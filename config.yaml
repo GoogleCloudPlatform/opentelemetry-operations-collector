@@ -1,0 +1,26 @@
+extensions:
+  zpages:
+    endpoint: 0.0.0.0:55679
+
+receivers:
+  hostmetrics:
+    collection_interval: 1m
+    scrapers:
+      cpu:
+      load:
+      memory:
+      disk:
+      filesystem:
+      network:
+
+exporters:
+  stackdriver:
+    metric_prefix: agent.googleapis.com/
+
+service:
+  pipelines:
+    metrics:
+      receivers: [hostmetrics]
+      exporters: [stackdriver]
+  
+  extensions: [zpages]

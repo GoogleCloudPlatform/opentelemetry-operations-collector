@@ -17,17 +17,19 @@ package main
 import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/exporter/stackdriverexporter"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/component/componenterror"
-	"go.opentelemetry.io/collector/config"
 	"go.opentelemetry.io/collector/service/defaultcomponents"
+
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/agentmetricsprocessor"
 )
 
-func components() (config.Factories, error) {
+func components() (component.Factories, error) {
 	errs := []error{}
 	factories, err := defaultcomponents.Components()
 	if err != nil {
-		return config.Factories{}, err
+		return component.Factories{}, err
 	}
 
 	extensions := []component.ExtensionFactory{}
@@ -60,7 +62,9 @@ func components() (config.Factories, error) {
 	}
 
 	processors := []component.ProcessorFactoryBase{
+		&agentmetricsprocessor.Factory{},
 		&metricstransformprocessor.Factory{},
+		resourcedetectionprocessor.NewFactory(),
 	}
 	for _, pr := range factories.Processors {
 		processors = append(processors, pr)

@@ -54,7 +54,7 @@ function Install-Tools {
 }
 
 function New-MSI(
-    [string]$Config="./config.yaml"
+    [string]$Config="./config/config-windows.yaml"
 ) {
     candle -arch "$CandleArch" -dPkgVersion="$PkgVersion" -dGoArch="$GoArch" -dConfig="$Config" .build/msi/google-cloudops-opentelemetry-collector.wxs
     light google-cloudops-opentelemetry-collector.wixobj

@@ -15,9 +15,9 @@
 package main
 
 import (
+	"fmt"
 	"log"
 
-	"github.com/pkg/errors"
 	"go.opentelemetry.io/collector/service"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/version"
@@ -30,7 +30,7 @@ func main() {
 	}
 
 	info := service.ApplicationStartInfo{
-		ExeName:  "otelcol",
+		ExeName:  "google-cloudops-opentelemetry-collector",
 		LongName: "OpenTelemetry Cloud Operations Collector",
 		Version:  version.Version,
 		GitHash:  version.GitHash,
@@ -46,12 +46,12 @@ func main() {
 func runInteractive(params service.Parameters) error {
 	app, err := service.New(params)
 	if err != nil {
-		return errors.Wrap(err, "failed to construct the application")
+		return fmt.Errorf("failed to construct the application: %w", err)
 	}
 
 	err = app.Start()
 	if err != nil {
-		return errors.Wrap(err, "application run finished with error: %v")
+		return fmt.Errorf("application run finished with error: %w", err)
 	}
 
 	return nil

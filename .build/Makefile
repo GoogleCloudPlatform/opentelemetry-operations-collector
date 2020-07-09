@@ -21,7 +21,7 @@ package-googet: build pack-googet
 
 .PHONY: build
 build:
-	GOOS=windows go build -o ./bin/otelopscol_windows_$(GOARCH).exe ./cmd/otelopscol
+	GOOS=windows go build -o ./bin/google-cloudops-opentelemetry-collector_windows_$(GOARCH).exe ./cmd/otelopscol
 
 .PHONY: pack-googet
 pack-googet: SHELL:=/bin/bash

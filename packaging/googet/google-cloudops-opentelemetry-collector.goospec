@@ -6,7 +6,7 @@
   "license": "http://www.apache.org/licenses/LICENSE-2.0",
   "description": "Google Cloud Operations OpenTelemetry Collector based Monitoring Agent",
   "files": {
-    "bin/otelopscol_windows_${GOARCH}.exe": "<ProgramFiles>/Google/Cloud Operations/OpenTelemetry Collector/google-cloudops-opentelemetry-collector.exe",
+    "bin/google-cloudops-opentelemetry-collector_windows_${GOARCH}.exe": "<ProgramFiles>/Google/Cloud Operations/OpenTelemetry Collector/google-cloudops-opentelemetry-collector.exe",
     "config.yaml": "<ProgramFiles>/Google/Cloud Operations/OpenTelemetry Collector/config.yaml"
   },
   "install": {
@@ -17,7 +17,7 @@
   },
   "sources": [{
       "include": [
-        "./bin/otelopscol_windows_${GOARCH}.exe",
+        "./bin/google-cloudops-opentelemetry-collector_windows_${GOARCH}.exe",
         "./config.yaml",
         "./packaging/googet/install.ps1",
         "./packaging/googet/uninstall.ps1"

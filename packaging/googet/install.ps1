@@ -24,15 +24,17 @@ function Set-ServiceConfig {
     sc.exe triggerinfo google-cloudops-opentelemetry-collector start/networkon
 }
 
+$InstallDir = "%ProgramFiles%\Google\Cloud Operations\OpenTelemetry Collector"
+
 try
 {
-    if (-not (Get-Service 'google-cloudops-opentelemetry-collector' -ErrorAction SilentlyContinue))
+    if (-not (Get-Service "google-cloudops-opentelemetry-collector" -ErrorAction SilentlyContinue))
     {
-        New-Service -DisplayName 'Google Cloud Operations OpenTelemetry Collector' `
-            -Name 'google-cloudops-opentelemetry-collector' `
-            -BinaryPathName '%ProgramFiles%\Google\Cloud Operations\OpenTelemetry Collector\opentelemetry-collector.exe --config="C:\Users\jbebb\go\src\go.opentelemetry.io\collector\examples\otel-local-config.yaml"' `
+        New-Service -DisplayName "Google Cloud Operations OpenTelemetry Collector" `
+            -Name "google-cloudops-opentelemetry-collector" `
+            -BinaryPathName "$InstallDir\google-cloudops-opentelemetry-collector.exe --config=""$InstallDir\config.yaml""" `
             -StartupType AutomaticDelayedStart `
-            -Description 'Google Cloud Operations OpenTelemetry Collector based Monitoring Agent'
+            -Description "Google Cloud Operations OpenTelemetry Collector based Monitoring Agent"
 
         Set-ServiceConfig
         Start-Service 'google-cloudops-opentelemetry-collector' -Verbose -ErrorAction Stop

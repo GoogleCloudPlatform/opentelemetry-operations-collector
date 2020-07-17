@@ -71,3 +71,15 @@ ifndef TARGET
 	$(error "TARGET is undefined")
 endif
 	docker run -e PKG_VERSION -e GOOS -e ARCH -e GOARCH -v $(CURDIR):/mnt otelopscol-build /bin/bash -c "cd /mnt; make $(TARGET)"
+
+# # gcp collector related variables
+# IMAGE_NAME=gcpcol_image
+# CONTAINER_NAME=gcpcol_container
+
+# .PHONY: gcpcol
+# gcpcol:
+# 	docker build -t $(IMAGE_NAME) ./linux
+# 	docker run -i --name=$(CONTAINER_NAME) $(IMAGE_NAME)
+# 	docker cp $(CONTAINER_NAME):/go/gcp-otel.tar.gz .
+# 	docker rmi -f $(IMAGE_NAME)
+# 	docker rm $(CONTAINER_NAME)

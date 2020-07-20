@@ -14,18 +14,38 @@
 
 <#
 .SYNOPSIS
-    Makefile like build commands for the Operations Collector on Windows.
+    Makefile like build commands for commands that can only be run on
+    Windows.
     
-    Usage:   .\make.ps1 <Command> [-<Param> <Value> ...]
-    Example: .\make.ps1 New-MSI -Config "./config.yaml"
+    Usage:
+        .\make.ps1 [-Arch <Arch>] <Command> [-<Param> <Value> ...]
+    Examples:
+        .\make.ps1 New-MSI
+        .\make.ps1 -Arch x86 New-MSI -Config "./config.yaml"
 .PARAMETER Target
     Build target to run (Install-Tools, New-MSI, Confirm-MSI)
 #>
 Param(
-    [Parameter(Mandatory=$true, ValueFromRemainingArguments=$true)][string]$Target
+    [Parameter(Mandatory=$false)][string]$Arch,
+    [Parameter(Position=0,Mandatory=$true, ValueFromRemainingArguments=$true)][string]$Target
 )
 
 $ErrorActionPreference = "Stop"
+
+# read PKG_VERSION from VERSION file
+$PkgVersion = Select-String -Path "VERSION" -Pattern "^PKG_VERSION=(.*)$" | %{$_.Matches.Groups[1].Value}
+
+# if ARCH is not supplied, set default value based on user's system
+if (!$Arch) {
+    $Arch = (&{If([System.Environment]::Is64BitProcess) {"x86_64"} Else {"x86"}})
+}
+
+# set GOARCH & CANDLEARCH based on ARCH
+switch($Arch) {
+    "x86_64" { $GoArch = "amd64"; $CandleArch = "x64"; break}
+    "x86"    { $GoArch = "386";   $CandleArch = "x86"; break}
+    default  { Throw "Arch must be set to one of: x86, x86_64" }
+}
 
 function Install-Tools {
     choco install wixtoolset -y
@@ -34,12 +54,13 @@ function Install-Tools {
 }
 
 function New-MSI(
-    [string]$Version="0.0.0",
-    [string]$Config="./config.yml"
+    [string]$Config="./config.yaml"
 ) {
-    candle -arch x64 -dVersion="$Version" -dConfig="$Config" packaging/msi/google-cloudops-opentelemetry-collector.wxs
+    candle -arch "$CandleArch" -dPkgVersion="$PkgVersion" -dGoArch="$GoArch" -dConfig="$Config" .build/msi/google-cloudops-opentelemetry-collector.wxs
     light google-cloudops-opentelemetry-collector.wixobj
-    Move-Item -Force google-cloudops-opentelemetry-collector.msi bin/google-cloudops-opentelemetry-collector.msi
+
+    New-Item -Force -Type dir dist
+    Move-Item -Force google-cloudops-opentelemetry-collector.msi dist/google-cloudops-opentelemetry-collector.msi
 }
 
 function Confirm-MSI {
@@ -47,7 +68,7 @@ function Confirm-MSI {
     $env:Path += ";C:\Windows\System32"
 
     # install msi, validate service is installed & running
-    Start-Process -Wait msiexec "/i `"$pwd\bin\google-cloudops-opentelemetry-collector.msi`" /qn"
+    Start-Process -Wait msiexec "/i `"$pwd\dist\google-cloudops-opentelemetry-collector.msi`" /qn"
     sc.exe query state=all | findstr "google-cloudops-opentelemetry-collector" | Out-Null
     if ($LASTEXITCODE -ne 0) { Throw "google-cloudops-opentelemetry-collector service failed to install" }
 
@@ -58,7 +79,7 @@ function Confirm-MSI {
     Start-Service google-cloudops-opentelemetry-collector
 
     # uninstall msi, validate service is uninstalled
-    Start-Process -Wait msiexec "/x `"$pwd\bin\opentelemetry-contrib-collector.msi`" /qn"
+    Start-Process -Wait msiexec "/x `"$pwd\dist\opentelemetry-contrib-collector.msi`" /qn"
     sc.exe query state=all | findstr "google-cloudops-opentelemetry-collector" | Out-Null
     if ($LASTEXITCODE -ne 1) { Throw "google-cloudops-opentelemetry-collector service failed to uninstall" }
 }

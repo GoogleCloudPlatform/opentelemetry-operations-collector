@@ -23,6 +23,10 @@ else
 $(error "ARCH must be set to one of: x86, x86_64")
 endif
 
+# set docker Image and Container names
+IMAGE_NAME=otelopscol-build
+CONTAINER_NAME=otelopscol-build-container
+
 .EXPORT_ALL_VARIABLES:
 
 # --------------------------
@@ -49,7 +53,9 @@ pack-googet:
 
 # tarball (Linux)
 
-# TODO
+.PHONY: pack-linux-tarball
+pack-linux-tarball:
+	./tar/generate_tar.sh
 
 # --------------------
 #  Create build image
@@ -57,7 +63,7 @@ pack-googet:
 
 .PHONY: docker-build-image
 build-image:
-	docker build -t otelopscol-build ./.build
+	docker build -t $(IMAGE_NAME) ./.build
 
 # -------------------------------------------
 #  Run targets inside the docker build image
@@ -70,16 +76,4 @@ docker-run:
 ifndef TARGET
 	$(error "TARGET is undefined")
 endif
-	docker run -e PKG_VERSION -e GOOS -e ARCH -e GOARCH -v $(CURDIR):/mnt otelopscol-build /bin/bash -c "cd /mnt; make $(TARGET)"
-
-# # gcp collector related variables
-# IMAGE_NAME=gcpcol_image
-# CONTAINER_NAME=gcpcol_container
-
-# .PHONY: gcpcol
-# gcpcol:
-# 	docker build -t $(IMAGE_NAME) ./linux
-# 	docker run -i --name=$(CONTAINER_NAME) $(IMAGE_NAME)
-# 	docker cp $(CONTAINER_NAME):/go/gcp-otel.tar.gz .
-# 	docker rmi -f $(IMAGE_NAME)
-# 	docker rm $(CONTAINER_NAME)
+	docker run -e PKG_VERSION -e GOOS -e ARCH -e GOARCH -v $(CURDIR):/mnt -w /mnt $(IMAGE_NAME) /bin/bash -c "make $(TARGET)"

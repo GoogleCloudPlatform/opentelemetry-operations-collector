@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # locate config file
-CONFIG_FILE="gcp-config.yaml"
+CONFIG_FILE="config-example.yaml"
 
 if [ ! -e "config/$CONFIG_FILE" ]
 then 

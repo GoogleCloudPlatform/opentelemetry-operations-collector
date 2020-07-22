@@ -1,0 +1,41 @@
+receivers:
+  # scrape all metrics at 1m interval
+  hostmetrics:
+    collection_interval: 20s # for testing
+    scrapers:
+      memory:
+  # add receivers from Nic to extend the ability for MySQL, JVM and Apache
+
+processors:
+  # convert from OpenTelemetry metric formats to Cloud Monitoring formats
+  metricstransform:
+    transforms:
+      - metric_name: system.memory.usage
+        action: update
+        new_name: memory/bytes_used
+        operations:
+          # change data type from int64 -> double
+          - action: toggle_scalar_data_type
+          # aggregate state label values: slab_reclaimable & slab_unreclaimable -> slab (note this is not currently supported)
+          - action: aggregate_label_values
+            label: state
+            aggregated_values: [slab_reclaimable, slab_unreclaimable]
+            new_value: slab
+            aggregation_type: sum
+
+exporters:
+  # export to Cloud Monitoring using the agent prefix
+  stackdriver:
+    project: otel-gce-metrics
+
+  # for debugging
+  logging:
+  file:
+    path: ./metrics.json
+
+service:
+  pipelines:
+    metrics:
+      receivers: [hostmetrics]
+      processors: [metricstransform]
+      exporters: [stackdriver, logging]

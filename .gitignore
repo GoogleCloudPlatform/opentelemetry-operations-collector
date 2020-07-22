@@ -25,3 +25,6 @@ coverage.html
 # Wix
 *.wixobj
 *.wixpdb
+
+# Tarball file
+*.tar.gz

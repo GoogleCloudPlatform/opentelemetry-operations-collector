@@ -25,7 +25,9 @@ endif
 
 # set docker Image and Container names
 IMAGE_NAME=otelopscol-build
-CONTAINER_NAME=otelopscol-build-container
+
+# set collector binary name
+OTELCOL_BINARY=google-cloudops-opentelemetry-collector_$(GOOS)_$(GOARCH)$(EXTENSION)
 
 .EXPORT_ALL_VARIABLES:
 
@@ -35,7 +37,7 @@ CONTAINER_NAME=otelopscol-build-container
 
 .PHONY: build
 build:
-	go build -o ./bin/google-cloudops-opentelemetry-collector_$(GOOS)_$(GOARCH)$(EXTENSION) ./cmd/otelopscol
+	go build -o ./bin/$(OTELCOL_BINARY) ./cmd/otelopscol
 
 # googet (Windows)
 
@@ -52,9 +54,9 @@ pack-googet:
 	goopack -output_dir ./dist <(envsubst < ./.build/googet/google-cloudops-opentelemetry-collector.goospec)
 
 # tarball (Linux)
-
-.PHONY: pack-linux-tarball
-pack-linux-tarball:
+.PHONY: linux-tarball
+linux-tarball:
+	make build
 	./tar/generate_tar.sh
 
 # --------------------
@@ -62,7 +64,7 @@ pack-linux-tarball:
 # --------------------
 
 .PHONY: docker-build-image
-build-image:
+docker-build-image:
 	docker build -t $(IMAGE_NAME) ./.build
 
 # -------------------------------------------

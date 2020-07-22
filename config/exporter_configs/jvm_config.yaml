@@ -1,0 +1,6 @@
+# Simple JMX exporter config file, please change host:port of your particular JVM configuration
+# Documentation: https://github.com/prometheus/jmx_exporter
+
+startDelaySeconds: 0
+hostPort: localhost:8686
+ssl: false

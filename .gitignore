@@ -20,3 +20,6 @@ bin/
 # Coverage
 coverage.txt
 coverage.html
+
+# .tar file
+*.tar.gz

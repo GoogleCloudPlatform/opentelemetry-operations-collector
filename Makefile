@@ -23,6 +23,11 @@ else
 $(error "ARCH must be set to one of: x86, x86_64")
 endif
 
+# set CONFIG_FILE to be included in the tarball file. Default to the example one
+ifeq ($(CONFIG_FILE),)
+CONFIG_FILE=config-example.yaml
+endif
+
 # set docker Image and Container names
 IMAGE_NAME=otelopscol-build
 
@@ -40,23 +45,28 @@ build:
 	go build -o ./bin/$(OTELCOL_BINARY) ./cmd/otelopscol
 
 # googet (Windows)
+.PHONY: build-googet
+build-googet:
+	GOOS=windows
+	build package-googet
 
 .PHONY: package-googet
+package-googet: SHELL:=/bin/bash
 package-googet:
-	GOOS=windows
-	build pack-googet
-
-.PHONY: pack-googet
-pack-googet: SHELL:=/bin/bash
-pack-googet:
 	GOOS=windows
 	# goopack doesn't support variable replacement or command line args so just use envsubst
 	goopack -output_dir ./dist <(envsubst < ./.build/googet/google-cloudops-opentelemetry-collector.goospec)
 
-# tarball (Linux)
-.PHONY: linux-tarball
-linux-tarball:
+# tarball
+# Usage: CONFIG_FILE=<custom config file in the config directory> make build-tarball
+# CONFIG_FILE is not supplied, default to config-example.yaml
+.PHONY: build-tarball
+build-tarball:
 	make build
+	make package-tarball
+
+.PHONY: package-tarball
+package-tarball:
 	./tar/generate_tar.sh
 
 # --------------------

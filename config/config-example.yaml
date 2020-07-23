@@ -14,8 +14,6 @@ processors:
         action: insert
         new_name: memory/bytes_used
         operations:
-          # change data type from int64 -> double
-          - action: toggle_scalar_data_type
           # aggregate state label values: slab_reclaimable & slab_unreclaimable -> slab
           - action: aggregate_label_values
             label: state

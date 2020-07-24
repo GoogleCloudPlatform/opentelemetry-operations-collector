@@ -23,16 +23,12 @@ else
 $(error "ARCH must be set to one of: x86, x86_64")
 endif
 
-# set CONFIG_FILE to be included in the tarball file. Default to the example one
-ifeq ($(CONFIG_FILE),)
-CONFIG_FILE=config-example.yaml
+# set docker build image name
+ifeq ($(BUILD_IMAGE_NAME),)
+BUILD_IMAGE_NAME=otelopscol-build
 endif
 
-# set docker Image and Container names
-IMAGE_NAME=otelopscol-build
-
-# set collector binary name
-OTELCOL_BINARY=google-cloudops-opentelemetry-collector_$(GOOS)_$(GOARCH)$(EXTENSION)
+OTELCOL_BINARY=google-cloudops-opentelemetry-collector
 
 .EXPORT_ALL_VARIABLES:
 
@@ -42,32 +38,34 @@ OTELCOL_BINARY=google-cloudops-opentelemetry-collector_$(GOOS)_$(GOARCH)$(EXTENS
 
 .PHONY: build
 build:
-	go build -o ./bin/$(OTELCOL_BINARY) ./cmd/otelopscol
+	go build -o ./bin/$(OTELCOL_BINARY)_$(GOOS)_$(GOARCH)$(EXTENSION) ./cmd/otelopscol
 
 # googet (Windows)
-.PHONY: build-googet
-build-googet:
-	GOOS=windows
-	build package-googet
 
-.PHONY: package-googet
-package-googet: SHELL:=/bin/bash
-package-googet:
-	GOOS=windows
+.PHONY: build-goo
+build-goo: export GOOS=windows
+build-goo: export EXTENSION=.exe
+build-goo: build package-goo
+
+.PHONY: package-goo
+package-goo: export GOOS=windows
+package-goo: export EXTENSION=.exe
+package-goo: SHELL:=/bin/bash
+package-goo:
+	mkdir -p dist
 	# goopack doesn't support variable replacement or command line args so just use envsubst
 	goopack -output_dir ./dist <(envsubst < ./.build/googet/google-cloudops-opentelemetry-collector.goospec)
+	chmod -R 777 ./dist/
 
 # tarball
-# Usage: CONFIG_FILE=<custom config file in the config directory> make build-tarball
-# CONFIG_FILE is not supplied, default to config-example.yaml
+
 .PHONY: build-tarball
-build-tarball:
-	make build
-	make package-tarball
+build-tarball: build package-tarball
 
 .PHONY: package-tarball
 package-tarball:
-	./tar/generate_tar.sh
+	./.build/tar/generate_tar.sh
+	chmod -R 777 ./dist/
 
 # --------------------
 #  Create build image
@@ -75,7 +73,7 @@ package-tarball:
 
 .PHONY: docker-build-image
 docker-build-image:
-	docker build -t $(IMAGE_NAME) ./.build
+	docker build -t $(BUILD_IMAGE_NAME) ./.build
 
 # -------------------------------------------
 #  Run targets inside the docker build image
@@ -88,4 +86,4 @@ docker-run:
 ifndef TARGET
 	$(error "TARGET is undefined")
 endif
-	docker run -e PKG_VERSION -e GOOS -e ARCH -e GOARCH -v $(CURDIR):/mnt -w /mnt $(IMAGE_NAME) /bin/bash -c "make $(TARGET)"
+	docker run -e PKG_VERSION -e GOOS -e ARCH -e GOARCH -v $(CURDIR):/mnt -w /mnt $(BUILD_IMAGE_NAME) /bin/bash -c "make $(TARGET)"

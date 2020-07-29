@@ -1,6 +1,7 @@
 #!/bin/bash
 
 CONFIG_FILE=${CONFIG_FILE:-config-example.yaml}
+README=${README:-tarball-readme.md}
 
 echo "Start building tarball distribution file"
 
@@ -22,11 +23,12 @@ fi
 echo "Organizing files to be compressed"
 cp config/$CONFIG_FILE dist/
 cp bin/$OTELCOL_BINARY dist/
+cp docs/$README dist/
 
 # compress the binary and the config into a .tar file
 echo "Compressing..."
-cd dist && tar -cvzf google-cloudops-opentelemetry-collector.tar.gz $OTELCOL_BINARY $CONFIG_FILE
+cd dist && tar -cvzf google-cloudops-opentelemetry-collector.tar.gz $OTELCOL_BINARY $CONFIG_FILE $README
 
 # remove the folders and files that were added
 echo "Cleaning up"
-rm $OTELCOL_BINARY $CONFIG_FILE
+rm $OTELCOL_BINARY $CONFIG_FILE $README

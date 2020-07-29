@@ -28,7 +28,7 @@ ifeq ($(BUILD_IMAGE_NAME),)
 BUILD_IMAGE_NAME=otelopscol-build
 endif
 
-OTELCOL_BINARY=google-cloudops-opentelemetry-collector
+OTELCOL_BINARY=google-cloudops-opentelemetry-collector_$(GOOS)_$(GOARCH)$(EXTENSION)
 
 .EXPORT_ALL_VARIABLES:
 
@@ -60,7 +60,7 @@ checklicense:
 
 .PHONY: build
 build:
-	go build -o ./bin/$(OTELCOL_BINARY)_$(GOOS)_$(GOARCH)$(EXTENSION) ./cmd/otelopscol
+	go build -o ./bin/$(OTELCOL_BINARY) ./cmd/otelopscol
 
 .PHONY: test
 test:
@@ -90,7 +90,7 @@ build-tarball: test build package-tarball
 
 .PHONY: package-tarball
 package-tarball:
-	./.build/tar/generate_tar.sh
+	bash ./.build/tar/generate_tar.sh
 	chmod -R 777 ./dist/
 
 # --------------------

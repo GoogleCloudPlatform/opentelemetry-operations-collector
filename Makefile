@@ -1,10 +1,89 @@
-.PHONY: build-image
-build-image:
-	docker build -t otelopscol-build ./.build
+# read PKG_VERSION from VERSION file
+include VERSION
 
-# all build commands are run using the docker build image
-DOCKER_RUN=docker run -v $(CURDIR):/mnt otelopscol-build
+# if GOOS is not supplied, set default value based on user's system, will be overridden for OS specific packaging commands
+ifeq ($(GOOS),)
+GOOS=$(shell go env GOOS)
+endif
+ifeq ($(GOOS),windows)
+EXTENSION = .exe
+endif
 
-.PHONY: package-googet
-package-googet:
-	$(DOCKER_RUN) /bin/bash -c "cd /mnt; make -f .build/Makefile VERSION=$(VERSION) ARCH=$(ARCH) package-googet"
+# if ARCH is not supplied, set default value based on user's system
+ifeq ($(ARCH),)
+ARCH = $(shell if [ `getconf LONG_BIT` == "64" ]; then echo "x86_64"; else echo "x86"; fi)
+endif
+
+# set GOARCH based on ARCH
+ifeq ($(ARCH),x86_64)
+GOARCH=amd64
+else ifeq ($(ARCH),x86)
+GOARCH=386
+else
+$(error "ARCH must be set to one of: x86, x86_64")
+endif
+
+# set docker build image name
+ifeq ($(BUILD_IMAGE_NAME),)
+BUILD_IMAGE_NAME=otelopscol-build
+endif
+
+OTELCOL_BINARY=google-cloudops-opentelemetry-collector
+
+.EXPORT_ALL_VARIABLES:
+
+# --------------------------
+#  Build / Package Commands
+# --------------------------
+
+.PHONY: build
+build:
+	go build -o ./bin/$(OTELCOL_BINARY)_$(GOOS)_$(GOARCH)$(EXTENSION) ./cmd/otelopscol
+
+# googet (Windows)
+
+.PHONY: build-goo
+build-goo: export GOOS=windows
+build-goo: export EXTENSION=.exe
+build-goo: build package-goo
+
+.PHONY: package-goo
+package-goo: export GOOS=windows
+package-goo: export EXTENSION=.exe
+package-goo: SHELL:=/bin/bash
+package-goo:
+	mkdir -p dist
+	# goopack doesn't support variable replacement or command line args so just use envsubst
+	goopack -output_dir ./dist <(envsubst < ./.build/googet/google-cloudops-opentelemetry-collector.goospec)
+	chmod -R 777 ./dist/
+
+# tarball
+
+.PHONY: build-tarball
+build-tarball: build package-tarball
+
+.PHONY: package-tarball
+package-tarball:
+	./.build/tar/generate_tar.sh
+	chmod -R 777 ./dist/
+
+# --------------------
+#  Create build image
+# --------------------
+
+.PHONY: docker-build-image
+docker-build-image:
+	docker build -t $(BUILD_IMAGE_NAME) ./.build
+
+# -------------------------------------------
+#  Run targets inside the docker build image
+# -------------------------------------------
+
+# Usage:   make TARGET=<target> docker-run
+# Example: make TARGET=package-googet docker-run
+.PHONY: docker-run
+docker-run:
+ifndef TARGET
+	$(error "TARGET is undefined")
+endif
+	docker run -e PKG_VERSION -e GOOS -e ARCH -e GOARCH -v $(CURDIR):/mnt -w /mnt $(BUILD_IMAGE_NAME) /bin/bash -c "make $(TARGET)"

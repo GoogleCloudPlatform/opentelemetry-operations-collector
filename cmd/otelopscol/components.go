@@ -16,6 +16,7 @@ package main
 
 import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/exporter/stackdriverexporter"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/component/componenterror"
 	"go.opentelemetry.io/collector/config"
@@ -58,7 +59,9 @@ func components() (config.Factories, error) {
 		errs = append(errs, err)
 	}
 
-	processors := []component.ProcessorFactoryBase{}
+	processors := []component.ProcessorFactoryBase{
+		&metricstransformprocessor.Factory{},
+	}
 	for _, pr := range factories.Processors {
 		processors = append(processors, pr)
 	}

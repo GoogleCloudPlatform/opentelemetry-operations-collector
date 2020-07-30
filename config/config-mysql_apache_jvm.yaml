@@ -60,7 +60,7 @@ processors:
 exporters:
   stackdriver:  
     project:  # stackdriver will use the default GCE credentials
-    metric_prefix: agent.googleapis.com/
+    # metric_prefix: agent.googleapis.com/
 
 service:
   pipelines:

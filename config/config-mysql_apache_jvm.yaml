@@ -1,0 +1,70 @@
+# This config hopes to mimick the Cloud Monitoring Agent by collecting metrics from popular third-party services the Agent already supports
+# and formatting the metrics in the same way, so they appear similarly in Cloud Monitoring. The services targeted here are MySQL, Apache and JVM.
+# Please remove/comment-out the prometheus_exec configs that you don't need in the receivers section as well as the list in the service/pipelines/metrics/receivers section.
+# Documentation specific to each exporter is found in the comment directly above its configuration
+
+receivers:
+
+  # https://github.com/prometheus/mysqld_exporter
+  prometheus_exec/mysql:
+    exec: ./prometheus_exporters/mysqld_exporter --web.listen-address=":{{port}}" --no-collect.global_variables  # this last flag reduces the amount of generated metrics, can be removed to enable all (600+) MySQL metrics
+    port: 9104
+    env:
+    - name: DATA_SOURCE_NAME  # DATA_SOURCE_NAME and its value are needed to connect to the MySQL server, alternatively you could use a .my.cnf configuration file
+      value: username:password@(host:port)/db_name  # replace all value here with your MySQL server credentials
+
+  # https://github.com/Lusitaniae/apache_exporter
+  prometheus_exec/apache:
+    exec: ./prometheus_exporters/apache_exporter --telemetry.address=":{{port}}"
+    port: 9117
+
+  # https://github.com/prometheus/jmx_exporter
+  prometheus_exec/jvm:
+    exec: java -jar ./prometheus_exporters/jmx_exporter.jar {{port}} exporter_configs/jvm_config.yaml # see jvm_config.yaml for JMX configuration, notably the "hostPort" key
+    port: 9404
+
+processors:
+  filter:
+    metrics:
+      include:
+        match_type: regexp
+        metric_names: # Allowing all JVM and Apache metrics, but whitelisting MySQL ones to filter hundreds of unused ones
+                - mysql_global_status_commands_total
+                - mysql_global_status_threads_running
+                - mysql_global_status_handlers_total
+                - apache_.*
+                - jmx_.*
+                - java_.*
+
+  metricstransform/mysql:
+    transforms:
+      - metric_name: mysql_global_status_commands_total
+        action: update
+        new_name: mysql/command_count
+        operations:
+          # change data type from double -> int64
+          - action: toggle_scalar_data_type
+      - metric_name: mysql_global_status_threads_running
+        action: update
+        new_name: mysql/thread_count
+      - metric_name: mysql_global_status_handlers_total
+        action: update
+        new_name: mysql/handler_count
+
+  metricstransform/java:
+    transforms:
+      - metric_name: java_lang_GarbageCollector_CollectionCount
+        action: update
+        new_name: jvm/gc/count
+
+exporters:
+  stackdriver:  
+    project:  # stackdriver will use the default GCE credentials
+    metric_prefix: agent.googleapis.com/
+
+service:
+  pipelines:
+    metrics:
+      receivers: [prometheus_exec/mysql, prometheus_exec/apache, prometheus_exec/jvm]  # Remember to remove unwanted receivers from this list
+      processors: [filter, metricstransform/mysql, metricstransform/java]
+      exporters: [stackdriver]

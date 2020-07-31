@@ -35,6 +35,7 @@ processors:
                 - apache_.*
                 - jmx_.*
                 - java_.*
+                - promhttp_.*
 
   metricstransform/mysql:
     transforms:
@@ -57,10 +58,22 @@ processors:
         action: update
         new_name: jvm/gc/count
 
+  metricstransform/apache:
+    transforms:
+      - metric_name: promhttp_metric_handler_requests_total
+        action: update
+        new_name: apache/request_count
+        operations:
+          - action: aggregate_labels
+            label_set: []
+            aggregation_type: sum
+            # change data type from double -> int64
+          - action: toggle_scalar_data_type
+
 exporters:
   stackdriver:  
     project:  # stackdriver will use the default GCE credentials
-    # metric_prefix: agent.googleapis.com/
+    #metric_prefix: agent.googleapis.com/
 
 service:
   pipelines:

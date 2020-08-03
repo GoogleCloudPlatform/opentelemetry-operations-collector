@@ -38,6 +38,7 @@ OTELCOL_BINARY=google-cloudops-opentelemetry-collector_$(GOOS)_$(GOARCH)$(EXTENS
 
 .PHONY: build
 build:
+	@echo "Building collector binary..."
 	go build -o ./bin/$(OTELCOL_BINARY) ./cmd/otelopscol
 
 # googet (Windows)
@@ -64,6 +65,7 @@ build-tarball: build package-tarball
 
 .PHONY: package-tarball
 package-tarball:
+	@echo "Packaging tarball..."
 	bash ./.build/tar/generate_tar.sh
 	chmod -R 777 ./dist/
 
@@ -86,4 +88,5 @@ docker-run:
 ifndef TARGET
 	$(error "TARGET is undefined")
 endif
+	@echo "Running $(TARGET) with docker container..."
 	docker run -e PKG_VERSION -e GOOS -e ARCH -e GOARCH -v $(CURDIR):/mnt -w /mnt $(BUILD_IMAGE_NAME) /bin/bash -c "make $(TARGET)"

@@ -114,5 +114,5 @@ docker-run:
 ifndef TARGET
 	$(error "TARGET is undefined")
 endif
-	@echo "Running $(TARGET) with docker container..."
+	@echo "Running $(TARGET) in docker container $(BUILD_IMAGE_NAME)"
 	docker run -e PKG_VERSION -e GOOS -e ARCH -e GOARCH -v $(CURDIR):/mnt -w /mnt $(BUILD_IMAGE_NAME) /bin/bash -c "make $(TARGET)"

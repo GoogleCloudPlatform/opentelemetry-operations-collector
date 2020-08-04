@@ -1,6 +1,7 @@
 #!/bin/bash
 
 CONFIG_FILE=${CONFIG_FILE:-config-example.yaml}
+FINAL_CONFIG_FILE=config.yaml
 README=${README:-tarball-readme.md}
 RUN=run.sh
 
@@ -27,10 +28,12 @@ cp bin/$OTELCOL_BINARY dist/
 cp docs/$README dist/
 cp .build/tar/$RUN dist/
 
+mv dist/$CONFIG_FILE dist/$FINAL_CONFIG_FILE
+
 # compress the binary and the config into a .tar file
 echo "Compressing..."
-cd dist && tar -cvzf google-cloudops-opentelemetry-collector.tar.gz $OTELCOL_BINARY $CONFIG_FILE $README $RUN
+cd dist && tar -cvzf google-cloudops-opentelemetry-collector.tar.gz $OTELCOL_BINARY $FINAL_CONFIG_FILE $README $RUN
 
 # remove the folders and files that were added
 echo "Clean up..."
-rm $OTELCOL_BINARY $CONFIG_FILE $README $RUN
+rm $OTELCOL_BINARY $FINAL_CONFIG_FILE $README $RUN

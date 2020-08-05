@@ -16,8 +16,9 @@ To generate a tarball file that packages the executable OpenTelemetry binary wit
 1. Run `make build-tarball`
 2. The tarball file will be generated in the `dist` folder
 
-Alternatively, you can  run the make commands inside docker.
-1. Make sure docker image has already been built: run `docker images` to check if `otelopscol-build` image exists
-2. If image doesn't exist, run `make docker-build-image` to build an image from the dockerfile
-2. Run `make TARGET=build-tarball docker-run`
-3. The tarball file will be generated in the `dist` folder
+## Running build commands in Docker
+
+Alternatively, you can run the build commands inside docker:
+1. Run `make docker-build-image` to build the docker image. This will generate an image called `otelopscol-build`
+2. Run `make TARGET=build-<package> docker-run`
+3. The specified package will be generated in the `dist` folder

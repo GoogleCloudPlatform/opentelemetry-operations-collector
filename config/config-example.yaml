@@ -3,14 +3,15 @@ receivers:
   hostmetrics:
     collection_interval: 1m
     scrapers:
-      memory:
       cpu:
       disk:
       filesystem:
+      load:
+      memory:
       network:
       swap:
       process:
-      load:
+      
   # add receivers to extend the ability for MySQL, JVM and Apache
 
 processors:

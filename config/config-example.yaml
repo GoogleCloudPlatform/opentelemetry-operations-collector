@@ -4,6 +4,13 @@ receivers:
     collection_interval: 1m
     scrapers:
       memory:
+      cpu:
+      disk:
+      filesystem:
+      network:
+      swap:
+      process:
+      load:
   # add receivers to extend the ability for MySQL, JVM and Apache
 
 processors:
@@ -20,11 +27,26 @@ processors:
             aggregated_values: [slab_reclaimable, slab_unreclaimable]
             new_value: slab
             aggregation_type: sum
+      - metric_name: system.filesystem.usage
+        action: insert
+        new_name: disk/bytes_used
+      - metric_name: system.disk.merged
+        action: insert
+        new_name: disk/merged_operations
+      - metric_name: system.cpu.load_average.1m
+        action: insert
+        new_name: cpu/load_1m
+      - metric_name: system.cpu.load_average.5m
+        action: insert
+        new_name: cpu/load_5m
+      - metric_name: system.cpu.load_average.15m
+        action: insert
+        new_name: cpu/load_15m
 
 exporters:
   # export to Cloud Monitoring using the agent prefix
   stackdriver:
-    project: "otel-gce-metrics" # change this to the project name of the Monitoring project
+    metric_prefix: agent.googleapis.com/
 
   # for debugging
   logging:

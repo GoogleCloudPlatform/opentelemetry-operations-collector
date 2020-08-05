@@ -60,7 +60,6 @@ checklicense:
 
 .PHONY: build
 build:
-	@echo "Building collector binary..."
 	go build -o ./bin/$(OTELCOL_BINARY) ./cmd/otelopscol
 
 .PHONY: test
@@ -91,7 +90,6 @@ build-tarball: test build package-tarball
 
 .PHONY: package-tarball
 package-tarball:
-	@echo "Packaging tarball..."
 	bash ./.build/tar/generate_tar.sh
 	chmod -R 777 ./dist/
 

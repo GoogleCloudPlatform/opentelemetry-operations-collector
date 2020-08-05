@@ -2,13 +2,6 @@
 
 This repository is focused on building and packaging the OpenTelemetry Collector for use with Google Cloud Monitoring.
 
-## Prerequisite
-
-[docker](https://docs.docker.com/engine/install/) is installed
-
-## Building the Docker Image
-
-Run `make docker-build-image`
 
 ## Collector for Linux
 

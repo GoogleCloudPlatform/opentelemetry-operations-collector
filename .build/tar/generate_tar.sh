@@ -1,6 +1,6 @@
 #!/bin/bash
 
-CONFIG_FILE=${CONFIG_FILE:-config-mysql_apache_jvm.yaml}
+CONFIG_FILE=${CONFIG_FILE:-config-example.yaml}
 EXPORTERS_DIRECTORY=prometheus_exporters
 EXPORTERS_CONFIG_DIRECTORY=exporter_configs
 

@@ -1,4 +1,4 @@
-// Copyright 2020 OpenTelemetry Authors
+// Copyright 2020, Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ package agentmetricsprocessor
 import (
 	"context"
 	"regexp"
+	"sync"
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/component/componenterror"
@@ -32,6 +33,8 @@ var metricPostfixRegex = regexp.MustCompile(`([^.]*$)`)
 type agentMetricsProcessor struct {
 	logger            *zap.Logger
 	next              consumer.MetricsConsumer
+
+	mutex             sync.Mutex
 	prevCPUTimeValues map[string]float64
 }
 

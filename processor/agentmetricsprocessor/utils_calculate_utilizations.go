@@ -1,4 +1,4 @@
-// Copyright 2020 OpenTelemetry Authors
+// Copyright 2020, Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -53,7 +53,7 @@ func (mtp *agentMetricsProcessor) appendUtilizationMetrics(rms pdata.ResourceMet
 
 				// ignore all metrics except the ones we want to compute utilizations for
 				metricName := metric.MetricDescriptor().Name()
-				if _, ok := metricsToComputeUtilizationFor[metricName]; !ok {
+				if !metricsToComputeUtilizationFor[metricName] {
 					continue
 				}
 
@@ -94,16 +94,19 @@ func (mtp *agentMetricsProcessor) calculateUtilizationMetric(metric pdata.Metric
 
 	// persist the values of "cpu.time" so we can compute deltas on the next cycle
 	if isCPUTime {
-		mtp.prevCPUTimeValues = doubleDataPointsToMap(metric)
+		mtp.setPrevCPUTimes(metric)
 	}
 
 	return utilizationMetric, nil
 }
 
 // convertPrevCPUTimeToDelta converts the cpu.time values to delta values using the
-// values persisted in the previous cycle
-func (mtp *agentMetricsProcessor) convertPrevCPUTimeToDelta(metric pdata.Metric) {
-	ddps := metric.DoubleDataPoints()
+// values persisted in the previous snapshot
+func (mtp *agentMetricsProcessor) convertPrevCPUTimeToDelta(cpuTimeMetric pdata.Metric) {
+	mtp.mutex.Lock()
+	defer mtp.mutex.Unlock()
+
+	ddps := cpuTimeMetric.DoubleDataPoints()
 	for i := 0; i < ddps.Len(); {
 		ddp := ddps.At(i)
 
@@ -111,8 +114,7 @@ func (mtp *agentMetricsProcessor) convertPrevCPUTimeToDelta(metric pdata.Metric)
 		// remove the data point as we cannot calculate a utilization
 		prevValue, ok := mtp.prevCPUTimeValues[labelsAsKey(ddp.LabelsMap())]
 		if !ok {
-			ddps.At(ddps.Len() - 1).CopyTo(ddp)
-			ddps.Resize(ddps.Len() - 1)
+			removeElementAt(ddps, i)
 			continue
 		}
 
@@ -120,6 +122,15 @@ func (mtp *agentMetricsProcessor) convertPrevCPUTimeToDelta(metric pdata.Metric)
 		ddp.SetValue(ddp.Value() - prevValue)
 		i++
 	}
+}
+
+// setPrevCPUTimes persists the cpu.time cumulative values as a map so they can
+// be used to calculate deltas in the next snapshot
+func (mtp *agentMetricsProcessor) setPrevCPUTimes(cpuTimeMetric pdata.Metric) {
+	mtp.mutex.Lock()
+	defer mtp.mutex.Unlock()
+
+	mtp.prevCPUTimeValues = doubleDataPointsToMap(cpuTimeMetric)
 }
 
 type int64Points struct {
@@ -217,6 +228,13 @@ func doubleDataPointsToMap(metric pdata.Metric) map[string]float64 {
 	return labelToValuesMap
 }
 
+// removeElementAt removes the element at the specified index. This operation
+// does not preserve the order of elements in the data point slice
+func removeElementAt(ddps pdata.DoubleDataPointSlice, index int) {
+	ddps.At(ddps.Len() - 1).CopyTo(ddps.At(index))
+	ddps.Resize(ddps.Len() - 1)
+}
+
 // labelsAsKey returns a key representing the labels in the provided labelset.
 func labelsAsKey(labels pdata.StringMap) string {
 	otherLabelsLen := labels.Len()
@@ -239,7 +257,7 @@ func labelsAsKey(labels pdata.StringMap) string {
 func otherLabelsAsKey(labels pdata.StringMap, excluding ...string) (string, error) {
 	otherLabelsLen := labels.Len() - len(excluding)
 
-	idx, otherLabels := 0, make([]string, otherLabelsLen)
+	otherLabels := make([]string, 0, otherLabelsLen)
 	labels.ForEach(func(k string, v pdata.StringValue) {
 		// ignore any keys specified in excluding
 		for _, e := range excluding {
@@ -248,11 +266,10 @@ func otherLabelsAsKey(labels pdata.StringMap, excluding ...string) (string, erro
 			}
 		}
 
-		otherLabels[idx] = k + "=" + v.Value()
-		idx++
+		otherLabels = append(otherLabels, k + "=" + v.Value())
 	})
 
-	if idx != otherLabelsLen {
+	if len(otherLabels) > otherLabelsLen {
 		return "", fmt.Errorf("label set did not include all expected labels: %v", excluding)
 	}
 

@@ -1,4 +1,4 @@
-// Copyright 2020 OpenTelemetry Authors
+// Copyright 2020, Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,9 +48,14 @@ import (
 // Assumptions:
 // * There is at most one resource metrics slice without process resource info (will raise error if not)
 // * There is no other resource info supplied that needs to be retained (info may be silently lost if it exists)
-// * All metrics with the same name have the same descriptor (process metrics will be merged if the names match)
 
 func combineProcessMetrics(rms pdata.ResourceMetricsSlice) error {
+	resultMetrics := pdata.NewResourceMetrics()
+	resultMetrics.InitEmpty()
+	ilms := resultMetrics.InstrumentationLibraryMetrics()
+	ilms.Resize(1)
+	ilms.At(0).InitEmpty()
+
 	// create collection of combined process metrics, disregarding any ResourceMetrics
 	// with no process resource attributes as "otherMetrics"
 	processMetrics, otherMetrics, err := createProcessMetrics(rms)
@@ -58,26 +63,24 @@ func combineProcessMetrics(rms pdata.ResourceMetricsSlice) error {
 		return err
 	}
 
-	// if no non-process metrics were supplied, initialize an empty
-	// ResourceMetrics object
-	if otherMetrics.IsNil() {
-		otherMetrics.InitEmpty()
-		ilms := otherMetrics.InstrumentationLibraryMetrics()
-		ilms.Resize(1)
-		ilms.At(0).InitEmpty()
+	// if non-process specific metrics were supplied, initialize the result
+	// with those metrics
+	if !otherMetrics.IsNil() {
+		resultMetrics = otherMetrics
 	}
 
-	// append the process metrics to the other ResourceMetrics object
-	metrics := otherMetrics.InstrumentationLibraryMetrics().At(0).Metrics()
-	// ideally, we would Resize & Set, but function not available at this time
+	// append all of the process metrics
+	metrics := resultMetrics.InstrumentationLibraryMetrics().At(0).Metrics()
+	// ideally, we would Resize & Set, but a Set function is not available
+	// at this time
 	for _, metric := range processMetrics {
-		metrics.Append(&metric.Metric) // also, why does append take a pointer?
+		metrics.Append(&metric.Metric)
 	}
 
 	// TODO: This is super inefficient. Instead, we should just return a new
 	// data.MetricData struct, but currently blocked as it is internal
 	rms.Resize(1)
-	otherMetrics.CopyTo(rms.At(0))
+	resultMetrics.CopyTo(rms.At(0))
 	return nil
 }
 
@@ -93,7 +96,7 @@ func createProcessMetrics(rms pdata.ResourceMetricsSlice) (processMetrics conver
 		// these must be the "other" non-process metrics
 		if !includesProcessAttributes(resource) {
 			if !otherMetrics.IsNil() {
-				err = errors.New("unexpectedly received multiple Resource Metrics  with err")
+				err = errors.New("unexpectedly received multiple Resource Metrics without process attributes")
 				return
 			}
 

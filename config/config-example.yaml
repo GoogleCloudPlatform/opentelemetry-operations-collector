@@ -15,8 +15,24 @@ receivers:
   # add receivers to extend the ability for MySQL, JVM and Apache
 
 processors:
+  # append resource information from GCE metadata
+  resourcedetection:
+    detectors: [gce]
+
   # perform custom transformations that aren't supported by the metricstransform processor
   agentmetrics/cloud-monitoring:
+    # 1. combines resource process metrics into metrics with processes as labels
+    # 2. splits "disk.io" metrics into read & write metrics
+    # 3. creates utilization metrics from usage metrics
+
+  # filter out metrics not currently supported by cloud monitoring
+  filter/cloud-monitoring:
+    metrics:
+      exclude:
+        match_type: strict
+        metric_names:
+          - system.network.dropped_packets
+          - system.swap.usage
 
   metricstransform/cloud-monitoring:
     transforms:
@@ -194,7 +210,7 @@ processors:
       # system.swap.usage -> pagefile/percent_used
       - metric_name: system.swap.utilization
         action: update
-        new_name: pagefile/percent_used
+        new_name: swap/percent_used
         operations:
           # take sum over direction dimension, retaining only state
           - action: aggregate_labels
@@ -239,14 +255,20 @@ exporters:
   stackdriver:
     metric_prefix: agent.googleapis.com/
 
-  # for debugging
-  logging:
-  file:
-    path: ./metrics.json
+  # uncomment for debugging
+  # logging:
+  # file:
+  #   path: ./metrics.json
+
+extensions:
+  zpages:
+    endpoint: 0.0.0.0:55679
 
 service:
   pipelines:
     metrics:
       receivers: [hostmetrics]
-      processors: [metricstransform/cloud-monitoring, agentmetrics/cloud-monitoring]
-      exporters: [stackdriver, logging] # add 'file' to enable output to a file
+      processors: [agentmetrics/cloud-monitoring, metricstransform/cloud-monitoring, filter/cloud-monitoring, resourcedetection]
+      exporters: [stackdriver]
+
+  extensions: [zpages]

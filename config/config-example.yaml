@@ -1,16 +1,19 @@
 receivers:
   # scrape all metrics at 1m interval
+  # commented out disk and process scrapers because:
+  # 1. When sending scraped disk metrics into Google Cloud Monitoring, there is an error message "One or more TimeSeries could not be written: Points must be written in order. One or more of the points specified had an older start time than the most recent point"
+  # 2. The process scraper produces an error of "no such file or directory" when readlink "/proc/2/exe", "/proc/3/exe", etc.
   hostmetrics:
     collection_interval: 1m
     scrapers:
       cpu:
-      disk:
       filesystem:
       load:
       memory:
       network:
       swap:
-      process:
+      # disk:
+      # process:
       
   # add receivers to extend the ability for MySQL, JVM and Apache
 

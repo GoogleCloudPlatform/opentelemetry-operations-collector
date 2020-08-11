@@ -15,6 +15,9 @@ receivers:
   # add receivers to extend the ability for MySQL, JVM and Apache
 
 processors:
+  # perform custom transformations that aren't supported by the metricstransform processor
+  agentmetrics/cloud-monitoring:
+
   metricstransform/cloud-monitoring:
     transforms:
       # system.cpu.time -> cpu/usage_time
@@ -245,5 +248,5 @@ service:
   pipelines:
     metrics:
       receivers: [hostmetrics]
-      processors: [metricstransform/cloud-monitoring]
+      processors: [metricstransform/cloud-monitoring, agentmetrics/cloud-monitoring]
       exporters: [stackdriver, logging] # add 'file' to enable output to a file

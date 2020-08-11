@@ -60,7 +60,7 @@ checklicense:
 
 .PHONY: build
 build:
-	go build -o ./bin/$(OTELCOL_BINARY) ./cmd/otelopscols
+	go build -o ./bin/$(OTELCOL_BINARY) ./cmd/otelopscol
 
 .PHONY: test
 test:

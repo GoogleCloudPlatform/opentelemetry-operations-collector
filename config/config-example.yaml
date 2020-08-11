@@ -33,6 +33,8 @@ processors:
         metric_names:
           - system.network.dropped_packets
           - system.swap.usage
+          - system.filesystem.inodes.usage
+          - system.swap.page_faults
 
   metricstransform/cloud-monitoring:
     transforms:
@@ -107,6 +109,10 @@ processors:
       - metric_name: system.disk.pending_operations
         action: update
         new_name: disk/pending_operations
+      # system.disk.merged -> disk/merged_operations
+      - metric_name: system.disk.merged
+        action: update
+        new_name: disk/merged_operations
       # system.filesystem.usage -> disk/bytes_used
       - metric_name: system.filesystem.usage
         action: update

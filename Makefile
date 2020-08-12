@@ -31,20 +31,46 @@ endif
 OTELCOL_BINARY=google-cloudops-opentelemetry-collector_$(GOOS)_$(GOARCH)$(EXTENSION)
 .EXPORT_ALL_VARIABLES:
 
+.DEFAULT_GOAL := all
+
 # --------------------------
 #  Build / Package Commands
 # --------------------------
 
+ALL_SRC := $(shell find . -name '*.go' -type f | sort)
+
+.PHONY: installtools
+installtools:
+	go install github.com/google/addlicense
+
+.PHONY: all
+all: checklicense test build
+
+.PHONY: checklicense
+checklicense:
+	@ADDLICENSEOUT=`addlicense -check $(ALL_SRC) 2>&1`; \
+		if [ "$$ADDLICENSEOUT" ]; then \
+			echo "addlicense FAILED => add License errors:"; \
+			echo "$$ADDLICENSEOUT"; \
+			exit 1; \
+		else \
+			echo "Check License finished successfully"; \
+		fi
+
 .PHONY: build
 build:
 	go build -o ./bin/$(OTELCOL_BINARY) ./cmd/otelopscol
+
+.PHONY: test
+test:
+	go test ./...
 
 # googet (Windows)
 
 .PHONY: build-goo
 build-goo: export GOOS=windows
 build-goo: export EXTENSION=.exe
-build-goo: build package-goo
+build-goo: test build package-goo
 
 .PHONY: package-goo
 package-goo: export GOOS=windows
@@ -72,10 +98,10 @@ package-tarball:
 	chmod -R 777 ./dist/
 
 .PHONY: build-tarball
-build-tarball: clean-dist build package-tarball
+build-tarball: clean-dist test build package-tarball
 
 .PHONY: build-tarball-exporters
-build-tarball-exporters: clean-dist build build-exporters package-tarball
+build-tarball-exporters: clean-dist test build build-exporters package-tarball
 
 # --------------------
 #  Create build image

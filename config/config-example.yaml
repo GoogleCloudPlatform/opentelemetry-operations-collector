@@ -216,7 +216,7 @@ processors:
           - action: aggregate_labels
             label_set: [ direction ]
             aggregation_type: sum
-      # system.swap.usage -> pagefile/percent_used
+      # system.swap.utilization -> swap/percent_used
       - metric_name: system.swap.utilization
         action: update
         new_name: swap/percent_used

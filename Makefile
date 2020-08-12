@@ -62,14 +62,20 @@ build-exporters:
 	bash ./.build/tar/build_exporters.sh
 
 # tarball
-
-.PHONY: build-tarball
-build-tarball: build build-exporters package-tarball
+.PHONY: clean-dist
+clean-dist:
+	rm -rf dist/
 
 .PHONY: package-tarball
 package-tarball:
 	bash ./.build/tar/generate_tar.sh
 	chmod -R 777 ./dist/
+
+.PHONY: build-tarball
+build-tarball: clean-dist build package-tarball
+
+.PHONY: build-tarball-exporters
+build-tarball-exporters: clean-dist build build-exporters package-tarball
 
 # --------------------
 #  Create build image

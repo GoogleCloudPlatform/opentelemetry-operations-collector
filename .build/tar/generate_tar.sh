@@ -13,6 +13,8 @@ then
     exit 1
 fi
 
+mkdir -p dist
+
 # move the needed files into dist folder
 echo "Organizing files to be compressed"
 cp config/$CONFIG_FILE dist/

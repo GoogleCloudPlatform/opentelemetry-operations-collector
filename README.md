@@ -15,7 +15,7 @@ To generate an MSI that will install OpenTelemetry as a Windows service using a 
 2. Run `.build\msi\make.ps1 New-MSI`
 3. The MSI file will be generated in the `dist` folder
 
-Alternatively, you can generate a [googet](https://github.com/google/googet) package by running `make build-googet`. This is the packaging method used to install the Collector on GCE VMs.
+Alternatively, you can generate a [googet](https://github.com/google/googet) package by running `make build-googet`. This is the packaging method used to install the Collector on Windows GCE VMs.
 
 ## Running build commands in Docker
 

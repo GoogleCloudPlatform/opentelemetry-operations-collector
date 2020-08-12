@@ -264,7 +264,7 @@ exporters:
   stackdriver:
     metric_prefix: agent.googleapis.com/
 
-  # uncomment for debugging
+  # to debug the outputted metrics, uncomment the following and add "logging" to the exporters list below
   # logging:
   # file:
   #   path: ./metrics.json

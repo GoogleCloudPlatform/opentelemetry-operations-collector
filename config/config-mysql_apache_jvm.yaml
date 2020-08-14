@@ -36,6 +36,11 @@ receivers:
     exec: java -jar ./prometheus_exporters/jmx_exporter.jar {{port}} exporter_configs/jvm_config.yaml
     port: 9404
 
+  # https://github.com/prometheus/statsd_exporter
+  prometheus_exec/statsd:
+    exec: ./statsd_exporter
+    port: 9102
+
 processors:
 
   # Detect GCE info

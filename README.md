@@ -7,7 +7,7 @@ This repository is focused on building and packaging the OpenTelemetry Collector
 
 To generate a tarball file that packages the executable OpenTelemetry binary with the configuration file compatible with Google Cloud Monitoring.
 1. Run `make build-tarball`
-    - To also include JVM, Apache, MySQL and StasD supports, run `make build-tarball-exporters` instead
+    - To also include JVM, Apache, MySQL and StasD support, run `make build-tarball-exporters CONFIG_FILE=config-mysql_apache_jvm.yaml` instead
 2. The tarball file will be generated in the `dist` folder
 
 ## Running build commands in Docker

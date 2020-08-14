@@ -23,6 +23,11 @@ receivers:
     exec: java -jar ./prometheus_exporters/jmx_exporter.jar {{port}} exporter_configs/jvm_config.yaml # see jvm_config.yaml for JMX configuration, notably the "hostPort" key
     port: 9404
 
+  # https://github.com/prometheus/statsd_exporter
+  prometheus_exec/statsd:
+    exec: ./statsd_exporter
+    port: 9102
+
 processors:
   filter:
     metrics:

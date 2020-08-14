@@ -57,4 +57,14 @@ cd ..
 cp jmx_exporter/jmx_prometheus_httpserver/target/jmx_prometheus_httpserver-${version}-jar-with-dependencies.jar dist/prometheus_exporters/jmx_exporter.jar
 rm -rf jmx_exporter
 
+# StatsD exporter
+echo "Cloning and building the StatsD exporter"
+
+git clone https://github.com/prometheus/statsd_exporter.git -q
+cd statsd_exporter/ 
+make build
+cd ..
+cp statsd_exporter/statsd_exporter dist/prometheus_exporters/statsd_exporter
+rm -rf statsd_exporter
+
 echo "Prometheus exporters built"

@@ -1,5 +1,6 @@
 # This config mimicks the Cloud Monitoring Agent by collecting metrics from popular third-party services the Agent already supports
 # and formatting the metrics in the same way, so they appear similarly in Cloud Monitoring. The services targeted here are MySQL, Apache and JVM.
+# There is also support for DogStatsD metrics, with no transformations
 # Please remove/comment-out the pipelines you don't need/want in the last section.
 # Documentation specific to each exporter is found in the comment directly above its configuration
 
@@ -38,11 +39,10 @@ receivers:
 
   # https://github.com/prometheus/statsd_exporter
   prometheus_exec/statsd:
-    exec: ./statsd_exporter
+    exec: ./prometheus_exporters/statsd_exporter
     port: 9102
 
 processors:
-
   # Detect GCE info
   resourcedetection:
     detectors: [gce]
@@ -299,4 +299,9 @@ service:
     metrics/host:
       receivers: [hostmetrics]
       processors: [resourcedetection, metricstransform/host]
+      exporters: [stackdriver]
+
+    metrics/statsd:
+      receivers: [prometheus_exec/statsd]
+      processors: [resourcedetection]
       exporters: [stackdriver]

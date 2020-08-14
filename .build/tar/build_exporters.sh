@@ -44,9 +44,7 @@ rm -rf jmx_exporter
 echo "Cloning and building the StatsD exporter"
 
 git clone https://github.com/prometheus/statsd_exporter.git -q
-cd statsd_exporter/ 
-make build
-cd ..
+make -C statsd_exporter/ >/dev/null
 cp statsd_exporter/statsd_exporter dist/prometheus_exporters/statsd_exporter
 rm -rf statsd_exporter
 

@@ -33,7 +33,6 @@ try
         New-Service -DisplayName "Google Cloud Operations OpenTelemetry Collector" `
             -Name "google-cloudops-opentelemetry-collector" `
             -BinaryPathName "$InstallDir\google-cloudops-opentelemetry-collector.exe --config=""$InstallDir\config.yaml""" `
-            -StartupType AutomaticDelayedStart `
             -Description "Google Cloud Operations OpenTelemetry Collector based Monitoring Agent"
 
         Set-ServiceConfig

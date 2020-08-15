@@ -15,10 +15,11 @@
 package main
 
 import (
-	"github.com/Nicolas-MacBeth/opentelemetry-collector-contrib/receiver/prometheusexecreceiver" //update when merged
 	"github.com/open-telemetry/opentelemetry-collector-contrib/exporter/stackdriverexporter"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusexecreceiver"
+
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/component/componenterror"
 	"go.opentelemetry.io/collector/service/defaultcomponents"
@@ -43,7 +44,7 @@ func components() (component.Factories, error) {
 	}
 
 	receivers := []component.ReceiverFactoryBase{
-		&prometheusexecreceiver.Factory{},
+		prometheusexecreceiver.NewFactory(),
 	}
 	for _, rcv := range factories.Receivers {
 		receivers = append(receivers, rcv)

@@ -484,14 +484,11 @@ processors:
         operations:
           - action: toggle_scalar_data_type
 
-# both Stackdriver exporters below will use the default GCE credentials
 exporters:
 
-  # this exporter has no prefix, the metric's name prefix needs to be defined before reaching this exporter
-  stackdriver/no-prefix:  
-    metric_prefix: 
-
-  stackdriver/custom:  
+  # this exporter will prefix all metrics without a domain (eg. agent.googleapis.com/) with custom.googleapis.com/
+  # also, it will use the default GCE instance credentials this Collector will run on
+  stackdriver:  
     metric_prefix: custom.googleapis.com/
 
 service:
@@ -500,24 +497,24 @@ service:
     metrics/host:
       receivers: [hostmetrics]
       processors: [agentmetrics/host, metricstransform/host, filter/host, resourcedetection]
-      exporters: [stackdriver/no-prefix]
+      exporters: [stackdriver]
 
     metrics/mysql:
       receivers: [prometheus_exec/mysql]
       processors: [filter/mysql, metricstransform/mysql, resourcedetection]
-      exporters: [stackdriver/no-prefix]
+      exporters: [stackdriver]
 
     metrics/jvm:
       receivers: [prometheus_exec/jvm]
       processors: [filter/jvm, metricstransform/jvm, resourcedetection]
-      exporters: [stackdriver/no-prefix]
+      exporters: [stackdriver]
 
     metrics/apache:
       receivers: [prometheus_exec/apache]
       processors: [filter/apache, metricstransform/apache, resourcedetection]
-      exporters: [stackdriver/no-prefix]
+      exporters: [stackdriver]
 
     metrics/statsd:
       receivers: [prometheus_exec/statsd]
       processors: [resourcedetection]
-      exporters: [stackdriver/custom]
+      exporters: [stackdriver]

@@ -3,7 +3,7 @@ module github.com/GoogleCloudPlatform/opentelemetry-operations-collector
 go 1.14
 
 require (
-	github.com/StackExchange/wmi v0.0.0-20181212234831-e0a55b97c705 // indirect
+github.com/StackExchange/wmi v0.0.0-20181212234831-e0a55b97c705 // indirect
 	github.com/go-ole/go-ole v1.2.4 // indirect
 	github.com/hashicorp/consul/api v1.4.0 // indirect
 	github.com/hashicorp/serf v0.9.2 // indirect

@@ -8,14 +8,15 @@ require (
 	github.com/hashicorp/consul/api v1.4.0 // indirect
 	github.com/hashicorp/serf v0.9.2 // indirect
 	github.com/mitchellh/go-testing-interface v1.0.3 // indirect
-	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/stackdriverexporter v0.6.1-0.20200723171718-a2ff1aa6779e
-	github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor v0.6.1-0.20200723171718-a2ff1aa6779e
-	github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor v0.6.1-0.20200723171718-a2ff1aa6779e
-	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusexecreceiver v0.0.0-20200815200603-450150cb08ca
+	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/stackdriverexporter v0.8.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor v0.8.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor v0.8.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusexecreceiver v0.8.0
 	github.com/shirou/gopsutil v2.20.6+incompatible // indirect
 	github.com/stretchr/testify v1.6.1
+	go.opentelemetry.io/collector v0.8.1-0.20200815205113-8e5c6065eb0e
 	go.uber.org/zap v1.15.0
-	golang.org/x/sys v0.0.0-20200625212154-ddb9806d33ae
+	golang.org/x/sys v0.0.0-20200803210538-64077c9b5642
 	k8s.io/client-go v8.0.0+incompatible // indirect
 )
 

@@ -15,7 +15,7 @@ receivers:
 processors:
   # append resource information from GCE metadata
   resourcedetection:
-    detectors: [gce]
+    detectors: [ gce ]
 
   # perform custom transformations that aren't supported by the metricstransform processor
   agentmetrics/cloud-monitoring:

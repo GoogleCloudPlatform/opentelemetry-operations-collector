@@ -1,5 +1,7 @@
 # OpenTelemetry Operations Collector
 
+> ### :warning: This product is currently in ALPHA and not officially supported by Google.
+
 This repository is focused on building and packaging the OpenTelemetry Collector for use with Google Cloud Monitoring.
 
 ## Collector for Linux

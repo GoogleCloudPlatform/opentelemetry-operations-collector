@@ -266,7 +266,7 @@ func otherLabelsAsKey(labels pdata.StringMap, excluding ...string) (string, erro
 			}
 		}
 
-		otherLabels = append(otherLabels, k + "=" + v.Value())
+		otherLabels = append(otherLabels, fmt.Sprintf("%s=%s", k, v.Value()))
 	})
 
 	if len(otherLabels) > otherLabelsLen {

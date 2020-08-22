@@ -30,33 +30,45 @@ endif
 
 OTELCOL_BINARY=google-cloudops-opentelemetry-collector_$(GOOS)_$(GOARCH)$(EXTENSION)
 
+ALL_SRC := $(shell find . -name '*.go' -type f | sort)
+ALL_DOC := $(shell find . \( -name "*.md" -o -name "*.yaml" \) -type f | sort)
+
 .EXPORT_ALL_VARIABLES:
 
-.DEFAULT_GOAL := all
+.DEFAULT_GOAL := presubmit
 
 # --------------------------
 #  Build / Package Commands
 # --------------------------
 
-ALL_SRC := $(shell find . -name '*.go' -type f | sort)
+.PHONY: install-tools
+install-tools:
+	go get github.com/client9/misspell/cmd/misspell
+	go get github.com/golangci/golangci-lint/cmd/golangci-lint
+	go get github.com/google/addlicense
+	go get github.com/google/googet/goopack
+	go get github.com/pavius/impi/cmd/impi
 
-.PHONY: installtools
-installtools:
-	go install github.com/google/addlicense
+# lint / build / test
 
-.PHONY: all
-all: checklicense test build
+.PHONY: presubmit
+presubmit: checklicense impi lint misspell test
 
 .PHONY: checklicense
 checklicense:
-	@ADDLICENSEOUT=`addlicense -check $(ALL_SRC) 2>&1`; \
-		if [ "$$ADDLICENSEOUT" ]; then \
-			echo "addlicense FAILED => add License errors:"; \
-			echo "$$ADDLICENSEOUT"; \
-			exit 1; \
-		else \
-			echo "Check License finished successfully"; \
-		fi
+	@output=`addlicense -check $(ALL_SRC)` && echo checklicense finished successfully || (echo checklicense errors: $$output && exit 1)
+
+.PHONY: impi
+impi:
+	@output=`impi --local github.com/GoogleCloudPlatform/opentelemetry-operations-collector --scheme stdThirdPartyLocal ./...` && echo impi finished successfully || (echo impi errors:\\n$$output && exit 1)
+
+.PHONY: lint
+lint:
+	golangci-lint run
+
+.PHONY: misspell
+misspell:
+	@output=`misspell -error $(ALL_DOC)` && echo misspell finished successfully || (echo misspell errors:\\n$$output && exit 1)
 
 .PHONY: build
 build:
@@ -64,34 +76,32 @@ build:
 
 .PHONY: test
 test:
-	go test ./...
+	go test -v -race ./...
 
 # googet (Windows)
 
 .PHONY: build-goo
-build-goo: export GOOS=windows
-build-goo: export EXTENSION=.exe
-build-goo: test build package-goo
+build-goo:
+	make GOOS=windows build package-goo
 
 .PHONY: package-goo
 package-goo: export GOOS=windows
-package-goo: export EXTENSION=.exe
 package-goo: SHELL:=/bin/bash
 package-goo:
 	mkdir -p dist
 	# goopack doesn't support variable replacement or command line args so just use envsubst
 	goopack -output_dir ./dist <(envsubst < ./.build/googet/google-cloudops-opentelemetry-collector.goospec)
-	chmod -R 777 ./dist/
+	chmod -R a+rwx ./dist/
 
 # tarball
 
 .PHONY: build-tarball
-build-tarball: test build package-tarball
+build-tarball: build package-tarball
 
 .PHONY: package-tarball
 package-tarball:
 	bash ./.build/tar/generate_tar.sh
-	chmod -R 777 ./dist/
+	chmod -R a+rwx ./dist/
 
 # --------------------
 #  Create build image
@@ -106,11 +116,10 @@ docker-build-image:
 # -------------------------------------------
 
 # Usage:   make TARGET=<target> docker-run
-# Example: make TARGET=package-googet docker-run
+# Example: make TARGET=build-goo docker-run
 .PHONY: docker-run
 docker-run:
 ifndef TARGET
 	$(error "TARGET is undefined")
 endif
-	@echo "Running $(TARGET) in docker container $(BUILD_IMAGE_NAME)"
-	docker run -e PKG_VERSION -e GOOS -e ARCH -e GOARCH -v $(CURDIR):/mnt -w /mnt $(BUILD_IMAGE_NAME) /bin/bash -c "make $(TARGET)"
+	docker run -e PKG_VERSION -e ARCH -v $(CURDIR):/mnt -w /mnt $(BUILD_IMAGE_NAME) /bin/bash -c "make $(TARGET)"

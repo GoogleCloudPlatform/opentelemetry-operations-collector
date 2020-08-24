@@ -5,6 +5,7 @@ go 1.14
 require (
 	github.com/StackExchange/wmi v0.0.0-20181212234831-e0a55b97c705 // indirect
 	github.com/go-ole/go-ole v1.2.4 // indirect
+	github.com/google/addlicense v0.0.0-20200817051935-6f4cd4aacc89 // indirect
 	github.com/hashicorp/consul/api v1.4.0 // indirect
 	github.com/hashicorp/serf v0.9.2 // indirect
 	github.com/mitchellh/go-testing-interface v1.0.3 // indirect

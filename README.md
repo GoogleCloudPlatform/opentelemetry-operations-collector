@@ -26,7 +26,7 @@ You can experiment with custom builds, but for the official Linux agent, see htt
 #### To install the agent via MSI:
 
 1. Download the latest MSI package from the Releases](https://github.com/GoogleCloudPlatform/opentelemetry-operations-collector/releases) page.
-2. Copy the MSI package to your Virtual Machines.
+2. Copy the MSI package to your Virtual Machine.
 3. Double click the MSI or run the following command in an administrative Powershell console: `msiexec /i google-cloudops-opentelemetry-collector.msi /qn`.
 4. This will install the agent as a Windows Service and start running immediately.
 
@@ -45,7 +45,7 @@ Within a couple of minutes you should see agent metrics appearing in Cloud Monit
 3. You can view metrics related to the health of the agent itself under the `agent` prefix as documented [here](https://cloud.google.com/monitoring/api/metrics_agent#agent-agent).
 4. The agent reports additional Prometheus style self observability metrics that can be accessed locally via the endpoint https://localhost:8888/metrics as documented [here](https://github.com/open-telemetry/opentelemetry-collector/blob/master/docs/observability.md).
 5. The agent exposes additional debug information via the endpoint http://localhost:55679/debug/tracez that can be used to discover errors collecting metrics or . Find our more about zpages [here](https://github.com/open-telemetry/opentelemetry-specification/blob/master/experimental/trace/zpages.md).
-6. If you encounter an issue related to running the agent or using it with Cloud Monitoring, please create a Github issue in this repository and include relevant debug information. If you encounter an issue or have a feature request related to the core OpenTelemetry Collector application, consider creating an issue [here](https://github.com/open-telemetry/opentelemetry-collector/issues).
+6. If you encounter an issue related to running the agent or using it with Cloud Monitoring, please create a GitHub issue in this repository and include relevant debug information. If you encounter an issue or have a feature request related to the core OpenTelemetry Collector application, consider creating an issue [here](https://github.com/open-telemetry/opentelemetry-collector/issues) instead.
 
 ## Build / Package from source
 

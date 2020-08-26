@@ -2,36 +2,36 @@
 include VERSION
 
 # if GOOS is not supplied, set default value based on user's system, will be overridden for OS specific packaging commands
-ifeq ($(GOOS),)
-GOOS=$(shell go env GOOS)
-endif
+GOOS ?= $(shell go env GOOS)
 ifeq ($(GOOS),windows)
-EXTENSION = .exe
+EXTENSION := .exe
 endif
 
 # if ARCH is not supplied, set default value based on user's system
-ifeq ($(ARCH),)
-ARCH = $(shell if [ `getconf LONG_BIT` == "64" ]; then echo "x86_64"; else echo "x86"; fi)
-endif
+ARCH ?= $(shell if [ `getconf LONG_BIT` == "64" ]; then echo "x86_64"; else echo "x86"; fi)
 
 # set GOARCH based on ARCH
 ifeq ($(ARCH),x86_64)
-GOARCH=amd64
+GOARCH := amd64
 else ifeq ($(ARCH),x86)
-GOARCH=386
+GOARCH := 386
 else
 $(error "ARCH must be set to one of: x86, x86_64")
 endif
 
-# set docker build image name
-ifeq ($(BUILD_IMAGE_NAME),)
-BUILD_IMAGE_NAME=otelopscol-build
-endif
+# set default docker build image name
+BUILD_IMAGE_NAME ?= otelopscol-build
 
-OTELCOL_BINARY=google-cloudops-opentelemetry-collector_$(GOOS)_$(GOARCH)$(EXTENSION)
+OTELCOL_BINARY = google-cloudops-opentelemetry-collector_$(GOOS)_$(GOARCH)$(EXTENSION)
 
 ALL_SRC := $(shell find . -name '*.go' -type f | sort)
 ALL_DOC := $(shell find . \( -name "*.md" -o -name "*.yaml" \) -type f | sort)
+GIT_SHA := $(shell git rev-parse --short HEAD)
+
+BUILD_INFO_IMPORT_PATH := github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/version
+BUILD_X1 := -X $(BUILD_INFO_IMPORT_PATH).GitHash=$(GIT_SHA)
+BUILD_X2 := -X $(BUILD_INFO_IMPORT_PATH).Version=$(PKG_VERSION)
+BUILD_INFO := -ldflags "${BUILD_X1} ${BUILD_X2}"
 
 .EXPORT_ALL_VARIABLES:
 
@@ -72,7 +72,7 @@ misspell:
 
 .PHONY: build
 build:
-	go build -o ./bin/$(OTELCOL_BINARY) ./cmd/otelopscol
+	go build -o ./bin/$(OTELCOL_BINARY) $(BUILD_INFO) ./cmd/otelopscol
 
 .PHONY: test
 test:

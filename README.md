@@ -1,6 +1,4 @@
----
-
-<p align="center">
+<p align="right">
   <strong>
     <a href="docs/contributing.md">Contributing<a/>
     &nbsp;&nbsp;&bull;&nbsp;&nbsp;
@@ -8,13 +6,11 @@
   </strong>
 </p>
 
----
-
 # OpenTelemetry Operations Collector Agent
 
 ### :exclamation: This product is currently in ALPHA and not officially supported by Google.
 
-This repository hosts packaging and configuration code for custom builds of the OpenTelemetry Collector for use with Google Cloud Monitoring.
+This repository hosts packaging and configuration code for using the OpenTelemetry Collector to collect system & application metrics and send these to Google Cloud Monitoring.
 
 ## Running the Agent
 
@@ -26,7 +22,7 @@ You can experiment with custom builds, but for the official Linux agent, see htt
 
 ### Windows
 
-To install the agent via MSI:
+#### To install the agent via MSI:
 
 1. Download the latest MSI package from [Releases](https://github.com/GoogleCloudPlatform/opentelemetry-operations-collector/releases)
 2. Copy the package to your Virtual Machines.
@@ -34,11 +30,11 @@ To install the agent via MSI:
 
 Within a couple of minutes you should see agent metrics appearing in Cloud Monitoring. The monitoring agent status should change to ":white_check_mark:&nbsp;&nbsp;Latest" in the VM Instances dashboard: https://console.cloud.google.com/monitoring/dashboards/resourceList/gce_instance.
 
-To uninstall the agent via MSI:
+#### To uninstall the agent via MSI:
 
 1. Right click the MSI and select uninstall or run the following command in an administrative Powershell console: `msiexec /x google-cloudops-opentelemetry-collector.msi /qn`. This will uninstall the agent and remove the windows service.
 
-Troubleshooting:
+#### Troubleshooting (TODO):
 
 1. MSI installation logs
 2. Event Viewer

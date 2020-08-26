@@ -1,4 +1,6 @@
-<p align="right">
+# OpenTelemetry Operations Collector Agent
+
+<p>
   <strong>
     <a href="docs/contributing.md">Contributing<a/>
     &nbsp;&nbsp;&bull;&nbsp;&nbsp;
@@ -6,7 +8,6 @@
   </strong>
 </p>
 
-# OpenTelemetry Operations Collector Agent
 
 ### :exclamation: This product is currently in ALPHA and not officially supported by Google.
 

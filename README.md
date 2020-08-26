@@ -10,7 +10,7 @@
 
 ### :exclamation: This product is currently in ALPHA and not officially supported by Google.
 
-This repository hosts packaging and configuration code for using the OpenTelemetry Collector to collect system & application metrics and send these to Google Cloud Monitoring.
+This repository hosts packaging and configuration code for generating builds of the OpenTelemetry Collector that can be used to collect system & application metrics and send these to Google Cloud Monitoring.
 
 ## Running the Agent
 
@@ -24,22 +24,27 @@ You can experiment with custom builds, but for the official Linux agent, see htt
 
 #### To install the agent via MSI:
 
-1. Download the latest MSI package from [Releases](https://github.com/GoogleCloudPlatform/opentelemetry-operations-collector/releases)
-2. Copy the package to your Virtual Machines.
-3. Double click the MSI or run the following command in an administrative Powershell console: `msiexec /i google-cloudops-opentelemetry-collector.msi /qn`. This will install the agent as a windows service and start running immediately.
+1. Download the latest MSI package from the Releases](https://github.com/GoogleCloudPlatform/opentelemetry-operations-collector/releases) page.
+2. Copy the MSI package to your Virtual Machines.
+3. Double click the MSI or run the following command in an administrative Powershell console: `msiexec /i google-cloudops-opentelemetry-collector.msi /qn`.
+4. This will install the agent as a Windows Service and start running immediately.
 
 Within a couple of minutes you should see agent metrics appearing in Cloud Monitoring. The monitoring agent status should change to ":white_check_mark:&nbsp;&nbsp;Latest" in the VM Instances dashboard: https://console.cloud.google.com/monitoring/dashboards/resourceList/gce_instance.
 
 #### To uninstall the agent via MSI:
 
-1. Right click the MSI and select uninstall or run the following command in an administrative Powershell console: `msiexec /x google-cloudops-opentelemetry-collector.msi /qn`. This will uninstall the agent and remove the windows service.
+1. Right click the MSI and select uninstall or run the following command in an administrative Powershell console: `msiexec /x google-cloudops-opentelemetry-collector.msi /qn`.
+2. Alternatively, you can uninstall the agent from the Programs & Features page in the Control Panel. The agent will appear as "Google Cloud Operations OpenTelemetry Collector".
+2. This will uninstall the agent and remove the windows service.
 
-#### Troubleshooting (TODO):
+#### Troubleshooting:
 
-1. MSI installation logs
-2. Event Viewer
-3. Self-observability metrics & agent metrics in Cloud Monitoring
-4. Create a Github issue
+1. If the MSI fails to install, you can generate installation logs for debugging purposes by adding the flag `/l* msi.log` to the [msiexec command](https://docs.microsoft.com/en-us/windows/win32/msi/command-line-options).
+2. Application logs are sent to the Event Viewer. These will show under the source "google-cloudops-opentelemetry-collector". These can be used to debug why the service failed to install/start as well as general errors.
+3. You can view metrics related to the health of the agent itself under the `agent` prefix as documented [here](https://cloud.google.com/monitoring/api/metrics_agent#agent-agent).
+4. The agent reports additional Prometheus style self observability metrics that can be accessed locally via the endpoint https://localhost:8888/metrics as documented [here](https://github.com/open-telemetry/opentelemetry-collector/blob/master/docs/observability.md).
+5. The agent exposes additional debug information via the endpoint http://localhost:55679/debug/tracez that can be used to discover errors collecting metrics or . Find our more about zpages [here](https://github.com/open-telemetry/opentelemetry-specification/blob/master/experimental/trace/zpages.md).
+6. If you encounter an issue related to running the agent or using it with Cloud Monitoring, please create a Github issue in this repository and include relevant debug information. If you encounter an issue or have a feature request related to the core OpenTelemetry Collector application, consider creating an issue [here](https://github.com/open-telemetry/opentelemetry-collector/issues).
 
 ## Build / Package from source
 
@@ -47,16 +52,16 @@ Within a couple of minutes you should see agent metrics appearing in Cloud Monit
 
 To generate a tarball archive that includes the OpenTelemetry binary and a configuration file compatible with Google Cloud Monitoring:
 
-1. Run `make build-tarball`
-2. The tarball file will be generated in the `dist` folder
+1. Run `make build-tarball`.
+2. The tarball file will be generated in the `dist` folder.
 
 ### Windows
 
 To generate an MSI that will install OpenTelemetry as a Windows service using a configuration file compatible with Google Cloud Monitoring:
 
-1. Run `.build\msi\make.ps1 Install-Tools` to install the open source [WIX Toolset](https://wixtoolset.org)
-2. Run `.build\msi\make.ps1 New-MSI`
-3. The MSI file will be generated in the `dist` folder
+1. Run `.build\msi\make.ps1 Install-Tools` to install the open source [WIX Toolset](https://wixtoolset.org).
+2. Run `.build\msi\make.ps1 New-MSI`.
+3. The MSI file will be generated in the `dist` folder.
 
 Alternatively, you can generate a [googet](https://github.com/google/googet) package by running `make build-googet`. This is the packaging method used to install the Collector on Windows GCE VMs.
 
@@ -68,7 +73,7 @@ The Collector Agent is compatible with, but has not been tested on, other operat
 
 You can also run the build commands inside docker:
 
-1. Run `make docker-build-image` to build the docker image. This will generate an image called `otelopscol-build`
-2. Run `make TARGET=build-<package> docker-run`
-3. The specified package will be generated in the `dist` folder
+1. Run `make docker-build-image` to build the docker image. This will generate an image called `otelopscol-build`.
+2. Run `make TARGET=build-<package> docker-run`.
+3. The specified package will be generated in the `dist` folder.
 

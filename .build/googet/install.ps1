@@ -32,7 +32,7 @@ try
     {
         New-Service -DisplayName "Google Cloud Operations OpenTelemetry Collector" `
             -Name "google-cloudops-opentelemetry-collector" `
-            -BinaryPathName "$InstallDir\google-cloudops-opentelemetry-collector.exe --config=""$InstallDir\config.yaml""" `
+            -BinaryPathName "$InstallDir\google-cloudops-opentelemetry-collector.exe --add-instance-id=false --config=""$InstallDir\config.yaml""" `
             -Description "Google Cloud Operations OpenTelemetry Collector based Monitoring Agent"
 
         Set-ServiceConfig

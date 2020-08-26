@@ -1,5 +1,5 @@
 receivers:
-  # scrape all metrics at 1m interval
+  # scrape system metrics at 1m interval
   hostmetrics:
     collection_interval: 1m
     scrapers:
@@ -12,10 +12,19 @@ receivers:
       swap:
       process:
 
+  # agent self-observability metrics
+  prometheus/agent:
+    config:
+      scrape_configs:
+      - job_name: 'otel-collector'
+        scrape_interval: 1m
+        static_configs:
+        - targets: ['0.0.0.0:8888']
+
 processors:
   # append resource information from GCE metadata
   resourcedetection:
-    detectors: [gce]
+    detectors: [gce, ec2]
 
   # perform custom transformations that aren't supported by the metricstransform processor
   agentmetrics/cloud-monitoring:
@@ -202,7 +211,7 @@ processors:
         action: update
         new_name: swap/io
         operations:
-          # delete singular type dimension, retaining only direction
+          # delete single-valued type dimension, retaining only direction
           - action: aggregate_labels
             label_set: [ direction ]
             aggregation_type: sum
@@ -226,6 +235,10 @@ processors:
           - action: update_label
             label: state
             new_label: user_or_syst
+            # change label value system -> syst  
+            value_actions:
+              - value: system
+                new_value: syst
       # process.disk.read_io (as named after custom split logic) -> processes/disk/read_bytes_count
       - metric_name: process.disk.read_io
         action: update
@@ -249,6 +262,56 @@ processors:
           # change data type from int64 -> double
           - action: toggle_scalar_data_type
 
+  # filter to include only agent metrics supported by cloud monitoring
+  filter/agent:
+    metrics:
+      include:
+        match_type: strict
+        metric_names:
+          - process_uptime
+          - process_memory_rss
+          - otelcol_grpc_io_client_completed_rpcs
+          - otelcol_googlecloudmonitoring_point_count
+
+  # convert from opentelemetry metric formats to cloud monitoring formats
+  metricstransform/agent:
+    transforms:
+      # process_uptime -> agent/uptime
+      - metric_name: process_uptime
+        action: update
+        new_name: agent/uptime
+        operations:
+          # add version label
+          - action: add_label
+            new_label: version
+            new_value: Google Cloud Operations OpenTelemetry Collector {{version}}
+      # process_memory_rss -> agent/memory_usage
+      - metric_name: process_memory_rss
+        action: update
+        new_name: agent/memory_usage
+      # otelcol_grpc_io_client_completed_rpcs -> agent/api_request_count
+      - metric_name: otelcol_grpc_io_client_completed_rpcs
+        action: update
+        new_name: agent/api_request_count
+        operations:
+          # ignore any non "google.monitoring" RPCs
+        # TODO (there won't be any of these, but would be safer to delete to make this future proof):
+        # - action: select_label_values
+        #   label: grpc_client_method
+        #   value_regexp: ^google\.monitoring
+          # change label grpc_client_status -> state
+          - action: update_label
+            label: grpc_client_status
+            new_label: state
+          # delete grpc_client_method dimension, retaining only state
+          - action: aggregate_labels
+            label_set: [ state ]
+            aggregation_type: sum
+      # otelcol_googlecloudmonitoring_point_count -> agent/monitoring/point_count
+      - metric_name: otelcol_googlecloudmonitoring_point_count
+        action: update
+        new_name: agent/monitoring/point_count
+
 exporters:
   # export to cloud monitoring using the agent prefix
   stackdriver:
@@ -260,7 +323,8 @@ extensions:
 
 service:
   pipelines:
-    metrics:
+    # reports system metrics to cloud monitoring
+    metrics/system:
       receivers:
         - hostmetrics
       processors:
@@ -269,6 +333,17 @@ service:
         - metricstransform/cloud-monitoring
         - filter/cloud-monitoring
         # add additional custom processors below this line if desired
+        - resourcedetection
+      exporters:        
+        - stackdriver
+
+    # reports agent self-observability metrics to cloud monitoring
+    metrics/agent:
+      receivers:
+        - prometheus/agent
+      processors:
+        - filter/agent
+        - metricstransform/agent
         - resourcedetection
       exporters:        
         - stackdriver

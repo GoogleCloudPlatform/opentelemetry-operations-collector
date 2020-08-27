@@ -31,7 +31,7 @@ GIT_SHA := $(shell git rev-parse --short HEAD)
 BUILD_INFO_IMPORT_PATH := github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/version
 BUILD_X1 := -X $(BUILD_INFO_IMPORT_PATH).GitHash=$(GIT_SHA)
 BUILD_X2 := -X $(BUILD_INFO_IMPORT_PATH).Version=$(PKG_VERSION)
-BUILD_INFO := -ldflags "${BUILD_X1} ${BUILD_X2}"
+LD_FLAGS := -ldflags "${BUILD_X1} ${BUILD_X2}"
 
 .EXPORT_ALL_VARIABLES:
 
@@ -72,7 +72,7 @@ misspell:
 
 .PHONY: build
 build:
-	go build -o ./bin/$(OTELCOL_BINARY) $(BUILD_INFO) ./cmd/otelopscol
+	go build -o ./bin/$(OTELCOL_BINARY) $(LD_FLAGS) ./cmd/otelopscol
 
 .PHONY: test
 test:

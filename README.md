@@ -60,8 +60,6 @@ msiexec /x google-cloudops-opentelemetry-collector.msi /qn
 
 ## Configuration
 
-### Configure scraped metrics
-
 To view details of the general structure of the configuration file and Collector pipelines, see the [OpenTelemetry Collector design document](https://github.com/open-telemetry/opentelemetry-collector/blob/master/docs/design.md).
 
 Common configuration that you may want to change includes:

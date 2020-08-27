@@ -52,7 +52,7 @@ func (mtp *agentMetricsProcessor) appendUtilizationMetrics(rms pdata.ResourceMet
 				metric := metrics.At(k)
 
 				// ignore all metrics except the ones we want to compute utilizations for
-				metricName := metric.MetricDescriptor().Name()
+				metricName := metric.Name()
 				if !metricsToComputeUtilizationFor[metricName] {
 					continue
 				}
@@ -71,30 +71,43 @@ func (mtp *agentMetricsProcessor) appendUtilizationMetrics(rms pdata.ResourceMet
 	return nil
 }
 
-func (mtp *agentMetricsProcessor) calculateUtilizationMetric(metric pdata.Metric) (pdata.Metric, error) {
+func (mtp *agentMetricsProcessor) calculateUtilizationMetric(usageMetric pdata.Metric) (pdata.Metric, error) {
 	utilizationMetric := pdata.NewMetric()
-	metric.CopyTo(utilizationMetric)
-	utilizationMetric.MetricDescriptor().SetName(metricPostfixRegex.ReplaceAllString(metric.MetricDescriptor().Name(), "utilization"))
-	utilizationMetric.MetricDescriptor().SetType(pdata.MetricTypeDouble)
+	usageMetric.CopyTo(utilizationMetric)
+
+	utilizationMetric.SetName(metricPostfixRegex.ReplaceAllString(usageMetric.Name(), "utilization"))
+	utilizationMetric.SetDataType(pdata.MetricDataTypeDoubleGauge)
+	utilizationMetric.DoubleGauge().InitEmpty()
+
+	metric := usageMetric
 
 	// for "cpu.time", we need to convert cumulative values to delta values before
 	// computing utilization of the deltas
-	isCPUTime := metric.MetricDescriptor().Name() == cpuTime
+	isCPUTime := usageMetric.Name() == cpuTime
 	if isCPUTime {
-		mtp.convertPrevCPUTimeToDelta(utilizationMetric)
+		delta := pdata.NewMetric()
+		usageMetric.CopyTo(delta)
+		mtp.convertPrevCPUTimeToDelta(delta)
+		metric = delta
 	}
 
-	if err := calculateUtilizationFromDoubleDataPoints(utilizationMetric); err != nil {
-		return pdata.NewMetric(), err
+	var err error
+	switch t := metric.DataType(); t {
+	case pdata.MetricDataTypeIntSum, pdata.MetricDataTypeIntGauge:
+		err = calculateUtilizationFromIntDataPoints(metric, utilizationMetric)
+	case pdata.MetricDataTypeDoubleSum, pdata.MetricDataTypeDoubleGauge:
+		err = calculateUtilizationFromDoubleDataPoints(metric, utilizationMetric)
+	default:
+		return pdata.NewMetric(), fmt.Errorf("unsupported metric data type: %v", t)
 	}
 
-	if err := calculateUtilizationFromInt64DataPoints(utilizationMetric); err != nil {
+	if err != nil {
 		return pdata.NewMetric(), err
 	}
 
 	// persist the values of "cpu.time" so we can compute deltas on the next cycle
 	if isCPUTime {
-		mtp.setPrevCPUTimes(metric)
+		mtp.setPrevCPUTimes(usageMetric)
 	}
 
 	return utilizationMetric, nil
@@ -106,7 +119,7 @@ func (mtp *agentMetricsProcessor) convertPrevCPUTimeToDelta(cpuTimeMetric pdata.
 	mtp.mutex.Lock()
 	defer mtp.mutex.Unlock()
 
-	ddps := cpuTimeMetric.DoubleDataPoints()
+	ddps := cpuTimeMetric.DoubleSum().DataPoints()
 	for i := 0; i < ddps.Len(); {
 		ddp := ddps.At(i)
 
@@ -134,19 +147,27 @@ func (mtp *agentMetricsProcessor) setPrevCPUTimes(cpuTimeMetric pdata.Metric) {
 }
 
 type int64Points struct {
-	pts []pdata.Int64DataPoint
+	pts []pdata.IntDataPoint
 	sum float64
 }
 
-func calculateUtilizationFromInt64DataPoints(metric pdata.Metric) error {
-	idps := metric.Int64DataPoints()
-	groupedPoints := make(map[string]*int64Points, idps.Len()) // overallocate to ensure no resizes are required
-	for i := 0; i < idps.Len(); i++ {
+func calculateUtilizationFromIntDataPoints(metric, utilizationMetric pdata.Metric) error {
+	var idps pdata.IntDataPointSlice
+	switch t := metric.DataType(); t {
+	case pdata.MetricDataTypeIntSum:
+		idps = metric.IntSum().DataPoints()
+	case pdata.MetricDataTypeIntGauge:
+		idps = metric.IntGauge().DataPoints()
+	}
+
+	pointCount := idps.Len()
+	groupedPoints := make(map[string]*int64Points, pointCount) // overallocate to ensure no resizes are required
+	for i := 0; i < pointCount; i++ {
 		idp := idps.At(i)
 
 		key, err := otherLabelsAsKey(idp.LabelsMap(), stateLabel)
 		if err != nil {
-			return fmt.Errorf("metric %v: %w", metric.MetricDescriptor().Name(), err)
+			return fmt.Errorf("metric %v: %w", metric.Name(), err)
 		}
 
 		points, ok := groupedPoints[key]
@@ -159,14 +180,14 @@ func calculateUtilizationFromInt64DataPoints(metric pdata.Metric) error {
 		points.pts = append(points.pts, idp)
 	}
 
-	ddps := metric.DoubleDataPoints()
-	startIndex, index := ddps.Len(), 0
-	ddps.Resize(startIndex + idps.Len())
+	ddps := utilizationMetric.DoubleGauge().DataPoints()
+	ddps.Resize(pointCount)
+	index := 0
 	for _, points := range groupedPoints {
 		for _, point := range points.pts {
-			ddp := ddps.At(startIndex + index)
+			ddp := ddps.At(index)
 
-			// copy idp to ddp, setting the value based on utilization calculation
+			// copy dp, setting the value based on utilization calculation
 			point.LabelsMap().CopyTo(ddp.LabelsMap())
 			ddp.SetStartTime(point.StartTime())
 			ddp.SetTimestamp(point.Timestamp())
@@ -174,7 +195,6 @@ func calculateUtilizationFromInt64DataPoints(metric pdata.Metric) error {
 			index++
 		}
 	}
-	idps.Resize(0)
 
 	return nil
 }
@@ -184,15 +204,23 @@ type doublePoints struct {
 	sum float64
 }
 
-func calculateUtilizationFromDoubleDataPoints(metric pdata.Metric) error {
-	ddps := metric.DoubleDataPoints()
-	groupedPoints := make(map[string]*doublePoints, ddps.Len()) // overallocate to ensure no resizes are required
-	for i := 0; i < ddps.Len(); i++ {
+func calculateUtilizationFromDoubleDataPoints(metric, utilizationMetric pdata.Metric) error {
+	var ddps pdata.DoubleDataPointSlice
+	switch t := metric.DataType(); t {
+	case pdata.MetricDataTypeDoubleSum:
+		ddps = metric.DoubleSum().DataPoints()
+	case pdata.MetricDataTypeDoubleGauge:
+		ddps = metric.DoubleGauge().DataPoints()
+	}
+
+	pointCount := ddps.Len()
+	groupedPoints := make(map[string]*doublePoints, pointCount) // overallocate to ensure no resizes are required
+	for i := 0; i < pointCount; i++ {
 		ddp := ddps.At(i)
 
 		key, err := otherLabelsAsKey(ddp.LabelsMap(), stateLabel)
 		if err != nil {
-			return fmt.Errorf("metric %v: %w", metric.MetricDescriptor().Name(), err)
+			return fmt.Errorf("metric %v: %w", metric.Name(), err)
 		}
 
 		points, ok := groupedPoints[key]
@@ -205,10 +233,19 @@ func calculateUtilizationFromDoubleDataPoints(metric pdata.Metric) error {
 		points.pts = append(points.pts, ddp)
 	}
 
+	ddps = utilizationMetric.DoubleGauge().DataPoints()
+	ddps.Resize(pointCount)
+	index := 0
 	for _, points := range groupedPoints {
 		for _, point := range points.pts {
-			// update the value based on utilization calculation
-			point.SetValue(point.Value() / points.sum * 100)
+			ddp := ddps.At(index)
+
+			// copy dp, setting the value based on utilization calculation
+			point.LabelsMap().CopyTo(ddp.LabelsMap())
+			ddp.SetStartTime(point.StartTime())
+			ddp.SetTimestamp(point.Timestamp())
+			ddp.SetValue(point.Value() / points.sum * 100)
+			index++
 		}
 	}
 
@@ -218,7 +255,7 @@ func calculateUtilizationFromDoubleDataPoints(metric pdata.Metric) error {
 // doubleDataPointsToMap converts the double data points in the provided metric
 // to a map of labels to values
 func doubleDataPointsToMap(metric pdata.Metric) map[string]float64 {
-	ddps := metric.DoubleDataPoints()
+	ddps := metric.DoubleSum().DataPoints()
 	labelToValuesMap := make(map[string]float64, ddps.Len())
 	for i := 0; i < ddps.Len(); i++ {
 		ddp := ddps.At(i)

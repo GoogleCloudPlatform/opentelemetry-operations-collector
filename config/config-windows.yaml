@@ -1,3 +1,17 @@
+# Copyright 2020, Google Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 receivers:
   # scrape system metrics at 1m interval
   hostmetrics:
@@ -115,6 +129,9 @@ processors:
       - metric_name: system.disk.pending_operations
         action: update
         new_name: disk/pending_operations
+        operations:
+          # change data type from int64 -> double
+          - action: toggle_scalar_data_type
       # system.filesystem.usage -> disk/bytes_used
       - metric_name: system.filesystem.usage
         action: update
@@ -155,6 +172,10 @@ processors:
         action: update
         new_name: interface/traffic
         operations:
+          # change label interface -> device
+          - action: update_label
+            label: interface
+            new_label: device
           # change direction label values receive -> rx
           - action: update_label
             label: direction
@@ -170,6 +191,10 @@ processors:
         action: update
         new_name: interface/errors
         operations:
+          # change label interface -> device
+          - action: update_label
+            label: interface
+            new_label: device
           # change direction label values receive -> rx
           - action: update_label
             label: direction
@@ -185,6 +210,10 @@ processors:
         action: update
         new_name: interface/packets
         operations:
+          # change label interface -> device
+          - action: update_label
+            label: interface
+            new_label: device
           # change direction label values receive -> rx
           - action: update_label
             label: direction
@@ -268,25 +297,27 @@ processors:
       include:
         match_type: strict
         metric_names:
-          - process_uptime
-          - process_memory_rss
+          - otelcol_process_uptime
+          - otelcol_process_memory_rss
           - otelcol_grpc_io_client_completed_rpcs
-          - otelcol_googlecloudmonitoring_point_count
+          - otelcol_otelcol_googlecloudmonitoring_point_count
 
   # convert from opentelemetry metric formats to cloud monitoring formats
   metricstransform/agent:
     transforms:
-      # process_uptime -> agent/uptime
-      - metric_name: process_uptime
+      # otelcol_process_uptime -> agent/uptime
+      - metric_name: otelcol_process_uptime
         action: update
         new_name: agent/uptime
         operations:
+          # change data type from double -> int64
+          - action: toggle_scalar_data_type
           # add version label
           - action: add_label
             new_label: version
             new_value: Google Cloud Operations OpenTelemetry Collector {{version}}
-      # process_memory_rss -> agent/memory_usage
-      - metric_name: process_memory_rss
+      # otelcol_process_memory_rss -> agent/memory_usage
+      - metric_name: otelcol_process_memory_rss
         action: update
         new_name: agent/memory_usage
       # otelcol_grpc_io_client_completed_rpcs -> agent/api_request_count
@@ -294,6 +325,8 @@ processors:
         action: update
         new_name: agent/api_request_count
         operations:
+          # change data type from double -> int64
+          - action: toggle_scalar_data_type
           # ignore any non "google.monitoring" RPCs
         # TODO (there won't be any of these, but would be safer to delete to make this future proof):
         # - action: select_label_values
@@ -307,10 +340,13 @@ processors:
           - action: aggregate_labels
             label_set: [ state ]
             aggregation_type: sum
-      # otelcol_googlecloudmonitoring_point_count -> agent/monitoring/point_count
-      - metric_name: otelcol_googlecloudmonitoring_point_count
+      # otelcol_otelcol_googlecloudmonitoring_point_count -> agent/monitoring/point_count
+      - metric_name: otelcol_otelcol_googlecloudmonitoring_point_count
         action: update
         new_name: agent/monitoring/point_count
+        operations:
+          # change data type from double -> int64
+          - action: toggle_scalar_data_type
 
 exporters:
   # export to cloud monitoring using the agent prefix
@@ -334,7 +370,7 @@ service:
         - filter/cloud-monitoring
         # add additional custom processors below this line if desired
         - resourcedetection
-      exporters:        
+      exporters:
         - stackdriver
 
     # reports agent self-observability metrics to cloud monitoring
@@ -345,7 +381,7 @@ service:
         - filter/agent
         - metricstransform/agent
         - resourcedetection
-      exporters:        
+      exporters:
         - stackdriver
 
   extensions: [zpages]

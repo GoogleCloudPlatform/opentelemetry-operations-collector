@@ -156,14 +156,14 @@ func (cms convertedMetrics) append(metric pdata.Metric, resource pdata.Resource)
 // name (creating this metric if it doesn't exist yet).
 func (cms convertedMetrics) getOrCreate(metric pdata.Metric) *convertedMetric {
 	// if we have an existing converted metric, return this
-	metricName := metric.MetricDescriptor().Name()
+	metricName := metric.Name()
 	if cm, ok := cms[metricName]; ok {
 		return cm
 	}
 
 	// if there is no existing converted metric, create one using the
-	// descriptor from the provided metric
-	cm := newConvertedMetric(metric.MetricDescriptor())
+	// descriptor info from the provided metric
+	cm := &convertedMetric{newMetric(metric)}
 	cms[metricName] = cm
 	return cm
 }
@@ -173,39 +173,45 @@ type convertedMetric struct {
 	pdata.Metric
 }
 
-// newConvertedMetric creates a new convertedMetric with no data points
-// using the provided descriptor
-func newConvertedMetric(descriptor pdata.MetricDescriptor) *convertedMetric {
-	cm := &convertedMetric{pdata.NewMetric()}
-	cm.InitEmpty()
-	descriptor.CopyTo(cm.MetricDescriptor())
-	return cm
-}
-
 // append appends the data points associated with the provided metric to the
 // converted metric and appends the provided resource attributes as labels
 // against these data points.
 func (cm convertedMetric) append(metric pdata.Metric, resource pdata.Resource) error {
-	// int64 data points
-	idps := metric.Int64DataPoints()
+	var err error
+
+	switch t := metric.DataType(); t {
+	case pdata.MetricDataTypeIntSum:
+		err = appendIntDataSlice(metric.IntSum().DataPoints(), cm.IntSum().DataPoints(), resource)
+	case pdata.MetricDataTypeIntGauge:
+		err = appendIntDataSlice(metric.IntGauge().DataPoints(), cm.IntGauge().DataPoints(), resource)
+	case pdata.MetricDataTypeDoubleSum:
+		err = appendDoubleDataSlice(metric.DoubleSum().DataPoints(), cm.DoubleSum().DataPoints(), resource)
+	case pdata.MetricDataTypeDoubleGauge:
+		err = appendDoubleDataSlice(metric.DoubleGauge().DataPoints(), cm.DoubleGauge().DataPoints(), resource)
+	}
+
+	return err
+}
+
+func appendIntDataSlice(idps, converted pdata.IntDataPointSlice, resource pdata.Resource) error {
 	for i := 0; i < idps.Len(); i++ {
 		err := appendAttributesToLabels(idps.At(i).LabelsMap(), resource.Attributes())
 		if err != nil {
 			return err
 		}
 	}
-	idps.MoveAndAppendTo(cm.Int64DataPoints())
+	idps.MoveAndAppendTo(converted)
+	return nil
+}
 
-	// double data points
-	ddps := metric.DoubleDataPoints()
+func appendDoubleDataSlice(ddps, converted pdata.DoubleDataPointSlice, resource pdata.Resource) error {
 	for i := 0; i < ddps.Len(); i++ {
 		err := appendAttributesToLabels(ddps.At(i).LabelsMap(), resource.Attributes())
 		if err != nil {
 			return err
 		}
 	}
-	ddps.MoveAndAppendTo(cm.DoubleDataPoints())
-
+	ddps.MoveAndAppendTo(converted)
 	return nil
 }
 
@@ -246,7 +252,7 @@ func toCloudMonitoringLabel(resourceAttributeKey string) string {
 		return "command"
 	case conventions.AttributeProcessCommandLine:
 		return "command_line"
-	case conventions.AttributeProcessUsername:
+	case conventions.AttributeProcessOwner:
 		return "owner"
 	default:
 		return ""

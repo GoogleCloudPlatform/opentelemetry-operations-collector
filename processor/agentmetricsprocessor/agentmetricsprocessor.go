@@ -61,6 +61,8 @@ func (*agentMetricsProcessor) Shutdown(ctx context.Context) error {
 func (mtp *agentMetricsProcessor) ConsumeMetrics(ctx context.Context, metrics pdata.Metrics) error {
 	md := pdatautil.MetricsToInternalMetrics(metrics)
 
+	convertNonMonotonicSumsToGauges(md.ResourceMetrics())
+
 	var errors []error
 
 	if err := combineProcessMetrics(md.ResourceMetrics()); err != nil {
@@ -86,4 +88,45 @@ func (mtp *agentMetricsProcessor) ConsumeMetrics(ctx context.Context, metrics pd
 	}
 
 	return nil
+}
+
+// newMetric creates a new metric with no data points using the provided descriptor info
+func newMetric(metric pdata.Metric) pdata.Metric {
+	return newMetricWithName(metric, "")
+}
+
+// newMetric creates a new metric with no data points using the provided descriptor info
+// and overrides the name with the supplied value
+func newMetricWithName(metric pdata.Metric, name string) pdata.Metric {
+	new := pdata.NewMetric()
+	new.InitEmpty()
+
+	if name != "" {
+		new.SetName(name)
+	} else {
+		new.SetName(metric.Name())
+	}
+
+	new.SetDescription(metric.Description())
+	new.SetUnit(metric.Unit())
+	new.SetDataType(metric.DataType())
+
+	switch t := metric.DataType(); t {
+	case pdata.MetricDataTypeIntSum:
+		sum := new.IntSum()
+		sum.InitEmpty()
+		sum.SetIsMonotonic(metric.IntSum().IsMonotonic())
+		sum.SetAggregationTemporality(metric.IntSum().AggregationTemporality())
+	case pdata.MetricDataTypeDoubleSum:
+		sum := new.DoubleSum()
+		sum.InitEmpty()
+		sum.SetIsMonotonic(metric.DoubleSum().IsMonotonic())
+		sum.SetAggregationTemporality(metric.DoubleSum().AggregationTemporality())
+	case pdata.MetricDataTypeIntGauge:
+		new.IntGauge().InitEmpty()
+	case pdata.MetricDataTypeDoubleGauge:
+		new.DoubleGauge().InitEmpty()
+	}
+
+	return new
 }

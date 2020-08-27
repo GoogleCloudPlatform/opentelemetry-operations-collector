@@ -58,7 +58,7 @@ func splitReadWriteBytesMetrics(rms pdata.ResourceMetricsSlice) error {
 				metric := metrics.At(k)
 
 				// ignore all metrics except "disk.io" metrics
-				metricName := metric.MetricDescriptor().Name()
+				metricName := metric.Name()
 				if _, ok := metricsToSplit[metricName]; !ok {
 					continue
 				}
@@ -87,75 +87,69 @@ const (
 )
 
 func splitReadWriteBytesMetric(metric pdata.Metric) (read pdata.Metric, write pdata.Metric, err error) {
-	// create new read metric with descriptor & name including "read_" prefix
-	read = pdata.NewMetric()
-	read.InitEmpty()
-	metric.MetricDescriptor().CopyTo(read.MetricDescriptor())
-	read.MetricDescriptor().SetName(metricPostfixRegex.ReplaceAllString(metric.MetricDescriptor().Name(), "read_$1"))
+	// create new read & write metrics with descriptor & name including "read_" & "write_" prefix respectively
+	read = newMetricWithName(metric, metricPostfixRegex.ReplaceAllString(metric.Name(), "read_$1"))
+	write = newMetricWithName(metric, metricPostfixRegex.ReplaceAllString(metric.Name(), "write_$1"))
 
-	// create new write metric with descriptor & name including "write_" prefix
-	write = pdata.NewMetric()
-	write.InitEmpty()
-	metric.MetricDescriptor().CopyTo(write.MetricDescriptor())
-	write.MetricDescriptor().SetName(metricPostfixRegex.ReplaceAllString(metric.MetricDescriptor().Name(), "write_$1"))
-
-	// append int64 data points to the read or write metric as appropriate
-	if err = appendInt64DataPoints(metric, read, write); err != nil {
-		return read, write, err
-	}
-
-	// append double data points to the read or write metric as appropriate
-	if err = appendDoubleDataPoints(metric, read, write); err != nil {
-		return read, write, err
+	// append data points to the read or write metric as appropriate
+	switch t := metric.DataType(); t {
+	case pdata.MetricDataTypeIntSum:
+		err = appendInt64DataPoints(metric.Name(), metric.IntSum().DataPoints(), read.IntSum().DataPoints(), write.IntSum().DataPoints())
+	case pdata.MetricDataTypeDoubleSum:
+		err = appendDoubleDataPoints(metric.Name(), metric.DoubleSum().DataPoints(), read.DoubleSum().DataPoints(), write.DoubleSum().DataPoints())
+	case pdata.MetricDataTypeIntGauge:
+		err = appendInt64DataPoints(metric.Name(), metric.IntGauge().DataPoints(), read.IntGauge().DataPoints(), write.IntGauge().DataPoints())
+	case pdata.MetricDataTypeDoubleGauge:
+		err = appendDoubleDataPoints(metric.Name(), metric.DoubleGauge().DataPoints(), read.DoubleGauge().DataPoints(), write.DoubleGauge().DataPoints())
+	default:
+		return read, write, fmt.Errorf("unsupported metric data type: %v", t)
 	}
 
 	return read, write, err
 }
 
-func appendInt64DataPoints(metric, read, write pdata.Metric) error {
-	idps := metric.Int64DataPoints()
+func appendInt64DataPoints(metricName string, idps, read, write pdata.IntDataPointSlice) error {
 	for i := 0; i < idps.Len(); i++ {
 		idp := idps.At(i)
 		labels := idp.LabelsMap()
 
 		dir, ok := labels.Get(directionLabel)
 		if !ok {
-			return fmt.Errorf("metric %v did not contain %v label as expected", metric.MetricDescriptor().Name(), directionLabel)
+			return fmt.Errorf("metric %v did not contain %v label as expected", metricName, directionLabel)
 		}
 		labels.Delete(directionLabel)
 
 		switch d := dir.Value(); d {
 		case readDirection:
-			read.Int64DataPoints().Append(&idp)
+			read.Append(&idp)
 		case writeDirection:
-			write.Int64DataPoints().Append(&idp)
+			write.Append(&idp)
 		default:
-			return fmt.Errorf("metric %v label %v contained unexpected value %v", metric.MetricDescriptor().Name(), directionLabel, d)
+			return fmt.Errorf("metric %v label %v contained unexpected value %v", metricName, directionLabel, d)
 		}
 	}
 
 	return nil
 }
 
-func appendDoubleDataPoints(metric, read, write pdata.Metric) error {
-	ddps := metric.DoubleDataPoints()
+func appendDoubleDataPoints(metricName string, ddps, read, write pdata.DoubleDataPointSlice) error {
 	for i := 0; i < ddps.Len(); i++ {
 		ddp := ddps.At(i)
 		labels := ddp.LabelsMap()
 
 		dir, ok := labels.Get(directionLabel)
 		if !ok {
-			return fmt.Errorf("metric %v did not contain %v label as expected", metric.MetricDescriptor().Name(), directionLabel)
+			return fmt.Errorf("metric %v did not contain %v label as expected", metricName, directionLabel)
 		}
 		labels.Delete(directionLabel)
 
 		switch d := dir.Value(); d {
 		case readDirection:
-			read.DoubleDataPoints().Append(&ddp)
+			read.Append(&ddp)
 		case writeDirection:
-			write.DoubleDataPoints().Append(&ddp)
+			write.Append(&ddp)
 		default:
-			return fmt.Errorf("metric %v label %v contained unexpected value %v", metric.MetricDescriptor().Name(), directionLabel, d)
+			return fmt.Errorf("metric %v label %v contained unexpected value %v", metricName, directionLabel, d)
 		}
 	}
 

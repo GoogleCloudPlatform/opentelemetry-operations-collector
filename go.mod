@@ -3,10 +3,17 @@ module github.com/GoogleCloudPlatform/opentelemetry-operations-collector
 go 1.14
 
 require (
+	github.com/StackExchange/wmi v0.0.0-20181212234831-e0a55b97c705 // indirect
+	github.com/go-ole/go-ole v1.2.4 // indirect
+	github.com/google/addlicense v0.0.0-20200817051935-6f4cd4aacc89 // indirect
+	github.com/hashicorp/consul/api v1.4.0 // indirect
+	github.com/hashicorp/serf v0.9.2 // indirect
+	github.com/mitchellh/go-testing-interface v1.0.3 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/stackdriverexporter v0.9.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor v0.9.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor v0.9.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusexecreceiver v0.9.0
+	github.com/shirou/gopsutil v2.20.6+incompatible // indirect
 	github.com/stretchr/testify v1.6.1
 	go.opentelemetry.io/collector v0.9.0
 	go.uber.org/zap v1.15.0

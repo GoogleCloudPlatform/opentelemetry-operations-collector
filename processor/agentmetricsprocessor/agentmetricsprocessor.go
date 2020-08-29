@@ -31,8 +31,8 @@ import (
 var metricPostfixRegex = regexp.MustCompile(`([^.]*$)`)
 
 type agentMetricsProcessor struct {
-	logger            *zap.Logger
-	next              consumer.MetricsConsumer
+	logger *zap.Logger
+	next   consumer.MetricsConsumer
 
 	mutex             sync.Mutex
 	prevCPUTimeValues map[string]float64

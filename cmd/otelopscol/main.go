@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"log"
 
+	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/service"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/version"
@@ -29,7 +30,7 @@ func main() {
 		log.Fatalf("failed to build default components: %v", err)
 	}
 
-	info := service.ApplicationStartInfo{
+	info := component.ApplicationStartInfo{
 		ExeName:  "google-cloudops-opentelemetry-collector",
 		LongName: "OpenTelemetry Cloud Operations Collector",
 		Version:  version.Version,

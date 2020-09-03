@@ -36,6 +36,10 @@ func (f *Factory) Type() configmodels.Type {
 	return typeStr
 }
 
+func NewFactory() *Factory {
+	return &Factory{}
+}
+
 // CreateDefaultConfig creates the default configuration for processor.
 func (f *Factory) CreateDefaultConfig() configmodels.Processor {
 	return &Config{
@@ -48,20 +52,30 @@ func (f *Factory) CreateDefaultConfig() configmodels.Processor {
 
 // CreateTraceProcessor creates a trace processor based on this config.
 func (f *Factory) CreateTraceProcessor(
-	ctx context.Context,
-	params component.ProcessorCreateParams,
-	nextConsumer consumer.TraceConsumer,
-	cfg configmodels.Processor,
+	_ context.Context,
+	_ component.ProcessorCreateParams,
+	_ consumer.TraceConsumer,
+	_ configmodels.Processor,
 ) (component.TraceProcessor, error) {
 	return nil, configerror.ErrDataTypeIsNotSupported
 }
 
 // CreateMetricsProcessor creates a metrics processor based on this config.
 func (f *Factory) CreateMetricsProcessor(
-	ctx context.Context,
+	_ context.Context,
 	params component.ProcessorCreateParams,
 	nextConsumer consumer.MetricsConsumer,
-	c configmodels.Processor,
+	_ configmodels.Processor,
 ) (component.MetricsProcessor, error) {
 	return newAgentMetricsProcessor(params.Logger, nextConsumer), nil
+}
+
+// CreateLogsProcessor creates a logs processor based on this config.
+func (f *Factory) CreateLogsProcessor(
+	_ context.Context,
+	_ component.ProcessorCreateParams,
+	_ configmodels.Processor,
+	_ consumer.LogsConsumer,
+) (component.LogsProcessor, error) {
+	return nil, configerror.ErrDataTypeIsNotSupported
 }

@@ -42,6 +42,11 @@ type testCase struct {
 func TestAgentMetricsProcessor(t *testing.T) {
 	tests := []testCase{
 		{
+			name:     "non-monotonic-sums-case",
+			input:    generateNonMonotonicSumsInput(),
+			expected: generateNonMonotonicSumsExpected(),
+		},
+		{
 			name:     "process-resources-case",
 			input:    generateProcessResourceMetricsInput(),
 			expected: generateProcessResourceMetricsExpected(),
@@ -117,12 +122,28 @@ type metricsBuilder struct {
 	metrics pdata.MetricSlice
 }
 
-func (msb metricsBuilder) addMetric(name string, t pdata.MetricType) metricBuilder {
+func (msb metricsBuilder) addMetric(name string, t pdata.MetricDataType, isMonotonic bool) metricBuilder {
 	metric := pdata.NewMetric()
 	metric.InitEmpty()
-	metric.MetricDescriptor().InitEmpty()
-	metric.MetricDescriptor().SetName(name)
-	metric.MetricDescriptor().SetType(t)
+	metric.SetName(name)
+	metric.SetDataType(t)
+
+	switch t {
+	case pdata.MetricDataTypeIntSum:
+		sum := metric.IntSum()
+		sum.InitEmpty()
+		sum.SetIsMonotonic(isMonotonic)
+		sum.SetAggregationTemporality(pdata.AggregationTemporalityCumulative)
+	case pdata.MetricDataTypeDoubleSum:
+		sum := metric.DoubleSum()
+		sum.InitEmpty()
+		sum.SetIsMonotonic(isMonotonic)
+		sum.SetAggregationTemporality(pdata.AggregationTemporalityCumulative)
+	case pdata.MetricDataTypeIntGauge:
+		metric.IntGauge().InitEmpty()
+	case pdata.MetricDataTypeDoubleGauge:
+		metric.DoubleGauge().InitEmpty()
+	}
 
 	msb.metrics.Append(&metric)
 	return metricBuilder{metric: metric}
@@ -132,23 +153,35 @@ type metricBuilder struct {
 	metric pdata.Metric
 }
 
-func (mb metricBuilder) addInt64DataPoint(value int64, labels map[string]string) metricBuilder {
-	idp := pdata.NewInt64DataPoint()
+func (mb metricBuilder) addIntDataPoint(value int64, labels map[string]string) metricBuilder {
+	idp := pdata.NewIntDataPoint()
 	idp.InitEmpty()
 	idp.LabelsMap().InitFromMap(labels)
 	idp.SetValue(value)
 
-	mb.metric.Int64DataPoints().Append(&idp)
+	switch mb.metric.DataType() {
+	case pdata.MetricDataTypeIntSum:
+		mb.metric.IntSum().DataPoints().Append(&idp)
+	case pdata.MetricDataTypeIntGauge:
+		mb.metric.IntGauge().DataPoints().Append(&idp)
+	}
+
 	return mb
 }
 
 func (mb metricBuilder) addDoubleDataPoint(value float64, labels map[string]string) metricBuilder {
-	idp := pdata.NewDoubleDataPoint()
-	idp.InitEmpty()
-	idp.LabelsMap().InitFromMap(labels)
-	idp.SetValue(value)
+	ddp := pdata.NewDoubleDataPoint()
+	ddp.InitEmpty()
+	ddp.LabelsMap().InitFromMap(labels)
+	ddp.SetValue(value)
 
-	mb.metric.DoubleDataPoints().Append(&idp)
+	switch mb.metric.DataType() {
+	case pdata.MetricDataTypeDoubleSum:
+		mb.metric.DoubleSum().DataPoints().Append(&ddp)
+	case pdata.MetricDataTypeDoubleGauge:
+		mb.metric.DoubleGauge().DataPoints().Append(&ddp)
+	}
+
 	return mb
 }
 
@@ -188,54 +221,89 @@ func assertEqual(t *testing.T, expected, actual pdata.Metrics) {
 			// build a map of expected metrics
 			metricsExpMap := make(map[string]pdata.Metric, metricsExp.Len())
 			for k := 0; k < metricsExp.Len(); k++ {
-				metricsExpMap[metricsExp.At(k).MetricDescriptor().Name()] = metricsExp.At(k)
+				metricsExpMap[metricsExp.At(k).Name()] = metricsExp.At(k)
 			}
 
 			for k := 0; k < metricsAct.Len(); k++ {
 				metricAct := metricsAct.At(k)
-				metricExp, ok := metricsExpMap[metricAct.MetricDescriptor().Name()]
+				metricExp, ok := metricsExpMap[metricAct.Name()]
 				if !ok {
-					require.Fail(t, fmt.Sprintf("unexpected metric %v", metricAct.MetricDescriptor().Name()))
+					require.Fail(t, fmt.Sprintf("unexpected metric %v", metricAct.Name()))
 				}
 
 				// assert equality of descriptors
-				assert.Equal(t, metricExp.MetricDescriptor(), metricAct.MetricDescriptor())
+				assert.Equal(t, metricExp.Name(), metricAct.Name())
+				assert.Equalf(t, metricExp.Description(), metricAct.Description(), "Metric %s", metricAct.Name())
+				assert.Equalf(t, metricExp.Unit(), metricAct.Unit(), "Metric %s", metricAct.Name())
+				assert.Equalf(t, metricExp.DataType(), metricAct.DataType(), "Metric %s", metricAct.Name())
 
-				// assert equality of int data points
-				idpsAct := metricAct.Int64DataPoints()
-				idpsExp := metricExp.Int64DataPoints()
-				require.Equal(t, idpsExp.Len(), idpsAct.Len())
-				for l := 0; l < idpsAct.Len(); l++ {
-					idpAct := idpsAct.At(l)
-					idpExp := idpsExp.At(l)
-
-					assert.Equal(t, idpExp.LabelsMap().Sort(), idpAct.LabelsMap().Sort())
-					assert.Equal(t, idpExp.StartTime(), idpAct.StartTime())
-					assert.Equal(t, idpExp.Timestamp(), idpAct.Timestamp())
-					assert.Equal(t, idpExp.Value(), idpAct.Value())
+				// assert equality of aggregation info & data points
+				switch ty := metricAct.DataType(); ty {
+				case pdata.MetricDataTypeIntSum:
+					assert.Equal(t, metricAct.IntSum().AggregationTemporality(), metricExp.IntSum().AggregationTemporality(), "Metric %s", metricAct.Name())
+					assert.Equal(t, metricAct.IntSum().IsMonotonic(), metricExp.IntSum().IsMonotonic(), "Metric %s", metricAct.Name())
+					assertEqualIntDataPointSlice(t, metricAct.Name(), metricAct.IntSum().DataPoints(), metricExp.IntSum().DataPoints())
+				case pdata.MetricDataTypeDoubleSum:
+					assert.Equal(t, metricAct.DoubleSum().AggregationTemporality(), metricExp.DoubleSum().AggregationTemporality(), "Metric %s", metricAct.Name())
+					assert.Equal(t, metricAct.DoubleSum().IsMonotonic(), metricExp.DoubleSum().IsMonotonic(), "Metric %s", metricAct.Name())
+					assertEqualDoubleDataPointSlice(t, metricAct.Name(), metricAct.DoubleSum().DataPoints(), metricExp.DoubleSum().DataPoints())
+				case pdata.MetricDataTypeIntGauge:
+					assertEqualIntDataPointSlice(t, metricAct.Name(), metricAct.IntGauge().DataPoints(), metricExp.IntGauge().DataPoints())
+				case pdata.MetricDataTypeDoubleGauge:
+					assertEqualDoubleDataPointSlice(t, metricAct.Name(), metricAct.DoubleGauge().DataPoints(), metricExp.DoubleGauge().DataPoints())
+				default:
+					assert.Fail(t, "unexpected metric type", t)
 				}
-
-				// assert equality of double data points
-				ddpsAct := metricAct.DoubleDataPoints()
-				ddpsExp := metricExp.DoubleDataPoints()
-				require.Equal(t, ddpsExp.Len(), ddpsAct.Len())
-				for l := 0; l < ddpsAct.Len(); l++ {
-					ddpAct := ddpsAct.At(l)
-					ddpExp := ddpsExp.At(l)
-
-					assert.Equal(t, ddpExp.LabelsMap().Sort(), ddpAct.LabelsMap().Sort())
-					assert.Equal(t, ddpExp.StartTime(), ddpAct.StartTime())
-					assert.Equal(t, ddpExp.Timestamp(), ddpAct.Timestamp())
-					assert.InDelta(t, ddpExp.Value(), ddpAct.Value(), 0.00000001)
-				}
-
-				// currently expect other kinds of data points to always be empty
-				assert.True(t, metricAct.HistogramDataPoints().Len() == 0)
-				assert.True(t, metricExp.HistogramDataPoints().Len() == 0)
-				assert.True(t, metricAct.SummaryDataPoints().Len() == 0)
-				assert.True(t, metricExp.SummaryDataPoints().Len() == 0)
 			}
 		}
+	}
+}
+
+func assertEqualIntDataPointSlice(t *testing.T, metricName string, idpsAct, idpsExp pdata.IntDataPointSlice) {
+	require.Equalf(t, idpsExp.Len(), idpsAct.Len(), "Metric %s", metricName)
+
+	// build a map of expected data points
+	idpsExpMap := make(map[string]pdata.IntDataPoint, idpsExp.Len())
+	for k := 0; k < idpsExp.Len(); k++ {
+		idpsExpMap[labelsAsKey(idpsExp.At(k).LabelsMap())] = idpsExp.At(k)
+	}
+
+	for l := 0; l < idpsAct.Len(); l++ {
+		idpAct := idpsAct.At(l)
+
+		idpExp, ok := idpsExpMap[labelsAsKey(idpAct.LabelsMap())]
+		if !ok {
+			require.Failf(t, fmt.Sprintf("no data point for %s", labelsAsKey(idpAct.LabelsMap())), "Metric %s", metricName)
+		}
+
+		assert.Equalf(t, idpExp.LabelsMap().Sort(), idpAct.LabelsMap().Sort(), "Metric %s", metricName)
+		assert.Equalf(t, idpExp.StartTime(), idpAct.StartTime(), "Metric %s", metricName)
+		assert.Equalf(t, idpExp.Timestamp(), idpAct.Timestamp(), "Metric %s", metricName)
+		assert.Equalf(t, idpExp.Value(), idpAct.Value(), "Metric %s", metricName)
+	}
+}
+
+func assertEqualDoubleDataPointSlice(t *testing.T, metricName string, ddpsAct, ddpsExp pdata.DoubleDataPointSlice) {
+	require.Equalf(t, ddpsExp.Len(), ddpsAct.Len(), "Metric %s", metricName)
+
+	// build a map of expected data points
+	ddpsExpMap := make(map[string]pdata.DoubleDataPoint, ddpsExp.Len())
+	for k := 0; k < ddpsExp.Len(); k++ {
+		ddpsExpMap[labelsAsKey(ddpsExp.At(k).LabelsMap())] = ddpsExp.At(k)
+	}
+
+	for l := 0; l < ddpsAct.Len(); l++ {
+		ddpAct := ddpsAct.At(l)
+
+		ddpExp, ok := ddpsExpMap[labelsAsKey(ddpAct.LabelsMap())]
+		if !ok {
+			require.Failf(t, fmt.Sprintf("no data point for %s", labelsAsKey(ddpAct.LabelsMap())), "Metric %s", metricName)
+		}
+
+		assert.Equalf(t, ddpExp.LabelsMap().Sort(), ddpAct.LabelsMap().Sort(), "Metric %s", metricName)
+		assert.Equalf(t, ddpExp.StartTime(), ddpAct.StartTime(), "Metric %s", metricName)
+		assert.Equalf(t, ddpExp.Timestamp(), ddpAct.Timestamp(), "Metric %s", metricName)
+		assert.InDeltaf(t, ddpExp.Value(), ddpAct.Value(), 0.00000001, "Metric %s", metricName)
 	}
 }
 

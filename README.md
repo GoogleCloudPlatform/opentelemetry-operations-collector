@@ -11,7 +11,7 @@
 
 ### :exclamation: This product is currently in ALPHA and not officially supported by Google.
 
-This repository hosts packaging and configuration code for generating builds of the OpenTelemetry Collector that can be used to collect system & application metrics and send these to Google Cloud Monitoring.
+This repository hosts packaging and configuration code for generating builds of the OpenTelemetry Collector that can be used to collect system & application metrics from GCE or EC2 virtual machines and send these to Google Cloud Monitoring.
 
 ## Running the Agent
 
@@ -57,6 +57,15 @@ msiexec /x google-cloudops-opentelemetry-collector.msi /qn
 - The agent exposes additional debug information locally via the endpoint http://0.0.0.0:55679/debug/tracez. This debug information can be used to debug errors related to collecting metrics or sending them to cloud monitoring. Find our more about zpages [here](https://github.com/open-telemetry/opentelemetry-specification/blob/master/experimental/trace/zpages.md).
 
 - If you encounter an issue related to running the agent or using it with Cloud Monitoring, please create a GitHub issue in this repository and include relevant debug information. If you encounter an issue or have a feature request related to the core OpenTelemetry Collector application, consider creating an issue [here](https://github.com/open-telemetry/opentelemetry-collector/issues) instead.
+
+## Configuration
+
+To understand OpenTelemetry Collector pipelines and how these are configured, see the [OpenTelemetry Collector design document](https://github.com/open-telemetry/opentelemetry-collector/blob/master/docs/design.md).
+
+Common configuration that you may want to change includes:
+
+- Under the `hostmetrics` receiver you can configure which kinds of metrics to scrape, and can also filter devices. For more details, see the [Host Metrics receiver](https://github.com/open-telemetry/opentelemetry-collector/tree/master/receiver/hostmetricsreceiver).
+- Under the `filter/system` processor you can configure which metrics to include or exclude. For more details, see the [Filter processor](https://github.com/open-telemetry/opentelemetry-collector/tree/master/processor/filterprocessor).
 
 ## Build / Package from source
 

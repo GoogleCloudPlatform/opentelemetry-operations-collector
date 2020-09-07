@@ -13,7 +13,7 @@
 # limitations under the License.
 
 receivers:
-  # scrape all metrics at 1m interval
+  # scrape system metrics at 1m interval
   hostmetrics:
     collection_interval: 1m
     scrapers:
@@ -26,19 +26,29 @@ receivers:
       swap:
       process:
 
+  # agent self-observability metrics
+  prometheus/agent:
+    config:
+      scrape_configs:
+      - job_name: 'otel-collector'
+        scrape_interval: 1m
+        static_configs:
+        - targets: ['0.0.0.0:8888']
+
 processors:
   # append resource information from GCE metadata
   resourcedetection:
-    detectors: [gce]
+    detectors: [gce, ec2]
 
   # perform custom transformations that aren't supported by the metricstransform processor
-  agentmetrics/cloud-monitoring:
-    # 1. combines resource process metrics into metrics with processes as labels
-    # 2. splits "disk.io" metrics into read & write metrics
-    # 3. creates utilization metrics from usage metrics
+  agentmetrics/system:
+    # 1. converts up down sum types to gauges
+    # 2. combines resource process metrics into metrics with processes as labels
+    # 3. splits "disk.io" metrics into read & write metrics
+    # 4. creates utilization metrics from usage metrics
 
   # filter out metrics not currently supported by cloud monitoring
-  filter/cloud-monitoring:
+  filter/system:
     metrics:
       exclude:
         match_type: strict
@@ -47,7 +57,7 @@ processors:
           - system.swap.usage
 
   # convert from opentelemetry metric formats to cloud monitoring formats
-  metricstransform/cloud-monitoring:
+  metricstransform/system:
     transforms:
       # system.cpu.time -> cpu/usage_time
       - metric_name: system.cpu.time
@@ -120,6 +130,9 @@ processors:
       - metric_name: system.disk.pending_operations
         action: update
         new_name: disk/pending_operations
+        operations:
+          # change data type from int64 -> double
+          - action: toggle_scalar_data_type
       # system.filesystem.usage -> disk/bytes_used
       - metric_name: system.filesystem.usage
         action: update
@@ -160,6 +173,10 @@ processors:
         action: update
         new_name: interface/traffic
         operations:
+          # change label interface -> device
+          - action: update_label
+            label: interface
+            new_label: device
           # change direction label values receive -> rx
           - action: update_label
             label: direction
@@ -175,6 +192,10 @@ processors:
         action: update
         new_name: interface/errors
         operations:
+          # change label interface -> device
+          - action: update_label
+            label: interface
+            new_label: device
           # change direction label values receive -> rx
           - action: update_label
             label: direction
@@ -190,6 +211,10 @@ processors:
         action: update
         new_name: interface/packets
         operations:
+          # change label interface -> device
+          - action: update_label
+            label: interface
+            new_label: device
           # change direction label values receive -> rx
           - action: update_label
             label: direction
@@ -216,7 +241,7 @@ processors:
         action: update
         new_name: swap/io
         operations:
-          # delete singular type dimension, retaining only direction
+          # delete single-valued type dimension, retaining only direction
           - action: aggregate_labels
             label_set: [ direction ]
             aggregation_type: sum
@@ -240,6 +265,10 @@ processors:
           - action: update_label
             label: state
             new_label: user_or_syst
+            # change label value system -> syst  
+            value_actions:
+              - value: system
+                new_value: syst
       # process.disk.read_io (as named after custom split logic) -> processes/disk/read_bytes_count
       - metric_name: process.disk.read_io
         action: update
@@ -263,9 +292,70 @@ processors:
           # change data type from int64 -> double
           - action: toggle_scalar_data_type
 
+  # filter to include only agent metrics supported by cloud monitoring
+  filter/agent:
+    metrics:
+      include:
+        match_type: strict
+        metric_names:
+          - otelcol_process_uptime
+          - otelcol_process_memory_rss
+          - otelcol_grpc_io_client_completed_rpcs
+          - otelcol_otelcol_googlecloudmonitoring_point_count
+
+  # convert from opentelemetry metric formats to cloud monitoring formats
+  metricstransform/agent:
+    transforms:
+      # otelcol_process_uptime -> agent/uptime
+      - metric_name: otelcol_process_uptime
+        action: update
+        new_name: agent/uptime
+        operations:
+          # change data type from double -> int64
+          - action: toggle_scalar_data_type
+          # add version label
+          - action: add_label
+            new_label: version
+            new_value: Google Cloud Operations OpenTelemetry Collector {{version}}
+      # otelcol_process_memory_rss -> agent/memory_usage
+      - metric_name: otelcol_process_memory_rss
+        action: update
+        new_name: agent/memory_usage
+      # otelcol_grpc_io_client_completed_rpcs -> agent/api_request_count
+      - metric_name: otelcol_grpc_io_client_completed_rpcs
+        action: update
+        new_name: agent/api_request_count
+        operations:
+          # change data type from double -> int64
+          - action: toggle_scalar_data_type
+        # TODO: below is proposed new configuration for the metrics transform processor
+          # ignore any non "google.monitoring" RPCs (note there won't be any other RPCs for now)
+        # - action: select_label_values
+        #   label: grpc_client_method
+        #   value_regexp: ^google\.monitoring
+          # change label grpc_client_status -> state
+          - action: update_label
+            label: grpc_client_status
+            new_label: state
+          # delete grpc_client_method dimension, retaining only state
+          - action: aggregate_labels
+            label_set: [ state ]
+            aggregation_type: sum
+      # otelcol_otelcol_googlecloudmonitoring_point_count -> agent/monitoring/point_count
+      - metric_name: otelcol_otelcol_googlecloudmonitoring_point_count
+        action: update
+        new_name: agent/monitoring/point_count
+        operations:
+          # change data type from double -> int64
+          - action: toggle_scalar_data_type
+
 exporters:
   # export to cloud monitoring using the agent prefix
-  stackdriver:
+  stackdriver/system:
+    metric_prefix: agent.googleapis.com/
+
+  # export to cloud monitoring using the agent prefix
+  stackdriver/agent:
     metric_prefix: agent.googleapis.com/
 
 extensions:
@@ -274,17 +364,29 @@ extensions:
 
 service:
   pipelines:
-    metrics:
+    # reports system metrics to cloud monitoring
+    metrics/system:
       receivers:
         - hostmetrics
       processors:
         # leave these custom processors here to support cloud monitoring agent metric format
-        - agentmetrics/cloud-monitoring
-        - metricstransform/cloud-monitoring
-        - filter/cloud-monitoring
+        - agentmetrics/system
+        - metricstransform/system
+        - filter/system
         # add additional custom processors below this line if desired
         - resourcedetection
-      exporters:        
-        - stackdriver
+      exporters:
+        - stackdriver/system
+
+    # reports agent self-observability metrics to cloud monitoring
+    metrics/agent:
+      receivers:
+        - prometheus/agent
+      processors:
+        - filter/agent
+        - metricstransform/agent
+        - resourcedetection
+      exporters:
+        - stackdriver/agent
 
   extensions: [zpages]

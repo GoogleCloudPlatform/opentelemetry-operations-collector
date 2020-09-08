@@ -74,7 +74,7 @@ Common configuration that you may want to change includes:
 To generate a tarball archive that includes the OpenTelemetry binary and a configuration file compatible with Google Cloud Monitoring:
 
 1. Run `make build-tarball`.
-  - To also include JVM, Apache, MySQL and StasD support, run `make build-tarball-exporters` instead
+    - To also include JVM, Apache, MySQL and StatsD support, run `make build-tarball-exporters` instead.
 2. The tarball file will be generated in the `dist` folder.
 
 ### Windows

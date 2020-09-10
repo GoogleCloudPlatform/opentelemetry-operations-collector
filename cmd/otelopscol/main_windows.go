@@ -31,9 +31,8 @@ func run(params service.Parameters) error {
 
 	if isInteractive {
 		return runInteractive(params)
-	} else {
-		return runService(params)
 	}
+	return runService(params)
 }
 
 func runService(params service.Parameters) error {

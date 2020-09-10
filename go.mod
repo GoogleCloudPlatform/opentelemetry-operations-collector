@@ -11,6 +11,7 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/stackdriverexporter v0.9.1-0.20200903011615-31c0d95d7cf9
 	github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor v0.9.1-0.20200903011615-31c0d95d7cf9
 	github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor v0.9.1-0.20200903011615-31c0d95d7cf9
+	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusexecreceiver v0.9.1-0.20200903011615-31c0d95d7cf9
 	github.com/shirou/gopsutil v2.20.8+incompatible // indirect
 	github.com/stretchr/testify v1.6.1
 	go.opentelemetry.io/collector v0.9.1-0.20200901221426-ec327358d634

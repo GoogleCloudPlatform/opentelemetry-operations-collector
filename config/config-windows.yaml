@@ -380,8 +380,8 @@ service:
       processors:
         # leave these custom processors here to support cloud monitoring agent metric format
         - agentmetrics/system
-        - metricstransform/system
         - filter/system
+        - metricstransform/system
         # add additional custom processors below this line if desired
         - resourcedetection
       exporters:

@@ -18,6 +18,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/exporter/stackdriverexporter"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusexecreceiver"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/component/componenterror"
 	"go.opentelemetry.io/collector/service/defaultcomponents"
@@ -41,7 +42,9 @@ func components() (component.Factories, error) {
 		errs = append(errs, err)
 	}
 
-	receivers := []component.ReceiverFactoryBase{}
+	receivers := []component.ReceiverFactory{
+		prometheusexecreceiver.NewFactory(),
+	}
 	for _, rcv := range factories.Receivers {
 		receivers = append(receivers, rcv)
 	}
@@ -50,8 +53,8 @@ func components() (component.Factories, error) {
 		errs = append(errs, err)
 	}
 
-	exporters := []component.ExporterFactoryBase{
-		&stackdriverexporter.Factory{},
+	exporters := []component.ExporterFactory{
+		stackdriverexporter.NewFactory(),
 	}
 	for _, exp := range factories.Exporters {
 		exporters = append(exporters, exp)
@@ -61,9 +64,9 @@ func components() (component.Factories, error) {
 		errs = append(errs, err)
 	}
 
-	processors := []component.ProcessorFactoryBase{
-		&agentmetricsprocessor.Factory{},
-		&metricstransformprocessor.Factory{},
+	processors := []component.ProcessorFactory{
+		agentmetricsprocessor.NewFactory(),
+		metricstransformprocessor.NewFactory(),
 		resourcedetectionprocessor.NewFactory(),
 	}
 	for _, pr := range factories.Processors {

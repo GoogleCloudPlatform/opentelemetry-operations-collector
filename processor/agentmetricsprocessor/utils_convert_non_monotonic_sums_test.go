@@ -19,33 +19,37 @@ import (
 	"go.opentelemetry.io/collector/consumer/pdatautil"
 )
 
-func generateReadWriteMetricsInput() pdata.Metrics {
+func generateNonMonotonicSumsInput() pdata.Metrics {
 	input := pdatautil.MetricsToInternalMetrics(newInternalMetrics())
 
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
 
-	mb1 := b.addMetric("system.disk.io", pdata.MetricDataTypeIntSum, true)
-	mb1.addIntDataPoint(1, map[string]string{"label1": "value1", "direction": "read"})
-	mb1.addIntDataPoint(2, map[string]string{"label1": "value2", "direction": "write"})
+	mb1 := b.addMetric("m1", pdata.MetricDataTypeIntSum, false)
+	mb1.addIntDataPoint(1, map[string]string{"label1": "value1"})
+	mb1.addIntDataPoint(2, map[string]string{"label1": "value2"})
 
-	mb2 := b.addMetric("process.disk.io", pdata.MetricDataTypeDoubleSum, false)
-	mb2.addDoubleDataPoint(3, map[string]string{"label1": "value1", "direction": "read"})
-	mb2.addDoubleDataPoint(4, map[string]string{"label1": "value2", "direction": "write"})
+	mb2 := b.addMetric("m2", pdata.MetricDataTypeDoubleSum, false)
+	mb2.addDoubleDataPoint(3, map[string]string{"label1": "value1"})
+	mb2.addDoubleDataPoint(4, map[string]string{"label1": "value2"})
 
 	rmb.Build().CopyTo(input.ResourceMetrics())
 	return pdatautil.MetricsFromInternalMetrics(input)
 }
 
-func generateReadWriteMetricsExpected() pdata.Metrics {
+func generateNonMonotonicSumsExpected() pdata.Metrics {
 	expected := pdatautil.MetricsToInternalMetrics(newInternalMetrics())
 
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
-	b.addMetric("system.disk.read_io", pdata.MetricDataTypeIntSum, true).addIntDataPoint(1, map[string]string{"label1": "value1"})
-	b.addMetric("process.disk.read_io", pdata.MetricDataTypeDoubleGauge, false).addDoubleDataPoint(3, map[string]string{"label1": "value1"})
-	b.addMetric("system.disk.write_io", pdata.MetricDataTypeIntSum, true).addIntDataPoint(2, map[string]string{"label1": "value2"})
-	b.addMetric("process.disk.write_io", pdata.MetricDataTypeDoubleGauge, false).addDoubleDataPoint(4, map[string]string{"label1": "value2"})
+
+	mb1 := b.addMetric("m1", pdata.MetricDataTypeIntGauge, false)
+	mb1.addIntDataPoint(1, map[string]string{"label1": "value1"})
+	mb1.addIntDataPoint(2, map[string]string{"label1": "value2"})
+
+	mb2 := b.addMetric("m2", pdata.MetricDataTypeDoubleGauge, false)
+	mb2.addDoubleDataPoint(3, map[string]string{"label1": "value1"})
+	mb2.addDoubleDataPoint(4, map[string]string{"label1": "value2"})
 
 	rmb.Build().CopyTo(expected.ResourceMetrics())
 	return pdatautil.MetricsFromInternalMetrics(expected)

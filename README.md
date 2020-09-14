@@ -65,8 +65,7 @@ To understand OpenTelemetry Collector pipelines and how these are configured, se
 Common configuration that you may want to change includes:
 
 - Under the `hostmetrics` receiver you can configure which kinds of metrics to scrape, and can also filter devices. For more details, see the [Host Metrics receiver](https://github.com/open-telemetry/opentelemetry-collector/tree/master/receiver/hostmetricsreceiver).
-
-- Under the `filter/cloud-monitoring` processor you can configure which metrics to include or exclude. For more details, see the [Filter processor](https://github.com/open-telemetry/opentelemetry-collector/tree/master/processor/filterprocessor).
+- Under the `filter/system` processor you can configure which metrics to include or exclude. For more details, see the [Filter processor](https://github.com/open-telemetry/opentelemetry-collector/tree/master/processor/filterprocessor).
 
 ## Build / Package from source
 
@@ -75,6 +74,7 @@ Common configuration that you may want to change includes:
 To generate a tarball archive that includes the OpenTelemetry binary and a configuration file compatible with Google Cloud Monitoring:
 
 1. Run `make build-tarball`.
+    - To also include JVM, Apache, MySQL and StatsD support, run `make build-tarball-exporters` instead.
 2. The tarball file will be generated in the `dist` folder.
 
 ### Windows

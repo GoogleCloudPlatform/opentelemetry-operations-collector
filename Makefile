@@ -93,15 +93,30 @@ package-goo:
 	goopack -output_dir ./dist <(envsubst < ./.build/googet/google-cloudops-opentelemetry-collector.goospec)
 	chmod -R a+rwx ./dist/
 
-# tarball
+# exporters
+.PHONY: build-exporters
+build-exporters:
+	bash ./.build/tar/build_exporters.sh
 
-.PHONY: build-tarball
-build-tarball: build package-tarball
+# tarball
+.PHONY: clean-dist
+clean-dist:
+	rm -rf dist/
 
 .PHONY: package-tarball
 package-tarball:
 	bash ./.build/tar/generate_tar.sh
 	chmod -R a+rwx ./dist/
+
+.PHONY: build-tarball
+build-tarball: clean-dist test build package-tarball
+
+.PHONY: package-tarball-exporters
+package-tarball-exporters:
+	make package-tarball CONFIG_FILE=config-linux-with-exporters.yaml
+
+.PHONY: build-tarball-exporters
+build-tarball-exporters: clean-dist test build build-exporters package-tarball-exporters
 
 # --------------------
 #  Create build image

@@ -54,7 +54,6 @@ processors:
         match_type: strict
         metric_names:
           - system.network.dropped_packets
-          - system.swap.usage
 
   # convert from opentelemetry metric formats to cloud monitoring formats
   metricstransform/system:
@@ -236,6 +235,25 @@ processors:
           - action: update_label
             label: state
             new_label: tcp_state
+      # system.swap.usage -> swap/bytes_used
+      - metric_name: system.swap.usage
+        action: update
+        new_name: swap/bytes_used
+          # change data type from int64 -> double
+          - action: toggle_scalar_data_type
+      # system.swap.utilization -> swap/percent_used
+      - metric_name: system.swap.utilization
+        action: update
+        new_name: swap/percent_used
+      # duplicate swap/percent_used -> pagefile/percent_used
+      - metric_name: swap/percent_used
+        action: insert
+        new_name: pagefile/percent_used
+        operations:
+          # take sum over device dimension, retaining only state
+          - action: aggregate_labels
+            label_set: [ state ]
+            aggregation_type: sum
       # system.swap.paging_ops -> swap/io
       - metric_name: system.swap.paging_ops
         action: update
@@ -244,15 +262,6 @@ processors:
           # delete single-valued type dimension, retaining only direction
           - action: aggregate_labels
             label_set: [ direction ]
-            aggregation_type: sum
-      # system.swap.usage -> pagefile/percent_used
-      - metric_name: system.swap.utilization
-        action: update
-        new_name: pagefile/percent_used
-        operations:
-          # take sum over direction dimension, retaining only state
-          - action: aggregate_labels
-            label_set: [ state ]
             aggregation_type: sum
       # process.cpu.time -> processes/cpu_time
       - metric_name: process.cpu.time
@@ -371,8 +380,8 @@ service:
       processors:
         # leave these custom processors here to support cloud monitoring agent metric format
         - agentmetrics/system
-        - metricstransform/system
         - filter/system
+        - metricstransform/system
         # add additional custom processors below this line if desired
         - resourcedetection
       exporters:

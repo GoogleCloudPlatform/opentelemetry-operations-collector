@@ -239,6 +239,7 @@ processors:
       - metric_name: system.swap.usage
         action: update
         new_name: swap/bytes_used
+        operations:
           # change data type from int64 -> double
           - action: toggle_scalar_data_type
       # system.swap.utilization -> swap/percent_used

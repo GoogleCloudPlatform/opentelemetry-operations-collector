@@ -74,6 +74,7 @@ Pipelines:
     - `stackdriver` exporter: Exports the metrics to Cloud Monitoring using the `agent.googleapis.com` prefix.
 
 2. Ingest agent self-observability metrics:
+
     - `prometheus` receiver: The OpenTelemetry Collector exports self-observability metrics in Prometheus format on port 8888 by default. This receiver scrapes those metrics at the configured frequency.
     - `filter` processor: Retains only the “agent” metrics that are supported by Cloud Monitoring.
     - `metricstransform` processor: Converts the internal self-observability metrics to Cloud Monitoring format, as defined in [agent metrics](https://cloud.google.com/monitoring/api/metrics_agent).

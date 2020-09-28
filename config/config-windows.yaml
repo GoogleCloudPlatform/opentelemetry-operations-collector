@@ -326,7 +326,7 @@ processors:
           # add version label
           - action: add_label
             new_label: version
-            new_value: Google Cloud Operations OpenTelemetry Collector {{version}}
+            new_value: GoogleCloudOperationsOpenTelemetryMetricsAgent/{{version}} (Windows)
       # otelcol_process_memory_rss -> agent/memory_usage
       - metric_name: otelcol_process_memory_rss
         action: update
@@ -363,10 +363,12 @@ exporters:
   # export to cloud monitoring using the agent prefix
   stackdriver/system:
     metric_prefix: agent.googleapis.com/
+    user_agent: GoogleCloudOperationsOpenTelemetryMetricsAgent/{{version}} (Windows)
 
   # export to cloud monitoring using the agent prefix
   stackdriver/agent:
     metric_prefix: agent.googleapis.com/
+    user_agent: GoogleCloudOperationsOpenTelemetryMetricsAgent/{{version}} (Windows)
 
 extensions:
   zpages:

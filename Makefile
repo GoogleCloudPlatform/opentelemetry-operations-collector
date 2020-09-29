@@ -22,7 +22,7 @@ endif
 # set default docker build image name
 BUILD_IMAGE_NAME ?= otelopscol-build
 
-OTELCOL_BINARY = google-cloudops-opentelemetry-collector_$(GOOS)_$(GOARCH)$(EXTENSION)
+OTELCOL_BINARY = google-cloud-metrics-agent_$(GOOS)_$(GOARCH)$(EXTENSION)
 
 ALL_SRC := $(shell find . -name '*.go' -type f | sort)
 ALL_DOC := $(shell find . \( -name "*.md" -o -name "*.yaml" \) -type f | sort)
@@ -90,7 +90,7 @@ package-goo: SHELL:=/bin/bash
 package-goo:
 	mkdir -p dist
 	# goopack doesn't support variable replacement or command line args so just use envsubst
-	goopack -output_dir ./dist <(envsubst < ./.build/googet/google-cloudops-opentelemetry-collector.goospec)
+	goopack -output_dir ./dist <(envsubst < ./.build/googet/google-cloud-metrics-agent.goospec)
 	chmod -R a+rwx ./dist/
 
 # exporters

@@ -17,31 +17,31 @@ $ErrorActionPreference = 'Stop'
 # mirror osconfig agent settings
 function Set-ServiceConfig {
     # restart after 1s then 2s, reset error counter after 60s
-    sc.exe failure google-cloudops-opentelemetry-collector reset=60 actions=restart/1000/restart/2000
+    sc.exe failure google-cloud-metrics-agent reset=60 actions=restart/1000/restart/2000
     # set delayed start
-    sc.exe config google-cloudops-opentelemetry-collector depend="rpcss" start=delayed-auto
+    sc.exe config google-cloud-metrics-agent depend="rpcss" start=delayed-auto
     # create trrigger to start the service on first IP address
-    sc.exe triggerinfo google-cloudops-opentelemetry-collector start/networkon
+    sc.exe triggerinfo google-cloud-metrics-agent start/networkon
 }
 
-$InstallDir = "%ProgramFiles%\Google\Cloud Operations\OpenTelemetry Collector"
+$InstallDir = "%ProgramFiles%\Google\Cloud Operations\Metrics Agent"
 
 try
 {
-    if (-not (Get-Service "google-cloudops-opentelemetry-collector" -ErrorAction SilentlyContinue))
+    if (-not (Get-Service "google-cloud-metrics-agent" -ErrorAction SilentlyContinue))
     {
-        New-Service -DisplayName "Google Cloud Operations OpenTelemetry Collector" `
-            -Name "google-cloudops-opentelemetry-collector" `
-            -BinaryPathName "$InstallDir\google-cloudops-opentelemetry-collector.exe --add-instance-id=false --config=""$InstallDir\config.yaml""" `
-            -Description "Google Cloud Operations OpenTelemetry Collector based Monitoring Agent"
+        New-Service -DisplayName "Google Cloud Metrics Agent" `
+            -Name "google-cloud-metrics-agent" `
+            -BinaryPathName "$InstallDir\google-cloud-metrics-agent.exe --add-instance-id=false --config=""$InstallDir\config.yaml""" `
+            -Description "Collects agent metrics and reports them to Google Cloud Operations."
 
         Set-ServiceConfig
-        Start-Service 'google-cloudops-opentelemetry-collector' -Verbose -ErrorAction Stop
+        Start-Service 'google-cloud-metrics-agent' -Verbose -ErrorAction Stop
     }
     else
     {
         Set-ServiceConfig
-        Restart-Service -Name google-cloudops-opentelemetry-collector
+        Restart-Service -Name google-cloud-metrics-agent
     }
 }
 catch

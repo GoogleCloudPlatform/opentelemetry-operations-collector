@@ -56,11 +56,11 @@ function Install-Tools {
 function New-MSI(
     [string]$Config="./config/config-windows.yaml"
 ) {
-    candle -arch "$CandleArch" -dPkgVersion="$PkgVersion" -dGoArch="$GoArch" -dConfig="$Config" .build/msi/google-cloudops-opentelemetry-collector.wxs
-    light google-cloudops-opentelemetry-collector.wixobj
+    candle -arch "$CandleArch" -dPkgVersion="$PkgVersion" -dGoArch="$GoArch" -dConfig="$Config" .build/msi/google-cloud-metrics-agent.wxs
+    light google-cloud-metrics-agent.wixobj
 
     New-Item -Force -Type dir dist
-    Move-Item -Force google-cloudops-opentelemetry-collector.msi dist/google-cloudops-opentelemetry-collector.msi
+    Move-Item -Force google-cloud-metrics-agent.msi dist/google-cloud-metrics-agent.msi
 }
 
 function Confirm-MSI {
@@ -68,20 +68,20 @@ function Confirm-MSI {
     $env:Path += ";C:\Windows\System32"
 
     # install msi, validate service is installed & running
-    Start-Process -Wait msiexec "/i `"$pwd\dist\google-cloudops-opentelemetry-collector.msi`" /qn"
-    sc.exe query state=all | findstr "google-cloudops-opentelemetry-collector" | Out-Null
-    if ($LASTEXITCODE -ne 0) { Throw "google-cloudops-opentelemetry-collector service failed to install" }
+    Start-Process -Wait msiexec "/i `"$pwd\dist\google-cloud-metrics-agent.msi`" /qn"
+    sc.exe query state=all | findstr "google-cloud-metrics-agent" | Out-Null
+    if ($LASTEXITCODE -ne 0) { Throw "google-cloud-metrics-agent service failed to install" }
 
     # stop service
-    Stop-Service google-cloudops-opentelemetry-collector
+    Stop-Service google-cloud-metrics-agent
 
     # start service
-    Start-Service google-cloudops-opentelemetry-collector
+    Start-Service google-cloud-metrics-agent
 
     # uninstall msi, validate service is uninstalled
-    Start-Process -Wait msiexec "/x `"$pwd\dist\opentelemetry-contrib-collector.msi`" /qn"
-    sc.exe query state=all | findstr "google-cloudops-opentelemetry-collector" | Out-Null
-    if ($LASTEXITCODE -ne 1) { Throw "google-cloudops-opentelemetry-collector service failed to uninstall" }
+    Start-Process -Wait msiexec "/x `"$pwd\dist\google-cloud-metrics-agent.msi`" /qn"
+    sc.exe query state=all | findstr "google-cloud-metrics-agent" | Out-Null
+    if ($LASTEXITCODE -ne 1) { Throw "google-cloud-metrics-agent service failed to uninstall" }
 }
 
 $sb = [scriptblock]::create("$Target")

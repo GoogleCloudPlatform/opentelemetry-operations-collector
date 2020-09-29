@@ -1,5 +1,5 @@
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
-   <Product Id="*" UpgradeCode="2B747F3C-BA1A-47DB-8617-E6BE77832F7E" Name="Google Cloud Operations OpenTelemetry Collector" Version="$(var.PkgVersion)" Manufacturer="OpenTelemetry" Language="1033">
+   <Product Id="*" UpgradeCode="2B747F3C-BA1A-47DB-8617-E6BE77832F7E" Name="Google Cloud Metrics Agent" Version="$(var.PkgVersion)" Manufacturer="Google" Language="1033">
       <Package InstallerVersion="200" Compressed="yes" Comments="Windows Installer Package"/>
       <Media Id="1" Cabinet="product.cab" EmbedCab="yes"/>
       <Icon Id="ProductIcon" SourceFile="./.build/msi/opentelemetry.ico"/>
@@ -17,7 +17,7 @@
          <Directory Id="ProgramFiles64Folder">
             <Directory Id="GoogleDir" Name="Google">
                <Directory Id="CloudOperationsDir" Name="Cloud Operations">
-                  <Directory Id="INSTALLDIR" Name="OpenTelemetry Collector" />
+                  <Directory Id="INSTALLDIR" Name="Metrics Agent" />
                </Directory>
             </Directory>
          </Directory>
@@ -25,13 +25,13 @@
 
       <DirectoryRef Id="INSTALLDIR">
          <Component Id="ApplicationComponent" Guid="03F8DA4A-B41A-4AC1-8B18-5E3AF5D7A548">
-            <File Id="ExecutableFile" Name="google-cloudops-opentelemetry-collector.exe" KeyPath="yes" Source="./bin/google-cloudops-opentelemetry-collector_windows_$(var.GoArch).exe"/>
+            <File Id="ExecutableFile" Name="google-cloud-metrics-agent.exe" KeyPath="yes" Source="./bin/google-cloud-metrics-agent_windows_$(var.GoArch).exe"/>
             <File Id="ConfigFile" Name="config.yaml" Source="$(var.Config)" />
 
             <ServiceInstall
                Id="Service"
-               Name="google-cloudops-opentelemetry-collector"
-               DisplayName="Google Cloud Operations OpenTelemetry Collector"
+               Name="google-cloud-metrics-agent"
+               DisplayName="Google Cloud Metrics Agent"
                Description="Collects agent metrics and reports them to Google Cloud Operations."
                Type="ownProcess"
                Vital="yes"
@@ -42,7 +42,7 @@
                Interactive="no" />
             <ServiceControl
                Id="StartStopRemoveService"
-               Name="google-cloudops-opentelemetry-collector"
+               Name="google-cloud-metrics-agent"
                Start="install"
                Stop="both"
                Remove="uninstall"

@@ -42,7 +42,7 @@ mv dist/$CONFIG_FILE dist/$FINAL_CONFIG_FILE
 
 # compress the binary and the config into a .tar file
 echo "Compressing..."
-cd dist && tar -cvzf google-cloudops-opentelemetry-collector.tar.gz $OTELCOL_BINARY $FINAL_CONFIG_FILE $README $EXPORTERS_DIRECTORY $EXPORTERS_CONFIG_DIRECTORY
+cd dist && tar -cvzf google-cloud-metrics-agent.tar.gz $OTELCOL_BINARY $FINAL_CONFIG_FILE $README $EXPORTERS_DIRECTORY $EXPORTERS_CONFIG_DIRECTORY
 
 # remove the folders and files that were added
 echo "Clean up..."

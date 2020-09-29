@@ -31,8 +31,8 @@ func main() {
 	}
 
 	info := component.ApplicationStartInfo{
-		ExeName:  "google-cloudops-opentelemetry-collector",
-		LongName: "OpenTelemetry Cloud Operations Collector",
+		ExeName:  "google-cloud-metrics-agent",
+		LongName: "Google Cloud Metrics Agent",
 		Version:  version.Version,
 		GitHash:  version.GitHash,
 	}

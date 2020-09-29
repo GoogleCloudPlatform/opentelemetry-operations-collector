@@ -1,0 +1,26 @@
+{
+  "name": "google-cloud-metrics-agent",
+  "version": "${PKG_VERSION}",
+  "arch": "${ARCH}",
+  "authors": "Google & OpenTelemetry Community",
+  "license": "http://www.apache.org/licenses/LICENSE-2.0",
+  "description": "Collects agent metrics and reports them to Google Cloud Operations.",
+  "files": {
+    "bin/google-cloud-metrics-agent_${GOOS}_${GOARCH}.exe": "<ProgramFiles>/Google/Cloud Operations/Metrics Agent/google-cloud-metrics-agent.exe",
+    "config/config-windows.yaml": "<ProgramFiles>/Google/Cloud Operations/Metrics Agent/config.yaml"
+  },
+  "install": {
+    "path": ".build/googet/install.ps1"
+  },
+  "uninstall": {
+    "path": ".build/googet/uninstall.ps1"
+  },
+  "sources": [{
+      "include": [
+        "bin/google-cloud-metrics-agent_${GOOS}_${GOARCH}.exe",
+        "config/config-windows.yaml",
+        ".build/googet/install.ps1",
+        ".build/googet/uninstall.ps1"
+      ]
+  }]
+}

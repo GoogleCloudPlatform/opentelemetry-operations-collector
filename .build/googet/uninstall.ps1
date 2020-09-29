@@ -12,5 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-Stop-Service google-cloudops-opentelemetry-collector -Verbose
-& sc.exe delete google-cloudops-opentelemetry-collector -Verbose
+Stop-Service google-cloud-metrics-agent -Verbose
+& sc.exe delete google-cloud-metrics-agent -Verbose

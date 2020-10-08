@@ -22,13 +22,13 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/shirou/gopsutil/disk"
+	"github.com/shirou/gopsutil/host"
+	"github.com/shirou/gopsutil/mem"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/service"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/version"
-	"github.com/shirou/gopsutil/disk"
-	"github.com/shirou/gopsutil/host"
-	"github.com/shirou/gopsutil/mem"
 )
 
 func main() {

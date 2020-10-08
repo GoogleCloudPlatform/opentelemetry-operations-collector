@@ -17,14 +17,26 @@ package main
 import (
 	"fmt"
 	"log"
+	"math"
+	"os"
+	"runtime"
+	"strings"
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/service"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/version"
+	"github.com/shirou/gopsutil/disk"
+	"github.com/shirou/gopsutil/host"
+	"github.com/shirou/gopsutil/mem"
 )
 
 func main() {
+	err := setConfigEnvVars()
+	if err != nil {
+		log.Fatalf("failed to build environment variables for config: %v", err)
+	}
+
 	factories, err := components()
 	if err != nil {
 		log.Fatalf("failed to build default components: %v", err)
@@ -55,5 +67,57 @@ func runInteractive(params service.Parameters) error {
 		return fmt.Errorf("application run finished with error: %w", err)
 	}
 
+	return nil
+}
+
+func setConfigEnvVars() error {
+	hostInfo, err := host.Info()
+	if err != nil {
+		return err
+	}
+
+	cores := runtime.NumCPU()
+
+	memory, err := mem.VirtualMemory()
+	if err != nil {
+		return err
+	}
+
+	partitions, err := disk.Partitions(false)
+	if err != nil {
+		return err
+	}
+
+	var totalDiskCapacity uint64
+	for _, partition := range partitions {
+		disk, err := disk.Usage(partition.Mountpoint)
+		if err != nil {
+			return err
+		}
+		totalDiskCapacity += disk.Total
+	}
+
+	platform := hostInfo.Platform
+	if platform == "" {
+		platform = "Unknown"
+	}
+
+	platformVersion := hostInfo.PlatformVersion
+	if platformVersion != "" {
+		platformVersion = fmt.Sprintf("v%v ", platformVersion)
+	}
+
+	userAgent := fmt.Sprintf(
+		"Google Cloud Metrics Agent/%v (TargetPlatform=%v; Framework=OpenTelemetry Collector) %s %s(Cores=%v; Memory=%0.1fGB; Disk=%0.1fGB)",
+		version.Version,
+		strings.Title(runtime.GOOS),
+		platform,
+		platformVersion,
+		cores,
+		float64(memory.Total)/math.Pow(1024, 3),
+		float64(totalDiskCapacity)/math.Pow(1024, 3),
+	)
+
+	os.Setenv("USERAGENT", userAgent)
 	return nil
 }

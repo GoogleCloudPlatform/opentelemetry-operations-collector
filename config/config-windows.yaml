@@ -393,6 +393,7 @@ processors:
           # change data type from double -> int64
           - action: toggle_scalar_data_type
 
+  # convert from windows perf counter formats to cloud monitoring formats
   metricstransform/iis:
     transforms:
       # TODO: make this unnecessary
@@ -418,6 +419,7 @@ processors:
         action: combine
         new_name: iis/request_count
 
+  # convert from windows perf counter formats to cloud monitoring formats
   metricstransform/mssql:
     transforms:
       # TODO: make this unnecessary

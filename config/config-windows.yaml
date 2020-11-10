@@ -33,18 +33,17 @@ receivers:
       - object: Web Service
         instances: _Total
         counters:
-          # TODO: instead of setting capture group values to lowercase, make this option explicit
           - Current Connections
-          - Total Bytes received
-          - Total Bytes sent
+          - Total Bytes Received
+          - Total Bytes Sent
           - Total Connection Attempts (all instances)
-          - Total delete Requests
-          - Total get Requests
-          - Total head Requests
-          - Total options Requests
-          - Total post Requests
-          - Total put Requests
-          - Total trace Requests
+          - Total Delete Requests
+          - Total Get Requests
+          - Total Head Requests
+          - Total Options Requests
+          - Total Post Requests
+          - Total Put Requests
+          - Total Trace Requests
 
   # scrape mssql perf counters at 1m interval
   windowsperfcounters/mssql:
@@ -347,6 +346,39 @@ processors:
           - otelcol_grpc_io_client_completed_rpcs
           - otelcol_otelcol_googlecloudmonitoring_point_count
 
+  # convert from windows perf counter formats to cloud monitoring formats
+  metricstransform/iis:
+    transforms:
+      - include: \Web Service(_Total)\Current Connections
+        action: update
+        new_name: iis/current_connections
+      - include: ^\\Web Service\(_Total\)\\Total Bytes (?P<direction>.*)$
+        match_type: regexp
+        action: combine
+        new_name: iis/network/transferred_bytes_count
+        submatch_case: lower
+      - include: \Web Service(_Total)\Total Connection Attempts (all instances)
+        action: update
+        new_name: iis/new_connection_count
+      - include: ^\\Web Service\(_Total\)\\Total (?P<http_method>.*) Requests$
+        match_type: regexp
+        action: combine
+        new_name: iis/request_count
+        submatch_case: lower
+
+  # convert from windows perf counter formats to cloud monitoring formats
+  metricstransform/mssql:
+    transforms:
+      - include: \SQLServer:General Statistics(_Total)\User Connections
+        action: update
+        new_name: mssql/connections/user 
+      - include: \SQLServer:Databases(_Total)\Transactions/sec
+        action: update
+        new_name: mssql/transaction_rate
+      - include: \SQLServer:Databases(_Total)\Write Transactions/sec
+        action: update
+        new_name: mssql/write_transaction_rate
+
   # convert from opentelemetry metric formats to cloud monitoring formats
   metricstransform/agent:
     transforms:
@@ -392,53 +424,6 @@ processors:
         operations:
           # change data type from double -> int64
           - action: toggle_scalar_data_type
-
-  # convert from windows perf counter formats to cloud monitoring formats
-  metricstransform/iis:
-    transforms:
-      # TODO: make this unnecessary
-      - include: .*
-        action: update
-        match_type: regexp
-        operations:
-          # delete "instance = _Total" label from all points
-          - action: aggregate_labels
-
-      - include: \Web Service(_Total)\Current Connections
-        action: update
-        new_name: iis/current_connections
-      - include: ^\\Web Service\(_Total\)\\Total Bytes (?P<direction>.*)$
-        match_type: regexp
-        action: combine
-        new_name: iis/network/transferred_bytes_count
-      - include: \Web Service(_Total)\Total Connection Attempts (all instances)
-        action: update
-        new_name: iis/new_connection_count
-      - include: ^\\Web Service\(_Total\)\\Total (?P<http_method>.*) Requests$
-        match_type: regexp
-        action: combine
-        new_name: iis/request_count
-
-  # convert from windows perf counter formats to cloud monitoring formats
-  metricstransform/mssql:
-    transforms:
-      # TODO: make this unnecessary
-      - include: .*
-        action: update
-        match_type: regexp
-        operations:
-          # delete "instance = _Total" label from all points
-          - action: aggregate_labels
-
-      - include: \SQLServer:General Statistics(_Total)\User Connections
-        action: update
-        new_name: mssql/connections/user 
-      - include: \SQLServer:Databases(_Total)\Transactions/sec
-        action: update
-        new_name: mssql/transaction_rate
-      - include: \SQLServer:Databases(_Total)\Write Transactions/sec
-        action: update
-        new_name: mssql/write_transaction_rate
 
 exporters:
   # export to cloud monitoring using the agent prefix

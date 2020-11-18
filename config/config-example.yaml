@@ -137,10 +137,19 @@ processors:
         operations:
           # change data type from int64 -> double
           - action: toggle_scalar_data_type
+          # take sum over mode, mountpoint & type dimensions, retaining only device & state
+          - action: aggregate_labels
+            label_set: [ device, state ]
+            aggregation_type: sum
       # system.filesystem.utilization -> disk/percent_used
       - metric_name: system.filesystem.utilization
         action: update
         new_name: disk/percent_used
+        operations:
+          # take sum over mode, mountpoint & type dimensions, retaining only device & state
+          - action: aggregate_labels
+            label_set: [ device, state ]
+            aggregation_type: sum
       # system.memory.usage -> memory/bytes_used
       - metric_name: system.memory.usage
         action: update
@@ -276,7 +285,8 @@ processors:
 exporters:
   # export to cloud monitoring using the agent prefix
   stackdriver:
-    metric_prefix: agent.googleapis.com/
+    metric:
+      prefix: agent.googleapis.com/
 
   # to debug the outputted metrics, uncomment the following and add "logging" to the exporters list below
   # logging:

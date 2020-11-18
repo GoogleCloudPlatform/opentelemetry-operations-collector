@@ -38,8 +38,8 @@ receivers:
 
   # https://github.com/prometheus/jmx_exporter
   prometheus_exec/jvm:
-    # see exporter_configs/jvm_config.yaml for JMX configuration, notably the `jmxUrl` key
-    exec: java -jar ./prometheus_exporters/jmx_exporter.jar {{port}} exporter_configs/jvm_config.yaml
+    # see prometheus_exporter_config/jvm_config.yaml for JMX configuration, notably the `jmxUrl` key
+    exec: java -jar ./prometheus_exporters/jmx_exporter.jar {{port}} prometheus_exporter_config/jvm_config.yaml
     port: 9404
 
   # https://github.com/prometheus/statsd_exporter
@@ -152,10 +152,19 @@ processors:
         operations:
           # change data type from int64 -> double
           - action: toggle_scalar_data_type
+          # take sum over mode, mountpoint & type dimensions, retaining only device & state
+          - action: aggregate_labels
+            label_set: [ device, state ]
+            aggregation_type: sum
       # system.filesystem.utilization -> disk/percent_used
       - metric_name: system.filesystem.utilization
         action: update
         new_name: agent.googleapis.com/disk/percent_used
+        operations:
+          # take sum over mode, mountpoint & type dimensions, retaining only device & state
+          - action: aggregate_labels
+            label_set: [ device, state ]
+            aggregation_type: sum
       # system.memory.usage -> memory/bytes_used
       - metric_name: system.memory.usage
         action: update
@@ -488,8 +497,9 @@ exporters:
 
   # this exporter will prefix all metrics without a domain (eg. agent.googleapis.com/) with custom.googleapis.com/
   # also, it will use the default GCE instance credentials this Collector will run on
-  stackdriver:  
-    metric_prefix: custom.googleapis.com/
+  stackdriver:
+    metric:
+      prefix: custom.googleapis.com/
 
 service:
   pipelines:

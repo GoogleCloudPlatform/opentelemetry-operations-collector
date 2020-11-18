@@ -23,7 +23,6 @@ import (
 	"go.opentelemetry.io/collector/component/componenterror"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/consumer/pdata"
-	"go.opentelemetry.io/collector/consumer/pdatautil"
 	"go.uber.org/zap"
 )
 
@@ -59,25 +58,21 @@ func (*agentMetricsProcessor) Shutdown(ctx context.Context) error {
 
 // ConsumeMetrics implements the MetricsProcessor interface.
 func (mtp *agentMetricsProcessor) ConsumeMetrics(ctx context.Context, metrics pdata.Metrics) error {
-	md := pdatautil.MetricsToInternalMetrics(metrics)
-
-	convertNonMonotonicSumsToGauges(md.ResourceMetrics())
+	convertNonMonotonicSumsToGauges(metrics.ResourceMetrics())
 
 	var errors []error
 
-	if err := combineProcessMetrics(md.ResourceMetrics()); err != nil {
+	if err := combineProcessMetrics(metrics.ResourceMetrics()); err != nil {
 		errors = append(errors, err)
 	}
 
-	if err := splitReadWriteBytesMetrics(md.ResourceMetrics()); err != nil {
+	if err := splitReadWriteBytesMetrics(metrics.ResourceMetrics()); err != nil {
 		errors = append(errors, err)
 	}
 
-	if err := mtp.appendUtilizationMetrics(md.ResourceMetrics()); err != nil {
+	if err := mtp.appendUtilizationMetrics(metrics.ResourceMetrics()); err != nil {
 		errors = append(errors, err)
 	}
-
-	metrics = pdatautil.MetricsFromInternalMetrics(md)
 
 	if err := mtp.next.ConsumeMetrics(ctx, metrics); err != nil {
 		errors = append(errors, err)

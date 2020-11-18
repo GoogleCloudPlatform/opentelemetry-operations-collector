@@ -27,13 +27,12 @@ func TestLoadConfig(t *testing.T) {
 	factories, err := componenttest.ExampleComponents()
 	assert.NoError(t, err)
 
-	factory := &Factory{}
-	factories.Processors[typeStr] = &Factory{}
+	factories.Processors[typeStr] = NewFactory()
 
 	cfg, err := configtest.LoadConfigFile(t, path.Join(".", "testdata", "config.yaml"), factories)
 	assert.NoError(t, err)
 	assert.NotNil(t, cfg)
 
 	p1 := cfg.Processors["agentmetrics"]
-	assert.Equal(t, p1, factory.CreateDefaultConfig())
+	assert.Equal(t, p1, createDefaultConfig())
 }

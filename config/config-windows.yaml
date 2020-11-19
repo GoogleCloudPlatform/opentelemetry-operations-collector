@@ -335,7 +335,7 @@ processors:
           # add version label
           - action: add_label
             new_label: version
-            new_value: Google Cloud Metrics Agent/{{version}} (TargetPlatform=windows; Framework=OpenTelemetry Collector)
+            new_value: $USERAGENT
       # otelcol_process_memory_rss -> agent/memory_usage
       - metric_name: otelcol_process_memory_rss
         action: update
@@ -371,13 +371,13 @@ processors:
 exporters:
   # export to cloud monitoring using the agent prefix
   stackdriver/system:
-    user_agent: Google Cloud Metrics Agent/{{version}} (TargetPlatform=windows; Framework=OpenTelemetry Collector)
+    user_agent: $USERAGENT
     metric:
       prefix: agent.googleapis.com/
 
   # export to cloud monitoring using the agent prefix
   stackdriver/agent:
-    user_agent: Google Cloud Metrics Agent/{{version}} (TargetPlatform=windows; Framework=OpenTelemetry Collector)
+    user_agent: $USERAGENT
     metric:
       prefix: agent.googleapis.com/
 

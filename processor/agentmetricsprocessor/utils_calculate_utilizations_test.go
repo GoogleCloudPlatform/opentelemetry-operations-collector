@@ -16,11 +16,10 @@ package agentmetricsprocessor
 
 import (
 	"go.opentelemetry.io/collector/consumer/pdata"
-	"go.opentelemetry.io/collector/consumer/pdatautil"
 )
 
 func generateUtilizationMetricsInput() pdata.Metrics {
-	input := pdatautil.MetricsToInternalMetrics(newInternalMetrics())
+	input := pdata.NewMetrics()
 
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
@@ -50,7 +49,7 @@ func generateUtilizationMetricsInput() pdata.Metrics {
 	mb3.addDoubleDataPoint(1.5, map[string]string{"label1": "value2", "label2": "value2", "state": "reserved"})
 
 	rmb.Build().CopyTo(input.ResourceMetrics())
-	return pdatautil.MetricsFromInternalMetrics(input)
+	return input
 }
 
 func generateUtilizationPrevCPUTimeValuesInput() map[string]float64 {
@@ -63,7 +62,7 @@ func generateUtilizationPrevCPUTimeValuesInput() map[string]float64 {
 }
 
 func generateUtilizationMetricsExpected() pdata.Metrics {
-	expected := pdatautil.MetricsToInternalMetrics(newInternalMetrics())
+	expected := pdata.NewMetrics()
 
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
@@ -117,7 +116,7 @@ func generateUtilizationMetricsExpected() pdata.Metrics {
 	mb6.addDoubleDataPoint(1.5/(9.7+2.1+1.5)*100, map[string]string{"label1": "value2", "label2": "value2", "state": "reserved"})
 
 	rmb.Build().CopyTo(expected.ResourceMetrics())
-	return pdatautil.MetricsFromInternalMetrics(expected)
+	return expected
 }
 
 func generateUtilizationPrevCPUTimeValuesExpected() map[string]float64 {

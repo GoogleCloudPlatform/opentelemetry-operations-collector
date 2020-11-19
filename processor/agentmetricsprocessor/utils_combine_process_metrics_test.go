@@ -16,11 +16,10 @@ package agentmetricsprocessor
 
 import (
 	"go.opentelemetry.io/collector/consumer/pdata"
-	"go.opentelemetry.io/collector/consumer/pdatautil"
 )
 
 func generateProcessResourceMetricsInput() pdata.Metrics {
-	input := pdatautil.MetricsToInternalMetrics(newInternalMetrics())
+	input := pdata.NewMetrics()
 
 	rmb := newResourceMetricsBuilder()
 	b1 := rmb.addResourceMetrics(nil)
@@ -50,11 +49,11 @@ func generateProcessResourceMetricsInput() pdata.Metrics {
 	b3.addMetric("m4", pdata.MetricDataTypeDoubleGauge, false).addDoubleDataPoint(6, map[string]string{"label1": "value2"})
 
 	rmb.Build().CopyTo(input.ResourceMetrics())
-	return pdatautil.MetricsFromInternalMetrics(input)
+	return input
 }
 
 func generateProcessResourceMetricsExpected() pdata.Metrics {
-	expected := pdatautil.MetricsToInternalMetrics(newInternalMetrics())
+	expected := pdata.NewMetrics()
 
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
@@ -95,5 +94,5 @@ func generateProcessResourceMetricsExpected() pdata.Metrics {
 	})
 
 	rmb.Build().CopyTo(expected.ResourceMetrics())
-	return pdatautil.MetricsFromInternalMetrics(expected)
+	return expected
 }

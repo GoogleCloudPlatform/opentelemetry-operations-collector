@@ -16,11 +16,10 @@ package agentmetricsprocessor
 
 import (
 	"go.opentelemetry.io/collector/consumer/pdata"
-	"go.opentelemetry.io/collector/consumer/pdatautil"
 )
 
 func generateNonMonotonicSumsInput() pdata.Metrics {
-	input := pdatautil.MetricsToInternalMetrics(newInternalMetrics())
+	input := pdata.NewMetrics()
 
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
@@ -34,11 +33,11 @@ func generateNonMonotonicSumsInput() pdata.Metrics {
 	mb2.addDoubleDataPoint(4, map[string]string{"label1": "value2"})
 
 	rmb.Build().CopyTo(input.ResourceMetrics())
-	return pdatautil.MetricsFromInternalMetrics(input)
+	return input
 }
 
 func generateNonMonotonicSumsExpected() pdata.Metrics {
-	expected := pdatautil.MetricsToInternalMetrics(newInternalMetrics())
+	expected := pdata.NewMetrics()
 
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
@@ -52,5 +51,5 @@ func generateNonMonotonicSumsExpected() pdata.Metrics {
 	mb2.addDoubleDataPoint(4, map[string]string{"label1": "value2"})
 
 	rmb.Build().CopyTo(expected.ResourceMetrics())
-	return pdatautil.MetricsFromInternalMetrics(expected)
+	return expected
 }

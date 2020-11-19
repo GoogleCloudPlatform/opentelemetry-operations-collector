@@ -24,21 +24,13 @@ import (
 )
 
 func TestCreateDefaultConfig(t *testing.T) {
-	var factory Factory
-	cfg := factory.CreateDefaultConfig()
+	cfg := createDefaultConfig()
 	assert.NoError(t, configcheck.ValidateConfig(cfg))
 	assert.NotNil(t, cfg)
 }
 
 func TestCreateProcessor(t *testing.T) {
-	factory := &Factory{}
-	cfg := factory.CreateDefaultConfig()
-
-	tp, err := factory.CreateTraceProcessor(context.Background(), component.ProcessorCreateParams{}, nil, cfg)
-	assert.Error(t, err)
-	assert.Nil(t, tp)
-
-	mp, err := factory.CreateMetricsProcessor(context.Background(), component.ProcessorCreateParams{}, nil, cfg)
+	mp, err := createMetricsProcessor(context.Background(), component.ProcessorCreateParams{}, createDefaultConfig(), nil)
 	assert.NoError(t, err)
 	assert.NotNil(t, mp)
 }

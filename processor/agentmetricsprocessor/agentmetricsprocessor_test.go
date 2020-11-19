@@ -18,16 +18,13 @@ import (
 	"context"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/consumer/pdata"
-	"go.opentelemetry.io/collector/consumer/pdatautil"
 	"go.opentelemetry.io/collector/exporter/exportertest"
-	"go.opentelemetry.io/collector/receiver/hostmetricsreceiver"
 	"go.uber.org/zap"
 )
 
@@ -67,9 +64,9 @@ func TestAgentMetricsProcessor(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			factory := &Factory{}
+			factory := NewFactory()
 			tmn := &exportertest.SinkMetricsExporter{}
-			rmp, err := factory.CreateMetricsProcessor(context.Background(), component.ProcessorCreateParams{Logger: zap.NewNop()}, tmn, &Config{})
+			rmp, err := factory.CreateMetricsProcessor(context.Background(), component.ProcessorCreateParams{Logger: zap.NewNop()}, &Config{}, tmn)
 			require.NoError(t, err)
 
 			assert.True(t, rmp.GetCapabilities().MutatesConsumedData)
@@ -102,7 +99,6 @@ func (rmsb resourceMetricsBuilder) addResourceMetrics(resourceAttributes map[str
 	rm.InitEmpty()
 
 	if resourceAttributes != nil {
-		rm.Resource().InitEmpty()
 		rm.Resource().Attributes().InitFromMap(resourceAttributes)
 	}
 
@@ -110,7 +106,7 @@ func (rmsb resourceMetricsBuilder) addResourceMetrics(resourceAttributes map[str
 	ilm := rm.InstrumentationLibraryMetrics().At(0)
 	ilm.InitEmpty()
 
-	rmsb.rms.Append(&rm)
+	rmsb.rms.Append(rm)
 	return metricsBuilder{metrics: ilm.Metrics()}
 }
 
@@ -145,7 +141,7 @@ func (msb metricsBuilder) addMetric(name string, t pdata.MetricDataType, isMonot
 		metric.DoubleGauge().InitEmpty()
 	}
 
-	msb.metrics.Append(&metric)
+	msb.metrics.Append(metric)
 	return metricBuilder{metric: metric}
 }
 
@@ -161,9 +157,9 @@ func (mb metricBuilder) addIntDataPoint(value int64, labels map[string]string) m
 
 	switch mb.metric.DataType() {
 	case pdata.MetricDataTypeIntSum:
-		mb.metric.IntSum().DataPoints().Append(&idp)
+		mb.metric.IntSum().DataPoints().Append(idp)
 	case pdata.MetricDataTypeIntGauge:
-		mb.metric.IntGauge().DataPoints().Append(&idp)
+		mb.metric.IntGauge().DataPoints().Append(idp)
 	}
 
 	return mb
@@ -177,9 +173,9 @@ func (mb metricBuilder) addDoubleDataPoint(value float64, labels map[string]stri
 
 	switch mb.metric.DataType() {
 	case pdata.MetricDataTypeDoubleSum:
-		mb.metric.DoubleSum().DataPoints().Append(&ddp)
+		mb.metric.DoubleSum().DataPoints().Append(ddp)
 	case pdata.MetricDataTypeDoubleGauge:
-		mb.metric.DoubleGauge().DataPoints().Append(&ddp)
+		mb.metric.DoubleGauge().DataPoints().Append(ddp)
 	}
 
 	return mb
@@ -188,18 +184,15 @@ func (mb metricBuilder) addDoubleDataPoint(value float64, labels map[string]stri
 // assertEqual is required because Attribute & Label Maps are not sorted by default
 // and we don't provide any guarantees on the order of transformed metrics
 func assertEqual(t *testing.T, expected, actual pdata.Metrics) {
-	rmsAct := pdatautil.MetricsToInternalMetrics(actual).ResourceMetrics()
-	rmsExp := pdatautil.MetricsToInternalMetrics(expected).ResourceMetrics()
+	rmsAct := actual.ResourceMetrics()
+	rmsExp := expected.ResourceMetrics()
 	require.Equal(t, rmsExp.Len(), rmsAct.Len())
 	for i := 0; i < rmsAct.Len(); i++ {
 		rmAct := rmsAct.At(i)
 		rmExp := rmsExp.At(i)
 
 		// assert equality of resource attributes
-		assert.Equal(t, rmExp.Resource().IsNil(), rmAct.Resource().IsNil())
-		if !rmExp.Resource().IsNil() {
-			assert.Equal(t, rmExp.Resource().Attributes().Sort(), rmAct.Resource().Attributes().Sort())
-		}
+		assert.Equal(t, rmExp.Resource().Attributes().Sort(), rmAct.Resource().Attributes().Sort())
 
 		// assert equality of IL metrics
 		ilmsAct := rmAct.InstrumentationLibraryMetrics()
@@ -305,24 +298,4 @@ func assertEqualDoubleDataPointSlice(t *testing.T, metricName string, ddpsAct, d
 		assert.Equalf(t, ddpExp.Timestamp(), ddpAct.Timestamp(), "Metric %s", metricName)
 		assert.InDeltaf(t, ddpExp.Value(), ddpAct.Value(), 0.00000001, "Metric %s", metricName)
 	}
-}
-
-var cached *pdata.Metrics
-
-// a very dirty hack to get an internal.Data object since we shouldn't be using it yet,
-// but its needed to construct the resource tests
-func newInternalMetrics() pdata.Metrics {
-	if cached == nil {
-		f := hostmetricsreceiver.NewFactory()
-		c := &hostmetricsreceiver.Config{CollectionInterval: 3 * time.Millisecond}
-		s := &exportertest.SinkMetricsExporter{}
-		r, _ := f.CreateMetricsReceiver(context.Background(), component.ReceiverCreateParams{Logger: zap.NewNop()}, c, s)
-		_ = r.Start(context.Background(), componenttest.NewNopHost())
-		time.Sleep(10 * time.Millisecond)
-		_ = r.Shutdown(context.Background())
-		md := s.AllMetrics()[0]
-		cached = &md
-	}
-
-	return pdatautil.MetricsFromInternalMetrics(pdatautil.MetricsToInternalMetrics(*cached).Clone())
 }

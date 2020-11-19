@@ -72,7 +72,7 @@ func splitReadWriteBytesMetrics(rms pdata.ResourceMetricsSlice) error {
 				// append the new metrics to the collection, overwriting the old one
 				metric.InitEmpty() // reset original metric to avoid effecting data points that are re-used in new metrics
 				read.CopyTo(metric)
-				metrics.Append(&write)
+				metrics.Append(write)
 			}
 		}
 	}
@@ -119,13 +119,13 @@ func appendInt64DataPoints(metricName string, idps, read, write pdata.IntDataPoi
 		}
 		labels.Delete(directionLabel)
 
-		switch d := dir.Value(); d {
+		switch dir {
 		case readDirection:
-			read.Append(&idp)
+			read.Append(idp)
 		case writeDirection:
-			write.Append(&idp)
+			write.Append(idp)
 		default:
-			return fmt.Errorf("metric %v label %v contained unexpected value %v", metricName, directionLabel, d)
+			return fmt.Errorf("metric %v label %v contained unexpected value %v", metricName, directionLabel, dir)
 		}
 	}
 
@@ -143,13 +143,13 @@ func appendDoubleDataPoints(metricName string, ddps, read, write pdata.DoubleDat
 		}
 		labels.Delete(directionLabel)
 
-		switch d := dir.Value(); d {
+		switch dir {
 		case readDirection:
-			read.Append(&ddp)
+			read.Append(ddp)
 		case writeDirection:
-			write.Append(&ddp)
+			write.Append(ddp)
 		default:
-			return fmt.Errorf("metric %v label %v contained unexpected value %v", metricName, directionLabel, d)
+			return fmt.Errorf("metric %v label %v contained unexpected value %v", metricName, directionLabel, dir)
 		}
 	}
 

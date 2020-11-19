@@ -15,7 +15,7 @@
 # limitations under the License.
 
 CONFIG_FILE=${CONFIG_FILE:-config-example.yaml}
-EXPORTERS_DIRECTORY=prometheus_exporters
+EXPORTERS_DIRECTORY=prometheus_exporter
 EXPORTERS_CONFIG_DIRECTORY=prometheus_exporter_config
 FINAL_CONFIG_FILE=config.yaml
 README=${README:-tarball-readme.md}

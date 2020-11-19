@@ -24,7 +24,7 @@ receivers:
   # https://github.com/prometheus/mysqld_exporter
   prometheus_exec/mysql:
     # --no-collect.global_variables reduces the amount of generated metrics, can be removed to enable all (600+) MySQL metrics
-    exec: ./prometheus_exporters/mysqld_exporter --web.listen-address=":{{port}}" --no-collect.global_variables
+    exec: ./prometheus_exporter/mysqld_exporter --web.listen-address=":{{port}}" --no-collect.global_variables
     port: 9104
     env:
       # DATA_SOURCE_NAME and its value are needed to connect to the MySQL server, alternatively you could use a .my.cnf configuration file
@@ -33,18 +33,18 @@ receivers:
 
   # https://github.com/Lusitaniae/apache_exporter
   prometheus_exec/apache:
-    exec: ./prometheus_exporters/apache_exporter --telemetry.address=":{{port}}"
+    exec: ./prometheus_exporter/apache_exporter --telemetry.address=":{{port}}"
     port: 9117
 
   # https://github.com/prometheus/jmx_exporter
   prometheus_exec/jvm:
     # see prometheus_exporter_config/jvm_config.yaml for JMX configuration, notably the `jmxUrl` key
-    exec: java -jar ./prometheus_exporters/jmx_exporter.jar {{port}} prometheus_exporter_config/jvm_config.yaml
+    exec: java -jar ./prometheus_exporter/jmx_exporter.jar {{port}} prometheus_exporter_config/jvm_config.yaml
     port: 9404
 
   # https://github.com/prometheus/statsd_exporter
   prometheus_exec/statsd:
-    exec: ./prometheus_exporters/statsd_exporter
+    exec: ./prometheus_exporter/statsd_exporter
     port: 9102
 
 processors:

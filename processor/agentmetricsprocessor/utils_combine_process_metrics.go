@@ -74,7 +74,7 @@ func combineProcessMetrics(rms pdata.ResourceMetricsSlice) error {
 	// ideally, we would Resize & Set, but a Set function is not available
 	// at this time
 	for _, metric := range processMetrics {
-		metrics.Append(&metric.Metric)
+		metrics.Append(metric.Metric)
 	}
 
 	// TODO: This is super inefficient. Instead, we should just return a new
@@ -126,10 +126,6 @@ const processAttributePrefix = "process."
 // includesProcessAttributes returns true if the resource includes
 // any attributes with a "process." prefix
 func includesProcessAttributes(resource pdata.Resource) bool {
-	if resource.IsNil() {
-		return false
-	}
-
 	includesProcessAttributes := false
 	resource.Attributes().ForEach(func(k string, _ pdata.AttributeValue) {
 		if strings.HasPrefix(k, processAttributePrefix) {

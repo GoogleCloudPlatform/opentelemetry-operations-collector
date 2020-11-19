@@ -21,10 +21,15 @@ import (
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/service"
 
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/env"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/version"
 )
 
 func main() {
+	if err := env.Create(); err != nil {
+		log.Fatalf("failed to build environment variables for config: %v", err)
+	}
+
 	factories, err := components()
 	if err != nil {
 		log.Fatalf("failed to build default components: %v", err)
@@ -50,7 +55,7 @@ func runInteractive(params service.Parameters) error {
 		return fmt.Errorf("failed to construct the application: %w", err)
 	}
 
-	err = app.Start()
+	err = app.Run()
 	if err != nil {
 		return fmt.Errorf("application run finished with error: %w", err)
 	}

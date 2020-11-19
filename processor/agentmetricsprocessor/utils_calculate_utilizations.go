@@ -63,7 +63,7 @@ func (mtp *agentMetricsProcessor) appendUtilizationMetrics(rms pdata.ResourceMet
 					return err
 				}
 
-				metrics.Append(&utilizationMetric)
+				metrics.Append(utilizationMetric)
 			}
 		}
 	}
@@ -277,8 +277,8 @@ func labelsAsKey(labels pdata.StringMap) string {
 	otherLabelsLen := labels.Len()
 
 	idx, otherLabels := 0, make([]string, otherLabelsLen)
-	labels.ForEach(func(k string, v pdata.StringValue) {
-		otherLabels[idx] = k + "=" + v.Value()
+	labels.ForEach(func(k string, v string) {
+		otherLabels[idx] = k + "=" + v
 		idx++
 	})
 
@@ -295,7 +295,7 @@ func otherLabelsAsKey(labels pdata.StringMap, excluding ...string) (string, erro
 	otherLabelsLen := labels.Len() - len(excluding)
 
 	otherLabels := make([]string, 0, otherLabelsLen)
-	labels.ForEach(func(k string, v pdata.StringValue) {
+	labels.ForEach(func(k string, v string) {
 		// ignore any keys specified in excluding
 		for _, e := range excluding {
 			if k == e {
@@ -303,7 +303,7 @@ func otherLabelsAsKey(labels pdata.StringMap, excluding ...string) (string, erro
 			}
 		}
 
-		otherLabels = append(otherLabels, fmt.Sprintf("%s=%s", k, v.Value()))
+		otherLabels = append(otherLabels, fmt.Sprintf("%s=%s", k, v))
 	})
 
 	if len(otherLabels) > otherLabelsLen {

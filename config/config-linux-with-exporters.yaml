@@ -24,7 +24,7 @@ receivers:
   # https://github.com/prometheus/mysqld_exporter
   prometheus_exec/mysql:
     # --no-collect.global_variables reduces the amount of generated metrics, can be removed to enable all (600+) MySQL metrics
-    exec: ./prometheus_exporters/mysqld_exporter --web.listen-address=":{{port}}" --no-collect.global_variables
+    exec: ./prometheus_exporter/mysqld_exporter --web.listen-address=":{{port}}" --no-collect.global_variables
     port: 9104
     env:
       # DATA_SOURCE_NAME and its value are needed to connect to the MySQL server, alternatively you could use a .my.cnf configuration file
@@ -33,18 +33,18 @@ receivers:
 
   # https://github.com/Lusitaniae/apache_exporter
   prometheus_exec/apache:
-    exec: ./prometheus_exporters/apache_exporter --telemetry.address=":{{port}}"
+    exec: ./prometheus_exporter/apache_exporter --telemetry.address=":{{port}}"
     port: 9117
 
   # https://github.com/prometheus/jmx_exporter
   prometheus_exec/jvm:
-    # see exporter_configs/jvm_config.yaml for JMX configuration, notably the `jmxUrl` key
-    exec: java -jar ./prometheus_exporters/jmx_exporter.jar {{port}} exporter_configs/jvm_config.yaml
+    # see prometheus_exporter_config/jvm_config.yaml for JMX configuration, notably the `jmxUrl` key
+    exec: java -jar ./prometheus_exporter/jmx_exporter.jar {{port}} prometheus_exporter_config/jvm_config.yaml
     port: 9404
 
   # https://github.com/prometheus/statsd_exporter
   prometheus_exec/statsd:
-    exec: ./prometheus_exporters/statsd_exporter
+    exec: ./prometheus_exporter/statsd_exporter
     port: 9102
 
 processors:
@@ -152,10 +152,19 @@ processors:
         operations:
           # change data type from int64 -> double
           - action: toggle_scalar_data_type
+          # take sum over mode, mountpoint & type dimensions, retaining only device & state
+          - action: aggregate_labels
+            label_set: [ device, state ]
+            aggregation_type: sum
       # system.filesystem.utilization -> disk/percent_used
       - metric_name: system.filesystem.utilization
         action: update
         new_name: agent.googleapis.com/disk/percent_used
+        operations:
+          # take sum over mode, mountpoint & type dimensions, retaining only device & state
+          - action: aggregate_labels
+            label_set: [ device, state ]
+            aggregation_type: sum
       # system.memory.usage -> memory/bytes_used
       - metric_name: system.memory.usage
         action: update
@@ -488,8 +497,9 @@ exporters:
 
   # this exporter will prefix all metrics without a domain (eg. agent.googleapis.com/) with custom.googleapis.com/
   # also, it will use the default GCE instance credentials this Collector will run on
-  stackdriver:  
-    metric_prefix: custom.googleapis.com/
+  stackdriver:
+    metric:
+      prefix: custom.googleapis.com/
 
 service:
   pipelines:

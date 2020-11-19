@@ -1,4 +1,4 @@
-// Copyright 2020, OpenTelemetry Authors
+// Copyright 2020, Google Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,28 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package agentmetricsprocessor
+package env
 
 import (
-	"path"
+	"fmt"
+	"os"
+	"runtime"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"go.opentelemetry.io/collector/component/componenttest"
-	"go.opentelemetry.io/collector/config/configtest"
+	"github.com/stretchr/testify/require"
 )
 
-func TestLoadConfig(t *testing.T) {
-	factories, err := componenttest.ExampleComponents()
-	assert.NoError(t, err)
+func Test_Create(t *testing.T) {
+	require.NoError(t, Create())
 
-	factory := NewFactory()
-	factories.Processors[typeStr] = factory
-
-	cfg, err := configtest.LoadConfigFile(t, path.Join(".", "testdata", "config.yaml"), factories)
-	assert.NoError(t, err)
-	assert.NotNil(t, cfg)
-
-	p1 := cfg.Processors["agentmetrics"]
-	assert.Equal(t, p1, factory.CreateDefaultConfig())
+	expectedUserAgentRegex := fmt.Sprintf(`^Google Cloud Metrics Agent/latest \(TargetPlatform=(?i:%v); Framework=OpenTelemetry Collector\) .* \(Cores=\d+; Memory=(?:[0-9]*[.])?[0-9]+GB; Disk=(?:[0-9]*[.])?[0-9]+GB\)$`, runtime.GOOS)
+	assert.Regexp(t, expectedUserAgentRegex, os.Getenv("USERAGENT"))
 }

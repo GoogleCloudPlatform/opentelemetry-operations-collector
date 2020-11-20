@@ -26,7 +26,40 @@ receivers:
       swap:
       process:
 
-  # agent self-observability metrics
+  # scrape iis perf counters at 1m interval
+  windowsperfcounters/iis:
+    collection_interval: 1m
+    perfcounters:
+      - object: Web Service
+        instances: _Total
+        counters:
+          - Current Connections
+          - Total Bytes Received
+          - Total Bytes Sent
+          - Total Connection Attempts (all instances)
+          - Total Delete Requests
+          - Total Get Requests
+          - Total Head Requests
+          - Total Options Requests
+          - Total Post Requests
+          - Total Put Requests
+          - Total Trace Requests
+
+  # scrape mssql perf counters at 1m interval
+  windowsperfcounters/mssql:
+    collection_interval: 1m
+    perfcounters:
+      - object: SQLServer:General Statistics
+        instances: _Total
+        counters:
+          - User Connections
+      - object: SQLServer:Databases
+        instances: _Total
+        counters:
+          - Transactions/sec
+          - Write Transactions/sec
+
+  # scrape agent self-observability metrics
   prometheus/agent:
     config:
       scrape_configs:
@@ -322,6 +355,39 @@ processors:
           - otelcol_grpc_io_client_completed_rpcs
           - otelcol_otelcol_googlecloudmonitoring_point_count
 
+  # convert from windows perf counter formats to cloud monitoring formats
+  metricstransform/iis:
+    transforms:
+      - include: \Web Service(_Total)\Current Connections
+        action: update
+        new_name: iis/current_connections
+      - include: ^\\Web Service\(_Total\)\\Total Bytes (?P<direction>.*)$
+        match_type: regexp
+        action: combine
+        new_name: iis/network/transferred_bytes_count
+        submatch_case: lower
+      - include: \Web Service(_Total)\Total Connection Attempts (all instances)
+        action: update
+        new_name: iis/new_connection_count
+      - include: ^\\Web Service\(_Total\)\\Total (?P<http_method>.*) Requests$
+        match_type: regexp
+        action: combine
+        new_name: iis/request_count
+        submatch_case: lower
+
+  # convert from windows perf counter formats to cloud monitoring formats
+  metricstransform/mssql:
+    transforms:
+      - include: \SQLServer:General Statistics(_Total)\User Connections
+        action: update
+        new_name: mssql/connections/user 
+      - include: \SQLServer:Databases(_Total)\Transactions/sec
+        action: update
+        new_name: mssql/transaction_rate
+      - include: \SQLServer:Databases(_Total)\Write Transactions/sec
+        action: update
+        new_name: mssql/write_transaction_rate
+
   # convert from opentelemetry metric formats to cloud monitoring formats
   metricstransform/agent:
     transforms:
@@ -370,12 +436,12 @@ processors:
 
 exporters:
   # export to cloud monitoring using the agent prefix
-  stackdriver/system:
+  stackdriver:
     user_agent: $USERAGENT
     metric:
       prefix: agent.googleapis.com/
 
-  # export to cloud monitoring using the agent prefix
+  # export self-reported metrics to cloud monitoring using the agent prefix
   stackdriver/agent:
     user_agent: $USERAGENT
     metric:
@@ -399,7 +465,31 @@ service:
         # add additional custom processors below this line if desired
         - resourcedetection
       exporters:
-        - stackdriver/system
+        - stackdriver
+
+    # reports iis metrics to cloud monitoring
+    metrics/iis:
+      receivers:
+        - windowsperfcounters/iis
+      processors:
+        # leave these custom processors here to support cloud monitoring agent metric format
+        - metricstransform/iis
+        # add additional custom processors below this line if desired
+        - resourcedetection
+      exporters:
+        - stackdriver
+
+    # reports mssql metrics to cloud monitoring
+    metrics/mssql:
+      receivers:
+        - windowsperfcounters/mssql
+      processors:
+        # leave these custom processors here to support cloud monitoring agent metric format
+        - metricstransform/mssql
+        # add additional custom processors below this line if desired
+        - resourcedetection
+      exporters:
+        - stackdriver
 
     # reports agent self-observability metrics to cloud monitoring
     metrics/agent:

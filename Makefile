@@ -38,7 +38,7 @@ LD_FLAGS := -ldflags "${BUILD_X1} ${BUILD_X2}"
 .DEFAULT_GOAL := presubmit
 
 # --------------------------
-#  Build / Package Commands
+#  Install Tools
 # --------------------------
 
 .PHONY: install-tools
@@ -48,6 +48,19 @@ install-tools:
 	go get github.com/google/addlicense
 	go get github.com/google/googet/goopack
 	go get github.com/pavius/impi/cmd/impi
+
+# --------------------------
+#  Helper Commands
+# --------------------------
+
+.PHONY: update-components
+update-components:
+	grep -o github.com/open-telemetry/opentelemetry-collector-contrib/[[:lower:]]*/[[:lower:]]* go.mod | xargs -I '{}' go get {}
+	go mod tidy
+
+# --------------------------
+#  Build / Package Commands
+# --------------------------
 
 # lint / build / test
 

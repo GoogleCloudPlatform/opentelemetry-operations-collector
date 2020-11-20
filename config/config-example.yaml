@@ -115,8 +115,8 @@ processors:
       - metric_name: system.disk.ops
         action: update
         new_name: disk/operation_count
-      # system.disk.time -> disk/operation_time
-      - metric_name: system.disk.time
+      # system.disk.operation_time -> disk/operation_time
+      - metric_name: system.disk.operation_time
         action: update
         new_name: disk/operation_time
         operations:

@@ -151,6 +151,13 @@ processors:
       - metric_name: system.disk.ops
         action: update
         new_name: disk/operation_count
+      # system.disk.io_time -> disk/io_time
+      - metric_name: system.disk.io_time
+        action: update
+        new_name: disk/io_time
+        operations:
+          # change data type from double -> int64
+          - action: toggle_scalar_data_type
       # system.disk.operation_time -> disk/operation_time
       - metric_name: system.disk.operation_time
         action: update

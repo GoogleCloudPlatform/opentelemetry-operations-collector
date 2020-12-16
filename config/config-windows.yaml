@@ -360,7 +360,7 @@ processors:
           - otelcol_process_uptime
           - otelcol_process_memory_rss
           - otelcol_grpc_io_client_completed_rpcs
-          - otelcol_otelcol_googlecloudmonitoring_point_count
+          - otelcol_googlecloudmonitoring_point_count
 
   # convert from windows perf counter formats to cloud monitoring formats
   metricstransform/iis:
@@ -433,8 +433,8 @@ processors:
           - action: aggregate_labels
             label_set: [ state ]
             aggregation_type: sum
-      # otelcol_otelcol_googlecloudmonitoring_point_count -> agent/monitoring/point_count
-      - metric_name: otelcol_otelcol_googlecloudmonitoring_point_count
+      # otelcol_googlecloudmonitoring_point_count -> agent/monitoring/point_count
+      - metric_name: otelcol_googlecloudmonitoring_point_count
         action: update
         new_name: agent/monitoring/point_count
         operations:

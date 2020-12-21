@@ -49,7 +49,9 @@ var metricsToSplit = map[string]bool{
 	processDiskBytes: true,
 }
 
-func splitReadWriteBytesMetrics(rms pdata.ResourceMetricsSlice) error {
+func splitReadWriteBytesMetrics(metrics pdata.Metrics) error {
+	rms := metrics.ResourceMetrics()
+
 	for i := 0; i < rms.Len(); i++ {
 		ilms := rms.At(i).InstrumentationLibraryMetrics()
 		for j := 0; j < ilms.Len(); j++ {
@@ -70,7 +72,6 @@ func splitReadWriteBytesMetrics(rms pdata.ResourceMetricsSlice) error {
 				}
 
 				// append the new metrics to the collection, overwriting the old one
-				metric.InitEmpty() // reset original metric to avoid effecting data points that are re-used in new metrics
 				read.CopyTo(metric)
 				metrics.Append(write)
 			}

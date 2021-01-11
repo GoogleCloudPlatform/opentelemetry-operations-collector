@@ -8,7 +8,7 @@ EXTENSION := .exe
 endif
 
 # if ARCH is not supplied, set default value based on user's system
-ARCH ?= $(shell if [ `getconf LONG_BIT` == "64" ]; then echo "x86_64"; else echo "x86"; fi)
+ARCH ?= $(shell if [ `getconf LONG_BIT` -eq "64" ]; then echo "x86_64"; else echo "x86"; fi)
 
 # set GOARCH based on ARCH
 ifeq ($(ARCH),x86_64)

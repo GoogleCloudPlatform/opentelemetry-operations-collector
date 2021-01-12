@@ -31,19 +31,21 @@ const (
 	cpuTime         = "system.cpu.time"
 	memoryUsage     = "system.memory.usage"
 	fileSystemUsage = "system.filesystem.usage"
-	swapUsage       = "system.swap.usage"
+	pagingUsage     = "system.paging.usage"
 )
 
 var metricsToComputeUtilizationFor = map[string]bool{
 	cpuTime:         true,
 	memoryUsage:     true,
 	fileSystemUsage: true,
-	swapUsage:       true,
+	pagingUsage:     true,
 }
 
 const stateLabel = "state"
 
-func (mtp *agentMetricsProcessor) appendUtilizationMetrics(rms pdata.ResourceMetricsSlice) error {
+func (mtp *agentMetricsProcessor) appendUtilizationMetrics(metrics pdata.Metrics) error {
+	rms := metrics.ResourceMetrics()
+
 	for i := 0; i < rms.Len(); i++ {
 		ilms := rms.At(i).InstrumentationLibraryMetrics()
 		for j := 0; j < ilms.Len(); j++ {
@@ -77,7 +79,6 @@ func (mtp *agentMetricsProcessor) calculateUtilizationMetric(usageMetric pdata.M
 
 	utilizationMetric.SetName(metricPostfixRegex.ReplaceAllString(usageMetric.Name(), "utilization"))
 	utilizationMetric.SetDataType(pdata.MetricDataTypeDoubleGauge)
-	utilizationMetric.DoubleGauge().InitEmpty()
 
 	metric := usageMetric
 

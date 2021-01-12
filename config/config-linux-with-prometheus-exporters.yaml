@@ -12,52 +12,59 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# This config supports Apache, DogStatsD (not curated), JVM, and MySQL
+# metrics.
+#
+# Where necessary, you can configure environment-specific details as
+# specified in the receivers section below. You can remove the pipelines
+# you don't need in the pipelines section at the bottom of this file.
+#
+# Note that application metrics will be reported as custom metrics by
+# default. Curated metrics are explicitly prefixed with
+# agent.googleapis.com in the relevant metricstransform processor.
+
 receivers:
   # scrape system metrics at 1m interval
   hostmetrics:
     collection_interval: 1m
     scrapers:
+      # commented out disk and process scrapers because:
+      # 1. When sending scraped disk metrics into Google Cloud Monitoring, there is an error message "One or more TimeSeries could not be written: Points must be written in order. One or more of the points specified had an older start time than the most recent point"
+      # 2. The process scraper produces an error of "no such file or directory" when readlink "/proc/2/exe", "/proc/3/exe", etc.
       cpu:
+      # disk:
+      filesystem:
       load:
       memory:
-      disk:
-      filesystem:
       network:
       paging:
-      process:
+      # process:     
 
-  # scrape iis perf counters at 1m interval
-  windowsperfcounters/iis:
-    collection_interval: 1m
-    perfcounters:
-      - object: Web Service
-        instances: _Total
-        counters:
-          - Current Connections
-          - Total Bytes Received
-          - Total Bytes Sent
-          - Total Connection Attempts (all instances)
-          - Total Delete Requests
-          - Total Get Requests
-          - Total Head Requests
-          - Total Options Requests
-          - Total Post Requests
-          - Total Put Requests
-          - Total Trace Requests
+  # https://github.com/Lusitaniae/apache_exporter
+  prometheus_exec/apache:
+    exec: ./prometheus_exporter/apache_exporter --telemetry.address=":{{port}}"
+    port: 9117
 
-  # scrape mssql perf counters at 1m interval
-  windowsperfcounters/mssql:
-    collection_interval: 1m
-    perfcounters:
-      - object: SQLServer:General Statistics
-        instances: _Total
-        counters:
-          - User Connections
-      - object: SQLServer:Databases
-        instances: _Total
-        counters:
-          - Transactions/sec
-          - Write Transactions/sec
+  # https://github.com/prometheus/jmx_exporter
+  prometheus_exec/jvm:
+    # see prometheus_exporter_config/jvm_config.yaml for JMX configuration, notably the `jmxUrl` key
+    exec: java -jar ./prometheus_exporter/jmx_exporter.jar {{port}} prometheus_exporter_config/jvm_config.yaml
+    port: 9404
+
+  # https://github.com/prometheus/mysqld_exporter
+  prometheus_exec/mysql:
+    # The --no-collect.global_variables flag reduces the amount of generated metrics. This can be removed to enable all (600+) MySQL metrics
+    exec: ./prometheus_exporter/mysqld_exporter --web.listen-address=":{{port}}" --no-collect.global_variables
+    port: 9104
+    env:
+      # DATA_SOURCE_NAME and its value are needed to connect to the MySQL server, alternatively you could use a .my.cnf configuration file
+    # - name: DATA_SOURCE_NAME  
+    #   value: username:password@(host:port)/db_name  # replace all values here with your MySQL server credentials
+
+  # https://github.com/prometheus/statsd_exporter
+  prometheus_exec/statsd:
+    exec: ./prometheus_exporter/statsd_exporter
+    port: 9102
 
   # scrape agent self-observability metrics
   prometheus/agent:
@@ -86,7 +93,9 @@ processors:
       exclude:
         match_type: strict
         metric_names:
+          - system.filesystem.inodes.usage
           - system.network.dropped
+          - system.paging.faults
 
   # convert from opentelemetry metric formats to cloud monitoring formats
   metricstransform/system:
@@ -172,6 +181,10 @@ processors:
         operations:
           # change data type from int64 -> double
           - action: toggle_scalar_data_type
+      # system.disk.merged -> disk/merged_operations
+      - metric_name: system.disk.merged
+        action: update
+        new_name: disk/merged_operations
       # system.filesystem.usage -> disk/bytes_used
       - metric_name: system.filesystem.usage
         action: update
@@ -199,10 +212,23 @@ processors:
         operations:
           # change data type from int64 -> double
           - action: toggle_scalar_data_type
+          # aggregate state label values: slab_reclaimable & slab_unreclaimable -> slab
+          - action: aggregate_label_values
+            label: state
+            aggregated_values: [slab_reclaimable, slab_unreclaimable]
+            new_value: slab
+            aggregation_type: sum
       # system.memory.utilization -> memory/percent_used
       - metric_name: system.memory.utilization
         action: update
         new_name: memory/percent_used
+        operations:
+          # sum state label values: slab = slab_reclaimable + slab_unreclaimable
+          - action: aggregate_label_values
+            label: state
+            aggregated_values: [slab_reclaimable, slab_unreclaimable]
+            new_value: slab
+            aggregation_type: sum
       # system.network.io -> interface/traffic
       - metric_name: system.network.io
         action: update
@@ -275,15 +301,6 @@ processors:
       - metric_name: system.paging.utilization
         action: update
         new_name: swap/percent_used
-      # duplicate swap/percent_used -> pagefile/percent_used
-      - metric_name: swap/percent_used
-        action: insert
-        new_name: pagefile/percent_used
-        operations:
-          # take sum over device dimension, retaining only state
-          - action: aggregate_labels
-            label_set: [ state ]
-            aggregation_type: sum
       # system.paging.operations -> swap/io
       - metric_name: system.paging.operations
         action: update
@@ -331,38 +348,211 @@ processors:
           # change data type from int64 -> double
           - action: toggle_scalar_data_type
 
-  # convert from windows perf counter formats to cloud monitoring formats
-  metricstransform/iis:
-    transforms:
-      - include: \Web Service(_Total)\Current Connections
-        action: update
-        new_name: iis/current_connections
-      - include: ^\\Web Service\(_Total\)\\Total Bytes (?P<direction>.*)$
-        match_type: regexp
-        action: combine
-        new_name: iis/network/transferred_bytes_count
-        submatch_case: lower
-      - include: \Web Service(_Total)\Total Connection Attempts (all instances)
-        action: update
-        new_name: iis/new_connection_count
-      - include: ^\\Web Service\(_Total\)\\Total (?P<http_method>.*) Requests$
-        match_type: regexp
-        action: combine
-        new_name: iis/request_count
-        submatch_case: lower
+  # filter to include only apache metrics curated by cloud monitoring
+  filter/apache:
+    metrics:
+      include:
+        match_type: strict
+        metric_names: 
+          - apache_connections
+          - apache_scoreboard
+          - apache_sent_kilobytes_total
+          - apache_workers
+          - promhttp_metric_handler_requests_total
 
-  # convert from windows perf counter formats to cloud monitoring formats
-  metricstransform/mssql:
+  # convert from prometheus exporter metric formats to cloud monitoring formats
+  metricstransform/apache:
     transforms:
-      - include: \SQLServer:General Statistics(_Total)\User Connections
+      # apache_connections -> apache/connections
+      - metric_name: apache_connections
         action: update
-        new_name: mssql/connections/user 
-      - include: \SQLServer:Databases(_Total)\Transactions/sec
+        new_name: agent.googleapis.com/apache/connections
+        operations:
+          - action: aggregate_labels
+            label_set: []
+            aggregation_type: max
+      # apache_scoreboard -> apache/scoreboard
+      - metric_name: apache_scoreboard
         action: update
-        new_name: mssql/transaction_rate
-      - include: \SQLServer:Databases(_Total)\Write Transactions/sec
+        new_name: agent.googleapis.com/apache/scoreboard
+        operations:
+          - action: update_label
+            label: state
+            value_actions:
+              - value: dns
+                new_value: dnslookup
+              - value: idle
+                new_value: waiting
+              - value: open_slot
+                new_value: open
+              - value: read
+                new_value: reading
+              - value: reply
+                new_value: sending
+              - value: startup
+                new_value: starting
+              - value: graceful_stop
+                new_value: finishing
+      # apache_sent_kilobytes_total -> apache/traffic
+      - metric_name: apache_sent_kilobytes_total
         action: update
-        new_name: mssql/write_transaction_rate
+        new_name: agent.googleapis.com/apache/traffic
+        operations:
+          - action: toggle_scalar_data_type
+      # apache_workers -> apache/idle_workers
+      - metric_name: apache_workers
+        action: update
+        new_name: agent.googleapis.com/apache/idle_workers
+        operations:
+          # WARN: this is a hack since the correct value is not necessarily max
+          - action: aggregate_labels
+            label_set: []
+            aggregation_type: max
+      # promhttp_metric_handler_requests_total -> apache/request_count
+      - metric_name: promhttp_metric_handler_requests_total
+        action: update
+        new_name: agent.googleapis.com/apache/request_count
+        operations:
+         - action: aggregate_labels
+           label_set: []
+           aggregation_type: sum
+         - action: toggle_scalar_data_type 
+
+  # filter to include only jvm metrics curated by cloud monitoring
+  filter/jvm:
+    metrics:
+      include:
+        match_type: strict
+        metric_names: 
+          - java_lang_Memory_HeapMemoryUsage_committed
+          - java_lang_Memory_HeapMemoryUsage_max
+          - java_lang_Memory_HeapMemoryUsage_used
+          - java_lang_Memory_NonHeapMemoryUsage_committed
+          - java_lang_Memory_NonHeapMemoryUsage_max
+          - java_lang_Memory_NonHeapMemoryUsage_used
+          - java_lang_OperatingSystem_OpenFileDescriptorCount
+          - java_lang_Threading_DaemonThreadCount
+          - java_lang_Threading_ThreadCount
+
+  # convert from prometheus exporter metric formats to cloud monitoring formats
+  metricstransform/jvm:
+    transforms:
+      # TODO: consider changing the following six transforms to use action: combine
+      # java_lang_Memory_HeapMemoryUsage_committed -> jvm/memory/usage{memory_type=heap,usage_kind=committed}
+      - metric_name: java_lang_Memory_HeapMemoryUsage_committed
+        action: update
+        new_name: agent.googleapis.com/jvm/memory/usage
+        operations:
+          - action: add_label
+            new_label: memory_type
+            new_value: heap
+          - action: add_label
+            new_label: usage_kind
+            new_value: committed
+      # java_lang_Memory_HeapMemoryUsage_max -> jvm/memory/usage{memory_type=heap,usage_kind=max}
+      - metric_name: java_lang_Memory_HeapMemoryUsage_max
+        action: update
+        new_name: agent.googleapis.com/jvm/memory/usage
+        operations:
+          - action: add_label
+            new_label: memory_type
+            new_value: heap
+          - action: add_label
+            new_label: usage_kind
+            new_value: max
+      # java_lang_Memory_HeapMemoryUsage_used -> jvm/memory/usage{memory_type=heap,usage_kind=used}
+      - metric_name: java_lang_Memory_HeapMemoryUsage_used
+        action: update
+        new_name: agent.googleapis.com/jvm/memory/usage
+        operations: 
+          - action: add_label
+            new_label: memory_type
+            new_value: heap
+          - action: add_label
+            new_label: usage_kind
+            new_value: used
+      # java_lang_Memory_NonHeapMemoryUsage_committed -> jvm/memory/usage{memory_type=non_heap,usage_kind=committed}
+      - metric_name: java_lang_Memory_NonHeapMemoryUsage_committed
+        action: update
+        new_name: agent.googleapis.com/jvm/memory/usage
+        operations: 
+          - action: add_label
+            new_label: memory_type
+            new_value: non_heap
+          - action: add_label
+            new_label: usage_kind
+            new_value: committed
+      # java_lang_Memory_NonHeapMemoryUsage_max -> jvm/memory/usage{memory_type=non_heap,usage_kind=max}
+      - metric_name: java_lang_Memory_NonHeapMemoryUsage_max
+        action: update
+        new_name: agent.googleapis.com/jvm/memory/usage
+        operations: 
+          - action: add_label
+            new_label: memory_type
+            new_value: non_heap
+          - action: add_label
+            new_label: usage_kind
+            new_value: max
+      # java_lang_Memory_NonHeapMemoryUsage_used -> jvm/memory/usage{memory_type=non_heap,usage_kind=used}
+      - metric_name: java_lang_Memory_NonHeapMemoryUsage_used
+        action: update
+        new_name: agent.googleapis.com/jvm/memory/usage
+        operations: 
+          - action: add_label
+            new_label: memory_type
+            new_value: non_heap
+          - action: add_label
+            new_label: usage_kind
+            new_value: used
+      # java_lang_OperatingSystem_OpenFileDescriptorCount -> jvm/os/open_files
+      - metric_name: java_lang_OperatingSystem_OpenFileDescriptorCount
+        action: update
+        new_name: agent.googleapis.com/jvm/os/open_files
+      # java_lang_Threading_DaemonThreadCount -> jvm/thread/num_daemon
+      - metric_name: java_lang_Threading_DaemonThreadCount
+        action: update
+        new_name: agent.googleapis.com/jvm/thread/num_daemon
+      # java_lang_Threading_ThreadCount -> jvm/thread/num_live
+      - metric_name: java_lang_Threading_ThreadCount
+        action: update
+        new_name: agent.googleapis.com/jvm/thread/num_live
+
+  # filter to include only mysql metrics curated by cloud monitoring
+  filter/mysql:
+    metrics:
+      include:
+        match_type: strict
+        metric_names: 
+          - mysql_global_status_commands_total
+          - mysql_global_status_handlers_total
+          - mysql_global_status_threads_connected
+
+  # convert from prometheus exporter metric formats to cloud monitoring formats
+  metricstransform/mysql:
+    transforms:
+      # mysql_global_status_commands_total -> mysql/command_count
+      - metric_name: mysql_global_status_commands_total
+        action: update
+        new_name: agent.googleapis.com/mysql/command_count
+        operations:
+          - action: toggle_scalar_data_type
+      # mysql_global_status_handlers_total -> mysql/handler_count
+      - metric_name: mysql_global_status_handlers_total
+        action: update
+        new_name: agent.googleapis.com/mysql/handler_count
+        operations:
+          - action: toggle_scalar_data_type
+          - action: update_label
+            label: handler
+            new_label: kind
+      # mysql_global_status_threads_connected -> mysql/thread_count
+      - metric_name: mysql_global_status_threads_connected
+        action: update
+        new_name: agent.googleapis.com/mysql/thread_count
+        operations:
+          - action: add_label
+            new_label: kind
+            new_value: connected
 
   # filter to include only agent metrics supported by cloud monitoring
   filter/agent:
@@ -422,11 +612,17 @@ processors:
           - action: toggle_scalar_data_type
 
 exporters:
-  # export to cloud monitoring using the agent prefix
-  stackdriver:
+  # export system metrics to cloud monitoring using the agent prefix
+  stackdriver/system:
     user_agent: $USERAGENT
     metric:
       prefix: agent.googleapis.com/
+
+  # export application metrics to cloud monitoring using the custom prefix
+  stackdriver/custom:
+    user_agent: $USERAGENT
+    metric:
+      prefix: custom.googleapis.com/
 
   # export self-reported metrics to cloud monitoring using the agent prefix
   stackdriver/agent:
@@ -434,59 +630,41 @@ exporters:
     metric:
       prefix: agent.googleapis.com/
 
-extensions:
-  zpages:
-    endpoint: 0.0.0.0:55679
-
 service:
+  # remove any unwanted pipelines from this list if desired
   pipelines:
     # reports system metrics to cloud monitoring
     metrics/system:
-      receivers:
-        - hostmetrics
-      processors:
-        # leave these custom processors here to support cloud monitoring agent metric format
-        - agentmetrics/system
-        - filter/system
-        - metricstransform/system
-        # add additional custom processors below this line if desired
-        - resourcedetection
-      exporters:
-        - stackdriver
+      receivers: [hostmetrics]
+      processors: [agentmetrics/system, filter/system, metricstransform/system, resourcedetection]
+      exporters: [stackdriver/system]
 
-    # reports iis metrics to cloud monitoring
-    metrics/iis:
-      receivers:
-        - windowsperfcounters/iis
-      processors:
-        # leave these custom processors here to support cloud monitoring agent metric format
-        - metricstransform/iis
-        # add additional custom processors below this line if desired
-        - resourcedetection
-      exporters:
-        - stackdriver
+    # reports apache metrics to cloud monitoring
+    metrics/apache:
+      receivers: [prometheus_exec/apache]
+      processors: [filter/apache, metricstransform/apache, resourcedetection]
+      exporters: [stackdriver/custom]
 
-    # reports mssql metrics to cloud monitoring
-    metrics/mssql:
-      receivers:
-        - windowsperfcounters/mssql
-      processors:
-        # leave these custom processors here to support cloud monitoring agent metric format
-        - metricstransform/mssql
-        # add additional custom processors below this line if desired
-        - resourcedetection
-      exporters:
-        - stackdriver
+    # reports jvm metrics to cloud monitoring
+    metrics/jvm:
+      receivers: [prometheus_exec/jvm]
+      processors: [filter/jvm, metricstransform/jvm, resourcedetection]
+      exporters: [stackdriver/custom]
+
+    # reports mysql metrics to cloud monitoring
+    metrics/mysql:
+      receivers: [prometheus_exec/mysql]
+      processors: [filter/mysql, metricstransform/mysql, resourcedetection]
+      exporters: [stackdriver/custom]
+
+    # reports statsd metrics to cloud monitoring
+    metrics/statsd:
+      receivers: [prometheus_exec/statsd]
+      processors: [resourcedetection]
+      exporters: [stackdriver/custom]
 
     # reports agent self-observability metrics to cloud monitoring
     metrics/agent:
-      receivers:
-        - prometheus/agent
-      processors:
-        - filter/agent
-        - metricstransform/agent
-        - resourcedetection
-      exporters:
-        - stackdriver/agent
-
-  extensions: [zpages]
+      receivers: [prometheus/agent]
+      processors: [filter/agent, metricstransform/agent, resourcedetection]
+      exporters: [stackdriver/agent]

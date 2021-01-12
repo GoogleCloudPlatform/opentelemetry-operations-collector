@@ -21,7 +21,9 @@ import (
 // The following code converts metrics of OpenTelemetry Counter (sum) type
 // that are non-Monotonic to Gauges.
 
-func convertNonMonotonicSumsToGauges(rms pdata.ResourceMetricsSlice) {
+func convertNonMonotonicSumsToGauges(metrics pdata.Metrics) {
+	rms := metrics.ResourceMetrics()
+
 	for i := 0; i < rms.Len(); i++ {
 		ilms := rms.At(i).InstrumentationLibraryMetrics()
 		for j := 0; j < ilms.Len(); j++ {
@@ -57,12 +59,10 @@ func convertToGauge(metric pdata.Metric) {
 	case pdata.MetricDataTypeIntSum:
 		idps := metric.IntSum().DataPoints()
 		metric.SetDataType(pdata.MetricDataTypeIntGauge)
-		metric.IntGauge().InitEmpty()
 		idps.CopyTo(metric.IntGauge().DataPoints())
 	case pdata.MetricDataTypeDoubleSum:
 		ddps := metric.DoubleSum().DataPoints()
 		metric.SetDataType(pdata.MetricDataTypeDoubleGauge)
-		metric.DoubleGauge().InitEmpty()
 		ddps.CopyTo(metric.DoubleGauge().DataPoints())
 	}
 }

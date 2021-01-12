@@ -73,13 +73,21 @@ Pipelines:
     - `resourcedetection` processor: Appends resource information detected from the host.
     - `stackdriver` exporter: Exports the metrics to Cloud Monitoring using the `agent.googleapis.com` prefix.
 
-2. Ingest agent self-observability metrics:
+2. Ingest application metrics:
+
+    - relevant receiver to ingest application metrics
+    - `filter` processor: as above.
+    - `metricstransform` processor: as above.
+    - `resourcedetection` processor: as above.
+    - `stackdriver` exporter: as above.
+
+3. Ingest agent self-observability metrics:
 
     - `prometheus` receiver: The OpenTelemetry Collector exports self-observability metrics in Prometheus format on port 8888 by default. This receiver scrapes those metrics at the configured frequency.
     - `filter` processor: Retains only the “agent” metrics that are supported by Cloud Monitoring.
-    - `metricstransform` processor: Converts the internal self-observability metrics to Cloud Monitoring format, as defined in [agent metrics](https://cloud.google.com/monitoring/api/metrics_agent).
-    - `resourcedetection` processor: Appends resource information detected from the host using the resourcedetection processor.
-    - `stackdriver` exporter: Exports the metrics to Cloud Monitoring using the `agent.googleapis.com` prefix.
+    - `metricstransform` processor: Converts the internal self-observability metrics to Cloud Monitoring format, as defined in the [agent metrics](https://cloud.google.com/monitoring/api/metrics_agent) documentation.
+    - `resourcedetection` processor: as above.
+    - `stackdriver` exporter: as above.
  
 Common configuration that you may want to change:
 

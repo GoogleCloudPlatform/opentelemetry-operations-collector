@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-CONFIG_FILE=${CONFIG_FILE:-config-example.yaml}
+CONFIG_FILE=${CONFIG_FILE:-config-linux.yaml}
 EXPORTERS_DIRECTORY=prometheus_exporter
 EXPORTERS_CONFIG_DIRECTORY=prometheus_exporter_config
 FINAL_CONFIG_FILE=config.yaml

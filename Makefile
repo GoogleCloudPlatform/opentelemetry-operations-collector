@@ -126,7 +126,7 @@ build-tarball: clean-dist test build package-tarball
 
 .PHONY: package-tarball-exporters
 package-tarball-exporters:
-	make package-tarball CONFIG_FILE=config-linux-with-exporters.yaml
+	make package-tarball CONFIG_FILE=config-linux-with-prometheus-exporters.yaml
 
 .PHONY: build-tarball-exporters
 build-tarball-exporters: clean-dist test build build-exporters package-tarball-exporters

@@ -49,39 +49,37 @@ import (
 // * There is at most one resource metrics slice without process resource info (will raise error if not)
 // * There is no other resource info supplied that needs to be retained (info may be silently lost if it exists)
 
-func combineProcessMetrics(rms pdata.ResourceMetricsSlice) error {
-	resultMetrics := pdata.NewResourceMetrics()
-	resultMetrics.InitEmpty()
-	ilms := resultMetrics.InstrumentationLibraryMetrics()
+func combineProcessMetrics(metrics pdata.Metrics) (pdata.Metrics, error) {
+	resultMetricData := pdata.NewMetrics()
+	resultMetricData.ResourceMetrics().Resize(1)
+	resultResourceMetrics := resultMetricData.ResourceMetrics().At(0)
+	ilms := resultResourceMetrics.InstrumentationLibraryMetrics()
 	ilms.Resize(1)
-	ilms.At(0).InitEmpty()
 
 	// create collection of combined process metrics, disregarding any ResourceMetrics
 	// with no process resource attributes as "otherMetrics"
-	processMetrics, otherMetrics, err := createProcessMetrics(rms)
+	processMetrics, otherMetrics, err := createProcessMetrics(metrics.ResourceMetrics())
 	if err != nil {
-		return err
+		return resultMetricData, err
 	}
 
 	// if non-process specific metrics were supplied, initialize the result
 	// with those metrics
-	if !otherMetrics.IsNil() {
-		resultMetrics = otherMetrics
+	if otherMetrics.InstrumentationLibraryMetrics().Len() > 0 {
+		otherMetrics.CopyTo(resultResourceMetrics)
 	}
 
 	// append all of the process metrics
-	metrics := resultMetrics.InstrumentationLibraryMetrics().At(0).Metrics()
-	// ideally, we would Resize & Set, but a Set function is not available
-	// at this time
+	idx := 0
+	resultMetrics := resultResourceMetrics.InstrumentationLibraryMetrics().At(0).Metrics()
+	startIdx := resultMetrics.Len()
+	resultMetrics.Resize(startIdx + len(processMetrics))
 	for _, metric := range processMetrics {
-		metrics.Append(metric.Metric)
+		metric.Metric.CopyTo(resultMetrics.At(startIdx + idx))
+		idx++
 	}
 
-	// TODO: This is super inefficient. Instead, we should just return a new
-	// data.MetricData struct, but currently blocked as it is internal
-	rms.Resize(1)
-	resultMetrics.CopyTo(rms.At(0))
-	return nil
+	return resultMetricData, nil
 }
 
 func createProcessMetrics(rms pdata.ResourceMetricsSlice) (processMetrics convertedMetrics, otherMetrics pdata.ResourceMetrics, err error) {
@@ -95,7 +93,7 @@ func createProcessMetrics(rms pdata.ResourceMetricsSlice) (processMetrics conver
 		// if these ResourceMetrics do not contain process resource attributes,
 		// these must be the "other" non-process metrics
 		if !includesProcessAttributes(resource) {
-			if !otherMetrics.IsNil() {
+			if otherMetrics.InstrumentationLibraryMetrics().Len() > 0 {
 				err = errors.New("unexpectedly received multiple Resource Metrics without process attributes")
 				return
 			}

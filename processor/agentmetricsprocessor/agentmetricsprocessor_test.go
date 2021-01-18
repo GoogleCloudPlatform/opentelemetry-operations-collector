@@ -23,8 +23,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/component/componenttest"
+	"go.opentelemetry.io/collector/consumer/consumertest"
 	"go.opentelemetry.io/collector/consumer/pdata"
-	"go.opentelemetry.io/collector/exporter/exportertest"
 	"go.uber.org/zap"
 )
 
@@ -65,7 +65,7 @@ func TestAgentMetricsProcessor(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			factory := NewFactory()
-			tmn := &exportertest.SinkMetricsExporter{}
+			tmn := &consumertest.MetricsSink{}
 			rmp, err := factory.CreateMetricsProcessor(context.Background(), component.ProcessorCreateParams{Logger: zap.NewNop()}, &Config{}, tmn)
 			require.NoError(t, err)
 
@@ -96,7 +96,6 @@ func newResourceMetricsBuilder() resourceMetricsBuilder {
 
 func (rmsb resourceMetricsBuilder) addResourceMetrics(resourceAttributes map[string]pdata.AttributeValue) metricsBuilder {
 	rm := pdata.NewResourceMetrics()
-	rm.InitEmpty()
 
 	if resourceAttributes != nil {
 		rm.Resource().Attributes().InitFromMap(resourceAttributes)
@@ -104,7 +103,6 @@ func (rmsb resourceMetricsBuilder) addResourceMetrics(resourceAttributes map[str
 
 	rm.InstrumentationLibraryMetrics().Resize(1)
 	ilm := rm.InstrumentationLibraryMetrics().At(0)
-	ilm.InitEmpty()
 
 	rmsb.rms.Append(rm)
 	return metricsBuilder{metrics: ilm.Metrics()}
@@ -120,25 +118,22 @@ type metricsBuilder struct {
 
 func (msb metricsBuilder) addMetric(name string, t pdata.MetricDataType, isMonotonic bool) metricBuilder {
 	metric := pdata.NewMetric()
-	metric.InitEmpty()
 	metric.SetName(name)
 	metric.SetDataType(t)
 
 	switch t {
 	case pdata.MetricDataTypeIntSum:
 		sum := metric.IntSum()
-		sum.InitEmpty()
 		sum.SetIsMonotonic(isMonotonic)
 		sum.SetAggregationTemporality(pdata.AggregationTemporalityCumulative)
 	case pdata.MetricDataTypeDoubleSum:
 		sum := metric.DoubleSum()
-		sum.InitEmpty()
 		sum.SetIsMonotonic(isMonotonic)
 		sum.SetAggregationTemporality(pdata.AggregationTemporalityCumulative)
 	case pdata.MetricDataTypeIntGauge:
-		metric.IntGauge().InitEmpty()
+		metric.IntGauge()
 	case pdata.MetricDataTypeDoubleGauge:
-		metric.DoubleGauge().InitEmpty()
+		metric.DoubleGauge()
 	}
 
 	msb.metrics.Append(metric)
@@ -151,7 +146,6 @@ type metricBuilder struct {
 
 func (mb metricBuilder) addIntDataPoint(value int64, labels map[string]string) metricBuilder {
 	idp := pdata.NewIntDataPoint()
-	idp.InitEmpty()
 	idp.LabelsMap().InitFromMap(labels)
 	idp.SetValue(value)
 
@@ -167,7 +161,6 @@ func (mb metricBuilder) addIntDataPoint(value int64, labels map[string]string) m
 
 func (mb metricBuilder) addDoubleDataPoint(value float64, labels map[string]string) metricBuilder {
 	ddp := pdata.NewDoubleDataPoint()
-	ddp.InitEmpty()
 	ddp.LabelsMap().InitFromMap(labels)
 	ddp.SetValue(value)
 
@@ -201,10 +194,6 @@ func assertEqual(t *testing.T, expected, actual pdata.Metrics) {
 		for j := 0; j < ilmsAct.Len(); j++ {
 			ilmAct := ilmsAct.At(j)
 			ilmExp := ilmsExp.At(j)
-
-			// currently expect IL to always be nil
-			assert.True(t, ilmAct.InstrumentationLibrary().IsNil())
-			assert.True(t, ilmExp.InstrumentationLibrary().IsNil())
 
 			// assert equality of metrics
 			metricsAct := ilmAct.Metrics()

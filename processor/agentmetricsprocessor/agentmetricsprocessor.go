@@ -94,7 +94,6 @@ func newMetric(metric pdata.Metric) pdata.Metric {
 // and overrides the name with the supplied value
 func newMetricWithName(metric pdata.Metric, name string) pdata.Metric {
 	new := pdata.NewMetric()
-	new.InitEmpty()
 
 	if name != "" {
 		new.SetName(name)
@@ -109,18 +108,16 @@ func newMetricWithName(metric pdata.Metric, name string) pdata.Metric {
 	switch t := metric.DataType(); t {
 	case pdata.MetricDataTypeIntSum:
 		sum := new.IntSum()
-		sum.InitEmpty()
 		sum.SetIsMonotonic(metric.IntSum().IsMonotonic())
 		sum.SetAggregationTemporality(metric.IntSum().AggregationTemporality())
 	case pdata.MetricDataTypeDoubleSum:
 		sum := new.DoubleSum()
-		sum.InitEmpty()
 		sum.SetIsMonotonic(metric.DoubleSum().IsMonotonic())
 		sum.SetAggregationTemporality(metric.DoubleSum().AggregationTemporality())
 	case pdata.MetricDataTypeIntGauge:
-		new.IntGauge().InitEmpty()
+		new.IntGauge()
 	case pdata.MetricDataTypeDoubleGauge:
-		new.DoubleGauge().InitEmpty()
+		new.DoubleGauge()
 	}
 
 	return new

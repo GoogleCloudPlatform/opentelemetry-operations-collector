@@ -57,12 +57,12 @@ func convertToGauge(metric pdata.Metric) {
 	case pdata.MetricDataTypeIntSum:
 		idps := metric.IntSum().DataPoints()
 		metric.SetDataType(pdata.MetricDataTypeIntGauge)
-		metric.IntGauge().InitEmpty()
+		metric.IntGauge()
 		idps.CopyTo(metric.IntGauge().DataPoints())
 	case pdata.MetricDataTypeDoubleSum:
 		ddps := metric.DoubleSum().DataPoints()
 		metric.SetDataType(pdata.MetricDataTypeDoubleGauge)
-		metric.DoubleGauge().InitEmpty()
+		metric.DoubleGauge()
 		ddps.CopyTo(metric.DoubleGauge().DataPoints())
 	}
 }

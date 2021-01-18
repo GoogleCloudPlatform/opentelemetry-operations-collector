@@ -15,7 +15,6 @@
 package agentmetricsprocessor
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -51,10 +50,9 @@ import (
 
 func combineProcessMetrics(rms pdata.ResourceMetricsSlice) error {
 	resultMetrics := pdata.NewResourceMetrics()
-	resultMetrics.InitEmpty()
 	ilms := resultMetrics.InstrumentationLibraryMetrics()
 	ilms.Resize(1)
-	ilms.At(0).InitEmpty()
+	ilms.At(0)
 
 	// create collection of combined process metrics, disregarding any ResourceMetrics
 	// with no process resource attributes as "otherMetrics"
@@ -65,9 +63,7 @@ func combineProcessMetrics(rms pdata.ResourceMetricsSlice) error {
 
 	// if non-process specific metrics were supplied, initialize the result
 	// with those metrics
-	if !otherMetrics.IsNil() {
-		resultMetrics = otherMetrics
-	}
+	resultMetrics = otherMetrics
 
 	// append all of the process metrics
 	metrics := resultMetrics.InstrumentationLibraryMetrics().At(0).Metrics()
@@ -95,11 +91,6 @@ func createProcessMetrics(rms pdata.ResourceMetricsSlice) (processMetrics conver
 		// if these ResourceMetrics do not contain process resource attributes,
 		// these must be the "other" non-process metrics
 		if !includesProcessAttributes(resource) {
-			if !otherMetrics.IsNil() {
-				err = errors.New("unexpectedly received multiple Resource Metrics without process attributes")
-				return
-			}
-
 			otherMetrics = rm
 			continue
 		}

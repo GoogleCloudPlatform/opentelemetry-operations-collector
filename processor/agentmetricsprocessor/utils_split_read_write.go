@@ -70,7 +70,6 @@ func splitReadWriteBytesMetrics(rms pdata.ResourceMetricsSlice) error {
 				}
 
 				// append the new metrics to the collection, overwriting the old one
-				metric.InitEmpty() // reset original metric to avoid effecting data points that are re-used in new metrics
 				read.CopyTo(metric)
 				metrics.Append(write)
 			}

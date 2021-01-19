@@ -29,6 +29,30 @@ receivers:
       # disk:
       # process:
       
+  # receiver for FluentBit Prometheus endpoint
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: 'fluentbit'
+          metrics_path: '/api/v1/metrics/prometheus'
+          scrape_interval: 30s 
+          static_configs:
+            - targets: ['0.0.0.0:2020']
+          metric_relabel_configs:
+          # drop the metrics we aren't using
+          - source_labels: [ __name__ ]
+            regex: 'fluentbit_build_info'
+            action: drop
+          - source_labels: [ __name__ ]
+            regex: 'process_start_time_seconds'
+            action: drop
+          - source_labels: [ __name__ ]
+            regex: "fluentbit_(filter|input_bytes|input_files|output_proc|output_errors|output_retries_failed)_.*"
+            action: drop
+          # drop the 'name' label for each metric - we will combine all sources into one 
+          - regex: 'name'
+            action: labeldrop
+
   # add receivers to extend the ability for MySQL, JVM and Apache
 
 processors:
@@ -55,6 +79,20 @@ processors:
 
   metricstransform/cloud-monitoring:
     transforms:
+      # fluentbit_filter_emit_records_total -> agent/log_entry_count
+      - metric_name: fluentbit_input_records_total
+        action: update
+        new_name: agent/log_entry_count
+        operations:
+          # change data type from double -> int64
+          - action: toggle_scalar_data_type
+      # fluentbit_output_retries_total -> agent/log_entry_retry_count
+      - metric_name: fluentbit_output_retries_total
+        action: update
+        new_name: agent/log_entry_retry_count
+        operations:
+          # change data type from double -> int64
+          - action: toggle_scalar_data_type
       # system.cpu.time -> cpu/usage_time
       - metric_name: system.cpu.time
         action: update
@@ -300,7 +338,7 @@ extensions:
 service:
   pipelines:
     metrics:
-      receivers: [hostmetrics]
+      receivers: [hostmetrics, prometheus]
       processors: [agentmetrics/cloud-monitoring, metricstransform/cloud-monitoring, filter/cloud-monitoring, resourcedetection]
       exporters: [stackdriver]
 

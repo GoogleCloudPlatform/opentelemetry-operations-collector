@@ -102,8 +102,6 @@ To generate a tarball archive that includes the agent binary and a configuration
 
 To build the source locally:
 
-On Windows:
-
 ```
 go build  .\cmd\otelopscol\
 ```

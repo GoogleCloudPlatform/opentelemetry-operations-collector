@@ -114,7 +114,7 @@ On Linux:
 GOOS=windows go build ./cmd/otelopscol
 ```
 
-Alternatively, you can generate a [googet](https://github.com/google/googet) package by running `make build-goo`. This is the packaging method used to install the Collector on Windows GCE VMs.
+Alternatively, you can generate a [googet](https://github.com/google/googet) package, which includes a configuration file compatible with Google Cloud Monitoring, by running `make build-goo`. This is the packaging method used to install the Collector on Windows GCE VMs.
 
 ### Other Operating Systems
 

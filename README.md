@@ -100,14 +100,19 @@ To generate a tarball archive that includes the agent binary and a configuration
 
 ### Windows
 
-To generate an MSI that will install the agent as a Windows service using a configuration file compatible with Google Cloud Monitoring:
+To build the source locally:
 
-1. Ensure that [Chocolatey](https://docs.chocolatey.org/en-us/) is [installed](https://docs.chocolatey.org/en-us/choco/setup)
-2. Run `.build\msi\make.ps1 Install-Tools` to install the open source [WIX Toolset](https://wixtoolset.org).
-3. Run `.build\msi\make.ps1 New-MSI`.
-4. The MSI file will be generated in the `dist` folder.
+```
+go build  .\cmd\otelopscol\
+```
 
-Alternatively, you can generate a [googet](https://github.com/google/googet) package by running `make build-googet`. This is the packaging method used to install the Collector on Windows GCE VMs.
+On Linux:
+
+```
+GOOS=windows go build ./cmd/otelopscol
+```
+
+Alternatively, you can generate a [googet](https://github.com/google/googet) package, which includes a configuration file compatible with Google Cloud Monitoring, by running `make build-goo`. This is the packaging method used to install the Collector on Windows GCE VMs.
 
 ### Other Operating Systems
 

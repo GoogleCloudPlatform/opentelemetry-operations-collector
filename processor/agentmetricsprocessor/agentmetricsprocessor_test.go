@@ -21,10 +21,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/component/componenttest"
+	"go.opentelemetry.io/collector/config"
 	"go.opentelemetry.io/collector/consumer/consumertest"
 	"go.opentelemetry.io/collector/consumer/pdata"
+	"go.opentelemetry.io/collector/processor/processorhelper"
 	"go.uber.org/zap"
 )
 
@@ -64,14 +65,21 @@ func TestAgentMetricsProcessor(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			factory := NewFactory()
+			amp := newAgentMetricsProcessor(zap.NewExample())
+
 			tmn := &consumertest.MetricsSink{}
-			rmp, err := factory.CreateMetricsProcessor(context.Background(), component.ProcessorCreateParams{Logger: zap.NewNop()}, &Config{}, tmn)
+			rmp, err := processorhelper.NewMetricsProcessor(
+				&Config{
+					ProcessorSettings: config.NewProcessorSettings(typeStr),
+				},
+				tmn,
+				amp,
+				processorhelper.WithCapabilities(processorCapabilities))
 			require.NoError(t, err)
 
 			assert.True(t, rmp.GetCapabilities().MutatesConsumedData)
 
-			rmp.(*agentMetricsProcessor).prevCPUTimeValues = tt.prevCPUTimeValuesInput
+			amp.prevCPUTimeValues = tt.prevCPUTimeValuesInput
 			require.NoError(t, rmp.Start(context.Background(), componenttest.NewNopHost()))
 			defer func() { assert.NoError(t, rmp.Shutdown(context.Background())) }()
 
@@ -79,7 +87,7 @@ func TestAgentMetricsProcessor(t *testing.T) {
 			require.NoError(t, err)
 
 			assertEqual(t, tt.expected, tmn.AllMetrics()[0])
-			assert.Equal(t, tt.prevCPUTimeValuesExpected, rmp.(*agentMetricsProcessor).prevCPUTimeValues)
+			assert.Equal(t, tt.prevCPUTimeValuesExpected, amp.prevCPUTimeValues)
 		})
 	}
 }
@@ -259,7 +267,7 @@ func assertEqualIntDataPointSlice(t *testing.T, metricName string, idpsAct, idps
 		}
 
 		assert.Equalf(t, idpExp.LabelsMap().Sort(), idpAct.LabelsMap().Sort(), "Metric %s", metricName)
-		assert.Equalf(t, idpExp.StartTime(), idpAct.StartTime(), "Metric %s", metricName)
+		assert.Equalf(t, idpExp.StartTimestamp(), idpAct.StartTimestamp(), "Metric %s", metricName)
 		assert.Equalf(t, idpExp.Timestamp(), idpAct.Timestamp(), "Metric %s", metricName)
 		assert.Equalf(t, idpExp.Value(), idpAct.Value(), "Metric %s", metricName)
 	}
@@ -283,7 +291,7 @@ func assertEqualDoubleDataPointSlice(t *testing.T, metricName string, ddpsAct, d
 		}
 
 		assert.Equalf(t, ddpExp.LabelsMap().Sort(), ddpAct.LabelsMap().Sort(), "Metric %s", metricName)
-		assert.Equalf(t, ddpExp.StartTime(), ddpAct.StartTime(), "Metric %s", metricName)
+		assert.Equalf(t, ddpExp.StartTimestamp(), ddpAct.StartTimestamp(), "Metric %s", metricName)
 		assert.Equalf(t, ddpExp.Timestamp(), ddpAct.Timestamp(), "Metric %s", metricName)
 		assert.InDeltaf(t, ddpExp.Value(), ddpAct.Value(), 0.00000001, "Metric %s", metricName)
 	}

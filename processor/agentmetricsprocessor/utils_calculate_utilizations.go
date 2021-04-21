@@ -189,7 +189,7 @@ func calculateUtilizationFromIntDataPoints(metric, utilizationMetric pdata.Metri
 
 			// copy dp, setting the value based on utilization calculation
 			point.LabelsMap().CopyTo(ddp.LabelsMap())
-			ddp.SetStartTime(point.StartTime())
+			ddp.SetStartTimestamp(point.StartTimestamp())
 			ddp.SetTimestamp(point.Timestamp())
 			ddp.SetValue(float64(point.Value()) / points.sum * 100)
 			index++
@@ -242,7 +242,7 @@ func calculateUtilizationFromDoubleDataPoints(metric, utilizationMetric pdata.Me
 
 			// copy dp, setting the value based on utilization calculation
 			point.LabelsMap().CopyTo(ddp.LabelsMap())
-			ddp.SetStartTime(point.StartTime())
+			ddp.SetStartTimestamp(point.StartTimestamp())
 			ddp.SetTimestamp(point.Timestamp())
 			ddp.SetValue(point.Value() / points.sum * 100)
 			index++

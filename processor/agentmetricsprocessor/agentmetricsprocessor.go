@@ -19,9 +19,7 @@ import (
 	"regexp"
 	"sync"
 
-	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/component/componenterror"
-	"go.opentelemetry.io/collector/consumer"
+	"go.opentelemetry.io/collector/consumer/consumererror"
 	"go.opentelemetry.io/collector/consumer/pdata"
 	"go.uber.org/zap"
 )
@@ -31,33 +29,17 @@ var metricPostfixRegex = regexp.MustCompile(`([^.]*$)`)
 
 type agentMetricsProcessor struct {
 	logger *zap.Logger
-	next   consumer.MetricsConsumer
 
 	mutex             sync.Mutex
 	prevCPUTimeValues map[string]float64
 }
 
-func newAgentMetricsProcessor(logger *zap.Logger, next consumer.MetricsConsumer) *agentMetricsProcessor {
-	return &agentMetricsProcessor{logger: logger, next: next}
+func newAgentMetricsProcessor(logger *zap.Logger) *agentMetricsProcessor {
+	return &agentMetricsProcessor{logger: logger}
 }
 
-// GetCapabilities returns the Capabilities associated with the metrics transform processor.
-func (mtp *agentMetricsProcessor) GetCapabilities() component.ProcessorCapabilities {
-	return component.ProcessorCapabilities{MutatesConsumedData: true}
-}
-
-// Start is invoked during service startup.
-func (*agentMetricsProcessor) Start(ctx context.Context, host component.Host) error {
-	return nil
-}
-
-// Shutdown is invoked during service shutdown.
-func (*agentMetricsProcessor) Shutdown(ctx context.Context) error {
-	return nil
-}
-
-// ConsumeMetrics implements the MetricsProcessor interface.
-func (mtp *agentMetricsProcessor) ConsumeMetrics(ctx context.Context, metrics pdata.Metrics) error {
+// ProcessMetrics implements the MProcessor interface.
+func (mtp *agentMetricsProcessor) ProcessMetrics(ctx context.Context, metrics pdata.Metrics) (pdata.Metrics, error) {
 	convertNonMonotonicSumsToGauges(metrics.ResourceMetrics())
 
 	var errors []error
@@ -74,15 +56,11 @@ func (mtp *agentMetricsProcessor) ConsumeMetrics(ctx context.Context, metrics pd
 		errors = append(errors, err)
 	}
 
-	if err := mtp.next.ConsumeMetrics(ctx, metrics); err != nil {
-		errors = append(errors, err)
-	}
-
 	if len(errors) > 0 {
-		return componenterror.CombineErrors(errors)
+		return metrics, consumererror.Combine(errors)
 	}
 
-	return nil
+	return metrics, nil
 }
 
 // newMetric creates a new metric with no data points using the provided descriptor info

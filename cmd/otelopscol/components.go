@@ -15,7 +15,7 @@
 package main
 
 import (
-	"github.com/open-telemetry/opentelemetry-collector-contrib/exporter/stackdriverexporter"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusexecreceiver"
@@ -56,7 +56,7 @@ func components() (component.Factories, error) {
 	}
 
 	exporters := []component.ExporterFactory{
-		stackdriverexporter.NewFactory(),
+		googlecloudexporter.NewFactory(),
 	}
 	for _, exp := range factories.Exporters {
 		exporters = append(exporters, exp)

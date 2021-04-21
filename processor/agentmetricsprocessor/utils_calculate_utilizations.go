@@ -277,9 +277,10 @@ func labelsAsKey(labels pdata.StringMap) string {
 	otherLabelsLen := labels.Len()
 
 	idx, otherLabels := 0, make([]string, otherLabelsLen)
-	labels.ForEach(func(k string, v string) {
+	labels.Range(func(k string, v string) bool {
 		otherLabels[idx] = k + "=" + v
 		idx++
+		return true
 	})
 
 	// sort the slice so that we consider labelsets
@@ -295,15 +296,17 @@ func otherLabelsAsKey(labels pdata.StringMap, excluding ...string) (string, erro
 	otherLabelsLen := labels.Len() - len(excluding)
 
 	otherLabels := make([]string, 0, otherLabelsLen)
-	labels.ForEach(func(k string, v string) {
+	labels.Range(func(k string, v string) bool {
 		// ignore any keys specified in excluding
 		for _, e := range excluding {
 			if k == e {
-				return
+				return true
 			}
 		}
 
 		otherLabels = append(otherLabels, fmt.Sprintf("%s=%s", k, v))
+
+		return true
 	})
 
 	if len(otherLabels) > otherLabelsLen {

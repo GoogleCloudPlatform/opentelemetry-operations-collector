@@ -71,7 +71,7 @@ Pipelines:
     - `filter` processor: Filters out several metrics that are not supported by Cloud Monitoring.
     - `metricstransform` processor: Converts the metrics from OpenTelemetry format, as defined in the [semantic conventions](https://github.com/open-telemetry/opentelemetry-specification/tree/master/specification/metrics/semantic_conventions), to Cloud Monitoring format, as defined in the [agent metrics](https://cloud.google.com/monitoring/api/metrics_agent) documentation.
     - `resourcedetection` processor: Appends resource information detected from the host.
-    - `stackdriver` exporter: Exports the metrics to Cloud Monitoring using the `agent.googleapis.com` prefix.
+    - `googlecloud` exporter: Exports the metrics to Cloud Monitoring using the `agent.googleapis.com` prefix.
 
 2. Ingest agent self-observability metrics:
 
@@ -79,7 +79,7 @@ Pipelines:
     - `filter` processor: Retains only the “agent” metrics that are supported by Cloud Monitoring.
     - `metricstransform` processor: Converts the internal self-observability metrics to Cloud Monitoring format, as defined in [agent metrics](https://cloud.google.com/monitoring/api/metrics_agent).
     - `resourcedetection` processor: Appends resource information detected from the host using the resourcedetection processor.
-    - `stackdriver` exporter: Exports the metrics to Cloud Monitoring using the `agent.googleapis.com` prefix.
+    - `googlecloud` exporter: Exports the metrics to Cloud Monitoring using the `agent.googleapis.com` prefix.
  
 Common configuration that you may want to change:
 

@@ -284,7 +284,7 @@ processors:
 
 exporters:
   # export to cloud monitoring using the agent prefix
-  stackdriver:
+  googlecloud:
     metric:
       prefix: agent.googleapis.com/
 
@@ -302,6 +302,6 @@ service:
     metrics:
       receivers: [hostmetrics]
       processors: [agentmetrics/cloud-monitoring, metricstransform/cloud-monitoring, filter/cloud-monitoring, resourcedetection]
-      exporters: [stackdriver]
+      exporters: [googlecloud]
 
   extensions: [zpages]

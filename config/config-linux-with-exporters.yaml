@@ -497,7 +497,7 @@ exporters:
 
   # this exporter will prefix all metrics without a domain (eg. agent.googleapis.com/) with custom.googleapis.com/
   # also, it will use the default GCE instance credentials this Collector will run on
-  stackdriver:
+  googlecloud:
     metric:
       prefix: custom.googleapis.com/
 
@@ -507,24 +507,24 @@ service:
     metrics/host:
       receivers: [hostmetrics]
       processors: [agentmetrics/host, metricstransform/host, filter/host, resourcedetection]
-      exporters: [stackdriver]
+      exporters: [googlecloud]
 
     metrics/mysql:
       receivers: [prometheus_exec/mysql]
       processors: [filter/mysql, metricstransform/mysql, resourcedetection]
-      exporters: [stackdriver]
+      exporters: [googlecloud]
 
     metrics/jvm:
       receivers: [prometheus_exec/jvm]
       processors: [filter/jvm, metricstransform/jvm, resourcedetection]
-      exporters: [stackdriver]
+      exporters: [googlecloud]
 
     metrics/apache:
       receivers: [prometheus_exec/apache]
       processors: [filter/apache, metricstransform/apache, resourcedetection]
-      exporters: [stackdriver]
+      exporters: [googlecloud]
 
     metrics/statsd:
       receivers: [prometheus_exec/statsd]
       processors: [resourcedetection]
-      exporters: [stackdriver]
+      exporters: [googlecloud]

@@ -443,13 +443,13 @@ processors:
 
 exporters:
   # export to cloud monitoring using the agent prefix
-  stackdriver:
+  googlecloud:
     user_agent: $USERAGENT
     metric:
       prefix: agent.googleapis.com/
 
   # export self-reported metrics to cloud monitoring using the agent prefix
-  stackdriver/agent:
+  googlecloud/agent:
     user_agent: $USERAGENT
     metric:
       prefix: agent.googleapis.com/
@@ -472,7 +472,7 @@ service:
         # add additional custom processors below this line if desired
         - resourcedetection
       exporters:
-        - stackdriver
+        - googlecloud
 
     # reports iis metrics to cloud monitoring
     metrics/iis:
@@ -484,7 +484,7 @@ service:
         # add additional custom processors below this line if desired
         - resourcedetection
       exporters:
-        - stackdriver
+        - googlecloud
 
     # reports mssql metrics to cloud monitoring
     metrics/mssql:
@@ -496,7 +496,7 @@ service:
         # add additional custom processors below this line if desired
         - resourcedetection
       exporters:
-        - stackdriver
+        - googlecloud
 
     # reports agent self-observability metrics to cloud monitoring
     metrics/agent:
@@ -507,6 +507,6 @@ service:
         - metricstransform/agent
         - resourcedetection
       exporters:
-        - stackdriver/agent
+        - googlecloud/agent
 
   extensions: [zpages]

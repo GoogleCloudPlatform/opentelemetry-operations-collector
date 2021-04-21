@@ -13,17 +13,17 @@
 # limitations under the License.
 
 receivers:
-  examplereceiver:
+  nop:
 
 processors:
   agentmetrics:
 
 exporters:
-  exampleexporter:
+  nop:
 
 service:
   pipelines:
     metrics:
-      receivers: [examplereceiver]
+      receivers: [nop]
       processors: [agentmetrics]
-      exporters: [exampleexporter]
+      exporters: [nop]

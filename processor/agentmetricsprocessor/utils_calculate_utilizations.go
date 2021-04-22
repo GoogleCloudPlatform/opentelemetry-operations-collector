@@ -31,7 +31,7 @@ const (
 	cpuTime         = "system.cpu.time"
 	memoryUsage     = "system.memory.usage"
 	fileSystemUsage = "system.filesystem.usage"
-	swapUsage       = "system.swap.usage"
+	swapUsage       = "system.paging.usage"
 )
 
 var metricsToComputeUtilizationFor = map[string]bool{

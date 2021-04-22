@@ -63,7 +63,7 @@ processors:
       exclude:
         match_type: strict
         metric_names:
-          - system.network.dropped_packets
+          - system.network.dropped
           - system.paging.usage
           - system.filesystem.inodes.usage
           - system.paging.faults
@@ -126,8 +126,8 @@ processors:
       - metric_name: system.disk.write_io
         action: update
         new_name: agent.googleapis.com/disk/write_bytes_count
-      # system.disk.ops -> disk/operation_count
-      - metric_name: system.disk.ops
+      # system.disk.operations -> disk/operation_count
+      - metric_name: system.disk.operations
         action: update
         new_name: agent.googleapis.com/disk/operation_count
       # system.disk.operation_time -> disk/operation_time

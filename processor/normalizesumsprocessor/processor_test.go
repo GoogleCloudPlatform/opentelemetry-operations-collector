@@ -136,6 +136,46 @@ func generateSimpleInput(startTime int64) []pdata.Metrics {
 	return []pdata.Metrics{input}
 }
 
+func generateLabelledInput(startTime int64) []pdata.Metrics {
+	input := pdata.NewMetrics()
+
+	rmb := newResourceMetricsBuilder()
+	b := rmb.addResourceMetrics(nil)
+
+	mb1 := b.addMetric("m1", pdata.MetricDataTypeIntSum, true)
+	mb1.addIntDataPoint(0, map[string]string{"label": "val1"}, startTime, 0)
+	mb1.addIntDataPoint(3, map[string]string{"label": "val2"}, startTime, 0)
+	mb1.addIntDataPoint(12, map[string]string{"label": "val1"}, startTime+1000, 0)
+	mb1.addIntDataPoint(5, map[string]string{"label": "val2"}, startTime+1000, 0)
+	mb1.addIntDataPoint(15, map[string]string{"label": "val1"}, startTime+2000, 0)
+	mb1.addIntDataPoint(1, map[string]string{"label": "val2"}, startTime+2000, 0)
+	mb1.addIntDataPoint(22, map[string]string{"label": "val1"}, startTime+3000, 0)
+	mb1.addIntDataPoint(11, map[string]string{"label": "val2"}, startTime+3000, 0)
+
+	rmb.Build().CopyTo(input.ResourceMetrics())
+	return []pdata.Metrics{input}
+}
+
+func generateLabelledOutput(startTime int64) pdata.Metrics {
+	output := pdata.NewMetrics()
+
+	rmb := newResourceMetricsBuilder()
+	b := rmb.addResourceMetrics(nil)
+
+	mb1 := b.addMetric("m1", pdata.MetricDataTypeIntSum, true)
+	// mb1.addIntDataPoint(1, map[string]string{"label": "val1"}, startTime, 0)
+	// mb1.addIntDataPoint(1, map[string]string{"label": "val2"}, startTime, 0)
+	mb1.addIntDataPoint(1, map[string]string{"label": "val1"}, startTime+1000, startTime)
+	mb1.addIntDataPoint(1, map[string]string{"label": "val2"}, startTime+1000, startTime)
+	mb1.addIntDataPoint(1, map[string]string{"label": "val1"}, startTime+2000, startTime)
+	//mb1.addIntDataPoint(1, map[string]string{"label": "val2"}, startTime+2000, 1)
+	mb1.addIntDataPoint(1, map[string]string{"label": "val1"}, startTime+3000, startTime)
+	mb1.addIntDataPoint(1, map[string]string{"label": "val2"}, startTime+3000, startTime+2000)
+
+	rmb.Build().CopyTo(output.ResourceMetrics())
+	return output
+}
+
 func generateOneMetricHappyCaseOutput(startTime int64) pdata.Metrics {
 	output := pdata.NewMetrics()
 

@@ -35,9 +35,11 @@ func TestLoadConfig(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, cfg)
 
-	p1 := cfg.Processors[typeStr]
+	id := config.NewID(typeStr)
+	settings := config.NewProcessorSettings(id)
+	p1 := cfg.Processors[id]
 	expectedCfg := &Config{
-		ProcessorSettings: config.NewProcessorSettings(typeStr),
+		ProcessorSettings: &settings,
 		Transforms: []SumMetrics{
 			{
 				MetricName: "cpu",

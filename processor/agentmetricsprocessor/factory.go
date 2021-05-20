@@ -36,12 +36,13 @@ func NewFactory() component.ProcessorFactory {
 }
 
 func createDefaultConfig() config.Processor {
+	settings := config.NewProcessorSettings(config.NewID(typeStr))
 	return &Config{
-		ProcessorSettings: config.NewProcessorSettings(typeStr),
+		ProcessorSettings: &settings,
 	}
 }
 
-var processorCapabilities = component.ProcessorCapabilities{MutatesConsumedData: true}
+var processorCapabilities = consumer.Capabilities{MutatesData: true}
 
 func createMetricsProcessor(
 	_ context.Context,

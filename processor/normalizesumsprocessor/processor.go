@@ -260,7 +260,7 @@ func dataPointIdentifier(resource pdata.Resource, metric *pdata.Metric, labels p
 
 func addAttributeToIdentityBuilder(b *strings.Builder, v pdata.AttributeValue) {
 	switch v.Type() {
-	case pdata.AttributeValueARRAY:
+	case pdata.AttributeValueTypeArray:
 		b.WriteString("[")
 		arr := v.ArrayVal()
 		for i := 0; i < arr.Len(); i++ {
@@ -268,16 +268,16 @@ func addAttributeToIdentityBuilder(b *strings.Builder, v pdata.AttributeValue) {
 			b.WriteString(",")
 		}
 		b.WriteString("]")
-	case pdata.AttributeValueBOOL:
+	case pdata.AttributeValueTypeBool:
 		fmt.Fprintf(b, "%t", v.BoolVal())
-	case pdata.AttributeValueDOUBLE:
+	case pdata.AttributeValueTypeDouble:
 		// TODO - Double attribute values could be problematic for use in
 		// forming an identify due to floating point math. Consider how to best
 		// handle this case
 		fmt.Fprintf(b, "%f", v.DoubleVal())
-	case pdata.AttributeValueINT:
+	case pdata.AttributeValueTypeInt:
 		fmt.Fprintf(b, "%d", v.IntVal())
-	case pdata.AttributeValueMAP:
+	case pdata.AttributeValueTypeMap:
 		b.WriteString("{")
 		v.MapVal().Sort().Range(func(k string, mapVal pdata.AttributeValue) bool {
 			fmt.Fprintf(b, "%s:", k)
@@ -286,9 +286,9 @@ func addAttributeToIdentityBuilder(b *strings.Builder, v pdata.AttributeValue) {
 			return true
 		})
 		b.WriteString("}")
-	case pdata.AttributeValueNULL:
+	case pdata.AttributeValueTypeNull:
 		b.WriteString("NULL")
-	case pdata.AttributeValueSTRING:
+	case pdata.AttributeValueTypeString:
 		fmt.Fprintf(b, "'%s'", v.StringVal())
 	}
 }

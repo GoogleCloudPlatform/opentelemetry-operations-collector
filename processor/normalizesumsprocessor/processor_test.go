@@ -89,9 +89,11 @@ func TestNormalizeSumsProcessor(t *testing.T) {
 			nsp := newNormalizeSumsProcessor(zap.NewExample(), tt.transforms)
 
 			tmn := &consumertest.MetricsSink{}
+			id := config.NewID(typeStr)
+			settings := config.NewProcessorSettings(id)
 			rmp, err := processorhelper.NewMetricsProcessor(
 				&Config{
-					ProcessorSettings: config.NewProcessorSettings(typeStr),
+					ProcessorSettings: &settings,
 					Transforms:        tt.transforms,
 				},
 				tmn,
@@ -99,7 +101,7 @@ func TestNormalizeSumsProcessor(t *testing.T) {
 				processorhelper.WithCapabilities(processorCapabilities))
 			require.NoError(t, err)
 
-			assert.True(t, rmp.GetCapabilities().MutatesConsumedData)
+			assert.True(t, rmp.Capabilities().MutatesData)
 
 			require.NoError(t, rmp.Start(context.Background(), componenttest.NewNopHost()))
 			defer func() { assert.NoError(t, rmp.Shutdown(context.Background())) }()

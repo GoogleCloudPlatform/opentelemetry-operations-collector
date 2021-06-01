@@ -252,13 +252,13 @@ func toCloudMonitoringLabel(resourceAttributeKey string) string {
 func stringValue(attributeValue pdata.AttributeValue) (string, error) {
 	var stringValue string
 	switch t := attributeValue.Type(); t {
-	case pdata.AttributeValueBOOL:
+	case pdata.AttributeValueTypeBool:
 		stringValue = strconv.FormatBool(attributeValue.BoolVal())
-	case pdata.AttributeValueINT:
+	case pdata.AttributeValueTypeInt:
 		stringValue = strconv.FormatInt(attributeValue.IntVal(), 10)
-	case pdata.AttributeValueDOUBLE:
+	case pdata.AttributeValueTypeDouble:
 		stringValue = strconv.FormatFloat(attributeValue.DoubleVal(), 'f', -1, 64)
-	case pdata.AttributeValueSTRING:
+	case pdata.AttributeValueTypeString:
 		stringValue = attributeValue.StringVal()
 	default:
 		return "", fmt.Errorf("unexpected attribute type: %v", t)

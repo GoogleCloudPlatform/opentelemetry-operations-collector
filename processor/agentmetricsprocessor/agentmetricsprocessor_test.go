@@ -70,14 +70,12 @@ func TestAgentMetricsProcessor(t *testing.T) {
 			tmn := &consumertest.MetricsSink{}
 			rmp, err := processorhelper.NewMetricsProcessor(
 				&Config{
-					ProcessorSettings: config.NewProcessorSettings(typeStr),
+					ProcessorSettings: config.NewProcessorSettings(config.NewID(typeStr)),
 				},
 				tmn,
 				amp,
 				processorhelper.WithCapabilities(processorCapabilities))
 			require.NoError(t, err)
-
-			assert.True(t, rmp.GetCapabilities().MutatesConsumedData)
 
 			amp.prevCPUTimeValues = tt.prevCPUTimeValuesInput
 			require.NoError(t, rmp.Start(context.Background(), componenttest.NewNopHost()))

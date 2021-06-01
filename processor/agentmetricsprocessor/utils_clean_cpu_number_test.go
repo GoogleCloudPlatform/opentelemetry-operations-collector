@@ -18,7 +18,7 @@ import (
 	"go.opentelemetry.io/collector/consumer/pdata"
 )
 
-func generateCpuMetricsInput() pdata.Metrics {
+func generateCPUMetricsInput() pdata.Metrics {
 	input := pdata.NewMetrics()
 
 	rmb := newResourceMetricsBuilder()
@@ -32,7 +32,7 @@ func generateCpuMetricsInput() pdata.Metrics {
 	return input
 }
 
-func generateCpuMetricsExpected() pdata.Metrics {
+func generateCPUMetricsExpected() pdata.Metrics {
 	expected := pdata.NewMetrics()
 
 	rmb := newResourceMetricsBuilder()

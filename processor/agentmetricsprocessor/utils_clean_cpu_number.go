@@ -20,7 +20,7 @@ import (
 	"go.opentelemetry.io/collector/consumer/pdata"
 )
 
-func cleanCpuNumber(rms pdata.ResourceMetricsSlice) error {
+func cleanCPUNumber(rms pdata.ResourceMetricsSlice) error {
 	for i := 0; i < rms.Len(); i++ {
 		ilms := rms.At(i).InstrumentationLibraryMetrics()
 		for j := 0; j < ilms.Len(); j++ {
@@ -28,7 +28,7 @@ func cleanCpuNumber(rms pdata.ResourceMetricsSlice) error {
 			for k := 0; k < metrics.Len(); k++ {
 				metric := metrics.At(k)
 
-				if err := forEachPoint(metric, cleanCpuNumberDataPoint); err != nil {
+				if err := forEachPoint(metric, cleanCPUNumberDataPoint); err != nil {
 					return err
 				}
 			}
@@ -76,7 +76,7 @@ func forEachPoint(metric pdata.Metric, fn func(labelsMapper) error) error {
 	return nil
 }
 
-func cleanCpuNumberDataPoint(lm labelsMapper) error {
+func cleanCPUNumberDataPoint(lm labelsMapper) error {
 	sm := lm.LabelsMap()
 	if value, ok := sm.Get("cpu"); ok {
 		sm.Update("cpu", strings.TrimPrefix(value, "cpu"))

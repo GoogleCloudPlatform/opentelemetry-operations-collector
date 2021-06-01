@@ -63,8 +63,8 @@ func TestAgentMetricsProcessor(t *testing.T) {
 		},
 		{
 			name:     "cpu-number-case",
-			input:    generateCpuMetricsInput(),
-			expected: generateCpuMetricsExpected(),
+			input:    generateCPUMetricsInput(),
+			expected: generateCPUMetricsExpected(),
 		},
 	}
 

@@ -56,7 +56,7 @@ func (mtp *agentMetricsProcessor) ProcessMetrics(ctx context.Context, metrics pd
 		errors = append(errors, err)
 	}
 
-	if err := cleanCpuNumber(metrics.ResourceMetrics()); err != nil {
+	if err := cleanCPUNumber(metrics.ResourceMetrics()); err != nil {
 		errors = append(errors, err)
 	}
 

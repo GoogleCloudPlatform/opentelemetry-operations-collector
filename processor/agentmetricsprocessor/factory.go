@@ -49,10 +49,11 @@ func createMetricsProcessor(
 	cfg config.Processor,
 	nextConsumer consumer.Metrics,
 ) (component.MetricsProcessor, error) {
-	metricsProcessor := newAgentMetricsProcessor(params.Logger)
+	// NewMetricsProcess takes an MProcessor, which is what agentMetricsProcessor implements, and returns a MetricsProcessor.
+	mProcessor := newAgentMetricsProcessor(params.Logger)
 	return processorhelper.NewMetricsProcessor(
 		cfg,
 		nextConsumer,
-		metricsProcessor,
+		mProcessor,
 		processorhelper.WithCapabilities(processorCapabilities))
 }

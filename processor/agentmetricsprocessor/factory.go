@@ -18,7 +18,7 @@ import (
 	"context"
 
 	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/config/configmodels"
+	"go.opentelemetry.io/collector/config"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/processor/processorhelper"
 )
@@ -35,20 +35,25 @@ func NewFactory() component.ProcessorFactory {
 		processorhelper.WithMetrics(createMetricsProcessor))
 }
 
-func createDefaultConfig() configmodels.Processor {
+func createDefaultConfig() config.Processor {
 	return &Config{
-		ProcessorSettings: configmodels.ProcessorSettings{
-			TypeVal: typeStr,
-			NameVal: typeStr,
-		},
+		ProcessorSettings: config.NewProcessorSettings(config.NewID(typeStr)),
 	}
 }
+
+var processorCapabilities = consumer.Capabilities{MutatesData: true}
 
 func createMetricsProcessor(
 	_ context.Context,
 	params component.ProcessorCreateParams,
-	_ configmodels.Processor,
-	nextConsumer consumer.MetricsConsumer,
+	cfg config.Processor,
+	nextConsumer consumer.Metrics,
 ) (component.MetricsProcessor, error) {
-	return newAgentMetricsProcessor(params.Logger, nextConsumer), nil
+	// NewMetricsProcess takes an MProcessor, which is what agentMetricsProcessor implements, and returns a MetricsProcessor.
+	mProcessor := newAgentMetricsProcessor(params.Logger)
+	return processorhelper.NewMetricsProcessor(
+		cfg,
+		nextConsumer,
+		mProcessor,
+		processorhelper.WithCapabilities(processorCapabilities))
 }

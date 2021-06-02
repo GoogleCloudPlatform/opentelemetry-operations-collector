@@ -14,9 +14,9 @@
 
 package agentmetricsprocessor
 
-import "go.opentelemetry.io/collector/config/configmodels"
+import "go.opentelemetry.io/collector/config"
 
 // Config defines configuration for Resource processor.
 type Config struct {
-	configmodels.ProcessorSettings `mapstructure:",squash"`
+	config.ProcessorSettings `mapstructure:",squash"`
 }

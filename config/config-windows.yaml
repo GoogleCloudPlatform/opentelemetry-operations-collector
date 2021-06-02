@@ -23,7 +23,7 @@ receivers:
       disk:
       filesystem:
       network:
-      swap:
+      paging:
       process:
 
   # scrape iis perf counters at 1m interval
@@ -86,7 +86,7 @@ processors:
       exclude:
         match_type: strict
         metric_names:
-          - system.network.dropped_packets
+          - system.network.dropped
 
   # convert from opentelemetry metric formats to cloud monitoring formats
   metricstransform/system:
@@ -147,8 +147,8 @@ processors:
       - metric_name: system.disk.write_io
         action: update
         new_name: disk/write_bytes_count
-      # system.disk.ops -> disk/operation_count
-      - metric_name: system.disk.ops
+      # system.disk.operations -> disk/operation_count
+      - metric_name: system.disk.operations
         action: update
         new_name: disk/operation_count
       # system.disk.io_time -> disk/io_time
@@ -273,26 +273,34 @@ processors:
               # transmit -> tx
               - value: transmit
                 new_value: tx
-      # system.network.tcp_connections -> network/tcp_connections
-      - metric_name: system.network.tcp_connections 
+      # system.network.connections -> network/tcp_connections
+      - metric_name: system.network.connections
         action: update
         new_name: network/tcp_connections
         operations:
           # change data type from int64 -> double
           - action: toggle_scalar_data_type
+          # remove udp data
+          - action: delete_label_value
+            label: protocol
+            label_value: udp
           # change label state -> tcp_state
           - action: update_label
             label: state
             new_label: tcp_state
-      # system.swap.usage -> swap/bytes_used
-      - metric_name: system.swap.usage
+          # remove protocol label
+          - action: aggregate_labels
+            label_set: [ state ]
+            aggregation_type: sum
+      # system.paging.usage -> swap/bytes_used
+      - metric_name: system.paging.usage
         action: update
         new_name: swap/bytes_used
         operations:
           # change data type from int64 -> double
           - action: toggle_scalar_data_type
-      # system.swap.utilization -> swap/percent_used
-      - metric_name: system.swap.utilization
+      # system.paging.utilization -> swap/percent_used
+      - metric_name: system.paging.utilization
         action: update
         new_name: swap/percent_used
       # duplicate swap/percent_used -> pagefile/percent_used
@@ -304,8 +312,8 @@ processors:
           - action: aggregate_labels
             label_set: [ state ]
             aggregation_type: sum
-      # system.swap.paging_ops -> swap/io
-      - metric_name: system.swap.paging_ops
+      # system.paging.operations -> swap/io
+      - metric_name: system.paging.operations
         action: update
         new_name: swap/io
         operations:
@@ -443,13 +451,13 @@ processors:
 
 exporters:
   # export to cloud monitoring using the agent prefix
-  stackdriver:
+  googlecloud:
     user_agent: $USERAGENT
     metric:
       prefix: agent.googleapis.com/
 
   # export self-reported metrics to cloud monitoring using the agent prefix
-  stackdriver/agent:
+  googlecloud/agent:
     user_agent: $USERAGENT
     metric:
       prefix: agent.googleapis.com/
@@ -472,7 +480,7 @@ service:
         # add additional custom processors below this line if desired
         - resourcedetection
       exporters:
-        - stackdriver
+        - googlecloud
 
     # reports iis metrics to cloud monitoring
     metrics/iis:
@@ -484,7 +492,7 @@ service:
         # add additional custom processors below this line if desired
         - resourcedetection
       exporters:
-        - stackdriver
+        - googlecloud
 
     # reports mssql metrics to cloud monitoring
     metrics/mssql:
@@ -496,7 +504,7 @@ service:
         # add additional custom processors below this line if desired
         - resourcedetection
       exporters:
-        - stackdriver
+        - googlecloud
 
     # reports agent self-observability metrics to cloud monitoring
     metrics/agent:
@@ -507,6 +515,6 @@ service:
         - metricstransform/agent
         - resourcedetection
       exporters:
-        - stackdriver/agent
+        - googlecloud/agent
 
   extensions: [zpages]

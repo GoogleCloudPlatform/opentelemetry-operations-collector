@@ -21,7 +21,7 @@ Transform processor:
 ## Configuration
 
 No additional configuration is currently possible. This processor is only expected
-to be used in a pipeline that includes the Host Metrics receiver and Stackdriver
+to be used in a pipeline that includes the Host Metrics receiver and Google Cloud
 exporter and should generally be the first processor in the pipeline, i.e.
 
 ```yaml
@@ -30,5 +30,5 @@ service:
     metrics:
       receivers: [hostmetrics]
       processors: [agentmetricsprocessor, ...]
-      exporters: [stackdriver]
+      exporters: [googlecloud]
 ```

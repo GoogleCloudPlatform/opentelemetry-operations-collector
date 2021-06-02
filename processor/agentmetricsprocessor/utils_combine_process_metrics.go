@@ -118,10 +118,12 @@ const processAttributePrefix = "process."
 // any attributes with a "process." prefix
 func includesProcessAttributes(resource pdata.Resource) bool {
 	includesProcessAttributes := false
-	resource.Attributes().ForEach(func(k string, _ pdata.AttributeValue) {
+	resource.Attributes().Range(func(k string, _ pdata.AttributeValue) bool {
 		if strings.HasPrefix(k, processAttributePrefix) {
 			includesProcessAttributes = true
+			return false
 		}
+		return true
 	})
 	return includesProcessAttributes
 }
@@ -206,26 +208,27 @@ func appendDoubleDataSlice(ddps, converted pdata.DoubleDataPointSlice, resource 
 // This requires converting the attributes to string format.
 func appendAttributesToLabels(labels pdata.StringMap, attributes pdata.AttributeMap) error {
 	var err error
-	attributes.ForEach(func(k string, v pdata.AttributeValue) {
+	attributes.Range(func(k string, v pdata.AttributeValue) bool {
 		// break if error has occurred in previous iteration
 		if err != nil {
-			return
+			return false
 		}
 
 		key := toCloudMonitoringLabel(k)
 		// ignore attributes that do not map to a cloud ops label
 		if key == "" {
-			return
+			return true
 		}
 
 		var value string
 		value, err = stringValue(v)
 		// break if error
 		if err != nil {
-			return
+			return false
 		}
 
 		labels.Insert(key, value)
+		return true
 	})
 	return err
 }
@@ -249,13 +252,13 @@ func toCloudMonitoringLabel(resourceAttributeKey string) string {
 func stringValue(attributeValue pdata.AttributeValue) (string, error) {
 	var stringValue string
 	switch t := attributeValue.Type(); t {
-	case pdata.AttributeValueBOOL:
+	case pdata.AttributeValueTypeBool:
 		stringValue = strconv.FormatBool(attributeValue.BoolVal())
-	case pdata.AttributeValueINT:
+	case pdata.AttributeValueTypeInt:
 		stringValue = strconv.FormatInt(attributeValue.IntVal(), 10)
-	case pdata.AttributeValueDOUBLE:
+	case pdata.AttributeValueTypeDouble:
 		stringValue = strconv.FormatFloat(attributeValue.DoubleVal(), 'f', -1, 64)
-	case pdata.AttributeValueSTRING:
+	case pdata.AttributeValueTypeString:
 		stringValue = attributeValue.StringVal()
 	default:
 		return "", fmt.Errorf("unexpected attribute type: %v", t)

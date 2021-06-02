@@ -35,14 +35,13 @@ func main() {
 		log.Fatalf("failed to build default components: %v", err)
 	}
 
-	info := component.ApplicationStartInfo{
-		ExeName:  "google-cloud-metrics-agent",
-		LongName: "Google Cloud Metrics Agent",
-		Version:  version.Version,
-		GitHash:  version.GitHash,
+	info := component.BuildInfo{
+		Command:     "google-cloud-metrics-agent",
+		Description: "Google Cloud Metrics Agent",
+		Version:     version.Version,
 	}
 
-	params := service.Parameters{Factories: factories, ApplicationStartInfo: info}
+	params := service.Parameters{Factories: factories, BuildInfo: info}
 
 	if err := run(params); err != nil {
 		log.Fatal(err)

@@ -54,30 +54,21 @@ func (nsp *NormalizeSumsProcessor) ProcessMetrics(ctx context.Context, metrics p
 
 	for i := 0; i < metrics.ResourceMetrics().Len(); i++ {
 		rms := metrics.ResourceMetrics().At(i)
-		for _, transform := range nsp.transforms {
-			metric, slice := findMetric(transform.MetricName, rms)
+		if nsp.transforms == nil {
+			processingErrors := nsp.transformAllSumMetrics(rms)
+			errors = append(errors, processingErrors...)
+		} else {
+			for _, transform := range nsp.transforms {
+				metric, slice := findMetric(transform.MetricName, rms)
 
-			if metric == nil {
-				continue
-			}
+				if metric == nil {
+					continue
+				}
 
-			switch t := metric.DataType(); t {
-			case pdata.MetricDataTypeIntSum:
-				dataPointsRemaining, processingErr := nsp.processIntSumMetric(slice, transform, rms.Resource(), metric)
-				if processingErr != nil {
-					errors = append(errors, processingErr)
-				} else {
-					cleanUpMetricSlice(transform, metric, slice, dataPointsRemaining)
+				err := nsp.transformMetric(transform, rms.Resource(), metric, slice)
+				if err != nil {
+					errors = append(errors, err)
 				}
-			case pdata.MetricDataTypeDoubleSum:
-				dataPointsRemaining, processingErr := nsp.processDoubleSumMetric(slice, transform, rms.Resource(), metric)
-				if processingErr != nil {
-					errors = append(errors, processingErr)
-				} else {
-					cleanUpMetricSlice(transform, metric, slice, dataPointsRemaining)
-				}
-			default:
-				errors = append(errors, fmt.Errorf("Data Type not supported %s", metric.DataType()))
 			}
 		}
 	}
@@ -87,6 +78,50 @@ func (nsp *NormalizeSumsProcessor) ProcessMetrics(ctx context.Context, metrics p
 	}
 
 	return metrics, nil
+}
+
+func (nsp *NormalizeSumsProcessor) transformAllSumMetrics(rms pdata.ResourceMetrics) []error {
+	var errors []error
+
+	ilms := rms.InstrumentationLibraryMetrics()
+	for j := 0; j < ilms.Len(); j++ {
+		ilm := ilms.At(j).Metrics()
+		for k := 0; k < ilm.Len(); k++ {
+			metric := ilm.At(k)
+			if metric.DataType() == pdata.MetricDataTypeIntSum || metric.DataType() == pdata.MetricDataTypeDoubleSum {
+				err := nsp.transformMetric(SumMetrics{MetricName: metric.Name()}, rms.Resource(), &metric, &ilm)
+				if err != nil {
+					errors = append(errors, err)
+				}
+			}
+		}
+	}
+
+	return errors
+}
+
+//func findMetric(name string, rms pdata.ResourceMetrics) (*pdata.Metric, *pdata.MetricSlice) {
+func (nsp *NormalizeSumsProcessor) transformMetric(transform SumMetrics, resource pdata.Resource, metric *pdata.Metric, slice *pdata.MetricSlice) error {
+	switch t := metric.DataType(); t {
+	case pdata.MetricDataTypeIntSum:
+		dataPointsRemaining, processingErr := nsp.processIntSumMetric(slice, transform, resource, metric)
+		if processingErr != nil {
+			return processingErr
+		} else {
+			cleanUpMetricSlice(transform, metric, slice, dataPointsRemaining)
+		}
+	case pdata.MetricDataTypeDoubleSum:
+		dataPointsRemaining, processingErr := nsp.processDoubleSumMetric(slice, transform, resource, metric)
+		if processingErr != nil {
+			return processingErr
+		} else {
+			cleanUpMetricSlice(transform, metric, slice, dataPointsRemaining)
+		}
+	default:
+		return fmt.Errorf("Data Type not supported %s", metric.DataType())
+	}
+
+	return nil
 }
 
 func cleanUpMetricSlice(transform SumMetrics, metric *pdata.Metric, slice *pdata.MetricSlice, dataPointsRemaining int) {

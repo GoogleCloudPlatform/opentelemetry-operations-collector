@@ -23,7 +23,7 @@ import (
 	"golang.org/x/sys/windows/svc"
 )
 
-func run(params service.AppSettings) error {
+func run(params service.CollectorSettings) error {
 	isInteractive, err := svc.IsAnInteractiveSession()
 	if err != nil {
 		return fmt.Errorf("failed to determine if we are running in an interactive session: %w", err)
@@ -35,7 +35,7 @@ func run(params service.AppSettings) error {
 	return runService(params)
 }
 
-func runService(params service.AppSettings) error {
+func runService(params service.CollectorSettings) error {
 	// do not need to supply service name when startup is invoked through Service Control Manager directly
 	if err := svc.Run("", service.NewWindowsService(params)); err != nil {
 		return fmt.Errorf("failed to start service: %w", err)

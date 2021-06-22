@@ -41,14 +41,14 @@ func main() {
 		Version:     version.Version,
 	}
 
-	params := service.AppSettings{Factories: factories, BuildInfo: info}
+	params := service.CollectorSettings{Factories: factories, BuildInfo: info}
 
 	if err := run(params); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func runInteractive(params service.AppSettings) error {
+func runInteractive(params service.CollectorSettings) error {
 	app, err := service.New(params)
 	if err != nil {
 		return fmt.Errorf("failed to construct the application: %w", err)

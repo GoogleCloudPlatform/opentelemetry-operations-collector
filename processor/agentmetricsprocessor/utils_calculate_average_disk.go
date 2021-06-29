@@ -16,13 +16,18 @@ package agentmetricsprocessor
 
 import "go.opentelemetry.io/collector/consumer/pdata"
 
+// https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/metrics/semantic_conventions/system-metrics.md#systemdisk---disk-controller-metrics
 const opName = "system.disk.operations"
 const opTimeName = "system.disk.operation_time"
+
+// system.disk.operations contains the cumulative number of operations per disk and direction
+// system.disk.operation_time contains the cumulative busy time per disk and direction
 
 func (mtp *agentMetricsProcessor) appendAverageDiskMetrics(rms pdata.ResourceMetricsSlice) error {
 	for i := 0; i < rms.Len(); i++ {
 		ilms := rms.At(i).InstrumentationLibraryMetrics()
 		for j := 0; j < ilms.Len(); j++ {
+			// Collect the corresponding count and time so they can be divided.
 			newOp := make(map[opKey]opData)
 			var opTimeMetric pdata.Metric
 			metrics := ilms.At(j).Metrics()
@@ -30,8 +35,7 @@ func (mtp *agentMetricsProcessor) appendAverageDiskMetrics(rms pdata.ResourceMet
 				metric := metrics.At(k)
 
 				// ignore all metrics except the ones we want to compute utilizations for
-				metricName := metric.Name()
-				switch metricName {
+				switch metric.Name() {
 				case opName:
 					idps := metric.IntSum().DataPoints()
 					for i := 0; i < idps.Len(); i++ {
@@ -79,10 +83,12 @@ func (mtp *agentMetricsProcessor) appendAverageDiskMetrics(rms pdata.ResourceMet
 				// No point making a new metric if there is no data.
 				continue
 			}
+			// Generate a new metric from the operation count and time for each disk and direction.
 			averageTimeMetric := pdata.NewMetric()
 			opTimeMetric.CopyTo(averageTimeMetric)
 			opTimeMetric.SetName(metricPostfixRegex.ReplaceAllString(opTimeMetric.Name(), "average_operation_time"))
 			ddps := opTimeMetric.DoubleSum().DataPoints()
+			// Make sure ddps is large enough to hold the points we're writing.
 			ddps.Resize(len(newOp))
 			i := 0
 			for key, new := range newOp {

@@ -46,7 +46,10 @@ type agentMetricsProcessor struct {
 }
 
 func newAgentMetricsProcessor(logger *zap.Logger) *agentMetricsProcessor {
-	return &agentMetricsProcessor{logger: logger}
+	return &agentMetricsProcessor{
+		logger: logger,
+		prevOp: make(map[opKey]opData),
+	}
 }
 
 // ProcessMetrics implements the MProcessor interface.

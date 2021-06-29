@@ -299,14 +299,16 @@ func assertEqualDoubleDataPointSlice(t *testing.T, metricName string, ddpsAct, d
 	for l := 0; l < ddpsAct.Len(); l++ {
 		ddpAct := ddpsAct.At(l)
 
-		ddpExp, ok := ddpsExpMap[labelsAsKey(ddpAct.LabelsMap())]
+		key := labelsAsKey(ddpAct.LabelsMap())
+
+		ddpExp, ok := ddpsExpMap[key]
 		if !ok {
-			require.Failf(t, fmt.Sprintf("no data point for %s", labelsAsKey(ddpAct.LabelsMap())), "Metric %s", metricName)
+			require.Failf(t, fmt.Sprintf("no data point for %s", key), "Metric %s", metricName)
 		}
 
-		assert.Equalf(t, ddpExp.LabelsMap().Sort(), ddpAct.LabelsMap().Sort(), "Metric %s", metricName)
-		assert.Equalf(t, ddpExp.StartTimestamp(), ddpAct.StartTimestamp(), "Metric %s", metricName)
-		assert.Equalf(t, ddpExp.Timestamp(), ddpAct.Timestamp(), "Metric %s", metricName)
-		assert.InDeltaf(t, ddpExp.Value(), ddpAct.Value(), 0.00000001, "Metric %s", metricName)
+		assert.Equalf(t, ddpExp.LabelsMap().Sort(), ddpAct.LabelsMap().Sort(), "Metric %s point %d labels %q", metricName, l, labelsAsKey(ddpAct.LabelsMap()))
+		assert.Equalf(t, ddpExp.StartTimestamp(), ddpAct.StartTimestamp(), "Metric %s point %d labels %q", metricName, l, labelsAsKey(ddpAct.LabelsMap()))
+		assert.Equalf(t, ddpExp.Timestamp(), ddpAct.Timestamp(), "Metric %s point %d labels %q", metricName, l, labelsAsKey(ddpAct.LabelsMap()))
+		assert.InDeltaf(t, ddpExp.Value(), ddpAct.Value(), 0.00000001, "Metric %s point %d labels %q", metricName, l, labelsAsKey(ddpAct.LabelsMap()))
 	}
 }

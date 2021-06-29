@@ -46,7 +46,9 @@ func (mtp *agentMetricsProcessor) appendAverageDiskMetrics(rms pdata.ResourceMet
 						if !ok {
 							op = mtp.prevOp[key]
 						}
-						op.operations = idp
+						// Can't just save idp because it is overwritten by OT.
+						op.operations = pdata.NewIntDataPoint()
+						idp.CopyTo(op.operations)
 						newOp[key] = op
 					}
 				case opTimeName:
@@ -64,7 +66,9 @@ func (mtp *agentMetricsProcessor) appendAverageDiskMetrics(rms pdata.ResourceMet
 						if !ok {
 							op = mtp.prevOp[key]
 						}
-						op.time = ddp
+						// Can't just save ddp because it is overwritten by OT.
+						op.time = pdata.NewDoubleDataPoint()
+						ddp.CopyTo(op.time)
 						newOp[key] = op
 					}
 				default:

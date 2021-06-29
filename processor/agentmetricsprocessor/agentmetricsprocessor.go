@@ -32,8 +32,8 @@ type opKey struct {
 }
 
 type opData struct {
-	operations metric.IntDataPoint
-	time       metric.DoubleDataPoint
+	operations pdata.IntDataPoint
+	time       pdata.DoubleDataPoint
 	cumAvgTime float64
 }
 

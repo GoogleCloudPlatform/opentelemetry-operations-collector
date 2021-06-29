@@ -23,8 +23,8 @@ func (mtp *agentMetricsProcessor) appendAverageDiskMetrics(rms pdata.ResourceMet
 	for i := 0; i < rms.Len(); i++ {
 		ilms := rms.At(i).InstrumentationLibraryMetrics()
 		for j := 0; j < ilms.Len(); j++ {
-			newOp := make(map[string]opData)
-			var opMetric, opTimeMetric metrics.Metric
+			newOp := make(map[opKey]opData)
+			var opTimeMetric pdata.Metric
 			metrics := ilms.At(j).Metrics()
 			for k := 0; k < metrics.Len(); k++ {
 				metric := metrics.At(k)
@@ -33,8 +33,7 @@ func (mtp *agentMetricsProcessor) appendAverageDiskMetrics(rms pdata.ResourceMet
 				metricName := metric.Name()
 				switch metricName {
 				case opName:
-					opMetric = metric
-					idps = metric.IntSum().DataPoints()
+					idps := metric.IntSum().DataPoints()
 					for i := 0; i < idps.Len(); i++ {
 						idp := idps.At(i)
 
@@ -43,16 +42,16 @@ func (mtp *agentMetricsProcessor) appendAverageDiskMetrics(rms pdata.ResourceMet
 						direction, _ := lm.Get("direction")
 						key := opKey{device, direction}
 
-						op, ok := newOp[opKey]
+						op, ok := newOp[key]
 						if !ok {
-							op = mtp.prevOp[opKey]
+							op = mtp.prevOp[key]
 						}
 						op.operations = idp
-						newOp[opKey] = op
+						newOp[key] = op
 					}
 				case opTimeName:
 					opTimeMetric = metric
-					ddps = metric.DoubleSum().DataPoints()
+					ddps := metric.DoubleSum().DataPoints()
 					for i := 0; i < ddps.Len(); i++ {
 						ddp := ddps.At(i)
 
@@ -61,12 +60,12 @@ func (mtp *agentMetricsProcessor) appendAverageDiskMetrics(rms pdata.ResourceMet
 						direction, _ := lm.Get("direction")
 						key := opKey{device, direction}
 
-						op, ok := newOp[opKey]
+						op, ok := newOp[key]
 						if !ok {
-							op = mtp.prevOp[opKey]
+							op = mtp.prevOp[key]
 						}
 						op.time = ddp
-						newOp[opKey] = op
+						newOp[key] = op
 					}
 				default:
 					continue
@@ -83,10 +82,10 @@ func (mtp *agentMetricsProcessor) appendAverageDiskMetrics(rms pdata.ResourceMet
 				ddp := ddps.At(i)
 				new.time.CopyTo(ddp)
 				t := new.time.Value()
-				ops := new.ops.Value()
+				ops := new.operations.Value()
 				if prevOk {
 					t -= prev.time.Value()
-					ops -= prev.ops.Value()
+					ops -= prev.operations.Value()
 				}
 				new.cumAvgTime += t / float64(ops)
 				ddp.SetValue(new.cumAvgTime)

@@ -35,6 +35,7 @@ type testCase struct {
 	expected                  pdata.Metrics
 	prevCPUTimeValuesInput    map[string]float64
 	prevCPUTimeValuesExpected map[string]float64
+	prevOpInput               map[opKey]opData
 }
 
 func TestAgentMetricsProcessor(t *testing.T) {
@@ -66,6 +67,11 @@ func TestAgentMetricsProcessor(t *testing.T) {
 			input:    generateCPUMetricsInput(),
 			expected: generateCPUMetricsExpected(),
 		},
+		{
+			name:     "average-disk",
+			input:    generateAverageDiskInput(),
+			expected: generateAverageDiskExpected(),
+		},
 	}
 
 	for _, tt := range tests {
@@ -83,6 +89,9 @@ func TestAgentMetricsProcessor(t *testing.T) {
 			require.NoError(t, err)
 
 			amp.prevCPUTimeValues = tt.prevCPUTimeValuesInput
+			if tt.prevOpInput != nil {
+				amp.prevOp = tt.prevOpInput
+			}
 			require.NoError(t, rmp.Start(context.Background(), componenttest.NewNopHost()))
 			defer func() { assert.NoError(t, rmp.Shutdown(context.Background())) }()
 

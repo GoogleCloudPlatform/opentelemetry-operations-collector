@@ -1,0 +1,23 @@
+receivers:
+    nop:
+
+processors:
+    googlemetricstransform:
+        transforms:
+            - include: name1
+              metric_name: name2
+              action: update
+
+exporters:
+    nop:
+
+service:
+    pipelines:
+        traces:
+            receivers: [nop]
+            processors: [googlemetricstransform]
+            exporters: [nop]
+        metrics:
+            receivers: [nop]
+            processors: [googlemetricstransform]
+            exporters: [nop]

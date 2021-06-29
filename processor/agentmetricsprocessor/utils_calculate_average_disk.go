@@ -95,7 +95,9 @@ func (mtp *agentMetricsProcessor) appendAverageDiskMetrics(rms pdata.ResourceMet
 					t -= prev.time.Value()
 					ops -= prev.operations.Value()
 				}
-				new.cumAvgTime += t / float64(ops)
+				if ops > 0 {
+					new.cumAvgTime += t / float64(ops)
+				}
 				ddp.SetValue(new.cumAvgTime)
 				i++
 				mtp.prevOp[key] = new

@@ -72,6 +72,12 @@ func TestAgentMetricsProcessor(t *testing.T) {
 			input:    generateAverageDiskInput(),
 			expected: generateAverageDiskExpected(),
 		},
+		{
+			name:        "average-disk-prev",
+			input:       generateAverageDiskInput(),
+			expected:    generateAverageDiskPrevExpected(),
+			prevOpInput: generateAverageDiskPrevOpInput(),
+		},
 	}
 
 	for _, tt := range tests {

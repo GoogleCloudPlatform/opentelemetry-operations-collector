@@ -1,4 +1,4 @@
-// Copyright 2021 Google LLC
+// Copyright 2020 OpenTelemetry Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,7 +31,7 @@ func TestCreateDefaultConfig(t *testing.T) {
 }
 
 func TestCreateProcessor(t *testing.T) {
-	mp, err := createMetricsProcessor(context.Background(), component.ProcessorCreateParams{}, createDefaultConfig(), consumertest.NewNop())
+	mp, err := createMetricsProcessor(context.Background(), component.ProcessorCreateSettings{}, createDefaultConfig(), consumertest.NewNop())
 	assert.NoError(t, err)
 	assert.NotNil(t, mp)
 }

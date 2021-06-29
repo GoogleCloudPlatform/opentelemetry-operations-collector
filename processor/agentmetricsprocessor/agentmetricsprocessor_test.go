@@ -61,6 +61,11 @@ func TestAgentMetricsProcessor(t *testing.T) {
 			prevCPUTimeValuesInput:    generateUtilizationPrevCPUTimeValuesInput(),
 			prevCPUTimeValuesExpected: generateUtilizationPrevCPUTimeValuesExpected(),
 		},
+		{
+			name:     "cpu-number-case",
+			input:    generateCPUMetricsInput(),
+			expected: generateCPUMetricsExpected(),
+		},
 	}
 
 	for _, tt := range tests {
@@ -68,17 +73,14 @@ func TestAgentMetricsProcessor(t *testing.T) {
 			amp := newAgentMetricsProcessor(zap.NewExample())
 
 			tmn := &consumertest.MetricsSink{}
-			id := config.NewID(typeStr)
-			settings := config.NewProcessorSettings(id)
 			rmp, err := processorhelper.NewMetricsProcessor(
 				&Config{
-					ProcessorSettings: &settings,
+					ProcessorSettings: config.NewProcessorSettings(config.NewID(typeStr)),
 				},
 				tmn,
 				amp,
 				processorhelper.WithCapabilities(processorCapabilities))
 			require.NoError(t, err)
-
 			assert.True(t, rmp.Capabilities().MutatesData)
 
 			amp.prevCPUTimeValues = tt.prevCPUTimeValuesInput
@@ -89,7 +91,9 @@ func TestAgentMetricsProcessor(t *testing.T) {
 			require.NoError(t, err)
 
 			assertEqual(t, tt.expected, tmn.AllMetrics()[0])
-			assert.Equal(t, tt.prevCPUTimeValuesExpected, amp.prevCPUTimeValues)
+			if tt.prevCPUTimeValuesExpected != nil {
+				assert.Equal(t, tt.prevCPUTimeValuesExpected, amp.prevCPUTimeValues)
+			}
 		})
 	}
 }
@@ -208,7 +212,7 @@ func assertEqual(t *testing.T, expected, actual pdata.Metrics) {
 			// assert equality of metrics
 			metricsAct := ilmAct.Metrics()
 			metricsExp := ilmExp.Metrics()
-			require.Equal(t, metricsExp.Len(), metricsAct.Len())
+			require.Equal(t, metricsExp.Len(), metricsAct.Len(), "Number of metrics")
 
 			// build a map of expected metrics
 			metricsExpMap := make(map[string]pdata.Metric, metricsExp.Len())
@@ -276,7 +280,7 @@ func assertEqualIntDataPointSlice(t *testing.T, metricName string, idpsAct, idps
 }
 
 func assertEqualDoubleDataPointSlice(t *testing.T, metricName string, ddpsAct, ddpsExp pdata.DoubleDataPointSlice) {
-	require.Equalf(t, ddpsExp.Len(), ddpsAct.Len(), "Metric %s", metricName)
+	require.Equalf(t, ddpsExp.Len(), ddpsAct.Len(), "Metric %s number of points", metricName)
 
 	// build a map of expected data points
 	ddpsExpMap := make(map[string]pdata.DoubleDataPoint, ddpsExp.Len())

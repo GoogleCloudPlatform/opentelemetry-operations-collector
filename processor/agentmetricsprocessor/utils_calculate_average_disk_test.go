@@ -58,10 +58,10 @@ func od(ops int64, time, cum float64) opData {
 
 func generateAverageDiskPrevOpInput() map[opKey]opData {
 	return map[opKey]opData{
-		opKey{"hda", "read"}:  od(0, 100, 15),
-		opKey{"hda", "write"}: od(3, 300, 20),
-		opKey{"hdb", "read"}:  od(2, 100, 30),
-		opKey{"hdb", "write"}: od(10, 50, 5),
+		{"hda", "read"}:  od(0, 100, 15),
+		{"hda", "write"}: od(3, 300, 20),
+		{"hdb", "read"}:  od(2, 100, 30),
+		{"hdb", "write"}: od(10, 50, 5),
 	}
 }
 

@@ -71,10 +71,14 @@ func (mtp *agentMetricsProcessor) appendAverageDiskMetrics(rms pdata.ResourceMet
 					continue
 				}
 			}
+			if len(newOp) == 0 {
+				// No point making a new metric if there is no data.
+				continue
+			}
 			averageTimeMetric := pdata.NewMetric()
 			opTimeMetric.CopyTo(averageTimeMetric)
 			opTimeMetric.SetName(metricPostfixRegex.ReplaceAllString(opTimeMetric.Name(), "average_operation_time"))
-			ddps := opTimeMetric.DoubleGauge().DataPoints()
+			ddps := opTimeMetric.DoubleSum().DataPoints()
 			ddps.Resize(len(newOp))
 			i := 0
 			for key, new := range newOp {

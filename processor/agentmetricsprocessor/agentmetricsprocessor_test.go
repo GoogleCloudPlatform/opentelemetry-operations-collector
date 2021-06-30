@@ -141,7 +141,8 @@ func (rmsb resourceMetricsBuilder) Build() pdata.ResourceMetricsSlice {
 }
 
 type metricsBuilder struct {
-	metrics pdata.MetricSlice
+	metrics   pdata.MetricSlice
+	timestamp pdata.Timestamp
 }
 
 func (msb metricsBuilder) addMetric(name string, t pdata.MetricDataType, isMonotonic bool) metricBuilder {
@@ -165,17 +166,19 @@ func (msb metricsBuilder) addMetric(name string, t pdata.MetricDataType, isMonot
 	}
 
 	msb.metrics.Append(metric)
-	return metricBuilder{metric: metric}
+	return metricBuilder{metric: metric, timestamp: msb.timestamp}
 }
 
 type metricBuilder struct {
-	metric pdata.Metric
+	metric    pdata.Metric
+	timestamp pdata.Timestamp
 }
 
 func (mb metricBuilder) addIntDataPoint(value int64, labels map[string]string) metricBuilder {
 	idp := pdata.NewIntDataPoint()
 	idp.LabelsMap().InitFromMap(labels)
 	idp.SetValue(value)
+	idp.SetTimestamp(mb.timestamp)
 
 	switch mb.metric.DataType() {
 	case pdata.MetricDataTypeIntSum:
@@ -191,6 +194,7 @@ func (mb metricBuilder) addDoubleDataPoint(value float64, labels map[string]stri
 	ddp := pdata.NewDoubleDataPoint()
 	ddp.LabelsMap().InitFromMap(labels)
 	ddp.SetValue(value)
+	ddp.SetTimestamp(mb.timestamp)
 
 	switch mb.metric.DataType() {
 	case pdata.MetricDataTypeDoubleSum:
@@ -312,9 +316,9 @@ func assertEqualDoubleDataPointSlice(t *testing.T, metricName string, ddpsAct, d
 			require.Failf(t, fmt.Sprintf("no data point for %s", key), "Metric %s", metricName)
 		}
 
-		assert.Equalf(t, ddpExp.LabelsMap().Sort(), ddpAct.LabelsMap().Sort(), "Metric %s point %d labels %q", metricName, l, labelsAsKey(ddpAct.LabelsMap()))
-		assert.Equalf(t, ddpExp.StartTimestamp(), ddpAct.StartTimestamp(), "Metric %s point %d labels %q", metricName, l, labelsAsKey(ddpAct.LabelsMap()))
-		assert.Equalf(t, ddpExp.Timestamp(), ddpAct.Timestamp(), "Metric %s point %d labels %q", metricName, l, labelsAsKey(ddpAct.LabelsMap()))
-		assert.InDeltaf(t, ddpExp.Value(), ddpAct.Value(), 0.00000001, "Metric %s point %d labels %q", metricName, l, labelsAsKey(ddpAct.LabelsMap()))
+		assert.Equalf(t, ddpExp.LabelsMap().Sort(), ddpAct.LabelsMap().Sort(), "Labels for metric %s point %d labels %q", metricName, l, labelsAsKey(ddpAct.LabelsMap()))
+		assert.Equalf(t, ddpExp.StartTimestamp(), ddpAct.StartTimestamp(), "StartTimestamp for metric %s point %d labels %q", metricName, l, labelsAsKey(ddpAct.LabelsMap()))
+		assert.Equalf(t, ddpExp.Timestamp(), ddpAct.Timestamp(), "Timestamp for metric %s point %d labels %q", metricName, l, labelsAsKey(ddpAct.LabelsMap()))
+		assert.InDeltaf(t, ddpExp.Value(), ddpAct.Value(), 0.00000001, "Value for metric %s point %d labels %q", metricName, l, labelsAsKey(ddpAct.LabelsMap()))
 	}
 }

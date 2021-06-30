@@ -86,29 +86,29 @@ func (mtp *agentMetricsProcessor) appendAverageDiskMetrics(rms pdata.ResourceMet
 			// Generate a new metric from the operation count and time for each disk and direction.
 			averageTimeMetric := pdata.NewMetric()
 			opTimeMetric.CopyTo(averageTimeMetric)
-			opTimeMetric.SetName(metricPostfixRegex.ReplaceAllString(opTimeMetric.Name(), "average_operation_time"))
-			ddps := opTimeMetric.DoubleSum().DataPoints()
-			// Make sure ddps is large enough to hold the points we're writing.
-			ddps.Resize(len(newOp))
-			i := 0
+			averageTimeMetric.SetName(metricPostfixRegex.ReplaceAllString(opTimeMetric.Name(), "average_operation_time"))
+			ddps := averageTimeMetric.DoubleSum().DataPoints()
+			ddps.Resize(0)
 			for key, new := range newOp {
 				prev, prevOk := mtp.prevOp[key]
-				ddp := ddps.At(i)
-				new.time.CopyTo(ddp)
 				t := new.time.Value()
 				ops := new.operations.Value()
 				if prevOk {
 					t -= prev.time.Value()
 					ops -= prev.operations.Value()
+					ddp := ddps.AppendEmpty()
+					new.time.CopyTo(ddp)
+					if ops > 0 {
+						interval := new.time.Timestamp() - prev.time.Timestamp()
+						new.cumAvgTime += (t / float64(ops)) * float64(interval) / 1e9
+					}
+					ddp.SetValue(new.cumAvgTime)
 				}
-				if ops > 0 {
-					new.cumAvgTime += t / float64(ops)
-				}
-				ddp.SetValue(new.cumAvgTime)
-				i++
 				mtp.prevOp[key] = new
 			}
-			metrics.Append(averageTimeMetric)
+			if ddps.Len() > 0 {
+				metrics.Append(averageTimeMetric)
+			}
 		}
 	}
 

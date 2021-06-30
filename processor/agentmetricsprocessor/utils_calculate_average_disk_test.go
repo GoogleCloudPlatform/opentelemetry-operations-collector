@@ -19,6 +19,8 @@ import (
 )
 
 func commonAverageDiskInput(b metricsBuilder) {
+	b.timestamp = oneSecond
+
 	mb1 := b.addMetric("system.disk.operation_time", pdata.MetricDataTypeDoubleSum, true)
 	mb1.addDoubleDataPoint(200, map[string]string{"device": "hda", "direction": "read"})
 	mb1.addDoubleDataPoint(400, map[string]string{"device": "hda", "direction": "write"})
@@ -73,21 +75,22 @@ func generateAverageDiskExpected() pdata.Metrics {
 
 	commonAverageDiskInput(b)
 
-	mb3 := b.addMetric("system.disk.average_operation_time", pdata.MetricDataTypeDoubleSum, true)
-	mb3.addDoubleDataPoint(40, map[string]string{"device": "hda", "direction": "read"})
-	mb3.addDoubleDataPoint(100, map[string]string{"device": "hda", "direction": "write"})
-	mb3.addDoubleDataPoint(50, map[string]string{"device": "hdb", "direction": "read"})
-	mb3.addDoubleDataPoint(5, map[string]string{"device": "hdb", "direction": "write"})
+	// No average_operation_time expected for the first point
 
 	rmb.Build().CopyTo(expected.ResourceMetrics())
 	return expected
 }
+
+const oneSecond = 1000000000
 
 func generateAverageDiskPrevExpected() pdata.Metrics {
 	expected := pdata.NewMetrics()
 
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
+
+	// One second elapsed
+	b.timestamp = oneSecond
 
 	commonAverageDiskInput(b)
 

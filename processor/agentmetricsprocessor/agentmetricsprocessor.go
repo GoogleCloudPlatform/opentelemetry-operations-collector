@@ -27,15 +27,29 @@ import (
 // matches the string after the last "." (or the whole string if no ".")
 var metricPostfixRegex = regexp.MustCompile(`([^.]*$)`)
 
+type opKey struct {
+	device, direction string
+}
+
+type opData struct {
+	operations pdata.IntDataPoint
+	time       pdata.DoubleDataPoint
+	cumAvgTime float64
+}
+
 type agentMetricsProcessor struct {
 	logger *zap.Logger
 
 	mutex             sync.Mutex
 	prevCPUTimeValues map[string]float64
+	prevOp            map[opKey]opData
 }
 
 func newAgentMetricsProcessor(logger *zap.Logger) *agentMetricsProcessor {
-	return &agentMetricsProcessor{logger: logger}
+	return &agentMetricsProcessor{
+		logger: logger,
+		prevOp: make(map[opKey]opData),
+	}
 }
 
 // ProcessMetrics implements the MProcessor interface.
@@ -57,6 +71,10 @@ func (mtp *agentMetricsProcessor) ProcessMetrics(ctx context.Context, metrics pd
 	}
 
 	if err := cleanCPUNumber(metrics.ResourceMetrics()); err != nil {
+		errors = append(errors, err)
+	}
+
+	if err := mtp.appendAverageDiskMetrics(metrics.ResourceMetrics()); err != nil {
 		errors = append(errors, err)
 	}
 

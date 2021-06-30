@@ -1,0 +1,23 @@
+receivers:
+    nop:
+
+processors:
+    googlemetricstransform:
+        transforms:
+            - include: metric_name
+              match_type: invalid
+              action: update
+
+exporters:
+    nop:
+
+service:
+    pipelines:
+        traces:
+            receivers: [nop]
+            processors: [googlemetricstransform]
+            exporters: [nop]
+        metrics:
+            receivers: [nop]
+            processors: [googlemetricstransform]
+            exporters: [nop]

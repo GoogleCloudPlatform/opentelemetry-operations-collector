@@ -35,6 +35,7 @@ type testCase struct {
 	expected                  pdata.Metrics
 	prevCPUTimeValuesInput    map[string]float64
 	prevCPUTimeValuesExpected map[string]float64
+	prevOpInput               map[opKey]opData
 }
 
 func TestAgentMetricsProcessor(t *testing.T) {
@@ -66,6 +67,17 @@ func TestAgentMetricsProcessor(t *testing.T) {
 			input:    generateCPUMetricsInput(),
 			expected: generateCPUMetricsExpected(),
 		},
+		{
+			name:     "average-disk",
+			input:    generateAverageDiskInput(),
+			expected: generateAverageDiskExpected(),
+		},
+		{
+			name:        "average-disk-prev",
+			input:       generateAverageDiskInput(),
+			expected:    generateAverageDiskPrevExpected(),
+			prevOpInput: generateAverageDiskPrevOpInput(),
+		},
 	}
 
 	for _, tt := range tests {
@@ -84,6 +96,9 @@ func TestAgentMetricsProcessor(t *testing.T) {
 			assert.True(t, rmp.Capabilities().MutatesData)
 
 			amp.prevCPUTimeValues = tt.prevCPUTimeValuesInput
+			if tt.prevOpInput != nil {
+				amp.prevOp = tt.prevOpInput
+			}
 			require.NoError(t, rmp.Start(context.Background(), componenttest.NewNopHost()))
 			defer func() { assert.NoError(t, rmp.Shutdown(context.Background())) }()
 
@@ -127,7 +142,8 @@ func (rmsb resourceMetricsBuilder) Build() pdata.ResourceMetricsSlice {
 }
 
 type metricsBuilder struct {
-	metrics pdata.MetricSlice
+	metrics   pdata.MetricSlice
+	timestamp pdata.Timestamp
 }
 
 func (msb metricsBuilder) addMetric(name string, t pdata.MetricDataType, isMonotonic bool) metricBuilder {
@@ -151,17 +167,19 @@ func (msb metricsBuilder) addMetric(name string, t pdata.MetricDataType, isMonot
 	}
 
 	msb.metrics.Append(metric)
-	return metricBuilder{metric: metric}
+	return metricBuilder{metric: metric, timestamp: msb.timestamp}
 }
 
 type metricBuilder struct {
-	metric pdata.Metric
+	metric    pdata.Metric
+	timestamp pdata.Timestamp
 }
 
 func (mb metricBuilder) addIntDataPoint(value int64, labels map[string]string) metricBuilder {
 	idp := pdata.NewIntDataPoint()
 	idp.LabelsMap().InitFromMap(labels)
 	idp.SetValue(value)
+	idp.SetTimestamp(mb.timestamp)
 
 	switch mb.metric.DataType() {
 	case pdata.MetricDataTypeIntSum:
@@ -177,6 +195,7 @@ func (mb metricBuilder) addDoubleDataPoint(value float64, labels map[string]stri
 	ddp := pdata.NewDoubleDataPoint()
 	ddp.LabelsMap().InitFromMap(labels)
 	ddp.SetValue(value)
+	ddp.SetTimestamp(mb.timestamp)
 
 	switch mb.metric.DataType() {
 	case pdata.MetricDataTypeDoubleSum:
@@ -291,14 +310,16 @@ func assertEqualDoubleDataPointSlice(t *testing.T, metricName string, ddpsAct, d
 	for l := 0; l < ddpsAct.Len(); l++ {
 		ddpAct := ddpsAct.At(l)
 
-		ddpExp, ok := ddpsExpMap[labelsAsKey(ddpAct.LabelsMap())]
+		key := labelsAsKey(ddpAct.LabelsMap())
+
+		ddpExp, ok := ddpsExpMap[key]
 		if !ok {
-			require.Failf(t, fmt.Sprintf("no data point for %s", labelsAsKey(ddpAct.LabelsMap())), "Metric %s", metricName)
+			require.Failf(t, fmt.Sprintf("no data point for %s", key), "Metric %s", metricName)
 		}
 
-		assert.Equalf(t, ddpExp.LabelsMap().Sort(), ddpAct.LabelsMap().Sort(), "Metric %s", metricName)
-		assert.Equalf(t, ddpExp.StartTimestamp(), ddpAct.StartTimestamp(), "Metric %s", metricName)
-		assert.Equalf(t, ddpExp.Timestamp(), ddpAct.Timestamp(), "Metric %s", metricName)
-		assert.InDeltaf(t, ddpExp.Value(), ddpAct.Value(), 0.00000001, "Metric %s", metricName)
+		assert.Equalf(t, ddpExp.LabelsMap().Sort(), ddpAct.LabelsMap().Sort(), "Labels for metric %s point %d labels %q", metricName, l, labelsAsKey(ddpAct.LabelsMap()))
+		assert.Equalf(t, ddpExp.StartTimestamp(), ddpAct.StartTimestamp(), "StartTimestamp for metric %s point %d labels %q", metricName, l, labelsAsKey(ddpAct.LabelsMap()))
+		assert.Equalf(t, ddpExp.Timestamp(), ddpAct.Timestamp(), "Timestamp for metric %s point %d labels %q", metricName, l, labelsAsKey(ddpAct.LabelsMap()))
+		assert.InDeltaf(t, ddpExp.Value(), ddpAct.Value(), 0.00000001, "Value for metric %s point %d labels %q", metricName, l, labelsAsKey(ddpAct.LabelsMap()))
 	}
 }

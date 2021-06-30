@@ -1,0 +1,25 @@
+receivers:
+    nop:
+
+processors:
+    googlemetricstransform:
+        transforms:
+          - include: old_name
+            action: update
+            operations:
+              - action: aggregate_labels
+                aggregation_type: invalid
+
+exporters:
+    nop:
+
+service:
+    pipelines:
+        traces:
+            receivers: [nop]
+            processors: [googlemetricstransform]
+            exporters: [nop]
+        metrics:
+            receivers: [nop]
+            processors: [googlemetricstransform]
+            exporters: [nop]

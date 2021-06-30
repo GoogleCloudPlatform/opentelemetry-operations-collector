@@ -16,7 +16,6 @@ package main
 
 import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/nginxreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusexecreceiver"
@@ -26,6 +25,7 @@ import (
 	"go.opentelemetry.io/collector/service/defaultcomponents"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/agentmetricsprocessor"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/googlemetricstransformprocessor"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/normalizesumsprocessor"
 )
 
@@ -72,7 +72,7 @@ func components() (component.Factories, error) {
 	processors := []component.ProcessorFactory{
 		agentmetricsprocessor.NewFactory(),
 		normalizesumsprocessor.NewFactory(),
-		metricstransformprocessor.NewFactory(),
+		googlemetricstransformprocessor.NewFactory(),
 		resourcedetectionprocessor.NewFactory(),
 	}
 	for _, pr := range factories.Processors {

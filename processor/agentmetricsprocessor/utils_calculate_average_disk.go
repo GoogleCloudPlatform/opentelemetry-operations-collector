@@ -100,6 +100,7 @@ func (mtp *agentMetricsProcessor) appendAverageDiskMetrics(rms pdata.ResourceMet
 					new.time.CopyTo(ddp)
 					if ops > 0 {
 						interval := new.time.Timestamp() - prev.time.Timestamp()
+						// Logic from https://github.com/Stackdriver/collectd/blob/2d176c650d9d6e4cd45d2add7977016c82dd8b55/src/disk.c#L321
 						new.cumAvgTime += (t / float64(ops)) * float64(interval) / 1e9
 					}
 					ddp.SetValue(new.cumAvgTime)

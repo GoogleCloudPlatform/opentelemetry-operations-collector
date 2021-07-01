@@ -39,15 +39,17 @@ type opData struct {
 
 type agentMetricsProcessor struct {
 	logger *zap.Logger
+	cfg    *Config
 
 	mutex             sync.Mutex
 	prevCPUTimeValues map[string]float64
 	prevOp            map[opKey]opData
 }
 
-func newAgentMetricsProcessor(logger *zap.Logger) *agentMetricsProcessor {
+func newAgentMetricsProcessor(logger *zap.Logger, cfg *Config) *agentMetricsProcessor {
 	return &agentMetricsProcessor{
 		logger: logger,
+		cfg:    cfg,
 		prevOp: make(map[opKey]opData),
 	}
 }
@@ -57,6 +59,10 @@ func (mtp *agentMetricsProcessor) ProcessMetrics(ctx context.Context, metrics pd
 	convertNonMonotonicSumsToGauges(metrics.ResourceMetrics())
 
 	var errors []error
+
+	if err := mtp.addBlankLabel(metrics.ResourceMetrics()); err != nil {
+		errors = append(errors, err)
+	}
 
 	if err := combineProcessMetrics(metrics.ResourceMetrics()); err != nil {
 		errors = append(errors, err)

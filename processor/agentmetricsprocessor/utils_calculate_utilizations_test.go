@@ -54,10 +54,10 @@ func generateUtilizationMetricsInput() pdata.Metrics {
 
 func generateUtilizationPrevCPUTimeValuesInput() map[string]float64 {
 	return map[string]float64{
-		"label1=value1;state=user": 100,
-		"label1=value2;state=user": 200,
-		"label1=value1;state=idle": 300,
-		"label1=value2;state=idle": 400,
+		"blank=;label1=value1;state=user": 100,
+		"blank=;label1=value2;state=user": 200,
+		"blank=;label1=value1;state=idle": 300,
+		"blank=;label1=value2;state=idle": 400,
 	}
 }
 
@@ -68,10 +68,10 @@ func generateUtilizationMetricsExpected() pdata.Metrics {
 	b := rmb.addResourceMetrics(nil)
 
 	mb1 := b.addMetric("system.cpu.time", pdata.MetricDataTypeDoubleSum, true)
-	mb1.addDoubleDataPoint(101, map[string]string{"label1": "value1", "state": "user"})
-	mb1.addDoubleDataPoint(202, map[string]string{"label1": "value2", "state": "user"})
-	mb1.addDoubleDataPoint(303, map[string]string{"label1": "value1", "state": "idle"})
-	mb1.addDoubleDataPoint(404, map[string]string{"label1": "value2", "state": "idle"})
+	mb1.addDoubleDataPoint(101, map[string]string{"label1": "value1", "state": "user", "blank": ""})
+	mb1.addDoubleDataPoint(202, map[string]string{"label1": "value2", "state": "user", "blank": ""})
+	mb1.addDoubleDataPoint(303, map[string]string{"label1": "value1", "state": "idle", "blank": ""})
+	mb1.addDoubleDataPoint(404, map[string]string{"label1": "value2", "state": "idle", "blank": ""})
 
 	mb2 := b.addMetric("system.memory.usage", pdata.MetricDataTypeIntGauge, false)
 	mb2.addIntDataPoint(1, map[string]string{"state": "used"})
@@ -92,10 +92,10 @@ func generateUtilizationMetricsExpected() pdata.Metrics {
 	mb3.addDoubleDataPoint(1.5, map[string]string{"label1": "value2", "label2": "value2", "state": "reserved"})
 
 	mb4 := b.addMetric("system.cpu.utilization", pdata.MetricDataTypeDoubleGauge, false)
-	mb4.addDoubleDataPoint(1.0/(1.0+3.0)*100, map[string]string{"label1": "value1", "state": "user"})
-	mb4.addDoubleDataPoint(2.0/(2.0+4.0)*100, map[string]string{"label1": "value2", "state": "user"})
-	mb4.addDoubleDataPoint(3.0/(1.0+3.0)*100, map[string]string{"label1": "value1", "state": "idle"})
-	mb4.addDoubleDataPoint(4.0/(2.0+4.0)*100, map[string]string{"label1": "value2", "state": "idle"})
+	mb4.addDoubleDataPoint(1.0/(1.0+3.0)*100, map[string]string{"label1": "value1", "state": "user", "blank": ""})
+	mb4.addDoubleDataPoint(2.0/(2.0+4.0)*100, map[string]string{"label1": "value2", "state": "user", "blank": ""})
+	mb4.addDoubleDataPoint(3.0/(1.0+3.0)*100, map[string]string{"label1": "value1", "state": "idle", "blank": ""})
+	mb4.addDoubleDataPoint(4.0/(2.0+4.0)*100, map[string]string{"label1": "value2", "state": "idle", "blank": ""})
 
 	mb5 := b.addMetric("system.memory.utilization", pdata.MetricDataTypeDoubleGauge, false)
 	mb5.addDoubleDataPoint(1.0/(1.0+2.0)*100, map[string]string{"state": "used"})
@@ -121,9 +121,9 @@ func generateUtilizationMetricsExpected() pdata.Metrics {
 
 func generateUtilizationPrevCPUTimeValuesExpected() map[string]float64 {
 	return map[string]float64{
-		"label1=value1;state=user": 101,
-		"label1=value2;state=user": 202,
-		"label1=value1;state=idle": 303,
-		"label1=value2;state=idle": 404,
+		"blank=;label1=value1;state=user": 101,
+		"blank=;label1=value2;state=user": 202,
+		"blank=;label1=value1;state=idle": 303,
+		"blank=;label1=value2;state=idle": 404,
 	}
 }

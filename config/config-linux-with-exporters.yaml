@@ -52,7 +52,7 @@ processors:
   resourcedetection:
     detectors: [gce]
 
-  # perform custom transformations that aren't supported by the googlemetricstransform processor
+  # perform custom transformations that aren't supported by the metricstransform processor
   agentmetrics/host:
     # 1. combines resource process metrics into metrics with processes as labels
     # 2. splits "disk.io" metrics into read & write metrics
@@ -68,7 +68,7 @@ processors:
           - system.filesystem.inodes.usage
           - system.paging.faults
 
-  googlemetricstransform/host:
+  metricstransform/host:
     transforms:
       # system.cpu.time -> cpu/usage_time
       - metric_name: system.cpu.time
@@ -317,7 +317,7 @@ processors:
           - mysql_global_status_threads_connected
           - mysql_global_status_handlers_total
 
-  googlemetricstransform/mysql:
+  metricstransform/mysql:
     transforms:
       - metric_name: mysql_global_status_commands_total
         action: update
@@ -357,7 +357,7 @@ processors:
           - java_lang_Threading_ThreadCount
           - java_lang_OperatingSystem_OpenFileDescriptorCount
 
-  googlemetricstransform/jvm:
+  metricstransform/jvm:
     transforms: 
       - metric_name: java_lang_Memory_HeapMemoryUsage_committed
         action: update
@@ -448,7 +448,7 @@ processors:
           - apache_workers
           - apache_sent_kilobytes_total
 
-  googlemetricstransform/apache:
+  metricstransform/apache:
     transforms:
       - metric_name: promhttp_metric_handler_requests_total
         action: update
@@ -517,22 +517,22 @@ service:
     # Remove any unwanted pipelines from this list if desired
     metrics/host:
       receivers: [hostmetrics]
-      processors: [agentmetrics/host, googlemetricstransform/host, filter/host, resourcedetection]
+      processors: [agentmetrics/host, metricstransform/host, filter/host, resourcedetection]
       exporters: [googlecloud]
 
     metrics/mysql:
       receivers: [prometheus_exec/mysql]
-      processors: [filter/mysql, googlemetricstransform/mysql, resourcedetection]
+      processors: [filter/mysql, metricstransform/mysql, resourcedetection]
       exporters: [googlecloud]
 
     metrics/jvm:
       receivers: [prometheus_exec/jvm]
-      processors: [filter/jvm, googlemetricstransform/jvm, resourcedetection]
+      processors: [filter/jvm, metricstransform/jvm, resourcedetection]
       exporters: [googlecloud]
 
     metrics/apache:
       receivers: [prometheus_exec/apache]
-      processors: [filter/apache, googlemetricstransform/apache, resourcedetection]
+      processors: [filter/apache, metricstransform/apache, resourcedetection]
       exporters: [googlecloud]
 
     metrics/statsd:

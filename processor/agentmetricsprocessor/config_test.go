@@ -38,7 +38,7 @@ func TestLoadConfig(t *testing.T) {
 	p1 := cfg.Processors[config.NewID("agentmetrics")]
 
 	want := factory.CreateDefaultConfig()
-	want.(*Config).BlankMetrics = []string{"system.cpu.time"}
+	want.(*Config).BlankLabelMetrics = []string{"system.cpu.time"}
 
 	assert.Equal(t, want, p1)
 }

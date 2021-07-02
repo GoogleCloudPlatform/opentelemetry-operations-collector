@@ -20,7 +20,7 @@ import "go.opentelemetry.io/collector/config"
 type Config struct {
 	config.ProcessorSettings `mapstructure:",squash"`
 
-	// BlankMetrics is a list of metrics that need a label called
+	// BlankLabelMetrics is a list of metrics that need a label called
 	// "blank" with an empty value.
-	BlankMetrics []string `mapstructure:"blank_metrics"`
+	BlankLabelMetrics []string `mapstructure:"blank_label_metrics"`
 }

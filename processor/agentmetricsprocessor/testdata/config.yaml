@@ -17,7 +17,7 @@ receivers:
 
 processors:
   agentmetrics:
-    blank_metrics:
+    blank_label_metrics:
       - system.cpu.time
 
 exporters:

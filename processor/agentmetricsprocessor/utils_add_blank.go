@@ -26,7 +26,7 @@ func (mtp *agentMetricsProcessor) addBlankLabel(rms pdata.ResourceMetricsSlice) 
 			for k := 0; k < metrics.Len(); k++ {
 				metric := metrics.At(k)
 				var found bool
-				for _, name := range mtp.cfg.BlankMetrics {
+				for _, name := range mtp.cfg.BlankLabelMetrics {
 					if name == metric.Name() {
 						found = true
 					}

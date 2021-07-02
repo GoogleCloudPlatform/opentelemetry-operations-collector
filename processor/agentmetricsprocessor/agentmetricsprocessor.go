@@ -80,7 +80,7 @@ func (mtp *agentMetricsProcessor) ProcessMetrics(ctx context.Context, metrics pd
 		errors = append(errors, err)
 	}
 
-	// Add blank labels last so it can be used on newly-generated metrics.
+	// Add blank labels last so they can also be applied to metrics added by agentmetricsprocessor.
 	if err := mtp.addBlankLabel(metrics.ResourceMetrics()); err != nil {
 		errors = append(errors, err)
 	}

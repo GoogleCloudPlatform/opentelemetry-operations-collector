@@ -39,15 +39,17 @@ type opData struct {
 
 type agentMetricsProcessor struct {
 	logger *zap.Logger
+	cfg    *Config
 
 	mutex             sync.Mutex
 	prevCPUTimeValues map[string]float64
 	prevOp            map[opKey]opData
 }
 
-func newAgentMetricsProcessor(logger *zap.Logger) *agentMetricsProcessor {
+func newAgentMetricsProcessor(logger *zap.Logger, cfg *Config) *agentMetricsProcessor {
 	return &agentMetricsProcessor{
 		logger: logger,
+		cfg:    cfg,
 		prevOp: make(map[opKey]opData),
 	}
 }
@@ -75,6 +77,11 @@ func (mtp *agentMetricsProcessor) ProcessMetrics(ctx context.Context, metrics pd
 	}
 
 	if err := mtp.appendAverageDiskMetrics(metrics.ResourceMetrics()); err != nil {
+		errors = append(errors, err)
+	}
+
+	// Add blank labels last so they can also be applied to metrics added by agentmetricsprocessor.
+	if err := mtp.addBlankLabel(metrics.ResourceMetrics()); err != nil {
 		errors = append(errors, err)
 	}
 

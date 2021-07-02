@@ -16,6 +16,7 @@ package main
 
 import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusexecreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowsperfcountersreceiver"
@@ -24,7 +25,6 @@ import (
 	"go.opentelemetry.io/collector/service/defaultcomponents"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/agentmetricsprocessor"
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/googlemetricstransformprocessor"
 )
 
 func components() (component.Factories, error) {
@@ -68,7 +68,7 @@ func components() (component.Factories, error) {
 
 	processors := []component.ProcessorFactory{
 		agentmetricsprocessor.NewFactory(),
-		googlemetricstransformprocessor.NewFactory(),
+		metricstransformprocessor.NewFactory(),
 		resourcedetectionprocessor.NewFactory(),
 	}
 	for _, pr := range factories.Processors {

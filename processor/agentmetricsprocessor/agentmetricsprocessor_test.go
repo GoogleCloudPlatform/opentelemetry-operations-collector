@@ -82,7 +82,9 @@ func TestAgentMetricsProcessor(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			amp := newAgentMetricsProcessor(zap.NewExample())
+			amp := newAgentMetricsProcessor(zap.NewExample(), &Config{
+				BlankLabelMetrics: []string{"system.cpu.time"},
+			})
 
 			tmn := &consumertest.MetricsSink{}
 			rmp, err := processorhelper.NewMetricsProcessor(

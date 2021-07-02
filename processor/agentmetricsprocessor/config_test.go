@@ -1,4 +1,4 @@
-// Copyright 2020 Google LLC
+// Copyright 2020 OpenTelemetry Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -36,5 +36,9 @@ func TestLoadConfig(t *testing.T) {
 	assert.NotNil(t, cfg)
 
 	p1 := cfg.Processors[config.NewID("agentmetrics")]
-	assert.Equal(t, p1, factory.CreateDefaultConfig())
+
+	want := factory.CreateDefaultConfig()
+	want.(*Config).BlankLabelMetrics = []string{"system.cpu.time"}
+
+	assert.Equal(t, want, p1)
 }

@@ -36,7 +36,7 @@ processors:
   resourcedetection:
     detectors: [gce]
 
-  # perform custom transformations that aren't supported by the googlemetricstransform processor
+  # perform custom transformations that aren't supported by the metricstransform processor
   agentmetrics/cloud-monitoring:
     # 1. combines resource process metrics into metrics with processes as labels
     # 2. splits "disk.io" metrics into read & write metrics
@@ -53,7 +53,7 @@ processors:
           - system.filesystem.inodes.usage
           - system.paging.faults
 
-  googlemetricstransform/cloud-monitoring:
+  metricstransform/cloud-monitoring:
     transforms:
       # system.cpu.time -> cpu/usage_time
       - metric_name: system.cpu.time
@@ -309,7 +309,7 @@ service:
   pipelines:
     metrics:
       receivers: [hostmetrics]
-      processors: [agentmetrics/cloud-monitoring, googlemetricstransform/cloud-monitoring, filter/cloud-monitoring, resourcedetection]
+      processors: [agentmetrics/cloud-monitoring, metricstransform/cloud-monitoring, filter/cloud-monitoring, resourcedetection]
       exporters: [googlecloud]
 
   extensions: [zpages]

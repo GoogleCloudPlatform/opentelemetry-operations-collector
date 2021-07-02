@@ -60,10 +60,6 @@ func (mtp *agentMetricsProcessor) ProcessMetrics(ctx context.Context, metrics pd
 
 	var errors []error
 
-	if err := mtp.addBlankLabel(metrics.ResourceMetrics()); err != nil {
-		errors = append(errors, err)
-	}
-
 	if err := combineProcessMetrics(metrics.ResourceMetrics()); err != nil {
 		errors = append(errors, err)
 	}
@@ -81,6 +77,11 @@ func (mtp *agentMetricsProcessor) ProcessMetrics(ctx context.Context, metrics pd
 	}
 
 	if err := mtp.appendAverageDiskMetrics(metrics.ResourceMetrics()); err != nil {
+		errors = append(errors, err)
+	}
+
+	// Add blank labels last so it can be used on newly-generated metrics.
+	if err := mtp.addBlankLabel(metrics.ResourceMetrics()); err != nil {
 		errors = append(errors, err)
 	}
 

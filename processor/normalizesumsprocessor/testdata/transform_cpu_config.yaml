@@ -19,7 +19,6 @@ processors:
   normalizesums:
     transforms:
       - metric_name: "cpu"
-        new_name: "total_cpu"
 
 exporters:
   nop:

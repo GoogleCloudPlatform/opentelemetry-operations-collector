@@ -73,7 +73,7 @@ processors:
   resourcedetection:
     detectors: [gce, ec2]
 
-  # perform custom transformations that aren't supported by the googlemetricstransform processor
+  # perform custom transformations that aren't supported by the metricstransform processor
   agentmetrics/system:
     # 1. converts up down sum types to gauges
     # 2. combines resource process metrics into metrics with processes as labels
@@ -89,7 +89,7 @@ processors:
           - system.network.dropped
 
   # convert from opentelemetry metric formats to cloud monitoring formats
-  googlemetricstransform/system:
+  metricstransform/system:
     transforms:
       # system.cpu.time -> cpu/usage_time
       - metric_name: system.cpu.time
@@ -374,7 +374,7 @@ processors:
           - otelcol_googlecloudmonitoring_point_count
 
   # convert from windows perf counter formats to cloud monitoring formats
-  googlemetricstransform/iis:
+  metricstransform/iis:
     transforms:
       - include: \Web Service(_Total)\Current Connections
         action: update
@@ -394,7 +394,7 @@ processors:
         submatch_case: lower
 
   # convert from windows perf counter formats to cloud monitoring formats
-  googlemetricstransform/mssql:
+  metricstransform/mssql:
     transforms:
       - include: \SQLServer:General Statistics(_Total)\User Connections
         action: update
@@ -407,7 +407,7 @@ processors:
         new_name: mssql/write_transaction_rate
 
   # convert from opentelemetry metric formats to cloud monitoring formats
-  googlemetricstransform/agent:
+  metricstransform/agent:
     transforms:
       # otelcol_process_uptime -> agent/uptime
       - metric_name: otelcol_process_uptime
@@ -479,7 +479,7 @@ service:
         # leave these custom processors here to support cloud monitoring agent metric format
         - agentmetrics/system
         - filter/system
-        - googlemetricstransform/system
+        - metricstransform/system
         # add additional custom processors below this line if desired
         - resourcedetection
       exporters:
@@ -491,7 +491,7 @@ service:
         - windowsperfcounters/iis
       processors:
         # leave these custom processors here to support cloud monitoring agent metric format
-        - googlemetricstransform/iis
+        - metricstransform/iis
         # add additional custom processors below this line if desired
         - resourcedetection
       exporters:
@@ -503,7 +503,7 @@ service:
         - windowsperfcounters/mssql
       processors:
         # leave these custom processors here to support cloud monitoring agent metric format
-        - googlemetricstransform/mssql
+        - metricstransform/mssql
         # add additional custom processors below this line if desired
         - resourcedetection
       exporters:
@@ -515,7 +515,7 @@ service:
         - prometheus/agent
       processors:
         - filter/agent
-        - googlemetricstransform/agent
+        - metricstransform/agent
         - resourcedetection
       exporters:
         - googlecloud/agent

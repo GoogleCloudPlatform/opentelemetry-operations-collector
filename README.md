@@ -69,7 +69,7 @@ Pipelines:
     - `hostmetrics` receiver: Scrapes system metrics.
     - `agentmetrics` processor: Performs some custom processing of these metrics to make them compatible with Cloud Monitoring.
     - `filter` processor: Filters out several metrics that are not supported by Cloud Monitoring.
-    - `googlemetricstransform` processor: Converts the metrics from OpenTelemetry format, as defined in the [semantic conventions](https://github.com/open-telemetry/opentelemetry-specification/tree/master/specification/metrics/semantic_conventions), to Cloud Monitoring format, as defined in the [agent metrics](https://cloud.google.com/monitoring/api/metrics_agent) documentation.
+    - `metricstransform` processor: Converts the metrics from OpenTelemetry format, as defined in the [semantic conventions](https://github.com/open-telemetry/opentelemetry-specification/tree/master/specification/metrics/semantic_conventions), to Cloud Monitoring format, as defined in the [agent metrics](https://cloud.google.com/monitoring/api/metrics_agent) documentation.
     - `resourcedetection` processor: Appends resource information detected from the host.
     - `googlecloud` exporter: Exports the metrics to Cloud Monitoring using the `agent.googleapis.com` prefix.
 
@@ -77,7 +77,7 @@ Pipelines:
 
     - `prometheus` receiver: The OpenTelemetry Collector exports self-observability metrics in Prometheus format on port 8888 by default. This receiver scrapes those metrics at the configured frequency.
     - `filter` processor: Retains only the “agent” metrics that are supported by Cloud Monitoring.
-    - `googlemetricstransform` processor: Converts the internal self-observability metrics to Cloud Monitoring format, as defined in [agent metrics](https://cloud.google.com/monitoring/api/metrics_agent).
+    - `metricstransform` processor: Converts the internal self-observability metrics to Cloud Monitoring format, as defined in [agent metrics](https://cloud.google.com/monitoring/api/metrics_agent).
     - `resourcedetection` processor: Appends resource information detected from the host using the resourcedetection processor.
     - `googlecloud` exporter: Exports the metrics to Cloud Monitoring using the `agent.googleapis.com` prefix.
  
@@ -86,7 +86,7 @@ Common configuration that you may want to change:
 - Under the `hostmetrics` receiver you can configure which kinds of metrics to scrape, and can also filter devices. For more details, see the [Host Metrics receiver](https://github.com/open-telemetry/opentelemetry-collector/tree/master/receiver/hostmetricsreceiver).
     - You can configure the `collection_interval` to the granularity at which you would like to view metric data in Cloud Monitoring. The minimum interval supported by Cloud Monitoring is 10s.
 - Under the `filter/system` processor you can configure which host metrics to include or exclude. For more details, see the [Filter processor](https://github.com/open-telemetry/opentelemetry-collector/tree/master/processor/filterprocessor).
-- Metrics ingested by Cloud Monitoring under the `agent.googleapis.com` prefix must conform to the format specified in Agent Metrics. If you would like to generate any metrics in a non-standard format, you should submit Custom Metrics using the `custom.googleapis.com` prefix instead. To do this, specifying the full metric name, including this prefix, in the `googlemetricstransform` processor rename configuration. If the domain is specified in the metric name, the `agent.googleapis.com` prefix will not be added to the metric when exported.
+- Metrics ingested by Cloud Monitoring under the `agent.googleapis.com` prefix must conform to the format specified in Agent Metrics. If you would like to generate any metrics in a non-standard format, you should submit Custom Metrics using the `custom.googleapis.com` prefix instead. To do this, specifying the full metric name, including this prefix, in the `metricstransform` processor rename configuration. If the domain is specified in the metric name, the `agent.googleapis.com` prefix will not be added to the metric when exported.
 
 ## Build / Package from source
 

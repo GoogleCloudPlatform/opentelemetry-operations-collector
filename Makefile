@@ -77,7 +77,7 @@ impi:
 
 .PHONY: lint
 lint:
-	golangci-lint run --skip-dirs "googlemetricstransformprocessor"
+	golangci-lint run
 
 .PHONY: misspell
 misspell:

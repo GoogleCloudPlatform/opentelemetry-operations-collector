@@ -68,10 +68,10 @@ func generateUtilizationMetricsExpected() pdata.Metrics {
 	b := rmb.addResourceMetrics(nil)
 
 	mb1 := b.addMetric("system.cpu.time", pdata.MetricDataTypeDoubleSum, true)
-	mb1.addDoubleDataPoint(101, map[string]string{"label1": "value1", "state": "user"})
-	mb1.addDoubleDataPoint(202, map[string]string{"label1": "value2", "state": "user"})
-	mb1.addDoubleDataPoint(303, map[string]string{"label1": "value1", "state": "idle"})
-	mb1.addDoubleDataPoint(404, map[string]string{"label1": "value2", "state": "idle"})
+	mb1.addDoubleDataPoint(101, map[string]string{"label1": "value1", "state": "user", "blank": ""})
+	mb1.addDoubleDataPoint(202, map[string]string{"label1": "value2", "state": "user", "blank": ""})
+	mb1.addDoubleDataPoint(303, map[string]string{"label1": "value1", "state": "idle", "blank": ""})
+	mb1.addDoubleDataPoint(404, map[string]string{"label1": "value2", "state": "idle", "blank": ""})
 
 	mb2 := b.addMetric("system.memory.usage", pdata.MetricDataTypeIntGauge, false)
 	mb2.addIntDataPoint(1, map[string]string{"state": "used"})

@@ -1127,6 +1127,8 @@ github.com/onsi/gomega v1.10.2/go.mod h1:iN09h71vgCQne3DLsj+A5owkum+a2tYe+TOCB1y
 github.com/op/go-logging v0.0.0-20160315200505-970db520ece7/go.mod h1:HzydrMdWErDVzsI23lYNej1Htcns9BCg93Dk0bBINWk=
 github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter v0.28.0 h1:B9TJPZUgv5pPxhD52P7ZW6e3h7DV2IDL8h7MOURvrgg=
 github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter v0.28.0/go.mod h1:FJQr2f8aocPm+4iLLWdV2kg2VdploUMKSUlgcOSbKvw=
+github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor v0.28.0 h1:QHATHli3YawZV8p5nUaldei/2zxGvisBkKCVadYFQsU=
+github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor v0.28.0/go.mod h1:OqEXReTSUAzE+4lAkFFIqIxSq4j9K0X/BgTtscM6u0I=
 github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor v0.28.0 h1:f+OtBANO/o9Mcn93gAP48gFbdUIjGy5iTggMwUwKp4k=
 github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor v0.28.0/go.mod h1:12OEBW9A3SILe/IOIweoR/r4WRhFxc+3aDKBnAPaAB8=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/nginxreceiver v0.29.0 h1:/cSbMcmsPN20HXllNuExht5ASkALeqmY6nPsamA3zVY=

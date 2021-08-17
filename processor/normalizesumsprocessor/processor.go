@@ -177,9 +177,15 @@ func (nsp *NormalizeSumsProcessor) processDoubleSumDataPoint(dp pdata.DoubleData
 		return false
 	}
 
-	// If this data is older than the start point, we can't
-	// meaningfully report this point
+	// If this data is older than the start point, we can't meaningfully report this point
+	// TODO - consider resetting on two subsequent data points older than current start timestamp.
+	// This could signify a permanent clock change.
 	if dp.Timestamp() <= start.doubleDataPoint.Timestamp() {
+		nsp.logger.Info(
+			"data point being processed older than last recorded reset, will not be emitted",
+			zap.String("lastRecordedReset", start.doubleDataPoint.Timestamp().String()),
+			zap.String("dataPoint", dp.Timestamp().String()),
+		)
 		return false
 	}
 
@@ -220,9 +226,15 @@ func (nsp *NormalizeSumsProcessor) processIntSumDataPoint(dp pdata.IntDataPoint,
 		return false
 	}
 
-	// If this data is older than the start point, we can't
-	// meaningfully report this point
+	// If this data is older than the start point, we can't meaningfully report this point
+	// TODO - consider resetting on two subsequent data points older than current start timestamp.
+	// This could signify a permanent clock change.
 	if dp.Timestamp() <= start.intDataPoint.Timestamp() {
+		nsp.logger.Info(
+			"data point being processed older than last recorded reset, will not be emitted",
+			zap.String("lastRecordedReset", start.intDataPoint.Timestamp().String()),
+			zap.String("dataPoint", dp.Timestamp().String()),
+		)
 		return false
 	}
 

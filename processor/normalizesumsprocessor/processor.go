@@ -73,7 +73,7 @@ func (nsp *NormalizeSumsProcessor) transformMetrics(rms pdata.ResourceMetrics) [
 		newSlice := pdata.NewMetricSlice()
 		for k := 0; k < ilm.Len(); k++ {
 			metric := ilm.At(k)
-			if shouldTransform := nsp.shouldTransformMetric(metric); shouldTransform {
+			if nsp.shouldTransformMetric(metric) {
 				keepMetric, err := nsp.processMetric(rms.Resource(), metric)
 				if err != nil {
 					errors = append(errors, err)

@@ -1,0 +1,25 @@
+receivers:
+  nginx:
+    endpoint: "http://oiq-int-nginx:80/status"
+    collection_interval: 10s
+
+processors:
+  normalizesums:
+    transforms:
+      - metric_name: "nginx.requests"
+      - metric_name: "nginx.connections_accepted"
+      - metric_name: "nginx.connections_handled"
+
+exporters:
+  googlecloud:
+    project: "otel-agent-dev"
+    metric:
+      prefix: "custom.googleapis.com"
+
+
+service:
+  pipelines:
+    metrics:
+      receivers: [nginx]
+      processors: [normalizesums]
+      exporters: [googlecloud]

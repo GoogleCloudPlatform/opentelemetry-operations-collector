@@ -172,9 +172,6 @@ processors:
         operations:
           # change data type from int64 -> double
           - action: toggle_scalar_data_type
-        operations:
-          # change data type from int64 -> double
-          - action: toggle_scalar_data_type
       # system.filesystem.usage -> disk/bytes_used
       - metric_name: system.filesystem.usage
         action: update

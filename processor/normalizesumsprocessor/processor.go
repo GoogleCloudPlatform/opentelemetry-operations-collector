@@ -24,6 +24,10 @@ import (
 	"go.uber.org/zap"
 )
 
+// TODO - This processor shares a lot of similar intent with the MetricsAdjuster present in the
+// prometheus receiver. The relevant code should be merged together and made available in a way
+// where it is available to all receivers.
+// see: https://github.com/open-telemetry/opentelemetry-collector/blob/6e5beaf43b325e63ec6f1e864d9746a0d051cc35/receiver/prometheusreceiver/internal/metrics_adjuster.go#L187
 type NormalizeSumsProcessor struct {
 	logger     *zap.Logger
 	transforms []Transform

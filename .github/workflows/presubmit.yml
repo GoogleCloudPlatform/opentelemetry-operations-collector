@@ -1,0 +1,23 @@
+name: Presubmit
+
+on: 
+  pull_request:
+      branches:
+      - master
+env:
+  # Default minimum version of Go to support.
+  DEFAULT_GO_VERSION: 1.15
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+          fetch-depth: 0
+          lfs: true
+      - uses: actions/setup-go@v2
+        with:
+          go-version: ${{ env.DEFAULT_GO_VERSION }}
+      - name: Build and test
+        run: make install-tools && make presubmit

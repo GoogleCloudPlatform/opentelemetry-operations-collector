@@ -187,7 +187,7 @@ func generateMultipleResourceOutput(startTime int64) []pdata.Metrics {
 	})
 
 	mb1 := b.addMetric("m1", pdata.MetricDataTypeIntSum, true)
-	//mb1.addIntDataPoint(1, map[string]string{}, startTime, 0)
+	// mb1.addIntDataPoint(1, map[string]string{}, startTime, 0)
 	mb1.addIntDataPoint(1, map[string]string{}, startTime+1000, startTime)
 
 	b2 := rmb.addResourceMetrics(map[string]pdata.AttributeValue{
@@ -195,7 +195,7 @@ func generateMultipleResourceOutput(startTime int64) []pdata.Metrics {
 	})
 
 	mb2 := b2.addMetric("m1", pdata.MetricDataTypeIntSum, true)
-	//mb2.addIntDataPoint(5, map[string]string{}, startTime+2000, 0)
+	// mb2.addIntDataPoint(5, map[string]string{}, startTime+2000, 0)
 	mb2.addIntDataPoint(5, map[string]string{}, startTime+3000, startTime+2000)
 
 	rmb.Build().CopyTo(output.ResourceMetrics())
@@ -234,7 +234,7 @@ func generateLabelledOutput(startTime int64) []pdata.Metrics {
 	mb1.addIntDataPoint(12, map[string]string{"label": "val1"}, startTime+1000, startTime)
 	mb1.addIntDataPoint(2, map[string]string{"label": "val2"}, startTime+1000, startTime)
 	mb1.addIntDataPoint(15, map[string]string{"label": "val1"}, startTime+2000, startTime)
-	//mb1.addIntDataPoint(1, map[string]string{"label": "val2"}, startTime+2000, 1)
+	// mb1.addIntDataPoint(1, map[string]string{"label": "val2"}, startTime+2000, 1)
 	mb1.addIntDataPoint(22, map[string]string{"label": "val1"}, startTime+3000, startTime)
 	mb1.addIntDataPoint(10, map[string]string{"label": "val2"}, startTime+3000, startTime+2000)
 
@@ -279,7 +279,7 @@ func generateSeparatedLabelledOutput(startTime int64) []pdata.Metrics {
 	mb2 := b.addMetric("m1", pdata.MetricDataTypeIntSum, true)
 	// mb2.addIntDataPoint(1, map[string]string{"label": "val2"}, startTime, 0)
 	mb2.addIntDataPoint(2, map[string]string{"label": "val2"}, startTime+1000, startTime)
-	//mb2.addIntDataPoint(1, map[string]string{"label": "val2"}, startTime+2000, 1)
+	// mb2.addIntDataPoint(1, map[string]string{"label": "val2"}, startTime+2000, 1)
 	mb2.addIntDataPoint(10, map[string]string{"label": "val2"}, startTime+3000, startTime+2000)
 
 	rmb.Build().CopyTo(output.ResourceMetrics())
@@ -476,6 +476,10 @@ func (msb metricsBuilder) addMetric(name string, t pdata.MetricDataType, isMonot
 	switch t {
 	case pdata.MetricDataTypeDoubleSum:
 		sum := metric.DoubleSum()
+		sum.SetIsMonotonic(isMonotonic)
+		sum.SetAggregationTemporality(pdata.AggregationTemporalityCumulative)
+	case pdata.MetricDataTypeIntSum:
+		sum := metric.IntSum()
 		sum.SetIsMonotonic(isMonotonic)
 		sum.SetAggregationTemporality(pdata.AggregationTemporalityCumulative)
 	}

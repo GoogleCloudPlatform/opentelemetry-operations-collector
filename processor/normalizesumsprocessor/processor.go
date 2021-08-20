@@ -109,18 +109,18 @@ func (nsp *NormalizeSumsProcessor) processMetric(resource pdata.Resource, metric
 
 func (nsp *NormalizeSumsProcessor) processDoubleSumMetric(resource pdata.Resource, metric pdata.Metric) int {
 	dps := metric.DoubleSum().DataPoints()
-	for i := 0; i < dps.Len(); {
-		dp := dps.At(i)
-		// Only transform data when the StartTimestamp was not set
-		if dp.StartTimestamp() == 0 {
-			reportData := nsp.processDoubleSumDataPoint(dp, resource, metric)
+
+	// Only transform data when the StartTimestamp was not set
+	if dps.Len() > 0 && dps.At(0).StartTimestamp() == 0 {
+		for i := 0; i < dps.Len(); {
+			reportData := nsp.processDoubleSumDataPoint(dps.At(i), resource, metric)
 
 			if !reportData {
 				removeDoubleDataPointAt(dps, i)
 				continue
 			}
+			i++
 		}
-		i++
 	}
 
 	return dps.Len()
@@ -128,18 +128,18 @@ func (nsp *NormalizeSumsProcessor) processDoubleSumMetric(resource pdata.Resourc
 
 func (nsp *NormalizeSumsProcessor) processIntSumMetric(resource pdata.Resource, metric pdata.Metric) int {
 	dps := metric.IntSum().DataPoints()
-	for i := 0; i < dps.Len(); {
-		dp := dps.At(i)
-		// Only transform data when the StartTimestamp was not set
-		if dp.StartTimestamp() == 0 {
-			reportData := nsp.processIntSumDataPoint(dp, resource, metric)
+
+	// Only transform data when the StartTimestamp was not set
+	if dps.Len() > 0 && dps.At(0).StartTimestamp() == 0 {
+		for i := 0; i < dps.Len(); {
+			reportData := nsp.processIntSumDataPoint(dps.At(i), resource, metric)
 
 			if !reportData {
 				removeIntDataPointAt(dps, i)
 				continue
 			}
+			i++
 		}
-		i++
 	}
 
 	return dps.Len()

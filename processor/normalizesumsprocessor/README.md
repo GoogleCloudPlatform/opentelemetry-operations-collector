@@ -15,17 +15,8 @@ favor of providing only accurate data representing the sum from a known point
 
 ## Configuration
 
-List the metrics being transformed under 'transforms'.
-
-```yaml
-normalizesums:
-  transforms:
-    - metric_name: <metric_name>
-    - metric_name: <another_metric_name>
-```
-
-
-If you do not provide a transforms list, any Sum type metrics found will be transformed
+No configuration is required, all sum metrics with a 0 (unset) start timestamp
+will be normalized.
 
 ```yaml
 normalizesums:

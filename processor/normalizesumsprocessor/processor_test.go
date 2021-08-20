@@ -109,39 +109,22 @@ func generateNoTransformMetrics(startTime int64) []pdata.Metrics {
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
 
-	mb1 := b.addMetric("m1", pdata.MetricDataTypeIntGauge, true)
-	mb1.addIntDataPoint(1, map[string]string{}, startTime, 0)
-	mb1.addIntDataPoint(2, map[string]string{}, startTime+1000, 0)
-
-	mb2 := b.addMetric("m2", pdata.MetricDataTypeDoubleGauge, true)
-	mb2.addDoubleDataPoint(3, map[string]string{}, startTime, 0)
-	mb2.addDoubleDataPoint(4, map[string]string{}, startTime+1000, 0)
-
-	mb3 := b.addMetric("m3", pdata.MetricDataTypeDoubleGauge, false)
-	mb3.addDoubleDataPoint(5, map[string]string{}, startTime, 0)
-	mb3.addDoubleDataPoint(6, map[string]string{}, startTime+1000, 0)
-
-	rmb.Build().CopyTo(input.ResourceMetrics())
-	return []pdata.Metrics{input}
-}
-
-func generateSimpleInput(startTime int64) []pdata.Metrics {
-	input := pdata.NewMetrics()
-
-	rmb := newResourceMetricsBuilder()
-	b := rmb.addResourceMetrics(nil)
-
 	mb1 := b.addMetric("m1", pdata.MetricDataTypeIntSum, true)
-	mb1.addIntDataPoint(1, map[string]string{}, startTime, 0)
-	mb1.addIntDataPoint(2, map[string]string{}, startTime+1000, 0)
+	mb1.addIntDataPoint(1, map[string]string{}, startTime+1000, startTime)
+	mb1.addIntDataPoint(5, map[string]string{}, startTime+2000, startTime)
+	mb1.addIntDataPoint(2, map[string]string{}, startTime+3000, startTime+2000)
 
 	mb2 := b.addMetric("m2", pdata.MetricDataTypeDoubleSum, true)
-	mb2.addDoubleDataPoint(3, map[string]string{}, startTime, 0)
-	mb2.addDoubleDataPoint(4, map[string]string{}, startTime+1000, 0)
+	mb2.addDoubleDataPoint(3, map[string]string{}, startTime+6000, startTime)
+	mb2.addDoubleDataPoint(4, map[string]string{}, startTime+7000, startTime)
 
-	mb3 := b.addMetric("m3", pdata.MetricDataTypeDoubleGauge, false)
-	mb3.addDoubleDataPoint(5, map[string]string{}, startTime, 0)
-	mb3.addDoubleDataPoint(6, map[string]string{}, startTime+1000, 0)
+	mb3 := b.addMetric("m3", pdata.MetricDataTypeIntGauge, false)
+	mb3.addIntDataPoint(5, map[string]string{}, startTime, 0)
+	mb3.addIntDataPoint(4, map[string]string{}, startTime+1000, 0)
+
+	mb4 := b.addMetric("m4", pdata.MetricDataTypeDoubleGauge, false)
+	mb4.addDoubleDataPoint(50000.2, map[string]string{}, startTime, 0)
+	mb4.addDoubleDataPoint(11, map[string]string{}, startTime+1000, 0)
 
 	rmb.Build().CopyTo(input.ResourceMetrics())
 	return []pdata.Metrics{input}

@@ -127,8 +127,8 @@ func (nsp *NormalizeSumsProcessor) processDoubleSumMetric(resource pdata.Resourc
 				removeDoubleDataPointAt(dps, i)
 				continue
 			}
-			i++
 		}
+		i++
 	}
 
 	return dps.Len()
@@ -137,11 +137,14 @@ func (nsp *NormalizeSumsProcessor) processDoubleSumMetric(resource pdata.Resourc
 func (nsp *NormalizeSumsProcessor) processIntSumMetric(resource pdata.Resource, metric pdata.Metric) int {
 	dps := metric.IntSum().DataPoints()
 	for i := 0; i < dps.Len(); {
-		reportData := nsp.processIntSumDataPoint(dps.At(i), resource, metric)
+		dp := dps.At(i)
+		if dp.StartTimestamp() == 0 {
+			reportData := nsp.processIntSumDataPoint(dp, resource, metric)
 
-		if !reportData {
-			removeIntDataPointAt(dps, i)
-			continue
+			if !reportData {
+				removeIntDataPointAt(dps, i)
+				continue
+			}
 		}
 		i++
 	}

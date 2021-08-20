@@ -75,7 +75,7 @@ func (nsp *NormalizeSumsProcessor) transformMetrics(rms pdata.ResourceMetrics) [
 		newSlice := pdata.NewMetricSlice()
 		for k := 0; k < ilm.Len(); k++ {
 			metric := ilm.At(k)
-			if nsp.shouldTransformMetric(metric) {
+			if metric.DataType() == pdata.MetricDataTypeIntSum || metric.DataType() == pdata.MetricDataTypeDoubleSum {
 				keepMetric, err := nsp.processMetric(rms.Resource(), metric)
 				if err != nil {
 					errors = append(errors, err)
@@ -96,15 +96,6 @@ func (nsp *NormalizeSumsProcessor) transformMetrics(rms pdata.ResourceMetrics) [
 	return errors
 }
 
-func (nsp *NormalizeSumsProcessor) shouldTransformMetric(metric pdata.Metric) bool {
-	// Only consider Sums
-	if metric.DataType() == pdata.MetricDataTypeIntSum || metric.DataType() == pdata.MetricDataTypeDoubleSum {
-		return true
-	}
-
-	return false
-}
-
 func (nsp *NormalizeSumsProcessor) processMetric(resource pdata.Resource, metric pdata.Metric) (bool, error) {
 	switch t := metric.DataType(); t {
 	case pdata.MetricDataTypeDoubleSum:
@@ -120,6 +111,7 @@ func (nsp *NormalizeSumsProcessor) processDoubleSumMetric(resource pdata.Resourc
 	dps := metric.DoubleSum().DataPoints()
 	for i := 0; i < dps.Len(); {
 		dp := dps.At(i)
+		// Only transform data when the StartTimestamp was not set
 		if dp.StartTimestamp() == 0 {
 			reportData := nsp.processDoubleSumDataPoint(dp, resource, metric)
 
@@ -138,6 +130,7 @@ func (nsp *NormalizeSumsProcessor) processIntSumMetric(resource pdata.Resource, 
 	dps := metric.IntSum().DataPoints()
 	for i := 0; i < dps.Len(); {
 		dp := dps.At(i)
+		// Only transform data when the StartTimestamp was not set
 		if dp.StartTimestamp() == 0 {
 			reportData := nsp.processIntSumDataPoint(dp, resource, metric)
 

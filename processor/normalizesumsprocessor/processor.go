@@ -29,8 +29,7 @@ import (
 // where it is available to all receivers.
 // see: https://github.com/open-telemetry/opentelemetry-collector/blob/6e5beaf43b325e63ec6f1e864d9746a0d051cc35/receiver/prometheusreceiver/internal/metrics_adjuster.go#L187
 type NormalizeSumsProcessor struct {
-	logger     *zap.Logger
-	transforms []Transform
+	logger *zap.Logger
 
 	history map[string]*startPoint
 }
@@ -43,11 +42,10 @@ type startPoint struct {
 	lastDoubleValue float64
 }
 
-func newNormalizeSumsProcessor(logger *zap.Logger, transforms []Transform) *NormalizeSumsProcessor {
+func newNormalizeSumsProcessor(logger *zap.Logger) *NormalizeSumsProcessor {
 	return &NormalizeSumsProcessor{
-		logger:     logger,
-		transforms: transforms,
-		history:    make(map[string]*startPoint),
+		logger:  logger,
+		history: make(map[string]*startPoint),
 	}
 }
 
@@ -100,20 +98,8 @@ func (nsp *NormalizeSumsProcessor) transformMetrics(rms pdata.ResourceMetrics) [
 
 func (nsp *NormalizeSumsProcessor) shouldTransformMetric(metric pdata.Metric) bool {
 	// Only consider Sums
-	if metric.DataType() != pdata.MetricDataTypeIntSum && metric.DataType() != pdata.MetricDataTypeDoubleSum {
-		return false
-	}
-
-	// If transforms is empty, transform all Sums
-	if nsp.transforms == nil {
+	if metric.DataType() == pdata.MetricDataTypeIntSum || metric.DataType() == pdata.MetricDataTypeDoubleSum {
 		return true
-	}
-
-	// Check through the list of transforms for the named metric
-	for _, transform := range nsp.transforms {
-		if transform.MetricName == metric.Name() {
-			return true
-		}
 	}
 
 	return false
@@ -133,13 +119,16 @@ func (nsp *NormalizeSumsProcessor) processMetric(resource pdata.Resource, metric
 func (nsp *NormalizeSumsProcessor) processDoubleSumMetric(resource pdata.Resource, metric pdata.Metric) int {
 	dps := metric.DoubleSum().DataPoints()
 	for i := 0; i < dps.Len(); {
-		reportData := nsp.processDoubleSumDataPoint(dps.At(i), resource, metric)
+		dp := dps.At(i)
+		if dp.StartTimestamp() == 0 {
+			reportData := nsp.processDoubleSumDataPoint(dp, resource, metric)
 
-		if !reportData {
-			removeDoubleDataPointAt(dps, i)
-			continue
+			if !reportData {
+				removeDoubleDataPointAt(dps, i)
+				continue
+			}
+			i++
 		}
-		i++
 	}
 
 	return dps.Len()

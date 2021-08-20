@@ -32,77 +32,49 @@ import (
 )
 
 type testCase struct {
-	name       string
-	inputs     []pdata.Metrics
-	expected   []pdata.Metrics
-	transforms []Transform
+	name     string
+	inputs   []pdata.Metrics
+	expected []pdata.Metrics
 }
 
 func TestNormalizeSumsProcessor(t *testing.T) {
 	testStart := time.Now().Unix()
 	tests := []testCase{
 		{
-			name:       "simple-case",
-			inputs:     generateSimpleInput(testStart),
-			expected:   generateSimpleInput(testStart),
-			transforms: make([]Transform, 0),
+			name:     "no-transform-case",
+			inputs:   generateNoTransformMetrics(testStart),
+			expected: generateNoTransformMetrics(testStart),
 		},
 		{
 			name:     "removed-metric-case",
 			inputs:   generateRemoveInput(testStart),
 			expected: generateRemoveOutput(testStart),
-			transforms: []Transform{
-				{
-					MetricName: "m1",
-				},
-			},
 		},
 		{
-			name:     "one-metric-happy-case",
-			inputs:   generateSimpleInput(testStart),
-			expected: generateOneMetricHappyCaseOutput(testStart),
-			transforms: []Transform{
-				{
-					MetricName: "m1",
-				},
-			},
+			name:     "transform-all-happy-case",
+			inputs:   generateLabelledInput(testStart),
+			expected: generateLabelledOutput(testStart),
 		},
 		{
-			name:       "transform-all-happy-case",
-			inputs:     generateLabelledInput(testStart),
-			expected:   generateLabelledOutput(testStart),
-			transforms: nil,
-		},
-		{
-			name:       "transform-all-label-separated-case",
-			inputs:     generateSeparatedLabelledInput(testStart),
-			expected:   generateSeparatedLabelledOutput(testStart),
-			transforms: nil,
+			name:     "transform-all-label-separated-case",
+			inputs:   generateSeparatedLabelledInput(testStart),
+			expected: generateSeparatedLabelledOutput(testStart),
 		},
 		{
 			name:     "more-complex-case",
 			inputs:   generateComplexInput(testStart),
 			expected: generateComplexOutput(testStart),
-			transforms: []Transform{
-				{
-					MetricName: "m1",
-				},
-				{
-					MetricName: "m2",
-				},
-			},
 		},
 		{
-			name:       "multiple-resource-case",
-			inputs:     generateMultipleResourceInput(testStart),
-			expected:   generateMultipleResourceOutput(testStart),
-			transforms: nil,
+			name:     "multiple-resource-case",
+			inputs:   generateMultipleResourceInput(testStart),
+			expected: generateMultipleResourceOutput(testStart),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			nsp := newNormalizeSumsProcessor(zap.NewExample(), tt.transforms)
+			nsp := newNormalizeSumsProcessor(zap.NewExample())
 
 			tmn := &consumertest.MetricsSink{}
 			id := config.NewID(typeStr)
@@ -110,7 +82,6 @@ func TestNormalizeSumsProcessor(t *testing.T) {
 			rmp, err := processorhelper.NewMetricsProcessor(
 				&Config{
 					ProcessorSettings: &settings,
-					Transforms:        tt.transforms,
 				},
 				tmn,
 				nsp,
@@ -130,6 +101,28 @@ func TestNormalizeSumsProcessor(t *testing.T) {
 			requireEqual(t, tt.expected, tmn.AllMetrics())
 		})
 	}
+}
+
+func generateNoTransformMetrics(startTime int64) []pdata.Metrics {
+	input := pdata.NewMetrics()
+
+	rmb := newResourceMetricsBuilder()
+	b := rmb.addResourceMetrics(nil)
+
+	mb1 := b.addMetric("m1", pdata.MetricDataTypeIntGauge, true)
+	mb1.addIntDataPoint(1, map[string]string{}, startTime, 0)
+	mb1.addIntDataPoint(2, map[string]string{}, startTime+1000, 0)
+
+	mb2 := b.addMetric("m2", pdata.MetricDataTypeDoubleGauge, true)
+	mb2.addDoubleDataPoint(3, map[string]string{}, startTime, 0)
+	mb2.addDoubleDataPoint(4, map[string]string{}, startTime+1000, 0)
+
+	mb3 := b.addMetric("m3", pdata.MetricDataTypeDoubleGauge, false)
+	mb3.addDoubleDataPoint(5, map[string]string{}, startTime, 0)
+	mb3.addDoubleDataPoint(6, map[string]string{}, startTime+1000, 0)
+
+	rmb.Build().CopyTo(input.ResourceMetrics())
+	return []pdata.Metrics{input}
 }
 
 func generateSimpleInput(startTime int64) []pdata.Metrics {
@@ -286,28 +279,6 @@ func generateSeparatedLabelledOutput(startTime int64) []pdata.Metrics {
 	return []pdata.Metrics{output}
 }
 
-func generateOneMetricHappyCaseOutput(startTime int64) []pdata.Metrics {
-	output := pdata.NewMetrics()
-
-	rmb := newResourceMetricsBuilder()
-	b := rmb.addResourceMetrics(nil)
-
-	mb1 := b.addMetric("m1", pdata.MetricDataTypeIntSum, true)
-	// mb1.addIntDataPoint(1, map[string]string{"label1": "value1"}, startTime)
-	mb1.addIntDataPoint(1, map[string]string{}, startTime+1000, startTime)
-
-	mb2 := b.addMetric("m2", pdata.MetricDataTypeDoubleSum, true)
-	mb2.addDoubleDataPoint(3, map[string]string{}, startTime, 0)
-	mb2.addDoubleDataPoint(4, map[string]string{}, startTime+1000, 0)
-
-	mb3 := b.addMetric("m3", pdata.MetricDataTypeDoubleGauge, false)
-	mb3.addDoubleDataPoint(5, map[string]string{}, startTime, 0)
-	mb3.addDoubleDataPoint(6, map[string]string{}, startTime+1000, 0)
-
-	rmb.Build().CopyTo(output.ResourceMetrics())
-	return []pdata.Metrics{output}
-}
-
 func generateRemoveInput(startTime int64) []pdata.Metrics {
 	input := pdata.NewMetrics()
 
@@ -336,8 +307,8 @@ func generateRemoveOutput(startTime int64) []pdata.Metrics {
 	b := rmb.addResourceMetrics(nil)
 
 	mb2 := b.addMetric("m2", pdata.MetricDataTypeDoubleSum, true)
-	mb2.addDoubleDataPoint(3, map[string]string{}, startTime, 0)
-	mb2.addDoubleDataPoint(4, map[string]string{}, startTime+1000, 0)
+	// mb2.addDoubleDataPoint(3, map[string]string{}, startTime, 0)
+	mb2.addDoubleDataPoint(1, map[string]string{}, startTime+1000, startTime)
 
 	mb3 := b.addMetric("m3", pdata.MetricDataTypeDoubleGauge, false)
 	mb3.addDoubleDataPoint(5, map[string]string{}, startTime, 0)

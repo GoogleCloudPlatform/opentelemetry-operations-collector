@@ -31,7 +31,7 @@ func TestLoadConfig(t *testing.T) {
 	factory := NewFactory()
 	factories.Processors[typeStr] = factory
 
-	cfg, err := configtest.LoadConfigAndValidate(path.Join(".", "testdata", "transform_cpu_config.yaml"), factories)
+	cfg, err := configtest.LoadConfigAndValidate(path.Join(".", "testdata", "transform_all_config.yaml"), factories)
 	assert.NoError(t, err)
 	assert.NotNil(t, cfg)
 
@@ -40,24 +40,6 @@ func TestLoadConfig(t *testing.T) {
 	p1 := cfg.Processors[id]
 	expectedCfg := &Config{
 		ProcessorSettings: &settings,
-		Transforms: []Transform{
-			{
-				MetricName: "cpu",
-			},
-		},
-	}
-	assert.Equal(t, p1, expectedCfg)
-
-	cfg, err = configtest.LoadConfigAndValidate(path.Join(".", "testdata", "transform_all_config.yaml"), factories)
-	assert.NoError(t, err)
-	assert.NotNil(t, cfg)
-
-	id = config.NewID(typeStr)
-	settings = config.NewProcessorSettings(id)
-	p1 = cfg.Processors[id]
-	expectedCfg = &Config{
-		ProcessorSettings: &settings,
-		Transforms:        nil,
 	}
 	assert.Equal(t, p1, expectedCfg)
 }

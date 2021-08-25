@@ -33,6 +33,8 @@ BUILD_X1 := -X $(BUILD_INFO_IMPORT_PATH).GitHash=$(GIT_SHA)
 BUILD_X2 := -X $(BUILD_INFO_IMPORT_PATH).Version=$(PKG_VERSION)
 LD_FLAGS := -ldflags "${BUILD_X1} ${BUILD_X2}"
 
+TOOLS_DIR := internal/tools
+
 .EXPORT_ALL_VARIABLES:
 
 .DEFAULT_GOAL := presubmit
@@ -43,11 +45,11 @@ LD_FLAGS := -ldflags "${BUILD_X1} ${BUILD_X2}"
 
 .PHONY: install-tools
 install-tools:
-	go get github.com/client9/misspell/cmd/misspell
-	go get github.com/golangci/golangci-lint/cmd/golangci-lint
-	go get github.com/google/addlicense
-	go get github.com/google/googet/goopack
-	go get github.com/pavius/impi/cmd/impi
+	cd $(TOOLS_DIR) && go install github.com/client9/misspell/cmd/misspell
+	cd $(TOOLS_DIR) && go install github.com/golangci/golangci-lint/cmd/golangci-lint
+	cd $(TOOLS_DIR) && go install github.com/google/addlicense
+	cd $(TOOLS_DIR) && go install github.com/google/googet/goopack
+	cd $(TOOLS_DIR) && go install github.com/pavius/impi/cmd/impi
 
 # --------------------------
 #  Helper Commands

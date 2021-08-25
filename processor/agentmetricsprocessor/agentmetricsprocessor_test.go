@@ -95,6 +95,7 @@ func TestAgentMetricsProcessor(t *testing.T) {
 				amp,
 				processorhelper.WithCapabilities(processorCapabilities))
 			require.NoError(t, err)
+			assert.True(t, rmp.Capabilities().MutatesData)
 
 			amp.prevCPUTimeValues = tt.prevCPUTimeValuesInput
 			if tt.prevOpInput != nil {

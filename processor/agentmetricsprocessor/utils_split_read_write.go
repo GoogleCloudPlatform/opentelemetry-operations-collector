@@ -17,7 +17,7 @@ package agentmetricsprocessor
 import (
 	"fmt"
 
-	"go.opentelemetry.io/collector/consumer/pdata"
+	"go.opentelemetry.io/collector/model/pdata"
 )
 
 // The following code splits metrics with read/write direction labels into

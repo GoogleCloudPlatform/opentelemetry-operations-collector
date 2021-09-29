@@ -22,6 +22,7 @@ require (
 	github.com/stretchr/testify v1.7.0
 	github.com/tklauser/go-sysconf v0.3.6 // indirect
 	go.opentelemetry.io/collector v0.36.0
+	go.opentelemetry.io/collector/model v0.36.0 // indirect
 	go.uber.org/zap v1.19.1
 	golang.org/x/sys v0.0.0-20210908233432-aa78b53d3365
 )

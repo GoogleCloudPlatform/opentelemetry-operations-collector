@@ -15,7 +15,7 @@
 package agentmetricsprocessor
 
 import (
-	"go.opentelemetry.io/collector/consumer/pdata"
+	"go.opentelemetry.io/collector/model/pdata"
 )
 
 // The following code converts metrics of OpenTelemetry Counter (sum) type

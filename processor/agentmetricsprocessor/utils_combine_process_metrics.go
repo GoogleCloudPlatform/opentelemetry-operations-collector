@@ -19,8 +19,8 @@ import (
 	"strconv"
 	"strings"
 
-	"go.opentelemetry.io/collector/consumer/pdata"
-	"go.opentelemetry.io/collector/translator/conventions"
+	"go.opentelemetry.io/collector/model/pdata"
+	conventions "go.opentelemetry.io/collector/model/semconv/v1.5.0"
 )
 
 // The following code performs a translation from metrics that store process
@@ -236,7 +236,7 @@ func appendAttributesToLabels(labels pdata.StringMap, attributes pdata.Attribute
 func toCloudMonitoringLabel(resourceAttributeKey string) string {
 	// see https://cloud.google.com/monitoring/api/metrics_agent#agent-processes
 	switch resourceAttributeKey {
-	case conventions.AttributeProcessID:
+	case conventions.AttributeProcessPID:
 		return "pid"
 	case conventions.AttributeProcessExecutableName:
 		return "command"

@@ -19,7 +19,7 @@ import (
 	"sort"
 	"strings"
 
-	"go.opentelemetry.io/collector/consumer/pdata"
+	"go.opentelemetry.io/collector/model/pdata"
 )
 
 // The following code calculates a new utilization metric from

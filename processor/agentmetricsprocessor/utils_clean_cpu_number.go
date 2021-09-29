@@ -17,7 +17,7 @@ package agentmetricsprocessor
 import (
 	"strings"
 
-	"go.opentelemetry.io/collector/consumer/pdata"
+	"go.opentelemetry.io/collector/model/pdata"
 )
 
 func cleanCPUNumber(rms pdata.ResourceMetricsSlice) error {

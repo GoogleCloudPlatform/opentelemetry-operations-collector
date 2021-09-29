@@ -14,7 +14,7 @@
 
 package agentmetricsprocessor
 
-import "go.opentelemetry.io/collector/consumer/pdata"
+import "go.opentelemetry.io/collector/model/pdata"
 
 // https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/metrics/semantic_conventions/system-metrics.md#systemdisk---disk-controller-metrics
 const opName = "system.disk.operations"

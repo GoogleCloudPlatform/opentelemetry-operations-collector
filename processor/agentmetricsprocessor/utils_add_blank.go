@@ -14,7 +14,7 @@
 
 package agentmetricsprocessor
 
-import "go.opentelemetry.io/collector/consumer/pdata"
+import "go.opentelemetry.io/collector/model/pdata"
 
 const labelName = "blank"
 

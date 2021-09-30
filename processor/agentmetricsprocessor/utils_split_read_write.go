@@ -110,7 +110,7 @@ func splitReadWriteBytesMetric(metric pdata.Metric) (read pdata.Metric, write pd
 func appendInt64DataPoints(metricName string, idps, read, write pdata.IntDataPointSlice) error {
 	for i := 0; i < idps.Len(); i++ {
 		idp := idps.At(i)
-		labels := idp.LabelsMap()
+		labels := idp.Attributes()
 
 		dir, ok := labels.Get(directionLabel)
 		if !ok {
@@ -134,7 +134,7 @@ func appendInt64DataPoints(metricName string, idps, read, write pdata.IntDataPoi
 func appendDoubleDataPoints(metricName string, ddps, read, write pdata.DoubleDataPointSlice) error {
 	for i := 0; i < ddps.Len(); i++ {
 		ddp := ddps.At(i)
-		labels := ddp.LabelsMap()
+		labels := ddp.Attributes()
 
 		dir, ok := labels.Get(directionLabel)
 		if !ok {

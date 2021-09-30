@@ -179,7 +179,7 @@ type metricBuilder struct {
 
 func (mb metricBuilder) addIntDataPoint(value int64, labels map[string]string) metricBuilder {
 	idp := pdata.NewIntDataPoint()
-	idp.LabelsMap().InitFromMap(labels)
+	idp.Attributes().InitFromMap(labels)
 	idp.SetValue(value)
 	idp.SetTimestamp(mb.timestamp)
 
@@ -195,7 +195,7 @@ func (mb metricBuilder) addIntDataPoint(value int64, labels map[string]string) m
 
 func (mb metricBuilder) addDoubleDataPoint(value float64, labels map[string]string) metricBuilder {
 	ddp := pdata.NewDoubleDataPoint()
-	ddp.LabelsMap().InitFromMap(labels)
+	ddp.Attributes().InitFromMap(labels)
 	ddp.SetValue(value)
 	ddp.SetTimestamp(mb.timestamp)
 
@@ -282,18 +282,18 @@ func assertEqualIntDataPointSlice(t *testing.T, metricName string, idpsAct, idps
 	// build a map of expected data points
 	idpsExpMap := make(map[string]pdata.IntDataPoint, idpsExp.Len())
 	for k := 0; k < idpsExp.Len(); k++ {
-		idpsExpMap[labelsAsKey(idpsExp.At(k).LabelsMap())] = idpsExp.At(k)
+		idpsExpMap[labelsAsKey(idpsExp.At(k).Attributes())] = idpsExp.At(k)
 	}
 
 	for l := 0; l < idpsAct.Len(); l++ {
 		idpAct := idpsAct.At(l)
 
-		idpExp, ok := idpsExpMap[labelsAsKey(idpAct.LabelsMap())]
+		idpExp, ok := idpsExpMap[labelsAsKey(idpAct.Attributes())]
 		if !ok {
-			require.Failf(t, fmt.Sprintf("no data point for %s", labelsAsKey(idpAct.LabelsMap())), "Metric %s", metricName)
+			require.Failf(t, fmt.Sprintf("no data point for %s", labelsAsKey(idpAct.Attributes())), "Metric %s", metricName)
 		}
 
-		assert.Equalf(t, idpExp.LabelsMap().Sort(), idpAct.LabelsMap().Sort(), "Metric %s", metricName)
+		assert.Equalf(t, idpExp.Attributes().Sort(), idpAct.Attributes().Sort(), "Metric %s", metricName)
 		assert.Equalf(t, idpExp.StartTimestamp(), idpAct.StartTimestamp(), "Metric %s", metricName)
 		assert.Equalf(t, idpExp.Timestamp(), idpAct.Timestamp(), "Metric %s", metricName)
 		assert.Equalf(t, idpExp.Value(), idpAct.Value(), "Metric %s", metricName)
@@ -306,22 +306,22 @@ func assertEqualDoubleDataPointSlice(t *testing.T, metricName string, ddpsAct, d
 	// build a map of expected data points
 	ddpsExpMap := make(map[string]pdata.DoubleDataPoint, ddpsExp.Len())
 	for k := 0; k < ddpsExp.Len(); k++ {
-		ddpsExpMap[labelsAsKey(ddpsExp.At(k).LabelsMap())] = ddpsExp.At(k)
+		ddpsExpMap[labelsAsKey(ddpsExp.At(k).Attributes())] = ddpsExp.At(k)
 	}
 
 	for l := 0; l < ddpsAct.Len(); l++ {
 		ddpAct := ddpsAct.At(l)
 
-		key := labelsAsKey(ddpAct.LabelsMap())
+		key := labelsAsKey(ddpAct.Attributes())
 
 		ddpExp, ok := ddpsExpMap[key]
 		if !ok {
 			require.Failf(t, fmt.Sprintf("no data point for %s", key), "Metric %s", metricName)
 		}
 
-		assert.Equalf(t, ddpExp.LabelsMap().Sort(), ddpAct.LabelsMap().Sort(), "Labels for metric %s point %d labels %q", metricName, l, labelsAsKey(ddpAct.LabelsMap()))
-		assert.Equalf(t, ddpExp.StartTimestamp(), ddpAct.StartTimestamp(), "StartTimestamp for metric %s point %d labels %q", metricName, l, labelsAsKey(ddpAct.LabelsMap()))
-		assert.Equalf(t, ddpExp.Timestamp(), ddpAct.Timestamp(), "Timestamp for metric %s point %d labels %q", metricName, l, labelsAsKey(ddpAct.LabelsMap()))
-		assert.InDeltaf(t, ddpExp.Value(), ddpAct.Value(), 0.00000001, "Value for metric %s point %d labels %q", metricName, l, labelsAsKey(ddpAct.LabelsMap()))
+		assert.Equalf(t, ddpExp.Attributes().Sort(), ddpAct.Attributes().Sort(), "Labels for metric %s point %d labels %q", metricName, l, labelsAsKey(ddpAct.Attributes()))
+		assert.Equalf(t, ddpExp.StartTimestamp(), ddpAct.StartTimestamp(), "StartTimestamp for metric %s point %d labels %q", metricName, l, labelsAsKey(ddpAct.Attributes()))
+		assert.Equalf(t, ddpExp.Timestamp(), ddpAct.Timestamp(), "Timestamp for metric %s point %d labels %q", metricName, l, labelsAsKey(ddpAct.Attributes()))
+		assert.InDeltaf(t, ddpExp.Value(), ddpAct.Value(), 0.00000001, "Value for metric %s point %d labels %q", metricName, l, labelsAsKey(ddpAct.Attributes()))
 	}
 }

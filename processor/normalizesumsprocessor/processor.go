@@ -146,7 +146,7 @@ func (nsp *NormalizeSumsProcessor) processIntSumMetric(resource pdata.Resource, 
 }
 
 func (nsp *NormalizeSumsProcessor) processDoubleSumDataPoint(dp pdata.DoubleDataPoint, resource pdata.Resource, metric pdata.Metric) bool {
-	metricIdentifier := dataPointIdentifier(resource, metric, dp.LabelsMap())
+	metricIdentifier := dataPointIdentifier(resource, metric, dp.Attributes())
 
 	start := nsp.history[metricIdentifier]
 	// If this is the first time we've observed this unique metric,
@@ -195,7 +195,7 @@ func (nsp *NormalizeSumsProcessor) processDoubleSumDataPoint(dp pdata.DoubleData
 }
 
 func (nsp *NormalizeSumsProcessor) processIntSumDataPoint(dp pdata.IntDataPoint, resource pdata.Resource, metric pdata.Metric) bool {
-	metricIdentifier := dataPointIdentifier(resource, metric, dp.LabelsMap())
+	metricIdentifier := dataPointIdentifier(resource, metric, dp.Attributes())
 
 	start := nsp.history[metricIdentifier]
 	// If this is the first time we've observed this unique metric,

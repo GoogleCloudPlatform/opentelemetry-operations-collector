@@ -184,7 +184,7 @@ func (cm convertedMetric) append(metric pdata.Metric, resource pdata.Resource) e
 
 func appendIntDataSlice(idps, converted pdata.IntDataPointSlice, resource pdata.Resource) error {
 	for i := 0; i < idps.Len(); i++ {
-		err := appendAttributesToLabels(idps.At(i).LabelsMap(), resource.Attributes())
+		err := appendAttributesToLabels(idps.At(i).Attributes(), resource.Attributes())
 		if err != nil {
 			return err
 		}
@@ -195,7 +195,7 @@ func appendIntDataSlice(idps, converted pdata.IntDataPointSlice, resource pdata.
 
 func appendDoubleDataSlice(ddps, converted pdata.DoubleDataPointSlice, resource pdata.Resource) error {
 	for i := 0; i < ddps.Len(); i++ {
-		err := appendAttributesToLabels(ddps.At(i).LabelsMap(), resource.Attributes())
+		err := appendAttributesToLabels(ddps.At(i).Attributes(), resource.Attributes())
 		if err != nil {
 			return err
 		}

@@ -449,7 +449,7 @@ func (mb metricBuilder) addDoubleDataPoint(value float64, labels map[string]stri
 	switch mb.metric.DataType() {
 	case pdata.MetricDataTypeDoubleSum:
 		ddp := mb.metric.DoubleSum().DataPoints().AppendEmpty()
-		ddp.LabelsMap().InitFromMap(labels)
+		ddp.Attributes().InitFromMap(labels)
 		ddp.SetValue(value)
 		ddp.SetTimestamp(pdata.TimestampFromTime(time.Unix(timestamp, 0)))
 		if startTimestamp > 0 {
@@ -457,7 +457,7 @@ func (mb metricBuilder) addDoubleDataPoint(value float64, labels map[string]stri
 		}
 	case pdata.MetricDataTypeDoubleGauge:
 		ddp := mb.metric.DoubleGauge().DataPoints().AppendEmpty()
-		ddp.LabelsMap().InitFromMap(labels)
+		ddp.Attributes().InitFromMap(labels)
 		ddp.SetValue(value)
 		ddp.SetTimestamp(pdata.TimestampFromTime(time.Unix(timestamp, 0)))
 		if startTimestamp > 0 {
@@ -470,7 +470,7 @@ func (mb metricBuilder) addIntDataPoint(value int64, labels map[string]string, t
 	switch mb.metric.DataType() {
 	case pdata.MetricDataTypeIntSum:
 		ddp := mb.metric.IntSum().DataPoints().AppendEmpty()
-		ddp.LabelsMap().InitFromMap(labels)
+		ddp.Attributes().InitFromMap(labels)
 		ddp.SetValue(value)
 		ddp.SetTimestamp(pdata.TimestampFromTime(time.Unix(timestamp, 0)))
 		if startTimestamp > 0 {
@@ -478,7 +478,7 @@ func (mb metricBuilder) addIntDataPoint(value int64, labels map[string]string, t
 		}
 	case pdata.MetricDataTypeIntGauge:
 		ddp := mb.metric.IntGauge().DataPoints().AppendEmpty()
-		ddp.LabelsMap().InitFromMap(labels)
+		ddp.Attributes().InitFromMap(labels)
 		ddp.SetValue(value)
 		ddp.SetTimestamp(pdata.TimestampFromTime(time.Unix(timestamp, 0)))
 		if startTimestamp > 0 {
@@ -562,19 +562,19 @@ func requireEqualDoubleDataPointSlice(t *testing.T, metricName string, ddpsAct, 
 	ddpsExpMap := make(map[string]pdata.DoubleDataPoint, ddpsExp.Len())
 	for k := 0; k < ddpsExp.Len(); k++ {
 		ddpsExp := ddpsExp.At(k)
-		ddpsExpMap[dataPointKey(metricName, ddpsExp.LabelsMap(), ddpsExp.Timestamp(), ddpsExp.StartTimestamp())] = ddpsExp
+		ddpsExpMap[dataPointKey(metricName, ddpsExp.Attributes(), ddpsExp.Timestamp(), ddpsExp.StartTimestamp())] = ddpsExp
 	}
 
 	for l := 0; l < ddpsAct.Len(); l++ {
 		ddpAct := ddpsAct.At(l)
-		dpKey := dataPointKey(metricName, ddpAct.LabelsMap(), ddpAct.Timestamp(), ddpAct.StartTimestamp())
+		dpKey := dataPointKey(metricName, ddpAct.Attributes(), ddpAct.Timestamp(), ddpAct.StartTimestamp())
 
 		ddpExp, ok := ddpsExpMap[dpKey]
 		if !ok {
 			require.Failf(t, fmt.Sprintf("no data point for %s", dpKey), "Metric %s", metricName)
 		}
 
-		require.Equalf(t, ddpExp.LabelsMap().Sort(), ddpAct.LabelsMap().Sort(), "Metric %s", metricName)
+		require.Equalf(t, ddpExp.Attributes().Sort(), ddpAct.Attributes().Sort(), "Metric %s", metricName)
 		require.Equalf(t, ddpExp.StartTimestamp(), ddpAct.StartTimestamp(), "Metric %s", metricName)
 		require.Equalf(t, ddpExp.Timestamp(), ddpAct.Timestamp(), "Metric %s", metricName)
 		require.InDeltaf(t, ddpExp.Value(), ddpAct.Value(), 0.00000001, "Metric %s", metricName)
@@ -588,19 +588,19 @@ func requireEqualIntDataPointSlice(t *testing.T, metricName string, ddpsAct, ddp
 	ddpsExpMap := make(map[string]pdata.IntDataPoint, ddpsExp.Len())
 	for k := 0; k < ddpsExp.Len(); k++ {
 		ddpsExp := ddpsExp.At(k)
-		ddpsExpMap[dataPointKey(metricName, ddpsExp.LabelsMap(), ddpsExp.Timestamp(), ddpsExp.StartTimestamp())] = ddpsExp
+		ddpsExpMap[dataPointKey(metricName, ddpsExp.Attributes(), ddpsExp.Timestamp(), ddpsExp.StartTimestamp())] = ddpsExp
 	}
 
 	for l := 0; l < ddpsAct.Len(); l++ {
 		ddpAct := ddpsAct.At(l)
-		dpKey := dataPointKey(metricName, ddpAct.LabelsMap(), ddpAct.Timestamp(), ddpAct.StartTimestamp())
+		dpKey := dataPointKey(metricName, ddpAct.Attributes(), ddpAct.Timestamp(), ddpAct.StartTimestamp())
 
 		ddpExp, ok := ddpsExpMap[dpKey]
 		if !ok {
 			require.Failf(t, fmt.Sprintf("no data point for %s", dpKey), "Metric %s", metricName)
 		}
 
-		require.Equalf(t, ddpExp.LabelsMap().Sort(), ddpAct.LabelsMap().Sort(), "Metric %s", metricName)
+		require.Equalf(t, ddpExp.Attributes().Sort(), ddpAct.Attributes().Sort(), "Metric %s", metricName)
 		require.Equalf(t, ddpExp.StartTimestamp(), ddpAct.StartTimestamp(), "Metric %s", metricName)
 		require.Equalf(t, ddpExp.Timestamp(), ddpAct.Timestamp(), "Metric %s", metricName)
 		require.InDeltaf(t, ddpExp.Value(), ddpAct.Value(), 0.00000001, "Metric %s", metricName)

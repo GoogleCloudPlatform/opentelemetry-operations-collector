@@ -32,8 +32,8 @@ type opKey struct {
 }
 
 type opData struct {
-	operations pdata.IntDataPoint
-	time       pdata.DoubleDataPoint
+	operations pdata.NumberDataPoint
+	time       pdata.NumberDataPoint
 	cumAvgTime float64
 }
 
@@ -113,18 +113,12 @@ func newMetricWithName(metric pdata.Metric, name string) pdata.Metric {
 	new.SetDataType(metric.DataType())
 
 	switch t := metric.DataType(); t {
-	case pdata.MetricDataTypeIntSum:
-		sum := new.IntSum()
-		sum.SetIsMonotonic(metric.IntSum().IsMonotonic())
-		sum.SetAggregationTemporality(metric.IntSum().AggregationTemporality())
-	case pdata.MetricDataTypeDoubleSum:
-		sum := new.DoubleSum()
-		sum.SetIsMonotonic(metric.DoubleSum().IsMonotonic())
-		sum.SetAggregationTemporality(metric.DoubleSum().AggregationTemporality())
-	case pdata.MetricDataTypeIntGauge:
-		new.IntGauge()
-	case pdata.MetricDataTypeDoubleGauge:
-		new.DoubleGauge()
+	case pdata.MetricDataTypeSum:
+		sum := new.Sum()
+		sum.SetIsMonotonic(metric.Sum().IsMonotonic())
+		sum.SetAggregationTemporality(metric.Sum().AggregationTemporality())
+	case pdata.MetricDataTypeGauge:
+		new.Gauge()
 	}
 
 	return new

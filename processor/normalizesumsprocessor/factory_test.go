@@ -25,9 +25,11 @@ import (
 )
 
 func TestCreateDefaultConfig(t *testing.T) {
-	cfg := createDefaultConfig()
-	assert.NoError(t, configcheck.ValidateConfig(cfg))
-	assert.NotNil(t, cfg)
+	m, err := component.MakeProcessorFactoryMap(NewFactory())
+	assert.NoError(t, err)
+	assert.NoError(t, configcheck.ValidateConfigFromFactories(component.Factories{
+		Processors: m,
+	}))
 }
 
 func TestCreateProcessor(t *testing.T) {

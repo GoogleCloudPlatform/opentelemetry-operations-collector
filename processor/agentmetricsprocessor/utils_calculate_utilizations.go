@@ -196,9 +196,9 @@ func calculateUtilizationFromNumberDataPoints(metric, utilizationMetric pdata.Me
 			var num float64
 			switch point.Type() {
 			case pdata.MetricValueTypeInt:
-				num = float64(ndp.IntVal())
+				num = float64(point.IntVal())
 			case pdata.MetricValueTypeDouble:
-				num = ndp.DoubleVal()
+				num = point.DoubleVal()
 			}
 			ndp.SetDoubleVal(num / points.sum * 100)
 		}

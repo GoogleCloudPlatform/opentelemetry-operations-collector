@@ -269,6 +269,8 @@ func assertEqual(t *testing.T, expected, actual pdata.Metrics) {
 	}
 }
 
+const epsilon = 0.0000000001
+
 func assertEqualNumberDataPointSlice(t *testing.T, metricName string, ndpsAct, ndpsExp pdata.NumberDataPointSlice) {
 	require.Equalf(t, ndpsExp.Len(), ndpsAct.Len(), "Metric %s", metricName)
 
@@ -296,7 +298,7 @@ func assertEqualNumberDataPointSlice(t *testing.T, metricName string, ndpsAct, n
 		case pdata.MetricValueTypeInt:
 			assert.Equalf(t, ndpExp.IntVal(), ndpAct.IntVal(), "Metric %s attributes %s", metricName, key)
 		case pdata.MetricValueTypeDouble:
-			assert.Equalf(t, ndpExp.DoubleVal(), ndpAct.DoubleVal(), "Metric %s attributes %s", metricName, key)
+			assert.InEpsilonf(t, ndpExp.DoubleVal(), ndpAct.DoubleVal(), epsilon, "Metric %s attributes %s", metricName, key)
 		}
 	}
 }

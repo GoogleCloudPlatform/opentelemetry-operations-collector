@@ -94,14 +94,17 @@ func (nsp *NormalizeSumsProcessor) transformMetrics(rms pdata.ResourceMetrics) [
 
 func (nsp *NormalizeSumsProcessor) processMetric(resource pdata.Resource, metric pdata.Metric) (bool, error) {
 	dps := metric.Sum().DataPoints()
+
+	// Only transform data when the StartTimestamp was not set
+	if dps.Len() == 0 || dps.At(0).StartTimestamp() != 0 {
+		return true, nil
+	}
+
 	out := pdata.NewNumberDataPointSlice()
 	out.EnsureCapacity(dps.Len())
 
-	// Only transform data when the StartTimestamp was not set
-	if dps.Len() > 0 && dps.At(0).StartTimestamp() == 0 {
-		for i := 0; i < dps.Len(); i++ {
-			nsp.processSumDataPoint(dps.At(i), resource, metric, out)
-		}
+	for i := 0; i < dps.Len(); i++ {
+		nsp.processSumDataPoint(dps.At(i), resource, metric, out)
 	}
 
 	if out.Len() > 0 {

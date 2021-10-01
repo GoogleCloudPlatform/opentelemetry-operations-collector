@@ -10,9 +10,11 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter v0.36.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor v0.36.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor v0.36.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver v0.36.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver v0.36.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/nginxreceiver v0.36.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusexecreceiver v0.36.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver v0.36.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowsperfcountersreceiver v0.36.0
 	github.com/shirou/gopsutil v3.21.8+incompatible
 	github.com/stretchr/testify v1.7.0

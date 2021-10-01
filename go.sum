@@ -1124,6 +1124,8 @@ github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstrans
 github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor v0.36.0/go.mod h1:OzxEZBQCtXai3WEHTT6xDvq6WZPWl1i3pmWvIFT1Wns=
 github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor v0.36.0 h1:VH1203XBSmNMQcHkHtNQOdnTBC1oevgh5/GFHsQHSzY=
 github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor v0.36.0/go.mod h1:4rJNBKUCT7ZXnP1o+aq8aY0dqplBhY3W3aQe3hOMTfE=
+github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourceprocessor v0.36.0 h1:cG0W1Mr7rp7lLsEWdkdwWpIp6vM9akL8+/pBm1a1Lsc=
+github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourceprocessor v0.36.0/go.mod h1:f/I2JJaAeGWjf+6XY+dExceunKvJEhFXKoMb0/YPNk0=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver v0.36.0 h1:BWBm/XEHlyzYVkDt4M4+bumivPK2sn6OybMNS8Bk4uA=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver v0.36.0/go.mod h1:1LAX5fBkrCdtwYCkbHWKTpXXxwSLrFZsSiFNTp5qxm0=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver v0.36.0 h1:7qUeFRklDU2mgXyoXMzdcfIx4/j9p5hfsLgckXal5go=

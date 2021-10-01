@@ -121,9 +121,8 @@ func (nsp *NormalizeSumsProcessor) processSumDataPoint(dp pdata.NumberDataPoint,
 	// If this is the first time we've observed this unique metric,
 	// record it as the start point and do not report this data point
 	if start == nil {
-		dps := metric.Sum().DataPoints()
 		newDP := pdata.NewNumberDataPoint()
-		dps.At(0).CopyTo(newDP)
+		dp.CopyTo(newDP)
 		newDP2 := pdata.NewNumberDataPoint()
 		newDP.CopyTo(newDP2)
 

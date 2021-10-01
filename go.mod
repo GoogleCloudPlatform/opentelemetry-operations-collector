@@ -8,6 +8,7 @@ require (
 	github.com/mitchellh/go-testing-interface v1.0.3 // indirect
 	github.com/onsi/ginkgo v1.14.1 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter v0.36.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.36.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor v0.36.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor v0.36.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver v0.36.0 // indirect

@@ -178,7 +178,7 @@ func dataPointIdentifier(resource pdata.Resource, metric pdata.Metric, labels pd
 
 	// Metric identifiers
 	fmt.Fprintf(&b, " - %s", metric.Name())
-	labels.Sort().Range(func(k, v pdata.AttributeValue) bool {
+	labels.Sort().Range(func(k string, v pdata.AttributeValue) bool {
 		fmt.Fprintf(&b, " %s=%s", k, v.AsString())
 		return true
 	})

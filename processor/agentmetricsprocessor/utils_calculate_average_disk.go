@@ -36,7 +36,10 @@ func (mtp *agentMetricsProcessor) appendAverageDiskMetrics(rms pdata.ResourceMet
 
 				// ignore all metrics except the ones we want to compute utilizations for
 				switch metric.Name() {
-				case opName, opTimeName:
+				case opTimeName:
+					opTimeMetric = metric
+					fallthrough
+				case opName:
 					ndps := metric.Sum().DataPoints()
 					for i := 0; i < ndps.Len(); i++ {
 						ndp := ndps.At(i)

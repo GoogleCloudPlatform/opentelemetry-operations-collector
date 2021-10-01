@@ -84,7 +84,7 @@ func TestNormalizeSumsProcessor(t *testing.T) {
 					ProcessorSettings: &settings,
 				},
 				tmn,
-				nsp,
+				nsp.ProcessMetrics,
 				processorhelper.WithCapabilities(processorCapabilities))
 			require.NoError(t, err)
 

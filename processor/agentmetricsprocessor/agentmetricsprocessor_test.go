@@ -92,7 +92,7 @@ func TestAgentMetricsProcessor(t *testing.T) {
 					ProcessorSettings: config.NewProcessorSettings(config.NewID(typeStr)),
 				},
 				tmn,
-				amp,
+				amp.ProcessMetrics,
 				processorhelper.WithCapabilities(processorCapabilities))
 			require.NoError(t, err)
 			assert.True(t, rmp.Capabilities().MutatesData)

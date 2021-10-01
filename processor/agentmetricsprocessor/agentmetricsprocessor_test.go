@@ -24,6 +24,7 @@ import (
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/config"
 	"go.opentelemetry.io/collector/consumer/consumertest"
+	"go.opentelemetry.io/collector/model/otlp"
 	"go.opentelemetry.io/collector/model/pdata"
 	"go.opentelemetry.io/collector/processor/processorhelper"
 	"go.uber.org/zap"
@@ -106,6 +107,11 @@ func TestAgentMetricsProcessor(t *testing.T) {
 
 			err = rmp.ConsumeMetrics(context.Background(), tt.input)
 			require.NoError(t, err)
+
+			marshaler := otlp.NewJSONMetricsMarshaler()
+			outJSON, err := marshaler.MarshalMetrics(tmn.AllMetrics()[0])
+			require.NoError(t, err)
+			t.Logf("actual metrics: %s", outJSON)
 
 			assertEqual(t, tt.expected, tmn.AllMetrics()[0])
 			if tt.prevCPUTimeValuesExpected != nil {
@@ -275,20 +281,22 @@ func assertEqualNumberDataPointSlice(t *testing.T, metricName string, ndpsAct, n
 	for l := 0; l < ndpsAct.Len(); l++ {
 		ndpAct := ndpsAct.At(l)
 
-		ndpExp, ok := ndpsExpMap[labelsAsKey(ndpAct.Attributes())]
+		key := labelsAsKey(ndpAct.Attributes())
+
+		ndpExp, ok := ndpsExpMap[key]
 		if !ok {
 			require.Failf(t, fmt.Sprintf("no data point for %s", labelsAsKey(ndpAct.Attributes())), "Metric %s", metricName)
 		}
 
-		assert.Equalf(t, ndpExp.Attributes().Sort(), ndpAct.Attributes().Sort(), "Metric %s", metricName)
-		assert.Equalf(t, ndpExp.StartTimestamp(), ndpAct.StartTimestamp(), "Metric %s", metricName)
-		assert.Equalf(t, ndpExp.Timestamp(), ndpAct.Timestamp(), "Metric %s", metricName)
-		assert.Equalf(t, ndpExp.Type(), ndpAct.Type(), "Metric %s", metricName)
+		assert.Equalf(t, ndpExp.Attributes().Sort(), ndpAct.Attributes().Sort(), "Metric %s attributes %s", metricName, key)
+		assert.Equalf(t, ndpExp.StartTimestamp(), ndpAct.StartTimestamp(), "Metric %s attributes %s", metricName, key)
+		assert.Equalf(t, ndpExp.Timestamp(), ndpAct.Timestamp(), "Metric %s attributes %s", metricName, key)
+		assert.Equalf(t, ndpExp.Type(), ndpAct.Type(), "Metric %s attributes %s", metricName, key)
 		switch ndpExp.Type() {
 		case pdata.MetricValueTypeInt:
-			assert.Equalf(t, ndpExp.IntVal(), ndpAct.IntVal(), "Metric %s", metricName)
+			assert.Equalf(t, ndpExp.IntVal(), ndpAct.IntVal(), "Metric %s attributes %s", metricName, key)
 		case pdata.MetricValueTypeDouble:
-			assert.Equalf(t, ndpExp.DoubleVal(), ndpAct.DoubleVal(), "Metric %s", metricName)
+			assert.Equalf(t, ndpExp.DoubleVal(), ndpAct.DoubleVal(), "Metric %s attributes %s", metricName, key)
 		}
 	}
 }

@@ -488,9 +488,9 @@ func requireEqual(t *testing.T, expected, actual []pdata.Metrics) {
 	marshaler := otlp.NewJSONMetricsMarshaler()
 
 	for q := 0; q < len(actual); q++ {
-		inJSON, err := marshaler.MarshalMetrics(actual[q])
+		outJSON, err := marshaler.MarshalMetrics(actual[q])
 		require.NoError(t, err)
-		t.Logf("actual metrics %d: %s", q, inJSON)
+		t.Logf("actual metrics %d: %s", q, outJSON)
 
 		rmsAct := actual[q].ResourceMetrics()
 		rmsExp := expected[q].ResourceMetrics()

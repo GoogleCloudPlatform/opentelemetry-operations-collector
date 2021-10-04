@@ -61,20 +61,18 @@ func combineProcessMetrics(rms pdata.ResourceMetricsSlice) error {
 	resultMetrics := otherMetrics
 
 	// append all of the process metrics
-	metrics := resultMetrics.InstrumentationLibraryMetrics().At(0).Metrics()
+	metrics := resultMetrics.At(0).InstrumentationLibraryMetrics().At(0).Metrics()
 	for _, metric := range processMetrics {
 		metric.Metric.CopyTo(metrics.AppendEmpty())
 	}
 
-	new := pdata.NewResourceMetricsSlice()
-	resultMetrics.CopyTo(new.AppendEmpty())
-	new.CopyTo(rms)
+	resultMetrics.CopyTo(rms)
 	return nil
 }
 
-func createProcessMetrics(rms pdata.ResourceMetricsSlice) (processMetrics convertedMetrics, otherMetrics pdata.ResourceMetrics, err error) {
+func createProcessMetrics(rms pdata.ResourceMetricsSlice) (processMetrics convertedMetrics, otherMetrics pdata.ResourceMetricsSlice, err error) {
 	processMetrics = convertedMetrics{}
-	otherMetrics = pdata.NewResourceMetrics()
+	otherMetrics = pdata.NewResourceMetricsSlice()
 
 	for i := 0; i < rms.Len(); i++ {
 		rm := rms.At(i)
@@ -83,7 +81,7 @@ func createProcessMetrics(rms pdata.ResourceMetricsSlice) (processMetrics conver
 		// if these ResourceMetrics do not contain process resource attributes,
 		// these must be the "other" non-process metrics
 		if !includesProcessAttributes(resource) {
-			otherMetrics = rm
+			rm.CopyTo(otherMetrics.AppendEmpty())
 			continue
 		}
 

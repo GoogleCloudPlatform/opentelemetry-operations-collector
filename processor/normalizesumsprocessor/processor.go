@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"strings"
 
-	"go.opentelemetry.io/collector/consumer/consumererror"
 	"go.opentelemetry.io/collector/model/pdata"
 	"go.uber.org/zap"
 )
@@ -47,24 +46,15 @@ func newNormalizeSumsProcessor(logger *zap.Logger) *NormalizeSumsProcessor {
 
 // ProcessMetrics implements the MProcessor interface.
 func (nsp *NormalizeSumsProcessor) ProcessMetrics(ctx context.Context, metrics pdata.Metrics) (pdata.Metrics, error) {
-	var errors []error
-
 	for i := 0; i < metrics.ResourceMetrics().Len(); i++ {
 		rms := metrics.ResourceMetrics().At(i)
-		processingErrors := nsp.transformMetrics(rms)
-		errors = append(errors, processingErrors...)
-	}
-
-	if len(errors) > 0 {
-		return metrics, consumererror.Combine(errors)
+		nsp.transformMetrics(rms)
 	}
 
 	return metrics, nil
 }
 
-func (nsp *NormalizeSumsProcessor) transformMetrics(rms pdata.ResourceMetrics) []error {
-	var errors []error
-
+func (nsp *NormalizeSumsProcessor) transformMetrics(rms pdata.ResourceMetrics) {
 	ilms := rms.InstrumentationLibraryMetrics()
 	for j := 0; j < ilms.Len(); j++ {
 		ilm := ilms.At(j).Metrics()
@@ -72,10 +62,7 @@ func (nsp *NormalizeSumsProcessor) transformMetrics(rms pdata.ResourceMetrics) [
 		for k := 0; k < ilm.Len(); k++ {
 			metric := ilm.At(k)
 			if metric.DataType() == pdata.MetricDataTypeSum {
-				keepMetric, err := nsp.processMetric(rms.Resource(), metric)
-				if err != nil {
-					errors = append(errors, err)
-				}
+				keepMetric := nsp.processMetric(rms.Resource(), metric)
 				if keepMetric {
 					newMetric := newSlice.AppendEmpty()
 					metric.CopyTo(newMetric)
@@ -88,16 +75,16 @@ func (nsp *NormalizeSumsProcessor) transformMetrics(rms pdata.ResourceMetrics) [
 
 		newSlice.CopyTo(ilm)
 	}
-
-	return errors
 }
 
-func (nsp *NormalizeSumsProcessor) processMetric(resource pdata.Resource, metric pdata.Metric) (bool, error) {
+// processMetric processes a Sum-type metric.
+// It returns a boolean that indicates if the metric should be kept.
+func (nsp *NormalizeSumsProcessor) processMetric(resource pdata.Resource, metric pdata.Metric) bool {
 	dps := metric.Sum().DataPoints()
 
 	// Only transform data when the StartTimestamp was not set
 	if dps.Len() == 0 || dps.At(0).StartTimestamp() != 0 {
-		return true, nil
+		return true
 	}
 
 	out := pdata.NewNumberDataPointSlice()
@@ -109,9 +96,9 @@ func (nsp *NormalizeSumsProcessor) processMetric(resource pdata.Resource, metric
 
 	if out.Len() > 0 {
 		out.CopyTo(dps)
-		return true, nil
+		return true
 	}
-	return false, nil
+	return false
 }
 
 func (nsp *NormalizeSumsProcessor) processSumDataPoint(dp pdata.NumberDataPoint, resource pdata.Resource, metric pdata.Metric, ndps pdata.NumberDataPointSlice) {

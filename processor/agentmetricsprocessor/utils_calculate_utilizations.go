@@ -19,7 +19,7 @@ import (
 	"sort"
 	"strings"
 
-	"go.opentelemetry.io/collector/consumer/pdata"
+	"go.opentelemetry.io/collector/model/pdata"
 )
 
 // The following code calculates a new utilization metric from
@@ -63,7 +63,7 @@ func (mtp *agentMetricsProcessor) appendUtilizationMetrics(rms pdata.ResourceMet
 					return err
 				}
 
-				metrics.Append(utilizationMetric)
+				utilizationMetric.CopyTo(metrics.AppendEmpty())
 			}
 		}
 	}
@@ -76,8 +76,8 @@ func (mtp *agentMetricsProcessor) calculateUtilizationMetric(usageMetric pdata.M
 	usageMetric.CopyTo(utilizationMetric)
 
 	utilizationMetric.SetName(metricPostfixRegex.ReplaceAllString(usageMetric.Name(), "utilization"))
-	utilizationMetric.SetDataType(pdata.MetricDataTypeDoubleGauge)
-	utilizationMetric.DoubleGauge()
+	utilizationMetric.SetDataType(pdata.MetricDataTypeGauge)
+	utilizationMetric.Gauge()
 
 	metric := usageMetric
 
@@ -91,18 +91,13 @@ func (mtp *agentMetricsProcessor) calculateUtilizationMetric(usageMetric pdata.M
 		metric = delta
 	}
 
-	var err error
 	switch t := metric.DataType(); t {
-	case pdata.MetricDataTypeIntSum, pdata.MetricDataTypeIntGauge:
-		err = calculateUtilizationFromIntDataPoints(metric, utilizationMetric)
-	case pdata.MetricDataTypeDoubleSum, pdata.MetricDataTypeDoubleGauge:
-		err = calculateUtilizationFromDoubleDataPoints(metric, utilizationMetric)
+	case pdata.MetricDataTypeSum, pdata.MetricDataTypeGauge:
+		if err := calculateUtilizationFromNumberDataPoints(metric, utilizationMetric); err != nil {
+			return pdata.NewMetric(), err
+		}
 	default:
 		return pdata.NewMetric(), fmt.Errorf("unsupported metric data type: %v", t)
-	}
-
-	if err != nil {
-		return pdata.NewMetric(), err
 	}
 
 	// persist the values of "cpu.time" so we can compute deltas on the next cycle
@@ -119,22 +114,25 @@ func (mtp *agentMetricsProcessor) convertPrevCPUTimeToDelta(cpuTimeMetric pdata.
 	mtp.mutex.Lock()
 	defer mtp.mutex.Unlock()
 
-	ddps := cpuTimeMetric.DoubleSum().DataPoints()
-	for i := 0; i < ddps.Len(); {
-		ddp := ddps.At(i)
+	ndps := cpuTimeMetric.Sum().DataPoints()
+	out := pdata.NewNumberDataPointSlice()
+	for i := 0; i < ndps.Len(); i++ {
+		ndp := ndps.At(i)
 
 		// if we have no previous value for this cpu/state combination,
 		// remove the data point as we cannot calculate a utilization
-		prevValue, ok := mtp.prevCPUTimeValues[labelsAsKey(ddp.LabelsMap())]
+		prevValue, ok := mtp.prevCPUTimeValues[labelsAsKey(ndp.Attributes())]
 		if !ok {
-			removeElementAt(ddps, i)
 			continue
 		}
 
 		// delta value = current cumulative value - previous cumulative value
-		ddp.SetValue(ddp.Value() - prevValue)
-		i++
+		ndp2 := out.AppendEmpty()
+		ndp.CopyTo(ndp2)
+		ndp2.SetDoubleVal(ndp.DoubleVal() - prevValue)
 	}
+	// overwrite previous slice
+	out.CopyTo(ndps)
 }
 
 // setPrevCPUTimes persists the cpu.time cumulative values as a map so they can
@@ -146,108 +144,66 @@ func (mtp *agentMetricsProcessor) setPrevCPUTimes(cpuTimeMetric pdata.Metric) {
 	mtp.prevCPUTimeValues = doubleDataPointsToMap(cpuTimeMetric)
 }
 
-type int64Points struct {
-	pts []pdata.IntDataPoint
+type numberPoints struct {
+	pts []pdata.NumberDataPoint
 	sum float64
 }
 
-func calculateUtilizationFromIntDataPoints(metric, utilizationMetric pdata.Metric) error {
-	var idps pdata.IntDataPointSlice
+func calculateUtilizationFromNumberDataPoints(metric, utilizationMetric pdata.Metric) error {
+	var ndps pdata.NumberDataPointSlice
 	switch t := metric.DataType(); t {
-	case pdata.MetricDataTypeIntSum:
-		idps = metric.IntSum().DataPoints()
-	case pdata.MetricDataTypeIntGauge:
-		idps = metric.IntGauge().DataPoints()
+	case pdata.MetricDataTypeSum:
+		ndps = metric.Sum().DataPoints()
+	case pdata.MetricDataTypeGauge:
+		ndps = metric.Gauge().DataPoints()
 	}
 
-	pointCount := idps.Len()
-	groupedPoints := make(map[string]*int64Points, pointCount) // overallocate to ensure no resizes are required
+	pointCount := ndps.Len()
+	groupedPoints := make(map[string]*numberPoints, pointCount) // overallocate to ensure no resizes are required
 	for i := 0; i < pointCount; i++ {
-		idp := idps.At(i)
+		ndp := ndps.At(i)
 
-		key, err := otherLabelsAsKey(idp.LabelsMap(), stateLabel)
+		key, err := otherLabelsAsKey(ndp.Attributes(), stateLabel)
 		if err != nil {
 			return fmt.Errorf("metric %v: %w", metric.Name(), err)
 		}
 
 		points, ok := groupedPoints[key]
 		if !ok {
-			points = &int64Points{}
+			points = &numberPoints{}
 			groupedPoints[key] = points
 		}
 
-		points.sum += float64(idp.Value())
-		points.pts = append(points.pts, idp)
+		switch ndp.Type() {
+		case pdata.MetricValueTypeInt:
+			points.sum += float64(ndp.IntVal())
+		case pdata.MetricValueTypeDouble:
+			points.sum += ndp.DoubleVal()
+		}
+		points.pts = append(points.pts, ndp)
 	}
 
-	ddps := utilizationMetric.DoubleGauge().DataPoints()
-	ddps.Resize(pointCount)
-	index := 0
+	ndps = pdata.NewNumberDataPointSlice()
+	ndps.EnsureCapacity(pointCount)
 	for _, points := range groupedPoints {
 		for _, point := range points.pts {
-			ddp := ddps.At(index)
+			ndp := ndps.AppendEmpty()
 
 			// copy dp, setting the value based on utilization calculation
-			point.LabelsMap().CopyTo(ddp.LabelsMap())
-			ddp.SetStartTimestamp(point.StartTimestamp())
-			ddp.SetTimestamp(point.Timestamp())
-			ddp.SetValue(float64(point.Value()) / points.sum * 100)
-			index++
+			point.Attributes().CopyTo(ndp.Attributes())
+			ndp.SetStartTimestamp(point.StartTimestamp())
+			ndp.SetTimestamp(point.Timestamp())
+			var num float64
+			switch point.Type() {
+			case pdata.MetricValueTypeInt:
+				num = float64(point.IntVal())
+			case pdata.MetricValueTypeDouble:
+				num = point.DoubleVal()
+			}
+			ndp.SetDoubleVal(num / points.sum * 100)
 		}
 	}
-
-	return nil
-}
-
-type doublePoints struct {
-	pts []pdata.DoubleDataPoint
-	sum float64
-}
-
-func calculateUtilizationFromDoubleDataPoints(metric, utilizationMetric pdata.Metric) error {
-	var ddps pdata.DoubleDataPointSlice
-	switch t := metric.DataType(); t {
-	case pdata.MetricDataTypeDoubleSum:
-		ddps = metric.DoubleSum().DataPoints()
-	case pdata.MetricDataTypeDoubleGauge:
-		ddps = metric.DoubleGauge().DataPoints()
-	}
-
-	pointCount := ddps.Len()
-	groupedPoints := make(map[string]*doublePoints, pointCount) // overallocate to ensure no resizes are required
-	for i := 0; i < pointCount; i++ {
-		ddp := ddps.At(i)
-
-		key, err := otherLabelsAsKey(ddp.LabelsMap(), stateLabel)
-		if err != nil {
-			return fmt.Errorf("metric %v: %w", metric.Name(), err)
-		}
-
-		points, ok := groupedPoints[key]
-		if !ok {
-			points = &doublePoints{}
-			groupedPoints[key] = points
-		}
-
-		points.sum += ddp.Value()
-		points.pts = append(points.pts, ddp)
-	}
-
-	ddps = utilizationMetric.DoubleGauge().DataPoints()
-	ddps.Resize(pointCount)
-	index := 0
-	for _, points := range groupedPoints {
-		for _, point := range points.pts {
-			ddp := ddps.At(index)
-
-			// copy dp, setting the value based on utilization calculation
-			point.LabelsMap().CopyTo(ddp.LabelsMap())
-			ddp.SetStartTimestamp(point.StartTimestamp())
-			ddp.SetTimestamp(point.Timestamp())
-			ddp.SetValue(point.Value() / points.sum * 100)
-			index++
-		}
-	}
+	ndps.CopyTo(utilizationMetric.Gauge().DataPoints())
 
 	return nil
 }
@@ -255,30 +211,23 @@ func calculateUtilizationFromDoubleDataPoints(metric, utilizationMetric pdata.Me
 // doubleDataPointsToMap converts the double data points in the provided metric
 // to a map of labels to values
 func doubleDataPointsToMap(metric pdata.Metric) map[string]float64 {
-	ddps := metric.DoubleSum().DataPoints()
+	ddps := metric.Sum().DataPoints()
 	labelToValuesMap := make(map[string]float64, ddps.Len())
 	for i := 0; i < ddps.Len(); i++ {
 		ddp := ddps.At(i)
-		key, _ := otherLabelsAsKey(ddp.LabelsMap())
-		labelToValuesMap[key] = ddp.Value()
+		key, _ := otherLabelsAsKey(ddp.Attributes())
+		labelToValuesMap[key] = ddp.DoubleVal()
 	}
 	return labelToValuesMap
 }
 
-// removeElementAt removes the element at the specified index. This operation
-// does not preserve the order of elements in the data point slice
-func removeElementAt(ddps pdata.DoubleDataPointSlice, index int) {
-	ddps.At(ddps.Len() - 1).CopyTo(ddps.At(index))
-	ddps.Resize(ddps.Len() - 1)
-}
-
 // labelsAsKey returns a key representing the labels in the provided labelset.
-func labelsAsKey(labels pdata.StringMap) string {
+func labelsAsKey(labels pdata.AttributeMap) string {
 	otherLabelsLen := labels.Len()
 
 	idx, otherLabels := 0, make([]string, otherLabelsLen)
-	labels.Range(func(k string, v string) bool {
-		otherLabels[idx] = k + "=" + v
+	labels.Range(func(k string, v pdata.AttributeValue) bool {
+		otherLabels[idx] = k + "=" + v.AsString()
 		idx++
 		return true
 	})
@@ -292,11 +241,11 @@ func labelsAsKey(labels pdata.StringMap) string {
 // otherLabelsAsKey returns a key representing the other labels in the provided
 // labelset excluding the specified label keys. An error is returned if any of the
 // specified labels to exclude do not exist in the labelset.
-func otherLabelsAsKey(labels pdata.StringMap, excluding ...string) (string, error) {
+func otherLabelsAsKey(labels pdata.AttributeMap, excluding ...string) (string, error) {
 	otherLabelsLen := labels.Len() - len(excluding)
 
 	otherLabels := make([]string, 0, otherLabelsLen)
-	labels.Range(func(k string, v string) bool {
+	labels.Range(func(k string, v pdata.AttributeValue) bool {
 		// ignore any keys specified in excluding
 		for _, e := range excluding {
 			if k == e {
@@ -304,7 +253,7 @@ func otherLabelsAsKey(labels pdata.StringMap, excluding ...string) (string, erro
 			}
 		}
 
-		otherLabels = append(otherLabels, fmt.Sprintf("%s=%s", k, v))
+		otherLabels = append(otherLabels, fmt.Sprintf("%s=%s", k, v.AsString()))
 
 		return true
 	})

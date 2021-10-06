@@ -15,7 +15,7 @@
 package agentmetricsprocessor
 
 import (
-	"go.opentelemetry.io/collector/consumer/pdata"
+	"go.opentelemetry.io/collector/model/pdata"
 )
 
 // The following code converts metrics of OpenTelemetry Counter (sum) type
@@ -32,10 +32,8 @@ func convertNonMonotonicSumsToGauges(rms pdata.ResourceMetricsSlice) {
 				// ignore all metrics that are not counter (sum) types
 				var isMonotonic bool
 				switch t := metric.DataType(); t {
-				case pdata.MetricDataTypeIntSum:
-					isMonotonic = metric.IntSum().IsMonotonic()
-				case pdata.MetricDataTypeDoubleSum:
-					isMonotonic = metric.DoubleSum().IsMonotonic()
+				case pdata.MetricDataTypeSum:
+					isMonotonic = metric.Sum().IsMonotonic()
 				default:
 					continue
 				}
@@ -53,16 +51,10 @@ func convertNonMonotonicSumsToGauges(rms pdata.ResourceMetricsSlice) {
 }
 
 func convertToGauge(metric pdata.Metric) {
-	switch t := metric.DataType(); t {
-	case pdata.MetricDataTypeIntSum:
-		idps := metric.IntSum().DataPoints()
-		metric.SetDataType(pdata.MetricDataTypeIntGauge)
-		metric.IntGauge()
-		idps.CopyTo(metric.IntGauge().DataPoints())
-	case pdata.MetricDataTypeDoubleSum:
-		ddps := metric.DoubleSum().DataPoints()
-		metric.SetDataType(pdata.MetricDataTypeDoubleGauge)
-		metric.DoubleGauge()
-		ddps.CopyTo(metric.DoubleGauge().DataPoints())
+	if metric.DataType() == pdata.MetricDataTypeSum {
+		idps := metric.Sum().DataPoints()
+		metric.SetDataType(pdata.MetricDataTypeGauge)
+		metric.Gauge()
+		idps.CopyTo(metric.Gauge().DataPoints())
 	}
 }

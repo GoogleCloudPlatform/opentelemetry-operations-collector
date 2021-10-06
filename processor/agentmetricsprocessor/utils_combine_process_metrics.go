@@ -19,8 +19,8 @@ import (
 	"strconv"
 	"strings"
 
-	"go.opentelemetry.io/collector/consumer/pdata"
-	"go.opentelemetry.io/collector/translator/conventions"
+	"go.opentelemetry.io/collector/model/pdata"
+	conventions "go.opentelemetry.io/collector/model/semconv/v1.5.0"
 )
 
 // The following code performs a translation from metrics that store process
@@ -49,11 +49,6 @@ import (
 // * There is no other resource info supplied that needs to be retained (info may be silently lost if it exists)
 
 func combineProcessMetrics(rms pdata.ResourceMetricsSlice) error {
-	resultMetrics := pdata.NewResourceMetrics()
-	ilms := resultMetrics.InstrumentationLibraryMetrics()
-	ilms.Resize(1)
-	ilms.At(0)
-
 	// create collection of combined process metrics, disregarding any ResourceMetrics
 	// with no process resource attributes as "otherMetrics"
 	processMetrics, otherMetrics, err := createProcessMetrics(rms)
@@ -63,26 +58,21 @@ func combineProcessMetrics(rms pdata.ResourceMetricsSlice) error {
 
 	// if non-process specific metrics were supplied, initialize the result
 	// with those metrics
-	resultMetrics = otherMetrics
+	resultMetrics := otherMetrics
 
 	// append all of the process metrics
-	metrics := resultMetrics.InstrumentationLibraryMetrics().At(0).Metrics()
-	// ideally, we would Resize & Set, but a Set function is not available
-	// at this time
+	metrics := resultMetrics.At(0).InstrumentationLibraryMetrics().At(0).Metrics()
 	for _, metric := range processMetrics {
-		metrics.Append(metric.Metric)
+		metric.Metric.CopyTo(metrics.AppendEmpty())
 	}
 
-	// TODO: This is super inefficient. Instead, we should just return a new
-	// data.MetricData struct, but currently blocked as it is internal
-	rms.Resize(1)
-	resultMetrics.CopyTo(rms.At(0))
+	resultMetrics.CopyTo(rms)
 	return nil
 }
 
-func createProcessMetrics(rms pdata.ResourceMetricsSlice) (processMetrics convertedMetrics, otherMetrics pdata.ResourceMetrics, err error) {
+func createProcessMetrics(rms pdata.ResourceMetricsSlice) (processMetrics convertedMetrics, otherMetrics pdata.ResourceMetricsSlice, err error) {
 	processMetrics = convertedMetrics{}
-	otherMetrics = pdata.NewResourceMetrics()
+	otherMetrics = pdata.NewResourceMetricsSlice()
 
 	for i := 0; i < rms.Len(); i++ {
 		rm := rms.At(i)
@@ -91,7 +81,7 @@ func createProcessMetrics(rms pdata.ResourceMetricsSlice) (processMetrics conver
 		// if these ResourceMetrics do not contain process resource attributes,
 		// these must be the "other" non-process metrics
 		if !includesProcessAttributes(resource) {
-			otherMetrics = rm
+			rm.CopyTo(otherMetrics.AppendEmpty())
 			continue
 		}
 
@@ -169,44 +159,29 @@ func (cm convertedMetric) append(metric pdata.Metric, resource pdata.Resource) e
 	var err error
 
 	switch t := metric.DataType(); t {
-	case pdata.MetricDataTypeIntSum:
-		err = appendIntDataSlice(metric.IntSum().DataPoints(), cm.IntSum().DataPoints(), resource)
-	case pdata.MetricDataTypeIntGauge:
-		err = appendIntDataSlice(metric.IntGauge().DataPoints(), cm.IntGauge().DataPoints(), resource)
-	case pdata.MetricDataTypeDoubleSum:
-		err = appendDoubleDataSlice(metric.DoubleSum().DataPoints(), cm.DoubleSum().DataPoints(), resource)
-	case pdata.MetricDataTypeDoubleGauge:
-		err = appendDoubleDataSlice(metric.DoubleGauge().DataPoints(), cm.DoubleGauge().DataPoints(), resource)
+	case pdata.MetricDataTypeSum:
+		err = appendNumberDataSlice(metric.Sum().DataPoints(), cm.Sum().DataPoints(), resource)
+	case pdata.MetricDataTypeGauge:
+		err = appendNumberDataSlice(metric.Gauge().DataPoints(), cm.Gauge().DataPoints(), resource)
 	}
 
 	return err
 }
 
-func appendIntDataSlice(idps, converted pdata.IntDataPointSlice, resource pdata.Resource) error {
-	for i := 0; i < idps.Len(); i++ {
-		err := appendAttributesToLabels(idps.At(i).LabelsMap(), resource.Attributes())
+func appendNumberDataSlice(ndps, converted pdata.NumberDataPointSlice, resource pdata.Resource) error {
+	for i := 0; i < ndps.Len(); i++ {
+		err := appendAttributesToLabels(ndps.At(i).Attributes(), resource.Attributes())
 		if err != nil {
 			return err
 		}
 	}
-	idps.MoveAndAppendTo(converted)
-	return nil
-}
-
-func appendDoubleDataSlice(ddps, converted pdata.DoubleDataPointSlice, resource pdata.Resource) error {
-	for i := 0; i < ddps.Len(); i++ {
-		err := appendAttributesToLabels(ddps.At(i).LabelsMap(), resource.Attributes())
-		if err != nil {
-			return err
-		}
-	}
-	ddps.MoveAndAppendTo(converted)
+	ndps.MoveAndAppendTo(converted)
 	return nil
 }
 
 // appendAttributesToLabels appends the provided attributes to the provided labels map.
 // This requires converting the attributes to string format.
-func appendAttributesToLabels(labels pdata.StringMap, attributes pdata.AttributeMap) error {
+func appendAttributesToLabels(labels pdata.AttributeMap, attributes pdata.AttributeMap) error {
 	var err error
 	attributes.Range(func(k string, v pdata.AttributeValue) bool {
 		// break if error has occurred in previous iteration
@@ -227,7 +202,7 @@ func appendAttributesToLabels(labels pdata.StringMap, attributes pdata.Attribute
 			return false
 		}
 
-		labels.Insert(key, value)
+		labels.Insert(key, pdata.NewAttributeValueString(value))
 		return true
 	})
 	return err
@@ -236,7 +211,7 @@ func appendAttributesToLabels(labels pdata.StringMap, attributes pdata.Attribute
 func toCloudMonitoringLabel(resourceAttributeKey string) string {
 	// see https://cloud.google.com/monitoring/api/metrics_agent#agent-processes
 	switch resourceAttributeKey {
-	case conventions.AttributeProcessID:
+	case conventions.AttributeProcessPID:
 		return "pid"
 	case conventions.AttributeProcessExecutableName:
 		return "command"

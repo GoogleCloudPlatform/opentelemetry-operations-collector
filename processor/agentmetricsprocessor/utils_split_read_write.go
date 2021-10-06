@@ -17,7 +17,7 @@ package agentmetricsprocessor
 import (
 	"fmt"
 
-	"go.opentelemetry.io/collector/consumer/pdata"
+	"go.opentelemetry.io/collector/model/pdata"
 )
 
 // The following code splits metrics with read/write direction labels into
@@ -71,7 +71,7 @@ func splitReadWriteBytesMetrics(rms pdata.ResourceMetricsSlice) error {
 
 				// append the new metrics to the collection, overwriting the old one
 				read.CopyTo(metric)
-				metrics.Append(write)
+				write.CopyTo(metrics.AppendEmpty())
 			}
 		}
 	}
@@ -92,14 +92,10 @@ func splitReadWriteBytesMetric(metric pdata.Metric) (read pdata.Metric, write pd
 
 	// append data points to the read or write metric as appropriate
 	switch t := metric.DataType(); t {
-	case pdata.MetricDataTypeIntSum:
-		err = appendInt64DataPoints(metric.Name(), metric.IntSum().DataPoints(), read.IntSum().DataPoints(), write.IntSum().DataPoints())
-	case pdata.MetricDataTypeDoubleSum:
-		err = appendDoubleDataPoints(metric.Name(), metric.DoubleSum().DataPoints(), read.DoubleSum().DataPoints(), write.DoubleSum().DataPoints())
-	case pdata.MetricDataTypeIntGauge:
-		err = appendInt64DataPoints(metric.Name(), metric.IntGauge().DataPoints(), read.IntGauge().DataPoints(), write.IntGauge().DataPoints())
-	case pdata.MetricDataTypeDoubleGauge:
-		err = appendDoubleDataPoints(metric.Name(), metric.DoubleGauge().DataPoints(), read.DoubleGauge().DataPoints(), write.DoubleGauge().DataPoints())
+	case pdata.MetricDataTypeSum:
+		err = appendNumberDataPoints(metric.Name(), metric.Sum().DataPoints(), read.Sum().DataPoints(), write.Sum().DataPoints())
+	case pdata.MetricDataTypeGauge:
+		err = appendNumberDataPoints(metric.Name(), metric.Gauge().DataPoints(), read.Gauge().DataPoints(), write.Gauge().DataPoints())
 	default:
 		return read, write, fmt.Errorf("unsupported metric data type: %v", t)
 	}
@@ -107,49 +103,27 @@ func splitReadWriteBytesMetric(metric pdata.Metric) (read pdata.Metric, write pd
 	return read, write, err
 }
 
-func appendInt64DataPoints(metricName string, idps, read, write pdata.IntDataPointSlice) error {
-	for i := 0; i < idps.Len(); i++ {
-		idp := idps.At(i)
-		labels := idp.LabelsMap()
+func appendNumberDataPoints(metricName string, ndps, read, write pdata.NumberDataPointSlice) error {
+	for i := 0; i < ndps.Len(); i++ {
+		ndp := ndps.At(i)
+		labels := ndp.Attributes()
 
 		dir, ok := labels.Get(directionLabel)
 		if !ok {
 			return fmt.Errorf("metric %v did not contain %v label as expected", metricName, directionLabel)
 		}
-		labels.Delete(directionLabel)
 
-		switch dir {
+		var new pdata.NumberDataPoint
+		switch dir.StringVal() {
 		case readDirection:
-			read.Append(idp)
+			new = read.AppendEmpty()
 		case writeDirection:
-			write.Append(idp)
+			new = write.AppendEmpty()
 		default:
-			return fmt.Errorf("metric %v label %v contained unexpected value %v", metricName, directionLabel, dir)
+			return fmt.Errorf("metric %v label %v contained unexpected value %v", metricName, directionLabel, dir.AsString())
 		}
-	}
-
-	return nil
-}
-
-func appendDoubleDataPoints(metricName string, ddps, read, write pdata.DoubleDataPointSlice) error {
-	for i := 0; i < ddps.Len(); i++ {
-		ddp := ddps.At(i)
-		labels := ddp.LabelsMap()
-
-		dir, ok := labels.Get(directionLabel)
-		if !ok {
-			return fmt.Errorf("metric %v did not contain %v label as expected", metricName, directionLabel)
-		}
-		labels.Delete(directionLabel)
-
-		switch dir {
-		case readDirection:
-			read.Append(ddp)
-		case writeDirection:
-			write.Append(ddp)
-		default:
-			return fmt.Errorf("metric %v label %v contained unexpected value %v", metricName, directionLabel, dir)
-		}
+		ndp.CopyTo(new)
+		new.Attributes().Delete(directionLabel)
 	}
 
 	return nil

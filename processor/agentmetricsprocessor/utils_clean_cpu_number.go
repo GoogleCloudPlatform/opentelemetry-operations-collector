@@ -17,7 +17,7 @@ package agentmetricsprocessor
 import (
 	"strings"
 
-	"go.opentelemetry.io/collector/consumer/pdata"
+	"go.opentelemetry.io/collector/model/pdata"
 )
 
 func cleanCPUNumber(rms pdata.ResourceMetricsSlice) error {
@@ -39,34 +39,20 @@ func cleanCPUNumber(rms pdata.ResourceMetricsSlice) error {
 }
 
 type labelsMapper interface {
-	LabelsMap() pdata.StringMap
+	Attributes() pdata.AttributeMap
 }
 
 func forEachPoint(metric pdata.Metric, fn func(labelsMapper) error) error {
 	switch t := metric.DataType(); t {
-	case pdata.MetricDataTypeIntSum:
-		dp := metric.IntSum().DataPoints()
+	case pdata.MetricDataTypeSum:
+		dp := metric.Sum().DataPoints()
 		for i := 0; i < dp.Len(); i++ {
 			if err := fn(dp.At(i)); err != nil {
 				return err
 			}
 		}
-	case pdata.MetricDataTypeDoubleSum:
-		dp := metric.DoubleSum().DataPoints()
-		for i := 0; i < dp.Len(); i++ {
-			if err := fn(dp.At(i)); err != nil {
-				return err
-			}
-		}
-	case pdata.MetricDataTypeIntGauge:
-		dp := metric.IntGauge().DataPoints()
-		for i := 0; i < dp.Len(); i++ {
-			if err := fn(dp.At(i)); err != nil {
-				return err
-			}
-		}
-	case pdata.MetricDataTypeDoubleGauge:
-		dp := metric.DoubleGauge().DataPoints()
+	case pdata.MetricDataTypeGauge:
+		dp := metric.Gauge().DataPoints()
 		for i := 0; i < dp.Len(); i++ {
 			if err := fn(dp.At(i)); err != nil {
 				return err
@@ -77,9 +63,9 @@ func forEachPoint(metric pdata.Metric, fn func(labelsMapper) error) error {
 }
 
 func cleanCPUNumberDataPoint(lm labelsMapper) error {
-	sm := lm.LabelsMap()
+	sm := lm.Attributes()
 	if value, ok := sm.Get("cpu"); ok {
-		sm.Update("cpu", strings.TrimPrefix(value, "cpu"))
+		sm.Update("cpu", pdata.NewAttributeValueString(strings.TrimPrefix(value.StringVal(), "cpu")))
 	}
 	return nil
 }

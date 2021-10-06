@@ -14,7 +14,7 @@
 
 package agentmetricsprocessor
 
-import "go.opentelemetry.io/collector/consumer/pdata"
+import "go.opentelemetry.io/collector/model/pdata"
 
 // https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/metrics/semantic_conventions/system-metrics.md#systemdisk---disk-controller-metrics
 const opName = "system.disk.operations"
@@ -36,43 +36,32 @@ func (mtp *agentMetricsProcessor) appendAverageDiskMetrics(rms pdata.ResourceMet
 
 				// ignore all metrics except the ones we want to compute utilizations for
 				switch metric.Name() {
-				case opName:
-					idps := metric.IntSum().DataPoints()
-					for i := 0; i < idps.Len(); i++ {
-						idp := idps.At(i)
-
-						lm := idp.LabelsMap()
-						device, _ := lm.Get("device")
-						direction, _ := lm.Get("direction")
-						key := opKey{device, direction}
-
-						op, ok := newOp[key]
-						if !ok {
-							op = mtp.prevOp[key]
-						}
-						// Can't just save idp because it is overwritten by OT.
-						op.operations = pdata.NewIntDataPoint()
-						idp.CopyTo(op.operations)
-						newOp[key] = op
-					}
 				case opTimeName:
 					opTimeMetric = metric
-					ddps := metric.DoubleSum().DataPoints()
-					for i := 0; i < ddps.Len(); i++ {
-						ddp := ddps.At(i)
+					fallthrough
+				case opName:
+					ndps := metric.Sum().DataPoints()
+					for i := 0; i < ndps.Len(); i++ {
+						ndp := ndps.At(i)
 
-						lm := ddp.LabelsMap()
+						lm := ndp.Attributes()
 						device, _ := lm.Get("device")
 						direction, _ := lm.Get("direction")
-						key := opKey{device, direction}
+						key := opKey{device.AsString(), direction.AsString()}
 
 						op, ok := newOp[key]
 						if !ok {
 							op = mtp.prevOp[key]
 						}
-						// Can't just save ddp because it is overwritten by OT.
-						op.time = pdata.NewDoubleDataPoint()
-						ddp.CopyTo(op.time)
+						// Can't just save ndp because it is overwritten by OT.
+						ndp2 := pdata.NewNumberDataPoint()
+						ndp.CopyTo(ndp2)
+						switch metric.Name() {
+						case opName:
+							op.operations = ndp2
+						case opTimeName:
+							op.time = ndp2
+						}
 						newOp[key] = op
 					}
 				default:
@@ -84,31 +73,30 @@ func (mtp *agentMetricsProcessor) appendAverageDiskMetrics(rms pdata.ResourceMet
 				continue
 			}
 			// Generate a new metric from the operation count and time for each disk and direction.
-			averageTimeMetric := pdata.NewMetric()
-			opTimeMetric.CopyTo(averageTimeMetric)
-			averageTimeMetric.SetName(metricPostfixRegex.ReplaceAllString(opTimeMetric.Name(), "average_operation_time"))
-			ddps := averageTimeMetric.DoubleSum().DataPoints()
-			ddps.Resize(0)
+			ndps := pdata.NewNumberDataPointSlice()
 			for key, new := range newOp {
 				prev, prevOk := mtp.prevOp[key]
-				t := new.time.Value()
-				ops := new.operations.Value()
+				t := new.time.DoubleVal()
+				ops := new.operations.IntVal()
 				if prevOk {
-					t -= prev.time.Value()
-					ops -= prev.operations.Value()
-					ddp := ddps.AppendEmpty()
-					new.time.CopyTo(ddp)
+					t -= prev.time.DoubleVal()
+					ops -= prev.operations.IntVal()
+					ndp := ndps.AppendEmpty()
+					new.time.CopyTo(ndp)
 					if ops > 0 {
 						interval := new.time.Timestamp() - prev.time.Timestamp()
 						// Logic from https://github.com/Stackdriver/collectd/blob/2d176c650d9d6e4cd45d2add7977016c82dd8b55/src/disk.c#L321
 						new.cumAvgTime += (t / float64(ops)) * float64(interval) / 1e9
 					}
-					ddp.SetValue(new.cumAvgTime)
+					ndp.SetDoubleVal(new.cumAvgTime)
 				}
 				mtp.prevOp[key] = new
 			}
-			if ddps.Len() > 0 {
-				metrics.Append(averageTimeMetric)
+			if ndps.Len() > 0 {
+				averageTimeMetric := metrics.AppendEmpty()
+				opTimeMetric.CopyTo(averageTimeMetric)
+				averageTimeMetric.SetName(metricPostfixRegex.ReplaceAllString(opTimeMetric.Name(), "average_operation_time"))
+				ndps.CopyTo(averageTimeMetric.Sum().DataPoints())
 			}
 		}
 	}

@@ -301,6 +301,7 @@ github.com/containerd/containerd v1.3.2/go.mod h1:bC6axHOhabU15QhwfG7w5PipXdVtMX
 github.com/containerd/containerd v1.4.0-beta.2.0.20200729163537-40b22ef07410/go.mod h1:bC6axHOhabU15QhwfG7w5PipXdVtMXFTttgp+kVtyUA=
 github.com/containerd/containerd v1.4.1/go.mod h1:bC6axHOhabU15QhwfG7w5PipXdVtMXFTttgp+kVtyUA=
 github.com/containerd/containerd v1.4.3/go.mod h1:bC6axHOhabU15QhwfG7w5PipXdVtMXFTttgp+kVtyUA=
+github.com/containerd/containerd v1.4.4/go.mod h1:bC6axHOhabU15QhwfG7w5PipXdVtMXFTttgp+kVtyUA=
 github.com/containerd/containerd v1.5.0-beta.1/go.mod h1:5HfvG1V2FsKesEGQ17k5/T7V960Tmcumvqn8Mc+pCYQ=
 github.com/containerd/containerd v1.5.0-beta.3/go.mod h1:/wr9AVtEM7x9c+n0+stptlo/uBBoBORwEx6ardVcmKU=
 github.com/containerd/containerd v1.5.0-beta.4/go.mod h1:GmdgZd2zA2GYIBZ0w09ZvgqEq8EfBp/m3lcVZIvPHhI=
@@ -591,6 +592,8 @@ github.com/go-playground/locales v0.12.1/go.mod h1:IUMDtCfWo/w/mtMfIE/IG2K+Ey3yg
 github.com/go-playground/universal-translator v0.16.0/go.mod h1:1AnU7NaIRDWWzGEKwgtJRd2xk99HeFyHw3yid4rvQIY=
 github.com/go-redis/redis v6.15.9+incompatible h1:K0pv1D7EQUjfyoMql+r/jZqCLizCGKFlFgcHWWmHQjg=
 github.com/go-redis/redis v6.15.9+incompatible/go.mod h1:NAIEuMOZ/fxfXJIrKDQDz8wamY7mA7PouImQ2Jvg6kA=
+github.com/go-redis/redis/v7 v7.4.1 h1:PASvf36gyUpr2zdOUS/9Zqc80GbM+9BDyiJSJDDOrTI=
+github.com/go-redis/redis/v7 v7.4.1/go.mod h1:JDNMw23GTyLNC4GZu9njt15ctBQVn7xjRfnwdHj/Dcg=
 github.com/go-resty/resty/v2 v2.1.1-0.20191201195748-d7b97669fe48 h1:JVrqSeQfdhYRFk24TvhTZWU0q8lfCojxZQFi3Ou7+uY=
 github.com/go-resty/resty/v2 v2.1.1-0.20191201195748-d7b97669fe48/go.mod h1:dZGr0i9PLlaaTD4H/hoZIDjQ+r6xq8mgbRzHZf7f2J8=
 github.com/go-sql-driver/mysql v1.4.0/go.mod h1:zAC/RDZ24gD3HViQzih4MyKcchzm+sOG5ZlKdlhCg5w=
@@ -1105,6 +1108,7 @@ github.com/onsi/gomega v1.4.3/go.mod h1:ex+gbHU/CVuBBDIJjb2X0qEXbFg53c61hWP/1Cpa
 github.com/onsi/gomega v1.7.0/go.mod h1:ex+gbHU/CVuBBDIJjb2X0qEXbFg53c61hWP/1CpauHY=
 github.com/onsi/gomega v1.7.1/go.mod h1:XdKZgCCFLUoM/7CFJVPcG8C1xQ1AJ0vpAezJrB7JYyY=
 github.com/onsi/gomega v1.10.1/go.mod h1:iN09h71vgCQne3DLsj+A5owkum+a2tYe+TOCB1ybHNo=
+github.com/onsi/gomega v1.10.2/go.mod h1:iN09h71vgCQne3DLsj+A5owkum+a2tYe+TOCB1ybHNo=
 github.com/onsi/gomega v1.10.3 h1:gph6h/qe9GSUw1NhH1gp+qb+h8rXD8Cy60Z32Qw3ELA=
 github.com/onsi/gomega v1.10.3/go.mod h1:V9xEwhxec5O8UDM77eCW8vLymOMltsqPVYWrpDsH8xc=
 github.com/op/go-logging v0.0.0-20160315200505-970db520ece7/go.mod h1:HzydrMdWErDVzsI23lYNej1Htcns9BCg93Dk0bBINWk=
@@ -1112,8 +1116,11 @@ github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudex
 github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter v0.36.0/go.mod h1:bJ/hJdmNUBEahlmjC0A5PdWfFN+P1Wtaxb/g3uVR3ds=
 github.com/open-telemetry/opentelemetry-collector-contrib/exporter/prometheusremotewriteexporter v0.36.0 h1:lbIjBp20h59LaK/Q9BmlWlG5xphB1fw9POcV6rl4EH4=
 github.com/open-telemetry/opentelemetry-collector-contrib/exporter/prometheusremotewriteexporter v0.36.0/go.mod h1:0sF639xpWoYL5WZIs0H2S/jeCii/peW7AZOclxlgEwM=
+github.com/open-telemetry/opentelemetry-collector-contrib/internal/common v0.36.0/go.mod h1:i2MDLhi0OaO1v99Lp51izydBG98cu5blATp6jLACMe4=
 github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal v0.36.0 h1:rZjI+lSHLKOEkjLQ91MHPecREAXF9FeoxVvRml7gyFQ=
 github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal v0.36.0/go.mod h1:Igqttmhj9FePkB257ec1OvlhgEvOU/PLDBbQg38AY8Q=
+github.com/open-telemetry/opentelemetry-collector-contrib/internal/interval v0.36.0 h1:2cWetd0i4i6jQI+mSl1MIBfhBViwGE2sXJbRNSKzNdQ=
+github.com/open-telemetry/opentelemetry-collector-contrib/internal/interval v0.36.0/go.mod h1:PWPOsBA76rNpcT9nCTh7YOE//ccJ48Ev3U5zK00+d6o=
 github.com/open-telemetry/opentelemetry-collector-contrib/pkg/resourcetotelemetry v0.36.0 h1:br0pmCqgp1nx/e809LLYGrf1xEeQDvokMYU6CA8v4UU=
 github.com/open-telemetry/opentelemetry-collector-contrib/pkg/resourcetotelemetry v0.36.0/go.mod h1:Ef1KwpEoRGBVJ4GsvVhqkeon+Q59iH57k7OJHqsRPIk=
 github.com/open-telemetry/opentelemetry-collector-contrib/pkg/translator/opencensus v0.36.0 h1:s/NynixZllp0ACF/8nvh42S9oMoHidxYlZnjndFXG2E=
@@ -1136,6 +1143,8 @@ github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusexe
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusexecreceiver v0.36.0/go.mod h1:2AmFdpmPVBLbR+NDeuSEUQQe765GJCcPdhE1yVbNXus=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver v0.36.0 h1:J4PUPI6/zfsPW6A19jqx97m6ooWrQ86IGi5CcghOnNE=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver v0.36.0/go.mod h1:cnEk/4PS2528qYznF8su8OeV8UahRUvltXeao1YS630=
+github.com/open-telemetry/opentelemetry-collector-contrib/receiver/redisreceiver v0.36.0 h1:lAJtfNhu5xYnjzb6biV1YMsqrg0Jxg6KzoG7BAsNExs=
+github.com/open-telemetry/opentelemetry-collector-contrib/receiver/redisreceiver v0.36.0/go.mod h1:cXrX2HyWlQ9YuPAUaLt99FV6zLzR2SuHxS8VQ6MGDZM=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/scraperhelper v0.36.0 h1:BVD9iliI1I7zLF4eLr8M7nFHx5Upnh8cvc6hALOr2xE=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/scraperhelper v0.36.0/go.mod h1:hTpyYzcS7RaK5rHEU0JxePVJYrvbvFVN+xlwN7zvT9w=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowsperfcountersreceiver v0.36.0 h1:tE3+yLEMpXV/txeV2dY9asgC87Ev7nTBuI34uWVYS5o=

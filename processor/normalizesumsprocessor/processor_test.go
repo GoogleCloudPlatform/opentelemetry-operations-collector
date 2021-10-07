@@ -26,7 +26,6 @@ import (
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/config"
 	"go.opentelemetry.io/collector/consumer/consumertest"
-	"go.opentelemetry.io/collector/model/otlp"
 	"go.opentelemetry.io/collector/model/pdata"
 	"go.opentelemetry.io/collector/processor/processorhelper"
 	"go.uber.org/zap"
@@ -330,6 +329,10 @@ func generateComplexInput(startTime int64) []pdata.Metrics {
 	mb3.addDoubleDataPoint(5, map[string]string{}, startTime, 0)
 	mb3.addDoubleDataPoint(6, map[string]string{}, startTime+1000, 0)
 
+	mb4 := b.addMetric("m4", pdata.MetricDataTypeSum, false)
+	mb4.addDoubleDataPoint(12, map[string]string{}, startTime, 0)
+	mb4.addDoubleDataPoint(13, map[string]string{}, startTime+2000, 0)
+
 	rmb.Build().CopyTo(input.ResourceMetrics())
 	list = append(list, input)
 
@@ -374,6 +377,10 @@ func generateComplexOutput(startTime int64) []pdata.Metrics {
 	mb3 := b.addMetric("m3", pdata.MetricDataTypeGauge, false)
 	mb3.addDoubleDataPoint(5, map[string]string{}, startTime, 0)
 	mb3.addDoubleDataPoint(6, map[string]string{}, startTime+1000, 0)
+
+	mb4 := b.addMetric("m4", pdata.MetricDataTypeSum, false)
+	mb4.addDoubleDataPoint(12, map[string]string{}, startTime, 0)
+	mb4.addDoubleDataPoint(13, map[string]string{}, startTime+2000, 0)
 
 	rmb.Build().CopyTo(output.ResourceMetrics())
 	list = append(list, output)
@@ -485,13 +492,7 @@ func (mb metricBuilder) addIntDataPoint(value int64, labels map[string]string, t
 func requireEqual(t *testing.T, expected, actual []pdata.Metrics) {
 	require.Equal(t, len(expected), len(actual))
 
-	marshaler := otlp.NewJSONMetricsMarshaler()
-
 	for q := 0; q < len(actual); q++ {
-		outJSON, err := marshaler.MarshalMetrics(actual[q])
-		require.NoError(t, err)
-		t.Logf("actual metrics %d: %s", q, outJSON)
-
 		rmsAct := actual[q].ResourceMetrics()
 		rmsExp := expected[q].ResourceMetrics()
 		require.Equal(t, rmsExp.Len(), rmsAct.Len())

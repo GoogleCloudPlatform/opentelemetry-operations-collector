@@ -26,6 +26,7 @@ import (
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/config"
 	"go.opentelemetry.io/collector/consumer/consumertest"
+	"go.opentelemetry.io/collector/model/otlp"
 	"go.opentelemetry.io/collector/model/pdata"
 	"go.opentelemetry.io/collector/processor/processorhelper"
 	"go.uber.org/zap"
@@ -492,7 +493,13 @@ func (mb metricBuilder) addIntDataPoint(value int64, labels map[string]string, t
 func requireEqual(t *testing.T, expected, actual []pdata.Metrics) {
 	require.Equal(t, len(expected), len(actual))
 
+	marshaler := otlp.NewJSONMetricsMarshaler()
+
 	for q := 0; q < len(actual); q++ {
+		outJSON, err := marshaler.MarshalMetrics(actual[q])
+		require.NoError(t, err)
+		t.Logf("actual metrics %d: %s", q, outJSON)
+
 		rmsAct := actual[q].ResourceMetrics()
 		rmsExp := expected[q].ResourceMetrics()
 		require.Equal(t, rmsExp.Len(), rmsAct.Len())

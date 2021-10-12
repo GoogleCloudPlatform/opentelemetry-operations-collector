@@ -24,6 +24,7 @@ import (
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/config"
 	"go.opentelemetry.io/collector/consumer/consumertest"
+	"go.opentelemetry.io/collector/model/otlp"
 	"go.opentelemetry.io/collector/model/pdata"
 	"go.opentelemetry.io/collector/processor/processorhelper"
 	"go.uber.org/zap"
@@ -106,6 +107,11 @@ func TestAgentMetricsProcessor(t *testing.T) {
 
 			err = rmp.ConsumeMetrics(context.Background(), tt.input)
 			require.NoError(t, err)
+
+			marshaler := otlp.NewJSONMetricsMarshaler()
+			outJSON, err := marshaler.MarshalMetrics(tmn.AllMetrics()[0])
+			require.NoError(t, err)
+			t.Logf("actual metrics: %s", outJSON)
 
 			assertEqual(t, tt.expected, tmn.AllMetrics()[0])
 			if tt.prevCPUTimeValuesExpected != nil {

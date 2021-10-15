@@ -330,6 +330,10 @@ func generateComplexInput(startTime int64) []pdata.Metrics {
 	mb3.addDoubleDataPoint(5, map[string]string{}, startTime, 0)
 	mb3.addDoubleDataPoint(6, map[string]string{}, startTime+1000, 0)
 
+	mb4 := b.addMetric("m4", pdata.MetricDataTypeSum, false)
+	mb4.addDoubleDataPoint(12, map[string]string{}, startTime, 0)
+	mb4.addDoubleDataPoint(13, map[string]string{}, startTime+2000, 0)
+
 	rmb.Build().CopyTo(input.ResourceMetrics())
 	list = append(list, input)
 
@@ -374,6 +378,10 @@ func generateComplexOutput(startTime int64) []pdata.Metrics {
 	mb3 := b.addMetric("m3", pdata.MetricDataTypeGauge, false)
 	mb3.addDoubleDataPoint(5, map[string]string{}, startTime, 0)
 	mb3.addDoubleDataPoint(6, map[string]string{}, startTime+1000, 0)
+
+	mb4 := b.addMetric("m4", pdata.MetricDataTypeSum, false)
+	mb4.addDoubleDataPoint(12, map[string]string{}, startTime, 0)
+	mb4.addDoubleDataPoint(13, map[string]string{}, startTime+2000, 0)
 
 	rmb.Build().CopyTo(output.ResourceMetrics())
 	list = append(list, output)

@@ -61,7 +61,7 @@ func (nsp *NormalizeSumsProcessor) transformMetrics(rms pdata.ResourceMetrics) {
 		newSlice := pdata.NewMetricSlice()
 		for k := 0; k < ilm.Len(); k++ {
 			metric := ilm.At(k)
-			if metric.DataType() == pdata.MetricDataTypeSum {
+			if metric.DataType() == pdata.MetricDataTypeSum && metric.Sum().IsMonotonic() {
 				keepMetric := nsp.processMetric(rms.Resource(), metric)
 				if keepMetric {
 					newMetric := newSlice.AppendEmpty()

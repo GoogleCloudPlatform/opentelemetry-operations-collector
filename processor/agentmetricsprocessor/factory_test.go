@@ -22,34 +22,10 @@ import (
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/configtest"
 	"go.opentelemetry.io/collector/consumer/consumertest"
-	"go.uber.org/multierr"
 )
 
 func TestCreateDefaultConfig(t *testing.T) {
-	m, err := component.MakeProcessorFactoryMap(NewFactory())
-	assert.NoError(t, err)
-	assert.NoError(t, validateConfigFromFactories(component.Factories{
-		Processors: m,
-	}))
-}
-
-func validateConfigFromFactories(factories component.Factories) error {
-	var errs error
-
-	for _, factory := range factories.Receivers {
-		errs = multierr.Append(errs, configtest.CheckConfigStruct(factory.CreateDefaultConfig()))
-	}
-	for _, factory := range factories.Processors {
-		errs = multierr.Append(errs, configtest.CheckConfigStruct(factory.CreateDefaultConfig()))
-	}
-	for _, factory := range factories.Exporters {
-		errs = multierr.Append(errs, configtest.CheckConfigStruct(factory.CreateDefaultConfig()))
-	}
-	for _, factory := range factories.Extensions {
-		errs = multierr.Append(errs, configtest.CheckConfigStruct(factory.CreateDefaultConfig()))
-	}
-
-	return errs
+	assert.NoError(t, configtest.CheckConfigStruct(NewFactory().CreateDefaultConfig()))
 }
 
 func TestCreateProcessor(t *testing.T) {

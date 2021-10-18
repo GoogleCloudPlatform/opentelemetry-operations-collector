@@ -28,8 +28,8 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/redisreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowsperfcountersreceiver"
 	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/consumer/consumererror"
 	"go.opentelemetry.io/collector/service/defaultcomponents"
+	"go.uber.org/multierr"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/agentmetricsprocessor"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/normalizesumsprocessor"
@@ -95,5 +95,5 @@ func components() (component.Factories, error) {
 		errs = append(errs, err)
 	}
 
-	return factories, consumererror.Combine(errs)
+	return factories, multierr.Combine(errs...)
 }

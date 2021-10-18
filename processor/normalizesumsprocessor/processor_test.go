@@ -78,7 +78,7 @@ func TestNormalizeSumsProcessor(t *testing.T) {
 			nsp := newNormalizeSumsProcessor(zap.NewExample())
 
 			tmn := &consumertest.MetricsSink{}
-			id := config.NewID(typeStr)
+			id := config.NewComponentID(typeStr)
 			settings := config.NewProcessorSettings(id)
 			rmp, err := processorhelper.NewMetricsProcessor(
 				&Config{
@@ -440,7 +440,7 @@ func (msb metricsBuilder) addMetric(name string, t pdata.MetricDataType, isMonot
 	case pdata.MetricDataTypeSum:
 		sum := metric.Sum()
 		sum.SetIsMonotonic(isMonotonic)
-		sum.SetAggregationTemporality(pdata.AggregationTemporalityCumulative)
+		sum.SetAggregationTemporality(pdata.MetricAggregationTemporalityCumulative)
 	case pdata.MetricDataTypeGauge:
 		metric.Gauge()
 	}

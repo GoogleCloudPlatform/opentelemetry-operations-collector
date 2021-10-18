@@ -49,11 +49,11 @@ func main() {
 }
 
 func runInteractive(params service.CollectorSettings) error {
-	app, err := service.New(params)
+	_, err := service.New(params)
 	if err != nil {
 		return fmt.Errorf("failed to construct the application: %w", err)
 	}
-	cmd := service.NewCommand(app)
+	cmd := service.NewCommand(params)
 	err = cmd.Execute()
 	if err != nil {
 		return fmt.Errorf("application run finished with error: %w", err)

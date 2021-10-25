@@ -47,6 +47,11 @@ func TestAgentMetricsProcessor(t *testing.T) {
 			expected: generateNonMonotonicSumsExpected(),
 		},
 		{
+			name:     "remove-version-case",
+			input:    generateVersionInput(),
+			expected: generateVersionExpected(),
+		},
+		{
 			name:     "process-resources-case",
 			input:    generateProcessResourceMetricsInput(),
 			expected: generateProcessResourceMetricsExpected(),

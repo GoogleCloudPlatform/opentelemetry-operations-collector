@@ -57,9 +57,9 @@ func newAgentMetricsProcessor(logger *zap.Logger, cfg *Config) *agentMetricsProc
 // ProcessMetrics implements the MProcessor interface.
 func (mtp *agentMetricsProcessor) ProcessMetrics(ctx context.Context, metrics pdata.Metrics) (pdata.Metrics, error) {
 	convertNonMonotonicSumsToGauges(metrics.ResourceMetrics())
+	removeVersionAttribute(metrics.ResourceMetrics())
 
 	var errors []error
-
 	if err := combineProcessMetrics(metrics.ResourceMetrics()); err != nil {
 		errors = append(errors, err)
 	}

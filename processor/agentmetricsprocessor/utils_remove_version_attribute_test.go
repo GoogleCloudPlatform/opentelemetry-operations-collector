@@ -49,3 +49,35 @@ func generateVersionExpected() pdata.Metrics {
 	rmb.Build().CopyTo(input.ResourceMetrics())
 	return input
 }
+
+func generateMultiAttrVersionInput() pdata.Metrics {
+	input := pdata.NewMetrics()
+
+	rmb := newResourceMetricsBuilder()
+	b := rmb.addResourceMetrics(nil)
+
+	mb1 := b.addMetric("m1", pdata.MetricDataTypeSum, true)
+	mb1.addIntDataPoint(2, map[string]string{"service_version": "value2", "other_attr": "value2"})
+
+	mb2 := b.addMetric("m2", pdata.MetricDataTypeGauge, false)
+	mb2.addDoubleDataPoint(3, map[string]string{"service_version": "value1", "other_attr": "value1"})
+
+	rmb.Build().CopyTo(input.ResourceMetrics())
+	return input
+}
+
+func generateMultiAttrVersionExpected() pdata.Metrics {
+	input := pdata.NewMetrics()
+
+	rmb := newResourceMetricsBuilder()
+	b := rmb.addResourceMetrics(nil)
+
+	mb1 := b.addMetric("m1", pdata.MetricDataTypeSum, true)
+	mb1.addIntDataPoint(2, map[string]string{"other_attr": "value2"})
+
+	mb2 := b.addMetric("m2", pdata.MetricDataTypeGauge, false)
+	mb2.addDoubleDataPoint(3, map[string]string{"other_attr": "value1"})
+
+	rmb.Build().CopyTo(input.ResourceMetrics())
+	return input
+}

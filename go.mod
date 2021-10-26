@@ -11,7 +11,9 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor v0.37.1
 	github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourceprocessor v0.37.1
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver v0.37.1
+	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/httpdreceiver v0.37.1
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver v0.37.1
+	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/mysqlreceiver v0.37.1
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/nginxreceiver v0.37.1
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusexecreceiver v0.37.1
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver v0.37.1

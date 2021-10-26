@@ -19,8 +19,8 @@ import (
 	"regexp"
 	"sync"
 
-	"go.opentelemetry.io/collector/consumer/consumererror"
 	"go.opentelemetry.io/collector/model/pdata"
+	"go.uber.org/multierr"
 	"go.uber.org/zap"
 )
 
@@ -86,7 +86,7 @@ func (mtp *agentMetricsProcessor) ProcessMetrics(ctx context.Context, metrics pd
 	}
 
 	if len(errors) > 0 {
-		return metrics, consumererror.Combine(errors)
+		return metrics, multierr.Combine(errors...)
 	}
 
 	return metrics, nil

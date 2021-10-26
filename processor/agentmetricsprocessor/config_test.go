@@ -35,7 +35,7 @@ func TestLoadConfig(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, cfg)
 
-	p1 := cfg.Processors[config.NewID("agentmetrics")]
+	p1 := cfg.Processors[config.NewComponentID("agentmetrics")]
 
 	want := factory.CreateDefaultConfig()
 	want.(*Config).BlankLabelMetrics = []string{"system.cpu.time"}

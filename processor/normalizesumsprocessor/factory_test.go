@@ -20,18 +20,13 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/config/configcheck"
+	"go.opentelemetry.io/collector/config/configtest"
 	"go.opentelemetry.io/collector/consumer/consumertest"
 )
 
 func TestCreateDefaultConfig(t *testing.T) {
-	m, err := component.MakeProcessorFactoryMap(NewFactory())
-	assert.NoError(t, err)
-	assert.NoError(t, configcheck.ValidateConfigFromFactories(component.Factories{
-		Processors: m,
-	}))
+	assert.NoError(t, configtest.CheckConfigStruct(NewFactory().CreateDefaultConfig()))
 }
-
 func TestCreateProcessor(t *testing.T) {
 	mp, err := createMetricsProcessor(context.Background(), component.ProcessorCreateSettings{}, createDefaultConfig(), consumertest.NewNop())
 	assert.NoError(t, err)

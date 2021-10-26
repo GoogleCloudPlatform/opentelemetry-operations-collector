@@ -100,7 +100,7 @@ func TestAgentMetricsProcessor(t *testing.T) {
 			tmn := &consumertest.MetricsSink{}
 			rmp, err := processorhelper.NewMetricsProcessor(
 				&Config{
-					ProcessorSettings: config.NewProcessorSettings(config.NewID(typeStr)),
+					ProcessorSettings: config.NewProcessorSettings(config.NewComponentID(typeStr)),
 				},
 				tmn,
 				amp.ProcessMetrics,
@@ -171,7 +171,7 @@ func (msb metricsBuilder) addMetric(name string, t pdata.MetricDataType, isMonot
 	case pdata.MetricDataTypeSum:
 		sum := metric.Sum()
 		sum.SetIsMonotonic(isMonotonic)
-		sum.SetAggregationTemporality(pdata.AggregationTemporalityCumulative)
+		sum.SetAggregationTemporality(pdata.MetricAggregationTemporalityCumulative)
 	case pdata.MetricDataTypeGauge:
 		metric.Gauge()
 	}

@@ -461,8 +461,9 @@ github.com/franela/goblin v0.0.0-20200105215937-c9ffbefa60db/go.mod h1:7dvUGVsVB
 github.com/franela/goreq v0.0.0-20171204163338-bcd34c9993f8/go.mod h1:ZhphrRTfi2rbfLwlschooIH4+wKKDR4Pdxhh+TRoA20=
 github.com/frankban/quicktest v1.11.3/go.mod h1:wRf/ReqHper53s+kmmSZizM8NamnL3IM0I9ntUbOk+k=
 github.com/fsnotify/fsnotify v1.4.7/go.mod h1:jwhsz4b93w/PPRr/qN1Yymfu8t87LnFCMoQvtojpjFo=
-github.com/fsnotify/fsnotify v1.4.9 h1:hsms1Qyu0jgnwNXIxa+/V/PDsU6CfLf6CNO8H7IWoS4=
 github.com/fsnotify/fsnotify v1.4.9/go.mod h1:znqG4EE+3YCdAaPaxE2ZRY/06pZUdp0tY4IgpuI1SZQ=
+github.com/fsnotify/fsnotify v1.5.1 h1:mZcQUHVQUQWoPXXtuf9yuEXKudkV2sx1E06UadKWpgI=
+github.com/fsnotify/fsnotify v1.5.1/go.mod h1:T3375wBYaZdLLcVNkcVbzGHY7f1l/uK5T5Ai1i3InKU=
 github.com/fullsailor/pkcs7 v0.0.0-20190404230743-d7302db945fa/go.mod h1:KnogPXtdwXqoenmZCw6S+25EAm2MkxbG0deNDu4cbSA=
 github.com/garyburd/redigo v0.0.0-20150301180006-535138d7bcd7/go.mod h1:NR3MbYisc3/PwhQ00EMzDiPmrwpPxAn5GI05/YaO1SY=
 github.com/gdamore/encoding v1.0.0/go.mod h1:alR0ol34c49FCSBLjhosxzcPHQbf2trDkoo5dl+VrEg=
@@ -1136,8 +1137,12 @@ github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourceproc
 github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourceprocessor v0.37.1/go.mod h1:FbXOAeWTM02aCdozdcuzlgefq/wzbuj2rlSgFC4q02Y=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver v0.37.1 h1:YgTZo5zlv/7u57UXBQgyUIZ6cdFJlsrGK5ZYMmIp84o=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver v0.37.1/go.mod h1:hYczQP+EAiJlmITPW8lJ6XsW7YLM4k3Z5VbuTrFtapU=
+github.com/open-telemetry/opentelemetry-collector-contrib/receiver/httpdreceiver v0.37.1 h1:PtJFKUxIV4mLb7eG6yYQAS2UVsH7m98g1v46jPOedQI=
+github.com/open-telemetry/opentelemetry-collector-contrib/receiver/httpdreceiver v0.37.1/go.mod h1:gQM/0n8v28UWmLfhBrCPI1rhuF0sAhSetGU223KxYiE=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver v0.37.1 h1:iOPUNcHEl35yR+13ur8iqLVR92frrUONOzc34gnhLug=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver v0.37.1/go.mod h1:mEfbx5Zuw+KwqWk+qxUGdFvT0rEphsnKMqO/bqz7mvc=
+github.com/open-telemetry/opentelemetry-collector-contrib/receiver/mysqlreceiver v0.37.1 h1:B/gJopbvY05jA+WdJaKJU8RDPdHACtRqoKCGNTR4JMw=
+github.com/open-telemetry/opentelemetry-collector-contrib/receiver/mysqlreceiver v0.37.1/go.mod h1:HThhcWq0cnjpuOrcc0MfHg2A5OZQe2E9Cl4QSphapXc=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/nginxreceiver v0.37.1 h1:5FbHklE87vFMxhTlCCHlq+1qP41t+PZaCXNi1y5cNO0=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/nginxreceiver v0.37.1/go.mod h1:OTIh9sq9/C5eZeJ/+Q1KwqXsyKNhT9wl/IgoL1U4EiM=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusexecreceiver v0.37.1 h1:W2uf2kP1xv7bpDvNz5jcBmD0g3vA2x3OTwRY3gJjCSc=
@@ -1298,8 +1303,9 @@ github.com/rogpeppe/fastuuid v1.2.0/go.mod h1:jVj6XXZzXRy/MSR5jhDC/2q6DgLz+nrA6L
 github.com/rogpeppe/go-internal v1.1.0/go.mod h1:M8bDsm7K2OlrFYOpmOWEs/qY81heoFRclV5y23lUDJ4=
 github.com/rogpeppe/go-internal v1.2.2/go.mod h1:M8bDsm7K2OlrFYOpmOWEs/qY81heoFRclV5y23lUDJ4=
 github.com/rogpeppe/go-internal v1.3.0/go.mod h1:M8bDsm7K2OlrFYOpmOWEs/qY81heoFRclV5y23lUDJ4=
-github.com/rogpeppe/go-internal v1.6.1 h1:/FiVV8dS/e+YqF2JvO3yXRFbBLTIuSDkuC7aBOAvL+k=
 github.com/rogpeppe/go-internal v1.6.1/go.mod h1:xXDCJY+GAPziupqXw64V24skbSoqbTEfhy4qGm1nDQc=
+github.com/rogpeppe/go-internal v1.6.2 h1:aIihoIOHCiLZHxyoNQ+ABL4NKhFTgKLBdMLyEAh98m0=
+github.com/rogpeppe/go-internal v1.6.2/go.mod h1:xXDCJY+GAPziupqXw64V24skbSoqbTEfhy4qGm1nDQc=
 github.com/rs/cors v1.6.0/go.mod h1:gFx+x8UowdsKA9AchylcLynDq+nNFfI8FkUZdN/jGCU=
 github.com/rs/cors v1.7.0/go.mod h1:gFx+x8UowdsKA9AchylcLynDq+nNFfI8FkUZdN/jGCU=
 github.com/rs/cors v1.8.0 h1:P2KMzcFwrPoSjkF1WLRPsp3UMLyql8L4v9hQpVeK5so=

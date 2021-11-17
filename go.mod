@@ -11,6 +11,7 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver v0.39.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/httpdreceiver v0.38.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver v0.39.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/memcachedreceiver v0.39.1-0.20211117124746-226fbbc13fad
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/mysqlreceiver v0.39.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/nginxreceiver v0.39.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusexecreceiver v0.39.0
@@ -33,6 +34,7 @@ require (
 	contrib.go.opencensus.io/exporter/prometheus v0.4.0 // indirect
 	contrib.go.opencensus.io/exporter/stackdriver v0.13.10 // indirect
 	github.com/Azure/azure-sdk-for-go v55.2.0+incompatible // indirect
+	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
 	github.com/Azure/go-autorest v14.2.0+incompatible // indirect
 	github.com/Azure/go-autorest/autorest v0.11.19 // indirect
 	github.com/Azure/go-autorest/autorest/adal v0.9.14 // indirect
@@ -50,7 +52,7 @@ require (
 	github.com/armon/go-metrics v0.3.9 // indirect
 	github.com/aws/aws-sdk-go v1.41.19 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/cenkalti/backoff/v4 v4.1.1 // indirect
+	github.com/cenkalti/backoff/v4 v4.1.2 // indirect
 	github.com/census-instrumentation/opencensus-proto v0.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
 	github.com/cncf/udpa/go v0.0.0-20210930031921-04548b0d99d4 // indirect
@@ -88,6 +90,7 @@ require (
 	github.com/googleapis/gnostic v0.4.1 // indirect
 	github.com/gophercloud/gophercloud v0.18.0 // indirect
 	github.com/gorilla/mux v1.8.0 // indirect
+	github.com/grobie/gomemcache v0.0.0-20180201122607-1f779c573665 // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0 // indirect
 	github.com/hashicorp/consul/api v1.10.1 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect

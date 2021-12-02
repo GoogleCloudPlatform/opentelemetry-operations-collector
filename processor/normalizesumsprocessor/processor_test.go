@@ -414,8 +414,8 @@ func newResourceMetricsBuilder() resourceMetricsBuilder {
 func (rmsb resourceMetricsBuilder) addResourceMetrics(resourceAttributes map[string]pdata.AttributeValue) metricsBuilder {
 	rm := rmsb.rms.AppendEmpty()
 
-	if resourceAttributes != nil {
-		rm.Resource().Attributes().InitFromMap(resourceAttributes)
+	for k, v := range resourceAttributes {
+		rm.Resource().Attributes().Insert(k, v)
 	}
 
 	ilm := rm.InstrumentationLibraryMetrics().AppendEmpty()

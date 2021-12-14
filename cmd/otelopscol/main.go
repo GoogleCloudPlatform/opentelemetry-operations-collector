@@ -19,12 +19,11 @@ import (
 	"log"
 	"strings"
 
+	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/service"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"moul.io/zapfilter"
-
-	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/service"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/env"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/version"

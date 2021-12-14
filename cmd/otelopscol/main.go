@@ -18,6 +18,10 @@ import (
 	"fmt"
 	"log"
 
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"moul.io/zapfilter"
+
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/service"
 
@@ -41,7 +45,21 @@ func main() {
 		Version:     version.Version,
 	}
 
-	params := service.CollectorSettings{Factories: factories, BuildInfo: info}
+	// Remove hostmetrics logspam
+	logFilterFunc := func(entry zapcore.Entry, fields []zapcore.Field) bool {
+
+		return true
+	}
+
+	params := service.CollectorSettings{
+		Factories: factories,
+		BuildInfo: info,
+		LoggingOptions: []zap.Option{
+			zap.WrapCore(func(core zapcore.Core) zapcore.Core {
+				return zapfilter.NewFilteringCore(core, logFilterFunc)
+			}),
+		},
+	}
 
 	if err := run(params); err != nil {
 		log.Fatal(err)

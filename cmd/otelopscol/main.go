@@ -62,8 +62,19 @@ func main() {
 // Upstream issue: https://github.com/open-telemetry/opentelemetry-collector/issues/3004
 func logSpamFilterCore() zap.Option {
 	logFilterFunc := func(entry zapcore.Entry, fields []zapcore.Field) bool {
-		if strings.Contains(entry.Caller.File, "scrapercontroller.go") {
-			return strings.Contains(entry.Message, "error reading process name for pid")
+		if !strings.Contains(entry.Caller.File, "scrapercontroller.go") {
+			return true
+		}
+		for _, field := range fields {
+			if field.Key == "error" {
+				logError, ok := field.Interface.(error)
+				if !ok {
+					return true
+				}
+				return !strings.Contains(
+					logError.Error(),
+					"error reading process name for pid")
+			}
 		}
 		return true
 	}

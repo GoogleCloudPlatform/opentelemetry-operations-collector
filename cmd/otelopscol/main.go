@@ -46,29 +46,32 @@ func main() {
 		Version:     version.Version,
 	}
 
-	// Remove hostmetrics logspam
-	logFilterFunc := func(entry zapcore.Entry, fields []zapcore.Field) bool {
-		if strings.Contains(entry.Caller.File, "scrapercontroller.go") {
-			if strings.Contains(entry.Message, "error reading process name for pid") {
-				return false
-			}
-		}
-		return true
-	}
-
 	params := service.CollectorSettings{
 		Factories: factories,
 		BuildInfo: info,
 		LoggingOptions: []zap.Option{
-			zap.WrapCore(func(core zapcore.Core) zapcore.Core {
-				return zapfilter.NewFilteringCore(core, logFilterFunc)
-			}),
+			logSpamFilterCore(),
 		},
 	}
 
 	if err := run(params); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// Returns a zapfilter core that will filter log spam from the otel collector.
+// Upstream issue: https://github.com/open-telemetry/opentelemetry-collector/issues/3004
+func logSpamFilterCore() zap.Option {
+	logFilterFunc := func(entry zapcore.Entry, fields []zapcore.Field) bool {
+		if strings.Contains(entry.Caller.File, "scrapercontroller.go") {
+			return strings.Contains(entry.Message, "error reading process name for pid")
+		}
+		return true
+	}
+
+	return zap.WrapCore(func(core zapcore.Core) zapcore.Core {
+		return zapfilter.NewFilteringCore(core, logFilterFunc)
+	})
 }
 
 func runInteractive(params service.CollectorSettings) error {

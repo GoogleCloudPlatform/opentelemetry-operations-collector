@@ -17,6 +17,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"strings"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -47,7 +48,11 @@ func main() {
 
 	// Remove hostmetrics logspam
 	logFilterFunc := func(entry zapcore.Entry, fields []zapcore.Field) bool {
-
+		if strings.Contains(entry.Caller.File, "scrapercontroller.go") {
+			if strings.Contains(entry.Message, "error reading process name for pid") {
+				return false
+			}
+		}
 		return true
 	}
 

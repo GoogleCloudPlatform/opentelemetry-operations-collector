@@ -71,6 +71,7 @@ func logSpamFilterCore() zap.Option {
 				if !ok {
 					return true
 				}
+				fmt.Printf("abcdefg it found string %s", logError.Error())
 				return !strings.Contains(
 					logError.Error(),
 					"error reading process name for pid")

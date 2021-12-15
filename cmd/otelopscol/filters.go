@@ -22,16 +22,34 @@ import (
 	"moul.io/zapfilter"
 )
 
-// Returns a zapfilter core that will filter logs with some error message.
-func errorFilterCore() zap.Option {
-	errorSubstringsToFilter := []string{
+type errorFilterConfig struct {
+	fileName        string
+	errorSubstrings []string
+}
+
+// Returns zap options that will filter logs with some error message from a file.
+func errorFilterOptions() []zap.Option {
+	errorFilters := []errorFilterConfig{
 		// Filter out a problematic upstream otel spam log from hostmetrics.
 		// Upstream issue: https://github.com/open-telemetry/opentelemetry-collector/issues/3004
-		"error reading process name for pid",
+		{
+			fileName:        "scrapercontroller.go",
+			errorSubstrings: []string{"error reading process name for pid"},
+		},
 	}
 
+	options := []zap.Option{}
+	for _, filter := range errorFilters {
+		options = append(options, makeErrorFilterOption(filter))
+	}
+
+	return options
+}
+
+func makeErrorFilterOption(filterConfig errorFilterConfig) zap.Option {
 	logFilterFunc := func(entry zapcore.Entry, fields []zapcore.Field) bool {
-		if !strings.Contains(entry.Caller.File, "scrapercontroller.go") {
+		if filterConfig.fileName != "" &&
+			!strings.Contains(entry.Caller.File, filterConfig.fileName) {
 			return true
 		}
 		for _, field := range fields {
@@ -40,7 +58,7 @@ func errorFilterCore() zap.Option {
 				if !ok {
 					return true
 				}
-				return !matchAny(logError.Error(), errorSubstringsToFilter)
+				return !matchAny(logError.Error(), filterConfig.errorSubstrings)
 			}
 		}
 		return true

@@ -42,12 +42,15 @@ func main() {
 		Version:     version.Version,
 	}
 
+	loggingOptions := append(
+		[]zap.Option{},
+		errorFilterOptions()...,
+	)
+
 	params := service.CollectorSettings{
-		Factories: factories,
-		BuildInfo: info,
-		LoggingOptions: []zap.Option{
-			errorFilterCore(),
-		},
+		Factories:      factories,
+		BuildInfo:      info,
+		LoggingOptions: loggingOptions,
 	}
 
 	if err := run(params); err != nil {

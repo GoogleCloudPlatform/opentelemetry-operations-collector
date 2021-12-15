@@ -35,7 +35,7 @@ func TestErrorFilterOption(t *testing.T) {
 				},
 			},
 			errors: []error{
-				errors.New("error reading process name for pid 1:"),
+				errors.New("error reading process name for pid 1"),
 			},
 			expectedLogCount: 0,
 		},
@@ -46,9 +46,9 @@ func TestErrorFilterOption(t *testing.T) {
 				},
 			},
 			errors: []error{
-				errors.New("error reading process name for pid 1:"),
-				errors.New("error reading process name for pid 2:"),
-				errors.New("error reading process name for pid 0:"),
+				errors.New("error reading process name for pid 1"),
+				errors.New("error reading process name for pid 2"),
+				errors.New("error reading process name for pid 0"),
 			},
 			expectedLogCount: 0,
 		},
@@ -59,7 +59,7 @@ func TestErrorFilterOption(t *testing.T) {
 				},
 			},
 			errors: []error{
-				errors.New("error reading process name for pid 1:"),
+				errors.New("error reading process name for pid 1"),
 				errors.New("unrelated error"),
 			},
 			expectedLogCount: 1,

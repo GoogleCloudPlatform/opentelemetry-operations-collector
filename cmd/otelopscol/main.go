@@ -17,13 +17,10 @@ package main
 import (
 	"fmt"
 	"log"
-	"strings"
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/service"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
-	"moul.io/zapfilter"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/env"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/version"
@@ -49,39 +46,13 @@ func main() {
 		Factories: factories,
 		BuildInfo: info,
 		LoggingOptions: []zap.Option{
-			logSpamFilterCore(),
+			errorFilterCore(),
 		},
 	}
 
 	if err := run(params); err != nil {
 		log.Fatal(err)
 	}
-}
-
-// Returns a zapfilter core that will filter log spam from the otel collector.
-// Upstream issue: https://github.com/open-telemetry/opentelemetry-collector/issues/3004
-func logSpamFilterCore() zap.Option {
-	logFilterFunc := func(entry zapcore.Entry, fields []zapcore.Field) bool {
-		if !strings.Contains(entry.Caller.File, "scrapercontroller.go") {
-			return true
-		}
-		for _, field := range fields {
-			if field.Key == "error" {
-				logError, ok := field.Interface.(error)
-				if !ok {
-					return true
-				}
-				return !strings.Contains(
-					logError.Error(),
-					"error reading process name for pid")
-			}
-		}
-		return true
-	}
-
-	return zap.WrapCore(func(core zapcore.Core) zapcore.Core {
-		return zapfilter.NewFilteringCore(core, logFilterFunc)
-	})
 }
 
 func runInteractive(params service.CollectorSettings) error {

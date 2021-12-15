@@ -29,7 +29,7 @@ type errorFilterConfig struct {
 
 // Returns zap options that will filter logs with some error message from a file.
 func errorFilterOptions() []zap.Option {
-	errorFilters := []errorFilterConfig{
+	errorFilterConfigs := []errorFilterConfig{
 		// Filter out a problematic upstream otel spam log from hostmetrics.
 		// Upstream issue: https://github.com/open-telemetry/opentelemetry-collector/issues/3004
 		{
@@ -39,7 +39,7 @@ func errorFilterOptions() []zap.Option {
 	}
 
 	options := []zap.Option{}
-	for _, filter := range errorFilters {
+	for _, filter := range errorFilterConfigs {
 		options = append(options, makeErrorFilterOption(filter))
 	}
 

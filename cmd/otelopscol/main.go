@@ -20,6 +20,7 @@ import (
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/service"
+	"go.uber.org/zap"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/env"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/version"
@@ -41,7 +42,16 @@ func main() {
 		Version:     version.Version,
 	}
 
-	params := service.CollectorSettings{Factories: factories, BuildInfo: info}
+	loggingOptions := append(
+		[]zap.Option{},
+		errorFilterOptions()...,
+	)
+
+	params := service.CollectorSettings{
+		Factories:      factories,
+		BuildInfo:      info,
+		LoggingOptions: loggingOptions,
+	}
 
 	if err := run(params); err != nil {
 		log.Fatal(err)

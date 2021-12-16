@@ -29,6 +29,6 @@ service:
   pipelines:
     metrics:
       receivers: [hostmetrics]
-      processors: [agentmetricsprocessor, ...]
+      processors: [agentmetrics, ...]
       exporters: [googlecloud]
 ```

@@ -20,8 +20,8 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourceprocessor"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/apachereceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/httpdreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/memcachedreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/mysqlreceiver"
@@ -64,7 +64,7 @@ func components() (component.Factories, error) {
 		windowsperfcountersreceiver.NewFactory(),
 		redisreceiver.NewFactory(),
 		mysqlreceiver.NewFactory(),
-		httpdreceiver.NewFactory(),
+		apachereceiver.NewFactory(),
 		memcachedreceiver.NewFactory(),
 		postgresqlreceiver.NewFactory(),
 	}

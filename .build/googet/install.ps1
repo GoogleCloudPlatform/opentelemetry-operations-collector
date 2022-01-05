@@ -32,7 +32,7 @@ try
     {
         New-Service -DisplayName "Google Cloud Metrics Agent" `
             -Name "google-cloud-metrics-agent" `
-            -BinaryPathName "$InstallDir\google-cloud-metrics-agent.exe --add-instance-id=false --config=""$InstallDir\config.yaml""" `
+            -BinaryPathName "$InstallDir\google-cloud-metrics-agent.exe  --config=""$InstallDir\config.yaml""" `
             -Description "Collects agent metrics and reports them to Google Cloud Operations."
 
         Set-ServiceConfig

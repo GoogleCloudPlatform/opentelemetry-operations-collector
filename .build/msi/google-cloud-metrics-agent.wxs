@@ -38,7 +38,7 @@
                Start="auto"
                Account="LocalSystem"
                ErrorControl="normal"
-               Arguments=" --add-instance-id=false --config=&quot;[INSTALLDIR]config.yaml&quot;"
+               Arguments=" --config=&quot;[INSTALLDIR]config.yaml&quot;"
                Interactive="no" />
             <ServiceControl
                Id="StartStopRemoveService"

@@ -9,6 +9,7 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor v0.42.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourceprocessor v0.42.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/apachereceiver v0.41.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/elasticsearchreceiver v0.42.1-0.20220117194018-72c35359fa53
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver v0.42.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver v0.42.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/memcachedreceiver v0.42.0

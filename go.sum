@@ -986,8 +986,9 @@ github.com/klauspost/compress v1.4.0/go.mod h1:RyIbtBH6LamlWaDj8nUwkbUhJ87Yi3uG0
 github.com/klauspost/compress v1.9.5/go.mod h1:RyIbtBH6LamlWaDj8nUwkbUhJ87Yi3uG0guNDohfE1A=
 github.com/klauspost/compress v1.11.3/go.mod h1:aoV0uJVorq1K+umq18yTdKaF57EivdYsUV+/s2qKfXs=
 github.com/klauspost/compress v1.11.13/go.mod h1:aoV0uJVorq1K+umq18yTdKaF57EivdYsUV+/s2qKfXs=
-github.com/klauspost/compress v1.13.6 h1:P76CopJELS0TiO2mebmnzgWaajssP/EszplttgQxcgc=
 github.com/klauspost/compress v1.13.6/go.mod h1:/3/Vjq9QcHkK5uEr5lBEmyoZ1iFhe47etQ6QUkpK6sk=
+github.com/klauspost/compress v1.14.1 h1:hLQYb23E8/fO+1u53d02A97a8UnsddcvYzq4ERRU4ds=
+github.com/klauspost/compress v1.14.1/go.mod h1:/3/Vjq9QcHkK5uEr5lBEmyoZ1iFhe47etQ6QUkpK6sk=
 github.com/klauspost/cpuid v0.0.0-20170728055534-ae7887de9fa5/go.mod h1:Pj4uuM528wm8OyEC2QMXAi2YiTZ96dNQPGgoMS4s3ek=
 github.com/klauspost/crc32 v0.0.0-20161016154125-cb6bfca970f6/go.mod h1:+ZoRqAPRLkC4NPOvfYeR5KNOrY6TD+/sAC3HXPZgDYg=
 github.com/klauspost/pgzip v1.0.2-0.20170402124221-0bf5dcad4ada/go.mod h1:Ch1tH69qFZu15pkjo5kYi6mth2Zzwzt50oCQKQE9RUs=
@@ -1209,6 +1210,10 @@ github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourceproc
 github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourceprocessor v0.42.0/go.mod h1:xuHp+S+Ofje2GXHqlA6aYeA7kufpe+HnmSe22NVd9p4=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/apachereceiver v0.41.0 h1:FRES7ideJtvo3G1Z90ATxgiBgJr/dSpjC+LHYEKs9Mk=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/apachereceiver v0.41.0/go.mod h1:dO32ogC+gnFK5UF+J2Spmc9oID0PoC4xGz4eXbl5E1o=
+github.com/open-telemetry/opentelemetry-collector-contrib/receiver/couchdbreceiver v0.42.1-0.20220119193557-f430ca84115a h1:12cO2OFDyY+3Oxoj4Mbke7pBU2YHY0uYGfgSbUu5CUY=
+github.com/open-telemetry/opentelemetry-collector-contrib/receiver/couchdbreceiver v0.42.1-0.20220119193557-f430ca84115a/go.mod h1:Aq/PKndW/lL56U/ivfl7/lJv9N2dpst5MNmLczMb8is=
+github.com/open-telemetry/opentelemetry-collector-contrib/receiver/elasticsearchreceiver v0.42.1-0.20220119150724-0df7ca0677e3 h1:lr2BnkfG3ckoZngyUWd9zxHvCKmVTa8Ef8+Ca+Ds954=
+github.com/open-telemetry/opentelemetry-collector-contrib/receiver/elasticsearchreceiver v0.42.1-0.20220119150724-0df7ca0677e3/go.mod h1:VOHywQGOASYEeJv+cnmuMBxkGvdp3o3cbUTACtHnYdQ=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver v0.42.0 h1:w7ewktR63enhCplewutrDQ64s1bcmR1eI2Uj0UHfLQo=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver v0.42.0/go.mod h1:OasDxTd0hOAviA3LD2SjX3ivZsVdReNAT2hoi8xy8EI=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver v0.42.0 h1:VJaLObhXGZqZ/uLk1m6AK94cuSDmNSz/Ep0dkgjMVoY=

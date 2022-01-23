@@ -21,6 +21,7 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver v0.42.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/redisreceiver v0.42.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowsperfcountersreceiver v0.42.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/zookeeperreceiver v0.42.1-0.20220120170846-5431deed321e
 	github.com/shirou/gopsutil v3.21.10+incompatible
 	github.com/stretchr/testify v1.7.0
 	go.opentelemetry.io/collector v0.42.0

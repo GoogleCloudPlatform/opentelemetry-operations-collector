@@ -75,7 +75,55 @@ func TestNormalizeSumsProcessor(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			nsp := newNormalizeSumsProcessor(zap.NewExample())
+			nsp := newNormalizeSumsProcessor(zap.NewExample(), nil)
+
+			tmn := &consumertest.MetricsSink{}
+			id := config.NewComponentID(typeStr)
+			settings := config.NewProcessorSettings(id)
+			rmp, err := processorhelper.NewMetricsProcessor(
+				&Config{
+					ProcessorSettings: &settings,
+				},
+				tmn,
+				nsp.ProcessMetrics,
+				processorhelper.WithCapabilities(processorCapabilities))
+			require.NoError(t, err)
+
+			require.True(t, rmp.Capabilities().MutatesData)
+
+			require.NoError(t, rmp.Start(context.Background(), componenttest.NewNopHost()))
+			defer func() { require.NoError(t, rmp.Shutdown(context.Background())) }()
+
+			for _, input := range tt.inputs {
+				err = rmp.ConsumeMetrics(context.Background(), input)
+				require.NoError(t, err)
+			}
+
+			requireEqual(t, tt.expected, tmn.AllMetrics())
+		})
+	}
+
+	gaugeTests := []testCase{
+		{
+			name:     "no-transform-case",
+			inputs:   generateNoTransformMetrics(testStart),
+			expected: generateNoTransformMetrics(testStart),
+		},
+		{
+			name:     "gauge-metric-case",
+			inputs:   generateIncludedGaugeInput(testStart),
+			expected: generateIncludedGaugeOutput(testStart),
+		},
+		{
+			name:     "more-complex-gauge-metric-case",
+			inputs:   generateComplexIncludedGaugeInput(testStart),
+			expected: generateComplexIncludedGaugeOutput(testStart),
+		},
+	}
+
+	for _, tt := range gaugeTests {
+		t.Run(tt.name, func(t *testing.T) {
+			nsp := newNormalizeSumsProcessor(zap.NewExample(), []string{"m1", "m2"})
 
 			tmn := &consumertest.MetricsSink{}
 			id := config.NewComponentID(typeStr)
@@ -399,6 +447,112 @@ func generateComplexOutput(startTime int64) []pdata.Metrics {
 	list = append(list, output)
 
 	return list
+}
+
+func generateIncludedGaugeInput(startTime int64) []pdata.Metrics {
+	input := pdata.NewMetrics()
+
+	rmb := newResourceMetricsBuilder()
+	b := rmb.addResourceMetrics(nil)
+
+	mb1 := b.addMetric("m1", pdata.MetricDataTypeGauge, false)
+	mb1.addDoubleDataPoint(3, map[string]string{}, startTime, 0)
+	mb1.addDoubleDataPoint(4, map[string]string{}, startTime+1000, 0)
+
+	mb3 := b.addMetric("m3", pdata.MetricDataTypeGauge, false)
+	mb3.addDoubleDataPoint(5, map[string]string{}, startTime, 0)
+	mb3.addDoubleDataPoint(6, map[string]string{}, startTime+1000, 0)
+
+	rmb.Build().CopyTo(input.ResourceMetrics())
+	return []pdata.Metrics{input}
+}
+
+func generateIncludedGaugeOutput(startTime int64) []pdata.Metrics {
+	output := pdata.NewMetrics()
+
+	rmb := newResourceMetricsBuilder()
+	b := rmb.addResourceMetrics(nil)
+
+	mb1 := b.addMetric("m1", pdata.MetricDataTypeSum, true)
+	// mb1.addDoubleDataPoint(3, map[string]string{}, startTime, 0)
+	mb1.addDoubleDataPoint(1, map[string]string{}, startTime+1000, startTime)
+
+	mb3 := b.addMetric("m3", pdata.MetricDataTypeGauge, false)
+	mb3.addDoubleDataPoint(5, map[string]string{}, startTime, 0)
+	mb3.addDoubleDataPoint(6, map[string]string{}, startTime+1000, 0)
+
+	rmb.Build().CopyTo(output.ResourceMetrics())
+	return []pdata.Metrics{output}
+}
+
+func generateComplexIncludedGaugeInput(startTime int64) []pdata.Metrics {
+	input := pdata.NewMetrics()
+
+	rmb := newResourceMetricsBuilder()
+	b := rmb.addResourceMetrics(nil)
+
+	mb1 := b.addMetric("m1", pdata.MetricDataTypeGauge, true)
+	mb1.addIntDataPoint(1, map[string]string{}, startTime, 0)
+	mb1.addIntDataPoint(2, map[string]string{}, startTime+1000, 0)
+	mb1.addIntDataPoint(2, map[string]string{}, startTime+2000, 0)
+	mb1.addIntDataPoint(5, map[string]string{}, startTime+3000, 0)
+	mb1.addIntDataPoint(2, map[string]string{}, startTime+4000, 0)
+	mb1.addIntDataPoint(4, map[string]string{}, startTime+5000, 0)
+
+	mb2 := b.addMetric("m2", pdata.MetricDataTypeGauge, true)
+	mb2.addDoubleDataPoint(3, map[string]string{}, startTime, 0)
+	mb2.addDoubleDataPoint(4, map[string]string{}, startTime+1000, 0)
+	mb2.addDoubleDataPoint(5, map[string]string{}, startTime+2000, 0)
+	mb2.addDoubleDataPoint(2, map[string]string{}, startTime, 0)
+	mb2.addDoubleDataPoint(8, map[string]string{}, startTime+3000, 0)
+	mb2.addDoubleDataPoint(2, map[string]string{}, startTime+10000, 0)
+	mb2.addDoubleDataPoint(6, map[string]string{}, startTime+120000, 0)
+
+	mb3 := b.addMetric("m3", pdata.MetricDataTypeGauge, false)
+	mb3.addDoubleDataPoint(5, map[string]string{}, startTime, 0)
+	mb3.addDoubleDataPoint(6, map[string]string{}, startTime+1000, 0)
+
+	mb4 := b.addMetric("m4", pdata.MetricDataTypeSum, false)
+	mb4.addDoubleDataPoint(12, map[string]string{}, startTime, 0)
+	mb4.addDoubleDataPoint(13, map[string]string{}, startTime+2000, 0)
+
+	rmb.Build().CopyTo(input.ResourceMetrics())
+	return []pdata.Metrics{input}
+}
+
+func generateComplexIncludedGaugeOutput(startTime int64) []pdata.Metrics {
+	output := pdata.NewMetrics()
+
+	rmb := newResourceMetricsBuilder()
+	b := rmb.addResourceMetrics(nil)
+
+	mb1 := b.addMetric("m1", pdata.MetricDataTypeSum, true)
+	// mb1.addIntDataPoint(1, map[string]string{}, startTime, 0)
+	mb1.addIntDataPoint(1, map[string]string{}, startTime+1000, startTime)
+	mb1.addIntDataPoint(1, map[string]string{}, startTime+2000, startTime)
+	mb1.addIntDataPoint(4, map[string]string{}, startTime+3000, startTime)
+	// mb1.addIntDataPoint(2, map[string]string{}, startTime+4000, 0)
+	mb1.addIntDataPoint(2, map[string]string{}, startTime+5000, startTime+4000)
+
+	mb2 := b.addMetric("m2", pdata.MetricDataTypeSum, true)
+	// mb2.addDoubleDataPoint(3, map[string]string{}, startTime, 0)
+	mb2.addDoubleDataPoint(1, map[string]string{}, startTime+1000, startTime)
+	mb2.addDoubleDataPoint(2, map[string]string{}, startTime+2000, startTime)
+	// mb2.addDoubleDataPoint(2, map[string]string{}, startTime, 0)
+	mb2.addDoubleDataPoint(5, map[string]string{}, startTime+3000, startTime)
+	// mb2.addDoubleDataPoint(2, map[string]string{}, startTime+10000, 0)
+	mb2.addDoubleDataPoint(4, map[string]string{}, startTime+120000, startTime+10000)
+
+	mb3 := b.addMetric("m3", pdata.MetricDataTypeGauge, false)
+	mb3.addDoubleDataPoint(5, map[string]string{}, startTime, 0)
+	mb3.addDoubleDataPoint(6, map[string]string{}, startTime+1000, 0)
+
+	mb4 := b.addMetric("m4", pdata.MetricDataTypeSum, false)
+	mb4.addDoubleDataPoint(12, map[string]string{}, startTime, 0)
+	mb4.addDoubleDataPoint(13, map[string]string{}, startTime+2000, 0)
+
+	rmb.Build().CopyTo(output.ResourceMetrics())
+	return []pdata.Metrics{output}
 }
 
 // builders to generate test metrics

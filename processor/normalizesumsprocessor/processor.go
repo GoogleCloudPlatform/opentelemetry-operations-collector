@@ -30,19 +30,17 @@ import (
 type NormalizeSumsProcessor struct {
 	logger *zap.Logger
 
-	includeGauges []string
-	history       map[string]*startPoint
+	history map[string]*startPoint
 }
 
 type startPoint struct {
 	start, last pdata.NumberDataPoint
 }
 
-func newNormalizeSumsProcessor(logger *zap.Logger, includeGauges []string) *NormalizeSumsProcessor {
+func newNormalizeSumsProcessor(logger *zap.Logger) *NormalizeSumsProcessor {
 	return &NormalizeSumsProcessor{
-		logger:        logger,
-		includeGauges: includeGauges,
-		history:       make(map[string]*startPoint),
+		logger:  logger,
+		history: make(map[string]*startPoint),
 	}
 }
 
@@ -63,8 +61,13 @@ func (nsp *NormalizeSumsProcessor) transformMetrics(rms pdata.ResourceMetrics) {
 		newSlice := pdata.NewMetricSlice()
 		for k := 0; k < ilm.Len(); k++ {
 			metric := ilm.At(k)
-			keepMetric := nsp.processMetric(rms.Resource(), metric)
-			if keepMetric {
+			if metric.DataType() == pdata.MetricDataTypeSum && metric.Sum().IsMonotonic() {
+				keepMetric := nsp.processMetric(rms.Resource(), metric)
+				if keepMetric {
+					newMetric := newSlice.AppendEmpty()
+					metric.CopyTo(newMetric)
+				}
+			} else {
 				newMetric := newSlice.AppendEmpty()
 				metric.CopyTo(newMetric)
 			}
@@ -74,38 +77,11 @@ func (nsp *NormalizeSumsProcessor) transformMetrics(rms pdata.ResourceMetrics) {
 	}
 }
 
-func sliceContains(names []string, name string) bool {
-	for _, n := range names {
-		if name == n {
-			return true
-		}
-	}
-	return false
-}
-
-// processMetric processes a supported Sum-type or Gauge-type metric.
+// processMetric processes a Sum-type metric.
 // It returns a boolean that indicates if the metric should be kept.
 func (nsp *NormalizeSumsProcessor) processMetric(resource pdata.Resource, metric pdata.Metric) bool {
-	if metric.DataType() == pdata.MetricDataTypeSum && metric.Sum().IsMonotonic() {
-		return nsp.processDataPoints(resource, metric, metric.Sum().DataPoints())
-	}
-	if metric.DataType() == pdata.MetricDataTypeGauge && sliceContains(nsp.includeGauges, metric.Name()) {
-		newMetric := pdata.NewMetric()
-		metric.CopyTo(newMetric)
-		newMetric.SetDataType(pdata.MetricDataTypeSum)
-		newMetric.Sum().SetIsMonotonic(true)
-		newMetric.Sum().SetAggregationTemporality(pdata.MetricAggregationTemporalityCumulative)
-		metric.Gauge().DataPoints().CopyTo(newMetric.Sum().DataPoints())
-		keepMetric := nsp.processDataPoints(resource, newMetric, newMetric.Sum().DataPoints())
-		newMetric.CopyTo(metric)
-		return keepMetric
-	}
-	return true
-}
+	dps := metric.Sum().DataPoints()
 
-// processDataPoints processes data points for a Sum-type or Gauge-type metric.
-// It returns a boolean that indicates if the metric should be kept.
-func (nsp *NormalizeSumsProcessor) processDataPoints(resource pdata.Resource, metric pdata.Metric, dps pdata.NumberDataPointSlice) bool {
 	// Only transform data when the StartTimestamp was not set
 	if dps.Len() == 0 || dps.At(0).StartTimestamp() != 0 {
 		return true

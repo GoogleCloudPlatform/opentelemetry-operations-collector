@@ -43,24 +43,3 @@ func TestLoadConfig(t *testing.T) {
 	}
 	assert.Equal(t, p1, expectedCfg)
 }
-
-func TestWithGauges(t *testing.T) {
-	factories, err := componenttest.NopFactories()
-	assert.NoError(t, err)
-
-	factory := NewFactory()
-	factories.Processors[typeStr] = factory
-
-	cfg, err := servicetest.LoadConfigAndValidate(path.Join(".", "testdata", "with_gauges_config.yaml"), factories)
-	assert.NoError(t, err)
-	assert.NotNil(t, cfg)
-
-	id := config.NewComponentID(typeStr)
-	settings := config.NewProcessorSettings(id)
-	p1 := cfg.Processors[id]
-	expectedCfg := &Config{
-		ProcessorSettings: &settings,
-		IncludeGauges:     []string{"abc", "def"},
-	}
-	assert.Equal(t, p1, expectedCfg)
-}

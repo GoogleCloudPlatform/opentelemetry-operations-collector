@@ -54,7 +54,7 @@ func createMetricsProcessor(
 	if err := validateConfiguration(oCfg); err != nil {
 		return nil, err
 	}
-	metricsProcessor := newNormalizeSumsProcessor(params.Logger, oCfg.IncludeGauges)
+	metricsProcessor := newNormalizeSumsProcessor(params.Logger)
 	return processorhelper.NewMetricsProcessor(
 		cfg,
 		nextConsumer,

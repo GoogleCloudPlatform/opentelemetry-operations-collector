@@ -13,7 +13,7 @@ Each value remains unchanged, but is transformed to a cumulative sum.
 
 Configuration is specified through a list of metrics. The processor uses metric
 names to identify a set of input metrics and casts each of them to a cumulative
-sum.
+monotonic sum.
 
 ```yaml
 casttosum:

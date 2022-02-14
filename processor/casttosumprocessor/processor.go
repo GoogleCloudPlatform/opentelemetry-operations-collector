@@ -16,7 +16,6 @@ package casttosumprocessor
 
 import (
 	"context"
-	"fmt"
 
 	"go.opentelemetry.io/collector/model/pdata"
 	"go.uber.org/zap"
@@ -52,15 +51,10 @@ func (ctsp *CastToSumProcessor) transformMetrics(rms pdata.ResourceMetrics) {
 	ilms := rms.InstrumentationLibraryMetrics()
 	for j := 0; j < ilms.Len(); j++ {
 		ilm := ilms.At(j).Metrics()
-		newSlice := pdata.NewMetricSlice()
 		for k := 0; k < ilm.Len(); k++ {
 			metric := ilm.At(k)
 			ctsp.processMetric(rms.Resource(), metric)
-			newMetric := newSlice.AppendEmpty()
-			metric.CopyTo(newMetric)
 		}
-
-		newSlice.CopyTo(ilm)
 	}
 }
 
@@ -85,7 +79,7 @@ func (ctsp *CastToSumProcessor) processMetric(resource pdata.Resource, metric pd
 		metric.Gauge().DataPoints().CopyTo(newMetric.Sum().DataPoints())
 		newMetric.CopyTo(metric)
 	} else if metric.DataType() != pdata.MetricDataTypeSum {
-		ctsp.logger.Info(fmt.Sprintf("Configured metric %s is neither gauge nor sum\n", metric.Name()))
+		ctsp.logger.Info("Configured metric %s is neither gauge nor sum", zap.String("metric", metric.Name()))
 	}
 	metric.Sum().SetIsMonotonic(true)
 	metric.Sum().SetAggregationTemporality(pdata.MetricAggregationTemporalityCumulative)

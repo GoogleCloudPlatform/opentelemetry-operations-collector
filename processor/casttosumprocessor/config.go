@@ -24,7 +24,7 @@ import (
 type Config struct {
 	*config.ProcessorSettings `mapstructure:"-"`
 
-	// List of input metrics to convert to sums
+	// List of input metrics
 	Metrics []string `mapstructure:"metrics"`
 }
 

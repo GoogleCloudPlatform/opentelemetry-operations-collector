@@ -3,6 +3,7 @@ module github.com/GoogleCloudPlatform/opentelemetry-operations-collector
 go 1.17
 
 require (
+	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector v0.26.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/fileexporter v0.44.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter v0.44.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.44.0
@@ -30,13 +31,13 @@ require (
 	go.opentelemetry.io/collector v0.44.0
 	go.opentelemetry.io/collector/model v0.44.0
 	go.uber.org/multierr v1.7.0
-	go.uber.org/zap v1.20.0
-	golang.org/x/sys v0.0.0-20220114195835-da31bd327af9
+	go.uber.org/zap v1.21.0
+	golang.org/x/sys v0.0.0-20220204135822-1c1b9b1eba6a
 )
 
 require (
-	cloud.google.com/go/compute v1.1.0 // indirect
-	cloud.google.com/go/monitoring v1.1.0 // indirect
+	cloud.google.com/go/compute v1.2.0 // indirect
+	cloud.google.com/go/monitoring v1.2.0 // indirect
 	cloud.google.com/go/trace v1.0.0 // indirect
 	contrib.go.opencensus.io/exporter/prometheus v0.4.0 // indirect
 	contrib.go.opencensus.io/exporter/stackdriver v0.13.10 // indirect
@@ -194,9 +195,9 @@ require (
 	golang.org/x/time v0.0.0-20211116232009-f0f3c7e86c11 // indirect
 	golang.org/x/tools v0.1.9 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
-	google.golang.org/api v0.66.0 // indirect
+	google.golang.org/api v0.68.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
-	google.golang.org/genproto v0.0.0-20220114231437-d2e6a121cae0 // indirect
+	google.golang.org/genproto v0.0.0-20220207185906-7721543eae58 // indirect
 	google.golang.org/grpc v1.44.0 // indirect
 	google.golang.org/protobuf v1.27.1 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect

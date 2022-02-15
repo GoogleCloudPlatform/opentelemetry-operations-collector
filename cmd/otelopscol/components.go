@@ -44,6 +44,7 @@ import (
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/exporter/googlecloudexporter"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/agentmetricsprocessor"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/casttosumprocessor"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/normalizesumsprocessor"
 )
 
@@ -117,6 +118,7 @@ func components() (component.Factories, error) {
 
 	processors := []component.ProcessorFactory{
 		agentmetricsprocessor.NewFactory(),
+		casttosumprocessor.NewFactory(),
 		filterprocessor.NewFactory(),
 		normalizesumsprocessor.NewFactory(),
 		metricstransformprocessor.NewFactory(),

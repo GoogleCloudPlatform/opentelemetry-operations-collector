@@ -15,29 +15,48 @@
 package main
 
 import (
-	"github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/exporter/fileexporter"
+	upstreamgooglecloudexporter "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourceprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/apachereceiver"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/couchdbreceiver"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/elasticsearchreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/memcachedreceiver"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/mongodbreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/mysqlreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/nginxreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/postgresqlreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusexecreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/rabbitmqreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/redisreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowsperfcountersreceiver"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/zookeeperreceiver"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/service/defaultcomponents"
+	"go.opentelemetry.io/collector/service/featuregate"
 	"go.uber.org/multierr"
 
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/exporter/googlecloudexporter"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/agentmetricsprocessor"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/casttosumprocessor"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/normalizesumsprocessor"
 )
+
+const pdataExporterFeatureGate = "exporter.googlecloud.OTLPDirect"
+
+func init() {
+	featuregate.Register(featuregate.Gate{
+		ID:          pdataExporterFeatureGate,
+		Description: "When enabled, the googlecloud exporter translates pdata directly to google cloud monitoring's types, rather than first translating to opencensus.",
+		Enabled:     false,
+	})
+}
 
 func components() (component.Factories, error) {
 	errs := []error{}
@@ -66,7 +85,12 @@ func components() (component.Factories, error) {
 		mysqlreceiver.NewFactory(),
 		apachereceiver.NewFactory(),
 		memcachedreceiver.NewFactory(),
+		mongodbreceiver.NewFactory(),
 		postgresqlreceiver.NewFactory(),
+		elasticsearchreceiver.NewFactory(),
+		couchdbreceiver.NewFactory(),
+		zookeeperreceiver.NewFactory(),
+		rabbitmqreceiver.NewFactory(),
 	}
 	for _, rcv := range factories.Receivers {
 		receivers = append(receivers, rcv)
@@ -77,7 +101,12 @@ func components() (component.Factories, error) {
 	}
 
 	exporters := []component.ExporterFactory{
-		googlecloudexporter.NewFactory(),
+		fileexporter.NewFactory(),
+	}
+	if featuregate.IsEnabled(pdataExporterFeatureGate) {
+		exporters = append(exporters, googlecloudexporter.NewFactory())
+	} else {
+		exporters = append(exporters, upstreamgooglecloudexporter.NewFactory())
 	}
 	for _, exp := range factories.Exporters {
 		exporters = append(exporters, exp)
@@ -89,6 +118,7 @@ func components() (component.Factories, error) {
 
 	processors := []component.ProcessorFactory{
 		agentmetricsprocessor.NewFactory(),
+		casttosumprocessor.NewFactory(),
 		filterprocessor.NewFactory(),
 		normalizesumsprocessor.NewFactory(),
 		metricstransformprocessor.NewFactory(),

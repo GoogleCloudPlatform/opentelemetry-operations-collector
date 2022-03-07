@@ -303,8 +303,8 @@ func assertEqualNumberDataPointSlice(t *testing.T, metricName string, ndpsAct, n
 		assert.Equalf(t, ndpExp.Attributes().Sort(), ndpAct.Attributes().Sort(), "Metric %s attributes %s", metricName, key)
 		assert.Equalf(t, ndpExp.StartTimestamp(), ndpAct.StartTimestamp(), "Metric %s attributes %s", metricName, key)
 		assert.Equalf(t, ndpExp.Timestamp(), ndpAct.Timestamp(), "Metric %s attributes %s", metricName, key)
-		assert.Equalf(t, ndpExp.Type(), ndpAct.Type(), "Metric %s attributes %s", metricName, key)
-		switch ndpExp.Type() {
+		assert.Equalf(t, ndpExp.ValueType(), ndpAct.ValueType(), "Metric %s attributes %s", metricName, key)
+		switch ndpExp.ValueType() {
 		case pdata.MetricValueTypeInt:
 			assert.Equalf(t, ndpExp.IntVal(), ndpAct.IntVal(), "Metric %s attributes %s", metricName, key)
 		case pdata.MetricValueTypeDouble:

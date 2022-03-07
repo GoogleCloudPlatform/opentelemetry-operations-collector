@@ -38,7 +38,14 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowsperfcountersreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/zookeeperreceiver"
 	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/service/defaultcomponents"
+	"go.opentelemetry.io/collector/exporter/loggingexporter"
+	"go.opentelemetry.io/collector/exporter/otlpexporter"
+	"go.opentelemetry.io/collector/exporter/otlphttpexporter"
+	"go.opentelemetry.io/collector/extension/ballastextension"
+	"go.opentelemetry.io/collector/extension/zpagesextension"
+	"go.opentelemetry.io/collector/processor/batchprocessor"
+	"go.opentelemetry.io/collector/processor/memorylimiterprocessor"
+	"go.opentelemetry.io/collector/receiver/otlpreceiver"
 	"go.opentelemetry.io/collector/service/featuregate"
 	"go.uber.org/multierr"
 
@@ -60,7 +67,7 @@ func init() {
 
 func components() (component.Factories, error) {
 	errs := []error{}
-	factories, err := defaultcomponents.Components()
+	factories, err := Components()
 	if err != nil {
 		return component.Factories{}, err
 	}
@@ -134,4 +141,44 @@ func components() (component.Factories, error) {
 	}
 
 	return factories, multierr.Combine(errs...)
+}
+
+func Components() (
+	component.Factories,
+	error,
+) {
+	var errs error
+
+	extensions, err := component.MakeExtensionFactoryMap(
+		zpagesextension.NewFactory(),
+		ballastextension.NewFactory(),
+	)
+	errs = multierr.Append(errs, err)
+
+	receivers, err := component.MakeReceiverFactoryMap(
+		otlpreceiver.NewFactory(),
+	)
+	errs = multierr.Append(errs, err)
+
+	exporters, err := component.MakeExporterFactoryMap(
+		loggingexporter.NewFactory(),
+		otlpexporter.NewFactory(),
+		otlphttpexporter.NewFactory(),
+	)
+	errs = multierr.Append(errs, err)
+
+	processors, err := component.MakeProcessorFactoryMap(
+		batchprocessor.NewFactory(),
+		memorylimiterprocessor.NewFactory(),
+	)
+	errs = multierr.Append(errs, err)
+
+	factories := component.Factories{
+		Extensions: extensions,
+		Receivers:  receivers,
+		Processors: processors,
+		Exporters:  exporters,
+	}
+
+	return factories, errs
 }

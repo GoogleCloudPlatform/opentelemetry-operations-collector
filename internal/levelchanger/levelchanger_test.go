@@ -115,9 +115,3 @@ func TestLevelChangerCoreFilePathCondition(t *testing.T) {
 	log := observedLogs.All()[0]
 	assert.Equal(t, zapcore.DebugLevel, log.Level)
 }
-
-func newLevelChangeLoggerAndObserver(loggerLevel, from, to zapcore.Level) (*zap.Logger, *observer.ObservedLogs) {
-	observedCore, observedLogs := observer.New(loggerLevel)
-	logger := zap.New(observedCore, levelchanger.NewLevelChangerOption(from, to))
-	return logger, observedLogs
-}

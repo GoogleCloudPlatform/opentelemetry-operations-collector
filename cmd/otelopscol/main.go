@@ -20,8 +20,11 @@ import (
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/service"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/env"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/levelchanger"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/version"
 )
 
@@ -44,6 +47,12 @@ func main() {
 	params := service.CollectorSettings{
 		Factories: factories,
 		BuildInfo: info,
+		LoggingOptions: []zap.Option{
+			levelchanger.NewLevelChangerOption(
+				zapcore.ErrorLevel,
+				zapcore.DebugLevel,
+				levelchanger.FilePathLevelChangeCondition("scrapercontroller.go")),
+		},
 	}
 
 	if err := run(params); err != nil {

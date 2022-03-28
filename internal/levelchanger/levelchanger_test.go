@@ -17,11 +17,12 @@ package levelchanger_test
 import (
 	"testing"
 
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/levelchanger"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
+
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/levelchanger"
 )
 
 type baseTestCase struct {

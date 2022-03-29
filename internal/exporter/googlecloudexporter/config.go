@@ -30,3 +30,8 @@ type Config struct {
 	exporterhelper.QueueSettings   `mapstructure:"sending_queue"`
 	exporterhelper.RetrySettings   `mapstructure:"retry_on_failure"`
 }
+
+// Validate returns an error if the config is invalid
+func (c *Config) Validate() error {
+	return c.ExporterSettings.Validate()
+}

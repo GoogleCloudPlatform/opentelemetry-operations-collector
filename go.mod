@@ -4,7 +4,7 @@ go 1.17
 
 require (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector v0.26.0
-	github.com/observiq/observiq-otel-collector/receiver/varnishreceiver v0.0.0-20220324141904-c402bab91130
+	github.com/observiq/observiq-otel-collector/receiver/varnishreceiver v0.0.0-20220330212709-510f2a6f54a8
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/fileexporter v0.46.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter v0.46.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.46.0

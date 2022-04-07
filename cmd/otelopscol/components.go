@@ -16,7 +16,7 @@ package main
 
 import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/exporter/fileexporter"
-	upstreamgooglecloudexporter "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor"
@@ -46,24 +46,12 @@ import (
 	"go.opentelemetry.io/collector/processor/batchprocessor"
 	"go.opentelemetry.io/collector/processor/memorylimiterprocessor"
 	"go.opentelemetry.io/collector/receiver/otlpreceiver"
-	"go.opentelemetry.io/collector/service/featuregate"
 	"go.uber.org/multierr"
 
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/exporter/googlecloudexporter"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/agentmetricsprocessor"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/casttosumprocessor"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/normalizesumsprocessor"
 )
-
-const pdataExporterFeatureGate = "exporter.googlecloud.OTLPDirect"
-
-func init() {
-	featuregate.Register(featuregate.Gate{
-		ID:          pdataExporterFeatureGate,
-		Description: "When enabled, the googlecloud exporter translates pdata directly to google cloud monitoring's types, rather than first translating to opencensus.",
-		Enabled:     false,
-	})
-}
 
 func components() (component.Factories, error) {
 	errs := []error{}
@@ -109,11 +97,7 @@ func components() (component.Factories, error) {
 
 	exporters := []component.ExporterFactory{
 		fileexporter.NewFactory(),
-	}
-	if featuregate.IsEnabled(pdataExporterFeatureGate) {
-		exporters = append(exporters, googlecloudexporter.NewFactory())
-	} else {
-		exporters = append(exporters, upstreamgooglecloudexporter.NewFactory())
+		googlecloudexporter.NewFactory(),
 	}
 	for _, exp := range factories.Exporters {
 		exporters = append(exporters, exp)

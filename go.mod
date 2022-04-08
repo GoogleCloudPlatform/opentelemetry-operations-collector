@@ -3,7 +3,6 @@ module github.com/GoogleCloudPlatform/opentelemetry-operations-collector
 go 1.17
 
 require (
-	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector v0.26.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/fileexporter v0.46.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter v0.46.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.46.0

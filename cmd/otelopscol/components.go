@@ -26,6 +26,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/couchdbreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/elasticsearchreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/iisreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/memcachedreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/mongodbreceiver"
@@ -77,6 +78,7 @@ func components() (component.Factories, error) {
 		nginxreceiver.NewFactory(),
 		jmxreceiver.NewFactory(),
 		windowsperfcountersreceiver.NewFactory(),
+		iisreceiver.NewFactory(),
 		redisreceiver.NewFactory(),
 		mysqlreceiver.NewFactory(),
 		apachereceiver.NewFactory(),

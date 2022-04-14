@@ -18,6 +18,7 @@ import (
 	"context"
 
 	"go.opentelemetry.io/collector/model/pdata"
+	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.uber.org/zap"
 )
 
@@ -48,7 +49,7 @@ func (ctsp *CastToSumProcessor) ProcessMetrics(ctx context.Context, metrics pdat
 }
 
 func (ctsp *CastToSumProcessor) transformMetrics(rms pdata.ResourceMetrics) {
-	ilms := rms.InstrumentationLibraryMetrics()
+	ilms := rms.ScopeMetrics()
 	for j := 0; j < ilms.Len(); j++ {
 		ilm := ilms.At(j).Metrics()
 		for k := 0; k < ilm.Len(); k++ {
@@ -72,15 +73,15 @@ func (ctsp *CastToSumProcessor) processMetric(resource pdata.Resource, metric pd
 	if !sliceContains(ctsp.Metrics, metric.Name()) {
 		return
 	}
-	if metric.DataType() == pdata.MetricDataTypeGauge {
+	if metric.DataType() == pmetric.MetricDataTypeGauge {
 		newMetric := pdata.NewMetric()
 		metric.CopyTo(newMetric)
-		newMetric.SetDataType(pdata.MetricDataTypeSum)
+		newMetric.SetDataType(pmetric.MetricDataTypeSum)
 		metric.Gauge().DataPoints().CopyTo(newMetric.Sum().DataPoints())
 		newMetric.CopyTo(metric)
-	} else if metric.DataType() != pdata.MetricDataTypeSum {
+	} else if metric.DataType() != pmetric.MetricDataTypeSum {
 		ctsp.logger.Info("Configured metric %s is neither gauge nor sum", zap.String("metric", metric.Name()))
 	}
 	metric.Sum().SetIsMonotonic(true)
-	metric.Sum().SetAggregationTemporality(pdata.MetricAggregationTemporalityCumulative)
+	metric.Sum().SetAggregationTemporality(pmetric.MetricAggregationTemporalityCumulative)
 }

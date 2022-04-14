@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"go.opentelemetry.io/collector/model/pdata"
+	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
 // The following code calculates a new utilization metric from
@@ -45,7 +46,7 @@ const stateLabel = "state"
 
 func (mtp *agentMetricsProcessor) appendUtilizationMetrics(rms pdata.ResourceMetricsSlice) error {
 	for i := 0; i < rms.Len(); i++ {
-		ilms := rms.At(i).InstrumentationLibraryMetrics()
+		ilms := rms.At(i).ScopeMetrics()
 		for j := 0; j < ilms.Len(); j++ {
 			metrics := ilms.At(j).Metrics()
 			for k := 0; k < metrics.Len(); k++ {
@@ -76,7 +77,7 @@ func (mtp *agentMetricsProcessor) calculateUtilizationMetric(usageMetric pdata.M
 	usageMetric.CopyTo(utilizationMetric)
 
 	utilizationMetric.SetName(metricPostfixRegex.ReplaceAllString(usageMetric.Name(), "utilization"))
-	utilizationMetric.SetDataType(pdata.MetricDataTypeGauge)
+	utilizationMetric.SetDataType(pmetric.MetricDataTypeGauge)
 	utilizationMetric.Gauge()
 
 	metric := usageMetric
@@ -92,7 +93,7 @@ func (mtp *agentMetricsProcessor) calculateUtilizationMetric(usageMetric pdata.M
 	}
 
 	switch t := metric.DataType(); t {
-	case pdata.MetricDataTypeSum, pdata.MetricDataTypeGauge:
+	case pmetric.MetricDataTypeSum, pmetric.MetricDataTypeGauge:
 		if err := calculateUtilizationFromNumberDataPoints(metric, utilizationMetric); err != nil {
 			return pdata.NewMetric(), err
 		}
@@ -152,9 +153,9 @@ type numberPoints struct {
 func calculateUtilizationFromNumberDataPoints(metric, utilizationMetric pdata.Metric) error {
 	var ndps pdata.NumberDataPointSlice
 	switch t := metric.DataType(); t {
-	case pdata.MetricDataTypeSum:
+	case pmetric.MetricDataTypeSum:
 		ndps = metric.Sum().DataPoints()
-	case pdata.MetricDataTypeGauge:
+	case pmetric.MetricDataTypeGauge:
 		ndps = metric.Gauge().DataPoints()
 	}
 
@@ -175,9 +176,9 @@ func calculateUtilizationFromNumberDataPoints(metric, utilizationMetric pdata.Me
 		}
 
 		switch ndp.ValueType() {
-		case pdata.MetricValueTypeInt:
+		case pmetric.MetricValueTypeInt:
 			points.sum += float64(ndp.IntVal())
-		case pdata.MetricValueTypeDouble:
+		case pmetric.MetricValueTypeDouble:
 			points.sum += ndp.DoubleVal()
 		}
 		points.pts = append(points.pts, ndp)
@@ -195,9 +196,9 @@ func calculateUtilizationFromNumberDataPoints(metric, utilizationMetric pdata.Me
 			ndp.SetTimestamp(point.Timestamp())
 			var num float64
 			switch point.ValueType() {
-			case pdata.MetricValueTypeInt:
+			case pmetric.MetricValueTypeInt:
 				num = float64(point.IntVal())
-			case pdata.MetricValueTypeDouble:
+			case pmetric.MetricValueTypeDouble:
 				num = point.DoubleVal()
 			}
 			ndp.SetDoubleVal(num / points.sum * 100)
@@ -222,11 +223,11 @@ func doubleDataPointsToMap(metric pdata.Metric) map[string]float64 {
 }
 
 // labelsAsKey returns a key representing the labels in the provided labelset.
-func labelsAsKey(labels pdata.AttributeMap) string {
+func labelsAsKey(labels pdata.Map) string {
 	otherLabelsLen := labels.Len()
 
 	idx, otherLabels := 0, make([]string, otherLabelsLen)
-	labels.Range(func(k string, v pdata.AttributeValue) bool {
+	labels.Range(func(k string, v pdata.Value) bool {
 		otherLabels[idx] = k + "=" + v.AsString()
 		idx++
 		return true
@@ -241,11 +242,11 @@ func labelsAsKey(labels pdata.AttributeMap) string {
 // otherLabelsAsKey returns a key representing the other labels in the provided
 // labelset excluding the specified label keys. An error is returned if any of the
 // specified labels to exclude do not exist in the labelset.
-func otherLabelsAsKey(labels pdata.AttributeMap, excluding ...string) (string, error) {
+func otherLabelsAsKey(labels pdata.Map, excluding ...string) (string, error) {
 	otherLabelsLen := labels.Len() - len(excluding)
 
 	otherLabels := make([]string, 0, otherLabelsLen)
-	labels.Range(func(k string, v pdata.AttributeValue) bool {
+	labels.Range(func(k string, v pdata.Value) bool {
 		// ignore any keys specified in excluding
 		for _, e := range excluding {
 			if k == e {

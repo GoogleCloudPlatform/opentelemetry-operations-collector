@@ -16,6 +16,7 @@ package agentmetricsprocessor
 
 import (
 	"go.opentelemetry.io/collector/model/pdata"
+	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
 func generateNonMonotonicSumsInput() pdata.Metrics {
@@ -24,11 +25,11 @@ func generateNonMonotonicSumsInput() pdata.Metrics {
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
 
-	mb1 := b.addMetric("m1", pdata.MetricDataTypeSum, false)
+	mb1 := b.addMetric("m1", pmetric.MetricDataTypeSum, false)
 	mb1.addIntDataPoint(1, map[string]string{"label1": "value1"})
 	mb1.addIntDataPoint(2, map[string]string{"label1": "value2"})
 
-	mb2 := b.addMetric("m2", pdata.MetricDataTypeSum, false)
+	mb2 := b.addMetric("m2", pmetric.MetricDataTypeSum, false)
 	mb2.addDoubleDataPoint(3, map[string]string{"label1": "value1"})
 	mb2.addDoubleDataPoint(4, map[string]string{"label1": "value2"})
 
@@ -42,11 +43,11 @@ func generateNonMonotonicSumsExpected() pdata.Metrics {
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
 
-	mb1 := b.addMetric("m1", pdata.MetricDataTypeGauge, false)
+	mb1 := b.addMetric("m1", pmetric.MetricDataTypeGauge, false)
 	mb1.addIntDataPoint(1, map[string]string{"label1": "value1"})
 	mb1.addIntDataPoint(2, map[string]string{"label1": "value2"})
 
-	mb2 := b.addMetric("m2", pdata.MetricDataTypeGauge, false)
+	mb2 := b.addMetric("m2", pmetric.MetricDataTypeGauge, false)
 	mb2.addDoubleDataPoint(3, map[string]string{"label1": "value1"})
 	mb2.addDoubleDataPoint(4, map[string]string{"label1": "value2"})
 

@@ -14,13 +14,16 @@
 
 package agentmetricsprocessor
 
-import "go.opentelemetry.io/collector/model/pdata"
+import (
+	"go.opentelemetry.io/collector/model/pdata"
+	"go.opentelemetry.io/collector/pdata/pcommon"
+)
 
 const labelName = "blank"
 
 func (mtp *agentMetricsProcessor) addBlankLabel(rms pdata.ResourceMetricsSlice) error {
 	for i := 0; i < rms.Len(); i++ {
-		ilms := rms.At(i).InstrumentationLibraryMetrics()
+		ilms := rms.At(i).ScopeMetrics()
 		for j := 0; j < ilms.Len(); j++ {
 			metrics := ilms.At(j).Metrics()
 			for k := 0; k < metrics.Len(); k++ {
@@ -46,6 +49,6 @@ func (mtp *agentMetricsProcessor) addBlankLabel(rms pdata.ResourceMetricsSlice) 
 
 func addBlankLabel(lm labelsMapper) error {
 	sm := lm.Attributes()
-	sm.Upsert(labelName, pdata.NewAttributeValueString(""))
+	sm.Upsert(labelName, pcommon.NewValueString(""))
 	return nil
 }

@@ -18,11 +18,13 @@ import (
 	"strings"
 
 	"go.opentelemetry.io/collector/model/pdata"
+	"go.opentelemetry.io/collector/pdata/pcommon"
+	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
 func cleanCPUNumber(rms pdata.ResourceMetricsSlice) error {
 	for i := 0; i < rms.Len(); i++ {
-		ilms := rms.At(i).InstrumentationLibraryMetrics()
+		ilms := rms.At(i).ScopeMetrics()
 		for j := 0; j < ilms.Len(); j++ {
 			metrics := ilms.At(j).Metrics()
 			for k := 0; k < metrics.Len(); k++ {
@@ -39,19 +41,19 @@ func cleanCPUNumber(rms pdata.ResourceMetricsSlice) error {
 }
 
 type labelsMapper interface {
-	Attributes() pdata.AttributeMap
+	Attributes() pdata.Map
 }
 
 func forEachPoint(metric pdata.Metric, fn func(labelsMapper) error) error {
 	switch t := metric.DataType(); t {
-	case pdata.MetricDataTypeSum:
+	case pmetric.MetricDataTypeSum:
 		dp := metric.Sum().DataPoints()
 		for i := 0; i < dp.Len(); i++ {
 			if err := fn(dp.At(i)); err != nil {
 				return err
 			}
 		}
-	case pdata.MetricDataTypeGauge:
+	case pmetric.MetricDataTypeGauge:
 		dp := metric.Gauge().DataPoints()
 		for i := 0; i < dp.Len(); i++ {
 			if err := fn(dp.At(i)); err != nil {
@@ -65,7 +67,7 @@ func forEachPoint(metric pdata.Metric, fn func(labelsMapper) error) error {
 func cleanCPUNumberDataPoint(lm labelsMapper) error {
 	sm := lm.Attributes()
 	if value, ok := sm.Get("cpu"); ok {
-		sm.Update("cpu", pdata.NewAttributeValueString(strings.TrimPrefix(value.StringVal(), "cpu")))
+		sm.Update("cpu", pcommon.NewValueString(strings.TrimPrefix(value.StringVal(), "cpu")))
 	}
 	return nil
 }

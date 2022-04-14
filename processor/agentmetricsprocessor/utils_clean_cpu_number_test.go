@@ -16,6 +16,7 @@ package agentmetricsprocessor
 
 import (
 	"go.opentelemetry.io/collector/model/pdata"
+	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
 func generateCPUMetricsInput() pdata.Metrics {
@@ -24,7 +25,7 @@ func generateCPUMetricsInput() pdata.Metrics {
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
 
-	mb1 := b.addMetric("system.cpu.time", pdata.MetricDataTypeSum, true)
+	mb1 := b.addMetric("system.cpu.time", pmetric.MetricDataTypeSum, true)
 	mb1.addDoubleDataPoint(1, map[string]string{"cpu": "cpu0", "state": "idle"})
 	mb1.addDoubleDataPoint(2, map[string]string{"cpu": "cpu0", "state": "system"})
 
@@ -37,11 +38,11 @@ func generateCPUMetricsExpected() pdata.Metrics {
 
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
-	mb1 := b.addMetric("system.cpu.time", pdata.MetricDataTypeSum, true)
+	mb1 := b.addMetric("system.cpu.time", pmetric.MetricDataTypeSum, true)
 	mb1.addDoubleDataPoint(1, map[string]string{"cpu": "0", "state": "idle", "blank": ""})
 	mb1.addDoubleDataPoint(2, map[string]string{"cpu": "0", "state": "system", "blank": ""})
 
-	b.addMetric("system.cpu.utilization", pdata.MetricDataTypeGauge, false)
+	b.addMetric("system.cpu.utilization", pmetric.MetricDataTypeGauge, false)
 
 	rmb.Build().CopyTo(expected.ResourceMetrics())
 	return expected

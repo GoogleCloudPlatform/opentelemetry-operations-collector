@@ -13,11 +13,14 @@
 // limitations under the License.
 package agentmetricsprocessor
 
-import "go.opentelemetry.io/collector/model/pdata"
+import (
+	"go.opentelemetry.io/collector/model/pdata"
+	"go.opentelemetry.io/collector/pdata/pmetric"
+)
 
 func removeVersionAttribute(rms pdata.ResourceMetricsSlice) {
 	for i := 0; i < rms.Len(); i++ {
-		ilms := rms.At(i).InstrumentationLibraryMetrics()
+		ilms := rms.At(i).ScopeMetrics()
 		for j := 0; j < ilms.Len(); j++ {
 			metrics := ilms.At(j).Metrics()
 			for k := 0; k < metrics.Len(); k++ {
@@ -25,15 +28,15 @@ func removeVersionAttribute(rms pdata.ResourceMetricsSlice) {
 
 				var dps pdata.NumberDataPointSlice
 				switch metric.DataType() {
-				case pdata.MetricDataTypeGauge:
+				case pmetric.MetricDataTypeGauge:
 					dps = metric.Gauge().DataPoints()
-				case pdata.MetricDataTypeSum:
+				case pmetric.MetricDataTypeSum:
 					dps = metric.Sum().DataPoints()
 				}
 
 				for l := 0; l < dps.Len(); l++ {
 					dp := dps.At(l)
-					dp.Attributes().Delete("service_version")
+					dp.Attributes().Remove("service_version")
 				}
 			}
 		}

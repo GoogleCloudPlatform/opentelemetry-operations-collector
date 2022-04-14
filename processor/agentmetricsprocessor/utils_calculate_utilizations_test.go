@@ -16,6 +16,7 @@ package agentmetricsprocessor
 
 import (
 	"go.opentelemetry.io/collector/model/pdata"
+	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
 func generateUtilizationMetricsInput() pdata.Metrics {
@@ -24,17 +25,17 @@ func generateUtilizationMetricsInput() pdata.Metrics {
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
 
-	mb1 := b.addMetric("system.cpu.time", pdata.MetricDataTypeSum, true)
+	mb1 := b.addMetric("system.cpu.time", pmetric.MetricDataTypeSum, true)
 	mb1.addDoubleDataPoint(101, map[string]string{"label1": "value1", "state": "user"})
 	mb1.addDoubleDataPoint(202, map[string]string{"label1": "value2", "state": "user"})
 	mb1.addDoubleDataPoint(303, map[string]string{"label1": "value1", "state": "idle"})
 	mb1.addDoubleDataPoint(404, map[string]string{"label1": "value2", "state": "idle"})
 
-	mb2 := b.addMetric("system.memory.usage", pdata.MetricDataTypeSum, false)
+	mb2 := b.addMetric("system.memory.usage", pmetric.MetricDataTypeSum, false)
 	mb2.addIntDataPoint(1, map[string]string{"state": "used"})
 	mb2.addIntDataPoint(2, map[string]string{"state": "free"})
 
-	mb3 := b.addMetric("system.filesystem.usage", pdata.MetricDataTypeSum, true)
+	mb3 := b.addMetric("system.filesystem.usage", pmetric.MetricDataTypeSum, true)
 	mb3.addDoubleDataPoint(1.5, map[string]string{"label1": "value1", "label2": "value1", "state": "used"})
 	mb3.addDoubleDataPoint(2.3, map[string]string{"label1": "value2", "label2": "value1", "state": "used"})
 	mb3.addDoubleDataPoint(7.8, map[string]string{"label1": "value1", "label2": "value2", "state": "used"})
@@ -67,17 +68,17 @@ func generateUtilizationMetricsExpected() pdata.Metrics {
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
 
-	mb1 := b.addMetric("system.cpu.time", pdata.MetricDataTypeSum, true)
+	mb1 := b.addMetric("system.cpu.time", pmetric.MetricDataTypeSum, true)
 	mb1.addDoubleDataPoint(101, map[string]string{"label1": "value1", "state": "user", "blank": ""})
 	mb1.addDoubleDataPoint(202, map[string]string{"label1": "value2", "state": "user", "blank": ""})
 	mb1.addDoubleDataPoint(303, map[string]string{"label1": "value1", "state": "idle", "blank": ""})
 	mb1.addDoubleDataPoint(404, map[string]string{"label1": "value2", "state": "idle", "blank": ""})
 
-	mb2 := b.addMetric("system.memory.usage", pdata.MetricDataTypeGauge, false)
+	mb2 := b.addMetric("system.memory.usage", pmetric.MetricDataTypeGauge, false)
 	mb2.addIntDataPoint(1, map[string]string{"state": "used"})
 	mb2.addIntDataPoint(2, map[string]string{"state": "free"})
 
-	mb3 := b.addMetric("system.filesystem.usage", pdata.MetricDataTypeSum, true)
+	mb3 := b.addMetric("system.filesystem.usage", pmetric.MetricDataTypeSum, true)
 	mb3.addDoubleDataPoint(1.5, map[string]string{"label1": "value1", "label2": "value1", "state": "used"})
 	mb3.addDoubleDataPoint(2.3, map[string]string{"label1": "value2", "label2": "value1", "state": "used"})
 	mb3.addDoubleDataPoint(7.8, map[string]string{"label1": "value1", "label2": "value2", "state": "used"})
@@ -91,17 +92,17 @@ func generateUtilizationMetricsExpected() pdata.Metrics {
 	mb3.addDoubleDataPoint(9.9, map[string]string{"label1": "value1", "label2": "value2", "state": "reserved"})
 	mb3.addDoubleDataPoint(1.5, map[string]string{"label1": "value2", "label2": "value2", "state": "reserved"})
 
-	mb4 := b.addMetric("system.cpu.utilization", pdata.MetricDataTypeGauge, false)
+	mb4 := b.addMetric("system.cpu.utilization", pmetric.MetricDataTypeGauge, false)
 	mb4.addDoubleDataPoint(1.0/(1.0+3.0)*100, map[string]string{"label1": "value1", "state": "user"})
 	mb4.addDoubleDataPoint(2.0/(2.0+4.0)*100, map[string]string{"label1": "value2", "state": "user"})
 	mb4.addDoubleDataPoint(3.0/(1.0+3.0)*100, map[string]string{"label1": "value1", "state": "idle"})
 	mb4.addDoubleDataPoint(4.0/(2.0+4.0)*100, map[string]string{"label1": "value2", "state": "idle"})
 
-	mb5 := b.addMetric("system.memory.utilization", pdata.MetricDataTypeGauge, false)
+	mb5 := b.addMetric("system.memory.utilization", pmetric.MetricDataTypeGauge, false)
 	mb5.addDoubleDataPoint(1.0/(1.0+2.0)*100, map[string]string{"state": "used"})
 	mb5.addDoubleDataPoint(2.0/(1.0+2.0)*100, map[string]string{"state": "free"})
 
-	mb6 := b.addMetric("system.filesystem.utilization", pdata.MetricDataTypeGauge, false)
+	mb6 := b.addMetric("system.filesystem.utilization", pmetric.MetricDataTypeGauge, false)
 	mb6.addDoubleDataPoint(1.5/(1.5+3.3+2.6)*100, map[string]string{"label1": "value1", "label2": "value1", "state": "used"})
 	mb6.addDoubleDataPoint(2.3/(2.3+6.4+6.0)*100, map[string]string{"label1": "value2", "label2": "value1", "state": "used"})
 	mb6.addDoubleDataPoint(7.8/(7.8+5.9+9.9)*100, map[string]string{"label1": "value1", "label2": "value2", "state": "used"})

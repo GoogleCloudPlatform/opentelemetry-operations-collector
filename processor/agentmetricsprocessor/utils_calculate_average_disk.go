@@ -25,7 +25,7 @@ const opTimeName = "system.disk.operation_time"
 
 func (mtp *agentMetricsProcessor) appendAverageDiskMetrics(rms pdata.ResourceMetricsSlice) error {
 	for i := 0; i < rms.Len(); i++ {
-		ilms := rms.At(i).InstrumentationLibraryMetrics()
+		ilms := rms.At(i).ScopeMetrics()
 		for j := 0; j < ilms.Len(); j++ {
 			// Collect the corresponding count and time so they can be divided.
 			newOp := make(map[opKey]opData)

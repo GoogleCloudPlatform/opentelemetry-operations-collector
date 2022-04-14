@@ -18,6 +18,7 @@ import (
 	"fmt"
 
 	"go.opentelemetry.io/collector/model/pdata"
+	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
 // The following code splits metrics with read/write direction labels into
@@ -51,7 +52,7 @@ var metricsToSplit = map[string]bool{
 
 func splitReadWriteBytesMetrics(rms pdata.ResourceMetricsSlice) error {
 	for i := 0; i < rms.Len(); i++ {
-		ilms := rms.At(i).InstrumentationLibraryMetrics()
+		ilms := rms.At(i).ScopeMetrics()
 		for j := 0; j < ilms.Len(); j++ {
 			metrics := ilms.At(j).Metrics()
 			for k := 0; k < metrics.Len(); k++ {
@@ -92,9 +93,9 @@ func splitReadWriteBytesMetric(metric pdata.Metric) (read pdata.Metric, write pd
 
 	// append data points to the read or write metric as appropriate
 	switch t := metric.DataType(); t {
-	case pdata.MetricDataTypeSum:
+	case pmetric.MetricDataTypeSum:
 		err = appendNumberDataPoints(metric.Name(), metric.Sum().DataPoints(), read.Sum().DataPoints(), write.Sum().DataPoints())
-	case pdata.MetricDataTypeGauge:
+	case pmetric.MetricDataTypeGauge:
 		err = appendNumberDataPoints(metric.Name(), metric.Gauge().DataPoints(), read.Gauge().DataPoints(), write.Gauge().DataPoints())
 	default:
 		return read, write, fmt.Errorf("unsupported metric data type: %v", t)
@@ -123,7 +124,7 @@ func appendNumberDataPoints(metricName string, ndps, read, write pdata.NumberDat
 			return fmt.Errorf("metric %v label %v contained unexpected value %v", metricName, directionLabel, dir.AsString())
 		}
 		ndp.CopyTo(new)
-		new.Attributes().Delete(directionLabel)
+		new.Attributes().Remove(directionLabel)
 	}
 
 	return nil

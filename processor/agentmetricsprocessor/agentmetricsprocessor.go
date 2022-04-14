@@ -20,6 +20,7 @@ import (
 	"sync"
 
 	"go.opentelemetry.io/collector/model/pdata"
+	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.uber.org/multierr"
 	"go.uber.org/zap"
 )
@@ -113,11 +114,11 @@ func newMetricWithName(metric pdata.Metric, name string) pdata.Metric {
 	new.SetDataType(metric.DataType())
 
 	switch t := metric.DataType(); t {
-	case pdata.MetricDataTypeSum:
+	case pmetric.MetricDataTypeSum:
 		sum := new.Sum()
 		sum.SetIsMonotonic(metric.Sum().IsMonotonic())
 		sum.SetAggregationTemporality(metric.Sum().AggregationTemporality())
-	case pdata.MetricDataTypeGauge:
+	case pmetric.MetricDataTypeGauge:
 		new.Gauge()
 	}
 

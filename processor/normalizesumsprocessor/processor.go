@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"go.opentelemetry.io/collector/model/pdata"
+	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.uber.org/zap"
 )
 
@@ -55,13 +56,13 @@ func (nsp *NormalizeSumsProcessor) ProcessMetrics(ctx context.Context, metrics p
 }
 
 func (nsp *NormalizeSumsProcessor) transformMetrics(rms pdata.ResourceMetrics) {
-	ilms := rms.InstrumentationLibraryMetrics()
+	ilms := rms.ScopeMetrics()
 	for j := 0; j < ilms.Len(); j++ {
 		ilm := ilms.At(j).Metrics()
 		newSlice := pdata.NewMetricSlice()
 		for k := 0; k < ilm.Len(); k++ {
 			metric := ilm.At(k)
-			if metric.DataType() == pdata.MetricDataTypeSum && metric.Sum().IsMonotonic() {
+			if metric.DataType() == pmetric.MetricDataTypeSum && metric.Sum().IsMonotonic() {
 				keepMetric := nsp.processMetric(rms.Resource(), metric)
 				if keepMetric {
 					newMetric := newSlice.AppendEmpty()
@@ -136,7 +137,7 @@ func (nsp *NormalizeSumsProcessor) processSumDataPoint(dp pdata.NumberDataPoint,
 
 	// If data has rolled over or the counter has been restarted for
 	// any other reason, grab a new start point and do not report this data
-	if (dp.ValueType() == pdata.MetricValueTypeInt && dp.IntVal() < start.last.IntVal()) || (dp.ValueType() == pdata.MetricValueTypeDouble && dp.DoubleVal() < start.last.DoubleVal()) {
+	if (dp.ValueType() == pmetric.MetricValueTypeInt && dp.IntVal() < start.last.IntVal()) || (dp.ValueType() == pmetric.MetricValueTypeDouble && dp.DoubleVal() < start.last.DoubleVal()) {
 		dp.CopyTo(start.start)
 		dp.CopyTo(start.last)
 
@@ -148,26 +149,26 @@ func (nsp *NormalizeSumsProcessor) processSumDataPoint(dp pdata.NumberDataPoint,
 	newDP := ndps.AppendEmpty()
 	dp.CopyTo(newDP)
 	switch dp.ValueType() {
-	case pdata.MetricValueTypeInt:
+	case pmetric.MetricValueTypeInt:
 		newDP.SetIntVal(dp.IntVal() - start.start.IntVal())
-	case pdata.MetricValueTypeDouble:
+	case pmetric.MetricValueTypeDouble:
 		newDP.SetDoubleVal(dp.DoubleVal() - start.start.DoubleVal())
 	}
 	newDP.SetStartTimestamp(start.start.Timestamp())
 }
 
-func dataPointIdentifier(resource pdata.Resource, metric pdata.Metric, labels pdata.AttributeMap) string {
+func dataPointIdentifier(resource pdata.Resource, metric pdata.Metric, labels pdata.Map) string {
 	var b strings.Builder
 
 	// Resource identifiers
-	resource.Attributes().Sort().Range(func(k string, v pdata.AttributeValue) bool {
+	resource.Attributes().Sort().Range(func(k string, v pdata.Value) bool {
 		fmt.Fprintf(&b, "%s=%s|", k, v.AsString())
 		return true
 	})
 
 	// Metric identifiers
 	fmt.Fprintf(&b, " - %s", metric.Name())
-	labels.Sort().Range(func(k string, v pdata.AttributeValue) bool {
+	labels.Sort().Range(func(k string, v pdata.Value) bool {
 		fmt.Fprintf(&b, " %s=%s", k, v.AsString())
 		return true
 	})

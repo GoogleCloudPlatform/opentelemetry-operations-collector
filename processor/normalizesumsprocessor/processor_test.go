@@ -28,6 +28,8 @@ import (
 	"go.opentelemetry.io/collector/consumer/consumertest"
 	"go.opentelemetry.io/collector/model/otlp"
 	"go.opentelemetry.io/collector/model/pdata"
+	"go.opentelemetry.io/collector/pdata/pcommon"
+	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/processor/processorhelper"
 	"go.uber.org/zap"
 )
@@ -110,20 +112,20 @@ func generateNoTransformMetrics(startTime int64) []pdata.Metrics {
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
 
-	mb1 := b.addMetric("m1", pdata.MetricDataTypeSum, true)
+	mb1 := b.addMetric("m1", pmetric.MetricDataTypeSum, true)
 	mb1.addIntDataPoint(1, map[string]string{}, startTime+1000, startTime)
 	mb1.addIntDataPoint(5, map[string]string{}, startTime+2000, startTime)
 	mb1.addIntDataPoint(2, map[string]string{}, startTime+3000, startTime+2000)
 
-	mb2 := b.addMetric("m2", pdata.MetricDataTypeSum, true)
+	mb2 := b.addMetric("m2", pmetric.MetricDataTypeSum, true)
 	mb2.addDoubleDataPoint(3, map[string]string{}, startTime+6000, startTime)
 	mb2.addDoubleDataPoint(4, map[string]string{}, startTime+7000, startTime)
 
-	mb3 := b.addMetric("m3", pdata.MetricDataTypeGauge, false)
+	mb3 := b.addMetric("m3", pmetric.MetricDataTypeGauge, false)
 	mb3.addIntDataPoint(5, map[string]string{}, startTime, 0)
 	mb3.addIntDataPoint(4, map[string]string{}, startTime+1000, 0)
 
-	mb4 := b.addMetric("m4", pdata.MetricDataTypeGauge, false)
+	mb4 := b.addMetric("m4", pmetric.MetricDataTypeGauge, false)
 	mb4.addDoubleDataPoint(50000.2, map[string]string{}, startTime, 0)
 	mb4.addDoubleDataPoint(11, map[string]string{}, startTime+1000, 0)
 
@@ -135,19 +137,19 @@ func generateMultipleResourceInput(startTime int64) []pdata.Metrics {
 	input := pdata.NewMetrics()
 
 	rmb := newResourceMetricsBuilder()
-	b := rmb.addResourceMetrics(map[string]pdata.AttributeValue{
-		"label1": pdata.NewAttributeValueString("value1"),
+	b := rmb.addResourceMetrics(map[string]pdata.Value{
+		"label1": pcommon.NewValueString("value1"),
 	})
 
-	mb1 := b.addMetric("m1", pdata.MetricDataTypeSum, true)
+	mb1 := b.addMetric("m1", pmetric.MetricDataTypeSum, true)
 	mb1.addIntDataPoint(1, map[string]string{}, startTime, 0)
 	mb1.addIntDataPoint(2, map[string]string{}, startTime+1000, 0)
 
-	b2 := rmb.addResourceMetrics(map[string]pdata.AttributeValue{
-		"label1": pdata.NewAttributeValueString("value2"),
+	b2 := rmb.addResourceMetrics(map[string]pdata.Value{
+		"label1": pcommon.NewValueString("value2"),
 	})
 
-	mb2 := b2.addMetric("m1", pdata.MetricDataTypeSum, true)
+	mb2 := b2.addMetric("m1", pmetric.MetricDataTypeSum, true)
 	mb2.addIntDataPoint(5, map[string]string{}, startTime+2000, 0)
 	mb2.addIntDataPoint(10, map[string]string{}, startTime+3000, 0)
 
@@ -159,19 +161,19 @@ func generateMultipleResourceOutput(startTime int64) []pdata.Metrics {
 	output := pdata.NewMetrics()
 
 	rmb := newResourceMetricsBuilder()
-	b := rmb.addResourceMetrics(map[string]pdata.AttributeValue{
-		"label1": pdata.NewAttributeValueString("value1"),
+	b := rmb.addResourceMetrics(map[string]pdata.Value{
+		"label1": pcommon.NewValueString("value1"),
 	})
 
-	mb1 := b.addMetric("m1", pdata.MetricDataTypeSum, true)
+	mb1 := b.addMetric("m1", pmetric.MetricDataTypeSum, true)
 	// mb1.addIntDataPoint(1, map[string]string{}, startTime, 0)
 	mb1.addIntDataPoint(1, map[string]string{}, startTime+1000, startTime)
 
-	b2 := rmb.addResourceMetrics(map[string]pdata.AttributeValue{
-		"label1": pdata.NewAttributeValueString("value2"),
+	b2 := rmb.addResourceMetrics(map[string]pdata.Value{
+		"label1": pcommon.NewValueString("value2"),
 	})
 
-	mb2 := b2.addMetric("m1", pdata.MetricDataTypeSum, true)
+	mb2 := b2.addMetric("m1", pmetric.MetricDataTypeSum, true)
 	// mb2.addIntDataPoint(5, map[string]string{}, startTime+2000, 0)
 	mb2.addIntDataPoint(5, map[string]string{}, startTime+3000, startTime+2000)
 
@@ -185,7 +187,7 @@ func generateLabelledInput(startTime int64) []pdata.Metrics {
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
 
-	mb1 := b.addMetric("m1", pdata.MetricDataTypeSum, true)
+	mb1 := b.addMetric("m1", pmetric.MetricDataTypeSum, true)
 	mb1.addIntDataPoint(0, map[string]string{"label": "val1"}, startTime, 0)
 	mb1.addIntDataPoint(3, map[string]string{"label": "val2"}, startTime, 0)
 	mb1.addIntDataPoint(12, map[string]string{"label": "val1"}, startTime+1000, 0)
@@ -205,7 +207,7 @@ func generateLabelledOutput(startTime int64) []pdata.Metrics {
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
 
-	mb1 := b.addMetric("m1", pdata.MetricDataTypeSum, true)
+	mb1 := b.addMetric("m1", pmetric.MetricDataTypeSum, true)
 	// mb1.addIntDataPoint(1, map[string]string{"label": "val1"}, startTime, 0)
 	// mb1.addIntDataPoint(1, map[string]string{"label": "val2"}, startTime, 0)
 	mb1.addIntDataPoint(12, map[string]string{"label": "val1"}, startTime+1000, startTime)
@@ -225,13 +227,13 @@ func generateSeparatedLabelledInput(startTime int64) []pdata.Metrics {
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
 
-	mb1 := b.addMetric("m1", pdata.MetricDataTypeSum, true)
+	mb1 := b.addMetric("m1", pmetric.MetricDataTypeSum, true)
 	mb1.addIntDataPoint(0, map[string]string{"label": "val1"}, startTime, 0)
 	mb1.addIntDataPoint(12, map[string]string{"label": "val1"}, startTime+1000, 0)
 	mb1.addIntDataPoint(15, map[string]string{"label": "val1"}, startTime+2000, 0)
 	mb1.addIntDataPoint(22, map[string]string{"label": "val1"}, startTime+3000, 0)
 
-	mb2 := b.addMetric("m1", pdata.MetricDataTypeSum, true)
+	mb2 := b.addMetric("m1", pmetric.MetricDataTypeSum, true)
 	mb2.addIntDataPoint(3, map[string]string{"label": "val2"}, startTime, 0)
 	mb2.addIntDataPoint(5, map[string]string{"label": "val2"}, startTime+1000, 0)
 	mb2.addIntDataPoint(1, map[string]string{"label": "val2"}, startTime+2000, 0)
@@ -247,13 +249,13 @@ func generateSeparatedLabelledOutput(startTime int64) []pdata.Metrics {
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
 
-	mb1 := b.addMetric("m1", pdata.MetricDataTypeSum, true)
+	mb1 := b.addMetric("m1", pmetric.MetricDataTypeSum, true)
 	// mb1.addIntDataPoint(1, map[string]string{"label": "val1"}, startTime, 0)
 	mb1.addIntDataPoint(12, map[string]string{"label": "val1"}, startTime+1000, startTime)
 	mb1.addIntDataPoint(15, map[string]string{"label": "val1"}, startTime+2000, startTime)
 	mb1.addIntDataPoint(22, map[string]string{"label": "val1"}, startTime+3000, startTime)
 
-	mb2 := b.addMetric("m1", pdata.MetricDataTypeSum, true)
+	mb2 := b.addMetric("m1", pmetric.MetricDataTypeSum, true)
 	// mb2.addIntDataPoint(1, map[string]string{"label": "val2"}, startTime, 0)
 	mb2.addIntDataPoint(2, map[string]string{"label": "val2"}, startTime+1000, startTime)
 	// mb2.addIntDataPoint(1, map[string]string{"label": "val2"}, startTime+2000, 1)
@@ -269,14 +271,14 @@ func generateRemoveInput(startTime int64) []pdata.Metrics {
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
 
-	mb1 := b.addMetric("m1", pdata.MetricDataTypeSum, true)
+	mb1 := b.addMetric("m1", pmetric.MetricDataTypeSum, true)
 	mb1.addIntDataPoint(1, map[string]string{}, startTime, 0)
 
-	mb2 := b.addMetric("m2", pdata.MetricDataTypeSum, true)
+	mb2 := b.addMetric("m2", pmetric.MetricDataTypeSum, true)
 	mb2.addDoubleDataPoint(3, map[string]string{}, startTime, 0)
 	mb2.addDoubleDataPoint(4, map[string]string{}, startTime+1000, 0)
 
-	mb3 := b.addMetric("m3", pdata.MetricDataTypeGauge, false)
+	mb3 := b.addMetric("m3", pmetric.MetricDataTypeGauge, false)
 	mb3.addDoubleDataPoint(5, map[string]string{}, startTime, 0)
 	mb3.addDoubleDataPoint(6, map[string]string{}, startTime+1000, 0)
 
@@ -290,11 +292,11 @@ func generateRemoveOutput(startTime int64) []pdata.Metrics {
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
 
-	mb2 := b.addMetric("m2", pdata.MetricDataTypeSum, true)
+	mb2 := b.addMetric("m2", pmetric.MetricDataTypeSum, true)
 	// mb2.addDoubleDataPoint(3, map[string]string{}, startTime, 0)
 	mb2.addDoubleDataPoint(1, map[string]string{}, startTime+1000, startTime)
 
-	mb3 := b.addMetric("m3", pdata.MetricDataTypeGauge, false)
+	mb3 := b.addMetric("m3", pmetric.MetricDataTypeGauge, false)
 	mb3.addDoubleDataPoint(5, map[string]string{}, startTime, 0)
 	mb3.addDoubleDataPoint(6, map[string]string{}, startTime+1000, 0)
 
@@ -309,7 +311,7 @@ func generateComplexInput(startTime int64) []pdata.Metrics {
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
 
-	mb1 := b.addMetric("m1", pdata.MetricDataTypeSum, true)
+	mb1 := b.addMetric("m1", pmetric.MetricDataTypeSum, true)
 	mb1.addIntDataPoint(1, map[string]string{}, startTime, 0)
 	mb1.addIntDataPoint(2, map[string]string{}, startTime+1000, 0)
 	mb1.addIntDataPoint(2, map[string]string{}, startTime+2000, 0)
@@ -317,7 +319,7 @@ func generateComplexInput(startTime int64) []pdata.Metrics {
 	mb1.addIntDataPoint(2, map[string]string{}, startTime+4000, 0)
 	mb1.addIntDataPoint(4, map[string]string{}, startTime+5000, 0)
 
-	mb2 := b.addMetric("m2", pdata.MetricDataTypeSum, true)
+	mb2 := b.addMetric("m2", pmetric.MetricDataTypeSum, true)
 	mb2.addDoubleDataPoint(3, map[string]string{}, startTime, 0)
 	mb2.addDoubleDataPoint(4, map[string]string{}, startTime+1000, 0)
 	mb2.addDoubleDataPoint(5, map[string]string{}, startTime+2000, 0)
@@ -326,11 +328,11 @@ func generateComplexInput(startTime int64) []pdata.Metrics {
 	mb2.addDoubleDataPoint(2, map[string]string{}, startTime+10000, 0)
 	mb2.addDoubleDataPoint(6, map[string]string{}, startTime+120000, 0)
 
-	mb3 := b.addMetric("m3", pdata.MetricDataTypeGauge, false)
+	mb3 := b.addMetric("m3", pmetric.MetricDataTypeGauge, false)
 	mb3.addDoubleDataPoint(5, map[string]string{}, startTime, 0)
 	mb3.addDoubleDataPoint(6, map[string]string{}, startTime+1000, 0)
 
-	mb4 := b.addMetric("m4", pdata.MetricDataTypeSum, false)
+	mb4 := b.addMetric("m4", pmetric.MetricDataTypeSum, false)
 	mb4.addDoubleDataPoint(12, map[string]string{}, startTime, 0)
 	mb4.addDoubleDataPoint(13, map[string]string{}, startTime+2000, 0)
 
@@ -341,7 +343,7 @@ func generateComplexInput(startTime int64) []pdata.Metrics {
 	rmb = newResourceMetricsBuilder()
 	b = rmb.addResourceMetrics(nil)
 
-	mb1 = b.addMetric("m1", pdata.MetricDataTypeSum, true)
+	mb1 = b.addMetric("m1", pmetric.MetricDataTypeSum, true)
 	mb1.addIntDataPoint(7, map[string]string{}, startTime+6000, 0)
 	mb1.addIntDataPoint(9, map[string]string{}, startTime+7000, 0)
 
@@ -358,7 +360,7 @@ func generateComplexOutput(startTime int64) []pdata.Metrics {
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
 
-	mb1 := b.addMetric("m1", pdata.MetricDataTypeSum, true)
+	mb1 := b.addMetric("m1", pmetric.MetricDataTypeSum, true)
 	// mb1.addIntDataPoint(1, map[string]string{}, startTime, 0)
 	mb1.addIntDataPoint(1, map[string]string{}, startTime+1000, startTime)
 	mb1.addIntDataPoint(1, map[string]string{}, startTime+2000, startTime)
@@ -366,7 +368,7 @@ func generateComplexOutput(startTime int64) []pdata.Metrics {
 	// mb1.addIntDataPoint(2, map[string]string{}, startTime+4000, 0)
 	mb1.addIntDataPoint(2, map[string]string{}, startTime+5000, startTime+4000)
 
-	mb2 := b.addMetric("m2", pdata.MetricDataTypeSum, true)
+	mb2 := b.addMetric("m2", pmetric.MetricDataTypeSum, true)
 	// mb2.addDoubleDataPoint(3, map[string]string{}, startTime, 0)
 	mb2.addDoubleDataPoint(1, map[string]string{}, startTime+1000, startTime)
 	mb2.addDoubleDataPoint(2, map[string]string{}, startTime+2000, startTime)
@@ -375,11 +377,11 @@ func generateComplexOutput(startTime int64) []pdata.Metrics {
 	// mb2.addDoubleDataPoint(2, map[string]string{}, startTime+10000, 0)
 	mb2.addDoubleDataPoint(4, map[string]string{}, startTime+120000, startTime+10000)
 
-	mb3 := b.addMetric("m3", pdata.MetricDataTypeGauge, false)
+	mb3 := b.addMetric("m3", pmetric.MetricDataTypeGauge, false)
 	mb3.addDoubleDataPoint(5, map[string]string{}, startTime, 0)
 	mb3.addDoubleDataPoint(6, map[string]string{}, startTime+1000, 0)
 
-	mb4 := b.addMetric("m4", pdata.MetricDataTypeSum, false)
+	mb4 := b.addMetric("m4", pmetric.MetricDataTypeSum, false)
 	mb4.addDoubleDataPoint(12, map[string]string{}, startTime, 0)
 	mb4.addDoubleDataPoint(13, map[string]string{}, startTime+2000, 0)
 
@@ -391,7 +393,7 @@ func generateComplexOutput(startTime int64) []pdata.Metrics {
 	rmb = newResourceMetricsBuilder()
 	b = rmb.addResourceMetrics(nil)
 
-	mb1 = b.addMetric("m1", pdata.MetricDataTypeSum, true)
+	mb1 = b.addMetric("m1", pmetric.MetricDataTypeSum, true)
 	mb1.addIntDataPoint(5, map[string]string{}, startTime+6000, startTime+4000)
 	mb1.addIntDataPoint(7, map[string]string{}, startTime+7000, startTime+4000)
 
@@ -411,14 +413,14 @@ func newResourceMetricsBuilder() resourceMetricsBuilder {
 	return resourceMetricsBuilder{rms: pdata.NewResourceMetricsSlice()}
 }
 
-func (rmsb resourceMetricsBuilder) addResourceMetrics(resourceAttributes map[string]pdata.AttributeValue) metricsBuilder {
+func (rmsb resourceMetricsBuilder) addResourceMetrics(resourceAttributes map[string]pdata.Value) metricsBuilder {
 	rm := rmsb.rms.AppendEmpty()
 
 	for k, v := range resourceAttributes {
 		rm.Resource().Attributes().Insert(k, v)
 	}
 
-	ilm := rm.InstrumentationLibraryMetrics().AppendEmpty()
+	ilm := rm.ScopeMetrics().AppendEmpty()
 
 	return metricsBuilder{metrics: ilm.Metrics()}
 }
@@ -437,11 +439,11 @@ func (msb metricsBuilder) addMetric(name string, t pdata.MetricDataType, isMonot
 	metric.SetDataType(t)
 
 	switch t {
-	case pdata.MetricDataTypeSum:
+	case pmetric.MetricDataTypeSum:
 		sum := metric.Sum()
 		sum.SetIsMonotonic(isMonotonic)
-		sum.SetAggregationTemporality(pdata.MetricAggregationTemporalityCumulative)
-	case pdata.MetricDataTypeGauge:
+		sum.SetAggregationTemporality(pmetric.MetricAggregationTemporalityCumulative)
+	case pmetric.MetricDataTypeGauge:
 		metric.Gauge()
 	}
 
@@ -455,9 +457,9 @@ type metricBuilder struct {
 func (mb metricBuilder) addDoubleDataPoint(value float64, labels map[string]string, timestamp int64, startTimestamp int64) {
 	var ddp pdata.NumberDataPoint
 	switch mb.metric.DataType() {
-	case pdata.MetricDataTypeSum:
+	case pmetric.MetricDataTypeSum:
 		ddp = mb.metric.Sum().DataPoints().AppendEmpty()
-	case pdata.MetricDataTypeGauge:
+	case pmetric.MetricDataTypeGauge:
 		ddp = mb.metric.Gauge().DataPoints().AppendEmpty()
 	}
 	for k, v := range labels {
@@ -473,9 +475,9 @@ func (mb metricBuilder) addDoubleDataPoint(value float64, labels map[string]stri
 func (mb metricBuilder) addIntDataPoint(value int64, labels map[string]string, timestamp int64, startTimestamp int64) {
 	var idp pdata.NumberDataPoint
 	switch mb.metric.DataType() {
-	case pdata.MetricDataTypeSum:
+	case pmetric.MetricDataTypeSum:
 		idp = mb.metric.Sum().DataPoints().AppendEmpty()
-	case pdata.MetricDataTypeGauge:
+	case pmetric.MetricDataTypeGauge:
 		idp = mb.metric.Gauge().DataPoints().AppendEmpty()
 	}
 	for k, v := range labels {
@@ -511,8 +513,8 @@ func requireEqual(t *testing.T, expected, actual []pdata.Metrics) {
 			require.Equal(t, rmExp.Resource().Attributes().Sort(), rmAct.Resource().Attributes().Sort())
 
 			// require equality of IL metrics
-			ilmsAct := rmAct.InstrumentationLibraryMetrics()
-			ilmsExp := rmExp.InstrumentationLibraryMetrics()
+			ilmsAct := rmAct.ScopeMetrics()
+			ilmsExp := rmExp.ScopeMetrics()
 			require.Equal(t, ilmsExp.Len(), ilmsAct.Len())
 			for j := 0; j < ilmsAct.Len(); j++ {
 				ilmAct := ilmsAct.At(j)
@@ -541,11 +543,11 @@ func requireEqual(t *testing.T, expected, actual []pdata.Metrics) {
 
 					// require equality of aggregation info & data points
 					switch ty := metricAct.DataType(); ty {
-					case pdata.MetricDataTypeSum:
+					case pmetric.MetricDataTypeSum:
 						require.Equal(t, metricAct.Sum().AggregationTemporality(), metricExp.Sum().AggregationTemporality(), "Metric %s", metricAct.Name())
 						require.Equal(t, metricAct.Sum().IsMonotonic(), metricExp.Sum().IsMonotonic(), "Metric %s", metricAct.Name())
 						requireEqualNumberDataPointSlice(t, metricAct.Name(), metricAct.Sum().DataPoints(), metricExp.Sum().DataPoints())
-					case pdata.MetricDataTypeGauge:
+					case pmetric.MetricDataTypeGauge:
 						requireEqualNumberDataPointSlice(t, metricAct.Name(), metricAct.Gauge().DataPoints(), metricExp.Gauge().DataPoints())
 					default:
 						require.Fail(t, "unexpected metric type", t)
@@ -580,18 +582,18 @@ func requireEqualNumberDataPointSlice(t *testing.T, metricName string, ndpsAct, 
 		require.Equalf(t, ndpExp.Timestamp(), ndpAct.Timestamp(), "Metric %s", metricName)
 		require.Equalf(t, ndpExp.ValueType(), ndpAct.ValueType(), "Metric %s", metricName)
 		switch ndpExp.ValueType() {
-		case pdata.MetricValueTypeInt:
+		case pmetric.MetricValueTypeInt:
 			require.Equalf(t, ndpExp.IntVal(), ndpAct.IntVal(), "Metric %s", metricName)
-		case pdata.MetricValueTypeDouble:
+		case pmetric.MetricValueTypeDouble:
 			require.Equalf(t, ndpExp.DoubleVal(), ndpAct.DoubleVal(), "Metric %s", metricName)
 		}
 	}
 }
 
 // dataPointKey returns a key representing the data point
-func dataPointKey(metricName string, labelsMap pdata.AttributeMap, timestamp pdata.Timestamp, startTimestamp pdata.Timestamp) string {
+func dataPointKey(metricName string, labelsMap pdata.Map, timestamp pdata.Timestamp, startTimestamp pdata.Timestamp) string {
 	idx, otherLabels := 0, make([]string, labelsMap.Len())
-	labelsMap.Range(func(k string, v pdata.AttributeValue) bool {
+	labelsMap.Range(func(k string, v pdata.Value) bool {
 		otherLabels[idx] = k + "=" + v.AsString()
 		idx++
 		return true

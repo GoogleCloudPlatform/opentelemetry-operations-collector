@@ -16,6 +16,7 @@ package agentmetricsprocessor
 
 import (
 	"go.opentelemetry.io/collector/model/pdata"
+	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
 func generateVersionInput() pdata.Metrics {
@@ -24,10 +25,10 @@ func generateVersionInput() pdata.Metrics {
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
 
-	mb1 := b.addMetric("m1", pdata.MetricDataTypeSum, true)
+	mb1 := b.addMetric("m1", pmetric.MetricDataTypeSum, true)
 	mb1.addIntDataPoint(2, map[string]string{"service_version": "value2"})
 
-	mb2 := b.addMetric("m2", pdata.MetricDataTypeGauge, false)
+	mb2 := b.addMetric("m2", pmetric.MetricDataTypeGauge, false)
 	mb2.addDoubleDataPoint(3, map[string]string{"service_version": "value1"})
 
 	rmb.Build().CopyTo(input.ResourceMetrics())
@@ -40,10 +41,10 @@ func generateVersionExpected() pdata.Metrics {
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
 
-	mb1 := b.addMetric("m1", pdata.MetricDataTypeSum, true)
+	mb1 := b.addMetric("m1", pmetric.MetricDataTypeSum, true)
 	mb1.addIntDataPoint(2, map[string]string{})
 
-	mb2 := b.addMetric("m2", pdata.MetricDataTypeGauge, false)
+	mb2 := b.addMetric("m2", pmetric.MetricDataTypeGauge, false)
 	mb2.addDoubleDataPoint(3, map[string]string{})
 
 	rmb.Build().CopyTo(input.ResourceMetrics())
@@ -56,10 +57,10 @@ func generateMultiAttrVersionInput() pdata.Metrics {
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
 
-	mb1 := b.addMetric("m1", pdata.MetricDataTypeSum, true)
+	mb1 := b.addMetric("m1", pmetric.MetricDataTypeSum, true)
 	mb1.addIntDataPoint(2, map[string]string{"service_version": "value2", "other_attr": "value2"})
 
-	mb2 := b.addMetric("m2", pdata.MetricDataTypeGauge, false)
+	mb2 := b.addMetric("m2", pmetric.MetricDataTypeGauge, false)
 	mb2.addDoubleDataPoint(3, map[string]string{"service_version": "value1", "other_attr": "value1"})
 
 	rmb.Build().CopyTo(input.ResourceMetrics())
@@ -72,10 +73,10 @@ func generateMultiAttrVersionExpected() pdata.Metrics {
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
 
-	mb1 := b.addMetric("m1", pdata.MetricDataTypeSum, true)
+	mb1 := b.addMetric("m1", pmetric.MetricDataTypeSum, true)
 	mb1.addIntDataPoint(2, map[string]string{"other_attr": "value2"})
 
-	mb2 := b.addMetric("m2", pdata.MetricDataTypeGauge, false)
+	mb2 := b.addMetric("m2", pmetric.MetricDataTypeGauge, false)
 	mb2.addDoubleDataPoint(3, map[string]string{"other_attr": "value1"})
 
 	rmb.Build().CopyTo(input.ResourceMetrics())

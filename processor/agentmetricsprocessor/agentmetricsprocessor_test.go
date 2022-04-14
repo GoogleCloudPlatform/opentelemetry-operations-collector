@@ -26,6 +26,7 @@ import (
 	"go.opentelemetry.io/collector/consumer/consumertest"
 	"go.opentelemetry.io/collector/model/otlp"
 	"go.opentelemetry.io/collector/model/pdata"
+	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/processor/processorhelper"
 	"go.uber.org/zap"
 )
@@ -141,14 +142,14 @@ func newResourceMetricsBuilder() resourceMetricsBuilder {
 	return resourceMetricsBuilder{rms: pdata.NewResourceMetricsSlice()}
 }
 
-func (rmsb resourceMetricsBuilder) addResourceMetrics(resourceAttributes map[string]pdata.AttributeValue) metricsBuilder {
+func (rmsb resourceMetricsBuilder) addResourceMetrics(resourceAttributes map[string]pdata.Value) metricsBuilder {
 	rm := rmsb.rms.AppendEmpty()
 
 	for k, v := range resourceAttributes {
 		rm.Resource().Attributes().Insert(k, v)
 	}
 
-	ilm := rm.InstrumentationLibraryMetrics().AppendEmpty()
+	ilm := rm.ScopeMetrics().AppendEmpty()
 
 	return metricsBuilder{metrics: ilm.Metrics()}
 }
@@ -168,11 +169,11 @@ func (msb metricsBuilder) addMetric(name string, t pdata.MetricDataType, isMonot
 	metric.SetDataType(t)
 
 	switch t {
-	case pdata.MetricDataTypeSum:
+	case pmetric.MetricDataTypeSum:
 		sum := metric.Sum()
 		sum.SetIsMonotonic(isMonotonic)
-		sum.SetAggregationTemporality(pdata.MetricAggregationTemporalityCumulative)
-	case pdata.MetricDataTypeGauge:
+		sum.SetAggregationTemporality(pmetric.MetricAggregationTemporalityCumulative)
+	case pmetric.MetricDataTypeGauge:
 		metric.Gauge()
 	}
 
@@ -187,9 +188,9 @@ type metricBuilder struct {
 func (mb metricBuilder) addIntDataPoint(value int64, labels map[string]string) metricBuilder {
 	var idp pdata.NumberDataPoint
 	switch mb.metric.DataType() {
-	case pdata.MetricDataTypeSum:
+	case pmetric.MetricDataTypeSum:
 		idp = mb.metric.Sum().DataPoints().AppendEmpty()
-	case pdata.MetricDataTypeGauge:
+	case pmetric.MetricDataTypeGauge:
 		idp = mb.metric.Gauge().DataPoints().AppendEmpty()
 	}
 	for k, v := range labels {
@@ -204,9 +205,9 @@ func (mb metricBuilder) addIntDataPoint(value int64, labels map[string]string) m
 func (mb metricBuilder) addDoubleDataPoint(value float64, labels map[string]string) metricBuilder {
 	var ddp pdata.NumberDataPoint
 	switch mb.metric.DataType() {
-	case pdata.MetricDataTypeSum:
+	case pmetric.MetricDataTypeSum:
 		ddp = mb.metric.Sum().DataPoints().AppendEmpty()
-	case pdata.MetricDataTypeGauge:
+	case pmetric.MetricDataTypeGauge:
 		ddp = mb.metric.Gauge().DataPoints().AppendEmpty()
 	}
 	for k, v := range labels {
@@ -232,8 +233,8 @@ func assertEqual(t *testing.T, expected, actual pdata.Metrics) {
 		assert.Equal(t, rmExp.Resource().Attributes().Sort(), rmAct.Resource().Attributes().Sort())
 
 		// assert equality of IL metrics
-		ilmsAct := rmAct.InstrumentationLibraryMetrics()
-		ilmsExp := rmExp.InstrumentationLibraryMetrics()
+		ilmsAct := rmAct.ScopeMetrics()
+		ilmsExp := rmExp.ScopeMetrics()
 		require.Equal(t, ilmsExp.Len(), ilmsAct.Len())
 		for j := 0; j < ilmsAct.Len(); j++ {
 			ilmAct := ilmsAct.At(j)
@@ -265,11 +266,11 @@ func assertEqual(t *testing.T, expected, actual pdata.Metrics) {
 
 				// assert equality of aggregation info & data points
 				switch ty := metricAct.DataType(); ty {
-				case pdata.MetricDataTypeSum:
+				case pmetric.MetricDataTypeSum:
 					assert.Equal(t, metricAct.Sum().AggregationTemporality(), metricExp.Sum().AggregationTemporality(), "Metric %s", metricAct.Name())
 					assert.Equal(t, metricAct.Sum().IsMonotonic(), metricExp.Sum().IsMonotonic(), "Metric %s", metricAct.Name())
 					assertEqualNumberDataPointSlice(t, metricAct.Name(), metricAct.Sum().DataPoints(), metricExp.Sum().DataPoints())
-				case pdata.MetricDataTypeGauge:
+				case pmetric.MetricDataTypeGauge:
 					assertEqualNumberDataPointSlice(t, metricAct.Name(), metricAct.Gauge().DataPoints(), metricExp.Gauge().DataPoints())
 				default:
 					assert.Fail(t, "unexpected metric type", t)
@@ -305,9 +306,9 @@ func assertEqualNumberDataPointSlice(t *testing.T, metricName string, ndpsAct, n
 		assert.Equalf(t, ndpExp.Timestamp(), ndpAct.Timestamp(), "Metric %s attributes %s", metricName, key)
 		assert.Equalf(t, ndpExp.ValueType(), ndpAct.ValueType(), "Metric %s attributes %s", metricName, key)
 		switch ndpExp.ValueType() {
-		case pdata.MetricValueTypeInt:
+		case pmetric.MetricValueTypeInt:
 			assert.Equalf(t, ndpExp.IntVal(), ndpAct.IntVal(), "Metric %s attributes %s", metricName, key)
-		case pdata.MetricValueTypeDouble:
+		case pmetric.MetricValueTypeDouble:
 			assert.InEpsilonf(t, ndpExp.DoubleVal(), ndpAct.DoubleVal(), epsilon, "Metric %s attributes %s", metricName, key)
 		}
 	}

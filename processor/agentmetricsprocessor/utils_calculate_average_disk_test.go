@@ -16,18 +16,19 @@ package agentmetricsprocessor
 
 import (
 	"go.opentelemetry.io/collector/model/pdata"
+	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
 func commonAverageDiskInput(b metricsBuilder) {
 	b.timestamp = twoSeconds
 
-	mb1 := b.addMetric("system.disk.operation_time", pdata.MetricDataTypeSum, true)
+	mb1 := b.addMetric("system.disk.operation_time", pmetric.MetricDataTypeSum, true)
 	mb1.addDoubleDataPoint(200, map[string]string{"device": "hda", "direction": "read"})
 	mb1.addDoubleDataPoint(400, map[string]string{"device": "hda", "direction": "write"})
 	mb1.addDoubleDataPoint(100, map[string]string{"device": "hdb", "direction": "read"})
 	mb1.addDoubleDataPoint(100, map[string]string{"device": "hdb", "direction": "write"})
 
-	mb2 := b.addMetric("system.disk.operations", pdata.MetricDataTypeSum, true)
+	mb2 := b.addMetric("system.disk.operations", pmetric.MetricDataTypeSum, true)
 	mb2.addIntDataPoint(5, map[string]string{"device": "hda", "direction": "read"})
 	mb2.addIntDataPoint(4, map[string]string{"device": "hda", "direction": "write"})
 	mb2.addIntDataPoint(2, map[string]string{"device": "hdb", "direction": "read"})
@@ -94,7 +95,7 @@ func generateAverageDiskPrevExpected() pdata.Metrics {
 
 	commonAverageDiskInput(b)
 
-	mb3 := b.addMetric("system.disk.average_operation_time", pdata.MetricDataTypeSum, true)
+	mb3 := b.addMetric("system.disk.average_operation_time", pmetric.MetricDataTypeSum, true)
 	mb3.addDoubleDataPoint(15+2*(100/5), map[string]string{"device": "hda", "direction": "read"})
 	mb3.addDoubleDataPoint(20+2*(100/1), map[string]string{"device": "hda", "direction": "write"})
 	mb3.addDoubleDataPoint(30, map[string]string{"device": "hdb", "direction": "read"})

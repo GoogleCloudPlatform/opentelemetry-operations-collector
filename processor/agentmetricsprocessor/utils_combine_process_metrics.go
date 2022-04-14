@@ -21,6 +21,8 @@ import (
 
 	"go.opentelemetry.io/collector/model/pdata"
 	conventions "go.opentelemetry.io/collector/model/semconv/v1.5.0"
+	"go.opentelemetry.io/collector/pdata/pcommon"
+	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
 // The following code performs a translation from metrics that store process
@@ -61,7 +63,7 @@ func combineProcessMetrics(rms pdata.ResourceMetricsSlice) error {
 	resultMetrics := otherMetrics
 
 	// append all of the process metrics
-	metrics := resultMetrics.At(0).InstrumentationLibraryMetrics().At(0).Metrics()
+	metrics := resultMetrics.At(0).ScopeMetrics().At(0).Metrics()
 	for _, metric := range processMetrics {
 		metric.Metric.CopyTo(metrics.AppendEmpty())
 	}
@@ -87,7 +89,7 @@ func createProcessMetrics(rms pdata.ResourceMetricsSlice) (processMetrics conver
 
 		// combine all metrics into the process metrics map by appending
 		// the data points
-		ilms := rm.InstrumentationLibraryMetrics()
+		ilms := rm.ScopeMetrics()
 		for j := 0; j < ilms.Len(); j++ {
 			metrics := ilms.At(j).Metrics()
 			for k := 0; k < metrics.Len(); k++ {
@@ -108,7 +110,7 @@ const processAttributePrefix = "process."
 // any attributes with a "process." prefix
 func includesProcessAttributes(resource pdata.Resource) bool {
 	includesProcessAttributes := false
-	resource.Attributes().Range(func(k string, _ pdata.AttributeValue) bool {
+	resource.Attributes().Range(func(k string, _ pdata.Value) bool {
 		if strings.HasPrefix(k, processAttributePrefix) {
 			includesProcessAttributes = true
 			return false
@@ -159,9 +161,9 @@ func (cm convertedMetric) append(metric pdata.Metric, resource pdata.Resource) e
 	var err error
 
 	switch t := metric.DataType(); t {
-	case pdata.MetricDataTypeSum:
+	case pmetric.MetricDataTypeSum:
 		err = appendNumberDataSlice(metric.Sum().DataPoints(), cm.Sum().DataPoints(), resource)
-	case pdata.MetricDataTypeGauge:
+	case pmetric.MetricDataTypeGauge:
 		err = appendNumberDataSlice(metric.Gauge().DataPoints(), cm.Gauge().DataPoints(), resource)
 	}
 
@@ -181,9 +183,9 @@ func appendNumberDataSlice(ndps, converted pdata.NumberDataPointSlice, resource 
 
 // appendAttributesToLabels appends the provided attributes to the provided labels map.
 // This requires converting the attributes to string format.
-func appendAttributesToLabels(labels pdata.AttributeMap, attributes pdata.AttributeMap) error {
+func appendAttributesToLabels(labels pdata.Map, attributes pdata.Map) error {
 	var err error
-	attributes.Range(func(k string, v pdata.AttributeValue) bool {
+	attributes.Range(func(k string, v pdata.Value) bool {
 		// break if error has occurred in previous iteration
 		if err != nil {
 			return false
@@ -202,7 +204,7 @@ func appendAttributesToLabels(labels pdata.AttributeMap, attributes pdata.Attrib
 			return false
 		}
 
-		labels.Insert(key, pdata.NewAttributeValueString(value))
+		labels.Insert(key, pcommon.NewValueString(value))
 		return true
 	})
 	return err
@@ -224,16 +226,16 @@ func toCloudMonitoringLabel(resourceAttributeKey string) string {
 	}
 }
 
-func stringValue(attributeValue pdata.AttributeValue) (string, error) {
+func stringValue(attributeValue pdata.Value) (string, error) {
 	var stringValue string
 	switch t := attributeValue.Type(); t {
-	case pdata.AttributeValueTypeBool:
+	case pcommon.ValueTypeBool:
 		stringValue = strconv.FormatBool(attributeValue.BoolVal())
-	case pdata.AttributeValueTypeInt:
+	case pcommon.ValueTypeInt:
 		stringValue = strconv.FormatInt(attributeValue.IntVal(), 10)
-	case pdata.AttributeValueTypeDouble:
+	case pcommon.ValueTypeDouble:
 		stringValue = strconv.FormatFloat(attributeValue.DoubleVal(), 'f', -1, 64)
-	case pdata.AttributeValueTypeString:
+	case pcommon.ValueTypeString:
 		stringValue = attributeValue.StringVal()
 	default:
 		return "", fmt.Errorf("unexpected attribute type: %v", t)

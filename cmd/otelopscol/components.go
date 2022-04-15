@@ -15,7 +15,6 @@
 package main
 
 import (
-	"github.com/observiq/observiq-otel-collector/receiver/varnishreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/exporter/fileexporter"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor"
@@ -91,7 +90,6 @@ func components() (component.Factories, error) {
 		couchdbreceiver.NewFactory(),
 		zookeeperreceiver.NewFactory(),
 		rabbitmqreceiver.NewFactory(),
-		varnishreceiver.NewFactory(),
 	}
 	for _, rcv := range factories.Receivers {
 		receivers = append(receivers, rcv)

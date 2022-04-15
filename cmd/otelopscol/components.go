@@ -25,6 +25,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/couchdbreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/elasticsearchreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/iisreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/memcachedreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/mongodbreceiver"
@@ -35,6 +36,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/rabbitmqreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/redisreceiver"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/sqlserverreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowsperfcountersreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/zookeeperreceiver"
 	"go.opentelemetry.io/collector/component"
@@ -76,6 +78,8 @@ func components() (component.Factories, error) {
 		nginxreceiver.NewFactory(),
 		jmxreceiver.NewFactory(),
 		windowsperfcountersreceiver.NewFactory(),
+		iisreceiver.NewFactory(),
+		sqlserverreceiver.NewFactory(),
 		redisreceiver.NewFactory(),
 		mysqlreceiver.NewFactory(),
 		apachereceiver.NewFactory(),

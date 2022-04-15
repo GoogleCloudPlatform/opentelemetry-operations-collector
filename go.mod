@@ -13,6 +13,7 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/couchdbreceiver v0.49.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/elasticsearchreceiver v0.49.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver v0.49.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/iisreceiver v0.0.0-20220414174352-95f0da0c8495
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver v0.49.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/memcachedreceiver v0.49.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/mongodbreceiver v0.49.0
@@ -23,12 +24,14 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver v0.49.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/rabbitmqreceiver v0.49.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/redisreceiver v0.49.0
-	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowsperfcountersreceiver v0.49.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/sqlserverreceiver v0.0.0-20220415170442-c7fe9fd45510
+	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowsperfcountersreceiver v0.49.1-0.20220414180250-8e47182c7af2
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/zookeeperreceiver v0.49.0
 	github.com/shirou/gopsutil v3.21.10+incompatible
 	github.com/stretchr/testify v1.7.1
 	go.opentelemetry.io/collector v0.49.0
 	go.opentelemetry.io/collector/model v0.49.0
+	go.opentelemetry.io/collector/pdata v0.49.0
 	go.uber.org/multierr v1.8.0
 	go.uber.org/zap v1.21.0
 	golang.org/x/sys v0.0.0-20220328115105-d36c6a25d886
@@ -98,16 +101,13 @@ require (
 	github.com/googleapis/gax-go/v2 v2.2.0 // indirect
 	github.com/googleapis/gnostic v0.5.5 // indirect
 	github.com/gophercloud/gophercloud v0.24.0 // indirect
-	github.com/gorilla/mux v1.8.0 // indirect
 	github.com/grafana/regexp v0.0.0-20220304095617-2e8d9baf4ac2 // indirect
 	github.com/grobie/gomemcache v0.0.0-20180201122607-1f779c573665 // indirect
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0 // indirect
 	github.com/hashicorp/consul/api v1.12.0 // indirect
-	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-hclog v1.2.0 // indirect
 	github.com/hashicorp/go-immutable-radix v1.3.1 // indirect
-	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/go-rootcerts v1.0.2 // indirect
 	github.com/hashicorp/go-uuid v1.0.2 // indirect
 	github.com/hashicorp/go-version v1.4.0 // indirect
@@ -141,17 +141,12 @@ require (
 	github.com/mostynb/go-grpc-compression v1.1.16 // indirect
 	github.com/mwitkow/go-conntrack v0.0.0-20190716064945-2f068394615f // indirect
 	github.com/nginxinc/nginx-prometheus-exporter v0.8.1-0.20201110005315-f5a5f8086c19 // indirect
-	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/prometheusremotewriteexporter v0.49.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/aws/ecsutil v0.49.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/common v0.49.0 // indirect
-	github.com/open-telemetry/opentelemetry-collector-contrib/internal/containertest v0.49.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal v0.49.0 // indirect
-	github.com/open-telemetry/opentelemetry-collector-contrib/internal/scrapertest v0.49.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/sharedcomponent v0.49.0 // indirect
-	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/resourcetotelemetry v0.49.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/translator/opencensus v0.49.0 // indirect
-	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/translator/prometheusremotewrite v0.49.0 // indirect
-	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/winperfcounters v0.49.0 // indirect
+	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/winperfcounters v0.49.1-0.20220414180250-8e47182c7af2 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.0.2 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
@@ -172,11 +167,6 @@ require (
 	github.com/spf13/cobra v1.4.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/stretchr/objx v0.2.0 // indirect
-	github.com/tidwall/gjson v1.10.2 // indirect
-	github.com/tidwall/match v1.1.1 // indirect
-	github.com/tidwall/pretty v1.2.0 // indirect
-	github.com/tidwall/tinylru v1.1.0 // indirect
-	github.com/tidwall/wal v1.1.7 // indirect
 	github.com/tklauser/go-sysconf v0.3.10 // indirect
 	github.com/tklauser/numcpus v0.4.0 // indirect
 	github.com/xdg-go/pbkdf2 v1.0.0 // indirect
@@ -186,13 +176,11 @@ require (
 	github.com/yusufpapurcu/wmi v1.2.2 // indirect
 	go.mongodb.org/mongo-driver v1.9.0 // indirect
 	go.opencensus.io v0.23.0 // indirect
-	go.opentelemetry.io/collector/pdata v0.49.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.31.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.31.0 // indirect
 	go.opentelemetry.io/contrib/zpages v0.31.0 // indirect
 	go.opentelemetry.io/otel v1.6.3 // indirect
 	go.opentelemetry.io/otel/exporters/prometheus v0.29.0 // indirect
-	go.opentelemetry.io/otel/internal/metric v0.27.0 // indirect
 	go.opentelemetry.io/otel/metric v0.29.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.6.3 // indirect
 	go.opentelemetry.io/otel/sdk/metric v0.29.0 // indirect
@@ -217,6 +205,7 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
+	gotest.tools/v3 v3.1.0 // indirect
 	k8s.io/api v0.23.5 // indirect
 	k8s.io/apimachinery v0.23.5 // indirect
 	k8s.io/client-go v0.23.5 // indirect
@@ -227,3 +216,5 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.1 // indirect
 	sigs.k8s.io/yaml v1.2.0 // indirect
 )
+
+replace github.com/open-telemetry/opentelemetry-collector-contrib/pkg/winperfcounters v0.0.0-00010101000000-000000000000 => github.com/open-telemetry/opentelemetry-collector-contrib/pkg/winperfcounters v0.49.1-0.20220414180250-8e47182c7af2

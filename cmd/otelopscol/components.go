@@ -37,6 +37,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/rabbitmqreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/redisreceiver"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/sqlserverreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowsperfcountersreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/zookeeperreceiver"
 	"go.opentelemetry.io/collector/component"
@@ -79,6 +80,7 @@ func components() (component.Factories, error) {
 		jmxreceiver.NewFactory(),
 		windowsperfcountersreceiver.NewFactory(),
 		iisreceiver.NewFactory(),
+		sqlserverreceiver.NewFactory(),
 		redisreceiver.NewFactory(),
 		mysqlreceiver.NewFactory(),
 		apachereceiver.NewFactory(),

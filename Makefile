@@ -1,8 +1,6 @@
 # read PKG_VERSION from VERSION file
 include VERSION
 
-ALL_MODULES := $(shell find . -type f -name "go.mod" -exec dirname {} \; | sort )
-
 # if GOOS is not supplied, set default value based on user's system, will be overridden for OS specific packaging commands
 GOOS ?= $(shell go env GOOS)
 ifeq ($(GOOS),windows)
@@ -157,16 +155,7 @@ ifndef TARGET
 endif
 	docker run -e PKG_VERSION -e ARCH -v $(CURDIR):/mnt -w /mnt $(BUILD_IMAGE_NAME) /bin/bash -c "make $(TARGET)"
 
-.PHONY: for-all
-for-all:
-	@echo "running $${CMD} in root"
-	@$${CMD}
-	@set -e; for dir in $(ALL_MODULES); do \
-	  (cd "$${dir}" && \
-	  	echo "running $${CMD} in $${dir}" && \
-	 	$${CMD} ); \
-	done
-
 .PHONY: generate
 generate:
-	$(MAKE) for-all CMD="go generate ./..."
+	go generate ./...
+	

@@ -17,4 +17,4 @@
 
 //go:generate mdatagen --experimental-gen metadata.yaml
 
-package varnishreceiver // import "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/varnishreceiver"
+package varnishreceiver

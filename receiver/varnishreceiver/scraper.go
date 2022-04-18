@@ -23,6 +23,7 @@ import (
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/model/pdata"
 	"go.opentelemetry.io/collector/pdata/pcommon"
+	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.uber.org/zap"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/varnishreceiver/internal/metadata"
@@ -64,7 +65,7 @@ func (v *varnishScraper) setCacheName() error {
 	return nil
 }
 
-func (v *varnishScraper) scrape(context.Context) (pdata.Metrics, error) {
+func (v *varnishScraper) scrape(context.Context) (pmetric.Metrics, error) {
 	stats, err := v.client.GetStats()
 	if err != nil {
 		v.settings.Logger.Error("Failed to execute varnishstat",
@@ -76,9 +77,6 @@ func (v *varnishScraper) scrape(context.Context) (pdata.Metrics, error) {
 	}
 
 	now := pcommon.NewTimestampFromTime(time.Now())
-	md := v.mb.NewMetricData()
-
-	md.ResourceMetrics().At(0).Resource().Attributes().UpsertString(metadata.A.CacheName, v.cacheName)
 
 	v.recordVarnishBackendConnectionsCountDataPoint(now, stats)
 	v.recordVarnishCacheOperationsCountDataPoint(now, stats)
@@ -93,6 +91,5 @@ func (v *varnishScraper) scrape(context.Context) (pdata.Metrics, error) {
 	v.mb.RecordVarnishObjectCountDataPoint(now, stats.MAINNObject.Value)
 	v.mb.RecordVarnishBackendRequestCountDataPoint(now, stats.MAINBackendReq.Value)
 
-	v.mb.Emit(md.ResourceMetrics().At(0).InstrumentationLibraryMetrics().At(0).Metrics())
-	return md, nil
+	return v.mb.Emit(metadata.WithVarnishCacheName(v.cacheName)), nil
 }

@@ -5,7 +5,8 @@ package metadata
 import (
 	"time"
 
-	"go.opentelemetry.io/collector/model/pdata"
+	"go.opentelemetry.io/collector/pdata/pcommon"
+	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
 // MetricSettings provides common settings for a particular metric.
@@ -67,7 +68,7 @@ func DefaultMetricsSettings() MetricsSettings {
 }
 
 type metricVarnishBackendConnectionCount struct {
-	data     pdata.Metric   // data buffer for generated metric.
+	data     pmetric.Metric // data buffer for generated metric.
 	settings MetricSettings // metric settings provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
@@ -77,13 +78,13 @@ func (m *metricVarnishBackendConnectionCount) init() {
 	m.data.SetName("varnish.backend.connection.count")
 	m.data.SetDescription("The backend connection type count.")
 	m.data.SetUnit("{connections}")
-	m.data.SetDataType(pdata.MetricDataTypeSum)
+	m.data.SetDataType(pmetric.MetricDataTypeSum)
 	m.data.Sum().SetIsMonotonic(true)
-	m.data.Sum().SetAggregationTemporality(pdata.MetricAggregationTemporalityCumulative)
+	m.data.Sum().SetAggregationTemporality(pmetric.MetricAggregationTemporalityCumulative)
 	m.data.Sum().DataPoints().EnsureCapacity(m.capacity)
 }
 
-func (m *metricVarnishBackendConnectionCount) recordDataPoint(start pdata.Timestamp, ts pdata.Timestamp, val int64, backendConnectionTypeAttributeValue string) {
+func (m *metricVarnishBackendConnectionCount) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, backendConnectionTypeAttributeValue string) {
 	if !m.settings.Enabled {
 		return
 	}
@@ -91,7 +92,7 @@ func (m *metricVarnishBackendConnectionCount) recordDataPoint(start pdata.Timest
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
 	dp.SetIntVal(val)
-	dp.Attributes().Insert(A.BackendConnectionType, pdata.NewAttributeValueString(backendConnectionTypeAttributeValue))
+	dp.Attributes().Insert(A.BackendConnectionType, pcommon.NewValueString(backendConnectionTypeAttributeValue))
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
@@ -102,7 +103,7 @@ func (m *metricVarnishBackendConnectionCount) updateCapacity() {
 }
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
-func (m *metricVarnishBackendConnectionCount) emit(metrics pdata.MetricSlice) {
+func (m *metricVarnishBackendConnectionCount) emit(metrics pmetric.MetricSlice) {
 	if m.settings.Enabled && m.data.Sum().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
@@ -113,14 +114,14 @@ func (m *metricVarnishBackendConnectionCount) emit(metrics pdata.MetricSlice) {
 func newMetricVarnishBackendConnectionCount(settings MetricSettings) metricVarnishBackendConnectionCount {
 	m := metricVarnishBackendConnectionCount{settings: settings}
 	if settings.Enabled {
-		m.data = pdata.NewMetric()
+		m.data = pmetric.NewMetric()
 		m.init()
 	}
 	return m
 }
 
 type metricVarnishBackendRequestCount struct {
-	data     pdata.Metric   // data buffer for generated metric.
+	data     pmetric.Metric // data buffer for generated metric.
 	settings MetricSettings // metric settings provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
@@ -130,12 +131,12 @@ func (m *metricVarnishBackendRequestCount) init() {
 	m.data.SetName("varnish.backend.request.count")
 	m.data.SetDescription("The backend requests count.")
 	m.data.SetUnit("{requests}")
-	m.data.SetDataType(pdata.MetricDataTypeSum)
+	m.data.SetDataType(pmetric.MetricDataTypeSum)
 	m.data.Sum().SetIsMonotonic(true)
-	m.data.Sum().SetAggregationTemporality(pdata.MetricAggregationTemporalityCumulative)
+	m.data.Sum().SetAggregationTemporality(pmetric.MetricAggregationTemporalityCumulative)
 }
 
-func (m *metricVarnishBackendRequestCount) recordDataPoint(start pdata.Timestamp, ts pdata.Timestamp, val int64) {
+func (m *metricVarnishBackendRequestCount) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64) {
 	if !m.settings.Enabled {
 		return
 	}
@@ -153,7 +154,7 @@ func (m *metricVarnishBackendRequestCount) updateCapacity() {
 }
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
-func (m *metricVarnishBackendRequestCount) emit(metrics pdata.MetricSlice) {
+func (m *metricVarnishBackendRequestCount) emit(metrics pmetric.MetricSlice) {
 	if m.settings.Enabled && m.data.Sum().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
@@ -164,14 +165,14 @@ func (m *metricVarnishBackendRequestCount) emit(metrics pdata.MetricSlice) {
 func newMetricVarnishBackendRequestCount(settings MetricSettings) metricVarnishBackendRequestCount {
 	m := metricVarnishBackendRequestCount{settings: settings}
 	if settings.Enabled {
-		m.data = pdata.NewMetric()
+		m.data = pmetric.NewMetric()
 		m.init()
 	}
 	return m
 }
 
 type metricVarnishCacheOperationCount struct {
-	data     pdata.Metric   // data buffer for generated metric.
+	data     pmetric.Metric // data buffer for generated metric.
 	settings MetricSettings // metric settings provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
@@ -181,13 +182,13 @@ func (m *metricVarnishCacheOperationCount) init() {
 	m.data.SetName("varnish.cache.operation.count")
 	m.data.SetDescription("The cache operation type count.")
 	m.data.SetUnit("{operations}")
-	m.data.SetDataType(pdata.MetricDataTypeSum)
+	m.data.SetDataType(pmetric.MetricDataTypeSum)
 	m.data.Sum().SetIsMonotonic(true)
-	m.data.Sum().SetAggregationTemporality(pdata.MetricAggregationTemporalityCumulative)
+	m.data.Sum().SetAggregationTemporality(pmetric.MetricAggregationTemporalityCumulative)
 	m.data.Sum().DataPoints().EnsureCapacity(m.capacity)
 }
 
-func (m *metricVarnishCacheOperationCount) recordDataPoint(start pdata.Timestamp, ts pdata.Timestamp, val int64, cacheOperationsAttributeValue string) {
+func (m *metricVarnishCacheOperationCount) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, cacheOperationsAttributeValue string) {
 	if !m.settings.Enabled {
 		return
 	}
@@ -195,7 +196,7 @@ func (m *metricVarnishCacheOperationCount) recordDataPoint(start pdata.Timestamp
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
 	dp.SetIntVal(val)
-	dp.Attributes().Insert(A.CacheOperations, pdata.NewAttributeValueString(cacheOperationsAttributeValue))
+	dp.Attributes().Insert(A.CacheOperations, pcommon.NewValueString(cacheOperationsAttributeValue))
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
@@ -206,7 +207,7 @@ func (m *metricVarnishCacheOperationCount) updateCapacity() {
 }
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
-func (m *metricVarnishCacheOperationCount) emit(metrics pdata.MetricSlice) {
+func (m *metricVarnishCacheOperationCount) emit(metrics pmetric.MetricSlice) {
 	if m.settings.Enabled && m.data.Sum().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
@@ -217,14 +218,14 @@ func (m *metricVarnishCacheOperationCount) emit(metrics pdata.MetricSlice) {
 func newMetricVarnishCacheOperationCount(settings MetricSettings) metricVarnishCacheOperationCount {
 	m := metricVarnishCacheOperationCount{settings: settings}
 	if settings.Enabled {
-		m.data = pdata.NewMetric()
+		m.data = pmetric.NewMetric()
 		m.init()
 	}
 	return m
 }
 
 type metricVarnishClientRequestCount struct {
-	data     pdata.Metric   // data buffer for generated metric.
+	data     pmetric.Metric // data buffer for generated metric.
 	settings MetricSettings // metric settings provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
@@ -234,13 +235,13 @@ func (m *metricVarnishClientRequestCount) init() {
 	m.data.SetName("varnish.client.request.count")
 	m.data.SetDescription("The client request count.")
 	m.data.SetUnit("{requests}")
-	m.data.SetDataType(pdata.MetricDataTypeSum)
+	m.data.SetDataType(pmetric.MetricDataTypeSum)
 	m.data.Sum().SetIsMonotonic(true)
-	m.data.Sum().SetAggregationTemporality(pdata.MetricAggregationTemporalityCumulative)
+	m.data.Sum().SetAggregationTemporality(pmetric.MetricAggregationTemporalityCumulative)
 	m.data.Sum().DataPoints().EnsureCapacity(m.capacity)
 }
 
-func (m *metricVarnishClientRequestCount) recordDataPoint(start pdata.Timestamp, ts pdata.Timestamp, val int64, stateAttributeValue string) {
+func (m *metricVarnishClientRequestCount) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, stateAttributeValue string) {
 	if !m.settings.Enabled {
 		return
 	}
@@ -248,7 +249,7 @@ func (m *metricVarnishClientRequestCount) recordDataPoint(start pdata.Timestamp,
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
 	dp.SetIntVal(val)
-	dp.Attributes().Insert(A.State, pdata.NewAttributeValueString(stateAttributeValue))
+	dp.Attributes().Insert(A.State, pcommon.NewValueString(stateAttributeValue))
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
@@ -259,7 +260,7 @@ func (m *metricVarnishClientRequestCount) updateCapacity() {
 }
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
-func (m *metricVarnishClientRequestCount) emit(metrics pdata.MetricSlice) {
+func (m *metricVarnishClientRequestCount) emit(metrics pmetric.MetricSlice) {
 	if m.settings.Enabled && m.data.Sum().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
@@ -270,14 +271,14 @@ func (m *metricVarnishClientRequestCount) emit(metrics pdata.MetricSlice) {
 func newMetricVarnishClientRequestCount(settings MetricSettings) metricVarnishClientRequestCount {
 	m := metricVarnishClientRequestCount{settings: settings}
 	if settings.Enabled {
-		m.data = pdata.NewMetric()
+		m.data = pmetric.NewMetric()
 		m.init()
 	}
 	return m
 }
 
 type metricVarnishClientRequestErrorCount struct {
-	data     pdata.Metric   // data buffer for generated metric.
+	data     pmetric.Metric // data buffer for generated metric.
 	settings MetricSettings // metric settings provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
@@ -287,13 +288,13 @@ func (m *metricVarnishClientRequestErrorCount) init() {
 	m.data.SetName("varnish.client.request.error.count")
 	m.data.SetDescription("The client request errors received by status code.")
 	m.data.SetUnit("{requests}")
-	m.data.SetDataType(pdata.MetricDataTypeSum)
+	m.data.SetDataType(pmetric.MetricDataTypeSum)
 	m.data.Sum().SetIsMonotonic(true)
-	m.data.Sum().SetAggregationTemporality(pdata.MetricAggregationTemporalityCumulative)
+	m.data.Sum().SetAggregationTemporality(pmetric.MetricAggregationTemporalityCumulative)
 	m.data.Sum().DataPoints().EnsureCapacity(m.capacity)
 }
 
-func (m *metricVarnishClientRequestErrorCount) recordDataPoint(start pdata.Timestamp, ts pdata.Timestamp, val int64, httpStatusCodeAttributeValue string) {
+func (m *metricVarnishClientRequestErrorCount) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, httpStatusCodeAttributeValue string) {
 	if !m.settings.Enabled {
 		return
 	}
@@ -301,7 +302,7 @@ func (m *metricVarnishClientRequestErrorCount) recordDataPoint(start pdata.Times
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
 	dp.SetIntVal(val)
-	dp.Attributes().Insert(A.HTTPStatusCode, pdata.NewAttributeValueString(httpStatusCodeAttributeValue))
+	dp.Attributes().Insert(A.HTTPStatusCode, pcommon.NewValueString(httpStatusCodeAttributeValue))
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
@@ -312,7 +313,7 @@ func (m *metricVarnishClientRequestErrorCount) updateCapacity() {
 }
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
-func (m *metricVarnishClientRequestErrorCount) emit(metrics pdata.MetricSlice) {
+func (m *metricVarnishClientRequestErrorCount) emit(metrics pmetric.MetricSlice) {
 	if m.settings.Enabled && m.data.Sum().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
@@ -323,14 +324,14 @@ func (m *metricVarnishClientRequestErrorCount) emit(metrics pdata.MetricSlice) {
 func newMetricVarnishClientRequestErrorCount(settings MetricSettings) metricVarnishClientRequestErrorCount {
 	m := metricVarnishClientRequestErrorCount{settings: settings}
 	if settings.Enabled {
-		m.data = pdata.NewMetric()
+		m.data = pmetric.NewMetric()
 		m.init()
 	}
 	return m
 }
 
 type metricVarnishObjectCount struct {
-	data     pdata.Metric   // data buffer for generated metric.
+	data     pmetric.Metric // data buffer for generated metric.
 	settings MetricSettings // metric settings provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
@@ -340,12 +341,12 @@ func (m *metricVarnishObjectCount) init() {
 	m.data.SetName("varnish.object.count")
 	m.data.SetDescription("The HTTP objects in the cache count.")
 	m.data.SetUnit("{objects}")
-	m.data.SetDataType(pdata.MetricDataTypeSum)
+	m.data.SetDataType(pmetric.MetricDataTypeSum)
 	m.data.Sum().SetIsMonotonic(false)
-	m.data.Sum().SetAggregationTemporality(pdata.MetricAggregationTemporalityCumulative)
+	m.data.Sum().SetAggregationTemporality(pmetric.MetricAggregationTemporalityCumulative)
 }
 
-func (m *metricVarnishObjectCount) recordDataPoint(start pdata.Timestamp, ts pdata.Timestamp, val int64) {
+func (m *metricVarnishObjectCount) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64) {
 	if !m.settings.Enabled {
 		return
 	}
@@ -363,7 +364,7 @@ func (m *metricVarnishObjectCount) updateCapacity() {
 }
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
-func (m *metricVarnishObjectCount) emit(metrics pdata.MetricSlice) {
+func (m *metricVarnishObjectCount) emit(metrics pmetric.MetricSlice) {
 	if m.settings.Enabled && m.data.Sum().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
@@ -374,14 +375,14 @@ func (m *metricVarnishObjectCount) emit(metrics pdata.MetricSlice) {
 func newMetricVarnishObjectCount(settings MetricSettings) metricVarnishObjectCount {
 	m := metricVarnishObjectCount{settings: settings}
 	if settings.Enabled {
-		m.data = pdata.NewMetric()
+		m.data = pmetric.NewMetric()
 		m.init()
 	}
 	return m
 }
 
 type metricVarnishObjectExpired struct {
-	data     pdata.Metric   // data buffer for generated metric.
+	data     pmetric.Metric // data buffer for generated metric.
 	settings MetricSettings // metric settings provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
@@ -391,12 +392,12 @@ func (m *metricVarnishObjectExpired) init() {
 	m.data.SetName("varnish.object.expired")
 	m.data.SetDescription("The expired objects from old age count.")
 	m.data.SetUnit("{objects}")
-	m.data.SetDataType(pdata.MetricDataTypeSum)
+	m.data.SetDataType(pmetric.MetricDataTypeSum)
 	m.data.Sum().SetIsMonotonic(true)
-	m.data.Sum().SetAggregationTemporality(pdata.MetricAggregationTemporalityCumulative)
+	m.data.Sum().SetAggregationTemporality(pmetric.MetricAggregationTemporalityCumulative)
 }
 
-func (m *metricVarnishObjectExpired) recordDataPoint(start pdata.Timestamp, ts pdata.Timestamp, val int64) {
+func (m *metricVarnishObjectExpired) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64) {
 	if !m.settings.Enabled {
 		return
 	}
@@ -414,7 +415,7 @@ func (m *metricVarnishObjectExpired) updateCapacity() {
 }
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
-func (m *metricVarnishObjectExpired) emit(metrics pdata.MetricSlice) {
+func (m *metricVarnishObjectExpired) emit(metrics pmetric.MetricSlice) {
 	if m.settings.Enabled && m.data.Sum().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
@@ -425,14 +426,14 @@ func (m *metricVarnishObjectExpired) emit(metrics pdata.MetricSlice) {
 func newMetricVarnishObjectExpired(settings MetricSettings) metricVarnishObjectExpired {
 	m := metricVarnishObjectExpired{settings: settings}
 	if settings.Enabled {
-		m.data = pdata.NewMetric()
+		m.data = pmetric.NewMetric()
 		m.init()
 	}
 	return m
 }
 
 type metricVarnishObjectMoved struct {
-	data     pdata.Metric   // data buffer for generated metric.
+	data     pmetric.Metric // data buffer for generated metric.
 	settings MetricSettings // metric settings provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
@@ -442,12 +443,12 @@ func (m *metricVarnishObjectMoved) init() {
 	m.data.SetName("varnish.object.moved")
 	m.data.SetDescription("The moved operations done on the LRU list count.")
 	m.data.SetUnit("{objects}")
-	m.data.SetDataType(pdata.MetricDataTypeSum)
+	m.data.SetDataType(pmetric.MetricDataTypeSum)
 	m.data.Sum().SetIsMonotonic(true)
-	m.data.Sum().SetAggregationTemporality(pdata.MetricAggregationTemporalityCumulative)
+	m.data.Sum().SetAggregationTemporality(pmetric.MetricAggregationTemporalityCumulative)
 }
 
-func (m *metricVarnishObjectMoved) recordDataPoint(start pdata.Timestamp, ts pdata.Timestamp, val int64) {
+func (m *metricVarnishObjectMoved) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64) {
 	if !m.settings.Enabled {
 		return
 	}
@@ -465,7 +466,7 @@ func (m *metricVarnishObjectMoved) updateCapacity() {
 }
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
-func (m *metricVarnishObjectMoved) emit(metrics pdata.MetricSlice) {
+func (m *metricVarnishObjectMoved) emit(metrics pmetric.MetricSlice) {
 	if m.settings.Enabled && m.data.Sum().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
@@ -476,14 +477,14 @@ func (m *metricVarnishObjectMoved) emit(metrics pdata.MetricSlice) {
 func newMetricVarnishObjectMoved(settings MetricSettings) metricVarnishObjectMoved {
 	m := metricVarnishObjectMoved{settings: settings}
 	if settings.Enabled {
-		m.data = pdata.NewMetric()
+		m.data = pmetric.NewMetric()
 		m.init()
 	}
 	return m
 }
 
 type metricVarnishObjectNuked struct {
-	data     pdata.Metric   // data buffer for generated metric.
+	data     pmetric.Metric // data buffer for generated metric.
 	settings MetricSettings // metric settings provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
@@ -493,12 +494,12 @@ func (m *metricVarnishObjectNuked) init() {
 	m.data.SetName("varnish.object.nuked")
 	m.data.SetDescription("The objects that have been forcefully evicted from storage count.")
 	m.data.SetUnit("{objects}")
-	m.data.SetDataType(pdata.MetricDataTypeSum)
+	m.data.SetDataType(pmetric.MetricDataTypeSum)
 	m.data.Sum().SetIsMonotonic(true)
-	m.data.Sum().SetAggregationTemporality(pdata.MetricAggregationTemporalityCumulative)
+	m.data.Sum().SetAggregationTemporality(pmetric.MetricAggregationTemporalityCumulative)
 }
 
-func (m *metricVarnishObjectNuked) recordDataPoint(start pdata.Timestamp, ts pdata.Timestamp, val int64) {
+func (m *metricVarnishObjectNuked) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64) {
 	if !m.settings.Enabled {
 		return
 	}
@@ -516,7 +517,7 @@ func (m *metricVarnishObjectNuked) updateCapacity() {
 }
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
-func (m *metricVarnishObjectNuked) emit(metrics pdata.MetricSlice) {
+func (m *metricVarnishObjectNuked) emit(metrics pmetric.MetricSlice) {
 	if m.settings.Enabled && m.data.Sum().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
@@ -527,14 +528,14 @@ func (m *metricVarnishObjectNuked) emit(metrics pdata.MetricSlice) {
 func newMetricVarnishObjectNuked(settings MetricSettings) metricVarnishObjectNuked {
 	m := metricVarnishObjectNuked{settings: settings}
 	if settings.Enabled {
-		m.data = pdata.NewMetric()
+		m.data = pmetric.NewMetric()
 		m.init()
 	}
 	return m
 }
 
 type metricVarnishSessionCount struct {
-	data     pdata.Metric   // data buffer for generated metric.
+	data     pmetric.Metric // data buffer for generated metric.
 	settings MetricSettings // metric settings provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
@@ -544,13 +545,13 @@ func (m *metricVarnishSessionCount) init() {
 	m.data.SetName("varnish.session.count")
 	m.data.SetDescription("The session connection type count.")
 	m.data.SetUnit("{connections}")
-	m.data.SetDataType(pdata.MetricDataTypeSum)
+	m.data.SetDataType(pmetric.MetricDataTypeSum)
 	m.data.Sum().SetIsMonotonic(true)
-	m.data.Sum().SetAggregationTemporality(pdata.MetricAggregationTemporalityCumulative)
+	m.data.Sum().SetAggregationTemporality(pmetric.MetricAggregationTemporalityCumulative)
 	m.data.Sum().DataPoints().EnsureCapacity(m.capacity)
 }
 
-func (m *metricVarnishSessionCount) recordDataPoint(start pdata.Timestamp, ts pdata.Timestamp, val int64, sessionTypeAttributeValue string) {
+func (m *metricVarnishSessionCount) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, sessionTypeAttributeValue string) {
 	if !m.settings.Enabled {
 		return
 	}
@@ -558,7 +559,7 @@ func (m *metricVarnishSessionCount) recordDataPoint(start pdata.Timestamp, ts pd
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
 	dp.SetIntVal(val)
-	dp.Attributes().Insert(A.SessionType, pdata.NewAttributeValueString(sessionTypeAttributeValue))
+	dp.Attributes().Insert(A.SessionType, pcommon.NewValueString(sessionTypeAttributeValue))
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
@@ -569,7 +570,7 @@ func (m *metricVarnishSessionCount) updateCapacity() {
 }
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
-func (m *metricVarnishSessionCount) emit(metrics pdata.MetricSlice) {
+func (m *metricVarnishSessionCount) emit(metrics pmetric.MetricSlice) {
 	if m.settings.Enabled && m.data.Sum().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
@@ -580,14 +581,14 @@ func (m *metricVarnishSessionCount) emit(metrics pdata.MetricSlice) {
 func newMetricVarnishSessionCount(settings MetricSettings) metricVarnishSessionCount {
 	m := metricVarnishSessionCount{settings: settings}
 	if settings.Enabled {
-		m.data = pdata.NewMetric()
+		m.data = pmetric.NewMetric()
 		m.init()
 	}
 	return m
 }
 
 type metricVarnishThreadOperationCount struct {
-	data     pdata.Metric   // data buffer for generated metric.
+	data     pmetric.Metric // data buffer for generated metric.
 	settings MetricSettings // metric settings provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
@@ -597,13 +598,13 @@ func (m *metricVarnishThreadOperationCount) init() {
 	m.data.SetName("varnish.thread.operation.count")
 	m.data.SetDescription("The thread operation type count.")
 	m.data.SetUnit("{operations}")
-	m.data.SetDataType(pdata.MetricDataTypeSum)
+	m.data.SetDataType(pmetric.MetricDataTypeSum)
 	m.data.Sum().SetIsMonotonic(true)
-	m.data.Sum().SetAggregationTemporality(pdata.MetricAggregationTemporalityCumulative)
+	m.data.Sum().SetAggregationTemporality(pmetric.MetricAggregationTemporalityCumulative)
 	m.data.Sum().DataPoints().EnsureCapacity(m.capacity)
 }
 
-func (m *metricVarnishThreadOperationCount) recordDataPoint(start pdata.Timestamp, ts pdata.Timestamp, val int64, threadOperationsAttributeValue string) {
+func (m *metricVarnishThreadOperationCount) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, threadOperationsAttributeValue string) {
 	if !m.settings.Enabled {
 		return
 	}
@@ -611,7 +612,7 @@ func (m *metricVarnishThreadOperationCount) recordDataPoint(start pdata.Timestam
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
 	dp.SetIntVal(val)
-	dp.Attributes().Insert(A.ThreadOperations, pdata.NewAttributeValueString(threadOperationsAttributeValue))
+	dp.Attributes().Insert(A.ThreadOperations, pcommon.NewValueString(threadOperationsAttributeValue))
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
@@ -622,7 +623,7 @@ func (m *metricVarnishThreadOperationCount) updateCapacity() {
 }
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
-func (m *metricVarnishThreadOperationCount) emit(metrics pdata.MetricSlice) {
+func (m *metricVarnishThreadOperationCount) emit(metrics pmetric.MetricSlice) {
 	if m.settings.Enabled && m.data.Sum().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
@@ -633,7 +634,7 @@ func (m *metricVarnishThreadOperationCount) emit(metrics pdata.MetricSlice) {
 func newMetricVarnishThreadOperationCount(settings MetricSettings) metricVarnishThreadOperationCount {
 	m := metricVarnishThreadOperationCount{settings: settings}
 	if settings.Enabled {
-		m.data = pdata.NewMetric()
+		m.data = pmetric.NewMetric()
 		m.init()
 	}
 	return m
@@ -642,7 +643,10 @@ func newMetricVarnishThreadOperationCount(settings MetricSettings) metricVarnish
 // MetricsBuilder provides an interface for scrapers to report metrics while taking care of all the transformations
 // required to produce metric representation defined in metadata and user settings.
 type MetricsBuilder struct {
-	startTime                            pdata.Timestamp
+	startTime                            pcommon.Timestamp // start time that will be applied to all recorded data points.
+	metricsCapacity                      int               // maximum observed number of metrics per resource.
+	resourceCapacity                     int               // maximum observed number of resource attributes.
+	metricsBuffer                        pmetric.Metrics   // accumulates metrics data before emitting.
 	metricVarnishBackendConnectionCount  metricVarnishBackendConnectionCount
 	metricVarnishBackendRequestCount     metricVarnishBackendRequestCount
 	metricVarnishCacheOperationCount     metricVarnishCacheOperationCount
@@ -660,7 +664,7 @@ type MetricsBuilder struct {
 type metricBuilderOption func(*MetricsBuilder)
 
 // WithStartTime sets startTime on the metrics builder.
-func WithStartTime(startTime pdata.Timestamp) metricBuilderOption {
+func WithStartTime(startTime pcommon.Timestamp) metricBuilderOption {
 	return func(mb *MetricsBuilder) {
 		mb.startTime = startTime
 	}
@@ -668,7 +672,8 @@ func WithStartTime(startTime pdata.Timestamp) metricBuilderOption {
 
 func NewMetricsBuilder(settings MetricsSettings, options ...metricBuilderOption) *MetricsBuilder {
 	mb := &MetricsBuilder{
-		startTime:                            pdata.NewTimestampFromTime(time.Now()),
+		startTime:                            pcommon.NewTimestampFromTime(time.Now()),
+		metricsBuffer:                        pmetric.NewMetrics(),
 		metricVarnishBackendConnectionCount:  newMetricVarnishBackendConnectionCount(settings.VarnishBackendConnectionCount),
 		metricVarnishBackendRequestCount:     newMetricVarnishBackendRequestCount(settings.VarnishBackendRequestCount),
 		metricVarnishCacheOperationCount:     newMetricVarnishCacheOperationCount(settings.VarnishCacheOperationCount),
@@ -687,95 +692,128 @@ func NewMetricsBuilder(settings MetricsSettings, options ...metricBuilderOption)
 	return mb
 }
 
-// Emit appends generated metrics to a pdata.MetricsSlice and updates the internal state to be ready for recording
-// another set of data points. This function will be doing all transformations required to produce metric representation
-// defined in metadata and user settings, e.g. delta/cumulative translation.
-func (mb *MetricsBuilder) Emit(metrics pdata.MetricSlice) {
-	mb.metricVarnishBackendConnectionCount.emit(metrics)
-	mb.metricVarnishBackendRequestCount.emit(metrics)
-	mb.metricVarnishCacheOperationCount.emit(metrics)
-	mb.metricVarnishClientRequestCount.emit(metrics)
-	mb.metricVarnishClientRequestErrorCount.emit(metrics)
-	mb.metricVarnishObjectCount.emit(metrics)
-	mb.metricVarnishObjectExpired.emit(metrics)
-	mb.metricVarnishObjectMoved.emit(metrics)
-	mb.metricVarnishObjectNuked.emit(metrics)
-	mb.metricVarnishSessionCount.emit(metrics)
-	mb.metricVarnishThreadOperationCount.emit(metrics)
+// updateCapacity updates max length of metrics and resource attributes that will be used for the slice capacity.
+func (mb *MetricsBuilder) updateCapacity(rm pmetric.ResourceMetrics) {
+	if mb.metricsCapacity < rm.ScopeMetrics().At(0).Metrics().Len() {
+		mb.metricsCapacity = rm.ScopeMetrics().At(0).Metrics().Len()
+	}
+	if mb.resourceCapacity < rm.Resource().Attributes().Len() {
+		mb.resourceCapacity = rm.Resource().Attributes().Len()
+	}
+}
+
+// ResourceOption applies changes to provided resource.
+type ResourceOption func(pcommon.Resource)
+
+// WithVarnishCacheName sets provided value as "varnish.cache.name" attribute for current resource.
+func WithVarnishCacheName(val string) ResourceOption {
+	return func(r pcommon.Resource) {
+		r.Attributes().UpsertString("varnish.cache.name", val)
+	}
+}
+
+// EmitForResource saves all the generated metrics under a new resource and updates the internal state to be ready for
+// recording another set of data points as part of another resource. This function can be helpful when one scraper
+// needs to emit metrics from several resources. Otherwise calling this function is not required,
+// just `Emit` function can be called instead. Resource attributes should be provided as ResourceOption arguments.
+func (mb *MetricsBuilder) EmitForResource(ro ...ResourceOption) {
+	rm := pmetric.NewResourceMetrics()
+	rm.Resource().Attributes().EnsureCapacity(mb.resourceCapacity)
+	for _, op := range ro {
+		op(rm.Resource())
+	}
+	ils := rm.ScopeMetrics().AppendEmpty()
+	ils.Scope().SetName("otelcol/varnishreceiver")
+	ils.Metrics().EnsureCapacity(mb.metricsCapacity)
+	mb.metricVarnishBackendConnectionCount.emit(ils.Metrics())
+	mb.metricVarnishBackendRequestCount.emit(ils.Metrics())
+	mb.metricVarnishCacheOperationCount.emit(ils.Metrics())
+	mb.metricVarnishClientRequestCount.emit(ils.Metrics())
+	mb.metricVarnishClientRequestErrorCount.emit(ils.Metrics())
+	mb.metricVarnishObjectCount.emit(ils.Metrics())
+	mb.metricVarnishObjectExpired.emit(ils.Metrics())
+	mb.metricVarnishObjectMoved.emit(ils.Metrics())
+	mb.metricVarnishObjectNuked.emit(ils.Metrics())
+	mb.metricVarnishSessionCount.emit(ils.Metrics())
+	mb.metricVarnishThreadOperationCount.emit(ils.Metrics())
+	if ils.Metrics().Len() > 0 {
+		mb.updateCapacity(rm)
+		rm.MoveTo(mb.metricsBuffer.ResourceMetrics().AppendEmpty())
+	}
+}
+
+// Emit returns all the metrics accumulated by the metrics builder and updates the internal state to be ready for
+// recording another set of metrics. This function will be responsible for applying all the transformations required to
+// produce metric representation defined in metadata and user settings, e.g. delta or cumulative.
+func (mb *MetricsBuilder) Emit(ro ...ResourceOption) pmetric.Metrics {
+	mb.EmitForResource(ro...)
+	metrics := pmetric.NewMetrics()
+	mb.metricsBuffer.MoveTo(metrics)
+	return metrics
 }
 
 // RecordVarnishBackendConnectionCountDataPoint adds a data point to varnish.backend.connection.count metric.
-func (mb *MetricsBuilder) RecordVarnishBackendConnectionCountDataPoint(ts pdata.Timestamp, val int64, backendConnectionTypeAttributeValue string) {
+func (mb *MetricsBuilder) RecordVarnishBackendConnectionCountDataPoint(ts pcommon.Timestamp, val int64, backendConnectionTypeAttributeValue string) {
 	mb.metricVarnishBackendConnectionCount.recordDataPoint(mb.startTime, ts, val, backendConnectionTypeAttributeValue)
 }
 
 // RecordVarnishBackendRequestCountDataPoint adds a data point to varnish.backend.request.count metric.
-func (mb *MetricsBuilder) RecordVarnishBackendRequestCountDataPoint(ts pdata.Timestamp, val int64) {
+func (mb *MetricsBuilder) RecordVarnishBackendRequestCountDataPoint(ts pcommon.Timestamp, val int64) {
 	mb.metricVarnishBackendRequestCount.recordDataPoint(mb.startTime, ts, val)
 }
 
 // RecordVarnishCacheOperationCountDataPoint adds a data point to varnish.cache.operation.count metric.
-func (mb *MetricsBuilder) RecordVarnishCacheOperationCountDataPoint(ts pdata.Timestamp, val int64, cacheOperationsAttributeValue string) {
+func (mb *MetricsBuilder) RecordVarnishCacheOperationCountDataPoint(ts pcommon.Timestamp, val int64, cacheOperationsAttributeValue string) {
 	mb.metricVarnishCacheOperationCount.recordDataPoint(mb.startTime, ts, val, cacheOperationsAttributeValue)
 }
 
 // RecordVarnishClientRequestCountDataPoint adds a data point to varnish.client.request.count metric.
-func (mb *MetricsBuilder) RecordVarnishClientRequestCountDataPoint(ts pdata.Timestamp, val int64, stateAttributeValue string) {
+func (mb *MetricsBuilder) RecordVarnishClientRequestCountDataPoint(ts pcommon.Timestamp, val int64, stateAttributeValue string) {
 	mb.metricVarnishClientRequestCount.recordDataPoint(mb.startTime, ts, val, stateAttributeValue)
 }
 
 // RecordVarnishClientRequestErrorCountDataPoint adds a data point to varnish.client.request.error.count metric.
-func (mb *MetricsBuilder) RecordVarnishClientRequestErrorCountDataPoint(ts pdata.Timestamp, val int64, httpStatusCodeAttributeValue string) {
+func (mb *MetricsBuilder) RecordVarnishClientRequestErrorCountDataPoint(ts pcommon.Timestamp, val int64, httpStatusCodeAttributeValue string) {
 	mb.metricVarnishClientRequestErrorCount.recordDataPoint(mb.startTime, ts, val, httpStatusCodeAttributeValue)
 }
 
 // RecordVarnishObjectCountDataPoint adds a data point to varnish.object.count metric.
-func (mb *MetricsBuilder) RecordVarnishObjectCountDataPoint(ts pdata.Timestamp, val int64) {
+func (mb *MetricsBuilder) RecordVarnishObjectCountDataPoint(ts pcommon.Timestamp, val int64) {
 	mb.metricVarnishObjectCount.recordDataPoint(mb.startTime, ts, val)
 }
 
 // RecordVarnishObjectExpiredDataPoint adds a data point to varnish.object.expired metric.
-func (mb *MetricsBuilder) RecordVarnishObjectExpiredDataPoint(ts pdata.Timestamp, val int64) {
+func (mb *MetricsBuilder) RecordVarnishObjectExpiredDataPoint(ts pcommon.Timestamp, val int64) {
 	mb.metricVarnishObjectExpired.recordDataPoint(mb.startTime, ts, val)
 }
 
 // RecordVarnishObjectMovedDataPoint adds a data point to varnish.object.moved metric.
-func (mb *MetricsBuilder) RecordVarnishObjectMovedDataPoint(ts pdata.Timestamp, val int64) {
+func (mb *MetricsBuilder) RecordVarnishObjectMovedDataPoint(ts pcommon.Timestamp, val int64) {
 	mb.metricVarnishObjectMoved.recordDataPoint(mb.startTime, ts, val)
 }
 
 // RecordVarnishObjectNukedDataPoint adds a data point to varnish.object.nuked metric.
-func (mb *MetricsBuilder) RecordVarnishObjectNukedDataPoint(ts pdata.Timestamp, val int64) {
+func (mb *MetricsBuilder) RecordVarnishObjectNukedDataPoint(ts pcommon.Timestamp, val int64) {
 	mb.metricVarnishObjectNuked.recordDataPoint(mb.startTime, ts, val)
 }
 
 // RecordVarnishSessionCountDataPoint adds a data point to varnish.session.count metric.
-func (mb *MetricsBuilder) RecordVarnishSessionCountDataPoint(ts pdata.Timestamp, val int64, sessionTypeAttributeValue string) {
+func (mb *MetricsBuilder) RecordVarnishSessionCountDataPoint(ts pcommon.Timestamp, val int64, sessionTypeAttributeValue string) {
 	mb.metricVarnishSessionCount.recordDataPoint(mb.startTime, ts, val, sessionTypeAttributeValue)
 }
 
 // RecordVarnishThreadOperationCountDataPoint adds a data point to varnish.thread.operation.count metric.
-func (mb *MetricsBuilder) RecordVarnishThreadOperationCountDataPoint(ts pdata.Timestamp, val int64, threadOperationsAttributeValue string) {
+func (mb *MetricsBuilder) RecordVarnishThreadOperationCountDataPoint(ts pcommon.Timestamp, val int64, threadOperationsAttributeValue string) {
 	mb.metricVarnishThreadOperationCount.recordDataPoint(mb.startTime, ts, val, threadOperationsAttributeValue)
 }
 
 // Reset resets metrics builder to its initial state. It should be used when external metrics source is restarted,
 // and metrics builder should update its startTime and reset it's internal state accordingly.
 func (mb *MetricsBuilder) Reset(options ...metricBuilderOption) {
-	mb.startTime = pdata.NewTimestampFromTime(time.Now())
+	mb.startTime = pcommon.NewTimestampFromTime(time.Now())
 	for _, op := range options {
 		op(mb)
 	}
-}
-
-// NewMetricData creates new pdata.Metrics and sets the InstrumentationLibrary
-// name on the ResourceMetrics.
-func (mb *MetricsBuilder) NewMetricData() pdata.Metrics {
-	md := pdata.NewMetrics()
-	rm := md.ResourceMetrics().AppendEmpty()
-	ilm := rm.InstrumentationLibraryMetrics().AppendEmpty()
-	ilm.InstrumentationLibrary().SetName("otelcol/varnishreceiver")
-	return md
 }
 
 // Attributes contains the possible metric attributes that can be used.

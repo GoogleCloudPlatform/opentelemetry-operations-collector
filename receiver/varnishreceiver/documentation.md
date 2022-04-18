@@ -29,14 +29,20 @@ metrics:
     enabled: <true|false>
 ```
 
-## Attributes
+## Resource attributes
 
-| Name | Description |
-| ---- | ----------- |
-| backend_connection_type | The backend connection types. |
-| cache_name | The varnish cache name. |
-| cache_operations | The cache operation types |
-| http.status_code | An HTTP status code. |
-| session_type | The session connection types. |
-| state | The client request states. |
-| thread_operations | The thread operation types. |
+| Name | Description | Type |
+| ---- | ----------- | ---- |
+| varnish.cache.name | The name of the cache. | String |
+
+## Metric attributes
+
+| Name | Description | Values |
+| ---- | ----------- | ------ |
+| backend_connection_type (kind) | The backend connection types. | success, recycle, reuse, fail, unhealthy, busy, retry |
+| cache_name | The varnish cache name. |  |
+| cache_operations (operation) | The cache operation types | hit, miss, hit_pass |
+| http.status_code (status_code) | An HTTP status code. |  |
+| session_type (kind) | The session connection types. | accepted, dropped, failed |
+| state (state) | The client request states. | received, dropped |
+| thread_operations (operation) | The thread operation types. | created, destroyed, failed |

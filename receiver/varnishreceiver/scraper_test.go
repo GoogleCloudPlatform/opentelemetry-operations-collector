@@ -25,7 +25,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component/componenttest"
-	"go.opentelemetry.io/collector/model/pdata"
+	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
@@ -88,12 +88,13 @@ func TestScrape(t *testing.T) {
 
 }
 
-func validateScraperResult(t *testing.T, actualMetrics pdata.Metrics) {
+func validateScraperResult(t *testing.T, actualMetrics pmetric.Metrics) {
 	require.Equal(t, actualMetrics.MetricCount(), 11)
 	require.Equal(t, actualMetrics.DataPointCount(), 26)
 
-	ilms := actualMetrics.ResourceMetrics().At(0).InstrumentationLibraryMetrics()
+	ilms := actualMetrics.ResourceMetrics().At(0).ScopeMetrics()
 	require.Equal(t, 1, ilms.Len())
+
 	ms := ilms.At(0).Metrics()
 	for i := 0; i < ms.Len(); i++ {
 		m := ms.At(i)

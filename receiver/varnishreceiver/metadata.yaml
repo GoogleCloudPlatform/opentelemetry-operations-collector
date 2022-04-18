@@ -1,5 +1,10 @@
 name: varnishreceiver
 
+resource_attributes:
+  varnish.cache.name:
+    description: The name of the cache.
+    type: string
+
 attributes:
   cache_name:
     description: The varnish cache name.

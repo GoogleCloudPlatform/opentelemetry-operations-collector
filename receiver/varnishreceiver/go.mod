@@ -1,4 +1,4 @@
-module github.com/observiq/observiq-otel-collector/receiver/varnishreceiver
+module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/varnishreceiver
 
 go 1.17
 

@@ -1,4 +1,4 @@
-// Copyright  observIQ, Inc.
+// Copyright 2020 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package varnishreceiver // import "github.com/observiq/observiq-otel-collector/receiver/varnishreceiver"
+package varnishreceiver // import "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/varnishreceiver"
 
 import (
 	"fmt"
@@ -20,7 +20,7 @@ import (
 
 	"go.opentelemetry.io/collector/receiver/scraperhelper"
 
-	"github.com/observiq/observiq-otel-collector/receiver/varnishreceiver/internal/metadata"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/varnishreceiver/internal/metadata"
 )
 
 // Config defines configuration for varnish metrics receiver.

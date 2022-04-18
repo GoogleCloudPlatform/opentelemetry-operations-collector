@@ -53,6 +53,7 @@ import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/agentmetricsprocessor"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/casttosumprocessor"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/normalizesumsprocessor"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/varnishreceiver"
 )
 
 func components() (component.Factories, error) {
@@ -90,6 +91,7 @@ func components() (component.Factories, error) {
 		couchdbreceiver.NewFactory(),
 		zookeeperreceiver.NewFactory(),
 		rabbitmqreceiver.NewFactory(),
+		varnishreceiver.NewFactory(),
 	}
 	for _, rcv := range factories.Receivers {
 		receivers = append(receivers, rcv)

@@ -20,7 +20,7 @@ import (
 
 	"go.opentelemetry.io/collector/receiver/scraperhelper"
 
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/varnishreceiver/internal/metadata"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/varnishreceiver/internal/metadata"
 )
 
 // Config defines configuration for varnish metrics receiver.

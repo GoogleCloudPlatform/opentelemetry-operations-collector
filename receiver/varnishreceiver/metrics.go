@@ -20,7 +20,7 @@ import (
 
 	"go.opentelemetry.io/collector/model/pdata"
 
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/varnishreceiver/internal/metadata"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/varnishreceiver/internal/metadata"
 )
 
 // FullStats holds stats from a 6.5+ response.

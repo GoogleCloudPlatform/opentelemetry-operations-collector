@@ -22,9 +22,10 @@ import (
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/model/pdata"
+	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.uber.org/zap"
 
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/varnishreceiver/internal/metadata"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/varnishreceiver/internal/metadata"
 )
 
 type varnishScraper struct {
@@ -74,7 +75,7 @@ func (v *varnishScraper) scrape(context.Context) (pdata.Metrics, error) {
 		return pdata.NewMetrics(), err
 	}
 
-	now := pdata.NewTimestampFromTime(time.Now())
+	now := pcommon.NewTimestampFromTime(time.Now())
 	md := v.mb.NewMetricData()
 
 	md.ResourceMetrics().At(0).Resource().Attributes().UpsertString(metadata.A.CacheName, v.cacheName)

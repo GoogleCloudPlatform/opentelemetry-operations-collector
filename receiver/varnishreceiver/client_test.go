@@ -131,10 +131,8 @@ func (_m *mockExecuter) Execute(command string, args []string) ([]byte, error) {
 	var r0 []byte
 	if rf, ok := ret.Get(0).(func(string, []string) []byte); ok {
 		r0 = rf(command, args)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]byte)
-		}
+	} else if ret.Get(0) != nil {
+		r0 = ret.Get(0).([]byte)
 	}
 
 	var r1 error

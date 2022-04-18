@@ -296,10 +296,8 @@ func (_m *mockClient) GetStats() (*Stats, error) {
 	var r0 *Stats
 	if rf, ok := ret.Get(0).(func() *Stats); ok {
 		r0 = rf()
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*Stats)
-		}
+	} else if ret.Get(0) != nil {
+		r0 = ret.Get(0).(*Stats)
 	}
 
 	var r1 error

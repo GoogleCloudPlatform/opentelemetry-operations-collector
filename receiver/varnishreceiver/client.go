@@ -17,6 +17,7 @@ package varnishreceiver
 import (
 	"encoding/json"
 	"os/exec"
+	"path/filepath"
 
 	"go.opentelemetry.io/collector/component"
 	"go.uber.org/zap"
@@ -74,7 +75,7 @@ func (v *varnishClient) BuildCommand() (string, []string) {
 
 	command := varnishStat
 	if v.cfg.ExecDir != "" {
-		command = v.cfg.ExecDir
+		command = filepath.Join(v.cfg.ExecDir, command)
 	}
 	return command, argList
 }

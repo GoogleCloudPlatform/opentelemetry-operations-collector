@@ -58,10 +58,19 @@ func TestBuildCommand(t *testing.T) {
 			argList: []string{"-j", "-n", "/path/varnishinstance"},
 		},
 		{
+			desc: "with exec dir & trailing / and cache dir",
+			config: Config{
+				CacheDir: "/path/varnishinstance",
+				ExecDir:  "/exec/dir/",
+			},
+			command: "/exec/dir/varnishstat",
+			argList: []string{"-j", "-n", "/path/varnishinstance"},
+		},
+		{
 			desc: "with exec dir and cache dir",
 			config: Config{
 				CacheDir: "/path/varnishinstance",
-				ExecDir:  "/exec/dir/varnishstat",
+				ExecDir:  "/exec/dir",
 			},
 			command: "/exec/dir/varnishstat",
 			argList: []string{"-j", "-n", "/path/varnishinstance"},

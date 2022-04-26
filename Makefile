@@ -50,6 +50,7 @@ install-tools:
 	cd $(TOOLS_DIR) && go install github.com/google/addlicense
 	cd $(TOOLS_DIR) && go install github.com/google/googet/goopack
 	cd $(TOOLS_DIR) && go install github.com/pavius/impi/cmd/impi
+	cd $(TOOLS_DIR) && go install github.com/open-telemetry/opentelemetry-collector-contrib/cmd/mdatagen@v0.49.0
 
 # --------------------------
 #  Helper Commands
@@ -153,3 +154,8 @@ ifndef TARGET
 	$(error "TARGET is undefined")
 endif
 	docker run -e PKG_VERSION -e ARCH -v $(CURDIR):/mnt -w /mnt $(BUILD_IMAGE_NAME) /bin/bash -c "make $(TARGET)"
+
+.PHONY: generate
+generate:
+	go generate ./...
+	

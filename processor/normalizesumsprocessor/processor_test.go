@@ -582,9 +582,9 @@ func requireEqualNumberDataPointSlice(t *testing.T, metricName string, ndpsAct, 
 		require.Equalf(t, ndpExp.Timestamp(), ndpAct.Timestamp(), "Metric %s", metricName)
 		require.Equalf(t, ndpExp.ValueType(), ndpAct.ValueType(), "Metric %s", metricName)
 		switch ndpExp.ValueType() {
-		case pmetric.MetricValueTypeInt:
+		case pmetric.NumberDataPointValueTypeInt:
 			require.Equalf(t, ndpExp.IntVal(), ndpAct.IntVal(), "Metric %s", metricName)
-		case pmetric.MetricValueTypeDouble:
+		case pmetric.NumberDataPointValueTypeDouble:
 			require.Equalf(t, ndpExp.DoubleVal(), ndpAct.DoubleVal(), "Metric %s", metricName)
 		}
 	}

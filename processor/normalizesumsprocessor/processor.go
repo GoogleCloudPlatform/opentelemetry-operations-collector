@@ -137,7 +137,7 @@ func (nsp *NormalizeSumsProcessor) processSumDataPoint(dp pdata.NumberDataPoint,
 
 	// If data has rolled over or the counter has been restarted for
 	// any other reason, grab a new start point and do not report this data
-	if (dp.ValueType() == pmetric.MetricValueTypeInt && dp.IntVal() < start.last.IntVal()) || (dp.ValueType() == pmetric.MetricValueTypeDouble && dp.DoubleVal() < start.last.DoubleVal()) {
+	if (dp.ValueType() == pmetric.NumberDataPointValueTypeInt && dp.IntVal() < start.last.IntVal()) || (dp.ValueType() == pmetric.NumberDataPointValueTypeDouble && dp.DoubleVal() < start.last.DoubleVal()) {
 		dp.CopyTo(start.start)
 		dp.CopyTo(start.last)
 
@@ -149,9 +149,9 @@ func (nsp *NormalizeSumsProcessor) processSumDataPoint(dp pdata.NumberDataPoint,
 	newDP := ndps.AppendEmpty()
 	dp.CopyTo(newDP)
 	switch dp.ValueType() {
-	case pmetric.MetricValueTypeInt:
+	case pmetric.NumberDataPointValueTypeInt:
 		newDP.SetIntVal(dp.IntVal() - start.start.IntVal())
-	case pmetric.MetricValueTypeDouble:
+	case pmetric.NumberDataPointValueTypeDouble:
 		newDP.SetDoubleVal(dp.DoubleVal() - start.start.DoubleVal())
 	}
 	newDP.SetStartTimestamp(start.start.Timestamp())

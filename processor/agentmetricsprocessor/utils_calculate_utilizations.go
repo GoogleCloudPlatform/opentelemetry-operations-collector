@@ -176,9 +176,9 @@ func calculateUtilizationFromNumberDataPoints(metric, utilizationMetric pdata.Me
 		}
 
 		switch ndp.ValueType() {
-		case pmetric.MetricValueTypeInt:
+		case pmetric.NumberDataPointValueTypeInt:
 			points.sum += float64(ndp.IntVal())
-		case pmetric.MetricValueTypeDouble:
+		case pmetric.NumberDataPointValueTypeDouble:
 			points.sum += ndp.DoubleVal()
 		}
 		points.pts = append(points.pts, ndp)
@@ -196,9 +196,9 @@ func calculateUtilizationFromNumberDataPoints(metric, utilizationMetric pdata.Me
 			ndp.SetTimestamp(point.Timestamp())
 			var num float64
 			switch point.ValueType() {
-			case pmetric.MetricValueTypeInt:
+			case pmetric.NumberDataPointValueTypeInt:
 				num = float64(point.IntVal())
-			case pmetric.MetricValueTypeDouble:
+			case pmetric.NumberDataPointValueTypeDouble:
 				num = point.DoubleVal()
 			}
 			ndp.SetDoubleVal(num / points.sum * 100)

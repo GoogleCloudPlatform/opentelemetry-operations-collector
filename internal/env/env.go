@@ -19,11 +19,12 @@ import (
 	"math"
 	"os"
 	"runtime"
-	"strings"
 
 	"github.com/shirou/gopsutil/disk"
 	"github.com/shirou/gopsutil/host"
 	"github.com/shirou/gopsutil/mem"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/version"
 )
@@ -78,7 +79,7 @@ func getUserAgent() (string, error) {
 	userAgent := fmt.Sprintf(
 		"Google Cloud Metrics Agent/%v (TargetPlatform=%v; Framework=OpenTelemetry Collector) %s %s(Cores=%v; Memory=%0.1fGB; Disk=%0.1fGB)",
 		version.Version,
-		strings.Title(runtime.GOOS),
+		cases.Title(language.English).String(runtime.GOOS),
 		platform,
 		platformVersion,
 		cores,

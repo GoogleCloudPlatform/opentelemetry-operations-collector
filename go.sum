@@ -185,6 +185,8 @@ github.com/PuerkitoBio/urlesc v0.0.0-20160726150825-5bd2802263f2/go.mod h1:uGdko
 github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578 h1:d+Bc7a5rLufV/sSk/8dngufqelfh6jnri85riMAaF/M=
 github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578/go.mod h1:uGdkoq3SwY9Y+13GIhn11/XLaGBb4BfwItxLd5jeuXE=
 github.com/SAP/go-hdb v0.14.1/go.mod h1:7fdQLVC2lER3urZLjZCm0AuMQfApof92n3aylBPEkMo=
+github.com/SAP/go-hdb v0.105.5 h1:mop9KOZU1ro9PjJLgqseHUZzwoOJh4d7f8Nrvf1a2Uo=
+github.com/SAP/go-hdb v0.105.5/go.mod h1:xbtJDvjqm9MQhIAnalynGNAbqxolS9W02qQo/vBqyaU=
 github.com/Shopify/logrus-bugsnag v0.0.0-20171204204709-577dee27f20d/go.mod h1:HI8ITrYtUY+O+ZhtlqUnD8+KwNPOyugEhfP9fdUIaEQ=
 github.com/Shopify/sarama v1.19.0/go.mod h1:FVkBWblsNy7DGZRfXLU0O9RCGt5g3g3yEuWXgklEdEo=
 github.com/Shopify/toxiproxy v2.1.4+incompatible/go.mod h1:OXgGpZ6Cli1/URJOF1DMxUHB2q5Ap20/P/eIdh4G0pI=
@@ -1399,6 +1401,8 @@ github.com/open-telemetry/opentelemetry-collector-contrib/receiver/rabbitmqrecei
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/rabbitmqreceiver v0.51.0/go.mod h1:FrBL3LphEsKCoDVGiaXp/+Gkq290FEeNqe1e+8qogVk=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/redisreceiver v0.51.0 h1:mYqzqLvhYMnslHdiq4VZ/DCCuEZukgyWkrEdcKU7UAQ=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/redisreceiver v0.51.0/go.mod h1:2PNHts2GNrVSWBR2sPm1Bd4LXBPt7xUL1dlxagyBfPM=
+github.com/open-telemetry/opentelemetry-collector-contrib/receiver/saphanareceiver v0.51.0 h1:5ouBDgL0zLH+gJv+l2r4InWSeijL2e/IEkPqrgvfIo4=
+github.com/open-telemetry/opentelemetry-collector-contrib/receiver/saphanareceiver v0.51.0/go.mod h1:pQoIBhU0mFefX20h+u+FB5sOB0rNXJrwIt+fq7nrZIA=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/sqlserverreceiver v0.51.0 h1:FZ1l6iE/ZATvJ854gQX4iVD+1X7p23OberwvfZq5Bk0=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/sqlserverreceiver v0.51.0/go.mod h1:DypW7H7D95RQ/2SXVFiBzWhBKQtSohLe+ganTF/Snsw=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowsperfcountersreceiver v0.51.0 h1:MMiw5dm4BgA1tvPQtGkicXEvkAk4MYNnpIiVoqBucj0=
@@ -1950,6 +1954,8 @@ golang.org/x/crypto v0.0.0-20211202192323-5770296d904e/go.mod h1:IxCIyHEi3zRg3s0
 golang.org/x/crypto v0.0.0-20211215153901-e495a2d5b3d3/go.mod h1:IxCIyHEi3zRg3s0A5j5BB6A9Jmi73HwBIUl50j+osU4=
 golang.org/x/crypto v0.0.0-20220214200702-86341886e292 h1:f+lwQ+GtmgoY+A2YaQxlSOnDjXcQ7ZRLWOHbC6HtRqE=
 golang.org/x/crypto v0.0.0-20220214200702-86341886e292/go.mod h1:IxCIyHEi3zRg3s0A5j5BB6A9Jmi73HwBIUl50j+osU4=
+golang.org/x/crypto v0.0.0-20220307211146-efcb8507fb70 h1:syTAU9FwmvzEoIYMqcPHOcVm4H3U5u90WsvuYgwpETU=
+golang.org/x/crypto v0.0.0-20220307211146-efcb8507fb70/go.mod h1:IxCIyHEi3zRg3s0A5j5BB6A9Jmi73HwBIUl50j+osU4=
 golang.org/x/exp v0.0.0-20180321215751-8460e604b9de/go.mod h1:CJ0aWSM057203Lf6IL+f9T1iT9GByDxfZKAQTCR3kQA=
 golang.org/x/exp v0.0.0-20180807140117-3d87b88a115f/go.mod h1:CJ0aWSM057203Lf6IL+f9T1iT9GByDxfZKAQTCR3kQA=
 golang.org/x/exp v0.0.0-20190121172915-509febef88a4/go.mod h1:CJ0aWSM057203Lf6IL+f9T1iT9GByDxfZKAQTCR3kQA=

@@ -15,12 +15,11 @@
 package agentmetricsprocessor
 
 import (
-	"go.opentelemetry.io/collector/model/pdata"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
-func generateUtilizationMetricsInput() pdata.Metrics {
-	input := pdata.NewMetrics()
+func generateUtilizationMetricsInput() pmetric.Metrics {
+	input := pmetric.NewMetrics()
 
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
@@ -62,8 +61,8 @@ func generateUtilizationPrevCPUTimeValuesInput() map[string]float64 {
 	}
 }
 
-func generateUtilizationMetricsExpected() pdata.Metrics {
-	expected := pdata.NewMetrics()
+func generateUtilizationMetricsExpected() pmetric.Metrics {
+	expected := pmetric.NewMetrics()
 
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)

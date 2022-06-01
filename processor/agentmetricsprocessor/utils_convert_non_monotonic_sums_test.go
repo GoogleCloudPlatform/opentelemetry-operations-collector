@@ -15,12 +15,11 @@
 package agentmetricsprocessor
 
 import (
-	"go.opentelemetry.io/collector/model/pdata"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
-func generateNonMonotonicSumsInput() pdata.Metrics {
-	input := pdata.NewMetrics()
+func generateNonMonotonicSumsInput() pmetric.Metrics {
+	input := pmetric.NewMetrics()
 
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
@@ -37,8 +36,8 @@ func generateNonMonotonicSumsInput() pdata.Metrics {
 	return input
 }
 
-func generateNonMonotonicSumsExpected() pdata.Metrics {
-	expected := pdata.NewMetrics()
+func generateNonMonotonicSumsExpected() pmetric.Metrics {
+	expected := pmetric.NewMetrics()
 
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)

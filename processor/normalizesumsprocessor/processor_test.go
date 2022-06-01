@@ -26,8 +26,6 @@ import (
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/config"
 	"go.opentelemetry.io/collector/consumer/consumertest"
-	"go.opentelemetry.io/collector/model/otlp"
-	"go.opentelemetry.io/collector/model/pdata"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/processor/processorhelper"
@@ -36,8 +34,8 @@ import (
 
 type testCase struct {
 	name     string
-	inputs   []pdata.Metrics
-	expected []pdata.Metrics
+	inputs   []pmetric.Metrics
+	expected []pmetric.Metrics
 }
 
 func TestNormalizeSumsProcessor(t *testing.T) {
@@ -106,8 +104,8 @@ func TestNormalizeSumsProcessor(t *testing.T) {
 	}
 }
 
-func generateNoTransformMetrics(startTime int64) []pdata.Metrics {
-	input := pdata.NewMetrics()
+func generateNoTransformMetrics(startTime int64) []pmetric.Metrics {
+	input := pmetric.NewMetrics()
 
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
@@ -130,14 +128,14 @@ func generateNoTransformMetrics(startTime int64) []pdata.Metrics {
 	mb4.addDoubleDataPoint(11, map[string]string{}, startTime+1000, 0)
 
 	rmb.Build().CopyTo(input.ResourceMetrics())
-	return []pdata.Metrics{input}
+	return []pmetric.Metrics{input}
 }
 
-func generateMultipleResourceInput(startTime int64) []pdata.Metrics {
-	input := pdata.NewMetrics()
+func generateMultipleResourceInput(startTime int64) []pmetric.Metrics {
+	input := pmetric.NewMetrics()
 
 	rmb := newResourceMetricsBuilder()
-	b := rmb.addResourceMetrics(map[string]pdata.Value{
+	b := rmb.addResourceMetrics(map[string]pcommon.Value{
 		"label1": pcommon.NewValueString("value1"),
 	})
 
@@ -145,7 +143,7 @@ func generateMultipleResourceInput(startTime int64) []pdata.Metrics {
 	mb1.addIntDataPoint(1, map[string]string{}, startTime, 0)
 	mb1.addIntDataPoint(2, map[string]string{}, startTime+1000, 0)
 
-	b2 := rmb.addResourceMetrics(map[string]pdata.Value{
+	b2 := rmb.addResourceMetrics(map[string]pcommon.Value{
 		"label1": pcommon.NewValueString("value2"),
 	})
 
@@ -154,14 +152,14 @@ func generateMultipleResourceInput(startTime int64) []pdata.Metrics {
 	mb2.addIntDataPoint(10, map[string]string{}, startTime+3000, 0)
 
 	rmb.Build().CopyTo(input.ResourceMetrics())
-	return []pdata.Metrics{input}
+	return []pmetric.Metrics{input}
 }
 
-func generateMultipleResourceOutput(startTime int64) []pdata.Metrics {
-	output := pdata.NewMetrics()
+func generateMultipleResourceOutput(startTime int64) []pmetric.Metrics {
+	output := pmetric.NewMetrics()
 
 	rmb := newResourceMetricsBuilder()
-	b := rmb.addResourceMetrics(map[string]pdata.Value{
+	b := rmb.addResourceMetrics(map[string]pcommon.Value{
 		"label1": pcommon.NewValueString("value1"),
 	})
 
@@ -169,7 +167,7 @@ func generateMultipleResourceOutput(startTime int64) []pdata.Metrics {
 	// mb1.addIntDataPoint(1, map[string]string{}, startTime, 0)
 	mb1.addIntDataPoint(1, map[string]string{}, startTime+1000, startTime)
 
-	b2 := rmb.addResourceMetrics(map[string]pdata.Value{
+	b2 := rmb.addResourceMetrics(map[string]pcommon.Value{
 		"label1": pcommon.NewValueString("value2"),
 	})
 
@@ -178,11 +176,11 @@ func generateMultipleResourceOutput(startTime int64) []pdata.Metrics {
 	mb2.addIntDataPoint(5, map[string]string{}, startTime+3000, startTime+2000)
 
 	rmb.Build().CopyTo(output.ResourceMetrics())
-	return []pdata.Metrics{output}
+	return []pmetric.Metrics{output}
 }
 
-func generateLabelledInput(startTime int64) []pdata.Metrics {
-	input := pdata.NewMetrics()
+func generateLabelledInput(startTime int64) []pmetric.Metrics {
+	input := pmetric.NewMetrics()
 
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
@@ -198,11 +196,11 @@ func generateLabelledInput(startTime int64) []pdata.Metrics {
 	mb1.addIntDataPoint(11, map[string]string{"label": "val2"}, startTime+3000, 0)
 
 	rmb.Build().CopyTo(input.ResourceMetrics())
-	return []pdata.Metrics{input}
+	return []pmetric.Metrics{input}
 }
 
-func generateLabelledOutput(startTime int64) []pdata.Metrics {
-	output := pdata.NewMetrics()
+func generateLabelledOutput(startTime int64) []pmetric.Metrics {
+	output := pmetric.NewMetrics()
 
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
@@ -218,11 +216,11 @@ func generateLabelledOutput(startTime int64) []pdata.Metrics {
 	mb1.addIntDataPoint(10, map[string]string{"label": "val2"}, startTime+3000, startTime+2000)
 
 	rmb.Build().CopyTo(output.ResourceMetrics())
-	return []pdata.Metrics{output}
+	return []pmetric.Metrics{output}
 }
 
-func generateSeparatedLabelledInput(startTime int64) []pdata.Metrics {
-	input := pdata.NewMetrics()
+func generateSeparatedLabelledInput(startTime int64) []pmetric.Metrics {
+	input := pmetric.NewMetrics()
 
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
@@ -240,11 +238,11 @@ func generateSeparatedLabelledInput(startTime int64) []pdata.Metrics {
 	mb2.addIntDataPoint(11, map[string]string{"label": "val2"}, startTime+3000, 0)
 
 	rmb.Build().CopyTo(input.ResourceMetrics())
-	return []pdata.Metrics{input}
+	return []pmetric.Metrics{input}
 }
 
-func generateSeparatedLabelledOutput(startTime int64) []pdata.Metrics {
-	output := pdata.NewMetrics()
+func generateSeparatedLabelledOutput(startTime int64) []pmetric.Metrics {
+	output := pmetric.NewMetrics()
 
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
@@ -262,11 +260,11 @@ func generateSeparatedLabelledOutput(startTime int64) []pdata.Metrics {
 	mb2.addIntDataPoint(10, map[string]string{"label": "val2"}, startTime+3000, startTime+2000)
 
 	rmb.Build().CopyTo(output.ResourceMetrics())
-	return []pdata.Metrics{output}
+	return []pmetric.Metrics{output}
 }
 
-func generateRemoveInput(startTime int64) []pdata.Metrics {
-	input := pdata.NewMetrics()
+func generateRemoveInput(startTime int64) []pmetric.Metrics {
+	input := pmetric.NewMetrics()
 
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
@@ -283,11 +281,11 @@ func generateRemoveInput(startTime int64) []pdata.Metrics {
 	mb3.addDoubleDataPoint(6, map[string]string{}, startTime+1000, 0)
 
 	rmb.Build().CopyTo(input.ResourceMetrics())
-	return []pdata.Metrics{input}
+	return []pmetric.Metrics{input}
 }
 
-func generateRemoveOutput(startTime int64) []pdata.Metrics {
-	output := pdata.NewMetrics()
+func generateRemoveOutput(startTime int64) []pmetric.Metrics {
+	output := pmetric.NewMetrics()
 
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
@@ -301,12 +299,12 @@ func generateRemoveOutput(startTime int64) []pdata.Metrics {
 	mb3.addDoubleDataPoint(6, map[string]string{}, startTime+1000, 0)
 
 	rmb.Build().CopyTo(output.ResourceMetrics())
-	return []pdata.Metrics{output}
+	return []pmetric.Metrics{output}
 }
 
-func generateComplexInput(startTime int64) []pdata.Metrics {
-	list := []pdata.Metrics{}
-	input := pdata.NewMetrics()
+func generateComplexInput(startTime int64) []pmetric.Metrics {
+	list := []pmetric.Metrics{}
+	input := pmetric.NewMetrics()
 
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
@@ -339,7 +337,7 @@ func generateComplexInput(startTime int64) []pdata.Metrics {
 	rmb.Build().CopyTo(input.ResourceMetrics())
 	list = append(list, input)
 
-	input = pdata.NewMetrics()
+	input = pmetric.NewMetrics()
 	rmb = newResourceMetricsBuilder()
 	b = rmb.addResourceMetrics(nil)
 
@@ -353,9 +351,9 @@ func generateComplexInput(startTime int64) []pdata.Metrics {
 	return list
 }
 
-func generateComplexOutput(startTime int64) []pdata.Metrics {
-	list := []pdata.Metrics{}
-	output := pdata.NewMetrics()
+func generateComplexOutput(startTime int64) []pmetric.Metrics {
+	list := []pmetric.Metrics{}
+	output := pmetric.NewMetrics()
 
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
@@ -388,7 +386,7 @@ func generateComplexOutput(startTime int64) []pdata.Metrics {
 	rmb.Build().CopyTo(output.ResourceMetrics())
 	list = append(list, output)
 
-	output = pdata.NewMetrics()
+	output = pmetric.NewMetrics()
 
 	rmb = newResourceMetricsBuilder()
 	b = rmb.addResourceMetrics(nil)
@@ -406,14 +404,14 @@ func generateComplexOutput(startTime int64) []pdata.Metrics {
 // builders to generate test metrics
 
 type resourceMetricsBuilder struct {
-	rms pdata.ResourceMetricsSlice
+	rms pmetric.ResourceMetricsSlice
 }
 
 func newResourceMetricsBuilder() resourceMetricsBuilder {
-	return resourceMetricsBuilder{rms: pdata.NewResourceMetricsSlice()}
+	return resourceMetricsBuilder{rms: pmetric.NewResourceMetricsSlice()}
 }
 
-func (rmsb resourceMetricsBuilder) addResourceMetrics(resourceAttributes map[string]pdata.Value) metricsBuilder {
+func (rmsb resourceMetricsBuilder) addResourceMetrics(resourceAttributes map[string]pcommon.Value) metricsBuilder {
 	rm := rmsb.rms.AppendEmpty()
 
 	for k, v := range resourceAttributes {
@@ -425,15 +423,15 @@ func (rmsb resourceMetricsBuilder) addResourceMetrics(resourceAttributes map[str
 	return metricsBuilder{metrics: ilm.Metrics()}
 }
 
-func (rmsb resourceMetricsBuilder) Build() pdata.ResourceMetricsSlice {
+func (rmsb resourceMetricsBuilder) Build() pmetric.ResourceMetricsSlice {
 	return rmsb.rms
 }
 
 type metricsBuilder struct {
-	metrics pdata.MetricSlice
+	metrics pmetric.MetricSlice
 }
 
-func (msb metricsBuilder) addMetric(name string, t pdata.MetricDataType, isMonotonic bool) metricBuilder {
+func (msb metricsBuilder) addMetric(name string, t pmetric.MetricDataType, isMonotonic bool) metricBuilder {
 	metric := msb.metrics.AppendEmpty()
 	metric.SetName(name)
 	metric.SetDataType(t)
@@ -451,11 +449,11 @@ func (msb metricsBuilder) addMetric(name string, t pdata.MetricDataType, isMonot
 }
 
 type metricBuilder struct {
-	metric pdata.Metric
+	metric pmetric.Metric
 }
 
 func (mb metricBuilder) addDoubleDataPoint(value float64, labels map[string]string, timestamp int64, startTimestamp int64) {
-	var ddp pdata.NumberDataPoint
+	var ddp pmetric.NumberDataPoint
 	switch mb.metric.DataType() {
 	case pmetric.MetricDataTypeSum:
 		ddp = mb.metric.Sum().DataPoints().AppendEmpty()
@@ -466,14 +464,14 @@ func (mb metricBuilder) addDoubleDataPoint(value float64, labels map[string]stri
 		ddp.Attributes().InsertString(k, v)
 	}
 	ddp.SetDoubleVal(value)
-	ddp.SetTimestamp(pdata.NewTimestampFromTime(time.Unix(timestamp, 0)))
+	ddp.SetTimestamp(pcommon.NewTimestampFromTime(time.Unix(timestamp, 0)))
 	if startTimestamp > 0 {
-		ddp.SetStartTimestamp(pdata.NewTimestampFromTime(time.Unix(startTimestamp, 0)))
+		ddp.SetStartTimestamp(pcommon.NewTimestampFromTime(time.Unix(startTimestamp, 0)))
 	}
 }
 
 func (mb metricBuilder) addIntDataPoint(value int64, labels map[string]string, timestamp int64, startTimestamp int64) {
-	var idp pdata.NumberDataPoint
+	var idp pmetric.NumberDataPoint
 	switch mb.metric.DataType() {
 	case pmetric.MetricDataTypeSum:
 		idp = mb.metric.Sum().DataPoints().AppendEmpty()
@@ -484,18 +482,18 @@ func (mb metricBuilder) addIntDataPoint(value int64, labels map[string]string, t
 		idp.Attributes().InsertString(k, v)
 	}
 	idp.SetIntVal(value)
-	idp.SetTimestamp(pdata.NewTimestampFromTime(time.Unix(timestamp, 0)))
+	idp.SetTimestamp(pcommon.NewTimestampFromTime(time.Unix(timestamp, 0)))
 	if startTimestamp > 0 {
-		idp.SetStartTimestamp(pdata.NewTimestampFromTime(time.Unix(startTimestamp, 0)))
+		idp.SetStartTimestamp(pcommon.NewTimestampFromTime(time.Unix(startTimestamp, 0)))
 	}
 }
 
 // requireEqual is required because Attribute & Label Maps are not sorted by default
 // and we don't provide any guarantees on the order of transformed metrics
-func requireEqual(t *testing.T, expected, actual []pdata.Metrics) {
+func requireEqual(t *testing.T, expected, actual []pmetric.Metrics) {
 	require.Equal(t, len(expected), len(actual))
 
-	marshaler := otlp.NewJSONMetricsMarshaler()
+	marshaler := pmetric.NewJSONMarshaler()
 
 	for q := 0; q < len(actual); q++ {
 		outJSON, err := marshaler.MarshalMetrics(actual[q])
@@ -526,7 +524,7 @@ func requireEqual(t *testing.T, expected, actual []pdata.Metrics) {
 				require.Equal(t, metricsExp.Len(), metricsAct.Len())
 
 				// build a map of expected metrics
-				metricsExpMap := make(map[string]pdata.Metric, metricsExp.Len())
+				metricsExpMap := make(map[string]pmetric.Metric, metricsExp.Len())
 				for k := 0; k < metricsExp.Len(); k++ {
 					metricsExpMap[metricsExp.At(k).Name()] = metricsExp.At(k)
 				}
@@ -558,11 +556,11 @@ func requireEqual(t *testing.T, expected, actual []pdata.Metrics) {
 	}
 }
 
-func requireEqualNumberDataPointSlice(t *testing.T, metricName string, ndpsAct, ndpsExp pdata.NumberDataPointSlice) {
+func requireEqualNumberDataPointSlice(t *testing.T, metricName string, ndpsAct, ndpsExp pmetric.NumberDataPointSlice) {
 	require.Equalf(t, ndpsExp.Len(), ndpsAct.Len(), "Metric %s", metricName)
 
 	// build a map of expected data points
-	ndpsExpMap := make(map[string]pdata.NumberDataPoint, ndpsExp.Len())
+	ndpsExpMap := make(map[string]pmetric.NumberDataPoint, ndpsExp.Len())
 	for k := 0; k < ndpsExp.Len(); k++ {
 		ndpExp := ndpsExp.At(k)
 		ndpsExpMap[dataPointKey(metricName, ndpExp.Attributes(), ndpExp.Timestamp(), ndpExp.StartTimestamp())] = ndpExp
@@ -591,9 +589,9 @@ func requireEqualNumberDataPointSlice(t *testing.T, metricName string, ndpsAct, 
 }
 
 // dataPointKey returns a key representing the data point
-func dataPointKey(metricName string, labelsMap pdata.Map, timestamp pdata.Timestamp, startTimestamp pdata.Timestamp) string {
+func dataPointKey(metricName string, labelsMap pcommon.Map, timestamp pcommon.Timestamp, startTimestamp pcommon.Timestamp) string {
 	idx, otherLabels := 0, make([]string, labelsMap.Len())
-	labelsMap.Range(func(k string, v pdata.Value) bool {
+	labelsMap.Range(func(k string, v pcommon.Value) bool {
 		otherLabels[idx] = k + "=" + v.AsString()
 		idx++
 		return true

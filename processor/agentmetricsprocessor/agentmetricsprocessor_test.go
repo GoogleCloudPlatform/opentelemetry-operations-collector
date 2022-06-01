@@ -24,8 +24,7 @@ import (
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/config"
 	"go.opentelemetry.io/collector/consumer/consumertest"
-	"go.opentelemetry.io/collector/model/otlp"
-	"go.opentelemetry.io/collector/model/pdata"
+	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/processor/processorhelper"
 	"go.uber.org/zap"
@@ -33,8 +32,8 @@ import (
 
 type testCase struct {
 	name                      string
-	input                     pdata.Metrics
-	expected                  pdata.Metrics
+	input                     pmetric.Metrics
+	expected                  pmetric.Metrics
 	prevCPUTimeValuesInput    map[string]float64
 	prevCPUTimeValuesExpected map[string]float64
 	prevOpInput               map[opKey]opData
@@ -119,7 +118,7 @@ func TestAgentMetricsProcessor(t *testing.T) {
 			err = rmp.ConsumeMetrics(context.Background(), tt.input)
 			require.NoError(t, err)
 
-			marshaler := otlp.NewJSONMetricsMarshaler()
+			marshaler := pmetric.NewJSONMarshaler()
 			outJSON, err := marshaler.MarshalMetrics(tmn.AllMetrics()[0])
 			require.NoError(t, err)
 			t.Logf("actual metrics: %s", outJSON)
@@ -135,14 +134,14 @@ func TestAgentMetricsProcessor(t *testing.T) {
 // builders to generate test metrics
 
 type resourceMetricsBuilder struct {
-	rms pdata.ResourceMetricsSlice
+	rms pmetric.ResourceMetricsSlice
 }
 
 func newResourceMetricsBuilder() resourceMetricsBuilder {
-	return resourceMetricsBuilder{rms: pdata.NewResourceMetricsSlice()}
+	return resourceMetricsBuilder{rms: pmetric.NewResourceMetricsSlice()}
 }
 
-func (rmsb resourceMetricsBuilder) addResourceMetrics(resourceAttributes map[string]pdata.Value) metricsBuilder {
+func (rmsb resourceMetricsBuilder) addResourceMetrics(resourceAttributes map[string]pcommon.Value) metricsBuilder {
 	rm := rmsb.rms.AppendEmpty()
 
 	for k, v := range resourceAttributes {
@@ -154,16 +153,16 @@ func (rmsb resourceMetricsBuilder) addResourceMetrics(resourceAttributes map[str
 	return metricsBuilder{metrics: ilm.Metrics()}
 }
 
-func (rmsb resourceMetricsBuilder) Build() pdata.ResourceMetricsSlice {
+func (rmsb resourceMetricsBuilder) Build() pmetric.ResourceMetricsSlice {
 	return rmsb.rms
 }
 
 type metricsBuilder struct {
-	metrics   pdata.MetricSlice
-	timestamp pdata.Timestamp
+	metrics   pmetric.MetricSlice
+	timestamp pcommon.Timestamp
 }
 
-func (msb metricsBuilder) addMetric(name string, t pdata.MetricDataType, isMonotonic bool) metricBuilder {
+func (msb metricsBuilder) addMetric(name string, t pmetric.MetricDataType, isMonotonic bool) metricBuilder {
 	metric := msb.metrics.AppendEmpty()
 	metric.SetName(name)
 	metric.SetDataType(t)
@@ -181,12 +180,12 @@ func (msb metricsBuilder) addMetric(name string, t pdata.MetricDataType, isMonot
 }
 
 type metricBuilder struct {
-	metric    pdata.Metric
-	timestamp pdata.Timestamp
+	metric    pmetric.Metric
+	timestamp pcommon.Timestamp
 }
 
 func (mb metricBuilder) addIntDataPoint(value int64, labels map[string]string) metricBuilder {
-	var idp pdata.NumberDataPoint
+	var idp pmetric.NumberDataPoint
 	switch mb.metric.DataType() {
 	case pmetric.MetricDataTypeSum:
 		idp = mb.metric.Sum().DataPoints().AppendEmpty()
@@ -203,7 +202,7 @@ func (mb metricBuilder) addIntDataPoint(value int64, labels map[string]string) m
 }
 
 func (mb metricBuilder) addDoubleDataPoint(value float64, labels map[string]string) metricBuilder {
-	var ddp pdata.NumberDataPoint
+	var ddp pmetric.NumberDataPoint
 	switch mb.metric.DataType() {
 	case pmetric.MetricDataTypeSum:
 		ddp = mb.metric.Sum().DataPoints().AppendEmpty()
@@ -221,7 +220,7 @@ func (mb metricBuilder) addDoubleDataPoint(value float64, labels map[string]stri
 
 // assertEqual is required because Attribute & Label Maps are not sorted by default
 // and we don't provide any guarantees on the order of transformed metrics
-func assertEqual(t *testing.T, expected, actual pdata.Metrics) {
+func assertEqual(t *testing.T, expected, actual pmetric.Metrics) {
 	rmsAct := actual.ResourceMetrics()
 	rmsExp := expected.ResourceMetrics()
 	require.Equal(t, rmsExp.Len(), rmsAct.Len())
@@ -246,7 +245,7 @@ func assertEqual(t *testing.T, expected, actual pdata.Metrics) {
 			require.Equal(t, metricsExp.Len(), metricsAct.Len(), "Number of metrics")
 
 			// build a map of expected metrics
-			metricsExpMap := make(map[string]pdata.Metric, metricsExp.Len())
+			metricsExpMap := make(map[string]pmetric.Metric, metricsExp.Len())
 			for k := 0; k < metricsExp.Len(); k++ {
 				metricsExpMap[metricsExp.At(k).Name()] = metricsExp.At(k)
 			}
@@ -282,11 +281,11 @@ func assertEqual(t *testing.T, expected, actual pdata.Metrics) {
 
 const epsilon = 0.0000000001
 
-func assertEqualNumberDataPointSlice(t *testing.T, metricName string, ndpsAct, ndpsExp pdata.NumberDataPointSlice) {
+func assertEqualNumberDataPointSlice(t *testing.T, metricName string, ndpsAct, ndpsExp pmetric.NumberDataPointSlice) {
 	require.Equalf(t, ndpsExp.Len(), ndpsAct.Len(), "Metric %s", metricName)
 
 	// build a map of expected data points
-	ndpsExpMap := make(map[string]pdata.NumberDataPoint, ndpsExp.Len())
+	ndpsExpMap := make(map[string]pmetric.NumberDataPoint, ndpsExp.Len())
 	for k := 0; k < ndpsExp.Len(); k++ {
 		ndpsExpMap[labelsAsKey(ndpsExp.At(k).Attributes())] = ndpsExp.At(k)
 	}

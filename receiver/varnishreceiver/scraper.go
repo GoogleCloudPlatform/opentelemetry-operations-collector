@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/model/pdata"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.uber.org/zap"
@@ -73,7 +72,7 @@ func (v *varnishScraper) scrape(context.Context) (pmetric.Metrics, error) {
 			zap.String("Executable Directory:", v.config.ExecDir),
 			zap.Error(err),
 		)
-		return pdata.NewMetrics(), err
+		return pmetric.NewMetrics(), err
 	}
 
 	now := pcommon.NewTimestampFromTime(time.Now())

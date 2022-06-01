@@ -19,7 +19,7 @@ import (
 	"sort"
 	"strings"
 
-	"go.opentelemetry.io/collector/model/pdata"
+	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
@@ -44,7 +44,7 @@ var metricsToComputeUtilizationFor = map[string]bool{
 
 const stateLabel = "state"
 
-func (mtp *agentMetricsProcessor) appendUtilizationMetrics(rms pdata.ResourceMetricsSlice) error {
+func (mtp *agentMetricsProcessor) appendUtilizationMetrics(rms pmetric.ResourceMetricsSlice) error {
 	for i := 0; i < rms.Len(); i++ {
 		ilms := rms.At(i).ScopeMetrics()
 		for j := 0; j < ilms.Len(); j++ {
@@ -72,8 +72,8 @@ func (mtp *agentMetricsProcessor) appendUtilizationMetrics(rms pdata.ResourceMet
 	return nil
 }
 
-func (mtp *agentMetricsProcessor) calculateUtilizationMetric(usageMetric pdata.Metric) (pdata.Metric, error) {
-	utilizationMetric := pdata.NewMetric()
+func (mtp *agentMetricsProcessor) calculateUtilizationMetric(usageMetric pmetric.Metric) (pmetric.Metric, error) {
+	utilizationMetric := pmetric.NewMetric()
 	usageMetric.CopyTo(utilizationMetric)
 
 	utilizationMetric.SetName(metricPostfixRegex.ReplaceAllString(usageMetric.Name(), "utilization"))
@@ -86,7 +86,7 @@ func (mtp *agentMetricsProcessor) calculateUtilizationMetric(usageMetric pdata.M
 	// computing utilization of the deltas
 	isCPUTime := usageMetric.Name() == cpuTime
 	if isCPUTime {
-		delta := pdata.NewMetric()
+		delta := pmetric.NewMetric()
 		usageMetric.CopyTo(delta)
 		mtp.convertPrevCPUTimeToDelta(delta)
 		metric = delta
@@ -95,10 +95,10 @@ func (mtp *agentMetricsProcessor) calculateUtilizationMetric(usageMetric pdata.M
 	switch t := metric.DataType(); t {
 	case pmetric.MetricDataTypeSum, pmetric.MetricDataTypeGauge:
 		if err := calculateUtilizationFromNumberDataPoints(metric, utilizationMetric); err != nil {
-			return pdata.NewMetric(), err
+			return pmetric.NewMetric(), err
 		}
 	default:
-		return pdata.NewMetric(), fmt.Errorf("unsupported metric data type: %v", t)
+		return pmetric.NewMetric(), fmt.Errorf("unsupported metric data type: %v", t)
 	}
 
 	// persist the values of "cpu.time" so we can compute deltas on the next cycle
@@ -111,12 +111,12 @@ func (mtp *agentMetricsProcessor) calculateUtilizationMetric(usageMetric pdata.M
 
 // convertPrevCPUTimeToDelta converts the cpu.time values to delta values using the
 // values persisted in the previous snapshot
-func (mtp *agentMetricsProcessor) convertPrevCPUTimeToDelta(cpuTimeMetric pdata.Metric) {
+func (mtp *agentMetricsProcessor) convertPrevCPUTimeToDelta(cpuTimeMetric pmetric.Metric) {
 	mtp.mutex.Lock()
 	defer mtp.mutex.Unlock()
 
 	ndps := cpuTimeMetric.Sum().DataPoints()
-	out := pdata.NewNumberDataPointSlice()
+	out := pmetric.NewNumberDataPointSlice()
 	for i := 0; i < ndps.Len(); i++ {
 		ndp := ndps.At(i)
 
@@ -138,7 +138,7 @@ func (mtp *agentMetricsProcessor) convertPrevCPUTimeToDelta(cpuTimeMetric pdata.
 
 // setPrevCPUTimes persists the cpu.time cumulative values as a map so they can
 // be used to calculate deltas in the next snapshot
-func (mtp *agentMetricsProcessor) setPrevCPUTimes(cpuTimeMetric pdata.Metric) {
+func (mtp *agentMetricsProcessor) setPrevCPUTimes(cpuTimeMetric pmetric.Metric) {
 	mtp.mutex.Lock()
 	defer mtp.mutex.Unlock()
 
@@ -146,12 +146,12 @@ func (mtp *agentMetricsProcessor) setPrevCPUTimes(cpuTimeMetric pdata.Metric) {
 }
 
 type numberPoints struct {
-	pts []pdata.NumberDataPoint
+	pts []pmetric.NumberDataPoint
 	sum float64
 }
 
-func calculateUtilizationFromNumberDataPoints(metric, utilizationMetric pdata.Metric) error {
-	var ndps pdata.NumberDataPointSlice
+func calculateUtilizationFromNumberDataPoints(metric, utilizationMetric pmetric.Metric) error {
+	var ndps pmetric.NumberDataPointSlice
 	switch t := metric.DataType(); t {
 	case pmetric.MetricDataTypeSum:
 		ndps = metric.Sum().DataPoints()
@@ -184,7 +184,7 @@ func calculateUtilizationFromNumberDataPoints(metric, utilizationMetric pdata.Me
 		points.pts = append(points.pts, ndp)
 	}
 
-	ndps = pdata.NewNumberDataPointSlice()
+	ndps = pmetric.NewNumberDataPointSlice()
 	ndps.EnsureCapacity(pointCount)
 	for _, points := range groupedPoints {
 		for _, point := range points.pts {
@@ -211,7 +211,7 @@ func calculateUtilizationFromNumberDataPoints(metric, utilizationMetric pdata.Me
 
 // doubleDataPointsToMap converts the double data points in the provided metric
 // to a map of labels to values
-func doubleDataPointsToMap(metric pdata.Metric) map[string]float64 {
+func doubleDataPointsToMap(metric pmetric.Metric) map[string]float64 {
 	ddps := metric.Sum().DataPoints()
 	labelToValuesMap := make(map[string]float64, ddps.Len())
 	for i := 0; i < ddps.Len(); i++ {
@@ -223,11 +223,11 @@ func doubleDataPointsToMap(metric pdata.Metric) map[string]float64 {
 }
 
 // labelsAsKey returns a key representing the labels in the provided labelset.
-func labelsAsKey(labels pdata.Map) string {
+func labelsAsKey(labels pcommon.Map) string {
 	otherLabelsLen := labels.Len()
 
 	idx, otherLabels := 0, make([]string, otherLabelsLen)
-	labels.Range(func(k string, v pdata.Value) bool {
+	labels.Range(func(k string, v pcommon.Value) bool {
 		otherLabels[idx] = k + "=" + v.AsString()
 		idx++
 		return true
@@ -242,11 +242,11 @@ func labelsAsKey(labels pdata.Map) string {
 // otherLabelsAsKey returns a key representing the other labels in the provided
 // labelset excluding the specified label keys. An error is returned if any of the
 // specified labels to exclude do not exist in the labelset.
-func otherLabelsAsKey(labels pdata.Map, excluding ...string) (string, error) {
+func otherLabelsAsKey(labels pcommon.Map, excluding ...string) (string, error) {
 	otherLabelsLen := labels.Len() - len(excluding)
 
 	otherLabels := make([]string, 0, otherLabelsLen)
-	labels.Range(func(k string, v pdata.Value) bool {
+	labels.Range(func(k string, v pcommon.Value) bool {
 		// ignore any keys specified in excluding
 		for _, e := range excluding {
 			if k == e {

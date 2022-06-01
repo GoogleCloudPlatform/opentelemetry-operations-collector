@@ -18,9 +18,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"go.opentelemetry.io/collector/model/pdata"
-
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/varnishreceiver/internal/metadata"
+	"go.opentelemetry.io/collector/pdata/pcommon"
 )
 
 // FullStats holds stats from a 6.5+ response.
@@ -112,7 +111,7 @@ type Stats struct {
 	} `json:"MAIN.backend_req"`
 }
 
-func (v *varnishScraper) recordVarnishBackendConnectionsCountDataPoint(now pdata.Timestamp, stats *Stats) {
+func (v *varnishScraper) recordVarnishBackendConnectionsCountDataPoint(now pcommon.Timestamp, stats *Stats) {
 	attributeMappings := map[string]int64{
 		metadata.AttributeBackendConnectionType.Success:   stats.MAINBackendConn.Value,
 		metadata.AttributeBackendConnectionType.Recycle:   stats.MAINBackendRecycle.Value,
@@ -128,7 +127,7 @@ func (v *varnishScraper) recordVarnishBackendConnectionsCountDataPoint(now pdata
 	}
 }
 
-func (v *varnishScraper) recordVarnishCacheOperationsCountDataPoint(now pdata.Timestamp, stats *Stats) {
+func (v *varnishScraper) recordVarnishCacheOperationsCountDataPoint(now pcommon.Timestamp, stats *Stats) {
 	attributeMappings := map[string]int64{
 		metadata.AttributeCacheOperations.Hit:     stats.MAINCacheHit.Value,
 		metadata.AttributeCacheOperations.HitPass: stats.MAINCacheHitpass.Value,
@@ -140,7 +139,7 @@ func (v *varnishScraper) recordVarnishCacheOperationsCountDataPoint(now pdata.Ti
 	}
 }
 
-func (v *varnishScraper) recordVarnishThreadOperationsCountDataPoint(now pdata.Timestamp, stats *Stats) {
+func (v *varnishScraper) recordVarnishThreadOperationsCountDataPoint(now pcommon.Timestamp, stats *Stats) {
 	attributeMappings := map[string]int64{
 		metadata.AttributeThreadOperations.Created:   stats.MAINThreadsCreated.Value,
 		metadata.AttributeThreadOperations.Destroyed: stats.MAINThreadsDestroyed.Value,
@@ -152,7 +151,7 @@ func (v *varnishScraper) recordVarnishThreadOperationsCountDataPoint(now pdata.T
 	}
 }
 
-func (v *varnishScraper) recordVarnishSessionCountDataPoint(now pdata.Timestamp, stats *Stats) {
+func (v *varnishScraper) recordVarnishSessionCountDataPoint(now pcommon.Timestamp, stats *Stats) {
 	attributeMappings := map[string]int64{
 		metadata.AttributeSessionType.Accepted: stats.MAINSessConn.Value,
 		metadata.AttributeSessionType.Dropped:  stats.MAINSessDropped.Value,
@@ -164,7 +163,7 @@ func (v *varnishScraper) recordVarnishSessionCountDataPoint(now pdata.Timestamp,
 	}
 }
 
-func (v *varnishScraper) recordVarnishClientRequestsCountDataPoint(now pdata.Timestamp, stats *Stats) {
+func (v *varnishScraper) recordVarnishClientRequestsCountDataPoint(now pcommon.Timestamp, stats *Stats) {
 	attributeMappings := map[string]int64{
 		metadata.AttributeState.Received: stats.MAINClientReq.Value,
 		metadata.AttributeState.Dropped:  stats.MAINReqDropped.Value,
@@ -175,7 +174,7 @@ func (v *varnishScraper) recordVarnishClientRequestsCountDataPoint(now pdata.Tim
 	}
 }
 
-func (v *varnishScraper) recordVarnishClientRequestErrorCountDataPoint(now pdata.Timestamp, stats *Stats) {
+func (v *varnishScraper) recordVarnishClientRequestErrorCountDataPoint(now pcommon.Timestamp, stats *Stats) {
 	attributeMappings := map[string]int64{
 		fmt.Sprint(http.StatusBadRequest):          stats.MAINClientReq400.Value,
 		fmt.Sprint(http.StatusExpectationFailed):   stats.MAINClientReq417.Value,

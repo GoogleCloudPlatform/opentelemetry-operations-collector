@@ -15,14 +15,13 @@
 package agentmetricsprocessor
 
 import (
-	"go.opentelemetry.io/collector/model/pdata"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
 // The following code converts metrics of OpenTelemetry Counter (sum) type
 // that are non-Monotonic to Gauges.
 
-func convertNonMonotonicSumsToGauges(rms pdata.ResourceMetricsSlice) {
+func convertNonMonotonicSumsToGauges(rms pmetric.ResourceMetricsSlice) {
 	for i := 0; i < rms.Len(); i++ {
 		ilms := rms.At(i).ScopeMetrics()
 		for j := 0; j < ilms.Len(); j++ {
@@ -51,7 +50,7 @@ func convertNonMonotonicSumsToGauges(rms pdata.ResourceMetricsSlice) {
 	}
 }
 
-func convertToGauge(metric pdata.Metric) {
+func convertToGauge(metric pmetric.Metric) {
 	if metric.DataType() == pmetric.MetricDataTypeSum {
 		idps := metric.Sum().DataPoints()
 		metric.SetDataType(pmetric.MetricDataTypeGauge)

@@ -15,12 +15,11 @@
 package agentmetricsprocessor
 
 import (
-	"go.opentelemetry.io/collector/model/pdata"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
-func generateReadWriteMetricsInput() pdata.Metrics {
-	input := pdata.NewMetrics()
+func generateReadWriteMetricsInput() pmetric.Metrics {
+	input := pmetric.NewMetrics()
 
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
@@ -37,8 +36,8 @@ func generateReadWriteMetricsInput() pdata.Metrics {
 	return input
 }
 
-func generateReadWriteMetricsExpected() pdata.Metrics {
-	expected := pdata.NewMetrics()
+func generateReadWriteMetricsExpected() pmetric.Metrics {
+	expected := pmetric.NewMetrics()
 
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)

@@ -14,11 +14,10 @@
 package agentmetricsprocessor
 
 import (
-	"go.opentelemetry.io/collector/model/pdata"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
-func removeVersionAttribute(rms pdata.ResourceMetricsSlice) {
+func removeVersionAttribute(rms pmetric.ResourceMetricsSlice) {
 	for i := 0; i < rms.Len(); i++ {
 		ilms := rms.At(i).ScopeMetrics()
 		for j := 0; j < ilms.Len(); j++ {
@@ -26,7 +25,7 @@ func removeVersionAttribute(rms pdata.ResourceMetricsSlice) {
 			for k := 0; k < metrics.Len(); k++ {
 				metric := metrics.At(k)
 
-				var dps pdata.NumberDataPointSlice
+				var dps pmetric.NumberDataPointSlice
 				switch metric.DataType() {
 				case pmetric.MetricDataTypeGauge:
 					dps = metric.Gauge().DataPoints()

@@ -15,20 +15,19 @@
 package agentmetricsprocessor
 
 import (
-	"go.opentelemetry.io/collector/model/pdata"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
-func generateProcessResourceMetricsInput() pdata.Metrics {
-	input := pdata.NewMetrics()
+func generateProcessResourceMetricsInput() pmetric.Metrics {
+	input := pmetric.NewMetrics()
 
 	rmb := newResourceMetricsBuilder()
 	b1 := rmb.addResourceMetrics(nil)
 	b1.addMetric("m1", pmetric.MetricDataTypeSum, true).addIntDataPoint(1, map[string]string{"label1": "value1"})
 	b1.addMetric("m2", pmetric.MetricDataTypeSum, false).addDoubleDataPoint(2, map[string]string{"label1": "value1"})
 
-	b2 := rmb.addResourceMetrics(map[string]pdata.Value{
+	b2 := rmb.addResourceMetrics(map[string]pcommon.Value{
 		"process.pid":             pcommon.NewValueInt(1),
 		"process.executable.name": pcommon.NewValueString("process1"),
 		"process.executable.path": pcommon.NewValueString("/path/to/process1"),
@@ -39,7 +38,7 @@ func generateProcessResourceMetricsInput() pdata.Metrics {
 	b2.addMetric("m3", pmetric.MetricDataTypeSum, true).addIntDataPoint(3, map[string]string{"label1": "value1"})
 	b2.addMetric("m4", pmetric.MetricDataTypeGauge, false).addDoubleDataPoint(4, map[string]string{"label1": "value1"})
 
-	b3 := rmb.addResourceMetrics(map[string]pdata.Value{
+	b3 := rmb.addResourceMetrics(map[string]pcommon.Value{
 		"process.pid":             pcommon.NewValueInt(2),
 		"process.executable.name": pcommon.NewValueString("process2"),
 		"process.executable.path": pcommon.NewValueString("/path/to/process2"),
@@ -54,8 +53,8 @@ func generateProcessResourceMetricsInput() pdata.Metrics {
 	return input
 }
 
-func generateProcessResourceMetricsExpected() pdata.Metrics {
-	expected := pdata.NewMetrics()
+func generateProcessResourceMetricsExpected() pmetric.Metrics {
+	expected := pmetric.NewMetrics()
 
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)

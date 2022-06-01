@@ -17,7 +17,6 @@ package agentmetricsprocessor
 import (
 	"fmt"
 
-	"go.opentelemetry.io/collector/model/pdata"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
@@ -50,7 +49,7 @@ var metricsToSplit = map[string]bool{
 	processDiskBytes: true,
 }
 
-func splitReadWriteBytesMetrics(rms pdata.ResourceMetricsSlice) error {
+func splitReadWriteBytesMetrics(rms pmetric.ResourceMetricsSlice) error {
 	for i := 0; i < rms.Len(); i++ {
 		ilms := rms.At(i).ScopeMetrics()
 		for j := 0; j < ilms.Len(); j++ {
@@ -86,7 +85,7 @@ const (
 	writeDirection = "write"
 )
 
-func splitReadWriteBytesMetric(metric pdata.Metric) (read pdata.Metric, write pdata.Metric, err error) {
+func splitReadWriteBytesMetric(metric pmetric.Metric) (read pmetric.Metric, write pmetric.Metric, err error) {
 	// create new read & write metrics with descriptor & name including "read_" & "write_" prefix respectively
 	read = newMetricWithName(metric, metricPostfixRegex.ReplaceAllString(metric.Name(), "read_$1"))
 	write = newMetricWithName(metric, metricPostfixRegex.ReplaceAllString(metric.Name(), "write_$1"))
@@ -104,7 +103,7 @@ func splitReadWriteBytesMetric(metric pdata.Metric) (read pdata.Metric, write pd
 	return read, write, err
 }
 
-func appendNumberDataPoints(metricName string, ndps, read, write pdata.NumberDataPointSlice) error {
+func appendNumberDataPoints(metricName string, ndps, read, write pmetric.NumberDataPointSlice) error {
 	for i := 0; i < ndps.Len(); i++ {
 		ndp := ndps.At(i)
 		labels := ndp.Attributes()
@@ -114,7 +113,7 @@ func appendNumberDataPoints(metricName string, ndps, read, write pdata.NumberDat
 			return fmt.Errorf("metric %v did not contain %v label as expected", metricName, directionLabel)
 		}
 
-		var new pdata.NumberDataPoint
+		var new pmetric.NumberDataPoint
 		switch dir.StringVal() {
 		case readDirection:
 			new = read.AppendEmpty()

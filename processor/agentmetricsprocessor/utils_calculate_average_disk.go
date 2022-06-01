@@ -14,7 +14,7 @@
 
 package agentmetricsprocessor
 
-import "go.opentelemetry.io/collector/model/pdata"
+import "go.opentelemetry.io/collector/pdata/pmetric"
 
 // https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/metrics/semantic_conventions/system-metrics.md#systemdisk---disk-controller-metrics
 const opName = "system.disk.operations"
@@ -23,13 +23,13 @@ const opTimeName = "system.disk.operation_time"
 // system.disk.operations contains the cumulative number of operations per disk and direction
 // system.disk.operation_time contains the cumulative busy time per disk and direction
 
-func (mtp *agentMetricsProcessor) appendAverageDiskMetrics(rms pdata.ResourceMetricsSlice) error {
+func (mtp *agentMetricsProcessor) appendAverageDiskMetrics(rms pmetric.ResourceMetricsSlice) error {
 	for i := 0; i < rms.Len(); i++ {
 		ilms := rms.At(i).ScopeMetrics()
 		for j := 0; j < ilms.Len(); j++ {
 			// Collect the corresponding count and time so they can be divided.
 			newOp := make(map[opKey]opData)
-			var opTimeMetric pdata.Metric
+			var opTimeMetric pmetric.Metric
 			metrics := ilms.At(j).Metrics()
 			for k := 0; k < metrics.Len(); k++ {
 				metric := metrics.At(k)
@@ -54,7 +54,7 @@ func (mtp *agentMetricsProcessor) appendAverageDiskMetrics(rms pdata.ResourceMet
 							op = mtp.prevOp[key]
 						}
 						// Can't just save ndp because it is overwritten by OT.
-						ndp2 := pdata.NewNumberDataPoint()
+						ndp2 := pmetric.NewNumberDataPoint()
 						ndp.CopyTo(ndp2)
 						switch metric.Name() {
 						case opName:
@@ -73,7 +73,7 @@ func (mtp *agentMetricsProcessor) appendAverageDiskMetrics(rms pdata.ResourceMet
 				continue
 			}
 			// Generate a new metric from the operation count and time for each disk and direction.
-			ndps := pdata.NewNumberDataPointSlice()
+			ndps := pmetric.NewNumberDataPointSlice()
 			for key, new := range newOp {
 				prev, prevOk := mtp.prevOp[key]
 				t := new.time.DoubleVal()

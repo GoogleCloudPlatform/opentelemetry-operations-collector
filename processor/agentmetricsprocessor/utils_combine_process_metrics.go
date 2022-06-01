@@ -19,8 +19,7 @@ import (
 	"strconv"
 	"strings"
 
-	"go.opentelemetry.io/collector/model/pdata"
-	conventions "go.opentelemetry.io/collector/model/semconv/v1.5.0"
+	conventions "go.opentelemetry.io/collector/model/semconv/v1.9.0"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 )
@@ -50,7 +49,7 @@ import (
 // * There is at most one resource metrics slice without process resource info (will raise error if not)
 // * There is no other resource info supplied that needs to be retained (info may be silently lost if it exists)
 
-func combineProcessMetrics(rms pdata.ResourceMetricsSlice) error {
+func combineProcessMetrics(rms pmetric.ResourceMetricsSlice) error {
 	// create collection of combined process metrics, disregarding any ResourceMetrics
 	// with no process resource attributes as "otherMetrics"
 	processMetrics, otherMetrics, err := createProcessMetrics(rms)
@@ -72,9 +71,9 @@ func combineProcessMetrics(rms pdata.ResourceMetricsSlice) error {
 	return nil
 }
 
-func createProcessMetrics(rms pdata.ResourceMetricsSlice) (processMetrics convertedMetrics, otherMetrics pdata.ResourceMetricsSlice, err error) {
+func createProcessMetrics(rms pmetric.ResourceMetricsSlice) (processMetrics convertedMetrics, otherMetrics pmetric.ResourceMetricsSlice, err error) {
 	processMetrics = convertedMetrics{}
-	otherMetrics = pdata.NewResourceMetricsSlice()
+	otherMetrics = pmetric.NewResourceMetricsSlice()
 
 	for i := 0; i < rms.Len(); i++ {
 		rm := rms.At(i)
@@ -108,9 +107,9 @@ const processAttributePrefix = "process."
 
 // includesProcessAttributes returns true if the resource includes
 // any attributes with a "process." prefix
-func includesProcessAttributes(resource pdata.Resource) bool {
+func includesProcessAttributes(resource pcommon.Resource) bool {
 	includesProcessAttributes := false
-	resource.Attributes().Range(func(k string, _ pdata.Value) bool {
+	resource.Attributes().Range(func(k string, _ pcommon.Value) bool {
 		if strings.HasPrefix(k, processAttributePrefix) {
 			includesProcessAttributes = true
 			return false
@@ -128,14 +127,14 @@ type convertedMetrics map[string]*convertedMetric
 // associated converted metric (creating this metric if it doesn't exist yet),
 // and appends the provided resource attributes as labels against these
 // data points.
-func (cms convertedMetrics) append(metric pdata.Metric, resource pdata.Resource) error {
+func (cms convertedMetrics) append(metric pmetric.Metric, resource pcommon.Resource) error {
 	cm := cms.getOrCreate(metric)
 	return cm.append(metric, resource)
 }
 
 // getOrCreate returns the converted metric associated with a given metric
 // name (creating this metric if it doesn't exist yet).
-func (cms convertedMetrics) getOrCreate(metric pdata.Metric) *convertedMetric {
+func (cms convertedMetrics) getOrCreate(metric pmetric.Metric) *convertedMetric {
 	// if we have an existing converted metric, return this
 	metricName := metric.Name()
 	if cm, ok := cms[metricName]; ok {
@@ -149,15 +148,15 @@ func (cms convertedMetrics) getOrCreate(metric pdata.Metric) *convertedMetric {
 	return cm
 }
 
-// convertedMetric is a pdata.Metric with process information stored as labels.
+// convertedMetric is a pmetric.Metric with process information stored as labels.
 type convertedMetric struct {
-	pdata.Metric
+	pmetric.Metric
 }
 
 // append appends the data points associated with the provided metric to the
 // converted metric and appends the provided resource attributes as labels
 // against these data points.
-func (cm convertedMetric) append(metric pdata.Metric, resource pdata.Resource) error {
+func (cm convertedMetric) append(metric pmetric.Metric, resource pcommon.Resource) error {
 	var err error
 
 	switch t := metric.DataType(); t {
@@ -170,7 +169,7 @@ func (cm convertedMetric) append(metric pdata.Metric, resource pdata.Resource) e
 	return err
 }
 
-func appendNumberDataSlice(ndps, converted pdata.NumberDataPointSlice, resource pdata.Resource) error {
+func appendNumberDataSlice(ndps, converted pmetric.NumberDataPointSlice, resource pcommon.Resource) error {
 	for i := 0; i < ndps.Len(); i++ {
 		err := appendAttributesToLabels(ndps.At(i).Attributes(), resource.Attributes())
 		if err != nil {
@@ -183,9 +182,9 @@ func appendNumberDataSlice(ndps, converted pdata.NumberDataPointSlice, resource 
 
 // appendAttributesToLabels appends the provided attributes to the provided labels map.
 // This requires converting the attributes to string format.
-func appendAttributesToLabels(labels pdata.Map, attributes pdata.Map) error {
+func appendAttributesToLabels(labels pcommon.Map, attributes pcommon.Map) error {
 	var err error
-	attributes.Range(func(k string, v pdata.Value) bool {
+	attributes.Range(func(k string, v pcommon.Value) bool {
 		// break if error has occurred in previous iteration
 		if err != nil {
 			return false
@@ -226,7 +225,7 @@ func toCloudMonitoringLabel(resourceAttributeKey string) string {
 	}
 }
 
-func stringValue(attributeValue pdata.Value) (string, error) {
+func stringValue(attributeValue pcommon.Value) (string, error) {
 	var stringValue string
 	switch t := attributeValue.Type(); t {
 	case pcommon.ValueTypeBool:

@@ -17,7 +17,7 @@ package casttosumprocessor
 import (
 	"context"
 
-	"go.opentelemetry.io/collector/model/pdata"
+	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.uber.org/zap"
 )
@@ -39,7 +39,7 @@ func newCastToSumProcessor(config *Config, logger *zap.Logger) *CastToSumProcess
 }
 
 // ProcessMetrics implements the MProcessor interface.
-func (ctsp *CastToSumProcessor) ProcessMetrics(ctx context.Context, metrics pdata.Metrics) (pdata.Metrics, error) {
+func (ctsp *CastToSumProcessor) ProcessMetrics(ctx context.Context, metrics pmetric.Metrics) (pmetric.Metrics, error) {
 	for i := 0; i < metrics.ResourceMetrics().Len(); i++ {
 		rms := metrics.ResourceMetrics().At(i)
 		ctsp.transformMetrics(rms)
@@ -48,7 +48,7 @@ func (ctsp *CastToSumProcessor) ProcessMetrics(ctx context.Context, metrics pdat
 	return metrics, nil
 }
 
-func (ctsp *CastToSumProcessor) transformMetrics(rms pdata.ResourceMetrics) {
+func (ctsp *CastToSumProcessor) transformMetrics(rms pmetric.ResourceMetrics) {
 	ilms := rms.ScopeMetrics()
 	for j := 0; j < ilms.Len(); j++ {
 		ilm := ilms.At(j).Metrics()
@@ -69,12 +69,12 @@ func sliceContains(names []string, name string) bool {
 }
 
 // processMetric processes a supported metric.
-func (ctsp *CastToSumProcessor) processMetric(resource pdata.Resource, metric pdata.Metric) {
+func (ctsp *CastToSumProcessor) processMetric(resource pcommon.Resource, metric pmetric.Metric) {
 	if !sliceContains(ctsp.Metrics, metric.Name()) {
 		return
 	}
 	if metric.DataType() == pmetric.MetricDataTypeGauge {
-		newMetric := pdata.NewMetric()
+		newMetric := pmetric.NewMetric()
 		metric.CopyTo(newMetric)
 		newMetric.SetDataType(pmetric.MetricDataTypeSum)
 		metric.Gauge().DataPoints().CopyTo(newMetric.Sum().DataPoints())

@@ -15,7 +15,6 @@
 package agentmetricsprocessor
 
 import (
-	"go.opentelemetry.io/collector/model/pdata"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
@@ -35,8 +34,8 @@ func commonAverageDiskInput(b metricsBuilder) {
 	mb2.addIntDataPoint(20, map[string]string{"device": "hdb", "direction": "write"})
 }
 
-func generateAverageDiskInput() pdata.Metrics {
-	input := pdata.NewMetrics()
+func generateAverageDiskInput() pmetric.Metrics {
+	input := pmetric.NewMetrics()
 
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
@@ -48,9 +47,9 @@ func generateAverageDiskInput() pdata.Metrics {
 }
 
 func od(ops int64, time, cum float64) opData {
-	opsDp := pdata.NewNumberDataPoint()
+	opsDp := pmetric.NewNumberDataPoint()
 	opsDp.SetIntVal(ops)
-	timeDp := pdata.NewNumberDataPoint()
+	timeDp := pmetric.NewNumberDataPoint()
 	timeDp.SetDoubleVal(time)
 	return opData{
 		opsDp,
@@ -68,8 +67,8 @@ func generateAverageDiskPrevOpInput() map[opKey]opData {
 	}
 }
 
-func generateAverageDiskExpected() pdata.Metrics {
-	expected := pdata.NewMetrics()
+func generateAverageDiskExpected() pmetric.Metrics {
+	expected := pmetric.NewMetrics()
 
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
@@ -84,8 +83,8 @@ func generateAverageDiskExpected() pdata.Metrics {
 
 const twoSeconds = 2000000000
 
-func generateAverageDiskPrevExpected() pdata.Metrics {
-	expected := pdata.NewMetrics()
+func generateAverageDiskPrevExpected() pmetric.Metrics {
+	expected := pmetric.NewMetrics()
 
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)

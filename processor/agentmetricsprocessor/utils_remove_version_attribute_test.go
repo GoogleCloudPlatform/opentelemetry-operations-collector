@@ -15,12 +15,11 @@
 package agentmetricsprocessor
 
 import (
-	"go.opentelemetry.io/collector/model/pdata"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
-func generateVersionInput() pdata.Metrics {
-	input := pdata.NewMetrics()
+func generateVersionInput() pmetric.Metrics {
+	input := pmetric.NewMetrics()
 
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
@@ -35,8 +34,8 @@ func generateVersionInput() pdata.Metrics {
 	return input
 }
 
-func generateVersionExpected() pdata.Metrics {
-	input := pdata.NewMetrics()
+func generateVersionExpected() pmetric.Metrics {
+	input := pmetric.NewMetrics()
 
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
@@ -51,8 +50,8 @@ func generateVersionExpected() pdata.Metrics {
 	return input
 }
 
-func generateMultiAttrVersionInput() pdata.Metrics {
-	input := pdata.NewMetrics()
+func generateMultiAttrVersionInput() pmetric.Metrics {
+	input := pmetric.NewMetrics()
 
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
@@ -67,8 +66,8 @@ func generateMultiAttrVersionInput() pdata.Metrics {
 	return input
 }
 
-func generateMultiAttrVersionExpected() pdata.Metrics {
-	input := pdata.NewMetrics()
+func generateMultiAttrVersionExpected() pmetric.Metrics {
+	input := pmetric.NewMetrics()
 
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)

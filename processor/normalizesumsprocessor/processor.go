@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"strings"
 
-	"go.opentelemetry.io/collector/model/pdata"
+	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.uber.org/zap"
 )
@@ -35,7 +35,7 @@ type NormalizeSumsProcessor struct {
 }
 
 type startPoint struct {
-	start, last pdata.NumberDataPoint
+	start, last pmetric.NumberDataPoint
 }
 
 func newNormalizeSumsProcessor(logger *zap.Logger) *NormalizeSumsProcessor {
@@ -46,7 +46,7 @@ func newNormalizeSumsProcessor(logger *zap.Logger) *NormalizeSumsProcessor {
 }
 
 // ProcessMetrics implements the MProcessor interface.
-func (nsp *NormalizeSumsProcessor) ProcessMetrics(ctx context.Context, metrics pdata.Metrics) (pdata.Metrics, error) {
+func (nsp *NormalizeSumsProcessor) ProcessMetrics(ctx context.Context, metrics pmetric.Metrics) (pmetric.Metrics, error) {
 	for i := 0; i < metrics.ResourceMetrics().Len(); i++ {
 		rms := metrics.ResourceMetrics().At(i)
 		nsp.transformMetrics(rms)
@@ -55,11 +55,11 @@ func (nsp *NormalizeSumsProcessor) ProcessMetrics(ctx context.Context, metrics p
 	return metrics, nil
 }
 
-func (nsp *NormalizeSumsProcessor) transformMetrics(rms pdata.ResourceMetrics) {
+func (nsp *NormalizeSumsProcessor) transformMetrics(rms pmetric.ResourceMetrics) {
 	ilms := rms.ScopeMetrics()
 	for j := 0; j < ilms.Len(); j++ {
 		ilm := ilms.At(j).Metrics()
-		newSlice := pdata.NewMetricSlice()
+		newSlice := pmetric.NewMetricSlice()
 		for k := 0; k < ilm.Len(); k++ {
 			metric := ilm.At(k)
 			if metric.DataType() == pmetric.MetricDataTypeSum && metric.Sum().IsMonotonic() {
@@ -80,7 +80,7 @@ func (nsp *NormalizeSumsProcessor) transformMetrics(rms pdata.ResourceMetrics) {
 
 // processMetric processes a Sum-type metric.
 // It returns a boolean that indicates if the metric should be kept.
-func (nsp *NormalizeSumsProcessor) processMetric(resource pdata.Resource, metric pdata.Metric) bool {
+func (nsp *NormalizeSumsProcessor) processMetric(resource pcommon.Resource, metric pmetric.Metric) bool {
 	dps := metric.Sum().DataPoints()
 
 	// Only transform data when the StartTimestamp was not set
@@ -88,7 +88,7 @@ func (nsp *NormalizeSumsProcessor) processMetric(resource pdata.Resource, metric
 		return true
 	}
 
-	out := pdata.NewNumberDataPointSlice()
+	out := pmetric.NewNumberDataPointSlice()
 	out.EnsureCapacity(dps.Len())
 
 	for i := 0; i < dps.Len(); i++ {
@@ -102,16 +102,16 @@ func (nsp *NormalizeSumsProcessor) processMetric(resource pdata.Resource, metric
 	return false
 }
 
-func (nsp *NormalizeSumsProcessor) processSumDataPoint(dp pdata.NumberDataPoint, resource pdata.Resource, metric pdata.Metric, ndps pdata.NumberDataPointSlice) {
+func (nsp *NormalizeSumsProcessor) processSumDataPoint(dp pmetric.NumberDataPoint, resource pcommon.Resource, metric pmetric.Metric, ndps pmetric.NumberDataPointSlice) {
 	metricIdentifier := dataPointIdentifier(resource, metric, dp.Attributes())
 
 	start := nsp.history[metricIdentifier]
 	// If this is the first time we've observed this unique metric,
 	// record it as the start point and do not report this data point
 	if start == nil {
-		newDP := pdata.NewNumberDataPoint()
+		newDP := pmetric.NewNumberDataPoint()
 		dp.CopyTo(newDP)
-		newDP2 := pdata.NewNumberDataPoint()
+		newDP2 := pmetric.NewNumberDataPoint()
 		newDP.CopyTo(newDP2)
 
 		newStart := startPoint{
@@ -157,18 +157,18 @@ func (nsp *NormalizeSumsProcessor) processSumDataPoint(dp pdata.NumberDataPoint,
 	newDP.SetStartTimestamp(start.start.Timestamp())
 }
 
-func dataPointIdentifier(resource pdata.Resource, metric pdata.Metric, labels pdata.Map) string {
+func dataPointIdentifier(resource pcommon.Resource, metric pmetric.Metric, labels pcommon.Map) string {
 	var b strings.Builder
 
 	// Resource identifiers
-	resource.Attributes().Sort().Range(func(k string, v pdata.Value) bool {
+	resource.Attributes().Sort().Range(func(k string, v pcommon.Value) bool {
 		fmt.Fprintf(&b, "%s=%s|", k, v.AsString())
 		return true
 	})
 
 	// Metric identifiers
 	fmt.Fprintf(&b, " - %s", metric.Name())
-	labels.Sort().Range(func(k string, v pdata.Value) bool {
+	labels.Sort().Range(func(k string, v pcommon.Value) bool {
 		fmt.Fprintf(&b, " %s=%s", k, v.AsString())
 		return true
 	})

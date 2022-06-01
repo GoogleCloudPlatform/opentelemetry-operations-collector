@@ -19,7 +19,6 @@ import (
 	"regexp"
 	"sync"
 
-	"go.opentelemetry.io/collector/model/pdata"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.uber.org/multierr"
 	"go.uber.org/zap"
@@ -33,8 +32,8 @@ type opKey struct {
 }
 
 type opData struct {
-	operations pdata.NumberDataPoint
-	time       pdata.NumberDataPoint
+	operations pmetric.NumberDataPoint
+	time       pmetric.NumberDataPoint
 	cumAvgTime float64
 }
 
@@ -56,7 +55,7 @@ func newAgentMetricsProcessor(logger *zap.Logger, cfg *Config) *agentMetricsProc
 }
 
 // ProcessMetrics implements the MProcessor interface.
-func (mtp *agentMetricsProcessor) ProcessMetrics(ctx context.Context, metrics pdata.Metrics) (pdata.Metrics, error) {
+func (mtp *agentMetricsProcessor) ProcessMetrics(ctx context.Context, metrics pmetric.Metrics) (pmetric.Metrics, error) {
 	convertNonMonotonicSumsToGauges(metrics.ResourceMetrics())
 	removeVersionAttribute(metrics.ResourceMetrics())
 
@@ -94,14 +93,14 @@ func (mtp *agentMetricsProcessor) ProcessMetrics(ctx context.Context, metrics pd
 }
 
 // newMetric creates a new metric with no data points using the provided descriptor info
-func newMetric(metric pdata.Metric) pdata.Metric {
+func newMetric(metric pmetric.Metric) pmetric.Metric {
 	return newMetricWithName(metric, "")
 }
 
 // newMetric creates a new metric with no data points using the provided descriptor info
 // and overrides the name with the supplied value
-func newMetricWithName(metric pdata.Metric, name string) pdata.Metric {
-	new := pdata.NewMetric()
+func newMetricWithName(metric pmetric.Metric, name string) pmetric.Metric {
+	new := pmetric.NewMetric()
 
 	if name != "" {
 		new.SetName(name)

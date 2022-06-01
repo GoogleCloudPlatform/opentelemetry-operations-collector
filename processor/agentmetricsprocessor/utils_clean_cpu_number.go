@@ -17,12 +17,11 @@ package agentmetricsprocessor
 import (
 	"strings"
 
-	"go.opentelemetry.io/collector/model/pdata"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
-func cleanCPUNumber(rms pdata.ResourceMetricsSlice) error {
+func cleanCPUNumber(rms pmetric.ResourceMetricsSlice) error {
 	for i := 0; i < rms.Len(); i++ {
 		ilms := rms.At(i).ScopeMetrics()
 		for j := 0; j < ilms.Len(); j++ {
@@ -41,10 +40,10 @@ func cleanCPUNumber(rms pdata.ResourceMetricsSlice) error {
 }
 
 type labelsMapper interface {
-	Attributes() pdata.Map
+	Attributes() pcommon.Map
 }
 
-func forEachPoint(metric pdata.Metric, fn func(labelsMapper) error) error {
+func forEachPoint(metric pmetric.Metric, fn func(labelsMapper) error) error {
 	switch t := metric.DataType(); t {
 	case pmetric.MetricDataTypeSum:
 		dp := metric.Sum().DataPoints()

@@ -15,13 +15,13 @@
 package agentmetricsprocessor
 
 import (
-	"go.opentelemetry.io/collector/model/pdata"
 	"go.opentelemetry.io/collector/pdata/pcommon"
+	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
 const labelName = "blank"
 
-func (mtp *agentMetricsProcessor) addBlankLabel(rms pdata.ResourceMetricsSlice) error {
+func (mtp *agentMetricsProcessor) addBlankLabel(rms pmetric.ResourceMetricsSlice) error {
 	for i := 0; i < rms.Len(); i++ {
 		ilms := rms.At(i).ScopeMetrics()
 		for j := 0; j < ilms.Len(); j++ {

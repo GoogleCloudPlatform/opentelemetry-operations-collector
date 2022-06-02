@@ -676,6 +676,8 @@ github.com/open-telemetry/opentelemetry-collector-contrib/receiver/couchdbreceiv
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/couchdbreceiver v0.53.0/go.mod h1:wYVPnfYqkNPLTS0GZFwuXh0b2e7xogXZm+ZssAD6UXc=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/elasticsearchreceiver v0.53.0 h1:fjzl+ZvXQcOschbBcJ+MH1w1f3qs+1iQZQ0AqKv3p4w=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/elasticsearchreceiver v0.53.0/go.mod h1:q2bBqzXO/mIq96O+qI4PY1DRElCZW3tRniAvOqlD9po=
+github.com/open-telemetry/opentelemetry-collector-contrib/receiver/flinkmetricsreceiver v0.53.0 h1:ozmV7cP3HFo35OEIH7PtfWoaiDF+aMh+q6AdTgaeS/0=
+github.com/open-telemetry/opentelemetry-collector-contrib/receiver/flinkmetricsreceiver v0.53.0/go.mod h1:RBGJJ4wyPuQIHR2ZcykAYdQDMzUdTjks7d7cdhRofQE=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver v0.53.0 h1:ouZJjcqhuGTOoj6Vup8NBFgoiJxXNMMO0r5ugA1vDjo=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver v0.53.0/go.mod h1:4AaCjW12+2WW3KmLrlvx9QsUtsphLT7gK3kMaKzelnw=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/iisreceiver v0.53.0 h1:3f6Uz06f+GraalELZ2Y/G8F/V7DBtnBvH2yrH3aBWDg=

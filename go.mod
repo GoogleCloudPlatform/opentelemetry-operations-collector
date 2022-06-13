@@ -14,6 +14,7 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/apachereceiver v0.53.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/couchdbreceiver v0.53.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/elasticsearchreceiver v0.53.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/flinkmetricsreceiver v0.53.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver v0.53.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/iisreceiver v0.53.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver v0.53.0

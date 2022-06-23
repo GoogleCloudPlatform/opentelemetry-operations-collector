@@ -28,7 +28,7 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver v0.54.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/rabbitmqreceiver v0.54.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/redisreceiver v0.54.0
-	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/saphanareceiver v0.54.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/saphanareceiver v0.54.1-0.20220623170949-ecc699eaa886
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/sqlserverreceiver v0.54.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowsperfcountersreceiver v0.54.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/zookeeperreceiver v0.54.0

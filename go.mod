@@ -9,7 +9,7 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor v0.53.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor v0.53.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourceprocessor v0.53.0
-	github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor v0.53.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor v0.53.1-0.20220621145410-b7d9045a74df
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/activedirectorydsreceiver v0.53.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/aerospikereceiver v0.0.0-20220617145750-a231993a6b1a
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/apachereceiver v0.53.0
@@ -33,7 +33,7 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowsperfcountersreceiver v0.53.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/zookeeperreceiver v0.53.0
 	github.com/shirou/gopsutil v3.21.10+incompatible
-	github.com/stretchr/testify v1.7.2
+	github.com/stretchr/testify v1.7.3
 	go.opentelemetry.io/collector v0.53.1-0.20220615184617-4cefca87d2c6
 	go.opentelemetry.io/collector/model v0.50.0
 	go.opentelemetry.io/collector/pdata v0.53.1-0.20220615184617-4cefca87d2c6
@@ -191,7 +191,7 @@ require (
 	github.com/spf13/cast v1.5.0 // indirect
 	github.com/spf13/cobra v1.4.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	github.com/stretchr/objx v0.2.0 // indirect
+	github.com/stretchr/objx v0.4.0 // indirect
 	github.com/tklauser/go-sysconf v0.3.10 // indirect
 	github.com/tklauser/numcpus v0.4.0 // indirect
 	github.com/vultr/govultr/v2 v2.17.0 // indirect

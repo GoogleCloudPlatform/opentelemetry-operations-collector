@@ -714,6 +714,8 @@ github.com/open-telemetry/opentelemetry-collector-contrib/receiver/redisreceiver
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/redisreceiver v0.54.0/go.mod h1:spdheyNiOb+RG/tTLc1NOa/Ip4svsKQHWNuYEA+JOrs=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/saphanareceiver v0.54.0 h1:5/K/5RmfV+Lhu6Hh43PUhZhlrZPIr8EyP55WA3gmjKY=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/saphanareceiver v0.54.0/go.mod h1:+8nHtu62ZGsXTUka8lnKGULLA2kz0GRUYBbcrwjDjvI=
+github.com/open-telemetry/opentelemetry-collector-contrib/receiver/saphanareceiver v0.54.1-0.20220623170949-ecc699eaa886 h1:F++JiRCfY2HpqQorBcbyjGnwxmww7bwq8jM2rrJowi8=
+github.com/open-telemetry/opentelemetry-collector-contrib/receiver/saphanareceiver v0.54.1-0.20220623170949-ecc699eaa886/go.mod h1:+8nHtu62ZGsXTUka8lnKGULLA2kz0GRUYBbcrwjDjvI=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/sqlserverreceiver v0.54.0 h1:AJJmbqF1xZupLwkFu9FEPm0ngx16O8oj61KBKHeVqnU=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/sqlserverreceiver v0.54.0/go.mod h1:jO3pQPYr6mJT3xDZ00IIZgdQvG6eGVrGkcmdSrUkty8=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowsperfcountersreceiver v0.54.0 h1:1WQgxXxr6jSnTZrBo3/z9DKDoOPEbbub+Qr3iyu5G/A=

@@ -20,10 +20,10 @@ linters:
     - gocritic
     - gofmt
     - goimports
-    - golint
+    - revive
     - govet
     - misspell
-    - scopelint
+    - exportloopref
     - staticcheck
     - unconvert
 
@@ -31,7 +31,7 @@ issues:
   exclude-rules:
     - path: _test\.go
       linters:
-        - scopelint
+        - exportloopref
 
 linters-settings:
   gofmt:
@@ -41,9 +41,6 @@ linters-settings:
     # put imports beginning with prefix after 3rd-party packages;
     # it's a comma-separated list of prefixes
     local-prefixes: github.com/GoogleCloudPlatform/opentelemetry-operations-collector
-  golint:
-    # minimal confidence for issues, default is 0.8
-    min-confidence: 0.8
   govet:
     # report about shadowed variables
     check-shadowing: true

@@ -525,6 +525,8 @@ github.com/klauspost/compress v1.13.6/go.mod h1:/3/Vjq9QcHkK5uEr5lBEmyoZ1iFhe47e
 github.com/klauspost/compress v1.14.1/go.mod h1:/3/Vjq9QcHkK5uEr5lBEmyoZ1iFhe47etQ6QUkpK6sk=
 github.com/klauspost/compress v1.15.8 h1:JahtItbkWjf2jzm/T+qgMxkP9EMHsqEUA6vCMGmXvhA=
 github.com/klauspost/compress v1.15.8/go.mod h1:PhcZ0MbTNciWF3rruxRgKxI5NkcHHrHUDtV4Yw2GlzU=
+github.com/klauspost/compress v1.15.9 h1:wKRjX6JRtDdrE9qwa4b/Cip7ACOshUI4smpCQanqjSY=
+github.com/klauspost/compress v1.15.9/go.mod h1:PhcZ0MbTNciWF3rruxRgKxI5NkcHHrHUDtV4Yw2GlzU=
 github.com/knadh/koanf v1.4.2 h1:2itp+cdC6miId4pO4Jw7c/3eiYD26Z/Sz3ATJMwHxIs=
 github.com/knadh/koanf v1.4.2/go.mod h1:4NCo0q4pmU398vF9vq2jStF9MWQZ8JEDcDMHlDCr4h0=
 github.com/kolo/xmlrpc v0.0.0-20201022064351-38db28db192b h1:iNjcivnc6lhbvJA3LD622NPrUponluJrBWPIwGG/3Bg=
@@ -707,6 +709,8 @@ github.com/open-telemetry/opentelemetry-collector-contrib/receiver/memcachedrece
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/memcachedreceiver v0.56.0/go.mod h1:QgWy0mmfASAsRSp3zsqM/C8VR2Bgnv5cR0PUCEHWX/4=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/mongodbreceiver v0.56.0 h1:49yNaQp/SmCUrzQDlGtl8o9GHyDwImRLcFhnN4HecME=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/mongodbreceiver v0.56.0/go.mod h1:hnKKW1/1tFvm3UjIVQFLJ1o+eub/brIeJqQjqr0WKZ8=
+github.com/open-telemetry/opentelemetry-collector-contrib/receiver/mongodbreceiver v0.56.1-0.20220801211424-e0f6eb70a5c9 h1:uGTC7jrf/evQjpi+y2tRQwKU3Ie8IDjF6ZdaDZtWhSo=
+github.com/open-telemetry/opentelemetry-collector-contrib/receiver/mongodbreceiver v0.56.1-0.20220801211424-e0f6eb70a5c9/go.mod h1:DJ1vtNerCrIP2pQBaMq3aiLyIABSb1+WewbW2geLDXg=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/mysqlreceiver v0.56.0 h1:USBxHSrsEH/brI9zBHM222GIMm3joU4OKz7dCxpIoJU=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/mysqlreceiver v0.56.0/go.mod h1:2A4IGBCQiCNQZrpxxNcu3AdTvzM9k+6kuDyHRJ3IKDQ=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/nginxreceiver v0.56.0 h1:9I+B46bm64Qgfwu4iVa3n5CEZIN42LQ3b4oagt6kqx0=
@@ -1456,6 +1460,8 @@ google.golang.org/protobuf v1.26.0/go.mod h1:9q0QmTI4eRPtz6boOQmLYwt+qCgq0jsYwAQ
 google.golang.org/protobuf v1.27.1/go.mod h1:9q0QmTI4eRPtz6boOQmLYwt+qCgq0jsYwAQnmE0givc=
 google.golang.org/protobuf v1.28.0 h1:w43yiav+6bVFTBQFZX0r7ipe9JQ1QsbMgHwbBziscLw=
 google.golang.org/protobuf v1.28.0/go.mod h1:HV8QOd/L58Z+nl8r43ehVNZIU/HEI6OcFqwMG9pJV4I=
+google.golang.org/protobuf v1.28.1 h1:d0NfwRgPtno5B1Wa6L2DAG+KivqkdutMf1UhdNx175w=
+google.golang.org/protobuf v1.28.1/go.mod h1:HV8QOd/L58Z+nl8r43ehVNZIU/HEI6OcFqwMG9pJV4I=
 gopkg.in/alecthomas/kingpin.v2 v2.2.6/go.mod h1:FMv+mEhP44yOT+4EoQTLFTRgOQ1FBLkstjWtayDeSgw=
 gopkg.in/asn1-ber.v1 v1.0.0-20181015200546-f715ec2f112d/go.mod h1:cuepJuh7vyXfUyUwEgHQXw849cJrilpS5NeIjOWESAw=
 gopkg.in/check.v1 v0.0.0-20161208181325-20d25e280405/go.mod h1:Co6ibVJAznAaIkqp8huTwlJQCZ016jof/cbN4VW5Yz0=

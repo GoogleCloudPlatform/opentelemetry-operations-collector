@@ -33,7 +33,7 @@ func NewFactory() component.ReceiverFactory {
 	return component.NewReceiverFactory(
 		typeStr,
 		createDefaultConfig,
-		component.WithMetricsReceiver(createMetricsReceiver))
+		component.WithMetricsReceiver(createMetricsReceiver, component.StabilityLevelBeta))
 }
 
 func createDefaultConfig() config.Receiver {

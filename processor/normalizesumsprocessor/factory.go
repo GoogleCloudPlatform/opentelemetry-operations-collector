@@ -32,7 +32,7 @@ func NewFactory() component.ProcessorFactory {
 	return component.NewProcessorFactory(
 		typeStr,
 		createDefaultConfig,
-		component.WithMetricsProcessor(createMetricsProcessor))
+		component.WithMetricsProcessor(createMetricsProcessor, component.StabilityLevelBeta))
 }
 
 func createDefaultConfig() config.Processor {

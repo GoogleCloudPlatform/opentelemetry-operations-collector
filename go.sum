@@ -704,8 +704,8 @@ github.com/open-telemetry/opentelemetry-collector-contrib/receiver/mysqlreceiver
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/mysqlreceiver v0.58.0/go.mod h1:zDtZg0CQ5FmMLYGz+/OZoNMeRUW5QUb522ksTBska78=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/nginxreceiver v0.58.0 h1:fj9S8i9lS3MEEwNs3yrg+wz4qLUO87BMbPO+oW7hi9k=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/nginxreceiver v0.58.0/go.mod h1:TjlzURMJEy/vRiW2okVNv6ItMH5cBn9UNcKStkbFPvU=
-github.com/open-telemetry/opentelemetry-collector-contrib/receiver/postgresqlreceiver v0.58.0 h1:Nmx6dQ1RcRxOG0I+bEHmW5BNOcMPqE8HNOyuuVQTd9Q=
-github.com/open-telemetry/opentelemetry-collector-contrib/receiver/postgresqlreceiver v0.58.0/go.mod h1:OQXzlLKT8QT/8xeZrshXjzXyno8eSmfxwv5D+X0+SHE=
+github.com/open-telemetry/opentelemetry-collector-contrib/receiver/postgresqlreceiver v0.58.1-0.20220822190726-74e0dd335c6a h1:+t/KgSNsZb0qWn8j2Fqf9JoUR1xMVlDbbjjVbVsNln8=
+github.com/open-telemetry/opentelemetry-collector-contrib/receiver/postgresqlreceiver v0.58.1-0.20220822190726-74e0dd335c6a/go.mod h1:pTDyJU7dHSuRxX0ySx7vHlR2NTkzapBYOaL5/VE1g4A=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusexecreceiver v0.58.0 h1:0jVtSVSCfcNFzIzSxZGcgPyzgN4hpdWeuRcgcWHd3wM=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusexecreceiver v0.58.0/go.mod h1:bSU0yDs9B/AqEDWFzVqe3bh7FhuJQ6p4j0zrK/Dr1Hc=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver v0.58.0 h1:uPBQP0oXZRB87pQN4QkvrPUF9YvmGKCYTcQdxhJp9y0=
@@ -914,8 +914,8 @@ go.opentelemetry.io/otel/trace v1.9.0/go.mod h1:2737Q0MuG8q1uILYm2YYVkAyLtOofiTN
 go.opentelemetry.io/proto/otlp v0.7.0/go.mod h1:PqfVotwruBrMGOCsRd/89rSnXhoiJIqeYNgFYFoEGnI=
 go.opentelemetry.io/proto/otlp v0.15.0/go.mod h1:H7XAot3MsfNsj7EXtrA2q5xSNQ10UqI405h3+duxN4U=
 go.uber.org/atomic v1.7.0/go.mod h1:fEN4uk6kAWBTFdckzkM89CLk9XfWZrxpCo0nPH17wJc=
-go.uber.org/atomic v1.9.0 h1:ECmE8Bn/WFTYwEW/bpKD3M8VtR/zQVbavAoalC1PYyE=
-go.uber.org/atomic v1.9.0/go.mod h1:fEN4uk6kAWBTFdckzkM89CLk9XfWZrxpCo0nPH17wJc=
+go.uber.org/atomic v1.10.0 h1:9qC72Qh0+3MqyJbAn8YU5xVq1frD8bn3JtD2oXtafVQ=
+go.uber.org/atomic v1.10.0/go.mod h1:LUxbIzbOniOlMKjJjyPfpl4v+PKK2cNJn91OQbhoJI0=
 go.uber.org/goleak v1.1.12 h1:gZAh5/EyT/HQwlpkCy6wTpqfH9H8Lz8zbm3dZh+OyzA=
 go.uber.org/goleak v1.1.12/go.mod h1:cwTWslyiVhfpKIDGSZEM2HlOvcqm+tG4zioyIeLoqMQ=
 go.uber.org/multierr v1.8.0 h1:dg6GjLku4EH+249NNmoIciG9N/jURbDG+pFlTkhzIC8=

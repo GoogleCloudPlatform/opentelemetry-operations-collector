@@ -80,7 +80,9 @@ func TestNormalizeSumsProcessor(t *testing.T) {
 			tmn := &consumertest.MetricsSink{}
 			id := config.NewComponentID(typeStr)
 			settings := config.NewProcessorSettings(id)
-			rmp, err := processorhelper.NewMetricsProcessor(
+			rmp, err := processorhelper.NewMetricsProcessorWithCreateSettings(
+				context.Background(),
+				componenttest.NewNopProcessorCreateSettings(),
 				&Config{
 					ProcessorSettings: &settings,
 				},

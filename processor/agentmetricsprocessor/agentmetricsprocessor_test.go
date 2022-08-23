@@ -98,7 +98,9 @@ func TestAgentMetricsProcessor(t *testing.T) {
 			})
 
 			tmn := &consumertest.MetricsSink{}
-			rmp, err := processorhelper.NewMetricsProcessor(
+			rmp, err := processorhelper.NewMetricsProcessorWithCreateSettings(
+				context.Background(),
+				componenttest.NewNopProcessorCreateSettings(),
 				&Config{
 					ProcessorSettings: config.NewProcessorSettings(config.NewComponentID(typeStr)),
 				},

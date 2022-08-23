@@ -46,7 +46,7 @@ func createDefaultConfig() config.Processor {
 var processorCapabilities = consumer.Capabilities{MutatesData: true}
 
 func createMetricsProcessor(
-	_ context.Context,
+	ctx context.Context,
 	params component.ProcessorCreateSettings,
 	cfg config.Processor,
 	nextConsumer consumer.Metrics,
@@ -61,7 +61,9 @@ func createMetricsProcessor(
 	}
 
 	metricsProcessor := newCastToSumProcessor(processorConfig, params.Logger)
-	return processorhelper.NewMetricsProcessor(
+	return processorhelper.NewMetricsProcessorWithCreateSettings(
+		ctx,
+		params,
 		cfg,
 		nextConsumer,
 		metricsProcessor.ProcessMetrics,

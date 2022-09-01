@@ -88,7 +88,7 @@ func TestCastToSumProcessor(t *testing.T) {
 			nsp := newCastToSumProcessor(cfg, zap.NewExample())
 
 			tmn := &consumertest.MetricsSink{}
-			rmp, err := processorhelper.NewMetricsProcessorWithCreateSettings(
+			rmp, err := processorhelper.NewMetricsProcessor(
 				context.Background(),
 				componenttest.NewNopProcessorCreateSettings(),
 				cfg,

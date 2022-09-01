@@ -61,7 +61,7 @@ func createMetricsProcessor(
 	}
 
 	metricsProcessor := newCastToSumProcessor(processorConfig, params.Logger)
-	return processorhelper.NewMetricsProcessorWithCreateSettings(
+	return processorhelper.NewMetricsProcessor(
 		ctx,
 		params,
 		cfg,

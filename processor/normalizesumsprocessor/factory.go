@@ -55,7 +55,7 @@ func createMetricsProcessor(
 		return nil, err
 	}
 	metricsProcessor := newNormalizeSumsProcessor(params.Logger)
-	return processorhelper.NewMetricsProcessorWithCreateSettings(
+	return processorhelper.NewMetricsProcessor(
 		ctx,
 		params,
 		cfg,

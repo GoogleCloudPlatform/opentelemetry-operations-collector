@@ -66,7 +66,7 @@ func forEachPoint(metric pmetric.Metric, fn func(labelsMapper) error) error {
 func cleanCPUNumberDataPoint(lm labelsMapper) error {
 	sm := lm.Attributes()
 	if value, ok := sm.Get("cpu"); ok {
-		sm.Update("cpu", pcommon.NewValueString(strings.TrimPrefix(value.StringVal(), "cpu")))
+		sm.UpdateString("cpu", strings.TrimPrefix(value.StringVal(), "cpu"))
 	}
 	return nil
 }

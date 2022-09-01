@@ -51,7 +51,7 @@ func createMetricsProcessor(
 ) (component.MetricsProcessor, error) {
 	// NewMetricsProcess takes an MProcessor, which is what agentMetricsProcessor implements, and returns a MetricsProcessor.
 	mProcessor := newAgentMetricsProcessor(params.Logger, cfg.(*Config))
-	return processorhelper.NewMetricsProcessorWithCreateSettings(
+	return processorhelper.NewMetricsProcessor(
 		ctx,
 		params,
 		cfg,

@@ -30,7 +30,7 @@ import (
 
 func main() {
 	if err := env.Create(); err != nil {
-		log.Fatalf("failed to build environment variables for config: %v", err)
+		log.Printf("failed to build environment variables for config: %v", err)
 	}
 
 	factories, err := components()

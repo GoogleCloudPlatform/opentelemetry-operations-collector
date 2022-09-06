@@ -656,8 +656,8 @@ github.com/open-telemetry/opentelemetry-collector-contrib/internal/scrapertest v
 github.com/open-telemetry/opentelemetry-collector-contrib/internal/sharedcomponent v0.59.0 h1:kaSqabTOdLy7E+5vC8K0xCJVPFANa4LMJvpaTo8MV6o=
 github.com/open-telemetry/opentelemetry-collector-contrib/internal/sharedcomponent v0.59.0/go.mod h1:24Z7QmC7MW0nV6/wHEOMIeDCMFfj7t/Qi5PPwotVIfo=
 github.com/open-telemetry/opentelemetry-collector-contrib/pkg/resourcetotelemetry v0.59.0 h1:D9JetxR98ZSGYvJzpA0lIsGFYAuZOIpZ00Tq7Gnty8o=
-github.com/open-telemetry/opentelemetry-collector-contrib/pkg/telemetryquerylanguage v0.59.0 h1:uVQmiE4MY3KfXNkxzCJYnqHEsTWufbaufRmbdfwB/lE=
-github.com/open-telemetry/opentelemetry-collector-contrib/pkg/telemetryquerylanguage v0.59.0/go.mod h1:Z1WlPedBZ9JjN7BW330sdszqMBnxmBtD+Db4OkTI88k=
+github.com/open-telemetry/opentelemetry-collector-contrib/pkg/telemetryquerylanguage v0.59.1-0.20220906184950-aa1c1f330ec9 h1:9T5ir35iiNyc2I0rGEoCzjSPFnznvmyoXXzLpVadG80=
+github.com/open-telemetry/opentelemetry-collector-contrib/pkg/telemetryquerylanguage v0.59.1-0.20220906184950-aa1c1f330ec9/go.mod h1:Ik72N0d4FcOb6d3epDkBTJp3GFHLeo6b65BfQsxep8I=
 github.com/open-telemetry/opentelemetry-collector-contrib/pkg/translator/opencensus v0.59.0 h1:/XBLDr44f+jOy0H5pOjxQu0kemccNsZuhC0ZLM85itw=
 github.com/open-telemetry/opentelemetry-collector-contrib/pkg/translator/opencensus v0.59.0/go.mod h1:kxAMbgw8c6R5bPFylPiXXBdUwaZNP7CI3CECWBHE52g=
 github.com/open-telemetry/opentelemetry-collector-contrib/pkg/translator/prometheus v0.59.0 h1:q93i8ABbyVsMV/0YJvozDlnGaMyzO8OKuyz4/eU2BOA=
@@ -672,8 +672,8 @@ github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedete
 github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor v0.59.0/go.mod h1:U6f1YRLbyDVAUUWHwUD1Ct5Q4kfAWiUsvYoIV6vazmU=
 github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourceprocessor v0.59.0 h1:f7ATuUahmHYNPTI1Wt6GLOoz3WI1VE8/ZGtgNdCWAnU=
 github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourceprocessor v0.59.0/go.mod h1:nhnX/K9se/lAqUHu6mHDVsFZylq3vPUIj1VCuGWyEg0=
-github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor v0.59.1-0.20220906183641-4281e841024d h1:7PGTS9Q0oD3W2EZegoPqn9b7/FPtIPSFO6ackwBtGhk=
-github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor v0.59.1-0.20220906183641-4281e841024d/go.mod h1:JnMJ5uICwCkl5Kjiie5K37uxjhfLl24HXdOMwizKknk=
+github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor v0.59.1-0.20220906184950-aa1c1f330ec9 h1:RQKChGBEuKfjjsA25b9pfV40OvhWDjCeFqmuR9a+dsA=
+github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor v0.59.1-0.20220906184950-aa1c1f330ec9/go.mod h1:JnMJ5uICwCkl5Kjiie5K37uxjhfLl24HXdOMwizKknk=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/activedirectorydsreceiver v0.59.0 h1:7U3SYlOgOrHzmenx/VpN+MHZRRTUNjjq0e0xKhUqK1w=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/activedirectorydsreceiver v0.59.0/go.mod h1:l5fl9bEiXtImPS6Z8b4iOkZbAL5zvFW9GautY+52IvQ=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/aerospikereceiver v0.59.0 h1:DrvYcL91Y4EkfbetGPN6ayKjfx2izzsuTL9OuU21OyA=

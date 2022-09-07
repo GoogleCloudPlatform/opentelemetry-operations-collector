@@ -700,8 +700,8 @@ github.com/open-telemetry/opentelemetry-collector-contrib/receiver/mysqlreceiver
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/mysqlreceiver v0.59.0/go.mod h1:r/giBQOptGKx8Z8BOEUofOhEEe9/MabHcnJdrUfZdkI=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/nginxreceiver v0.59.0 h1:DeM+6ONcd6FZUEAijd0dS9azRfgw6aSEUtRXq5GWjt8=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/nginxreceiver v0.59.0/go.mod h1:iGIVmm9N+UMIdJBXyjf+AgF62hX8/E0lWH/5ddx0nWc=
-github.com/open-telemetry/opentelemetry-collector-contrib/receiver/postgresqlreceiver v0.59.0 h1:96qTnkl8vUYZSk+BqdjGNNWJa901EcWI/GErLnRb85s=
-github.com/open-telemetry/opentelemetry-collector-contrib/receiver/postgresqlreceiver v0.59.0/go.mod h1:yRhjVohsuFC+vxsVppyakQzapJmJw56lw6ZVtjtBHPA=
+github.com/open-telemetry/opentelemetry-collector-contrib/receiver/postgresqlreceiver v0.59.1-0.20220907165338-7ae3abe55c1d h1:Wj57293SRhRyBFSf8+Mk+71jMc37OJwDW/9nKFWMqDk=
+github.com/open-telemetry/opentelemetry-collector-contrib/receiver/postgresqlreceiver v0.59.1-0.20220907165338-7ae3abe55c1d/go.mod h1:yRhjVohsuFC+vxsVppyakQzapJmJw56lw6ZVtjtBHPA=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusexecreceiver v0.59.0 h1:njALYrXx2/0tiOX9CKqPXn53IfLtVdPooZTJnproYXA=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusexecreceiver v0.59.0/go.mod h1:tLs7DSzjG1mCdQeioJm1C7k2l7EMR/oY3zrv6NGscG8=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver v0.59.0 h1:2pMZ1ysoTGh6Yu3wWEySd5LikgdG7SregB9SA29gflM=

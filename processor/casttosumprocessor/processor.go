@@ -76,7 +76,7 @@ func (ctsp *CastToSumProcessor) processMetric(resource pcommon.Resource, metric 
 	if metric.DataType() == pmetric.MetricDataTypeGauge {
 		newMetric := pmetric.NewMetric()
 		metric.CopyTo(newMetric)
-		newMetric.SetDataType(pmetric.MetricDataTypeSum)
+		newMetric.SetEmptySum()
 		metric.Gauge().DataPoints().CopyTo(newMetric.Sum().DataPoints())
 		newMetric.CopyTo(metric)
 	} else if metric.DataType() != pmetric.MetricDataTypeSum {

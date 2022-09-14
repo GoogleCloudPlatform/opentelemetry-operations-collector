@@ -77,7 +77,7 @@ func (mtp *agentMetricsProcessor) calculateUtilizationMetric(usageMetric pmetric
 	usageMetric.CopyTo(utilizationMetric)
 
 	utilizationMetric.SetName(metricPostfixRegex.ReplaceAllString(usageMetric.Name(), "utilization"))
-	utilizationMetric.SetDataType(pmetric.MetricDataTypeGauge)
+	utilizationMetric.SetEmptyGauge()
 	utilizationMetric.Gauge()
 
 	metric := usageMetric

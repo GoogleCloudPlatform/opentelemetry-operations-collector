@@ -483,14 +483,15 @@ type metricsBuilder struct {
 func (msb metricsBuilder) addMetric(name string, t pmetric.MetricDataType, isMonotonic bool) metricBuilder {
 	metric := msb.metrics.AppendEmpty()
 	metric.SetName(name)
-	metric.SetDataType(t)
 
 	switch t {
 	case pmetric.MetricDataTypeSum:
+		metric.SetEmptySum()
 		sum := metric.Sum()
 		sum.SetIsMonotonic(isMonotonic)
 		sum.SetAggregationTemporality(pmetric.MetricAggregationTemporalityCumulative)
 	case pmetric.MetricDataTypeGauge:
+		metric.SetEmptyGauge()
 		metric.Gauge()
 	}
 

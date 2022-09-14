@@ -53,7 +53,7 @@ func convertNonMonotonicSumsToGauges(rms pmetric.ResourceMetricsSlice) {
 func convertToGauge(metric pmetric.Metric) {
 	if metric.DataType() == pmetric.MetricDataTypeSum {
 		idps := metric.Sum().DataPoints()
-		metric.SetDataType(pmetric.MetricDataTypeGauge)
+		metric.SetEmptyGauge()
 		metric.Gauge()
 		idps.CopyTo(metric.Gauge().DataPoints())
 	}

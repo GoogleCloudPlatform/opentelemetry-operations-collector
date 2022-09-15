@@ -147,7 +147,16 @@ func (rmsb resourceMetricsBuilder) addResourceMetrics(resourceAttributes map[str
 	rm := rmsb.rms.AppendEmpty()
 
 	for k, v := range resourceAttributes {
-		rm.Resource().Attributes().PutString(k, v.StringVal())
+		switch v.Type() {
+		case pcommon.ValueTypeString:
+			rm.Resource().Attributes().PutString(k, v.StringVal())
+		case pcommon.ValueTypeInt:
+			rm.Resource().Attributes().PutInt(k, v.IntVal())
+		case pcommon.ValueTypeBool:
+			rm.Resource().Attributes().PutBool(k, v.BoolVal())
+		case pcommon.ValueTypeDouble:
+			rm.Resource().Attributes().PutDouble(k, v.DoubleVal())
+		}
 	}
 
 	ilm := rm.ScopeMetrics().AppendEmpty()

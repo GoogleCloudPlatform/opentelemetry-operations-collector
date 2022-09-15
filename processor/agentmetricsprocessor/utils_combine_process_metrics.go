@@ -203,7 +203,7 @@ func appendAttributesToLabels(labels pcommon.Map, attributes pcommon.Map) error 
 			return false
 		}
 
-		labels.Insert(key, pcommon.NewValueString(value))
+		labels.PutString(key, value)
 		return true
 	})
 	return err

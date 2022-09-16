@@ -417,7 +417,16 @@ func (rmsb resourceMetricsBuilder) addResourceMetrics(resourceAttributes map[str
 	rm := rmsb.rms.AppendEmpty()
 
 	for k, v := range resourceAttributes {
-		rm.Resource().Attributes().Insert(k, v)
+		switch v.Type() {
+		case pcommon.ValueTypeString:
+			rm.Resource().Attributes().PutString(k, v.StringVal())
+		case pcommon.ValueTypeInt:
+			rm.Resource().Attributes().PutInt(k, v.IntVal())
+		case pcommon.ValueTypeBool:
+			rm.Resource().Attributes().PutBool(k, v.BoolVal())
+		case pcommon.ValueTypeDouble:
+			rm.Resource().Attributes().PutDouble(k, v.DoubleVal())
+		}
 	}
 
 	ilm := rm.ScopeMetrics().AppendEmpty()
@@ -464,7 +473,7 @@ func (mb metricBuilder) addDoubleDataPoint(value float64, labels map[string]stri
 		ddp = mb.metric.Gauge().DataPoints().AppendEmpty()
 	}
 	for k, v := range labels {
-		ddp.Attributes().InsertString(k, v)
+		ddp.Attributes().PutString(k, v)
 	}
 	ddp.SetDoubleVal(value)
 	ddp.SetTimestamp(pcommon.NewTimestampFromTime(time.Unix(timestamp, 0)))
@@ -482,7 +491,7 @@ func (mb metricBuilder) addIntDataPoint(value int64, labels map[string]string, t
 		idp = mb.metric.Gauge().DataPoints().AppendEmpty()
 	}
 	for k, v := range labels {
-		idp.Attributes().InsertString(k, v)
+		idp.Attributes().PutString(k, v)
 	}
 	idp.SetIntVal(value)
 	idp.SetTimestamp(pcommon.NewTimestampFromTime(time.Unix(timestamp, 0)))

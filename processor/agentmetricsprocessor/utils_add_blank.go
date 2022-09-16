@@ -48,6 +48,6 @@ func (mtp *agentMetricsProcessor) addBlankLabel(rms pmetric.ResourceMetricsSlice
 
 func addBlankLabel(lm labelsMapper) error {
 	sm := lm.Attributes()
-	sm.UpsertString(labelName, "")
+	sm.PutString(labelName, "")
 	return nil
 }

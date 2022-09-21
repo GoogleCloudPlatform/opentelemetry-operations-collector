@@ -5,6 +5,7 @@ package metadata
 import (
 	"time"
 
+	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 )
@@ -67,6 +68,168 @@ func DefaultMetricsSettings() MetricsSettings {
 	}
 }
 
+// AttributeBackendConnectionType specifies the a value backend_connection_type attribute.
+type AttributeBackendConnectionType int
+
+const (
+	_ AttributeBackendConnectionType = iota
+	AttributeBackendConnectionTypeSuccess
+	AttributeBackendConnectionTypeRecycle
+	AttributeBackendConnectionTypeReuse
+	AttributeBackendConnectionTypeFail
+	AttributeBackendConnectionTypeUnhealthy
+	AttributeBackendConnectionTypeBusy
+	AttributeBackendConnectionTypeRetry
+)
+
+// String returns the string representation of the AttributeBackendConnectionType.
+func (av AttributeBackendConnectionType) String() string {
+	switch av {
+	case AttributeBackendConnectionTypeSuccess:
+		return "success"
+	case AttributeBackendConnectionTypeRecycle:
+		return "recycle"
+	case AttributeBackendConnectionTypeReuse:
+		return "reuse"
+	case AttributeBackendConnectionTypeFail:
+		return "fail"
+	case AttributeBackendConnectionTypeUnhealthy:
+		return "unhealthy"
+	case AttributeBackendConnectionTypeBusy:
+		return "busy"
+	case AttributeBackendConnectionTypeRetry:
+		return "retry"
+	}
+	return ""
+}
+
+// MapAttributeBackendConnectionType is a helper map of string to AttributeBackendConnectionType attribute value.
+var MapAttributeBackendConnectionType = map[string]AttributeBackendConnectionType{
+	"success":   AttributeBackendConnectionTypeSuccess,
+	"recycle":   AttributeBackendConnectionTypeRecycle,
+	"reuse":     AttributeBackendConnectionTypeReuse,
+	"fail":      AttributeBackendConnectionTypeFail,
+	"unhealthy": AttributeBackendConnectionTypeUnhealthy,
+	"busy":      AttributeBackendConnectionTypeBusy,
+	"retry":     AttributeBackendConnectionTypeRetry,
+}
+
+// AttributeCacheOperations specifies the a value cache_operations attribute.
+type AttributeCacheOperations int
+
+const (
+	_ AttributeCacheOperations = iota
+	AttributeCacheOperationsHit
+	AttributeCacheOperationsMiss
+	AttributeCacheOperationsHitPass
+)
+
+// String returns the string representation of the AttributeCacheOperations.
+func (av AttributeCacheOperations) String() string {
+	switch av {
+	case AttributeCacheOperationsHit:
+		return "hit"
+	case AttributeCacheOperationsMiss:
+		return "miss"
+	case AttributeCacheOperationsHitPass:
+		return "hit_pass"
+	}
+	return ""
+}
+
+// MapAttributeCacheOperations is a helper map of string to AttributeCacheOperations attribute value.
+var MapAttributeCacheOperations = map[string]AttributeCacheOperations{
+	"hit":      AttributeCacheOperationsHit,
+	"miss":     AttributeCacheOperationsMiss,
+	"hit_pass": AttributeCacheOperationsHitPass,
+}
+
+// AttributeSessionType specifies the a value session_type attribute.
+type AttributeSessionType int
+
+const (
+	_ AttributeSessionType = iota
+	AttributeSessionTypeAccepted
+	AttributeSessionTypeDropped
+	AttributeSessionTypeFailed
+)
+
+// String returns the string representation of the AttributeSessionType.
+func (av AttributeSessionType) String() string {
+	switch av {
+	case AttributeSessionTypeAccepted:
+		return "accepted"
+	case AttributeSessionTypeDropped:
+		return "dropped"
+	case AttributeSessionTypeFailed:
+		return "failed"
+	}
+	return ""
+}
+
+// MapAttributeSessionType is a helper map of string to AttributeSessionType attribute value.
+var MapAttributeSessionType = map[string]AttributeSessionType{
+	"accepted": AttributeSessionTypeAccepted,
+	"dropped":  AttributeSessionTypeDropped,
+	"failed":   AttributeSessionTypeFailed,
+}
+
+// AttributeState specifies the a value state attribute.
+type AttributeState int
+
+const (
+	_ AttributeState = iota
+	AttributeStateReceived
+	AttributeStateDropped
+)
+
+// String returns the string representation of the AttributeState.
+func (av AttributeState) String() string {
+	switch av {
+	case AttributeStateReceived:
+		return "received"
+	case AttributeStateDropped:
+		return "dropped"
+	}
+	return ""
+}
+
+// MapAttributeState is a helper map of string to AttributeState attribute value.
+var MapAttributeState = map[string]AttributeState{
+	"received": AttributeStateReceived,
+	"dropped":  AttributeStateDropped,
+}
+
+// AttributeThreadOperations specifies the a value thread_operations attribute.
+type AttributeThreadOperations int
+
+const (
+	_ AttributeThreadOperations = iota
+	AttributeThreadOperationsCreated
+	AttributeThreadOperationsDestroyed
+	AttributeThreadOperationsFailed
+)
+
+// String returns the string representation of the AttributeThreadOperations.
+func (av AttributeThreadOperations) String() string {
+	switch av {
+	case AttributeThreadOperationsCreated:
+		return "created"
+	case AttributeThreadOperationsDestroyed:
+		return "destroyed"
+	case AttributeThreadOperationsFailed:
+		return "failed"
+	}
+	return ""
+}
+
+// MapAttributeThreadOperations is a helper map of string to AttributeThreadOperations attribute value.
+var MapAttributeThreadOperations = map[string]AttributeThreadOperations{
+	"created":   AttributeThreadOperationsCreated,
+	"destroyed": AttributeThreadOperationsDestroyed,
+	"failed":    AttributeThreadOperationsFailed,
+}
+
 type metricVarnishBackendConnectionCount struct {
 	data     pmetric.Metric // data buffer for generated metric.
 	settings MetricSettings // metric settings provided by user.
@@ -78,7 +241,7 @@ func (m *metricVarnishBackendConnectionCount) init() {
 	m.data.SetName("varnish.backend.connection.count")
 	m.data.SetDescription("The backend connection type count.")
 	m.data.SetUnit("{connections}")
-	m.data.SetDataType(pmetric.MetricDataTypeSum)
+	m.data.SetEmptySum()
 	m.data.Sum().SetIsMonotonic(true)
 	m.data.Sum().SetAggregationTemporality(pmetric.MetricAggregationTemporalityCumulative)
 	m.data.Sum().DataPoints().EnsureCapacity(m.capacity)
@@ -92,7 +255,7 @@ func (m *metricVarnishBackendConnectionCount) recordDataPoint(start pcommon.Time
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
 	dp.SetIntVal(val)
-	dp.Attributes().Insert(A.BackendConnectionType, pcommon.NewValueString(backendConnectionTypeAttributeValue))
+	dp.Attributes().PutString("kind", backendConnectionTypeAttributeValue)
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
@@ -131,7 +294,7 @@ func (m *metricVarnishBackendRequestCount) init() {
 	m.data.SetName("varnish.backend.request.count")
 	m.data.SetDescription("The backend requests count.")
 	m.data.SetUnit("{requests}")
-	m.data.SetDataType(pmetric.MetricDataTypeSum)
+	m.data.SetEmptySum()
 	m.data.Sum().SetIsMonotonic(true)
 	m.data.Sum().SetAggregationTemporality(pmetric.MetricAggregationTemporalityCumulative)
 }
@@ -182,7 +345,7 @@ func (m *metricVarnishCacheOperationCount) init() {
 	m.data.SetName("varnish.cache.operation.count")
 	m.data.SetDescription("The cache operation type count.")
 	m.data.SetUnit("{operations}")
-	m.data.SetDataType(pmetric.MetricDataTypeSum)
+	m.data.SetEmptySum()
 	m.data.Sum().SetIsMonotonic(true)
 	m.data.Sum().SetAggregationTemporality(pmetric.MetricAggregationTemporalityCumulative)
 	m.data.Sum().DataPoints().EnsureCapacity(m.capacity)
@@ -196,7 +359,7 @@ func (m *metricVarnishCacheOperationCount) recordDataPoint(start pcommon.Timesta
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
 	dp.SetIntVal(val)
-	dp.Attributes().Insert(A.CacheOperations, pcommon.NewValueString(cacheOperationsAttributeValue))
+	dp.Attributes().PutString("operation", cacheOperationsAttributeValue)
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
@@ -235,7 +398,7 @@ func (m *metricVarnishClientRequestCount) init() {
 	m.data.SetName("varnish.client.request.count")
 	m.data.SetDescription("The client request count.")
 	m.data.SetUnit("{requests}")
-	m.data.SetDataType(pmetric.MetricDataTypeSum)
+	m.data.SetEmptySum()
 	m.data.Sum().SetIsMonotonic(true)
 	m.data.Sum().SetAggregationTemporality(pmetric.MetricAggregationTemporalityCumulative)
 	m.data.Sum().DataPoints().EnsureCapacity(m.capacity)
@@ -249,7 +412,7 @@ func (m *metricVarnishClientRequestCount) recordDataPoint(start pcommon.Timestam
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
 	dp.SetIntVal(val)
-	dp.Attributes().Insert(A.State, pcommon.NewValueString(stateAttributeValue))
+	dp.Attributes().PutString("state", stateAttributeValue)
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
@@ -288,7 +451,7 @@ func (m *metricVarnishClientRequestErrorCount) init() {
 	m.data.SetName("varnish.client.request.error.count")
 	m.data.SetDescription("The client request errors received by status code.")
 	m.data.SetUnit("{requests}")
-	m.data.SetDataType(pmetric.MetricDataTypeSum)
+	m.data.SetEmptySum()
 	m.data.Sum().SetIsMonotonic(true)
 	m.data.Sum().SetAggregationTemporality(pmetric.MetricAggregationTemporalityCumulative)
 	m.data.Sum().DataPoints().EnsureCapacity(m.capacity)
@@ -302,7 +465,7 @@ func (m *metricVarnishClientRequestErrorCount) recordDataPoint(start pcommon.Tim
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
 	dp.SetIntVal(val)
-	dp.Attributes().Insert(A.HTTPStatusCode, pcommon.NewValueString(httpStatusCodeAttributeValue))
+	dp.Attributes().PutString("status_code", httpStatusCodeAttributeValue)
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
@@ -341,7 +504,7 @@ func (m *metricVarnishObjectCount) init() {
 	m.data.SetName("varnish.object.count")
 	m.data.SetDescription("The HTTP objects in the cache count.")
 	m.data.SetUnit("{objects}")
-	m.data.SetDataType(pmetric.MetricDataTypeSum)
+	m.data.SetEmptySum()
 	m.data.Sum().SetIsMonotonic(false)
 	m.data.Sum().SetAggregationTemporality(pmetric.MetricAggregationTemporalityCumulative)
 }
@@ -392,7 +555,7 @@ func (m *metricVarnishObjectExpired) init() {
 	m.data.SetName("varnish.object.expired")
 	m.data.SetDescription("The expired objects from old age count.")
 	m.data.SetUnit("{objects}")
-	m.data.SetDataType(pmetric.MetricDataTypeSum)
+	m.data.SetEmptySum()
 	m.data.Sum().SetIsMonotonic(true)
 	m.data.Sum().SetAggregationTemporality(pmetric.MetricAggregationTemporalityCumulative)
 }
@@ -443,7 +606,7 @@ func (m *metricVarnishObjectMoved) init() {
 	m.data.SetName("varnish.object.moved")
 	m.data.SetDescription("The moved operations done on the LRU list count.")
 	m.data.SetUnit("{objects}")
-	m.data.SetDataType(pmetric.MetricDataTypeSum)
+	m.data.SetEmptySum()
 	m.data.Sum().SetIsMonotonic(true)
 	m.data.Sum().SetAggregationTemporality(pmetric.MetricAggregationTemporalityCumulative)
 }
@@ -494,7 +657,7 @@ func (m *metricVarnishObjectNuked) init() {
 	m.data.SetName("varnish.object.nuked")
 	m.data.SetDescription("The objects that have been forcefully evicted from storage count.")
 	m.data.SetUnit("{objects}")
-	m.data.SetDataType(pmetric.MetricDataTypeSum)
+	m.data.SetEmptySum()
 	m.data.Sum().SetIsMonotonic(true)
 	m.data.Sum().SetAggregationTemporality(pmetric.MetricAggregationTemporalityCumulative)
 }
@@ -545,7 +708,7 @@ func (m *metricVarnishSessionCount) init() {
 	m.data.SetName("varnish.session.count")
 	m.data.SetDescription("The session connection type count.")
 	m.data.SetUnit("{connections}")
-	m.data.SetDataType(pmetric.MetricDataTypeSum)
+	m.data.SetEmptySum()
 	m.data.Sum().SetIsMonotonic(true)
 	m.data.Sum().SetAggregationTemporality(pmetric.MetricAggregationTemporalityCumulative)
 	m.data.Sum().DataPoints().EnsureCapacity(m.capacity)
@@ -559,7 +722,7 @@ func (m *metricVarnishSessionCount) recordDataPoint(start pcommon.Timestamp, ts 
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
 	dp.SetIntVal(val)
-	dp.Attributes().Insert(A.SessionType, pcommon.NewValueString(sessionTypeAttributeValue))
+	dp.Attributes().PutString("kind", sessionTypeAttributeValue)
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
@@ -598,7 +761,7 @@ func (m *metricVarnishThreadOperationCount) init() {
 	m.data.SetName("varnish.thread.operation.count")
 	m.data.SetDescription("The thread operation type count.")
 	m.data.SetUnit("{operations}")
-	m.data.SetDataType(pmetric.MetricDataTypeSum)
+	m.data.SetEmptySum()
 	m.data.Sum().SetIsMonotonic(true)
 	m.data.Sum().SetAggregationTemporality(pmetric.MetricAggregationTemporalityCumulative)
 	m.data.Sum().DataPoints().EnsureCapacity(m.capacity)
@@ -612,7 +775,7 @@ func (m *metricVarnishThreadOperationCount) recordDataPoint(start pcommon.Timest
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
 	dp.SetIntVal(val)
-	dp.Attributes().Insert(A.ThreadOperations, pcommon.NewValueString(threadOperationsAttributeValue))
+	dp.Attributes().PutString("operation", threadOperationsAttributeValue)
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
@@ -643,10 +806,11 @@ func newMetricVarnishThreadOperationCount(settings MetricSettings) metricVarnish
 // MetricsBuilder provides an interface for scrapers to report metrics while taking care of all the transformations
 // required to produce metric representation defined in metadata and user settings.
 type MetricsBuilder struct {
-	startTime                            pcommon.Timestamp // start time that will be applied to all recorded data points.
-	metricsCapacity                      int               // maximum observed number of metrics per resource.
-	resourceCapacity                     int               // maximum observed number of resource attributes.
-	metricsBuffer                        pmetric.Metrics   // accumulates metrics data before emitting.
+	startTime                            pcommon.Timestamp   // start time that will be applied to all recorded data points.
+	metricsCapacity                      int                 // maximum observed number of metrics per resource.
+	resourceCapacity                     int                 // maximum observed number of resource attributes.
+	metricsBuffer                        pmetric.Metrics     // accumulates metrics data before emitting.
+	buildInfo                            component.BuildInfo // contains version information
 	metricVarnishBackendConnectionCount  metricVarnishBackendConnectionCount
 	metricVarnishBackendRequestCount     metricVarnishBackendRequestCount
 	metricVarnishCacheOperationCount     metricVarnishCacheOperationCount
@@ -670,10 +834,11 @@ func WithStartTime(startTime pcommon.Timestamp) metricBuilderOption {
 	}
 }
 
-func NewMetricsBuilder(settings MetricsSettings, options ...metricBuilderOption) *MetricsBuilder {
+func NewMetricsBuilder(settings MetricsSettings, buildInfo component.BuildInfo, options ...metricBuilderOption) *MetricsBuilder {
 	mb := &MetricsBuilder{
 		startTime:                            pcommon.NewTimestampFromTime(time.Now()),
 		metricsBuffer:                        pmetric.NewMetrics(),
+		buildInfo:                            buildInfo,
 		metricVarnishBackendConnectionCount:  newMetricVarnishBackendConnectionCount(settings.VarnishBackendConnectionCount),
 		metricVarnishBackendRequestCount:     newMetricVarnishBackendRequestCount(settings.VarnishBackendRequestCount),
 		metricVarnishCacheOperationCount:     newMetricVarnishCacheOperationCount(settings.VarnishCacheOperationCount),
@@ -702,28 +867,47 @@ func (mb *MetricsBuilder) updateCapacity(rm pmetric.ResourceMetrics) {
 	}
 }
 
-// ResourceOption applies changes to provided resource.
-type ResourceOption func(pcommon.Resource)
+// ResourceMetricsOption applies changes to provided resource metrics.
+type ResourceMetricsOption func(pmetric.ResourceMetrics)
 
 // WithVarnishCacheName sets provided value as "varnish.cache.name" attribute for current resource.
-func WithVarnishCacheName(val string) ResourceOption {
-	return func(r pcommon.Resource) {
-		r.Attributes().UpsertString("varnish.cache.name", val)
+func WithVarnishCacheName(val string) ResourceMetricsOption {
+	return func(rm pmetric.ResourceMetrics) {
+		rm.Resource().Attributes().PutString("varnish.cache.name", val)
+	}
+}
+
+// WithStartTimeOverride overrides start time for all the resource metrics data points.
+// This option should be only used if different start time has to be set on metrics coming from different resources.
+func WithStartTimeOverride(start pcommon.Timestamp) ResourceMetricsOption {
+	return func(rm pmetric.ResourceMetrics) {
+		var dps pmetric.NumberDataPointSlice
+		metrics := rm.ScopeMetrics().At(0).Metrics()
+		for i := 0; i < metrics.Len(); i++ {
+			switch metrics.At(i).DataType() {
+			case pmetric.MetricDataTypeGauge:
+				dps = metrics.At(i).Gauge().DataPoints()
+			case pmetric.MetricDataTypeSum:
+				dps = metrics.At(i).Sum().DataPoints()
+			}
+			for j := 0; j < dps.Len(); j++ {
+				dps.At(j).SetStartTimestamp(start)
+			}
+		}
 	}
 }
 
 // EmitForResource saves all the generated metrics under a new resource and updates the internal state to be ready for
 // recording another set of data points as part of another resource. This function can be helpful when one scraper
 // needs to emit metrics from several resources. Otherwise calling this function is not required,
-// just `Emit` function can be called instead. Resource attributes should be provided as ResourceOption arguments.
-func (mb *MetricsBuilder) EmitForResource(ro ...ResourceOption) {
+// just `Emit` function can be called instead.
+// Resource attributes should be provided as ResourceMetricsOption arguments.
+func (mb *MetricsBuilder) EmitForResource(rmo ...ResourceMetricsOption) {
 	rm := pmetric.NewResourceMetrics()
 	rm.Resource().Attributes().EnsureCapacity(mb.resourceCapacity)
-	for _, op := range ro {
-		op(rm.Resource())
-	}
 	ils := rm.ScopeMetrics().AppendEmpty()
 	ils.Scope().SetName("otelcol/varnishreceiver")
+	ils.Scope().SetVersion(mb.buildInfo.Version)
 	ils.Metrics().EnsureCapacity(mb.metricsCapacity)
 	mb.metricVarnishBackendConnectionCount.emit(ils.Metrics())
 	mb.metricVarnishBackendRequestCount.emit(ils.Metrics())
@@ -736,6 +920,9 @@ func (mb *MetricsBuilder) EmitForResource(ro ...ResourceOption) {
 	mb.metricVarnishObjectNuked.emit(ils.Metrics())
 	mb.metricVarnishSessionCount.emit(ils.Metrics())
 	mb.metricVarnishThreadOperationCount.emit(ils.Metrics())
+	for _, op := range rmo {
+		op(rm)
+	}
 	if ils.Metrics().Len() > 0 {
 		mb.updateCapacity(rm)
 		rm.MoveTo(mb.metricsBuffer.ResourceMetrics().AppendEmpty())
@@ -745,16 +932,16 @@ func (mb *MetricsBuilder) EmitForResource(ro ...ResourceOption) {
 // Emit returns all the metrics accumulated by the metrics builder and updates the internal state to be ready for
 // recording another set of metrics. This function will be responsible for applying all the transformations required to
 // produce metric representation defined in metadata and user settings, e.g. delta or cumulative.
-func (mb *MetricsBuilder) Emit(ro ...ResourceOption) pmetric.Metrics {
-	mb.EmitForResource(ro...)
+func (mb *MetricsBuilder) Emit(rmo ...ResourceMetricsOption) pmetric.Metrics {
+	mb.EmitForResource(rmo...)
 	metrics := pmetric.NewMetrics()
 	mb.metricsBuffer.MoveTo(metrics)
 	return metrics
 }
 
 // RecordVarnishBackendConnectionCountDataPoint adds a data point to varnish.backend.connection.count metric.
-func (mb *MetricsBuilder) RecordVarnishBackendConnectionCountDataPoint(ts pcommon.Timestamp, val int64, backendConnectionTypeAttributeValue string) {
-	mb.metricVarnishBackendConnectionCount.recordDataPoint(mb.startTime, ts, val, backendConnectionTypeAttributeValue)
+func (mb *MetricsBuilder) RecordVarnishBackendConnectionCountDataPoint(ts pcommon.Timestamp, val int64, backendConnectionTypeAttributeValue AttributeBackendConnectionType) {
+	mb.metricVarnishBackendConnectionCount.recordDataPoint(mb.startTime, ts, val, backendConnectionTypeAttributeValue.String())
 }
 
 // RecordVarnishBackendRequestCountDataPoint adds a data point to varnish.backend.request.count metric.
@@ -763,13 +950,13 @@ func (mb *MetricsBuilder) RecordVarnishBackendRequestCountDataPoint(ts pcommon.T
 }
 
 // RecordVarnishCacheOperationCountDataPoint adds a data point to varnish.cache.operation.count metric.
-func (mb *MetricsBuilder) RecordVarnishCacheOperationCountDataPoint(ts pcommon.Timestamp, val int64, cacheOperationsAttributeValue string) {
-	mb.metricVarnishCacheOperationCount.recordDataPoint(mb.startTime, ts, val, cacheOperationsAttributeValue)
+func (mb *MetricsBuilder) RecordVarnishCacheOperationCountDataPoint(ts pcommon.Timestamp, val int64, cacheOperationsAttributeValue AttributeCacheOperations) {
+	mb.metricVarnishCacheOperationCount.recordDataPoint(mb.startTime, ts, val, cacheOperationsAttributeValue.String())
 }
 
 // RecordVarnishClientRequestCountDataPoint adds a data point to varnish.client.request.count metric.
-func (mb *MetricsBuilder) RecordVarnishClientRequestCountDataPoint(ts pcommon.Timestamp, val int64, stateAttributeValue string) {
-	mb.metricVarnishClientRequestCount.recordDataPoint(mb.startTime, ts, val, stateAttributeValue)
+func (mb *MetricsBuilder) RecordVarnishClientRequestCountDataPoint(ts pcommon.Timestamp, val int64, stateAttributeValue AttributeState) {
+	mb.metricVarnishClientRequestCount.recordDataPoint(mb.startTime, ts, val, stateAttributeValue.String())
 }
 
 // RecordVarnishClientRequestErrorCountDataPoint adds a data point to varnish.client.request.error.count metric.
@@ -798,13 +985,13 @@ func (mb *MetricsBuilder) RecordVarnishObjectNukedDataPoint(ts pcommon.Timestamp
 }
 
 // RecordVarnishSessionCountDataPoint adds a data point to varnish.session.count metric.
-func (mb *MetricsBuilder) RecordVarnishSessionCountDataPoint(ts pcommon.Timestamp, val int64, sessionTypeAttributeValue string) {
-	mb.metricVarnishSessionCount.recordDataPoint(mb.startTime, ts, val, sessionTypeAttributeValue)
+func (mb *MetricsBuilder) RecordVarnishSessionCountDataPoint(ts pcommon.Timestamp, val int64, sessionTypeAttributeValue AttributeSessionType) {
+	mb.metricVarnishSessionCount.recordDataPoint(mb.startTime, ts, val, sessionTypeAttributeValue.String())
 }
 
 // RecordVarnishThreadOperationCountDataPoint adds a data point to varnish.thread.operation.count metric.
-func (mb *MetricsBuilder) RecordVarnishThreadOperationCountDataPoint(ts pcommon.Timestamp, val int64, threadOperationsAttributeValue string) {
-	mb.metricVarnishThreadOperationCount.recordDataPoint(mb.startTime, ts, val, threadOperationsAttributeValue)
+func (mb *MetricsBuilder) RecordVarnishThreadOperationCountDataPoint(ts pcommon.Timestamp, val int64, threadOperationsAttributeValue AttributeThreadOperations) {
+	mb.metricVarnishThreadOperationCount.recordDataPoint(mb.startTime, ts, val, threadOperationsAttributeValue.String())
 }
 
 // Reset resets metrics builder to its initial state. It should be used when external metrics source is restarted,
@@ -814,94 +1001,4 @@ func (mb *MetricsBuilder) Reset(options ...metricBuilderOption) {
 	for _, op := range options {
 		op(mb)
 	}
-}
-
-// Attributes contains the possible metric attributes that can be used.
-var Attributes = struct {
-	// BackendConnectionType (The backend connection types.)
-	BackendConnectionType string
-	// CacheName (The varnish cache name.)
-	CacheName string
-	// CacheOperations (The cache operation types)
-	CacheOperations string
-	// HTTPStatusCode (An HTTP status code.)
-	HTTPStatusCode string
-	// SessionType (The session connection types.)
-	SessionType string
-	// State (The client request states.)
-	State string
-	// ThreadOperations (The thread operation types.)
-	ThreadOperations string
-}{
-	"kind",
-	"cache_name",
-	"operation",
-	"status_code",
-	"kind",
-	"state",
-	"operation",
-}
-
-// A is an alias for Attributes.
-var A = Attributes
-
-// AttributeBackendConnectionType are the possible values that the attribute "backend_connection_type" can have.
-var AttributeBackendConnectionType = struct {
-	Success   string
-	Recycle   string
-	Reuse     string
-	Fail      string
-	Unhealthy string
-	Busy      string
-	Retry     string
-}{
-	"success",
-	"recycle",
-	"reuse",
-	"fail",
-	"unhealthy",
-	"busy",
-	"retry",
-}
-
-// AttributeCacheOperations are the possible values that the attribute "cache_operations" can have.
-var AttributeCacheOperations = struct {
-	Hit     string
-	Miss    string
-	HitPass string
-}{
-	"hit",
-	"miss",
-	"hit_pass",
-}
-
-// AttributeSessionType are the possible values that the attribute "session_type" can have.
-var AttributeSessionType = struct {
-	Accepted string
-	Dropped  string
-	Failed   string
-}{
-	"accepted",
-	"dropped",
-	"failed",
-}
-
-// AttributeState are the possible values that the attribute "state" can have.
-var AttributeState = struct {
-	Received string
-	Dropped  string
-}{
-	"received",
-	"dropped",
-}
-
-// AttributeThreadOperations are the possible values that the attribute "thread_operations" can have.
-var AttributeThreadOperations = struct {
-	Created   string
-	Destroyed string
-	Failed    string
-}{
-	"created",
-	"destroyed",
-	"failed",
 }

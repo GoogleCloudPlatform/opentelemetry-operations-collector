@@ -765,6 +765,8 @@ github.com/open-telemetry/opentelemetry-collector-contrib/pkg/winperfcounters v0
 github.com/open-telemetry/opentelemetry-collector-contrib/pkg/winperfcounters v0.60.0/go.mod h1:H2xW/JlRzLreImGETqbSXIGuH0z8hmo//udRg4YGxtg=
 github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.60.0 h1:CSVxKdZ3CHdXBAUxE2ykvDlgabG8HLh716/j4ZTDtWw=
 github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.60.0/go.mod h1:UX6ECUemByrbz1eHDO5BbSbzJjtNWUvrfnAy57s0VZw=
+github.com/open-telemetry/opentelemetry-collector-contrib/processor/groupbyattrsprocessor v0.60.0 h1:vj2tQ/nMs5nD+cVOzkO0PlF6q087FhVMovAVe+N8lsk=
+github.com/open-telemetry/opentelemetry-collector-contrib/processor/groupbyattrsprocessor v0.60.0/go.mod h1:iNeduBokKDbmUue0lS27dX8qUo6lUKaqYsXHHEQ1mpk=
 github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor v0.60.0 h1:F2HREw9aG6/j9cIawAshAgJv7q7sEvT0bTzq+sUnjo4=
 github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor v0.60.0/go.mod h1:Se9HkDOcwy9sHs2mMkWB0eGtSAeUpn044LndxDvv+ao=
 github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor v0.60.0 h1:NACpxZI3eicntyiScxzhS/KOBBKIL0nbcvbUIIThiCE=

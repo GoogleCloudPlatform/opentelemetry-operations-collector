@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 
@@ -29,6 +30,10 @@ import (
 )
 
 func main() {
+	mainContext(context.Background())
+}
+
+func mainContext(ctx context.Context) {
 	if err := env.Create(); err != nil {
 		log.Printf("failed to build environment variables for config: %v", err)
 	}
@@ -57,14 +62,14 @@ func main() {
 		},
 	}
 
-	if err := run(params); err != nil {
+	if err := run(ctx, params); err != nil {
 		log.Fatal(err)
 	}
 }
 
-func runInteractive(params service.CollectorSettings) error {
+func runInteractive(ctx context.Context, params service.CollectorSettings) error {
 	cmd := service.NewCommand(params)
-	err := cmd.Execute()
+	err := cmd.ExecuteContext(ctx)
 	if err != nil {
 		return fmt.Errorf("application run finished with error: %w", err)
 	}

@@ -18,20 +18,22 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
 	"go.opentelemetry.io/collector/service"
 	"golang.org/x/sys/windows/svc"
 )
 
-func run(params service.CollectorSettings) error {
+func run(ctx context.Context, params service.CollectorSettings) error {
+	// TODO: this should possibly be using svc.IsWindowsService() instead.
 	isInteractive, err := svc.IsAnInteractiveSession()
 	if err != nil {
 		return fmt.Errorf("failed to determine if we are running in an interactive session: %w", err)
 	}
 
 	if isInteractive {
-		return runInteractive(params)
+		return runInteractive(ctx, params)
 	}
 	return runService(params)
 }

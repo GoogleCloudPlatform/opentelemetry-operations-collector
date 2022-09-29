@@ -24,11 +24,11 @@ func generateNonMonotonicSumsInput() pmetric.Metrics {
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
 
-	mb1 := b.addMetric("m1", pmetric.MetricDataTypeSum, false)
+	mb1 := b.addMetric("m1", pmetric.MetricTypeSum, false)
 	mb1.addIntDataPoint(1, map[string]string{"label1": "value1"})
 	mb1.addIntDataPoint(2, map[string]string{"label1": "value2"})
 
-	mb2 := b.addMetric("m2", pmetric.MetricDataTypeSum, false)
+	mb2 := b.addMetric("m2", pmetric.MetricTypeSum, false)
 	mb2.addDoubleDataPoint(3, map[string]string{"label1": "value1"})
 	mb2.addDoubleDataPoint(4, map[string]string{"label1": "value2"})
 
@@ -42,11 +42,11 @@ func generateNonMonotonicSumsExpected() pmetric.Metrics {
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
 
-	mb1 := b.addMetric("m1", pmetric.MetricDataTypeGauge, false)
+	mb1 := b.addMetric("m1", pmetric.MetricTypeGauge, false)
 	mb1.addIntDataPoint(1, map[string]string{"label1": "value1"})
 	mb1.addIntDataPoint(2, map[string]string{"label1": "value2"})
 
-	mb2 := b.addMetric("m2", pmetric.MetricDataTypeGauge, false)
+	mb2 := b.addMetric("m2", pmetric.MetricTypeGauge, false)
 	mb2.addDoubleDataPoint(3, map[string]string{"label1": "value1"})
 	mb2.addDoubleDataPoint(4, map[string]string{"label1": "value2"})
 

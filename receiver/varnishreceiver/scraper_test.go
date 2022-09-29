@@ -108,7 +108,7 @@ func validateScraperResult(t *testing.T, actualMetrics pmetric.Metrics) {
 				dp := dps.At(j)
 				method := dp.Attributes().AsRaw()
 				label := fmt.Sprintf("%s method:%s", m.Name(), method)
-				attributeMappings[label] = dp.IntVal()
+				attributeMappings[label] = dp.IntValue()
 			}
 			require.Equal(t, map[string]int64{
 				"varnish.backend.connection.count method:map[kind:busy]":      int64(9),
@@ -128,7 +128,7 @@ func validateScraperResult(t *testing.T, actualMetrics pmetric.Metrics) {
 				dp := dps.At(j)
 				method := dp.Attributes().AsRaw()
 				label := fmt.Sprintf("%s method:%s", m.Name(), method)
-				attributeMappings[label] = dp.IntVal()
+				attributeMappings[label] = dp.IntValue()
 			}
 			require.Equal(t, map[string]int64{
 				"varnish.cache.operation.count method:map[operation:hit]":      int64(4),
@@ -144,7 +144,7 @@ func validateScraperResult(t *testing.T, actualMetrics pmetric.Metrics) {
 				dp := dps.At(j)
 				method := dp.Attributes().AsRaw()
 				label := fmt.Sprintf("%s method:%s", m.Name(), method)
-				attributeMappings[label] = dp.IntVal()
+				attributeMappings[label] = dp.IntValue()
 			}
 			require.Equal(t, map[string]int64{
 				"varnish.thread.operation.count method:map[operation:created]":   int64(14),
@@ -160,7 +160,7 @@ func validateScraperResult(t *testing.T, actualMetrics pmetric.Metrics) {
 				dp := dps.At(j)
 				method := dp.Attributes().AsRaw()
 				label := fmt.Sprintf("%s method:%s", m.Name(), method)
-				attributeMappings[label] = dp.IntVal()
+				attributeMappings[label] = dp.IntValue()
 			}
 			require.Equal(t, map[string]int64{
 				"varnish.session.count method:map[kind:accepted]": int64(1),
@@ -171,19 +171,19 @@ func validateScraperResult(t *testing.T, actualMetrics pmetric.Metrics) {
 		case "varnish.object.nuked":
 			dps := m.Sum().DataPoints()
 			require.Equal(t, 1, dps.Len())
-			require.EqualValues(t, int64(20), dps.At(0).IntVal())
+			require.EqualValues(t, int64(20), dps.At(0).IntValue())
 		case "varnish.object.moved":
 			dps := m.Sum().DataPoints()
 			require.Equal(t, 1, dps.Len())
-			require.EqualValues(t, int64(21), dps.At(0).IntVal())
+			require.EqualValues(t, int64(21), dps.At(0).IntValue())
 		case "varnish.object.expired":
 			dps := m.Sum().DataPoints()
 			require.Equal(t, 1, dps.Len())
-			require.EqualValues(t, int64(19), dps.At(0).IntVal())
+			require.EqualValues(t, int64(19), dps.At(0).IntValue())
 		case "varnish.object.count":
 			dps := m.Sum().DataPoints()
 			require.Equal(t, 1, dps.Len())
-			require.EqualValues(t, int64(18), dps.At(0).IntVal())
+			require.EqualValues(t, int64(18), dps.At(0).IntValue())
 		case "varnish.client.request.count":
 			dps := m.Sum().DataPoints()
 			require.Equal(t, 2, dps.Len())
@@ -192,7 +192,7 @@ func validateScraperResult(t *testing.T, actualMetrics pmetric.Metrics) {
 				dp := dps.At(j)
 				method := dp.Attributes().AsRaw()
 				label := fmt.Sprintf("%s method:%s", m.Name(), method)
-				attributeMappings[label] = dp.IntVal()
+				attributeMappings[label] = dp.IntValue()
 			}
 			require.Equal(t, map[string]int64{
 				"varnish.client.request.count method:map[state:received]": int64(3),
@@ -207,7 +207,7 @@ func validateScraperResult(t *testing.T, actualMetrics pmetric.Metrics) {
 				dp := dps.At(j)
 				method := dp.Attributes().AsRaw()
 				label := fmt.Sprintf("%s method:%s", m.Name(), method)
-				attributeMappings[label] = dp.IntVal()
+				attributeMappings[label] = dp.IntValue()
 			}
 			require.Equal(t, map[string]int64{
 				"varnish.client.request.error.count method:map[status_code:400]": int64(24),
@@ -218,7 +218,7 @@ func validateScraperResult(t *testing.T, actualMetrics pmetric.Metrics) {
 		case "varnish.backend.request.count":
 			dps := m.Sum().DataPoints()
 			require.Equal(t, 1, dps.Len())
-			require.EqualValues(t, int64(22), dps.At(0).IntVal())
+			require.EqualValues(t, int64(22), dps.At(0).IntValue())
 		}
 	}
 }

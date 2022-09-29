@@ -24,8 +24,8 @@ func generateProcessResourceMetricsInput() pmetric.Metrics {
 
 	rmb := newResourceMetricsBuilder()
 	b1 := rmb.addResourceMetrics(nil)
-	b1.addMetric("m1", pmetric.MetricDataTypeSum, true).addIntDataPoint(1, map[string]string{"label1": "value1"})
-	b1.addMetric("m2", pmetric.MetricDataTypeSum, false).addDoubleDataPoint(2, map[string]string{"label1": "value1"})
+	b1.addMetric("m1", pmetric.MetricTypeSum, true).addIntDataPoint(1, map[string]string{"label1": "value1"})
+	b1.addMetric("m2", pmetric.MetricTypeSum, false).addDoubleDataPoint(2, map[string]string{"label1": "value1"})
 
 	b2 := rmb.addResourceMetrics(map[string]pcommon.Value{
 		"process.pid":             pcommon.NewValueInt(1),
@@ -35,8 +35,8 @@ func generateProcessResourceMetricsInput() pmetric.Metrics {
 		"process.command_line":    pcommon.NewValueString("to/process1 -arg arg"),
 		"process.owner":           pcommon.NewValueString("username1"),
 	})
-	b2.addMetric("m3", pmetric.MetricDataTypeSum, true).addIntDataPoint(3, map[string]string{"label1": "value1"})
-	b2.addMetric("m4", pmetric.MetricDataTypeGauge, false).addDoubleDataPoint(4, map[string]string{"label1": "value1"})
+	b2.addMetric("m3", pmetric.MetricTypeSum, true).addIntDataPoint(3, map[string]string{"label1": "value1"})
+	b2.addMetric("m4", pmetric.MetricTypeGauge, false).addDoubleDataPoint(4, map[string]string{"label1": "value1"})
 
 	b3 := rmb.addResourceMetrics(map[string]pcommon.Value{
 		"process.pid":             pcommon.NewValueInt(2),
@@ -46,8 +46,8 @@ func generateProcessResourceMetricsInput() pmetric.Metrics {
 		"process.command_line":    pcommon.NewValueString("to/process2 -arg arg"),
 		"process.owner":           pcommon.NewValueString("username2"),
 	})
-	b3.addMetric("m3", pmetric.MetricDataTypeSum, true).addIntDataPoint(5, map[string]string{"label1": "value2"})
-	b3.addMetric("m4", pmetric.MetricDataTypeGauge, false).addDoubleDataPoint(6, map[string]string{"label1": "value2"})
+	b3.addMetric("m3", pmetric.MetricTypeSum, true).addIntDataPoint(5, map[string]string{"label1": "value2"})
+	b3.addMetric("m4", pmetric.MetricTypeGauge, false).addDoubleDataPoint(6, map[string]string{"label1": "value2"})
 
 	rmb.Build().CopyTo(input.ResourceMetrics())
 	return input
@@ -59,10 +59,10 @@ func generateProcessResourceMetricsExpected() pmetric.Metrics {
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
 
-	b.addMetric("m1", pmetric.MetricDataTypeSum, true).addIntDataPoint(1, map[string]string{"label1": "value1"})
-	b.addMetric("m2", pmetric.MetricDataTypeGauge, false).addDoubleDataPoint(2, map[string]string{"label1": "value1"})
+	b.addMetric("m1", pmetric.MetricTypeSum, true).addIntDataPoint(1, map[string]string{"label1": "value1"})
+	b.addMetric("m2", pmetric.MetricTypeGauge, false).addDoubleDataPoint(2, map[string]string{"label1": "value1"})
 
-	mb3 := b.addMetric("m3", pmetric.MetricDataTypeSum, true)
+	mb3 := b.addMetric("m3", pmetric.MetricTypeSum, true)
 	mb3.addIntDataPoint(3, map[string]string{
 		"label1":       "value1",
 		"pid":          "1",
@@ -78,7 +78,7 @@ func generateProcessResourceMetricsExpected() pmetric.Metrics {
 		"owner":        "username2",
 	})
 
-	mb4 := b.addMetric("m4", pmetric.MetricDataTypeGauge, false)
+	mb4 := b.addMetric("m4", pmetric.MetricTypeGauge, false)
 	mb4.addDoubleDataPoint(4, map[string]string{
 		"label1":       "value1",
 		"pid":          "1",

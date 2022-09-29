@@ -254,7 +254,7 @@ func (m *metricVarnishBackendConnectionCount) recordDataPoint(start pcommon.Time
 	dp := m.data.Sum().DataPoints().AppendEmpty()
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
-	dp.SetIntVal(val)
+	dp.SetIntValue(val)
 	dp.Attributes().PutString("kind", backendConnectionTypeAttributeValue)
 }
 
@@ -306,7 +306,7 @@ func (m *metricVarnishBackendRequestCount) recordDataPoint(start pcommon.Timesta
 	dp := m.data.Sum().DataPoints().AppendEmpty()
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
-	dp.SetIntVal(val)
+	dp.SetIntValue(val)
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
@@ -358,7 +358,7 @@ func (m *metricVarnishCacheOperationCount) recordDataPoint(start pcommon.Timesta
 	dp := m.data.Sum().DataPoints().AppendEmpty()
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
-	dp.SetIntVal(val)
+	dp.SetIntValue(val)
 	dp.Attributes().PutString("operation", cacheOperationsAttributeValue)
 }
 
@@ -411,7 +411,7 @@ func (m *metricVarnishClientRequestCount) recordDataPoint(start pcommon.Timestam
 	dp := m.data.Sum().DataPoints().AppendEmpty()
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
-	dp.SetIntVal(val)
+	dp.SetIntValue(val)
 	dp.Attributes().PutString("state", stateAttributeValue)
 }
 
@@ -464,7 +464,7 @@ func (m *metricVarnishClientRequestErrorCount) recordDataPoint(start pcommon.Tim
 	dp := m.data.Sum().DataPoints().AppendEmpty()
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
-	dp.SetIntVal(val)
+	dp.SetIntValue(val)
 	dp.Attributes().PutString("status_code", httpStatusCodeAttributeValue)
 }
 
@@ -516,7 +516,7 @@ func (m *metricVarnishObjectCount) recordDataPoint(start pcommon.Timestamp, ts p
 	dp := m.data.Sum().DataPoints().AppendEmpty()
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
-	dp.SetIntVal(val)
+	dp.SetIntValue(val)
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
@@ -567,7 +567,7 @@ func (m *metricVarnishObjectExpired) recordDataPoint(start pcommon.Timestamp, ts
 	dp := m.data.Sum().DataPoints().AppendEmpty()
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
-	dp.SetIntVal(val)
+	dp.SetIntValue(val)
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
@@ -618,7 +618,7 @@ func (m *metricVarnishObjectMoved) recordDataPoint(start pcommon.Timestamp, ts p
 	dp := m.data.Sum().DataPoints().AppendEmpty()
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
-	dp.SetIntVal(val)
+	dp.SetIntValue(val)
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
@@ -669,7 +669,7 @@ func (m *metricVarnishObjectNuked) recordDataPoint(start pcommon.Timestamp, ts p
 	dp := m.data.Sum().DataPoints().AppendEmpty()
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
-	dp.SetIntVal(val)
+	dp.SetIntValue(val)
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
@@ -721,7 +721,7 @@ func (m *metricVarnishSessionCount) recordDataPoint(start pcommon.Timestamp, ts 
 	dp := m.data.Sum().DataPoints().AppendEmpty()
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
-	dp.SetIntVal(val)
+	dp.SetIntValue(val)
 	dp.Attributes().PutString("kind", sessionTypeAttributeValue)
 }
 
@@ -774,7 +774,7 @@ func (m *metricVarnishThreadOperationCount) recordDataPoint(start pcommon.Timest
 	dp := m.data.Sum().DataPoints().AppendEmpty()
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
-	dp.SetIntVal(val)
+	dp.SetIntValue(val)
 	dp.Attributes().PutString("operation", threadOperationsAttributeValue)
 }
 
@@ -884,10 +884,10 @@ func WithStartTimeOverride(start pcommon.Timestamp) ResourceMetricsOption {
 		var dps pmetric.NumberDataPointSlice
 		metrics := rm.ScopeMetrics().At(0).Metrics()
 		for i := 0; i < metrics.Len(); i++ {
-			switch metrics.At(i).DataType() {
-			case pmetric.MetricDataTypeGauge:
+			switch metrics.At(i).Type() {
+			case pmetric.MetricTypeGauge:
 				dps = metrics.At(i).Gauge().DataPoints()
-			case pmetric.MetricDataTypeSum:
+			case pmetric.MetricTypeSum:
 				dps = metrics.At(i).Sum().DataPoints()
 			}
 			for j := 0; j < dps.Len(); j++ {

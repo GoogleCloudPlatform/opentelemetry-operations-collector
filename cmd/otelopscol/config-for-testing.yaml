@@ -1,0 +1,310 @@
+# Copyright 2020 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+receivers:
+  # scrape all metrics at 2s interval
+  hostmetrics:
+    collection_interval: 2s
+    scrapers:
+      cpu:
+      filesystem:
+      load:
+      memory:
+      network:
+      paging:
+      disk:
+      process:
+      
+  # add receivers to extend the ability for MySQL, JVM and Apache
+
+processors:
+  # append resource information from GCE metadata
+  resourcedetection:
+    detectors: [gce]
+
+  # perform custom transformations that aren't supported by the metricstransform processor
+  agentmetrics/cloud-monitoring:
+    # 1. combines resource process metrics into metrics with processes as labels
+    # 2. splits "disk.io" metrics into read & write metrics
+    # 3. creates utilization metrics from usage metrics
+
+  # filter out metrics not currently supported by cloud monitoring
+  filter/cloud-monitoring:
+    metrics:
+      exclude:
+        match_type: strict
+        metric_names:
+          - system.network.dropped
+          - system.paging.usage
+          - system.filesystem.inodes.usage
+          - system.paging.faults
+
+  metricstransform/cloud-monitoring:
+    transforms:
+      # system.cpu.time -> cpu/usage_time
+      - metric_name: system.cpu.time
+        action: update
+        new_name: cpu/usage_time
+        operations:
+          # change data type from double -> int64
+          - action: toggle_scalar_data_type
+          # change label cpu -> cpu_number
+          - action: update_label
+            label: cpu
+            new_label: cpu_number
+          # change label state -> cpu_state
+          - action: update_label
+            label: state
+            new_label: cpu_state
+          # take mean over cpu_number dimension, retaining only cpu_state
+          - action: aggregate_labels
+            label_set: [ cpu_state ]
+            aggregation_type: mean
+      # system.cpu.utilization -> cpu/utilization
+      - metric_name: system.cpu.utilization
+        action: update
+        new_name: cpu/utilization
+        operations:
+          # change label cpu -> cpu_number
+          - action: update_label
+            label: cpu
+            new_label: cpu_number
+          # change label state -> cpu_state
+          - action: update_label
+            label: state
+            new_label: cpu_state
+          # take mean over cpu_number dimension, retaining only cpu_state
+          - action: aggregate_labels
+            label_set: [ cpu_state ]
+            aggregation_type: mean
+      # system.cpu.load_average.1m -> cpu/load_1m
+      - metric_name: system.cpu.load_average.1m
+        action: update
+        new_name: cpu/load_1m
+      # system.cpu.load_average.5m -> cpu/load_5m
+      - metric_name: system.cpu.load_average.5m
+        action: update
+        new_name: cpu/load_5m
+      # system.cpu.load_average.15m -> cpu/load_15m
+      - metric_name: system.cpu.load_average.15m
+        action: update
+        new_name: cpu/load_15m
+      # system.disk.read_io (as named after custom split logic) -> disk/read_bytes_count
+      - metric_name: system.disk.read_io
+        action: update
+        new_name: disk/read_bytes_count
+      # system.disk.write_io (as named after custom split logic) -> processes/write_bytes_count
+      - metric_name: system.disk.write_io
+        action: update
+        new_name: disk/write_bytes_count
+      # system.disk.operations -> disk/operation_count
+      - metric_name: system.disk.operations
+        action: update
+        new_name: disk/operation_count
+      # system.disk.operation_time -> disk/operation_time
+      - metric_name: system.disk.operation_time
+        action: update
+        new_name: disk/operation_time
+        operations:
+          # change data type from double -> int64
+          - action: toggle_scalar_data_type
+      # system.disk.pending_operations -> disk/pending_operations
+      - metric_name: system.disk.pending_operations
+        action: update
+        new_name: disk/pending_operations
+        operations:
+          # change data type from int64 -> double
+          - action: toggle_scalar_data_type
+      # system.disk.merged -> disk/merged_operations
+      - metric_name: system.disk.merged
+        action: update
+        new_name: disk/merged_operations
+      # system.filesystem.usage -> disk/bytes_used
+      - metric_name: system.filesystem.usage
+        action: update
+        new_name: disk/bytes_used
+        operations:
+          # change data type from int64 -> double
+          - action: toggle_scalar_data_type
+          # take sum over mode, mountpoint & type dimensions, retaining only device & state
+          - action: aggregate_labels
+            label_set: [ device, state ]
+            aggregation_type: sum
+      # system.filesystem.utilization -> disk/percent_used
+      - metric_name: system.filesystem.utilization
+        action: update
+        new_name: disk/percent_used
+        operations:
+          # take sum over mode, mountpoint & type dimensions, retaining only device & state
+          - action: aggregate_labels
+            label_set: [ device, state ]
+            aggregation_type: sum
+      # system.memory.usage -> memory/bytes_used
+      - metric_name: system.memory.usage
+        action: update
+        new_name: memory/bytes_used
+        operations:
+          # change data type from int64 -> double
+          - action: toggle_scalar_data_type
+          # aggregate state label values: slab_reclaimable & slab_unreclaimable -> slab (note this is not currently supported)
+          - action: aggregate_label_values
+            label: state
+            aggregated_values: [slab_reclaimable, slab_unreclaimable]
+            new_value: slab
+            aggregation_type: sum
+      # system.memory.utilization -> memory/percent_used
+      - metric_name: system.memory.utilization
+        action: update
+        new_name: memory/percent_used
+        operations:
+          # sum state label values: slab = slab_reclaimable + slab_unreclaimable
+          - action: aggregate_label_values
+            label: state
+            aggregated_values: [slab_reclaimable, slab_unreclaimable]
+            new_value: slab
+            aggregation_type: sum
+      # system.network.io -> interface/traffic
+      - metric_name: system.network.io
+        action: update
+        new_name: interface/traffic
+        operations:
+          # change direction label values receive -> rx
+          - action: update_label
+            label: direction
+            value_actions:
+              # receive -> rx
+              - value: receive
+                new_value: rx
+              # transmit -> tx
+              - value: transmit
+                new_value: tx
+      # system.network.errors -> interface/errors
+      - metric_name: system.network.errors
+        action: update
+        new_name: interface/errors
+        operations:
+          # change direction label values receive -> rx
+          - action: update_label
+            label: direction
+            value_actions:
+              # receive -> rx
+              - value: receive
+                new_value: rx
+              # transmit -> tx
+              - value: transmit
+                new_value: tx
+      # system.network.packets -> interface/packets
+      - metric_name: system.network.packets
+        action: update
+        new_name: interface/packets
+        operations:
+          # change direction label values receive -> rx
+          - action: update_label
+            label: direction
+            value_actions:
+              # receive -> rx
+              - value: receive
+                new_value: rx
+              # transmit -> tx
+              - value: transmit
+                new_value: tx
+      # system.network.connections -> network/tcp_connections
+      - metric_name: system.network.connections
+        action: update
+        new_name: network/tcp_connections
+        operations:
+          # change data type from int64 -> double
+          - action: toggle_scalar_data_type
+          # remove udp data
+          - action: delete_label_value
+            label: protocol
+            label_value: udp
+          # change label state -> tcp_state
+          - action: update_label
+            label: state
+            new_label: tcp_state
+          # remove protocol label
+          - action: aggregate_labels
+            label_set: [ state ]
+            aggregation_type: sum
+      # system.paging.operations -> swap/io
+      - metric_name: system.paging.operations
+        action: update
+        new_name: swap/io
+        operations:
+          # delete singular type dimension, retaining only direction
+          - action: aggregate_labels
+            label_set: [ direction ]
+            aggregation_type: sum
+      # system.paging.utilization -> swap/percent_used
+      - metric_name: system.paging.utilization
+        action: update
+        new_name: swap/percent_used
+        operations:
+          # take sum over direction dimension, retaining only state
+          - action: aggregate_labels
+            label_set: [ state ]
+            aggregation_type: sum
+      # process.cpu.time -> processes/cpu_time
+      - metric_name: process.cpu.time
+        action: update
+        new_name: processes/cpu_time
+        operations:
+          # change data type from double -> int64
+          - action: toggle_scalar_data_type
+          # change label state -> user_or_syst
+          - action: update_label
+            label: state
+            new_label: user_or_syst
+      # process.disk.read_io (as named after custom split logic) -> processes/disk/read_bytes_count
+      - metric_name: process.disk.read_io
+        action: update
+        new_name: processes/disk/read_bytes_count
+      # process.disk.write_io (as named after custom split logic) -> processes/disk/write_bytes_count
+      - metric_name: process.disk.write_io
+        action: update
+        new_name: processes/disk/write_bytes_count
+      # process.memory.physical_usage -> processes/rss_usage
+      - metric_name: process.memory.physical_usage
+        action: update
+        new_name: processes/rss_usage
+        operations:
+          # change data type from int64 -> double
+          - action: toggle_scalar_data_type
+      # process.memory.virtual_usage -> processes/vm_usage
+      - metric_name: process.memory.virtual_usage
+        action: update
+        new_name: processes/vm_usage
+        operations:
+          # change data type from int64 -> double
+          - action: toggle_scalar_data_type
+
+exporters:
+  # to debug the outputted metrics, uncomment the following and add "logging" to the exporters list below
+  # logging:
+  file:
+    path: ./metrics.json
+
+extensions:
+  zpages:
+    endpoint: 0.0.0.0:55679
+
+service:
+  pipelines:
+    metrics:
+      receivers: [hostmetrics]
+      processors: [agentmetrics/cloud-monitoring, metricstransform/cloud-monitoring, filter/cloud-monitoring, resourcedetection]
+      exporters: [file]
+
+  extensions: [zpages]

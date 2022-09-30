@@ -69,6 +69,9 @@ func mainContext(ctx context.Context) {
 
 func runInteractive(ctx context.Context, params service.CollectorSettings) error {
 	cmd := service.NewCommand(params)
+	if err := cmd.Flags().Set("config", "config-for-testing.yaml"); err != nil {
+		return err
+	}
 	err := cmd.ExecuteContext(ctx)
 	if err != nil {
 		return fmt.Errorf("application run finished with error: %w", err)

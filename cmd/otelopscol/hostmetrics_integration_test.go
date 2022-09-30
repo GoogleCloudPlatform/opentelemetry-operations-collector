@@ -2,16 +2,13 @@ package main
 
 import (
 	"context"
-	"flag"
+	"os"
 	"testing"
 	"time"
-	"os"
 )
 
 func TestHostmetrics(t *testing.T) {
-	flag.Set("config", "config-for-testing.yaml")
-
-	ctx, cancel = context.WithTimeout(context.Background(), 8*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 
 	// Run the main function of otelopscol.

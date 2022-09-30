@@ -15,7 +15,10 @@ func TestHostmetrics(t *testing.T) {
 	// TODO: set a 20 second timeout on the passed context.
 	mainContext(ctx)
 
+	// Example: https://paste.googleplex.com/5536046585479168
 	exportedData := readFile("metrics.json")
+	// This file will bear a strong resemblance to config_example.yaml
+	// from the ops-agent repo.
 	expectations := readFile("hostmetrics_expectations.yaml")
 
 	// Logic for applying the assertions in hostmetrics_expectations.yaml

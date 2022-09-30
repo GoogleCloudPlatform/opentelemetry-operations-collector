@@ -21,13 +21,13 @@ import (
 func commonAverageDiskInput(b metricsBuilder) {
 	b.timestamp = twoSeconds
 
-	mb1 := b.addMetric("system.disk.operation_time", pmetric.MetricDataTypeSum, true)
+	mb1 := b.addMetric("system.disk.operation_time", pmetric.MetricTypeSum, true)
 	mb1.addDoubleDataPoint(200, map[string]string{"device": "hda", "direction": "read"})
 	mb1.addDoubleDataPoint(400, map[string]string{"device": "hda", "direction": "write"})
 	mb1.addDoubleDataPoint(100, map[string]string{"device": "hdb", "direction": "read"})
 	mb1.addDoubleDataPoint(100, map[string]string{"device": "hdb", "direction": "write"})
 
-	mb2 := b.addMetric("system.disk.operations", pmetric.MetricDataTypeSum, true)
+	mb2 := b.addMetric("system.disk.operations", pmetric.MetricTypeSum, true)
 	mb2.addIntDataPoint(5, map[string]string{"device": "hda", "direction": "read"})
 	mb2.addIntDataPoint(4, map[string]string{"device": "hda", "direction": "write"})
 	mb2.addIntDataPoint(2, map[string]string{"device": "hdb", "direction": "read"})
@@ -48,9 +48,9 @@ func generateAverageDiskInput() pmetric.Metrics {
 
 func od(ops int64, time, cum float64) opData {
 	opsDp := pmetric.NewNumberDataPoint()
-	opsDp.SetIntVal(ops)
+	opsDp.SetIntValue(ops)
 	timeDp := pmetric.NewNumberDataPoint()
-	timeDp.SetDoubleVal(time)
+	timeDp.SetDoubleValue(time)
 	return opData{
 		opsDp,
 		timeDp,
@@ -94,7 +94,7 @@ func generateAverageDiskPrevExpected() pmetric.Metrics {
 
 	commonAverageDiskInput(b)
 
-	mb3 := b.addMetric("system.disk.average_operation_time", pmetric.MetricDataTypeSum, true)
+	mb3 := b.addMetric("system.disk.average_operation_time", pmetric.MetricTypeSum, true)
 	mb3.addDoubleDataPoint(15+2*(100/5), map[string]string{"device": "hda", "direction": "read"})
 	mb3.addDoubleDataPoint(20+2*(100/1), map[string]string{"device": "hda", "direction": "write"})
 	mb3.addDoubleDataPoint(30, map[string]string{"device": "hdb", "direction": "read"})

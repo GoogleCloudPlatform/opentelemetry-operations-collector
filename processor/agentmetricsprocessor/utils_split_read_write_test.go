@@ -24,11 +24,11 @@ func generateReadWriteMetricsInput() pmetric.Metrics {
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
 
-	mb1 := b.addMetric("system.disk.io", pmetric.MetricDataTypeSum, true)
+	mb1 := b.addMetric("system.disk.io", pmetric.MetricTypeSum, true)
 	mb1.addIntDataPoint(1, map[string]string{"label1": "value1", "direction": "read"})
 	mb1.addIntDataPoint(2, map[string]string{"label1": "value2", "direction": "write"})
 
-	mb2 := b.addMetric("process.disk.io", pmetric.MetricDataTypeSum, false)
+	mb2 := b.addMetric("process.disk.io", pmetric.MetricTypeSum, false)
 	mb2.addDoubleDataPoint(3, map[string]string{"label1": "value1", "direction": "read"})
 	mb2.addDoubleDataPoint(4, map[string]string{"label1": "value2", "direction": "write"})
 
@@ -41,10 +41,10 @@ func generateReadWriteMetricsExpected() pmetric.Metrics {
 
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
-	b.addMetric("system.disk.read_io", pmetric.MetricDataTypeSum, true).addIntDataPoint(1, map[string]string{"label1": "value1"})
-	b.addMetric("process.disk.read_io", pmetric.MetricDataTypeGauge, false).addDoubleDataPoint(3, map[string]string{"label1": "value1"})
-	b.addMetric("system.disk.write_io", pmetric.MetricDataTypeSum, true).addIntDataPoint(2, map[string]string{"label1": "value2"})
-	b.addMetric("process.disk.write_io", pmetric.MetricDataTypeGauge, false).addDoubleDataPoint(4, map[string]string{"label1": "value2"})
+	b.addMetric("system.disk.read_io", pmetric.MetricTypeSum, true).addIntDataPoint(1, map[string]string{"label1": "value1"})
+	b.addMetric("process.disk.read_io", pmetric.MetricTypeGauge, false).addDoubleDataPoint(3, map[string]string{"label1": "value1"})
+	b.addMetric("system.disk.write_io", pmetric.MetricTypeSum, true).addIntDataPoint(2, map[string]string{"label1": "value2"})
+	b.addMetric("process.disk.write_io", pmetric.MetricTypeGauge, false).addDoubleDataPoint(4, map[string]string{"label1": "value2"})
 
 	rmb.Build().CopyTo(expected.ResourceMetrics())
 	return expected

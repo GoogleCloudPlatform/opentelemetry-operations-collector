@@ -76,11 +76,11 @@ func (mtp *agentMetricsProcessor) appendAverageDiskMetrics(rms pmetric.ResourceM
 			ndps := pmetric.NewNumberDataPointSlice()
 			for key, new := range newOp {
 				prev, prevOk := mtp.prevOp[key]
-				t := new.time.DoubleVal()
-				ops := new.operations.IntVal()
+				t := new.time.DoubleValue()
+				ops := new.operations.IntValue()
 				if prevOk {
-					t -= prev.time.DoubleVal()
-					ops -= prev.operations.IntVal()
+					t -= prev.time.DoubleValue()
+					ops -= prev.operations.IntValue()
 					ndp := ndps.AppendEmpty()
 					new.time.CopyTo(ndp)
 					if ops > 0 {
@@ -88,7 +88,7 @@ func (mtp *agentMetricsProcessor) appendAverageDiskMetrics(rms pmetric.ResourceM
 						// Logic from https://github.com/Stackdriver/collectd/blob/2d176c650d9d6e4cd45d2add7977016c82dd8b55/src/disk.c#L321
 						new.cumAvgTime += (t / float64(ops)) * float64(interval) / 1e9
 					}
-					ndp.SetDoubleVal(new.cumAvgTime)
+					ndp.SetDoubleValue(new.cumAvgTime)
 				}
 				mtp.prevOp[key] = new
 			}

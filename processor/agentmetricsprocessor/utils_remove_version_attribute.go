@@ -27,10 +27,10 @@ func removeVersionAttribute(rms pmetric.ResourceMetricsSlice) {
 				metric := metrics.At(k)
 
 				var dps pmetric.NumberDataPointSlice
-				switch metric.DataType() {
-				case pmetric.MetricDataTypeGauge:
+				switch metric.Type() {
+				case pmetric.MetricTypeGauge:
 					dps = metric.Gauge().DataPoints()
-				case pmetric.MetricDataTypeSum:
+				case pmetric.MetricTypeSum:
 					dps = metric.Sum().DataPoints()
 				}
 

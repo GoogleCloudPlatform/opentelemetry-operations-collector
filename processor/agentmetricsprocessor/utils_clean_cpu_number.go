@@ -44,15 +44,15 @@ type labelsMapper interface {
 }
 
 func forEachPoint(metric pmetric.Metric, fn func(labelsMapper) error) error {
-	switch t := metric.DataType(); t {
-	case pmetric.MetricDataTypeSum:
+	switch t := metric.Type(); t {
+	case pmetric.MetricTypeSum:
 		dp := metric.Sum().DataPoints()
 		for i := 0; i < dp.Len(); i++ {
 			if err := fn(dp.At(i)); err != nil {
 				return err
 			}
 		}
-	case pmetric.MetricDataTypeGauge:
+	case pmetric.MetricTypeGauge:
 		dp := metric.Gauge().DataPoints()
 		for i := 0; i < dp.Len(); i++ {
 			if err := fn(dp.At(i)); err != nil {
@@ -66,7 +66,7 @@ func forEachPoint(metric pmetric.Metric, fn func(labelsMapper) error) error {
 func cleanCPUNumberDataPoint(lm labelsMapper) error {
 	sm := lm.Attributes()
 	if value, ok := sm.Get("cpu"); ok {
-		value.SetStringVal(strings.TrimPrefix(value.StringVal(), "cpu"))
+		value.SetStr(strings.TrimPrefix(value.Str(), "cpu"))
 	}
 	return nil
 }

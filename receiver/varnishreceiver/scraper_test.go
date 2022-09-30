@@ -40,7 +40,7 @@ func TestScrape(t *testing.T) {
 		mockClient := new(mockClient)
 		mockClient.On("GetStats").Return(getStats(t, "mock_response6_5.json"))
 
-		scraper := newVarnishScraper(componenttest.NewNopTelemetrySettings(), cfg)
+		scraper := newVarnishScraper(componenttest.NewNopReceiverCreateSettings(), cfg)
 		scraper.client = mockClient
 		actualMetrics, err := scraper.scrape(context.Background())
 		require.NoError(t, err)
@@ -53,7 +53,7 @@ func TestScrape(t *testing.T) {
 		mockClient := new(mockClient)
 		mockClient.On("GetStats").Return(getStats(t, "mock_response6_0.json"))
 
-		scraper := newVarnishScraper(componenttest.NewNopTelemetrySettings(), cfg)
+		scraper := newVarnishScraper(componenttest.NewNopReceiverCreateSettings(), cfg)
 		scraper.client = mockClient
 		actualMetrics, err := scraper.scrape(context.Background())
 		require.NoError(t, err)
@@ -64,8 +64,9 @@ func TestScrape(t *testing.T) {
 
 	t.Run("scrape error", func(t *testing.T) {
 		obs, logs := observer.New(zap.ErrorLevel)
-		settings := componenttest.NewNopTelemetrySettings()
-		settings.Logger = zap.New(obs)
+		settings := componenttest.NewNopReceiverCreateSettings()
+
+		settings.TelemetrySettings.Logger = zap.New(obs)
 		mockClient := new(mockClient)
 		mockClient.On("GetStats").Return(getStats(t, ""))
 		scraper := newVarnishScraper(settings, cfg)
@@ -107,7 +108,7 @@ func validateScraperResult(t *testing.T, actualMetrics pmetric.Metrics) {
 				dp := dps.At(j)
 				method := dp.Attributes().AsRaw()
 				label := fmt.Sprintf("%s method:%s", m.Name(), method)
-				attributeMappings[label] = dp.IntVal()
+				attributeMappings[label] = dp.IntValue()
 			}
 			require.Equal(t, map[string]int64{
 				"varnish.backend.connection.count method:map[kind:busy]":      int64(9),
@@ -127,7 +128,7 @@ func validateScraperResult(t *testing.T, actualMetrics pmetric.Metrics) {
 				dp := dps.At(j)
 				method := dp.Attributes().AsRaw()
 				label := fmt.Sprintf("%s method:%s", m.Name(), method)
-				attributeMappings[label] = dp.IntVal()
+				attributeMappings[label] = dp.IntValue()
 			}
 			require.Equal(t, map[string]int64{
 				"varnish.cache.operation.count method:map[operation:hit]":      int64(4),
@@ -143,7 +144,7 @@ func validateScraperResult(t *testing.T, actualMetrics pmetric.Metrics) {
 				dp := dps.At(j)
 				method := dp.Attributes().AsRaw()
 				label := fmt.Sprintf("%s method:%s", m.Name(), method)
-				attributeMappings[label] = dp.IntVal()
+				attributeMappings[label] = dp.IntValue()
 			}
 			require.Equal(t, map[string]int64{
 				"varnish.thread.operation.count method:map[operation:created]":   int64(14),
@@ -159,7 +160,7 @@ func validateScraperResult(t *testing.T, actualMetrics pmetric.Metrics) {
 				dp := dps.At(j)
 				method := dp.Attributes().AsRaw()
 				label := fmt.Sprintf("%s method:%s", m.Name(), method)
-				attributeMappings[label] = dp.IntVal()
+				attributeMappings[label] = dp.IntValue()
 			}
 			require.Equal(t, map[string]int64{
 				"varnish.session.count method:map[kind:accepted]": int64(1),
@@ -170,19 +171,19 @@ func validateScraperResult(t *testing.T, actualMetrics pmetric.Metrics) {
 		case "varnish.object.nuked":
 			dps := m.Sum().DataPoints()
 			require.Equal(t, 1, dps.Len())
-			require.EqualValues(t, int64(20), dps.At(0).IntVal())
+			require.EqualValues(t, int64(20), dps.At(0).IntValue())
 		case "varnish.object.moved":
 			dps := m.Sum().DataPoints()
 			require.Equal(t, 1, dps.Len())
-			require.EqualValues(t, int64(21), dps.At(0).IntVal())
+			require.EqualValues(t, int64(21), dps.At(0).IntValue())
 		case "varnish.object.expired":
 			dps := m.Sum().DataPoints()
 			require.Equal(t, 1, dps.Len())
-			require.EqualValues(t, int64(19), dps.At(0).IntVal())
+			require.EqualValues(t, int64(19), dps.At(0).IntValue())
 		case "varnish.object.count":
 			dps := m.Sum().DataPoints()
 			require.Equal(t, 1, dps.Len())
-			require.EqualValues(t, int64(18), dps.At(0).IntVal())
+			require.EqualValues(t, int64(18), dps.At(0).IntValue())
 		case "varnish.client.request.count":
 			dps := m.Sum().DataPoints()
 			require.Equal(t, 2, dps.Len())
@@ -191,7 +192,7 @@ func validateScraperResult(t *testing.T, actualMetrics pmetric.Metrics) {
 				dp := dps.At(j)
 				method := dp.Attributes().AsRaw()
 				label := fmt.Sprintf("%s method:%s", m.Name(), method)
-				attributeMappings[label] = dp.IntVal()
+				attributeMappings[label] = dp.IntValue()
 			}
 			require.Equal(t, map[string]int64{
 				"varnish.client.request.count method:map[state:received]": int64(3),
@@ -206,7 +207,7 @@ func validateScraperResult(t *testing.T, actualMetrics pmetric.Metrics) {
 				dp := dps.At(j)
 				method := dp.Attributes().AsRaw()
 				label := fmt.Sprintf("%s method:%s", m.Name(), method)
-				attributeMappings[label] = dp.IntVal()
+				attributeMappings[label] = dp.IntValue()
 			}
 			require.Equal(t, map[string]int64{
 				"varnish.client.request.error.count method:map[status_code:400]": int64(24),
@@ -217,7 +218,7 @@ func validateScraperResult(t *testing.T, actualMetrics pmetric.Metrics) {
 		case "varnish.backend.request.count":
 			dps := m.Sum().DataPoints()
 			require.Equal(t, 1, dps.Len())
-			require.EqualValues(t, int64(22), dps.At(0).IntVal())
+			require.EqualValues(t, int64(22), dps.At(0).IntValue())
 		}
 	}
 }
@@ -229,7 +230,7 @@ func TestStart(t *testing.T) {
 
 		f := NewFactory()
 		cfg := f.CreateDefaultConfig().(*Config)
-		scraper := newVarnishScraper(componenttest.NewNopTelemetrySettings(), cfg)
+		scraper := newVarnishScraper(componenttest.NewNopReceiverCreateSettings(), cfg)
 		err = scraper.start(context.Background(), componenttest.NewNopHost())
 		require.NoError(t, err)
 		require.EqualValues(t, hostname, scraper.cacheName)
@@ -238,7 +239,7 @@ func TestStart(t *testing.T) {
 		f := NewFactory()
 		cfg := f.CreateDefaultConfig().(*Config)
 		cfg.CacheDir = "/path/cache_name"
-		scraper := newVarnishScraper(componenttest.NewNopTelemetrySettings(), cfg)
+		scraper := newVarnishScraper(componenttest.NewNopReceiverCreateSettings(), cfg)
 		err := scraper.start(context.Background(), componenttest.NewNopHost())
 		require.NoError(t, err)
 		require.EqualValues(t, "cache_name", scraper.cacheName)
@@ -249,7 +250,7 @@ func TestSetDefaultCacheName(t *testing.T) {
 	t.Run("missing cache dir", func(t *testing.T) {
 		f := NewFactory()
 		cfg := f.CreateDefaultConfig().(*Config)
-		scraper := newVarnishScraper(componenttest.NewNopTelemetrySettings(), cfg)
+		scraper := newVarnishScraper(componenttest.NewNopReceiverCreateSettings(), cfg)
 
 		hostname, err := os.Hostname()
 		require.NoError(t, err)
@@ -263,7 +264,7 @@ func TestSetDefaultCacheName(t *testing.T) {
 		f := NewFactory()
 		cfg := f.CreateDefaultConfig().(*Config)
 		cfg.CacheDir = "/path/cache_name"
-		scraper := newVarnishScraper(componenttest.NewNopTelemetrySettings(), cfg)
+		scraper := newVarnishScraper(componenttest.NewNopReceiverCreateSettings(), cfg)
 
 		err := scraper.setCacheName()
 		require.NoError(t, err)

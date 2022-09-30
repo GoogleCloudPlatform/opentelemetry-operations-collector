@@ -62,7 +62,7 @@ func (nsp *NormalizeSumsProcessor) transformMetrics(rms pmetric.ResourceMetrics)
 		newSlice := pmetric.NewMetricSlice()
 		for k := 0; k < ilm.Len(); k++ {
 			metric := ilm.At(k)
-			if metric.DataType() == pmetric.MetricDataTypeSum && metric.Sum().IsMonotonic() {
+			if metric.Type() == pmetric.MetricTypeSum && metric.Sum().IsMonotonic() {
 				keepMetric := nsp.processMetric(rms.Resource(), metric)
 				if keepMetric {
 					newMetric := newSlice.AppendEmpty()
@@ -137,7 +137,7 @@ func (nsp *NormalizeSumsProcessor) processSumDataPoint(dp pmetric.NumberDataPoin
 
 	// If data has rolled over or the counter has been restarted for
 	// any other reason, grab a new start point and do not report this data
-	if (dp.ValueType() == pmetric.NumberDataPointValueTypeInt && dp.IntVal() < start.last.IntVal()) || (dp.ValueType() == pmetric.NumberDataPointValueTypeDouble && dp.DoubleVal() < start.last.DoubleVal()) {
+	if (dp.ValueType() == pmetric.NumberDataPointValueTypeInt && dp.IntValue() < start.last.IntValue()) || (dp.ValueType() == pmetric.NumberDataPointValueTypeDouble && dp.DoubleValue() < start.last.DoubleValue()) {
 		dp.CopyTo(start.start)
 		dp.CopyTo(start.last)
 
@@ -150,9 +150,9 @@ func (nsp *NormalizeSumsProcessor) processSumDataPoint(dp pmetric.NumberDataPoin
 	dp.CopyTo(newDP)
 	switch dp.ValueType() {
 	case pmetric.NumberDataPointValueTypeInt:
-		newDP.SetIntVal(dp.IntVal() - start.start.IntVal())
+		newDP.SetIntValue(dp.IntValue() - start.start.IntValue())
 	case pmetric.NumberDataPointValueTypeDouble:
-		newDP.SetDoubleVal(dp.DoubleVal() - start.start.DoubleVal())
+		newDP.SetDoubleValue(dp.DoubleValue() - start.start.DoubleValue())
 	}
 	newDP.SetStartTimestamp(start.start.Timestamp())
 }

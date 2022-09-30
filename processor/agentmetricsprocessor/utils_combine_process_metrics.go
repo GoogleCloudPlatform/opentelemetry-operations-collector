@@ -159,10 +159,10 @@ type convertedMetric struct {
 func (cm convertedMetric) append(metric pmetric.Metric, resource pcommon.Resource) error {
 	var err error
 
-	switch t := metric.DataType(); t {
-	case pmetric.MetricDataTypeSum:
+	switch t := metric.Type(); t {
+	case pmetric.MetricTypeSum:
 		err = appendNumberDataSlice(metric.Sum().DataPoints(), cm.Sum().DataPoints(), resource)
-	case pmetric.MetricDataTypeGauge:
+	case pmetric.MetricTypeGauge:
 		err = appendNumberDataSlice(metric.Gauge().DataPoints(), cm.Gauge().DataPoints(), resource)
 	}
 
@@ -229,13 +229,13 @@ func stringValue(attributeValue pcommon.Value) (string, error) {
 	var stringValue string
 	switch t := attributeValue.Type(); t {
 	case pcommon.ValueTypeBool:
-		stringValue = strconv.FormatBool(attributeValue.BoolVal())
+		stringValue = strconv.FormatBool(attributeValue.Bool())
 	case pcommon.ValueTypeInt:
-		stringValue = strconv.FormatInt(attributeValue.IntVal(), 10)
+		stringValue = strconv.FormatInt(attributeValue.Int(), 10)
 	case pcommon.ValueTypeDouble:
-		stringValue = strconv.FormatFloat(attributeValue.DoubleVal(), 'f', -1, 64)
-	case pcommon.ValueTypeString:
-		stringValue = attributeValue.StringVal()
+		stringValue = strconv.FormatFloat(attributeValue.Double(), 'f', -1, 64)
+	case pcommon.ValueTypeStr:
+		stringValue = attributeValue.Str()
 	default:
 		return "", fmt.Errorf("unexpected attribute type: %v", t)
 	}

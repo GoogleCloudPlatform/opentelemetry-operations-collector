@@ -31,8 +31,8 @@ func convertNonMonotonicSumsToGauges(rms pmetric.ResourceMetricsSlice) {
 
 				// ignore all metrics that are not counter (sum) types
 				var isMonotonic bool
-				switch t := metric.DataType(); t {
-				case pmetric.MetricDataTypeSum:
+				switch t := metric.Type(); t {
+				case pmetric.MetricTypeSum:
 					isMonotonic = metric.Sum().IsMonotonic()
 				default:
 					continue
@@ -51,7 +51,7 @@ func convertNonMonotonicSumsToGauges(rms pmetric.ResourceMetricsSlice) {
 }
 
 func convertToGauge(metric pmetric.Metric) {
-	if metric.DataType() == pmetric.MetricDataTypeSum {
+	if metric.Type() == pmetric.MetricTypeSum {
 		idps := metric.Sum().DataPoints()
 		metric.SetEmptyGauge()
 		metric.Gauge()

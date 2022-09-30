@@ -113,14 +113,14 @@ type Stats struct {
 }
 
 func (v *varnishScraper) recordVarnishBackendConnectionsCountDataPoint(now pcommon.Timestamp, stats *Stats) {
-	attributeMappings := map[string]int64{
-		metadata.AttributeBackendConnectionType.Success:   stats.MAINBackendConn.Value,
-		metadata.AttributeBackendConnectionType.Recycle:   stats.MAINBackendRecycle.Value,
-		metadata.AttributeBackendConnectionType.Reuse:     stats.MAINBackendReuse.Value,
-		metadata.AttributeBackendConnectionType.Fail:      stats.MAINBackendFail.Value,
-		metadata.AttributeBackendConnectionType.Unhealthy: stats.MAINBackendUnhealthy.Value,
-		metadata.AttributeBackendConnectionType.Busy:      stats.MAINBackendBusy.Value,
-		metadata.AttributeBackendConnectionType.Retry:     stats.MAINBackendRetry.Value,
+	attributeMappings := map[metadata.AttributeBackendConnectionType]int64{
+		metadata.AttributeBackendConnectionTypeSuccess:   stats.MAINBackendConn.Value,
+		metadata.AttributeBackendConnectionTypeRecycle:   stats.MAINBackendRecycle.Value,
+		metadata.AttributeBackendConnectionTypeReuse:     stats.MAINBackendReuse.Value,
+		metadata.AttributeBackendConnectionTypeFail:      stats.MAINBackendFail.Value,
+		metadata.AttributeBackendConnectionTypeUnhealthy: stats.MAINBackendUnhealthy.Value,
+		metadata.AttributeBackendConnectionTypeBusy:      stats.MAINBackendBusy.Value,
+		metadata.AttributeBackendConnectionTypeRetry:     stats.MAINBackendRetry.Value,
 	}
 
 	for attributeName, attributeValue := range attributeMappings {
@@ -129,10 +129,10 @@ func (v *varnishScraper) recordVarnishBackendConnectionsCountDataPoint(now pcomm
 }
 
 func (v *varnishScraper) recordVarnishCacheOperationsCountDataPoint(now pcommon.Timestamp, stats *Stats) {
-	attributeMappings := map[string]int64{
-		metadata.AttributeCacheOperations.Hit:     stats.MAINCacheHit.Value,
-		metadata.AttributeCacheOperations.HitPass: stats.MAINCacheHitpass.Value,
-		metadata.AttributeCacheOperations.Miss:    stats.MAINCacheMiss.Value,
+	attributeMappings := map[metadata.AttributeCacheOperations]int64{
+		metadata.AttributeCacheOperationsHit:     stats.MAINCacheHit.Value,
+		metadata.AttributeCacheOperationsHitPass: stats.MAINCacheHitpass.Value,
+		metadata.AttributeCacheOperationsMiss:    stats.MAINCacheMiss.Value,
 	}
 
 	for attributeName, attributeValue := range attributeMappings {
@@ -141,10 +141,10 @@ func (v *varnishScraper) recordVarnishCacheOperationsCountDataPoint(now pcommon.
 }
 
 func (v *varnishScraper) recordVarnishThreadOperationsCountDataPoint(now pcommon.Timestamp, stats *Stats) {
-	attributeMappings := map[string]int64{
-		metadata.AttributeThreadOperations.Created:   stats.MAINThreadsCreated.Value,
-		metadata.AttributeThreadOperations.Destroyed: stats.MAINThreadsDestroyed.Value,
-		metadata.AttributeThreadOperations.Failed:    stats.MAINThreadsFailed.Value,
+	attributeMappings := map[metadata.AttributeThreadOperations]int64{
+		metadata.AttributeThreadOperationsCreated:   stats.MAINThreadsCreated.Value,
+		metadata.AttributeThreadOperationsDestroyed: stats.MAINThreadsDestroyed.Value,
+		metadata.AttributeThreadOperationsFailed:    stats.MAINThreadsFailed.Value,
 	}
 
 	for attributeName, attributeValue := range attributeMappings {
@@ -153,10 +153,10 @@ func (v *varnishScraper) recordVarnishThreadOperationsCountDataPoint(now pcommon
 }
 
 func (v *varnishScraper) recordVarnishSessionCountDataPoint(now pcommon.Timestamp, stats *Stats) {
-	attributeMappings := map[string]int64{
-		metadata.AttributeSessionType.Accepted: stats.MAINSessConn.Value,
-		metadata.AttributeSessionType.Dropped:  stats.MAINSessDropped.Value,
-		metadata.AttributeSessionType.Failed:   stats.MAINSessFail.Value,
+	attributeMappings := map[metadata.AttributeSessionType]int64{
+		metadata.AttributeSessionTypeAccepted: stats.MAINSessConn.Value,
+		metadata.AttributeSessionTypeDropped:  stats.MAINSessDropped.Value,
+		metadata.AttributeSessionTypeFailed:   stats.MAINSessFail.Value,
 	}
 
 	for attributeName, attributeValue := range attributeMappings {
@@ -165,9 +165,9 @@ func (v *varnishScraper) recordVarnishSessionCountDataPoint(now pcommon.Timestam
 }
 
 func (v *varnishScraper) recordVarnishClientRequestsCountDataPoint(now pcommon.Timestamp, stats *Stats) {
-	attributeMappings := map[string]int64{
-		metadata.AttributeState.Received: stats.MAINClientReq.Value,
-		metadata.AttributeState.Dropped:  stats.MAINReqDropped.Value,
+	attributeMappings := map[metadata.AttributeState]int64{
+		metadata.AttributeStateReceived: stats.MAINClientReq.Value,
+		metadata.AttributeStateDropped:  stats.MAINReqDropped.Value,
 	}
 
 	for attributeName, attributeValue := range attributeMappings {

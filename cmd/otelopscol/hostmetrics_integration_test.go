@@ -24,7 +24,7 @@ func TestHostmetrics(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
 	defer cancel()
 
-	os.Args = append(os.Args, "-config=config-for-testing.yaml")
+	os.Args = append(os.Args, "--config=config-for-testing.yaml")
 
 	// Run the main function of otelopscol.
 	mainContext(ctx)

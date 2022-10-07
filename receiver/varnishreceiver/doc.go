@@ -15,6 +15,6 @@
 //go:build !windows
 // +build !windows
 
-//go:generate mdatagen --experimental-gen metadata.yaml
+//go:generate mdatagen metadata.yaml
 
 package varnishreceiver

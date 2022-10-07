@@ -2,7 +2,10 @@ module github.com/GoogleCloudPlatform/opentelemetry-operations-collector
 
 go 1.18
 
+replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/nvmlreceiver => ./receiver/nvmlreceiver
+
 require (
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/nvmlreceiver v0.61.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/fileexporter v0.61.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter v0.61.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlemanagedprometheusexporter v0.61.0
@@ -47,6 +50,7 @@ require (
 )
 
 require (
+	github.com/NVIDIA/go-nvml v0.11.6-0 // indirect
 	github.com/aerospike/aerospike-client-go/v6 v6.4.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.11.3 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/ottl v0.61.0 // indirect

@@ -22,8 +22,6 @@ import (
 	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
-type metricsBundle struct {}
-
 func TestHostmetrics(t *testing.T) {
 	terminationTime := 8*time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), terminationTime)
@@ -39,7 +37,7 @@ func TestHostmetrics(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	
+
 	metrics, err := pmetric.NewJSONUnmarshaler().UnmarshalMetrics(data)
 	if err != nil {
 		t.Fatal(err)

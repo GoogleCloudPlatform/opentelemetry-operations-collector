@@ -15,23 +15,36 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"testing"
 	"time"
+
+	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
+type metricsBundle struct {}
+
 func TestHostmetrics(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	terminationTime := 8*time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), terminationTime)
 	defer cancel()
 
 	os.Args = append(os.Args, "--config=config-for-testing.yaml")
 
 	// Run the main function of otelopscol.
+	// It will self-terminate in terminationTime.
 	mainContext(ctx)
 
 	data, err := os.ReadFile("metrics.json")
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Fatal(string(data))
+	
+	metrics, err := pmetric.NewJSONUnmarshaler().UnmarshalMetrics(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	singleExport := metrics.ResourceMetricsSlice().At(1)
+	t.Fatal(singleExport)
 }

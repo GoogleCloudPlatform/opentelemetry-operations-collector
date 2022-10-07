@@ -15,7 +15,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"testing"
 	"time"
@@ -45,6 +44,6 @@ func TestHostmetrics(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	singleExport := metrics.ResourceMetricsSlice().At(1)
+	singleExport := metrics.ResourceMetrics().At(1)
 	t.Fatal(singleExport)
 }

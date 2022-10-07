@@ -42,6 +42,8 @@ func TestHostmetrics(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	singleExport := metrics.ResourceMetrics().At(1)
-	t.Fatal(singleExport)
+	scopeMetrics0 := metrics.ResourceMetrics().At(1).ScopeMetrics().At(0)
+	t.Error(scopeMetrics0.Scope().Name())
+	t.Error(scopeMetrics0.Metrics().At(0).Name())
+	t.Error(scopeMetrics0.Metrics().At(0).Unit())
 }

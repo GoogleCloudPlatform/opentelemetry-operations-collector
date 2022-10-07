@@ -15,41 +15,41 @@
 package nvmlreceiver
 
 import (
-   "fmt"
-   "unsafe"
+	"fmt"
+	"unsafe"
 
-   "github.com/NVIDIA/go-nvml/pkg/nvml"
+	"github.com/NVIDIA/go-nvml/pkg/nvml"
 )
 
 func (m *nvmlMetric) setFloat64(val float64) {
-   *(*float64)(unsafe.Pointer(&m.value[0])) = val
+	*(*float64)(unsafe.Pointer(&m.value[0])) = val
 }
 
 func (m *nvmlMetric) asFloat64() float64 {
-   return *(*float64)(unsafe.Pointer(&m.value[0]))
+	return *(*float64)(unsafe.Pointer(&m.value[0]))
 }
 
 func (m *nvmlMetric) setInt64(val int64) {
-   *(*int64)(unsafe.Pointer(&m.value[0])) = val
+	*(*int64)(unsafe.Pointer(&m.value[0])) = val
 }
 
 func (m *nvmlMetric) asInt64() int64 {
-   return *(*int64)(unsafe.Pointer(&m.value[0]))
+	return *(*int64)(unsafe.Pointer(&m.value[0]))
 }
 
 func nvmlSampleAsFloat64(value [8]byte, nvmlType nvml.ValueType) (float64, error) {
-   switch (nvmlType) {
-   case nvml.VALUE_TYPE_DOUBLE:
-      return *(*float64)(unsafe.Pointer(&value[0])), nil
-   case nvml.VALUE_TYPE_UNSIGNED_INT:
-      return (float64)(*(*uint32)(unsafe.Pointer(&value[0]))), nil
-   case nvml.VALUE_TYPE_UNSIGNED_LONG:
-      return (float64)(*(*uint64)(unsafe.Pointer(&value[0]))), nil
-   case nvml.VALUE_TYPE_UNSIGNED_LONG_LONG:
-      return (float64)(*(*uint64)(unsafe.Pointer(&value[0]))), nil
-   case nvml.VALUE_TYPE_SIGNED_LONG_LONG:
-      return (float64)(*(*int64)(unsafe.Pointer(&value[0]))), nil
-   }
+	switch nvmlType {
+	case nvml.VALUE_TYPE_DOUBLE:
+		return *(*float64)(unsafe.Pointer(&value[0])), nil
+	case nvml.VALUE_TYPE_UNSIGNED_INT:
+		return (float64)(*(*uint32)(unsafe.Pointer(&value[0]))), nil
+	case nvml.VALUE_TYPE_UNSIGNED_LONG:
+		return (float64)(*(*uint64)(unsafe.Pointer(&value[0]))), nil
+	case nvml.VALUE_TYPE_UNSIGNED_LONG_LONG:
+		return (float64)(*(*uint64)(unsafe.Pointer(&value[0]))), nil
+	case nvml.VALUE_TYPE_SIGNED_LONG_LONG:
+		return (float64)(*(*int64)(unsafe.Pointer(&value[0]))), nil
+	}
 
-   return 0.0, fmt.Errorf("Unable to convert Nvidia NVML sample value to float64");
+	return 0.0, fmt.Errorf("Unable to convert Nvidia NVML sample value to float64")
 }

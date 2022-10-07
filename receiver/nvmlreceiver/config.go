@@ -15,18 +15,16 @@
 package nvmlreceiver
 
 import (
-   "time"
+	"time"
 
-   "go.opentelemetry.io/collector/receiver/scraperhelper"
+	"go.opentelemetry.io/collector/receiver/scraperhelper"
 
-   "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/nvmlreceiver/internal/metadata"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/nvmlreceiver/internal/metadata"
 )
 
-const defaultCollectionInterval = 10*time.Second
+const defaultCollectionInterval = 10 * time.Second
 
 type Config struct {
-   scraperhelper.ScraperControllerSettings `mapstructure:",squash"`
-   Metrics metadata.MetricsSettings        `mapstructure:"metrics"`
+	scraperhelper.ScraperControllerSettings `mapstructure:",squash"`
+	Metrics                                 metadata.MetricsSettings `mapstructure:"metrics"`
 }
-
-

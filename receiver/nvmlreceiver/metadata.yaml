@@ -1,0 +1,29 @@
+name: nvmlreceiver
+
+attributes:
+  gpu:
+    description: GPU number starting at 0.
+
+  memory_state:
+    description: Breakdown of GPU memory usage by type.
+    enum: [used, free]
+
+  model:
+    description: GPU model
+
+metrics:
+  nvml.gpu.utilization:
+    enabled: true
+    description: The GPU utilization
+    unit: 10^2.%
+    gauge:
+      value_type: double
+    attributes: [model, gpu]
+
+  nvml.gpu.memory.bytes_used:
+    enabled: true
+    description: The GPU allocated memory as bytes.
+    unit: By
+    gauge:
+      value_type: int
+    attributes: [model, gpu, memory_state]

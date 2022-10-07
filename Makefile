@@ -80,7 +80,7 @@ impi:
 
 .PHONY: lint
 lint:
-	golangci-lint run --allow-parallel-runners
+	golangci-lint run --allow-parallel-runners --verbose
 
 .PHONY: misspell
 misspell:

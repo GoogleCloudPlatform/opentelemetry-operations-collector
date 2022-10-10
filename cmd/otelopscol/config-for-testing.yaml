@@ -13,9 +13,9 @@
 # limitations under the License.
 
 receivers:
-  # scrape all metrics at 2s interval
+  # scrape all metrics at 1s interval
   hostmetrics:
-    collection_interval: 2s
+    collection_interval: 1s
     scrapers:
       cpu:
       filesystem:
@@ -25,8 +25,7 @@ receivers:
       paging:
       disk:
       process:
-      
-  # add receivers to extend the ability for MySQL, JVM and Apache
+      processes:
 
 processors:
   # append resource information from GCE metadata
@@ -46,7 +45,6 @@ processors:
         match_type: strict
         metric_names:
           - system.network.dropped
-          - system.paging.usage
           - system.filesystem.inodes.usage
           - system.paging.faults
 
@@ -67,10 +65,6 @@ processors:
           - action: update_label
             label: state
             new_label: cpu_state
-          # take mean over cpu_number dimension, retaining only cpu_state
-          - action: aggregate_labels
-            label_set: [ cpu_state ]
-            aggregation_type: mean
       # system.cpu.utilization -> cpu/utilization
       - include: system.cpu.utilization
         action: update
@@ -84,10 +78,6 @@ processors:
           - action: update_label
             label: state
             new_label: cpu_state
-          # take mean over cpu_number dimension, retaining only cpu_state
-          - action: aggregate_labels
-            label_set: [ cpu_state ]
-            aggregation_type: mean
       # system.cpu.load_average.1m -> cpu/load_1m
       - include: system.cpu.load_average.1m
         action: update
@@ -100,6 +90,10 @@ processors:
       - include: system.cpu.load_average.15m
         action: update
         new_name: cpu/load_15m
+      # system.disk.io_time -> disk/io_time
+      - include: system.disk.io_time
+        action: update
+        new_name: disk/io_time
       # system.disk.read_io (as named after custom split logic) -> disk/read_bytes_count
       - include: system.disk.read_io
         action: update
@@ -130,6 +124,10 @@ processors:
       - include: system.disk.merged
         action: update
         new_name: disk/merged_operations
+      # system.disk.weighted_io_time -> disk/weighted_io_time
+      - include: system.disk.weighted_io_time
+        action: update
+        new_name: disk/weighted_io_time
       # system.filesystem.usage -> disk/bytes_used
       - include: system.filesystem.usage
         action: update
@@ -226,18 +224,6 @@ processors:
         operations:
           # change data type from int64 -> double
           - action: toggle_scalar_data_type
-          # remove udp data
-          - action: delete_label_value
-            label: protocol
-            label_value: udp
-          # change label state -> tcp_state
-          - action: update_label
-            label: state
-            new_label: tcp_state
-          # remove protocol label
-          - action: aggregate_labels
-            label_set: [ state ]
-            aggregation_type: sum
       # system.paging.operations -> swap/io
       - include: system.paging.operations
         action: update
@@ -247,15 +233,17 @@ processors:
           - action: aggregate_labels
             label_set: [ direction ]
             aggregation_type: sum
+      # system.paging.usage -> swap/bytes_used
+      - include: system.paging.usage
+        action: update
+        new_name: swap/bytes_used
+        operations:
+          # change data type from ?? -> ??
+        - action: toggle_scalar_data_type
       # system.paging.utilization -> swap/percent_used
       - include: system.paging.utilization
         action: update
         new_name: swap/percent_used
-        operations:
-          # take sum over direction dimension, retaining only state
-          - action: aggregate_labels
-            label_set: [ state ]
-            aggregation_type: sum
       # process.cpu.time -> processes/cpu_time
       - include: process.cpu.time
         action: update
@@ -263,10 +251,6 @@ processors:
         operations:
           # change data type from double -> int64
           - action: toggle_scalar_data_type
-          # change label state -> user_or_syst
-          - action: update_label
-            label: state
-            new_label: user_or_syst
       # process.disk.read_io (as named after custom split logic) -> processes/disk/read_bytes_count
       - include: process.disk.read_io
         action: update
@@ -289,10 +273,23 @@ processors:
         operations:
           # change data type from int64 -> double
           - action: toggle_scalar_data_type
+      # system.processes.count -> processes/count_by_state
+      - include: system.processes.count
+        action: update
+        new_name: processes/count_by_state
+        operations:
+          # change data type from ?? -> ??
+        - action: toggle_scalar_data_type
+        - action: update_label
+          label: status
+          new_label: state
+      # system.processes.created -> processes/fork_count
+      - include: system.processes.created
+        action: update
+        new_name: processes/fork_count
 
 exporters:
-  # to debug the outputted metrics, uncomment the following and add "logging" to the exporters list below
-  # logging:
+  logging:
   file:
     path: ./metrics.json
 
@@ -305,6 +302,6 @@ service:
     metrics:
       receivers: [hostmetrics]
       processors: [agentmetrics/cloud-monitoring, metricstransform/cloud-monitoring, filter/cloud-monitoring, resourcedetection]
-      exporters: [file]
+      exporters: [file,logging]
 
   extensions: [zpages]

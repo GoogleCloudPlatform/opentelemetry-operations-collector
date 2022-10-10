@@ -1,0 +1,190 @@
+# Copyright 2022 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+expected_metrics:
+  - name: cpu/load_15m
+    value_type: DOUBLE
+    kind: Gauge
+  - name: cpu/load_1m
+    value_type: DOUBLE
+    kind: Gauge
+  - name: cpu/load_5m
+    value_type: DOUBLE
+    kind: Gauge
+  - name: cpu/usage_time
+    value_type: INT64
+    kind: Sum
+    attributes:
+      cpu_number: \d*
+      cpu_state: idle|interrupt|nice|softirq|steal|system|used|user|wait
+  - name: cpu/utilization
+    value_type: DOUBLE
+    kind: Gauge
+    attributes:
+      cpu_number: \d*
+      cpu_state: idle|interrupt|nice|softirq|steal|system|used|user|wait
+  - name: disk/bytes_used
+    value_type: DOUBLE
+    kind: Gauge
+    attributes:
+      device: .*
+      state: free|reserved|used
+  - name: disk/io_time
+    value_type: INT64
+    kind: Sum
+    attributes:
+      device: .*
+  - name: disk/merged_operations
+    value_type: INT64
+    kind: Sum
+    attributes:
+      device: .*
+      direction: read|write
+  - name: disk/operation_count
+    value_type: INT64
+    kind: Sum
+    attributes:
+      device: .*
+      direction: read|write
+  - name: disk/operation_time
+    value_type: INT64
+    kind: Sum
+    attributes:
+      device: .*
+      direction: read|write
+  - name: disk/pending_operations
+    value_type: DOUBLE
+    kind: Gauge
+    attributes:
+      device: .*
+  - name: disk/percent_used
+    value_type: DOUBLE
+    kind: Gauge
+    attributes:
+      device: .*
+      state: free|reserved|used
+  - name: disk/read_bytes_count
+    value_type: INT64
+    kind: Sum
+    attributes:
+      device: .*
+  - name: disk/weighted_io_time
+    value_type: INT64
+    kind: Sum
+    attributes:
+      device: .*
+  - name: disk/write_bytes_count
+    value_type: INT64
+    kind: Sum
+    attributes:
+      device: .*
+  - name: interface/errors
+    value_type: INT64
+    kind: Sum
+    attributes:
+      device: .*
+      direction: tx|rx
+  - name: interface/packets
+    value_type: INT64
+    kind: Sum
+    attributes:
+      device: .*
+      direction: tx|rx
+  - name: interface/traffic
+    value_type: INT64
+    kind: Sum
+    attributes:
+      device: .*
+      direction: tx|rx
+  - name: memory/bytes_used
+    value_type: DOUBLE
+    kind: Gauge
+    attributes:
+      state: buffered|cached|free|slab|used
+  - name: memory/percent_used
+    value_type: DOUBLE
+    kind: Gauge
+    attributes:
+      state: buffered|cached|free|slab|used
+  - name: network/tcp_connections
+    value_type: DOUBLE
+    kind: Gauge
+    attributes:
+      state: CLOSE|CLOSED|CLOSE_WAIT|CLOSING|DELETE|ESTABLISHED|FIN_WAIT_1|FIN_WAIT1|FIN_WAIT_2|FIN_WAIT2|LAST_ACK|LISTEN|SYN_RECEIVED|SYN_RECV|SYN_SENT|TIME_WAIT
+  - name: processes/count_by_state
+    value_type: DOUBLE
+    kind: Gauge
+    attributes:
+      state: blocked|daemon|detached|idle|locked|orphan|paging|running|sleeping|stopped|system|unknown|zombies
+  - name: processes/cpu_time
+    value_type: INT64
+    kind: Sum
+    attributes:
+      command: .*
+      command_line: .*
+      owner: .*
+      pid: \d+
+      state: user|system|wait
+  - name: processes/disk/read_bytes_count
+    value_type: INT64
+    kind: Sum
+    attributes:
+      command: .*
+      command_line: .*
+      owner: .*
+      pid: \d+
+  - name: processes/disk/write_bytes_count
+    value_type: INT64
+    kind: Sum
+    attributes:
+      command: .*
+      command_line: .*
+      owner: .*
+      pid: \d+
+  - name: processes/fork_count
+    value_type: INT64
+    kind: Sum
+  - name: processes/rss_usage
+    value_type: DOUBLE
+    kind: Gauge
+    attributes:
+      command: .*
+      command_line: .*
+      owner: .*
+      pid: \d+
+  - name: processes/vm_usage
+    value_type: DOUBLE
+    kind: Gauge
+    attributes:
+      command: .*
+      command_line: .*
+      owner: .*
+      pid: \d+
+  - name: swap/bytes_used
+    value_type: DOUBLE
+    kind: Gauge
+    attributes:
+      device: .*
+      state: cached|free|used
+  - name: swap/io
+    value_type: INT64
+    kind: Sum
+    attributes:
+      direction: page_in|page_out
+  - name: swap/percent_used
+    value_type: DOUBLE
+    kind: Gauge
+    attributes:
+      device: .*
+      state: free|used

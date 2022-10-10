@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build with_gpu
-// +build with_gpu
+//go:build gpu
+// +build gpu
 
 package nvmlreceiver
 

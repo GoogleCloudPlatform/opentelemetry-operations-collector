@@ -18,9 +18,12 @@
 package nvmlreceiver
 
 import (
+	"math"
 	"testing"
 	"time"
+	"unsafe"
 
+	"github.com/NVIDIA/go-nvml/pkg/nvml"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
@@ -33,7 +36,18 @@ func TestNewNvmlClientWithGpuPresent(t *testing.T) {
 	assert.Greater(t, len(client.devices), 0)
 }
 
-func TestGpuUtilizationWithGpuPresent(t *testing.T) {
+func TestGpuModelNameExists(t *testing.T) {
+	client, _ := newClient(createDefaultConfig().(*Config), zaptest.NewLogger(t))
+	require.NotNil(t, client)
+	require.Greater(t, len(client.devices), 0)
+
+	for gpuId := 0; gpuId < len(client.devices); gpuId++ {
+		model := client.getDeviceModelName(uint(gpuId))
+		assert.GreaterOrEqual(t, len(model), 2)
+	}
+}
+
+func TestCollectGpuUtilization(t *testing.T) {
 	client, _ := newClient(createDefaultConfig().(*Config), zaptest.NewLogger(t))
 	require.NotNil(t, client)
 
@@ -53,7 +67,7 @@ func TestGpuUtilizationWithGpuPresent(t *testing.T) {
 	}
 }
 
-func TestGpuMemoryUsedWithGpuPresent(t *testing.T) {
+func TestCollectGpuMemoryUsed(t *testing.T) {
 	client, _ := newClient(createDefaultConfig().(*Config), zaptest.NewLogger(t))
 	require.NotNil(t, client)
 
@@ -83,7 +97,30 @@ func TestGpuMemoryUsedWithGpuPresent(t *testing.T) {
 	}
 }
 
+func TestGpuUtilizationIsAveraged(t *testing.T) {
+	client, _ := newClient(createDefaultConfig().(*Config), zaptest.NewLogger(t))
+	require.NotNil(t, client)
+
+	realNvmlGetSamples := nvmlDeviceGetSamples
+	defer func() { nvmlDeviceGetSamples = realNvmlGetSamples }()
+	nvmlDeviceGetSamples = func(
+		device nvml.Device, _type nvml.SamplingType, LastSeenTimeStamp uint64) (nvml.ValueType, []nvml.Sample, nvml.Return) {
+		sampleCount := 61
+		samples := make([]nvml.Sample, sampleCount)
+		for i, _ := range samples {
+			x := float64(i) / float64(sampleCount) * math.Pi
+			y := int64(100.0 * math.Sin(x) * math.Sin(x))
+			*(*int64)(unsafe.Pointer(&samples[i].SampleValue[0])) = y
+			samples[i].TimeStamp = uint64(time.Now().Unix())
+		}
+
+		return nvml.VALUE_TYPE_SIGNED_LONG_LONG, samples, nvml.SUCCESS
+	}
+
+	metrics := client.collectDeviceUtilization()
+	require.GreaterOrEqual(t, len(metrics), 1)
+	assert.InDelta(t, 0.5, metrics[0].asFloat64(), 0.01)
+}
+
 // todo: check no fail on bad NVML query
 // todo: check max warnings on bad NVML query
-// todo: check average utilization is correct
-// todo: check model name is meaningful

@@ -55,6 +55,15 @@ var nvmlInit = func() nvml.Return {
 	return nvmlInitReturn
 }
 
+var nvmlDeviceGetSamples = func(
+	device nvml.Device, _type nvml.SamplingType, LastSeenTimeStamp uint64) (nvml.ValueType, []nvml.Sample, nvml.Return) {
+	return nvml.DeviceGetSamples(device, _type, LastSeenTimeStamp)
+}
+
+var nvmlDeviceGetMemoryInfo = func(device nvml.Device) (nvml.Memory, nvml.Return) {
+	return nvml.DeviceGetMemoryInfo(device)
+}
+
 func newClient(config *Config, logger *zap.Logger) (*nvmlClient, error) {
 	nvmlCleanup, err := initializeNvml(logger)
 	if err != nil {
@@ -196,7 +205,7 @@ func (client *nvmlClient) collectDeviceUtilization() []nvmlMetric {
 }
 
 func (client *nvmlClient) getAverageGpuUtilizationSinceLastQuery(device nvml.Device) (float64, error) {
-	nvmlType, samples, ret := device.GetSamples(nvml.GPU_UTILIZATION_SAMPLES, client.deviceToLastSeenTimestamp[device])
+	nvmlType, samples, ret := nvmlDeviceGetSamples(device, nvml.GPU_UTILIZATION_SAMPLES, client.deviceToLastSeenTimestamp[device])
 	if ret != nvml.SUCCESS {
 		return 0.0, fmt.Errorf("%v", nvml.ErrorString(ret))
 	}
@@ -236,7 +245,7 @@ func (client *nvmlClient) collectDeviceMemoryInfo() []nvmlMetric {
 	gpuMemFree := nvmlMetric{name: "nvml.gpu.memory.bytes_free"}
 
 	for idx, device := range client.devices {
-		memInfo, ret := device.GetMemoryInfo()
+		memInfo, ret := nvmlDeviceGetMemoryInfo(device)
 		timestamp := time.Now()
 		if ret != nvml.SUCCESS {
 			client.issueWarningForFailedQueryUptoThreshold(idx, gpuMemUsed.name, nvml.ErrorString(ret))

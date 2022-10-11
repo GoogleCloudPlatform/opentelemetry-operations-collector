@@ -121,6 +121,3 @@ func TestGpuUtilizationIsAveraged(t *testing.T) {
 	require.GreaterOrEqual(t, len(metrics), 1)
 	assert.InDelta(t, 0.5, metrics[0].asFloat64(), 0.01)
 }
-
-// todo: check no fail on bad NVML query
-// todo: check max warnings on bad NVML query

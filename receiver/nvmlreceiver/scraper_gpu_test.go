@@ -19,6 +19,7 @@ package nvmlreceiver
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/NVIDIA/go-nvml/pkg/nvml"
@@ -91,7 +92,7 @@ func TestScrapeEmitsWarningsUptoThreshold(t *testing.T) {
 	warnings := 0
 	settings := componenttest.NewNopReceiverCreateSettings()
 	settings.Logger = zaptest.NewLogger(t, zaptest.WrapOptions(zap.Hooks(func(e zapcore.Entry) error {
-		if e.Level == zap.WarnLevel {
+		if e.Level == zap.WarnLevel && strings.Contains(e.Message, "Unable to query") {
 			warnings = warnings + 1
 		}
 		return nil
@@ -108,8 +109,7 @@ func TestScrapeEmitsWarningsUptoThreshold(t *testing.T) {
 		scraper.scrape(context.Background())
 	}
 
-	// +1 for final warning regarding suppression of further warnings
-	require.Equal(t, warnings, maxWarningsForFailedDeviceMetricQuery+1)
+	require.Equal(t, warnings, maxWarningsForFailedDeviceMetricQuery)
 }
 
 func validateScraperResult(t *testing.T, metrics pmetric.Metrics, expected_metrics []string) {

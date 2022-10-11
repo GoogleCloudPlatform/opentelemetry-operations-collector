@@ -109,7 +109,7 @@ func TestScrapeEmitsWarningsUptoThreshold(t *testing.T) {
 	}
 
 	// +1 for final warning regarding suppression of further warnings
-	require.LessOrEqual(t, warnings, maxWarningsForFailedDeviceMetricQuery+1)
+	require.Equal(t, warnings, maxWarningsForFailedDeviceMetricQuery+1)
 }
 
 func validateScraperResult(t *testing.T, metrics pmetric.Metrics, expected_metrics []string) {

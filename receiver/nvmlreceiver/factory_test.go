@@ -12,29 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build windows
-// +build windows
+//go:build !windows
+// +build !windows
 
 package nvmlreceiver
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/collector/component/componenttest"
-	"go.opentelemetry.io/collector/consumer/consumertest"
+	"go.opentelemetry.io/collector/config"
 )
 
-func TestCreateMetricsReceiverOnWindows(t *testing.T) {
+func TestCreateDefaultConfig(t *testing.T) {
 	factory := NewFactory()
 	cfg := factory.CreateDefaultConfig()
-	receiver, err := factory.CreateMetricsReceiver(
-		context.Background(),
-		componenttest.NewNopReceiverCreateSettings(),
-		cfg,
-		consumertest.NewNop())
+	require.NotNil(t, cfg, "failed to create default config")
+}
 
-	require.Regexp(t, "*only supported on Linux*", err)
-	require.Nil(t, receiver)
+func TestType(t *testing.T) {
+	factory := NewFactory()
+	require.Equal(t, config.Type(typeStr), factory.Type())
 }

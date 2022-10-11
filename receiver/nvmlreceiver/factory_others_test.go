@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build windows
-// +build windows
+//go:build !windows
+// +build !windows
 
 package nvmlreceiver
 
@@ -26,15 +26,18 @@ import (
 	"go.opentelemetry.io/collector/consumer/consumertest"
 )
 
-func TestCreateMetricsReceiverOnWindows(t *testing.T) {
+func TestCreateMetricsReceiverOnLinux(t *testing.T) {
 	factory := NewFactory()
 	cfg := factory.CreateDefaultConfig()
+	receiverConfig := cfg.(*Config)
+
 	receiver, err := factory.CreateMetricsReceiver(
 		context.Background(),
 		componenttest.NewNopReceiverCreateSettings(),
-		cfg,
-		consumertest.NewNop())
+		receiverConfig,
+		consumertest.NewNop(),
+	)
 
-	require.Regexp(t, "*only supported on Linux*", err)
-	require.Nil(t, receiver)
+	require.NoError(t, err)
+	require.NotNil(t, receiver, "failed to create metrics receiver")
 }

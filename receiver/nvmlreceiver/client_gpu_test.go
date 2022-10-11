@@ -19,7 +19,9 @@ package nvmlreceiver
 
 import (
 	"testing"
+	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 )
@@ -27,20 +29,27 @@ import (
 func TestNewNvmlClientWithGpuPresent(t *testing.T) {
 	client, _ := newClient(createDefaultConfig().(*Config), zaptest.NewLogger(t))
 	require.NotNil(t, client)
-	require.Equal(t, client.disable, false)
-	require.Greater(t, len(client.devices), 0)
+	assert.Equal(t, client.disable, false)
+	assert.Greater(t, len(client.devices), 0)
 }
 
 func TestGpuUtilizationWithGpuPresent(t *testing.T) {
 	client, _ := newClient(createDefaultConfig().(*Config), zaptest.NewLogger(t))
 	require.NotNil(t, client)
 
+	before := time.Now()
 	metrics := client.collectDeviceUtilization()
-	require.GreaterOrEqual(t, len(metrics), 1)
+	after := time.Now()
+
+	assert.GreaterOrEqual(t, len(metrics), 1)
 	for _, metric := range metrics {
-		require.Equal(t, metric.name, "nvml.gpu.utilization")
-		require.GreaterOrEqual(t, metric.asFloat64(), 0.0)
-		require.LessOrEqual(t, metric.asFloat64(), 1.0)
+		assert.Equal(t, metric.name, "nvml.gpu.utilization")
+		assert.GreaterOrEqual(t, metric.gpuId, uint(0))
+		assert.LessOrEqual(t, metric.gpuId, uint(32))
+		assert.GreaterOrEqual(t, metric.asFloat64(), 0.0)
+		assert.LessOrEqual(t, metric.asFloat64(), 1.0)
+		assert.GreaterOrEqual(t, metric.time, before)
+		assert.LessOrEqual(t, metric.time, after)
 	}
 }
 
@@ -48,14 +57,33 @@ func TestGpuMemoryUsedWithGpuPresent(t *testing.T) {
 	client, _ := newClient(createDefaultConfig().(*Config), zaptest.NewLogger(t))
 	require.NotNil(t, client)
 
+	var requiredNames = map[string]bool{
+		"nvml.gpu.memory.bytes_used": false,
+		"nvml.gpu.memory.bytes_free": false,
+	}
+
+	before := time.Now()
 	metrics := client.collectDeviceMemoryInfo()
-	require.GreaterOrEqual(t, len(metrics), 2)
+	after := time.Now()
+
+	assert.GreaterOrEqual(t, len(metrics), 2)
 	for _, metric := range metrics {
-		nameMatch :=
-			metric.name == "nvml.gpu.memory.bytes_used" ||
-				metric.name == "nvml.gpu.memory.bytes_free"
-		require.Equal(t, nameMatch, true)
-		require.GreaterOrEqual(t, metric.asInt64(), int64(0))
-		require.LessOrEqual(t, metric.asInt64(), int64(10995116277760))
+		assert.Contains(t, requiredNames, metric.name)
+		requiredNames[metric.name] = true
+		assert.GreaterOrEqual(t, metric.gpuId, uint(0))
+		assert.LessOrEqual(t, metric.gpuId, uint(32))
+		assert.GreaterOrEqual(t, metric.asInt64(), int64(0))
+		assert.LessOrEqual(t, metric.asInt64(), int64(10995116277760)) // 10 TiB
+		assert.GreaterOrEqual(t, metric.time, before)
+		assert.LessOrEqual(t, metric.time, after)
+	}
+
+	for _, seen := range requiredNames {
+		assert.Equal(t, seen, true)
 	}
 }
+
+// todo: check no fail on bad NVML query
+// todo: check max warnings on bad NVML query
+// todo: check average utilization is correct
+// todo: check model name is meaningful

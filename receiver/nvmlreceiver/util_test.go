@@ -12,29 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build windows
-// +build windows
+//go:build !windows
+// +build !windows
 
 package nvmlreceiver
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/collector/component/componenttest"
-	"go.opentelemetry.io/collector/consumer/consumertest"
 )
 
-func TestCreateMetricsReceiverOnWindows(t *testing.T) {
-	factory := NewFactory()
-	cfg := factory.CreateDefaultConfig()
-	receiver, err := factory.CreateMetricsReceiver(
-		context.Background(),
-		componenttest.NewNopReceiverCreateSettings(),
-		cfg,
-		consumertest.NewNop())
+func TestNvmlMetricSetFloat64(t *testing.T) {
+	var metric nvmlMetric
+	metric.setFloat64(23.0)
+	require.Equal(t, metric.asFloat64(), 23.0)
+	metric.setFloat64(43.0)
+	require.Equal(t, metric.asFloat64(), 43.0)
+}
 
-	require.Regexp(t, "*only supported on Linux*", err)
-	require.Nil(t, receiver)
+func TestNvmlMetricSetInt64(t *testing.T) {
+	var metric nvmlMetric
+	metric.setInt64(23)
+	require.Equal(t, metric.asInt64(), int64(23))
+	metric.setInt64(43)
+	require.Equal(t, metric.asInt64(), int64(43))
 }

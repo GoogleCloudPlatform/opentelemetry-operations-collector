@@ -13,121 +13,128 @@
 # limitations under the License.
 
 expected_metrics:
-  - name: cpu/load_15m
+  - name: system.cpu.load_average.15m
     value_type: DOUBLE
     kind: Gauge
-  - name: cpu/load_1m
+  - name: system.cpu.load_average.1m
     value_type: DOUBLE
     kind: Gauge
-  - name: cpu/load_5m
+  - name: system.cpu.load_average.5m
     value_type: DOUBLE
     kind: Gauge
-  - name: cpu/usage_time
+  - name: system.cpu.time
     value_type: INT64
     kind: Sum
     attributes:
-      cpu_number: \d*
-      cpu_state: idle|interrupt|nice|softirq|steal|system|used|user|wait
-  - name: cpu/utilization
+      cpu: \d*
+      state: idle|interrupt|nice|softirq|steal|system|used|user|wait
+  - name: system.cpu.utilization
     value_type: DOUBLE
     kind: Gauge
     attributes:
-      cpu_number: \d*
-      cpu_state: idle|interrupt|nice|softirq|steal|system|used|user|wait
-  - name: disk/bytes_used
+      cpu: \d*
+      state: idle|interrupt|nice|softirq|steal|system|used|user|wait
+  - name: system.filesystem.usage
     value_type: DOUBLE
     kind: Gauge
     attributes:
       device: .*
+      mode: .*
+      mountpoint: /.*
       state: free|reserved|used
-  - name: disk/io_time
+      type: .*
+  - name: system.disk.io_time
     value_type: INT64
     kind: Sum
     attributes:
       device: .*
-  - name: disk/merged_operations
-    value_type: INT64
-    kind: Sum
-    attributes:
-      device: .*
-      direction: read|write
-  - name: disk/operation_count
+  - name: system.disk.merged
     value_type: INT64
     kind: Sum
     attributes:
       device: .*
       direction: read|write
-  - name: disk/operation_time
+  - name: system.disk.operations
     value_type: INT64
     kind: Sum
     attributes:
       device: .*
       direction: read|write
-  - name: disk/pending_operations
+  - name: system.disk.operation_time
+    value_type: INT64
+    kind: Sum
+    attributes:
+      device: .*
+      direction: read|write
+  - name: system.disk.pending_operations
     value_type: DOUBLE
     kind: Gauge
     attributes:
       device: .*
-  - name: disk/percent_used
+  - name: system.filesystem.utilization
     value_type: DOUBLE
     kind: Gauge
     attributes:
       device: .*
+      mode: .*
+      mountpoint: /.*
       state: free|reserved|used
-  - name: disk/read_bytes_count
+      type: .*
+  - name: system.disk.read_io
     value_type: INT64
     kind: Sum
     attributes:
       device: .*
-  - name: disk/weighted_io_time
+  - name: system.disk.weighted_io_time
     value_type: INT64
     kind: Sum
     attributes:
       device: .*
-  - name: disk/write_bytes_count
+  - name: system.disk.write_io
     value_type: INT64
     kind: Sum
     attributes:
       device: .*
-  - name: interface/errors
+  - name: system.network.errors
     value_type: INT64
     kind: Sum
     attributes:
       device: .*
-      direction: tx|rx
-  - name: interface/packets
+      direction: transmit|receive
+  - name: system.network.packets
     value_type: INT64
     kind: Sum
     attributes:
       device: .*
-      direction: tx|rx
-  - name: interface/traffic
+      direction: transmit|receive
+  - name: system.network.io
     value_type: INT64
     kind: Sum
     attributes:
       device: .*
-      direction: tx|rx
-  - name: memory/bytes_used
+      direction: transmit|receive
+  - name: system.memory.usage
     value_type: DOUBLE
     kind: Gauge
     attributes:
-      state: buffered|cached|free|slab|used
-  - name: memory/percent_used
+      state: buffered|cached|free|slab_reclaimable|slab_unreclaimable|used
+  - name: system.memory.utilization
     value_type: DOUBLE
     kind: Gauge
     attributes:
-      state: buffered|cached|free|slab|used
-  - name: network/tcp_connections
+      state: buffered|cached|free|slab_reclaimable|slab_unreclaimable|used
+  - name: system.network.connections
     value_type: DOUBLE
     kind: Gauge
     attributes:
+      protocol: tcp|udp
       state: CLOSE|CLOSED|CLOSE_WAIT|CLOSING|DELETE|ESTABLISHED|FIN_WAIT_1|FIN_WAIT1|FIN_WAIT_2|FIN_WAIT2|LAST_ACK|LISTEN|SYN_RECEIVED|SYN_RECV|SYN_SENT|TIME_WAIT
-  - name: processes/count_by_state
+  - name: system.processes.count
     value_type: DOUBLE
     kind: Gauge
     attributes:
-      state: blocked|daemon|detached|idle|locked|orphan|paging|running|sleeping|stopped|system|unknown|zombies
-  - name: processes/cpu_time
+      status: blocked|daemon|detached|idle|locked|orphan|paging|running|sleeping|stopped|system|unknown|zombies
+  - name: process.cpu.time
     value_type: INT64
     kind: Sum
     attributes:
@@ -136,7 +143,7 @@ expected_metrics:
       owner: .*
       pid: \d+
       state: user|system|wait
-  - name: processes/disk/read_bytes_count
+  - name: process.disk.read_io
     value_type: INT64
     kind: Sum
     attributes:
@@ -144,7 +151,7 @@ expected_metrics:
       command_line: .*
       owner: .*
       pid: \d+
-  - name: processes/disk/write_bytes_count
+  - name: process.disk.write_io
     value_type: INT64
     kind: Sum
     attributes:
@@ -152,10 +159,10 @@ expected_metrics:
       command_line: .*
       owner: .*
       pid: \d+
-  - name: processes/fork_count
+  - name: system.processes.created
     value_type: INT64
     kind: Sum
-  - name: processes/rss_usage
+  - name: process.memory.physical_usage
     value_type: DOUBLE
     kind: Gauge
     attributes:
@@ -163,7 +170,7 @@ expected_metrics:
       command_line: .*
       owner: .*
       pid: \d+
-  - name: processes/vm_usage
+  - name: process.memory.virtual_usage
     value_type: DOUBLE
     kind: Gauge
     attributes:
@@ -171,18 +178,19 @@ expected_metrics:
       command_line: .*
       owner: .*
       pid: \d+
-  - name: swap/bytes_used
+  - name: system.paging.usage
     value_type: DOUBLE
     kind: Gauge
     attributes:
       device: .*
       state: cached|free|used
-  - name: swap/io
+  - name: system.paging.operations
     value_type: INT64
     kind: Sum
     attributes:
       direction: page_in|page_out
-  - name: swap/percent_used
+      type: major|minor
+  - name: system.paging.utilization
     value_type: DOUBLE
     kind: Gauge
     attributes:

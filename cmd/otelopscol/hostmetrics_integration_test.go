@@ -110,7 +110,6 @@ type ExpectedMetric struct {
 	Kind string `yaml:"kind" validate:"required,oneof=GAUGE DELTA CUMULATIVE"`
 	// Mapping of expected label keys to value patterns.
 	// Patterns are RE2 regular expressions.
-	// TODO: check that the set of expected attributes is exhaustive?
 	Attributes map[string]string `yaml:"attributes,omitempty" validate:"omitempty,gt=0"`
 }
 
@@ -130,33 +129,40 @@ func expectAttributesMatch(t *testing.T, dataPoints pmetric.NumberDataPointSlice
 	//     cpu_state:map[idle:true interrupt:true]
 	//     pid:map[123:true 456:true]
 	//   ]
-	collectedAttributes := make(map[string]map[string]bool)
+	actualAttributes := make(map[string]map[string]bool)
 
 	// Collect all the attributes across all data points into the
-	// `collectedAttributes` map.
+	// `actualAttributes` map.
 	for i := 0; i < dataPoints.Len(); i++ {
 		dataPoint := dataPoints.At(i)
 		attributes := dataPoint.Attributes()
 		attributes.Range(func(k string, v pcommon.Value) bool {
-			if _, ok := collectedAttributes[k]; !ok {
-				collectedAttributes[k] = make(map[string]bool)
+			if _, ok := actualAttributes[k]; !ok {
+				actualAttributes[k] = make(map[string]bool)
 			}
-			collectedAttributes[k][v.AsString()] = true
+			actualAttributes[k][v.AsString()] = true
 			return true // Tell Range() to keep going.
 		})
 	}
 
+	// Only expected attributes must be present.
+	for attribute, actualValues := range actualAttributes {
+		if _, ok := expectedAttrs[attribute]; !ok {
+			t.Errorf("Unexpected attribute %q with values %v found for metric %q.", attribute, actualValues, metricName)
+		}
+	}
+
 	// Iterate over expectedAttrs, checking that:
-	// 1. Every attribute in expectedAttrs appears in collectedAttributes
-	// 2. All values in collectedAttributes match the regular expressions stored
+	// 1. Every attribute in expectedAttrs appears in actualAttributes
+	// 2. All values in actualAttributes match the regular expressions stored
 	//    in expectedAttrs.
 	for attribute, expectedPattern := range expectedAttrs {
-		if _, ok := collectedAttributes[attribute]; !ok {
-			t.Errorf("Missing expected attribute %q on metric %q. Found attributes: %v", attribute, metricName, keys(collectedAttributes))
+		if _, ok := actualAttributes[attribute]; !ok {
+			t.Errorf("Missing expected attribute %q on metric %q. Found attributes: %v", attribute, metricName, keys(actualAttributes))
 			continue
 		}
 
-		for actualValue, _ := range collectedAttributes[attribute] {
+		for actualValue, _ := range actualAttributes[attribute] {
 			match, matchErr := regexp.MatchString(fmt.Sprintf("^(?:%s)$", expectedPattern), actualValue)
 			if matchErr != nil {
 				t.Errorf("Error parsing pattern. metric=%s, attribute=%s, pattern=%s, err=%v",
@@ -180,7 +186,6 @@ func expectAttributesMatch(t *testing.T, dataPoints pmetric.NumberDataPointSlice
 func expectMetricsLookRight(t *testing.T, metrics pmetric.Metrics, expectedMetrics map[string]ExpectedMetric) {
 	seen := make(map[string]bool)
 
-	// todo: it's kinda weird that we need to iterate over all Resourcemetrics in order to pick up all the expected metrics. I didn't think that would be the case and that it should be enough to just iterate over all the ScopeMetrics.
 	resourceMetrics := metrics.ResourceMetrics()
 	for i := 0; i < resourceMetrics.Len(); i++ {
 		scopeMetrics := resourceMetrics.At(i).ScopeMetrics()

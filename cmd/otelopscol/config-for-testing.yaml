@@ -1,4 +1,4 @@
-# Copyright 2020 Google LLC
+# Copyright 2022 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,7 +13,6 @@
 # limitations under the License.
 
 receivers:
-  # scrape all metrics at 1s interval
   hostmetrics:
     collection_interval: 1s
     scrapers:
@@ -28,10 +27,6 @@ receivers:
       processes:
 
 processors:
-  # append resource information from GCE metadata
-  resourcedetection:
-    detectors: [gce]
-
   # perform custom transformations that aren't supported by the metricstransform processor
   agentmetrics/cloud-monitoring:
     # 1. combines resource process metrics into metrics with processes as labels
@@ -48,260 +43,14 @@ processors:
           - system.filesystem.inodes.usage
           - system.paging.faults
 
-  metricstransform/cloud-monitoring:
-    transforms:
-      # system.cpu.time -> cpu/usage_time
-      - include: system.cpu.time
-        action: update
-        new_name: cpu/usage_time
-        operations:
-          # change data type from double -> int64
-          - action: toggle_scalar_data_type
-          # change label cpu -> cpu_number
-          - action: update_label
-            label: cpu
-            new_label: cpu_number
-          # change label state -> cpu_state
-          - action: update_label
-            label: state
-            new_label: cpu_state
-      # system.cpu.utilization -> cpu/utilization
-      - include: system.cpu.utilization
-        action: update
-        new_name: cpu/utilization
-        operations:
-          # change label cpu -> cpu_number
-          - action: update_label
-            label: cpu
-            new_label: cpu_number
-          # change label state -> cpu_state
-          - action: update_label
-            label: state
-            new_label: cpu_state
-      # system.cpu.load_average.1m -> cpu/load_1m
-      - include: system.cpu.load_average.1m
-        action: update
-        new_name: cpu/load_1m
-      # system.cpu.load_average.5m -> cpu/load_5m
-      - include: system.cpu.load_average.5m
-        action: update
-        new_name: cpu/load_5m
-      # system.cpu.load_average.15m -> cpu/load_15m
-      - include: system.cpu.load_average.15m
-        action: update
-        new_name: cpu/load_15m
-      # system.disk.io_time -> disk/io_time
-      - include: system.disk.io_time
-        action: update
-        new_name: disk/io_time
-      # system.disk.read_io (as named after custom split logic) -> disk/read_bytes_count
-      - include: system.disk.read_io
-        action: update
-        new_name: disk/read_bytes_count
-      # system.disk.write_io (as named after custom split logic) -> processes/write_bytes_count
-      - include: system.disk.write_io
-        action: update
-        new_name: disk/write_bytes_count
-      # system.disk.operations -> disk/operation_count
-      - include: system.disk.operations
-        action: update
-        new_name: disk/operation_count
-      # system.disk.operation_time -> disk/operation_time
-      - include: system.disk.operation_time
-        action: update
-        new_name: disk/operation_time
-        operations:
-          # change data type from double -> int64
-          - action: toggle_scalar_data_type
-      # system.disk.pending_operations -> disk/pending_operations
-      - include: system.disk.pending_operations
-        action: update
-        new_name: disk/pending_operations
-        operations:
-          # change data type from int64 -> double
-          - action: toggle_scalar_data_type
-      # system.disk.merged -> disk/merged_operations
-      - include: system.disk.merged
-        action: update
-        new_name: disk/merged_operations
-      # system.disk.weighted_io_time -> disk/weighted_io_time
-      - include: system.disk.weighted_io_time
-        action: update
-        new_name: disk/weighted_io_time
-      # system.filesystem.usage -> disk/bytes_used
-      - include: system.filesystem.usage
-        action: update
-        new_name: disk/bytes_used
-        operations:
-          # change data type from int64 -> double
-          - action: toggle_scalar_data_type
-          # take sum over mode, mountpoint & type dimensions, retaining only device & state
-          - action: aggregate_labels
-            label_set: [ device, state ]
-            aggregation_type: sum
-      # system.filesystem.utilization -> disk/percent_used
-      - include: system.filesystem.utilization
-        action: update
-        new_name: disk/percent_used
-        operations:
-          # take sum over mode, mountpoint & type dimensions, retaining only device & state
-          - action: aggregate_labels
-            label_set: [ device, state ]
-            aggregation_type: sum
-      # system.memory.usage -> memory/bytes_used
-      - include: system.memory.usage
-        action: update
-        new_name: memory/bytes_used
-        operations:
-          # change data type from int64 -> double
-          - action: toggle_scalar_data_type
-          # aggregate state label values: slab_reclaimable & slab_unreclaimable -> slab (note this is not currently supported)
-          - action: aggregate_label_values
-            label: state
-            aggregated_values: [slab_reclaimable, slab_unreclaimable]
-            new_value: slab
-            aggregation_type: sum
-      # system.memory.utilization -> memory/percent_used
-      - include: system.memory.utilization
-        action: update
-        new_name: memory/percent_used
-        operations:
-          # sum state label values: slab = slab_reclaimable + slab_unreclaimable
-          - action: aggregate_label_values
-            label: state
-            aggregated_values: [slab_reclaimable, slab_unreclaimable]
-            new_value: slab
-            aggregation_type: sum
-      # system.network.io -> interface/traffic
-      - include: system.network.io
-        action: update
-        new_name: interface/traffic
-        operations:
-          # change direction label values receive -> rx
-          - action: update_label
-            label: direction
-            value_actions:
-              # receive -> rx
-              - value: receive
-                new_value: rx
-              # transmit -> tx
-              - value: transmit
-                new_value: tx
-      # system.network.errors -> interface/errors
-      - include: system.network.errors
-        action: update
-        new_name: interface/errors
-        operations:
-          # change direction label values receive -> rx
-          - action: update_label
-            label: direction
-            value_actions:
-              # receive -> rx
-              - value: receive
-                new_value: rx
-              # transmit -> tx
-              - value: transmit
-                new_value: tx
-      # system.network.packets -> interface/packets
-      - include: system.network.packets
-        action: update
-        new_name: interface/packets
-        operations:
-          # change direction label values receive -> rx
-          - action: update_label
-            label: direction
-            value_actions:
-              # receive -> rx
-              - value: receive
-                new_value: rx
-              # transmit -> tx
-              - value: transmit
-                new_value: tx
-      # system.network.connections -> network/tcp_connections
-      - include: system.network.connections
-        action: update
-        new_name: network/tcp_connections
-        operations:
-          # change data type from int64 -> double
-          - action: toggle_scalar_data_type
-      # system.paging.operations -> swap/io
-      - include: system.paging.operations
-        action: update
-        new_name: swap/io
-        operations:
-          # delete singular type dimension, retaining only direction
-          - action: aggregate_labels
-            label_set: [ direction ]
-            aggregation_type: sum
-      # system.paging.usage -> swap/bytes_used
-      - include: system.paging.usage
-        action: update
-        new_name: swap/bytes_used
-        operations:
-          # change data type from ?? -> ??
-        - action: toggle_scalar_data_type
-      # system.paging.utilization -> swap/percent_used
-      - include: system.paging.utilization
-        action: update
-        new_name: swap/percent_used
-      # process.cpu.time -> processes/cpu_time
-      - include: process.cpu.time
-        action: update
-        new_name: processes/cpu_time
-        operations:
-          # change data type from double -> int64
-          - action: toggle_scalar_data_type
-      # process.disk.read_io (as named after custom split logic) -> processes/disk/read_bytes_count
-      - include: process.disk.read_io
-        action: update
-        new_name: processes/disk/read_bytes_count
-      # process.disk.write_io (as named after custom split logic) -> processes/disk/write_bytes_count
-      - include: process.disk.write_io
-        action: update
-        new_name: processes/disk/write_bytes_count
-      # process.memory.physical_usage -> processes/rss_usage
-      - include: process.memory.physical_usage
-        action: update
-        new_name: processes/rss_usage
-        operations:
-          # change data type from int64 -> double
-          - action: toggle_scalar_data_type
-      # process.memory.virtual_usage -> processes/vm_usage
-      - include: process.memory.virtual_usage
-        action: update
-        new_name: processes/vm_usage
-        operations:
-          # change data type from int64 -> double
-          - action: toggle_scalar_data_type
-      # system.processes.count -> processes/count_by_state
-      - include: system.processes.count
-        action: update
-        new_name: processes/count_by_state
-        operations:
-          # change data type from ?? -> ??
-        - action: toggle_scalar_data_type
-        - action: update_label
-          label: status
-          new_label: state
-      # system.processes.created -> processes/fork_count
-      - include: system.processes.created
-        action: update
-        new_name: processes/fork_count
-
 exporters:
   logging:
   file:
     path: ./metrics.json
 
-extensions:
-  zpages:
-    endpoint: 0.0.0.0:55679
-
 service:
   pipelines:
     metrics:
       receivers: [hostmetrics]
-      processors: [agentmetrics/cloud-monitoring, metricstransform/cloud-monitoring, filter/cloud-monitoring, resourcedetection]
+      processors: [agentmetrics/cloud-monitoring, filter/cloud-monitoring]
       exporters: [file,logging]
-
-  extensions: [zpages]

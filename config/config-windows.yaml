@@ -92,7 +92,7 @@ processors:
   metricstransform/system:
     transforms:
       # system.cpu.time -> cpu/usage_time
-      - metric_name: system.cpu.time
+      - include: system.cpu.time
         action: update
         new_name: cpu/usage_time
         operations:
@@ -111,7 +111,7 @@ processors:
             label_set: [ cpu_state ]
             aggregation_type: mean
       # system.cpu.utilization -> cpu/utilization
-      - metric_name: system.cpu.utilization
+      - include: system.cpu.utilization
         action: update
         new_name: cpu/utilization
         operations:
@@ -128,52 +128,52 @@ processors:
             label_set: [ cpu_state ]
             aggregation_type: mean
       # system.cpu.load_average.1m -> cpu/load_1m
-      - metric_name: system.cpu.load_average.1m
+      - include: system.cpu.load_average.1m
         action: update
         new_name: cpu/load_1m
       # system.cpu.load_average.5m -> cpu/load_5m
-      - metric_name: system.cpu.load_average.5m
+      - include: system.cpu.load_average.5m
         action: update
         new_name: cpu/load_5m
       # system.cpu.load_average.15m -> cpu/load_15m
-      - metric_name: system.cpu.load_average.15m
+      - include: system.cpu.load_average.15m
         action: update
         new_name: cpu/load_15m
       # system.disk.read_io (as named after custom split logic) -> disk/read_bytes_count
-      - metric_name: system.disk.read_io
+      - include: system.disk.read_io
         action: update
         new_name: disk/read_bytes_count
       # system.disk.write_io (as named after custom split logic) -> processes/write_bytes_count
-      - metric_name: system.disk.write_io
+      - include: system.disk.write_io
         action: update
         new_name: disk/write_bytes_count
       # system.disk.operations -> disk/operation_count
-      - metric_name: system.disk.operations
+      - include: system.disk.operations
         action: update
         new_name: disk/operation_count
       # system.disk.io_time -> disk/io_time
-      - metric_name: system.disk.io_time
+      - include: system.disk.io_time
         action: update
         new_name: disk/io_time
         operations:
           # change data type from double -> int64
           - action: toggle_scalar_data_type
       # system.disk.operation_time -> disk/operation_time
-      - metric_name: system.disk.operation_time
+      - include: system.disk.operation_time
         action: update
         new_name: disk/operation_time
         operations:
           # change data type from double -> int64
           - action: toggle_scalar_data_type
       # system.disk.pending_operations -> disk/pending_operations
-      - metric_name: system.disk.pending_operations
+      - include: system.disk.pending_operations
         action: update
         new_name: disk/pending_operations
         operations:
           # change data type from int64 -> double
           - action: toggle_scalar_data_type
       # system.filesystem.usage -> disk/bytes_used
-      - metric_name: system.filesystem.usage
+      - include: system.filesystem.usage
         action: update
         new_name: disk/bytes_used
         operations:
@@ -184,7 +184,7 @@ processors:
             label_set: [ device, state ]
             aggregation_type: sum
       # system.filesystem.utilization -> disk/percent_used
-      - metric_name: system.filesystem.utilization
+      - include: system.filesystem.utilization
         action: update
         new_name: disk/percent_used
         operations:
@@ -193,7 +193,7 @@ processors:
             label_set: [ device, state ]
             aggregation_type: sum
       # system.memory.usage -> memory/bytes_used
-      - metric_name: system.memory.usage
+      - include: system.memory.usage
         action: update
         new_name: memory/bytes_used
         operations:
@@ -206,7 +206,7 @@ processors:
             new_value: slab
             aggregation_type: sum
       # system.memory.utilization -> memory/percent_used
-      - metric_name: system.memory.utilization
+      - include: system.memory.utilization
         action: update
         new_name: memory/percent_used
         operations:
@@ -217,7 +217,7 @@ processors:
             new_value: slab
             aggregation_type: sum
       # system.network.io -> interface/traffic
-      - metric_name: system.network.io
+      - include: system.network.io
         action: update
         new_name: interface/traffic
         operations:
@@ -236,7 +236,7 @@ processors:
               - value: transmit
                 new_value: tx
       # system.network.errors -> interface/errors
-      - metric_name: system.network.errors
+      - include: system.network.errors
         action: update
         new_name: interface/errors
         operations:
@@ -255,7 +255,7 @@ processors:
               - value: transmit
                 new_value: tx
       # system.network.packets -> interface/packets
-      - metric_name: system.network.packets
+      - include: system.network.packets
         action: update
         new_name: interface/packets
         operations:
@@ -274,7 +274,7 @@ processors:
               - value: transmit
                 new_value: tx
       # system.network.connections -> network/tcp_connections
-      - metric_name: system.network.connections
+      - include: system.network.connections
         action: update
         new_name: network/tcp_connections
         operations:
@@ -293,18 +293,18 @@ processors:
             label_set: [ state ]
             aggregation_type: sum
       # system.paging.usage -> swap/bytes_used
-      - metric_name: system.paging.usage
+      - include: system.paging.usage
         action: update
         new_name: swap/bytes_used
         operations:
           # change data type from int64 -> double
           - action: toggle_scalar_data_type
       # system.paging.utilization -> swap/percent_used
-      - metric_name: system.paging.utilization
+      - include: system.paging.utilization
         action: update
         new_name: swap/percent_used
       # duplicate swap/percent_used -> pagefile/percent_used
-      - metric_name: swap/percent_used
+      - include: swap/percent_used
         action: insert
         new_name: pagefile/percent_used
         operations:
@@ -313,7 +313,7 @@ processors:
             label_set: [ state ]
             aggregation_type: sum
       # system.paging.operations -> swap/io
-      - metric_name: system.paging.operations
+      - include: system.paging.operations
         action: update
         new_name: swap/io
         operations:
@@ -322,7 +322,7 @@ processors:
             label_set: [ direction ]
             aggregation_type: sum
       # process.cpu.time -> processes/cpu_time
-      - metric_name: process.cpu.time
+      - include: process.cpu.time
         action: update
         new_name: processes/cpu_time
         operations:
@@ -337,22 +337,22 @@ processors:
               - value: system
                 new_value: syst
       # process.disk.read_io (as named after custom split logic) -> processes/disk/read_bytes_count
-      - metric_name: process.disk.read_io
+      - include: process.disk.read_io
         action: update
         new_name: processes/disk/read_bytes_count
       # process.disk.write_io (as named after custom split logic) -> processes/disk/write_bytes_count
-      - metric_name: process.disk.write_io
+      - include: process.disk.write_io
         action: update
         new_name: processes/disk/write_bytes_count
       # process.memory.physical_usage -> processes/rss_usage
-      - metric_name: process.memory.physical_usage
+      - include: process.memory.physical_usage
         action: update
         new_name: processes/rss_usage
         operations:
           # change data type from int64 -> double
           - action: toggle_scalar_data_type
       # process.memory.virtual_usage -> processes/vm_usage
-      - metric_name: process.memory.virtual_usage
+      - include: process.memory.virtual_usage
         action: update
         new_name: processes/vm_usage
         operations:
@@ -407,7 +407,7 @@ processors:
   metricstransform/agent:
     transforms:
       # otelcol_process_uptime -> agent/uptime
-      - metric_name: otelcol_process_uptime
+      - include: otelcol_process_uptime
         action: update
         new_name: agent/uptime
         operations:
@@ -418,11 +418,11 @@ processors:
             new_label: version
             new_value: $USERAGENT
       # otelcol_process_memory_rss -> agent/memory_usage
-      - metric_name: otelcol_process_memory_rss
+      - include: otelcol_process_memory_rss
         action: update
         new_name: agent/memory_usage
       # otelcol_grpc_io_client_completed_rpcs -> agent/api_request_count
-      - metric_name: otelcol_grpc_io_client_completed_rpcs
+      - include: otelcol_grpc_io_client_completed_rpcs
         action: update
         new_name: agent/api_request_count
         operations:
@@ -442,7 +442,7 @@ processors:
             label_set: [ state ]
             aggregation_type: sum
       # otelcol_googlecloudmonitoring_point_count -> agent/monitoring/point_count
-      - metric_name: otelcol_googlecloudmonitoring_point_count
+      - include: otelcol_googlecloudmonitoring_point_count
         action: update
         new_name: agent/monitoring/point_count
         operations:

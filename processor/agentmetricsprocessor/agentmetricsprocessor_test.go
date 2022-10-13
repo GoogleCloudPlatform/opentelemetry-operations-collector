@@ -182,7 +182,7 @@ func (msb metricsBuilder) addMetric(name string, t pmetric.MetricType, isMonoton
 		metric.SetEmptySum()
 		sum := metric.Sum()
 		sum.SetIsMonotonic(isMonotonic)
-		sum.SetAggregationTemporality(pmetric.MetricAggregationTemporalityCumulative)
+		sum.SetAggregationTemporality(pmetric.AggregationTemporalityCumulative)
 	case pmetric.MetricTypeGauge:
 		metric.SetEmptyGauge()
 		metric.Gauge()

@@ -13,186 +13,183 @@
 # limitations under the License.
 
 expected_metrics:
+  - name: process.cpu.time
+    value_type: double
+    data_type: Sum
+    attributes:
+      state: user|system|wait
+    resource_attributes:
+      process.command: .*
+      process.command_line: .*
+      process.executable.name: .*
+      process.executable.path: .*
+      process.owner: .*
+      process.parent_pid: \d+
+      process.pid: \d+
+  - name: process.disk.io
+    value_type: int
+    data_type: Sum
+    attributes:
+      direction: read|write
+    resource_attributes:
+      process.command: .*
+      process.command_line: .*
+      process.executable.name: .*
+      process.executable.path: .*
+      process.owner: .*
+      process.parent_pid: \d+
+      process.pid: \d+
+  - name: process.memory.physical_usage
+    value_type: int
+    data_type: Sum
+    resource_attributes:
+      process.command: .*
+      process.command_line: .*
+      process.executable.name: .*
+      process.executable.path: .*
+      process.owner: .*
+      process.parent_pid: \d+
+      process.pid: \d+
+  - name: process.memory.virtual_usage
+    value_type: int
+    data_type: Sum
+    resource_attributes:
+      process.command: .*
+      process.command_line: .*
+      process.executable.name: .*
+      process.executable.path: .*
+      process.owner: .*
+      process.parent_pid: \d+
+      process.pid: \d+
   - name: system.cpu.load_average.15m
-    value_type: DOUBLE
-    kind: Gauge
+    value_type: double
+    data_type: Sum
   - name: system.cpu.load_average.1m
-    value_type: DOUBLE
-    kind: Gauge
+    value_type: double
+    data_type: Sum
   - name: system.cpu.load_average.5m
-    value_type: DOUBLE
-    kind: Gauge
+    value_type: double
+    data_type: Sum
   - name: system.cpu.time
-    value_type: INT64
-    kind: Sum
+    value_type: double
+    data_type: Sum
     attributes:
-      cpu: \d*
+      cpu: cpu\d+
       state: idle|interrupt|nice|softirq|steal|system|used|user|wait
-  - name: system.cpu.utilization
-    value_type: DOUBLE
-    kind: Gauge
-    attributes:
-      cpu: \d*
-      state: idle|interrupt|nice|softirq|steal|system|used|user|wait
-  - name: system.filesystem.usage
-    value_type: DOUBLE
-    kind: Gauge
-    attributes:
-      device: .*
-      mode: .*
-      mountpoint: /.*
-      state: free|reserved|used
-      type: .*
-  - name: system.disk.io_time
-    value_type: INT64
-    kind: Sum
-    attributes:
-      device: .*
-  - name: system.disk.merged
-    value_type: INT64
-    kind: Sum
+  - name: system.disk.io
+    value_type: int
+    data_type: Sum
     attributes:
       device: .*
       direction: read|write
-  - name: system.disk.operations
-    value_type: INT64
-    kind: Sum
+  - name: system.disk.io_time
+    value_type: double
+    data_type: Sum
+    attributes:
+      device: .*
+  - name: system.disk.merged
+    value_type: int
+    data_type: Sum
     attributes:
       device: .*
       direction: read|write
   - name: system.disk.operation_time
-    value_type: INT64
-    kind: Sum
+    value_type: double
+    data_type: Sum
+    attributes:
+      device: .*
+      direction: read|write
+  - name: system.disk.operations
+    value_type: int
+    data_type: Sum
     attributes:
       device: .*
       direction: read|write
   - name: system.disk.pending_operations
-    value_type: DOUBLE
-    kind: Gauge
+    value_type: int
+    data_type: Sum
     attributes:
       device: .*
-  - name: system.filesystem.utilization
-    value_type: DOUBLE
-    kind: Gauge
+  - name: system.disk.weighted_io_time
+    value_type: double
+    data_type: Sum
+    attributes:
+      device: .*
+  - name: system.filesystem.inodes.usage
+    value_type: int
+    data_type: Sum
     attributes:
       device: .*
       mode: .*
       mountpoint: /.*
       state: free|reserved|used
       type: .*
-  - name: system.disk.read_io
-    value_type: INT64
-    kind: Sum
+  - name: system.filesystem.usage
+    value_type: int
+    data_type: Sum
     attributes:
       device: .*
-  - name: system.disk.weighted_io_time
-    value_type: INT64
-    kind: Sum
+      mode: .*
+      mountpoint: /.*
+      state: free|reserved|used
+      type: .*
+  - name: system.memory.usage
+    value_type: int
+    data_type: Sum
     attributes:
-      device: .*
-  - name: system.disk.write_io
-    value_type: INT64
-    kind: Sum
+      state: buffered|cached|free|slab_reclaimable|slab_unreclaimable|used
+  - name: system.network.connections
+    value_type: int
+    data_type: Sum
     attributes:
-      device: .*
-  - name: system.network.errors
-    value_type: INT64
-    kind: Sum
+      protocol: tcp|udp
+      state: CLOSE|CLOSED|CLOSE_WAIT|CLOSING|DELETE|ESTABLISHED|FIN_WAIT_1|FIN_WAIT1|FIN_WAIT_2|FIN_WAIT2|LAST_ACK|LISTEN|SYN_RECEIVED|SYN_RECV|SYN_SENT|TIME_WAIT
+  - name: system.network.dropped
+    value_type: int
+    data_type: Sum
     attributes:
       device: .*
       direction: transmit|receive
-  - name: system.network.packets
-    value_type: INT64
-    kind: Sum
+  - name: system.network.errors
+    value_type: int
+    data_type: Sum
     attributes:
       device: .*
       direction: transmit|receive
   - name: system.network.io
-    value_type: INT64
-    kind: Sum
+    value_type: int
+    data_type: Sum
     attributes:
       device: .*
       direction: transmit|receive
-  - name: system.memory.usage
-    value_type: DOUBLE
-    kind: Gauge
-    attributes:
-      state: buffered|cached|free|slab_reclaimable|slab_unreclaimable|used
-  - name: system.memory.utilization
-    value_type: DOUBLE
-    kind: Gauge
-    attributes:
-      state: buffered|cached|free|slab_reclaimable|slab_unreclaimable|used
-  - name: system.network.connections
-    value_type: DOUBLE
-    kind: Gauge
-    attributes:
-      protocol: tcp|udp
-      state: CLOSE|CLOSED|CLOSE_WAIT|CLOSING|DELETE|ESTABLISHED|FIN_WAIT_1|FIN_WAIT1|FIN_WAIT_2|FIN_WAIT2|LAST_ACK|LISTEN|SYN_RECEIVED|SYN_RECV|SYN_SENT|TIME_WAIT
-  - name: system.processes.count
-    value_type: DOUBLE
-    kind: Gauge
-    attributes:
-      status: blocked|daemon|detached|idle|locked|orphan|paging|running|sleeping|stopped|system|unknown|zombies
-  - name: process.cpu.time
-    value_type: INT64
-    kind: Sum
-    attributes:
-      command: .*
-      command_line: .*
-      owner: .*
-      pid: \d+
-      state: user|system|wait
-  - name: process.disk.read_io
-    value_type: INT64
-    kind: Sum
-    attributes:
-      command: .*
-      command_line: .*
-      owner: .*
-      pid: \d+
-  - name: process.disk.write_io
-    value_type: INT64
-    kind: Sum
-    attributes:
-      command: .*
-      command_line: .*
-      owner: .*
-      pid: \d+
-  - name: system.processes.created
-    value_type: INT64
-    kind: Sum
-  - name: process.memory.physical_usage
-    value_type: DOUBLE
-    kind: Gauge
-    attributes:
-      command: .*
-      command_line: .*
-      owner: .*
-      pid: \d+
-  - name: process.memory.virtual_usage
-    value_type: DOUBLE
-    kind: Gauge
-    attributes:
-      command: .*
-      command_line: .*
-      owner: .*
-      pid: \d+
-  - name: system.paging.usage
-    value_type: DOUBLE
-    kind: Gauge
+  - name: system.network.packets
+    value_type: int
+    data_type: Sum
     attributes:
       device: .*
-      state: cached|free|used
+      direction: transmit|receive
+  - name: system.paging.faults
+    value_type: int
+    data_type: Sum
+    attributes:
+      type: major|minor
   - name: system.paging.operations
-    value_type: INT64
-    kind: Sum
+    value_type: int
+    data_type: Sum
     attributes:
       direction: page_in|page_out
       type: major|minor
-  - name: system.paging.utilization
-    value_type: DOUBLE
-    kind: Gauge
+  - name: system.paging.usage
+    value_type: int
+    data_type: Sum
     attributes:
       device: .*
-      state: free|used
+      state: cached|free|used
+  - name: system.processes.count
+    value_type: int
+    data_type: Sum
+    attributes:
+      status: blocked|daemon|detached|idle|locked|orphan|paging|running|sleeping|stopped|system|unknown|zombies
+  - name: system.processes.created
+    value_type: int
+    data_type: Sum

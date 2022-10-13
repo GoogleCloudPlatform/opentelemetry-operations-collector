@@ -26,23 +26,6 @@ receivers:
       process:
       processes:
 
-processors:
-  # perform custom transformations that aren't supported by the metricstransform processor
-  agentmetrics/cloud-monitoring:
-    # 1. combines resource process metrics into metrics with processes as labels
-    # 2. splits "disk.io" metrics into read & write metrics
-    # 3. creates utilization metrics from usage metrics
-
-  # filter out metrics not currently supported by cloud monitoring
-  filter/cloud-monitoring:
-    metrics:
-      exclude:
-        match_type: strict
-        metric_names:
-          - system.network.dropped
-          - system.filesystem.inodes.usage
-          - system.paging.faults
-
 exporters:
   logging:
   file:
@@ -52,5 +35,4 @@ service:
   pipelines:
     metrics:
       receivers: [hostmetrics]
-      processors: [agentmetrics/cloud-monitoring, filter/cloud-monitoring]
       exporters: [file,logging]

@@ -49,23 +49,23 @@ func TestHostmetrics(t *testing.T) {
 	// It will self-terminate in terminationTime.
 	mainContext(ctx)
 
-	observed := loadObservedMetrics(t, scratchDir)
-	expected := loadExpectedMetrics(t, testDir)
+	observed := loadObservedMetrics(t, filepath.Join(scratchDir, "metrics.json"))
+	expected := loadExpectedMetrics(t, filepath.Join(testDir, "expected-metrics.yaml"))
 
 	expectMetricsMatch(t, observed, expected)
 }
 
-// TODO: revisit all this YAML validation. does it work? what does it do?
+// TODO: Implement YAML validation.
 
 // ExpectedMetric encodes a series of assertions about what data we expect
 // to see in the metrics backend.
 type ExpectedMetric struct {
-	// The metric name, for example network/tcp_connections.
+	// The metric name, for example system.network.connections.
 	Name string `yaml:"name" validate:"required"`
-	// The value type, for example INT64.
-	ValueType string `yaml:"value_type" validate:"required,oneof=BOOL INT64 DOUBLE STRING DISTRIBUTION"`
-	// The metric data type, for example GAUGE.
-	DataType string `yaml:"data_type" validate:"required,oneof=GAUGE DELTA CUMULATIVE"`
+	// The value type, for example "Int".
+	ValueType string `yaml:"value_type" validate:"required,oneof=Int Double"`
+	// The metric data type, for example "Gauge".
+	DataType string `yaml:"data_type" validate:"required,oneof=Gauge Sum"`
 	// Mapping of expected attribute keys to value patterns.
 	// Patterns are RE2 regular expressions.
 	Attributes map[string]string `yaml:"attributes,omitempty" validate:"omitempty,gt=0"`
@@ -81,13 +81,14 @@ type ExpectedMetric struct {
 //	  cpu_state:map[idle:true interrupt:true]
 //	  pid:map[123:true 456:true]
 //	]
+//
+// This would be a map[string]set[string] if go had a type called set[string].
 type attributeMap map[string]map[string]bool
 
 type ObservedMetric struct {
 	// The value type, for example INT64.
-	// TODO: check the value type.
 	ValueType string
-	// The metric data type, for example GAUGE.
+	// The metric data type, for example "Gauge".
 	DataType string
 	// Mapping of observed attribute keys to sets of observed values.
 	Attributes attributeMap
@@ -95,8 +96,9 @@ type ObservedMetric struct {
 	ResourceAttributes attributeMap
 }
 
-func loadExpectedMetrics(t *testing.T, testDir string) map[string]ExpectedMetric {
-	data, err := os.ReadFile(filepath.Join(testDir, "expected-metrics.yaml"))
+// loadExpectedMetrics reads the metrics expectations from the given path.
+func loadExpectedMetrics(t *testing.T, expectedMetricsPath string) map[string]ExpectedMetric {
+	data, err := os.ReadFile(expectedMetricsPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,11 +115,18 @@ func loadExpectedMetrics(t *testing.T, testDir string) map[string]ExpectedMetric
 	for _, expect := range agentMetrics.ExpectedMetrics {
 		result[expect.Name] = expect
 	}
+
+	if len(result) < 2 {
+		t.Fatalf("Unreasonably few (<2) expectations found. expectations=%v", result)
+	}
 	return result
 }
 
-func loadObservedMetrics(t *testing.T, scratchDir string) map[string]ObservedMetric {
-	metricsJSONPath := filepath.Join(scratchDir, "metrics.json")
+// loadObservedMetrics reads the contents of metrics.json produced by
+// otelopscol, selects one of the lines from it, and processes the data into
+// a form suitable for comparing against the expectations from
+// expected-metrics.yaml.
+func loadObservedMetrics(t *testing.T, metricsJSONPath string) map[string]ObservedMetric {
 	data, err := os.ReadFile(metricsJSONPath)
 	if err != nil {
 		t.Fatal(err)
@@ -129,16 +138,22 @@ func loadObservedMetrics(t *testing.T, scratchDir string) map[string]ObservedMet
 		t.Fatalf("Only found %v lines in %q, need at least 2", len(lines), metricsJSONPath)
 	}
 
-	// Take the second batch of data exported by otelopscol, because the
-	// first batch doesn't include any data for system.cpu.utilization.
+	// Take the second batch of data exported by otelopscol. Picking the first
+	// batch can hit problems with certain metrics like system.cpu.utilization,
+	// which don't appear in the first batch.
 	secondBatch := lines[1]
 	metrics, err := pmetric.NewJSONUnmarshaler().UnmarshalMetrics([]byte(secondBatch))
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Convert the pmetric.Metrics into a more usable data structure.
 	return consolidateObservedMetrics(t, metrics)
 }
 
+// consolidateObservedMetrics collects all data from the given pmetric.Metrics
+// into a simple map of metric name -> ObservedMetric. The pmetric.Metrics
+// is awkward to use directly because
+// TODO: probably we should be using it directly...
 func consolidateObservedMetrics(t *testing.T, metrics pmetric.Metrics) map[string]ObservedMetric {
 	// Map from metric name to details about that metric.
 	observedMetrics := make(map[string]ObservedMetric)
@@ -153,6 +168,8 @@ func consolidateObservedMetrics(t *testing.T, metrics pmetric.Metrics) map[strin
 			for k := 0; k < metrics.Len(); k++ {
 				metric := metrics.At(k)
 
+				// Initialize an ObservedMetric for our current metric if there isn't
+				// one already stored in observedMetrics.
 				if _, ok := observedMetrics[metric.Name()]; !ok {
 					observedMetrics[metric.Name()] = ObservedMetric{
 						Attributes:         make(attributeMap),
@@ -160,16 +177,6 @@ func consolidateObservedMetrics(t *testing.T, metrics pmetric.Metrics) map[strin
 					}
 				}
 				observed := observedMetrics[metric.Name()]
-
-				if observed.DataType == "" {
-					observed.DataType = metric.DataType().String()
-				} else if observed.DataType != metric.DataType().String() {
-					t.Errorf("Metric %q had two different DataTypes: %q and %q",
-						metric.Name(),
-						observed.DataType,
-						metric.DataType().String(),
-					)
-				}
 
 				var dataPoints pmetric.NumberDataPointSlice
 				switch metric.DataType() {
@@ -184,11 +191,52 @@ func consolidateObservedMetrics(t *testing.T, metrics pmetric.Metrics) map[strin
 				mergeAttributes(observed.Attributes, extractAttributes(dataPoints))
 				mergeAttributes(observed.ResourceAttributes, extractResourceAttributes(resourceAttributes))
 
+				newDataType := metric.DataType().String()
+				if observed.DataType == "" {
+					observed.DataType = newDataType
+				} else if observed.DataType != newDataType {
+					t.Errorf("Metric %q had conflicting DataTypes (%q and %q)",
+						metric.Name(),
+						observed.DataType,
+						newDataType,
+					)
+				}
+
+				newValueType := extractValueType(t, dataPoints, metric.Name())
+				if observed.ValueType == "" {
+					observed.ValueType = newValueType
+				} else if observed.ValueType != newValueType {
+					t.Errorf("Metric %q had conflicting ValueTypes (%q and %q)",
+						metric.Name(),
+						observed.ValueType,
+						newValueType,
+					)
+				}
+
 				observedMetrics[metric.Name()] = observed
 			}
 		}
 	}
 	return observedMetrics
+}
+
+func extractValueType(t *testing.T, dataPoints pmetric.NumberDataPointSlice, metricName string) string {
+	valueType := ""
+	for i := 0; i < dataPoints.Len(); i++ {
+		dataPoint := dataPoints.At(i)
+
+		newValueType := dataPoint.ValueType().String()
+		if valueType == "" {
+			valueType = newValueType
+		} else if valueType != newValueType {
+			t.Errorf("Metric %q had conflicting ValueTypes (%v and %v)",
+				metricName,
+				valueType,
+				newValueType,
+			)
+		}
+	}
+	return valueType
 }
 
 // mergeAttributes modifies the first argument by merging in all entries
@@ -204,26 +252,28 @@ func mergeAttributes(attributes attributeMap, newAttributes attributeMap) {
 	}
 }
 
-// TODO: comment this function and others in this file
+// extractAttributes takes the union of all attributes in the given list
+// of data points.
 func extractAttributes(dataPoints pmetric.NumberDataPointSlice) attributeMap {
-	actualAttributes := make(attributeMap)
+	attributes := make(attributeMap)
 
 	// Collect all the attributes across all data points into the
-	// `actualAttributes` map.
+	// `attributes` map.
 	for i := 0; i < dataPoints.Len(); i++ {
 		dataPoint := dataPoints.At(i)
-		attributes := dataPoint.Attributes()
-		attributes.Range(func(k string, v pcommon.Value) bool {
-			if _, ok := actualAttributes[k]; !ok {
-				actualAttributes[k] = make(map[string]bool)
+		dataPoint.Attributes().Range(func(k string, v pcommon.Value) bool {
+			if _, ok := attributes[k]; !ok {
+				attributes[k] = make(map[string]bool)
 			}
-			actualAttributes[k][v.AsString()] = true
+			attributes[k][v.AsString()] = true
 			return true // Tell Range() to keep going.
 		})
 	}
-	return actualAttributes
+	return attributes
 }
 
+// extractResourceAttributes converts the given pcommon.Map into an
+// attributeMap.
 func extractResourceAttributes(attributes pcommon.Map) attributeMap {
 	result := make(attributeMap)
 
@@ -237,13 +287,19 @@ func extractResourceAttributes(attributes pcommon.Map) attributeMap {
 	return result
 }
 
+// expectMetricsMatch checks that all the metrics in observedMetrics match
+// expectations in expectedMetrics, and that all expectations in
+// expectedMetrics are fulfilled.
 func expectMetricsMatch(t *testing.T, observedMetrics map[string]ObservedMetric, expectedMetrics map[string]ExpectedMetric) {
 	for name, observed := range observedMetrics {
 		expected, ok := expectedMetrics[name]
 		if !ok {
-			// TODO: Probably change to t.Logf once we've figured out why
-			// system.disk.average_operation_time is appearing and whether we
-			// should add any assertions about it.
+			// It's debatable whether a new metric being introduced should cause
+			// this test to fail. We decided to fail the test in this case because
+			// otherwise, there's no incentive to add coverage for new metrics as
+			// they appear. If it proves onerous to keep fixing this test, we can
+			// remove this check and come up with some other way to keep this test
+			// up to date.
 			t.Errorf("Unexpected metric %q observed. details=%#v", name, observed)
 			continue
 		}
@@ -258,6 +314,8 @@ func expectMetricsMatch(t *testing.T, observedMetrics map[string]ObservedMetric,
 	}
 }
 
+// expectMetricMatches checks that the given ObservedMetric looks right
+// based on the given expectations for that metric.
 func expectMetricMatches(t *testing.T, observed ObservedMetric, expected ExpectedMetric) {
 	expectAttributesMatch(t, observed.Attributes, expected.Attributes, expected.Name, "attribute")
 	expectAttributesMatch(t, observed.ResourceAttributes, expected.ResourceAttributes, expected.Name, "resource attribute")
@@ -278,11 +336,17 @@ func expectMetricMatches(t *testing.T, observed ObservedMetric, expected Expecte
 	}
 }
 
+// expectAttributesMatch checks that the given attributeMap matches
+// the attributes and value regexes from expectedAttributes. Specifically,
+//  1. observedAttributes and expectedAttributes must have the same exact
+//     set of keys, and
+//  2. all values in observedAttributes[attr] must match the regex in
+//     expectedAttributes[attr].
 func expectAttributesMatch(t *testing.T, observedAttributes attributeMap, expectedAttributes map[string]string, metricName, kind string) {
 	// Only expected attributes must be present.
-	for attribute, actualValues := range observedAttributes {
+	for attribute, observedValues := range observedAttributes {
 		if _, ok := expectedAttributes[attribute]; !ok {
-			t.Errorf("Unexpected %s %q with values %v found for metric %q.", kind, attribute, actualValues, metricName)
+			t.Errorf("Unexpected %s %q with values %v found for metric %q.", kind, attribute, observedValues, metricName)
 		}
 	}
 
@@ -296,8 +360,8 @@ func expectAttributesMatch(t *testing.T, observedAttributes attributeMap, expect
 			continue
 		}
 
-		for actualValue, _ := range observedAttributes[attribute] {
-			match, matchErr := regexp.MatchString(fmt.Sprintf("^(?:%s)$", expectedPattern), actualValue)
+		for observedValue, _ := range observedAttributes[attribute] {
+			match, matchErr := regexp.MatchString(fmt.Sprintf("^(?:%s)$", expectedPattern), observedValue)
 			if matchErr != nil {
 				t.Errorf("Error parsing pattern. metric=%s, attribute=%s, pattern=%s, err=%v",
 					metricName,
@@ -311,7 +375,7 @@ func expectAttributesMatch(t *testing.T, observedAttributes attributeMap, expect
 					kind,
 					attribute,
 					expectedPattern,
-					actualValue,
+					observedValue,
 				)
 			}
 		}
@@ -320,9 +384,11 @@ func expectAttributesMatch(t *testing.T, observedAttributes attributeMap, expect
 
 // keys returns a slice containing just the keys from the input map m.
 func keys[K comparable, V any](m map[K]V) []K {
-	var ks []K
-	for k, _ := range m {
-		ks = append(ks, k)
+	ks := make([]K, len(m))
+	i := 0
+	for k := range m {
+		ks[i] = k
+		i++
 	}
 	return ks
 }

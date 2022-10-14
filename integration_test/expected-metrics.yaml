@@ -24,7 +24,7 @@ expected_metrics:
       process.executable.name: .*
       process.executable.path: .*
       process.owner: .*
-      process.parent_pid: \d+
+      process.parent_pid: -1|\d+
       process.pid: \d+
   - name: process.disk.io
     value_type: Int
@@ -37,7 +37,7 @@ expected_metrics:
       process.executable.name: .*
       process.executable.path: .*
       process.owner: .*
-      process.parent_pid: \d+
+      process.parent_pid: -1|\d+
       process.pid: \d+
   - name: process.memory.physical_usage
     value_type: Int
@@ -48,7 +48,7 @@ expected_metrics:
       process.executable.name: .*
       process.executable.path: .*
       process.owner: .*
-      process.parent_pid: \d+
+      process.parent_pid: -1|\d+
       process.pid: \d+
   - name: process.memory.virtual_usage
     value_type: Int
@@ -59,7 +59,7 @@ expected_metrics:
       process.executable.name: .*
       process.executable.path: .*
       process.owner: .*
-      process.parent_pid: \d+
+      process.parent_pid: -1|\d+
       process.pid: \d+
   - name: system.cpu.load_average.15m
     value_type: Double

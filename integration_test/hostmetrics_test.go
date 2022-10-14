@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package main
+package service_test
 
 import (
 	"context"
@@ -23,31 +23,36 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/service"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"gopkg.in/yaml.v2"
 )
 
 func TestHostmetrics(t *testing.T) {
-	terminationTime := 4 * time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), terminationTime)
-	defer cancel()
-
 	testDir, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
 	}
-	os.Args = append(os.Args, fmt.Sprintf("--config=%s", filepath.Join(testDir, "config-for-testing.yaml")))
+	os.Args = append(os.Args, fmt.Sprintf("--config=%s", filepath.Join(testDir, "hostmetrics-config.yaml")))
 
+	// Make a scratch directory and cd there so that otelopscol will write
+	// metrics.json to a scratch directory instead of into source control.
 	scratchDir, err := os.MkdirTemp("", "")
 	if err != nil {
-		t.Fatalf("Couldn't create scratch directory. err=%v", err)
+		t.Fatal(err)
 	}
-	os.Chdir(scratchDir)
+	if err := os.Chdir(scratchDir); err != nil {
+		t.Fatal(err)
+	}
+
+	terminationTime := 4 * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), terminationTime)
+	defer cancel()
 
 	// Run the main function of otelopscol.
 	// It will self-terminate in terminationTime.
-	mainContext(ctx)
+	service.MainContext(ctx)
 
 	observed := loadObservedMetrics(t, filepath.Join(scratchDir, "metrics.json"))
 	expected := loadExpectedMetrics(t, filepath.Join(testDir, "expected-metrics.yaml"))
@@ -97,6 +102,8 @@ func loadExpectedMetrics(t *testing.T, expectedMetricsPath string) map[string]Ex
 		result[expect.Name] = expect
 	}
 
+	t.Logf("Loaded %v metrics expectations from %s", len(result), expectedMetricsPath)
+
 	if len(result) < 2 {
 		t.Fatalf("Unreasonably few (<2) expectations found. expectations=%v", result)
 	}
@@ -111,7 +118,6 @@ func loadObservedMetrics(t *testing.T, metricsJSONPath string) pmetric.Metrics {
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("Found %v bytes of data at %s", len(data), metricsJSONPath)
 
 	lines := strings.Split(string(data), "\n")
 	if len(lines) < 2 {
@@ -121,7 +127,10 @@ func loadObservedMetrics(t *testing.T, metricsJSONPath string) pmetric.Metrics {
 	// Take the second batch of data exported by otelopscol. Picking the first
 	// batch can hit problems with certain metrics like system.cpu.utilization,
 	// which don't appear in the first batch.
-	secondBatch := lines[1]
+	secondBatch := []byte(lines[1])
+
+	t.Logf("Found %v bytes of data at %s, selecting %v bytes", len(data), metricsJSONPath, len(secondBatch))
+
 	metrics, err := pmetric.NewJSONUnmarshaler().UnmarshalMetrics([]byte(secondBatch))
 	if err != nil {
 		t.Fatal(err)
@@ -131,7 +140,12 @@ func loadObservedMetrics(t *testing.T, metricsJSONPath string) pmetric.Metrics {
 
 // expectMetricsMatch checks that all the data in `observedMetrics` matches
 // the expectations configured in `expectedMetrics`.
+// Note that an individual metric can appear many times in `observedMetrics`
+// under different values of its resource attributes. In particular, the
+// process.* metrics have resource attributes and so they will appear N times,
+// where N is the number of process resources that were detected.
 func expectMetricsMatch(t *testing.T, observedMetrics pmetric.Metrics, expectedMetrics map[string]ExpectedMetric) {
+	// Holds the set of metrics that were seen somewhere in observedMetrics.
 	seen := make(map[string]bool)
 
 	resourceMetrics := observedMetrics.ResourceMetrics()

@@ -18,7 +18,7 @@ expected_metrics:
     type: Sum
     attributes:
       state: user|system|wait
-    resource_attributes:
+    resource_attributes: &process_resource_attributes
       process.command: .*
       process.command_line: .*
       process.executable.name: .*
@@ -31,36 +31,15 @@ expected_metrics:
     type: Sum
     attributes:
       direction: read|write
-    resource_attributes:
-      process.command: .*
-      process.command_line: .*
-      process.executable.name: .*
-      process.executable.path: .*
-      process.owner: .*
-      process.parent_pid: -1|\d+
-      process.pid: \d+
+    resource_attributes: *process_resource_attributes
   - name: process.memory.physical_usage
     value_type: Int
     type: Sum
-    resource_attributes:
-      process.command: .*
-      process.command_line: .*
-      process.executable.name: .*
-      process.executable.path: .*
-      process.owner: .*
-      process.parent_pid: -1|\d+
-      process.pid: \d+
+    resource_attributes: *process_resource_attributes
   - name: process.memory.virtual_usage
     value_type: Int
     type: Sum
-    resource_attributes:
-      process.command: .*
-      process.command_line: .*
-      process.executable.name: .*
-      process.executable.path: .*
-      process.owner: .*
-      process.parent_pid: -1|\d+
-      process.pid: \d+
+    resource_attributes: *process_resource_attributes
   - name: system.cpu.load_average.15m
     value_type: Double
     type: Gauge

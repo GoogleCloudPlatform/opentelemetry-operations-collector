@@ -68,8 +68,8 @@ type ExpectedMetric struct {
 	Name string `yaml:"name"`
 	// The value type, for example "Int".
 	ValueType string `yaml:"value_type"`
-	// The metric data type, for example "Gauge".
-	DataType string `yaml:"data_type"`
+	// The metric type, for example "Gauge".
+	Type string `yaml:"type"`
 	// Mapping of expected attribute keys to value patterns.
 	// Patterns are RE2 regular expressions.
 	Attributes map[string]string `yaml:"attributes"`
@@ -176,24 +176,24 @@ func expectMetricsMatch(t *testing.T, observedMetrics pmetric.Metrics, expectedM
 					continue
 				}
 
-				if metric.DataType().String() != expected.DataType {
-					t.Errorf("For metric %q, DataType()=%v, want %v",
+				if metric.Type().String() != expected.Type {
+					t.Errorf("For metric %q, Type()=%v, want %v",
 						name,
-						metric.DataType().String(),
-						expected.DataType,
+						metric.Type().String(),
+						expected.Type,
 					)
 				}
 
 				expectAttributesMatch(t, resourceAttributes, expected.ResourceAttributes, name, "resource attribute")
 
 				var dataPoints pmetric.NumberDataPointSlice
-				switch metric.DataType() {
-				case pmetric.MetricDataTypeGauge:
+				switch metric.Type() {
+				case pmetric.MetricTypeGauge:
 					dataPoints = metric.Gauge().DataPoints()
-				case pmetric.MetricDataTypeSum:
+				case pmetric.MetricTypeSum:
 					dataPoints = metric.Sum().DataPoints()
 				default:
-					t.Errorf("Unimplemented handling for metric type %v", metric.DataType())
+					t.Errorf("Unimplemented handling for metric type %v", metric.Type())
 				}
 
 				for i := 0; i < dataPoints.Len(); i++ {

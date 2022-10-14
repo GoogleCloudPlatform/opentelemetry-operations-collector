@@ -132,7 +132,7 @@ func loadObservedMetrics(t *testing.T, metricsJSONPath string) pmetric.Metrics {
 
 	t.Logf("Found %v bytes of data at %s, selecting %v bytes", len(data), metricsJSONPath, len(secondBatch))
 
-	metrics, err := pmetric.NewJSONUnmarshaler().UnmarshalMetrics([]byte(secondBatch))
+	metrics, err := pmetric.NewJSONUnmarshaler().UnmarshalMetrics(secondBatch)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +207,7 @@ func expectMetricsMatch(t *testing.T, observedMetrics pmetric.Metrics, expectedM
 	}
 
 	// Don't forget to check that we saw all the metrics we expected!
-	for name, _ := range expectedMetrics {
+	for name := range expectedMetrics {
 		if _, ok := seen[name]; !ok {
 			t.Errorf("Never saw metric with name %q", name)
 		}

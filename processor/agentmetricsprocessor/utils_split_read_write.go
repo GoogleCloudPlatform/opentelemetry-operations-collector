@@ -91,10 +91,10 @@ func splitReadWriteBytesMetric(metric pmetric.Metric) (read pmetric.Metric, writ
 	write = newMetricWithName(metric, metricPostfixRegex.ReplaceAllString(metric.Name(), "write_$1"))
 
 	// append data points to the read or write metric as appropriate
-	switch t := metric.DataType(); t {
-	case pmetric.MetricDataTypeSum:
+	switch t := metric.Type(); t {
+	case pmetric.MetricTypeSum:
 		err = appendNumberDataPoints(metric.Name(), metric.Sum().DataPoints(), read.Sum().DataPoints(), write.Sum().DataPoints())
-	case pmetric.MetricDataTypeGauge:
+	case pmetric.MetricTypeGauge:
 		err = appendNumberDataPoints(metric.Name(), metric.Gauge().DataPoints(), read.Gauge().DataPoints(), write.Gauge().DataPoints())
 	default:
 		return read, write, fmt.Errorf("unsupported metric data type: %v", t)
@@ -114,7 +114,7 @@ func appendNumberDataPoints(metricName string, ndps, read, write pmetric.NumberD
 		}
 
 		var new pmetric.NumberDataPoint
-		switch dir.StringVal() {
+		switch dir.Str() {
 		case readDirection:
 			new = read.AppendEmpty()
 		case writeDirection:

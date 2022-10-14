@@ -111,13 +111,13 @@ func newMetricWithName(metric pmetric.Metric, name string) pmetric.Metric {
 	new.SetDescription(metric.Description())
 	new.SetUnit(metric.Unit())
 
-	switch t := metric.DataType(); t {
-	case pmetric.MetricDataTypeSum:
+	switch t := metric.Type(); t {
+	case pmetric.MetricTypeSum:
 		new.SetEmptySum()
 		sum := new.Sum()
 		sum.SetIsMonotonic(metric.Sum().IsMonotonic())
 		sum.SetAggregationTemporality(metric.Sum().AggregationTemporality())
-	case pmetric.MetricDataTypeGauge:
+	case pmetric.MetricTypeGauge:
 		new.SetEmptyGauge()
 		new.Gauge()
 	}

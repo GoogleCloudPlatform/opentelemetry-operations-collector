@@ -92,8 +92,8 @@ func (mtp *agentMetricsProcessor) calculateUtilizationMetric(usageMetric pmetric
 		metric = delta
 	}
 
-	switch t := metric.DataType(); t {
-	case pmetric.MetricDataTypeSum, pmetric.MetricDataTypeGauge:
+	switch t := metric.Type(); t {
+	case pmetric.MetricTypeSum, pmetric.MetricTypeGauge:
 		if err := calculateUtilizationFromNumberDataPoints(metric, utilizationMetric); err != nil {
 			return pmetric.NewMetric(), err
 		}
@@ -130,7 +130,7 @@ func (mtp *agentMetricsProcessor) convertPrevCPUTimeToDelta(cpuTimeMetric pmetri
 		// delta value = current cumulative value - previous cumulative value
 		ndp2 := out.AppendEmpty()
 		ndp.CopyTo(ndp2)
-		ndp2.SetDoubleVal(ndp.DoubleVal() - prevValue)
+		ndp2.SetDoubleValue(ndp.DoubleValue() - prevValue)
 	}
 	// overwrite previous slice
 	out.CopyTo(ndps)
@@ -152,10 +152,10 @@ type numberPoints struct {
 
 func calculateUtilizationFromNumberDataPoints(metric, utilizationMetric pmetric.Metric) error {
 	var ndps pmetric.NumberDataPointSlice
-	switch t := metric.DataType(); t {
-	case pmetric.MetricDataTypeSum:
+	switch t := metric.Type(); t {
+	case pmetric.MetricTypeSum:
 		ndps = metric.Sum().DataPoints()
-	case pmetric.MetricDataTypeGauge:
+	case pmetric.MetricTypeGauge:
 		ndps = metric.Gauge().DataPoints()
 	}
 
@@ -177,9 +177,9 @@ func calculateUtilizationFromNumberDataPoints(metric, utilizationMetric pmetric.
 
 		switch ndp.ValueType() {
 		case pmetric.NumberDataPointValueTypeInt:
-			points.sum += float64(ndp.IntVal())
+			points.sum += float64(ndp.IntValue())
 		case pmetric.NumberDataPointValueTypeDouble:
-			points.sum += ndp.DoubleVal()
+			points.sum += ndp.DoubleValue()
 		}
 		points.pts = append(points.pts, ndp)
 	}
@@ -197,11 +197,11 @@ func calculateUtilizationFromNumberDataPoints(metric, utilizationMetric pmetric.
 			var num float64
 			switch point.ValueType() {
 			case pmetric.NumberDataPointValueTypeInt:
-				num = float64(point.IntVal())
+				num = float64(point.IntValue())
 			case pmetric.NumberDataPointValueTypeDouble:
-				num = point.DoubleVal()
+				num = point.DoubleValue()
 			}
-			ndp.SetDoubleVal(num / points.sum * 100)
+			ndp.SetDoubleValue(num / points.sum * 100)
 		}
 	}
 	ndps.CopyTo(utilizationMetric.Gauge().DataPoints())
@@ -217,7 +217,7 @@ func doubleDataPointsToMap(metric pmetric.Metric) map[string]float64 {
 	for i := 0; i < ddps.Len(); i++ {
 		ddp := ddps.At(i)
 		key, _ := otherLabelsAsKey(ddp.Attributes())
-		labelToValuesMap[key] = ddp.DoubleVal()
+		labelToValuesMap[key] = ddp.DoubleValue()
 	}
 	return labelToValuesMap
 }

@@ -24,10 +24,10 @@ func generateVersionInput() pmetric.Metrics {
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
 
-	mb1 := b.addMetric("m1", pmetric.MetricDataTypeSum, true)
+	mb1 := b.addMetric("m1", pmetric.MetricTypeSum, true)
 	mb1.addIntDataPoint(2, map[string]string{"service_version": "value2"})
 
-	mb2 := b.addMetric("m2", pmetric.MetricDataTypeGauge, false)
+	mb2 := b.addMetric("m2", pmetric.MetricTypeGauge, false)
 	mb2.addDoubleDataPoint(3, map[string]string{"service_version": "value1"})
 
 	rmb.Build().CopyTo(input.ResourceMetrics())
@@ -40,10 +40,10 @@ func generateVersionExpected() pmetric.Metrics {
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
 
-	mb1 := b.addMetric("m1", pmetric.MetricDataTypeSum, true)
+	mb1 := b.addMetric("m1", pmetric.MetricTypeSum, true)
 	mb1.addIntDataPoint(2, map[string]string{})
 
-	mb2 := b.addMetric("m2", pmetric.MetricDataTypeGauge, false)
+	mb2 := b.addMetric("m2", pmetric.MetricTypeGauge, false)
 	mb2.addDoubleDataPoint(3, map[string]string{})
 
 	rmb.Build().CopyTo(input.ResourceMetrics())
@@ -56,10 +56,10 @@ func generateMultiAttrVersionInput() pmetric.Metrics {
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
 
-	mb1 := b.addMetric("m1", pmetric.MetricDataTypeSum, true)
+	mb1 := b.addMetric("m1", pmetric.MetricTypeSum, true)
 	mb1.addIntDataPoint(2, map[string]string{"service_version": "value2", "other_attr": "value2"})
 
-	mb2 := b.addMetric("m2", pmetric.MetricDataTypeGauge, false)
+	mb2 := b.addMetric("m2", pmetric.MetricTypeGauge, false)
 	mb2.addDoubleDataPoint(3, map[string]string{"service_version": "value1", "other_attr": "value1"})
 
 	rmb.Build().CopyTo(input.ResourceMetrics())
@@ -72,10 +72,10 @@ func generateMultiAttrVersionExpected() pmetric.Metrics {
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(nil)
 
-	mb1 := b.addMetric("m1", pmetric.MetricDataTypeSum, true)
+	mb1 := b.addMetric("m1", pmetric.MetricTypeSum, true)
 	mb1.addIntDataPoint(2, map[string]string{"other_attr": "value2"})
 
-	mb2 := b.addMetric("m2", pmetric.MetricDataTypeGauge, false)
+	mb2 := b.addMetric("m2", pmetric.MetricTypeGauge, false)
 	mb2.addDoubleDataPoint(3, map[string]string{"other_attr": "value1"})
 
 	rmb.Build().CopyTo(input.ResourceMetrics())

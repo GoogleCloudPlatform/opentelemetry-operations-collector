@@ -148,14 +148,14 @@ func (rmsb resourceMetricsBuilder) addResourceMetrics(resourceAttributes map[str
 
 	for k, v := range resourceAttributes {
 		switch v.Type() {
-		case pcommon.ValueTypeString:
-			rm.Resource().Attributes().PutString(k, v.StringVal())
+		case pcommon.ValueTypeStr:
+			rm.Resource().Attributes().PutString(k, v.Str())
 		case pcommon.ValueTypeInt:
-			rm.Resource().Attributes().PutInt(k, v.IntVal())
+			rm.Resource().Attributes().PutInt(k, v.Int())
 		case pcommon.ValueTypeBool:
-			rm.Resource().Attributes().PutBool(k, v.BoolVal())
+			rm.Resource().Attributes().PutBool(k, v.Bool())
 		case pcommon.ValueTypeDouble:
-			rm.Resource().Attributes().PutDouble(k, v.DoubleVal())
+			rm.Resource().Attributes().PutDouble(k, v.Double())
 		}
 	}
 
@@ -173,17 +173,17 @@ type metricsBuilder struct {
 	timestamp pcommon.Timestamp
 }
 
-func (msb metricsBuilder) addMetric(name string, t pmetric.MetricDataType, isMonotonic bool) metricBuilder {
+func (msb metricsBuilder) addMetric(name string, t pmetric.MetricType, isMonotonic bool) metricBuilder {
 	metric := msb.metrics.AppendEmpty()
 	metric.SetName(name)
 
 	switch t {
-	case pmetric.MetricDataTypeSum:
+	case pmetric.MetricTypeSum:
 		metric.SetEmptySum()
 		sum := metric.Sum()
 		sum.SetIsMonotonic(isMonotonic)
-		sum.SetAggregationTemporality(pmetric.MetricAggregationTemporalityCumulative)
-	case pmetric.MetricDataTypeGauge:
+		sum.SetAggregationTemporality(pmetric.AggregationTemporalityCumulative)
+	case pmetric.MetricTypeGauge:
 		metric.SetEmptyGauge()
 		metric.Gauge()
 	}
@@ -198,16 +198,16 @@ type metricBuilder struct {
 
 func (mb metricBuilder) addIntDataPoint(value int64, labels map[string]string) metricBuilder {
 	var idp pmetric.NumberDataPoint
-	switch mb.metric.DataType() {
-	case pmetric.MetricDataTypeSum:
+	switch mb.metric.Type() {
+	case pmetric.MetricTypeSum:
 		idp = mb.metric.Sum().DataPoints().AppendEmpty()
-	case pmetric.MetricDataTypeGauge:
+	case pmetric.MetricTypeGauge:
 		idp = mb.metric.Gauge().DataPoints().AppendEmpty()
 	}
 	for k, v := range labels {
 		idp.Attributes().PutString(k, v)
 	}
-	idp.SetIntVal(value)
+	idp.SetIntValue(value)
 	idp.SetTimestamp(mb.timestamp)
 
 	return mb
@@ -215,16 +215,16 @@ func (mb metricBuilder) addIntDataPoint(value int64, labels map[string]string) m
 
 func (mb metricBuilder) addDoubleDataPoint(value float64, labels map[string]string) metricBuilder {
 	var ddp pmetric.NumberDataPoint
-	switch mb.metric.DataType() {
-	case pmetric.MetricDataTypeSum:
+	switch mb.metric.Type() {
+	case pmetric.MetricTypeSum:
 		ddp = mb.metric.Sum().DataPoints().AppendEmpty()
-	case pmetric.MetricDataTypeGauge:
+	case pmetric.MetricTypeGauge:
 		ddp = mb.metric.Gauge().DataPoints().AppendEmpty()
 	}
 	for k, v := range labels {
 		ddp.Attributes().PutString(k, v)
 	}
-	ddp.SetDoubleVal(value)
+	ddp.SetDoubleValue(value)
 	ddp.SetTimestamp(mb.timestamp)
 
 	return mb
@@ -273,15 +273,15 @@ func assertEqual(t *testing.T, expected, actual pmetric.Metrics) {
 				assert.Equal(t, metricExp.Name(), metricAct.Name())
 				assert.Equalf(t, metricExp.Description(), metricAct.Description(), "Metric %s", metricAct.Name())
 				assert.Equalf(t, metricExp.Unit(), metricAct.Unit(), "Metric %s", metricAct.Name())
-				assert.Equalf(t, metricExp.DataType(), metricAct.DataType(), "Metric %s", metricAct.Name())
+				assert.Equalf(t, metricExp.Type(), metricAct.Type(), "Metric %s", metricAct.Name())
 
 				// assert equality of aggregation info & data points
-				switch ty := metricAct.DataType(); ty {
-				case pmetric.MetricDataTypeSum:
+				switch ty := metricAct.Type(); ty {
+				case pmetric.MetricTypeSum:
 					assert.Equal(t, metricAct.Sum().AggregationTemporality(), metricExp.Sum().AggregationTemporality(), "Metric %s", metricAct.Name())
 					assert.Equal(t, metricAct.Sum().IsMonotonic(), metricExp.Sum().IsMonotonic(), "Metric %s", metricAct.Name())
 					assertEqualNumberDataPointSlice(t, metricAct.Name(), metricAct.Sum().DataPoints(), metricExp.Sum().DataPoints())
-				case pmetric.MetricDataTypeGauge:
+				case pmetric.MetricTypeGauge:
 					assertEqualNumberDataPointSlice(t, metricAct.Name(), metricAct.Gauge().DataPoints(), metricExp.Gauge().DataPoints())
 				default:
 					assert.Fail(t, "unexpected metric type", t)
@@ -318,9 +318,9 @@ func assertEqualNumberDataPointSlice(t *testing.T, metricName string, ndpsAct, n
 		assert.Equalf(t, ndpExp.ValueType(), ndpAct.ValueType(), "Metric %s attributes %s", metricName, key)
 		switch ndpExp.ValueType() {
 		case pmetric.NumberDataPointValueTypeInt:
-			assert.Equalf(t, ndpExp.IntVal(), ndpAct.IntVal(), "Metric %s attributes %s", metricName, key)
+			assert.Equalf(t, ndpExp.IntValue(), ndpAct.IntValue(), "Metric %s attributes %s", metricName, key)
 		case pmetric.NumberDataPointValueTypeDouble:
-			assert.InEpsilonf(t, ndpExp.DoubleVal(), ndpAct.DoubleVal(), epsilon, "Metric %s attributes %s", metricName, key)
+			assert.InEpsilonf(t, ndpExp.DoubleValue(), ndpAct.DoubleValue(), epsilon, "Metric %s attributes %s", metricName, key)
 		}
 	}
 }

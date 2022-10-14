@@ -73,15 +73,15 @@ func (ctsp *CastToSumProcessor) processMetric(resource pcommon.Resource, metric 
 	if !sliceContains(ctsp.Metrics, metric.Name()) {
 		return
 	}
-	if metric.DataType() == pmetric.MetricDataTypeGauge {
+	if metric.Type() == pmetric.MetricTypeGauge {
 		newMetric := pmetric.NewMetric()
 		metric.CopyTo(newMetric)
 		newMetric.SetEmptySum()
 		metric.Gauge().DataPoints().CopyTo(newMetric.Sum().DataPoints())
 		newMetric.CopyTo(metric)
-	} else if metric.DataType() != pmetric.MetricDataTypeSum {
+	} else if metric.Type() != pmetric.MetricTypeSum {
 		ctsp.logger.Info("Configured metric %s is neither gauge nor sum", zap.String("metric", metric.Name()))
 	}
 	metric.Sum().SetIsMonotonic(true)
-	metric.Sum().SetAggregationTemporality(pmetric.MetricAggregationTemporalityCumulative)
+	metric.Sum().SetAggregationTemporality(pmetric.AggregationTemporalityCumulative)
 }

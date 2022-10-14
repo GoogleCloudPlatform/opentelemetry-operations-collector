@@ -29,23 +29,23 @@ import (
 )
 
 type varnishScraper struct {
-	client    client
-	config    *Config
-	settings  component.TelemetrySettings
-	mb        *metadata.MetricsBuilder
-	cacheName string
+	client            client
+	config            *Config
+	telemetrySettings component.TelemetrySettings
+	mb                *metadata.MetricsBuilder
+	cacheName         string
 }
 
-func newVarnishScraper(settings component.TelemetrySettings, config *Config) *varnishScraper {
+func newVarnishScraper(settings component.ReceiverCreateSettings, config *Config) *varnishScraper {
 	return &varnishScraper{
-		settings: settings,
-		config:   config,
-		mb:       metadata.NewMetricsBuilder(metadata.DefaultMetricsSettings()),
+		telemetrySettings: settings.TelemetrySettings,
+		config:            config,
+		mb:                metadata.NewMetricsBuilder(metadata.DefaultMetricsSettings(), settings.BuildInfo),
 	}
 }
 
 func (v *varnishScraper) start(_ context.Context, host component.Host) error {
-	v.client = newVarnishClient(v.config, host, v.settings)
+	v.client = newVarnishClient(v.config, host, v.telemetrySettings)
 	return v.setCacheName()
 }
 
@@ -67,7 +67,7 @@ func (v *varnishScraper) setCacheName() error {
 func (v *varnishScraper) scrape(context.Context) (pmetric.Metrics, error) {
 	stats, err := v.client.GetStats()
 	if err != nil {
-		v.settings.Logger.Error("Failed to execute varnishstat",
+		v.telemetrySettings.Logger.Error("Failed to execute varnishstat",
 			zap.String("Cache Dir:", v.config.CacheDir),
 			zap.String("Executable Directory:", v.config.ExecDir),
 			zap.Error(err),

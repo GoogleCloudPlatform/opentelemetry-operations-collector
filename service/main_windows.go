@@ -26,7 +26,6 @@ import (
 )
 
 func run(ctx context.Context, params service.CollectorSettings) error {
-	// TODO: this should possibly be using svc.IsWindowsService() instead.
 	isInteractive, err := svc.IsAnInteractiveSession()
 	if err != nil {
 		return fmt.Errorf("failed to determine if we are running in an interactive session: %w", err)

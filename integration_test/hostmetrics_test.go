@@ -23,10 +23,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/service"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"gopkg.in/yaml.v2"
+
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/service"
 )
 
 func TestHostmetrics(t *testing.T) {

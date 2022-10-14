@@ -279,7 +279,7 @@ func expectAttributesMatch(t *testing.T, observedAttributes pcommon.Map, expecte
 	})
 
 	// Check that all expected attributes actually apper in observedAttributes.
-	for attribute, _ := range expectedAttributes {
+	for attribute := range expectedAttributes {
 		if _, ok := observedAttributes.Get(attribute); !ok {
 			t.Errorf("For metric %q, missing expected %s %q. Found: %v",
 				metricName,

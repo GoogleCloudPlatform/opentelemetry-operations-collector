@@ -11,9 +11,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package service_test
+package integrationtest
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -25,7 +26,7 @@ import (
 
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/service"
 )
@@ -35,7 +36,10 @@ func TestHostmetrics(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	oldArgs := os.Args
 	os.Args = append(os.Args, fmt.Sprintf("--config=%s", filepath.Join(testDir, "hostmetrics-config.yaml")))
+	// Restore the original args.
+	t.Cleanup(func() { os.Args = oldArgs })
 
 	// Make a scratch directory and cd there so that otelopscol will write
 	// metrics.json to a scratch directory instead of into source control.
@@ -88,7 +92,9 @@ func loadExpectedMetrics(t *testing.T, expectedMetricsPath string) map[string]Ex
 		ExpectedMetrics []ExpectedMetric `yaml:"expected_metrics"`
 	}
 
-	if err := yaml.UnmarshalStrict(data, &agentMetrics); err != nil {
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true) // Fail decoding on unknown fields.
+	if err := decoder.Decode(&agentMetrics); err != nil {
 		t.Fatal(err)
 	}
 
@@ -278,7 +284,7 @@ func expectAttributesMatch(t *testing.T, observedAttributes pcommon.Map, expecte
 		return true // Tell Range() to keep going.
 	})
 
-	// Check that all expected attributes actually apper in observedAttributes.
+	// Check that all expected attributes actually appear in observedAttributes.
 	for attribute := range expectedAttributes {
 		if _, ok := observedAttributes.Get(attribute); !ok {
 			t.Errorf("For metric %q, missing expected %s %q. Found: %v",

@@ -2,10 +2,7 @@ module github.com/GoogleCloudPlatform/opentelemetry-operations-collector
 
 go 1.18
 
-replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/nvmlreceiver => ./receiver/nvmlreceiver
-
 require (
-	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/nvmlreceiver v0.61.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/fileexporter v0.61.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter v0.61.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlemanagedprometheusexporter v0.61.0

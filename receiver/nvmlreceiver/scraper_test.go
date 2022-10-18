@@ -39,5 +39,6 @@ func TestScrapeOnLibraryNotFound(t *testing.T) {
 	require.NoError(t, err)
 
 	metrics, err := scraper.scrape(context.Background())
+	require.NoError(t, err)
 	require.Equal(t, 0, metrics.MetricCount())
 }

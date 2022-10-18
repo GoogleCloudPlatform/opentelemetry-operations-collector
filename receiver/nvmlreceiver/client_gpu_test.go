@@ -41,8 +41,8 @@ func TestGpuModelNameExists(t *testing.T) {
 	require.NotNil(t, client)
 	require.Greater(t, len(client.devices), 0)
 
-	for gpuId := 0; gpuId < len(client.devices); gpuId++ {
-		model := client.getDeviceModelName(uint(gpuId))
+	for gpuID := 0; gpuID < len(client.devices); gpuID++ {
+		model := client.getDeviceModelName(uint(gpuID))
 		assert.GreaterOrEqual(t, len(model), 2)
 	}
 }
@@ -58,8 +58,8 @@ func TestCollectGpuUtilization(t *testing.T) {
 	assert.GreaterOrEqual(t, len(metrics), 1)
 	for _, metric := range metrics {
 		assert.Equal(t, metric.name, "nvml.gpu.utilization")
-		assert.GreaterOrEqual(t, metric.gpuId, uint(0))
-		assert.LessOrEqual(t, metric.gpuId, uint(32))
+		assert.GreaterOrEqual(t, metric.gpuID, uint(0))
+		assert.LessOrEqual(t, metric.gpuID, uint(32))
 		assert.GreaterOrEqual(t, metric.asFloat64(), 0.0)
 		assert.LessOrEqual(t, metric.asFloat64(), 1.0)
 		assert.GreaterOrEqual(t, metric.time, before)
@@ -84,8 +84,8 @@ func TestCollectGpuMemoryUsed(t *testing.T) {
 	for _, metric := range metrics {
 		assert.Contains(t, requiredNames, metric.name)
 		requiredNames[metric.name] = true
-		assert.GreaterOrEqual(t, metric.gpuId, uint(0))
-		assert.LessOrEqual(t, metric.gpuId, uint(32))
+		assert.GreaterOrEqual(t, metric.gpuID, uint(0))
+		assert.LessOrEqual(t, metric.gpuID, uint(32))
 		assert.GreaterOrEqual(t, metric.asInt64(), int64(0))
 		assert.LessOrEqual(t, metric.asInt64(), int64(10995116277760)) // 10 TiB
 		assert.GreaterOrEqual(t, metric.time, before)

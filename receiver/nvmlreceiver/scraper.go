@@ -64,15 +64,15 @@ func (s *nvmlScraper) scrape(ctx context.Context) (pmetric.Metrics, error) {
 
 	for _, metric := range deviceMetrics {
 		timestamp := pcommon.NewTimestampFromTime(metric.time)
-		model := s.client.getDeviceModelName(metric.gpuId)
-		gpuId := fmt.Sprintf("%d", metric.gpuId)
+		model := s.client.getDeviceModelName(metric.gpuID)
+		gpuID := fmt.Sprintf("%d", metric.gpuID)
 		switch metric.name {
 		case "nvml.gpu.utilization":
-			s.mb.RecordNvmlGpuUtilizationDataPoint(timestamp, metric.asFloat64(), model, gpuId)
+			s.mb.RecordNvmlGpuUtilizationDataPoint(timestamp, metric.asFloat64(), model, gpuID)
 		case "nvml.gpu.memory.bytes_used":
-			s.mb.RecordNvmlGpuMemoryBytesUsedDataPoint(timestamp, metric.asInt64(), model, gpuId, metadata.AttributeMemoryStateUsed)
+			s.mb.RecordNvmlGpuMemoryBytesUsedDataPoint(timestamp, metric.asInt64(), model, gpuID, metadata.AttributeMemoryStateUsed)
 		case "nvml.gpu.memory.bytes_free":
-			s.mb.RecordNvmlGpuMemoryBytesUsedDataPoint(timestamp, metric.asInt64(), model, gpuId, metadata.AttributeMemoryStateFree)
+			s.mb.RecordNvmlGpuMemoryBytesUsedDataPoint(timestamp, metric.asInt64(), model, gpuID, metadata.AttributeMemoryStateFree)
 		}
 	}
 

@@ -182,32 +182,34 @@ func expectMetricsMatch(t *testing.T, observedMetrics pmetric.Metrics, expectedM
 					continue
 				}
 
-				if metric.Type().String() != expected.Type {
-					t.Errorf("For metric %q, Type()=%v, want %v",
-						name,
-						metric.Type().String(),
-						expected.Type,
-					)
-				}
+				t.Run(name, func(t *testing.T) {
+					if metric.Type().String() != expected.Type {
+						t.Errorf("For metric %q, Type()=%v, want %v",
+							name,
+							metric.Type().String(),
+							expected.Type,
+						)
+					}
 
-				expectAttributesMatch(t, resourceAttributes, expected.ResourceAttributes, name, "resource attribute")
+					expectAttributesMatch(t, resourceAttributes, expected.ResourceAttributes, name, "resource attribute")
 
-				var dataPoints pmetric.NumberDataPointSlice
-				switch metric.Type() {
-				case pmetric.MetricTypeGauge:
-					dataPoints = metric.Gauge().DataPoints()
-				case pmetric.MetricTypeSum:
-					dataPoints = metric.Sum().DataPoints()
-				default:
-					t.Errorf("Unimplemented handling for metric type %v", metric.Type())
-				}
+					var dataPoints pmetric.NumberDataPointSlice
+					switch metric.Type() {
+					case pmetric.MetricTypeGauge:
+						dataPoints = metric.Gauge().DataPoints()
+					case pmetric.MetricTypeSum:
+						dataPoints = metric.Sum().DataPoints()
+					default:
+						t.Errorf("Unimplemented handling for metric type %v", metric.Type())
+					}
 
-				for i := 0; i < dataPoints.Len(); i++ {
-					dataPoint := dataPoints.At(i)
-					expectAttributesMatch(t, dataPoint.Attributes(), expected.Attributes, name, "attribute")
-				}
+					for i := 0; i < dataPoints.Len(); i++ {
+						dataPoint := dataPoints.At(i)
+						expectAttributesMatch(t, dataPoint.Attributes(), expected.Attributes, name, "attribute")
+					}
 
-				expectValueTypesMatch(t, dataPoints, expected.ValueType, name)
+					expectValueTypesMatch(t, dataPoints, expected.ValueType, name)
+				})
 			}
 		}
 	}

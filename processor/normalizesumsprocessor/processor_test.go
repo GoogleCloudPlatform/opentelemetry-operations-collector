@@ -138,7 +138,7 @@ func generateMultipleResourceInput(startTime int64) []pmetric.Metrics {
 
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(map[string]pcommon.Value{
-		"label1": pcommon.NewValueString("value1"),
+		"label1": pcommon.NewValueStr("value1"),
 	})
 
 	mb1 := b.addMetric("m1", pmetric.MetricTypeSum, true)
@@ -146,7 +146,7 @@ func generateMultipleResourceInput(startTime int64) []pmetric.Metrics {
 	mb1.addIntDataPoint(2, map[string]string{}, startTime+1000, 0)
 
 	b2 := rmb.addResourceMetrics(map[string]pcommon.Value{
-		"label1": pcommon.NewValueString("value2"),
+		"label1": pcommon.NewValueStr("value2"),
 	})
 
 	mb2 := b2.addMetric("m1", pmetric.MetricTypeSum, true)
@@ -162,7 +162,7 @@ func generateMultipleResourceOutput(startTime int64) []pmetric.Metrics {
 
 	rmb := newResourceMetricsBuilder()
 	b := rmb.addResourceMetrics(map[string]pcommon.Value{
-		"label1": pcommon.NewValueString("value1"),
+		"label1": pcommon.NewValueStr("value1"),
 	})
 
 	mb1 := b.addMetric("m1", pmetric.MetricTypeSum, true)
@@ -170,7 +170,7 @@ func generateMultipleResourceOutput(startTime int64) []pmetric.Metrics {
 	mb1.addIntDataPoint(1, map[string]string{}, startTime+1000, startTime)
 
 	b2 := rmb.addResourceMetrics(map[string]pcommon.Value{
-		"label1": pcommon.NewValueString("value2"),
+		"label1": pcommon.NewValueStr("value2"),
 	})
 
 	mb2 := b2.addMetric("m1", pmetric.MetricTypeSum, true)
@@ -451,7 +451,7 @@ func (msb metricsBuilder) addMetric(name string, t pmetric.MetricType, isMonoton
 		metric.SetEmptySum()
 		sum := metric.Sum()
 		sum.SetIsMonotonic(isMonotonic)
-		sum.SetAggregationTemporality(pmetric.MetricAggregationTemporalityCumulative)
+		sum.SetAggregationTemporality(pmetric.AggregationTemporalityCumulative)
 	case pmetric.MetricTypeGauge:
 		metric.SetEmptyGauge()
 		metric.Gauge()

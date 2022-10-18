@@ -29,22 +29,22 @@ func generateProcessResourceMetricsInput() pmetric.Metrics {
 
 	b2 := rmb.addResourceMetrics(map[string]pcommon.Value{
 		"process.pid":             pcommon.NewValueInt(1),
-		"process.executable.name": pcommon.NewValueString("process1"),
-		"process.executable.path": pcommon.NewValueString("/path/to/process1"),
-		"process.command":         pcommon.NewValueString("to/process1"),
-		"process.command_line":    pcommon.NewValueString("to/process1 -arg arg"),
-		"process.owner":           pcommon.NewValueString("username1"),
+		"process.executable.name": pcommon.NewValueStr("process1"),
+		"process.executable.path": pcommon.NewValueStr("/path/to/process1"),
+		"process.command":         pcommon.NewValueStr("to/process1"),
+		"process.command_line":    pcommon.NewValueStr("to/process1 -arg arg"),
+		"process.owner":           pcommon.NewValueStr("username1"),
 	})
 	b2.addMetric("m3", pmetric.MetricTypeSum, true).addIntDataPoint(3, map[string]string{"label1": "value1"})
 	b2.addMetric("m4", pmetric.MetricTypeGauge, false).addDoubleDataPoint(4, map[string]string{"label1": "value1"})
 
 	b3 := rmb.addResourceMetrics(map[string]pcommon.Value{
 		"process.pid":             pcommon.NewValueInt(2),
-		"process.executable.name": pcommon.NewValueString("process2"),
-		"process.executable.path": pcommon.NewValueString("/path/to/process2"),
-		"process.command":         pcommon.NewValueString("to/process2"),
-		"process.command_line":    pcommon.NewValueString("to/process2 -arg arg"),
-		"process.owner":           pcommon.NewValueString("username2"),
+		"process.executable.name": pcommon.NewValueStr("process2"),
+		"process.executable.path": pcommon.NewValueStr("/path/to/process2"),
+		"process.command":         pcommon.NewValueStr("to/process2"),
+		"process.command_line":    pcommon.NewValueStr("to/process2 -arg arg"),
+		"process.owner":           pcommon.NewValueStr("username2"),
 	})
 	b3.addMetric("m3", pmetric.MetricTypeSum, true).addIntDataPoint(5, map[string]string{"label1": "value2"})
 	b3.addMetric("m4", pmetric.MetricTypeGauge, false).addDoubleDataPoint(6, map[string]string{"label1": "value2"})

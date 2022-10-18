@@ -83,5 +83,5 @@ func (ctsp *CastToSumProcessor) processMetric(resource pcommon.Resource, metric 
 		ctsp.logger.Info("Configured metric %s is neither gauge nor sum", zap.String("metric", metric.Name()))
 	}
 	metric.Sum().SetIsMonotonic(true)
-	metric.Sum().SetAggregationTemporality(pmetric.MetricAggregationTemporalityCumulative)
+	metric.Sum().SetAggregationTemporality(pmetric.AggregationTemporalityCumulative)
 }

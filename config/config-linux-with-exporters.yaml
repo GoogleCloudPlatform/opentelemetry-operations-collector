@@ -71,7 +71,7 @@ processors:
   metricstransform/host:
     transforms:
       # system.cpu.time -> cpu/usage_time
-      - metric_name: system.cpu.time
+      - include: system.cpu.time
         action: update
         new_name: agent.googleapis.com/cpu/usage_time
         operations:
@@ -90,7 +90,7 @@ processors:
             label_set: [ cpu_state ]
             aggregation_type: mean
       # system.cpu.utilization -> cpu/utilization
-      - metric_name: system.cpu.utilization
+      - include: system.cpu.utilization
         action: update
         new_name: agent.googleapis.com/cpu/utilization
         operations:
@@ -107,49 +107,49 @@ processors:
             label_set: [ cpu_state ]
             aggregation_type: mean
       # system.cpu.load_average.1m -> cpu/load_1m
-      - metric_name: system.cpu.load_average.1m
+      - include: system.cpu.load_average.1m
         action: update
         new_name: agent.googleapis.com/cpu/load_1m
       # system.cpu.load_average.5m -> cpu/load_5m
-      - metric_name: system.cpu.load_average.5m
+      - include: system.cpu.load_average.5m
         action: update
         new_name: agent.googleapis.com/cpu/load_5m
       # system.cpu.load_average.15m -> cpu/load_15m
-      - metric_name: system.cpu.load_average.15m
+      - include: system.cpu.load_average.15m
         action: update
         new_name: agent.googleapis.com/cpu/load_15m
       # system.disk.read_io (as named after custom split logic) -> disk/read_bytes_count
-      - metric_name: system.disk.read_io
+      - include: system.disk.read_io
         action: update
         new_name: agent.googleapis.com/disk/read_bytes_count
       # system.disk.write_io (as named after custom split logic) -> processes/write_bytes_count
-      - metric_name: system.disk.write_io
+      - include: system.disk.write_io
         action: update
         new_name: agent.googleapis.com/disk/write_bytes_count
       # system.disk.operations -> disk/operation_count
-      - metric_name: system.disk.operations
+      - include: system.disk.operations
         action: update
         new_name: agent.googleapis.com/disk/operation_count
       # system.disk.operation_time -> disk/operation_time
-      - metric_name: system.disk.operation_time
+      - include: system.disk.operation_time
         action: update
         new_name: agent.googleapis.com/disk/operation_time
         operations:
           # change data type from double -> int64
           - action: toggle_scalar_data_type
       # system.disk.pending_operations -> disk/pending_operations
-      - metric_name: system.disk.pending_operations
+      - include: system.disk.pending_operations
         action: update
         new_name: agent.googleapis.com/disk/pending_operations
         operations:
           # change data type from int64 -> double
           - action: toggle_scalar_data_type
       # system.disk.merged -> disk/merged_operations
-      - metric_name: system.disk.merged
+      - include: system.disk.merged
         action: update
         new_name: agent.googleapis.com/disk/merged_operations
       # system.filesystem.usage -> disk/bytes_used
-      - metric_name: system.filesystem.usage
+      - include: system.filesystem.usage
         action: update
         new_name: agent.googleapis.com/disk/bytes_used
         operations:
@@ -160,7 +160,7 @@ processors:
             label_set: [ device, state ]
             aggregation_type: sum
       # system.filesystem.utilization -> disk/percent_used
-      - metric_name: system.filesystem.utilization
+      - include: system.filesystem.utilization
         action: update
         new_name: agent.googleapis.com/disk/percent_used
         operations:
@@ -169,7 +169,7 @@ processors:
             label_set: [ device, state ]
             aggregation_type: sum
       # system.memory.usage -> memory/bytes_used
-      - metric_name: system.memory.usage
+      - include: system.memory.usage
         action: update
         new_name: agent.googleapis.com/memory/bytes_used
         operations:
@@ -182,7 +182,7 @@ processors:
             new_value: slab
             aggregation_type: sum
       # system.memory.utilization -> memory/percent_used
-      - metric_name: system.memory.utilization
+      - include: system.memory.utilization
         action: update
         new_name: agent.googleapis.com/memory/percent_used
         operations:
@@ -193,7 +193,7 @@ processors:
             new_value: slab
             aggregation_type: sum
       # system.network.io -> interface/traffic
-      - metric_name: system.network.io
+      - include: system.network.io
         action: update
         new_name: agent.googleapis.com/interface/traffic
         operations:
@@ -208,7 +208,7 @@ processors:
               - value: transmit
                 new_value: tx
       # system.network.errors -> interface/errors
-      - metric_name: system.network.errors
+      - include: system.network.errors
         action: update
         new_name: agent.googleapis.com/interface/errors
         operations:
@@ -223,7 +223,7 @@ processors:
               - value: transmit
                 new_value: tx
       # system.network.packets -> interface/packets
-      - metric_name: system.network.packets
+      - include: system.network.packets
         action: update
         new_name: agent.googleapis.com/interface/packets
         operations:
@@ -238,7 +238,7 @@ processors:
               - value: transmit
                 new_value: tx
       # system.network.connections -> network/tcp_connections
-      - metric_name: system.network.connections
+      - include: system.network.connections
         action: update
         new_name: agent.googleapis.com/network/tcp_connections
         operations:
@@ -257,7 +257,7 @@ processors:
             label_set: [ state ]
             aggregation_type: sum
       # system.paging.operations -> swap/io
-      - metric_name: system.paging.operations
+      - include: system.paging.operations
         action: update
         new_name: agent.googleapis.com/swap/io
         operations:
@@ -266,7 +266,7 @@ processors:
             label_set: [ direction ]
             aggregation_type: sum
       # system.paging.utilization -> swap/percent_used
-      - metric_name: system.paging.utilization
+      - include: system.paging.utilization
         action: update
         new_name: agent.googleapis.com/swap/percent_used
         operations:
@@ -275,7 +275,7 @@ processors:
             label_set: [ state ]
             aggregation_type: sum
       # process.cpu.time -> processes/cpu_time
-      - metric_name: process.cpu.time
+      - include: process.cpu.time
         action: update
         new_name: agent.googleapis.com/processes/cpu_time
         operations:
@@ -286,22 +286,22 @@ processors:
             label: state
             new_label: user_or_syst
       # process.disk.read_io (as named after custom split logic) -> processes/disk/read_bytes_count
-      - metric_name: process.disk.read_io
+      - include: process.disk.read_io
         action: update
         new_name: agent.googleapis.com/processes/disk/read_bytes_count
       # process.disk.write_io (as named after custom split logic) -> processes/disk/write_bytes_count
-      - metric_name: process.disk.write_io
+      - include: process.disk.write_io
         action: update
         new_name: agent.googleapis.com/processes/disk/write_bytes_count
       # process.memory.physical_usage -> processes/rss_usage
-      - metric_name: process.memory.physical_usage
+      - include: process.memory.physical_usage
         action: update
         new_name: agent.googleapis.com/processes/rss_usage
         operations:
           # change data type from int64 -> double
           - action: toggle_scalar_data_type
       # process.memory.virtual_usage -> processes/vm_usage
-      - metric_name: process.memory.virtual_usage
+      - include: process.memory.virtual_usage
         action: update
         new_name: agent.googleapis.com/processes/vm_usage
         operations:
@@ -319,13 +319,13 @@ processors:
 
   metricstransform/mysql:
     transforms:
-      - metric_name: mysql_global_status_commands_total
+      - include: mysql_global_status_commands_total
         action: update
         new_name: agent.googleapis.com/mysql/command_count
         operations:
           - action: toggle_scalar_data_type
 
-      - metric_name: mysql_global_status_threads_connected
+      - include: mysql_global_status_threads_connected
         action: update
         new_name: agent.googleapis.com/mysql/thread_count
         operations:
@@ -333,7 +333,7 @@ processors:
             new_label: kind
             new_value: connected
 
-      - metric_name: mysql_global_status_handlers_total
+      - include: mysql_global_status_handlers_total
         action: update
         new_name: agent.googleapis.com/mysql/handler_count
         operations:
@@ -359,7 +359,7 @@ processors:
 
   metricstransform/jvm:
     transforms: 
-      - metric_name: java_lang_Memory_HeapMemoryUsage_committed
+      - include: java_lang_Memory_HeapMemoryUsage_committed
         action: update
         new_name: agent.googleapis.com/jvm/memory/usage
         operations: 
@@ -370,7 +370,7 @@ processors:
             new_label: usage_kind
             new_value: committed
 
-      - metric_name: java_lang_Memory_HeapMemoryUsage_max
+      - include: java_lang_Memory_HeapMemoryUsage_max
         action: update
         new_name: agent.googleapis.com/jvm/memory/usage
         operations: 
@@ -381,7 +381,7 @@ processors:
             new_label: usage_kind
             new_value: max
 
-      - metric_name: java_lang_Memory_NonHeapMemoryUsage_used
+      - include: java_lang_Memory_NonHeapMemoryUsage_used
         action: update
         new_name: agent.googleapis.com/jvm/memory/usage
         operations: 
@@ -392,7 +392,7 @@ processors:
             new_label: usage_kind
             new_value: used
 
-      - metric_name: java_lang_Memory_NonHeapMemoryUsage_committed
+      - include: java_lang_Memory_NonHeapMemoryUsage_committed
         action: update
         new_name: agent.googleapis.com/jvm/memory/usage
         operations: 
@@ -403,7 +403,7 @@ processors:
             new_label: usage_kind
             new_value: committed
 
-      - metric_name: java_lang_Memory_NonHeapMemoryUsage_max
+      - include: java_lang_Memory_NonHeapMemoryUsage_max
         action: update
         new_name: agent.googleapis.com/jvm/memory/usage
         operations: 
@@ -414,7 +414,7 @@ processors:
             new_label: usage_kind
             new_value: max
 
-      - metric_name: java_lang_Memory_HeapMemoryUsage_used
+      - include: java_lang_Memory_HeapMemoryUsage_used
         action: update
         new_name: agent.googleapis.com/jvm/memory/usage
         operations: 
@@ -425,15 +425,15 @@ processors:
             new_label: usage_kind
             new_value: used
 
-      - metric_name: java_lang_Threading_DaemonThreadCount
+      - include: java_lang_Threading_DaemonThreadCount
         action: update
         new_name: agent.googleapis.com/jvm/thread/num_daemon
       
-      - metric_name: java_lang_Threading_ThreadCount
+      - include: java_lang_Threading_ThreadCount
         action: update
         new_name: agent.googleapis.com/jvm/thread/num_live
       
-      - metric_name: java_lang_OperatingSystem_OpenFileDescriptorCount
+      - include: java_lang_OperatingSystem_OpenFileDescriptorCount
         action: update
         new_name: agent.googleapis.com/jvm/os/open_files
 
@@ -450,7 +450,7 @@ processors:
 
   metricstransform/apache:
     transforms:
-      - metric_name: promhttp_metric_handler_requests_total
+      - include: promhttp_metric_handler_requests_total
         action: update
         new_name: agent.googleapis.com/apache/request_count
         operations:
@@ -459,7 +459,7 @@ processors:
            aggregation_type: sum
          - action: toggle_scalar_data_type 
 
-      - metric_name: apache_connections
+      - include: apache_connections
         action: update
         new_name: agent.googleapis.com/apache/connections
         operations:
@@ -467,7 +467,7 @@ processors:
             label_set: []
             aggregation_type: max
 
-      - metric_name: apache_scoreboard
+      - include: apache_scoreboard
         action: update
         new_name: agent.googleapis.com/apache/scoreboard
         operations:
@@ -489,7 +489,7 @@ processors:
               - value: graceful_stop
                 new_value: finishing
 
-      - metric_name: apache_workers
+      - include: apache_workers
         action: update
         new_name: agent.googleapis.com/apache/idle_workers
         operations:
@@ -498,7 +498,7 @@ processors:
             aggregation_type: max
             #this is a hack since the correct value is not necessarily max
       
-      - metric_name: apache_sent_kilobytes_total
+      - include: apache_sent_kilobytes_total
         action: update
         new_name: agent.googleapis.com/apache/traffic
         operations:

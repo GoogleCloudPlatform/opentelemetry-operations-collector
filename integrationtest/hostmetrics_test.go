@@ -31,13 +31,21 @@ import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/service"
 )
 
+func TestAgentProcessorHostmetrics(t *testing.T) {
+	runTest(t, "agentprocessor-hostmetrics-config.yaml", "agentprocessor-hostmetrics-expected.yaml")
+}
+
 func TestHostmetrics(t *testing.T) {
+	runTest(t, "hostmetrics-config.yaml", "hostmetrics-expected.yaml")
+}
+
+func runTest(t *testing.T, configFile, expectationsFile string) {
 	testDir, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
 	}
 	oldArgs := os.Args
-	os.Args = append(os.Args, fmt.Sprintf("--config=%s", filepath.Join(testDir, "hostmetrics-config.yaml")))
+	os.Args = append(os.Args, fmt.Sprintf("--config=%s", filepath.Join(testDir, configFile)))
 	// Restore the original args.
 	t.Cleanup(func() { os.Args = oldArgs })
 
@@ -60,7 +68,7 @@ func TestHostmetrics(t *testing.T) {
 	service.MainContext(ctx)
 
 	observed := loadObservedMetrics(t, filepath.Join(scratchDir, "metrics.json"))
-	expected := loadExpectedMetrics(t, filepath.Join(testDir, "expected-metrics.yaml"))
+	expected := loadExpectedMetrics(t, filepath.Join(testDir, expectationsFile))
 
 	expectMetricsMatch(t, observed, expected)
 }

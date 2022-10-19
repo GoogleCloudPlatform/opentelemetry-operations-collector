@@ -31,7 +31,7 @@ import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/service"
 )
 
-func TestAgentProcessorHostmetrics(t *testing.T) {
+func TestAgentMetrics(t *testing.T) {
 	runTest(t, "agentmetrics-config.yaml", "agentmetrics-expected.yaml")
 }
 

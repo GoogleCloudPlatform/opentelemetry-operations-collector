@@ -32,7 +32,7 @@ import (
 )
 
 func TestAgentProcessorHostmetrics(t *testing.T) {
-	runTest(t, "agentprocessor-hostmetrics-config.yaml", "agentprocessor-hostmetrics-expected.yaml")
+	runTest(t, "agentmetrics-config.yaml", "agentmetrics-expected.yaml")
 }
 
 func TestHostmetrics(t *testing.T) {
@@ -58,6 +58,12 @@ func runTest(t *testing.T, configFile, expectationsFile string) {
 	if err := os.Chdir(scratchDir); err != nil {
 		t.Fatal(err)
 	}
+	// Restore the original working directory.
+	t.Cleanup(func() {
+		if err := os.Chdir(testDir); err != nil {
+			t.Fatal(err)
+		}
+	})
 
 	terminationTime := 4 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), terminationTime)

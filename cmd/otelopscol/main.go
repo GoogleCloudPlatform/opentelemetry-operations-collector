@@ -15,59 +15,11 @@
 package main
 
 import (
-	"fmt"
-	"log"
+	"context"
 
-	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/service"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
-
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/env"
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/levelchanger"
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/version"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/service"
 )
 
 func main() {
-	if err := env.Create(); err != nil {
-		log.Printf("failed to build environment variables for config: %v", err)
-	}
-
-	factories, err := components()
-	if err != nil {
-		log.Fatalf("failed to build default components: %v", err)
-	}
-
-	info := component.BuildInfo{
-		Command:     "google-cloud-metrics-agent",
-		Description: "Google Cloud Metrics Agent",
-		Version:     version.Version,
-	}
-
-	params := service.CollectorSettings{
-		Factories: factories,
-		BuildInfo: info,
-		LoggingOptions: []zap.Option{
-			levelchanger.NewLevelChangerOption(
-				zapcore.ErrorLevel,
-				zapcore.DebugLevel,
-				// We would like the Error logs from this file to be logged at Debug instead.
-				// https://github.com/open-telemetry/opentelemetry-collector/blob/831373ae6c6959f6c9258ac585a2ec0ab19a074f/receiver/scraperhelper/scrapercontroller.go#L198
-				levelchanger.FilePathLevelChangeCondition("scrapercontroller.go")),
-		},
-	}
-
-	if err := run(params); err != nil {
-		log.Fatal(err)
-	}
-}
-
-func runInteractive(params service.CollectorSettings) error {
-	cmd := service.NewCommand(params)
-	err := cmd.Execute()
-	if err != nil {
-		return fmt.Errorf("application run finished with error: %w", err)
-	}
-
-	return nil
+	service.MainContext(context.Background())
 }

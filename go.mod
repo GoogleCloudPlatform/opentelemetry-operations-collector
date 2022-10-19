@@ -50,6 +50,7 @@ require (
 	github.com/aerospike/aerospike-client-go/v6 v6.4.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.11.3 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/ottl v0.62.0 // indirect
+	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
 
 require (
@@ -272,8 +273,7 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/ini.v1 v1.66.6 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
-	gopkg.in/yaml.v2 v2.4.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
+	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.25.2 // indirect
 	k8s.io/apimachinery v0.25.2 // indirect
 	k8s.io/client-go v0.25.2 // indirect

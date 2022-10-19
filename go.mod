@@ -199,13 +199,13 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/mwitkow/go-conntrack v0.0.0-20190716064945-2f068394615f // indirect
 	github.com/nginxinc/nginx-prometheus-exporter v0.8.1-0.20201110005315-f5a5f8086c19 // indirect
-	github.com/open-telemetry/opentelemetry-collector-contrib/internal/aws/ecsutil v0.62.0 // indirect; indir1ct
-	github.com/open-telemetry/opentelemetry-collector-contrib/internal/common v0.62.0 // indirect; indir1ct
-	github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal v0.62.0 // indirect; indir1ct
-	github.com/open-telemetry/opentelemetry-collector-contrib/internal/metadataproviders v0.62.0 // indirect; indir1ct
-	github.com/open-telemetry/opentelemetry-collector-contrib/internal/sharedcomponent v0.62.0 // indirect; indir1ct
-	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/translator/opencensus v0.62.0 // indirect; indir1ct
-	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/winperfcounters v0.62.0 // indirect; indir1ct
+	github.com/open-telemetry/opentelemetry-collector-contrib/internal/aws/ecsutil v0.62.0 // indirect
+	github.com/open-telemetry/opentelemetry-collector-contrib/internal/common v0.62.0 // indirect
+	github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal v0.62.0 // indirect
+	github.com/open-telemetry/opentelemetry-collector-contrib/internal/metadataproviders v0.62.0 // indirect
+	github.com/open-telemetry/opentelemetry-collector-contrib/internal/sharedcomponent v0.62.0 // indirect
+	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/translator/opencensus v0.62.0 // indirect
+	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/winperfcounters v0.62.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.0.3-0.20211202183452-c5a74bcca799 // indirect
 	github.com/pelletier/go-toml v1.9.5 // indirect
@@ -242,16 +242,16 @@ require (
 	github.com/yusufpapurcu/wmi v1.2.2 // indirect
 	go.mongodb.org/mongo-driver v1.10.3 // indirect
 	go.opencensus.io v0.23.0 // indirect
-	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.36.1 // indirect; indir1ct
-	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.36.1 // indirect; indir1ct
-	go.opentelemetry.io/contrib/propagators/b3 v1.10.0 // indirect; indir1ct
-	go.opentelemetry.io/contrib/zpages v0.36.1 // indirect; indir1ct
-	go.opentelemetry.io/otel v1.10.0 // indirect; indir1ct
-	go.opentelemetry.io/otel/exporters/prometheus v0.32.1 // indirect; indir1ct
-	go.opentelemetry.io/otel/metric v0.32.1 // indirect; indir1ct
-	go.opentelemetry.io/otel/sdk v1.10.0 // indirect; indir1ct
-	go.opentelemetry.io/otel/sdk/metric v0.32.1 // indirect; indir1ct
-	go.opentelemetry.io/otel/trace v1.10.0 // indirect; indir1ct
+	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.36.1 // indirect
+	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.36.1 // indirect
+	go.opentelemetry.io/contrib/propagators/b3 v1.10.0 // indirect
+	go.opentelemetry.io/contrib/zpages v0.36.1 // indirect
+	go.opentelemetry.io/otel v1.10.0 // indirect
+	go.opentelemetry.io/otel/exporters/prometheus v0.32.1 // indirect
+	go.opentelemetry.io/otel/metric v0.32.1 // indirect
+	go.opentelemetry.io/otel/sdk v1.10.0 // indirect
+	go.opentelemetry.io/otel/sdk/metric v0.32.1 // indirect
+	go.opentelemetry.io/otel/trace v1.10.0 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/goleak v1.2.0 // indirect
 	golang.org/x/crypto v0.0.0-20221005025214-4161e89ecf1b // indirect

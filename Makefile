@@ -67,8 +67,9 @@ update-components:
 
 # lint / build / test
 
+# DO NOT SUBMIT
 .PHONY: presubmit
-presubmit: checklicense impi lint misspell test
+presubmit: impi lint misspell test
 
 .PHONY: checklicense
 checklicense:

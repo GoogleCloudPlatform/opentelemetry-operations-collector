@@ -31,13 +31,21 @@ import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/service"
 )
 
+func TestAgentMetrics(t *testing.T) {
+	runTest(t, "agentmetrics-config.yaml", "agentmetrics-expected.yaml")
+}
+
 func TestHostmetrics(t *testing.T) {
+	runTest(t, "hostmetrics-config.yaml", "hostmetrics-expected.yaml")
+}
+
+func runTest(t *testing.T, configFile, expectationsFile string) {
 	testDir, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
 	}
 	oldArgs := os.Args
-	os.Args = append(os.Args, fmt.Sprintf("--config=%s", filepath.Join(testDir, "hostmetrics-config.yaml")))
+	os.Args = append(os.Args, fmt.Sprintf("--config=%s", filepath.Join(testDir, configFile)))
 	// Restore the original args.
 	t.Cleanup(func() { os.Args = oldArgs })
 
@@ -50,6 +58,12 @@ func TestHostmetrics(t *testing.T) {
 	if err := os.Chdir(scratchDir); err != nil {
 		t.Fatal(err)
 	}
+	// Restore the original working directory.
+	t.Cleanup(func() {
+		if err := os.Chdir(testDir); err != nil {
+			t.Fatal(err)
+		}
+	})
 
 	terminationTime := 4 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), terminationTime)
@@ -60,7 +74,7 @@ func TestHostmetrics(t *testing.T) {
 	service.MainContext(ctx)
 
 	observed := loadObservedMetrics(t, filepath.Join(scratchDir, "metrics.json"))
-	expected := loadExpectedMetrics(t, filepath.Join(testDir, "expected-metrics.yaml"))
+	expected := loadExpectedMetrics(t, filepath.Join(testDir, expectationsFile))
 
 	expectMetricsMatch(t, observed, expected)
 }

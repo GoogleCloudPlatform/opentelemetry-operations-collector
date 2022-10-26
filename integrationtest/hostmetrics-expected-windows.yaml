@@ -1,0 +1,169 @@
+# Copyright 2022 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+expected_metrics:
+  - name: process.cpu.time
+    value_type: Double
+    type: Sum
+    attributes:
+      state: user|system|wait
+    resource_attributes: &process_resource_attributes
+      process.command: .*
+      process.command_line: .*
+      process.executable.name: .*
+      process.executable.path: .*
+      process.owner: .*
+      process.parent_pid: -1|\d+
+      process.pid: \d+
+  - name: process.disk.io
+    value_type: Int
+    type: Sum
+    attributes:
+      direction: read|write
+    resource_attributes: *process_resource_attributes
+  - name: process.memory.physical_usage
+    value_type: Int
+    type: Sum
+    resource_attributes: *process_resource_attributes
+  - name: process.memory.virtual_usage
+    value_type: Int
+    type: Sum
+    resource_attributes: *process_resource_attributes
+  - name: system.cpu.load_average.15m
+    value_type: Double
+    type: Gauge
+  - name: system.cpu.load_average.1m
+    value_type: Double
+    type: Gauge
+  - name: system.cpu.load_average.5m
+    value_type: Double
+    type: Gauge
+  - name: system.cpu.time
+    value_type: Double
+    type: Sum
+    attributes:
+      cpu: cpu\d+
+      state: idle|interrupt|nice|softirq|steal|system|used|user|wait
+  - name: system.disk.io
+    value_type: Int
+    type: Sum
+    attributes:
+      device: .*
+      direction: read|write
+  - name: system.disk.io_time
+    value_type: Double
+    type: Sum
+    attributes:
+      device: .*
+  - name: system.disk.merged
+    value_type: Int
+    type: Sum
+    attributes:
+      device: .*
+      direction: read|write
+  - name: system.disk.operation_time
+    value_type: Double
+    type: Sum
+    attributes:
+      device: .*
+      direction: read|write
+  - name: system.disk.operations
+    value_type: Int
+    type: Sum
+    attributes:
+      device: .*
+      direction: read|write
+  - name: system.disk.pending_operations
+    value_type: Int
+    type: Sum
+    attributes:
+      device: .*
+  - name: system.filesystem.inodes.usage
+    value_type: Int
+    type: Sum
+    attributes:
+      device: .*
+      mode: .*
+      mountpoint: /.*
+      state: free|reserved|used
+      type: .*
+  - name: system.filesystem.usage
+    value_type: Int
+    type: Sum
+    attributes:
+      device: .*
+      mode: .*
+      mountpoint: /.*
+      state: free|reserved|used
+      type: .*
+  - name: system.memory.usage
+    value_type: Int
+    type: Sum
+    attributes:
+      state: buffered|cached|free|slab_reclaimable|slab_unreclaimable|used
+  - name: system.network.connections
+    value_type: Int
+    type: Sum
+    attributes:
+      protocol: tcp|udp
+      state: CLOSE|CLOSED|CLOSE_WAIT|CLOSING|DELETE|ESTABLISHED|FIN_WAIT_1|FIN_WAIT1|FIN_WAIT_2|FIN_WAIT2|LAST_ACK|LISTEN|SYN_RECEIVED|SYN_RECV|SYN_SENT|TIME_WAIT
+  - name: system.network.dropped
+    value_type: Int
+    type: Sum
+    attributes:
+      device: .*
+      direction: transmit|receive
+  - name: system.network.errors
+    value_type: Int
+    type: Sum
+    attributes:
+      device: .*
+      direction: transmit|receive
+  - name: system.network.io
+    value_type: Int
+    type: Sum
+    attributes:
+      device: .*
+      direction: transmit|receive
+  - name: system.network.packets
+    value_type: Int
+    type: Sum
+    attributes:
+      device: .*
+      direction: transmit|receive
+  - name: system.paging.faults
+    value_type: Int
+    type: Sum
+    attributes:
+      type: major|minor
+  - name: system.paging.operations
+    value_type: Int
+    type: Sum
+    attributes:
+      direction: page_in|page_out
+      type: major|minor
+  - name: system.paging.usage
+    value_type: Int
+    type: Sum
+    attributes:
+      device: .*
+      state: cached|free|used
+  - name: system.processes.count
+    value_type: Int
+    type: Sum
+    attributes:
+      status: blocked|daemon|detached|idle|locked|orphan|paging|running|sleeping|stopped|system|unknown|zombies
+  - name: system.processes.created
+    value_type: Int
+    type: Sum

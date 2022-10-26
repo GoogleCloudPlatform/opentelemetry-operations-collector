@@ -32,11 +32,19 @@ import (
 )
 
 func TestAgentMetrics(t *testing.T) {
-	runTest(t, "agentmetrics-config.yaml", "agentmetrics-expected.yaml")
+	expectations := "agentmetrics-expected-linux.yaml"
+	if runtime.GOOS == "windows" {
+		expectations := "agentmetrics-expected-windows.yaml"
+	}
+	runTest(t, "agentmetrics-config.yaml", expectations)
 }
 
 func TestHostmetrics(t *testing.T) {
-	runTest(t, "hostmetrics-config.yaml", "hostmetrics-expected.yaml")
+	expectations := "hostmetrics-expected-linux.yaml"
+	if runtime.GOOS == "windows" {
+		expectations := "hostmetrics-expected-windows.yaml"
+	}
+	runTest(t, "hostmetrics-config.yaml", expectations)
 }
 
 func runTest(t *testing.T, configFile, expectationsFile string) {

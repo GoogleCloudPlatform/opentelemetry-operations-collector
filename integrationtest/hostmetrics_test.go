@@ -133,7 +133,7 @@ func loadExpectedMetrics(t *testing.T, expectedMetricsPath string) map[string]Ex
 		if _, ok := result[expect.Name]; ok {
 			t.Fatalf("Found multiple ExpectedMetric entries with Name=%q", expect.Name)
 		}
-		if len(result.OnlyOn) == 0 || sliceContains(expect.OnlyOn, runtime.GOOS) {
+		if len(expect.OnlyOn) == 0 || sliceContains(expect.OnlyOn, runtime.GOOS) {
 			result[expect.Name] = expect
 		}
 	}

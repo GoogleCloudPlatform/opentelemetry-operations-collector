@@ -100,7 +100,7 @@ type ExpectedMetric struct {
 	ResourceAttributes map[string]string `yaml:"resource_attributes"`
 }
 
-func sliceContains(haystack []string, needle string) {
+func sliceContains(haystack []string, needle string) bool {
 	for _, s := range haystack {
 		if needle == s {
 			return true
@@ -133,7 +133,7 @@ func loadExpectedMetrics(t *testing.T, expectedMetricsPath string) map[string]Ex
 		if _, ok := result[expect.Name]; ok {
 			t.Fatalf("Found multiple ExpectedMetric entries with Name=%q", expect.Name)
 		}
-		if len(result.OnlyOn) == 0 || sliceContains(result.OnlyOn, runtime.GOOS) {
+		if len(result.OnlyOn) == 0 || sliceContains(expect.OnlyOn, runtime.GOOS) {
 			result[expect.Name] = expect
 		}
 	}

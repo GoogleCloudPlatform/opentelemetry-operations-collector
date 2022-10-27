@@ -40,7 +40,7 @@ expected_metrics:
     attributes:
       device: .*
       mode: .*
-      mountpoint: /.*
+      mountpoint: .*
       state: free|reserved|used
       type: .*
     # The only_on sections in this file are taken from:
@@ -57,7 +57,7 @@ expected_metrics:
     attributes:
       device: .*
       mode: .*
-      mountpoint: /.*
+      mountpoint: .*
       state: free|reserved|used
       type: .*
   - name: system.disk.average_operation_time
@@ -102,7 +102,7 @@ expected_metrics:
     attributes:
       device: .*
       mode: .*
-      mountpoint: /.*
+      mountpoint: .*
       state: free|reserved|used
       type: .*
   - name: system.disk.read_io

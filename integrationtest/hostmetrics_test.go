@@ -33,7 +33,7 @@ import (
 )
 
 func TestAgentMetrics(t *testing.T) {
-	runTest(t, "agentmetrics-config.yaml", "agentmetrics-windows.yaml")
+	runTest(t, "agentmetrics-config.yaml", "agentmetrics-expected.yaml")
 }
 
 func TestHostmetrics(t *testing.T) {

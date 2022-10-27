@@ -72,6 +72,8 @@ expected_metrics:
     attributes:
       device: .*
       direction: read|write
+    only_on:
+      - linux
   - name: system.disk.operation_time
     value_type: Double
     type: Sum
@@ -94,6 +96,8 @@ expected_metrics:
     type: Sum
     attributes:
       device: .*
+    only_on:
+      - linux
   - name: system.filesystem.inodes.usage
     value_type: Int
     type: Sum

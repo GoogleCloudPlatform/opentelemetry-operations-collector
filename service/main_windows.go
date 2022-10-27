@@ -26,15 +26,15 @@ import (
 )
 
 func run(ctx context.Context, params service.CollectorSettings) error {
-	isInteractive, err := svc.IsAnInteractiveSession()
+	isService, err := svc.IsWindowsService()
 	if err != nil {
-		return fmt.Errorf("failed to determine if we are running in an interactive session: %w", err)
+		return fmt.Errorf("failed to determine if we are running as a Windows service: %w", err)
 	}
 
-	if isInteractive {
-		return runInteractive(ctx, params)
+	if isService {
+		return runService(params)
 	}
-	return runService(params)
+	return runInteractive(ctx, params)
 }
 
 func runService(params service.CollectorSettings) error {

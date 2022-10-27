@@ -43,6 +43,14 @@ expected_metrics:
       mountpoint: /.*
       state: free|reserved|used
       type: .*
+    # The only_on sections in this file are taken from:
+    # https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/cf0f006aa73571fd3f955f514161e1dd36b68250/receiver/hostmetricsreceiver/hostmetrics_receiver_test.go#L76
+    only_on:
+      - linux
+      - darwin
+      - freebsd
+      - openbsd
+      - solaris
   - name: system.filesystem.usage
     value_type: Int
     type: Gauge
@@ -63,6 +71,14 @@ expected_metrics:
     type: Sum
     attributes:
       device: .*
+  - name: system.disk.merged
+    value_type: Int
+    type: Sum
+    attributes:
+      device: .*
+      direction: read|write
+    only_on:
+      - linux
   - name: system.disk.operations
     value_type: Int
     type: Sum
@@ -94,6 +110,13 @@ expected_metrics:
     type: Sum
     attributes:
       device: .*
+  - name: system.disk.weighted_io_time
+    value_type: Double
+    type: Sum
+    attributes:
+      device: .*
+    only_on:
+      - linux
   - name: system.disk.write_io
     value_type: Int
     type: Sum
@@ -139,6 +162,16 @@ expected_metrics:
     attributes:
       protocol: tcp|udp
       state: CLOSE|CLOSED|CLOSE_WAIT|CLOSING|DELETE|ESTABLISHED|FIN_WAIT_1|FIN_WAIT1|FIN_WAIT_2|FIN_WAIT2|LAST_ACK|LISTEN|SYN_RECEIVED|SYN_RECV|SYN_SENT|TIME_WAIT
+  - name: system.processes.count
+    value_type: Int
+    type: Gauge
+    attributes:
+      status: blocked|daemon|detached|idle|locked|orphan|paging|running|sleeping|stopped|system|unknown|zombies
+    only_on:
+      - linux
+      - darwin
+      - freebsd
+      - openbsd
   - name: process.cpu.time
     value_type: Double
     type: Sum
@@ -164,6 +197,12 @@ expected_metrics:
       command_line: .*
       owner: .*
       pid: \d+
+  - name: system.processes.created
+    value_type: Int
+    type: Sum
+    only_on:
+      - linux
+      - openbsd
   - name: process.memory.physical_usage
     value_type: Int
     type: Gauge
@@ -185,6 +224,12 @@ expected_metrics:
     type: Sum
     attributes:
       type: major|minor
+    only_on:
+      - linux
+      - darwin
+      - freebsd
+      - openbsd
+      - solaris
   - name: system.paging.usage
     value_type: Int
     type: Gauge

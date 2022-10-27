@@ -69,7 +69,7 @@ update-components:
 
 # DO NOT SUBMIT
 .PHONY: presubmit
-presubmit: impi test
+presubmit: impi lint misspell test
 
 .PHONY: checklicense
 checklicense:

@@ -135,8 +135,6 @@ func loadExpectedMetrics(t *testing.T, expectedMetricsPath string) map[string]Ex
 		}
 		if len(expect.OnlyOn) == 0 || sliceContains(expect.OnlyOn, runtime.GOOS) {
 			result[expect.Name] = expect
-		} else {
-			// Skip this expected metric because it is not generated on this platform.
 		}
 	}
 

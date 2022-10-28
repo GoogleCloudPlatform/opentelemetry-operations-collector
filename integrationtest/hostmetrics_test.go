@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -84,6 +85,9 @@ func runTest(t *testing.T, configFile, expectationsFile string) {
 type ExpectedMetric struct {
 	// The metric name, for example system.network.connections.
 	Name string `yaml:"name"`
+	// List of operating systems that the given metric is limited to.
+	// An empty list means the metric is supported on all platforms.
+	OnlyOn []string `yaml:"only_on"`
 	// The value type, for example "Int".
 	ValueType string `yaml:"value_type"`
 	// The metric type, for example "Gauge".
@@ -94,6 +98,15 @@ type ExpectedMetric struct {
 	// Mapping of expected resource attribute keys to value patterns.
 	// Patterns are RE2 regular expressions.
 	ResourceAttributes map[string]string `yaml:"resource_attributes"`
+}
+
+func sliceContains(haystack []string, needle string) bool {
+	for _, s := range haystack {
+		if needle == s {
+			return true
+		}
+	}
+	return false
 }
 
 // loadExpectedMetrics reads the metrics expectations from the given path.
@@ -120,7 +133,9 @@ func loadExpectedMetrics(t *testing.T, expectedMetricsPath string) map[string]Ex
 		if _, ok := result[expect.Name]; ok {
 			t.Fatalf("Found multiple ExpectedMetric entries with Name=%q", expect.Name)
 		}
-		result[expect.Name] = expect
+		if len(expect.OnlyOn) == 0 || sliceContains(expect.OnlyOn, runtime.GOOS) {
+			result[expect.Name] = expect
+		}
 	}
 
 	t.Logf("Loaded %v metrics expectations from %s", len(result), expectedMetricsPath)

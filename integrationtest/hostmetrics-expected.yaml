@@ -72,6 +72,8 @@ expected_metrics:
     attributes:
       device: .*
       direction: read|write
+    only_on:
+      - linux
   - name: system.disk.operation_time
     value_type: Double
     type: Sum
@@ -94,22 +96,32 @@ expected_metrics:
     type: Sum
     attributes:
       device: .*
+    only_on:
+      - linux
   - name: system.filesystem.inodes.usage
     value_type: Int
     type: Sum
     attributes:
       device: .*
       mode: .*
-      mountpoint: /.*
+      mountpoint: .*
       state: free|reserved|used
       type: .*
+    # The only_on sections in this file are taken from:
+    # https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/cf0f006aa73571fd3f955f514161e1dd36b68250/receiver/hostmetricsreceiver/hostmetrics_receiver_test.go#L76
+    only_on:
+      - linux
+      - darwin
+      - freebsd
+      - openbsd
+      - solaris
   - name: system.filesystem.usage
     value_type: Int
     type: Sum
     attributes:
       device: .*
       mode: .*
-      mountpoint: /.*
+      mountpoint: .*
       state: free|reserved|used
       type: .*
   - name: system.memory.usage
@@ -152,6 +164,12 @@ expected_metrics:
     type: Sum
     attributes:
       type: major|minor
+    only_on:
+      - linux
+      - darwin
+      - freebsd
+      - openbsd
+      - solaris
   - name: system.paging.operations
     value_type: Int
     type: Sum
@@ -169,6 +187,14 @@ expected_metrics:
     type: Sum
     attributes:
       status: blocked|daemon|detached|idle|locked|orphan|paging|running|sleeping|stopped|system|unknown|zombies
+    only_on:
+      - linux
+      - darwin
+      - freebsd
+      - openbsd
   - name: system.processes.created
     value_type: Int
     type: Sum
+    only_on:
+      - linux
+      - openbsd

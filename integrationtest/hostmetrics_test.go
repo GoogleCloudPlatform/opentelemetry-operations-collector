@@ -167,7 +167,8 @@ func loadObservedMetrics(t *testing.T, metricsJSONPath string) pmetric.Metrics {
 
 	t.Logf("Found %v bytes of data at %s, selecting %v bytes", len(data), metricsJSONPath, len(secondBatch))
 
-	metrics, err := pmetric.NewJSONUnmarshaler().UnmarshalMetrics(secondBatch)
+	unmarshaller := &pmetric.JSONUnmarshaler{}
+	metrics, err := unmarshaller.UnmarshalMetrics(secondBatch)
 	if err != nil {
 		t.Fatal(err)
 	}

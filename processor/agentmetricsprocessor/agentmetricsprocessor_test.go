@@ -120,7 +120,7 @@ func TestAgentMetricsProcessor(t *testing.T) {
 			err = rmp.ConsumeMetrics(context.Background(), tt.input)
 			require.NoError(t, err)
 
-			marshaler := pmetric.NewJSONMarshaler()
+			marshaler := &pmetric.JSONMarshaler{}
 			outJSON, err := marshaler.MarshalMetrics(tmn.AllMetrics()[0])
 			require.NoError(t, err)
 			t.Logf("actual metrics: %s", outJSON)
@@ -149,7 +149,7 @@ func (rmsb resourceMetricsBuilder) addResourceMetrics(resourceAttributes map[str
 	for k, v := range resourceAttributes {
 		switch v.Type() {
 		case pcommon.ValueTypeStr:
-			rm.Resource().Attributes().PutString(k, v.Str())
+			rm.Resource().Attributes().PutStr(k, v.Str())
 		case pcommon.ValueTypeInt:
 			rm.Resource().Attributes().PutInt(k, v.Int())
 		case pcommon.ValueTypeBool:
@@ -205,7 +205,7 @@ func (mb metricBuilder) addIntDataPoint(value int64, labels map[string]string) m
 		idp = mb.metric.Gauge().DataPoints().AppendEmpty()
 	}
 	for k, v := range labels {
-		idp.Attributes().PutString(k, v)
+		idp.Attributes().PutStr(k, v)
 	}
 	idp.SetIntValue(value)
 	idp.SetTimestamp(mb.timestamp)
@@ -222,7 +222,7 @@ func (mb metricBuilder) addDoubleDataPoint(value float64, labels map[string]stri
 		ddp = mb.metric.Gauge().DataPoints().AppendEmpty()
 	}
 	for k, v := range labels {
-		ddp.Attributes().PutString(k, v)
+		ddp.Attributes().PutStr(k, v)
 	}
 	ddp.SetDoubleValue(value)
 	ddp.SetTimestamp(mb.timestamp)

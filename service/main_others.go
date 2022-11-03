@@ -15,12 +15,14 @@
 //go:build !windows
 // +build !windows
 
-package main
+package service
 
 import (
+	"context"
+
 	"go.opentelemetry.io/collector/service"
 )
 
-func run(params service.CollectorSettings) error {
-	return runInteractive(params)
+func run(ctx context.Context, params service.CollectorSettings) error {
+	return runInteractive(ctx, params)
 }

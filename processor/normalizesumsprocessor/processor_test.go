@@ -419,7 +419,7 @@ func (rmsb resourceMetricsBuilder) addResourceMetrics(resourceAttributes map[str
 	for k, v := range resourceAttributes {
 		switch v.Type() {
 		case pcommon.ValueTypeStr:
-			rm.Resource().Attributes().PutString(k, v.Str())
+			rm.Resource().Attributes().PutStr(k, v.Str())
 		case pcommon.ValueTypeInt:
 			rm.Resource().Attributes().PutInt(k, v.Int())
 		case pcommon.ValueTypeBool:
@@ -473,7 +473,7 @@ func (mb metricBuilder) addDoubleDataPoint(value float64, labels map[string]stri
 		ddp = mb.metric.Gauge().DataPoints().AppendEmpty()
 	}
 	for k, v := range labels {
-		ddp.Attributes().PutString(k, v)
+		ddp.Attributes().PutStr(k, v)
 	}
 	ddp.SetDoubleValue(value)
 	ddp.SetTimestamp(pcommon.NewTimestampFromTime(time.Unix(timestamp, 0)))
@@ -491,7 +491,7 @@ func (mb metricBuilder) addIntDataPoint(value int64, labels map[string]string, t
 		idp = mb.metric.Gauge().DataPoints().AppendEmpty()
 	}
 	for k, v := range labels {
-		idp.Attributes().PutString(k, v)
+		idp.Attributes().PutStr(k, v)
 	}
 	idp.SetIntValue(value)
 	idp.SetTimestamp(pcommon.NewTimestampFromTime(time.Unix(timestamp, 0)))
@@ -505,7 +505,7 @@ func (mb metricBuilder) addIntDataPoint(value int64, labels map[string]string, t
 func requireEqual(t *testing.T, expected, actual []pmetric.Metrics) {
 	require.Equal(t, len(expected), len(actual))
 
-	marshaler := pmetric.NewJSONMarshaler()
+	marshaler := &pmetric.JSONMarshaler{}
 
 	for q := 0; q < len(actual); q++ {
 		outJSON, err := marshaler.MarshalMetrics(actual[q])

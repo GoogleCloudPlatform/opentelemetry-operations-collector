@@ -50,7 +50,7 @@ install-tools:
 	cd $(TOOLS_DIR) && go install github.com/google/addlicense
 	cd $(TOOLS_DIR) && go install github.com/google/googet/goopack
 	cd $(TOOLS_DIR) && go install github.com/pavius/impi/cmd/impi
-	cd $(TOOLS_DIR) && go install github.com/open-telemetry/opentelemetry-collector-contrib/cmd/mdatagen@v0.62.0
+	cd $(TOOLS_DIR) && go install github.com/open-telemetry/opentelemetry-collector-contrib/cmd/mdatagen@v0.63.0
 
 # --------------------------
 #  Helper Commands
@@ -80,7 +80,7 @@ impi:
 
 .PHONY: lint
 lint:
-	golangci-lint run --allow-parallel-runners
+	golangci-lint run --allow-parallel-runners --timeout=20m
 
 .PHONY: misspell
 misspell:

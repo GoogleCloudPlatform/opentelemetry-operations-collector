@@ -18,6 +18,7 @@ import (
 	"errors"
 	"os"
 	"path"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/mock"
@@ -63,7 +64,7 @@ func TestBuildCommand(t *testing.T) {
 				CacheDir: "/path/varnishinstance",
 				ExecDir:  "/exec/dir/",
 			},
-			command: "/exec/dir/varnishstat",
+			command: filepath.Clean("/exec/dir/varnishstat"),
 			argList: []string{"-j", "-n", "/path/varnishinstance"},
 		},
 		{
@@ -72,7 +73,7 @@ func TestBuildCommand(t *testing.T) {
 				CacheDir: "/path/varnishinstance",
 				ExecDir:  "/exec/dir",
 			},
-			command: "/exec/dir/varnishstat",
+			command: filepath.Clean("/exec/dir/varnishstat"),
 			argList: []string{"-j", "-n", "/path/varnishinstance"},
 		},
 	}

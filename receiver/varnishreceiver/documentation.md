@@ -33,7 +33,7 @@ metrics:
 
 | Name | Description | Type |
 | ---- | ----------- | ---- |
-| varnish.cache.name | The name of the cache. | String |
+| varnish.cache.name | The name of the cache. | Str |
 
 ## Metric attributes
 

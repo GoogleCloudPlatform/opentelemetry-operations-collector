@@ -15,25 +15,26 @@
 //go:build windows
 // +build windows
 
-package main
+package service
 
 import (
+	"context"
 	"fmt"
 
 	"go.opentelemetry.io/collector/service"
 	"golang.org/x/sys/windows/svc"
 )
 
-func run(params service.CollectorSettings) error {
-	isInteractive, err := svc.IsAnInteractiveSession()
+func run(ctx context.Context, params service.CollectorSettings) error {
+	isService, err := svc.IsWindowsService()
 	if err != nil {
-		return fmt.Errorf("failed to determine if we are running in an interactive session: %w", err)
+		return fmt.Errorf("failed to determine if we are running as a Windows service: %w", err)
 	}
 
-	if isInteractive {
-		return runInteractive(params)
+	if isService {
+		return runService(params)
 	}
-	return runService(params)
+	return runInteractive(ctx, params)
 }
 
 func runService(params service.CollectorSettings) error {

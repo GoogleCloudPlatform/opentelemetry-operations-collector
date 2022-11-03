@@ -35,6 +35,6 @@ func TestCreateMetricsReceiverOnWindows(t *testing.T) {
 		cfg,
 		consumertest.NewNop())
 
-	require.Regexp(t, "*only supported on Linux*", err)
+	require.Regexp(t, ".*only supported on Linux.*", err)
 	require.Nil(t, receiver)
 }

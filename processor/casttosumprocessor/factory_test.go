@@ -22,13 +22,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/component/componenttest"
-	"go.opentelemetry.io/collector/config/configtest"
 	"go.opentelemetry.io/collector/consumer/consumertest"
 	"go.opentelemetry.io/collector/service/servicetest"
 )
 
 func TestCreateDefaultConfig(t *testing.T) {
-	assert.NoError(t, configtest.CheckConfigStruct(NewFactory().CreateDefaultConfig()))
+	assert.NoError(t, componenttest.CheckConfigStruct(NewFactory().CreateDefaultConfig()))
 }
 func TestCreateProcessor(t *testing.T) {
 	factories, err := componenttest.NopFactories()

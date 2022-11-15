@@ -38,15 +38,15 @@ require (
 	github.com/shirou/gopsutil v3.21.10+incompatible
 	github.com/stretchr/testify v1.8.1
 	go.opentelemetry.io/collector v0.64.1
-	go.opentelemetry.io/collector/exporter/loggingexporter v0.63.1
-	go.opentelemetry.io/collector/exporter/otlpexporter v0.63.1
-	go.opentelemetry.io/collector/exporter/otlphttpexporter v0.63.1
+	go.opentelemetry.io/collector/exporter/loggingexporter v0.64.1
+	go.opentelemetry.io/collector/exporter/otlpexporter v0.64.1
+	go.opentelemetry.io/collector/exporter/otlphttpexporter v0.64.1
 	go.opentelemetry.io/collector/extension/ballastextension v0.64.1
 	go.opentelemetry.io/collector/extension/zpagesextension v0.64.1
 	go.opentelemetry.io/collector/pdata v0.64.1
 	go.opentelemetry.io/collector/processor/batchprocessor v0.64.1
 	go.opentelemetry.io/collector/processor/memorylimiterprocessor v0.64.1
-	go.opentelemetry.io/collector/receiver/otlpreceiver v0.64.0
+	go.opentelemetry.io/collector/receiver/otlpreceiver v0.64.1
 	go.opentelemetry.io/collector/semconv v0.64.1
 	go.uber.org/multierr v1.8.0
 	go.uber.org/zap v1.23.0

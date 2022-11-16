@@ -19,8 +19,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/component/componenttest"
-	"go.opentelemetry.io/collector/config"
 	"go.opentelemetry.io/collector/service/servicetest"
 )
 
@@ -35,7 +35,7 @@ func TestLoadConfig(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, cfg)
 
-	p1 := cfg.Processors[config.NewComponentID("agentmetrics")]
+	p1 := cfg.Processors[component.NewID("agentmetrics")]
 
 	want := factory.CreateDefaultConfig()
 	want.(*Config).BlankLabelMetrics = []string{"system.cpu.time"}

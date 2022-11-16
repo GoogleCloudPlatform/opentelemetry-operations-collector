@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/config"
 	"go.opentelemetry.io/collector/consumer/consumertest"
@@ -78,7 +79,7 @@ func TestNormalizeSumsProcessor(t *testing.T) {
 			nsp := newNormalizeSumsProcessor(zap.NewExample())
 
 			tmn := &consumertest.MetricsSink{}
-			id := config.NewComponentID(typeStr)
+			id := component.NewID(typeStr)
 			settings := config.NewProcessorSettings(id)
 			rmp, err := processorhelper.NewMetricsProcessor(
 				context.Background(),

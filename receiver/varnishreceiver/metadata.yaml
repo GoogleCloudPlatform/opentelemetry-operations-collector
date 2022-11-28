@@ -8,27 +8,34 @@ resource_attributes:
 attributes:
   cache_name:
     description: The varnish cache name.
+    type: string
   backend_connection_type:
+    type: string
     value: kind
     description: The backend connection types.
     enum: [success, recycle, reuse, fail, unhealthy, busy, retry]
   cache_operations:
+    type: string
     value: operation
     description: The cache operation types
     enum: [hit, miss, hit_pass]
   thread_operations:
+    type: string
     value: operation
     description: The thread operation types.
     enum: [created, destroyed, failed]
   session_type:
+    type: string
     value: kind
     description: The session connection types.
     enum: [accepted, dropped, failed]
   state:
+    type: string
     value: state
     description: The client request states.
     enum: [received, dropped]
   http.status_code:
+    type: string
     value: status_code
     description: An HTTP status code.
 

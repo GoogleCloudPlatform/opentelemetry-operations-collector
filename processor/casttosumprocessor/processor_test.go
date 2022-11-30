@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/config"
 	"go.opentelemetry.io/collector/consumer/consumertest"
@@ -80,7 +81,7 @@ func TestCastToSumProcessor(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			settings := config.NewProcessorSettings(config.NewComponentID(typeStr))
+			settings := config.NewProcessorSettings(component.NewID(typeStr))
 			cfg := &Config{
 				ProcessorSettings: &settings,
 				Metrics:           []string{"m1", "m2"},

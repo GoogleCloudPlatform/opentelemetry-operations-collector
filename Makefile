@@ -50,7 +50,7 @@ install-tools:
 	cd $(TOOLS_DIR) && go install github.com/google/addlicense
 	cd $(TOOLS_DIR) && go install github.com/google/googet/goopack
 	cd $(TOOLS_DIR) && go install github.com/pavius/impi/cmd/impi
-	cd $(TOOLS_DIR) && go install github.com/open-telemetry/opentelemetry-collector-contrib/cmd/mdatagen@v0.63.0
+	cd $(TOOLS_DIR) && go install github.com/open-telemetry/opentelemetry-collector-contrib/cmd/mdatagen@v0.66.0
 
 # --------------------------
 #  Helper Commands

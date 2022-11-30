@@ -2,6 +2,7 @@ allowedLicenses:
   - Apache-2.0
 ignoreFiles:
   - receiver/**/generated_metrics.go
+  - receiver/**/generated_metrics_test.go
 sourceFileExtensions:
   - go
   - ps1

@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/config"
 	"go.opentelemetry.io/collector/service/servicetest"
@@ -35,7 +36,7 @@ func TestLoadConfig(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, cfg)
 
-	id := config.NewComponentID(typeStr)
+	id := component.NewID(typeStr)
 	settings := config.NewProcessorSettings(id)
 	p1 := cfg.Processors[id]
 	expectedCfg := &Config{

@@ -134,7 +134,7 @@ func validateScraperResult(t *testing.T, metrics pmetric.Metrics, expected_metri
 		m := ms.At(i)
 		dps := m.Gauge().DataPoints()
 		for j := 0; j < dps.Len(); j++ {
-			assert.Regexp(t, ".*gpu:.*", dps.At(j).Attributes().AsRaw())
+			assert.Regexp(t, ".*gpu_number:.*", dps.At(j).Attributes().AsRaw())
 			assert.Regexp(t, ".*model:.*", dps.At(j).Attributes().AsRaw())
 		}
 

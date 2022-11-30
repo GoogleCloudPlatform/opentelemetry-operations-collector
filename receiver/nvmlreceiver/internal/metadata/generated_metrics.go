@@ -87,13 +87,13 @@ type metricNvmlGpuMemoryBytesUsed struct {
 // init fills nvml.gpu.memory.bytes_used metric with initial data.
 func (m *metricNvmlGpuMemoryBytesUsed) init() {
 	m.data.SetName("nvml.gpu.memory.bytes_used")
-	m.data.SetDescription("The GPU allocated memory as bytes.")
+	m.data.SetDescription("Current number of GPU memory bytes used by state. Summing the values of all states yields the total GPU memory space.")
 	m.data.SetUnit("By")
 	m.data.SetEmptyGauge()
 	m.data.Gauge().DataPoints().EnsureCapacity(m.capacity)
 }
 
-func (m *metricNvmlGpuMemoryBytesUsed) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, modelAttributeValue string, gpuAttributeValue string, memoryStateAttributeValue string) {
+func (m *metricNvmlGpuMemoryBytesUsed) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, modelAttributeValue string, gpuNumberAttributeValue string, memoryStateAttributeValue string) {
 	if !m.settings.Enabled {
 		return
 	}
@@ -102,7 +102,7 @@ func (m *metricNvmlGpuMemoryBytesUsed) recordDataPoint(start pcommon.Timestamp, 
 	dp.SetTimestamp(ts)
 	dp.SetIntValue(val)
 	dp.Attributes().PutStr("model", modelAttributeValue)
-	dp.Attributes().PutStr("gpu", gpuAttributeValue)
+	dp.Attributes().PutStr("gpu_number", gpuNumberAttributeValue)
 	dp.Attributes().PutStr("memory_state", memoryStateAttributeValue)
 }
 
@@ -140,13 +140,13 @@ type metricNvmlGpuUtilization struct {
 // init fills nvml.gpu.utilization metric with initial data.
 func (m *metricNvmlGpuUtilization) init() {
 	m.data.SetName("nvml.gpu.utilization")
-	m.data.SetDescription("The GPU utilization")
+	m.data.SetDescription("Fraction of time GPU was not idle since the last sample.")
 	m.data.SetUnit("10^2.%")
 	m.data.SetEmptyGauge()
 	m.data.Gauge().DataPoints().EnsureCapacity(m.capacity)
 }
 
-func (m *metricNvmlGpuUtilization) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuAttributeValue string) {
+func (m *metricNvmlGpuUtilization) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuNumberAttributeValue string) {
 	if !m.settings.Enabled {
 		return
 	}
@@ -155,7 +155,7 @@ func (m *metricNvmlGpuUtilization) recordDataPoint(start pcommon.Timestamp, ts p
 	dp.SetTimestamp(ts)
 	dp.SetDoubleValue(val)
 	dp.Attributes().PutStr("model", modelAttributeValue)
-	dp.Attributes().PutStr("gpu", gpuAttributeValue)
+	dp.Attributes().PutStr("gpu_number", gpuNumberAttributeValue)
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
@@ -286,13 +286,13 @@ func (mb *MetricsBuilder) Emit(rmo ...ResourceMetricsOption) pmetric.Metrics {
 }
 
 // RecordNvmlGpuMemoryBytesUsedDataPoint adds a data point to nvml.gpu.memory.bytes_used metric.
-func (mb *MetricsBuilder) RecordNvmlGpuMemoryBytesUsedDataPoint(ts pcommon.Timestamp, val int64, modelAttributeValue string, gpuAttributeValue string, memoryStateAttributeValue AttributeMemoryState) {
-	mb.metricNvmlGpuMemoryBytesUsed.recordDataPoint(mb.startTime, ts, val, modelAttributeValue, gpuAttributeValue, memoryStateAttributeValue.String())
+func (mb *MetricsBuilder) RecordNvmlGpuMemoryBytesUsedDataPoint(ts pcommon.Timestamp, val int64, modelAttributeValue string, gpuNumberAttributeValue string, memoryStateAttributeValue AttributeMemoryState) {
+	mb.metricNvmlGpuMemoryBytesUsed.recordDataPoint(mb.startTime, ts, val, modelAttributeValue, gpuNumberAttributeValue, memoryStateAttributeValue.String())
 }
 
 // RecordNvmlGpuUtilizationDataPoint adds a data point to nvml.gpu.utilization metric.
-func (mb *MetricsBuilder) RecordNvmlGpuUtilizationDataPoint(ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuAttributeValue string) {
-	mb.metricNvmlGpuUtilization.recordDataPoint(mb.startTime, ts, val, modelAttributeValue, gpuAttributeValue)
+func (mb *MetricsBuilder) RecordNvmlGpuUtilizationDataPoint(ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuNumberAttributeValue string) {
+	mb.metricNvmlGpuUtilization.recordDataPoint(mb.startTime, ts, val, modelAttributeValue, gpuNumberAttributeValue)
 }
 
 // Reset resets metrics builder to its initial state. It should be used when external metrics source is restarted,

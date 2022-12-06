@@ -18,7 +18,7 @@ metrics:
   nvml.gpu.utilization:
     enabled: true
     description: Fraction of time GPU was not idle since the last sample.
-    unit: 10^2.%
+    unit: 1
     gauge:
       value_type: double
     attributes: [model, gpu_number, uuid]

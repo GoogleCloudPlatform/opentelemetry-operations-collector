@@ -142,7 +142,7 @@ type metricNvmlGpuUtilization struct {
 func (m *metricNvmlGpuUtilization) init() {
 	m.data.SetName("nvml.gpu.utilization")
 	m.data.SetDescription("Fraction of time GPU was not idle since the last sample.")
-	m.data.SetUnit("10^2.%")
+	m.data.SetUnit("1")
 	m.data.SetEmptyGauge()
 	m.data.Gauge().DataPoints().EnsureCapacity(m.capacity)
 }

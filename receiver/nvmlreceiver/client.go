@@ -40,10 +40,10 @@ type nvmlClient struct {
 }
 
 type nvmlMetric struct {
-	time  time.Time
+	time     time.Time
 	gpuIndex uint
-	name  string
-	value [8]byte
+	name     string
+	value    [8]byte
 }
 
 // calling nvml.Init() twice causes an unnecessary error (also wrap here for mocking)
@@ -107,12 +107,12 @@ func initializeNvml(logger *zap.Logger) (nvmlCleanup func() error, err error) {
 	nvmlCleanup = func() error {
 		ret := nvml.Shutdown()
 		if ret != nvml.SUCCESS {
-         msg := fmt.Sprintf("Unable to shutdown Nvidia Management library on '%v'", nvml.ErrorString(ret))
-         logger.Sugar().Warnf(msg)
-         return fmt.Errorf("%s", msg)
+			msg := fmt.Sprintf("Unable to shutdown Nvidia Management library on '%v'", nvml.ErrorString(ret))
+			logger.Sugar().Warnf(msg)
+			return fmt.Errorf("%s", msg)
 		}
 
-      return nil
+		return nil
 	}
 
 	err = nil
@@ -162,15 +162,15 @@ func discoverDevices(logger *zap.Logger) ([]nvml.Device, []string, []string, err
 func (client *nvmlClient) cleanup() error {
 	if client.handleCleanup != nil {
 		err := client.handleCleanup()
-      if err != nil {
-         return err
-      }
+		if err != nil {
+			return err
+		}
 	}
 	if !client.disable {
 		client.logger.Info("Shutdown Nvidia Management Library client")
 	}
 
-   return nil
+	return nil
 }
 
 func (client *nvmlClient) getDeviceModelName(gpuIndex uint) string {
@@ -195,7 +195,7 @@ func (client *nvmlClient) collectDeviceMetrics() ([]nvmlMetric, error) {
 func (client *nvmlClient) collectDeviceUtilization() []nvmlMetric {
 	deviceMetrics := make([]nvmlMetric, 0, len(client.devices))
 
-   gpuUtil := nvmlMetric{name: "nvml.gpu.utilization"}
+	gpuUtil := nvmlMetric{name: "nvml.gpu.utilization"}
 
 	for gpuIndex, device := range client.devices {
 		mean, err := client.getAverageGpuUtilizationSinceLastQuery(device)
@@ -251,7 +251,7 @@ func (client *nvmlClient) getAverageGpuUtilizationSinceLastQuery(device nvml.Dev
 func (client *nvmlClient) collectDeviceMemoryInfo() []nvmlMetric {
 	deviceMetrics := make([]nvmlMetric, 0, 2*len(client.devices))
 
-   gpuMemUsed := nvmlMetric{name: "nvml.gpu.memory.bytes_used"}
+	gpuMemUsed := nvmlMetric{name: "nvml.gpu.memory.bytes_used"}
 	gpuMemFree := nvmlMetric{name: "nvml.gpu.memory.bytes_free"}
 
 	for gpuIndex, device := range client.devices {

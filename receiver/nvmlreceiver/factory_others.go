@@ -19,7 +19,7 @@ package nvmlreceiver
 
 import (
 	"context"
-   "fmt"
+	"fmt"
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"

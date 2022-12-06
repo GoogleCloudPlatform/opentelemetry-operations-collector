@@ -33,11 +33,10 @@ import (
 )
 
 func TestScrapeWithGpuPresent(t *testing.T) {
-	scraper, err := newNvmlScraper(createDefaultConfig().(*Config), componenttest.NewNopReceiverCreateSettings())
-	require.NoError(t, err)
+	scraper := newNvmlScraper(createDefaultConfig().(*Config), componenttest.NewNopReceiverCreateSettings())
 	require.NotNil(t, scraper)
 
-	err = scraper.start(context.Background(), componenttest.NewNopHost())
+	err := scraper.start(context.Background(), componenttest.NewNopHost())
 	require.NoError(t, err)
 
 	metrics, err := scraper.scrape(context.Background())
@@ -52,11 +51,10 @@ func TestScrapeOnGpuUtilizationUnsupported(t *testing.T) {
 		return nvml.VALUE_TYPE_SIGNED_LONG_LONG, nil, nvml.ERROR_NOT_SUPPORTED
 	}
 
-	scraper, err := newNvmlScraper(createDefaultConfig().(*Config), componenttest.NewNopReceiverCreateSettings())
-	require.NoError(t, err)
+	scraper := newNvmlScraper(createDefaultConfig().(*Config), componenttest.NewNopReceiverCreateSettings())
 	require.NotNil(t, scraper)
 
-	err = scraper.start(context.Background(), componenttest.NewNopHost())
+	err := scraper.start(context.Background(), componenttest.NewNopHost())
 	require.NoError(t, err)
 
 	metrics, err := scraper.scrape(context.Background())
@@ -70,11 +68,10 @@ func TestScrapeOnGpuMemoryInfoUnsupported(t *testing.T) {
 		return nvml.Memory{}, nvml.ERROR_NOT_SUPPORTED
 	}
 
-	scraper, err := newNvmlScraper(createDefaultConfig().(*Config), componenttest.NewNopReceiverCreateSettings())
-	require.NoError(t, err)
+	scraper := newNvmlScraper(createDefaultConfig().(*Config), componenttest.NewNopReceiverCreateSettings())
 	require.NotNil(t, scraper)
 
-	err = scraper.start(context.Background(), componenttest.NewNopHost())
+	err := scraper.start(context.Background(), componenttest.NewNopHost())
 	require.NoError(t, err)
 
 	metrics, err := scraper.scrape(context.Background())
@@ -98,11 +95,10 @@ func TestScrapeEmitsWarningsUptoThreshold(t *testing.T) {
 		return nil
 	})))
 
-	scraper, err := newNvmlScraper(createDefaultConfig().(*Config), settings)
-	require.NoError(t, err)
+	scraper := newNvmlScraper(createDefaultConfig().(*Config), settings)
 	require.NotNil(t, scraper)
 
-	err = scraper.start(context.Background(), componenttest.NewNopHost())
+	err := scraper.start(context.Background(), componenttest.NewNopHost())
 	require.NoError(t, err)
 
 	for i := 0; i < maxWarningsForFailedDeviceMetricQuery+10; i++ {
@@ -136,6 +132,7 @@ func validateScraperResult(t *testing.T, metrics pmetric.Metrics, expected_metri
 		for j := 0; j < dps.Len(); j++ {
 			assert.Regexp(t, ".*gpu_number:.*", dps.At(j).Attributes().AsRaw())
 			assert.Regexp(t, ".*model:.*", dps.At(j).Attributes().AsRaw())
+			assert.Regexp(t, ".*uuid:.*", dps.At(j).Attributes().AsRaw())
 		}
 
 		switch m.Name() {

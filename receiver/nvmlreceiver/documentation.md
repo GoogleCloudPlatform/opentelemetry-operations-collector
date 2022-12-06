@@ -8,8 +8,8 @@ These are the metrics available for this scraper.
 
 | Name | Description | Unit | Type | Attributes |
 | ---- | ----------- | ---- | ---- | ---------- |
-| **nvml.gpu.memory.bytes_used** | Current number of GPU memory bytes used by state. Summing the values of all states yields the total GPU memory space. | By | Gauge(Int) | <ul> <li>model</li> <li>gpu_number</li> <li>memory_state</li> </ul> |
-| **nvml.gpu.utilization** | Fraction of time GPU was not idle since the last sample. | 10^2.% | Gauge(Double) | <ul> <li>model</li> <li>gpu_number</li> </ul> |
+| **nvml.gpu.memory.bytes_used** | Current number of GPU memory bytes used by state. Summing the values of all states yields the total GPU memory space. | By | Gauge(Int) | <ul> <li>model</li> <li>gpu_number</li> <li>uuid</li> <li>memory_state</li> </ul> |
+| **nvml.gpu.utilization** | Fraction of time GPU was not idle since the last sample. | 10^2.% | Gauge(Double) | <ul> <li>model</li> <li>gpu_number</li> <li>uuid</li> </ul> |
 
 **Highlighted metrics** are emitted by default. Other metrics are optional and not emitted by default.
 Any metric can be enabled or disabled with the following scraper configuration:
@@ -27,3 +27,4 @@ metrics:
 | gpu_number | GPU index starting at 0. |  |
 | memory_state | GPU memory used or free. | used, free |
 | model | GPU model |  |
+| uuid | GPU universally unique identifier |  |

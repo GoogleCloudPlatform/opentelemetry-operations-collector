@@ -31,16 +31,17 @@ const maxWarningsForFailedDeviceMetricQuery = 5
 type nvmlClient struct {
 	logger                         *zap.SugaredLogger
 	disable                        bool
-	handleCleanup                  func()
+	handleCleanup                  func() error
 	devices                        []nvml.Device
 	devicesModelName               []string
+	devicesUUID                    []string
 	deviceToLastSeenTimestamp      map[nvml.Device]uint64
 	deviceMetricToFailedQueryCount map[string]uint64
 }
 
 type nvmlMetric struct {
 	time  time.Time
-	gpuID uint
+	gpuIndex uint
 	name  string
 	value [8]byte
 }
@@ -65,7 +66,7 @@ func newClient(config *Config, logger *zap.Logger) (*nvmlClient, error) {
 		return &nvmlClient{logger: logger.Sugar(), disable: true}, nil
 	}
 
-	devices, names, err := discoverDevices(logger)
+	devices, names, UUIDs, err := discoverDevices(logger)
 	if err != nil {
 		return nil, err
 	}
@@ -76,12 +77,13 @@ func newClient(config *Config, logger *zap.Logger) (*nvmlClient, error) {
 		handleCleanup:                  nvmlCleanup,
 		devices:                        devices,
 		devicesModelName:               names,
+		devicesUUID:                    UUIDs,
 		deviceToLastSeenTimestamp:      make(map[nvml.Device]uint64),
 		deviceMetricToFailedQueryCount: make(map[string]uint64),
 	}, nil
 }
 
-func initializeNvml(logger *zap.Logger) (nvmlCleanup func(), err error) {
+func initializeNvml(logger *zap.Logger) (nvmlCleanup func() error, err error) {
 	nvmlCleanup = nil
 
 	defer func() {
@@ -102,42 +104,47 @@ func initializeNvml(logger *zap.Logger) (nvmlCleanup func(), err error) {
 	}
 	logger.Sugar().Infof("Successfully initialized Nvidia Management Library")
 
-	nvmlCleanup = func() {
+	nvmlCleanup = func() error {
 		ret := nvml.Shutdown()
 		if ret != nvml.SUCCESS {
-			logger.Sugar().Infof("Unable to shutdown Nvidia Management library on '%v'", nvml.ErrorString(ret))
+         msg := fmt.Sprintf("Unable to shutdown Nvidia Management library on '%v'", nvml.ErrorString(ret))
+         logger.Sugar().Warnf(msg)
+         return fmt.Errorf("%s", msg)
 		}
+
+      return nil
 	}
 
 	err = nil
 	return
 }
 
-func discoverDevices(logger *zap.Logger) ([]nvml.Device, []string, error) {
+func discoverDevices(logger *zap.Logger) ([]nvml.Device, []string, []string, error) {
 	count, ret := nvml.DeviceGetCount()
 	if ret != nvml.SUCCESS {
-		return nil, nil, fmt.Errorf("Unable to get Nvidia device count on '%v'", nvml.ErrorString(ret))
+		return nil, nil, nil, fmt.Errorf("Unable to get Nvidia device count on '%v'", nvml.ErrorString(ret))
 	}
 
 	devices := make([]nvml.Device, count)
 	names := make([]string, count)
+	UUIDs := make([]string, count)
 	for i := 0; i < count; i++ {
 		devices[i], ret = nvml.DeviceGetHandleByIndex(i)
 		if ret != nvml.SUCCESS {
-			return nil, nil, fmt.Errorf("Unable to get Nvidia device at index %d on '%v'", i, nvml.ErrorString(ret))
+			return nil, nil, nil, fmt.Errorf("Unable to get Nvidia device at index %d on '%v'", i, nvml.ErrorString(ret))
 		}
 
-		uuid, ret := devices[i].GetUUID()
+		UUIDs[i], ret = devices[i].GetUUID()
 		if ret != nvml.SUCCESS {
-			return nil, nil, fmt.Errorf("Unable to get UUID of Nvidia device %d on '%v'", i, nvml.ErrorString(ret))
+			return nil, nil, nil, fmt.Errorf("Unable to get UUID of Nvidia device %d on '%v'", i, nvml.ErrorString(ret))
 		}
 
 		names[i], ret = devices[i].GetName()
 		if ret != nvml.SUCCESS {
-			return nil, nil, fmt.Errorf("Unable to get name of Nvidia device %d on '%v'", i, nvml.ErrorString(ret))
+			return nil, nil, nil, fmt.Errorf("Unable to get name of Nvidia device %d on '%v'", i, nvml.ErrorString(ret))
 		}
 
-		logger.Sugar().Infof("Discovered Nvidia device %d of model %s with UUID %s", i, names[i], uuid)
+		logger.Sugar().Infof("Discovered Nvidia device %d of model %s with UUID %s", i, names[i], UUIDs[i])
 
 		currMode, _, ret := devices[i].GetMigMode()
 		if ret != nvml.SUCCESS {
@@ -149,20 +156,29 @@ func discoverDevices(logger *zap.Logger) ([]nvml.Device, []string, error) {
 		}
 	}
 
-	return devices, names, nil
+	return devices, names, UUIDs, nil
 }
 
-func (client *nvmlClient) cleanup() {
+func (client *nvmlClient) cleanup() error {
 	if client.handleCleanup != nil {
-		client.handleCleanup()
+		err := client.handleCleanup()
+      if err != nil {
+         return err
+      }
 	}
 	if !client.disable {
 		client.logger.Info("Shutdown Nvidia Management Library client")
 	}
+
+   return nil
 }
 
-func (client *nvmlClient) getDeviceModelName(gpuID uint) string {
-	return client.devicesModelName[gpuID]
+func (client *nvmlClient) getDeviceModelName(gpuIndex uint) string {
+	return client.devicesModelName[gpuIndex]
+}
+
+func (client *nvmlClient) getDeviceUUID(gpuIndex uint) string {
+	return client.devicesUUID[gpuIndex]
 }
 
 func (client *nvmlClient) collectDeviceMetrics() ([]nvmlMetric, error) {
@@ -179,20 +195,20 @@ func (client *nvmlClient) collectDeviceMetrics() ([]nvmlMetric, error) {
 func (client *nvmlClient) collectDeviceUtilization() []nvmlMetric {
 	deviceMetrics := make([]nvmlMetric, 0, len(client.devices))
 
-	gpuUtil := nvmlMetric{name: "nvml.gpu.utilization"}
+   gpuUtil := nvmlMetric{name: "nvml.gpu.utilization"}
 
-	for idx, device := range client.devices {
+	for gpuIndex, device := range client.devices {
 		mean, err := client.getAverageGpuUtilizationSinceLastQuery(device)
 		if err != nil {
-			client.issueWarningForFailedQueryUptoThreshold(idx, gpuUtil.name, err.Error())
+			client.issueWarningForFailedQueryUptoThreshold(gpuIndex, gpuUtil.name, err.Error())
 			continue
 		}
 
-		gpuUtil.gpuID = uint(idx)
+		gpuUtil.gpuIndex = uint(gpuIndex)
 		gpuUtil.time = time.Now()
 		gpuUtil.setFloat64(mean)
 		deviceMetrics = append(deviceMetrics, gpuUtil)
-		client.logger.Debugf("Nvidia device %d has GPU utilization of %.1f%%", idx, 100.0*gpuUtil.asFloat64())
+		client.logger.Debugf("Nvidia device %d has GPU utilization of %.1f%%", gpuIndex, 100.0*gpuUtil.asFloat64())
 	}
 
 	return deviceMetrics
@@ -235,28 +251,28 @@ func (client *nvmlClient) getAverageGpuUtilizationSinceLastQuery(device nvml.Dev
 func (client *nvmlClient) collectDeviceMemoryInfo() []nvmlMetric {
 	deviceMetrics := make([]nvmlMetric, 0, 2*len(client.devices))
 
-	gpuMemUsed := nvmlMetric{name: "nvml.gpu.memory.bytes_used"}
+   gpuMemUsed := nvmlMetric{name: "nvml.gpu.memory.bytes_used"}
 	gpuMemFree := nvmlMetric{name: "nvml.gpu.memory.bytes_free"}
 
-	for idx, device := range client.devices {
+	for gpuIndex, device := range client.devices {
 		memInfo, ret := nvmlDeviceGetMemoryInfo(device)
 		timestamp := time.Now()
 		if ret != nvml.SUCCESS {
-			client.issueWarningForFailedQueryUptoThreshold(idx, gpuMemUsed.name, nvml.ErrorString(ret))
+			client.issueWarningForFailedQueryUptoThreshold(gpuIndex, gpuMemUsed.name, nvml.ErrorString(ret))
 			continue
 		}
 
-		gpuMemUsed.gpuID = uint(idx)
+		gpuMemUsed.gpuIndex = uint(gpuIndex)
 		gpuMemUsed.time = timestamp
 		gpuMemUsed.setInt64(int64(memInfo.Used))
 		deviceMetrics = append(deviceMetrics, gpuMemUsed)
 
-		gpuMemFree.gpuID = uint(idx)
+		gpuMemFree.gpuIndex = uint(gpuIndex)
 		gpuMemFree.time = timestamp
 		gpuMemFree.setInt64(int64(memInfo.Free))
 		deviceMetrics = append(deviceMetrics, gpuMemFree)
 
-		client.logger.Debugf("Nvidia device %d has %d bytes used and %d bytes free", idx, gpuMemUsed.asInt64(), gpuMemFree.asInt64())
+		client.logger.Debugf("Nvidia device %d has %d bytes used and %d bytes free", gpuIndex, gpuMemUsed.asInt64(), gpuMemFree.asInt64())
 	}
 
 	return deviceMetrics

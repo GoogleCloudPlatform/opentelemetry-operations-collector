@@ -1,15 +1,18 @@
 name: nvmlreceiver
 
 attributes:
+  uuid:
+    description: GPU universally unique identifier
+
   gpu_number:
     description: GPU index starting at 0.
+
+  model:
+    description: GPU model
 
   memory_state:
     description: GPU memory used or free.
     enum: [used, free]
-
-  model:
-    description: GPU model
 
 metrics:
   nvml.gpu.utilization:
@@ -18,7 +21,7 @@ metrics:
     unit: 10^2.%
     gauge:
       value_type: double
-    attributes: [model, gpu_number]
+    attributes: [model, gpu_number, uuid]
 
   nvml.gpu.memory.bytes_used:
     enabled: true
@@ -26,4 +29,4 @@ metrics:
     unit: By
     gauge:
       value_type: int
-    attributes: [model, gpu_number, memory_state]
+    attributes: [model, gpu_number, uuid, memory_state]

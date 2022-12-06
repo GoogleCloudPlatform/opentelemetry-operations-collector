@@ -19,6 +19,7 @@ package nvmlreceiver
 
 import (
 	"context"
+   "fmt"
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
@@ -33,14 +34,10 @@ func createMetricsReceiver(
 ) (component.MetricsReceiver, error) {
 	cfg, ok := rConf.(*Config)
 	if !ok {
-		return nil, nil
+		return nil, fmt.Errorf("Unable to cast receiver configuration to nvml.Config")
 	}
 
-	ns, err := newNvmlScraper(cfg, params)
-	if err != nil {
-		return nil, err
-	}
-
+	ns := newNvmlScraper(cfg, params)
 	scraper, err := scraperhelper.NewScraper(
 		typeStr,
 		ns.scrape,

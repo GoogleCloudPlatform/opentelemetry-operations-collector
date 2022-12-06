@@ -36,8 +36,8 @@ type nvmlScraper struct {
 	mb       *metadata.MetricsBuilder
 }
 
-func newNvmlScraper(config *Config, settings component.ReceiverCreateSettings) (*nvmlScraper, error) {
-	return &nvmlScraper{config: config, settings: settings}, nil
+func newNvmlScraper(config *Config, settings component.ReceiverCreateSettings) *nvmlScraper {
+	return &nvmlScraper{config: config, settings: settings}
 }
 
 func (s *nvmlScraper) start(_ context.Context, host component.Host) error {
@@ -47,16 +47,15 @@ func (s *nvmlScraper) start(_ context.Context, host component.Host) error {
 		return err
 	}
 
-	starttime := pcommon.NewTimestampFromTime(time.Now())
+	startTime := pcommon.NewTimestampFromTime(time.Now())
 	s.mb = metadata.NewMetricsBuilder(
-		s.config.Metrics, s.settings.BuildInfo, metadata.WithStartTime(starttime))
+		s.config.Metrics, s.settings.BuildInfo, metadata.WithStartTime(startTime))
 
 	return nil
 }
 
 func (s *nvmlScraper) stop(_ context.Context) error {
-	s.client.cleanup()
-	return nil
+	return s.client.cleanup()
 }
 
 func (s *nvmlScraper) scrape(ctx context.Context) (pmetric.Metrics, error) {
@@ -64,15 +63,16 @@ func (s *nvmlScraper) scrape(ctx context.Context) (pmetric.Metrics, error) {
 
 	for _, metric := range deviceMetrics {
 		timestamp := pcommon.NewTimestampFromTime(metric.time)
-		model := s.client.getDeviceModelName(metric.gpuID)
-		gpuID := fmt.Sprintf("%d", metric.gpuID)
+		model := s.client.getDeviceModelName(metric.gpuIndex)
+		UUID := s.client.getDeviceUUID(metric.gpuIndex)
+		gpuIndex := fmt.Sprintf("%d", metric.gpuIndex)
 		switch metric.name {
 		case "nvml.gpu.utilization":
-			s.mb.RecordNvmlGpuUtilizationDataPoint(timestamp, metric.asFloat64(), model, gpuID)
+			s.mb.RecordNvmlGpuUtilizationDataPoint(timestamp, metric.asFloat64(), model, gpuIndex, UUID)
 		case "nvml.gpu.memory.bytes_used":
-			s.mb.RecordNvmlGpuMemoryBytesUsedDataPoint(timestamp, metric.asInt64(), model, gpuID, metadata.AttributeMemoryStateUsed)
+			s.mb.RecordNvmlGpuMemoryBytesUsedDataPoint(timestamp, metric.asInt64(), model, gpuIndex, UUID, metadata.AttributeMemoryStateUsed)
 		case "nvml.gpu.memory.bytes_free":
-			s.mb.RecordNvmlGpuMemoryBytesUsedDataPoint(timestamp, metric.asInt64(), model, gpuID, metadata.AttributeMemoryStateFree)
+			s.mb.RecordNvmlGpuMemoryBytesUsedDataPoint(timestamp, metric.asInt64(), model, gpuIndex, UUID, metadata.AttributeMemoryStateFree)
 		}
 	}
 

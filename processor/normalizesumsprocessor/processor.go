@@ -161,14 +161,17 @@ func dataPointIdentifier(resource pcommon.Resource, metric pmetric.Metric, label
 	var b strings.Builder
 
 	// Resource identifiers
-	resource.Attributes().Sort().Range(func(k string, v pcommon.Value) bool {
+	attributes := resource.Attributes()
+	attributes.Sort()
+	attributes.Range(func(k string, v pcommon.Value) bool {
 		fmt.Fprintf(&b, "%s=%s|", k, v.AsString())
 		return true
 	})
 
 	// Metric identifiers
 	fmt.Fprintf(&b, " - %s", metric.Name())
-	labels.Sort().Range(func(k string, v pcommon.Value) bool {
+	labels.Sort()
+	labels.Range(func(k string, v pcommon.Value) bool {
 		fmt.Fprintf(&b, " %s=%s", k, v.AsString())
 		return true
 	})

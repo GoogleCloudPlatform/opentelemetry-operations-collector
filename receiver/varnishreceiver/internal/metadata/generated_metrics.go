@@ -9,6 +9,7 @@ import (
 	"go.opentelemetry.io/collector/confmap"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
+	"go.opentelemetry.io/collector/receiver"
 )
 
 // MetricSettings provides common settings for a particular metric.
@@ -854,22 +855,22 @@ func WithStartTime(startTime pcommon.Timestamp) metricBuilderOption {
 	}
 }
 
-func NewMetricsBuilder(settings MetricsSettings, buildInfo component.BuildInfo, options ...metricBuilderOption) *MetricsBuilder {
+func NewMetricsBuilder(ms MetricsSettings, settings receiver.CreateSettings, options ...metricBuilderOption) *MetricsBuilder {
 	mb := &MetricsBuilder{
 		startTime:                            pcommon.NewTimestampFromTime(time.Now()),
 		metricsBuffer:                        pmetric.NewMetrics(),
-		buildInfo:                            buildInfo,
-		metricVarnishBackendConnectionCount:  newMetricVarnishBackendConnectionCount(settings.VarnishBackendConnectionCount),
-		metricVarnishBackendRequestCount:     newMetricVarnishBackendRequestCount(settings.VarnishBackendRequestCount),
-		metricVarnishCacheOperationCount:     newMetricVarnishCacheOperationCount(settings.VarnishCacheOperationCount),
-		metricVarnishClientRequestCount:      newMetricVarnishClientRequestCount(settings.VarnishClientRequestCount),
-		metricVarnishClientRequestErrorCount: newMetricVarnishClientRequestErrorCount(settings.VarnishClientRequestErrorCount),
-		metricVarnishObjectCount:             newMetricVarnishObjectCount(settings.VarnishObjectCount),
-		metricVarnishObjectExpired:           newMetricVarnishObjectExpired(settings.VarnishObjectExpired),
-		metricVarnishObjectMoved:             newMetricVarnishObjectMoved(settings.VarnishObjectMoved),
-		metricVarnishObjectNuked:             newMetricVarnishObjectNuked(settings.VarnishObjectNuked),
-		metricVarnishSessionCount:            newMetricVarnishSessionCount(settings.VarnishSessionCount),
-		metricVarnishThreadOperationCount:    newMetricVarnishThreadOperationCount(settings.VarnishThreadOperationCount),
+		buildInfo:                            settings.BuildInfo,
+		metricVarnishBackendConnectionCount:  newMetricVarnishBackendConnectionCount(ms.VarnishBackendConnectionCount),
+		metricVarnishBackendRequestCount:     newMetricVarnishBackendRequestCount(ms.VarnishBackendRequestCount),
+		metricVarnishCacheOperationCount:     newMetricVarnishCacheOperationCount(ms.VarnishCacheOperationCount),
+		metricVarnishClientRequestCount:      newMetricVarnishClientRequestCount(ms.VarnishClientRequestCount),
+		metricVarnishClientRequestErrorCount: newMetricVarnishClientRequestErrorCount(ms.VarnishClientRequestErrorCount),
+		metricVarnishObjectCount:             newMetricVarnishObjectCount(ms.VarnishObjectCount),
+		metricVarnishObjectExpired:           newMetricVarnishObjectExpired(ms.VarnishObjectExpired),
+		metricVarnishObjectMoved:             newMetricVarnishObjectMoved(ms.VarnishObjectMoved),
+		metricVarnishObjectNuked:             newMetricVarnishObjectNuked(ms.VarnishObjectNuked),
+		metricVarnishSessionCount:            newMetricVarnishSessionCount(ms.VarnishSessionCount),
+		metricVarnishThreadOperationCount:    newMetricVarnishThreadOperationCount(ms.VarnishThreadOperationCount),
 	}
 	for _, op := range options {
 		op(mb)

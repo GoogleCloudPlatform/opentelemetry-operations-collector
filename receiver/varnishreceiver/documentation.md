@@ -2,47 +2,142 @@
 
 # varnishreceiver
 
-## Metrics
+## Default Metrics
 
-These are the metrics available for this scraper.
-
-| Name | Description | Unit | Type | Attributes |
-| ---- | ----------- | ---- | ---- | ---------- |
-| **varnish.backend.connection.count** | The backend connection type count. | {connections} | Sum(Int) | <ul> <li>backend_connection_type</li> </ul> |
-| **varnish.backend.request.count** | The backend requests count. | {requests} | Sum(Int) | <ul> </ul> |
-| **varnish.cache.operation.count** | The cache operation type count. | {operations} | Sum(Int) | <ul> <li>cache_operations</li> </ul> |
-| **varnish.client.request.count** | The client request count. | {requests} | Sum(Int) | <ul> <li>state</li> </ul> |
-| **varnish.client.request.error.count** | The client request errors received by status code. | {requests} | Sum(Int) | <ul> <li>http.status_code</li> </ul> |
-| **varnish.object.count** | The HTTP objects in the cache count. | {objects} | Sum(Int) | <ul> </ul> |
-| **varnish.object.expired** | The expired objects from old age count. | {objects} | Sum(Int) | <ul> </ul> |
-| **varnish.object.moved** | The moved operations done on the LRU list count. | {objects} | Sum(Int) | <ul> </ul> |
-| **varnish.object.nuked** | The objects that have been forcefully evicted from storage count. | {objects} | Sum(Int) | <ul> </ul> |
-| **varnish.session.count** | The session connection type count. | {connections} | Sum(Int) | <ul> <li>session_type</li> </ul> |
-| **varnish.thread.operation.count** | The thread operation type count. | {operations} | Sum(Int) | <ul> <li>thread_operations</li> </ul> |
-
-**Highlighted metrics** are emitted by default. Other metrics are optional and not emitted by default.
-Any metric can be enabled or disabled with the following scraper configuration:
+The following metrics are emitted by default. Each of them can be disabled by applying the following configuration:
 
 ```yaml
 metrics:
   <metric_name>:
-    enabled: <true|false>
+    enabled: false
 ```
 
-## Resource attributes
+### varnish.backend.connection.count
 
-| Name | Description | Type |
-| ---- | ----------- | ---- |
-| varnish.cache.name | The name of the cache. | Str |
+The backend connection type count.
 
-## Metric attributes
+| Unit | Metric Type | Value Type | Aggregation Temporality | Monotonic |
+| ---- | ----------- | ---------- | ----------------------- | --------- |
+| {connections} | Sum | Int | Cumulative | true |
+
+#### Attributes
 
 | Name | Description | Values |
 | ---- | ----------- | ------ |
-| backend_connection_type (kind) | The backend connection types. | success, recycle, reuse, fail, unhealthy, busy, retry |
-| cache_name | The varnish cache name. |  |
-| cache_operations (operation) | The cache operation types | hit, miss, hit_pass |
-| http.status_code (status_code) | An HTTP status code. |  |
-| session_type (kind) | The session connection types. | accepted, dropped, failed |
-| state (state) | The client request states. | received, dropped |
-| thread_operations (operation) | The thread operation types. | created, destroyed, failed |
+| kind | The backend connection types. | Str: ``success``, ``recycle``, ``reuse``, ``fail``, ``unhealthy``, ``busy``, ``retry`` |
+
+### varnish.backend.request.count
+
+The backend requests count.
+
+| Unit | Metric Type | Value Type | Aggregation Temporality | Monotonic |
+| ---- | ----------- | ---------- | ----------------------- | --------- |
+| {requests} | Sum | Int | Cumulative | true |
+
+### varnish.cache.operation.count
+
+The cache operation type count.
+
+| Unit | Metric Type | Value Type | Aggregation Temporality | Monotonic |
+| ---- | ----------- | ---------- | ----------------------- | --------- |
+| {operations} | Sum | Int | Cumulative | true |
+
+#### Attributes
+
+| Name | Description | Values |
+| ---- | ----------- | ------ |
+| operation | The cache operation types | Str: ``hit``, ``miss``, ``hit_pass`` |
+
+### varnish.client.request.count
+
+The client request count.
+
+| Unit | Metric Type | Value Type | Aggregation Temporality | Monotonic |
+| ---- | ----------- | ---------- | ----------------------- | --------- |
+| {requests} | Sum | Int | Cumulative | true |
+
+#### Attributes
+
+| Name | Description | Values |
+| ---- | ----------- | ------ |
+| state | The client request states. | Str: ``received``, ``dropped`` |
+
+### varnish.client.request.error.count
+
+The client request errors received by status code.
+
+| Unit | Metric Type | Value Type | Aggregation Temporality | Monotonic |
+| ---- | ----------- | ---------- | ----------------------- | --------- |
+| {requests} | Sum | Int | Cumulative | true |
+
+#### Attributes
+
+| Name | Description | Values |
+| ---- | ----------- | ------ |
+| status_code | An HTTP status code. | Any Str |
+
+### varnish.object.count
+
+The HTTP objects in the cache count.
+
+| Unit | Metric Type | Value Type | Aggregation Temporality | Monotonic |
+| ---- | ----------- | ---------- | ----------------------- | --------- |
+| {objects} | Sum | Int | Cumulative | false |
+
+### varnish.object.expired
+
+The expired objects from old age count.
+
+| Unit | Metric Type | Value Type | Aggregation Temporality | Monotonic |
+| ---- | ----------- | ---------- | ----------------------- | --------- |
+| {objects} | Sum | Int | Cumulative | true |
+
+### varnish.object.moved
+
+The moved operations done on the LRU list count.
+
+| Unit | Metric Type | Value Type | Aggregation Temporality | Monotonic |
+| ---- | ----------- | ---------- | ----------------------- | --------- |
+| {objects} | Sum | Int | Cumulative | true |
+
+### varnish.object.nuked
+
+The objects that have been forcefully evicted from storage count.
+
+| Unit | Metric Type | Value Type | Aggregation Temporality | Monotonic |
+| ---- | ----------- | ---------- | ----------------------- | --------- |
+| {objects} | Sum | Int | Cumulative | true |
+
+### varnish.session.count
+
+The session connection type count.
+
+| Unit | Metric Type | Value Type | Aggregation Temporality | Monotonic |
+| ---- | ----------- | ---------- | ----------------------- | --------- |
+| {connections} | Sum | Int | Cumulative | true |
+
+#### Attributes
+
+| Name | Description | Values |
+| ---- | ----------- | ------ |
+| kind | The session connection types. | Str: ``accepted``, ``dropped``, ``failed`` |
+
+### varnish.thread.operation.count
+
+The thread operation type count.
+
+| Unit | Metric Type | Value Type | Aggregation Temporality | Monotonic |
+| ---- | ----------- | ---------- | ----------------------- | --------- |
+| {operations} | Sum | Int | Cumulative | true |
+
+#### Attributes
+
+| Name | Description | Values |
+| ---- | ----------- | ------ |
+| operation | The thread operation types. | Str: ``created``, ``destroyed``, ``failed`` |
+
+## Resource Attributes
+
+| Name | Description | Values |
+| ---- | ----------- | ------ |
+| varnish.cache.name | The name of the cache. | Any Str |

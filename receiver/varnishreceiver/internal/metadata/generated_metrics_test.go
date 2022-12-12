@@ -7,15 +7,17 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
+	"go.opentelemetry.io/collector/receiver/receivertest"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 func TestDefaultMetrics(t *testing.T) {
 	start := pcommon.Timestamp(1_000_000_000)
 	ts := pcommon.Timestamp(1_000_001_000)
-	mb := NewMetricsBuilder(DefaultMetricsSettings(), component.BuildInfo{}, WithStartTime(start))
+	mb := NewMetricsBuilder(DefaultMetricsSettings(), receivertest.NewNopCreateSettings(), WithStartTime(start))
 	enabledMetrics := make(map[string]bool)
 
 	enabledMetrics["varnish.backend.connection.count"] = true
@@ -69,7 +71,7 @@ func TestDefaultMetrics(t *testing.T) {
 func TestAllMetrics(t *testing.T) {
 	start := pcommon.Timestamp(1_000_000_000)
 	ts := pcommon.Timestamp(1_000_001_000)
-	settings := MetricsSettings{
+	metricsSettings := MetricsSettings{
 		VarnishBackendConnectionCount:  MetricSettings{Enabled: true},
 		VarnishBackendRequestCount:     MetricSettings{Enabled: true},
 		VarnishCacheOperationCount:     MetricSettings{Enabled: true},
@@ -82,7 +84,12 @@ func TestAllMetrics(t *testing.T) {
 		VarnishSessionCount:            MetricSettings{Enabled: true},
 		VarnishThreadOperationCount:    MetricSettings{Enabled: true},
 	}
-	mb := NewMetricsBuilder(settings, component.BuildInfo{}, WithStartTime(start))
+	observedZapCore, observedLogs := observer.New(zap.WarnLevel)
+	settings := receivertest.NewNopCreateSettings()
+	settings.Logger = zap.New(observedZapCore)
+	mb := NewMetricsBuilder(metricsSettings, settings, WithStartTime(start))
+
+	assert.Equal(t, 0, observedLogs.Len())
 
 	mb.RecordVarnishBackendConnectionCountDataPoint(ts, 1, AttributeBackendConnectionType(1))
 	mb.RecordVarnishBackendRequestCountDataPoint(ts, 1)
@@ -128,7 +135,7 @@ func TestAllMetrics(t *testing.T) {
 			assert.Equal(t, int64(1), dp.IntValue())
 			attrVal, ok := dp.Attributes().Get("kind")
 			assert.True(t, ok)
-			assert.Equal(t, AttributeBackendConnectionType(1).String(), attrVal.Str())
+			assert.Equal(t, "success", attrVal.Str())
 			validatedMetrics["varnish.backend.connection.count"] = struct{}{}
 		case "varnish.backend.request.count":
 			assert.Equal(t, pmetric.MetricTypeSum, ms.At(i).Type())
@@ -157,7 +164,7 @@ func TestAllMetrics(t *testing.T) {
 			assert.Equal(t, int64(1), dp.IntValue())
 			attrVal, ok := dp.Attributes().Get("operation")
 			assert.True(t, ok)
-			assert.Equal(t, AttributeCacheOperations(1).String(), attrVal.Str())
+			assert.Equal(t, "hit", attrVal.Str())
 			validatedMetrics["varnish.cache.operation.count"] = struct{}{}
 		case "varnish.client.request.count":
 			assert.Equal(t, pmetric.MetricTypeSum, ms.At(i).Type())
@@ -173,7 +180,7 @@ func TestAllMetrics(t *testing.T) {
 			assert.Equal(t, int64(1), dp.IntValue())
 			attrVal, ok := dp.Attributes().Get("state")
 			assert.True(t, ok)
-			assert.Equal(t, AttributeState(1).String(), attrVal.Str())
+			assert.Equal(t, "received", attrVal.Str())
 			validatedMetrics["varnish.client.request.count"] = struct{}{}
 		case "varnish.client.request.error.count":
 			assert.Equal(t, pmetric.MetricTypeSum, ms.At(i).Type())
@@ -257,7 +264,7 @@ func TestAllMetrics(t *testing.T) {
 			assert.Equal(t, int64(1), dp.IntValue())
 			attrVal, ok := dp.Attributes().Get("kind")
 			assert.True(t, ok)
-			assert.Equal(t, AttributeSessionType(1).String(), attrVal.Str())
+			assert.Equal(t, "accepted", attrVal.Str())
 			validatedMetrics["varnish.session.count"] = struct{}{}
 		case "varnish.thread.operation.count":
 			assert.Equal(t, pmetric.MetricTypeSum, ms.At(i).Type())
@@ -273,7 +280,7 @@ func TestAllMetrics(t *testing.T) {
 			assert.Equal(t, int64(1), dp.IntValue())
 			attrVal, ok := dp.Attributes().Get("operation")
 			assert.True(t, ok)
-			assert.Equal(t, AttributeThreadOperations(1).String(), attrVal.Str())
+			assert.Equal(t, "created", attrVal.Str())
 			validatedMetrics["varnish.thread.operation.count"] = struct{}{}
 		}
 	}
@@ -283,7 +290,7 @@ func TestAllMetrics(t *testing.T) {
 func TestNoMetrics(t *testing.T) {
 	start := pcommon.Timestamp(1_000_000_000)
 	ts := pcommon.Timestamp(1_000_001_000)
-	settings := MetricsSettings{
+	metricsSettings := MetricsSettings{
 		VarnishBackendConnectionCount:  MetricSettings{Enabled: false},
 		VarnishBackendRequestCount:     MetricSettings{Enabled: false},
 		VarnishCacheOperationCount:     MetricSettings{Enabled: false},
@@ -296,7 +303,12 @@ func TestNoMetrics(t *testing.T) {
 		VarnishSessionCount:            MetricSettings{Enabled: false},
 		VarnishThreadOperationCount:    MetricSettings{Enabled: false},
 	}
-	mb := NewMetricsBuilder(settings, component.BuildInfo{}, WithStartTime(start))
+	observedZapCore, observedLogs := observer.New(zap.WarnLevel)
+	settings := receivertest.NewNopCreateSettings()
+	settings.Logger = zap.New(observedZapCore)
+	mb := NewMetricsBuilder(metricsSettings, settings, WithStartTime(start))
+
+	assert.Equal(t, 0, observedLogs.Len())
 	mb.RecordVarnishBackendConnectionCountDataPoint(ts, 1, AttributeBackendConnectionType(1))
 	mb.RecordVarnishBackendRequestCountDataPoint(ts, 1)
 	mb.RecordVarnishCacheOperationCountDataPoint(ts, 1, AttributeCacheOperations(1))

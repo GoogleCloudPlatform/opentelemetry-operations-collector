@@ -23,6 +23,7 @@ import (
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
+	"go.opentelemetry.io/collector/receiver"
 	"go.uber.org/zap"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/varnishreceiver/internal/metadata"
@@ -36,11 +37,11 @@ type varnishScraper struct {
 	cacheName         string
 }
 
-func newVarnishScraper(settings component.ReceiverCreateSettings, config *Config) *varnishScraper {
+func newVarnishScraper(settings receiver.CreateSettings, config *Config) *varnishScraper {
 	return &varnishScraper{
 		telemetrySettings: settings.TelemetrySettings,
 		config:            config,
-		mb:                metadata.NewMetricsBuilder(metadata.DefaultMetricsSettings(), settings.BuildInfo),
+		mb:                metadata.NewMetricsBuilder(metadata.DefaultMetricsSettings(), settings),
 	}
 }
 

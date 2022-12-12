@@ -23,7 +23,7 @@ import (
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/config"
-	"go.opentelemetry.io/collector/service/servicetest"
+	"go.opentelemetry.io/collector/otelcol/otelcoltest"
 )
 
 func TestLoadingFullConfig(t *testing.T) {
@@ -33,7 +33,7 @@ func TestLoadingFullConfig(t *testing.T) {
 	factory := NewFactory()
 	factories.Processors[typeStr] = factory
 
-	cfg, err := servicetest.LoadConfigAndValidate(path.Join(".", "testdata", "config_full.yaml"), factories)
+	cfg, err := otelcoltest.LoadConfigAndValidate(path.Join(".", "testdata", "config_full.yaml"), factories)
 	assert.NoError(t, err)
 	assert.NotNil(t, cfg)
 
@@ -57,6 +57,6 @@ func TestValidateConfig(t *testing.T) {
 	factory := NewFactory()
 	factories.Processors[typeStr] = factory
 
-	_, err = servicetest.LoadConfigAndValidate(path.Join(".", "testdata", "config_missing_name.yaml"), factories)
-	assert.EqualError(t, err, fmt.Sprintf("processor %q has invalid configuration: %s", typeStr, "metric names are missing"))
+	_, err = otelcoltest.LoadConfigAndValidate(path.Join(".", "testdata", "config_missing_name.yaml"), factories)
+	assert.EqualError(t, err, fmt.Sprintf("processors::%s: %s", typeStr, "metric names are missing"))
 }

@@ -23,7 +23,7 @@ import (
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/consumer/consumertest"
-	"go.opentelemetry.io/collector/service/servicetest"
+	"go.opentelemetry.io/collector/otelcol/otelcoltest"
 )
 
 func TestCreateDefaultConfig(t *testing.T) {
@@ -36,7 +36,7 @@ func TestCreateProcessor(t *testing.T) {
 	factory := NewFactory()
 	factories.Processors[typeStr] = factory
 
-	config, err := servicetest.LoadConfigAndValidate(path.Join(".", "testdata", "config_full.yaml"), factories)
+	config, err := otelcoltest.LoadConfigAndValidate(path.Join(".", "testdata", "config_full.yaml"), factories)
 	assert.NoError(t, err)
 	assert.NotNil(t, config)
 

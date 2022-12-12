@@ -35,7 +35,7 @@ func NewFactory() component.ProcessorFactory {
 		component.WithMetricsProcessor(createMetricsProcessor, component.StabilityLevelBeta))
 }
 
-func createDefaultConfig() component.ProcessorConfig {
+func createDefaultConfig() component.Config {
 	return &Config{
 		ProcessorSettings: config.NewProcessorSettings(component.NewID(typeStr)),
 	}
@@ -46,7 +46,7 @@ var processorCapabilities = consumer.Capabilities{MutatesData: true}
 func createMetricsProcessor(
 	ctx context.Context,
 	params component.ProcessorCreateSettings,
-	cfg component.ProcessorConfig,
+	cfg component.Config,
 	nextConsumer consumer.Metrics,
 ) (component.MetricsProcessor, error) {
 	// NewMetricsProcess takes an MProcessor, which is what agentMetricsProcessor implements, and returns a MetricsProcessor.

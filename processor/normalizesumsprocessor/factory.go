@@ -35,7 +35,7 @@ func NewFactory() component.ProcessorFactory {
 		component.WithMetricsProcessor(createMetricsProcessor, component.StabilityLevelBeta))
 }
 
-func createDefaultConfig() component.ProcessorConfig {
+func createDefaultConfig() component.Config {
 	settings := config.NewProcessorSettings(component.NewID(typeStr))
 	return &Config{
 		ProcessorSettings: &settings,
@@ -47,7 +47,7 @@ var processorCapabilities = consumer.Capabilities{MutatesData: true}
 func createMetricsProcessor(
 	ctx context.Context,
 	params component.ProcessorCreateSettings,
-	cfg component.ProcessorConfig,
+	cfg component.Config,
 	nextConsumer consumer.Metrics,
 ) (component.MetricsProcessor, error) {
 	oCfg := cfg.(*Config)

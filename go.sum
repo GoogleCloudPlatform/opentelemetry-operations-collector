@@ -106,10 +106,14 @@ github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace v1.10.
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/cloudmock v0.34.1 h1:2G1eO4RSvcTNncDivyGTd3Zh9tozmMeA2JpF07QEYlc=
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.34.1 h1:2zV0DiJaSJ+zoaYwMuWAkqMQyLggPfStnrwrFNv+ty4=
 github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.34.1/go.mod h1:oBeOrlgeIZVX6bRZ+TDJiEuL1bsDdgAWKa4iETycZf8=
+github.com/Masterminds/semver v1.5.0 h1:H65muMkzWKEuNDnfl9d70GUjFniHKHRbFPGBuZ3QEww=
+github.com/Masterminds/semver v1.5.0/go.mod h1:MB6lktGJrhw8PrUyiEoblNEGEQ+RzHPF078ddwwvV3Y=
 github.com/Microsoft/go-winio v0.4.14/go.mod h1:qXqCSQ3Xa7+6tgxaGTIe4Kpcdsi+P8jBhyzoq1bpyYA=
 github.com/Microsoft/go-winio v0.5.2 h1:a9IhgEQBCUEk6QCdml9CiJGhAws+YwffDHEMp1VMrpA=
 github.com/Microsoft/go-winio v0.5.2/go.mod h1:WpS1mjBmmwHBEWmogvA2mj8546UReBk4v8QkMxJ6pZY=
 github.com/Microsoft/hcsshim v0.9.4 h1:mnUj0ivWy6UzbB1uLFqKR6F+ZyiDc7j4iGgHTpO+5+I=
+github.com/NVIDIA/go-dcgm v0.0.0-20221107203308-b6ed78cdc8d3 h1:qk/qQaBY+918SBhcJsqYwZdDaS3MRtUH2SUX53SC7Cs=
+github.com/NVIDIA/go-dcgm v0.0.0-20221107203308-b6ed78cdc8d3/go.mod h1:atKWXstYFllLarJucBxnt9ivFIPe26Y6S4JQvzqeSr8=
 github.com/NVIDIA/go-nvml v0.11.6-0 h1:tugQzmaX84Y/6+03wZ/MAgcpfSKDkvkAWeuxFNLHmxY=
 github.com/NVIDIA/go-nvml v0.11.6-0/go.mod h1:hy7HYeQy335x6nEss0Ne3PYqleRa6Ct+VKD9RQ4nyFs=
 github.com/OneOfOne/xxhash v1.2.2/go.mod h1:HSdplMjZKSmBqAxg5vPj2TmRDmfkzw+cTzAElWljhcU=
@@ -212,6 +216,8 @@ github.com/beorn7/perks v1.0.0/go.mod h1:KWe93zE9D1o94FZ5RNwFwVgaQK1VOXiVxmqh+Ce
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
 github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=
 github.com/bgentry/speakeasy v0.1.0/go.mod h1:+zsyZBPWlz7T6j88CTgSN5bM796AkVf0kBD4zp0CCIs=
+github.com/bits-and-blooms/bitset v1.2.1 h1:M+/hrU9xlMp7t4TyTDQW97d3tRPVuKFC6zBEK16QnXY=
+github.com/bits-and-blooms/bitset v1.2.1/go.mod h1:gIdJ4wp64HaoK2YrL1Q5/N7Y16edYb8uY+O0FJTyyDA=
 github.com/boombuler/barcode v1.0.0/go.mod h1:paBWMcWSl3LHKBqUq+rly7CNSldXjb2rDl3JlRe0mD8=
 github.com/cenkalti/backoff/v4 v4.2.0 h1:HN5dHm3WBOgndBH6E8V0q2jIYIR3s9yglV8k/+MN3u4=
 github.com/cenkalti/backoff/v4 v4.2.0/go.mod h1:Y3VNntkOUPxTVeUxJ/G5vcM//AlwfmyYozVcomhLiZE=
@@ -468,6 +474,7 @@ github.com/googleapis/gax-go/v2 v2.7.0 h1:IcsPKeInNvYi7eqSaDjiZqDDKu5rsmunY0Y1Yu
 github.com/googleapis/gax-go/v2 v2.7.0/go.mod h1:TEop28CZZQ2y+c0VxMUmu1lV+fQx57QpBWsYpwqHJx8=
 github.com/gophercloud/gophercloud v0.25.0 h1:C3Oae7y0fUVQGSsBrb3zliAjdX+riCSEh4lNMejFNI4=
 github.com/gophercloud/gophercloud v0.25.0/go.mod h1:Q8fZtyi5zZxPS/j9aj3sSxtvj41AdQMDwyo1myduD5c=
+github.com/gorilla/mux v1.8.0/go.mod h1:DVbg23sWSpFRCP0SfiEN6jmj59UnW/n46BH5rLB71So=
 github.com/gorilla/websocket v1.5.0 h1:PPwGk2jz7EePpoHN/+ClbZu8SPxiqlu12wZP/3sWmnc=
 github.com/gorilla/websocket v1.5.0/go.mod h1:YR8l580nyteQvAITg2hZ9XVh4b55+EU/adAjf1fMHhE=
 github.com/grafana/regexp v0.0.0-20220304095617-2e8d9baf4ac2 h1:uirlL/j72L93RhV4+mkWhjv0cov2I0MIgPOG9rMDr1k=

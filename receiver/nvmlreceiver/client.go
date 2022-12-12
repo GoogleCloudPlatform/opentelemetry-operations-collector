@@ -37,6 +37,8 @@ type nvmlClient struct {
 	devicesUUID                    []string
 	deviceToLastSeenTimestamp      map[nvml.Device]uint64
 	deviceMetricToFailedQueryCount map[string]uint64
+	collectProcesses               bool
+	processToStartTimestamp        map[string]uint64
 }
 
 type nvmlMetric struct {
@@ -44,6 +46,15 @@ type nvmlMetric struct {
 	gpuIndex uint
 	name     string
 	value    [8]byte
+}
+
+type processMetric struct {
+	time                   time.Time
+	gpuIndex               uint
+	pid                    string
+	name                   string
+	lifetimeGpuUtilization uint64
+	lifetimeGpuMaxMemory   uint64
 }
 
 // calling nvml.Init() twice causes an unnecessary error (also wrap here for mocking)

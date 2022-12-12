@@ -12,20 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package nvmlreceiver
+package dcgmreceiver
 
 import (
 	"time"
 
+	"go.opentelemetry.io/collector/config/confignet"
 	"go.opentelemetry.io/collector/receiver/scraperhelper"
 
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/nvmlreceiver/internal/metadata"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/dcgmreceiver/internal/metadata"
 )
 
-const defaultCollectionInterval = 10 * time.Second
-const defaultCollectProcesses = false
+const defaultEndpoint = "localhost:5555"
+const defaultCollectionInterval = 5 * time.Second
 
 type Config struct {
 	scraperhelper.ScraperControllerSettings `mapstructure:",squash"`
+	confignet.TCPAddr                       `mapstructure:",squash"`
 	Metrics                                 metadata.MetricsSettings `mapstructure:"metrics"`
 }

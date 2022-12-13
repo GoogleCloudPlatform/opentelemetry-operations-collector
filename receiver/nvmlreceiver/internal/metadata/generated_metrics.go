@@ -159,7 +159,7 @@ func (m *metricNvmlGpuProcessesLifetimeGpuUtilization) init() {
 	m.data.Gauge().DataPoints().EnsureCapacity(m.capacity)
 }
 
-func (m *metricNvmlGpuProcessesLifetimeGpuUtilization) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64, processAttributeValue string, pidAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string) {
+func (m *metricNvmlGpuProcessesLifetimeGpuUtilization) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, pidAttributeValue string) {
 	if !m.settings.Enabled {
 		return
 	}
@@ -167,10 +167,10 @@ func (m *metricNvmlGpuProcessesLifetimeGpuUtilization) recordDataPoint(start pco
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
 	dp.SetDoubleValue(val)
-	dp.Attributes().PutStr("process", processAttributeValue)
-	dp.Attributes().PutStr("pid", pidAttributeValue)
+	dp.Attributes().PutStr("model", modelAttributeValue)
 	dp.Attributes().PutStr("gpu_number", gpuNumberAttributeValue)
 	dp.Attributes().PutStr("uuid", uuidAttributeValue)
+	dp.Attributes().PutStr("pid", pidAttributeValue)
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
@@ -213,7 +213,7 @@ func (m *metricNvmlGpuProcessesLifetimePeakBytesUsed) init() {
 	m.data.Gauge().DataPoints().EnsureCapacity(m.capacity)
 }
 
-func (m *metricNvmlGpuProcessesLifetimePeakBytesUsed) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, processAttributeValue string, pidAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string) {
+func (m *metricNvmlGpuProcessesLifetimePeakBytesUsed) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, pidAttributeValue string) {
 	if !m.settings.Enabled {
 		return
 	}
@@ -221,10 +221,10 @@ func (m *metricNvmlGpuProcessesLifetimePeakBytesUsed) recordDataPoint(start pcom
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
 	dp.SetIntValue(val)
-	dp.Attributes().PutStr("process", processAttributeValue)
-	dp.Attributes().PutStr("pid", pidAttributeValue)
+	dp.Attributes().PutStr("model", modelAttributeValue)
 	dp.Attributes().PutStr("gpu_number", gpuNumberAttributeValue)
 	dp.Attributes().PutStr("uuid", uuidAttributeValue)
+	dp.Attributes().PutStr("pid", pidAttributeValue)
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
@@ -267,7 +267,7 @@ func (m *metricNvmlGpuProcessesRunningTime) init() {
 	m.data.Gauge().DataPoints().EnsureCapacity(m.capacity)
 }
 
-func (m *metricNvmlGpuProcessesRunningTime) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64, processAttributeValue string, pidAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string) {
+func (m *metricNvmlGpuProcessesRunningTime) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, pidAttributeValue string) {
 	if !m.settings.Enabled {
 		return
 	}
@@ -275,10 +275,10 @@ func (m *metricNvmlGpuProcessesRunningTime) recordDataPoint(start pcommon.Timest
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
 	dp.SetDoubleValue(val)
-	dp.Attributes().PutStr("process", processAttributeValue)
-	dp.Attributes().PutStr("pid", pidAttributeValue)
+	dp.Attributes().PutStr("model", modelAttributeValue)
 	dp.Attributes().PutStr("gpu_number", gpuNumberAttributeValue)
 	dp.Attributes().PutStr("uuid", uuidAttributeValue)
+	dp.Attributes().PutStr("pid", pidAttributeValue)
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
@@ -476,18 +476,18 @@ func (mb *MetricsBuilder) RecordNvmlGpuMemoryBytesUsedDataPoint(ts pcommon.Times
 }
 
 // RecordNvmlGpuProcessesLifetimeGpuUtilizationDataPoint adds a data point to nvml.gpu.processes.lifetime_gpu_utilization metric.
-func (mb *MetricsBuilder) RecordNvmlGpuProcessesLifetimeGpuUtilizationDataPoint(ts pcommon.Timestamp, val float64, processAttributeValue string, pidAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string) {
-	mb.metricNvmlGpuProcessesLifetimeGpuUtilization.recordDataPoint(mb.startTime, ts, val, processAttributeValue, pidAttributeValue, gpuNumberAttributeValue, uuidAttributeValue)
+func (mb *MetricsBuilder) RecordNvmlGpuProcessesLifetimeGpuUtilizationDataPoint(ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, pidAttributeValue string) {
+	mb.metricNvmlGpuProcessesLifetimeGpuUtilization.recordDataPoint(mb.startTime, ts, val, modelAttributeValue, gpuNumberAttributeValue, uuidAttributeValue, pidAttributeValue)
 }
 
 // RecordNvmlGpuProcessesLifetimePeakBytesUsedDataPoint adds a data point to nvml.gpu.processes.lifetime_peak_bytes_used metric.
-func (mb *MetricsBuilder) RecordNvmlGpuProcessesLifetimePeakBytesUsedDataPoint(ts pcommon.Timestamp, val int64, processAttributeValue string, pidAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string) {
-	mb.metricNvmlGpuProcessesLifetimePeakBytesUsed.recordDataPoint(mb.startTime, ts, val, processAttributeValue, pidAttributeValue, gpuNumberAttributeValue, uuidAttributeValue)
+func (mb *MetricsBuilder) RecordNvmlGpuProcessesLifetimePeakBytesUsedDataPoint(ts pcommon.Timestamp, val int64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, pidAttributeValue string) {
+	mb.metricNvmlGpuProcessesLifetimePeakBytesUsed.recordDataPoint(mb.startTime, ts, val, modelAttributeValue, gpuNumberAttributeValue, uuidAttributeValue, pidAttributeValue)
 }
 
 // RecordNvmlGpuProcessesRunningTimeDataPoint adds a data point to nvml.gpu.processes.running_time metric.
-func (mb *MetricsBuilder) RecordNvmlGpuProcessesRunningTimeDataPoint(ts pcommon.Timestamp, val float64, processAttributeValue string, pidAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string) {
-	mb.metricNvmlGpuProcessesRunningTime.recordDataPoint(mb.startTime, ts, val, processAttributeValue, pidAttributeValue, gpuNumberAttributeValue, uuidAttributeValue)
+func (mb *MetricsBuilder) RecordNvmlGpuProcessesRunningTimeDataPoint(ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, pidAttributeValue string) {
+	mb.metricNvmlGpuProcessesRunningTime.recordDataPoint(mb.startTime, ts, val, modelAttributeValue, gpuNumberAttributeValue, uuidAttributeValue, pidAttributeValue)
 }
 
 // RecordNvmlGpuUtilizationDataPoint adds a data point to nvml.gpu.utilization metric.

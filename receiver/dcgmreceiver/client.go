@@ -215,7 +215,7 @@ func (client *dcgmClient) collectDeviceMetrics() ([]dcgmMetric, error) {
 		fieldValues, pollerr := dcgm.GetLatestValuesForFields(gpuIndex, client.enabledFieldIds)
 		if pollerr == nil {
 			gpuMetrics = client.appendMetric(gpuMetrics, gpuIndex, fieldValues)
-			client.logger.Infof("Successful poll of DCGM daemon for GPU %d", gpuIndex)
+			client.logger.Debugf("Successful poll of DCGM daemon for GPU %d", gpuIndex)
 		} else {
 			msg := fmt.Sprintf("Unable to poll DCGM daemon for GPU %d on %v", gpuIndex, pollerr)
 			client.logger.Warnf(msg)
@@ -236,9 +236,9 @@ func (client *dcgmClient) appendMetric(gpuMetrics []dcgmMetric, gpuIndex uint, f
 
 		switch fieldValue.FieldType {
 		case 'd':
-			client.logger.Infof("Discovered (ts %d gpu %d) %s = %.3f (f64)", fieldValue.Ts, gpuIndex, metricName, fieldValue.Float64())
+			client.logger.Debugf("Discovered (ts %d gpu %d) %s = %.3f (f64)", fieldValue.Ts, gpuIndex, metricName, fieldValue.Float64())
 		case 'i':
-			client.logger.Infof("Discovered (ts %d gpu %d) %s = %d (i64)", fieldValue.Ts, gpuIndex, metricName, fieldValue.Int64())
+			client.logger.Debugf("Discovered (ts %d gpu %d) %s = %d (i64)", fieldValue.Ts, gpuIndex, metricName, fieldValue.Int64())
 		}
 		gpuMetrics = append(gpuMetrics, dcgmMetric{fieldValue.Ts, gpuIndex, metricName, fieldValue.Value})
 	}

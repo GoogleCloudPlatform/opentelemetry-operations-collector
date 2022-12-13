@@ -49,7 +49,7 @@ metrics:
     unit: s
     gauge:
       value_type: double
-    attributes: [process, pid, gpu_number, uuid]
+    attributes: [model, gpu_number, uuid, pid]
 
   nvml.gpu.processes.lifetime_gpu_utilization:
     enabled: false
@@ -57,7 +57,7 @@ metrics:
     unit: 1
     gauge:
       value_type: double
-    attributes: [process, pid, gpu_number, uuid]
+    attributes: [model, gpu_number, uuid, pid]
 
   nvml.gpu.processes.lifetime_peak_bytes_used:
     enabled: false
@@ -65,4 +65,4 @@ metrics:
     unit: By
     gauge:
       value_type: int
-    attributes: [process, pid, gpu_number, uuid]
+    attributes: [model, gpu_number, uuid, pid]

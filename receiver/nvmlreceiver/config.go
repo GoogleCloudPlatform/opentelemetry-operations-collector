@@ -23,7 +23,6 @@ import (
 )
 
 const defaultCollectionInterval = 10 * time.Second
-const defaultCollectProcesses = false
 
 type Config struct {
 	scraperhelper.ScraperControllerSettings `mapstructure:",squash"`

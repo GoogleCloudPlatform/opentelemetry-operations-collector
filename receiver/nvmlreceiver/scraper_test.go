@@ -24,6 +24,7 @@ import (
 	"github.com/NVIDIA/go-nvml/pkg/nvml"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component/componenttest"
+	"go.opentelemetry.io/collector/receiver/receivertest"
 )
 
 func TestScrapeOnLibraryNotFound(t *testing.T) {
@@ -31,7 +32,7 @@ func TestScrapeOnLibraryNotFound(t *testing.T) {
 	defer func() { nvmlInit = realNvmlInit }()
 	nvmlInit = func() nvml.Return { panic("library not found") }
 
-	scraper := newNvmlScraper(createDefaultConfig().(*Config), componenttest.NewNopReceiverCreateSettings())
+	scraper := newNvmlScraper(createDefaultConfig().(*Config), receivertest.NewNopCreateSettings())
 	require.NotNil(t, scraper)
 
 	err := scraper.start(context.Background(), componenttest.NewNopHost())

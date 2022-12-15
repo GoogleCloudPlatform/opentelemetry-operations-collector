@@ -562,7 +562,9 @@ func requireEqual(t *testing.T, expected, actual []pmetric.Metrics) {
 			rmExp := rmsExp.At(i)
 
 			// require equality of resource attributes
-			require.Equal(t, rmExp.Resource().Attributes().Sort(), rmAct.Resource().Attributes().Sort())
+			rmExp.Resource().Attributes().Sort()
+			rmAct.Resource().Attributes().Sort()
+			require.Equal(t, rmExp.Resource().Attributes(), rmAct.Resource().Attributes())
 
 			// require equality of IL metrics
 			ilmsAct := rmAct.ScopeMetrics()
@@ -629,7 +631,9 @@ func requireEqualNumberDataPointSlice(t *testing.T, metricName string, ndpsAct, 
 			require.Failf(t, fmt.Sprintf("no data point for %s", dpKey), "Metric %s", metricName)
 		}
 
-		require.Equalf(t, ndpExp.Attributes().Sort(), ndpAct.Attributes().Sort(), "Metric %s", metricName)
+		ndpExp.Attributes().Sort()
+		ndpAct.Attributes().Sort()
+		require.Equalf(t, ndpExp.Attributes(), ndpAct.Attributes(), "Metric %s", metricName)
 		require.Equalf(t, ndpExp.StartTimestamp(), ndpAct.StartTimestamp(), "Metric %s", metricName)
 		require.Equalf(t, ndpExp.Timestamp(), ndpAct.Timestamp(), "Metric %s", metricName)
 		require.Equalf(t, ndpExp.ValueType(), ndpAct.ValueType(), "Metric %s", metricName)

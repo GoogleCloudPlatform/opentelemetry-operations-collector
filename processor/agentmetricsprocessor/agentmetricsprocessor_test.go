@@ -242,7 +242,9 @@ func assertEqual(t *testing.T, expected, actual pmetric.Metrics) {
 		rmExp := rmsExp.At(i)
 
 		// assert equality of resource attributes
-		assert.Equal(t, rmExp.Resource().Attributes().Sort(), rmAct.Resource().Attributes().Sort())
+		rmExp.Resource().Attributes().Sort()
+		rmAct.Resource().Attributes().Sort()
+		assert.Equal(t, rmExp.Resource().Attributes(), rmAct.Resource().Attributes())
 
 		// assert equality of IL metrics
 		ilmsAct := rmAct.ScopeMetrics()
@@ -313,7 +315,9 @@ func assertEqualNumberDataPointSlice(t *testing.T, metricName string, ndpsAct, n
 			require.Failf(t, fmt.Sprintf("no data point for %s", labelsAsKey(ndpAct.Attributes())), "Metric %s", metricName)
 		}
 
-		assert.Equalf(t, ndpExp.Attributes().Sort(), ndpAct.Attributes().Sort(), "Metric %s attributes %s", metricName, key)
+		ndpExp.Attributes().Sort()
+		ndpAct.Attributes().Sort()
+		assert.Equalf(t, ndpExp.Attributes(), ndpAct.Attributes(), "Metric %s attributes %s", metricName, key)
 		assert.Equalf(t, ndpExp.StartTimestamp(), ndpAct.StartTimestamp(), "Metric %s attributes %s", metricName, key)
 		assert.Equalf(t, ndpExp.Timestamp(), ndpAct.Timestamp(), "Metric %s attributes %s", metricName, key)
 		assert.Equalf(t, ndpExp.ValueType(), ndpAct.ValueType(), "Metric %s attributes %s", metricName, key)

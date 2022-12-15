@@ -1,0 +1,32 @@
+name: nvmlreceiver
+
+attributes:
+  uuid:
+    description: GPU universally unique identifier
+
+  gpu_number:
+    description: GPU index starting at 0.
+
+  model:
+    description: GPU model
+
+  memory_state:
+    description: GPU memory used or free.
+    enum: [used, free]
+
+metrics:
+  nvml.gpu.utilization:
+    enabled: true
+    description: Fraction of time GPU was not idle since the last sample.
+    unit: 1
+    gauge:
+      value_type: double
+    attributes: [model, gpu_number, uuid]
+
+  nvml.gpu.memory.bytes_used:
+    enabled: true
+    description: Current number of GPU memory bytes used by state. Summing the values of all states yields the total GPU memory space.
+    unit: By
+    gauge:
+      value_type: int
+    attributes: [model, gpu_number, uuid, memory_state]

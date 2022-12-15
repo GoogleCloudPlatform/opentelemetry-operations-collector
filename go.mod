@@ -3,6 +3,7 @@ module github.com/GoogleCloudPlatform/opentelemetry-operations-collector
 go 1.18
 
 require (
+	github.com/NVIDIA/go-nvml v0.11.6-0
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/fileexporter v0.67.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter v0.67.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlemanagedprometheusexporter v0.67.0
@@ -62,6 +63,7 @@ require (
 	github.com/99designs/keyring v1.2.1 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/v4a v1.0.14 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.1.18 // indirect
+	github.com/benbjohnson/clock v1.3.0 // indirect
 	github.com/danieljoos/wincred v1.1.2 // indirect
 	github.com/dvsekhvalnov/jose2go v1.5.0 // indirect
 	github.com/godbus/dbus v0.0.0-20190726142602-4481cbc300e2 // indirect

@@ -64,6 +64,7 @@ import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/agentmetricsprocessor"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/casttosumprocessor"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/normalizesumsprocessor"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/nvmlreceiver"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/varnishreceiver"
 )
 
@@ -99,6 +100,7 @@ func components() (component.Factories, error) {
 		apachereceiver.NewFactory(),
 		memcachedreceiver.NewFactory(),
 		mongodbreceiver.NewFactory(),
+		nvmlreceiver.NewFactory(),
 		postgresqlreceiver.NewFactory(),
 		elasticsearchreceiver.NewFactory(),
 		flinkmetricsreceiver.NewFactory(),

@@ -78,6 +78,16 @@ func TestScrapeOnGpuMemoryInfoUnsupported(t *testing.T) {
 	validateScraperResult(t, metrics, []string{"nvml.gpu.utilization"})
 }
 
+// func TestScrapeWithGpuProcess(t *testing.T) {
+//   -- go routine to loop on GPU kernel submission
+//   -- wait to collect process metrics (or timeout)
+// }
+
+// func TestScrapeWithGpuProcessAccountingError(t *testing.T) {
+//    -- mock error on collect accounting mode
+//    -- assert the other metrics are colected
+// }
+
 func TestScrapeEmitsWarningsUptoThreshold(t *testing.T) {
 	realNvmlGetSamples := nvmlDeviceGetSamples
 	defer func() { nvmlDeviceGetSamples = realNvmlGetSamples }()
@@ -110,8 +120,10 @@ func TestScrapeEmitsWarningsUptoThreshold(t *testing.T) {
 
 func validateScraperResult(t *testing.T, metrics pmetric.Metrics, expected_metrics []string) {
 	expected_datapoints := map[string]int{
-		"nvml.gpu.utilization":       1,
-		"nvml.gpu.memory.bytes_used": 2,
+		"nvml.gpu.utilization":                       1,
+		"nvml.gpu.memory.bytes_used":                 2,
+		"nvml.processes.lifetime_gpu_utilization":    1,
+		"nvml.processes.lifetime_gpu_max_bytes_used": 1,
 	}
 
 	count := 0
@@ -143,6 +155,7 @@ func validateScraperResult(t *testing.T, metrics pmetric.Metrics, expected_metri
 			for j := 0; j < dps.Len(); j++ {
 				assert.Regexp(t, ".*memory_state:.*", dps.At(j).Attributes().AsRaw())
 			}
+			// add two additional cases here
 		default:
 			t.Errorf("Unexpected metric %s", m.Name())
 		}

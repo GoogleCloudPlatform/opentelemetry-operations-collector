@@ -36,6 +36,12 @@ func TestNewNvmlClientWithGpuPresent(t *testing.T) {
 	assert.Greater(t, len(client.devices), 0)
 }
 
+// func TestNewNvmlClientOnAccountingModeUnsupported(t *testing.T) {
+//   -- mock accounting mode unsupported
+//   -- assert client is not disabled
+//   -- assert collectProcessInfo is false
+// }
+
 func TestGpuModelNameExists(t *testing.T) {
 	client, _ := newClient(createDefaultConfig().(*Config), zaptest.NewLogger(t))
 	require.NotNil(t, client)
@@ -96,6 +102,13 @@ func TestCollectGpuMemoryUsed(t *testing.T) {
 		assert.Equal(t, seen, true)
 	}
 }
+
+// func TestCollectGpuProcessesAccounting(t *testing.T) {
+//  -- assert process accounting enabled
+//  -- go routine to submit GPU kernels
+//  -- assert both metrics collected (or timeout)
+//  -- assert PID matches on label
+// }
 
 func TestGpuUtilizationIsAveraged(t *testing.T) {
 	client, _ := newClient(createDefaultConfig().(*Config), zaptest.NewLogger(t))

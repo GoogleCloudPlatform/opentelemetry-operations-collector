@@ -38,7 +38,6 @@ type nvmlClient struct {
 	deviceToLastSeenTimestamp      map[nvml.Device]uint64
 	deviceMetricToFailedQueryCount map[string]uint64
 	collectProcessInfo             bool
-	processToStartTimestamp        map[string]uint64
 }
 
 type nvmlMetric struct {
@@ -347,9 +346,9 @@ func (client *nvmlClient) collectProcessMetrics() []processMetric {
 				time:                   time.Now(),
 				processPid:             pid,
 				gpuIndex:               uint(gpuIndex),
-				runningTime:            time.Now().Sub(time.UnixMicro(int64(stats.StartTime))),
+				runningTime:            time.Since(time.UnixMicro(int64(stats.StartTime))),
 				lifetimeGpuUtilization: uint64(stats.GpuUtilization),
-				lifetimeGpuMaxMemory:   uint64(stats.MaxMemoryUsage),
+				lifetimeGpuMaxMemory:   stats.MaxMemoryUsage,
 			}
 
 			processMetrics = append(processMetrics, metric)

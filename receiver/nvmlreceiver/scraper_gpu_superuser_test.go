@@ -64,6 +64,6 @@ func TestScrapeWithGpuProcessAccountingError(t *testing.T) {
 	metrics, err := scraper.scrape(context.Background())
 	validateScraperResult(t, metrics, []string{
 		"nvml.gpu.utilization",
-		"nvml.gpu.memory.bytes_used"
+		"nvml.gpu.memory.bytes_used",
 	})
 }

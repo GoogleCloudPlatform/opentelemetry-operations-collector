@@ -52,10 +52,10 @@ func DefaultMetricsSettings() MetricsSettings {
 			Enabled: true,
 		},
 		NvmlProcessesLifetimeGpuMaxBytesUsed: MetricSettings{
-			Enabled: false,
+			Enabled: true,
 		},
 		NvmlProcessesLifetimeGpuUtilization: MetricSettings{
-			Enabled: false,
+			Enabled: true,
 		},
 	}
 }

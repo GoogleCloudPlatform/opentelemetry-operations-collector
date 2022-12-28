@@ -69,11 +69,12 @@ var nvmlInit = func() nvml.Return {
 
 var nvmlDeviceGetSamples = nvml.DeviceGetSamples
 var nvmlDeviceGetMemoryInfo = nvml.DeviceGetMemoryInfo
+var nvmlDeviceSetAccountingMode = nvml.DeviceSetAccountingMode
 
 func newClient(config *Config, logger *zap.Logger) (*nvmlClient, error) {
 	nvmlCleanup, err := initializeNvml(logger)
 	if err != nil {
-		logger.Sugar().Warnf("Unable to find and/or initialize Nvidia Management Library on '%v'. No Nvidia device metrics will be collected.", err)
+		logger.Sugar().Warnf("Unable to find and/or initialize Nvidia Management Library on '%w'. No Nvidia device metrics will be collected.", err)
 		return &nvmlClient{logger: logger.Sugar(), disable: true}, nil
 	}
 
@@ -183,9 +184,9 @@ func discoverDevices(logger *zap.Logger) ([]nvml.Device, []string, []string, err
 
 func enableProcessAccountingMode(logger *zap.Logger, devices []nvml.Device) error {
 	for gpuIndex, device := range devices {
-		ret := nvml.DeviceSetAccountingMode(device, nvml.FEATURE_ENABLED)
+		ret := nvmlDeviceSetAccountingMode(device, nvml.FEATURE_ENABLED)
 		if ret != nvml.SUCCESS {
-			return fmt.Errorf("Unable to set process accounting mode for Nvidia device %d on '%v'", gpuIndex, nvml.ErrorString(ret))
+			return fmt.Errorf("Unable to set process accounting mode for Nvidia device %d on '%s'", gpuIndex, nvml.ErrorString(ret))
 		}
 
 		logger.Sugar().Infof("Successfully enabled process accounting mode for Nvidia device %d", gpuIndex)

@@ -12,24 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build windows
-// +build windows
+//go:build gpu
+// +build gpu
 
-package nvmlreceiver
+package testcudakernel
 
-import (
-	"context"
-	"errors"
+/*
+#cgo CPPFLAGS: -I/usr/local/cuda/include
+#cgo LDFLAGS: -L. -L/usr/local/cuda/lib64 -lcublas -lcudart
+_Bool SubmitCudaTestKernel();
+*/
+import "C"
 
-	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/consumer"
-)
-
-func createMetricsReceiver(
-	_ context.Context,
-	params component.ReceiverCreateSettings,
-	rConf component.ReceiverConfig,
-	consumer consumer.Metrics,
-) (component.MetricsReceiver, error) {
-	return nil, errors.New("NVML receiver is only supported on Linux")
+func SubmitCudaTestKernel() {
+	C.SubmitCudaTestKernel()
 }

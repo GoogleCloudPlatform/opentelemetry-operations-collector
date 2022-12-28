@@ -2,17 +2,29 @@ name: nvmlreceiver
 
 attributes:
   uuid:
+    type: string
     description: GPU universally unique identifier
 
   gpu_number:
+    type: string
     description: GPU index starting at 0.
 
   model:
+    type: string
     description: GPU model
 
   memory_state:
+    type: string
     description: GPU memory used or free.
     enum: [used, free]
+
+  process:
+    type: string
+    description: Process name.
+
+  pid: 
+    type: string
+    description: Process ID.
 
 metrics:
   nvml.gpu.utilization:
@@ -30,3 +42,19 @@ metrics:
     gauge:
       value_type: int
     attributes: [model, gpu_number, uuid, memory_state]
+
+  nvml.processes.lifetime_gpu_utilization:
+    enabled: true
+    description: Fraction of time over the process's lifetime during which one or more kernels was executing on the GPU.
+    unit: 1
+    gauge:
+      value_type: double
+    attributes: [model, gpu_number, uuid, pid]
+
+  nvml.processes.lifetime_gpu_max_bytes_used:
+    enabled: true
+    description: Maximum total GPU memory in bytes that was ever allocated by the process.
+    unit: By
+    gauge:
+      value_type: int
+    attributes: [model, gpu_number, uuid, pid]

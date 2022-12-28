@@ -25,19 +25,18 @@ import (
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
-	"go.opentelemetry.io/collector/receiver"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/nvmlreceiver/internal/metadata"
 )
 
 type nvmlScraper struct {
 	config   *Config
-	settings receiver.CreateSettings
+	settings component.ReceiverCreateSettings
 	client   *nvmlClient
 	mb       *metadata.MetricsBuilder
 }
 
-func newNvmlScraper(config *Config, settings receiver.CreateSettings) *nvmlScraper {
+func newNvmlScraper(config *Config, settings component.ReceiverCreateSettings) *nvmlScraper {
 	return &nvmlScraper{config: config, settings: settings}
 }
 
@@ -56,10 +55,7 @@ func (s *nvmlScraper) start(_ context.Context, host component.Host) error {
 }
 
 func (s *nvmlScraper) stop(_ context.Context) error {
-	if s.client != nil {
-		return s.client.cleanup()
-	}
-	return nil
+	return s.client.cleanup()
 }
 
 func (s *nvmlScraper) scrape(ctx context.Context) (pmetric.Metrics, error) {
@@ -78,6 +74,17 @@ func (s *nvmlScraper) scrape(ctx context.Context) (pmetric.Metrics, error) {
 		case "nvml.gpu.memory.bytes_free":
 			s.mb.RecordNvmlGpuMemoryBytesUsedDataPoint(timestamp, metric.asInt64(), model, gpuIndex, UUID, metadata.AttributeMemoryStateFree)
 		}
+	}
+
+	processMetrics := s.client.collectProcessMetrics()
+	for _, metric := range processMetrics {
+		timestamp := pcommon.NewTimestampFromTime(metric.time)
+		model := s.client.getDeviceModelName(metric.gpuIndex)
+		UUID := s.client.getDeviceUUID(metric.gpuIndex)
+		gpuIndex := fmt.Sprintf("%d", metric.gpuIndex)
+		processPid := fmt.Sprintf("%d", metric.processPid)
+		s.mb.RecordNvmlProcessesLifetimeGpuUtilizationDataPoint(timestamp, float64(metric.lifetimeGpuUtilization)/100.0, model, gpuIndex, UUID, processPid)
+		s.mb.RecordNvmlProcessesLifetimeGpuMaxBytesUsedDataPoint(timestamp, int64(metric.lifetimeGpuMaxMemory), model, gpuIndex, UUID, processPid)
 	}
 
 	return s.mb.Emit(), err

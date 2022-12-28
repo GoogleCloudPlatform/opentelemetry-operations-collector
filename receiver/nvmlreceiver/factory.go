@@ -17,7 +17,6 @@ package nvmlreceiver
 import (
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config"
-	"go.opentelemetry.io/collector/receiver"
 	"go.opentelemetry.io/collector/receiver/scraperhelper"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/nvmlreceiver/internal/metadata"
@@ -25,15 +24,15 @@ import (
 
 const typeStr = "nvml"
 
-func NewFactory() receiver.Factory {
-	return receiver.NewFactory(
+func NewFactory() component.ReceiverFactory {
+	return component.NewReceiverFactory(
 		typeStr,
 		createDefaultConfig,
-		receiver.WithMetrics(createMetricsReceiver, component.StabilityLevelBeta),
+		component.WithMetricsReceiver(createMetricsReceiver, component.StabilityLevelBeta),
 	)
 }
 
-func createDefaultConfig() component.Config {
+func createDefaultConfig() component.ReceiverConfig {
 	return &Config{
 		ScraperControllerSettings: scraperhelper.ScraperControllerSettings{
 			ReceiverSettings:   config.NewReceiverSettings(component.NewID(typeStr)),

@@ -36,6 +36,20 @@ func TestNewNvmlClientWithGpuPresent(t *testing.T) {
 	assert.Greater(t, len(client.devices), 0)
 }
 
+func TestNewNvmlClientOnAccountingModeUnsupported(t *testing.T) {
+	realNvmlDeviceSetAccountingMode := nvmlDeviceSetAccountingMode
+	defer func() { nvmlDeviceSetAccountingMode = realNvmlDeviceSetAccountingMode }()
+	nvmlDeviceSetAccountingMode = func(Device nvml.Device, Mode nvml.EnableState) nvml.Return {
+		return nvml.ERROR_NOT_SUPPORTED
+	}
+
+	client, _ := newClient(createDefaultConfig().(*Config), zaptest.NewLogger(t))
+	require.NotNil(t, client)
+	require.Equal(t, client.disable, false)
+	assert.Greater(t, len(client.devices), 0)
+	assert.Equal(t, client.collectProcessInfo, false)
+}
+
 func TestGpuModelNameExists(t *testing.T) {
 	client, _ := newClient(createDefaultConfig().(*Config), zaptest.NewLogger(t))
 	require.NotNil(t, client)

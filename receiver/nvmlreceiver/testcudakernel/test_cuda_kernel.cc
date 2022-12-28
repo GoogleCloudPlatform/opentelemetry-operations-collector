@@ -60,3 +60,4 @@ extern "C" bool SubmitCudaTestKernel() {
   cublasXtDestroy(xt_);
   return true;
 }
+

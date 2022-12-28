@@ -70,6 +70,7 @@ var nvmlInit = func() nvml.Return {
 var nvmlDeviceGetSamples = nvml.DeviceGetSamples
 var nvmlDeviceGetMemoryInfo = nvml.DeviceGetMemoryInfo
 var nvmlDeviceSetAccountingMode = nvml.DeviceSetAccountingMode
+var nvmlDeviceGetAccountingPids = nvml.DeviceGetAccountingPids
 
 func newClient(config *Config, logger *zap.Logger) (*nvmlClient, error) {
 	nvmlCleanup, err := initializeNvml(logger)
@@ -321,7 +322,7 @@ func (client *nvmlClient) collectProcessMetrics() []processMetric {
 
 	processMetrics := make([]processMetric, 0)
 	for gpuIndex, device := range client.devices {
-		pids, ret := nvml.DeviceGetAccountingPids(device)
+		pids, ret := nvmlDeviceGetAccountingPids(device)
 		if ret != nvml.SUCCESS {
 			msg := fmt.Sprintf("Unable to query cached PIDs on '%v", nvml.ErrorString(ret))
 			client.issueWarningForFailedQueryUptoThreshold(gpuIndex, "nvml.processes", msg)

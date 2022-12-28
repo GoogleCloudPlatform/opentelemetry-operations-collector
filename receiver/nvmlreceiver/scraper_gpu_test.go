@@ -78,16 +78,6 @@ func TestScrapeOnGpuMemoryInfoUnsupported(t *testing.T) {
 	validateScraperResult(t, metrics, []string{"nvml.gpu.utilization"})
 }
 
-// func TestScrapeWithGpuProcess(t *testing.T) {
-//   -- go routine to loop on GPU kernel submission
-//   -- wait to collect process metrics (or timeout)
-// }
-
-// func TestScrapeWithGpuProcessAccountingError(t *testing.T) {
-//    -- mock error on collect accounting mode
-//    -- assert the other metrics are colected
-// }
-
 func TestScrapeEmitsWarningsUptoThreshold(t *testing.T) {
 	realNvmlGetSamples := nvmlDeviceGetSamples
 	defer func() { nvmlDeviceGetSamples = realNvmlGetSamples }()
@@ -118,21 +108,23 @@ func TestScrapeEmitsWarningsUptoThreshold(t *testing.T) {
 	require.Equal(t, warnings, maxWarningsForFailedDeviceMetricQuery)
 }
 
-func validateScraperResult(t *testing.T, metrics pmetric.Metrics, expected_metrics []string) {
-	expected_datapoints := map[string]int{
+func validateScraperResult(t *testing.T, metrics pmetric.Metrics, expectedMetrics []string) {
+	expectedMetricToDataPointCount := map[string]int{
 		"nvml.gpu.utilization":                       1,
 		"nvml.gpu.memory.bytes_used":                 2,
 		"nvml.processes.lifetime_gpu_utilization":    1,
 		"nvml.processes.lifetime_gpu_max_bytes_used": 1,
 	}
 
-	count := 0
-	for _, s := range expected_metrics {
-		count += expected_datapoints[s]
+	metricWasSeen := make(map[string]bool)
+	minExpectedDataPointCount := 0
+	for _, s := range expectedMetrics {
+		metricWasSeen[s] = false
+		minExpectedDataPointCount += expectedMetricToDataPointCount[s]
 	}
 
-	assert.GreaterOrEqual(t, metrics.MetricCount(), len(expected_metrics))
-	assert.GreaterOrEqual(t, metrics.DataPointCount(), count)
+	assert.GreaterOrEqual(t, metrics.MetricCount(), len(expectedMetrics))
+	assert.GreaterOrEqual(t, metrics.DataPointCount(), minExpectedDataPointCount)
 
 	ilms := metrics.ResourceMetrics().At(0).ScopeMetrics()
 	require.Equal(t, 1, ilms.Len())
@@ -149,21 +141,27 @@ func validateScraperResult(t *testing.T, metrics pmetric.Metrics, expected_metri
 
 		switch m.Name() {
 		case "nvml.gpu.utilization":
-			assert.Equal(t, expected_datapoints[m.Name()], dps.Len())
+			assert.Equal(t, expectedMetricToDataPointCount[m.Name()], dps.Len())
 		case "nvml.gpu.memory.bytes_used":
-			assert.Equal(t, expected_datapoints[m.Name()], dps.Len())
+			assert.Equal(t, expectedMetricToDataPointCount[m.Name()], dps.Len())
 			for j := 0; j < dps.Len(); j++ {
 				assert.Regexp(t, ".*memory_state:.*", dps.At(j).Attributes().AsRaw())
 			}
 		case "nvml.processes.lifetime_gpu_utilization":
 			fallthrough
 		case "nvml.processes.lifetime_gpu_max_bytes_used":
-			assert.GreaterOrEqual(t, expected_datapoints[m.Name()], dps.Len())
+			assert.GreaterOrEqual(t, expectedMetricToDataPointCount[m.Name()], dps.Len())
 			for j := 0; j < dps.Len(); j++ {
 				assert.Regexp(t, ".*pid:.*", dps.At(j).Attributes().AsRaw())
 			}
 		default:
 			t.Errorf("Unexpected metric %s", m.Name())
 		}
+
+		metricWasSeen[m.Name()] = true
+	}
+
+	for _, metric := range expectedMetrics {
+		assert.Equal(t, metricWasSeen[metric], true)
 	}
 }

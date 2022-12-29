@@ -84,8 +84,8 @@ func (s *nvmlScraper) scrape(ctx context.Context) (pmetric.Metrics, error) {
 		UUID := s.client.getDeviceUUID(metric.gpuIndex)
 		gpuIndex := fmt.Sprintf("%d", metric.gpuIndex)
 		processPid := fmt.Sprintf("%d", metric.processPid)
-		s.mb.RecordNvmlProcessesLifetimeGpuUtilizationDataPoint(timestamp, float64(metric.lifetimeGpuUtilization)/100.0, model, gpuIndex, UUID, processPid)
-		s.mb.RecordNvmlProcessesLifetimeGpuMaxBytesUsedDataPoint(timestamp, int64(metric.lifetimeGpuMaxMemory), model, gpuIndex, UUID, processPid)
+		s.mb.RecordNvmlGpuProcessesLifetimeUtilizationDataPoint(timestamp, float64(metric.lifetimeGpuUtilization)/100.0, model, gpuIndex, UUID, processPid)
+		s.mb.RecordNvmlGpuProcessesMaxBytesUsedDataPoint(timestamp, int64(metric.lifetimeGpuMaxMemory), model, gpuIndex, UUID, processPid)
 	}
 
 	return s.mb.Emit(), err

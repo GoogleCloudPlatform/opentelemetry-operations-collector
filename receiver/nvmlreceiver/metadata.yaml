@@ -43,15 +43,15 @@ metrics:
       value_type: int
     attributes: [model, gpu_number, uuid, memory_state]
 
-  nvml.processes.lifetime_gpu_utilization:
+  nvml.gpu.processes.lifetime_utilization:
     enabled: true
-    description: Fraction of time over the process's lifetime during which one or more kernels was executing on the GPU.
+    description: Fraction of time over the process's life thus far during which one or more kernels was executing on the GPU.
     unit: 1
     gauge:
       value_type: double
     attributes: [model, gpu_number, uuid, pid]
 
-  nvml.processes.lifetime_gpu_max_bytes_used:
+  nvml.gpu.processes.max_bytes_used:
     enabled: true
     description: Maximum total GPU memory in bytes that was ever allocated by the process.
     unit: By

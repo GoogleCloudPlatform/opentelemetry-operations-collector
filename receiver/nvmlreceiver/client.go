@@ -83,8 +83,8 @@ func newClient(config *Config, logger *zap.Logger) (*nvmlClient, error) {
 		return nil, err
 	}
 
-	collectProcessInfo := config.Metrics.NvmlProcessesLifetimeGpuUtilization.Enabled ||
-		config.Metrics.NvmlProcessesLifetimeGpuMaxBytesUsed.Enabled
+	collectProcessInfo := config.Metrics.NvmlGpuProcessesLifetimeUtilization.Enabled ||
+		config.Metrics.NvmlGpuProcessesMaxBytesUsed.Enabled
 	if collectProcessInfo {
 		err = enableProcessAccountingMode(logger, devices)
 		if err != nil {

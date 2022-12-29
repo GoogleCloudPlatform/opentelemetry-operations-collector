@@ -19,6 +19,7 @@ package nvmlreceiver
 
 import (
 	"math"
+	"os"
 	"testing"
 	"time"
 	"unsafe"
@@ -27,6 +28,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
+
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/nvmlreceiver/testcudakernel"
 )
 
 func TestNewNvmlClientWithGpuPresent(t *testing.T) {
@@ -134,4 +137,50 @@ func TestGpuUtilizationIsAveraged(t *testing.T) {
 	metrics := client.collectDeviceUtilization()
 	require.GreaterOrEqual(t, len(metrics), 1)
 	assert.InDelta(t, 0.5, metrics[0].asFloat64(), 0.01)
+}
+
+func TestNewNvmlClientWithGpuSupportsAccountingMode(t *testing.T) {
+	logger := zaptest.NewLogger(t)
+	logger.Sugar().Warnf("This test requires superuser privileges.")
+
+	client, _ := newClient(createDefaultConfig().(*Config), logger)
+	require.NotNil(t, client)
+	assert.Equal(t, client.disable, false)
+	assert.Greater(t, len(client.devices), 0)
+	assert.Equal(t, client.collectProcessInfo, true)
+}
+
+func TestCollectGpuProcessesAccounting(t *testing.T) {
+	logger := zaptest.NewLogger(t)
+	logger.Sugar().Warnf("This test requires superuser privileges.")
+
+	client, _ := newClient(createDefaultConfig().(*Config), logger)
+	require.NotNil(t, client)
+	assert.Equal(t, client.disable, false)
+	assert.Greater(t, len(client.devices), 0)
+	assert.Equal(t, client.collectProcessInfo, true)
+
+	testcudakernel.SubmitCudaTestKernel()
+
+	before := time.Now()
+	metrics := client.collectProcessMetrics()
+	after := time.Now()
+
+	seenSelfPid := false
+	for _, metric := range metrics {
+		assert.GreaterOrEqual(t, metric.time, before)
+		assert.LessOrEqual(t, metric.time, after)
+		assert.GreaterOrEqual(t, metric.gpuIndex, uint(0))
+		assert.LessOrEqual(t, metric.gpuIndex, uint(32))
+		assert.GreaterOrEqual(t, metric.processPid, int(0))
+		assert.LessOrEqual(t, metric.processPid, int(32768))
+		assert.GreaterOrEqual(t, metric.lifetimeGpuUtilization, uint64(0))
+		assert.LessOrEqual(t, metric.lifetimeGpuUtilization, uint64(100))
+		assert.GreaterOrEqual(t, metric.lifetimeGpuMaxMemory, uint64(0))
+		assert.LessOrEqual(t, metric.lifetimeGpuMaxMemory, uint64(1073741824))
+
+		seenSelfPid = seenSelfPid || metric.processPid == os.Getpid()
+	}
+
+	assert.Equal(t, seenSelfPid, true)
 }

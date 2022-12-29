@@ -30,6 +30,8 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
+
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/nvmlreceiver/testcudakernel"
 )
 
 func TestScrapeWithGpuPresent(t *testing.T) {
@@ -78,6 +80,49 @@ func TestScrapeOnGpuMemoryInfoUnsupported(t *testing.T) {
 	validateScraperResult(t, metrics, []string{"nvml.gpu.utilization"})
 }
 
+func TestScrapeWithGpuProcessAccounting(t *testing.T) {
+	logger := zaptest.NewLogger(t)
+	logger.Sugar().Warnf("This test requires superuser privileges.")
+
+	scraper := newNvmlScraper(createDefaultConfig().(*Config), componenttest.NewNopReceiverCreateSettings())
+	require.NotNil(t, scraper)
+
+	err := scraper.start(context.Background(), componenttest.NewNopHost())
+	require.NoError(t, err)
+
+	testcudakernel.SubmitCudaTestKernel()
+
+	metrics, err := scraper.scrape(context.Background())
+	validateScraperResult(t, metrics, []string{
+		"nvml.gpu.utilization",
+		"nvml.gpu.memory.bytes_used",
+		"nvml.gpu.processes.lifetime_utilization",
+		"nvml.gpu.processes.max_bytes_used",
+	})
+}
+
+func TestScrapeWithGpuProcessAccountingError(t *testing.T) {
+	realNvmlDeviceGetAccountingPids := nvmlDeviceGetAccountingPids
+	defer func() { nvmlDeviceGetAccountingPids = realNvmlDeviceGetAccountingPids }()
+	nvmlDeviceGetAccountingPids = func(device nvml.Device) ([]int, nvml.Return) {
+		return nil, nvml.ERROR_UNKNOWN
+	}
+
+	scraper := newNvmlScraper(createDefaultConfig().(*Config), componenttest.NewNopReceiverCreateSettings())
+	require.NotNil(t, scraper)
+
+	err := scraper.start(context.Background(), componenttest.NewNopHost())
+	require.NoError(t, err)
+
+	testcudakernel.SubmitCudaTestKernel()
+
+	metrics, err := scraper.scrape(context.Background())
+	validateScraperResult(t, metrics, []string{
+		"nvml.gpu.utilization",
+		"nvml.gpu.memory.bytes_used",
+	})
+}
+
 func TestScrapeEmitsWarningsUptoThreshold(t *testing.T) {
 	realNvmlGetSamples := nvmlDeviceGetSamples
 	defer func() { nvmlDeviceGetSamples = realNvmlGetSamples }()
@@ -110,10 +155,10 @@ func TestScrapeEmitsWarningsUptoThreshold(t *testing.T) {
 
 func validateScraperResult(t *testing.T, metrics pmetric.Metrics, expectedMetrics []string) {
 	expectedMetricToDataPointCount := map[string]int{
-		"nvml.gpu.utilization":                       1,
-		"nvml.gpu.memory.bytes_used":                 2,
-		"nvml.processes.lifetime_gpu_utilization":    1,
-		"nvml.processes.lifetime_gpu_max_bytes_used": 1,
+		"nvml.gpu.utilization":                    1,
+		"nvml.gpu.memory.bytes_used":              2,
+		"nvml.gpu.processes.lifetime_utilization": 1,
+		"nvml.gpu.processes.max_bytes_used":       1,
 	}
 
 	metricWasSeen := make(map[string]bool)
@@ -147,9 +192,9 @@ func validateScraperResult(t *testing.T, metrics pmetric.Metrics, expectedMetric
 			for j := 0; j < dps.Len(); j++ {
 				assert.Regexp(t, ".*memory_state:.*", dps.At(j).Attributes().AsRaw())
 			}
-		case "nvml.processes.lifetime_gpu_utilization":
+		case "nvml.gpu.processes.lifetime_utilization":
 			fallthrough
-		case "nvml.processes.lifetime_gpu_max_bytes_used":
+		case "nvml.gpu.processes.max_bytes_used":
 			assert.GreaterOrEqual(t, expectedMetricToDataPointCount[m.Name()], dps.Len())
 			for j := 0; j < dps.Len(); j++ {
 				assert.Regexp(t, ".*pid:.*", dps.At(j).Attributes().AsRaw())

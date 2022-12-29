@@ -27,10 +27,10 @@ import (
 const typeStr = "dcgm"
 
 func NewFactory() receiver.Factory {
-	return component.NewReceiverFactory(
+	return receiver.NewFactory(
 		typeStr,
 		createDefaultConfig,
-		component.WithMetricsReceiver(createMetricsReceiver, component.StabilityLevelBeta),
+		receiver.WithMetrics(createMetricsReceiver, component.StabilityLevelBeta),
 	)
 }
 

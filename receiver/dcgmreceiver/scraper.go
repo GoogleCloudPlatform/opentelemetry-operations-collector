@@ -22,18 +22,19 @@ import (
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
+	"go.opentelemetry.io/collector/receiver"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/dcgmreceiver/internal/metadata"
 )
 
 type dcgmScraper struct {
 	config   *Config
-	settings component.ReceiverCreateSettings
+	settings receiver.CreateSettings
 	client   *dcgmClient
 	mb       *metadata.MetricsBuilder
 }
 
-func newDcgmScraper(config *Config, settings component.ReceiverCreateSettings) (*dcgmScraper, error) {
+func newDcgmScraper(config *Config, settings receiver.CreateSettings) (*dcgmScraper, error) {
 	return &dcgmScraper{config: config, settings: settings}, nil
 }
 

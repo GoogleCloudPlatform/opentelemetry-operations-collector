@@ -27,14 +27,14 @@ import (
 	"go.opentelemetry.io/collector/receiver/scraperhelper"
 )
 
-var dcgmIdToName map[dcgm.Short]string
+var dcgmIDToName map[dcgm.Short]string
 var dcgmNameToMetricName map[string]string
 var metricNameToDcgmName map[string]string
 
 func init() {
-	dcgmIdToName = make(map[dcgm.Short]string, len(dcgm.DCGM_FI))
-	for fieldName, fieldId := range dcgm.DCGM_FI {
-		dcgmIdToName[fieldId] = fieldName
+	dcgmIDToName = make(map[dcgm.Short]string, len(dcgm.DCGM_FI))
+	for fieldName, fieldID := range dcgm.DCGM_FI {
+		dcgmIDToName[fieldID] = fieldName
 	}
 
 	dcgmNameToMetricName = map[string]string{

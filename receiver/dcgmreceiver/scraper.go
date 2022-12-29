@@ -68,14 +68,14 @@ func (s *dcgmScraper) scrape(ctx context.Context) (pmetric.Metrics, error) {
 		gpuIndex := fmt.Sprintf("%d", metric.gpuIndex)
 		switch metric.name {
 		case "dcgm.gpu.utilization":
-			gpu_util := float64(metric.asInt64()) / 100.0 /* normalize */
-			s.mb.RecordDcgmGpuUtilizationDataPoint(now, gpu_util, model, gpuIndex, UUID)
+			gpuUtil := float64(metric.asInt64()) / 100.0 /* normalize */
+			s.mb.RecordDcgmGpuUtilizationDataPoint(now, gpuUtil, model, gpuIndex, UUID)
 		case "dcgm.gpu.memory.bytes_used":
-			bytes_used := 1e6 * metric.asInt64() /* MB to B */
-			s.mb.RecordDcgmGpuMemoryBytesUsedDataPoint(now, bytes_used, model, gpuIndex, UUID, metadata.AttributeMemoryStateUsed)
+			bytesUsed := 1e6 * metric.asInt64() /* MB to B */
+			s.mb.RecordDcgmGpuMemoryBytesUsedDataPoint(now, bytesUsed, model, gpuIndex, UUID, metadata.AttributeMemoryStateUsed)
 		case "dcgm.gpu.memory.bytes_free":
-			bytes_free := 1e6 * metric.asInt64() /* MB to B */
-			s.mb.RecordDcgmGpuMemoryBytesUsedDataPoint(now, bytes_free, model, gpuIndex, UUID, metadata.AttributeMemoryStateFree)
+			bytesFree := 1e6 * metric.asInt64() /* MB to B */
+			s.mb.RecordDcgmGpuMemoryBytesUsedDataPoint(now, bytesFree, model, gpuIndex, UUID, metadata.AttributeMemoryStateFree)
 		case "dcgm.gpu.profiling.sm_utilization":
 			s.mb.RecordDcgmGpuProfilingSmUtilizationDataPoint(now, metric.asFloat64(), model, gpuIndex, UUID)
 		case "dcgm.gpu.profiling.sm_occupancy":

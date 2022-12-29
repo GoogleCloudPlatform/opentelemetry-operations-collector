@@ -39,7 +39,7 @@ func TestNewDcgmClientWithGpuPresent(t *testing.T) {
 		assert.Greater(t, len(client.devicesModelName[gpuIndex]), 0)
 		assert.Greater(t, len(client.devicesUUID[gpuIndex]), 0)
 	}
-	assert.Equal(t, len(client.enabledFieldIds), len(dcgmNameToMetricName))
+	assert.Equal(t, len(client.enabledfieldIDs), len(dcgmNameToMetricName))
 }
 
 func TestCollectGpuProfilingMetrics(t *testing.T) {

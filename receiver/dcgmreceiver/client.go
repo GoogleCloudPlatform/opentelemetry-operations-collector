@@ -19,6 +19,7 @@ package dcgmreceiver
 
 import (
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/NVIDIA/go-dcgm/pkg/dcgm"
@@ -46,26 +47,31 @@ type dcgmMetric struct {
 	value     [4096]byte
 }
 
+// Can't pass argument dcgm.mode because it is unexported
+var dcgmInit = func(args ...string) (func(), error) {
+	return dcgm.Init(dcgm.Standalone, args...)
+}
+
 func newClient(config *Config, logger *zap.Logger) (*dcgmClient, error) {
 	dcgmCleanup, err := initializeDcgm(config, logger)
 	if err != nil {
-		return &dcgmClient{logger: logger.Sugar()}, err
+		return nil, err
 	}
 
 	deviceIndices, names, UUIDs, err := discoverDevices(logger)
 	if err != nil {
-		return &dcgmClient{logger: logger.Sugar()}, err
+		return nil, err
 	}
 
 	deviceGroup, err := createDeviceGroup(logger, deviceIndices)
 	if err != nil {
-		return &dcgmClient{logger: logger.Sugar()}, err
+		return nil, err
 	}
 
 	enabledFieldIds := discoverEnabledFieldIds(config)
 	enabledFieldGroup, err := setWatchesOnEnabledFields(config, logger, deviceGroup, enabledFieldIds)
 	if err != nil {
-		return &dcgmClient{logger: logger.Sugar()}, fmt.Errorf("Unable to set field watches on %w", err)
+		return nil, fmt.Errorf("Unable to set field watches on %w", err)
 	}
 
 	return &dcgmClient{
@@ -81,7 +87,7 @@ func newClient(config *Config, logger *zap.Logger) (*dcgmClient, error) {
 }
 
 func initializeDcgm(config *Config, logger *zap.Logger) (func(), error) {
-	dcgmCleanup, err := dcgm.Init(dcgm.Standalone, config.TCPAddr.Endpoint, "0")
+	dcgmCleanup, err := dcgmInit(config.TCPAddr.Endpoint, "0")
 	if err != nil {
 		return nil, fmt.Errorf("Unable to connect to DCGM daemon at %s on %w; Is the DCGM daemon running?", config.TCPAddr.Endpoint, err)
 	}
@@ -169,7 +175,8 @@ func discoverEnabledFieldIds(config *Config) []dcgm.Short {
 func setWatchesOnEnabledFields(config *Config, logger *zap.Logger, deviceGroup dcgm.GroupHandle, enabledFieldIds []dcgm.Short) (dcgm.FieldHandle, error) {
 	var err error
 
-	fieldGroupName := "google-cloud-ops-agent-metrics"
+	// Note: Add random suffix to avoid conflict amongnst any parallel collectors
+	fieldGroupName := fmt.Sprintf("google-cloud-ops-agent-metrics-%d", rand.Intn(10000))
 	enabledFieldGroup, err := dcgm.FieldGroupCreate(fieldGroupName, enabledFieldIds)
 	if err != nil {
 		return dcgm.FieldHandle{}, fmt.Errorf("Unable to create DCGM field group '%s'", fieldGroupName)
@@ -181,9 +188,10 @@ func setWatchesOnEnabledFields(config *Config, logger *zap.Logger, deviceGroup d
 	}
 	logger.Sugar().Info(msg)
 
+	// Note: DCGM retained samples = Max(maxKeepSamples, maxKeepTime/updateFreq)
 	dcgmUpdateFreq := int64(config.CollectionInterval / time.Microsecond)
 	dcgmMaxKeepTime := 600.0 /* 10 min */
-	dcgmMaxKeepSamples := int32(6)
+	dcgmMaxKeepSamples := int32(15)
 	err = dcgm.WatchFieldsWithGroupEx(enabledFieldGroup, deviceGroup, dcgmUpdateFreq, dcgmMaxKeepTime, dcgmMaxKeepSamples)
 	if err != nil {
 		return dcgm.FieldHandle{}, fmt.Errorf("Setting watches for DCGM field group '%s' failed on %w", fieldGroupName, err)
@@ -218,7 +226,7 @@ func (client *dcgmClient) collectDeviceMetrics() ([]dcgmMetric, error) {
 			client.logger.Debugf("Successful poll of DCGM daemon for GPU %d", gpuIndex)
 		} else {
 			msg := fmt.Sprintf("Unable to poll DCGM daemon for GPU %d on %v", gpuIndex, pollerr)
-			client.logger.Warnf(msg)
+			client.issueWarningForFailedQueryUptoThreshold(gpuIndex, "all-profiling-metrics", msg)
 			err = fmt.Errorf("%s; %w", msg, err)
 		}
 	}
@@ -230,7 +238,8 @@ func (client *dcgmClient) appendMetric(gpuMetrics []dcgmMetric, gpuIndex uint, f
 	for _, fieldValue := range fieldValues {
 		metricName := dcgmNameToMetricName[dcgmIdToName[dcgm.Short(fieldValue.FieldId)]]
 		if !isValidValue(fieldValue) {
-			client.logger.Warnf("Skipping invalid value (ts %d gpu %d) %s", fieldValue.Ts, gpuIndex, metricName)
+			msg := fmt.Sprintf("Received invalid value (ts %d gpu %d) %s", fieldValue.Ts, gpuIndex, metricName)
+			client.issueWarningForFailedQueryUptoThreshold(gpuIndex, metricName, msg)
 			continue
 		}
 
@@ -246,7 +255,7 @@ func (client *dcgmClient) appendMetric(gpuMetrics []dcgmMetric, gpuIndex uint, f
 	return gpuMetrics
 }
 
-func (client *dcgmClient) issueWarningForFailedQueryUptoThreshold(deviceIdx int, metricName string, reason string) {
+func (client *dcgmClient) issueWarningForFailedQueryUptoThreshold(deviceIdx uint, metricName string, reason string) {
 	deviceMetric := fmt.Sprintf("device%d.%s", deviceIdx, metricName)
 	client.deviceMetricToFailedQueryCount[deviceMetric]++
 

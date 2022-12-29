@@ -17,14 +17,22 @@
 
 package dcgmreceiver
 
-// "testing"
+import (
+	"fmt"
+	"testing"
 
-// "github.com/NVIDIA/go-nvml/pkg/nvml"
-// "github.com/stretchr/testify/require"
-// "go.uber.org/zap/zaptest"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zaptest"
+)
 
-// func TestNewNvmlClientOnLibraryNotFoundError(t *testing.T) {
-// }
+func TestNewDcgmClientOnInitializationError(t *testing.T) {
+	realDcgmInit := dcgmInit
+	defer func() { dcgmInit = realDcgmInit }()
+	dcgmInit = func(args ...string) (func(), error) {
+		return nil, fmt.Errorf("No DCGM client library *OR* No DCGM connection")
+	}
 
-// func TestNewNvmlClientOnBadDcgmConnection(t *testing.T) {
-// }
+	client, err := newClient(createDefaultConfig().(*Config), zaptest.NewLogger(t))
+	require.Regexp(t, ".*Unable to connect.*", err)
+	require.Nil(t, client)
+}

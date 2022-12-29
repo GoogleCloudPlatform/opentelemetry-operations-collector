@@ -91,6 +91,7 @@ func (s *dcgmScraper) scrape(ctx context.Context) (pmetric.Metrics, error) {
 		case "dcgm.gpu.profiling.dram_utilization":
 			s.mb.RecordDcgmGpuProfilingDramUtilizationDataPoint(now, metric.asFloat64(), model, gpuIndex, UUID)
 		case "dcgm.gpu.profiling.pcie_sent_bytes":
+			/* DCGM already returns these as bytes/sec despite the name */
 			s.mb.RecordDcgmGpuProfilingPcieTrafficRateDataPoint(now, metric.asInt64(), model, gpuIndex, UUID, metadata.AttributeDirectionTx)
 		case "dcgm.gpu.profiling.pcie_received_bytes":
 			s.mb.RecordDcgmGpuProfilingPcieTrafficRateDataPoint(now, metric.asInt64(), model, gpuIndex, UUID, metadata.AttributeDirectionRx)

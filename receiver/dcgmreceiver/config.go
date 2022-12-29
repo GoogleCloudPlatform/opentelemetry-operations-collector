@@ -24,7 +24,7 @@ import (
 )
 
 const defaultEndpoint = "localhost:5555"
-const defaultCollectionInterval = 5 * time.Second
+const defaultCollectionInterval = 20 * time.Second
 
 type Config struct {
 	scraperhelper.ScraperControllerSettings `mapstructure:",squash"`

@@ -52,6 +52,8 @@ var dcgmInit = func(args ...string) (func(), error) {
 	return dcgm.Init(dcgm.Standalone, args...)
 }
 
+var dcgmGetLatestValuesForFields = dcgm.GetLatestValuesForFields
+
 func newClient(config *Config, logger *zap.Logger) (*dcgmClient, error) {
 	dcgmCleanup, err := initializeDcgm(config, logger)
 	if err != nil {
@@ -75,14 +77,15 @@ func newClient(config *Config, logger *zap.Logger) (*dcgmClient, error) {
 	}
 
 	return &dcgmClient{
-		logger:            logger.Sugar(),
-		handleCleanup:     dcgmCleanup,
-		enabledfieldIDs:   enabledfieldIDs,
-		enabledFieldGroup: enabledFieldGroup,
-		deviceGroup:       deviceGroup,
-		deviceIndices:     deviceIndices,
-		devicesModelName:  names,
-		devicesUUID:       UUIDs,
+		logger:                         logger.Sugar(),
+		handleCleanup:                  dcgmCleanup,
+		enabledfieldIDs:                enabledfieldIDs,
+		enabledFieldGroup:              enabledFieldGroup,
+		deviceGroup:                    deviceGroup,
+		deviceIndices:                  deviceIndices,
+		devicesModelName:               names,
+		devicesUUID:                    UUIDs,
+		deviceMetricToFailedQueryCount: make(map[string]uint64),
 	}, nil
 }
 
@@ -220,12 +223,12 @@ func (client *dcgmClient) collectDeviceMetrics() ([]dcgmMetric, error) {
 	var err error
 	gpuMetrics := make([]dcgmMetric, 0, len(client.enabledfieldIDs))
 	for _, gpuIndex := range client.deviceIndices {
-		fieldValues, pollerr := dcgm.GetLatestValuesForFields(gpuIndex, client.enabledfieldIDs)
+		fieldValues, pollerr := dcgmGetLatestValuesForFields(gpuIndex, client.enabledfieldIDs)
 		if pollerr == nil {
 			gpuMetrics = client.appendMetric(gpuMetrics, gpuIndex, fieldValues)
 			client.logger.Debugf("Successful poll of DCGM daemon for GPU %d", gpuIndex)
 		} else {
-			msg := fmt.Sprintf("Unable to poll DCGM daemon for GPU %d on %v", gpuIndex, pollerr)
+			msg := fmt.Sprintf("Unable to poll DCGM daemon for GPU %d on %s", gpuIndex, pollerr)
 			client.issueWarningForFailedQueryUptoThreshold(gpuIndex, "all-profiling-metrics", msg)
 			err = fmt.Errorf("%s; %w", msg, err)
 		}

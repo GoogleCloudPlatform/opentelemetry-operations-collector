@@ -18,28 +18,113 @@
 package dcgmreceiver
 
 import (
-// "context"
-// "strings"
-// "testing"
+	"context"
+	"fmt"
+	"testing"
 
-// "github.com/NVIDIA/go-nvml/pkg/nvml"
-// "github.com/stretchr/testify/assert"
-// "github.com/stretchr/testify/require"
-// "go.opentelemetry.io/collector/component/componenttest"
-// "go.opentelemetry.io/collector/pdata/pmetric"
-// "go.uber.org/zap"
-// "go.uber.org/zap/zapcore"
-// "go.uber.org/zap/zaptest"
+	"github.com/NVIDIA/go-dcgm/pkg/dcgm"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/collector/component/componenttest"
+	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
-// func TestScrapeWithGpuPresent(t *testing.T) {
-// }
+func TestScrapeWithGpuPresent(t *testing.T) {
+	scraper, err := newDcgmScraper(createDefaultConfig().(*Config), componenttest.NewNopReceiverCreateSettings())
+	require.NotNil(t, scraper)
+	require.NoError(t, err)
 
-// func TestScrapeOnPollingError(t *testing.T) {
-// }
+	err = scraper.start(context.Background(), componenttest.NewNopHost())
+	require.NoError(t, err)
 
-// func TestScrapeEmitsWarningsUptoThreshold(t *testing.T) {
-// }
+	metrics, err := scraper.scrape(context.Background())
+	validateScraperResult(t, metrics)
+}
 
-// func validateScraperResult(t *testing.T, metrics pmetric.Metrics, expected_metrics []string) {
-// }
+func TestScrapeOnPollingError(t *testing.T) {
+	realDcgmGetLatestValuesForFields := dcgmGetLatestValuesForFields
+	defer func() { dcgmGetLatestValuesForFields = realDcgmGetLatestValuesForFields }()
+	dcgmGetLatestValuesForFields = func(gpu uint, fields []dcgm.Short) ([]dcgm.FieldValue_v1, error) {
+		return nil, fmt.Errorf("DCGM polling error")
+	}
+
+	scraper, err := newDcgmScraper(createDefaultConfig().(*Config), componenttest.NewNopReceiverCreateSettings())
+	require.NotNil(t, scraper)
+	require.NoError(t, err)
+
+	err = scraper.start(context.Background(), componenttest.NewNopHost())
+	require.NoError(t, err)
+
+	metrics, err := scraper.scrape(context.Background())
+
+	assert.Error(t, err)
+	assert.Equal(t, metrics.MetricCount(), 0)
+}
+
+func validateScraperResult(t *testing.T, metrics pmetric.Metrics) {
+	expectedMetrics := map[string]int{
+		"dcgm.gpu.utilization":                   1,
+		"dcgm.gpu.memory.bytes_used":             2,
+		"dcgm.gpu.profiling.sm_utilization":      1,
+		"dcgm.gpu.profiling.sm_occupancy":        1,
+		"dcgm.gpu.profiling.pipe_utilization":    4,
+		"dcgm.gpu.profiling.dram_utilization":    1,
+		"dcgm.gpu.profiling.pcie_traffic_rate":   2,
+		"dcgm.gpu.profiling.nvlink_traffic_rate": 2,
+	}
+
+	metricWasSeen := make(map[string]bool)
+	expectedDataPointCount := 0
+	for metric, expectedMetricDataPoints := range expectedMetrics {
+		metricWasSeen[metric] = false
+		expectedDataPointCount += expectedMetricDataPoints
+	}
+
+	assert.Equal(t, metrics.MetricCount(), len(expectedMetrics))
+	assert.Equal(t, metrics.DataPointCount(), expectedDataPointCount)
+
+	ilms := metrics.ResourceMetrics().At(0).ScopeMetrics()
+	require.Equal(t, 1, ilms.Len())
+
+	ms := ilms.At(0).Metrics()
+	for i := 0; i < ms.Len(); i++ {
+		m := ms.At(i)
+		dps := m.Gauge().DataPoints()
+		for j := 0; j < dps.Len(); j++ {
+			assert.Regexp(t, ".*gpu_number:.*", dps.At(j).Attributes().AsRaw())
+			assert.Regexp(t, ".*model:.*", dps.At(j).Attributes().AsRaw())
+			assert.Regexp(t, ".*uuid:.*", dps.At(j).Attributes().AsRaw())
+		}
+
+		assert.Equal(t, expectedMetrics[m.Name()], dps.Len())
+
+		switch m.Name() {
+		case "dcgm.gpu.utilization":
+		case "dcgm.gpu.memory.bytes_used":
+			for j := 0; j < dps.Len(); j++ {
+				assert.Regexp(t, ".*memory_state:.*", dps.At(j).Attributes().AsRaw())
+			}
+		case "dcgm.gpu.profiling.sm_utilization":
+		case "dcgm.gpu.profiling.sm_occupancy":
+		case "dcgm.gpu.profiling.dram_utilization":
+		case "dcgm.gpu.profiling.pipe_utilization":
+			for j := 0; j < dps.Len(); j++ {
+				assert.Regexp(t, ".*pipe:.*", dps.At(j).Attributes().AsRaw())
+			}
+		case "dcgm.gpu.profiling.pcie_traffic_rate":
+			fallthrough
+		case "dcgm.gpu.profiling.nvlink_traffic_rate":
+			for j := 0; j < dps.Len(); j++ {
+				assert.Regexp(t, ".*direction:.*", dps.At(j).Attributes().AsRaw())
+			}
+		default:
+			t.Errorf("Unexpected metric %s", m.Name())
+		}
+
+		metricWasSeen[m.Name()] = true
+	}
+
+	for metric := range expectedMetrics {
+		assert.Equal(t, metricWasSeen[metric], true)
+	}
+}

@@ -18,15 +18,15 @@
 package dcgmreceiver
 
 import (
-	"math"
-	"testing"
-	"time"
-	"unsafe"
+// "math"
+// "testing"
+// "time"
+// "unsafe"
 
-	// "github.com/NVIDIA/go-nvml/pkg/nvml"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/zap/zaptest"
+// "github.com/NVIDIA/go-nvml/pkg/nvml"
+// "github.com/stretchr/testify/assert"
+// "github.com/stretchr/testify/require"
+// "go.uber.org/zap/zaptest"
 )
 
 // func TestNewDcgmClientWithGpuPresent(t *testing.T) {
@@ -40,4 +40,3 @@ import (
 
 // func TestCollectGpuProfilingMetrics(t *testing.T) {
 // }
-

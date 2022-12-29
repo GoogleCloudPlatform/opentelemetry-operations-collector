@@ -18,18 +18,18 @@
 package dcgmreceiver
 
 import (
-	"context"
-	"strings"
-	"testing"
+// "context"
+// "strings"
+// "testing"
 
-	// "github.com/NVIDIA/go-nvml/pkg/nvml"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/collector/component/componenttest"
-	"go.opentelemetry.io/collector/pdata/pmetric"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
-	"go.uber.org/zap/zaptest"
+// "github.com/NVIDIA/go-nvml/pkg/nvml"
+// "github.com/stretchr/testify/assert"
+// "github.com/stretchr/testify/require"
+// "go.opentelemetry.io/collector/component/componenttest"
+// "go.opentelemetry.io/collector/pdata/pmetric"
+// "go.uber.org/zap"
+// "go.uber.org/zap/zapcore"
+// "go.uber.org/zap/zaptest"
 )
 
 // func TestScrapeWithGpuPresent(t *testing.T) {

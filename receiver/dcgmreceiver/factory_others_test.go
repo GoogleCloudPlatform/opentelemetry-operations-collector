@@ -17,14 +17,27 @@
 
 package dcgmreceiver
 
-// "testing"
+import (
+	"context"
+	"testing"
 
-// "github.com/NVIDIA/go-nvml/pkg/nvml"
-// "github.com/stretchr/testify/require"
-// "go.uber.org/zap/zaptest"
+	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/collector/consumer/consumertest"
+	"go.opentelemetry.io/collector/receiver/receivertest"
+)
 
-// func TestNewNvmlClientOnLibraryNotFoundError(t *testing.T) {
-// }
+func TestCreateMetricsReceiverOnLinux(t *testing.T) {
+	factory := NewFactory()
+	cfg := factory.CreateDefaultConfig()
+	receiverConfig := cfg.(*Config)
 
-// func TestNewNvmlClientOnBadDcgmConnection(t *testing.T) {
-// }
+	receiver, err := factory.CreateMetricsReceiver(
+		context.Background(),
+		receivertest.NewNopCreateSettings(),
+		receiverConfig,
+		consumertest.NewNop(),
+	)
+
+	require.NoError(t, err)
+	require.NotNil(t, receiver, "failed to create metrics receiver")
+}

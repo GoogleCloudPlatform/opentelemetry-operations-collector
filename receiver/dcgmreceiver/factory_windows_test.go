@@ -12,19 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build !windows
-// +build !windows
+//go:build windows
+// +build windows
 
 package dcgmreceiver
 
-// "testing"
+import (
+	"context"
+	"testing"
 
-// "github.com/NVIDIA/go-nvml/pkg/nvml"
-// "github.com/stretchr/testify/require"
-// "go.uber.org/zap/zaptest"
+	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/collector/consumer/consumertest"
+	"go.opentelemetry.io/collector/receiver/receivertest"
+)
 
-// func TestNewNvmlClientOnLibraryNotFoundError(t *testing.T) {
-// }
+func TestCreateMetricsReceiverOnWindows(t *testing.T) {
+	factory := NewFactory()
+	cfg := factory.CreateDefaultConfig()
+	receiver, err := factory.CreateMetricsReceiver(
+		context.Background(),
+		receivertest.NewNopCreateSettings(),
+		cfg,
+		consumertest.NewNop())
 
-// func TestNewNvmlClientOnBadDcgmConnection(t *testing.T) {
-// }
+	require.Regexp(t, ".*only supported on Linux.*", err)
+	require.Nil(t, receiver)
+}

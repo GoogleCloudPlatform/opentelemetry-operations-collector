@@ -97,7 +97,7 @@ func TestCollectGpuProfilingMetrics(t *testing.T) {
 		case "dcgm.gpu.memory.bytes_used":
 			// arbitrary max of 10 TiB
 			assert.GreaterOrEqual(t, metric.asInt64(), int64(0))
-			assert.LessOrEqual(t, metric.asInt64(), int64(1048576))
+			assert.LessOrEqual(t, metric.asInt64(), int64(10485760))
 		case "dcgm.gpu.profiling.pcie_sent_bytes":
 			fallthrough
 		case "dcgm.gpu.profiling.pcie_received_bytes":

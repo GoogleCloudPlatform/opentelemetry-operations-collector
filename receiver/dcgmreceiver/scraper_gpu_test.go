@@ -21,16 +21,23 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/NVIDIA/go-dcgm/pkg/dcgm"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/pdata/pmetric"
+	"go.uber.org/zap/zaptest"
+
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/dcgmreceiver/testprofilepause"
 )
 
 func TestScrapeWithGpuPresent(t *testing.T) {
-	scraper, err := newDcgmScraper(createDefaultConfig().(*Config), componenttest.NewNopReceiverCreateSettings())
+	settings := componenttest.NewNopReceiverCreateSettings()
+	settings.Logger = zaptest.NewLogger(t)
+
+	scraper, err := newDcgmScraper(createDefaultConfig().(*Config), settings)
 	require.NotNil(t, scraper)
 	require.NoError(t, err)
 
@@ -48,7 +55,10 @@ func TestScrapeOnPollingError(t *testing.T) {
 		return nil, fmt.Errorf("DCGM polling error")
 	}
 
-	scraper, err := newDcgmScraper(createDefaultConfig().(*Config), componenttest.NewNopReceiverCreateSettings())
+	settings := componenttest.NewNopReceiverCreateSettings()
+	settings.Logger = zaptest.NewLogger(t)
+
+	scraper, err := newDcgmScraper(createDefaultConfig().(*Config), settings)
 	require.NotNil(t, scraper)
 	require.NoError(t, err)
 
@@ -59,6 +69,45 @@ func TestScrapeOnPollingError(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Equal(t, metrics.MetricCount(), 0)
+}
+
+func TestScrapeOnProfilingPaused(t *testing.T) {
+	config := createDefaultConfig().(*Config)
+	config.CollectionInterval = 10 * time.Millisecond
+
+	settings := componenttest.NewNopReceiverCreateSettings()
+	settings.Logger = zaptest.NewLogger(t)
+
+	scraper, err := newDcgmScraper(config, settings)
+	require.NotNil(t, scraper)
+	require.NoError(t, err)
+
+	defer func() { testprofilepause.ResumeProfilingMetrics() }()
+	testprofilepause.PauseProfilingMetrics()
+	time.Sleep(20 * time.Millisecond)
+
+	err = scraper.start(context.Background(), componenttest.NewNopHost())
+	require.NoError(t, err)
+
+	metrics, err := scraper.scrape(context.Background())
+
+	assert.NoError(t, err)
+	require.Equal(t, metrics.MetricCount(), 2)
+
+	expectedMetrics := []string{
+		"dcgm.gpu.utilization",
+		"dcgm.gpu.memory.bytes_used",
+	}
+
+	ms := metrics.ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics()
+	metricWasSeen := make(map[string]bool)
+	for i := 0; i < ms.Len(); i++ {
+		metricWasSeen[ms.At(i).Name()] = true
+	}
+
+	for _, metric := range expectedMetrics {
+		assert.Equal(t, metricWasSeen[metric], true)
+	}
 }
 
 func validateScraperResult(t *testing.T, metrics pmetric.Metrics) {

@@ -398,6 +398,10 @@ func (client *nvmlClient) setProcessMetadataLabels(metric processMetric) process
 		return metric
 	}
 
+	if len(metric.commandLine) > 1024 {
+		metric.commandLine = metric.commandLine[:1024]
+	}
+
 	metric.owner, err = process.Username()
 	if err != nil {
 		msg := fmt.Sprintf("Unable to query pid %d username on '%v'", metric.processPid, err)

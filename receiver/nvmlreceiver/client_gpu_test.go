@@ -170,14 +170,21 @@ func TestCollectGpuProcessesAccounting(t *testing.T) {
 	for _, metric := range metrics {
 		assert.GreaterOrEqual(t, metric.time, before)
 		assert.LessOrEqual(t, metric.time, after)
+
 		assert.GreaterOrEqual(t, metric.gpuIndex, uint(0))
 		assert.LessOrEqual(t, metric.gpuIndex, uint(32))
-		assert.GreaterOrEqual(t, metric.processPid, int(0))
-		assert.LessOrEqual(t, metric.processPid, int(32768))
+
 		assert.GreaterOrEqual(t, metric.lifetimeGpuUtilization, uint64(0))
 		assert.LessOrEqual(t, metric.lifetimeGpuUtilization, uint64(100))
 		assert.GreaterOrEqual(t, metric.lifetimeGpuMaxMemory, uint64(0))
 		assert.LessOrEqual(t, metric.lifetimeGpuMaxMemory, uint64(10995116277760))
+
+		assert.GreaterOrEqual(t, metric.processPid, int(0))
+		assert.LessOrEqual(t, metric.processPid, int(32768))
+		assert.Greater(t, len(metric.processName), 0)
+		assert.Greater(t, len(metric.command), 0)
+		assert.Greater(t, len(metric.commandLine), 0)
+		assert.Greater(t, len(metric.owner), 0)
 
 		seenSelfPid = seenSelfPid || metric.processPid == os.Getpid()
 	}

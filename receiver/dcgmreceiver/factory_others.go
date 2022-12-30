@@ -20,6 +20,8 @@ package dcgmreceiver
 import (
 	"context"
 	"fmt"
+	"math/rand"
+	"time"
 
 	"github.com/NVIDIA/go-dcgm/pkg/dcgm"
 	"go.opentelemetry.io/collector/component"
@@ -33,6 +35,8 @@ var dcgmNameToMetricName map[string]string
 var metricNameToDcgmName map[string]string
 
 func init() {
+	rand.Seed(time.Now().UnixMicro())
+
 	dcgmIDToName = make(map[dcgm.Short]string, len(dcgm.DCGM_FI))
 	for fieldName, fieldID := range dcgm.DCGM_FI {
 		dcgmIDToName[fieldID] = fieldName

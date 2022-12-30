@@ -358,6 +358,9 @@ func (client *nvmlClient) collectProcessMetrics() []processMetric {
 
 			metric = client.setProcessMetadataLabels(metric)
 			processMetrics = append(processMetrics, metric)
+
+			client.logger.Debugf("Found running pid %d (owner %s command %s) has used Nvidia device %d\n",
+				metric.processPid, metric.owner, metric.commandLine, metric.gpuIndex)
 		}
 	}
 

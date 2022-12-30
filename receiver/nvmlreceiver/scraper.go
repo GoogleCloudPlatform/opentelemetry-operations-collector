@@ -69,11 +69,14 @@ func (s *nvmlScraper) scrape(ctx context.Context) (pmetric.Metrics, error) {
 		gpuIndex := fmt.Sprintf("%d", metric.gpuIndex)
 		switch metric.name {
 		case "nvml.gpu.utilization":
-			s.mb.RecordNvmlGpuUtilizationDataPoint(timestamp, metric.asFloat64(), model, gpuIndex, UUID)
+			s.mb.RecordNvmlGpuUtilizationDataPoint(
+				timestamp, metric.asFloat64(), model, gpuIndex, UUID)
 		case "nvml.gpu.memory.bytes_used":
-			s.mb.RecordNvmlGpuMemoryBytesUsedDataPoint(timestamp, metric.asInt64(), model, gpuIndex, UUID, metadata.AttributeMemoryStateUsed)
+			s.mb.RecordNvmlGpuMemoryBytesUsedDataPoint(
+				timestamp, metric.asInt64(), model, gpuIndex, UUID, metadata.AttributeMemoryStateUsed)
 		case "nvml.gpu.memory.bytes_free":
-			s.mb.RecordNvmlGpuMemoryBytesUsedDataPoint(timestamp, metric.asInt64(), model, gpuIndex, UUID, metadata.AttributeMemoryStateFree)
+			s.mb.RecordNvmlGpuMemoryBytesUsedDataPoint(
+				timestamp, metric.asInt64(), model, gpuIndex, UUID, metadata.AttributeMemoryStateFree)
 		}
 	}
 
@@ -84,8 +87,14 @@ func (s *nvmlScraper) scrape(ctx context.Context) (pmetric.Metrics, error) {
 		UUID := s.client.getDeviceUUID(metric.gpuIndex)
 		gpuIndex := fmt.Sprintf("%d", metric.gpuIndex)
 		processPid := fmt.Sprintf("%d", metric.processPid)
-		s.mb.RecordNvmlGpuProcessesLifetimeUtilizationDataPoint(timestamp, float64(metric.lifetimeGpuUtilization)/100.0, model, gpuIndex, UUID, processPid)
-		s.mb.RecordNvmlGpuProcessesMaxBytesUsedDataPoint(timestamp, int64(metric.lifetimeGpuMaxMemory), model, gpuIndex, UUID, processPid)
+
+		s.mb.RecordNvmlGpuProcessesLifetimeUtilizationDataPoint(
+			timestamp, float64(metric.lifetimeGpuUtilization)/100.0, model, gpuIndex, UUID, processPid,
+			metric.processName, metric.command, metric.commandLine, metric.owner)
+
+		s.mb.RecordNvmlGpuProcessesMaxBytesUsedDataPoint(
+			timestamp, int64(metric.lifetimeGpuMaxMemory), model, gpuIndex, UUID, processPid,
+			metric.processName, metric.command, metric.commandLine, metric.owner)
 	}
 
 	return s.mb.Emit(), err

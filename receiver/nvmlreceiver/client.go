@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/go-nvml/pkg/nvml"
+	"github.com/shirou/gopsutil/v3/process"
 	"go.uber.org/zap"
 )
 
@@ -54,6 +55,10 @@ type processMetric struct {
 	runningTime            time.Duration
 	lifetimeGpuUtilization uint64
 	lifetimeGpuMaxMemory   uint64
+	processName            string
+	command                string
+	commandLine            string
+	owner                  string
 }
 
 // calling nvml.Init() twice causes an unnecessary error (also wrap here for mocking)
@@ -351,11 +356,53 @@ func (client *nvmlClient) collectProcessMetrics() []processMetric {
 				lifetimeGpuMaxMemory:   stats.MaxMemoryUsage,
 			}
 
+			metric = client.setProcessMetadataLabels(metric)
 			processMetrics = append(processMetrics, metric)
 		}
 	}
 
 	return processMetrics
+}
+
+func (client *nvmlClient) setProcessMetadataLabels(metric processMetric) processMetric {
+	metricName := fmt.Sprintf("nvml.processes{pid=%d}.metadata", metric.processPid)
+
+	process, err := process.NewProcess(int32(metric.processPid))
+	if err != nil {
+		msg := fmt.Sprintf("Unable to obtain process handle for pid %d to query for metadata on '%v'", metric.processPid, err)
+		client.issueWarningForFailedQueryUptoThreshold(int(metric.gpuIndex), metricName, msg)
+		return metric
+	}
+
+	metric.processName, err = process.Name()
+	if err != nil {
+		msg := fmt.Sprintf("Unable to query pid %d process name on '%v'", metric.processPid, err)
+		client.issueWarningForFailedQueryUptoThreshold(int(metric.gpuIndex), metricName, msg)
+		return metric
+	}
+
+	metric.command, err = process.Cmdline()
+	if err != nil {
+		msg := fmt.Sprintf("Unable to query pid %d command on '%v'", metric.processPid, err)
+		client.issueWarningForFailedQueryUptoThreshold(int(metric.gpuIndex), metricName, msg)
+		return metric
+	}
+
+	metric.commandLine, err = process.Cmdline()
+	if err != nil {
+		msg := fmt.Sprintf("Unable to query pid %d command line on '%v'", metric.processPid, err)
+		client.issueWarningForFailedQueryUptoThreshold(int(metric.gpuIndex), metricName, msg)
+		return metric
+	}
+
+	metric.owner, err = process.Username()
+	if err != nil {
+		msg := fmt.Sprintf("Unable to query pid %d username on '%v'", metric.processPid, err)
+		client.issueWarningForFailedQueryUptoThreshold(int(metric.gpuIndex), metricName, msg)
+		return metric
+	}
+
+	return metric
 }
 
 func (client *nvmlClient) issueWarningForFailedQueryUptoThreshold(deviceIdx int, metricName string, reason string) {

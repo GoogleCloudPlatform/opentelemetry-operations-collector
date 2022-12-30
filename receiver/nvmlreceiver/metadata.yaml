@@ -18,13 +18,25 @@ attributes:
     description: GPU memory used or free.
     enum: [used, free]
 
+  pid: 
+    type: string
+    description: Process ID.
+
   process:
     type: string
     description: Process name.
 
-  pid: 
+  command:
     type: string
-    description: Process ID.
+    description: Process command.
+
+  command_line:
+    type: string
+    description: Process command line, 1024 characters maximum.
+
+  owner:
+    type: string
+    description: Process command line, 1024 characters maximum.
 
 metrics:
   nvml.gpu.utilization:
@@ -49,7 +61,7 @@ metrics:
     unit: 1
     gauge:
       value_type: double
-    attributes: [model, gpu_number, uuid, pid]
+    attributes: [model, gpu_number, uuid, pid, process, command, command_line, owner]
 
   nvml.gpu.processes.max_bytes_used:
     enabled: true
@@ -57,4 +69,4 @@ metrics:
     unit: By
     gauge:
       value_type: int
-    attributes: [model, gpu_number, uuid, pid]
+    attributes: [model, gpu_number, uuid, pid, process, command, command_line, owner]

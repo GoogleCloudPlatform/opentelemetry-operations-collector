@@ -195,9 +195,13 @@ func validateScraperResult(t *testing.T, metrics pmetric.Metrics, expectedMetric
 		case "nvml.gpu.processes.lifetime_utilization":
 			fallthrough
 		case "nvml.gpu.processes.max_bytes_used":
-			assert.GreaterOrEqual(t, expectedMetricToDataPointCount[m.Name()], dps.Len())
+			assert.GreaterOrEqual(t, dps.Len(), expectedMetricToDataPointCount[m.Name()])
 			for j := 0; j < dps.Len(); j++ {
 				assert.Regexp(t, ".*pid:.*", dps.At(j).Attributes().AsRaw())
+				assert.Regexp(t, ".*process:.*", dps.At(j).Attributes().AsRaw())
+				assert.Regexp(t, ".*command:.*", dps.At(j).Attributes().AsRaw())
+				assert.Regexp(t, ".*command_line:.*", dps.At(j).Attributes().AsRaw())
+				assert.Regexp(t, ".*owner:.*", dps.At(j).Attributes().AsRaw())
 			}
 		default:
 			t.Errorf("Unexpected metric %s", m.Name())

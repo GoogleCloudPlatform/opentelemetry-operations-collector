@@ -155,7 +155,7 @@ func (m *metricNvmlGpuProcessesLifetimeUtilization) init() {
 	m.data.Gauge().DataPoints().EnsureCapacity(m.capacity)
 }
 
-func (m *metricNvmlGpuProcessesLifetimeUtilization) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, pidAttributeValue string) {
+func (m *metricNvmlGpuProcessesLifetimeUtilization) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, pidAttributeValue string, processAttributeValue string, commandAttributeValue string, commandLineAttributeValue string, ownerAttributeValue string) {
 	if !m.settings.Enabled {
 		return
 	}
@@ -167,6 +167,10 @@ func (m *metricNvmlGpuProcessesLifetimeUtilization) recordDataPoint(start pcommo
 	dp.Attributes().PutStr("gpu_number", gpuNumberAttributeValue)
 	dp.Attributes().PutStr("uuid", uuidAttributeValue)
 	dp.Attributes().PutStr("pid", pidAttributeValue)
+	dp.Attributes().PutStr("process", processAttributeValue)
+	dp.Attributes().PutStr("command", commandAttributeValue)
+	dp.Attributes().PutStr("command_line", commandLineAttributeValue)
+	dp.Attributes().PutStr("owner", ownerAttributeValue)
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
@@ -209,7 +213,7 @@ func (m *metricNvmlGpuProcessesMaxBytesUsed) init() {
 	m.data.Gauge().DataPoints().EnsureCapacity(m.capacity)
 }
 
-func (m *metricNvmlGpuProcessesMaxBytesUsed) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, pidAttributeValue string) {
+func (m *metricNvmlGpuProcessesMaxBytesUsed) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, pidAttributeValue string, processAttributeValue string, commandAttributeValue string, commandLineAttributeValue string, ownerAttributeValue string) {
 	if !m.settings.Enabled {
 		return
 	}
@@ -221,6 +225,10 @@ func (m *metricNvmlGpuProcessesMaxBytesUsed) recordDataPoint(start pcommon.Times
 	dp.Attributes().PutStr("gpu_number", gpuNumberAttributeValue)
 	dp.Attributes().PutStr("uuid", uuidAttributeValue)
 	dp.Attributes().PutStr("pid", pidAttributeValue)
+	dp.Attributes().PutStr("process", processAttributeValue)
+	dp.Attributes().PutStr("command", commandAttributeValue)
+	dp.Attributes().PutStr("command_line", commandLineAttributeValue)
+	dp.Attributes().PutStr("owner", ownerAttributeValue)
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
@@ -415,13 +423,13 @@ func (mb *MetricsBuilder) RecordNvmlGpuMemoryBytesUsedDataPoint(ts pcommon.Times
 }
 
 // RecordNvmlGpuProcessesLifetimeUtilizationDataPoint adds a data point to nvml.gpu.processes.lifetime_utilization metric.
-func (mb *MetricsBuilder) RecordNvmlGpuProcessesLifetimeUtilizationDataPoint(ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, pidAttributeValue string) {
-	mb.metricNvmlGpuProcessesLifetimeUtilization.recordDataPoint(mb.startTime, ts, val, modelAttributeValue, gpuNumberAttributeValue, uuidAttributeValue, pidAttributeValue)
+func (mb *MetricsBuilder) RecordNvmlGpuProcessesLifetimeUtilizationDataPoint(ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, pidAttributeValue string, processAttributeValue string, commandAttributeValue string, commandLineAttributeValue string, ownerAttributeValue string) {
+	mb.metricNvmlGpuProcessesLifetimeUtilization.recordDataPoint(mb.startTime, ts, val, modelAttributeValue, gpuNumberAttributeValue, uuidAttributeValue, pidAttributeValue, processAttributeValue, commandAttributeValue, commandLineAttributeValue, ownerAttributeValue)
 }
 
 // RecordNvmlGpuProcessesMaxBytesUsedDataPoint adds a data point to nvml.gpu.processes.max_bytes_used metric.
-func (mb *MetricsBuilder) RecordNvmlGpuProcessesMaxBytesUsedDataPoint(ts pcommon.Timestamp, val int64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, pidAttributeValue string) {
-	mb.metricNvmlGpuProcessesMaxBytesUsed.recordDataPoint(mb.startTime, ts, val, modelAttributeValue, gpuNumberAttributeValue, uuidAttributeValue, pidAttributeValue)
+func (mb *MetricsBuilder) RecordNvmlGpuProcessesMaxBytesUsedDataPoint(ts pcommon.Timestamp, val int64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, pidAttributeValue string, processAttributeValue string, commandAttributeValue string, commandLineAttributeValue string, ownerAttributeValue string) {
+	mb.metricNvmlGpuProcessesMaxBytesUsed.recordDataPoint(mb.startTime, ts, val, modelAttributeValue, gpuNumberAttributeValue, uuidAttributeValue, pidAttributeValue, processAttributeValue, commandAttributeValue, commandLineAttributeValue, ownerAttributeValue)
 }
 
 // RecordNvmlGpuUtilizationDataPoint adds a data point to nvml.gpu.utilization metric.

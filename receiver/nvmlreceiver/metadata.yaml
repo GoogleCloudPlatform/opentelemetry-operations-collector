@@ -36,7 +36,7 @@ attributes:
 
   owner:
     type: string
-    description: Process command line, 1024 characters maximum.
+    description: Process owner.
 
 metrics:
   nvml.gpu.utilization:

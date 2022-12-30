@@ -31,7 +31,7 @@ metrics:
 | gpu_number | GPU index starting at 0. |  |
 | memory_state | GPU memory used or free. | used, free |
 | model | GPU model |  |
-| owner | Process command line, 1024 characters maximum. |  |
+| owner | Process owner. |  |
 | pid | Process ID. |  |
 | process | Process name. |  |
 | uuid | GPU universally unique identifier |  |

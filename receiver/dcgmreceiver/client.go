@@ -92,7 +92,9 @@ func newClient(config *Config, logger *zap.Logger) (*dcgmClient, error) {
 func initializeDcgm(config *Config, logger *zap.Logger) (func(), error) {
 	dcgmCleanup, err := dcgmInit(config.TCPAddr.Endpoint, "0")
 	if err != nil {
-		return nil, fmt.Errorf("Unable to connect to DCGM daemon at %s on %w; Is the DCGM daemon running?", config.TCPAddr.Endpoint, err)
+		msg := fmt.Sprintf("Unable to connect to DCGM daemon at %s on %v; Is the DCGM daemon running?", config.TCPAddr.Endpoint, err)
+		logger.Sugar().Warnf("%s", msg)
+		return nil, fmt.Errorf(msg)
 	}
 
 	logger.Sugar().Infof("Connected to DCGM daemon at %s", config.TCPAddr.Endpoint)

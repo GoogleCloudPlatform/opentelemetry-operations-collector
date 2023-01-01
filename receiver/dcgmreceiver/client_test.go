@@ -1,4 +1,4 @@
-// Copyright 2022 Google LLC
+// Copyright 2023 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,9 +19,13 @@ package dcgmreceiver
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
 )
 
@@ -32,7 +36,16 @@ func TestNewDcgmClientOnInitializationError(t *testing.T) {
 		return nil, fmt.Errorf("No DCGM client library *OR* No DCGM connection")
 	}
 
-	client, err := newClient(createDefaultConfig().(*Config), zaptest.NewLogger(t))
-	require.Regexp(t, ".*Unable to connect.*", err)
+	seenDcgmConnectionWarning := false
+	logger := zaptest.NewLogger(t, zaptest.WrapOptions(zap.Hooks(func(e zapcore.Entry) error {
+		if e.Level == zap.WarnLevel && strings.Contains(e.Message, "Unable to connect to DCGM daemon") {
+			seenDcgmConnectionWarning = true
+		}
+		return nil
+	})))
+
+	client, err := newClient(createDefaultConfig().(*Config), logger)
+	assert.Equal(t, seenDcgmConnectionWarning, true)
+	assert.Regexp(t, ".*Unable to connect.*", err)
 	require.Nil(t, client)
 }

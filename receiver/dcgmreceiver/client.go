@@ -1,4 +1,4 @@
-// Copyright 2022 Google LLC
+// Copyright 2023 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -93,8 +93,8 @@ func initializeDcgm(config *Config, logger *zap.Logger) (func(), error) {
 	dcgmCleanup, err := dcgmInit(config.TCPAddr.Endpoint, "0")
 	if err != nil {
 		msg := fmt.Sprintf("Unable to connect to DCGM daemon at %s on %v; Is the DCGM daemon running?", config.TCPAddr.Endpoint, err)
-		logger.Sugar().Warnf("%s", msg)
-		return nil, fmt.Errorf(msg)
+		logger.Sugar().Warn(msg)
+		return nil, fmt.Errorf("%s", msg)
 	}
 
 	logger.Sugar().Infof("Connected to DCGM daemon at %s", config.TCPAddr.Endpoint)

@@ -19,7 +19,7 @@ attributes:
     enum: [used, free]
 
   pid: 
-    type: string
+    type: int
     description: Process ID.
 
   process:

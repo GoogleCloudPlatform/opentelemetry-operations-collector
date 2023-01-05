@@ -19,6 +19,7 @@ package nvmlreceiver
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -39,9 +40,10 @@ type nvmlClient struct {
 	deviceToLastSeenTimestamp      map[nvml.Device]uint64
 	deviceMetricToFailedQueryCount map[string]uint64
 	collectProcessInfo             bool
+	lastProcessInfoCollection      time.Time
 }
 
-type nvmlMetric struct {
+type deviceMetric struct {
 	time     time.Time
 	gpuIndex uint
 	name     string
@@ -52,7 +54,6 @@ type processMetric struct {
 	time                   time.Time
 	gpuIndex               uint
 	processPid             int
-	runningTime            time.Duration
 	lifetimeGpuUtilization uint64
 	lifetimeGpuMaxMemory   uint64
 	processName            string
@@ -108,6 +109,7 @@ func newClient(config *Config, logger *zap.Logger) (*nvmlClient, error) {
 		deviceToLastSeenTimestamp:      make(map[nvml.Device]uint64),
 		deviceMetricToFailedQueryCount: make(map[string]uint64),
 		collectProcessInfo:             collectProcessInfo,
+		lastProcessInfoCollection:      time.Now(),
 	}, nil
 }
 
@@ -222,7 +224,7 @@ func (client *nvmlClient) getDeviceUUID(gpuIndex uint) string {
 	return client.devicesUUID[gpuIndex]
 }
 
-func (client *nvmlClient) collectDeviceMetrics() ([]nvmlMetric, error) {
+func (client *nvmlClient) collectDeviceMetrics() ([]deviceMetric, error) {
 	// not strictly needed since len(client.devices) = 0; but, safer
 	if client.disable {
 		return nil, nil
@@ -233,10 +235,10 @@ func (client *nvmlClient) collectDeviceMetrics() ([]nvmlMetric, error) {
 	return deviceMetrics, nil
 }
 
-func (client *nvmlClient) collectDeviceUtilization() []nvmlMetric {
-	deviceMetrics := make([]nvmlMetric, 0, len(client.devices))
+func (client *nvmlClient) collectDeviceUtilization() []deviceMetric {
+	deviceMetrics := make([]deviceMetric, 0, len(client.devices))
 
-	gpuUtil := nvmlMetric{name: "nvml.gpu.utilization"}
+	gpuUtil := deviceMetric{name: "nvml.gpu.utilization"}
 
 	for gpuIndex, device := range client.devices {
 		mean, err := client.getAverageGpuUtilizationSinceLastQuery(device)
@@ -289,11 +291,11 @@ func (client *nvmlClient) getAverageGpuUtilizationSinceLastQuery(device nvml.Dev
 	return mean, nil
 }
 
-func (client *nvmlClient) collectDeviceMemoryInfo() []nvmlMetric {
-	deviceMetrics := make([]nvmlMetric, 0, 2*len(client.devices))
+func (client *nvmlClient) collectDeviceMemoryInfo() []deviceMetric {
+	deviceMetrics := make([]deviceMetric, 0, 2*len(client.devices))
 
-	gpuMemUsed := nvmlMetric{name: "nvml.gpu.memory.bytes_used"}
-	gpuMemFree := nvmlMetric{name: "nvml.gpu.memory.bytes_free"}
+	gpuMemUsed := deviceMetric{name: "nvml.gpu.memory.bytes_used"}
+	gpuMemFree := deviceMetric{name: "nvml.gpu.memory.bytes_free"}
 
 	for gpuIndex, device := range client.devices {
 		memInfo, ret := nvmlDeviceGetMemoryInfo(device)
@@ -325,6 +327,7 @@ func (client *nvmlClient) collectProcessMetrics() []processMetric {
 	}
 
 	processMetrics := make([]processMetric, 0)
+
 	for gpuIndex, device := range client.devices {
 		pids, ret := nvmlDeviceGetAccountingPids(device)
 		if ret != nvml.SUCCESS {
@@ -343,7 +346,8 @@ func (client *nvmlClient) collectProcessMetrics() []processMetric {
 				continue
 			}
 
-			if stats.IsRunning != 1 {
+			startTime := time.UnixMicro(int64(stats.StartTime))
+			if stats.IsRunning != 1 && startTime.Before(client.lastProcessInfoCollection) {
 				continue
 			}
 
@@ -351,65 +355,57 @@ func (client *nvmlClient) collectProcessMetrics() []processMetric {
 				time:                   time.Now(),
 				processPid:             pid,
 				gpuIndex:               uint(gpuIndex),
-				runningTime:            time.Since(time.UnixMicro(int64(stats.StartTime))),
 				lifetimeGpuUtilization: uint64(stats.GpuUtilization),
 				lifetimeGpuMaxMemory:   stats.MaxMemoryUsage,
 			}
 
-			metric = client.setProcessMetadataLabels(metric)
+			err := metric.setMetadataLabels()
+			if err != nil {
+				metricName := fmt.Sprintf("nvml.processes{pid=%d}.metadata", metric.processPid)
+				client.issueWarningForFailedQueryUptoThreshold(int(metric.gpuIndex), metricName, err.Error())
+			}
+
 			processMetrics = append(processMetrics, metric)
 
-			client.logger.Debugf("Found running pid %d (owner %s command %s) has used Nvidia device %d\n",
+			client.logger.Debugf("Found pid %d (owner %s command %s) has used Nvidia device %d\n",
 				metric.processPid, metric.owner, metric.commandLine, metric.gpuIndex)
 		}
 	}
 
+	client.lastProcessInfoCollection = time.Now()
 	return processMetrics
 }
 
-func (client *nvmlClient) setProcessMetadataLabels(metric processMetric) processMetric {
-	metricName := fmt.Sprintf("nvml.processes{pid=%d}.metadata", metric.processPid)
-
+func (metric *processMetric) setMetadataLabels() error {
 	process, err := process.NewProcess(int32(metric.processPid))
 	if err != nil {
-		msg := fmt.Sprintf("Unable to obtain process handle for pid %d to query for metadata on '%v'", metric.processPid, err)
-		client.issueWarningForFailedQueryUptoThreshold(int(metric.gpuIndex), metricName, msg)
-		return metric
+		return fmt.Errorf("Unable to obtain process handle for pid %d to query for metadata on '%v'", metric.processPid, err)
 	}
 
 	metric.processName, err = process.Name()
 	if err != nil {
-		msg := fmt.Sprintf("Unable to query pid %d process name on '%v'", metric.processPid, err)
-		client.issueWarningForFailedQueryUptoThreshold(int(metric.gpuIndex), metricName, msg)
-		return metric
+		return fmt.Errorf("Unable to query pid %d process name on '%v'", metric.processPid, err)
 	}
 
-	metric.command, err = process.Cmdline()
+	commandLineSlice, err := process.CmdlineSlice()
 	if err != nil {
-		msg := fmt.Sprintf("Unable to query pid %d command on '%v'", metric.processPid, err)
-		client.issueWarningForFailedQueryUptoThreshold(int(metric.gpuIndex), metricName, msg)
-		return metric
+		return fmt.Errorf("Unable to query pid %d command line slice on '%v'", metric.processPid, err)
+	}
+	if len(commandLineSlice) > 0 {
+		metric.command = commandLineSlice[0]
 	}
 
-	metric.commandLine, err = process.Cmdline()
-	if err != nil {
-		msg := fmt.Sprintf("Unable to query pid %d command line on '%v'", metric.processPid, err)
-		client.issueWarningForFailedQueryUptoThreshold(int(metric.gpuIndex), metricName, msg)
-		return metric
-	}
-
+	metric.commandLine = strings.Join(commandLineSlice, " ")
 	if len(metric.commandLine) > 1024 {
 		metric.commandLine = metric.commandLine[:1024]
 	}
 
 	metric.owner, err = process.Username()
 	if err != nil {
-		msg := fmt.Sprintf("Unable to query pid %d username on '%v'", metric.processPid, err)
-		client.issueWarningForFailedQueryUptoThreshold(int(metric.gpuIndex), metricName, msg)
-		return metric
+		return fmt.Errorf("Unable to query pid %d username on '%v'", metric.processPid, err)
 	}
 
-	return metric
+	return nil
 }
 
 func (client *nvmlClient) issueWarningForFailedQueryUptoThreshold(deviceIdx int, metricName string, reason string) {

@@ -23,7 +23,6 @@ import (
 	"github.com/NVIDIA/go-dcgm/pkg/dcgm"
 )
 
-//nolint:golint,unused
 func (m *dcgmMetric) setFloat64(val float64) {
 	*(*float64)(unsafe.Pointer(&m.value[0])) = val
 }
@@ -32,7 +31,6 @@ func (m *dcgmMetric) asFloat64() float64 {
 	return *(*float64)(unsafe.Pointer(&m.value[0]))
 }
 
-//nolint:golint,unused
 func (m *dcgmMetric) setInt64(val int64) {
 	*(*int64)(unsafe.Pointer(&m.value[0])) = val
 }

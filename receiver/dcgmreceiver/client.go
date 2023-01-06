@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/go-dcgm/pkg/dcgm"
+	"go.opentelemetry.io/collector/receiver/scrapererror"
 	"go.uber.org/zap"
 )
 
@@ -222,7 +223,7 @@ func (client *dcgmClient) getDeviceUUID(gpuIndex uint) string {
 }
 
 func (client *dcgmClient) collectDeviceMetrics() ([]dcgmMetric, error) {
-	var err error
+	var err scrapererror.ScrapeErrors
 	gpuMetrics := make([]dcgmMetric, 0, len(client.enabledFieldIDs)*len(client.deviceIndices))
 	for _, gpuIndex := range client.deviceIndices {
 		fieldValues, pollErr := dcgmGetLatestValuesForFields(gpuIndex, client.enabledFieldIDs)
@@ -232,11 +233,11 @@ func (client *dcgmClient) collectDeviceMetrics() ([]dcgmMetric, error) {
 		} else {
 			msg := fmt.Sprintf("Unable to poll DCGM daemon for GPU %d on %s", gpuIndex, pollErr)
 			client.issueWarningForFailedQueryUptoThreshold(gpuIndex, "all-profiling-metrics", msg)
-			err = fmt.Errorf("%s; %w", msg, err)
+			err.AddPartial(1, fmt.Errorf("%s", msg))
 		}
 	}
 
-	return gpuMetrics, err
+	return gpuMetrics, err.Combine()
 }
 
 func (client *dcgmClient) appendMetric(gpuMetrics []dcgmMetric, gpuIndex uint, fieldValues []dcgm.FieldValue_v1) []dcgmMetric {

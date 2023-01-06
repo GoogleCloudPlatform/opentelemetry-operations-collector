@@ -43,7 +43,7 @@ func (m *dcgmMetric) asInt64() int64 {
 
 func isValidValue(fieldValue dcgm.FieldValue_v1) bool {
 	switch fieldValue.FieldType {
-	case 'd':
+	case dcgm.DCGM_FT_DOUBLE:
 		switch v := fieldValue.Float64(); v {
 		case dcgm.DCGM_FT_FP64_BLANK:
 			return false
@@ -55,7 +55,7 @@ func isValidValue(fieldValue dcgm.FieldValue_v1) bool {
 			return false
 		}
 
-	case 'i':
+	case dcgm.DCGM_FT_INT64:
 		switch v := fieldValue.Int64(); v {
 		case dcgm.DCGM_FT_INT32_BLANK:
 			return false

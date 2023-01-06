@@ -31,9 +31,8 @@ const maxWarningsForFailedDeviceMetricQuery = 5
 type dcgmClient struct {
 	logger                         *zap.SugaredLogger
 	handleCleanup                  func()
-	enabledfieldIDs                []dcgm.Short
+	enabledFieldIDs                []dcgm.Short
 	enabledFieldGroup              dcgm.FieldHandle
-	deviceGroup                    dcgm.GroupHandle
 	deviceIndices                  []uint
 	devicesModelName               []string
 	devicesUUID                    []string
@@ -70,8 +69,8 @@ func newClient(config *Config, logger *zap.Logger) (*dcgmClient, error) {
 		return nil, err
 	}
 
-	enabledfieldIDs := discoverEnabledfieldIDs(config)
-	enabledFieldGroup, err := setWatchesOnEnabledFields(config, logger, deviceGroup, enabledfieldIDs)
+	enabledFieldIDs := discoverEnabledFieldIDs(config)
+	enabledFieldGroup, err := setWatchesOnEnabledFields(config, logger, deviceGroup, enabledFieldIDs)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to set field watches on %w", err)
 	}
@@ -79,9 +78,8 @@ func newClient(config *Config, logger *zap.Logger) (*dcgmClient, error) {
 	return &dcgmClient{
 		logger:                         logger.Sugar(),
 		handleCleanup:                  dcgmCleanup,
-		enabledfieldIDs:                enabledfieldIDs,
+		enabledFieldIDs:                enabledFieldIDs,
 		enabledFieldGroup:              enabledFieldGroup,
-		deviceGroup:                    deviceGroup,
 		deviceIndices:                  deviceIndices,
 		devicesModelName:               names,
 		devicesUUID:                    UUIDs,
@@ -90,7 +88,8 @@ func newClient(config *Config, logger *zap.Logger) (*dcgmClient, error) {
 }
 
 func initializeDcgm(config *Config, logger *zap.Logger) (func(), error) {
-	dcgmCleanup, err := dcgmInit(config.TCPAddr.Endpoint, "0")
+	isSocket := "0"
+	dcgmCleanup, err := dcgmInit(config.TCPAddr.Endpoint, isSocket)
 	if err != nil {
 		msg := fmt.Sprintf("Unable to connect to DCGM daemon at %s on %v; Is the DCGM daemon running?", config.TCPAddr.Endpoint, err)
 		logger.Sugar().Warn(msg)
@@ -130,6 +129,7 @@ func createDeviceGroup(logger *zap.Logger, deviceIndices []uint) (dcgm.GroupHand
 	if err != nil {
 		return dcgm.GroupHandle{}, fmt.Errorf("Unable to create DCGM GPU group '%s' on %w", deviceGroupName, err)
 	}
+
 	for _, gpuIndex := range deviceIndices {
 		err = dcgm.AddToGroup(deviceGroup, gpuIndex)
 		if err != nil {
@@ -141,54 +141,54 @@ func createDeviceGroup(logger *zap.Logger, deviceIndices []uint) (dcgm.GroupHand
 	return deviceGroup, nil
 }
 
-func discoverEnabledfieldIDs(config *Config) []dcgm.Short {
-	enabledfieldIDs := []dcgm.Short{}
+func discoverEnabledFieldIDs(config *Config) []dcgm.Short {
+	enabledFieldIDs := []dcgm.Short{}
 	if config.Metrics.DcgmGpuUtilization.Enabled {
-		enabledfieldIDs = append(enabledfieldIDs, dcgm.DCGM_FI["DCGM_FI_DEV_GPU_UTIL"])
+		enabledFieldIDs = append(enabledFieldIDs, dcgm.DCGM_FI["DCGM_FI_DEV_GPU_UTIL"])
 	}
 	if config.Metrics.DcgmGpuMemoryBytesUsed.Enabled {
-		enabledfieldIDs = append(enabledfieldIDs, dcgm.DCGM_FI["DCGM_FI_DEV_FB_USED"])
-		enabledfieldIDs = append(enabledfieldIDs, dcgm.DCGM_FI["DCGM_FI_DEV_FB_FREE"])
+		enabledFieldIDs = append(enabledFieldIDs, dcgm.DCGM_FI["DCGM_FI_DEV_FB_USED"])
+		enabledFieldIDs = append(enabledFieldIDs, dcgm.DCGM_FI["DCGM_FI_DEV_FB_FREE"])
 	}
 	if config.Metrics.DcgmGpuProfilingSmUtilization.Enabled {
-		enabledfieldIDs = append(enabledfieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_SM_ACTIVE"])
+		enabledFieldIDs = append(enabledFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_SM_ACTIVE"])
 	}
 	if config.Metrics.DcgmGpuProfilingSmOccupancy.Enabled {
-		enabledfieldIDs = append(enabledfieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_SM_OCCUPANCY"])
+		enabledFieldIDs = append(enabledFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_SM_OCCUPANCY"])
 	}
 	if config.Metrics.DcgmGpuProfilingPipeUtilization.Enabled {
-		enabledfieldIDs = append(enabledfieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_PIPE_TENSOR_ACTIVE"])
-		enabledfieldIDs = append(enabledfieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_PIPE_FP64_ACTIVE"])
-		enabledfieldIDs = append(enabledfieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_PIPE_FP32_ACTIVE"])
-		enabledfieldIDs = append(enabledfieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_PIPE_FP16_ACTIVE"])
+		enabledFieldIDs = append(enabledFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_PIPE_TENSOR_ACTIVE"])
+		enabledFieldIDs = append(enabledFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_PIPE_FP64_ACTIVE"])
+		enabledFieldIDs = append(enabledFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_PIPE_FP32_ACTIVE"])
+		enabledFieldIDs = append(enabledFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_PIPE_FP16_ACTIVE"])
 	}
 	if config.Metrics.DcgmGpuProfilingDramUtilization.Enabled {
-		enabledfieldIDs = append(enabledfieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_DRAM_ACTIVE"])
+		enabledFieldIDs = append(enabledFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_DRAM_ACTIVE"])
 	}
 	if config.Metrics.DcgmGpuProfilingPcieTrafficRate.Enabled {
-		enabledfieldIDs = append(enabledfieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_PCIE_TX_BYTES"])
-		enabledfieldIDs = append(enabledfieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_PCIE_RX_BYTES"])
+		enabledFieldIDs = append(enabledFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_PCIE_TX_BYTES"])
+		enabledFieldIDs = append(enabledFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_PCIE_RX_BYTES"])
 	}
 	if config.Metrics.DcgmGpuProfilingNvlinkTrafficRate.Enabled {
-		enabledfieldIDs = append(enabledfieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_NVLINK_TX_BYTES"])
-		enabledfieldIDs = append(enabledfieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_NVLINK_RX_BYTES"])
+		enabledFieldIDs = append(enabledFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_NVLINK_TX_BYTES"])
+		enabledFieldIDs = append(enabledFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_NVLINK_RX_BYTES"])
 	}
 
-	return enabledfieldIDs
+	return enabledFieldIDs
 }
 
-func setWatchesOnEnabledFields(config *Config, logger *zap.Logger, deviceGroup dcgm.GroupHandle, enabledfieldIDs []dcgm.Short) (dcgm.FieldHandle, error) {
+func setWatchesOnEnabledFields(config *Config, logger *zap.Logger, deviceGroup dcgm.GroupHandle, enabledFieldIDs []dcgm.Short) (dcgm.FieldHandle, error) {
 	var err error
 
 	// Note: Add random suffix to avoid conflict amongnst any parallel collectors
 	fieldGroupName := fmt.Sprintf("google-cloud-ops-agent-metrics-%d", rand.Intn(10000))
-	enabledFieldGroup, err := dcgm.FieldGroupCreate(fieldGroupName, enabledfieldIDs)
+	enabledFieldGroup, err := dcgm.FieldGroupCreate(fieldGroupName, enabledFieldIDs)
 	if err != nil {
 		return dcgm.FieldHandle{}, fmt.Errorf("Unable to create DCGM field group '%s'", fieldGroupName)
 	}
 
 	msg := fmt.Sprintf("Created DCGM field group '%s' with field ids: ", fieldGroupName)
-	for _, fieldID := range enabledfieldIDs {
+	for _, fieldID := range enabledFieldIDs {
 		msg += fmt.Sprintf("%d ", fieldID)
 	}
 	logger.Sugar().Info(msg)
@@ -223,14 +223,14 @@ func (client *dcgmClient) getDeviceUUID(gpuIndex uint) string {
 
 func (client *dcgmClient) collectDeviceMetrics() ([]dcgmMetric, error) {
 	var err error
-	gpuMetrics := make([]dcgmMetric, 0, len(client.enabledfieldIDs))
+	gpuMetrics := make([]dcgmMetric, 0, len(client.enabledFieldIDs)*len(client.deviceIndices))
 	for _, gpuIndex := range client.deviceIndices {
-		fieldValues, pollerr := dcgmGetLatestValuesForFields(gpuIndex, client.enabledfieldIDs)
-		if pollerr == nil {
+		fieldValues, pollErr := dcgmGetLatestValuesForFields(gpuIndex, client.enabledFieldIDs)
+		if pollErr == nil {
 			gpuMetrics = client.appendMetric(gpuMetrics, gpuIndex, fieldValues)
 			client.logger.Debugf("Successful poll of DCGM daemon for GPU %d", gpuIndex)
 		} else {
-			msg := fmt.Sprintf("Unable to poll DCGM daemon for GPU %d on %s", gpuIndex, pollerr)
+			msg := fmt.Sprintf("Unable to poll DCGM daemon for GPU %d on %s", gpuIndex, pollErr)
 			client.issueWarningForFailedQueryUptoThreshold(gpuIndex, "all-profiling-metrics", msg)
 			err = fmt.Errorf("%s; %w", msg, err)
 		}
@@ -249,9 +249,9 @@ func (client *dcgmClient) appendMetric(gpuMetrics []dcgmMetric, gpuIndex uint, f
 		}
 
 		switch fieldValue.FieldType {
-		case 'd':
+		case dcgm.DCGM_FT_DOUBLE:
 			client.logger.Debugf("Discovered (ts %d gpu %d) %s = %.3f (f64)", fieldValue.Ts, gpuIndex, metricName, fieldValue.Float64())
-		case 'i':
+		case dcgm.DCGM_FT_INT64:
 			client.logger.Debugf("Discovered (ts %d gpu %d) %s = %d (i64)", fieldValue.Ts, gpuIndex, metricName, fieldValue.Int64())
 		}
 		gpuMetrics = append(gpuMetrics, dcgmMetric{fieldValue.Ts, gpuIndex, metricName, fieldValue.Value})

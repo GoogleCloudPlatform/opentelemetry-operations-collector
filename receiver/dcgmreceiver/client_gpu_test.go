@@ -20,6 +20,7 @@
 package dcgmreceiver
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -39,7 +40,7 @@ func TestNewDcgmClientWithGpuPresent(t *testing.T) {
 		assert.Greater(t, len(client.devicesModelName[gpuIndex]), 0)
 		assert.Greater(t, len(client.devicesUUID[gpuIndex]), 0)
 	}
-	assert.Equal(t, len(client.enabledfieldIDs), len(dcgmNameToMetricName))
+	assert.Equal(t, len(client.enabledFieldIDs), len(dcgmNameToMetricName))
 }
 
 func TestCollectGpuProfilingMetrics(t *testing.T) {
@@ -115,10 +116,12 @@ func TestCollectGpuProfilingMetrics(t *testing.T) {
 		assert.GreaterOrEqual(t, metric.timestamp, before)
 		assert.LessOrEqual(t, metric.timestamp, after)
 
-		seenMetric[metric.name] = true
+		seenMetric[fmt.Sprintf("gpu{%d}.metric{%s}", metric.gpuIndex, metric.name)] = true
 	}
 
-	for _, metric := range expectedMetrics {
-		assert.Equal(t, seenMetric[metric], true)
+	for _, gpuIndex := range client.deviceIndices {
+		for _, metric := range expectedMetrics {
+			assert.Equal(t, seenMetric[fmt.Sprintf("gpu{%d}.metric{%s}", gpuIndex, metric)], true)
+		}
 	}
 }

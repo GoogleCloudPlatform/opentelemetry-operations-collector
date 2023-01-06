@@ -76,10 +76,6 @@ func TestCollectGpuProfilingMetrics(t *testing.T) {
 		assert.LessOrEqual(t, metric.gpuIndex, uint(32))
 
 		switch metric.name {
-		case "dcgm.gpu.profiling.sm_utilization":
-			fallthrough
-		case "dcgm.gpu.profiling.sm_occupancy":
-			fallthrough
 		case "dcgm.gpu.profiling.tensor_utilization":
 			fallthrough
 		case "dcgm.gpu.profiling.dram_utilization":
@@ -90,9 +86,14 @@ func TestCollectGpuProfilingMetrics(t *testing.T) {
 			fallthrough
 		case "dcgm.gpu.profiling.fp16_utilization":
 			fallthrough
-		case "dcgm.gpu.utilization":
+		case "dcgm.gpu.profiling.sm_occupancy":
+			fallthrough
+		case "dcgm.gpu.profiling.sm_utilization":
 			assert.GreaterOrEqual(t, metric.asFloat64(), float64(0.0))
 			assert.LessOrEqual(t, metric.asFloat64(), float64(1.0))
+		case "dcgm.gpu.utilization":
+			assert.GreaterOrEqual(t, metric.asInt64(), int64(0))
+			assert.LessOrEqual(t, metric.asInt64(), int64(100))
 		case "dcgm.gpu.memory.bytes_free":
 			fallthrough
 		case "dcgm.gpu.memory.bytes_used":

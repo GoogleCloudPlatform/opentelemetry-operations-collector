@@ -72,6 +72,21 @@ func isValidValue(fieldValue dcgm.FieldValue_v1) bool {
 		case dcgm.DCGM_FT_INT64_NOT_PERMISSIONED:
 			return false
 		}
+
+	case dcgm.DCGM_FT_STRING:
+		switch v := fieldValue.String(); v {
+		case dcgm.DCGM_FT_STR_BLANK:
+			return false
+		case dcgm.DCGM_FT_STR_NOT_FOUND:
+			return false
+		case dcgm.DCGM_FT_STR_NOT_SUPPORTED:
+			return false
+		case dcgm.DCGM_FT_STR_NOT_PERMISSIONED:
+			return false
+		}
+
+	default:
+		return false
 	}
 
 	return true

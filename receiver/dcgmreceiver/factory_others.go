@@ -76,11 +76,7 @@ func createMetricsReceiver(
 		return nil, fmt.Errorf("Unable to cast receiver configuration to dcgm.Config")
 	}
 
-	ns, err := newDcgmScraper(cfg, params)
-	if err != nil {
-		return nil, err
-	}
-
+	ns := newDcgmScraper(cfg, params)
 	scraper, err := scraperhelper.NewScraper(
 		typeStr,
 		ns.scrape,

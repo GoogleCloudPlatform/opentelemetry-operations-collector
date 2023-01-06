@@ -37,11 +37,10 @@ func TestScrapeWithGpuPresent(t *testing.T) {
 	settings := componenttest.NewNopReceiverCreateSettings()
 	settings.Logger = zaptest.NewLogger(t)
 
-	scraper, err := newDcgmScraper(createDefaultConfig().(*Config), settings)
+	scraper := newDcgmScraper(createDefaultConfig().(*Config), settings)
 	require.NotNil(t, scraper)
-	require.NoError(t, err)
 
-	err = scraper.start(context.Background(), componenttest.NewNopHost())
+	err := scraper.start(context.Background(), componenttest.NewNopHost())
 	require.NoError(t, err)
 
 	metrics, err := scraper.scrape(context.Background())
@@ -58,11 +57,10 @@ func TestScrapeOnPollingError(t *testing.T) {
 	settings := componenttest.NewNopReceiverCreateSettings()
 	settings.Logger = zaptest.NewLogger(t)
 
-	scraper, err := newDcgmScraper(createDefaultConfig().(*Config), settings)
+	scraper := newDcgmScraper(createDefaultConfig().(*Config), settings)
 	require.NotNil(t, scraper)
-	require.NoError(t, err)
 
-	err = scraper.start(context.Background(), componenttest.NewNopHost())
+	err := scraper.start(context.Background(), componenttest.NewNopHost())
 	require.NoError(t, err)
 
 	metrics, err := scraper.scrape(context.Background())
@@ -78,15 +76,14 @@ func TestScrapeOnProfilingPaused(t *testing.T) {
 	settings := componenttest.NewNopReceiverCreateSettings()
 	settings.Logger = zaptest.NewLogger(t)
 
-	scraper, err := newDcgmScraper(config, settings)
+	scraper := newDcgmScraper(config, settings)
 	require.NotNil(t, scraper)
-	require.NoError(t, err)
 
 	defer func() { testprofilepause.ResumeProfilingMetrics() }()
 	testprofilepause.PauseProfilingMetrics()
 	time.Sleep(20 * time.Millisecond)
 
-	err = scraper.start(context.Background(), componenttest.NewNopHost())
+	err := scraper.start(context.Background(), componenttest.NewNopHost())
 	require.NoError(t, err)
 
 	metrics, err := scraper.scrape(context.Background())

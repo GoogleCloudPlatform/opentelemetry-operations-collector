@@ -55,7 +55,7 @@ metrics:
       value_type: int
     attributes: [model, gpu_number, uuid, memory_state]
 
-  nvml.gpu.processes.lifetime_utilization:
+  nvml.gpu.processes.utilization:
     enabled: true
     description: Fraction of time over the process's life thus far during which one or more kernels was executing on the GPU.
     unit: 1

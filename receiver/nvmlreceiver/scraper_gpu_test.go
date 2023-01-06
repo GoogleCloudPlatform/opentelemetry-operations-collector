@@ -96,7 +96,7 @@ func TestScrapeWithGpuProcessAccounting(t *testing.T) {
 	validateScraperResult(t, metrics, []string{
 		"nvml.gpu.utilization",
 		"nvml.gpu.memory.bytes_used",
-		"nvml.gpu.processes.lifetime_utilization",
+		"nvml.gpu.processes.utilization",
 		"nvml.gpu.processes.max_bytes_used",
 	})
 }
@@ -155,10 +155,10 @@ func TestScrapeEmitsWarningsUptoThreshold(t *testing.T) {
 
 func validateScraperResult(t *testing.T, metrics pmetric.Metrics, expectedMetrics []string) {
 	expectedMetricToDataPointCount := map[string]int{
-		"nvml.gpu.utilization":                    1,
-		"nvml.gpu.memory.bytes_used":              2,
-		"nvml.gpu.processes.lifetime_utilization": 1,
-		"nvml.gpu.processes.max_bytes_used":       1,
+		"nvml.gpu.utilization":              1,
+		"nvml.gpu.memory.bytes_used":        2,
+		"nvml.gpu.processes.utilization":    1,
+		"nvml.gpu.processes.max_bytes_used": 1,
 	}
 
 	metricWasSeen := make(map[string]bool)
@@ -192,7 +192,7 @@ func validateScraperResult(t *testing.T, metrics pmetric.Metrics, expectedMetric
 			for j := 0; j < dps.Len(); j++ {
 				assert.Regexp(t, ".*memory_state:.*", dps.At(j).Attributes().AsRaw())
 			}
-		case "nvml.gpu.processes.lifetime_utilization":
+		case "nvml.gpu.processes.utilization":
 			fallthrough
 		case "nvml.gpu.processes.max_bytes_used":
 			assert.GreaterOrEqual(t, dps.Len(), expectedMetricToDataPointCount[m.Name()])

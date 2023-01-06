@@ -21,11 +21,11 @@ func TestDefaultMetrics(t *testing.T) {
 	enabledMetrics["nvml.gpu.memory.bytes_used"] = true
 	mb.RecordNvmlGpuMemoryBytesUsedDataPoint(ts, 1, "attr-val", "attr-val", "attr-val", AttributeMemoryState(1))
 
-	enabledMetrics["nvml.gpu.processes.lifetime_utilization"] = true
-	mb.RecordNvmlGpuProcessesLifetimeUtilizationDataPoint(ts, 1, "attr-val", "attr-val", "attr-val", 1, "attr-val", "attr-val", "attr-val", "attr-val")
-
 	enabledMetrics["nvml.gpu.processes.max_bytes_used"] = true
 	mb.RecordNvmlGpuProcessesMaxBytesUsedDataPoint(ts, 1, "attr-val", "attr-val", "attr-val", 1, "attr-val", "attr-val", "attr-val", "attr-val")
+
+	enabledMetrics["nvml.gpu.processes.utilization"] = true
+	mb.RecordNvmlGpuProcessesUtilizationDataPoint(ts, 1, "attr-val", "attr-val", "attr-val", 1, "attr-val", "attr-val", "attr-val", "attr-val")
 
 	enabledMetrics["nvml.gpu.utilization"] = true
 	mb.RecordNvmlGpuUtilizationDataPoint(ts, 1, "attr-val", "attr-val", "attr-val")
@@ -49,16 +49,16 @@ func TestAllMetrics(t *testing.T) {
 	start := pcommon.Timestamp(1_000_000_000)
 	ts := pcommon.Timestamp(1_000_001_000)
 	settings := MetricsSettings{
-		NvmlGpuMemoryBytesUsed:              MetricSettings{Enabled: true},
-		NvmlGpuProcessesLifetimeUtilization: MetricSettings{Enabled: true},
-		NvmlGpuProcessesMaxBytesUsed:        MetricSettings{Enabled: true},
-		NvmlGpuUtilization:                  MetricSettings{Enabled: true},
+		NvmlGpuMemoryBytesUsed:       MetricSettings{Enabled: true},
+		NvmlGpuProcessesMaxBytesUsed: MetricSettings{Enabled: true},
+		NvmlGpuProcessesUtilization:  MetricSettings{Enabled: true},
+		NvmlGpuUtilization:           MetricSettings{Enabled: true},
 	}
 	mb := NewMetricsBuilder(settings, component.BuildInfo{}, WithStartTime(start))
 
 	mb.RecordNvmlGpuMemoryBytesUsedDataPoint(ts, 1, "attr-val", "attr-val", "attr-val", AttributeMemoryState(1))
-	mb.RecordNvmlGpuProcessesLifetimeUtilizationDataPoint(ts, 1, "attr-val", "attr-val", "attr-val", 1, "attr-val", "attr-val", "attr-val", "attr-val")
 	mb.RecordNvmlGpuProcessesMaxBytesUsedDataPoint(ts, 1, "attr-val", "attr-val", "attr-val", 1, "attr-val", "attr-val", "attr-val", "attr-val")
+	mb.RecordNvmlGpuProcessesUtilizationDataPoint(ts, 1, "attr-val", "attr-val", "attr-val", 1, "attr-val", "attr-val", "attr-val", "attr-val")
 	mb.RecordNvmlGpuUtilizationDataPoint(ts, 1, "attr-val", "attr-val", "attr-val")
 
 	metrics := mb.Emit()
@@ -98,41 +98,6 @@ func TestAllMetrics(t *testing.T) {
 			assert.True(t, ok)
 			assert.Equal(t, AttributeMemoryState(1).String(), attrVal.Str())
 			validatedMetrics["nvml.gpu.memory.bytes_used"] = struct{}{}
-		case "nvml.gpu.processes.lifetime_utilization":
-			assert.Equal(t, pmetric.MetricTypeGauge, ms.At(i).Type())
-			assert.Equal(t, 1, ms.At(i).Gauge().DataPoints().Len())
-			assert.Equal(t, "Fraction of time over the process's life thus far during which one or more kernels was executing on the GPU.", ms.At(i).Description())
-			assert.Equal(t, "1", ms.At(i).Unit())
-			dp := ms.At(i).Gauge().DataPoints().At(0)
-			assert.Equal(t, start, dp.StartTimestamp())
-			assert.Equal(t, ts, dp.Timestamp())
-			assert.Equal(t, pmetric.NumberDataPointValueTypeDouble, dp.ValueType())
-			assert.Equal(t, float64(1), dp.DoubleValue())
-			attrVal, ok := dp.Attributes().Get("model")
-			assert.True(t, ok)
-			assert.EqualValues(t, "attr-val", attrVal.Str())
-			attrVal, ok = dp.Attributes().Get("gpu_number")
-			assert.True(t, ok)
-			assert.EqualValues(t, "attr-val", attrVal.Str())
-			attrVal, ok = dp.Attributes().Get("uuid")
-			assert.True(t, ok)
-			assert.EqualValues(t, "attr-val", attrVal.Str())
-			attrVal, ok = dp.Attributes().Get("pid")
-			assert.True(t, ok)
-			assert.EqualValues(t, 1, attrVal.Int())
-			attrVal, ok = dp.Attributes().Get("process")
-			assert.True(t, ok)
-			assert.EqualValues(t, "attr-val", attrVal.Str())
-			attrVal, ok = dp.Attributes().Get("command")
-			assert.True(t, ok)
-			assert.EqualValues(t, "attr-val", attrVal.Str())
-			attrVal, ok = dp.Attributes().Get("command_line")
-			assert.True(t, ok)
-			assert.EqualValues(t, "attr-val", attrVal.Str())
-			attrVal, ok = dp.Attributes().Get("owner")
-			assert.True(t, ok)
-			assert.EqualValues(t, "attr-val", attrVal.Str())
-			validatedMetrics["nvml.gpu.processes.lifetime_utilization"] = struct{}{}
 		case "nvml.gpu.processes.max_bytes_used":
 			assert.Equal(t, pmetric.MetricTypeGauge, ms.At(i).Type())
 			assert.Equal(t, 1, ms.At(i).Gauge().DataPoints().Len())
@@ -168,6 +133,41 @@ func TestAllMetrics(t *testing.T) {
 			assert.True(t, ok)
 			assert.EqualValues(t, "attr-val", attrVal.Str())
 			validatedMetrics["nvml.gpu.processes.max_bytes_used"] = struct{}{}
+		case "nvml.gpu.processes.utilization":
+			assert.Equal(t, pmetric.MetricTypeGauge, ms.At(i).Type())
+			assert.Equal(t, 1, ms.At(i).Gauge().DataPoints().Len())
+			assert.Equal(t, "Fraction of time over the process's life thus far during which one or more kernels was executing on the GPU.", ms.At(i).Description())
+			assert.Equal(t, "1", ms.At(i).Unit())
+			dp := ms.At(i).Gauge().DataPoints().At(0)
+			assert.Equal(t, start, dp.StartTimestamp())
+			assert.Equal(t, ts, dp.Timestamp())
+			assert.Equal(t, pmetric.NumberDataPointValueTypeDouble, dp.ValueType())
+			assert.Equal(t, float64(1), dp.DoubleValue())
+			attrVal, ok := dp.Attributes().Get("model")
+			assert.True(t, ok)
+			assert.EqualValues(t, "attr-val", attrVal.Str())
+			attrVal, ok = dp.Attributes().Get("gpu_number")
+			assert.True(t, ok)
+			assert.EqualValues(t, "attr-val", attrVal.Str())
+			attrVal, ok = dp.Attributes().Get("uuid")
+			assert.True(t, ok)
+			assert.EqualValues(t, "attr-val", attrVal.Str())
+			attrVal, ok = dp.Attributes().Get("pid")
+			assert.True(t, ok)
+			assert.EqualValues(t, 1, attrVal.Int())
+			attrVal, ok = dp.Attributes().Get("process")
+			assert.True(t, ok)
+			assert.EqualValues(t, "attr-val", attrVal.Str())
+			attrVal, ok = dp.Attributes().Get("command")
+			assert.True(t, ok)
+			assert.EqualValues(t, "attr-val", attrVal.Str())
+			attrVal, ok = dp.Attributes().Get("command_line")
+			assert.True(t, ok)
+			assert.EqualValues(t, "attr-val", attrVal.Str())
+			attrVal, ok = dp.Attributes().Get("owner")
+			assert.True(t, ok)
+			assert.EqualValues(t, "attr-val", attrVal.Str())
+			validatedMetrics["nvml.gpu.processes.utilization"] = struct{}{}
 		case "nvml.gpu.utilization":
 			assert.Equal(t, pmetric.MetricTypeGauge, ms.At(i).Type())
 			assert.Equal(t, 1, ms.At(i).Gauge().DataPoints().Len())
@@ -197,15 +197,15 @@ func TestNoMetrics(t *testing.T) {
 	start := pcommon.Timestamp(1_000_000_000)
 	ts := pcommon.Timestamp(1_000_001_000)
 	settings := MetricsSettings{
-		NvmlGpuMemoryBytesUsed:              MetricSettings{Enabled: false},
-		NvmlGpuProcessesLifetimeUtilization: MetricSettings{Enabled: false},
-		NvmlGpuProcessesMaxBytesUsed:        MetricSettings{Enabled: false},
-		NvmlGpuUtilization:                  MetricSettings{Enabled: false},
+		NvmlGpuMemoryBytesUsed:       MetricSettings{Enabled: false},
+		NvmlGpuProcessesMaxBytesUsed: MetricSettings{Enabled: false},
+		NvmlGpuProcessesUtilization:  MetricSettings{Enabled: false},
+		NvmlGpuUtilization:           MetricSettings{Enabled: false},
 	}
 	mb := NewMetricsBuilder(settings, component.BuildInfo{}, WithStartTime(start))
 	mb.RecordNvmlGpuMemoryBytesUsedDataPoint(ts, 1, "attr-val", "attr-val", "attr-val", AttributeMemoryState(1))
-	mb.RecordNvmlGpuProcessesLifetimeUtilizationDataPoint(ts, 1, "attr-val", "attr-val", "attr-val", 1, "attr-val", "attr-val", "attr-val", "attr-val")
 	mb.RecordNvmlGpuProcessesMaxBytesUsedDataPoint(ts, 1, "attr-val", "attr-val", "attr-val", 1, "attr-val", "attr-val", "attr-val", "attr-val")
+	mb.RecordNvmlGpuProcessesUtilizationDataPoint(ts, 1, "attr-val", "attr-val", "attr-val", 1, "attr-val", "attr-val", "attr-val", "attr-val")
 	mb.RecordNvmlGpuUtilizationDataPoint(ts, 1, "attr-val", "attr-val", "attr-val")
 
 	metrics := mb.Emit()

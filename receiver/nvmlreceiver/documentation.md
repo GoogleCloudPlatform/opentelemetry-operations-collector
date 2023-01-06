@@ -9,8 +9,8 @@ These are the metrics available for this scraper.
 | Name | Description | Unit | Type | Attributes |
 | ---- | ----------- | ---- | ---- | ---------- |
 | **nvml.gpu.memory.bytes_used** | Current number of GPU memory bytes used by state. Summing the values of all states yields the total GPU memory space. | By | Gauge(Int) | <ul> <li>model</li> <li>gpu_number</li> <li>uuid</li> <li>memory_state</li> </ul> |
-| **nvml.gpu.processes.lifetime_utilization** | Fraction of time over the process's life thus far during which one or more kernels was executing on the GPU. | 1 | Gauge(Double) | <ul> <li>model</li> <li>gpu_number</li> <li>uuid</li> <li>pid</li> <li>process</li> <li>command</li> <li>command_line</li> <li>owner</li> </ul> |
 | **nvml.gpu.processes.max_bytes_used** | Maximum total GPU memory in bytes that was ever allocated by the process. | By | Gauge(Int) | <ul> <li>model</li> <li>gpu_number</li> <li>uuid</li> <li>pid</li> <li>process</li> <li>command</li> <li>command_line</li> <li>owner</li> </ul> |
+| **nvml.gpu.processes.utilization** | Fraction of time over the process's life thus far during which one or more kernels was executing on the GPU. | 1 | Gauge(Double) | <ul> <li>model</li> <li>gpu_number</li> <li>uuid</li> <li>pid</li> <li>process</li> <li>command</li> <li>command_line</li> <li>owner</li> </ul> |
 | **nvml.gpu.utilization** | Fraction of time GPU was not idle since the last sample. | 1 | Gauge(Double) | <ul> <li>model</li> <li>gpu_number</li> <li>uuid</li> </ul> |
 
 **Highlighted metrics** are emitted by default. Other metrics are optional and not emitted by default.

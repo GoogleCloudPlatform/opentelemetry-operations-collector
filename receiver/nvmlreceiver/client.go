@@ -89,8 +89,7 @@ func newClient(config *Config, logger *zap.Logger) (*nvmlClient, error) {
 		return nil, err
 	}
 
-	collectProcessInfo := config.Metrics.NvmlGpuProcessesUtilization.Enabled ||
-		config.Metrics.NvmlGpuProcessesMaxBytesUsed.Enabled
+	collectProcessInfo := config.Metrics.NvmlGpuProcessesUtilization.Enabled || config.Metrics.NvmlGpuProcessesMaxBytesUsed.Enabled
 	if collectProcessInfo {
 		err = enableProcessAccountingMode(logger, devices)
 		if err != nil {
@@ -155,48 +154,65 @@ func discoverDevices(logger *zap.Logger) ([]nvml.Device, []string, []string, err
 		return nil, nil, nil, fmt.Errorf("Unable to get Nvidia device count on '%v'", nvml.ErrorString(ret))
 	}
 
-	devices := make([]nvml.Device, count)
-	names := make([]string, count)
-	UUIDs := make([]string, count)
+	devices := make([]nvml.Device, 0, count)
+	names := make([]string, 0, count)
+	UUIDs := make([]string, 0, count)
 	for i := 0; i < count; i++ {
-		devices[i], ret = nvml.DeviceGetHandleByIndex(i)
+		device, ret := nvml.DeviceGetHandleByIndex(i)
 		if ret != nvml.SUCCESS {
-			return nil, nil, nil, fmt.Errorf("Unable to get Nvidia device at index %d on '%v'", i, nvml.ErrorString(ret))
+			logger.Sugar().Warnf("Unable to get Nvidia device at index %d on '%v'; ignoring device.", i, nvml.ErrorString(ret))
+			continue
 		}
 
-		UUIDs[i], ret = devices[i].GetUUID()
+		UUID, ret := device.GetUUID()
 		if ret != nvml.SUCCESS {
-			return nil, nil, nil, fmt.Errorf("Unable to get UUID of Nvidia device %d on '%v'", i, nvml.ErrorString(ret))
+			logger.Sugar().Warnf("Unable to get UUID of Nvidia device %d on '%v'; ignoring device.", i, nvml.ErrorString(ret))
+			continue
 		}
 
-		names[i], ret = devices[i].GetName()
+		name, ret := device.GetName()
 		if ret != nvml.SUCCESS {
-			return nil, nil, nil, fmt.Errorf("Unable to get name of Nvidia device %d on '%v'", i, nvml.ErrorString(ret))
+			logger.Sugar().Warnf("Unable to get name of Nvidia device %d on '%v'; ignoring device.", i, nvml.ErrorString(ret))
+			continue
 		}
 
-		logger.Sugar().Infof("Discovered Nvidia device %d of model %s with UUID %s", i, names[i], UUIDs[i])
+		devices = append(devices, device)
+		UUIDs = append(UUIDs, UUID)
+		names = append(names, name)
+		logger.Sugar().Infof("Discovered Nvidia device %d of model %s with UUID %s.", i, name, UUID)
 
 		currMode, _, ret := devices[i].GetMigMode()
 		if ret != nvml.SUCCESS {
-			logger.Sugar().Warnf("Unable to query MIG mode for Nvidia device %d", i)
+			logger.Sugar().Warnf("Unable to query MIG mode for Nvidia device %d.", i)
 			continue
 		}
 		if currMode == nvml.DEVICE_MIG_ENABLE {
-			logger.Sugar().Warnf("Nvidia device %d has MIG enabled. GPU utilization queries may not be supported", i)
+			logger.Sugar().Warnf("Nvidia device %d has MIG enabled. GPU utilization queries may not be supported.", i)
 		}
+	}
+
+	if len(devices) == 0 {
+		return nil, nil, nil, fmt.Errorf("No supported NVIDIA devices found")
 	}
 
 	return devices, names, UUIDs, nil
 }
 
 func enableProcessAccountingMode(logger *zap.Logger, devices []nvml.Device) error {
+	enabledCount := 0
 	for gpuIndex, device := range devices {
 		ret := nvmlDeviceSetAccountingMode(device, nvml.FEATURE_ENABLED)
 		if ret != nvml.SUCCESS {
-			return fmt.Errorf("Unable to set process accounting mode for Nvidia device %d on '%s'", gpuIndex, nvml.ErrorString(ret))
+			logger.Sugar().Warnf("Unable to set process accounting mode for Nvidia device %d on '%s'.", gpuIndex, nvml.ErrorString(ret))
+			continue
 		}
 
-		logger.Sugar().Infof("Successfully enabled process accounting mode for Nvidia device %d", gpuIndex)
+		logger.Sugar().Infof("Successfully enabled process accounting mode for Nvidia device %d.", gpuIndex)
+		enabledCount += 1
+	}
+
+	if enabledCount == 0 {
+		return fmt.Errorf("Unable to enable process accounting mode for any discovered NVIDIA devices")
 	}
 
 	return nil

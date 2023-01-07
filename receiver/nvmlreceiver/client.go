@@ -208,7 +208,7 @@ func enableProcessAccountingMode(logger *zap.Logger, devices []nvml.Device) erro
 		}
 
 		logger.Sugar().Infof("Successfully enabled process accounting mode for Nvidia device %d.", gpuIndex)
-		enabledCount += 1
+		enabledCount++
 	}
 
 	if enabledCount == 0 {

@@ -132,6 +132,7 @@ func initializeNvml(logger *zap.Logger) (nvmlCleanup func() error, err error) {
 		return
 	}
 	logger.Sugar().Infof("Successfully initialized Nvidia Management Library")
+	printNvmlAndDriverVersion(logger)
 
 	nvmlCleanup = func() error {
 		ret := nvml.Shutdown()
@@ -146,6 +147,20 @@ func initializeNvml(logger *zap.Logger) (nvmlCleanup func() error, err error) {
 
 	err = nil
 	return
+}
+
+func printNvmlAndDriverVersion(logger *zap.Logger) {
+	nvmlVersion, ret := nvml.SystemGetNVMLVersion()
+	if ret != nvml.SUCCESS {
+		logger.Sugar().Warnf("Unable to determine Nvidia Management library version on '%v'", nvml.ErrorString(ret))
+	}
+	logger.Sugar().Infof("Nvidia Management library version is %s", nvmlVersion)
+
+	driverVersion, ret := nvml.SystemGetDriverVersion()
+	if ret != nvml.SUCCESS {
+		logger.Sugar().Warnf("Unable to determine NVIDIA driver version on '%v'", nvml.ErrorString(ret))
+	}
+	logger.Sugar().Infof("CUDA library version is %s", driverVersion)
 }
 
 func discoverDevices(logger *zap.Logger) ([]nvml.Device, []string, []string, error) {

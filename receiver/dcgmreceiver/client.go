@@ -108,20 +108,23 @@ func discoverDevices(logger *zap.Logger) ([]uint, []string, []string, error) {
 	}
 	logger.Sugar().Infof("Discovered %d supported GPU devices", len(supportedDeviceIndices))
 
-	names := make([]string, len(supportedDeviceIndices))
-	UUIDs := make([]string, len(supportedDeviceIndices))
+	devices := make([]uint, 0, len(supportedDeviceIndices))
+	names := make([]string, 0, len(supportedDeviceIndices))
+	UUIDs := make([]string, 0, len(supportedDeviceIndices))
 	for _, gpuIndex := range supportedDeviceIndices {
 		deviceInfo, err := dcgm.GetDeviceInfo(gpuIndex)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("Unable to query device info for NVIDIA device %d on '%w'", gpuIndex, err)
+			logger.Sugar().Warnf("Unable to query device info for NVIDIA device %d on '%w'", gpuIndex, err)
+			continue
 		}
 
-		names[gpuIndex] = deviceInfo.Identifiers.Model
-		UUIDs[gpuIndex] = deviceInfo.UUID
+		devices = append(devices, gpuIndex)
+		names = append(names, deviceInfo.Identifiers.Model)
+		UUIDs = append(UUIDs, deviceInfo.UUID)
 		logger.Sugar().Infof("Discovered NVIDIA device %s with UUID %s", names[gpuIndex], UUIDs[gpuIndex])
 	}
 
-	return supportedDeviceIndices, names, UUIDs, nil
+	return devices, names, UUIDs, nil
 }
 
 func createDeviceGroup(logger *zap.Logger, deviceIndices []uint) (dcgm.GroupHandle, error) {

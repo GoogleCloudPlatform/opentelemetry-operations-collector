@@ -91,9 +91,9 @@ func newClient(config *Config, logger *zap.Logger) (*nvmlClient, error) {
 
 	collectProcessInfo := config.Metrics.NvmlGpuProcessesUtilization.Enabled || config.Metrics.NvmlGpuProcessesMaxBytesUsed.Enabled
 	if collectProcessInfo {
-		err = enableProcessAccountingMode(logger, devices)
-		if err != nil {
-			logger.Sugar().Warnf("Unable to enable process metrics collection on %w. No Nvidia process metrics will be collected.", err)
+		enableCount := enableProcessAccountingModeOnSupportingDevices(logger, devices)
+		if enableCount == 0 {
+			logger.Sugar().Warnf("Unable to enable process metrics collection on any NVIDIA devices. No Nvidia process metrics will be collected.", err)
 			collectProcessInfo = false
 		}
 	}
@@ -164,6 +164,7 @@ func discoverDevices(logger *zap.Logger) ([]nvml.Device, []string, []string, err
 			continue
 		}
 
+		/* Note: UUID and Name query should not fail under normal circumstances */
 		UUID, ret := device.GetUUID()
 		if ret != nvml.SUCCESS {
 			logger.Sugar().Warnf("Unable to get UUID of Nvidia device %d on '%v'; ignoring device.", i, nvml.ErrorString(ret))
@@ -181,7 +182,7 @@ func discoverDevices(logger *zap.Logger) ([]nvml.Device, []string, []string, err
 		names = append(names, name)
 		logger.Sugar().Infof("Discovered Nvidia device %d of model %s with UUID %s.", i, name, UUID)
 
-		currMode, _, ret := devices[i].GetMigMode()
+		currMode, _, ret := device.GetMigMode()
 		if ret != nvml.SUCCESS {
 			logger.Sugar().Warnf("Unable to query MIG mode for Nvidia device %d.", i)
 			continue
@@ -198,7 +199,7 @@ func discoverDevices(logger *zap.Logger) ([]nvml.Device, []string, []string, err
 	return devices, names, UUIDs, nil
 }
 
-func enableProcessAccountingMode(logger *zap.Logger, devices []nvml.Device) error {
+func enableProcessAccountingModeOnSupportingDevices(logger *zap.Logger, devices []nvml.Device) int {
 	enabledCount := 0
 	for gpuIndex, device := range devices {
 		ret := nvmlDeviceSetAccountingMode(device, nvml.FEATURE_ENABLED)
@@ -211,11 +212,7 @@ func enableProcessAccountingMode(logger *zap.Logger, devices []nvml.Device) erro
 		enabledCount++
 	}
 
-	if enabledCount == 0 {
-		return fmt.Errorf("Unable to enable process accounting mode for any discovered NVIDIA devices")
-	}
-
-	return nil
+	return enabledCount
 }
 
 func (client *nvmlClient) cleanup() error {

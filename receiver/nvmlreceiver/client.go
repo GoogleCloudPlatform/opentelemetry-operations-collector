@@ -160,7 +160,7 @@ func printNvmlAndDriverVersion(logger *zap.Logger) {
 	if ret != nvml.SUCCESS {
 		logger.Sugar().Warnf("Unable to determine NVIDIA driver version on '%v'", nvml.ErrorString(ret))
 	}
-	logger.Sugar().Infof("CUDA library version is %s", driverVersion)
+	logger.Sugar().Infof("NVIDIA driver version is %s", driverVersion)
 }
 
 func discoverDevices(logger *zap.Logger) ([]nvml.Device, []string, []string, error) {

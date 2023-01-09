@@ -40,7 +40,6 @@ type nvmlClient struct {
 	deviceToLastSeenTimestamp      map[nvml.Device]uint64
 	deviceMetricToFailedQueryCount map[string]uint64
 	collectProcessInfo             bool
-	lastProcessInfoCollection      time.Time
 }
 
 type deviceMetric struct {
@@ -108,7 +107,6 @@ func newClient(config *Config, logger *zap.Logger) (*nvmlClient, error) {
 		deviceToLastSeenTimestamp:      make(map[nvml.Device]uint64),
 		deviceMetricToFailedQueryCount: make(map[string]uint64),
 		collectProcessInfo:             collectProcessInfo,
-		lastProcessInfoCollection:      time.Now(),
 	}, nil
 }
 
@@ -374,8 +372,7 @@ func (client *nvmlClient) collectProcessMetrics() []processMetric {
 				continue
 			}
 
-			startTime := time.UnixMicro(int64(stats.StartTime))
-			if stats.IsRunning != 1 && startTime.Before(client.lastProcessInfoCollection) {
+			if stats.IsRunning != 1 {
 				continue
 			}
 
@@ -400,7 +397,6 @@ func (client *nvmlClient) collectProcessMetrics() []processMetric {
 		}
 	}
 
-	client.lastProcessInfoCollection = time.Now()
 	return processMetrics
 }
 

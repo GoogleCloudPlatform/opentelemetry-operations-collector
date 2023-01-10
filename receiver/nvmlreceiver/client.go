@@ -92,7 +92,7 @@ func newClient(config *Config, logger *zap.Logger) (*nvmlClient, error) {
 	if collectProcessInfo {
 		enableCount := enableProcessAccountingModeOnSupportingDevices(logger, devices)
 		if enableCount == 0 {
-			logger.Sugar().Warnf("Unable to enable process metrics collection on any NVIDIA devices. No Nvidia process metrics will be collected.", err)
+			logger.Sugar().Warnf("Unable to enable process metrics collection on any NVIDIA devices. No Nvidia process metrics will be collected.")
 			collectProcessInfo = false
 		}
 	}

@@ -50,7 +50,10 @@ func TestNewNvmlClientOnAccountingModeUnsupported(t *testing.T) {
 	require.NotNil(t, client)
 	require.Equal(t, client.disable, false)
 	assert.Greater(t, len(client.devices), 0)
-	assert.Equal(t, client.collectProcessInfo, false)
+
+	for _, isAccountingEnabled := range client.deviceToAccountingIsEnabled {
+		assert.Equal(t, isAccountingEnabled, false)
+	}
 }
 
 func TestGpuModelNameExists(t *testing.T) {
@@ -147,7 +150,10 @@ func TestNewNvmlClientWithGpuSupportsAccountingMode(t *testing.T) {
 	require.NotNil(t, client)
 	assert.Equal(t, client.disable, false)
 	assert.Greater(t, len(client.devices), 0)
-	assert.Equal(t, client.collectProcessInfo, true)
+
+	for _, isAccountingEnabled := range client.deviceToAccountingIsEnabled {
+		assert.Equal(t, isAccountingEnabled, true)
+	}
 }
 
 func TestCollectGpuProcessesAccounting(t *testing.T) {
@@ -158,7 +164,10 @@ func TestCollectGpuProcessesAccounting(t *testing.T) {
 	require.NotNil(t, client)
 	assert.Equal(t, client.disable, false)
 	assert.Greater(t, len(client.devices), 0)
-	assert.Equal(t, client.collectProcessInfo, true)
+
+	for _, isAccountingEnabled := range client.deviceToAccountingIsEnabled {
+		assert.Equal(t, isAccountingEnabled, true)
+	}
 
 	testcudakernel.SubmitCudaTestKernel()
 

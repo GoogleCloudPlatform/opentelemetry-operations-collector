@@ -23,7 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNvmlMetricSetFloat64(t *testing.T) {
+func TestDcgmMetricSetFloat64(t *testing.T) {
 	var metric dcgmMetric
 	metric.setFloat64(23.0)
 	require.Equal(t, metric.asFloat64(), 23.0)
@@ -31,7 +31,7 @@ func TestNvmlMetricSetFloat64(t *testing.T) {
 	require.Equal(t, metric.asFloat64(), 43.0)
 }
 
-func TestNvmlMetricSetInt64(t *testing.T) {
+func TestDcgmMetricSetInt64(t *testing.T) {
 	var metric dcgmMetric
 	metric.setInt64(23)
 	require.Equal(t, metric.asInt64(), int64(23))

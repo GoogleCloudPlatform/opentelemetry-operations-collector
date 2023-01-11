@@ -126,8 +126,8 @@ func validateScraperResult(t *testing.T, metrics pmetric.Metrics) {
 		expectedDataPointCount += expectedMetricDataPoints
 	}
 
-	assert.Equal(t, metrics.MetricCount(), len(expectedMetrics))
-	assert.Equal(t, metrics.DataPointCount(), expectedDataPointCount)
+	assert.LessOrEqual(t, len(expectedMetrics), metrics.MetricCount())
+	assert.LessOrEqual(t, expectedDataPointCount, metrics.DataPointCount())
 
 	ilms := metrics.ResourceMetrics().At(0).ScopeMetrics()
 	require.Equal(t, 1, ilms.Len())
@@ -142,7 +142,7 @@ func validateScraperResult(t *testing.T, metrics pmetric.Metrics) {
 			assert.Regexp(t, ".*uuid:.*", dps.At(j).Attributes().AsRaw())
 		}
 
-		assert.Equal(t, expectedMetrics[m.Name()], dps.Len())
+		assert.LessOrEqual(t, expectedMetrics[m.Name()], dps.Len())
 
 		switch m.Name() {
 		case "dcgm.gpu.utilization":

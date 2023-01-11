@@ -359,7 +359,7 @@ func (client *nvmlClient) collectProcessMetrics() []processMetric {
 	processMetrics := make([]processMetric, 0)
 
 	for gpuIndex, device := range client.devices {
-		if client.deviceToAccountingIsEnabled[device] == false {
+		if !client.deviceToAccountingIsEnabled[device] {
 			continue
 		}
 

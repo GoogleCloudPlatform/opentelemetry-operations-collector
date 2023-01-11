@@ -24,7 +24,7 @@ import (
 )
 
 func TestNvmlMetricSetFloat64(t *testing.T) {
-	var metric nvmlMetric
+	var metric deviceMetric
 	metric.setFloat64(23.0)
 	require.Equal(t, metric.asFloat64(), 23.0)
 	metric.setFloat64(43.0)
@@ -32,7 +32,7 @@ func TestNvmlMetricSetFloat64(t *testing.T) {
 }
 
 func TestNvmlMetricSetInt64(t *testing.T) {
-	var metric nvmlMetric
+	var metric deviceMetric
 	metric.setInt64(23)
 	require.Equal(t, metric.asInt64(), int64(23))
 	metric.setInt64(43)

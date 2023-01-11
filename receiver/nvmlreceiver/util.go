@@ -24,19 +24,19 @@ import (
 	"github.com/NVIDIA/go-nvml/pkg/nvml"
 )
 
-func (m *nvmlMetric) setFloat64(val float64) {
+func (m *deviceMetric) setFloat64(val float64) {
 	*(*float64)(unsafe.Pointer(&m.value[0])) = val
 }
 
-func (m *nvmlMetric) asFloat64() float64 {
+func (m *deviceMetric) asFloat64() float64 {
 	return *(*float64)(unsafe.Pointer(&m.value[0]))
 }
 
-func (m *nvmlMetric) setInt64(val int64) {
+func (m *deviceMetric) setInt64(val int64) {
 	*(*int64)(unsafe.Pointer(&m.value[0])) = val
 }
 
-func (m *nvmlMetric) asInt64() int64 {
+func (m *deviceMetric) asInt64() int64 {
 	return *(*int64)(unsafe.Pointer(&m.value[0]))
 }
 

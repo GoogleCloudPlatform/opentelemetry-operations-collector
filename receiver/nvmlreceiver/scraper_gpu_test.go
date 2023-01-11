@@ -30,6 +30,8 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
+
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/nvmlreceiver/testcudakernel"
 )
 
 func TestScrapeWithGpuPresent(t *testing.T) {
@@ -78,6 +80,49 @@ func TestScrapeOnGpuMemoryInfoUnsupported(t *testing.T) {
 	validateScraperResult(t, metrics, []string{"nvml.gpu.utilization"})
 }
 
+func TestScrapeWithGpuProcessAccounting(t *testing.T) {
+	logger := zaptest.NewLogger(t)
+	logger.Sugar().Warnf("This test requires superuser privileges.")
+
+	scraper := newNvmlScraper(createDefaultConfig().(*Config), componenttest.NewNopReceiverCreateSettings())
+	require.NotNil(t, scraper)
+
+	err := scraper.start(context.Background(), componenttest.NewNopHost())
+	require.NoError(t, err)
+
+	testcudakernel.SubmitCudaTestKernel()
+
+	metrics, err := scraper.scrape(context.Background())
+	validateScraperResult(t, metrics, []string{
+		"nvml.gpu.utilization",
+		"nvml.gpu.memory.bytes_used",
+		"nvml.gpu.processes.utilization",
+		"nvml.gpu.processes.max_bytes_used",
+	})
+}
+
+func TestScrapeWithGpuProcessAccountingError(t *testing.T) {
+	realNvmlDeviceGetAccountingPids := nvmlDeviceGetAccountingPids
+	defer func() { nvmlDeviceGetAccountingPids = realNvmlDeviceGetAccountingPids }()
+	nvmlDeviceGetAccountingPids = func(device nvml.Device) ([]int, nvml.Return) {
+		return nil, nvml.ERROR_UNKNOWN
+	}
+
+	scraper := newNvmlScraper(createDefaultConfig().(*Config), componenttest.NewNopReceiverCreateSettings())
+	require.NotNil(t, scraper)
+
+	err := scraper.start(context.Background(), componenttest.NewNopHost())
+	require.NoError(t, err)
+
+	testcudakernel.SubmitCudaTestKernel()
+
+	metrics, err := scraper.scrape(context.Background())
+	validateScraperResult(t, metrics, []string{
+		"nvml.gpu.utilization",
+		"nvml.gpu.memory.bytes_used",
+	})
+}
+
 func TestScrapeEmitsWarningsUptoThreshold(t *testing.T) {
 	realNvmlGetSamples := nvmlDeviceGetSamples
 	defer func() { nvmlDeviceGetSamples = realNvmlGetSamples }()
@@ -108,19 +153,23 @@ func TestScrapeEmitsWarningsUptoThreshold(t *testing.T) {
 	require.Equal(t, warnings, maxWarningsForFailedDeviceMetricQuery)
 }
 
-func validateScraperResult(t *testing.T, metrics pmetric.Metrics, expected_metrics []string) {
-	expected_datapoints := map[string]int{
-		"nvml.gpu.utilization":       1,
-		"nvml.gpu.memory.bytes_used": 2,
+func validateScraperResult(t *testing.T, metrics pmetric.Metrics, expectedMetrics []string) {
+	expectedMetricToDataPointCount := map[string]int{
+		"nvml.gpu.utilization":              1,
+		"nvml.gpu.memory.bytes_used":        2,
+		"nvml.gpu.processes.utilization":    1,
+		"nvml.gpu.processes.max_bytes_used": 1,
 	}
 
-	count := 0
-	for _, s := range expected_metrics {
-		count += expected_datapoints[s]
+	metricWasSeen := make(map[string]bool)
+	minExpectedDataPointCount := 0
+	for _, s := range expectedMetrics {
+		metricWasSeen[s] = false
+		minExpectedDataPointCount += expectedMetricToDataPointCount[s]
 	}
 
-	assert.Equal(t, metrics.MetricCount(), len(expected_metrics))
-	assert.Equal(t, metrics.DataPointCount(), count)
+	assert.GreaterOrEqual(t, metrics.MetricCount(), len(expectedMetrics))
+	assert.GreaterOrEqual(t, metrics.DataPointCount(), minExpectedDataPointCount)
 
 	ilms := metrics.ResourceMetrics().At(0).ScopeMetrics()
 	require.Equal(t, 1, ilms.Len())
@@ -137,14 +186,31 @@ func validateScraperResult(t *testing.T, metrics pmetric.Metrics, expected_metri
 
 		switch m.Name() {
 		case "nvml.gpu.utilization":
-			assert.Equal(t, expected_datapoints["nvml.gpu.utilization"], dps.Len())
+			assert.Equal(t, expectedMetricToDataPointCount[m.Name()], dps.Len())
 		case "nvml.gpu.memory.bytes_used":
-			assert.Equal(t, expected_datapoints["nvml.gpu.memory.bytes_used"], dps.Len())
+			assert.Equal(t, expectedMetricToDataPointCount[m.Name()], dps.Len())
 			for j := 0; j < dps.Len(); j++ {
 				assert.Regexp(t, ".*memory_state:.*", dps.At(j).Attributes().AsRaw())
+			}
+		case "nvml.gpu.processes.utilization":
+			fallthrough
+		case "nvml.gpu.processes.max_bytes_used":
+			assert.GreaterOrEqual(t, dps.Len(), expectedMetricToDataPointCount[m.Name()])
+			for j := 0; j < dps.Len(); j++ {
+				assert.Regexp(t, ".*pid:.*", dps.At(j).Attributes().AsRaw())
+				assert.Regexp(t, ".*process:.*", dps.At(j).Attributes().AsRaw())
+				assert.Regexp(t, ".*command:.*", dps.At(j).Attributes().AsRaw())
+				assert.Regexp(t, ".*command_line:.*", dps.At(j).Attributes().AsRaw())
+				assert.Regexp(t, ".*owner:.*", dps.At(j).Attributes().AsRaw())
 			}
 		default:
 			t.Errorf("Unexpected metric %s", m.Name())
 		}
+
+		metricWasSeen[m.Name()] = true
+	}
+
+	for _, metric := range expectedMetrics {
+		assert.Equal(t, metricWasSeen[metric], true)
 	}
 }

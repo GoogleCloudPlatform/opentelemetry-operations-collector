@@ -37,13 +37,21 @@ func (ms *MetricSettings) Unmarshal(parser *confmap.Conf) error {
 
 // MetricsSettings provides settings for nvmlreceiver metrics.
 type MetricsSettings struct {
-	NvmlGpuMemoryBytesUsed MetricSettings `mapstructure:"nvml.gpu.memory.bytes_used"`
-	NvmlGpuUtilization     MetricSettings `mapstructure:"nvml.gpu.utilization"`
+	NvmlGpuMemoryBytesUsed       MetricSettings `mapstructure:"nvml.gpu.memory.bytes_used"`
+	NvmlGpuProcessesMaxBytesUsed MetricSettings `mapstructure:"nvml.gpu.processes.max_bytes_used"`
+	NvmlGpuProcessesUtilization  MetricSettings `mapstructure:"nvml.gpu.processes.utilization"`
+	NvmlGpuUtilization           MetricSettings `mapstructure:"nvml.gpu.utilization"`
 }
 
 func DefaultMetricsSettings() MetricsSettings {
 	return MetricsSettings{
 		NvmlGpuMemoryBytesUsed: MetricSettings{
+			Enabled: true,
+		},
+		NvmlGpuProcessesMaxBytesUsed: MetricSettings{
+			Enabled: true,
+		},
+		NvmlGpuProcessesUtilization: MetricSettings{
 			Enabled: true,
 		},
 		NvmlGpuUtilization: MetricSettings{
@@ -132,6 +140,122 @@ func newMetricNvmlGpuMemoryBytesUsed(settings MetricSettings) metricNvmlGpuMemor
 	return m
 }
 
+type metricNvmlGpuProcessesMaxBytesUsed struct {
+	data     pmetric.Metric // data buffer for generated metric.
+	settings MetricSettings // metric settings provided by user.
+	capacity int            // max observed number of data points added to the metric.
+}
+
+// init fills nvml.gpu.processes.max_bytes_used metric with initial data.
+func (m *metricNvmlGpuProcessesMaxBytesUsed) init() {
+	m.data.SetName("nvml.gpu.processes.max_bytes_used")
+	m.data.SetDescription("Maximum total GPU memory in bytes that was ever allocated by the process.")
+	m.data.SetUnit("By")
+	m.data.SetEmptyGauge()
+	m.data.Gauge().DataPoints().EnsureCapacity(m.capacity)
+}
+
+func (m *metricNvmlGpuProcessesMaxBytesUsed) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, pidAttributeValue int64, processAttributeValue string, commandAttributeValue string, commandLineAttributeValue string, ownerAttributeValue string) {
+	if !m.settings.Enabled {
+		return
+	}
+	dp := m.data.Gauge().DataPoints().AppendEmpty()
+	dp.SetStartTimestamp(start)
+	dp.SetTimestamp(ts)
+	dp.SetIntValue(val)
+	dp.Attributes().PutStr("model", modelAttributeValue)
+	dp.Attributes().PutStr("gpu_number", gpuNumberAttributeValue)
+	dp.Attributes().PutStr("uuid", uuidAttributeValue)
+	dp.Attributes().PutInt("pid", pidAttributeValue)
+	dp.Attributes().PutStr("process", processAttributeValue)
+	dp.Attributes().PutStr("command", commandAttributeValue)
+	dp.Attributes().PutStr("command_line", commandLineAttributeValue)
+	dp.Attributes().PutStr("owner", ownerAttributeValue)
+}
+
+// updateCapacity saves max length of data point slices that will be used for the slice capacity.
+func (m *metricNvmlGpuProcessesMaxBytesUsed) updateCapacity() {
+	if m.data.Gauge().DataPoints().Len() > m.capacity {
+		m.capacity = m.data.Gauge().DataPoints().Len()
+	}
+}
+
+// emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
+func (m *metricNvmlGpuProcessesMaxBytesUsed) emit(metrics pmetric.MetricSlice) {
+	if m.settings.Enabled && m.data.Gauge().DataPoints().Len() > 0 {
+		m.updateCapacity()
+		m.data.MoveTo(metrics.AppendEmpty())
+		m.init()
+	}
+}
+
+func newMetricNvmlGpuProcessesMaxBytesUsed(settings MetricSettings) metricNvmlGpuProcessesMaxBytesUsed {
+	m := metricNvmlGpuProcessesMaxBytesUsed{settings: settings}
+	if settings.Enabled {
+		m.data = pmetric.NewMetric()
+		m.init()
+	}
+	return m
+}
+
+type metricNvmlGpuProcessesUtilization struct {
+	data     pmetric.Metric // data buffer for generated metric.
+	settings MetricSettings // metric settings provided by user.
+	capacity int            // max observed number of data points added to the metric.
+}
+
+// init fills nvml.gpu.processes.utilization metric with initial data.
+func (m *metricNvmlGpuProcessesUtilization) init() {
+	m.data.SetName("nvml.gpu.processes.utilization")
+	m.data.SetDescription("Fraction of time over the process's life thus far during which one or more kernels was executing on the GPU.")
+	m.data.SetUnit("1")
+	m.data.SetEmptyGauge()
+	m.data.Gauge().DataPoints().EnsureCapacity(m.capacity)
+}
+
+func (m *metricNvmlGpuProcessesUtilization) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, pidAttributeValue int64, processAttributeValue string, commandAttributeValue string, commandLineAttributeValue string, ownerAttributeValue string) {
+	if !m.settings.Enabled {
+		return
+	}
+	dp := m.data.Gauge().DataPoints().AppendEmpty()
+	dp.SetStartTimestamp(start)
+	dp.SetTimestamp(ts)
+	dp.SetDoubleValue(val)
+	dp.Attributes().PutStr("model", modelAttributeValue)
+	dp.Attributes().PutStr("gpu_number", gpuNumberAttributeValue)
+	dp.Attributes().PutStr("uuid", uuidAttributeValue)
+	dp.Attributes().PutInt("pid", pidAttributeValue)
+	dp.Attributes().PutStr("process", processAttributeValue)
+	dp.Attributes().PutStr("command", commandAttributeValue)
+	dp.Attributes().PutStr("command_line", commandLineAttributeValue)
+	dp.Attributes().PutStr("owner", ownerAttributeValue)
+}
+
+// updateCapacity saves max length of data point slices that will be used for the slice capacity.
+func (m *metricNvmlGpuProcessesUtilization) updateCapacity() {
+	if m.data.Gauge().DataPoints().Len() > m.capacity {
+		m.capacity = m.data.Gauge().DataPoints().Len()
+	}
+}
+
+// emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
+func (m *metricNvmlGpuProcessesUtilization) emit(metrics pmetric.MetricSlice) {
+	if m.settings.Enabled && m.data.Gauge().DataPoints().Len() > 0 {
+		m.updateCapacity()
+		m.data.MoveTo(metrics.AppendEmpty())
+		m.init()
+	}
+}
+
+func newMetricNvmlGpuProcessesUtilization(settings MetricSettings) metricNvmlGpuProcessesUtilization {
+	m := metricNvmlGpuProcessesUtilization{settings: settings}
+	if settings.Enabled {
+		m.data = pmetric.NewMetric()
+		m.init()
+	}
+	return m
+}
+
 type metricNvmlGpuUtilization struct {
 	data     pmetric.Metric // data buffer for generated metric.
 	settings MetricSettings // metric settings provided by user.
@@ -188,13 +312,15 @@ func newMetricNvmlGpuUtilization(settings MetricSettings) metricNvmlGpuUtilizati
 // MetricsBuilder provides an interface for scrapers to report metrics while taking care of all the transformations
 // required to produce metric representation defined in metadata and user settings.
 type MetricsBuilder struct {
-	startTime                    pcommon.Timestamp   // start time that will be applied to all recorded data points.
-	metricsCapacity              int                 // maximum observed number of metrics per resource.
-	resourceCapacity             int                 // maximum observed number of resource attributes.
-	metricsBuffer                pmetric.Metrics     // accumulates metrics data before emitting.
-	buildInfo                    component.BuildInfo // contains version information
-	metricNvmlGpuMemoryBytesUsed metricNvmlGpuMemoryBytesUsed
-	metricNvmlGpuUtilization     metricNvmlGpuUtilization
+	startTime                          pcommon.Timestamp   // start time that will be applied to all recorded data points.
+	metricsCapacity                    int                 // maximum observed number of metrics per resource.
+	resourceCapacity                   int                 // maximum observed number of resource attributes.
+	metricsBuffer                      pmetric.Metrics     // accumulates metrics data before emitting.
+	buildInfo                          component.BuildInfo // contains version information
+	metricNvmlGpuMemoryBytesUsed       metricNvmlGpuMemoryBytesUsed
+	metricNvmlGpuProcessesMaxBytesUsed metricNvmlGpuProcessesMaxBytesUsed
+	metricNvmlGpuProcessesUtilization  metricNvmlGpuProcessesUtilization
+	metricNvmlGpuUtilization           metricNvmlGpuUtilization
 }
 
 // metricBuilderOption applies changes to default metrics builder.
@@ -209,11 +335,13 @@ func WithStartTime(startTime pcommon.Timestamp) metricBuilderOption {
 
 func NewMetricsBuilder(settings MetricsSettings, buildInfo component.BuildInfo, options ...metricBuilderOption) *MetricsBuilder {
 	mb := &MetricsBuilder{
-		startTime:                    pcommon.NewTimestampFromTime(time.Now()),
-		metricsBuffer:                pmetric.NewMetrics(),
-		buildInfo:                    buildInfo,
-		metricNvmlGpuMemoryBytesUsed: newMetricNvmlGpuMemoryBytesUsed(settings.NvmlGpuMemoryBytesUsed),
-		metricNvmlGpuUtilization:     newMetricNvmlGpuUtilization(settings.NvmlGpuUtilization),
+		startTime:                          pcommon.NewTimestampFromTime(time.Now()),
+		metricsBuffer:                      pmetric.NewMetrics(),
+		buildInfo:                          buildInfo,
+		metricNvmlGpuMemoryBytesUsed:       newMetricNvmlGpuMemoryBytesUsed(settings.NvmlGpuMemoryBytesUsed),
+		metricNvmlGpuProcessesMaxBytesUsed: newMetricNvmlGpuProcessesMaxBytesUsed(settings.NvmlGpuProcessesMaxBytesUsed),
+		metricNvmlGpuProcessesUtilization:  newMetricNvmlGpuProcessesUtilization(settings.NvmlGpuProcessesUtilization),
+		metricNvmlGpuUtilization:           newMetricNvmlGpuUtilization(settings.NvmlGpuUtilization),
 	}
 	for _, op := range options {
 		op(mb)
@@ -267,6 +395,8 @@ func (mb *MetricsBuilder) EmitForResource(rmo ...ResourceMetricsOption) {
 	ils.Scope().SetVersion(mb.buildInfo.Version)
 	ils.Metrics().EnsureCapacity(mb.metricsCapacity)
 	mb.metricNvmlGpuMemoryBytesUsed.emit(ils.Metrics())
+	mb.metricNvmlGpuProcessesMaxBytesUsed.emit(ils.Metrics())
+	mb.metricNvmlGpuProcessesUtilization.emit(ils.Metrics())
 	mb.metricNvmlGpuUtilization.emit(ils.Metrics())
 	for _, op := range rmo {
 		op(rm)
@@ -290,6 +420,16 @@ func (mb *MetricsBuilder) Emit(rmo ...ResourceMetricsOption) pmetric.Metrics {
 // RecordNvmlGpuMemoryBytesUsedDataPoint adds a data point to nvml.gpu.memory.bytes_used metric.
 func (mb *MetricsBuilder) RecordNvmlGpuMemoryBytesUsedDataPoint(ts pcommon.Timestamp, val int64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, memoryStateAttributeValue AttributeMemoryState) {
 	mb.metricNvmlGpuMemoryBytesUsed.recordDataPoint(mb.startTime, ts, val, modelAttributeValue, gpuNumberAttributeValue, uuidAttributeValue, memoryStateAttributeValue.String())
+}
+
+// RecordNvmlGpuProcessesMaxBytesUsedDataPoint adds a data point to nvml.gpu.processes.max_bytes_used metric.
+func (mb *MetricsBuilder) RecordNvmlGpuProcessesMaxBytesUsedDataPoint(ts pcommon.Timestamp, val int64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, pidAttributeValue int64, processAttributeValue string, commandAttributeValue string, commandLineAttributeValue string, ownerAttributeValue string) {
+	mb.metricNvmlGpuProcessesMaxBytesUsed.recordDataPoint(mb.startTime, ts, val, modelAttributeValue, gpuNumberAttributeValue, uuidAttributeValue, pidAttributeValue, processAttributeValue, commandAttributeValue, commandLineAttributeValue, ownerAttributeValue)
+}
+
+// RecordNvmlGpuProcessesUtilizationDataPoint adds a data point to nvml.gpu.processes.utilization metric.
+func (mb *MetricsBuilder) RecordNvmlGpuProcessesUtilizationDataPoint(ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, pidAttributeValue int64, processAttributeValue string, commandAttributeValue string, commandLineAttributeValue string, ownerAttributeValue string) {
+	mb.metricNvmlGpuProcessesUtilization.recordDataPoint(mb.startTime, ts, val, modelAttributeValue, gpuNumberAttributeValue, uuidAttributeValue, pidAttributeValue, processAttributeValue, commandAttributeValue, commandLineAttributeValue, ownerAttributeValue)
 }
 
 // RecordNvmlGpuUtilizationDataPoint adds a data point to nvml.gpu.utilization metric.

@@ -20,64 +20,12 @@ import (
 	"os"
 	"testing"
 
-	"github.com/hashicorp/go-version"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/integration/mtest"
-	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.uber.org/zap"
 )
-
-// fakeClient is a mocked client of the scraper
-// was not able to optimize scraping multiple databases via goroutines
-// while also testing with exclusively mtest.
-type fakeClient struct{ mock.Mock }
-
-func (fc *fakeClient) ListDatabaseNames(ctx context.Context, filters interface{}, opts ...*options.ListDatabasesOptions) ([]string, error) {
-	args := fc.Called(ctx, filters, opts)
-	return args.Get(0).([]string), args.Error(1)
-}
-
-func (fc *fakeClient) ListCollectionNames(ctx context.Context, dbName string) ([]string, error) {
-	args := fc.Called(ctx, dbName)
-	return args.Get(0).([]string), args.Error(1)
-}
-
-func (fc *fakeClient) Disconnect(ctx context.Context) error {
-	args := fc.Called(ctx)
-	return args.Error(0)
-}
-func (fc *fakeClient) Connect(ctx context.Context) error {
-	args := fc.Called(ctx)
-	return args.Error(0)
-}
-
-func (fc *fakeClient) GetVersion(ctx context.Context) (*version.Version, error) {
-	args := fc.Called(ctx)
-	return args.Get(0).(*version.Version), args.Error(1)
-}
-
-func (fc *fakeClient) ServerStatus(ctx context.Context, dbName string) (bson.M, error) {
-	args := fc.Called(ctx, dbName)
-	return args.Get(0).(bson.M), args.Error(1)
-}
-
-func (fc *fakeClient) DBStats(ctx context.Context, dbName string) (bson.M, error) {
-	args := fc.Called(ctx, dbName)
-	return args.Get(0).(bson.M), args.Error(1)
-}
-
-func (fc *fakeClient) TopStats(ctx context.Context) (bson.M, error) {
-	args := fc.Called(ctx)
-	return args.Get(0).(bson.M), args.Error(1)
-}
-
-func (fc *fakeClient) IndexStats(ctx context.Context, dbName, collectionName string) ([]bson.M, error) {
-	args := fc.Called(ctx, dbName, collectionName)
-	return args.Get(0).([]bson.M), args.Error(1)
-}
 
 func TestListDatabaseNames(t *testing.T) {
 	mont := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))

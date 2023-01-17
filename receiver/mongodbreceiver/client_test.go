@@ -16,7 +16,6 @@ package mongodbreceiver // import "github.com/GoogleCloudPlatform/opentelemetry-
 
 import (
 	"context"
-	"errors"
 	"os"
 	"testing"
 
@@ -203,73 +202,20 @@ func loadDBStats() (bson.D, error) {
 	return loadTestFile("./testdata/dbstats.json")
 }
 
-func loadDBStatsAsMap() (bson.M, error) {
-	return loadTestFileAsMap("./testdata/dbstats.json")
-}
-
 func loadServerStatus() (bson.D, error) {
 	return loadTestFile("./testdata/serverStatus.json")
-}
-
-func loadServerStatusAsMap() (bson.M, error) {
-	return loadTestFileAsMap("./testdata/serverStatus.json")
 }
 
 func loadTop() (bson.D, error) {
 	return loadTestFile("./testdata/top.json")
 }
 
-func loadTopAsMap() (bson.M, error) {
-	return loadTestFileAsMap("./testdata/top.json")
-}
-
-func loadIndexStatsAsMap(collectionName string) ([]bson.M, error) {
-	var indexStats []bson.M
-	switch collectionName {
-	case "products":
-		indexStats0, _ := loadTestFileAsMap("./testdata/productsIndexStats0.json")
-		indexStats = append(indexStats, indexStats0)
-	case "orders":
-		indexStats0, _ := loadTestFileAsMap("./testdata/ordersIndexStats0.json")
-		indexStats1, _ := loadTestFileAsMap("./testdata/ordersIndexStats1.json")
-		indexStats2, _ := loadTestFileAsMap("./testdata/ordersIndexStats2.json")
-		indexStats = append(indexStats, indexStats0, indexStats1, indexStats2)
-	case "error":
-		indexStatsError, _ := loadTestFileAsMap("./testdata/indexStatsError.json")
-		indexStats = append(indexStats, indexStatsError)
-	default:
-		return nil, errors.New("failed to load index stats from an unknown collection name")
-	}
-	return indexStats, nil
-}
-
 func loadBuildInfo() (bson.D, error) {
 	return loadTestFile("./testdata/buildInfo.json")
 }
 
-func loadAdminStatusAsMap() (bson.M, error) {
-	return loadTestFileAsMap("./testdata/admin.json")
-}
-
-func loadOnlyStorageEngineAsMap() (bson.M, error) {
-	return loadTestFileAsMap("./testdata/only_storage_engine.json")
-}
-
 func loadTestFile(filePath string) (bson.D, error) {
 	var doc bson.D
-	testFile, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, err
-	}
-	err = bson.UnmarshalExtJSON(testFile, true, &doc)
-	if err != nil {
-		return nil, err
-	}
-	return doc, nil
-}
-
-func loadTestFileAsMap(filePath string) (bson.M, error) {
-	var doc bson.M
 	testFile, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, err

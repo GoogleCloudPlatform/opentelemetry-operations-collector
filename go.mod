@@ -76,6 +76,7 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/translator/prometheus v0.67.0 // indirect
 	github.com/ovh/go-ovh v1.1.0 // indirect
 	go.opentelemetry.io/collector/featuregate v0.67.0 // indirect
+	gotest.tools/v3 v3.4.0 // indirect
 )
 
 require (
@@ -257,7 +258,7 @@ require (
 	github.com/prometheus/statsd_exporter v0.22.7 // indirect
 	github.com/rs/cors v1.8.2 // indirect
 	github.com/scaleway/scaleway-sdk-go v1.0.0-beta.9 // indirect
-	github.com/shirou/gopsutil/v3 v3.22.10 // indirect
+	github.com/shirou/gopsutil/v3 v3.22.10
 	github.com/sijms/go-ora/v2 v2.5.17 // indirect
 	github.com/sirupsen/logrus v1.9.0 // indirect
 	github.com/snowflakedb/gosnowflake v1.6.15 // indirect

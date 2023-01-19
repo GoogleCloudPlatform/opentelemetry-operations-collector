@@ -15,7 +15,6 @@
 package service
 
 import (
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/mongodbreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/exporter/fileexporter"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlemanagedprometheusexporter"
@@ -65,6 +64,7 @@ import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/casttosumprocessor"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/normalizesumsprocessor"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/dcgmreceiver"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/mongodbreceiver"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/nvmlreceiver"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/varnishreceiver"
 )

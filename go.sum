@@ -797,8 +797,6 @@ github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver v
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver v0.67.0/go.mod h1:fnc/wIpsYfNoWOz6mWg0VAsC8/UnYBLQ0y2DhLPkohw=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/memcachedreceiver v0.67.0 h1:HBMdhkO78vK1XGwwROkBiTvDy+42K8m0VklyOqnfDhk=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/memcachedreceiver v0.67.0/go.mod h1:/TbthL9kBUnlOd6e43FXPDYBdiSRRsBiu1/hgn2FgYE=
-github.com/open-telemetry/opentelemetry-collector-contrib/receiver/mongodbreceiver v0.67.0 h1:WNoSGhWEJsX8Dsd2agLv3sRv7UWSSqu4cQLSBc9aUP8=
-github.com/open-telemetry/opentelemetry-collector-contrib/receiver/mongodbreceiver v0.67.0/go.mod h1:5flighMJ68zYGbGu4Cgl1/+ARjkIXBddVn540tA5Qto=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/mysqlreceiver v0.67.0 h1:TJ5wbn2X3/M0+UAWmsb7QgvavrWdXJU0EJGOhy8E210=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/mysqlreceiver v0.67.0/go.mod h1:Edl+hjaOR3daintuUzyOIWCtIlMep5VadcCQu58gX2w=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/nginxreceiver v0.67.0 h1:Vag5zV732X93XoYghL+JtdrhqCQIOW9eVHaheNiNwH8=

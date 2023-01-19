@@ -24,7 +24,6 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/iisreceiver v0.67.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver v0.67.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/memcachedreceiver v0.67.0
-	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/mongodbreceiver v0.67.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/mysqlreceiver v0.67.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/nginxreceiver v0.67.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/postgresqlreceiver v0.67.0

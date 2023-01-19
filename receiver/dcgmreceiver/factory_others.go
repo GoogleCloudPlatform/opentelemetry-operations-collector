@@ -12,29 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build windows
-// +build windows
+//go:build !linux
+// +build !linux
 
 package dcgmreceiver
 
 import (
 	"context"
-	"testing"
+	"errors"
 
-	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/collector/consumer/consumertest"
-	"go.opentelemetry.io/collector/receiver/receivertest"
+	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/consumer"
+	"go.opentelemetry.io/collector/receiver"
 )
 
-func TestCreateMetricsReceiverOnWindows(t *testing.T) {
-	factory := NewFactory()
-	cfg := factory.CreateDefaultConfig()
-	receiver, err := factory.CreateMetricsReceiver(
-		context.Background(),
-		receivertest.NewNopCreateSettings(),
-		cfg,
-		consumertest.NewNop())
-
-	require.Regexp(t, ".*only supported on Linux.*", err)
-	require.Nil(t, receiver)
+func createMetricsReceiver(
+	_ context.Context,
+	params receiver.CreateSettings,
+	rConf component.Config,
+	consumer consumer.Metrics,
+) (receiver.Metrics, error) {
+	return nil, errors.New("DCGM receiver is only supported on Linux")
 }

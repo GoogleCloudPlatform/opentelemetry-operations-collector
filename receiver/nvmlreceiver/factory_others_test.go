@@ -1,4 +1,4 @@
-// Copyright 2023 Google LLC
+// Copyright 2022 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,29 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build linux
-// +build linux
+//go:build !linux
+// +build !linux
 
-package dcgmreceiver
+package nvmlreceiver
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/collector/consumer/consumertest"
+	"go.opentelemetry.io/collector/receiver/receivertest"
 )
 
-func TestDcgmMetricSetFloat64(t *testing.T) {
-	var metric dcgmMetric
-	metric.setFloat64(23.0)
-	require.Equal(t, metric.asFloat64(), 23.0)
-	metric.setFloat64(43.0)
-	require.Equal(t, metric.asFloat64(), 43.0)
-}
+func TestCreateMetricsReceiverOnWindows(t *testing.T) {
+	factory := NewFactory()
+	cfg := factory.CreateDefaultConfig()
+	receiver, err := factory.CreateMetricsReceiver(
+		context.Background(),
+		receivertest.NewNopCreateSettings(),
+		cfg,
+		consumertest.NewNop())
 
-func TestDcgmMetricSetInt64(t *testing.T) {
-	var metric dcgmMetric
-	metric.setInt64(23)
-	require.Equal(t, metric.asInt64(), int64(23))
-	metric.setInt64(43)
-	require.Equal(t, metric.asInt64(), int64(43))
+	require.Regexp(t, ".*only supported on Linux.*", err)
+	require.Nil(t, receiver)
 }

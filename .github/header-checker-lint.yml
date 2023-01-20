@@ -3,6 +3,7 @@ allowedLicenses:
 ignoreFiles:
   - receiver/**/generated_metrics.go
   - receiver/**/generated_metrics_test.go
+  - receiver/mongodbreceiver/**/*.go
 sourceFileExtensions:
   - go
   - ps1

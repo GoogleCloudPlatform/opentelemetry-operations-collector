@@ -34,7 +34,6 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/iisreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/memcachedreceiver"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/mongodbreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/mysqlreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/nginxreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/postgresqlreceiver"
@@ -65,6 +64,7 @@ import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/casttosumprocessor"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/normalizesumsprocessor"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/dcgmreceiver"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/mongodbreceiver"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/nvmlreceiver"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/varnishreceiver"
 )

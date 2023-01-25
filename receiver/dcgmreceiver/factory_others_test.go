@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build !windows
-// +build !windows
+//go:build !linux
+// +build !linux
 
 package dcgmreceiver
 
@@ -26,18 +26,15 @@ import (
 	"go.opentelemetry.io/collector/receiver/receivertest"
 )
 
-func TestCreateMetricsReceiverOnLinux(t *testing.T) {
+func TestCreateMetricsReceiverOnWindows(t *testing.T) {
 	factory := NewFactory()
 	cfg := factory.CreateDefaultConfig()
-	receiverConfig := cfg.(*Config)
-
 	receiver, err := factory.CreateMetricsReceiver(
 		context.Background(),
 		receivertest.NewNopCreateSettings(),
-		receiverConfig,
-		consumertest.NewNop(),
-	)
+		cfg,
+		consumertest.NewNop())
 
-	require.NoError(t, err)
-	require.NotNil(t, receiver, "failed to create metrics receiver")
+	require.Regexp(t, ".*only supported on Linux.*", err)
+	require.Nil(t, receiver)
 }

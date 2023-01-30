@@ -30,10 +30,6 @@ import (
 	"go.uber.org/zap"
 )
 
-func testOne(t *testing.T, name *string, version *string) {
-
-}
-
 func TestModifyScopeProcessor(t *testing.T) {
 	testStart := time.Now().Unix()
 

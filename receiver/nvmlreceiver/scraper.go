@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build !windows
-// +build !windows
+//go:build linux
+// +build linux
 
 package nvmlreceiver
 
@@ -56,7 +56,10 @@ func (s *nvmlScraper) start(_ context.Context, host component.Host) error {
 }
 
 func (s *nvmlScraper) stop(_ context.Context) error {
-	return s.client.cleanup()
+	if s.client != nil {
+		return s.client.cleanup()
+	}
+	return nil
 }
 
 func (s *nvmlScraper) scrape(ctx context.Context) (pmetric.Metrics, error) {

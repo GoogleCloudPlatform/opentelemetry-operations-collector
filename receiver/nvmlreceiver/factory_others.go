@@ -12,19 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build !windows
-// +build !windows
+//go:build !linux
+// +build !linux
 
 package nvmlreceiver
 
 import (
 	"context"
-	"fmt"
+	"errors"
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/receiver"
-	"go.opentelemetry.io/collector/receiver/scraperhelper"
 )
 
 func createMetricsReceiver(
@@ -33,23 +32,5 @@ func createMetricsReceiver(
 	rConf component.Config,
 	consumer consumer.Metrics,
 ) (receiver.Metrics, error) {
-	cfg, ok := rConf.(*Config)
-	if !ok {
-		return nil, fmt.Errorf("Unable to cast receiver configuration to nvml.Config")
-	}
-
-	ns := newNvmlScraper(cfg, params)
-	scraper, err := scraperhelper.NewScraper(
-		typeStr,
-		ns.scrape,
-		scraperhelper.WithStart(ns.start),
-		scraperhelper.WithShutdown(ns.stop))
-	if err != nil {
-		return nil, err
-	}
-
-	return scraperhelper.NewScraperControllerReceiver(
-		&cfg.ScraperControllerSettings, params, consumer,
-		scraperhelper.AddScraper(scraper),
-	)
+	return nil, errors.New("NVML receiver is only supported on Linux")
 }

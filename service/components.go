@@ -62,6 +62,7 @@ import (
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/agentmetricsprocessor"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/casttosumprocessor"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/modifyscopeprocessor"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/normalizesumsprocessor"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/dcgmreceiver"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/mongodbreceiver"
@@ -144,6 +145,7 @@ func components() (component.Factories, error) {
 		resourceprocessor.NewFactory(),
 		transformprocessor.NewFactory(),
 		groupbyattrsprocessor.NewFactory(),
+		modifyscopeprocessor.NewFactory(),
 	}
 	for _, pr := range factories.Processors {
 		processors = append(processors, pr)

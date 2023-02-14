@@ -20,13 +20,12 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/component/componenttest"
-	"go.opentelemetry.io/collector/config"
 	"go.opentelemetry.io/collector/consumer/consumertest"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/processor/processorhelper"
+	"go.opentelemetry.io/collector/processor/processortest"
 	"go.uber.org/zap"
 )
 
@@ -45,10 +44,7 @@ func TestModifyScopeProcessor(t *testing.T) {
 		{"version-only", nil, &newVersion},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			id := component.NewID(typeStr)
-			settings := config.NewProcessorSettings(id)
 			cfg := &Config{
-				ProcessorSettings:    &settings,
 				OverrideScopeName:    tt.scopeName,
 				OverrideScopeVersion: tt.scopeVersion,
 			}
@@ -57,7 +53,7 @@ func TestModifyScopeProcessor(t *testing.T) {
 			tmn := &consumertest.MetricsSink{}
 			rmp, err := processorhelper.NewMetricsProcessor(
 				context.Background(),
-				componenttest.NewNopProcessorCreateSettings(),
+				processortest.NewNopCreateSettings(),
 				cfg,
 				tmn,
 				msp.ProcessMetrics,

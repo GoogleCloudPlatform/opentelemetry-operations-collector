@@ -20,17 +20,17 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/consumer/consumertest"
 	"go.opentelemetry.io/collector/otelcol/otelcoltest"
+	"go.opentelemetry.io/collector/processor"
 )
 
 func TestCreateDefaultConfig(t *testing.T) {
 	assert.NoError(t, componenttest.CheckConfigStruct(NewFactory().CreateDefaultConfig()))
 }
 func TestCreateProcessor(t *testing.T) {
-	factories, err := componenttest.NopFactories()
+	factories, err := otelcoltest.NopFactories()
 	assert.NoError(t, err)
 
 	factory := NewFactory()
@@ -41,7 +41,7 @@ func TestCreateProcessor(t *testing.T) {
 	assert.NotNil(t, config)
 
 	for _, cfg := range config.Processors {
-		mp, err := createMetricsProcessor(context.Background(), component.ProcessorCreateSettings{}, cfg, consumertest.NewNop())
+		mp, err := createMetricsProcessor(context.Background(), processor.CreateSettings{}, cfg, consumertest.NewNop())
 		assert.NoError(t, err)
 		assert.NotNil(t, mp)
 	}

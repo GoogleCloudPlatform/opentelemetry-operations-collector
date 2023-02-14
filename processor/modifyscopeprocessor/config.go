@@ -14,12 +14,8 @@
 
 package modifyscopeprocessor
 
-import "go.opentelemetry.io/collector/config"
-
 // Config defines configuration for Resource processor.
 type Config struct {
-	*config.ProcessorSettings `mapstructure:"-"`
-
 	OverrideScopeName    *string `mapstructure:"override_scope_name"`
 	OverrideScopeVersion *string `mapstructure:"override_scope_version"`
 }

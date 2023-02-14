@@ -46,7 +46,6 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/sqlserverreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowsperfcountersreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/zookeeperreceiver"
-	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/exporter/loggingexporter"
 	"go.opentelemetry.io/collector/exporter/otlpexporter"
@@ -54,6 +53,8 @@ import (
 	"go.opentelemetry.io/collector/extension"
 	"go.opentelemetry.io/collector/extension/ballastextension"
 	"go.opentelemetry.io/collector/extension/zpagesextension"
+	"go.opentelemetry.io/collector/otelcol"
+	"go.opentelemetry.io/collector/processor"
 	"go.opentelemetry.io/collector/processor/batchprocessor"
 	"go.opentelemetry.io/collector/processor/memorylimiterprocessor"
 	"go.opentelemetry.io/collector/receiver"
@@ -70,11 +71,11 @@ import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/varnishreceiver"
 )
 
-func components() (component.Factories, error) {
+func components() (otelcol.Factories, error) {
 	errs := []error{}
 	factories, err := Components()
 	if err != nil {
-		return component.Factories{}, err
+		return otelcol.Factories{}, err
 	}
 
 	extensions := []extension.Factory{}
@@ -135,7 +136,7 @@ func components() (component.Factories, error) {
 		errs = append(errs, err)
 	}
 
-	processors := []component.ProcessorFactory{
+	processors := []processor.Factory{
 		agentmetricsprocessor.NewFactory(),
 		casttosumprocessor.NewFactory(),
 		filterprocessor.NewFactory(),
@@ -150,7 +151,7 @@ func components() (component.Factories, error) {
 	for _, pr := range factories.Processors {
 		processors = append(processors, pr)
 	}
-	factories.Processors, err = component.MakeProcessorFactoryMap(processors...)
+	factories.Processors, err = processor.MakeFactoryMap(processors...)
 	if err != nil {
 		errs = append(errs, err)
 	}
@@ -159,7 +160,7 @@ func components() (component.Factories, error) {
 }
 
 func Components() (
-	component.Factories,
+	otelcol.Factories,
 	error,
 ) {
 	var errs error
@@ -182,13 +183,13 @@ func Components() (
 	)
 	errs = multierr.Append(errs, err)
 
-	processors, err := component.MakeProcessorFactoryMap(
+	processors, err := processor.MakeFactoryMap(
 		batchprocessor.NewFactory(),
 		memorylimiterprocessor.NewFactory(),
 	)
 	errs = multierr.Append(errs, err)
 
-	factories := component.Factories{
+	factories := otelcol.Factories{
 		Extensions: extensions,
 		Receivers:  receivers,
 		Processors: processors,

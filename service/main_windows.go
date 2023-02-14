@@ -21,11 +21,11 @@ import (
 	"context"
 	"fmt"
 
-	"go.opentelemetry.io/collector/service"
+	"go.opentelemetry.io/collector/otelcol"
 	"golang.org/x/sys/windows/svc"
 )
 
-func run(ctx context.Context, params service.CollectorSettings) error {
+func run(ctx context.Context, params otelcol.CollectorSettings) error {
 	isService, err := svc.IsWindowsService()
 	if err != nil {
 		return fmt.Errorf("failed to determine if we are running as a Windows service: %w", err)
@@ -37,9 +37,9 @@ func run(ctx context.Context, params service.CollectorSettings) error {
 	return runInteractive(ctx, params)
 }
 
-func runService(params service.CollectorSettings) error {
+func runService(params otelcol.CollectorSettings) error {
 	// do not need to supply service name when startup is invoked through Service Control Manager directly
-	if err := svc.Run("", service.NewSvcHandler(params)); err != nil {
+	if err := svc.Run("", otelcol.NewSvcHandler(params)); err != nil {
 		return fmt.Errorf("failed to start service: %w", err)
 	}
 

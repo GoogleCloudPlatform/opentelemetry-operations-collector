@@ -344,15 +344,15 @@ processors:
       - include: process.disk.write_io
         action: update
         new_name: processes/disk/write_bytes_count
-      # process.memory.physical_usage -> processes/rss_usage
-      - include: process.memory.physical_usage
+      # process.memory.usage -> processes/rss_usage
+      - include: process.memory.usage
         action: update
         new_name: processes/rss_usage
         operations:
           # change data type from int64 -> double
           - action: toggle_scalar_data_type
-      # process.memory.virtual_usage -> processes/vm_usage
-      - include: process.memory.virtual_usage
+      # process.memory.virtual -> processes/vm_usage
+      - include: process.memory.virtual
         action: update
         new_name: processes/vm_usage
         operations:

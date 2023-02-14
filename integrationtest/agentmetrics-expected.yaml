@@ -203,7 +203,7 @@ expected_metrics:
     only_on:
       - linux
       - openbsd
-  - name: process.memory.physical_usage
+  - name: process.memory.usage
     value_type: Int
     type: Gauge
     attributes:
@@ -211,7 +211,7 @@ expected_metrics:
       command_line: .*
       owner: .*
       pid: \d+
-  - name: process.memory.virtual_usage
+  - name: process.memory.virtual
     value_type: Int
     type: Gauge
     attributes:

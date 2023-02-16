@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatautil"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.uber.org/zap"
@@ -162,18 +163,13 @@ func dataPointIdentifier(resource pcommon.Resource, metric pmetric.Metric, label
 
 	// Resource identifiers
 	attributes := resource.Attributes()
-	attributes.Sort()
-	attributes.Range(func(k string, v pcommon.Value) bool {
-		fmt.Fprintf(&b, "%s=%s|", k, v.AsString())
-		return true
-	})
+	hash := pdatautil.MapHash(attributes)
+	fmt.Fprintf(&b, "resourceAttributes=%s|", hash)
 
 	// Metric identifiers
 	fmt.Fprintf(&b, " - %s", metric.Name())
-	labels.Sort()
-	labels.Range(func(k string, v pcommon.Value) bool {
-		fmt.Fprintf(&b, " %s=%s", k, v.AsString())
-		return true
-	})
+	hash = pdatautil.MapHash(labels)
+	fmt.Fprintf(&b, "metricLabels=%s|", hash)
+
 	return b.String()
 }

@@ -20,7 +20,7 @@ import (
 	"log"
 
 	"go.opentelemetry.io/collector/component"
-	otelservice "go.opentelemetry.io/collector/service"
+	"go.opentelemetry.io/collector/otelcol"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
@@ -45,7 +45,7 @@ func MainContext(ctx context.Context) {
 		Version:     version.Version,
 	}
 
-	params := otelservice.CollectorSettings{
+	params := otelcol.CollectorSettings{
 		Factories: factories,
 		BuildInfo: info,
 		LoggingOptions: []zap.Option{
@@ -63,8 +63,8 @@ func MainContext(ctx context.Context) {
 	}
 }
 
-func runInteractive(ctx context.Context, params otelservice.CollectorSettings) error {
-	cmd := otelservice.NewCommand(params)
+func runInteractive(ctx context.Context, params otelcol.CollectorSettings) error {
+	cmd := otelcol.NewCommand(params)
 	err := cmd.ExecuteContext(ctx)
 	if err != nil {
 		return fmt.Errorf("application run finished with error: %w", err)

@@ -23,13 +23,12 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/component/componenttest"
-	"go.opentelemetry.io/collector/config"
 	"go.opentelemetry.io/collector/consumer/consumertest"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/processor/processorhelper"
+	"go.opentelemetry.io/collector/processor/processortest"
 	"go.uber.org/zap"
 )
 
@@ -81,17 +80,15 @@ func TestCastToSumProcessor(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			settings := config.NewProcessorSettings(component.NewID(typeStr))
 			cfg := &Config{
-				ProcessorSettings: &settings,
-				Metrics:           []string{"m1", "m2"},
+				Metrics: []string{"m1", "m2"},
 			}
 			nsp := newCastToSumProcessor(cfg, zap.NewExample())
 
 			tmn := &consumertest.MetricsSink{}
 			rmp, err := processorhelper.NewMetricsProcessor(
 				context.Background(),
-				componenttest.NewNopProcessorCreateSettings(),
+				processortest.NewNopCreateSettings(),
 				cfg,
 				tmn,
 				nsp.ProcessMetrics,
@@ -562,9 +559,7 @@ func requireEqual(t *testing.T, expected, actual []pmetric.Metrics) {
 			rmExp := rmsExp.At(i)
 
 			// require equality of resource attributes
-			rmExp.Resource().Attributes().Sort()
-			rmAct.Resource().Attributes().Sort()
-			require.Equal(t, rmExp.Resource().Attributes(), rmAct.Resource().Attributes())
+			require.Equal(t, rmExp.Resource().Attributes().AsRaw(), rmAct.Resource().Attributes().AsRaw())
 
 			// require equality of IL metrics
 			ilmsAct := rmAct.ScopeMetrics()
@@ -631,9 +626,7 @@ func requireEqualNumberDataPointSlice(t *testing.T, metricName string, ndpsAct, 
 			require.Failf(t, fmt.Sprintf("no data point for %s", dpKey), "Metric %s", metricName)
 		}
 
-		ndpExp.Attributes().Sort()
-		ndpAct.Attributes().Sort()
-		require.Equalf(t, ndpExp.Attributes(), ndpAct.Attributes(), "Metric %s", metricName)
+		require.Equalf(t, ndpExp.Attributes().AsRaw(), ndpAct.Attributes().AsRaw(), "Metric %s", metricName)
 		require.Equalf(t, ndpExp.StartTimestamp(), ndpAct.StartTimestamp(), "Metric %s", metricName)
 		require.Equalf(t, ndpExp.Timestamp(), ndpAct.Timestamp(), "Metric %s", metricName)
 		require.Equalf(t, ndpExp.ValueType(), ndpAct.ValueType(), "Metric %s", metricName)

@@ -20,9 +20,9 @@ package service
 import (
 	"context"
 
-	"go.opentelemetry.io/collector/service"
+	"go.opentelemetry.io/collector/otelcol"
 )
 
-func run(ctx context.Context, params service.CollectorSettings) error {
+func run(ctx context.Context, params otelcol.CollectorSettings) error {
 	return runInteractive(ctx, params)
 }

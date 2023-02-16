@@ -21,13 +21,12 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/component/componenttest"
-	"go.opentelemetry.io/collector/config"
 	"go.opentelemetry.io/collector/consumer/consumertest"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/processor/processorhelper"
+	"go.opentelemetry.io/collector/processor/processortest"
 	"go.uber.org/zap"
 )
 
@@ -101,10 +100,8 @@ func TestAgentMetricsProcessor(t *testing.T) {
 			tmn := &consumertest.MetricsSink{}
 			rmp, err := processorhelper.NewMetricsProcessor(
 				context.Background(),
-				componenttest.NewNopProcessorCreateSettings(),
-				&Config{
-					ProcessorSettings: config.NewProcessorSettings(component.NewID(typeStr)),
-				},
+				processortest.NewNopCreateSettings(),
+				&Config{},
 				tmn,
 				amp.ProcessMetrics,
 				processorhelper.WithCapabilities(processorCapabilities))
@@ -231,8 +228,7 @@ func (mb metricBuilder) addDoubleDataPoint(value float64, labels map[string]stri
 	return mb
 }
 
-// assertEqual is required because Attribute & Label Maps are not sorted by default
-// and we don't provide any guarantees on the order of transformed metrics
+// assertEqual is required because we don't provide any guarantees on the order of transformed metrics
 func assertEqual(t *testing.T, expected, actual pmetric.Metrics) {
 	rmsAct := actual.ResourceMetrics()
 	rmsExp := expected.ResourceMetrics()
@@ -242,9 +238,7 @@ func assertEqual(t *testing.T, expected, actual pmetric.Metrics) {
 		rmExp := rmsExp.At(i)
 
 		// assert equality of resource attributes
-		rmExp.Resource().Attributes().Sort()
-		rmAct.Resource().Attributes().Sort()
-		assert.Equal(t, rmExp.Resource().Attributes(), rmAct.Resource().Attributes())
+		assert.Equal(t, rmExp.Resource().Attributes().AsRaw(), rmAct.Resource().Attributes().AsRaw())
 
 		// assert equality of IL metrics
 		ilmsAct := rmAct.ScopeMetrics()
@@ -315,9 +309,7 @@ func assertEqualNumberDataPointSlice(t *testing.T, metricName string, ndpsAct, n
 			require.Failf(t, fmt.Sprintf("no data point for %s", labelsAsKey(ndpAct.Attributes())), "Metric %s", metricName)
 		}
 
-		ndpExp.Attributes().Sort()
-		ndpAct.Attributes().Sort()
-		assert.Equalf(t, ndpExp.Attributes(), ndpAct.Attributes(), "Metric %s attributes %s", metricName, key)
+		assert.Equalf(t, ndpExp.Attributes().AsRaw(), ndpAct.Attributes().AsRaw(), "Metric %s attributes %s", metricName, key)
 		assert.Equalf(t, ndpExp.StartTimestamp(), ndpAct.StartTimestamp(), "Metric %s attributes %s", metricName, key)
 		assert.Equalf(t, ndpExp.Timestamp(), ndpAct.Timestamp(), "Metric %s attributes %s", metricName, key)
 		assert.Equalf(t, ndpExp.ValueType(), ndpAct.ValueType(), "Metric %s attributes %s", metricName, key)

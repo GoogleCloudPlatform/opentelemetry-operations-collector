@@ -32,11 +32,11 @@ expected_metrics:
     attributes:
       direction: read|write
     resource_attributes: *process_resource_attributes
-  - name: process.memory.physical_usage
+  - name: process.memory.usage
     value_type: Int
     type: Sum
     resource_attributes: *process_resource_attributes
-  - name: process.memory.virtual_usage
+  - name: process.memory.virtual
     value_type: Int
     type: Sum
     resource_attributes: *process_resource_attributes

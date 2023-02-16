@@ -14,12 +14,8 @@
 
 package agentmetricsprocessor
 
-import "go.opentelemetry.io/collector/config"
-
 // Config defines configuration for Resource processor.
 type Config struct {
-	config.ProcessorSettings `mapstructure:",squash"`
-
 	// BlankLabelMetrics is a list of metrics that need a label called
 	// "blank" with an empty value.
 	BlankLabelMetrics []string `mapstructure:"blank_label_metrics"`

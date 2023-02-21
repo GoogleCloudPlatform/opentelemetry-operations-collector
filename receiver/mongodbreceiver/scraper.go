@@ -103,10 +103,10 @@ func (s *mongodbScraper) collectMetrics(ctx context.Context, errs *scrapererror.
 			return
 		}
 
-		// Mongo version 4.0+ is required to have authorized access to list collection names
-		// reference: https://www.mongodb.com/docs/manual/reference/method/db.getCollectionNames/
-		mongo40, _ := version.NewVersion("4.0")
-		if s.mongoVersion.GreaterThanOrEqual(mongo40) {
+		// Collect the the indexStats aggregation is only available if version is >= 3.2
+		// https://www.mongodb.com/docs/v3.2/reference/operator/aggregation/indexStats/
+		mongo32, _ := version.NewVersion("3.2")
+		if s.mongoVersion.GreaterThanOrEqual(mongo32) {
 			for _, collectionName := range collectionNames {
 				s.collectIndexStats(ctx, now, dbName, collectionName, errs)
 			}

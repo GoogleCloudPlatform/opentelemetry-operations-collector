@@ -103,7 +103,7 @@ func (s *mongodbScraper) collectMetrics(ctx context.Context, errs *scrapererror.
 			return
 		}
 
-		// Collect the the indexStats aggregation is only available if version is >= 3.2
+		// The indexStats aggregation is only available if version is >= 3.2
 		// https://www.mongodb.com/docs/v3.2/reference/operator/aggregation/indexStats/
 		mongo32, _ := version.NewVersion("3.2")
 		if s.mongoVersion.GreaterThanOrEqual(mongo32) {

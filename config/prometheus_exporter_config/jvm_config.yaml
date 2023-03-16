@@ -1,6 +1,0 @@
-# Simple JMX exporter config file, please change host:port of your particular JVM configuration
-# Documentation: https://github.com/prometheus/jmx_exporter
-
-jmxUrl: service:jmx:rmi:///jndi/rmi://host:port/jmxrmi
-startDelaySeconds: 0
-ssl: false

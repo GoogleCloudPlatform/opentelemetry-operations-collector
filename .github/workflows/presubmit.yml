@@ -31,5 +31,5 @@ jobs:
       - name: Build and test
         run: make install-tools && make presubmit
       - name: Build and test GPU support
-        if: matrix.os == "ubuntu-20.04"
+        if: matrix.os == 'ubuntu-20.04'
         run: make install-tools && make presubmit_gpu_support

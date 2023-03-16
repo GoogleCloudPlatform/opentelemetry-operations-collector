@@ -1,0 +1,13 @@
+receivers:
+  hostmetrics:
+    collection_interval: 1m
+    scrapers:
+      cpu:
+exporters:
+  file:
+    path: ./metrics.json
+service:
+  pipelines:
+    metrics:
+      receivers: [hostmetrics]
+      exporters: [file]

@@ -14,8 +14,8 @@
 
 // Note: DCGM daemon needs to be running for all GPU tests
 
-//go:build gpu && linux
-// +build gpu,linux
+//go:build gpu && has_gpu
+// +build gpu,has_gpu
 
 package dcgmreceiver
 

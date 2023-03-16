@@ -12,29 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build !linux
-// +build !linux
+//go:build !gpu
+// +build !gpu
 
 package dcgmreceiver
 
 import (
 	"context"
-	"testing"
 
-	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/collector/consumer/consumertest"
-	"go.opentelemetry.io/collector/receiver/receivertest"
+	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/consumer"
+	"go.opentelemetry.io/collector/receiver"
+
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/collectorerror"
 )
 
-func TestCreateMetricsReceiverOnWindows(t *testing.T) {
-	factory := NewFactory()
-	cfg := factory.CreateDefaultConfig()
-	receiver, err := factory.CreateMetricsReceiver(
-		context.Background(),
-		receivertest.NewNopCreateSettings(),
-		cfg,
-		consumertest.NewNop())
-
-	require.Regexp(t, ".*only supported on Linux.*", err)
-	require.Nil(t, receiver)
+func createMetricsReceiver(
+	_ context.Context,
+	params receiver.CreateSettings,
+	rConf component.Config,
+	consumer consumer.Metrics,
+) (receiver.Metrics, error) {
+	return nil, collectorerror.ErrGPUSupportDisabled
 }

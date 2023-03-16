@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build gpu
-// +build gpu
+//go:build gpu && has_gpu
+// +build gpu,has_gpu
 
 package nvmlreceiver
 
@@ -27,6 +27,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/pdata/pmetric"
+	"go.opentelemetry.io/collector/receiver"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
@@ -35,7 +36,7 @@ import (
 )
 
 func TestScrapeWithGpuPresent(t *testing.T) {
-	scraper := newNvmlScraper(createDefaultConfig().(*Config), componenttest.NewNopReceiverCreateSettings())
+	scraper := newNvmlScraper(createDefaultConfig().(*Config), receiver.CreateSettings{})
 	require.NotNil(t, scraper)
 
 	err := scraper.start(context.Background(), componenttest.NewNopHost())
@@ -53,7 +54,7 @@ func TestScrapeOnGpuUtilizationUnsupported(t *testing.T) {
 		return nvml.VALUE_TYPE_SIGNED_LONG_LONG, nil, nvml.ERROR_NOT_SUPPORTED
 	}
 
-	scraper := newNvmlScraper(createDefaultConfig().(*Config), componenttest.NewNopReceiverCreateSettings())
+	scraper := newNvmlScraper(createDefaultConfig().(*Config), receiver.CreateSettings{})
 	require.NotNil(t, scraper)
 
 	err := scraper.start(context.Background(), componenttest.NewNopHost())
@@ -70,7 +71,7 @@ func TestScrapeOnGpuMemoryInfoUnsupported(t *testing.T) {
 		return nvml.Memory{}, nvml.ERROR_NOT_SUPPORTED
 	}
 
-	scraper := newNvmlScraper(createDefaultConfig().(*Config), componenttest.NewNopReceiverCreateSettings())
+	scraper := newNvmlScraper(createDefaultConfig().(*Config), receiver.CreateSettings{})
 	require.NotNil(t, scraper)
 
 	err := scraper.start(context.Background(), componenttest.NewNopHost())
@@ -84,7 +85,7 @@ func TestScrapeWithGpuProcessAccounting(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	logger.Sugar().Warnf("This test requires superuser privileges.")
 
-	scraper := newNvmlScraper(createDefaultConfig().(*Config), componenttest.NewNopReceiverCreateSettings())
+	scraper := newNvmlScraper(createDefaultConfig().(*Config), receiver.CreateSettings{})
 	require.NotNil(t, scraper)
 
 	err := scraper.start(context.Background(), componenttest.NewNopHost())
@@ -108,7 +109,7 @@ func TestScrapeWithGpuProcessAccountingError(t *testing.T) {
 		return nil, nvml.ERROR_UNKNOWN
 	}
 
-	scraper := newNvmlScraper(createDefaultConfig().(*Config), componenttest.NewNopReceiverCreateSettings())
+	scraper := newNvmlScraper(createDefaultConfig().(*Config), receiver.CreateSettings{})
 	require.NotNil(t, scraper)
 
 	err := scraper.start(context.Background(), componenttest.NewNopHost())
@@ -132,7 +133,7 @@ func TestScrapeEmitsWarningsUptoThreshold(t *testing.T) {
 	}
 
 	warnings := 0
-	settings := componenttest.NewNopReceiverCreateSettings()
+	var settings receiver.CreateSettings
 	settings.Logger = zaptest.NewLogger(t, zaptest.WrapOptions(zap.Hooks(func(e zapcore.Entry) error {
 		if e.Level == zap.WarnLevel && strings.Contains(e.Message, "Unable to query") {
 			warnings = warnings + 1

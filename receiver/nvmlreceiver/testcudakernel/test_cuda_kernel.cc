@@ -16,30 +16,33 @@
 // https://stackoverflow.com/questions/27900849/unable-to-use-cublasxt
 // https://creativecommons.org/licenses/by-sa/3.0/
 
-#include <stdio.h>
-#include "curand.h"
-#include "cublasXt.h"
+// go:build has_gpu
+//  +build has_gpu
 
-void FillMatrix(double* &x, long m, long n, double val) {
+#include "cublasXt.h"
+#include "curand.h"
+#include <stdio.h>
+
+void FillMatrix(double *&x, long m, long n, double val) {
   x = new double[m * n];
   for (long i = 0; i < m; ++i)
-  for (long j = 0; j < n; ++j)
-    x[i * n + j] = val;
+    for (long j = 0; j < n; ++j)
+      x[i * n + j] = val;
 }
 
-void PrintMatrix(double* x, long m, long n) {
+void PrintMatrix(double *x, long m, long n) {
   for (int i = 0; i < m; ++i) {
     for (int j = 0; j < n; ++j)
-      printf ("%lf ", x[i *n + j]);
-    printf ("\n");
+      printf("%lf ", x[i * n + j]);
+    printf("\n");
   }
 }
 
 extern "C" bool SubmitCudaTestKernel() {
   cublasXtHandle_t xt_;
   cublasXtCreate(&xt_);
-  int devices[1] = { 0 }; 
-  if(cublasXtDeviceSelect(xt_, 1, devices) != CUBLAS_STATUS_SUCCESS)
+  int devices[1] = {0};
+  if (cublasXtDeviceSelect(xt_, 1, devices) != CUBLAS_STATUS_SUCCESS)
     return false;
 
   double *A, *B, *C;
@@ -52,12 +55,10 @@ extern "C" bool SubmitCudaTestKernel() {
   double alpha = 1.0;
   double beta = 0.0;
 
-  cublasXtDgemm(xt_, CUBLAS_OP_N, CUBLAS_OP_N,
-    m, n, k, &alpha, A, m, B, k, &beta, C, m
-  );
+  cublasXtDgemm(xt_, CUBLAS_OP_N, CUBLAS_OP_N, m, n, k, &alpha, A, m, B, k,
+                &beta, C, m);
 
-  cudaDeviceSynchronize();  
+  cudaDeviceSynchronize();
   cublasXtDestroy(xt_);
   return true;
 }
-

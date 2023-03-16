@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build gpu
-// +build gpu
+//go:build gpu && has_gpu
+// +build gpu,has_gpu
 
 package dcgmreceiver
 
@@ -28,13 +28,14 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/pdata/pmetric"
+	"go.opentelemetry.io/collector/receiver"
 	"go.uber.org/zap/zaptest"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/dcgmreceiver/testprofilepause"
 )
 
 func TestScrapeWithGpuPresent(t *testing.T) {
-	settings := componenttest.NewNopReceiverCreateSettings()
+	var settings receiver.CreateSettings
 	settings.Logger = zaptest.NewLogger(t)
 
 	scraper := newDcgmScraper(createDefaultConfig().(*Config), settings)
@@ -54,7 +55,7 @@ func TestScrapeOnPollingError(t *testing.T) {
 		return nil, fmt.Errorf("DCGM polling error")
 	}
 
-	settings := componenttest.NewNopReceiverCreateSettings()
+	var settings receiver.CreateSettings
 	settings.Logger = zaptest.NewLogger(t)
 
 	scraper := newDcgmScraper(createDefaultConfig().(*Config), settings)
@@ -73,7 +74,7 @@ func TestScrapeOnProfilingPaused(t *testing.T) {
 	config := createDefaultConfig().(*Config)
 	config.CollectionInterval = 10 * time.Millisecond
 
-	settings := componenttest.NewNopReceiverCreateSettings()
+	var settings receiver.CreateSettings
 	settings.Logger = zaptest.NewLogger(t)
 
 	scraper := newDcgmScraper(config, settings)

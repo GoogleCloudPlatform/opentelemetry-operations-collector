@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build gpu
-// +build gpu
+//go:build gpu && has_gpu
+// +build gpu,has_gpu
 
 package testcudakernel
 

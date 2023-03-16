@@ -67,8 +67,14 @@ update-components:
 
 # lint / build / test
 
+.PHONY: presubmit_tool_checks
+presubmit_tool_checks: checklicense impi lint misspell
+
 .PHONY: presubmit
-presubmit: checklicense impi lint misspell test
+presubmit: presubmit_tool_checks test
+
+.PHONY: presubmit_gpu_support
+presubmit_gpu_support: presubmit_tool_checks test_gpu_support
 
 .PHONY: checklicense
 checklicense:
@@ -90,9 +96,21 @@ misspell:
 build:
 	go build -o ./bin/$(OTELCOL_BINARY) $(LD_FLAGS) ./cmd/otelopscol
 
+.PHONY: build_gpu_support
+build_gpu_support:
+	go build -tags=gpu -o ./bin/$(OTELCOL_BINARY) $(LD_FLAGS) ./cmd/otelopscol
+
 .PHONY: test
 test:
 	go test -v -race ./...
+
+.PHONY: test_gpu_support
+test_gpu_support:
+	go test -tags=gpu -v -race ./...
+
+.PHONY: test_gpu_support_has_gpu
+test_gpu_support_has_gpu:
+	go test -tags=gpu,has_gpu -v -race ./...
 
 # googet (Windows)
 

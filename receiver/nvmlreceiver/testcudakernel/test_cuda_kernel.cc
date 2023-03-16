@@ -16,8 +16,8 @@
 // https://stackoverflow.com/questions/27900849/unable-to-use-cublasxt
 // https://creativecommons.org/licenses/by-sa/3.0/
 
-// go:build has_gpu
-//  +build has_gpu
+// go:build gpu && has_gpu
+//  +build gpu,has_gpu
 
 #include "cublasXt.h"
 #include "curand.h"

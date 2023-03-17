@@ -28,5 +28,10 @@ jobs:
           echo "GOPATH=$(go env GOPATH)" >> $GITHUB_ENV
           echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
         shell: bash
-      - name: Build and test
-        run: make install-tools && make presubmit
+      - name: Install Tools
+        run: make install-tools
+      - name: Run Presubmit
+        run: make presubmit
+      - name: Test GPU Support
+        if: startsWith(matrix.os, 'ubuntu')
+        run: GO_TAGS=gpu make test

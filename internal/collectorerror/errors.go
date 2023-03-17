@@ -12,25 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build !linux
-// +build !linux
+package collectorerror
 
-package dcgmreceiver
+import "errors"
 
-import (
-	"context"
-	"errors"
-
-	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/consumer"
-	"go.opentelemetry.io/collector/receiver"
-)
-
-func createMetricsReceiver(
-	_ context.Context,
-	params receiver.CreateSettings,
-	rConf component.Config,
-	consumer consumer.Metrics,
-) (receiver.Metrics, error) {
-	return nil, errors.New("DCGM receiver is only supported on Linux")
-}
+var ErrGPUSupportDisabled = errors.New("gpu support is disabled")

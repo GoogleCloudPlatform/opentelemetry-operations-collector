@@ -12,32 +12,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build linux
-// +build linux
+//go:build !gpu
+// +build !gpu
 
 package nvmlreceiver
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/consumer/consumertest"
 	"go.opentelemetry.io/collector/receiver/receivertest"
+
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/collectorerror"
 )
 
-func TestCreateMetricsReceiverOnLinux(t *testing.T) {
+func TestCreateMetricsReceiverWithGPUSupportOff(t *testing.T) {
 	factory := NewFactory()
 	cfg := factory.CreateDefaultConfig()
-	receiverConfig := cfg.(*Config)
-
 	receiver, err := factory.CreateMetricsReceiver(
 		context.Background(),
 		receivertest.NewNopCreateSettings(),
-		receiverConfig,
-		consumertest.NewNop(),
-	)
+		cfg,
+		consumertest.NewNop())
 
-	require.NoError(t, err)
-	require.NotNil(t, receiver, "failed to create metrics receiver")
+	require.True(t, errors.Is(err, collectorerror.ErrGPUSupportDisabled))
+	require.Nil(t, receiver)
 }

@@ -14,8 +14,8 @@
 
 // Note: The DCGM library should be loaded to find the symbols
 
-//go:build gpu
-// +build gpu
+//go:build gpu && has_gpu
+// +build gpu,has_gpu
 
 package testprofilepause
 

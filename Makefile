@@ -94,23 +94,11 @@ misspell:
 
 .PHONY: build
 build:
-	go build -o ./bin/$(OTELCOL_BINARY) $(LD_FLAGS) ./cmd/otelopscol
-
-.PHONY: build_gpu_support
-build_gpu_support:
-	go build -tags=gpu -o ./bin/$(OTELCOL_BINARY) $(LD_FLAGS) ./cmd/otelopscol
+	go build -tags=$(GO_TAGS) -o ./bin/$(OTELCOL_BINARY) $(LD_FLAGS) ./cmd/otelopscol
 
 .PHONY: test
 test:
-	go test -v -race ./...
-
-.PHONY: test_gpu_support
-test_gpu_support:
-	go test -tags=gpu -v -race ./...
-
-.PHONY: test_gpu_support_has_gpu
-test_gpu_support_has_gpu:
-	go test -tags=gpu,has_gpu -v -race ./...
+	go test -tags=$(GO_TAGS) -v -race ./...
 
 # googet (Windows)
 

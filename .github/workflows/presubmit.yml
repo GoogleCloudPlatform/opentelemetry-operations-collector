@@ -34,4 +34,4 @@ jobs:
         run: make presubmit
       - name: Test GPU Support
         if: startsWith(matrix.os, 'ubuntu')
-        run: make test_gpu_support
+        run: GO_TAGS=gpu make test

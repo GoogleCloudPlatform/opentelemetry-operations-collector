@@ -92,8 +92,8 @@ precommit: addlicense lint misspell test_quiet
 
 # Checks for the presence of required license headers, runs verbose
 # tests for complete information in CI job.
-.PHONY: ci
-ci: checklicense lint misspell test
+.PHONY: presubmit
+presubmit: checklicense lint misspell test
 
 # --------------------------
 #  Build and Test 

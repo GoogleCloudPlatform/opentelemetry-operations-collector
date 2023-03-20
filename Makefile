@@ -19,11 +19,6 @@ else
 $(error "ARCH must be set to one of: x86, x86_64")
 endif
 
-# set default docker build image name
-BUILD_IMAGE_NAME ?= otelopscol-build
-
-OTELCOL_BINARY = google-cloud-metrics-agent_$(GOOS)_$(GOARCH)$(EXTENSION)
-
 ALL_SRC := $(shell find . -name '*.go' -type f | sort)
 ALL_DOC := $(shell find . \( -name "*.md" -o -name "*.yaml" \) -type f | sort)
 GIT_SHA := $(shell git rev-parse --short HEAD)
@@ -31,9 +26,10 @@ GIT_SHA := $(shell git rev-parse --short HEAD)
 BUILD_INFO_IMPORT_PATH := github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/version
 BUILD_X1 := -X $(BUILD_INFO_IMPORT_PATH).GitHash=$(GIT_SHA)
 BUILD_X2 := -X $(BUILD_INFO_IMPORT_PATH).Version=$(PKG_VERSION)
-BUILD_JMX := -X github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver.MetricsGathererHash=$(JMX_JAR_SHA)
-ifdef JMX_JAR_SHA
-LD_FLAGS := -ldflags "${BUILD_X1} ${BUILD_X2} ${BUILD_JMX}"
+ifdef JMX_HASH
+JMX_RECEIVER_IMPORT_PATH := github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver
+BUILD_X_JMX := -X $(JMX_RECEIVER_IMPORT_PATH).MetricsGathererHash=$(JMX_HASH)
+LD_FLAGS := -ldflags "${BUILD_X1} ${BUILD_X2} ${BUILD_X_JMX}"
 else
 LD_FLAGS := -ldflags "${BUILD_X1} ${BUILD_X2}"
 endif
@@ -42,7 +38,19 @@ TOOLS_DIR := internal/tools
 
 .EXPORT_ALL_VARIABLES:
 
-.DEFAULT_GOAL := presubmit
+.DEFAULT_GOAL := ci
+
+# --------------------------
+#  Helpers 
+# --------------------------
+
+.PHONY: update-components
+update-components:
+	grep -o github.com/open-telemetry/opentelemetry-collector-contrib/[[:lower:]]*/[[:lower:]]* go.mod | xargs -I '{}' go get {}
+	go mod tidy
+	cd $(TOOLS_DIR) && \
+		go get -u github.com/open-telemetry/opentelemetry-collector-contrib/cmd/mdatagen && \
+		go mod tidy
 
 # --------------------------
 #  Tools
@@ -50,44 +58,20 @@ TOOLS_DIR := internal/tools
 
 .PHONY: install-tools
 install-tools:
-	cd $(TOOLS_DIR) && go install github.com/client9/misspell/cmd/misspell
-	cd $(TOOLS_DIR) && go install github.com/golangci/golangci-lint/cmd/golangci-lint
-	cd $(TOOLS_DIR) && go install github.com/google/addlicense
-	cd $(TOOLS_DIR) && go install github.com/google/googet/goopack
-	cd $(TOOLS_DIR) && go install github.com/pavius/impi/cmd/impi
-	cd $(TOOLS_DIR) && go install github.com/open-telemetry/opentelemetry-collector-contrib/cmd/mdatagen@v0.67.0
+	cd $(TOOLS_DIR); \
+		go install github.com/client9/misspell/cmd/misspell; \
+		go install github.com/golangci/golangci-lint/cmd/golangci-lint; \
+		go install github.com/google/addlicense; \
+		go install github.com/open-telemetry/opentelemetry-collector-contrib/cmd/mdatagen; \
+		go install github.com/google/googet/goopack;
 
-# --------------------------
-#  Helper Commands
-# --------------------------
-
-.PHONY: update-components
-update-components:
-	grep -o github.com/open-telemetry/opentelemetry-collector-contrib/[[:lower:]]*/[[:lower:]]* go.mod | xargs -I '{}' go get {}
-	go mod tidy
-
-# --------------------------
-#  Build / Package Commands
-# --------------------------
-
-# lint / build / test
-
-.PHONY: presubmit_tool_checks
-presubmit_tool_checks: checklicense impi lint misspell
-
-.PHONY: presubmit
-presubmit: presubmit_tool_checks test
-
-.PHONY: presubmit_gpu_support
-presubmit_gpu_support: presubmit_tool_checks test_gpu_support
+.PHONY: addlicense
+addlicense:
+	addlicense -c "Google LLC" -l apache $(ALL_SRC)
 
 .PHONY: checklicense
 checklicense:
 	@output=`addlicense -check $(ALL_SRC)` && echo checklicense finished successfully || (echo checklicense errors: $$output && exit 1)
-
-.PHONY: impi
-impi:
-	@output=`impi --local github.com/GoogleCloudPlatform/opentelemetry-operations-collector --scheme stdThirdPartyLocal ./...` && echo impi finished successfully || (echo impi errors:\\n$$output && exit 1)
 
 .PHONY: lint
 lint:
@@ -98,34 +82,96 @@ misspell:
 	@output=`misspell -error $(ALL_DOC)` && echo misspell finished successfully || (echo misspell errors:\\n$$output && exit 1)
 
 # --------------------------
-#  Helper Commands
+#  CI
 # --------------------------
 
-.PHONY: update-components
-update-components:
-	grep -o github.com/open-telemetry/opentelemetry-collector-contrib/[[:lower:]]*/[[:lower:]]* go.mod | xargs -I '{}' go get {}
-	go mod tidy
+# Adds license headers to files that are missing it, quiet tests
+# so full output is visible at a glance.
+.PHONY: precommit
+precommit: addlicense lint misspell test_quiet
+
+# Checks for the presence of required license headers, runs verbose
+# tests for complete information in CI job.
+.PHONY: ci
+ci: checklicense lint misspell test
 
 # --------------------------
 #  Build and Test 
 # --------------------------
 
+GO_BUILD_OUT ?= ./bin/otelopscol
 .PHONY: build
 build:
-	go build -tags=$(GO_TAGS) -o ./bin/otelopscol $(LD_FLAGS) ./cmd/otelopscol
+	go build -tags=$(GO_BUILD_TAGS) -o $(GO_BUILD_OUT) $(LD_FLAGS) ./cmd/otelopscol
 
+OTELCOL_BINARY = google-cloud-metrics-agent_$(GOOS)_$(GOARCH)$(EXTENSION)
 .PHONY: build_full_name
 build_full_name:
-	go build -tags=$(GO_TAGS) -o ./bin/$(OTELCOL_BINARY) $(LD_FLAGS) ./cmd/otelopscol
+	go build -tags=$(GO_BUILD_TAGS) -o ./bin/$(OTELCOL_BINARY) $(LD_FLAGS) ./cmd/otelopscol
 
 .PHONY: test
 test:
-	go test -tags=$(GO_TAGS) -v -race ./...
+	go test -tags=$(GO_BUILD_TAGS) -v -race ./...
 
 .PHONY: test_quiet
 test_quiet:
-	go test -tags=$(GO_TAGS) -race ./...
+	go test -tags=$(GO_BUILD_TAGS) -race ./...
 
 .PHONY: generate
 generate:
 	go generate ./...
+
+# --------------------
+#  Docker
+# --------------------
+
+# set default docker build image name
+BUILD_IMAGE_NAME ?= otelopscol-build
+
+.PHONY: docker-build-image
+docker-build-image:
+	docker build -t $(BUILD_IMAGE_NAME) .
+
+# Usage:   make TARGET=<target> docker-run
+# Example: make TARGET=build-goo docker-run
+.PHONY: docker-run
+docker-run:
+ifndef TARGET
+	$(error "TARGET is undefined")
+endif
+	docker run -e PKG_VERSION -e ARCH -v $(CURDIR):/mnt -w /mnt $(BUILD_IMAGE_NAME) /bin/bash -c "make $(TARGET)"
+
+# --------------------
+#  (DEPRECATED) Packaging
+# --------------------
+#
+# These targets are kept here due to their use in internal Google build jobs.
+# These packaging formats are not maintained and likely contain issues. Do
+# not use directly.
+
+# googet (Windows)
+.PHONY: build-goo
+build-goo:
+	make GOOS=windows build_full_name package-goo
+
+.PHONY: package-goo
+package-goo: export GOOS=windows
+package-goo: SHELL:=/bin/bash
+package-goo:
+	mkdir -p dist
+	# goopack doesn't support variable replacement or command line args so just use envsubst
+	goopack -output_dir ./dist <(envsubst < ./.build/googet/google-cloud-metrics-agent.goospec)
+	chmod -R a+rwx ./dist/
+
+# tarball
+.PHONY: clean-dist
+clean-dist:
+	rm -rf dist/
+
+.PHONY: package-tarball
+package-tarball:
+	bash ./.build/tar/generate_tar.sh
+	chmod -R a+rwx ./dist/
+
+.PHONY: build-tarball
+build-tarball: clean-dist test build package-tarball

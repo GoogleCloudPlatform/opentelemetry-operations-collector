@@ -703,6 +703,8 @@ github.com/onsi/gomega v1.7.1/go.mod h1:XdKZgCCFLUoM/7CFJVPcG8C1xQ1AJ0vpAezJrB7J
 github.com/onsi/gomega v1.10.1/go.mod h1:iN09h71vgCQne3DLsj+A5owkum+a2tYe+TOCB1ybHNo=
 github.com/onsi/gomega v1.15.0/go.mod h1:cIuvLEne0aoVhAgh/O6ac0Op8WWw9H6eYCriF+tEHG0=
 github.com/onsi/gomega v1.23.0 h1:/oxKu9c2HVap+F3PfKort2Hw5DEU+HGlW8n+tguWsys=
+github.com/open-telemetry/opentelemetry-collector-contrib/cmd/mdatagen v0.71.0 h1:1b6SWym6k+MxjG1x568W0CUkxKf3qcZQ9RVrpvzoPDo=
+github.com/open-telemetry/opentelemetry-collector-contrib/cmd/mdatagen v0.71.0/go.mod h1:CfmKTS8bGbMuW5pRTBsofUwKKKmfSzyE+vyZvjzs+jo=
 github.com/open-telemetry/opentelemetry-collector-contrib/exporter/fileexporter v0.71.0 h1:pp2brtgBojjLRlwFyGh199OQryh7p3FGA85z5+povuk=
 github.com/open-telemetry/opentelemetry-collector-contrib/exporter/fileexporter v0.71.0/go.mod h1:KroNaWdPPmtF7DszmUXsCsCkZ+nZ8H8/p6PnFKNXHOo=
 github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter v0.71.0 h1:+HuL5MCpe8KrPKs9G7VwwiM66/39vwhL7Yfmd68FIeU=

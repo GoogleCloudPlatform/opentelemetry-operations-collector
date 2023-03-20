@@ -13,48 +13,12 @@
 
 The Google Cloud Ops OpenTelemetry Collector is a distribution of the collector tooled specifically for exporting telemetry data to Google Cloud. It facilitates the monitoring portion of the [Google Cloud Ops Agent][ops-agent], and includes some custom receivers and processors built to support Ops Agent features.
 
-## Build and Test
+## Development Guides
 
-All commands documented here will reference the `make` targets. If you don't have `make` installed, most of the targets are simple enough to copy and run manually.
+[Build and Test](./docs/dev/build-and-test.md)
 
-All builds require Go at version 1.18 or greater.
+[Upgrade OpenTelemetry Version](./docs/dev/upgrade-opentelemetry.md)
 
-### Base Collector
-
-To build the base collector with no optional features, run the following command:
-```
-make build
-```
-To run base collector tests:
-```
-make test
-```
-
-### GPU Support
-
-Additional requirements:
-* CGO support (having C build tools in your path should do it)
-
-To build the collector with GPU receiver support added, you can use the build tag `gpu`:
-```
-GO_TAGS=gpu make build
-```
-Building with GPU support on platforms other than `linux` or without CGO enabled will fail.
-
-To run tests with GPU support:
-```
-GO_TAGS=gpu make test
-```
-
-### JMX Receiver Support
-
-Additional requirements:
-* A valid JMX Jar and its sha256 hash
-
-To build the collector with JMX receiver support, you can provide the environment variable JMX_JAR_SHA:
-```
-JMX_JAR_SHA=<sha256 of JMX jar> make build
-```
-Testing with a JMX Jar SHA currently does not affect tests.
+[Using Go Build Tags](./docs/dev/using-go-build-tags.md)
 
 [ops-agent]: https://github.com/GoogleCloudPlatform/ops-agent

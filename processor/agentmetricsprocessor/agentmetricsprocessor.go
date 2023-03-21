@@ -55,7 +55,7 @@ func newAgentMetricsProcessor(logger *zap.Logger, cfg *Config) *agentMetricsProc
 }
 
 // ProcessMetrics implements the MProcessor interface.
-func (mtp *agentMetricsProcessor) ProcessMetrics(ctx context.Context, metrics pmetric.Metrics) (pmetric.Metrics, error) {
+func (mtp *agentMetricsProcessor) ProcessMetrics(_ context.Context, metrics pmetric.Metrics) (pmetric.Metrics, error) {
 	convertNonMonotonicSumsToGauges(metrics.ResourceMetrics())
 	removeVersionAttribute(metrics.ResourceMetrics())
 
@@ -100,27 +100,27 @@ func newMetric(metric pmetric.Metric) pmetric.Metric {
 // newMetric creates a new metric with no data points using the provided descriptor info
 // and overrides the name with the supplied value
 func newMetricWithName(metric pmetric.Metric, name string) pmetric.Metric {
-	new := pmetric.NewMetric()
+	newMetric := pmetric.NewMetric()
 
 	if name != "" {
-		new.SetName(name)
+		newMetric.SetName(name)
 	} else {
-		new.SetName(metric.Name())
+		newMetric.SetName(metric.Name())
 	}
 
-	new.SetDescription(metric.Description())
-	new.SetUnit(metric.Unit())
+	newMetric.SetDescription(metric.Description())
+	newMetric.SetUnit(metric.Unit())
 
 	switch t := metric.Type(); t {
 	case pmetric.MetricTypeSum:
-		new.SetEmptySum()
-		sum := new.Sum()
+		newMetric.SetEmptySum()
+		sum := newMetric.Sum()
 		sum.SetIsMonotonic(metric.Sum().IsMonotonic())
 		sum.SetAggregationTemporality(metric.Sum().AggregationTemporality())
 	case pmetric.MetricTypeGauge:
-		new.SetEmptyGauge()
-		new.Gauge()
+		newMetric.SetEmptyGauge()
+		newMetric.Gauge()
 	}
 
-	return new
+	return newMetric
 }

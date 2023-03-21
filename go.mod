@@ -8,6 +8,7 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/fileexporter v0.74.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter v0.74.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlemanagedprometheusexporter v0.74.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatautil v0.74.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.74.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/processor/groupbyattrsprocessor v0.74.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor v0.74.0
@@ -43,6 +44,7 @@ require (
 	go.opentelemetry.io/collector/component v0.74.0
 	go.opentelemetry.io/collector/confmap v0.74.0
 	go.opentelemetry.io/collector/consumer v0.74.0
+	go.opentelemetry.io/collector/exporter v0.74.0
 	go.opentelemetry.io/collector/exporter/loggingexporter v0.71.0
 	go.opentelemetry.io/collector/exporter/otlpexporter v0.71.0
 	go.opentelemetry.io/collector/exporter/otlphttpexporter v0.71.0
@@ -51,6 +53,7 @@ require (
 	go.opentelemetry.io/collector/pdata v1.0.0-rc8
 	go.opentelemetry.io/collector/processor/batchprocessor v0.74.0
 	go.opentelemetry.io/collector/processor/memorylimiterprocessor v0.71.0
+	go.opentelemetry.io/collector/receiver v0.74.0
 	go.opentelemetry.io/collector/receiver/otlpreceiver v0.74.0
 	go.opentelemetry.io/collector/semconv v0.74.0
 	go.uber.org/multierr v1.10.0
@@ -74,15 +77,11 @@ require (
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/mtibben/percent v0.2.1 // indirect
-	github.com/open-telemetry/opentelemetry-collector-contrib/internal/aws v0.24.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/filter v0.74.0 // indirect
-	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatautil v0.74.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/translator/prometheus v0.74.0 // indirect
 	github.com/ovh/go-ovh v1.3.0 // indirect
 	github.com/panta/machineid v1.0.2 // indirect
-	go.opentelemetry.io/collector/exporter v0.74.0 // indirect
 	go.opentelemetry.io/collector/featuregate v0.74.0 // indirect
-	go.opentelemetry.io/collector/receiver v0.74.0 // indirect
 	gotest.tools/v3 v3.4.0 // indirect
 )
 

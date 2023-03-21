@@ -29,9 +29,9 @@ import (
 
 func createMetricsReceiver(
 	_ context.Context,
-	params receiver.CreateSettings,
-	rConf component.Config,
-	consumer consumer.Metrics,
+	_ receiver.CreateSettings,
+	_ component.Config,
+	_ consumer.Metrics,
 ) (receiver.Metrics, error) {
 	return nil, collectorerror.ErrGPUSupportDisabled
 }

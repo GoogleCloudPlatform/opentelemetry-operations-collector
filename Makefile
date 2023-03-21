@@ -50,7 +50,7 @@ install-tools:
 	cd $(TOOLS_DIR) && go install github.com/google/addlicense
 	cd $(TOOLS_DIR) && go install github.com/google/googet/goopack
 	cd $(TOOLS_DIR) && go install github.com/pavius/impi/cmd/impi
-	cd $(TOOLS_DIR) && go install github.com/open-telemetry/opentelemetry-collector-contrib/cmd/mdatagen@v0.67.0
+	cd $(TOOLS_DIR) && go install github.com/open-telemetry/opentelemetry-collector-contrib/cmd/mdatagen@v0.74.0
 
 # --------------------------
 #  Helper Commands
@@ -163,5 +163,5 @@ endif
 
 .PHONY: generate
 generate:
-	go generate ./...
+	go generate -tags=$(GO_TAGS) ./...
 	

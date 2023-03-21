@@ -16,12 +16,7 @@ import (
 type MetricSettings struct {
 	Enabled bool `mapstructure:"enabled"`
 
-	enabledProvidedByUser bool
-}
-
-// IsEnabledProvidedByUser returns true if `enabled` option is explicitly set in user settings to any value.
-func (ms *MetricSettings) IsEnabledProvidedByUser() bool {
-	return ms.enabledProvidedByUser
+	enabledSetByUser bool
 }
 
 func (ms *MetricSettings) Unmarshal(parser *confmap.Conf) error {
@@ -32,7 +27,7 @@ func (ms *MetricSettings) Unmarshal(parser *confmap.Conf) error {
 	if err != nil {
 		return err
 	}
-	ms.enabledProvidedByUser = parser.IsSet("enabled")
+	ms.enabledSetByUser = parser.IsSet("enabled")
 	return nil
 }
 
@@ -85,6 +80,24 @@ func DefaultMetricsSettings() MetricsSettings {
 		},
 		VarnishThreadOperationCount: MetricSettings{
 			Enabled: true,
+		},
+	}
+}
+
+// ResourceAttributeSettings provides common settings for a particular metric.
+type ResourceAttributeSettings struct {
+	Enabled bool `mapstructure:"enabled"`
+}
+
+// ResourceAttributesSettings provides settings for varnishreceiver metrics.
+type ResourceAttributesSettings struct {
+	VarnishCacheName ResourceAttributeSettings `mapstructure:"varnish.cache.name"`
+}
+
+func DefaultResourceAttributesSettings() ResourceAttributesSettings {
+	return ResourceAttributesSettings{
+		VarnishCacheName: ResourceAttributeSettings{
+			Enabled: false,
 		},
 	}
 }
@@ -824,6 +837,12 @@ func newMetricVarnishThreadOperationCount(settings MetricSettings) metricVarnish
 	return m
 }
 
+// MetricsBuilderConfig is a structural subset of an otherwise 1-1 copy of metadata.yaml
+type MetricsBuilderConfig struct {
+	Metrics            MetricsSettings            `mapstructure:"metrics"`
+	ResourceAttributes ResourceAttributesSettings `mapstructure:"resource_attributes"`
+}
+
 // MetricsBuilder provides an interface for scrapers to report metrics while taking care of all the transformations
 // required to produce metric representation defined in metadata and user settings.
 type MetricsBuilder struct {
@@ -832,6 +851,7 @@ type MetricsBuilder struct {
 	resourceCapacity                     int                 // maximum observed number of resource attributes.
 	metricsBuffer                        pmetric.Metrics     // accumulates metrics data before emitting.
 	buildInfo                            component.BuildInfo // contains version information
+	resourceAttributesSettings           ResourceAttributesSettings
 	metricVarnishBackendConnectionCount  metricVarnishBackendConnectionCount
 	metricVarnishBackendRequestCount     metricVarnishBackendRequestCount
 	metricVarnishCacheOperationCount     metricVarnishCacheOperationCount
@@ -855,22 +875,37 @@ func WithStartTime(startTime pcommon.Timestamp) metricBuilderOption {
 	}
 }
 
-func NewMetricsBuilder(ms MetricsSettings, settings receiver.CreateSettings, options ...metricBuilderOption) *MetricsBuilder {
+func DefaultMetricsBuilderConfig() MetricsBuilderConfig {
+	return MetricsBuilderConfig{
+		Metrics:            DefaultMetricsSettings(),
+		ResourceAttributes: DefaultResourceAttributesSettings(),
+	}
+}
+
+func NewMetricsBuilderConfig(ms MetricsSettings, ras ResourceAttributesSettings) MetricsBuilderConfig {
+	return MetricsBuilderConfig{
+		Metrics:            ms,
+		ResourceAttributes: ras,
+	}
+}
+
+func NewMetricsBuilder(mbc MetricsBuilderConfig, settings receiver.CreateSettings, options ...metricBuilderOption) *MetricsBuilder {
 	mb := &MetricsBuilder{
 		startTime:                            pcommon.NewTimestampFromTime(time.Now()),
 		metricsBuffer:                        pmetric.NewMetrics(),
 		buildInfo:                            settings.BuildInfo,
-		metricVarnishBackendConnectionCount:  newMetricVarnishBackendConnectionCount(ms.VarnishBackendConnectionCount),
-		metricVarnishBackendRequestCount:     newMetricVarnishBackendRequestCount(ms.VarnishBackendRequestCount),
-		metricVarnishCacheOperationCount:     newMetricVarnishCacheOperationCount(ms.VarnishCacheOperationCount),
-		metricVarnishClientRequestCount:      newMetricVarnishClientRequestCount(ms.VarnishClientRequestCount),
-		metricVarnishClientRequestErrorCount: newMetricVarnishClientRequestErrorCount(ms.VarnishClientRequestErrorCount),
-		metricVarnishObjectCount:             newMetricVarnishObjectCount(ms.VarnishObjectCount),
-		metricVarnishObjectExpired:           newMetricVarnishObjectExpired(ms.VarnishObjectExpired),
-		metricVarnishObjectMoved:             newMetricVarnishObjectMoved(ms.VarnishObjectMoved),
-		metricVarnishObjectNuked:             newMetricVarnishObjectNuked(ms.VarnishObjectNuked),
-		metricVarnishSessionCount:            newMetricVarnishSessionCount(ms.VarnishSessionCount),
-		metricVarnishThreadOperationCount:    newMetricVarnishThreadOperationCount(ms.VarnishThreadOperationCount),
+		resourceAttributesSettings:           mbc.ResourceAttributes,
+		metricVarnishBackendConnectionCount:  newMetricVarnishBackendConnectionCount(mbc.Metrics.VarnishBackendConnectionCount),
+		metricVarnishBackendRequestCount:     newMetricVarnishBackendRequestCount(mbc.Metrics.VarnishBackendRequestCount),
+		metricVarnishCacheOperationCount:     newMetricVarnishCacheOperationCount(mbc.Metrics.VarnishCacheOperationCount),
+		metricVarnishClientRequestCount:      newMetricVarnishClientRequestCount(mbc.Metrics.VarnishClientRequestCount),
+		metricVarnishClientRequestErrorCount: newMetricVarnishClientRequestErrorCount(mbc.Metrics.VarnishClientRequestErrorCount),
+		metricVarnishObjectCount:             newMetricVarnishObjectCount(mbc.Metrics.VarnishObjectCount),
+		metricVarnishObjectExpired:           newMetricVarnishObjectExpired(mbc.Metrics.VarnishObjectExpired),
+		metricVarnishObjectMoved:             newMetricVarnishObjectMoved(mbc.Metrics.VarnishObjectMoved),
+		metricVarnishObjectNuked:             newMetricVarnishObjectNuked(mbc.Metrics.VarnishObjectNuked),
+		metricVarnishSessionCount:            newMetricVarnishSessionCount(mbc.Metrics.VarnishSessionCount),
+		metricVarnishThreadOperationCount:    newMetricVarnishThreadOperationCount(mbc.Metrics.VarnishThreadOperationCount),
 	}
 	for _, op := range options {
 		op(mb)
@@ -889,19 +924,21 @@ func (mb *MetricsBuilder) updateCapacity(rm pmetric.ResourceMetrics) {
 }
 
 // ResourceMetricsOption applies changes to provided resource metrics.
-type ResourceMetricsOption func(pmetric.ResourceMetrics)
+type ResourceMetricsOption func(ResourceAttributesSettings, pmetric.ResourceMetrics)
 
 // WithVarnishCacheName sets provided value as "varnish.cache.name" attribute for current resource.
 func WithVarnishCacheName(val string) ResourceMetricsOption {
-	return func(rm pmetric.ResourceMetrics) {
-		rm.Resource().Attributes().PutStr("varnish.cache.name", val)
+	return func(ras ResourceAttributesSettings, rm pmetric.ResourceMetrics) {
+		if ras.VarnishCacheName.Enabled {
+			rm.Resource().Attributes().PutStr("varnish.cache.name", val)
+		}
 	}
 }
 
 // WithStartTimeOverride overrides start time for all the resource metrics data points.
 // This option should be only used if different start time has to be set on metrics coming from different resources.
 func WithStartTimeOverride(start pcommon.Timestamp) ResourceMetricsOption {
-	return func(rm pmetric.ResourceMetrics) {
+	return func(ras ResourceAttributesSettings, rm pmetric.ResourceMetrics) {
 		var dps pmetric.NumberDataPointSlice
 		metrics := rm.ScopeMetrics().At(0).Metrics()
 		for i := 0; i < metrics.Len(); i++ {
@@ -941,8 +978,9 @@ func (mb *MetricsBuilder) EmitForResource(rmo ...ResourceMetricsOption) {
 	mb.metricVarnishObjectNuked.emit(ils.Metrics())
 	mb.metricVarnishSessionCount.emit(ils.Metrics())
 	mb.metricVarnishThreadOperationCount.emit(ils.Metrics())
+
 	for _, op := range rmo {
-		op(rm)
+		op(mb.resourceAttributesSettings, rm)
 	}
 	if ils.Metrics().Len() > 0 {
 		mb.updateCapacity(rm)
@@ -955,8 +993,8 @@ func (mb *MetricsBuilder) EmitForResource(rmo ...ResourceMetricsOption) {
 // produce metric representation defined in metadata and user settings, e.g. delta or cumulative.
 func (mb *MetricsBuilder) Emit(rmo ...ResourceMetricsOption) pmetric.Metrics {
 	mb.EmitForResource(rmo...)
-	metrics := pmetric.NewMetrics()
-	mb.metricsBuffer.MoveTo(metrics)
+	metrics := mb.metricsBuffer
+	mb.metricsBuffer = pmetric.NewMetrics()
 	return metrics
 }
 

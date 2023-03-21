@@ -41,10 +41,12 @@ type mongodbScraper struct {
 }
 
 func newMongodbScraper(settings receiver.CreateSettings, config *Config) *mongodbScraper {
+	mbConfig := metadata.DefaultMetricsBuilderConfig()
+	mbConfig.Metrics = config.Metrics
 	return &mongodbScraper{
 		logger: settings.Logger,
 		config: config,
-		mb:     metadata.NewMetricsBuilder(config.Metrics, settings),
+		mb:     metadata.NewMetricsBuilder(mbConfig, settings),
 	}
 }
 

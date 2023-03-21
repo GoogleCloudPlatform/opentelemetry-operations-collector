@@ -49,8 +49,10 @@ func (s *dcgmScraper) start(_ context.Context, host component.Host) error {
 	}
 
 	startTime := pcommon.NewTimestampFromTime(time.Now())
+	mbConfig := metadata.DefaultMetricsBuilderConfig()
+	mbConfig.Metrics = s.config.Metrics
 	s.mb = metadata.NewMetricsBuilder(
-		s.config.Metrics, s.settings.BuildInfo, metadata.WithStartTime(startTime))
+		mbConfig, s.settings, metadata.WithStartTime(startTime))
 
 	return nil
 }

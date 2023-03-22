@@ -94,7 +94,7 @@ misspell:
 
 .PHONY: build
 build:
-	go build -tags=$(GO_TAGS) -o ./bin/$(OTELCOL_BINARY) $(LD_FLAGS) ./cmd/otelopscol
+	go build -tags=$(GO_TAGS) -o ./bin/$(OTELCOL_BINARY) $(LD_FLAGS) -buildvcs=false ./cmd/otelopscol
 
 .PHONY: test
 test:

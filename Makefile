@@ -38,10 +38,10 @@ TOOLS_DIR := internal/tools
 
 .EXPORT_ALL_VARIABLES:
 
-.DEFAULT_GOAL := ci
+.DEFAULT_GOAL := presubmit
 
 # --------------------------
-#  Helpers 
+#  Helpers
 # --------------------------
 
 .PHONY: update-components
@@ -58,12 +58,13 @@ update-components:
 
 .PHONY: install-tools
 install-tools:
-	cd $(TOOLS_DIR); \
-		go install github.com/client9/misspell/cmd/misspell; \
-		go install github.com/golangci/golangci-lint/cmd/golangci-lint; \
-		go install github.com/google/addlicense; \
-		go install github.com/open-telemetry/opentelemetry-collector-contrib/cmd/mdatagen; \
-		go install github.com/google/googet/goopack;
+	cd $(TOOLS_DIR) && \
+		go install \
+			github.com/client9/misspell/cmd/misspell \
+			github.com/golangci/golangci-lint/cmd/golangci-lint \
+			github.com/google/addlicense \
+			github.com/open-telemetry/opentelemetry-collector-contrib/cmd/mdatagen \
+			github.com/google/googet/goopack
 
 .PHONY: addlicense
 addlicense:
@@ -96,7 +97,7 @@ precommit: addlicense lint misspell test_quiet
 presubmit: checklicense lint misspell test
 
 # --------------------------
-#  Build and Test 
+#  Build and Test
 # --------------------------
 
 GO_BUILD_OUT ?= ./bin/otelopscol
@@ -107,15 +108,15 @@ build:
 OTELCOL_BINARY = google-cloud-metrics-agent_$(GOOS)_$(GOARCH)$(EXTENSION)
 .PHONY: build_full_name
 build_full_name:
-	go build -tags=$(GO_BUILD_TAGS) -o ./bin/$(OTELCOL_BINARY) $(LD_FLAGS) ./cmd/otelopscol
+	$(MAKE) GO_BUILD_OUT=./bin/$(OTELCOL_BINARY) build
 
 .PHONY: test
 test:
-	go test -tags=$(GO_BUILD_TAGS) -v -race ./...
+	go test -tags=$(GO_BUILD_TAGS) $(GO_TEST_VERBOSE) -race ./...
 
 .PHONY: test_quiet
-test_quiet:
-	go test -tags=$(GO_BUILD_TAGS) -race ./...
+test_verbose:
+	$(MAKE) GO_TEST_VERBOSE=-v test
 
 .PHONY: generate
 generate:

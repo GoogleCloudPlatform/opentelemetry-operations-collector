@@ -47,7 +47,7 @@ func newNormalizeSumsProcessor(logger *zap.Logger) *NormalizeSumsProcessor {
 }
 
 // ProcessMetrics implements the MProcessor interface.
-func (nsp *NormalizeSumsProcessor) ProcessMetrics(ctx context.Context, metrics pmetric.Metrics) (pmetric.Metrics, error) {
+func (nsp *NormalizeSumsProcessor) ProcessMetrics(_ context.Context, metrics pmetric.Metrics) (pmetric.Metrics, error) {
 	for i := 0; i < metrics.ResourceMetrics().Len(); i++ {
 		rms := metrics.ResourceMetrics().At(i)
 		nsp.transformMetrics(rms)

@@ -113,17 +113,17 @@ func appendNumberDataPoints(metricName string, ndps, read, write pmetric.NumberD
 			return fmt.Errorf("metric %v did not contain %v label as expected", metricName, directionLabel)
 		}
 
-		var new pmetric.NumberDataPoint
+		var ndpNew pmetric.NumberDataPoint
 		switch dir.Str() {
 		case readDirection:
-			new = read.AppendEmpty()
+			ndpNew = read.AppendEmpty()
 		case writeDirection:
-			new = write.AppendEmpty()
+			ndpNew = write.AppendEmpty()
 		default:
 			return fmt.Errorf("metric %v label %v contained unexpected value %v", metricName, directionLabel, dir.AsString())
 		}
-		ndp.CopyTo(new)
-		new.Attributes().Remove(directionLabel)
+		ndp.CopyTo(ndpNew)
+		ndpNew.Attributes().Remove(directionLabel)
 	}
 
 	return nil

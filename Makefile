@@ -41,7 +41,7 @@ TOOLS_DIR := internal/tools
 .DEFAULT_GOAL := presubmit
 
 # --------------------------
-#  Helpers
+#  Helper Commands
 # --------------------------
 
 .PHONY: update-components
@@ -89,12 +89,12 @@ misspell:
 # Adds license headers to files that are missing it, quiet tests
 # so full output is visible at a glance.
 .PHONY: precommit
-precommit: addlicense lint misspell test_quiet
+precommit: addlicense lint misspell test
 
 # Checks for the presence of required license headers, runs verbose
 # tests for complete information in CI job.
 .PHONY: presubmit
-presubmit: checklicense lint misspell test
+presubmit: checklicense lint misspell test_verbose
 
 # --------------------------
 #  Build and Test
@@ -103,7 +103,7 @@ presubmit: checklicense lint misspell test
 GO_BUILD_OUT ?= ./bin/otelopscol
 .PHONY: build
 build:
-	go build -tags=$(GO_BUILD_TAGS) -o $(GO_BUILD_OUT) $(LD_FLAGS) ./cmd/otelopscol
+	go build -tags=$(GO_BUILD_TAGS) -o $(GO_BUILD_OUT) $(LD_FLAGS) -buildvcs=false ./cmd/otelopscol
 
 OTELCOL_BINARY = google-cloud-metrics-agent_$(GOOS)_$(GOARCH)$(EXTENSION)
 .PHONY: build_full_name
@@ -168,11 +168,3 @@ package-goo:
 .PHONY: clean-dist
 clean-dist:
 	rm -rf dist/
-
-.PHONY: package-tarball
-package-tarball:
-	bash ./.build/tar/generate_tar.sh
-	chmod -R a+rwx ./dist/
-
-.PHONY: build-tarball
-build-tarball: clean-dist test build package-tarball

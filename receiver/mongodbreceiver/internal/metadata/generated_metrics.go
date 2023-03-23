@@ -16,12 +16,7 @@ import (
 type MetricSettings struct {
 	Enabled bool `mapstructure:"enabled"`
 
-	enabledProvidedByUser bool
-}
-
-// IsEnabledProvidedByUser returns true if `enabled` option is explicitly set in user settings to any value.
-func (ms *MetricSettings) IsEnabledProvidedByUser() bool {
-	return ms.enabledProvidedByUser
+	enabledSetByUser bool
 }
 
 func (ms *MetricSettings) Unmarshal(parser *confmap.Conf) error {
@@ -32,7 +27,7 @@ func (ms *MetricSettings) Unmarshal(parser *confmap.Conf) error {
 	if err != nil {
 		return err
 	}
-	ms.enabledProvidedByUser = parser.IsSet("enabled")
+	ms.enabledSetByUser = parser.IsSet("enabled")
 	return nil
 }
 
@@ -145,6 +140,24 @@ func DefaultMetricsSettings() MetricsSettings {
 		},
 		MongodbStorageSize: MetricSettings{
 			Enabled: true,
+		},
+	}
+}
+
+// ResourceAttributeSettings provides common settings for a particular metric.
+type ResourceAttributeSettings struct {
+	Enabled bool `mapstructure:"enabled"`
+}
+
+// ResourceAttributesSettings provides settings for mongodbreceiver metrics.
+type ResourceAttributesSettings struct {
+	Database ResourceAttributeSettings `mapstructure:"database"`
+}
+
+func DefaultResourceAttributesSettings() ResourceAttributesSettings {
+	return ResourceAttributesSettings{
+		Database: ResourceAttributeSettings{
+			Enabled: false,
 		},
 	}
 }
@@ -1731,6 +1744,12 @@ func newMetricMongodbStorageSize(settings MetricSettings) metricMongodbStorageSi
 	return m
 }
 
+// MetricsBuilderConfig is a structural subset of an otherwise 1-1 copy of metadata.yaml
+type MetricsBuilderConfig struct {
+	Metrics            MetricsSettings            `mapstructure:"metrics"`
+	ResourceAttributes ResourceAttributesSettings `mapstructure:"resource_attributes"`
+}
+
 // MetricsBuilder provides an interface for scrapers to report metrics while taking care of all the transformations
 // required to produce metric representation defined in metadata and user settings.
 type MetricsBuilder struct {
@@ -1739,6 +1758,7 @@ type MetricsBuilder struct {
 	resourceCapacity                    int                 // maximum observed number of resource attributes.
 	metricsBuffer                       pmetric.Metrics     // accumulates metrics data before emitting.
 	buildInfo                           component.BuildInfo // contains version information
+	resourceAttributesSettings          ResourceAttributesSettings
 	metricMongodbCacheOperations        metricMongodbCacheOperations
 	metricMongodbCollectionCount        metricMongodbCollectionCount
 	metricMongodbConnectionCount        metricMongodbConnectionCount
@@ -1777,37 +1797,52 @@ func WithStartTime(startTime pcommon.Timestamp) metricBuilderOption {
 	}
 }
 
-func NewMetricsBuilder(ms MetricsSettings, settings receiver.CreateSettings, options ...metricBuilderOption) *MetricsBuilder {
+func DefaultMetricsBuilderConfig() MetricsBuilderConfig {
+	return MetricsBuilderConfig{
+		Metrics:            DefaultMetricsSettings(),
+		ResourceAttributes: DefaultResourceAttributesSettings(),
+	}
+}
+
+func NewMetricsBuilderConfig(ms MetricsSettings, ras ResourceAttributesSettings) MetricsBuilderConfig {
+	return MetricsBuilderConfig{
+		Metrics:            ms,
+		ResourceAttributes: ras,
+	}
+}
+
+func NewMetricsBuilder(mbc MetricsBuilderConfig, settings receiver.CreateSettings, options ...metricBuilderOption) *MetricsBuilder {
 	mb := &MetricsBuilder{
 		startTime:                           pcommon.NewTimestampFromTime(time.Now()),
 		metricsBuffer:                       pmetric.NewMetrics(),
 		buildInfo:                           settings.BuildInfo,
-		metricMongodbCacheOperations:        newMetricMongodbCacheOperations(ms.MongodbCacheOperations),
-		metricMongodbCollectionCount:        newMetricMongodbCollectionCount(ms.MongodbCollectionCount),
-		metricMongodbConnectionCount:        newMetricMongodbConnectionCount(ms.MongodbConnectionCount),
-		metricMongodbCursorCount:            newMetricMongodbCursorCount(ms.MongodbCursorCount),
-		metricMongodbCursorTimeoutCount:     newMetricMongodbCursorTimeoutCount(ms.MongodbCursorTimeoutCount),
-		metricMongodbDataSize:               newMetricMongodbDataSize(ms.MongodbDataSize),
-		metricMongodbDatabaseCount:          newMetricMongodbDatabaseCount(ms.MongodbDatabaseCount),
-		metricMongodbDocumentOperationCount: newMetricMongodbDocumentOperationCount(ms.MongodbDocumentOperationCount),
-		metricMongodbExtentCount:            newMetricMongodbExtentCount(ms.MongodbExtentCount),
-		metricMongodbGlobalLockTime:         newMetricMongodbGlobalLockTime(ms.MongodbGlobalLockTime),
-		metricMongodbIndexAccessCount:       newMetricMongodbIndexAccessCount(ms.MongodbIndexAccessCount),
-		metricMongodbIndexCount:             newMetricMongodbIndexCount(ms.MongodbIndexCount),
-		metricMongodbIndexSize:              newMetricMongodbIndexSize(ms.MongodbIndexSize),
-		metricMongodbLockAcquireCount:       newMetricMongodbLockAcquireCount(ms.MongodbLockAcquireCount),
-		metricMongodbLockAcquireTime:        newMetricMongodbLockAcquireTime(ms.MongodbLockAcquireTime),
-		metricMongodbLockAcquireWaitCount:   newMetricMongodbLockAcquireWaitCount(ms.MongodbLockAcquireWaitCount),
-		metricMongodbLockDeadlockCount:      newMetricMongodbLockDeadlockCount(ms.MongodbLockDeadlockCount),
-		metricMongodbMemoryUsage:            newMetricMongodbMemoryUsage(ms.MongodbMemoryUsage),
-		metricMongodbNetworkIoReceive:       newMetricMongodbNetworkIoReceive(ms.MongodbNetworkIoReceive),
-		metricMongodbNetworkIoTransmit:      newMetricMongodbNetworkIoTransmit(ms.MongodbNetworkIoTransmit),
-		metricMongodbNetworkRequestCount:    newMetricMongodbNetworkRequestCount(ms.MongodbNetworkRequestCount),
-		metricMongodbObjectCount:            newMetricMongodbObjectCount(ms.MongodbObjectCount),
-		metricMongodbOperationCount:         newMetricMongodbOperationCount(ms.MongodbOperationCount),
-		metricMongodbOperationTime:          newMetricMongodbOperationTime(ms.MongodbOperationTime),
-		metricMongodbSessionCount:           newMetricMongodbSessionCount(ms.MongodbSessionCount),
-		metricMongodbStorageSize:            newMetricMongodbStorageSize(ms.MongodbStorageSize),
+		resourceAttributesSettings:          mbc.ResourceAttributes,
+		metricMongodbCacheOperations:        newMetricMongodbCacheOperations(mbc.Metrics.MongodbCacheOperations),
+		metricMongodbCollectionCount:        newMetricMongodbCollectionCount(mbc.Metrics.MongodbCollectionCount),
+		metricMongodbConnectionCount:        newMetricMongodbConnectionCount(mbc.Metrics.MongodbConnectionCount),
+		metricMongodbCursorCount:            newMetricMongodbCursorCount(mbc.Metrics.MongodbCursorCount),
+		metricMongodbCursorTimeoutCount:     newMetricMongodbCursorTimeoutCount(mbc.Metrics.MongodbCursorTimeoutCount),
+		metricMongodbDataSize:               newMetricMongodbDataSize(mbc.Metrics.MongodbDataSize),
+		metricMongodbDatabaseCount:          newMetricMongodbDatabaseCount(mbc.Metrics.MongodbDatabaseCount),
+		metricMongodbDocumentOperationCount: newMetricMongodbDocumentOperationCount(mbc.Metrics.MongodbDocumentOperationCount),
+		metricMongodbExtentCount:            newMetricMongodbExtentCount(mbc.Metrics.MongodbExtentCount),
+		metricMongodbGlobalLockTime:         newMetricMongodbGlobalLockTime(mbc.Metrics.MongodbGlobalLockTime),
+		metricMongodbIndexAccessCount:       newMetricMongodbIndexAccessCount(mbc.Metrics.MongodbIndexAccessCount),
+		metricMongodbIndexCount:             newMetricMongodbIndexCount(mbc.Metrics.MongodbIndexCount),
+		metricMongodbIndexSize:              newMetricMongodbIndexSize(mbc.Metrics.MongodbIndexSize),
+		metricMongodbLockAcquireCount:       newMetricMongodbLockAcquireCount(mbc.Metrics.MongodbLockAcquireCount),
+		metricMongodbLockAcquireTime:        newMetricMongodbLockAcquireTime(mbc.Metrics.MongodbLockAcquireTime),
+		metricMongodbLockAcquireWaitCount:   newMetricMongodbLockAcquireWaitCount(mbc.Metrics.MongodbLockAcquireWaitCount),
+		metricMongodbLockDeadlockCount:      newMetricMongodbLockDeadlockCount(mbc.Metrics.MongodbLockDeadlockCount),
+		metricMongodbMemoryUsage:            newMetricMongodbMemoryUsage(mbc.Metrics.MongodbMemoryUsage),
+		metricMongodbNetworkIoReceive:       newMetricMongodbNetworkIoReceive(mbc.Metrics.MongodbNetworkIoReceive),
+		metricMongodbNetworkIoTransmit:      newMetricMongodbNetworkIoTransmit(mbc.Metrics.MongodbNetworkIoTransmit),
+		metricMongodbNetworkRequestCount:    newMetricMongodbNetworkRequestCount(mbc.Metrics.MongodbNetworkRequestCount),
+		metricMongodbObjectCount:            newMetricMongodbObjectCount(mbc.Metrics.MongodbObjectCount),
+		metricMongodbOperationCount:         newMetricMongodbOperationCount(mbc.Metrics.MongodbOperationCount),
+		metricMongodbOperationTime:          newMetricMongodbOperationTime(mbc.Metrics.MongodbOperationTime),
+		metricMongodbSessionCount:           newMetricMongodbSessionCount(mbc.Metrics.MongodbSessionCount),
+		metricMongodbStorageSize:            newMetricMongodbStorageSize(mbc.Metrics.MongodbStorageSize),
 	}
 	for _, op := range options {
 		op(mb)
@@ -1826,19 +1861,21 @@ func (mb *MetricsBuilder) updateCapacity(rm pmetric.ResourceMetrics) {
 }
 
 // ResourceMetricsOption applies changes to provided resource metrics.
-type ResourceMetricsOption func(pmetric.ResourceMetrics)
+type ResourceMetricsOption func(ResourceAttributesSettings, pmetric.ResourceMetrics)
 
 // WithDatabase sets provided value as "database" attribute for current resource.
 func WithDatabase(val string) ResourceMetricsOption {
-	return func(rm pmetric.ResourceMetrics) {
-		rm.Resource().Attributes().PutStr("database", val)
+	return func(ras ResourceAttributesSettings, rm pmetric.ResourceMetrics) {
+		if ras.Database.Enabled {
+			rm.Resource().Attributes().PutStr("database", val)
+		}
 	}
 }
 
 // WithStartTimeOverride overrides start time for all the resource metrics data points.
 // This option should be only used if different start time has to be set on metrics coming from different resources.
 func WithStartTimeOverride(start pcommon.Timestamp) ResourceMetricsOption {
-	return func(rm pmetric.ResourceMetrics) {
+	return func(ras ResourceAttributesSettings, rm pmetric.ResourceMetrics) {
 		var dps pmetric.NumberDataPointSlice
 		metrics := rm.ScopeMetrics().At(0).Metrics()
 		for i := 0; i < metrics.Len(); i++ {
@@ -1893,8 +1930,9 @@ func (mb *MetricsBuilder) EmitForResource(rmo ...ResourceMetricsOption) {
 	mb.metricMongodbOperationTime.emit(ils.Metrics())
 	mb.metricMongodbSessionCount.emit(ils.Metrics())
 	mb.metricMongodbStorageSize.emit(ils.Metrics())
+
 	for _, op := range rmo {
-		op(rm)
+		op(mb.resourceAttributesSettings, rm)
 	}
 	if ils.Metrics().Len() > 0 {
 		mb.updateCapacity(rm)
@@ -1907,8 +1945,8 @@ func (mb *MetricsBuilder) EmitForResource(rmo ...ResourceMetricsOption) {
 // produce metric representation defined in metadata and user settings, e.g. delta or cumulative.
 func (mb *MetricsBuilder) Emit(rmo ...ResourceMetricsOption) pmetric.Metrics {
 	mb.EmitForResource(rmo...)
-	metrics := pmetric.NewMetrics()
-	mb.metricsBuffer.MoveTo(metrics)
+	metrics := mb.metricsBuffer
+	mb.metricsBuffer = pmetric.NewMetrics()
 	return metrics
 }
 

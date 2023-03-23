@@ -63,6 +63,6 @@ func createMetricsProcessor(
 
 // validateConfiguration validates the input configuration has all of the required fields for the processor
 // An error is returned if there are any invalid inputs.
-func validateConfiguration(config *Config) error {
+func validateConfiguration(_ *Config) error {
 	return nil
 }

@@ -1,4 +1,4 @@
-// Copyright 2022 Google LLC
+// Copyright 2023 Google LLC
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,26 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build !gpu
-// +build !gpu
+//go:build gpu
+// +build gpu
+
+//go:generate mdatagen metadata.yaml
 
 package nvmlreceiver
-
-import (
-	"context"
-
-	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/consumer"
-	"go.opentelemetry.io/collector/receiver"
-
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/collectorerror"
-)
-
-func createMetricsReceiver(
-	_ context.Context,
-	_ receiver.CreateSettings,
-	_ component.Config,
-	_ consumer.Metrics,
-) (receiver.Metrics, error) {
-	return nil, collectorerror.ErrGPUSupportDisabled
-}

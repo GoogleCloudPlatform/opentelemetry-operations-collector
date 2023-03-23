@@ -138,6 +138,6 @@ The thread operation type count.
 
 ## Resource Attributes
 
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| varnish.cache.name | The name of the cache. | Any Str |
+| Name | Description | Values | Enabled |
+| ---- | ----------- | ------ | ------- |
+| varnish.cache.name | The name of the cache. | Any Str | false |

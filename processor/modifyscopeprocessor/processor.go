@@ -34,7 +34,7 @@ func newModifyScopeProcessor(logger *zap.Logger, cfg *Config) *ModifyScopeProces
 }
 
 // ProcessMetrics implements the MProcessor interface.
-func (msp *ModifyScopeProcessor) ProcessMetrics(ctx context.Context, metrics pmetric.Metrics) (pmetric.Metrics, error) {
+func (msp *ModifyScopeProcessor) ProcessMetrics(_ context.Context, metrics pmetric.Metrics) (pmetric.Metrics, error) {
 	for i := 0; i < metrics.ResourceMetrics().Len(); i++ {
 		rms := metrics.ResourceMetrics().At(i)
 		msp.transformMetrics(rms)

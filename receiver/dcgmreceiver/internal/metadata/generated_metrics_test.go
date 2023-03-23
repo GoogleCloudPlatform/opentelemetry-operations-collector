@@ -3,299 +3,310 @@
 package metadata
 
 import (
-	"reflect"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/confmap/confmaptest"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
+	"go.opentelemetry.io/collector/receiver/receivertest"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 )
 
-func TestDefaultMetrics(t *testing.T) {
-	start := pcommon.Timestamp(1_000_000_000)
-	ts := pcommon.Timestamp(1_000_001_000)
-	mb := NewMetricsBuilder(DefaultMetricsSettings(), component.BuildInfo{}, WithStartTime(start))
-	enabledMetrics := make(map[string]bool)
+type testConfigCollection int
 
-	enabledMetrics["dcgm.gpu.memory.bytes_used"] = true
-	mb.RecordDcgmGpuMemoryBytesUsedDataPoint(ts, 1, "attr-val", "attr-val", "attr-val", AttributeMemoryState(1))
+const (
+	testSetDefault testConfigCollection = iota
+	testSetAll
+	testSetNone
+)
 
-	enabledMetrics["dcgm.gpu.profiling.dram_utilization"] = true
-	mb.RecordDcgmGpuProfilingDramUtilizationDataPoint(ts, 1, "attr-val", "attr-val", "attr-val")
-
-	enabledMetrics["dcgm.gpu.profiling.nvlink_traffic_rate"] = true
-	mb.RecordDcgmGpuProfilingNvlinkTrafficRateDataPoint(ts, 1, "attr-val", "attr-val", "attr-val", AttributeDirection(1))
-
-	enabledMetrics["dcgm.gpu.profiling.pcie_traffic_rate"] = true
-	mb.RecordDcgmGpuProfilingPcieTrafficRateDataPoint(ts, 1, "attr-val", "attr-val", "attr-val", AttributeDirection(1))
-
-	enabledMetrics["dcgm.gpu.profiling.pipe_utilization"] = true
-	mb.RecordDcgmGpuProfilingPipeUtilizationDataPoint(ts, 1, "attr-val", "attr-val", "attr-val", AttributePipe(1))
-
-	enabledMetrics["dcgm.gpu.profiling.sm_occupancy"] = true
-	mb.RecordDcgmGpuProfilingSmOccupancyDataPoint(ts, 1, "attr-val", "attr-val", "attr-val")
-
-	enabledMetrics["dcgm.gpu.profiling.sm_utilization"] = true
-	mb.RecordDcgmGpuProfilingSmUtilizationDataPoint(ts, 1, "attr-val", "attr-val", "attr-val")
-
-	enabledMetrics["dcgm.gpu.utilization"] = true
-	mb.RecordDcgmGpuUtilizationDataPoint(ts, 1, "attr-val", "attr-val", "attr-val")
-
-	metrics := mb.Emit()
-
-	assert.Equal(t, 1, metrics.ResourceMetrics().Len())
-	sm := metrics.ResourceMetrics().At(0).ScopeMetrics()
-	assert.Equal(t, 1, sm.Len())
-	ms := sm.At(0).Metrics()
-	assert.Equal(t, len(enabledMetrics), ms.Len())
-	seenMetrics := make(map[string]bool)
-	for i := 0; i < ms.Len(); i++ {
-		assert.True(t, enabledMetrics[ms.At(i).Name()])
-		seenMetrics[ms.At(i).Name()] = true
+func TestMetricsBuilder(t *testing.T) {
+	tests := []struct {
+		name      string
+		configSet testConfigCollection
+	}{
+		{
+			name:      "default",
+			configSet: testSetDefault,
+		},
+		{
+			name:      "all_set",
+			configSet: testSetAll,
+		},
+		{
+			name:      "none_set",
+			configSet: testSetNone,
+		},
 	}
-	assert.Equal(t, len(enabledMetrics), len(seenMetrics))
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			start := pcommon.Timestamp(1_000_000_000)
+			ts := pcommon.Timestamp(1_000_001_000)
+			observedZapCore, observedLogs := observer.New(zap.WarnLevel)
+			settings := receivertest.NewNopCreateSettings()
+			settings.Logger = zap.New(observedZapCore)
+			mb := NewMetricsBuilder(loadConfig(t, test.name), settings, WithStartTime(start))
+
+			expectedWarnings := 0
+			assert.Equal(t, expectedWarnings, observedLogs.Len())
+
+			defaultMetricsCount := 0
+			allMetricsCount := 0
+
+			defaultMetricsCount++
+			allMetricsCount++
+			mb.RecordDcgmGpuMemoryBytesUsedDataPoint(ts, 1, "attr-val", "attr-val", "attr-val", AttributeMemoryState(1))
+
+			defaultMetricsCount++
+			allMetricsCount++
+			mb.RecordDcgmGpuProfilingDramUtilizationDataPoint(ts, 1, "attr-val", "attr-val", "attr-val")
+
+			defaultMetricsCount++
+			allMetricsCount++
+			mb.RecordDcgmGpuProfilingNvlinkTrafficRateDataPoint(ts, 1, "attr-val", "attr-val", "attr-val", AttributeDirection(1))
+
+			defaultMetricsCount++
+			allMetricsCount++
+			mb.RecordDcgmGpuProfilingPcieTrafficRateDataPoint(ts, 1, "attr-val", "attr-val", "attr-val", AttributeDirection(1))
+
+			defaultMetricsCount++
+			allMetricsCount++
+			mb.RecordDcgmGpuProfilingPipeUtilizationDataPoint(ts, 1, "attr-val", "attr-val", "attr-val", AttributePipe(1))
+
+			defaultMetricsCount++
+			allMetricsCount++
+			mb.RecordDcgmGpuProfilingSmOccupancyDataPoint(ts, 1, "attr-val", "attr-val", "attr-val")
+
+			defaultMetricsCount++
+			allMetricsCount++
+			mb.RecordDcgmGpuProfilingSmUtilizationDataPoint(ts, 1, "attr-val", "attr-val", "attr-val")
+
+			defaultMetricsCount++
+			allMetricsCount++
+			mb.RecordDcgmGpuUtilizationDataPoint(ts, 1, "attr-val", "attr-val", "attr-val")
+
+			metrics := mb.Emit()
+
+			if test.configSet == testSetNone {
+				assert.Equal(t, 0, metrics.ResourceMetrics().Len())
+				return
+			}
+
+			assert.Equal(t, 1, metrics.ResourceMetrics().Len())
+			rm := metrics.ResourceMetrics().At(0)
+			attrCount := 0
+			enabledAttrCount := 0
+			assert.Equal(t, enabledAttrCount, rm.Resource().Attributes().Len())
+			assert.Equal(t, attrCount, 0)
+
+			assert.Equal(t, 1, rm.ScopeMetrics().Len())
+			ms := rm.ScopeMetrics().At(0).Metrics()
+			if test.configSet == testSetDefault {
+				assert.Equal(t, defaultMetricsCount, ms.Len())
+			}
+			if test.configSet == testSetAll {
+				assert.Equal(t, allMetricsCount, ms.Len())
+			}
+			validatedMetrics := make(map[string]bool)
+			for i := 0; i < ms.Len(); i++ {
+				switch ms.At(i).Name() {
+				case "dcgm.gpu.memory.bytes_used":
+					assert.False(t, validatedMetrics["dcgm.gpu.memory.bytes_used"], "Found a duplicate in the metrics slice: dcgm.gpu.memory.bytes_used")
+					validatedMetrics["dcgm.gpu.memory.bytes_used"] = true
+					assert.Equal(t, pmetric.MetricTypeGauge, ms.At(i).Type())
+					assert.Equal(t, 1, ms.At(i).Gauge().DataPoints().Len())
+					assert.Equal(t, "Current number of GPU memory bytes used by state. Summing the values of all states yields the total GPU memory space.", ms.At(i).Description())
+					assert.Equal(t, "By", ms.At(i).Unit())
+					dp := ms.At(i).Gauge().DataPoints().At(0)
+					assert.Equal(t, start, dp.StartTimestamp())
+					assert.Equal(t, ts, dp.Timestamp())
+					assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
+					assert.Equal(t, int64(1), dp.IntValue())
+					attrVal, ok := dp.Attributes().Get("model")
+					assert.True(t, ok)
+					assert.EqualValues(t, "attr-val", attrVal.Str())
+					attrVal, ok = dp.Attributes().Get("gpu_number")
+					assert.True(t, ok)
+					assert.EqualValues(t, "attr-val", attrVal.Str())
+					attrVal, ok = dp.Attributes().Get("uuid")
+					assert.True(t, ok)
+					assert.EqualValues(t, "attr-val", attrVal.Str())
+					attrVal, ok = dp.Attributes().Get("memory_state")
+					assert.True(t, ok)
+					assert.Equal(t, "used", attrVal.Str())
+				case "dcgm.gpu.profiling.dram_utilization":
+					assert.False(t, validatedMetrics["dcgm.gpu.profiling.dram_utilization"], "Found a duplicate in the metrics slice: dcgm.gpu.profiling.dram_utilization")
+					validatedMetrics["dcgm.gpu.profiling.dram_utilization"] = true
+					assert.Equal(t, pmetric.MetricTypeGauge, ms.At(i).Type())
+					assert.Equal(t, 1, ms.At(i).Gauge().DataPoints().Len())
+					assert.Equal(t, "Fraction of cycles data was being sent or received from GPU memory.", ms.At(i).Description())
+					assert.Equal(t, "1", ms.At(i).Unit())
+					dp := ms.At(i).Gauge().DataPoints().At(0)
+					assert.Equal(t, start, dp.StartTimestamp())
+					assert.Equal(t, ts, dp.Timestamp())
+					assert.Equal(t, pmetric.NumberDataPointValueTypeDouble, dp.ValueType())
+					assert.Equal(t, float64(1), dp.DoubleValue())
+					attrVal, ok := dp.Attributes().Get("model")
+					assert.True(t, ok)
+					assert.EqualValues(t, "attr-val", attrVal.Str())
+					attrVal, ok = dp.Attributes().Get("gpu_number")
+					assert.True(t, ok)
+					assert.EqualValues(t, "attr-val", attrVal.Str())
+					attrVal, ok = dp.Attributes().Get("uuid")
+					assert.True(t, ok)
+					assert.EqualValues(t, "attr-val", attrVal.Str())
+				case "dcgm.gpu.profiling.nvlink_traffic_rate":
+					assert.False(t, validatedMetrics["dcgm.gpu.profiling.nvlink_traffic_rate"], "Found a duplicate in the metrics slice: dcgm.gpu.profiling.nvlink_traffic_rate")
+					validatedMetrics["dcgm.gpu.profiling.nvlink_traffic_rate"] = true
+					assert.Equal(t, pmetric.MetricTypeGauge, ms.At(i).Type())
+					assert.Equal(t, 1, ms.At(i).Gauge().DataPoints().Len())
+					assert.Equal(t, "The average rate of bytes received from the GPU over NVLink over the sample period, not including protocol headers.", ms.At(i).Description())
+					assert.Equal(t, "By/s", ms.At(i).Unit())
+					dp := ms.At(i).Gauge().DataPoints().At(0)
+					assert.Equal(t, start, dp.StartTimestamp())
+					assert.Equal(t, ts, dp.Timestamp())
+					assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
+					assert.Equal(t, int64(1), dp.IntValue())
+					attrVal, ok := dp.Attributes().Get("model")
+					assert.True(t, ok)
+					assert.EqualValues(t, "attr-val", attrVal.Str())
+					attrVal, ok = dp.Attributes().Get("gpu_number")
+					assert.True(t, ok)
+					assert.EqualValues(t, "attr-val", attrVal.Str())
+					attrVal, ok = dp.Attributes().Get("uuid")
+					assert.True(t, ok)
+					assert.EqualValues(t, "attr-val", attrVal.Str())
+					attrVal, ok = dp.Attributes().Get("direction")
+					assert.True(t, ok)
+					assert.Equal(t, "tx", attrVal.Str())
+				case "dcgm.gpu.profiling.pcie_traffic_rate":
+					assert.False(t, validatedMetrics["dcgm.gpu.profiling.pcie_traffic_rate"], "Found a duplicate in the metrics slice: dcgm.gpu.profiling.pcie_traffic_rate")
+					validatedMetrics["dcgm.gpu.profiling.pcie_traffic_rate"] = true
+					assert.Equal(t, pmetric.MetricTypeGauge, ms.At(i).Type())
+					assert.Equal(t, 1, ms.At(i).Gauge().DataPoints().Len())
+					assert.Equal(t, "The average rate of bytes sent from the GPU over the PCIe bus over the sample period, including both protocol headers and data payloads.", ms.At(i).Description())
+					assert.Equal(t, "By/s", ms.At(i).Unit())
+					dp := ms.At(i).Gauge().DataPoints().At(0)
+					assert.Equal(t, start, dp.StartTimestamp())
+					assert.Equal(t, ts, dp.Timestamp())
+					assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
+					assert.Equal(t, int64(1), dp.IntValue())
+					attrVal, ok := dp.Attributes().Get("model")
+					assert.True(t, ok)
+					assert.EqualValues(t, "attr-val", attrVal.Str())
+					attrVal, ok = dp.Attributes().Get("gpu_number")
+					assert.True(t, ok)
+					assert.EqualValues(t, "attr-val", attrVal.Str())
+					attrVal, ok = dp.Attributes().Get("uuid")
+					assert.True(t, ok)
+					assert.EqualValues(t, "attr-val", attrVal.Str())
+					attrVal, ok = dp.Attributes().Get("direction")
+					assert.True(t, ok)
+					assert.Equal(t, "tx", attrVal.Str())
+				case "dcgm.gpu.profiling.pipe_utilization":
+					assert.False(t, validatedMetrics["dcgm.gpu.profiling.pipe_utilization"], "Found a duplicate in the metrics slice: dcgm.gpu.profiling.pipe_utilization")
+					validatedMetrics["dcgm.gpu.profiling.pipe_utilization"] = true
+					assert.Equal(t, pmetric.MetricTypeGauge, ms.At(i).Type())
+					assert.Equal(t, 1, ms.At(i).Gauge().DataPoints().Len())
+					assert.Equal(t, "Fraction of cycles the corresponding GPU pipe was active, averaged over time and all multiprocessors.", ms.At(i).Description())
+					assert.Equal(t, "1", ms.At(i).Unit())
+					dp := ms.At(i).Gauge().DataPoints().At(0)
+					assert.Equal(t, start, dp.StartTimestamp())
+					assert.Equal(t, ts, dp.Timestamp())
+					assert.Equal(t, pmetric.NumberDataPointValueTypeDouble, dp.ValueType())
+					assert.Equal(t, float64(1), dp.DoubleValue())
+					attrVal, ok := dp.Attributes().Get("model")
+					assert.True(t, ok)
+					assert.EqualValues(t, "attr-val", attrVal.Str())
+					attrVal, ok = dp.Attributes().Get("gpu_number")
+					assert.True(t, ok)
+					assert.EqualValues(t, "attr-val", attrVal.Str())
+					attrVal, ok = dp.Attributes().Get("uuid")
+					assert.True(t, ok)
+					assert.EqualValues(t, "attr-val", attrVal.Str())
+					attrVal, ok = dp.Attributes().Get("pipe")
+					assert.True(t, ok)
+					assert.Equal(t, "tensor", attrVal.Str())
+				case "dcgm.gpu.profiling.sm_occupancy":
+					assert.False(t, validatedMetrics["dcgm.gpu.profiling.sm_occupancy"], "Found a duplicate in the metrics slice: dcgm.gpu.profiling.sm_occupancy")
+					validatedMetrics["dcgm.gpu.profiling.sm_occupancy"] = true
+					assert.Equal(t, pmetric.MetricTypeGauge, ms.At(i).Type())
+					assert.Equal(t, 1, ms.At(i).Gauge().DataPoints().Len())
+					assert.Equal(t, "Fraction of resident warps on a multiprocessor relative to the maximum number supported, averaged over time and all multiprocessors.", ms.At(i).Description())
+					assert.Equal(t, "1", ms.At(i).Unit())
+					dp := ms.At(i).Gauge().DataPoints().At(0)
+					assert.Equal(t, start, dp.StartTimestamp())
+					assert.Equal(t, ts, dp.Timestamp())
+					assert.Equal(t, pmetric.NumberDataPointValueTypeDouble, dp.ValueType())
+					assert.Equal(t, float64(1), dp.DoubleValue())
+					attrVal, ok := dp.Attributes().Get("model")
+					assert.True(t, ok)
+					assert.EqualValues(t, "attr-val", attrVal.Str())
+					attrVal, ok = dp.Attributes().Get("gpu_number")
+					assert.True(t, ok)
+					assert.EqualValues(t, "attr-val", attrVal.Str())
+					attrVal, ok = dp.Attributes().Get("uuid")
+					assert.True(t, ok)
+					assert.EqualValues(t, "attr-val", attrVal.Str())
+				case "dcgm.gpu.profiling.sm_utilization":
+					assert.False(t, validatedMetrics["dcgm.gpu.profiling.sm_utilization"], "Found a duplicate in the metrics slice: dcgm.gpu.profiling.sm_utilization")
+					validatedMetrics["dcgm.gpu.profiling.sm_utilization"] = true
+					assert.Equal(t, pmetric.MetricTypeGauge, ms.At(i).Type())
+					assert.Equal(t, 1, ms.At(i).Gauge().DataPoints().Len())
+					assert.Equal(t, "Fraction of time at least one warp was active on a multiprocessor, averaged over all multiprocessors.", ms.At(i).Description())
+					assert.Equal(t, "1", ms.At(i).Unit())
+					dp := ms.At(i).Gauge().DataPoints().At(0)
+					assert.Equal(t, start, dp.StartTimestamp())
+					assert.Equal(t, ts, dp.Timestamp())
+					assert.Equal(t, pmetric.NumberDataPointValueTypeDouble, dp.ValueType())
+					assert.Equal(t, float64(1), dp.DoubleValue())
+					attrVal, ok := dp.Attributes().Get("model")
+					assert.True(t, ok)
+					assert.EqualValues(t, "attr-val", attrVal.Str())
+					attrVal, ok = dp.Attributes().Get("gpu_number")
+					assert.True(t, ok)
+					assert.EqualValues(t, "attr-val", attrVal.Str())
+					attrVal, ok = dp.Attributes().Get("uuid")
+					assert.True(t, ok)
+					assert.EqualValues(t, "attr-val", attrVal.Str())
+				case "dcgm.gpu.utilization":
+					assert.False(t, validatedMetrics["dcgm.gpu.utilization"], "Found a duplicate in the metrics slice: dcgm.gpu.utilization")
+					validatedMetrics["dcgm.gpu.utilization"] = true
+					assert.Equal(t, pmetric.MetricTypeGauge, ms.At(i).Type())
+					assert.Equal(t, 1, ms.At(i).Gauge().DataPoints().Len())
+					assert.Equal(t, "Fraction of time the GPU was not idle.", ms.At(i).Description())
+					assert.Equal(t, "1", ms.At(i).Unit())
+					dp := ms.At(i).Gauge().DataPoints().At(0)
+					assert.Equal(t, start, dp.StartTimestamp())
+					assert.Equal(t, ts, dp.Timestamp())
+					assert.Equal(t, pmetric.NumberDataPointValueTypeDouble, dp.ValueType())
+					assert.Equal(t, float64(1), dp.DoubleValue())
+					attrVal, ok := dp.Attributes().Get("model")
+					assert.True(t, ok)
+					assert.EqualValues(t, "attr-val", attrVal.Str())
+					attrVal, ok = dp.Attributes().Get("gpu_number")
+					assert.True(t, ok)
+					assert.EqualValues(t, "attr-val", attrVal.Str())
+					attrVal, ok = dp.Attributes().Get("uuid")
+					assert.True(t, ok)
+					assert.EqualValues(t, "attr-val", attrVal.Str())
+				}
+			}
+		})
+	}
 }
 
-func TestAllMetrics(t *testing.T) {
-	start := pcommon.Timestamp(1_000_000_000)
-	ts := pcommon.Timestamp(1_000_001_000)
-	settings := MetricsSettings{
-		DcgmGpuMemoryBytesUsed:            MetricSettings{Enabled: true},
-		DcgmGpuProfilingDramUtilization:   MetricSettings{Enabled: true},
-		DcgmGpuProfilingNvlinkTrafficRate: MetricSettings{Enabled: true},
-		DcgmGpuProfilingPcieTrafficRate:   MetricSettings{Enabled: true},
-		DcgmGpuProfilingPipeUtilization:   MetricSettings{Enabled: true},
-		DcgmGpuProfilingSmOccupancy:       MetricSettings{Enabled: true},
-		DcgmGpuProfilingSmUtilization:     MetricSettings{Enabled: true},
-		DcgmGpuUtilization:                MetricSettings{Enabled: true},
-	}
-	mb := NewMetricsBuilder(settings, component.BuildInfo{}, WithStartTime(start))
-
-	mb.RecordDcgmGpuMemoryBytesUsedDataPoint(ts, 1, "attr-val", "attr-val", "attr-val", AttributeMemoryState(1))
-	mb.RecordDcgmGpuProfilingDramUtilizationDataPoint(ts, 1, "attr-val", "attr-val", "attr-val")
-	mb.RecordDcgmGpuProfilingNvlinkTrafficRateDataPoint(ts, 1, "attr-val", "attr-val", "attr-val", AttributeDirection(1))
-	mb.RecordDcgmGpuProfilingPcieTrafficRateDataPoint(ts, 1, "attr-val", "attr-val", "attr-val", AttributeDirection(1))
-	mb.RecordDcgmGpuProfilingPipeUtilizationDataPoint(ts, 1, "attr-val", "attr-val", "attr-val", AttributePipe(1))
-	mb.RecordDcgmGpuProfilingSmOccupancyDataPoint(ts, 1, "attr-val", "attr-val", "attr-val")
-	mb.RecordDcgmGpuProfilingSmUtilizationDataPoint(ts, 1, "attr-val", "attr-val", "attr-val")
-	mb.RecordDcgmGpuUtilizationDataPoint(ts, 1, "attr-val", "attr-val", "attr-val")
-
-	metrics := mb.Emit()
-
-	assert.Equal(t, 1, metrics.ResourceMetrics().Len())
-	rm := metrics.ResourceMetrics().At(0)
-	attrCount := 0
-	assert.Equal(t, attrCount, rm.Resource().Attributes().Len())
-
-	assert.Equal(t, 1, rm.ScopeMetrics().Len())
-	ms := rm.ScopeMetrics().At(0).Metrics()
-	allMetricsCount := reflect.TypeOf(MetricsSettings{}).NumField()
-	assert.Equal(t, allMetricsCount, ms.Len())
-	validatedMetrics := make(map[string]struct{})
-	for i := 0; i < ms.Len(); i++ {
-		switch ms.At(i).Name() {
-		case "dcgm.gpu.memory.bytes_used":
-			assert.Equal(t, pmetric.MetricTypeGauge, ms.At(i).Type())
-			assert.Equal(t, 1, ms.At(i).Gauge().DataPoints().Len())
-			assert.Equal(t, "Current number of GPU memory bytes used by state. Summing the values of all states yields the total GPU memory space.", ms.At(i).Description())
-			assert.Equal(t, "By", ms.At(i).Unit())
-			dp := ms.At(i).Gauge().DataPoints().At(0)
-			assert.Equal(t, start, dp.StartTimestamp())
-			assert.Equal(t, ts, dp.Timestamp())
-			assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
-			assert.Equal(t, int64(1), dp.IntValue())
-			attrVal, ok := dp.Attributes().Get("model")
-			assert.True(t, ok)
-			assert.EqualValues(t, "attr-val", attrVal.Str())
-			attrVal, ok = dp.Attributes().Get("gpu_number")
-			assert.True(t, ok)
-			assert.EqualValues(t, "attr-val", attrVal.Str())
-			attrVal, ok = dp.Attributes().Get("uuid")
-			assert.True(t, ok)
-			assert.EqualValues(t, "attr-val", attrVal.Str())
-			attrVal, ok = dp.Attributes().Get("memory_state")
-			assert.True(t, ok)
-			assert.Equal(t, AttributeMemoryState(1).String(), attrVal.Str())
-			validatedMetrics["dcgm.gpu.memory.bytes_used"] = struct{}{}
-		case "dcgm.gpu.profiling.dram_utilization":
-			assert.Equal(t, pmetric.MetricTypeGauge, ms.At(i).Type())
-			assert.Equal(t, 1, ms.At(i).Gauge().DataPoints().Len())
-			assert.Equal(t, "Fraction of cycles data was being sent or received from GPU memory.", ms.At(i).Description())
-			assert.Equal(t, "1", ms.At(i).Unit())
-			dp := ms.At(i).Gauge().DataPoints().At(0)
-			assert.Equal(t, start, dp.StartTimestamp())
-			assert.Equal(t, ts, dp.Timestamp())
-			assert.Equal(t, pmetric.NumberDataPointValueTypeDouble, dp.ValueType())
-			assert.Equal(t, float64(1), dp.DoubleValue())
-			attrVal, ok := dp.Attributes().Get("model")
-			assert.True(t, ok)
-			assert.EqualValues(t, "attr-val", attrVal.Str())
-			attrVal, ok = dp.Attributes().Get("gpu_number")
-			assert.True(t, ok)
-			assert.EqualValues(t, "attr-val", attrVal.Str())
-			attrVal, ok = dp.Attributes().Get("uuid")
-			assert.True(t, ok)
-			assert.EqualValues(t, "attr-val", attrVal.Str())
-			validatedMetrics["dcgm.gpu.profiling.dram_utilization"] = struct{}{}
-		case "dcgm.gpu.profiling.nvlink_traffic_rate":
-			assert.Equal(t, pmetric.MetricTypeGauge, ms.At(i).Type())
-			assert.Equal(t, 1, ms.At(i).Gauge().DataPoints().Len())
-			assert.Equal(t, "The average rate of bytes received from the GPU over NVLink over the sample period, not including protocol headers.", ms.At(i).Description())
-			assert.Equal(t, "By/s", ms.At(i).Unit())
-			dp := ms.At(i).Gauge().DataPoints().At(0)
-			assert.Equal(t, start, dp.StartTimestamp())
-			assert.Equal(t, ts, dp.Timestamp())
-			assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
-			assert.Equal(t, int64(1), dp.IntValue())
-			attrVal, ok := dp.Attributes().Get("model")
-			assert.True(t, ok)
-			assert.EqualValues(t, "attr-val", attrVal.Str())
-			attrVal, ok = dp.Attributes().Get("gpu_number")
-			assert.True(t, ok)
-			assert.EqualValues(t, "attr-val", attrVal.Str())
-			attrVal, ok = dp.Attributes().Get("uuid")
-			assert.True(t, ok)
-			assert.EqualValues(t, "attr-val", attrVal.Str())
-			attrVal, ok = dp.Attributes().Get("direction")
-			assert.True(t, ok)
-			assert.Equal(t, AttributeDirection(1).String(), attrVal.Str())
-			validatedMetrics["dcgm.gpu.profiling.nvlink_traffic_rate"] = struct{}{}
-		case "dcgm.gpu.profiling.pcie_traffic_rate":
-			assert.Equal(t, pmetric.MetricTypeGauge, ms.At(i).Type())
-			assert.Equal(t, 1, ms.At(i).Gauge().DataPoints().Len())
-			assert.Equal(t, "The average rate of bytes sent from the GPU over the PCIe bus over the sample period, including both protocol headers and data payloads.", ms.At(i).Description())
-			assert.Equal(t, "By/s", ms.At(i).Unit())
-			dp := ms.At(i).Gauge().DataPoints().At(0)
-			assert.Equal(t, start, dp.StartTimestamp())
-			assert.Equal(t, ts, dp.Timestamp())
-			assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
-			assert.Equal(t, int64(1), dp.IntValue())
-			attrVal, ok := dp.Attributes().Get("model")
-			assert.True(t, ok)
-			assert.EqualValues(t, "attr-val", attrVal.Str())
-			attrVal, ok = dp.Attributes().Get("gpu_number")
-			assert.True(t, ok)
-			assert.EqualValues(t, "attr-val", attrVal.Str())
-			attrVal, ok = dp.Attributes().Get("uuid")
-			assert.True(t, ok)
-			assert.EqualValues(t, "attr-val", attrVal.Str())
-			attrVal, ok = dp.Attributes().Get("direction")
-			assert.True(t, ok)
-			assert.Equal(t, AttributeDirection(1).String(), attrVal.Str())
-			validatedMetrics["dcgm.gpu.profiling.pcie_traffic_rate"] = struct{}{}
-		case "dcgm.gpu.profiling.pipe_utilization":
-			assert.Equal(t, pmetric.MetricTypeGauge, ms.At(i).Type())
-			assert.Equal(t, 1, ms.At(i).Gauge().DataPoints().Len())
-			assert.Equal(t, "Fraction of cycles the corresponding GPU pipe was active, averaged over time and all multiprocessors.", ms.At(i).Description())
-			assert.Equal(t, "1", ms.At(i).Unit())
-			dp := ms.At(i).Gauge().DataPoints().At(0)
-			assert.Equal(t, start, dp.StartTimestamp())
-			assert.Equal(t, ts, dp.Timestamp())
-			assert.Equal(t, pmetric.NumberDataPointValueTypeDouble, dp.ValueType())
-			assert.Equal(t, float64(1), dp.DoubleValue())
-			attrVal, ok := dp.Attributes().Get("model")
-			assert.True(t, ok)
-			assert.EqualValues(t, "attr-val", attrVal.Str())
-			attrVal, ok = dp.Attributes().Get("gpu_number")
-			assert.True(t, ok)
-			assert.EqualValues(t, "attr-val", attrVal.Str())
-			attrVal, ok = dp.Attributes().Get("uuid")
-			assert.True(t, ok)
-			assert.EqualValues(t, "attr-val", attrVal.Str())
-			attrVal, ok = dp.Attributes().Get("pipe")
-			assert.True(t, ok)
-			assert.Equal(t, AttributePipe(1).String(), attrVal.Str())
-			validatedMetrics["dcgm.gpu.profiling.pipe_utilization"] = struct{}{}
-		case "dcgm.gpu.profiling.sm_occupancy":
-			assert.Equal(t, pmetric.MetricTypeGauge, ms.At(i).Type())
-			assert.Equal(t, 1, ms.At(i).Gauge().DataPoints().Len())
-			assert.Equal(t, "Fraction of resident warps on a multiprocessor relative to the maximum number supported, averaged over time and all multiprocessors.", ms.At(i).Description())
-			assert.Equal(t, "1", ms.At(i).Unit())
-			dp := ms.At(i).Gauge().DataPoints().At(0)
-			assert.Equal(t, start, dp.StartTimestamp())
-			assert.Equal(t, ts, dp.Timestamp())
-			assert.Equal(t, pmetric.NumberDataPointValueTypeDouble, dp.ValueType())
-			assert.Equal(t, float64(1), dp.DoubleValue())
-			attrVal, ok := dp.Attributes().Get("model")
-			assert.True(t, ok)
-			assert.EqualValues(t, "attr-val", attrVal.Str())
-			attrVal, ok = dp.Attributes().Get("gpu_number")
-			assert.True(t, ok)
-			assert.EqualValues(t, "attr-val", attrVal.Str())
-			attrVal, ok = dp.Attributes().Get("uuid")
-			assert.True(t, ok)
-			assert.EqualValues(t, "attr-val", attrVal.Str())
-			validatedMetrics["dcgm.gpu.profiling.sm_occupancy"] = struct{}{}
-		case "dcgm.gpu.profiling.sm_utilization":
-			assert.Equal(t, pmetric.MetricTypeGauge, ms.At(i).Type())
-			assert.Equal(t, 1, ms.At(i).Gauge().DataPoints().Len())
-			assert.Equal(t, "Fraction of time at least one warp was active on a multiprocessor, averaged over all multiprocessors.", ms.At(i).Description())
-			assert.Equal(t, "1", ms.At(i).Unit())
-			dp := ms.At(i).Gauge().DataPoints().At(0)
-			assert.Equal(t, start, dp.StartTimestamp())
-			assert.Equal(t, ts, dp.Timestamp())
-			assert.Equal(t, pmetric.NumberDataPointValueTypeDouble, dp.ValueType())
-			assert.Equal(t, float64(1), dp.DoubleValue())
-			attrVal, ok := dp.Attributes().Get("model")
-			assert.True(t, ok)
-			assert.EqualValues(t, "attr-val", attrVal.Str())
-			attrVal, ok = dp.Attributes().Get("gpu_number")
-			assert.True(t, ok)
-			assert.EqualValues(t, "attr-val", attrVal.Str())
-			attrVal, ok = dp.Attributes().Get("uuid")
-			assert.True(t, ok)
-			assert.EqualValues(t, "attr-val", attrVal.Str())
-			validatedMetrics["dcgm.gpu.profiling.sm_utilization"] = struct{}{}
-		case "dcgm.gpu.utilization":
-			assert.Equal(t, pmetric.MetricTypeGauge, ms.At(i).Type())
-			assert.Equal(t, 1, ms.At(i).Gauge().DataPoints().Len())
-			assert.Equal(t, "Fraction of time the GPU was not idle.", ms.At(i).Description())
-			assert.Equal(t, "1", ms.At(i).Unit())
-			dp := ms.At(i).Gauge().DataPoints().At(0)
-			assert.Equal(t, start, dp.StartTimestamp())
-			assert.Equal(t, ts, dp.Timestamp())
-			assert.Equal(t, pmetric.NumberDataPointValueTypeDouble, dp.ValueType())
-			assert.Equal(t, float64(1), dp.DoubleValue())
-			attrVal, ok := dp.Attributes().Get("model")
-			assert.True(t, ok)
-			assert.EqualValues(t, "attr-val", attrVal.Str())
-			attrVal, ok = dp.Attributes().Get("gpu_number")
-			assert.True(t, ok)
-			assert.EqualValues(t, "attr-val", attrVal.Str())
-			attrVal, ok = dp.Attributes().Get("uuid")
-			assert.True(t, ok)
-			assert.EqualValues(t, "attr-val", attrVal.Str())
-			validatedMetrics["dcgm.gpu.utilization"] = struct{}{}
-		}
-	}
-	assert.Equal(t, allMetricsCount, len(validatedMetrics))
-}
-
-func TestNoMetrics(t *testing.T) {
-	start := pcommon.Timestamp(1_000_000_000)
-	ts := pcommon.Timestamp(1_000_001_000)
-	settings := MetricsSettings{
-		DcgmGpuMemoryBytesUsed:            MetricSettings{Enabled: false},
-		DcgmGpuProfilingDramUtilization:   MetricSettings{Enabled: false},
-		DcgmGpuProfilingNvlinkTrafficRate: MetricSettings{Enabled: false},
-		DcgmGpuProfilingPcieTrafficRate:   MetricSettings{Enabled: false},
-		DcgmGpuProfilingPipeUtilization:   MetricSettings{Enabled: false},
-		DcgmGpuProfilingSmOccupancy:       MetricSettings{Enabled: false},
-		DcgmGpuProfilingSmUtilization:     MetricSettings{Enabled: false},
-		DcgmGpuUtilization:                MetricSettings{Enabled: false},
-	}
-	mb := NewMetricsBuilder(settings, component.BuildInfo{}, WithStartTime(start))
-	mb.RecordDcgmGpuMemoryBytesUsedDataPoint(ts, 1, "attr-val", "attr-val", "attr-val", AttributeMemoryState(1))
-	mb.RecordDcgmGpuProfilingDramUtilizationDataPoint(ts, 1, "attr-val", "attr-val", "attr-val")
-	mb.RecordDcgmGpuProfilingNvlinkTrafficRateDataPoint(ts, 1, "attr-val", "attr-val", "attr-val", AttributeDirection(1))
-	mb.RecordDcgmGpuProfilingPcieTrafficRateDataPoint(ts, 1, "attr-val", "attr-val", "attr-val", AttributeDirection(1))
-	mb.RecordDcgmGpuProfilingPipeUtilizationDataPoint(ts, 1, "attr-val", "attr-val", "attr-val", AttributePipe(1))
-	mb.RecordDcgmGpuProfilingSmOccupancyDataPoint(ts, 1, "attr-val", "attr-val", "attr-val")
-	mb.RecordDcgmGpuProfilingSmUtilizationDataPoint(ts, 1, "attr-val", "attr-val", "attr-val")
-	mb.RecordDcgmGpuUtilizationDataPoint(ts, 1, "attr-val", "attr-val", "attr-val")
-
-	metrics := mb.Emit()
-
-	assert.Equal(t, 0, metrics.ResourceMetrics().Len())
+func loadConfig(t *testing.T, name string) MetricsBuilderConfig {
+	cm, err := confmaptest.LoadConf(filepath.Join("testdata", "config.yaml"))
+	require.NoError(t, err)
+	sub, err := cm.Sub(name)
+	require.NoError(t, err)
+	cfg := DefaultMetricsBuilderConfig()
+	require.NoError(t, component.UnmarshalConfig(sub, &cfg))
+	return cfg
 }

@@ -41,7 +41,7 @@ func newDcgmScraper(config *Config, settings receiver.CreateSettings) *dcgmScrap
 	return &dcgmScraper{config: config, settings: settings}
 }
 
-func (s *dcgmScraper) start(_ context.Context, host component.Host) error {
+func (s *dcgmScraper) start(_ context.Context, _ component.Host) error {
 	var err error
 	s.client, err = newClient(s.config, s.settings.Logger)
 	if err != nil {
@@ -49,8 +49,10 @@ func (s *dcgmScraper) start(_ context.Context, host component.Host) error {
 	}
 
 	startTime := pcommon.NewTimestampFromTime(time.Now())
+	mbConfig := metadata.DefaultMetricsBuilderConfig()
+	mbConfig.Metrics = s.config.Metrics
 	s.mb = metadata.NewMetricsBuilder(
-		s.config.Metrics, s.settings.BuildInfo, metadata.WithStartTime(startTime))
+		mbConfig, s.settings, metadata.WithStartTime(startTime))
 
 	return nil
 }
@@ -62,7 +64,7 @@ func (s *dcgmScraper) stop(_ context.Context) error {
 	return nil
 }
 
-func (s *dcgmScraper) scrape(ctx context.Context) (pmetric.Metrics, error) {
+func (s *dcgmScraper) scrape(_ context.Context) (pmetric.Metrics, error) {
 	deviceMetrics, err := s.client.collectDeviceMetrics()
 
 	now := pcommon.NewTimestampFromTime(time.Now())

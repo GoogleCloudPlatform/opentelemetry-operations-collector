@@ -2,36 +2,87 @@
 
 # nvmlreceiver
 
-## Metrics
+## Default Metrics
 
-These are the metrics available for this scraper.
-
-| Name | Description | Unit | Type | Attributes |
-| ---- | ----------- | ---- | ---- | ---------- |
-| **nvml.gpu.memory.bytes_used** | Current number of GPU memory bytes used by state. Summing the values of all states yields the total GPU memory space. | By | Gauge(Int) | <ul> <li>model</li> <li>gpu_number</li> <li>uuid</li> <li>memory_state</li> </ul> |
-| **nvml.gpu.processes.max_bytes_used** | Maximum total GPU memory in bytes that was ever allocated by the process. | By | Gauge(Int) | <ul> <li>model</li> <li>gpu_number</li> <li>uuid</li> <li>pid</li> <li>process</li> <li>command</li> <li>command_line</li> <li>owner</li> </ul> |
-| **nvml.gpu.processes.utilization** | Fraction of time over the process's life thus far during which one or more kernels was executing on the GPU. | 1 | Gauge(Double) | <ul> <li>model</li> <li>gpu_number</li> <li>uuid</li> <li>pid</li> <li>process</li> <li>command</li> <li>command_line</li> <li>owner</li> </ul> |
-| **nvml.gpu.utilization** | Fraction of time GPU was not idle since the last sample. | 1 | Gauge(Double) | <ul> <li>model</li> <li>gpu_number</li> <li>uuid</li> </ul> |
-
-**Highlighted metrics** are emitted by default. Other metrics are optional and not emitted by default.
-Any metric can be enabled or disabled with the following scraper configuration:
+The following metrics are emitted by default. Each of them can be disabled by applying the following configuration:
 
 ```yaml
 metrics:
   <metric_name>:
-    enabled: <true|false>
+    enabled: false
 ```
 
-## Metric attributes
+### nvml.gpu.memory.bytes_used
+
+Current number of GPU memory bytes used by state. Summing the values of all states yields the total GPU memory space.
+
+| Unit | Metric Type | Value Type |
+| ---- | ----------- | ---------- |
+| By | Gauge | Int |
+
+#### Attributes
 
 | Name | Description | Values |
 | ---- | ----------- | ------ |
-| command | Process command. |  |
-| command_line | Process command line, 1024 characters maximum. |  |
-| gpu_number | GPU index starting at 0. |  |
-| memory_state | GPU memory used or free. | used, free |
-| model | GPU model |  |
-| owner | Process owner. |  |
-| pid | Process ID. |  |
-| process | Process name. |  |
-| uuid | GPU universally unique identifier |  |
+| model | GPU model | Any Str |
+| gpu_number | GPU index starting at 0. | Any Str |
+| uuid | GPU universally unique identifier | Any Str |
+| memory_state | GPU memory used or free. | Str: ``used``, ``free`` |
+
+### nvml.gpu.processes.max_bytes_used
+
+Maximum total GPU memory in bytes that was ever allocated by the process.
+
+| Unit | Metric Type | Value Type |
+| ---- | ----------- | ---------- |
+| By | Gauge | Int |
+
+#### Attributes
+
+| Name | Description | Values |
+| ---- | ----------- | ------ |
+| model | GPU model | Any Str |
+| gpu_number | GPU index starting at 0. | Any Str |
+| uuid | GPU universally unique identifier | Any Str |
+| pid | Process ID. | Any Int |
+| process | Process name. | Any Str |
+| command | Process command. | Any Str |
+| command_line | Process command line, 1024 characters maximum. | Any Str |
+| owner | Process owner. | Any Str |
+
+### nvml.gpu.processes.utilization
+
+Fraction of time over the process's life thus far during which one or more kernels was executing on the GPU.
+
+| Unit | Metric Type | Value Type |
+| ---- | ----------- | ---------- |
+| 1 | Gauge | Double |
+
+#### Attributes
+
+| Name | Description | Values |
+| ---- | ----------- | ------ |
+| model | GPU model | Any Str |
+| gpu_number | GPU index starting at 0. | Any Str |
+| uuid | GPU universally unique identifier | Any Str |
+| pid | Process ID. | Any Int |
+| process | Process name. | Any Str |
+| command | Process command. | Any Str |
+| command_line | Process command line, 1024 characters maximum. | Any Str |
+| owner | Process owner. | Any Str |
+
+### nvml.gpu.utilization
+
+Fraction of time GPU was not idle since the last sample.
+
+| Unit | Metric Type | Value Type |
+| ---- | ----------- | ---------- |
+| 1 | Gauge | Double |
+
+#### Attributes
+
+| Name | Description | Values |
+| ---- | ----------- | ------ |
+| model | GPU model | Any Str |
+| gpu_number | GPU index starting at 0. | Any Str |
+| uuid | GPU universally unique identifier | Any Str |

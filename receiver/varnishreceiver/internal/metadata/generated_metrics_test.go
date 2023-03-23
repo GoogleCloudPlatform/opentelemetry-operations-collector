@@ -3,10 +3,13 @@
 package metadata
 
 import (
-	"reflect"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/confmap/confmaptest"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/receiver/receivertest"
@@ -14,314 +17,307 @@ import (
 	"go.uber.org/zap/zaptest/observer"
 )
 
-func TestDefaultMetrics(t *testing.T) {
-	start := pcommon.Timestamp(1_000_000_000)
-	ts := pcommon.Timestamp(1_000_001_000)
-	mb := NewMetricsBuilder(DefaultMetricsSettings(), receivertest.NewNopCreateSettings(), WithStartTime(start))
-	enabledMetrics := make(map[string]bool)
+type testConfigCollection int
 
-	enabledMetrics["varnish.backend.connection.count"] = true
-	mb.RecordVarnishBackendConnectionCountDataPoint(ts, 1, AttributeBackendConnectionType(1))
+const (
+	testSetDefault testConfigCollection = iota
+	testSetAll
+	testSetNone
+)
 
-	enabledMetrics["varnish.backend.request.count"] = true
-	mb.RecordVarnishBackendRequestCountDataPoint(ts, 1)
-
-	enabledMetrics["varnish.cache.operation.count"] = true
-	mb.RecordVarnishCacheOperationCountDataPoint(ts, 1, AttributeCacheOperations(1))
-
-	enabledMetrics["varnish.client.request.count"] = true
-	mb.RecordVarnishClientRequestCountDataPoint(ts, 1, AttributeState(1))
-
-	enabledMetrics["varnish.client.request.error.count"] = true
-	mb.RecordVarnishClientRequestErrorCountDataPoint(ts, 1, "attr-val")
-
-	enabledMetrics["varnish.object.count"] = true
-	mb.RecordVarnishObjectCountDataPoint(ts, 1)
-
-	enabledMetrics["varnish.object.expired"] = true
-	mb.RecordVarnishObjectExpiredDataPoint(ts, 1)
-
-	enabledMetrics["varnish.object.moved"] = true
-	mb.RecordVarnishObjectMovedDataPoint(ts, 1)
-
-	enabledMetrics["varnish.object.nuked"] = true
-	mb.RecordVarnishObjectNukedDataPoint(ts, 1)
-
-	enabledMetrics["varnish.session.count"] = true
-	mb.RecordVarnishSessionCountDataPoint(ts, 1, AttributeSessionType(1))
-
-	enabledMetrics["varnish.thread.operation.count"] = true
-	mb.RecordVarnishThreadOperationCountDataPoint(ts, 1, AttributeThreadOperations(1))
-
-	metrics := mb.Emit()
-
-	assert.Equal(t, 1, metrics.ResourceMetrics().Len())
-	sm := metrics.ResourceMetrics().At(0).ScopeMetrics()
-	assert.Equal(t, 1, sm.Len())
-	ms := sm.At(0).Metrics()
-	assert.Equal(t, len(enabledMetrics), ms.Len())
-	seenMetrics := make(map[string]bool)
-	for i := 0; i < ms.Len(); i++ {
-		assert.True(t, enabledMetrics[ms.At(i).Name()])
-		seenMetrics[ms.At(i).Name()] = true
+func TestMetricsBuilder(t *testing.T) {
+	tests := []struct {
+		name      string
+		configSet testConfigCollection
+	}{
+		{
+			name:      "default",
+			configSet: testSetDefault,
+		},
+		{
+			name:      "all_set",
+			configSet: testSetAll,
+		},
+		{
+			name:      "none_set",
+			configSet: testSetNone,
+		},
 	}
-	assert.Equal(t, len(enabledMetrics), len(seenMetrics))
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			start := pcommon.Timestamp(1_000_000_000)
+			ts := pcommon.Timestamp(1_000_001_000)
+			observedZapCore, observedLogs := observer.New(zap.WarnLevel)
+			settings := receivertest.NewNopCreateSettings()
+			settings.Logger = zap.New(observedZapCore)
+			mb := NewMetricsBuilder(loadConfig(t, test.name), settings, WithStartTime(start))
+
+			expectedWarnings := 0
+			assert.Equal(t, expectedWarnings, observedLogs.Len())
+
+			defaultMetricsCount := 0
+			allMetricsCount := 0
+
+			defaultMetricsCount++
+			allMetricsCount++
+			mb.RecordVarnishBackendConnectionCountDataPoint(ts, 1, AttributeBackendConnectionType(1))
+
+			defaultMetricsCount++
+			allMetricsCount++
+			mb.RecordVarnishBackendRequestCountDataPoint(ts, 1)
+
+			defaultMetricsCount++
+			allMetricsCount++
+			mb.RecordVarnishCacheOperationCountDataPoint(ts, 1, AttributeCacheOperations(1))
+
+			defaultMetricsCount++
+			allMetricsCount++
+			mb.RecordVarnishClientRequestCountDataPoint(ts, 1, AttributeState(1))
+
+			defaultMetricsCount++
+			allMetricsCount++
+			mb.RecordVarnishClientRequestErrorCountDataPoint(ts, 1, "attr-val")
+
+			defaultMetricsCount++
+			allMetricsCount++
+			mb.RecordVarnishObjectCountDataPoint(ts, 1)
+
+			defaultMetricsCount++
+			allMetricsCount++
+			mb.RecordVarnishObjectExpiredDataPoint(ts, 1)
+
+			defaultMetricsCount++
+			allMetricsCount++
+			mb.RecordVarnishObjectMovedDataPoint(ts, 1)
+
+			defaultMetricsCount++
+			allMetricsCount++
+			mb.RecordVarnishObjectNukedDataPoint(ts, 1)
+
+			defaultMetricsCount++
+			allMetricsCount++
+			mb.RecordVarnishSessionCountDataPoint(ts, 1, AttributeSessionType(1))
+
+			defaultMetricsCount++
+			allMetricsCount++
+			mb.RecordVarnishThreadOperationCountDataPoint(ts, 1, AttributeThreadOperations(1))
+
+			metrics := mb.Emit(WithVarnishCacheName("attr-val"))
+
+			if test.configSet == testSetNone {
+				assert.Equal(t, 0, metrics.ResourceMetrics().Len())
+				return
+			}
+
+			assert.Equal(t, 1, metrics.ResourceMetrics().Len())
+			rm := metrics.ResourceMetrics().At(0)
+			attrCount := 0
+			enabledAttrCount := 0
+			attrVal, ok := rm.Resource().Attributes().Get("varnish.cache.name")
+			attrCount++
+			assert.Equal(t, mb.resourceAttributesSettings.VarnishCacheName.Enabled, ok)
+			if mb.resourceAttributesSettings.VarnishCacheName.Enabled {
+				enabledAttrCount++
+				assert.EqualValues(t, "attr-val", attrVal.Str())
+			}
+			assert.Equal(t, enabledAttrCount, rm.Resource().Attributes().Len())
+			assert.Equal(t, attrCount, 1)
+
+			assert.Equal(t, 1, rm.ScopeMetrics().Len())
+			ms := rm.ScopeMetrics().At(0).Metrics()
+			if test.configSet == testSetDefault {
+				assert.Equal(t, defaultMetricsCount, ms.Len())
+			}
+			if test.configSet == testSetAll {
+				assert.Equal(t, allMetricsCount, ms.Len())
+			}
+			validatedMetrics := make(map[string]bool)
+			for i := 0; i < ms.Len(); i++ {
+				switch ms.At(i).Name() {
+				case "varnish.backend.connection.count":
+					assert.False(t, validatedMetrics["varnish.backend.connection.count"], "Found a duplicate in the metrics slice: varnish.backend.connection.count")
+					validatedMetrics["varnish.backend.connection.count"] = true
+					assert.Equal(t, pmetric.MetricTypeSum, ms.At(i).Type())
+					assert.Equal(t, 1, ms.At(i).Sum().DataPoints().Len())
+					assert.Equal(t, "The backend connection type count.", ms.At(i).Description())
+					assert.Equal(t, "{connections}", ms.At(i).Unit())
+					assert.Equal(t, true, ms.At(i).Sum().IsMonotonic())
+					assert.Equal(t, pmetric.AggregationTemporalityCumulative, ms.At(i).Sum().AggregationTemporality())
+					dp := ms.At(i).Sum().DataPoints().At(0)
+					assert.Equal(t, start, dp.StartTimestamp())
+					assert.Equal(t, ts, dp.Timestamp())
+					assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
+					assert.Equal(t, int64(1), dp.IntValue())
+					attrVal, ok := dp.Attributes().Get("kind")
+					assert.True(t, ok)
+					assert.Equal(t, "success", attrVal.Str())
+				case "varnish.backend.request.count":
+					assert.False(t, validatedMetrics["varnish.backend.request.count"], "Found a duplicate in the metrics slice: varnish.backend.request.count")
+					validatedMetrics["varnish.backend.request.count"] = true
+					assert.Equal(t, pmetric.MetricTypeSum, ms.At(i).Type())
+					assert.Equal(t, 1, ms.At(i).Sum().DataPoints().Len())
+					assert.Equal(t, "The backend requests count.", ms.At(i).Description())
+					assert.Equal(t, "{requests}", ms.At(i).Unit())
+					assert.Equal(t, true, ms.At(i).Sum().IsMonotonic())
+					assert.Equal(t, pmetric.AggregationTemporalityCumulative, ms.At(i).Sum().AggregationTemporality())
+					dp := ms.At(i).Sum().DataPoints().At(0)
+					assert.Equal(t, start, dp.StartTimestamp())
+					assert.Equal(t, ts, dp.Timestamp())
+					assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
+					assert.Equal(t, int64(1), dp.IntValue())
+				case "varnish.cache.operation.count":
+					assert.False(t, validatedMetrics["varnish.cache.operation.count"], "Found a duplicate in the metrics slice: varnish.cache.operation.count")
+					validatedMetrics["varnish.cache.operation.count"] = true
+					assert.Equal(t, pmetric.MetricTypeSum, ms.At(i).Type())
+					assert.Equal(t, 1, ms.At(i).Sum().DataPoints().Len())
+					assert.Equal(t, "The cache operation type count.", ms.At(i).Description())
+					assert.Equal(t, "{operations}", ms.At(i).Unit())
+					assert.Equal(t, true, ms.At(i).Sum().IsMonotonic())
+					assert.Equal(t, pmetric.AggregationTemporalityCumulative, ms.At(i).Sum().AggregationTemporality())
+					dp := ms.At(i).Sum().DataPoints().At(0)
+					assert.Equal(t, start, dp.StartTimestamp())
+					assert.Equal(t, ts, dp.Timestamp())
+					assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
+					assert.Equal(t, int64(1), dp.IntValue())
+					attrVal, ok := dp.Attributes().Get("operation")
+					assert.True(t, ok)
+					assert.Equal(t, "hit", attrVal.Str())
+				case "varnish.client.request.count":
+					assert.False(t, validatedMetrics["varnish.client.request.count"], "Found a duplicate in the metrics slice: varnish.client.request.count")
+					validatedMetrics["varnish.client.request.count"] = true
+					assert.Equal(t, pmetric.MetricTypeSum, ms.At(i).Type())
+					assert.Equal(t, 1, ms.At(i).Sum().DataPoints().Len())
+					assert.Equal(t, "The client request count.", ms.At(i).Description())
+					assert.Equal(t, "{requests}", ms.At(i).Unit())
+					assert.Equal(t, true, ms.At(i).Sum().IsMonotonic())
+					assert.Equal(t, pmetric.AggregationTemporalityCumulative, ms.At(i).Sum().AggregationTemporality())
+					dp := ms.At(i).Sum().DataPoints().At(0)
+					assert.Equal(t, start, dp.StartTimestamp())
+					assert.Equal(t, ts, dp.Timestamp())
+					assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
+					assert.Equal(t, int64(1), dp.IntValue())
+					attrVal, ok := dp.Attributes().Get("state")
+					assert.True(t, ok)
+					assert.Equal(t, "received", attrVal.Str())
+				case "varnish.client.request.error.count":
+					assert.False(t, validatedMetrics["varnish.client.request.error.count"], "Found a duplicate in the metrics slice: varnish.client.request.error.count")
+					validatedMetrics["varnish.client.request.error.count"] = true
+					assert.Equal(t, pmetric.MetricTypeSum, ms.At(i).Type())
+					assert.Equal(t, 1, ms.At(i).Sum().DataPoints().Len())
+					assert.Equal(t, "The client request errors received by status code.", ms.At(i).Description())
+					assert.Equal(t, "{requests}", ms.At(i).Unit())
+					assert.Equal(t, true, ms.At(i).Sum().IsMonotonic())
+					assert.Equal(t, pmetric.AggregationTemporalityCumulative, ms.At(i).Sum().AggregationTemporality())
+					dp := ms.At(i).Sum().DataPoints().At(0)
+					assert.Equal(t, start, dp.StartTimestamp())
+					assert.Equal(t, ts, dp.Timestamp())
+					assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
+					assert.Equal(t, int64(1), dp.IntValue())
+					attrVal, ok := dp.Attributes().Get("status_code")
+					assert.True(t, ok)
+					assert.EqualValues(t, "attr-val", attrVal.Str())
+				case "varnish.object.count":
+					assert.False(t, validatedMetrics["varnish.object.count"], "Found a duplicate in the metrics slice: varnish.object.count")
+					validatedMetrics["varnish.object.count"] = true
+					assert.Equal(t, pmetric.MetricTypeSum, ms.At(i).Type())
+					assert.Equal(t, 1, ms.At(i).Sum().DataPoints().Len())
+					assert.Equal(t, "The HTTP objects in the cache count.", ms.At(i).Description())
+					assert.Equal(t, "{objects}", ms.At(i).Unit())
+					assert.Equal(t, false, ms.At(i).Sum().IsMonotonic())
+					assert.Equal(t, pmetric.AggregationTemporalityCumulative, ms.At(i).Sum().AggregationTemporality())
+					dp := ms.At(i).Sum().DataPoints().At(0)
+					assert.Equal(t, start, dp.StartTimestamp())
+					assert.Equal(t, ts, dp.Timestamp())
+					assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
+					assert.Equal(t, int64(1), dp.IntValue())
+				case "varnish.object.expired":
+					assert.False(t, validatedMetrics["varnish.object.expired"], "Found a duplicate in the metrics slice: varnish.object.expired")
+					validatedMetrics["varnish.object.expired"] = true
+					assert.Equal(t, pmetric.MetricTypeSum, ms.At(i).Type())
+					assert.Equal(t, 1, ms.At(i).Sum().DataPoints().Len())
+					assert.Equal(t, "The expired objects from old age count.", ms.At(i).Description())
+					assert.Equal(t, "{objects}", ms.At(i).Unit())
+					assert.Equal(t, true, ms.At(i).Sum().IsMonotonic())
+					assert.Equal(t, pmetric.AggregationTemporalityCumulative, ms.At(i).Sum().AggregationTemporality())
+					dp := ms.At(i).Sum().DataPoints().At(0)
+					assert.Equal(t, start, dp.StartTimestamp())
+					assert.Equal(t, ts, dp.Timestamp())
+					assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
+					assert.Equal(t, int64(1), dp.IntValue())
+				case "varnish.object.moved":
+					assert.False(t, validatedMetrics["varnish.object.moved"], "Found a duplicate in the metrics slice: varnish.object.moved")
+					validatedMetrics["varnish.object.moved"] = true
+					assert.Equal(t, pmetric.MetricTypeSum, ms.At(i).Type())
+					assert.Equal(t, 1, ms.At(i).Sum().DataPoints().Len())
+					assert.Equal(t, "The moved operations done on the LRU list count.", ms.At(i).Description())
+					assert.Equal(t, "{objects}", ms.At(i).Unit())
+					assert.Equal(t, true, ms.At(i).Sum().IsMonotonic())
+					assert.Equal(t, pmetric.AggregationTemporalityCumulative, ms.At(i).Sum().AggregationTemporality())
+					dp := ms.At(i).Sum().DataPoints().At(0)
+					assert.Equal(t, start, dp.StartTimestamp())
+					assert.Equal(t, ts, dp.Timestamp())
+					assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
+					assert.Equal(t, int64(1), dp.IntValue())
+				case "varnish.object.nuked":
+					assert.False(t, validatedMetrics["varnish.object.nuked"], "Found a duplicate in the metrics slice: varnish.object.nuked")
+					validatedMetrics["varnish.object.nuked"] = true
+					assert.Equal(t, pmetric.MetricTypeSum, ms.At(i).Type())
+					assert.Equal(t, 1, ms.At(i).Sum().DataPoints().Len())
+					assert.Equal(t, "The objects that have been forcefully evicted from storage count.", ms.At(i).Description())
+					assert.Equal(t, "{objects}", ms.At(i).Unit())
+					assert.Equal(t, true, ms.At(i).Sum().IsMonotonic())
+					assert.Equal(t, pmetric.AggregationTemporalityCumulative, ms.At(i).Sum().AggregationTemporality())
+					dp := ms.At(i).Sum().DataPoints().At(0)
+					assert.Equal(t, start, dp.StartTimestamp())
+					assert.Equal(t, ts, dp.Timestamp())
+					assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
+					assert.Equal(t, int64(1), dp.IntValue())
+				case "varnish.session.count":
+					assert.False(t, validatedMetrics["varnish.session.count"], "Found a duplicate in the metrics slice: varnish.session.count")
+					validatedMetrics["varnish.session.count"] = true
+					assert.Equal(t, pmetric.MetricTypeSum, ms.At(i).Type())
+					assert.Equal(t, 1, ms.At(i).Sum().DataPoints().Len())
+					assert.Equal(t, "The session connection type count.", ms.At(i).Description())
+					assert.Equal(t, "{connections}", ms.At(i).Unit())
+					assert.Equal(t, true, ms.At(i).Sum().IsMonotonic())
+					assert.Equal(t, pmetric.AggregationTemporalityCumulative, ms.At(i).Sum().AggregationTemporality())
+					dp := ms.At(i).Sum().DataPoints().At(0)
+					assert.Equal(t, start, dp.StartTimestamp())
+					assert.Equal(t, ts, dp.Timestamp())
+					assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
+					assert.Equal(t, int64(1), dp.IntValue())
+					attrVal, ok := dp.Attributes().Get("kind")
+					assert.True(t, ok)
+					assert.Equal(t, "accepted", attrVal.Str())
+				case "varnish.thread.operation.count":
+					assert.False(t, validatedMetrics["varnish.thread.operation.count"], "Found a duplicate in the metrics slice: varnish.thread.operation.count")
+					validatedMetrics["varnish.thread.operation.count"] = true
+					assert.Equal(t, pmetric.MetricTypeSum, ms.At(i).Type())
+					assert.Equal(t, 1, ms.At(i).Sum().DataPoints().Len())
+					assert.Equal(t, "The thread operation type count.", ms.At(i).Description())
+					assert.Equal(t, "{operations}", ms.At(i).Unit())
+					assert.Equal(t, true, ms.At(i).Sum().IsMonotonic())
+					assert.Equal(t, pmetric.AggregationTemporalityCumulative, ms.At(i).Sum().AggregationTemporality())
+					dp := ms.At(i).Sum().DataPoints().At(0)
+					assert.Equal(t, start, dp.StartTimestamp())
+					assert.Equal(t, ts, dp.Timestamp())
+					assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
+					assert.Equal(t, int64(1), dp.IntValue())
+					attrVal, ok := dp.Attributes().Get("operation")
+					assert.True(t, ok)
+					assert.Equal(t, "created", attrVal.Str())
+				}
+			}
+		})
+	}
 }
 
-func TestAllMetrics(t *testing.T) {
-	start := pcommon.Timestamp(1_000_000_000)
-	ts := pcommon.Timestamp(1_000_001_000)
-	metricsSettings := MetricsSettings{
-		VarnishBackendConnectionCount:  MetricSettings{Enabled: true},
-		VarnishBackendRequestCount:     MetricSettings{Enabled: true},
-		VarnishCacheOperationCount:     MetricSettings{Enabled: true},
-		VarnishClientRequestCount:      MetricSettings{Enabled: true},
-		VarnishClientRequestErrorCount: MetricSettings{Enabled: true},
-		VarnishObjectCount:             MetricSettings{Enabled: true},
-		VarnishObjectExpired:           MetricSettings{Enabled: true},
-		VarnishObjectMoved:             MetricSettings{Enabled: true},
-		VarnishObjectNuked:             MetricSettings{Enabled: true},
-		VarnishSessionCount:            MetricSettings{Enabled: true},
-		VarnishThreadOperationCount:    MetricSettings{Enabled: true},
-	}
-	observedZapCore, observedLogs := observer.New(zap.WarnLevel)
-	settings := receivertest.NewNopCreateSettings()
-	settings.Logger = zap.New(observedZapCore)
-	mb := NewMetricsBuilder(metricsSettings, settings, WithStartTime(start))
-
-	assert.Equal(t, 0, observedLogs.Len())
-
-	mb.RecordVarnishBackendConnectionCountDataPoint(ts, 1, AttributeBackendConnectionType(1))
-	mb.RecordVarnishBackendRequestCountDataPoint(ts, 1)
-	mb.RecordVarnishCacheOperationCountDataPoint(ts, 1, AttributeCacheOperations(1))
-	mb.RecordVarnishClientRequestCountDataPoint(ts, 1, AttributeState(1))
-	mb.RecordVarnishClientRequestErrorCountDataPoint(ts, 1, "attr-val")
-	mb.RecordVarnishObjectCountDataPoint(ts, 1)
-	mb.RecordVarnishObjectExpiredDataPoint(ts, 1)
-	mb.RecordVarnishObjectMovedDataPoint(ts, 1)
-	mb.RecordVarnishObjectNukedDataPoint(ts, 1)
-	mb.RecordVarnishSessionCountDataPoint(ts, 1, AttributeSessionType(1))
-	mb.RecordVarnishThreadOperationCountDataPoint(ts, 1, AttributeThreadOperations(1))
-
-	metrics := mb.Emit(WithVarnishCacheName("attr-val"))
-
-	assert.Equal(t, 1, metrics.ResourceMetrics().Len())
-	rm := metrics.ResourceMetrics().At(0)
-	attrCount := 0
-	attrCount++
-	attrVal, ok := rm.Resource().Attributes().Get("varnish.cache.name")
-	assert.True(t, ok)
-	assert.EqualValues(t, "attr-val", attrVal.Str())
-	assert.Equal(t, attrCount, rm.Resource().Attributes().Len())
-
-	assert.Equal(t, 1, rm.ScopeMetrics().Len())
-	ms := rm.ScopeMetrics().At(0).Metrics()
-	allMetricsCount := reflect.TypeOf(MetricsSettings{}).NumField()
-	assert.Equal(t, allMetricsCount, ms.Len())
-	validatedMetrics := make(map[string]struct{})
-	for i := 0; i < ms.Len(); i++ {
-		switch ms.At(i).Name() {
-		case "varnish.backend.connection.count":
-			assert.Equal(t, pmetric.MetricTypeSum, ms.At(i).Type())
-			assert.Equal(t, 1, ms.At(i).Sum().DataPoints().Len())
-			assert.Equal(t, "The backend connection type count.", ms.At(i).Description())
-			assert.Equal(t, "{connections}", ms.At(i).Unit())
-			assert.Equal(t, true, ms.At(i).Sum().IsMonotonic())
-			assert.Equal(t, pmetric.AggregationTemporalityCumulative, ms.At(i).Sum().AggregationTemporality())
-			dp := ms.At(i).Sum().DataPoints().At(0)
-			assert.Equal(t, start, dp.StartTimestamp())
-			assert.Equal(t, ts, dp.Timestamp())
-			assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
-			assert.Equal(t, int64(1), dp.IntValue())
-			attrVal, ok := dp.Attributes().Get("kind")
-			assert.True(t, ok)
-			assert.Equal(t, "success", attrVal.Str())
-			validatedMetrics["varnish.backend.connection.count"] = struct{}{}
-		case "varnish.backend.request.count":
-			assert.Equal(t, pmetric.MetricTypeSum, ms.At(i).Type())
-			assert.Equal(t, 1, ms.At(i).Sum().DataPoints().Len())
-			assert.Equal(t, "The backend requests count.", ms.At(i).Description())
-			assert.Equal(t, "{requests}", ms.At(i).Unit())
-			assert.Equal(t, true, ms.At(i).Sum().IsMonotonic())
-			assert.Equal(t, pmetric.AggregationTemporalityCumulative, ms.At(i).Sum().AggregationTemporality())
-			dp := ms.At(i).Sum().DataPoints().At(0)
-			assert.Equal(t, start, dp.StartTimestamp())
-			assert.Equal(t, ts, dp.Timestamp())
-			assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
-			assert.Equal(t, int64(1), dp.IntValue())
-			validatedMetrics["varnish.backend.request.count"] = struct{}{}
-		case "varnish.cache.operation.count":
-			assert.Equal(t, pmetric.MetricTypeSum, ms.At(i).Type())
-			assert.Equal(t, 1, ms.At(i).Sum().DataPoints().Len())
-			assert.Equal(t, "The cache operation type count.", ms.At(i).Description())
-			assert.Equal(t, "{operations}", ms.At(i).Unit())
-			assert.Equal(t, true, ms.At(i).Sum().IsMonotonic())
-			assert.Equal(t, pmetric.AggregationTemporalityCumulative, ms.At(i).Sum().AggregationTemporality())
-			dp := ms.At(i).Sum().DataPoints().At(0)
-			assert.Equal(t, start, dp.StartTimestamp())
-			assert.Equal(t, ts, dp.Timestamp())
-			assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
-			assert.Equal(t, int64(1), dp.IntValue())
-			attrVal, ok := dp.Attributes().Get("operation")
-			assert.True(t, ok)
-			assert.Equal(t, "hit", attrVal.Str())
-			validatedMetrics["varnish.cache.operation.count"] = struct{}{}
-		case "varnish.client.request.count":
-			assert.Equal(t, pmetric.MetricTypeSum, ms.At(i).Type())
-			assert.Equal(t, 1, ms.At(i).Sum().DataPoints().Len())
-			assert.Equal(t, "The client request count.", ms.At(i).Description())
-			assert.Equal(t, "{requests}", ms.At(i).Unit())
-			assert.Equal(t, true, ms.At(i).Sum().IsMonotonic())
-			assert.Equal(t, pmetric.AggregationTemporalityCumulative, ms.At(i).Sum().AggregationTemporality())
-			dp := ms.At(i).Sum().DataPoints().At(0)
-			assert.Equal(t, start, dp.StartTimestamp())
-			assert.Equal(t, ts, dp.Timestamp())
-			assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
-			assert.Equal(t, int64(1), dp.IntValue())
-			attrVal, ok := dp.Attributes().Get("state")
-			assert.True(t, ok)
-			assert.Equal(t, "received", attrVal.Str())
-			validatedMetrics["varnish.client.request.count"] = struct{}{}
-		case "varnish.client.request.error.count":
-			assert.Equal(t, pmetric.MetricTypeSum, ms.At(i).Type())
-			assert.Equal(t, 1, ms.At(i).Sum().DataPoints().Len())
-			assert.Equal(t, "The client request errors received by status code.", ms.At(i).Description())
-			assert.Equal(t, "{requests}", ms.At(i).Unit())
-			assert.Equal(t, true, ms.At(i).Sum().IsMonotonic())
-			assert.Equal(t, pmetric.AggregationTemporalityCumulative, ms.At(i).Sum().AggregationTemporality())
-			dp := ms.At(i).Sum().DataPoints().At(0)
-			assert.Equal(t, start, dp.StartTimestamp())
-			assert.Equal(t, ts, dp.Timestamp())
-			assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
-			assert.Equal(t, int64(1), dp.IntValue())
-			attrVal, ok := dp.Attributes().Get("status_code")
-			assert.True(t, ok)
-			assert.EqualValues(t, "attr-val", attrVal.Str())
-			validatedMetrics["varnish.client.request.error.count"] = struct{}{}
-		case "varnish.object.count":
-			assert.Equal(t, pmetric.MetricTypeSum, ms.At(i).Type())
-			assert.Equal(t, 1, ms.At(i).Sum().DataPoints().Len())
-			assert.Equal(t, "The HTTP objects in the cache count.", ms.At(i).Description())
-			assert.Equal(t, "{objects}", ms.At(i).Unit())
-			assert.Equal(t, false, ms.At(i).Sum().IsMonotonic())
-			assert.Equal(t, pmetric.AggregationTemporalityCumulative, ms.At(i).Sum().AggregationTemporality())
-			dp := ms.At(i).Sum().DataPoints().At(0)
-			assert.Equal(t, start, dp.StartTimestamp())
-			assert.Equal(t, ts, dp.Timestamp())
-			assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
-			assert.Equal(t, int64(1), dp.IntValue())
-			validatedMetrics["varnish.object.count"] = struct{}{}
-		case "varnish.object.expired":
-			assert.Equal(t, pmetric.MetricTypeSum, ms.At(i).Type())
-			assert.Equal(t, 1, ms.At(i).Sum().DataPoints().Len())
-			assert.Equal(t, "The expired objects from old age count.", ms.At(i).Description())
-			assert.Equal(t, "{objects}", ms.At(i).Unit())
-			assert.Equal(t, true, ms.At(i).Sum().IsMonotonic())
-			assert.Equal(t, pmetric.AggregationTemporalityCumulative, ms.At(i).Sum().AggregationTemporality())
-			dp := ms.At(i).Sum().DataPoints().At(0)
-			assert.Equal(t, start, dp.StartTimestamp())
-			assert.Equal(t, ts, dp.Timestamp())
-			assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
-			assert.Equal(t, int64(1), dp.IntValue())
-			validatedMetrics["varnish.object.expired"] = struct{}{}
-		case "varnish.object.moved":
-			assert.Equal(t, pmetric.MetricTypeSum, ms.At(i).Type())
-			assert.Equal(t, 1, ms.At(i).Sum().DataPoints().Len())
-			assert.Equal(t, "The moved operations done on the LRU list count.", ms.At(i).Description())
-			assert.Equal(t, "{objects}", ms.At(i).Unit())
-			assert.Equal(t, true, ms.At(i).Sum().IsMonotonic())
-			assert.Equal(t, pmetric.AggregationTemporalityCumulative, ms.At(i).Sum().AggregationTemporality())
-			dp := ms.At(i).Sum().DataPoints().At(0)
-			assert.Equal(t, start, dp.StartTimestamp())
-			assert.Equal(t, ts, dp.Timestamp())
-			assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
-			assert.Equal(t, int64(1), dp.IntValue())
-			validatedMetrics["varnish.object.moved"] = struct{}{}
-		case "varnish.object.nuked":
-			assert.Equal(t, pmetric.MetricTypeSum, ms.At(i).Type())
-			assert.Equal(t, 1, ms.At(i).Sum().DataPoints().Len())
-			assert.Equal(t, "The objects that have been forcefully evicted from storage count.", ms.At(i).Description())
-			assert.Equal(t, "{objects}", ms.At(i).Unit())
-			assert.Equal(t, true, ms.At(i).Sum().IsMonotonic())
-			assert.Equal(t, pmetric.AggregationTemporalityCumulative, ms.At(i).Sum().AggregationTemporality())
-			dp := ms.At(i).Sum().DataPoints().At(0)
-			assert.Equal(t, start, dp.StartTimestamp())
-			assert.Equal(t, ts, dp.Timestamp())
-			assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
-			assert.Equal(t, int64(1), dp.IntValue())
-			validatedMetrics["varnish.object.nuked"] = struct{}{}
-		case "varnish.session.count":
-			assert.Equal(t, pmetric.MetricTypeSum, ms.At(i).Type())
-			assert.Equal(t, 1, ms.At(i).Sum().DataPoints().Len())
-			assert.Equal(t, "The session connection type count.", ms.At(i).Description())
-			assert.Equal(t, "{connections}", ms.At(i).Unit())
-			assert.Equal(t, true, ms.At(i).Sum().IsMonotonic())
-			assert.Equal(t, pmetric.AggregationTemporalityCumulative, ms.At(i).Sum().AggregationTemporality())
-			dp := ms.At(i).Sum().DataPoints().At(0)
-			assert.Equal(t, start, dp.StartTimestamp())
-			assert.Equal(t, ts, dp.Timestamp())
-			assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
-			assert.Equal(t, int64(1), dp.IntValue())
-			attrVal, ok := dp.Attributes().Get("kind")
-			assert.True(t, ok)
-			assert.Equal(t, "accepted", attrVal.Str())
-			validatedMetrics["varnish.session.count"] = struct{}{}
-		case "varnish.thread.operation.count":
-			assert.Equal(t, pmetric.MetricTypeSum, ms.At(i).Type())
-			assert.Equal(t, 1, ms.At(i).Sum().DataPoints().Len())
-			assert.Equal(t, "The thread operation type count.", ms.At(i).Description())
-			assert.Equal(t, "{operations}", ms.At(i).Unit())
-			assert.Equal(t, true, ms.At(i).Sum().IsMonotonic())
-			assert.Equal(t, pmetric.AggregationTemporalityCumulative, ms.At(i).Sum().AggregationTemporality())
-			dp := ms.At(i).Sum().DataPoints().At(0)
-			assert.Equal(t, start, dp.StartTimestamp())
-			assert.Equal(t, ts, dp.Timestamp())
-			assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
-			assert.Equal(t, int64(1), dp.IntValue())
-			attrVal, ok := dp.Attributes().Get("operation")
-			assert.True(t, ok)
-			assert.Equal(t, "created", attrVal.Str())
-			validatedMetrics["varnish.thread.operation.count"] = struct{}{}
-		}
-	}
-	assert.Equal(t, allMetricsCount, len(validatedMetrics))
-}
-
-func TestNoMetrics(t *testing.T) {
-	start := pcommon.Timestamp(1_000_000_000)
-	ts := pcommon.Timestamp(1_000_001_000)
-	metricsSettings := MetricsSettings{
-		VarnishBackendConnectionCount:  MetricSettings{Enabled: false},
-		VarnishBackendRequestCount:     MetricSettings{Enabled: false},
-		VarnishCacheOperationCount:     MetricSettings{Enabled: false},
-		VarnishClientRequestCount:      MetricSettings{Enabled: false},
-		VarnishClientRequestErrorCount: MetricSettings{Enabled: false},
-		VarnishObjectCount:             MetricSettings{Enabled: false},
-		VarnishObjectExpired:           MetricSettings{Enabled: false},
-		VarnishObjectMoved:             MetricSettings{Enabled: false},
-		VarnishObjectNuked:             MetricSettings{Enabled: false},
-		VarnishSessionCount:            MetricSettings{Enabled: false},
-		VarnishThreadOperationCount:    MetricSettings{Enabled: false},
-	}
-	observedZapCore, observedLogs := observer.New(zap.WarnLevel)
-	settings := receivertest.NewNopCreateSettings()
-	settings.Logger = zap.New(observedZapCore)
-	mb := NewMetricsBuilder(metricsSettings, settings, WithStartTime(start))
-
-	assert.Equal(t, 0, observedLogs.Len())
-	mb.RecordVarnishBackendConnectionCountDataPoint(ts, 1, AttributeBackendConnectionType(1))
-	mb.RecordVarnishBackendRequestCountDataPoint(ts, 1)
-	mb.RecordVarnishCacheOperationCountDataPoint(ts, 1, AttributeCacheOperations(1))
-	mb.RecordVarnishClientRequestCountDataPoint(ts, 1, AttributeState(1))
-	mb.RecordVarnishClientRequestErrorCountDataPoint(ts, 1, "attr-val")
-	mb.RecordVarnishObjectCountDataPoint(ts, 1)
-	mb.RecordVarnishObjectExpiredDataPoint(ts, 1)
-	mb.RecordVarnishObjectMovedDataPoint(ts, 1)
-	mb.RecordVarnishObjectNukedDataPoint(ts, 1)
-	mb.RecordVarnishSessionCountDataPoint(ts, 1, AttributeSessionType(1))
-	mb.RecordVarnishThreadOperationCountDataPoint(ts, 1, AttributeThreadOperations(1))
-
-	metrics := mb.Emit()
-
-	assert.Equal(t, 0, metrics.ResourceMetrics().Len())
+func loadConfig(t *testing.T, name string) MetricsBuilderConfig {
+	cm, err := confmaptest.LoadConf(filepath.Join("testdata", "config.yaml"))
+	require.NoError(t, err)
+	sub, err := cm.Sub(name)
+	require.NoError(t, err)
+	cfg := DefaultMetricsBuilderConfig()
+	require.NoError(t, component.UnmarshalConfig(sub, &cfg))
+	return cfg
 }

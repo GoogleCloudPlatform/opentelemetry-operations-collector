@@ -39,7 +39,7 @@ func newCastToSumProcessor(config *Config, logger *zap.Logger) *CastToSumProcess
 }
 
 // ProcessMetrics implements the MProcessor interface.
-func (ctsp *CastToSumProcessor) ProcessMetrics(ctx context.Context, metrics pmetric.Metrics) (pmetric.Metrics, error) {
+func (ctsp *CastToSumProcessor) ProcessMetrics(_ context.Context, metrics pmetric.Metrics) (pmetric.Metrics, error) {
 	for i := 0; i < metrics.ResourceMetrics().Len(); i++ {
 		rms := metrics.ResourceMetrics().At(i)
 		ctsp.transformMetrics(rms)
@@ -69,7 +69,7 @@ func sliceContains(names []string, name string) bool {
 }
 
 // processMetric processes a supported metric.
-func (ctsp *CastToSumProcessor) processMetric(resource pcommon.Resource, metric pmetric.Metric) {
+func (ctsp *CastToSumProcessor) processMetric(_ pcommon.Resource, metric pmetric.Metric) {
 	if !sliceContains(ctsp.Metrics, metric.Name()) {
 		return
 	}

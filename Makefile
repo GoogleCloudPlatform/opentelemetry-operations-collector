@@ -76,7 +76,7 @@ checklicense:
 
 .PHONY: lint
 lint:
-	golangci-lint run --allow-parallel-runners --timeout=20m
+	golangci-lint run --allow-parallel-runners --build-tags=$(GO_BUILD_TAGS) --timeout=20m
 
 .PHONY: misspell
 misspell:

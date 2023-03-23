@@ -33,7 +33,7 @@ import (
 var dcgmIDToName map[dcgm.Short]string
 var dcgmNameToMetricName map[string]string
 var metricNameToDcgmName map[string]string
-var randSource *rand.Rand = rand.New(rand.NewSource(time.Now().UnixMicro()))
+var randSource = rand.New(rand.NewSource(time.Now().UnixMicro()))
 
 func init() {
 	dcgmIDToName = make(map[dcgm.Short]string, len(dcgm.DCGM_FI))

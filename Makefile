@@ -51,11 +51,10 @@ update-components:
 	cd $(TOOLS_DIR) && go get -u github.com/open-telemetry/opentelemetry-collector-contrib/cmd/mdatagen
 	cd $(TOOLS_DIR) && go mod tidy
 
-update-opentelemetry: 
-	GO_BUILD_TAGS=gpu
-	$(MAKE) update-components 
-	$(MAKE) install-tools 
-	$(MAKE) generate
+update-opentelemetry:
+	$(MAKE) update-components
+	$(MAKE) install-tools
+	$(MAKE) GO_BUILD_TAGS=gpu generate
 
 # --------------------------
 #  Tools

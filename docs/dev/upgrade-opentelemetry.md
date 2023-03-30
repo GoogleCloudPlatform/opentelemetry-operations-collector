@@ -9,13 +9,14 @@ There is a `make` target to update all OpenTelemetry dependencies and regenerate
 make update-opentelemetry
 ```
 
-Read on for details of the actual details of the target, or skip ahead to [Test](#test) to continue the process.
+<details>
+    <summary>update-opentelemetry target details</summary>
 
 First, update all `opentelemetry` dependencies to the newest possible version.
 ```
 make update-components
 ```
-Those dependencies includes the `mdatagen` tool, which is in a separate place from libraries (read more in [tools.md](./tools.md)). Since the `mdatagen` version has been updated in the tools `go.mod`, re-install tools to actually install the new version:
+These dependencies include the `mdatagen` tool, which is in a separate place from libraries (read more in [tools.md](./tools.md)). Since the `mdatagen` version has been updated in the tools `go.mod`, re-install tools to actually install the new version:
 ```
 make install-tools
 ```
@@ -23,6 +24,7 @@ With the new version of `mdatagen` installed, regenerate the `metadata` packages
 ```
 GO_BUILD_TAGS=gpu make generate
 ```
+</details>
 
 ## Test
 

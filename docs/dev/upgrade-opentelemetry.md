@@ -10,7 +10,7 @@ make update-opentelemetry
 ```
 
 <details>
-    <summary>update-opentelemetry target details</summary>
+    <summary>`update-opentelemetry` target details</summary>
 
 First, update all `opentelemetry` dependencies to the newest possible version.
 ```

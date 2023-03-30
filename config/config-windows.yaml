@@ -12,6 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+###############
+# DEPRECATED
+# This config has not been fully maintained for recent otel upgrades.
+# It may not work. It is kept here for backwards compatibility with
+# internal build jobs.
+###############
+
 receivers:
   # scrape system metrics at 1m interval
   hostmetrics:
@@ -63,10 +70,10 @@ receivers:
   prometheus/agent:
     config:
       scrape_configs:
-      - job_name: 'otel-collector'
-        scrape_interval: 1m
-        static_configs:
-        - targets: ['0.0.0.0:8888']
+        - job_name: "otel-collector"
+          scrape_interval: 1m
+          static_configs:
+            - targets: ["0.0.0.0:8888"]
 
 processors:
   # append resource information from GCE metadata
@@ -108,7 +115,7 @@ processors:
             new_label: cpu_state
           # take mean over cpu_number dimension, retaining only cpu_state
           - action: aggregate_labels
-            label_set: [ cpu_state ]
+            label_set: [cpu_state]
             aggregation_type: mean
       # system.cpu.utilization -> cpu/utilization
       - include: system.cpu.utilization
@@ -125,7 +132,7 @@ processors:
             new_label: cpu_state
           # take mean over cpu_number dimension, retaining only cpu_state
           - action: aggregate_labels
-            label_set: [ cpu_state ]
+            label_set: [cpu_state]
             aggregation_type: mean
       # system.cpu.load_average.1m -> cpu/load_1m
       - include: system.cpu.load_average.1m
@@ -181,7 +188,7 @@ processors:
           - action: toggle_scalar_data_type
           # take sum over mode, mountpoint & type dimensions, retaining only device & state
           - action: aggregate_labels
-            label_set: [ device, state ]
+            label_set: [device, state]
             aggregation_type: sum
       # system.filesystem.utilization -> disk/percent_used
       - include: system.filesystem.utilization
@@ -190,7 +197,7 @@ processors:
         operations:
           # take sum over mode, mountpoint & type dimensions, retaining only device & state
           - action: aggregate_labels
-            label_set: [ device, state ]
+            label_set: [device, state]
             aggregation_type: sum
       # system.memory.usage -> memory/bytes_used
       - include: system.memory.usage
@@ -290,7 +297,7 @@ processors:
             new_label: tcp_state
           # remove protocol label
           - action: aggregate_labels
-            label_set: [ state ]
+            label_set: [state]
             aggregation_type: sum
       # system.paging.usage -> swap/bytes_used
       - include: system.paging.usage
@@ -310,7 +317,7 @@ processors:
         operations:
           # take sum over device dimension, retaining only state
           - action: aggregate_labels
-            label_set: [ state ]
+            label_set: [state]
             aggregation_type: sum
       # system.paging.operations -> swap/io
       - include: system.paging.operations
@@ -319,7 +326,7 @@ processors:
         operations:
           # delete single-valued type dimension, retaining only direction
           - action: aggregate_labels
-            label_set: [ direction ]
+            label_set: [direction]
             aggregation_type: sum
       # process.cpu.time -> processes/cpu_time
       - include: process.cpu.time
@@ -332,7 +339,7 @@ processors:
           - action: update_label
             label: state
             new_label: user_or_syst
-            # change label value system -> syst  
+            # change label value system -> syst
             value_actions:
               - value: system
                 new_value: syst
@@ -395,7 +402,7 @@ processors:
     transforms:
       - include: \SQLServer:General Statistics(_Total)\User Connections
         action: update
-        new_name: mssql/connections/user 
+        new_name: mssql/connections/user
       - include: \SQLServer:Databases(_Total)\Transactions/sec
         action: update
         new_name: mssql/transaction_rate
@@ -428,18 +435,18 @@ processors:
         operations:
           # change data type from double -> int64
           - action: toggle_scalar_data_type
-        # TODO: below is proposed new configuration for the metrics transform processor
+          # TODO: below is proposed new configuration for the metrics transform processor
           # ignore any non "google.monitoring" RPCs (note there won't be any other RPCs for now)
-        # - action: select_label_values
-        #   label: grpc_client_method
-        #   value_regexp: ^google\.monitoring
+          # - action: select_label_values
+          #   label: grpc_client_method
+          #   value_regexp: ^google\.monitoring
           # change label grpc_client_status -> state
           - action: update_label
             label: grpc_client_status
             new_label: state
           # delete grpc_client_method dimension, retaining only state
           - action: aggregate_labels
-            label_set: [ state ]
+            label_set: [state]
             aggregation_type: sum
       # otelcol_googlecloudmonitoring_point_count -> agent/monitoring/point_count
       - include: otelcol_googlecloudmonitoring_point_count

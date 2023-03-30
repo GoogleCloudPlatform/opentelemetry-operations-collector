@@ -30,8 +30,8 @@ jobs:
         shell: bash
       - name: Install Tools
         run: make install-tools
-      - name: Run Presubmit
+      - name: Run presubmit
         run: make presubmit
       - name: Test GPU Support
         if: startsWith(matrix.os, 'ubuntu')
-        run: GO_TAGS=gpu make test
+        run: GO_BUILD_TAGS=gpu make presubmit

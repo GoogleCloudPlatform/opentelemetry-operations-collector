@@ -19,7 +19,6 @@ package dcgmreceiver
 
 import (
 	"fmt"
-	"math/rand"
 	"time"
 
 	"github.com/NVIDIA/go-dcgm/pkg/dcgm"
@@ -185,7 +184,7 @@ func setWatchesOnEnabledFields(config *Config, logger *zap.Logger, deviceGroup d
 	var err error
 
 	// Note: Add random suffix to avoid conflict amongnst any parallel collectors
-	fieldGroupName := fmt.Sprintf("google-cloud-ops-agent-metrics-%d", rand.Intn(10000))
+	fieldGroupName := fmt.Sprintf("google-cloud-ops-agent-metrics-%d", randSource.Intn(10000))
 	enabledFieldGroup, err := dcgm.FieldGroupCreate(fieldGroupName, enabledFieldIDs)
 	if err != nil {
 		return dcgm.FieldHandle{}, fmt.Errorf("Unable to create DCGM field group '%s'", fieldGroupName)

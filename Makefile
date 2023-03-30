@@ -48,9 +48,14 @@ TOOLS_DIR := internal/tools
 update-components:
 	grep -o github.com/open-telemetry/opentelemetry-collector-contrib/[[:lower:]]*/[[:lower:]]* go.mod | xargs -I '{}' go get {}
 	go mod tidy
-	cd $(TOOLS_DIR) && \
-		go get -u github.com/open-telemetry/opentelemetry-collector-contrib/cmd/mdatagen && \
-		go mod tidy
+	cd $(TOOLS_DIR) && go get -u github.com/open-telemetry/opentelemetry-collector-contrib/cmd/mdatagen
+	cd $(TOOLS_DIR) && go mod tidy
+
+update-opentelemetry: 
+	GO_BUILD_TAGS=gpu
+	$(MAKE) update-components 
+	$(MAKE) install-tools 
+	$(MAKE) generate
 
 # --------------------------
 #  Tools

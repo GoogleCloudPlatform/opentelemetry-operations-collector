@@ -4,18 +4,22 @@ When the [opentelemetry-collector](https://github.com/open-telemetry/opentelemet
 
 ## Update All Dependencies
 
-There is a `make` target that will update all `opentelemetry-collector-contrib` dependencies, which will include all indirect `opentelemetry-collector` dependencies:
+There is a `make` target to update all OpenTelemetry dependencies and regenerate necessary metadata. To run the update:
+```
+make update-opentelemetry
+```
+
+Read on for details of the actual details of the target, or skip ahead to [Test](#test) to continue the process.
+
+First, update all `opentelemetry` dependencies to the newest possible version.
 ```
 make update-components
 ```
-And then re-install tools to install the new version of the `mdatagen` tool:
+Those dependencies includes the `mdatagen` tool, which is in a separate place from libraries (read more in [tools.md](./tools.md)). Since the `mdatagen` version has been updated in the tools `go.mod`, re-install tools to actually install the new version:
 ```
 make install-tools
 ```
-
-## Regenerate Metadata Code
-
-With the new version of `mdatagen` installed, next we'll need to re-generate the `metadata` packages for tests. This will bring the test packages in line with anything that's changed in the `opentelemetry-collector` base libraries.
+With the new version of `mdatagen` installed, regenerate the `metadata` packages for tests. This will bring the test packages in line with anything that's changed in the `opentelemetry-collector` base libraries.
 ```
 GO_BUILD_TAGS=gpu make generate
 ```

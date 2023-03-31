@@ -132,10 +132,19 @@ generate:
 
 # set default docker build image name
 BUILD_IMAGE_NAME ?= otelopscol-build
+BUILD_IMAGE_REPO ?= gcr.io/stackdriver-test-143416/opentelemetry-operations-collector:test
 
 .PHONY: docker-build-image
 docker-build-image:
-	docker build -t $(BUILD_IMAGE_NAME) .
+	docker build -t $(BUILD_IMAGE_NAME) .build
+
+.PHONY: docker-push-image
+docker-push-image:
+	docker tag $(BUILD_IMAGE_NAME) $(BUILD_IMAGE_REPO)
+	docker push $(BUILD_IMAGE_REPO)
+
+.PHONY: docker-build-and-push
+docker-build-and-push: docker-build-image docker-push-image
 
 # Usage:   make TARGET=<target> docker-run
 # Example: make TARGET=build-goo docker-run

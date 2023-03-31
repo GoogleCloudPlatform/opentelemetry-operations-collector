@@ -132,7 +132,7 @@ generate:
 
 # set default docker build image name
 BUILD_IMAGE_NAME ?= otelopscol-build
-BUILD_IMAGE_REPO ?= gcr.io/stackdriver-test-143416/opentelemetry-operations-collector
+BUILD_IMAGE_REPO ?= gcr.io/stackdriver-test-143416/opentelemetry-operations-collector:test
 
 .PHONY: docker-build-image
 docker-build-image:

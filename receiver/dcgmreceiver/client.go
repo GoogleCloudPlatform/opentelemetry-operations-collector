@@ -185,7 +185,12 @@ func discoverEnabledFieldIDs(config *Config) []dcgm.Short {
 	return enabledFieldIDs
 }
 
-func getAllSupportedFields() (supported []uint, err error) {
+func getAllSupportedFields() ([]dcgm.Short, error) {
+	var supported = []dcgm.Short{
+		dcgm.DCGM_FI["DCGM_FI_DEV_GPU_UTIL"],
+		dcgm.DCGM_FI["DCGM_FI_DEV_FB_USED"],
+		dcgm.DCGM_FI["DCGM_FI_DEV_FB_FREE"],
+	}
 	// GetSupportedMetricGroups currently does not support passing the actual
 	// group handle; here we pass 0 to query supported fields for group 0, which
 	// is the default DCGM group that is **supposed** to include all GPUs on the
@@ -195,12 +200,14 @@ func getAllSupportedFields() (supported []uint, err error) {
 		return supported, fmt.Errorf("cannot query supported profiling fields on '%s'", err)
 	}
 	for i := 0; i < len(fieldGroups); i++ {
-		supported = append(supported, fieldGroups[i].FieldIds...)
+		for j := 0; j < len(fieldGroups[i].FieldIds); j++ {
+			supported = append(supported, dcgm.Short(fieldGroups[i].FieldIds[j]))
+		}
 	}
 	return supported, nil
 }
 
-func removeUnsupported(enabled []dcgm.Short, supported []uint) []dcgm.Short {
+func removeUnsupported(enabled []dcgm.Short, supported []dcgm.Short) []dcgm.Short {
 	var filtered []dcgm.Short
 	for _, e := range enabled {
 		for _, s := range supported {

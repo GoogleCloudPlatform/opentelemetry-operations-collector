@@ -72,7 +72,11 @@ func newClient(config *Config, logger *zap.Logger) (*dcgmClient, error) {
 	enabledFieldIDs := discoverEnabledFieldIDs(config)
 	supported, err := getAllSupportedFields()
 	if err != nil {
-		return nil, err
+		// If there is error querying the supported fields at all, it is
+		// possible the GPU model is not supported for profiling. Example is
+		// NVIDIA P4 GPUs. In this case, the receiver will only collect basic
+		// metrics (GPU utilization, used/free memory).
+		logger.Sugar().Warn("error querying supported profiling fields: %w; only basic metrics will be collected", err)
 	}
 	enabledFieldIDs = removeUnsupported(enabledFieldIDs, supported)
 	enabledFieldGroup, err := setWatchesOnEnabledFields(config, logger, deviceGroup, enabledFieldIDs)

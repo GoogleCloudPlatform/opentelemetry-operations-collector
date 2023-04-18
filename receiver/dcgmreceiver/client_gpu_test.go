@@ -21,13 +21,112 @@ package dcgmreceiver
 
 import (
 	"fmt"
+	"io/ioutil"
+	"os"
+	"path"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/go-dcgm/pkg/dcgm"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
+	"gopkg.in/yaml.v3"
+	"gotest.tools/v3/golden"
 )
+
+const testdataDir = "testdata"
+
+// ModelSupportedFileds
+type ModelSupportedFields struct {
+	// The model of the GPU device
+	Model string `yaml:"model"`
+	// List of supported fields
+	SupportedFields []string `yaml:"supported_fields"`
+	// List of unsupported fields
+	UnsupportedFields []string `yaml:"unsupported_fields"`
+}
+
+func TestSupportedFiledsWithGolden(t *testing.T) {
+	config := createDefaultConfig().(*Config)
+	client, err := newClient(config, zaptest.NewLogger(t))
+	require.Nil(t, err)
+
+	assert.NotEmpty(t, client.devicesModelName)
+	gpuModel := client.getDeviceModelName(0)
+	enabled := discoverEnabledFieldIDs(config)
+	fields, err := getAllSupportedFields()
+	require.Nil(t, err)
+	onFields, offFields := filterSupportedFileds(enabled, fields)
+
+	dcgmIDToNameMap := make(map[dcgm.Short]string, len(dcgm.DCGM_FI))
+	for fieldName, fieldID := range dcgm.DCGM_FI {
+		dcgmIDToNameMap[fieldID] = fieldName
+	}
+	var onFieldsString []string
+	var offFieldsString []string
+	for _, f := range onFields {
+		onFieldsString = append(onFieldsString, dcgmIDToNameMap[f])
+	}
+	for _, f := range offFields {
+		offFieldsString = append(offFieldsString, dcgmIDToNameMap[f])
+	}
+	m := ModelSupportedFields{
+		Model:             gpuModel,
+		SupportedFields:   onFieldsString,
+		UnsupportedFields: offFieldsString,
+	}
+	actual, err := yaml.Marshal(&m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assert.Equal(t, len(dcgmNameToMetricName), len(client.enabledFieldIDs)+len(offFields))
+	goldenPath := getModelGoldenFilePath(t, gpuModel)
+	golden.Assert(t, string(actual), goldenPath)
+}
+
+func LoadExpectedMetrics(t *testing.T, model string) []string {
+	dcgmNameToMetricNameMap := map[string]string{
+		"DCGM_FI_DEV_GPU_UTIL":            "dcgm.gpu.utilization",
+		"DCGM_FI_DEV_FB_USED":             "dcgm.gpu.memory.bytes_used",
+		"DCGM_FI_DEV_FB_FREE":             "dcgm.gpu.memory.bytes_free",
+		"DCGM_FI_PROF_SM_ACTIVE":          "dcgm.gpu.profiling.sm_utilization",
+		"DCGM_FI_PROF_SM_OCCUPANCY":       "dcgm.gpu.profiling.sm_occupancy",
+		"DCGM_FI_PROF_PIPE_TENSOR_ACTIVE": "dcgm.gpu.profiling.tensor_utilization",
+		"DCGM_FI_PROF_DRAM_ACTIVE":        "dcgm.gpu.profiling.dram_utilization",
+		"DCGM_FI_PROF_PIPE_FP64_ACTIVE":   "dcgm.gpu.profiling.fp64_utilization",
+		"DCGM_FI_PROF_PIPE_FP32_ACTIVE":   "dcgm.gpu.profiling.fp32_utilization",
+		"DCGM_FI_PROF_PIPE_FP16_ACTIVE":   "dcgm.gpu.profiling.fp16_utilization",
+		"DCGM_FI_PROF_PCIE_TX_BYTES":      "dcgm.gpu.profiling.pcie_sent_bytes",
+		"DCGM_FI_PROF_PCIE_RX_BYTES":      "dcgm.gpu.profiling.pcie_received_bytes",
+		"DCGM_FI_PROF_NVLINK_TX_BYTES":    "dcgm.gpu.profiling.nvlink_sent_bytes",
+		"DCGM_FI_PROF_NVLINK_RX_BYTES":    "dcgm.gpu.profiling.nvlink_received_bytes",
+	}
+	goldenPath := getModelGoldenFilePath(t, model)
+	goldenFile, err := ioutil.ReadFile(goldenPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m ModelSupportedFields
+	err = yaml.Unmarshal(goldenFile, &m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var expectedMetrics []string
+	for _, supported := range m.SupportedFields {
+		expectedMetrics = append(expectedMetrics, dcgmNameToMetricNameMap[supported])
+	}
+	return expectedMetrics
+}
+
+func getModelGoldenFilePath(t *testing.T, model string) string {
+	testDir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return path.Join(testDir, testdataDir, fmt.Sprintf("%s.yaml", strings.ReplaceAll(model, " ", "_")))
+}
 
 func TestNewDcgmClientWithGpuPresent(t *testing.T) {
 	client, err := newClient(createDefaultConfig().(*Config), zaptest.NewLogger(t))
@@ -36,34 +135,16 @@ func TestNewDcgmClientWithGpuPresent(t *testing.T) {
 	assert.NotNil(t, client)
 	assert.NotNil(t, client.handleCleanup)
 	assert.Greater(t, len(client.deviceIndices), 0)
-	for gpuIndex, _ := range client.deviceIndices {
+	for gpuIndex := range client.deviceIndices {
 		assert.Greater(t, len(client.devicesModelName[gpuIndex]), 0)
 		assert.Greater(t, len(client.devicesUUID[gpuIndex]), 0)
 	}
-	assert.Equal(t, len(client.enabledFieldIDs), len(dcgmNameToMetricName))
 }
 
 func TestCollectGpuProfilingMetrics(t *testing.T) {
 	client, err := newClient(createDefaultConfig().(*Config), zaptest.NewLogger(t))
 	require.Nil(t, err)
-
-	expectedMetrics := []string{
-		"dcgm.gpu.utilization",
-		"dcgm.gpu.memory.bytes_used",
-		"dcgm.gpu.memory.bytes_free",
-		"dcgm.gpu.profiling.sm_utilization",
-		"dcgm.gpu.profiling.sm_occupancy",
-		"dcgm.gpu.profiling.tensor_utilization",
-		"dcgm.gpu.profiling.dram_utilization",
-		"dcgm.gpu.profiling.fp64_utilization",
-		"dcgm.gpu.profiling.fp32_utilization",
-		"dcgm.gpu.profiling.fp16_utilization",
-		"dcgm.gpu.profiling.pcie_sent_bytes",
-		"dcgm.gpu.profiling.pcie_received_bytes",
-		"dcgm.gpu.profiling.nvlink_sent_bytes",
-		"dcgm.gpu.profiling.nvlink_received_bytes",
-	}
-
+	expectedMetrics := LoadExpectedMetrics(t, client.devicesModelName[0])
 	var maxCollectionInterval = 60 * time.Second
 	before := time.Now().UnixMicro() - maxCollectionInterval.Microseconds()
 	metrics, err := client.collectDeviceMetrics()

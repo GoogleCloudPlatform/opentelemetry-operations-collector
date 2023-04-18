@@ -70,16 +70,19 @@ func newClient(config *Config, logger *zap.Logger) (*dcgmClient, error) {
 	}
 
 	enabledFieldIDs := discoverEnabledFieldIDs(config)
-	supported, err := getAllSupportedFields()
+	supportedFiledIDs, err := getAllSupportedFields()
 	if err != nil {
 		// If there is error querying the supported fields at all, it is
 		// possible the GPU model is not supported for profiling. Example is
 		// NVIDIA P4 GPUs. In this case, the receiver will only collect basic
 		// metrics (GPU utilization, used/free memory).
-		logger.Sugar().Warn("error querying supported profiling fields: %w; only basic metrics will be collected", err)
+		logger.Sugar().Warnf("error querying supported profiling fields: %w; only basic metrics will be collected", err)
 	}
-	enabledFieldIDs = removeUnsupported(enabledFieldIDs, supported)
-	enabledFieldGroup, err := setWatchesOnEnabledFields(config, logger, deviceGroup, enabledFieldIDs)
+	onFields, offFields := filterSupportedFileds(enabledFieldIDs, supportedFiledIDs)
+	for _, f := range offFields {
+		logger.Sugar().Warnf("Field '%s' is not supported. Metric '%s' will not be collected", dcgmIDToName[f], dcgmNameToMetricName[dcgmIDToName[f]])
+	}
+	enabledFieldGroup, err := setWatchesOnEnabledFields(config, logger, deviceGroup, onFields)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to set field watches on %w", err)
 	}
@@ -87,7 +90,7 @@ func newClient(config *Config, logger *zap.Logger) (*dcgmClient, error) {
 	return &dcgmClient{
 		logger:                         logger.Sugar(),
 		handleCleanup:                  dcgmCleanup,
-		enabledFieldIDs:                enabledFieldIDs,
+		enabledFieldIDs:                onFields,
 		enabledFieldGroup:              enabledFieldGroup,
 		deviceIndices:                  deviceIndices,
 		devicesModelName:               names,
@@ -190,6 +193,8 @@ func discoverEnabledFieldIDs(config *Config) []dcgm.Short {
 }
 
 func getAllSupportedFields() ([]dcgm.Short, error) {
+	// Fileds like `DCGM_FI_DEV_*` are not profiling fields, and they are alwasy
+	// supported on all devices
 	var supported = []dcgm.Short{
 		dcgm.DCGM_FI["DCGM_FI_DEV_GPU_UTIL"],
 		dcgm.DCGM_FI["DCGM_FI_DEV_FB_USED"],
@@ -197,8 +202,8 @@ func getAllSupportedFields() ([]dcgm.Short, error) {
 	}
 	// GetSupportedMetricGroups currently does not support passing the actual
 	// group handle; here we pass 0 to query supported fields for group 0, which
-	// is the default DCGM group that is **supposed** to include all GPUs on the
-	// instance.
+	// is the default DCGM group that is **supposed** to include all GPUs of the
+	// host.
 	fieldGroups, err := dcgm.GetSupportedMetricGroups(0)
 	if err != nil {
 		return supported, fmt.Errorf("cannot query supported profiling fields on '%s'", err)
@@ -211,17 +216,23 @@ func getAllSupportedFields() ([]dcgm.Short, error) {
 	return supported, nil
 }
 
-func removeUnsupported(enabled []dcgm.Short, supported []dcgm.Short) []dcgm.Short {
-	var filtered []dcgm.Short
-	for _, e := range enabled {
-		for _, s := range supported {
-			if dcgm.Short(s) == e {
-				filtered = append(filtered, e)
+func filterSupportedFileds(enabledFields []dcgm.Short, supportedFields []dcgm.Short) ([]dcgm.Short, []dcgm.Short) {
+	var onFields []dcgm.Short
+	var offFields []dcgm.Short
+	for _, ef := range enabledFields {
+		support := false
+		for _, sf := range supportedFields {
+			if dcgm.Short(sf) == ef {
+				onFields = append(onFields, ef)
+				support = true
 				break
 			}
 		}
+		if !support {
+			offFields = append(offFields, ef)
+		}
 	}
-	return filtered
+	return onFields, offFields
 }
 
 func setWatchesOnEnabledFields(config *Config, logger *zap.Logger, deviceGroup dcgm.GroupHandle, enabledFieldIDs []dcgm.Short) (dcgm.FieldHandle, error) {

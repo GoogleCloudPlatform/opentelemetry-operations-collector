@@ -45,7 +45,8 @@ func TestScrapeWithGpuPresent(t *testing.T) {
 	require.NoError(t, err)
 
 	metrics, err := scraper.scrape(context.Background())
-	validateScraperResult(t, metrics)
+	expectedGroups := loadExpectedMetricGroupsFromGoldenFile(t, scraper.client.getDeviceModelName(0))
+	validateScraperResult(t, metrics, expectedGroups)
 }
 
 func TestScrapeOnPollingError(t *testing.T) {
@@ -108,17 +109,41 @@ func TestScrapeOnProfilingPaused(t *testing.T) {
 	}
 }
 
-func validateScraperResult(t *testing.T, metrics pmetric.Metrics) {
-	expectedMetrics := map[string]int{
-		"dcgm.gpu.utilization":                   1,
-		"dcgm.gpu.memory.bytes_used":             2,
-		"dcgm.gpu.profiling.sm_utilization":      1,
-		"dcgm.gpu.profiling.sm_occupancy":        1,
-		"dcgm.gpu.profiling.pipe_utilization":    4,
-		"dcgm.gpu.profiling.dram_utilization":    1,
-		"dcgm.gpu.profiling.pcie_traffic_rate":   2,
-		"dcgm.gpu.profiling.nvlink_traffic_rate": 2,
+func loadExpectedMetricGroupsFromGoldenFile(t *testing.T, model string) map[string]int {
+	expectedMetricGroups := map[string]int{
+		"dcgm.gpu.utilization":                   0,
+		"dcgm.gpu.memory.bytes_used":             0,
+		"dcgm.gpu.profiling.sm_utilization":      0,
+		"dcgm.gpu.profiling.sm_occupancy":        0,
+		"dcgm.gpu.profiling.pipe_utilization":    0,
+		"dcgm.gpu.profiling.dram_utilization":    0,
+		"dcgm.gpu.profiling.pcie_traffic_rate":   0,
+		"dcgm.gpu.profiling.nvlink_traffic_rate": 0,
 	}
+	nameToGroupMap := map[string]string{
+		"dcgm.gpu.utilization":                     "dcgm.gpu.utilization",
+		"dcgm.gpu.memory.bytes_used":               "dcgm.gpu.memory.bytes_used",
+		"dcgm.gpu.memory.bytes_free":               "dcgm.gpu.memory.bytes_used",
+		"dcgm.gpu.profiling.sm_utilization":        "dcgm.gpu.profiling.sm_utilization",
+		"dcgm.gpu.profiling.sm_occupancy":          "dcgm.gpu.profiling.sm_occupancy",
+		"dcgm.gpu.profiling.tensor_utilization":    "dcgm.gpu.profiling.pipe_utilization",
+		"dcgm.gpu.profiling.dram_utilization":      "dcgm.gpu.profiling.dram_utilization",
+		"dcgm.gpu.profiling.fp64_utilization":      "dcgm.gpu.profiling.pipe_utilization",
+		"dcgm.gpu.profiling.fp32_utilization":      "dcgm.gpu.profiling.pipe_utilization",
+		"dcgm.gpu.profiling.fp16_utilization":      "dcgm.gpu.profiling.pipe_utilization",
+		"dcgm.gpu.profiling.pcie_sent_bytes":       "dcgm.gpu.profiling.pcie_traffic_rate",
+		"dcgm.gpu.profiling.pcie_received_bytes":   "dcgm.gpu.profiling.pcie_traffic_rate",
+		"dcgm.gpu.profiling.nvlink_sent_bytes":     "dcgm.gpu.profiling.nvlink_traffic_rate",
+		"dcgm.gpu.profiling.nvlink_received_bytes": "dcgm.gpu.profiling.nvlink_traffic_rate",
+	}
+	expectedMetrics := LoadExpectedMetrics(t, model)
+	for _, em := range expectedMetrics {
+		expectedMetricGroups[nameToGroupMap[em]] += 1
+	}
+	return expectedMetricGroups
+}
+
+func validateScraperResult(t *testing.T, metrics pmetric.Metrics, expectedMetrics map[string]int) {
 
 	metricWasSeen := make(map[string]bool)
 	expectedDataPointCount := 0

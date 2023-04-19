@@ -38,7 +38,7 @@ import (
 
 const testdataDir = "testdata"
 
-// ModelSupportedFileds can be used to track supported fields for a given GPU
+// ModelSupportedFields can be used to track supported fields for a given GPU
 type ModelSupportedFields struct {
 	// The model of the GPU device, for example, Tesla P4
 	Model string `yaml:"model"`
@@ -48,9 +48,9 @@ type ModelSupportedFields struct {
 	UnsupportedFields []string `yaml:"unsupported_fields"`
 }
 
-// TestSupportedFiledsWithGolden test getAllSupportedFields() against the golden
+// TestSupportedFieldsWithGolden test getAllSupportedFields() against the golden
 // files for the current GPU model
-func TestSupportedFiledsWithGolden(t *testing.T) {
+func TestSupportedFieldsWithGolden(t *testing.T) {
 	config := createDefaultConfig().(*Config)
 	client, err := newClient(config, zaptest.NewLogger(t))
 	require.Nil(t, err)
@@ -60,7 +60,7 @@ func TestSupportedFiledsWithGolden(t *testing.T) {
 	enabled := discoverEnabledFieldIDs(config)
 	fields, err := getAllSupportedFields()
 	require.Nil(t, err)
-	onFields, offFields := filterSupportedFileds(enabled, fields)
+	onFields, offFields := filterSupportedFields(enabled, fields)
 
 	dcgmIDToNameMap := make(map[dcgm.Short]string, len(dcgm.DCGM_FI))
 	for fieldName, fieldID := range dcgm.DCGM_FI {

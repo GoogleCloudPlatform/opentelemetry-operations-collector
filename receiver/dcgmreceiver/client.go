@@ -76,7 +76,7 @@ func newClient(config *Config, logger *zap.Logger) (*dcgmClient, error) {
 		// receiver collect basic metrics: (GPU utilization, used/free memory).
 		logger.Sugar().Warnf("error querying supported profiling fields; only basic metrics will be collected: %w", err)
 	}
-	onFields, offFields := filterSupportedFileds(enabledFieldIDs, supportedFiledIDs)
+	onFields, offFields := filterSupportedFields(enabledFieldIDs, supportedFiledIDs)
 	for _, f := range offFields {
 		logger.Sugar().Warnf("Field '%s' is not supported. Metric '%s' will not be collected", dcgmIDToName[f], dcgmNameToMetricName[dcgmIDToName[f]])
 	}
@@ -193,7 +193,7 @@ func discoverEnabledFieldIDs(config *Config) []dcgm.Short {
 // getAllSupportedFields calls the DCGM query function to find out all the
 // fields that are supported by the current GPUs
 func getAllSupportedFields() ([]dcgm.Short, error) {
-	// Fileds like `DCGM_FI_DEV_*` are not profiling fields, and they are alwasy
+	// Fields like `DCGM_FI_DEV_*` are not profiling fields, and they are always
 	// supported on all devices
 	var supported = []dcgm.Short{
 		dcgm.DCGM_FI["DCGM_FI_DEV_GPU_UTIL"],
@@ -225,16 +225,16 @@ func getAllSupportedFields() ([]dcgm.Short, error) {
 	return supported, nil
 }
 
-// filterSupportedFileds takes the user selected fields and device supported
+// filterSupportedFields takes the user selected fields and device supported
 // fields, and filter to return those that are selected & supported (ON fields)
 // and those that are selected but not supported (OFF fields)
-func filterSupportedFileds(enabledFields []dcgm.Short, supportedFields []dcgm.Short) ([]dcgm.Short, []dcgm.Short) {
+func filterSupportedFields(enabledFields []dcgm.Short, supportedFields []dcgm.Short) ([]dcgm.Short, []dcgm.Short) {
 	var onFields []dcgm.Short
 	var offFields []dcgm.Short
 	for _, ef := range enabledFields {
 		support := false
 		for _, sf := range supportedFields {
-			if dcgm.Short(sf) == ef {
+			if sf == ef {
 				onFields = append(onFields, ef)
 				support = true
 				break

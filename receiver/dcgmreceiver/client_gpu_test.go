@@ -38,9 +38,9 @@ import (
 
 const testdataDir = "testdata"
 
-// ModelSupportedFileds
+// ModelSupportedFileds can be used to track supported fields for a given GPU
 type ModelSupportedFields struct {
-	// The model of the GPU device
+	// The model of the GPU device, for example, Tesla P4
 	Model string `yaml:"model"`
 	// List of supported fields
 	SupportedFields []string `yaml:"supported_fields"`
@@ -48,6 +48,8 @@ type ModelSupportedFields struct {
 	UnsupportedFields []string `yaml:"unsupported_fields"`
 }
 
+// TestSupportedFiledsWithGolden test getAllSupportedFields() against the golden
+// files for the current GPU model
 func TestSupportedFiledsWithGolden(t *testing.T) {
 	config := createDefaultConfig().(*Config)
 	client, err := newClient(config, zaptest.NewLogger(t))
@@ -86,6 +88,8 @@ func TestSupportedFiledsWithGolden(t *testing.T) {
 	golden.Assert(t, string(actual), goldenPath)
 }
 
+// LoadExpectedMetrics read the supported metrics of a GPU model from the golden
+// file, given a GPU model string
 func LoadExpectedMetrics(t *testing.T, model string) []string {
 	dcgmNameToMetricNameMap := map[string]string{
 		"DCGM_FI_DEV_GPU_UTIL":            "dcgm.gpu.utilization",
@@ -120,6 +124,7 @@ func LoadExpectedMetrics(t *testing.T, model string) []string {
 	return expectedMetrics
 }
 
+// getModelGoldenFilePath returns golden file path given a GPU model string
 func getModelGoldenFilePath(t *testing.T, model string) string {
 	testDir, err := os.Getwd()
 	if err != nil {

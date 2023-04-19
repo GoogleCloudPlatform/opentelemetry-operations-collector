@@ -45,8 +45,8 @@ func TestScrapeWithGpuPresent(t *testing.T) {
 	require.NoError(t, err)
 
 	metrics, err := scraper.scrape(context.Background())
-	expectedGroups := loadExpectedMetricGroupsFromGoldenFile(t, scraper.client.getDeviceModelName(0))
-	validateScraperResult(t, metrics, expectedGroups)
+	expectedMetrics := loadExpectedScraperMetrics(t, scraper.client.getDeviceModelName(0))
+	validateScraperResult(t, metrics, expectedMetrics)
 }
 
 func TestScrapeOnPollingError(t *testing.T) {
@@ -109,25 +109,19 @@ func TestScrapeOnProfilingPaused(t *testing.T) {
 	}
 }
 
-func loadExpectedMetricGroupsFromGoldenFile(t *testing.T, model string) map[string]int {
-	expectedMetricGroups := map[string]int{
-		"dcgm.gpu.utilization":                   0,
-		"dcgm.gpu.memory.bytes_used":             0,
-		"dcgm.gpu.profiling.sm_utilization":      0,
-		"dcgm.gpu.profiling.sm_occupancy":        0,
-		"dcgm.gpu.profiling.pipe_utilization":    0,
-		"dcgm.gpu.profiling.dram_utilization":    0,
-		"dcgm.gpu.profiling.pcie_traffic_rate":   0,
-		"dcgm.gpu.profiling.nvlink_traffic_rate": 0,
-	}
-	nameToGroupMap := map[string]string{
+// loadExpectedScraperMetrics calls LoadExpectedMetrics to read the supported
+// metrics from the golden file given a GPU model, and then convert the name
+// from how they are definied in the dcgm client to scraper naming
+func loadExpectedScraperMetrics(t *testing.T, model string) map[string]int {
+	expectedMetrics := make(map[string]int)
+	receiverMetricNameToScraperMetricName := map[string]string{
 		"dcgm.gpu.utilization":                     "dcgm.gpu.utilization",
 		"dcgm.gpu.memory.bytes_used":               "dcgm.gpu.memory.bytes_used",
 		"dcgm.gpu.memory.bytes_free":               "dcgm.gpu.memory.bytes_used",
 		"dcgm.gpu.profiling.sm_utilization":        "dcgm.gpu.profiling.sm_utilization",
 		"dcgm.gpu.profiling.sm_occupancy":          "dcgm.gpu.profiling.sm_occupancy",
-		"dcgm.gpu.profiling.tensor_utilization":    "dcgm.gpu.profiling.pipe_utilization",
 		"dcgm.gpu.profiling.dram_utilization":      "dcgm.gpu.profiling.dram_utilization",
+		"dcgm.gpu.profiling.tensor_utilization":    "dcgm.gpu.profiling.pipe_utilization",
 		"dcgm.gpu.profiling.fp64_utilization":      "dcgm.gpu.profiling.pipe_utilization",
 		"dcgm.gpu.profiling.fp32_utilization":      "dcgm.gpu.profiling.pipe_utilization",
 		"dcgm.gpu.profiling.fp16_utilization":      "dcgm.gpu.profiling.pipe_utilization",
@@ -136,11 +130,11 @@ func loadExpectedMetricGroupsFromGoldenFile(t *testing.T, model string) map[stri
 		"dcgm.gpu.profiling.nvlink_sent_bytes":     "dcgm.gpu.profiling.nvlink_traffic_rate",
 		"dcgm.gpu.profiling.nvlink_received_bytes": "dcgm.gpu.profiling.nvlink_traffic_rate",
 	}
-	expectedMetrics := LoadExpectedMetrics(t, model)
-	for _, em := range expectedMetrics {
-		expectedMetricGroups[nameToGroupMap[em]] += 1
+	expectedReceiverMetrics := LoadExpectedMetrics(t, model)
+	for _, em := range expectedReceiverMetrics {
+		expectedMetrics[receiverMetricNameToScraperMetricName[em]] += 1
 	}
-	return expectedMetricGroups
+	return expectedMetrics
 }
 
 func validateScraperResult(t *testing.T, metrics pmetric.Metrics, expectedMetrics map[string]int) {

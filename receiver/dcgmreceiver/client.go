@@ -72,11 +72,9 @@ func newClient(config *Config, logger *zap.Logger) (*dcgmClient, error) {
 	enabledFieldIDs := discoverEnabledFieldIDs(config)
 	supportedFiledIDs, err := getAllSupportedFields()
 	if err != nil {
-		// If there is error querying the supported fields at all, it is
-		// possible the GPU model is not supported for profiling. Example is
-		// NVIDIA P4 GPUs. In this case, the receiver will only collect basic
-		// metrics (GPU utilization, used/free memory).
-		logger.Sugar().Warnf("error querying supported profiling fields: %w; only basic metrics will be collected", err)
+		// If there is error querying the supported fields at all, let the
+		// receiver collect basic metrics: (GPU utilization, used/free memory).
+		logger.Sugar().Warnf("error querying supported profiling fields; only basic metrics will be collected: %w", err)
 	}
 	onFields, offFields := filterSupportedFileds(enabledFieldIDs, supportedFiledIDs)
 	for _, f := range offFields {
@@ -192,6 +190,8 @@ func discoverEnabledFieldIDs(config *Config) []dcgm.Short {
 	return enabledFieldIDs
 }
 
+// getAllSupportedFields calls the DCGM query function to find out all the
+// fields that are supported by the current GPUs
 func getAllSupportedFields() ([]dcgm.Short, error) {
 	// Fileds like `DCGM_FI_DEV_*` are not profiling fields, and they are alwasy
 	// supported on all devices
@@ -206,7 +206,16 @@ func getAllSupportedFields() ([]dcgm.Short, error) {
 	// host.
 	fieldGroups, err := dcgm.GetSupportedMetricGroups(0)
 	if err != nil {
-		return supported, fmt.Errorf("cannot query supported profiling fields on '%s'", err)
+		if dcgmErr, ok := err.(*dcgm.DcgmError); ok {
+			// When the device does not support profiling metrics, this function
+			// will return DCGM_ST_MODULE_NOT_LOADED:
+			// "This request is serviced by a module of DCGM that is not
+			// currently loaded." Example of this is NVIDIA P4
+			if dcgmErr.Code == dcgm.DCGM_ST_MODULE_NOT_LOADED {
+				return supported, nil
+			}
+		}
+		return supported, err
 	}
 	for i := 0; i < len(fieldGroups); i++ {
 		for j := 0; j < len(fieldGroups[i].FieldIds); j++ {
@@ -216,6 +225,9 @@ func getAllSupportedFields() ([]dcgm.Short, error) {
 	return supported, nil
 }
 
+// filterSupportedFileds takes the user selected fields and device supported
+// fields, and filter to return those that are selected & supported (ON fields)
+// and those that are selected but not supported (OFF fields)
 func filterSupportedFileds(enabledFields []dcgm.Short, supportedFields []dcgm.Short) ([]dcgm.Short, []dcgm.Short) {
 	var onFields []dcgm.Short
 	var offFields []dcgm.Short

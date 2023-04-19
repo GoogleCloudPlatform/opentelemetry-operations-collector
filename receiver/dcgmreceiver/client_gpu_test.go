@@ -91,6 +91,7 @@ func TestSupportedFieldsWithGolden(t *testing.T) {
 // LoadExpectedMetrics read the supported metrics of a GPU model from the golden
 // file, given a GPU model string
 func LoadExpectedMetrics(t *testing.T, model string) []string {
+	t.Helper()
 	dcgmNameToMetricNameMap := map[string]string{
 		"DCGM_FI_DEV_GPU_UTIL":            "dcgm.gpu.utilization",
 		"DCGM_FI_DEV_FB_USED":             "dcgm.gpu.memory.bytes_used",
@@ -126,6 +127,7 @@ func LoadExpectedMetrics(t *testing.T, model string) []string {
 
 // getModelGoldenFilePath returns golden file path given a GPU model string
 func getModelGoldenFilePath(t *testing.T, model string) string {
+	t.Helper()
 	testDir, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)

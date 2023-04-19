@@ -18,6 +18,7 @@
 package dcgmreceiver
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -195,7 +196,7 @@ func discoverEnabledFieldIDs(config *Config) []dcgm.Short {
 func getAllSupportedFields() ([]dcgm.Short, error) {
 	// Fields like `DCGM_FI_DEV_*` are not profiling fields, and they are always
 	// supported on all devices
-	var supported = []dcgm.Short{
+	supported := []dcgm.Short{
 		dcgm.DCGM_FI["DCGM_FI_DEV_GPU_UTIL"],
 		dcgm.DCGM_FI["DCGM_FI_DEV_FB_USED"],
 		dcgm.DCGM_FI["DCGM_FI_DEV_FB_FREE"],
@@ -206,7 +207,8 @@ func getAllSupportedFields() ([]dcgm.Short, error) {
 	// host.
 	fieldGroups, err := dcgm.GetSupportedMetricGroups(0)
 	if err != nil {
-		if dcgmErr, ok := err.(*dcgm.DcgmError); ok {
+		var dcgmErr *dcgm.DcgmError
+		if errors.As(err, &dcgmErr) {
 			// When the device does not support profiling metrics, this function
 			// will return DCGM_ST_MODULE_NOT_LOADED:
 			// "This request is serviced by a module of DCGM that is not

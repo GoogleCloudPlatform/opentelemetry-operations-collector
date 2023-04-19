@@ -70,13 +70,13 @@ func newClient(config *Config, logger *zap.Logger) (*dcgmClient, error) {
 	}
 
 	enabledFieldIDs := discoverEnabledFieldIDs(config)
-	supportedFiledIDs, err := getAllSupportedFields()
+	supportedFieldIDs, err := getAllSupportedFields()
 	if err != nil {
 		// If there is error querying the supported fields at all, let the
 		// receiver collect basic metrics: (GPU utilization, used/free memory).
 		logger.Sugar().Warnf("error querying supported profiling fields; only basic metrics will be collected: %w", err)
 	}
-	onFields, offFields := filterSupportedFields(enabledFieldIDs, supportedFiledIDs)
+	onFields, offFields := filterSupportedFields(enabledFieldIDs, supportedFieldIDs)
 	for _, f := range offFields {
 		logger.Sugar().Warnf("Field '%s' is not supported. Metric '%s' will not be collected", dcgmIDToName[f], dcgmNameToMetricName[dcgmIDToName[f]])
 	}

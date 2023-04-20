@@ -113,6 +113,7 @@ func TestScrapeOnProfilingPaused(t *testing.T) {
 // metrics from the golden file given a GPU model, and then convert the name
 // from how they are definied in the dcgm client to scraper naming
 func loadExpectedScraperMetrics(t *testing.T, model string) map[string]int {
+	t.Helper()
 	expectedMetrics := make(map[string]int)
 	receiverMetricNameToScraperMetricName := map[string]string{
 		"dcgm.gpu.utilization":                     "dcgm.gpu.utilization",
@@ -138,7 +139,7 @@ func loadExpectedScraperMetrics(t *testing.T, model string) map[string]int {
 }
 
 func validateScraperResult(t *testing.T, metrics pmetric.Metrics, expectedMetrics map[string]int) {
-
+	t.Helper()
 	metricWasSeen := make(map[string]bool)
 	expectedDataPointCount := 0
 	for metric, expectedMetricDataPoints := range expectedMetrics {

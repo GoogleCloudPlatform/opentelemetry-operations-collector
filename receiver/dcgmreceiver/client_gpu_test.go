@@ -38,8 +38,8 @@ import (
 
 const testdataDir = "testdata"
 
-// ModelSupportedFields can be used to track supported fields for a given GPU
-type ModelSupportedFields struct {
+// modelSupportedFields can be used to track supported fields for a given GPU
+type modelSupportedFields struct {
 	// The model of the GPU device, for example, Tesla P4
 	Model string `yaml:"model"`
 	// List of supported fields
@@ -74,7 +74,7 @@ func TestSupportedFieldsWithGolden(t *testing.T) {
 	for _, f := range offFields {
 		offFieldsString = append(offFieldsString, dcgmIDToNameMap[f])
 	}
-	m := ModelSupportedFields{
+	m := modelSupportedFields{
 		Model:             gpuModel,
 		SupportedFields:   onFieldsString,
 		UnsupportedFields: offFieldsString,
@@ -113,7 +113,7 @@ func LoadExpectedMetrics(t *testing.T, model string) []string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var m ModelSupportedFields
+	var m modelSupportedFields
 	err = yaml.Unmarshal(goldenFile, &m)
 	if err != nil {
 		t.Fatal(err)

@@ -70,18 +70,18 @@ func newClient(config *Config, logger *zap.Logger) (*dcgmClient, error) {
 		return nil, err
 	}
 
-	enabledFieldIDs := discoverEnabledFieldIDs(config)
+	requestedFieldIDs := discoverRequestedFieldIDs(config)
 	supportedFieldIDs, err := getAllSupportedFields()
 	if err != nil {
 		// If there is error querying the supported fields at all, let the
 		// receiver collect basic metrics: (GPU utilization, used/free memory).
-		logger.Sugar().Warnf("error querying supported profiling fields; only basic metrics will be collected: %w", err)
+		logger.Sugar().Warnf("Error querying supported profiling fields on '%w'. GPU profiling metrics will not be collected.", err)
 	}
-	onFields, offFields := filterSupportedFields(enabledFieldIDs, supportedFieldIDs)
-	for _, f := range offFields {
+	enabledFields, unavailableFields := filterSupportedFields(requestedFieldIDs, supportedFieldIDs)
+	for _, f := range unavailableFields {
 		logger.Sugar().Warnf("Field '%s' is not supported. Metric '%s' will not be collected", dcgmIDToName[f], dcgmNameToMetricName[dcgmIDToName[f]])
 	}
-	enabledFieldGroup, err := setWatchesOnEnabledFields(config, logger, deviceGroup, onFields)
+	enabledFieldGroup, err := setWatchesOnEnabledFields(config, logger, deviceGroup, enabledFields)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to set field watches on %w", err)
 	}
@@ -89,7 +89,7 @@ func newClient(config *Config, logger *zap.Logger) (*dcgmClient, error) {
 	return &dcgmClient{
 		logger:                         logger.Sugar(),
 		handleCleanup:                  dcgmCleanup,
-		enabledFieldIDs:                onFields,
+		enabledFieldIDs:                enabledFields,
 		enabledFieldGroup:              enabledFieldGroup,
 		deviceIndices:                  deviceIndices,
 		devicesModelName:               names,
@@ -155,40 +155,40 @@ func createDeviceGroup(logger *zap.Logger, deviceIndices []uint) (dcgm.GroupHand
 	return deviceGroup, nil
 }
 
-func discoverEnabledFieldIDs(config *Config) []dcgm.Short {
-	enabledFieldIDs := []dcgm.Short{}
+func discoverRequestedFieldIDs(config *Config) []dcgm.Short {
+	requestedFieldIDs := []dcgm.Short{}
 	if config.Metrics.DcgmGpuUtilization.Enabled {
-		enabledFieldIDs = append(enabledFieldIDs, dcgm.DCGM_FI["DCGM_FI_DEV_GPU_UTIL"])
+		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_DEV_GPU_UTIL"])
 	}
 	if config.Metrics.DcgmGpuMemoryBytesUsed.Enabled {
-		enabledFieldIDs = append(enabledFieldIDs, dcgm.DCGM_FI["DCGM_FI_DEV_FB_USED"])
-		enabledFieldIDs = append(enabledFieldIDs, dcgm.DCGM_FI["DCGM_FI_DEV_FB_FREE"])
+		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_DEV_FB_USED"])
+		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_DEV_FB_FREE"])
 	}
 	if config.Metrics.DcgmGpuProfilingSmUtilization.Enabled {
-		enabledFieldIDs = append(enabledFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_SM_ACTIVE"])
+		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_SM_ACTIVE"])
 	}
 	if config.Metrics.DcgmGpuProfilingSmOccupancy.Enabled {
-		enabledFieldIDs = append(enabledFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_SM_OCCUPANCY"])
+		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_SM_OCCUPANCY"])
 	}
 	if config.Metrics.DcgmGpuProfilingPipeUtilization.Enabled {
-		enabledFieldIDs = append(enabledFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_PIPE_TENSOR_ACTIVE"])
-		enabledFieldIDs = append(enabledFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_PIPE_FP64_ACTIVE"])
-		enabledFieldIDs = append(enabledFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_PIPE_FP32_ACTIVE"])
-		enabledFieldIDs = append(enabledFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_PIPE_FP16_ACTIVE"])
+		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_PIPE_TENSOR_ACTIVE"])
+		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_PIPE_FP64_ACTIVE"])
+		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_PIPE_FP32_ACTIVE"])
+		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_PIPE_FP16_ACTIVE"])
 	}
 	if config.Metrics.DcgmGpuProfilingDramUtilization.Enabled {
-		enabledFieldIDs = append(enabledFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_DRAM_ACTIVE"])
+		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_DRAM_ACTIVE"])
 	}
 	if config.Metrics.DcgmGpuProfilingPcieTrafficRate.Enabled {
-		enabledFieldIDs = append(enabledFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_PCIE_TX_BYTES"])
-		enabledFieldIDs = append(enabledFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_PCIE_RX_BYTES"])
+		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_PCIE_TX_BYTES"])
+		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_PCIE_RX_BYTES"])
 	}
 	if config.Metrics.DcgmGpuProfilingNvlinkTrafficRate.Enabled {
-		enabledFieldIDs = append(enabledFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_NVLINK_TX_BYTES"])
-		enabledFieldIDs = append(enabledFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_NVLINK_RX_BYTES"])
+		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_NVLINK_TX_BYTES"])
+		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_NVLINK_RX_BYTES"])
 	}
 
-	return enabledFieldIDs
+	return requestedFieldIDs
 }
 
 // getAllSupportedFields calls the DCGM query function to find out all the
@@ -227,26 +227,26 @@ func getAllSupportedFields() ([]dcgm.Short, error) {
 	return supported, nil
 }
 
-// filterSupportedFields takes the user selected fields and device supported
-// fields, and filter to return those that are selected & supported (ON fields)
-// and those that are selected but not supported (OFF fields)
-func filterSupportedFields(enabledFields []dcgm.Short, supportedFields []dcgm.Short) ([]dcgm.Short, []dcgm.Short) {
-	var onFields []dcgm.Short
-	var offFields []dcgm.Short
-	for _, ef := range enabledFields {
+// filterSupportedFields takes the user requested fields and device supported
+// fields, and filter to return those that are requested & supported to be the
+// enabledFields and requested but not supported as unavailableFields
+func filterSupportedFields(requestedFields []dcgm.Short, supportedFields []dcgm.Short) ([]dcgm.Short, []dcgm.Short) {
+	var enabledFields []dcgm.Short
+	var unavailableFields []dcgm.Short
+	for _, ef := range requestedFields {
 		support := false
 		for _, sf := range supportedFields {
 			if sf == ef {
-				onFields = append(onFields, ef)
+				enabledFields = append(enabledFields, ef)
 				support = true
 				break
 			}
 		}
 		if !support {
-			offFields = append(offFields, ef)
+			unavailableFields = append(unavailableFields, ef)
 		}
 	}
-	return onFields, offFields
+	return enabledFields, unavailableFields
 }
 
 func setWatchesOnEnabledFields(config *Config, logger *zap.Logger, deviceGroup dcgm.GroupHandle, enabledFieldIDs []dcgm.Short) (dcgm.FieldHandle, error) {

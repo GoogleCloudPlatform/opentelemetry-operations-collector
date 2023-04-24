@@ -57,33 +57,33 @@ func TestSupportedFieldsWithGolden(t *testing.T) {
 
 	assert.NotEmpty(t, client.devicesModelName)
 	gpuModel := client.getDeviceModelName(0)
-	enabled := discoverEnabledFieldIDs(config)
-	fields, err := getAllSupportedFields()
+	allFields := discoverRequestedFieldIDs(config)
+	supportedFields, err := getAllSupportedFields()
 	require.Nil(t, err)
-	onFields, offFields := filterSupportedFields(enabled, fields)
+	enabledFields, unavailableFields := filterSupportedFields(allFields, supportedFields)
 
 	dcgmIDToNameMap := make(map[dcgm.Short]string, len(dcgm.DCGM_FI))
 	for fieldName, fieldID := range dcgm.DCGM_FI {
 		dcgmIDToNameMap[fieldID] = fieldName
 	}
-	var onFieldsString []string
-	var offFieldsString []string
-	for _, f := range onFields {
-		onFieldsString = append(onFieldsString, dcgmIDToNameMap[f])
+	var enabledFieldsString []string
+	var unavailableFieldsString []string
+	for _, f := range enabledFields {
+		enabledFieldsString = append(enabledFieldsString, dcgmIDToNameMap[f])
 	}
-	for _, f := range offFields {
-		offFieldsString = append(offFieldsString, dcgmIDToNameMap[f])
+	for _, f := range unavailableFields {
+		unavailableFieldsString = append(unavailableFieldsString, dcgmIDToNameMap[f])
 	}
 	m := modelSupportedFields{
 		Model:             gpuModel,
-		SupportedFields:   onFieldsString,
-		UnsupportedFields: offFieldsString,
+		SupportedFields:   enabledFieldsString,
+		UnsupportedFields: unavailableFieldsString,
 	}
 	actual, err := yaml.Marshal(&m)
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, len(dcgmNameToMetricName), len(client.enabledFieldIDs)+len(offFields))
+	assert.Equal(t, len(dcgmNameToMetricName), len(client.enabledFieldIDs)+len(unavailableFieldsString))
 	goldenPath := getModelGoldenFilePath(t, gpuModel)
 	golden.Assert(t, string(actual), goldenPath)
 }

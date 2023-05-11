@@ -60,6 +60,7 @@ require (
 	go.uber.org/zap v1.24.0
 	golang.org/x/sys v0.6.0
 	golang.org/x/text v0.8.0
+	gotest.tools/v3 v3.4.0
 )
 
 require (
@@ -82,7 +83,6 @@ require (
 	github.com/ovh/go-ovh v1.3.0 // indirect
 	github.com/panta/machineid v1.0.2 // indirect
 	go.opentelemetry.io/collector/featuregate v0.74.0 // indirect
-	gotest.tools/v3 v3.4.0 // indirect
 )
 
 require (
@@ -147,7 +147,7 @@ require (
 	github.com/denisenkom/go-mssqldb v0.12.2 // indirect
 	github.com/dennwc/varint v1.0.0 // indirect
 	github.com/digitalocean/godo v1.95.0 // indirect
-	github.com/docker/distribution v2.8.1+incompatible // indirect
+	github.com/docker/distribution v2.8.2+incompatible // indirect
 	github.com/docker/docker v23.0.1+incompatible // indirect
 	github.com/docker/go-connections v0.4.1-0.20210727194412-58542c764a11 // indirect
 	github.com/docker/go-units v0.5.0 // indirect

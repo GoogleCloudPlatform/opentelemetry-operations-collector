@@ -1,0 +1,28 @@
+receivers:
+  hostmetrics:
+    collection_interval: 2s
+    scrapers:
+      cpu: {}
+      disk: {}
+      filesystem: {}
+      load: {}
+      memory: {}
+      network: {}
+      paging: {}
+      process:
+        mute_process_name_error: true
+      processes: {}
+
+processors:
+  processhandleprocessor:
+
+exporters:
+  file:
+    path: x.json
+
+service:
+  pipelines:
+    metrics:
+      receivers: [hostmetrics]
+      processors: [processhandleprocessor]
+      exporters: [file]

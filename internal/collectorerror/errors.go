@@ -14,6 +14,18 @@
 
 package collectorerror
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+	"runtime"
+)
 
 var ErrGPUSupportDisabled = errors.New("gpu support is disabled")
+
+type UnsupportedPlatformError struct {
+	ReceiverName string
+}
+
+func (e *UnsupportedPlatformError) Error() string {
+	return fmt.Sprintf("%s is not supported on %s", e.ReceiverName, runtime.GOOS)
+}

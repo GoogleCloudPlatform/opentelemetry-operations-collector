@@ -15,6 +15,9 @@
 run:
   timeout: 5m
 
+  skip-dirs:
+    - receiver/prometheusreceiver
+
 linters:
   enable:
     - gocritic

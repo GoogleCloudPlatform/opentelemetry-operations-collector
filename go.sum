@@ -569,8 +569,6 @@ github.com/julienschmidt/httprouter v1.2.0/go.mod h1:SYymIcj16QtmaHHD7aYtjjsJG7V
 github.com/julienschmidt/httprouter v1.3.0/go.mod h1:JR6WtHb+2LUe8TCKY3cZOxFyyO8IZAc4RVcycCCAKdM=
 github.com/k0kubun/pp v3.0.1+incompatible/go.mod h1:GWse8YhT0p8pT4ir3ZgBbfZild3tgzSScAn6HmfYukg=
 github.com/k0kubun/pp/v3 v3.1.0/go.mod h1:vIrP5CF0n78pKHm2Ku6GVerpZBJvscg48WepUYEk2gw=
-github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 h1:Z9n2FFNUXsshfwJMBgNA0RU6/i7WVaAegv3PtuIHPMs=
-github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51/go.mod h1:CzGEWj7cYgsdH8dAjBGEr58BoE7ScuLd+fwFZ44+/x8=
 github.com/kisielk/errcheck v1.5.0/go.mod h1:pFxgyoBC7bSaBwPgfKdkLd5X25qrDl4LWUI2bnpBCr8=
 github.com/kisielk/gotool v1.0.0/go.mod h1:XhKaO+MFFWcvkIS/tQcRk01m1F5IRFswLeQ+oQHNcck=
 github.com/klauspost/asmfmt v1.3.2 h1:4Ri7ox3EwapiOjCki+hw14RyKk201CN4rzyCJRFLpK4=
@@ -708,6 +706,7 @@ github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudex
 github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlemanagedprometheusexporter v0.74.0 h1:IAil15Y5jsa86YbjBZcS/o3HLr5S/M9XnouAASlGUho=
 github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlemanagedprometheusexporter v0.74.0/go.mod h1:FJEbVehzxIrxHifyuZymAE/E48Hdv8j5wiG8n2mttfQ=
 github.com/open-telemetry/opentelemetry-collector-contrib/exporter/prometheusremotewriteexporter v0.74.0 h1:1DwD5J3voytfldOYEbi8TpO98KwT+tY1u1hXfqBcjHQ=
+github.com/open-telemetry/opentelemetry-collector-contrib/exporter/prometheusremotewriteexporter v0.74.0/go.mod h1:RcR/iLnL0wbVJR0EGzB3JgEauIIPmN/LiydHgXWA9C0=
 github.com/open-telemetry/opentelemetry-collector-contrib/internal/aws/ecsutil v0.74.0 h1:AeSzctqGTDh4Wkfjb5Yy8gWj4trJrRgqErlynrC+Vkc=
 github.com/open-telemetry/opentelemetry-collector-contrib/internal/aws/ecsutil v0.74.0/go.mod h1:S6rxpuSqr76cgXXUhMVOlFpPcUjLPV4Nvw8BtfY0N6Q=
 github.com/open-telemetry/opentelemetry-collector-contrib/internal/common v0.74.0 h1:SUlZZPqhPs0FUtq8ck07P2jUnxiNY6iGdqoKVSVSoOU=
@@ -726,9 +725,11 @@ github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatatest v0.74.0 
 github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatautil v0.74.0 h1:9zWdiR9+bem0LvvWWoMZU6R3xTmu0WbcAPe8kI/jpyk=
 github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatautil v0.74.0/go.mod h1:3RViz8fguswWAFR+8W2Kzmch3eecOVK935QVsBdpUk4=
 github.com/open-telemetry/opentelemetry-collector-contrib/pkg/resourcetotelemetry v0.74.0 h1:HQGFpz3olAA1AGH1AgVKV2dygf9QGyQF7cwTMFDdthI=
+github.com/open-telemetry/opentelemetry-collector-contrib/pkg/resourcetotelemetry v0.74.0/go.mod h1:Nw7FXUNb5aKbHxdJvXPOh382a9P0dTKfsrIv4ZIXjig=
 github.com/open-telemetry/opentelemetry-collector-contrib/pkg/translator/prometheus v0.74.0 h1:KaNIB5+iuKpTxFcOKP7NEnxXcEi16dFQSkfeZBgUgQc=
 github.com/open-telemetry/opentelemetry-collector-contrib/pkg/translator/prometheus v0.74.0/go.mod h1:wglIjSJcaZjTZwC21Aiem0lYWPRpQ9ta7ntzT2roLSY=
 github.com/open-telemetry/opentelemetry-collector-contrib/pkg/translator/prometheusremotewrite v0.74.0 h1:/ZhZsv9t8p7Gbn/T00rf3e9v1uYieRL4luJ5QG8fxPQ=
+github.com/open-telemetry/opentelemetry-collector-contrib/pkg/translator/prometheusremotewrite v0.74.0/go.mod h1:1bDXfyMUXng8/6g7ZbFCClw54dBWE639rPDYm3zEE8s=
 github.com/open-telemetry/opentelemetry-collector-contrib/pkg/winperfcounters v0.74.0 h1:mEKwoSDr8zqCxvbKPYld2720A4u5wXYELmdKON2zlt0=
 github.com/open-telemetry/opentelemetry-collector-contrib/pkg/winperfcounters v0.74.0/go.mod h1:LzaEfNFUff43RLmi5EWTfHD5vhpihwFuL2weVHuECpw=
 github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.74.0 h1:11kk61GJqLQ9lsveDUBfvJ3aN/Eq3nkDZoE7fzjztDY=
@@ -769,10 +770,6 @@ github.com/open-telemetry/opentelemetry-collector-contrib/receiver/nginxreceiver
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/nginxreceiver v0.74.0/go.mod h1:lUvlrfU4h6ENrKusvpymCWGpLprnzzCgVTikkHPSUxs=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/postgresqlreceiver v0.74.0 h1:dOwMya7A5RurBf/ZYvwN5USBK3TcEDipIYK8m0hw2YY=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/postgresqlreceiver v0.74.0/go.mod h1:ux+fq8aGn0MEzzrv8DQmS4KX0muIhB33n6H9mv7vJGI=
-github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusexecreceiver v0.74.0 h1:5l4CkoIK5z5vAP91y9HqQFUT/+2H3mJVDJDboGPZX5I=
-github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusexecreceiver v0.74.0/go.mod h1:7esKIF8x1GDsQvKcBqIyzeurW/YKRWUTCUZsyge3Yiw=
-github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver v0.74.0 h1:JP0wF/0RiXEDPWHvIaExy/vh5vKoBdeCZmnzhgx8j24=
-github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver v0.74.0/go.mod h1:fDI6mlvqp+apb2qbiiciiDrHE+yD3MJrkaBC3FsH54k=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/rabbitmqreceiver v0.74.0 h1:2khxF6VBonR3ia3d74TNBOtcrK8wNKOhdOoP8vUoZeE=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/rabbitmqreceiver v0.74.0/go.mod h1:Kib6rO+ifji9pnDxcB7q2mkWFN1Jn99BJCzina6eK0c=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/redisreceiver v0.74.0 h1:H9ilA4BXVFn4UenVNoKNgRCzL0/eCYDgA0c5LFSoXYk=
@@ -926,11 +923,16 @@ github.com/stretchr/testify v1.8.2/go.mod h1:w2LPCIKwWwSfY2zedu0+kehJoqGctiVI29o
 github.com/stvp/go-udp-testing v0.0.0-20201019212854-469649b16807/go.mod h1:7jxmlfBCDBXRzr0eAQJ48XC1hBu1np4CS5+cHEYfwpc=
 github.com/testcontainers/testcontainers-go v0.19.0 h1:3bmFPuQRgVIQwxZJERyzB8AogmJW3Qzh8iDyfJbPhi8=
 github.com/tidwall/gjson v1.10.2 h1:APbLGOM0rrEkd8WBw9C24nllro4ajFuJu0Sc9hRz8Bo=
+github.com/tidwall/gjson v1.10.2/go.mod h1:/wbyibRr2FHMks5tjHJ5F8dMZh3AcwJEMf5vlfC0lxk=
 github.com/tidwall/match v1.1.1 h1:+Ho715JplO36QYgwN9PGYNhgZvoUSc9X2c80KVTi+GA=
+github.com/tidwall/match v1.1.1/go.mod h1:eRSPERbgtNPcGhD8UCthc6PmLEQXEWd3PRB5JTxsfmM=
 github.com/tidwall/pretty v1.0.0/go.mod h1:XNkn88O1ChpSDQmQeStsy+sBenx6DDtFZJxhVysOjyk=
 github.com/tidwall/pretty v1.2.0 h1:RWIZEg2iJ8/g6fDDYzMpobmaoGh5OLl4AXtGUGPcqCs=
+github.com/tidwall/pretty v1.2.0/go.mod h1:ITEVvHYasfjBbM0u2Pg8T2nJnzm8xPwvNhhsoaGGjNU=
 github.com/tidwall/tinylru v1.1.0 h1:XY6IUfzVTU9rpwdhKUF6nQdChgCdGjkMfLzbWyiau6I=
+github.com/tidwall/tinylru v1.1.0/go.mod h1:3+bX+TJ2baOLMWTnlyNWHh4QMnFyARg2TLTQ6OFbzw8=
 github.com/tidwall/wal v1.1.7 h1:emc1TRjIVsdKKSnpwGBAcsAGg0767SvUk8+ygx7Bb+4=
+github.com/tidwall/wal v1.1.7/go.mod h1:r6lR1j27W9EPalgHiB7zLJDYu3mzW5BQP5KrzBpYY/E=
 github.com/tklauser/go-sysconf v0.3.11 h1:89WgdJhk5SNwJfu+GKyYveZ4IaJ7xAkecBo+KdJV0CM=
 github.com/tklauser/go-sysconf v0.3.11/go.mod h1:GqXfhXY3kiPa0nAXPDIQIWzJbMCB7AmcWpGR8lSZfqI=
 github.com/tklauser/numcpus v0.6.0 h1:kebhY2Qt+3U6RNK7UqpYNA+tJ23IBEGKkB7JQBfDYms=

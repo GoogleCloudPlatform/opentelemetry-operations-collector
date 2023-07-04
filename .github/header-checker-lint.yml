@@ -4,6 +4,7 @@ ignoreFiles:
   - receiver/**/generated_metrics.go
   - receiver/**/generated_metrics_test.go
   - receiver/mongodbreceiver/**/*.go
+  - receiver/prometheusreceiver/**/*.go
 sourceFileExtensions:
   - go
   - ps1

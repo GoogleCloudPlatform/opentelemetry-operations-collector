@@ -17,6 +17,7 @@ package prometheusreceiver
 import (
 	"testing"
 
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/prometheusreceiver/internal"
 	"github.com/prometheus/common/model"
 	promcfg "github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/model/relabel"
@@ -141,10 +142,11 @@ func verifyRenameMetric(t *testing.T, td *testData, resourceMetrics []pmetric.Re
 				},
 				{
 					// renaming config converts any metric type to untyped metric, which then gets converted to gauge double type by metric builder
+					// This bug is tracked here: https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/5001
 					numberPointComparator: []numberPointComparator{
 						compareTimestamp(ts1),
 						compareDoubleValue(15),
-						compareAttributes(map[string]string{"method": "post", "port": "6380"}),
+						compareAttributes(map[string]string{"method": "post", "port": "6380", internal.PrometheusUntypedKey: "true"}),
 					},
 				},
 			}),
@@ -156,14 +158,14 @@ func verifyRenameMetric(t *testing.T, td *testData, resourceMetrics []pmetric.Re
 					numberPointComparator: []numberPointComparator{
 						compareTimestamp(ts1),
 						compareDoubleValue(10),
-						compareAttributes(map[string]string{"method": "post", "port": "6380"}),
+						compareAttributes(map[string]string{"method": "post", "port": "6380", internal.PrometheusUntypedKey: "true"}),
 					},
 				},
 				{
 					numberPointComparator: []numberPointComparator{
 						compareTimestamp(ts1),
 						compareDoubleValue(12),
-						compareAttributes(map[string]string{"method": "post", "port": "6381"}),
+						compareAttributes(map[string]string{"method": "post", "port": "6381", internal.PrometheusUntypedKey: "true"}),
 					},
 				},
 			}),

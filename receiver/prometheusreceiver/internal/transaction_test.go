@@ -737,6 +737,7 @@ func TestMetricBuilderUntyped(t *testing.T) {
 				pt0.SetStartTimestamp(0)
 				pt0.SetTimestamp(tsNanos)
 				pt0.Attributes().PutStr("foo", "bar")
+				pt0.Attributes().PutBool(PrometheusUntypedKey, true)
 
 				return []pmetric.Metrics{md0}
 			},
@@ -762,6 +763,7 @@ func TestMetricBuilderUntyped(t *testing.T) {
 				pt0.SetDoubleValue(100.0)
 				pt0.SetTimestamp(tsNanos)
 				pt0.Attributes().PutStr("foo", "bar")
+				pt0.Attributes().PutBool(PrometheusUntypedKey, true)
 
 				m1 := mL0.AppendEmpty()
 				m1.SetName("theother_not_exists")
@@ -770,11 +772,13 @@ func TestMetricBuilderUntyped(t *testing.T) {
 				pt1.SetDoubleValue(200.0)
 				pt1.SetTimestamp(tsNanos)
 				pt1.Attributes().PutStr("foo", "bar")
+				pt1.Attributes().PutBool(PrometheusUntypedKey, true)
 
 				pt2 := gauge1.DataPoints().AppendEmpty()
 				pt2.SetDoubleValue(300.0)
 				pt2.SetTimestamp(tsNanos)
 				pt2.Attributes().PutStr("bar", "foo")
+				pt2.Attributes().PutBool(PrometheusUntypedKey, true)
 
 				return []pmetric.Metrics{md0}
 			},
@@ -798,6 +802,7 @@ func TestMetricBuilderUntyped(t *testing.T) {
 				pt0.SetDoubleValue(100.0)
 				pt0.SetTimestamp(tsNanos)
 				pt0.Attributes().PutStr("foo", "bar")
+				pt0.Attributes().PutBool(PrometheusUntypedKey, true)
 
 				return []pmetric.Metrics{md0}
 			},

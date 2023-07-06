@@ -19,6 +19,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/prometheusreceiver/internal"
 	"github.com/prometheus/prometheus/model/value"
 	"github.com/stretchr/testify/assert"
 	"go.opentelemetry.io/collector/featuregate"
@@ -287,7 +288,7 @@ func verifyNormalNaNs(t *testing.T, td *testData, resourceMetrics []pmetric.Reso
 				{
 					numberPointComparator: []numberPointComparator{
 						compareTimestamp(ts1),
-						compareAttributes(map[string]string{"name": "rough-snowflake-web", "port": "6380"}),
+						compareAttributes(map[string]string{"name": "rough-snowflake-web", "port": "6380", internal.PrometheusUntypedKey: "true"}),
 						assertNormalNan(),
 					},
 				},
@@ -371,7 +372,7 @@ func verifyInfValues(t *testing.T, td *testData, resourceMetrics []pmetric.Resou
 				{
 					numberPointComparator: []numberPointComparator{
 						compareTimestamp(ts1),
-						compareAttributes(map[string]string{"name": "rough-snowflake-web", "port": "6380"}),
+						compareAttributes(map[string]string{"name": "rough-snowflake-web", "port": "6380", internal.PrometheusUntypedKey: "true"}),
 						compareDoubleValue(math.Inf(-1)),
 					},
 				},

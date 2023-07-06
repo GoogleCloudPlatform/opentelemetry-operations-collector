@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/prometheusreceiver/internal"
 	"github.com/prometheus/common/model"
 	promConfig "github.com/prometheus/prometheus/config"
 	"github.com/stretchr/testify/assert"
@@ -1452,7 +1453,6 @@ func verifyUntypedMetrics(t *testing.T, td *testData, resourceMetrics []pmetric.
 	assert.Equal(t, 7, metricsCount(m1))
 
 	wantAttributes := td.attributes
-
 	metrics1 := m1.ScopeMetrics().At(0).Metrics()
 	ts1 := getTS(metrics1)
 	e1 := []testExpectation{
@@ -1463,14 +1463,14 @@ func verifyUntypedMetrics(t *testing.T, td *testData, resourceMetrics []pmetric.
 					numberPointComparator: []numberPointComparator{
 						compareTimestamp(ts1),
 						compareDoubleValue(100),
-						compareAttributes(map[string]string{"method": "post", "code": "200"}),
+						compareAttributes(map[string]string{"method": "post", "code": "200", internal.PrometheusUntypedKey: "true"}),
 					},
 				},
 				{
 					numberPointComparator: []numberPointComparator{
 						compareTimestamp(ts1),
 						compareDoubleValue(5),
-						compareAttributes(map[string]string{"method": "post", "code": "400"}),
+						compareAttributes(map[string]string{"method": "post", "code": "400", internal.PrometheusUntypedKey: "true"}),
 					},
 				},
 			}),
@@ -1481,14 +1481,14 @@ func verifyUntypedMetrics(t *testing.T, td *testData, resourceMetrics []pmetric.
 					numberPointComparator: []numberPointComparator{
 						compareTimestamp(ts1),
 						compareDoubleValue(10),
-						compareAttributes(map[string]string{"name": "rough-snowflake-web", "port": "6380"}),
+						compareAttributes(map[string]string{"name": "rough-snowflake-web", "port": "6380", internal.PrometheusUntypedKey: "true"}),
 					},
 				},
 				{
 					numberPointComparator: []numberPointComparator{
 						compareTimestamp(ts1),
 						compareDoubleValue(12),
-						compareAttributes(map[string]string{"name": "rough-snowflake-web", "port": "6381"}),
+						compareAttributes(map[string]string{"name": "rough-snowflake-web", "port": "6381", internal.PrometheusUntypedKey: "true"}),
 					},
 				},
 			}),

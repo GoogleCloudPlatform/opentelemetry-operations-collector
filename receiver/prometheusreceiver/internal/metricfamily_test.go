@@ -237,7 +237,7 @@ func TestMetricGroupData_toDistributionUnitTest(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			mp := newMetricFamily(tt.metricName, mc, zap.NewNop())
+			mp := newMetricFamily(tt.metricName, mc, zap.NewNop(), true)
 			for i, tv := range tt.scrapes {
 				var lbls labels.Labels
 				if tv.extraLabel.Name != "" {
@@ -527,7 +527,7 @@ func TestMetricGroupData_toSummaryUnitTest(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			mp := newMetricFamily(tt.name, mc, zap.NewNop())
+			mp := newMetricFamily(tt.name, mc, zap.NewNop(), true)
 			for _, lbs := range tt.labelsScrapes {
 				for i, scrape := range lbs.scrapes {
 					lb := lbs.labels.Copy()
@@ -647,7 +647,7 @@ func TestMetricGroupData_toNumberDataUnitTest(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			mp := newMetricFamily(tt.metricKind, mc, zap.NewNop())
+			mp := newMetricFamily(tt.metricKind, mc, zap.NewNop(), true)
 			for _, tv := range tt.scrapes {
 				lb := tt.labels.Copy()
 				sRef, _ := getSeriesRef(nil, lb, mp.mtype)

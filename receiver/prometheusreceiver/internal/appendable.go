@@ -32,6 +32,7 @@ type appendable struct {
 	sink                 consumer.Metrics
 	metricAdjuster       MetricsAdjuster
 	useStartTimeMetric   bool
+	preserveUntyped      bool
 	startTimeMetricRegex *regexp.Regexp
 	externalLabels       labels.Labels
 
@@ -46,6 +47,7 @@ func NewAppendable(
 	set receiver.CreateSettings,
 	gcInterval time.Duration,
 	useStartTimeMetric bool,
+	preserveUntyped bool,
 	startTimeMetricRegex *regexp.Regexp,
 	useCreatedMetric bool,
 	externalLabels labels.Labels,
@@ -71,9 +73,10 @@ func NewAppendable(
 		externalLabels:       externalLabels,
 		obsrecv:              obsrecv,
 		registry:             registry,
+		preserveUntyped:      preserveUntyped,
 	}, nil
 }
 
 func (o *appendable) Appender(ctx context.Context) storage.Appender {
-	return newTransaction(ctx, o.metricAdjuster, o.sink, o.externalLabels, o.settings, o.obsrecv, o.registry)
+	return newTransaction(ctx, o.metricAdjuster, o.sink, o.externalLabels, o.settings, o.obsrecv, o.registry, o.preserveUntyped)
 }

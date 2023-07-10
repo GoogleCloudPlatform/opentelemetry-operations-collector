@@ -273,6 +273,7 @@ func (r *pReceiver) initPrometheusComponents(ctx context.Context, host component
 		r.settings,
 		gcInterval(r.cfg.PrometheusConfig),
 		r.cfg.UseStartTimeMetric,
+		r.cfg.PreserveUntyped,
 		startTimeMetricRegex,
 		useCreatedMetricGate.IsEnabled(),
 		r.cfg.PrometheusConfig.GlobalConfig.ExternalLabels,

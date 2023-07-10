@@ -55,8 +55,9 @@ type transaction struct {
 	metricAdjuster MetricsAdjuster
 	obsrecv        *obsreport.Receiver
 	// Used as buffer to calculate series ref hash.
-	bufBytes   []byte
-	normalizer *prometheustranslator.Normalizer
+	bufBytes        []byte
+	normalizer      *prometheustranslator.Normalizer
+	preserveUntyped bool
 }
 
 func newTransaction(
@@ -66,18 +67,20 @@ func newTransaction(
 	externalLabels labels.Labels,
 	settings receiver.CreateSettings,
 	obsrecv *obsreport.Receiver,
-	registry *featuregate.Registry) *transaction {
+	registry *featuregate.Registry,
+	preserveUntyped bool) *transaction {
 	return &transaction{
-		ctx:            ctx,
-		families:       make(map[string]*metricFamily),
-		isNew:          true,
-		sink:           sink,
-		metricAdjuster: metricAdjuster,
-		externalLabels: externalLabels,
-		logger:         settings.Logger,
-		obsrecv:        obsrecv,
-		bufBytes:       make([]byte, 0, 1024),
-		normalizer:     prometheustranslator.NewNormalizer(registry),
+		ctx:             ctx,
+		families:        make(map[string]*metricFamily),
+		isNew:           true,
+		sink:            sink,
+		metricAdjuster:  metricAdjuster,
+		externalLabels:  externalLabels,
+		logger:          settings.Logger,
+		obsrecv:         obsrecv,
+		bufBytes:        make([]byte, 0, 1024),
+		normalizer:      prometheustranslator.NewNormalizer(registry),
+		preserveUntyped: preserveUntyped,
 	}
 }
 
@@ -149,7 +152,7 @@ func (t *transaction) getOrCreateMetricFamily(mn string) *metricFamily {
 		if mf, ok := t.families[fn]; ok && mf.includesMetric(mn) {
 			curMf = mf
 		} else {
-			curMf = newMetricFamily(mn, t.mc, t.logger)
+			curMf = newMetricFamily(mn, t.mc, t.logger, t.preserveUntyped)
 			t.families[curMf.name] = curMf
 		}
 	}

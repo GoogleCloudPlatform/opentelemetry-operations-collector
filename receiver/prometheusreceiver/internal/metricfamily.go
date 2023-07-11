@@ -36,7 +36,7 @@ import (
 const (
 	traceIDKey           = "trace_id"
 	spanIDKey            = "span_id"
-	PrometheusUntypedKey = "promethues_untyped_metric"
+	PrometheusUntypedKey = "prometheus_untyped_metric"
 )
 
 type metricFamily struct {

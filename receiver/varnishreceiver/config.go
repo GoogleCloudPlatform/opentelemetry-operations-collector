@@ -26,9 +26,9 @@ import (
 // Config defines configuration for varnish metrics receiver.
 type Config struct {
 	scraperhelper.ScraperControllerSettings `mapstructure:",squash"`
-	Metrics                                 metadata.MetricsSettings `mapstructure:"metrics"`
-	CacheDir                                string                   `mapstructure:"cache_dir"`
-	ExecDir                                 string                   `mapstructure:"exec_dir"`
+	Metrics                                 metadata.MetricsConfig `mapstructure:"metrics"`
+	CacheDir                                string                 `mapstructure:"cache_dir"`
+	ExecDir                                 string                 `mapstructure:"exec_dir"`
 }
 
 // Validate validates the config.

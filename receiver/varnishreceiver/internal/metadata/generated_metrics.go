@@ -6,101 +6,10 @@ import (
 	"time"
 
 	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/confmap"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/receiver"
 )
-
-// MetricSettings provides common settings for a particular metric.
-type MetricSettings struct {
-	Enabled bool `mapstructure:"enabled"`
-
-	enabledSetByUser bool
-}
-
-func (ms *MetricSettings) Unmarshal(parser *confmap.Conf) error {
-	if parser == nil {
-		return nil
-	}
-	err := parser.Unmarshal(ms, confmap.WithErrorUnused())
-	if err != nil {
-		return err
-	}
-	ms.enabledSetByUser = parser.IsSet("enabled")
-	return nil
-}
-
-// MetricsSettings provides settings for varnishreceiver metrics.
-type MetricsSettings struct {
-	VarnishBackendConnectionCount  MetricSettings `mapstructure:"varnish.backend.connection.count"`
-	VarnishBackendRequestCount     MetricSettings `mapstructure:"varnish.backend.request.count"`
-	VarnishCacheOperationCount     MetricSettings `mapstructure:"varnish.cache.operation.count"`
-	VarnishClientRequestCount      MetricSettings `mapstructure:"varnish.client.request.count"`
-	VarnishClientRequestErrorCount MetricSettings `mapstructure:"varnish.client.request.error.count"`
-	VarnishObjectCount             MetricSettings `mapstructure:"varnish.object.count"`
-	VarnishObjectExpired           MetricSettings `mapstructure:"varnish.object.expired"`
-	VarnishObjectMoved             MetricSettings `mapstructure:"varnish.object.moved"`
-	VarnishObjectNuked             MetricSettings `mapstructure:"varnish.object.nuked"`
-	VarnishSessionCount            MetricSettings `mapstructure:"varnish.session.count"`
-	VarnishThreadOperationCount    MetricSettings `mapstructure:"varnish.thread.operation.count"`
-}
-
-func DefaultMetricsSettings() MetricsSettings {
-	return MetricsSettings{
-		VarnishBackendConnectionCount: MetricSettings{
-			Enabled: true,
-		},
-		VarnishBackendRequestCount: MetricSettings{
-			Enabled: true,
-		},
-		VarnishCacheOperationCount: MetricSettings{
-			Enabled: true,
-		},
-		VarnishClientRequestCount: MetricSettings{
-			Enabled: true,
-		},
-		VarnishClientRequestErrorCount: MetricSettings{
-			Enabled: true,
-		},
-		VarnishObjectCount: MetricSettings{
-			Enabled: true,
-		},
-		VarnishObjectExpired: MetricSettings{
-			Enabled: true,
-		},
-		VarnishObjectMoved: MetricSettings{
-			Enabled: true,
-		},
-		VarnishObjectNuked: MetricSettings{
-			Enabled: true,
-		},
-		VarnishSessionCount: MetricSettings{
-			Enabled: true,
-		},
-		VarnishThreadOperationCount: MetricSettings{
-			Enabled: true,
-		},
-	}
-}
-
-// ResourceAttributeSettings provides common settings for a particular metric.
-type ResourceAttributeSettings struct {
-	Enabled bool `mapstructure:"enabled"`
-}
-
-// ResourceAttributesSettings provides settings for varnishreceiver metrics.
-type ResourceAttributesSettings struct {
-	VarnishCacheName ResourceAttributeSettings `mapstructure:"varnish.cache.name"`
-}
-
-func DefaultResourceAttributesSettings() ResourceAttributesSettings {
-	return ResourceAttributesSettings{
-		VarnishCacheName: ResourceAttributeSettings{
-			Enabled: false,
-		},
-	}
-}
 
 // AttributeBackendConnectionType specifies the a value backend_connection_type attribute.
 type AttributeBackendConnectionType int
@@ -266,7 +175,7 @@ var MapAttributeThreadOperations = map[string]AttributeThreadOperations{
 
 type metricVarnishBackendConnectionCount struct {
 	data     pmetric.Metric // data buffer for generated metric.
-	settings MetricSettings // metric settings provided by user.
+	config   MetricConfig   // metric config provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
 
@@ -282,7 +191,7 @@ func (m *metricVarnishBackendConnectionCount) init() {
 }
 
 func (m *metricVarnishBackendConnectionCount) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, backendConnectionTypeAttributeValue string) {
-	if !m.settings.Enabled {
+	if !m.config.Enabled {
 		return
 	}
 	dp := m.data.Sum().DataPoints().AppendEmpty()
@@ -301,16 +210,16 @@ func (m *metricVarnishBackendConnectionCount) updateCapacity() {
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
 func (m *metricVarnishBackendConnectionCount) emit(metrics pmetric.MetricSlice) {
-	if m.settings.Enabled && m.data.Sum().DataPoints().Len() > 0 {
+	if m.config.Enabled && m.data.Sum().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
 		m.init()
 	}
 }
 
-func newMetricVarnishBackendConnectionCount(settings MetricSettings) metricVarnishBackendConnectionCount {
-	m := metricVarnishBackendConnectionCount{settings: settings}
-	if settings.Enabled {
+func newMetricVarnishBackendConnectionCount(cfg MetricConfig) metricVarnishBackendConnectionCount {
+	m := metricVarnishBackendConnectionCount{config: cfg}
+	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
 	}
@@ -319,7 +228,7 @@ func newMetricVarnishBackendConnectionCount(settings MetricSettings) metricVarni
 
 type metricVarnishBackendRequestCount struct {
 	data     pmetric.Metric // data buffer for generated metric.
-	settings MetricSettings // metric settings provided by user.
+	config   MetricConfig   // metric config provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
 
@@ -334,7 +243,7 @@ func (m *metricVarnishBackendRequestCount) init() {
 }
 
 func (m *metricVarnishBackendRequestCount) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64) {
-	if !m.settings.Enabled {
+	if !m.config.Enabled {
 		return
 	}
 	dp := m.data.Sum().DataPoints().AppendEmpty()
@@ -352,16 +261,16 @@ func (m *metricVarnishBackendRequestCount) updateCapacity() {
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
 func (m *metricVarnishBackendRequestCount) emit(metrics pmetric.MetricSlice) {
-	if m.settings.Enabled && m.data.Sum().DataPoints().Len() > 0 {
+	if m.config.Enabled && m.data.Sum().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
 		m.init()
 	}
 }
 
-func newMetricVarnishBackendRequestCount(settings MetricSettings) metricVarnishBackendRequestCount {
-	m := metricVarnishBackendRequestCount{settings: settings}
-	if settings.Enabled {
+func newMetricVarnishBackendRequestCount(cfg MetricConfig) metricVarnishBackendRequestCount {
+	m := metricVarnishBackendRequestCount{config: cfg}
+	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
 	}
@@ -370,7 +279,7 @@ func newMetricVarnishBackendRequestCount(settings MetricSettings) metricVarnishB
 
 type metricVarnishCacheOperationCount struct {
 	data     pmetric.Metric // data buffer for generated metric.
-	settings MetricSettings // metric settings provided by user.
+	config   MetricConfig   // metric config provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
 
@@ -386,7 +295,7 @@ func (m *metricVarnishCacheOperationCount) init() {
 }
 
 func (m *metricVarnishCacheOperationCount) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, cacheOperationsAttributeValue string) {
-	if !m.settings.Enabled {
+	if !m.config.Enabled {
 		return
 	}
 	dp := m.data.Sum().DataPoints().AppendEmpty()
@@ -405,16 +314,16 @@ func (m *metricVarnishCacheOperationCount) updateCapacity() {
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
 func (m *metricVarnishCacheOperationCount) emit(metrics pmetric.MetricSlice) {
-	if m.settings.Enabled && m.data.Sum().DataPoints().Len() > 0 {
+	if m.config.Enabled && m.data.Sum().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
 		m.init()
 	}
 }
 
-func newMetricVarnishCacheOperationCount(settings MetricSettings) metricVarnishCacheOperationCount {
-	m := metricVarnishCacheOperationCount{settings: settings}
-	if settings.Enabled {
+func newMetricVarnishCacheOperationCount(cfg MetricConfig) metricVarnishCacheOperationCount {
+	m := metricVarnishCacheOperationCount{config: cfg}
+	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
 	}
@@ -423,7 +332,7 @@ func newMetricVarnishCacheOperationCount(settings MetricSettings) metricVarnishC
 
 type metricVarnishClientRequestCount struct {
 	data     pmetric.Metric // data buffer for generated metric.
-	settings MetricSettings // metric settings provided by user.
+	config   MetricConfig   // metric config provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
 
@@ -439,7 +348,7 @@ func (m *metricVarnishClientRequestCount) init() {
 }
 
 func (m *metricVarnishClientRequestCount) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, stateAttributeValue string) {
-	if !m.settings.Enabled {
+	if !m.config.Enabled {
 		return
 	}
 	dp := m.data.Sum().DataPoints().AppendEmpty()
@@ -458,16 +367,16 @@ func (m *metricVarnishClientRequestCount) updateCapacity() {
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
 func (m *metricVarnishClientRequestCount) emit(metrics pmetric.MetricSlice) {
-	if m.settings.Enabled && m.data.Sum().DataPoints().Len() > 0 {
+	if m.config.Enabled && m.data.Sum().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
 		m.init()
 	}
 }
 
-func newMetricVarnishClientRequestCount(settings MetricSettings) metricVarnishClientRequestCount {
-	m := metricVarnishClientRequestCount{settings: settings}
-	if settings.Enabled {
+func newMetricVarnishClientRequestCount(cfg MetricConfig) metricVarnishClientRequestCount {
+	m := metricVarnishClientRequestCount{config: cfg}
+	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
 	}
@@ -476,7 +385,7 @@ func newMetricVarnishClientRequestCount(settings MetricSettings) metricVarnishCl
 
 type metricVarnishClientRequestErrorCount struct {
 	data     pmetric.Metric // data buffer for generated metric.
-	settings MetricSettings // metric settings provided by user.
+	config   MetricConfig   // metric config provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
 
@@ -492,7 +401,7 @@ func (m *metricVarnishClientRequestErrorCount) init() {
 }
 
 func (m *metricVarnishClientRequestErrorCount) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, httpStatusCodeAttributeValue string) {
-	if !m.settings.Enabled {
+	if !m.config.Enabled {
 		return
 	}
 	dp := m.data.Sum().DataPoints().AppendEmpty()
@@ -511,16 +420,16 @@ func (m *metricVarnishClientRequestErrorCount) updateCapacity() {
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
 func (m *metricVarnishClientRequestErrorCount) emit(metrics pmetric.MetricSlice) {
-	if m.settings.Enabled && m.data.Sum().DataPoints().Len() > 0 {
+	if m.config.Enabled && m.data.Sum().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
 		m.init()
 	}
 }
 
-func newMetricVarnishClientRequestErrorCount(settings MetricSettings) metricVarnishClientRequestErrorCount {
-	m := metricVarnishClientRequestErrorCount{settings: settings}
-	if settings.Enabled {
+func newMetricVarnishClientRequestErrorCount(cfg MetricConfig) metricVarnishClientRequestErrorCount {
+	m := metricVarnishClientRequestErrorCount{config: cfg}
+	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
 	}
@@ -529,7 +438,7 @@ func newMetricVarnishClientRequestErrorCount(settings MetricSettings) metricVarn
 
 type metricVarnishObjectCount struct {
 	data     pmetric.Metric // data buffer for generated metric.
-	settings MetricSettings // metric settings provided by user.
+	config   MetricConfig   // metric config provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
 
@@ -544,7 +453,7 @@ func (m *metricVarnishObjectCount) init() {
 }
 
 func (m *metricVarnishObjectCount) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64) {
-	if !m.settings.Enabled {
+	if !m.config.Enabled {
 		return
 	}
 	dp := m.data.Sum().DataPoints().AppendEmpty()
@@ -562,16 +471,16 @@ func (m *metricVarnishObjectCount) updateCapacity() {
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
 func (m *metricVarnishObjectCount) emit(metrics pmetric.MetricSlice) {
-	if m.settings.Enabled && m.data.Sum().DataPoints().Len() > 0 {
+	if m.config.Enabled && m.data.Sum().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
 		m.init()
 	}
 }
 
-func newMetricVarnishObjectCount(settings MetricSettings) metricVarnishObjectCount {
-	m := metricVarnishObjectCount{settings: settings}
-	if settings.Enabled {
+func newMetricVarnishObjectCount(cfg MetricConfig) metricVarnishObjectCount {
+	m := metricVarnishObjectCount{config: cfg}
+	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
 	}
@@ -580,7 +489,7 @@ func newMetricVarnishObjectCount(settings MetricSettings) metricVarnishObjectCou
 
 type metricVarnishObjectExpired struct {
 	data     pmetric.Metric // data buffer for generated metric.
-	settings MetricSettings // metric settings provided by user.
+	config   MetricConfig   // metric config provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
 
@@ -595,7 +504,7 @@ func (m *metricVarnishObjectExpired) init() {
 }
 
 func (m *metricVarnishObjectExpired) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64) {
-	if !m.settings.Enabled {
+	if !m.config.Enabled {
 		return
 	}
 	dp := m.data.Sum().DataPoints().AppendEmpty()
@@ -613,16 +522,16 @@ func (m *metricVarnishObjectExpired) updateCapacity() {
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
 func (m *metricVarnishObjectExpired) emit(metrics pmetric.MetricSlice) {
-	if m.settings.Enabled && m.data.Sum().DataPoints().Len() > 0 {
+	if m.config.Enabled && m.data.Sum().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
 		m.init()
 	}
 }
 
-func newMetricVarnishObjectExpired(settings MetricSettings) metricVarnishObjectExpired {
-	m := metricVarnishObjectExpired{settings: settings}
-	if settings.Enabled {
+func newMetricVarnishObjectExpired(cfg MetricConfig) metricVarnishObjectExpired {
+	m := metricVarnishObjectExpired{config: cfg}
+	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
 	}
@@ -631,7 +540,7 @@ func newMetricVarnishObjectExpired(settings MetricSettings) metricVarnishObjectE
 
 type metricVarnishObjectMoved struct {
 	data     pmetric.Metric // data buffer for generated metric.
-	settings MetricSettings // metric settings provided by user.
+	config   MetricConfig   // metric config provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
 
@@ -646,7 +555,7 @@ func (m *metricVarnishObjectMoved) init() {
 }
 
 func (m *metricVarnishObjectMoved) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64) {
-	if !m.settings.Enabled {
+	if !m.config.Enabled {
 		return
 	}
 	dp := m.data.Sum().DataPoints().AppendEmpty()
@@ -664,16 +573,16 @@ func (m *metricVarnishObjectMoved) updateCapacity() {
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
 func (m *metricVarnishObjectMoved) emit(metrics pmetric.MetricSlice) {
-	if m.settings.Enabled && m.data.Sum().DataPoints().Len() > 0 {
+	if m.config.Enabled && m.data.Sum().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
 		m.init()
 	}
 }
 
-func newMetricVarnishObjectMoved(settings MetricSettings) metricVarnishObjectMoved {
-	m := metricVarnishObjectMoved{settings: settings}
-	if settings.Enabled {
+func newMetricVarnishObjectMoved(cfg MetricConfig) metricVarnishObjectMoved {
+	m := metricVarnishObjectMoved{config: cfg}
+	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
 	}
@@ -682,7 +591,7 @@ func newMetricVarnishObjectMoved(settings MetricSettings) metricVarnishObjectMov
 
 type metricVarnishObjectNuked struct {
 	data     pmetric.Metric // data buffer for generated metric.
-	settings MetricSettings // metric settings provided by user.
+	config   MetricConfig   // metric config provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
 
@@ -697,7 +606,7 @@ func (m *metricVarnishObjectNuked) init() {
 }
 
 func (m *metricVarnishObjectNuked) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64) {
-	if !m.settings.Enabled {
+	if !m.config.Enabled {
 		return
 	}
 	dp := m.data.Sum().DataPoints().AppendEmpty()
@@ -715,16 +624,16 @@ func (m *metricVarnishObjectNuked) updateCapacity() {
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
 func (m *metricVarnishObjectNuked) emit(metrics pmetric.MetricSlice) {
-	if m.settings.Enabled && m.data.Sum().DataPoints().Len() > 0 {
+	if m.config.Enabled && m.data.Sum().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
 		m.init()
 	}
 }
 
-func newMetricVarnishObjectNuked(settings MetricSettings) metricVarnishObjectNuked {
-	m := metricVarnishObjectNuked{settings: settings}
-	if settings.Enabled {
+func newMetricVarnishObjectNuked(cfg MetricConfig) metricVarnishObjectNuked {
+	m := metricVarnishObjectNuked{config: cfg}
+	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
 	}
@@ -733,7 +642,7 @@ func newMetricVarnishObjectNuked(settings MetricSettings) metricVarnishObjectNuk
 
 type metricVarnishSessionCount struct {
 	data     pmetric.Metric // data buffer for generated metric.
-	settings MetricSettings // metric settings provided by user.
+	config   MetricConfig   // metric config provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
 
@@ -749,7 +658,7 @@ func (m *metricVarnishSessionCount) init() {
 }
 
 func (m *metricVarnishSessionCount) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, sessionTypeAttributeValue string) {
-	if !m.settings.Enabled {
+	if !m.config.Enabled {
 		return
 	}
 	dp := m.data.Sum().DataPoints().AppendEmpty()
@@ -768,16 +677,16 @@ func (m *metricVarnishSessionCount) updateCapacity() {
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
 func (m *metricVarnishSessionCount) emit(metrics pmetric.MetricSlice) {
-	if m.settings.Enabled && m.data.Sum().DataPoints().Len() > 0 {
+	if m.config.Enabled && m.data.Sum().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
 		m.init()
 	}
 }
 
-func newMetricVarnishSessionCount(settings MetricSettings) metricVarnishSessionCount {
-	m := metricVarnishSessionCount{settings: settings}
-	if settings.Enabled {
+func newMetricVarnishSessionCount(cfg MetricConfig) metricVarnishSessionCount {
+	m := metricVarnishSessionCount{config: cfg}
+	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
 	}
@@ -786,7 +695,7 @@ func newMetricVarnishSessionCount(settings MetricSettings) metricVarnishSessionC
 
 type metricVarnishThreadOperationCount struct {
 	data     pmetric.Metric // data buffer for generated metric.
-	settings MetricSettings // metric settings provided by user.
+	config   MetricConfig   // metric config provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
 
@@ -802,7 +711,7 @@ func (m *metricVarnishThreadOperationCount) init() {
 }
 
 func (m *metricVarnishThreadOperationCount) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, threadOperationsAttributeValue string) {
-	if !m.settings.Enabled {
+	if !m.config.Enabled {
 		return
 	}
 	dp := m.data.Sum().DataPoints().AppendEmpty()
@@ -821,37 +730,31 @@ func (m *metricVarnishThreadOperationCount) updateCapacity() {
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
 func (m *metricVarnishThreadOperationCount) emit(metrics pmetric.MetricSlice) {
-	if m.settings.Enabled && m.data.Sum().DataPoints().Len() > 0 {
+	if m.config.Enabled && m.data.Sum().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
 		m.init()
 	}
 }
 
-func newMetricVarnishThreadOperationCount(settings MetricSettings) metricVarnishThreadOperationCount {
-	m := metricVarnishThreadOperationCount{settings: settings}
-	if settings.Enabled {
+func newMetricVarnishThreadOperationCount(cfg MetricConfig) metricVarnishThreadOperationCount {
+	m := metricVarnishThreadOperationCount{config: cfg}
+	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
 	}
 	return m
 }
 
-// MetricsBuilderConfig is a structural subset of an otherwise 1-1 copy of metadata.yaml
-type MetricsBuilderConfig struct {
-	Metrics            MetricsSettings            `mapstructure:"metrics"`
-	ResourceAttributes ResourceAttributesSettings `mapstructure:"resource_attributes"`
-}
-
 // MetricsBuilder provides an interface for scrapers to report metrics while taking care of all the transformations
-// required to produce metric representation defined in metadata and user settings.
+// required to produce metric representation defined in metadata and user config.
 type MetricsBuilder struct {
 	startTime                            pcommon.Timestamp   // start time that will be applied to all recorded data points.
 	metricsCapacity                      int                 // maximum observed number of metrics per resource.
 	resourceCapacity                     int                 // maximum observed number of resource attributes.
 	metricsBuffer                        pmetric.Metrics     // accumulates metrics data before emitting.
 	buildInfo                            component.BuildInfo // contains version information
-	resourceAttributesSettings           ResourceAttributesSettings
+	resourceAttributesConfig             ResourceAttributesConfig
 	metricVarnishBackendConnectionCount  metricVarnishBackendConnectionCount
 	metricVarnishBackendRequestCount     metricVarnishBackendRequestCount
 	metricVarnishCacheOperationCount     metricVarnishCacheOperationCount
@@ -875,26 +778,12 @@ func WithStartTime(startTime pcommon.Timestamp) metricBuilderOption {
 	}
 }
 
-func DefaultMetricsBuilderConfig() MetricsBuilderConfig {
-	return MetricsBuilderConfig{
-		Metrics:            DefaultMetricsSettings(),
-		ResourceAttributes: DefaultResourceAttributesSettings(),
-	}
-}
-
-func NewMetricsBuilderConfig(ms MetricsSettings, ras ResourceAttributesSettings) MetricsBuilderConfig {
-	return MetricsBuilderConfig{
-		Metrics:            ms,
-		ResourceAttributes: ras,
-	}
-}
-
 func NewMetricsBuilder(mbc MetricsBuilderConfig, settings receiver.CreateSettings, options ...metricBuilderOption) *MetricsBuilder {
 	mb := &MetricsBuilder{
 		startTime:                            pcommon.NewTimestampFromTime(time.Now()),
 		metricsBuffer:                        pmetric.NewMetrics(),
 		buildInfo:                            settings.BuildInfo,
-		resourceAttributesSettings:           mbc.ResourceAttributes,
+		resourceAttributesConfig:             mbc.ResourceAttributes,
 		metricVarnishBackendConnectionCount:  newMetricVarnishBackendConnectionCount(mbc.Metrics.VarnishBackendConnectionCount),
 		metricVarnishBackendRequestCount:     newMetricVarnishBackendRequestCount(mbc.Metrics.VarnishBackendRequestCount),
 		metricVarnishCacheOperationCount:     newMetricVarnishCacheOperationCount(mbc.Metrics.VarnishCacheOperationCount),
@@ -924,12 +813,12 @@ func (mb *MetricsBuilder) updateCapacity(rm pmetric.ResourceMetrics) {
 }
 
 // ResourceMetricsOption applies changes to provided resource metrics.
-type ResourceMetricsOption func(ResourceAttributesSettings, pmetric.ResourceMetrics)
+type ResourceMetricsOption func(ResourceAttributesConfig, pmetric.ResourceMetrics)
 
 // WithVarnishCacheName sets provided value as "varnish.cache.name" attribute for current resource.
 func WithVarnishCacheName(val string) ResourceMetricsOption {
-	return func(ras ResourceAttributesSettings, rm pmetric.ResourceMetrics) {
-		if ras.VarnishCacheName.Enabled {
+	return func(rac ResourceAttributesConfig, rm pmetric.ResourceMetrics) {
+		if rac.VarnishCacheName.Enabled {
 			rm.Resource().Attributes().PutStr("varnish.cache.name", val)
 		}
 	}
@@ -938,7 +827,7 @@ func WithVarnishCacheName(val string) ResourceMetricsOption {
 // WithStartTimeOverride overrides start time for all the resource metrics data points.
 // This option should be only used if different start time has to be set on metrics coming from different resources.
 func WithStartTimeOverride(start pcommon.Timestamp) ResourceMetricsOption {
-	return func(ras ResourceAttributesSettings, rm pmetric.ResourceMetrics) {
+	return func(_ ResourceAttributesConfig, rm pmetric.ResourceMetrics) {
 		var dps pmetric.NumberDataPointSlice
 		metrics := rm.ScopeMetrics().At(0).Metrics()
 		for i := 0; i < metrics.Len(); i++ {
@@ -980,7 +869,7 @@ func (mb *MetricsBuilder) EmitForResource(rmo ...ResourceMetricsOption) {
 	mb.metricVarnishThreadOperationCount.emit(ils.Metrics())
 
 	for _, op := range rmo {
-		op(mb.resourceAttributesSettings, rm)
+		op(mb.resourceAttributesConfig, rm)
 	}
 	if ils.Metrics().Len() > 0 {
 		mb.updateCapacity(rm)
@@ -990,7 +879,7 @@ func (mb *MetricsBuilder) EmitForResource(rmo ...ResourceMetricsOption) {
 
 // Emit returns all the metrics accumulated by the metrics builder and updates the internal state to be ready for
 // recording another set of metrics. This function will be responsible for applying all the transformations required to
-// produce metric representation defined in metadata and user settings, e.g. delta or cumulative.
+// produce metric representation defined in metadata and user config, e.g. delta or cumulative.
 func (mb *MetricsBuilder) Emit(rmo ...ResourceMetricsOption) pmetric.Metrics {
 	mb.EmitForResource(rmo...)
 	metrics := mb.metricsBuffer

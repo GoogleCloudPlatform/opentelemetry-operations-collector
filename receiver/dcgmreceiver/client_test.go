@@ -46,6 +46,7 @@ func TestNewDcgmClientOnInitializationError(t *testing.T) {
 
 	client, err := newClient(createDefaultConfig().(*Config), logger)
 	assert.Equal(t, seenDcgmConnectionWarning, true)
-	assert.Regexp(t, ".*Unable to connect.*", err)
-	require.Nil(t, client)
+	require.NotNil(t, client)
+	require.Equal(t, client.disable, true)
+	require.Nil(t, err)
 }

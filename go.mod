@@ -3,6 +3,8 @@ module github.com/GoogleCloudPlatform/opentelemetry-operations-collector
 go 1.20
 
 require (
+	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector v0.41.0
+	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector/googlemanagedprometheus v0.41.0
 	github.com/NVIDIA/go-dcgm v0.0.0-20221107203308-b6ed78cdc8d3
 	github.com/NVIDIA/go-nvml v0.11.6-0
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/fileexporter v0.81.0
@@ -149,10 +151,8 @@ require (
 	github.com/Azure/go-autorest/logger v0.2.1 // indirect
 	github.com/Azure/go-autorest/tracing v0.6.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.15.2 // indirect
-	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector v0.39.2
-	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector/googlemanagedprometheus v0.39.2
-	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace v1.15.2 // indirect
-	github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.39.2 // indirect
+	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace v1.17.0 // indirect
+	github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.41.0 // indirect
 	github.com/Microsoft/go-winio v0.6.0 // indirect
 	github.com/SAP/go-hdb v1.3.9 // indirect
 	github.com/Showmax/go-fqdn v1.0.0 // indirect

@@ -9,6 +9,8 @@ import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector/googlemanagedprometheus"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
+	"go.opentelemetry.io/collector/featuregate"
+	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
 // Config defines configuration for Google Cloud Managed Service for Prometheus exporter.
@@ -26,6 +28,14 @@ type GMPConfig struct {
 	ProjectID    string       `mapstructure:"project"`
 	UserAgent    string       `mapstructure:"user_agent"`
 	MetricConfig MetricConfig `mapstructure:"metric"`
+
+	// Setting UntypedDoubleExport to true makes the collector double write prometheus
+	// untyped metrics to GMP similar to the GMP collector. That is, it writes it once as
+	// a gauge with the metric name suffix `unknown` and once as a counter with the
+	// metric name suffix `unknown:counter`.
+	// For the counter, if the point value is smaller than the previous point in the series
+	// it is considered a reset point.
+	UntypedDoubleExport bool `mapstructure:"untyped_double_export"`
 }
 
 type MetricConfig struct {
@@ -54,6 +64,15 @@ func (c *GMPConfig) toCollectorConfig() collector.Config {
 	cfg.ProjectID = c.ProjectID
 	cfg.UserAgent = c.UserAgent
 	cfg.MetricConfig.ClientConfig = c.MetricConfig.ClientConfig
+	if c.UntypedDoubleExport {
+		cfg.MetricConfig.ExtraMetrics = func(m pmetric.Metrics) pmetric.ResourceMetricsSlice {
+			//nolint:errcheck
+			featuregate.GlobalRegistry().Set("gcp.untyped_double_export", true)
+			googlemanagedprometheus.AddUntypedMetrics(m)
+			return m.ResourceMetrics()
+		}
+	}
+
 	return cfg
 }
 

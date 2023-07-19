@@ -1,4 +1,9 @@
-name: mongodbreceiver
+type: mongodb
+
+status:
+  class: receiver
+  stability: 
+    development: [metrics]
 
 resource_attributes:
   database:

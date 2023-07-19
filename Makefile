@@ -44,13 +44,29 @@ TOOLS_DIR := internal/tools
 #  Helper Commands
 # --------------------------
 
-.PHONY: update-components
-update-components:
+.PHONY: update-components-old
+update-components-old:
 	grep -o github.com/open-telemetry/opentelemetry-collector-contrib/[[:lower:]]*/[[:lower:]]* go.mod | xargs -I '{}' go get {}
 	go mod tidy
 	cd $(TOOLS_DIR) && go get -u github.com/open-telemetry/opentelemetry-collector-contrib/cmd/mdatagen
 	cd $(TOOLS_DIR) && go mod tidy
 
+OTEL_VER ?= latest
+.PHONY: update-components
+update-components:
+	go list -m -f '{{if not (or .Indirect .Main)}}{{.Path}}{{end}}' all | \
+		grep "^go.opentelemetry.io" | \
+		grep -v "go.opentelemetry.io/collector/featuregate" | \
+		grep -v "go.opentelemetry.io/collector/pdata" | \
+		xargs -t -I '{}' go get {}@$(OTEL_VER)
+	go list -m -f '{{if not (or .Indirect .Main)}}{{.Path}}{{end}}' all | \
+		grep "^github.com/open-telemetry/opentelemetry-collector-contrib" | \
+		xargs -t -I '{}' go get {}@$(OTEL_VER)
+	go mod tidy
+	cd $(TOOLS_DIR) && go get -u github.com/open-telemetry/opentelemetry-collector-contrib/cmd/mdatagen@$(OTEL_VER)
+	cd $(TOOLS_DIR) && go mod tidy
+
+# We can bring this target back when https://github.com/open-telemetry/opentelemetry-collector/issues/8063 is resolved.
 update-opentelemetry:
 	$(MAKE) update-components
 	$(MAKE) install-tools

@@ -4,6 +4,9 @@ When the [opentelemetry-collector](https://github.com/open-telemetry/opentelemet
 
 ## Update All Dependencies
 
+<!-- 
+We can bring this target back when https://github.com/open-telemetry/opentelemetry-collector/issues/8063 is resolved.
+
 There is a `make` target to update all OpenTelemetry dependencies and regenerate necessary metadata. To run the update:
 ```
 make update-opentelemetry
@@ -11,8 +14,10 @@ make update-opentelemetry
 
 <details>
     <summary><code>update-opentelemetry</code> target details</summary>
+-->
+First, you will need to manually fetch the release candidate tags for the stable `go.opentelemetry.io` modules. Since their latest release tags are not in sync with everything else (see [this open issue](https://github.com/open-telemetry/opentelemetry-collector/issues/8063)) you will have to manually fetch these to get the tag for the same ref as the other dependencies. You will find some `grep -v` commands in the `update-components` make target, those will be the versions where you'll need to manually fetch the release candidate tag instead. Failure to do this can cause issues in dependency resolution and automatically downgrade dependencies you are trying to upgrade.
 
-First, update all `opentelemetry` dependencies to the newest possible version.
+Next, update all OpenTelemetry dependencies to the newest possible version.
 ```
 make update-components
 ```
@@ -24,7 +29,7 @@ With the new version of `mdatagen` installed, regenerate the `metadata` packages
 ```
 GO_BUILD_TAGS=gpu make generate
 ```
-</details>
+<!--</details>-->
 
 ## Test
 

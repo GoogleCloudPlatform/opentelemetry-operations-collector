@@ -3,6 +3,9 @@ allowedLicenses:
 ignoreFiles:
   - receiver/**/generated_metrics.go
   - receiver/**/generated_metrics_test.go
+  - receiver/**/generated_config.go
+  - receiver/**/generated_config_test.go
+  - receiver/**/generated_status.go
   - receiver/mongodbreceiver/**/*.go
   - receiver/prometheusreceiver/**/*.go
 sourceFileExtensions:

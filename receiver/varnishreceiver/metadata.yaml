@@ -1,4 +1,9 @@
-name: varnishreceiver
+type: varnish
+
+status:
+  class: receiver
+  stability:
+    development: [metrics]
 
 resource_attributes:
   varnish.cache.name:

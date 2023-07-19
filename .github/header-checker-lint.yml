@@ -8,6 +8,7 @@ ignoreFiles:
   - receiver/**/generated_status.go
   - receiver/mongodbreceiver/**/*.go
   - receiver/prometheusreceiver/**/*.go
+  - exporter/googlemanagedprometheusexporter/**/*.go
 sourceFileExtensions:
   - go
   - ps1

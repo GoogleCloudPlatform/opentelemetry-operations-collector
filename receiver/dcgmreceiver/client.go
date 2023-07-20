@@ -31,6 +31,7 @@ const maxWarningsForFailedDeviceMetricQuery = 5
 
 type dcgmClient struct {
 	logger                         *zap.SugaredLogger
+	disable                        bool
 	handleCleanup                  func()
 	enabledFieldIDs                []dcgm.Short
 	enabledFieldGroup              dcgm.FieldHandle
@@ -56,8 +57,9 @@ var dcgmGetLatestValuesForFields = dcgm.GetLatestValuesForFields
 
 func newClient(config *Config, logger *zap.Logger) (*dcgmClient, error) {
 	dcgmCleanup, err := initializeDcgm(config, logger)
+	// When DCGM is not installed or not running, return empty client
 	if err != nil {
-		return nil, err
+		return &dcgmClient{logger: logger.Sugar(), disable: true}, nil
 	}
 
 	deviceIndices, names, UUIDs, err := discoverDevices(logger)
@@ -282,7 +284,10 @@ func (client *dcgmClient) cleanup() {
 	if client.handleCleanup != nil {
 		client.handleCleanup()
 	}
-	client.logger.Info("Shutdown DCGM")
+
+	if !client.disable {
+		client.logger.Info("Shutdown DCGM")
+	}
 }
 
 func (client *dcgmClient) getDeviceModelName(gpuIndex uint) string {
@@ -294,6 +299,10 @@ func (client *dcgmClient) getDeviceUUID(gpuIndex uint) string {
 }
 
 func (client *dcgmClient) collectDeviceMetrics() ([]dcgmMetric, error) {
+	if client.disable {
+		return nil, nil
+	}
+
 	var err scrapererror.ScrapeErrors
 	gpuMetrics := make([]dcgmMetric, 0, len(client.enabledFieldIDs)*len(client.deviceIndices))
 	for _, gpuIndex := range client.deviceIndices {

@@ -34,9 +34,10 @@ import (
 )
 
 const (
-	traceIDKey           = "trace_id"
-	spanIDKey            = "span_id"
-	PrometheusUntypedKey = "prometheus_untyped_metric"
+	traceIDKey = "trace_id"
+	spanIDKey  = "span_id"
+
+	GCPOpsAgentUntypedMetricKey = "prometheus.googleapis.com/internal/untyped_metric"
 )
 
 type metricFamily struct {
@@ -265,7 +266,7 @@ func populateAttributes(mType pmetric.MetricType, pType textparse.MetricType, ls
 
 	// Preserve the untypedness of the metric as a metric attribute.
 	if preserveUntyped && (pType == textparse.MetricTypeUnknown) {
-		dest.PutBool(PrometheusUntypedKey, true)
+		dest.PutBool(GCPOpsAgentUntypedMetricKey, true)
 	}
 }
 

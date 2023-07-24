@@ -1463,14 +1463,14 @@ func verifyUntypedMetrics(t *testing.T, td *testData, resourceMetrics []pmetric.
 					numberPointComparator: []numberPointComparator{
 						compareTimestamp(ts1),
 						compareDoubleValue(100),
-						compareAttributes(map[string]string{"method": "post", "code": "200", internal.PrometheusUntypedKey: "true"}),
+						compareAttributes(map[string]string{"method": "post", "code": "200", internal.GCPOpsAgentUntypedMetricKey: "true"}),
 					},
 				},
 				{
 					numberPointComparator: []numberPointComparator{
 						compareTimestamp(ts1),
 						compareDoubleValue(5),
-						compareAttributes(map[string]string{"method": "post", "code": "400", internal.PrometheusUntypedKey: "true"}),
+						compareAttributes(map[string]string{"method": "post", "code": "400", internal.GCPOpsAgentUntypedMetricKey: "true"}),
 					},
 				},
 			}),
@@ -1481,14 +1481,14 @@ func verifyUntypedMetrics(t *testing.T, td *testData, resourceMetrics []pmetric.
 					numberPointComparator: []numberPointComparator{
 						compareTimestamp(ts1),
 						compareDoubleValue(10),
-						compareAttributes(map[string]string{"name": "rough-snowflake-web", "port": "6380", internal.PrometheusUntypedKey: "true"}),
+						compareAttributes(map[string]string{"name": "rough-snowflake-web", "port": "6380", internal.GCPOpsAgentUntypedMetricKey: "true"}),
 					},
 				},
 				{
 					numberPointComparator: []numberPointComparator{
 						compareTimestamp(ts1),
 						compareDoubleValue(12),
-						compareAttributes(map[string]string{"name": "rough-snowflake-web", "port": "6381", internal.PrometheusUntypedKey: "true"}),
+						compareAttributes(map[string]string{"name": "rough-snowflake-web", "port": "6381", internal.GCPOpsAgentUntypedMetricKey: "true"}),
 					},
 				},
 			}),

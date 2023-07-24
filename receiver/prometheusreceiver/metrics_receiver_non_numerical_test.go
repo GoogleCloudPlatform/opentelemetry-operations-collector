@@ -288,7 +288,7 @@ func verifyNormalNaNs(t *testing.T, td *testData, resourceMetrics []pmetric.Reso
 				{
 					numberPointComparator: []numberPointComparator{
 						compareTimestamp(ts1),
-						compareAttributes(map[string]string{"name": "rough-snowflake-web", "port": "6380", internal.PrometheusUntypedKey: "true"}),
+						compareAttributes(map[string]string{"name": "rough-snowflake-web", "port": "6380", internal.GCPOpsAgentUntypedMetricKey: "true"}),
 						assertNormalNan(),
 					},
 				},
@@ -372,7 +372,7 @@ func verifyInfValues(t *testing.T, td *testData, resourceMetrics []pmetric.Resou
 				{
 					numberPointComparator: []numberPointComparator{
 						compareTimestamp(ts1),
-						compareAttributes(map[string]string{"name": "rough-snowflake-web", "port": "6380", internal.PrometheusUntypedKey: "true"}),
+						compareAttributes(map[string]string{"name": "rough-snowflake-web", "port": "6380", internal.GCPOpsAgentUntypedMetricKey: "true"}),
 						compareDoubleValue(math.Inf(-1)),
 					},
 				},

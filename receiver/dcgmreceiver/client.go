@@ -31,7 +31,6 @@ const maxWarningsForFailedDeviceMetricQuery = 5
 
 type dcgmClient struct {
 	logger                         *zap.SugaredLogger
-	handleCleanup                  func()
 	enabledFieldIDs                []dcgm.Short
 	enabledFieldGroup              dcgm.FieldHandle
 	deviceIndices                  []uint
@@ -55,11 +54,6 @@ var dcgmInit = func(args ...string) (func(), error) {
 var dcgmGetLatestValuesForFields = dcgm.GetLatestValuesForFields
 
 func newClient(config *Config, logger *zap.Logger) (*dcgmClient, error) {
-	dcgmCleanup, err := initializeDcgm(config, logger)
-	if err != nil {
-		return nil, err
-	}
-
 	deviceIndices, names, UUIDs, err := discoverDevices(logger)
 	if err != nil {
 		return nil, err
@@ -88,7 +82,6 @@ func newClient(config *Config, logger *zap.Logger) (*dcgmClient, error) {
 
 	return &dcgmClient{
 		logger:                         logger.Sugar(),
-		handleCleanup:                  dcgmCleanup,
 		enabledFieldIDs:                enabledFields,
 		enabledFieldGroup:              enabledFieldGroup,
 		deviceIndices:                  deviceIndices,
@@ -276,13 +269,6 @@ func setWatchesOnEnabledFields(config *Config, logger *zap.Logger, deviceGroup d
 	logger.Sugar().Infof("Setting watches for DCGM field group '%s' succeeded", fieldGroupName)
 
 	return enabledFieldGroup, nil
-}
-
-func (client *dcgmClient) cleanup() {
-	if client.handleCleanup != nil {
-		client.handleCleanup()
-	}
-	client.logger.Info("Shutdown DCGM")
 }
 
 func (client *dcgmClient) getDeviceModelName(gpuIndex uint) string {

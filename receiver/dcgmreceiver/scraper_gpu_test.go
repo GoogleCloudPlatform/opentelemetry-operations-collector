@@ -49,6 +49,39 @@ func TestScrapeWithGpuPresent(t *testing.T) {
 	validateScraperResult(t, metrics, expectedMetrics)
 }
 
+func TestScrapeWithDelayedDcgmService(t *testing.T) {
+	realDcgmInit := dcgmInit
+	defer func() { dcgmInit = realDcgmInit }()
+	dcgmInit = func(args ...string) (func(), error) {
+		return nil, fmt.Errorf("No DCGM client library *OR* No DCGM connection")
+	}
+
+	var settings receiver.CreateSettings
+	settings.Logger = zaptest.NewLogger(t)
+
+	scraper := newDcgmScraper(createDefaultConfig().(*Config), settings)
+	require.NotNil(t, scraper)
+
+	err := scraper.start(context.Background(), componenttest.NewNopHost())
+	require.NoError(t, err)
+
+	metrics, err := scraper.scrape(context.Background())
+	assert.NoError(t, err) // If failed to init DCGM, should have no error
+	assert.Equal(t, metrics.MetricCount(), 0)
+
+	// Scrape again with DCGM not available
+	metrics, err = scraper.scrape(context.Background())
+	assert.NoError(t, err)
+	assert.Equal(t, metrics.MetricCount(), 0)
+
+	// Simulate DCGM becomes available
+	dcgmInit = realDcgmInit
+	metrics, err = scraper.scrape(context.Background())
+	assert.NoError(t, err)
+	expectedMetrics := loadExpectedScraperMetrics(t, scraper.client.getDeviceModelName(0))
+	validateScraperResult(t, metrics, expectedMetrics)
+}
+
 func TestScrapeOnPollingError(t *testing.T) {
 	realDcgmGetLatestValuesForFields := dcgmGetLatestValuesForFields
 	defer func() { dcgmGetLatestValuesForFields = realDcgmGetLatestValuesForFields }()
@@ -111,7 +144,7 @@ func TestScrapeOnProfilingPaused(t *testing.T) {
 
 // loadExpectedScraperMetrics calls LoadExpectedMetrics to read the supported
 // metrics from the golden file given a GPU model, and then convert the name
-// from how they are definied in the dcgm client to scraper naming
+// from how they are defined in the dcgm client to scraper naming
 func loadExpectedScraperMetrics(t *testing.T, model string) map[string]int {
 	t.Helper()
 	expectedMetrics := make(map[string]int)

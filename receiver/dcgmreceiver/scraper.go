@@ -31,23 +31,38 @@ import (
 )
 
 type dcgmScraper struct {
-	config   *Config
-	settings receiver.CreateSettings
-	client   *dcgmClient
-	mb       *metadata.MetricsBuilder
+	config        *Config
+	settings      receiver.CreateSettings
+	client        *dcgmClient
+	mb            *metadata.MetricsBuilder
+	handleCleanup func()
 }
 
 func newDcgmScraper(config *Config, settings receiver.CreateSettings) *dcgmScraper {
 	return &dcgmScraper{config: config, settings: settings}
 }
 
-func (s *dcgmScraper) start(_ context.Context, _ component.Host) error {
-	var err error
-	s.client, err = newClient(s.config, s.settings.Logger)
-	if err != nil {
-		return err
+// getClient will try to create a new dcgmClient if currently has no client;
+// it will try to initialize the communication with the DCGM service; if
+// success, create a client; only return errors if DCGM service is available but
+// failed to create client.
+func (s *dcgmScraper) getClient() error {
+	if s.client != nil {
+		return nil
 	}
+	dcgmCleanup, err := initializeDcgm(s.config, s.settings.Logger)
+	if err == nil {
+		client, err := newClient(s.config, s.settings.Logger)
+		if err != nil {
+			return err
+		}
+		s.client = client
+		s.handleCleanup = dcgmCleanup
+	}
+	return nil
+}
 
+func (s *dcgmScraper) start(_ context.Context, _ component.Host) error {
 	startTime := pcommon.NewTimestampFromTime(time.Now())
 	mbConfig := metadata.DefaultMetricsBuilderConfig()
 	mbConfig.Metrics = s.config.Metrics
@@ -58,13 +73,22 @@ func (s *dcgmScraper) start(_ context.Context, _ component.Host) error {
 }
 
 func (s *dcgmScraper) stop(_ context.Context) error {
-	if s.client != nil {
-		s.client.cleanup()
+	if s.handleCleanup != nil {
+		s.handleCleanup()
 	}
+	s.settings.Logger.Info("Shutdown DCGM")
 	return nil
 }
 
 func (s *dcgmScraper) scrape(_ context.Context) (pmetric.Metrics, error) {
+	err := s.getClient()
+	if err != nil {
+		return s.mb.Emit(), err
+	}
+	if s.client == nil {
+		return s.mb.Emit(), nil
+	}
+
 	deviceMetrics, err := s.client.collectDeviceMetrics()
 
 	now := pcommon.NewTimestampFromTime(time.Now())

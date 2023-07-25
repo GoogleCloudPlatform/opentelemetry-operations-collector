@@ -23,7 +23,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
@@ -44,8 +43,9 @@ func TestNewDcgmClientOnInitializationError(t *testing.T) {
 		return nil
 	})))
 
-	client, err := newClient(createDefaultConfig().(*Config), logger)
+	config := createDefaultConfig().(*Config)
+	dcgmCleanup, err := initializeDcgm(config, logger)
 	assert.Equal(t, seenDcgmConnectionWarning, true)
 	assert.Regexp(t, ".*Unable to connect.*", err)
-	require.Nil(t, client)
+	assert.Nil(t, dcgmCleanup)
 }

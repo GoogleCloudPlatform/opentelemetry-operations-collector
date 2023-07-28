@@ -27,10 +27,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component/componenttest"
+	"go.opentelemetry.io/collector/config/confignet"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/receiver"
+	"go.opentelemetry.io/collector/receiver/scraperhelper"
 	"go.uber.org/zap/zaptest"
 
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/dcgmreceiver/internal/metadata"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/dcgmreceiver/testprofilepause"
 )
 
@@ -80,6 +83,55 @@ func TestScrapeWithDelayedDcgmService(t *testing.T) {
 	assert.NoError(t, err)
 	expectedMetrics := loadExpectedScraperMetrics(t, scraper.client.getDeviceModelName(0))
 	validateScraperResult(t, metrics, expectedMetrics)
+}
+
+func TestScrapeWithEmptyMetricsConfig(t *testing.T) {
+	var settings receiver.CreateSettings
+	settings.Logger = zaptest.NewLogger(t)
+	emptyConfig := &Config{
+		ScraperControllerSettings: scraperhelper.ScraperControllerSettings{
+			CollectionInterval: defaultCollectionInterval,
+		},
+		TCPAddr: confignet.TCPAddr{
+			Endpoint: defaultEndpoint,
+		},
+		Metrics: metadata.MetricsSettings{
+			DcgmGpuMemoryBytesUsed: metadata.MetricSettings{
+				Enabled: false,
+			},
+			DcgmGpuProfilingDramUtilization: metadata.MetricSettings{
+				Enabled: false,
+			},
+			DcgmGpuProfilingNvlinkTrafficRate: metadata.MetricSettings{
+				Enabled: false,
+			},
+			DcgmGpuProfilingPcieTrafficRate: metadata.MetricSettings{
+				Enabled: false,
+			},
+			DcgmGpuProfilingPipeUtilization: metadata.MetricSettings{
+				Enabled: false,
+			},
+			DcgmGpuProfilingSmOccupancy: metadata.MetricSettings{
+				Enabled: false,
+			},
+			DcgmGpuProfilingSmUtilization: metadata.MetricSettings{
+				Enabled: false,
+			},
+			DcgmGpuUtilization: metadata.MetricSettings{
+				Enabled: false,
+			},
+		},
+	}
+
+	scraper := newDcgmScraper(emptyConfig, settings)
+	require.NotNil(t, scraper)
+
+	err := scraper.start(context.Background(), componenttest.NewNopHost())
+	require.NoError(t, err)
+
+	metrics, err := scraper.scrape(context.Background())
+	assert.NoError(t, err)
+	assert.Equal(t, metrics.MetricCount(), 0)
 }
 
 func TestScrapeOnPollingError(t *testing.T) {

@@ -17,10 +17,16 @@
 
 package dcgmreceiver
 
+/*
+#include <stdlib.h>
+#include <dlfcn.h>
+*/
+import "C"
 import (
 	"errors"
 	"fmt"
 	"time"
+	"unsafe"
 
 	"github.com/NVIDIA/go-dcgm/pkg/dcgm"
 	"go.opentelemetry.io/collector/receiver/scrapererror"
@@ -75,6 +81,19 @@ func newClient(config *Config, logger *zap.Logger) (*dcgmClient, error) {
 	for _, f := range unavailableFields {
 		logger.Sugar().Warnf("Field '%s' is not supported. Metric '%s' will not be collected", dcgmIDToName[f], dcgmNameToMetricName[dcgmIDToName[f]])
 	}
+	// If there is no metrics to watch after filtering the user configuration
+	// with device supported fields, return an client with an empty device list
+	if len(enabledFields) == 0 {
+		return &dcgmClient{
+			logger:                         logger.Sugar(),
+			enabledFieldIDs:                enabledFields,
+			enabledFieldGroup:              dcgm.FieldHandle{},
+			deviceIndices:                  make([]uint, 0),
+			devicesModelName:               make([]string, 0),
+			devicesUUID:                    make([]string, 0),
+			deviceMetricToFailedQueryCount: make(map[string]uint64, 0),
+		}, nil
+	}
 	enabledFieldGroup, err := setWatchesOnEnabledFields(config, logger, deviceGroup, enabledFields)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to set field watches on %w", err)
@@ -91,12 +110,28 @@ func newClient(config *Config, logger *zap.Logger) (*dcgmClient, error) {
 	}, nil
 }
 
+// TODO: b/293585142 - Remove this function and use dcgm.Init() to check if DCGM is
+// installed after https://github.com/NVIDIA/go-dcgm/issues/13 is fixed
+func isDcgmInstalled() bool {
+	const (
+		dcgmLib = "libdcgm.so"
+	)
+	lib := C.CString(dcgmLib)
+	defer C.free(unsafe.Pointer(lib))
+
+	dcgmLibHandle := C.dlopen(lib, C.RTLD_LAZY|C.RTLD_GLOBAL)
+	return dcgmLibHandle != nil
+}
+
 func initializeDcgm(config *Config, logger *zap.Logger) (func(), error) {
 	isSocket := "0"
 	dcgmCleanup, err := dcgmInit(config.TCPAddr.Endpoint, isSocket)
 	if err != nil {
 		msg := fmt.Sprintf("Unable to connect to DCGM daemon at %s on %v; Is the DCGM daemon running?", config.TCPAddr.Endpoint, err)
 		logger.Sugar().Warn(msg)
+		if dcgmCleanup != nil {
+			dcgmCleanup()
+		}
 		return nil, fmt.Errorf("%s", msg)
 	}
 

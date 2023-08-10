@@ -35,7 +35,7 @@ import (
 
 const maxWarningsForFailedDeviceMetricQuery = 5
 
-var ErrDcgmInitialization = errors.New("error initialize dcgm")
+var ErrDcgmInitialization = errors.New("error initializing DCGM")
 
 type dcgmClient struct {
 	logger                         *zap.SugaredLogger
@@ -78,18 +78,15 @@ func newClient(config *Config, logger *zap.Logger) (*dcgmClient, error) {
 		// receiver collect basic metrics: (GPU utilization, used/free memory).
 		logger.Sugar().Warnf("Error querying supported profiling fields on '%w'. GPU profiling metrics will not be collected.", err)
 	}
-
 	enabledFields, unavailableFields := filterSupportedFields(requestedFieldIDs, supportedFieldIDs)
 	for _, f := range unavailableFields {
 		logger.Sugar().Warnf("Field '%s' is not supported. Metric '%s' will not be collected", dcgmIDToName[f], dcgmNameToMetricName[dcgmIDToName[f]])
 	}
-
 	if len(enabledFields) != 0 {
 		deviceIndices, names, UUIDs, err = discoverDevices(logger)
 		if err != nil {
 			return nil, err
 		}
-
 		deviceGroup, err := createDeviceGroup(logger, deviceIndices)
 		if err != nil {
 			return nil, err
@@ -99,7 +96,6 @@ func newClient(config *Config, logger *zap.Logger) (*dcgmClient, error) {
 			return nil, fmt.Errorf("Unable to set field watches on %w", err)
 		}
 	}
-
 	return &dcgmClient{
 		logger:                         logger.Sugar(),
 		handleCleanup:                  dcgmCleanup,
@@ -112,9 +108,9 @@ func newClient(config *Config, logger *zap.Logger) (*dcgmClient, error) {
 	}, nil
 }
 
-// isDcgmInstalled returns true if it was able to load the dcgm shared library.
-// TODO(b/293585142): Remove this function and use dcgm.Init() to check if DCGM is
-// installed after https://github.com/NVIDIA/go-dcgm/issues/13 is fixed
+// isDcgmInstalled returns true if it was able to load the DCGM shared library.
+// TODO(b/293585142): Remove this function and use dcgm.Init() to check if DCGM
+// is installed after https://github.com/NVIDIA/go-dcgm/issues/13 is fixed
 func isDcgmInstalled() bool {
 	const (
 		dcgmLib = "libdcgm.so"
@@ -126,20 +122,20 @@ func isDcgmInstalled() bool {
 	return dcgmLibHandle != nil
 }
 
-// initializeDcgm tries to initialize a dcgm connection; returns a cleanup func
+// initializeDcgm tries to initialize a DCGM connection; returns a cleanup func
 // only if the connection is initialized successfully without error
 func initializeDcgm(config *Config, logger *zap.Logger) (func(), error) {
+	if !isDcgmInstalled() {
+		return nil, fmt.Errorf("cannot initialize a DCGM client; DCGM is not installed")
+	}
 	isSocket := "0"
 	dcgmCleanup, err := dcgmInit(config.TCPAddr.Endpoint, isSocket)
 	if err != nil {
-		msg := fmt.Sprintf("Unable to connect to DCGM daemon at %s on %v; Is the DCGM daemon running?", config.TCPAddr.Endpoint, err)
-		logger.Sugar().Warn(msg)
 		if dcgmCleanup != nil {
 			dcgmCleanup()
 		}
-		return nil, fmt.Errorf("%s", msg)
+		return nil, fmt.Errorf("Unable to connect to DCGM daemon at %s on %v; Is the DCGM daemon running?", config.TCPAddr.Endpoint, err)
 	}
-
 	logger.Sugar().Infof("Connected to DCGM daemon at %s", config.TCPAddr.Endpoint)
 	return dcgmCleanup, nil
 }

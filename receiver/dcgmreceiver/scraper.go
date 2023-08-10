@@ -50,13 +50,9 @@ func (s *dcgmScraper) initClient() error {
 	if s.client != nil {
 		return nil
 	}
-	if !isDcgmInstalled() {
-		s.settings.Logger.Warn("cannot initialize a DCGM client; DCGM is not installed.")
-		return nil
-	}
-
 	client, err := newClient(s.config, s.settings.Logger)
 	if err != nil {
+		s.settings.Logger.Sugar().Warn(err)
 		if errors.Is(err, ErrDcgmInitialization) {
 			// If cannot connect to DCGM, return no error and retry at next
 			// collection time

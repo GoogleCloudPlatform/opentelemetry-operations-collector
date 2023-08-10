@@ -12,42 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build gpu
-// +build gpu
+//go:build gpu && !has_gpu
+// +build gpu,!has_gpu
 
 package dcgmreceiver
 
 import (
 	"errors"
-	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
 )
 
 func TestNewDcgmClientOnInitializationError(t *testing.T) {
-	realDcgmInit := dcgmInit
-	defer func() { dcgmInit = realDcgmInit }()
-	dcgmInit = func(args ...string) (func(), error) {
-		return nil, fmt.Errorf("No DCGM client library *OR* No DCGM connection")
-	}
-
-	seenDcgmConnectionWarning := false
-	logger := zaptest.NewLogger(t, zaptest.WrapOptions(zap.Hooks(func(e zapcore.Entry) error {
-		if e.Level == zap.WarnLevel && strings.Contains(e.Message, "Unable to connect to DCGM daemon") {
-			seenDcgmConnectionWarning = true
-		}
-		return nil
-	})))
-
 	config := createDefaultConfig().(*Config)
-	client, err := newClient(config, logger)
-	assert.Equal(t, seenDcgmConnectionWarning, true)
+	client, err := newClient(config, zaptest.NewLogger(t))
 	assert.True(t, errors.Is(err, ErrDcgmInitialization))
-	assert.Regexp(t, ".*Unable to connect.*", err)
+	assert.Regexp(t, ".*cannot initialize a DCGM client; DCGM is not installed.*", err)
 	assert.Nil(t, client)
 }

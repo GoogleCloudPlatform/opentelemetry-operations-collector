@@ -35,7 +35,7 @@ func TestScraperWithoutDcgm(t *testing.T) {
 	var settings receiver.CreateSettings
 	seenDcgmNotInstalledWarning := false
 	settings.Logger = zaptest.NewLogger(t, zaptest.WrapOptions(zap.Hooks(func(e zapcore.Entry) error {
-		if e.Level == zap.WarnLevel && strings.Contains(e.Message, "can not initialize a DCGM client; DCGM is not installed.") {
+		if e.Level == zap.WarnLevel && strings.Contains(e.Message, "cannot initialize a DCGM client; DCGM is not installed.") {
 			seenDcgmNotInstalledWarning = true
 		}
 		return nil

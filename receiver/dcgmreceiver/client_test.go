@@ -18,6 +18,7 @@
 package dcgmreceiver
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -44,8 +45,9 @@ func TestNewDcgmClientOnInitializationError(t *testing.T) {
 	})))
 
 	config := createDefaultConfig().(*Config)
-	dcgmCleanup, err := initializeDcgm(config, logger)
+	client, err := newClient(config, logger)
 	assert.Equal(t, seenDcgmConnectionWarning, true)
+	assert.True(t, errors.Is(err, ErrDcgmInitialization))
 	assert.Regexp(t, ".*Unable to connect.*", err)
-	assert.Nil(t, dcgmCleanup)
+	assert.Nil(t, client)
 }

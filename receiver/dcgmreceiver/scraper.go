@@ -19,6 +19,7 @@ package dcgmreceiver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -31,11 +32,10 @@ import (
 )
 
 type dcgmScraper struct {
-	config        *Config
-	settings      receiver.CreateSettings
-	client        *dcgmClient
-	mb            *metadata.MetricsBuilder
-	handleCleanup func()
+	config   *Config
+	settings receiver.CreateSettings
+	client   *dcgmClient
+	mb       *metadata.MetricsBuilder
 }
 
 func newDcgmScraper(config *Config, settings receiver.CreateSettings) *dcgmScraper {
@@ -51,21 +51,20 @@ func (s *dcgmScraper) initClient() error {
 		return nil
 	}
 	if !isDcgmInstalled() {
-		s.settings.Logger.Warn("can not initialize a DCGM client; DCGM is not installed.")
+		s.settings.Logger.Warn("cannot initialize a DCGM client; DCGM is not installed.")
 		return nil
 	}
-	dcgmCleanup, err := initializeDcgm(s.config, s.settings.Logger)
-	if err != nil {
-		// If can not connect to DCGM, return no error and retry at next
-		// collection time
-		return nil
-	}
+
 	client, err := newClient(s.config, s.settings.Logger)
 	if err != nil {
+		if errors.Is(err, ErrDcgmInitialization) {
+			// If cannot connect to DCGM, return no error and retry at next
+			// collection time
+			return nil
+		}
 		return err
 	}
 	s.client = client
-	s.handleCleanup = dcgmCleanup
 	return nil
 }
 
@@ -80,10 +79,9 @@ func (s *dcgmScraper) start(_ context.Context, _ component.Host) error {
 }
 
 func (s *dcgmScraper) stop(_ context.Context) error {
-	if s.handleCleanup != nil {
-		s.handleCleanup()
+	if s.client != nil {
+		s.client.cleanup()
 	}
-	s.settings.Logger.Info("Shutdown DCGM")
 	return nil
 }
 

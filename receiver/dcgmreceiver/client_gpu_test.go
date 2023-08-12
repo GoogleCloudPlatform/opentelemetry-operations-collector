@@ -52,8 +52,7 @@ type modelSupportedFields struct {
 // files for the current GPU model
 func TestSupportedFieldsWithGolden(t *testing.T) {
 	config := createDefaultConfig().(*Config)
-	logger := zaptest.NewLogger(t)
-	client, err := newClient(config, logger)
+	client, err := newClient(config, zaptest.NewLogger(t))
 	require.Nil(t, err, "can not initialize DCGM. Install and run DCGM before running tests.")
 
 	assert.NotEmpty(t, client.devicesModelName)
@@ -138,12 +137,11 @@ func getModelGoldenFilePath(t *testing.T, model string) string {
 }
 
 func TestNewDcgmClientWithGpuPresent(t *testing.T) {
-	config := createDefaultConfig().(*Config)
-	logger := zaptest.NewLogger(t)
-	client, err := newClient(config, logger)
+	client, err := newClient(createDefaultConfig().(*Config), zaptest.NewLogger(t))
 	require.Nil(t, err, "can not initialize DCGM. Install and run DCGM before running tests.")
 
 	assert.NotNil(t, client)
+	assert.NotNil(t, client.handleCleanup)
 	assert.Greater(t, len(client.deviceIndices), 0)
 	for gpuIndex := range client.deviceIndices {
 		assert.Greater(t, len(client.devicesModelName[gpuIndex]), 0)
@@ -153,9 +151,7 @@ func TestNewDcgmClientWithGpuPresent(t *testing.T) {
 }
 
 func TestCollectGpuProfilingMetrics(t *testing.T) {
-	config := createDefaultConfig().(*Config)
-	logger := zaptest.NewLogger(t)
-	client, err := newClient(config, logger)
+	client, err := newClient(createDefaultConfig().(*Config), zaptest.NewLogger(t))
 	require.Nil(t, err, "can not initialize DCGM. Install and run DCGM before running tests.")
 	expectedMetrics := LoadExpectedMetrics(t, client.devicesModelName[0])
 	var maxCollectionInterval = 60 * time.Second

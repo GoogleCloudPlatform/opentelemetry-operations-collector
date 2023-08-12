@@ -17,16 +17,10 @@
 
 package dcgmreceiver
 
-/*
-#include <stdlib.h>
-#include <dlfcn.h>
-*/
-import "C"
 import (
 	"errors"
 	"fmt"
 	"time"
-	"unsafe"
 
 	"github.com/NVIDIA/go-dcgm/pkg/dcgm"
 	"go.opentelemetry.io/collector/receiver/scrapererror"
@@ -108,33 +102,18 @@ func newClient(config *Config, logger *zap.Logger) (*dcgmClient, error) {
 	}, nil
 }
 
-// isDcgmInstalled returns true if it was able to load the DCGM shared library.
-// TODO(b/293585142): Remove this function and use dcgm.Init() to check if DCGM
-// is installed after https://github.com/NVIDIA/go-dcgm/issues/13 is fixed
-func isDcgmInstalled() bool {
-	const (
-		dcgmLib = "libdcgm.so"
-	)
-	lib := C.CString(dcgmLib)
-	defer C.free(unsafe.Pointer(lib))
-
-	dcgmLibHandle := C.dlopen(lib, C.RTLD_LAZY|C.RTLD_GLOBAL)
-	return dcgmLibHandle != nil
-}
-
 // initializeDcgm tries to initialize a DCGM connection; returns a cleanup func
 // only if the connection is initialized successfully without error
 func initializeDcgm(config *Config, logger *zap.Logger) (func(), error) {
-	if !isDcgmInstalled() {
-		return nil, fmt.Errorf("cannot initialize a DCGM client; DCGM is not installed")
-	}
 	isSocket := "0"
 	dcgmCleanup, err := dcgmInit(config.TCPAddr.Endpoint, isSocket)
 	if err != nil {
+		msg := fmt.Sprintf("Unable to connect to DCGM daemon at %s on %v; Is the DCGM daemon running?", config.TCPAddr.Endpoint, err)
+		logger.Sugar().Warn(msg)
 		if dcgmCleanup != nil {
 			dcgmCleanup()
 		}
-		return nil, fmt.Errorf("Unable to connect to DCGM daemon at %s on %v; Is the DCGM daemon running?", config.TCPAddr.Endpoint, err)
+		return nil, fmt.Errorf("%s", msg)
 	}
 	logger.Sugar().Infof("Connected to DCGM daemon at %s", config.TCPAddr.Endpoint)
 	return dcgmCleanup, nil

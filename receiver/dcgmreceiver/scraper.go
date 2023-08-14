@@ -19,6 +19,7 @@ package dcgmreceiver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -41,13 +42,29 @@ func newDcgmScraper(config *Config, settings receiver.CreateSettings) *dcgmScrap
 	return &dcgmScraper{config: config, settings: settings}
 }
 
-func (s *dcgmScraper) start(_ context.Context, _ component.Host) error {
-	var err error
-	s.client, err = newClient(s.config, s.settings.Logger)
+// initClient will try to create a new dcgmClient if currently has no client;
+// it will try to initialize the communication with the DCGM service; if
+// success, create a client; only return errors if DCGM service is available but
+// failed to create client.
+func (s *dcgmScraper) initClient() error {
+	if s.client != nil {
+		return nil
+	}
+	client, err := newClient(s.config, s.settings.Logger)
 	if err != nil {
+		s.settings.Logger.Sugar().Warn(err)
+		if errors.Is(err, ErrDcgmInitialization) {
+			// If cannot connect to DCGM, return no error and retry at next
+			// collection time
+			return nil
+		}
 		return err
 	}
+	s.client = client
+	return nil
+}
 
+func (s *dcgmScraper) start(_ context.Context, _ component.Host) error {
 	startTime := pcommon.NewTimestampFromTime(time.Now())
 	mbConfig := metadata.DefaultMetricsBuilderConfig()
 	mbConfig.Metrics = s.config.Metrics
@@ -65,6 +82,11 @@ func (s *dcgmScraper) stop(_ context.Context) error {
 }
 
 func (s *dcgmScraper) scrape(_ context.Context) (pmetric.Metrics, error) {
+	err := s.initClient()
+	if err != nil || s.client == nil {
+		return s.mb.Emit(), err
+	}
+
 	deviceMetrics, err := s.client.collectDeviceMetrics()
 
 	now := pcommon.NewTimestampFromTime(time.Now())

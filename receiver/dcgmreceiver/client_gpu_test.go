@@ -53,7 +53,7 @@ type modelSupportedFields struct {
 func TestSupportedFieldsWithGolden(t *testing.T) {
 	config := createDefaultConfig().(*Config)
 	client, err := newClient(config, zaptest.NewLogger(t))
-	require.Nil(t, err)
+	require.Nil(t, err, "cannot initialize DCGM. Install and run DCGM before running tests.")
 
 	assert.NotEmpty(t, client.devicesModelName)
 	gpuModel := client.getDeviceModelName(0)
@@ -86,6 +86,7 @@ func TestSupportedFieldsWithGolden(t *testing.T) {
 	assert.Equal(t, len(dcgmNameToMetricName), len(client.enabledFieldIDs)+len(unavailableFieldsString))
 	goldenPath := getModelGoldenFilePath(t, gpuModel)
 	golden.Assert(t, string(actual), goldenPath)
+	client.cleanup()
 }
 
 // LoadExpectedMetrics read the supported metrics of a GPU model from the golden
@@ -137,7 +138,7 @@ func getModelGoldenFilePath(t *testing.T, model string) string {
 
 func TestNewDcgmClientWithGpuPresent(t *testing.T) {
 	client, err := newClient(createDefaultConfig().(*Config), zaptest.NewLogger(t))
-	require.Nil(t, err)
+	require.Nil(t, err, "cannot initialize DCGM. Install and run DCGM before running tests.")
 
 	assert.NotNil(t, client)
 	assert.NotNil(t, client.handleCleanup)
@@ -146,11 +147,12 @@ func TestNewDcgmClientWithGpuPresent(t *testing.T) {
 		assert.Greater(t, len(client.devicesModelName[gpuIndex]), 0)
 		assert.Greater(t, len(client.devicesUUID[gpuIndex]), 0)
 	}
+	client.cleanup()
 }
 
 func TestCollectGpuProfilingMetrics(t *testing.T) {
 	client, err := newClient(createDefaultConfig().(*Config), zaptest.NewLogger(t))
-	require.Nil(t, err)
+	require.Nil(t, err, "cannot initialize DCGM. Install and run DCGM before running tests.")
 	expectedMetrics := LoadExpectedMetrics(t, client.devicesModelName[0])
 	var maxCollectionInterval = 60 * time.Second
 	before := time.Now().UnixMicro() - maxCollectionInterval.Microseconds()
@@ -213,4 +215,5 @@ func TestCollectGpuProfilingMetrics(t *testing.T) {
 			assert.Equal(t, seenMetric[fmt.Sprintf("gpu{%d}.metric{%s}", gpuIndex, metric)], true)
 		}
 	}
+	client.cleanup()
 }

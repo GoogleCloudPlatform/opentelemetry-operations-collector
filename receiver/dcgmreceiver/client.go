@@ -29,9 +29,10 @@ import (
 
 const maxWarningsForFailedDeviceMetricQuery = 5
 
+var ErrDcgmInitialization = errors.New("error initializing DCGM")
+
 type dcgmClient struct {
 	logger                         *zap.SugaredLogger
-	disable                        bool
 	handleCleanup                  func()
 	enabledFieldIDs                []dcgm.Short
 	enabledFieldGroup              dcgm.FieldHandle
@@ -57,21 +58,13 @@ var dcgmGetLatestValuesForFields = dcgm.GetLatestValuesForFields
 
 func newClient(config *Config, logger *zap.Logger) (*dcgmClient, error) {
 	dcgmCleanup, err := initializeDcgm(config, logger)
-	// When DCGM is not installed or not running, return empty client
 	if err != nil {
-		return &dcgmClient{logger: logger.Sugar(), disable: true}, nil
+		return nil, errors.Join(ErrDcgmInitialization, err)
 	}
-
-	deviceIndices, names, UUIDs, err := discoverDevices(logger)
-	if err != nil {
-		return nil, err
-	}
-
-	deviceGroup, err := createDeviceGroup(logger, deviceIndices)
-	if err != nil {
-		return nil, err
-	}
-
+	deviceIndices := make([]uint, 0)
+	names := make([]string, 0)
+	UUIDs := make([]string, 0)
+	enabledFieldGroup := dcgm.FieldHandle{}
 	requestedFieldIDs := discoverRequestedFieldIDs(config)
 	supportedFieldIDs, err := getAllSupportedFields()
 	if err != nil {
@@ -83,11 +76,20 @@ func newClient(config *Config, logger *zap.Logger) (*dcgmClient, error) {
 	for _, f := range unavailableFields {
 		logger.Sugar().Warnf("Field '%s' is not supported. Metric '%s' will not be collected", dcgmIDToName[f], dcgmNameToMetricName[dcgmIDToName[f]])
 	}
-	enabledFieldGroup, err := setWatchesOnEnabledFields(config, logger, deviceGroup, enabledFields)
-	if err != nil {
-		return nil, fmt.Errorf("Unable to set field watches on %w", err)
+	if len(enabledFields) != 0 {
+		deviceIndices, names, UUIDs, err = discoverDevices(logger)
+		if err != nil {
+			return nil, err
+		}
+		deviceGroup, err := createDeviceGroup(logger, deviceIndices)
+		if err != nil {
+			return nil, err
+		}
+		enabledFieldGroup, err = setWatchesOnEnabledFields(config, logger, deviceGroup, enabledFields)
+		if err != nil {
+			return nil, fmt.Errorf("Unable to set field watches on %w", err)
+		}
 	}
-
 	return &dcgmClient{
 		logger:                         logger.Sugar(),
 		handleCleanup:                  dcgmCleanup,
@@ -100,15 +102,19 @@ func newClient(config *Config, logger *zap.Logger) (*dcgmClient, error) {
 	}, nil
 }
 
+// initializeDcgm tries to initialize a DCGM connection; returns a cleanup func
+// only if the connection is initialized successfully without error
 func initializeDcgm(config *Config, logger *zap.Logger) (func(), error) {
 	isSocket := "0"
 	dcgmCleanup, err := dcgmInit(config.TCPAddr.Endpoint, isSocket)
 	if err != nil {
 		msg := fmt.Sprintf("Unable to connect to DCGM daemon at %s on %v; Is the DCGM daemon running?", config.TCPAddr.Endpoint, err)
 		logger.Sugar().Warn(msg)
+		if dcgmCleanup != nil {
+			dcgmCleanup()
+		}
 		return nil, fmt.Errorf("%s", msg)
 	}
-
 	logger.Sugar().Infof("Connected to DCGM daemon at %s", config.TCPAddr.Endpoint)
 	return dcgmCleanup, nil
 }
@@ -285,9 +291,7 @@ func (client *dcgmClient) cleanup() {
 		client.handleCleanup()
 	}
 
-	if !client.disable {
-		client.logger.Info("Shutdown DCGM")
-	}
+	client.logger.Info("Shutdown DCGM")
 }
 
 func (client *dcgmClient) getDeviceModelName(gpuIndex uint) string {
@@ -299,10 +303,6 @@ func (client *dcgmClient) getDeviceUUID(gpuIndex uint) string {
 }
 
 func (client *dcgmClient) collectDeviceMetrics() ([]dcgmMetric, error) {
-	if client.disable {
-		return nil, nil
-	}
-
 	var err scrapererror.ScrapeErrors
 	gpuMetrics := make([]dcgmMetric, 0, len(client.enabledFieldIDs)*len(client.deviceIndices))
 	for _, gpuIndex := range client.deviceIndices {

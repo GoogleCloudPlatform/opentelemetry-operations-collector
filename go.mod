@@ -5,7 +5,7 @@ go 1.20
 require (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector v0.42.0
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector/googlemanagedprometheus v0.42.0
-	github.com/NVIDIA/go-dcgm v0.0.0-20221107203308-b6ed78cdc8d3
+	github.com/NVIDIA/go-dcgm v0.0.0-20230811193702-90bac724c747
 	github.com/NVIDIA/go-nvml v0.11.6-0
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/fileexporter v0.81.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter v0.81.0

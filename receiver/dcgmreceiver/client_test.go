@@ -18,12 +18,12 @@
 package dcgmreceiver
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
@@ -46,7 +46,7 @@ func TestNewDcgmClientOnInitializationError(t *testing.T) {
 
 	client, err := newClient(createDefaultConfig().(*Config), logger)
 	assert.Equal(t, seenDcgmConnectionWarning, true)
-	require.NotNil(t, client)
-	require.Equal(t, client.disable, true)
-	require.Nil(t, err)
+	assert.True(t, errors.Is(err, ErrDcgmInitialization))
+	assert.Regexp(t, ".*Unable to connect.*", err)
+	assert.Nil(t, client)
 }

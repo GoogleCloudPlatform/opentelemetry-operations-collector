@@ -49,6 +49,7 @@ func TestMetricsBuilder(t *testing.T) {
 			mb := NewMetricsBuilder(loadMetricsBuilderConfig(t, test.name), settings, WithStartTime(start))
 
 			expectedWarnings := 0
+
 			assert.Equal(t, expectedWarnings, observedLogs.Len())
 
 			defaultMetricsCount := 0
@@ -56,7 +57,7 @@ func TestMetricsBuilder(t *testing.T) {
 
 			defaultMetricsCount++
 			allMetricsCount++
-			mb.RecordVarnishBackendConnectionCountDataPoint(ts, 1, AttributeBackendConnectionType(1))
+			mb.RecordVarnishBackendConnectionCountDataPoint(ts, 1, AttributeBackendConnectionTypeSuccess)
 
 			defaultMetricsCount++
 			allMetricsCount++
@@ -64,15 +65,15 @@ func TestMetricsBuilder(t *testing.T) {
 
 			defaultMetricsCount++
 			allMetricsCount++
-			mb.RecordVarnishCacheOperationCountDataPoint(ts, 1, AttributeCacheOperations(1))
+			mb.RecordVarnishCacheOperationCountDataPoint(ts, 1, AttributeCacheOperationsHit)
 
 			defaultMetricsCount++
 			allMetricsCount++
-			mb.RecordVarnishClientRequestCountDataPoint(ts, 1, AttributeState(1))
+			mb.RecordVarnishClientRequestCountDataPoint(ts, 1, AttributeStateReceived)
 
 			defaultMetricsCount++
 			allMetricsCount++
-			mb.RecordVarnishClientRequestErrorCountDataPoint(ts, 1, "attr-val")
+			mb.RecordVarnishClientRequestErrorCountDataPoint(ts, 1, "http.status_code-val")
 
 			defaultMetricsCount++
 			allMetricsCount++
@@ -92,13 +93,16 @@ func TestMetricsBuilder(t *testing.T) {
 
 			defaultMetricsCount++
 			allMetricsCount++
-			mb.RecordVarnishSessionCountDataPoint(ts, 1, AttributeSessionType(1))
+			mb.RecordVarnishSessionCountDataPoint(ts, 1, AttributeSessionTypeAccepted)
 
 			defaultMetricsCount++
 			allMetricsCount++
-			mb.RecordVarnishThreadOperationCountDataPoint(ts, 1, AttributeThreadOperations(1))
+			mb.RecordVarnishThreadOperationCountDataPoint(ts, 1, AttributeThreadOperationsCreated)
 
-			metrics := mb.Emit(WithVarnishCacheName("attr-val"))
+			rb := mb.NewResourceBuilder()
+			rb.SetVarnishCacheName("varnish.cache.name-val")
+			res := rb.Emit()
+			metrics := mb.Emit(WithResource(res))
 
 			if test.configSet == testSetNone {
 				assert.Equal(t, 0, metrics.ResourceMetrics().Len())
@@ -107,18 +111,7 @@ func TestMetricsBuilder(t *testing.T) {
 
 			assert.Equal(t, 1, metrics.ResourceMetrics().Len())
 			rm := metrics.ResourceMetrics().At(0)
-			attrCount := 0
-			enabledAttrCount := 0
-			attrVal, ok := rm.Resource().Attributes().Get("varnish.cache.name")
-			attrCount++
-			assert.Equal(t, mb.resourceAttributesConfig.VarnishCacheName.Enabled, ok)
-			if mb.resourceAttributesConfig.VarnishCacheName.Enabled {
-				enabledAttrCount++
-				assert.EqualValues(t, "attr-val", attrVal.Str())
-			}
-			assert.Equal(t, enabledAttrCount, rm.Resource().Attributes().Len())
-			assert.Equal(t, attrCount, 1)
-
+			assert.Equal(t, res, rm.Resource())
 			assert.Equal(t, 1, rm.ScopeMetrics().Len())
 			ms := rm.ScopeMetrics().At(0).Metrics()
 			if test.configSet == testSetDefault {
@@ -146,7 +139,7 @@ func TestMetricsBuilder(t *testing.T) {
 					assert.Equal(t, int64(1), dp.IntValue())
 					attrVal, ok := dp.Attributes().Get("kind")
 					assert.True(t, ok)
-					assert.Equal(t, "success", attrVal.Str())
+					assert.EqualValues(t, "success", attrVal.Str())
 				case "varnish.backend.request.count":
 					assert.False(t, validatedMetrics["varnish.backend.request.count"], "Found a duplicate in the metrics slice: varnish.backend.request.count")
 					validatedMetrics["varnish.backend.request.count"] = true
@@ -177,7 +170,7 @@ func TestMetricsBuilder(t *testing.T) {
 					assert.Equal(t, int64(1), dp.IntValue())
 					attrVal, ok := dp.Attributes().Get("operation")
 					assert.True(t, ok)
-					assert.Equal(t, "hit", attrVal.Str())
+					assert.EqualValues(t, "hit", attrVal.Str())
 				case "varnish.client.request.count":
 					assert.False(t, validatedMetrics["varnish.client.request.count"], "Found a duplicate in the metrics slice: varnish.client.request.count")
 					validatedMetrics["varnish.client.request.count"] = true
@@ -194,7 +187,7 @@ func TestMetricsBuilder(t *testing.T) {
 					assert.Equal(t, int64(1), dp.IntValue())
 					attrVal, ok := dp.Attributes().Get("state")
 					assert.True(t, ok)
-					assert.Equal(t, "received", attrVal.Str())
+					assert.EqualValues(t, "received", attrVal.Str())
 				case "varnish.client.request.error.count":
 					assert.False(t, validatedMetrics["varnish.client.request.error.count"], "Found a duplicate in the metrics slice: varnish.client.request.error.count")
 					validatedMetrics["varnish.client.request.error.count"] = true
@@ -211,7 +204,7 @@ func TestMetricsBuilder(t *testing.T) {
 					assert.Equal(t, int64(1), dp.IntValue())
 					attrVal, ok := dp.Attributes().Get("status_code")
 					assert.True(t, ok)
-					assert.EqualValues(t, "attr-val", attrVal.Str())
+					assert.EqualValues(t, "http.status_code-val", attrVal.Str())
 				case "varnish.object.count":
 					assert.False(t, validatedMetrics["varnish.object.count"], "Found a duplicate in the metrics slice: varnish.object.count")
 					validatedMetrics["varnish.object.count"] = true
@@ -284,7 +277,7 @@ func TestMetricsBuilder(t *testing.T) {
 					assert.Equal(t, int64(1), dp.IntValue())
 					attrVal, ok := dp.Attributes().Get("kind")
 					assert.True(t, ok)
-					assert.Equal(t, "accepted", attrVal.Str())
+					assert.EqualValues(t, "accepted", attrVal.Str())
 				case "varnish.thread.operation.count":
 					assert.False(t, validatedMetrics["varnish.thread.operation.count"], "Found a duplicate in the metrics slice: varnish.thread.operation.count")
 					validatedMetrics["varnish.thread.operation.count"] = true
@@ -301,7 +294,7 @@ func TestMetricsBuilder(t *testing.T) {
 					assert.Equal(t, int64(1), dp.IntValue())
 					attrVal, ok := dp.Attributes().Get("operation")
 					assert.True(t, ok)
-					assert.Equal(t, "created", attrVal.Str())
+					assert.EqualValues(t, "created", attrVal.Str())
 				}
 			}
 		})

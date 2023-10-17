@@ -80,7 +80,6 @@ func (v *varnishScraper) scrape(context.Context) (pmetric.Metrics, error) {
 
 	rb := v.mb.NewResourceBuilder()
 	rb.SetVarnishCacheName(v.cacheName)
-	//v.mb.EmitForResource()
 
 	v.recordVarnishBackendConnectionsCountDataPoint(now, stats)
 	v.recordVarnishCacheOperationsCountDataPoint(now, stats)

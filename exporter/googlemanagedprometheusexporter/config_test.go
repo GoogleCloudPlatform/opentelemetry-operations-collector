@@ -16,6 +16,7 @@ import (
 	"go.opentelemetry.io/collector/otelcol/otelcoltest"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/exporter/googlemanagedprometheusexporter/internal/metadata"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector/googlemanagedprometheus"
 )
 
 func TestLoadConfig(t *testing.T) {
@@ -43,6 +44,9 @@ func TestLoadConfig(t *testing.T) {
 			GMPConfig: GMPConfig{
 				ProjectID: "my-project",
 				UserAgent: "opentelemetry-collector-contrib {{version}}",
+				MetricConfig: MetricConfig{
+					Config: googlemanagedprometheus.DefaultConfig(),
+				},
 			},
 			RetrySettings: exporterhelper.RetrySettings{
 				Enabled:             true,

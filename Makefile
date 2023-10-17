@@ -59,6 +59,7 @@ update-components:
 		grep -v "go.opentelemetry.io/collector/featuregate" | \
 		grep -v "go.opentelemetry.io/collector/pdata" | \
 		xargs -t -I '{}' go get {}@$(OTEL_VER)
+	go get -u github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector/googlemanagedprometheus@latest
 	go list -m -f '{{if not (or .Indirect .Main)}}{{.Path}}{{end}}' all | \
 		grep "^github.com/open-telemetry/opentelemetry-collector-contrib" | \
 		xargs -t -I '{}' go get {}@$(OTEL_VER)

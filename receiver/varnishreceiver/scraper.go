@@ -78,6 +78,9 @@ func (v *varnishScraper) scrape(context.Context) (pmetric.Metrics, error) {
 
 	now := pcommon.NewTimestampFromTime(time.Now())
 
+	rb := v.mb.NewResourceBuilder()
+	rb.SetVarnishCacheName(v.cacheName)
+
 	v.recordVarnishBackendConnectionsCountDataPoint(now, stats)
 	v.recordVarnishCacheOperationsCountDataPoint(now, stats)
 	v.recordVarnishThreadOperationsCountDataPoint(now, stats)
@@ -91,5 +94,5 @@ func (v *varnishScraper) scrape(context.Context) (pmetric.Metrics, error) {
 	v.mb.RecordVarnishObjectCountDataPoint(now, stats.MAINNObject.Value)
 	v.mb.RecordVarnishBackendRequestCountDataPoint(now, stats.MAINBackendReq.Value)
 
-	return v.mb.Emit(metadata.WithVarnishCacheName(v.cacheName)), nil
+	return v.mb.Emit(metadata.WithResource(rb.Emit())), nil
 }

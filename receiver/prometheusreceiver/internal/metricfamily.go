@@ -21,6 +21,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/translator/prometheus"
 	"github.com/prometheus/prometheus/model/exemplar"
 	"github.com/prometheus/prometheus/model/labels"
 	"github.com/prometheus/prometheus/model/textparse"
@@ -29,8 +30,6 @@ import (
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.uber.org/zap"
-
-	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/translator/prometheus"
 )
 
 const (
@@ -326,10 +325,13 @@ func (mf *metricFamily) addSeries(seriesRef uint64, metricName string, ls labels
 	return nil
 }
 
-func (mf *metricFamily) appendMetric(metrics pmetric.MetricSlice, normalizer *prometheus.Normalizer) {
+func (mf *metricFamily) appendMetric(metrics pmetric.MetricSlice, trimSuffixes bool) {
 	metric := pmetric.NewMetric()
-	// Trims type's and unit's suffixes from metric name
-	metric.SetName(normalizer.TrimPromSuffixes(mf.name, mf.mtype, mf.metadata.Unit))
+	name := mf.name
+	if trimSuffixes {
+		name = prometheus.TrimPromSuffixes(name, mf.mtype, mf.metadata.Unit)
+	}
+	metric.SetName(name)
 	metric.SetDescription(mf.metadata.Help)
 	metric.SetUnit(mf.metadata.Unit)
 

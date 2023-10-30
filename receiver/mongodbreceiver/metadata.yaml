@@ -75,7 +75,7 @@ metrics:
     unit: "{operations}"
     enabled: true
     sum:
-      aggregation: cumulative
+      aggregation_temporality: cumulative
       value_type: int
       monotonic: true
     attributes: [type]
@@ -84,7 +84,7 @@ metrics:
     unit: "{collections}"
     enabled: true
     sum:
-      aggregation: cumulative
+      aggregation_temporality: cumulative
       value_type: int
       monotonic: false
     attributes: [database]
@@ -93,7 +93,7 @@ metrics:
     unit: By
     enabled: true
     sum:
-      aggregation: cumulative
+      aggregation_temporality: cumulative
       value_type: int
       monotonic: false
     attributes: [database]
@@ -103,7 +103,7 @@ metrics:
     enabled: true
     sum:
       value_type: int
-      aggregation: cumulative
+      aggregation_temporality: cumulative
       monotonic: false
     attributes: [database, connection_type]
   mongodb.extent.count:
@@ -111,7 +111,7 @@ metrics:
     unit: "{extents}"
     enabled: true
     sum:
-      aggregation: cumulative
+      aggregation_temporality: cumulative
       value_type: int
       monotonic: false
     attributes: [database]
@@ -120,7 +120,7 @@ metrics:
     unit: ms
     enabled: true
     sum:
-      aggregation: cumulative
+      aggregation_temporality: cumulative
       value_type: int
       monotonic: true
     attributes: []
@@ -129,7 +129,7 @@ metrics:
     unit: "{indexes}"
     enabled: true
     sum:
-      aggregation: cumulative
+      aggregation_temporality: cumulative
       value_type: int
       monotonic: false
     attributes: [database]
@@ -138,7 +138,7 @@ metrics:
     unit: By
     enabled: true
     sum:
-      aggregation: cumulative
+      aggregation_temporality: cumulative
       value_type: int
       monotonic: false
     attributes: [database]
@@ -147,7 +147,7 @@ metrics:
     unit: By
     enabled: true
     sum:
-      aggregation: cumulative
+      aggregation_temporality: cumulative
       value_type: int
       monotonic: false
     attributes: [database, memory_type]
@@ -156,7 +156,7 @@ metrics:
     unit: "{objects}"
     enabled: true
     sum:
-      aggregation: cumulative
+      aggregation_temporality: cumulative
       value_type: int
       monotonic: false
     attributes: [database]
@@ -165,7 +165,7 @@ metrics:
     unit: "{operations}"
     enabled: true
     sum:
-      aggregation: cumulative
+      aggregation_temporality: cumulative
       value_type: int
       monotonic: true
     attributes: [operation]
@@ -175,7 +175,7 @@ metrics:
     unit: By
     enabled: true
     sum:
-      aggregation: cumulative
+      aggregation_temporality: cumulative
       value_type: int
       monotonic: true
     attributes: [database]
@@ -185,7 +185,7 @@ metrics:
     enabled: true
     sum:
       value_type: int
-      aggregation: cumulative
+      aggregation_temporality: cumulative
       monotonic: false
     attributes: []
   mongodb.index.access.count:
@@ -194,7 +194,7 @@ metrics:
     enabled: true
     sum:
       value_type: int
-      aggregation: cumulative
+      aggregation_temporality: cumulative
       monotonic: false
     attributes: [database, collection]
   mongodb.document.operation.count:
@@ -203,7 +203,7 @@ metrics:
     enabled: true
     sum:
       value_type: int
-      aggregation: cumulative
+      aggregation_temporality: cumulative
       monotonic: false
     attributes: [database, operation]
   mongodb.network.io.receive:
@@ -212,7 +212,7 @@ metrics:
     enabled: true
     sum:
       value_type: int
-      aggregation: cumulative
+      aggregation_temporality: cumulative
       monotonic: false
     attributes: []
   mongodb.network.io.transmit:
@@ -221,7 +221,7 @@ metrics:
     enabled: true
     sum:
       value_type: int
-      aggregation: cumulative
+      aggregation_temporality: cumulative
       monotonic: false
     attributes: []
   mongodb.network.request.count:
@@ -230,7 +230,7 @@ metrics:
     enabled: true
     sum:
       value_type: int
-      aggregation: cumulative
+      aggregation_temporality: cumulative
       monotonic: false
     attributes: []
   mongodb.operation.time:
@@ -239,7 +239,7 @@ metrics:
     enabled: true
     sum:
       value_type: int
-      aggregation: cumulative
+      aggregation_temporality: cumulative
       monotonic: true
     attributes: [operation]
   mongodb.session.count:
@@ -248,7 +248,7 @@ metrics:
     enabled: true
     sum:
       value_type: int
-      aggregation: cumulative
+      aggregation_temporality: cumulative
       monotonic: false
     attributes: []
   mongodb.cursor.count:
@@ -257,7 +257,7 @@ metrics:
     enabled: true
     sum:
       value_type: int
-      aggregation: cumulative
+      aggregation_temporality: cumulative
       monotonic: false
     attributes: []
   mongodb.cursor.timeout.count:
@@ -266,7 +266,7 @@ metrics:
     enabled: true
     sum:
       value_type: int
-      aggregation: cumulative
+      aggregation_temporality: cumulative
       monotonic: false
     attributes: []
   mongodb.lock.acquire.count:
@@ -275,7 +275,7 @@ metrics:
     enabled: false
     sum:
       value_type: int
-      aggregation: cumulative
+      aggregation_temporality: cumulative
       monotonic: true
     attributes: [database, lock_type, lock_mode]
   mongodb.lock.acquire.wait_count:
@@ -284,7 +284,7 @@ metrics:
     enabled: false
     sum:
       value_type: int
-      aggregation: cumulative
+      aggregation_temporality: cumulative
       monotonic: true
     attributes: [database, lock_type, lock_mode]
   mongodb.lock.acquire.time:
@@ -293,7 +293,7 @@ metrics:
     enabled: false
     sum:
       value_type: int
-      aggregation: cumulative
+      aggregation_temporality: cumulative
       monotonic: true
     attributes: [database, lock_type, lock_mode]
   mongodb.lock.deadlock.count:
@@ -302,6 +302,6 @@ metrics:
     enabled: false
     sum:
       value_type: int
-      aggregation: cumulative
+      aggregation_temporality: cumulative
       monotonic: true
     attributes: [database, lock_type, lock_mode]

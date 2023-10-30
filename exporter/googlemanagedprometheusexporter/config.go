@@ -10,7 +10,6 @@ import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector/googlemanagedprometheus"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
 	"go.opentelemetry.io/collector/featuregate"
-	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
 // Config defines configuration for Google Cloud Managed Service for Prometheus exporter.
@@ -41,11 +40,12 @@ type GMPConfig struct {
 type MetricConfig struct {
 	// Prefix configures the prefix of metrics sent to GoogleManagedPrometheus.  Defaults to prometheus.googleapis.com.
 	// Changing this prefix is not recommended, as it may cause metrics to not be queryable with promql in the Cloud Monitoring UI.
-	Prefix       string                 `mapstructure:"prefix"`
-	ClientConfig collector.ClientConfig `mapstructure:",squash"`
+	Prefix       string                         `mapstructure:"prefix"`
+	ClientConfig collector.ClientConfig         `mapstructure:",squash"`
+	Config       googlemanagedprometheus.Config `mapstructure:",squash"`
 }
 
-func (c *GMPConfig) toCollectorConfig() collector.Config {
+func (c *GMPConfig) toCollectorConfig() (collector.Config, error) {
 	// start with whatever the default collector config is.
 	cfg := collector.DefaultConfig()
 	cfg.MetricConfig.Prefix = c.MetricConfig.Prefix
@@ -56,28 +56,31 @@ func (c *GMPConfig) toCollectorConfig() collector.Config {
 	cfg.MetricConfig.InstrumentationLibraryLabels = false
 	cfg.MetricConfig.ServiceResourceLabels = false
 	// Update metric naming to match GMP conventions
-	cfg.MetricConfig.GetMetricName = googlemanagedprometheus.GetMetricName
+	cfg.MetricConfig.GetMetricName = c.MetricConfig.Config.GetMetricName
 	// Map to the prometheus_target monitored resource
-	cfg.MetricConfig.MapMonitoredResource = googlemanagedprometheus.MapToPrometheusTarget
+	cfg.MetricConfig.MapMonitoredResource = c.MetricConfig.Config.MapToPrometheusTarget
 	cfg.MetricConfig.EnableSumOfSquaredDeviation = true
 	// map the GMP config's fields to the collector config
 	cfg.ProjectID = c.ProjectID
 	cfg.UserAgent = c.UserAgent
 	cfg.MetricConfig.ClientConfig = c.MetricConfig.ClientConfig
+	cfg.MetricConfig.ExtraMetrics = c.MetricConfig.Config.ExtraMetrics
 	if c.UntypedDoubleExport {
-		cfg.MetricConfig.ExtraMetrics = func(m pmetric.Metrics) pmetric.ResourceMetricsSlice {
-			//nolint:errcheck
-			featuregate.GlobalRegistry().Set("gcp.untyped_double_export", true)
-			googlemanagedprometheus.AddUntypedMetrics(m)
-			return m.ResourceMetrics()
+		err := featuregate.GlobalRegistry().Set("gcp.untyped_double_export", true)
+		if err != nil {
+			return cfg, err
 		}
 	}
 
-	return cfg
+	return cfg, nil
 }
 
 func (cfg *Config) Validate() error {
-	if err := collector.ValidateConfig(cfg.toCollectorConfig()); err != nil {
+	collectorConfig, err := cfg.toCollectorConfig()
+	if err != nil {
+		return fmt.Errorf("error setting featuregate option: %w", err)
+	}
+	if err := collector.ValidateConfig(collectorConfig); err != nil {
 		return fmt.Errorf("exporter settings are invalid :%w", err)
 	}
 	return nil

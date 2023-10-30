@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector/googlemanagedprometheus"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -43,6 +44,9 @@ func TestLoadConfig(t *testing.T) {
 			GMPConfig: GMPConfig{
 				ProjectID: "my-project",
 				UserAgent: "opentelemetry-collector-contrib {{version}}",
+				MetricConfig: MetricConfig{
+					Config: googlemanagedprometheus.DefaultConfig(),
+				},
 			},
 			RetrySettings: exporterhelper.RetrySettings{
 				Enabled:             true,

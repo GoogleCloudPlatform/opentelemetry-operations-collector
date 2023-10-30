@@ -59,6 +59,7 @@ update-components:
 		grep -v "go.opentelemetry.io/collector/featuregate" | \
 		grep -v "go.opentelemetry.io/collector/pdata" | \
 		xargs -t -I '{}' go get {}@$(OTEL_VER)
+	go get -u github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector/googlemanagedprometheus@latest
 	go list -m -f '{{if not (or .Indirect .Main)}}{{.Path}}{{end}}' all | \
 		grep "^github.com/open-telemetry/opentelemetry-collector-contrib" | \
 		xargs -t -I '{}' go get {}@$(OTEL_VER)
@@ -88,11 +89,11 @@ install-tools:
 
 .PHONY: addlicense
 addlicense:
-	addlicense -c "Google LLC" -l apache $(ALL_SRC)
+	addlicense -c "Google LLC" -l apache ./**/*.go 
 
 .PHONY: checklicense
 checklicense:
-	@output=`addlicense -check $(ALL_SRC)` && echo checklicense finished successfully || (echo checklicense errors: $$output && exit 1)
+	@output=`addlicense -check ./**/*.go` && echo checklicense finished successfully || (echo checklicense errors: $$output && exit 1)
 
 .PHONY: lint
 lint:

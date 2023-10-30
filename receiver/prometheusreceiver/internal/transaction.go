@@ -29,14 +29,11 @@ import (
 	"github.com/prometheus/prometheus/scrape"
 	"github.com/prometheus/prometheus/storage"
 	"go.opentelemetry.io/collector/consumer"
-	"go.opentelemetry.io/collector/featuregate"
-	"go.opentelemetry.io/collector/obsreport"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/receiver"
+	"go.opentelemetry.io/collector/receiver/receiverhelper"
 	"go.uber.org/zap"
-
-	prometheustranslator "github.com/open-telemetry/opentelemetry-collector-contrib/pkg/translator/prometheus"
 )
 
 const (
@@ -45,6 +42,7 @@ const (
 
 type transaction struct {
 	isNew          bool
+	trimSuffixes   bool
 	ctx            context.Context
 	families       map[string]*metricFamily
 	mc             scrape.MetricMetadataStore
@@ -53,10 +51,9 @@ type transaction struct {
 	nodeResource   pcommon.Resource
 	logger         *zap.Logger
 	metricAdjuster MetricsAdjuster
-	obsrecv        *obsreport.Receiver
+	obsrecv        *receiverhelper.ObsReport
 	// Used as buffer to calculate series ref hash.
 	bufBytes        []byte
-	normalizer      *prometheustranslator.Normalizer
 	preserveUntyped bool
 }
 
@@ -66,20 +63,20 @@ func newTransaction(
 	sink consumer.Metrics,
 	externalLabels labels.Labels,
 	settings receiver.CreateSettings,
-	obsrecv *obsreport.Receiver,
-	registry *featuregate.Registry,
+	obsrecv *receiverhelper.ObsReport,
+	trimSuffixes bool,
 	preserveUntyped bool) *transaction {
 	return &transaction{
 		ctx:             ctx,
 		families:        make(map[string]*metricFamily),
 		isNew:           true,
+		trimSuffixes:    trimSuffixes,
 		sink:            sink,
 		metricAdjuster:  metricAdjuster,
 		externalLabels:  externalLabels,
 		logger:          settings.Logger,
 		obsrecv:         obsrecv,
 		bufBytes:        make([]byte, 0, 1024),
-		normalizer:      prometheustranslator.NewNormalizer(registry),
 		preserveUntyped: preserveUntyped,
 	}
 }
@@ -213,7 +210,7 @@ func (t *transaction) getMetrics(resource pcommon.Resource) (pmetric.Metrics, er
 	metrics := rms.ScopeMetrics().AppendEmpty().Metrics()
 
 	for _, mf := range t.families {
-		mf.appendMetric(metrics, t.normalizer)
+		mf.appendMetric(metrics, t.trimSuffixes)
 	}
 
 	return md, nil

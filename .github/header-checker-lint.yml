@@ -6,6 +6,8 @@ ignoreFiles:
   - receiver/**/generated_config.go
   - receiver/**/generated_config_test.go
   - receiver/**/generated_status.go
+  - receiver/**/generated_resource.go
+  - receiver/**/generated_resource_test.go
   - receiver/mongodbreceiver/**/*.go
   - receiver/prometheusreceiver/**/*.go
   - exporter/googlemanagedprometheusexporter/**/*.go

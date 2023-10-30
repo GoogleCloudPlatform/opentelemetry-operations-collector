@@ -41,7 +41,6 @@ require (
 	github.com/shirou/gopsutil v3.21.10+incompatible
 	github.com/stretchr/testify v1.8.4
 	go.mongodb.org/mongo-driver v1.12.0
-	go.opentelemetry.io/collector v0.87.0
 	go.opentelemetry.io/collector/component v0.87.0
 	go.opentelemetry.io/collector/config/confignet v0.87.0
 	go.opentelemetry.io/collector/config/configtls v0.87.0
@@ -122,6 +121,7 @@ require (
 	github.com/tidwall/tinylru v1.1.0 // indirect
 	github.com/tidwall/wal v1.1.7 // indirect
 	github.com/zeebo/xxh3 v1.0.2 // indirect
+	go.opentelemetry.io/collector v0.87.0 // indirect
 	go.opentelemetry.io/collector/config/configauth v0.87.0 // indirect
 	go.opentelemetry.io/collector/config/configcompression v0.87.0 // indirect
 	go.opentelemetry.io/collector/config/configgrpc v0.87.0 // indirect
@@ -204,7 +204,7 @@ require (
 	github.com/dennwc/varint v1.0.0 // indirect
 	github.com/digitalocean/godo v1.99.0 // indirect
 	github.com/docker/distribution v2.8.2+incompatible // indirect
-	github.com/docker/docker v24.0.6+incompatible // indirect
+	github.com/docker/docker v24.0.7+incompatible // indirect
 	github.com/docker/go-connections v0.4.1-0.20210727194412-58542c764a11 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/emicklei/go-restful/v3 v3.10.2 // indirect

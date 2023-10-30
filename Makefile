@@ -89,11 +89,11 @@ install-tools:
 
 .PHONY: addlicense
 addlicense:
-	addlicense -c "Google LLC" -l apache $(ALL_SRC)
+	addlicense -c "Google LLC" -l apache ./**/*.go 
 
 .PHONY: checklicense
 checklicense:
-	@output=`addlicense -check $(ALL_SRC)` && echo checklicense finished successfully || (echo checklicense errors: $$output && exit 1)
+	@output=`addlicense -check ./**/*.go` && echo checklicense finished successfully || (echo checklicense errors: $$output && exit 1)
 
 .PHONY: lint
 lint:

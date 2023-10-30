@@ -45,7 +45,7 @@ type MetricConfig struct {
 	Config       googlemanagedprometheus.Config `mapstructure:",squash"`
 }
 
-func (c *GMPConfig) toCollectorConfig() collector.Config {
+func (c *GMPConfig) toCollectorConfig() (collector.Config, error) {
 	// start with whatever the default collector config is.
 	cfg := collector.DefaultConfig()
 	cfg.MetricConfig.Prefix = c.MetricConfig.Prefix
@@ -66,14 +66,21 @@ func (c *GMPConfig) toCollectorConfig() collector.Config {
 	cfg.MetricConfig.ClientConfig = c.MetricConfig.ClientConfig
 	cfg.MetricConfig.ExtraMetrics = c.MetricConfig.Config.ExtraMetrics
 	if c.UntypedDoubleExport {
-		featuregate.GlobalRegistry().Set("gcp.untyped_double_export", true)
+		err := featuregate.GlobalRegistry().Set("gcp.untyped_double_export", true)
+		if err != nil {
+			return cfg, err
+		}
 	}
 
-	return cfg
+	return cfg, nil
 }
 
 func (cfg *Config) Validate() error {
-	if err := collector.ValidateConfig(cfg.toCollectorConfig()); err != nil {
+	collectorConfig, err := cfg.toCollectorConfig()
+	if err != nil {
+		return fmt.Errorf("error setting featuregate option: %w", err)
+	}
+	if err := collector.ValidateConfig(collectorConfig); err != nil {
 		return fmt.Errorf("exporter settings are invalid :%w", err)
 	}
 	return nil

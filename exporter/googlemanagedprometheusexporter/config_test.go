@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector/googlemanagedprometheus"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -16,7 +17,6 @@ import (
 	"go.opentelemetry.io/collector/otelcol/otelcoltest"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/exporter/googlemanagedprometheusexporter/internal/metadata"
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector/googlemanagedprometheus"
 )
 
 func TestLoadConfig(t *testing.T) {

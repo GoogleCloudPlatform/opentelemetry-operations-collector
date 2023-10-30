@@ -53,7 +53,11 @@ func createMetricsExporter(
 	params exporter.CreateSettings,
 	cfg component.Config) (exporter.Metrics, error) {
 	eCfg := cfg.(*Config)
-	mExp, err := collector.NewGoogleCloudMetricsExporter(ctx, eCfg.GMPConfig.toCollectorConfig(), params.TelemetrySettings.Logger, params.BuildInfo.Version, eCfg.Timeout)
+	collectorConfig, err := eCfg.GMPConfig.toCollectorConfig()
+	if err != nil {
+		return nil, err
+	}
+	mExp, err := collector.NewGoogleCloudMetricsExporter(ctx, collectorConfig, params.TelemetrySettings.Logger, params.BuildInfo.Version, eCfg.Timeout)
 	if err != nil {
 		return nil, err
 	}

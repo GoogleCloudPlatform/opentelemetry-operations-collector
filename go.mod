@@ -6,7 +6,7 @@ require (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector v0.44.0
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector/googlemanagedprometheus v0.44.0
 	github.com/NVIDIA/go-dcgm v0.0.0-20230811193702-90bac724c747
-	github.com/NVIDIA/go-nvml v0.11.6-0
+	github.com/NVIDIA/go-nvml v0.12.0-1.0.20231004121253-351a54f8e4cf
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/fileexporter v0.87.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter v0.87.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/prometheusremotewriteexporter v0.87.0

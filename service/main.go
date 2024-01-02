@@ -34,11 +34,6 @@ func MainContext(ctx context.Context) {
 		log.Printf("failed to build environment variables for config: %v", err)
 	}
 
-	factories, err := components()
-	if err != nil {
-		log.Fatalf("failed to build default components: %v", err)
-	}
-
 	info := component.BuildInfo{
 		Command:     "google-cloud-metrics-agent",
 		Description: "Google Cloud Metrics Agent",
@@ -46,7 +41,7 @@ func MainContext(ctx context.Context) {
 	}
 
 	params := otelcol.CollectorSettings{
-		Factories: factories,
+		Factories: components,
 		BuildInfo: info,
 		LoggingOptions: []zap.Option{
 			levelchanger.NewLevelChangerOption(

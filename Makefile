@@ -56,8 +56,6 @@ OTEL_VER ?= latest
 update-components:
 	go list -m -f '{{if not (or .Indirect .Main)}}{{.Path}}{{end}}' all | \
 		grep "^go.opentelemetry.io" | \
-		grep -v "go.opentelemetry.io/collector/featuregate" | \
-		grep -v "go.opentelemetry.io/collector/pdata" | \
 		xargs -t -I '{}' go get {}@$(OTEL_VER)
 	go get -u github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector/googlemanagedprometheus@latest
 	go list -m -f '{{if not (or .Indirect .Main)}}{{.Path}}{{end}}' all | \
@@ -89,7 +87,7 @@ install-tools:
 
 .PHONY: addlicense
 addlicense:
-	addlicense -c "Google LLC" -l apache ./**/*.go 
+	addlicense -c "Google LLC" -l apache ./**/*.go
 
 .PHONY: checklicense
 checklicense:

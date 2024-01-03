@@ -4,9 +4,6 @@ When the [opentelemetry-collector](https://github.com/open-telemetry/opentelemet
 
 ## Update All Dependencies
 
-<!-- 
-We can bring this target back when https://github.com/open-telemetry/opentelemetry-collector/issues/8063 is resolved.
-
 There is a `make` target to update all OpenTelemetry dependencies and regenerate necessary metadata. To run the update:
 ```
 make update-opentelemetry
@@ -29,7 +26,7 @@ With the new version of `mdatagen` installed, regenerate the `metadata` packages
 ```
 GO_BUILD_TAGS=gpu make generate
 ```
-<!--</details>-->
+</details>
 
 ## Test
 

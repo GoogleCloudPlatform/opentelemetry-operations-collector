@@ -102,11 +102,11 @@ github.com/Masterminds/semver v1.5.0/go.mod h1:MB6lktGJrhw8PrUyiEoblNEGEQ+RzHPF0
 github.com/Microsoft/go-winio v0.4.14/go.mod h1:qXqCSQ3Xa7+6tgxaGTIe4Kpcdsi+P8jBhyzoq1bpyYA=
 github.com/Microsoft/go-winio v0.6.1 h1:9/kr64B9VUZrLm5YYwbGtUJnMgqWVOdUAXu6Migciow=
 github.com/Microsoft/go-winio v0.6.1/go.mod h1:LRdKpFKfdobln8UmuiYcKPot9D2v6svN5+sAH+4kjUM=
-github.com/Microsoft/hcsshim v0.11.1 h1:hJ3s7GbWlGK4YVV92sO88BQSyF4ZLVy7/awqOlPxFbA=
+github.com/Microsoft/hcsshim v0.11.4 h1:68vKo2VN8DE9AdN4tnkWnmdhqdbpUFM8OF3Airm7fz8=
 github.com/NVIDIA/go-dcgm v0.0.0-20230811193702-90bac724c747 h1:inukNBh/RJl4CsxPL3rwSAUwKI90YC3Vf8uaJ0V/J3o=
 github.com/NVIDIA/go-dcgm v0.0.0-20230811193702-90bac724c747/go.mod h1:atKWXstYFllLarJucBxnt9ivFIPe26Y6S4JQvzqeSr8=
-github.com/NVIDIA/go-nvml v0.11.6-0 h1:tugQzmaX84Y/6+03wZ/MAgcpfSKDkvkAWeuxFNLHmxY=
-github.com/NVIDIA/go-nvml v0.11.6-0/go.mod h1:hy7HYeQy335x6nEss0Ne3PYqleRa6Ct+VKD9RQ4nyFs=
+github.com/NVIDIA/go-nvml v0.12.0-2 h1:Sg239yy7jmopu/cuvYauoMj9fOpcGMngxVxxS1EBXeY=
+github.com/NVIDIA/go-nvml v0.12.0-2/go.mod h1:7ruy85eOM73muOc/I37euONSwEyFqZsv5ED9AogD4G0=
 github.com/NYTimes/gziphandler v0.0.0-20170623195520-56545f4a5d46/go.mod h1:3wb06e3pkSAbeQ52E9H9iFoQsEEwGN64994WTCIhntQ=
 github.com/PuerkitoBio/purell v1.1.1/go.mod h1:c11w/QuzBsJSee3cPx9rAFu61PvFxuPbtSwDGJws/X0=
 github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578/go.mod h1:uGdkoq3SwY9Y+13GIhn11/XLaGBb4BfwItxLd5jeuXE=
@@ -207,6 +207,8 @@ github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6r
 github.com/bgentry/speakeasy v0.1.0/go.mod h1:+zsyZBPWlz7T6j88CTgSN5bM796AkVf0kBD4zp0CCIs=
 github.com/bits-and-blooms/bitset v1.2.1 h1:M+/hrU9xlMp7t4TyTDQW97d3tRPVuKFC6zBEK16QnXY=
 github.com/bits-and-blooms/bitset v1.2.1/go.mod h1:gIdJ4wp64HaoK2YrL1Q5/N7Y16edYb8uY+O0FJTyyDA=
+github.com/bmatcuk/doublestar/v4 v4.6.1 h1:FH9SifrbvJhnlQpztAx++wlkk70QBf0iBWDwNy7PA4I=
+github.com/bmatcuk/doublestar/v4 v4.6.1/go.mod h1:xBQ8jztBU6kakFMg+8WGxn0c6z1fTSPVIjEY1Wr7jzc=
 github.com/bsm/ginkgo/v2 v2.12.0 h1:Ny8MWAHyOepLGlLKYmXG4IEkioBysk6GpaRTLC8zwWs=
 github.com/bsm/gomega v1.27.10 h1:yeMWxP2pV2fG3FgAODIY8EiRE3dy0aeFYt4l7wh6yKA=
 github.com/cenkalti/backoff/v4 v4.2.1 h1:y4OZtCnogmCPw98Zjyt5a6+QwPLGkiQsYW5oUqylYbM=
@@ -226,7 +228,7 @@ github.com/cncf/udpa/go v0.0.0-20191209042840-269d4d468f6f/go.mod h1:M8M6+tZqaGX
 github.com/cncf/udpa/go v0.0.0-20201120205902-5459f2c99403/go.mod h1:WmhPx2Nbnhtbo57+VJT5O0JRkEi1Wbu0z5j0R8u5Hbk=
 github.com/cncf/xds/go v0.0.0-20230607035331-e9ce68804cb4 h1:/inchEIKaYC1Akx+H+gqO04wryn5h75LSazbRlnya1k=
 github.com/cncf/xds/go v0.0.0-20230607035331-e9ce68804cb4/go.mod h1:eXthEFrGJvWHgFFCl3hGmgk+/aYT6PnTQLykKQRLhEs=
-github.com/containerd/containerd v1.7.7 h1:QOC2K4A42RQpcrZyptP6z9EJZnlHfHJUfZrAAHe15q4=
+github.com/containerd/containerd v1.7.11 h1:lfGKw3eU35sjV0aG2eYZTiwFEY1pCzxdzicHP3SZILw=
 github.com/containerd/log v0.1.0 h1:TCJt7ioM2cr/tfR8GPbGf9/VRAX8D2B4PjzCpfX540I=
 github.com/coreos/go-semver v0.3.0/go.mod h1:nnelYz7RCh+5ahJtPPxZlU+153eP4D4r3EedlOD2RNk=
 github.com/coreos/go-systemd/v22 v22.3.2/go.mod h1:Y58oyj3AT4RCenI/lSvhwexgC+NSVTIJ3seZv2GcEnc=
@@ -700,6 +702,7 @@ github.com/nginxinc/nginx-prometheus-exporter v0.8.1-0.20201110005315-f5a5f8086c
 github.com/nginxinc/nginx-prometheus-exporter v0.8.1-0.20201110005315-f5a5f8086c19/go.mod h1:L58Se1nwn3cEyHWlcfdlXgiGbHe/efvDbkbi+psz3lA=
 github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e/go.mod h1:zD1mROLANZcx1PVRCS0qkT7pwLkGfwJo4zjcN/Tysno=
 github.com/npillmayer/nestext v0.1.3/go.mod h1:h2lrijH8jpicr25dFY+oAJLyzlya6jhnuG+zWp9L0Uk=
+github.com/observiq/nanojack v0.0.0-20201106172433-343928847ebc h1:49ewVBwLcy+eYqI4R0ICilCI4dPjddpFXWv3liXzUxM=
 github.com/oklog/run v1.0.0/go.mod h1:dlhp/R75TPv97u0XWUtDeV/lRKWPKSdTuV0TZvrmrQA=
 github.com/oklog/ulid v1.3.1 h1:EGfNDEx6MqHz8B3uNV6QAib1UR2Lm97sHi3ocA6ESJ4=
 github.com/onsi/ginkgo v0.0.0-20170829012221-11459a886d9c/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=
@@ -721,8 +724,8 @@ github.com/open-telemetry/opentelemetry-collector-contrib/internal/aws/ecsutil v
 github.com/open-telemetry/opentelemetry-collector-contrib/internal/aws/ecsutil v0.91.0/go.mod h1:EVawY9NqDmPUc9wK/ZuFhIDO7ld/xOpkpMrqwiy3dw0=
 github.com/open-telemetry/opentelemetry-collector-contrib/internal/common v0.91.0 h1:8nzprvG2+4BK6C5wFSgZruZpoPiGKc1kRO2rp33tpTo=
 github.com/open-telemetry/opentelemetry-collector-contrib/internal/common v0.91.0/go.mod h1:Kw1ZyEtVfeOTaBeNnJ4tWFw3E5TtqGwwpNDjMqT4Zp4=
-github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal v0.91.0 h1:I3MFZXcQdnATObbeKseHLEWOWMFt1jHhHCbeunBw3mE=
-github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal v0.91.0/go.mod h1:xHPYTciFeEEE2HnPu65FMgsCQFYNns66mqiHsMqb+HM=
+github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal v0.91.1-0.20240104101950-d95d8c6f4a42 h1:hH+bQ3EO/rmf1sJ29G7BK/NAOzZ80Ozk/XpRLjXZrBQ=
+github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal v0.91.1-0.20240104101950-d95d8c6f4a42/go.mod h1:UDfr3LH7Mzrit5INbaYBmOztGdIF1+bOKRtRRrzOaCU=
 github.com/open-telemetry/opentelemetry-collector-contrib/internal/filter v0.91.0 h1:/DR7auSrP2JWDiU/BfLeonUJ8AYpT2qglPJ8l8Mge8M=
 github.com/open-telemetry/opentelemetry-collector-contrib/internal/filter v0.91.0/go.mod h1:Xh3jvjVQz3lzSFExZjbGOhnJifyoqQchycaOEoOIRHw=
 github.com/open-telemetry/opentelemetry-collector-contrib/internal/k8sconfig v0.91.0 h1:sQ7C+IpMP1mfsR1kPmSRF2Po7cbYcfEw/LYVJwWpvZ8=
@@ -769,6 +772,8 @@ github.com/open-telemetry/opentelemetry-collector-contrib/receiver/couchdbreceiv
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/couchdbreceiver v0.91.0/go.mod h1:jY/4N5NQ6s/LTC/I2lH/Xp+Cqj1iIgfNZLqrfHNmuS8=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/elasticsearchreceiver v0.91.0 h1:Q3dwrvGwI4x45m33DGybhY2Pow3TQq2z+3/x1w9/aXQ=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/elasticsearchreceiver v0.91.0/go.mod h1:AISJX7TE5Xc5DjSYYl8XyiO4GbCc69qBBiJWH83QoG4=
+github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver v0.91.0 h1:T0KUBfCfHsXypaJ1daiuKuzsII4ywKp9rByj8E4FqEQ=
+github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver v0.91.0/go.mod h1:VW6CjoMfDq+aQSEc0JvqC4HKjf4tu7oMd/p12lOmI+E=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/flinkmetricsreceiver v0.91.0 h1:zVTE+j1v6w432Z/FhnnaHmyceBrhwR4sLt14hNSchEg=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/flinkmetricsreceiver v0.91.0/go.mod h1:2sq1IWPWxXNmjXwM/3JYrEBqboBLfghmTz5uxmZx9HM=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver v0.91.0 h1:ucLEZx4gOOa76inPnuR/8x3opVwzFSln2niFR2u13t0=

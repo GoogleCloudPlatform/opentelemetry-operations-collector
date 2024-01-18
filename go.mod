@@ -6,7 +6,7 @@ require (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector v0.45.0
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector/googlemanagedprometheus v0.45.0
 	github.com/NVIDIA/go-dcgm v0.0.0-20230811193702-90bac724c747
-	github.com/NVIDIA/go-nvml v0.11.6-0
+	github.com/NVIDIA/go-nvml v0.12.0-2
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/fileexporter v0.91.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter v0.91.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/prometheusremotewriteexporter v0.91.0
@@ -23,6 +23,7 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/apachereceiver v0.91.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/couchdbreceiver v0.91.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/elasticsearchreceiver v0.91.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver v0.91.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/flinkmetricsreceiver v0.91.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver v0.91.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/iisreceiver v0.91.0
@@ -87,6 +88,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/internal/v4a v1.0.23 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.1.26 // indirect
 	github.com/bits-and-blooms/bitset v1.2.1 // indirect
+	github.com/bmatcuk/doublestar/v4 v4.6.1 // indirect
 	github.com/danieljoos/wincred v1.1.2 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
 	github.com/dvsekhvalnov/jose2go v1.6.0 // indirect
@@ -283,7 +285,7 @@ require (
 	github.com/nginxinc/nginx-prometheus-exporter v0.8.1-0.20201110005315-f5a5f8086c19 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/aws/ecsutil v0.91.0 // indirect; indir6.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/common v0.91.0 // indirect; indir6.0
-	github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal v0.91.0 // indirect; indir6.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal v0.91.1-0.20240104101950-d95d8c6f4a42 // indirect; indir6.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/metadataproviders v0.91.0 // indirect; indir6.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/sharedcomponent v0.91.0 // indirect; indir6.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/winperfcounters v0.91.0 // indirect; indir6.0

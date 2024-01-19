@@ -181,7 +181,7 @@ endif
 # googet (Windows)
 .PHONY: build-goo
 build-goo:
-	make GOOS=windows build_full_name package-goo
+	$(MAKE) GOOS=windows build_full_name package-goo
 
 .PHONY: package-goo
 package-goo: export GOOS=windows

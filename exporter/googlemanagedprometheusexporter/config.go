@@ -66,7 +66,7 @@ func (c *GMPConfig) toCollectorConfig() (collector.Config, error) {
 	cfg.MetricConfig.ClientConfig = c.MetricConfig.ClientConfig
 	cfg.MetricConfig.ExtraMetrics = c.MetricConfig.Config.ExtraMetrics
 	if c.UntypedDoubleExport {
-		err := featuregate.GlobalRegistry().Set("gcp.untyped_double_export", true)
+		err := featuregate.GlobalRegistry().Set("gcp.untypedDoubleExport", true)
 		if err != nil {
 			return cfg, err
 		}

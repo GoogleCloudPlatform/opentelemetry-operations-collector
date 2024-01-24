@@ -42,6 +42,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/saphanareceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/sqlqueryreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/sqlserverreceiver"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowseventlogreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowsperfcountersreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/zookeeperreceiver"
 	"go.opentelemetry.io/collector/exporter"
@@ -114,6 +115,7 @@ func components() (otelcol.Factories, error) {
 		saphanareceiver.NewFactory(),
 		sqlqueryreceiver.NewFactory(),
 		filelogreceiver.NewFactory(),
+		windowseventlogreceiver.NewFactory(),
 	}
 	for _, rcv := range factories.Receivers {
 		receivers = append(receivers, rcv)

@@ -719,6 +719,8 @@ github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudex
 github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter v0.91.0/go.mod h1:E3Yet8YF9QufJ0MVLn1azfMd1NXFQscp1bAFq0pFmgU=
 github.com/open-telemetry/opentelemetry-collector-contrib/exporter/prometheusremotewriteexporter v0.91.0 h1:gEtcld4dRU6PBO42AK95Bw4C7WN8n82zc04NRq/fzHU=
 github.com/open-telemetry/opentelemetry-collector-contrib/exporter/prometheusremotewriteexporter v0.91.0/go.mod h1:4Cm5hGKLXANTu09i18PfRROy2L6OSkCn662TXGuraF0=
+github.com/open-telemetry/opentelemetry-collector-contrib/extension/pprofextension v0.91.0 h1:bJt6FA6ksKSLkveP9ncb+Ksn2G7azNcmAQnbXpGH6tk=
+github.com/open-telemetry/opentelemetry-collector-contrib/extension/pprofextension v0.91.0/go.mod h1:gIXeXK8NwOJE0GFd0WcQOY3gy0YBSiQkt0XABUKwXNs=
 github.com/open-telemetry/opentelemetry-collector-contrib/extension/storage v0.91.0 h1:ytN1kuraYaxwO8SmneZ+KZ/ndLAEUZrCBgcocajdb8Q=
 github.com/open-telemetry/opentelemetry-collector-contrib/internal/aws/ecsutil v0.91.0 h1:FHYwX3Ftt5ZxnvP2gqQOyHtBBoQRaSeW/Ehjy32O0DY=
 github.com/open-telemetry/opentelemetry-collector-contrib/internal/aws/ecsutil v0.91.0/go.mod h1:EVawY9NqDmPUc9wK/ZuFhIDO7ld/xOpkpMrqwiy3dw0=

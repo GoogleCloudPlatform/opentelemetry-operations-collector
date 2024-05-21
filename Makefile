@@ -85,7 +85,8 @@ install-tools:
 			github.com/golangci/golangci-lint/cmd/golangci-lint \
 			github.com/google/addlicense \
 			go.opentelemetry.io/collector/cmd/mdatagen \
-			github.com/google/googet/goopack
+			github.com/google/googet/goopack \
+			golang.org/x/tools/cmd/goimports
 
 .PHONY: addlicense
 addlicense:
@@ -102,6 +103,10 @@ lint:
 .PHONY: misspell
 misspell:
 	@output=`misspell -error $(ALL_DOC)` && echo misspell finished successfully || (echo misspell errors:\\n$$output && exit 1)
+
+.PHONE: goimports
+goimports:
+	goimports -l -w .
 
 # --------------------------
 #  CI

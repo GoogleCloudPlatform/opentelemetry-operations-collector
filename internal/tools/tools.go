@@ -20,4 +20,5 @@ import (
 	_ "github.com/google/addlicense"
 	_ "github.com/google/googet/goopack"
 	_ "go.opentelemetry.io/collector/cmd/mdatagen"
+	_ "golang.org/x/tools"
 )

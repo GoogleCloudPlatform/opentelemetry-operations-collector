@@ -20,12 +20,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/mongodbreceiver/internal/metadata"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/confignet"
 	"go.opentelemetry.io/collector/config/configtls"
 	"go.opentelemetry.io/collector/confmap/confmaptest"
+
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/mongodbreceiver/internal/metadata"
 )
 
 func TestValidate(t *testing.T) {

@@ -18,10 +18,11 @@ import (
 	"context"
 	"testing"
 
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/varnishreceiver/internal/metadata"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/consumer/consumertest"
 	"go.opentelemetry.io/collector/receiver/receivertest"
+
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/varnishreceiver/internal/metadata"
 )
 
 func TestType(t *testing.T) {

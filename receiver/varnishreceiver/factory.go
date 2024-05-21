@@ -18,11 +18,12 @@ import (
 	"context"
 	"time"
 
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/varnishreceiver/internal/metadata"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/receiver"
 	"go.opentelemetry.io/collector/receiver/scraperhelper"
+
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/varnishreceiver/internal/metadata"
 )
 
 // NewFactory create a factory for the varnish receiver.

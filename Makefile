@@ -100,6 +100,10 @@ checklicense:
 lint:
 	golangci-lint run --allow-parallel-runners --build-tags=$(GO_BUILD_TAGS) --timeout=20m
 
+.PHONY: lint
+lint-fix:
+	golangci-lint run --fix --allow-parallel-runners --build-tags=$(GO_BUILD_TAGS) --timeout=20m
+
 .PHONY: misspell
 misspell:
 	@output=`misspell -error $(ALL_DOC)` && echo misspell finished successfully || (echo misspell errors:\\n$$output && exit 1)

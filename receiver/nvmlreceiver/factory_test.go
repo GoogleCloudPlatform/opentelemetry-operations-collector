@@ -17,8 +17,9 @@ package nvmlreceiver
 import (
 	"testing"
 
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/nvmlreceiver/internal/metadata"
 	"github.com/stretchr/testify/require"
+
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/nvmlreceiver/internal/metadata"
 )
 
 func TestCreateDefaultConfig(t *testing.T) {

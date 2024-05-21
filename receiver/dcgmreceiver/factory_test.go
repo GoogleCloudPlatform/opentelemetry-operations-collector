@@ -17,8 +17,9 @@ package dcgmreceiver
 import (
 	"testing"
 
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/dcgmreceiver/internal/metadata"
 	"github.com/stretchr/testify/require"
+
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/dcgmreceiver/internal/metadata"
 )
 
 func TestCreateDefaultConfig(t *testing.T) {

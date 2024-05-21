@@ -23,6 +23,7 @@ import (
 	"math/rand"
 	"time"
 
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/dcgmreceiver/internal/metadata"
 	"github.com/NVIDIA/go-dcgm/pkg/dcgm"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
@@ -77,7 +78,7 @@ func createMetricsReceiver(
 
 	ns := newDcgmScraper(cfg, params)
 	scraper, err := scraperhelper.NewScraper(
-		typeStr,
+		metadata.Type.String(),
 		ns.scrape,
 		scraperhelper.WithStart(ns.start),
 		scraperhelper.WithShutdown(ns.stop))
@@ -86,7 +87,7 @@ func createMetricsReceiver(
 	}
 
 	return scraperhelper.NewScraperControllerReceiver(
-		&cfg.ScraperControllerSettings, params, consumer,
+		&cfg.ControllerConfig, params, consumer,
 		scraperhelper.AddScraper(scraper),
 	)
 }

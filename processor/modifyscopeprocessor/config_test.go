@@ -28,13 +28,13 @@ func TestLoadConfig(t *testing.T) {
 	assert.NoError(t, err)
 
 	factory := NewFactory()
-	factories.Processors[typeStr] = factory
+	factories.Processors[componentType] = factory
 
 	cfg, err := otelcoltest.LoadConfigAndValidate(path.Join(".", "testdata", "transform_all_config.yaml"), factories)
 	assert.NoError(t, err)
 	assert.NotNil(t, cfg)
 
-	id := component.NewID(typeStr)
+	id := component.NewID(componentType)
 	p1 := cfg.Processors[id]
 	newName := "scope"
 	newVersion := "version"

@@ -17,7 +17,6 @@ all_set:
       enabled: true
     dcgm.gpu.utilization:
       enabled: true
-  resource_attributes:
 none_set:
   metrics:
     dcgm.gpu.memory.bytes_used:
@@ -36,4 +35,3 @@ none_set:
       enabled: false
     dcgm.gpu.utilization:
       enabled: false
-  resource_attributes:

@@ -19,5 +19,5 @@ import (
 	_ "github.com/golangci/golangci-lint/cmd/golangci-lint"
 	_ "github.com/google/addlicense"
 	_ "github.com/google/googet/goopack"
-	_ "github.com/open-telemetry/opentelemetry-collector-contrib/cmd/mdatagen"
+	_ "go.opentelemetry.io/collector/cmd/mdatagen"
 )

@@ -34,7 +34,7 @@ func TestCreateProcessor(t *testing.T) {
 	assert.NoError(t, err)
 
 	factory := NewFactory()
-	factories.Processors[typeStr] = factory
+	factories.Processors[componentType] = factory
 
 	config, err := otelcoltest.LoadConfigAndValidate(path.Join(".", "testdata", "config_full.yaml"), factories)
 	assert.NoError(t, err)

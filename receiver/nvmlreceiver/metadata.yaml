@@ -1,4 +1,8 @@
-name: nvmlreceiver
+type: nvml
+status:
+  class: receiver
+  stability:
+    alpha: [metrics]
 
 attributes:
   uuid:
@@ -18,7 +22,7 @@ attributes:
     description: GPU memory used or free.
     enum: [used, free]
 
-  pid: 
+  pid:
     type: int
     description: Process ID.
 

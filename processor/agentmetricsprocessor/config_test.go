@@ -28,13 +28,13 @@ func TestLoadConfig(t *testing.T) {
 	assert.NoError(t, err)
 
 	factory := NewFactory()
-	factories.Processors[typeStr] = factory
+	factories.Processors[componentType] = factory
 
 	cfg, err := otelcoltest.LoadConfigAndValidate(path.Join(".", "testdata", "config.yaml"), factories)
 	assert.NoError(t, err)
 	assert.NotNil(t, cfg)
 
-	p1 := cfg.Processors[component.NewID("agentmetrics")]
+	p1 := cfg.Processors[component.NewID(componentType)]
 
 	want := factory.CreateDefaultConfig()
 	want.(*Config).BlankLabelMetrics = []string{"system.cpu.time"}

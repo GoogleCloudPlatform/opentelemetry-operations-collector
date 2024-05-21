@@ -1,8 +1,0 @@
-prometheus:
-  config:
-    scrape_configs:
-      - job_name: 'demo'
-        scrape_interval: 5s
-        tls_config:
-          key_file: /nonexistentkeyfile
-          cert_file: ./testdata/dummy-tls-cert-file

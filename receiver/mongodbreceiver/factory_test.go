@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/mongodbreceiver/internal/metadata"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer/consumertest"
@@ -28,8 +29,7 @@ import (
 
 func TestType(t *testing.T) {
 	factory := NewFactory()
-	ft := factory.Type()
-	require.EqualValues(t, "mongodb", ft)
+	require.EqualValues(t, metadata.Type, factory.Type())
 }
 
 func TestValidConfig(t *testing.T) {
@@ -43,7 +43,7 @@ func TestCreateMetricsReceiver(t *testing.T) {
 		context.Background(),
 		receivertest.NewNopCreateSettings(),
 		&Config{
-			ScraperControllerSettings: scraperhelper.ScraperControllerSettings{
+			ControllerConfig: scraperhelper.ControllerConfig{
 				CollectionInterval: 10 * time.Second,
 			},
 		},

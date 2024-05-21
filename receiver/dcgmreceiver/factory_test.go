@@ -17,6 +17,7 @@ package dcgmreceiver
 import (
 	"testing"
 
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/dcgmreceiver/internal/metadata"
 	"github.com/stretchr/testify/require"
 )
 
@@ -28,5 +29,5 @@ func TestCreateDefaultConfig(t *testing.T) {
 
 func TestType(t *testing.T) {
 	factory := NewFactory()
-	require.EqualValues(t, typeStr, factory.Type())
+	require.EqualValues(t, metadata.Type, factory.Type())
 }

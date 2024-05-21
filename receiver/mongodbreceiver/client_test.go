@@ -28,7 +28,6 @@ import (
 
 func TestListDatabaseNames(t *testing.T) {
 	mont := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
-	defer mont.Close()
 
 	mont.Run("list database names", func(mt *mtest.T) {
 		// mocking out a listdatabase call
@@ -64,7 +63,6 @@ const (
 
 func TestRunCommands(t *testing.T) {
 	mont := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
-	defer mont.Close()
 
 	loadedDbStats, err := loadDBStats()
 	require.NoError(t, err)
@@ -132,7 +130,6 @@ func TestRunCommands(t *testing.T) {
 
 func TestGetVersion(t *testing.T) {
 	mont := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
-	defer mont.Close()
 
 	buildInfo, err := loadBuildInfo()
 	require.NoError(t, err)
@@ -157,7 +154,6 @@ func TestGetVersion(t *testing.T) {
 
 func TestGetVersionFailures(t *testing.T) {
 	mont := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
-	defer mont.Close()
 
 	malformedBuildInfo := bson.D{
 		primitive.E{Key: "ok", Value: 1},

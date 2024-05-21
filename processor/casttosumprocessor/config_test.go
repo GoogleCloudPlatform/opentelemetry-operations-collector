@@ -29,13 +29,13 @@ func TestLoadingFullConfig(t *testing.T) {
 	assert.NoError(t, err)
 
 	factory := NewFactory()
-	factories.Processors[typeStr] = factory
+	factories.Processors[componentType] = factory
 
 	cfg, err := otelcoltest.LoadConfigAndValidate(path.Join(".", "testdata", "config_full.yaml"), factories)
 	assert.NoError(t, err)
 	assert.NotNil(t, cfg)
 
-	id := component.NewID(typeStr)
+	id := component.NewID(componentType)
 	p1 := cfg.Processors[id]
 	expectedCfg := &Config{
 		Metrics: []string{
@@ -51,8 +51,8 @@ func TestValidateConfig(t *testing.T) {
 	assert.NoError(t, err)
 
 	factory := NewFactory()
-	factories.Processors[typeStr] = factory
+	factories.Processors[componentType] = factory
 
 	_, err = otelcoltest.LoadConfigAndValidate(path.Join(".", "testdata", "config_missing_name.yaml"), factories)
-	assert.EqualError(t, err, fmt.Sprintf("processors::%s: %s", typeStr, "metric names are missing"))
+	assert.EqualError(t, err, fmt.Sprintf("processors::%s: %s", componentType, "metric names are missing"))
 }

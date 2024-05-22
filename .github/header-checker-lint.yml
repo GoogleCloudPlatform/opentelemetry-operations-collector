@@ -3,8 +3,6 @@ allowedLicenses:
 ignoreFiles:
   - "**/**/generated_*.go"
   - receiver/mongodbreceiver/**/*.go
-  - receiver/prometheusreceiver/**/*.go
-  - exporter/googlemanagedprometheusexporter/**/*.go
 sourceFileExtensions:
   - go
   - ps1

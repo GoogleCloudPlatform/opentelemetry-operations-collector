@@ -2,7 +2,7 @@ type: dcgm
 status:
   class: receiver
   stability:
-    alpha: [metrics]
+    beta: [metrics]
 
 
 attributes:

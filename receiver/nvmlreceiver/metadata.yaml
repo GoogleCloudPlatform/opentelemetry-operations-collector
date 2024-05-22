@@ -2,7 +2,7 @@ type: nvml
 status:
   class: receiver
   stability:
-    alpha: [metrics]
+    beta: [metrics]
 
 attributes:
   uuid:

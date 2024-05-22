@@ -3,13 +3,9 @@
 package metadata
 
 import (
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/confmap/confmaptest"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/receiver/receivertest"
@@ -17,30 +13,34 @@ import (
 	"go.uber.org/zap/zaptest/observer"
 )
 
-type testConfigCollection int
+type testDataSet int
 
 const (
-	testSetDefault testConfigCollection = iota
-	testSetAll
-	testSetNone
+	testDataSetDefault testDataSet = iota
+	testDataSetAll
+	testDataSetNone
 )
 
 func TestMetricsBuilder(t *testing.T) {
 	tests := []struct {
-		name      string
-		configSet testConfigCollection
+		name        string
+		metricsSet  testDataSet
+		resAttrsSet testDataSet
+		expectEmpty bool
 	}{
 		{
-			name:      "default",
-			configSet: testSetDefault,
+			name: "default",
 		},
 		{
-			name:      "all_set",
-			configSet: testSetAll,
+			name:        "all_set",
+			metricsSet:  testDataSetAll,
+			resAttrsSet: testDataSetAll,
 		},
 		{
-			name:      "none_set",
-			configSet: testSetNone,
+			name:        "none_set",
+			metricsSet:  testDataSetNone,
+			resAttrsSet: testDataSetNone,
+			expectEmpty: true,
 		},
 	}
 	for _, test := range tests {
@@ -50,9 +50,10 @@ func TestMetricsBuilder(t *testing.T) {
 			observedZapCore, observedLogs := observer.New(zap.WarnLevel)
 			settings := receivertest.NewNopCreateSettings()
 			settings.Logger = zap.New(observedZapCore)
-			mb := NewMetricsBuilder(loadConfig(t, test.name), settings, WithStartTime(start))
+			mb := NewMetricsBuilder(loadMetricsBuilderConfig(t, test.name), settings, WithStartTime(start))
 
 			expectedWarnings := 0
+
 			assert.Equal(t, expectedWarnings, observedLogs.Len())
 
 			defaultMetricsCount := 0
@@ -60,56 +61,53 @@ func TestMetricsBuilder(t *testing.T) {
 
 			defaultMetricsCount++
 			allMetricsCount++
-			mb.RecordDcgmGpuMemoryBytesUsedDataPoint(ts, 1, "attr-val", "attr-val", "attr-val", AttributeMemoryState(1))
+			mb.RecordDcgmGpuMemoryBytesUsedDataPoint(ts, 1, "model-val", "gpu_number-val", "uuid-val", AttributeMemoryStateUsed)
 
 			defaultMetricsCount++
 			allMetricsCount++
-			mb.RecordDcgmGpuProfilingDramUtilizationDataPoint(ts, 1, "attr-val", "attr-val", "attr-val")
+			mb.RecordDcgmGpuProfilingDramUtilizationDataPoint(ts, 1, "model-val", "gpu_number-val", "uuid-val")
 
 			defaultMetricsCount++
 			allMetricsCount++
-			mb.RecordDcgmGpuProfilingNvlinkTrafficRateDataPoint(ts, 1, "attr-val", "attr-val", "attr-val", AttributeDirection(1))
+			mb.RecordDcgmGpuProfilingNvlinkTrafficRateDataPoint(ts, 1, "model-val", "gpu_number-val", "uuid-val", AttributeDirectionTx)
 
 			defaultMetricsCount++
 			allMetricsCount++
-			mb.RecordDcgmGpuProfilingPcieTrafficRateDataPoint(ts, 1, "attr-val", "attr-val", "attr-val", AttributeDirection(1))
+			mb.RecordDcgmGpuProfilingPcieTrafficRateDataPoint(ts, 1, "model-val", "gpu_number-val", "uuid-val", AttributeDirectionTx)
 
 			defaultMetricsCount++
 			allMetricsCount++
-			mb.RecordDcgmGpuProfilingPipeUtilizationDataPoint(ts, 1, "attr-val", "attr-val", "attr-val", AttributePipe(1))
+			mb.RecordDcgmGpuProfilingPipeUtilizationDataPoint(ts, 1, "model-val", "gpu_number-val", "uuid-val", AttributePipeTensor)
 
 			defaultMetricsCount++
 			allMetricsCount++
-			mb.RecordDcgmGpuProfilingSmOccupancyDataPoint(ts, 1, "attr-val", "attr-val", "attr-val")
+			mb.RecordDcgmGpuProfilingSmOccupancyDataPoint(ts, 1, "model-val", "gpu_number-val", "uuid-val")
 
 			defaultMetricsCount++
 			allMetricsCount++
-			mb.RecordDcgmGpuProfilingSmUtilizationDataPoint(ts, 1, "attr-val", "attr-val", "attr-val")
+			mb.RecordDcgmGpuProfilingSmUtilizationDataPoint(ts, 1, "model-val", "gpu_number-val", "uuid-val")
 
 			defaultMetricsCount++
 			allMetricsCount++
-			mb.RecordDcgmGpuUtilizationDataPoint(ts, 1, "attr-val", "attr-val", "attr-val")
+			mb.RecordDcgmGpuUtilizationDataPoint(ts, 1, "model-val", "gpu_number-val", "uuid-val")
 
-			metrics := mb.Emit()
+			res := pcommon.NewResource()
+			metrics := mb.Emit(WithResource(res))
 
-			if test.configSet == testSetNone {
+			if test.expectEmpty {
 				assert.Equal(t, 0, metrics.ResourceMetrics().Len())
 				return
 			}
 
 			assert.Equal(t, 1, metrics.ResourceMetrics().Len())
 			rm := metrics.ResourceMetrics().At(0)
-			attrCount := 0
-			enabledAttrCount := 0
-			assert.Equal(t, enabledAttrCount, rm.Resource().Attributes().Len())
-			assert.Equal(t, attrCount, 0)
-
+			assert.Equal(t, res, rm.Resource())
 			assert.Equal(t, 1, rm.ScopeMetrics().Len())
 			ms := rm.ScopeMetrics().At(0).Metrics()
-			if test.configSet == testSetDefault {
+			if test.metricsSet == testDataSetDefault {
 				assert.Equal(t, defaultMetricsCount, ms.Len())
 			}
-			if test.configSet == testSetAll {
+			if test.metricsSet == testDataSetAll {
 				assert.Equal(t, allMetricsCount, ms.Len())
 			}
 			validatedMetrics := make(map[string]bool)
@@ -129,16 +127,16 @@ func TestMetricsBuilder(t *testing.T) {
 					assert.Equal(t, int64(1), dp.IntValue())
 					attrVal, ok := dp.Attributes().Get("model")
 					assert.True(t, ok)
-					assert.EqualValues(t, "attr-val", attrVal.Str())
+					assert.EqualValues(t, "model-val", attrVal.Str())
 					attrVal, ok = dp.Attributes().Get("gpu_number")
 					assert.True(t, ok)
-					assert.EqualValues(t, "attr-val", attrVal.Str())
+					assert.EqualValues(t, "gpu_number-val", attrVal.Str())
 					attrVal, ok = dp.Attributes().Get("uuid")
 					assert.True(t, ok)
-					assert.EqualValues(t, "attr-val", attrVal.Str())
+					assert.EqualValues(t, "uuid-val", attrVal.Str())
 					attrVal, ok = dp.Attributes().Get("memory_state")
 					assert.True(t, ok)
-					assert.Equal(t, "used", attrVal.Str())
+					assert.EqualValues(t, "used", attrVal.Str())
 				case "dcgm.gpu.profiling.dram_utilization":
 					assert.False(t, validatedMetrics["dcgm.gpu.profiling.dram_utilization"], "Found a duplicate in the metrics slice: dcgm.gpu.profiling.dram_utilization")
 					validatedMetrics["dcgm.gpu.profiling.dram_utilization"] = true
@@ -153,13 +151,13 @@ func TestMetricsBuilder(t *testing.T) {
 					assert.Equal(t, float64(1), dp.DoubleValue())
 					attrVal, ok := dp.Attributes().Get("model")
 					assert.True(t, ok)
-					assert.EqualValues(t, "attr-val", attrVal.Str())
+					assert.EqualValues(t, "model-val", attrVal.Str())
 					attrVal, ok = dp.Attributes().Get("gpu_number")
 					assert.True(t, ok)
-					assert.EqualValues(t, "attr-val", attrVal.Str())
+					assert.EqualValues(t, "gpu_number-val", attrVal.Str())
 					attrVal, ok = dp.Attributes().Get("uuid")
 					assert.True(t, ok)
-					assert.EqualValues(t, "attr-val", attrVal.Str())
+					assert.EqualValues(t, "uuid-val", attrVal.Str())
 				case "dcgm.gpu.profiling.nvlink_traffic_rate":
 					assert.False(t, validatedMetrics["dcgm.gpu.profiling.nvlink_traffic_rate"], "Found a duplicate in the metrics slice: dcgm.gpu.profiling.nvlink_traffic_rate")
 					validatedMetrics["dcgm.gpu.profiling.nvlink_traffic_rate"] = true
@@ -174,16 +172,16 @@ func TestMetricsBuilder(t *testing.T) {
 					assert.Equal(t, int64(1), dp.IntValue())
 					attrVal, ok := dp.Attributes().Get("model")
 					assert.True(t, ok)
-					assert.EqualValues(t, "attr-val", attrVal.Str())
+					assert.EqualValues(t, "model-val", attrVal.Str())
 					attrVal, ok = dp.Attributes().Get("gpu_number")
 					assert.True(t, ok)
-					assert.EqualValues(t, "attr-val", attrVal.Str())
+					assert.EqualValues(t, "gpu_number-val", attrVal.Str())
 					attrVal, ok = dp.Attributes().Get("uuid")
 					assert.True(t, ok)
-					assert.EqualValues(t, "attr-val", attrVal.Str())
+					assert.EqualValues(t, "uuid-val", attrVal.Str())
 					attrVal, ok = dp.Attributes().Get("direction")
 					assert.True(t, ok)
-					assert.Equal(t, "tx", attrVal.Str())
+					assert.EqualValues(t, "tx", attrVal.Str())
 				case "dcgm.gpu.profiling.pcie_traffic_rate":
 					assert.False(t, validatedMetrics["dcgm.gpu.profiling.pcie_traffic_rate"], "Found a duplicate in the metrics slice: dcgm.gpu.profiling.pcie_traffic_rate")
 					validatedMetrics["dcgm.gpu.profiling.pcie_traffic_rate"] = true
@@ -198,16 +196,16 @@ func TestMetricsBuilder(t *testing.T) {
 					assert.Equal(t, int64(1), dp.IntValue())
 					attrVal, ok := dp.Attributes().Get("model")
 					assert.True(t, ok)
-					assert.EqualValues(t, "attr-val", attrVal.Str())
+					assert.EqualValues(t, "model-val", attrVal.Str())
 					attrVal, ok = dp.Attributes().Get("gpu_number")
 					assert.True(t, ok)
-					assert.EqualValues(t, "attr-val", attrVal.Str())
+					assert.EqualValues(t, "gpu_number-val", attrVal.Str())
 					attrVal, ok = dp.Attributes().Get("uuid")
 					assert.True(t, ok)
-					assert.EqualValues(t, "attr-val", attrVal.Str())
+					assert.EqualValues(t, "uuid-val", attrVal.Str())
 					attrVal, ok = dp.Attributes().Get("direction")
 					assert.True(t, ok)
-					assert.Equal(t, "tx", attrVal.Str())
+					assert.EqualValues(t, "tx", attrVal.Str())
 				case "dcgm.gpu.profiling.pipe_utilization":
 					assert.False(t, validatedMetrics["dcgm.gpu.profiling.pipe_utilization"], "Found a duplicate in the metrics slice: dcgm.gpu.profiling.pipe_utilization")
 					validatedMetrics["dcgm.gpu.profiling.pipe_utilization"] = true
@@ -222,16 +220,16 @@ func TestMetricsBuilder(t *testing.T) {
 					assert.Equal(t, float64(1), dp.DoubleValue())
 					attrVal, ok := dp.Attributes().Get("model")
 					assert.True(t, ok)
-					assert.EqualValues(t, "attr-val", attrVal.Str())
+					assert.EqualValues(t, "model-val", attrVal.Str())
 					attrVal, ok = dp.Attributes().Get("gpu_number")
 					assert.True(t, ok)
-					assert.EqualValues(t, "attr-val", attrVal.Str())
+					assert.EqualValues(t, "gpu_number-val", attrVal.Str())
 					attrVal, ok = dp.Attributes().Get("uuid")
 					assert.True(t, ok)
-					assert.EqualValues(t, "attr-val", attrVal.Str())
+					assert.EqualValues(t, "uuid-val", attrVal.Str())
 					attrVal, ok = dp.Attributes().Get("pipe")
 					assert.True(t, ok)
-					assert.Equal(t, "tensor", attrVal.Str())
+					assert.EqualValues(t, "tensor", attrVal.Str())
 				case "dcgm.gpu.profiling.sm_occupancy":
 					assert.False(t, validatedMetrics["dcgm.gpu.profiling.sm_occupancy"], "Found a duplicate in the metrics slice: dcgm.gpu.profiling.sm_occupancy")
 					validatedMetrics["dcgm.gpu.profiling.sm_occupancy"] = true
@@ -246,13 +244,13 @@ func TestMetricsBuilder(t *testing.T) {
 					assert.Equal(t, float64(1), dp.DoubleValue())
 					attrVal, ok := dp.Attributes().Get("model")
 					assert.True(t, ok)
-					assert.EqualValues(t, "attr-val", attrVal.Str())
+					assert.EqualValues(t, "model-val", attrVal.Str())
 					attrVal, ok = dp.Attributes().Get("gpu_number")
 					assert.True(t, ok)
-					assert.EqualValues(t, "attr-val", attrVal.Str())
+					assert.EqualValues(t, "gpu_number-val", attrVal.Str())
 					attrVal, ok = dp.Attributes().Get("uuid")
 					assert.True(t, ok)
-					assert.EqualValues(t, "attr-val", attrVal.Str())
+					assert.EqualValues(t, "uuid-val", attrVal.Str())
 				case "dcgm.gpu.profiling.sm_utilization":
 					assert.False(t, validatedMetrics["dcgm.gpu.profiling.sm_utilization"], "Found a duplicate in the metrics slice: dcgm.gpu.profiling.sm_utilization")
 					validatedMetrics["dcgm.gpu.profiling.sm_utilization"] = true
@@ -267,13 +265,13 @@ func TestMetricsBuilder(t *testing.T) {
 					assert.Equal(t, float64(1), dp.DoubleValue())
 					attrVal, ok := dp.Attributes().Get("model")
 					assert.True(t, ok)
-					assert.EqualValues(t, "attr-val", attrVal.Str())
+					assert.EqualValues(t, "model-val", attrVal.Str())
 					attrVal, ok = dp.Attributes().Get("gpu_number")
 					assert.True(t, ok)
-					assert.EqualValues(t, "attr-val", attrVal.Str())
+					assert.EqualValues(t, "gpu_number-val", attrVal.Str())
 					attrVal, ok = dp.Attributes().Get("uuid")
 					assert.True(t, ok)
-					assert.EqualValues(t, "attr-val", attrVal.Str())
+					assert.EqualValues(t, "uuid-val", attrVal.Str())
 				case "dcgm.gpu.utilization":
 					assert.False(t, validatedMetrics["dcgm.gpu.utilization"], "Found a duplicate in the metrics slice: dcgm.gpu.utilization")
 					validatedMetrics["dcgm.gpu.utilization"] = true
@@ -288,25 +286,15 @@ func TestMetricsBuilder(t *testing.T) {
 					assert.Equal(t, float64(1), dp.DoubleValue())
 					attrVal, ok := dp.Attributes().Get("model")
 					assert.True(t, ok)
-					assert.EqualValues(t, "attr-val", attrVal.Str())
+					assert.EqualValues(t, "model-val", attrVal.Str())
 					attrVal, ok = dp.Attributes().Get("gpu_number")
 					assert.True(t, ok)
-					assert.EqualValues(t, "attr-val", attrVal.Str())
+					assert.EqualValues(t, "gpu_number-val", attrVal.Str())
 					attrVal, ok = dp.Attributes().Get("uuid")
 					assert.True(t, ok)
-					assert.EqualValues(t, "attr-val", attrVal.Str())
+					assert.EqualValues(t, "uuid-val", attrVal.Str())
 				}
 			}
 		})
 	}
-}
-
-func loadConfig(t *testing.T, name string) MetricsBuilderConfig {
-	cm, err := confmaptest.LoadConf(filepath.Join("testdata", "config.yaml"))
-	require.NoError(t, err)
-	sub, err := cm.Sub(name)
-	require.NoError(t, err)
-	cfg := DefaultMetricsBuilderConfig()
-	require.NoError(t, component.UnmarshalConfig(sub, &cfg))
-	return cfg
 }

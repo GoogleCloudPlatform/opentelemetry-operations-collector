@@ -19,15 +19,15 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer/consumertest"
 	"go.opentelemetry.io/collector/receiver/receivertest"
+
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/varnishreceiver/internal/metadata"
 )
 
 func TestType(t *testing.T) {
 	factory := NewFactory()
-	ft := factory.Type()
-	require.EqualValues(t, "varnish", ft)
+	require.EqualValues(t, metadata.Type, factory.Type())
 }
 
 func TestValidConfig(t *testing.T) {
@@ -64,19 +64,6 @@ func TestCreateMetricsReceiver(t *testing.T) {
 				)
 
 				require.NoError(t, err)
-			},
-		},
-		{
-			desc: "Nil consumer",
-			run: func(t *testing.T) {
-				t.Parallel()
-				_, err := createMetricsReceiver(
-					context.Background(),
-					receivertest.NewNopCreateSettings(),
-					createDefaultConfig(),
-					nil,
-				)
-				require.ErrorIs(t, err, component.ErrNilNextConsumer)
 			},
 		},
 	}

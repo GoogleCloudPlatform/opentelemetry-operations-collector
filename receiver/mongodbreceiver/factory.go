@@ -28,32 +28,28 @@ import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/mongodbreceiver/internal/metadata"
 )
 
-const (
-	typeStr   = "mongodb"
-	stability = component.StabilityLevelBeta
-)
-
 // NewFactory creates a factory for mongodb receiver.
 func NewFactory() receiver.Factory {
 	return receiver.NewFactory(
-		typeStr,
+		metadata.Type,
 		createDefaultConfig,
-		receiver.WithMetrics(createMetricsReceiver, stability))
+		receiver.WithMetrics(createMetricsReceiver, metadata.MetricsStability))
 }
 
 func createDefaultConfig() component.Config {
 	return &Config{
-		ScraperControllerSettings: scraperhelper.ScraperControllerSettings{
+		ControllerConfig: scraperhelper.ControllerConfig{
 			CollectionInterval: time.Minute,
 		},
 		Timeout: time.Minute,
-		Hosts: []confignet.NetAddr{
+		Hosts: []confignet.AddrConfig{
 			{
-				Endpoint: "localhost:27017",
+				Endpoint:  "localhost:27017",
+				Transport: confignet.TransportTypeTCP,
 			},
 		},
-		Metrics:          metadata.DefaultMetricsConfig(),
-		TLSClientSetting: configtls.TLSClientSetting{},
+		Metrics:      metadata.DefaultMetricsConfig(),
+		ClientConfig: configtls.ClientConfig{},
 	}
 }
 
@@ -66,7 +62,7 @@ func createMetricsReceiver(
 	cfg := rConf.(*Config)
 	ms := newMongodbScraper(params, cfg)
 
-	scraper, err := scraperhelper.NewScraper(typeStr, ms.scrape,
+	scraper, err := scraperhelper.NewScraper(metadata.Type.String(), ms.scrape,
 		scraperhelper.WithStart(ms.start),
 		scraperhelper.WithShutdown(ms.shutdown))
 	if err != nil {
@@ -74,7 +70,7 @@ func createMetricsReceiver(
 	}
 
 	return scraperhelper.NewScraperControllerReceiver(
-		&cfg.ScraperControllerSettings, params, consumer,
+		&cfg.ControllerConfig, params, consumer,
 		scraperhelper.AddScraper(scraper),
 	)
 }

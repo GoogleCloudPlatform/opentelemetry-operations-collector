@@ -15,6 +15,7 @@
 package mongodbreceiver // import "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/mongodbreceiver"
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -30,11 +31,11 @@ import (
 )
 
 type Config struct {
-	scraperhelper.ScraperControllerSettings `mapstructure:",squash"`
-	configtls.TLSClientSetting              `mapstructure:"tls,omitempty"`
+	scraperhelper.ControllerConfig `mapstructure:",squash"`
+	configtls.ClientConfig         `mapstructure:"tls,omitempty"`
 	// Metrics defines which metrics to enable for the scraper
 	Metrics    metadata.MetricsConfig `mapstructure:"metrics"`
-	Hosts      []confignet.NetAddr    `mapstructure:"hosts"`
+	Hosts      []confignet.AddrConfig `mapstructure:"hosts"`
 	Username   string                 `mapstructure:"username"`
 	Password   string                 `mapstructure:"password"`
 	ReplicaSet string                 `mapstructure:"replica_set,omitempty"`
@@ -59,7 +60,7 @@ func (c *Config) Validate() error {
 		err = multierr.Append(err, errors.New("password provided without user"))
 	}
 
-	if _, tlsErr := c.LoadTLSConfig(); tlsErr != nil {
+	if _, tlsErr := c.LoadTLSConfig(context.Background()); tlsErr != nil {
 		err = multierr.Append(err, fmt.Errorf("error loading tls configuration: %w", tlsErr))
 	}
 
@@ -75,7 +76,7 @@ func (c *Config) ClientOptions() *options.ClientOptions {
 		clientOptions.SetConnectTimeout(c.Timeout)
 	}
 
-	tlsConfig, err := c.LoadTLSConfig()
+	tlsConfig, err := c.LoadTLSConfig(context.Background())
 	if err == nil && tlsConfig != nil {
 		clientOptions.SetTLSConfig(tlsConfig)
 	}

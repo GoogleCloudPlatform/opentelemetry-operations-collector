@@ -23,14 +23,12 @@ import (
 	"go.opentelemetry.io/collector/processor/processorhelper"
 )
 
-const (
-	// The value of "type" key in configuration.
-	typeStr = "normalizesums"
-)
+// The value of "type" key in configuration.
+var componentType component.Type = component.MustNewType("normalizesums")
 
 func NewFactory() processor.Factory {
 	return processor.NewFactory(
-		typeStr,
+		componentType,
 		createDefaultConfig,
 		processor.WithMetrics(createMetricsProcessor, component.StabilityLevelBeta))
 }

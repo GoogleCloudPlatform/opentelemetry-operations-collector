@@ -27,7 +27,7 @@ receivers:
       processes:
 
 exporters:
-  logging:
+  debug:
   file:
     path: ./metrics.json
 
@@ -35,4 +35,4 @@ service:
   pipelines:
     metrics:
       receivers: [hostmetrics]
-      exporters: [file,logging]
+      exporters: [file,debug]

@@ -28,6 +28,8 @@ import (
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/receiver"
 	"go.opentelemetry.io/collector/receiver/scraperhelper"
+
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/dcgmreceiver/internal/metadata"
 )
 
 var dcgmIDToName map[dcgm.Short]string
@@ -77,7 +79,7 @@ func createMetricsReceiver(
 
 	ns := newDcgmScraper(cfg, params)
 	scraper, err := scraperhelper.NewScraper(
-		typeStr,
+		metadata.Type.String(),
 		ns.scrape,
 		scraperhelper.WithStart(ns.start),
 		scraperhelper.WithShutdown(ns.stop))
@@ -86,7 +88,7 @@ func createMetricsReceiver(
 	}
 
 	return scraperhelper.NewScraperControllerReceiver(
-		&cfg.ScraperControllerSettings, params, consumer,
+		&cfg.ControllerConfig, params, consumer,
 		scraperhelper.AddScraper(scraper),
 	)
 }

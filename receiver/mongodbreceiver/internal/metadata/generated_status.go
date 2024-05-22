@@ -6,7 +6,10 @@ import (
 	"go.opentelemetry.io/collector/component"
 )
 
+var (
+	Type = component.MustNewType("mongodb")
+)
+
 const (
-	Type             = "mongodb"
 	MetricsStability = component.StabilityLevelDevelopment
 )

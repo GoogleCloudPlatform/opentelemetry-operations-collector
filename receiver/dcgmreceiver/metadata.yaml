@@ -1,4 +1,9 @@
-name: dcgmreceiver
+type: dcgm
+status:
+  class: receiver
+  stability:
+    beta: [metrics]
+
 
 attributes:
   model:
@@ -60,7 +65,7 @@ metrics:
     gauge:
       value_type: double
     attributes: [model, gpu_number, uuid]
-   
+
   dcgm.gpu.profiling.pipe_utilization:
     enabled: true
     description: Fraction of cycles the corresponding GPU pipe was active, averaged over time and all multiprocessors.

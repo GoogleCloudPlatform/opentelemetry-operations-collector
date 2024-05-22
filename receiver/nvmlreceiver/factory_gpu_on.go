@@ -25,6 +25,8 @@ import (
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/receiver"
 	"go.opentelemetry.io/collector/receiver/scraperhelper"
+
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/nvmlreceiver/internal/metadata"
 )
 
 func createMetricsReceiver(
@@ -40,7 +42,7 @@ func createMetricsReceiver(
 
 	ns := newNvmlScraper(cfg, params)
 	scraper, err := scraperhelper.NewScraper(
-		typeStr,
+		metadata.Type.String(),
 		ns.scrape,
 		scraperhelper.WithStart(ns.start),
 		scraperhelper.WithShutdown(ns.stop))
@@ -49,7 +51,7 @@ func createMetricsReceiver(
 	}
 
 	return scraperhelper.NewScraperControllerReceiver(
-		&cfg.ScraperControllerSettings, params, consumer,
+		&cfg.ControllerConfig, params, consumer,
 		scraperhelper.AddScraper(scraper),
 	)
 }

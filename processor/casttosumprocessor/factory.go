@@ -24,14 +24,12 @@ import (
 	"go.opentelemetry.io/collector/processor/processorhelper"
 )
 
-const (
-	// The value of "type" key in configuration.
-	typeStr = "casttosum"
-)
+// The value of "type" key in configuration.
+var componentType component.Type = component.MustNewType("casttosum")
 
 func NewFactory() processor.Factory {
 	return processor.NewFactory(
-		typeStr,
+		componentType,
 		createDefaultConfig,
 		processor.WithMetrics(createMetricsProcessor, component.StabilityLevelBeta))
 }

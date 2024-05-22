@@ -34,7 +34,7 @@ processors:
     # 3. creates utilization metrics from usage metrics
 
 exporters:
-  logging:
+  debug:
   file:
     path: ./metrics.json
 
@@ -43,4 +43,4 @@ service:
     metrics:
       receivers: [hostmetrics]
       processors: [agentmetrics/cloud-monitoring]
-      exporters: [file,logging]
+      exporters: [file,debug]

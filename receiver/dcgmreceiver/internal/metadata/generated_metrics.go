@@ -6,84 +6,10 @@ import (
 	"time"
 
 	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/confmap"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/receiver"
 )
-
-// MetricSettings provides common settings for a particular metric.
-type MetricSettings struct {
-	Enabled bool `mapstructure:"enabled"`
-
-	enabledSetByUser bool
-}
-
-func (ms *MetricSettings) Unmarshal(parser *confmap.Conf) error {
-	if parser == nil {
-		return nil
-	}
-	err := parser.Unmarshal(ms, confmap.WithErrorUnused())
-	if err != nil {
-		return err
-	}
-	ms.enabledSetByUser = parser.IsSet("enabled")
-	return nil
-}
-
-// MetricsSettings provides settings for dcgmreceiver metrics.
-type MetricsSettings struct {
-	DcgmGpuMemoryBytesUsed            MetricSettings `mapstructure:"dcgm.gpu.memory.bytes_used"`
-	DcgmGpuProfilingDramUtilization   MetricSettings `mapstructure:"dcgm.gpu.profiling.dram_utilization"`
-	DcgmGpuProfilingNvlinkTrafficRate MetricSettings `mapstructure:"dcgm.gpu.profiling.nvlink_traffic_rate"`
-	DcgmGpuProfilingPcieTrafficRate   MetricSettings `mapstructure:"dcgm.gpu.profiling.pcie_traffic_rate"`
-	DcgmGpuProfilingPipeUtilization   MetricSettings `mapstructure:"dcgm.gpu.profiling.pipe_utilization"`
-	DcgmGpuProfilingSmOccupancy       MetricSettings `mapstructure:"dcgm.gpu.profiling.sm_occupancy"`
-	DcgmGpuProfilingSmUtilization     MetricSettings `mapstructure:"dcgm.gpu.profiling.sm_utilization"`
-	DcgmGpuUtilization                MetricSettings `mapstructure:"dcgm.gpu.utilization"`
-}
-
-func DefaultMetricsSettings() MetricsSettings {
-	return MetricsSettings{
-		DcgmGpuMemoryBytesUsed: MetricSettings{
-			Enabled: true,
-		},
-		DcgmGpuProfilingDramUtilization: MetricSettings{
-			Enabled: true,
-		},
-		DcgmGpuProfilingNvlinkTrafficRate: MetricSettings{
-			Enabled: true,
-		},
-		DcgmGpuProfilingPcieTrafficRate: MetricSettings{
-			Enabled: true,
-		},
-		DcgmGpuProfilingPipeUtilization: MetricSettings{
-			Enabled: true,
-		},
-		DcgmGpuProfilingSmOccupancy: MetricSettings{
-			Enabled: true,
-		},
-		DcgmGpuProfilingSmUtilization: MetricSettings{
-			Enabled: true,
-		},
-		DcgmGpuUtilization: MetricSettings{
-			Enabled: true,
-		},
-	}
-}
-
-// ResourceAttributeSettings provides common settings for a particular metric.
-type ResourceAttributeSettings struct {
-	Enabled bool `mapstructure:"enabled"`
-}
-
-// ResourceAttributesSettings provides settings for dcgmreceiver metrics.
-type ResourceAttributesSettings struct {
-}
-
-func DefaultResourceAttributesSettings() ResourceAttributesSettings {
-	return ResourceAttributesSettings{}
-}
 
 // AttributeDirection specifies the a value direction attribute.
 type AttributeDirection int
@@ -173,7 +99,7 @@ var MapAttributePipe = map[string]AttributePipe{
 
 type metricDcgmGpuMemoryBytesUsed struct {
 	data     pmetric.Metric // data buffer for generated metric.
-	settings MetricSettings // metric settings provided by user.
+	config   MetricConfig   // metric config provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
 
@@ -187,7 +113,7 @@ func (m *metricDcgmGpuMemoryBytesUsed) init() {
 }
 
 func (m *metricDcgmGpuMemoryBytesUsed) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, memoryStateAttributeValue string) {
-	if !m.settings.Enabled {
+	if !m.config.Enabled {
 		return
 	}
 	dp := m.data.Gauge().DataPoints().AppendEmpty()
@@ -209,16 +135,16 @@ func (m *metricDcgmGpuMemoryBytesUsed) updateCapacity() {
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
 func (m *metricDcgmGpuMemoryBytesUsed) emit(metrics pmetric.MetricSlice) {
-	if m.settings.Enabled && m.data.Gauge().DataPoints().Len() > 0 {
+	if m.config.Enabled && m.data.Gauge().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
 		m.init()
 	}
 }
 
-func newMetricDcgmGpuMemoryBytesUsed(settings MetricSettings) metricDcgmGpuMemoryBytesUsed {
-	m := metricDcgmGpuMemoryBytesUsed{settings: settings}
-	if settings.Enabled {
+func newMetricDcgmGpuMemoryBytesUsed(cfg MetricConfig) metricDcgmGpuMemoryBytesUsed {
+	m := metricDcgmGpuMemoryBytesUsed{config: cfg}
+	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
 	}
@@ -227,7 +153,7 @@ func newMetricDcgmGpuMemoryBytesUsed(settings MetricSettings) metricDcgmGpuMemor
 
 type metricDcgmGpuProfilingDramUtilization struct {
 	data     pmetric.Metric // data buffer for generated metric.
-	settings MetricSettings // metric settings provided by user.
+	config   MetricConfig   // metric config provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
 
@@ -241,7 +167,7 @@ func (m *metricDcgmGpuProfilingDramUtilization) init() {
 }
 
 func (m *metricDcgmGpuProfilingDramUtilization) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string) {
-	if !m.settings.Enabled {
+	if !m.config.Enabled {
 		return
 	}
 	dp := m.data.Gauge().DataPoints().AppendEmpty()
@@ -262,16 +188,16 @@ func (m *metricDcgmGpuProfilingDramUtilization) updateCapacity() {
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
 func (m *metricDcgmGpuProfilingDramUtilization) emit(metrics pmetric.MetricSlice) {
-	if m.settings.Enabled && m.data.Gauge().DataPoints().Len() > 0 {
+	if m.config.Enabled && m.data.Gauge().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
 		m.init()
 	}
 }
 
-func newMetricDcgmGpuProfilingDramUtilization(settings MetricSettings) metricDcgmGpuProfilingDramUtilization {
-	m := metricDcgmGpuProfilingDramUtilization{settings: settings}
-	if settings.Enabled {
+func newMetricDcgmGpuProfilingDramUtilization(cfg MetricConfig) metricDcgmGpuProfilingDramUtilization {
+	m := metricDcgmGpuProfilingDramUtilization{config: cfg}
+	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
 	}
@@ -280,7 +206,7 @@ func newMetricDcgmGpuProfilingDramUtilization(settings MetricSettings) metricDcg
 
 type metricDcgmGpuProfilingNvlinkTrafficRate struct {
 	data     pmetric.Metric // data buffer for generated metric.
-	settings MetricSettings // metric settings provided by user.
+	config   MetricConfig   // metric config provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
 
@@ -294,7 +220,7 @@ func (m *metricDcgmGpuProfilingNvlinkTrafficRate) init() {
 }
 
 func (m *metricDcgmGpuProfilingNvlinkTrafficRate) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, directionAttributeValue string) {
-	if !m.settings.Enabled {
+	if !m.config.Enabled {
 		return
 	}
 	dp := m.data.Gauge().DataPoints().AppendEmpty()
@@ -316,16 +242,16 @@ func (m *metricDcgmGpuProfilingNvlinkTrafficRate) updateCapacity() {
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
 func (m *metricDcgmGpuProfilingNvlinkTrafficRate) emit(metrics pmetric.MetricSlice) {
-	if m.settings.Enabled && m.data.Gauge().DataPoints().Len() > 0 {
+	if m.config.Enabled && m.data.Gauge().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
 		m.init()
 	}
 }
 
-func newMetricDcgmGpuProfilingNvlinkTrafficRate(settings MetricSettings) metricDcgmGpuProfilingNvlinkTrafficRate {
-	m := metricDcgmGpuProfilingNvlinkTrafficRate{settings: settings}
-	if settings.Enabled {
+func newMetricDcgmGpuProfilingNvlinkTrafficRate(cfg MetricConfig) metricDcgmGpuProfilingNvlinkTrafficRate {
+	m := metricDcgmGpuProfilingNvlinkTrafficRate{config: cfg}
+	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
 	}
@@ -334,7 +260,7 @@ func newMetricDcgmGpuProfilingNvlinkTrafficRate(settings MetricSettings) metricD
 
 type metricDcgmGpuProfilingPcieTrafficRate struct {
 	data     pmetric.Metric // data buffer for generated metric.
-	settings MetricSettings // metric settings provided by user.
+	config   MetricConfig   // metric config provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
 
@@ -348,7 +274,7 @@ func (m *metricDcgmGpuProfilingPcieTrafficRate) init() {
 }
 
 func (m *metricDcgmGpuProfilingPcieTrafficRate) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, directionAttributeValue string) {
-	if !m.settings.Enabled {
+	if !m.config.Enabled {
 		return
 	}
 	dp := m.data.Gauge().DataPoints().AppendEmpty()
@@ -370,16 +296,16 @@ func (m *metricDcgmGpuProfilingPcieTrafficRate) updateCapacity() {
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
 func (m *metricDcgmGpuProfilingPcieTrafficRate) emit(metrics pmetric.MetricSlice) {
-	if m.settings.Enabled && m.data.Gauge().DataPoints().Len() > 0 {
+	if m.config.Enabled && m.data.Gauge().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
 		m.init()
 	}
 }
 
-func newMetricDcgmGpuProfilingPcieTrafficRate(settings MetricSettings) metricDcgmGpuProfilingPcieTrafficRate {
-	m := metricDcgmGpuProfilingPcieTrafficRate{settings: settings}
-	if settings.Enabled {
+func newMetricDcgmGpuProfilingPcieTrafficRate(cfg MetricConfig) metricDcgmGpuProfilingPcieTrafficRate {
+	m := metricDcgmGpuProfilingPcieTrafficRate{config: cfg}
+	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
 	}
@@ -388,7 +314,7 @@ func newMetricDcgmGpuProfilingPcieTrafficRate(settings MetricSettings) metricDcg
 
 type metricDcgmGpuProfilingPipeUtilization struct {
 	data     pmetric.Metric // data buffer for generated metric.
-	settings MetricSettings // metric settings provided by user.
+	config   MetricConfig   // metric config provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
 
@@ -402,7 +328,7 @@ func (m *metricDcgmGpuProfilingPipeUtilization) init() {
 }
 
 func (m *metricDcgmGpuProfilingPipeUtilization) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, pipeAttributeValue string) {
-	if !m.settings.Enabled {
+	if !m.config.Enabled {
 		return
 	}
 	dp := m.data.Gauge().DataPoints().AppendEmpty()
@@ -424,16 +350,16 @@ func (m *metricDcgmGpuProfilingPipeUtilization) updateCapacity() {
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
 func (m *metricDcgmGpuProfilingPipeUtilization) emit(metrics pmetric.MetricSlice) {
-	if m.settings.Enabled && m.data.Gauge().DataPoints().Len() > 0 {
+	if m.config.Enabled && m.data.Gauge().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
 		m.init()
 	}
 }
 
-func newMetricDcgmGpuProfilingPipeUtilization(settings MetricSettings) metricDcgmGpuProfilingPipeUtilization {
-	m := metricDcgmGpuProfilingPipeUtilization{settings: settings}
-	if settings.Enabled {
+func newMetricDcgmGpuProfilingPipeUtilization(cfg MetricConfig) metricDcgmGpuProfilingPipeUtilization {
+	m := metricDcgmGpuProfilingPipeUtilization{config: cfg}
+	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
 	}
@@ -442,7 +368,7 @@ func newMetricDcgmGpuProfilingPipeUtilization(settings MetricSettings) metricDcg
 
 type metricDcgmGpuProfilingSmOccupancy struct {
 	data     pmetric.Metric // data buffer for generated metric.
-	settings MetricSettings // metric settings provided by user.
+	config   MetricConfig   // metric config provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
 
@@ -456,7 +382,7 @@ func (m *metricDcgmGpuProfilingSmOccupancy) init() {
 }
 
 func (m *metricDcgmGpuProfilingSmOccupancy) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string) {
-	if !m.settings.Enabled {
+	if !m.config.Enabled {
 		return
 	}
 	dp := m.data.Gauge().DataPoints().AppendEmpty()
@@ -477,16 +403,16 @@ func (m *metricDcgmGpuProfilingSmOccupancy) updateCapacity() {
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
 func (m *metricDcgmGpuProfilingSmOccupancy) emit(metrics pmetric.MetricSlice) {
-	if m.settings.Enabled && m.data.Gauge().DataPoints().Len() > 0 {
+	if m.config.Enabled && m.data.Gauge().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
 		m.init()
 	}
 }
 
-func newMetricDcgmGpuProfilingSmOccupancy(settings MetricSettings) metricDcgmGpuProfilingSmOccupancy {
-	m := metricDcgmGpuProfilingSmOccupancy{settings: settings}
-	if settings.Enabled {
+func newMetricDcgmGpuProfilingSmOccupancy(cfg MetricConfig) metricDcgmGpuProfilingSmOccupancy {
+	m := metricDcgmGpuProfilingSmOccupancy{config: cfg}
+	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
 	}
@@ -495,7 +421,7 @@ func newMetricDcgmGpuProfilingSmOccupancy(settings MetricSettings) metricDcgmGpu
 
 type metricDcgmGpuProfilingSmUtilization struct {
 	data     pmetric.Metric // data buffer for generated metric.
-	settings MetricSettings // metric settings provided by user.
+	config   MetricConfig   // metric config provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
 
@@ -509,7 +435,7 @@ func (m *metricDcgmGpuProfilingSmUtilization) init() {
 }
 
 func (m *metricDcgmGpuProfilingSmUtilization) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string) {
-	if !m.settings.Enabled {
+	if !m.config.Enabled {
 		return
 	}
 	dp := m.data.Gauge().DataPoints().AppendEmpty()
@@ -530,16 +456,16 @@ func (m *metricDcgmGpuProfilingSmUtilization) updateCapacity() {
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
 func (m *metricDcgmGpuProfilingSmUtilization) emit(metrics pmetric.MetricSlice) {
-	if m.settings.Enabled && m.data.Gauge().DataPoints().Len() > 0 {
+	if m.config.Enabled && m.data.Gauge().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
 		m.init()
 	}
 }
 
-func newMetricDcgmGpuProfilingSmUtilization(settings MetricSettings) metricDcgmGpuProfilingSmUtilization {
-	m := metricDcgmGpuProfilingSmUtilization{settings: settings}
-	if settings.Enabled {
+func newMetricDcgmGpuProfilingSmUtilization(cfg MetricConfig) metricDcgmGpuProfilingSmUtilization {
+	m := metricDcgmGpuProfilingSmUtilization{config: cfg}
+	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
 	}
@@ -548,7 +474,7 @@ func newMetricDcgmGpuProfilingSmUtilization(settings MetricSettings) metricDcgmG
 
 type metricDcgmGpuUtilization struct {
 	data     pmetric.Metric // data buffer for generated metric.
-	settings MetricSettings // metric settings provided by user.
+	config   MetricConfig   // metric config provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
 
@@ -562,7 +488,7 @@ func (m *metricDcgmGpuUtilization) init() {
 }
 
 func (m *metricDcgmGpuUtilization) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string) {
-	if !m.settings.Enabled {
+	if !m.config.Enabled {
 		return
 	}
 	dp := m.data.Gauge().DataPoints().AppendEmpty()
@@ -583,37 +509,30 @@ func (m *metricDcgmGpuUtilization) updateCapacity() {
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
 func (m *metricDcgmGpuUtilization) emit(metrics pmetric.MetricSlice) {
-	if m.settings.Enabled && m.data.Gauge().DataPoints().Len() > 0 {
+	if m.config.Enabled && m.data.Gauge().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
 		m.init()
 	}
 }
 
-func newMetricDcgmGpuUtilization(settings MetricSettings) metricDcgmGpuUtilization {
-	m := metricDcgmGpuUtilization{settings: settings}
-	if settings.Enabled {
+func newMetricDcgmGpuUtilization(cfg MetricConfig) metricDcgmGpuUtilization {
+	m := metricDcgmGpuUtilization{config: cfg}
+	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
 	}
 	return m
 }
 
-// MetricsBuilderConfig is a structural subset of an otherwise 1-1 copy of metadata.yaml
-type MetricsBuilderConfig struct {
-	Metrics            MetricsSettings            `mapstructure:"metrics"`
-	ResourceAttributes ResourceAttributesSettings `mapstructure:"resource_attributes"`
-}
-
 // MetricsBuilder provides an interface for scrapers to report metrics while taking care of all the transformations
-// required to produce metric representation defined in metadata and user settings.
+// required to produce metric representation defined in metadata and user config.
 type MetricsBuilder struct {
-	startTime                               pcommon.Timestamp   // start time that will be applied to all recorded data points.
-	metricsCapacity                         int                 // maximum observed number of metrics per resource.
-	resourceCapacity                        int                 // maximum observed number of resource attributes.
-	metricsBuffer                           pmetric.Metrics     // accumulates metrics data before emitting.
-	buildInfo                               component.BuildInfo // contains version information
-	resourceAttributesSettings              ResourceAttributesSettings
+	config                                  MetricsBuilderConfig // config of the metrics builder.
+	startTime                               pcommon.Timestamp    // start time that will be applied to all recorded data points.
+	metricsCapacity                         int                  // maximum observed number of metrics per resource.
+	metricsBuffer                           pmetric.Metrics      // accumulates metrics data before emitting.
+	buildInfo                               component.BuildInfo  // contains version information.
 	metricDcgmGpuMemoryBytesUsed            metricDcgmGpuMemoryBytesUsed
 	metricDcgmGpuProfilingDramUtilization   metricDcgmGpuProfilingDramUtilization
 	metricDcgmGpuProfilingNvlinkTrafficRate metricDcgmGpuProfilingNvlinkTrafficRate
@@ -634,26 +553,12 @@ func WithStartTime(startTime pcommon.Timestamp) metricBuilderOption {
 	}
 }
 
-func DefaultMetricsBuilderConfig() MetricsBuilderConfig {
-	return MetricsBuilderConfig{
-		Metrics:            DefaultMetricsSettings(),
-		ResourceAttributes: DefaultResourceAttributesSettings(),
-	}
-}
-
-func NewMetricsBuilderConfig(ms MetricsSettings, ras ResourceAttributesSettings) MetricsBuilderConfig {
-	return MetricsBuilderConfig{
-		Metrics:            ms,
-		ResourceAttributes: ras,
-	}
-}
-
 func NewMetricsBuilder(mbc MetricsBuilderConfig, settings receiver.CreateSettings, options ...metricBuilderOption) *MetricsBuilder {
 	mb := &MetricsBuilder{
+		config:                                  mbc,
 		startTime:                               pcommon.NewTimestampFromTime(time.Now()),
 		metricsBuffer:                           pmetric.NewMetrics(),
 		buildInfo:                               settings.BuildInfo,
-		resourceAttributesSettings:              mbc.ResourceAttributes,
 		metricDcgmGpuMemoryBytesUsed:            newMetricDcgmGpuMemoryBytesUsed(mbc.Metrics.DcgmGpuMemoryBytesUsed),
 		metricDcgmGpuProfilingDramUtilization:   newMetricDcgmGpuProfilingDramUtilization(mbc.Metrics.DcgmGpuProfilingDramUtilization),
 		metricDcgmGpuProfilingNvlinkTrafficRate: newMetricDcgmGpuProfilingNvlinkTrafficRate(mbc.Metrics.DcgmGpuProfilingNvlinkTrafficRate),
@@ -663,6 +568,7 @@ func NewMetricsBuilder(mbc MetricsBuilderConfig, settings receiver.CreateSetting
 		metricDcgmGpuProfilingSmUtilization:     newMetricDcgmGpuProfilingSmUtilization(mbc.Metrics.DcgmGpuProfilingSmUtilization),
 		metricDcgmGpuUtilization:                newMetricDcgmGpuUtilization(mbc.Metrics.DcgmGpuUtilization),
 	}
+
 	for _, op := range options {
 		op(mb)
 	}
@@ -674,18 +580,23 @@ func (mb *MetricsBuilder) updateCapacity(rm pmetric.ResourceMetrics) {
 	if mb.metricsCapacity < rm.ScopeMetrics().At(0).Metrics().Len() {
 		mb.metricsCapacity = rm.ScopeMetrics().At(0).Metrics().Len()
 	}
-	if mb.resourceCapacity < rm.Resource().Attributes().Len() {
-		mb.resourceCapacity = rm.Resource().Attributes().Len()
-	}
 }
 
 // ResourceMetricsOption applies changes to provided resource metrics.
-type ResourceMetricsOption func(ResourceAttributesSettings, pmetric.ResourceMetrics)
+type ResourceMetricsOption func(pmetric.ResourceMetrics)
+
+// WithResource sets the provided resource on the emitted ResourceMetrics.
+// It's recommended to use ResourceBuilder to create the resource.
+func WithResource(res pcommon.Resource) ResourceMetricsOption {
+	return func(rm pmetric.ResourceMetrics) {
+		res.CopyTo(rm.Resource())
+	}
+}
 
 // WithStartTimeOverride overrides start time for all the resource metrics data points.
 // This option should be only used if different start time has to be set on metrics coming from different resources.
 func WithStartTimeOverride(start pcommon.Timestamp) ResourceMetricsOption {
-	return func(ras ResourceAttributesSettings, rm pmetric.ResourceMetrics) {
+	return func(rm pmetric.ResourceMetrics) {
 		var dps pmetric.NumberDataPointSlice
 		metrics := rm.ScopeMetrics().At(0).Metrics()
 		for i := 0; i < metrics.Len(); i++ {
@@ -709,9 +620,8 @@ func WithStartTimeOverride(start pcommon.Timestamp) ResourceMetricsOption {
 // Resource attributes should be provided as ResourceMetricsOption arguments.
 func (mb *MetricsBuilder) EmitForResource(rmo ...ResourceMetricsOption) {
 	rm := pmetric.NewResourceMetrics()
-	rm.Resource().Attributes().EnsureCapacity(mb.resourceCapacity)
 	ils := rm.ScopeMetrics().AppendEmpty()
-	ils.Scope().SetName("otelcol/dcgmreceiver")
+	ils.Scope().SetName("github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/dcgmreceiver")
 	ils.Scope().SetVersion(mb.buildInfo.Version)
 	ils.Metrics().EnsureCapacity(mb.metricsCapacity)
 	mb.metricDcgmGpuMemoryBytesUsed.emit(ils.Metrics())
@@ -724,8 +634,9 @@ func (mb *MetricsBuilder) EmitForResource(rmo ...ResourceMetricsOption) {
 	mb.metricDcgmGpuUtilization.emit(ils.Metrics())
 
 	for _, op := range rmo {
-		op(mb.resourceAttributesSettings, rm)
+		op(rm)
 	}
+
 	if ils.Metrics().Len() > 0 {
 		mb.updateCapacity(rm)
 		rm.MoveTo(mb.metricsBuffer.ResourceMetrics().AppendEmpty())
@@ -734,7 +645,7 @@ func (mb *MetricsBuilder) EmitForResource(rmo ...ResourceMetricsOption) {
 
 // Emit returns all the metrics accumulated by the metrics builder and updates the internal state to be ready for
 // recording another set of metrics. This function will be responsible for applying all the transformations required to
-// produce metric representation defined in metadata and user settings, e.g. delta or cumulative.
+// produce metric representation defined in metadata and user config, e.g. delta or cumulative.
 func (mb *MetricsBuilder) Emit(rmo ...ResourceMetricsOption) pmetric.Metrics {
 	mb.EmitForResource(rmo...)
 	metrics := mb.metricsBuffer

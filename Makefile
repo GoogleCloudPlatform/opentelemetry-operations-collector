@@ -34,6 +34,8 @@ else
 LD_FLAGS := -ldflags "${BUILD_X1} ${BUILD_X2}"
 endif
 
+GO_ALL_BUILD_TAGS=gpu
+
 TOOLS_DIR := internal/tools
 
 .EXPORT_ALL_VARIABLES:
@@ -62,14 +64,14 @@ update-components:
 		grep "^github.com/open-telemetry/opentelemetry-collector-contrib" | \
 		xargs -t -I '{}' go get {}@$(OTEL_VER)
 	go mod tidy
-	cd $(TOOLS_DIR) && go get -u github.com/open-telemetry/opentelemetry-collector-contrib/cmd/mdatagen@$(OTEL_VER)
+	cd $(TOOLS_DIR) && go get -u go.opentelemetry.io/collector/cmd/mdatagen@$(OTEL_VER)
 	cd $(TOOLS_DIR) && go mod tidy
 
 # We can bring this target back when https://github.com/open-telemetry/opentelemetry-collector/issues/8063 is resolved.
 update-opentelemetry:
 	$(MAKE) update-components
 	$(MAKE) install-tools
-	$(MAKE) GO_BUILD_TAGS=gpu generate
+	$(MAKE) generate
 
 # --------------------------
 #  Tools
@@ -82,8 +84,9 @@ install-tools:
 			github.com/client9/misspell/cmd/misspell \
 			github.com/golangci/golangci-lint/cmd/golangci-lint \
 			github.com/google/addlicense \
-			github.com/open-telemetry/opentelemetry-collector-contrib/cmd/mdatagen \
-			github.com/google/googet/goopack
+			go.opentelemetry.io/collector/cmd/mdatagen \
+			github.com/google/googet/goopack \
+			golang.org/x/tools/cmd/goimports
 
 .PHONY: addlicense
 addlicense:
@@ -96,6 +99,10 @@ checklicense:
 .PHONY: lint
 lint:
 	golangci-lint run --allow-parallel-runners --build-tags=$(GO_BUILD_TAGS) --timeout=20m
+
+.PHONY: lint-fix
+lint-fix:
+	golangci-lint run --fix --allow-parallel-runners --build-tags=$(GO_BUILD_TAGS) --timeout=20m
 
 .PHONY: misspell
 misspell:
@@ -139,7 +146,7 @@ test_verbose:
 
 .PHONY: generate
 generate:
-	go generate ./...
+	go generate -tags=$(GO_ALL_BUILD_TAGS) ./...
 
 # --------------------
 #  Docker

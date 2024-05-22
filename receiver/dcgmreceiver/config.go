@@ -27,7 +27,7 @@ const defaultEndpoint = "localhost:5555"
 const defaultCollectionInterval = 20 * time.Second
 
 type Config struct {
-	scraperhelper.ScraperControllerSettings `mapstructure:",squash"`
-	confignet.TCPAddr                       `mapstructure:",squash"`
-	Metrics                                 metadata.MetricsSettings `mapstructure:"metrics"`
+	scraperhelper.ControllerConfig `mapstructure:",squash"`
+	confignet.TCPAddrConfig        `mapstructure:",squash"`
+	Metrics                        metadata.MetricsConfig `mapstructure:"metrics"`
 }

@@ -100,7 +100,7 @@ checklicense:
 lint:
 	golangci-lint run --allow-parallel-runners --build-tags=$(GO_BUILD_TAGS) --timeout=20m
 
-.PHONY: lint
+.PHONY: lint-fix
 lint-fix:
 	golangci-lint run --fix --allow-parallel-runners --build-tags=$(GO_BUILD_TAGS) --timeout=20m
 

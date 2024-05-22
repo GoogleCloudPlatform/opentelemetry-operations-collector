@@ -25,3 +25,14 @@ coverage.html
 # Wix
 *.wixobj
 *.wixpdb
+
+## Unwanted Files
+
+# GPU receiver generated component tests
+
+# These generated test files do not work with the default off build tag setup
+# we have going on with the GPU receivers. As such we'll simply eschew these generated
+# files and copy them manually into properly build tagged files.
+# - @braydonk, 2024-05-22
+receiver/nvmlreceiver/generated_component_test.go
+receiver/dcgmreceiver/generated_component_test.go

@@ -108,10 +108,6 @@ lint-fix:
 misspell:
 	@output=`misspell -error $(ALL_DOC)` && echo misspell finished successfully || (echo misspell errors:\\n$$output && exit 1)
 
-.PHONE: goimports
-goimports:
-	goimports -l -w .
-
 # --------------------------
 #  CI
 # --------------------------

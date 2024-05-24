@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/filter"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/receiver"
@@ -112,7 +113,7 @@ func (m *metricDcgmGpuMemoryBytesUsed) init() {
 	m.data.Gauge().DataPoints().EnsureCapacity(m.capacity)
 }
 
-func (m *metricDcgmGpuMemoryBytesUsed) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, memoryStateAttributeValue string) {
+func (m *metricDcgmGpuMemoryBytesUsed) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, memoryStateAttributeValue string) {
 	if !m.config.Enabled {
 		return
 	}
@@ -120,9 +121,6 @@ func (m *metricDcgmGpuMemoryBytesUsed) recordDataPoint(start pcommon.Timestamp, 
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
 	dp.SetIntValue(val)
-	dp.Attributes().PutStr("model", modelAttributeValue)
-	dp.Attributes().PutStr("gpu_number", gpuNumberAttributeValue)
-	dp.Attributes().PutStr("uuid", uuidAttributeValue)
 	dp.Attributes().PutStr("memory_state", memoryStateAttributeValue)
 }
 
@@ -163,10 +161,9 @@ func (m *metricDcgmGpuProfilingDramUtilization) init() {
 	m.data.SetDescription("Fraction of cycles data was being sent or received from GPU memory.")
 	m.data.SetUnit("1")
 	m.data.SetEmptyGauge()
-	m.data.Gauge().DataPoints().EnsureCapacity(m.capacity)
 }
 
-func (m *metricDcgmGpuProfilingDramUtilization) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string) {
+func (m *metricDcgmGpuProfilingDramUtilization) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64) {
 	if !m.config.Enabled {
 		return
 	}
@@ -174,9 +171,6 @@ func (m *metricDcgmGpuProfilingDramUtilization) recordDataPoint(start pcommon.Ti
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
 	dp.SetDoubleValue(val)
-	dp.Attributes().PutStr("model", modelAttributeValue)
-	dp.Attributes().PutStr("gpu_number", gpuNumberAttributeValue)
-	dp.Attributes().PutStr("uuid", uuidAttributeValue)
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
@@ -219,7 +213,7 @@ func (m *metricDcgmGpuProfilingNvlinkTrafficRate) init() {
 	m.data.Gauge().DataPoints().EnsureCapacity(m.capacity)
 }
 
-func (m *metricDcgmGpuProfilingNvlinkTrafficRate) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, directionAttributeValue string) {
+func (m *metricDcgmGpuProfilingNvlinkTrafficRate) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, directionAttributeValue string) {
 	if !m.config.Enabled {
 		return
 	}
@@ -227,9 +221,6 @@ func (m *metricDcgmGpuProfilingNvlinkTrafficRate) recordDataPoint(start pcommon.
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
 	dp.SetIntValue(val)
-	dp.Attributes().PutStr("model", modelAttributeValue)
-	dp.Attributes().PutStr("gpu_number", gpuNumberAttributeValue)
-	dp.Attributes().PutStr("uuid", uuidAttributeValue)
 	dp.Attributes().PutStr("direction", directionAttributeValue)
 }
 
@@ -273,7 +264,7 @@ func (m *metricDcgmGpuProfilingPcieTrafficRate) init() {
 	m.data.Gauge().DataPoints().EnsureCapacity(m.capacity)
 }
 
-func (m *metricDcgmGpuProfilingPcieTrafficRate) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, directionAttributeValue string) {
+func (m *metricDcgmGpuProfilingPcieTrafficRate) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, directionAttributeValue string) {
 	if !m.config.Enabled {
 		return
 	}
@@ -281,9 +272,6 @@ func (m *metricDcgmGpuProfilingPcieTrafficRate) recordDataPoint(start pcommon.Ti
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
 	dp.SetIntValue(val)
-	dp.Attributes().PutStr("model", modelAttributeValue)
-	dp.Attributes().PutStr("gpu_number", gpuNumberAttributeValue)
-	dp.Attributes().PutStr("uuid", uuidAttributeValue)
 	dp.Attributes().PutStr("direction", directionAttributeValue)
 }
 
@@ -327,7 +315,7 @@ func (m *metricDcgmGpuProfilingPipeUtilization) init() {
 	m.data.Gauge().DataPoints().EnsureCapacity(m.capacity)
 }
 
-func (m *metricDcgmGpuProfilingPipeUtilization) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, pipeAttributeValue string) {
+func (m *metricDcgmGpuProfilingPipeUtilization) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64, pipeAttributeValue string) {
 	if !m.config.Enabled {
 		return
 	}
@@ -335,9 +323,6 @@ func (m *metricDcgmGpuProfilingPipeUtilization) recordDataPoint(start pcommon.Ti
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
 	dp.SetDoubleValue(val)
-	dp.Attributes().PutStr("model", modelAttributeValue)
-	dp.Attributes().PutStr("gpu_number", gpuNumberAttributeValue)
-	dp.Attributes().PutStr("uuid", uuidAttributeValue)
 	dp.Attributes().PutStr("pipe", pipeAttributeValue)
 }
 
@@ -378,10 +363,9 @@ func (m *metricDcgmGpuProfilingSmOccupancy) init() {
 	m.data.SetDescription("Fraction of resident warps on a multiprocessor relative to the maximum number supported, averaged over time and all multiprocessors.")
 	m.data.SetUnit("1")
 	m.data.SetEmptyGauge()
-	m.data.Gauge().DataPoints().EnsureCapacity(m.capacity)
 }
 
-func (m *metricDcgmGpuProfilingSmOccupancy) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string) {
+func (m *metricDcgmGpuProfilingSmOccupancy) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64) {
 	if !m.config.Enabled {
 		return
 	}
@@ -389,9 +373,6 @@ func (m *metricDcgmGpuProfilingSmOccupancy) recordDataPoint(start pcommon.Timest
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
 	dp.SetDoubleValue(val)
-	dp.Attributes().PutStr("model", modelAttributeValue)
-	dp.Attributes().PutStr("gpu_number", gpuNumberAttributeValue)
-	dp.Attributes().PutStr("uuid", uuidAttributeValue)
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
@@ -431,10 +412,9 @@ func (m *metricDcgmGpuProfilingSmUtilization) init() {
 	m.data.SetDescription("Fraction of time at least one warp was active on a multiprocessor, averaged over all multiprocessors.")
 	m.data.SetUnit("1")
 	m.data.SetEmptyGauge()
-	m.data.Gauge().DataPoints().EnsureCapacity(m.capacity)
 }
 
-func (m *metricDcgmGpuProfilingSmUtilization) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string) {
+func (m *metricDcgmGpuProfilingSmUtilization) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64) {
 	if !m.config.Enabled {
 		return
 	}
@@ -442,9 +422,6 @@ func (m *metricDcgmGpuProfilingSmUtilization) recordDataPoint(start pcommon.Time
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
 	dp.SetDoubleValue(val)
-	dp.Attributes().PutStr("model", modelAttributeValue)
-	dp.Attributes().PutStr("gpu_number", gpuNumberAttributeValue)
-	dp.Attributes().PutStr("uuid", uuidAttributeValue)
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
@@ -484,10 +461,9 @@ func (m *metricDcgmGpuUtilization) init() {
 	m.data.SetDescription("Fraction of time the GPU was not idle.")
 	m.data.SetUnit("1")
 	m.data.SetEmptyGauge()
-	m.data.Gauge().DataPoints().EnsureCapacity(m.capacity)
 }
 
-func (m *metricDcgmGpuUtilization) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string) {
+func (m *metricDcgmGpuUtilization) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64) {
 	if !m.config.Enabled {
 		return
 	}
@@ -495,9 +471,6 @@ func (m *metricDcgmGpuUtilization) recordDataPoint(start pcommon.Timestamp, ts p
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
 	dp.SetDoubleValue(val)
-	dp.Attributes().PutStr("model", modelAttributeValue)
-	dp.Attributes().PutStr("gpu_number", gpuNumberAttributeValue)
-	dp.Attributes().PutStr("uuid", uuidAttributeValue)
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
@@ -533,6 +506,8 @@ type MetricsBuilder struct {
 	metricsCapacity                         int                  // maximum observed number of metrics per resource.
 	metricsBuffer                           pmetric.Metrics      // accumulates metrics data before emitting.
 	buildInfo                               component.BuildInfo  // contains version information.
+	resourceAttributeIncludeFilter          map[string]filter.Filter
+	resourceAttributeExcludeFilter          map[string]filter.Filter
 	metricDcgmGpuMemoryBytesUsed            metricDcgmGpuMemoryBytesUsed
 	metricDcgmGpuProfilingDramUtilization   metricDcgmGpuProfilingDramUtilization
 	metricDcgmGpuProfilingNvlinkTrafficRate metricDcgmGpuProfilingNvlinkTrafficRate
@@ -567,12 +542,37 @@ func NewMetricsBuilder(mbc MetricsBuilderConfig, settings receiver.CreateSetting
 		metricDcgmGpuProfilingSmOccupancy:       newMetricDcgmGpuProfilingSmOccupancy(mbc.Metrics.DcgmGpuProfilingSmOccupancy),
 		metricDcgmGpuProfilingSmUtilization:     newMetricDcgmGpuProfilingSmUtilization(mbc.Metrics.DcgmGpuProfilingSmUtilization),
 		metricDcgmGpuUtilization:                newMetricDcgmGpuUtilization(mbc.Metrics.DcgmGpuUtilization),
+		resourceAttributeIncludeFilter:          make(map[string]filter.Filter),
+		resourceAttributeExcludeFilter:          make(map[string]filter.Filter),
+	}
+	if mbc.ResourceAttributes.GpuModel.MetricsInclude != nil {
+		mb.resourceAttributeIncludeFilter["gpu.model"] = filter.CreateFilter(mbc.ResourceAttributes.GpuModel.MetricsInclude)
+	}
+	if mbc.ResourceAttributes.GpuModel.MetricsExclude != nil {
+		mb.resourceAttributeExcludeFilter["gpu.model"] = filter.CreateFilter(mbc.ResourceAttributes.GpuModel.MetricsExclude)
+	}
+	if mbc.ResourceAttributes.GpuNumber.MetricsInclude != nil {
+		mb.resourceAttributeIncludeFilter["gpu.number"] = filter.CreateFilter(mbc.ResourceAttributes.GpuNumber.MetricsInclude)
+	}
+	if mbc.ResourceAttributes.GpuNumber.MetricsExclude != nil {
+		mb.resourceAttributeExcludeFilter["gpu.number"] = filter.CreateFilter(mbc.ResourceAttributes.GpuNumber.MetricsExclude)
+	}
+	if mbc.ResourceAttributes.GpuUUID.MetricsInclude != nil {
+		mb.resourceAttributeIncludeFilter["gpu.uuid"] = filter.CreateFilter(mbc.ResourceAttributes.GpuUUID.MetricsInclude)
+	}
+	if mbc.ResourceAttributes.GpuUUID.MetricsExclude != nil {
+		mb.resourceAttributeExcludeFilter["gpu.uuid"] = filter.CreateFilter(mbc.ResourceAttributes.GpuUUID.MetricsExclude)
 	}
 
 	for _, op := range options {
 		op(mb)
 	}
 	return mb
+}
+
+// NewResourceBuilder returns a new resource builder that should be used to build a resource associated with for the emitted metrics.
+func (mb *MetricsBuilder) NewResourceBuilder() *ResourceBuilder {
+	return NewResourceBuilder(mb.config.ResourceAttributes)
 }
 
 // updateCapacity updates max length of metrics and resource attributes that will be used for the slice capacity.
@@ -636,6 +636,16 @@ func (mb *MetricsBuilder) EmitForResource(rmo ...ResourceMetricsOption) {
 	for _, op := range rmo {
 		op(rm)
 	}
+	for attr, filter := range mb.resourceAttributeIncludeFilter {
+		if val, ok := rm.Resource().Attributes().Get(attr); ok && !filter.Matches(val.AsString()) {
+			return
+		}
+	}
+	for attr, filter := range mb.resourceAttributeExcludeFilter {
+		if val, ok := rm.Resource().Attributes().Get(attr); ok && filter.Matches(val.AsString()) {
+			return
+		}
+	}
 
 	if ils.Metrics().Len() > 0 {
 		mb.updateCapacity(rm)
@@ -654,43 +664,43 @@ func (mb *MetricsBuilder) Emit(rmo ...ResourceMetricsOption) pmetric.Metrics {
 }
 
 // RecordDcgmGpuMemoryBytesUsedDataPoint adds a data point to dcgm.gpu.memory.bytes_used metric.
-func (mb *MetricsBuilder) RecordDcgmGpuMemoryBytesUsedDataPoint(ts pcommon.Timestamp, val int64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, memoryStateAttributeValue AttributeMemoryState) {
-	mb.metricDcgmGpuMemoryBytesUsed.recordDataPoint(mb.startTime, ts, val, modelAttributeValue, gpuNumberAttributeValue, uuidAttributeValue, memoryStateAttributeValue.String())
+func (mb *MetricsBuilder) RecordDcgmGpuMemoryBytesUsedDataPoint(ts pcommon.Timestamp, val int64, memoryStateAttributeValue AttributeMemoryState) {
+	mb.metricDcgmGpuMemoryBytesUsed.recordDataPoint(mb.startTime, ts, val, memoryStateAttributeValue.String())
 }
 
 // RecordDcgmGpuProfilingDramUtilizationDataPoint adds a data point to dcgm.gpu.profiling.dram_utilization metric.
-func (mb *MetricsBuilder) RecordDcgmGpuProfilingDramUtilizationDataPoint(ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string) {
-	mb.metricDcgmGpuProfilingDramUtilization.recordDataPoint(mb.startTime, ts, val, modelAttributeValue, gpuNumberAttributeValue, uuidAttributeValue)
+func (mb *MetricsBuilder) RecordDcgmGpuProfilingDramUtilizationDataPoint(ts pcommon.Timestamp, val float64) {
+	mb.metricDcgmGpuProfilingDramUtilization.recordDataPoint(mb.startTime, ts, val)
 }
 
 // RecordDcgmGpuProfilingNvlinkTrafficRateDataPoint adds a data point to dcgm.gpu.profiling.nvlink_traffic_rate metric.
-func (mb *MetricsBuilder) RecordDcgmGpuProfilingNvlinkTrafficRateDataPoint(ts pcommon.Timestamp, val int64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, directionAttributeValue AttributeDirection) {
-	mb.metricDcgmGpuProfilingNvlinkTrafficRate.recordDataPoint(mb.startTime, ts, val, modelAttributeValue, gpuNumberAttributeValue, uuidAttributeValue, directionAttributeValue.String())
+func (mb *MetricsBuilder) RecordDcgmGpuProfilingNvlinkTrafficRateDataPoint(ts pcommon.Timestamp, val int64, directionAttributeValue AttributeDirection) {
+	mb.metricDcgmGpuProfilingNvlinkTrafficRate.recordDataPoint(mb.startTime, ts, val, directionAttributeValue.String())
 }
 
 // RecordDcgmGpuProfilingPcieTrafficRateDataPoint adds a data point to dcgm.gpu.profiling.pcie_traffic_rate metric.
-func (mb *MetricsBuilder) RecordDcgmGpuProfilingPcieTrafficRateDataPoint(ts pcommon.Timestamp, val int64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, directionAttributeValue AttributeDirection) {
-	mb.metricDcgmGpuProfilingPcieTrafficRate.recordDataPoint(mb.startTime, ts, val, modelAttributeValue, gpuNumberAttributeValue, uuidAttributeValue, directionAttributeValue.String())
+func (mb *MetricsBuilder) RecordDcgmGpuProfilingPcieTrafficRateDataPoint(ts pcommon.Timestamp, val int64, directionAttributeValue AttributeDirection) {
+	mb.metricDcgmGpuProfilingPcieTrafficRate.recordDataPoint(mb.startTime, ts, val, directionAttributeValue.String())
 }
 
 // RecordDcgmGpuProfilingPipeUtilizationDataPoint adds a data point to dcgm.gpu.profiling.pipe_utilization metric.
-func (mb *MetricsBuilder) RecordDcgmGpuProfilingPipeUtilizationDataPoint(ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, pipeAttributeValue AttributePipe) {
-	mb.metricDcgmGpuProfilingPipeUtilization.recordDataPoint(mb.startTime, ts, val, modelAttributeValue, gpuNumberAttributeValue, uuidAttributeValue, pipeAttributeValue.String())
+func (mb *MetricsBuilder) RecordDcgmGpuProfilingPipeUtilizationDataPoint(ts pcommon.Timestamp, val float64, pipeAttributeValue AttributePipe) {
+	mb.metricDcgmGpuProfilingPipeUtilization.recordDataPoint(mb.startTime, ts, val, pipeAttributeValue.String())
 }
 
 // RecordDcgmGpuProfilingSmOccupancyDataPoint adds a data point to dcgm.gpu.profiling.sm_occupancy metric.
-func (mb *MetricsBuilder) RecordDcgmGpuProfilingSmOccupancyDataPoint(ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string) {
-	mb.metricDcgmGpuProfilingSmOccupancy.recordDataPoint(mb.startTime, ts, val, modelAttributeValue, gpuNumberAttributeValue, uuidAttributeValue)
+func (mb *MetricsBuilder) RecordDcgmGpuProfilingSmOccupancyDataPoint(ts pcommon.Timestamp, val float64) {
+	mb.metricDcgmGpuProfilingSmOccupancy.recordDataPoint(mb.startTime, ts, val)
 }
 
 // RecordDcgmGpuProfilingSmUtilizationDataPoint adds a data point to dcgm.gpu.profiling.sm_utilization metric.
-func (mb *MetricsBuilder) RecordDcgmGpuProfilingSmUtilizationDataPoint(ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string) {
-	mb.metricDcgmGpuProfilingSmUtilization.recordDataPoint(mb.startTime, ts, val, modelAttributeValue, gpuNumberAttributeValue, uuidAttributeValue)
+func (mb *MetricsBuilder) RecordDcgmGpuProfilingSmUtilizationDataPoint(ts pcommon.Timestamp, val float64) {
+	mb.metricDcgmGpuProfilingSmUtilization.recordDataPoint(mb.startTime, ts, val)
 }
 
 // RecordDcgmGpuUtilizationDataPoint adds a data point to dcgm.gpu.utilization metric.
-func (mb *MetricsBuilder) RecordDcgmGpuUtilizationDataPoint(ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string) {
-	mb.metricDcgmGpuUtilization.recordDataPoint(mb.startTime, ts, val, modelAttributeValue, gpuNumberAttributeValue, uuidAttributeValue)
+func (mb *MetricsBuilder) RecordDcgmGpuUtilizationDataPoint(ts pcommon.Timestamp, val float64) {
+	mb.metricDcgmGpuUtilization.recordDataPoint(mb.startTime, ts, val)
 }
 
 // Reset resets metrics builder to its initial state. It should be used when external metrics source is restarted,

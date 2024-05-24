@@ -24,9 +24,6 @@ Current number of GPU memory bytes used by state. Summing the values of all stat
 
 | Name | Description | Values |
 | ---- | ----------- | ------ |
-| model | GPU model | Any Str |
-| gpu_number | GPU index starting at 0. | Any Str |
-| uuid | GPU universally unique identifier | Any Str |
 | memory_state | GPU memory used or free | Str: ``used``, ``free`` |
 
 ### dcgm.gpu.profiling.dram_utilization
@@ -36,14 +33,6 @@ Fraction of cycles data was being sent or received from GPU memory.
 | Unit | Metric Type | Value Type |
 | ---- | ----------- | ---------- |
 | 1 | Gauge | Double |
-
-#### Attributes
-
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| model | GPU model | Any Str |
-| gpu_number | GPU index starting at 0. | Any Str |
-| uuid | GPU universally unique identifier | Any Str |
 
 ### dcgm.gpu.profiling.nvlink_traffic_rate
 
@@ -57,9 +46,6 @@ The average rate of bytes received from the GPU over NVLink over the sample peri
 
 | Name | Description | Values |
 | ---- | ----------- | ------ |
-| model | GPU model | Any Str |
-| gpu_number | GPU index starting at 0. | Any Str |
-| uuid | GPU universally unique identifier | Any Str |
 | direction | Direction of the link traffic, one of [tx, rx]. | Str: ``tx``, ``rx`` |
 
 ### dcgm.gpu.profiling.pcie_traffic_rate
@@ -74,9 +60,6 @@ The average rate of bytes sent from the GPU over the PCIe bus over the sample pe
 
 | Name | Description | Values |
 | ---- | ----------- | ------ |
-| model | GPU model | Any Str |
-| gpu_number | GPU index starting at 0. | Any Str |
-| uuid | GPU universally unique identifier | Any Str |
 | direction | Direction of the link traffic, one of [tx, rx]. | Str: ``tx``, ``rx`` |
 
 ### dcgm.gpu.profiling.pipe_utilization
@@ -91,9 +74,6 @@ Fraction of cycles the corresponding GPU pipe was active, averaged over time and
 
 | Name | Description | Values |
 | ---- | ----------- | ------ |
-| model | GPU model | Any Str |
-| gpu_number | GPU index starting at 0. | Any Str |
-| uuid | GPU universally unique identifier | Any Str |
 | pipe | GPU pipe in use, one of [tensor, fp64, fp32, fp16]. | Str: ``tensor``, ``fp64``, ``fp32``, ``fp16`` |
 
 ### dcgm.gpu.profiling.sm_occupancy
@@ -104,14 +84,6 @@ Fraction of resident warps on a multiprocessor relative to the maximum number su
 | ---- | ----------- | ---------- |
 | 1 | Gauge | Double |
 
-#### Attributes
-
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| model | GPU model | Any Str |
-| gpu_number | GPU index starting at 0. | Any Str |
-| uuid | GPU universally unique identifier | Any Str |
-
 ### dcgm.gpu.profiling.sm_utilization
 
 Fraction of time at least one warp was active on a multiprocessor, averaged over all multiprocessors.
@@ -119,14 +91,6 @@ Fraction of time at least one warp was active on a multiprocessor, averaged over
 | Unit | Metric Type | Value Type |
 | ---- | ----------- | ---------- |
 | 1 | Gauge | Double |
-
-#### Attributes
-
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| model | GPU model | Any Str |
-| gpu_number | GPU index starting at 0. | Any Str |
-| uuid | GPU universally unique identifier | Any Str |
 
 ### dcgm.gpu.utilization
 
@@ -136,10 +100,10 @@ Fraction of time the GPU was not idle.
 | ---- | ----------- | ---------- |
 | 1 | Gauge | Double |
 
-#### Attributes
+## Resource Attributes
 
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| model | GPU model | Any Str |
-| gpu_number | GPU index starting at 0. | Any Str |
-| uuid | GPU universally unique identifier | Any Str |
+| Name | Description | Values | Enabled |
+| ---- | ----------- | ------ | ------- |
+| gpu.model | GPU model name. | Any Str | true |
+| gpu.number | GPU index starting at 0. | Any Str | true |
+| gpu.uuid | GPU universally unique identifier. | Any Str | true |

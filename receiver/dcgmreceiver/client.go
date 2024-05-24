@@ -46,7 +46,6 @@ type dcgmClient struct {
 
 type dcgmMetric struct {
 	timestamp int64
-	gpuIndex  uint
 	name      string
 	value     [4096]byte
 }
@@ -304,13 +303,13 @@ func (client *dcgmClient) getDeviceUUID(gpuIndex uint) string {
 	return client.devicesUUID[gpuIndex]
 }
 
-func (client *dcgmClient) collectDeviceMetrics() ([]dcgmMetric, error) {
+func (client *dcgmClient) collectDeviceMetrics() (map[uint][]dcgmMetric, error) {
 	var err scrapererror.ScrapeErrors
-	gpuMetrics := make([]dcgmMetric, 0, len(client.enabledFieldIDs)*len(client.deviceIndices))
+	gpuMetrics := make(map[uint][]dcgmMetric)
 	for _, gpuIndex := range client.deviceIndices {
 		fieldValues, pollErr := dcgmGetLatestValuesForFields(gpuIndex, client.enabledFieldIDs)
 		if pollErr == nil {
-			gpuMetrics = client.appendMetric(gpuMetrics, gpuIndex, fieldValues)
+			gpuMetrics[gpuIndex] = client.appendMetric(gpuMetrics[gpuIndex], gpuIndex, fieldValues)
 			client.logger.Debugf("Successful poll of DCGM daemon for GPU %d", gpuIndex)
 		} else {
 			msg := fmt.Sprintf("Unable to poll DCGM daemon for GPU %d on %s", gpuIndex, pollErr)
@@ -337,7 +336,7 @@ func (client *dcgmClient) appendMetric(gpuMetrics []dcgmMetric, gpuIndex uint, f
 		case dcgm.DCGM_FT_INT64:
 			client.logger.Debugf("Discovered (ts %d gpu %d) %s = %d (i64)", fieldValue.Ts, gpuIndex, metricName, fieldValue.Int64())
 		}
-		gpuMetrics = append(gpuMetrics, dcgmMetric{fieldValue.Ts, gpuIndex, metricName, fieldValue.Value})
+		gpuMetrics = append(gpuMetrics, dcgmMetric{fieldValue.Ts, metricName, fieldValue.Value})
 	}
 
 	return gpuMetrics

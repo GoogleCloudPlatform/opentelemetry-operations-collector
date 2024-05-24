@@ -156,58 +156,59 @@ func TestCollectGpuProfilingMetrics(t *testing.T) {
 	expectedMetrics := LoadExpectedMetrics(t, client.devicesModelName[0])
 	var maxCollectionInterval = 60 * time.Second
 	before := time.Now().UnixMicro() - maxCollectionInterval.Microseconds()
-	metrics, err := client.collectDeviceMetrics()
+	deviceMetrics, err := client.collectDeviceMetrics()
 	after := time.Now().UnixMicro()
 	assert.Nil(t, err)
 
 	seenMetric := make(map[string]bool)
-	for _, metric := range metrics {
-		assert.GreaterOrEqual(t, metric.gpuIndex, uint(0))
-		assert.LessOrEqual(t, metric.gpuIndex, uint(32))
+	assert.GreaterOrEqual(t, len(deviceMetrics), 0)
+	assert.LessOrEqual(t, len(deviceMetrics), 32)
+	for gpuIndex, metrics := range deviceMetrics {
+		for _, metric := range metrics {
+			switch metric.name {
+			case "dcgm.gpu.profiling.tensor_utilization":
+				fallthrough
+			case "dcgm.gpu.profiling.dram_utilization":
+				fallthrough
+			case "dcgm.gpu.profiling.fp64_utilization":
+				fallthrough
+			case "dcgm.gpu.profiling.fp32_utilization":
+				fallthrough
+			case "dcgm.gpu.profiling.fp16_utilization":
+				fallthrough
+			case "dcgm.gpu.profiling.sm_occupancy":
+				fallthrough
+			case "dcgm.gpu.profiling.sm_utilization":
+				assert.GreaterOrEqual(t, metric.asFloat64(), float64(0.0))
+				assert.LessOrEqual(t, metric.asFloat64(), float64(1.0))
+			case "dcgm.gpu.utilization":
+				assert.GreaterOrEqual(t, metric.asInt64(), int64(0))
+				assert.LessOrEqual(t, metric.asInt64(), int64(100))
+			case "dcgm.gpu.memory.bytes_free":
+				fallthrough
+			case "dcgm.gpu.memory.bytes_used":
+				// arbitrary max of 10 TiB
+				assert.GreaterOrEqual(t, metric.asInt64(), int64(0))
+				assert.LessOrEqual(t, metric.asInt64(), int64(10485760))
+			case "dcgm.gpu.profiling.pcie_sent_bytes":
+				fallthrough
+			case "dcgm.gpu.profiling.pcie_received_bytes":
+				fallthrough
+			case "dcgm.gpu.profiling.nvlink_sent_bytes":
+				fallthrough
+			case "dcgm.gpu.profiling.nvlink_received_bytes":
+				// arbitrary max of 10 TiB/sec
+				assert.GreaterOrEqual(t, metric.asInt64(), int64(0))
+				assert.LessOrEqual(t, metric.asInt64(), int64(10995116277760))
+			default:
+				t.Errorf("Unexpected metric '%s'", metric.name)
+			}
 
-		switch metric.name {
-		case "dcgm.gpu.profiling.tensor_utilization":
-			fallthrough
-		case "dcgm.gpu.profiling.dram_utilization":
-			fallthrough
-		case "dcgm.gpu.profiling.fp64_utilization":
-			fallthrough
-		case "dcgm.gpu.profiling.fp32_utilization":
-			fallthrough
-		case "dcgm.gpu.profiling.fp16_utilization":
-			fallthrough
-		case "dcgm.gpu.profiling.sm_occupancy":
-			fallthrough
-		case "dcgm.gpu.profiling.sm_utilization":
-			assert.GreaterOrEqual(t, metric.asFloat64(), float64(0.0))
-			assert.LessOrEqual(t, metric.asFloat64(), float64(1.0))
-		case "dcgm.gpu.utilization":
-			assert.GreaterOrEqual(t, metric.asInt64(), int64(0))
-			assert.LessOrEqual(t, metric.asInt64(), int64(100))
-		case "dcgm.gpu.memory.bytes_free":
-			fallthrough
-		case "dcgm.gpu.memory.bytes_used":
-			// arbitrary max of 10 TiB
-			assert.GreaterOrEqual(t, metric.asInt64(), int64(0))
-			assert.LessOrEqual(t, metric.asInt64(), int64(10485760))
-		case "dcgm.gpu.profiling.pcie_sent_bytes":
-			fallthrough
-		case "dcgm.gpu.profiling.pcie_received_bytes":
-			fallthrough
-		case "dcgm.gpu.profiling.nvlink_sent_bytes":
-			fallthrough
-		case "dcgm.gpu.profiling.nvlink_received_bytes":
-			// arbitrary max of 10 TiB/sec
-			assert.GreaterOrEqual(t, metric.asInt64(), int64(0))
-			assert.LessOrEqual(t, metric.asInt64(), int64(10995116277760))
-		default:
-			t.Errorf("Unexpected metric '%s'", metric.name)
+			assert.GreaterOrEqual(t, metric.timestamp, before)
+			assert.LessOrEqual(t, metric.timestamp, after)
+
+			seenMetric[fmt.Sprintf("gpu{%d}.metric{%s}", gpuIndex, metric.name)] = true
 		}
-
-		assert.GreaterOrEqual(t, metric.timestamp, before)
-		assert.LessOrEqual(t, metric.timestamp, after)
-
-		seenMetric[fmt.Sprintf("gpu{%d}.metric{%s}", metric.gpuIndex, metric.name)] = true
 	}
 
 	for _, gpuIndex := range client.deviceIndices {

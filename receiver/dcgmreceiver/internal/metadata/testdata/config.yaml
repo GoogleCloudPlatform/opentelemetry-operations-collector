@@ -17,6 +17,13 @@ all_set:
       enabled: true
     dcgm.gpu.utilization:
       enabled: true
+  resource_attributes:
+    gpu.model:
+      enabled: true
+    gpu.number:
+      enabled: true
+    gpu.uuid:
+      enabled: true
 none_set:
   metrics:
     dcgm.gpu.memory.bytes_used:
@@ -35,3 +42,38 @@ none_set:
       enabled: false
     dcgm.gpu.utilization:
       enabled: false
+  resource_attributes:
+    gpu.model:
+      enabled: false
+    gpu.number:
+      enabled: false
+    gpu.uuid:
+      enabled: false
+filter_set_include:
+  resource_attributes:
+    gpu.model:
+      enabled: true
+      metrics_include:
+        - regexp: ".*"
+    gpu.number:
+      enabled: true
+      metrics_include:
+        - regexp: ".*"
+    gpu.uuid:
+      enabled: true
+      metrics_include:
+        - regexp: ".*"
+filter_set_exclude:
+  resource_attributes:
+    gpu.model:
+      enabled: true
+      metrics_exclude:
+        - strict: "gpu.model-val"
+    gpu.number:
+      enabled: true
+      metrics_exclude:
+        - strict: "gpu.number-val"
+    gpu.uuid:
+      enabled: true
+      metrics_exclude:
+        - strict: "gpu.uuid-val"

@@ -182,9 +182,12 @@ func TestScrapeOnProfilingPaused(t *testing.T) {
 		"dcgm.gpu.memory.bytes_used",
 	}
 
-	require.Equal(t, len(expectedMetrics), metrics.MetricCount())
+	ilms := metrics.ResourceMetrics().At(0).ScopeMetrics()
+	require.Equal(t, 1, ilms.Len())
 
-	ms := metrics.ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics()
+	ms := ilms.At(0).Metrics()
+	require.Equal(t, len(expectedMetrics), ms.Len())
+
 	metricWasSeen := make(map[string]bool)
 	for i := 0; i < ms.Len(); i++ {
 		metricWasSeen[ms.At(i).Name()] = true
@@ -236,6 +239,11 @@ func validateScraperResult(t *testing.T, metrics pmetric.Metrics, expectedMetric
 	assert.LessOrEqual(t, len(expectedMetrics), metrics.MetricCount())
 	assert.LessOrEqual(t, expectedDataPointCount, metrics.DataPointCount())
 
+	r := metrics.ResourceMetrics().At(0).Resource()
+	assert.Contains(t, r.Attributes().AsRaw(), "gpu.number")
+	assert.Contains(t, r.Attributes().AsRaw(), "gpu.uuid")
+	assert.Contains(t, r.Attributes().AsRaw(), "gpu.model")
+
 	ilms := metrics.ResourceMetrics().At(0).ScopeMetrics()
 	require.Equal(t, 1, ilms.Len())
 
@@ -243,11 +251,6 @@ func validateScraperResult(t *testing.T, metrics pmetric.Metrics, expectedMetric
 	for i := 0; i < ms.Len(); i++ {
 		m := ms.At(i)
 		dps := m.Gauge().DataPoints()
-		for j := 0; j < dps.Len(); j++ {
-			assert.Contains(t, dps.At(j).Attributes().AsRaw(), "gpu_number")
-			assert.Contains(t, dps.At(j).Attributes().AsRaw(), "model")
-			assert.Contains(t, dps.At(j).Attributes().AsRaw(), "uuid")
-		}
 
 		assert.LessOrEqual(t, expectedMetrics[m.Name()], dps.Len())
 

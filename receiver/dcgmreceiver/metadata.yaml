@@ -5,19 +5,23 @@ status:
     beta: [metrics]
 
 
-attributes:
-  model:
-    type: string
-    description: GPU model
-
-  uuid:
-    type: string
-    description: GPU universally unique identifier
-
-  gpu_number:
+resource_attributes:
+  gpu.number:
     type: string
     description: GPU index starting at 0.
+    enabled: true
 
+  gpu.uuid:
+    type: string
+    description: GPU universally unique identifier.
+    enabled: true
+
+  gpu.model:
+    type: string
+    description: GPU model name.
+    enabled: true
+
+attributes:
   memory_state:
     type: string
     description: GPU memory used or free
@@ -39,7 +43,6 @@ metrics:
     unit: 1
     gauge:
       value_type: double
-    attributes: [model, gpu_number, uuid]
     enabled: true
 
   dcgm.gpu.memory.bytes_used:
@@ -47,7 +50,7 @@ metrics:
     unit: By
     gauge:
       value_type: int
-    attributes: [model, gpu_number, uuid, memory_state]
+    attributes: [memory_state]
     enabled: true
 
   dcgm.gpu.profiling.sm_utilization:
@@ -55,7 +58,6 @@ metrics:
     unit: 1
     gauge:
       value_type: double
-    attributes: [model, gpu_number, uuid]
     enabled: true
 
   dcgm.gpu.profiling.sm_occupancy:
@@ -63,7 +65,6 @@ metrics:
     unit: 1
     gauge:
       value_type: double
-    attributes: [model, gpu_number, uuid]
     enabled: true
 
   dcgm.gpu.profiling.pipe_utilization:
@@ -71,7 +72,7 @@ metrics:
     unit: 1
     gauge:
       value_type: double
-    attributes: [model, gpu_number, uuid, pipe]
+    attributes: [pipe]
     enabled: true
 
   dcgm.gpu.profiling.dram_utilization:
@@ -79,7 +80,6 @@ metrics:
     unit: 1
     gauge:
       value_type: double
-    attributes: [model, gpu_number, uuid]
     enabled: true
 
   dcgm.gpu.profiling.pcie_traffic_rate:
@@ -87,7 +87,7 @@ metrics:
     unit: By/s
     gauge:
       value_type: int
-    attributes: [model, gpu_number, uuid, direction]
+    attributes: [direction]
     enabled: true
 
   dcgm.gpu.profiling.nvlink_traffic_rate:
@@ -95,5 +95,5 @@ metrics:
     unit: By/s
     gauge:
       value_type: int
-    attributes: [model, gpu_number, uuid, direction]
+    attributes: [direction]
     enabled: true

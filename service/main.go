@@ -49,7 +49,16 @@ func MainContext(ctx context.Context) {
 				zapcore.DebugLevel,
 				// We would like the Error logs from this file to be logged at Debug instead.
 				// https://github.com/open-telemetry/opentelemetry-collector/blob/831373ae6c6959f6c9258ac585a2ec0ab19a074f/receiver/scraperhelper/scrapercontroller.go#L198
-				levelchanger.FilePathLevelChangeCondition("scrapercontroller.go")),
+				levelchanger.FilePathLevelChangeCondition("scrapercontroller.go"),
+			),
+			levelchanger.NewLevelChangerOption(
+				zapcore.WarnLevel,
+				zapcore.DebugLevel,
+				// This is a warning log that is written unless a certain featuregate is
+				// enabled, but we don't want to turn the featuregate on.
+				// https://github.com/open-telemetry/opentelemetry-collector/blob/8a2a1a58d13b5f492ebab2f40c51fdcb6fc452ce/internal/localhostgate/featuregate.go#L61-L68
+				levelchanger.FilePathLevelChangeCondition("localhostgate/featuregate.go"),
+			),
 		},
 	}
 

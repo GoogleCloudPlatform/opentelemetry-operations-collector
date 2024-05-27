@@ -89,35 +89,35 @@ func TestScrapeWithEmptyMetricsConfig(t *testing.T) {
 	var settings receiver.CreateSettings
 	settings.Logger = zaptest.NewLogger(t)
 	emptyConfig := &Config{
-		ScraperControllerSettings: scraperhelper.ScraperControllerSettings{
+		ControllerConfig: scraperhelper.ControllerConfig{
 			CollectionInterval: defaultCollectionInterval,
 		},
-		TCPAddr: confignet.TCPAddr{
+		TCPAddrConfig: confignet.TCPAddrConfig{
 			Endpoint: defaultEndpoint,
 		},
-		Metrics: metadata.MetricsSettings{
-			DcgmGpuMemoryBytesUsed: metadata.MetricSettings{
+		Metrics: metadata.MetricsConfig{
+			DcgmGpuMemoryBytesUsed: metadata.MetricConfig{
 				Enabled: false,
 			},
-			DcgmGpuProfilingDramUtilization: metadata.MetricSettings{
+			DcgmGpuProfilingDramUtilization: metadata.MetricConfig{
 				Enabled: false,
 			},
-			DcgmGpuProfilingNvlinkTrafficRate: metadata.MetricSettings{
+			DcgmGpuProfilingNvlinkTrafficRate: metadata.MetricConfig{
 				Enabled: false,
 			},
-			DcgmGpuProfilingPcieTrafficRate: metadata.MetricSettings{
+			DcgmGpuProfilingPcieTrafficRate: metadata.MetricConfig{
 				Enabled: false,
 			},
-			DcgmGpuProfilingPipeUtilization: metadata.MetricSettings{
+			DcgmGpuProfilingPipeUtilization: metadata.MetricConfig{
 				Enabled: false,
 			},
-			DcgmGpuProfilingSmOccupancy: metadata.MetricSettings{
+			DcgmGpuProfilingSmOccupancy: metadata.MetricConfig{
 				Enabled: false,
 			},
-			DcgmGpuProfilingSmUtilization: metadata.MetricSettings{
+			DcgmGpuProfilingSmUtilization: metadata.MetricConfig{
 				Enabled: false,
 			},
-			DcgmGpuUtilization: metadata.MetricSettings{
+			DcgmGpuUtilization: metadata.MetricConfig{
 				Enabled: false,
 			},
 		},

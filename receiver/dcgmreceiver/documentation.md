@@ -24,7 +24,7 @@ Current number of GPU memory bytes used by state. Summing the values of all stat
 
 | Name | Description | Values |
 | ---- | ----------- | ------ |
-| memory_state | GPU memory used or free | Str: ``used``, ``free`` |
+| memory_state | GPU memory state, one of [free, used, reserved]. | Str: ``used``, ``free``, ``reserved`` |
 
 ### dcgm.gpu.profiling.dram_utilization
 
@@ -99,6 +99,176 @@ Fraction of time the GPU was not idle.
 | Unit | Metric Type | Value Type |
 | ---- | ----------- | ---------- |
 | 1 | Gauge | Double |
+
+### gpu.dcgm.clock.frequency
+
+Multiprocessor clock frequency.
+
+| Unit | Metric Type | Value Type |
+| ---- | ----------- | ---------- |
+| Hz | Gauge | Double |
+
+### gpu.dcgm.clock.throttle_duration.time
+
+Clock throttle total duration.
+
+| Unit | Metric Type | Value Type | Aggregation Temporality | Monotonic |
+| ---- | ----------- | ---------- | ----------------------- | --------- |
+| s | Sum | Double | Cumulative | true |
+
+#### Attributes
+
+| Name | Description | Values |
+| ---- | ----------- | ------ |
+| violation | Reason for throttling, one of [power, thermal, sync_boost, board_limit, low_util, reliability, app_clock, base_clock]. | Str: ``power``, ``thermal``, ``sync_boost``, ``board_limit``, ``low_util``, ``reliability``, ``app_clock``, ``base_clock`` |
+
+### gpu.dcgm.codec.decoder.utilization
+
+Decoder utilization.
+
+| Unit | Metric Type | Value Type |
+| ---- | ----------- | ---------- |
+| 1 | Gauge | Double |
+
+### gpu.dcgm.codec.encoder.utilization
+
+Encoder utilization.
+
+| Unit | Metric Type | Value Type |
+| ---- | ----------- | ---------- |
+| 1 | Gauge | Double |
+
+### gpu.dcgm.ecc_errors
+
+Data corruption errors.
+
+| Unit | Metric Type | Value Type | Aggregation Temporality | Monotonic |
+| ---- | ----------- | ---------- | ----------------------- | --------- |
+| 1 | Sum | Int | Cumulative | true |
+
+#### Attributes
+
+| Name | Description | Values |
+| ---- | ----------- | ------ |
+| error_type | The type of error, one of [sbe, dbe]. | Str: ``sbe``, ``dbe`` |
+
+### gpu.dcgm.energy_consumption
+
+Total energy consumption for the GPU in J since the driver was last reloaded.
+
+| Unit | Metric Type | Value Type | Aggregation Temporality | Monotonic |
+| ---- | ----------- | ---------- | ----------------------- | --------- |
+| J | Sum | Double | Cumulative | true |
+
+### gpu.dcgm.memory.bandwidth_utilization
+
+Fraction of cycles data was being sent or received from GPU memory.
+
+| Unit | Metric Type | Value Type |
+| ---- | ----------- | ---------- |
+| 1 | Gauge | Double |
+
+### gpu.dcgm.memory.bytes_used
+
+Current number of GPU memory bytes used by state. Summing the values of all states yields the total GPU memory space.
+
+| Unit | Metric Type | Value Type |
+| ---- | ----------- | ---------- |
+| By | Gauge | Int |
+
+#### Attributes
+
+| Name | Description | Values |
+| ---- | ----------- | ------ |
+| memory_state | GPU memory state, one of [free, used, reserved]. | Str: ``used``, ``free``, ``reserved`` |
+
+### gpu.dcgm.nvlink.traffic
+
+The number of bytes sent over NVLink, not including protocol headers.
+
+| Unit | Metric Type | Value Type | Aggregation Temporality | Monotonic |
+| ---- | ----------- | ---------- | ----------------------- | --------- |
+| By | Sum | Int | Delta | true |
+
+#### Attributes
+
+| Name | Description | Values |
+| ---- | ----------- | ------ |
+| direction | Direction of the link traffic, one of [tx, rx]. | Str: ``tx``, ``rx`` |
+
+### gpu.dcgm.pcie.traffic
+
+The number of bytes sent over the PCIe bus, including both protocol headers and data payloads.
+
+| Unit | Metric Type | Value Type | Aggregation Temporality | Monotonic |
+| ---- | ----------- | ---------- | ----------------------- | --------- |
+| By | Sum | Int | Delta | true |
+
+#### Attributes
+
+| Name | Description | Values |
+| ---- | ----------- | ------ |
+| direction | Direction of the link traffic, one of [tx, rx]. | Str: ``tx``, ``rx`` |
+
+### gpu.dcgm.pipe.utilization
+
+Fraction of cycles the corresponding GPU pipe was active, averaged over time and all multiprocessors.
+
+| Unit | Metric Type | Value Type |
+| ---- | ----------- | ---------- |
+| 1 | Gauge | Double |
+
+#### Attributes
+
+| Name | Description | Values |
+| ---- | ----------- | ------ |
+| pipe | GPU pipe in use, one of [tensor, fp64, fp32, fp16]. | Str: ``tensor``, ``fp64``, ``fp32``, ``fp16`` |
+
+### gpu.dcgm.sm.occupancy
+
+Fraction of the number of warps resident on a multiprocessor, averaged over all multiprocessors.
+
+| Unit | Metric Type | Value Type |
+| ---- | ----------- | ---------- |
+| 1 | Gauge | Double |
+
+### gpu.dcgm.sm.utilization
+
+Fraction of time at least one warp was active on a multiprocessor, averaged over all multiprocessors.
+
+| Unit | Metric Type | Value Type |
+| ---- | ----------- | ---------- |
+| 1 | Gauge | Double |
+
+### gpu.dcgm.temperature
+
+Current temperature readings for the device, in ˚C.
+
+| Unit | Metric Type | Value Type |
+| ---- | ----------- | ---------- |
+| Cel | Gauge | Double |
+
+### gpu.dcgm.utilization
+
+Ratio of time the graphics engine is active.
+
+| Unit | Metric Type | Value Type |
+| ---- | ----------- | ---------- |
+| 1 | Gauge | Double |
+
+### gpu.dcgm.xid_errors
+
+XID errors.
+
+| Unit | Metric Type | Value Type | Aggregation Temporality | Monotonic |
+| ---- | ----------- | ---------- | ----------------------- | --------- |
+| 1 | Sum | Int | Cumulative | true |
+
+#### Attributes
+
+| Name | Description | Values |
+| ---- | ----------- | ------ |
+| xid | The XID code for the error, 1..143. | Any Int |
 
 ## Resource Attributes
 

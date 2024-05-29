@@ -36,6 +36,22 @@ type MetricsConfig struct {
 	DcgmGpuProfilingSmOccupancy       MetricConfig `mapstructure:"dcgm.gpu.profiling.sm_occupancy"`
 	DcgmGpuProfilingSmUtilization     MetricConfig `mapstructure:"dcgm.gpu.profiling.sm_utilization"`
 	DcgmGpuUtilization                MetricConfig `mapstructure:"dcgm.gpu.utilization"`
+	GpuDcgmClockFrequency             MetricConfig `mapstructure:"gpu.dcgm.clock.frequency"`
+	GpuDcgmClockThrottleDurationTime  MetricConfig `mapstructure:"gpu.dcgm.clock.throttle_duration.time"`
+	GpuDcgmCodecDecoderUtilization    MetricConfig `mapstructure:"gpu.dcgm.codec.decoder.utilization"`
+	GpuDcgmCodecEncoderUtilization    MetricConfig `mapstructure:"gpu.dcgm.codec.encoder.utilization"`
+	GpuDcgmEccErrors                  MetricConfig `mapstructure:"gpu.dcgm.ecc_errors"`
+	GpuDcgmEnergyConsumption          MetricConfig `mapstructure:"gpu.dcgm.energy_consumption"`
+	GpuDcgmMemoryBandwidthUtilization MetricConfig `mapstructure:"gpu.dcgm.memory.bandwidth_utilization"`
+	GpuDcgmMemoryBytesUsed            MetricConfig `mapstructure:"gpu.dcgm.memory.bytes_used"`
+	GpuDcgmNvlinkTraffic              MetricConfig `mapstructure:"gpu.dcgm.nvlink.traffic"`
+	GpuDcgmPcieTraffic                MetricConfig `mapstructure:"gpu.dcgm.pcie.traffic"`
+	GpuDcgmPipeUtilization            MetricConfig `mapstructure:"gpu.dcgm.pipe.utilization"`
+	GpuDcgmSmOccupancy                MetricConfig `mapstructure:"gpu.dcgm.sm.occupancy"`
+	GpuDcgmSmUtilization              MetricConfig `mapstructure:"gpu.dcgm.sm.utilization"`
+	GpuDcgmTemperature                MetricConfig `mapstructure:"gpu.dcgm.temperature"`
+	GpuDcgmUtilization                MetricConfig `mapstructure:"gpu.dcgm.utilization"`
+	GpuDcgmXidErrors                  MetricConfig `mapstructure:"gpu.dcgm.xid_errors"`
 }
 
 func DefaultMetricsConfig() MetricsConfig {
@@ -62,6 +78,54 @@ func DefaultMetricsConfig() MetricsConfig {
 			Enabled: true,
 		},
 		DcgmGpuUtilization: MetricConfig{
+			Enabled: true,
+		},
+		GpuDcgmClockFrequency: MetricConfig{
+			Enabled: true,
+		},
+		GpuDcgmClockThrottleDurationTime: MetricConfig{
+			Enabled: true,
+		},
+		GpuDcgmCodecDecoderUtilization: MetricConfig{
+			Enabled: true,
+		},
+		GpuDcgmCodecEncoderUtilization: MetricConfig{
+			Enabled: true,
+		},
+		GpuDcgmEccErrors: MetricConfig{
+			Enabled: true,
+		},
+		GpuDcgmEnergyConsumption: MetricConfig{
+			Enabled: true,
+		},
+		GpuDcgmMemoryBandwidthUtilization: MetricConfig{
+			Enabled: true,
+		},
+		GpuDcgmMemoryBytesUsed: MetricConfig{
+			Enabled: true,
+		},
+		GpuDcgmNvlinkTraffic: MetricConfig{
+			Enabled: true,
+		},
+		GpuDcgmPcieTraffic: MetricConfig{
+			Enabled: true,
+		},
+		GpuDcgmPipeUtilization: MetricConfig{
+			Enabled: true,
+		},
+		GpuDcgmSmOccupancy: MetricConfig{
+			Enabled: true,
+		},
+		GpuDcgmSmUtilization: MetricConfig{
+			Enabled: true,
+		},
+		GpuDcgmTemperature: MetricConfig{
+			Enabled: true,
+		},
+		GpuDcgmUtilization: MetricConfig{
+			Enabled: true,
+		},
+		GpuDcgmXidErrors: MetricConfig{
 			Enabled: true,
 		},
 	}

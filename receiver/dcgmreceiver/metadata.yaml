@@ -24,8 +24,8 @@ resource_attributes:
 attributes:
   memory_state:
     type: string
-    description: GPU memory used or free
-    enum: [used, free]
+    description: GPU memory state, one of [free, used, reserved].
+    enum: [used, free, reserved]
 
   pipe:
     type: string
@@ -37,7 +37,153 @@ attributes:
     description: Direction of the link traffic, one of [tx, rx].
     enum: [tx, rx]
 
+  violation:
+    type: string
+    description: Reason for throttling, one of [power, thermal, sync_boost, board_limit, low_util, reliability, app_clock, base_clock].
+    enum: [power, thermal, sync_boost, board_limit, low_util, reliability, app_clock, base_clock]
+
+  error_type:
+    type: string
+    description: The type of error, one of [sbe, dbe].
+    enum: [sbe, dbe]
+
+  xid:
+    type: int
+    description: The XID code for the error, 1..143.
+
 metrics:
+  gpu.dcgm.utilization:
+    enabled: true
+    description: Ratio of time the graphics engine is active.
+    unit: 1
+    gauge:
+      value_type: double
+
+  gpu.dcgm.sm.utilization:
+    enabled: true
+    description: Fraction of time at least one warp was active on a multiprocessor, averaged over all multiprocessors.
+    unit: 1
+    gauge:
+      value_type: double
+
+  gpu.dcgm.sm.occupancy:
+    enabled: true
+    description: Fraction of the number of warps resident on a multiprocessor, averaged over all multiprocessors.
+    unit: 1
+    gauge:
+      value_type: double
+
+  gpu.dcgm.pipe.utilization:
+    enabled: true
+    description: Fraction of cycles the corresponding GPU pipe was active, averaged over time and all multiprocessors.
+    unit: 1
+    gauge:
+      value_type: double
+    attributes: [pipe]
+
+  gpu.dcgm.codec.encoder.utilization:
+    enabled: true
+    description: Encoder utilization.
+    unit: 1
+    gauge:
+      value_type: double
+
+  gpu.dcgm.codec.decoder.utilization:
+    enabled: true
+    description: Decoder utilization.
+    unit: 1
+    gauge:
+      value_type: double
+
+  gpu.dcgm.memory.bytes_used:
+    enabled: true
+    description: Current number of GPU memory bytes used by state. Summing the values of all states yields the total GPU memory space.
+    unit: By
+    gauge:
+      value_type: int
+    attributes: [memory_state]
+
+  gpu.dcgm.memory.bandwidth_utilization:
+    enabled: true
+    description: Fraction of cycles data was being sent or received from GPU memory.
+    unit: 1
+    gauge:
+      value_type: double
+
+  gpu.dcgm.pcie.traffic:
+    enabled: true
+    description: The number of bytes sent over the PCIe bus, including both protocol headers and data payloads.
+    unit: By
+    sum:
+      value_type: int
+      aggregation_temporality: delta
+      monotonic: true
+    attributes: [direction]
+
+  gpu.dcgm.nvlink.traffic:
+    enabled: true
+    description: The number of bytes sent over NVLink, not including protocol headers.
+    unit: By
+    sum:
+      value_type: int
+      aggregation_temporality: delta
+      monotonic: true
+    attributes: [direction]
+
+  gpu.dcgm.energy_consumption:
+    enabled: true
+    description: Total energy consumption for the GPU in J since the driver was last reloaded.
+    unit: J
+    sum:
+      value_type: double
+      aggregation_temporality: cumulative
+      monotonic: true
+
+  gpu.dcgm.temperature:
+    enabled: true
+    description: Current temperature readings for the device, in ˚C.
+    unit: Cel
+    gauge:
+      value_type: double
+
+  gpu.dcgm.clock.frequency:
+    enabled: true
+    description: Multiprocessor clock frequency.
+    unit: Hz
+    gauge:
+      value_type: double
+
+  gpu.dcgm.clock.throttle_duration.time:
+    enabled: true
+    description: Clock throttle total duration.
+    unit: s
+    sum:
+      value_type: double
+      aggregation_temporality: cumulative
+      monotonic: true
+    attributes: [violation]
+
+  gpu.dcgm.ecc_errors:
+    enabled: true
+    description: Data corruption errors.
+    unit: 1
+    sum:
+      value_type: int
+      aggregation_temporality: cumulative
+      monotonic: true
+    attributes: [error_type]
+
+  gpu.dcgm.xid_errors:
+    enabled: true
+    description: XID errors.
+    unit: 1
+    sum:
+      value_type: int
+      aggregation_temporality: cumulative
+      monotonic: true
+    attributes: [xid]
+
+#---
   dcgm.gpu.utilization:
     description: Fraction of time the GPU was not idle.
     unit: 1

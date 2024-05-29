@@ -205,20 +205,20 @@ func loadExpectedScraperMetrics(t *testing.T, model string) map[string]int {
 	t.Helper()
 	expectedMetrics := make(map[string]int)
 	receiverMetricNameToScraperMetricName := map[string]string{
-		"dcgm.gpu.utilization":                     "dcgm.gpu.utilization",
-		"dcgm.gpu.memory.bytes_used":               "dcgm.gpu.memory.bytes_used",
-		"dcgm.gpu.memory.bytes_free":               "dcgm.gpu.memory.bytes_used",
-		"dcgm.gpu.profiling.sm_utilization":        "dcgm.gpu.profiling.sm_utilization",
-		"dcgm.gpu.profiling.sm_occupancy":          "dcgm.gpu.profiling.sm_occupancy",
-		"dcgm.gpu.profiling.dram_utilization":      "dcgm.gpu.profiling.dram_utilization",
-		"dcgm.gpu.profiling.tensor_utilization":    "dcgm.gpu.profiling.pipe_utilization",
-		"dcgm.gpu.profiling.fp64_utilization":      "dcgm.gpu.profiling.pipe_utilization",
-		"dcgm.gpu.profiling.fp32_utilization":      "dcgm.gpu.profiling.pipe_utilization",
-		"dcgm.gpu.profiling.fp16_utilization":      "dcgm.gpu.profiling.pipe_utilization",
-		"dcgm.gpu.profiling.pcie_sent_bytes":       "dcgm.gpu.profiling.pcie_traffic_rate",
-		"dcgm.gpu.profiling.pcie_received_bytes":   "dcgm.gpu.profiling.pcie_traffic_rate",
-		"dcgm.gpu.profiling.nvlink_sent_bytes":     "dcgm.gpu.profiling.nvlink_traffic_rate",
-		"dcgm.gpu.profiling.nvlink_received_bytes": "dcgm.gpu.profiling.nvlink_traffic_rate",
+		"DCGM_FI_DEV_GPU_UTIL":            "dcgm.gpu.utilization",
+		"DCGM_FI_DEV_FB_USED":             "dcgm.gpu.memory.bytes_used",
+		"DCGM_FI_DEV_FB_FREE":             "dcgm.gpu.memory.bytes_used",
+		"DCGM_FI_PROF_SM_ACTIVE":          "dcgm.gpu.profiling.sm_utilization",
+		"DCGM_FI_PROF_SM_OCCUPANCY":       "dcgm.gpu.profiling.sm_occupancy",
+		"DCGM_FI_PROF_DRAM_ACTIVE":        "dcgm.gpu.profiling.dram_utilization",
+		"DCGM_FI_PROF_PIPE_TENSOR_ACTIVE": "dcgm.gpu.profiling.pipe_utilization",
+		"DCGM_FI_PROF_PIPE_FP64_ACTIVE":   "dcgm.gpu.profiling.pipe_utilization",
+		"DCGM_FI_PROF_PIPE_FP32_ACTIVE":   "dcgm.gpu.profiling.pipe_utilization",
+		"DCGM_FI_PROF_PIPE_FP16_ACTIVE":   "dcgm.gpu.profiling.pipe_utilization",
+		"DCGM_FI_PROF_PCIE_TX_BYTES":      "dcgm.gpu.profiling.pcie_traffic_rate",
+		"DCGM_FI_PROF_PCIE_RX_BYTES":      "dcgm.gpu.profiling.pcie_traffic_rate",
+		"DCGM_FI_PROF_NVLINK_TX_BYTES":    "dcgm.gpu.profiling.nvlink_traffic_rate",
+		"DCGM_FI_PROF_NVLINK_RX_BYTES":    "dcgm.gpu.profiling.nvlink_traffic_rate",
 	}
 	expectedReceiverMetrics := LoadExpectedMetrics(t, model)
 	for _, em := range expectedReceiverMetrics {

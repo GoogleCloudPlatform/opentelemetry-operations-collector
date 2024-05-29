@@ -28,7 +28,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/go-dcgm/pkg/dcgm"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
@@ -62,17 +61,13 @@ func TestSupportedFieldsWithGolden(t *testing.T) {
 	require.Nil(t, err)
 	enabledFields, unavailableFields := filterSupportedFields(allFields, supportedProfilingFields)
 
-	dcgmIDToNameMap := make(map[dcgm.Short]string, len(dcgm.DCGM_FI))
-	for fieldName, fieldID := range dcgm.DCGM_FI {
-		dcgmIDToNameMap[fieldID] = fieldName
-	}
 	var enabledFieldsString []string
 	var unavailableFieldsString []string
 	for _, f := range enabledFields {
-		enabledFieldsString = append(enabledFieldsString, dcgmIDToNameMap[f])
+		enabledFieldsString = append(enabledFieldsString, dcgmIDToName[f])
 	}
 	for _, f := range unavailableFields {
-		unavailableFieldsString = append(unavailableFieldsString, dcgmIDToNameMap[f])
+		unavailableFieldsString = append(unavailableFieldsString, dcgmIDToName[f])
 	}
 	m := modelSupportedFields{
 		Model:             gpuModel,
@@ -83,7 +78,7 @@ func TestSupportedFieldsWithGolden(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assert.Equal(t, len(dcgmNameToMetricName), len(client.enabledFieldIDs)+len(unavailableFieldsString))
+	assert.Equal(t, len(allFields), len(client.enabledFieldIDs)+len(unavailableFieldsString))
 	goldenPath := getModelGoldenFilePath(t, gpuModel)
 	golden.Assert(t, string(actual), goldenPath)
 	client.cleanup()
@@ -93,22 +88,6 @@ func TestSupportedFieldsWithGolden(t *testing.T) {
 // file, given a GPU model string
 func LoadExpectedMetrics(t *testing.T, model string) []string {
 	t.Helper()
-	dcgmNameToMetricNameMap := map[string]string{
-		"DCGM_FI_DEV_GPU_UTIL":            "dcgm.gpu.utilization",
-		"DCGM_FI_DEV_FB_USED":             "dcgm.gpu.memory.bytes_used",
-		"DCGM_FI_DEV_FB_FREE":             "dcgm.gpu.memory.bytes_free",
-		"DCGM_FI_PROF_SM_ACTIVE":          "dcgm.gpu.profiling.sm_utilization",
-		"DCGM_FI_PROF_SM_OCCUPANCY":       "dcgm.gpu.profiling.sm_occupancy",
-		"DCGM_FI_PROF_PIPE_TENSOR_ACTIVE": "dcgm.gpu.profiling.tensor_utilization",
-		"DCGM_FI_PROF_DRAM_ACTIVE":        "dcgm.gpu.profiling.dram_utilization",
-		"DCGM_FI_PROF_PIPE_FP64_ACTIVE":   "dcgm.gpu.profiling.fp64_utilization",
-		"DCGM_FI_PROF_PIPE_FP32_ACTIVE":   "dcgm.gpu.profiling.fp32_utilization",
-		"DCGM_FI_PROF_PIPE_FP16_ACTIVE":   "dcgm.gpu.profiling.fp16_utilization",
-		"DCGM_FI_PROF_PCIE_TX_BYTES":      "dcgm.gpu.profiling.pcie_sent_bytes",
-		"DCGM_FI_PROF_PCIE_RX_BYTES":      "dcgm.gpu.profiling.pcie_received_bytes",
-		"DCGM_FI_PROF_NVLINK_TX_BYTES":    "dcgm.gpu.profiling.nvlink_sent_bytes",
-		"DCGM_FI_PROF_NVLINK_RX_BYTES":    "dcgm.gpu.profiling.nvlink_received_bytes",
-	}
 	goldenPath := getModelGoldenFilePath(t, model)
 	goldenFile, err := ioutil.ReadFile(goldenPath)
 	if err != nil {
@@ -121,7 +100,7 @@ func LoadExpectedMetrics(t *testing.T, model string) []string {
 	}
 	var expectedMetrics []string
 	for _, supported := range m.SupportedFields {
-		expectedMetrics = append(expectedMetrics, dcgmNameToMetricNameMap[supported])
+		expectedMetrics = append(expectedMetrics, supported)
 	}
 	return expectedMetrics
 }
@@ -166,37 +145,37 @@ func TestCollectGpuProfilingMetrics(t *testing.T) {
 	for gpuIndex, metrics := range deviceMetrics {
 		for _, metric := range metrics {
 			switch metric.name {
-			case "dcgm.gpu.profiling.tensor_utilization":
+			case "DCGM_FI_PROF_PIPE_TENSOR_ACTIVE":
 				fallthrough
-			case "dcgm.gpu.profiling.dram_utilization":
+			case "DCGM_FI_PROF_DRAM_ACTIVE":
 				fallthrough
-			case "dcgm.gpu.profiling.fp64_utilization":
+			case "DCGM_FI_PROF_PIPE_FP64_ACTIVE":
 				fallthrough
-			case "dcgm.gpu.profiling.fp32_utilization":
+			case "DCGM_FI_PROF_PIPE_FP32_ACTIVE":
 				fallthrough
-			case "dcgm.gpu.profiling.fp16_utilization":
+			case "DCGM_FI_PROF_PIPE_FP16_ACTIVE":
 				fallthrough
-			case "dcgm.gpu.profiling.sm_occupancy":
+			case "DCGM_FI_PROF_SM_OCCUPANCY":
 				fallthrough
-			case "dcgm.gpu.profiling.sm_utilization":
+			case "DCGM_FI_PROF_SM_ACTIVE":
 				assert.GreaterOrEqual(t, metric.asFloat64(), float64(0.0))
 				assert.LessOrEqual(t, metric.asFloat64(), float64(1.0))
-			case "dcgm.gpu.utilization":
+			case "DCGM_FI_DEV_GPU_UTIL":
 				assert.GreaterOrEqual(t, metric.asInt64(), int64(0))
 				assert.LessOrEqual(t, metric.asInt64(), int64(100))
-			case "dcgm.gpu.memory.bytes_free":
+			case "DCGM_FI_DEV_FB_FREE":
 				fallthrough
-			case "dcgm.gpu.memory.bytes_used":
+			case "DCGM_FI_DEV_FB_USED":
 				// arbitrary max of 10 TiB
 				assert.GreaterOrEqual(t, metric.asInt64(), int64(0))
 				assert.LessOrEqual(t, metric.asInt64(), int64(10485760))
-			case "dcgm.gpu.profiling.pcie_sent_bytes":
+			case "DCGM_FI_PROF_PCIE_TX_BYTES":
 				fallthrough
-			case "dcgm.gpu.profiling.pcie_received_bytes":
+			case "DCGM_FI_PROF_PCIE_RX_BYTES":
 				fallthrough
-			case "dcgm.gpu.profiling.nvlink_sent_bytes":
+			case "DCGM_FI_PROF_NVLINK_TX_BYTES":
 				fallthrough
-			case "dcgm.gpu.profiling.nvlink_received_bytes":
+			case "DCGM_FI_PROF_NVLINK_RX_BYTES":
 				// arbitrary max of 10 TiB/sec
 				assert.GreaterOrEqual(t, metric.asInt64(), int64(0))
 				assert.LessOrEqual(t, metric.asInt64(), int64(10995116277760))

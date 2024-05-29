@@ -98,37 +98,37 @@ func (s *dcgmScraper) scrape(_ context.Context) (pmetric.Metrics, error) {
 		gpuResource := rb.Emit()
 		for _, metric := range metrics {
 			switch metric.name {
-			case "dcgm.gpu.utilization":
+			case "DCGM_FI_DEV_GPU_UTIL":
 				gpuUtil := float64(metric.asInt64()) / 100.0 /* normalize */
 				s.mb.RecordDcgmGpuUtilizationDataPoint(now, gpuUtil)
-			case "dcgm.gpu.memory.bytes_used":
+			case "DCGM_FI_DEV_FB_USED":
 				bytesUsed := 1e6 * metric.asInt64() /* MB to B */
 				s.mb.RecordDcgmGpuMemoryBytesUsedDataPoint(now, bytesUsed, metadata.AttributeMemoryStateUsed)
-			case "dcgm.gpu.memory.bytes_free":
+			case "DCGM_FI_DEV_FB_FREE":
 				bytesFree := 1e6 * metric.asInt64() /* MB to B */
 				s.mb.RecordDcgmGpuMemoryBytesUsedDataPoint(now, bytesFree, metadata.AttributeMemoryStateFree)
-			case "dcgm.gpu.profiling.sm_utilization":
+			case "DCGM_FI_PROF_SM_ACTIVE":
 				s.mb.RecordDcgmGpuProfilingSmUtilizationDataPoint(now, metric.asFloat64())
-			case "dcgm.gpu.profiling.sm_occupancy":
+			case "DCGM_FI_PROF_SM_OCCUPANCY":
 				s.mb.RecordDcgmGpuProfilingSmOccupancyDataPoint(now, metric.asFloat64())
-			case "dcgm.gpu.profiling.tensor_utilization":
+			case "DCGM_FI_PROF_PIPE_TENSOR_ACTIVE":
 				s.mb.RecordDcgmGpuProfilingPipeUtilizationDataPoint(now, metric.asFloat64(), metadata.AttributePipeTensor)
-			case "dcgm.gpu.profiling.fp64_utilization":
+			case "DCGM_FI_PROF_PIPE_FP64_ACTIVE":
 				s.mb.RecordDcgmGpuProfilingPipeUtilizationDataPoint(now, metric.asFloat64(), metadata.AttributePipeFp64)
-			case "dcgm.gpu.profiling.fp32_utilization":
+			case "DCGM_FI_PROF_PIPE_FP32_ACTIVE":
 				s.mb.RecordDcgmGpuProfilingPipeUtilizationDataPoint(now, metric.asFloat64(), metadata.AttributePipeFp32)
-			case "dcgm.gpu.profiling.fp16_utilization":
+			case "DCGM_FI_PROF_PIPE_FP16_ACTIVE":
 				s.mb.RecordDcgmGpuProfilingPipeUtilizationDataPoint(now, metric.asFloat64(), metadata.AttributePipeFp16)
-			case "dcgm.gpu.profiling.dram_utilization":
+			case "DCGM_FI_PROF_DRAM_ACTIVE":
 				s.mb.RecordDcgmGpuProfilingDramUtilizationDataPoint(now, metric.asFloat64())
-			case "dcgm.gpu.profiling.pcie_sent_bytes":
+			case "DCGM_FI_PROF_PCIE_TX_BYTES":
 				/* DCGM already returns these as bytes/sec despite the name */
 				s.mb.RecordDcgmGpuProfilingPcieTrafficRateDataPoint(now, metric.asInt64(), metadata.AttributeDirectionTx)
-			case "dcgm.gpu.profiling.pcie_received_bytes":
+			case "DCGM_FI_PROF_PCIE_RX_BYTES":
 				s.mb.RecordDcgmGpuProfilingPcieTrafficRateDataPoint(now, metric.asInt64(), metadata.AttributeDirectionRx)
-			case "dcgm.gpu.profiling.nvlink_sent_bytes":
+			case "DCGM_FI_PROF_NVLINK_TX_BYTES":
 				s.mb.RecordDcgmGpuProfilingNvlinkTrafficRateDataPoint(now, metric.asInt64(), metadata.AttributeDirectionTx)
-			case "dcgm.gpu.profiling.nvlink_received_bytes":
+			case "DCGM_FI_PROF_NVLINK_RX_BYTES":
 				s.mb.RecordDcgmGpuProfilingNvlinkTrafficRateDataPoint(now, metric.asInt64(), metadata.AttributeDirectionRx)
 			}
 		}

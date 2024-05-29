@@ -75,7 +75,7 @@ func newClient(config *Config, logger *zap.Logger) (*dcgmClient, error) {
 	}
 	enabledFields, unavailableFields := filterSupportedFields(requestedFieldIDs, supportedProfilingFieldIDs)
 	for _, f := range unavailableFields {
-		logger.Sugar().Warnf("Field '%s' is not supported. Metric '%s' will not be collected", dcgmIDToName[f], dcgmNameToMetricName[dcgmIDToName[f]])
+		logger.Sugar().Warnf("Field '%s' is not supported. Metric '%s' will not be collected", dcgmIDToName[f], dcgmIDToName[f])
 	}
 	if len(enabledFields) != 0 {
 		deviceIndices, names, UUIDs, err = discoverDevices(logger)
@@ -323,34 +323,34 @@ func (client *dcgmClient) collectDeviceMetrics() (map[uint][]dcgmMetric, error) 
 
 func (client *dcgmClient) appendMetric(gpuMetrics []dcgmMetric, gpuIndex uint, fieldValues []dcgm.FieldValue_v1) []dcgmMetric {
 	for _, fieldValue := range fieldValues {
-		metricName := dcgmNameToMetricName[dcgmIDToName[dcgm.Short(fieldValue.FieldId)]]
+		dcgmName := dcgmIDToName[dcgm.Short(fieldValue.FieldId)]
 		if !isValidValue(fieldValue) {
-			msg := fmt.Sprintf("Received invalid value (ts %d gpu %d) %s", fieldValue.Ts, gpuIndex, metricName)
-			client.issueWarningForFailedQueryUptoThreshold(gpuIndex, metricName, msg)
+			msg := fmt.Sprintf("Received invalid value (ts %d gpu %d) %s", fieldValue.Ts, gpuIndex, dcgmName)
+			client.issueWarningForFailedQueryUptoThreshold(gpuIndex, dcgmName, msg)
 			continue
 		}
 
 		switch fieldValue.FieldType {
 		case dcgm.DCGM_FT_DOUBLE:
-			client.logger.Debugf("Discovered (ts %d gpu %d) %s = %.3f (f64)", fieldValue.Ts, gpuIndex, metricName, fieldValue.Float64())
+			client.logger.Debugf("Discovered (ts %d gpu %d) %s = %.3f (f64)", fieldValue.Ts, gpuIndex, dcgmName, fieldValue.Float64())
 		case dcgm.DCGM_FT_INT64:
-			client.logger.Debugf("Discovered (ts %d gpu %d) %s = %d (i64)", fieldValue.Ts, gpuIndex, metricName, fieldValue.Int64())
+			client.logger.Debugf("Discovered (ts %d gpu %d) %s = %d (i64)", fieldValue.Ts, gpuIndex, dcgmName, fieldValue.Int64())
 		}
-		gpuMetrics = append(gpuMetrics, dcgmMetric{fieldValue.Ts, metricName, fieldValue.Value})
+		gpuMetrics = append(gpuMetrics, dcgmMetric{fieldValue.Ts, dcgmName, fieldValue.Value})
 	}
 
 	return gpuMetrics
 }
 
-func (client *dcgmClient) issueWarningForFailedQueryUptoThreshold(deviceIdx uint, metricName string, reason string) {
-	deviceMetric := fmt.Sprintf("device%d.%s", deviceIdx, metricName)
+func (client *dcgmClient) issueWarningForFailedQueryUptoThreshold(deviceIdx uint, dcgmName string, reason string) {
+	deviceMetric := fmt.Sprintf("device%d.%s", deviceIdx, dcgmName)
 	client.deviceMetricToFailedQueryCount[deviceMetric]++
 
 	failedCount := client.deviceMetricToFailedQueryCount[deviceMetric]
 	if failedCount <= maxWarningsForFailedDeviceMetricQuery {
-		client.logger.Warnf("Unable to query '%s' for Nvidia device %d on '%s'", metricName, deviceIdx, reason)
+		client.logger.Warnf("Unable to query '%s' for Nvidia device %d on '%s'", dcgmName, deviceIdx, reason)
 		if failedCount == maxWarningsForFailedDeviceMetricQuery {
-			client.logger.Warnf("Surpressing further device query warnings for '%s' for Nvidia device %d", metricName, deviceIdx)
+			client.logger.Warnf("Surpressing further device query warnings for '%s' for Nvidia device %d", dcgmName, deviceIdx)
 		}
 	}
 }

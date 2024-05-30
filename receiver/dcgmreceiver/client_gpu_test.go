@@ -145,9 +145,13 @@ func TestCollectGpuProfilingMetrics(t *testing.T) {
 	for gpuIndex, metrics := range deviceMetrics {
 		for _, metric := range metrics {
 			switch metric.name {
-			case "DCGM_FI_PROF_PIPE_TENSOR_ACTIVE":
+			case "DCGM_FI_PROF_GR_ENGINE_ACTIVE":
 				fallthrough
-			case "DCGM_FI_PROF_DRAM_ACTIVE":
+			case "DCGM_FI_PROF_SM_ACTIVE":
+				fallthrough
+			case "DCGM_FI_PROF_SM_OCCUPANCY":
+				fallthrough
+			case "DCGM_FI_PROF_PIPE_TENSOR_ACTIVE":
 				fallthrough
 			case "DCGM_FI_PROF_PIPE_FP64_ACTIVE":
 				fallthrough
@@ -155,17 +159,23 @@ func TestCollectGpuProfilingMetrics(t *testing.T) {
 				fallthrough
 			case "DCGM_FI_PROF_PIPE_FP16_ACTIVE":
 				fallthrough
-			case "DCGM_FI_PROF_SM_OCCUPANCY":
-				fallthrough
-			case "DCGM_FI_PROF_SM_ACTIVE":
+			case "DCGM_FI_PROF_DRAM_ACTIVE":
 				assert.GreaterOrEqual(t, metric.asFloat64(), float64(0.0))
 				assert.LessOrEqual(t, metric.asFloat64(), float64(1.0))
 			case "DCGM_FI_DEV_GPU_UTIL":
+				fallthrough
+			case "DCGM_FI_DEV_MEM_COPY_UTIL":
+				fallthrough
+			case "DCGM_FI_DEV_ENC_UTIL":
+				fallthrough
+			case "DCGM_FI_DEV_DEC_UTIL":
 				assert.GreaterOrEqual(t, metric.asInt64(), int64(0))
 				assert.LessOrEqual(t, metric.asInt64(), int64(100))
 			case "DCGM_FI_DEV_FB_FREE":
 				fallthrough
 			case "DCGM_FI_DEV_FB_USED":
+				fallthrough
+			case "DCGM_FI_DEV_FB_RESERVED":
 				// arbitrary max of 10 TiB
 				assert.GreaterOrEqual(t, metric.asInt64(), int64(0))
 				assert.LessOrEqual(t, metric.asInt64(), int64(10485760))
@@ -179,6 +189,41 @@ func TestCollectGpuProfilingMetrics(t *testing.T) {
 				// arbitrary max of 10 TiB/sec
 				assert.GreaterOrEqual(t, metric.asInt64(), int64(0))
 				assert.LessOrEqual(t, metric.asInt64(), int64(10995116277760))
+			case "DCGM_FI_DEV_BOARD_LIMIT_VIOLATION":
+				fallthrough
+			case "DCGM_FI_DEV_LOW_UTIL_VIOLATION":
+				fallthrough
+			case "DCGM_FI_DEV_POWER_VIOLATION":
+				fallthrough
+			case "DCGM_FI_DEV_RELIABILITY_VIOLATION":
+				fallthrough
+			case "DCGM_FI_DEV_SYNC_BOOST_VIOLATION":
+				fallthrough
+			case "DCGM_FI_DEV_THERMAL_VIOLATION":
+				fallthrough
+			case "DCGM_FI_DEV_TOTAL_APP_CLOCKS_VIOLATION":
+				fallthrough
+			case "DCGM_FI_DEV_TOTAL_BASE_CLOCKS_VIOLATION":
+				assert.GreaterOrEqual(t, metric.asInt64(), int64(0))
+				assert.LessOrEqual(t, metric.asInt64(), time.Now().UnixMicro())
+			case "DCGM_FI_DEV_ECC_DBE_VOL_TOTAL":
+				fallthrough
+			case "DCGM_FI_DEV_ECC_SBE_VOL_TOTAL":
+				// arbitrary max of 100000000 errors
+				assert.GreaterOrEqual(t, metric.asInt64(), int64(0))
+				assert.LessOrEqual(t, metric.asInt64(), int64(100000000))
+			case "DCGM_FI_DEV_GPU_TEMP":
+				// arbitrary max of 100000 °C
+				assert.GreaterOrEqual(t, metric.asFloat64(), float64(0.0))
+				assert.LessOrEqual(t, metric.asFloat64(), float64(100000.0))
+			case "DCGM_FI_DEV_SM_CLOCK":
+				// arbitrary max of 100000 MHz
+				assert.GreaterOrEqual(t, metric.asFloat64(), float64(0.0))
+				assert.LessOrEqual(t, metric.asFloat64(), float64(100000.0))
+			case "DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION":
+				// TODO
+			case "DCGM_FI_DEV_POWER_USAGE":
+				// TODO
 			default:
 				t.Errorf("Unexpected metric '%s'", metric.name)
 			}

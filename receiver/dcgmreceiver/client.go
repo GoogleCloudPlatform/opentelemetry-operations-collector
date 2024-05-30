@@ -166,35 +166,71 @@ func createDeviceGroup(logger *zap.Logger, deviceIndices []uint) (dcgm.GroupHand
 
 func discoverRequestedFieldIDs(config *Config) []dcgm.Short {
 	requestedFieldIDs := []dcgm.Short{}
-	if config.Metrics.DcgmGpuUtilization.Enabled {
-		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_DEV_GPU_UTIL"])
+	if config.Metrics.GpuDcgmUtilization.Enabled {
+		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_GR_ENGINE_ACTIVE"])
+		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_DEV_GPU_UTIL"]) // fallback
 	}
-	if config.Metrics.DcgmGpuMemoryBytesUsed.Enabled {
-		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_DEV_FB_USED"])
-		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_DEV_FB_FREE"])
-	}
-	if config.Metrics.DcgmGpuProfilingSmUtilization.Enabled {
+	if config.Metrics.GpuDcgmSmUtilization.Enabled {
 		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_SM_ACTIVE"])
 	}
-	if config.Metrics.DcgmGpuProfilingSmOccupancy.Enabled {
+	if config.Metrics.GpuDcgmSmOccupancy.Enabled {
 		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_SM_OCCUPANCY"])
 	}
-	if config.Metrics.DcgmGpuProfilingPipeUtilization.Enabled {
+	if config.Metrics.GpuDcgmPipeUtilization.Enabled {
 		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_PIPE_TENSOR_ACTIVE"])
 		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_PIPE_FP64_ACTIVE"])
 		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_PIPE_FP32_ACTIVE"])
 		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_PIPE_FP16_ACTIVE"])
 	}
-	if config.Metrics.DcgmGpuProfilingDramUtilization.Enabled {
-		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_DRAM_ACTIVE"])
+	if config.Metrics.GpuDcgmCodecEncoderUtilization.Enabled {
+		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_DEV_ENC_UTIL"])
 	}
-	if config.Metrics.DcgmGpuProfilingPcieTrafficRate.Enabled {
+	if config.Metrics.GpuDcgmCodecDecoderUtilization.Enabled {
+		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_DEV_DEC_UTIL"])
+	}
+	if config.Metrics.GpuDcgmMemoryBytesUsed.Enabled {
+		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_DEV_FB_FREE"])
+		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_DEV_FB_USED"])
+		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_DEV_FB_RESERVED"])
+	}
+	if config.Metrics.GpuDcgmMemoryBandwidthUtilization.Enabled {
+		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_DRAM_ACTIVE"])
+		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_DEV_MEM_COPY_UTIL"]) // fallback
+	}
+	if config.Metrics.GpuDcgmPcieTraffic.Enabled {
 		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_PCIE_TX_BYTES"])
 		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_PCIE_RX_BYTES"])
 	}
-	if config.Metrics.DcgmGpuProfilingNvlinkTrafficRate.Enabled {
+	if config.Metrics.GpuDcgmNvlinkTraffic.Enabled {
 		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_NVLINK_TX_BYTES"])
 		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_NVLINK_RX_BYTES"])
+	}
+	if config.Metrics.GpuDcgmEnergyConsumption.Enabled {
+		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION"])
+		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_DEV_POWER_USAGE"]) // fallback
+	}
+	if config.Metrics.GpuDcgmTemperature.Enabled {
+		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_DEV_GPU_TEMP"])
+	}
+	if config.Metrics.GpuDcgmClockFrequency.Enabled {
+		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_DEV_SM_CLOCK"])
+	}
+	if config.Metrics.GpuDcgmClockThrottleDurationTime.Enabled {
+		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_DEV_POWER_VIOLATION"])
+		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_DEV_THERMAL_VIOLATION"])
+		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_DEV_SYNC_BOOST_VIOLATION"])
+		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_DEV_BOARD_LIMIT_VIOLATION"])
+		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_DEV_LOW_UTIL_VIOLATION"])
+		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_DEV_RELIABILITY_VIOLATION"])
+		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_DEV_TOTAL_APP_CLOCKS_VIOLATION"])
+		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_DEV_TOTAL_BASE_CLOCKS_VIOLATION"])
+	}
+	if config.Metrics.GpuDcgmEccErrors.Enabled {
+		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_DEV_ECC_SBE_VOL_TOTAL"])
+		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_DEV_ECC_DBE_VOL_TOTAL"])
+	}
+	if config.Metrics.GpuDcgmXidErrors.Enabled {
+		//requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI[""])
 	}
 
 	return requestedFieldIDs

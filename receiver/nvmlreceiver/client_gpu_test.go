@@ -189,7 +189,7 @@ func TestCollectGpuProcessesAccounting(t *testing.T) {
 		assert.LessOrEqual(t, metric.lifetimeGpuMaxMemory, uint64(10995116277760))
 
 		assert.GreaterOrEqual(t, metric.processPid, int(0))
-		assert.LessOrEqual(t, metric.processPid, int(32768))
+		assert.LessOrEqual(t, metric.processPid, int(4194304))
 		assert.Greater(t, len(metric.processName), 0)
 		assert.Greater(t, len(metric.command), 0)
 		assert.Greater(t, len(metric.commandLine), 0)

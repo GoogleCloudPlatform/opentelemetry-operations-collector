@@ -26,6 +26,7 @@ package nvmlreceiver
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -79,9 +80,11 @@ func TestComponentLifecycle(t *testing.T) {
 			firstRcvr, err := test.createFn(context.Background(), receivertest.NewNopCreateSettings(), cfg)
 			require.NoError(t, err)
 			host := componenttest.NewNopHost()
+			once = sync.Once{}
 			require.NoError(t, err)
 			require.NoError(t, firstRcvr.Start(context.Background(), host))
 			require.NoError(t, firstRcvr.Shutdown(context.Background()))
+			once = sync.Once{}
 			secondRcvr, err := test.createFn(context.Background(), receivertest.NewNopCreateSettings(), cfg)
 			require.NoError(t, err)
 			require.NoError(t, secondRcvr.Start(context.Background(), host))

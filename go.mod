@@ -5,7 +5,7 @@ go 1.21.0
 require (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector v0.47.0
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector/googlemanagedprometheus v0.47.0
-	github.com/NVIDIA/go-dcgm v0.0.0-20230811193702-90bac724c747
+	github.com/NVIDIA/go-dcgm v0.0.0-20240409130410-eeff1ddeec19
 	github.com/NVIDIA/go-nvml v0.12.0-2
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/fileexporter v0.100.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter v0.100.0
@@ -95,7 +95,7 @@ require (
 	github.com/apache/arrow/go/v15 v15.0.0 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/v4a v1.0.23 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.1.26 // indirect
-	github.com/bits-and-blooms/bitset v1.2.1 // indirect
+	github.com/bits-and-blooms/bitset v1.13.0 // indirect
 	github.com/bmatcuk/doublestar/v4 v4.6.1 // indirect
 	github.com/danieljoos/wincred v1.1.2 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect

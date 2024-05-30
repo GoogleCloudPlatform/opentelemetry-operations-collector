@@ -28,14 +28,6 @@ func (ms *MetricConfig) Unmarshal(parser *confmap.Conf) error {
 
 // MetricsConfig provides config for dcgm metrics.
 type MetricsConfig struct {
-	DcgmGpuMemoryBytesUsed            MetricConfig `mapstructure:"dcgm.gpu.memory.bytes_used"`
-	DcgmGpuProfilingDramUtilization   MetricConfig `mapstructure:"dcgm.gpu.profiling.dram_utilization"`
-	DcgmGpuProfilingNvlinkTrafficRate MetricConfig `mapstructure:"dcgm.gpu.profiling.nvlink_traffic_rate"`
-	DcgmGpuProfilingPcieTrafficRate   MetricConfig `mapstructure:"dcgm.gpu.profiling.pcie_traffic_rate"`
-	DcgmGpuProfilingPipeUtilization   MetricConfig `mapstructure:"dcgm.gpu.profiling.pipe_utilization"`
-	DcgmGpuProfilingSmOccupancy       MetricConfig `mapstructure:"dcgm.gpu.profiling.sm_occupancy"`
-	DcgmGpuProfilingSmUtilization     MetricConfig `mapstructure:"dcgm.gpu.profiling.sm_utilization"`
-	DcgmGpuUtilization                MetricConfig `mapstructure:"dcgm.gpu.utilization"`
 	GpuDcgmClockFrequency             MetricConfig `mapstructure:"gpu.dcgm.clock.frequency"`
 	GpuDcgmClockThrottleDurationTime  MetricConfig `mapstructure:"gpu.dcgm.clock.throttle_duration.time"`
 	GpuDcgmCodecDecoderUtilization    MetricConfig `mapstructure:"gpu.dcgm.codec.decoder.utilization"`
@@ -56,30 +48,6 @@ type MetricsConfig struct {
 
 func DefaultMetricsConfig() MetricsConfig {
 	return MetricsConfig{
-		DcgmGpuMemoryBytesUsed: MetricConfig{
-			Enabled: true,
-		},
-		DcgmGpuProfilingDramUtilization: MetricConfig{
-			Enabled: true,
-		},
-		DcgmGpuProfilingNvlinkTrafficRate: MetricConfig{
-			Enabled: true,
-		},
-		DcgmGpuProfilingPcieTrafficRate: MetricConfig{
-			Enabled: true,
-		},
-		DcgmGpuProfilingPipeUtilization: MetricConfig{
-			Enabled: true,
-		},
-		DcgmGpuProfilingSmOccupancy: MetricConfig{
-			Enabled: true,
-		},
-		DcgmGpuProfilingSmUtilization: MetricConfig{
-			Enabled: true,
-		},
-		DcgmGpuUtilization: MetricConfig{
-			Enabled: true,
-		},
 		GpuDcgmClockFrequency: MetricConfig{
 			Enabled: true,
 		},

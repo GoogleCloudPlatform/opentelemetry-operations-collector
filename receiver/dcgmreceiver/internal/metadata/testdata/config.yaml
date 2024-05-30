@@ -1,22 +1,6 @@
 default:
 all_set:
   metrics:
-    dcgm.gpu.memory.bytes_used:
-      enabled: true
-    dcgm.gpu.profiling.dram_utilization:
-      enabled: true
-    dcgm.gpu.profiling.nvlink_traffic_rate:
-      enabled: true
-    dcgm.gpu.profiling.pcie_traffic_rate:
-      enabled: true
-    dcgm.gpu.profiling.pipe_utilization:
-      enabled: true
-    dcgm.gpu.profiling.sm_occupancy:
-      enabled: true
-    dcgm.gpu.profiling.sm_utilization:
-      enabled: true
-    dcgm.gpu.utilization:
-      enabled: true
     gpu.dcgm.clock.frequency:
       enabled: true
     gpu.dcgm.clock.throttle_duration.time:
@@ -58,22 +42,6 @@ all_set:
       enabled: true
 none_set:
   metrics:
-    dcgm.gpu.memory.bytes_used:
-      enabled: false
-    dcgm.gpu.profiling.dram_utilization:
-      enabled: false
-    dcgm.gpu.profiling.nvlink_traffic_rate:
-      enabled: false
-    dcgm.gpu.profiling.pcie_traffic_rate:
-      enabled: false
-    dcgm.gpu.profiling.pipe_utilization:
-      enabled: false
-    dcgm.gpu.profiling.sm_occupancy:
-      enabled: false
-    dcgm.gpu.profiling.sm_utilization:
-      enabled: false
-    dcgm.gpu.utilization:
-      enabled: false
     gpu.dcgm.clock.frequency:
       enabled: false
     gpu.dcgm.clock.throttle_duration.time:

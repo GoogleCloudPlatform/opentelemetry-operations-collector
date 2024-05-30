@@ -26,14 +26,6 @@ func TestMetricsBuilderConfig(t *testing.T) {
 			name: "all_set",
 			want: MetricsBuilderConfig{
 				Metrics: MetricsConfig{
-					DcgmGpuMemoryBytesUsed:            MetricConfig{Enabled: true},
-					DcgmGpuProfilingDramUtilization:   MetricConfig{Enabled: true},
-					DcgmGpuProfilingNvlinkTrafficRate: MetricConfig{Enabled: true},
-					DcgmGpuProfilingPcieTrafficRate:   MetricConfig{Enabled: true},
-					DcgmGpuProfilingPipeUtilization:   MetricConfig{Enabled: true},
-					DcgmGpuProfilingSmOccupancy:       MetricConfig{Enabled: true},
-					DcgmGpuProfilingSmUtilization:     MetricConfig{Enabled: true},
-					DcgmGpuUtilization:                MetricConfig{Enabled: true},
 					GpuDcgmClockFrequency:             MetricConfig{Enabled: true},
 					GpuDcgmClockThrottleDurationTime:  MetricConfig{Enabled: true},
 					GpuDcgmCodecDecoderUtilization:    MetricConfig{Enabled: true},
@@ -62,14 +54,6 @@ func TestMetricsBuilderConfig(t *testing.T) {
 			name: "none_set",
 			want: MetricsBuilderConfig{
 				Metrics: MetricsConfig{
-					DcgmGpuMemoryBytesUsed:            MetricConfig{Enabled: false},
-					DcgmGpuProfilingDramUtilization:   MetricConfig{Enabled: false},
-					DcgmGpuProfilingNvlinkTrafficRate: MetricConfig{Enabled: false},
-					DcgmGpuProfilingPcieTrafficRate:   MetricConfig{Enabled: false},
-					DcgmGpuProfilingPipeUtilization:   MetricConfig{Enabled: false},
-					DcgmGpuProfilingSmOccupancy:       MetricConfig{Enabled: false},
-					DcgmGpuProfilingSmUtilization:     MetricConfig{Enabled: false},
-					DcgmGpuUtilization:                MetricConfig{Enabled: false},
 					GpuDcgmClockFrequency:             MetricConfig{Enabled: false},
 					GpuDcgmClockThrottleDurationTime:  MetricConfig{Enabled: false},
 					GpuDcgmCodecDecoderUtilization:    MetricConfig{Enabled: false},

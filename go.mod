@@ -40,7 +40,7 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/zookeeperreceiver v0.102.0
 	github.com/shirou/gopsutil v3.21.10+incompatible
 	github.com/stretchr/testify v1.9.0
-	go.mongodb.org/mongo-driver v1.14.0
+	go.mongodb.org/mongo-driver v1.15.0
 	go.opentelemetry.io/collector/component v0.102.1
 	go.opentelemetry.io/collector/config/confignet v0.102.1
 	go.opentelemetry.io/collector/config/configtls v0.102.1

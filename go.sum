@@ -747,6 +747,8 @@ github.com/open-telemetry/opentelemetry-collector-contrib/pkg/translator/prometh
 github.com/open-telemetry/opentelemetry-collector-contrib/pkg/translator/prometheusremotewrite v0.102.0/go.mod h1:+Vlutd4t2XluxHYbIAfZiz3z5uWbsbiIUpipV5AnLtk=
 github.com/open-telemetry/opentelemetry-collector-contrib/pkg/winperfcounters v0.102.0 h1:adfJy3Sev2MaD6+plcmsSecpzy8h4MJT7eXEuif/2Ew=
 github.com/open-telemetry/opentelemetry-collector-contrib/pkg/winperfcounters v0.102.0/go.mod h1:FJmA939yem9GSEbqjCK6CXVbPfNPFKhvKnn+nWNpWio=
+github.com/open-telemetry/opentelemetry-collector-contrib/processor/deltatorateprocessor v0.102.0 h1:mj3t9/FAQZjcZJA2kjgbpz2fSK9yD/pYpmqKEWpHJ1A=
+github.com/open-telemetry/opentelemetry-collector-contrib/processor/deltatorateprocessor v0.102.0/go.mod h1:IIIjEblgrNISbDY7GPMMto9kEVIf0n9IeJoVru89kfY=
 github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.102.0 h1:DaEYlVCn58GtkyYVK0IT/ZMjRFJ+BfmR0p9I0Eq42aQ=
 github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.102.0/go.mod h1:u9x08rUCWdgI8Nle5XOMTCmxd0K26KTZvMMA5H8Xjyg=
 github.com/open-telemetry/opentelemetry-collector-contrib/processor/groupbyattrsprocessor v0.102.0 h1:huh7V8uqMakQGdnbOqTSZihfoDeOIbNHfFt62HMsk5k=

@@ -212,7 +212,7 @@ func TestCollectGpuProfilingMetrics(t *testing.T) {
 
 	for _, gpuIndex := range client.deviceIndices {
 		for _, metric := range expectedMetrics {
-			assert.Equal(t, seenMetric[fmt.Sprintf("gpu{%d}.metric{%s}", gpuIndex, metric)], true)
+			assert.True(t, seenMetric[fmt.Sprintf("gpu{%d}.metric{%s}", gpuIndex, metric)], fmt.Sprintf("%s on gpu %d", metric, gpuIndex))
 		}
 	}
 	client.cleanup()

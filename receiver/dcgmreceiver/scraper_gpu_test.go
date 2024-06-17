@@ -70,12 +70,12 @@ func TestScrapeWithDelayedDcgmService(t *testing.T) {
 
 	metrics, err := scraper.scrape(context.Background())
 	assert.NoError(t, err) // If failed to init DCGM, should have no error
-	assert.Equal(t, metrics.MetricCount(), 0)
+	assert.Equal(t, 0, metrics.MetricCount())
 
 	// Scrape again with DCGM not available
 	metrics, err = scraper.scrape(context.Background())
 	assert.NoError(t, err)
-	assert.Equal(t, metrics.MetricCount(), 0)
+	assert.Equal(t, 0, metrics.MetricCount())
 
 	// Simulate DCGM becomes available
 	dcgmInit = realDcgmInit
@@ -131,7 +131,7 @@ func TestScrapeWithEmptyMetricsConfig(t *testing.T) {
 
 	metrics, err := scraper.scrape(context.Background())
 	assert.NoError(t, err)
-	assert.Equal(t, metrics.MetricCount(), 0)
+	assert.Equal(t, 0, metrics.MetricCount())
 }
 
 func TestScrapeOnPollingError(t *testing.T) {
@@ -153,7 +153,7 @@ func TestScrapeOnPollingError(t *testing.T) {
 	metrics, err := scraper.scrape(context.Background())
 
 	assert.Error(t, err)
-	assert.Equal(t, metrics.MetricCount(), 0)
+	assert.Equal(t, 0, metrics.MetricCount())
 }
 
 func TestScrapeOnProfilingPaused(t *testing.T) {
@@ -176,12 +176,13 @@ func TestScrapeOnProfilingPaused(t *testing.T) {
 	metrics, err := scraper.scrape(context.Background())
 
 	assert.NoError(t, err)
-	require.Equal(t, metrics.MetricCount(), 2)
 
 	expectedMetrics := []string{
 		"dcgm.gpu.utilization",
 		"dcgm.gpu.memory.bytes_used",
 	}
+
+	require.Equal(t, len(expectedMetrics), metrics.MetricCount())
 
 	ms := metrics.ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics()
 	metricWasSeen := make(map[string]bool)
@@ -190,7 +191,7 @@ func TestScrapeOnProfilingPaused(t *testing.T) {
 	}
 
 	for _, metric := range expectedMetrics {
-		assert.Equal(t, metricWasSeen[metric], true)
+		assert.True(t, metricWasSeen[metric], metric)
 	}
 }
 
@@ -243,9 +244,9 @@ func validateScraperResult(t *testing.T, metrics pmetric.Metrics, expectedMetric
 		m := ms.At(i)
 		dps := m.Gauge().DataPoints()
 		for j := 0; j < dps.Len(); j++ {
-			assert.Regexp(t, ".*gpu_number:.*", dps.At(j).Attributes().AsRaw())
-			assert.Regexp(t, ".*model:.*", dps.At(j).Attributes().AsRaw())
-			assert.Regexp(t, ".*uuid:.*", dps.At(j).Attributes().AsRaw())
+			assert.Contains(t, dps.At(j).Attributes().AsRaw(), "gpu_number")
+			assert.Contains(t, dps.At(j).Attributes().AsRaw(), "model")
+			assert.Contains(t, dps.At(j).Attributes().AsRaw(), "uuid")
 		}
 
 		assert.LessOrEqual(t, expectedMetrics[m.Name()], dps.Len())
@@ -254,20 +255,20 @@ func validateScraperResult(t *testing.T, metrics pmetric.Metrics, expectedMetric
 		case "dcgm.gpu.utilization":
 		case "dcgm.gpu.memory.bytes_used":
 			for j := 0; j < dps.Len(); j++ {
-				assert.Regexp(t, ".*memory_state:.*", dps.At(j).Attributes().AsRaw())
+				assert.Contains(t, dps.At(j).Attributes().AsRaw(), "memory_state")
 			}
 		case "dcgm.gpu.profiling.sm_utilization":
 		case "dcgm.gpu.profiling.sm_occupancy":
 		case "dcgm.gpu.profiling.dram_utilization":
 		case "dcgm.gpu.profiling.pipe_utilization":
 			for j := 0; j < dps.Len(); j++ {
-				assert.Regexp(t, ".*pipe:.*", dps.At(j).Attributes().AsRaw())
+				assert.Contains(t, dps.At(j).Attributes().AsRaw(), "pipe")
 			}
 		case "dcgm.gpu.profiling.pcie_traffic_rate":
 			fallthrough
 		case "dcgm.gpu.profiling.nvlink_traffic_rate":
 			for j := 0; j < dps.Len(); j++ {
-				assert.Regexp(t, ".*direction:.*", dps.At(j).Attributes().AsRaw())
+				assert.Contains(t, dps.At(j).Attributes().AsRaw(), "direction")
 			}
 		default:
 			t.Errorf("Unexpected metric %s", m.Name())
@@ -277,6 +278,6 @@ func validateScraperResult(t *testing.T, metrics pmetric.Metrics, expectedMetric
 	}
 
 	for metric := range expectedMetrics {
-		assert.Equal(t, metricWasSeen[metric], true)
+		assert.True(t, metricWasSeen[metric], metric)
 	}
 }

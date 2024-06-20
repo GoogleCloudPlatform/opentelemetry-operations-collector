@@ -47,8 +47,9 @@ type modelSupportedFields struct {
 	UnsupportedFields []string `yaml:"unsupported_fields"`
 }
 
-// TestSupportedFieldsWithGolden test getSupportedProfilingFields() against the
-// golden files for the current GPU model
+// TestSupportedFieldsWithGolden tests getSupportedRegularFields() and
+// getSupportedProfilingFields() against the golden files for the current GPU
+// model
 func TestSupportedFieldsWithGolden(t *testing.T) {
 	config := createDefaultConfig().(*Config)
 	client, err := newClient(config, zaptest.NewLogger(t))
@@ -57,9 +58,11 @@ func TestSupportedFieldsWithGolden(t *testing.T) {
 	assert.NotEmpty(t, client.devicesModelName)
 	gpuModel := client.getDeviceModelName(0)
 	allFields := discoverRequestedFieldIDs(config)
+	supportedRegularFields, err := getSupportedRegularFields(allFields, zaptest.NewLogger(t))
+	require.Nil(t, err)
 	supportedProfilingFields, err := getSupportedProfilingFields()
 	require.Nil(t, err)
-	enabledFields, unavailableFields := filterSupportedFields(allFields, supportedProfilingFields)
+	enabledFields, unavailableFields := filterSupportedFields(allFields, supportedRegularFields, supportedProfilingFields)
 
 	var enabledFieldsString []string
 	var unavailableFieldsString []string

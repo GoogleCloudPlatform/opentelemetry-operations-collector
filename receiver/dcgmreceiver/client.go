@@ -29,6 +29,8 @@ import (
 
 const maxWarningsForFailedDeviceMetricQuery = 5
 
+const dcgmProfilingFieldsStart = dcgm.Short(1000)
+
 var ErrDcgmInitialization = errors.New("error initializing DCGM")
 
 type dcgmClient struct {
@@ -66,13 +68,13 @@ func newClient(config *Config, logger *zap.Logger) (*dcgmClient, error) {
 	UUIDs := make([]string, 0)
 	enabledFieldGroup := dcgm.FieldHandle{}
 	requestedFieldIDs := discoverRequestedFieldIDs(config)
-	supportedFieldIDs, err := getAllSupportedFields()
+	supportedProfilingFieldIDs, err := getSupportedProfilingFields()
 	if err != nil {
 		// If there is error querying the supported fields at all, let the
 		// receiver collect basic metrics: (GPU utilization, used/free memory).
 		logger.Sugar().Warnf("Error querying supported profiling fields on '%w'. GPU profiling metrics will not be collected.", err)
 	}
-	enabledFields, unavailableFields := filterSupportedFields(requestedFieldIDs, supportedFieldIDs)
+	enabledFields, unavailableFields := filterSupportedFields(requestedFieldIDs, supportedProfilingFieldIDs)
 	for _, f := range unavailableFields {
 		logger.Sugar().Warnf("Field '%s' is not supported. Metric '%s' will not be collected", dcgmIDToName[f], dcgmNameToMetricName[dcgmIDToName[f]])
 	}
@@ -199,16 +201,10 @@ func discoverRequestedFieldIDs(config *Config) []dcgm.Short {
 	return requestedFieldIDs
 }
 
-// getAllSupportedFields calls the DCGM query function to find out all the
-// fields that are supported by the current GPUs
-func getAllSupportedFields() ([]dcgm.Short, error) {
-	// Fields like `DCGM_FI_DEV_*` are not profiling fields, and they are always
-	// supported on all devices
-	supported := []dcgm.Short{
-		dcgm.DCGM_FI["DCGM_FI_DEV_GPU_UTIL"],
-		dcgm.DCGM_FI["DCGM_FI_DEV_FB_USED"],
-		dcgm.DCGM_FI["DCGM_FI_DEV_FB_FREE"],
-	}
+// getSupportedProfilingFields calls the DCGM query function to find out all
+// profiling fields that are supported by the current GPUs
+func getSupportedProfilingFields() ([]dcgm.Short, error) {
+	supported := []dcgm.Short{}
 	// GetSupportedMetricGroups currently does not support passing the actual
 	// group handle; here we pass 0 to query supported fields for group 0, which
 	// is the default DCGM group that is **supposed** to include all GPUs of the
@@ -236,21 +232,27 @@ func getAllSupportedFields() ([]dcgm.Short, error) {
 }
 
 // filterSupportedFields takes the user requested fields and device supported
-// fields, and filter to return those that are requested & supported to be the
-// enabledFields and requested but not supported as unavailableFields
-func filterSupportedFields(requestedFields []dcgm.Short, supportedFields []dcgm.Short) ([]dcgm.Short, []dcgm.Short) {
+// profiling fields, and filters to return those that are requested & supported
+// to be the enabledFields and requested but not supported as unavailableFields
+func filterSupportedFields(requestedFields []dcgm.Short, supportedProfilingFields []dcgm.Short) ([]dcgm.Short, []dcgm.Short) {
 	var enabledFields []dcgm.Short
 	var unavailableFields []dcgm.Short
 	for _, ef := range requestedFields {
 		support := false
-		for _, sf := range supportedFields {
+		if ef < dcgmProfilingFieldsStart {
+			// Fields like `DCGM_FI_DEV_*` are not profiling
+			// fields, and they are always supported on all devices
+			support = true
+		}
+		for _, sf := range supportedProfilingFields {
 			if sf == ef {
-				enabledFields = append(enabledFields, ef)
 				support = true
 				break
 			}
 		}
-		if !support {
+		if support {
+			enabledFields = append(enabledFields, ef)
+		} else {
 			unavailableFields = append(unavailableFields, ef)
 		}
 	}

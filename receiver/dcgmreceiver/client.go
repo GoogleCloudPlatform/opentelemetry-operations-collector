@@ -324,8 +324,8 @@ func (client *dcgmClient) collectDeviceMetrics() (map[uint][]dcgmMetric, error) 
 func (client *dcgmClient) appendMetric(gpuMetrics []dcgmMetric, gpuIndex uint, fieldValues []dcgm.FieldValue_v1) []dcgmMetric {
 	for _, fieldValue := range fieldValues {
 		dcgmName := dcgmIDToName[dcgm.Short(fieldValue.FieldId)]
-		if !isValidValue(fieldValue) {
-			msg := fmt.Sprintf("Received invalid value (ts %d gpu %d) %s", fieldValue.Ts, gpuIndex, dcgmName)
+		if err := isValidValue(fieldValue); err != nil {
+			msg := fmt.Sprintf("Received invalid value (ts %d gpu %d) %s: %v", fieldValue.Ts, gpuIndex, dcgmName, err)
 			client.issueWarningForFailedQueryUptoThreshold(gpuIndex, dcgmName, msg)
 			continue
 		}

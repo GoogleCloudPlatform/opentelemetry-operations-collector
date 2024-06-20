@@ -18,9 +18,18 @@
 package dcgmreceiver
 
 import (
+	"fmt"
 	"unsafe"
 
 	"github.com/NVIDIA/go-dcgm/pkg/dcgm"
+)
+
+var (
+	blankValueError       = fmt.Errorf("unspecified blank value")
+	dataNotFoundError     = fmt.Errorf("data not found")
+	notSupportedError     = fmt.Errorf("field not supported")
+	permissionDeniedError = fmt.Errorf("no permission to fetch value")
+	unexpectedTypeError   = fmt.Errorf("unexpected data type")
 )
 
 func (m *dcgmMetric) setFloat64(val float64) {
@@ -39,44 +48,44 @@ func (m *dcgmMetric) asInt64() int64 {
 	return *(*int64)(unsafe.Pointer(&m.value[0]))
 }
 
-func isValidValue(fieldValue dcgm.FieldValue_v1) bool {
+func isValidValue(fieldValue dcgm.FieldValue_v1) error {
 	switch fieldValue.FieldType {
 	case dcgm.DCGM_FT_DOUBLE:
 		switch v := fieldValue.Float64(); v {
 		case dcgm.DCGM_FT_FP64_BLANK:
-			return false
+			return blankValueError
 		case dcgm.DCGM_FT_FP64_NOT_FOUND:
-			return false
+			return dataNotFoundError
 		case dcgm.DCGM_FT_FP64_NOT_SUPPORTED:
-			return false
+			return notSupportedError
 		case dcgm.DCGM_FT_FP64_NOT_PERMISSIONED:
-			return false
+			return permissionDeniedError
 		}
 
 	case dcgm.DCGM_FT_INT64:
 		switch v := fieldValue.Int64(); v {
 		case dcgm.DCGM_FT_INT32_BLANK:
-			return false
+			return blankValueError
 		case dcgm.DCGM_FT_INT32_NOT_FOUND:
-			return false
+			return dataNotFoundError
 		case dcgm.DCGM_FT_INT32_NOT_SUPPORTED:
-			return false
+			return notSupportedError
 		case dcgm.DCGM_FT_INT32_NOT_PERMISSIONED:
-			return false
+			return permissionDeniedError
 		case dcgm.DCGM_FT_INT64_BLANK:
-			return false
+			return blankValueError
 		case dcgm.DCGM_FT_INT64_NOT_FOUND:
-			return false
+			return dataNotFoundError
 		case dcgm.DCGM_FT_INT64_NOT_SUPPORTED:
-			return false
+			return notSupportedError
 		case dcgm.DCGM_FT_INT64_NOT_PERMISSIONED:
-			return false
+			return permissionDeniedError
 		}
 
 	// dcgm.DCGM_FT_STRING also exists but we don't expect it
 	default:
-		return false
+		return unexpectedTypeError
 	}
 
-	return true
+	return nil
 }

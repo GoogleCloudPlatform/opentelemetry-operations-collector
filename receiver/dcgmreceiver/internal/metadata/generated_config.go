@@ -114,7 +114,7 @@ func DefaultMetricsConfig() MetricsConfig {
 			Enabled: true,
 		},
 		GpuDcgmSmOccupancy: MetricConfig{
-			Enabled: true,
+			Enabled: false,
 		},
 		GpuDcgmSmUtilization: MetricConfig{
 			Enabled: true,

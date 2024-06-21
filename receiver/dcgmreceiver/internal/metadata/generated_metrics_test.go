@@ -144,7 +144,6 @@ func TestMetricsBuilder(t *testing.T) {
 			allMetricsCount++
 			mb.RecordGpuDcgmPipeUtilizationDataPoint(ts, 1, AttributePipeTensor)
 
-			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordGpuDcgmSmOccupancyDataPoint(ts, 1)
 

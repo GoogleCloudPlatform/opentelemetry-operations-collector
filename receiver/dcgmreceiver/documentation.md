@@ -224,14 +224,6 @@ Fraction of cycles the corresponding GPU pipe was active, averaged over time and
 | ---- | ----------- | ------ |
 | pipe | GPU pipe in use, one of [tensor, fp64, fp32, fp16]. | Str: ``tensor``, ``fp64``, ``fp32``, ``fp16`` |
 
-### gpu.dcgm.sm.occupancy
-
-Fraction of the number of warps resident on a multiprocessor, averaged over all multiprocessors.
-
-| Unit | Metric Type | Value Type |
-| ---- | ----------- | ---------- |
-| 1 | Gauge | Double |
-
 ### gpu.dcgm.sm.utilization
 
 Fraction of time at least one warp was active on a multiprocessor, averaged over all multiprocessors.
@@ -269,6 +261,24 @@ XID errors.
 | Name | Description | Values |
 | ---- | ----------- | ------ |
 | xid | The XID code for the error, 1..143. | Any Int |
+
+## Optional Metrics
+
+The following metrics are not emitted by default. Each of them can be enabled by applying the following configuration:
+
+```yaml
+metrics:
+  <metric_name>:
+    enabled: true
+```
+
+### gpu.dcgm.sm.occupancy
+
+Fraction of the number of warps resident on a multiprocessor, averaged over all multiprocessors.
+
+| Unit | Metric Type | Value Type |
+| ---- | ----------- | ---------- |
+| 1 | Gauge | Double |
 
 ## Resource Attributes
 

@@ -120,10 +120,10 @@ func TestScrapeWithEmptyMetricsConfig(t *testing.T) {
 			GpuDcgmMemoryBytesUsed: metadata.MetricConfig{
 				Enabled: false,
 			},
-			GpuDcgmNvlinkTraffic: metadata.MetricConfig{
+			GpuDcgmNvlinkIo: metadata.MetricConfig{
 				Enabled: false,
 			},
-			GpuDcgmPcieTraffic: metadata.MetricConfig{
+			GpuDcgmPcieIo: metadata.MetricConfig{
 				Enabled: false,
 			},
 			GpuDcgmPipeUtilization: metadata.MetricConfig{
@@ -252,10 +252,10 @@ func loadExpectedScraperMetrics(t *testing.T, model string) map[string]int {
 		"DCGM_FI_DEV_FB_RESERVED":         "gpu.dcgm.memory.bytes_used",
 		"DCGM_FI_PROF_DRAM_ACTIVE":        "gpu.dcgm.memory.bandwidth_utilization",
 		//"DCGM_FI_DEV_MEM_COPY_UTIL":               "gpu.dcgm.memory.bandwidth_utilization",
-		"DCGM_FI_PROF_PCIE_TX_BYTES": "gpu.dcgm.pcie.traffic",
-		"DCGM_FI_PROF_PCIE_RX_BYTES": "gpu.dcgm.pcie.traffic",
-		"DCGM_FI_PROF_NVLINK_TX_BYTES":         "gpu.dcgm.nvlink.traffic",
-		"DCGM_FI_PROF_NVLINK_RX_BYTES":         "gpu.dcgm.nvlink.traffic",
+		"DCGM_FI_PROF_PCIE_TX_BYTES":           "gpu.dcgm.pcie.io",
+		"DCGM_FI_PROF_PCIE_RX_BYTES":           "gpu.dcgm.pcie.io",
+		"DCGM_FI_PROF_NVLINK_TX_BYTES":         "gpu.dcgm.nvlink.io",
+		"DCGM_FI_PROF_NVLINK_RX_BYTES":         "gpu.dcgm.nvlink.io",
 		"DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION": "gpu.dcgm.energy_consumption",
 		//"DCGM_FI_DEV_POWER_USAGE":                 "gpu.dcgm.energy_consumption",
 		"DCGM_FI_DEV_GPU_TEMP":                    "gpu.dcgm.temperature",
@@ -332,9 +332,9 @@ func validateScraperResult(t *testing.T, metrics pmetric.Metrics, expectedMetric
 			fallthrough
 		case "gpu.dcgm.clock.throttle_duration.time":
 			fallthrough
-		case "gpu.dcgm.pcie.traffic":
+		case "gpu.dcgm.pcie.io":
 			fallthrough
-		case "gpu.dcgm.nvlink.traffic":
+		case "gpu.dcgm.nvlink.io":
 			fallthrough
 		case "gpu.dcgm.ecc_errors":
 			fallthrough
@@ -351,36 +351,36 @@ func validateScraperResult(t *testing.T, metrics pmetric.Metrics, expectedMetric
 		case "gpu.dcgm.sm.occupancy":
 		case "gpu.dcgm.pipe.utilization":
 			for j := 0; j < dps.Len(); j++ {
-				assert.Contains(t, dps.At(j).Attributes().AsRaw(), "pipe")
+				assert.Contains(t, dps.At(j).Attributes().AsRaw(), "gpu.pipe")
 			}
 		case "gpu.dcgm.codec.encoder.utilization":
 		case "gpu.dcgm.codec.decoder.utilization":
 		case "gpu.dcgm.memory.bytes_used":
 			for j := 0; j < dps.Len(); j++ {
-				assert.Contains(t, dps.At(j).Attributes().AsRaw(), "memory_state")
+				assert.Contains(t, dps.At(j).Attributes().AsRaw(), "gpu.memory.state")
 			}
 		case "gpu.dcgm.memory.bandwidth_utilization":
-		case "gpu.dcgm.pcie.traffic":
+		case "gpu.dcgm.pcie.io":
 			fallthrough
-		case "gpu.dcgm.nvlink.traffic":
+		case "gpu.dcgm.nvlink.io":
 			for j := 0; j < dps.Len(); j++ {
-				assert.Contains(t, dps.At(j).Attributes().AsRaw(), "direction")
+				assert.Contains(t, dps.At(j).Attributes().AsRaw(), "network.io.direction")
 			}
 		case "gpu.dcgm.energy_consumption":
 		case "gpu.dcgm.temperature":
 		case "gpu.dcgm.clock.frequency":
 		case "gpu.dcgm.clock.throttle_duration.time":
 			for j := 0; j < dps.Len(); j++ {
-				assert.Contains(t, dps.At(j).Attributes().AsRaw(), "violation")
+				assert.Contains(t, dps.At(j).Attributes().AsRaw(), "gpu.clock.violation")
 			}
 		case "gpu.dcgm.ecc_errors":
 			for j := 0; j < dps.Len(); j++ {
-				assert.Contains(t, dps.At(j).Attributes().AsRaw(), "error_type")
+				assert.Contains(t, dps.At(j).Attributes().AsRaw(), "gpu.error.type")
 			}
 		// TODO
 		//case "gpu.dcgm.xid_errors":
 		//	for j := 0; j < dps.Len(); j++ {
-		//		assert.Contains(t, dps.At(j).Attributes().AsRaw(), "xid")
+		//		assert.Contains(t, dps.At(j).Attributes().AsRaw(), "gpu.error.xid")
 		//	}
 		default:
 			t.Errorf("Unexpected metric %s", m.Name())

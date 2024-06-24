@@ -12,170 +12,170 @@ import (
 	"go.opentelemetry.io/collector/receiver"
 )
 
-// AttributeDirection specifies the a value direction attribute.
-type AttributeDirection int
+// AttributeGpuClockViolation specifies the a value gpu.clock.violation attribute.
+type AttributeGpuClockViolation int
 
 const (
-	_ AttributeDirection = iota
-	AttributeDirectionTx
-	AttributeDirectionRx
+	_ AttributeGpuClockViolation = iota
+	AttributeGpuClockViolationPower
+	AttributeGpuClockViolationThermal
+	AttributeGpuClockViolationSyncBoost
+	AttributeGpuClockViolationBoardLimit
+	AttributeGpuClockViolationLowUtil
+	AttributeGpuClockViolationReliability
+	AttributeGpuClockViolationAppClock
+	AttributeGpuClockViolationBaseClock
 )
 
-// String returns the string representation of the AttributeDirection.
-func (av AttributeDirection) String() string {
+// String returns the string representation of the AttributeGpuClockViolation.
+func (av AttributeGpuClockViolation) String() string {
 	switch av {
-	case AttributeDirectionTx:
-		return "tx"
-	case AttributeDirectionRx:
-		return "rx"
-	}
-	return ""
-}
-
-// MapAttributeDirection is a helper map of string to AttributeDirection attribute value.
-var MapAttributeDirection = map[string]AttributeDirection{
-	"tx": AttributeDirectionTx,
-	"rx": AttributeDirectionRx,
-}
-
-// AttributeErrorType specifies the a value error_type attribute.
-type AttributeErrorType int
-
-const (
-	_ AttributeErrorType = iota
-	AttributeErrorTypeSbe
-	AttributeErrorTypeDbe
-)
-
-// String returns the string representation of the AttributeErrorType.
-func (av AttributeErrorType) String() string {
-	switch av {
-	case AttributeErrorTypeSbe:
-		return "sbe"
-	case AttributeErrorTypeDbe:
-		return "dbe"
-	}
-	return ""
-}
-
-// MapAttributeErrorType is a helper map of string to AttributeErrorType attribute value.
-var MapAttributeErrorType = map[string]AttributeErrorType{
-	"sbe": AttributeErrorTypeSbe,
-	"dbe": AttributeErrorTypeDbe,
-}
-
-// AttributeMemoryState specifies the a value memory_state attribute.
-type AttributeMemoryState int
-
-const (
-	_ AttributeMemoryState = iota
-	AttributeMemoryStateUsed
-	AttributeMemoryStateFree
-	AttributeMemoryStateReserved
-)
-
-// String returns the string representation of the AttributeMemoryState.
-func (av AttributeMemoryState) String() string {
-	switch av {
-	case AttributeMemoryStateUsed:
-		return "used"
-	case AttributeMemoryStateFree:
-		return "free"
-	case AttributeMemoryStateReserved:
-		return "reserved"
-	}
-	return ""
-}
-
-// MapAttributeMemoryState is a helper map of string to AttributeMemoryState attribute value.
-var MapAttributeMemoryState = map[string]AttributeMemoryState{
-	"used":     AttributeMemoryStateUsed,
-	"free":     AttributeMemoryStateFree,
-	"reserved": AttributeMemoryStateReserved,
-}
-
-// AttributePipe specifies the a value pipe attribute.
-type AttributePipe int
-
-const (
-	_ AttributePipe = iota
-	AttributePipeTensor
-	AttributePipeFp64
-	AttributePipeFp32
-	AttributePipeFp16
-)
-
-// String returns the string representation of the AttributePipe.
-func (av AttributePipe) String() string {
-	switch av {
-	case AttributePipeTensor:
-		return "tensor"
-	case AttributePipeFp64:
-		return "fp64"
-	case AttributePipeFp32:
-		return "fp32"
-	case AttributePipeFp16:
-		return "fp16"
-	}
-	return ""
-}
-
-// MapAttributePipe is a helper map of string to AttributePipe attribute value.
-var MapAttributePipe = map[string]AttributePipe{
-	"tensor": AttributePipeTensor,
-	"fp64":   AttributePipeFp64,
-	"fp32":   AttributePipeFp32,
-	"fp16":   AttributePipeFp16,
-}
-
-// AttributeViolation specifies the a value violation attribute.
-type AttributeViolation int
-
-const (
-	_ AttributeViolation = iota
-	AttributeViolationPower
-	AttributeViolationThermal
-	AttributeViolationSyncBoost
-	AttributeViolationBoardLimit
-	AttributeViolationLowUtil
-	AttributeViolationReliability
-	AttributeViolationAppClock
-	AttributeViolationBaseClock
-)
-
-// String returns the string representation of the AttributeViolation.
-func (av AttributeViolation) String() string {
-	switch av {
-	case AttributeViolationPower:
+	case AttributeGpuClockViolationPower:
 		return "power"
-	case AttributeViolationThermal:
+	case AttributeGpuClockViolationThermal:
 		return "thermal"
-	case AttributeViolationSyncBoost:
+	case AttributeGpuClockViolationSyncBoost:
 		return "sync_boost"
-	case AttributeViolationBoardLimit:
+	case AttributeGpuClockViolationBoardLimit:
 		return "board_limit"
-	case AttributeViolationLowUtil:
+	case AttributeGpuClockViolationLowUtil:
 		return "low_util"
-	case AttributeViolationReliability:
+	case AttributeGpuClockViolationReliability:
 		return "reliability"
-	case AttributeViolationAppClock:
+	case AttributeGpuClockViolationAppClock:
 		return "app_clock"
-	case AttributeViolationBaseClock:
+	case AttributeGpuClockViolationBaseClock:
 		return "base_clock"
 	}
 	return ""
 }
 
-// MapAttributeViolation is a helper map of string to AttributeViolation attribute value.
-var MapAttributeViolation = map[string]AttributeViolation{
-	"power":       AttributeViolationPower,
-	"thermal":     AttributeViolationThermal,
-	"sync_boost":  AttributeViolationSyncBoost,
-	"board_limit": AttributeViolationBoardLimit,
-	"low_util":    AttributeViolationLowUtil,
-	"reliability": AttributeViolationReliability,
-	"app_clock":   AttributeViolationAppClock,
-	"base_clock":  AttributeViolationBaseClock,
+// MapAttributeGpuClockViolation is a helper map of string to AttributeGpuClockViolation attribute value.
+var MapAttributeGpuClockViolation = map[string]AttributeGpuClockViolation{
+	"power":       AttributeGpuClockViolationPower,
+	"thermal":     AttributeGpuClockViolationThermal,
+	"sync_boost":  AttributeGpuClockViolationSyncBoost,
+	"board_limit": AttributeGpuClockViolationBoardLimit,
+	"low_util":    AttributeGpuClockViolationLowUtil,
+	"reliability": AttributeGpuClockViolationReliability,
+	"app_clock":   AttributeGpuClockViolationAppClock,
+	"base_clock":  AttributeGpuClockViolationBaseClock,
+}
+
+// AttributeGpuErrorType specifies the a value gpu.error.type attribute.
+type AttributeGpuErrorType int
+
+const (
+	_ AttributeGpuErrorType = iota
+	AttributeGpuErrorTypeSbe
+	AttributeGpuErrorTypeDbe
+)
+
+// String returns the string representation of the AttributeGpuErrorType.
+func (av AttributeGpuErrorType) String() string {
+	switch av {
+	case AttributeGpuErrorTypeSbe:
+		return "sbe"
+	case AttributeGpuErrorTypeDbe:
+		return "dbe"
+	}
+	return ""
+}
+
+// MapAttributeGpuErrorType is a helper map of string to AttributeGpuErrorType attribute value.
+var MapAttributeGpuErrorType = map[string]AttributeGpuErrorType{
+	"sbe": AttributeGpuErrorTypeSbe,
+	"dbe": AttributeGpuErrorTypeDbe,
+}
+
+// AttributeGpuMemoryState specifies the a value gpu.memory.state attribute.
+type AttributeGpuMemoryState int
+
+const (
+	_ AttributeGpuMemoryState = iota
+	AttributeGpuMemoryStateUsed
+	AttributeGpuMemoryStateFree
+	AttributeGpuMemoryStateReserved
+)
+
+// String returns the string representation of the AttributeGpuMemoryState.
+func (av AttributeGpuMemoryState) String() string {
+	switch av {
+	case AttributeGpuMemoryStateUsed:
+		return "used"
+	case AttributeGpuMemoryStateFree:
+		return "free"
+	case AttributeGpuMemoryStateReserved:
+		return "reserved"
+	}
+	return ""
+}
+
+// MapAttributeGpuMemoryState is a helper map of string to AttributeGpuMemoryState attribute value.
+var MapAttributeGpuMemoryState = map[string]AttributeGpuMemoryState{
+	"used":     AttributeGpuMemoryStateUsed,
+	"free":     AttributeGpuMemoryStateFree,
+	"reserved": AttributeGpuMemoryStateReserved,
+}
+
+// AttributeGpuPipe specifies the a value gpu.pipe attribute.
+type AttributeGpuPipe int
+
+const (
+	_ AttributeGpuPipe = iota
+	AttributeGpuPipeTensor
+	AttributeGpuPipeFp64
+	AttributeGpuPipeFp32
+	AttributeGpuPipeFp16
+)
+
+// String returns the string representation of the AttributeGpuPipe.
+func (av AttributeGpuPipe) String() string {
+	switch av {
+	case AttributeGpuPipeTensor:
+		return "tensor"
+	case AttributeGpuPipeFp64:
+		return "fp64"
+	case AttributeGpuPipeFp32:
+		return "fp32"
+	case AttributeGpuPipeFp16:
+		return "fp16"
+	}
+	return ""
+}
+
+// MapAttributeGpuPipe is a helper map of string to AttributeGpuPipe attribute value.
+var MapAttributeGpuPipe = map[string]AttributeGpuPipe{
+	"tensor": AttributeGpuPipeTensor,
+	"fp64":   AttributeGpuPipeFp64,
+	"fp32":   AttributeGpuPipeFp32,
+	"fp16":   AttributeGpuPipeFp16,
+}
+
+// AttributeNetworkIoDirection specifies the a value network.io.direction attribute.
+type AttributeNetworkIoDirection int
+
+const (
+	_ AttributeNetworkIoDirection = iota
+	AttributeNetworkIoDirectionTransmit
+	AttributeNetworkIoDirectionReceive
+)
+
+// String returns the string representation of the AttributeNetworkIoDirection.
+func (av AttributeNetworkIoDirection) String() string {
+	switch av {
+	case AttributeNetworkIoDirectionTransmit:
+		return "transmit"
+	case AttributeNetworkIoDirectionReceive:
+		return "receive"
+	}
+	return ""
+}
+
+// MapAttributeNetworkIoDirection is a helper map of string to AttributeNetworkIoDirection attribute value.
+var MapAttributeNetworkIoDirection = map[string]AttributeNetworkIoDirection{
+	"transmit": AttributeNetworkIoDirectionTransmit,
+	"receive":  AttributeNetworkIoDirectionReceive,
 }
 
 type metricGpuDcgmClockFrequency struct {
@@ -244,7 +244,7 @@ func (m *metricGpuDcgmClockThrottleDurationTime) init() {
 	m.data.Sum().DataPoints().EnsureCapacity(m.capacity)
 }
 
-func (m *metricGpuDcgmClockThrottleDurationTime) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64, violationAttributeValue string) {
+func (m *metricGpuDcgmClockThrottleDurationTime) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64, gpuClockViolationAttributeValue string) {
 	if !m.config.Enabled {
 		return
 	}
@@ -252,7 +252,7 @@ func (m *metricGpuDcgmClockThrottleDurationTime) recordDataPoint(start pcommon.T
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
 	dp.SetDoubleValue(val)
-	dp.Attributes().PutStr("violation", violationAttributeValue)
+	dp.Attributes().PutStr("gpu.clock.violation", gpuClockViolationAttributeValue)
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
@@ -395,7 +395,7 @@ func (m *metricGpuDcgmEccErrors) init() {
 	m.data.Sum().DataPoints().EnsureCapacity(m.capacity)
 }
 
-func (m *metricGpuDcgmEccErrors) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, errorTypeAttributeValue string) {
+func (m *metricGpuDcgmEccErrors) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, gpuErrorTypeAttributeValue string) {
 	if !m.config.Enabled {
 		return
 	}
@@ -403,7 +403,7 @@ func (m *metricGpuDcgmEccErrors) recordDataPoint(start pcommon.Timestamp, ts pco
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
 	dp.SetIntValue(val)
-	dp.Attributes().PutStr("error_type", errorTypeAttributeValue)
+	dp.Attributes().PutStr("gpu.error.type", gpuErrorTypeAttributeValue)
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
@@ -546,7 +546,7 @@ func (m *metricGpuDcgmMemoryBytesUsed) init() {
 	m.data.Gauge().DataPoints().EnsureCapacity(m.capacity)
 }
 
-func (m *metricGpuDcgmMemoryBytesUsed) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, memoryStateAttributeValue string) {
+func (m *metricGpuDcgmMemoryBytesUsed) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, gpuMemoryStateAttributeValue string) {
 	if !m.config.Enabled {
 		return
 	}
@@ -554,7 +554,7 @@ func (m *metricGpuDcgmMemoryBytesUsed) recordDataPoint(start pcommon.Timestamp, 
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
 	dp.SetIntValue(val)
-	dp.Attributes().PutStr("memory_state", memoryStateAttributeValue)
+	dp.Attributes().PutStr("gpu.memory.state", gpuMemoryStateAttributeValue)
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
@@ -582,15 +582,15 @@ func newMetricGpuDcgmMemoryBytesUsed(cfg MetricConfig) metricGpuDcgmMemoryBytesU
 	return m
 }
 
-type metricGpuDcgmNvlinkTraffic struct {
+type metricGpuDcgmNvlinkIo struct {
 	data     pmetric.Metric // data buffer for generated metric.
 	config   MetricConfig   // metric config provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
 
-// init fills gpu.dcgm.nvlink.traffic metric with initial data.
-func (m *metricGpuDcgmNvlinkTraffic) init() {
-	m.data.SetName("gpu.dcgm.nvlink.traffic")
+// init fills gpu.dcgm.nvlink.io metric with initial data.
+func (m *metricGpuDcgmNvlinkIo) init() {
+	m.data.SetName("gpu.dcgm.nvlink.io")
 	m.data.SetDescription("The number of bytes sent over NVLink, not including protocol headers.")
 	m.data.SetUnit("By")
 	m.data.SetEmptySum()
@@ -599,7 +599,7 @@ func (m *metricGpuDcgmNvlinkTraffic) init() {
 	m.data.Sum().DataPoints().EnsureCapacity(m.capacity)
 }
 
-func (m *metricGpuDcgmNvlinkTraffic) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, directionAttributeValue string) {
+func (m *metricGpuDcgmNvlinkIo) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, networkIoDirectionAttributeValue string) {
 	if !m.config.Enabled {
 		return
 	}
@@ -607,18 +607,18 @@ func (m *metricGpuDcgmNvlinkTraffic) recordDataPoint(start pcommon.Timestamp, ts
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
 	dp.SetIntValue(val)
-	dp.Attributes().PutStr("direction", directionAttributeValue)
+	dp.Attributes().PutStr("network.io.direction", networkIoDirectionAttributeValue)
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
-func (m *metricGpuDcgmNvlinkTraffic) updateCapacity() {
+func (m *metricGpuDcgmNvlinkIo) updateCapacity() {
 	if m.data.Sum().DataPoints().Len() > m.capacity {
 		m.capacity = m.data.Sum().DataPoints().Len()
 	}
 }
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
-func (m *metricGpuDcgmNvlinkTraffic) emit(metrics pmetric.MetricSlice) {
+func (m *metricGpuDcgmNvlinkIo) emit(metrics pmetric.MetricSlice) {
 	if m.config.Enabled && m.data.Sum().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
@@ -626,8 +626,8 @@ func (m *metricGpuDcgmNvlinkTraffic) emit(metrics pmetric.MetricSlice) {
 	}
 }
 
-func newMetricGpuDcgmNvlinkTraffic(cfg MetricConfig) metricGpuDcgmNvlinkTraffic {
-	m := metricGpuDcgmNvlinkTraffic{config: cfg}
+func newMetricGpuDcgmNvlinkIo(cfg MetricConfig) metricGpuDcgmNvlinkIo {
+	m := metricGpuDcgmNvlinkIo{config: cfg}
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -635,15 +635,15 @@ func newMetricGpuDcgmNvlinkTraffic(cfg MetricConfig) metricGpuDcgmNvlinkTraffic 
 	return m
 }
 
-type metricGpuDcgmPcieTraffic struct {
+type metricGpuDcgmPcieIo struct {
 	data     pmetric.Metric // data buffer for generated metric.
 	config   MetricConfig   // metric config provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
 
-// init fills gpu.dcgm.pcie.traffic metric with initial data.
-func (m *metricGpuDcgmPcieTraffic) init() {
-	m.data.SetName("gpu.dcgm.pcie.traffic")
+// init fills gpu.dcgm.pcie.io metric with initial data.
+func (m *metricGpuDcgmPcieIo) init() {
+	m.data.SetName("gpu.dcgm.pcie.io")
 	m.data.SetDescription("The number of bytes sent over the PCIe bus, including both protocol headers and data payloads.")
 	m.data.SetUnit("By")
 	m.data.SetEmptySum()
@@ -652,7 +652,7 @@ func (m *metricGpuDcgmPcieTraffic) init() {
 	m.data.Sum().DataPoints().EnsureCapacity(m.capacity)
 }
 
-func (m *metricGpuDcgmPcieTraffic) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, directionAttributeValue string) {
+func (m *metricGpuDcgmPcieIo) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, networkIoDirectionAttributeValue string) {
 	if !m.config.Enabled {
 		return
 	}
@@ -660,18 +660,18 @@ func (m *metricGpuDcgmPcieTraffic) recordDataPoint(start pcommon.Timestamp, ts p
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
 	dp.SetIntValue(val)
-	dp.Attributes().PutStr("direction", directionAttributeValue)
+	dp.Attributes().PutStr("network.io.direction", networkIoDirectionAttributeValue)
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
-func (m *metricGpuDcgmPcieTraffic) updateCapacity() {
+func (m *metricGpuDcgmPcieIo) updateCapacity() {
 	if m.data.Sum().DataPoints().Len() > m.capacity {
 		m.capacity = m.data.Sum().DataPoints().Len()
 	}
 }
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
-func (m *metricGpuDcgmPcieTraffic) emit(metrics pmetric.MetricSlice) {
+func (m *metricGpuDcgmPcieIo) emit(metrics pmetric.MetricSlice) {
 	if m.config.Enabled && m.data.Sum().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
@@ -679,8 +679,8 @@ func (m *metricGpuDcgmPcieTraffic) emit(metrics pmetric.MetricSlice) {
 	}
 }
 
-func newMetricGpuDcgmPcieTraffic(cfg MetricConfig) metricGpuDcgmPcieTraffic {
-	m := metricGpuDcgmPcieTraffic{config: cfg}
+func newMetricGpuDcgmPcieIo(cfg MetricConfig) metricGpuDcgmPcieIo {
+	m := metricGpuDcgmPcieIo{config: cfg}
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -703,7 +703,7 @@ func (m *metricGpuDcgmPipeUtilization) init() {
 	m.data.Gauge().DataPoints().EnsureCapacity(m.capacity)
 }
 
-func (m *metricGpuDcgmPipeUtilization) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64, pipeAttributeValue string) {
+func (m *metricGpuDcgmPipeUtilization) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64, gpuPipeAttributeValue string) {
 	if !m.config.Enabled {
 		return
 	}
@@ -711,7 +711,7 @@ func (m *metricGpuDcgmPipeUtilization) recordDataPoint(start pcommon.Timestamp, 
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
 	dp.SetDoubleValue(val)
-	dp.Attributes().PutStr("pipe", pipeAttributeValue)
+	dp.Attributes().PutStr("gpu.pipe", gpuPipeAttributeValue)
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
@@ -952,7 +952,7 @@ func (m *metricGpuDcgmXidErrors) init() {
 	m.data.Sum().DataPoints().EnsureCapacity(m.capacity)
 }
 
-func (m *metricGpuDcgmXidErrors) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, xidAttributeValue int64) {
+func (m *metricGpuDcgmXidErrors) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, gpuErrorXidAttributeValue int64) {
 	if !m.config.Enabled {
 		return
 	}
@@ -960,7 +960,7 @@ func (m *metricGpuDcgmXidErrors) recordDataPoint(start pcommon.Timestamp, ts pco
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
 	dp.SetIntValue(val)
-	dp.Attributes().PutInt("xid", xidAttributeValue)
+	dp.Attributes().PutInt("gpu.error.xid", gpuErrorXidAttributeValue)
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
@@ -1006,8 +1006,8 @@ type MetricsBuilder struct {
 	metricGpuDcgmEnergyConsumption          metricGpuDcgmEnergyConsumption
 	metricGpuDcgmMemoryBandwidthUtilization metricGpuDcgmMemoryBandwidthUtilization
 	metricGpuDcgmMemoryBytesUsed            metricGpuDcgmMemoryBytesUsed
-	metricGpuDcgmNvlinkTraffic              metricGpuDcgmNvlinkTraffic
-	metricGpuDcgmPcieTraffic                metricGpuDcgmPcieTraffic
+	metricGpuDcgmNvlinkIo                   metricGpuDcgmNvlinkIo
+	metricGpuDcgmPcieIo                     metricGpuDcgmPcieIo
 	metricGpuDcgmPipeUtilization            metricGpuDcgmPipeUtilization
 	metricGpuDcgmSmOccupancy                metricGpuDcgmSmOccupancy
 	metricGpuDcgmSmUtilization              metricGpuDcgmSmUtilization
@@ -1040,8 +1040,8 @@ func NewMetricsBuilder(mbc MetricsBuilderConfig, settings receiver.CreateSetting
 		metricGpuDcgmEnergyConsumption:          newMetricGpuDcgmEnergyConsumption(mbc.Metrics.GpuDcgmEnergyConsumption),
 		metricGpuDcgmMemoryBandwidthUtilization: newMetricGpuDcgmMemoryBandwidthUtilization(mbc.Metrics.GpuDcgmMemoryBandwidthUtilization),
 		metricGpuDcgmMemoryBytesUsed:            newMetricGpuDcgmMemoryBytesUsed(mbc.Metrics.GpuDcgmMemoryBytesUsed),
-		metricGpuDcgmNvlinkTraffic:              newMetricGpuDcgmNvlinkTraffic(mbc.Metrics.GpuDcgmNvlinkTraffic),
-		metricGpuDcgmPcieTraffic:                newMetricGpuDcgmPcieTraffic(mbc.Metrics.GpuDcgmPcieTraffic),
+		metricGpuDcgmNvlinkIo:                   newMetricGpuDcgmNvlinkIo(mbc.Metrics.GpuDcgmNvlinkIo),
+		metricGpuDcgmPcieIo:                     newMetricGpuDcgmPcieIo(mbc.Metrics.GpuDcgmPcieIo),
 		metricGpuDcgmPipeUtilization:            newMetricGpuDcgmPipeUtilization(mbc.Metrics.GpuDcgmPipeUtilization),
 		metricGpuDcgmSmOccupancy:                newMetricGpuDcgmSmOccupancy(mbc.Metrics.GpuDcgmSmOccupancy),
 		metricGpuDcgmSmUtilization:              newMetricGpuDcgmSmUtilization(mbc.Metrics.GpuDcgmSmUtilization),
@@ -1138,8 +1138,8 @@ func (mb *MetricsBuilder) EmitForResource(rmo ...ResourceMetricsOption) {
 	mb.metricGpuDcgmEnergyConsumption.emit(ils.Metrics())
 	mb.metricGpuDcgmMemoryBandwidthUtilization.emit(ils.Metrics())
 	mb.metricGpuDcgmMemoryBytesUsed.emit(ils.Metrics())
-	mb.metricGpuDcgmNvlinkTraffic.emit(ils.Metrics())
-	mb.metricGpuDcgmPcieTraffic.emit(ils.Metrics())
+	mb.metricGpuDcgmNvlinkIo.emit(ils.Metrics())
+	mb.metricGpuDcgmPcieIo.emit(ils.Metrics())
 	mb.metricGpuDcgmPipeUtilization.emit(ils.Metrics())
 	mb.metricGpuDcgmSmOccupancy.emit(ils.Metrics())
 	mb.metricGpuDcgmSmUtilization.emit(ils.Metrics())
@@ -1183,8 +1183,8 @@ func (mb *MetricsBuilder) RecordGpuDcgmClockFrequencyDataPoint(ts pcommon.Timest
 }
 
 // RecordGpuDcgmClockThrottleDurationTimeDataPoint adds a data point to gpu.dcgm.clock.throttle_duration.time metric.
-func (mb *MetricsBuilder) RecordGpuDcgmClockThrottleDurationTimeDataPoint(ts pcommon.Timestamp, val float64, violationAttributeValue AttributeViolation) {
-	mb.metricGpuDcgmClockThrottleDurationTime.recordDataPoint(mb.startTime, ts, val, violationAttributeValue.String())
+func (mb *MetricsBuilder) RecordGpuDcgmClockThrottleDurationTimeDataPoint(ts pcommon.Timestamp, val float64, gpuClockViolationAttributeValue AttributeGpuClockViolation) {
+	mb.metricGpuDcgmClockThrottleDurationTime.recordDataPoint(mb.startTime, ts, val, gpuClockViolationAttributeValue.String())
 }
 
 // RecordGpuDcgmCodecDecoderUtilizationDataPoint adds a data point to gpu.dcgm.codec.decoder.utilization metric.
@@ -1198,8 +1198,8 @@ func (mb *MetricsBuilder) RecordGpuDcgmCodecEncoderUtilizationDataPoint(ts pcomm
 }
 
 // RecordGpuDcgmEccErrorsDataPoint adds a data point to gpu.dcgm.ecc_errors metric.
-func (mb *MetricsBuilder) RecordGpuDcgmEccErrorsDataPoint(ts pcommon.Timestamp, val int64, errorTypeAttributeValue AttributeErrorType) {
-	mb.metricGpuDcgmEccErrors.recordDataPoint(mb.startTime, ts, val, errorTypeAttributeValue.String())
+func (mb *MetricsBuilder) RecordGpuDcgmEccErrorsDataPoint(ts pcommon.Timestamp, val int64, gpuErrorTypeAttributeValue AttributeGpuErrorType) {
+	mb.metricGpuDcgmEccErrors.recordDataPoint(mb.startTime, ts, val, gpuErrorTypeAttributeValue.String())
 }
 
 // RecordGpuDcgmEnergyConsumptionDataPoint adds a data point to gpu.dcgm.energy_consumption metric.
@@ -1213,23 +1213,23 @@ func (mb *MetricsBuilder) RecordGpuDcgmMemoryBandwidthUtilizationDataPoint(ts pc
 }
 
 // RecordGpuDcgmMemoryBytesUsedDataPoint adds a data point to gpu.dcgm.memory.bytes_used metric.
-func (mb *MetricsBuilder) RecordGpuDcgmMemoryBytesUsedDataPoint(ts pcommon.Timestamp, val int64, memoryStateAttributeValue AttributeMemoryState) {
-	mb.metricGpuDcgmMemoryBytesUsed.recordDataPoint(mb.startTime, ts, val, memoryStateAttributeValue.String())
+func (mb *MetricsBuilder) RecordGpuDcgmMemoryBytesUsedDataPoint(ts pcommon.Timestamp, val int64, gpuMemoryStateAttributeValue AttributeGpuMemoryState) {
+	mb.metricGpuDcgmMemoryBytesUsed.recordDataPoint(mb.startTime, ts, val, gpuMemoryStateAttributeValue.String())
 }
 
-// RecordGpuDcgmNvlinkTrafficDataPoint adds a data point to gpu.dcgm.nvlink.traffic metric.
-func (mb *MetricsBuilder) RecordGpuDcgmNvlinkTrafficDataPoint(ts pcommon.Timestamp, val int64, directionAttributeValue AttributeDirection) {
-	mb.metricGpuDcgmNvlinkTraffic.recordDataPoint(mb.startTime, ts, val, directionAttributeValue.String())
+// RecordGpuDcgmNvlinkIoDataPoint adds a data point to gpu.dcgm.nvlink.io metric.
+func (mb *MetricsBuilder) RecordGpuDcgmNvlinkIoDataPoint(ts pcommon.Timestamp, val int64, networkIoDirectionAttributeValue AttributeNetworkIoDirection) {
+	mb.metricGpuDcgmNvlinkIo.recordDataPoint(mb.startTime, ts, val, networkIoDirectionAttributeValue.String())
 }
 
-// RecordGpuDcgmPcieTrafficDataPoint adds a data point to gpu.dcgm.pcie.traffic metric.
-func (mb *MetricsBuilder) RecordGpuDcgmPcieTrafficDataPoint(ts pcommon.Timestamp, val int64, directionAttributeValue AttributeDirection) {
-	mb.metricGpuDcgmPcieTraffic.recordDataPoint(mb.startTime, ts, val, directionAttributeValue.String())
+// RecordGpuDcgmPcieIoDataPoint adds a data point to gpu.dcgm.pcie.io metric.
+func (mb *MetricsBuilder) RecordGpuDcgmPcieIoDataPoint(ts pcommon.Timestamp, val int64, networkIoDirectionAttributeValue AttributeNetworkIoDirection) {
+	mb.metricGpuDcgmPcieIo.recordDataPoint(mb.startTime, ts, val, networkIoDirectionAttributeValue.String())
 }
 
 // RecordGpuDcgmPipeUtilizationDataPoint adds a data point to gpu.dcgm.pipe.utilization metric.
-func (mb *MetricsBuilder) RecordGpuDcgmPipeUtilizationDataPoint(ts pcommon.Timestamp, val float64, pipeAttributeValue AttributePipe) {
-	mb.metricGpuDcgmPipeUtilization.recordDataPoint(mb.startTime, ts, val, pipeAttributeValue.String())
+func (mb *MetricsBuilder) RecordGpuDcgmPipeUtilizationDataPoint(ts pcommon.Timestamp, val float64, gpuPipeAttributeValue AttributeGpuPipe) {
+	mb.metricGpuDcgmPipeUtilization.recordDataPoint(mb.startTime, ts, val, gpuPipeAttributeValue.String())
 }
 
 // RecordGpuDcgmSmOccupancyDataPoint adds a data point to gpu.dcgm.sm.occupancy metric.
@@ -1253,8 +1253,8 @@ func (mb *MetricsBuilder) RecordGpuDcgmUtilizationDataPoint(ts pcommon.Timestamp
 }
 
 // RecordGpuDcgmXidErrorsDataPoint adds a data point to gpu.dcgm.xid_errors metric.
-func (mb *MetricsBuilder) RecordGpuDcgmXidErrorsDataPoint(ts pcommon.Timestamp, val int64, xidAttributeValue int64) {
-	mb.metricGpuDcgmXidErrors.recordDataPoint(mb.startTime, ts, val, xidAttributeValue)
+func (mb *MetricsBuilder) RecordGpuDcgmXidErrorsDataPoint(ts pcommon.Timestamp, val int64, gpuErrorXidAttributeValue int64) {
+	mb.metricGpuDcgmXidErrors.recordDataPoint(mb.startTime, ts, val, gpuErrorXidAttributeValue)
 }
 
 // Reset resets metrics builder to its initial state. It should be used when external metrics source is restarted,

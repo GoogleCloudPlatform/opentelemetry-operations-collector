@@ -22,32 +22,32 @@ resource_attributes:
     enabled: true
 
 attributes:
-  memory_state:
+  gpu.memory.state:
     type: string
     description: GPU memory state, one of [free, used, reserved].
     enum: [used, free, reserved]
 
-  pipe:
+  gpu.pipe:
     type: string
     description: GPU pipe in use, one of [tensor, fp64, fp32, fp16].
     enum: [tensor, fp64, fp32, fp16]
 
-  direction:
+  network.io.direction:
     type: string
     description: Direction of the link traffic, one of [tx, rx].
-    enum: [tx, rx]
+    enum: [transmit, receive]
 
-  violation:
+  gpu.clock.violation:
     type: string
     description: Reason for throttling, one of [power, thermal, sync_boost, board_limit, low_util, reliability, app_clock, base_clock].
     enum: [power, thermal, sync_boost, board_limit, low_util, reliability, app_clock, base_clock]
 
-  error_type:
+  gpu.error.type:
     type: string
     description: The type of error, one of [sbe, dbe].
     enum: [sbe, dbe]
 
-  xid:
+  gpu.error.xid:
     type: int
     description: The XID code for the error, 1..143.
 
@@ -78,7 +78,7 @@ metrics:
     unit: 1
     gauge:
       value_type: double
-    attributes: [pipe]
+    attributes: [gpu.pipe]
     enabled: true
 
   gpu.dcgm.codec.encoder.utilization:
@@ -100,7 +100,7 @@ metrics:
     unit: By
     gauge:
       value_type: int
-    attributes: [memory_state]
+    attributes: [gpu.memory.state]
     enabled: true
 
   gpu.dcgm.memory.bandwidth_utilization:
@@ -110,24 +110,24 @@ metrics:
       value_type: double
     enabled: true
 
-  gpu.dcgm.pcie.traffic:
+  gpu.dcgm.pcie.io:
     description: The number of bytes sent over the PCIe bus, including both protocol headers and data payloads.
     unit: By
     sum:
       value_type: int
       aggregation_temporality: delta
       monotonic: true
-    attributes: [direction]
+    attributes: [network.io.direction]
     enabled: true
 
-  gpu.dcgm.nvlink.traffic:
+  gpu.dcgm.nvlink.io:
     description: The number of bytes sent over NVLink, not including protocol headers.
     unit: By
     sum:
       value_type: int
       aggregation_temporality: delta
       monotonic: true
-    attributes: [direction]
+    attributes: [network.io.direction]
     enabled: true
 
   gpu.dcgm.energy_consumption:
@@ -160,7 +160,7 @@ metrics:
       value_type: double
       aggregation_temporality: cumulative
       monotonic: true
-    attributes: [violation]
+    attributes: [gpu.clock.violation]
     enabled: true
 
   gpu.dcgm.ecc_errors:
@@ -170,7 +170,7 @@ metrics:
       value_type: int
       aggregation_temporality: cumulative
       monotonic: true
-    attributes: [error_type]
+    attributes: [gpu.error.type]
     enabled: true
 
   gpu.dcgm.xid_errors:
@@ -180,5 +180,5 @@ metrics:
       value_type: int
       aggregation_temporality: cumulative
       monotonic: true
-    attributes: [xid]
+    attributes: [gpu.error.xid]
     enabled: true

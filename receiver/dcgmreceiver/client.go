@@ -203,11 +203,11 @@ func discoverRequestedFieldIDs(config *Config) []dcgm.Short {
 		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_DRAM_ACTIVE"])
 		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_DEV_MEM_COPY_UTIL"]) // fallback
 	}
-	if config.Metrics.GpuDcgmPcieTraffic.Enabled {
+	if config.Metrics.GpuDcgmPcieIo.Enabled {
 		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_PCIE_TX_BYTES"])
 		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_PCIE_RX_BYTES"])
 	}
-	if config.Metrics.GpuDcgmNvlinkTraffic.Enabled {
+	if config.Metrics.GpuDcgmNvlinkIo.Enabled {
 		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_NVLINK_TX_BYTES"])
 		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_PROF_NVLINK_RX_BYTES"])
 	}

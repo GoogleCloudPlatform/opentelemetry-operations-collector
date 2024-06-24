@@ -17,9 +17,9 @@ all_set:
       enabled: true
     gpu.dcgm.memory.bytes_used:
       enabled: true
-    gpu.dcgm.nvlink.traffic:
+    gpu.dcgm.nvlink.io:
       enabled: true
-    gpu.dcgm.pcie.traffic:
+    gpu.dcgm.pcie.io:
       enabled: true
     gpu.dcgm.pipe.utilization:
       enabled: true
@@ -58,9 +58,9 @@ none_set:
       enabled: false
     gpu.dcgm.memory.bytes_used:
       enabled: false
-    gpu.dcgm.nvlink.traffic:
+    gpu.dcgm.nvlink.io:
       enabled: false
-    gpu.dcgm.pcie.traffic:
+    gpu.dcgm.pcie.io:
       enabled: false
     gpu.dcgm.pipe.utilization:
       enabled: false

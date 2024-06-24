@@ -36,8 +36,8 @@ type MetricsConfig struct {
 	GpuDcgmEnergyConsumption          MetricConfig `mapstructure:"gpu.dcgm.energy_consumption"`
 	GpuDcgmMemoryBandwidthUtilization MetricConfig `mapstructure:"gpu.dcgm.memory.bandwidth_utilization"`
 	GpuDcgmMemoryBytesUsed            MetricConfig `mapstructure:"gpu.dcgm.memory.bytes_used"`
-	GpuDcgmNvlinkTraffic              MetricConfig `mapstructure:"gpu.dcgm.nvlink.traffic"`
-	GpuDcgmPcieTraffic                MetricConfig `mapstructure:"gpu.dcgm.pcie.traffic"`
+	GpuDcgmNvlinkIo                   MetricConfig `mapstructure:"gpu.dcgm.nvlink.io"`
+	GpuDcgmPcieIo                     MetricConfig `mapstructure:"gpu.dcgm.pcie.io"`
 	GpuDcgmPipeUtilization            MetricConfig `mapstructure:"gpu.dcgm.pipe.utilization"`
 	GpuDcgmSmOccupancy                MetricConfig `mapstructure:"gpu.dcgm.sm.occupancy"`
 	GpuDcgmSmUtilization              MetricConfig `mapstructure:"gpu.dcgm.sm.utilization"`
@@ -72,10 +72,10 @@ func DefaultMetricsConfig() MetricsConfig {
 		GpuDcgmMemoryBytesUsed: MetricConfig{
 			Enabled: true,
 		},
-		GpuDcgmNvlinkTraffic: MetricConfig{
+		GpuDcgmNvlinkIo: MetricConfig{
 			Enabled: true,
 		},
-		GpuDcgmPcieTraffic: MetricConfig{
+		GpuDcgmPcieIo: MetricConfig{
 			Enabled: true,
 		},
 		GpuDcgmPipeUtilization: MetricConfig{

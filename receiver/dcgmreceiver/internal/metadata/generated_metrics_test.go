@@ -74,7 +74,7 @@ func TestMetricsBuilder(t *testing.T) {
 
 			defaultMetricsCount++
 			allMetricsCount++
-			mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(ts, 1, AttributeViolationPower)
+			mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(ts, 1, AttributeGpuClockViolationPower)
 
 			defaultMetricsCount++
 			allMetricsCount++
@@ -86,7 +86,7 @@ func TestMetricsBuilder(t *testing.T) {
 
 			defaultMetricsCount++
 			allMetricsCount++
-			mb.RecordGpuDcgmEccErrorsDataPoint(ts, 1, AttributeErrorTypeSbe)
+			mb.RecordGpuDcgmEccErrorsDataPoint(ts, 1, AttributeGpuErrorTypeSbe)
 
 			defaultMetricsCount++
 			allMetricsCount++
@@ -98,19 +98,19 @@ func TestMetricsBuilder(t *testing.T) {
 
 			defaultMetricsCount++
 			allMetricsCount++
-			mb.RecordGpuDcgmMemoryBytesUsedDataPoint(ts, 1, AttributeMemoryStateUsed)
+			mb.RecordGpuDcgmMemoryBytesUsedDataPoint(ts, 1, AttributeGpuMemoryStateUsed)
 
 			defaultMetricsCount++
 			allMetricsCount++
-			mb.RecordGpuDcgmNvlinkTrafficDataPoint(ts, 1, AttributeDirectionTx)
+			mb.RecordGpuDcgmNvlinkIoDataPoint(ts, 1, AttributeNetworkIoDirectionTransmit)
 
 			defaultMetricsCount++
 			allMetricsCount++
-			mb.RecordGpuDcgmPcieTrafficDataPoint(ts, 1, AttributeDirectionTx)
+			mb.RecordGpuDcgmPcieIoDataPoint(ts, 1, AttributeNetworkIoDirectionTransmit)
 
 			defaultMetricsCount++
 			allMetricsCount++
-			mb.RecordGpuDcgmPipeUtilizationDataPoint(ts, 1, AttributePipeTensor)
+			mb.RecordGpuDcgmPipeUtilizationDataPoint(ts, 1, AttributeGpuPipeTensor)
 
 			allMetricsCount++
 			mb.RecordGpuDcgmSmOccupancyDataPoint(ts, 1)
@@ -129,7 +129,7 @@ func TestMetricsBuilder(t *testing.T) {
 
 			defaultMetricsCount++
 			allMetricsCount++
-			mb.RecordGpuDcgmXidErrorsDataPoint(ts, 1, 3)
+			mb.RecordGpuDcgmXidErrorsDataPoint(ts, 1, 13)
 
 			rb := mb.NewResourceBuilder()
 			rb.SetGpuModel("gpu.model-val")
@@ -183,7 +183,7 @@ func TestMetricsBuilder(t *testing.T) {
 					assert.Equal(t, ts, dp.Timestamp())
 					assert.Equal(t, pmetric.NumberDataPointValueTypeDouble, dp.ValueType())
 					assert.Equal(t, float64(1), dp.DoubleValue())
-					attrVal, ok := dp.Attributes().Get("violation")
+					attrVal, ok := dp.Attributes().Get("gpu.clock.violation")
 					assert.True(t, ok)
 					assert.EqualValues(t, "power", attrVal.Str())
 				case "gpu.dcgm.codec.decoder.utilization":
@@ -224,7 +224,7 @@ func TestMetricsBuilder(t *testing.T) {
 					assert.Equal(t, ts, dp.Timestamp())
 					assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
 					assert.Equal(t, int64(1), dp.IntValue())
-					attrVal, ok := dp.Attributes().Get("error_type")
+					attrVal, ok := dp.Attributes().Get("gpu.error.type")
 					assert.True(t, ok)
 					assert.EqualValues(t, "sbe", attrVal.Str())
 				case "gpu.dcgm.energy_consumption":
@@ -265,12 +265,12 @@ func TestMetricsBuilder(t *testing.T) {
 					assert.Equal(t, ts, dp.Timestamp())
 					assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
 					assert.Equal(t, int64(1), dp.IntValue())
-					attrVal, ok := dp.Attributes().Get("memory_state")
+					attrVal, ok := dp.Attributes().Get("gpu.memory.state")
 					assert.True(t, ok)
 					assert.EqualValues(t, "used", attrVal.Str())
-				case "gpu.dcgm.nvlink.traffic":
-					assert.False(t, validatedMetrics["gpu.dcgm.nvlink.traffic"], "Found a duplicate in the metrics slice: gpu.dcgm.nvlink.traffic")
-					validatedMetrics["gpu.dcgm.nvlink.traffic"] = true
+				case "gpu.dcgm.nvlink.io":
+					assert.False(t, validatedMetrics["gpu.dcgm.nvlink.io"], "Found a duplicate in the metrics slice: gpu.dcgm.nvlink.io")
+					validatedMetrics["gpu.dcgm.nvlink.io"] = true
 					assert.Equal(t, pmetric.MetricTypeSum, ms.At(i).Type())
 					assert.Equal(t, 1, ms.At(i).Sum().DataPoints().Len())
 					assert.Equal(t, "The number of bytes sent over NVLink, not including protocol headers.", ms.At(i).Description())
@@ -282,12 +282,12 @@ func TestMetricsBuilder(t *testing.T) {
 					assert.Equal(t, ts, dp.Timestamp())
 					assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
 					assert.Equal(t, int64(1), dp.IntValue())
-					attrVal, ok := dp.Attributes().Get("direction")
+					attrVal, ok := dp.Attributes().Get("network.io.direction")
 					assert.True(t, ok)
-					assert.EqualValues(t, "tx", attrVal.Str())
-				case "gpu.dcgm.pcie.traffic":
-					assert.False(t, validatedMetrics["gpu.dcgm.pcie.traffic"], "Found a duplicate in the metrics slice: gpu.dcgm.pcie.traffic")
-					validatedMetrics["gpu.dcgm.pcie.traffic"] = true
+					assert.EqualValues(t, "transmit", attrVal.Str())
+				case "gpu.dcgm.pcie.io":
+					assert.False(t, validatedMetrics["gpu.dcgm.pcie.io"], "Found a duplicate in the metrics slice: gpu.dcgm.pcie.io")
+					validatedMetrics["gpu.dcgm.pcie.io"] = true
 					assert.Equal(t, pmetric.MetricTypeSum, ms.At(i).Type())
 					assert.Equal(t, 1, ms.At(i).Sum().DataPoints().Len())
 					assert.Equal(t, "The number of bytes sent over the PCIe bus, including both protocol headers and data payloads.", ms.At(i).Description())
@@ -299,9 +299,9 @@ func TestMetricsBuilder(t *testing.T) {
 					assert.Equal(t, ts, dp.Timestamp())
 					assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
 					assert.Equal(t, int64(1), dp.IntValue())
-					attrVal, ok := dp.Attributes().Get("direction")
+					attrVal, ok := dp.Attributes().Get("network.io.direction")
 					assert.True(t, ok)
-					assert.EqualValues(t, "tx", attrVal.Str())
+					assert.EqualValues(t, "transmit", attrVal.Str())
 				case "gpu.dcgm.pipe.utilization":
 					assert.False(t, validatedMetrics["gpu.dcgm.pipe.utilization"], "Found a duplicate in the metrics slice: gpu.dcgm.pipe.utilization")
 					validatedMetrics["gpu.dcgm.pipe.utilization"] = true
@@ -314,7 +314,7 @@ func TestMetricsBuilder(t *testing.T) {
 					assert.Equal(t, ts, dp.Timestamp())
 					assert.Equal(t, pmetric.NumberDataPointValueTypeDouble, dp.ValueType())
 					assert.Equal(t, float64(1), dp.DoubleValue())
-					attrVal, ok := dp.Attributes().Get("pipe")
+					attrVal, ok := dp.Attributes().Get("gpu.pipe")
 					assert.True(t, ok)
 					assert.EqualValues(t, "tensor", attrVal.Str())
 				case "gpu.dcgm.sm.occupancy":
@@ -379,9 +379,9 @@ func TestMetricsBuilder(t *testing.T) {
 					assert.Equal(t, ts, dp.Timestamp())
 					assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
 					assert.Equal(t, int64(1), dp.IntValue())
-					attrVal, ok := dp.Attributes().Get("xid")
+					attrVal, ok := dp.Attributes().Get("gpu.error.xid")
 					assert.True(t, ok)
-					assert.EqualValues(t, 3, attrVal.Int())
+					assert.EqualValues(t, 13, attrVal.Int())
 				}
 			}
 		})

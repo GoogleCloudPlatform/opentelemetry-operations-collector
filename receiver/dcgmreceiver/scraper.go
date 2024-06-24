@@ -109,13 +109,13 @@ func (s *dcgmScraper) scrape(_ context.Context) (pmetric.Metrics, error) {
 			case "DCGM_FI_PROF_SM_OCCUPANCY":
 				s.mb.RecordGpuDcgmSmOccupancyDataPoint(now, metric.asFloat64())
 			case "DCGM_FI_PROF_PIPE_TENSOR_ACTIVE":
-				s.mb.RecordGpuDcgmPipeUtilizationDataPoint(now, metric.asFloat64(), metadata.AttributePipeTensor)
+				s.mb.RecordGpuDcgmPipeUtilizationDataPoint(now, metric.asFloat64(), metadata.AttributeGpuPipeTensor)
 			case "DCGM_FI_PROF_PIPE_FP64_ACTIVE":
-				s.mb.RecordGpuDcgmPipeUtilizationDataPoint(now, metric.asFloat64(), metadata.AttributePipeFp64)
+				s.mb.RecordGpuDcgmPipeUtilizationDataPoint(now, metric.asFloat64(), metadata.AttributeGpuPipeFp64)
 			case "DCGM_FI_PROF_PIPE_FP32_ACTIVE":
-				s.mb.RecordGpuDcgmPipeUtilizationDataPoint(now, metric.asFloat64(), metadata.AttributePipeFp32)
+				s.mb.RecordGpuDcgmPipeUtilizationDataPoint(now, metric.asFloat64(), metadata.AttributeGpuPipeFp32)
 			case "DCGM_FI_PROF_PIPE_FP16_ACTIVE":
-				s.mb.RecordGpuDcgmPipeUtilizationDataPoint(now, metric.asFloat64(), metadata.AttributePipeFp16)
+				s.mb.RecordGpuDcgmPipeUtilizationDataPoint(now, metric.asFloat64(), metadata.AttributeGpuPipeFp16)
 			case "DCGM_FI_DEV_ENC_UTIL":
 				encUtil := float64(metric.asInt64()) / 100.0 /* normalize */
 				s.mb.RecordGpuDcgmCodecEncoderUtilizationDataPoint(now, encUtil)
@@ -124,13 +124,13 @@ func (s *dcgmScraper) scrape(_ context.Context) (pmetric.Metrics, error) {
 				s.mb.RecordGpuDcgmCodecDecoderUtilizationDataPoint(now, decUtil)
 			case "DCGM_FI_DEV_FB_FREE":
 				bytesFree := 1e6 * metric.asInt64() /* MBy to By */
-				s.mb.RecordGpuDcgmMemoryBytesUsedDataPoint(now, bytesFree, metadata.AttributeMemoryStateFree)
+				s.mb.RecordGpuDcgmMemoryBytesUsedDataPoint(now, bytesFree, metadata.AttributeGpuMemoryStateFree)
 			case "DCGM_FI_DEV_FB_USED":
 				bytesUsed := 1e6 * metric.asInt64() /* MBy to By */
-				s.mb.RecordGpuDcgmMemoryBytesUsedDataPoint(now, bytesUsed, metadata.AttributeMemoryStateUsed)
+				s.mb.RecordGpuDcgmMemoryBytesUsedDataPoint(now, bytesUsed, metadata.AttributeGpuMemoryStateUsed)
 			case "DCGM_FI_DEV_FB_RESERVED":
 				bytesFree := 1e6 * metric.asInt64() /* MBy to By */
-				s.mb.RecordGpuDcgmMemoryBytesUsedDataPoint(now, bytesFree, metadata.AttributeMemoryStateReserved)
+				s.mb.RecordGpuDcgmMemoryBytesUsedDataPoint(now, bytesFree, metadata.AttributeGpuMemoryStateReserved)
 			case "DCGM_FI_PROF_DRAM_ACTIVE":
 				s.mb.RecordGpuDcgmMemoryBandwidthUtilizationDataPoint(now, metric.asFloat64())
 			// TODO: fallback
@@ -139,16 +139,16 @@ func (s *dcgmScraper) scrape(_ context.Context) (pmetric.Metrics, error) {
 			//	s.mb.RecordGpuDcgmMemoryBandwidthUtilizationDataPoint(now, memCopyUtil)
 			case "DCGM_FI_PROF_PCIE_TX_BYTES":
 				pcieTx := int64(float64(metric.asInt64()) * (s.config.CollectionInterval.Seconds())) /* rate to delta */
-				s.mb.RecordGpuDcgmPcieTrafficDataPoint(now, pcieTx, metadata.AttributeDirectionTx)
+				s.mb.RecordGpuDcgmPcieIoDataPoint(now, pcieTx, metadata.AttributeNetworkIoDirectionTransmit)
 			case "DCGM_FI_PROF_PCIE_RX_BYTES":
 				pcieRx := int64(float64(metric.asInt64()) * (s.config.CollectionInterval.Seconds())) /* rate to delta */
-				s.mb.RecordGpuDcgmPcieTrafficDataPoint(now, pcieRx, metadata.AttributeDirectionRx)
+				s.mb.RecordGpuDcgmPcieIoDataPoint(now, pcieRx, metadata.AttributeNetworkIoDirectionReceive)
 			case "DCGM_FI_PROF_NVLINK_TX_BYTES":
 				nvlinkTx := int64(float64(metric.asInt64()) * (s.config.CollectionInterval.Seconds())) /* rate to delta */
-				s.mb.RecordGpuDcgmNvlinkTrafficDataPoint(now, nvlinkTx, metadata.AttributeDirectionTx)
+				s.mb.RecordGpuDcgmNvlinkIoDataPoint(now, nvlinkTx, metadata.AttributeNetworkIoDirectionTransmit)
 			case "DCGM_FI_PROF_NVLINK_RX_BYTES":
 				nvlinkRx := int64(float64(metric.asInt64()) * (s.config.CollectionInterval.Seconds())) /* rate to delta */
-				s.mb.RecordGpuDcgmNvlinkTrafficDataPoint(now, nvlinkRx, metadata.AttributeDirectionRx)
+				s.mb.RecordGpuDcgmNvlinkIoDataPoint(now, nvlinkRx, metadata.AttributeNetworkIoDirectionReceive)
 			case "DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION":
 				s.mb.RecordGpuDcgmEnergyConsumptionDataPoint(now, metric.asFloat64())
 			// TODO: fallback
@@ -162,32 +162,32 @@ func (s *dcgmScraper) scrape(_ context.Context) (pmetric.Metrics, error) {
 				s.mb.RecordGpuDcgmClockFrequencyDataPoint(now, clockFreq)
 			case "DCGM_FI_DEV_POWER_VIOLATION":
 				violationTime := float64(metric.asInt64()) / 1e6 /* us to s */
-				s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, violationTime, metadata.AttributeViolationPower)
+				s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, violationTime, metadata.AttributeGpuClockViolationPower)
 			case "DCGM_FI_DEV_THERMAL_VIOLATION":
 				violationTime := float64(metric.asInt64()) / 1e6 /* us to s */
-				s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, violationTime, metadata.AttributeViolationThermal)
+				s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, violationTime, metadata.AttributeGpuClockViolationThermal)
 			case "DCGM_FI_DEV_SYNC_BOOST_VIOLATION":
 				violationTime := float64(metric.asInt64()) / 1e6 /* us to s */
-				s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, violationTime, metadata.AttributeViolationSyncBoost)
+				s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, violationTime, metadata.AttributeGpuClockViolationSyncBoost)
 			case "DCGM_FI_DEV_BOARD_LIMIT_VIOLATION":
 				violationTime := float64(metric.asInt64()) / 1e6 /* us to s */
-				s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, violationTime, metadata.AttributeViolationBoardLimit)
+				s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, violationTime, metadata.AttributeGpuClockViolationBoardLimit)
 			case "DCGM_FI_DEV_LOW_UTIL_VIOLATION":
 				violationTime := float64(metric.asInt64()) / 1e6 /* us to s */
-				s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, violationTime, metadata.AttributeViolationLowUtil)
+				s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, violationTime, metadata.AttributeGpuClockViolationLowUtil)
 			case "DCGM_FI_DEV_RELIABILITY_VIOLATION":
 				violationTime := float64(metric.asInt64()) / 1e6 /* us to s */
-				s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, violationTime, metadata.AttributeViolationReliability)
+				s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, violationTime, metadata.AttributeGpuClockViolationReliability)
 			case "DCGM_FI_DEV_TOTAL_APP_CLOCKS_VIOLATION":
 				violationTime := float64(metric.asInt64()) / 1e6 /* us to s */
-				s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, violationTime, metadata.AttributeViolationAppClock)
+				s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, violationTime, metadata.AttributeGpuClockViolationAppClock)
 			case "DCGM_FI_DEV_TOTAL_BASE_CLOCKS_VIOLATION":
 				violationTime := float64(metric.asInt64()) / 1e6 /* us to s */
-				s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, violationTime, metadata.AttributeViolationBaseClock)
+				s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, violationTime, metadata.AttributeGpuClockViolationBaseClock)
 			case "DCGM_FI_DEV_ECC_SBE_VOL_TOTAL":
-				s.mb.RecordGpuDcgmEccErrorsDataPoint(now, metric.asInt64(), metadata.AttributeErrorTypeSbe)
+				s.mb.RecordGpuDcgmEccErrorsDataPoint(now, metric.asInt64(), metadata.AttributeGpuErrorTypeSbe)
 			case "DCGM_FI_DEV_ECC_DBE_VOL_TOTAL":
-				s.mb.RecordGpuDcgmEccErrorsDataPoint(now, metric.asInt64(), metadata.AttributeErrorTypeDbe)
+				s.mb.RecordGpuDcgmEccErrorsDataPoint(now, metric.asInt64(), metadata.AttributeGpuErrorTypeDbe)
 			}
 		}
 		// TODO: XID errors.

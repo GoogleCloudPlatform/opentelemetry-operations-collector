@@ -202,12 +202,12 @@ func TestScrapeOnProfilingPaused(t *testing.T) {
 	assert.NoError(t, err)
 
 	expectedMetrics := []string{
-		//TODO "gpu.dcgm.utilization",
+		"gpu.dcgm.utilization",
 		"gpu.dcgm.codec.decoder.utilization",
 		"gpu.dcgm.codec.encoder.utilization",
 		"gpu.dcgm.memory.bytes_used",
-		//TODO "gpu.dcgm.memory.bandwidth_utilization",
-		//TODO "gpu.dcgm.energy_consumption",
+		"gpu.dcgm.memory.bandwidth_utilization",
+		"gpu.dcgm.energy_consumption",
 		"gpu.dcgm.temperature",
 		"gpu.dcgm.clock.frequency",
 		"gpu.dcgm.clock.throttle_duration.time",
@@ -218,8 +218,6 @@ func TestScrapeOnProfilingPaused(t *testing.T) {
 	require.Equal(t, 1, ilms.Len())
 
 	ms := ilms.At(0).Metrics()
-	require.LessOrEqual(t, len(expectedMetrics), ms.Len())
-
 	metricWasSeen := make(map[string]bool)
 	for i := 0; i < ms.Len(); i++ {
 		metricWasSeen[ms.At(i).Name()] = true
@@ -227,7 +225,9 @@ func TestScrapeOnProfilingPaused(t *testing.T) {
 
 	for _, metric := range expectedMetrics {
 		assert.True(t, metricWasSeen[metric], metric)
+		delete(metricWasSeen, metric)
 	}
+	assert.Equal(t, len(expectedMetrics), ms.Len(), fmt.Sprintf("%v", metricWasSeen))
 }
 
 // loadExpectedScraperMetrics calls LoadExpectedMetrics to read the supported

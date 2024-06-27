@@ -22,9 +22,10 @@ package testprofilepause
 /*
 #include <stdint.h>
 typedef uintptr_t dcgmHandle_t;
-typedef enum dcgmReturn_enum { DCGM_ST_OK = 0 } dcgmReturn_t;
+typedef enum dcgmReturn_enum { DCGM_ST_OK = 0, DCGM_ST_NOT_SUPPORTED = -6 } dcgmReturn_t;
 dcgmReturn_t dcgmProfPause(dcgmHandle_t pDcgmHandle);
 dcgmReturn_t dcgmProfResume(dcgmHandle_t pDcgmHandle);
+const char *errorString(dcgmReturn_t result);
 */
 import "C"
 import (
@@ -39,17 +40,44 @@ type dcgmHandle struct{ handle C.dcgmHandle_t }
 //go:linkname handle github.com/NVIDIA/go-dcgm/pkg/dcgm.handle
 var handle dcgmHandle
 
-func PauseProfilingMetrics() {
-	result := C.dcgmProfPause(handle.handle)
-	if result != 0 {
-		fmt.Printf("CUDA version %d", dcgm.DCGM_FI_CUDA_DRIVER_VERSION)
-		fmt.Printf("Failed to pause profiling (result %d)\n", result)
+var errorMap = map[C.dcgmReturn_t]error{
+	C.DCGM_ST_OK: nil,
+}
+
+func errorString(result C.dcgmReturn_t) error {
+	if err, ok := errorMap[result]; ok {
+		return err
+	}
+	msg := C.GoString(C.errorString(result))
+	err := fmt.Errorf("%v", msg)
+	errorMap[result] = err
+	return err
+}
+
+var FeatureNotSupportedError error
+var initErrors = func() {
+	if FeatureNotSupportedError == nil {
+		FeatureNotSupportedError = errorString(C.DCGM_ST_NOT_SUPPORTED)
 	}
 }
 
-func ResumeProfilingMetrics() {
-	result := C.dcgmProfResume(handle.handle)
-	if result != 0 {
-		fmt.Printf("Failed to resume profiling (result %d)\n", result)
+func PauseProfilingMetrics() error {
+	initErrors()
+	result := C.dcgmProfPause(handle.handle)
+	err := errorString(result)
+	if err != nil {
+		fmt.Printf("CUDA version %d\n", dcgm.DCGM_FI_CUDA_DRIVER_VERSION)
+		fmt.Printf("Failed to pause profiling (%v)\n", err)
 	}
+	return err
+}
+
+func ResumeProfilingMetrics() error {
+	initErrors()
+	result := C.dcgmProfResume(handle.handle)
+	err := errorString(result)
+	if err != nil {
+		fmt.Printf("Failed to resume profiling (%v)\n", err)
+	}
+	return err
 }

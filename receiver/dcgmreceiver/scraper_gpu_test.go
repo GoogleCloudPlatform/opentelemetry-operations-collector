@@ -19,6 +19,7 @@ package dcgmreceiver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -191,10 +192,17 @@ func TestScrapeOnProfilingPaused(t *testing.T) {
 	require.NotNil(t, scraper)
 
 	defer func() { testprofilepause.ResumeProfilingMetrics() }()
-	testprofilepause.PauseProfilingMetrics()
+	err := testprofilepause.PauseProfilingMetrics()
+	if err != nil {
+		if errors.Is(err, testprofilepause.FeatureNotSupportedError) {
+			t.Skipf("Pausing profiling not supported")
+		} else {
+			t.Errorf("Pausing profiling failed with error %v", err)
+		}
+	}
 	time.Sleep(20 * time.Millisecond)
 
-	err := scraper.start(context.Background(), componenttest.NewNopHost())
+	err = scraper.start(context.Background(), componenttest.NewNopHost())
 	require.NoError(t, err)
 
 	metrics, err := scraper.scrape(context.Background())

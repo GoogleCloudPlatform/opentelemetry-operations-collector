@@ -42,6 +42,9 @@ type dcgmClient struct {
 	devicesModelName               []string
 	devicesUUID                    []string
 	deviceMetricToFailedQueryCount map[string]uint64
+	collectionInterval             time.Duration
+	retryBlankValues               bool
+	maxRetries                     int
 }
 
 type dcgmMetric struct {
@@ -106,6 +109,9 @@ func newClient(config *Config, logger *zap.Logger) (*dcgmClient, error) {
 		devicesModelName:               names,
 		devicesUUID:                    UUIDs,
 		deviceMetricToFailedQueryCount: make(map[string]uint64),
+		collectionInterval:             config.CollectionInterval,
+		retryBlankValues:               config.retryBlankValues,
+		maxRetries:                     config.maxRetries,
 	}, nil
 }
 
@@ -434,26 +440,38 @@ func (client *dcgmClient) collectDeviceMetrics() (map[uint][]dcgmMetric, error) 
 	var err scrapererror.ScrapeErrors
 	gpuMetrics := make(map[uint][]dcgmMetric)
 	for _, gpuIndex := range client.deviceIndices {
-		fieldValues, pollErr := dcgmGetLatestValuesForFields(gpuIndex, client.enabledFieldIDs)
-		if pollErr == nil {
-			gpuMetrics[gpuIndex] = client.appendMetric(gpuMetrics[gpuIndex], gpuIndex, fieldValues)
-			client.logger.Debugf("Successful poll of DCGM daemon for GPU %d", gpuIndex)
-		} else {
-			msg := fmt.Sprintf("Unable to poll DCGM daemon for GPU %d on %s", gpuIndex, pollErr)
-			client.issueWarningForFailedQueryUptoThreshold(gpuIndex, "all-profiling-metrics", msg)
-			err.AddPartial(1, fmt.Errorf("%s", msg))
+		retry := true
+		for i := 0; retry && i < client.maxRetries; i++ {
+			fieldValues, pollErr := dcgmGetLatestValuesForFields(gpuIndex, client.enabledFieldIDs)
+			if pollErr == nil {
+				gpuMetrics[gpuIndex], retry = client.appendMetric(gpuMetrics[gpuIndex], gpuIndex, fieldValues)
+				if retry {
+					client.logger.Warnf("Retrying poll of DCGM daemon for GPU %d; attempt %d", gpuIndex, i+1)
+					time.Sleep(client.collectionInterval)
+					continue
+				}
+				client.logger.Debugf("Successful poll of DCGM daemon for GPU %d", gpuIndex)
+			} else {
+				msg := fmt.Sprintf("Unable to poll DCGM daemon for GPU %d on %s", gpuIndex, pollErr)
+				client.issueWarningForFailedQueryUptoThreshold(gpuIndex, "all-profiling-metrics", msg)
+				err.AddPartial(1, fmt.Errorf("%s", msg))
+			}
 		}
 	}
 
 	return gpuMetrics, err.Combine()
 }
 
-func (client *dcgmClient) appendMetric(gpuMetrics []dcgmMetric, gpuIndex uint, fieldValues []dcgm.FieldValue_v1) []dcgmMetric {
+func (client *dcgmClient) appendMetric(gpuMetrics []dcgmMetric, gpuIndex uint, fieldValues []dcgm.FieldValue_v1) (result []dcgmMetric, retry bool) {
+	retry = false
 	for _, fieldValue := range fieldValues {
 		dcgmName := dcgmIDToName[dcgm.Short(fieldValue.FieldId)]
 		if err := isValidValue(fieldValue); err != nil {
 			msg := fmt.Sprintf("Received invalid value (ts %d gpu %d) %s: %v", fieldValue.Ts, gpuIndex, dcgmName, err)
 			client.issueWarningForFailedQueryUptoThreshold(gpuIndex, dcgmName, msg)
+			if client.retryBlankValues && errors.Is(err, blankValueError) {
+				retry = true
+			}
 			continue
 		}
 
@@ -466,7 +484,7 @@ func (client *dcgmClient) appendMetric(gpuMetrics []dcgmMetric, gpuIndex uint, f
 		gpuMetrics = append(gpuMetrics, dcgmMetric{fieldValue.Ts, dcgmName, fieldValue.Value})
 	}
 
-	return gpuMetrics
+	return gpuMetrics, retry
 }
 
 func (client *dcgmClient) issueWarningForFailedQueryUptoThreshold(deviceIdx uint, dcgmName string, reason string) {

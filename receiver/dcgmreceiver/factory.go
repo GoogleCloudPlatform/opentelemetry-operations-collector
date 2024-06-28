@@ -39,6 +39,8 @@ func createDefaultConfig() component.Config {
 		TCPAddrConfig: confignet.TCPAddrConfig{
 			Endpoint: defaultEndpoint,
 		},
-		Metrics: metadata.DefaultMetricsConfig(),
+		Metrics:          metadata.DefaultMetricsConfig(),
+		retryBlankValues: true,
+		maxRetries:       5,
 	}
 }

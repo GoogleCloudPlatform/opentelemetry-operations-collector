@@ -72,9 +72,7 @@ func newClient(config *Config, logger *zap.Logger) (*dcgmClient, error) {
 	requestedFieldIDs := discoverRequestedFieldIDs(config)
 	supportedRegularFieldIDs, err := getSupportedRegularFields(requestedFieldIDs, logger)
 	if err != nil {
-		// TODO: If there is error querying the supported fields at all, let the
-		// receiver collect no metrics.
-		logger.Sugar().Warnf("Error querying supported regular fields on '%w'. Regular GPU metrics will not be collected.", err)
+		return nil, fmt.Errorf("Error querying supported regular fields: %w", err)
 	}
 	supportedProfilingFieldIDs, err := getSupportedProfilingFields()
 	if err != nil {
@@ -313,7 +311,7 @@ func getSupportedRegularFields(requestedFields []dcgm.Short, logger *zap.Logger)
 		if ef < dcgmProfilingFieldsStart {
 			// For fields like `DCGM_FI_DEV_*`, which are not
 			// profiling fields, try to actually retrieve the values
-			// all devices
+			// from all devices
 			regularFields = append(regularFields, ef)
 		}
 	}

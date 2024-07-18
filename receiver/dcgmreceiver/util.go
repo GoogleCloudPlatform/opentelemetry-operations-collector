@@ -25,11 +25,11 @@ import (
 )
 
 var (
-	blankValueError       = fmt.Errorf("unspecified blank value")
-	dataNotFoundError     = fmt.Errorf("data not found")
-	notSupportedError     = fmt.Errorf("field not supported")
-	permissionDeniedError = fmt.Errorf("no permission to fetch value")
-	unexpectedTypeError   = fmt.Errorf("unexpected data type")
+	errBlankValue       = fmt.Errorf("unspecified blank value")
+	errDataNotFound     = fmt.Errorf("data not found")
+	errNotSupported     = fmt.Errorf("field not supported")
+	errPermissionDenied = fmt.Errorf("no permission to fetch value")
+	errUnexpectedType   = fmt.Errorf("unexpected data type")
 )
 
 func (m *dcgmMetric) setFloat64(val float64) {
@@ -53,38 +53,38 @@ func isValidValue(fieldValue dcgm.FieldValue_v1) error {
 	case dcgm.DCGM_FT_DOUBLE:
 		switch v := fieldValue.Float64(); v {
 		case dcgm.DCGM_FT_FP64_BLANK:
-			return blankValueError
+			return errBlankValue
 		case dcgm.DCGM_FT_FP64_NOT_FOUND:
-			return dataNotFoundError
+			return errDataNotFound
 		case dcgm.DCGM_FT_FP64_NOT_SUPPORTED:
-			return notSupportedError
+			return errNotSupported
 		case dcgm.DCGM_FT_FP64_NOT_PERMISSIONED:
-			return permissionDeniedError
+			return errPermissionDenied
 		}
 
 	case dcgm.DCGM_FT_INT64:
 		switch v := fieldValue.Int64(); v {
 		case dcgm.DCGM_FT_INT32_BLANK:
-			return blankValueError
+			return errBlankValue
 		case dcgm.DCGM_FT_INT32_NOT_FOUND:
-			return dataNotFoundError
+			return errDataNotFound
 		case dcgm.DCGM_FT_INT32_NOT_SUPPORTED:
-			return notSupportedError
+			return errNotSupported
 		case dcgm.DCGM_FT_INT32_NOT_PERMISSIONED:
-			return permissionDeniedError
+			return errPermissionDenied
 		case dcgm.DCGM_FT_INT64_BLANK:
-			return blankValueError
+			return errBlankValue
 		case dcgm.DCGM_FT_INT64_NOT_FOUND:
-			return dataNotFoundError
+			return errDataNotFound
 		case dcgm.DCGM_FT_INT64_NOT_SUPPORTED:
-			return notSupportedError
+			return errNotSupported
 		case dcgm.DCGM_FT_INT64_NOT_PERMISSIONED:
-			return permissionDeniedError
+			return errPermissionDenied
 		}
 
 	// dcgm.DCGM_FT_STRING also exists but we don't expect it
 	default:
-		return unexpectedTypeError
+		return errUnexpectedType
 	}
 
 	return nil

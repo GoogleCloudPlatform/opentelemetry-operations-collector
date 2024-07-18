@@ -240,7 +240,8 @@ func discoverRequestedFieldIDs(config *Config) []dcgm.Short {
 		requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI["DCGM_FI_DEV_ECC_DBE_VOL_TOTAL"])
 	}
 	if config.Metrics.GpuDcgmXidErrors.Enabled {
-		//requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI[""])
+		// requestedFieldIDs = append(requestedFieldIDs, dcgm.DCGM_FI[""])
+		func() {}() // no-op
 	}
 
 	return requestedFieldIDs
@@ -324,10 +325,10 @@ func getSupportedRegularFields(requestedFields []dcgm.Short, logger *zap.Logger)
 	}
 	deviceGroupName := "google-cloud-ops-agent-initial-watch-group"
 	deviceGroup, err := dcgm.NewDefaultGroup(deviceGroupName)
-	defer dcgm.DestroyGroup(deviceGroup)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to create DCGM GPU default group on %w", err)
 	}
+	defer func() { _ = dcgm.DestroyGroup(deviceGroup) }()
 	testFieldGroup, err := setWatchesOnFields(logger, deviceGroup, regularFields, dcgmWatchParams{
 		fieldGroupName: "google-cloud-ops-agent-initial-discovery",
 		updateFreqUs:   3600000000, // call UpdateAllFields manually
@@ -337,11 +338,11 @@ func getSupportedRegularFields(requestedFields []dcgm.Short, logger *zap.Logger)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to set field watches on %w", err)
 	}
+	defer func() { _ = dcgm.FieldGroupDestroy(testFieldGroup) }()
 	err = dcgm.UpdateAllFields()
 	if err != nil {
 		return nil, fmt.Errorf("Unable to update fields on %w", err)
 	}
-	defer dcgm.FieldGroupDestroy(testFieldGroup)
 	found := make(map[dcgm.Short]bool)
 	for _, gpuIndex := range deviceIndices {
 		fieldValues, pollErr := dcgm.GetLatestValuesForFields(gpuIndex, regularFields)
@@ -365,8 +366,8 @@ func getSupportedRegularFields(requestedFields []dcgm.Short, logger *zap.Logger)
 	}
 	// TODO: dcgmUnwatchFields is not available.
 	supported := make([]dcgm.Short, len(found))
-	for fieldId, _ := range found {
-		supported = append(supported, fieldId)
+	for fieldID := range found {
+		supported = append(supported, fieldID)
 	}
 	return supported, nil
 }
@@ -467,7 +468,7 @@ func (client *dcgmClient) appendMetric(gpuMetrics []dcgmMetric, gpuIndex uint, f
 		if err := isValidValue(fieldValue); err != nil {
 			msg := fmt.Sprintf("Received invalid value (ts %d gpu %d) %s: %v", fieldValue.Ts, gpuIndex, dcgmName, err)
 			client.issueWarningForFailedQueryUptoThreshold(gpuIndex, dcgmName, msg)
-			if client.retryBlankValues && errors.Is(err, blankValueError) {
+			if client.retryBlankValues && errors.Is(err, errBlankValue) {
 				retry = true
 			}
 			continue

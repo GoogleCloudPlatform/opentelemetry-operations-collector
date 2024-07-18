@@ -32,7 +32,7 @@ import (
 func TestNewDcgmClientOnInitializationError(t *testing.T) {
 	realDcgmInit := dcgmInit
 	defer func() { dcgmInit = realDcgmInit }()
-	dcgmInit = func(args ...string) (func(), error) {
+	dcgmInit = func(...string) (func(), error) {
 		return nil, fmt.Errorf("No DCGM client library *OR* No DCGM connection")
 	}
 

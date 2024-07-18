@@ -34,8 +34,6 @@ import (
 )
 
 var dcgmIDToName map[dcgm.Short]string
-var metricNameToDcgmName map[string]string
-var dcgmNameToMetricName map[string]string
 var randSource = rand.New(rand.NewSource(time.Now().UnixMicro()))
 
 func init() {

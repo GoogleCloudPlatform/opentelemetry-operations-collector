@@ -231,7 +231,7 @@ func (s *dcgmScraper) scrape(_ context.Context) (pmetric.Metrics, error) {
 			s.mb.RecordGpuDcgmEccErrorsDataPoint(now, metric.asInt64(), metadata.AttributeGpuErrorTypeDbe)
 		}
 		// TODO: XID errors.
-		//s.mb.RecordGpuDcgmXidErrorsDataPoint(now, metric.asInt64(), xid)
+		// s.mb.RecordGpuDcgmXidErrorsDataPoint(now, metric.asInt64(), xid)
 		s.mb.EmitForResource(metadata.WithResource(gpuResource))
 	}
 

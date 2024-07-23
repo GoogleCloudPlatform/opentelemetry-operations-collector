@@ -34,7 +34,7 @@ attributes:
 
   network.io.direction:
     type: string
-    description: Direction of the link traffic, one of [tx, rx].
+    description: Direction of the link traffic, one of [transmit, receive].
     enum: [transmit, receive]
 
   gpu.clock.violation:

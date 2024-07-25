@@ -100,13 +100,13 @@ The number of bytes sent over NVLink, not including protocol headers.
 
 | Unit | Metric Type | Value Type | Aggregation Temporality | Monotonic |
 | ---- | ----------- | ---------- | ----------------------- | --------- |
-| By | Sum | Int | Delta | true |
+| By | Sum | Int | Cumulative | true |
 
 #### Attributes
 
 | Name | Description | Values |
 | ---- | ----------- | ------ |
-| network.io.direction | Direction of the link traffic, one of [tx, rx]. | Str: ``transmit``, ``receive`` |
+| network.io.direction | Direction of the link traffic, one of [transmit, receive]. | Str: ``transmit``, ``receive`` |
 
 ### gpu.dcgm.pcie.io
 
@@ -114,13 +114,13 @@ The number of bytes sent over the PCIe bus, including both protocol headers and 
 
 | Unit | Metric Type | Value Type | Aggregation Temporality | Monotonic |
 | ---- | ----------- | ---------- | ----------------------- | --------- |
-| By | Sum | Int | Delta | true |
+| By | Sum | Int | Cumulative | true |
 
 #### Attributes
 
 | Name | Description | Values |
 | ---- | ----------- | ------ |
-| network.io.direction | Direction of the link traffic, one of [tx, rx]. | Str: ``transmit``, ``receive`` |
+| network.io.direction | Direction of the link traffic, one of [transmit, receive]. | Str: ``transmit``, ``receive`` |
 
 ### gpu.dcgm.pipe.utilization
 

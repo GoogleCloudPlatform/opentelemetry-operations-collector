@@ -115,7 +115,7 @@ metrics:
     unit: By
     sum:
       value_type: int
-      aggregation_temporality: delta
+      aggregation_temporality: cumulative
       monotonic: true
     attributes: [network.io.direction]
     enabled: true
@@ -125,7 +125,7 @@ metrics:
     unit: By
     sum:
       value_type: int
-      aggregation_temporality: delta
+      aggregation_temporality: cumulative
       monotonic: true
     attributes: [network.io.direction]
     enabled: true

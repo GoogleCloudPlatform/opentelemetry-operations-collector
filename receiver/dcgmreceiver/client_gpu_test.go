@@ -55,7 +55,7 @@ func TestSupportedFieldsWithGolden(t *testing.T) {
 	client, err := newClient(config, zaptest.NewLogger(t))
 	require.Nil(t, err, "cannot initialize DCGM. Install and run DCGM before running tests.")
 
-	assert.NotEmpty(t, client.devicesModelName)
+	require.NotEmpty(t, client.devicesModelName)
 	gpuModel := client.getDeviceModelName(0)
 	allFields := discoverRequestedFieldIDs(config)
 	supportedRegularFields, err := getSupportedRegularFields(allFields, zaptest.NewLogger(t))

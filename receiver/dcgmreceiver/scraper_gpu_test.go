@@ -49,6 +49,10 @@ func TestScrapeWithGpuPresent(t *testing.T) {
 	require.NoError(t, err)
 
 	metrics, err := scraper.scrape(context.Background())
+	assert.NoError(t, err)
+
+	require.NotNil(t, scraper.client)
+	require.NotEmpty(t, scraper.client.devicesModelName)
 	expectedMetrics := loadExpectedScraperMetrics(t, scraper.client.getDeviceModelName(0))
 	validateScraperResult(t, metrics, expectedMetrics)
 }
@@ -82,6 +86,9 @@ func TestScrapeWithDelayedDcgmService(t *testing.T) {
 	dcgmInit = realDcgmInit
 	metrics, err = scraper.scrape(context.Background())
 	assert.NoError(t, err)
+
+	require.NotNil(t, scraper.client)
+	require.NotEmpty(t, scraper.client.devicesModelName)
 	expectedMetrics := loadExpectedScraperMetrics(t, scraper.client.getDeviceModelName(0))
 	validateScraperResult(t, metrics, expectedMetrics)
 }

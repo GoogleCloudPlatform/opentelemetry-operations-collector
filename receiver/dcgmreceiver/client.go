@@ -95,6 +95,7 @@ func newClient(config *Config, logger *zap.Logger) (*dcgmClient, error) {
 		}
 		enabledFieldGroup, err = setWatchesOnEnabledFields(config, logger, deviceGroup, enabledFields)
 		if err != nil {
+			_ = dcgm.FieldGroupDestroy(enabledFieldGroup)
 			return nil, fmt.Errorf("Unable to set field watches on %w", err)
 		}
 	}
@@ -335,10 +336,10 @@ func getSupportedRegularFields(requestedFields []dcgm.Short, logger *zap.Logger)
 		maxKeepTime:    600,
 		maxKeepSamples: 1,
 	})
+	defer func() { _ = dcgm.FieldGroupDestroy(testFieldGroup) }()
 	if err != nil {
 		return nil, fmt.Errorf("Unable to set field watches on %w", err)
 	}
-	defer func() { _ = dcgm.FieldGroupDestroy(testFieldGroup) }()
 	err = dcgm.UpdateAllFields()
 	if err != nil {
 		return nil, fmt.Errorf("Unable to update fields on %w", err)
@@ -401,7 +402,7 @@ func setWatchesOnFields(logger *zap.Logger, deviceGroup dcgm.GroupHandle, fieldI
 	dcgmMaxKeepSamples := params.maxKeepSamples
 	err = dcgm.WatchFieldsWithGroupEx(fieldGroup, deviceGroup, dcgmUpdateFreq, dcgmMaxKeepTime, dcgmMaxKeepSamples)
 	if err != nil {
-		return dcgm.FieldHandle{}, fmt.Errorf("Setting watches for DCGM field group '%s' failed on %w", params.fieldGroupName, err)
+		return fieldGroup, fmt.Errorf("Setting watches for DCGM field group '%s' failed on %w", params.fieldGroupName, err)
 	}
 	logger.Sugar().Infof("Setting watches for DCGM field group '%s' succeeded", params.fieldGroupName)
 
@@ -420,6 +421,7 @@ func setWatchesOnEnabledFields(config *Config, logger *zap.Logger, deviceGroup d
 }
 
 func (client *dcgmClient) cleanup() {
+	_ = dcgm.FieldGroupDestroy(client.enabledFieldGroup)
 	if client.handleCleanup != nil {
 		client.handleCleanup()
 	}

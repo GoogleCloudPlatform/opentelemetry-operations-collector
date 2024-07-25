@@ -127,7 +127,6 @@ func TestMetricsBuilder(t *testing.T) {
 			allMetricsCount++
 			mb.RecordGpuDcgmUtilizationDataPoint(ts, 1)
 
-			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordGpuDcgmXidErrorsDataPoint(ts, 1, 13)
 

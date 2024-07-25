@@ -153,8 +153,8 @@ func (s *dcgmScraper) scrape(_ context.Context) (pmetric.Metrics, error) {
 			s.mb.RecordGpuDcgmMemoryBytesUsedDataPoint(now, bytesUsed, metadata.AttributeGpuMemoryStateUsed)
 		}
 		if metric, ok := metrics["DCGM_FI_DEV_FB_RESERVED"]; ok {
-			bytesFree := 1e6 * metric.asInt64() /* MBy to By */
-			s.mb.RecordGpuDcgmMemoryBytesUsedDataPoint(now, bytesFree, metadata.AttributeGpuMemoryStateReserved)
+			bytesReserved := 1e6 * metric.asInt64() /* MBy to By */
+			s.mb.RecordGpuDcgmMemoryBytesUsedDataPoint(now, bytesReserved, metadata.AttributeGpuMemoryStateReserved)
 		}
 		if metric, ok := metrics["DCGM_FI_PROF_DRAM_ACTIVE"]; ok {
 			s.mb.RecordGpuDcgmMemoryBandwidthUtilizationDataPoint(now, metric.asFloat64())

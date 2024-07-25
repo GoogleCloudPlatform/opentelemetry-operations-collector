@@ -181,4 +181,4 @@ metrics:
       aggregation_temporality: cumulative
       monotonic: true
     attributes: [gpu.error.xid]
-    enabled: true
+    enabled: false

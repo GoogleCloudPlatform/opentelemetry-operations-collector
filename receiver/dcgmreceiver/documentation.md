@@ -160,20 +160,6 @@ Ratio of time the graphics engine is active.
 | ---- | ----------- | ---------- |
 | 1 | Gauge | Double |
 
-### gpu.dcgm.xid_errors
-
-XID errors.
-
-| Unit | Metric Type | Value Type | Aggregation Temporality | Monotonic |
-| ---- | ----------- | ---------- | ----------------------- | --------- |
-| 1 | Sum | Int | Cumulative | true |
-
-#### Attributes
-
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| gpu.error.xid | The XID code for the error, 1..143. | Any Int |
-
 ## Optional Metrics
 
 The following metrics are not emitted by default. Each of them can be enabled by applying the following configuration:
@@ -191,6 +177,20 @@ Fraction of the number of warps resident on a multiprocessor, averaged over all 
 | Unit | Metric Type | Value Type |
 | ---- | ----------- | ---------- |
 | 1 | Gauge | Double |
+
+### gpu.dcgm.xid_errors
+
+XID errors.
+
+| Unit | Metric Type | Value Type | Aggregation Temporality | Monotonic |
+| ---- | ----------- | ---------- | ----------------------- | --------- |
+| 1 | Sum | Int | Cumulative | true |
+
+#### Attributes
+
+| Name | Description | Values |
+| ---- | ----------- | ------ |
+| gpu.error.xid | The XID code for the error, 1..143. | Any Int |
 
 ## Resource Attributes
 

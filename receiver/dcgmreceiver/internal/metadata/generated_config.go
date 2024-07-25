@@ -94,7 +94,7 @@ func DefaultMetricsConfig() MetricsConfig {
 			Enabled: true,
 		},
 		GpuDcgmXidErrors: MetricConfig{
-			Enabled: true,
+			Enabled: false,
 		},
 	}
 }

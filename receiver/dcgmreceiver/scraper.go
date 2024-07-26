@@ -273,7 +273,8 @@ func (s *dcgmScraper) scrape(_ context.Context) (pmetric.Metrics, error) {
 			s.mb.RecordGpuDcgmNvlinkIoDataPoint(now, s.aggregates.nvlinkRxTotal[gpuIndex], metadata.AttributeNetworkIoDirectionReceive)
 		}
 		if metric, ok := metrics["DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION"]; ok {
-			s.mb.RecordGpuDcgmEnergyConsumptionDataPoint(now, float64(metric.asInt64()))
+			energyUsed := float64(metric.asInt64()) / 1e3 /* mJ to J */
+			s.mb.RecordGpuDcgmEnergyConsumptionDataPoint(now, energyUsed)
 		} else if metric, ok := metrics["DCGM_FI_DEV_POWER_USAGE"]; ok { // fallback
 			powerUsage := metric.asFloat64() * (s.config.CollectionInterval.Seconds()) /* rate to delta */
 			s.aggregates.energyConsumptionFallback[gpuIndex] += powerUsage             /* delta to cumulative */

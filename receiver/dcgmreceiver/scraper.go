@@ -182,7 +182,13 @@ func (s *dcgmScraper) scrape(_ context.Context) (pmetric.Metrics, error) {
 		return s.mb.Emit(), err
 	}
 
+	s.settings.Logger.Sugar().Debug("Client created, collecting metrics")
 	deviceMetrics, err := s.client.collectDeviceMetrics()
+	if err != nil {
+		s.settings.Logger.Sugar().Warnf("Metrics not collected; err=%v", err)
+		return s.mb.Emit(), err
+	}
+	s.settings.Logger.Sugar().Debugf("Metrics collected: %d", len(deviceMetrics))
 
 	now := pcommon.NewTimestampFromTime(time.Now())
 	for gpuIndex, gpuMetrics := range deviceMetrics {
@@ -190,6 +196,7 @@ func (s *dcgmScraper) scrape(_ context.Context) (pmetric.Metrics, error) {
 		for _, metric := range gpuMetrics {
 			metricsByName[metric.name] = append(metricsByName[metric.name], metric)
 		}
+		s.settings.Logger.Sugar().Debugf("Got %d unique metrics: %v", len(metricsByName), metricsByName)
 		metrics := make(map[string]dcgmMetric)
 		for name, points := range metricsByName {
 			slices.SortStableFunc(points, func(a, b dcgmMetric) int {

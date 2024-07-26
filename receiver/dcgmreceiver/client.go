@@ -384,9 +384,11 @@ func (client *dcgmClient) collectDeviceMetrics() (map[uint][]dcgmMetric, error) 
 	var err scrapererror.ScrapeErrors
 	gpuMetrics := make(map[uint][]dcgmMetric)
 	for _, gpuIndex := range client.deviceIndices {
+		client.logger.Debugf("Polling DCGM daemon for GPU %d", gpuIndex)
 		retry := true
 		for i := 0; retry && i < client.maxRetries; i++ {
 			fieldValues, pollErr := dcgmGetLatestValuesForFields(gpuIndex, client.enabledFieldIDs)
+			client.logger.Debugf("Got %d field values", len(fieldValues))
 			if pollErr == nil {
 				gpuMetrics[gpuIndex], retry = client.appendMetrics(gpuMetrics[gpuIndex], gpuIndex, fieldValues)
 				if retry {

@@ -60,7 +60,14 @@ func (s *dcgmScraper) initClient() error {
 	if s.client != nil {
 		return nil
 	}
-	client, err := newClient(s.config, s.settings.Logger)
+	clientSettings := &dcgmClientSettings{
+		endpoint:         s.config.TCPAddrConfig.Endpoint,
+		pollingInterval:  s.config.CollectionInterval,
+		fields:           discoverRequestedFields(s.config),
+		retryBlankValues: true,
+		maxRetries:       5,
+	}
+	client, err := newClient(clientSettings, s.settings.Logger)
 	if err != nil {
 		s.settings.Logger.Sugar().Warn(err)
 		if errors.Is(err, ErrDcgmInitialization) {
@@ -94,6 +101,79 @@ func (s *dcgmScraper) stop(_ context.Context) error {
 		s.client.cleanup()
 	}
 	return nil
+}
+
+func discoverRequestedFields(config *Config) []string {
+	requestedFields := []string{}
+	if config.Metrics.GpuDcgmUtilization.Enabled {
+		requestedFields = append(requestedFields, "DCGM_FI_PROF_GR_ENGINE_ACTIVE")
+		requestedFields = append(requestedFields, "DCGM_FI_DEV_GPU_UTIL") // fallback
+	}
+	if config.Metrics.GpuDcgmSmUtilization.Enabled {
+		requestedFields = append(requestedFields, "DCGM_FI_PROF_SM_ACTIVE")
+	}
+	if config.Metrics.GpuDcgmSmOccupancy.Enabled {
+		requestedFields = append(requestedFields, "DCGM_FI_PROF_SM_OCCUPANCY")
+	}
+	if config.Metrics.GpuDcgmPipeUtilization.Enabled {
+		requestedFields = append(requestedFields, "DCGM_FI_PROF_PIPE_TENSOR_ACTIVE")
+		requestedFields = append(requestedFields, "DCGM_FI_PROF_PIPE_FP64_ACTIVE")
+		requestedFields = append(requestedFields, "DCGM_FI_PROF_PIPE_FP32_ACTIVE")
+		requestedFields = append(requestedFields, "DCGM_FI_PROF_PIPE_FP16_ACTIVE")
+	}
+	if config.Metrics.GpuDcgmCodecEncoderUtilization.Enabled {
+		requestedFields = append(requestedFields, "DCGM_FI_DEV_ENC_UTIL")
+	}
+	if config.Metrics.GpuDcgmCodecDecoderUtilization.Enabled {
+		requestedFields = append(requestedFields, "DCGM_FI_DEV_DEC_UTIL")
+	}
+	if config.Metrics.GpuDcgmMemoryBytesUsed.Enabled {
+		requestedFields = append(requestedFields, "DCGM_FI_DEV_FB_FREE")
+		requestedFields = append(requestedFields, "DCGM_FI_DEV_FB_USED")
+		requestedFields = append(requestedFields, "DCGM_FI_DEV_FB_RESERVED")
+	}
+	if config.Metrics.GpuDcgmMemoryBandwidthUtilization.Enabled {
+		requestedFields = append(requestedFields, "DCGM_FI_PROF_DRAM_ACTIVE")
+		requestedFields = append(requestedFields, "DCGM_FI_DEV_MEM_COPY_UTIL") // fallback
+	}
+	if config.Metrics.GpuDcgmPcieIo.Enabled {
+		requestedFields = append(requestedFields, "DCGM_FI_PROF_PCIE_TX_BYTES")
+		requestedFields = append(requestedFields, "DCGM_FI_PROF_PCIE_RX_BYTES")
+	}
+	if config.Metrics.GpuDcgmNvlinkIo.Enabled {
+		requestedFields = append(requestedFields, "DCGM_FI_PROF_NVLINK_TX_BYTES")
+		requestedFields = append(requestedFields, "DCGM_FI_PROF_NVLINK_RX_BYTES")
+	}
+	if config.Metrics.GpuDcgmEnergyConsumption.Enabled {
+		requestedFields = append(requestedFields, "DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION")
+		requestedFields = append(requestedFields, "DCGM_FI_DEV_POWER_USAGE") // fallback
+	}
+	if config.Metrics.GpuDcgmTemperature.Enabled {
+		requestedFields = append(requestedFields, "DCGM_FI_DEV_GPU_TEMP")
+	}
+	if config.Metrics.GpuDcgmClockFrequency.Enabled {
+		requestedFields = append(requestedFields, "DCGM_FI_DEV_SM_CLOCK")
+	}
+	if config.Metrics.GpuDcgmClockThrottleDurationTime.Enabled {
+		requestedFields = append(requestedFields, "DCGM_FI_DEV_POWER_VIOLATION")
+		requestedFields = append(requestedFields, "DCGM_FI_DEV_THERMAL_VIOLATION")
+		requestedFields = append(requestedFields, "DCGM_FI_DEV_SYNC_BOOST_VIOLATION")
+		requestedFields = append(requestedFields, "DCGM_FI_DEV_BOARD_LIMIT_VIOLATION")
+		requestedFields = append(requestedFields, "DCGM_FI_DEV_LOW_UTIL_VIOLATION")
+		requestedFields = append(requestedFields, "DCGM_FI_DEV_RELIABILITY_VIOLATION")
+		requestedFields = append(requestedFields, "DCGM_FI_DEV_TOTAL_APP_CLOCKS_VIOLATION")
+		requestedFields = append(requestedFields, "DCGM_FI_DEV_TOTAL_BASE_CLOCKS_VIOLATION")
+	}
+	if config.Metrics.GpuDcgmEccErrors.Enabled {
+		requestedFields = append(requestedFields, "DCGM_FI_DEV_ECC_SBE_VOL_TOTAL")
+		requestedFields = append(requestedFields, "DCGM_FI_DEV_ECC_DBE_VOL_TOTAL")
+	}
+	if config.Metrics.GpuDcgmXidErrors.Enabled {
+		// requestedFields = append(requestedFields, "")
+		func() {}() // no-op
+	}
+
+	return requestedFields
 }
 
 func (s *dcgmScraper) scrape(_ context.Context) (pmetric.Metrics, error) {

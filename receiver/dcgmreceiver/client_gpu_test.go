@@ -47,17 +47,28 @@ type modelSupportedFields struct {
 	UnsupportedFields []string `yaml:"unsupported_fields"`
 }
 
+func defaultClientSettings() *dcgmClientSettings {
+	requestedFields := discoverRequestedFields(createDefaultConfig().(*Config))
+	return &dcgmClientSettings{
+		endpoint:         defaultEndpoint,
+		pollingInterval:  10 * time.Second,
+		retryBlankValues: true,
+		maxRetries:       5,
+		fields:           requestedFields,
+	}
+}
+
 // TestSupportedFieldsWithGolden tests getSupportedRegularFields() and
 // getSupportedProfilingFields() against the golden files for the current GPU
 // model
 func TestSupportedFieldsWithGolden(t *testing.T) {
-	config := createDefaultConfig().(*Config)
-	client, err := newClient(config, zaptest.NewLogger(t))
+	clientSettings := defaultClientSettings()
+	client, err := newClient(clientSettings, zaptest.NewLogger(t))
 	require.Nil(t, err, "cannot initialize DCGM. Install and run DCGM before running tests.")
 
 	require.NotEmpty(t, client.devicesModelName)
 	gpuModel := client.getDeviceModelName(0)
-	allFields := discoverRequestedFieldIDs(config)
+	allFields := toFieldIDs(clientSettings.fields)
 	supportedRegularFields, err := getSupportedRegularFields(allFields, zaptest.NewLogger(t))
 	require.Nil(t, err)
 	supportedProfilingFields, err := getSupportedProfilingFields()
@@ -119,7 +130,7 @@ func getModelGoldenFilePath(t *testing.T, model string) string {
 }
 
 func TestNewDcgmClientWithGpuPresent(t *testing.T) {
-	client, err := newClient(createDefaultConfig().(*Config), zaptest.NewLogger(t))
+	client, err := newClient(defaultClientSettings(), zaptest.NewLogger(t))
 	require.Nil(t, err, "cannot initialize DCGM. Install and run DCGM before running tests.")
 
 	assert.NotNil(t, client)
@@ -133,7 +144,7 @@ func TestNewDcgmClientWithGpuPresent(t *testing.T) {
 }
 
 func TestCollectGpuProfilingMetrics(t *testing.T) {
-	client, err := newClient(createDefaultConfig().(*Config), zaptest.NewLogger(t))
+	client, err := newClient(defaultClientSettings(), zaptest.NewLogger(t))
 	require.Nil(t, err, "cannot initialize DCGM. Install and run DCGM before running tests.")
 	expectedMetrics := LoadExpectedMetrics(t, client.devicesModelName[0])
 	var maxCollectionInterval = 60 * time.Second

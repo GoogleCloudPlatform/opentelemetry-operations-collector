@@ -44,7 +44,7 @@ func TestNewDcgmClientOnInitializationError(t *testing.T) {
 		return nil
 	})))
 
-	client, err := newClient(createDefaultConfig().(*Config), logger)
+	client, err := newClient(&dcgmClientSettings{endpoint: defaultEndpoint}, logger)
 	assert.Equal(t, seenDcgmConnectionWarning, true)
 	assert.True(t, errors.Is(err, ErrDcgmInitialization))
 	assert.Regexp(t, ".*Unable to connect.*", err)

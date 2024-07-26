@@ -30,6 +30,4 @@ type Config struct {
 	scraperhelper.ControllerConfig `mapstructure:",squash"`
 	confignet.TCPAddrConfig        `mapstructure:",squash"`
 	Metrics                        metadata.MetricsConfig `mapstructure:"metrics"`
-	retryBlankValues               bool
-	maxRetries                     int
 }

@@ -245,17 +245,21 @@ func TestCollectGpuProfilingMetrics(t *testing.T) {
 				assert.LessOrEqual(t, value, int64(100000000))
 			case "DCGM_FI_DEV_GPU_TEMP":
 				// arbitrary max of 100000 °C
-				value := asFloat64(metric)
-				assert.GreaterOrEqual(t, value, float64(0.0))
-				assert.LessOrEqual(t, value, float64(100000.0))
+				value := asInt64(metric)
+				assert.GreaterOrEqual(t, value, int64(0))
+				assert.LessOrEqual(t, value, int64(100000))
 			case "DCGM_FI_DEV_SM_CLOCK":
 				// arbitrary max of 100000 MHz
-				value := asFloat64(metric)
-				assert.GreaterOrEqual(t, value, float64(0.0))
-				assert.LessOrEqual(t, value, float64(100000.0))
+				value := asInt64(metric)
+				assert.GreaterOrEqual(t, value, int64(0))
+				assert.LessOrEqual(t, value, int64(100000))
 			case "DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION":
+				value := asInt64(metric)
+				assert.GreaterOrEqual(t, value, int64(0))
 				// TODO
 			case "DCGM_FI_DEV_POWER_USAGE":
+				value := asFloat64(metric)
+				assert.GreaterOrEqual(t, value, float64(0.0))
 				// TODO
 			default:
 				t.Errorf("Unexpected metric '%s'", metric.name)

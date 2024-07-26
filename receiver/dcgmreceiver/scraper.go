@@ -273,17 +273,17 @@ func (s *dcgmScraper) scrape(_ context.Context) (pmetric.Metrics, error) {
 			s.mb.RecordGpuDcgmNvlinkIoDataPoint(now, s.aggregates.nvlinkRxTotal[gpuIndex], metadata.AttributeNetworkIoDirectionReceive)
 		}
 		if metric, ok := metrics["DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION"]; ok {
-			s.mb.RecordGpuDcgmEnergyConsumptionDataPoint(now, metric.asFloat64())
+			s.mb.RecordGpuDcgmEnergyConsumptionDataPoint(now, float64(metric.asInt64()))
 		} else if metric, ok := metrics["DCGM_FI_DEV_POWER_USAGE"]; ok { // fallback
 			powerUsage := metric.asFloat64() * (s.config.CollectionInterval.Seconds()) /* rate to delta */
 			s.aggregates.energyConsumptionFallback[gpuIndex] += powerUsage             /* delta to cumulative */
 			s.mb.RecordGpuDcgmEnergyConsumptionDataPoint(now, s.aggregates.energyConsumptionFallback[gpuIndex])
 		}
 		if metric, ok := metrics["DCGM_FI_DEV_GPU_TEMP"]; ok {
-			s.mb.RecordGpuDcgmTemperatureDataPoint(now, metric.asFloat64())
+			s.mb.RecordGpuDcgmTemperatureDataPoint(now, float64(metric.asInt64()))
 		}
 		if metric, ok := metrics["DCGM_FI_DEV_SM_CLOCK"]; ok {
-			clockFreq := 1e6 * metric.asFloat64() /* MHz to Hz */
+			clockFreq := 1e6 * float64(metric.asInt64()) /* MHz to Hz */
 			s.mb.RecordGpuDcgmClockFrequencyDataPoint(now, clockFreq)
 		}
 		if metric, ok := metrics["DCGM_FI_DEV_POWER_VIOLATION"]; ok {

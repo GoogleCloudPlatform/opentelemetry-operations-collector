@@ -58,7 +58,7 @@ type dcgmClient struct {
 type dcgmMetric struct {
 	timestamp int64
 	name      string
-	value     [4096]byte
+	value     interface{}
 }
 
 // Can't pass argument dcgm.mode because it is unexported
@@ -388,7 +388,7 @@ func (client *dcgmClient) collectDeviceMetrics() (map[uint][]dcgmMetric, error) 
 		for i := 0; retry && i < client.maxRetries; i++ {
 			fieldValues, pollErr := dcgmGetLatestValuesForFields(gpuIndex, client.enabledFieldIDs)
 			if pollErr == nil {
-				gpuMetrics[gpuIndex], retry = client.appendMetric(gpuMetrics[gpuIndex], gpuIndex, fieldValues)
+				gpuMetrics[gpuIndex], retry = client.appendMetrics(gpuMetrics[gpuIndex], gpuIndex, fieldValues)
 				if retry {
 					client.logger.Warnf("Retrying poll of DCGM daemon for GPU %d; attempt %d", gpuIndex, i+1)
 					time.Sleep(client.pollingInterval)
@@ -406,7 +406,7 @@ func (client *dcgmClient) collectDeviceMetrics() (map[uint][]dcgmMetric, error) 
 	return gpuMetrics, err.Combine()
 }
 
-func (client *dcgmClient) appendMetric(gpuMetrics []dcgmMetric, gpuIndex uint, fieldValues []dcgm.FieldValue_v1) (result []dcgmMetric, retry bool) {
+func (client *dcgmClient) appendMetrics(gpuMetrics []dcgmMetric, gpuIndex uint, fieldValues []dcgm.FieldValue_v1) (result []dcgmMetric, retry bool) {
 	retry = false
 	for _, fieldValue := range fieldValues {
 		dcgmName := dcgmIDToName[dcgm.Short(fieldValue.FieldId)]
@@ -419,13 +419,20 @@ func (client *dcgmClient) appendMetric(gpuMetrics []dcgmMetric, gpuIndex uint, f
 			continue
 		}
 
+		var metricValue interface{}
 		switch fieldValue.FieldType {
 		case dcgm.DCGM_FT_DOUBLE:
-			client.logger.Debugf("Discovered (ts %d gpu %d) %s = %.3f (f64)", fieldValue.Ts, gpuIndex, dcgmName, fieldValue.Float64())
+			value := fieldValue.Float64()
+			client.logger.Debugf("Discovered (ts %d gpu %d) %s = %.3f (f64)", fieldValue.Ts, gpuIndex, dcgmName, value)
+			metricValue = value
 		case dcgm.DCGM_FT_INT64:
-			client.logger.Debugf("Discovered (ts %d gpu %d) %s = %d (i64)", fieldValue.Ts, gpuIndex, dcgmName, fieldValue.Int64())
+			value := fieldValue.Int64()
+			client.logger.Debugf("Discovered (ts %d gpu %d) %s = %d (i64)", fieldValue.Ts, gpuIndex, dcgmName, value)
+			metricValue = value
+		default:
+			metricValue = fieldValue.Value
 		}
-		gpuMetrics = append(gpuMetrics, dcgmMetric{fieldValue.Ts, dcgmName, fieldValue.Value})
+		gpuMetrics = append(gpuMetrics, dcgmMetric{fieldValue.Ts, dcgmName, metricValue})
 	}
 
 	return gpuMetrics, retry

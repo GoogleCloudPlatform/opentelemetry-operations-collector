@@ -153,6 +153,17 @@ func TestCollectGpuProfilingMetrics(t *testing.T) {
 	after := time.Now().UnixMicro()
 	assert.Nil(t, err)
 
+	asFloat64 := func(metric dcgmMetric) float64 {
+		require.IsTypef(t, float64(0), metric.value, "Unexpected metric type: %T", metric.value)
+		value, _ := metric.value.(float64)
+		return value
+	}
+	asInt64 := func(metric dcgmMetric) int64 {
+		require.IsTypef(t, int64(0), metric.value, "Unexpected metric type: %T", metric.value)
+		value, _ := metric.value.(int64)
+		return value
+	}
+
 	seenMetric := make(map[string]bool)
 	assert.GreaterOrEqual(t, len(deviceMetrics), 0)
 	assert.LessOrEqual(t, len(deviceMetrics), 32)
@@ -174,8 +185,9 @@ func TestCollectGpuProfilingMetrics(t *testing.T) {
 			case "DCGM_FI_PROF_PIPE_FP16_ACTIVE":
 				fallthrough
 			case "DCGM_FI_PROF_DRAM_ACTIVE":
-				assert.GreaterOrEqual(t, metric.asFloat64(), float64(0.0))
-				assert.LessOrEqual(t, metric.asFloat64(), float64(1.0))
+				value := asFloat64(metric)
+				assert.GreaterOrEqual(t, value, float64(0.0))
+				assert.LessOrEqual(t, value, float64(1.0))
 			case "DCGM_FI_DEV_GPU_UTIL":
 				fallthrough
 			case "DCGM_FI_DEV_MEM_COPY_UTIL":
@@ -183,16 +195,18 @@ func TestCollectGpuProfilingMetrics(t *testing.T) {
 			case "DCGM_FI_DEV_ENC_UTIL":
 				fallthrough
 			case "DCGM_FI_DEV_DEC_UTIL":
-				assert.GreaterOrEqual(t, metric.asInt64(), int64(0))
-				assert.LessOrEqual(t, metric.asInt64(), int64(100))
+				value := asInt64(metric)
+				assert.GreaterOrEqual(t, value, int64(0))
+				assert.LessOrEqual(t, value, int64(100))
 			case "DCGM_FI_DEV_FB_FREE":
 				fallthrough
 			case "DCGM_FI_DEV_FB_USED":
 				fallthrough
 			case "DCGM_FI_DEV_FB_RESERVED":
 				// arbitrary max of 10 TiB
-				assert.GreaterOrEqual(t, metric.asInt64(), int64(0))
-				assert.LessOrEqual(t, metric.asInt64(), int64(10485760))
+				value := asInt64(metric)
+				assert.GreaterOrEqual(t, value, int64(0))
+				assert.LessOrEqual(t, value, int64(10485760))
 			case "DCGM_FI_PROF_PCIE_TX_BYTES":
 				fallthrough
 			case "DCGM_FI_PROF_PCIE_RX_BYTES":
@@ -201,8 +215,9 @@ func TestCollectGpuProfilingMetrics(t *testing.T) {
 				fallthrough
 			case "DCGM_FI_PROF_NVLINK_RX_BYTES":
 				// arbitrary max of 10 TiB/sec
-				assert.GreaterOrEqual(t, metric.asInt64(), int64(0))
-				assert.LessOrEqual(t, metric.asInt64(), int64(10995116277760))
+				value := asInt64(metric)
+				assert.GreaterOrEqual(t, value, int64(0))
+				assert.LessOrEqual(t, value, int64(10995116277760))
 			case "DCGM_FI_DEV_BOARD_LIMIT_VIOLATION":
 				fallthrough
 			case "DCGM_FI_DEV_LOW_UTIL_VIOLATION":
@@ -218,22 +233,26 @@ func TestCollectGpuProfilingMetrics(t *testing.T) {
 			case "DCGM_FI_DEV_TOTAL_APP_CLOCKS_VIOLATION":
 				fallthrough
 			case "DCGM_FI_DEV_TOTAL_BASE_CLOCKS_VIOLATION":
-				assert.GreaterOrEqual(t, metric.asInt64(), int64(0))
-				assert.LessOrEqual(t, metric.asInt64(), time.Now().UnixMicro())
+				value := asInt64(metric)
+				assert.GreaterOrEqual(t, value, int64(0))
+				assert.LessOrEqual(t, value, time.Now().UnixMicro())
 			case "DCGM_FI_DEV_ECC_DBE_VOL_TOTAL":
 				fallthrough
 			case "DCGM_FI_DEV_ECC_SBE_VOL_TOTAL":
 				// arbitrary max of 100000000 errors
-				assert.GreaterOrEqual(t, metric.asInt64(), int64(0))
-				assert.LessOrEqual(t, metric.asInt64(), int64(100000000))
+				value := asInt64(metric)
+				assert.GreaterOrEqual(t, value, int64(0))
+				assert.LessOrEqual(t, value, int64(100000000))
 			case "DCGM_FI_DEV_GPU_TEMP":
 				// arbitrary max of 100000 °C
-				assert.GreaterOrEqual(t, metric.asFloat64(), float64(0.0))
-				assert.LessOrEqual(t, metric.asFloat64(), float64(100000.0))
+				value := asFloat64(metric)
+				assert.GreaterOrEqual(t, value, float64(0.0))
+				assert.LessOrEqual(t, value, float64(100000.0))
 			case "DCGM_FI_DEV_SM_CLOCK":
 				// arbitrary max of 100000 MHz
-				assert.GreaterOrEqual(t, metric.asFloat64(), float64(0.0))
-				assert.LessOrEqual(t, metric.asFloat64(), float64(100000.0))
+				value := asFloat64(metric)
+				assert.GreaterOrEqual(t, value, float64(0.0))
+				assert.LessOrEqual(t, value, float64(100000.0))
 			case "DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION":
 				// TODO
 			case "DCGM_FI_DEV_POWER_USAGE":

@@ -19,7 +19,6 @@ package dcgmreceiver
 
 import (
 	"fmt"
-	"unsafe"
 
 	"github.com/NVIDIA/go-dcgm/pkg/dcgm"
 )
@@ -32,20 +31,12 @@ var (
 	errUnexpectedType   = fmt.Errorf("unexpected data type")
 )
 
-func (m *dcgmMetric) setFloat64(val float64) {
-	*(*float64)(unsafe.Pointer(&m.value[0])) = val
-}
-
 func (m *dcgmMetric) asFloat64() float64 {
-	return *(*float64)(unsafe.Pointer(&m.value[0]))
-}
-
-func (m *dcgmMetric) setInt64(val int64) {
-	*(*int64)(unsafe.Pointer(&m.value[0])) = val
+	return m.value.(float64)
 }
 
 func (m *dcgmMetric) asInt64() int64 {
-	return *(*int64)(unsafe.Pointer(&m.value[0]))
+	return m.value.(int64)
 }
 
 func isValidValue(fieldValue dcgm.FieldValue_v1) error {

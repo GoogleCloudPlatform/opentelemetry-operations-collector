@@ -19,9 +19,66 @@ package dcgmreceiver
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/NVIDIA/go-dcgm/pkg/dcgm"
 )
+
+var nowUnixMicro = func() int64 { return time.Now().UnixNano() / 1e3 }
+
+// rateIntegrator converts timestamped values that represent rates into
+// cumulative values. It assumes the rate stays constant since the last
+// timestamp.
+type rateIntegrator[V int64 | float64] struct {
+	lastTimestamp    int64
+	aggregatedRateUs V // the integration of the rate over microsecond timestamps.
+}
+
+func (ri *rateIntegrator[V]) Reset() {
+	ri.lastTimestamp = nowUnixMicro()
+	ri.aggregatedRateUs = V(0)
+}
+
+func (ri *rateIntegrator[V]) Update(ts int64, v V) {
+	// Drop stale points.
+	if ts <= ri.lastTimestamp {
+		return
+	}
+	// v is the rate per second, and timestamps are in microseconds, so the
+	// delta will be 1e6 times the actual increment.
+	ri.aggregatedRateUs += v * V(ts-ri.lastTimestamp)
+	ri.lastTimestamp = ts
+}
+
+func (ri *rateIntegrator[V]) Value() (int64, V) {
+	return ri.lastTimestamp, ri.aggregatedRateUs / V(1e6)
+}
+
+type defaultMap[K comparable, V any] struct {
+	m map[K]V
+	f func() V
+}
+
+func newDefaultMap[K comparable, V any](f func() V) *defaultMap[K, V] {
+	return &defaultMap[K, V]{
+		m: make(map[K]V),
+		f: f,
+	}
+}
+
+func (m *defaultMap[K, V]) Get(k K) V {
+	if v, ok := m.m[k]; ok {
+		return v
+	}
+	v := m.f()
+	m.m[k] = v
+	return v
+}
+
+func (m *defaultMap[K, V]) TryGet(k K) (V, bool) {
+	v, ok := m.m[k]
+	return v, ok
+}
 
 var (
 	errBlankValue       = fmt.Errorf("unspecified blank value")

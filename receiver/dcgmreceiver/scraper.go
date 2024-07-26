@@ -40,11 +40,11 @@ type dcgmScraper struct {
 	mb       *metadata.MetricsBuilder
 	// Aggregate cumulative values.
 	aggregates struct {
-		energyConsumptionFallback map[uint]float64 // ...from power usage rate.
-		pcieTxTotal               map[uint]int64   // ...from pcie tx.
-		pcieRxTotal               map[uint]int64   // ...from pcie rx.
-		nvlinkTxTotal             map[uint]int64   // ...from nvlink tx.
-		nvlinkRxTotal             map[uint]int64   // ...from nvlink rx.
+		energyConsumptionFallback *defaultMap[uint, *rateIntegrator[float64]] // ...from power usage rate.
+		pcieTxTotal               *defaultMap[uint, *rateIntegrator[int64]]   // ...from pcie tx.
+		pcieRxTotal               *defaultMap[uint, *rateIntegrator[int64]]   // ...from pcie rx.
+		nvlinkTxTotal             *defaultMap[uint, *rateIntegrator[int64]]   // ...from nvlink tx.
+		nvlinkRxTotal             *defaultMap[uint, *rateIntegrator[int64]]   // ...from nvlink rx.
 	}
 }
 
@@ -81,17 +81,23 @@ func (s *dcgmScraper) initClient() error {
 	return nil
 }
 
+func newRateIntegrator[V int64 | float64]() *rateIntegrator[V] {
+	ri := new(rateIntegrator[V])
+	ri.Reset()
+	return ri
+}
+
 func (s *dcgmScraper) start(_ context.Context, _ component.Host) error {
 	startTime := pcommon.NewTimestampFromTime(time.Now())
 	mbConfig := metadata.DefaultMetricsBuilderConfig()
 	mbConfig.Metrics = s.config.Metrics
 	s.mb = metadata.NewMetricsBuilder(
 		mbConfig, s.settings, metadata.WithStartTime(startTime))
-	s.aggregates.energyConsumptionFallback = make(map[uint]float64)
-	s.aggregates.pcieTxTotal = make(map[uint]int64)
-	s.aggregates.pcieRxTotal = make(map[uint]int64)
-	s.aggregates.nvlinkTxTotal = make(map[uint]int64)
-	s.aggregates.nvlinkRxTotal = make(map[uint]int64)
+	s.aggregates.energyConsumptionFallback = newDefaultMap[uint](newRateIntegrator[float64])
+	s.aggregates.pcieTxTotal = newDefaultMap[uint](newRateIntegrator[int64])
+	s.aggregates.pcieRxTotal = newDefaultMap[uint](newRateIntegrator[int64])
+	s.aggregates.nvlinkTxTotal = newDefaultMap[uint](newRateIntegrator[int64])
+	s.aggregates.nvlinkRxTotal = newDefaultMap[uint](newRateIntegrator[int64])
 
 	return nil
 }
@@ -260,32 +266,32 @@ func (s *dcgmScraper) scrape(_ context.Context) (pmetric.Metrics, error) {
 			s.mb.RecordGpuDcgmMemoryBandwidthUtilizationDataPoint(now, memCopyUtil)
 		}
 		if metric, ok := metrics["DCGM_FI_PROF_PCIE_TX_BYTES"]; ok {
-			pcieTx := int64(float64(metric.asInt64()) * (s.config.CollectionInterval.Seconds())) /* rate to delta */
-			s.aggregates.pcieTxTotal[gpuIndex] += pcieTx                                         /* delta to cumulative */
-			s.mb.RecordGpuDcgmPcieIoDataPoint(now, s.aggregates.pcieTxTotal[gpuIndex], metadata.AttributeNetworkIoDirectionTransmit)
+			s.aggregates.pcieTxTotal.Get(gpuIndex).Update(metric.timestamp, metric.asInt64())
+			_, pcieTx := s.aggregates.pcieTxTotal.Get(gpuIndex).Value()
+			s.mb.RecordGpuDcgmPcieIoDataPoint(now, pcieTx, metadata.AttributeNetworkIoDirectionTransmit)
 		}
 		if metric, ok := metrics["DCGM_FI_PROF_PCIE_RX_BYTES"]; ok {
-			pcieRx := int64(float64(metric.asInt64()) * (s.config.CollectionInterval.Seconds())) /* rate to delta */
-			s.aggregates.pcieRxTotal[gpuIndex] += pcieRx                                         /* delta to cumulative */
-			s.mb.RecordGpuDcgmPcieIoDataPoint(now, s.aggregates.pcieRxTotal[gpuIndex], metadata.AttributeNetworkIoDirectionReceive)
+			s.aggregates.pcieRxTotal.Get(gpuIndex).Update(metric.timestamp, metric.asInt64())
+			_, pcieRx := s.aggregates.pcieRxTotal.Get(gpuIndex).Value()
+			s.mb.RecordGpuDcgmPcieIoDataPoint(now, pcieRx, metadata.AttributeNetworkIoDirectionReceive)
 		}
 		if metric, ok := metrics["DCGM_FI_PROF_NVLINK_TX_BYTES"]; ok {
-			nvlinkTx := int64(float64(metric.asInt64()) * (s.config.CollectionInterval.Seconds())) /* rate to delta */
-			s.aggregates.nvlinkTxTotal[gpuIndex] += nvlinkTx                                       /* delta to cumulative */
-			s.mb.RecordGpuDcgmNvlinkIoDataPoint(now, s.aggregates.nvlinkTxTotal[gpuIndex], metadata.AttributeNetworkIoDirectionTransmit)
+			s.aggregates.nvlinkTxTotal.Get(gpuIndex).Update(metric.timestamp, metric.asInt64())
+			_, nvlinkTx := s.aggregates.nvlinkTxTotal.Get(gpuIndex).Value()
+			s.mb.RecordGpuDcgmNvlinkIoDataPoint(now, nvlinkTx, metadata.AttributeNetworkIoDirectionTransmit)
 		}
 		if metric, ok := metrics["DCGM_FI_PROF_NVLINK_RX_BYTES"]; ok {
-			nvlinkRx := int64(float64(metric.asInt64()) * (s.config.CollectionInterval.Seconds())) /* rate to delta */
-			s.aggregates.nvlinkRxTotal[gpuIndex] += nvlinkRx                                       /* delta to cumulative */
-			s.mb.RecordGpuDcgmNvlinkIoDataPoint(now, s.aggregates.nvlinkRxTotal[gpuIndex], metadata.AttributeNetworkIoDirectionReceive)
+			s.aggregates.nvlinkRxTotal.Get(gpuIndex).Update(metric.timestamp, metric.asInt64())
+			_, nvlinkRx := s.aggregates.nvlinkRxTotal.Get(gpuIndex).Value()
+			s.mb.RecordGpuDcgmNvlinkIoDataPoint(now, nvlinkRx, metadata.AttributeNetworkIoDirectionReceive)
 		}
 		if metric, ok := metrics["DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION"]; ok {
 			energyUsed := float64(metric.asInt64()) / 1e3 /* mJ to J */
 			s.mb.RecordGpuDcgmEnergyConsumptionDataPoint(now, energyUsed)
 		} else if metric, ok := metrics["DCGM_FI_DEV_POWER_USAGE"]; ok { // fallback
-			powerUsage := metric.asFloat64() * (s.config.CollectionInterval.Seconds()) /* rate to delta */
-			s.aggregates.energyConsumptionFallback[gpuIndex] += powerUsage             /* delta to cumulative */
-			s.mb.RecordGpuDcgmEnergyConsumptionDataPoint(now, s.aggregates.energyConsumptionFallback[gpuIndex])
+			s.aggregates.energyConsumptionFallback.Get(gpuIndex).Update(metric.timestamp, metric.asFloat64())
+			_, energyUsed := s.aggregates.energyConsumptionFallback.Get(gpuIndex).Value()
+			s.mb.RecordGpuDcgmEnergyConsumptionDataPoint(now, energyUsed)
 		}
 		if metric, ok := metrics["DCGM_FI_DEV_GPU_TEMP"]; ok {
 			s.mb.RecordGpuDcgmTemperatureDataPoint(now, float64(metric.asInt64()))

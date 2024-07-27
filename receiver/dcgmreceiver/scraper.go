@@ -40,11 +40,32 @@ type dcgmScraper struct {
 	mb       *metadata.MetricsBuilder
 	// Aggregate cumulative values.
 	aggregates struct {
-		energyConsumptionFallback *defaultMap[uint, *rateIntegrator[float64]] // ...from power usage rate.
-		pcieTxTotal               *defaultMap[uint, *rateIntegrator[int64]]   // ...from pcie tx.
-		pcieRxTotal               *defaultMap[uint, *rateIntegrator[int64]]   // ...from pcie rx.
-		nvlinkTxTotal             *defaultMap[uint, *rateIntegrator[int64]]   // ...from nvlink tx.
-		nvlinkRxTotal             *defaultMap[uint, *rateIntegrator[int64]]   // ...from nvlink rx.
+		energyConsumption struct {
+			total    *defaultMap[uint, *cumulativeTracker[int64]]
+			fallback *defaultMap[uint, *rateIntegrator[float64]] // ...from power usage rate.
+		}
+		pcieTotal struct {
+			tx *defaultMap[uint, *rateIntegrator[int64]] // ...from pcie tx.
+			rx *defaultMap[uint, *rateIntegrator[int64]] // ...from pcie rx.
+		}
+		nvlinkTotal struct {
+			tx *defaultMap[uint, *rateIntegrator[int64]] // ...from nvlink tx.
+			rx *defaultMap[uint, *rateIntegrator[int64]] // ...from nvlink rx.
+		}
+		throttleDuration struct {
+			powerViolation           *defaultMap[uint, *cumulativeTracker[int64]]
+			thermalViolation         *defaultMap[uint, *cumulativeTracker[int64]]
+			syncBoostViolation       *defaultMap[uint, *cumulativeTracker[int64]]
+			boardLimitViolation      *defaultMap[uint, *cumulativeTracker[int64]]
+			lowUtilViolation         *defaultMap[uint, *cumulativeTracker[int64]]
+			reliabilityViolation     *defaultMap[uint, *cumulativeTracker[int64]]
+			totalAppClocksViolation  *defaultMap[uint, *cumulativeTracker[int64]]
+			totalBaseClocksViolation *defaultMap[uint, *cumulativeTracker[int64]]
+		}
+		eccTotal struct {
+			sbe *defaultMap[uint, *cumulativeTracker[int64]]
+			dbe *defaultMap[uint, *cumulativeTracker[int64]]
+		}
 	}
 }
 
@@ -87,17 +108,34 @@ func newRateIntegrator[V int64 | float64]() *rateIntegrator[V] {
 	return ri
 }
 
+func newCumulativeTracker[V int64 | float64]() *cumulativeTracker[V] {
+	ct := new(cumulativeTracker[V])
+	ct.Reset()
+	return ct
+}
+
 func (s *dcgmScraper) start(_ context.Context, _ component.Host) error {
 	startTime := pcommon.NewTimestampFromTime(time.Now())
 	mbConfig := metadata.DefaultMetricsBuilderConfig()
 	mbConfig.Metrics = s.config.Metrics
 	s.mb = metadata.NewMetricsBuilder(
 		mbConfig, s.settings, metadata.WithStartTime(startTime))
-	s.aggregates.energyConsumptionFallback = newDefaultMap[uint](newRateIntegrator[float64])
-	s.aggregates.pcieTxTotal = newDefaultMap[uint](newRateIntegrator[int64])
-	s.aggregates.pcieRxTotal = newDefaultMap[uint](newRateIntegrator[int64])
-	s.aggregates.nvlinkTxTotal = newDefaultMap[uint](newRateIntegrator[int64])
-	s.aggregates.nvlinkRxTotal = newDefaultMap[uint](newRateIntegrator[int64])
+	s.aggregates.energyConsumption.total = newDefaultMap[uint](newCumulativeTracker[int64])
+	s.aggregates.energyConsumption.fallback = newDefaultMap[uint](newRateIntegrator[float64])
+	s.aggregates.pcieTotal.tx = newDefaultMap[uint](newRateIntegrator[int64])
+	s.aggregates.pcieTotal.rx = newDefaultMap[uint](newRateIntegrator[int64])
+	s.aggregates.nvlinkTotal.tx = newDefaultMap[uint](newRateIntegrator[int64])
+	s.aggregates.nvlinkTotal.rx = newDefaultMap[uint](newRateIntegrator[int64])
+	s.aggregates.throttleDuration.powerViolation = newDefaultMap[uint](newCumulativeTracker[int64])
+	s.aggregates.throttleDuration.thermalViolation = newDefaultMap[uint](newCumulativeTracker[int64])
+	s.aggregates.throttleDuration.syncBoostViolation = newDefaultMap[uint](newCumulativeTracker[int64])
+	s.aggregates.throttleDuration.boardLimitViolation = newDefaultMap[uint](newCumulativeTracker[int64])
+	s.aggregates.throttleDuration.lowUtilViolation = newDefaultMap[uint](newCumulativeTracker[int64])
+	s.aggregates.throttleDuration.reliabilityViolation = newDefaultMap[uint](newCumulativeTracker[int64])
+	s.aggregates.throttleDuration.totalAppClocksViolation = newDefaultMap[uint](newCumulativeTracker[int64])
+	s.aggregates.throttleDuration.totalBaseClocksViolation = newDefaultMap[uint](newCumulativeTracker[int64])
+	s.aggregates.eccTotal.sbe = newDefaultMap[uint](newCumulativeTracker[int64])
+	s.aggregates.eccTotal.dbe = newDefaultMap[uint](newCumulativeTracker[int64])
 
 	return nil
 }
@@ -266,31 +304,33 @@ func (s *dcgmScraper) scrape(_ context.Context) (pmetric.Metrics, error) {
 			s.mb.RecordGpuDcgmMemoryBandwidthUtilizationDataPoint(now, memCopyUtil)
 		}
 		if metric, ok := metrics["DCGM_FI_PROF_PCIE_TX_BYTES"]; ok {
-			s.aggregates.pcieTxTotal.Get(gpuIndex).Update(metric.timestamp, metric.asInt64())
-			_, pcieTx := s.aggregates.pcieTxTotal.Get(gpuIndex).Value()
+			s.aggregates.pcieTotal.tx.Get(gpuIndex).Update(metric.timestamp, metric.asInt64())
+			_, pcieTx := s.aggregates.pcieTotal.tx.Get(gpuIndex).Value()
 			s.mb.RecordGpuDcgmPcieIoDataPoint(now, pcieTx, metadata.AttributeNetworkIoDirectionTransmit)
 		}
 		if metric, ok := metrics["DCGM_FI_PROF_PCIE_RX_BYTES"]; ok {
-			s.aggregates.pcieRxTotal.Get(gpuIndex).Update(metric.timestamp, metric.asInt64())
-			_, pcieRx := s.aggregates.pcieRxTotal.Get(gpuIndex).Value()
+			s.aggregates.pcieTotal.rx.Get(gpuIndex).Update(metric.timestamp, metric.asInt64())
+			_, pcieRx := s.aggregates.pcieTotal.rx.Get(gpuIndex).Value()
 			s.mb.RecordGpuDcgmPcieIoDataPoint(now, pcieRx, metadata.AttributeNetworkIoDirectionReceive)
 		}
 		if metric, ok := metrics["DCGM_FI_PROF_NVLINK_TX_BYTES"]; ok {
-			s.aggregates.nvlinkTxTotal.Get(gpuIndex).Update(metric.timestamp, metric.asInt64())
-			_, nvlinkTx := s.aggregates.nvlinkTxTotal.Get(gpuIndex).Value()
+			s.aggregates.nvlinkTotal.tx.Get(gpuIndex).Update(metric.timestamp, metric.asInt64())
+			_, nvlinkTx := s.aggregates.nvlinkTotal.tx.Get(gpuIndex).Value()
 			s.mb.RecordGpuDcgmNvlinkIoDataPoint(now, nvlinkTx, metadata.AttributeNetworkIoDirectionTransmit)
 		}
 		if metric, ok := metrics["DCGM_FI_PROF_NVLINK_RX_BYTES"]; ok {
-			s.aggregates.nvlinkRxTotal.Get(gpuIndex).Update(metric.timestamp, metric.asInt64())
-			_, nvlinkRx := s.aggregates.nvlinkRxTotal.Get(gpuIndex).Value()
+			s.aggregates.nvlinkTotal.rx.Get(gpuIndex).Update(metric.timestamp, metric.asInt64())
+			_, nvlinkRx := s.aggregates.nvlinkTotal.rx.Get(gpuIndex).Value()
 			s.mb.RecordGpuDcgmNvlinkIoDataPoint(now, nvlinkRx, metadata.AttributeNetworkIoDirectionReceive)
 		}
 		if metric, ok := metrics["DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION"]; ok {
-			energyUsed := float64(metric.asInt64()) / 1e3 /* mJ to J */
+			s.aggregates.energyConsumption.total.Get(gpuIndex).Update(metric.timestamp, metric.asInt64())
+			_, value := s.aggregates.energyConsumption.total.Get(gpuIndex).Value()
+			energyUsed := float64(value) / 1e3 /* mJ to J */
 			s.mb.RecordGpuDcgmEnergyConsumptionDataPoint(now, energyUsed)
 		} else if metric, ok := metrics["DCGM_FI_DEV_POWER_USAGE"]; ok { // fallback
-			s.aggregates.energyConsumptionFallback.Get(gpuIndex).Update(metric.timestamp, metric.asFloat64())
-			_, energyUsed := s.aggregates.energyConsumptionFallback.Get(gpuIndex).Value()
+			s.aggregates.energyConsumption.fallback.Get(gpuIndex).Update(metric.timestamp, metric.asFloat64())
+			_, energyUsed := s.aggregates.energyConsumption.fallback.Get(gpuIndex).Value()
 			s.mb.RecordGpuDcgmEnergyConsumptionDataPoint(now, energyUsed)
 		}
 		if metric, ok := metrics["DCGM_FI_DEV_GPU_TEMP"]; ok {
@@ -301,42 +341,62 @@ func (s *dcgmScraper) scrape(_ context.Context) (pmetric.Metrics, error) {
 			s.mb.RecordGpuDcgmClockFrequencyDataPoint(now, clockFreq)
 		}
 		if metric, ok := metrics["DCGM_FI_DEV_POWER_VIOLATION"]; ok {
-			violationTime := float64(metric.asInt64()) / 1e6 /* us to s */
+			s.aggregates.throttleDuration.powerViolation.Get(gpuIndex).Update(metric.timestamp, metric.asInt64())
+			_, value := s.aggregates.throttleDuration.powerViolation.Get(gpuIndex).Value()
+			violationTime := float64(value) / 1e6 /* us to s */
 			s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, violationTime, metadata.AttributeGpuClockViolationPower)
 		}
 		if metric, ok := metrics["DCGM_FI_DEV_THERMAL_VIOLATION"]; ok {
-			violationTime := float64(metric.asInt64()) / 1e6 /* us to s */
+			s.aggregates.throttleDuration.thermalViolation.Get(gpuIndex).Update(metric.timestamp, metric.asInt64())
+			_, value := s.aggregates.throttleDuration.thermalViolation.Get(gpuIndex).Value()
+			violationTime := float64(value) / 1e6 /* us to s */
 			s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, violationTime, metadata.AttributeGpuClockViolationThermal)
 		}
 		if metric, ok := metrics["DCGM_FI_DEV_SYNC_BOOST_VIOLATION"]; ok {
-			violationTime := float64(metric.asInt64()) / 1e6 /* us to s */
+			s.aggregates.throttleDuration.syncBoostViolation.Get(gpuIndex).Update(metric.timestamp, metric.asInt64())
+			_, value := s.aggregates.throttleDuration.syncBoostViolation.Get(gpuIndex).Value()
+			violationTime := float64(value) / 1e6 /* us to s */
 			s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, violationTime, metadata.AttributeGpuClockViolationSyncBoost)
 		}
 		if metric, ok := metrics["DCGM_FI_DEV_BOARD_LIMIT_VIOLATION"]; ok {
-			violationTime := float64(metric.asInt64()) / 1e6 /* us to s */
+			s.aggregates.throttleDuration.boardLimitViolation.Get(gpuIndex).Update(metric.timestamp, metric.asInt64())
+			_, value := s.aggregates.throttleDuration.boardLimitViolation.Get(gpuIndex).Value()
+			violationTime := float64(value) / 1e6 /* us to s */
 			s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, violationTime, metadata.AttributeGpuClockViolationBoardLimit)
 		}
 		if metric, ok := metrics["DCGM_FI_DEV_LOW_UTIL_VIOLATION"]; ok {
-			violationTime := float64(metric.asInt64()) / 1e6 /* us to s */
+			s.aggregates.throttleDuration.lowUtilViolation.Get(gpuIndex).Update(metric.timestamp, metric.asInt64())
+			_, value := s.aggregates.throttleDuration.lowUtilViolation.Get(gpuIndex).Value()
+			violationTime := float64(value) / 1e6 /* us to s */
 			s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, violationTime, metadata.AttributeGpuClockViolationLowUtil)
 		}
 		if metric, ok := metrics["DCGM_FI_DEV_RELIABILITY_VIOLATION"]; ok {
-			violationTime := float64(metric.asInt64()) / 1e6 /* us to s */
+			s.aggregates.throttleDuration.reliabilityViolation.Get(gpuIndex).Update(metric.timestamp, metric.asInt64())
+			_, value := s.aggregates.throttleDuration.reliabilityViolation.Get(gpuIndex).Value()
+			violationTime := float64(value) / 1e6 /* us to s */
 			s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, violationTime, metadata.AttributeGpuClockViolationReliability)
 		}
 		if metric, ok := metrics["DCGM_FI_DEV_TOTAL_APP_CLOCKS_VIOLATION"]; ok {
-			violationTime := float64(metric.asInt64()) / 1e6 /* us to s */
+			s.aggregates.throttleDuration.totalAppClocksViolation.Get(gpuIndex).Update(metric.timestamp, metric.asInt64())
+			_, value := s.aggregates.throttleDuration.totalAppClocksViolation.Get(gpuIndex).Value()
+			violationTime := float64(value) / 1e6 /* us to s */
 			s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, violationTime, metadata.AttributeGpuClockViolationAppClock)
 		}
 		if metric, ok := metrics["DCGM_FI_DEV_TOTAL_BASE_CLOCKS_VIOLATION"]; ok {
-			violationTime := float64(metric.asInt64()) / 1e6 /* us to s */
+			s.aggregates.throttleDuration.totalBaseClocksViolation.Get(gpuIndex).Update(metric.timestamp, metric.asInt64())
+			_, value := s.aggregates.throttleDuration.totalBaseClocksViolation.Get(gpuIndex).Value()
+			violationTime := float64(value) / 1e6 /* us to s */
 			s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, violationTime, metadata.AttributeGpuClockViolationBaseClock)
 		}
 		if metric, ok := metrics["DCGM_FI_DEV_ECC_SBE_VOL_TOTAL"]; ok {
-			s.mb.RecordGpuDcgmEccErrorsDataPoint(now, metric.asInt64(), metadata.AttributeGpuErrorTypeSbe)
+			s.aggregates.eccTotal.sbe.Get(gpuIndex).Update(metric.timestamp, metric.asInt64())
+			_, sbeErrors := s.aggregates.eccTotal.sbe.Get(gpuIndex).Value()
+			s.mb.RecordGpuDcgmEccErrorsDataPoint(now, sbeErrors, metadata.AttributeGpuErrorTypeSbe)
 		}
 		if metric, ok := metrics["DCGM_FI_DEV_ECC_DBE_VOL_TOTAL"]; ok {
-			s.mb.RecordGpuDcgmEccErrorsDataPoint(now, metric.asInt64(), metadata.AttributeGpuErrorTypeDbe)
+			s.aggregates.eccTotal.dbe.Get(gpuIndex).Update(metric.timestamp, metric.asInt64())
+			_, dbeErrors := s.aggregates.eccTotal.dbe.Get(gpuIndex).Value()
+			s.mb.RecordGpuDcgmEccErrorsDataPoint(now, dbeErrors, metadata.AttributeGpuErrorTypeDbe)
 		}
 		// TODO: XID errors.
 		// s.mb.RecordGpuDcgmXidErrorsDataPoint(now, metric.asInt64(), xid)

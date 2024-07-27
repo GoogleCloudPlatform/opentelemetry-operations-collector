@@ -67,6 +67,56 @@ func TestRateIntegratorFloat64(t *testing.T) {
 	testRateIntegrator[float64](t)
 }
 
+func testCumulativeTracker[V int64 | float64](t *testing.T) {
+	origNowUnixMicro := nowUnixMicro
+	nowUnixMicro = func() int64 { return 10 }
+	defer func() { nowUnixMicro = origNowUnixMicro }()
+
+	type P struct {
+		ts int64
+		v  V
+	}
+	p := func(ts int64, v V) P { return P{ts, v} }
+
+	var ct cumulativeTracker[V]
+
+	ct.Reset()
+	require.Equal(t, P{0, 0}, p(ct.Baseline()))
+	require.Equal(t, P{10, 0}, p(ct.Value()))
+	// Ensure first updates sets the baseline.
+	ct.Update(15, 50)
+	require.Equal(t, P{15, 50}, p(ct.Baseline()))
+	assert.Equal(t, P{15, 0}, p(ct.Value()))
+	// Ensure updates affect values, but not the baseline.
+	ct.Update(20, 80)
+	assert.Equal(t, P{15, 50}, p(ct.Baseline()))
+	assert.Equal(t, P{20, 30}, p(ct.Value()))
+	// Ensure stale points are ignored.
+	ct.Update(18, 1e8)
+	assert.Equal(t, P{20, 30}, p(ct.Value()))
+	ct.Update(20, 1e8)
+	assert.Equal(t, P{20, 30}, p(ct.Value()))
+	// Ensure updates affect values.
+	ct.Update(25, 100)
+	assert.Equal(t, P{25, 50}, p(ct.Value()))
+	// Ensure same inputs don't affect values.
+	ct.Update(30, 100)
+	assert.Equal(t, P{30, 50}, p(ct.Value()))
+
+	// Ensure the value and baseline are cleared on reset.
+	ct.Reset()
+	assert.Equal(t, P{0, 0}, p(ct.Baseline()))
+	assert.Equal(t, P{10, 0}, p(ct.Value()))
+}
+
+func TestCumulativeTrackerInt64(t *testing.T) {
+	testCumulativeTracker[int64](t)
+}
+
+func TestCumulativeTrackerFloat64(t *testing.T) {
+	testCumulativeTracker[float64](t)
+}
+
 func TestDefaultMap(t *testing.T) {
 	called := false
 	m := newDefaultMap[int, int64](func() int64 {

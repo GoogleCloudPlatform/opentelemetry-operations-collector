@@ -39,7 +39,7 @@ type dcgmScraper struct {
 	client   *dcgmClient
 	mb       *metadata.MetricsBuilder
 	// Aggregate cumulative values from power usage rate.
-	energyConsumptionFallback float64
+	energyConsumptionFallback map[uint]float64
 }
 
 func newDcgmScraper(config *Config, settings receiver.CreateSettings) *dcgmScraper {
@@ -74,7 +74,7 @@ func (s *dcgmScraper) start(_ context.Context, _ component.Host) error {
 	mbConfig.Metrics = s.config.Metrics
 	s.mb = metadata.NewMetricsBuilder(
 		mbConfig, s.settings, metadata.WithStartTime(startTime))
-	s.energyConsumptionFallback = 0.0
+	s.energyConsumptionFallback = make(map[uint]float64)
 
 	return nil
 }
@@ -182,8 +182,8 @@ func (s *dcgmScraper) scrape(_ context.Context) (pmetric.Metrics, error) {
 			s.mb.RecordGpuDcgmEnergyConsumptionDataPoint(now, metric.asFloat64())
 		} else if metric, ok := metrics["DCGM_FI_DEV_POWER_USAGE"]; ok { // fallback
 			powerUsage := metric.asFloat64() * (s.config.CollectionInterval.Seconds()) /* rate to delta */
-			s.energyConsumptionFallback += powerUsage                                  /* delta to cumulative */
-			s.mb.RecordGpuDcgmEnergyConsumptionDataPoint(now, s.energyConsumptionFallback)
+			s.energyConsumptionFallback[gpuIndex] += powerUsage                        /* delta to cumulative */
+			s.mb.RecordGpuDcgmEnergyConsumptionDataPoint(now, s.energyConsumptionFallback[gpuIndex])
 		}
 		if metric, ok := metrics["DCGM_FI_DEV_GPU_TEMP"]; ok {
 			s.mb.RecordGpuDcgmTemperatureDataPoint(now, metric.asFloat64())

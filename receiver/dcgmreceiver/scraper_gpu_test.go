@@ -58,11 +58,17 @@ func TestScrapeWithGpuPresent(t *testing.T) {
 }
 
 func TestScrapeWithDelayedDcgmService(t *testing.T) {
+	dcgmInitMutex.Lock()
 	realDcgmInit := dcgmInit
-	defer func() { dcgmInit = realDcgmInit }()
 	dcgmInit = func(args ...string) (func(), error) {
 		return nil, fmt.Errorf("No DCGM client library *OR* No DCGM connection")
 	}
+	dcgmInitMutex.Unlock()
+	defer func() {
+		dcgmInitMutex.Lock()
+		dcgmInit = realDcgmInit
+		dcgmInitMutex.Unlock()
+	}()
 
 	var settings receiver.CreateSettings
 	settings.Logger = zaptest.NewLogger(t)
@@ -83,7 +89,9 @@ func TestScrapeWithDelayedDcgmService(t *testing.T) {
 	assert.Equal(t, 0, metrics.MetricCount())
 
 	// Simulate DCGM becomes available
+	dcgmInitMutex.Lock()
 	dcgmInit = realDcgmInit
+	dcgmInitMutex.Unlock()
 	metrics, err = scraper.scrape(context.Background())
 	assert.NoError(t, err)
 

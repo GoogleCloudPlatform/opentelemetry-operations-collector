@@ -24,6 +24,26 @@ import (
 	"github.com/NVIDIA/go-dcgm/pkg/dcgm"
 )
 
+type metricTracker[V int64 | float64] interface {
+	Reset()
+	Update(int64, V)
+	Value() (int64, V)
+}
+
+type typedMetricTracker struct {
+	i64 metricTracker[int64]
+	f64 metricTracker[float64]
+}
+
+func (tmt typedMetricTracker) Reset() {
+	if tmt.i64 != nil {
+		tmt.i64.Reset()
+	}
+	if tmt.f64 != nil {
+		tmt.f64.Reset()
+	}
+}
+
 var nowUnixMicro = func() int64 { return time.Now().UnixNano() / 1e3 }
 
 // rateIntegrator converts timestamped values that represent rates into
@@ -113,6 +133,29 @@ func (i *cumulativeTracker[V]) Value() (int64, V) {
 
 func (i *cumulativeTracker[V]) Baseline() (int64, V) {
 	return i.baseTimestamp, i.baseline
+}
+
+// gaugeTracker records gauge values as they arrive.
+type gaugeTracker[V int64 | float64] struct {
+	lastTimestamp int64
+	lastValue     V // the value seen at lastTimestamp.
+}
+
+func (i *gaugeTracker[V]) Reset() {
+	i.lastTimestamp = nowUnixMicro()
+	i.lastValue = V(0)
+}
+
+func (i *gaugeTracker[V]) Update(ts int64, v V) {
+	// Drop stale points.
+	if ts <= i.lastTimestamp {
+		return
+	}
+	i.lastTimestamp, i.lastValue = ts, v
+}
+
+func (i *gaugeTracker[V]) Value() (int64, V) {
+	return i.lastTimestamp, i.lastValue
 }
 
 var (

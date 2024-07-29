@@ -118,6 +118,7 @@ func (s *dcgmScraper) start(_ context.Context, _ component.Host) error {
 	mbConfig.Metrics = s.config.Metrics
 	s.mb = metadata.NewMetricsBuilder(
 		mbConfig, s.settings, metadata.WithStartTime(startTime))
+	s.devices = make(map[uint]bool)
 	s.aggregates = map[string]*defaultMap[uint, typedMetricTracker]{
 		"DCGM_FI_PROF_GR_ENGINE_ACTIVE":           newTypedMetricTrackerMap(newGaugeTracker[float64]),
 		"DCGM_FI_DEV_GPU_UTIL":                    newTypedMetricTrackerMap(newGaugeTracker[int64]),
@@ -138,7 +139,7 @@ func (s *dcgmScraper) start(_ context.Context, _ component.Host) error {
 		"DCGM_FI_PROF_PCIE_RX_BYTES":              newTypedMetricTrackerMap(newRateIntegrator[int64]),
 		"DCGM_FI_PROF_NVLINK_TX_BYTES":            newTypedMetricTrackerMap(newRateIntegrator[int64]),
 		"DCGM_FI_PROF_NVLINK_RX_BYTES":            newTypedMetricTrackerMap(newRateIntegrator[int64]),
-		"DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION":    newTypedMetricTrackerMap(newCumulativeTracker[float64]),
+		"DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION":    newTypedMetricTrackerMap(newCumulativeTracker[int64]),
 		"DCGM_FI_DEV_POWER_USAGE":                 newTypedMetricTrackerMap(newRateIntegrator[float64]),
 		"DCGM_FI_DEV_GPU_TEMP":                    newTypedMetricTrackerMap(newGaugeTracker[int64]),
 		"DCGM_FI_DEV_SM_CLOCK":                    newTypedMetricTrackerMap(newGaugeTracker[int64]),

@@ -20,6 +20,7 @@ package dcgmreceiver
 import (
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/go-dcgm/pkg/dcgm"
@@ -65,6 +66,7 @@ type dcgmMetric struct {
 var dcgmInit = func(args ...string) (func(), error) {
 	return dcgm.Init(dcgm.Standalone, args...)
 }
+var dcgmInitMutex sync.Mutex
 
 var dcgmGetLatestValuesForFields = dcgm.GetLatestValuesForFields
 
@@ -126,7 +128,10 @@ func newClient(settings *dcgmClientSettings, logger *zap.Logger) (*dcgmClient, e
 // only if the connection is initialized successfully without error
 func initializeDcgm(endpoint string, logger *zap.Logger) (func(), error) {
 	isSocket := "0"
-	dcgmCleanup, err := dcgmInit(endpoint, isSocket)
+	dcgmInitMutex.Lock()
+	dcgmInitFunc := dcgmInit
+	dcgmInitMutex.Unlock()
+	dcgmCleanup, err := dcgmInitFunc(endpoint, isSocket)
 	if err != nil {
 		msg := fmt.Sprintf("Unable to connect to DCGM daemon at %s on %v; Is the DCGM daemon running?", endpoint, err)
 		logger.Sugar().Warn(msg)

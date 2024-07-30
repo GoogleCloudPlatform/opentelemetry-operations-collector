@@ -21,7 +21,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"go.opentelemetry.io/collector/component"
@@ -36,13 +35,13 @@ type dcgmScraper struct {
 	config            *Config
 	settings          receiver.CreateSettings
 	client            *dcgmClient
+	metricsChannel    chan chan map[uint]map[string]point
 	stopClientPolling chan bool
 	mb                *metadata.MetricsBuilder
 	// Resource set.
 	devices map[uint]bool
 	// Value trackers.
 	aggregates map[string]*defaultMap[uint, typedMetricTracker]
-	mu         sync.Mutex
 }
 
 func newDcgmScraper(config *Config, settings receiver.CreateSettings) *dcgmScraper {
@@ -160,6 +159,7 @@ func (s *dcgmScraper) start(_ context.Context, _ component.Host) error {
 		return err
 	}
 	s.stopClientPolling = make(chan bool)
+	s.metricsChannel = make(chan chan map[uint]map[string]point)
 	go s.clientPoller(10 * time.Second) // TODO
 
 	return nil
@@ -197,8 +197,6 @@ func (s *dcgmScraper) collectClientMetrics() error {
 	}
 	s.settings.Logger.Sugar().Debugf("Metrics collected: %d", len(deviceMetrics))
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	for gpuIndex, gpuMetrics := range deviceMetrics {
 		s.settings.Logger.Sugar().Debugf("Got %d metrics for %d: %v", len(gpuMetrics), gpuIndex, gpuMetrics)
 		s.devices[gpuIndex] = true
@@ -223,6 +221,8 @@ func (s *dcgmScraper) clientPoller(interval time.Duration) {
 		select {
 		case <-ticker.C:
 			_ = s.collectClientMetrics()
+		case rc := <-s.metricsChannel:
+			rc <- s.snapshotClientMetrics()
 		case <-s.stopClientPolling:
 			s.settings.Logger.Sugar().Info("Stopping client poller")
 			return
@@ -309,8 +309,6 @@ type point struct {
 }
 
 func (s *dcgmScraper) snapshotClientMetrics() map[uint]map[string]point {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	metrics := make(map[uint]map[string]point)
 	for gpuIndex := range s.devices {
 		perDevice := make(map[string]point)
@@ -332,8 +330,14 @@ func (s *dcgmScraper) snapshotClientMetrics() map[uint]map[string]point {
 	return metrics
 }
 
+func (s *dcgmScraper) getClientMetricsSnapshot() map[uint]map[string]point {
+	rc := make(chan map[uint]map[string]point)
+	s.metricsChannel <- rc
+	return <-rc
+}
+
 func (s *dcgmScraper) scrape(_ context.Context) (pmetric.Metrics, error) {
-	clientMetrics := s.snapshotClientMetrics()
+	clientMetrics := s.getClientMetricsSnapshot()
 	for gpuIndex, metrics := range clientMetrics {
 		rb := s.mb.NewResourceBuilder()
 		rb.SetGpuNumber(fmt.Sprintf("%d", gpuIndex))

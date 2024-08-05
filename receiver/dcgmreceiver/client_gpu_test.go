@@ -66,8 +66,6 @@ func TestSupportedFieldsWithGolden(t *testing.T) {
 	client, err := newClient(clientSettings, zaptest.NewLogger(t))
 	require.Nil(t, err, "cannot initialize DCGM. Install and run DCGM before running tests.")
 
-	require.NotEmpty(t, client.devicesModelName)
-	gpuModel := client.getDeviceModelName(0)
 	allFields := toFieldIDs(clientSettings.fields)
 	supportedRegularFields, err := getSupportedRegularFields(allFields, zaptest.NewLogger(t))
 	require.Nil(t, err)
@@ -83,6 +81,10 @@ func TestSupportedFieldsWithGolden(t *testing.T) {
 	for _, f := range unavailableFields {
 		unavailableFieldsString = append(unavailableFieldsString, dcgmIDToName[f])
 	}
+	_, err = client.collect()
+	require.Nil(t, err)
+	require.NotEmpty(t, client.devices)
+	gpuModel := client.devices[0].ModelName
 	m := modelSupportedFields{
 		Model:             gpuModel,
 		SupportedFields:   enabledFieldsString,
@@ -135,41 +137,38 @@ func TestNewDcgmClientWithGpuPresent(t *testing.T) {
 
 	assert.NotNil(t, client)
 	assert.NotNil(t, client.handleCleanup)
-	assert.Greater(t, len(client.deviceIndices), 0)
-	for gpuIndex := range client.deviceIndices {
-		assert.Greater(t, len(client.devicesModelName[gpuIndex]), 0)
-		assert.Greater(t, len(client.devicesUUID[gpuIndex]), 0)
-	}
 	client.cleanup()
 }
 
 func TestCollectGpuProfilingMetrics(t *testing.T) {
 	client, err := newClient(defaultClientSettings(), zaptest.NewLogger(t))
 	require.Nil(t, err, "cannot initialize DCGM. Install and run DCGM before running tests.")
-	expectedMetrics := LoadExpectedMetrics(t, client.devicesModelName[0])
 	var maxCollectionInterval = 60 * time.Second
 	before := time.Now().UnixMicro() - maxCollectionInterval.Microseconds()
-	deviceMetrics, err := client.collectDeviceMetrics()
+	duration, err := client.collect()
 	after := time.Now().UnixMicro()
+	assert.Greater(t, duration, 0)
 	assert.Nil(t, err)
+	deviceMetrics := client.devices
+	expectedMetrics := LoadExpectedMetrics(t, client.devices[0].ModelName)
 
-	asFloat64 := func(metric dcgmMetric) float64 {
-		require.IsTypef(t, float64(0), metric.value, "Unexpected metric type: %T", metric.value)
-		value, _ := metric.value.(float64)
+	lastFloat64 := func(metric *metricStats) float64 {
+		value, ok := asFloat64(*metric.lastFieldValue)
+		require.True(t, ok, "Unexpected metric type: %+v", metric.lastFieldValue)
 		return value
 	}
-	asInt64 := func(metric dcgmMetric) int64 {
-		require.IsTypef(t, int64(0), metric.value, "Unexpected metric type: %T", metric.value)
-		value, _ := metric.value.(int64)
+	lastInt64 := func(metric *metricStats) int64 {
+		value, ok := asInt64(*metric.lastFieldValue)
+		require.True(t, ok, "Unexpected metric type: %+v", metric.lastFieldValue)
 		return value
 	}
 
 	seenMetric := make(map[string]bool)
 	assert.GreaterOrEqual(t, len(deviceMetrics), 0)
 	assert.LessOrEqual(t, len(deviceMetrics), 32)
-	for gpuIndex, metrics := range deviceMetrics {
-		for _, metric := range metrics {
-			switch metric.name {
+	for gpuIndex, device := range deviceMetrics {
+		for name, metric := range device.Metrics {
+			switch name {
 			case "DCGM_FI_PROF_GR_ENGINE_ACTIVE":
 				fallthrough
 			case "DCGM_FI_PROF_SM_ACTIVE":
@@ -185,7 +184,7 @@ func TestCollectGpuProfilingMetrics(t *testing.T) {
 			case "DCGM_FI_PROF_PIPE_FP16_ACTIVE":
 				fallthrough
 			case "DCGM_FI_PROF_DRAM_ACTIVE":
-				value := asFloat64(metric)
+				value := lastFloat64(metric)
 				assert.GreaterOrEqual(t, value, float64(0.0))
 				assert.LessOrEqual(t, value, float64(1.0))
 			case "DCGM_FI_DEV_GPU_UTIL":
@@ -195,7 +194,7 @@ func TestCollectGpuProfilingMetrics(t *testing.T) {
 			case "DCGM_FI_DEV_ENC_UTIL":
 				fallthrough
 			case "DCGM_FI_DEV_DEC_UTIL":
-				value := asInt64(metric)
+				value := lastInt64(metric)
 				assert.GreaterOrEqual(t, value, int64(0))
 				assert.LessOrEqual(t, value, int64(100))
 			case "DCGM_FI_DEV_FB_FREE":
@@ -204,7 +203,7 @@ func TestCollectGpuProfilingMetrics(t *testing.T) {
 				fallthrough
 			case "DCGM_FI_DEV_FB_RESERVED":
 				// arbitrary max of 10 TiB
-				value := asInt64(metric)
+				value := lastInt64(metric)
 				assert.GreaterOrEqual(t, value, int64(0))
 				assert.LessOrEqual(t, value, int64(10485760))
 			case "DCGM_FI_PROF_PCIE_TX_BYTES":
@@ -215,7 +214,7 @@ func TestCollectGpuProfilingMetrics(t *testing.T) {
 				fallthrough
 			case "DCGM_FI_PROF_NVLINK_RX_BYTES":
 				// arbitrary max of 10 TiB/sec
-				value := asInt64(metric)
+				value := lastInt64(metric)
 				assert.GreaterOrEqual(t, value, int64(0))
 				assert.LessOrEqual(t, value, int64(10995116277760))
 			case "DCGM_FI_DEV_BOARD_LIMIT_VIOLATION":
@@ -233,46 +232,46 @@ func TestCollectGpuProfilingMetrics(t *testing.T) {
 			case "DCGM_FI_DEV_TOTAL_APP_CLOCKS_VIOLATION":
 				fallthrough
 			case "DCGM_FI_DEV_TOTAL_BASE_CLOCKS_VIOLATION":
-				value := asInt64(metric)
+				value := lastInt64(metric)
 				assert.GreaterOrEqual(t, value, int64(0))
 				assert.LessOrEqual(t, value, time.Now().UnixMicro())
 			case "DCGM_FI_DEV_ECC_DBE_VOL_TOTAL":
 				fallthrough
 			case "DCGM_FI_DEV_ECC_SBE_VOL_TOTAL":
 				// arbitrary max of 100000000 errors
-				value := asInt64(metric)
+				value := lastInt64(metric)
 				assert.GreaterOrEqual(t, value, int64(0))
 				assert.LessOrEqual(t, value, int64(100000000))
 			case "DCGM_FI_DEV_GPU_TEMP":
 				// arbitrary max of 100000 °C
-				value := asInt64(metric)
+				value := lastInt64(metric)
 				assert.GreaterOrEqual(t, value, int64(0))
 				assert.LessOrEqual(t, value, int64(100000))
 			case "DCGM_FI_DEV_SM_CLOCK":
 				// arbitrary max of 100000 MHz
-				value := asInt64(metric)
+				value := lastInt64(metric)
 				assert.GreaterOrEqual(t, value, int64(0))
 				assert.LessOrEqual(t, value, int64(100000))
 			case "DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION":
-				value := asInt64(metric)
+				value := lastInt64(metric)
 				assert.GreaterOrEqual(t, value, int64(0))
 				// TODO
 			case "DCGM_FI_DEV_POWER_USAGE":
-				value := asFloat64(metric)
+				value := lastFloat64(metric)
 				assert.GreaterOrEqual(t, value, float64(0.0))
 				// TODO
 			default:
-				t.Errorf("Unexpected metric '%s'", metric.name)
+				t.Errorf("Unexpected metric '%s'", name)
 			}
 
-			assert.GreaterOrEqual(t, metric.timestamp, before)
-			assert.LessOrEqual(t, metric.timestamp, after)
+			assert.GreaterOrEqual(t, metric.lastFieldValue.Ts, before)
+			assert.LessOrEqual(t, metric.lastFieldValue.Ts, after)
 
-			seenMetric[fmt.Sprintf("gpu{%d}.metric{%s}", gpuIndex, metric.name)] = true
+			seenMetric[fmt.Sprintf("gpu{%d}.metric{%s}", gpuIndex, name)] = true
 		}
 	}
 
-	for _, gpuIndex := range client.deviceIndices {
+	for gpuIndex := range deviceMetrics {
 		for _, metric := range expectedMetrics {
 			assert.True(t, seenMetric[fmt.Sprintf("gpu{%d}.metric{%s}", gpuIndex, metric)], fmt.Sprintf("%s on gpu %d", metric, gpuIndex))
 		}

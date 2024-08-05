@@ -44,7 +44,7 @@ type dcgmClientSettings struct {
 type deviceMetrics struct {
 	ModelName string
 	UUID      string
-	Metrics   map[string]*metricStats
+	Metrics   MetricsMap
 }
 
 type dcgmClient struct {
@@ -152,7 +152,7 @@ func newDeviceMetrics(logger *zap.SugaredLogger, gpuIndex uint) (deviceMetrics, 
 	device := deviceMetrics{
 		ModelName: deviceInfo.Identifiers.Model,
 		UUID:      deviceInfo.UUID,
-		Metrics:   map[string]*metricStats{},
+		Metrics:   MetricsMap{},
 	}
 	logger.Infof("Discovered NVIDIA device %s with UUID %s", device.ModelName, device.UUID)
 	return device, nil
@@ -417,7 +417,7 @@ func (client *dcgmClient) collect() (time.Duration, error) {
 func (client *dcgmClient) getDeviceMetrics() map[uint]deviceMetrics {
 	out := map[uint]deviceMetrics{}
 	for gpuIndex, device := range client.devices {
-		new := map[string]*metricStats{}
+		new := MetricsMap{}
 		for key, value := range device.Metrics {
 			newValue := *value
 			new[key] = &newValue

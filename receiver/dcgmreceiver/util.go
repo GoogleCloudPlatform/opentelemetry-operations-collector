@@ -50,6 +50,16 @@ func asInt64(fieldValue dcgm.FieldValue_v2) (int64, bool) {
 	return 0, false
 }
 
+func asFloat64(fieldValue dcgm.FieldValue_v2) (float64, bool) {
+	switch fieldValue.FieldType {
+	case dcgm.DCGM_FT_DOUBLE:
+		return fieldValue.Float64(), true
+	case dcgm.DCGM_FT_INT64:
+		return float64(fieldValue.Int64()), true
+	}
+	return 0, false
+}
+
 func (m *metricStats) Update(fieldValue dcgm.FieldValue_v2) {
 	ts := fieldValue.Ts
 	intValue, intOk := asInt64(fieldValue)
@@ -71,6 +81,37 @@ func (m *metricStats) Update(fieldValue dcgm.FieldValue_v2) {
 		m.integratedRateMicroseconds %= 1000000
 	}
 	m.lastFieldValue = &fieldValue
+}
+
+type MetricsMap map[string]*metricStats
+
+func (m MetricsMap) LastFloat64(name string) (float64, bool) {
+	metric, ok := m[name]
+	if ok && metric.lastFieldValue != nil {
+		return asFloat64(*metric.lastFieldValue)
+	}
+	return 0, false
+}
+func (m MetricsMap) LastInt64(name string) (int64, bool) {
+	metric, ok := m[name]
+	if ok && metric.lastFieldValue != nil {
+		return asInt64(*metric.lastFieldValue)
+	}
+	return 0, false
+}
+func (m MetricsMap) IntegratedRate(name string) (int64, bool) {
+	metric, ok := m[name]
+	if ok {
+		return metric.integratedRateSeconds, true
+	}
+	return 0, false
+}
+func (m MetricsMap) CumulativeTotal(name string) (int64, bool) {
+	metric, ok := m[name]
+	if ok {
+		return metric.cumulativeValue, true
+	}
+	return 0, false
 }
 
 // rateIntegrator converts timestamped values that represent rates into

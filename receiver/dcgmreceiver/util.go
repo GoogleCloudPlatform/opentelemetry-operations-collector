@@ -26,6 +26,53 @@ import (
 
 var nowUnixMicro = func() int64 { return time.Now().UnixNano() / 1e3 }
 
+// For each metric, we need to track:
+type metricStats struct {
+	// Timestamp (us)
+	// Last value (for gauge metrics), as int or float
+	lastFieldValue *dcgm.FieldValue_v2
+	// Integrated rate (always int), as {unit-seconds,unit-microseconds}
+	integratedRateSeconds      int64
+	integratedRateMicroseconds int64
+	// Cumulative value (always int)
+	initialCumulativeValue int64
+	cumulativeValue        int64
+}
+
+func asInt64(fieldValue dcgm.FieldValue_v2) (int64, bool) {
+	// TODO: dcgm's Float64 and Int64 use undefined behavior
+	switch fieldValue.FieldType {
+	case dcgm.DCGM_FT_DOUBLE:
+		return int64(fieldValue.Float64()), true
+	case dcgm.DCGM_FT_INT64:
+		return fieldValue.Int64(), true
+	}
+	return 0, false
+}
+
+func (m *metricStats) Update(fieldValue dcgm.FieldValue_v2) {
+	ts := fieldValue.Ts
+	intValue, intOk := asInt64(fieldValue)
+	if !intOk {
+		return
+	}
+	if m.lastFieldValue == nil {
+		m.initialCumulativeValue = intValue
+	} else {
+		m.cumulativeValue = intValue - m.initialCumulativeValue
+
+		tsDelta := ts - m.lastFieldValue.Ts
+		if fieldValue.FieldType == dcgm.DCGM_FT_DOUBLE {
+			m.integratedRateMicroseconds += int64(float64(tsDelta) * fieldValue.Float64())
+		} else {
+			m.integratedRateMicroseconds += tsDelta * intValue
+		}
+		m.integratedRateSeconds += m.integratedRateMicroseconds / 1000000
+		m.integratedRateMicroseconds %= 1000000
+	}
+	m.lastFieldValue = &fieldValue
+}
+
 // rateIntegrator converts timestamped values that represent rates into
 // cumulative values. It assumes the rate stays constant since the last
 // timestamp.
@@ -131,7 +178,7 @@ func (m *dcgmMetric) asInt64() int64 {
 	return m.value.(int64)
 }
 
-func isValidValue(fieldValue dcgm.FieldValue_v1) error {
+func isValidValue(fieldValue dcgm.FieldValue_v2) error {
 	switch fieldValue.FieldType {
 	case dcgm.DCGM_FT_DOUBLE:
 		switch v := fieldValue.Float64(); v {

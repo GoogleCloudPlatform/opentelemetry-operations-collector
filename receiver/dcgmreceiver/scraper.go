@@ -29,6 +29,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/receiver"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/dcgmreceiver/internal/metadata"
 )
@@ -36,51 +37,18 @@ import (
 type dcgmScraper struct {
 	config   *Config
 	settings receiver.CreateSettings
-	client   *dcgmClient
 	mb       *metadata.MetricsBuilder
-	// Aggregate cumulative values.
-	aggregates struct {
-		energyConsumption struct {
-			total    *defaultMap[uint, *cumulativeTracker[int64]]
-			fallback *defaultMap[uint, *rateIntegrator[float64]] // ...from power usage rate.
-		}
-		pcieTotal struct {
-			tx *defaultMap[uint, *rateIntegrator[int64]] // ...from pcie tx.
-			rx *defaultMap[uint, *rateIntegrator[int64]] // ...from pcie rx.
-		}
-		nvlinkTotal struct {
-			tx *defaultMap[uint, *rateIntegrator[int64]] // ...from nvlink tx.
-			rx *defaultMap[uint, *rateIntegrator[int64]] // ...from nvlink rx.
-		}
-		throttleDuration struct {
-			powerViolation           *defaultMap[uint, *cumulativeTracker[int64]]
-			thermalViolation         *defaultMap[uint, *cumulativeTracker[int64]]
-			syncBoostViolation       *defaultMap[uint, *cumulativeTracker[int64]]
-			boardLimitViolation      *defaultMap[uint, *cumulativeTracker[int64]]
-			lowUtilViolation         *defaultMap[uint, *cumulativeTracker[int64]]
-			reliabilityViolation     *defaultMap[uint, *cumulativeTracker[int64]]
-			totalAppClocksViolation  *defaultMap[uint, *cumulativeTracker[int64]]
-			totalBaseClocksViolation *defaultMap[uint, *cumulativeTracker[int64]]
-		}
-		eccTotal struct {
-			sbe *defaultMap[uint, *cumulativeTracker[int64]]
-			dbe *defaultMap[uint, *cumulativeTracker[int64]]
-		}
-	}
+	cancel   func()
 }
 
 func newDcgmScraper(config *Config, settings receiver.CreateSettings) *dcgmScraper {
 	return &dcgmScraper{config: config, settings: settings}
 }
 
-// initClient will try to create a new dcgmClient if currently has no client;
-// it will try to initialize the communication with the DCGM service; if
+// initClient will try to initialize the communication with the DCGM service; if
 // success, create a client; only return errors if DCGM service is available but
 // failed to create client.
-func (s *dcgmScraper) initClient() error {
-	if s.client != nil {
-		return nil
-	}
+func (s *dcgmScraper) initClient() (*dcgmClient, error) {
 	clientSettings := &dcgmClientSettings{
 		endpoint:         s.config.TCPAddrConfig.Endpoint,
 		pollingInterval:  s.config.CollectionInterval,
@@ -94,12 +62,11 @@ func (s *dcgmScraper) initClient() error {
 		if errors.Is(err, ErrDcgmInitialization) {
 			// If cannot connect to DCGM, return no error and retry at next
 			// collection time
-			return nil
+			return nil, nil
 		}
-		return err
+		return nil, err
 	}
-	s.client = client
-	return nil
+	return client, nil
 }
 
 func newRateIntegrator[V int64 | float64]() *rateIntegrator[V] {
@@ -114,35 +81,32 @@ func newCumulativeTracker[V int64 | float64]() *cumulativeTracker[V] {
 	return ct
 }
 
-func (s *dcgmScraper) start(_ context.Context, _ component.Host) error {
+func (s *dcgmScraper) start(ctx context.Context, _ component.Host) error {
 	startTime := pcommon.NewTimestampFromTime(time.Now())
 	mbConfig := metadata.DefaultMetricsBuilderConfig()
 	mbConfig.Metrics = s.config.Metrics
 	s.mb = metadata.NewMetricsBuilder(
 		mbConfig, s.settings, metadata.WithStartTime(startTime))
-	s.aggregates.energyConsumption.total = newDefaultMap[uint](newCumulativeTracker[int64])
-	s.aggregates.energyConsumption.fallback = newDefaultMap[uint](newRateIntegrator[float64])
-	s.aggregates.pcieTotal.tx = newDefaultMap[uint](newRateIntegrator[int64])
-	s.aggregates.pcieTotal.rx = newDefaultMap[uint](newRateIntegrator[int64])
-	s.aggregates.nvlinkTotal.tx = newDefaultMap[uint](newRateIntegrator[int64])
-	s.aggregates.nvlinkTotal.rx = newDefaultMap[uint](newRateIntegrator[int64])
-	s.aggregates.throttleDuration.powerViolation = newDefaultMap[uint](newCumulativeTracker[int64])
-	s.aggregates.throttleDuration.thermalViolation = newDefaultMap[uint](newCumulativeTracker[int64])
-	s.aggregates.throttleDuration.syncBoostViolation = newDefaultMap[uint](newCumulativeTracker[int64])
-	s.aggregates.throttleDuration.boardLimitViolation = newDefaultMap[uint](newCumulativeTracker[int64])
-	s.aggregates.throttleDuration.lowUtilViolation = newDefaultMap[uint](newCumulativeTracker[int64])
-	s.aggregates.throttleDuration.reliabilityViolation = newDefaultMap[uint](newCumulativeTracker[int64])
-	s.aggregates.throttleDuration.totalAppClocksViolation = newDefaultMap[uint](newCumulativeTracker[int64])
-	s.aggregates.throttleDuration.totalBaseClocksViolation = newDefaultMap[uint](newCumulativeTracker[int64])
-	s.aggregates.eccTotal.sbe = newDefaultMap[uint](newCumulativeTracker[int64])
-	s.aggregates.eccTotal.dbe = newDefaultMap[uint](newCumulativeTracker[int64])
+
+	scrapeCtx, scrapeCancel := context.WithCancel(context.WithoutCancel(ctx))
+	g, scrapeCtx := errgroup.WithContext(scrapeCtx)
+
+	s.cancel = func() {
+		scrapeCancel()
+		g.Wait()
+	}
+
+	g.Go(func() error {
+		return s.run(scrapeCtx)
+	})
 
 	return nil
 }
 
 func (s *dcgmScraper) stop(_ context.Context) error {
-	if s.client != nil {
-		s.client.cleanup()
+	if s.cancel != nil {
+		s.cancel()
+		s.cancel = nil
 	}
 	return nil
 }
@@ -218,6 +182,46 @@ func discoverRequestedFields(config *Config) []string {
 	}
 
 	return requestedFields
+}
+
+func (s *dcgmScraper) run(ctx context.Context) error {
+	for {
+		client, _ := s.initClient()
+		// Ignore the error; it's logged in initClient.
+		if client != nil {
+			s.runOnce(ctx, client)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(10 * time.Second):
+		}
+	}
+	return nil
+}
+
+func (s *dcgmScraper) runOnce(ctx context.Context, client *dcgmClient) {
+	for {
+		waitTime, err := client.collect()
+		// Ignore the error; it's logged in collect()
+		if err != nil {
+			waitTime = 10 * time.Second
+		}
+		// Try to poll at least twice per collection interval
+		waitTime = max(
+			100*time.Millisecond,
+			min(
+				s.config.CollectionInterval,
+				waitTime,
+			)/2,
+		)
+		select {
+		case <-ctx.Done():
+			return
+		// FIXME: Allow collecting metrics here
+		case <-time.After(waitTime):
+		}
+	}
 }
 
 func (s *dcgmScraper) scrape(_ context.Context) (pmetric.Metrics, error) {

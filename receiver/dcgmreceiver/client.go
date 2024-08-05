@@ -20,10 +20,10 @@ package dcgmreceiver
 import (
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/NVIDIA/go-dcgm/pkg/dcgm"
-	"go.opentelemetry.io/collector/receiver/scrapererror"
 	"go.uber.org/zap"
 )
 
@@ -41,14 +41,20 @@ type dcgmClientSettings struct {
 	fields           []string
 }
 
+type deviceMetrics struct {
+	ModelName string
+	UUID      string
+	Metrics   map[string]*metricStats
+}
+
 type dcgmClient struct {
-	logger                         *zap.SugaredLogger
-	handleCleanup                  func()
-	enabledFieldIDs                []dcgm.Short
-	enabledFieldGroup              dcgm.FieldHandle
-	deviceIndices                  []uint
-	devicesModelName               []string
-	devicesUUID                    []string
+	logger            *zap.SugaredLogger
+	handleCleanup     func()
+	enabledFieldIDs   []dcgm.Short
+	enabledFieldGroup dcgm.FieldHandle
+
+	devices map[uint]deviceMetrics
+
 	deviceMetricToFailedQueryCount map[string]uint64
 	pollingInterval                time.Duration
 	retryBlankValues               bool
@@ -66,16 +72,13 @@ var dcgmInit = func(args ...string) (func(), error) {
 	return dcgm.Init(dcgm.Standalone, args...)
 }
 
-var dcgmGetLatestValuesForFields = dcgm.GetLatestValuesForFields
+var dcgmGetValuesSince = dcgm.GetValuesSince
 
 func newClient(settings *dcgmClientSettings, logger *zap.Logger) (*dcgmClient, error) {
 	dcgmCleanup, err := initializeDcgm(settings.endpoint, logger)
 	if err != nil {
 		return nil, errors.Join(ErrDcgmInitialization, err)
 	}
-	deviceIndices := make([]uint, 0)
-	names := make([]string, 0)
-	UUIDs := make([]string, 0)
 	enabledFieldGroup := dcgm.FieldHandle{}
 	requestedFieldIDs := toFieldIDs(settings.fields)
 	supportedRegularFieldIDs, err := getSupportedRegularFields(requestedFieldIDs, logger)
@@ -93,11 +96,13 @@ func newClient(settings *dcgmClientSettings, logger *zap.Logger) (*dcgmClient, e
 		logger.Sugar().Warnf("Field '%s' is not supported. Metric '%s' will not be collected", dcgmIDToName[f], dcgmIDToName[f])
 	}
 	if len(enabledFields) != 0 {
-		deviceIndices, names, UUIDs, err = discoverDevices(logger)
+		supportedDeviceIndices, err := dcgm.GetSupportedDevices()
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("Unable to discover supported GPUs on %w", err)
 		}
-		deviceGroup, err := createDeviceGroup(logger, deviceIndices)
+		logger.Sugar().Infof("Discovered %d supported GPU devices", len(supportedDeviceIndices))
+
+		deviceGroup, err := createDeviceGroup(logger, supportedDeviceIndices)
 		if err != nil {
 			return nil, err
 		}
@@ -112,9 +117,7 @@ func newClient(settings *dcgmClientSettings, logger *zap.Logger) (*dcgmClient, e
 		handleCleanup:                  dcgmCleanup,
 		enabledFieldIDs:                enabledFields,
 		enabledFieldGroup:              enabledFieldGroup,
-		deviceIndices:                  deviceIndices,
-		devicesModelName:               names,
-		devicesUUID:                    UUIDs,
+		devices:                        map[uint]deviceMetrics{},
 		deviceMetricToFailedQueryCount: make(map[string]uint64),
 		pollingInterval:                settings.pollingInterval,
 		retryBlankValues:               settings.retryBlankValues,
@@ -139,30 +142,20 @@ func initializeDcgm(endpoint string, logger *zap.Logger) (func(), error) {
 	return dcgmCleanup, nil
 }
 
-func discoverDevices(logger *zap.Logger) ([]uint, []string, []string, error) {
-	supportedDeviceIndices, err := dcgm.GetSupportedDevices()
+func newDeviceMetrics(logger *zap.SugaredLogger, gpuIndex uint) (deviceMetrics, error) {
+	deviceInfo, err := dcgm.GetDeviceInfo(gpuIndex)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("Unable to discover supported GPUs on %w", err)
-	}
-	logger.Sugar().Infof("Discovered %d supported GPU devices", len(supportedDeviceIndices))
-
-	devices := make([]uint, 0, len(supportedDeviceIndices))
-	names := make([]string, 0, len(supportedDeviceIndices))
-	UUIDs := make([]string, 0, len(supportedDeviceIndices))
-	for _, gpuIndex := range supportedDeviceIndices {
-		deviceInfo, err := dcgm.GetDeviceInfo(gpuIndex)
-		if err != nil {
-			logger.Sugar().Warnf("Unable to query device info for NVIDIA device %d on '%w'", gpuIndex, err)
-			continue
-		}
-
-		devices = append(devices, gpuIndex)
-		names = append(names, deviceInfo.Identifiers.Model)
-		UUIDs = append(UUIDs, deviceInfo.UUID)
-		logger.Sugar().Infof("Discovered NVIDIA device %s with UUID %s", names[gpuIndex], UUIDs[gpuIndex])
+		logger.Warnf("Unable to query device info for NVIDIA device %d on '%w'", gpuIndex, err)
+		return deviceMetrics{}, err
 	}
 
-	return devices, names, UUIDs, nil
+	device := deviceMetrics{
+		ModelName: deviceInfo.Identifiers.Model,
+		UUID:      deviceInfo.UUID,
+		Metrics:   map[string]*metricStats{},
+	}
+	logger.Infof("Discovered NVIDIA device %s with UUID %s", device.ModelName, device.UUID)
+	return device, nil
 }
 
 func createDeviceGroup(logger *zap.Logger, deviceIndices []uint) (dcgm.GroupHandle, error) {
@@ -289,7 +282,7 @@ func getSupportedRegularFields(requestedFields []dcgm.Short, logger *zap.Logger)
 	}
 	found := make(map[dcgm.Short]bool)
 	for _, gpuIndex := range deviceIndices {
-		fieldValues, pollErr := dcgm.GetLatestValuesForFields(gpuIndex, regularFields)
+		fieldValues, pollErr := dcgm.EntitiesGetLatestValues([]dcgm.GroupEntityPair{{dcgm.FE_GPU, gpuIndex}}, regularFields, 0)
 		if pollErr != nil {
 			continue
 		}
@@ -372,83 +365,78 @@ func (client *dcgmClient) cleanup() {
 	client.logger.Info("Shutdown DCGM")
 }
 
-func (client *dcgmClient) getDeviceModelName(gpuIndex uint) string {
-	return client.devicesModelName[gpuIndex]
-}
-
-func (client *dcgmClient) getDeviceUUID(gpuIndex uint) string {
-	return client.devicesUUID[gpuIndex]
-}
-
-func (client *dcgmClient) collectDeviceMetrics() (map[uint][]dcgmMetric, error) {
-	var err scrapererror.ScrapeErrors
-	gpuMetrics := make(map[uint][]dcgmMetric)
-	for _, gpuIndex := range client.deviceIndices {
-		client.logger.Debugf("Polling DCGM daemon for GPU %d", gpuIndex)
-		retry := true
-		for i := 0; retry && i < client.maxRetries; i++ {
-			fieldValues, pollErr := dcgmGetLatestValuesForFields(gpuIndex, client.enabledFieldIDs)
-			client.logger.Debugf("Got %d field values", len(fieldValues))
-			if pollErr == nil {
-				gpuMetrics[gpuIndex], retry = client.appendMetrics(gpuMetrics[gpuIndex], gpuIndex, fieldValues)
-				if retry {
-					client.logger.Warnf("Retrying poll of DCGM daemon for GPU %d; attempt %d", gpuIndex, i+1)
-					time.Sleep(client.pollingInterval)
-					continue
-				}
-				client.logger.Debugf("Successful poll of DCGM daemon for GPU %d", gpuIndex)
-			} else {
-				msg := fmt.Sprintf("Unable to poll DCGM daemon for GPU %d on %s", gpuIndex, pollErr)
-				client.issueWarningForFailedQueryUptoThreshold(gpuIndex, "all-profiling-metrics", msg)
-				err.AddPartial(1, fmt.Errorf("%s", msg))
-			}
-		}
+// collect will poll dcgm for any new metrics, updating client.devices as appropriate
+// It returns the estimated polling interval.
+func (client *dcgmClient) collect() (time.Duration, error) {
+	client.logger.Debugf("Polling DCGM daemon for field values")
+	fieldValues, _, err := dcgmGetValuesSince(dcgm.GroupAllGPUs(), client.enabledFieldGroup, time.Time{})
+	if err != nil {
+		msg := fmt.Sprintf("Unable to poll DCGM daemon for on %s", err)
+		client.issueWarningForFailedQueryUptoThreshold("all-profiling-metrics", msg)
+		return 0, err
 	}
-
-	return gpuMetrics, err.Combine()
-}
-
-func (client *dcgmClient) appendMetrics(gpuMetrics []dcgmMetric, gpuIndex uint, fieldValues []dcgm.FieldValue_v1) (result []dcgmMetric, retry bool) {
-	retry = false
+	client.logger.Debugf("Got %d field values", len(fieldValues))
+	oldestTs := int64(math.MaxInt64)
+	newestTs := int64(0)
 	for _, fieldValue := range fieldValues {
+		if fieldValue.EntityGroupId != dcgm.FE_GPU {
+			continue
+		}
+		gpuIndex := fieldValue.EntityId
+		if _, ok := client.devices[gpuIndex]; !ok {
+			device, err := newDeviceMetrics(client.logger, gpuIndex)
+			if err != nil {
+				continue
+			}
+			client.devices[gpuIndex] = device
+		}
+		device := client.devices[gpuIndex]
 		dcgmName := dcgmIDToName[dcgm.Short(fieldValue.FieldId)]
 		if err := isValidValue(fieldValue); err != nil {
 			msg := fmt.Sprintf("Received invalid value (ts %d gpu %d) %s: %v", fieldValue.Ts, gpuIndex, dcgmName, err)
-			client.issueWarningForFailedQueryUptoThreshold(gpuIndex, dcgmName, msg)
-			if client.retryBlankValues && errors.Is(err, errBlankValue) {
-				retry = true
-			}
+			client.issueWarningForFailedQueryUptoThreshold(fmt.Sprintf("device%d.%s", gpuIndex, dcgmName), msg)
 			continue
 		}
-
-		var metricValue interface{}
-		switch fieldValue.FieldType {
-		case dcgm.DCGM_FT_DOUBLE:
-			value := fieldValue.Float64()
-			client.logger.Debugf("Discovered (ts %d gpu %d) %s = %.3f (f64)", fieldValue.Ts, gpuIndex, dcgmName, value)
-			metricValue = value
-		case dcgm.DCGM_FT_INT64:
-			value := fieldValue.Int64()
-			client.logger.Debugf("Discovered (ts %d gpu %d) %s = %d (i64)", fieldValue.Ts, gpuIndex, dcgmName, value)
-			metricValue = value
-		default:
-			metricValue = fieldValue.Value
+		if fieldValue.Ts < oldestTs {
+			oldestTs = fieldValue.Ts
 		}
-		gpuMetrics = append(gpuMetrics, dcgmMetric{fieldValue.Ts, dcgmName, metricValue})
+		if fieldValue.Ts > newestTs {
+			newestTs = fieldValue.Ts
+		}
+		if _, ok := device.Metrics[dcgmName]; !ok {
+			device.Metrics[dcgmName] = &metricStats{}
+		}
+		device.Metrics[dcgmName].Update(fieldValue)
 	}
-
-	return gpuMetrics, retry
+	duration := time.Duration(newestTs-oldestTs) * time.Microsecond
+	client.logger.Debugf("Successful poll of DCGM daemon returned %v of data", duration)
+	return duration, nil
 }
 
-func (client *dcgmClient) issueWarningForFailedQueryUptoThreshold(deviceIdx uint, dcgmName string, reason string) {
-	deviceMetric := fmt.Sprintf("device%d.%s", deviceIdx, dcgmName)
-	client.deviceMetricToFailedQueryCount[deviceMetric]++
+// getDeviceMetrics returns a deep copy of client.devices
+func (client *dcgmClient) getDeviceMetrics() map[uint]deviceMetrics {
+	out := map[uint]deviceMetrics{}
+	for gpuIndex, device := range client.devices {
+		new := map[string]*metricStats{}
+		for key, value := range device.Metrics {
+			newValue := *value
+			new[key] = &newValue
+		}
+		// device is already a copy here
+		device.Metrics = new
+		out[gpuIndex] = device
+	}
+	return out
+}
 
-	failedCount := client.deviceMetricToFailedQueryCount[deviceMetric]
+func (client *dcgmClient) issueWarningForFailedQueryUptoThreshold(dcgmName string, reason string) {
+	client.deviceMetricToFailedQueryCount[dcgmName]++
+
+	failedCount := client.deviceMetricToFailedQueryCount[dcgmName]
 	if failedCount <= maxWarningsForFailedDeviceMetricQuery {
-		client.logger.Warnf("Unable to query '%s' for Nvidia device %d on '%s'", dcgmName, deviceIdx, reason)
+		client.logger.Warnf("Unable to query '%s' on '%s'", dcgmName, reason)
 		if failedCount == maxWarningsForFailedDeviceMetricQuery {
-			client.logger.Warnf("Surpressing further device query warnings for '%s' for Nvidia device %d", dcgmName, deviceIdx)
+			client.logger.Warnf("Surpressing further device query warnings for '%s'", dcgmName)
 		}
 	}
 }

@@ -38,6 +38,19 @@ import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/dcgmreceiver/testprofilepause"
 )
 
+func collectScraperResult(t *testing.T, ctx context.Context, scraper *dcgmScraper) (pmetric.Metrics, error) {
+	for {
+		metrics, err := scraper.scrape(ctx)
+		assert.NoError(t, err)
+		if metrics.MetricCount() > 0 {
+			// We expect cumulative metrics to be missing on the first scrape.
+			time.Sleep(scrapePollingInterval)
+			return scraper.scrape(ctx)
+		}
+		time.Sleep(scrapePollingInterval)
+	}
+}
+
 func TestScrapeWithGpuPresent(t *testing.T) {
 	var settings receiver.CreateSettings
 	settings.Logger = zaptest.NewLogger(t)
@@ -48,7 +61,7 @@ func TestScrapeWithGpuPresent(t *testing.T) {
 	err := scraper.start(context.Background(), componenttest.NewNopHost())
 	require.NoError(t, err)
 
-	metrics, err := scraper.scrape(context.Background())
+	metrics, err := collectScraperResult(t, context.Background(), scraper)
 	assert.NoError(t, err)
 
 	assert.NoError(t, scraper.stop(context.Background()))
@@ -81,7 +94,7 @@ func TestScrapeWithDelayedDcgmService(t *testing.T) {
 
 	// Simulate DCGM becomes available after 3 attempts
 	// scrape should block until DCGM is available
-	metrics, err := scraper.scrape(context.Background())
+	metrics, err := collectScraperResult(t, context.Background(), scraper)
 	assert.NoError(t, err)
 
 	assert.NoError(t, scraper.stop(context.Background()))
@@ -214,7 +227,7 @@ func TestScrapeOnProfilingPaused(t *testing.T) {
 	err = scraper.start(context.Background(), componenttest.NewNopHost())
 	require.NoError(t, err)
 
-	metrics, err := scraper.scrape(context.Background())
+	metrics, err := collectScraperResult(t, context.Background(), scraper)
 
 	assert.NoError(t, err)
 
@@ -232,6 +245,8 @@ func TestScrapeOnProfilingPaused(t *testing.T) {
 		"gpu.dcgm.clock.throttle_duration.time",
 		"gpu.dcgm.ecc_errors",
 	}
+
+	require.Greater(t, metrics.ResourceMetrics().Len(), 0)
 
 	ilms := metrics.ResourceMetrics().At(0).ScopeMetrics()
 	require.Equal(t, 1, ilms.Len())
@@ -316,8 +331,8 @@ func validateScraperResult(t *testing.T, metrics pmetric.Metrics) {
 		expectedDataPointCount += expectedMetricDataPoints
 	}
 
-	assert.LessOrEqual(t, len(expectedMetrics), metrics.MetricCount())
-	assert.LessOrEqual(t, expectedDataPointCount, metrics.DataPointCount())
+	assert.LessOrEqual(t, len(expectedMetrics), metrics.MetricCount(), "metric count")
+	assert.LessOrEqual(t, expectedDataPointCount, metrics.DataPointCount(), "data point count")
 
 	r := metrics.ResourceMetrics().At(0).Resource()
 	assert.Contains(t, r.Attributes().AsRaw(), "gpu.number")

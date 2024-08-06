@@ -45,13 +45,15 @@ func newDcgmScraper(config *Config, settings receiver.CreateSettings) *dcgmScrap
 	return &dcgmScraper{config: config, settings: settings, initRetryTime: 10 * time.Second}
 }
 
+const scrapePollingInterval = 100*time.Millisecond // TODO: Choose an appropriate value
+
 // initClient will try to initialize the communication with the DCGM service; if
 // success, create a client; only return errors if DCGM service is available but
 // failed to create client.
 func (s *dcgmScraper) initClient() (*dcgmClient, error) {
 	clientSettings := &dcgmClientSettings{
 		endpoint:         s.config.TCPAddrConfig.Endpoint,
-		pollingInterval:  100*time.Millisecond, // TODO: Choose an appropriate value
+		pollingInterval:  scrapePollingInterval,
 		fields:           discoverRequestedFields(s.config),
 		retryBlankValues: true,
 		maxRetries:       5,

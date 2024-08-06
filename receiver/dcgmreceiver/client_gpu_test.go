@@ -28,6 +28,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/NVIDIA/go-dcgm/pkg/dcgm"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
@@ -147,17 +148,19 @@ func TestCollectGpuProfilingMetrics(t *testing.T) {
 	before := time.Now().UnixMicro() - maxCollectionInterval.Microseconds()
 	duration, err := client.collect()
 	after := time.Now().UnixMicro()
-	assert.Greater(t, duration, 0)
+	assert.Greater(t, duration, time.Duration(0))
 	assert.Nil(t, err)
 	deviceMetrics := client.devices
 	expectedMetrics := LoadExpectedMetrics(t, client.devices[0].ModelName)
 
 	lastFloat64 := func(metric *metricStats) float64 {
+		assert.Equal(t, dcgm.DCGM_FT_DOUBLE, metric.lastFieldValue.FieldType, "Unexpected metric type: %+v", metric.lastFieldValue)
 		value, ok := asFloat64(*metric.lastFieldValue)
 		require.True(t, ok, "Unexpected metric type: %+v", metric.lastFieldValue)
 		return value
 	}
 	lastInt64 := func(metric *metricStats) int64 {
+		assert.Equal(t, dcgm.DCGM_FT_INT64, metric.lastFieldValue.FieldType, "Unexpected metric type: %+v", metric.lastFieldValue)
 		value, ok := asInt64(*metric.lastFieldValue)
 		require.True(t, ok, "Unexpected metric type: %+v", metric.lastFieldValue)
 		return value

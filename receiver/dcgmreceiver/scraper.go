@@ -33,15 +33,16 @@ import (
 )
 
 type dcgmScraper struct {
-	config    *Config
-	settings  receiver.CreateSettings
-	mb        *metadata.MetricsBuilder
-	metricsCh <-chan map[uint]deviceMetrics
-	cancel    func()
+	config        *Config
+	settings      receiver.CreateSettings
+	initRetryTime time.Duration
+	mb            *metadata.MetricsBuilder
+	metricsCh     <-chan map[uint]deviceMetrics
+	cancel        func()
 }
 
 func newDcgmScraper(config *Config, settings receiver.CreateSettings) *dcgmScraper {
-	return &dcgmScraper{config: config, settings: settings}
+	return &dcgmScraper{config: config, settings: settings, initRetryTime: 10 * time.Second}
 }
 
 // initClient will try to initialize the communication with the DCGM service; if
@@ -196,7 +197,7 @@ func (s *dcgmScraper) run(ctx context.Context, metricsCh chan<- map[uint]deviceM
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(10 * time.Second):
+		case <-time.After(s.initRetryTime):
 		}
 	}
 	return nil
@@ -217,6 +218,7 @@ func (s *dcgmScraper) runOnce(ctx context.Context, client *dcgmClient, metricsCh
 				waitTime,
 			)/2,
 		)
+		s.settings.Logger.Sugar().Debugf("Waiting %s for the next collection", waitTime)
 		deviceMetrics := client.getDeviceMetrics()
 		select {
 		case <-ctx.Done():
@@ -227,8 +229,13 @@ func (s *dcgmScraper) runOnce(ctx context.Context, client *dcgmClient, metricsCh
 	}
 }
 
-func (s *dcgmScraper) scrape(_ context.Context) (pmetric.Metrics, error) {
-	deviceMetrics := <-s.metricsCh
+func (s *dcgmScraper) scrape(ctx context.Context) (pmetric.Metrics, error) {
+	var deviceMetrics map[uint]deviceMetrics
+	select {
+	case deviceMetrics = <-s.metricsCh:
+	case <-ctx.Done():
+		return pmetric.NewMetrics(), ctx.Err()
+	}
 	s.settings.Logger.Sugar().Debugf("Metrics collected: %d", len(deviceMetrics))
 
 	now := pcommon.NewTimestampFromTime(time.Now())

@@ -51,7 +51,7 @@ func newDcgmScraper(config *Config, settings receiver.CreateSettings) *dcgmScrap
 func (s *dcgmScraper) initClient() (*dcgmClient, error) {
 	clientSettings := &dcgmClientSettings{
 		endpoint:         s.config.TCPAddrConfig.Endpoint,
-		pollingInterval:  s.config.CollectionInterval,
+		pollingInterval:  100*time.Millisecond, // TODO: Choose an appropriate value
 		fields:           discoverRequestedFields(s.config),
 		retryBlankValues: true,
 		maxRetries:       5,

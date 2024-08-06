@@ -52,7 +52,7 @@ func defaultClientSettings() *dcgmClientSettings {
 	requestedFields := discoverRequestedFields(createDefaultConfig().(*Config))
 	return &dcgmClientSettings{
 		endpoint:         defaultEndpoint,
-		pollingInterval:  10 * time.Second,
+		pollingInterval:  1 * time.Second,
 		retryBlankValues: true,
 		maxRetries:       5,
 		fields:           requestedFields,
@@ -145,11 +145,26 @@ func TestCollectGpuProfilingMetrics(t *testing.T) {
 	client, err := newClient(defaultClientSettings(), zaptest.NewLogger(t))
 	require.Nil(t, err, "cannot initialize DCGM. Install and run DCGM before running tests.")
 	var maxCollectionInterval = 60 * time.Second
-	before := time.Now().UnixMicro() - maxCollectionInterval.Microseconds()
-	duration, err := client.collect()
-	after := time.Now().UnixMicro()
-	assert.Greater(t, duration, time.Duration(0))
-	assert.Nil(t, err)
+	var before, after int64
+	for {
+		before = time.Now().UnixMicro() - maxCollectionInterval.Microseconds()
+		duration, err := client.collect()
+		after = time.Now().UnixMicro()
+		assert.Greater(t, duration, time.Duration(0))
+		assert.Nil(t, err)
+		var metricCount int
+		for _, device := range client.devices {
+			for _, metric := range device.Metrics {
+				if metric.lastFieldValue != nil {
+					metricCount++
+				}
+			}
+		}
+		if metricCount > 0 {
+			break
+		}
+		time.Sleep(client.pollingInterval)
+	}
 	deviceMetrics := client.devices
 	expectedMetrics := LoadExpectedMetrics(t, client.devices[0].ModelName)
 

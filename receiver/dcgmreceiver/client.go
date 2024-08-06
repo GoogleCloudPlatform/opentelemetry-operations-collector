@@ -54,6 +54,7 @@ type dcgmClient struct {
 	enabledFieldGroup dcgm.FieldHandle
 
 	devices map[uint]deviceMetrics
+	lastSuccessfulPoll time.Time
 
 	deviceMetricToFailedQueryCount map[string]uint64
 	pollingInterval                time.Duration
@@ -118,6 +119,7 @@ func newClient(settings *dcgmClientSettings, logger *zap.Logger) (*dcgmClient, e
 		enabledFieldIDs:                enabledFields,
 		enabledFieldGroup:              enabledFieldGroup,
 		devices:                        map[uint]deviceMetrics{},
+		lastSuccessfulPoll: time.Now(),
 		deviceMetricToFailedQueryCount: make(map[string]uint64),
 		pollingInterval:                settings.pollingInterval,
 		retryBlankValues:               settings.retryBlankValues,
@@ -352,7 +354,7 @@ func setWatchesOnEnabledFields(pollingInterval time.Duration, logger *zap.Logger
 		// Note: DCGM retained samples = Max(maxKeepSamples, maxKeepTime/updateFreq)
 		updateFreqUs:   int64(pollingInterval / time.Microsecond),
 		maxKeepTime:    600.0, /* 10 min */
-		maxKeepSamples: int32(15),
+		maxKeepSamples: int32(100),
 	})
 }
 
@@ -369,13 +371,14 @@ func (client *dcgmClient) cleanup() {
 // It returns the estimated polling interval.
 func (client *dcgmClient) collect() (time.Duration, error) {
 	client.logger.Debugf("Polling DCGM daemon for field values")
-	fieldValues, _, err := dcgmGetValuesSince(dcgm.GroupAllGPUs(), client.enabledFieldGroup, time.Time{})
+	fieldValues, pollTime, err := dcgmGetValuesSince(dcgm.GroupAllGPUs(), client.enabledFieldGroup, client.lastSuccessfulPoll)
 	if err != nil {
 		msg := fmt.Sprintf("Unable to poll DCGM daemon for on %s", err)
 		client.issueWarningForFailedQueryUptoThreshold("all-profiling-metrics", msg)
 		return 0, err
 	}
-	client.logger.Debugf("Got %d field values", len(fieldValues))
+	client.logger.Debugf("Got %d field values over %s", len(fieldValues), pollTime.Sub(client.lastSuccessfulPoll))
+	client.lastSuccessfulPoll = pollTime
 	oldestTs := int64(math.MaxInt64)
 	newestTs := int64(0)
 	for _, fieldValue := range fieldValues {

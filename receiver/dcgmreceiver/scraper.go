@@ -45,7 +45,7 @@ func newDcgmScraper(config *Config, settings receiver.CreateSettings) *dcgmScrap
 	return &dcgmScraper{config: config, settings: settings, initRetryTime: 10 * time.Second}
 }
 
-const scrapePollingInterval = 100*time.Millisecond // TODO: Choose an appropriate value
+const scrapePollingInterval = 100 * time.Millisecond // TODO: Choose an appropriate value
 
 // initClient will try to initialize the communication with the DCGM service; if
 // success, create a client; only return errors if DCGM service is available but
@@ -190,6 +190,7 @@ func discoverRequestedFields(config *Config) []string {
 }
 
 func (s *dcgmScraper) run(ctx context.Context, metricsCh chan<- map[uint]deviceMetrics) error {
+	defer close(metricsCh)
 	for {
 		client, _ := s.initClient()
 		// Ignore the error; it's logged in initClient.
@@ -199,6 +200,8 @@ func (s *dcgmScraper) run(ctx context.Context, metricsCh chan<- map[uint]deviceM
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
+		case metricsCh <- map[uint]deviceMetrics{}:
+			// Un-hang any scrapers waiting for data, since we currently have no metrics to offer.
 		case <-time.After(s.initRetryTime):
 		}
 	}
@@ -206,6 +209,7 @@ func (s *dcgmScraper) run(ctx context.Context, metricsCh chan<- map[uint]deviceM
 }
 
 func (s *dcgmScraper) runOnce(ctx context.Context, client *dcgmClient, metricsCh chan<- map[uint]deviceMetrics) {
+	defer client.cleanup()
 	for {
 		waitTime, err := client.collect()
 		// Ignore the error; it's logged in collect()

@@ -53,7 +53,7 @@ type dcgmClient struct {
 	enabledFieldIDs   []dcgm.Short
 	enabledFieldGroup dcgm.FieldHandle
 
-	devices map[uint]deviceMetrics
+	devices            map[uint]deviceMetrics
 	lastSuccessfulPoll time.Time
 
 	deviceMetricToFailedQueryCount map[string]uint64
@@ -119,7 +119,7 @@ func newClient(settings *dcgmClientSettings, logger *zap.Logger) (*dcgmClient, e
 		enabledFieldIDs:                enabledFields,
 		enabledFieldGroup:              enabledFieldGroup,
 		devices:                        map[uint]deviceMetrics{},
-		lastSuccessfulPoll: time.Now(),
+		lastSuccessfulPoll:             time.Now(),
 		deviceMetricToFailedQueryCount: make(map[string]uint64),
 		pollingInterval:                settings.pollingInterval,
 		retryBlankValues:               settings.retryBlankValues,

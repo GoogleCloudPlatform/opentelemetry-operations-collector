@@ -347,7 +347,7 @@ func setWatchesOnEnabledFields(pollingInterval time.Duration, logger *zap.Logger
 		fieldGroupName: fmt.Sprintf("google-cloud-ops-agent-metrics-%d", randSource.Intn(10000)),
 		// Note: DCGM retained samples = Max(maxKeepSamples, maxKeepTime/updateFreq)
 		updateFreqUs:   int64(pollingInterval / time.Microsecond),
-		maxKeepTime:    600.0, /* 10 min */
+		maxKeepTime:    600.0,      /* 10 min */
 		maxKeepSamples: int32(100), // TODO: Is this enough?
 	})
 }

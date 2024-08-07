@@ -90,7 +90,7 @@ func (s *dcgmScraper) start(ctx context.Context, _ component.Host) error {
 	s.metricsCh = metricsCh
 
 	g.Go(func() error {
-		return s.run(scrapeCtx, metricsCh)
+		return s.runConnectLoop(scrapeCtx, metricsCh)
 	})
 
 	return nil
@@ -177,13 +177,13 @@ func discoverRequestedFields(config *Config) []string {
 	return requestedFields
 }
 
-func (s *dcgmScraper) run(ctx context.Context, metricsCh chan<- map[uint]deviceMetrics) error {
+func (s *dcgmScraper) runConnectLoop(ctx context.Context, metricsCh chan<- map[uint]deviceMetrics) error {
 	defer close(metricsCh)
 	for {
 		client, _ := s.initClient()
 		// Ignore the error; it's logged in initClient.
 		if client != nil {
-			s.runOnce(ctx, client, metricsCh)
+			s.pollClient(ctx, client, metricsCh)
 		}
 		select {
 		case <-ctx.Done():
@@ -196,7 +196,7 @@ func (s *dcgmScraper) run(ctx context.Context, metricsCh chan<- map[uint]deviceM
 	return nil
 }
 
-func (s *dcgmScraper) runOnce(ctx context.Context, client *dcgmClient, metricsCh chan<- map[uint]deviceMetrics) {
+func (s *dcgmScraper) pollClient(ctx context.Context, client *dcgmClient, metricsCh chan<- map[uint]deviceMetrics) {
 	defer client.cleanup()
 	for {
 		waitTime, err := client.collect()

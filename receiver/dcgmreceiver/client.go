@@ -150,7 +150,7 @@ func newDeviceMetrics(logger *zap.SugaredLogger, gpuIndex uint) (deviceMetrics, 
 		UUID:      deviceInfo.UUID,
 		Metrics:   MetricsMap{},
 	}
-	logger.Infof("Discovered NVIDIA device %s with UUID %s", device.ModelName, device.UUID)
+	logger.Infof("Discovered NVIDIA device %s with UUID %s (DCGM GPU ID %d)", device.ModelName, device.UUID, gpuIndex)
 	return device, nil
 }
 
@@ -348,7 +348,7 @@ func setWatchesOnEnabledFields(pollingInterval time.Duration, logger *zap.Logger
 		// Note: DCGM retained samples = Max(maxKeepSamples, maxKeepTime/updateFreq)
 		updateFreqUs:   int64(pollingInterval / time.Microsecond),
 		maxKeepTime:    600.0, /* 10 min */
-		maxKeepSamples: int32(100),
+		maxKeepSamples: int32(100), // TODO: Is this enough?
 	})
 }
 

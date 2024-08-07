@@ -131,19 +131,3 @@ func TestMetricStatsCumulativeInt64(t *testing.T) {
 func TestMetricStatsCumulativeFloat64(t *testing.T) {
 	testMetricStatsCumulative[float64](t, fieldValueFloat64)
 }
-
-func TestDefaultMap(t *testing.T) {
-	called := false
-	m := newDefaultMap[int, int64](func() int64 {
-		called = true
-		return 8
-	})
-	_, ok := m.TryGet(3)
-	assert.False(t, ok)
-	assert.False(t, called)
-	v := m.Get(3)
-	assert.True(t, called)
-	assert.Equal(t, int64(8), v)
-	_, ok = m.TryGet(3)
-	assert.True(t, ok)
-}

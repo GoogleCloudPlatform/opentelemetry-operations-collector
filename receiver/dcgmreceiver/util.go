@@ -25,8 +25,8 @@ import (
 
 // For each metric, we need to track:
 type metricStats struct {
-	// Timestamp (us)
-	// Last value (for gauge metrics), as int or float
+	// Timestamp (µs)
+	// Last value (for gauge metrics), as int64 or double
 	lastFieldValue *dcgm.FieldValue_v2
 	// Integrated rate (always int), as {unit-seconds,unit-microseconds}
 	integratedRateSeconds      int64
@@ -86,58 +86,28 @@ func (m *metricStats) Update(fieldValue dcgm.FieldValue_v2) {
 type MetricsMap map[string]*metricStats
 
 func (m MetricsMap) LastFloat64(name string) (float64, bool) {
-	metric, ok := m[name]
-	if ok && metric.lastFieldValue != nil {
+	if metric, ok := m[name]; ok && metric.lastFieldValue != nil {
 		return asFloat64(*metric.lastFieldValue)
 	}
 	return 0, false
 }
 func (m MetricsMap) LastInt64(name string) (int64, bool) {
-	metric, ok := m[name]
-	if ok && metric.lastFieldValue != nil {
+	if metric, ok := m[name]; ok && metric.lastFieldValue != nil {
 		return asInt64(*metric.lastFieldValue)
 	}
 	return 0, false
 }
 func (m MetricsMap) IntegratedRate(name string) (int64, bool) {
-	metric, ok := m[name]
-	if ok {
+	if metric, ok := m[name]; ok {
 		return metric.integratedRateSeconds, true
 	}
 	return 0, false
 }
 func (m MetricsMap) CumulativeTotal(name string) (int64, bool) {
-	metric, ok := m[name]
-	if ok {
+	if metric, ok := m[name]; ok {
 		return metric.cumulativeValue, true
 	}
 	return 0, false
-}
-
-type defaultMap[K comparable, V any] struct {
-	m map[K]V
-	f func() V
-}
-
-func newDefaultMap[K comparable, V any](f func() V) *defaultMap[K, V] {
-	return &defaultMap[K, V]{
-		m: make(map[K]V),
-		f: f,
-	}
-}
-
-func (m *defaultMap[K, V]) Get(k K) V {
-	if v, ok := m.m[k]; ok {
-		return v
-	}
-	v := m.f()
-	m.m[k] = v
-	return v
-}
-
-func (m *defaultMap[K, V]) TryGet(k K) (V, bool) {
-	v, ok := m.m[k]
-	return v, ok
 }
 
 var (

@@ -71,12 +71,6 @@ func (s *dcgmScraper) initClient() (*dcgmClient, error) {
 	return client, nil
 }
 
-func newCumulativeTracker[V int64 | float64]() *cumulativeTracker[V] {
-	ct := new(cumulativeTracker[V])
-	ct.Reset()
-	return ct
-}
-
 func (s *dcgmScraper) start(ctx context.Context, _ component.Host) error {
 	startTime := pcommon.NewTimestampFromTime(time.Now())
 	mbConfig := metadata.DefaultMetricsBuilderConfig()

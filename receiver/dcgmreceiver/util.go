@@ -143,41 +143,6 @@ func (m *defaultMap[K, V]) TryGet(k K) (V, bool) {
 	return v, ok
 }
 
-// cumulativeTracker records cumulative values since last reset.
-type cumulativeTracker[V int64 | float64] struct {
-	baseTimestamp int64
-	baseline      V // the value seen at baseTimestamp.
-	lastTimestamp int64
-	lastValue     V // the value seen at lastTimestamp.
-}
-
-func (i *cumulativeTracker[V]) Reset() {
-	i.baseTimestamp = 0
-	i.lastTimestamp = nowUnixMicro()
-	i.baseline = V(0)
-	i.lastValue = V(0)
-}
-
-func (i *cumulativeTracker[V]) Update(ts int64, v V) {
-	// On first update, record the value as the baseline.
-	if i.baseTimestamp == 0 {
-		i.baseTimestamp, i.baseline = ts, v
-	}
-	// Drop stale points.
-	if ts <= i.lastTimestamp {
-		return
-	}
-	i.lastTimestamp, i.lastValue = ts, v
-}
-
-func (i *cumulativeTracker[V]) Value() (int64, V) {
-	return i.lastTimestamp, i.lastValue - i.baseline
-}
-
-func (i *cumulativeTracker[V]) Baseline() (int64, V) {
-	return i.baseTimestamp, i.baseline
-}
-
 var (
 	errBlankValue       = fmt.Errorf("unspecified blank value")
 	errDataNotFound     = fmt.Errorf("data not found")

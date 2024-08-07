@@ -29,6 +29,9 @@ type metricStats struct {
 	// Last value (for gauge metrics), as int64 or double
 	lastFieldValue *dcgm.FieldValue_v2
 	// Integrated rate (always int), as {unit-seconds,unit-microseconds}
+	// This is intended for metrics that have a per-second unit, such as By/s.
+	// The metric value is multiplied by the timestamp delta, producing us.By/s in integratedRateMicroseconds
+	// When that overflows past 1e6, the overflow is put in integratedRateSeconds, which is in units of s.By/s, or just By.
 	integratedRateSeconds      int64
 	integratedRateMicroseconds int64
 	// Cumulative value (always int)

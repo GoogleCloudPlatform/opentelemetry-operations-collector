@@ -35,14 +35,14 @@ import (
 type dcgmScraper struct {
 	config        *Config
 	settings      receiver.CreateSettings
-	initRetryTime time.Duration
+	initRetryDelay time.Duration
 	mb            *metadata.MetricsBuilder
 	metricsCh     <-chan map[uint]deviceMetrics
 	cancel        func()
 }
 
 func newDcgmScraper(config *Config, settings receiver.CreateSettings) *dcgmScraper {
-	return &dcgmScraper{config: config, settings: settings, initRetryTime: 10 * time.Second}
+	return &dcgmScraper{config: config, settings: settings, initRetryDelay: 10 * time.Second}
 }
 
 const scrapePollingInterval = 100 * time.Millisecond // TODO: Choose an appropriate value
@@ -190,7 +190,7 @@ func (s *dcgmScraper) runConnectLoop(ctx context.Context, metricsCh chan<- map[u
 			return ctx.Err()
 		case metricsCh <- map[uint]deviceMetrics{}:
 			// Un-hang any scrapers waiting for data, since we currently have no metrics to offer.
-		case <-time.After(s.initRetryTime):
+		case <-time.After(s.initRetryDelay):
 		}
 	}
 	return nil

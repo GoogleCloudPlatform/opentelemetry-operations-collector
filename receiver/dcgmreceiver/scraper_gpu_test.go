@@ -87,7 +87,7 @@ func TestScrapeWithDelayedDcgmService(t *testing.T) {
 	scraper := newDcgmScraper(createDefaultConfig().(*Config), settings)
 	require.NotNil(t, scraper)
 
-	scraper.initRetryTime = 0 // retry immediately
+	scraper.initRetryDelay = 0 // retry immediately
 
 	err := scraper.start(context.Background(), componenttest.NewNopHost())
 	require.NoError(t, err)

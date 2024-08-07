@@ -213,18 +213,29 @@ func TestScrapeOnProfilingPaused(t *testing.T) {
 	scraper := newDcgmScraper(config, settings)
 	require.NotNil(t, scraper)
 
-	defer func() { testprofilepause.ResumeProfilingMetrics() }()
-	err := testprofilepause.PauseProfilingMetrics()
-	if err != nil {
-		if errors.Is(err, testprofilepause.FeatureNotSupportedError) {
-			t.Skipf("Pausing profiling not supported")
-		} else {
-			t.Errorf("Pausing profiling failed with error %v", err)
+	defer func() {
+		client, err := scraper.initClient()
+		require.NoError(t, err)
+		defer client.cleanup()
+		testprofilepause.ResumeProfilingMetrics()
+	}()
+	func() {
+		// Open our own client connection so the pause call can be delivered.
+		client, err := scraper.initClient()
+		require.NoError(t, err)
+		defer client.cleanup()
+		err = testprofilepause.PauseProfilingMetrics()
+		if err != nil {
+			if errors.Is(err, testprofilepause.FeatureNotSupportedError) {
+				t.Skipf("Pausing profiling not supported")
+			} else {
+				t.Fatalf("Pausing profiling failed with error %v", err)
+			}
 		}
-	}
+	}()
 	time.Sleep(20 * time.Millisecond)
 
-	err = scraper.start(context.Background(), componenttest.NewNopHost())
+	err := scraper.start(context.Background(), componenttest.NewNopHost())
 	require.NoError(t, err)
 
 	metrics, err := collectScraperResult(t, context.Background(), scraper)

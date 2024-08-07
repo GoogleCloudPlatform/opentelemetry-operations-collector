@@ -62,12 +62,6 @@ type dcgmClient struct {
 	maxRetries                     int
 }
 
-type dcgmMetric struct {
-	timestamp int64
-	name      string
-	value     interface{}
-}
-
 // Can't pass argument dcgm.mode because it is unexported
 var dcgmInit = func(args ...string) (func(), error) {
 	return dcgm.Init(dcgm.Standalone, args...)

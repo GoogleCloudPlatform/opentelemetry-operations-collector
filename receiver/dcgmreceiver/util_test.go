@@ -33,7 +33,7 @@ func fieldValue(t *testing.T, ts int64, fieldType uint, value any) dcgm.FieldVal
 	var valueArr [4096]byte
 	copy(valueArr[:], buf.Bytes())
 	return dcgm.FieldValue_v2{
-		Ts: ts,
+		Ts:        ts,
 		FieldType: fieldType,
 		Value:     valueArr,
 	}

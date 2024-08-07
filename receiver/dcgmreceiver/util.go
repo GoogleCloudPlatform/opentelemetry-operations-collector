@@ -19,12 +19,9 @@ package dcgmreceiver
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/NVIDIA/go-dcgm/pkg/dcgm"
 )
-
-var nowUnixMicro = func() int64 { return time.Now().UnixNano() / 1e3 }
 
 // For each metric, we need to track:
 type metricStats struct {
@@ -150,14 +147,6 @@ var (
 	errPermissionDenied = fmt.Errorf("no permission to fetch value")
 	errUnexpectedType   = fmt.Errorf("unexpected data type")
 )
-
-func (m *dcgmMetric) asFloat64() float64 {
-	return m.value.(float64)
-}
-
-func (m *dcgmMetric) asInt64() int64 {
-	return m.value.(int64)
-}
 
 func isValidValue(fieldValue dcgm.FieldValue_v2) error {
 	switch fieldValue.FieldType {

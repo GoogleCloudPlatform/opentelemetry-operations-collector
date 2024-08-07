@@ -1,4 +1,4 @@
-model: Tesla T4
+model: NVIDIA H100 80GB HBM3
 supported_fields:
     - DCGM_FI_PROF_GR_ENGINE_ACTIVE
     - DCGM_FI_DEV_GPU_UTIL

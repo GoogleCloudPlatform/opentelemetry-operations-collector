@@ -18,65 +18,157 @@
 package dcgmreceiver
 
 import (
-	"unsafe"
+	"fmt"
+	"time"
 
 	"github.com/NVIDIA/go-dcgm/pkg/dcgm"
 )
 
-func (m *dcgmMetric) setFloat64(val float64) {
-	*(*float64)(unsafe.Pointer(&m.value[0])) = val
+var nowUnixMicro = func() int64 { return time.Now().UnixNano() / 1e3 }
+
+// rateIntegrator converts timestamped values that represent rates into
+// cumulative values. It assumes the rate stays constant since the last
+// timestamp.
+type rateIntegrator[V int64 | float64] struct {
+	lastTimestamp    int64
+	aggregatedRateUs V // the integration of the rate over microsecond timestamps.
 }
+
+func (ri *rateIntegrator[V]) Reset() {
+	ri.lastTimestamp = nowUnixMicro()
+	ri.aggregatedRateUs = V(0)
+}
+
+func (ri *rateIntegrator[V]) Update(ts int64, v V) {
+	// Drop stale points.
+	if ts <= ri.lastTimestamp {
+		return
+	}
+	// v is the rate per second, and timestamps are in microseconds, so the
+	// delta will be 1e6 times the actual increment.
+	ri.aggregatedRateUs += v * V(ts-ri.lastTimestamp)
+	ri.lastTimestamp = ts
+}
+
+func (ri *rateIntegrator[V]) Value() (int64, V) {
+	return ri.lastTimestamp, ri.aggregatedRateUs / V(1e6)
+}
+
+type defaultMap[K comparable, V any] struct {
+	m map[K]V
+	f func() V
+}
+
+func newDefaultMap[K comparable, V any](f func() V) *defaultMap[K, V] {
+	return &defaultMap[K, V]{
+		m: make(map[K]V),
+		f: f,
+	}
+}
+
+func (m *defaultMap[K, V]) Get(k K) V {
+	if v, ok := m.m[k]; ok {
+		return v
+	}
+	v := m.f()
+	m.m[k] = v
+	return v
+}
+
+func (m *defaultMap[K, V]) TryGet(k K) (V, bool) {
+	v, ok := m.m[k]
+	return v, ok
+}
+
+// cumulativeTracker records cumulative values since last reset.
+type cumulativeTracker[V int64 | float64] struct {
+	baseTimestamp int64
+	baseline      V // the value seen at baseTimestamp.
+	lastTimestamp int64
+	lastValue     V // the value seen at lastTimestamp.
+}
+
+func (i *cumulativeTracker[V]) Reset() {
+	i.baseTimestamp = 0
+	i.lastTimestamp = nowUnixMicro()
+	i.baseline = V(0)
+	i.lastValue = V(0)
+}
+
+func (i *cumulativeTracker[V]) Update(ts int64, v V) {
+	// On first update, record the value as the baseline.
+	if i.baseTimestamp == 0 {
+		i.baseTimestamp, i.baseline = ts, v
+	}
+	// Drop stale points.
+	if ts <= i.lastTimestamp {
+		return
+	}
+	i.lastTimestamp, i.lastValue = ts, v
+}
+
+func (i *cumulativeTracker[V]) Value() (int64, V) {
+	return i.lastTimestamp, i.lastValue - i.baseline
+}
+
+func (i *cumulativeTracker[V]) Baseline() (int64, V) {
+	return i.baseTimestamp, i.baseline
+}
+
+var (
+	errBlankValue       = fmt.Errorf("unspecified blank value")
+	errDataNotFound     = fmt.Errorf("data not found")
+	errNotSupported     = fmt.Errorf("field not supported")
+	errPermissionDenied = fmt.Errorf("no permission to fetch value")
+	errUnexpectedType   = fmt.Errorf("unexpected data type")
+)
 
 func (m *dcgmMetric) asFloat64() float64 {
-	return *(*float64)(unsafe.Pointer(&m.value[0]))
-}
-
-func (m *dcgmMetric) setInt64(val int64) {
-	*(*int64)(unsafe.Pointer(&m.value[0])) = val
+	return m.value.(float64)
 }
 
 func (m *dcgmMetric) asInt64() int64 {
-	return *(*int64)(unsafe.Pointer(&m.value[0]))
+	return m.value.(int64)
 }
 
-func isValidValue(fieldValue dcgm.FieldValue_v1) bool {
+func isValidValue(fieldValue dcgm.FieldValue_v1) error {
 	switch fieldValue.FieldType {
 	case dcgm.DCGM_FT_DOUBLE:
 		switch v := fieldValue.Float64(); v {
 		case dcgm.DCGM_FT_FP64_BLANK:
-			return false
+			return errBlankValue
 		case dcgm.DCGM_FT_FP64_NOT_FOUND:
-			return false
+			return errDataNotFound
 		case dcgm.DCGM_FT_FP64_NOT_SUPPORTED:
-			return false
+			return errNotSupported
 		case dcgm.DCGM_FT_FP64_NOT_PERMISSIONED:
-			return false
+			return errPermissionDenied
 		}
 
 	case dcgm.DCGM_FT_INT64:
 		switch v := fieldValue.Int64(); v {
 		case dcgm.DCGM_FT_INT32_BLANK:
-			return false
+			return errBlankValue
 		case dcgm.DCGM_FT_INT32_NOT_FOUND:
-			return false
+			return errDataNotFound
 		case dcgm.DCGM_FT_INT32_NOT_SUPPORTED:
-			return false
+			return errNotSupported
 		case dcgm.DCGM_FT_INT32_NOT_PERMISSIONED:
-			return false
+			return errPermissionDenied
 		case dcgm.DCGM_FT_INT64_BLANK:
-			return false
+			return errBlankValue
 		case dcgm.DCGM_FT_INT64_NOT_FOUND:
-			return false
+			return errDataNotFound
 		case dcgm.DCGM_FT_INT64_NOT_SUPPORTED:
-			return false
+			return errNotSupported
 		case dcgm.DCGM_FT_INT64_NOT_PERMISSIONED:
-			return false
+			return errPermissionDenied
 		}
 
 	// dcgm.DCGM_FT_STRING also exists but we don't expect it
 	default:
-		return false
+		return errUnexpectedType
 	}
 
-	return true
+	return nil
 }

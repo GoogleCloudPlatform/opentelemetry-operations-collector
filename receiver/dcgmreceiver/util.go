@@ -69,6 +69,9 @@ func (m *metricStats) Update(fieldValue dcgm.FieldValue_v2) {
 	if m.lastFieldValue == nil {
 		m.initialCumulativeValue = intValue
 	} else {
+		if m.lastFieldValue.Ts >= ts {
+			return
+		}
 		m.cumulativeValue = intValue - m.initialCumulativeValue
 
 		tsDelta := ts - m.lastFieldValue.Ts

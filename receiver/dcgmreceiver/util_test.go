@@ -18,53 +18,73 @@
 package dcgmreceiver
 
 import (
+	"bytes"
+	"encoding/binary"
 	"testing"
 
+	"github.com/NVIDIA/go-dcgm/pkg/dcgm"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func testRateIntegrator[V int64 | float64](t *testing.T) {
-	origNowUnixMicro := nowUnixMicro
-	nowUnixMicro = func() int64 { return 10 }
-	defer func() { nowUnixMicro = origNowUnixMicro }()
+func fieldValue(t *testing.T, ts int64, fieldType uint, value any) dcgm.FieldValue_v2 {
+	buf := new(bytes.Buffer)
+	require.NoError(t, binary.Write(buf, binary.NativeEndian, value))
+	var valueArr [4096]byte
+	copy(valueArr[:], buf.Bytes())
+	return dcgm.FieldValue_v2{
+		Ts: ts,
+		FieldType: fieldType,
+		Value:     valueArr,
+	}
+}
+
+func fieldValueInt64(t *testing.T, ts int64, value int64) dcgm.FieldValue_v2 {
+	return fieldValue(t, ts, dcgm.DCGM_FT_INT64, value)
+}
+
+func fieldValueFloat64(t *testing.T, ts int64, value float64) dcgm.FieldValue_v2 {
+	return fieldValue(t, ts, dcgm.DCGM_FT_DOUBLE, value)
+}
+
+func testMetricStatsRate[V int64 | float64](t *testing.T, fv func(*testing.T, int64, V) dcgm.FieldValue_v2) {
+	stats := &metricStats{}
 
 	type P struct {
 		ts int64
-		v  V
+		v  int64
 	}
-	p := func(ts int64, v V) P { return P{ts, v} }
+	p := func(stats *metricStats) P {
+		if stats.lastFieldValue == nil {
+			return P{0, stats.integratedRateSeconds}
+		}
+		return P{stats.lastFieldValue.Ts, stats.integratedRateSeconds}
+	}
 
-	var ri rateIntegrator[V]
-
-	ri.Reset()
-	require.Equal(t, P{10, 0}, p(ri.Value()))
+	stats.Update(fv(t, 10, 0))
+	require.Equal(t, P{10, 0}, p(stats))
 	// Ensure updates affect aggregated values.
-	ri.Update(15, 1e6)
-	assert.Equal(t, P{15, 5}, p(ri.Value()))
+	stats.Update(fv(t, 15, 1e6))
+	assert.Equal(t, P{15, 5}, p(stats))
 	// Ensure stale points are ignored.
-	ri.Update(12, 1e8)
-	assert.Equal(t, P{15, 5}, p(ri.Value()))
-	ri.Update(15, 1.e8)
-	assert.Equal(t, P{15, 5}, p(ri.Value()))
+	stats.Update(fv(t, 12, 1e8))
+	assert.Equal(t, P{15, 5}, p(stats))
+	stats.Update(fv(t, 15, 1.e8))
+	assert.Equal(t, P{15, 5}, p(stats))
 	// Ensure updates affect aggregated values.
-	ri.Update(20, 2.e6)
-	assert.Equal(t, P{20, 15}, p(ri.Value()))
+	stats.Update(fv(t, 20, 2.e6))
+	assert.Equal(t, P{20, 15}, p(stats))
 	// Ensure zero rates don't change the aggregated value.
-	ri.Update(25, 0)
-	assert.Equal(t, P{25, 15}, p(ri.Value()))
-
-	// Ensure the value is cleared on reset.
-	ri.Reset()
-	assert.Equal(t, P{10, 0}, p(ri.Value()))
+	stats.Update(fv(t, 25, 0))
+	assert.Equal(t, P{25, 15}, p(stats))
 }
 
-func TestRateIntegratorInt64(t *testing.T) {
-	testRateIntegrator[int64](t)
+func TestMetricStatsRateInt64(t *testing.T) {
+	testMetricStatsRate[int64](t, fieldValueInt64)
 }
 
-func TestRateIntegratorFloat64(t *testing.T) {
-	testRateIntegrator[float64](t)
+func TestMetricStatsRateFloat64(t *testing.T) {
+	testMetricStatsRate[float64](t, fieldValueFloat64)
 }
 
 func testCumulativeTracker[V int64 | float64](t *testing.T) {

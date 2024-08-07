@@ -71,12 +71,6 @@ func (s *dcgmScraper) initClient() (*dcgmClient, error) {
 	return client, nil
 }
 
-func newRateIntegrator[V int64 | float64]() *rateIntegrator[V] {
-	ri := new(rateIntegrator[V])
-	ri.Reset()
-	return ri
-}
-
 func newCumulativeTracker[V int64 | float64]() *cumulativeTracker[V] {
 	ct := new(cumulativeTracker[V])
 	ct.Reset()

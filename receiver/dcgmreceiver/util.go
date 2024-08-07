@@ -117,34 +117,6 @@ func (m MetricsMap) CumulativeTotal(name string) (int64, bool) {
 	return 0, false
 }
 
-// rateIntegrator converts timestamped values that represent rates into
-// cumulative values. It assumes the rate stays constant since the last
-// timestamp.
-type rateIntegrator[V int64 | float64] struct {
-	lastTimestamp    int64
-	aggregatedRateUs V // the integration of the rate over microsecond timestamps.
-}
-
-func (ri *rateIntegrator[V]) Reset() {
-	ri.lastTimestamp = nowUnixMicro()
-	ri.aggregatedRateUs = V(0)
-}
-
-func (ri *rateIntegrator[V]) Update(ts int64, v V) {
-	// Drop stale points.
-	if ts <= ri.lastTimestamp {
-		return
-	}
-	// v is the rate per second, and timestamps are in microseconds, so the
-	// delta will be 1e6 times the actual increment.
-	ri.aggregatedRateUs += v * V(ts-ri.lastTimestamp)
-	ri.lastTimestamp = ts
-}
-
-func (ri *rateIntegrator[V]) Value() (int64, V) {
-	return ri.lastTimestamp, ri.aggregatedRateUs / V(1e6)
-}
-
 type defaultMap[K comparable, V any] struct {
 	m map[K]V
 	f func() V

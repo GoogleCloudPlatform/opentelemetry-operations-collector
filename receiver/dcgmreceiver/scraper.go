@@ -33,12 +33,12 @@ import (
 
 type dcgmScraper struct {
 	config   *Config
-	settings receiver.CreateSettings
+	settings receiver.Settings
 	client   *dcgmClient
 	mb       *metadata.MetricsBuilder
 }
 
-func newDcgmScraper(config *Config, settings receiver.CreateSettings) *dcgmScraper {
+func newDcgmScraper(config *Config, settings receiver.Settings) *dcgmScraper {
 	return &dcgmScraper{config: config, settings: settings}
 }
 

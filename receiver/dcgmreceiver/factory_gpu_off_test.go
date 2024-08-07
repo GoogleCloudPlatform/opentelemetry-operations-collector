@@ -34,7 +34,7 @@ func TestCreateMetricsReceiverWithGPUSupportOff(t *testing.T) {
 	cfg := factory.CreateDefaultConfig()
 	receiver, err := factory.CreateMetricsReceiver(
 		context.Background(),
-		receivertest.NewNopCreateSettings(),
+		receivertest.NewNopSettings(),
 		cfg,
 		consumertest.NewNop())
 

@@ -32,7 +32,7 @@ import (
 )
 
 func TestScraperWithoutDcgm(t *testing.T) {
-	var settings receiver.CreateSettings
+	var settings receiver.Settings
 	seenDcgmNotInstalledWarning := false
 	settings.Logger = zaptest.NewLogger(t, zaptest.WrapOptions(zap.Hooks(func(e zapcore.Entry) error {
 		if e.Level == zap.WarnLevel && strings.Contains(e.Message, "Unable to connect to DCGM daemon at localhost:5555 on libdcgm.so not Found; Is the DCGM daemon running") {

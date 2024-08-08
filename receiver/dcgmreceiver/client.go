@@ -349,7 +349,7 @@ func setWatchesOnEnabledFields(pollingInterval time.Duration, logger *zap.Logger
 		fieldGroupName: fmt.Sprintf("google-cloud-ops-agent-metrics-%d", randSource.Intn(10000)),
 		// Note: DCGM retained samples = Max(maxKeepSamples, maxKeepTime/updateFreq)
 		updateFreqUs:   int64(pollingInterval / time.Microsecond),
-		maxKeepTime:    600.0,      /* 10 min */
+		maxKeepTime:    600.0, /* 10 min */
 		maxKeepSamples: maxKeepSamples,
 	})
 }
@@ -410,7 +410,7 @@ func (client *dcgmClient) collect() (time.Duration, error) {
 	duration := time.Duration(newestTs-oldestTs) * time.Microsecond
 	client.logger.Debugf("Successful poll of DCGM daemon returned %v of data", duration)
 	// If we did a partial poll, there should be more room in the buffer.
-	duration = max(duration, client.pollingInterval * maxKeepSamples)
+	duration = max(duration, client.pollingInterval*maxKeepSamples)
 	return duration, nil
 }
 

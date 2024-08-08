@@ -33,13 +33,13 @@ import (
 )
 
 type dcgmScraper struct {
-	config        *Config
-	settings      receiver.CreateSettings
-	initRetryDelay time.Duration
-	mb            *metadata.MetricsBuilder
+	config           *Config
+	settings         receiver.CreateSettings
+	initRetryDelay   time.Duration
+	mb               *metadata.MetricsBuilder
 	collectTriggerCh chan<- struct{}
-	metricsCh     <-chan map[uint]deviceMetrics
-	cancel        func()
+	metricsCh        <-chan map[uint]deviceMetrics
+	cancel           func()
 }
 
 func newDcgmScraper(config *Config, settings receiver.CreateSettings) *dcgmScraper {
@@ -220,7 +220,7 @@ func (s *dcgmScraper) pollClient(ctx context.Context, client *dcgmClient, metric
 		select {
 		case <-ctx.Done():
 			return
-		case <- collectTriggerCh:
+		case <-collectTriggerCh:
 			// Loop and trigger a collect() again.
 		case metricsCh <- deviceMetrics:
 		case <-time.After(waitTime):

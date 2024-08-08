@@ -37,6 +37,7 @@ type dcgmScraper struct {
 	settings      receiver.CreateSettings
 	initRetryDelay time.Duration
 	mb            *metadata.MetricsBuilder
+	collectTriggerCh chan<- struct{}
 	metricsCh     <-chan map[uint]deviceMetrics
 	cancel        func()
 }
@@ -87,10 +88,12 @@ func (s *dcgmScraper) start(ctx context.Context, _ component.Host) error {
 	}
 
 	metricsCh := make(chan map[uint]deviceMetrics)
+	collectTriggerCh := make(chan struct{}, 1) // Capacity of 1 makes this asynchronous
 	s.metricsCh = metricsCh
+	s.collectTriggerCh = collectTriggerCh
 
 	g.Go(func() error {
-		return s.runConnectLoop(scrapeCtx, metricsCh)
+		return s.runConnectLoop(scrapeCtx, metricsCh, collectTriggerCh)
 	})
 
 	return nil
@@ -177,13 +180,13 @@ func discoverRequestedFields(config *Config) []string {
 	return requestedFields
 }
 
-func (s *dcgmScraper) runConnectLoop(ctx context.Context, metricsCh chan<- map[uint]deviceMetrics) error {
+func (s *dcgmScraper) runConnectLoop(ctx context.Context, metricsCh chan<- map[uint]deviceMetrics, collectTriggerCh <-chan struct{}) error {
 	defer close(metricsCh)
 	for {
 		client, _ := s.initClient()
 		// Ignore the error; it's logged in initClient.
 		if client != nil {
-			s.pollClient(ctx, client, metricsCh)
+			s.pollClient(ctx, client, metricsCh, collectTriggerCh)
 		}
 		select {
 		case <-ctx.Done():
@@ -196,7 +199,7 @@ func (s *dcgmScraper) runConnectLoop(ctx context.Context, metricsCh chan<- map[u
 	return nil
 }
 
-func (s *dcgmScraper) pollClient(ctx context.Context, client *dcgmClient, metricsCh chan<- map[uint]deviceMetrics) {
+func (s *dcgmScraper) pollClient(ctx context.Context, client *dcgmClient, metricsCh chan<- map[uint]deviceMetrics, collectTriggerCh <-chan struct{}) {
 	defer client.cleanup()
 	for {
 		waitTime, err := client.collect()
@@ -217,6 +220,8 @@ func (s *dcgmScraper) pollClient(ctx context.Context, client *dcgmClient, metric
 		select {
 		case <-ctx.Done():
 			return
+		case <- collectTriggerCh:
+			// Loop and trigger a collect() again.
 		case metricsCh <- deviceMetrics:
 		case <-time.After(waitTime):
 		}
@@ -225,6 +230,13 @@ func (s *dcgmScraper) pollClient(ctx context.Context, client *dcgmClient, metric
 
 func (s *dcgmScraper) scrape(ctx context.Context) (pmetric.Metrics, error) {
 	var deviceMetrics map[uint]deviceMetrics
+	// Trigger a collection cycle to make sure we have fresh metrics.
+	// The select ensures that if there's already a request registered we don't block.
+	select {
+	case s.collectTriggerCh <- struct{}{}:
+	default:
+	}
+	// Now wait for metrics.
 	select {
 	case deviceMetrics = <-s.metricsCh:
 	case <-ctx.Done():

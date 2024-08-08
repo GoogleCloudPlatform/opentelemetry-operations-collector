@@ -341,6 +341,8 @@ func setWatchesOnFields(logger *zap.Logger, deviceGroup dcgm.GroupHandle, fieldI
 	return fieldGroup, nil
 }
 
+const maxKeepSamples = 100 // TODO: Is this enough?
+
 func setWatchesOnEnabledFields(pollingInterval time.Duration, logger *zap.Logger, deviceGroup dcgm.GroupHandle, enabledFieldIDs []dcgm.Short) (dcgm.FieldHandle, error) {
 	return setWatchesOnFields(logger, deviceGroup, enabledFieldIDs, dcgmWatchParams{
 		// Note: Add random suffix to avoid conflict amongnst any parallel collectors
@@ -348,7 +350,7 @@ func setWatchesOnEnabledFields(pollingInterval time.Duration, logger *zap.Logger
 		// Note: DCGM retained samples = Max(maxKeepSamples, maxKeepTime/updateFreq)
 		updateFreqUs:   int64(pollingInterval / time.Microsecond),
 		maxKeepTime:    600.0,      /* 10 min */
-		maxKeepSamples: int32(100), // TODO: Is this enough?
+		maxKeepSamples: maxKeepSamples,
 	})
 }
 
@@ -407,6 +409,8 @@ func (client *dcgmClient) collect() (time.Duration, error) {
 	}
 	duration := time.Duration(newestTs-oldestTs) * time.Microsecond
 	client.logger.Debugf("Successful poll of DCGM daemon returned %v of data", duration)
+	// If we did a partial poll, there should be more room in the buffer.
+	duration = max(duration, client.pollingInterval * maxKeepSamples)
 	return duration, nil
 }
 

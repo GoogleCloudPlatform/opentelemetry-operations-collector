@@ -61,6 +61,9 @@ func TestScrapeWithGpuPresent(t *testing.T) {
 	err := scraper.start(context.Background(), componenttest.NewNopHost())
 	require.NoError(t, err)
 
+	// Make sure we wait long enough to do multiple collections.
+	time.Sleep(10 * time.Second)
+
 	metrics, err := collectScraperResult(t, context.Background(), scraper)
 	assert.NoError(t, err)
 

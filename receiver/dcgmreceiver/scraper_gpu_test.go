@@ -61,13 +61,46 @@ func TestScrapeWithGpuPresent(t *testing.T) {
 	err := scraper.start(context.Background(), componenttest.NewNopHost())
 	require.NoError(t, err)
 
-	// Make sure we wait long enough to do multiple collections.
-	time.Sleep(10 * time.Second)
+	metrics, err := collectScraperResult(t, context.Background(), scraper)
+	assert.NoError(t, err)
+
+	assert.NoError(t, scraper.stop(context.Background()))
+
+	validateScraperResult(t, metrics)
+}
+
+func TestScrapeCollectionInterval(t *testing.T) {
+	var settings receiver.CreateSettings
+	settings.Logger = zaptest.NewLogger(t)
+
+	var fetchCount int
+
+	realDcgmGetValuesSince := dcgmGetValuesSince
+	defer func() { dcgmGetValuesSince = realDcgmGetValuesSince }()
+	dcgmGetValuesSince = func(g dcgm.GroupHandle, f dcgm.FieldHandle, t time.Time) ([]dcgm.FieldValue_v2, time.Time, error) {
+		fetchCount++
+		return realDcgmGetValuesSince(g, f, t)
+	}
+
+	scraper := newDcgmScraper(createDefaultConfig().(*Config), settings)
+	require.NotNil(t, scraper)
+
+	err := scraper.start(context.Background(), componenttest.NewNopHost())
+	require.NoError(t, err)
+
+	// We expect to scrape every maxKeepSamples * scrapePollingInterval / 2.
+	// Wait long enough that we expect three scrapes.
+	const sleepTime = 3.5 * maxKeepSamples * scrapePollingInterval / 2
+
+	time.Sleep(sleepTime)
 
 	metrics, err := collectScraperResult(t, context.Background(), scraper)
 	assert.NoError(t, err)
 
 	assert.NoError(t, scraper.stop(context.Background()))
+
+	// We should have seen 1 initial scrape + 3 timed scrapes + 2 scrapes triggered by `collectScraperResult`.
+	assert.Less(t, fetchCount, 7, "too many fetches")
 
 	validateScraperResult(t, metrics)
 }

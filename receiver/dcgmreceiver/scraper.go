@@ -216,14 +216,19 @@ func (s *dcgmScraper) pollClient(ctx context.Context, client *dcgmClient, metric
 			)/2,
 		)
 		s.settings.Logger.Sugar().Debugf("Waiting %s for the next collection", waitTime)
-		deviceMetrics := client.getDeviceMetrics()
-		select {
-		case <-ctx.Done():
-			return
-		case <-collectTriggerCh:
-			// Loop and trigger a collect() again.
-		case metricsCh <- deviceMetrics:
-		case <-time.After(waitTime):
+		after := time.After(waitTime)
+		for after != nil {
+			deviceMetrics := client.getDeviceMetrics()
+			select {
+			case <-ctx.Done():
+				return
+			case <-collectTriggerCh:
+				// Loop and trigger a collect() again.
+				after = nil
+			case metricsCh <- deviceMetrics:
+			case <-after:
+				after = nil
+			}
 		}
 	}
 }

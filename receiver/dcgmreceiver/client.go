@@ -52,6 +52,7 @@ type dcgmClient struct {
 	handleCleanup     func()
 	enabledFieldIDs   []dcgm.Short
 	enabledFieldGroup dcgm.FieldHandle
+	deviceGroup       dcgm.GroupHandle
 
 	devices            map[uint]deviceMetrics
 	lastSuccessfulPoll time.Time
@@ -90,6 +91,7 @@ func newClient(settings *dcgmClientSettings, logger *zap.Logger) (*dcgmClient, e
 	for _, f := range unavailableFields {
 		logger.Sugar().Warnf("Field '%s' is not supported. Metric '%s' will not be collected", dcgmIDToName[f], dcgmIDToName[f])
 	}
+	var deviceGroup dcgm.GroupHandle
 	if len(enabledFields) != 0 {
 		supportedDeviceIndices, err := dcgm.GetSupportedDevices()
 		if err != nil {
@@ -97,7 +99,7 @@ func newClient(settings *dcgmClientSettings, logger *zap.Logger) (*dcgmClient, e
 		}
 		logger.Sugar().Infof("Discovered %d supported GPU devices", len(supportedDeviceIndices))
 
-		deviceGroup, err := createDeviceGroup(logger, supportedDeviceIndices)
+		deviceGroup, err = createDeviceGroup(logger, supportedDeviceIndices)
 		if err != nil {
 			return nil, err
 		}
@@ -112,6 +114,7 @@ func newClient(settings *dcgmClientSettings, logger *zap.Logger) (*dcgmClient, e
 		handleCleanup:                  dcgmCleanup,
 		enabledFieldIDs:                enabledFields,
 		enabledFieldGroup:              enabledFieldGroup,
+		deviceGroup:                    deviceGroup,
 		devices:                        map[uint]deviceMetrics{},
 		lastSuccessfulPoll:             time.Now(),
 		deviceMetricToFailedQueryCount: make(map[string]uint64),
@@ -356,6 +359,7 @@ func setWatchesOnEnabledFields(pollingInterval time.Duration, logger *zap.Logger
 
 func (client *dcgmClient) cleanup() {
 	_ = dcgm.FieldGroupDestroy(client.enabledFieldGroup)
+	_ = dcgm.DestroyGroup(client.deviceGroup)
 	if client.handleCleanup != nil {
 		client.handleCleanup()
 	}
@@ -367,7 +371,11 @@ func (client *dcgmClient) cleanup() {
 // It returns the estimated polling interval.
 func (client *dcgmClient) collect() (time.Duration, error) {
 	client.logger.Debugf("Polling DCGM daemon for field values")
-	fieldValues, pollTime, err := dcgmGetValuesSince(dcgm.GroupAllGPUs(), client.enabledFieldGroup, client.lastSuccessfulPoll)
+	if len(client.enabledFieldIDs) == 0 {
+		// Make sure we don't try to scrape without a device group (since we don't construct one when there are no enabled fields).
+		return 0, nil
+	}
+	fieldValues, pollTime, err := dcgmGetValuesSince(client.deviceGroup, client.enabledFieldGroup, client.lastSuccessfulPoll)
 	if err != nil {
 		msg := fmt.Sprintf("Unable to poll DCGM daemon for on %s", err)
 		client.issueWarningForFailedQueryUptoThreshold("all-profiling-metrics", msg)

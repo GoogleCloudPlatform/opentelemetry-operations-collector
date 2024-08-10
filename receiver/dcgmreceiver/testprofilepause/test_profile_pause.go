@@ -61,10 +61,15 @@ var initErrors = func() {
 	}
 }
 
-func PauseProfilingMetrics() error {
+func PauseProfilingMetrics(endpoint string) error {
 	initErrors()
+	cleanup, err := dcgm.Init(dcgm.Standalone, endpoint, "0")
+	if err != nil {
+		return err
+	}
+	defer cleanup()
 	result := C.dcgmProfPause(handle.handle)
-	err := errorString(result)
+	err = errorString(result)
 	if err != nil {
 		fmt.Printf("CUDA version %d\n", dcgm.DCGM_FI_CUDA_DRIVER_VERSION)
 		fmt.Printf("Failed to pause profiling (%v)\n", err)
@@ -72,10 +77,15 @@ func PauseProfilingMetrics() error {
 	return err
 }
 
-func ResumeProfilingMetrics() error {
+func ResumeProfilingMetrics(endpoint string) error {
 	initErrors()
+	cleanup, err := dcgm.Init(dcgm.Standalone, endpoint, "0")
+	if err != nil {
+		return err
+	}
+	defer cleanup()
 	result := C.dcgmProfResume(handle.handle)
-	err := errorString(result)
+	err = errorString(result)
 	if err != nil {
 		fmt.Printf("Failed to resume profiling (%v)\n", err)
 	}

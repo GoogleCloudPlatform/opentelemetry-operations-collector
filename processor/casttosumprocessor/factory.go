@@ -42,7 +42,7 @@ var processorCapabilities = consumer.Capabilities{MutatesData: true}
 
 func createMetricsProcessor(
 	ctx context.Context,
-	params processor.Settings,
+	params processor.CreateSettings,
 	cfg component.Config,
 	nextConsumer consumer.Metrics,
 ) (processor.Metrics, error) {

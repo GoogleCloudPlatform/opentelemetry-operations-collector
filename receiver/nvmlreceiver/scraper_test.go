@@ -32,7 +32,7 @@ func TestScrapeOnLibraryNotFound(t *testing.T) {
 	defer func() { nvmlInit = realNvmlInit }()
 	nvmlInit = func() nvml.Return { panic("library not found") }
 
-	scraper := newNvmlScraper(createDefaultConfig().(*Config), receivertest.NewNopSettings())
+	scraper := newNvmlScraper(createDefaultConfig().(*Config), receivertest.NewNopCreateSettings())
 	require.NotNil(t, scraper)
 
 	err := scraper.start(context.Background(), componenttest.NewNopHost())

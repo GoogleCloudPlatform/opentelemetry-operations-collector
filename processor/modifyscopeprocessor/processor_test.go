@@ -53,7 +53,7 @@ func TestModifyScopeProcessor(t *testing.T) {
 			tmn := &consumertest.MetricsSink{}
 			rmp, err := processorhelper.NewMetricsProcessor(
 				context.Background(),
-				processortest.NewNopSettings(),
+				processortest.NewNopCreateSettings(),
 				cfg,
 				tmn,
 				msp.ProcessMetrics,

@@ -20,6 +20,7 @@ import (
 	"log"
 
 	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/confmap"
 	"go.opentelemetry.io/collector/otelcol"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -27,6 +28,13 @@ import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/env"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/levelchanger"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/version"
+
+	expandconverter "go.opentelemetry.io/collector/confmap/converter/expandconverter"
+	envprovider "go.opentelemetry.io/collector/confmap/provider/envprovider"
+	fileprovider "go.opentelemetry.io/collector/confmap/provider/fileprovider"
+	httpprovider "go.opentelemetry.io/collector/confmap/provider/httpprovider"
+	httpsprovider "go.opentelemetry.io/collector/confmap/provider/httpsprovider"
+	yamlprovider "go.opentelemetry.io/collector/confmap/provider/yamlprovider"
 )
 
 func MainContext(ctx context.Context) {
@@ -43,6 +51,18 @@ func MainContext(ctx context.Context) {
 	params := otelcol.CollectorSettings{
 		Factories: components,
 		BuildInfo: info,
+		ConfigProviderSettings: otelcol.ConfigProviderSettings{
+			ResolverSettings: confmap.ResolverSettings{
+				ProviderFactories: []confmap.ProviderFactory{
+					fileprovider.NewFactory(),
+					envprovider.NewFactory(),
+					yamlprovider.NewFactory(),
+					httpprovider.NewFactory(),
+					httpsprovider.NewFactory(),
+				},
+				ConverterFactories: []confmap.ConverterFactory{expandconverter.NewFactory()},
+			},
+		},
 		LoggingOptions: []zap.Option{
 			levelchanger.NewLevelChangerOption(
 				zapcore.ErrorLevel,

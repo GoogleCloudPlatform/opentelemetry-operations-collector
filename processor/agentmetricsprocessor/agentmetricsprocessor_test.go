@@ -100,7 +100,7 @@ func TestAgentMetricsProcessor(t *testing.T) {
 			tmn := &consumertest.MetricsSink{}
 			rmp, err := processorhelper.NewMetricsProcessor(
 				context.Background(),
-				processortest.NewNopCreateSettings(),
+				processortest.NewNopSettings(),
 				&Config{},
 				tmn,
 				amp.ProcessMetrics,

@@ -41,7 +41,7 @@ func TestScrape(t *testing.T) {
 		mockClient := new(mockClient)
 		mockClient.On("GetStats").Return(getStats(t, "mock_response6_5.json"))
 
-		scraper := newVarnishScraper(receivertest.NewNopSettings(), cfg)
+		scraper := newVarnishScraper(receivertest.NewNopCreateSettings(), cfg)
 		scraper.client = mockClient
 		actualMetrics, err := scraper.scrape(context.Background())
 		require.NoError(t, err)
@@ -54,7 +54,7 @@ func TestScrape(t *testing.T) {
 		mockClient := new(mockClient)
 		mockClient.On("GetStats").Return(getStats(t, "mock_response6_0.json"))
 
-		scraper := newVarnishScraper(receivertest.NewNopSettings(), cfg)
+		scraper := newVarnishScraper(receivertest.NewNopCreateSettings(), cfg)
 		scraper.client = mockClient
 		actualMetrics, err := scraper.scrape(context.Background())
 		require.NoError(t, err)
@@ -65,7 +65,7 @@ func TestScrape(t *testing.T) {
 
 	t.Run("scrape error", func(t *testing.T) {
 		obs, logs := observer.New(zap.ErrorLevel)
-		settings := receivertest.NewNopSettings()
+		settings := receivertest.NewNopCreateSettings()
 
 		settings.TelemetrySettings.Logger = zap.New(obs)
 		mockClient := new(mockClient)
@@ -231,7 +231,7 @@ func TestStart(t *testing.T) {
 
 		f := NewFactory()
 		cfg := f.CreateDefaultConfig().(*Config)
-		scraper := newVarnishScraper(receivertest.NewNopSettings(), cfg)
+		scraper := newVarnishScraper(receivertest.NewNopCreateSettings(), cfg)
 		err = scraper.start(context.Background(), componenttest.NewNopHost())
 		require.NoError(t, err)
 		require.EqualValues(t, hostname, scraper.cacheName)
@@ -240,7 +240,7 @@ func TestStart(t *testing.T) {
 		f := NewFactory()
 		cfg := f.CreateDefaultConfig().(*Config)
 		cfg.CacheDir = "/path/cache_name"
-		scraper := newVarnishScraper(receivertest.NewNopSettings(), cfg)
+		scraper := newVarnishScraper(receivertest.NewNopCreateSettings(), cfg)
 		err := scraper.start(context.Background(), componenttest.NewNopHost())
 		require.NoError(t, err)
 		require.EqualValues(t, "cache_name", scraper.cacheName)
@@ -251,7 +251,7 @@ func TestSetDefaultCacheName(t *testing.T) {
 	t.Run("missing cache dir", func(t *testing.T) {
 		f := NewFactory()
 		cfg := f.CreateDefaultConfig().(*Config)
-		scraper := newVarnishScraper(receivertest.NewNopSettings(), cfg)
+		scraper := newVarnishScraper(receivertest.NewNopCreateSettings(), cfg)
 
 		hostname, err := os.Hostname()
 		require.NoError(t, err)
@@ -265,7 +265,7 @@ func TestSetDefaultCacheName(t *testing.T) {
 		f := NewFactory()
 		cfg := f.CreateDefaultConfig().(*Config)
 		cfg.CacheDir = "/path/cache_name"
-		scraper := newVarnishScraper(receivertest.NewNopSettings(), cfg)
+		scraper := newVarnishScraper(receivertest.NewNopCreateSettings(), cfg)
 
 		err := scraper.setCacheName()
 		require.NoError(t, err)

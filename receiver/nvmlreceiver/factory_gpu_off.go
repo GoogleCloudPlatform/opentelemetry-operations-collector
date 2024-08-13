@@ -29,7 +29,7 @@ import (
 
 func createMetricsReceiver(
 	_ context.Context,
-	_ receiver.Settings,
+	_ receiver.CreateSettings,
 	_ component.Config,
 	_ consumer.Metrics,
 ) (receiver.Metrics, error) {

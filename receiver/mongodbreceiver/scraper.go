@@ -40,7 +40,7 @@ type mongodbScraper struct {
 	mb           *metadata.MetricsBuilder
 }
 
-func newMongodbScraper(settings receiver.Settings, config *Config) *mongodbScraper {
+func newMongodbScraper(settings receiver.CreateSettings, config *Config) *mongodbScraper {
 	mbConfig := metadata.DefaultMetricsBuilderConfig()
 	mbConfig.Metrics = config.Metrics
 	return &mongodbScraper{

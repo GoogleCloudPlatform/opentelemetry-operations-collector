@@ -29,7 +29,7 @@ func TestCreateDefaultConfig(t *testing.T) {
 }
 
 func TestCreateProcessor(t *testing.T) {
-	mp, err := createMetricsProcessor(context.Background(), processor.Settings{}, createDefaultConfig(), consumertest.NewNop())
+	mp, err := createMetricsProcessor(context.Background(), processor.CreateSettings{}, createDefaultConfig(), consumertest.NewNop())
 	assert.NoError(t, err)
 	assert.NotNil(t, mp)
 }

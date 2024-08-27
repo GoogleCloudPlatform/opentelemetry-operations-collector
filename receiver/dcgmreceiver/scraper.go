@@ -335,28 +335,28 @@ func (s *dcgmScraper) scrape(ctx context.Context) (pmetric.Metrics, error) {
 			s.mb.RecordGpuDcgmClockFrequencyDataPoint(now, 1e6*v) /* MHz to Hz */
 		}
 		if v, ok := gpu.Metrics.CumulativeTotal("DCGM_FI_DEV_POWER_VIOLATION"); ok {
-			s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, float64(v)/1e6, metadata.AttributeGpuClockViolationPower) /* µs to s */
+			s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, float64(v)/1e9, metadata.AttributeGpuClockViolationPower) /* ns to s */
 		}
 		if v, ok := gpu.Metrics.CumulativeTotal("DCGM_FI_DEV_THERMAL_VIOLATION"); ok {
-			s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, float64(v)/1e6, metadata.AttributeGpuClockViolationThermal) /* µs to s */
+			s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, float64(v)/1e9, metadata.AttributeGpuClockViolationThermal) /* ns to s */
 		}
 		if v, ok := gpu.Metrics.CumulativeTotal("DCGM_FI_DEV_SYNC_BOOST_VIOLATION"); ok {
-			s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, float64(v)/1e6, metadata.AttributeGpuClockViolationSyncBoost) /* µs to s */
+			s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, float64(v)/1e9, metadata.AttributeGpuClockViolationSyncBoost) /* ns to s */
 		}
 		if v, ok := gpu.Metrics.CumulativeTotal("DCGM_FI_DEV_BOARD_LIMIT_VIOLATION"); ok {
-			s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, float64(v)/1e6, metadata.AttributeGpuClockViolationBoardLimit) /* µs to s */
+			s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, float64(v)/1e9, metadata.AttributeGpuClockViolationBoardLimit) /* ns to s */
 		}
 		if v, ok := gpu.Metrics.CumulativeTotal("DCGM_FI_DEV_LOW_UTIL_VIOLATION"); ok {
-			s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, float64(v)/1e6, metadata.AttributeGpuClockViolationLowUtil) /* µs to s */
+			s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, float64(v)/1e9, metadata.AttributeGpuClockViolationLowUtil) /* ns to s */
 		}
 		if v, ok := gpu.Metrics.CumulativeTotal("DCGM_FI_DEV_RELIABILITY_VIOLATION"); ok {
-			s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, float64(v)/1e6, metadata.AttributeGpuClockViolationReliability) /* µs to s */
+			s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, float64(v)/1e9, metadata.AttributeGpuClockViolationReliability) /* ns to s */
 		}
 		if v, ok := gpu.Metrics.CumulativeTotal("DCGM_FI_DEV_TOTAL_APP_CLOCKS_VIOLATION"); ok {
-			s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, float64(v)/1e6, metadata.AttributeGpuClockViolationAppClock) /* µs to s */
+			s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, float64(v)/1e9, metadata.AttributeGpuClockViolationAppClock) /* ns to s */
 		}
 		if v, ok := gpu.Metrics.CumulativeTotal("DCGM_FI_DEV_TOTAL_BASE_CLOCKS_VIOLATION"); ok {
-			s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, float64(v)/1e6, metadata.AttributeGpuClockViolationBaseClock) /* µs to s */
+			s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, float64(v)/1e9, metadata.AttributeGpuClockViolationBaseClock) /* ns to s */
 		}
 		if v, ok := gpu.Metrics.CumulativeTotal("DCGM_FI_DEV_ECC_SBE_VOL_TOTAL"); ok {
 			s.mb.RecordGpuDcgmEccErrorsDataPoint(now, v, metadata.AttributeGpuErrorTypeSbe)

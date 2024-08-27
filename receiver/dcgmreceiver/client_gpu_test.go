@@ -250,7 +250,7 @@ func TestCollectGpuProfilingMetrics(t *testing.T) {
 			case "DCGM_FI_DEV_TOTAL_BASE_CLOCKS_VIOLATION":
 				value := lastInt64(metric)
 				assert.GreaterOrEqual(t, value, int64(0))
-				assert.LessOrEqual(t, value, time.Now().UnixMicro(), name)
+				assert.LessOrEqual(t, value, time.Now().UnixNano(), name)
 			case "DCGM_FI_DEV_ECC_DBE_VOL_TOTAL":
 				fallthrough
 			case "DCGM_FI_DEV_ECC_SBE_VOL_TOTAL":

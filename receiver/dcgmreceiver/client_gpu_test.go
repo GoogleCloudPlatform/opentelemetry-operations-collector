@@ -68,11 +68,9 @@ func TestSupportedFieldsWithGolden(t *testing.T) {
 	require.Nil(t, err, "cannot initialize DCGM. Install and run DCGM before running tests.")
 
 	allFields := toFieldIDs(clientSettings.fields)
-	supportedRegularFields, err := getSupportedRegularFields(allFields, zaptest.NewLogger(t))
-	require.Nil(t, err)
 	supportedProfilingFields, err := getSupportedProfilingFields()
 	require.Nil(t, err)
-	enabledFields, unavailableFields := filterSupportedFields(allFields, supportedRegularFields, supportedProfilingFields)
+	enabledFields, unavailableFields := filterSupportedFields(allFields, supportedProfilingFields)
 
 	var enabledFieldsString []string
 	var unavailableFieldsString []string
@@ -252,7 +250,7 @@ func TestCollectGpuProfilingMetrics(t *testing.T) {
 			case "DCGM_FI_DEV_TOTAL_BASE_CLOCKS_VIOLATION":
 				value := lastInt64(metric)
 				assert.GreaterOrEqual(t, value, int64(0))
-				assert.LessOrEqual(t, value, time.Now().UnixMicro())
+				assert.LessOrEqual(t, value, time.Now().UnixMicro(), name)
 			case "DCGM_FI_DEV_ECC_DBE_VOL_TOTAL":
 				fallthrough
 			case "DCGM_FI_DEV_ECC_SBE_VOL_TOTAL":

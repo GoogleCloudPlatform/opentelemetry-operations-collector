@@ -77,17 +77,13 @@ func newClient(settings *dcgmClientSettings, logger *zap.Logger) (*dcgmClient, e
 	}
 	enabledFieldGroup := dcgm.FieldHandle{}
 	requestedFieldIDs := toFieldIDs(settings.fields)
-	supportedRegularFieldIDs, err := getSupportedRegularFields(requestedFieldIDs, logger)
-	if err != nil {
-		return nil, fmt.Errorf("Error querying supported regular fields: %w", err)
-	}
 	supportedProfilingFieldIDs, err := getSupportedProfilingFields()
 	if err != nil {
 		// If there is error querying the supported fields at all, let the
 		// receiver collect basic metrics: (GPU utilization, used/free memory).
 		logger.Sugar().Warnf("Error querying supported profiling fields on '%w'. GPU profiling metrics will not be collected.", err)
 	}
-	enabledFields, unavailableFields := filterSupportedFields(requestedFieldIDs, supportedRegularFieldIDs, supportedProfilingFieldIDs)
+	enabledFields, unavailableFields := filterSupportedFields(requestedFieldIDs, supportedProfilingFieldIDs)
 	for _, f := range unavailableFields {
 		logger.Sugar().Warnf("Field '%s' is not supported. Metric '%s' will not be collected", dcgmIDToName[f], dcgmIDToName[f])
 	}
@@ -216,17 +212,13 @@ func getSupportedProfilingFields() ([]dcgm.Short, error) {
 // filterSupportedFields takes the user requested fields and device supported
 // profiling fields, and filters to return those that are requested & supported
 // to be the enabledFields and requested but not supported as unavailableFields
-func filterSupportedFields(requestedFields []dcgm.Short, supportedRegularFields []dcgm.Short, supportedProfilingFields []dcgm.Short) ([]dcgm.Short, []dcgm.Short) {
+func filterSupportedFields(requestedFields []dcgm.Short, supportedProfilingFields []dcgm.Short) ([]dcgm.Short, []dcgm.Short) {
 	var enabledFields []dcgm.Short
 	var unavailableFields []dcgm.Short
 	for _, ef := range requestedFields {
-		support := false
-		for _, sf := range supportedRegularFields {
-			if sf == ef {
-				support = true
-				break
-			}
-		}
+		// For fields like `DCGM_FI_DEV_*`, which are not
+		// profiling fields, assume they are always present.
+		support := ef < dcgmProfilingFieldsStart
 		for _, sf := range supportedProfilingFields {
 			if sf == ef {
 				support = true
@@ -240,72 +232,6 @@ func filterSupportedFields(requestedFields []dcgm.Short, supportedRegularFields 
 		}
 	}
 	return enabledFields, unavailableFields
-}
-
-func getSupportedRegularFields(requestedFields []dcgm.Short, logger *zap.Logger) ([]dcgm.Short, error) {
-	var regularFields []dcgm.Short
-	for _, ef := range requestedFields {
-		if ef < dcgmProfilingFieldsStart {
-			// For fields like `DCGM_FI_DEV_*`, which are not
-			// profiling fields, try to actually retrieve the values
-			// from all devices
-			regularFields = append(regularFields, ef)
-		}
-	}
-	if len(regularFields) == 0 {
-		return nil, nil
-	}
-	deviceIndices, err := dcgm.GetSupportedDevices()
-	if err != nil {
-		return nil, fmt.Errorf("Unable to discover supported GPUs on %w", err)
-	}
-	deviceGroupName := "google-cloud-ops-agent-initial-watch-group"
-	deviceGroup, err := dcgm.NewDefaultGroup(deviceGroupName)
-	if err != nil {
-		return nil, fmt.Errorf("Unable to create DCGM GPU default group on %w", err)
-	}
-	defer func() { _ = dcgm.DestroyGroup(deviceGroup) }()
-	testFieldGroup, err := setWatchesOnFields(logger, deviceGroup, regularFields, dcgmWatchParams{
-		fieldGroupName: "google-cloud-ops-agent-initial-discovery",
-		updateFreqUs:   3600000000, // call UpdateAllFields manually
-		maxKeepTime:    600,
-		maxKeepSamples: 1,
-	})
-	defer func() { _ = dcgm.FieldGroupDestroy(testFieldGroup) }()
-	if err != nil {
-		return nil, fmt.Errorf("Unable to set field watches on %w", err)
-	}
-	err = dcgm.UpdateAllFields()
-	if err != nil {
-		return nil, fmt.Errorf("Unable to update fields on %w", err)
-	}
-	found := make(map[dcgm.Short]bool)
-	for _, gpuIndex := range deviceIndices {
-		fieldValues, pollErr := dcgm.EntitiesGetLatestValues([]dcgm.GroupEntityPair{{dcgm.FE_GPU, gpuIndex}}, regularFields, 0)
-		if pollErr != nil {
-			continue
-		}
-		for _, fieldValue := range fieldValues {
-			dcgmName := dcgmIDToName[dcgm.Short(fieldValue.FieldId)]
-			if err := isValidValue(fieldValue); err != nil {
-				logger.Sugar().Warnf("Received invalid value (ts %d gpu %d) %s: %v", fieldValue.Ts, gpuIndex, dcgmName, err)
-				continue
-			}
-			switch fieldValue.FieldType {
-			case dcgm.DCGM_FT_DOUBLE:
-				logger.Sugar().Debugf("Discovered (ts %d gpu %d) %s = %.3f (f64)", fieldValue.Ts, gpuIndex, dcgmName, fieldValue.Float64())
-			case dcgm.DCGM_FT_INT64:
-				logger.Sugar().Debugf("Discovered (ts %d gpu %d) %s = %d (i64)", fieldValue.Ts, gpuIndex, dcgmName, fieldValue.Int64())
-			}
-			found[dcgm.Short(fieldValue.FieldId)] = true
-		}
-	}
-	// TODO: dcgmUnwatchFields is not available.
-	supported := make([]dcgm.Short, len(found))
-	for fieldID := range found {
-		supported = append(supported, fieldID)
-	}
-	return supported, nil
 }
 
 // Internal-only

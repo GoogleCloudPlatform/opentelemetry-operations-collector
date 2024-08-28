@@ -325,7 +325,10 @@ func (client *dcgmClient) collect() (time.Duration, error) {
 		}
 		device := client.devices[gpuIndex]
 		dcgmName := dcgmIDToName[dcgm.Short(fieldValue.FieldId)]
-		if err := isValidValue(fieldValue); err != nil {
+		if err := isValidValue(fieldValue); err == errBlankValue {
+			// Blank values are expected at startup.
+			continue
+		} else if err != nil {
 			msg := fmt.Sprintf("Received invalid value (ts %d gpu %d) %s: %v", fieldValue.Ts, gpuIndex, dcgmName, err)
 			client.issueWarningForFailedQueryUptoThreshold(fmt.Sprintf("device%d.%s", gpuIndex, dcgmName), msg)
 			continue

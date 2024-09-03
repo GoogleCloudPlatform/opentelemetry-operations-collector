@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -80,6 +81,8 @@ func TestSupportedFieldsWithGolden(t *testing.T) {
 	for _, f := range unavailableFields {
 		unavailableFieldsString = append(unavailableFieldsString, dcgmIDToName[f])
 	}
+	sort.Strings(enabledFieldsString)
+	sort.Strings(unavailableFieldsString)
 	_, err = client.collect()
 	require.Nil(t, err)
 	require.NotEmpty(t, client.devices)

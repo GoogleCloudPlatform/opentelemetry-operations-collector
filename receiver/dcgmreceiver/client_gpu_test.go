@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -60,13 +61,14 @@ func defaultClientSettings() *dcgmClientSettings {
 	}
 }
 
-// TestSupportedFieldsWithGolden tests getSupportedRegularFields() and
+// TestSupportedProfilingFieldsWithGolden tests getSupportedRegularFields() and
 // getSupportedProfilingFields() against the golden files for the current GPU
 // model
-func TestSupportedFieldsWithGolden(t *testing.T) {
+func TestSupportedProfilingFieldsWithGolden(t *testing.T) {
 	clientSettings := defaultClientSettings()
 	client, err := newClient(clientSettings, zaptest.NewLogger(t))
 	require.Nil(t, err, "cannot initialize DCGM. Install and run DCGM before running tests.")
+	defer client.cleanup()
 
 	allFields := toFieldIDs(clientSettings.fields)
 	supportedProfilingFields, err := getSupportedProfilingFields()
@@ -76,10 +78,16 @@ func TestSupportedFieldsWithGolden(t *testing.T) {
 	var enabledFieldsString []string
 	var unavailableFieldsString []string
 	for _, f := range enabledFields {
-		enabledFieldsString = append(enabledFieldsString, dcgmIDToName[f])
+		name := dcgmIDToName[f]
+		if !strings.HasPrefix(name, "DCGM_FI_DEV_") {
+			enabledFieldsString = append(enabledFieldsString, name)
+		}
 	}
 	for _, f := range unavailableFields {
-		unavailableFieldsString = append(unavailableFieldsString, dcgmIDToName[f])
+		name := dcgmIDToName[f]
+		if !strings.HasPrefix(name, "DCGM_FI_DEV_") {
+			unavailableFieldsString = append(unavailableFieldsString, name)
+		}
 	}
 	sort.Strings(enabledFieldsString)
 	sort.Strings(unavailableFieldsString)
@@ -87,24 +95,21 @@ func TestSupportedFieldsWithGolden(t *testing.T) {
 	require.Nil(t, err)
 	require.NotEmpty(t, client.devices)
 	gpuModel := client.devices[0].ModelName
-	m := modelSupportedFields{
-		Model:             gpuModel,
-		SupportedFields:   enabledFieldsString,
-		UnsupportedFields: unavailableFieldsString,
-	}
-	actual, err := yaml.Marshal(&m)
-	if err != nil {
-		t.Fatal(err)
-	}
-	assert.Equal(t, len(allFields), len(client.enabledFieldIDs)+len(unavailableFieldsString))
-	goldenPath := getModelGoldenFilePath(t, gpuModel)
-	golden.Assert(t, string(actual), goldenPath)
-	client.cleanup()
+
+	want := LoadExpectedMetrics(t, gpuModel)
+	want.SupportedFields = slices.DeleteFunc(want.SupportedFields, func(name string) bool {
+		return strings.HasPrefix(name, "DCGM_FI_DEV_")
+	})
+	want.UnsupportedFields = slices.DeleteFunc(want.UnsupportedFields, func(name string) bool {
+		return strings.HasPrefix(name, "DCGM_FI_DEV_")
+	})
+	assert.ElementsMatch(t, enabledFieldsString, want.SupportedFields, "supported profiling fields")
+	assert.ElementsMatch(t, unavailableFieldsString, want.UnsupportedFields)
 }
 
 // LoadExpectedMetrics read the supported metrics of a GPU model from the golden
 // file, given a GPU model string
-func LoadExpectedMetrics(t *testing.T, model string) []string {
+func LoadExpectedMetrics(t *testing.T, model string) modelSupportedFields {
 	t.Helper()
 	goldenPath := getModelGoldenFilePath(t, model)
 	goldenFile, err := ioutil.ReadFile(goldenPath)
@@ -116,11 +121,7 @@ func LoadExpectedMetrics(t *testing.T, model string) []string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var expectedMetrics []string
-	for _, supported := range m.SupportedFields {
-		expectedMetrics = append(expectedMetrics, supported)
-	}
-	return expectedMetrics
+	return m
 }
 
 // getModelGoldenFilePath returns golden file path given a GPU model string
@@ -143,7 +144,9 @@ func TestNewDcgmClientWithGpuPresent(t *testing.T) {
 }
 
 func TestCollectGpuProfilingMetrics(t *testing.T) {
-	client, err := newClient(defaultClientSettings(), zaptest.NewLogger(t))
+	clientSettings := defaultClientSettings()
+	client, err := newClient(clientSettings, zaptest.NewLogger(t))
+	defer client.cleanup()
 	require.Nil(t, err, "cannot initialize DCGM. Install and run DCGM before running tests.")
 	var maxCollectionInterval = 60 * time.Second
 	var before, after int64
@@ -167,7 +170,6 @@ func TestCollectGpuProfilingMetrics(t *testing.T) {
 		time.Sleep(client.pollingInterval)
 	}
 	deviceMetrics := client.devices
-	expectedMetrics := LoadExpectedMetrics(t, client.devices[0].ModelName)
 
 	lastFloat64 := func(metric *metricStats) float64 {
 		assert.Equal(t, dcgm.DCGM_FT_DOUBLE, metric.lastFieldValue.FieldType, "Unexpected metric type: %+v", metric.lastFieldValue)
@@ -182,10 +184,10 @@ func TestCollectGpuProfilingMetrics(t *testing.T) {
 		return value
 	}
 
-	seenMetric := make(map[string]bool)
+	seenMetric := make(map[string]int)
 	assert.GreaterOrEqual(t, len(deviceMetrics), 0)
 	assert.LessOrEqual(t, len(deviceMetrics), 32)
-	for gpuIndex, device := range deviceMetrics {
+	for _, device := range deviceMetrics {
 		for name, metric := range device.Metrics {
 			switch name {
 			case "DCGM_FI_PROF_GR_ENGINE_ACTIVE":
@@ -286,14 +288,37 @@ func TestCollectGpuProfilingMetrics(t *testing.T) {
 			assert.GreaterOrEqual(t, metric.lastFieldValue.Ts, before)
 			assert.LessOrEqual(t, metric.lastFieldValue.Ts, after)
 
-			seenMetric[fmt.Sprintf("gpu{%d}.metric{%s}", gpuIndex, name)] = true
+			seenMetric[name]++
 		}
 	}
 
-	for gpuIndex := range deviceMetrics {
-		for _, metric := range expectedMetrics {
-			assert.True(t, seenMetric[fmt.Sprintf("gpu{%d}.metric{%s}", gpuIndex, metric)], fmt.Sprintf("%s on gpu %d", metric, gpuIndex))
+	for name, count := range seenMetric {
+		assert.Equalf(t, count, len(deviceMetrics), "metric %q found on an unexpected number of GPUs", name)
+	}
+
+	allFields := clientSettings.fields
+
+	var enabledFieldsString []string
+	var unavailableFieldsString []string
+	for _, f := range allFields {
+		if seenMetric[f] > 0 {
+			enabledFieldsString = append(enabledFieldsString, f)
+		} else {
+			unavailableFieldsString = append(unavailableFieldsString, f)
 		}
 	}
-	client.cleanup()
+	sort.Strings(enabledFieldsString)
+	sort.Strings(unavailableFieldsString)
+	gpuModel := client.devices[0].ModelName
+	m := modelSupportedFields{
+		Model:             gpuModel,
+		SupportedFields:   enabledFieldsString,
+		UnsupportedFields: unavailableFieldsString,
+	}
+	actual, err := yaml.Marshal(&m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	goldenPath := getModelGoldenFilePath(t, gpuModel)
+	golden.Assert(t, string(actual), goldenPath)
 }

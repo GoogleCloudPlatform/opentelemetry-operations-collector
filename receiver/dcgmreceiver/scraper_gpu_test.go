@@ -339,8 +339,8 @@ func loadExpectedScraperMetrics(t *testing.T, model string) map[string]int {
 		"DCGM_FI_DEV_ECC_SBE_VOL_TOTAL":           "gpu.dcgm.ecc_errors",
 		"DCGM_FI_DEV_ECC_DBE_VOL_TOTAL":           "gpu.dcgm.ecc_errors",
 	}
-	expectedReceiverMetrics := LoadExpectedMetrics(t, model)
-	for _, em := range expectedReceiverMetrics {
+	supportedFields := LoadExpectedMetrics(t, model)
+	for _, em := range supportedFields.SupportedFields {
 		scraperMetric := receiverMetricNameToScraperMetricName[em]
 		if scraperMetric != "" {
 			expectedMetrics[scraperMetric] += 1

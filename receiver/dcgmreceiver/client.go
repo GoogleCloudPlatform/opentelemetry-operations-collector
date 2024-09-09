@@ -57,7 +57,7 @@ type dcgmClient struct {
 	devices            map[uint]deviceMetrics
 	lastSuccessfulPoll time.Time
 
-	deviceMetricToFailedQueryCount map[string]uint64
+	deviceMetricToFailedQueryCount map[string]int
 	pollingInterval                time.Duration
 	retryBlankValues               bool
 	maxRetries                     int
@@ -113,7 +113,7 @@ func newClient(settings *dcgmClientSettings, logger *zap.Logger) (*dcgmClient, e
 		deviceGroup:                    deviceGroup,
 		devices:                        map[uint]deviceMetrics{},
 		lastSuccessfulPoll:             time.Now(),
-		deviceMetricToFailedQueryCount: make(map[string]uint64),
+		deviceMetricToFailedQueryCount: make(map[string]int),
 		pollingInterval:                settings.pollingInterval,
 		retryBlankValues:               settings.retryBlankValues,
 		maxRetries:                     settings.maxRetries,
@@ -303,8 +303,8 @@ func (client *dcgmClient) collect() (time.Duration, error) {
 	}
 	fieldValues, pollTime, err := dcgmGetValuesSince(client.deviceGroup, client.enabledFieldGroup, client.lastSuccessfulPoll)
 	if err != nil {
-		msg := fmt.Sprintf("Unable to poll DCGM daemon for on %s", err)
-		client.issueWarningForFailedQueryUptoThreshold("all-profiling-metrics", msg)
+		msg := fmt.Sprintf("Unable to poll DCGM daemon for metrics: %s", err)
+		client.issueWarningForFailedQueryUptoThreshold("all-profiling-metrics", maxWarningsForFailedDeviceMetricQuery, msg)
 		return 0, err
 	}
 	client.logger.Debugf("Got %d field values over %s", len(fieldValues), pollTime.Sub(client.lastSuccessfulPoll))
@@ -328,9 +328,11 @@ func (client *dcgmClient) collect() (time.Duration, error) {
 		if err := isValidValue(fieldValue); err == errBlankValue {
 			// Blank values are expected at startup.
 			continue
+		} else if err == errNotSupported {
+			client.issueWarningForFailedQueryUptoThreshold(dcgmName, 1, fmt.Sprintf("Field '%s' is not supported. Metric '%s' will not be collected", dcgmName, dcgmName))
 		} else if err != nil {
 			msg := fmt.Sprintf("Received invalid value (ts %d gpu %d) %s: %v", fieldValue.Ts, gpuIndex, dcgmName, err)
-			client.issueWarningForFailedQueryUptoThreshold(fmt.Sprintf("device%d.%s", gpuIndex, dcgmName), msg)
+			client.issueWarningForFailedQueryUptoThreshold(fmt.Sprintf("device%d.%s", gpuIndex, dcgmName), maxWarningsForFailedDeviceMetricQuery, msg)
 			continue
 		}
 		if fieldValue.Ts < oldestTs {
@@ -367,13 +369,13 @@ func (client *dcgmClient) getDeviceMetrics() map[uint]deviceMetrics {
 	return out
 }
 
-func (client *dcgmClient) issueWarningForFailedQueryUptoThreshold(dcgmName string, reason string) {
+func (client *dcgmClient) issueWarningForFailedQueryUptoThreshold(dcgmName string, limit int, reason string) {
 	client.deviceMetricToFailedQueryCount[dcgmName]++
 
 	failedCount := client.deviceMetricToFailedQueryCount[dcgmName]
-	if failedCount <= maxWarningsForFailedDeviceMetricQuery {
-		client.logger.Warnf("Unable to query '%s' on '%s'", dcgmName, reason)
-		if failedCount == maxWarningsForFailedDeviceMetricQuery {
+	if failedCount <= limit {
+		client.logger.Warnf("%s", reason)
+		if limit > 1 && failedCount == limit {
 			client.logger.Warnf("Surpressing further device query warnings for '%s'", dcgmName)
 		}
 	}

@@ -330,6 +330,7 @@ func (client *dcgmClient) collect() (time.Duration, error) {
 			continue
 		} else if err == errNotSupported {
 			client.issueWarningForFailedQueryUptoThreshold(dcgmName, 1, fmt.Sprintf("Field '%s' is not supported. Metric '%s' will not be collected", dcgmName, dcgmName))
+			continue
 		} else if err != nil {
 			msg := fmt.Sprintf("Received invalid value (ts %d gpu %d) %s: %v", fieldValue.Ts, gpuIndex, dcgmName, err)
 			client.issueWarningForFailedQueryUptoThreshold(fmt.Sprintf("device%d.%s", gpuIndex, dcgmName), maxWarningsForFailedDeviceMetricQuery, msg)

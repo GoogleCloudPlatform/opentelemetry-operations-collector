@@ -18,72 +18,43 @@
 package dcgmreceiver
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"fmt"
-	"slices"
 	"time"
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/receiver"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/dcgmreceiver/internal/metadata"
 )
 
 type dcgmScraper struct {
-	config   *Config
-	settings receiver.CreateSettings
-	client   *dcgmClient
-	mb       *metadata.MetricsBuilder
-	// Aggregate cumulative values.
-	aggregates struct {
-		energyConsumption struct {
-			total    *defaultMap[uint, *cumulativeTracker[int64]]
-			fallback *defaultMap[uint, *rateIntegrator[float64]] // ...from power usage rate.
-		}
-		pcieTotal struct {
-			tx *defaultMap[uint, *rateIntegrator[int64]] // ...from pcie tx.
-			rx *defaultMap[uint, *rateIntegrator[int64]] // ...from pcie rx.
-		}
-		nvlinkTotal struct {
-			tx *defaultMap[uint, *rateIntegrator[int64]] // ...from nvlink tx.
-			rx *defaultMap[uint, *rateIntegrator[int64]] // ...from nvlink rx.
-		}
-		throttleDuration struct {
-			powerViolation           *defaultMap[uint, *cumulativeTracker[int64]]
-			thermalViolation         *defaultMap[uint, *cumulativeTracker[int64]]
-			syncBoostViolation       *defaultMap[uint, *cumulativeTracker[int64]]
-			boardLimitViolation      *defaultMap[uint, *cumulativeTracker[int64]]
-			lowUtilViolation         *defaultMap[uint, *cumulativeTracker[int64]]
-			reliabilityViolation     *defaultMap[uint, *cumulativeTracker[int64]]
-			totalAppClocksViolation  *defaultMap[uint, *cumulativeTracker[int64]]
-			totalBaseClocksViolation *defaultMap[uint, *cumulativeTracker[int64]]
-		}
-		eccTotal struct {
-			sbe *defaultMap[uint, *cumulativeTracker[int64]]
-			dbe *defaultMap[uint, *cumulativeTracker[int64]]
-		}
-	}
+	config           *Config
+	settings         receiver.CreateSettings
+	initRetryDelay   time.Duration
+	mb               *metadata.MetricsBuilder
+	collectTriggerCh chan<- struct{}
+	metricsCh        <-chan map[uint]deviceMetrics
+	cancel           func()
 }
 
 func newDcgmScraper(config *Config, settings receiver.CreateSettings) *dcgmScraper {
-	return &dcgmScraper{config: config, settings: settings}
+	return &dcgmScraper{config: config, settings: settings, initRetryDelay: 10 * time.Second}
 }
 
-// initClient will try to create a new dcgmClient if currently has no client;
-// it will try to initialize the communication with the DCGM service; if
+const scrapePollingInterval = 100 * time.Millisecond // TODO: Choose an appropriate value
+
+// initClient will try to initialize the communication with the DCGM service; if
 // success, create a client; only return errors if DCGM service is available but
 // failed to create client.
-func (s *dcgmScraper) initClient() error {
-	if s.client != nil {
-		return nil
-	}
+func (s *dcgmScraper) initClient() (*dcgmClient, error) {
 	clientSettings := &dcgmClientSettings{
 		endpoint:         s.config.TCPAddrConfig.Endpoint,
-		pollingInterval:  s.config.CollectionInterval,
+		pollingInterval:  scrapePollingInterval,
 		fields:           discoverRequestedFields(s.config),
 		retryBlankValues: true,
 		maxRetries:       5,
@@ -94,55 +65,44 @@ func (s *dcgmScraper) initClient() error {
 		if errors.Is(err, ErrDcgmInitialization) {
 			// If cannot connect to DCGM, return no error and retry at next
 			// collection time
-			return nil
+			return nil, nil
 		}
-		return err
+		return nil, err
 	}
-	s.client = client
-	return nil
+	return client, nil
 }
 
-func newRateIntegrator[V int64 | float64]() *rateIntegrator[V] {
-	ri := new(rateIntegrator[V])
-	ri.Reset()
-	return ri
-}
-
-func newCumulativeTracker[V int64 | float64]() *cumulativeTracker[V] {
-	ct := new(cumulativeTracker[V])
-	ct.Reset()
-	return ct
-}
-
-func (s *dcgmScraper) start(_ context.Context, _ component.Host) error {
+func (s *dcgmScraper) start(ctx context.Context, _ component.Host) error {
 	startTime := pcommon.NewTimestampFromTime(time.Now())
 	mbConfig := metadata.DefaultMetricsBuilderConfig()
 	mbConfig.Metrics = s.config.Metrics
 	s.mb = metadata.NewMetricsBuilder(
 		mbConfig, s.settings, metadata.WithStartTime(startTime))
-	s.aggregates.energyConsumption.total = newDefaultMap[uint](newCumulativeTracker[int64])
-	s.aggregates.energyConsumption.fallback = newDefaultMap[uint](newRateIntegrator[float64])
-	s.aggregates.pcieTotal.tx = newDefaultMap[uint](newRateIntegrator[int64])
-	s.aggregates.pcieTotal.rx = newDefaultMap[uint](newRateIntegrator[int64])
-	s.aggregates.nvlinkTotal.tx = newDefaultMap[uint](newRateIntegrator[int64])
-	s.aggregates.nvlinkTotal.rx = newDefaultMap[uint](newRateIntegrator[int64])
-	s.aggregates.throttleDuration.powerViolation = newDefaultMap[uint](newCumulativeTracker[int64])
-	s.aggregates.throttleDuration.thermalViolation = newDefaultMap[uint](newCumulativeTracker[int64])
-	s.aggregates.throttleDuration.syncBoostViolation = newDefaultMap[uint](newCumulativeTracker[int64])
-	s.aggregates.throttleDuration.boardLimitViolation = newDefaultMap[uint](newCumulativeTracker[int64])
-	s.aggregates.throttleDuration.lowUtilViolation = newDefaultMap[uint](newCumulativeTracker[int64])
-	s.aggregates.throttleDuration.reliabilityViolation = newDefaultMap[uint](newCumulativeTracker[int64])
-	s.aggregates.throttleDuration.totalAppClocksViolation = newDefaultMap[uint](newCumulativeTracker[int64])
-	s.aggregates.throttleDuration.totalBaseClocksViolation = newDefaultMap[uint](newCumulativeTracker[int64])
-	s.aggregates.eccTotal.sbe = newDefaultMap[uint](newCumulativeTracker[int64])
-	s.aggregates.eccTotal.dbe = newDefaultMap[uint](newCumulativeTracker[int64])
+
+	scrapeCtx, scrapeCancel := context.WithCancel(context.WithoutCancel(ctx))
+	g, scrapeCtx := errgroup.WithContext(scrapeCtx)
+
+	s.cancel = func() {
+		scrapeCancel()
+		g.Wait()
+	}
+
+	metricsCh := make(chan map[uint]deviceMetrics)
+	collectTriggerCh := make(chan struct{}, 1) // Capacity of 1 makes this asynchronous
+	s.metricsCh = metricsCh
+	s.collectTriggerCh = collectTriggerCh
+
+	g.Go(func() error {
+		return s.runConnectLoop(scrapeCtx, metricsCh, collectTriggerCh)
+	})
 
 	return nil
 }
 
 func (s *dcgmScraper) stop(_ context.Context) error {
-	if s.client != nil {
-		s.client.cleanup()
+	if s.cancel != nil {
+		s.cancel()
+		s.cancel = nil
 	}
 	return nil
 }
@@ -220,188 +180,194 @@ func discoverRequestedFields(config *Config) []string {
 	return requestedFields
 }
 
-func (s *dcgmScraper) scrape(_ context.Context) (pmetric.Metrics, error) {
-	err := s.initClient()
-	if err != nil || s.client == nil {
-		return s.mb.Emit(), err
+func (s *dcgmScraper) runConnectLoop(ctx context.Context, metricsCh chan<- map[uint]deviceMetrics, collectTriggerCh <-chan struct{}) error {
+	defer close(metricsCh)
+	for {
+		client, _ := s.initClient()
+		// Ignore the error; it's logged in initClient.
+		if client != nil {
+			s.pollClient(ctx, client, metricsCh, collectTriggerCh)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case metricsCh <- map[uint]deviceMetrics{}:
+			// Un-hang any scrapers waiting for data, since we currently have no metrics to offer.
+		case <-time.After(s.initRetryDelay):
+		}
 	}
+	return nil
+}
 
-	s.settings.Logger.Sugar().Debug("Client created, collecting metrics")
-	deviceMetrics, err := s.client.collectDeviceMetrics()
-	if err != nil {
-		s.settings.Logger.Sugar().Warnf("Metrics not collected; err=%v", err)
-		return s.mb.Emit(), err
+func (s *dcgmScraper) pollClient(ctx context.Context, client *dcgmClient, metricsCh chan<- map[uint]deviceMetrics, collectTriggerCh <-chan struct{}) {
+	defer client.cleanup()
+	for {
+		waitTime, err := client.collect()
+		// Ignore the error; it's logged in collect()
+		if err != nil {
+			waitTime = 10 * time.Second
+		}
+		// Try to poll at least twice per collection interval
+		waitTime = max(
+			100*time.Millisecond,
+			min(
+				s.config.CollectionInterval,
+				waitTime,
+			)/2,
+		)
+		s.settings.Logger.Sugar().Debugf("Waiting %s for the next collection", waitTime)
+		after := time.After(waitTime)
+		for after != nil {
+			deviceMetrics := client.getDeviceMetrics()
+			select {
+			case <-ctx.Done():
+				return
+			case <-collectTriggerCh:
+				// Loop and trigger a collect() again.
+				after = nil
+			case metricsCh <- deviceMetrics:
+			case <-after:
+				after = nil
+			}
+		}
+	}
+}
+
+func (s *dcgmScraper) scrape(ctx context.Context) (pmetric.Metrics, error) {
+	var deviceMetrics map[uint]deviceMetrics
+	// Trigger a collection cycle to make sure we have fresh metrics.
+	// The select ensures that if there's already a request registered we don't block.
+	select {
+	case s.collectTriggerCh <- struct{}{}:
+	default:
+	}
+	// Now wait for metrics.
+	select {
+	case deviceMetrics = <-s.metricsCh:
+	case <-ctx.Done():
+		return pmetric.NewMetrics(), ctx.Err()
 	}
 	s.settings.Logger.Sugar().Debugf("Metrics collected: %d", len(deviceMetrics))
 
 	now := pcommon.NewTimestampFromTime(time.Now())
-	for gpuIndex, gpuMetrics := range deviceMetrics {
-		metricsByName := make(map[string][]dcgmMetric)
-		for _, metric := range gpuMetrics {
-			metricsByName[metric.name] = append(metricsByName[metric.name], metric)
-		}
-		s.settings.Logger.Sugar().Debugf("Got %d unique metrics: %v", len(metricsByName), metricsByName)
-		metrics := make(map[string]dcgmMetric)
-		for name, points := range metricsByName {
-			slices.SortStableFunc(points, func(a, b dcgmMetric) int {
-				return cmp.Compare(a.timestamp, b.timestamp)
-			})
-			metrics[name] = points[len(points)-1]
-		}
+	for gpuIndex, gpu := range deviceMetrics {
+		s.settings.Logger.Sugar().Debugf("Got %d unique metrics: %v", len(gpu.Metrics), gpu.Metrics)
 		rb := s.mb.NewResourceBuilder()
 		rb.SetGpuNumber(fmt.Sprintf("%d", gpuIndex))
-		rb.SetGpuUUID(s.client.getDeviceUUID(gpuIndex))
-		rb.SetGpuModel(s.client.getDeviceModelName(gpuIndex))
+		rb.SetGpuUUID(gpu.UUID)
+		rb.SetGpuModel(gpu.ModelName)
 		gpuResource := rb.Emit()
-		if metric, ok := metrics["DCGM_FI_PROF_GR_ENGINE_ACTIVE"]; ok {
-			s.mb.RecordGpuDcgmUtilizationDataPoint(now, metric.asFloat64())
-		} else if metric, ok := metrics["DCGM_FI_DEV_GPU_UTIL"]; ok { // fallback
-			gpuUtil := float64(metric.asInt64()) / 100.0 /* normalize */
-			s.mb.RecordGpuDcgmUtilizationDataPoint(now, gpuUtil)
+
+		v, ok := gpu.Metrics.LastFloat64("DCGM_FI_PROF_GR_ENGINE_ACTIVE")
+		if !ok {
+			v, ok = gpu.Metrics.LastFloat64("DCGM_FI_DEV_GPU_UTIL")
+			v /= 100.0 /* normalize */
 		}
-		if metric, ok := metrics["DCGM_FI_PROF_SM_ACTIVE"]; ok {
-			s.mb.RecordGpuDcgmSmUtilizationDataPoint(now, metric.asFloat64())
+		if ok {
+			s.mb.RecordGpuDcgmUtilizationDataPoint(now, v)
 		}
-		if metric, ok := metrics["DCGM_FI_PROF_SM_OCCUPANCY"]; ok {
-			s.mb.RecordGpuDcgmSmOccupancyDataPoint(now, metric.asFloat64())
+		if v, ok := gpu.Metrics.LastFloat64("DCGM_FI_PROF_SM_ACTIVE"); ok {
+			s.mb.RecordGpuDcgmSmUtilizationDataPoint(now, v)
 		}
-		if metric, ok := metrics["DCGM_FI_PROF_PIPE_TENSOR_ACTIVE"]; ok {
-			s.mb.RecordGpuDcgmPipeUtilizationDataPoint(now, metric.asFloat64(), metadata.AttributeGpuPipeTensor)
+		if v, ok := gpu.Metrics.LastFloat64("DCGM_FI_PROF_SM_OCCUPANCY"); ok {
+			s.mb.RecordGpuDcgmSmOccupancyDataPoint(now, v)
 		}
-		if metric, ok := metrics["DCGM_FI_PROF_PIPE_FP64_ACTIVE"]; ok {
-			s.mb.RecordGpuDcgmPipeUtilizationDataPoint(now, metric.asFloat64(), metadata.AttributeGpuPipeFp64)
+		if v, ok := gpu.Metrics.LastFloat64("DCGM_FI_PROF_PIPE_TENSOR_ACTIVE"); ok {
+			s.mb.RecordGpuDcgmPipeUtilizationDataPoint(now, v, metadata.AttributeGpuPipeTensor)
 		}
-		if metric, ok := metrics["DCGM_FI_PROF_PIPE_FP32_ACTIVE"]; ok {
-			s.mb.RecordGpuDcgmPipeUtilizationDataPoint(now, metric.asFloat64(), metadata.AttributeGpuPipeFp32)
+		if v, ok := gpu.Metrics.LastFloat64("DCGM_FI_PROF_PIPE_FP64_ACTIVE"); ok {
+			s.mb.RecordGpuDcgmPipeUtilizationDataPoint(now, v, metadata.AttributeGpuPipeFp64)
 		}
-		if metric, ok := metrics["DCGM_FI_PROF_PIPE_FP16_ACTIVE"]; ok {
-			s.mb.RecordGpuDcgmPipeUtilizationDataPoint(now, metric.asFloat64(), metadata.AttributeGpuPipeFp16)
+		if v, ok := gpu.Metrics.LastFloat64("DCGM_FI_PROF_PIPE_FP32_ACTIVE"); ok {
+			s.mb.RecordGpuDcgmPipeUtilizationDataPoint(now, v, metadata.AttributeGpuPipeFp32)
 		}
-		if metric, ok := metrics["DCGM_FI_DEV_ENC_UTIL"]; ok {
-			encUtil := float64(metric.asInt64()) / 100.0 /* normalize */
-			s.mb.RecordGpuDcgmCodecEncoderUtilizationDataPoint(now, encUtil)
+		if v, ok := gpu.Metrics.LastFloat64("DCGM_FI_PROF_PIPE_FP16_ACTIVE"); ok {
+			s.mb.RecordGpuDcgmPipeUtilizationDataPoint(now, v, metadata.AttributeGpuPipeFp16)
 		}
-		if metric, ok := metrics["DCGM_FI_DEV_DEC_UTIL"]; ok {
-			decUtil := float64(metric.asInt64()) / 100.0 /* normalize */
-			s.mb.RecordGpuDcgmCodecDecoderUtilizationDataPoint(now, decUtil)
+		if v, ok := gpu.Metrics.LastFloat64("DCGM_FI_DEV_ENC_UTIL"); ok {
+			s.mb.RecordGpuDcgmCodecEncoderUtilizationDataPoint(now, v/100.0) /* normalize */
 		}
-		if metric, ok := metrics["DCGM_FI_DEV_FB_FREE"]; ok {
-			bytesFree := 1e6 * metric.asInt64() /* MBy to By */
-			s.mb.RecordGpuDcgmMemoryBytesUsedDataPoint(now, bytesFree, metadata.AttributeGpuMemoryStateFree)
+		if v, ok := gpu.Metrics.LastFloat64("DCGM_FI_DEV_DEC_UTIL"); ok {
+			s.mb.RecordGpuDcgmCodecDecoderUtilizationDataPoint(now, v/100.0) /* normalize */
 		}
-		if metric, ok := metrics["DCGM_FI_DEV_FB_USED"]; ok {
-			bytesUsed := 1e6 * metric.asInt64() /* MBy to By */
-			s.mb.RecordGpuDcgmMemoryBytesUsedDataPoint(now, bytesUsed, metadata.AttributeGpuMemoryStateUsed)
+		if v, ok := gpu.Metrics.LastInt64("DCGM_FI_DEV_FB_FREE"); ok {
+			s.mb.RecordGpuDcgmMemoryBytesUsedDataPoint(now, 1e6*v, metadata.AttributeGpuMemoryStateFree) /* MBy to By */
 		}
-		if metric, ok := metrics["DCGM_FI_DEV_FB_RESERVED"]; ok {
-			bytesReserved := 1e6 * metric.asInt64() /* MBy to By */
-			s.mb.RecordGpuDcgmMemoryBytesUsedDataPoint(now, bytesReserved, metadata.AttributeGpuMemoryStateReserved)
+		if v, ok := gpu.Metrics.LastInt64("DCGM_FI_DEV_FB_USED"); ok {
+			s.mb.RecordGpuDcgmMemoryBytesUsedDataPoint(now, 1e6*v, metadata.AttributeGpuMemoryStateUsed) /* MBy to By */
 		}
-		if metric, ok := metrics["DCGM_FI_PROF_DRAM_ACTIVE"]; ok {
-			s.mb.RecordGpuDcgmMemoryBandwidthUtilizationDataPoint(now, metric.asFloat64())
-		} else if metric, ok := metrics["DCGM_FI_DEV_MEM_COPY_UTIL"]; ok { // fallback
-			memCopyUtil := float64(metric.asInt64()) / 100.0 /* normalize */
-			s.mb.RecordGpuDcgmMemoryBandwidthUtilizationDataPoint(now, memCopyUtil)
+		if v, ok := gpu.Metrics.LastInt64("DCGM_FI_DEV_FB_RESERVED"); ok {
+			s.mb.RecordGpuDcgmMemoryBytesUsedDataPoint(now, 1e6*v, metadata.AttributeGpuMemoryStateReserved) /* MBy to By */
 		}
-		if metric, ok := metrics["DCGM_FI_PROF_PCIE_TX_BYTES"]; ok {
-			s.aggregates.pcieTotal.tx.Get(gpuIndex).Update(metric.timestamp, metric.asInt64())
-			_, pcieTx := s.aggregates.pcieTotal.tx.Get(gpuIndex).Value()
-			s.mb.RecordGpuDcgmPcieIoDataPoint(now, pcieTx, metadata.AttributeNetworkIoDirectionTransmit)
+		v, ok = gpu.Metrics.LastFloat64("DCGM_FI_PROF_DRAM_ACTIVE")
+		if !ok { // fallback
+			v, ok = gpu.Metrics.LastFloat64("DCGM_FI_DEV_MEM_COPY_UTIL")
+			v /= 100.0 /* normalize */
 		}
-		if metric, ok := metrics["DCGM_FI_PROF_PCIE_RX_BYTES"]; ok {
-			s.aggregates.pcieTotal.rx.Get(gpuIndex).Update(metric.timestamp, metric.asInt64())
-			_, pcieRx := s.aggregates.pcieTotal.rx.Get(gpuIndex).Value()
-			s.mb.RecordGpuDcgmPcieIoDataPoint(now, pcieRx, metadata.AttributeNetworkIoDirectionReceive)
+		if ok {
+			s.mb.RecordGpuDcgmMemoryBandwidthUtilizationDataPoint(now, v)
 		}
-		if metric, ok := metrics["DCGM_FI_PROF_NVLINK_TX_BYTES"]; ok {
-			s.aggregates.nvlinkTotal.tx.Get(gpuIndex).Update(metric.timestamp, metric.asInt64())
-			_, nvlinkTx := s.aggregates.nvlinkTotal.tx.Get(gpuIndex).Value()
-			s.mb.RecordGpuDcgmNvlinkIoDataPoint(now, nvlinkTx, metadata.AttributeNetworkIoDirectionTransmit)
+		if v, ok := gpu.Metrics.IntegratedRate("DCGM_FI_PROF_PCIE_TX_BYTES"); ok {
+			s.mb.RecordGpuDcgmPcieIoDataPoint(now, v, metadata.AttributeNetworkIoDirectionTransmit)
 		}
-		if metric, ok := metrics["DCGM_FI_PROF_NVLINK_RX_BYTES"]; ok {
-			s.aggregates.nvlinkTotal.rx.Get(gpuIndex).Update(metric.timestamp, metric.asInt64())
-			_, nvlinkRx := s.aggregates.nvlinkTotal.rx.Get(gpuIndex).Value()
-			s.mb.RecordGpuDcgmNvlinkIoDataPoint(now, nvlinkRx, metadata.AttributeNetworkIoDirectionReceive)
+		if v, ok := gpu.Metrics.IntegratedRate("DCGM_FI_PROF_PCIE_RX_BYTES"); ok {
+			s.mb.RecordGpuDcgmPcieIoDataPoint(now, v, metadata.AttributeNetworkIoDirectionReceive)
 		}
-		if metric, ok := metrics["DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION"]; ok {
-			s.aggregates.energyConsumption.total.Get(gpuIndex).Update(metric.timestamp, metric.asInt64())
-			_, value := s.aggregates.energyConsumption.total.Get(gpuIndex).Value()
-			energyUsed := float64(value) / 1e3 /* mJ to J */
-			s.mb.RecordGpuDcgmEnergyConsumptionDataPoint(now, energyUsed)
-		} else if metric, ok := metrics["DCGM_FI_DEV_POWER_USAGE"]; ok { // fallback
-			s.aggregates.energyConsumption.fallback.Get(gpuIndex).Update(metric.timestamp, metric.asFloat64())
-			_, energyUsed := s.aggregates.energyConsumption.fallback.Get(gpuIndex).Value()
-			s.mb.RecordGpuDcgmEnergyConsumptionDataPoint(now, energyUsed)
+		if v, ok := gpu.Metrics.IntegratedRate("DCGM_FI_PROF_NVLINK_TX_BYTES"); ok {
+			s.mb.RecordGpuDcgmNvlinkIoDataPoint(now, v, metadata.AttributeNetworkIoDirectionTransmit)
 		}
-		if metric, ok := metrics["DCGM_FI_DEV_GPU_TEMP"]; ok {
-			s.mb.RecordGpuDcgmTemperatureDataPoint(now, float64(metric.asInt64()))
+		if v, ok := gpu.Metrics.IntegratedRate("DCGM_FI_PROF_NVLINK_RX_BYTES"); ok {
+			s.mb.RecordGpuDcgmNvlinkIoDataPoint(now, v, metadata.AttributeNetworkIoDirectionReceive)
 		}
-		if metric, ok := metrics["DCGM_FI_DEV_SM_CLOCK"]; ok {
-			clockFreq := 1e6 * float64(metric.asInt64()) /* MHz to Hz */
-			s.mb.RecordGpuDcgmClockFrequencyDataPoint(now, clockFreq)
+		i, ok := gpu.Metrics.CumulativeTotal("DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION")
+		v = float64(i) / 1e3 /* mJ to J */
+		if !ok {             // fallback
+			i, ok = gpu.Metrics.IntegratedRate("DCGM_FI_DEV_POWER_USAGE")
+			v = float64(i)
 		}
-		if metric, ok := metrics["DCGM_FI_DEV_POWER_VIOLATION"]; ok {
-			s.aggregates.throttleDuration.powerViolation.Get(gpuIndex).Update(metric.timestamp, metric.asInt64())
-			_, value := s.aggregates.throttleDuration.powerViolation.Get(gpuIndex).Value()
-			violationTime := float64(value) / 1e6 /* us to s */
-			s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, violationTime, metadata.AttributeGpuClockViolationPower)
+		if ok {
+			s.mb.RecordGpuDcgmEnergyConsumptionDataPoint(now, v)
 		}
-		if metric, ok := metrics["DCGM_FI_DEV_THERMAL_VIOLATION"]; ok {
-			s.aggregates.throttleDuration.thermalViolation.Get(gpuIndex).Update(metric.timestamp, metric.asInt64())
-			_, value := s.aggregates.throttleDuration.thermalViolation.Get(gpuIndex).Value()
-			violationTime := float64(value) / 1e6 /* us to s */
-			s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, violationTime, metadata.AttributeGpuClockViolationThermal)
+		if v, ok := gpu.Metrics.LastFloat64("DCGM_FI_DEV_GPU_TEMP"); ok {
+			s.mb.RecordGpuDcgmTemperatureDataPoint(now, v)
 		}
-		if metric, ok := metrics["DCGM_FI_DEV_SYNC_BOOST_VIOLATION"]; ok {
-			s.aggregates.throttleDuration.syncBoostViolation.Get(gpuIndex).Update(metric.timestamp, metric.asInt64())
-			_, value := s.aggregates.throttleDuration.syncBoostViolation.Get(gpuIndex).Value()
-			violationTime := float64(value) / 1e6 /* us to s */
-			s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, violationTime, metadata.AttributeGpuClockViolationSyncBoost)
+		if v, ok := gpu.Metrics.LastFloat64("DCGM_FI_DEV_SM_CLOCK"); ok {
+			s.mb.RecordGpuDcgmClockFrequencyDataPoint(now, 1e6*v) /* MHz to Hz */
 		}
-		if metric, ok := metrics["DCGM_FI_DEV_BOARD_LIMIT_VIOLATION"]; ok {
-			s.aggregates.throttleDuration.boardLimitViolation.Get(gpuIndex).Update(metric.timestamp, metric.asInt64())
-			_, value := s.aggregates.throttleDuration.boardLimitViolation.Get(gpuIndex).Value()
-			violationTime := float64(value) / 1e6 /* us to s */
-			s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, violationTime, metadata.AttributeGpuClockViolationBoardLimit)
+		if v, ok := gpu.Metrics.CumulativeTotal("DCGM_FI_DEV_POWER_VIOLATION"); ok {
+			s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, float64(v)/1e9, metadata.AttributeGpuClockViolationPower) /* ns to s */
 		}
-		if metric, ok := metrics["DCGM_FI_DEV_LOW_UTIL_VIOLATION"]; ok {
-			s.aggregates.throttleDuration.lowUtilViolation.Get(gpuIndex).Update(metric.timestamp, metric.asInt64())
-			_, value := s.aggregates.throttleDuration.lowUtilViolation.Get(gpuIndex).Value()
-			violationTime := float64(value) / 1e6 /* us to s */
-			s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, violationTime, metadata.AttributeGpuClockViolationLowUtil)
+		if v, ok := gpu.Metrics.CumulativeTotal("DCGM_FI_DEV_THERMAL_VIOLATION"); ok {
+			s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, float64(v)/1e9, metadata.AttributeGpuClockViolationThermal) /* ns to s */
 		}
-		if metric, ok := metrics["DCGM_FI_DEV_RELIABILITY_VIOLATION"]; ok {
-			s.aggregates.throttleDuration.reliabilityViolation.Get(gpuIndex).Update(metric.timestamp, metric.asInt64())
-			_, value := s.aggregates.throttleDuration.reliabilityViolation.Get(gpuIndex).Value()
-			violationTime := float64(value) / 1e6 /* us to s */
-			s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, violationTime, metadata.AttributeGpuClockViolationReliability)
+		if v, ok := gpu.Metrics.CumulativeTotal("DCGM_FI_DEV_SYNC_BOOST_VIOLATION"); ok {
+			s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, float64(v)/1e9, metadata.AttributeGpuClockViolationSyncBoost) /* ns to s */
 		}
-		if metric, ok := metrics["DCGM_FI_DEV_TOTAL_APP_CLOCKS_VIOLATION"]; ok {
-			s.aggregates.throttleDuration.totalAppClocksViolation.Get(gpuIndex).Update(metric.timestamp, metric.asInt64())
-			_, value := s.aggregates.throttleDuration.totalAppClocksViolation.Get(gpuIndex).Value()
-			violationTime := float64(value) / 1e6 /* us to s */
-			s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, violationTime, metadata.AttributeGpuClockViolationAppClock)
+		if v, ok := gpu.Metrics.CumulativeTotal("DCGM_FI_DEV_BOARD_LIMIT_VIOLATION"); ok {
+			s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, float64(v)/1e9, metadata.AttributeGpuClockViolationBoardLimit) /* ns to s */
 		}
-		if metric, ok := metrics["DCGM_FI_DEV_TOTAL_BASE_CLOCKS_VIOLATION"]; ok {
-			s.aggregates.throttleDuration.totalBaseClocksViolation.Get(gpuIndex).Update(metric.timestamp, metric.asInt64())
-			_, value := s.aggregates.throttleDuration.totalBaseClocksViolation.Get(gpuIndex).Value()
-			violationTime := float64(value) / 1e6 /* us to s */
-			s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, violationTime, metadata.AttributeGpuClockViolationBaseClock)
+		if v, ok := gpu.Metrics.CumulativeTotal("DCGM_FI_DEV_LOW_UTIL_VIOLATION"); ok {
+			s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, float64(v)/1e9, metadata.AttributeGpuClockViolationLowUtil) /* ns to s */
 		}
-		if metric, ok := metrics["DCGM_FI_DEV_ECC_SBE_VOL_TOTAL"]; ok {
-			s.aggregates.eccTotal.sbe.Get(gpuIndex).Update(metric.timestamp, metric.asInt64())
-			_, sbeErrors := s.aggregates.eccTotal.sbe.Get(gpuIndex).Value()
-			s.mb.RecordGpuDcgmEccErrorsDataPoint(now, sbeErrors, metadata.AttributeGpuErrorTypeSbe)
+		if v, ok := gpu.Metrics.CumulativeTotal("DCGM_FI_DEV_RELIABILITY_VIOLATION"); ok {
+			s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, float64(v)/1e9, metadata.AttributeGpuClockViolationReliability) /* ns to s */
 		}
-		if metric, ok := metrics["DCGM_FI_DEV_ECC_DBE_VOL_TOTAL"]; ok {
-			s.aggregates.eccTotal.dbe.Get(gpuIndex).Update(metric.timestamp, metric.asInt64())
-			_, dbeErrors := s.aggregates.eccTotal.dbe.Get(gpuIndex).Value()
-			s.mb.RecordGpuDcgmEccErrorsDataPoint(now, dbeErrors, metadata.AttributeGpuErrorTypeDbe)
+		if v, ok := gpu.Metrics.CumulativeTotal("DCGM_FI_DEV_TOTAL_APP_CLOCKS_VIOLATION"); ok {
+			s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, float64(v)/1e9, metadata.AttributeGpuClockViolationAppClock) /* ns to s */
+		}
+		if v, ok := gpu.Metrics.CumulativeTotal("DCGM_FI_DEV_TOTAL_BASE_CLOCKS_VIOLATION"); ok {
+			s.mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(now, float64(v)/1e9, metadata.AttributeGpuClockViolationBaseClock) /* ns to s */
+		}
+		if v, ok := gpu.Metrics.CumulativeTotal("DCGM_FI_DEV_ECC_SBE_VOL_TOTAL"); ok {
+			s.mb.RecordGpuDcgmEccErrorsDataPoint(now, v, metadata.AttributeGpuErrorTypeSbe)
+		}
+		if v, ok := gpu.Metrics.CumulativeTotal("DCGM_FI_DEV_ECC_DBE_VOL_TOTAL"); ok {
+			s.mb.RecordGpuDcgmEccErrorsDataPoint(now, v, metadata.AttributeGpuErrorTypeDbe)
 		}
 		// TODO: XID errors.
 		// s.mb.RecordGpuDcgmXidErrorsDataPoint(now, metric.asInt64(), xid)
 		s.mb.EmitForResource(metadata.WithResource(gpuResource))
 	}
 
-	return s.mb.Emit(), err
+	return s.mb.Emit(), nil
 }

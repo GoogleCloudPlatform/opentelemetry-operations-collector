@@ -38,6 +38,19 @@ import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/dcgmreceiver/testprofilepause"
 )
 
+func collectScraperResult(t *testing.T, ctx context.Context, scraper *dcgmScraper) (pmetric.Metrics, error) {
+	for {
+		metrics, err := scraper.scrape(ctx)
+		assert.NoError(t, err)
+		if metrics.MetricCount() > 0 {
+			// We expect cumulative metrics to be missing on the first scrape.
+			time.Sleep(scrapePollingInterval)
+			return scraper.scrape(ctx)
+		}
+		time.Sleep(scrapePollingInterval)
+	}
+}
+
 func TestScrapeWithGpuPresent(t *testing.T) {
 	var settings receiver.CreateSettings
 	settings.Logger = zaptest.NewLogger(t)
@@ -48,20 +61,60 @@ func TestScrapeWithGpuPresent(t *testing.T) {
 	err := scraper.start(context.Background(), componenttest.NewNopHost())
 	require.NoError(t, err)
 
-	metrics, err := scraper.scrape(context.Background())
+	metrics, err := collectScraperResult(t, context.Background(), scraper)
 	assert.NoError(t, err)
 
-	require.NotNil(t, scraper.client)
-	require.NotEmpty(t, scraper.client.devicesModelName)
-	expectedMetrics := loadExpectedScraperMetrics(t, scraper.client.getDeviceModelName(0))
-	validateScraperResult(t, metrics, expectedMetrics)
+	assert.NoError(t, scraper.stop(context.Background()))
+
+	validateScraperResult(t, metrics)
+}
+
+func TestScrapeCollectionInterval(t *testing.T) {
+	var settings receiver.CreateSettings
+	settings.Logger = zaptest.NewLogger(t)
+
+	var fetchCount int
+
+	realDcgmGetValuesSince := dcgmGetValuesSince
+	defer func() { dcgmGetValuesSince = realDcgmGetValuesSince }()
+	dcgmGetValuesSince = func(g dcgm.GroupHandle, f dcgm.FieldHandle, t time.Time) ([]dcgm.FieldValue_v2, time.Time, error) {
+		fetchCount++
+		return realDcgmGetValuesSince(g, f, t)
+	}
+
+	scraper := newDcgmScraper(createDefaultConfig().(*Config), settings)
+	require.NotNil(t, scraper)
+
+	err := scraper.start(context.Background(), componenttest.NewNopHost())
+	require.NoError(t, err)
+
+	// We expect to scrape every maxKeepSamples * scrapePollingInterval / 2.
+	// Wait long enough that we expect three scrapes.
+	const sleepTime = 3.5 * maxKeepSamples * scrapePollingInterval / 2
+
+	time.Sleep(sleepTime)
+
+	metrics, err := collectScraperResult(t, context.Background(), scraper)
+	assert.NoError(t, err)
+
+	assert.NoError(t, scraper.stop(context.Background()))
+
+	// We should have seen 1 initial scrape + 3 timed scrapes + 2 scrapes triggered by `collectScraperResult`.
+	assert.Less(t, fetchCount, 7, "too many fetches")
+
+	validateScraperResult(t, metrics)
 }
 
 func TestScrapeWithDelayedDcgmService(t *testing.T) {
 	realDcgmInit := dcgmInit
 	defer func() { dcgmInit = realDcgmInit }()
+	failures := 2
 	dcgmInit = func(args ...string) (func(), error) {
-		return nil, fmt.Errorf("No DCGM client library *OR* No DCGM connection")
+		if failures > 0 {
+			failures--
+			return nil, fmt.Errorf("No DCGM client library *OR* No DCGM connection")
+		}
+		return realDcgmInit(args...)
 	}
 
 	var settings receiver.CreateSettings
@@ -70,27 +123,21 @@ func TestScrapeWithDelayedDcgmService(t *testing.T) {
 	scraper := newDcgmScraper(createDefaultConfig().(*Config), settings)
 	require.NotNil(t, scraper)
 
+	scraper.initRetryDelay = 0 // retry immediately
+
 	err := scraper.start(context.Background(), componenttest.NewNopHost())
 	require.NoError(t, err)
 
-	metrics, err := scraper.scrape(context.Background())
-	assert.NoError(t, err) // If failed to init DCGM, should have no error
-	assert.Equal(t, 0, metrics.MetricCount())
-
-	// Scrape again with DCGM not available
-	metrics, err = scraper.scrape(context.Background())
-	assert.NoError(t, err)
-	assert.Equal(t, 0, metrics.MetricCount())
-
-	// Simulate DCGM becomes available
-	dcgmInit = realDcgmInit
-	metrics, err = scraper.scrape(context.Background())
+	// Simulate DCGM becomes available after 3 attempts
+	// scrape should block until DCGM is available
+	metrics, err := collectScraperResult(t, context.Background(), scraper)
 	assert.NoError(t, err)
 
-	require.NotNil(t, scraper.client)
-	require.NotEmpty(t, scraper.client.devicesModelName)
-	expectedMetrics := loadExpectedScraperMetrics(t, scraper.client.getDeviceModelName(0))
-	validateScraperResult(t, metrics, expectedMetrics)
+	assert.NoError(t, scraper.stop(context.Background()))
+
+	assert.Equal(t, 0, failures)
+
+	validateScraperResult(t, metrics)
 }
 
 func TestScrapeWithEmptyMetricsConfig(t *testing.T) {
@@ -164,13 +211,15 @@ func TestScrapeWithEmptyMetricsConfig(t *testing.T) {
 	metrics, err := scraper.scrape(context.Background())
 	assert.NoError(t, err)
 	assert.Equal(t, 0, metrics.MetricCount())
+
+	assert.NoError(t, scraper.stop(context.Background()))
 }
 
 func TestScrapeOnPollingError(t *testing.T) {
-	realDcgmGetLatestValuesForFields := dcgmGetLatestValuesForFields
-	defer func() { dcgmGetLatestValuesForFields = realDcgmGetLatestValuesForFields }()
-	dcgmGetLatestValuesForFields = func(gpu uint, fields []dcgm.Short) ([]dcgm.FieldValue_v1, error) {
-		return nil, fmt.Errorf("DCGM polling error")
+	realDcgmGetValuesSince := dcgmGetValuesSince
+	defer func() { dcgmGetValuesSince = realDcgmGetValuesSince }()
+	dcgmGetValuesSince = func(_ dcgm.GroupHandle, _ dcgm.FieldHandle, _ time.Time) ([]dcgm.FieldValue_v2, time.Time, error) {
+		return nil, time.Time{}, fmt.Errorf("DCGM polling error")
 	}
 
 	var settings receiver.CreateSettings
@@ -184,8 +233,10 @@ func TestScrapeOnPollingError(t *testing.T) {
 
 	metrics, err := scraper.scrape(context.Background())
 
-	assert.Error(t, err)
+	assert.NoError(t, err)
 	assert.Equal(t, 0, metrics.MetricCount())
+
+	assert.NoError(t, scraper.stop(context.Background()))
 }
 
 func TestScrapeOnProfilingPaused(t *testing.T) {
@@ -198,23 +249,23 @@ func TestScrapeOnProfilingPaused(t *testing.T) {
 	scraper := newDcgmScraper(config, settings)
 	require.NotNil(t, scraper)
 
-	defer func() { testprofilepause.ResumeProfilingMetrics() }()
-	err := testprofilepause.PauseProfilingMetrics()
-	if err != nil {
-		if errors.Is(err, testprofilepause.FeatureNotSupportedError) {
-			t.Skipf("Pausing profiling not supported")
-		} else {
-			t.Errorf("Pausing profiling failed with error %v", err)
-		}
+	defer testprofilepause.ResumeProfilingMetrics(config.TCPAddrConfig.Endpoint)
+	err := testprofilepause.PauseProfilingMetrics(config.TCPAddrConfig.Endpoint)
+	if errors.Is(err, testprofilepause.FeatureNotSupportedError) {
+		t.Skipf("Pausing profiling not supported")
+	} else if err != nil {
+		t.Fatalf("Pausing profiling failed with error %v", err)
 	}
 	time.Sleep(20 * time.Millisecond)
 
 	err = scraper.start(context.Background(), componenttest.NewNopHost())
 	require.NoError(t, err)
 
-	metrics, err := scraper.scrape(context.Background())
+	metrics, err := collectScraperResult(t, context.Background(), scraper)
 
 	assert.NoError(t, err)
+
+	assert.NoError(t, scraper.stop(context.Background()))
 
 	expectedMetrics := []string{
 		"gpu.dcgm.utilization",
@@ -228,6 +279,8 @@ func TestScrapeOnProfilingPaused(t *testing.T) {
 		"gpu.dcgm.clock.throttle_duration.time",
 		"gpu.dcgm.ecc_errors",
 	}
+
+	require.Greater(t, metrics.ResourceMetrics().Len(), 0)
 
 	ilms := metrics.ResourceMetrics().At(0).ScopeMetrics()
 	require.Equal(t, 1, ilms.Len())
@@ -286,8 +339,8 @@ func loadExpectedScraperMetrics(t *testing.T, model string) map[string]int {
 		"DCGM_FI_DEV_ECC_SBE_VOL_TOTAL":           "gpu.dcgm.ecc_errors",
 		"DCGM_FI_DEV_ECC_DBE_VOL_TOTAL":           "gpu.dcgm.ecc_errors",
 	}
-	expectedReceiverMetrics := LoadExpectedMetrics(t, model)
-	for _, em := range expectedReceiverMetrics {
+	supportedFields := LoadExpectedMetrics(t, model)
+	for _, em := range supportedFields.SupportedFields {
 		scraperMetric := receiverMetricNameToScraperMetricName[em]
 		if scraperMetric != "" {
 			expectedMetrics[scraperMetric] += 1
@@ -297,8 +350,14 @@ func loadExpectedScraperMetrics(t *testing.T, model string) map[string]int {
 	return expectedMetrics
 }
 
-func validateScraperResult(t *testing.T, metrics pmetric.Metrics, expectedMetrics map[string]int) {
+func validateScraperResult(t *testing.T, metrics pmetric.Metrics) {
 	t.Helper()
+	rms := metrics.ResourceMetrics()
+	require.NotEmpty(t, rms.Len(), "missing ResourceMetrics")
+	modelValue, ok := rms.At(0).Resource().Attributes().Get("gpu.model")
+	require.True(t, ok, "missing gpu.model resource attribute")
+	expectedMetrics := loadExpectedScraperMetrics(t, modelValue.Str())
+
 	metricWasSeen := make(map[string]bool)
 	expectedDataPointCount := 0
 	for metric, expectedMetricDataPoints := range expectedMetrics {
@@ -306,8 +365,8 @@ func validateScraperResult(t *testing.T, metrics pmetric.Metrics, expectedMetric
 		expectedDataPointCount += expectedMetricDataPoints
 	}
 
-	assert.LessOrEqual(t, len(expectedMetrics), metrics.MetricCount())
-	assert.LessOrEqual(t, expectedDataPointCount, metrics.DataPointCount())
+	assert.LessOrEqual(t, len(expectedMetrics), metrics.MetricCount(), "metric count")
+	assert.LessOrEqual(t, expectedDataPointCount, metrics.DataPointCount(), "data point count")
 
 	r := metrics.ResourceMetrics().At(0).Resource()
 	assert.Contains(t, r.Attributes().AsRaw(), "gpu.number")

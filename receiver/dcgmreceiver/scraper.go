@@ -84,7 +84,7 @@ func (s *dcgmScraper) start(ctx context.Context, _ component.Host) error {
 
 	s.cancel = func() {
 		scrapeCancel()
-		g.Wait()
+		_ = g.Wait() // Ignore the error from a canceled context
 	}
 
 	metricsCh := make(chan map[uint]deviceMetrics)
@@ -196,7 +196,6 @@ func (s *dcgmScraper) runConnectLoop(ctx context.Context, metricsCh chan<- map[u
 		case <-time.After(s.initRetryDelay):
 		}
 	}
-	return nil
 }
 
 func (s *dcgmScraper) pollClient(ctx context.Context, client *dcgmClient, metricsCh chan<- map[uint]deviceMetrics, collectTriggerCh <-chan struct{}) {

@@ -57,6 +57,7 @@ linters-settings:
           - (github.com/golangci/golangci-lint/pkg/logutils.Log).Fatalf
     disable:
       - fieldalignment
+      - shadow
     enable-all: true
   misspell:
     locale: US

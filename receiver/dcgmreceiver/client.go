@@ -358,13 +358,13 @@ func (client *dcgmClient) collect() (time.Duration, error) {
 func (client *dcgmClient) getDeviceMetrics() map[uint]deviceMetrics {
 	out := map[uint]deviceMetrics{}
 	for gpuIndex, device := range client.devices {
-		new := MetricsMap{}
+		newMetrics := MetricsMap{}
 		for key, value := range device.Metrics {
 			newValue := *value
-			new[key] = &newValue
+			newMetrics[key] = &newValue
 		}
 		// device is already a copy here
-		device.Metrics = new
+		device.Metrics = newMetrics
 		out[gpuIndex] = device
 	}
 	return out

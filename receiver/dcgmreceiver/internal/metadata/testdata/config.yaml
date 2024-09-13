@@ -1,37 +1,111 @@
 default:
 all_set:
   metrics:
-    dcgm.gpu.memory.bytes_used:
+    gpu.dcgm.clock.frequency:
       enabled: true
-    dcgm.gpu.profiling.dram_utilization:
+    gpu.dcgm.clock.throttle_duration.time:
       enabled: true
-    dcgm.gpu.profiling.nvlink_traffic_rate:
+    gpu.dcgm.codec.decoder.utilization:
       enabled: true
-    dcgm.gpu.profiling.pcie_traffic_rate:
+    gpu.dcgm.codec.encoder.utilization:
       enabled: true
-    dcgm.gpu.profiling.pipe_utilization:
+    gpu.dcgm.ecc_errors:
       enabled: true
-    dcgm.gpu.profiling.sm_occupancy:
+    gpu.dcgm.energy_consumption:
       enabled: true
-    dcgm.gpu.profiling.sm_utilization:
+    gpu.dcgm.memory.bandwidth_utilization:
       enabled: true
-    dcgm.gpu.utilization:
+    gpu.dcgm.memory.bytes_used:
+      enabled: true
+    gpu.dcgm.nvlink.io:
+      enabled: true
+    gpu.dcgm.pcie.io:
+      enabled: true
+    gpu.dcgm.pipe.utilization:
+      enabled: true
+    gpu.dcgm.sm.occupancy:
+      enabled: true
+    gpu.dcgm.sm.utilization:
+      enabled: true
+    gpu.dcgm.temperature:
+      enabled: true
+    gpu.dcgm.utilization:
+      enabled: true
+    gpu.dcgm.xid_errors:
+      enabled: true
+  resource_attributes:
+    gpu.model:
+      enabled: true
+    gpu.number:
+      enabled: true
+    gpu.uuid:
       enabled: true
 none_set:
   metrics:
-    dcgm.gpu.memory.bytes_used:
+    gpu.dcgm.clock.frequency:
       enabled: false
-    dcgm.gpu.profiling.dram_utilization:
+    gpu.dcgm.clock.throttle_duration.time:
       enabled: false
-    dcgm.gpu.profiling.nvlink_traffic_rate:
+    gpu.dcgm.codec.decoder.utilization:
       enabled: false
-    dcgm.gpu.profiling.pcie_traffic_rate:
+    gpu.dcgm.codec.encoder.utilization:
       enabled: false
-    dcgm.gpu.profiling.pipe_utilization:
+    gpu.dcgm.ecc_errors:
       enabled: false
-    dcgm.gpu.profiling.sm_occupancy:
+    gpu.dcgm.energy_consumption:
       enabled: false
-    dcgm.gpu.profiling.sm_utilization:
+    gpu.dcgm.memory.bandwidth_utilization:
       enabled: false
-    dcgm.gpu.utilization:
+    gpu.dcgm.memory.bytes_used:
       enabled: false
+    gpu.dcgm.nvlink.io:
+      enabled: false
+    gpu.dcgm.pcie.io:
+      enabled: false
+    gpu.dcgm.pipe.utilization:
+      enabled: false
+    gpu.dcgm.sm.occupancy:
+      enabled: false
+    gpu.dcgm.sm.utilization:
+      enabled: false
+    gpu.dcgm.temperature:
+      enabled: false
+    gpu.dcgm.utilization:
+      enabled: false
+    gpu.dcgm.xid_errors:
+      enabled: false
+  resource_attributes:
+    gpu.model:
+      enabled: false
+    gpu.number:
+      enabled: false
+    gpu.uuid:
+      enabled: false
+filter_set_include:
+  resource_attributes:
+    gpu.model:
+      enabled: true
+      metrics_include:
+        - regexp: ".*"
+    gpu.number:
+      enabled: true
+      metrics_include:
+        - regexp: ".*"
+    gpu.uuid:
+      enabled: true
+      metrics_include:
+        - regexp: ".*"
+filter_set_exclude:
+  resource_attributes:
+    gpu.model:
+      enabled: true
+      metrics_exclude:
+        - strict: "gpu.model-val"
+    gpu.number:
+      enabled: true
+      metrics_exclude:
+        - strict: "gpu.number-val"
+    gpu.uuid:
+      enabled: true
+      metrics_exclude:
+        - strict: "gpu.uuid-val"

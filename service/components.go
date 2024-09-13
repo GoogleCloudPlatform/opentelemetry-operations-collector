@@ -18,6 +18,8 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/exporter/fileexporter"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlemanagedprometheusexporter"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/cumulativetodeltaprocessor"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/deltatorateprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/groupbyattrsprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor"
@@ -141,6 +143,8 @@ func components() (otelcol.Factories, error) {
 	processors := []processor.Factory{
 		agentmetricsprocessor.NewFactory(),
 		casttosumprocessor.NewFactory(),
+		cumulativetodeltaprocessor.NewFactory(),
+		deltatorateprocessor.NewFactory(),
 		filterprocessor.NewFactory(),
 		normalizesumsprocessor.NewFactory(),
 		metricstransformprocessor.NewFactory(),

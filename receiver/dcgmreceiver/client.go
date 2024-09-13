@@ -85,7 +85,7 @@ func newClient(settings *dcgmClientSettings, logger *zap.Logger) (*dcgmClient, e
 	}
 	enabledFields, unavailableFields := filterSupportedFields(requestedFieldIDs, supportedProfilingFieldIDs)
 	for _, f := range unavailableFields {
-		logger.Sugar().Warnf("Field '%s' is not supported. Metric '%s' will not be collected", dcgmIDToName[f], dcgmIDToName[f])
+		logger.Sugar().Warnf("Field '%s' is not supported", dcgmIDToName[f])
 	}
 	var deviceGroup dcgm.GroupHandle
 	if len(enabledFields) != 0 {
@@ -329,7 +329,7 @@ func (client *dcgmClient) collect() (time.Duration, error) {
 			// Blank values are expected at startup.
 			continue
 		} else if err == errNotSupported {
-			client.issueWarningForFailedQueryUptoThreshold(dcgmName, 1, fmt.Sprintf("Field '%s' is not supported. Metric '%s' will not be collected", dcgmName, dcgmName))
+			client.issueWarningForFailedQueryUptoThreshold(dcgmName, 1, fmt.Sprintf("Field '%s' is not supported", dcgmName))
 			continue
 		} else if err != nil {
 			msg := fmt.Sprintf("Received invalid value (ts %d gpu %d) %s: %v", fieldValue.Ts, gpuIndex, dcgmName, err)
@@ -375,7 +375,7 @@ func (client *dcgmClient) issueWarningForFailedQueryUptoThreshold(dcgmName strin
 
 	failedCount := client.deviceMetricToFailedQueryCount[dcgmName]
 	if failedCount <= limit {
-		client.logger.Warnf("%s", reason)
+		client.logger.Warn(reason)
 		if limit > 1 && failedCount == limit {
 			client.logger.Warnf("Surpressing further device query warnings for '%s'", dcgmName)
 		}

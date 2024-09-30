@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-k8s-deployment
+  namespace: test-k8s
+  labels:
+    app: test-metadata
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: test-app
+  template:
+    metadata:
+      labels:
+        app: test-app
+    spec:
+      containers:
+      - name: test-pod
+        image: us-central1-docker.pkg.dev/ops-agent-first-dive/test-docker/test-otel:latest
+        ports:
+        - containerPort: 4317

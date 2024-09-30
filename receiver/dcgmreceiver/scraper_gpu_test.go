@@ -52,7 +52,7 @@ func collectScraperResult(t *testing.T, ctx context.Context, scraper *dcgmScrape
 }
 
 func TestScrapeWithGpuPresent(t *testing.T) {
-	var settings receiver.CreateSettings
+	var settings receiver.Settings
 	settings.Logger = zaptest.NewLogger(t)
 
 	scraper := newDcgmScraper(createDefaultConfig().(*Config), settings)
@@ -70,7 +70,7 @@ func TestScrapeWithGpuPresent(t *testing.T) {
 }
 
 func TestScrapeCollectionInterval(t *testing.T) {
-	var settings receiver.CreateSettings
+	var settings receiver.Settings
 	settings.Logger = zaptest.NewLogger(t)
 
 	var fetchCount int
@@ -117,7 +117,7 @@ func TestScrapeWithDelayedDcgmService(t *testing.T) {
 		return realDcgmInit(args...)
 	}
 
-	var settings receiver.CreateSettings
+	var settings receiver.Settings
 	settings.Logger = zaptest.NewLogger(t)
 
 	scraper := newDcgmScraper(createDefaultConfig().(*Config), settings)
@@ -141,7 +141,7 @@ func TestScrapeWithDelayedDcgmService(t *testing.T) {
 }
 
 func TestScrapeWithEmptyMetricsConfig(t *testing.T) {
-	var settings receiver.CreateSettings
+	var settings receiver.Settings
 	settings.Logger = zaptest.NewLogger(t)
 	emptyConfig := &Config{
 		ControllerConfig: scraperhelper.ControllerConfig{
@@ -222,7 +222,7 @@ func TestScrapeOnPollingError(t *testing.T) {
 		return nil, time.Time{}, fmt.Errorf("DCGM polling error")
 	}
 
-	var settings receiver.CreateSettings
+	var settings receiver.Settings
 	settings.Logger = zaptest.NewLogger(t)
 
 	scraper := newDcgmScraper(createDefaultConfig().(*Config), settings)
@@ -243,7 +243,7 @@ func TestScrapeOnProfilingPaused(t *testing.T) {
 	config := createDefaultConfig().(*Config)
 	config.CollectionInterval = 10 * time.Millisecond
 
-	var settings receiver.CreateSettings
+	var settings receiver.Settings
 	settings.Logger = zaptest.NewLogger(t)
 
 	scraper := newDcgmScraper(config, settings)

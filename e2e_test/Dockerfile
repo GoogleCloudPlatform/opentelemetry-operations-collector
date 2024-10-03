@@ -10,6 +10,7 @@ WORKDIR /builder/bin
 RUN mkdir src
 ENV PATH=/builder/bin:$PATH
 ENV PATH=/usr/local/go/bin:$PATH
+ENV ZONES=us-central1-a
 ENTRYPOINT ["go.bash"]
 
 #RUN apt-get update -qqy && apt-get dist-upgrade -yq && apt-get install -qqy git mercurial subversion gcc

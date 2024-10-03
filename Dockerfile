@@ -25,10 +25,10 @@
 #ENTRYPOINT ["/otelopscol", "--config=config.yaml"]
 #EXPOSE 4317
 
-
-#ARG GO_VERSION=1.23.0
 #
-#FROM gcr.io/google.com/cloudsdktool/google-cloud-cli:alpine as build
+#ARG GO_VERSION=1.21.0
+#
+#FROM gcr.io/google.com/cloudsdktool/google-cloud-cli:debian as build
 #
 ## Install git to clone the repo
 #RUN apk update && apk add --no-cache git && apk add --no-cache make
@@ -40,14 +40,8 @@
 #    tar -xf /tmp/go${GO_VERSION}.tar.gz -C /usr/local
 #ENV PATH="${PATH}:/usr/local/go/bin"
 #
-#RUN git clone https://github.com/GoogleCloudPlatform/ops-agent.git
-#
-#WORKDIR /ops-agent/integration_test/ops_agent_test/testdata/otlp
-#EXPOSE 4317
-#
-#RUN go mod init main
-#RUN go mod tidy
-#RUN go run traces.go
+#ENTRYPOINT ["go.bash"]
+
 
 FROM otel/opentelemetry-collector-contrib
 COPY config.yaml /etc/otelcol-contrib/config.yaml

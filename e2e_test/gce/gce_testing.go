@@ -167,7 +167,7 @@ const (
 
 	vmInitTimeout                     = 20 * time.Minute
 	vmInitBackoffDuration             = 10 * time.Second
-	vmInitPokeSSHTimeout              = 30 * time.Second
+	vmInitPokeSSHTimeout              = 10 * time.Minute
 	vmWinPasswordResetBackoffDuration = 30 * time.Second
 
 	slesStartupDelay           = 60 * time.Second

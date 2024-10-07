@@ -4,6 +4,7 @@ package e2e_test
 
 import (
 	"context"
+	"fmt"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/e2e_test/gce"
 	"os"
 	"testing"
@@ -25,6 +26,7 @@ func TestGcloud(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	fmt.Printf("vm successfully created with name: %s", vm.Name)
 	var cmd gce.CommandOutput
 	cmd, err = gce.RunScriptRemotely(ctx, logger.ToFile("script.txt"), vm, "echo foo", []string{}, make(map[string]string))
 	if err != nil {

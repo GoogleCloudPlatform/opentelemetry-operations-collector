@@ -166,7 +166,7 @@ const (
 	traceQueryDerate = 6 // = 30 seconds with above settings
 
 	vmInitTimeout                     = 20 * time.Minute
-	vmInitBackoffDuration             = 10 * time.Second
+	vmInitBackoffDuration             = 10 * time.Minute
 	vmInitPokeSSHTimeout              = 10 * time.Minute
 	vmWinPasswordResetBackoffDuration = 30 * time.Second
 

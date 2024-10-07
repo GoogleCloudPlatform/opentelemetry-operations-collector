@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/e2e_test/gce"
+	"github.com/google/uuid"
 	"os"
 	"testing"
 )
@@ -23,6 +24,7 @@ func TestGcloud(t *testing.T) {
 		ImageSpec: "cos-cloud:cos-stable",
 		Project:   projectName,
 		Zone:      "us-central1-a",
+		Name:      fmt.Sprintf("gboc-%s", uuid.New().String()),
 	}
 	vm, err := gce.CreateInstance(ctx, logger.ToFile("VM_initialization.txt"), vmOptions)
 	if err != nil {

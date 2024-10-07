@@ -1309,6 +1309,8 @@ func attemptCreateInstance(ctx context.Context, logger *log.Logger, options VMOp
 		logger.Printf("Unable to retrieve information about the VM's boot disk: %v", err)
 	}
 
+	fmt.Printf("vm successfully created with name: %s", vm.Name)
+
 	if err := waitForStart(ctx, logger, vm); err != nil {
 		return nil, err
 	}

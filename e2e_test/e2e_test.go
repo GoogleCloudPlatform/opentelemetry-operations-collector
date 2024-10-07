@@ -10,9 +10,9 @@ import (
 )
 
 func TestGcloud(t *testing.T) {
-	projectName := os.Getenv("proj")
+	projectName := os.Getenv("PROJECT_NAME")
 	if projectName == "" {
-		t.Fatal("No proj enviroment variable found")
+		t.Fatal("No proj environment variable found")
 	}
 	ctx := context.Background()
 	logger := gce.SetupLogger(t)
@@ -27,5 +27,12 @@ func TestGcloud(t *testing.T) {
 	}
 	var cmd gce.CommandOutput
 	cmd, err = gce.RunScriptRemotely(ctx, logger.ToFile("script.txt"), vm, "echo foo", []string{}, make(map[string]string))
+	if err != nil {
+		t.Fatal("could not run script", err)
+	}
 	logger.ToMainLog().Printf("cmd output = %s", cmd.Stdout)
+	err = gce.DeleteInstance(logger.ToMainLog(), vm)
+	if err != nil {
+		t.Fatal("could not delete instance", err)
+	}
 }

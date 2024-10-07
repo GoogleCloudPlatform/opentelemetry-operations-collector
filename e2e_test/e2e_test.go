@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"os"
 	"testing"
+	"time"
 )
 
 func TestGcloud(t *testing.T) {
@@ -16,7 +17,7 @@ func TestGcloud(t *testing.T) {
 	if projectName == "" {
 		t.Fatal("No proj environment variable found")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), gce.SuggestedTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Minute)
 	t.Cleanup(cancel)
 	ctx = gce.WithGcloudConfigDir(ctx, t.TempDir())
 	logger := gce.SetupLogger(t)

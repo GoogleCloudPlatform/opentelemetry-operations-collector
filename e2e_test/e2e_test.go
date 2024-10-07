@@ -15,7 +15,9 @@ func TestGcloud(t *testing.T) {
 	if projectName == "" {
 		t.Fatal("No proj environment variable found")
 	}
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), gce.SuggestedTimeout)
+	t.Cleanup(cancel)
+	ctx = gce.WithGcloudConfigDir(ctx, t.TempDir())
 	logger := gce.SetupLogger(t)
 	vmOptions := gce.VMOptions{
 		ImageSpec: "cos-cloud:cos-stable",

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/e2e_test/gce"
 	"github.com/google/uuid"
+	"log"
 	"os"
 	"testing"
 	"time"
@@ -27,7 +28,7 @@ func TestGcloud(t *testing.T) {
 		Zone:      "us-central1-a",
 		Name:      fmt.Sprintf("gboc-%s", uuid.New().String()),
 	}
-	vm, err := gce.CreateInstance(ctx, logger.ToFile("VM_initialization.txt"), vmOptions)
+	vm, err := gce.CreateInstance(ctx, log.Default(), vmOptions)
 	if err != nil {
 		t.Fatal(err)
 	}

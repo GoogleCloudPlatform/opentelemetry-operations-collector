@@ -230,9 +230,9 @@ require (
 	cloud.google.com/go/logging v1.10.0 // indirect
 	cloud.google.com/go/monitoring v1.20.2 // indirect
 	cloud.google.com/go/trace v1.10.10 // indirect
-	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.24.2 // indirect
-	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace v1.24.2 // indirect
-	github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.48.2 // indirect
+	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.24.3-0.20241010165122-5cd127bed904 // indirect
+	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace v1.24.3-0.20241010165122-5cd127bed904 // indirect
+	github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.48.3-0.20241010165122-5cd127bed904 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/SAP/go-hdb v1.12.2 // indirect
 	github.com/Showmax/go-fqdn v1.0.0 // indirect
@@ -417,6 +417,16 @@ require (
 // Currently causes build issues on windows. Downgrading to previous version.
 replace github.com/mattn/go-ieproxy v0.0.9 => github.com/mattn/go-ieproxy v0.0.1
 
-replace github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlemanagedprometheusexporter v0.111.0 => github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlemanagedprometheusexporter v0.111.1-0.20241008202135-c7bcf9d616b9
+replace github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlemanagedprometheusexporter v0.111.0 => github.com/observiq/opentelemetry-collector-contrib/exporter/googlemanagedprometheusexporter v0.0.0-20241010181821-83d86680280e
 
-replace github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter v0.111.0 => github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter v0.111.1-0.20241008202135-c7bcf9d616b9
+replace github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter v0.111.0 => github.com/observiq/opentelemetry-collector-contrib/exporter/googlecloudexporter v0.0.0-20241010181821-83d86680280e
+
+replace github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector v0.48.2 => github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector v0.48.3-0.20241010165122-5cd127bed904
+
+replace github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector/googlemanagedprometheus v0.48.2 => github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector/googlemanagedprometheus v0.48.3-0.20241010165122-5cd127bed904
+
+replace github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.24.2 => github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.24.3-0.20241010165122-5cd127bed904
+
+replace github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace v1.24.2 => github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace v1.24.3-0.20241010165122-5cd127bed904
+
+replace github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.48.2 => github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.48.3-0.20241010165122-5cd127bed904

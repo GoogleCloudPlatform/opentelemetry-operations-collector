@@ -34,7 +34,7 @@ import (
 
 type dcgmScraper struct {
 	config           *Config
-	settings         receiver.CreateSettings
+	settings         receiver.Settings
 	initRetryDelay   time.Duration
 	mb               *metadata.MetricsBuilder
 	collectTriggerCh chan<- struct{}
@@ -42,7 +42,7 @@ type dcgmScraper struct {
 	cancel           func()
 }
 
-func newDcgmScraper(config *Config, settings receiver.CreateSettings) *dcgmScraper {
+func newDcgmScraper(config *Config, settings receiver.Settings) *dcgmScraper {
 	return &dcgmScraper{config: config, settings: settings, initRetryDelay: 10 * time.Second}
 }
 

@@ -41,13 +41,13 @@ var processorCapabilities = consumer.Capabilities{MutatesData: true}
 
 func createMetricsProcessor(
 	ctx context.Context,
-	params processor.CreateSettings,
+	params processor.Settings,
 	cfg component.Config,
 	nextConsumer consumer.Metrics,
 ) (processor.Metrics, error) {
 	// NewMetricsProcess takes an MProcessor, which is what agentMetricsProcessor implements, and returns a MetricsProcessor.
 	mProcessor := newAgentMetricsProcessor(params.Logger, cfg.(*Config))
-	return processorhelper.NewMetricsProcessor(
+	return processorhelper.NewMetrics(
 		ctx,
 		params,
 		cfg,

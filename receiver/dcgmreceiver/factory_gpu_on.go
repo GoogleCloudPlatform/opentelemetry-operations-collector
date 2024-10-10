@@ -48,7 +48,7 @@ func init() {
 
 func createMetricsReceiver(
 	_ context.Context,
-	params receiver.CreateSettings,
+	params receiver.Settings,
 	rConf component.Config,
 	consumer consumer.Metrics,
 ) (receiver.Metrics, error) {
@@ -59,7 +59,7 @@ func createMetricsReceiver(
 
 	ns := newDcgmScraper(cfg, params)
 	scraper, err := scraperhelper.NewScraper(
-		metadata.Type.String(),
+		metadata.Type,
 		ns.scrape,
 		scraperhelper.WithStart(ns.start),
 		scraperhelper.WithShutdown(ns.stop))

@@ -32,12 +32,12 @@ import (
 
 type nvmlScraper struct {
 	config   *Config
-	settings receiver.CreateSettings
+	settings receiver.Settings
 	client   *nvmlClient
 	mb       *metadata.MetricsBuilder
 }
 
-func newNvmlScraper(config *Config, settings receiver.CreateSettings) *nvmlScraper {
+func newNvmlScraper(config *Config, settings receiver.Settings) *nvmlScraper {
 	return &nvmlScraper{config: config, settings: settings}
 }
 

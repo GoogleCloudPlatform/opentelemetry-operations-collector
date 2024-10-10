@@ -14,6 +14,7 @@ import (
 )
 
 func TestGcloud(t *testing.T) {
+	log.Printf("USE_INTERNAL: %s\n", os.Getenv("USE_INTERNAL_IP"))
 	projectName := os.Getenv("PROJECT_NAME")
 	if projectName == "" {
 		t.Fatal("No PROJECT_NAME environment variable found")

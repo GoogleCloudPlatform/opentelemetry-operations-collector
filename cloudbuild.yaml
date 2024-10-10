@@ -15,7 +15,7 @@ steps:
 - name: gboc-e2e
   env:
   - PROJECT_NAME=$_PROJECT_NAME
-  - USE_INTERNAL_IP = 'true'
+  - USE_INTERNAL_IP="true"
   - >-
     SERVICE_EMAIL=build-and-test@stackdriver-test-143416.iam.gserviceaccount.com
   args:

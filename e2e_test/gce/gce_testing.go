@@ -1931,7 +1931,7 @@ func logLocation(logRootDir, testName string) string {
 	}
 	uploadLocation := os.Getenv("LOG_UPLOAD_URL_ROOT")
 	if uploadLocation == "" {
-		uploadLocation = "https://console.cloud.google.com/storage/browser/cloud-built-otel-collector-public-buckets-test-logs/"
+		uploadLocation = "https://console.cloud.google.com/storage/browser/cloud-built-otel-collector-buckets-test-logs/"
 	}
 	return uploadLocation + path.Join(subdir, "logs", testName)
 }

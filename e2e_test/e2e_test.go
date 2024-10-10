@@ -16,7 +16,7 @@ import (
 func TestGcloud(t *testing.T) {
 	projectName := os.Getenv("PROJECT_NAME")
 	if projectName == "" {
-		t.Fatal("No proj environment variable found")
+		t.Fatal("No PROJECT_NAME environment variable found")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Minute)
 	t.Cleanup(cancel)

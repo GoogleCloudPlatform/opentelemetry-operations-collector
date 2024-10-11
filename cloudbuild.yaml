@@ -13,16 +13,6 @@ steps:
   - ./e2e_test
   id: Build tester image
 - name: gboc-e2e
-  args:
-  - '-c'
-  - |
-    gcloud config get-value project
-  id: Test project location - gboc
-  entrypoint: /bin/bash
-- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-  args: ['gcloud', 'config', 'get-value', 'project']
-  id: Test project location - gcloud
-- name: gboc-e2e
   env:
   - PROJECT_NAME=$_PROJECT_NAME
   - USE_INTERNAL_IP="true"

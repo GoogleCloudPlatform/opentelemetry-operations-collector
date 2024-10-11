@@ -21,6 +21,9 @@ func TestGcloud(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Minute)
 	t.Cleanup(cancel)
+	gce.RunGcloud(ctx, log.Default(), "", []string{
+		"config", "get-value", "project",
+	})
 	ctx = gce.WithGcloudConfigDir(ctx, t.TempDir())
 	logger := gce.SetupLogger(t)
 	vmOptions := gce.VMOptions{
@@ -44,4 +47,8 @@ func TestGcloud(t *testing.T) {
 	if err != nil {
 		t.Fatal("could not delete instance", err)
 	}
+}
+
+func TestGKE(t *testing.T) {
+
 }

@@ -21,9 +21,13 @@ func TestGcloud(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Minute)
 	t.Cleanup(cancel)
-	gce.RunGcloud(ctx, log.Default(), "", []string{
+	cmdout, e := gce.RunGcloud(ctx, log.Default(), "", []string{
 		"config", "get-value", "project",
 	})
+	if e != nil {
+		t.Fatal(e)
+	}
+	log.Default().Printf("project from gcloud: %s", cmdout.Stdout)
 	ctx = gce.WithGcloudConfigDir(ctx, t.TempDir())
 	logger := gce.SetupLogger(t)
 	vmOptions := gce.VMOptions{

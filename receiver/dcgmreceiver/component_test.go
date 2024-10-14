@@ -46,8 +46,8 @@ func TestComponentConfigStruct(t *testing.T) {
 	require.NoError(t, componenttest.CheckConfigStruct(NewFactory().CreateDefaultConfig()))
 }
 
-func newCreateSettings(t *testing.T) receiver.CreateSettings {
-	settings := receivertest.NewNopCreateSettings()
+func newCreateSettings(t *testing.T) receiver.Settings {
+	settings := receivertest.NewNopSettings()
 	settings.Logger = zaptest.NewLogger(t)
 	return settings
 }
@@ -57,13 +57,13 @@ func TestComponentLifecycle(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		createFn func(ctx context.Context, set receiver.CreateSettings, cfg component.Config) (component.Component, error)
+		createFn func(ctx context.Context, set receiver.Settings, cfg component.Config) (component.Component, error)
 	}{
 
 		{
 			name: "metrics",
-			createFn: func(ctx context.Context, set receiver.CreateSettings, cfg component.Config) (component.Component, error) {
-				return factory.CreateMetricsReceiver(ctx, set, cfg, consumertest.NewNop())
+			createFn: func(ctx context.Context, set receiver.Settings, cfg component.Config) (component.Component, error) {
+				return factory.CreateMetrics(ctx, set, cfg, consumertest.NewNop())
 			},
 		},
 	}
@@ -73,7 +73,7 @@ func TestComponentLifecycle(t *testing.T) {
 	cfg := factory.CreateDefaultConfig()
 	sub, err := cm.Sub("tests::config")
 	require.NoError(t, err)
-	require.NoError(t, component.UnmarshalConfig(sub, cfg))
+	require.NoError(t, sub.Unmarshal(&cfg))
 
 	for _, test := range tests {
 		t.Run(test.name+"-shutdown", func(t *testing.T) {

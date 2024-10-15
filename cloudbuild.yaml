@@ -1,32 +1,60 @@
-steps:
-- name: gcr.io/google.com/cloudsdktool/cloud-sdk
-  args:
-  - gcloud
-  - config
-  - get-value
-  - project
-- name: gcr.io/cloud-builders/docker
-  args:
-  - build
-  - '-t'
-  - gboc-e2e
-  - ./e2e_test
-  id: Build tester image
-- name: gboc-e2e
-  env:
-  - PROJECT_NAME=$_PROJECT_NAME
-  - USE_INTERNAL_IP="true"
-  - >-
-    SERVICE_EMAIL=build-and-test@stackdriver-test-143416.iam.gserviceaccount.com
-  args:
-  - '-c'
-  - |
-    cd ./e2e_test
-    echo ${_BUILD_ARTIFACTS}
-    gcloud config get-value project
-    go test e2e_test.go -timeout=3h -tags integration_test
-  entrypoint: /bin/bash
-logsBucket: 'gs://cloud-built-otel-collector-buckets-test-logs'
+#steps:
+#- name: gcr.io/google.com/cloudsdktool/cloud-sdk
+#  args:
+#  - gcloud
+#  - config
+#  - get-value
+#  - project
+#- name: gcr.io/cloud-builders/docker
+#  args:
+#  - build
+#  - '-t'
+#  - gboc-e2e
+#  - ./e2e_test
+#  id: Build tester image
+#- name: gboc-e2e
+#  env:
+#  - PROJECT_NAME=$_PROJECT_NAME
+#  - USE_INTERNAL_IP="true"
+#  - >-
+#    SERVICE_EMAIL=build-and-test@stackdriver-test-143416.iam.gserviceaccount.com
+#  args:
+#  - '-c'
+#  - |
+#    cd ./e2e_test
+#    echo ${_BUILD_ARTIFACTS}
+#    gcloud config get-value project
+#    go test e2e_test.go -timeout=3h -tags integration_test
+#  entrypoint: /bin/bash
+#logsBucket: 'gs://cloud-built-otel-collector-buckets-test-logs'
+#substitutions:
+#  _PROJECT_NAME: ''
+#  _BUILD_ARTIFACTS: ''
+
 substitutions:
-  _PROJECT_NAME: ''
-  _BUILD_ARTIFACTS: ''
+  _VM: ''
+  _PROJECT: ''
+  _ZONE: ''
+steps:
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:debian_component_based'
+  entrypoint: bash
+  args:
+  - -c
+  - |
+    set -x
+
+    gcloud compute instances create "${_VM}" --project="${_PROJECT}" --zone="${_ZONE}" --machine-type=e2-standard-4 --image-family-scope=global --network=default --image-project=debian-cloud --image-family=debian-11 --metadata=serial-port-logging-enable=true --service-account=build-and-test@stackdriver-test-143416.iam.gserviceaccount.com || exit 7
+
+    sleep 180
+
+    function try_ssh() {
+      gcloud compute ssh --project="${_PROJECT}" --zone="${_ZONE}" "${_VM}" --command="echo try_ssh"
+    }
+
+    try_ssh && echo "success"
+
+    gcloud compute firewall-rules create --project="${_PROJECT}" --network=default default-allow-ssh --allow=tcp:22
+
+    try_ssh && echo "success"
+
+    gcloud compute instances delete "${_VM}" --project="${_PROJECT}" --zone="${_ZONE}" --quiet

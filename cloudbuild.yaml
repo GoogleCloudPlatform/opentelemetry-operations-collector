@@ -43,19 +43,5 @@ steps:
   - -c
   - |
     set -x
-
-    gcloud compute instances create "${_VM}" --project="${_PROJECT}" --zone="${_ZONE}" --machine-type=e2-standard-4 --image-family-scope=global --network=default --image-project=debian-cloud --image-family=debian-11 --metadata=serial-port-logging-enable=true --service-account=build-and-test@stackdriver-test-143416.iam.gserviceaccount.com || exit 7
-
-    sleep 180
-
-    function try_ssh() {
-      gcloud compute ssh --project="${_PROJECT}" --zone="${_ZONE}" "${_VM}" --command="echo try_ssh"
-    }
-
-    try_ssh && echo "success"
-
-    gcloud compute firewall-rules create --project="${_PROJECT}" --network=default default-allow-ssh --allow=tcp:22
-
-    try_ssh && echo "success"
-
-    gcloud compute instances delete "${_VM}" --project="${_PROJECT}" --zone="${_ZONE}" --quiet
+    
+    gcloud compute networks list --project=stackdriver-test-143416

@@ -35,6 +35,7 @@ substitutions:
   _VM: ''
   _PROJECT: ''
   _ZONE: ''
+logsBucket: 'gs://cloud-built-otel-collector-buckets-test-logs'
 steps:
 - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:debian_component_based'
   entrypoint: bash

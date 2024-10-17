@@ -6,7 +6,7 @@ on:
       - master
 env:
   # Default minimum version of Go to support.
-  DEFAULT_GO_VERSION: 1.21.10
+  DEFAULT_GO_VERSION: 1.21.11
 jobs:
   build:
     strategy:

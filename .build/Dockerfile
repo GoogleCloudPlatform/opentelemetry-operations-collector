@@ -1,4 +1,4 @@
-FROM golang:1.21.6-bullseye
+FROM golang:1.21.11-bullseye
 
 RUN apt-get update && apt-get install gettext-base
 

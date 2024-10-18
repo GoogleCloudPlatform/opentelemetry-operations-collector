@@ -31,9 +31,9 @@ func TestCreateMetricsReceiverOnLinux(t *testing.T) {
 	cfg := factory.CreateDefaultConfig()
 	receiverConfig := cfg.(*Config)
 
-	receiver, err := factory.CreateMetricsReceiver(
+	receiver, err := factory.CreateMetrics(
 		context.Background(),
-		receivertest.NewNopCreateSettings(),
+		receivertest.NewNopSettings(),
 		receiverConfig,
 		consumertest.NewNop(),
 	)

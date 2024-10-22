@@ -33,7 +33,7 @@ import (
 )
 
 func TestScraperWithoutDcgm(t *testing.T) {
-	var settings receiver.CreateSettings
+	var settings receiver.Settings
 	var mu sync.Mutex
 	seenDcgmNotInstalledWarning := false
 	settings.Logger = zaptest.NewLogger(t, zaptest.WrapOptions(zap.Hooks(func(e zapcore.Entry) error {

@@ -1,6 +1,6 @@
 module github.com/GoogleCloudPlatform/opentelemetry-operations-collector
 
-go 1.21.11
+go 1.22.8
 
 require (
 	github.com/NVIDIA/go-dcgm v0.0.0-20240409130410-eeff1ddeec19

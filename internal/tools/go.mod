@@ -7,7 +7,7 @@ require (
 	github.com/golangci/golangci-lint v1.52.1
 	github.com/google/addlicense v1.1.1
 	github.com/google/googet v2.13.0+incompatible
-	go.opentelemetry.io/collector/cmd/mdatagen v0.111.1-0.20241021232133-8f20a0784789
+	go.opentelemetry.io/collector/cmd/mdatagen v0.112.0
 	golang.org/x/tools v0.21.1-0.20240508182429-e35e4ccd0d2d
 )
 
@@ -172,12 +172,12 @@ require (
 	github.com/yagipy/maintidx v1.0.0 // indirect
 	github.com/yeya24/promlinter v0.2.0 // indirect
 	gitlab.com/bosi/decorder v0.2.3 // indirect
-	go.opentelemetry.io/collector/component v0.111.1-0.20241021232133-8f20a0784789 // indirect
-	go.opentelemetry.io/collector/config/configtelemetry v0.111.1-0.20241021232133-8f20a0784789 // indirect
-	go.opentelemetry.io/collector/confmap v1.17.1-0.20241021232133-8f20a0784789 // indirect
-	go.opentelemetry.io/collector/confmap/provider/fileprovider v1.17.1-0.20241021232133-8f20a0784789 // indirect
-	go.opentelemetry.io/collector/filter v0.111.1-0.20241021232133-8f20a0784789 // indirect
-	go.opentelemetry.io/collector/pdata v1.17.1-0.20241021232133-8f20a0784789 // indirect
+	go.opentelemetry.io/collector/component v0.112.0 // indirect
+	go.opentelemetry.io/collector/config/configtelemetry v0.112.0 // indirect
+	go.opentelemetry.io/collector/confmap v1.18.0 // indirect
+	go.opentelemetry.io/collector/confmap/provider/fileprovider v1.18.0 // indirect
+	go.opentelemetry.io/collector/filter v0.112.0 // indirect
+	go.opentelemetry.io/collector/pdata v1.18.0 // indirect
 	go.opentelemetry.io/otel v1.31.0 // indirect
 	go.opentelemetry.io/otel/metric v1.31.0 // indirect
 	go.opentelemetry.io/otel/trace v1.31.0 // indirect

@@ -28,8 +28,7 @@ func TestCreateDefaultConfig(t *testing.T) {
 	assert.NoError(t, componenttest.CheckConfigStruct(NewFactory().CreateDefaultConfig()))
 }
 func TestCreateProcessor(t *testing.T) {
-	cfg := createDefaultConfig().(*Config)
-	mp, err := createMetricsProcessor(context.Background(), processortest.NewNopSettings(), cfg, consumertest.NewNop())
+	mp, err := createMetricsProcessor(context.Background(), processortest.NewNopSettings(), createDefaultConfig(), consumertest.NewNop())
 	assert.NoError(t, err)
 	assert.NotNil(t, mp)
 }

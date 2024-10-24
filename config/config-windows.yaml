@@ -366,16 +366,35 @@ processors:
           # change data type from int64 -> double
           - action: toggle_scalar_data_type
 
-  # filter to include only agent metrics supported by cloud monitoring
-  filter/agent:
+  # filter to include only raw agent metrics supported by cloud monitoring
+  filter/agent_0:
     metrics:
       include:
         match_type: strict
         metric_names:
           - otelcol_process_uptime
           - otelcol_process_memory_rss
-          - otelcol_grpc_io_client_completed_rpcs
-          - otelcol_googlecloudmonitoring_point_count
+          - grpc_client_attempt_duration
+          - googlecloudmonitoring_point_count
+
+  # filter to include only agent metrics supported by cloud monitoring
+  filter/agent_1:
+    metrics:
+      include:
+        match_type: strict
+        metric_names:
+          - otelcol_process_uptime
+          - otelcol_process_memory_rss
+          - grpc_client_attempt_duration_count
+          - googlecloudmonitoring_point_count
+  
+  # create count metric from histogram metric
+  transform/agent:
+    error_mode: ignore
+    metric_statements:
+    - context: metric
+      statements:
+      - extract_count_metric(true) where name == "grpc_client_attempt_duration"
 
   # convert from windows perf counter formats to cloud monitoring formats
   metricstransform/iis:
@@ -428,28 +447,26 @@ processors:
       - include: otelcol_process_memory_rss
         action: update
         new_name: agent/memory_usage
-      # otelcol_grpc_io_client_completed_rpcs -> agent/api_request_count
-      - include: otelcol_grpc_io_client_completed_rpcs
+      # grpc_client_attempt_duration_count -> agent/api_request_count
+      - include: grpc_client_attempt_duration_count
         action: update
         new_name: agent/api_request_count
         operations:
-          # change data type from double -> int64
-          - action: toggle_scalar_data_type
           # TODO: below is proposed new configuration for the metrics transform processor
           # ignore any non "google.monitoring" RPCs (note there won't be any other RPCs for now)
           # - action: select_label_values
           #   label: grpc_client_method
           #   value_regexp: ^google\.monitoring
-          # change label grpc_client_status -> state
+          # change label grpc_status -> state
           - action: update_label
-            label: grpc_client_status
+            label: grpc_status
             new_label: state
           # delete grpc_client_method dimension, retaining only state
           - action: aggregate_labels
             label_set: [state]
             aggregation_type: sum
-      # otelcol_googlecloudmonitoring_point_count -> agent/monitoring/point_count
-      - include: otelcol_googlecloudmonitoring_point_count
+      # googlecloudmonitoring_point_count -> agent/monitoring/point_count
+      - include: googlecloudmonitoring_point_count
         action: update
         new_name: agent/monitoring/point_count
         operations:
@@ -518,7 +535,9 @@ service:
       receivers:
         - prometheus/agent
       processors:
-        - filter/agent
+        - filter/agent_0
+        - transform/agent
+        - filter/agent_1
         - metricstransform/agent
         - resourcedetection
       exporters:

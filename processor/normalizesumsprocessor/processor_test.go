@@ -78,9 +78,9 @@ func TestNormalizeSumsProcessor(t *testing.T) {
 			nsp := newNormalizeSumsProcessor(zap.NewExample())
 
 			tmn := &consumertest.MetricsSink{}
-			rmp, err := processorhelper.NewMetricsProcessor(
+			rmp, err := processorhelper.NewMetrics(
 				context.Background(),
-				processortest.NewNopCreateSettings(),
+				processortest.NewNopSettings(),
 				&Config{},
 				tmn,
 				nsp.ProcessMetrics,

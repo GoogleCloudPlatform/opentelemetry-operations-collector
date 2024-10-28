@@ -32,9 +32,9 @@ import (
 func TestCreateMetricsReceiverWithGPUSupportOff(t *testing.T) {
 	factory := NewFactory()
 	cfg := factory.CreateDefaultConfig()
-	receiver, err := factory.CreateMetricsReceiver(
+	receiver, err := factory.CreateMetrics(
 		context.Background(),
-		receivertest.NewNopCreateSettings(),
+		receivertest.NewNopSettings(),
 		cfg,
 		consumertest.NewNop())
 

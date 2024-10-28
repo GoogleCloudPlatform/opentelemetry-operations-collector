@@ -37,7 +37,7 @@ type varnishScraper struct {
 	cacheName         string
 }
 
-func newVarnishScraper(settings receiver.CreateSettings, config *Config) *varnishScraper {
+func newVarnishScraper(settings receiver.Settings, config *Config) *varnishScraper {
 	return &varnishScraper{
 		telemetrySettings: settings.TelemetrySettings,
 		config:            config,

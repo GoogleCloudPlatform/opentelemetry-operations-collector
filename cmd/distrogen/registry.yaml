@@ -1,0 +1,405 @@
+receivers:
+  activedirectoryds:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/activedirectorydsreceiver
+  aerospike:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/aerospikereceiver
+  apache:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/apachereceiver
+  apachespark:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/apachesparkreceiver
+  awscloudwatch:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/awscloudwatchreceiver
+  awscontainerinsight:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/awscontainerinsightreceiver
+  awsecscontainermetrics:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/awsecscontainermetricsreceiver
+  awsfirehose:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/awsfirehosereceiver
+  awsxray:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/awsxrayreceiver
+  azureblob:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/azureblobreceiver
+  azureeventhub:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/azureeventhubreceiver
+  azuremonitor:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/azuremonitorreceiver
+  bigip:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/bigipreceiver
+  carbon:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/carbonreceiver
+  chrony:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/chronyreceiver
+  cloudflare:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/cloudflarereceiver
+  cloudfoundry:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/cloudfoundryreceiver
+  collectd:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/collectdreceiver
+  couchdb:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/couchdbreceiver
+  creator:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/receivercreator
+  datadog:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/datadogreceiver
+  dockerstats:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/dockerstatsreceiver
+  elasticsearch:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/elasticsearchreceiver
+  expvar:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/expvarreceiver
+  filelog:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver
+  filestats:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filestatsreceiver
+  flinkmetrics:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/flinkmetricsreceiver
+  fluentforward:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/fluentforwardreceiver
+  googlecloudpubsub:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/googlecloudpubsubreceiver  
+  haproxy:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/haproxyreceiver
+  hostmetrics:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver
+  httpcheck:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/httpcheckreceiver
+  iis:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/iisreceiver
+  influxdb:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/influxdbreceiver
+  jaeger:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jaegerreceiver
+  jmx:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver
+  journald:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/journaldreceiver
+  k8scluster:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/k8sclusterreceiver
+  k8sevents:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/k8seventsreceiver
+  k8sobjects:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/k8sobjectsreceiver
+  kafka:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/kafkareceiver
+  kafkametrics:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/kafkametricsreceiver
+  kubeletstats:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/kubeletstatsreceiver
+  loki:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/lokireceiver
+  memcached:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/memcachedreceiver
+  mongodb:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/mongodbreceiver
+  mongodbatlas:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/mongodbatlasreceiver
+  mysql:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/mysqlreceiver
+  namedpipe:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/namedpipereceiver
+  nginx:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/nginxreceiver
+  nop:
+    gomod: go.opentelemetry.io/collector/receiver/nopreceiver
+  nsxt:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/nsxtreceiver
+  opencensus:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/opencensusreceiver
+  oracledb:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/oracledbreceiver
+  otelarrow:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/otelarrowreceiver
+  otlp:
+    gomod: go.opentelemetry.io/collector/receiver/otlpreceiver
+  otlpjsonfile:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/otlpjsonfilereceiver
+  podman:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/podmanreceiver
+  postgresql:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/postgresqlreceiver
+  prometheus:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver
+  pulsar:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/pulsarreceiver
+  purefa:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/purefareceiver
+  purefb:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/purefbreceiver
+  rabbitmq:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/rabbitmqreceiver
+  redis:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/redisreceiver
+  riak:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/riakreceiver
+  sapm:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/sapmreceiver
+  saphana:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/saphanareceiver
+  signalfx:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/signalfxreceiver
+  simpleprometheus:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/simpleprometheusreceiver
+  skywalking:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/skywalkingreceiver
+  snmp:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/snmpreceiver
+  snowflake:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/snowflakereceiver
+  solace:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/solacereceiver
+  splunkenterprise:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/splunkenterprisereceiver
+  splunkhec:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/splunkhecreceiver
+  sqlquery:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/sqlqueryreceiver
+  sqlserver:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/sqlserverreceiver
+  sshcheck:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/sshcheckreceiver
+  statsd:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/statsdreceiver
+  syslog:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/syslogreceiver
+  tcplog:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/tcplogreceiver
+  udplog:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/udplogreceiver
+  vcenter:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/vcenterreceiver
+  wavefront:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/wavefrontreceiver
+  webhookevent:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/webhookeventreceiver
+  windowseventlog:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowseventlogreceiver
+  windowsperfcounters:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowsperfcountersreceiver
+  zipkin:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/zipkinreceiver
+  zookeeper:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/zookeeperreceiver
+
+processors:
+  attributes:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/attributesprocessor
+  batch:
+    gomod: go.opentelemetry.io/collector/processor/batchprocessor
+  cumulativetodelta:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/cumulativetodeltaprocessor
+  deltatocumulative:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/deltatocumulativeprocessor
+  deltatorate:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/deltatorateprocessor
+  filter:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor
+  geoip:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/geoipprocessor
+  groupbyattrs:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/groupbyattrsprocessor
+  groupbytrace:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/groupbytraceprocessor
+  k8sattributes:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/k8sattributesprocessor
+  logdedup:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/logdedupprocessor
+  memorylimiter:
+    gomod: go.opentelemetry.io/collector/processor/memorylimiterprocessor
+  metricsgeneration:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricsgenerationprocessor
+  metricstransform:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor
+  probabilisticsampler:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/probabilisticsamplerprocessor
+  redaction:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/redactionprocessor
+  remotetap:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/remotetapprocessor
+  resource:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourceprocessor
+  resourcedetection:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor  
+  routing:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/routingprocessor
+  span:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/spanprocessor
+  sumologic:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/sumologicprocessor
+  tailsampling:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/tailsamplingprocessor
+  transform:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor
+
+exporters:
+  alibabacloudlogservice:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/alibabacloudlogserviceexporter
+  awscloudwatchlogs:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/awscloudwatchlogsexporter
+  awsemf:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/awsemfexporter
+  awskinesis:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/awskinesisexporter
+  awss3:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/awss3exporter
+  awsxray:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/awsxrayexporter
+  azuredataexplorer:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/azuredataexplorerexporter
+  azuremonitor:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/azuremonitorexporter
+  carbon:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/carbonexporter
+  cassandra:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/cassandraexporter
+  clickhouse:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/clickhouseexporter
+  coralogix:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/coralogixexporter
+  datadog:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/datadogexporter
+  dataset:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/datasetexporter
+  debug:
+    gomod: go.opentelemetry.io/collector/exporter/debugexporter
+  elasticsearch:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/elasticsearchexporter
+  file:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/fileexporter
+  googlecloud:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter
+  googlecloudpubsub:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudpubsubexporter  
+  googlemanagedprometheus:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlemanagedprometheusexporter  
+  honeycombmarker:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/honeycombmarkerexporter
+  influxdb:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/influxdbexporter
+  kafka:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/kafkaexporter
+  loadbalancing:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/loadbalancingexporter
+  logicmonitor:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/logicmonitorexporter
+  logzio:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/logzioexporter
+  loki:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/lokiexporter
+  mezmo:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/mezmoexporter
+  nop:
+    gomod: go.opentelemetry.io/collector/exporter/nopexporter
+  opencensus:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/opencensusexporter
+  opensearch:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/opensearchexporter
+  otelarrow:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/otelarrowexporter
+  otlp:
+    gomod: go.opentelemetry.io/collector/exporter/otlpexporter
+  otlphttp:
+    gomod: go.opentelemetry.io/collector/exporter/otlphttpexporter
+  prometheus:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/prometheusexporter
+  prometheusremotewrite:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/prometheusremotewriteexporter  
+  pulsar:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/pulsarexporter
+  rabbitmq:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/rabbitmqexporter
+  sapm:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/sapmexporter
+  sentry:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/sentryexporter
+  signalfx:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/signalfxexporter
+  splunkhec:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/splunkhecexporter
+  sumologic:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/sumologicexporter
+  syslog:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/syslogexporter
+  tencentcloudlogservice:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/tencentcloudlogserviceexporter
+  zipkin:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/zipkinexporter
+
+connectors:
+  count:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/connector/countconnector
+  datadog:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/connector/datadogconnector
+  exceptions:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/connector/exceptionsconnector
+  forward:
+    gomod: go.opentelemetry.io/collector/connector/forwardconnector
+  grafanacloud:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/connector/grafanacloudconnector
+  otlpjson:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/connector/otlpjsonconnector
+  roundrobin:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/connector/roundrobinconnector
+  routing:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/connector/routingconnector
+  servicegraph:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/connector/servicegraphconnector
+  spanmetrics:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/connector/spanmetricsconnector
+
+extensions:
+  ack:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/ackextension
+  asapauth:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/asapauthextension
+  awsproxy:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/awsproxy
+  basicauth:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/basicauthextension
+  bearertokenauth:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/bearertokenauthextension
+  dbstorage:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/storage/dbstorage  
+  dockerobserver:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/observer/dockerobserver
+  ecsobserver:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/observer/ecsobserver
+  ecstaskobserver:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/observer/ecstaskobserver
+  filestorage:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/storage/filestorage
+  googleclientauth:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/googleclientauthextension
+  headerssetter:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/headerssetterextension
+  healthcheck:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/healthcheckextension
+  hostobserver:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/observer/hostobserver
+  httpforwarder:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/httpforwarderextension
+  jaegerencoding:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/encoding/jaegerencodingextension
+  jaegerremotesampling:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/jaegerremotesampling
+  jsonlogencoding:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/encoding/jsonlogencodingextension
+  k8sobserver:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/observer/k8sobserver
+  oauth2clientauth:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/oauth2clientauthextension
+  oidcauth:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/oidcauthextension
+  opamp:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/opampextension
+  otlpencoding:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/encoding/otlpencodingextension
+  pprof:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/pprofextension
+  sigv4auth:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/sigv4authextension
+  sumologic:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/sumologicextension
+  zipkinencoding:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/encoding/zipkinencodingextension
+  zpages:
+    gomod: go.opentelemetry.io/collector/extension/zpagesextension

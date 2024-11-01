@@ -1,0 +1,67 @@
+default:
+all_set:
+  metrics:
+    varnish.backend.connection.count:
+      enabled: true
+    varnish.backend.request.count:
+      enabled: true
+    varnish.cache.operation.count:
+      enabled: true
+    varnish.client.request.count:
+      enabled: true
+    varnish.client.request.error.count:
+      enabled: true
+    varnish.object.count:
+      enabled: true
+    varnish.object.expired:
+      enabled: true
+    varnish.object.moved:
+      enabled: true
+    varnish.object.nuked:
+      enabled: true
+    varnish.session.count:
+      enabled: true
+    varnish.thread.operation.count:
+      enabled: true
+  resource_attributes:
+    varnish.cache.name:
+      enabled: true
+none_set:
+  metrics:
+    varnish.backend.connection.count:
+      enabled: false
+    varnish.backend.request.count:
+      enabled: false
+    varnish.cache.operation.count:
+      enabled: false
+    varnish.client.request.count:
+      enabled: false
+    varnish.client.request.error.count:
+      enabled: false
+    varnish.object.count:
+      enabled: false
+    varnish.object.expired:
+      enabled: false
+    varnish.object.moved:
+      enabled: false
+    varnish.object.nuked:
+      enabled: false
+    varnish.session.count:
+      enabled: false
+    varnish.thread.operation.count:
+      enabled: false
+  resource_attributes:
+    varnish.cache.name:
+      enabled: false
+filter_set_include:
+  resource_attributes:
+    varnish.cache.name:
+      enabled: true
+      metrics_include:
+        - regexp: ".*"
+filter_set_exclude:
+  resource_attributes:
+    varnish.cache.name:
+      enabled: true
+      metrics_exclude:
+        - strict: "varnish.cache.name-val"

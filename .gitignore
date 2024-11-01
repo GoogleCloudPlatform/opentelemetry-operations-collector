@@ -1,0 +1,9 @@
+go.work
+go.work.sum
+
+**/.tools
+
+.vscode
+
+otelcol-google
+otelopscol

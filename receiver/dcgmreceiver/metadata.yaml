@@ -1,0 +1,99 @@
+type: dcgm
+status:
+  class: receiver
+  stability:
+    beta: [metrics]
+
+
+attributes:
+  model:
+    type: string
+    description: GPU model
+
+  uuid:
+    type: string
+    description: GPU universally unique identifier
+
+  gpu_number:
+    type: string
+    description: GPU index starting at 0.
+
+  memory_state:
+    type: string
+    description: GPU memory used or free
+    enum: [used, free]
+
+  pipe:
+    type: string
+    description: GPU pipe in use, one of [tensor, fp64, fp32, fp16].
+    enum: [tensor, fp64, fp32, fp16]
+
+  direction:
+    type: string
+    description: Direction of the link traffic, one of [tx, rx].
+    enum: [tx, rx]
+
+metrics:
+  dcgm.gpu.utilization:
+    enabled: true
+    description: Fraction of time the GPU was not idle.
+    unit: 1
+    gauge:
+      value_type: double
+    attributes: [model, gpu_number, uuid]
+
+  dcgm.gpu.memory.bytes_used:
+    enabled: true
+    description: Current number of GPU memory bytes used by state. Summing the values of all states yields the total GPU memory space.
+    unit: By
+    gauge:
+      value_type: int
+    attributes: [model, gpu_number, uuid, memory_state]
+
+  dcgm.gpu.profiling.sm_utilization:
+    enabled: true
+    description: Fraction of time at least one warp was active on a multiprocessor, averaged over all multiprocessors.
+    unit: 1
+    gauge:
+      value_type: double
+    attributes: [model, gpu_number, uuid]
+
+  dcgm.gpu.profiling.sm_occupancy:
+    enabled: true
+    description: Fraction of resident warps on a multiprocessor relative to the maximum number supported, averaged over time and all multiprocessors.
+    unit: 1
+    gauge:
+      value_type: double
+    attributes: [model, gpu_number, uuid]
+
+  dcgm.gpu.profiling.pipe_utilization:
+    enabled: true
+    description: Fraction of cycles the corresponding GPU pipe was active, averaged over time and all multiprocessors.
+    unit: 1
+    gauge:
+      value_type: double
+    attributes: [model, gpu_number, uuid, pipe]
+
+  dcgm.gpu.profiling.dram_utilization:
+    enabled: true
+    description: Fraction of cycles data was being sent or received from GPU memory.
+    unit: 1
+    gauge:
+      value_type: double
+    attributes: [model, gpu_number, uuid]
+
+  dcgm.gpu.profiling.pcie_traffic_rate:
+    enabled: true
+    description: The average rate of bytes sent from the GPU over the PCIe bus over the sample period, including both protocol headers and data payloads.
+    unit: By/s
+    gauge:
+      value_type: int
+    attributes: [model, gpu_number, uuid, direction]
+
+  dcgm.gpu.profiling.nvlink_traffic_rate:
+    enabled: true
+    description: The average rate of bytes received from the GPU over NVLink over the sample period, not including protocol headers.
+    unit: By/s
+    gauge:
+      value_type: int
+    attributes: [model, gpu_number, uuid, direction]

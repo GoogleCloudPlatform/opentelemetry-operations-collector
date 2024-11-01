@@ -1,0 +1,33 @@
+receivers:
+  dcgm:
+    gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/dcgmreceiver v0.0.0
+    path: "../receiver/dcgmreceiver"
+  nvml:
+    gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/nvmlreceiver v0.0.0
+    path: "../receiver/nvmlreceiver"
+  mongodb:
+    gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/privatecomponents/receiver/mongodbreceiver v0.0.0
+    path: "../privatecomponents/receiver/mongodbreceiver"
+  varnish:
+    gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/privatecomponents/receiver/varnishreceiver v0.0.0
+    path: "../privatecomponents/receiver/varnishreceiver"
+  saphana:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/saphanareceiver
+
+processors:
+  agentmetrics:
+    gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/agentmetricsprocessor v0.0.0
+    path: "../processor/agentmetricsprocessor"
+  casttosum:
+    gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/privatecomponents/processor/casttosumprocessor v0.0.0
+    path: "../privatecomponents/processor/casttosumprocessor"
+  modifyscope:
+    gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/privatecomponents/processor/modifyscopeprocessor v0.0.0
+    path: "../privatecomponents/processor/modifyscopeprocessor"
+  normalizesums:
+    gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/privatecomponents/processor/normalizesumsprocessor v0.0.0
+    path: "../privatecomponents/processor/normalizesumsprocessor"
+
+exporters:
+connectors:
+extensions:

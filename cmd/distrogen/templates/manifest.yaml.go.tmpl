@@ -1,0 +1,25 @@
+dist:
+  module: github.com/GoogleCloudPlatform/{{ .Name }}
+  name: {{ .BinaryName }}
+  description: {{ .Description }}
+  version: {{ .Version }}
+  output_path: ./_build
+  otelcol_version: {{ .OpenTelemetryVersion }}
+
+receivers:
+{{ .Receivers.Render }}
+
+processors:
+{{ .Processors.Render }}
+
+exporters:
+{{ .Exporters.Render }}
+
+extensions:
+{{ .Extensions.Render }}
+
+connectors:
+{{ .Connectors.Render }}
+
+replaces:
+{{ .Replaces.Render }}

@@ -1,0 +1,213 @@
+name: google-otel
+description: OpenTelemetry Collector Built By Google
+version: 0.111.0
+opentelemetry_version: 0.111.0
+go_version: 1.23.2
+binary_name: otelcol-google
+collector_cgo: false
+docker_repo: us-docker.pkg.dev/experimental-braydonk/google-otel
+components:
+    receivers:
+        - signalfx
+        - solace
+        - sqlserver
+        - tcplog
+        - windowseventlog
+        - dockerstats
+        - k8sevents
+        - purefa
+        - cloudfoundry
+        - expvar
+        - kafka
+        - podman
+        - awscloudwatch
+        - awscontainerinsight
+        - azureeventhub
+        - opencensus
+        - memcached
+        - statsd
+        - nop
+        - elasticsearch
+        - kubeletstats
+        - mysql
+        - zipkin
+        - awsecscontainermetrics
+        - awsfirehose
+        - carbon
+        - riak
+        - simpleprometheus
+        - vcenter
+        - wavefront
+        - windowsperfcounters
+        - flinkmetrics
+        - prometheus
+        - purefb
+        - influxdb
+        - namedpipe
+        - rabbitmq
+        - sapm
+        - zookeeper
+        - otlp
+        - apache
+        - chrony
+        - fluentforward
+        - mongodb
+        - splunkenterprise
+        - udplog
+        - snmp
+        - apachespark
+        - awsxray
+        - filelog
+        - oracledb
+        - webhookevent
+        - kafkametrics
+        - nginx
+        - sshcheck
+        - aerospike
+        - httpcheck
+        - journald
+        - hostmetrics
+        - jmx
+        - k8sobjects
+        - loki
+        - mongodbatlas
+        - collectd
+        - filestats
+        - googlecloudpubsub
+        - jaeger
+        - nsxt
+        - snowflake
+        - azureblob
+        - couchdb
+        - datadog
+        - sqlquery
+        - azuremonitor
+        - k8scluster
+        - postgresql
+        - activedirectoryds
+        - iis
+        - redis
+        - skywalking
+        - cloudflare
+        - pulsar
+        - creator
+        - otelarrow
+        - splunkhec
+        - syslog
+        - bigip
+        - haproxy
+        - otlpjsonfile
+    processors:
+        - probabilisticsampler
+        - remotetap
+        - deltatocumulative
+        - filter
+        - geoip
+        - groupbyattrs
+        - k8sattributes
+        - groupbytrace
+        - resourcedetection
+        - routing
+        - span
+        - transform
+        - metricstransform
+        - sumologic
+        - tailsampling
+        - memorylimiter
+        - attributes
+        - cumulativetodelta
+        - deltatorate
+        - logdedup
+        - batch
+        - metricsgeneration
+        - redaction
+        - resource
+    exporters:
+        - otlp
+        - file
+        - googlecloudpubsub
+        - honeycombmarker
+        - logicmonitor
+        - opensearch
+        - zipkin
+        - nop
+        - otlphttp
+        - alibabacloudlogservice
+        - coralogix
+        - googlecloud
+        - otelarrow
+        - awskinesis
+        - influxdb
+        - mezmo
+        - sapm
+        - signalfx
+        - sumologic
+        - syslog
+        - awsemf
+        - logzio
+        - pulsar
+        - cassandra
+        - clickhouse
+        - elasticsearch
+        - loki
+        - splunkhec
+        - azuremonitor
+        - loadbalancing
+        - prometheus
+        - rabbitmq
+        - tencentcloudlogservice
+        - awsxray
+        - awss3
+        - azuredataexplorer
+        - carbon
+        - opencensus
+        - debug
+        - awscloudwatchlogs
+        - datadog
+        - dataset
+        - googlemanagedprometheus
+        - kafka
+        - prometheusremotewrite
+        - sentry
+    extensions:
+        - asapauth
+        - basicauth
+        - hostobserver
+        - opamp
+        - sumologic
+        - bearertokenauth
+        - jsonlogencoding
+        - dockerobserver
+        - jaegerencoding
+        - headerssetter
+        - ecsobserver
+        - filestorage
+        - otlpencoding
+        - healthcheck
+        - oidcauth
+        - ack
+        - googleclientauth
+        - sigv4auth
+        - k8sobserver
+        - pprof
+        - zpages
+        - httpforwarder
+        - jaegerremotesampling
+        - zipkinencoding
+        - oauth2clientauth
+        - awsproxy
+        - ecstaskobserver
+        - dbstorage
+replaces:
+    - from: github.com/googleapis/gnostic v0.5.6
+      to: github.com/googleapis/gnostic v0.5.5
+      reason: See https://github.com/google/gnostic/issues/262
+    - from: github.com/docker/go-connections v0.4.1-0.20210727194412-58542c764a11
+      to: github.com/docker/go-connections v0.4.0
+      reason: See https://github.com/open-telemetry/opentelemetry-collector-contrib/pull/12322#issuecomment-1185029670
+    - from: github.com/mattn/go-ieproxy
+      to: github.com/mattn/go-ieproxy v0.0.1
+      reason: See https://github.com/mattn/go-ieproxy/issues/45
+    - from: github.com/openshift/api
+      to: github.com/openshift/api v0.0.0-20230726162818-81f778f3b3ec
+      reason: See https://github.com/openshift/api/pull/1515

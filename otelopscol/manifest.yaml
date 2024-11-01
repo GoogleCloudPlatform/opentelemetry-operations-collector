@@ -1,0 +1,80 @@
+dist:
+  module: github.com/GoogleCloudPlatform/otelopscol
+  name: otelopscol
+  description: OpenTelemetry Collector binary used by the Ops Agent
+  version: 
+  output_path: ./_build
+  otelcol_version: 0.102.0
+
+receivers:
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/activedirectorydsreceiver v0.102.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/aerospikereceiver v0.102.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/apachereceiver v0.102.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/couchdbreceiver v0.102.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/elasticsearchreceiver v0.102.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver v0.102.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/flinkmetricsreceiver v0.102.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver v0.102.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/iisreceiver v0.102.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver v0.102.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/memcachedreceiver v0.102.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/mysqlreceiver v0.102.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/nginxreceiver v0.102.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/postgresqlreceiver v0.102.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver v0.102.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/rabbitmqreceiver v0.102.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/redisreceiver v0.102.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/saphanareceiver v0.102.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/sqlqueryreceiver v0.102.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/sqlserverreceiver v0.102.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowseventlogreceiver v0.102.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowsperfcountersreceiver v0.102.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/zookeeperreceiver v0.102.0
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/dcgmreceiver v0.102.0
+  path: ../receiver/dcgmreceiver
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/privatecomponents/receiver/mongodbreceiver v0.102.0
+  path: ../privatecomponents/receiver/mongodbreceiver
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/nvmlreceiver v0.102.0
+  path: ../receiver/nvmlreceiver
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/privatecomponents/receiver/varnishreceiver v0.102.0
+  path: ../privatecomponents/receiver/varnishreceiver
+
+
+processors:
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/cumulativetodeltaprocessor v0.102.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/deltatorateprocessor v0.102.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.102.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/groupbyattrsprocessor v0.102.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor v0.102.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor v0.102.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourceprocessor v0.102.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor v0.102.0
+- gomod: go.opentelemetry.io/collector/processor/batchprocessor v0.102.0
+- gomod: go.opentelemetry.io/collector/processor/memorylimiterprocessor v0.102.0
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/agentmetricsprocessor v0.102.0
+  path: ../processor/agentmetricsprocessor
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/privatecomponents/processor/casttosumprocessor v0.102.0
+  path: ../privatecomponents/processor/casttosumprocessor
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/privatecomponents/processor/modifyscopeprocessor v0.102.0
+  path: ../privatecomponents/processor/modifyscopeprocessor
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/privatecomponents/processor/normalizesumsprocessor v0.102.0
+  path: ../privatecomponents/processor/normalizesumsprocessor
+
+
+exporters:
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/fileexporter v0.102.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter v0.102.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlemanagedprometheusexporter v0.102.0
+- gomod: go.opentelemetry.io/collector/exporter/debugexporter v0.102.0
+- gomod: go.opentelemetry.io/collector/exporter/otlpexporter v0.102.0
+- gomod: go.opentelemetry.io/collector/exporter/otlphttpexporter v0.102.0
+
+
+extensions:
+- gomod: go.opentelemetry.io/collector/extension/zpagesextension v0.102.0
+
+
+connectors:
+
+
+replaces:

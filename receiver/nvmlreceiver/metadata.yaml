@@ -1,0 +1,76 @@
+type: nvml
+status:
+  class: receiver
+  stability:
+    beta: [metrics]
+
+attributes:
+  uuid:
+    type: string
+    description: GPU universally unique identifier
+
+  gpu_number:
+    type: string
+    description: GPU index starting at 0.
+
+  model:
+    type: string
+    description: GPU model
+
+  memory_state:
+    type: string
+    description: GPU memory used or free.
+    enum: [used, free]
+
+  pid:
+    type: int
+    description: Process ID.
+
+  process:
+    type: string
+    description: Process name.
+
+  command:
+    type: string
+    description: Process command.
+
+  command_line:
+    type: string
+    description: Process command line, 1024 characters maximum.
+
+  owner:
+    type: string
+    description: Process owner.
+
+metrics:
+  nvml.gpu.utilization:
+    enabled: true
+    description: Fraction of time GPU was not idle since the last sample.
+    unit: 1
+    gauge:
+      value_type: double
+    attributes: [model, gpu_number, uuid]
+
+  nvml.gpu.memory.bytes_used:
+    enabled: true
+    description: Current number of GPU memory bytes used by state. Summing the values of all states yields the total GPU memory space.
+    unit: By
+    gauge:
+      value_type: int
+    attributes: [model, gpu_number, uuid, memory_state]
+
+  nvml.gpu.processes.utilization:
+    enabled: true
+    description: Fraction of time over the process's life thus far during which one or more kernels was executing on the GPU.
+    unit: 1
+    gauge:
+      value_type: double
+    attributes: [model, gpu_number, uuid, pid, process, command, command_line, owner]
+
+  nvml.gpu.processes.max_bytes_used:
+    enabled: true
+    description: Maximum total GPU memory in bytes that was ever allocated by the process.
+    unit: By
+    gauge:
+      value_type: int
+    attributes: [model, gpu_number, uuid, pid, process, command, command_line, owner]

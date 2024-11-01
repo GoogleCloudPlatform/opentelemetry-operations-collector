@@ -1,32 +1,52 @@
+#steps:
+#- name: gcr.io/google.com/cloudsdktool/cloud-sdk
+#  args:
+#  - gcloud
+#  - config
+#  - get-value
+#  - project
+#- name: gcr.io/cloud-builders/docker
+#  args:
+#  - build
+#  - '-t'
+#  - gboc-e2e
+#  - ./e2e_test
+#  id: Build tester image
+#- name: gboc-e2e
+#  env:
+#  - PROJECT_NAME=$_PROJECT_NAME
+#  - USE_INTERNAL_IP="true"
+#  - >-
+#    SERVICE_EMAIL=build-and-test@stackdriver-test-143416.iam.gserviceaccount.com
+#  args:
+#  - '-c'
+#  - |
+#    cd ./e2e_test
+#    echo ${_BUILD_ARTIFACTS}
+#    gcloud config get-value project
+#    go test e2e_test.go -timeout=3h -tags integration_test
+#  entrypoint: /bin/bash
 steps:
-- name: gcr.io/google.com/cloudsdktool/cloud-sdk
+# Wait for the image to exist
+- name: "docker"
+  id: wait-for-image
+  entrypoint: "sh"
+  timeout: 3m
+  env: ["_TEST_SERVER_IMAGE=${_TEST_SERVER_IMAGE}"]
   args:
-  - gcloud
-  - config
-  - get-value
-  - project
-- name: gcr.io/cloud-builders/docker
+  - e2e-test-server/wait-for-image.sh
+
+# Run the test
+- name: $_TEST_RUNNER_IMAGE
+  id: run-tests-gce
+  dir: /
+  env: ["PROJECT_ID=$PROJECT_ID"]
   args:
-  - build
-  - '-t'
-  - gboc-e2e
-  - ./e2e_test
-  id: Build tester image
-- name: gboc-e2e
-  env:
-  - PROJECT_NAME=$_PROJECT_NAME
-  - USE_INTERNAL_IP="true"
-  - >-
-    SERVICE_EMAIL=build-and-test@stackdriver-test-143416.iam.gserviceaccount.com
-  args:
-  - '-c'
-  - |
-    cd ./e2e_test
-    echo ${_BUILD_ARTIFACTS}
-    gcloud config get-value project
-    go test e2e_test.go -timeout=3h -tags integration_test
-  entrypoint: /bin/bash
+  - gce
+  - --image=$_TEST_SERVER_IMAGE
 logsBucket: 'gs://cloud-built-otel-collector-buckets-test-logs'
 substitutions:
-  _PROJECT_NAME: ''
-  _BUILD_ARTIFACTS: ''
+#  _PROJECT_NAME: ''
+#  _BUILD_ARTIFACTS: ''
+  _TEST_SERVER_IMAGE: ''
+  _TEST_RUNNER_IMAGE: ''

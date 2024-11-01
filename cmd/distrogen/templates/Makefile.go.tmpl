@@ -2,7 +2,7 @@
 VERSION ?= {{ .Version }}
 OTEL_VERSION ?= {{ .OpenTelemetryVersion }}
 OTEL_VERSION_TAG = v$(OTEL_VERSION)
-COLLECTOR_BINARY_NAME ?= {{ .BinaryName }}
+COLLECTOR_BINARY_NAME = {{ .BinaryName }}
 COLLECTOR_BUILD_TEMP_DIR = $(PWD)/_build
 COLLECTOR_CGO = {{ if .CollectorCGO }}1{{else}}0{{end}}
 

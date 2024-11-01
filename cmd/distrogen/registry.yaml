@@ -133,8 +133,6 @@ receivers:
     gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/riakreceiver
   sapm:
     gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/sapmreceiver
-  saphana:
-    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/saphanareceiver
   signalfx:
     gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/signalfxreceiver
   simpleprometheus:

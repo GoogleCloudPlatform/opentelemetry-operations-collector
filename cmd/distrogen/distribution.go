@@ -67,7 +67,7 @@ func NewDistributionGenerator(spec *DistributionSpec, registry *Registry, forceG
 		}
 	}
 
-	tmpDir, err := os.MkdirTemp("", d.GenerateDirName)
+	tmpDir, err := os.MkdirTemp(".", d.GenerateDirName)
 	if err != nil {
 		return nil, err
 	}

@@ -7,10 +7,11 @@ import (
 )
 
 var (
-	flagSpec     = flag.String("spec", "", "The distribution specification to use")
-	flagForce    = flag.Bool("force", false, "Force generate even if there are no differences detected")
-	flagVerbose  = flag.Bool("v", false, "Verbose output")
-	flagRegistry = newArrayFlag("registry", "Provide additional component registries")
+	flagSpec       = flag.String("spec", "", "The distribution specification to use")
+	flagForce      = flag.Bool("force", false, "Force generate even if there are no differences detected")
+	flagVerbose    = flag.Bool("v", false, "Verbose output")
+	flagRegistry   = newArrayFlag("registry", "Provide additional component registries")
+	flagOtelConfig = flag.String("otel_config", "", "An OTel Config to generate a spec from configured components")
 
 	errNoSpecFlag = errors.New("missing --spec flag")
 )

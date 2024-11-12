@@ -25,6 +25,23 @@ func main() {
 }
 
 func run() error {
+	if *flagOtelConfig != "" {
+		return generateSpec()
+	}
+	return generateDistribution()
+}
+
+func generateSpec() error {
+	distro := &DistributionSpec{}
+	otelConfigMap, err := yamlUnmarshalFromFile[map[string]any](*flagOtelConfig)
+	if err != nil {
+		return err
+	}
+	distro.Components, err = ComponentsFromOTelConfig(*otelConfigMap)
+	return yamlMarshalToFile(distro, "generated_spec.yaml")
+}
+
+func generateDistribution() error {
 	specPath := *flagSpec
 	if *flagSpec == "" {
 		return errNoSpecFlag

@@ -1,0 +1,25 @@
+ARG DISTRO_ROOT="."
+ARG BUILD_CONTAINER="ubuntu:22.04"
+
+FROM ${BUILD_CONTAINER} AS build
+
+RUN apt-get -y update && apt-get -y install make curl
+RUN mkdir -p /build
+COPY ${DISTRO_ROOT}/Makefile /build
+COPY ${DISTRO_ROOT}/manifest.yaml /build
+WORKDIR /build
+RUN make build
+
+FROM ${BUILD_CONTAINER} AS certs
+RUN apt-get -y update && apt-get -y install ca-certificates
+
+FROM scratch
+
+ARG USER_UID=10001
+USER ${USER_UID}
+
+COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=build --chmod=755 /build/{{ .BinaryName }} /{{ .BinaryName }}
+COPY config.yaml /etc/{{ .BinaryName }}/config.yaml
+ENTRYPOINT ["/{{ .BinaryName }}"]
+CMD ["--config", "/etc/{{ .BinaryName }}/config.yaml"]

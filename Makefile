@@ -9,7 +9,7 @@ INCLUDE_PRIVATE_MODULES = grep $(PRIVATE_COMPONENT_PATTERN)
 
 RUN_DISTROGEN=go run ./cmd/distrogen
 
-GEN_GOOGLE_OTEL=$(RUN_DISTROGEN) -spec ./specs/google-otel.yaml
+GEN_GOOGLE_OTEL=$(RUN_DISTROGEN) -spec ./specs/google-otel.yaml -custom_templates ./templates
 .PHONY: gen-google-otel
 gen-google-otel:
 	@$(GEN_GOOGLE_OTEL)

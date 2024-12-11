@@ -1,7 +1,7 @@
 name: google-otel
 version: 0.111.0
 description: "OpenTelemetry Collector Built By Google"
-opentelemetry_version: 0.111.0
+opentelemetry_version: 0.113.0
 binary_name: otelcol-google
 collector_cgo: false
 go_version: 1.23.2

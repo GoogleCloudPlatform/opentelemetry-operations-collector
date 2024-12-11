@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -22,6 +23,7 @@ type DistributionSpec struct {
 	DockerRepo           string                  `yaml:"docker_repo"`
 	Components           *DistributionComponents `yaml:"components"`
 	Replaces             OCBManifestReplaces     `yaml:"replaces,omitempty"`
+	CustomValues         map[string]any          `yaml:"custom_values,omitempty"`
 }
 
 func (s *DistributionSpec) Diff(s2 *DistributionSpec) bool {
@@ -40,10 +42,11 @@ type DistributionComponents struct {
 }
 
 type DistributionGenerator struct {
-	Spec            *DistributionSpec
-	GenerateDirName string
-	GeneratePath    string
-	Registry        *Registry
+	Spec               *DistributionSpec
+	GenerateDirName    string
+	GeneratePath       string
+	Registry           *Registry
+	CustomTemplatesDir fs.FS
 }
 
 func NewDistributionGenerator(spec *DistributionSpec, registry *Registry, forceGenerate bool) (*DistributionGenerator, error) {
@@ -76,29 +79,27 @@ func NewDistributionGenerator(spec *DistributionSpec, registry *Registry, forceG
 }
 
 func (d *DistributionGenerator) Generate() error {
-	templates := []TemplateFile{
-		{
-			Name:    "Makefile",
-			Context: d.Spec,
-		},
-		{
-			Name:    "Dockerfile",
-			Context: d.Spec,
-		},
-		{
-			Name:    "config.yaml",
-			Context: d.Spec,
-		},
+	templates, err := GetEmbeddedTemplateSet(d.Spec)
+	if err != nil {
+		return err
+	}
+
+	if d.CustomTemplatesDir != nil {
+		customTemplates, err := GetTemplateSetFromDir(d.CustomTemplatesDir, d.Spec)
+		if err != nil {
+			return err
+		}
+
+		// This merge means that any custom templates named the same as the embedded
+		// defaults will overwrite the embedded version with the custom version.
+		mapMerge(templates, customTemplates)
 	}
 
 	manifestContext, err := NewManifestContextFromSpec(d.Spec, d.Registry)
 	if err != nil {
 		return err
 	}
-	templates = append(templates, TemplateFile{
-		Name:    "manifest.yaml",
-		Context: manifestContext,
-	})
+	templates.SetTemplateContext("manifest.yaml.go.tmpl", manifestContext)
 
 	for _, tmpl := range templates {
 		if err := tmpl.Render(d.GeneratePath); err != nil {
@@ -145,4 +146,43 @@ func (d *DistributionGenerator) MoveGeneratedDirToWd() (err error) {
 	}
 
 	return nil
+}
+
+func (d *DistributionGenerator) Clean() error {
+	if err := os.RemoveAll(d.GeneratePath); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
+type ManifestContext struct {
+	*DistributionSpec
+
+	Receivers  OCBManifestComponents
+	Processors OCBManifestComponents
+	Exporters  OCBManifestComponents
+	Extensions OCBManifestComponents
+	Connectors OCBManifestComponents
+}
+
+func NewManifestContextFromSpec(spec *DistributionSpec, registry *Registry) (*ManifestContext, error) {
+	context := ManifestContext{DistributionSpec: spec}
+
+	errs := make(RegistryLoadError)
+	var err RegistryLoadError
+	context.Receivers, err = registry.Receivers.LoadAll(spec.Components.Receivers, spec.OpenTelemetryVersion)
+	mapMerge(errs, err)
+	context.Processors, errs = registry.Processors.LoadAll(spec.Components.Processors, spec.OpenTelemetryVersion)
+	mapMerge(errs, err)
+	context.Exporters, errs = registry.Exporters.LoadAll(spec.Components.Exporters, spec.OpenTelemetryVersion)
+	mapMerge(errs, err)
+	context.Connectors, errs = registry.Connectors.LoadAll(spec.Components.Connectors, spec.OpenTelemetryVersion)
+	mapMerge(errs, err)
+	context.Extensions, errs = registry.Extensions.LoadAll(spec.Components.Extensions, spec.OpenTelemetryVersion)
+	mapMerge(errs, err)
+
+	if len(errs) > 0 {
+		return nil, errs
+	}
+	return &context, nil
 }

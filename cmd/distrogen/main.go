@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"flag"
+	"fmt"
 	"log"
 	"log/slog"
 	"os"
@@ -74,10 +75,20 @@ func generateDistribution() error {
 		return err
 	}
 
+	if *flagCustomTemplates != "" {
+		generator.CustomTemplatesDir = os.DirFS(*flagCustomTemplates)
+	}
+
 	if err := generator.Generate(); err != nil {
+		if err := generator.Clean(); err != nil {
+			fmt.Printf("couldn't clean generated dir: %v\n", err)
+		}
 		return err
 	}
 	if err := generator.MoveGeneratedDirToWd(); err != nil {
+		if err := generator.Clean(); err != nil {
+			fmt.Printf("couldn't clean generated dir: %v\n", err)
+		}
 		return err
 	}
 

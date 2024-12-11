@@ -17,7 +17,8 @@ TOOLS_DIR = $(PWD)/.tools
 OCB_BIN ?= $(TOOLS_DIR)/ocb
 
 GO_VERSION = {{ .GoVersion }}
-GO_BIN ?= $(TOOLS_DIR)/go/bin/go
+GO_BIN_DIR ?= $(TOOLS_DIR)/go/bin
+GO_BIN ?= $(GO_BIN_DIR)/go
 
 .PHONY: build
 build: $(COLLECTOR_BINARY_NAME)
@@ -60,7 +61,7 @@ collector-build: clean-collector $(COLLECTOR_BINARY_NAME)
 
 # Using OCB and the local manifest file, build a collector.
 $(COLLECTOR_BINARY_NAME): $(OCB_BIN)
-	GOWORK=off CGO_ENABLED=$(COLLECTOR_CGO) $(OCB_BIN) --go=$(GO_BIN) --ldflags="$(COLLECTOR_LD_FLAGS)" --verbose --config manifest.yaml
+	PATH="$(GO_BIN_DIR):${PATH}" GOWORK=off CGO_ENABLED=$(COLLECTOR_CGO) $(OCB_BIN) --ldflags="$(COLLECTOR_LD_FLAGS)" --verbose --config manifest.yaml
 	cp $(COLLECTOR_BUILD_TEMP_DIR)/$(COLLECTOR_BINARY_NAME) .
 	rm -rf $(COLLECTOR_BUILD_TEMP_DIR)
 
@@ -105,4 +106,3 @@ $(OCB_BIN): $(GO_BIN)
 .PHONY: clean-tools
 clean-tools:
 	rm -rf $(TOOLS_DIR)
-

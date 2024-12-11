@@ -4,7 +4,8 @@ dist:
   description: {{ .Description }}
   version: {{ .Version }}
   output_path: ./_build
-  otelcol_version: {{ .OpenTelemetryVersion }}
+  # TODO: Delete this hack when https://github.com/open-telemetry/opentelemetry-collector/issues/11453 is resolved
+  go: "../.tools/go/bin/go"
 
 receivers:
 {{ .Receivers.Render }}

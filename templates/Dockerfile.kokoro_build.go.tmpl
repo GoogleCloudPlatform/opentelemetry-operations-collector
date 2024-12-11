@@ -5,8 +5,11 @@ FROM ${BUILD_CONTAINER} AS build
 
 RUN apt-get -y update && apt-get -y install make curl
 RUN mkdir -p /build
+
+ARG DISTRO_ROOT
 COPY ${DISTRO_ROOT}/Makefile /build
 COPY ${DISTRO_ROOT}/manifest.yaml /build
+
 WORKDIR /build
 RUN make build
 

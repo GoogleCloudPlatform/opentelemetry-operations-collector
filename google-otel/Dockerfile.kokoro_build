@@ -23,6 +23,9 @@ USER ${USER_UID}
 
 COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=build --chmod=755 /build/otelcol-google /otelcol-google
-COPY config.yaml /etc/otelcol-google/config.yaml
+
+ARG DISTRO_ROOT
+COPY ${DISTRO_ROOT}/config.yaml /etc/otelcol-google/config.yaml
+
 ENTRYPOINT ["/otelcol-google"]
 CMD ["--config", "/etc/otelcol-google/config.yaml"]

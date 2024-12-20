@@ -1,6 +1,6 @@
 # Variables filled in from distro specification
-VERSION ?= 0.111.0
-OTEL_VERSION ?= 0.113.0
+VERSION ?= 0.116.0
+OTEL_VERSION ?= 0.116.0
 OTEL_VERSION_TAG = v$(OTEL_VERSION)
 COLLECTOR_BINARY_NAME = otelcol-google
 COLLECTOR_BUILD_TEMP_DIR = $(PWD)/_build
@@ -16,7 +16,7 @@ TOOLS_DIR = $(PWD)/.tools
 
 OCB_BIN ?= $(TOOLS_DIR)/ocb
 
-GO_VERSION = 1.23.2
+GO_VERSION = 1.23.4
 GO_BIN_DIR ?= $(TOOLS_DIR)/go/bin
 GO_BIN ?= $(GO_BIN_DIR)/go
 

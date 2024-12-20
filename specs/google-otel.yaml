@@ -1,12 +1,10 @@
 name: google-otel
-version: 0.111.0
+version: 0.116.0
 description: "OpenTelemetry Collector Built By Google"
-opentelemetry_version: 0.113.0
+opentelemetry_version: 0.116.0
 binary_name: otelcol-google
 collector_cgo: false
-go_version: 1.23.2
-
-# Temporary
+go_version: 1.23.4
 docker_repo: us-docker.pkg.dev/experimental-braydonk/google-otel
 
 components:

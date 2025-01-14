@@ -1,213 +1,88 @@
 name: google-otel
 description: OpenTelemetry Collector Built By Google
-version: 0.116.0
-opentelemetry_version: 0.116.0
+version: 0.117.0
+opentelemetry_version: 0.117.0
+opentelemetry_stable_version: 1.23.0
 go_version: 1.23.4
 binary_name: otelcol-google
 collector_cgo: false
 docker_repo: us-docker.pkg.dev/experimental-braydonk/google-otel
 components:
     receivers:
-        - signalfx
-        - solace
-        - sqlserver
-        - tcplog
-        - windowseventlog
-        - dockerstats
-        - k8sevents
-        - purefa
-        - cloudfoundry
-        - expvar
-        - kafka
-        - podman
-        - awscloudwatch
-        - awscontainerinsight
-        - azureeventhub
-        - opencensus
-        - memcached
-        - statsd
-        - nop
-        - elasticsearch
-        - kubeletstats
-        - mysql
-        - zipkin
-        - awsecscontainermetrics
-        - awsfirehose
-        - carbon
-        - riak
-        - simpleprometheus
-        - vcenter
-        - wavefront
-        - windowsperfcounters
-        - flinkmetrics
-        - prometheus
-        - purefb
-        - influxdb
-        - namedpipe
-        - rabbitmq
-        - sapm
-        - zookeeper
         - otlp
-        - apache
-        - chrony
-        - fluentforward
-        - mongodb
-        - splunkenterprise
-        - udplog
-        - snmp
-        - apachespark
-        - awsxray
         - filelog
-        - oracledb
-        - webhookevent
-        - kafkametrics
-        - nginx
-        - sshcheck
-        - aerospike
-        - httpcheck
-        - journald
+        - fluentforward
         - hostmetrics
-        - jmx
-        - k8sobjects
-        - loki
-        - mongodbatlas
-        - collectd
-        - filestats
-        - googlecloudpubsub
+        - httpcheck
         - jaeger
-        - nsxt
-        - snowflake
-        - azureblob
-        - couchdb
-        - datadog
-        - sqlquery
-        - azuremonitor
+        - journald
         - k8scluster
-        - postgresql
-        - activedirectoryds
-        - iis
-        - redis
-        - skywalking
-        - cloudflare
-        - pulsar
-        - creator
+        - k8sevents
+        - k8sobjects
+        - kubeletstats
+        - opencensus
         - otelarrow
-        - splunkhec
-        - syslog
-        - bigip
-        - haproxy
-        - otlpjsonfile
+        - prometheus
+        - receivercreator
+        - zipkin
     processors:
-        - probabilisticsampler
-        - remotetap
-        - deltatocumulative
-        - filter
-        - geoip
-        - groupbyattrs
-        - k8sattributes
-        - groupbytrace
-        - resourcedetection
-        - routing
-        - span
-        - transform
-        - metricstransform
-        - sumologic
-        - tailsampling
+        - batch
         - memorylimiter
         - attributes
         - cumulativetodelta
+        - deltatocumulative
         - deltatorate
+        - filter
+        - groupbyattrs
+        - groupbytrace
+        - k8sattributes
         - logdedup
-        - batch
-        - metricsgeneration
+        - metricstransform
+        - probabilisticsampler
         - redaction
+        - remotetap
+        - resourcedetection
         - resource
+        - tailsampling
+        - transform
     exporters:
-        - otlp
-        - file
-        - googlecloudpubsub
-        - honeycombmarker
-        - logicmonitor
-        - opensearch
-        - zipkin
-        - nop
-        - otlphttp
-        - alibabacloudlogservice
-        - coralogix
-        - googlecloud
-        - otelarrow
-        - awskinesis
-        - influxdb
-        - mezmo
-        - sapm
-        - signalfx
-        - sumologic
-        - syslog
-        - awsemf
-        - logzio
-        - pulsar
-        - cassandra
-        - clickhouse
-        - elasticsearch
-        - loki
-        - splunkhec
-        - azuremonitor
-        - loadbalancing
-        - prometheus
-        - rabbitmq
-        - tencentcloudlogservice
-        - awsxray
-        - awss3
-        - azuredataexplorer
-        - carbon
-        - opencensus
         - debug
-        - awscloudwatchlogs
-        - datadog
-        - dataset
+        - nop
+        - otlp
+        - otlphttp
+        - file
+        - loadbalancing
+        - otelarrow
+        - googlecloud
         - googlemanagedprometheus
-        - kafka
-        - prometheusremotewrite
-        - sentry
+    connectors:
+        - forward
+        - count
+        - exceptions
+        - failover
+        - otlpjson
+        - roundrobin
+        - routing
+        - servicegraph
+        - spanmetrics
     extensions:
-        - asapauth
-        - basicauth
-        - hostobserver
-        - opamp
-        - sumologic
-        - bearertokenauth
-        - jsonlogencoding
-        - dockerobserver
-        - jaegerencoding
-        - headerssetter
-        - ecsobserver
-        - filestorage
-        - otlpencoding
-        - healthcheck
-        - oidcauth
-        - ack
-        - googleclientauth
-        - sigv4auth
-        - k8sobserver
-        - pprof
         - zpages
+        - ack
+        - gomodbasicauth
+        - bearertokenauth
+        - headerssetter
+        - healthcheck
         - httpforwarder
-        - jaegerremotesampling
-        - zipkinencoding
         - oauth2clientauth
-        - awsproxy
-        - ecstaskobserver
-        - dbstorage
-replaces:
-    - from: github.com/googleapis/gnostic v0.5.6
-      to: github.com/googleapis/gnostic v0.5.5
-      reason: See https://github.com/google/gnostic/issues/262
-    - from: github.com/docker/go-connections v0.4.1-0.20210727194412-58542c764a11
-      to: github.com/docker/go-connections v0.4.0
-      reason: See https://github.com/open-telemetry/opentelemetry-collector-contrib/pull/12322#issuecomment-1185029670
-    - from: github.com/mattn/go-ieproxy
-      to: github.com/mattn/go-ieproxy v0.0.1
-      reason: See https://github.com/mattn/go-ieproxy/issues/45
-    - from: github.com/openshift/api
-      to: github.com/openshift/api v0.0.0-20230726162818-81f778f3b3ec
-      reason: See https://github.com/openshift/api/pull/1515
+        - hostobserver
+        - k8sobserver
+        - oidcauth
+        - opamp
+        - pprof
+        - filestorage
+    providers:
+        - env
+        - file
+        - http
+        - https
+        - yaml

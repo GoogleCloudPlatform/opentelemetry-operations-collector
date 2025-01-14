@@ -1,6 +1,6 @@
 # Variables filled in from distro specification
-VERSION ?= 0.116.0
-OTEL_VERSION ?= 0.116.0
+VERSION ?= 0.117.0
+OTEL_VERSION ?= 0.117.0
 OTEL_VERSION_TAG = v$(OTEL_VERSION)
 COLLECTOR_BINARY_NAME = otelcol-google
 COLLECTOR_BUILD_TEMP_DIR = $(PWD)/_build
@@ -50,6 +50,10 @@ image-push:
 	docker tag $(DOCKER_LOCAL_IMAGE_TAG) $(DOCKER_IMAGE_TAG)
 	docker push $(DOCKER_IMAGE_TAG)
 
+.PHONY: image-save
+image-save: image-build
+	docker save $(DOCKER_LOCAL_IMAGE_TAG) > $(DOCKER_LOCAL_IMAGE_TAG).tar
+
 ###################
 # Collector Build
 ###################
@@ -63,6 +67,15 @@ collector-build: clean-collector $(COLLECTOR_BINARY_NAME)
 $(COLLECTOR_BINARY_NAME): $(OCB_BIN)
 	PATH="$(GO_BIN_DIR):${PATH}" GOWORK=off CGO_ENABLED=$(COLLECTOR_CGO) $(OCB_BIN) --ldflags="$(COLLECTOR_LD_FLAGS)" --verbose --config manifest.yaml
 	cp $(COLLECTOR_BUILD_TEMP_DIR)/$(COLLECTOR_BINARY_NAME) .
+	rm -rf $(COLLECTOR_BUILD_TEMP_DIR)
+
+.PHONY: collector-package-list
+collector-package-list: $(OCB_BIN)
+	PATH="$(GO_BIN_DIR):${PATH}" GOWORK=off CGO_ENABLED=$(COLLECTOR_CGO) $(OCB_BIN) --ldflags="$(COLLECTOR_LD_FLAGS)" --verbose --skip-compilation --config manifest.yaml
+	cd $(COLLECTOR_BUILD_TEMP_DIR) && \
+		go list -deps -f '{{ .ImportPath }} {{ .Module }}' ./... |\
+		grep -v '<nil>' |\
+		sort -u > packages.txt
 	rm -rf $(COLLECTOR_BUILD_TEMP_DIR)
 
 # Delete any existing built collector binary.

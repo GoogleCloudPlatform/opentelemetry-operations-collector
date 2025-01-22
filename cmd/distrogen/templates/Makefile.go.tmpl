@@ -65,6 +65,15 @@ $(COLLECTOR_BINARY_NAME): $(OCB_BIN)
 	cp $(COLLECTOR_BUILD_TEMP_DIR)/$(COLLECTOR_BINARY_NAME) .
 	rm -rf $(COLLECTOR_BUILD_TEMP_DIR)
 
+.PHONY: collector-package-list
+collector-package-list: $(OCB_BIN)
+	PATH="$(GO_BIN_DIR):${PATH}" GOWORK=off CGO_ENABLED=$(COLLECTOR_CGO) $(OCB_BIN) --ldflags="$(COLLECTOR_LD_FLAGS)" --verbose --skip-compilation --config manifest.yaml
+	cd $(COLLECTOR_BUILD_TEMP_DIR) && \
+		go list -deps -f {{`'{{ .ImportPath }} {{ .Module }}'`}} ./... > ../packages.txt
+	grep -v '<nil>' packages.txt | sort -u > packages.txt
+	rm packages.txt
+	rm -rf $(COLLECTOR_BUILD_TEMP_DIR)
+
 # Delete any existing built collector binary.
 .PHONY: clean-collector
 clean-collector:

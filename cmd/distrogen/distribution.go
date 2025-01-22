@@ -13,17 +13,18 @@ import (
 var ErrNoDiff = errors.New("no differences found with previous generation")
 
 type DistributionSpec struct {
-	Name                 string                  `yaml:"name"`
-	Description          string                  `yaml:"description"`
-	Version              string                  `yaml:"version"`
-	OpenTelemetryVersion string                  `yaml:"opentelemetry_version"`
-	GoVersion            string                  `yaml:"go_version"`
-	BinaryName           string                  `yaml:"binary_name"`
-	CollectorCGO         bool                    `yaml:"collector_cgo"`
-	DockerRepo           string                  `yaml:"docker_repo"`
-	Components           *DistributionComponents `yaml:"components"`
-	Replaces             OCBManifestReplaces     `yaml:"replaces,omitempty"`
-	CustomValues         map[string]any          `yaml:"custom_values,omitempty"`
+	Name                       string                  `yaml:"name"`
+	Description                string                  `yaml:"description"`
+	Version                    string                  `yaml:"version"`
+	OpenTelemetryVersion       string                  `yaml:"opentelemetry_version"`
+	OpenTelemetryStableVersion string                  `yaml:"opentelemetry_stable_version"`
+	GoVersion                  string                  `yaml:"go_version"`
+	BinaryName                 string                  `yaml:"binary_name"`
+	CollectorCGO               bool                    `yaml:"collector_cgo"`
+	DockerRepo                 string                  `yaml:"docker_repo"`
+	Components                 *DistributionComponents `yaml:"components"`
+	Replaces                   OCBManifestReplaces     `yaml:"replaces,omitempty"`
+	CustomValues               map[string]any          `yaml:"custom_values,omitempty"`
 }
 
 func (s *DistributionSpec) Diff(s2 *DistributionSpec) bool {
@@ -37,8 +38,9 @@ type DistributionComponents struct {
 	Receivers  ComponentList `yaml:"receivers,omitempty"`
 	Processors ComponentList `yaml:"processors,omitempty"`
 	Exporters  ComponentList `yaml:"exporters,omitempty"`
-	Connectors ComponentList `yaml:"connector,omitempty"`
+	Connectors ComponentList `yaml:"connectors,omitempty"`
 	Extensions ComponentList `yaml:"extensions,omitempty"`
+	Providers  ComponentList `yaml:"providers,omitempty"`
 }
 
 type DistributionGenerator struct {
@@ -163,6 +165,7 @@ type ManifestContext struct {
 	Exporters  OCBManifestComponents
 	Extensions OCBManifestComponents
 	Connectors OCBManifestComponents
+	Providers  OCBManifestComponents
 }
 
 func NewManifestContextFromSpec(spec *DistributionSpec, registry *Registry) (*ManifestContext, error) {
@@ -170,15 +173,17 @@ func NewManifestContextFromSpec(spec *DistributionSpec, registry *Registry) (*Ma
 
 	errs := make(RegistryLoadError)
 	var err RegistryLoadError
-	context.Receivers, err = registry.Receivers.LoadAll(spec.Components.Receivers, spec.OpenTelemetryVersion)
+	context.Receivers, err = registry.Receivers.LoadAll(spec.Components.Receivers, spec.OpenTelemetryVersion, spec.OpenTelemetryStableVersion)
 	mapMerge(errs, err)
-	context.Processors, errs = registry.Processors.LoadAll(spec.Components.Processors, spec.OpenTelemetryVersion)
+	context.Processors, errs = registry.Processors.LoadAll(spec.Components.Processors, spec.OpenTelemetryVersion, spec.OpenTelemetryStableVersion)
 	mapMerge(errs, err)
-	context.Exporters, errs = registry.Exporters.LoadAll(spec.Components.Exporters, spec.OpenTelemetryVersion)
+	context.Exporters, errs = registry.Exporters.LoadAll(spec.Components.Exporters, spec.OpenTelemetryVersion, spec.OpenTelemetryStableVersion)
 	mapMerge(errs, err)
-	context.Connectors, errs = registry.Connectors.LoadAll(spec.Components.Connectors, spec.OpenTelemetryVersion)
+	context.Connectors, errs = registry.Connectors.LoadAll(spec.Components.Connectors, spec.OpenTelemetryVersion, spec.OpenTelemetryStableVersion)
 	mapMerge(errs, err)
-	context.Extensions, errs = registry.Extensions.LoadAll(spec.Components.Extensions, spec.OpenTelemetryVersion)
+	context.Extensions, errs = registry.Extensions.LoadAll(spec.Components.Extensions, spec.OpenTelemetryVersion, spec.OpenTelemetryStableVersion)
+	mapMerge(errs, err)
+	context.Providers, errs = registry.Providers.LoadAll(spec.Components.Providers, spec.OpenTelemetryVersion, spec.OpenTelemetryStableVersion)
 	mapMerge(errs, err)
 
 	if len(errs) > 0 {

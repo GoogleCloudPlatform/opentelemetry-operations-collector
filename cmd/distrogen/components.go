@@ -53,10 +53,12 @@ func (gm *GoModuleID) MarshalYAML() (interface{}, error) {
 }
 
 type OCBManifestComponent struct {
-	GoMod  *GoModuleID `yaml:"gomod"`
-	Import string      `yaml:"import,omitempty"`
-	Name   string      `yaml:"string,omitempty"`
-	Path   string      `yaml:"path,omitempty"`
+	GoMod         *GoModuleID `yaml:"gomod"`
+	Import        string      `yaml:"import,omitempty"`
+	Name          string      `yaml:"string,omitempty"`
+	Path          string      `yaml:"path,omitempty"`
+	Stable        bool        `yaml:"stable,omitempty"`
+	StartRevision string      `yaml:"start_revision,omitempty"`
 }
 
 type OCBManifestComponents []*OCBManifestComponent
@@ -75,7 +77,26 @@ func (cs OCBManifestComponents) Render() string {
 	if len(cs) == 0 {
 		return ""
 	}
-	content, _ := yaml.Marshal(cs)
+
+	// TODO: This is just to render only the 4 fields we want.
+	// This is not the cleanest way to do this and is due for refactor.
+	type manifestComponent struct {
+		GoMod  *GoModuleID `yaml:"gomod"`
+		Import string      `yaml:"import,omitempty"`
+		Name   string      `yaml:"string,omitempty"`
+		Path   string      `yaml:"path,omitempty"`
+	}
+	renderComponents := []manifestComponent{}
+	for _, c := range cs {
+		renderComponents = append(renderComponents, manifestComponent{
+			GoMod:  c.GoMod,
+			Import: c.Import,
+			Name:   c.Name,
+			Path:   c.Path,
+		})
+	}
+
+	content, _ := yaml.Marshal(renderComponents)
 	return string(content)
 }
 
@@ -104,11 +125,11 @@ func (rs OCBManifestReplaces) Render() string {
 type RegistryList map[string]*OCBManifestComponent
 
 func (rl RegistryList) Load(name string) (*OCBManifestComponent, error) {
-	component, ok := rl[name]
+	entry, ok := rl[name]
 	if !ok {
 		return nil, ErrComponentNotFound
 	}
-	return component, nil
+	return entry, nil
 }
 
 type RegistryLoadError map[string]error
@@ -122,18 +143,22 @@ func (e RegistryLoadError) Error() string {
 	return msg
 }
 
-func (rl RegistryList) LoadAll(names []string, version string) (OCBManifestComponents, RegistryLoadError) {
+func (rl RegistryList) LoadAll(names []string, version string, stableVersion string) (OCBManifestComponents, RegistryLoadError) {
 	components := OCBManifestComponents{}
 	errs := make(RegistryLoadError)
 
 	for _, name := range names {
-		component, err := rl.Load(name)
+		entry, err := rl.Load(name)
 		if err != nil {
 			errs[name] = err
-		} else {
-			component.GoMod.Tag = "v" + version
-			components = append(components, component)
+			continue
 		}
+
+		entry.GoMod.Tag = "v" + version
+		if entry.Stable {
+			entry.GoMod.Tag = "v" + stableVersion
+		}
+		components = append(components, entry)
 	}
 
 	return components, errs
@@ -145,6 +170,7 @@ type Registry struct {
 	Exporters  RegistryList `yaml:"exporters"`
 	Connectors RegistryList `yaml:"connectors"`
 	Extensions RegistryList `yaml:"extensions"`
+	Providers  RegistryList `yaml:"providers"`
 }
 
 func LoadEmbeddedRegistry() (*Registry, error) {
@@ -165,4 +191,5 @@ func (r *Registry) Merge(r2 *Registry) {
 	mapMerge(r.Exporters, r2.Exporters)
 	mapMerge(r.Connectors, r2.Connectors)
 	mapMerge(r.Extensions, r2.Extensions)
+	mapMerge(r.Providers, r2.Providers)
 }

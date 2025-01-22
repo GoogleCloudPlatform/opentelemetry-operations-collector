@@ -29,6 +29,7 @@ components:
     - sqlserver
     - windowseventlog
     - windowsperfcounters
+    # Within this repo
     - zookeeper
     - dcgm
     - mongodb
@@ -45,6 +46,7 @@ components:
     - transform
     - batch
     - memorylimiter
+    # Within this repo
     - agentmetrics
     - casttosum
     - modifyscope

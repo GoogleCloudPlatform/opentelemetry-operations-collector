@@ -39,6 +39,7 @@ receivers:
     gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/couchdbreceiver
   creator:
     gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/receivercreator
+    start_version: 0.117.0
   datadog:
     gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/datadogreceiver
   dockerstats:
@@ -177,6 +178,8 @@ receivers:
     gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/zipkinreceiver
   zookeeper:
     gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/zookeeperreceiver
+  receivercreator:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/receivercreator
 
 processors:
   attributes:
@@ -401,3 +404,20 @@ extensions:
     gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/encoding/zipkinencodingextension
   zpages:
     gomod: go.opentelemetry.io/collector/extension/zpagesextension
+
+providers:
+  env:
+    gomod: go.opentelemetry.io/collector/confmap/provider/envprovider
+    stable: true
+  file:
+    gomod: go.opentelemetry.io/collector/confmap/provider/fileprovider
+    stable: true
+  http:
+    gomod: go.opentelemetry.io/collector/confmap/provider/httpprovider
+    stable: true
+  https:
+    gomod: go.opentelemetry.io/collector/confmap/provider/httpsprovider
+    stable: true
+  yaml:
+    gomod: go.opentelemetry.io/collector/confmap/provider/yamlprovider
+    stable: true

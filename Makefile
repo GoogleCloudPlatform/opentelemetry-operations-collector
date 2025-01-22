@@ -18,6 +18,15 @@ gen-google-otel:
 regen-google-otel:
 	@$(GEN_GOOGLE_OTEL) -force
 
+GEN_GOOGLE_OTEL_CONTRIB=$(RUN_DISTROGEN) -spec ./specs/google-otel-contrib.yaml -custom_templates ./templates
+.PHONY: gen-google-otel
+gen-google-otel-contrib:
+	@$(GEN_GOOGLE_OTEL_CONTRIB)
+
+.PHONY: regen-google-otel
+regen-google-otel-contrib:
+	@$(GEN_GOOGLE_OTEL_CONTRIB) -force
+
 GEN_OTELOPSCOL=$(RUN_DISTROGEN) -registry ./registries/operations-collector-registry.yaml -spec ./specs/otelopscol.yaml
 .PHONY: gen-otelopscol
 gen-otelopscol:

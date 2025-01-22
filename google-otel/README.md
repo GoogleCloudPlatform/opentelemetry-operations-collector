@@ -55,58 +55,58 @@ A curated distribution of the OpenTelemetry Collector for use in GCP.
 
 | Component Name | Documentation |
 | -------------- | ------------- |
-| debug | https://github.com/open-telemetry/opentelemetry-collector-contrib/ |
-| file | https://github.com/open-telemetry/opentelemetry-collector-contrib/ |
-| googlecloud | https://github.com/open-telemetry/opentelemetry-collector-contrib/ |
-| googlemanagedprometheus | https://github.com/open-telemetry/opentelemetry-collector-contrib/ |
-| loadbalancing | https://github.com/open-telemetry/opentelemetry-collector-contrib/ |
-| nop | https://github.com/open-telemetry/opentelemetry-collector-contrib/ |
-| otelarrow | https://github.com/open-telemetry/opentelemetry-collector-contrib/ |
-| otlp | https://github.com/open-telemetry/opentelemetry-collector-contrib/ |
-| otlphttp | https://github.com/open-telemetry/opentelemetry-collector-contrib/ |
+| debug | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
+| file | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
+| googlecloud | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
+| googlemanagedprometheus | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
+| loadbalancing | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
+| nop | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
+| otelarrow | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
+| otlp | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
+| otlphttp | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
 
 
 ## Extensions
 
 | Component Name | Documentation |
 | -------------- | ------------- |
-| ack | https://github.com/open-telemetry/opentelemetry-collector-contrib/ |
-| basicauth | https://github.com/open-telemetry/opentelemetry-collector-contrib/ |
-| bearertokenauth | https://github.com/open-telemetry/opentelemetry-collector-contrib/ |
-| filestorage | https://github.com/open-telemetry/opentelemetry-collector-contrib/ |
-| headerssetter | https://github.com/open-telemetry/opentelemetry-collector-contrib/ |
-| healthcheck | https://github.com/open-telemetry/opentelemetry-collector-contrib/ |
-| hostobserver | https://github.com/open-telemetry/opentelemetry-collector-contrib/ |
-| httpforwarder | https://github.com/open-telemetry/opentelemetry-collector-contrib/ |
-| k8sobserver | https://github.com/open-telemetry/opentelemetry-collector-contrib/ |
-| oauth2clientauth | https://github.com/open-telemetry/opentelemetry-collector-contrib/ |
-| oidcauth | https://github.com/open-telemetry/opentelemetry-collector-contrib/ |
-| opamp | https://github.com/open-telemetry/opentelemetry-collector-contrib/ |
-| pprof | https://github.com/open-telemetry/opentelemetry-collector-contrib/ |
-| zpages | https://github.com/open-telemetry/opentelemetry-collector-contrib/ |
+| ack | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
+| basicauth | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
+| bearertokenauth | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
+| filestorage | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
+| headerssetter | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
+| healthcheck | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
+| hostobserver | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
+| httpforwarder | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
+| k8sobserver | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
+| oauth2clientauth | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
+| oidcauth | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
+| opamp | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
+| pprof | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
+| zpages | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
 
 
 ## Connectors
 
 | Component Name | Documentation |
 | -------------- | ------------- |
-| count | https://github.com/open-telemetry/opentelemetry-collector-contrib/ |
-| exceptions | https://github.com/open-telemetry/opentelemetry-collector-contrib/ |
-| failover | https://github.com/open-telemetry/opentelemetry-collector-contrib/ |
-| forward | https://github.com/open-telemetry/opentelemetry-collector-contrib/ |
-| otlpjson | https://github.com/open-telemetry/opentelemetry-collector-contrib/ |
-| roundrobin | https://github.com/open-telemetry/opentelemetry-collector-contrib/ |
-| routing | https://github.com/open-telemetry/opentelemetry-collector-contrib/ |
-| servicegraph | https://github.com/open-telemetry/opentelemetry-collector-contrib/ |
-| spanmetrics | https://github.com/open-telemetry/opentelemetry-collector-contrib/ |
+| count | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
+| exceptions | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
+| failover | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
+| forward | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
+| otlpjson | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
+| roundrobin | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
+| routing | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
+| servicegraph | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
+| spanmetrics | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
 
 
 ## Providers
 
 | Component Name | Documentation |
 | -------------- | ------------- |
-| env | https://github.com/open-telemetry/opentelemetry-collector-contrib/ |
-| file | https://github.com/open-telemetry/opentelemetry-collector-contrib/ |
-| http | https://github.com/open-telemetry/opentelemetry-collector-contrib/ |
-| https | https://github.com/open-telemetry/opentelemetry-collector-contrib/ |
-| yaml | https://github.com/open-telemetry/opentelemetry-collector-contrib/ |
+| env | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
+| file | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
+| http | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
+| https | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
+| yaml | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |

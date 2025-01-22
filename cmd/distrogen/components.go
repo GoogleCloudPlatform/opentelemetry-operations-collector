@@ -59,6 +59,15 @@ type OCBManifestComponent struct {
 	Path          string      `yaml:"path,omitempty"`
 	Stable        bool        `yaml:"stable,omitempty"`
 	StartRevision string      `yaml:"start_revision,omitempty"`
+	DocsURL       string      `yaml:"docs_url"`
+}
+
+func (c *OCBManifestComponent) RenderDocsURL() string {
+	if c.DocsURL == "" {
+		// FIXME: Temporary for demo
+		return "https://github.com/open-telemetry/opentelemetry-collector-contrib/"
+	}
+	return c.DocsURL
 }
 
 type OCBManifestComponents []*OCBManifestComponent

@@ -346,6 +346,8 @@ connectors:
     gomod: github.com/open-telemetry/opentelemetry-collector-contrib/connector/servicegraphconnector
   spanmetrics:
     gomod: github.com/open-telemetry/opentelemetry-collector-contrib/connector/spanmetricsconnector
+  failover:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/connector/failoverconnector
 
 extensions:
   ack:

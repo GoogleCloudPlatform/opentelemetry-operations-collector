@@ -14,7 +14,9 @@ var ErrNoDiff = errors.New("no differences found with previous generation")
 
 type DistributionSpec struct {
 	Name                       string                  `yaml:"name"`
+	DisplayName                string                  `yaml:"display_name"`
 	Description                string                  `yaml:"description"`
+	Blurb                      string                  `yaml:"blurb"`
 	Version                    string                  `yaml:"version"`
 	OpenTelemetryVersion       string                  `yaml:"opentelemetry_version"`
 	OpenTelemetryStableVersion string                  `yaml:"opentelemetry_stable_version"`
@@ -102,6 +104,12 @@ func (d *DistributionGenerator) Generate() error {
 		return err
 	}
 	templates.SetTemplateContext("manifest.yaml.go.tmpl", manifestContext)
+	// FIXME: will be refactored
+	readmeContext, err := NewREADMEContextFromSpec(d.Spec, d.Registry)
+	if err != nil {
+		return err
+	}
+	templates.SetTemplateContext("README.md.go.tmpl", readmeContext)
 
 	for _, tmpl := range templates {
 		if err := tmpl.Render(d.GeneratePath); err != nil {
@@ -175,19 +183,69 @@ func NewManifestContextFromSpec(spec *DistributionSpec, registry *Registry) (*Ma
 	var err RegistryLoadError
 	context.Receivers, err = registry.Receivers.LoadAll(spec.Components.Receivers, spec.OpenTelemetryVersion, spec.OpenTelemetryStableVersion)
 	mapMerge(errs, err)
-	context.Processors, errs = registry.Processors.LoadAll(spec.Components.Processors, spec.OpenTelemetryVersion, spec.OpenTelemetryStableVersion)
+	context.Processors, err = registry.Processors.LoadAll(spec.Components.Processors, spec.OpenTelemetryVersion, spec.OpenTelemetryStableVersion)
 	mapMerge(errs, err)
-	context.Exporters, errs = registry.Exporters.LoadAll(spec.Components.Exporters, spec.OpenTelemetryVersion, spec.OpenTelemetryStableVersion)
+	context.Exporters, err = registry.Exporters.LoadAll(spec.Components.Exporters, spec.OpenTelemetryVersion, spec.OpenTelemetryStableVersion)
 	mapMerge(errs, err)
-	context.Connectors, errs = registry.Connectors.LoadAll(spec.Components.Connectors, spec.OpenTelemetryVersion, spec.OpenTelemetryStableVersion)
+	context.Connectors, err = registry.Connectors.LoadAll(spec.Components.Connectors, spec.OpenTelemetryVersion, spec.OpenTelemetryStableVersion)
 	mapMerge(errs, err)
-	context.Extensions, errs = registry.Extensions.LoadAll(spec.Components.Extensions, spec.OpenTelemetryVersion, spec.OpenTelemetryStableVersion)
+	context.Extensions, err = registry.Extensions.LoadAll(spec.Components.Extensions, spec.OpenTelemetryVersion, spec.OpenTelemetryStableVersion)
 	mapMerge(errs, err)
-	context.Providers, errs = registry.Providers.LoadAll(spec.Components.Providers, spec.OpenTelemetryVersion, spec.OpenTelemetryStableVersion)
+	context.Providers, err = registry.Providers.LoadAll(spec.Components.Providers, spec.OpenTelemetryVersion, spec.OpenTelemetryStableVersion)
 	mapMerge(errs, err)
 
 	if len(errs) > 0 {
 		return nil, errs
 	}
 	return &context, nil
+}
+
+// FIXME: This whole implementation is a hack for demo purposes.
+// Refactor if agreed upon as a feature.
+type READMEContext struct {
+	*DistributionSpec
+
+	Receivers  map[string]*OCBManifestComponent
+	Processors map[string]*OCBManifestComponent
+	Exporters  map[string]*OCBManifestComponent
+	Extensions map[string]*OCBManifestComponent
+	Connectors map[string]*OCBManifestComponent
+	Providers  map[string]*OCBManifestComponent
+}
+
+func NewREADMEContextFromSpec(spec *DistributionSpec, registry *Registry) (*READMEContext, error) {
+	context := READMEContext{DistributionSpec: spec}
+
+	errs := make(RegistryLoadError)
+	var err RegistryLoadError
+	context.Receivers, err = loadComponentMap(context.Components.Receivers, registry.Receivers)
+	mapMerge(errs, err)
+	context.Processors, err = loadComponentMap(context.Components.Processors, registry.Processors)
+	mapMerge(errs, err)
+	context.Exporters, err = loadComponentMap(context.Components.Exporters, registry.Exporters)
+	mapMerge(errs, err)
+	context.Connectors, err = loadComponentMap(context.Components.Connectors, registry.Connectors)
+	mapMerge(errs, err)
+	context.Extensions, err = loadComponentMap(context.Components.Extensions, registry.Extensions)
+	mapMerge(errs, err)
+	context.Providers, err = loadComponentMap(context.Components.Providers, registry.Providers)
+	mapMerge(errs, err)
+
+	if len(errs) > 0 {
+		return nil, errs
+	}
+	return &context, nil
+}
+
+func loadComponentMap(components []string, registryList RegistryList) (map[string]*OCBManifestComponent, RegistryLoadError) {
+	result := make(map[string]*OCBManifestComponent)
+	errs := make(RegistryLoadError)
+	var err error
+	for _, componentName := range components {
+		result[componentName], err = registryList.Load(componentName)
+		if err != nil {
+			errs[componentName] = err
+		}
+	}
+	return result, errs
 }

@@ -50,10 +50,6 @@ image-push:
 	docker tag $(DOCKER_LOCAL_IMAGE_TAG) $(DOCKER_IMAGE_TAG)
 	docker push $(DOCKER_IMAGE_TAG)
 
-.PHONY: image-save
-image-save: image-build
-	docker save $(DOCKER_LOCAL_IMAGE_TAG) > $(DOCKER_LOCAL_IMAGE_TAG).tar
-
 ###################
 # Collector Build
 ###################
@@ -73,9 +69,9 @@ $(COLLECTOR_BINARY_NAME): $(OCB_BIN)
 collector-package-list: $(OCB_BIN)
 	PATH="$(GO_BIN_DIR):${PATH}" GOWORK=off CGO_ENABLED=$(COLLECTOR_CGO) $(OCB_BIN) --ldflags="$(COLLECTOR_LD_FLAGS)" --verbose --skip-compilation --config manifest.yaml
 	cd $(COLLECTOR_BUILD_TEMP_DIR) && \
-		go list -deps -f '{{ .ImportPath }} {{ .Module }}' ./... |\
-		grep -v '<nil>' |\
-		sort -u > packages.txt
+		go list -deps -f '{{ .ImportPath }} {{ .Module }}' ./... > ../packages.txt
+	grep -v '<nil>' packages.txt | sort -u > packages.txt
+	rm packages.txt
 	rm -rf $(COLLECTOR_BUILD_TEMP_DIR)
 
 # Delete any existing built collector binary.

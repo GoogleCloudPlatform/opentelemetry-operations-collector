@@ -1,6 +1,9 @@
 name: google-otel
+display_name: Google Built OpenTelemetry Collector
 version: 0.117.0
 description: "OpenTelemetry Collector Built By Google"
+blurb: |-
+  A curated distribution of the OpenTelemetry Collector for use in GCP.
 opentelemetry_version: 0.117.0
 opentelemetry_stable_version: 1.23.0
 binary_name: otelcol-google
@@ -64,7 +67,7 @@ components:
   extensions:
     - zpages
     - ack
-    - gomodbasicauth
+    - basicauth
     - bearertokenauth
     - headerssetter
     - healthcheck

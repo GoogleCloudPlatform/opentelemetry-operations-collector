@@ -27,5 +27,5 @@ COPY --from=build --chmod=755 /build/{{ .BinaryName }} /{{ .BinaryName }}
 ARG DISTRO_ROOT
 COPY ${DISTRO_ROOT}/config.yaml /etc/{{ .BinaryName }}/config.yaml
 
-ENTRYPOINT ["/{{ .BinaryName }}"]
+ENTRYPOINT ["/{{ .BinaryName }}", {{ range .FeatureGates }}, "--featuregate",  "{{ . }}"{{ end }}]
 CMD ["--config", "/etc/{{ .BinaryName }}/config.yaml"]

@@ -70,7 +70,7 @@ func (c *OCBManifestComponent) RenderDocsURL() string {
 	return c.DocsURL
 }
 
-type OCBManifestComponents []*OCBManifestComponent
+type OCBManifestComponents map[string]*OCBManifestComponent
 
 // Validate is intended to be called before template rendering.
 // This way, calling the Render method from the template can assume
@@ -82,7 +82,7 @@ func (cs OCBManifestComponents) Validate() error {
 
 // Render outputs the OCBManifestComponents array as a yaml
 // string. Used in manifest.yaml.go.tmpl.
-func (cs OCBManifestComponents) Render() string {
+func (cs OCBManifestComponents) RenderOCBComponents() string {
 	if len(cs) == 0 {
 		return ""
 	}
@@ -105,8 +105,7 @@ func (cs OCBManifestComponents) Render() string {
 		})
 	}
 
-	content, _ := yaml.Marshal(renderComponents)
-	return string(content)
+	return renderYaml(renderComponents)
 }
 
 type OCBManifestReplace struct {
@@ -167,7 +166,7 @@ func (rl RegistryList) LoadAll(names []string, version string, stableVersion str
 		if entry.Stable {
 			entry.GoMod.Tag = "v" + stableVersion
 		}
-		components = append(components, entry)
+		components[name] = entry
 	}
 
 	return components, errs

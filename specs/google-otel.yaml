@@ -10,6 +10,9 @@ binary_name: otelcol-google
 collector_cgo: false
 go_version: 1.23.4
 
+feature_gates:
+  - exporter.googlemanagedprometheus.intToDouble
+
 # TEMP
 docker_repo: us-docker.pkg.dev/experimental-braydonk/google-otel
 

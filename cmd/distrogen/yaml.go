@@ -53,3 +53,8 @@ func wrapYamlErr(err error, path string) error {
 	}
 	return fmt.Errorf("error parsing %s: %w", path, err)
 }
+
+func renderYaml(value any) string {
+	content, _ := yaml.Marshal(value)
+	return string(content)
+}

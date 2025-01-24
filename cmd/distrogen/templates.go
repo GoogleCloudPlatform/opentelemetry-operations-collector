@@ -41,10 +41,6 @@ func (tf *TemplateFile) Render(outDir string) error {
 	return os.WriteFile(outPath, buf.Bytes(), fs.ModePerm)
 }
 
-func (tf *TemplateFile) getTemplateFileName() string {
-	return fmt.Sprintf("%s.go.tmpl", tf.Name)
-}
-
 var (
 	ErrInvalidTemplateName = errors.New("invalid template name, must end with .go.tmpl")
 	ErrTemplateNotFound    = errors.New("template not found")

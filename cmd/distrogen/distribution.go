@@ -27,6 +27,7 @@ type DistributionSpec struct {
 	Components                 *DistributionComponents `yaml:"components"`
 	Replaces                   OCBManifestReplaces     `yaml:"replaces,omitempty"`
 	CustomValues               map[string]any          `yaml:"custom_values,omitempty"`
+	FeatureGates               []string                `yaml:"feature_gates"`
 }
 
 func (s *DistributionSpec) Diff(s2 *DistributionSpec) bool {
@@ -104,12 +105,7 @@ func (d *DistributionGenerator) Generate() error {
 		return err
 	}
 	templates.SetTemplateContext("manifest.yaml.go.tmpl", manifestContext)
-	// FIXME: will be refactored
-	readmeContext, err := NewREADMEContextFromSpec(d.Spec, d.Registry)
-	if err != nil {
-		return err
-	}
-	templates.SetTemplateContext("README.md.go.tmpl", readmeContext)
+	templates.SetTemplateContext("README.md.go.tmpl", manifestContext)
 
 	for _, tmpl := range templates {
 		if err := tmpl.Render(d.GeneratePath); err != nil {

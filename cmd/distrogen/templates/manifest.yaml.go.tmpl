@@ -6,16 +6,16 @@ dist:
   output_path: ./_build
 
 receivers:
-{{ .Receivers.Render }}
+{{ .Receivers.RenderOCBComponents }}
 processors:
-{{ .Processors.Render }}
+{{ .Processors.RenderOCBComponents }}
 exporters:
-{{ .Exporters.Render }}
+{{ .Exporters.RenderOCBComponents }}
 extensions:
-{{ .Extensions.Render }}
+{{ .Extensions.RenderOCBComponents }}
 connectors:
-{{ .Connectors.Render }}
+{{ .Connectors.RenderOCBComponents }}
 providers:
-{{ .Providers.Render }}
+{{ .Providers.RenderOCBComponents }}
 replaces:
 {{ .Replaces.Render }}

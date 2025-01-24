@@ -39,6 +39,9 @@ func generateSpec() error {
 		return err
 	}
 	distro.Components, err = ComponentsFromOTelConfig(*otelConfigMap)
+	if err != nil {
+		return err
+	}
 	return yamlMarshalToFile(distro, "generated_spec.yaml")
 }
 

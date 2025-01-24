@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -104,6 +105,12 @@ func (cs OCBManifestComponents) RenderOCBComponents() string {
 			Path:   c.Path,
 		})
 	}
+
+	// The component list is sorted here to ensure that re-generating will always
+	// have a consistent order.
+	slices.SortFunc(renderComponents, func(a manifestComponent, b manifestComponent) int {
+		return strings.Compare(a.GoMod.URL, b.GoMod.URL)
+	})
 
 	return renderYaml(renderComponents)
 }

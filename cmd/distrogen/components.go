@@ -208,3 +208,25 @@ func (r *Registry) Merge(r2 *Registry) {
 	mapMerge(r.Extensions, r2.Extensions)
 	mapMerge(r.Providers, r2.Providers)
 }
+
+type FeatureGates []string
+
+func (fgs FeatureGates) Render() string {
+	// This case should never come up in template rendering,
+	// but it's here as a backup in case.
+	if len(fgs) == 0 {
+		return ""
+	}
+
+	gates := ""
+	first := true
+	for _, fg := range fgs {
+		gates += fg
+		if first {
+			first = false
+		} else {
+			gates += ","
+		}
+	}
+	return gates
+}

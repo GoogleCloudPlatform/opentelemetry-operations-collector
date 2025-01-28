@@ -27,7 +27,7 @@ type DistributionSpec struct {
 	Components                 *DistributionComponents `yaml:"components"`
 	Replaces                   OCBManifestReplaces     `yaml:"replaces,omitempty"`
 	CustomValues               map[string]any          `yaml:"custom_values,omitempty"`
-	FeatureGates               []string                `yaml:"feature_gates"`
+	FeatureGates               FeatureGates            `yaml:"feature_gates"`
 }
 
 func (s *DistributionSpec) Diff(s2 *DistributionSpec) bool {

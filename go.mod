@@ -8,6 +8,7 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/fileexporter v0.112.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter v0.112.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlemanagedprometheusexporter v0.112.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/extension/storage/filestorage v0.112.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatautil v0.112.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/processor/cumulativetodeltaprocessor v0.112.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/processor/deltatorateprocessor v0.112.0
@@ -172,6 +173,7 @@ require (
 	github.com/valyala/fastjson v1.6.4 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/zeebo/xxh3 v1.0.2 // indirect
+	go.etcd.io/bbolt v1.3.11 // indirect
 	go.opentelemetry.io/collector v0.112.0 // indirect
 	go.opentelemetry.io/collector/client v1.18.0 // indirect
 	go.opentelemetry.io/collector/component/componentstatus v0.112.0 // indirect

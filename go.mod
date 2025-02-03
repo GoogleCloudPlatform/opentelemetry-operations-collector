@@ -26,6 +26,7 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/flinkmetricsreceiver v0.112.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver v0.112.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/iisreceiver v0.112.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/journaldreceiver v0.112.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver v0.112.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/memcachedreceiver v0.112.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/mysqlreceiver v0.112.0

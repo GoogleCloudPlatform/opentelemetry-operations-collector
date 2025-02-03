@@ -808,6 +808,8 @@ github.com/open-telemetry/opentelemetry-collector-contrib/receiver/iisreceiver v
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/iisreceiver v0.112.0/go.mod h1:GHCui9v7lnf3Trd78ug2KgrOWvbPcgdxbMo2WPAupFo=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver v0.112.0 h1:WyNsYM6HiWOmq1ClDtG5TmafKoEPgUPhY0ITJ44z5Sk=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver v0.112.0/go.mod h1:zE98Q5VzmTMDpX57nUqlB/B3gZpH5SBsUhS1f1/y6gA=
+github.com/open-telemetry/opentelemetry-collector-contrib/receiver/journaldreceiver v0.112.0 h1:DZRMfNp8dBFKuqBQ9oTeWQurPRXsGo23crsZCf6BXkk=
+github.com/open-telemetry/opentelemetry-collector-contrib/receiver/journaldreceiver v0.112.0/go.mod h1:4iA32xJPSocAGUogGWSsDsHI9vCpFx0rx1T6r6dmBbw=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/journaldreceiver v0.118.0 h1:TBBMzGyziF1g4BNzjAPI8WmnsrjHJcbjvdUNOzZgJBc=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/journaldreceiver v0.118.0/go.mod h1:5d8aoheubMGo/bASmxeyBoK4cfj9Wfx741LBxtJR/Fg=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/memcachedreceiver v0.112.0 h1:MSviOrHGPV8JlXMK+yW9sW5NPsjbfMOGUJVSmo6i2ZQ=

@@ -58,6 +58,8 @@ processors:
   # processor.
   #
   # Docs:
+  # https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/resourcedetectionprocessor
+  # https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/resourcedetectionprocessor#gcp-metadata
   resourcedetection:
     detectors: [gcp]
     timeout: 10s
@@ -70,7 +72,7 @@ exporters:
   # Traces -> Cloud Trace
   #
   # Docs:
-  #
+  # https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/googlecloudexporter
   googlecloud:
     log:
       default_log_name: opentelemetry-collector
@@ -79,7 +81,7 @@ exporters:
   # Google Managed Service for Prometheus.
   #
   # Docs:
-  #
+  # https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/googlemanagedprometheusexporter
   googlemanagedprometheus:
 
 service:

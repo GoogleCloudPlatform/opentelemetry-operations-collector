@@ -8,105 +8,105 @@ A curated distribution of the OpenTelemetry Collector for use in GCP.
 
 | Component Name | Documentation |
 | -------------- | ------------- |
-| filelog | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| fluentforward | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| hostmetrics | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| httpcheck | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| jaeger | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| journald | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| k8scluster | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| k8sevents | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| k8sobjects | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| kubeletstats | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| opencensus | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| otelarrow | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| otlp | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| prometheus | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| receivercreator | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| zipkin | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
+| filelog | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/filelogreceiver/README.md) |
+| fluentforward | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/fluentforwardreceiver/README.md) |
+| hostmetrics | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/hostmetricsreceiver/README.md) |
+| httpcheck | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/httpcheckreceiver/README.md) |
+| jaeger | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/jaegerreceiver/README.md) |
+| journald | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/journaldreceiver/README.md) |
+| k8scluster | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/k8sclusterreceiver/README.md) |
+| k8sevents | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/k8seventsreceiver/README.md) |
+| k8sobjects | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/k8sobjectsreceiver/README.md) |
+| kubeletstats | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/kubeletstatsreceiver/README.md) |
+| opencensus | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/opencensusreceiver/README.md) |
+| otelarrow | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/otelarrowreceiver/README.md) |
+| otlp | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/receiver/otlpreceiver/README.md) |
+| prometheus | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/prometheusreceiver/README.md) |
+| receivercreator | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/receivercreator/README.md) |
+| zipkin | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/zipkinreceiver/README.md) |
 
 
 ## Processors
 
 | Component Name | Documentation |
 | -------------- | ------------- |
-| attributes | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| batch | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| cumulativetodelta | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| deltatocumulative | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| deltatorate | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| filter | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| groupbyattrs | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| groupbytrace | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| k8sattributes | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| logdedup | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| memorylimiter | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| metricstransform | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| probabilisticsampler | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| redaction | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| remotetap | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| resource | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| resourcedetection | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| tailsampling | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| transform | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
+| attributes | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/attributesprocessor/README.md) |
+| batch | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/processor/batchprocessor/README.md) |
+| cumulativetodelta | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/cumulativetodeltaprocessor/README.md) |
+| deltatocumulative | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/deltatocumulativeprocessor/README.md) |
+| deltatorate | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/deltatorateprocessor/README.md) |
+| filter | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/filterprocessor/README.md) |
+| groupbyattrs | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/groupbyattrsprocessor/README.md) |
+| groupbytrace | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/groupbytraceprocessor/README.md) |
+| k8sattributes | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/k8sattributesprocessor/README.md) |
+| logdedup | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/logdedupprocessor/README.md) |
+| memorylimiter | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/processor/memorylimiterprocessor/README.md) |
+| metricstransform | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/metricstransformprocessor/README.md) |
+| probabilisticsampler | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/probabilisticsamplerprocessor/README.md) |
+| redaction | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/redactionprocessor/README.md) |
+| remotetap | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/remotetapprocessor/README.md) |
+| resource | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/resourceprocessor/README.md) |
+| resourcedetection | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/resourcedetectionprocessor/README.md) |
+| tailsampling | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/tailsamplingprocessor/README.md) |
+| transform | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/transformprocessor/README.md) |
 
 
 ## Exporters
 
 | Component Name | Documentation |
 | -------------- | ------------- |
-| debug | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| file | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| googlecloud | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| googlemanagedprometheus | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| loadbalancing | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| nop | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| otelarrow | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| otlp | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| otlphttp | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
+| debug | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/exporter/debugexporter/README.md) |
+| file | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/fileexporter/README.md) |
+| googlecloud | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/googlecloudexporter/README.md) |
+| googlemanagedprometheus | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/googlemanagedprometheusexporter/README.md) |
+| loadbalancing | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/loadbalancingexporter/README.md) |
+| nop | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/exporter/nopexporter/README.md) |
+| otelarrow | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/otelarrowexporter/README.md) |
+| otlp | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/exporter/otlpexporter/README.md) |
+| otlphttp | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/exporter/otlphttpexporter/README.md) |
 
 
 ## Extensions
 
 | Component Name | Documentation |
 | -------------- | ------------- |
-| ack | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| basicauth | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| bearertokenauth | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| filestorage | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| headerssetter | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| healthcheck | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| hostobserver | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| httpforwarder | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| k8sobserver | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| oauth2clientauth | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| oidcauth | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| opamp | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| pprof | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| zpages | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
+| ack | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/ackextension/README.md) |
+| basicauth | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/basicauthextension/README.md) |
+| bearertokenauth | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/bearertokenauthextension/README.md) |
+| filestorage | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/storage/README.md) |
+| headerssetter | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/headerssetterextension/README.md) |
+| healthcheck | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/healthcheckextension/README.md) |
+| hostobserver | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/observer/README.md) |
+| httpforwarder | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/httpforwarderextension/README.md) |
+| k8sobserver | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/observer/README.md) |
+| oauth2clientauth | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/oauth2clientauthextension/README.md) |
+| oidcauth | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/oidcauthextension/README.md) |
+| opamp | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/opampextension/README.md) |
+| pprof | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/pprofextension/README.md) |
+| zpages | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/extension/zpagesextension/README.md) |
 
 
 ## Connectors
 
 | Component Name | Documentation |
 | -------------- | ------------- |
-| count | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| exceptions | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| failover | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| forward | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| otlpjson | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| roundrobin | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| routing | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| servicegraph | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| spanmetrics | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
+| count | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/connector/countconnector/README.md) |
+| exceptions | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/connector/exceptionsconnector/README.md) |
+| failover | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/connector/failoverconnector/README.md) |
+| forward | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/connector/forwardconnector/README.md) |
+| otlpjson | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/connector/otlpjsonconnector/README.md) |
+| roundrobin | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/connector/roundrobinconnector/README.md) |
+| routing | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/connector/routingconnector/README.md) |
+| servicegraph | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/connector/servicegraphconnector/README.md) |
+| spanmetrics | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/connector/spanmetricsconnector/README.md) |
 
 
 ## Providers
 
 | Component Name | Documentation |
 | -------------- | ------------- |
-| env | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| file | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| http | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| https | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
-| yaml | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/) |
+| env | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/confmap/provider/envprovider) |
+| file | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/confmap/provider/fileprovider) |
+| http | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/confmap/provider/httpprovider) |
+| https | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/confmap/provider/httpsprovider) |
+| yaml | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/confmap/provider/yamlprovider) |

@@ -36,6 +36,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/iisreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/journaldreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/memcachedreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/mysqlreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/nginxreceiver"
@@ -92,31 +93,32 @@ func components() (otelcol.Factories, error) {
 	receivers := []receiver.Factory{
 		activedirectorydsreceiver.NewFactory(),
 		aerospikereceiver.NewFactory(),
-		hostmetricsreceiver.NewFactory(),
-		prometheusreceiver.NewFactory(),
-		nginxreceiver.NewFactory(),
-		jmxreceiver.NewFactory(),
-		windowsperfcountersreceiver.NewFactory(),
-		iisreceiver.NewFactory(),
-		sqlserverreceiver.NewFactory(),
-		redisreceiver.NewFactory(),
-		mysqlreceiver.NewFactory(),
 		apachereceiver.NewFactory(),
+		couchdbreceiver.NewFactory(),
+		dcgmreceiver.NewFactory(),
+		elasticsearchreceiver.NewFactory(),
+		filelogreceiver.NewFactory(),
+		flinkmetricsreceiver.NewFactory(),
+		hostmetricsreceiver.NewFactory(),
+		iisreceiver.NewFactory(),
+		jmxreceiver.NewFactory(),
+		journaldreceiver.NewFactory(),
 		memcachedreceiver.NewFactory(),
 		mongodbreceiver.NewFactory(),
-		dcgmreceiver.NewFactory(),
+		mysqlreceiver.NewFactory(),
+		nginxreceiver.NewFactory(),
 		nvmlreceiver.NewFactory(),
 		postgresqlreceiver.NewFactory(),
-		elasticsearchreceiver.NewFactory(),
-		flinkmetricsreceiver.NewFactory(),
-		couchdbreceiver.NewFactory(),
-		zookeeperreceiver.NewFactory(),
+		prometheusreceiver.NewFactory(),
 		rabbitmqreceiver.NewFactory(),
-		varnishreceiver.NewFactory(),
+		redisreceiver.NewFactory(),
 		saphanareceiver.NewFactory(),
 		sqlqueryreceiver.NewFactory(),
-		filelogreceiver.NewFactory(),
+		sqlserverreceiver.NewFactory(),
+		varnishreceiver.NewFactory(),
 		windowseventlogreceiver.NewFactory(),
+		windowsperfcountersreceiver.NewFactory(),
+		zookeeperreceiver.NewFactory(),
 	}
 	for _, rcv := range factories.Receivers {
 		receivers = append(receivers, rcv)

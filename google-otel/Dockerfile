@@ -15,5 +15,5 @@ COPY --chmod=755 otelcol-google /otelcol-google
 COPY config-standard.yaml /etc/otelcol-google/config-standard.yaml
 COPY config-k8s.yaml /etc/otelcol-google/config-k8s.yaml
 COPY --chmod=755 start_otelcol.sh /start_otelcol.sh
-ENTRYPOINT ["sh", "-c", "/start_otelcol.sh", "$@"]
-CMD ["--config=/etc/otelcol-google/config.yaml"]
+ENTRYPOINT ["sh", "/start_otelcol.sh", "--feature-gates=exporter.googlemanagedprometheus.intToDouble"]
+CMD ["--config=/config/config.yaml"]

@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: config
+  namespace: otelcol-google
+data:
+  config.yaml: |
+    ... Your yaml config here

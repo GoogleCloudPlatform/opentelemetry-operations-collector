@@ -1,0 +1,6 @@
+write_files:
+- path: /etc/config/config.yaml
+  permissions: 0644
+  owner: root
+  content: |
+    ... Your yaml config here

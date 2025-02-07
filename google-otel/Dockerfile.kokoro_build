@@ -1,5 +1,5 @@
 ARG DISTRO_ROOT="."
-ARG BUILD_CONTAINER="ubuntu:22.04"
+ARG BUILD_CONTAINER="ubuntu:24.04"
 
 FROM ${BUILD_CONTAINER} AS build
 
@@ -16,17 +16,21 @@ RUN make build
 FROM ${BUILD_CONTAINER} AS certs
 RUN apt-get -y update && apt-get -y install ca-certificates
 
-FROM scratch
+FROM ${BUILD_CONTAINER}
 
 ARG USER_UID=10001
+
+RUN mkdir -p /etc/otelcol-google
+RUN chown ${USER_UID}:${USER_UID} /etc/otelcol-google
+
 USER ${USER_UID}
 
 COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=build --chmod=755 /build/otelcol-google /otelcol-google
 
 ARG DISTRO_ROOT
-COPY ${DISTRO_ROOT}/config.yaml /etc/otelcol-google/config.yaml
-
-ENTRYPOINT ["/otelcol-google" , "--feature-gates=exporter.googlemanagedprometheus.intToDouble"]
+COPY ${DISTRO_ROOT}/config-k8s.yaml /etc/otelcol-google/config-k8s.yaml
+COPY ${DISTRO_ROOT}/config-standard.yaml /etc/otelcol-google/config-standard.yaml
+COPY --chmod=755 start_otelcol.sh /start_otelcol.sh
+ENTRYPOINT ["sh", "/start_otelcol.sh", "--feature-gates=exporter.googlemanagedprometheus.intToDouble"]
 CMD ["--config=/etc/otelcol-google/config.yaml"]
-

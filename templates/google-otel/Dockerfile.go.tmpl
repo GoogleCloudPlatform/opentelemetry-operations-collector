@@ -1,0 +1,19 @@
+FROM alpine:3.19 as certs
+RUN apk --update add ca-certificates
+
+FROM alpine:3.19
+
+ARG USER_UID=10001
+
+RUN mkdir -p /etc/{{ .BinaryName }}
+RUN chown ${USER_UID}:${USER_UID} /etc/{{ .BinaryName }}
+
+USER ${USER_UID}
+
+COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --chmod=755 {{ .BinaryName }} /{{ .BinaryName }}
+COPY config-k8s.yaml /etc/{{ .BinaryName }}/config-k8s.yaml
+COPY config-standard.yaml /etc/{{ .BinaryName }}/config-standard.yaml
+COPY --chmod=755 start_otelcol.sh /start_otelcol.sh
+ENTRYPOINT ["sh", "/start_otelcol.sh"{{ $length := len .FeatureGates }}{{ if gt $length 0 }}, "--feature-gates={{ .FeatureGates.Render }}"{{ end }}]
+CMD ["--config=/etc/{{ .BinaryName }}/config.yaml"]

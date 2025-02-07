@@ -9,5 +9,5 @@ USER ${USER_UID}
 COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --chmod=755 {{ .BinaryName }} /{{ .BinaryName }}
 COPY config.yaml /etc/{{ .BinaryName }}/config.yaml
-ENTRYPOINT ["/{{ .BinaryName }}"{{ $length := len .FeatureGates }} {{ if gt $length 0 }}, "--feature-gates={{ .FeatureGates.Render }}"{{ end }}]
+ENTRYPOINT ["/{{ .BinaryName }}"{{ $length := len .FeatureGates }}{{ if gt $length 0 }}, "--feature-gates={{ .FeatureGates.Render }}"{{ end }}]
 CMD ["--config=/etc/{{ .BinaryName }}/config.yaml"]

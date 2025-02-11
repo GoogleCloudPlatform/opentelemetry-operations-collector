@@ -2,6 +2,7 @@ go.work
 go.work.sum
 
 **/.tools
+**/_build
 
 .vscode
 

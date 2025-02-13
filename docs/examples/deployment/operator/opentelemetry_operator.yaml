@@ -1,8 +1,0 @@
-apiVersion: opentelemetry.io/v1beta1
-kind: OpenTelemetryCollector
-metadata:
-  name: otelcol-google
-  namespace: otelcol-google-operator
-spec:
-  image: us-docker.pkg.dev/cloud-ops-agents-artifacts/google-cloud-opentelemetry-collector/otelcol-google:latest
-  mode: deployment

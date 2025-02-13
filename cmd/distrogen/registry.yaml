@@ -342,6 +342,10 @@ processors:
     transform:
         gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor
         docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/transformprocessor/README.md
+    interval:
+        gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/intervalprocessor v0.119.0
+        docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/intervalprocessor/README.md
+
 exporters:
     alibabacloudlogservice:
         gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/alibabacloudlogserviceexporter

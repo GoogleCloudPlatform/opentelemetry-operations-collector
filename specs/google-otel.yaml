@@ -55,6 +55,7 @@ components:
     - resource
     - tailsampling
     - transform
+    - interval
 
   exporters:
     - debug

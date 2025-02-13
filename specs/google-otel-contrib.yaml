@@ -126,6 +126,7 @@ components:
     - metricsgeneration
     - redaction
     - resource
+    - interval
 
   exporters:
     - otlp

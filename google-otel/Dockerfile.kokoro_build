@@ -26,6 +26,6 @@ COPY --from=build --chmod=755 /build/otelcol-google /otelcol-google
 
 ARG DISTRO_ROOT
 COPY ${DISTRO_ROOT}/config.yaml /etc/otelcol-google/config.yaml
-COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+
 ENTRYPOINT ["/otelcol-google", "--feature-gates=exporter.googlemanagedprometheus.intToDouble"]
 CMD ["--config=/etc/otelcol-google/config.yaml"]

@@ -42,7 +42,7 @@ func createMetricsReceiver(
 	}
 
 	ns := newNvmlScraper(cfg, params)
-	scraper, err := scraper.NewMetrics(
+	scp, err := scraper.NewMetrics(
 		ns.scrape,
 		scraper.WithStart(ns.start),
 		scraper.WithShutdown(ns.stop))
@@ -52,6 +52,6 @@ func createMetricsReceiver(
 
 	return scraperhelper.NewMetricsController(
 		&cfg.ControllerConfig, params, consumer,
-		scraperhelper.AddScraper(metadata.Type, scraper),
+		scraperhelper.AddScraper(metadata.Type, scp),
 	)
 }

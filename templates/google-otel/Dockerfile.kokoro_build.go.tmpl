@@ -16,7 +16,7 @@ RUN make build
 FROM ${BUILD_CONTAINER} AS certs
 RUN apk --update add ca-certificates
 
-FROM ${BUILD_CONTAINER}
+FROM scratch
 
 ARG USER_UID=10001
 USER ${USER_UID}

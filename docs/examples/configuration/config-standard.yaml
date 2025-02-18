@@ -64,6 +64,30 @@ processors:
     detectors: [gcp]
     timeout: 10s
 
+  # The transform/collision processor is a transform processor that handles
+  # attributes added by resource detection and moves them into alternate
+  # names. This is to ensure the googlemanagedprometheus exporter can still
+  # fill these in after the fact.
+  #
+  # Docs:
+  #
+  transform/collision:
+    metric_statements:
+    - context: datapoint
+      statements:
+      - set(attributes["exported_location"], attributes["location"])
+      - delete_key(attributes, "location")
+      - set(attributes["exported_cluster"], attributes["cluster"])
+      - delete_key(attributes, "cluster")
+      - set(attributes["exported_namespace"], attributes["namespace"])
+      - delete_key(attributes, "namespace")
+      - set(attributes["exported_job"], attributes["job"])
+      - delete_key(attributes, "job")
+      - set(attributes["exported_instance"], attributes["instance"])
+      - delete_key(attributes, "instance")
+      - set(attributes["exported_project_id"], attributes["project_id"])
+      - delete_key(attributes, "project_id")
+
 exporters:
   # The googlecloud exporter will export telemetry to different
   # Google Cloud services:

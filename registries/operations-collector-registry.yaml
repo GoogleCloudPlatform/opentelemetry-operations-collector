@@ -29,5 +29,8 @@ processors:
     path: "../privatecomponents/processor/normalizesumsprocessor"
 
 exporters:
+  googleservicecontrol:
+    gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/exporter/googleservicecontrolexporter v0.0.0
+    path: "../exporter/googleservicecontrolexporter"
 connectors:
 extensions:

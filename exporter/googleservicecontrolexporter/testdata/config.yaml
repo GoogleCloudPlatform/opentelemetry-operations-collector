@@ -15,6 +15,7 @@ exporters:
     impersonate_service_account: "serviceAccount@myproject.iam.gserviceaccount.com"
     use_raw_sc_client: "false"
     enable_debug_headers: false
+    disable_auth: false
     timeout: "10s"
     retry_on_failure:
       enabled: true

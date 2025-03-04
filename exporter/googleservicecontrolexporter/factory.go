@@ -27,6 +27,7 @@ import (
 	"google.golang.org/api/impersonate"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/google"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/oauth"
 )
 
@@ -56,6 +57,7 @@ type Config struct {
 	// See go/agent-gdce
 	UseRawServicecontrolClient string `mapstructure:"use_raw_sc_client"`
 	EnableDebugHeaders         bool   `mapstructure:"enable_debug_headers"`
+	DisableAuth                bool   `mapstructure:"disable_auth"`
 
 	exporterhelper.TimeoutConfig `mapstructure:",squash"` // squash ensures fields are correctly decoded in embedded struct.
 	configretry.BackOffConfig    `mapstructure:"retry_on_failure"`
@@ -76,6 +78,7 @@ func createDefaultConfig() component.Config {
 		ImpersonateServiceAccount:  "",
 		UseRawServicecontrolClient: "true",
 		EnableDebugHeaders:         false,
+		DisableAuth:                false,
 		// The meaning of RetrySettings is described in
 		// https://github.com/open-telemetry/opentelemetry-collector/blob/v0.54.0/exporter/exporterhelper/queued_retry.go#L38.
 		// The defaults are ported from our collectd agent
@@ -123,7 +126,11 @@ func createMetricsExporter(ctx context.Context, settings exporter.Settings, cfg 
 		credentials = google.NewDefaultCredentialsWithOptions(google.DefaultCredentialsOptions{oauth.TokenSource{src}, nil})
 	}
 
-	opts = append(opts, grpc.WithCredentialsBundle(credentials))
+	if oCfg.DisableAuth {
+		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	} else {
+		opts = append(opts, grpc.WithCredentialsBundle(credentials))
+	}
 
 	useRawServicecontrolClient := strings.TrimSpace(strings.ToLower(oCfg.UseRawServicecontrolClient)) == "true"
 	c, err := clientProvider(oCfg.ServiceControlEndpoint, useRawServicecontrolClient, oCfg.EnableDebugHeaders, settings.Logger, opts...)

@@ -76,6 +76,7 @@ func TestCreateExporterFromConfig(t *testing.T) {
 				ImpersonateServiceAccount:  "serviceAccount@myproject.iam.gserviceaccount.com",
 				UseRawServicecontrolClient: "false",
 				EnableDebugHeaders:         false,
+				DisableAuth:                false,
 			},
 		},
 		{

@@ -2,9 +2,9 @@ name: google-otel
 display_name: Google Built OpenTelemetry Collector
 description: OpenTelemetry Collector Built By Google
 blurb: A curated distribution of the OpenTelemetry Collector for use in GCP.
-version: 0.119.0
-opentelemetry_version: 0.119.0
-opentelemetry_stable_version: 1.25.0
+version: 0.121.0
+opentelemetry_version: 0.121.0
+opentelemetry_stable_version: 1.27.0
 go_version: 1.24.0
 binary_name: otelcol-google
 collector_cgo: false

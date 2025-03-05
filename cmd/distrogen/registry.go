@@ -212,25 +212,3 @@ func (cs RegistryComponents) RenderOCBComponents() string {
 
 	return renderYaml(renderComponents)
 }
-
-type OCBManifestReplace struct {
-	From   *GoModuleID `yaml:"from"`
-	To     *GoModuleID `yaml:"to"`
-	Reason string      `yaml:"reason"`
-}
-
-func (r *OCBManifestReplace) String() string {
-	r.From.AllowBlankTag = true
-	r.To.AllowBlankTag = true
-	return fmt.Sprintf("# %s\n- %s => %s", r.Reason, r.From, r.To)
-}
-
-type OCBManifestReplaces []*OCBManifestReplace
-
-func (rs OCBManifestReplaces) Render() string {
-	result := ""
-	for _, r := range rs {
-		result += fmt.Sprintf("%s\n", r)
-	}
-	return result
-}

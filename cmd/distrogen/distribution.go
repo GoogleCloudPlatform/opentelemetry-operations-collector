@@ -12,40 +12,61 @@ import (
 
 var ErrNoDiff = errors.New("no differences found with previous generation")
 
+// DistributionSpec is the specification for a new OpenTelemetry Collector distribution.
+// It contains all the information that will be formatted into the default set of
+// templates/user provided templates.
 type DistributionSpec struct {
-	Name                       string                  `yaml:"name"`
-	DisplayName                string                  `yaml:"display_name"`
-	Description                string                  `yaml:"description"`
-	Blurb                      string                  `yaml:"blurb"`
-	Version                    string                  `yaml:"version"`
-	OpenTelemetryVersion       string                  `yaml:"opentelemetry_version"`
-	OpenTelemetryStableVersion string                  `yaml:"opentelemetry_stable_version"`
-	GoVersion                  string                  `yaml:"go_version"`
-	BinaryName                 string                  `yaml:"binary_name"`
-	CollectorCGO               bool                    `yaml:"collector_cgo"`
-	DockerRepo                 string                  `yaml:"docker_repo"`
-	Components                 *DistributionComponents `yaml:"components"`
-	Replaces                   OCBManifestReplaces     `yaml:"replaces,omitempty"`
-	CustomValues               map[string]any          `yaml:"custom_values,omitempty"`
-	FeatureGates               FeatureGates            `yaml:"feature_gates"`
+	Name                        string                  `yaml:"name"`
+	DisplayName                 string                  `yaml:"display_name"`
+	Description                 string                  `yaml:"description"`
+	Blurb                       string                  `yaml:"blurb"`
+	Version                     string                  `yaml:"version"`
+	OpenTelemetryVersion        string                  `yaml:"opentelemetry_version"`
+	OpenTelemetryContribVersion string                  `yaml:"opentelemetry_contrib_version"`
+	OpenTelemetryStableVersion  string                  `yaml:"opentelemetry_stable_version"`
+	GoVersion                   string                  `yaml:"go_version"`
+	BinaryName                  string                  `yaml:"binary_name"`
+	CollectorCGO                bool                    `yaml:"collector_cgo"`
+	DockerRepo                  string                  `yaml:"docker_repo"`
+	Components                  *DistributionComponents `yaml:"components"`
+	Replaces                    ComponentReplaces       `yaml:"replaces,omitempty"`
+	CustomValues                map[string]any          `yaml:"custom_values,omitempty"`
+	FeatureGates                FeatureGates            `yaml:"feature_gates"`
 }
 
+// Diff will compare two different DistributionSpecs.
 func (s *DistributionSpec) Diff(s2 *DistributionSpec) bool {
 	diff := cmp.Diff(s, s2)
 	return diff != ""
 }
 
-type ComponentList []string
-
-type DistributionComponents struct {
-	Receivers  ComponentList `yaml:"receivers,omitempty"`
-	Processors ComponentList `yaml:"processors,omitempty"`
-	Exporters  ComponentList `yaml:"exporters,omitempty"`
-	Connectors ComponentList `yaml:"connectors,omitempty"`
-	Extensions ComponentList `yaml:"extensions,omitempty"`
-	Providers  ComponentList `yaml:"providers,omitempty"`
+// NewDistributionSpec loads the DistributionSpec from a yaml file.
+func NewDistributionSpec(path string) (*DistributionSpec, error) {
+	spec, err := yamlUnmarshalFromFile[DistributionSpec](path)
+	if err != nil {
+		return nil, err
+	}
+	// It is a rare case where the contrib version falls out of sync with
+	// the canonical OpenTelemetry version, most of the time it is the same.
+	if spec.OpenTelemetryContribVersion == "" {
+		spec.OpenTelemetryContribVersion = spec.OpenTelemetryVersion
+	}
+	return spec, nil
 }
 
+// DistributionComponents is a set of components with RegistryComponent names
+// that defines all the components included in this collector distribution.
+type DistributionComponents struct {
+	Receivers  []string `yaml:"receivers,omitempty"`
+	Processors []string `yaml:"processors,omitempty"`
+	Exporters  []string `yaml:"exporters,omitempty"`
+	Connectors []string `yaml:"connectors,omitempty"`
+	Extensions []string `yaml:"extensions,omitempty"`
+	Providers  []string `yaml:"providers,omitempty"`
+}
+
+// DistributionGenerator contains all the facilities to generate a distribution
+// from a DistributionSpec.
 type DistributionGenerator struct {
 	Spec               *DistributionSpec
 	GenerateDirName    string
@@ -54,6 +75,7 @@ type DistributionGenerator struct {
 	CustomTemplatesDir fs.FS
 }
 
+// NewDistributionGenerator creates a DistributionGenerator.
 func NewDistributionGenerator(spec *DistributionSpec, registry *Registry, forceGenerate bool) (*DistributionGenerator, error) {
 	d := DistributionGenerator{
 		Spec:     spec,
@@ -83,14 +105,21 @@ func NewDistributionGenerator(spec *DistributionSpec, registry *Registry, forceG
 	return &d, nil
 }
 
+// Generate will generate the distribution. It will generate the distribution
+// in a temporary local directory, and upon there no errors in the generation
+// will move it into the destination path.
 func (d *DistributionGenerator) Generate() error {
-	templates, err := GetEmbeddedTemplateSet(d.Spec)
+	templateContext, err := NewTemplateContextFromSpec(d.Spec, d.Registry)
+	if err != nil {
+		return err
+	}
+	templates, err := GetEmbeddedTemplateSet(templateContext)
 	if err != nil {
 		return err
 	}
 
 	if d.CustomTemplatesDir != nil {
-		customTemplates, err := GetTemplateSetFromDir(d.CustomTemplatesDir, d.Spec)
+		customTemplates, err := GetTemplateSetFromDir(d.CustomTemplatesDir, templateContext)
 		if err != nil {
 			return err
 		}
@@ -99,13 +128,6 @@ func (d *DistributionGenerator) Generate() error {
 		// defaults will overwrite the embedded version with the custom version.
 		mapMerge(templates, customTemplates)
 	}
-
-	manifestContext, err := NewManifestContextFromSpec(d.Spec, d.Registry)
-	if err != nil {
-		return err
-	}
-	templates.SetTemplateContext("manifest.yaml.go.tmpl", manifestContext)
-	templates.SetTemplateContext("README.md.go.tmpl", manifestContext)
 
 	for _, tmpl := range templates {
 		if err := tmpl.Render(d.GeneratePath); err != nil {
@@ -119,10 +141,17 @@ func (d *DistributionGenerator) Generate() error {
 	return nil
 }
 
+// WriteSpec renders the DistributionSpec in a yaml file that lives in the generated
+// distribution. This is a human readable way to keep track of what spec was used for
+// this existing generation, as well as a method of detecting whether a new generation
+// needs to be done at all (if no spec changes no need to generate).
 func (d *DistributionGenerator) WriteSpec() error {
 	return yamlMarshalToFile(d.Spec, filepath.Join(d.GeneratePath, "spec.yaml"))
 }
 
+// MoveGeneratedDirToWd performs the final step of the generation, moving the generated temp
+// directory to the destination path. It tries to do this in a way where nothing is destroyed
+// until everything is confirmed to work.
 func (d *DistributionGenerator) MoveGeneratedDirToWd() (err error) {
 	wd, err := os.Getwd()
 	if err != nil {
@@ -161,33 +190,33 @@ func (d *DistributionGenerator) Clean() error {
 	return nil
 }
 
-type ManifestContext struct {
+type TemplateContext struct {
 	*DistributionSpec
 
-	Receivers  OCBManifestComponents
-	Processors OCBManifestComponents
-	Exporters  OCBManifestComponents
-	Extensions OCBManifestComponents
-	Connectors OCBManifestComponents
-	Providers  OCBManifestComponents
+	Receivers  RegistryComponents
+	Processors RegistryComponents
+	Exporters  RegistryComponents
+	Extensions RegistryComponents
+	Connectors RegistryComponents
+	Providers  RegistryComponents
 }
 
-func NewManifestContextFromSpec(spec *DistributionSpec, registry *Registry) (*ManifestContext, error) {
-	context := ManifestContext{DistributionSpec: spec}
+func NewTemplateContextFromSpec(spec *DistributionSpec, registry *Registry) (*TemplateContext, error) {
+	context := TemplateContext{DistributionSpec: spec}
 
 	errs := make(RegistryLoadError)
 	var err RegistryLoadError
-	context.Receivers, err = registry.Receivers.LoadAll(spec.Components.Receivers, spec.OpenTelemetryVersion, spec.OpenTelemetryStableVersion)
+	context.Receivers, err = registry.Receivers.LoadAll(spec.Components.Receivers, spec.OpenTelemetryVersion, spec.OpenTelemetryStableVersion, spec.OpenTelemetryContribVersion)
 	mapMerge(errs, err)
-	context.Processors, err = registry.Processors.LoadAll(spec.Components.Processors, spec.OpenTelemetryVersion, spec.OpenTelemetryStableVersion)
+	context.Processors, err = registry.Processors.LoadAll(spec.Components.Processors, spec.OpenTelemetryVersion, spec.OpenTelemetryStableVersion, spec.OpenTelemetryContribVersion)
 	mapMerge(errs, err)
-	context.Exporters, err = registry.Exporters.LoadAll(spec.Components.Exporters, spec.OpenTelemetryVersion, spec.OpenTelemetryStableVersion)
+	context.Exporters, err = registry.Exporters.LoadAll(spec.Components.Exporters, spec.OpenTelemetryVersion, spec.OpenTelemetryStableVersion, spec.OpenTelemetryContribVersion)
 	mapMerge(errs, err)
-	context.Connectors, err = registry.Connectors.LoadAll(spec.Components.Connectors, spec.OpenTelemetryVersion, spec.OpenTelemetryStableVersion)
+	context.Connectors, err = registry.Connectors.LoadAll(spec.Components.Connectors, spec.OpenTelemetryVersion, spec.OpenTelemetryStableVersion, spec.OpenTelemetryContribVersion)
 	mapMerge(errs, err)
-	context.Extensions, err = registry.Extensions.LoadAll(spec.Components.Extensions, spec.OpenTelemetryVersion, spec.OpenTelemetryStableVersion)
+	context.Extensions, err = registry.Extensions.LoadAll(spec.Components.Extensions, spec.OpenTelemetryVersion, spec.OpenTelemetryStableVersion, spec.OpenTelemetryContribVersion)
 	mapMerge(errs, err)
-	context.Providers, err = registry.Providers.LoadAll(spec.Components.Providers, spec.OpenTelemetryVersion, spec.OpenTelemetryStableVersion)
+	context.Providers, err = registry.Providers.LoadAll(spec.Components.Providers, spec.OpenTelemetryVersion, spec.OpenTelemetryStableVersion, spec.OpenTelemetryContribVersion)
 	mapMerge(errs, err)
 
 	if len(errs) > 0 {
@@ -196,52 +225,56 @@ func NewManifestContextFromSpec(spec *DistributionSpec, registry *Registry) (*Ma
 	return &context, nil
 }
 
-// FIXME: This whole implementation is a hack for demo purposes.
-// Refactor if agreed upon as a feature.
-type READMEContext struct {
-	*DistributionSpec
+type FeatureGates []string
 
-	Receivers  map[string]*OCBManifestComponent
-	Processors map[string]*OCBManifestComponent
-	Exporters  map[string]*OCBManifestComponent
-	Extensions map[string]*OCBManifestComponent
-	Connectors map[string]*OCBManifestComponent
-	Providers  map[string]*OCBManifestComponent
-}
-
-func NewREADMEContextFromSpec(spec *DistributionSpec, registry *Registry) (*READMEContext, error) {
-	context := READMEContext{DistributionSpec: spec}
-
-	errs := make(RegistryLoadError)
-	var err RegistryLoadError
-	context.Receivers, err = loadComponentMap(context.Components.Receivers, registry.Receivers)
-	mapMerge(errs, err)
-	context.Processors, err = loadComponentMap(context.Components.Processors, registry.Processors)
-	mapMerge(errs, err)
-	context.Exporters, err = loadComponentMap(context.Components.Exporters, registry.Exporters)
-	mapMerge(errs, err)
-	context.Connectors, err = loadComponentMap(context.Components.Connectors, registry.Connectors)
-	mapMerge(errs, err)
-	context.Extensions, err = loadComponentMap(context.Components.Extensions, registry.Extensions)
-	mapMerge(errs, err)
-	context.Providers, err = loadComponentMap(context.Components.Providers, registry.Providers)
-	mapMerge(errs, err)
-
-	if len(errs) > 0 {
-		return nil, errs
+// Render will render the feature gates in a comma separated list.
+func (fgs FeatureGates) Render() string {
+	// This case should never come up in template rendering,
+	// but it's here as a backup in case.
+	if len(fgs) == 0 {
+		return ""
 	}
-	return &context, nil
-}
 
-func loadComponentMap(components []string, registryList RegistryList) (map[string]*OCBManifestComponent, RegistryLoadError) {
-	result := make(map[string]*OCBManifestComponent)
-	errs := make(RegistryLoadError)
-	var err error
-	for _, componentName := range components {
-		result[componentName], err = registryList.Load(componentName)
-		if err != nil {
-			errs[componentName] = err
+	gates := ""
+	first := true
+	for _, fg := range fgs {
+		gates += fg
+		if first {
+			first = false
+		} else {
+			gates += ","
 		}
 	}
-	return result, errs
+	return gates
+}
+
+// ComponentReplace is a Go module replacement that will be
+// rendered into the OCB manifest.
+type ComponentReplace struct {
+	From   *GoModuleID `yaml:"from"`
+	To     *GoModuleID `yaml:"to"`
+	Reason string      `yaml:"reason"`
+}
+
+// String renders the component replace for an OCB manifest.
+func (r *ComponentReplace) String() string {
+	r.From.AllowBlankTag = true
+	r.To.AllowBlankTag = true
+	// This is pretty awkward and it would be nice to implement yaml.Marshaler
+	// on here instead, but this was the only nice way I could find to render
+	// the Reason field as a comment above the replacement entry.
+	return fmt.Sprintf("# %s\n- %s => %s", r.Reason, r.From, r.To)
+}
+
+// ComponentReplaces is a collection of component replacements.
+type ComponentReplaces []*ComponentReplace
+
+// Render renders the component replaces all at once
+// for an OCB manifest.
+func (rs ComponentReplaces) Render() string {
+	result := ""
+	for _, r := range rs {
+		result += fmt.Sprintf("%s\n", r)
+	}
+	return result
 }

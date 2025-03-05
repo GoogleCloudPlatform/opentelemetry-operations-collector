@@ -33,7 +33,7 @@ func ComponentsFromOTelConfig(otelConfig map[string]any) (*DistributionComponent
 	return components, nil
 }
 
-func readComponentsFromSection(sectionName string, otelConfig map[string]any) (ComponentList, error) {
+func readComponentsFromSection(sectionName string, otelConfig map[string]any) ([]string, error) {
 	var section map[string]any
 	rawSection, ok := otelConfig[sectionName]
 	if !ok {
@@ -43,5 +43,5 @@ func readComponentsFromSection(sectionName string, otelConfig map[string]any) (C
 	if !ok {
 		return nil, fmt.Errorf("reading section %s: invalid section data", sectionName)
 	}
-	return ComponentList(mapKeys(section)), nil
+	return mapKeys(section), nil
 }

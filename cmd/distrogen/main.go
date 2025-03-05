@@ -18,6 +18,8 @@ func main() {
 	flag.Parse()
 	if err := run(); err != nil {
 		if errors.Is(err, ErrNoDiff) {
+			// No diff means we just want to log the error
+			// but not exit with code 1.
 			log.Println(err)
 		} else {
 			log.Fatal(err)
@@ -55,7 +57,7 @@ func generateDistribution() error {
 		logLevel.Set(slog.LevelDebug)
 	}
 
-	spec, err := yamlUnmarshalFromFile[DistributionSpec](specPath)
+	spec, err := NewDistributionSpec(specPath)
 	if err != nil {
 		return err
 	}

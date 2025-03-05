@@ -64,13 +64,9 @@ processors:
     detectors: [gcp]
     timeout: 10s
 
-  # The transform/collision processor is a transform processor that handles
-  # attributes added by resource detection and moves them into alternate
-  # names. This is to ensure the googlemanagedprometheus exporter can still
-  # fill these in after the fact.
-  #
-  # Docs:
-  #
+  # The transform/collision processor ensures that any attributes that may
+  # collide with the googlemanagedprometheus exporter's monitored resource
+  # construction are moved to a similar name that is not reserved.
   transform/collision:
     metric_statements:
     - context: datapoint
@@ -123,6 +119,7 @@ service:
       receivers:
       - otlp
       processors:
+      - transform/collision
       - resourcedetection
       - memory_limiter
       - batch

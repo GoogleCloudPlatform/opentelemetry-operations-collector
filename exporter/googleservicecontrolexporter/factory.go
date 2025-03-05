@@ -38,10 +38,13 @@ const (
 var (
 	// 16s is the Service Control API default:
 	// https://github.com/googleapis/googleapis/blob/d68746128bbb1c5729ff97132f8532e36f796929/google/api/servicecontrol/v1/servicecontrol_grpc_service_config.json#L26
-	// It is important to keep it as is: go/slm-monitoring-opentelemetry-batching.
+	// It is important to keep it as is: go/slm-monitoring-opentelemetry-batching:
+	// Metrics points should come in chronological order: https://cloud.google.com/monitoring/api/ref_v3/rest/v3/projects.timeSeries/create
+	// Together with the RetrySettings on the exporter, this ensures metric at T
+	// is received, or dropped, before the metric at T + ScrapeInterval is sent.
 	defaultTimeout  = 16 * time.Second
 	defaultEndpoint = "servicecontrol.googleapis.com:443"
-	clientProvider  = New
+	clientProvider  = NewServiceControllerClient
 )
 
 // Config defines configuration for Service Control Exporter
@@ -52,9 +55,12 @@ type Config struct {
 	ServiceConfigID           string `mapstructure:"service_config_id"`
 	ImpersonateServiceAccount string `mapstructure:"impersonate_service_account"`
 	// Whether to use servicecontrol library or raw sc client.
+	// The Client Library's SC client supports authentications using ADC and WIF
+	// https://cloud.google.com/kubernetes-engine/fleet-management/docs/use-workload-identity#authenticate_from_your_code
 	// Defaults to `true`, so that existing customers are unaffected by changes.
 	// See go/agent-gdce
-	UseRawServicecontrolClient string `mapstructure:"use_raw_sc_client"`
+	// TODO(b/400987158): remove the option and migrate all to Client Library.
+	UseRawServiceControlClient string `mapstructure:"use_raw_sc_client"`
 	EnableDebugHeaders         bool   `mapstructure:"enable_debug_headers"`
 
 	exporterhelper.TimeoutConfig `mapstructure:",squash"` // squash ensures fields are correctly decoded in embedded struct.
@@ -74,7 +80,7 @@ func createDefaultConfig() component.Config {
 		TimeoutConfig:              exporterhelper.TimeoutConfig{Timeout: defaultTimeout},
 		ServiceControlEndpoint:     defaultEndpoint,
 		ImpersonateServiceAccount:  "",
-		UseRawServicecontrolClient: "true",
+		UseRawServiceControlClient: "true",
 		EnableDebugHeaders:         false,
 		// The meaning of RetrySettings is described in
 		// https://github.com/open-telemetry/opentelemetry-collector/blob/v0.54.0/exporter/exporterhelper/queued_retry.go#L38.
@@ -84,7 +90,11 @@ func createDefaultConfig() component.Config {
 			InitialInterval: 1 * time.Second,
 			MaxInterval:     1 * time.Second,
 			// Allow 1 regular metric submission + 1 retry + a couple of seconds in between.
-			// It's important to keep it as is: go/slm-monitoring-opentelemetry-batching.
+			// It's important to keep it as is: go/slm-monitoring-opentelemetry-batching:
+			// Metrics points should come in chronological order: https://cloud.google.com/monitoring/api/ref_v3/rest/v3/projects.timeSeries/create
+			// With MaxElapsedTime < ScrapeInterval, this ensures metric at T
+			// is received, or dropped, before the metric at T + ScrapeInterval
+			// is sent.
 			MaxElapsedTime: defaultTimeout + defaultTimeout + 2*time.Second,
 		},
 		// QueueSettings are described in
@@ -125,8 +135,8 @@ func createMetricsExporter(ctx context.Context, settings exporter.Settings, cfg 
 
 	opts = append(opts, grpc.WithCredentialsBundle(credentials))
 
-	useRawServicecontrolClient := strings.TrimSpace(strings.ToLower(oCfg.UseRawServicecontrolClient)) == "true"
-	c, err := clientProvider(oCfg.ServiceControlEndpoint, useRawServicecontrolClient, oCfg.EnableDebugHeaders, settings.Logger, opts...)
+	useRawServiceControlClient := strings.TrimSpace(strings.ToLower(oCfg.UseRawServiceControlClient)) == "true"
+	c, err := clientProvider(oCfg.ServiceControlEndpoint, useRawServiceControlClient, oCfg.EnableDebugHeaders, settings.Logger, opts...)
 	if err != nil {
 		return nil, err
 	}

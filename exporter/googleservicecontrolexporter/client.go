@@ -44,11 +44,10 @@ type serviceControlClientLibrary struct {
 	service *servicecontrol.ServiceControllerClient
 }
 
-// New is constructor for service control client
-func New(endpoint string, useRawServicecontrolClient bool, enableDebugHeaders bool, logger *zap.Logger, opts ...grpc.DialOption) (ServiceControlClient, error) {
+func NewServiceControllerClient(endpoint string, useRawServiceControlClient bool, enableDebugHeaders bool, logger *zap.Logger, opts ...grpc.DialOption) (ServiceControlClient, error) {
 	ctx := context.Background()
 	// Use client library. Ignore grpc dial options.
-	if !useRawServicecontrolClient {
+	if !useRawServiceControlClient {
 		// Enable gRPC response interceptor for debug header
 		var clientOpts []option.ClientOption
 		if enableDebugHeaders {

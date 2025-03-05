@@ -42,7 +42,7 @@ import (
 const (
 	operationName = "OpenTelemetry Reported Metrics"
 	// OTel resource attribute that can override the static `consumer_project` setting from factory.go.
-	dynamicConsumerAttribute = "ucp.servicecontrol.consumer_id"
+	dynamicConsumerAttribute = "servicecontrol.consumer_id"
 
 	// We don't print every failed request, since it may make logs unreadable.
 	logEveryNthError = 20
@@ -263,7 +263,10 @@ func (e *Exporter) createReportRequest(rms pmetric.ResourceMetricsSlice) *scpb.R
 	return &request
 }
 
-// We create a dedicated Operation for each metric, see go/slm-monitoring-opentelemetry-batching for details.
+// We create a dedicated Operation for each metric. The API would drop the
+// entire Operation if any metric point is invalid (e.g., old timestamp). Having
+// one metric per operation can avoid valid metric points get dropped.
+// see go/slm-monitoring-opentelemetry-batching for details.
 func (e *Exporter) createOperation(resourceAttributes map[string]string, metric pmetric.Metric, now time.Time, consumerID string) *scpb.Operation {
 	start := now
 	op := scpb.Operation{
@@ -302,9 +305,7 @@ func (e *Exporter) createMetricValueSet(metric pmetric.Metric) (*scpb.MetricValu
 		mv, startTime = e.createNumericMetricValues(metric.Sum().DataPoints(), metric.Sum().AggregationTemporality())
 	case pmetric.MetricTypeHistogram:
 		mv, startTime = e.createHistogramMetricValues(metric.Histogram())
-	// We don't handle ExponentialHistogram and Summary types, because:
-	// - they were not supported in GKE Metrics agent;
-	// - nobody asked for it so far.
+	// TODO(b/401006109): handle ExponentialHistogram and Summary types
 	default:
 		e.logger.Warn("Metric type unsupported", zap.String("type", t.String()))
 	}

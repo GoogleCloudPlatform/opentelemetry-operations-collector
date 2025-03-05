@@ -47,7 +47,7 @@ func TestCreateExporterFromConfig(t *testing.T) {
 
 		def.ServiceName = "test.service.name"
 		def.ConsumerProject = "my-project-id"
-		def.UseRawServicecontrolClient = "true"
+		def.UseRawServiceControlClient = "true"
 		return def
 	}()
 	tests := []struct {
@@ -74,7 +74,7 @@ func TestCreateExporterFromConfig(t *testing.T) {
 				ServiceName:                "test.service.name",
 				ServiceConfigID:            "111-222-333",
 				ImpersonateServiceAccount:  "serviceAccount@myproject.iam.gserviceaccount.com",
-				UseRawServicecontrolClient: "false",
+				UseRawServiceControlClient: "false",
 				EnableDebugHeaders:         false,
 			},
 		},

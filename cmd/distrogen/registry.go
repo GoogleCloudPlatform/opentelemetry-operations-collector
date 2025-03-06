@@ -1,3 +1,17 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package main
 
 import (
@@ -15,6 +29,8 @@ var registryContent []byte
 
 var ErrComponentNotFound = errors.New("component not found")
 
+// Registry is a collection of components that can be used in
+// a collector distribution.
 type Registry struct {
 	Receivers  RegistryList `yaml:"receivers"`
 	Processors RegistryList `yaml:"processors"`
@@ -24,6 +40,8 @@ type Registry struct {
 	Providers  RegistryList `yaml:"providers"`
 }
 
+// LoadEmbeddedRegistry will load the registry embedded in the
+// distrogen binary.
 func LoadEmbeddedRegistry() (*Registry, error) {
 	var r Registry
 	if err := yaml.Unmarshal(registryContent, &r); err != nil {
@@ -32,10 +50,12 @@ func LoadEmbeddedRegistry() (*Registry, error) {
 	return &r, nil
 }
 
+// LoadRegistry will load a registry from a yaml file.
 func LoadRegistry(path string) (*Registry, error) {
 	return yamlUnmarshalFromFile[Registry](path)
 }
 
+// Merge will merge another registry into this one.
 func (r *Registry) Merge(r2 *Registry) {
 	mapMerge(r.Receivers, r2.Receivers)
 	mapMerge(r.Processors, r2.Processors)
@@ -45,8 +65,11 @@ func (r *Registry) Merge(r2 *Registry) {
 	mapMerge(r.Providers, r2.Providers)
 }
 
+// RegistryList is a map of registry component names to component
+// details.
 type RegistryList map[string]*RegistryComponent
 
+// Load will load a component from the registry.
 func (rl RegistryList) Load(name string) (*RegistryComponent, error) {
 	entry, ok := rl[name]
 	if !ok {
@@ -55,8 +78,12 @@ func (rl RegistryList) Load(name string) (*RegistryComponent, error) {
 	return entry, nil
 }
 
+// RegistryLoadError is a combination of errors for loading a
+// set of components.
 type RegistryLoadError map[string]error
 
+// Error implements the error interface. It formats the error
+// with the intention of being output to stderr.
 func (e RegistryLoadError) Error() string {
 	msg := ""
 	for name, err := range e {
@@ -66,6 +93,8 @@ func (e RegistryLoadError) Error() string {
 	return msg
 }
 
+// LoadAll will take a list of component names and load them
+// from the registry, attaching the appropriate version tag.
 func (rl RegistryList) LoadAll(names []string, version string, stableVersion string, contribVersion string) (RegistryComponents, RegistryLoadError) {
 	components := RegistryComponents{}
 	errs := make(RegistryLoadError)

@@ -1,3 +1,17 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package main
 
 import (
@@ -183,6 +197,7 @@ func (d *DistributionGenerator) MoveGeneratedDirToWd() (err error) {
 	return nil
 }
 
+// Clean will remove the temporary directory used for generation.
 func (d *DistributionGenerator) Clean() error {
 	if err := os.RemoveAll(d.GeneratePath); err != nil && !os.IsNotExist(err) {
 		return err
@@ -190,6 +205,8 @@ func (d *DistributionGenerator) Clean() error {
 	return nil
 }
 
+// TemplateContext is the context that will be passed into any default or user
+// provided templates.
 type TemplateContext struct {
 	*DistributionSpec
 
@@ -201,6 +218,9 @@ type TemplateContext struct {
 	Providers  RegistryComponents
 }
 
+// NewTemplateContextFromSpec creates a TemplateContext from a DistributionSpec and a Registry.
+// It is expected that this registry will be already merged with the registries provided by the
+// user.
 func NewTemplateContextFromSpec(spec *DistributionSpec, registry *Registry) (*TemplateContext, error) {
 	context := TemplateContext{DistributionSpec: spec}
 
@@ -225,6 +245,8 @@ func NewTemplateContextFromSpec(spec *DistributionSpec, registry *Registry) (*Te
 	return &context, nil
 }
 
+// FeatureGates is a list of feature gate names to enable in a
+// collector.
 type FeatureGates []string
 
 // Render will render the feature gates in a comma separated list.

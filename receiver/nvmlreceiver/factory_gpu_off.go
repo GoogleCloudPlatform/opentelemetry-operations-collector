@@ -23,15 +23,13 @@ import (
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/receiver"
-
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/collectorerror"
 )
 
 func createMetricsReceiver(
 	_ context.Context,
-	_ receiver.Settings,
+	_ receiver.CreateSettings,
 	_ component.Config,
 	_ consumer.Metrics,
 ) (receiver.Metrics, error) {
-	return nil, collectorerror.ErrGPUSupportDisabled
+	return nil, ErrGPUSupportDisabled
 }

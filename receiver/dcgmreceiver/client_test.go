@@ -32,7 +32,7 @@ import (
 func TestNewDcgmClientOnInitializationError(t *testing.T) {
 	realDcgmInit := dcgmInit
 	defer func() { dcgmInit = realDcgmInit }()
-	dcgmInit = func(...string) (func(), error) {
+	dcgmInit = func(args ...string) (func(), error) {
 		return nil, fmt.Errorf("No DCGM client library *OR* No DCGM connection")
 	}
 
@@ -44,7 +44,7 @@ func TestNewDcgmClientOnInitializationError(t *testing.T) {
 		return nil
 	})))
 
-	client, err := newClient(&dcgmClientSettings{endpoint: defaultEndpoint}, logger)
+	client, err := newClient(createDefaultConfig().(*Config), logger)
 	assert.Equal(t, seenDcgmConnectionWarning, true)
 	assert.True(t, errors.Is(err, ErrDcgmInitialization))
 	assert.Regexp(t, ".*Unable to connect.*", err)

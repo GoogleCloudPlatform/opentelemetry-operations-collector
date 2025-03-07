@@ -36,7 +36,7 @@ import (
 )
 
 func TestScrapeWithGpuPresent(t *testing.T) {
-	scraper := newNvmlScraper(createDefaultConfig().(*Config), receiver.Settings{})
+	scraper := newNvmlScraper(createDefaultConfig().(*Config), receiver.CreateSettings{})
 	require.NotNil(t, scraper)
 
 	err := scraper.start(context.Background(), componenttest.NewNopHost())
@@ -54,7 +54,7 @@ func TestScrapeOnGpuUtilizationUnsupported(t *testing.T) {
 		return nvml.VALUE_TYPE_SIGNED_LONG_LONG, nil, nvml.ERROR_NOT_SUPPORTED
 	}
 
-	scraper := newNvmlScraper(createDefaultConfig().(*Config), receiver.Settings{})
+	scraper := newNvmlScraper(createDefaultConfig().(*Config), receiver.CreateSettings{})
 	require.NotNil(t, scraper)
 
 	err := scraper.start(context.Background(), componenttest.NewNopHost())
@@ -71,7 +71,7 @@ func TestScrapeOnGpuMemoryInfoUnsupported(t *testing.T) {
 		return nvml.Memory{}, nvml.ERROR_NOT_SUPPORTED
 	}
 
-	scraper := newNvmlScraper(createDefaultConfig().(*Config), receiver.Settings{})
+	scraper := newNvmlScraper(createDefaultConfig().(*Config), receiver.CreateSettings{})
 	require.NotNil(t, scraper)
 
 	err := scraper.start(context.Background(), componenttest.NewNopHost())
@@ -85,7 +85,7 @@ func TestScrapeWithGpuProcessAccounting(t *testing.T) {
 	logger := zaptest.NewLogger(t)
 	logger.Sugar().Warnf("This test requires superuser privileges.")
 
-	scraper := newNvmlScraper(createDefaultConfig().(*Config), receiver.Settings{})
+	scraper := newNvmlScraper(createDefaultConfig().(*Config), receiver.CreateSettings{})
 	require.NotNil(t, scraper)
 
 	err := scraper.start(context.Background(), componenttest.NewNopHost())
@@ -109,7 +109,7 @@ func TestScrapeWithGpuProcessAccountingError(t *testing.T) {
 		return nil, nvml.ERROR_UNKNOWN
 	}
 
-	scraper := newNvmlScraper(createDefaultConfig().(*Config), receiver.Settings{})
+	scraper := newNvmlScraper(createDefaultConfig().(*Config), receiver.CreateSettings{})
 	require.NotNil(t, scraper)
 
 	err := scraper.start(context.Background(), componenttest.NewNopHost())
@@ -133,7 +133,7 @@ func TestScrapeEmitsWarningsUptoThreshold(t *testing.T) {
 	}
 
 	warnings := 0
-	var settings receiver.Settings
+	var settings receiver.CreateSettings
 	settings.Logger = zaptest.NewLogger(t, zaptest.WrapOptions(zap.Hooks(func(e zapcore.Entry) error {
 		if e.Level == zap.WarnLevel && strings.Contains(e.Message, "Unable to query") {
 			warnings = warnings + 1

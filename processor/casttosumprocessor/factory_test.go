@@ -23,7 +23,7 @@ import (
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/consumer/consumertest"
 	"go.opentelemetry.io/collector/otelcol/otelcoltest"
-	"go.opentelemetry.io/collector/processor/processortest"
+	"go.opentelemetry.io/collector/processor"
 )
 
 func TestCreateDefaultConfig(t *testing.T) {
@@ -41,7 +41,7 @@ func TestCreateProcessor(t *testing.T) {
 	assert.NotNil(t, config)
 
 	for _, cfg := range config.Processors {
-		mp, err := createMetricsProcessor(context.Background(), processortest.NewNopSettings(), cfg.(*Config), consumertest.NewNop())
+		mp, err := createMetricsProcessor(context.Background(), processor.Settings{}, cfg, consumertest.NewNop())
 		assert.NoError(t, err)
 		assert.NotNil(t, mp)
 	}

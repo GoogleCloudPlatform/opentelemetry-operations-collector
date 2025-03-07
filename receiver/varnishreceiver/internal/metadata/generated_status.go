@@ -7,7 +7,8 @@ import (
 )
 
 var (
-	Type = component.MustNewType("varnish")
+	Type      = component.MustNewType("varnish")
+	ScopeName = "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/varnishreceiver"
 )
 
 const (

@@ -25,19 +25,17 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/consumer/consumertest"
 	"go.opentelemetry.io/collector/receiver/receivertest"
-
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/collectorerror"
 )
 
 func TestCreateMetricsReceiverWithGPUSupportOff(t *testing.T) {
 	factory := NewFactory()
 	cfg := factory.CreateDefaultConfig()
-	receiver, err := factory.CreateMetrics(
+	receiver, err := factory.CreateMetricsReceiver(
 		context.Background(),
-		receivertest.NewNopSettings(),
+		receivertest.NewNopCreateSettings(),
 		cfg,
 		consumertest.NewNop())
 
-	require.True(t, errors.Is(err, collectorerror.ErrGPUSupportDisabled))
+	require.True(t, errors.Is(err, ErrGPUSupportDisabled))
 	require.Nil(t, receiver)
 }

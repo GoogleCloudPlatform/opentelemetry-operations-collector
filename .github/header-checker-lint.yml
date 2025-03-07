@@ -1,9 +1,0 @@
-allowedLicenses:
-  - Apache-2.0
-ignoreFiles:
-  - "**/**/generated_*.go"
-  - receiver/mongodbreceiver/**/*.go
-sourceFileExtensions:
-  - go
-  - ps1
-  - sh

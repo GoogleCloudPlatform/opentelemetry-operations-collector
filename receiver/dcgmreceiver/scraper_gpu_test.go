@@ -19,7 +19,6 @@ package dcgmreceiver
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -38,21 +37,8 @@ import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/dcgmreceiver/testprofilepause"
 )
 
-func collectScraperResult(t *testing.T, ctx context.Context, scraper *dcgmScraper) (pmetric.Metrics, error) {
-	for {
-		metrics, err := scraper.scrape(ctx)
-		assert.NoError(t, err)
-		if metrics.MetricCount() > 0 {
-			// We expect cumulative metrics to be missing on the first scrape.
-			time.Sleep(scrapePollingInterval)
-			return scraper.scrape(ctx)
-		}
-		time.Sleep(scrapePollingInterval)
-	}
-}
-
 func TestScrapeWithGpuPresent(t *testing.T) {
-	var settings receiver.Settings
+	var settings receiver.CreateSettings
 	settings.Logger = zaptest.NewLogger(t)
 
 	scraper := newDcgmScraper(createDefaultConfig().(*Config), settings)
@@ -61,87 +47,46 @@ func TestScrapeWithGpuPresent(t *testing.T) {
 	err := scraper.start(context.Background(), componenttest.NewNopHost())
 	require.NoError(t, err)
 
-	metrics, err := collectScraperResult(t, context.Background(), scraper)
-	assert.NoError(t, err)
-
-	assert.NoError(t, scraper.stop(context.Background()))
-
-	validateScraperResult(t, metrics)
-}
-
-func TestScrapeCollectionInterval(t *testing.T) {
-	var settings receiver.Settings
-	settings.Logger = zaptest.NewLogger(t)
-
-	var fetchCount int
-
-	realDcgmGetValuesSince := dcgmGetValuesSince
-	defer func() { dcgmGetValuesSince = realDcgmGetValuesSince }()
-	dcgmGetValuesSince = func(g dcgm.GroupHandle, f dcgm.FieldHandle, t time.Time) ([]dcgm.FieldValue_v2, time.Time, error) {
-		fetchCount++
-		return realDcgmGetValuesSince(g, f, t)
-	}
-
-	scraper := newDcgmScraper(createDefaultConfig().(*Config), settings)
-	require.NotNil(t, scraper)
-
-	err := scraper.start(context.Background(), componenttest.NewNopHost())
-	require.NoError(t, err)
-
-	// We expect to scrape every maxKeepSamples * scrapePollingInterval / 2.
-	// Wait long enough that we expect three scrapes.
-	const sleepTime = 3.5 * maxKeepSamples * scrapePollingInterval / 2
-
-	time.Sleep(sleepTime)
-
-	metrics, err := collectScraperResult(t, context.Background(), scraper)
-	assert.NoError(t, err)
-
-	assert.NoError(t, scraper.stop(context.Background()))
-
-	// We should have seen 1 initial scrape + 3 timed scrapes + 2 scrapes triggered by `collectScraperResult`.
-	assert.Less(t, fetchCount, 7, "too many fetches")
-
-	validateScraperResult(t, metrics)
+	metrics, err := scraper.scrape(context.Background())
+	expectedMetrics := loadExpectedScraperMetrics(t, scraper.client.getDeviceModelName(0))
+	validateScraperResult(t, metrics, expectedMetrics)
 }
 
 func TestScrapeWithDelayedDcgmService(t *testing.T) {
 	realDcgmInit := dcgmInit
 	defer func() { dcgmInit = realDcgmInit }()
-	failures := 2
 	dcgmInit = func(args ...string) (func(), error) {
-		if failures > 0 {
-			failures--
-			return nil, fmt.Errorf("No DCGM client library *OR* No DCGM connection")
-		}
-		return realDcgmInit(args...)
+		return nil, fmt.Errorf("No DCGM client library *OR* No DCGM connection")
 	}
 
-	var settings receiver.Settings
+	var settings receiver.CreateSettings
 	settings.Logger = zaptest.NewLogger(t)
 
 	scraper := newDcgmScraper(createDefaultConfig().(*Config), settings)
 	require.NotNil(t, scraper)
 
-	scraper.initRetryDelay = 0 // retry immediately
-
 	err := scraper.start(context.Background(), componenttest.NewNopHost())
 	require.NoError(t, err)
 
-	// Simulate DCGM becomes available after 3 attempts
-	// scrape should block until DCGM is available
-	metrics, err := collectScraperResult(t, context.Background(), scraper)
+	metrics, err := scraper.scrape(context.Background())
+	assert.NoError(t, err) // If failed to init DCGM, should have no error
+	assert.Equal(t, metrics.MetricCount(), 0)
+
+	// Scrape again with DCGM not available
+	metrics, err = scraper.scrape(context.Background())
 	assert.NoError(t, err)
+	assert.Equal(t, metrics.MetricCount(), 0)
 
-	assert.NoError(t, scraper.stop(context.Background()))
-
-	assert.Equal(t, 0, failures)
-
-	validateScraperResult(t, metrics)
+	// Simulate DCGM becomes available
+	dcgmInit = realDcgmInit
+	metrics, err = scraper.scrape(context.Background())
+	assert.NoError(t, err)
+	expectedMetrics := loadExpectedScraperMetrics(t, scraper.client.getDeviceModelName(0))
+	validateScraperResult(t, metrics, expectedMetrics)
 }
 
 func TestScrapeWithEmptyMetricsConfig(t *testing.T) {
-	var settings receiver.Settings
+	var settings receiver.CreateSettings
 	settings.Logger = zaptest.NewLogger(t)
 	emptyConfig := &Config{
 		ControllerConfig: scraperhelper.ControllerConfig{
@@ -151,52 +96,28 @@ func TestScrapeWithEmptyMetricsConfig(t *testing.T) {
 			Endpoint: defaultEndpoint,
 		},
 		Metrics: metadata.MetricsConfig{
-			GpuDcgmClockFrequency: metadata.MetricConfig{
+			DcgmGpuMemoryBytesUsed: metadata.MetricConfig{
 				Enabled: false,
 			},
-			GpuDcgmClockThrottleDurationTime: metadata.MetricConfig{
+			DcgmGpuProfilingDramUtilization: metadata.MetricConfig{
 				Enabled: false,
 			},
-			GpuDcgmCodecDecoderUtilization: metadata.MetricConfig{
+			DcgmGpuProfilingNvlinkTrafficRate: metadata.MetricConfig{
 				Enabled: false,
 			},
-			GpuDcgmCodecEncoderUtilization: metadata.MetricConfig{
+			DcgmGpuProfilingPcieTrafficRate: metadata.MetricConfig{
 				Enabled: false,
 			},
-			GpuDcgmEccErrors: metadata.MetricConfig{
+			DcgmGpuProfilingPipeUtilization: metadata.MetricConfig{
 				Enabled: false,
 			},
-			GpuDcgmEnergyConsumption: metadata.MetricConfig{
+			DcgmGpuProfilingSmOccupancy: metadata.MetricConfig{
 				Enabled: false,
 			},
-			GpuDcgmMemoryBandwidthUtilization: metadata.MetricConfig{
+			DcgmGpuProfilingSmUtilization: metadata.MetricConfig{
 				Enabled: false,
 			},
-			GpuDcgmMemoryBytesUsed: metadata.MetricConfig{
-				Enabled: false,
-			},
-			GpuDcgmNvlinkIo: metadata.MetricConfig{
-				Enabled: false,
-			},
-			GpuDcgmPcieIo: metadata.MetricConfig{
-				Enabled: false,
-			},
-			GpuDcgmPipeUtilization: metadata.MetricConfig{
-				Enabled: false,
-			},
-			GpuDcgmSmOccupancy: metadata.MetricConfig{
-				Enabled: false,
-			},
-			GpuDcgmSmUtilization: metadata.MetricConfig{
-				Enabled: false,
-			},
-			GpuDcgmTemperature: metadata.MetricConfig{
-				Enabled: false,
-			},
-			GpuDcgmUtilization: metadata.MetricConfig{
-				Enabled: false,
-			},
-			GpuDcgmXidErrors: metadata.MetricConfig{
+			DcgmGpuUtilization: metadata.MetricConfig{
 				Enabled: false,
 			},
 		},
@@ -210,19 +131,17 @@ func TestScrapeWithEmptyMetricsConfig(t *testing.T) {
 
 	metrics, err := scraper.scrape(context.Background())
 	assert.NoError(t, err)
-	assert.Equal(t, 0, metrics.MetricCount())
-
-	assert.NoError(t, scraper.stop(context.Background()))
+	assert.Equal(t, metrics.MetricCount(), 0)
 }
 
 func TestScrapeOnPollingError(t *testing.T) {
-	realDcgmGetValuesSince := dcgmGetValuesSince
-	defer func() { dcgmGetValuesSince = realDcgmGetValuesSince }()
-	dcgmGetValuesSince = func(_ dcgm.GroupHandle, _ dcgm.FieldHandle, _ time.Time) ([]dcgm.FieldValue_v2, time.Time, error) {
-		return nil, time.Time{}, fmt.Errorf("DCGM polling error")
+	realDcgmGetLatestValuesForFields := dcgmGetLatestValuesForFields
+	defer func() { dcgmGetLatestValuesForFields = realDcgmGetLatestValuesForFields }()
+	dcgmGetLatestValuesForFields = func(gpu uint, fields []dcgm.Short) ([]dcgm.FieldValue_v1, error) {
+		return nil, fmt.Errorf("DCGM polling error")
 	}
 
-	var settings receiver.Settings
+	var settings receiver.CreateSettings
 	settings.Logger = zaptest.NewLogger(t)
 
 	scraper := newDcgmScraper(createDefaultConfig().(*Config), settings)
@@ -233,69 +152,46 @@ func TestScrapeOnPollingError(t *testing.T) {
 
 	metrics, err := scraper.scrape(context.Background())
 
-	assert.NoError(t, err)
-	assert.Equal(t, 0, metrics.MetricCount())
-
-	assert.NoError(t, scraper.stop(context.Background()))
+	assert.Error(t, err)
+	assert.Equal(t, metrics.MetricCount(), 0)
 }
 
 func TestScrapeOnProfilingPaused(t *testing.T) {
 	config := createDefaultConfig().(*Config)
 	config.CollectionInterval = 10 * time.Millisecond
 
-	var settings receiver.Settings
+	var settings receiver.CreateSettings
 	settings.Logger = zaptest.NewLogger(t)
 
 	scraper := newDcgmScraper(config, settings)
 	require.NotNil(t, scraper)
 
-	defer testprofilepause.ResumeProfilingMetrics(config.TCPAddrConfig.Endpoint)
-	err := testprofilepause.PauseProfilingMetrics(config.TCPAddrConfig.Endpoint)
-	if errors.Is(err, testprofilepause.FeatureNotSupportedError) {
-		t.Skipf("Pausing profiling not supported")
-	} else if err != nil {
-		t.Fatalf("Pausing profiling failed with error %v", err)
-	}
+	defer func() { testprofilepause.ResumeProfilingMetrics() }()
+	testprofilepause.PauseProfilingMetrics()
 	time.Sleep(20 * time.Millisecond)
 
-	err = scraper.start(context.Background(), componenttest.NewNopHost())
+	err := scraper.start(context.Background(), componenttest.NewNopHost())
 	require.NoError(t, err)
 
-	metrics, err := collectScraperResult(t, context.Background(), scraper)
+	metrics, err := scraper.scrape(context.Background())
 
 	assert.NoError(t, err)
-
-	assert.NoError(t, scraper.stop(context.Background()))
+	require.Equal(t, metrics.MetricCount(), 2)
 
 	expectedMetrics := []string{
-		"gpu.dcgm.utilization",
-		"gpu.dcgm.codec.decoder.utilization",
-		"gpu.dcgm.codec.encoder.utilization",
-		"gpu.dcgm.memory.bytes_used",
-		"gpu.dcgm.memory.bandwidth_utilization",
-		"gpu.dcgm.energy_consumption",
-		"gpu.dcgm.temperature",
-		"gpu.dcgm.clock.frequency",
-		"gpu.dcgm.clock.throttle_duration.time",
-		"gpu.dcgm.ecc_errors",
+		"dcgm.gpu.utilization",
+		"dcgm.gpu.memory.bytes_used",
 	}
 
-	require.Greater(t, metrics.ResourceMetrics().Len(), 0)
-
-	ilms := metrics.ResourceMetrics().At(0).ScopeMetrics()
-	require.Equal(t, 1, ilms.Len())
-
-	ms := ilms.At(0).Metrics()
+	ms := metrics.ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics()
 	metricWasSeen := make(map[string]bool)
 	for i := 0; i < ms.Len(); i++ {
 		metricWasSeen[ms.At(i).Name()] = true
 	}
 
 	for _, metric := range expectedMetrics {
-		assert.True(t, metricWasSeen[metric], metric)
-		delete(metricWasSeen, metric)
+		assert.Equal(t, metricWasSeen[metric], true)
 	}
-	assert.Equal(t, len(expectedMetrics), ms.Len(), fmt.Sprintf("%v", metricWasSeen))
 }
 
 // loadExpectedScraperMetrics calls LoadExpectedMetrics to read the supported
@@ -305,59 +201,30 @@ func loadExpectedScraperMetrics(t *testing.T, model string) map[string]int {
 	t.Helper()
 	expectedMetrics := make(map[string]int)
 	receiverMetricNameToScraperMetricName := map[string]string{
-		"DCGM_FI_PROF_GR_ENGINE_ACTIVE": "gpu.dcgm.utilization",
-		//"DCGM_FI_DEV_GPU_UTIL":          "gpu.dcgm.utilization",
-		"DCGM_FI_PROF_SM_ACTIVE":          "gpu.dcgm.sm.utilization",
-		"DCGM_FI_PROF_SM_OCCUPANCY":       "gpu.dcgm.sm.occupancy",
-		"DCGM_FI_PROF_PIPE_TENSOR_ACTIVE": "gpu.dcgm.pipe.utilization",
-		"DCGM_FI_PROF_PIPE_FP64_ACTIVE":   "gpu.dcgm.pipe.utilization",
-		"DCGM_FI_PROF_PIPE_FP32_ACTIVE":   "gpu.dcgm.pipe.utilization",
-		"DCGM_FI_PROF_PIPE_FP16_ACTIVE":   "gpu.dcgm.pipe.utilization",
-		"DCGM_FI_DEV_ENC_UTIL":            "gpu.dcgm.codec.encoder.utilization",
-		"DCGM_FI_DEV_DEC_UTIL":            "gpu.dcgm.codec.decoder.utilization",
-		"DCGM_FI_DEV_FB_FREE":             "gpu.dcgm.memory.bytes_used",
-		"DCGM_FI_DEV_FB_USED":             "gpu.dcgm.memory.bytes_used",
-		"DCGM_FI_DEV_FB_RESERVED":         "gpu.dcgm.memory.bytes_used",
-		"DCGM_FI_PROF_DRAM_ACTIVE":        "gpu.dcgm.memory.bandwidth_utilization",
-		//"DCGM_FI_DEV_MEM_COPY_UTIL":               "gpu.dcgm.memory.bandwidth_utilization",
-		"DCGM_FI_PROF_PCIE_TX_BYTES":           "gpu.dcgm.pcie.io",
-		"DCGM_FI_PROF_PCIE_RX_BYTES":           "gpu.dcgm.pcie.io",
-		"DCGM_FI_PROF_NVLINK_TX_BYTES":         "gpu.dcgm.nvlink.io",
-		"DCGM_FI_PROF_NVLINK_RX_BYTES":         "gpu.dcgm.nvlink.io",
-		"DCGM_FI_DEV_TOTAL_ENERGY_CONSUMPTION": "gpu.dcgm.energy_consumption",
-		//"DCGM_FI_DEV_POWER_USAGE":                 "gpu.dcgm.energy_consumption",
-		"DCGM_FI_DEV_GPU_TEMP":                    "gpu.dcgm.temperature",
-		"DCGM_FI_DEV_SM_CLOCK":                    "gpu.dcgm.clock.frequency",
-		"DCGM_FI_DEV_POWER_VIOLATION":             "gpu.dcgm.clock.throttle_duration.time",
-		"DCGM_FI_DEV_THERMAL_VIOLATION":           "gpu.dcgm.clock.throttle_duration.time",
-		"DCGM_FI_DEV_SYNC_BOOST_VIOLATION":        "gpu.dcgm.clock.throttle_duration.time",
-		"DCGM_FI_DEV_BOARD_LIMIT_VIOLATION":       "gpu.dcgm.clock.throttle_duration.time",
-		"DCGM_FI_DEV_LOW_UTIL_VIOLATION":          "gpu.dcgm.clock.throttle_duration.time",
-		"DCGM_FI_DEV_RELIABILITY_VIOLATION":       "gpu.dcgm.clock.throttle_duration.time",
-		"DCGM_FI_DEV_TOTAL_APP_CLOCKS_VIOLATION":  "gpu.dcgm.clock.throttle_duration.time",
-		"DCGM_FI_DEV_TOTAL_BASE_CLOCKS_VIOLATION": "gpu.dcgm.clock.throttle_duration.time",
-		"DCGM_FI_DEV_ECC_SBE_VOL_TOTAL":           "gpu.dcgm.ecc_errors",
-		"DCGM_FI_DEV_ECC_DBE_VOL_TOTAL":           "gpu.dcgm.ecc_errors",
+		"dcgm.gpu.utilization":                     "dcgm.gpu.utilization",
+		"dcgm.gpu.memory.bytes_used":               "dcgm.gpu.memory.bytes_used",
+		"dcgm.gpu.memory.bytes_free":               "dcgm.gpu.memory.bytes_used",
+		"dcgm.gpu.profiling.sm_utilization":        "dcgm.gpu.profiling.sm_utilization",
+		"dcgm.gpu.profiling.sm_occupancy":          "dcgm.gpu.profiling.sm_occupancy",
+		"dcgm.gpu.profiling.dram_utilization":      "dcgm.gpu.profiling.dram_utilization",
+		"dcgm.gpu.profiling.tensor_utilization":    "dcgm.gpu.profiling.pipe_utilization",
+		"dcgm.gpu.profiling.fp64_utilization":      "dcgm.gpu.profiling.pipe_utilization",
+		"dcgm.gpu.profiling.fp32_utilization":      "dcgm.gpu.profiling.pipe_utilization",
+		"dcgm.gpu.profiling.fp16_utilization":      "dcgm.gpu.profiling.pipe_utilization",
+		"dcgm.gpu.profiling.pcie_sent_bytes":       "dcgm.gpu.profiling.pcie_traffic_rate",
+		"dcgm.gpu.profiling.pcie_received_bytes":   "dcgm.gpu.profiling.pcie_traffic_rate",
+		"dcgm.gpu.profiling.nvlink_sent_bytes":     "dcgm.gpu.profiling.nvlink_traffic_rate",
+		"dcgm.gpu.profiling.nvlink_received_bytes": "dcgm.gpu.profiling.nvlink_traffic_rate",
 	}
-	supportedFields := LoadExpectedMetrics(t, model)
-	for _, em := range supportedFields.SupportedFields {
-		scraperMetric := receiverMetricNameToScraperMetricName[em]
-		if scraperMetric != "" {
-			expectedMetrics[scraperMetric] += 1
-		}
-		// TODO: fallbacks.
+	expectedReceiverMetrics := LoadExpectedMetrics(t, model)
+	for _, em := range expectedReceiverMetrics {
+		expectedMetrics[receiverMetricNameToScraperMetricName[em]] += 1
 	}
 	return expectedMetrics
 }
 
-func validateScraperResult(t *testing.T, metrics pmetric.Metrics) {
+func validateScraperResult(t *testing.T, metrics pmetric.Metrics, expectedMetrics map[string]int) {
 	t.Helper()
-	rms := metrics.ResourceMetrics()
-	require.NotEmpty(t, rms.Len(), "missing ResourceMetrics")
-	modelValue, ok := rms.At(0).Resource().Attributes().Get("gpu.model")
-	require.True(t, ok, "missing gpu.model resource attribute")
-	expectedMetrics := loadExpectedScraperMetrics(t, modelValue.Str())
-
 	metricWasSeen := make(map[string]bool)
 	expectedDataPointCount := 0
 	for metric, expectedMetricDataPoints := range expectedMetrics {
@@ -365,13 +232,8 @@ func validateScraperResult(t *testing.T, metrics pmetric.Metrics) {
 		expectedDataPointCount += expectedMetricDataPoints
 	}
 
-	assert.LessOrEqual(t, len(expectedMetrics), metrics.MetricCount(), "metric count")
-	assert.LessOrEqual(t, expectedDataPointCount, metrics.DataPointCount(), "data point count")
-
-	r := metrics.ResourceMetrics().At(0).Resource()
-	assert.Contains(t, r.Attributes().AsRaw(), "gpu.number")
-	assert.Contains(t, r.Attributes().AsRaw(), "gpu.uuid")
-	assert.Contains(t, r.Attributes().AsRaw(), "gpu.model")
+	assert.LessOrEqual(t, len(expectedMetrics), metrics.MetricCount())
+	assert.LessOrEqual(t, expectedDataPointCount, metrics.DataPointCount())
 
 	ilms := metrics.ResourceMetrics().At(0).ScopeMetrics()
 	require.Equal(t, 1, ilms.Len())
@@ -379,83 +241,34 @@ func validateScraperResult(t *testing.T, metrics pmetric.Metrics) {
 	ms := ilms.At(0).Metrics()
 	for i := 0; i < ms.Len(); i++ {
 		m := ms.At(i)
-		var dps pmetric.NumberDataPointSlice
-
-		switch m.Name() {
-		case "gpu.dcgm.utilization":
-			fallthrough
-		case "gpu.dcgm.sm.utilization":
-			fallthrough
-		case "gpu.dcgm.sm.occupancy":
-			fallthrough
-		case "gpu.dcgm.pipe.utilization":
-			fallthrough
-		case "gpu.dcgm.codec.encoder.utilization":
-			fallthrough
-		case "gpu.dcgm.codec.decoder.utilization":
-			fallthrough
-		case "gpu.dcgm.memory.bytes_used":
-			fallthrough
-		case "gpu.dcgm.memory.bandwidth_utilization":
-			fallthrough
-		case "gpu.dcgm.temperature":
-			fallthrough
-		case "gpu.dcgm.clock.frequency":
-			dps = m.Gauge().DataPoints()
-		case "gpu.dcgm.energy_consumption":
-			fallthrough
-		case "gpu.dcgm.clock.throttle_duration.time":
-			fallthrough
-		case "gpu.dcgm.pcie.io":
-			fallthrough
-		case "gpu.dcgm.nvlink.io":
-			fallthrough
-		case "gpu.dcgm.ecc_errors":
-			fallthrough
-		case "gpu.dcgm.xid_errors":
-			dps = m.Sum().DataPoints()
-		default:
-			t.Errorf("Unexpected metric %s", m.Name())
+		dps := m.Gauge().DataPoints()
+		for j := 0; j < dps.Len(); j++ {
+			assert.Regexp(t, ".*gpu_number:.*", dps.At(j).Attributes().AsRaw())
+			assert.Regexp(t, ".*model:.*", dps.At(j).Attributes().AsRaw())
+			assert.Regexp(t, ".*uuid:.*", dps.At(j).Attributes().AsRaw())
 		}
+
 		assert.LessOrEqual(t, expectedMetrics[m.Name()], dps.Len())
 
 		switch m.Name() {
-		case "gpu.dcgm.utilization":
-		case "gpu.dcgm.sm.utilization":
-		case "gpu.dcgm.sm.occupancy":
-		case "gpu.dcgm.pipe.utilization":
+		case "dcgm.gpu.utilization":
+		case "dcgm.gpu.memory.bytes_used":
 			for j := 0; j < dps.Len(); j++ {
-				assert.Contains(t, dps.At(j).Attributes().AsRaw(), "gpu.pipe")
+				assert.Regexp(t, ".*memory_state:.*", dps.At(j).Attributes().AsRaw())
 			}
-		case "gpu.dcgm.codec.encoder.utilization":
-		case "gpu.dcgm.codec.decoder.utilization":
-		case "gpu.dcgm.memory.bytes_used":
+		case "dcgm.gpu.profiling.sm_utilization":
+		case "dcgm.gpu.profiling.sm_occupancy":
+		case "dcgm.gpu.profiling.dram_utilization":
+		case "dcgm.gpu.profiling.pipe_utilization":
 			for j := 0; j < dps.Len(); j++ {
-				assert.Contains(t, dps.At(j).Attributes().AsRaw(), "gpu.memory.state")
+				assert.Regexp(t, ".*pipe:.*", dps.At(j).Attributes().AsRaw())
 			}
-		case "gpu.dcgm.memory.bandwidth_utilization":
-		case "gpu.dcgm.pcie.io":
+		case "dcgm.gpu.profiling.pcie_traffic_rate":
 			fallthrough
-		case "gpu.dcgm.nvlink.io":
+		case "dcgm.gpu.profiling.nvlink_traffic_rate":
 			for j := 0; j < dps.Len(); j++ {
-				assert.Contains(t, dps.At(j).Attributes().AsRaw(), "network.io.direction")
+				assert.Regexp(t, ".*direction:.*", dps.At(j).Attributes().AsRaw())
 			}
-		case "gpu.dcgm.energy_consumption":
-		case "gpu.dcgm.temperature":
-		case "gpu.dcgm.clock.frequency":
-		case "gpu.dcgm.clock.throttle_duration.time":
-			for j := 0; j < dps.Len(); j++ {
-				assert.Contains(t, dps.At(j).Attributes().AsRaw(), "gpu.clock.violation")
-			}
-		case "gpu.dcgm.ecc_errors":
-			for j := 0; j < dps.Len(); j++ {
-				assert.Contains(t, dps.At(j).Attributes().AsRaw(), "gpu.error.type")
-			}
-		// TODO
-		//case "gpu.dcgm.xid_errors":
-		//	for j := 0; j < dps.Len(); j++ {
-		//		assert.Contains(t, dps.At(j).Attributes().AsRaw(), "gpu.error.xid")
-		//	}
 		default:
 			t.Errorf("Unexpected metric %s", m.Name())
 		}
@@ -464,6 +277,6 @@ func validateScraperResult(t *testing.T, metrics pmetric.Metrics) {
 	}
 
 	for metric := range expectedMetrics {
-		assert.True(t, metricWasSeen[metric], metric)
+		assert.Equal(t, metricWasSeen[metric], true)
 	}
 }

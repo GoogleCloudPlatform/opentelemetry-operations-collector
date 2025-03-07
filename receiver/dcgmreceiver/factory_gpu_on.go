@@ -21,7 +21,6 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
-	"strings"
 	"time"
 
 	"github.com/NVIDIA/go-dcgm/pkg/dcgm"
@@ -35,15 +34,36 @@ import (
 )
 
 var dcgmIDToName map[dcgm.Short]string
+var dcgmNameToMetricName map[string]string
+var metricNameToDcgmName map[string]string
 var randSource = rand.New(rand.NewSource(time.Now().UnixMicro()))
 
 func init() {
 	dcgmIDToName = make(map[dcgm.Short]string, len(dcgm.DCGM_FI))
 	for fieldName, fieldID := range dcgm.DCGM_FI {
-		if strings.HasPrefix(fieldName, "DCGM_FT_") {
-			continue
-		}
 		dcgmIDToName[fieldID] = fieldName
+	}
+
+	dcgmNameToMetricName = map[string]string{
+		"DCGM_FI_DEV_GPU_UTIL":            "dcgm.gpu.utilization",
+		"DCGM_FI_DEV_FB_USED":             "dcgm.gpu.memory.bytes_used",
+		"DCGM_FI_DEV_FB_FREE":             "dcgm.gpu.memory.bytes_free",
+		"DCGM_FI_PROF_SM_ACTIVE":          "dcgm.gpu.profiling.sm_utilization",
+		"DCGM_FI_PROF_SM_OCCUPANCY":       "dcgm.gpu.profiling.sm_occupancy",
+		"DCGM_FI_PROF_PIPE_TENSOR_ACTIVE": "dcgm.gpu.profiling.tensor_utilization",
+		"DCGM_FI_PROF_DRAM_ACTIVE":        "dcgm.gpu.profiling.dram_utilization",
+		"DCGM_FI_PROF_PIPE_FP64_ACTIVE":   "dcgm.gpu.profiling.fp64_utilization",
+		"DCGM_FI_PROF_PIPE_FP32_ACTIVE":   "dcgm.gpu.profiling.fp32_utilization",
+		"DCGM_FI_PROF_PIPE_FP16_ACTIVE":   "dcgm.gpu.profiling.fp16_utilization",
+		"DCGM_FI_PROF_PCIE_TX_BYTES":      "dcgm.gpu.profiling.pcie_sent_bytes",
+		"DCGM_FI_PROF_PCIE_RX_BYTES":      "dcgm.gpu.profiling.pcie_received_bytes",
+		"DCGM_FI_PROF_NVLINK_TX_BYTES":    "dcgm.gpu.profiling.nvlink_sent_bytes",
+		"DCGM_FI_PROF_NVLINK_RX_BYTES":    "dcgm.gpu.profiling.nvlink_received_bytes",
+	}
+
+	metricNameToDcgmName = make(map[string]string, len(dcgmNameToMetricName))
+	for dcgmName, metricName := range dcgmNameToMetricName {
+		metricNameToDcgmName[metricName] = dcgmName
 	}
 }
 

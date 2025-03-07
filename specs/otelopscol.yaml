@@ -1,0 +1,78 @@
+# Copyright 2025 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: otelopscol
+description: "OpenTelemetry Collector binary used by the Ops Agent"
+opentelemetry_version: 0.121.0
+binary_name: otelopscol
+collector_cgo: true
+go_version: 1.23.2
+build_tags: gpu
+
+components:
+  receivers:
+    - activedirectoryds
+    - aerospike
+    - apache
+    - couchdb
+    - elasticsearch
+    - filelog
+    - flinkmetrics
+    - hostmetrics
+    - iis
+    - jmx
+    - memcached
+    - mysql
+    - nginx
+    - postgresql
+    - prometheus
+    - rabbitmq
+    - redis
+    - saphana
+    - sqlquery
+    - sqlserver
+    - windowseventlog
+    - windowsperfcounters
+    # Within this repo
+    - zookeeper
+    - dcgm
+    - mongodb
+    - nvml
+    - varnish
+  processors:
+    - cumulativetodelta
+    - deltatorate
+    - filter
+    - groupbyattrs
+    - metricstransform
+    - resourcedetection
+    - resource
+    - transform
+    - batch
+    - memorylimiter
+    # Within this repo
+    - agentmetrics
+    - casttosum
+    - modifyscope
+    - normalizesums
+  exporters:
+    - file
+    - googlecloud
+    - googlemanagedprometheus
+    - debug
+    - otlp
+    - otlphttp
+  extensions:
+    - zpages
+

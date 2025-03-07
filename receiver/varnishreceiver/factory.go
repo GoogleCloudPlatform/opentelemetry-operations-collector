@@ -51,13 +51,13 @@ func createMetricsReceiver(
 ) (receiver.Metrics, error) {
 	cfg := rConf.(*Config)
 	ns := newVarnishScraper(params, cfg)
-	scp, err := scraper.NewMetrics(ns.scrape, scraper.WithStart(ns.start))
+	scraper, err := scraper.NewMetrics(ns.scrape, scraper.WithStart(ns.start))
 	if err != nil {
 		return nil, err
 	}
 
 	return scraperhelper.NewMetricsController(
 		&cfg.ControllerConfig, params, consumer,
-		scraperhelper.AddScraper(metadata.Type, scp),
+		scraperhelper.AddScraper(metadata.Type, scraper),
 	)
 }

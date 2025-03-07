@@ -77,12 +77,16 @@ collector-build: clean-collector $(COLLECTOR_BINARY_NAME)
 
 # Using OCB and the local manifest file, build a collector.
 $(COLLECTOR_BINARY_NAME): $(OCB_BIN)
-	GOWORK=off \
-		GOFLAGS="-buildvcs=$(COLLECTOR_BUILD_VCS) -tags=$(COLLECTOR_BUILD_TAGS)" \
-		PATH="$(GO_BIN_DIR):${PATH}" \
+	$(OCB_BIN) --skip-compilation --verbose --config manifest.yaml
+	cd _build && \
+		GOWORK=off \
 		CGO_ENABLED=$(COLLECTOR_CGO) \
-		$(OCB_BIN) --ldflags="-s -w $(COLLECTOR_LD_FLAGS)" --verbose --config manifest.yaml
-	cp $(COLLECTOR_BUILD_TEMP_DIR)/$(COLLECTOR_BINARY_NAME) .
+		$(GO_BIN) build \
+			-buildvcs=$(COLLECTOR_BUILDVCS) \
+			-tags=$(COLLECTOR_BUILD_TAGS) \
+			--ldflags="-s -w $(COLLECTOR_LD_FLAGS)" \
+			-o ../otelopscol \
+			.
 	rm -rf $(COLLECTOR_BUILD_TEMP_DIR)
 
 .PHONY: collector-package-list

@@ -1,3 +1,17 @@
+# Copyright 2025 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 # Variables filled in from distro specification
 VERSION ?= 0.121.0
 OTEL_VERSION ?= 0.121.0
@@ -63,12 +77,16 @@ collector-build: clean-collector $(COLLECTOR_BINARY_NAME)
 
 # Using OCB and the local manifest file, build a collector.
 $(COLLECTOR_BINARY_NAME): $(OCB_BIN)
-	GOWORK=off \
-		GOFLAGS="-buildvcs=false -tags=$(COLLECTOR_BUILD_TAGS)" \
-		PATH="$(GO_BIN_DIR):${PATH}" \
+	PATH="$(GO_BIN_DIR):$PATH" $(OCB_BIN) --skip-compilation --verbose --config manifest.yaml
+	cd _build && \
+		GOWORK=off \
 		CGO_ENABLED=$(COLLECTOR_CGO) \
-		$(OCB_BIN) --ldflags="-s -w $(COLLECTOR_LD_FLAGS)" --verbose --config manifest.yaml
-	cp $(COLLECTOR_BUILD_TEMP_DIR)/$(COLLECTOR_BINARY_NAME) .
+		$(GO_BIN) build \
+			-buildvcs=$(COLLECTOR_BUILDVCS) \
+			-tags=$(COLLECTOR_BUILD_TAGS) \
+			--ldflags="-s -w $(COLLECTOR_LD_FLAGS)" \
+			-o ../otelcol-google \
+			.
 	rm -rf $(COLLECTOR_BUILD_TEMP_DIR)
 
 .PHONY: collector-package-list
@@ -83,7 +101,7 @@ collector-package-list: $(OCB_BIN)
 # Delete any existing built collector binary.
 .PHONY: clean-collector
 clean-collector:
-	rm $(COLLECTOR_BINARY_NAME)
+	rm -f $(COLLECTOR_BINARY_NAME)
 
 ###################
 # Tools

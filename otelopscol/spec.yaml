@@ -1,0 +1,67 @@
+name: otelopscol
+display_name: ""
+description: OpenTelemetry Collector binary used by the Ops Agent
+blurb: ""
+version: ""
+opentelemetry_version: 0.121.0
+opentelemetry_contrib_version: 0.121.0
+opentelemetry_stable_version: ""
+go_version: 1.23.2
+binary_name: otelopscol
+build_tags: gpu
+collector_cgo: true
+docker_repo: ""
+components:
+    receivers:
+        - activedirectoryds
+        - aerospike
+        - apache
+        - couchdb
+        - elasticsearch
+        - filelog
+        - flinkmetrics
+        - hostmetrics
+        - iis
+        - jmx
+        - memcached
+        - mysql
+        - nginx
+        - postgresql
+        - prometheus
+        - rabbitmq
+        - redis
+        - saphana
+        - sqlquery
+        - sqlserver
+        - windowseventlog
+        - windowsperfcounters
+        - zookeeper
+        - dcgm
+        - mongodb
+        - nvml
+        - varnish
+    processors:
+        - cumulativetodelta
+        - deltatorate
+        - filter
+        - groupbyattrs
+        - metricstransform
+        - resourcedetection
+        - resource
+        - transform
+        - batch
+        - memorylimiter
+        - agentmetrics
+        - casttosum
+        - modifyscope
+        - normalizesums
+    exporters:
+        - file
+        - googlecloud
+        - googlemanagedprometheus
+        - debug
+        - otlp
+        - otlphttp
+    extensions:
+        - zpages
+feature_gates: []

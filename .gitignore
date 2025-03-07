@@ -1,10 +1,16 @@
+# Workspaces
 go.work
 go.work.sum
 
+# Tools from builds and dev environment
 **/.tools
+
+# The ocb build directory
 **/_build
 
+# For VSCode users
 .vscode
 
-otelcol-google
-otelopscol
+# Binaries from builds
+/google-otel/otelcol-google
+/otelopscol/otelopscol

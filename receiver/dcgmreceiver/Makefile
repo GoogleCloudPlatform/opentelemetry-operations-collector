@@ -1,1 +1,2 @@
-include ../../make/component.mk
+include ../../make/common.mk
+include ../../make/otel_component.mk

@@ -27,7 +27,8 @@ import (
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/receiver"
-	"go.opentelemetry.io/collector/receiver/scraperhelper"
+	"go.opentelemetry.io/collector/scraper"
+	"go.opentelemetry.io/collector/scraper/scraperhelper"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/dcgmreceiver/internal/metadata"
 )
@@ -68,7 +69,7 @@ func init() {
 
 func createMetricsReceiver(
 	_ context.Context,
-	params receiver.CreateSettings,
+	params receiver.Settings,
 	rConf component.Config,
 	consumer consumer.Metrics,
 ) (receiver.Metrics, error) {
@@ -78,17 +79,16 @@ func createMetricsReceiver(
 	}
 
 	ns := newDcgmScraper(cfg, params)
-	scraper, err := scraperhelper.NewScraper(
-		metadata.Type.String(),
+	scp, err := scraper.NewMetrics(
 		ns.scrape,
-		scraperhelper.WithStart(ns.start),
-		scraperhelper.WithShutdown(ns.stop))
+		scraper.WithStart(ns.start),
+		scraper.WithShutdown(ns.stop))
 	if err != nil {
 		return nil, err
 	}
 
-	return scraperhelper.NewScraperControllerReceiver(
+	return scraperhelper.NewMetricsController(
 		&cfg.ControllerConfig, params, consumer,
-		scraperhelper.AddScraper(scraper),
+		scraperhelper.AddScraper(metadata.Type, scp),
 	)
 }

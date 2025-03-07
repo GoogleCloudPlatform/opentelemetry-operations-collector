@@ -1,10 +1,4 @@
-OTEL_VERSION ?= v0.111.0
-ALL_DIRECTORIES = find . -type d  -print0
-EXCLUDE_TOOLS_DIRS = grep -z -v ".*\.tools.*"
-LIST_LOCAL_MODULES = go list -f "{{ .Dir }}" -m
-PRIVATE_COMPONENT_PATTERN = ".*privatecomponents.*"
-EXCLUDE_PRIVATE_MODULES = grep -v $(PRIVATE_COMPONENT_PATTERN)
-INCLUDE_PRIVATE_MODULES = grep $(PRIVATE_COMPONENT_PATTERN)
+include ./make/common.mk
 
 #############
 # Development
@@ -19,6 +13,31 @@ setup-hooks:
 
 .PHONY: precommit
 precommit: checklicense misspell lint
+
+##########################
+# Updating OTel Components
+##########################
+
+OTEL_VERSION = v0.121.0
+OTEL_CONTRIB_VERSION = v0.121.0
+
+.PHONY: update-otel-components
+update-otel-components: export OTEL_VERSION := $(OTEL_VERSION)
+update-otel-components: export OTEL_CONTRIB_VERSION := $(OTEL_CONTRIB_VERSION)
+update-otel-components: update-otel-components-deps tidy-all update-mdatagen generate-components
+
+.PHONY: update-mdatagen
+update-mdatagen:
+	go get -u go.opentelemetry.io/collector/cmd/mdatagen@$(OTEL_VERSION)
+	TOOL_LIST=go.opentelemetry.io/collector/cmd/mdatagen $(MAKE) install-tools
+
+.PHONY: update-otel-components-deps
+update-otel-components-deps:
+	PATH="$(TOOLS_DIR):${PATH}" TARGET="update-components" $(MAKE) target-all-otel-components
+
+.PHONY: generate-components
+generate-components:
+	PATH="$(TOOLS_DIR):${PATH}" TARGET="generate" $(MAKE) target-all-otel-components
 
 ###################
 # Distro Generation
@@ -61,47 +80,16 @@ regen-otelopscol:
 test-all:
 	TARGET="test" $(MAKE) target-all-modules
 
-.PHONY: target-all-modules
-target-all-modules:
-ifndef TARGET
-	@echo "No TARGET defined."
-else
-	$(LIST_LOCAL_MODULES) |\
-	xargs -t -I '{}' $(MAKE) -C {} $(TARGET)
-endif
-
-.PHONY: target-public-modules
-target-public-modules:
-ifndef TARGET
-	echo "No TARGET defined."
-else
-	$(LIST_LOCAL_MODULES) |\
-	$(EXCLUDE_PRIVATE_MODULES) |\
-	xargs -t -I '{}' $(MAKE) -C {} $(TARGET)
-endif
-
-.PHONY: target-private-modules
-target-private-modules:
-ifndef TARGET
-	echo "No TARGET defined."
-else
-	$(LIST_LOCAL_MODULES) |\
-	$(INCLUDE_PRIVATE_MODULES) |\
-	xargs -t -I '{}' $(MAKE) -C {} $(TARGET)
-endif
-
-.PHONY: test
-test:
-	go test ./...
+.PHONY: tidy-all
+tidy-all:
+	TARGET="tidy" $(MAKE) target-all-modules
 
 ###########
 # Workspace
 ###########
 
-.PHONY: clean-workspace
-clean-workspace:
-	rm -f go.work
-	rm -f go.work.sum
+ALL_DIRECTORIES = find . -type d  -print0
+EXCLUDE_TOOLS_DIRS = grep -z -v ".*\.tools.*"
 
 .PHONY: workspace
 workspace: go.work
@@ -112,9 +100,10 @@ workspace: go.work
 go.work:
 	go work init
 
-.PHONY: update-mdatagen
-update-mdatagen:
-	go get -u go.opentelemetry.io/collector/cmd/mdatagen@$(OTEL_VERSION)
+.PHONY: clean-workspace
+clean-workspace:
+	rm -f go.work
+	rm -f go.work.sum
 
 #######
 # Tools
@@ -133,15 +122,18 @@ MISSPELL = $(TOOLS_DIR)/misspell
 tools-dir:
 	@mkdir -p $(TOOLS_DIR)
 
+TOOL_LIST ?= github.com/google/addlicense \
+			 go.opentelemetry.io/collector/cmd/mdatagen \
+			 github.com/client9/misspell/cmd/misspell \
+			 github.com/golangci/golangci-lint/cmd/golangci-lint \
+			 golang.org/x/tools/cmd/goimports \
+			 ./cmd/otel_component_versions
+
 .PHONY: install-tools
 install-tools: tools-dir
 	cd internal/tools && \
 	GOBIN=$(TOOLS_DIR) go install \
-		github.com/google/addlicense \
-		go.opentelemetry.io/collector/cmd/mdatagen \
-		github.com/client9/misspell/cmd/misspell \
-		github.com/golangci/golangci-lint/cmd/golangci-lint \
-		golang.org/x/tools/cmd/goimports
+	$(TOOL_LIST)
 
 ADDLICENSE_IGNORES = -ignore "**/.tools/*" -ignore "**/otelopscol/**/*" -ignore "**/google-otel/**/*" -ignore "**/docs/**/*" -ignore "**/*.md" -ignore "**/testdata/*"
 .PHONY: addlicense
@@ -163,3 +155,29 @@ lint-fix:
 .PHONY: misspell
 misspell:
 	@output=`$(MISSPELL) -error ./docs` && echo misspell finished successfully || (echo misspell errors:\\n$$output && exit 1)
+
+#########
+# Utility
+#########
+
+LIST_LOCAL_MODULES = go list -f "{{ .Dir }}" -m
+INCLUDE_OTEL_COMPONENTS = grep -e ".*receiver.*" -e ".*processor.*"
+
+.PHONY: target-all-modules
+target-all-modules:
+ifndef TARGET
+	@echo "No TARGET defined."
+else
+	$(LIST_LOCAL_MODULES) |\
+	GOWORK=off xargs -t -I '{}' $(MAKE) -C {} $(TARGET)
+endif
+
+.PHONY: target-all-otel-components
+target-all-otel-components:
+ifndef TARGET
+	@echo "No TARGET defined."
+else
+	$(LIST_LOCAL_MODULES) |\
+	$(INCLUDE_OTEL_COMPONENTS) |\
+	GOWORK=off xargs -t -I '{}' $(MAKE) -C {} $(TARGET)
+endif

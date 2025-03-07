@@ -60,7 +60,7 @@ metrics:
   nvml.gpu.utilization:
     enabled: true
     description: Fraction of time GPU was not idle since the last sample.
-    unit: 1
+    unit: "1"
     gauge:
       value_type: double
     attributes: [model, gpu_number, uuid]
@@ -76,7 +76,7 @@ metrics:
   nvml.gpu.processes.utilization:
     enabled: true
     description: Fraction of time over the process's life thus far during which one or more kernels was executing on the GPU.
-    unit: 1
+    unit: "1"
     gauge:
       value_type: double
     attributes: [model, gpu_number, uuid, pid, process, command, command_line, owner]

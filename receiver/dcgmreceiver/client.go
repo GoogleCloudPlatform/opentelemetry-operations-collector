@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/NVIDIA/go-dcgm/pkg/dcgm"
-	"go.opentelemetry.io/collector/receiver/scrapererror"
+	"go.opentelemetry.io/collector/scraper/scrapererror"
 	"go.uber.org/zap"
 )
 

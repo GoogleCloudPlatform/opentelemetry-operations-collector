@@ -14,10 +14,11 @@
 
 name: otelopscol
 description: "OpenTelemetry Collector binary used by the Ops Agent"
-opentelemetry_version: 0.102.0
+opentelemetry_version: 0.121.0
 binary_name: otelopscol
 collector_cgo: true
 go_version: 1.23.2
+build_tags: gpu
 
 components:
   receivers:

@@ -40,6 +40,7 @@ type DistributionSpec struct {
 	OpenTelemetryStableVersion  string                  `yaml:"opentelemetry_stable_version"`
 	GoVersion                   string                  `yaml:"go_version"`
 	BinaryName                  string                  `yaml:"binary_name"`
+	BuildTags                   string                  `yaml:"build_tags"`
 	CollectorCGO                bool                    `yaml:"collector_cgo"`
 	DockerRepo                  string                  `yaml:"docker_repo"`
 	Components                  *DistributionComponents `yaml:"components"`

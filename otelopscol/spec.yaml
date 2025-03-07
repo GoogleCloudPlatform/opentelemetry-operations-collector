@@ -1,9 +1,14 @@
 name: otelopscol
+display_name: ""
 description: OpenTelemetry Collector binary used by the Ops Agent
+blurb: ""
 version: ""
-opentelemetry_version: 0.102.0
+opentelemetry_version: 0.121.0
+opentelemetry_contrib_version: 0.121.0
+opentelemetry_stable_version: ""
 go_version: 1.23.2
 binary_name: otelopscol
+build_tags: gpu
 collector_cgo: true
 docker_repo: ""
 components:
@@ -59,3 +64,4 @@ components:
         - otlphttp
     extensions:
         - zpages
+feature_gates: []

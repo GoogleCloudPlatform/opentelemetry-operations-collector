@@ -51,7 +51,7 @@ metrics:
   dcgm.gpu.utilization:
     enabled: true
     description: Fraction of time the GPU was not idle.
-    unit: 1
+    unit: "1"
     gauge:
       value_type: double
     attributes: [model, gpu_number, uuid]
@@ -67,7 +67,7 @@ metrics:
   dcgm.gpu.profiling.sm_utilization:
     enabled: true
     description: Fraction of time at least one warp was active on a multiprocessor, averaged over all multiprocessors.
-    unit: 1
+    unit: "1"
     gauge:
       value_type: double
     attributes: [model, gpu_number, uuid]
@@ -75,7 +75,7 @@ metrics:
   dcgm.gpu.profiling.sm_occupancy:
     enabled: true
     description: Fraction of resident warps on a multiprocessor relative to the maximum number supported, averaged over time and all multiprocessors.
-    unit: 1
+    unit: "1"
     gauge:
       value_type: double
     attributes: [model, gpu_number, uuid]
@@ -83,7 +83,7 @@ metrics:
   dcgm.gpu.profiling.pipe_utilization:
     enabled: true
     description: Fraction of cycles the corresponding GPU pipe was active, averaged over time and all multiprocessors.
-    unit: 1
+    unit: "1"
     gauge:
       value_type: double
     attributes: [model, gpu_number, uuid, pipe]
@@ -91,7 +91,7 @@ metrics:
   dcgm.gpu.profiling.dram_utilization:
     enabled: true
     description: Fraction of cycles data was being sent or received from GPU memory.
-    unit: 1
+    unit: "1"
     gauge:
       value_type: double
     attributes: [model, gpu_number, uuid]

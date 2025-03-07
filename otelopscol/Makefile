@@ -1,10 +1,26 @@
+# Copyright 2025 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 # Variables filled in from distro specification
 VERSION ?= 
-OTEL_VERSION ?= 0.102.0
+OTEL_VERSION ?= 0.121.0
 OTEL_VERSION_TAG = v$(OTEL_VERSION)
 COLLECTOR_BINARY_NAME = otelopscol
 COLLECTOR_BUILD_TEMP_DIR = $(PWD)/_build
 COLLECTOR_CGO = 1
+COLLECTOR_BUILDVCS ?= false
+COLLECTOR_BUILD_TAGS ?= gpu
 
 DOCKER_REPO ?= 
 DOCKER_LOCAL_IMAGE_TAG ?= $(COLLECTOR_BINARY_NAME)
@@ -17,7 +33,8 @@ TOOLS_DIR = $(PWD)/.tools
 OCB_BIN ?= $(TOOLS_DIR)/ocb
 
 GO_VERSION = 1.23.2
-GO_BIN ?= $(TOOLS_DIR)/go/bin/go
+GO_BIN_DIR ?= $(TOOLS_DIR)/go/bin
+GO_BIN ?= $(GO_BIN_DIR)/go
 
 .PHONY: build
 build: $(COLLECTOR_BINARY_NAME)
@@ -60,14 +77,27 @@ collector-build: clean-collector $(COLLECTOR_BINARY_NAME)
 
 # Using OCB and the local manifest file, build a collector.
 $(COLLECTOR_BINARY_NAME): $(OCB_BIN)
-	GOWORK=off CGO_ENABLED=$(COLLECTOR_CGO) $(OCB_BIN) --go=$(GO_BIN) --ldflags="$(COLLECTOR_LD_FLAGS)" --verbose --config manifest.yaml
+	GOWORK=off \
+		GOFLAGS="-buildvcs=$(COLLECTOR_BUILD_VCS) -tags=$(COLLECTOR_BUILD_TAGS)" \
+		PATH="$(GO_BIN_DIR):${PATH}" \
+		CGO_ENABLED=$(COLLECTOR_CGO) \
+		$(OCB_BIN) --ldflags="-s -w $(COLLECTOR_LD_FLAGS)" --verbose --config manifest.yaml
 	cp $(COLLECTOR_BUILD_TEMP_DIR)/$(COLLECTOR_BINARY_NAME) .
+	rm -rf $(COLLECTOR_BUILD_TEMP_DIR)
+
+.PHONY: collector-package-list
+collector-package-list: $(OCB_BIN)
+	PATH="$(GO_BIN_DIR):${PATH}" GOWORK=off CGO_ENABLED=$(COLLECTOR_CGO) $(OCB_BIN) --ldflags="$(COLLECTOR_LD_FLAGS)" --verbose --skip-compilation --config manifest.yaml
+	cd $(COLLECTOR_BUILD_TEMP_DIR) && \
+		go list -deps -f '{{ .ImportPath }} {{ .Module }}' ./... > ../packages.txt
+	grep -v '<nil>' packages.txt | sort -u > packages.txt
+	rm packages.txt
 	rm -rf $(COLLECTOR_BUILD_TEMP_DIR)
 
 # Delete any existing built collector binary.
 .PHONY: clean-collector
 clean-collector:
-	rm $(COLLECTOR_BINARY_NAME)
+	rm -f $(COLLECTOR_BINARY_NAME)
 
 ###################
 # Tools
@@ -105,4 +135,3 @@ $(OCB_BIN): $(GO_BIN)
 .PHONY: clean-tools
 clean-tools:
 	rm -rf $(TOOLS_DIR)
-

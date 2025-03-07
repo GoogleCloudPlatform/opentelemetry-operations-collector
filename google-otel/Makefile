@@ -5,6 +5,8 @@ OTEL_VERSION_TAG = v$(OTEL_VERSION)
 COLLECTOR_BINARY_NAME = otelcol-google
 COLLECTOR_BUILD_TEMP_DIR = $(PWD)/_build
 COLLECTOR_CGO = 0
+COLLECTOR_BUILDVCS ?= false
+COLLECTOR_BUILD_TAGS ?= 
 
 DOCKER_REPO ?= us-docker.pkg.dev/experimental-braydonk/google-otel
 DOCKER_LOCAL_IMAGE_TAG ?= $(COLLECTOR_BINARY_NAME)
@@ -61,7 +63,11 @@ collector-build: clean-collector $(COLLECTOR_BINARY_NAME)
 
 # Using OCB and the local manifest file, build a collector.
 $(COLLECTOR_BINARY_NAME): $(OCB_BIN)
-	PATH="$(GO_BIN_DIR):${PATH}" GOWORK=off CGO_ENABLED=$(COLLECTOR_CGO) $(OCB_BIN) --ldflags="$(COLLECTOR_LD_FLAGS)" --verbose --config manifest.yaml
+	GOWORK=off \
+		GOFLAGS="-buildvcs=false -tags=$(COLLECTOR_BUILD_TAGS)" \
+		PATH="$(GO_BIN_DIR):${PATH}" \
+		CGO_ENABLED=$(COLLECTOR_CGO) \
+		$(OCB_BIN) --ldflags="-s -w $(COLLECTOR_LD_FLAGS)" --verbose --config manifest.yaml
 	cp $(COLLECTOR_BUILD_TEMP_DIR)/$(COLLECTOR_BINARY_NAME) .
 	rm -rf $(COLLECTOR_BUILD_TEMP_DIR)
 

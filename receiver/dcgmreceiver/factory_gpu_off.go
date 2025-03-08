@@ -19,15 +19,18 @@ package dcgmreceiver
 
 import (
 	"context"
+	"errors"
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/receiver"
 )
 
+var ErrGPUSupportDisabled = errors.New("gpu support is disabled")
+
 func createMetricsReceiver(
 	_ context.Context,
-	_ receiver.CreateSettings,
+	_ receiver.Settings,
 	_ component.Config,
 	_ consumer.Metrics,
 ) (receiver.Metrics, error) {

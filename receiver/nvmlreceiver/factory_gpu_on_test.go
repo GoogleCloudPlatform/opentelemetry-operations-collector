@@ -21,7 +21,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/nvmlreceiver/internal/metadata"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/consumer/consumertest"
 	"go.opentelemetry.io/collector/receiver/receivertest"
@@ -34,7 +33,7 @@ func TestCreateMetricsReceiverGPUSupportOn(t *testing.T) {
 
 	receiver, err := factory.CreateMetrics(
 		context.Background(),
-		receivertest.NewNopSettings(metadata.Type),
+		receivertest.NewNopSettings(),
 		receiverConfig,
 		consumertest.NewNop(),
 	)

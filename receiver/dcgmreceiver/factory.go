@@ -15,8 +15,6 @@
 package dcgmreceiver
 
 import (
-	"errors"
-
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/confignet"
 	"go.opentelemetry.io/collector/receiver"
@@ -24,8 +22,6 @@ import (
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/dcgmreceiver/internal/metadata"
 )
-
-var ErrGPUSupportDisabled = errors.New("gpu support is disabled")
 
 func NewFactory() receiver.Factory {
 	return receiver.NewFactory(

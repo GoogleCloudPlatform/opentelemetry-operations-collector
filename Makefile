@@ -63,7 +63,7 @@ gen-google-otel-contrib:
 regen-google-otel-contrib:
 	@$(GEN_GOOGLE_OTEL_CONTRIB) -force
 
-GEN_OTELOPSCOL=$(RUN_DISTROGEN) -registry ./registries/operations-collector-registry.yaml -spec ./specs/otelopscol.yaml
+GEN_OTELOPSCOL=$(RUN_DISTROGEN) -registry ./registries/operations-collector-registry.yaml -spec ./specs/otelopscol.yaml -custom_templates ./templates/otelopscol
 .PHONY: gen-otelopscol
 gen-otelopscol:
 	@$(GEN_OTELOPSCOL)

@@ -12,7 +12,75 @@ metrics:
     enabled: false
 ```
 
-### dcgm.gpu.memory.bytes_used
+### gpu.dcgm.clock.frequency
+
+Multiprocessor clock frequency.
+
+| Unit | Metric Type | Value Type |
+| ---- | ----------- | ---------- |
+| Hz | Gauge | Double |
+
+### gpu.dcgm.clock.throttle_duration.time
+
+Clock throttle total duration.
+
+| Unit | Metric Type | Value Type | Aggregation Temporality | Monotonic |
+| ---- | ----------- | ---------- | ----------------------- | --------- |
+| s | Sum | Double | Cumulative | true |
+
+#### Attributes
+
+| Name | Description | Values |
+| ---- | ----------- | ------ |
+| gpu.clock.violation | Reason for throttling, one of [power, thermal, sync_boost, board_limit, low_util, reliability, app_clock, base_clock]. | Str: ``power``, ``thermal``, ``sync_boost``, ``board_limit``, ``low_util``, ``reliability``, ``app_clock``, ``base_clock`` |
+
+### gpu.dcgm.codec.decoder.utilization
+
+Decoder utilization.
+
+| Unit | Metric Type | Value Type |
+| ---- | ----------- | ---------- |
+| 1 | Gauge | Double |
+
+### gpu.dcgm.codec.encoder.utilization
+
+Encoder utilization.
+
+| Unit | Metric Type | Value Type |
+| ---- | ----------- | ---------- |
+| 1 | Gauge | Double |
+
+### gpu.dcgm.ecc_errors
+
+Data corruption errors.
+
+| Unit | Metric Type | Value Type | Aggregation Temporality | Monotonic |
+| ---- | ----------- | ---------- | ----------------------- | --------- |
+| 1 | Sum | Int | Cumulative | true |
+
+#### Attributes
+
+| Name | Description | Values |
+| ---- | ----------- | ------ |
+| gpu.error.type | The type of error, one of [sbe, dbe]. | Str: ``sbe``, ``dbe`` |
+
+### gpu.dcgm.energy_consumption
+
+Total energy consumption for the GPU in J since the driver was last reloaded.
+
+| Unit | Metric Type | Value Type | Aggregation Temporality | Monotonic |
+| ---- | ----------- | ---------- | ----------------------- | --------- |
+| J | Sum | Double | Cumulative | true |
+
+### gpu.dcgm.memory.bandwidth_utilization
+
+Fraction of cycles data was being sent or received from GPU memory.
+
+| Unit | Metric Type | Value Type |
+| ---- | ----------- | ---------- |
+| 1 | Gauge | Double |
+
+### gpu.dcgm.memory.bytes_used
 
 Current number of GPU memory bytes used by state. Summing the values of all states yields the total GPU memory space.
 
@@ -24,62 +92,37 @@ Current number of GPU memory bytes used by state. Summing the values of all stat
 
 | Name | Description | Values |
 | ---- | ----------- | ------ |
-| model | GPU model | Any Str |
-| gpu_number | GPU index starting at 0. | Any Str |
-| uuid | GPU universally unique identifier | Any Str |
-| memory_state | GPU memory used or free | Str: ``used``, ``free`` |
+| gpu.memory.state | GPU memory state, one of [free, used, reserved]. | Str: ``used``, ``free``, ``reserved`` |
 
-### dcgm.gpu.profiling.dram_utilization
+### gpu.dcgm.nvlink.io
 
-Fraction of cycles data was being sent or received from GPU memory.
+The number of bytes sent over NVLink, not including protocol headers.
 
-| Unit | Metric Type | Value Type |
-| ---- | ----------- | ---------- |
-| 1 | Gauge | Double |
+| Unit | Metric Type | Value Type | Aggregation Temporality | Monotonic |
+| ---- | ----------- | ---------- | ----------------------- | --------- |
+| By | Sum | Int | Cumulative | true |
 
 #### Attributes
 
 | Name | Description | Values |
 | ---- | ----------- | ------ |
-| model | GPU model | Any Str |
-| gpu_number | GPU index starting at 0. | Any Str |
-| uuid | GPU universally unique identifier | Any Str |
+| network.io.direction | Direction of the link traffic, one of [transmit, receive]. | Str: ``transmit``, ``receive`` |
 
-### dcgm.gpu.profiling.nvlink_traffic_rate
+### gpu.dcgm.pcie.io
 
-The average rate of bytes received from the GPU over NVLink over the sample period, not including protocol headers.
+The number of bytes sent over the PCIe bus, including both protocol headers and data payloads.
 
-| Unit | Metric Type | Value Type |
-| ---- | ----------- | ---------- |
-| By/s | Gauge | Int |
+| Unit | Metric Type | Value Type | Aggregation Temporality | Monotonic |
+| ---- | ----------- | ---------- | ----------------------- | --------- |
+| By | Sum | Int | Cumulative | true |
 
 #### Attributes
 
 | Name | Description | Values |
 | ---- | ----------- | ------ |
-| model | GPU model | Any Str |
-| gpu_number | GPU index starting at 0. | Any Str |
-| uuid | GPU universally unique identifier | Any Str |
-| direction | Direction of the link traffic, one of [tx, rx]. | Str: ``tx``, ``rx`` |
+| network.io.direction | Direction of the link traffic, one of [transmit, receive]. | Str: ``transmit``, ``receive`` |
 
-### dcgm.gpu.profiling.pcie_traffic_rate
-
-The average rate of bytes sent from the GPU over the PCIe bus over the sample period, including both protocol headers and data payloads.
-
-| Unit | Metric Type | Value Type |
-| ---- | ----------- | ---------- |
-| By/s | Gauge | Int |
-
-#### Attributes
-
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| model | GPU model | Any Str |
-| gpu_number | GPU index starting at 0. | Any Str |
-| uuid | GPU universally unique identifier | Any Str |
-| direction | Direction of the link traffic, one of [tx, rx]. | Str: ``tx``, ``rx`` |
-
-### dcgm.gpu.profiling.pipe_utilization
+### gpu.dcgm.pipe.utilization
 
 Fraction of cycles the corresponding GPU pipe was active, averaged over time and all multiprocessors.
 
@@ -91,28 +134,9 @@ Fraction of cycles the corresponding GPU pipe was active, averaged over time and
 
 | Name | Description | Values |
 | ---- | ----------- | ------ |
-| model | GPU model | Any Str |
-| gpu_number | GPU index starting at 0. | Any Str |
-| uuid | GPU universally unique identifier | Any Str |
-| pipe | GPU pipe in use, one of [tensor, fp64, fp32, fp16]. | Str: ``tensor``, ``fp64``, ``fp32``, ``fp16`` |
+| gpu.pipe | GPU pipe in use, one of [tensor, fp64, fp32, fp16]. | Str: ``tensor``, ``fp64``, ``fp32``, ``fp16`` |
 
-### dcgm.gpu.profiling.sm_occupancy
-
-Fraction of resident warps on a multiprocessor relative to the maximum number supported, averaged over time and all multiprocessors.
-
-| Unit | Metric Type | Value Type |
-| ---- | ----------- | ---------- |
-| 1 | Gauge | Double |
-
-#### Attributes
-
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| model | GPU model | Any Str |
-| gpu_number | GPU index starting at 0. | Any Str |
-| uuid | GPU universally unique identifier | Any Str |
-
-### dcgm.gpu.profiling.sm_utilization
+### gpu.dcgm.sm.utilization
 
 Fraction of time at least one warp was active on a multiprocessor, averaged over all multiprocessors.
 
@@ -120,26 +144,58 @@ Fraction of time at least one warp was active on a multiprocessor, averaged over
 | ---- | ----------- | ---------- |
 | 1 | Gauge | Double |
 
-#### Attributes
+### gpu.dcgm.temperature
 
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| model | GPU model | Any Str |
-| gpu_number | GPU index starting at 0. | Any Str |
-| uuid | GPU universally unique identifier | Any Str |
+Current temperature readings for the device, in ˚C.
 
-### dcgm.gpu.utilization
+| Unit | Metric Type | Value Type |
+| ---- | ----------- | ---------- |
+| Cel | Gauge | Double |
 
-Fraction of time the GPU was not idle.
+### gpu.dcgm.utilization
+
+Ratio of time the graphics engine is active.
 
 | Unit | Metric Type | Value Type |
 | ---- | ----------- | ---------- |
 | 1 | Gauge | Double |
 
+## Optional Metrics
+
+The following metrics are not emitted by default. Each of them can be enabled by applying the following configuration:
+
+```yaml
+metrics:
+  <metric_name>:
+    enabled: true
+```
+
+### gpu.dcgm.sm.occupancy
+
+Fraction of the number of warps resident on a multiprocessor, averaged over all multiprocessors.
+
+| Unit | Metric Type | Value Type |
+| ---- | ----------- | ---------- |
+| 1 | Gauge | Double |
+
+### gpu.dcgm.xid_errors
+
+XID errors.
+
+| Unit | Metric Type | Value Type | Aggregation Temporality | Monotonic |
+| ---- | ----------- | ---------- | ----------------------- | --------- |
+| 1 | Sum | Int | Cumulative | true |
+
 #### Attributes
 
 | Name | Description | Values |
 | ---- | ----------- | ------ |
-| model | GPU model | Any Str |
-| gpu_number | GPU index starting at 0. | Any Str |
-| uuid | GPU universally unique identifier | Any Str |
+| gpu.error.xid | The XID code for the error, 1..143. | Any Int |
+
+## Resource Attributes
+
+| Name | Description | Values | Enabled |
+| ---- | ----------- | ------ | ------- |
+| gpu.model | GPU model name. | Any Str | true |
+| gpu.number | GPU index starting at 0. | Any Str | true |
+| gpu.uuid | GPU universally unique identifier. | Any Str | true |

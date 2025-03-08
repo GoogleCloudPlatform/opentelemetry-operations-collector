@@ -15,16 +15,12 @@
 package nvmlreceiver
 
 import (
-	"errors"
-
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/receiver"
 	"go.opentelemetry.io/collector/scraper/scraperhelper"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/nvmlreceiver/internal/metadata"
 )
-
-var ErrGPUSupportDisabled = errors.New("gpu support is disabled")
 
 func NewFactory() receiver.Factory {
 	return receiver.NewFactory(

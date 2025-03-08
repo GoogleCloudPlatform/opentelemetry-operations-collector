@@ -1,17 +1,3 @@
-# Copyright 2025 Google LLC
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 type: dcgm
 status:
   class: receiver
@@ -19,95 +5,180 @@ status:
     beta: [metrics]
 
 
-attributes:
-  model:
-    type: string
-    description: GPU model
-
-  uuid:
-    type: string
-    description: GPU universally unique identifier
-
-  gpu_number:
+resource_attributes:
+  gpu.number:
     type: string
     description: GPU index starting at 0.
+    enabled: true
 
-  memory_state:
+  gpu.uuid:
     type: string
-    description: GPU memory used or free
-    enum: [used, free]
+    description: GPU universally unique identifier.
+    enabled: true
 
-  pipe:
+  gpu.model:
+    type: string
+    description: GPU model name.
+    enabled: true
+
+attributes:
+  gpu.memory.state:
+    type: string
+    description: GPU memory state, one of [free, used, reserved].
+    enum: [used, free, reserved]
+
+  gpu.pipe:
     type: string
     description: GPU pipe in use, one of [tensor, fp64, fp32, fp16].
     enum: [tensor, fp64, fp32, fp16]
 
-  direction:
+  network.io.direction:
     type: string
-    description: Direction of the link traffic, one of [tx, rx].
-    enum: [tx, rx]
+    description: Direction of the link traffic, one of [transmit, receive].
+    enum: [transmit, receive]
+
+  gpu.clock.violation:
+    type: string
+    description: Reason for throttling, one of [power, thermal, sync_boost, board_limit, low_util, reliability, app_clock, base_clock].
+    enum: [power, thermal, sync_boost, board_limit, low_util, reliability, app_clock, base_clock]
+
+  gpu.error.type:
+    type: string
+    description: The type of error, one of [sbe, dbe].
+    enum: [sbe, dbe]
+
+  gpu.error.xid:
+    type: int
+    description: The XID code for the error, 1..143.
 
 metrics:
-  dcgm.gpu.utilization:
-    enabled: true
-    description: Fraction of time the GPU was not idle.
+  gpu.dcgm.utilization:
+    description: Ratio of time the graphics engine is active.
     unit: "1"
     gauge:
       value_type: double
-    attributes: [model, gpu_number, uuid]
-
-  dcgm.gpu.memory.bytes_used:
     enabled: true
-    description: Current number of GPU memory bytes used by state. Summing the values of all states yields the total GPU memory space.
-    unit: By
-    gauge:
-      value_type: int
-    attributes: [model, gpu_number, uuid, memory_state]
 
-  dcgm.gpu.profiling.sm_utilization:
-    enabled: true
+  gpu.dcgm.sm.utilization:
     description: Fraction of time at least one warp was active on a multiprocessor, averaged over all multiprocessors.
     unit: "1"
     gauge:
       value_type: double
-    attributes: [model, gpu_number, uuid]
-
-  dcgm.gpu.profiling.sm_occupancy:
     enabled: true
-    description: Fraction of resident warps on a multiprocessor relative to the maximum number supported, averaged over time and all multiprocessors.
+
+  gpu.dcgm.sm.occupancy:
+    description: Fraction of the number of warps resident on a multiprocessor, averaged over all multiprocessors.
     unit: "1"
     gauge:
       value_type: double
-    attributes: [model, gpu_number, uuid]
+    enabled: false
 
-  dcgm.gpu.profiling.pipe_utilization:
-    enabled: true
+  gpu.dcgm.pipe.utilization:
     description: Fraction of cycles the corresponding GPU pipe was active, averaged over time and all multiprocessors.
     unit: "1"
     gauge:
       value_type: double
-    attributes: [model, gpu_number, uuid, pipe]
-
-  dcgm.gpu.profiling.dram_utilization:
+    attributes: [gpu.pipe]
     enabled: true
+
+  gpu.dcgm.codec.encoder.utilization:
+    description: Encoder utilization.
+    unit: "1"
+    gauge:
+      value_type: double
+    enabled: true
+
+  gpu.dcgm.codec.decoder.utilization:
+    description: Decoder utilization.
+    unit: "1"
+    gauge:
+      value_type: double
+    enabled: true
+
+  gpu.dcgm.memory.bytes_used:
+    description: Current number of GPU memory bytes used by state. Summing the values of all states yields the total GPU memory space.
+    unit: By
+    gauge:
+      value_type: int
+    attributes: [gpu.memory.state]
+    enabled: true
+
+  gpu.dcgm.memory.bandwidth_utilization:
     description: Fraction of cycles data was being sent or received from GPU memory.
     unit: "1"
     gauge:
       value_type: double
-    attributes: [model, gpu_number, uuid]
-
-  dcgm.gpu.profiling.pcie_traffic_rate:
     enabled: true
-    description: The average rate of bytes sent from the GPU over the PCIe bus over the sample period, including both protocol headers and data payloads.
-    unit: By/s
-    gauge:
-      value_type: int
-    attributes: [model, gpu_number, uuid, direction]
 
-  dcgm.gpu.profiling.nvlink_traffic_rate:
-    enabled: true
-    description: The average rate of bytes received from the GPU over NVLink over the sample period, not including protocol headers.
-    unit: By/s
-    gauge:
+  gpu.dcgm.pcie.io:
+    description: The number of bytes sent over the PCIe bus, including both protocol headers and data payloads.
+    unit: By
+    sum:
       value_type: int
-    attributes: [model, gpu_number, uuid, direction]
+      aggregation_temporality: cumulative
+      monotonic: true
+    attributes: [network.io.direction]
+    enabled: true
+
+  gpu.dcgm.nvlink.io:
+    description: The number of bytes sent over NVLink, not including protocol headers.
+    unit: By
+    sum:
+      value_type: int
+      aggregation_temporality: cumulative
+      monotonic: true
+    attributes: [network.io.direction]
+    enabled: true
+
+  gpu.dcgm.energy_consumption:
+    description: Total energy consumption for the GPU in J since the driver was last reloaded.
+    unit: J
+    sum:
+      value_type: double
+      aggregation_temporality: cumulative
+      monotonic: true
+    enabled: true
+
+  gpu.dcgm.temperature:
+    description: Current temperature readings for the device, in ˚C.
+    unit: Cel
+    gauge:
+      value_type: double
+    enabled: true
+
+  gpu.dcgm.clock.frequency:
+    description: Multiprocessor clock frequency.
+    unit: Hz
+    gauge:
+      value_type: double
+    enabled: true
+
+  gpu.dcgm.clock.throttle_duration.time:
+    description: Clock throttle total duration.
+    unit: s
+    sum:
+      value_type: double
+      aggregation_temporality: cumulative
+      monotonic: true
+    attributes: [gpu.clock.violation]
+    enabled: true
+
+  gpu.dcgm.ecc_errors:
+    description: Data corruption errors.
+    unit: "1"
+    sum:
+      value_type: int
+      aggregation_temporality: cumulative
+      monotonic: true
+    attributes: [gpu.error.type]
+    enabled: true
+
+  gpu.dcgm.xid_errors:
+    description: XID errors.
+    unit: "1"
+    sum:
+      value_type: int
+      aggregation_temporality: cumulative
+      monotonic: true
+    attributes: [gpu.error.xid]
+    enabled: false

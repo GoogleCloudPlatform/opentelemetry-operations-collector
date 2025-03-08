@@ -6,113 +6,547 @@ import (
 	"time"
 
 	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/filter"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/receiver"
 )
 
-// AttributeDirection specifies the value direction attribute.
-type AttributeDirection int
+// AttributeGpuClockViolation specifies the value gpu.clock.violation attribute.
+type AttributeGpuClockViolation int
 
 const (
-	_ AttributeDirection = iota
-	AttributeDirectionTx
-	AttributeDirectionRx
+	_ AttributeGpuClockViolation = iota
+	AttributeGpuClockViolationPower
+	AttributeGpuClockViolationThermal
+	AttributeGpuClockViolationSyncBoost
+	AttributeGpuClockViolationBoardLimit
+	AttributeGpuClockViolationLowUtil
+	AttributeGpuClockViolationReliability
+	AttributeGpuClockViolationAppClock
+	AttributeGpuClockViolationBaseClock
 )
 
-// String returns the string representation of the AttributeDirection.
-func (av AttributeDirection) String() string {
+// String returns the string representation of the AttributeGpuClockViolation.
+func (av AttributeGpuClockViolation) String() string {
 	switch av {
-	case AttributeDirectionTx:
-		return "tx"
-	case AttributeDirectionRx:
-		return "rx"
+	case AttributeGpuClockViolationPower:
+		return "power"
+	case AttributeGpuClockViolationThermal:
+		return "thermal"
+	case AttributeGpuClockViolationSyncBoost:
+		return "sync_boost"
+	case AttributeGpuClockViolationBoardLimit:
+		return "board_limit"
+	case AttributeGpuClockViolationLowUtil:
+		return "low_util"
+	case AttributeGpuClockViolationReliability:
+		return "reliability"
+	case AttributeGpuClockViolationAppClock:
+		return "app_clock"
+	case AttributeGpuClockViolationBaseClock:
+		return "base_clock"
 	}
 	return ""
 }
 
-// MapAttributeDirection is a helper map of string to AttributeDirection attribute value.
-var MapAttributeDirection = map[string]AttributeDirection{
-	"tx": AttributeDirectionTx,
-	"rx": AttributeDirectionRx,
+// MapAttributeGpuClockViolation is a helper map of string to AttributeGpuClockViolation attribute value.
+var MapAttributeGpuClockViolation = map[string]AttributeGpuClockViolation{
+	"power":       AttributeGpuClockViolationPower,
+	"thermal":     AttributeGpuClockViolationThermal,
+	"sync_boost":  AttributeGpuClockViolationSyncBoost,
+	"board_limit": AttributeGpuClockViolationBoardLimit,
+	"low_util":    AttributeGpuClockViolationLowUtil,
+	"reliability": AttributeGpuClockViolationReliability,
+	"app_clock":   AttributeGpuClockViolationAppClock,
+	"base_clock":  AttributeGpuClockViolationBaseClock,
 }
 
-// AttributeMemoryState specifies the value memory_state attribute.
-type AttributeMemoryState int
+// AttributeGpuErrorType specifies the value gpu.error.type attribute.
+type AttributeGpuErrorType int
 
 const (
-	_ AttributeMemoryState = iota
-	AttributeMemoryStateUsed
-	AttributeMemoryStateFree
+	_ AttributeGpuErrorType = iota
+	AttributeGpuErrorTypeSbe
+	AttributeGpuErrorTypeDbe
 )
 
-// String returns the string representation of the AttributeMemoryState.
-func (av AttributeMemoryState) String() string {
+// String returns the string representation of the AttributeGpuErrorType.
+func (av AttributeGpuErrorType) String() string {
 	switch av {
-	case AttributeMemoryStateUsed:
+	case AttributeGpuErrorTypeSbe:
+		return "sbe"
+	case AttributeGpuErrorTypeDbe:
+		return "dbe"
+	}
+	return ""
+}
+
+// MapAttributeGpuErrorType is a helper map of string to AttributeGpuErrorType attribute value.
+var MapAttributeGpuErrorType = map[string]AttributeGpuErrorType{
+	"sbe": AttributeGpuErrorTypeSbe,
+	"dbe": AttributeGpuErrorTypeDbe,
+}
+
+// AttributeGpuMemoryState specifies the value gpu.memory.state attribute.
+type AttributeGpuMemoryState int
+
+const (
+	_ AttributeGpuMemoryState = iota
+	AttributeGpuMemoryStateUsed
+	AttributeGpuMemoryStateFree
+	AttributeGpuMemoryStateReserved
+)
+
+// String returns the string representation of the AttributeGpuMemoryState.
+func (av AttributeGpuMemoryState) String() string {
+	switch av {
+	case AttributeGpuMemoryStateUsed:
 		return "used"
-	case AttributeMemoryStateFree:
+	case AttributeGpuMemoryStateFree:
 		return "free"
+	case AttributeGpuMemoryStateReserved:
+		return "reserved"
 	}
 	return ""
 }
 
-// MapAttributeMemoryState is a helper map of string to AttributeMemoryState attribute value.
-var MapAttributeMemoryState = map[string]AttributeMemoryState{
-	"used": AttributeMemoryStateUsed,
-	"free": AttributeMemoryStateFree,
+// MapAttributeGpuMemoryState is a helper map of string to AttributeGpuMemoryState attribute value.
+var MapAttributeGpuMemoryState = map[string]AttributeGpuMemoryState{
+	"used":     AttributeGpuMemoryStateUsed,
+	"free":     AttributeGpuMemoryStateFree,
+	"reserved": AttributeGpuMemoryStateReserved,
 }
 
-// AttributePipe specifies the value pipe attribute.
-type AttributePipe int
+// AttributeGpuPipe specifies the value gpu.pipe attribute.
+type AttributeGpuPipe int
 
 const (
-	_ AttributePipe = iota
-	AttributePipeTensor
-	AttributePipeFp64
-	AttributePipeFp32
-	AttributePipeFp16
+	_ AttributeGpuPipe = iota
+	AttributeGpuPipeTensor
+	AttributeGpuPipeFp64
+	AttributeGpuPipeFp32
+	AttributeGpuPipeFp16
 )
 
-// String returns the string representation of the AttributePipe.
-func (av AttributePipe) String() string {
+// String returns the string representation of the AttributeGpuPipe.
+func (av AttributeGpuPipe) String() string {
 	switch av {
-	case AttributePipeTensor:
+	case AttributeGpuPipeTensor:
 		return "tensor"
-	case AttributePipeFp64:
+	case AttributeGpuPipeFp64:
 		return "fp64"
-	case AttributePipeFp32:
+	case AttributeGpuPipeFp32:
 		return "fp32"
-	case AttributePipeFp16:
+	case AttributeGpuPipeFp16:
 		return "fp16"
 	}
 	return ""
 }
 
-// MapAttributePipe is a helper map of string to AttributePipe attribute value.
-var MapAttributePipe = map[string]AttributePipe{
-	"tensor": AttributePipeTensor,
-	"fp64":   AttributePipeFp64,
-	"fp32":   AttributePipeFp32,
-	"fp16":   AttributePipeFp16,
+// MapAttributeGpuPipe is a helper map of string to AttributeGpuPipe attribute value.
+var MapAttributeGpuPipe = map[string]AttributeGpuPipe{
+	"tensor": AttributeGpuPipeTensor,
+	"fp64":   AttributeGpuPipeFp64,
+	"fp32":   AttributeGpuPipeFp32,
+	"fp16":   AttributeGpuPipeFp16,
 }
 
-type metricDcgmGpuMemoryBytesUsed struct {
+// AttributeNetworkIoDirection specifies the value network.io.direction attribute.
+type AttributeNetworkIoDirection int
+
+const (
+	_ AttributeNetworkIoDirection = iota
+	AttributeNetworkIoDirectionTransmit
+	AttributeNetworkIoDirectionReceive
+)
+
+// String returns the string representation of the AttributeNetworkIoDirection.
+func (av AttributeNetworkIoDirection) String() string {
+	switch av {
+	case AttributeNetworkIoDirectionTransmit:
+		return "transmit"
+	case AttributeNetworkIoDirectionReceive:
+		return "receive"
+	}
+	return ""
+}
+
+// MapAttributeNetworkIoDirection is a helper map of string to AttributeNetworkIoDirection attribute value.
+var MapAttributeNetworkIoDirection = map[string]AttributeNetworkIoDirection{
+	"transmit": AttributeNetworkIoDirectionTransmit,
+	"receive":  AttributeNetworkIoDirectionReceive,
+}
+
+type metricGpuDcgmClockFrequency struct {
 	data     pmetric.Metric // data buffer for generated metric.
 	config   MetricConfig   // metric config provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
 
-// init fills dcgm.gpu.memory.bytes_used metric with initial data.
-func (m *metricDcgmGpuMemoryBytesUsed) init() {
-	m.data.SetName("dcgm.gpu.memory.bytes_used")
+// init fills gpu.dcgm.clock.frequency metric with initial data.
+func (m *metricGpuDcgmClockFrequency) init() {
+	m.data.SetName("gpu.dcgm.clock.frequency")
+	m.data.SetDescription("Multiprocessor clock frequency.")
+	m.data.SetUnit("Hz")
+	m.data.SetEmptyGauge()
+}
+
+func (m *metricGpuDcgmClockFrequency) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64) {
+	if !m.config.Enabled {
+		return
+	}
+	dp := m.data.Gauge().DataPoints().AppendEmpty()
+	dp.SetStartTimestamp(start)
+	dp.SetTimestamp(ts)
+	dp.SetDoubleValue(val)
+}
+
+// updateCapacity saves max length of data point slices that will be used for the slice capacity.
+func (m *metricGpuDcgmClockFrequency) updateCapacity() {
+	if m.data.Gauge().DataPoints().Len() > m.capacity {
+		m.capacity = m.data.Gauge().DataPoints().Len()
+	}
+}
+
+// emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
+func (m *metricGpuDcgmClockFrequency) emit(metrics pmetric.MetricSlice) {
+	if m.config.Enabled && m.data.Gauge().DataPoints().Len() > 0 {
+		m.updateCapacity()
+		m.data.MoveTo(metrics.AppendEmpty())
+		m.init()
+	}
+}
+
+func newMetricGpuDcgmClockFrequency(cfg MetricConfig) metricGpuDcgmClockFrequency {
+	m := metricGpuDcgmClockFrequency{config: cfg}
+	if cfg.Enabled {
+		m.data = pmetric.NewMetric()
+		m.init()
+	}
+	return m
+}
+
+type metricGpuDcgmClockThrottleDurationTime struct {
+	data     pmetric.Metric // data buffer for generated metric.
+	config   MetricConfig   // metric config provided by user.
+	capacity int            // max observed number of data points added to the metric.
+}
+
+// init fills gpu.dcgm.clock.throttle_duration.time metric with initial data.
+func (m *metricGpuDcgmClockThrottleDurationTime) init() {
+	m.data.SetName("gpu.dcgm.clock.throttle_duration.time")
+	m.data.SetDescription("Clock throttle total duration.")
+	m.data.SetUnit("s")
+	m.data.SetEmptySum()
+	m.data.Sum().SetIsMonotonic(true)
+	m.data.Sum().SetAggregationTemporality(pmetric.AggregationTemporalityCumulative)
+	m.data.Sum().DataPoints().EnsureCapacity(m.capacity)
+}
+
+func (m *metricGpuDcgmClockThrottleDurationTime) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64, gpuClockViolationAttributeValue string) {
+	if !m.config.Enabled {
+		return
+	}
+	dp := m.data.Sum().DataPoints().AppendEmpty()
+	dp.SetStartTimestamp(start)
+	dp.SetTimestamp(ts)
+	dp.SetDoubleValue(val)
+	dp.Attributes().PutStr("gpu.clock.violation", gpuClockViolationAttributeValue)
+}
+
+// updateCapacity saves max length of data point slices that will be used for the slice capacity.
+func (m *metricGpuDcgmClockThrottleDurationTime) updateCapacity() {
+	if m.data.Sum().DataPoints().Len() > m.capacity {
+		m.capacity = m.data.Sum().DataPoints().Len()
+	}
+}
+
+// emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
+func (m *metricGpuDcgmClockThrottleDurationTime) emit(metrics pmetric.MetricSlice) {
+	if m.config.Enabled && m.data.Sum().DataPoints().Len() > 0 {
+		m.updateCapacity()
+		m.data.MoveTo(metrics.AppendEmpty())
+		m.init()
+	}
+}
+
+func newMetricGpuDcgmClockThrottleDurationTime(cfg MetricConfig) metricGpuDcgmClockThrottleDurationTime {
+	m := metricGpuDcgmClockThrottleDurationTime{config: cfg}
+	if cfg.Enabled {
+		m.data = pmetric.NewMetric()
+		m.init()
+	}
+	return m
+}
+
+type metricGpuDcgmCodecDecoderUtilization struct {
+	data     pmetric.Metric // data buffer for generated metric.
+	config   MetricConfig   // metric config provided by user.
+	capacity int            // max observed number of data points added to the metric.
+}
+
+// init fills gpu.dcgm.codec.decoder.utilization metric with initial data.
+func (m *metricGpuDcgmCodecDecoderUtilization) init() {
+	m.data.SetName("gpu.dcgm.codec.decoder.utilization")
+	m.data.SetDescription("Decoder utilization.")
+	m.data.SetUnit("1")
+	m.data.SetEmptyGauge()
+}
+
+func (m *metricGpuDcgmCodecDecoderUtilization) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64) {
+	if !m.config.Enabled {
+		return
+	}
+	dp := m.data.Gauge().DataPoints().AppendEmpty()
+	dp.SetStartTimestamp(start)
+	dp.SetTimestamp(ts)
+	dp.SetDoubleValue(val)
+}
+
+// updateCapacity saves max length of data point slices that will be used for the slice capacity.
+func (m *metricGpuDcgmCodecDecoderUtilization) updateCapacity() {
+	if m.data.Gauge().DataPoints().Len() > m.capacity {
+		m.capacity = m.data.Gauge().DataPoints().Len()
+	}
+}
+
+// emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
+func (m *metricGpuDcgmCodecDecoderUtilization) emit(metrics pmetric.MetricSlice) {
+	if m.config.Enabled && m.data.Gauge().DataPoints().Len() > 0 {
+		m.updateCapacity()
+		m.data.MoveTo(metrics.AppendEmpty())
+		m.init()
+	}
+}
+
+func newMetricGpuDcgmCodecDecoderUtilization(cfg MetricConfig) metricGpuDcgmCodecDecoderUtilization {
+	m := metricGpuDcgmCodecDecoderUtilization{config: cfg}
+	if cfg.Enabled {
+		m.data = pmetric.NewMetric()
+		m.init()
+	}
+	return m
+}
+
+type metricGpuDcgmCodecEncoderUtilization struct {
+	data     pmetric.Metric // data buffer for generated metric.
+	config   MetricConfig   // metric config provided by user.
+	capacity int            // max observed number of data points added to the metric.
+}
+
+// init fills gpu.dcgm.codec.encoder.utilization metric with initial data.
+func (m *metricGpuDcgmCodecEncoderUtilization) init() {
+	m.data.SetName("gpu.dcgm.codec.encoder.utilization")
+	m.data.SetDescription("Encoder utilization.")
+	m.data.SetUnit("1")
+	m.data.SetEmptyGauge()
+}
+
+func (m *metricGpuDcgmCodecEncoderUtilization) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64) {
+	if !m.config.Enabled {
+		return
+	}
+	dp := m.data.Gauge().DataPoints().AppendEmpty()
+	dp.SetStartTimestamp(start)
+	dp.SetTimestamp(ts)
+	dp.SetDoubleValue(val)
+}
+
+// updateCapacity saves max length of data point slices that will be used for the slice capacity.
+func (m *metricGpuDcgmCodecEncoderUtilization) updateCapacity() {
+	if m.data.Gauge().DataPoints().Len() > m.capacity {
+		m.capacity = m.data.Gauge().DataPoints().Len()
+	}
+}
+
+// emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
+func (m *metricGpuDcgmCodecEncoderUtilization) emit(metrics pmetric.MetricSlice) {
+	if m.config.Enabled && m.data.Gauge().DataPoints().Len() > 0 {
+		m.updateCapacity()
+		m.data.MoveTo(metrics.AppendEmpty())
+		m.init()
+	}
+}
+
+func newMetricGpuDcgmCodecEncoderUtilization(cfg MetricConfig) metricGpuDcgmCodecEncoderUtilization {
+	m := metricGpuDcgmCodecEncoderUtilization{config: cfg}
+	if cfg.Enabled {
+		m.data = pmetric.NewMetric()
+		m.init()
+	}
+	return m
+}
+
+type metricGpuDcgmEccErrors struct {
+	data     pmetric.Metric // data buffer for generated metric.
+	config   MetricConfig   // metric config provided by user.
+	capacity int            // max observed number of data points added to the metric.
+}
+
+// init fills gpu.dcgm.ecc_errors metric with initial data.
+func (m *metricGpuDcgmEccErrors) init() {
+	m.data.SetName("gpu.dcgm.ecc_errors")
+	m.data.SetDescription("Data corruption errors.")
+	m.data.SetUnit("1")
+	m.data.SetEmptySum()
+	m.data.Sum().SetIsMonotonic(true)
+	m.data.Sum().SetAggregationTemporality(pmetric.AggregationTemporalityCumulative)
+	m.data.Sum().DataPoints().EnsureCapacity(m.capacity)
+}
+
+func (m *metricGpuDcgmEccErrors) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, gpuErrorTypeAttributeValue string) {
+	if !m.config.Enabled {
+		return
+	}
+	dp := m.data.Sum().DataPoints().AppendEmpty()
+	dp.SetStartTimestamp(start)
+	dp.SetTimestamp(ts)
+	dp.SetIntValue(val)
+	dp.Attributes().PutStr("gpu.error.type", gpuErrorTypeAttributeValue)
+}
+
+// updateCapacity saves max length of data point slices that will be used for the slice capacity.
+func (m *metricGpuDcgmEccErrors) updateCapacity() {
+	if m.data.Sum().DataPoints().Len() > m.capacity {
+		m.capacity = m.data.Sum().DataPoints().Len()
+	}
+}
+
+// emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
+func (m *metricGpuDcgmEccErrors) emit(metrics pmetric.MetricSlice) {
+	if m.config.Enabled && m.data.Sum().DataPoints().Len() > 0 {
+		m.updateCapacity()
+		m.data.MoveTo(metrics.AppendEmpty())
+		m.init()
+	}
+}
+
+func newMetricGpuDcgmEccErrors(cfg MetricConfig) metricGpuDcgmEccErrors {
+	m := metricGpuDcgmEccErrors{config: cfg}
+	if cfg.Enabled {
+		m.data = pmetric.NewMetric()
+		m.init()
+	}
+	return m
+}
+
+type metricGpuDcgmEnergyConsumption struct {
+	data     pmetric.Metric // data buffer for generated metric.
+	config   MetricConfig   // metric config provided by user.
+	capacity int            // max observed number of data points added to the metric.
+}
+
+// init fills gpu.dcgm.energy_consumption metric with initial data.
+func (m *metricGpuDcgmEnergyConsumption) init() {
+	m.data.SetName("gpu.dcgm.energy_consumption")
+	m.data.SetDescription("Total energy consumption for the GPU in J since the driver was last reloaded.")
+	m.data.SetUnit("J")
+	m.data.SetEmptySum()
+	m.data.Sum().SetIsMonotonic(true)
+	m.data.Sum().SetAggregationTemporality(pmetric.AggregationTemporalityCumulative)
+}
+
+func (m *metricGpuDcgmEnergyConsumption) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64) {
+	if !m.config.Enabled {
+		return
+	}
+	dp := m.data.Sum().DataPoints().AppendEmpty()
+	dp.SetStartTimestamp(start)
+	dp.SetTimestamp(ts)
+	dp.SetDoubleValue(val)
+}
+
+// updateCapacity saves max length of data point slices that will be used for the slice capacity.
+func (m *metricGpuDcgmEnergyConsumption) updateCapacity() {
+	if m.data.Sum().DataPoints().Len() > m.capacity {
+		m.capacity = m.data.Sum().DataPoints().Len()
+	}
+}
+
+// emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
+func (m *metricGpuDcgmEnergyConsumption) emit(metrics pmetric.MetricSlice) {
+	if m.config.Enabled && m.data.Sum().DataPoints().Len() > 0 {
+		m.updateCapacity()
+		m.data.MoveTo(metrics.AppendEmpty())
+		m.init()
+	}
+}
+
+func newMetricGpuDcgmEnergyConsumption(cfg MetricConfig) metricGpuDcgmEnergyConsumption {
+	m := metricGpuDcgmEnergyConsumption{config: cfg}
+	if cfg.Enabled {
+		m.data = pmetric.NewMetric()
+		m.init()
+	}
+	return m
+}
+
+type metricGpuDcgmMemoryBandwidthUtilization struct {
+	data     pmetric.Metric // data buffer for generated metric.
+	config   MetricConfig   // metric config provided by user.
+	capacity int            // max observed number of data points added to the metric.
+}
+
+// init fills gpu.dcgm.memory.bandwidth_utilization metric with initial data.
+func (m *metricGpuDcgmMemoryBandwidthUtilization) init() {
+	m.data.SetName("gpu.dcgm.memory.bandwidth_utilization")
+	m.data.SetDescription("Fraction of cycles data was being sent or received from GPU memory.")
+	m.data.SetUnit("1")
+	m.data.SetEmptyGauge()
+}
+
+func (m *metricGpuDcgmMemoryBandwidthUtilization) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64) {
+	if !m.config.Enabled {
+		return
+	}
+	dp := m.data.Gauge().DataPoints().AppendEmpty()
+	dp.SetStartTimestamp(start)
+	dp.SetTimestamp(ts)
+	dp.SetDoubleValue(val)
+}
+
+// updateCapacity saves max length of data point slices that will be used for the slice capacity.
+func (m *metricGpuDcgmMemoryBandwidthUtilization) updateCapacity() {
+	if m.data.Gauge().DataPoints().Len() > m.capacity {
+		m.capacity = m.data.Gauge().DataPoints().Len()
+	}
+}
+
+// emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
+func (m *metricGpuDcgmMemoryBandwidthUtilization) emit(metrics pmetric.MetricSlice) {
+	if m.config.Enabled && m.data.Gauge().DataPoints().Len() > 0 {
+		m.updateCapacity()
+		m.data.MoveTo(metrics.AppendEmpty())
+		m.init()
+	}
+}
+
+func newMetricGpuDcgmMemoryBandwidthUtilization(cfg MetricConfig) metricGpuDcgmMemoryBandwidthUtilization {
+	m := metricGpuDcgmMemoryBandwidthUtilization{config: cfg}
+	if cfg.Enabled {
+		m.data = pmetric.NewMetric()
+		m.init()
+	}
+	return m
+}
+
+type metricGpuDcgmMemoryBytesUsed struct {
+	data     pmetric.Metric // data buffer for generated metric.
+	config   MetricConfig   // metric config provided by user.
+	capacity int            // max observed number of data points added to the metric.
+}
+
+// init fills gpu.dcgm.memory.bytes_used metric with initial data.
+func (m *metricGpuDcgmMemoryBytesUsed) init() {
+	m.data.SetName("gpu.dcgm.memory.bytes_used")
 	m.data.SetDescription("Current number of GPU memory bytes used by state. Summing the values of all states yields the total GPU memory space.")
 	m.data.SetUnit("By")
 	m.data.SetEmptyGauge()
 	m.data.Gauge().DataPoints().EnsureCapacity(m.capacity)
 }
 
-func (m *metricDcgmGpuMemoryBytesUsed) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, memoryStateAttributeValue string) {
+func (m *metricGpuDcgmMemoryBytesUsed) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, gpuMemoryStateAttributeValue string) {
 	if !m.config.Enabled {
 		return
 	}
@@ -120,21 +554,18 @@ func (m *metricDcgmGpuMemoryBytesUsed) recordDataPoint(start pcommon.Timestamp, 
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
 	dp.SetIntValue(val)
-	dp.Attributes().PutStr("model", modelAttributeValue)
-	dp.Attributes().PutStr("gpu_number", gpuNumberAttributeValue)
-	dp.Attributes().PutStr("uuid", uuidAttributeValue)
-	dp.Attributes().PutStr("memory_state", memoryStateAttributeValue)
+	dp.Attributes().PutStr("gpu.memory.state", gpuMemoryStateAttributeValue)
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
-func (m *metricDcgmGpuMemoryBytesUsed) updateCapacity() {
+func (m *metricGpuDcgmMemoryBytesUsed) updateCapacity() {
 	if m.data.Gauge().DataPoints().Len() > m.capacity {
 		m.capacity = m.data.Gauge().DataPoints().Len()
 	}
 }
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
-func (m *metricDcgmGpuMemoryBytesUsed) emit(metrics pmetric.MetricSlice) {
+func (m *metricGpuDcgmMemoryBytesUsed) emit(metrics pmetric.MetricSlice) {
 	if m.config.Enabled && m.data.Gauge().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
@@ -142,8 +573,8 @@ func (m *metricDcgmGpuMemoryBytesUsed) emit(metrics pmetric.MetricSlice) {
 	}
 }
 
-func newMetricDcgmGpuMemoryBytesUsed(cfg MetricConfig) metricDcgmGpuMemoryBytesUsed {
-	m := metricDcgmGpuMemoryBytesUsed{config: cfg}
+func newMetricGpuDcgmMemoryBytesUsed(cfg MetricConfig) metricGpuDcgmMemoryBytesUsed {
+	m := metricGpuDcgmMemoryBytesUsed{config: cfg}
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -151,106 +582,52 @@ func newMetricDcgmGpuMemoryBytesUsed(cfg MetricConfig) metricDcgmGpuMemoryBytesU
 	return m
 }
 
-type metricDcgmGpuProfilingDramUtilization struct {
+type metricGpuDcgmNvlinkIo struct {
 	data     pmetric.Metric // data buffer for generated metric.
 	config   MetricConfig   // metric config provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
 
-// init fills dcgm.gpu.profiling.dram_utilization metric with initial data.
-func (m *metricDcgmGpuProfilingDramUtilization) init() {
-	m.data.SetName("dcgm.gpu.profiling.dram_utilization")
-	m.data.SetDescription("Fraction of cycles data was being sent or received from GPU memory.")
-	m.data.SetUnit("1")
-	m.data.SetEmptyGauge()
-	m.data.Gauge().DataPoints().EnsureCapacity(m.capacity)
+// init fills gpu.dcgm.nvlink.io metric with initial data.
+func (m *metricGpuDcgmNvlinkIo) init() {
+	m.data.SetName("gpu.dcgm.nvlink.io")
+	m.data.SetDescription("The number of bytes sent over NVLink, not including protocol headers.")
+	m.data.SetUnit("By")
+	m.data.SetEmptySum()
+	m.data.Sum().SetIsMonotonic(true)
+	m.data.Sum().SetAggregationTemporality(pmetric.AggregationTemporalityCumulative)
+	m.data.Sum().DataPoints().EnsureCapacity(m.capacity)
 }
 
-func (m *metricDcgmGpuProfilingDramUtilization) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string) {
+func (m *metricGpuDcgmNvlinkIo) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, networkIoDirectionAttributeValue string) {
 	if !m.config.Enabled {
 		return
 	}
-	dp := m.data.Gauge().DataPoints().AppendEmpty()
-	dp.SetStartTimestamp(start)
-	dp.SetTimestamp(ts)
-	dp.SetDoubleValue(val)
-	dp.Attributes().PutStr("model", modelAttributeValue)
-	dp.Attributes().PutStr("gpu_number", gpuNumberAttributeValue)
-	dp.Attributes().PutStr("uuid", uuidAttributeValue)
-}
-
-// updateCapacity saves max length of data point slices that will be used for the slice capacity.
-func (m *metricDcgmGpuProfilingDramUtilization) updateCapacity() {
-	if m.data.Gauge().DataPoints().Len() > m.capacity {
-		m.capacity = m.data.Gauge().DataPoints().Len()
-	}
-}
-
-// emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
-func (m *metricDcgmGpuProfilingDramUtilization) emit(metrics pmetric.MetricSlice) {
-	if m.config.Enabled && m.data.Gauge().DataPoints().Len() > 0 {
-		m.updateCapacity()
-		m.data.MoveTo(metrics.AppendEmpty())
-		m.init()
-	}
-}
-
-func newMetricDcgmGpuProfilingDramUtilization(cfg MetricConfig) metricDcgmGpuProfilingDramUtilization {
-	m := metricDcgmGpuProfilingDramUtilization{config: cfg}
-	if cfg.Enabled {
-		m.data = pmetric.NewMetric()
-		m.init()
-	}
-	return m
-}
-
-type metricDcgmGpuProfilingNvlinkTrafficRate struct {
-	data     pmetric.Metric // data buffer for generated metric.
-	config   MetricConfig   // metric config provided by user.
-	capacity int            // max observed number of data points added to the metric.
-}
-
-// init fills dcgm.gpu.profiling.nvlink_traffic_rate metric with initial data.
-func (m *metricDcgmGpuProfilingNvlinkTrafficRate) init() {
-	m.data.SetName("dcgm.gpu.profiling.nvlink_traffic_rate")
-	m.data.SetDescription("The average rate of bytes received from the GPU over NVLink over the sample period, not including protocol headers.")
-	m.data.SetUnit("By/s")
-	m.data.SetEmptyGauge()
-	m.data.Gauge().DataPoints().EnsureCapacity(m.capacity)
-}
-
-func (m *metricDcgmGpuProfilingNvlinkTrafficRate) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, directionAttributeValue string) {
-	if !m.config.Enabled {
-		return
-	}
-	dp := m.data.Gauge().DataPoints().AppendEmpty()
+	dp := m.data.Sum().DataPoints().AppendEmpty()
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
 	dp.SetIntValue(val)
-	dp.Attributes().PutStr("model", modelAttributeValue)
-	dp.Attributes().PutStr("gpu_number", gpuNumberAttributeValue)
-	dp.Attributes().PutStr("uuid", uuidAttributeValue)
-	dp.Attributes().PutStr("direction", directionAttributeValue)
+	dp.Attributes().PutStr("network.io.direction", networkIoDirectionAttributeValue)
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
-func (m *metricDcgmGpuProfilingNvlinkTrafficRate) updateCapacity() {
-	if m.data.Gauge().DataPoints().Len() > m.capacity {
-		m.capacity = m.data.Gauge().DataPoints().Len()
+func (m *metricGpuDcgmNvlinkIo) updateCapacity() {
+	if m.data.Sum().DataPoints().Len() > m.capacity {
+		m.capacity = m.data.Sum().DataPoints().Len()
 	}
 }
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
-func (m *metricDcgmGpuProfilingNvlinkTrafficRate) emit(metrics pmetric.MetricSlice) {
-	if m.config.Enabled && m.data.Gauge().DataPoints().Len() > 0 {
+func (m *metricGpuDcgmNvlinkIo) emit(metrics pmetric.MetricSlice) {
+	if m.config.Enabled && m.data.Sum().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
 		m.init()
 	}
 }
 
-func newMetricDcgmGpuProfilingNvlinkTrafficRate(cfg MetricConfig) metricDcgmGpuProfilingNvlinkTrafficRate {
-	m := metricDcgmGpuProfilingNvlinkTrafficRate{config: cfg}
+func newMetricGpuDcgmNvlinkIo(cfg MetricConfig) metricGpuDcgmNvlinkIo {
+	m := metricGpuDcgmNvlinkIo{config: cfg}
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -258,53 +635,52 @@ func newMetricDcgmGpuProfilingNvlinkTrafficRate(cfg MetricConfig) metricDcgmGpuP
 	return m
 }
 
-type metricDcgmGpuProfilingPcieTrafficRate struct {
+type metricGpuDcgmPcieIo struct {
 	data     pmetric.Metric // data buffer for generated metric.
 	config   MetricConfig   // metric config provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
 
-// init fills dcgm.gpu.profiling.pcie_traffic_rate metric with initial data.
-func (m *metricDcgmGpuProfilingPcieTrafficRate) init() {
-	m.data.SetName("dcgm.gpu.profiling.pcie_traffic_rate")
-	m.data.SetDescription("The average rate of bytes sent from the GPU over the PCIe bus over the sample period, including both protocol headers and data payloads.")
-	m.data.SetUnit("By/s")
-	m.data.SetEmptyGauge()
-	m.data.Gauge().DataPoints().EnsureCapacity(m.capacity)
+// init fills gpu.dcgm.pcie.io metric with initial data.
+func (m *metricGpuDcgmPcieIo) init() {
+	m.data.SetName("gpu.dcgm.pcie.io")
+	m.data.SetDescription("The number of bytes sent over the PCIe bus, including both protocol headers and data payloads.")
+	m.data.SetUnit("By")
+	m.data.SetEmptySum()
+	m.data.Sum().SetIsMonotonic(true)
+	m.data.Sum().SetAggregationTemporality(pmetric.AggregationTemporalityCumulative)
+	m.data.Sum().DataPoints().EnsureCapacity(m.capacity)
 }
 
-func (m *metricDcgmGpuProfilingPcieTrafficRate) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, directionAttributeValue string) {
+func (m *metricGpuDcgmPcieIo) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, networkIoDirectionAttributeValue string) {
 	if !m.config.Enabled {
 		return
 	}
-	dp := m.data.Gauge().DataPoints().AppendEmpty()
+	dp := m.data.Sum().DataPoints().AppendEmpty()
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
 	dp.SetIntValue(val)
-	dp.Attributes().PutStr("model", modelAttributeValue)
-	dp.Attributes().PutStr("gpu_number", gpuNumberAttributeValue)
-	dp.Attributes().PutStr("uuid", uuidAttributeValue)
-	dp.Attributes().PutStr("direction", directionAttributeValue)
+	dp.Attributes().PutStr("network.io.direction", networkIoDirectionAttributeValue)
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
-func (m *metricDcgmGpuProfilingPcieTrafficRate) updateCapacity() {
-	if m.data.Gauge().DataPoints().Len() > m.capacity {
-		m.capacity = m.data.Gauge().DataPoints().Len()
+func (m *metricGpuDcgmPcieIo) updateCapacity() {
+	if m.data.Sum().DataPoints().Len() > m.capacity {
+		m.capacity = m.data.Sum().DataPoints().Len()
 	}
 }
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
-func (m *metricDcgmGpuProfilingPcieTrafficRate) emit(metrics pmetric.MetricSlice) {
-	if m.config.Enabled && m.data.Gauge().DataPoints().Len() > 0 {
+func (m *metricGpuDcgmPcieIo) emit(metrics pmetric.MetricSlice) {
+	if m.config.Enabled && m.data.Sum().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
 		m.init()
 	}
 }
 
-func newMetricDcgmGpuProfilingPcieTrafficRate(cfg MetricConfig) metricDcgmGpuProfilingPcieTrafficRate {
-	m := metricDcgmGpuProfilingPcieTrafficRate{config: cfg}
+func newMetricGpuDcgmPcieIo(cfg MetricConfig) metricGpuDcgmPcieIo {
+	m := metricGpuDcgmPcieIo{config: cfg}
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -312,22 +688,22 @@ func newMetricDcgmGpuProfilingPcieTrafficRate(cfg MetricConfig) metricDcgmGpuPro
 	return m
 }
 
-type metricDcgmGpuProfilingPipeUtilization struct {
+type metricGpuDcgmPipeUtilization struct {
 	data     pmetric.Metric // data buffer for generated metric.
 	config   MetricConfig   // metric config provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
 
-// init fills dcgm.gpu.profiling.pipe_utilization metric with initial data.
-func (m *metricDcgmGpuProfilingPipeUtilization) init() {
-	m.data.SetName("dcgm.gpu.profiling.pipe_utilization")
+// init fills gpu.dcgm.pipe.utilization metric with initial data.
+func (m *metricGpuDcgmPipeUtilization) init() {
+	m.data.SetName("gpu.dcgm.pipe.utilization")
 	m.data.SetDescription("Fraction of cycles the corresponding GPU pipe was active, averaged over time and all multiprocessors.")
 	m.data.SetUnit("1")
 	m.data.SetEmptyGauge()
 	m.data.Gauge().DataPoints().EnsureCapacity(m.capacity)
 }
 
-func (m *metricDcgmGpuProfilingPipeUtilization) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, pipeAttributeValue string) {
+func (m *metricGpuDcgmPipeUtilization) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64, gpuPipeAttributeValue string) {
 	if !m.config.Enabled {
 		return
 	}
@@ -335,21 +711,18 @@ func (m *metricDcgmGpuProfilingPipeUtilization) recordDataPoint(start pcommon.Ti
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
 	dp.SetDoubleValue(val)
-	dp.Attributes().PutStr("model", modelAttributeValue)
-	dp.Attributes().PutStr("gpu_number", gpuNumberAttributeValue)
-	dp.Attributes().PutStr("uuid", uuidAttributeValue)
-	dp.Attributes().PutStr("pipe", pipeAttributeValue)
+	dp.Attributes().PutStr("gpu.pipe", gpuPipeAttributeValue)
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
-func (m *metricDcgmGpuProfilingPipeUtilization) updateCapacity() {
+func (m *metricGpuDcgmPipeUtilization) updateCapacity() {
 	if m.data.Gauge().DataPoints().Len() > m.capacity {
 		m.capacity = m.data.Gauge().DataPoints().Len()
 	}
 }
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
-func (m *metricDcgmGpuProfilingPipeUtilization) emit(metrics pmetric.MetricSlice) {
+func (m *metricGpuDcgmPipeUtilization) emit(metrics pmetric.MetricSlice) {
 	if m.config.Enabled && m.data.Gauge().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
@@ -357,8 +730,8 @@ func (m *metricDcgmGpuProfilingPipeUtilization) emit(metrics pmetric.MetricSlice
 	}
 }
 
-func newMetricDcgmGpuProfilingPipeUtilization(cfg MetricConfig) metricDcgmGpuProfilingPipeUtilization {
-	m := metricDcgmGpuProfilingPipeUtilization{config: cfg}
+func newMetricGpuDcgmPipeUtilization(cfg MetricConfig) metricGpuDcgmPipeUtilization {
+	m := metricGpuDcgmPipeUtilization{config: cfg}
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -366,22 +739,21 @@ func newMetricDcgmGpuProfilingPipeUtilization(cfg MetricConfig) metricDcgmGpuPro
 	return m
 }
 
-type metricDcgmGpuProfilingSmOccupancy struct {
+type metricGpuDcgmSmOccupancy struct {
 	data     pmetric.Metric // data buffer for generated metric.
 	config   MetricConfig   // metric config provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
 
-// init fills dcgm.gpu.profiling.sm_occupancy metric with initial data.
-func (m *metricDcgmGpuProfilingSmOccupancy) init() {
-	m.data.SetName("dcgm.gpu.profiling.sm_occupancy")
-	m.data.SetDescription("Fraction of resident warps on a multiprocessor relative to the maximum number supported, averaged over time and all multiprocessors.")
+// init fills gpu.dcgm.sm.occupancy metric with initial data.
+func (m *metricGpuDcgmSmOccupancy) init() {
+	m.data.SetName("gpu.dcgm.sm.occupancy")
+	m.data.SetDescription("Fraction of the number of warps resident on a multiprocessor, averaged over all multiprocessors.")
 	m.data.SetUnit("1")
 	m.data.SetEmptyGauge()
-	m.data.Gauge().DataPoints().EnsureCapacity(m.capacity)
 }
 
-func (m *metricDcgmGpuProfilingSmOccupancy) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string) {
+func (m *metricGpuDcgmSmOccupancy) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64) {
 	if !m.config.Enabled {
 		return
 	}
@@ -389,20 +761,17 @@ func (m *metricDcgmGpuProfilingSmOccupancy) recordDataPoint(start pcommon.Timest
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
 	dp.SetDoubleValue(val)
-	dp.Attributes().PutStr("model", modelAttributeValue)
-	dp.Attributes().PutStr("gpu_number", gpuNumberAttributeValue)
-	dp.Attributes().PutStr("uuid", uuidAttributeValue)
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
-func (m *metricDcgmGpuProfilingSmOccupancy) updateCapacity() {
+func (m *metricGpuDcgmSmOccupancy) updateCapacity() {
 	if m.data.Gauge().DataPoints().Len() > m.capacity {
 		m.capacity = m.data.Gauge().DataPoints().Len()
 	}
 }
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
-func (m *metricDcgmGpuProfilingSmOccupancy) emit(metrics pmetric.MetricSlice) {
+func (m *metricGpuDcgmSmOccupancy) emit(metrics pmetric.MetricSlice) {
 	if m.config.Enabled && m.data.Gauge().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
@@ -410,8 +779,8 @@ func (m *metricDcgmGpuProfilingSmOccupancy) emit(metrics pmetric.MetricSlice) {
 	}
 }
 
-func newMetricDcgmGpuProfilingSmOccupancy(cfg MetricConfig) metricDcgmGpuProfilingSmOccupancy {
-	m := metricDcgmGpuProfilingSmOccupancy{config: cfg}
+func newMetricGpuDcgmSmOccupancy(cfg MetricConfig) metricGpuDcgmSmOccupancy {
+	m := metricGpuDcgmSmOccupancy{config: cfg}
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -419,22 +788,21 @@ func newMetricDcgmGpuProfilingSmOccupancy(cfg MetricConfig) metricDcgmGpuProfili
 	return m
 }
 
-type metricDcgmGpuProfilingSmUtilization struct {
+type metricGpuDcgmSmUtilization struct {
 	data     pmetric.Metric // data buffer for generated metric.
 	config   MetricConfig   // metric config provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
 
-// init fills dcgm.gpu.profiling.sm_utilization metric with initial data.
-func (m *metricDcgmGpuProfilingSmUtilization) init() {
-	m.data.SetName("dcgm.gpu.profiling.sm_utilization")
+// init fills gpu.dcgm.sm.utilization metric with initial data.
+func (m *metricGpuDcgmSmUtilization) init() {
+	m.data.SetName("gpu.dcgm.sm.utilization")
 	m.data.SetDescription("Fraction of time at least one warp was active on a multiprocessor, averaged over all multiprocessors.")
 	m.data.SetUnit("1")
 	m.data.SetEmptyGauge()
-	m.data.Gauge().DataPoints().EnsureCapacity(m.capacity)
 }
 
-func (m *metricDcgmGpuProfilingSmUtilization) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string) {
+func (m *metricGpuDcgmSmUtilization) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64) {
 	if !m.config.Enabled {
 		return
 	}
@@ -442,20 +810,17 @@ func (m *metricDcgmGpuProfilingSmUtilization) recordDataPoint(start pcommon.Time
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
 	dp.SetDoubleValue(val)
-	dp.Attributes().PutStr("model", modelAttributeValue)
-	dp.Attributes().PutStr("gpu_number", gpuNumberAttributeValue)
-	dp.Attributes().PutStr("uuid", uuidAttributeValue)
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
-func (m *metricDcgmGpuProfilingSmUtilization) updateCapacity() {
+func (m *metricGpuDcgmSmUtilization) updateCapacity() {
 	if m.data.Gauge().DataPoints().Len() > m.capacity {
 		m.capacity = m.data.Gauge().DataPoints().Len()
 	}
 }
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
-func (m *metricDcgmGpuProfilingSmUtilization) emit(metrics pmetric.MetricSlice) {
+func (m *metricGpuDcgmSmUtilization) emit(metrics pmetric.MetricSlice) {
 	if m.config.Enabled && m.data.Gauge().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
@@ -463,8 +828,8 @@ func (m *metricDcgmGpuProfilingSmUtilization) emit(metrics pmetric.MetricSlice) 
 	}
 }
 
-func newMetricDcgmGpuProfilingSmUtilization(cfg MetricConfig) metricDcgmGpuProfilingSmUtilization {
-	m := metricDcgmGpuProfilingSmUtilization{config: cfg}
+func newMetricGpuDcgmSmUtilization(cfg MetricConfig) metricGpuDcgmSmUtilization {
+	m := metricGpuDcgmSmUtilization{config: cfg}
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -472,22 +837,21 @@ func newMetricDcgmGpuProfilingSmUtilization(cfg MetricConfig) metricDcgmGpuProfi
 	return m
 }
 
-type metricDcgmGpuUtilization struct {
+type metricGpuDcgmTemperature struct {
 	data     pmetric.Metric // data buffer for generated metric.
 	config   MetricConfig   // metric config provided by user.
 	capacity int            // max observed number of data points added to the metric.
 }
 
-// init fills dcgm.gpu.utilization metric with initial data.
-func (m *metricDcgmGpuUtilization) init() {
-	m.data.SetName("dcgm.gpu.utilization")
-	m.data.SetDescription("Fraction of time the GPU was not idle.")
-	m.data.SetUnit("1")
+// init fills gpu.dcgm.temperature metric with initial data.
+func (m *metricGpuDcgmTemperature) init() {
+	m.data.SetName("gpu.dcgm.temperature")
+	m.data.SetDescription("Current temperature readings for the device, in ˚C.")
+	m.data.SetUnit("Cel")
 	m.data.SetEmptyGauge()
-	m.data.Gauge().DataPoints().EnsureCapacity(m.capacity)
 }
 
-func (m *metricDcgmGpuUtilization) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string) {
+func (m *metricGpuDcgmTemperature) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64) {
 	if !m.config.Enabled {
 		return
 	}
@@ -495,20 +859,17 @@ func (m *metricDcgmGpuUtilization) recordDataPoint(start pcommon.Timestamp, ts p
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
 	dp.SetDoubleValue(val)
-	dp.Attributes().PutStr("model", modelAttributeValue)
-	dp.Attributes().PutStr("gpu_number", gpuNumberAttributeValue)
-	dp.Attributes().PutStr("uuid", uuidAttributeValue)
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
-func (m *metricDcgmGpuUtilization) updateCapacity() {
+func (m *metricGpuDcgmTemperature) updateCapacity() {
 	if m.data.Gauge().DataPoints().Len() > m.capacity {
 		m.capacity = m.data.Gauge().DataPoints().Len()
 	}
 }
 
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
-func (m *metricDcgmGpuUtilization) emit(metrics pmetric.MetricSlice) {
+func (m *metricGpuDcgmTemperature) emit(metrics pmetric.MetricSlice) {
 	if m.config.Enabled && m.data.Gauge().DataPoints().Len() > 0 {
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
@@ -516,8 +877,110 @@ func (m *metricDcgmGpuUtilization) emit(metrics pmetric.MetricSlice) {
 	}
 }
 
-func newMetricDcgmGpuUtilization(cfg MetricConfig) metricDcgmGpuUtilization {
-	m := metricDcgmGpuUtilization{config: cfg}
+func newMetricGpuDcgmTemperature(cfg MetricConfig) metricGpuDcgmTemperature {
+	m := metricGpuDcgmTemperature{config: cfg}
+	if cfg.Enabled {
+		m.data = pmetric.NewMetric()
+		m.init()
+	}
+	return m
+}
+
+type metricGpuDcgmUtilization struct {
+	data     pmetric.Metric // data buffer for generated metric.
+	config   MetricConfig   // metric config provided by user.
+	capacity int            // max observed number of data points added to the metric.
+}
+
+// init fills gpu.dcgm.utilization metric with initial data.
+func (m *metricGpuDcgmUtilization) init() {
+	m.data.SetName("gpu.dcgm.utilization")
+	m.data.SetDescription("Ratio of time the graphics engine is active.")
+	m.data.SetUnit("1")
+	m.data.SetEmptyGauge()
+}
+
+func (m *metricGpuDcgmUtilization) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64) {
+	if !m.config.Enabled {
+		return
+	}
+	dp := m.data.Gauge().DataPoints().AppendEmpty()
+	dp.SetStartTimestamp(start)
+	dp.SetTimestamp(ts)
+	dp.SetDoubleValue(val)
+}
+
+// updateCapacity saves max length of data point slices that will be used for the slice capacity.
+func (m *metricGpuDcgmUtilization) updateCapacity() {
+	if m.data.Gauge().DataPoints().Len() > m.capacity {
+		m.capacity = m.data.Gauge().DataPoints().Len()
+	}
+}
+
+// emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
+func (m *metricGpuDcgmUtilization) emit(metrics pmetric.MetricSlice) {
+	if m.config.Enabled && m.data.Gauge().DataPoints().Len() > 0 {
+		m.updateCapacity()
+		m.data.MoveTo(metrics.AppendEmpty())
+		m.init()
+	}
+}
+
+func newMetricGpuDcgmUtilization(cfg MetricConfig) metricGpuDcgmUtilization {
+	m := metricGpuDcgmUtilization{config: cfg}
+	if cfg.Enabled {
+		m.data = pmetric.NewMetric()
+		m.init()
+	}
+	return m
+}
+
+type metricGpuDcgmXidErrors struct {
+	data     pmetric.Metric // data buffer for generated metric.
+	config   MetricConfig   // metric config provided by user.
+	capacity int            // max observed number of data points added to the metric.
+}
+
+// init fills gpu.dcgm.xid_errors metric with initial data.
+func (m *metricGpuDcgmXidErrors) init() {
+	m.data.SetName("gpu.dcgm.xid_errors")
+	m.data.SetDescription("XID errors.")
+	m.data.SetUnit("1")
+	m.data.SetEmptySum()
+	m.data.Sum().SetIsMonotonic(true)
+	m.data.Sum().SetAggregationTemporality(pmetric.AggregationTemporalityCumulative)
+	m.data.Sum().DataPoints().EnsureCapacity(m.capacity)
+}
+
+func (m *metricGpuDcgmXidErrors) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, gpuErrorXidAttributeValue int64) {
+	if !m.config.Enabled {
+		return
+	}
+	dp := m.data.Sum().DataPoints().AppendEmpty()
+	dp.SetStartTimestamp(start)
+	dp.SetTimestamp(ts)
+	dp.SetIntValue(val)
+	dp.Attributes().PutInt("gpu.error.xid", gpuErrorXidAttributeValue)
+}
+
+// updateCapacity saves max length of data point slices that will be used for the slice capacity.
+func (m *metricGpuDcgmXidErrors) updateCapacity() {
+	if m.data.Sum().DataPoints().Len() > m.capacity {
+		m.capacity = m.data.Sum().DataPoints().Len()
+	}
+}
+
+// emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
+func (m *metricGpuDcgmXidErrors) emit(metrics pmetric.MetricSlice) {
+	if m.config.Enabled && m.data.Sum().DataPoints().Len() > 0 {
+		m.updateCapacity()
+		m.data.MoveTo(metrics.AppendEmpty())
+		m.init()
+	}
+}
+
+func newMetricGpuDcgmXidErrors(cfg MetricConfig) metricGpuDcgmXidErrors {
+	m := metricGpuDcgmXidErrors{config: cfg}
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -533,14 +996,24 @@ type MetricsBuilder struct {
 	metricsCapacity                         int                  // maximum observed number of metrics per resource.
 	metricsBuffer                           pmetric.Metrics      // accumulates metrics data before emitting.
 	buildInfo                               component.BuildInfo  // contains version information.
-	metricDcgmGpuMemoryBytesUsed            metricDcgmGpuMemoryBytesUsed
-	metricDcgmGpuProfilingDramUtilization   metricDcgmGpuProfilingDramUtilization
-	metricDcgmGpuProfilingNvlinkTrafficRate metricDcgmGpuProfilingNvlinkTrafficRate
-	metricDcgmGpuProfilingPcieTrafficRate   metricDcgmGpuProfilingPcieTrafficRate
-	metricDcgmGpuProfilingPipeUtilization   metricDcgmGpuProfilingPipeUtilization
-	metricDcgmGpuProfilingSmOccupancy       metricDcgmGpuProfilingSmOccupancy
-	metricDcgmGpuProfilingSmUtilization     metricDcgmGpuProfilingSmUtilization
-	metricDcgmGpuUtilization                metricDcgmGpuUtilization
+	resourceAttributeIncludeFilter          map[string]filter.Filter
+	resourceAttributeExcludeFilter          map[string]filter.Filter
+	metricGpuDcgmClockFrequency             metricGpuDcgmClockFrequency
+	metricGpuDcgmClockThrottleDurationTime  metricGpuDcgmClockThrottleDurationTime
+	metricGpuDcgmCodecDecoderUtilization    metricGpuDcgmCodecDecoderUtilization
+	metricGpuDcgmCodecEncoderUtilization    metricGpuDcgmCodecEncoderUtilization
+	metricGpuDcgmEccErrors                  metricGpuDcgmEccErrors
+	metricGpuDcgmEnergyConsumption          metricGpuDcgmEnergyConsumption
+	metricGpuDcgmMemoryBandwidthUtilization metricGpuDcgmMemoryBandwidthUtilization
+	metricGpuDcgmMemoryBytesUsed            metricGpuDcgmMemoryBytesUsed
+	metricGpuDcgmNvlinkIo                   metricGpuDcgmNvlinkIo
+	metricGpuDcgmPcieIo                     metricGpuDcgmPcieIo
+	metricGpuDcgmPipeUtilization            metricGpuDcgmPipeUtilization
+	metricGpuDcgmSmOccupancy                metricGpuDcgmSmOccupancy
+	metricGpuDcgmSmUtilization              metricGpuDcgmSmUtilization
+	metricGpuDcgmTemperature                metricGpuDcgmTemperature
+	metricGpuDcgmUtilization                metricGpuDcgmUtilization
+	metricGpuDcgmXidErrors                  metricGpuDcgmXidErrors
 }
 
 // MetricBuilderOption applies changes to default metrics builder.
@@ -566,20 +1039,53 @@ func NewMetricsBuilder(mbc MetricsBuilderConfig, settings receiver.Settings, opt
 		startTime:                               pcommon.NewTimestampFromTime(time.Now()),
 		metricsBuffer:                           pmetric.NewMetrics(),
 		buildInfo:                               settings.BuildInfo,
-		metricDcgmGpuMemoryBytesUsed:            newMetricDcgmGpuMemoryBytesUsed(mbc.Metrics.DcgmGpuMemoryBytesUsed),
-		metricDcgmGpuProfilingDramUtilization:   newMetricDcgmGpuProfilingDramUtilization(mbc.Metrics.DcgmGpuProfilingDramUtilization),
-		metricDcgmGpuProfilingNvlinkTrafficRate: newMetricDcgmGpuProfilingNvlinkTrafficRate(mbc.Metrics.DcgmGpuProfilingNvlinkTrafficRate),
-		metricDcgmGpuProfilingPcieTrafficRate:   newMetricDcgmGpuProfilingPcieTrafficRate(mbc.Metrics.DcgmGpuProfilingPcieTrafficRate),
-		metricDcgmGpuProfilingPipeUtilization:   newMetricDcgmGpuProfilingPipeUtilization(mbc.Metrics.DcgmGpuProfilingPipeUtilization),
-		metricDcgmGpuProfilingSmOccupancy:       newMetricDcgmGpuProfilingSmOccupancy(mbc.Metrics.DcgmGpuProfilingSmOccupancy),
-		metricDcgmGpuProfilingSmUtilization:     newMetricDcgmGpuProfilingSmUtilization(mbc.Metrics.DcgmGpuProfilingSmUtilization),
-		metricDcgmGpuUtilization:                newMetricDcgmGpuUtilization(mbc.Metrics.DcgmGpuUtilization),
+		metricGpuDcgmClockFrequency:             newMetricGpuDcgmClockFrequency(mbc.Metrics.GpuDcgmClockFrequency),
+		metricGpuDcgmClockThrottleDurationTime:  newMetricGpuDcgmClockThrottleDurationTime(mbc.Metrics.GpuDcgmClockThrottleDurationTime),
+		metricGpuDcgmCodecDecoderUtilization:    newMetricGpuDcgmCodecDecoderUtilization(mbc.Metrics.GpuDcgmCodecDecoderUtilization),
+		metricGpuDcgmCodecEncoderUtilization:    newMetricGpuDcgmCodecEncoderUtilization(mbc.Metrics.GpuDcgmCodecEncoderUtilization),
+		metricGpuDcgmEccErrors:                  newMetricGpuDcgmEccErrors(mbc.Metrics.GpuDcgmEccErrors),
+		metricGpuDcgmEnergyConsumption:          newMetricGpuDcgmEnergyConsumption(mbc.Metrics.GpuDcgmEnergyConsumption),
+		metricGpuDcgmMemoryBandwidthUtilization: newMetricGpuDcgmMemoryBandwidthUtilization(mbc.Metrics.GpuDcgmMemoryBandwidthUtilization),
+		metricGpuDcgmMemoryBytesUsed:            newMetricGpuDcgmMemoryBytesUsed(mbc.Metrics.GpuDcgmMemoryBytesUsed),
+		metricGpuDcgmNvlinkIo:                   newMetricGpuDcgmNvlinkIo(mbc.Metrics.GpuDcgmNvlinkIo),
+		metricGpuDcgmPcieIo:                     newMetricGpuDcgmPcieIo(mbc.Metrics.GpuDcgmPcieIo),
+		metricGpuDcgmPipeUtilization:            newMetricGpuDcgmPipeUtilization(mbc.Metrics.GpuDcgmPipeUtilization),
+		metricGpuDcgmSmOccupancy:                newMetricGpuDcgmSmOccupancy(mbc.Metrics.GpuDcgmSmOccupancy),
+		metricGpuDcgmSmUtilization:              newMetricGpuDcgmSmUtilization(mbc.Metrics.GpuDcgmSmUtilization),
+		metricGpuDcgmTemperature:                newMetricGpuDcgmTemperature(mbc.Metrics.GpuDcgmTemperature),
+		metricGpuDcgmUtilization:                newMetricGpuDcgmUtilization(mbc.Metrics.GpuDcgmUtilization),
+		metricGpuDcgmXidErrors:                  newMetricGpuDcgmXidErrors(mbc.Metrics.GpuDcgmXidErrors),
+		resourceAttributeIncludeFilter:          make(map[string]filter.Filter),
+		resourceAttributeExcludeFilter:          make(map[string]filter.Filter),
+	}
+	if mbc.ResourceAttributes.GpuModel.MetricsInclude != nil {
+		mb.resourceAttributeIncludeFilter["gpu.model"] = filter.CreateFilter(mbc.ResourceAttributes.GpuModel.MetricsInclude)
+	}
+	if mbc.ResourceAttributes.GpuModel.MetricsExclude != nil {
+		mb.resourceAttributeExcludeFilter["gpu.model"] = filter.CreateFilter(mbc.ResourceAttributes.GpuModel.MetricsExclude)
+	}
+	if mbc.ResourceAttributes.GpuNumber.MetricsInclude != nil {
+		mb.resourceAttributeIncludeFilter["gpu.number"] = filter.CreateFilter(mbc.ResourceAttributes.GpuNumber.MetricsInclude)
+	}
+	if mbc.ResourceAttributes.GpuNumber.MetricsExclude != nil {
+		mb.resourceAttributeExcludeFilter["gpu.number"] = filter.CreateFilter(mbc.ResourceAttributes.GpuNumber.MetricsExclude)
+	}
+	if mbc.ResourceAttributes.GpuUUID.MetricsInclude != nil {
+		mb.resourceAttributeIncludeFilter["gpu.uuid"] = filter.CreateFilter(mbc.ResourceAttributes.GpuUUID.MetricsInclude)
+	}
+	if mbc.ResourceAttributes.GpuUUID.MetricsExclude != nil {
+		mb.resourceAttributeExcludeFilter["gpu.uuid"] = filter.CreateFilter(mbc.ResourceAttributes.GpuUUID.MetricsExclude)
 	}
 
 	for _, op := range options {
 		op.apply(mb)
 	}
 	return mb
+}
+
+// NewResourceBuilder returns a new resource builder that should be used to build a resource associated with for the emitted metrics.
+func (mb *MetricsBuilder) NewResourceBuilder() *ResourceBuilder {
+	return NewResourceBuilder(mb.config.ResourceAttributes)
 }
 
 // updateCapacity updates max length of metrics and resource attributes that will be used for the slice capacity.
@@ -639,17 +1145,35 @@ func (mb *MetricsBuilder) EmitForResource(options ...ResourceMetricsOption) {
 	ils.Scope().SetName(ScopeName)
 	ils.Scope().SetVersion(mb.buildInfo.Version)
 	ils.Metrics().EnsureCapacity(mb.metricsCapacity)
-	mb.metricDcgmGpuMemoryBytesUsed.emit(ils.Metrics())
-	mb.metricDcgmGpuProfilingDramUtilization.emit(ils.Metrics())
-	mb.metricDcgmGpuProfilingNvlinkTrafficRate.emit(ils.Metrics())
-	mb.metricDcgmGpuProfilingPcieTrafficRate.emit(ils.Metrics())
-	mb.metricDcgmGpuProfilingPipeUtilization.emit(ils.Metrics())
-	mb.metricDcgmGpuProfilingSmOccupancy.emit(ils.Metrics())
-	mb.metricDcgmGpuProfilingSmUtilization.emit(ils.Metrics())
-	mb.metricDcgmGpuUtilization.emit(ils.Metrics())
+	mb.metricGpuDcgmClockFrequency.emit(ils.Metrics())
+	mb.metricGpuDcgmClockThrottleDurationTime.emit(ils.Metrics())
+	mb.metricGpuDcgmCodecDecoderUtilization.emit(ils.Metrics())
+	mb.metricGpuDcgmCodecEncoderUtilization.emit(ils.Metrics())
+	mb.metricGpuDcgmEccErrors.emit(ils.Metrics())
+	mb.metricGpuDcgmEnergyConsumption.emit(ils.Metrics())
+	mb.metricGpuDcgmMemoryBandwidthUtilization.emit(ils.Metrics())
+	mb.metricGpuDcgmMemoryBytesUsed.emit(ils.Metrics())
+	mb.metricGpuDcgmNvlinkIo.emit(ils.Metrics())
+	mb.metricGpuDcgmPcieIo.emit(ils.Metrics())
+	mb.metricGpuDcgmPipeUtilization.emit(ils.Metrics())
+	mb.metricGpuDcgmSmOccupancy.emit(ils.Metrics())
+	mb.metricGpuDcgmSmUtilization.emit(ils.Metrics())
+	mb.metricGpuDcgmTemperature.emit(ils.Metrics())
+	mb.metricGpuDcgmUtilization.emit(ils.Metrics())
+	mb.metricGpuDcgmXidErrors.emit(ils.Metrics())
 
 	for _, op := range options {
 		op.apply(rm)
+	}
+	for attr, filter := range mb.resourceAttributeIncludeFilter {
+		if val, ok := rm.Resource().Attributes().Get(attr); ok && !filter.Matches(val.AsString()) {
+			return
+		}
+	}
+	for attr, filter := range mb.resourceAttributeExcludeFilter {
+		if val, ok := rm.Resource().Attributes().Get(attr); ok && filter.Matches(val.AsString()) {
+			return
+		}
 	}
 
 	if ils.Metrics().Len() > 0 {
@@ -668,44 +1192,84 @@ func (mb *MetricsBuilder) Emit(options ...ResourceMetricsOption) pmetric.Metrics
 	return metrics
 }
 
-// RecordDcgmGpuMemoryBytesUsedDataPoint adds a data point to dcgm.gpu.memory.bytes_used metric.
-func (mb *MetricsBuilder) RecordDcgmGpuMemoryBytesUsedDataPoint(ts pcommon.Timestamp, val int64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, memoryStateAttributeValue AttributeMemoryState) {
-	mb.metricDcgmGpuMemoryBytesUsed.recordDataPoint(mb.startTime, ts, val, modelAttributeValue, gpuNumberAttributeValue, uuidAttributeValue, memoryStateAttributeValue.String())
+// RecordGpuDcgmClockFrequencyDataPoint adds a data point to gpu.dcgm.clock.frequency metric.
+func (mb *MetricsBuilder) RecordGpuDcgmClockFrequencyDataPoint(ts pcommon.Timestamp, val float64) {
+	mb.metricGpuDcgmClockFrequency.recordDataPoint(mb.startTime, ts, val)
 }
 
-// RecordDcgmGpuProfilingDramUtilizationDataPoint adds a data point to dcgm.gpu.profiling.dram_utilization metric.
-func (mb *MetricsBuilder) RecordDcgmGpuProfilingDramUtilizationDataPoint(ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string) {
-	mb.metricDcgmGpuProfilingDramUtilization.recordDataPoint(mb.startTime, ts, val, modelAttributeValue, gpuNumberAttributeValue, uuidAttributeValue)
+// RecordGpuDcgmClockThrottleDurationTimeDataPoint adds a data point to gpu.dcgm.clock.throttle_duration.time metric.
+func (mb *MetricsBuilder) RecordGpuDcgmClockThrottleDurationTimeDataPoint(ts pcommon.Timestamp, val float64, gpuClockViolationAttributeValue AttributeGpuClockViolation) {
+	mb.metricGpuDcgmClockThrottleDurationTime.recordDataPoint(mb.startTime, ts, val, gpuClockViolationAttributeValue.String())
 }
 
-// RecordDcgmGpuProfilingNvlinkTrafficRateDataPoint adds a data point to dcgm.gpu.profiling.nvlink_traffic_rate metric.
-func (mb *MetricsBuilder) RecordDcgmGpuProfilingNvlinkTrafficRateDataPoint(ts pcommon.Timestamp, val int64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, directionAttributeValue AttributeDirection) {
-	mb.metricDcgmGpuProfilingNvlinkTrafficRate.recordDataPoint(mb.startTime, ts, val, modelAttributeValue, gpuNumberAttributeValue, uuidAttributeValue, directionAttributeValue.String())
+// RecordGpuDcgmCodecDecoderUtilizationDataPoint adds a data point to gpu.dcgm.codec.decoder.utilization metric.
+func (mb *MetricsBuilder) RecordGpuDcgmCodecDecoderUtilizationDataPoint(ts pcommon.Timestamp, val float64) {
+	mb.metricGpuDcgmCodecDecoderUtilization.recordDataPoint(mb.startTime, ts, val)
 }
 
-// RecordDcgmGpuProfilingPcieTrafficRateDataPoint adds a data point to dcgm.gpu.profiling.pcie_traffic_rate metric.
-func (mb *MetricsBuilder) RecordDcgmGpuProfilingPcieTrafficRateDataPoint(ts pcommon.Timestamp, val int64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, directionAttributeValue AttributeDirection) {
-	mb.metricDcgmGpuProfilingPcieTrafficRate.recordDataPoint(mb.startTime, ts, val, modelAttributeValue, gpuNumberAttributeValue, uuidAttributeValue, directionAttributeValue.String())
+// RecordGpuDcgmCodecEncoderUtilizationDataPoint adds a data point to gpu.dcgm.codec.encoder.utilization metric.
+func (mb *MetricsBuilder) RecordGpuDcgmCodecEncoderUtilizationDataPoint(ts pcommon.Timestamp, val float64) {
+	mb.metricGpuDcgmCodecEncoderUtilization.recordDataPoint(mb.startTime, ts, val)
 }
 
-// RecordDcgmGpuProfilingPipeUtilizationDataPoint adds a data point to dcgm.gpu.profiling.pipe_utilization metric.
-func (mb *MetricsBuilder) RecordDcgmGpuProfilingPipeUtilizationDataPoint(ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, pipeAttributeValue AttributePipe) {
-	mb.metricDcgmGpuProfilingPipeUtilization.recordDataPoint(mb.startTime, ts, val, modelAttributeValue, gpuNumberAttributeValue, uuidAttributeValue, pipeAttributeValue.String())
+// RecordGpuDcgmEccErrorsDataPoint adds a data point to gpu.dcgm.ecc_errors metric.
+func (mb *MetricsBuilder) RecordGpuDcgmEccErrorsDataPoint(ts pcommon.Timestamp, val int64, gpuErrorTypeAttributeValue AttributeGpuErrorType) {
+	mb.metricGpuDcgmEccErrors.recordDataPoint(mb.startTime, ts, val, gpuErrorTypeAttributeValue.String())
 }
 
-// RecordDcgmGpuProfilingSmOccupancyDataPoint adds a data point to dcgm.gpu.profiling.sm_occupancy metric.
-func (mb *MetricsBuilder) RecordDcgmGpuProfilingSmOccupancyDataPoint(ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string) {
-	mb.metricDcgmGpuProfilingSmOccupancy.recordDataPoint(mb.startTime, ts, val, modelAttributeValue, gpuNumberAttributeValue, uuidAttributeValue)
+// RecordGpuDcgmEnergyConsumptionDataPoint adds a data point to gpu.dcgm.energy_consumption metric.
+func (mb *MetricsBuilder) RecordGpuDcgmEnergyConsumptionDataPoint(ts pcommon.Timestamp, val float64) {
+	mb.metricGpuDcgmEnergyConsumption.recordDataPoint(mb.startTime, ts, val)
 }
 
-// RecordDcgmGpuProfilingSmUtilizationDataPoint adds a data point to dcgm.gpu.profiling.sm_utilization metric.
-func (mb *MetricsBuilder) RecordDcgmGpuProfilingSmUtilizationDataPoint(ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string) {
-	mb.metricDcgmGpuProfilingSmUtilization.recordDataPoint(mb.startTime, ts, val, modelAttributeValue, gpuNumberAttributeValue, uuidAttributeValue)
+// RecordGpuDcgmMemoryBandwidthUtilizationDataPoint adds a data point to gpu.dcgm.memory.bandwidth_utilization metric.
+func (mb *MetricsBuilder) RecordGpuDcgmMemoryBandwidthUtilizationDataPoint(ts pcommon.Timestamp, val float64) {
+	mb.metricGpuDcgmMemoryBandwidthUtilization.recordDataPoint(mb.startTime, ts, val)
 }
 
-// RecordDcgmGpuUtilizationDataPoint adds a data point to dcgm.gpu.utilization metric.
-func (mb *MetricsBuilder) RecordDcgmGpuUtilizationDataPoint(ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string) {
-	mb.metricDcgmGpuUtilization.recordDataPoint(mb.startTime, ts, val, modelAttributeValue, gpuNumberAttributeValue, uuidAttributeValue)
+// RecordGpuDcgmMemoryBytesUsedDataPoint adds a data point to gpu.dcgm.memory.bytes_used metric.
+func (mb *MetricsBuilder) RecordGpuDcgmMemoryBytesUsedDataPoint(ts pcommon.Timestamp, val int64, gpuMemoryStateAttributeValue AttributeGpuMemoryState) {
+	mb.metricGpuDcgmMemoryBytesUsed.recordDataPoint(mb.startTime, ts, val, gpuMemoryStateAttributeValue.String())
+}
+
+// RecordGpuDcgmNvlinkIoDataPoint adds a data point to gpu.dcgm.nvlink.io metric.
+func (mb *MetricsBuilder) RecordGpuDcgmNvlinkIoDataPoint(ts pcommon.Timestamp, val int64, networkIoDirectionAttributeValue AttributeNetworkIoDirection) {
+	mb.metricGpuDcgmNvlinkIo.recordDataPoint(mb.startTime, ts, val, networkIoDirectionAttributeValue.String())
+}
+
+// RecordGpuDcgmPcieIoDataPoint adds a data point to gpu.dcgm.pcie.io metric.
+func (mb *MetricsBuilder) RecordGpuDcgmPcieIoDataPoint(ts pcommon.Timestamp, val int64, networkIoDirectionAttributeValue AttributeNetworkIoDirection) {
+	mb.metricGpuDcgmPcieIo.recordDataPoint(mb.startTime, ts, val, networkIoDirectionAttributeValue.String())
+}
+
+// RecordGpuDcgmPipeUtilizationDataPoint adds a data point to gpu.dcgm.pipe.utilization metric.
+func (mb *MetricsBuilder) RecordGpuDcgmPipeUtilizationDataPoint(ts pcommon.Timestamp, val float64, gpuPipeAttributeValue AttributeGpuPipe) {
+	mb.metricGpuDcgmPipeUtilization.recordDataPoint(mb.startTime, ts, val, gpuPipeAttributeValue.String())
+}
+
+// RecordGpuDcgmSmOccupancyDataPoint adds a data point to gpu.dcgm.sm.occupancy metric.
+func (mb *MetricsBuilder) RecordGpuDcgmSmOccupancyDataPoint(ts pcommon.Timestamp, val float64) {
+	mb.metricGpuDcgmSmOccupancy.recordDataPoint(mb.startTime, ts, val)
+}
+
+// RecordGpuDcgmSmUtilizationDataPoint adds a data point to gpu.dcgm.sm.utilization metric.
+func (mb *MetricsBuilder) RecordGpuDcgmSmUtilizationDataPoint(ts pcommon.Timestamp, val float64) {
+	mb.metricGpuDcgmSmUtilization.recordDataPoint(mb.startTime, ts, val)
+}
+
+// RecordGpuDcgmTemperatureDataPoint adds a data point to gpu.dcgm.temperature metric.
+func (mb *MetricsBuilder) RecordGpuDcgmTemperatureDataPoint(ts pcommon.Timestamp, val float64) {
+	mb.metricGpuDcgmTemperature.recordDataPoint(mb.startTime, ts, val)
+}
+
+// RecordGpuDcgmUtilizationDataPoint adds a data point to gpu.dcgm.utilization metric.
+func (mb *MetricsBuilder) RecordGpuDcgmUtilizationDataPoint(ts pcommon.Timestamp, val float64) {
+	mb.metricGpuDcgmUtilization.recordDataPoint(mb.startTime, ts, val)
+}
+
+// RecordGpuDcgmXidErrorsDataPoint adds a data point to gpu.dcgm.xid_errors metric.
+func (mb *MetricsBuilder) RecordGpuDcgmXidErrorsDataPoint(ts pcommon.Timestamp, val int64, gpuErrorXidAttributeValue int64) {
+	mb.metricGpuDcgmXidErrors.recordDataPoint(mb.startTime, ts, val, gpuErrorXidAttributeValue)
 }
 
 // Reset resets metrics builder to its initial state. It should be used when external metrics source is restarted,

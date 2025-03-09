@@ -1,0 +1,38 @@
+receivers:
+  nop:
+
+processors:
+  nop:
+
+exporters:
+  # We're testing whether we can populate all parameters.
+  # Note that not all parameters are required.
+  googleservicecontrol/all_params:
+    service_name: "test.service.name"
+    consumer_project: "my-project-id"
+    service_control_endpoint: "test.googleapis.com:443"
+    service_config_id: "111-222-333"
+    impersonate_service_account: "serviceAccount@myproject.iam.gserviceaccount.com"
+    use_raw_sc_client: "false"
+    enable_debug_headers: false
+    timeout: "10s"
+    retry_on_failure:
+      enabled: true
+      initial_interval: "5s"
+      max_interval: "10s"
+      max_elapsed_time: "200s"
+    sending_queue:
+      enabled: true
+      num_consumers: 5
+      queue_size: 1000
+
+  googleservicecontrol/required_params:
+    service_name: "test.service.name"
+    consumer_project: "my-project-id"
+
+service:
+  pipelines:
+    metrics:
+      receivers: [nop]
+      processors: [nop]
+      exporters: [googleservicecontrol/all_params]

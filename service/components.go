@@ -40,6 +40,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/memcachedreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/mysqlreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/nginxreceiver"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/otlpjsonfilereceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/postgresqlreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/rabbitmqreceiver"
@@ -108,6 +109,7 @@ func components() (otelcol.Factories, error) {
 		mysqlreceiver.NewFactory(),
 		nginxreceiver.NewFactory(),
 		nvmlreceiver.NewFactory(),
+		otlpjsonfilereceiver.NewFactory(),
 		postgresqlreceiver.NewFactory(),
 		prometheusreceiver.NewFactory(),
 		rabbitmqreceiver.NewFactory(),

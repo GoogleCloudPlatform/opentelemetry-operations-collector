@@ -21,6 +21,7 @@ A curated distribution of the OpenTelemetry Collector for use in GCP.
 | opencensus | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/opencensusreceiver/README.md) |
 | otelarrow | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/otelarrowreceiver/README.md) |
 | otlp | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/receiver/otlpreceiver/README.md) |
+| otlpjsonfile | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/otlpjsonfilereceiver/README.md) |
 | prometheus | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/prometheusreceiver/README.md) |
 | receivercreator | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/receivercreator/README.md) |
 | zipkin | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/zipkinreceiver/README.md) |

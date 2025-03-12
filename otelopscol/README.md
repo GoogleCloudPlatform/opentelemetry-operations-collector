@@ -19,11 +19,13 @@
 | hostmetrics | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/hostmetricsreceiver/README.md) |
 | iis | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/iisreceiver/README.md) |
 | jmx | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/jmxreceiver/README.md) |
+| journald | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/journaldreceiver/README.md) |
 | memcached | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/memcachedreceiver/README.md) |
 | mongodb | [docs](No docs linked for component) |
 | mysql | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/mysqlreceiver/README.md) |
 | nginx | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/nginxreceiver/README.md) |
 | nvml | [docs](No docs linked for component) |
+| otlpjsonfile | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/otlpjsonfilereceiver/README.md) |
 | postgresql | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/postgresqlreceiver/README.md) |
 | prometheus | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/prometheusreceiver/README.md) |
 | rabbitmq | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/rabbitmqreceiver/README.md) |

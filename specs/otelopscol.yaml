@@ -50,6 +50,8 @@ components:
     - mongodb
     - nvml
     - varnish
+    - journald
+    - otlpjsonfile
   processors:
     - cumulativetodelta
     - deltatorate

@@ -180,14 +180,14 @@ func (c *RegistryComponent) GetOCBComponent() OCBManifestComponent {
 // details.
 type RegistryComponents map[string]*RegistryComponent
 
-// LoadAll will take a list of component names and load them
+// LoadAllComponents will take a list of component names and load them
 // from the registry, attaching the appropriate version tag.
-func (rl RegistryComponents) LoadAll(names []string, version string, stableVersion string, contribVersion string) (RegistryComponents, RegistryLoadError) {
+func (rl RegistryComponents) LoadAllComponents(names []string, version string, stableVersion string, contribVersion string) (RegistryComponents, RegistryLoadError) {
 	components := RegistryComponents{}
 	errs := make(RegistryLoadError)
 
 	for _, name := range names {
-		entry, err := rl.Load(name)
+		entry, err := rl.LoadComponent(name)
 		if err != nil {
 			errs[name] = err
 			continue
@@ -205,8 +205,8 @@ func (rl RegistryComponents) LoadAll(names []string, version string, stableVersi
 	return components, errs
 }
 
-// Load will load a component from the registry.
-func (rl RegistryComponents) Load(name string) (*RegistryComponent, error) {
+// LoadComponent will load a component from the registry.
+func (rl RegistryComponents) LoadComponent(name string) (*RegistryComponent, error) {
 	entry, ok := rl[name]
 	if !ok {
 		return nil, ErrComponentNotFound

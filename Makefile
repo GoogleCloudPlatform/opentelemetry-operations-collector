@@ -45,6 +45,12 @@ generate-components:
 
 RUN_DISTROGEN=go run ./cmd/distrogen
 
+.PHONY: gen-all
+gen-all: gen-google-otel gen-otelopscol
+
+.PHONY: regen-all
+regen-all: regen-google-otel regen-otelopscol
+
 GEN_GOOGLE_OTEL=$(RUN_DISTROGEN) -registry ./registries/operations-collector-registry.yaml -spec ./specs/google-otel.yaml -custom_templates ./templates/google-otel
 .PHONY: gen-google-otel
 gen-google-otel:

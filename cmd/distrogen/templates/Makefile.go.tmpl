@@ -78,7 +78,7 @@ collector-build: clean-collector $(COLLECTOR_BINARY_NAME)
 # Using OCB and the local manifest file, build a collector.
 $(COLLECTOR_BINARY_NAME): $(OCB_BIN)
 	PATH="$(GO_BIN_DIR):$PATH" $(OCB_BIN) --skip-compilation --verbose --config manifest.yaml
-	cd _build && \
+	cd $(COLLECTOR_BUILD_TEMP_DIR) && \
 		GOWORK=off \
 		CGO_ENABLED=$(COLLECTOR_CGO) \
 		$(GO_BIN) build \
@@ -87,21 +87,24 @@ $(COLLECTOR_BINARY_NAME): $(OCB_BIN)
 			--ldflags="-s -w $(COLLECTOR_LD_FLAGS)" \
 			-o ../{{ .BinaryName }} \
 			.
-	rm -rf $(COLLECTOR_BUILD_TEMP_DIR)
+	$(MAKE) clean-build-dir
 
 .PHONY: collector-package-list
 collector-package-list: $(OCB_BIN)
 	PATH="$(GO_BIN_DIR):${PATH}" GOWORK=off CGO_ENABLED=$(COLLECTOR_CGO) $(OCB_BIN) --ldflags="$(COLLECTOR_LD_FLAGS)" --verbose --skip-compilation --config manifest.yaml
 	cd $(COLLECTOR_BUILD_TEMP_DIR) && \
-		go list -deps -f {{`'{{ .ImportPath }} {{ .Module }}'`}} ./... > ../packages.txt
+		GOWORK=off go list -deps -f {{`'{{ .ImportPath }} {{ .Module }}'`}} ./... > ../packages.txt
 	grep -v '<nil>' packages.txt | sort -u > packages.txt
-	rm packages.txt
 	rm -rf $(COLLECTOR_BUILD_TEMP_DIR)
 
 # Delete any existing built collector binary.
 .PHONY: clean-collector
-clean-collector:
+clean-collector: clean-build-dir
 	rm -f $(COLLECTOR_BINARY_NAME)
+
+.PHONY: clean-build-dir
+clean-build-dir:
+	rm -rf $(COLLECTOR_BUILD_TEMP_DIR)
 
 ###################
 # Tools

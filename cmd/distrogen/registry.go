@@ -18,6 +18,7 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"strings"
 
@@ -32,12 +33,12 @@ var ErrComponentNotFound = errors.New("component not found")
 // Registry is a collection of components that can be used in
 // a collector distribution.
 type Registry struct {
-	Receivers  RegistryList `yaml:"receivers"`
-	Processors RegistryList `yaml:"processors"`
-	Exporters  RegistryList `yaml:"exporters"`
-	Connectors RegistryList `yaml:"connectors"`
-	Extensions RegistryList `yaml:"extensions"`
-	Providers  RegistryList `yaml:"providers"`
+	Receivers  RegistryComponents `yaml:"receivers"`
+	Processors RegistryComponents `yaml:"processors"`
+	Exporters  RegistryComponents `yaml:"exporters"`
+	Connectors RegistryComponents `yaml:"connectors"`
+	Extensions RegistryComponents `yaml:"extensions"`
+	Providers  RegistryComponents `yaml:"providers"`
 }
 
 // LoadEmbeddedRegistry will load the registry embedded in the
@@ -55,7 +56,9 @@ func LoadRegistry(path string) (*Registry, error) {
 	return yamlUnmarshalFromFile[Registry](path)
 }
 
-// Merge will merge another registry into this one.
+// Merge will merge another registry into this one. If the provided
+// registry contains any of the same entry keys as the current
+// registry, it will be overridden.
 func (r *Registry) Merge(r2 *Registry) {
 	mapMerge(r.Receivers, r2.Receivers)
 	mapMerge(r.Processors, r2.Processors)
@@ -63,19 +66,6 @@ func (r *Registry) Merge(r2 *Registry) {
 	mapMerge(r.Connectors, r2.Connectors)
 	mapMerge(r.Extensions, r2.Extensions)
 	mapMerge(r.Providers, r2.Providers)
-}
-
-// RegistryList is a map of registry component names to component
-// details.
-type RegistryList map[string]*RegistryComponent
-
-// Load will load a component from the registry.
-func (rl RegistryList) Load(name string) (*RegistryComponent, error) {
-	entry, ok := rl[name]
-	if !ok {
-		return nil, ErrComponentNotFound
-	}
-	return entry, nil
 }
 
 // RegistryLoadError is a combination of errors for loading a
@@ -91,31 +81,6 @@ func (e RegistryLoadError) Error() string {
 		msg += fmt.Sprintf("%v\n", combinedErr)
 	}
 	return msg
-}
-
-// LoadAll will take a list of component names and load them
-// from the registry, attaching the appropriate version tag.
-func (rl RegistryList) LoadAll(names []string, version string, stableVersion string, contribVersion string) (RegistryComponents, RegistryLoadError) {
-	components := RegistryComponents{}
-	errs := make(RegistryLoadError)
-
-	for _, name := range names {
-		entry, err := rl.Load(name)
-		if err != nil {
-			errs[name] = err
-			continue
-		}
-
-		entry.GoMod.Tag = "v" + version
-		if entry.Stable {
-			entry.GoMod.Tag = "v" + stableVersion
-		} else if entry.IsContrib() {
-			entry.GoMod.Tag = "v" + contribVersion
-		}
-		components[name] = entry
-	}
-
-	return components, errs
 }
 
 // GoModuleID is intended for stringifying/unmarshalling to
@@ -139,6 +104,7 @@ func (gm *GoModuleID) String() string {
 		// Otherwise if there is no tag specified, then it is assumed that this module
 		// will be replaced. Use the tag v0.0.0 since it will be ignored
 		// in the replace anyway.
+		logger.Debug("no tag detected for module, using v0.0.0", slog.String("module", gm.URL))
 		tag = "v0.0.0"
 	}
 	return fmt.Sprintf("%s %s", gm.URL, tag)
@@ -213,6 +179,40 @@ func (c *RegistryComponent) GetOCBComponent() OCBManifestComponent {
 // RegistryComponents is a map of registry component names to component
 // details.
 type RegistryComponents map[string]*RegistryComponent
+
+// LoadAll will take a list of component names and load them
+// from the registry, attaching the appropriate version tag.
+func (rl RegistryComponents) LoadAll(names []string, version string, stableVersion string, contribVersion string) (RegistryComponents, RegistryLoadError) {
+	components := RegistryComponents{}
+	errs := make(RegistryLoadError)
+
+	for _, name := range names {
+		entry, err := rl.Load(name)
+		if err != nil {
+			errs[name] = err
+			continue
+		}
+
+		entry.GoMod.Tag = "v" + version
+		if entry.Stable {
+			entry.GoMod.Tag = "v" + stableVersion
+		} else if entry.IsContrib() {
+			entry.GoMod.Tag = "v" + contribVersion
+		}
+		components[name] = entry
+	}
+
+	return components, errs
+}
+
+// Load will load a component from the registry.
+func (rl RegistryComponents) Load(name string) (*RegistryComponent, error) {
+	entry, ok := rl[name]
+	if !ok {
+		return nil, ErrComponentNotFound
+	}
+	return entry, nil
+}
 
 // Validate is intended to be called before template rendering.
 // This way, calling the Render method from the template can assume

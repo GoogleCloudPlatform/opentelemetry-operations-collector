@@ -225,19 +225,25 @@ type TemplateContext struct {
 func NewTemplateContextFromSpec(spec *DistributionSpec, registry *Registry) (*TemplateContext, error) {
 	context := TemplateContext{DistributionSpec: spec}
 
+	otelVersion := otelComponentVersion{
+		core:       spec.OpenTelemetryVersion,
+		coreStable: spec.OpenTelemetryStableVersion,
+		contrib:    spec.OpenTelemetryContribVersion,
+	}
+
 	errs := make(RegistryLoadError)
 	var err RegistryLoadError
-	context.Receivers, err = registry.Receivers.LoadAllComponents(spec.Components.Receivers, spec.OpenTelemetryVersion, spec.OpenTelemetryStableVersion, spec.OpenTelemetryContribVersion)
+	context.Receivers, err = registry.Receivers.LoadAllComponents(spec.Components.Receivers, otelVersion)
 	mapMerge(errs, err)
-	context.Processors, err = registry.Processors.LoadAllComponents(spec.Components.Processors, spec.OpenTelemetryVersion, spec.OpenTelemetryStableVersion, spec.OpenTelemetryContribVersion)
+	context.Processors, err = registry.Processors.LoadAllComponents(spec.Components.Processors, otelVersion)
 	mapMerge(errs, err)
-	context.Exporters, err = registry.Exporters.LoadAllComponents(spec.Components.Exporters, spec.OpenTelemetryVersion, spec.OpenTelemetryStableVersion, spec.OpenTelemetryContribVersion)
+	context.Exporters, err = registry.Exporters.LoadAllComponents(spec.Components.Exporters, otelVersion)
 	mapMerge(errs, err)
-	context.Connectors, err = registry.Connectors.LoadAllComponents(spec.Components.Connectors, spec.OpenTelemetryVersion, spec.OpenTelemetryStableVersion, spec.OpenTelemetryContribVersion)
+	context.Connectors, err = registry.Connectors.LoadAllComponents(spec.Components.Connectors, otelVersion)
 	mapMerge(errs, err)
-	context.Extensions, err = registry.Extensions.LoadAllComponents(spec.Components.Extensions, spec.OpenTelemetryVersion, spec.OpenTelemetryStableVersion, spec.OpenTelemetryContribVersion)
+	context.Extensions, err = registry.Extensions.LoadAllComponents(spec.Components.Extensions, otelVersion)
 	mapMerge(errs, err)
-	context.Providers, err = registry.Providers.LoadAllComponents(spec.Components.Providers, spec.OpenTelemetryVersion, spec.OpenTelemetryStableVersion, spec.OpenTelemetryContribVersion)
+	context.Providers, err = registry.Providers.LoadAllComponents(spec.Components.Providers, otelVersion)
 	mapMerge(errs, err)
 
 	if len(errs) > 0 {

@@ -36,6 +36,19 @@ func yamlUnmarshalFromFile[T any](path string) (*T, error) {
 	return &result, nil
 }
 
+func yamlUnmarshalFromFileInto[T any](path string, value *T) error {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	err = yaml.Unmarshal(content, &value)
+	if err != nil {
+		return fmt.Errorf("error parsing %s: %w", path, err)
+	}
+	return nil
+}
+
 func yamlMarshalToFile[T any](value *T, path string) error {
 	content, err := yaml.Marshal(value)
 	if err != nil {
@@ -50,8 +63,8 @@ func renderYaml(value any) string {
 }
 
 func mapMerge[K comparable, V any](m map[K]V, m2 map[K]V) {
-	if m == nil || m2 == nil {
-		return
+	if m == nil {
+		m = make(map[K]V, len(m2))
 	}
 	for k, v := range m2 {
 		m[k] = v

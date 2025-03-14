@@ -41,6 +41,19 @@ type Registry struct {
 	Providers  RegistryComponents `yaml:"providers"`
 }
 
+// NewRegistry will create an empty registry object with the
+// component lists preallocated.
+func NewRegistry() *Registry {
+	return &Registry{
+		Receivers:  RegistryComponents{},
+		Processors: RegistryComponents{},
+		Exporters:  RegistryComponents{},
+		Connectors: RegistryComponents{},
+		Extensions: RegistryComponents{},
+		Providers:  RegistryComponents{},
+	}
+}
+
 // LoadEmbeddedRegistry will load the registry embedded in the
 // distrogen binary.
 func LoadEmbeddedRegistry() (*Registry, error) {
@@ -53,7 +66,9 @@ func LoadEmbeddedRegistry() (*Registry, error) {
 
 // LoadRegistry will load a registry from a yaml file.
 func LoadRegistry(path string) (*Registry, error) {
-	return yamlUnmarshalFromFile[Registry](path)
+	r := NewRegistry()
+	err := yamlUnmarshalFromFileInto(path, r)
+	return r, err
 }
 
 // Merge will merge another registry into this one. If the provided
@@ -131,6 +146,12 @@ func (gm *GoModuleID) MarshalYAML() (interface{}, error) {
 	return gm.String(), nil
 }
 
+type otelComponentVersion struct {
+	core       string
+	coreStable string
+	contrib    string
+}
+
 // RegistryComponent is the type used as a basis for Registry.
 // It contains all the information needed to output a
 type RegistryComponent struct {
@@ -154,6 +175,15 @@ func (c *RegistryComponent) RenderDocsURL() string {
 // IsContrib determines whether the module comes from the opentelemetry-collector-contrib repo.
 func (c *RegistryComponent) IsContrib() bool {
 	return strings.Contains(c.GoMod.URL, "github.com/open-telemetry/opentelemetry-collector-contrib")
+}
+
+func (c *RegistryComponent) ApplyOTelVersion(otelVersion otelComponentVersion) {
+	c.GoMod.Tag = "v" + otelVersion.core
+	if c.Stable {
+		c.GoMod.Tag = "v" + otelVersion.coreStable
+	} else if c.IsContrib() {
+		c.GoMod.Tag = "v" + otelVersion.contrib
+	}
 }
 
 // OCBManifestComponent is a reflection of the fields for an
@@ -182,22 +212,15 @@ type RegistryComponents map[string]*RegistryComponent
 
 // LoadAllComponents will take a list of component names and load them
 // from the registry, attaching the appropriate version tag.
-func (rl RegistryComponents) LoadAllComponents(names []string, version string, stableVersion string, contribVersion string) (RegistryComponents, RegistryLoadError) {
+func (rl RegistryComponents) LoadAllComponents(names []string, otelVersion otelComponentVersion) (RegistryComponents, RegistryLoadError) {
 	components := RegistryComponents{}
 	errs := make(RegistryLoadError)
 
 	for _, name := range names {
-		entry, err := rl.LoadComponent(name)
+		entry, err := rl.LoadComponent(name, otelVersion)
 		if err != nil {
-			errs[name] = err
+			errs[name] = ErrComponentNotFound
 			continue
-		}
-
-		entry.GoMod.Tag = "v" + version
-		if entry.Stable {
-			entry.GoMod.Tag = "v" + stableVersion
-		} else if entry.IsContrib() {
-			entry.GoMod.Tag = "v" + contribVersion
 		}
 		components[name] = entry
 	}
@@ -205,12 +228,12 @@ func (rl RegistryComponents) LoadAllComponents(names []string, version string, s
 	return components, errs
 }
 
-// LoadComponent will load a component from the registry.
-func (rl RegistryComponents) LoadComponent(name string) (*RegistryComponent, error) {
+func (rl RegistryComponents) LoadComponent(name string, otelVersion otelComponentVersion) (*RegistryComponent, error) {
 	entry, ok := rl[name]
 	if !ok {
 		return nil, ErrComponentNotFound
 	}
+	entry.ApplyOTelVersion(otelVersion)
 	return entry, nil
 }
 

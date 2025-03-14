@@ -14,6 +14,11 @@ setup-hooks:
 .PHONY: precommit
 precommit: checklicense misspell lint
 
+# This is the same as precommit for now but this is
+# futureproofing against this changing in the future.
+.PHONY: presubmit
+presubmit: checklicense misspell lint
+
 ##########################
 # Updating OTel Components
 ##########################
@@ -90,6 +95,10 @@ test-all:
 tidy-all:
 	TARGET="tidy" $(MAKE) target-all-modules
 
+.PHONY: distrogen-golden-update
+distrogen-golden-update:
+	go test ./cmd/distrogen -update
+
 ###########
 # Workspace
 ###########
@@ -141,7 +150,14 @@ install-tools: tools-dir
 	GOBIN=$(TOOLS_DIR) go install \
 	$(TOOL_LIST)
 
-ADDLICENSE_IGNORES = -ignore "**/.tools/*" -ignore "**/otelopscol/**/*" -ignore "**/google-otel/**/*" -ignore "**/docs/**/*" -ignore "**/*.md" -ignore "**/testdata/*"
+ADDLICENSE_IGNORES = -ignore "**/.tools/*" \
+					-ignore "**/otelopscol/**/*" \
+					-ignore "**/google-otel/**/*" \
+					-ignore "**/docs/**/*" \
+					-ignore "**/*.md" \
+					-ignore "**/testdata/*" \
+					-ignore "**/golden/*" \
+					-ignore "**/spec.yaml"
 .PHONY: addlicense
 addlicense:
 	$(ADDLICENSE) -c "Google LLC" -l apache $(ADDLICENSE_IGNORES) .

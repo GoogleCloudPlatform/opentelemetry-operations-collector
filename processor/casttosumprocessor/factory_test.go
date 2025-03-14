@@ -41,7 +41,7 @@ func TestCreateProcessor(t *testing.T) {
 	assert.NotNil(t, config)
 
 	for _, cfg := range config.Processors {
-		mp, err := createMetricsProcessor(context.Background(), processortest.NewNopSettings(), cfg.(*Config), consumertest.NewNop())
+		mp, err := createMetricsProcessor(context.Background(), processortest.NewNopSettings(componentType), cfg.(*Config), consumertest.NewNop())
 		assert.NoError(t, err)
 		assert.NotNil(t, mp)
 	}

@@ -182,7 +182,7 @@ misspell:
 # Utility
 #########
 
-LIST_LOCAL_MODULES = go list -f "{{ .Dir }}" -m
+LIST_LOCAL_MODULES = go list -f "{{ .Dir }}" -m | grep -v ".*internal/tools.*"
 INCLUDE_OTEL_COMPONENTS = grep -e ".*receiver.*" -e ".*processor.*"
 
 .PHONY: target-all-modules

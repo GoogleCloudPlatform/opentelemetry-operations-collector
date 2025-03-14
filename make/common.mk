@@ -1,7 +1,7 @@
 # TODO: This could be better
 .PHONY: test
 test:
-	go test -tags=$(GO_BUILD_TAGS) ./...
+	go test ./...
 
 .PHONY: tidy
 tidy:

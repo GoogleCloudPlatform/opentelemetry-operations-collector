@@ -1,0 +1,118 @@
+# Copyright 2025 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: google-otel
+display_name: Google Built OpenTelemetry Collector
+version: 0.121.0
+description: "OpenTelemetry Collector Built By Google"
+blurb: |-
+  A curated distribution of the OpenTelemetry Collector for use in GCP.
+opentelemetry_version: 0.121.0
+opentelemetry_stable_version: 1.27.0
+binary_name: otelcol-google
+collector_cgo: false
+go_version: 1.24.0
+
+feature_gates:
+  - exporter.googlemanagedprometheus.intToDouble
+
+# TEMP
+docker_repo: us-docker.pkg.dev/experimental-braydonk/google-otel
+
+components:
+  receivers:
+    - otlp
+    - otlpjsonfile
+    - filelog
+    - fluentforward
+    - hostmetrics
+    - httpcheck
+    - jaeger
+    - journald
+    - k8scluster
+    - k8sevents
+    - k8sobjects
+    - kubeletstats
+    - opencensus
+    - otelarrow
+    - prometheus
+    - receivercreator
+    - zipkin
+
+  processors:
+    - batch
+    - memorylimiter
+    - attributes
+    - cumulativetodelta
+    - deltatocumulative
+    - deltatorate
+    - filter
+    - groupbyattrs
+    - groupbytrace
+    - k8sattributes
+    - logdedup
+    - metricstransform
+    - probabilisticsampler
+    - redaction
+    - remotetap
+    - resourcedetection
+    - resource
+    - tailsampling
+    - transform
+    - interval
+
+  exporters:
+    - debug
+    - nop
+    - otlp
+    - otlphttp
+    - file
+    - loadbalancing
+    - otelarrow
+    - googlecloud
+    - googlemanagedprometheus
+
+  extensions:
+    - zpages
+    - ack
+    - basicauth
+    - bearertokenauth
+    - headerssetter
+    - healthcheck
+    - httpforwarder
+    - oauth2clientauth
+    - hostobserver
+    - k8sobserver
+    - oidcauth
+    - opamp
+    - pprof
+    - filestorage
+
+  connectors:
+    - forward
+    - count
+    - exceptions
+    - failover
+    - otlpjson
+    - roundrobin
+    - routing
+    - servicegraph
+    - spanmetrics
+
+  providers:
+    - env
+    - file
+    - http
+    - https
+    - yaml

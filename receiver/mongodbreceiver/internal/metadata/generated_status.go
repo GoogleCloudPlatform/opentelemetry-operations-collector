@@ -7,7 +7,8 @@ import (
 )
 
 var (
-	Type = component.MustNewType("mongodb")
+	Type      = component.MustNewType("mongodb")
+	ScopeName = "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/mongodbreceiver"
 )
 
 const (

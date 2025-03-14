@@ -7,7 +7,8 @@ import (
 )
 
 var (
-	Type = component.MustNewType("dcgm")
+	Type      = component.MustNewType("dcgm")
+	ScopeName = "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/dcgmreceiver"
 )
 
 const (

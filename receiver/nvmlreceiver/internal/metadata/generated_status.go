@@ -7,7 +7,8 @@ import (
 )
 
 var (
-	Type = component.MustNewType("nvml")
+	Type      = component.MustNewType("nvml")
+	ScopeName = "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/nvmlreceiver"
 )
 
 const (

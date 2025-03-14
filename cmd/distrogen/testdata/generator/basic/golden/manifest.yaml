@@ -1,0 +1,41 @@
+# Copyright 2025 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+dist:
+  module: github.com/GoogleCloudPlatform/basic-distro
+  name: otelcol-basic
+  description: A basic distribution of the OpenTelemetry Collector
+  version: 0.121.0
+  output_path: ./_build
+
+receivers:
+- gomod: go.opentelemetry.io/collector/receiver/otlpreceiver v0.121.0
+
+processors:
+- gomod: go.opentelemetry.io/collector/processor/batchprocessor v0.121.0
+- gomod: go.opentelemetry.io/collector/processor/memorylimiterprocessor v0.121.0
+
+exporters:
+- gomod: go.opentelemetry.io/collector/exporter/otlpexporter v0.121.0
+
+extensions:
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/pprofextension v0.121.0
+
+connectors:
+- gomod: go.opentelemetry.io/collector/connector/forwardconnector v0.121.0
+
+providers:
+- gomod: go.opentelemetry.io/collector/confmap/provider/yamlprovider v1.27.0
+
+replaces:

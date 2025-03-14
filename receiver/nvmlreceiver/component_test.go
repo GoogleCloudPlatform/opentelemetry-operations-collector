@@ -28,6 +28,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/nvmlreceiver/internal/metadata"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/component/componenttest"
@@ -70,19 +71,19 @@ func TestComponentLifecycle(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name+"-shutdown", func(t *testing.T) {
-			c, err := test.createFn(context.Background(), receivertest.NewNopSettings(), cfg)
+			c, err := test.createFn(context.Background(), receivertest.NewNopSettings(metadata.Type), cfg)
 			require.NoError(t, err)
 			err = c.Shutdown(context.Background())
 			require.NoError(t, err)
 		})
 		t.Run(test.name+"-lifecycle", func(t *testing.T) {
-			firstRcvr, err := test.createFn(context.Background(), receivertest.NewNopSettings(), cfg)
+			firstRcvr, err := test.createFn(context.Background(), receivertest.NewNopSettings(metadata.Type), cfg)
 			require.NoError(t, err)
 			host := componenttest.NewNopHost()
 			require.NoError(t, err)
 			require.NoError(t, firstRcvr.Start(context.Background(), host))
 			require.NoError(t, firstRcvr.Shutdown(context.Background()))
-			secondRcvr, err := test.createFn(context.Background(), receivertest.NewNopSettings(), cfg)
+			secondRcvr, err := test.createFn(context.Background(), receivertest.NewNopSettings(metadata.Type), cfg)
 			require.NoError(t, err)
 			require.NoError(t, secondRcvr.Start(context.Background(), host))
 			require.NoError(t, secondRcvr.Shutdown(context.Background()))

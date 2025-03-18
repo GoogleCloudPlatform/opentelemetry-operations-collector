@@ -28,6 +28,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/dcgmreceiver/internal/metadata"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/component/componenttest"
@@ -47,7 +48,7 @@ func TestComponentConfigStruct(t *testing.T) {
 }
 
 func newCreateSettings(t *testing.T) receiver.Settings {
-	settings := receivertest.NewNopSettings()
+	settings := receivertest.NewNopSettings(metadata.Type)
 	settings.Logger = zaptest.NewLogger(t)
 	return settings
 }

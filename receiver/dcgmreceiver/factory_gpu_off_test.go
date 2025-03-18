@@ -26,7 +26,7 @@ import (
 	"go.opentelemetry.io/collector/consumer/consumertest"
 	"go.opentelemetry.io/collector/receiver/receivertest"
 
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/collectorerror"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/dcgmreceiver/internal/metadata"
 )
 
 func TestCreateMetricsReceiverWithGPUSupportOff(t *testing.T) {
@@ -34,10 +34,10 @@ func TestCreateMetricsReceiverWithGPUSupportOff(t *testing.T) {
 	cfg := factory.CreateDefaultConfig()
 	receiver, err := factory.CreateMetrics(
 		context.Background(),
-		receivertest.NewNopSettings(),
+		receivertest.NewNopSettings(metadata.Type),
 		cfg,
 		consumertest.NewNop())
 
-	require.True(t, errors.Is(err, collectorerror.ErrGPUSupportDisabled))
+	require.True(t, errors.Is(err, ErrGPUSupportDisabled))
 	require.Nil(t, receiver)
 }

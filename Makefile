@@ -23,8 +23,8 @@ presubmit: checklicense misspell lint
 # Updating OTel Components
 ##########################
 
-OTEL_VERSION = v0.121.0
-OTEL_CONTRIB_VERSION = v0.121.0
+OTEL_VERSION ?= v0.121.0
+OTEL_CONTRIB_VERSION ?= v0.121.0
 
 .PHONY: update-otel-components
 update-otel-components: export OTEL_VERSION := $(OTEL_VERSION)
@@ -43,6 +43,14 @@ update-otel-components-deps:
 .PHONY: generate-components
 generate-components:
 	PATH="$(TOOLS_DIR):${PATH}" TARGET="generate" $(MAKE) target-all-otel-components
+
+# This target will tag the git repo using the OTel version. Eventually this may be
+# more sophisticated if we want to supply separate tags for every subcomponent. For
+# now it is pretty simply.
+.PHONY: tag-repo
+tag-repo:
+	git tag -a $(OTEL_VERSION) -m "Update to OpenTelemetry Collector version $(OTEL_VERSION)"
+	@echo "Created git tag $(OTEL_VERSION). If it looks good, push it to the remote by running:\ngit push origin $(OTEL_VERSION)"
 
 ###################
 # Distro Generation

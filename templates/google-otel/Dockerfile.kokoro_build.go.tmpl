@@ -23,6 +23,7 @@ ARG DISTRO_ROOT
 COPY ${DISTRO_ROOT}/{{ .Name }} /build
 COPY ${DISTRO_ROOT}/receiver /receiver
 COPY ${DISTRO_ROOT}/processor /processor
+COPY ${DISTRO_ROOT}/exporter /exporter
 COPY ${DISTRO_ROOT}/extension /extension
 
 WORKDIR /build

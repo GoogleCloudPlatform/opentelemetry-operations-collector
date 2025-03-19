@@ -113,6 +113,19 @@ func (ts TemplateSet) GetTemplate(name string) (*TemplateFile, error) {
 	return tf, nil
 }
 
+// RenameExceptionalTemplates will take known names from the TemplateSet
+// and replace the rendering name with something else. This is generally
+// used for templates that need to be named something different depending
+// on the contents of the spec.
+func (ts TemplateSet) RenameExceptionalTemplates(spec *DistributionSpec) {
+	if file, ok := ts["systemd-unit.service.go.tmpl"]; ok {
+		file.Name = spec.BinaryName + ".service"
+	}
+	if file, ok := ts["conf-file.conf.go.tmpl"]; ok {
+		file.Name = spec.BinaryName + ".conf"
+	}
+}
+
 // GetTemplateSetFromDir will walk an FS for any *.go.tmpl files and
 // will collect them into a TemplateSet.
 func GetTemplateSetFromDir(dir fs.FS, templateContext any) (TemplateSet, error) {

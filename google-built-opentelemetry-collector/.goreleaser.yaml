@@ -1,0 +1,75 @@
+# Copyright 2025 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+version: 2
+project_name: opentelemetry-operations-collector
+
+env:
+  - LD_FLAGS=-s -w
+  - CGO_ENABLED=false
+  - BUILD_FLAGS=-trimpath
+  - GOWORK=off
+
+builds:
+  - id: otelcol-google-linux
+    goos:
+      - linux
+    goarch:
+      - "386"
+      - amd64
+      - arm64
+    goarm:
+      - "7"
+    binary: otelcol-google
+    dir: _build
+    ldflags:
+      - "-s -w"
+    flags:
+      - "-trimpath"
+      - "-buildvcs=false"
+
+archives:
+  - id: google-built-opentelemetry-collector
+    builds:
+      - otelcol-google-linux
+    name_template: '{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}{{ if .Mips }}_{{ .Mips }}{{ end }}'
+
+nfpms:
+  - package_name: otelcol-google
+    contents:
+      - src: otelcol-google.service
+        dst: /lib/systemd/system/otelcol-google.service
+      - src: otelcol-google.conf
+        dst: /etc/otelcol-google/otelcol-google.conf
+        type: config|noreplace
+      - src: config.yaml
+        dst: /etc/otelcol-google/config.yaml
+        type: config|noreplace
+    scripts:
+      preinstall: preinstall.sh
+      postinstall: postinstall.sh
+      preremove: preremove.sh
+    overrides:
+      rpm:
+        dependencies:
+          - /bin/sh
+    id: otelcol-google
+    builds:
+      - otelcol-google-linux
+    formats:
+      - deb
+      - rpm
+    maintainer: Google Cloud Platform <google@google.com> # something better than this
+    description: OpenTelemetry Collector Built By Google
+    license: Apache 2.0

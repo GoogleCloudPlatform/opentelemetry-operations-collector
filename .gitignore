@@ -8,6 +8,9 @@ go.work.sum
 # The ocb build directory
 **/_build
 
+# Goreleaser release dir
+**/dist
+
 # For VSCode users
 .vscode
 

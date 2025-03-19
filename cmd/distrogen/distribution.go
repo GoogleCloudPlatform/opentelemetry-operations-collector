@@ -145,6 +145,8 @@ func (d *DistributionGenerator) Generate() error {
 		mapMerge(templates, customTemplates)
 	}
 
+	templates.RenameExceptionalTemplates(d.Spec)
+
 	for _, tmpl := range templates {
 		if err := tmpl.Render(d.GeneratePath); err != nil {
 			return err
@@ -218,6 +220,9 @@ type TemplateContext struct {
 	Extensions RegistryComponents
 	Connectors RegistryComponents
 	Providers  RegistryComponents
+
+	SystemdServiceName  string
+	SystemdConfFileName string
 }
 
 // NewTemplateContextFromSpec creates a TemplateContext from a DistributionSpec and a Registry.
@@ -246,6 +251,9 @@ func NewTemplateContextFromSpec(spec *DistributionSpec, registry *Registry) (*Te
 	mapMerge(errs, err)
 	context.Providers, err = registry.Providers.LoadAllComponents(spec.Components.Providers, otelVersion)
 	mapMerge(errs, err)
+
+	context.SystemdServiceName = spec.BinaryName + ".service"
+	context.SystemdConfFileName = spec.BinaryName + ".conf"
 
 	if len(errs) > 0 {
 		return nil, errs

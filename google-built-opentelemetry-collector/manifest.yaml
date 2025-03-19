@@ -13,7 +13,7 @@
 # limitations under the License.
 
 dist:
-  module: github.com/GoogleCloudPlatform/google-otel
+  module: github.com/GoogleCloudPlatform/google-built-opentelemetry-collector
   name: otelcol-google
   description: OpenTelemetry Collector Built By Google
   version: 0.121.0

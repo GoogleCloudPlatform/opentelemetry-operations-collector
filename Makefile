@@ -64,25 +64,24 @@ gen-all: gen-google-otel gen-otelopscol
 .PHONY: regen-all
 regen-all: regen-google-otel regen-otelopscol
 
-GEN_GOOGLE_OTEL=$(RUN_DISTROGEN) -registry ./registries/operations-collector-registry.yaml -spec ./specs/google-otel.yaml -custom_templates ./templates/google-otel
-.PHONY: gen-google-otel
-gen-google-otel:
-	@$(GEN_GOOGLE_OTEL)
+GEN_GOOGLE_BUILT_OTEL=$(RUN_DISTROGEN) -spec ./specs/google-built-opentelemetry-collector.yaml \
+								 -registry ./registries/operations-collector-registry.yaml \
+								 -custom_templates ./templates/google-built-opentelemetry-collector
+.PHONY: gen-google-built-otel
+gen-google-built-otel:
+	@$(GEN_GOOGLE_BUILT_OTEL)
 
-.PHONY: regen-google-otel
-regen-google-otel:
-	@$(GEN_GOOGLE_OTEL) -force
+.PHONY: regen-google-built-otel
+regen-google-built-otel:
+	@$(GEN_GOOGLE_BUILT_OTEL) -force
 
-GEN_GOOGLE_OTEL_CONTRIB=$(RUN_DISTROGEN) -registry ./registries/operations-collector-registry.yaml -spec ./specs/google-otel-contrib.yaml -custom_templates ./templates/google-otel
-.PHONY: gen-google-otel
-gen-google-otel-contrib:
-	@$(GEN_GOOGLE_OTEL_CONTRIB)
+.PHONY: regen-google-built-otel-v
+regen-google-built-otel-v:
+	@$(GEN_GOOGLE_BUILT_OTEL) -force -v
 
-.PHONY: regen-google-otel
-regen-google-otel-contrib:
-	@$(GEN_GOOGLE_OTEL_CONTRIB) -force
-
-GEN_OTELOPSCOL=$(RUN_DISTROGEN) -registry ./registries/operations-collector-registry.yaml -spec ./specs/otelopscol.yaml -custom_templates ./templates/otelopscol
+GEN_OTELOPSCOL=$(RUN_DISTROGEN) -spec ./specs/otelopscol.yaml \
+								-registry ./registries/operations-collector-registry.yaml \
+								-custom_templates ./templates/otelopscol
 .PHONY: gen-otelopscol
 gen-otelopscol:
 	@$(GEN_OTELOPSCOL)

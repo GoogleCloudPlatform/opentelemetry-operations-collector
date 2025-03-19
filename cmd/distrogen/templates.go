@@ -33,9 +33,15 @@ var embeddedTemplatesFS embed.FS
 // that will be rendered for a distribution.
 type TemplateFile struct {
 	Name     string
-	FileName string
+	FilePath string
 	Context  any
 	FS       fs.FS
+}
+
+// outputPath gets the intended destination output path for the rendered template.
+func (tf *TemplateFile) outputPath() string {
+	tfPath := strings.TrimSuffix(tf.FilePath, filepath.Base(tf.FilePath))
+	return tfPath
 }
 
 // getTextTemplate retrieves the text tempalte from the template file's
@@ -43,8 +49,8 @@ type TemplateFile struct {
 // set provided by the user.
 func (tf *TemplateFile) getTextTemplate() (*template.Template, error) {
 	return template.
-		New(tf.FileName).
-		ParseFS(tf.FS, tf.FileName)
+		New(filepath.Base(tf.FilePath)).
+		ParseFS(tf.FS, tf.FilePath)
 }
 
 // Render will render the template into a file in the
@@ -58,8 +64,19 @@ func (tf *TemplateFile) Render(outDir string) error {
 	if err := tmpl.Execute(&buf, tf.Context); err != nil {
 		return err
 	}
-	outPath := filepath.Join(outDir, tf.Name)
-	return os.WriteFile(outPath, buf.Bytes(), fs.ModePerm)
+	tmplPath := tf.outputPath()
+	if tmplPath != "" {
+		// If the template is meant to go in a sub-directory, we need to mkdir -p
+		// to make sure we can write the file to the directory it belongs in.
+		if err := os.MkdirAll(filepath.Join(outDir, tmplPath), fs.ModePerm); err != nil {
+			return err
+		}
+	}
+	return os.WriteFile(
+		filepath.Join(outDir, tmplPath, tf.Name),
+		buf.Bytes(),
+		fs.ModePerm,
+	)
 }
 
 var (
@@ -73,12 +90,13 @@ type TemplateSet map[string]*TemplateFile
 // AddTemplate will add a template to the template set. If a template
 // is added with a name that already exists, AddTemplate will overwrite
 // the template it has.
-func (ts TemplateSet) AddTemplate(name string, templateContext any, dir fs.FS) error {
+func (ts TemplateSet) AddTemplate(path string, templateContext any, dir fs.FS) error {
+	name := filepath.Base(path)
 	if !strings.HasSuffix(name, ".go.tmpl") {
 		return fmt.Errorf("%w: %s", ErrInvalidTemplateName, name)
 	}
 	ts[name] = &TemplateFile{
-		FileName: name,
+		FilePath: path,
 		Name:     strings.TrimSuffix(name, ".go.tmpl"),
 		Context:  templateContext,
 		FS:       dir,
@@ -104,7 +122,7 @@ func GetTemplateSetFromDir(dir fs.FS, templateContext any) (TemplateSet, error) 
 		if d.IsDir() || !strings.HasSuffix(d.Name(), ".go.tmpl") {
 			return nil
 		}
-		return templates.AddTemplate(d.Name(), templateContext, dir)
+		return templates.AddTemplate(path, templateContext, dir)
 	})
 
 	return templates, err

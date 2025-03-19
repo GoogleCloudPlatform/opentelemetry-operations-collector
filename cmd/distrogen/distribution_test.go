@@ -15,6 +15,7 @@
 package main
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
@@ -52,6 +53,7 @@ func testGeneratorCase(t *testing.T, registry *Registry, testFolder string) {
 
 	g, err := NewDistributionGenerator(d, registry, true)
 	assert.NilError(t, err)
+	g.CustomTemplatesDir = os.DirFS(filepath.Join(testdataFullPath, testFolder, "templates"))
 	err = g.Generate()
 	assert.NilError(t, err)
 	t.Cleanup(func() {
@@ -98,13 +100,16 @@ getGoldenFiles:
 }
 
 func filesInDirAsSet(dir string) (map[string]bool, error) {
-	files, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, err
-	}
-	set := make(map[string]bool, len(files))
-	for _, f := range files {
-		set[f.Name()] = false
-	}
-	return set, nil
+	fileSet := make(map[string]bool)
+	err := fs.WalkDir(os.DirFS(dir), ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		fileSet[path] = false
+		return nil
+	})
+	return fileSet, err
 }

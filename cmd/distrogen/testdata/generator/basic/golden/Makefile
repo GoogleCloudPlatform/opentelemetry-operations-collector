@@ -22,7 +22,7 @@ COLLECTOR_CGO = 0
 COLLECTOR_BUILDVCS ?= false
 COLLECTOR_BUILD_TAGS ?= 
 
-DOCKER_REPO ?= us-docker.pkg.dev/experimental-braydonk/google-otel
+DOCKER_REPO ?= us-docker.pkg.dev/pretend-repo/otelcol-basic
 DOCKER_LOCAL_IMAGE_TAG ?= $(COLLECTOR_BINARY_NAME)
 DOCKER_IMAGE_TAG = $(DOCKER_REPO)/$(COLLECTOR_BINARY_NAME):$(VERSION)
 
@@ -35,6 +35,7 @@ OCB_BIN ?= $(TOOLS_DIR)/ocb
 GO_VERSION = 1.24.0
 GO_BIN_DIR ?= $(TOOLS_DIR)/go/bin
 GO_BIN ?= $(GO_BIN_DIR)/go
+SET_GO_BIN_PATH ?= PATH="$(GO_BIN_DIR):$$PATH"
 
 .PHONY: build
 build: $(COLLECTOR_BINARY_NAME)
@@ -63,6 +64,9 @@ image-build: $(COLLECTOR_BINARY_NAME)
 # After an image is built, pushes it to the specified docker repository.
 .PHONY: image-push
 image-push:
+ifndef DOCKER_REPO
+	$(error "Must set DOCKER_REPO to push")
+endif
 	docker tag $(DOCKER_LOCAL_IMAGE_TAG) $(DOCKER_IMAGE_TAG)
 	docker push $(DOCKER_IMAGE_TAG)
 
@@ -77,7 +81,7 @@ collector-build: clean-collector $(COLLECTOR_BINARY_NAME)
 
 # Using OCB and the local manifest file, build a collector.
 $(COLLECTOR_BINARY_NAME): $(OCB_BIN)
-	PATH="$(GO_BIN_DIR):$PATH" $(OCB_BIN) --skip-compilation --verbose --config manifest.yaml
+	$(SET_GO_BIN_PATH) $(OCB_BIN) --skip-compilation --verbose --config manifest.yaml
 	cd $(COLLECTOR_BUILD_TEMP_DIR) && \
 		GOWORK=off \
 		CGO_ENABLED=$(COLLECTOR_CGO) \

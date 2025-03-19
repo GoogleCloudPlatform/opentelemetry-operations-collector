@@ -12,24 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG DISTRO_ROOT="."
-ARG BUILD_CONTAINER="alpine:3"
 
-FROM ${BUILD_CONTAINER} AS build
-
-RUN apk --update add make curl
-
-ARG DISTRO_ROOT
-COPY ${DISTRO_ROOT}/{{ .Name }} /build
-COPY ${DISTRO_ROOT}/receiver /receiver
-COPY ${DISTRO_ROOT}/processor /processor
-COPY ${DISTRO_ROOT}/exporter /exporter
-COPY ${DISTRO_ROOT}/extension /extension
-
-WORKDIR /build
-RUN make build
-
-FROM ${BUILD_CONTAINER} AS certs
+FROM alpine:3.19 as certs
 RUN apk --update add ca-certificates
 
 FROM scratch
@@ -38,8 +22,7 @@ ARG USER_UID=10001
 USER ${USER_UID}
 
 COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
-COPY --from=build --chmod=755 /build/{{ .BinaryName }} /{{ .BinaryName }}
-COPY --from=build --chmod=644 /build/config.yaml /etc/{{ .BinaryName }}/config.yaml
-
-ENTRYPOINT ["/{{ .BinaryName }}"{{ $length := len .FeatureGates }}{{ if gt $length 0 }}, "--feature-gates={{ .FeatureGates.Render }}"{{ end }}]
-CMD ["--config=/etc/{{ .BinaryName }}/config.yaml"]
+COPY --chmod=755 otelcol-basic /otelcol-basic
+COPY config.yaml /etc/otelcol-basic/config.yaml
+ENTRYPOINT ["/otelcol-basic", "--feature-gates=exporter.googlemanagedprometheus.intToDouble"]
+CMD ["--config=/etc/otelcol-basic/config.yaml"]

@@ -22,7 +22,9 @@ COLLECTOR_CGO = {{ if .CollectorCGO }}1{{else}}0{{end}}
 COLLECTOR_BUILDVCS ?= false
 COLLECTOR_BUILD_TAGS ?= {{ .BuildTags }}
 
+{{ if ne .DockerRepo "" -}}
 DOCKER_REPO ?= {{ .DockerRepo }}
+{{ end -}}
 DOCKER_LOCAL_IMAGE_TAG ?= $(COLLECTOR_BINARY_NAME)
 DOCKER_IMAGE_TAG = $(DOCKER_REPO)/$(COLLECTOR_BINARY_NAME):$(VERSION)
 
@@ -64,6 +66,9 @@ image-build: $(COLLECTOR_BINARY_NAME)
 # After an image is built, pushes it to the specified docker repository.
 .PHONY: image-push
 image-push:
+ifndef DOCKER_REPO
+	$(error "Must set DOCKER_REPO to push")
+endif
 	docker tag $(DOCKER_LOCAL_IMAGE_TAG) $(DOCKER_IMAGE_TAG)
 	docker push $(DOCKER_IMAGE_TAG)
 

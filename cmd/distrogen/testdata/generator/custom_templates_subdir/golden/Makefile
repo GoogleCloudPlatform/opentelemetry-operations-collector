@@ -16,12 +16,13 @@
 VERSION ?= 0.121.0
 OTEL_VERSION ?= 0.121.0
 OTEL_VERSION_TAG = v$(OTEL_VERSION)
-COLLECTOR_BINARY_NAME = otelcol-google
+COLLECTOR_BINARY_NAME = otelcol-basic
 COLLECTOR_BUILD_TEMP_DIR = $(PWD)/_build
 COLLECTOR_CGO = 0
 COLLECTOR_BUILDVCS ?= false
 COLLECTOR_BUILD_TAGS ?= 
 
+DOCKER_REPO ?= us-docker.pkg.dev/experimental-braydonk/google-otel
 DOCKER_LOCAL_IMAGE_TAG ?= $(COLLECTOR_BINARY_NAME)
 DOCKER_IMAGE_TAG = $(DOCKER_REPO)/$(COLLECTOR_BINARY_NAME):$(VERSION)
 
@@ -88,7 +89,7 @@ $(COLLECTOR_BINARY_NAME): $(OCB_BIN)
 			-buildvcs=$(COLLECTOR_BUILDVCS) \
 			-tags=$(COLLECTOR_BUILD_TAGS) \
 			--ldflags="-s -w $(COLLECTOR_LD_FLAGS)" \
-			-o ../otelcol-google \
+			-o ../otelcol-basic \
 			.
 	$(MAKE) clean-build-dir
 

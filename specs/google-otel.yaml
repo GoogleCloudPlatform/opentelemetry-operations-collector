@@ -12,12 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: google-otel
-display_name: Google Built OpenTelemetry Collector
+name: google-built-opentelemetry-collector
+display_name: Google-Built OpenTelemetry Collector
 version: 0.121.0
 description: "OpenTelemetry Collector Built By Google"
-blurb: |-
-  A curated distribution of the OpenTelemetry Collector for use in GCP.
+blurb: >-
+  The Google-Built OpenTelemetry Collector is an open-source, production-ready build
+  of the upstream OpenTelemetry Collector that is built entirely with upstream OpenTelemetry components.
 opentelemetry_version: 0.121.0
 opentelemetry_stable_version: 1.27.0
 binary_name: otelcol-google

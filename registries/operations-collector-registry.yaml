@@ -49,5 +49,5 @@ exporters:
 connectors:
 extensions:
   oauth2clientauth:
-    gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/extension/oauth2clientauthextension v0.0.0
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/oauth2clientauthextension v0.0.0
     path: "../extension/oauth2clientauthextension"

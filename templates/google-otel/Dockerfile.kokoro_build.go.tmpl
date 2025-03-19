@@ -18,11 +18,13 @@ ARG BUILD_CONTAINER="alpine:3"
 FROM ${BUILD_CONTAINER} AS build
 
 RUN apk --update add make curl
-RUN mkdir -p /build
 
 ARG DISTRO_ROOT
-COPY ${DISTRO_ROOT}/Makefile /build
-COPY ${DISTRO_ROOT}/manifest.yaml /build
+COPY ${DISTRO_ROOT}/{{ .Name }} /build
+COPY ${DISTRO_ROOT}/receiver /receiver
+COPY ${DISTRO_ROOT}/processor /processor
+COPY ${DISTRO_ROOT}/exporter /exporter
+COPY ${DISTRO_ROOT}/extension /extension
 
 WORKDIR /build
 RUN make build
@@ -37,9 +39,7 @@ USER ${USER_UID}
 
 COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=build --chmod=755 /build/{{ .BinaryName }} /{{ .BinaryName }}
-
-ARG DISTRO_ROOT
-COPY ${DISTRO_ROOT}/config.yaml /etc/{{ .BinaryName }}/config.yaml
+COPY --from=build --chmod=644 /build/config.yaml /etc/{{ .BinaryName }}/config.yaml
 
 ENTRYPOINT ["/{{ .BinaryName }}"{{ $length := len .FeatureGates }}{{ if gt $length 0 }}, "--feature-gates={{ .FeatureGates.Render }}"{{ end }}]
 CMD ["--config=/etc/{{ .BinaryName }}/config.yaml"]

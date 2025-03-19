@@ -49,12 +49,12 @@ func yamlUnmarshalFromFileInto[T any](path string, value *T) error {
 	return nil
 }
 
-func yamlMarshalToFile[T any](value *T, path string) error {
+func yamlMarshalToFile[T any](value *T, path string, mode fs.FileMode) error {
 	content, err := yaml.Marshal(value)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, content, fs.ModePerm)
+	return os.WriteFile(path, content, mode)
 }
 
 func renderYaml(value any) string {

@@ -45,3 +45,4 @@ A basic collector distro
 | Component Name | Documentation |
 | -------------- | ------------- |
 | yaml | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/confmap/provider/yamlprovider) |
+

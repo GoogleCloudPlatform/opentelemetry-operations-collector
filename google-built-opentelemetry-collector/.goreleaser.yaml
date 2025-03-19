@@ -1,0 +1,86 @@
+version: 2
+project_name: opentelemetry-operations-collector
+
+env:
+  - LD_FLAGS=-s -w
+  - CGO_ENABLED=0
+  - BUILD_FLAGS=-trimpath
+  - GOWORK=off
+
+builds:
+  - id: otelcol-google-linux
+    goos:
+      - linux
+    goarch:
+      - "386"
+      - amd64
+      - arm64
+    goarm:
+      - "7"
+    binary: otelcol-google
+    dir: _build
+    ldflags:
+      - "-s -w"
+    flags:
+      - "-trimpath"
+      - "-buildvcs=false"
+
+  - id: otelcol-google-windows
+    goos:
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    goarm:
+      - "7"
+    binary: otelcol-google
+    dir: _build
+    ldflags:
+      - "-s -w"
+    flags:
+      - "-trimpath"
+      - "-buildvcs=false"
+
+archives:
+  - id: google-built-opentelemetry-collector
+    builds:
+      - otelcol-google-linux
+    name_template: '{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}{{ if .Mips }}_{{ .Mips }}{{ end }}'
+  - id: google-built-opentelemetry-collector-windows
+    builds:
+      - otelcol-google-windows
+    name_template: '{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}{{ if .Mips }}_{{ .Mips }}{{ end }}'
+
+nfpms:
+  - package_name: otelcol-google
+    contents:
+      - src: otelcol-google.service
+        dst: /lib/systemd/system/otelcol-google.service
+      - src: otelcol-google.conf
+        dst: /etc/otelcol-google/otelcol-google.conf
+        type: config|noreplace
+        file_info:
+          mode: 0644
+      - src: config.yaml
+        dst: /etc/otelcol-google/config.yaml
+        type: config|noreplace
+        file_info:
+          mode: 0644
+    scripts:
+      preinstall: preinstall.sh
+      postinstall: postinstall.sh
+      preremove: preremove.sh
+    overrides:
+      rpm:
+        dependencies:
+          - /bin/sh
+    id: otelcol-google
+    builds:
+      - otelcol-google-linux
+    formats:
+      - deb
+      - rpm
+    umask: 0
+    maintainer: Google Cloud Platform <google@google.com> # something better than this
+    description: OpenTelemetry Collector Built By Google
+    license: Apache 2.0

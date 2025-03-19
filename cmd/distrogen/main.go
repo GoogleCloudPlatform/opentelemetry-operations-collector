@@ -70,7 +70,7 @@ func generateSpec() error {
 	if err != nil {
 		return err
 	}
-	return yamlMarshalToFile(distro, "generated_spec.yaml")
+	return yamlMarshalToFile(distro, "generated_spec.yaml", DefaultFileMode)
 }
 
 func querySpec() error {

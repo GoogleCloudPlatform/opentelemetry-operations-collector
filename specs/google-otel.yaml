@@ -18,7 +18,8 @@ version: 0.121.0
 description: "OpenTelemetry Collector Built By Google"
 blurb: >-
   The Google-Built OpenTelemetry Collector is an open-source, production-ready build
-  of the upstream OpenTelemetry Collector that is built entirely with upstream OpenTelemetry components.
+  of the upstream OpenTelemetry Collector that is built with upstream OpenTelemetry
+  components.
 opentelemetry_version: 0.121.0
 opentelemetry_stable_version: 1.27.0
 binary_name: otelcol-google

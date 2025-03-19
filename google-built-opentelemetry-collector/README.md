@@ -1,6 +1,6 @@
 # Google-Built OpenTelemetry Collector
 
-The Google-Built OpenTelemetry Collector is an open-source, production-ready build of the upstream OpenTelemetry Collector that is built entirely with upstream OpenTelemetry components.
+The Google-Built OpenTelemetry Collector is an open-source, production-ready build of the upstream OpenTelemetry Collector that is built with upstream OpenTelemetry components.
 
 # Components
 

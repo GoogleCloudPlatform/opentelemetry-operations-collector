@@ -61,6 +61,7 @@ A curated distribution of the OpenTelemetry Collector for use in GCP.
 | file | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/fileexporter/README.md) |
 | googlecloud | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/googlecloudexporter/README.md) |
 | googlemanagedprometheus | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/googlemanagedprometheusexporter/README.md) |
+| googleservicecontrol | [docs](No docs linked for component) |
 | loadbalancing | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/loadbalancingexporter/README.md) |
 | nop | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/exporter/nopexporter/README.md) |
 | otelarrow | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/otelarrowexporter/README.md) |

@@ -61,6 +61,8 @@ processors:
 - gomod: go.opentelemetry.io/collector/processor/memorylimiterprocessor v0.121.0
 
 exporters:
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/exporter/googleservicecontrolexporter v0.121.0
+  path: ../exporter/googleservicecontrolexporter
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/fileexporter v0.121.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter v0.121.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlemanagedprometheusexporter v0.121.0

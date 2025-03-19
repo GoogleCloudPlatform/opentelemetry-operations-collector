@@ -61,6 +61,7 @@ components:
         - otelarrow
         - googlecloud
         - googlemanagedprometheus
+        - googleservicecontrol
     connectors:
         - forward
         - count

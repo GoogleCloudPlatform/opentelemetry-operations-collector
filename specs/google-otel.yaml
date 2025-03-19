@@ -82,6 +82,7 @@ components:
     - otelarrow
     - googlecloud
     - googlemanagedprometheus
+    - googleservicecontrol
 
   extensions:
     - zpages

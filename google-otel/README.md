@@ -81,7 +81,7 @@ A curated distribution of the OpenTelemetry Collector for use in GCP.
 | hostobserver | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/observer/README.md) |
 | httpforwarder | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/httpforwarderextension/README.md) |
 | k8sobserver | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/observer/README.md) |
-| oauth2clientauth | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/oauth2clientauthextension/README.md) |
+| oauth2clientauth | [docs](No docs linked for component) |
 | oidcauth | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/oidcauthextension/README.md) |
 | opamp | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/opampextension/README.md) |
 | pprof | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/pprofextension/README.md) |

@@ -35,6 +35,7 @@ OCB_BIN ?= $(TOOLS_DIR)/ocb
 GO_VERSION = 1.24.0
 GO_BIN_DIR ?= $(TOOLS_DIR)/go/bin
 GO_BIN ?= $(GO_BIN_DIR)/go
+SET_GO_BIN_PATH ?= PATH="$(GO_BIN_DIR):$$PATH"
 
 .PHONY: build
 build: $(COLLECTOR_BINARY_NAME)
@@ -77,7 +78,7 @@ collector-build: clean-collector $(COLLECTOR_BINARY_NAME)
 
 # Using OCB and the local manifest file, build a collector.
 $(COLLECTOR_BINARY_NAME): $(OCB_BIN)
-	PATH="$(GO_BIN_DIR):$PATH" $(OCB_BIN) --skip-compilation --verbose --config manifest.yaml
+	$(SET_GO_BIN_PATH) $(OCB_BIN) --skip-compilation --verbose --config manifest.yaml
 	cd $(COLLECTOR_BUILD_TEMP_DIR) && \
 		GOWORK=off \
 		CGO_ENABLED=$(COLLECTOR_CGO) \

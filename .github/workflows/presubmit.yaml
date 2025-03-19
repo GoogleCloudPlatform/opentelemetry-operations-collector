@@ -30,7 +30,7 @@ jobs:
         go: [1.24.1]
     runs-on: ${{matrix.os}}
     steps:
-      - uses: actions/setup-go@v3
+      - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
           cache: true

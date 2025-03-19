@@ -122,11 +122,13 @@ distrogen-golden-update:
 
 ALL_DIRECTORIES = find . -type d  -print0
 EXCLUDE_TOOLS_DIRS = grep -z -v ".*\.tools.*"
+EXCLUDE_BUILD_DIRS = grep -z -v -e ".*_build.*" -e ".*dist.*"
 
 .PHONY: workspace
 workspace: go.work
 	$(ALL_DIRECTORIES) |\
 	$(EXCLUDE_TOOLS_DIRS) |\
+	$(EXCLUDE_BUILD_DIRS) |\
 	xargs -0 go work use
 
 go.work:

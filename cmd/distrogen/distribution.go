@@ -89,6 +89,7 @@ type DistributionGenerator struct {
 	GeneratePath       string
 	Registry           *Registry
 	CustomTemplatesDir fs.FS
+	FileMode           fs.FileMode
 }
 
 // NewDistributionGenerator creates a DistributionGenerator.
@@ -96,6 +97,8 @@ func NewDistributionGenerator(spec *DistributionSpec, registry *Registry, forceG
 	d := DistributionGenerator{
 		Spec:     spec,
 		Registry: registry,
+		// -rw-r--r--
+		FileMode: 0644,
 	}
 	d.GenerateDirName = spec.Name
 
@@ -129,13 +132,13 @@ func (d *DistributionGenerator) Generate() error {
 	if err != nil {
 		return err
 	}
-	templates, err := GetEmbeddedTemplateSet(templateContext)
+	templates, err := GetEmbeddedTemplateSet(templateContext, d.FileMode)
 	if err != nil {
 		return err
 	}
 
 	if d.CustomTemplatesDir != nil {
-		customTemplates, err := GetTemplateSetFromDir(d.CustomTemplatesDir, templateContext)
+		customTemplates, err := GetTemplateSetFromDir(d.CustomTemplatesDir, templateContext, d.FileMode)
 		if err != nil {
 			return err
 		}
@@ -164,7 +167,7 @@ func (d *DistributionGenerator) Generate() error {
 // this existing generation, as well as a method of detecting whether a new generation
 // needs to be done at all (if no spec changes no need to generate).
 func (d *DistributionGenerator) WriteSpec() error {
-	return yamlMarshalToFile(d.Spec, filepath.Join(d.GeneratePath, "spec.yaml"))
+	return yamlMarshalToFile(d.Spec, filepath.Join(d.GeneratePath, "spec.yaml"), d.FileMode)
 }
 
 // MoveGeneratedDirToWd performs the final step of the generation, moving the generated temp

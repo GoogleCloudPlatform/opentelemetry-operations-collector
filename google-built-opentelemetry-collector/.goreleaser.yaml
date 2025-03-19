@@ -17,7 +17,7 @@ project_name: opentelemetry-operations-collector
 
 env:
   - LD_FLAGS=-s -w
-  - CGO_ENABLED=false
+  - CGO_ENABLED=0
   - BUILD_FLAGS=-trimpath
   - GOWORK=off
 
@@ -53,9 +53,13 @@ nfpms:
       - src: otelcol-google.conf
         dst: /etc/otelcol-google/otelcol-google.conf
         type: config|noreplace
+        file_info:
+          mode: 0644
       - src: config.yaml
         dst: /etc/otelcol-google/config.yaml
         type: config|noreplace
+        file_info:
+          mode: 0644
     scripts:
       preinstall: preinstall.sh
       postinstall: postinstall.sh
@@ -70,6 +74,7 @@ nfpms:
     formats:
       - deb
       - rpm
+    umask: 0
     maintainer: Google Cloud Platform <google@google.com> # something better than this
     description: OpenTelemetry Collector Built By Google
     license: Apache 2.0

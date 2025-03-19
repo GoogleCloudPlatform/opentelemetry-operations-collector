@@ -1,0 +1,86 @@
+version: 2
+project_name: opentelemetry-operations-collector
+
+env:
+  - LD_FLAGS=-s -w
+  - CGO_ENABLED={{ if .CollectorCGO }}1{{else}}0{{end}}
+  - BUILD_FLAGS=-trimpath
+  - GOWORK=off
+
+builds:
+  - id: {{ .BinaryName }}-linux
+    goos:
+      - linux
+    goarch:
+      - "386"
+      - amd64
+      - arm64
+    goarm:
+      - "7"
+    binary: {{ .BinaryName }}
+    dir: _build
+    ldflags:
+      - "-s -w"
+    flags:
+      - "-trimpath"
+      - "-buildvcs=false"
+
+  - id: {{ .BinaryName }}-windows
+    goos:
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    goarm:
+      - "7"
+    binary: {{ .BinaryName }}
+    dir: _build
+    ldflags:
+      - "-s -w"
+    flags:
+      - "-trimpath"
+      - "-buildvcs=false"
+
+archives:
+  - id: {{ .Name }}
+    builds:
+      - {{ .BinaryName }}-linux
+    name_template: {{`'{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}{{ if .Mips }}_{{ .Mips }}{{ end }}'`}}
+  - id: {{ .Name }}-windows
+    builds:
+      - {{ .BinaryName }}-windows
+    name_template: {{`'{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}{{ if .Mips }}_{{ .Mips }}{{ end }}'`}}
+
+nfpms:
+  - package_name: {{ .BinaryName }}
+    contents:
+      - src: {{ .SystemdServiceName }}
+        dst: /lib/systemd/system/{{ .SystemdServiceName }}
+      - src: {{ .SystemdConfFileName }}
+        dst: /etc/{{ .BinaryName }}/{{ .SystemdConfFileName }}
+        type: config|noreplace
+        file_info:
+          mode: 0644
+      - src: config.yaml
+        dst: /etc/{{ .BinaryName }}/config.yaml
+        type: config|noreplace
+        file_info:
+          mode: 0644
+    scripts:
+      preinstall: preinstall.sh
+      postinstall: postinstall.sh
+      preremove: preremove.sh
+    overrides:
+      rpm:
+        dependencies:
+          - /bin/sh
+    id: {{ .BinaryName }}
+    builds:
+      - {{ .BinaryName }}-linux
+    formats:
+      - deb
+      - rpm
+    umask: 0
+    maintainer: Google Cloud Platform <google@google.com> # something better than this
+    description: {{ .Description }}
+    license: Apache 2.0

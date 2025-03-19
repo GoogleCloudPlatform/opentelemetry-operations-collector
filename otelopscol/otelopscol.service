@@ -1,0 +1,15 @@
+[Unit]
+Description=OpenTelemetry Collector binary used by the Ops Agent
+After=network.target
+
+[Service]
+EnvironmentFile=/etc/otelopscol/otelopscol.conf
+ExecStart=/usr/bin/otelopscol $OTELCOL_OPTIONS
+KillMode=mixed
+Restart=on-failure
+Type=simple
+User=otelopscol
+Group=otelopscol
+
+[Install]
+WantedBy=multi-user.target

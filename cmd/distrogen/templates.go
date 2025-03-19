@@ -36,6 +36,7 @@ type TemplateFile struct {
 	FilePath string
 	Context  any
 	FS       fs.FS
+	FileMode fs.FileMode
 }
 
 // outputPath gets the intended destination output path for the rendered template.
@@ -72,11 +73,17 @@ func (tf *TemplateFile) Render(outDir string) error {
 			return err
 		}
 	}
-	return os.WriteFile(
-		filepath.Join(outDir, tmplPath, tf.Name),
+	generateFilePath := filepath.Join(outDir, tmplPath, tf.Name)
+	if err := os.WriteFile(
+		generateFilePath,
 		buf.Bytes(),
 		fs.ModePerm,
-	)
+	); err != nil {
+		return err
+	}
+	// HACK: WriteFile respects `umask` on the system but we don't want to.
+	// We truly do want read acces to any group in the files we create.
+	return os.Chmod(generateFilePath, tf.FileMode)
 }
 
 var (
@@ -90,7 +97,7 @@ type TemplateSet map[string]*TemplateFile
 // AddTemplate will add a template to the template set. If a template
 // is added with a name that already exists, AddTemplate will overwrite
 // the template it has.
-func (ts TemplateSet) AddTemplate(path string, templateContext any, dir fs.FS) error {
+func (ts TemplateSet) AddTemplate(path string, templateContext any, dir fs.FS, fileMode fs.FileMode) error {
 	name := filepath.Base(path)
 	if !strings.HasSuffix(name, ".go.tmpl") {
 		return fmt.Errorf("%w: %s", ErrInvalidTemplateName, name)
@@ -100,6 +107,7 @@ func (ts TemplateSet) AddTemplate(path string, templateContext any, dir fs.FS) e
 		Name:     strings.TrimSuffix(name, ".go.tmpl"),
 		Context:  templateContext,
 		FS:       dir,
+		FileMode: fileMode,
 	}
 	return nil
 }
@@ -113,9 +121,22 @@ func (ts TemplateSet) GetTemplate(name string) (*TemplateFile, error) {
 	return tf, nil
 }
 
+// RenameExceptionalTemplates will take known names from the TemplateSet
+// and replace the rendering name with something else. This is generally
+// used for templates that need to be named something different depending
+// on the contents of the spec.
+func (ts TemplateSet) RenameExceptionalTemplates(spec *DistributionSpec) {
+	if file, ok := ts["systemd-unit.service.go.tmpl"]; ok {
+		file.Name = spec.BinaryName + ".service"
+	}
+	if file, ok := ts["conf-file.conf.go.tmpl"]; ok {
+		file.Name = spec.BinaryName + ".conf"
+	}
+}
+
 // GetTemplateSetFromDir will walk an FS for any *.go.tmpl files and
 // will collect them into a TemplateSet.
-func GetTemplateSetFromDir(dir fs.FS, templateContext any) (TemplateSet, error) {
+func GetTemplateSetFromDir(dir fs.FS, templateContext any, fileMode fs.FileMode) (TemplateSet, error) {
 	templates := TemplateSet{}
 
 	err := fs.WalkDir(dir, ".", func(path string, d fs.DirEntry, err error) error {
@@ -125,7 +146,7 @@ func GetTemplateSetFromDir(dir fs.FS, templateContext any) (TemplateSet, error) 
 		if d.IsDir() || !strings.HasSuffix(d.Name(), ".go.tmpl") {
 			return nil
 		}
-		return templates.AddTemplate(path, templateContext, dir)
+		return templates.AddTemplate(path, templateContext, dir, fileMode)
 	})
 
 	return templates, err
@@ -133,10 +154,10 @@ func GetTemplateSetFromDir(dir fs.FS, templateContext any) (TemplateSet, error) 
 
 // GetEmbeddedTemplateSet will get the template set from the template FS embedded
 // into the distrogen binary.
-func GetEmbeddedTemplateSet(templateContext any) (TemplateSet, error) {
+func GetEmbeddedTemplateSet(templateContext any, fileMode fs.FileMode) (TemplateSet, error) {
 	embeddedTemplatesSubFS, err := fs.Sub(embeddedTemplatesFS, "templates")
 	if err != nil {
 		return nil, err
 	}
-	return GetTemplateSetFromDir(embeddedTemplatesSubFS, templateContext)
+	return GetTemplateSetFromDir(embeddedTemplatesSubFS, templateContext, fileMode)
 }

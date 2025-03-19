@@ -106,3 +106,4 @@ providers:
 - gomod: go.opentelemetry.io/collector/confmap/provider/yamlprovider v1.30.0
 
 replaces:
+

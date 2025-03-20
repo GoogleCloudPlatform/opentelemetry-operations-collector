@@ -12,14 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-if command -v systemctl >/dev/null 2>&1; then
-    if [ -d /run/systemd/system ]; then
-        systemctl daemon-reload
-    fi
-    systemctl enable otelcol-google.service
-    if [ -f /etc/otelcol-google/config.yaml ]; then
-        if [ -d /run/systemd/system ]; then
-            systemctl restart otelcol-google.service
-        fi
-    fi
-fi
+getent passwd otelopscol >/dev/null || useradd --system --user-group --no-create-home --shell /sbin/nologin otelopscol

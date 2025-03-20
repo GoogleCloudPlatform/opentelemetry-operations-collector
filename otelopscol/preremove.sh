@@ -12,22 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG DISTRO_ROOT="."
-ARG BUILD_CONTAINER="alpine:3"
-
-FROM ${BUILD_CONTAINER} AS build
-
-RUN apk --update add make curl git
-RUN mkdir -p /build
-
-ARG DISTRO_ROOT
-COPY ${DISTRO_ROOT}/{{ .Name }}/* /build
-COPY ${DISTRO_ROOT}/extension /extension
-COPY ${DISTRO_ROOT}/receiver /receiver
-COPY ${DISTRO_ROOT}/processor /processor
-#COPY ${DISTRO_ROOT}/exporter/* /exporter
-
-RUN ls /
-
-WORKDIR /build
-RUN make goreleaser-release
+if [ "$1" != "1" ]; then
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl stop otelopscol.service
+        systemctl disable otelopscol.service
+    fi
+fi

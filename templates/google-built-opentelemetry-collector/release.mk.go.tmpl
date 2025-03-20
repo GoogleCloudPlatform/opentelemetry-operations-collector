@@ -6,5 +6,5 @@ local-container-goreleaser:
 		-f Dockerfile.goreleaser_releaser \
 		..
 	CONTAINER_ID=$$(docker create {{ .BinaryName }}-build) && \
-		docker cp $$CONTAINER_ID:/build/dist . &&\
+		docker cp $$CONTAINER_ID:/{{ .Name }}/dist . &&\
 		docker rm --force $$CONTAINER_ID

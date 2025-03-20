@@ -59,37 +59,46 @@ tag-repo:
 RUN_DISTROGEN=go run ./cmd/distrogen
 
 .PHONY: gen-all
-gen-all: gen-google-otel gen-otelopscol
+gen-all: gen-google-built-otel gen-otelopscol
 
 .PHONY: regen-all
-regen-all: regen-google-otel regen-otelopscol
+regen-all: regen-google-built-otel regen-otelopscol
 
-GEN_GOOGLE_OTEL=$(RUN_DISTROGEN) -registry ./registries/operations-collector-registry.yaml -spec ./specs/google-otel.yaml -custom_templates ./templates/google-otel
-.PHONY: gen-google-otel
-gen-google-otel:
-	@$(GEN_GOOGLE_OTEL)
+GEN_GOOGLE_BUILT_OTEL=$(RUN_DISTROGEN) -spec ./specs/google-built-opentelemetry-collector.yaml \
+								 -registry ./registries/operations-collector-registry.yaml \
+								 -custom_templates ./templates/google-built-opentelemetry-collector
+.PHONY: gen-google-built-otel
+gen-google-built-otel:
+	@$(GEN_GOOGLE_BUILT_OTEL)
+	@$(MAKE) addlicense
 
-.PHONY: regen-google-otel
-regen-google-otel:
-	@$(GEN_GOOGLE_OTEL) -force
+.PHONY: regen-google-built-otel
+regen-google-built-otel:
+	@$(GEN_GOOGLE_BUILT_OTEL) -force
+	@$(MAKE) addlicense
 
-GEN_GOOGLE_OTEL_CONTRIB=$(RUN_DISTROGEN) -registry ./registries/operations-collector-registry.yaml -spec ./specs/google-otel-contrib.yaml -custom_templates ./templates/google-otel
-.PHONY: gen-google-otel
-gen-google-otel-contrib:
-	@$(GEN_GOOGLE_OTEL_CONTRIB)
+.PHONY: regen-google-built-otel-v
+regen-google-built-otel-v:
+	@$(GEN_GOOGLE_BUILT_OTEL) -force -v
+	@$(MAKE) addlicense
 
-.PHONY: regen-google-otel
-regen-google-otel-contrib:
-	@$(GEN_GOOGLE_OTEL_CONTRIB) -force
-
-GEN_OTELOPSCOL=$(RUN_DISTROGEN) -registry ./registries/operations-collector-registry.yaml -spec ./specs/otelopscol.yaml -custom_templates ./templates/otelopscol
+GEN_OTELOPSCOL=$(RUN_DISTROGEN) -spec ./specs/otelopscol.yaml \
+								-registry ./registries/operations-collector-registry.yaml \
+								-custom_templates ./templates/otelopscol
 .PHONY: gen-otelopscol
 gen-otelopscol:
 	@$(GEN_OTELOPSCOL)
+	@$(MAKE) addlicense
 
 .PHONY: regen-otelopscol
 regen-otelopscol:
 	@$(GEN_OTELOPSCOL) -force
+	@$(MAKE) addlicense
+
+.PHONY: regen-otelopscol-v
+regen-otelopscol-v:
+	@$(GEN_OTELOPSCOL) -force -v
+	@$(MAKE) addlicense
 
 #########
 # Testing
@@ -159,8 +168,6 @@ install-tools: tools-dir
 	$(TOOL_LIST)
 
 ADDLICENSE_IGNORES = -ignore "**/.tools/*" \
-					-ignore "**/otelopscol/**/*" \
-					-ignore "**/google-otel/**/*" \
 					-ignore "**/docs/**/*" \
 					-ignore "**/*.md" \
 					-ignore "**/testdata/*" \
@@ -168,7 +175,7 @@ ADDLICENSE_IGNORES = -ignore "**/.tools/*" \
 					-ignore "**/spec.yaml"
 .PHONY: addlicense
 addlicense:
-	$(ADDLICENSE) -c "Google LLC" -l apache $(ADDLICENSE_IGNORES) .
+	@$(ADDLICENSE) -c "Google LLC" -l apache $(ADDLICENSE_IGNORES) .
 
 .PHONY: checklicense
 checklicense:

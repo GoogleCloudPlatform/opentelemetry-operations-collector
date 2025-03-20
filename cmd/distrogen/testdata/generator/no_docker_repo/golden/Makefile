@@ -1,12 +1,26 @@
+# Copyright 2025 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 # Variables filled in from distro specification
-VERSION ?= 
+VERSION ?= 0.121.0
 OTEL_VERSION ?= 0.121.0
 OTEL_VERSION_TAG = v$(OTEL_VERSION)
-COLLECTOR_BINARY_NAME = otelopscol
+COLLECTOR_BINARY_NAME = otelcol-basic
 COLLECTOR_BUILD_TEMP_DIR = $(PWD)/_build
-COLLECTOR_CGO = 1
+COLLECTOR_CGO = 0
 COLLECTOR_BUILDVCS ?= false
-COLLECTOR_BUILD_TAGS ?= gpu
+COLLECTOR_BUILD_TAGS ?= 
 
 DOCKER_LOCAL_IMAGE_TAG ?= $(COLLECTOR_BINARY_NAME)
 DOCKER_IMAGE_TAG = $(DOCKER_REPO)/$(COLLECTOR_BINARY_NAME):$(VERSION)
@@ -17,7 +31,7 @@ TOOLS_DIR = $(PWD)/.tools
 
 OCB_BIN ?= $(TOOLS_DIR)/ocb
 
-GO_VERSION = 1.23.2
+GO_VERSION = 1.24.0
 GO_BIN_DIR ?= $(TOOLS_DIR)/go/bin
 GO_BIN ?= $(GO_BIN_DIR)/go
 SET_GO_BIN_PATH ?= PATH="$(GO_BIN_DIR):$$PATH"
@@ -45,12 +59,6 @@ install-tools: go ocb
 .PHONY: image-build
 image-build: $(COLLECTOR_BINARY_NAME)
 	docker buildx build -t $(DOCKER_LOCAL_IMAGE_TAG) .
-
-# Build an image by leveraging Dockerfile.build, which will
-# build the collector binary within Docker as well.
-.PHONY: image-build-full
-image-build-full:
-	docker buildx build -f Dockerfile.build -t $(DOCKER_LOCAL_IMAGE_TAG) ..
 
 # After an image is built, pushes it to the specified docker repository.
 .PHONY: image-push
@@ -80,7 +88,7 @@ $(COLLECTOR_BINARY_NAME): $(OCB_BIN)
 			-buildvcs=$(COLLECTOR_BUILDVCS) \
 			-tags=$(COLLECTOR_BUILD_TAGS) \
 			--ldflags="-s -w $(COLLECTOR_LD_FLAGS)" \
-			-o ../otelopscol \
+			-o ../otelcol-basic \
 			.
 	$(MAKE) clean-build-dir
 

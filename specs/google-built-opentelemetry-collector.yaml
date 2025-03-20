@@ -13,6 +13,7 @@
 # limitations under the License.
 
 name: google-built-opentelemetry-collector
+module: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/google-built-opentelemetry-collector
 display_name: Google-Built OpenTelemetry Collector
 version: 0.121.0
 description: "OpenTelemetry Collector Built By Google"
@@ -28,9 +29,6 @@ go_version: 1.24.0
 
 feature_gates:
   - exporter.googlemanagedprometheus.intToDouble
-
-# TEMP
-docker_repo: us-docker.pkg.dev/experimental-braydonk/google-otel
 
 components:
   receivers:

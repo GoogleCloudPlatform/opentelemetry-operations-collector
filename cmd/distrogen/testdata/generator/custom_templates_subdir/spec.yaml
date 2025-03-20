@@ -26,7 +26,7 @@ go_version: 1.24.0
 feature_gates:
   - exporter.googlemanagedprometheus.intToDouble
 
-docker_repo: us-docker.pkg.dev/pretend-repo/otelcol-basic
+docker_repo: us-docker.pkg.dev/experimental-braydonk/google-otel
 
 components:
   receivers:

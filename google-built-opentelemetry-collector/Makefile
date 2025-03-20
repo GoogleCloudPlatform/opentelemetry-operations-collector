@@ -1,17 +1,3 @@
-# Copyright 2025 Google LLC
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 # Variables filled in from distro specification
 VERSION ?= 0.121.0
 OTEL_VERSION ?= 0.121.0
@@ -22,7 +8,6 @@ COLLECTOR_CGO = 0
 COLLECTOR_BUILDVCS ?= false
 COLLECTOR_BUILD_TAGS ?= 
 
-DOCKER_REPO ?= us-docker.pkg.dev/experimental-braydonk/google-otel
 DOCKER_LOCAL_IMAGE_TAG ?= $(COLLECTOR_BINARY_NAME)
 DOCKER_IMAGE_TAG = $(DOCKER_REPO)/$(COLLECTOR_BINARY_NAME):$(VERSION)
 
@@ -61,9 +46,18 @@ install-tools: go ocb
 image-build: $(COLLECTOR_BINARY_NAME)
 	docker buildx build -t $(DOCKER_LOCAL_IMAGE_TAG) .
 
+# Build an image by leveraging Dockerfile.build, which will
+# build the collector binary within Docker as well.
+.PHONY: image-build-full
+image-build-full:
+	docker buildx build -f Dockerfile.build -t $(DOCKER_LOCAL_IMAGE_TAG) ..
+
 # After an image is built, pushes it to the specified docker repository.
 .PHONY: image-push
 image-push:
+ifndef DOCKER_REPO
+	$(error "Must set DOCKER_REPO to push")
+endif
 	docker tag $(DOCKER_LOCAL_IMAGE_TAG) $(DOCKER_IMAGE_TAG)
 	docker push $(DOCKER_IMAGE_TAG)
 

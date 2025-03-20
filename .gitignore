@@ -11,6 +11,9 @@ go.work.sum
 # Goreleaser release dir
 **/dist
 
+# googet release dir
+**/googet
+
 # For VSCode users
 .vscode
 

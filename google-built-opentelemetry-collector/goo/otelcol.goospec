@@ -2,8 +2,7 @@
 {{$ARCH := .ARCH -}}
 {{$GOOS := .GOOS -}}
 {{$GOARCH := .GOARCH -}}
-{{$INSTALL_DIR := or (.INSTALL_DIR) "<ProgramData>/Google/OpenTelemetry Collector" -}}
-{{$DATA_DIR := or (.DATA_DIR) "<ProgramData>/Google/OpenTelemetry Collector" -}}
+{{$INSTALL_DIR := or (.INSTALL_DIR) "<ProgramFiles>/Google/OpenTelemetry Collector" -}}
 {
   "name": "google-built-opentelemetry-collector",
   "version": "{{$PKG_VERSION}}",
@@ -11,15 +10,8 @@
   "authors": "Google Cloud Platform",
   "license": "http://www.apache.org/licenses/LICENSE-2.0",
   "description": "OpenTelemetry Collector Built By Google",
-  "sources": [{
-      "include": [
-        "dist/otelcol-google-windows_windows_amd64_v1/otelcol-google.exe",
-        "goo/maint.ps1",
-        "config.yaml"
-      ]
-  }],
   "files": {
-    "dist\\otelcol-google-windows_windows_amd64_v1\\otelcol-google.exe": "{{$INSTALL_DIR}}/bin/otelcol-google.exe"
+    "dist/otelcol-google-windows_windows_amd64_v1/otelcol-google.exe": "{{$INSTALL_DIR}}/bin/otelcol-google.exe"
   },
   "install": {
     "path": "goo/maint.ps1",
@@ -28,5 +20,11 @@
   "uninstall": {
     "path": "goo/maint.ps1",
     "args": ["-InstallDir:\"{{$INSTALL_DIR}}\"", "-Action:uninstall"]
-  }
+  },
+  "sources": [{
+      "include": [
+        "dist/otelcol-google-windows_windows_amd64_v1/otelcol-google.exe",
+        "config.yaml"
+      ]
+  }]
 }

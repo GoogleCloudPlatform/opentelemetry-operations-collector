@@ -2,8 +2,7 @@
 {{`{{$ARCH := .ARCH -}}`}}
 {{`{{$GOOS := .GOOS -}}`}}
 {{`{{$GOARCH := .GOARCH -}}`}}
-{{`{{$INSTALL_DIR := or (.INSTALL_DIR) "<ProgramData>/Google/OpenTelemetry Collector" -}}`}}
-{{`{{$DATA_DIR := or (.DATA_DIR) "<ProgramData>/Google/OpenTelemetry Collector" -}}`}}
+{{`{{$INSTALL_DIR := or (.INSTALL_DIR) "<ProgramFiles>/Google/OpenTelemetry Collector" -}}`}}
 {
   "name": "{{ .Name }}",
   "version": "{{`{{$PKG_VERSION}}`}}",
@@ -12,7 +11,7 @@
   "license": "http://www.apache.org/licenses/LICENSE-2.0",
   "description": "{{ .Description }}",
   "files": {
-    "dist\\{{ .Name }}-windows_windows_amd64\\{{ .Name }}-windows_windows_amd64.exe": "{{`{{$INSTALL_DIR}}`}}/bin/{{ .BinaryName }}.exe"
+    "dist/{{ .BinaryName }}-windows_windows_amd64_v1/{{ .BinaryName }}.exe": "{{`{{$INSTALL_DIR}}`}}/bin/{{ .BinaryName }}.exe"
   },
   "install": {
     "path": "goo/maint.ps1",
@@ -24,8 +23,8 @@
   },
   "sources": [{
       "include": [
-        "dist/{{ .Name }}-windows_windows_amd64/{{ .Name }}-windows_windows_amd64.exe",
-        "config.yaml",
+        "dist/{{ .BinaryName }}-windows_windows_amd64_v1/{{ .BinaryName }}.exe",
+        "config.yaml"
       ]
   }]
 }

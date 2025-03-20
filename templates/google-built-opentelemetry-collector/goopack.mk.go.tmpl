@@ -1,18 +1,19 @@
 include ./Makefile
 
 GOOPACK_BIN ?= $(TOOLS_DIR)/goopack
-GOOPACK_ARCH ?= amd64
+GOOPACK_ARCH ?= x86_64
+GOOPACK_GOARCH ?= amd64
 GOOPACK_DEST ?= googet
 
 .PHONY: goo-package
 goo-package: $(GOOPACK_BIN) goreleaser-release
-	mkdir -p $(GOOPACK_DEST)
-    $(GOOPACK_BIN) -output_dir $(GOOPACK_DEST) \
-		-var:PKG_VERSION={{ .Version }} \
-		-var:ARCH=$(GOOPACK_ARCH) \
-		-var:GOOS=windows \
-		-var:GOARCH=$(GOOPACK_ARCH) \
-		goo/install.goospec
+	mkdir -p $(GOOPACK_DEST) && \
+		$(GOOPACK_BIN) -output_dir $(GOOPACK_DEST) \
+			-var:PKG_VERSION={{ .Version }} \
+			-var:ARCH=$(GOOPACK_ARCH) \
+			-var:GOOS=windows \
+			-var:GOARCH=$(GOOPACK_GOARCH) \
+			goo/otelcol.goospec
 
 .PHONY: goopack
 goopack: $(GOOPACK_BIN)

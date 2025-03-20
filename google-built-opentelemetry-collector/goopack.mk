@@ -4,12 +4,16 @@ GOOPACK_BIN ?= $(TOOLS_DIR)/goopack
 GOOPACK_ARCH ?= x86_64
 GOOPACK_GOARCH ?= amd64
 GOOPACK_DEST ?= googet
-COLON := :
 
 .PHONY: goo-package
-goo-package: $(GOOPACK_BIN)
+goo-package: $(GOOPACK_BIN) goreleaser-release
 	mkdir -p $(GOOPACK_DEST) && \
-    $(GOOPACK_BIN) -output_dir $(GOOPACK_DEST) -var$(COLON)PKG_VERSION=0.121.0 -var$(COLON)ARCH=$(GOOPACK_ARCH) -var$(COLON)GOOS=windows -var$(COLON)GOARCH=$(GOOPACK_GOARCH) goo/install.goospec
+		$(GOOPACK_BIN) -output_dir $(GOOPACK_DEST) \
+			-var:PKG_VERSION=0.121.0 \
+			-var:ARCH=$(GOOPACK_ARCH) \
+			-var:GOOS=windows \
+			-var:GOARCH=$(GOOPACK_GOARCH) \
+			goo/otelcol.goospec
 
 .PHONY: goopack
 goopack: $(GOOPACK_BIN)

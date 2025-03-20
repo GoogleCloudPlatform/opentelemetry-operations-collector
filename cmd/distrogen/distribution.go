@@ -31,6 +31,7 @@ var ErrNoDiff = errors.New("no differences found with previous generation")
 // templates/user provided templates.
 type DistributionSpec struct {
 	Name                        string                  `yaml:"name"`
+	Module                      string                  `yaml:"module"`
 	DisplayName                 string                  `yaml:"display_name"`
 	Description                 string                  `yaml:"description"`
 	Blurb                       string                  `yaml:"blurb"`

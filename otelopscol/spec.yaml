@@ -1,4 +1,5 @@
 name: otelopscol
+module: ""
 display_name: ""
 description: OpenTelemetry Collector binary used by the Ops Agent
 blurb: ""

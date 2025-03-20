@@ -113,11 +113,11 @@ If you want to provide additional templates, or you wish to override one of the 
 Given a directory like this:
 ```
 -rw-r----- 1 user user 1801 Mar 19 01:37 config.yaml.go.tmpl
--rw-r----- 1 user user 1726 Mar 20 01:54 Dockerfile.build.go.tmpl
+-rw-r----- 1 user user 1726 Mar 20 01:54 Dockerfile.alternate.go.tmpl
 drwxr-x--- 3 user user 4096 Mar 20 00:07 docs
 -rw-r----- 1 user user  300 Mar 20 01:49 local.mk.go.tmpl
 ```
-* `local.mk.go.tmpl` and `Dockerfile.build.go.tmpl` are new additional templates, and will be rendered along with the default templates
+* `local.mk.go.tmpl` and `Dockerfile.alternate.go.tmpl` are new additional templates, and will be rendered along with the default templates
 * `config.yaml.go.tmpl` matches the name of `config.yaml.go.tmpl` from the embedded template set, so the custom directory will be chosen instead
 * `docs` is a directory with more templates, which will be rendered in the distribution folder with the same structure as they are in the template folder
 

@@ -59,10 +59,10 @@ tag-repo:
 RUN_DISTROGEN=go run ./cmd/distrogen
 
 .PHONY: gen-all
-gen-all: gen-google-otel gen-otelopscol
+gen-all: gen-google-built-otel gen-otelopscol
 
 .PHONY: regen-all
-regen-all: regen-google-otel regen-otelopscol
+regen-all: regen-google-built-otel regen-otelopscol
 
 GEN_GOOGLE_BUILT_OTEL=$(RUN_DISTROGEN) -spec ./specs/google-built-opentelemetry-collector.yaml \
 								 -registry ./registries/operations-collector-registry.yaml \
@@ -70,14 +70,17 @@ GEN_GOOGLE_BUILT_OTEL=$(RUN_DISTROGEN) -spec ./specs/google-built-opentelemetry-
 .PHONY: gen-google-built-otel
 gen-google-built-otel:
 	@$(GEN_GOOGLE_BUILT_OTEL)
+	@$(MAKE) addlicense
 
 .PHONY: regen-google-built-otel
 regen-google-built-otel:
 	@$(GEN_GOOGLE_BUILT_OTEL) -force
+	@$(MAKE) addlicense
 
 .PHONY: regen-google-built-otel-v
 regen-google-built-otel-v:
 	@$(GEN_GOOGLE_BUILT_OTEL) -force -v
+	@$(MAKE) addlicense
 
 GEN_OTELOPSCOL=$(RUN_DISTROGEN) -spec ./specs/otelopscol.yaml \
 								-registry ./registries/operations-collector-registry.yaml \
@@ -85,10 +88,17 @@ GEN_OTELOPSCOL=$(RUN_DISTROGEN) -spec ./specs/otelopscol.yaml \
 .PHONY: gen-otelopscol
 gen-otelopscol:
 	@$(GEN_OTELOPSCOL)
+	@$(MAKE) addlicense
 
 .PHONY: regen-otelopscol
 regen-otelopscol:
 	@$(GEN_OTELOPSCOL) -force
+	@$(MAKE) addlicense
+
+.PHONY: regen-otelopscol
+regen-otelopscol-v:
+	@$(GEN_OTELOPSCOL) -force -v
+	@$(MAKE) addlicense
 
 #########
 # Testing
@@ -158,8 +168,6 @@ install-tools: tools-dir
 	$(TOOL_LIST)
 
 ADDLICENSE_IGNORES = -ignore "**/.tools/*" \
-					-ignore "**/otelopscol/**/*" \
-					-ignore "**/google-otel/**/*" \
 					-ignore "**/docs/**/*" \
 					-ignore "**/*.md" \
 					-ignore "**/testdata/*" \
@@ -167,7 +175,7 @@ ADDLICENSE_IGNORES = -ignore "**/.tools/*" \
 					-ignore "**/spec.yaml"
 .PHONY: addlicense
 addlicense:
-	$(ADDLICENSE) -c "Google LLC" -l apache $(ADDLICENSE_IGNORES) .
+	@$(ADDLICENSE) -c "Google LLC" -l apache $(ADDLICENSE_IGNORES) .
 
 .PHONY: checklicense
 checklicense:

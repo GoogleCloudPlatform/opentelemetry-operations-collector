@@ -169,7 +169,8 @@ install-tools: tools-dir
 	GOBIN=$(TOOLS_DIR) go install \
 	$(TOOL_LIST)
 
-ADDLICENSE_IGNORES = -ignore "**/.tools/*" \
+ADDLICENSE_IGNORES = -ignore "**/.tools/**/*" \
+					-ignore "**/dist/**/*" \
 					-ignore "**/docs/**/*" \
 					-ignore "**/*.md" \
 					-ignore "**/testdata/*" \

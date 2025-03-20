@@ -25,10 +25,30 @@ builds:
       - "-trimpath"
       - "-buildvcs=false"
 
+  - id: {{ .BinaryName }}-windows
+    goos:
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    goarm:
+      - "7"
+    binary: {{ .BinaryName }}
+    dir: _build
+    ldflags:
+      - "-s -w"
+    flags:
+      - "-trimpath"
+      - "-buildvcs=false"
+
 archives:
   - id: {{ .Name }}
     builds:
       - {{ .BinaryName }}-linux
+    name_template: {{`'{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}{{ if .Mips }}_{{ .Mips }}{{ end }}'`}}
+  - id: {{ .Name }}-windows
+    builds:
+      - {{ .BinaryName }}-windows
     name_template: {{`'{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}{{ if .Mips }}_{{ .Mips }}{{ end }}'`}}
 
 nfpms:

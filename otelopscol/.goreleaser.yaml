@@ -39,10 +39,30 @@ builds:
       - "-trimpath"
       - "-buildvcs=false"
 
+  - id: otelopscol-windows
+    goos:
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    goarm:
+      - "7"
+    binary: otelopscol
+    dir: _build
+    ldflags:
+      - "-s -w"
+    flags:
+      - "-trimpath"
+      - "-buildvcs=false"
+
 archives:
   - id: otelopscol
     builds:
       - otelopscol-linux
+    name_template: '{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}{{ if .Mips }}_{{ .Mips }}{{ end }}'
+  - id: otelopscol-windows
+    builds:
+      - otelopscol-windows
     name_template: '{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}{{ if .Mips }}_{{ .Mips }}{{ end }}'
 
 nfpms:

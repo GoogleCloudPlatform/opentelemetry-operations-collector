@@ -39,10 +39,30 @@ builds:
       - "-trimpath"
       - "-buildvcs=false"
 
+  - id: otelcol-google-windows
+    goos:
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    goarm:
+      - "7"
+    binary: otelcol-google
+    dir: _build
+    ldflags:
+      - "-s -w"
+    flags:
+      - "-trimpath"
+      - "-buildvcs=false"
+
 archives:
   - id: google-built-opentelemetry-collector
     builds:
       - otelcol-google-linux
+    name_template: '{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}{{ if .Mips }}_{{ .Mips }}{{ end }}'
+  - id: google-built-opentelemetry-collector-windows
+    builds:
+      - otelcol-google-windows
     name_template: '{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}{{ if .Mips }}_{{ .Mips }}{{ end }}'
 
 nfpms:

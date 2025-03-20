@@ -125,4 +125,3 @@ Provide your custom template directory to `distrogen`:
 ```
 distrogen -spec spec.yaml -custom_templates ./templates
 ```
-It will generate a `basic-distro` directory. In that directory you can run `make build` to build a binary, or `make image-build` to build a binary as well as the resulting Docker container.

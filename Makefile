@@ -95,7 +95,7 @@ regen-otelopscol:
 	@$(GEN_OTELOPSCOL) -force
 	@$(MAKE) addlicense
 
-.PHONY: regen-otelopscol
+.PHONY: regen-otelopscol-v
 regen-otelopscol-v:
 	@$(GEN_OTELOPSCOL) -force -v
 	@$(MAKE) addlicense

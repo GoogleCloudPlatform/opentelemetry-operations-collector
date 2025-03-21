@@ -15,6 +15,7 @@ exporters:
     impersonate_service_account: "serviceAccount@myproject.iam.gserviceaccount.com"
     use_raw_sc_client: "false"
     enable_debug_headers: false
+    use_insecure: false
     timeout: "10s"
     retry_on_failure:
       enabled: true
@@ -25,6 +26,9 @@ exporters:
       enabled: true
       num_consumers: 5
       queue_size: 1000
+    log:
+      default_log_name: "log-name"
+      operation_name: "test-operation-name"
 
   googleservicecontrol/required_params:
     service_name: "test.service.name"
@@ -33,6 +37,10 @@ exporters:
 service:
   pipelines:
     metrics:
+      receivers: [nop]
+      processors: [nop]
+      exporters: [googleservicecontrol/all_params]
+    logs:
       receivers: [nop]
       processors: [nop]
       exporters: [googleservicecontrol/all_params]

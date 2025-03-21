@@ -39,8 +39,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	// "google.golang.org/grpc/credentials/insecure"
 )
 
 const (
@@ -79,7 +79,12 @@ func unexportedOptsForScRequest() cmp.Option {
 		timestamppb.Timestamp{},
 		scpb.Distribution_ExplicitBuckets{},
 		distribution.Distribution_Exemplar{},
-		scpb.Distribution{})
+		scpb.Distribution{},
+		scpb.LogEntry{},
+		scpb.LogEntrySourceLocation{},
+		scpb.HttpRequest{},
+		structpb.Value{},
+		structpb.Struct{})
 }
 
 func noError(_ context.Context) error {
@@ -1138,7 +1143,13 @@ func TestAddAndBuild(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			c := newFakeClient(noError)
-			e := NewExporter(zap.NewNop(), c, testServiceID, testConsumerID, testServiceConfigID, true, componenttest.NewNopTelemetrySettings())
+			cfg := Config{
+				ServiceName:        testServiceID,
+				ConsumerProject:    testConsumerID,
+				ServiceConfigID:    testServiceConfigID,
+				EnableDebugHeaders: true,
+			}
+			e := NewMetricsExporter(cfg, zap.NewNop(), c, componenttest.NewNopTelemetrySettings())
 			e.exporterStartTime, _ = time.Parse(time.RFC3339, testExporterStartTime)
 
 			err := e.ConsumeMetrics(context.Background(), metricDataToPmetric(tc.metrics))
@@ -1173,7 +1184,13 @@ func TestAddAndBuild(t *testing.T) {
 func TestErrorPropagation(t *testing.T) {
 	metrics := sampleMetricData(t)
 	c := newFakeClient(fakeError)
-	e := NewExporter(zap.NewNop(), c, testServiceID, testConsumerID, testServiceConfigID, true, componenttest.NewNopTelemetrySettings())
+	cfg := Config{
+		ServiceName:        testServiceID,
+		ConsumerProject:    testConsumerID,
+		ServiceConfigID:    testServiceConfigID,
+		EnableDebugHeaders: true,
+	}
+	e := NewMetricsExporter(cfg, zap.NewNop(), c, componenttest.NewNopTelemetrySettings())
 
 	err := e.ConsumeMetrics(context.Background(), metricDataToPmetric(metrics))
 	if err == nil {
@@ -1205,7 +1222,7 @@ func TestCreateOperations(t *testing.T) {
 	tests := []struct {
 		name        string
 		metricsFunc func() []pmetric.Metric
-		wantOpsFunc func(*Exporter, []pmetric.Metric, time.Time) []*scpb.Operation
+		wantOpsFunc func(*MetricsExporter, []pmetric.Metric, time.Time) []*scpb.Operation
 	}{
 		{
 			// If X and Y are metric names, then we have the following Metrics: [X, Y, X, Y].
@@ -1217,7 +1234,7 @@ func TestCreateOperations(t *testing.T) {
 				met = append(met, met...)
 				return met
 			},
-			wantOpsFunc: func(e *Exporter, met []pmetric.Metric, now time.Time) []*scpb.Operation {
+			wantOpsFunc: func(e *MetricsExporter, met []pmetric.Metric, now time.Time) []*scpb.Operation {
 				return []*scpb.Operation{
 					e.createOperation(expectedResourceAttributes, met[0:1][0], now, testConsumerID),
 					e.createOperation(expectedResourceAttributes, met[1:2][0], now, testConsumerID),
@@ -1232,7 +1249,7 @@ func TestCreateOperations(t *testing.T) {
 			metricsFunc: func() []pmetric.Metric {
 				return m.Metrics
 			},
-			wantOpsFunc: func(e *Exporter, met []pmetric.Metric, now time.Time) []*scpb.Operation {
+			wantOpsFunc: func(e *MetricsExporter, met []pmetric.Metric, now time.Time) []*scpb.Operation {
 				return []*scpb.Operation{
 					e.createOperation(expectedResourceAttributes, met[0:1][0], now, testConsumerID),
 					e.createOperation(expectedResourceAttributes, met[1:2][0], now, testConsumerID),
@@ -1249,7 +1266,7 @@ func TestCreateOperations(t *testing.T) {
 				met = append(met, m.Metrics[0])
 				return met
 			},
-			wantOpsFunc: func(e *Exporter, met []pmetric.Metric, now time.Time) []*scpb.Operation {
+			wantOpsFunc: func(e *MetricsExporter, met []pmetric.Metric, now time.Time) []*scpb.Operation {
 				return []*scpb.Operation{
 					e.createOperation(expectedResourceAttributes, met[0:1][0], now, testConsumerID),
 					e.createOperation(expectedResourceAttributes, met[1:2][0], now, testConsumerID),
@@ -1263,7 +1280,7 @@ func TestCreateOperations(t *testing.T) {
 			metricsFunc: func() []pmetric.Metric {
 				return []pmetric.Metric{}
 			},
-			wantOpsFunc: func(e *Exporter, met []pmetric.Metric, now time.Time) []*scpb.Operation {
+			wantOpsFunc: func(e *MetricsExporter, met []pmetric.Metric, now time.Time) []*scpb.Operation {
 				return []*scpb.Operation{}
 			},
 		},
@@ -1271,7 +1288,13 @@ func TestCreateOperations(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			e := NewExporter(zap.NewNop(), newFakeClient(noError), testServiceID, testConsumerID, testServiceConfigID, true, componenttest.NewNopTelemetrySettings())
+			cfg := Config{
+				ServiceName:        testServiceID,
+				ConsumerProject:    testConsumerID,
+				ServiceConfigID:    testServiceConfigID,
+				EnableDebugHeaders: true,
+			}
+			e := NewMetricsExporter(cfg, zap.NewNop(), newFakeClient(noError), componenttest.NewNopTelemetrySettings())
 			metrics := tc.metricsFunc()
 
 			ops := e.createReportRequest(createRms(metrics)).Operations
@@ -1366,7 +1389,13 @@ func TestRetries(t *testing.T) {
 func TestExporterStartTime(t *testing.T) {
 	c := newFakeClient(noError)
 	now := time.Now()
-	e := NewExporter(zap.NewNop(), c, testServiceID, testConsumerID, testServiceConfigID, true, componenttest.NewNopTelemetrySettings())
+	cfg := Config{
+		ServiceName:        testServiceID,
+		ConsumerProject:    testConsumerID,
+		ServiceConfigID:    testServiceConfigID,
+		EnableDebugHeaders: true,
+	}
+	e := NewMetricsExporter(cfg, zap.NewNop(), c, componenttest.NewNopTelemetrySettings())
 
 	if e.exporterStartTime.Before(now) {
 		t.Errorf("Wrong exporter start time: got %v, want >= %v", e.exporterStartTime, now)
@@ -1392,7 +1421,13 @@ func TestParseConsumerID(t *testing.T) {
 		{consumerID: "projectid", want: "projects/projectid"},
 	}
 	for _, tc := range tests {
-		e := NewExporter(zap.NewNop(), c, testServiceID, tc.consumerID, testServiceConfigID, true, componenttest.NewNopTelemetrySettings())
+		cfg := Config{
+			ServiceName:        testServiceID,
+			ConsumerProject:    tc.consumerID,
+			ServiceConfigID:    testServiceConfigID,
+			EnableDebugHeaders: true,
+		}
+		e := NewMetricsExporter(cfg, zap.NewNop(), c, componenttest.NewNopTelemetrySettings())
 		if e.consumerID != tc.want {
 			t.Errorf("consumerID differs, got: %s, want: %s", e.consumerID, tc.want)
 		}
@@ -1458,7 +1493,13 @@ func TestOperationStartTime(t *testing.T) {
 			}
 
 			c := newFakeClient(noError)
-			e := NewExporter(zap.NewNop(), c, testServiceID, testConsumerID, testServiceConfigID, true, componenttest.NewNopTelemetrySettings())
+			cfg := Config{
+				ServiceName:        testServiceID,
+				ConsumerProject:    testConsumerID,
+				ServiceConfigID:    testServiceConfigID,
+				EnableDebugHeaders: true,
+			}
+			e := NewMetricsExporter(cfg, zap.NewNop(), c, componenttest.NewNopTelemetrySettings())
 			e.exporterStartTime, _ = time.Parse(time.RFC3339, testExporterStartTime)
 			err = e.ConsumeMetrics(context.Background(), metricDataToPmetric(metrics))
 			require.NoError(t, err)
@@ -1518,7 +1559,13 @@ func TestRetriableErrorHeader(t *testing.T) {
 		service: scpb.NewServiceControllerClient(conn),
 	}
 
-	e := NewExporter(logger, fc, testServiceID, testConsumerID, testServiceConfigID, true, componenttest.NewNopTelemetrySettings())
+	cfg := Config{
+		ServiceName:        testServiceID,
+		ConsumerProject:    testConsumerID,
+		ServiceConfigID:    testServiceConfigID,
+		EnableDebugHeaders: true,
+	}
+	e := NewMetricsExporter(cfg, logger, fc, componenttest.NewNopTelemetrySettings())
 	e.nowFunc = nowFunc
 
 	metrics := sampleMetricData(t)

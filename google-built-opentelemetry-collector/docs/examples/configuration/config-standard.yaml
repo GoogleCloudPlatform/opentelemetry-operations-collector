@@ -33,11 +33,19 @@ receivers:
           - localhost:8888
 
 processors:
-  # The batch processor is in place to regulate both the number of requests
-  # being made and the size of those requests.
+  # The resourcedetection processor is configured to detect GCP resources.
+  # Resource attributes that represent the GCP resource the collector is
+  # running on will be attached to all telemetry that goes through this
+  # processor.
+  #
+  # This processor is required in all pipelines sending data to Google Cloud.
+  # Without it, data will not be associated with particular resources which
+  # can cause issues finding and correlating the data and can lead to errors
+  # sending telemetry. Ensure all pipelines include this processor.
   #
   # Docs:
-  # https://github.com/open-telemetry/opentelemetry-collector/tree/main/processor/batchprocessor
+  # https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/resourcedetectionprocessor
+  # https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/resourcedetectionprocessor#gcp-metadata
   batch:
     send_batch_max_size: 200
     send_batch_size: 200
@@ -56,6 +64,11 @@ processors:
   # Resource attributes that represent the GCP resource the collector is
   # running on will be attached to all telemetry that goes through this
   # processor.
+  #
+  # This processor is required in all pipelines sending data to Google Cloud.
+  # Without it, data will not be associated with particular resources which
+  # can cause issues finding and correlating the data and can lead to errors
+  # sending telemetry. Ensure all pipelines include this processor.
   #
   # Docs:
   # https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/resourcedetectionprocessor
@@ -88,19 +101,30 @@ exporters:
   # The googlecloud exporter will export telemetry to different
   # Google Cloud services:
   # Logs -> Cloud Logging
-  # Metrics -> Cloud Monitoring
   # Traces -> Cloud Trace
+  # Metrics -> Cloud Monitoring (but it is recommended to use the googlemanagedprometheus exporter for metrics)
   #
-  # Docs:
+  # Google Cloud docs:
+  # https://cloud.google.com/logging/docs
+  # https://cloud.google.com/trace/docs
+  #
+  # Exporter docs:
   # https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/googlecloudexporter
   googlecloud:
     log:
       default_log_name: opentelemetry-collector
 
   # The googlemanagedprometheus exporter will send metrics to
-  # Google Managed Service for Prometheus.
+  # Google Cloud Managed Service for Prometheus.
   #
-  # Docs:
+  # It is encouraged that metrics are sent through this exporter.
+  # Sending custom metrics to Google Cloud Managed Service for Prometheus
+  # gives you the best querying experience for the lowest cost.
+  #
+  # Google Cloud Managed Service for Prometheus docs:
+  # https://cloud.google.com/stackdriver/docs/managed-prometheus
+  #
+  # Exporter docs:
   # https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/googlemanagedprometheusexporter
   googlemanagedprometheus:
 

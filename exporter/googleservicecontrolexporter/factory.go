@@ -29,11 +29,8 @@ import (
 	"google.golang.org/grpc/credentials/google"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/oauth"
-)
 
-const (
-	// The value of "type" key in configuration.
-	typeStr = "googleservicecontrol"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/googleservicecontrolexporter/internal/metadata"
 )
 
 var (
@@ -48,6 +45,7 @@ var (
 	clientProvider  = NewServiceControllerClient
 )
 
+// TODO(lujieduan): Move config to separate config.go file.
 // Config defines configuration for Service Control Exporter
 type Config struct {
 	ServiceName               string `mapstructure:"service_name"`
@@ -83,12 +81,25 @@ type LogConfig struct {
 	OperationName string `mapstructure:"operation_name"`
 }
 
+func (c *Config) Validate() error {
+	if c.ServiceName == "" {
+		return fmt.Errorf("empty service_name")
+	}
+	if c.ConsumerProject == "" {
+		return fmt.Errorf("empty consumer_project")
+	}
+	if c.ServiceControlEndpoint == "" {
+		return fmt.Errorf("empty service_control_endpoint")
+	}
+	return nil
+}
+
 func NewFactory() exporter.Factory {
 	return exporter.NewFactory(
-		component.MustNewType(typeStr),
+		metadata.Type,
 		createDefaultConfig,
-		exporter.WithMetrics(createMetricsExporter, component.StabilityLevelBeta),
-		exporter.WithLogs(createLogExporter, component.StabilityLevelBeta),
+		exporter.WithMetrics(createMetricsExporter, metadata.MetricsStability),
+		exporter.WithLogs(createLogExporter, metadata.LogsStability),
 	)
 }
 
@@ -137,7 +148,7 @@ func createLogExporter(ctx context.Context, settings exporter.Settings, cfg comp
 		return nil, err
 	}
 
-	exp := NewLogsExporter(*oCfg, settings.Logger, c, settings.TelemetrySettings)
+	exp := NewLogsExporter(*oCfg, settings.Logger, *c, settings.TelemetrySettings)
 	return exporterhelper.NewLogs(ctx, settings, cfg, exp.ConsumeLogs,
 		exporterhelper.WithCapabilities(exp.Capabilities()),
 		// TODO: disable timeout and backoff for now
@@ -145,6 +156,7 @@ func createLogExporter(ctx context.Context, settings exporter.Settings, cfg comp
 		// exporterhelper.WithRetry(oCfg.BackOffConfig),
 		exporterhelper.WithQueue(oCfg.QueueConfig),
 		exporterhelper.WithStart(exp.Start),
+		exporterhelper.WithShutdown(exp.Shutdown),
 	)
 }
 
@@ -155,28 +167,19 @@ func createMetricsExporter(ctx context.Context, settings exporter.Settings, cfg 
 		return nil, err
 	}
 
-	exp := NewMetricsExporter(*oCfg, settings.Logger, c, settings.TelemetrySettings)
+	exp := NewMetricsExporter(*oCfg, settings.Logger, *c, settings.TelemetrySettings)
 	return exporterhelper.NewMetrics(ctx, settings, cfg, exp.ConsumeMetrics,
 		exporterhelper.WithCapabilities(exp.Capabilities()),
 		exporterhelper.WithTimeout(oCfg.TimeoutConfig),
 		exporterhelper.WithRetry(oCfg.BackOffConfig),
 		exporterhelper.WithQueue(oCfg.QueueConfig),
 		exporterhelper.WithStart(exp.Start),
+		exporterhelper.WithShutdown(exp.Shutdown),
 	)
 }
 
-func createClient(ctx context.Context, oCfg *Config, settings exporter.Settings) (ServiceControlClient, error) {
+func createClient(ctx context.Context, oCfg *Config, settings exporter.Settings) (*ServiceControlClient, error) {
 	opts := []grpc.DialOption{}
-	if oCfg.ServiceName == "" {
-		return nil, fmt.Errorf("empty service_name")
-	}
-	if oCfg.ConsumerProject == "" {
-		return nil, fmt.Errorf("empty consumer_project")
-	}
-	if oCfg.ServiceControlEndpoint == "" {
-		return nil, fmt.Errorf("empty service_control_endpoint")
-	}
-
 	if oCfg.UseInsecure {
 		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	} else {
@@ -203,5 +206,5 @@ func createClient(ctx context.Context, oCfg *Config, settings exporter.Settings)
 	if err != nil {
 		return nil, err
 	}
-	return c, nil
+	return &c, nil
 }

@@ -105,7 +105,13 @@ func (e *Exporter) Start(_ context.Context, host component.Host) error {
 
 // Shutdown cancels ongoing requests
 func (e *Exporter) Shutdown(_ context.Context) error {
-	e.client.Close()
+	if e.client != nil {
+		err := e.client.Close()
+		if err != nil {
+			return err
+		}
+		e.client = nil
+	}
 	return nil
 }
 

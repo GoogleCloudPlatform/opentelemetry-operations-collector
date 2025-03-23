@@ -45,7 +45,7 @@ func (s *mockServiceControllerServer) SetReturnFunc(f func(ctx context.Context, 
 	s.returnFunc = f
 }
 
-func StartMockServer() (*grpc.Server, *mockServiceControllerServer, error) {
+func StartMockServer() (*grpc.Server, *mockServiceControllerServer, *bufconn.Listener, error) {
 	lis = bufconn.Listen(bufSize)
 	server := grpc.NewServer()
 	scs := &mockServiceControllerServer{
@@ -58,7 +58,12 @@ func StartMockServer() (*grpc.Server, *mockServiceControllerServer, error) {
 			panic(err)
 		}
 	}()
-	return server, scs, nil
+	return server, scs, lis, nil
+}
+
+func StopMockServer(server *grpc.Server, listener *bufconn.Listener) {
+	server.GracefulStop()
+	listener.Close()
 }
 
 func BufDialer(context.Context, string) (net.Conn, error) {

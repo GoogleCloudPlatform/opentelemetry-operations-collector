@@ -37,10 +37,12 @@ import (
 	"google.golang.org/genproto/googleapis/api/distribution"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
+	grpcmetadata "google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
+
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/googleservicecontrolexporter/internal/metadata"
 )
 
 const (
@@ -114,7 +116,7 @@ func createExporterThroughOTel(t *testing.T, timeout time.Duration, retryEnabled
 		Enabled: false,
 	}
 
-	settings := exportertest.NewNopSettings()
+	settings := exportertest.NewNopSettings(metadata.Type)
 	e, err := createMetricsExporter(context.Background(), settings, conf)
 	if err != nil {
 		t.Fatalf("Could not create exporter: %v", err)
@@ -1521,7 +1523,8 @@ func TestOperationStartTime(t *testing.T) {
 }
 
 func TestRetriableErrorHeader(t *testing.T) {
-	server, mockServer, err := StartMockServer()
+	server, mockServer, listener, err := StartMockServer()
+	defer StopMockServer(server, listener)
 	require.NoError(t, err)
 	defer server.Stop()
 
@@ -1529,7 +1532,7 @@ func TestRetriableErrorHeader(t *testing.T) {
 		if mockServer.CallCount == 1 {
 			return nil, status.Error(codes.Unavailable, "service unavailable")
 		}
-		md := metadata.Pairs(debugHeaderKey, "This is debug encrypted response value.")
+		md := grpcmetadata.Pairs(debugHeaderKey, "This is debug encrypted response value.")
 		grpc.SendHeader(ctx, md)
 		return &scpb.ReportResponse{}, nil
 	})

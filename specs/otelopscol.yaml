@@ -37,6 +37,7 @@ components:
     - nginx
     - postgresql
     - prometheus
+    - otlp
     - rabbitmq
     - redis
     - saphana

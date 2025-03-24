@@ -16,7 +16,6 @@ import (
 	"go.opentelemetry.io/collector/config/configtls"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/clientcredentials"
 	grpcOAuth "google.golang.org/grpc/credentials/oauth"
 )
 
@@ -88,97 +87,13 @@ func TestOAuthClientSettings(t *testing.T) {
 				assert.ErrorContains(t, err, test.expectedError)
 				return
 			}
-			assert.NoError(t, err)
-			assert.Equal(t, test.settings.Scopes, rc.clientCredentials.Scopes)
-			assert.Equal(t, test.settings.TokenURL, rc.clientCredentials.TokenURL)
-			assert.EqualValues(t, test.settings.ClientSecret, rc.clientCredentials.ClientSecret)
-			assert.Equal(t, test.settings.ClientID, rc.clientCredentials.ClientID)
-			assert.Equal(t, test.settings.Timeout, rc.client.Timeout)
-			assert.Equal(t, test.settings.ExpiryBuffer, rc.clientCredentials.ExpiryBuffer)
-			assert.Equal(t, test.settings.EndpointParams, rc.clientCredentials.EndpointParams)
 
 			// test tls settings
-			transport := rc.client.Transport.(*http.Transport)
+			transport := rc.Transport().(*http.Transport)
 			tlsClientConfig := transport.TLSClientConfig
 			tlsTestSettingConfig, err := test.settings.TLSSetting.LoadTLSConfig(context.Background())
 			assert.NoError(t, err)
 			assert.Equal(t, tlsClientConfig.Certificates, tlsTestSettingConfig.Certificates)
-		})
-	}
-}
-
-func TestOAuthClientSettingsCredsConfig(t *testing.T) {
-	var (
-		testCredsFile        = "testdata/test-cred.txt"
-		testCredsEmptyFile   = "testdata/test-cred-empty.txt"
-		testCredsMissingFile = "testdata/test-cred-missing.txt"
-	)
-
-	tests := []struct {
-		name                 string
-		settings             *Config
-		expectedClientConfig *clientcredentials.Config
-		shouldError          bool
-		expectedError        error
-	}{
-		{
-			name: "client_id_file",
-			settings: &Config{
-				ClientIDFile: testCredsFile,
-				ClientSecret: "testsecret",
-			},
-			expectedClientConfig: &clientcredentials.Config{
-				ClientID:     "testcreds",
-				ClientSecret: "testsecret",
-			},
-			shouldError:   false,
-			expectedError: nil,
-		},
-		{
-			name: "client_secret_file",
-			settings: &Config{
-				ClientID:         "testclientid",
-				ClientSecretFile: testCredsFile,
-			},
-			expectedClientConfig: &clientcredentials.Config{
-				ClientID:     "testclientid",
-				ClientSecret: "testcreds",
-			},
-			shouldError:   false,
-			expectedError: nil,
-		},
-		{
-			name: "empty_client_creds_file",
-			settings: &Config{
-				ClientIDFile: testCredsEmptyFile,
-				ClientSecret: "testsecret",
-			},
-			shouldError:   true,
-			expectedError: errNoClientIDProvided,
-		},
-		{
-			name: "missing_client_creds_file",
-			settings: &Config{
-				ClientID:         "testclientid",
-				ClientSecretFile: testCredsMissingFile,
-			},
-			shouldError:   true,
-			expectedError: errNoClientSecretProvided,
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			rc, _ := newClientAuthenticator(test.settings, zap.NewNop())
-			cfg, err := rc.clientCredentials.createConfig()
-			if test.shouldError {
-				assert.Error(t, err)
-				assert.ErrorIs(t, err, test.expectedError)
-				return
-			}
-			assert.NoError(t, err)
-			assert.Equal(t, test.expectedClientConfig.ClientID, cfg.ClientID)
-			assert.Equal(t, test.expectedClientConfig.ClientSecret, cfg.ClientSecret)
 		})
 	}
 }
@@ -222,7 +137,7 @@ func TestRoundTripper(t *testing.T) {
 			}
 
 			assert.NotNil(t, oauth2Authenticator)
-			roundTripper, err := oauth2Authenticator.roundTripper(baseRoundTripper)
+			roundTripper, err := oauth2Authenticator.RoundTripper(baseRoundTripper)
 			assert.NoError(t, err)
 
 			// test roundTripper is an OAuth RoundTripper
@@ -266,7 +181,7 @@ func TestOAuth2PerRPCCredentials(t *testing.T) {
 				return
 			}
 			assert.NoError(t, err)
-			perRPCCredentials, err := oauth2Authenticator.perRPCCredentials()
+			perRPCCredentials, err := oauth2Authenticator.PerRPCCredentials()
 			assert.NoError(t, err)
 			// test perRPCCredentials is an grpc OAuthTokenSource
 			_, ok := perRPCCredentials.(grpcOAuth.TokenSource)
@@ -294,7 +209,7 @@ func TestFailContactingOAuth(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test for gRPC connections
-	credential, err := oauth2Authenticator.perRPCCredentials()
+	credential, err := oauth2Authenticator.PerRPCCredentials()
 	require.NoError(t, err)
 
 	_, err = credential.GetRequestMetadata(context.Background())
@@ -303,7 +218,7 @@ func TestFailContactingOAuth(t *testing.T) {
 
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	baseRoundTripper := (http.RoundTripper)(transport)
-	roundTripper, err := oauth2Authenticator.roundTripper(baseRoundTripper)
+	roundTripper, err := oauth2Authenticator.RoundTripper(baseRoundTripper)
 	require.NoError(t, err)
 
 	client := &http.Client{

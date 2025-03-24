@@ -56,7 +56,7 @@ type Config struct {
 	Audience string `mapstructure:"audience"`
 
 	// DisableTLSOnUse turns off TLS when using the credentials. i.e. sets TokenSource.RequireTransportSecurity to false
-	DisableTLSOnUse bool `mapstructure:"disable_TLSOnUse, omitempty"`
+	DisableTLSOnUse bool `mapstructure:"disable_tls_on_use, omitempty"`
 
 	//
 	// ******************************** Shared fields **********************************************

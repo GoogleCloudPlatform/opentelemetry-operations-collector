@@ -1,4 +1,4 @@
-module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/googleservicecontrolexporter
+module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/exporter/googleservicecontrolexporter
 
 go 1.23.2
 

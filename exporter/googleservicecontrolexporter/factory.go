@@ -30,7 +30,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/oauth"
 
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/googleservicecontrolexporter/internal/metadata"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/exporter/googleservicecontrolexporter/internal/metadata"
 )
 
 var (

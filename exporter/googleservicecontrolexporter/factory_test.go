@@ -30,7 +30,7 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/googleservicecontrolexporter/internal/metadata"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/exporter/googleservicecontrolexporter/internal/metadata"
 )
 
 func TestCreateDefaultConfig(t *testing.T) {

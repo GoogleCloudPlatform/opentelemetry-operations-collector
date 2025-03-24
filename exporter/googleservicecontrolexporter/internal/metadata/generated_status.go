@@ -8,7 +8,7 @@ import (
 
 var (
 	Type      = component.MustNewType("googleservicecontrol")
-	ScopeName = "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/googleservicecontrolexporter"
+	ScopeName = "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/exporter/googleservicecontrolexporter"
 )
 
 const (

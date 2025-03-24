@@ -180,23 +180,26 @@ func (e *LogsExporter) createReportRequest(ld plog.Logs) (*scpb.ReportRequest, e
 	// create one operation to contain all log entries. This could be problematic
 	// if there are too many logs, either within a same MR, or across all MRs.
 	// Instead, we should look into split them into separate requests
-	ops, err := e.createRequestOperation(ld, now, e.consumerID)
-	if err != nil {
-		return nil, err
+	for i := range ld.ResourceLogs().Len() {
+		rl := ld.ResourceLogs().At(i)
+		ops, err := e.createRequestOperation(rl, now)
+		if err != nil {
+			return nil, err
+		}
+		request.Operations = append(request.Operations, ops)
 	}
-	request.Operations = append(request.Operations, ops)
 
 	return &request, nil
 }
 
-func (e *LogsExporter) createRequestOperation(ld plog.Logs, now time.Time, consumerID string) (*scpb.Operation, error) {
-	le, mr, err := e.createEntries(ld)
+func (e *LogsExporter) createRequestOperation(rl plog.ResourceLogs, now time.Time) (*scpb.Operation, error) {
+	le, mr, consumerId, err := e.createEntries(rl)
 	if err != nil {
 		return nil, err
 	}
 
 	op := scpb.Operation{
-		ConsumerId:    consumerID,
+		ConsumerId:    consumerId,
 		OperationName: e.logMapper.cfg.LogConfig.OperationName,
 		// Ensure start_time < end_time:
 		// https://yaqs.corp.google.com/eng/q/5422158029493633024.
@@ -210,31 +213,27 @@ func (e *LogsExporter) createRequestOperation(ld plog.Logs, now time.Time, consu
 	return &op, nil
 }
 
-func (e *LogsExporter) createEntries(ld plog.Logs) ([]*scpb.LogEntry, map[string]string, error) {
+func (e *LogsExporter) createEntries(rl plog.ResourceLogs) ([]*scpb.LogEntry, map[string]string, string, error) {
 	var errs []error
 	entries := make([]*scpb.LogEntry, 0)
-	resourceAttributes := map[string]string{}
 	processTime := time.Now()
-	for i := range ld.ResourceLogs().Len() {
-		rl := ld.ResourceLogs().At(i)
-		resourceAttributes, _ = e.parseResourceAttributes(rl.Resource()) // TODO: do we need to use the dynamic customerID?
-		for j := range rl.ScopeLogs().Len() {
-			sl := rl.ScopeLogs().At(j)
-			// TODO: handle otel instrumentation scope labels, i.e., instrumentation_source
-			// and instrumentation_version
-			for k := range sl.LogRecords().Len() {
-				logRecord := sl.LogRecords().At(k)
-				entry, err := e.logMapper.parseLogEntry(logRecord, processTime)
-				if err != nil {
-					errs = append(errs, err)
-					continue
-				}
-				entries = append(entries, entry)
+	resourceAttributes, consumerId := e.parseResourceAttributes(rl.Resource())
+	for j := range rl.ScopeLogs().Len() {
+		sl := rl.ScopeLogs().At(j)
+		// TODO: handle otel instrumentation scope labels, i.e., instrumentation_source
+		// and instrumentation_version
+		for k := range sl.LogRecords().Len() {
+			logRecord := sl.LogRecords().At(k)
+			entry, err := e.logMapper.parseLogEntry(logRecord, processTime)
+			if err != nil {
+				errs = append(errs, err)
+				continue
 			}
+			entries = append(entries, entry)
 		}
 	}
 
-	return entries, resourceAttributes, errors.Join(errs...)
+	return entries, resourceAttributes, consumerId, errors.Join(errs...)
 }
 
 func (l logMapper) getLogName(log plog.LogRecord) (string, error) {

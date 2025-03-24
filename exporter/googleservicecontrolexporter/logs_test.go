@@ -34,17 +34,21 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func createLogOperation(lvs []*scpb.LogEntry) *scpb.Operation {
+func createLogOperation(lvs []*scpb.LogEntry, labels map[string]string) *scpb.Operation {
 	return &scpb.Operation{
 		ConsumerId:    testConsumerID,
 		OperationName: "log_entry",
-		Labels:        map[string]string{},
+		Labels:        labels,
 		LogEntries:    lvs,
 	}
 }
 
 func createSingleLogOp(lvs []*scpb.LogEntry) []*scpb.Operation {
-	return []*scpb.Operation{createLogOperation(lvs)}
+	return []*scpb.Operation{createLogOperation(lvs, map[string]string{})}
+}
+
+func createSingleLogOpWithResourceLabels(lvs []*scpb.LogEntry, labels map[string]string) []*scpb.Operation {
+	return []*scpb.Operation{createLogOperation(lvs, labels)}
 }
 
 type logData struct {
@@ -52,20 +56,31 @@ type logData struct {
 	Logs     []plog.LogRecord
 }
 
-func logDataToPlog(data logData) plog.Logs {
+func logDataToPlog(data []logData) plog.Logs {
+	resourceLogsMap := make(map[pcommon.Resource][]plog.LogRecord)
+	for _, d := range data {
+		if _, ok := resourceLogsMap[d.Resource]; !ok {
+			resourceLogsMap[d.Resource] = []plog.LogRecord{}
+		}
+		resourceLogsMap[d.Resource] = append(resourceLogsMap[d.Resource], d.Logs...)
+	}
+
 	logs := plog.NewLogs()
 	rms := logs.ResourceLogs()
-	rms.EnsureCapacity(1)
-	rm := rms.AppendEmpty()
-	data.Resource.CopyTo(rm.Resource())
+	rms.EnsureCapacity(len(resourceLogsMap))
 
-	rm.ScopeLogs().EnsureCapacity(1)
-	sm := rm.ScopeLogs().AppendEmpty()
-	met := sm.LogRecords()
-	met.EnsureCapacity(len(data.Logs))
-	for i, m := range data.Logs {
-		met.AppendEmpty()
-		m.CopyTo(met.At(i))
+	for resource, logs := range resourceLogsMap {
+		rm := rms.AppendEmpty()
+		resource.CopyTo(rm.Resource())
+
+		rm.ScopeLogs().EnsureCapacity(1)
+		sm := rm.ScopeLogs().AppendEmpty()
+		met := sm.LogRecords()
+		met.EnsureCapacity(len(logs))
+		for i, m := range logs {
+			met.AppendEmpty()
+			m.CopyTo(met.At(i))
+		}
 	}
 
 	return logs
@@ -107,7 +122,7 @@ func TestLogsAddAndBuild(t *testing.T) {
 
 	tests := []struct {
 		name          string
-		logs          logData
+		logs          []logData
 		want          []*scpb.Operation
 		config        func(*Config)
 		expectError   bool
@@ -115,14 +130,15 @@ func TestLogsAddAndBuild(t *testing.T) {
 	}{
 		{
 			name: "empty log, empty monitoredresource",
-			logs: logData{
-				Logs: func() []plog.LogRecord {
-					log := plog.NewLogRecord()
-					log.SetTimestamp(timestamp)
-					return []plog.LogRecord{log}
-				}(),
-				Resource: emptyResource(),
-			},
+			logs: []logData{
+				logData{
+					Logs: func() []plog.LogRecord {
+						log := plog.NewLogRecord()
+						log.SetTimestamp(timestamp)
+						return []plog.LogRecord{log}
+					}(),
+					Resource: emptyResource(),
+				}},
 			want: createSingleLogOp([]*scpb.LogEntry{
 				{
 					Name:      "default-log-name",
@@ -133,14 +149,15 @@ func TestLogsAddAndBuild(t *testing.T) {
 		},
 		{
 			name: "empty log, empty monitoredresource, with observerd timestamp",
-			logs: logData{
-				Logs: func() []plog.LogRecord {
-					log := plog.NewLogRecord()
-					log.SetObservedTimestamp(timestamp)
-					return []plog.LogRecord{log}
-				}(),
-				Resource: emptyResource(),
-			},
+			logs: []logData{
+				logData{
+					Logs: func() []plog.LogRecord {
+						log := plog.NewLogRecord()
+						log.SetObservedTimestamp(timestamp)
+						return []plog.LogRecord{log}
+					}(),
+					Resource: emptyResource(),
+				}},
 			want: createSingleLogOp([]*scpb.LogEntry{
 				{
 					Name:      "default-log-name",
@@ -151,15 +168,16 @@ func TestLogsAddAndBuild(t *testing.T) {
 		},
 		{
 			name: "log with json, empty monitoredresource",
-			logs: logData{
-				Logs: func() []plog.LogRecord {
-					log := plog.NewLogRecord()
-					log.Body().SetEmptyMap().PutStr("this", "is json")
-					log.SetObservedTimestamp(timestamp)
-					return []plog.LogRecord{log}
-				}(),
-				Resource: emptyResource(),
-			},
+			logs: []logData{
+				logData{
+					Logs: func() []plog.LogRecord {
+						log := plog.NewLogRecord()
+						log.Body().SetEmptyMap().PutStr("this", "is json")
+						log.SetObservedTimestamp(timestamp)
+						return []plog.LogRecord{log}
+					}(),
+					Resource: emptyResource(),
+				}},
 			want: createSingleLogOp([]*scpb.LogEntry{
 				{
 					Name:      "default-log-name",
@@ -173,15 +191,16 @@ func TestLogsAddAndBuild(t *testing.T) {
 		},
 		{
 			name: "log with invalid json byte body returns raw byte string",
-			logs: logData{
-				Logs: func() []plog.LogRecord {
-					log := plog.NewLogRecord()
-					log.Body().SetEmptyBytes().FromRaw([]byte(`"this is not json"`))
-					log.SetObservedTimestamp(timestamp)
-					return []plog.LogRecord{log}
-				}(),
-				Resource: emptyResource(),
-			},
+			logs: []logData{
+				logData{
+					Logs: func() []plog.LogRecord {
+						log := plog.NewLogRecord()
+						log.Body().SetEmptyBytes().FromRaw([]byte(`"this is not json"`))
+						log.SetObservedTimestamp(timestamp)
+						return []plog.LogRecord{log}
+					}(),
+					Resource: emptyResource(),
+				}},
 			want: createSingleLogOp([]*scpb.LogEntry{
 				{
 					Name:      "default-log-name",
@@ -193,11 +212,12 @@ func TestLogsAddAndBuild(t *testing.T) {
 		},
 		{
 			name: "log with json and httpRequest, empty monitoredresource",
-			logs: logData{
-				Logs: func() []plog.LogRecord {
-					log := plog.NewLogRecord()
-					log.Body().SetEmptyMap().PutStr("message", "hello!")
-					log.Attributes().PutEmptyBytes(HTTPRequestAttributeKey).FromRaw([]byte(`{
+			logs: []logData{
+				logData{
+					Logs: func() []plog.LogRecord {
+						log := plog.NewLogRecord()
+						log.Body().SetEmptyMap().PutStr("message", "hello!")
+						log.Attributes().PutEmptyBytes(HTTPRequestAttributeKey).FromRaw([]byte(`{
 							"requestMethod": "GET",
 							"requestURL": "https://www.example.com",
 							"requestSize": "1",
@@ -212,11 +232,11 @@ func TestLogsAddAndBuild(t *testing.T) {
 							"cacheFillBytes": "1",
 							"protocol": "HTTP/2"
 						}`))
-					log.SetObservedTimestamp(timestamp)
-					return []plog.LogRecord{log}
-				}(),
-				Resource: emptyResource(),
-			},
+						log.SetObservedTimestamp(timestamp)
+						return []plog.LogRecord{log}
+					}(),
+					Resource: emptyResource(),
+				}},
 			want: createSingleLogOp([]*scpb.LogEntry{
 				{
 					Name:      "default-log-name",
@@ -246,16 +266,17 @@ func TestLogsAddAndBuild(t *testing.T) {
 		},
 		{
 			name: "log with httpRequest attribute unsupported type",
-			logs: logData{
-				Logs: func() []plog.LogRecord {
-					log := plog.NewLogRecord()
-					log.Body().SetEmptyMap().PutStr("message", "hello!")
-					log.Attributes().PutBool(HTTPRequestAttributeKey, true)
-					log.SetObservedTimestamp(timestamp)
-					return []plog.LogRecord{log}
-				}(),
-				Resource: emptyResource(),
-			},
+			logs: []logData{
+				logData{
+					Logs: func() []plog.LogRecord {
+						log := plog.NewLogRecord()
+						log.Body().SetEmptyMap().PutStr("message", "hello!")
+						log.Attributes().PutBool(HTTPRequestAttributeKey, true)
+						log.SetObservedTimestamp(timestamp)
+						return []plog.LogRecord{log}
+					}(),
+					Resource: emptyResource(),
+				}},
 			want: createSingleLogOp([]*scpb.LogEntry{
 				{
 					Name:      "default-log-name",
@@ -269,15 +290,16 @@ func TestLogsAddAndBuild(t *testing.T) {
 		},
 		{
 			name: "log body with string value",
-			logs: logData{
-				Logs: func() []plog.LogRecord {
-					log := plog.NewLogRecord()
-					log.Body().SetStr("{\"message\": \"hello!\"}")
-					log.SetTimestamp(timestamp)
-					return []plog.LogRecord{log}
-				}(),
-				Resource: emptyResource(),
-			},
+			logs: []logData{
+				logData{
+					Logs: func() []plog.LogRecord {
+						log := plog.NewLogRecord()
+						log.Body().SetStr("{\"message\": \"hello!\"}")
+						log.SetTimestamp(timestamp)
+						return []plog.LogRecord{log}
+					}(),
+					Resource: emptyResource(),
+				}},
 			want: createSingleLogOp([]*scpb.LogEntry{
 				{
 					Name:      "default-log-name",
@@ -291,16 +313,17 @@ func TestLogsAddAndBuild(t *testing.T) {
 		},
 		{
 			name: "log with log name set in attributes",
-			logs: logData{
-				Logs: func() []plog.LogRecord {
-					log := plog.NewLogRecord()
-					log.Attributes().PutStr(LogNameAttributeKey, "foo-log")
-					log.Body().SetStr("{\"message\": \"hello!\"}")
-					log.SetTimestamp(timestamp)
-					return []plog.LogRecord{log}
-				}(),
-				Resource: emptyResource(),
-			},
+			logs: []logData{
+				logData{
+					Logs: func() []plog.LogRecord {
+						log := plog.NewLogRecord()
+						log.Attributes().PutStr(LogNameAttributeKey, "foo-log")
+						log.Body().SetStr("{\"message\": \"hello!\"}")
+						log.SetTimestamp(timestamp)
+						return []plog.LogRecord{log}
+					}(),
+					Resource: emptyResource(),
+				}},
 			want: createSingleLogOp([]*scpb.LogEntry{
 				{
 					Name:      "foo-log",
@@ -314,15 +337,16 @@ func TestLogsAddAndBuild(t *testing.T) {
 		},
 		{
 			name: "set default log name through config",
-			logs: logData{
-				Logs: func() []plog.LogRecord {
-					log := plog.NewLogRecord()
-					log.Body().SetStr("test1")
-					log.SetTimestamp(timestamp)
-					return []plog.LogRecord{log}
-				}(),
-				Resource: emptyResource(),
-			},
+			logs: []logData{
+				logData{
+					Logs: func() []plog.LogRecord {
+						log := plog.NewLogRecord()
+						log.Body().SetStr("test1")
+						log.SetTimestamp(timestamp)
+						return []plog.LogRecord{log}
+					}(),
+					Resource: emptyResource(),
+				}},
 			want: createSingleLogOp([]*scpb.LogEntry{
 				{
 					Name:      "customized-log-default-name",
@@ -339,16 +363,17 @@ func TestLogsAddAndBuild(t *testing.T) {
 		},
 		{
 			name: "set default log name through config, but log name attribute should take priority",
-			logs: logData{
-				Logs: func() []plog.LogRecord {
-					log := plog.NewLogRecord()
-					log.Attributes().PutStr(LogNameAttributeKey, "foo-log")
-					log.Body().SetStr("test1")
-					log.SetTimestamp(timestamp)
-					return []plog.LogRecord{log}
-				}(),
-				Resource: emptyResource(),
-			},
+			logs: []logData{
+				logData{
+					Logs: func() []plog.LogRecord {
+						log := plog.NewLogRecord()
+						log.Attributes().PutStr(LogNameAttributeKey, "foo-log")
+						log.Body().SetStr("test1")
+						log.SetTimestamp(timestamp)
+						return []plog.LogRecord{log}
+					}(),
+					Resource: emptyResource(),
+				}},
 			want: createSingleLogOp([]*scpb.LogEntry{
 				{
 					Name:      "foo-log",
@@ -365,15 +390,16 @@ func TestLogsAddAndBuild(t *testing.T) {
 		},
 		{
 			name: "set insert id from insert id attribute",
-			logs: logData{
-				Logs: func() []plog.LogRecord {
-					log := plog.NewLogRecord()
-					log.Attributes().PutStr(InsertIdAttributeKey, "foo-insert-id")
-					log.SetTimestamp(timestamp)
-					return []plog.LogRecord{log}
-				}(),
-				Resource: emptyResource(),
-			},
+			logs: []logData{
+				logData{
+					Logs: func() []plog.LogRecord {
+						log := plog.NewLogRecord()
+						log.Attributes().PutStr(InsertIdAttributeKey, "foo-insert-id")
+						log.SetTimestamp(timestamp)
+						return []plog.LogRecord{log}
+					}(),
+					Resource: emptyResource(),
+				}},
 			want: createSingleLogOp([]*scpb.LogEntry{
 				{
 					Name:      "default-log-name",
@@ -385,15 +411,16 @@ func TestLogsAddAndBuild(t *testing.T) {
 		},
 		{
 			name: "parse severity number correctly",
-			logs: logData{
-				Logs: func() []plog.LogRecord {
-					log := plog.NewLogRecord()
-					log.SetSeverityNumber(18)
-					log.SetTimestamp(timestamp)
-					return []plog.LogRecord{log}
-				}(),
-				Resource: emptyResource(),
-			},
+			logs: []logData{
+				logData{
+					Logs: func() []plog.LogRecord {
+						log := plog.NewLogRecord()
+						log.SetSeverityNumber(18)
+						log.SetTimestamp(timestamp)
+						return []plog.LogRecord{log}
+					}(),
+					Resource: emptyResource(),
+				}},
 			want: createSingleLogOp([]*scpb.LogEntry{
 				{
 					Name:      "default-log-name",
@@ -405,28 +432,30 @@ func TestLogsAddAndBuild(t *testing.T) {
 		},
 		{
 			name: "log with invalid severity number",
-			logs: logData{
-				Logs: func() []plog.LogRecord {
-					log := plog.NewLogRecord()
-					log.SetSeverityNumber(100)
-					log.SetTimestamp(timestamp)
-					return []plog.LogRecord{log}
-				}(),
-				Resource: emptyResource(),
-			},
+			logs: []logData{
+				logData{
+					Logs: func() []plog.LogRecord {
+						log := plog.NewLogRecord()
+						log.SetSeverityNumber(100)
+						log.SetTimestamp(timestamp)
+						return []plog.LogRecord{log}
+					}(),
+					Resource: emptyResource(),
+				}},
 			expectError: true,
 		},
 		{
 			name: "parse severity text correctly",
-			logs: logData{
-				Logs: func() []plog.LogRecord {
-					log := plog.NewLogRecord()
-					log.SetSeverityText("ERROR")
-					log.SetTimestamp(timestamp)
-					return []plog.LogRecord{log}
-				}(),
-				Resource: emptyResource(),
-			},
+			logs: []logData{
+				logData{
+					Logs: func() []plog.LogRecord {
+						log := plog.NewLogRecord()
+						log.SetSeverityText("ERROR")
+						log.SetTimestamp(timestamp)
+						return []plog.LogRecord{log}
+					}(),
+					Resource: emptyResource(),
+				}},
 			want: createSingleLogOp([]*scpb.LogEntry{
 				{
 					Name:      "default-log-name",
@@ -438,17 +467,18 @@ func TestLogsAddAndBuild(t *testing.T) {
 		},
 		{
 			name: "parse severity number over severiy text",
-			logs: logData{
-				Logs: func() []plog.LogRecord {
-					log := plog.NewLogRecord()
-					// 11 is NOTICE
-					log.SetSeverityNumber(11)
-					log.SetSeverityText("ERROR")
-					log.SetTimestamp(timestamp)
-					return []plog.LogRecord{log}
-				}(),
-				Resource: emptyResource(),
-			},
+			logs: []logData{
+				logData{
+					Logs: func() []plog.LogRecord {
+						log := plog.NewLogRecord()
+						// 11 is NOTICE
+						log.SetSeverityNumber(11)
+						log.SetSeverityText("ERROR")
+						log.SetTimestamp(timestamp)
+						return []plog.LogRecord{log}
+					}(),
+					Resource: emptyResource(),
+				}},
 			want: createSingleLogOp([]*scpb.LogEntry{
 				{
 					Name:      "default-log-name",
@@ -460,16 +490,17 @@ func TestLogsAddAndBuild(t *testing.T) {
 		},
 		{
 			name: "parse severity text over severiy number when number is invalid",
-			logs: logData{
-				Logs: func() []plog.LogRecord {
-					log := plog.NewLogRecord()
-					log.SetSeverityNumber(0)
-					log.SetSeverityText("fatal3")
-					log.SetTimestamp(timestamp)
-					return []plog.LogRecord{log}
-				}(),
-				Resource: emptyResource(),
-			},
+			logs: []logData{
+				logData{
+					Logs: func() []plog.LogRecord {
+						log := plog.NewLogRecord()
+						log.SetSeverityNumber(0)
+						log.SetSeverityText("fatal3")
+						log.SetTimestamp(timestamp)
+						return []plog.LogRecord{log}
+					}(),
+					Resource: emptyResource(),
+				}},
 			want: createSingleLogOp([]*scpb.LogEntry{
 				{
 					Name:      "default-log-name",
@@ -481,19 +512,20 @@ func TestLogsAddAndBuild(t *testing.T) {
 		},
 		{
 			name: "log with valid sourceLocation (bytes)",
-			logs: logData{
-				Logs: func() []plog.LogRecord {
-					log := plog.NewLogRecord()
-					log.Attributes().PutStr(LogNameAttributeKey, "foo-log")
-					log.Attributes().PutEmptyBytes(SourceLocationAttributeKey).FromRaw(
-						[]byte(`{"file": "test.php", "line":100, "function":"helloWorld"}`),
-					)
-					log.Body().SetStr("test1")
-					log.SetTimestamp(timestamp)
-					return []plog.LogRecord{log}
-				}(),
-				Resource: emptyResource(),
-			},
+			logs: []logData{
+				logData{
+					Logs: func() []plog.LogRecord {
+						log := plog.NewLogRecord()
+						log.Attributes().PutStr(LogNameAttributeKey, "foo-log")
+						log.Attributes().PutEmptyBytes(SourceLocationAttributeKey).FromRaw(
+							[]byte(`{"file": "test.php", "line":100, "function":"helloWorld"}`),
+						)
+						log.Body().SetStr("test1")
+						log.SetTimestamp(timestamp)
+						return []plog.LogRecord{log}
+					}(),
+					Resource: emptyResource(),
+				}},
 			want: createSingleLogOp([]*scpb.LogEntry{
 				{
 					Name:      "foo-log",
@@ -512,35 +544,37 @@ func TestLogsAddAndBuild(t *testing.T) {
 		},
 		{
 			name: "log with invalid sourceLocation (bytes)",
-			logs: logData{
-				Logs: func() []plog.LogRecord {
-					log := plog.NewLogRecord()
-					log.Attributes().PutStr(LogNameAttributeKey, "foo-log")
-					log.Attributes().PutEmptyBytes(SourceLocationAttributeKey).FromRaw(
-						[]byte(`{"file": 100}`),
-					)
-					log.Body().SetStr("test1")
-					log.SetTimestamp(timestamp)
-					return []plog.LogRecord{log}
-				}(),
-				Resource: emptyResource(),
-			},
+			logs: []logData{
+				logData{
+					Logs: func() []plog.LogRecord {
+						log := plog.NewLogRecord()
+						log.Attributes().PutStr(LogNameAttributeKey, "foo-log")
+						log.Attributes().PutEmptyBytes(SourceLocationAttributeKey).FromRaw(
+							[]byte(`{"file": 100}`),
+						)
+						log.Body().SetStr("test1")
+						log.SetTimestamp(timestamp)
+						return []plog.LogRecord{log}
+					}(),
+					Resource: emptyResource(),
+				}},
 			expectError: true,
 		},
 		{
 			name: "log with valid sourceLocation (map)",
-			logs: logData{
-				Logs: func() []plog.LogRecord {
-					log := plog.NewLogRecord()
-					sourceLocationMap := log.Attributes().PutEmptyMap(SourceLocationAttributeKey)
-					sourceLocationMap.PutStr("file", "test.php")
-					sourceLocationMap.PutInt("line", 100)
-					sourceLocationMap.PutStr("function", "helloWorld")
-					log.SetTimestamp(timestamp)
-					return []plog.LogRecord{log}
-				}(),
-				Resource: emptyResource(),
-			},
+			logs: []logData{
+				logData{
+					Logs: func() []plog.LogRecord {
+						log := plog.NewLogRecord()
+						sourceLocationMap := log.Attributes().PutEmptyMap(SourceLocationAttributeKey)
+						sourceLocationMap.PutStr("file", "test.php")
+						sourceLocationMap.PutInt("line", 100)
+						sourceLocationMap.PutStr("function", "helloWorld")
+						log.SetTimestamp(timestamp)
+						return []plog.LogRecord{log}
+					}(),
+					Resource: emptyResource(),
+				}},
 			want: createSingleLogOp([]*scpb.LogEntry{
 				{
 					Name:      "default-log-name",
@@ -556,32 +590,34 @@ func TestLogsAddAndBuild(t *testing.T) {
 		},
 		{
 			name: "log with invalid sourceLocation (map)",
-			logs: logData{
-				Logs: func() []plog.LogRecord {
-					log := plog.NewLogRecord()
-					sourceLocationMap := log.Attributes().PutEmptyMap(SourceLocationAttributeKey)
-					sourceLocationMap.PutStr("line", "100")
-					log.SetTimestamp(timestamp)
-					return []plog.LogRecord{log}
-				}(),
-				Resource: emptyResource(),
-			},
+			logs: []logData{
+				logData{
+					Logs: func() []plog.LogRecord {
+						log := plog.NewLogRecord()
+						sourceLocationMap := log.Attributes().PutEmptyMap(SourceLocationAttributeKey)
+						sourceLocationMap.PutStr("line", "100")
+						log.SetTimestamp(timestamp)
+						return []plog.LogRecord{log}
+					}(),
+					Resource: emptyResource(),
+				}},
 			expectError: true,
 		},
 		{
 			name: "log with valid sourceLocation (string)",
-			logs: logData{
-				Logs: func() []plog.LogRecord {
-					log := plog.NewLogRecord()
-					log.Attributes().PutStr(
-						SourceLocationAttributeKey,
-						`{"file": "test.php", "line":100, "function":"helloWorld"}`,
-					)
-					log.SetTimestamp(timestamp)
-					return []plog.LogRecord{log}
-				}(),
-				Resource: emptyResource(),
-			},
+			logs: []logData{
+				logData{
+					Logs: func() []plog.LogRecord {
+						log := plog.NewLogRecord()
+						log.Attributes().PutStr(
+							SourceLocationAttributeKey,
+							`{"file": "test.php", "line":100, "function":"helloWorld"}`,
+						)
+						log.SetTimestamp(timestamp)
+						return []plog.LogRecord{log}
+					}(),
+					Resource: emptyResource(),
+				}},
 			want: createSingleLogOp([]*scpb.LogEntry{
 				{
 					Name:      "default-log-name",
@@ -597,31 +633,33 @@ func TestLogsAddAndBuild(t *testing.T) {
 		},
 		{
 			name: "log with invalid sourceLocation (string)",
-			logs: logData{
-				Logs: func() []plog.LogRecord {
-					log := plog.NewLogRecord()
-					log.Attributes().PutStr(
-						SourceLocationAttributeKey,
-						`{"file": 100}`,
-					)
-					log.SetTimestamp(timestamp)
-					return []plog.LogRecord{log}
-				}(),
-				Resource: emptyResource(),
-			},
+			logs: []logData{
+				logData{
+					Logs: func() []plog.LogRecord {
+						log := plog.NewLogRecord()
+						log.Attributes().PutStr(
+							SourceLocationAttributeKey,
+							`{"file": 100}`,
+						)
+						log.SetTimestamp(timestamp)
+						return []plog.LogRecord{log}
+					}(),
+					Resource: emptyResource(),
+				}},
 			expectError: true,
 		},
 		{
 			name: "log with unsupported sourceLocation type",
-			logs: logData{
-				Logs: func() []plog.LogRecord {
-					log := plog.NewLogRecord()
-					log.Attributes().PutBool(SourceLocationAttributeKey, true)
-					log.SetTimestamp(timestamp)
-					return []plog.LogRecord{log}
-				}(),
-				Resource: emptyResource(),
-			},
+			logs: []logData{
+				logData{
+					Logs: func() []plog.LogRecord {
+						log := plog.NewLogRecord()
+						log.Attributes().PutBool(SourceLocationAttributeKey, true)
+						log.SetTimestamp(timestamp)
+						return []plog.LogRecord{log}
+					}(),
+					Resource: emptyResource(),
+				}},
 			expectError: true,
 			expectedError: &attributeProcessingError{
 				Key: SourceLocationAttributeKey,
@@ -630,20 +668,21 @@ func TestLogsAddAndBuild(t *testing.T) {
 		},
 		{
 			name: "two logs",
-			logs: logData{
-				Logs: func() []plog.LogRecord {
-					log1 := plog.NewLogRecord()
-					log1.Attributes().PutStr(LogNameAttributeKey, "foo-log-1")
-					log1.Body().SetStr("test1")
-					log1.SetTimestamp(timestamp)
-					log2 := plog.NewLogRecord()
-					log2.Attributes().PutStr(LogNameAttributeKey, "foo-log-2")
-					log2.Body().SetStr("test2")
-					log2.SetTimestamp(timestamp)
-					return []plog.LogRecord{log1, log2}
-				}(),
-				Resource: emptyResource(),
-			},
+			logs: []logData{
+				logData{
+					Logs: func() []plog.LogRecord {
+						log1 := plog.NewLogRecord()
+						log1.Attributes().PutStr(LogNameAttributeKey, "foo-log-1")
+						log1.Body().SetStr("test1")
+						log1.SetTimestamp(timestamp)
+						log2 := plog.NewLogRecord()
+						log2.Attributes().PutStr(LogNameAttributeKey, "foo-log-2")
+						log2.Body().SetStr("test2")
+						log2.SetTimestamp(timestamp)
+						return []plog.LogRecord{log1, log2}
+					}(),
+					Resource: emptyResource(),
+				}},
 			want: createSingleLogOp([]*scpb.LogEntry{
 				{
 					Name:      "foo-log-1",
@@ -662,6 +701,216 @@ func TestLogsAddAndBuild(t *testing.T) {
 					Labels: map[string]string{},
 				},
 			}),
+		},
+		{
+			name: "two logs with log labels",
+			logs: []logData{
+				logData{
+					Logs: func() []plog.LogRecord {
+						log1 := plog.NewLogRecord()
+						log1.Attributes().PutStr(LogNameAttributeKey, "foo-log-1")
+						log1.Body().SetStr("test1")
+						log1.SetTimestamp(timestamp)
+						log1.Attributes().PutStr("log-label1", "foo-label-1")
+						log1.Attributes().PutStr("log-label2", "foo-label-2")
+						log2 := plog.NewLogRecord()
+						log2.Attributes().PutStr(LogNameAttributeKey, "foo-log-2")
+						log2.Body().SetStr("test2")
+						log2.SetTimestamp(timestamp)
+						log2.Attributes().PutStr("log-label2", "foo-label-2")
+						return []plog.LogRecord{log1, log2}
+					}(),
+					Resource: emptyResource(),
+				}},
+			want: createSingleLogOp([]*scpb.LogEntry{
+				{
+					Name:      "foo-log-1",
+					Timestamp: requestTs,
+					Payload: &scpb.LogEntry_TextPayload{
+						TextPayload: "test1",
+					},
+					Labels: map[string]string{
+						"log-label1": "foo-label-1",
+						"log-label2": "foo-label-2",
+					},
+				},
+				{
+					Name:      "foo-log-2",
+					Timestamp: requestTs,
+					Payload: &scpb.LogEntry_TextPayload{
+						TextPayload: "test2",
+					},
+					Labels: map[string]string{
+						"log-label2": "foo-label-2",
+					},
+				},
+			}),
+		},
+		{
+			name: "log with json, sample monitoredresource",
+			logs: []logData{
+				logData{
+					Logs: func() []plog.LogRecord {
+						log := plog.NewLogRecord()
+						log.Body().SetEmptyMap().PutStr("this", "is json")
+						log.SetObservedTimestamp(timestamp)
+						return []plog.LogRecord{log}
+					}(),
+					Resource: sampleResource(),
+				}},
+			want: createSingleLogOpWithResourceLabels([]*scpb.LogEntry{
+				{
+					Name:      "default-log-name",
+					Timestamp: requestTs,
+					Labels:    map[string]string{},
+					Payload: &scpb.LogEntry_StructPayload{StructPayload: &structpb.Struct{Fields: map[string]*structpb.Value{
+						"this": {Kind: &structpb.Value_StringValue{StringValue: "is json"}},
+					}}},
+				},
+			},
+				map[string]string{
+					testServiceConfigIdKey: testServiceConfigID,
+					testServiceKey:         testServiceID,
+					testProjectIdKey:       testConsumerID,
+				}),
+		},
+		{
+			name: "log with json, sample monitoredresource and labels",
+			logs: []logData{
+				logData{
+					Logs: func() []plog.LogRecord {
+						log := plog.NewLogRecord()
+						log.Body().SetEmptyMap().PutStr("this", "is json")
+						log.SetObservedTimestamp(timestamp)
+						log.Attributes().PutStr("log-label1", "foo-label-1")
+						log.Attributes().PutStr(testServiceConfigIdKey, testServiceConfigID)
+						return []plog.LogRecord{log}
+					}(),
+					Resource: sampleResource(),
+				}},
+			want: createSingleLogOpWithResourceLabels([]*scpb.LogEntry{
+				{
+					Name:      "default-log-name",
+					Timestamp: requestTs,
+					Labels: map[string]string{
+						"log-label1":           "foo-label-1",
+						testServiceConfigIdKey: testServiceConfigID,
+					},
+					Payload: &scpb.LogEntry_StructPayload{StructPayload: &structpb.Struct{Fields: map[string]*structpb.Value{
+						"this": {Kind: &structpb.Value_StringValue{StringValue: "is json"}},
+					}}},
+				},
+			},
+				map[string]string{
+					testServiceConfigIdKey: testServiceConfigID,
+					testServiceKey:         testServiceID,
+					testProjectIdKey:       testConsumerID,
+				}),
+		},
+		{
+			name: "two logs with same monitored resource",
+			logs: []logData{
+				logData{
+					Logs: func() []plog.LogRecord {
+						log1 := plog.NewLogRecord()
+						log1.Attributes().PutStr(LogNameAttributeKey, "foo-log-1")
+						log1.Body().SetStr("test1")
+						log1.SetTimestamp(timestamp)
+						log2 := plog.NewLogRecord()
+						log2.Attributes().PutStr(LogNameAttributeKey, "foo-log-2")
+						log2.Body().SetStr("test2")
+						log2.SetTimestamp(timestamp)
+						return []plog.LogRecord{log1, log2}
+					}(),
+					Resource: sampleResource(),
+				}},
+			want: createSingleLogOpWithResourceLabels([]*scpb.LogEntry{
+				{
+					Name:      "foo-log-1",
+					Timestamp: requestTs,
+					Payload: &scpb.LogEntry_TextPayload{
+						TextPayload: "test1",
+					},
+					Labels: map[string]string{},
+				},
+				{
+					Name:      "foo-log-2",
+					Timestamp: requestTs,
+					Payload: &scpb.LogEntry_TextPayload{
+						TextPayload: "test2",
+					},
+					Labels: map[string]string{},
+				},
+			},
+				map[string]string{
+					testServiceConfigIdKey: testServiceConfigID,
+					testServiceKey:         testServiceID,
+					testProjectIdKey:       testConsumerID,
+				}),
+		},
+		{
+			name: "three logs with different monitored resource",
+			logs: []logData{
+				logData{
+					Logs: func() []plog.LogRecord {
+						log1 := plog.NewLogRecord()
+						log1.Attributes().PutStr(LogNameAttributeKey, "foo-log-1")
+						log1.Body().SetStr("test1")
+						log1.SetTimestamp(timestamp)
+						log2 := plog.NewLogRecord()
+						log2.Attributes().PutStr(LogNameAttributeKey, "foo-log-2")
+						log2.Body().SetStr("test2")
+						log2.SetTimestamp(timestamp)
+						return []plog.LogRecord{log1, log2}
+					}(),
+					Resource: sampleResource(),
+				},
+				logData{
+					Logs: func() []plog.LogRecord {
+						log1 := plog.NewLogRecord()
+						log1.Attributes().PutStr(LogNameAttributeKey, "foo-log-1")
+						log1.Body().SetStr("test1")
+						log1.SetTimestamp(timestamp)
+						return []plog.LogRecord{log1}
+					}(),
+					Resource: emptyResource(),
+				},
+			},
+			want: append(
+				createSingleLogOpWithResourceLabels([]*scpb.LogEntry{
+					{
+						Name:      "foo-log-1",
+						Timestamp: requestTs,
+						Payload: &scpb.LogEntry_TextPayload{
+							TextPayload: "test1",
+						},
+						Labels: map[string]string{},
+					},
+					{
+						Name:      "foo-log-2",
+						Timestamp: requestTs,
+						Payload: &scpb.LogEntry_TextPayload{
+							TextPayload: "test2",
+						},
+						Labels: map[string]string{},
+					},
+				},
+					map[string]string{
+						testServiceConfigIdKey: testServiceConfigID,
+						testServiceKey:         testServiceID,
+						testProjectIdKey:       testConsumerID,
+					}),
+				createSingleLogOp([]*scpb.LogEntry{
+					{
+						Name:      "foo-log-1",
+						Timestamp: requestTs,
+						Payload: &scpb.LogEntry_TextPayload{
+							TextPayload: "test1",
+						},
+						Labels: map[string]string{},
+					},
+				})...,
+			),
 		},
 	}
 	for _, tc := range tests {
@@ -700,7 +949,7 @@ func TestLogsAddAndBuild(t *testing.T) {
 				if diff := cmp.Diff(request.ServiceConfigId, testServiceConfigID); diff != "" {
 					t.Errorf("ServiceConfigId differs, -got +want: %s", diff)
 				}
-				if diff := cmp.Diff(request.Operations, tc.want, cleanOperation, cmpopts.SortSlices(operationLessEqual), cmpopts.SortSlices(metricValueLessEqual), unexportedOptsForScRequest()); diff != "" {
+				if diff := cmp.Diff(request.Operations, tc.want, cleanOperation, cmpopts.SortSlices(operationLess), cmpopts.SortSlices(metricValueLess), unexportedOptsForScRequest()); diff != "" {
 					t.Errorf("Operations differ, -got +want: %s", diff)
 				}
 				for _, op := range request.Operations {

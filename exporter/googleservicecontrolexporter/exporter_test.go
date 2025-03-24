@@ -42,7 +42,7 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/googleservicecontrolexporter/internal/metadata"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/exporter/googleservicecontrolexporter/internal/metadata"
 )
 
 const (
@@ -244,13 +244,16 @@ func sampleMetricData(t *testing.T) metricData {
 	}
 }
 
-func operationLessEqual(x, y *scpb.Operation) bool {
-	xRegion := x.Labels[gcpLocation]
-	yRegion := y.Labels[gcpLocation]
-	return xRegion < yRegion
+// operationLess is a less function we pass to the cmp.Diff to ensure we compare
+// the content and not the order of the operations.
+func operationLess(x, y *scpb.Operation) bool {
+	if x.Labels[gcpLocation] < y.Labels[gcpLocation] {
+		return true
+	}
+	return len(x.Labels) < len(y.Labels)
 }
 
-func metricValueLessEqual(x, y *scpb.MetricValue) bool {
+func metricValueLess(x, y *scpb.MetricValue) bool {
 	return x.GetDoubleValue() < y.GetDoubleValue()
 }
 
@@ -1165,7 +1168,7 @@ func TestAddAndBuild(t *testing.T) {
 			if diff := cmp.Diff(request.ServiceConfigId, testServiceConfigID); diff != "" {
 				t.Errorf("ServiceConfigId differs, -got +want: %s", diff)
 			}
-			if diff := cmp.Diff(request.Operations, tc.want, cleanOperation, cmpopts.SortSlices(operationLessEqual), cmpopts.SortSlices(metricValueLessEqual), unexportedOptsForScRequest()); diff != "" {
+			if diff := cmp.Diff(request.Operations, tc.want, cleanOperation, cmpopts.SortSlices(operationLess), cmpopts.SortSlices(metricValueLess), unexportedOptsForScRequest()); diff != "" {
 				t.Errorf("Operations differ, -got +want: %s", diff)
 			}
 			for _, op := range request.Operations {
@@ -1308,7 +1311,7 @@ func TestCreateOperations(t *testing.T) {
 			}
 
 			wantOps := tc.wantOpsFunc(e, metrics, now)
-			if diff := cmp.Diff(ops, wantOps, cleanOperation, cmpopts.SortSlices(operationLessEqual), cmpopts.SortSlices(metricValueLessEqual), unexportedOptsForScRequest()); diff != "" {
+			if diff := cmp.Diff(ops, wantOps, cleanOperation, cmpopts.SortSlices(operationLess), cmpopts.SortSlices(metricValueLess), unexportedOptsForScRequest()); diff != "" {
 				t.Errorf("Operations differ, -got +want: %s", diff)
 			}
 		})

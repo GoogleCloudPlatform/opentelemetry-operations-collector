@@ -1,0 +1,12 @@
+on:
+  workflow_dispatch:
+
+jobs:
+  get_token:
+    name: Get Token
+    runs-on: ubuntu-22.04
+    permissions:
+      id-token: write
+    steps:
+      - name: 'Get token'
+        run: 'curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=api://AzureADTokenExchange"'

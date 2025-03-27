@@ -72,10 +72,9 @@ var (
 
 // Exporter is a type that implements MetricsExporter interface for ServiceControl API
 type Exporter struct {
-	exporterStartTime time.Time
-	serviceName       string
-	consumerID        string
-	serviceConfigID   string
+	serviceName     string
+	consumerID      string
+	serviceConfigID string
 
 	client ServiceControlClient
 	tel    component.TelemetrySettings
@@ -91,6 +90,13 @@ type Exporter struct {
 	nowFunc                   func() time.Time
 }
 
+// TODO(lujieduan): move MetricsExporter specific code to a separate file.
+type MetricsExporter struct {
+	*Exporter
+	// Used for setting cumulative metrics start time
+	exporterStartTime time.Time
+}
+
 // Start starts Exporter
 func (e *Exporter) Start(_ context.Context, host component.Host) error {
 	e.host = host
@@ -99,24 +105,37 @@ func (e *Exporter) Start(_ context.Context, host component.Host) error {
 
 // Shutdown cancels ongoing requests
 func (e *Exporter) Shutdown(_ context.Context) error {
-	e.client.Close()
+	if e.client != nil {
+		err := e.client.Close()
+		if err != nil {
+			return err
+		}
+		e.client = nil
+	}
 	return nil
 }
 
-// NewExporter returns service control exporter
-func NewExporter(logger *zap.Logger, c ServiceControlClient, serviceName, consumerID, serviceConfigID string, enableDebugHeaders bool, tel component.TelemetrySettings) *Exporter {
+func newExporter(config Config, logger *zap.Logger, c ServiceControlClient, tel component.TelemetrySettings) *Exporter {
 	return &Exporter{
 		// Sugared logger has a more convenient API: https://pkg.go.dev/go.uber.org/zap#SugaredLogger.
 		logger:             logger.Sugar(),
-		serviceName:        serviceName,
-		consumerID:         parseConsumerID(consumerID),
+		serviceName:        config.ServiceName,
+		consumerID:         parseConsumerID(config.ConsumerProject),
 		client:             c,
-		serviceConfigID:    serviceConfigID,
+		serviceConfigID:    config.ServiceConfigID,
 		errCnt:             0,
-		exporterStartTime:  time.Now(),
 		tel:                tel,
-		enableDebugHeaders: enableDebugHeaders,
+		enableDebugHeaders: config.EnableDebugHeaders,
 		nowFunc:            time.Now,
+	}
+}
+
+// NewMetricsExporter returns service control metrics exporter
+func NewMetricsExporter(config Config, logger *zap.Logger, c ServiceControlClient, tel component.TelemetrySettings) *MetricsExporter {
+	e := newExporter(config, logger, c, tel)
+	return &MetricsExporter{
+		Exporter:          e,
+		exporterStartTime: time.Now(),
 	}
 }
 
@@ -168,7 +187,16 @@ func shouldRetry(err error) bool {
 
 // ConsumeMetrics creates report requests from provided metrics and sends them to Service Control API.
 // This func is called by several goroutines concurrently.
-func (e *Exporter) ConsumeMetrics(ctx context.Context, m pmetric.Metrics) error {
+func (e *MetricsExporter) ConsumeMetrics(ctx context.Context, m pmetric.Metrics) error {
+	req := e.createReportRequest(m.ResourceMetrics())
+	if len(req.Operations) == 0 {
+		// Nothing to export.
+		return nil
+	}
+	return e.pushReportRequest(ctx, req)
+}
+
+func (e *Exporter) pushReportRequest(ctx context.Context, req *scpb.ReportRequest) error {
 	// Check if we need to add the debug encrypted header
 	if e.enableDebugHeaders {
 		e.debugHeaderMutex.Lock()
@@ -178,11 +206,6 @@ func (e *Exporter) ConsumeMetrics(ctx context.Context, m pmetric.Metrics) error 
 		e.debugHeaderMutex.Unlock()
 	}
 
-	req := e.createReportRequest(m.ResourceMetrics())
-	if len(req.Operations) == 0 {
-		// Nothing to export.
-		return nil
-	}
 	// This is thread-safe due to https://grpc.io/docs/languages/go/generated-code/:
 	// "client-side RPC invocations and server-side RPC handlers are thread-safe and are meant to be run on concurrent goroutines".
 	resp, err := e.client.Report(ctx, req)
@@ -227,7 +250,7 @@ func (e *Exporter) Capabilities() consumer.Capabilities {
 //
 // [1] https://github.com/open-telemetry/opentelemetry-proto/blob/main/opentelemetry/proto/metrics/v1/metrics.proto
 // [2] https://cloud.google.com/service-infrastructure/docs/service-control/reference/rest/v1/Operation
-func (e *Exporter) createReportRequest(rms pmetric.ResourceMetricsSlice) *scpb.ReportRequest {
+func (e *MetricsExporter) createReportRequest(rms pmetric.ResourceMetricsSlice) *scpb.ReportRequest {
 	now := time.Now()
 	request := scpb.ReportRequest{
 		Operations:      make([]*scpb.Operation, 0),
@@ -237,20 +260,8 @@ func (e *Exporter) createReportRequest(rms pmetric.ResourceMetricsSlice) *scpb.R
 
 	for i := 0; i < rms.Len(); i++ {
 		rm := rms.At(i)
-		resource := rm.Resource()
+		resourceAttributes, consumerID := e.parseResourceAttributes(rm.Resource())
 		scopeMetricsSlice := rm.ScopeMetrics()
-		resourceAttributes := attributesToStringMap(resource.Attributes())
-
-		// By default, use consumerID from the exporter configuration.
-		consumerID := e.consumerID
-
-		// Allow users to override the consumerID by providing a resource attribute.
-		if v, found := resourceAttributes[dynamicConsumerAttribute]; found {
-			// Delete the attribute: it is only for Metrics Agent to understand the correct consumer id.
-			// Service Control does not know about this label, and will complain if we send it.
-			delete(resourceAttributes, dynamicConsumerAttribute)
-			consumerID = v
-		}
 
 		for j := 0; j < scopeMetricsSlice.Len(); j++ {
 			metrics := scopeMetricsSlice.At(j).Metrics()
@@ -263,11 +274,28 @@ func (e *Exporter) createReportRequest(rms pmetric.ResourceMetricsSlice) *scpb.R
 	return &request
 }
 
+func (e *Exporter) parseResourceAttributes(resource pcommon.Resource) (map[string]string, string) {
+	resourceAttributes := attributesToStringMap(resource.Attributes())
+
+	// By default, use consumerID from the exporter configuration.
+	consumerID := e.consumerID
+
+	// Allow users to override the consumerID by providing a resource attribute.
+	if v, found := resourceAttributes[dynamicConsumerAttribute]; found {
+		// Delete the attribute: it is only for Metrics Agent to understand the correct consumer id.
+		// Service Control does not know about this label, and will complain if we send it.
+		delete(resourceAttributes, dynamicConsumerAttribute)
+		consumerID = v
+	}
+
+	return resourceAttributes, consumerID
+}
+
 // We create a dedicated Operation for each metric. The API would drop the
 // entire Operation if any metric point is invalid (e.g., old timestamp). Having
 // one metric per operation can avoid valid metric points get dropped.
 // see go/slm-monitoring-opentelemetry-batching for details.
-func (e *Exporter) createOperation(resourceAttributes map[string]string, metric pmetric.Metric, now time.Time, consumerID string) *scpb.Operation {
+func (e *MetricsExporter) createOperation(resourceAttributes map[string]string, metric pmetric.Metric, now time.Time, consumerID string) *scpb.Operation {
 	start := now
 	op := scpb.Operation{
 		ConsumerId:    consumerID,
@@ -290,7 +318,7 @@ func (e *Exporter) createOperation(resourceAttributes map[string]string, metric 
 	return &op
 }
 
-func (e *Exporter) createMetricValueSet(metric pmetric.Metric) (*scpb.MetricValueSet, time.Time) {
+func (e *MetricsExporter) createMetricValueSet(metric pmetric.Metric) (*scpb.MetricValueSet, time.Time) {
 	vs := &scpb.MetricValueSet{
 		MetricName: metric.Name(),
 	}
@@ -314,7 +342,7 @@ func (e *Exporter) createMetricValueSet(metric pmetric.Metric) (*scpb.MetricValu
 	return vs, startTime
 }
 
-func (e *Exporter) getStartEndTimes(aggr pmetric.AggregationTemporality, start time.Time, end time.Time) (time.Time, time.Time) {
+func (e *MetricsExporter) getStartEndTimes(aggr pmetric.AggregationTemporality, start time.Time, end time.Time) (time.Time, time.Time) {
 	if aggr == pmetric.AggregationTemporalityUnspecified {
 		// This is a Gauge metric.
 		// According to https://cloud.google.com/monitoring/api/ref_v3/rpc/google.monitoring.v3#timeinterval
@@ -354,7 +382,7 @@ func (e *Exporter) getStartEndTimes(aggr pmetric.AggregationTemporality, start t
 	return start, end
 }
 
-func (e *Exporter) createNumericMetricValues(points pmetric.NumberDataPointSlice, aggr pmetric.AggregationTemporality) ([]*scpb.MetricValue, time.Time) {
+func (e *MetricsExporter) createNumericMetricValues(points pmetric.NumberDataPointSlice, aggr pmetric.AggregationTemporality) ([]*scpb.MetricValue, time.Time) {
 	var earliestStart time.Time
 	ret := make([]*scpb.MetricValue, points.Len())
 
@@ -390,7 +418,7 @@ func (e *Exporter) createNumericMetricValues(points pmetric.NumberDataPointSlice
 	return ret, earliestStart
 }
 
-func (e *Exporter) createHistogramMetricValues(m pmetric.Histogram) ([]*scpb.MetricValue, time.Time) {
+func (e *MetricsExporter) createHistogramMetricValues(m pmetric.Histogram) ([]*scpb.MetricValue, time.Time) {
 	var earliestStart time.Time
 	points := m.DataPoints()
 	ret := make([]*scpb.MetricValue, points.Len())

@@ -27,7 +27,8 @@ import (
 )
 
 func TestHeaderLoggingInterceptor(t *testing.T) {
-	server, mockServer, err := StartMockServer()
+	server, mockServer, listener, err := StartMockServer()
+	defer StopMockServer(server, listener)
 	require.NoError(t, err)
 	defer server.Stop()
 

@@ -1,8 +1,9 @@
-module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/googleservicecontrolexporter
+module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/exporter/googleservicecontrolexporter
 
 go 1.23.2
 
 require (
+	cloud.google.com/go/logging v1.12.0
 	cloud.google.com/go/servicecontrol v1.11.1
 	github.com/google/go-cmp v0.6.0
 	github.com/pborman/uuid v1.2.1
@@ -11,25 +12,28 @@ require (
 	go.opentelemetry.io/collector/component/componentstatus v0.119.0
 	go.opentelemetry.io/collector/component/componenttest v0.119.0
 	go.opentelemetry.io/collector/config/configretry v1.25.0
+	go.opentelemetry.io/collector/confmap v1.26.0
 	go.opentelemetry.io/collector/consumer v1.26.0
 	go.opentelemetry.io/collector/consumer/consumererror v0.119.0
 	go.opentelemetry.io/collector/exporter v0.119.0
 	go.opentelemetry.io/collector/exporter/exportertest v0.119.0
 	go.opentelemetry.io/collector/otelcol/otelcoltest v0.119.0
 	go.opentelemetry.io/collector/pdata v1.26.0
-	go.opentelemetry.io/otel/metric v1.34.0
-	go.opentelemetry.io/otel/trace v1.34.0
+	go.uber.org/goleak v1.3.0
 	go.uber.org/zap v1.27.0
 	google.golang.org/api v0.216.0
+	google.golang.org/genproto v0.0.0-20241118233622-e639e219e697
 	google.golang.org/genproto/googleapis/api v0.0.0-20250212204824-5a70512c5d8b
 	google.golang.org/grpc v1.70.0
 	google.golang.org/protobuf v1.36.5
 )
 
 require (
+	cloud.google.com/go v0.116.0 // indirect
 	cloud.google.com/go/auth v0.14.1 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.7 // indirect
 	cloud.google.com/go/compute/metadata v0.6.0 // indirect
+	cloud.google.com/go/longrunning v0.6.2 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -73,7 +77,6 @@ require (
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
 	go.opentelemetry.io/collector/config/configtelemetry v0.120.0 // indirect
-	go.opentelemetry.io/collector/confmap v1.26.0 // indirect
 	go.opentelemetry.io/collector/confmap/provider/envprovider v1.26.0 // indirect
 	go.opentelemetry.io/collector/confmap/provider/fileprovider v1.26.0 // indirect
 	go.opentelemetry.io/collector/confmap/provider/httpprovider v1.26.0 // indirect
@@ -121,9 +124,11 @@ require (
 	go.opentelemetry.io/otel/exporters/stdout/stdoutmetric v1.34.0 // indirect
 	go.opentelemetry.io/otel/exporters/stdout/stdouttrace v1.34.0 // indirect
 	go.opentelemetry.io/otel/log v0.10.0 // indirect
+	go.opentelemetry.io/otel/metric v1.34.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.34.0 // indirect
 	go.opentelemetry.io/otel/sdk/log v0.10.0 // indirect
 	go.opentelemetry.io/otel/sdk/metric v1.34.0 // indirect
+	go.opentelemetry.io/otel/trace v1.34.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.5.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	golang.org/x/crypto v0.33.0 // indirect
@@ -135,7 +140,6 @@ require (
 	golang.org/x/text v0.22.0 // indirect
 	golang.org/x/time v0.10.0 // indirect
 	gonum.org/v1/gonum v0.15.1 // indirect
-	google.golang.org/genproto v0.0.0-20241118233622-e639e219e697 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250212204824-5a70512c5d8b // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

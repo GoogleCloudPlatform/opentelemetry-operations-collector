@@ -24,13 +24,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/configretry"
-	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
+	"go.opentelemetry.io/collector/exporter/exportertest"
 	"go.opentelemetry.io/collector/otelcol/otelcoltest"
-	noopmetric "go.opentelemetry.io/otel/metric/noop"
-	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/exporter/googleservicecontrolexporter/internal/metadata"
 )
 
 func TestCreateDefaultConfig(t *testing.T) {
@@ -76,6 +76,11 @@ func TestCreateExporterFromConfig(t *testing.T) {
 				ImpersonateServiceAccount:  "serviceAccount@myproject.iam.gserviceaccount.com",
 				UseRawServiceControlClient: "false",
 				EnableDebugHeaders:         false,
+				UseInsecure:                false,
+				LogConfig: LogConfig{
+					DefaultLogName: "log-name",
+					OperationName:  "test-operation-name",
+				},
 			},
 		},
 		{
@@ -90,13 +95,13 @@ func TestCreateExporterFromConfig(t *testing.T) {
 			assert.NoError(t, err)
 
 			factory := NewFactory()
-			factories.Exporters[component.MustNewType(typeStr)] = factory
+			factories.Exporters[metadata.Type] = factory
 			cfg, err := otelcoltest.LoadConfigAndValidate(filepath.Join("testdata", "config.yaml"), factories)
 
 			require.Nil(t, err)
 			require.NotNil(t, cfg)
 
-			expConf := cfg.Exporters[component.NewIDWithName(component.MustNewType(typeStr), tc.name)]
+			expConf := cfg.Exporters[component.NewIDWithName(metadata.Type, tc.name)]
 			assert.Equal(t, tc.want, expConf)
 		})
 	}
@@ -137,9 +142,13 @@ func TestCreateMetricsExporter(t *testing.T) {
 
 	for _, test := range scenarios {
 		t.Run(test.testName, func(t *testing.T) {
+			defaultClientProvider := clientProvider
 			clientProvider = func(_ string, _ bool, _ bool, _ *zap.Logger, _ ...grpc.DialOption) (ServiceControlClient, error) {
 				return nil, nil
 			}
+			defer func() {
+				clientProvider = defaultClientProvider
+			}()
 			factory := NewFactory()
 			cfg := factory.CreateDefaultConfig()
 			config, ok := cfg.(*Config)
@@ -150,20 +159,21 @@ func TestCreateMetricsExporter(t *testing.T) {
 			config.ConsumerProject = test.consumerProject
 			config.TimeoutConfig.Timeout = test.timeout
 
-			settings := exporter.Settings{
-				TelemetrySettings: component.TelemetrySettings{
-					Logger:         zap.NewNop(),
-					TracerProvider: trace.NewNoopTracerProvider(),
-					MeterProvider:  noopmetric.NewMeterProvider(),
-				},
-			}
-			exporter, err := factory.CreateMetrics(context.Background(), settings, cfg)
-			if test.wantError && ((err == nil) || (exporter != nil)) {
-				t.Errorf("factory.CreateMetrics(zap.NewNop(), cfg) = (%v, %v), want (nil, error)", exporter, err)
+			err := config.Validate()
+			if test.wantError {
+				assert.Error(t, err)
 			}
 
-			if !test.wantError && ((err != nil) || (exporter == nil)) {
-				t.Errorf("factory.CreateMetrics(zap.NewNop(), cfg) = (%v, %v), want (receiver.MetricExporter{}, nil)", exporter, err)
+			if !test.wantError {
+				assert.NoError(t, err)
+				metricsExporter, err := factory.CreateMetrics(context.Background(), exportertest.NewNopSettings(metadata.Type), config)
+				assert.NoError(t, err)
+				assert.NotNil(t, metricsExporter)
+				assert.NoError(t, metricsExporter.Shutdown(context.Background()))
+				LogsExporter, err := factory.CreateLogs(context.Background(), exportertest.NewNopSettings(metadata.Type), config)
+				assert.NoError(t, err)
+				assert.NotNil(t, LogsExporter)
+				assert.NoError(t, LogsExporter.Shutdown(context.Background()))
 			}
 		})
 	}

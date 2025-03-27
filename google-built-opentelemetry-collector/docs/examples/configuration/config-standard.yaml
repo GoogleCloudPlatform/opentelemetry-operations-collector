@@ -104,7 +104,23 @@ exporters:
   # https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/googlemanagedprometheusexporter
   googlemanagedprometheus:
 
+extensions:
+  # Opens an endpoint on 13133 that can be used to check the
+  # status of the collector. Since this does not configure the
+  # `path` config value, the endpoint will default to `/`.
+  #
+  # When running on Cloud Run, this extension is required and not optional.
+  # In other environments it is recommended but may not be required for operation
+  # (i.e. in Container-Optimized OS or other GCE environments).
+  #
+  # Docs:
+  # https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/healthcheckextension
+  health_check:
+    endpoint: 0.0.0.0:13133
+
 service:
+  extensions:
+  - health_check
   pipelines:
     logs:
       receivers:

@@ -26,12 +26,12 @@ const (
 // stsTokenSource implements the interface `oauth2.TokenSource`.
 type stsTokenSource struct {
 	config    *stsExchangeConfig
-	transport *http.Transport
+	transport http.RoundTripper
 }
 
 var _ oauth2.TokenSource = &stsTokenSource{}
 
-func newStsTokenSource(config *Config, transport *http.Transport) (oauth2.TokenSource, error) {
+func newStsTokenSource(config *Config, transport http.RoundTripper) (oauth2.TokenSource, error) {
 	ts := &stsTokenSource{
 		config: &stsExchangeConfig{
 			Config: *config,

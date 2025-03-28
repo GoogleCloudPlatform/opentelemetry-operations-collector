@@ -231,3 +231,59 @@ func TestFailContactingOAuth(t *testing.T) {
 	assert.ErrorIs(t, err, errFailedToGetSecurityToken)
 	assert.ErrorContains(t, err, serverURL.String())
 }
+
+func TestClientAuthenticatorMode(t *testing.T) {
+	// test files for TLS testing
+
+	tests := []struct {
+		name          string
+		settings      *Config
+		shouldError   bool
+		expectedError string
+	}{
+		{
+			name: "test_create_two_legged_authenticator",
+			settings: &Config{
+				ClientID:     "testclientid",
+				ClientSecret: "testsecret",
+				TokenURL:     "https://example.com/v1/token",
+				Scopes:       []string{"resource.read"},
+			},
+			shouldError:   false,
+			expectedError: "",
+		},
+		{
+			name: "test_create_sts_authenticator",
+			settings: &Config{
+				SubjectToken:     "testtoken",
+				SubjectTokenType: "testtokentype",
+				TokenURL:         "https://example.com/v1/token",
+				Scopes:           []string{"resource.read"},
+				Audience:         "testaudience",
+			},
+			shouldError:   false,
+			expectedError: "",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			rc, err := newClientAuthenticator(test.settings, zap.NewNop())
+
+			if test.shouldError {
+				assert.ErrorContains(t, err, test.expectedError)
+				return
+			}
+
+			assert.NoError(t, err)
+			if test.settings.SubjectToken != "" {
+				_, ok := rc.(*stsClientAuthenticator)
+				assert.True(t, ok)
+			} else {
+				_, ok := rc.(*twoLeggedClientAuthenticator)
+				assert.True(t, ok)
+			}
+
+		})
+	}
+}

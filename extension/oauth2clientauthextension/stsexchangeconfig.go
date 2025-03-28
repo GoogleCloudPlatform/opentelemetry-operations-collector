@@ -54,7 +54,7 @@ func (ts stsTokenSource) Token() (*oauth2.Token, error) {
 		"scope":                {strings.Join(ts.config.Scopes, " ")},
 		"requested_token_type": {"urn:ietf:params:oauth:token-type:access_token"},
 		"subject_token":        {subjectToken},
-		"subject_token_type":   {"urn:k8s:params:oauth:token-type:serviceaccount"},
+		"subject_token_type":   {ts.config.SubjectTokenType},
 	}
 	req, err := http.NewRequest(http.MethodPost, ts.config.TokenURL, strings.NewReader(data.Encode()))
 

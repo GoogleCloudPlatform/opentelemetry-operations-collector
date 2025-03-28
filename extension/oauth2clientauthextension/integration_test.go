@@ -46,6 +46,7 @@ func TestGetToken(t *testing.T) {
 	}
 
 	for _, test := range tests {
+		t.Skip("This test should only be run manually for now.")
 		t.Run(test.name, func(t *testing.T) {
 			rc, err := newStsClientAuthenticator(test.settings, zap.NewNop())
 			assert.NoError(t, err)

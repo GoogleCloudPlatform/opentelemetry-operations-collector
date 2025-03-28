@@ -37,7 +37,7 @@ func createExtension(_ context.Context, set extension.Settings, cfg component.Co
 	}
 
 	return extensionauth.NewClient(
-		extensionauth.WithClientRoundTripper(ca.roundTripper),
-		extensionauth.WithClientPerRPCCredentials(ca.perRPCCredentials),
+		extensionauth.WithClientRoundTripper(ca.RoundTripper),
+		extensionauth.WithClientPerRPCCredentials(ca.PerRPCCredentials),
 	)
 }

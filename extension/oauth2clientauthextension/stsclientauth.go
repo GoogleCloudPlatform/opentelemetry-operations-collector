@@ -62,6 +62,7 @@ func (o *stsClientAuthenticator) GetRequestMetadata(ctx context.Context, uri ...
 	}, nil
 }
 
+// Applied when authenticator is returned as PerRPCCredentials
 func (o *stsClientAuthenticator) RequireTransportSecurity() bool {
 	return !o.config.DisableTLSOnUse
 }

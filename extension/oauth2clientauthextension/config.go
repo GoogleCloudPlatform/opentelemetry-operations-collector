@@ -55,7 +55,7 @@ type Config struct {
 	// Name of the target service that we want to access
 	Audience string `mapstructure:"audience"`
 
-	// DisableTLSOnUse turns off TLS when using the credentials. i.e. sets TokenSource.RequireTransportSecurity to false
+	// DisableTLSOnUse turns off TLS when using the credentials. i.e. sets TokenSource.RequireTransportSecurity to false. Only supported for STS mode.
 	DisableTLSOnUse bool `mapstructure:"disable_tls_on_use, omitempty"`
 
 	//

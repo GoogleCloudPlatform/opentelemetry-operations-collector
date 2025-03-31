@@ -1,0 +1,21 @@
+
+receivers:
+  nop:
+processors:
+  nop:
+exporters:
+  nop:
+extensions:
+  ia_health_agent:
+    scope: "container"
+    name: "otel"
+    port: "2345"
+    error_check_interval: 60s
+  ia_health_agent/2:
+service:
+  extensions: [ia_health_agent/2]
+  pipelines:
+    metrics:
+      receivers: [nop]
+      processors: [nop]
+      exporters: [nop]

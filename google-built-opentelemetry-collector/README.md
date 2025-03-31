@@ -77,6 +77,7 @@ The Google-Built OpenTelemetry Collector is an open-source, production-ready bui
 | basicauth | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/basicauthextension/README.md) |
 | bearertokenauth | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/bearertokenauthextension/README.md) |
 | filestorage | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/storage/README.md) |
+| googleclientauth | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/googleclientauthextension/README.md) |
 | headerssetter | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/headerssetterextension/README.md) |
 | healthcheck | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/healthcheckextension/README.md) |
 | hostobserver | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/observer/README.md) |

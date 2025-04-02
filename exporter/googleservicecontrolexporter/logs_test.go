@@ -442,7 +442,14 @@ func TestLogsAddAndBuild(t *testing.T) {
 					}(),
 					Resource: emptyResource(),
 				}},
-			expectError: true,
+			want: createSingleLogOp([]*scpb.LogEntry{
+				{
+					Name:      "default-log-name",
+					Timestamp: requestTs,
+					Severity:  logtypepb.LogSeverity(logging.Default),
+					Labels:    map[string]string{},
+				},
+			}),
 		},
 		{
 			name: "parse severity text correctly",

@@ -54,32 +54,29 @@ const (
 // to matching Cloud Logging severity levels.
 // Service Control' severity uses logtypepb's severity levels, so this mapping
 // is exactly the same as Cloud Logging exporter's severity mapping.
-var severityMapping = []logtypepb.LogSeverity{
-	logtypepb.LogSeverity_DEFAULT,   // Default, 0
-	logtypepb.LogSeverity_DEBUG,     //
-	logtypepb.LogSeverity_DEBUG,     //
-	logtypepb.LogSeverity_DEBUG,     //
-	logtypepb.LogSeverity_DEBUG,     //
-	logtypepb.LogSeverity_DEBUG,     //
-	logtypepb.LogSeverity_DEBUG,     //
-	logtypepb.LogSeverity_DEBUG,     //
-	logtypepb.LogSeverity_DEBUG,     // 1-8 -> Debug
-	logtypepb.LogSeverity_INFO,      //
-	logtypepb.LogSeverity_INFO,      // 9-10 -> Info
-	logtypepb.LogSeverity_NOTICE,    //
-	logtypepb.LogSeverity_NOTICE,    // 11-12 -> Notice
-	logtypepb.LogSeverity_WARNING,   //
-	logtypepb.LogSeverity_WARNING,   //
-	logtypepb.LogSeverity_WARNING,   //
-	logtypepb.LogSeverity_WARNING,   // 13-16 -> Warning
-	logtypepb.LogSeverity_ERROR,     //
-	logtypepb.LogSeverity_ERROR,     //
-	logtypepb.LogSeverity_ERROR,     //
-	logtypepb.LogSeverity_ERROR,     // 17-20 -> Error
-	logtypepb.LogSeverity_CRITICAL,  //
-	logtypepb.LogSeverity_CRITICAL,  // 21-22 -> Critical
-	logtypepb.LogSeverity_ALERT,     // 23 -> Alert
-	logtypepb.LogSeverity_EMERGENCY, // 24 -> Emergency
+func severityMapping(severityNumber plog.SeverityNumber) (logtypepb.LogSeverity, error) {
+	switch {
+	case severityNumber == 0:
+		return logtypepb.LogSeverity_DEFAULT, nil
+	case 1 <= severityNumber && severityNumber <= 8:
+		return logtypepb.LogSeverity_DEBUG, nil
+	case 9 <= severityNumber && severityNumber <= 10:
+		return logtypepb.LogSeverity_INFO, nil
+	case 11 <= severityNumber && severityNumber <= 12:
+		return logtypepb.LogSeverity_NOTICE, nil
+	case 13 <= severityNumber && severityNumber <= 16:
+		return logtypepb.LogSeverity_WARNING, nil
+	case 17 <= severityNumber && severityNumber <= 20:
+		return logtypepb.LogSeverity_ERROR, nil
+	case 21 <= severityNumber && severityNumber <= 22:
+		return logtypepb.LogSeverity_CRITICAL, nil
+	case severityNumber == 23:
+		return logtypepb.LogSeverity_ALERT, nil
+	case severityNumber == 24:
+		return logtypepb.LogSeverity_EMERGENCY, nil
+	default:
+		return logtypepb.LogSeverity_DEFAULT, fmt.Errorf("unknown severity number %d", severityNumber)
+	}
 }
 
 // otelSeverityForText maps the generic aliases of SeverityTexts to SeverityNumbers.
@@ -176,9 +173,12 @@ func (e *LogsExporter) createReportRequest(ld plog.Logs) (*scpb.ReportRequest, e
 		ServiceName:     e.serviceName,
 	}
 
-	//TODO: in FluentBit, the exporter would create a MR to log entries map, and
-	// create one operation to contain all log entries. This could be problematic
-	// if there are too many logs, either within a same MR, or across all MRs.
+	//TODO(lujieduan): in FluentBit, the exporter would create a monitored
+	// resources to log entries map, and create one "Operation" to contain all
+	// entries of each MR.
+	// This could be problematic if there are too many logs in one batch, either
+	// within a single MR, or across all MRs, causing the request to be larger
+	// than the API size limit.
 	// Instead, we should look into split them into separate requests
 	for i := range ld.ResourceLogs().Len() {
 		rl := ld.ResourceLogs().At(i)
@@ -215,13 +215,14 @@ func (e *LogsExporter) createRequestOperation(rl plog.ResourceLogs, now time.Tim
 
 func (e *LogsExporter) createEntries(rl plog.ResourceLogs) ([]*scpb.LogEntry, map[string]string, string, error) {
 	var errs []error
-	entries := make([]*scpb.LogEntry, 0)
+	logCount := rl.ScopeLogs().Len()
+	entries := make([]*scpb.LogEntry, 0, logCount)
 	processTime := time.Now()
 	resourceAttributes, consumerId := e.parseResourceAttributes(rl.Resource())
-	for j := range rl.ScopeLogs().Len() {
+	for j := range logCount {
 		sl := rl.ScopeLogs().At(j)
-		// TODO: handle otel instrumentation scope labels, i.e., instrumentation_source
-		// and instrumentation_version
+		// TODO(lujieduan): handle otel instrumentation scope labels, i.e.,
+		// instrumentation_source and instrumentation_version
 		for k := range sl.LogRecords().Len() {
 			logRecord := sl.LogRecords().At(k)
 			entry, err := e.logMapper.parseLogEntry(logRecord, processTime)
@@ -283,14 +284,16 @@ func (l logMapper) parseLogEntry(logRecord plog.LogRecord, processTime time.Time
 	})
 
 	// Parse LogEntry InsertId struct from OTel attribute
-	// TODO: we should evaluate if this is needed; if not, can remove this and
-	// let the API generate a UUID - same behavior as the Cloud Logging exporter
+	// TODO(lujieduan): we should evaluate if we need to parse insertId from
+	// the logs: the FluentBit plugin parses this but Otel Cloud Logging
+	// exporter does not and let API assigns the InsertId
 	if insertIdAttr, ok := attrsMap[InsertIdAttributeKey]; ok {
 		entry.InsertId = insertIdAttr.AsString()
 		delete(attrsMap, InsertIdAttributeKey)
 	}
-	// FluentBit would generate UUIDs in the exporter; here we would let server
-	// assign UUIDs
+	// When insertId is not present in the attributes, FluentBit would generate
+	// UUIDs in the exporter; here we would just leave it blank and let server
+	// assigns new UUIDs - same end results, easy for testing
 
 	// parse LogEntrySourceLocation struct from OTel attribute
 	if sourceLocation, ok := attrsMap[SourceLocationAttributeKey]; ok {
@@ -307,16 +310,13 @@ func (l logMapper) parseLogEntry(logRecord plog.LogRecord, processTime time.Time
 	if httpRequestAttr, ok := attrsMap[HTTPRequestAttributeKey]; ok {
 		httpRequest, err := l.parseHTTPRequest(httpRequestAttr)
 		if err != nil {
-			l.logger.Debug("Unable to parse httpRequest", zap.Error(err))
+			l.logger.Warn("Unable to parse httpRequest", zap.Error(err))
 		}
 		entry.HttpRequest = httpRequest
 		delete(attrsMap, HTTPRequestAttributeKey)
 	}
 
 	// parse Severity
-	if logRecord.SeverityNumber() < 0 || int(logRecord.SeverityNumber()) > len(severityMapping)-1 {
-		return nil, fmt.Errorf("unknown SeverityNumber %v", logRecord.SeverityNumber())
-	}
 	severityNumber := logRecord.SeverityNumber()
 	// Log severity levels are based on numerical values defined by Otel/GCP, which are informally mapped to generic text values such as "ALERT", "Debug", etc.
 	// In some cases, a SeverityText value can be automatically mapped to a matching SeverityNumber.
@@ -328,7 +328,10 @@ func (l logMapper) parseLogEntry(logRecord plog.LogRecord, processTime time.Time
 	if severityForText, ok := otelSeverityForText[strings.ToLower(logRecord.SeverityText())]; ok && severityNumber == 0 {
 		severityNumber = severityForText
 	}
-	entry.Severity = severityMapping[severityNumber]
+	entry.Severity, err = severityMapping(severityNumber)
+	if err != nil {
+		l.logger.Warn(fmt.Errorf("error parsing severity %v with error: %s", logRecord.SeverityNumber(), err))
+	}
 
 	// parse remaining OTel attributes to GCP labels
 	for k, v := range attrsMap {
@@ -348,7 +351,7 @@ func (l logMapper) parseLogEntry(logRecord plog.LogRecord, processTime time.Time
 			entry.Payload = &scpb.LogEntry_StructPayload{StructPayload: s}
 			return entry, nil
 		}
-		l.logger.Warn(fmt.Sprintf("map body cannot be converted to a json payload, exporting as raw string: %+v", err))
+		l.logger.Debug(fmt.Sprintf("map body cannot be converted to a json payload, exporting as raw string: %+v", err))
 	case pcommon.ValueTypeBytes:
 		s, err := toProtoStruct(logRecord.Body().Bytes().AsRaw())
 		if err == nil {

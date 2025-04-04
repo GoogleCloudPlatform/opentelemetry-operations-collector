@@ -50,7 +50,7 @@ generate-components:
 .PHONY: tag-repo
 tag-repo:
 	git tag -a $(OTEL_VERSION) -m "Update to OpenTelemetry Collector version $(OTEL_VERSION)"
-	@echo "Created git tag $(OTEL_VERSION). If it looks good, push it to the remote by running:\ngit push origin $(OTEL_VERSION)"
+	@echo "Created git tag $(OTEL_VERSION). If it looks good, push it to the remote by running: git push origin $(OTEL_VERSION)"
 
 ###################
 # Distro Generation

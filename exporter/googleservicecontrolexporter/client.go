@@ -38,6 +38,7 @@ type ServiceControlClient interface {
 
 type serviceControlClientRaw struct {
 	service scpb.ServiceControllerClient
+	conn    *grpc.ClientConn
 }
 
 type serviceControlClientLibrary struct {
@@ -74,6 +75,7 @@ func NewServiceControllerClient(endpoint string, useRawServiceControlClient bool
 
 	return &serviceControlClientRaw{
 		service: scpb.NewServiceControllerClient(conn),
+		conn:    conn,
 	}, nil
 }
 
@@ -81,8 +83,7 @@ func (c *serviceControlClientRaw) Report(ctx context.Context, request *scpb.Repo
 	return c.service.Report(ctx, request)
 }
 func (c *serviceControlClientRaw) Close() error {
-	// There is no Close function in basic version.
-	return nil
+	return c.conn.Close()
 }
 func (c *serviceControlClientLibrary) Report(ctx context.Context, request *scpb.ReportRequest) (*scpb.ReportResponse, error) {
 	return c.service.Report(ctx, request)

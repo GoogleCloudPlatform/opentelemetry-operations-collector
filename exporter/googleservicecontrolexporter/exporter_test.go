@@ -37,10 +37,12 @@ import (
 	"google.golang.org/genproto/googleapis/api/distribution"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
+	grpcmetadata "google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	// "google.golang.org/grpc/credentials/insecure"
+
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/exporter/googleservicecontrolexporter/internal/metadata"
 )
 
 const (
@@ -79,7 +81,12 @@ func unexportedOptsForScRequest() cmp.Option {
 		timestamppb.Timestamp{},
 		scpb.Distribution_ExplicitBuckets{},
 		distribution.Distribution_Exemplar{},
-		scpb.Distribution{})
+		scpb.Distribution{},
+		scpb.LogEntry{},
+		scpb.LogEntrySourceLocation{},
+		scpb.HttpRequest{},
+		structpb.Value{},
+		structpb.Struct{})
 }
 
 func noError(_ context.Context) error {
@@ -109,7 +116,7 @@ func createExporterThroughOTel(t *testing.T, timeout time.Duration, retryEnabled
 		Enabled: false,
 	}
 
-	settings := exportertest.NewNopSettings()
+	settings := exportertest.NewNopSettings(metadata.Type)
 	e, err := createMetricsExporter(context.Background(), settings, conf)
 	if err != nil {
 		t.Fatalf("Could not create exporter: %v", err)
@@ -237,13 +244,16 @@ func sampleMetricData(t *testing.T) metricData {
 	}
 }
 
-func operationLessEqual(x, y *scpb.Operation) bool {
-	xRegion := x.Labels[gcpLocation]
-	yRegion := y.Labels[gcpLocation]
-	return xRegion < yRegion
+// operationLess is a less function we pass to the cmp.Diff to ensure we compare
+// the content and not the order of the operations.
+func operationLess(x, y *scpb.Operation) bool {
+	if x.Labels[gcpLocation] < y.Labels[gcpLocation] {
+		return true
+	}
+	return len(x.Labels) < len(y.Labels)
 }
 
-func metricValueLessEqual(x, y *scpb.MetricValue) bool {
+func metricValueLess(x, y *scpb.MetricValue) bool {
 	return x.GetDoubleValue() < y.GetDoubleValue()
 }
 
@@ -1138,7 +1148,13 @@ func TestAddAndBuild(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			c := newFakeClient(noError)
-			e := NewExporter(zap.NewNop(), c, testServiceID, testConsumerID, testServiceConfigID, true, componenttest.NewNopTelemetrySettings())
+			cfg := Config{
+				ServiceName:        testServiceID,
+				ConsumerProject:    testConsumerID,
+				ServiceConfigID:    testServiceConfigID,
+				EnableDebugHeaders: true,
+			}
+			e := NewMetricsExporter(cfg, zap.NewNop(), c, componenttest.NewNopTelemetrySettings())
 			e.exporterStartTime, _ = time.Parse(time.RFC3339, testExporterStartTime)
 
 			err := e.ConsumeMetrics(context.Background(), metricDataToPmetric(tc.metrics))
@@ -1152,7 +1168,7 @@ func TestAddAndBuild(t *testing.T) {
 			if diff := cmp.Diff(request.ServiceConfigId, testServiceConfigID); diff != "" {
 				t.Errorf("ServiceConfigId differs, -got +want: %s", diff)
 			}
-			if diff := cmp.Diff(request.Operations, tc.want, cleanOperation, cmpopts.SortSlices(operationLessEqual), cmpopts.SortSlices(metricValueLessEqual), unexportedOptsForScRequest()); diff != "" {
+			if diff := cmp.Diff(request.Operations, tc.want, cleanOperation, cmpopts.SortSlices(operationLess), cmpopts.SortSlices(metricValueLess), unexportedOptsForScRequest()); diff != "" {
 				t.Errorf("Operations differ, -got +want: %s", diff)
 			}
 			for _, op := range request.Operations {
@@ -1173,7 +1189,13 @@ func TestAddAndBuild(t *testing.T) {
 func TestErrorPropagation(t *testing.T) {
 	metrics := sampleMetricData(t)
 	c := newFakeClient(fakeError)
-	e := NewExporter(zap.NewNop(), c, testServiceID, testConsumerID, testServiceConfigID, true, componenttest.NewNopTelemetrySettings())
+	cfg := Config{
+		ServiceName:        testServiceID,
+		ConsumerProject:    testConsumerID,
+		ServiceConfigID:    testServiceConfigID,
+		EnableDebugHeaders: true,
+	}
+	e := NewMetricsExporter(cfg, zap.NewNop(), c, componenttest.NewNopTelemetrySettings())
 
 	err := e.ConsumeMetrics(context.Background(), metricDataToPmetric(metrics))
 	if err == nil {
@@ -1205,7 +1227,7 @@ func TestCreateOperations(t *testing.T) {
 	tests := []struct {
 		name        string
 		metricsFunc func() []pmetric.Metric
-		wantOpsFunc func(*Exporter, []pmetric.Metric, time.Time) []*scpb.Operation
+		wantOpsFunc func(*MetricsExporter, []pmetric.Metric, time.Time) []*scpb.Operation
 	}{
 		{
 			// If X and Y are metric names, then we have the following Metrics: [X, Y, X, Y].
@@ -1217,7 +1239,7 @@ func TestCreateOperations(t *testing.T) {
 				met = append(met, met...)
 				return met
 			},
-			wantOpsFunc: func(e *Exporter, met []pmetric.Metric, now time.Time) []*scpb.Operation {
+			wantOpsFunc: func(e *MetricsExporter, met []pmetric.Metric, now time.Time) []*scpb.Operation {
 				return []*scpb.Operation{
 					e.createOperation(expectedResourceAttributes, met[0:1][0], now, testConsumerID),
 					e.createOperation(expectedResourceAttributes, met[1:2][0], now, testConsumerID),
@@ -1232,7 +1254,7 @@ func TestCreateOperations(t *testing.T) {
 			metricsFunc: func() []pmetric.Metric {
 				return m.Metrics
 			},
-			wantOpsFunc: func(e *Exporter, met []pmetric.Metric, now time.Time) []*scpb.Operation {
+			wantOpsFunc: func(e *MetricsExporter, met []pmetric.Metric, now time.Time) []*scpb.Operation {
 				return []*scpb.Operation{
 					e.createOperation(expectedResourceAttributes, met[0:1][0], now, testConsumerID),
 					e.createOperation(expectedResourceAttributes, met[1:2][0], now, testConsumerID),
@@ -1249,7 +1271,7 @@ func TestCreateOperations(t *testing.T) {
 				met = append(met, m.Metrics[0])
 				return met
 			},
-			wantOpsFunc: func(e *Exporter, met []pmetric.Metric, now time.Time) []*scpb.Operation {
+			wantOpsFunc: func(e *MetricsExporter, met []pmetric.Metric, now time.Time) []*scpb.Operation {
 				return []*scpb.Operation{
 					e.createOperation(expectedResourceAttributes, met[0:1][0], now, testConsumerID),
 					e.createOperation(expectedResourceAttributes, met[1:2][0], now, testConsumerID),
@@ -1263,7 +1285,7 @@ func TestCreateOperations(t *testing.T) {
 			metricsFunc: func() []pmetric.Metric {
 				return []pmetric.Metric{}
 			},
-			wantOpsFunc: func(e *Exporter, met []pmetric.Metric, now time.Time) []*scpb.Operation {
+			wantOpsFunc: func(e *MetricsExporter, met []pmetric.Metric, now time.Time) []*scpb.Operation {
 				return []*scpb.Operation{}
 			},
 		},
@@ -1271,7 +1293,13 @@ func TestCreateOperations(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			e := NewExporter(zap.NewNop(), newFakeClient(noError), testServiceID, testConsumerID, testServiceConfigID, true, componenttest.NewNopTelemetrySettings())
+			cfg := Config{
+				ServiceName:        testServiceID,
+				ConsumerProject:    testConsumerID,
+				ServiceConfigID:    testServiceConfigID,
+				EnableDebugHeaders: true,
+			}
+			e := NewMetricsExporter(cfg, zap.NewNop(), newFakeClient(noError), componenttest.NewNopTelemetrySettings())
 			metrics := tc.metricsFunc()
 
 			ops := e.createReportRequest(createRms(metrics)).Operations
@@ -1283,7 +1311,7 @@ func TestCreateOperations(t *testing.T) {
 			}
 
 			wantOps := tc.wantOpsFunc(e, metrics, now)
-			if diff := cmp.Diff(ops, wantOps, cleanOperation, cmpopts.SortSlices(operationLessEqual), cmpopts.SortSlices(metricValueLessEqual), unexportedOptsForScRequest()); diff != "" {
+			if diff := cmp.Diff(ops, wantOps, cleanOperation, cmpopts.SortSlices(operationLess), cmpopts.SortSlices(metricValueLess), unexportedOptsForScRequest()); diff != "" {
 				t.Errorf("Operations differ, -got +want: %s", diff)
 			}
 		})
@@ -1366,7 +1394,13 @@ func TestRetries(t *testing.T) {
 func TestExporterStartTime(t *testing.T) {
 	c := newFakeClient(noError)
 	now := time.Now()
-	e := NewExporter(zap.NewNop(), c, testServiceID, testConsumerID, testServiceConfigID, true, componenttest.NewNopTelemetrySettings())
+	cfg := Config{
+		ServiceName:        testServiceID,
+		ConsumerProject:    testConsumerID,
+		ServiceConfigID:    testServiceConfigID,
+		EnableDebugHeaders: true,
+	}
+	e := NewMetricsExporter(cfg, zap.NewNop(), c, componenttest.NewNopTelemetrySettings())
 
 	if e.exporterStartTime.Before(now) {
 		t.Errorf("Wrong exporter start time: got %v, want >= %v", e.exporterStartTime, now)
@@ -1392,7 +1426,13 @@ func TestParseConsumerID(t *testing.T) {
 		{consumerID: "projectid", want: "projects/projectid"},
 	}
 	for _, tc := range tests {
-		e := NewExporter(zap.NewNop(), c, testServiceID, tc.consumerID, testServiceConfigID, true, componenttest.NewNopTelemetrySettings())
+		cfg := Config{
+			ServiceName:        testServiceID,
+			ConsumerProject:    tc.consumerID,
+			ServiceConfigID:    testServiceConfigID,
+			EnableDebugHeaders: true,
+		}
+		e := NewMetricsExporter(cfg, zap.NewNop(), c, componenttest.NewNopTelemetrySettings())
 		if e.consumerID != tc.want {
 			t.Errorf("consumerID differs, got: %s, want: %s", e.consumerID, tc.want)
 		}
@@ -1458,7 +1498,13 @@ func TestOperationStartTime(t *testing.T) {
 			}
 
 			c := newFakeClient(noError)
-			e := NewExporter(zap.NewNop(), c, testServiceID, testConsumerID, testServiceConfigID, true, componenttest.NewNopTelemetrySettings())
+			cfg := Config{
+				ServiceName:        testServiceID,
+				ConsumerProject:    testConsumerID,
+				ServiceConfigID:    testServiceConfigID,
+				EnableDebugHeaders: true,
+			}
+			e := NewMetricsExporter(cfg, zap.NewNop(), c, componenttest.NewNopTelemetrySettings())
 			e.exporterStartTime, _ = time.Parse(time.RFC3339, testExporterStartTime)
 			err = e.ConsumeMetrics(context.Background(), metricDataToPmetric(metrics))
 			require.NoError(t, err)
@@ -1480,7 +1526,8 @@ func TestOperationStartTime(t *testing.T) {
 }
 
 func TestRetriableErrorHeader(t *testing.T) {
-	server, mockServer, err := StartMockServer()
+	server, mockServer, listener, err := StartMockServer()
+	defer StopMockServer(server, listener)
 	require.NoError(t, err)
 	defer server.Stop()
 
@@ -1488,7 +1535,7 @@ func TestRetriableErrorHeader(t *testing.T) {
 		if mockServer.CallCount == 1 {
 			return nil, status.Error(codes.Unavailable, "service unavailable")
 		}
-		md := metadata.Pairs(debugHeaderKey, "This is debug encrypted response value.")
+		md := grpcmetadata.Pairs(debugHeaderKey, "This is debug encrypted response value.")
 		grpc.SendHeader(ctx, md)
 		return &scpb.ReportResponse{}, nil
 	})
@@ -1518,7 +1565,13 @@ func TestRetriableErrorHeader(t *testing.T) {
 		service: scpb.NewServiceControllerClient(conn),
 	}
 
-	e := NewExporter(logger, fc, testServiceID, testConsumerID, testServiceConfigID, true, componenttest.NewNopTelemetrySettings())
+	cfg := Config{
+		ServiceName:        testServiceID,
+		ConsumerProject:    testConsumerID,
+		ServiceConfigID:    testServiceConfigID,
+		EnableDebugHeaders: true,
+	}
+	e := NewMetricsExporter(cfg, logger, fc, componenttest.NewNopTelemetrySettings())
 	e.nowFunc = nowFunc
 
 	metrics := sampleMetricData(t)

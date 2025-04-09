@@ -1,0 +1,104 @@
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package healthagent;
+
+import "google/protobuf/any.proto";
+
+option go_package = "internal/healthpb";
+
+// The health states that a health metric can aggregate to.
+enum AggregationTarget {
+  // Unspecified. Will default to "TARGET_ALL"
+  TARGET_UNSPECIFIED = 0;
+
+  // All. Will contribute to the scope's health and overall health.
+  TARGET_ALL = 1;
+
+  // Scope. Will contribute to the specified Scope's health but not the Overall
+  // health.
+  TARGET_SCOPE = 2;
+
+  // None. Will not contribute to the instance's Overall health or the Scope's
+  // health.
+  TARGET_NONE = 3;
+}
+
+// HealthStatus defines the possible health status.
+enum HealthStatus {
+  // Health status is unknown: not initialized or failed to retrieve.
+  UNKNOWN = 0;
+
+  // The resource is healthy.
+  HEALTHY = 1;
+
+  // The resource is unhealthy.
+  UNHEALTHY = 2;
+
+  // The resource is unresponsive.
+  TIMEOUT = 3;
+}
+
+// HealthMetric defines health status for one resource.
+message HealthMetric {
+  // Required. Used to distinguish the health status for different types of
+  // checks for a same scope. This value has to be unique within a scope.
+  //
+  // Eg: If we are checking whether a container is able to serve traffic or not
+  // we can have multiple checks like container is up, it can connect with db
+  // etc. in that case the scope would be same, but we can have different name
+  // for the checks to understand what is the reason unhealthy status.
+  string name = 1;
+
+  // Required. Health status of target resource.
+  HealthStatus status = 2;
+
+  // Optional. Health check agent can send extra data back through this
+  // field if it wants. e.g. last error message of the service, how many times
+  // the service restarted, etc.
+  google.protobuf.Any details = 3;
+
+  // The scope for the health metric. For example:
+  // "container": health regarding the containers in the VM.
+  // "redis": health regarding the managed service (redis in this example).
+  // "logger": health regarding the logging agent.
+  string scope = 4;
+
+  // Optional. Specifies what health state a metric will aggregate to.
+  AggregationTarget aggregation_target = 5;
+}
+
+// GetHealthRequest is the request message of GetHealth method.
+message GetHealthRequest {}
+
+// GetHealthResponse is the response message of GetHealth method. It returns a
+// list of health metrics for target resources.
+message GetHealthResponse {
+  // Required. A list (at least one) of health metrics for the monitored
+  // resources.
+  //
+  // If your health check service monitors one instance of the service,
+  // this can be simply one HealthMetric item. HealthMetrics scope must
+  // not be "container" or "logging" or "native_agent", as they are reserved.
+
+  repeated HealthMetric health_metrics = 1;
+}
+
+// HealthAgent defines the API health check agent should implement.
+service HealthAgent {
+  // Get the health status of your service.
+  rpc GetHealth(GetHealthRequest) returns (GetHealthResponse);
+}

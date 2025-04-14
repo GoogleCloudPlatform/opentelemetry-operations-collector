@@ -1,0 +1,81 @@
+processors:
+  metricstransform/ucp_internal_saasmanagement_docker_memory:
+    transforms:
+    - include: container.memory.usage.total
+      action: update
+      new_name: "saasmanagement.googleapis.com/instance/vm/container/memory/usage"
+    - include: container.memory.usage.limit
+      action: update
+      new_name: "saasmanagement.googleapis.com/instance/vm/container/memory/limit"
+
+  metricstransform/ucp_internal_saasmanagement_docker_network:
+    transforms:
+    - include: container.network.io.usage.rx_bytes
+      action: update
+      new_name: "saasmanagement.googleapis.com/instance/vm/container/network/received_bytes_count"
+    - include: container.network.io.usage.tx_bytes
+      action: update
+      new_name: "saasmanagement.googleapis.com/instance/vm/container/network/sent_bytes_count"
+
+  metricstransform/ucp_internal_saasmanagement_docker_restart:
+    transforms:
+    - include: container.restarts
+      action: update
+      new_name: "saasmanagement.googleapis.com/instance/vm/container/restart_count"
+
+  metricstransform/ucp_internal_saasmanagement_docker_metadata:
+    transforms:
+    - include: container.restarts
+      action: update
+      new_name: "saasmanagement.googleapis.com/instance/vm/container/image_metadata"
+
+service:
+  pipelines:
+     metrics/ucp_internal_saasmanagement_docker_restart:
+      receivers: [docker_stats/ucp_internal_docker_stats]
+      processors: [metricstransform/ucp_internal_saasmanagement_docker_restart,
+                   filter/ucp_internal_docker_after_transform,
+                   resource/ucp_internal_cleanup_docker_labels,
+                   resource/ucp_internal_saasmanagement_instance,
+                   transform/ucp_internal_saasmanagement_add_node_id,
+                   transform/ucp_internal_docker_set_container_name,
+                   resource/ucp_internal_docker_remove_container_name,
+                   batch/ucp_internal_batch]
+      exporters: [servicecontrol/ucp_internal_servicecontrol]
+
+     metrics/ucp_internal_saasmanagement_docker_memory:
+      receivers: [docker_stats/ucp_internal_docker_stats]
+      processors: [metricstransform/ucp_internal_saasmanagement_docker_memory,
+                   filter/ucp_internal_docker_after_transform,
+                   resource/ucp_internal_cleanup_docker_labels,
+                   resource/ucp_internal_saasmanagement_instance,
+                   transform/ucp_internal_saasmanagement_add_node_id,
+                   transform/ucp_internal_docker_set_container_name,
+                   resource/ucp_internal_docker_remove_container_name,
+                   batch/ucp_internal_batch]
+      exporters: [servicecontrol/ucp_internal_servicecontrol]
+
+     metrics/ucp_internal_saasmanagement_docker_network:
+      receivers: [docker_stats/ucp_internal_docker_stats]
+      processors: [metricstransform/ucp_internal_saasmanagement_docker_network,
+                   filter/ucp_internal_docker_after_transform,
+                   resource/ucp_internal_cleanup_docker_labels,
+                   resource/ucp_internal_saasmanagement_instance,
+                   transform/ucp_internal_saasmanagement_add_node_id,
+                   transform/ucp_internal_docker_set_container_name,
+                   resource/ucp_internal_docker_remove_container_name,
+                   batch/ucp_internal_batch]
+      exporters: [servicecontrol/ucp_internal_servicecontrol]
+
+     metrics/ucp_internal_saasmanagement_docker_metadata:
+      receivers: [docker_stats/ucp_internal_docker_stats]
+      processors: [metricstransform/ucp_internal_saasmanagement_docker_metadata,
+                   filter/ucp_internal_docker_after_transform,
+                   transform/ucp_internal_docker_set_image_name,
+                   resource/ucp_internal_cleanup_docker_labels,
+                   resource/ucp_internal_saasmanagement_instance,
+                   transform/ucp_internal_saasmanagement_add_node_id,
+                   transform/ucp_internal_docker_set_container_name,
+                   resource/ucp_internal_docker_remove_container_name,
+                   batch/ucp_internal_batch]
+      exporters: [servicecontrol/ucp_internal_servicecontrol]

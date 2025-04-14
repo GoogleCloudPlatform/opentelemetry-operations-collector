@@ -1,0 +1,212 @@
+receivers:
+  hostmetrics/ucp_internal_cpu:
+    collection_interval: 60s
+    scrapers:
+      cpu:
+  hostmetrics/ucp_internal_memory:
+    collection_interval: 60s
+    scrapers:
+      memory:
+        metrics:
+          system.linux.memory.available:
+            enabled: true
+  hostmetrics/ucp_internal_process:
+    collection_interval: 60s
+    scrapers:
+      process:
+        mute_process_name_error: true
+        mute_process_exe_error: true
+        mute_process_io_error: true
+        mute_process_user_error: true
+  hostmetrics/ucp_internal_network:
+    collection_interval: 60s
+    scrapers:
+      network:
+        metrics:
+          system.network.conntrack.count:
+            enabled: true
+          system.network.conntrack.max:
+            enabled: true
+
+processors:
+  # Remove labels of hostmetrics metrics. See yaqs/1509992303773614080.
+  resource/ucp_internal_cleanup_hostmetrics_memory:
+    attributes:
+    - key: state
+      action: delete
+  resource/ucp_internal_cleanup_hostmetrics_process:
+    attributes:
+    - key: process
+      action: insert
+      from_attribute: process.executable.name
+    - key: process.executable.name
+      action: delete
+    - key: process.pid
+      action: delete
+    - key: process.parent_pid
+      action: delete
+    - key: process.owner
+      action: delete
+    - key: process.command_line
+      action: delete
+    - key: process.executable.path
+      action: delete
+    - key: process.command
+      action: delete
+
+  # We create saasmanagement metrics out of existing `hostmetricsreceiver` metrics by renaming the metric and dropping labels.
+  # According to yaqs/1509992303773614080, this is the best solution so far.
+  metricstransform/ucp_internal_saasmanagement_hostmetrics_memory:
+    transforms:
+    - include: system.memory.usage
+      action: insert
+      new_name: "saasmanagement.googleapis.com/instance/vm/memory/usage"
+      operations:
+      - action: delete_label_value
+        label: state
+        label_value: cached
+      - action: delete_label_value
+        label: state
+        label_value: buffered
+      - action: delete_label_value
+        label: state
+        label_value: inactive
+      - action: delete_label_value
+        label: state
+        label_value: free
+      - action: delete_label_value
+        label: state
+        label_value: slab_reclaimable
+      - action: delete_label_value
+        label: state
+        label_value: slab_unreclaimable
+      - action: aggregate_labels
+        label_set: []
+        aggregation_type: sum
+    - include: system.linux.memory.available
+      action: insert
+      new_name: "saasmanagement.googleapis.com/instance/vm/memory/free"
+
+  metricstransform/ucp_internal_saasmanagement_hostmetrics_process:
+    transforms:
+    - include: process.cpu.time
+      action: update
+      operations:
+      - action: update_label
+        label: state
+        value_actions:
+        - value: system
+          new_value: kernel
+      new_name: "saasmanagement.googleapis.com/instance/vm/process/cpu/usage_time"
+    - include: process.memory.usage
+      action: update
+      new_name: "saasmanagement.googleapis.com/instance/vm/process/memory/usage"
+    - include: process.memory.virtual
+      action: update
+      new_name: "saasmanagement.googleapis.com/instance/vm/process/memory/size"
+    - include: process.disk.io
+      action: insert
+      new_name: "saasmanagement.googleapis.com/instance/vm/process/disk/read_bytes_count"
+      operations:
+      - action: delete_label_value
+        label: direction
+        label_value: write
+      - action: aggregate_labels
+        label_set: []
+        aggregation_type: sum
+    - include: process.disk.io
+      action: insert
+      new_name: "saasmanagement.googleapis.com/instance/vm/process/disk/write_bytes_count"
+      operations:
+      - action: delete_label_value
+        label: direction
+        label_value: read
+      - action: aggregate_labels
+        label_set: []
+        aggregation_type: sum
+
+  metricstransform/ucp_internal_saasmanagement_hostmetrics_cpu:
+    transforms:
+    - include: system.cpu.time
+      action: update
+      new_name: "saasmanagement.googleapis.com/instance/vm/cpu/usage_time"
+      operations:
+      - action: update_label
+        label: cpu
+        new_label: cpu_name
+
+  metricstransform/ucp_internal_saasmanagement_hostmetrics_network:
+    transforms:
+    - include: system.network.io
+      action: insert
+      new_name: "saasmanagement.googleapis.com/instance/vm/network/received_bytes_count"
+      operations:
+      - action: delete_label_value
+        label: direction
+        label_value: transmit
+      - action: aggregate_labels
+        label_set: [device]
+        aggregation_type: sum
+      - action: update_label
+        label: device
+        new_label: interface
+    - include: system.network.io
+      action: insert
+      new_name: "saasmanagement.googleapis.com/instance/vm/network/sent_bytes_count"
+      operations:
+      - action: delete_label_value
+        label: direction
+        label_value: receive
+      - action: aggregate_labels
+        label_set: [device]
+        aggregation_type: sum
+      - action: update_label
+        label: device
+        new_label: interface
+    - include: system.network.conntrack.count
+      action: update
+      new_name: "saasmanagement.googleapis.com/instance/vm/network/nf_conntrack_count"
+    - include: system.network.conntrack.max
+      action: update
+      new_name: "saasmanagement.googleapis.com/instance/vm/network/nf_conntrack_max"
+
+
+
+service:
+  pipelines:
+    metrics/ucp_internal_saasmanagement_hostmetrics_cpu:
+      receivers: [hostmetrics/ucp_internal_cpu]
+      processors: [metricstransform/ucp_internal_saasmanagement_hostmetrics_cpu,
+                   filter/ucp_internal_hostmetrics_after_transform,
+                   resource/ucp_internal_saasmanagement_instance,
+                   transform/ucp_internal_saasmanagement_add_node_id,
+                   batch/ucp_internal_batch]
+      exporters: [servicecontrol/ucp_internal_servicecontrol]
+
+    metrics/ucp_internal_saasmanagement_hostmetrics_process:
+      receivers: [hostmetrics/ucp_internal_process]
+      processors: [metricstransform/ucp_internal_saasmanagement_hostmetrics_process,
+                   resource/ucp_internal_cleanup_hostmetrics_process,
+                   filter/ucp_internal_hostmetrics_after_transform,
+                   resource/ucp_internal_saasmanagement_instance,
+                   transform/ucp_internal_saasmanagement_add_node_id,
+                   batch/ucp_internal_batch]
+      exporters: [servicecontrol/ucp_internal_servicecontrol]
+
+    metrics/ucp_internal_saasmanagement_hostmetrics_memory:
+      receivers: [hostmetrics/ucp_internal_memory]
+      processors: [metricstransform/ucp_internal_saasmanagement_hostmetrics_memory,
+                   filter/ucp_internal_hostmetrics_after_transform,
+                   resource/ucp_internal_saasmanagement_instance,
+                   transform/ucp_internal_saasmanagement_add_node_id,
+                   batch/ucp_internal_batch]
+      exporters: [servicecontrol/ucp_internal_servicecontrol]
+
+    metrics/ucp_internal_saasmanagement_hostmetrics_network:
+      receivers: [hostmetrics/ucp_internal_network]
+      processors: [metricstransform/ucp_internal_saasmanagement_hostmetrics_network,
+                   filter/ucp_internal_hostmetrics_after_transform,
+                   resource/ucp_internal_saasmanagement_instance,
+                   transform/ucp_internal_saasmanagement_add_node_id,
+                   batch/ucp_internal_batch]
+      exporters: [servicecontrol/ucp_internal_servicecontrol]

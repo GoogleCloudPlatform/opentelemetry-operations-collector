@@ -1,0 +1,30 @@
+processors:
+  # Filter out `hostmetricsreceiver` metrics which we used as a basis to create saasmanagement metrics.
+  filter/ucp_internal_hostmetrics_after_transform:
+    metrics:
+      include:
+        match_type: strict
+        metric_names:
+        - "saasmanagement.googleapis.com/instance/vm/memory/free"
+        - "saasmanagement.googleapis.com/instance/vm/memory/usage"
+        - "saasmanagement.googleapis.com/instance/vm/process/memory/usage"
+        - "saasmanagement.googleapis.com/instance/vm/process/memory/size"
+        - "saasmanagement.googleapis.com/instance/vm/cpu/usage_time"
+        - "saasmanagement.googleapis.com/instance/vm/process/cpu/usage_time"
+        - "saasmanagement.googleapis.com/instance/vm/network/received_bytes_count"
+        - "saasmanagement.googleapis.com/instance/vm/network/sent_bytes_count"
+        - "saasmanagement.googleapis.com/instance/vm/network/nf_conntrack_count"
+        - "saasmanagement.googleapis.com/instance/vm/network/nf_conntrack_max"
+        - "saasmanagement.googleapis.com/instance/vm/process/disk/read_bytes_count"
+        - "saasmanagement.googleapis.com/instance/vm/process/disk/write_bytes_count"
+        - "saasmanagement.googleapis.com/instance/vm/disk/io_time"
+        - "saasmanagement.googleapis.com/instance/vm/disk/free_bytes"
+        - "saasmanagement.googleapis.com/instance/vm/disk/read_bytes_count"
+        - "saasmanagement.googleapis.com/instance/vm/disk/read_ops_count"
+        - "saasmanagement.googleapis.com/instance/vm/disk/read_time"
+        - "saasmanagement.googleapis.com/instance/vm/disk/reserved_bytes"
+        - "saasmanagement.googleapis.com/instance/vm/disk/used_bytes"
+        - "saasmanagement.googleapis.com/instance/vm/disk/weighted_io_time"
+        - "saasmanagement.googleapis.com/instance/vm/disk/write_bytes_count"
+        - "saasmanagement.googleapis.com/instance/vm/disk/write_ops_count"
+        - "saasmanagement.googleapis.com/instance/vm/disk/write_time"

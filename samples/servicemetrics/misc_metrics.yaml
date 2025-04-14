@@ -1,0 +1,61 @@
+receivers:
+  memory_internal/ucp_internal_dirty:
+    collection_interval: 60s
+    scrapers:
+      memory:
+  os_internal/ucp_internal_fd:
+    collection_interval: 60s
+  uptime_internal/ucp_internal_uptime:
+    collection_interval: 60s
+
+processors:
+  filter/ucp_internal_saasmanagement_misc_metrics:
+    metrics:
+      include:
+        match_type: strict
+        metric_names:
+        - "saasmanagement.googleapis.com/instance/vm/memory/limit"
+        - "saasmanagement.googleapis.com/instance/vm/memory/dirty_pages"
+        - "saasmanagement.googleapis.com/instance/vm/uptime"
+        - "saasmanagement.googleapis.com/instance/vm/os/name"
+
+  metricstransform/ucp_internal_saasmanagement_misc_metrics:
+    transforms:
+    - include: system.memory.usage
+      action: insert
+      new_name: "saasmanagement.googleapis.com/instance/vm/memory/limit"
+      operations:
+      - action: delete_label_value
+        label: state
+        label_value: dirty
+      - action: aggregate_labels
+        label_set: []
+        aggregation_type: sum
+    - include: system.memory.usage
+      action: insert
+      new_name: "saasmanagement.googleapis.com/instance/vm/memory/dirty_pages"
+      operations:
+      - action: delete_label_value
+        label: state
+        label_value: total
+      - action: aggregate_labels
+        label_set: []
+        aggregation_type: sum
+    - include: system.uptime
+      action: update
+      new_name: "saasmanagement.googleapis.com/instance/vm/uptime"
+    - include: system.os
+      action: update
+      new_name: "saasmanagement.googleapis.com/instance/vm/os/name"
+
+service:
+  pipelines:
+    metrics/ucp_internal_saasmanagement_misc_metrics:
+      receivers: [memory_internal/ucp_internal_dirty, os_internal/ucp_internal_fd, uptime_internal/ucp_internal_uptime]
+      processors: [metricstransform/ucp_internal_saasmanagement_misc_metrics,
+                   filter/ucp_internal_saasmanagement_misc_metrics,
+                   resource/ucp_internal_saasmanagement_instance,
+                   transform/ucp_internal_saasmanagement_add_node_id,
+                   batch/ucp_internal_batch]
+      exporters: [servicecontrol/ucp_internal_servicecontrol]
+

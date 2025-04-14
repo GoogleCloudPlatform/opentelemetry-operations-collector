@@ -1,0 +1,104 @@
+processors:
+  metricstransform/ucp_internal_saasmanagement_docker_cpu:
+    transforms:
+      # Combine "cpu.usage.kernelmode" and "cpu.usage.usermode" into one metric with
+      # label `state` with values "kernel" and "user".
+    - include: ^container\.cpu\.usage\.(?P<state>kernelmode|usermode)$
+      match_type: regexp
+      action: combine
+      new_name: "saasmanagement.googleapis.com/instance/vm/container/cpu/usage_time_unscaled"
+      operations:
+      - action: update_label
+        label: state
+        value_actions:
+        - value: kernelmode
+          new_value: system
+        - value: usermode
+          new_value: user
+    - include: container.cpu.utilization
+      action: update
+      new_name: "saasmanagement.googleapis.com/instance/vm/container/cpu/usage_percent_unscaled"
+
+  filter/ucp_internal_docker_cpu_usage:
+    metrics:
+      include:
+        match_type: strict
+        metric_names:
+        - "saasmanagement.googleapis.com/instance/vm/container/cpu/usage_time_unscaled"
+
+  filter/ucp_internal_docker_cpu_percent:
+    metrics:
+      include:
+        match_type: strict
+        metric_names:
+        - "saasmanagement.googleapis.com/instance/vm/container/cpu/usage_percent_unscaled"
+
+  # `metricsgenerationprocessor` operates on Gauge metrics only. Our `usage_time` metric is a Cumulative metric.
+  # We convert it to Gauge, then scale, then convert back to Cumulative.
+  transform/ucp_internal_unscaled_to_gauge:
+    metric_statements:
+    - context: metric
+      statements:
+      - convert_sum_to_gauge() where name == "saasmanagement.googleapis.com/instance/vm/container/cpu/usage_time_unscaled"
+
+  transform/ucp_internal_scaled_to_sum:
+    metric_statements:
+    - context: metric
+      statements:
+      # `true` means "value is monotonically increasing".
+      - convert_gauge_to_sum("cumulative", true) where name == "saasmanagement.googleapis.com/instance/vm/container/cpu/usage_time"
+
+
+  # Change nanoseconds to seconds.
+  metricsgeneration/ucp_internal_cpu_usage:
+    rules:
+    - name: "saasmanagement.googleapis.com/instance/vm/container/cpu/usage_time"
+      unit: s
+      type: scale
+      metric1: "saasmanagement.googleapis.com/instance/vm/container/cpu/usage_time_unscaled"
+      operation: divide
+      scale_by: 1000000000
+
+  # Change 0-100% values to 0-1 values.
+  metricsgeneration/ucp_internal_cpu_percent:
+    rules:
+    - name: "saasmanagement.googleapis.com/instance/vm/container/cpu/usage_percent"
+      unit: "1"
+      type: scale
+      metric1: "saasmanagement.googleapis.com/instance/vm/container/cpu/usage_percent_unscaled"
+      operation: divide
+      scale_by: 100
+
+service:
+  pipelines:
+     # Separate pipeline for docker cpu usage, since we're scaling the value with `metricsgenerationprocessor`.
+    metrics/ucp_internal_saasmanagement_docker_cpu_usage:
+      receivers: [docker_stats/ucp_internal_docker_stats]
+      processors: [metricstransform/ucp_internal_saasmanagement_docker_cpu,
+                   filter/ucp_internal_docker_cpu_usage,
+                   transform/ucp_internal_unscaled_to_gauge,
+                   metricsgeneration/ucp_internal_cpu_usage,
+                   transform/ucp_internal_scaled_to_sum,
+                   filter/ucp_internal_docker_after_transform,
+                   resource/ucp_internal_cleanup_docker_labels,
+                   resource/ucp_internal_saasmanagement_instance,
+                   transform/ucp_internal_saasmanagement_add_node_id,
+                   transform/ucp_internal_docker_set_container_name,
+                   resource/ucp_internal_docker_remove_container_name,
+                   batch/ucp_internal_batch]
+      exporters: [servicecontrol/ucp_internal_servicecontrol]
+
+    # Separate pipeline for docker cpu percent, since we're scaling the value with `metricsgenerationprocessor`.
+    metrics/ucp_internal_saasmanagement_docker_cpu_percent:
+      receivers: [docker_stats/ucp_internal_docker_stats]
+      processors: [metricstransform/ucp_internal_saasmanagement_docker_cpu,
+                   filter/ucp_internal_docker_cpu_percent,
+                   metricsgeneration/ucp_internal_cpu_percent,
+                   filter/ucp_internal_docker_after_transform,
+                   resource/ucp_internal_cleanup_docker_labels,
+                   resource/ucp_internal_saasmanagement_instance,
+                   transform/ucp_internal_saasmanagement_add_node_id,
+                   transform/ucp_internal_docker_set_container_name,
+                   resource/ucp_internal_docker_remove_container_name,
+                   batch/ucp_internal_batch]
+      exporters: [servicecontrol/ucp_internal_servicecontrol]

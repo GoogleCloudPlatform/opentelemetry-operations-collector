@@ -1,0 +1,55 @@
+receivers:
+  docker_stats/ucp_internal_docker_stats:
+    collection_interval: 60s
+    metrics:
+      container.cpu.utilization:
+        enabled: true
+      container.restarts:
+        enabled: true
+
+processors:
+  # Leave only resulting saasmanagement metrics.
+  # We need this to drop `docker_stats` metrics which we used as a basis to create saasmanagement metrics.
+  filter/ucp_internal_docker_after_transform:
+    metrics:
+      include:
+        match_type: strict
+        metric_names:
+        - "saasmanagement.googleapis.com/instance/vm/container/memory/usage"
+        - "saasmanagement.googleapis.com/instance/vm/container/memory/limit"
+        - "saasmanagement.googleapis.com/instance/vm/container/cpu/usage_percent"
+        - "saasmanagement.googleapis.com/instance/vm/container/cpu/usage_time"
+        - "saasmanagement.googleapis.com/instance/vm/container/network/received_bytes_count"
+        - "saasmanagement.googleapis.com/instance/vm/container/network/sent_bytes_count"
+        - "saasmanagement.googleapis.com/instance/vm/container/restart_count"
+        - "saasmanagement.googleapis.com/instance/vm/container/image_metadata"
+
+  transform/ucp_internal_docker_set_container_name:
+    metric_statements:
+    - context: datapoint
+      statements:
+      - set(attributes["container_name"], resource.attributes["container.name"])
+
+  transform/ucp_internal_docker_set_image_name:
+    metric_statements:
+    - context: datapoint
+      statements:
+      - set(attributes["image_name"], resource.attributes["container.image.name"])
+      # Since this is a metadata metric, set the value to constant 1.
+      - set(value_int, 1)
+
+  resource/ucp_internal_docker_remove_container_name:
+    attributes:
+    - key: container.name
+      action: delete
+
+  resource/ucp_internal_cleanup_docker_labels:
+    attributes:
+    - key: container.id
+      action: delete
+    - key: container.runtime
+      action: delete
+    - key: container.image.name
+      action: delete
+    - key: container.hostname
+      action: delete

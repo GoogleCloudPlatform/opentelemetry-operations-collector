@@ -39,7 +39,7 @@ import (
 // * target --PromProto--> Prometheus vanilla --PRW 2.0--> GCM.
 // * target --PromProto--> OpenTelemetry Collector --OTLP--> GCM.
 func TestPromOtelGCM_PrometheusCounter_NoCT(t *testing.T) {
-	const interval = 30 * time.Second
+	const interval = 15 * time.Second
 
 	// target --PromProto--> Prometheus.
 	prom := promqle2e.PrometheusBackend{
@@ -95,7 +95,61 @@ func TestPromOtelGCM_PrometheusCounter_NoCT(t *testing.T) {
 		Expect(c, 10, promForkGCM).
 		Expect(c, 210, prom)
 
-	// Remove all CTs explicitly to see the logic for non-provided CTs in the Prometheus ecosystem.
+	c.Add(40)
+	pt.RecordScrape(interval).
+		Expect(c, 50, otelGCM).
+		Expect(c, 50, promForkGCM).
+		Expect(c, 250, prom)
+
+	// Reset to 0 (simulating instrumentation resetting metric or restarting target).
+	counter.Reset()
+	c = counter.WithLabelValues("bar")
+	pt.RecordScrape(interval).
+		// NOTE(bwplotka): This and following discrepancies are expected due to
+		// GCM PromQL layer using MQL with delta alignment. What we get as a raw
+		// counter is already reset-normalized (b/305901765) (plus cannibalization).
+		Expect(c, 50, otelGCM).
+		Expect(c, 50, promForkGCM).
+		Expect(c, 0, prom)
+
+	c.Add(150)
+	pt.RecordScrape(interval).
+		Expect(c, 200, otelGCM).
+		Expect(c, 200, promForkGCM).
+		Expect(c, 150, prom)
+
+	// Reset to 0 with addition.
+	counter.Reset()
+	c = counter.WithLabelValues("bar")
+	c.Add(20)
+	pt.RecordScrape(interval).
+		Expect(c, 220, otelGCM).
+		Expect(c, 220, promForkGCM).
+		Expect(c, 20, prom)
+
+	c.Add(50)
+	pt.RecordScrape(interval).
+		Expect(c, 270, otelGCM).
+		Expect(c, 270, promForkGCM).
+		Expect(c, 70, prom)
+
+	c.Add(10)
+	pt.RecordScrape(interval).
+		Expect(c, 280, otelGCM).
+		Expect(c, 280, promForkGCM).
+		Expect(c, 80, prom)
+
+	// Tricky reset case, unnoticeable reset for Prometheus without created timestamp as well.
+	counter.Reset()
+	c = counter.WithLabelValues("bar")
+	c.Add(600)
+	pt.RecordScrape(interval).
+		Expect(c, 800, otelGCM).
+		Expect(c, 800, promForkGCM).
+		Expect(c, 600, prom)
+
+	// Prometheus SDK used for replies actually emit CTs.
+	// Remove all CTs explicitly to test the logic for non-provided CTs in the Prometheus ecosystem.
 	pt.Transform(func(recordings [][]*dto.MetricFamily) [][]*dto.MetricFamily {
 		for i := range recordings {
 			for j := range recordings[i] {

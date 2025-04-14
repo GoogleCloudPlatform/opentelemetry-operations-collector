@@ -53,7 +53,13 @@ func testGeneratorCase(t *testing.T, registry *Registry, testFolder string) {
 
 	g, err := NewDistributionGenerator(d, registry, true)
 	assert.NilError(t, err)
-	g.CustomTemplatesDir = os.DirFS(filepath.Join(testdataFullPath, testFolder, "templates"))
+
+	// Ensure the template directory exists before generation.
+	customTemplates := filepath.Join(testdataFullPath, testFolder, "templates")
+	_, err = os.Stat(customTemplates)
+	if err == nil {
+		g.CustomTemplatesDir = os.DirFS(customTemplates)
+	}
 	err = g.Generate()
 	assert.NilError(t, err)
 	t.Cleanup(func() {

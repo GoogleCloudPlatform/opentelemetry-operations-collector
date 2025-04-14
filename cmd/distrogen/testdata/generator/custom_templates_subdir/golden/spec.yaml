@@ -1,4 +1,5 @@
 name: basic-distro
+module: ""
 display_name: Basic OTel
 description: A basic distribution of the OpenTelemetry Collector
 blurb: A basic collector distro

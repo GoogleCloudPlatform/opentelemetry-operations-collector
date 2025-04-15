@@ -76,13 +76,13 @@ exporters:
 - gomod: go.opentelemetry.io/collector/exporter/otlphttpexporter v0.122.1
 
 extensions:
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/extension/healthagent v0.122.1
+  path: ../extension/healthagent
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/ackextension v0.122.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/basicauthextension v0.122.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/bearertokenauthextension v0.122.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/googleclientauthextension v0.122.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/headerssetterextension v0.122.0
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/healthagent v0.122.0
-  path: ../extension/healthagent
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/healthcheckextension v0.122.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/httpforwarderextension v0.122.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/oauth2clientauthextension v0.122.0

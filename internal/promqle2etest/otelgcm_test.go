@@ -55,6 +55,8 @@ func TestPromOtelGCM_PrometheusCounter_NoCT(t *testing.T) {
 	}
 
 	// target --PromProto?--> OpenTelemetry Collector --GCM API--> GCM.
+	// For no-ct cases, this essentially uses GCM internal
+	// logic for "cannibalization" algorithm.
 	otelGCM := OtelGCMBackend{
 		Name: "otel-gcm",
 		// Current docs recommend otel/opentelemetry-collector-contrib:0.106.0
@@ -63,8 +65,20 @@ func TestPromOtelGCM_PrometheusCounter_NoCT(t *testing.T) {
 		GCMSA: GCMServiceAccountOrFail(t),
 	}
 
-	// target --PromProto?--> OpenTelemetry Collector --OTLP--> GCM.
-	// otelOTLPGCM := TODO by expanding OtelGCMBackend.
+	// target --PromProto?--> OpenTelemetry Collector (+ MSTP) --GCM API--> GCM.
+	// Similar to `otel-gcm` but we use a new metricstarttimeprocessor (MSTP) processor
+	// to adjust counter samples without CT before going to GMP exporter.
+	// TODO(bwplotka): Create another Otel backend test but with MSTP and OTLP.
+	otelMSTPGCM := OtelGCMBackend{
+		Name: "otel-mstp-gcm",
+		// TODO(bwplotka): Replace with upstream once https://github.com/open-telemetry/opentelemetry-collector-contrib/pull/38594 is merged.
+		Image: "us-east1-docker.pkg.dev/ridwanmsharif-dev/gboc/otelcol-google:0.122.1",
+		ExtraProcessors: map[string]string{
+			"metricstarttime": `
+    strategy: subtract_initial_point`,
+		},
+		GCMSA: GCMServiceAccountOrFail(t),
+	}
 
 	pt := promqle2e.NewScrapeStyleTest(t)
 	pt.SetCurrentTime(time.Now().Add(-10 * time.Minute)) // We only do a few scrapes, so -10m buffer is enough.
@@ -91,13 +105,14 @@ func TestPromOtelGCM_PrometheusCounter_NoCT(t *testing.T) {
 	c.Add(10)
 	pt.RecordScrape(interval).
 		Expect(c, 10, otelGCM).
-		// Expect(c, 10, otelOTLPGCM). TODO (:
+		Expect(c, 10, otelMSTPGCM).
 		Expect(c, 10, promForkGCM).
 		Expect(c, 210, prom)
 
 	c.Add(40)
 	pt.RecordScrape(interval).
 		Expect(c, 50, otelGCM).
+		Expect(c, 50, otelMSTPGCM).
 		Expect(c, 50, promForkGCM).
 		Expect(c, 250, prom)
 
@@ -109,6 +124,8 @@ func TestPromOtelGCM_PrometheusCounter_NoCT(t *testing.T) {
 		// GCM PromQL layer using MQL with delta alignment. What we get as a raw
 		// counter is already reset-normalized (b/305901765) (plus cannibalization).
 		Expect(c, 50, otelGCM).
+		// TODO(bwplotka): Here otelMSTPGCM misses this samples, that's not too bad, but
+		// perhaps it's doing cannibalization even in case of counter decreased value? Something to optimize?
 		Expect(c, 50, promForkGCM).
 		Expect(c, 0, prom)
 
@@ -116,8 +133,9 @@ func TestPromOtelGCM_PrometheusCounter_NoCT(t *testing.T) {
 	pt.RecordScrape(interval).
 		// NOTE(bwplotka): This is where Otel->GCM behaviour goes even more off vs
 		// Prometheus and Prometheus fork.
-		// TODO(bwplotka): Investigate? Is it worth given switch to OTLP? Accept and document?
+		// TODO(bwplotka): Investigate? Or should we mark it as broken and recommend MSTP?
 		Expect(c, 0, otelGCM).
+		Expect(c, 200, otelMSTPGCM).
 		// Prom fork works as expected, given current cannibalization design.
 		Expect(c, 200, promForkGCM).
 		Expect(c, 150, prom)
@@ -128,18 +146,21 @@ func TestPromOtelGCM_PrometheusCounter_NoCT(t *testing.T) {
 	c.Add(20)
 	pt.RecordScrape(interval).
 		Expect(c, 20, otelGCM).
+		Expect(c, 220, otelMSTPGCM).
 		Expect(c, 220, promForkGCM).
 		Expect(c, 20, prom)
 
 	c.Add(50)
 	pt.RecordScrape(interval).
 		Expect(c, -130, otelGCM). // TODO(bwplotka): Investigate?
+		Expect(c, 270, otelMSTPGCM).
 		Expect(c, 270, promForkGCM).
 		Expect(c, 70, prom)
 
 	c.Add(10)
 	pt.RecordScrape(interval).
 		Expect(c, -120, otelGCM). // TODO(bwplotka): Investigate?
+		Expect(c, 280, otelMSTPGCM).
 		Expect(c, 280, promForkGCM).
 		Expect(c, 80, prom)
 
@@ -149,6 +170,7 @@ func TestPromOtelGCM_PrometheusCounter_NoCT(t *testing.T) {
 	c.Add(600)
 	pt.RecordScrape(interval).
 		Expect(c, 400, otelGCM). // TODO(bwplotka): Investigate?
+		Expect(c, 800, otelMSTPGCM).
 		Expect(c, 800, promForkGCM).
 		Expect(c, 600, prom)
 

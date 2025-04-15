@@ -54,8 +54,9 @@ powershell.exe -Command $ocbGenerateCommand
 # Build the collector.
 $ldFlags="-s -w"
 if ($jmxHash -ne "") {
-    $ldFlags+=" github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver.MetricsGathererHash=$jmxHash"
+    $ldFlags+=" -X github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver.MetricsGathererHash=$jmxHash"
 }
-$collectorBinPath="${outDir}/bin/google-cloud-metrics-agent_windows_amd64.exe"
-$buildCollectorCommand="`$env:GOWORK='off'; cd _build; $goBin build -p 32 -buildvcs=false -o='${collectorBinPath}' --ldflags='$ldFlags' ."
+$buildCollectorCommand=@"
+`$env:GOWORK='off'; cd _build; $goBin build -p 32 -buildvcs=false -o '{0}/google-cloud-metrics-agent_windows_amd64.exe' --ldflags='{1}' .
+"@ -f $outDir, $ldFlags
 powershell.exe -Command $buildCollectorCommand

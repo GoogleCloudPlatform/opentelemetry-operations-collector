@@ -119,6 +119,9 @@ func GetTemplateSetFromDir(dir fs.FS, templateContext any) (TemplateSet, error) 
 	templates := TemplateSet{}
 
 	err := fs.WalkDir(dir, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
 		if d.IsDir() || !strings.HasSuffix(d.Name(), ".go.tmpl") {
 			return nil
 		}

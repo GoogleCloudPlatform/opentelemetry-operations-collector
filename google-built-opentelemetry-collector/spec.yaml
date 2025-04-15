@@ -79,6 +79,7 @@ components:
         - basicauth
         - bearertokenauth
         - headerssetter
+        - healthagent
         - healthcheck
         - httpforwarder
         - oauth2clientauth

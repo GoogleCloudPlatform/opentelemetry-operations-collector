@@ -266,12 +266,9 @@ func (fgs FeatureGates) Render() string {
 	}
 
 	gates := ""
-	first := true
-	for _, fg := range fgs {
+	for i, fg := range fgs {
 		gates += fg
-		if first {
-			first = false
-		} else {
+		if i < len(fgs)-1 {
 			gates += ","
 		}
 	}

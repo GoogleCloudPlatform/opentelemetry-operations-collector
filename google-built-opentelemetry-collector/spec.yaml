@@ -98,3 +98,4 @@ components:
         - yaml
 feature_gates:
     - exporter.googlemanagedprometheus.intToDouble
+    - exporter.googlecloud.CustomMonitoredResources

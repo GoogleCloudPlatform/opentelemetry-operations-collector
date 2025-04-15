@@ -1,0 +1,73 @@
+# Copyright 2025 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+exporters:
+  # UCP-defined metrics can only go to producer project. Hence, we define only one Chemist exporter for this purpose.
+  servicecontrol/ucp_internal_servicecontrol:
+    # Label values are empty by default, so that invalid configurations fail fast.
+    # All label values are overridden by instance metadata.
+    service_name: ""
+    consumer_project: ""
+    service_config_id: ""
+
+extensions:
+  ia_health_agent/ucp_internal_health_agent:
+    # These params are desribed in go/slm-instance-agent#health-checking-containers.
+    # They are overridden by instance metadata. See the defaults in the documentation.
+    scope: ""
+    name: ""
+    port: ""
+
+processors:
+  # Labels for saasmanagement.googleapis.com/Instance monitored resource.
+  # Label values are empty by default, so that invalid configurations fail fast.
+  # All label values are overridden by instance metadata.
+  resource/ucp_internal_saasmanagement_instance:
+    attributes:
+    - key: service_name
+      value: ""
+      action: upsert
+    - key: consumer_project_number
+      value: ""
+      action: upsert
+    - key: instance_id
+      value: ""
+      action: upsert
+    - key: instance_uid
+      value: ""
+      action: upsert
+    - key: location
+      value: ""
+      action: upsert
+
+  transform/ucp_internal_saasmanagement_add_node_id:
+    metric_statements:
+    - context: datapoint
+      statements:
+      - set(attributes["node_id"], "")
+
+  batch/ucp_internal_batch:
+    # Batch size should be such that the total request is <= 1 Mb.
+    # We recommend batch size <= 500.
+    send_batch_size: 500
+    # If you send many metrics, the size of the batch can exceed `send_batch_size`. In such case,
+    # the batch gets sliced into pieces of size <= `send_batch_max_size`.
+    # We recommend `send_batch_max_size` = `send_batch_size`.
+    send_batch_max_size: 500
+    # We recommend 10s timeout: http://go/slm-monitoring-opentelemetry-batching#bookmark=id.qtjzg9jx7ra2.
+    timeout: 10s
+
+service:
+  extensions: [ia_health_agent/ucp_internal_health_agent]
+

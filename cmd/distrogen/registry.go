@@ -83,21 +83,6 @@ func (r *Registry) Merge(r2 *Registry) {
 	mapMerge(r.Providers, r2.Providers)
 }
 
-// RegistryLoadError is a combination of errors for loading a
-// set of components.
-type RegistryLoadError map[string]error
-
-// Error implements the error interface. It formats the error
-// with the intention of being output to stderr.
-func (e RegistryLoadError) Error() string {
-	msg := ""
-	for name, err := range e {
-		combinedErr := fmt.Errorf("%s: %w", name, err)
-		msg += fmt.Sprintf("%v\n", combinedErr)
-	}
-	return msg
-}
-
 // GoModuleID is intended for stringifying/unmarshalling to
 // a Go module ID, i.e. github.com/package/name v0.0.0 format.
 type GoModuleID struct {
@@ -212,9 +197,9 @@ type RegistryComponents map[string]*RegistryComponent
 
 // LoadAllComponents will take a list of component names and load them
 // from the registry, attaching the appropriate version tag.
-func (rl RegistryComponents) LoadAllComponents(names []string, otelVersion otelComponentVersion) (RegistryComponents, RegistryLoadError) {
+func (rl RegistryComponents) LoadAllComponents(names []string, otelVersion otelComponentVersion) (RegistryComponents, CollectionError) {
 	components := RegistryComponents{}
-	errs := make(RegistryLoadError)
+	errs := make(CollectionError)
 
 	for _, name := range names {
 		entry, err := rl.LoadComponent(name, otelVersion)

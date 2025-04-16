@@ -27,6 +27,7 @@ var (
 	flagRegistry        = newArrayFlag("registry", "Provide additional component registries")
 	flagCustomTemplates = flag.String("custom_templates", "", "Provide a set of custom templates for this distribution")
 	flagOtelConfig      = flag.String("otel_config", "", "An OTel Config to generate a spec from configured components")
+	flagCompare         = flag.Bool("compare", false, "Compare the generated distribution against the existing one")
 
 	errNoSpecFlag = errors.New("missing --spec flag")
 )

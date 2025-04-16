@@ -24,17 +24,22 @@ import (
 )
 
 var (
-	logLevel = new(slog.LevelVar)
-	logger   = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel}))
+	logLevel            = new(slog.LevelVar)
+	logger              = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel}))
+	unexpectErrExitCode = 2
 )
 
 func main() {
 	flag.Parse()
+	var exitCodeErr *ExitCodeError
 	if err := run(); err != nil {
 		if errors.Is(err, ErrNoDiff) {
 			// No diff means we just want to log the error
 			// but not exit with code 1.
 			log.Println(err)
+		} else if errors.As(err, &exitCodeErr) {
+			logger.Error(fmt.Sprintf("unexpected error: %v", err))
+			os.Exit(exitCodeErr.exitCode)
 		} else {
 			log.Fatal(err)
 		}
@@ -93,23 +98,22 @@ func generateDistribution() error {
 	if err != nil {
 		return err
 	}
+	defer generator.Clean()
 
 	if *flagCustomTemplates != "" {
 		generator.CustomTemplatesDir = os.DirFS(*flagCustomTemplates)
 	}
 
 	if err := generator.Generate(); err != nil {
-		if err := generator.Clean(); err != nil {
-			fmt.Printf("couldn't clean generated dir: %v\n", err)
-		}
-		return err
-	}
-	if err := generator.MoveGeneratedDirToWd(); err != nil {
-		if err := generator.Clean(); err != nil {
-			fmt.Printf("couldn't clean generated dir: %v\n", err)
-		}
 		return err
 	}
 
-	return nil
+	var resultErr error
+	if *flagCompare {
+		resultErr = generator.Compare()
+	} else {
+		resultErr = generator.MoveGeneratedDirToWd()
+	}
+
+	return resultErr
 }

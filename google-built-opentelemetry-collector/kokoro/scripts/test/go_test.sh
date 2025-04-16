@@ -20,7 +20,7 @@ set -o pipefail
 
 # cd to the root of the git repo containing this script ($0).
 cd "$(readlink -f "$(dirname "$0")")"
-cd ../../../
+cd ../../../../
 
 # Avoids "fatal: detected dubious ownership in repository" errors on Kokoro containers.
 git config --global --add safe.directory "$(pwd)"
@@ -109,7 +109,7 @@ export AGENT_PACKAGES_IN_GCS
 LOGS_DIR="${KOKORO_ARTIFACTS_DIR}/logs"
 mkdir -p "${LOGS_DIR}"
 
-cd "integration_test/${TEST_SUITE_NAME}"
+cd "google-built-opentelemetry-collector/integration_test/${TEST_SUITE_NAME}"
 
 # Boost the max number of open files from 1024 to 1 million.
 ulimit -n 1000000

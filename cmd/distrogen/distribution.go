@@ -310,11 +310,10 @@ func getGeneratedFilesInDir(dir string) (map[string]*generatedFile, error) {
 }
 
 // Clean will remove the temporary directory used for generation.
-func (d *DistributionGenerator) Clean() error {
+func (d *DistributionGenerator) Clean() {
 	if err := os.RemoveAll(d.GeneratePath); err != nil && !os.IsNotExist(err) {
-		return err
+		logger.Error("failed to clean generated directory", "err", err)
 	}
-	return nil
 }
 
 // TemplateContext is the context that will be passed into any default or user

@@ -63,9 +63,7 @@ func testGeneratorCase(t *testing.T, registry *Registry, testFolder string) {
 	err = g.Generate()
 	assert.NilError(t, err)
 	t.Cleanup(func() {
-		if err := g.Clean(); err != nil {
-			t.Log("could not clean generated dir")
-		}
+		g.Clean()
 	})
 
 	generatedFiles, err := filesInDirAsSet(g.GeneratePath)

@@ -98,15 +98,13 @@ func generateDistribution() error {
 	if err != nil {
 		return err
 	}
+	defer generator.Clean()
 
 	if *flagCustomTemplates != "" {
 		generator.CustomTemplatesDir = os.DirFS(*flagCustomTemplates)
 	}
 
 	if err := generator.Generate(); err != nil {
-		if err := generator.Clean(); err != nil {
-			fmt.Printf("couldn't clean generated dir: %v\n", err)
-		}
 		return err
 	}
 
@@ -117,8 +115,5 @@ func generateDistribution() error {
 		resultErr = generator.MoveGeneratedDirToWd()
 	}
 
-	if err := generator.Clean(); err != nil {
-		fmt.Printf("couldn't clean generated dir: %v\n", err)
-	}
 	return resultErr
 }

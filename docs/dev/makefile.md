@@ -41,8 +41,8 @@ From this point, manual intervention will likely be required by the developer to
 
 Each distribution in this repo will have associated targets for using `distrogen` to generate updates.
 
-The `gen-<distro>` targets are the default. They will generate without the `-force` flag, meaning if the spec file for the distro has not changed then generation will be skipped.
-`regen-<distro>` will add the `-force` flag. This is generally used if you have made your own updates to the templates and want to do a generation while skipping the spec comparison step.
+The `gen-<distro>` targets are the default. They will generate without the `-force` flag, meaning if the spec file for the distro has not changed then generation will be skipped.  
+`regen-<distro>` will add the `-force` flag. This is generally used if you have made your own updates to the templates and want to do a generation while skipping the spec comparison step.  
 `regen-<distro>-v` will do a `-force` generation with debug logging for `distrogen` turned on.
 
 ## distrogen-golden-update

@@ -18,9 +18,9 @@ set -u
 set -x
 set -o pipefail
 
-# cd to the root of the git repo containing this script ($0).
+# cd to google-built-opentelemetry-collector.
 cd "$(readlink -f "$(dirname "$0")")"
-cd ../../../../
+cd ../../../
 
 # Avoids "fatal: detected dubious ownership in repository" errors on Kokoro containers.
 git config --global --add safe.directory "$(pwd)"
@@ -44,11 +44,13 @@ function set_image_specs() {
     return 1
   fi
   
-  # Extracts all representative and exhaustive image_specs matching $ARCH from project.yaml.
+  # Extracts all representative and exhaustive image_specs matching $ARCH from distros.yaml.
   IMAGE_SPECS="$(python3 -c "import yaml
 all_distros = []
-targets=yaml.safe_load(open('project.yaml'))['targets']
+targets=yaml.safe_load(open('distros.yaml'))['targets']
 for target in targets:
+  if target == 'windows':
+    continue
   test_distros = targets[target]['architectures']['${ARCH}']['test_distros']
   all_distros += test_distros['representative']
   if 'exhaustive' in test_distros:
@@ -109,7 +111,7 @@ export AGENT_PACKAGES_IN_GCS
 LOGS_DIR="${KOKORO_ARTIFACTS_DIR}/logs"
 mkdir -p "${LOGS_DIR}"
 
-cd "google-built-opentelemetry-collector/integration_test/${TEST_SUITE_NAME}"
+cd "integration_test/${TEST_SUITE_NAME}"
 
 # Boost the max number of open files from 1024 to 1 million.
 ulimit -n 1000000

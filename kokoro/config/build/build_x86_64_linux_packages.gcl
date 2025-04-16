@@ -1,0 +1,19 @@
+import 'common.gcl' as common
+
+config build = common.build {
+  build_file = 'otelcol-google/kokoro/scripts/build/build_packages.sh'
+
+  params {
+    environment {
+      ARCH = 'x86_64'
+    }
+  }
+
+  action = [
+    {
+      define_artifacts = {
+        regex = common.deb_rpm_artifacts_patterns
+      }
+    },
+  ]
+}

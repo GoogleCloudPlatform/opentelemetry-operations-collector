@@ -1,0 +1,9 @@
+import '../utils/functions.gcl' as functions
+
+template config build = {
+    params {}
+
+    env_vars = functions.environment_variables(params.environment)
+}
+
+deb_rpm_artifacts_patterns = ["**/*.deb", "**/*.rpm"]

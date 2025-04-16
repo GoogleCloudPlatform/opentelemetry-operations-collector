@@ -1,0 +1,39 @@
+import '../utils/functions.gcl' as functions
+
+template config go_test = {
+  build_file = 'otelcol-google/kokoro/scripts/test/go_test.sh'
+
+  params {
+    test_suite = external
+   
+    environment {
+      TEST_SUITE_NAME = test_suite
+
+      PROJECT = 'stackdriver-test-143416'
+
+      // Use a codepath that conserves external IPv4 addresses for quota
+      // reasons. The VMs will not be assigned external IPv4 addresses.
+      // Outgoing connections will use Cloud NAT, and incoming connections
+      // use the VM's internal IP address, which only works because the
+      // Kokoro worker is running in the same network as the spawned VM.
+      // Using the internal IP address also avoids issues with the firewall.
+      USE_INTERNAL_IP = 'true'
+
+      // TRANSFERS_BUCKET and SERVICE_EMAIL are always modified as a pair.
+      // when the build is running trusted (reviewed) code, it's OK to set
+      // this to 'stackdriver-test-143416-file-transfers' and use
+      // 'build-and-test@'. When running unreviewed code, leave both at their
+      // default values. go/sdi-kokoro-security is an internal doc that talks
+      // about how this is set up.
+      TRANSFERS_BUCKET = 'stackdriver-test-143416-untrusted-file-transfers'
+      SERVICE_EMAIL =
+          'build-and-test-external@stackdriver-test-143416.iam.gserviceaccount.com'
+    }
+  }
+  action = [{
+      define_artifacts = {
+          regex = ['logs/**']
+      }
+  }]
+  env_vars = functions.environment_variables(params.environment)
+}

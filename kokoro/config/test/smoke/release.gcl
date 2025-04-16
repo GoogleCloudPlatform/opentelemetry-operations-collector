@@ -1,0 +1,16 @@
+import 'common.gcl' as common
+
+config build = common.smoke_test {
+  params {
+    environment {
+      TEST_EXHAUSTIVE_DISTROS = '1'
+      GOTESTSUM_RERUN_FAILS = '2'
+
+      // The following SERVICE_EMAIL and TRANSFERS_BUCKET should only be used
+      // for releases, not presubmits.
+      SERVICE_EMAIL =
+          'build-and-test@stackdriver-test-143416.iam.gserviceaccount.com'
+      TRANSFERS_BUCKET = 'stackdriver-test-143416-file-transfers'
+    }
+  }
+}

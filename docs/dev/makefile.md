@@ -1,4 +1,4 @@
-# Using the repo Makefile 
+# Using the repo Makefile
 
 The Makefile at the root of this repo provides numerous conveniences for developers working on this repo.
 
@@ -41,10 +41,21 @@ From this point, manual intervention will likely be required by the developer to
 
 Each distribution in this repo will have associated targets for using `distrogen` to generate updates.
 
-The `gen-<distro>` targets are the default. They will generate without the `-force` flag, meaning if the spec file for the distro has not changed then generation will be skipped.  
+The `gen-<distro>` targets are the default. They will generate without the `-force` flag, meaning if the spec file for the distro has not changed then generation will be skipped.
 `regen-<distro>` will add the `-force` flag. This is generally used if you have made your own updates to the templates and want to do a generation while skipping the spec comparison step.
 `regen-<distro>-v` will do a `-force` generation with debug logging for `distrogen` turned on.
 
 ## distrogen-golden-update
 
 This target regenerates the `golden` files for all test cases in `distrogen`. You can add new testcases by following the format in `cmd/distrogen/testdata/generator` and running this target to generate the goldens for the new testcase.
+
+## Updating dependencies
+
+Since this is a multi-module repo, updating dependencies has to happen individually in each module. This is quite tedious to do manually, so there is a target in the Makefile to do this:
+
+```
+make update-go-module-in-all GO_MOD=golang.org/x/net GO_MOD_VERSION=v0.36.0
+```
+NOTE: You can omit `GO_MOD_VERSION` if you simply want to update the module to `latest`.
+
+This target will run `update-go-module` from `maintenance.mk` in each component. If the requested module is not found, it moves on. Otherwise, it runs `go get -u` with the module and version specified.

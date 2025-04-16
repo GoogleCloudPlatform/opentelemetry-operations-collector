@@ -1,5 +1,7 @@
 include ./make/common.mk
 
+MAKEFLAGS += --no-print-directory
+
 #############
 # Development
 #############
@@ -12,12 +14,12 @@ setup-hooks:
 	git config core.hooksPath $(PWD)/hooks
 
 .PHONY: precommit
-precommit: checklicense misspell lint
+precommit: checklicense misspell lint compare-all
 
 # This is the same as precommit for now but this is
 # futureproofing against this changing in the future.
 .PHONY: presubmit
-presubmit: checklicense misspell lint
+presubmit: checklicense misspell lint compare-all
 
 ##########################
 # Updating OTel Components
@@ -64,23 +66,28 @@ gen-all: gen-google-built-otel gen-otelopscol
 .PHONY: regen-all
 regen-all: regen-google-built-otel regen-otelopscol
 
+.PHONY: compare-all
+compare-all:
+	@./internal/tools/scripts/compare.sh
+
 GEN_GOOGLE_BUILT_OTEL=$(RUN_DISTROGEN) -spec ./specs/google-built-opentelemetry-collector.yaml \
 								 -registry ./registries/operations-collector-registry.yaml \
 								 -custom_templates ./templates/google-built-opentelemetry-collector
 .PHONY: gen-google-built-otel
 gen-google-built-otel:
 	@$(GEN_GOOGLE_BUILT_OTEL)
-	@$(MAKE) addlicense
 
 .PHONY: regen-google-built-otel
 regen-google-built-otel:
 	@$(GEN_GOOGLE_BUILT_OTEL) -force
-	@$(MAKE) addlicense
 
 .PHONY: regen-google-built-otel-v
 regen-google-built-otel-v:
 	@$(GEN_GOOGLE_BUILT_OTEL) -force -v
-	@$(MAKE) addlicense
+
+.PHONY: compare-google-built-otel
+compare-google-built-otel:
+	@$(GEN_GOOGLE_BUILT_OTEL) -force -compare
 
 GEN_OTELOPSCOL=$(RUN_DISTROGEN) -spec ./specs/otelopscol.yaml \
 								-registry ./registries/operations-collector-registry.yaml \
@@ -88,17 +95,18 @@ GEN_OTELOPSCOL=$(RUN_DISTROGEN) -spec ./specs/otelopscol.yaml \
 .PHONY: gen-otelopscol
 gen-otelopscol:
 	@$(GEN_OTELOPSCOL)
-	@$(MAKE) addlicense
 
 .PHONY: regen-otelopscol
 regen-otelopscol:
 	@$(GEN_OTELOPSCOL) -force
-	@$(MAKE) addlicense
 
 .PHONY: regen-otelopscol-v
 regen-otelopscol-v:
 	@$(GEN_OTELOPSCOL) -force -v
-	@$(MAKE) addlicense
+
+.PHONY: compare-otelopscol
+compare-otelopscol:
+	@$(GEN_OTELOPSCOL) -force -compare
 
 #########
 # Testing
@@ -147,6 +155,8 @@ ADDLICENSE = $(TOOLS_DIR)/addlicense
 GOLANGCI_LINT = $(TOOLS_DIR)/golangci-lint
 MISSPELL = $(TOOLS_DIR)/misspell
 
+$(ADDLICENSE): install-tools
+
 # This is a PHONY target cause if you make it as a normal recipe
 # it gets very confused because the creation date of the .tools
 # directory is newer than the tools inside it.
@@ -172,13 +182,15 @@ ADDLICENSE_IGNORES = -ignore "**/.tools/*" \
 					-ignore "**/*.md" \
 					-ignore "**/testdata/*" \
 					-ignore "**/golden/*" \
+					-ignore "**/google-built-opentelemetry-collector/*" \
+					-ignore "**/otelopscol/*" \
 					-ignore "**/spec.yaml"
 .PHONY: addlicense
-addlicense:
+addlicense: $(ADDLICENSE)
 	@$(ADDLICENSE) -c "Google LLC" -l apache $(ADDLICENSE_IGNORES) .
 
 .PHONY: checklicense
-checklicense:
+checklicense: $(ADDLICENSE)
 	@output=`$(ADDLICENSE) $(ADDLICENSE_IGNORES) -check .` && echo checklicense finished successfully || (echo checklicense errors, run make addlicense to resolve: $$output && exit 1)
 
 .PHONY: lint

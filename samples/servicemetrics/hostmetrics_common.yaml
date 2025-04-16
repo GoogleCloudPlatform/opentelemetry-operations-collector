@@ -1,0 +1,44 @@
+# Copyright 2025 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+processors:
+  # Filter out `hostmetricsreceiver` metrics which we used as a basis to create saasmanagement metrics.
+  filter/ucp_internal_hostmetrics_after_transform:
+    metrics:
+      include:
+        match_type: strict
+        metric_names:
+        - "saasmanagement.googleapis.com/instance/vm/memory/free"
+        - "saasmanagement.googleapis.com/instance/vm/memory/usage"
+        - "saasmanagement.googleapis.com/instance/vm/process/memory/usage"
+        - "saasmanagement.googleapis.com/instance/vm/process/memory/size"
+        - "saasmanagement.googleapis.com/instance/vm/cpu/usage_time"
+        - "saasmanagement.googleapis.com/instance/vm/process/cpu/usage_time"
+        - "saasmanagement.googleapis.com/instance/vm/network/received_bytes_count"
+        - "saasmanagement.googleapis.com/instance/vm/network/sent_bytes_count"
+        - "saasmanagement.googleapis.com/instance/vm/network/nf_conntrack_count"
+        - "saasmanagement.googleapis.com/instance/vm/network/nf_conntrack_max"
+        - "saasmanagement.googleapis.com/instance/vm/process/disk/read_bytes_count"
+        - "saasmanagement.googleapis.com/instance/vm/process/disk/write_bytes_count"
+        - "saasmanagement.googleapis.com/instance/vm/disk/io_time"
+        - "saasmanagement.googleapis.com/instance/vm/disk/free_bytes"
+        - "saasmanagement.googleapis.com/instance/vm/disk/read_bytes_count"
+        - "saasmanagement.googleapis.com/instance/vm/disk/read_ops_count"
+        - "saasmanagement.googleapis.com/instance/vm/disk/read_time"
+        - "saasmanagement.googleapis.com/instance/vm/disk/reserved_bytes"
+        - "saasmanagement.googleapis.com/instance/vm/disk/used_bytes"
+        - "saasmanagement.googleapis.com/instance/vm/disk/weighted_io_time"
+        - "saasmanagement.googleapis.com/instance/vm/disk/write_bytes_count"
+        - "saasmanagement.googleapis.com/instance/vm/disk/write_ops_count"
+        - "saasmanagement.googleapis.com/instance/vm/disk/write_time"

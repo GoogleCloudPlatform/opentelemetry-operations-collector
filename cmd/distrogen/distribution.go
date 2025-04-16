@@ -199,12 +199,121 @@ func (d *DistributionGenerator) MoveGeneratedDirToWd() (err error) {
 	return nil
 }
 
-// Clean will remove the temporary directory used for generation.
-func (d *DistributionGenerator) Clean() error {
-	if err := os.RemoveAll(d.GeneratePath); err != nil && !os.IsNotExist(err) {
-		return err
+type generatedFile struct {
+	path    string
+	content string
+	checked bool
+}
+
+var ErrDistroFolderDoesNotExist = errors.New("distribution folder not generated")
+var ErrDistroFolderDiff = errors.New("existing distro folder differs from generation")
+
+// Compare will deeply compare the newly generated distro against the existing one.
+func (d *DistributionGenerator) Compare() error {
+	wd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("could not get working directory: %w", err)
 	}
+
+	_, err = os.Stat(d.GeneratePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			panic(fmt.Sprintf("generated directory %s does not exist, if you see this it's a code error in distrogen", d.GeneratePath))
+		}
+		return wrapExitCodeError(
+			unexpectErrExitCode,
+			fmt.Errorf("could not stat generated directory: %w", err),
+		)
+	}
+	generateDest := filepath.Join(wd, d.GenerateDirName)
+
+	_, err = os.Stat(generateDest)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("%w: %s", ErrDistroFolderDoesNotExist, generateDest)
+		}
+		return wrapExitCodeError(
+			unexpectErrExitCode,
+			fmt.Errorf("could not stat existing distro directory: %w", err),
+		)
+	}
+
+	logger.Debug("comparing %s to %s", d.GeneratePath, generateDest)
+
+	generatedContent, err := getGeneratedFilesInDir(generateDest)
+	if err != nil {
+		return wrapExitCodeError(
+			unexpectErrExitCode,
+			fmt.Errorf("could not get generated files: %w", err),
+		)
+	}
+	existingContent, err := getGeneratedFilesInDir(d.GeneratePath)
+	if err != nil {
+		return wrapExitCodeError(
+			unexpectErrExitCode,
+			fmt.Errorf("could not get existing files: %w", err),
+		)
+	}
+
+	errs := make(CollectionError)
+	for name, existingFile := range existingContent {
+		generatedFile, ok := generatedContent[name]
+		if !ok {
+			errs[name] = fmt.Errorf("existing file not found in generated distribution")
+			continue
+		}
+		existingFile.checked = true
+		generatedFile.checked = true
+		diff := cmp.Diff(existingFile.content, generatedFile.content)
+		if diff != "" {
+			errs[name] = fmt.Errorf("existing file differs from generated distribution:\n%s", diff)
+		}
+	}
+
+	for name, generatedFile := range generatedContent {
+		if !generatedFile.checked {
+			errs[name] = fmt.Errorf("generated file not found in existing distribution")
+		}
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("%s: %w:\n\n%v", d.Spec.Name, ErrDistroFolderDiff, errs)
+	}
+
 	return nil
+}
+
+func getGeneratedFilesInDir(dir string) (map[string]*generatedFile, error) {
+	files := map[string]*generatedFile{}
+
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if d.IsDir() {
+			return nil
+		}
+
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		files[d.Name()] = &generatedFile{
+			path:    path,
+			content: string(content),
+		}
+		return nil
+	})
+
+	return files, err
+}
+
+// Clean will remove the temporary directory used for generation.
+func (d *DistributionGenerator) Clean() {
+	if err := os.RemoveAll(d.GeneratePath); err != nil && !os.IsNotExist(err) {
+		logger.Error("failed to clean generated directory", "err", err)
+	}
 }
 
 // TemplateContext is the context that will be passed into any default or user
@@ -232,8 +341,8 @@ func NewTemplateContextFromSpec(spec *DistributionSpec, registry *Registry) (*Te
 		contrib:    spec.OpenTelemetryContribVersion,
 	}
 
-	errs := make(RegistryLoadError)
-	var err RegistryLoadError
+	errs := make(CollectionError)
+	var err CollectionError
 	context.Receivers, err = registry.Receivers.LoadAllComponents(spec.Components.Receivers, otelVersion)
 	mapMerge(errs, err)
 	context.Processors, err = registry.Processors.LoadAllComponents(spec.Components.Processors, otelVersion)
@@ -266,12 +375,9 @@ func (fgs FeatureGates) Render() string {
 	}
 
 	gates := ""
-	first := true
-	for _, fg := range fgs {
+	for i, fg := range fgs {
 		gates += fg
-		if first {
-			first = false
-		} else {
+		if i < len(fgs)-1 {
 			gates += ","
 		}
 	}

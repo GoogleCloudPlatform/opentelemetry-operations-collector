@@ -27,12 +27,10 @@ import (
 	"google.golang.org/api/impersonate"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/google"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/oauth"
-)
 
-const (
-	// The value of "type" key in configuration.
-	typeStr = "googleservicecontrol"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/exporter/googleservicecontrolexporter/internal/metadata"
 )
 
 var (
@@ -47,32 +45,13 @@ var (
 	clientProvider  = NewServiceControllerClient
 )
 
-// Config defines configuration for Service Control Exporter
-type Config struct {
-	ServiceName               string `mapstructure:"service_name"`
-	ConsumerProject           string `mapstructure:"consumer_project"`
-	ServiceControlEndpoint    string `mapstructure:"service_control_endpoint"`
-	ServiceConfigID           string `mapstructure:"service_config_id"`
-	ImpersonateServiceAccount string `mapstructure:"impersonate_service_account"`
-	// Whether to use servicecontrol library or raw sc client.
-	// The Client Library's SC client supports authentications using ADC and WIF
-	// https://cloud.google.com/kubernetes-engine/fleet-management/docs/use-workload-identity#authenticate_from_your_code
-	// Defaults to `true`, so that existing customers are unaffected by changes.
-	// See go/agent-gdce
-	// TODO(b/400987158): remove the option and migrate all to Client Library.
-	UseRawServiceControlClient string `mapstructure:"use_raw_sc_client"`
-	EnableDebugHeaders         bool   `mapstructure:"enable_debug_headers"`
-
-	exporterhelper.TimeoutConfig `mapstructure:",squash"` // squash ensures fields are correctly decoded in embedded struct.
-	configretry.BackOffConfig    `mapstructure:"retry_on_failure"`
-	exporterhelper.QueueConfig   `mapstructure:"sending_queue"`
-}
-
 func NewFactory() exporter.Factory {
 	return exporter.NewFactory(
-		component.MustNewType(typeStr),
+		metadata.Type,
 		createDefaultConfig,
-		exporter.WithMetrics(createMetricsExporter, component.StabilityLevelBeta))
+		exporter.WithMetrics(createMetricsExporter, metadata.MetricsStability),
+		exporter.WithLogs(createLogExporter, metadata.LogsStability),
+	)
 }
 
 func createDefaultConfig() component.Config {
@@ -82,6 +61,7 @@ func createDefaultConfig() component.Config {
 		ImpersonateServiceAccount:  "",
 		UseRawServiceControlClient: "true",
 		EnableDebugHeaders:         false,
+		UseInsecure:                false,
 		// The meaning of RetrySettings is described in
 		// https://github.com/open-telemetry/opentelemetry-collector/blob/v0.54.0/exporter/exporterhelper/queued_retry.go#L38.
 		// The defaults are ported from our collectd agent
@@ -106,47 +86,76 @@ func createDefaultConfig() component.Config {
 			// This queue grows only in case of retries.
 			QueueSize: 3000,
 		},
+		LogConfig: LogConfig{
+			OperationName: LogDefaultOperationName,
+		},
 	}
 }
 
-func createMetricsExporter(ctx context.Context, settings exporter.Settings, cfg component.Config) (exporter.Metrics, error) {
+func createLogExporter(ctx context.Context, settings exporter.Settings, cfg component.Config) (exporter.Logs, error) {
 	oCfg := cfg.(*Config)
-	opts := []grpc.DialOption{}
-	if oCfg.ServiceName == "" {
-		return nil, fmt.Errorf("empty service_name")
-	}
-	if oCfg.ConsumerProject == "" {
-		return nil, fmt.Errorf("empty consumer_project")
-	}
-	if oCfg.ServiceControlEndpoint == "" {
-		return nil, fmt.Errorf("empty service_control_endpoint")
-	}
-	var credentials = google.NewDefaultCredentials()
-	if oCfg.ImpersonateServiceAccount != "" {
-		src, err := impersonate.CredentialsTokenSource(ctx, impersonate.CredentialsConfig{
-			TargetPrincipal: oCfg.ImpersonateServiceAccount,
-			Scopes:          []string{"https://www.googleapis.com/auth/cloud-platform"},
-		})
-		if err != nil {
-			return nil, fmt.Errorf("Failed to impersonate serviceAccount: %w", err)
-		}
-		credentials = google.NewDefaultCredentialsWithOptions(google.DefaultCredentialsOptions{oauth.TokenSource{src}, nil})
-	}
-
-	opts = append(opts, grpc.WithCredentialsBundle(credentials))
-
-	useRawServiceControlClient := strings.TrimSpace(strings.ToLower(oCfg.UseRawServiceControlClient)) == "true"
-	c, err := clientProvider(oCfg.ServiceControlEndpoint, useRawServiceControlClient, oCfg.EnableDebugHeaders, settings.Logger, opts...)
+	c, err := createClient(ctx, oCfg, settings)
 	if err != nil {
 		return nil, err
 	}
 
-	exp := NewExporter(settings.Logger, c, oCfg.ServiceName, oCfg.ConsumerProject, oCfg.ServiceConfigID, oCfg.EnableDebugHeaders, settings.TelemetrySettings)
+	exp := NewLogsExporter(*oCfg, settings.Logger, *c, settings.TelemetrySettings)
+	return exporterhelper.NewLogs(ctx, settings, cfg, exp.ConsumeLogs,
+		exporterhelper.WithCapabilities(exp.Capabilities()),
+		// TODO: disable timeout and backoff for now
+		// exporterhelper.WithTimeout(oCfg.TimeoutConfig),
+		// exporterhelper.WithRetry(oCfg.BackOffConfig),
+		exporterhelper.WithQueue(oCfg.QueueConfig),
+		exporterhelper.WithStart(exp.Start),
+		exporterhelper.WithShutdown(exp.Shutdown),
+	)
+}
+
+func createMetricsExporter(ctx context.Context, settings exporter.Settings, cfg component.Config) (exporter.Metrics, error) {
+	oCfg := cfg.(*Config)
+	c, err := createClient(ctx, oCfg, settings)
+	if err != nil {
+		return nil, err
+	}
+
+	exp := NewMetricsExporter(*oCfg, settings.Logger, *c, settings.TelemetrySettings)
 	return exporterhelper.NewMetrics(ctx, settings, cfg, exp.ConsumeMetrics,
 		exporterhelper.WithCapabilities(exp.Capabilities()),
 		exporterhelper.WithTimeout(oCfg.TimeoutConfig),
 		exporterhelper.WithRetry(oCfg.BackOffConfig),
 		exporterhelper.WithQueue(oCfg.QueueConfig),
 		exporterhelper.WithStart(exp.Start),
+		exporterhelper.WithShutdown(exp.Shutdown),
 	)
+}
+
+func createClient(ctx context.Context, oCfg *Config, settings exporter.Settings) (*ServiceControlClient, error) {
+	opts := []grpc.DialOption{}
+	if oCfg.UseInsecure {
+		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	} else {
+		var credentials = google.NewDefaultCredentials()
+		if oCfg.ImpersonateServiceAccount != "" {
+			src, err := impersonate.CredentialsTokenSource(ctx,
+				impersonate.CredentialsConfig{
+					TargetPrincipal: oCfg.ImpersonateServiceAccount,
+					Scopes:          []string{"https://www.googleapis.com/auth/cloud-platform"},
+				})
+			if err != nil {
+				return nil, fmt.Errorf("failed to impersonate serviceAccount: %w", err)
+			}
+			credentials = google.NewDefaultCredentialsWithOptions(
+				google.DefaultCredentialsOptions{
+					PerRPCCreds:     oauth.TokenSource{TokenSource: src},
+					ALTSPerRPCCreds: nil})
+		}
+		opts = append(opts, grpc.WithCredentialsBundle(credentials))
+	}
+
+	useRawServiceControlClient := strings.TrimSpace(strings.ToLower(oCfg.UseRawServiceControlClient)) == "true"
+	c, err := clientProvider(oCfg.ServiceControlEndpoint, useRawServiceControlClient, oCfg.EnableDebugHeaders, settings.Logger, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return &c, nil
 }

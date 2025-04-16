@@ -3,10 +3,10 @@ module: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/google
 display_name: Google-Built OpenTelemetry Collector
 description: OpenTelemetry Collector Built By Google
 blurb: The Google-Built OpenTelemetry Collector is an open-source, production-ready build of the upstream OpenTelemetry Collector that is built with upstream OpenTelemetry components.
-version: 0.121.0
-opentelemetry_version: 0.121.0
-opentelemetry_contrib_version: 0.121.0
-opentelemetry_stable_version: 1.27.0
+version: 0.122.1
+opentelemetry_version: 0.122.1
+opentelemetry_contrib_version: 0.122.0
+opentelemetry_stable_version: 1.28.0
 go_version: 1.24.0
 binary_name: otelcol-google
 build_tags: ""
@@ -79,6 +79,7 @@ components:
         - basicauth
         - bearertokenauth
         - headerssetter
+        - healthagent
         - healthcheck
         - httpforwarder
         - oauth2clientauth
@@ -88,6 +89,7 @@ components:
         - opamp
         - pprof
         - filestorage
+        - googleclientauth
     providers:
         - env
         - file
@@ -96,3 +98,4 @@ components:
         - yaml
 feature_gates:
     - exporter.googlemanagedprometheus.intToDouble
+    - exporter.googlecloud.CustomMonitoredResources

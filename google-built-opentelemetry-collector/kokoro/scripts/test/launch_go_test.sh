@@ -15,6 +15,8 @@
 
 IMAGE=us-east4-docker.pkg.dev/stackdriver-test-143416/build-tools/test-env:latest
 
+gcloud auth configure-docker
+
 ENV_FILE"=$(mktemp env-file-XXXXXXX.txt)"
 env > "${ENV_FILE}"
 

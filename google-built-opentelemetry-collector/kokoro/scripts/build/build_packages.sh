@@ -15,7 +15,7 @@
 
 set -eux
 
-// Temporary, for debugging.
+# Temporary, for debugging.
 function print_layout() {
   echo "${KOKORO_ARTIFACTS_DIR}"
   ls "${KOKORO_ARTIFACTS_DIR}" || true
@@ -28,4 +28,4 @@ cd "${KOKORO_ARTIFACTS_DIR}"/git/otelcol-google/google-built-opentelemetry-colle
 
 make goreleaser-release
 
-ls dist || true  // Temporary, for debugging.
+ls dist || true  # Temporary, for debugging.

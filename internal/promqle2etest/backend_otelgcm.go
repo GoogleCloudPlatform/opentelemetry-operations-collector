@@ -39,6 +39,8 @@ type OtelGCMBackend struct {
 	Image string
 	Name  string
 	GCMSA []byte
+
+	ExtraProcessors map[string]string
 }
 
 func (o OtelGCMBackend) Ref() string {
@@ -46,10 +48,20 @@ func (o OtelGCMBackend) Ref() string {
 }
 
 // newOtelCollector creates a new OpenTelemetry Collector runnable.
-func newOtelCollector(env e2e.Environment, name string, image string, scrapeTargetAddress string, cluster, location, project string, gcmSA []byte) *e2emon.InstrumentedRunnable {
+func newOtelCollector(env e2e.Environment, name string, image string, scrapeTargetAddress string, cluster, location, project string, gcmSA []byte, extraProcessors map[string]string) *e2emon.InstrumentedRunnable {
 	ports := map[string]int{"http": 9090}
 
 	f := env.Runnable(name).WithPorts(ports).Future()
+
+	var extraProcessorsConfigs, extraProcessorsEnable string
+	if extraProcessors != nil && len(extraProcessors) > 0 {
+		for proc, config := range extraProcessors {
+			extraProcessorsConfigs += fmt.Sprintf(`
+  %s:%s
+`, proc, config)
+			extraProcessorsEnable += fmt.Sprintf(", %s", proc)
+		}
+	}
 
 	// NOTE(bwplotka): Starting from https://cloud.google.com/stackdriver/docs/managed-prometheus/setup-otel#run-off-gcp
 	// but with extra things to make this actually work (TODO: update the docs)
@@ -115,6 +127,7 @@ processors:
     check_interval: 1s
     limit_percentage: 65
     spike_limit_percentage: 20
+  %s
 
 # Note that the googlemanagedprometheus exporter block is intentionally blank
 exporters:
@@ -132,7 +145,7 @@ service:
   pipelines:
     metrics:
       receivers: [prometheus]
-      processors: [batch, memory_limiter, resource, transform]
+      processors: [batch, memory_limiter, resource, transform%s]
       exporters: [googlemanagedprometheus]
   telemetry:
     # Internal collector metrics for debugging.
@@ -144,7 +157,7 @@ service:
               prometheus:
                 host: '0.0.0.0'
                 port: 9090
-`, scrapeTargetAddress, name, cluster, location, project)
+`, scrapeTargetAddress, name, cluster, location, extraProcessorsConfigs, project, extraProcessorsEnable)
 	if err := os.WriteFile(filepath.Join(f.Dir(), "config.yml"), []byte(config), 0600); err != nil {
 		return e2emon.AsInstrumented(e2e.NewFailedRunnable(name, fmt.Errorf("create otel config failed: %w", err)), "http")
 	}
@@ -191,7 +204,7 @@ func (o OtelGCMBackend) StartAndWaitReady(t testing.TB, env e2e.Environment) pro
 
 	replayer := promqle2e.StartIngestByScrapeReplayer(t, env)
 
-	otelCollector := newOtelCollector(env, o.Name, o.Image, replayer.Endpoint(env), cluster, location, creds.ProjectID, o.GCMSA)
+	otelCollector := newOtelCollector(env, o.Name, o.Image, replayer.Endpoint(env), cluster, location, creds.ProjectID, o.GCMSA, o.ExtraProcessors)
 	if err := e2e.StartAndWaitReady(otelCollector); err != nil {
 		t.Fatal(err)
 	}

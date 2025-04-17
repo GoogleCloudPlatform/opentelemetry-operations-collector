@@ -26,18 +26,19 @@ import (
 )
 
 // TestPromOtelGCM_PrometheusCounter_NoCT tests a basic counter sample behaviour
-// with a known CT limitation across 3 ingestion flows:
+// with a known CT limitation across the following ingestion flows:
 // * target --PromProto--> Prometheus (referencing, ideal, OSS behaviour).
 // * target --PromProto--> Prometheus GMP fork --GCM API--> GCM.
-// * target --PromProto--> OpenTelemetry Collector (Google Operations build) --GCM API--> GCM.
+// * target --PromProto--> OpenTelemetry Collector --GCM API--> GCM.
+// * target --PromProto--> OpenTelemetry Collector (+MSTP) --GCM API--> GCM.
 //
 // The main goal is to have a basic acceptance test on the non-trivial behaviours across multiple ingestion pipelines.
 // Currently, this test is for manual run only; to run add GCM_SECRET envvar containing GCM API read and write access (and adjust timeout).
 //
 // TODO(bwplotka): In future we could add more pipelines to test and compare e.g.
-// * target --PromProto--> Prometheus vanilla --PRW 2.0--> OpenTelemetry Collector --GCM API-->GCM.
+// * target --PromProto--> Prometheus vanilla --PRW 2.0--> OpenTelemetry Collector (+MSTP) --GCM API-->GCM.
 // * target --PromProto--> Prometheus vanilla --PRW 2.0--> GCM.
-// * target --PromProto--> OpenTelemetry Collector --OTLP--> GCM.
+// * target --PromProto--> OpenTelemetry Collector (+MSTP) --OTLP--> GCM.
 func TestPromOtelGCM_PrometheusCounter_NoCT(t *testing.T) {
 	const interval = 15 * time.Second
 
@@ -65,10 +66,9 @@ func TestPromOtelGCM_PrometheusCounter_NoCT(t *testing.T) {
 		GCMSA: GCMServiceAccountOrFail(t),
 	}
 
-	// target --PromProto?--> OpenTelemetry Collector (+ MSTP) --GCM API--> GCM.
+	// target --PromProto--> OpenTelemetry Collector (+MSTP) --GCM API--> GCM.
 	// Similar to `otel-gcm` but we use a new metricstarttimeprocessor (MSTP) processor
-	// to adjust counter samples without CT before going to GMP exporter.
-	// TODO(bwplotka): Create another Otel backend test but with MSTP and OTLP.
+	// to adjust counter samples without CT.
 	otelMSTPGCM := OtelGCMBackend{
 		Name: "otel-mstp-gcm",
 		// TODO(bwplotka): Replace with upstream once https://github.com/open-telemetry/opentelemetry-collector-contrib/pull/38594 is merged.
@@ -104,75 +104,79 @@ func TestPromOtelGCM_PrometheusCounter_NoCT(t *testing.T) {
 
 	c.Add(10)
 	pt.RecordScrape(interval).
-		Expect(c, 10, otelGCM).
-		Expect(c, 10, otelMSTPGCM).
+		Expect(c, 210, prom).
+		// NOTE(bwplotka): This and following discrepancies are also expected due to the cannibalization
+		// algorithm mentioned above.
 		Expect(c, 10, promForkGCM).
-		Expect(c, 210, prom)
+		Expect(c, 10, otelGCM).
+		Expect(c, 10, otelMSTPGCM)
 
 	c.Add(40)
 	pt.RecordScrape(interval).
-		Expect(c, 50, otelGCM).
-		Expect(c, 50, otelMSTPGCM).
+		Expect(c, 250, prom).
 		Expect(c, 50, promForkGCM).
-		Expect(c, 250, prom)
+		Expect(c, 50, otelGCM).
+		Expect(c, 50, otelMSTPGCM)
 
 	// Reset to 0 (simulating instrumentation resetting metric or restarting target).
 	counter.Reset()
 	c = counter.WithLabelValues("bar")
 	pt.RecordScrape(interval).
+		Expect(c, 0, prom).
 		// NOTE(bwplotka): This and following discrepancies are expected due to
 		// GCM PromQL layer using MQL with delta alignment. What we get as a raw
 		// counter is already reset-normalized (b/305901765) (plus cannibalization).
-		Expect(c, 50, otelGCM).
-		// TODO(bwplotka): Here otelMSTPGCM misses this samples, that's not too bad, but
-		// perhaps it's doing cannibalization even in case of counter decreased value? Something to optimize?
 		Expect(c, 50, promForkGCM).
-		Expect(c, 0, prom)
+		Expect(c, 50, otelGCM)
+	// NOTE(bwplotka): Here otelMSTPGCM misses the samples, which is not too bad,
+	// but I propose to fix it upstream (https://github.com/open-telemetry/opentelemetry-collector-contrib/pull/38594#discussion_r2044120953).
 
 	c.Add(150)
 	pt.RecordScrape(interval).
-		// NOTE(bwplotka): This is where Otel->GCM behaviour goes even more off vs
-		// Prometheus and Prometheus fork.
-		// TODO(bwplotka): Investigate? Or should we mark it as broken and recommend MSTP?
-		Expect(c, 0, otelGCM).
-		Expect(c, 200, otelMSTPGCM).
-		// Prom fork works as expected, given current cannibalization design.
+		Expect(c, 150, prom).
 		Expect(c, 200, promForkGCM).
-		Expect(c, 150, prom)
+		// NOTE(bwplotka): This is where Otel->GCM behaviour goes even more off vs
+		// Prometheus and Prometheus fork. The reason is the "broken" true reset algorithm
+		// in the prometheusreceiver, something we try to fix in MSTP
+		// (https://github.com/open-telemetry/opentelemetry-collector-contrib/pull/38594).
+		// TODO(bwplotka): Change GCP docs to recommended MSTP configuration once released (b/389130459).
+		Expect(c, 0, otelGCM).
+		// New MSTP flow is fine.
+		Expect(c, 200, otelMSTPGCM)
 
 	// Reset to 0 with addition.
 	counter.Reset()
 	c = counter.WithLabelValues("bar")
 	c.Add(20)
 	pt.RecordScrape(interval).
-		Expect(c, 20, otelGCM).
-		Expect(c, 220, otelMSTPGCM).
+		Expect(c, 20, prom).
 		Expect(c, 220, promForkGCM).
-		Expect(c, 20, prom)
+		Expect(c, 20, otelGCM). // Broken (b/389130459).
+		Expect(c, 220, otelMSTPGCM)
 
 	c.Add(50)
 	pt.RecordScrape(interval).
-		Expect(c, -130, otelGCM). // TODO(bwplotka): Investigate?
-		Expect(c, 270, otelMSTPGCM).
+		Expect(c, 70, prom).
 		Expect(c, 270, promForkGCM).
-		Expect(c, 70, prom)
+		Expect(c, -130, otelGCM). // Broken (b/389130459).
+		Expect(c, 270, otelMSTPGCM)
 
 	c.Add(10)
 	pt.RecordScrape(interval).
-		Expect(c, -120, otelGCM). // TODO(bwplotka): Investigate?
-		Expect(c, 280, otelMSTPGCM).
+		Expect(c, 80, prom).
 		Expect(c, 280, promForkGCM).
-		Expect(c, 80, prom)
+		Expect(c, -120, otelGCM). // Broken (b/389130459).
+		Expect(c, 280, otelMSTPGCM)
 
 	// Tricky reset case, unnoticeable reset for Prometheus without created timestamp as well.
 	counter.Reset()
 	c = counter.WithLabelValues("bar")
 	c.Add(600)
 	pt.RecordScrape(interval).
-		Expect(c, 400, otelGCM). // TODO(bwplotka): Investigate?
-		Expect(c, 800, otelMSTPGCM).
+		Expect(c, 600, prom).
 		Expect(c, 800, promForkGCM).
-		Expect(c, 600, prom)
+		Expect(c, 400, otelGCM). // Broken (b/389130459).
+		Expect(c, 800, otelMSTPGCM)
 
 	// Prometheus SDK used for replies actually emit CTs.
 	// Remove all CTs explicitly to test the logic for non-provided CTs in the Prometheus ecosystem.

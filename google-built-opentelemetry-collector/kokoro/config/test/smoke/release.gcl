@@ -3,7 +3,6 @@ import 'common.gcl' as common
 config build = common.smoke_test {
   params {
     environment {
-      TEST_EXHAUSTIVE_DISTROS = '1'
       GOTESTSUM_RERUN_FAILS = '2'
 
       // The following SERVICE_EMAIL and TRANSFERS_BUCKET should only be used

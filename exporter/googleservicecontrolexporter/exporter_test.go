@@ -1526,13 +1526,12 @@ func TestOperationStartTime(t *testing.T) {
 }
 
 func TestRetriableErrorHeader(t *testing.T) {
-	server, mockServer, listener, err := StartMockServer()
-	defer StopMockServer(server, listener)
+	mockServer, err := StartInMemoryMockServer()
+	defer StopMockServer(mockServer)
 	require.NoError(t, err)
-	defer server.Stop()
 
 	mockServer.SetReturnFunc(func(ctx context.Context, req *scpb.ReportRequest) (*scpb.ReportResponse, error) {
-		if mockServer.CallCount == 1 {
+		if mockServer.CallCount() == 1 {
 			return nil, status.Error(codes.Unavailable, "service unavailable")
 		}
 		md := grpcmetadata.Pairs(debugHeaderKey, "This is debug encrypted response value.")
@@ -1555,7 +1554,7 @@ func TestRetriableErrorHeader(t *testing.T) {
 		context.Background(),
 		"bufconn",
 		grpc.WithInsecure(),
-		grpc.WithContextDialer(BufDialer),
+		grpc.WithContextDialer(mockServer.DialFunc),
 		grpc.WithUnaryInterceptor(interceptor.UnaryInterceptor),
 	)
 	require.NoError(t, err)
@@ -1594,14 +1593,14 @@ func TestRetriableErrorHeader(t *testing.T) {
 	require.NoError(t, err)
 	expectedLogMessage := "Method: /google.api.servicecontrol.v1.ServiceController/Report, Received response headers: map[content-type:[application/grpc] x-return-encrypted-headers:[This is debug encrypted response value.]]"
 	logEntries := logs.FilterMessageSnippet("Received response headers").All()
-	require.Len(t, logEntries, mockServer.CallCount-1, "Expected one log entry for response headers")
+	require.Len(t, logEntries, mockServer.CallCount()-1, "Expected one log entry for response headers")
 	require.Contains(t, expectedLogMessage, logEntries[0].Message, "Log message does not match expected")
 
 	// Third call should contain header response with additional log
 	err = e.ConsumeMetrics(ctx, metricDataToPmetric(metrics))
 	require.NoError(t, err)
 	logEntries = logs.FilterMessageSnippet("Received response headers").All()
-	require.Len(t, logEntries, mockServer.CallCount-1, "Expected one log entry for response headers")
+	require.Len(t, logEntries, mockServer.CallCount()-1, "Expected one log entry for response headers")
 	require.Contains(t, expectedLogMessage, logEntries[0].Message, "Log message does not match expected")
 
 	// Fourth call with passing timelimit
@@ -1609,7 +1608,7 @@ func TestRetriableErrorHeader(t *testing.T) {
 
 	err = e.ConsumeMetrics(ctx, metricDataToPmetric(metrics))
 	require.NoError(t, err)
-	require.Len(t, logEntries, mockServer.CallCount-2, "Expected no log entry for response headers")
+	require.Len(t, logEntries, mockServer.CallCount()-2, "Expected no log entry for response headers")
 }
 
 func newFakeClient(errFunc func(context.Context) error) *fakeClient {

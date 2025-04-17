@@ -9,11 +9,5 @@ config build = common.build {
     }
   }
 
-  action = [
-    {
-      define_artifacts = {
-        regex = common.deb_rpm_artifacts_patterns
-      }
-    },
-  ]
+  fileset_artifacts = common.deb_rpm_fileset_artifacts
 }

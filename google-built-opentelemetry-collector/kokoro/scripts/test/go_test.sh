@@ -108,7 +108,7 @@ export_to_sponge_config "ARCH" "${ARCH:-}"
 AGENT_PACKAGES_IN_GCS="gs://invalid-bucket/"
 export AGENT_PACKAGES_IN_GCS
 
-LOGS_DIR="${KOKORO_ARTIFACTS_DIR}/logs"
+LOGS_DIR=logs
 mkdir -p "${LOGS_DIR}"
 
 cd "integration_test/${TEST_SUITE_NAME}"

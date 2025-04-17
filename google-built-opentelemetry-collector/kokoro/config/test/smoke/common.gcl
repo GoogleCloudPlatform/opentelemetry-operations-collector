@@ -1,0 +1,7 @@
+import '../common.gcl' as common
+
+template config smoke_test = common.go_test {
+  params {
+    test_suite = 'smoke_test'
+  }
+}

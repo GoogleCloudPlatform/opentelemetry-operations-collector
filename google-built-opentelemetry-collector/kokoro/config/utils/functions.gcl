@@ -1,0 +1,11 @@
+// Convert a map or a tuple into Kokoro environment variables.
+//
+// Example usage:
+//  environment_variables(['foo': 'bar', 'x': 'y'])
+//  environment_variables({foo = 'bar', x = 'y'})
+// Returns
+//  [{key = 'foo', value = 'bar'}, {key = 'x', value = 'y'}]
+environment_variables = lambda vars_: {
+  assert is_map(vars_) || is_tuple(vars_)
+  ret = map(lambda x_: { key = x_[0], value = x_[1] }, vars_.items())
+}.ret

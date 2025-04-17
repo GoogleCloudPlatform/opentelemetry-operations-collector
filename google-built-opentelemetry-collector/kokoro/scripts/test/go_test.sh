@@ -25,18 +25,6 @@ cd ../../../
 # Avoids "fatal: detected dubious ownership in repository" errors on Kokoro containers.
 git config --global --add safe.directory "$(pwd)"
 
-# A helper function for joining a bash array.
-# Ex. join_by , a b c -> a,b,c
-function join_by() {
-  delim="$1"
-  for (( i = 2; i <= $#; i++)); do
-    printf "${!i}"  # The ith positional argument
-    if [[ $i -ne $# ]]; then
-      printf "${delim}"
-    fi
-  done
-}
-
 function set_image_specs() {
   # if ARCH is not set, return an error
   if [[ -z "${ARCH:-}" ]]; then
@@ -65,40 +53,13 @@ print(','.join(all_distros))")"
 # The new Cloud NAT gateway must have "Minimum ports per VM instance"
 # set to 512 as per this article:
 # https://cloud.google.com/knowledge/kb/sles-unable-to-fetch-updates-when-behind-cloud-nat-000004450
-function set_zones() {
-   # if ZONES is defined, do nothing
-  if [[ -n "${ZONES:-}" ]]; then
-    return 0
-  fi
-  if [[ "${ARCH:-}" == "x86_64" ]]; then
-    zone_list=(
-      us-central1-a=3
-      us-central1-b=3
-      us-central1-c=3
-      us-central1-f=3
-      us-east1-b=2
-      us-east1-c=2
-      us-east1-d=2
-    )
-  # T2A machines are only available on us-central1-{a,b,f}.
-  # See warning above about changing regions.
-  elif [[ "${ARCH:-}" == "aarch64" ]]; then
-    zone_list=(
-      us-central1-a
-      us-central1-b
-      us-central1-f
-    )
-  else
-    zone_list=(
-      invalid_zone
-    )
-  fi
-  zones=$(join_by , "${zone_list[@]}")
-  export ZONES=$zones
-}
+#
+# T2A machines are only available on us-central1-{a,b,f}. Hardcoding these zones
+# will make it easier to support aarch64 in the future.
+ZONES=us-central1-a,us-central1-b,us-central1-f
+export ZONES
 
 set_image_specs
-set_zones
 
 export_to_sponge_config "ARCH" "${ARCH:-}"
 

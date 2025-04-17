@@ -3,6 +3,10 @@ import 'common.gcl' as common
 config build = common.smoke_test {
   params {
     environment {
+      // Eventually, this job will test all architectures simultaneously,
+      // but for now we limit to x86_64.
+      ARCH = 'x86_64'
+
       GOTESTSUM_RERUN_FAILS = '2'
 
       // The following SERVICE_EMAIL and TRANSFERS_BUCKET should only be used

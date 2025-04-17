@@ -15,13 +15,17 @@
 
 set -eux
 
-ls "${KOKORO_ARTIFACTS_DIR}" || true  // temporary, for debugging.
-pwd  // temporary, for debugging.
-ls .  // temporary, for debugging.
-
+// Temporary, for debugging.
+function print_layout() {
+  echo "${KOKORO_ARTIFACTS_DIR}"
+  ls "${KOKORO_ARTIFACTS_DIR}" || true
+  pwd
+  ls .
+}
+print_layout
 
 cd "${KOKORO_ARTIFACTS_DIR}"/git/otelcol-google/google-built-opentelemetry-collector
 
 make goreleaser-release
 
-ls dist || true  // temporary, for debugging.
+ls dist || true  // Temporary, for debugging.

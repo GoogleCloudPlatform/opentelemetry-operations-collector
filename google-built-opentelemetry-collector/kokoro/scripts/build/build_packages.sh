@@ -16,6 +16,9 @@
 set -eux
 
 ls "${KOKORO_ARTIFACTS_DIR}" || true  // temporary, for debugging.
+pwd  // temporary, for debugging.
+ls .  // temporary, for debugging.
+
 
 cd "${KOKORO_ARTIFACTS_DIR}"/git/otelcol-google/google-built-opentelemetry-collector
 

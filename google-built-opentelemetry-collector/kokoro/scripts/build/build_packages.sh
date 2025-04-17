@@ -15,8 +15,10 @@
 
 set -eux
 
+ls "${KOKORO_ARTIFACTS_DIR}" || true  // temporary, for debugging.
+
 cd "${KOKORO_ARTIFACTS_DIR}"/git/otelcol-google/google-built-opentelemetry-collector
 
 make goreleaser-release
 
-ls dist || true
+ls dist || true  // temporary, for debugging.

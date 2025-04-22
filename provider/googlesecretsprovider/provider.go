@@ -40,7 +40,7 @@ func (provider *provider) Retrieve(_ context.Context, uri string, _ confmap.Watc
 		return nil, fmt.Errorf("%q uri is not supported by %q provider", uri, schemeName)
 	}
 
-	return confmap.NewRetrieved("/tmp/mylog")
+	return confmap.NewRetrieved("/data")
 }
 
 func (*provider) Scheme() string {

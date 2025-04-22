@@ -1,9 +1,10 @@
 module github.com/open-telemetry/opentelemetry-collector-contrib/confmap/provider/googlesecretsprovider
 
-go 1.25
+go 1.23.0
 
 require (
 	go.opentelemetry.io/collector/confmap v1.30.0
+	go.uber.org/goleak v1.3.0
 	go.uber.org/zap v1.27.0
 )
 

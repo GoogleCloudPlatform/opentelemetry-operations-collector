@@ -79,5 +79,10 @@ connectors:
 providers:
 - gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/provider/googlesecretsprovider v0.121.0
   path: ../provider/googlesecretsprovider
+- gomod: go.opentelemetry.io/collector/confmap/provider/envprovider v
+- gomod: go.opentelemetry.io/collector/confmap/provider/fileprovider v
+- gomod: go.opentelemetry.io/collector/confmap/provider/httpprovider v
+- gomod: go.opentelemetry.io/collector/confmap/provider/httpsprovider v
+- gomod: go.opentelemetry.io/collector/confmap/provider/yamlprovider v
 
 replaces:

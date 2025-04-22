@@ -69,5 +69,10 @@ components:
     extensions:
         - zpages
     providers:
+        - env
+        - file
+        - http
+        - https
+        - yaml
         - googlesecretsprovider
 feature_gates: []

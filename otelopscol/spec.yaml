@@ -68,4 +68,6 @@ components:
         - otlphttp
     extensions:
         - zpages
+    providers:
+        - googlesecretsprovider
 feature_gates: []

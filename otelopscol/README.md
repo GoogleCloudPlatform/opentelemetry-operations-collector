@@ -89,3 +89,4 @@
 
 | Component Name | Documentation |
 | -------------- | ------------- |
+| googlesecretsprovider | [docs](No docs linked for component) |

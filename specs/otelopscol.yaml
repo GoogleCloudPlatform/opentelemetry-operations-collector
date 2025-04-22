@@ -78,4 +78,6 @@ components:
     - otlphttp
   extensions:
     - zpages
+  providers:
+    - googlesecretsprovider
 

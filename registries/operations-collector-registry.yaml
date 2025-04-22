@@ -54,3 +54,7 @@ extensions:
   oauth2clientauth:
     gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/oauth2clientauthextension v0.0.0
     path: "../extension/oauth2clientauthextension"
+providers:
+  googlesecretsprovider:
+    gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/provider/googlesecretsprovider v0.0.0
+    path: "../provider/googlesecretsprovider"

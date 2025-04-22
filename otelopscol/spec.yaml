@@ -6,7 +6,7 @@ blurb: ""
 version: ""
 opentelemetry_version: 0.121.0
 opentelemetry_contrib_version: 0.121.0
-opentelemetry_stable_version: ""
+opentelemetry_stable_version: 1.27.0
 go_version: 1.23.2
 binary_name: otelopscol
 build_tags: gpu
@@ -68,4 +68,11 @@ components:
         - otlphttp
     extensions:
         - zpages
+    providers:
+        - env
+        - file
+        - http
+        - https
+        - yaml
+        - googlesecretsprovider
 feature_gates: []

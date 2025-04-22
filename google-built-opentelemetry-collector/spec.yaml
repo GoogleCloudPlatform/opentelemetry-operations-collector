@@ -96,6 +96,7 @@ components:
         - http
         - https
         - yaml
+        - googlesecretsprovider
 feature_gates:
     - exporter.googlemanagedprometheus.intToDouble
     - exporter.googlecloud.CustomMonitoredResources

@@ -1,6 +1,6 @@
 module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/integration_test/gce-testing-internal
 
-go 1.25
+go 1.24
 
 require (
 	cloud.google.com/go/logging v1.13.0

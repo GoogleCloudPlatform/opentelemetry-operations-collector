@@ -32,7 +32,7 @@ update-google-otel-components: install-tools
 
 .PHONY: update-otelopscol-components
 update-otelopscol-components: install-tools
-	cd components/otelopscol && $(MAKE) update-components
+	cd components/otelopscol && PATH="$(TOOLS_DIR):${PATH}" $(MAKE) update-components
 
 ###################
 # Distro Generation

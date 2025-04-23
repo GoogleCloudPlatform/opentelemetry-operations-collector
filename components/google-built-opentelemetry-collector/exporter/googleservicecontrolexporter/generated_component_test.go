@@ -19,10 +19,8 @@ import (
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 
-var typ = component.MustNewType("googleservicecontrol")
-
 func TestComponentFactoryType(t *testing.T) {
-	require.Equal(t, typ, NewFactory().Type())
+	require.Equal(t, "googleservicecontrol", NewFactory().Type().String())
 }
 
 func TestComponentConfigStruct(t *testing.T) {
@@ -33,21 +31,21 @@ func TestComponentLifecycle(t *testing.T) {
 	factory := NewFactory()
 
 	tests := []struct {
-		createFn func(ctx context.Context, set exporter.Settings, cfg component.Config) (component.Component, error)
 		name     string
+		createFn func(ctx context.Context, set exporter.Settings, cfg component.Config) (component.Component, error)
 	}{
 
 		{
 			name: "logs",
 			createFn: func(ctx context.Context, set exporter.Settings, cfg component.Config) (component.Component, error) {
-				return factory.CreateLogs(ctx, set, cfg)
+				return factory.CreateLogsExporter(ctx, set, cfg)
 			},
 		},
 
 		{
 			name: "metrics",
 			createFn: func(ctx context.Context, set exporter.Settings, cfg component.Config) (component.Component, error) {
-				return factory.CreateMetrics(ctx, set, cfg)
+				return factory.CreateMetricsExporter(ctx, set, cfg)
 			},
 		},
 	}
@@ -61,7 +59,7 @@ func TestComponentLifecycle(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name+"-shutdown", func(t *testing.T) {
-			c, err := tt.createFn(context.Background(), exportertest.NewNopSettings(typ), cfg)
+			c, err := tt.createFn(context.Background(), exportertest.NewNopSettings(), cfg)
 			require.NoError(t, err)
 			err = c.Shutdown(context.Background())
 			require.NoError(t, err)

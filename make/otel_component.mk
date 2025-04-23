@@ -33,7 +33,7 @@ update-components: core-components contrib-components
 core-components:
 	$(LIST_DIRECT_MODULES) | \
 		$(INCLUDE_COLLECTOR_CORE_COMPONENTS) | \
-		../../../../.tools/otel_component_versions -otel_version $(OTEL_VERSION) | \
+		otel_component_versions -otel_version $(OTEL_VERSION) | \
 		$(GO_GET_ALL)
 
 .PHONY: contrib-components

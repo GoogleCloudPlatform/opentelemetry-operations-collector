@@ -16,8 +16,10 @@ package smoke
 
 import (
 	"testing"
+
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/integration_test/gce-testing-internal/gce"
 )
 
 func TestSkeleton(t *testing.T) {
-	t.Log("Unimplemented")
+	t.Fatalf("blep: %v", gce.IsWindows("debian-13"))
 }

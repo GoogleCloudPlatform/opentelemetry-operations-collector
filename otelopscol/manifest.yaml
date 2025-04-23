@@ -8,14 +8,14 @@ dist:
   output_path: ./_build
 
 receivers:
-- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/dcgmreceiver v0.121.0
-  path: ../receiver/dcgmreceiver
-- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/mongodbreceiver v0.121.0
-  path: ../receiver/mongodbreceiver
-- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/nvmlreceiver v0.121.0
-  path: ../receiver/nvmlreceiver
-- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/receiver/varnishreceiver v0.121.0
-  path: ../receiver/varnishreceiver
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/receiver/dcgmreceiver v0.121.0
+  path: ../components/otelopscol/receiver/dcgmreceiver
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/receiver/mongodbreceiver v0.121.0
+  path: ../components/otelopscol/receiver/mongodbreceiver
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/receiver/nvmlreceiver v0.121.0
+  path: ../components/otelopscol/receiver/nvmlreceiver
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/receiver/varnishreceiver v0.121.0
+  path: ../components/otelopscol/receiver/varnishreceiver
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/activedirectorydsreceiver v0.121.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/aerospikereceiver v0.121.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/apachereceiver v0.121.0
@@ -44,14 +44,14 @@ receivers:
 - gomod: go.opentelemetry.io/collector/receiver/otlpreceiver v0.121.0
 
 processors:
-- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/agentmetricsprocessor v0.121.0
-  path: ../processor/agentmetricsprocessor
-- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/casttosumprocessor v0.121.0
-  path: ../processor/casttosumprocessor
-- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/modifyscopeprocessor v0.121.0
-  path: ../processor/modifyscopeprocessor
-- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/normalizesumsprocessor v0.121.0
-  path: ../processor/normalizesumsprocessor
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/agentmetricsprocessor v0.121.0
+  path: ../components/otelopscol/processor/agentmetricsprocessor
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/casttosumprocessor v0.121.0
+  path: ../components/otelopscol/processor/casttosumprocessor
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/modifyscopeprocessor v0.121.0
+  path: ../components/otelopscol/processor/modifyscopeprocessor
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/normalizesumsprocessor v0.121.0
+  path: ../components/otelopscol/processor/normalizesumsprocessor
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/cumulativetodeltaprocessor v0.121.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/deltatorateprocessor v0.121.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.121.0

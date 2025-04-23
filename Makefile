@@ -26,34 +26,13 @@ presubmit: checklicense misspell lint compare-all
 # Updating OTel Components
 ##########################
 
-OTEL_VERSION ?= v0.121.0
-OTEL_CONTRIB_VERSION ?= v0.121.0
+.PHONY: update-google-otel-components
+update-google-otel-components: install-tools
+	cd components/google-built-opentelemetry-collector && PATH="$(TOOLS_DIR):${PATH}" $(MAKE) update-components
 
-.PHONY: update-otel-components
-update-otel-components: export OTEL_VERSION := $(OTEL_VERSION)
-update-otel-components: export OTEL_CONTRIB_VERSION := $(OTEL_CONTRIB_VERSION)
-update-otel-components: update-otel-components-deps tidy-all update-mdatagen generate-components
-
-.PHONY: update-mdatagen
-update-mdatagen:
-	go get -u go.opentelemetry.io/collector/cmd/mdatagen@$(OTEL_VERSION)
-	TOOL_LIST=go.opentelemetry.io/collector/cmd/mdatagen $(MAKE) install-tools
-
-.PHONY: update-otel-components-deps
-update-otel-components-deps:
-	PATH="$(TOOLS_DIR):${PATH}" TARGET="update-components" $(MAKE) target-all-otel-components
-
-.PHONY: generate-components
-generate-components:
-	PATH="$(TOOLS_DIR):${PATH}" TARGET="generate" $(MAKE) target-all-otel-components
-
-# This target will tag the git repo using the OTel version. Eventually this may be
-# more sophisticated if we want to supply separate tags for every subcomponent. For
-# now it is pretty simply.
-.PHONY: tag-repo
-tag-repo:
-	git tag -a $(OTEL_VERSION) -m "Update to OpenTelemetry Collector version $(OTEL_VERSION)"
-	@echo "Created git tag $(OTEL_VERSION). If it looks good, push it to the remote by running: git push origin $(OTEL_VERSION)"
+.PHONY: update-otelopscol-components
+update-otelopscol-components: install-tools
+	cd components/otelopscol && $(MAKE) update-components
 
 ###################
 # Distro Generation
@@ -72,7 +51,7 @@ compare-all:
 	@./internal/tools/scripts/compare.sh
 
 GEN_GOOGLE_BUILT_OTEL=$(RUN_DISTROGEN) -spec ./specs/google-built-opentelemetry-collector.yaml \
-								 -registry ./registries/operations-collector-registry.yaml \
+								 -registry ./components/google-built-opentelemetry-collector/registry.yaml \
 								 -custom_templates ./templates/google-built-opentelemetry-collector
 .PHONY: gen-google-built-otel
 gen-google-built-otel:
@@ -91,7 +70,7 @@ compare-google-built-otel:
 	@$(GEN_GOOGLE_BUILT_OTEL) -force -compare
 
 GEN_OTELOPSCOL=$(RUN_DISTROGEN) -spec ./specs/otelopscol.yaml \
-								-registry ./registries/operations-collector-registry.yaml \
+								-registry ./components/otelopscol/registry.yaml \
 								-custom_templates ./templates/otelopscol
 .PHONY: gen-otelopscol
 gen-otelopscol:
@@ -166,7 +145,6 @@ tools-dir:
 	@mkdir -p $(TOOLS_DIR)
 
 TOOL_LIST ?= github.com/google/addlicense \
-			 go.opentelemetry.io/collector/cmd/mdatagen \
 			 github.com/client9/misspell/cmd/misspell \
 			 github.com/golangci/golangci-lint/cmd/golangci-lint \
 			 golang.org/x/tools/cmd/goimports \
@@ -178,7 +156,7 @@ install-tools: tools-dir
 	GOBIN=$(TOOLS_DIR) go install \
 	$(TOOL_LIST)
 
-ADDLICENSE_IGNORES = -ignore "**/.tools/*" \
+ADDLICENSE_IGNORES = -ignore "**/.tools/**/*" \
 					-ignore "**/docs/**/*" \
 					-ignore "**/*.md" \
 					-ignore "**/testdata/*" \
@@ -210,25 +188,20 @@ misspell:
 # Utility
 #########
 
-LIST_LOCAL_MODULES = go list -f "{{ .Dir }}" -m | grep -v ".*internal/tools.*"
-INCLUDE_OTEL_COMPONENTS = grep -e ".*receiver.*" -e ".*processor.*" -e ".*extension.*" -e ".*exporter.*"
+# This target will tag the git repo using the OTel version. Eventually this may be
+# more sophisticated if we want to supply separate tags for every subcomponent. For
+# now it is pretty simply.
+.PHONY: tag-repo
+tag-repo:
+	git tag -a $(OTEL_VERSION) -m "Update to OpenTelemetry Collector version $(OTEL_VERSION)"
+	@echo "Created git tag $(OTEL_VERSION). If it looks good, push it to the remote by running: git push origin $(OTEL_VERSION)"
 
 .PHONY: target-all-modules
 target-all-modules:
 ifndef TARGET
 	@echo "No TARGET defined."
 else
-	$(LIST_LOCAL_MODULES) |\
-	GOWORK=off xargs -t -I '{}' $(MAKE) -C {} $(TARGET)
-endif
-
-.PHONY: target-all-otel-components
-target-all-otel-components:
-ifndef TARGET
-	@echo "No TARGET defined."
-else
-	$(LIST_LOCAL_MODULES) |\
-	$(INCLUDE_OTEL_COMPONENTS) |\
+	go list -f "{{ .Dir }}" -m | grep -v ".*internal/tools.*" |\
 	GOWORK=off xargs -t -I '{}' $(MAKE) -C {} $(TARGET)
 endif
 

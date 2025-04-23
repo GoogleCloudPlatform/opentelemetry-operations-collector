@@ -12,5 +12,5 @@ go.work.sum
 .vscode
 
 # Binaries from builds
-/google-otel/otelcol-google
+/google-built-opentelemetry-collector/otelcol-google
 /otelopscol/otelopscol

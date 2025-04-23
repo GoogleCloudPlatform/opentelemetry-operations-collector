@@ -1,6 +1,5 @@
 OTEL_VERSION ?= latest
 OTEL_CONTRIB_VERSION ?= latest
-OTEL_STABLE_VERSION ?= latest
 
 STABLE_COMPONENTS_PATTERN = -e "^go.opentelemetry.io/collector/pdata" \
 							-e "^go.opentelemetry.io/collector/featuregate" \
@@ -25,7 +24,7 @@ INCLUDE_COLLECTOR_CORE_COMPONENTS = grep "^go.opentelemetry.io" | grep -v "^go.o
 INCLUDE_COLLECTOR_STABLE_CORE_COMPONENTS = grep $(STABLE_COMPONENTS_PATTERN)
 EXCLUDE_COLLECTOR_STABLE_CORE_COMPONENTS = grep -v $(STABLE_COMPONENTS_PATTERN)
 INCLUDE_CONTRIB_COMPONENTS = grep "^github.com/open-telemetry/opentelemetry-collector-contrib"
-GO_GET_ALL = xargs -t -I '{}' go get -tags=gpu {}
+GO_GET_ALL = xargs --no-run-if-empty -t -I '{}' go get -tags=gpu {}
 
 .PHONY: update-components
 update-components: core-components contrib-components
@@ -33,7 +32,8 @@ update-components: core-components contrib-components
 .PHONY: core-components
 core-components:
 	$(LIST_DIRECT_MODULES) | \
-		otel_component_versions -otel_version $(OTEL_VERSION) | \
+		$(INCLUDE_COLLECTOR_CORE_COMPONENTS) | \
+		../../../../.tools/otel_component_versions -otel_version $(OTEL_VERSION) | \
 		$(GO_GET_ALL)
 
 .PHONY: contrib-components

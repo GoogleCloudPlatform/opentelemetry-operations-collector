@@ -20,6 +20,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/google/go-cmp/cmp"
 )
@@ -292,6 +293,11 @@ func getGeneratedFilesInDir(dir string) (map[string]*generatedFile, error) {
 		}
 
 		if d.IsDir() {
+			return nil
+		}
+
+		// Don't include .tools directory in comparison.
+		if strings.Contains(path, ".tools") {
 			return nil
 		}
 

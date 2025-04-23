@@ -241,14 +241,14 @@ func (d *DistributionGenerator) Compare() error {
 
 	logger.Debug("comparing %s to %s", d.GeneratePath, generateDest)
 
-	generatedContent, err := getGeneratedFilesInDir(generateDest)
+	generatedContent, err := d.getGeneratedFilesInDir()
 	if err != nil {
 		return wrapExitCodeError(
 			unexpectErrExitCode,
 			fmt.Errorf("could not get generated files: %w", err),
 		)
 	}
-	existingContent, err := getGeneratedFilesInDir(d.GeneratePath)
+	existingContent, err := d.getGeneratedFilesInDir()
 	if err != nil {
 		return wrapExitCodeError(
 			unexpectErrExitCode,
@@ -284,10 +284,15 @@ func (d *DistributionGenerator) Compare() error {
 	return nil
 }
 
-func getGeneratedFilesInDir(dir string) (map[string]*generatedFile, error) {
+func (dg *DistributionGenerator) getGeneratedFilesInDir() (map[string]*generatedFile, error) {
+	wd, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("could not get working directory: %w", err)
+	}
+	dir := filepath.Join(wd, dg.GenerateDirName)
 	files := map[string]*generatedFile{}
 
-	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+	err = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -298,6 +303,10 @@ func getGeneratedFilesInDir(dir string) (map[string]*generatedFile, error) {
 
 		// Don't include .tools directory in comparison.
 		if strings.Contains(path, ".tools") {
+			return nil
+		}
+
+		if d.Name() == dg.Spec.BinaryName {
 			return nil
 		}
 

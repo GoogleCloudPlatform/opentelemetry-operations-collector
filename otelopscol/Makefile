@@ -118,13 +118,14 @@ $(COLLECTOR_BINARY_NAME): ocb-generate
 		GOWORK=off \
 		CGO_ENABLED=$(COLLECTOR_CGO) \
 		GOOS=$(TARGETOS) GOARCH=$(TARGETARCH) \
+		CGO_CFLAGS="-I $(TOOLS_DIR)/onigmo-${ONIGMO_VERSION}" \
+		CGO_LDFLAGS="-L $(TOOLS_DIR)/onigmo-${ONIGMO_VERSION}/.libs -lonigmo" \
 		$(GO_BIN) build \
 			-buildvcs=$(COLLECTOR_BUILDVCS) \
 			-tags=$(COLLECTOR_BUILD_TAGS) \
 			--ldflags="-s -w -extldflags "-static" $(COLLECTOR_LD_FLAGS)" \
 			-o ../otelopscol \
 			.
-	$(MAKE) uninstall-onigmo
 	$(MAKE) clean-build-dir
 
 .PHONY: collector-module-list
@@ -195,14 +196,9 @@ install-onigmo: $(TOOLS_DIR)
 	cd ${TOOLS_DIR} && \
 	wget ${ONIG_REPOSITORY}/releases/download/Onigmo-${ONIGMO_VERSION}/onigmo-${ONIGMO_VERSION}.tar.gz && \
 	tar -xvzf onigmo-${ONIGMO_VERSION}.tar.gz && \
+	rm onigmo-${ONIGMO_VERSION}.tar.gz && \
 	cd onigmo-${ONIGMO_VERSION} && \
-	./configure --prefix=/usr && make && sudo make install
-
-.PHONY: uninstall-onigmo
-uninstall-onigmo: $(TOOLS_DIR)
-	cd ${TOOLS_DIR} && \
-	cd onigmo-${ONIGMO_VERSION} && \
-	sudo make uninstall
+	./configure --prefix=/usr && make
 
 $(GORELEASER_BIN): $(GO_BIN) $(OCB_BIN)
 	@{ \
@@ -213,5 +209,5 @@ $(GORELEASER_BIN): $(GO_BIN) $(OCB_BIN)
 	}
 
 .PHONY: clean-tools
-clean-tools: uninstall-onigmo
+clean-tools:
 	rm -rf $(TOOLS_DIR)

@@ -15,6 +15,8 @@
 package agenttransformprocessor
 
 import (
+	"fmt"
+
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/agenttransformprocessor/internal/logs"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/ottl"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/ottl/contexts/ottllog"
@@ -28,18 +30,24 @@ type CustomFactory struct {
 }
 
 func (f CustomFactory) CreateDefaultConfig() component.Config {
+	fmt.Println("Start agenttransformprocessor CreateDefaultConfig")
 	config := f.Factory.CreateDefaultConfig()
 	tConfig, ok := config.(transformprocessor.Config)
 	if ok {
 		tConfig.AdditionalOTTLFunc = []ottl.Factory[ottllog.TransformContext]{logs.NewExtractPatternsRubyRegexFactory[ottllog.TransformContext]()}
+		fmt.Println("End agenttransformprocessor CreateDefaultConfig with func", tConfig)
 		return tConfig
 	}
+	fmt.Println("End agenttransformprocessor CreateDefaultConfig no func", config)
 	return config
 }
 
 // NewFactory create a factory for the transform processor.
 func NewFactory() processor.Factory {
+	fmt.Println("Start agenttransformprocessor NewFactory")
 	oldFactory := transformprocessor.NewFactory()
 	customFactory := CustomFactory{Factory: oldFactory}
+
+	fmt.Println("End agenttransformprocessor NewFactory")
 	return customFactory
 }

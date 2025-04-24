@@ -41,7 +41,7 @@ receivers:
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowseventlogreceiver v0.121.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowsperfcountersreceiver v0.121.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/zookeeperreceiver v0.121.0
-- gomod: go.opentelemetry.io/collector/receiver/otlpreceiver v0.121.0
+- gomod: go.opentelemetry.io/collector/receiver/otlpreceiver v0.120.0
 
 processors:
 - gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/agentmetricsprocessor v0.121.0
@@ -52,6 +52,8 @@ processors:
   path: ../processor/modifyscopeprocessor
 - gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/normalizesumsprocessor v0.121.0
   path: ../processor/normalizesumsprocessor
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/agenttransformprocessor v0.121.0
+  path: ../processor/agenttransformprocessor
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/cumulativetodeltaprocessor v0.121.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/deltatorateprocessor v0.121.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.121.0
@@ -59,7 +61,6 @@ processors:
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor v0.121.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor v0.121.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourceprocessor v0.121.0
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor v0.121.0
 - gomod: go.opentelemetry.io/collector/processor/batchprocessor v0.121.0
 - gomod: go.opentelemetry.io/collector/processor/memorylimiterprocessor v0.121.0
 
@@ -79,3 +80,4 @@ connectors:
 providers:
 
 replaces:
+- github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor v0.121.0 => github.com/franciscovalentecastro/opentelemetry-collector-contrib/processor/transformprocessor v0.121.0-ottl-func

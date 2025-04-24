@@ -194,7 +194,7 @@ $(OCB_BIN): $(GO_BIN)
 .PHONY: install-onigmo
 install-onigmo: $(TOOLS_DIR)
 	cd ${TOOLS_DIR} && \
-	wget ${ONIG_REPOSITORY}/releases/download/Onigmo-${ONIGMO_VERSION}/onigmo-${ONIGMO_VERSION}.tar.gz && \
+	curl -LO ${ONIG_REPOSITORY}/releases/download/Onigmo-${ONIGMO_VERSION}/onigmo-${ONIGMO_VERSION}.tar.gz && \
 	tar -xvzf onigmo-${ONIGMO_VERSION}.tar.gz && \
 	rm onigmo-${ONIGMO_VERSION}.tar.gz && \
 	cd onigmo-${ONIGMO_VERSION} && \

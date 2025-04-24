@@ -47,6 +47,13 @@ func main() {
 }
 
 func run() error {
+	if *flagVerbose {
+		logLevel.Set(slog.LevelDebug)
+	}
+
+	if *flagQuery != "" {
+		return querySpec()
+	}
 	if *flagOtelConfig != "" {
 		return generateSpec()
 	}
@@ -66,14 +73,30 @@ func generateSpec() error {
 	return yamlMarshalToFile(distro, "generated_spec.yaml")
 }
 
-func generateDistribution() error {
-	specPath := *flagSpec
+func querySpec() error {
 	if *flagSpec == "" {
 		return errNoSpecFlag
 	}
 
-	if *flagVerbose {
-		logLevel.Set(slog.LevelDebug)
+	spec, err := NewDistributionSpec(*flagSpec)
+	if err != nil {
+		return err
+	}
+
+	val, err := spec.Query(*flagQuery)
+	if err != nil {
+		return err
+	}
+	// Using Println instead of logger since the results
+	// may be piped to another program.
+	fmt.Println(val)
+	return nil
+}
+
+func generateDistribution() error {
+	specPath := *flagSpec
+	if *flagSpec == "" {
+		return errNoSpecFlag
 	}
 
 	spec, err := NewDistributionSpec(specPath)

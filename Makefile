@@ -26,11 +26,17 @@ presubmit: checklicense misspell lint compare-all
 # Updating OTel Components
 ##########################
 
+GOOGLE_OTEL_SPEC_QUERY = go run ./cmd/distrogen -spec specs/google-built-opentelemetry-collector.yaml -query
 .PHONY: update-google-otel-components
+update-google-otel-components: export OTEL_VERSION := v$(shell $(GOOGLE_OTEL_SPEC_QUERY) opentelemetry_version)
+update-google-otel-components: export OTEL_CONTRIB_VERSION := v$(shell $(GOOGLE_OTEL_SPEC_QUERY) opentelemetry_contrib_version)
 update-google-otel-components: install-tools
 	cd components/google-built-opentelemetry-collector && PATH="$(TOOLS_DIR):${PATH}" $(MAKE) update-components
 
+OTELOPSCOL_SPEC_QUERY = go run ./cmd/distrogen -spec specs/otelopscol.yaml -query
 .PHONY: update-otelopscol-components
+update-otelopscol-components: export OTEL_VERSION := v$(shell $(OTELOPSCOL_SPEC_QUERY) opentelemetry_version)
+update-otelopscol-components: export OTEL_CONTRIB_VERSION := v$(shell $(OTELOPSCOL_SPEC_QUERY) opentelemetry_contrib_version)
 update-otelopscol-components: install-tools
 	cd components/otelopscol && PATH="$(TOOLS_DIR):${PATH}" $(MAKE) update-components
 

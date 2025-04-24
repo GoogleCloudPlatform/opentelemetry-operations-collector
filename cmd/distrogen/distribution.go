@@ -20,6 +20,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 
 	"github.com/google/go-cmp/cmp"
@@ -55,6 +56,35 @@ type DistributionSpec struct {
 func (s *DistributionSpec) Diff(s2 *DistributionSpec) bool {
 	diff := cmp.Diff(s, s2)
 	return diff != ""
+}
+
+var ErrQueryValueNotFound = errors.New("not found in spec")
+var ErrQueryValueInvalid = errors.New("found in spec but unsupported type")
+
+// Query will get a field from a loaded spec based on the yaml
+// field name.
+func (s *DistributionSpec) Query(field string) (string, error) {
+	v := reflect.ValueOf(s).Elem()
+	t := v.Type()
+
+	for i := 0; i < t.NumField(); i++ {
+		structField := t.Field(i)
+		yamlTag := structField.Tag.Get("yaml")
+
+		// Handle tags like "replaces,omitempty"
+		tagName := strings.Split(yamlTag, ",")[0]
+
+		if tagName == field {
+			fieldValue := v.Field(i)
+			// Convert the field value to string.
+			// This handles basic types like string, int, bool.
+			if fieldValue.IsValid() && fieldValue.CanInterface() {
+				return fmt.Sprintf("%v", fieldValue.Interface()), nil
+			}
+			return "", fmt.Errorf("field '%s': %w", field, ErrQueryValueInvalid)
+		}
+	}
+	return "", fmt.Errorf("field '%s': %w", field, ErrQueryValueNotFound)
 }
 
 // NewDistributionSpec loads the DistributionSpec from a yaml file.

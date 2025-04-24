@@ -33,12 +33,13 @@ func (f CustomFactory) CreateDefaultConfig() component.Config {
 	fmt.Println("Start agenttransformprocessor CreateDefaultConfig")
 	config := f.Factory.CreateDefaultConfig()
 	tConfig, ok := config.(transformprocessor.Config)
+	fmt.Println("tConfig, ok := config.(transformprocessor.Config)", tConfig, ok)
 	if ok {
 		tConfig.AdditionalOTTLFunc = []ottl.Factory[ottllog.TransformContext]{logs.NewExtractPatternsRubyRegexFactory[ottllog.TransformContext]()}
-		fmt.Println("End agenttransformprocessor CreateDefaultConfig with func", tConfig)
+		fmt.Printf("End agenttransformprocessor CreateDefaultConfig with func %v \n", tConfig)
 		return tConfig
 	}
-	fmt.Println("End agenttransformprocessor CreateDefaultConfig no func", config)
+	fmt.Printf("End agenttransformprocessor CreateDefaultConfig no func %v \n", config)
 	return config
 }
 

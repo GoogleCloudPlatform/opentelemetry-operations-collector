@@ -147,13 +147,13 @@ install-onigmo: $(TOOLS_DIR)
 	wget ${ONIG_REPOSITORY}/releases/download/Onigmo-${ONIGMO_VERSION}/onigmo-${ONIGMO_VERSION}.tar.gz && \
 	tar -xvzf onigmo-${ONIGMO_VERSION}.tar.gz && \
 	cd onigmo-${ONIGMO_VERSION} && \
-	./configure --prefix=/usr && make && sudo make install
+	./configure --prefix=/usr && make && make install
 
 .PHONY: uninstall-onigmo
 uninstall-onigmo: $(TOOLS_DIR)
 	cd ${TOOLS_DIR} && \
 	cd onigmo-${ONIGMO_VERSION} && \
-	sudo make uninstall
+	make uninstall
 
 .PHONY: clean-tools
 clean-tools: uninstall-onigmo

@@ -124,6 +124,7 @@ $(COLLECTOR_BINARY_NAME): ocb-generate
 			--ldflags="-s -w -extldflags "-static" $(COLLECTOR_LD_FLAGS)" \
 			-o ../otelopscol \
 			.
+	$(MAKE) uninstall-onigmo
 	$(MAKE) clean-build-dir
 
 .PHONY: collector-module-list

@@ -1,7 +1,7 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package logs
+package ottlfuncs
 
 import (
 	"context"
@@ -34,7 +34,7 @@ func createExtractPatternsRubyRegexFunction[K any](_ ottl.FunctionContext, oArgs
 }
 
 func extractPatternsRubyRegex[K any](target ottl.StringGetter[K], pattern string) (ottl.ExprFunc[K], error) {
-	r, err := onigmo.Compile(pattern)
+	r, err := onigmo.NewRegexp(pattern, onigmo.EncodingUTF8, onigmo.OptionNone, onigmo.SyntaxRuby)
 	if err != nil {
 		return nil, fmt.Errorf("the pattern supplied to ExtractPatternsRubyRegex is not a valid pattern: %w", err)
 	}

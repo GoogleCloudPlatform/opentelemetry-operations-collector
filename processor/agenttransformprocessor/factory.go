@@ -15,7 +15,7 @@
 package agenttransformprocessor
 
 import (
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/agenttransformprocessor/internal/logs"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/agenttransformprocessor/internal/ottlfuncs"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/ottl"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/ottl/contexts/ottllog"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor"
@@ -31,7 +31,7 @@ func (f CustomFactory) CreateDefaultConfig() component.Config {
 	config := f.Factory.CreateDefaultConfig()
 	tConfig, ok := config.(*transformprocessor.Config)
 	if ok {
-		tConfig.AdditionalOTTLFunc = []ottl.Factory[ottllog.TransformContext]{logs.NewExtractPatternsRubyRegexFactory[ottllog.TransformContext]()}
+		tConfig.AdditionalOTTLFunc = []ottl.Factory[ottllog.TransformContext]{ottlfuncs.NewExtractPatternsRubyRegexFactory[ottllog.TransformContext]()}
 		return tConfig
 	}
 	return config

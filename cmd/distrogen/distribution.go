@@ -332,7 +332,7 @@ func (dg *DistributionGenerator) getGeneratedFilesInDir() (map[string]*generated
 		}
 
 		// Don't include .tools directory in comparison.
-		if strings.Contains(path, ".tools") {
+		if strings.Contains(path, "/.tools/") {
 			return nil
 		}
 

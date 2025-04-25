@@ -1,4 +1,5 @@
 include ./make/common.mk
+include ./make/maintenance.mk
 
 MAKEFLAGS += --no-print-directory
 
@@ -210,7 +211,7 @@ misspell:
 #########
 
 LIST_LOCAL_MODULES = go list -f "{{ .Dir }}" -m | grep -v ".*internal/tools.*"
-INCLUDE_OTEL_COMPONENTS = grep -e ".*receiver.*" -e ".*processor.*"
+INCLUDE_OTEL_COMPONENTS = grep -e ".*receiver.*" -e ".*processor.*" -e ".*extension.*" -e ".*exporter.*"
 
 .PHONY: target-all-modules
 target-all-modules:
@@ -229,4 +230,12 @@ else
 	$(LIST_LOCAL_MODULES) |\
 	$(INCLUDE_OTEL_COMPONENTS) |\
 	GOWORK=off xargs -t -I '{}' $(MAKE) -C {} $(TARGET)
+endif
+
+.PHONY: update-go-module-in-all
+update-go-module-in-all:
+ifndef GO_MOD
+	@echo "must specify a GO_MOD"
+else
+	TARGET=update-go-module $(MAKE) target-all-modules GO_MOD=$(GO_MOD)$(if "$(GO_MOD_VERSION), GO_MOD_VERSION=$(GO_MOD_VERSION),)
 endif

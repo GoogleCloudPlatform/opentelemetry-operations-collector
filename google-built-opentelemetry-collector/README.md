@@ -8,11 +8,13 @@ The Google-Built OpenTelemetry Collector is an open-source, production-ready bui
 
 | Component Name | Documentation |
 | -------------- | ------------- |
+| dockerstats | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/dockerstatsreceiver/README.md) |
 | filelog | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/filelogreceiver/README.md) |
 | fluentforward | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/fluentforwardreceiver/README.md) |
 | hostmetrics | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/hostmetricsreceiver/README.md) |
 | httpcheck | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/httpcheckreceiver/README.md) |
 | jaeger | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/jaegerreceiver/README.md) |
+| jmx | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/jmxreceiver/README.md) |
 | journald | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/journaldreceiver/README.md) |
 | k8scluster | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/k8sclusterreceiver/README.md) |
 | k8sevents | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/k8seventsreceiver/README.md) |
@@ -24,6 +26,9 @@ The Google-Built OpenTelemetry Collector is an open-source, production-ready bui
 | otlpjsonfile | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/otlpjsonfilereceiver/README.md) |
 | prometheus | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/prometheusreceiver/README.md) |
 | receivercreator | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/receivercreator/README.md) |
+| redis | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/redisreceiver/README.md) |
+| statsd | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/statsdreceiver/README.md) |
+| syslog | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/syslogreceiver/README.md) |
 | zipkin | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/zipkinreceiver/README.md) |
 
 
@@ -43,6 +48,7 @@ The Google-Built OpenTelemetry Collector is an open-source, production-ready bui
 | k8sattributes | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/k8sattributesprocessor/README.md) |
 | logdedup | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/logdedupprocessor/README.md) |
 | memorylimiter | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/processor/memorylimiterprocessor/README.md) |
+| metricsgeneration | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/metricsgenerationprocessor/README.md) |
 | metricstransform | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/metricstransformprocessor/README.md) |
 | probabilisticsampler | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/probabilisticsamplerprocessor/README.md) |
 | redaction | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/redactionprocessor/README.md) |

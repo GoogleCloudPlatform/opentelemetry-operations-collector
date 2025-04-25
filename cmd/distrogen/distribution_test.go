@@ -117,3 +117,19 @@ func filesInDirAsSet(dir string) (map[string]bool, error) {
 	})
 	return fileSet, err
 }
+
+func TestSpecQuery(t *testing.T) {
+	otelVer := "v0.124.0"
+	spec := &DistributionSpec{
+		OpenTelemetryVersion: otelVer,
+	}
+	val, err := spec.Query("opentelemetry_version")
+	assert.NilError(t, err)
+	assert.Equal(t, val, otelVer)
+}
+
+func TestSpecQueryNotFound(t *testing.T) {
+	spec := &DistributionSpec{}
+	_, err := spec.Query("random_field_name")
+	assert.ErrorIs(t, err, ErrQueryValueNotFound)
+}

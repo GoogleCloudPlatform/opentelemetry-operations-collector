@@ -22,6 +22,7 @@ import (
 
 var (
 	flagSpec            = flag.String("spec", "", "The distribution specification to use")
+	flagQuery           = flag.String("query", "", "Field to query from the spec")
 	flagForce           = flag.Bool("force", false, "Force generate even if there are no differences detected")
 	flagVerbose         = flag.Bool("v", false, "Verbose output")
 	flagRegistry        = newArrayFlag("registry", "Provide additional component registries")

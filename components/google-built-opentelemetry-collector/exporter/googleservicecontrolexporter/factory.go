@@ -85,6 +85,8 @@ func createDefaultConfig() component.Config {
 			// Limit queue size to prevent memory growing in case of API outage.
 			// This queue grows only in case of retries.
 			QueueSize: 3000,
+			// SizerTypeRequests (RequestSizerTypeRequests) is the default in NewDefaultQueueConfig()
+			Sizer: exporterhelper.RequestSizerTypeRequests,
 		},
 		LogConfig: LogConfig{
 			OperationName: LogDefaultOperationName,

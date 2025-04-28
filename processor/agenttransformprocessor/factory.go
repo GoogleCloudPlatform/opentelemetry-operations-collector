@@ -31,7 +31,7 @@ func (f CustomFactory) CreateDefaultConfig() component.Config {
 	config := f.Factory.CreateDefaultConfig()
 	tConfig, ok := config.(*transformprocessor.Config)
 	if ok {
-		tConfig.AdditionalOTTLFunc = []ottl.Factory[ottllog.TransformContext]{ottlfuncs.NewExtractPatternsRubyRegexFactory[ottllog.TransformContext]()}
+		tConfig.AdditionalLogFuncs = []ottl.Factory[ottllog.TransformContext]{ottlfuncs.NewExtractPatternsRubyRegexFactory[ottllog.TransformContext]()}
 		return tConfig
 	}
 	return config

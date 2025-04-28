@@ -2,7 +2,7 @@ import '../utils/functions.gcl' as functions
 
 template config build = {
     params {
-      environment = {}
+      environment {}
     }
 
     env_vars = functions.environment_variables(params.environment)

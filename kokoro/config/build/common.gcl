@@ -1,0 +1,24 @@
+import '../utils/functions.gcl' as functions
+
+template config build = {
+    params {}
+
+    env_vars = functions.environment_variables(params.environment)
+}
+
+_fileset = lambda ext: {
+  name = ext
+  artifact_globs = '**/*.' + ext
+  extra_sbom_globs = '**/*.spdx.json'
+  generate_attestation = true
+  generate_sbom_from_fileset = true
+  destinations = [{
+    gcs = {
+      gcs_root_path = 'stackdriver-test-143416-release-builds'
+      populate_content_type = true
+    }
+    store_attestation = true
+  }]
+}
+
+deb_rpm_fileset_artifacts = [_fileset('deb'), _fileset('rpm')]

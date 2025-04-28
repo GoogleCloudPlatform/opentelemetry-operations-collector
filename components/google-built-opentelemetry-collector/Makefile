@@ -1,0 +1,1 @@
+include ../../make/component_dir.mk

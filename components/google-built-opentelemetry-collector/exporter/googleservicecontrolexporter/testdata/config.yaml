@@ -26,6 +26,7 @@ exporters:
       enabled: true
       num_consumers: 5
       queue_size: 1000
+      sizer: "requests"
     log:
       default_log_name: "log-name"
       operation_name: "test-operation-name"

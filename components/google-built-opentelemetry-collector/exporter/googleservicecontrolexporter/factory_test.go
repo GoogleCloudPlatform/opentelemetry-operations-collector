@@ -68,6 +68,7 @@ func TestCreateExporterFromConfig(t *testing.T) {
 					Enabled:      true,
 					NumConsumers: 5,
 					QueueSize:    1000,
+					Sizer:        exporterhelper.RequestSizerTypeRequests,
 				},
 				ServiceControlEndpoint:     "test.googleapis.com:443",
 				ConsumerProject:            "my-project-id",

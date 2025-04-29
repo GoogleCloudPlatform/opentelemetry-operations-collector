@@ -13,6 +13,9 @@
 # limitations under the License.
 
 name: Presubmit
+permissions:
+  contents: read
+  pull-requests: write
 
 on:
   pull_request:

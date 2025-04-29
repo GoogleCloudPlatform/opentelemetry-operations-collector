@@ -41,9 +41,9 @@ type Config struct {
 	UseInsecure bool      `mapstructure:"use_insecure"`
 	LogConfig   LogConfig `mapstructure:"log"`
 
-	exporterhelper.TimeoutConfig `mapstructure:",squash"` // squash ensures fields are correctly decoded in embedded struct.
-	configretry.BackOffConfig    `mapstructure:"retry_on_failure"`
-	exporterhelper.QueueConfig   `mapstructure:"sending_queue"`
+	TimeoutConfig             exporterhelper.TimeoutConfig `mapstructure:",squash"` // squash ensures fields are correctly decoded in embedded struct.
+	configretry.BackOffConfig `mapstructure:"retry_on_failure"`
+	QueueConfig               exporterhelper.QueueConfig `mapstructure:"sending_queue"`
 }
 
 type LogConfig struct {

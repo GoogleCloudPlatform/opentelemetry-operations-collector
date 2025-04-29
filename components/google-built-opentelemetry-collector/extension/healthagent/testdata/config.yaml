@@ -6,14 +6,14 @@ processors:
 exporters:
   nop:
 extensions:
-  ia_health_agent:
+  healthagent:
     scope: "container"
     name: "otel"
     port: "2345"
     error_check_interval: 60s
-  ia_health_agent/2:
+  healthagent/2:
 service:
-  extensions: [ia_health_agent/2]
+  extensions: [healthagent/2]
   pipelines:
     metrics:
       receivers: [nop]

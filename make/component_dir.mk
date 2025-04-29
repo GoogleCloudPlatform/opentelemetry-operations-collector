@@ -24,6 +24,10 @@ generate-components:
 tidy-components:
 	TARGET="tidy" $(MAKE) target-all-modules
 
+.PHONY: test-components
+test-components:
+	TARGET="test" $(MAKE) target-all-modules
+
 .PHONY: target-all-modules
 target-all-modules:
 ifndef TARGET

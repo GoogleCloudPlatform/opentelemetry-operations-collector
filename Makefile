@@ -17,8 +17,6 @@ setup-hooks:
 .PHONY: precommit
 precommit: checklicense misspell lint compare-all
 
-# This is the same as precommit for now but this is
-# futureproofing against this changing in the future.
 .PHONY: presubmit
 presubmit: checklicense misspell lint compare-all
 
@@ -39,6 +37,15 @@ update-google-otel-components update-otelopscol-components: export OTEL_VERSION 
 update-google-otel-components update-otelopscol-components: export OTEL_CONTRIB_VERSION := v$(shell $(DISTROGEN_QUERY) opentelemetry_contrib_version)
 update-google-otel-components update-otelopscol-components: install-tools
 	cd $(COMPONENT_DIR) && PATH="$(TOOLS_DIR):${PATH}" $(MAKE) update-components
+
+.PHONY: test-google-otel-components test-otelopscol-components
+
+test-google-otel-components: COMPONENT_DIR := components/google-built-opentelemetry-collector
+
+test-otelopscol-components: COMPONENT_DIR := components/otelopscol
+
+test-google-otel-components test-otelopscol-components:
+	cd $(COMPONENT_DIR) && $(MAKE) test-components
 
 ###################
 # Distro Generation

@@ -11,12 +11,21 @@
 # The whole project is copied to the container in case you provide
 # any custom components contained within your full project structure.
 ARG PROJECT_ROOT="."
-# Currently, this container has to be alpine based.
+{{ if eq .BuildContainer "ubuntu" -}}
+ARG BUILD_CONTAINER="ubuntu:24.04"
+
+FROM ${BUILD_CONTAINER} AS build
+
+RUN apt-get update && apt-get install make curl{{ if .CollectorCGO }} build-essential{{ end }}
+
+{{ else -}}
 ARG BUILD_CONTAINER="alpine:3"
 
 FROM ${BUILD_CONTAINER} AS build
 
 RUN apk --update add make curl{{ if .CollectorCGO }} alpine-sdk{{ end }}
+
+{{ end -}}
 
 ARG PROJECT_ROOT
 COPY ${PROJECT_ROOT} /

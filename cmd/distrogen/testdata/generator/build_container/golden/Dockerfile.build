@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install make curl build-essential
 ARG PROJECT_ROOT
 COPY ${PROJECT_ROOT} /
 
-WORKDIR /otelopscol
+WORKDIR /basic-distro
 RUN make build
 
 FROM ${BUILD_CONTAINER} AS certs
@@ -32,8 +32,8 @@ ARG USER_UID=10001
 USER ${USER_UID}
 
 COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
-COPY --from=build --chmod=755 /otelopscol/otelopscol /otelopscol
-COPY --from=build --chmod=644 /otelopscol/config.yaml /etc/otelopscol/config.yaml
+COPY --from=build --chmod=755 /basic-distro/otelcol-basic /otelcol-basic
+COPY --from=build --chmod=644 /basic-distro/config.yaml /etc/otelcol-basic/config.yaml
 
-ENTRYPOINT ["/otelopscol"]
-CMD ["--config=/etc/otelopscol/config.yaml"]
+ENTRYPOINT ["/otelcol-basic", "--feature-gates=exporter.googlemanagedprometheus.intToDouble"]
+CMD ["--config=/etc/otelcol-basic/config.yaml"]

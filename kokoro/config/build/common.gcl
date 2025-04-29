@@ -1,12 +1,14 @@
 import '../utils/functions.gcl' as functions
 
 template config build = {
-    params {}
+    params {
+      environment {}
+    }
 
     env_vars = functions.environment_variables(params.environment)
 }
 
-_fileset = lambda ext: {
+local _fileset = lambda ext: {
   name = ext
   artifact_globs = '**/*.' + ext
   extra_sbom_globs = '**/*.spdx.json'

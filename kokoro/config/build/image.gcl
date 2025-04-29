@@ -14,6 +14,10 @@ config build = common.build {
       value = syntax error // TODO: b/410865698 - Fill this in with the correct value once the RBE team says it's OK.
     },
   ]
+  // I'm not sure why, but this build doesn't seem to need container_properties;
+  // null it out for now.
+  container_properties = null
+
   container_artifact = [
     {
       // Path to the container tar file produced by the build. For a container build,

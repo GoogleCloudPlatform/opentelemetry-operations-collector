@@ -4,6 +4,11 @@ template config build = {
     params {
       environment {}
     }
+    container_properties {
+      // Other options are available, especially foundry-based ones,
+      // once we get permission to use them.
+      docker_image = 'us-central1-docker.pkg.dev/kokoro-container-bakery/kokoro/ubuntu/ubuntu2204/full:next'
+    }
 
     env_vars = functions.environment_variables(params.environment)
 }

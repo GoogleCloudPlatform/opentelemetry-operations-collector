@@ -45,6 +45,20 @@ install-tools: go ocb
 # These targets are for building a collector image
 # and pushing it to a Docker repo.
 
+BUILDOS ?= linux
+BUILDARCH ?= amd64
+TARGETOS ?= linux
+TARGETARCH ?= amd64
+
+DOCKER_BUILDER ?= amd-arm-builder
+
+.PHONY: multiplatform-builder
+multiplatform-builder:
+	docker buildx create \
+		--name $(DOCKER_BUILDER) \
+		--driver docker-container \
+		--bootstrap
+
 # Using a local collector binary, build an image
 # that uses this collector.
 .PHONY: image-build
@@ -55,7 +69,21 @@ image-build: $(COLLECTOR_BINARY_NAME)
 # build the collector binary within Docker as well.
 .PHONY: image-build-full
 image-build-full:
-	docker buildx build -f Dockerfile.build -t $(DOCKER_LOCAL_IMAGE_TAG) ..
+	docker buildx build \
+		-f Dockerfile.build \
+		-t $(DOCKER_LOCAL_IMAGE_TAG) ..
+
+.PHONY: image-build-cross-platform
+image-build-cross-platform:
+ifndef DOCKER_REPO
+	$(error "Must set DOCKER_REPO to push")
+endif
+	docker buildx build \
+		--builder $(DOCKER_BUILDER) \
+		--platform linux/amd64,linux/arm64 \
+		-t $(DOCKER_IMAGE_TAG) \
+		--push \
+		-f Dockerfile.build ..
 
 # After an image is built, pushes it to the specified docker repository.
 .PHONY: image-push
@@ -81,6 +109,7 @@ $(COLLECTOR_BINARY_NAME): $(OCB_BIN)
 	cd $(COLLECTOR_BUILD_TEMP_DIR) && \
 		GOWORK=off \
 		CGO_ENABLED=$(COLLECTOR_CGO) \
+		GOOS=$(TARGETOS) GOARCH=$(TARGETARCH) \
 		$(GO_BIN) build \
 			-buildvcs=$(COLLECTOR_BUILDVCS) \
 			-tags=$(COLLECTOR_BUILD_TAGS) \
@@ -119,7 +148,7 @@ ocb: $(OCB_BIN)
 go: $(GO_BIN)
 
 # Install the required version of Go.
-$(GO_BIN): GO_ARCHIVE = go$(GO_VERSION).linux-amd64.tar.gz
+$(GO_BIN): GO_ARCHIVE = go$(GO_VERSION).$(BUILDOS)-$(BUILDARCH).tar.gz
 $(GO_BIN):
 	@{ \
 	set -e ;\
@@ -135,7 +164,7 @@ $(OCB_BIN): $(GO_BIN)
 	set -e ;\
 	mkdir -p $(TOOLS_DIR) ;\
 	echo "Installing ocb at $(TOOLS_DIR)" ;\
-	GOBIN=$(TOOLS_DIR) CGO_ENABLED=0 $(GO_BIN) install -trimpath -ldflags="-s -w" go.opentelemetry.io/collector/cmd/builder@$(OTEL_VERSION_TAG) ;\
+	GOBIN=$(TOOLS_DIR) CGO_ENABLED=0 GOARCH=$(BUILDARCH) $(GO_BIN) install -trimpath -ldflags="-s -w" go.opentelemetry.io/collector/cmd/builder@$(OTEL_VERSION_TAG) ;\
 	mv $(TOOLS_DIR)/builder $(OCB_BIN) ;\
 	}
 

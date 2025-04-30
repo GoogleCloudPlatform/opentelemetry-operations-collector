@@ -127,14 +127,17 @@ const (
 	// take before it is forcibly killed.
 	SuggestedTimeout = 2 * time.Hour
 
-	// QueryMaxAttempts is the default number of retries when calling WaitForLog and WaitForMetricSeries.
+	// QueryMaxAttempts is the default number of retries when calling WaitForMetricSeries.
 	// Retries are spaced by 10 seconds, so 40 retries denotes 6 minutes 40 seconds total.
 	QueryMaxAttempts              = 40 // 6 minutes 40 seconds total.
 	queryMaxAttemptsMetricMissing = 5  // 50 seconds total.
 	queryMaxAttemptsLogMissing    = 5  // 50 seconds total.
 	queryBackoffDuration          = 10 * time.Second
-	LogQueryMaxAttempts           = 15 // 7 minutes 30 seconds total.
-	logQueryBackoffDuration       = 30 * time.Second
+
+	// LogQueryMaxAttempts is the default number of retries when calling WaitForLog.
+	// Retries are spaced by 30 seconds, so 15 retries denotes 7 minutes 30 seconds total.
+	LogQueryMaxAttempts     = 15 // 7 minutes 30 seconds total.
+	logQueryBackoffDuration = 30 * time.Second
 
 	// traceQueryDerate is the number of backoff durations to wait before retrying a trace query.
 	// Cloud Trace quota is incredibly low, and each call to ListTraces uses 25 quota tokens.

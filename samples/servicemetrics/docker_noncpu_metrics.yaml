@@ -55,7 +55,7 @@ service:
                    transform/ucp_internal_docker_set_container_name,
                    resource/ucp_internal_docker_remove_container_name,
                    batch/ucp_internal_batch]
-      exporters: [servicecontrol/ucp_internal_servicecontrol]
+      exporters: [googleservicecontrol/ucp_internal_servicecontrol]
 
      metrics/ucp_internal_saasmanagement_docker_memory:
       receivers: [docker_stats/ucp_internal_docker_stats]
@@ -67,7 +67,7 @@ service:
                    transform/ucp_internal_docker_set_container_name,
                    resource/ucp_internal_docker_remove_container_name,
                    batch/ucp_internal_batch]
-      exporters: [servicecontrol/ucp_internal_servicecontrol]
+      exporters: [googleservicecontrol/ucp_internal_servicecontrol]
 
      metrics/ucp_internal_saasmanagement_docker_network:
       receivers: [docker_stats/ucp_internal_docker_stats]
@@ -79,7 +79,7 @@ service:
                    transform/ucp_internal_docker_set_container_name,
                    resource/ucp_internal_docker_remove_container_name,
                    batch/ucp_internal_batch]
-      exporters: [servicecontrol/ucp_internal_servicecontrol]
+      exporters: [googleservicecontrol/ucp_internal_servicecontrol]
 
      metrics/ucp_internal_saasmanagement_docker_metadata:
       receivers: [docker_stats/ucp_internal_docker_stats]
@@ -92,4 +92,4 @@ service:
                    transform/ucp_internal_docker_set_container_name,
                    resource/ucp_internal_docker_remove_container_name,
                    batch/ucp_internal_batch]
-      exporters: [servicecontrol/ucp_internal_servicecontrol]
+      exporters: [googleservicecontrol/ucp_internal_servicecontrol]

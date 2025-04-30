@@ -14,20 +14,20 @@
 
 exporters:
   # UCP-defined metrics can only go to producer project. Hence, we define only one Service Control exporter for this purpose.
-  servicecontrol/ucp_internal_servicecontrol:
+  googleservicecontrol/ucp_internal_servicecontrol:
     # Label values are empty by default, so that invalid configurations fail fast.
     # All label values are overridden by instance metadata.
-    service_name: ""
-    consumer_project: ""
-    service_config_id: ""
+    service_name: "${service_name}"
+    consumer_project: ${consumer_project_id}
+    service_config_id: "${service_config_id}"
 
 extensions:
-  ia_health_agent/ucp_internal_health_agent:
+  healthagent/ucp_internal_health_agent:
     # These params are desribed in go/slm-instance-agent#health-checking-containers.
     # They are overridden by instance metadata. See the defaults in the documentation.
-    scope: ""
-    name: ""
-    port: ""
+    scope: ${otel_healthcheck_scope}
+    name: "${otel_healthcheck_name}"
+    port: "${otel_healthcheck_port}"
 
 processors:
   # Labels for saasmanagement.googleapis.com/Instance monitored resource.
@@ -36,19 +36,22 @@ processors:
   resource/ucp_internal_saasmanagement_instance:
     attributes:
     - key: service_name
-      value: ""
+      value: "${service_name}"
       action: upsert
     - key: consumer_project_number
-      value: ""
+      value: "${consumer_project_number}"
       action: upsert
+    - key: consumer_project_number
+      action: convert
+      converted_type: string
     - key: instance_id
-      value: ""
+      value: "${instance_id}"
       action: upsert
     - key: instance_uid
-      value: ""
+      value: "${instance_uuid}"
       action: upsert
     - key: location
-      value: ""
+      value: "${location}"
       action: upsert
 
   transform/ucp_internal_saasmanagement_add_node_id:
@@ -69,5 +72,4 @@ processors:
     timeout: 10s
 
 service:
-  extensions: [ia_health_agent/ucp_internal_health_agent]
-
+  extensions: [healthagent/ucp_internal_health_agent]

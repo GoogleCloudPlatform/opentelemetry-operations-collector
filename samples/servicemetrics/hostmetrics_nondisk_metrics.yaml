@@ -192,7 +192,7 @@ service:
                    resource/ucp_internal_saasmanagement_instance,
                    transform/ucp_internal_saasmanagement_add_node_id,
                    batch/ucp_internal_batch]
-      exporters: [servicecontrol/ucp_internal_servicecontrol]
+      exporters: [googleservicecontrol/ucp_internal_servicecontrol]
 
     metrics/ucp_internal_saasmanagement_hostmetrics_process:
       receivers: [hostmetrics/ucp_internal_process]
@@ -202,7 +202,7 @@ service:
                    resource/ucp_internal_saasmanagement_instance,
                    transform/ucp_internal_saasmanagement_add_node_id,
                    batch/ucp_internal_batch]
-      exporters: [servicecontrol/ucp_internal_servicecontrol]
+      exporters: [googleservicecontrol/ucp_internal_servicecontrol]
 
     metrics/ucp_internal_saasmanagement_hostmetrics_memory:
       receivers: [hostmetrics/ucp_internal_memory]
@@ -211,7 +211,7 @@ service:
                    resource/ucp_internal_saasmanagement_instance,
                    transform/ucp_internal_saasmanagement_add_node_id,
                    batch/ucp_internal_batch]
-      exporters: [servicecontrol/ucp_internal_servicecontrol]
+      exporters: [googleservicecontrol/ucp_internal_servicecontrol]
 
     metrics/ucp_internal_saasmanagement_hostmetrics_network:
       receivers: [hostmetrics/ucp_internal_network]
@@ -220,4 +220,4 @@ service:
                    resource/ucp_internal_saasmanagement_instance,
                    transform/ucp_internal_saasmanagement_add_node_id,
                    batch/ucp_internal_batch]
-      exporters: [servicecontrol/ucp_internal_servicecontrol]
+      exporters: [googleservicecontrol/ucp_internal_servicecontrol]

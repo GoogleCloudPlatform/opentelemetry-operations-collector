@@ -642,7 +642,7 @@ func QueryLog(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex stri
 			return first, nil
 		}
 		logger.Printf("Query returned found=%v, err=%v, attempt=%d", found, err, attempt)
-		if err != nil && !strings.Contains(err.Error(), "Internal error encountered") {
+		if err != nil && !strings.Contains(err.Error(), "Internal error encountered") && !strings.Contains(err.Error(), "Quota") {
 			// A non-retryable error.
 			return nil, fmt.Errorf("QueryLog() failed: %v", err)
 		}
@@ -1739,6 +1739,12 @@ func SetEnvironmentVariables(ctx context.Context, logger *log.Logger, vm *VM, en
 func handleDeleteError(err error, attempt int) error {
 	if err == nil {
 		return nil
+	}
+	// VM deletion can hit quota, especially when re-running presubmits,
+	// or when multple people are running tests. Retry errors by returning
+	// them directly.
+	if strings.Contains(err.Error(), "Quota") {
+		return err
 	}
 	// GCE sometimes responds with 502 or 503 errors. Retry these errors
 	// (and other 50x errors for good measure), by returning them directly.

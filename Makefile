@@ -126,12 +126,12 @@ EXCLUDE_TOOLS_DIRS = grep -z -v ".*\.tools.*"
 
 .PHONY: workspace
 workspace: go.work
-	$(ALL_DIRECTORIES) |\
-	$(EXCLUDE_TOOLS_DIRS) |\
-	xargs -0 go work use
 
 go.work:
 	go work init
+	$(ALL_DIRECTORIES) |\
+	$(EXCLUDE_TOOLS_DIRS) |\
+	xargs -0 go work use
 
 .PHONY: clean-workspace
 clean-workspace:
@@ -210,7 +210,7 @@ tag-repo:
 	@echo "Created git tag $(OTEL_VERSION). If it looks good, push it to the remote by running: git push origin $(OTEL_VERSION)"
 
 .PHONY: target-all-modules
-target-all-modules:
+target-all-modules: go.work
 ifndef TARGET
 	@echo "No TARGET defined."
 else

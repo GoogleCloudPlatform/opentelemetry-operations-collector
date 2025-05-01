@@ -25,9 +25,9 @@ function print_layout() {
 print_layout
 
 cd "${KOKORO_ARTIFACTS_DIR}"/git/otelcol-google/google-built-opentelemetry-collector
-go env GOPROXY || echo "go env outside failed"
 
 export GOPROXY=https://proxy.golang.org
+unset GOROOT
 
 make goreleaser-release
 

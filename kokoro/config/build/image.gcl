@@ -31,7 +31,9 @@ config build = common.build {
       source = 'container/container.tar'
       // Full output path on Artifact Registry including desired container name.
       // ex. us-central1-docker.pkg.dev/my-project/my-repo/my-container
-      destination = 'us-docker.pkg.dev/cloud-ops-agents-art-staging/google-cloud-opentelemetry-collector-staging/otelcol-google'
+      // Use artifacts-dev for now. DO NOT SUBMIT
+      // destination = 'us-docker.pkg.dev/cloud-ops-agents-art-staging/google-cloud-opentelemetry-collector-staging/otelcol-google'
+      destination = 'us-docker.pkg.dev/cloud-ops-agents-artifacts-dev/google-cloud-opentelemetry-collector-direct/otelcol-google'
     },
   ]
 }

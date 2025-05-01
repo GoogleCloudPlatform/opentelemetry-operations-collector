@@ -181,6 +181,8 @@ $(OCB_BIN): $(GO_BIN)
 	set -e ;\
 	mkdir -p $(TOOLS_DIR) ;\
 	echo "Installing ocb at $(TOOLS_DIR)" ;\
+	$(GO_BIN) env GOPROXY;\
+	echo 'go env complete';\
 	GOBIN=$(TOOLS_DIR) CGO_ENABLED=0 GOARCH=$(BUILDARCH) $(GO_BIN) install -trimpath -ldflags="-s -w" go.opentelemetry.io/collector/cmd/builder@$(OTEL_VERSION_TAG) ;\
 	mv $(TOOLS_DIR)/builder $(OCB_BIN) ;\
 	}

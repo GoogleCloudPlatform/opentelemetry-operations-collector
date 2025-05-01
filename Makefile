@@ -35,7 +35,7 @@ update-otelopscol-components: COMPONENT_DIR := components/otelopscol
 update-google-otel-components update-otelopscol-components: DISTROGEN_QUERY := go run ./cmd/distrogen -spec $(SPEC_FILE) -query
 update-google-otel-components update-otelopscol-components: export OTEL_VERSION := v$(shell $(DISTROGEN_QUERY) opentelemetry_version)
 update-google-otel-components update-otelopscol-components: export OTEL_CONTRIB_VERSION := v$(shell $(DISTROGEN_QUERY) opentelemetry_contrib_version)
-update-google-otel-components update-otelopscol-components: install-tools
+update-google-otel-components update-otelopscol-components: go.work install-tools
 	cd $(COMPONENT_DIR) && PATH="$(TOOLS_DIR):${PATH}" $(MAKE) update-components
 
 .PHONY: test-google-otel-components test-otelopscol-components
@@ -44,7 +44,7 @@ test-google-otel-components: COMPONENT_DIR := components/google-built-openteleme
 
 test-otelopscol-components: COMPONENT_DIR := components/otelopscol
 
-test-google-otel-components test-otelopscol-components:
+test-google-otel-components test-otelopscol-components: go.work
 	cd $(COMPONENT_DIR) && $(MAKE) test-components
 
 ###################

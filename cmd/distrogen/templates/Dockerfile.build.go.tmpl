@@ -14,15 +14,13 @@ ARG PROJECT_ROOT="."
 ARG CERT_CONTAINER="alpine:3"
 {{ if eq .BuildContainer "ubuntu" -}}
 ARG BUILD_CONTAINER="ubuntu:24.04"
-
-FROM ${BUILD_CONTAINER} AS build
+FROM --platform=${BUILDPLATFORM:-linux/amd64} ${BUILD_CONTAINER} AS build
 
 RUN apt-get update && apt-get install -y make curl{{ if .CollectorCGO }} build-essential{{ end }}
 
 {{ else -}}
 ARG BUILD_CONTAINER="alpine:3"
-
-FROM ${BUILD_CONTAINER} AS build
+FROM --platform=${BUILDPLATFORM:-linux/amd64} ${BUILD_CONTAINER} AS build
 
 RUN apk --update add make curl{{ if .CollectorCGO }} alpine-sdk{{ end }}
 
@@ -32,6 +30,11 @@ ARG PROJECT_ROOT
 COPY ${PROJECT_ROOT} /
 
 WORKDIR /{{ .Name }}
+
+ARG BUILDARCH
+ARG BUILDOS
+ARG TARGETOS
+ARG TARGETARCH
 RUN make build
 
 FROM ${CERT_CONTAINER} AS certs

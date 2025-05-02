@@ -21,6 +21,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/receiver/dcgmreceiver/internal/metadata"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/consumer/consumertest"
 	"go.opentelemetry.io/collector/receiver/receivertest"
@@ -33,7 +34,7 @@ func TestCreateMetricsReceiverOnLinux(t *testing.T) {
 
 	receiver, err := factory.CreateMetrics(
 		context.Background(),
-		receivertest.NewNopSettings(metadataType),
+		receivertest.NewNopSettings(metadata.Type),
 		receiverConfig,
 		consumertest.NewNop(),
 	)

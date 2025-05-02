@@ -28,6 +28,13 @@ import (
 
 var ErrNoDiff = errors.New("no differences found with previous generation")
 
+type BuildContainerOption string
+
+const (
+	Alpine BuildContainerOption = "alpine"
+	Ubuntu BuildContainerOption = "ubuntu"
+)
+
 // DistributionSpec is the specification for a new OpenTelemetry Collector distribution.
 // It contains all the information that will be formatted into the default set of
 // templates/user provided templates.
@@ -37,6 +44,7 @@ type DistributionSpec struct {
 	DisplayName                 string                  `yaml:"display_name"`
 	Description                 string                  `yaml:"description"`
 	Blurb                       string                  `yaml:"blurb"`
+	BuildContainer              BuildContainerOption    `yaml:"build_container"`
 	Version                     string                  `yaml:"version"`
 	OpenTelemetryVersion        string                  `yaml:"opentelemetry_version"`
 	OpenTelemetryContribVersion string                  `yaml:"opentelemetry_contrib_version"`
@@ -93,11 +101,17 @@ func NewDistributionSpec(path string) (*DistributionSpec, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	// It is a rare case where the contrib version falls out of sync with
 	// the canonical OpenTelemetry version, most of the time it is the same.
 	if spec.OpenTelemetryContribVersion == "" {
 		spec.OpenTelemetryContribVersion = spec.OpenTelemetryVersion
 	}
+
+	if spec.BuildContainer == "" {
+		spec.BuildContainer = Alpine
+	}
+
 	return spec, nil
 }
 

@@ -17,8 +17,6 @@ setup-hooks:
 .PHONY: precommit
 precommit: checklicense misspell lint compare-all
 
-# This is the same as precommit for now but this is
-# futureproofing against this changing in the future.
 .PHONY: presubmit
 presubmit: checklicense misspell lint compare-all
 
@@ -37,8 +35,17 @@ update-otelopscol-components: COMPONENT_DIR := components/otelopscol
 update-google-otel-components update-otelopscol-components: DISTROGEN_QUERY := go run ./cmd/distrogen -spec $(SPEC_FILE) -query
 update-google-otel-components update-otelopscol-components: export OTEL_VERSION := v$(shell $(DISTROGEN_QUERY) opentelemetry_version)
 update-google-otel-components update-otelopscol-components: export OTEL_CONTRIB_VERSION := v$(shell $(DISTROGEN_QUERY) opentelemetry_contrib_version)
-update-google-otel-components update-otelopscol-components: install-tools
+update-google-otel-components update-otelopscol-components: go.work install-tools
 	cd $(COMPONENT_DIR) && PATH="$(TOOLS_DIR):${PATH}" $(MAKE) update-components
+
+.PHONY: test-google-otel-components test-otelopscol-components
+
+test-google-otel-components: COMPONENT_DIR := components/google-built-opentelemetry-collector
+
+test-otelopscol-components: COMPONENT_DIR := components/otelopscol
+
+test-google-otel-components test-otelopscol-components: go.work
+	cd $(COMPONENT_DIR) && $(MAKE) test-components
 
 ###################
 # Distro Generation
@@ -119,12 +126,12 @@ EXCLUDE_TOOLS_DIRS = grep -z -v ".*\.tools.*"
 
 .PHONY: workspace
 workspace: go.work
-	$(ALL_DIRECTORIES) |\
-	$(EXCLUDE_TOOLS_DIRS) |\
-	xargs -0 go work use
 
 go.work:
 	go work init
+	$(ALL_DIRECTORIES) |\
+	$(EXCLUDE_TOOLS_DIRS) |\
+	xargs -0 go work use
 
 .PHONY: clean-workspace
 clean-workspace:
@@ -203,7 +210,7 @@ tag-repo:
 	@echo "Created git tag $(OTEL_VERSION). If it looks good, push it to the remote by running: git push origin $(OTEL_VERSION)"
 
 .PHONY: target-all-modules
-target-all-modules:
+target-all-modules: go.work
 ifndef TARGET
 	@echo "No TARGET defined."
 else

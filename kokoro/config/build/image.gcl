@@ -16,11 +16,8 @@ config build = common.build {
     },
     {
       key = 'CERT_CONTAINER'
-      value = syntax error // TODO: This will be the same as BUILD_CONTAINER.
-    },
-    {
-      key = 'CERT_CONTAINER'
-      value = syntax error // TODO: This will be the same as BUILD_CONTAINER.
+      value =
+          'us-docker.pkg.dev/artifact-foundry-prod/docker-3p-trusted/alpine:3'
     },
   ]
   // I'm not sure why, but this build doesn't seem to need container_properties;

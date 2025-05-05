@@ -5,9 +5,12 @@ template config build = {
       environment {}
     }
     container_properties {
+      docker_image = 'us-docker.pkg.dev/artifact-foundry-prod/docker-3p-trusted/alpine:3'
+
       // Other options are available, especially foundry-based ones,
       // once we get permission to use them.
-      docker_image = 'us-central1-docker.pkg.dev/kokoro-container-bakery/kokoro/ubuntu/ubuntu2204/full:next'
+      // DO NOT SUBMIT
+      // docker_image = 'us-central1-docker.pkg.dev/kokoro-container-bakery/kokoro/ubuntu/ubuntu2204/full:next'
     }
 
     env_vars = functions.environment_variables(params.environment)

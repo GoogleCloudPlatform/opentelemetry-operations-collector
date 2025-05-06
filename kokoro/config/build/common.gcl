@@ -28,4 +28,5 @@ local _fileset = lambda ext: {
   }]
 }
 
-deb_rpm_fileset_artifacts = [_fileset('deb'), _fileset('rpm')]
+pkg_artifacts_patterns = ['**/*.deb', '**/*.rpm']
+pkg_fileset_artifacts = [_fileset('deb'), _fileset('rpm')]

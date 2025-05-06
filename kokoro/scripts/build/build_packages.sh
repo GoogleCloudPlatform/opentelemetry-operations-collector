@@ -26,8 +26,8 @@ print_layout
 
 cd "${KOKORO_ARTIFACTS_DIR}"/git/otelcol-google/google-built-opentelemetry-collector
 
-unset GOROOT
+gsutil cp -r gs://cloud-built-otel-collector-file-transfers/martijnvs-temp-fast-iterations/297140bc-63c9-4b51-aac5-b64d3310d31a .
 
-make goreleaser-release
+mv 297140bc-63c9-4b51-aac5-b64d3310d31a dist
 
 ls dist || true  # Temporary, for debugging.

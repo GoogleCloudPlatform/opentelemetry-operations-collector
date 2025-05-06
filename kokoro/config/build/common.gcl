@@ -15,7 +15,7 @@ template config build = {
     action = cond(params.artifacts == [], [], [
       {
         // We are using "legacy Generic Artifacts"
-        // (http://go/kokoro-generic-artifacts-legacy) for now because Louhi
+        // (go/kokoro-generic-artifacts-legacy) for now because Louhi
         // does not yet support the replacement. See b/367727311.
         define_artifacts = {
           regex = params.artifacts

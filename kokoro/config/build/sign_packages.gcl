@@ -5,8 +5,8 @@ config build = common.build {
 
   verify_gfile_rules = [{
     resource = "misc_software://cloud-ops-agents-artifacts/google-cloud-opentelemetry-collector/otelcol-google"
-    artifacts_to_verify = common.deb_rpm_artifacts_patterns
+    artifacts_to_verify = common.pkg_artifacts_patterns
   }]
 
-  fileset_artifacts = common.deb_rpm_fileset_artifacts
+  fileset_artifacts = common.pkg_fileset_artifacts
 }

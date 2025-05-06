@@ -3,10 +3,13 @@ import 'common.gcl' as common
 config build = common.build {
   build_file = 'otelcol-google/kokoro/scripts/build/sign_packages.sh'
 
+  params {
+    artifacts = common.pkg_artifacts_patterns
+  }
+
   verify_gfile_rules = [{
     resource = "misc_software://cloud-ops-agents-artifacts/google-cloud-opentelemetry-collector/otelcol-google"
     artifacts_to_verify = common.pkg_artifacts_patterns
   }]
 
-  fileset_artifacts = common.pkg_fileset_artifacts
 }

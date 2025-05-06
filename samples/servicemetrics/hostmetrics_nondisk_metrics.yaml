@@ -24,6 +24,12 @@ receivers:
         metrics:
           system.linux.memory.available:
             enabled: true
+          system.memory.limit:
+            enabled: true
+          system.memory.page_size:
+            enabled: true
+          system.linux.memory.dirty:
+            enabled: true
   hostmetrics/ucp_internal_process:
     collection_interval: 60s
     scrapers:
@@ -41,12 +47,20 @@ receivers:
             enabled: true
           system.network.conntrack.max:
             enabled: true
+  hostmetrics/ucp_internal_system:
+    collection_interval: 60s
+    scrapers: 
+      system:
 
 processors:
-  resource/ucp_internal_cleanup_hostmetrics_memory:
-    attributes:
-    - key: state
-      action: delete
+  metricsgeneration/ucp_internal_hostmetrics_dirty_pages:
+    rules:
+    - name: system.memory.dirty
+      type: calculate
+      metric1: system.linux.memory.dirty
+      metric2: system.memory.page_size
+      operation: divide
+
   resource/ucp_internal_cleanup_hostmetrics_process:
     attributes:
     - key: process
@@ -97,6 +111,14 @@ processors:
     - include: system.linux.memory.available
       action: insert
       new_name: "saasmanagement.googleapis.com/instance/vm/memory/free"
+    - include: system.memory.limit
+      action: update
+      new_name: "saasmanagement.googleapis.com/instance/vm/memory/limit"
+    - include: system.memory.dirty
+      action: update 
+      new_name: "saasmanagement.googleapis.com/instance/vm/memory/dirty_pages"
+      operations:
+      - action: toggle_scalar_data_type
 
   metricstransform/ucp_internal_saasmanagement_hostmetrics_process:
     transforms:
@@ -180,8 +202,42 @@ processors:
     - include: system.network.conntrack.max
       action: update
       new_name: "saasmanagement.googleapis.com/instance/vm/network/nf_conntrack_max"
+  
+  resourcedetection/ucp_internal_saasmanagement_os_name:
+    # By default, the detector reads from /etc
+    # If need to detect from another location, e.g., when running in a container
+    # set HOST_ETC env: e.g., HOST_ETC="/host-etc"
+    detectors: 
+    - system
+    system:
+      resource_attributes:
+        host.name:
+          enabled: false
+        os.type:
+          enabled: false
+        os.version:
+          enabled: true
 
+  metricstransform/ucp_internal_saasmanagement_hostmetrics_system:
+    transforms:
+    - include: system.uptime
+      action: insert 
+      new_name: "saasmanagement.googleapis.com/instance/vm/os/name"
+    - include: system.uptime
+      action: insert
+      new_name: "saasmanagement.googleapis.com/instance/vm/uptime"
+      operations:
+      - action: toggle_scalar_data_type
 
+  transform/ucp_internal_saasmanagement_os_name:
+    metric_statements:
+    - context: datapoint
+      statements:
+      - set(attributes["name"], resource.attributes["os.version"]) where metric.name == "saasmanagement.googleapis.com/instance/vm/os/name"
+      - set(value_int, 1) where metric.name == "saasmanagement.googleapis.com/instance/vm/os/name"
+    - context: resource
+      statements:
+      - delete_key(attributes, "os.version")
 
 service:
   pipelines:
@@ -206,7 +262,8 @@ service:
 
     metrics/ucp_internal_saasmanagement_hostmetrics_memory:
       receivers: [hostmetrics/ucp_internal_memory]
-      processors: [metricstransform/ucp_internal_saasmanagement_hostmetrics_memory,
+      processors: [metricsgeneration/ucp_internal_hostmetrics_dirty_pages,
+                   metricstransform/ucp_internal_saasmanagement_hostmetrics_memory,
                    filter/ucp_internal_hostmetrics_after_transform,
                    resource/ucp_internal_saasmanagement_instance,
                    transform/ucp_internal_saasmanagement_add_node_id,
@@ -216,6 +273,17 @@ service:
     metrics/ucp_internal_saasmanagement_hostmetrics_network:
       receivers: [hostmetrics/ucp_internal_network]
       processors: [metricstransform/ucp_internal_saasmanagement_hostmetrics_network,
+                   filter/ucp_internal_hostmetrics_after_transform,
+                   resource/ucp_internal_saasmanagement_instance,
+                   transform/ucp_internal_saasmanagement_add_node_id,
+                   batch/ucp_internal_batch]
+      exporters: [googleservicecontrol/ucp_internal_servicecontrol]
+
+    metrics/ucp_internal_saasmanagement_hostmetrics_system:
+      receivers: [hostmetrics/ucp_internal_system]
+      processors: [metricstransform/ucp_internal_saasmanagement_hostmetrics_system,
+                   resourcedetection/ucp_internal_saasmanagement_os_name,
+                   transform/ucp_internal_saasmanagement_os_name,
                    filter/ucp_internal_hostmetrics_after_transform,
                    resource/ucp_internal_saasmanagement_instance,
                    transform/ucp_internal_saasmanagement_add_node_id,

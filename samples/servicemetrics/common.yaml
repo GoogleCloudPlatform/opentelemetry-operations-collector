@@ -58,7 +58,7 @@ processors:
     metric_statements:
     - context: datapoint
       statements:
-      - set(attributes["node_id"], "")
+      - set(attributes["node_id"], "${node_id}")
 
   batch/ucp_internal_batch:
     # Batch size should be such that the total request is <= 1 Mb.

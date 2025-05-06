@@ -21,6 +21,8 @@ processors:
         metric_names:
         - "saasmanagement.googleapis.com/instance/vm/memory/free"
         - "saasmanagement.googleapis.com/instance/vm/memory/usage"
+        - "saasmanagement.googleapis.com/instance/vm/memory/limit"
+        - "saasmanagement.googleapis.com/instance/vm/memory/dirty_pages"
         - "saasmanagement.googleapis.com/instance/vm/process/memory/usage"
         - "saasmanagement.googleapis.com/instance/vm/process/memory/size"
         - "saasmanagement.googleapis.com/instance/vm/cpu/usage_time"
@@ -42,3 +44,5 @@ processors:
         - "saasmanagement.googleapis.com/instance/vm/disk/write_bytes_count"
         - "saasmanagement.googleapis.com/instance/vm/disk/write_ops_count"
         - "saasmanagement.googleapis.com/instance/vm/disk/write_time"
+        - "saasmanagement.googleapis.com/instance/vm/uptime"
+        - "saasmanagement.googleapis.com/instance/vm/os/name"

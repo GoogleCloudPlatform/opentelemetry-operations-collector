@@ -7,7 +7,7 @@ template config build = {
     }
 
     container_properties {
-      docker_image = 'us-docker.pkg.dev/artifact-foundry-prod/docker-3p-trusted/golang:1'
+      docker_image = 'us-docker.pkg.dev/artifact-foundry-prod/docker-3p-trusted/google/cloud-sdk:412.0.0-alpine'
     }
 
     action = cond(params.artifacts == [], [], [

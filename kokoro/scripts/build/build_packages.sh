@@ -26,13 +26,23 @@ print_layout
 
 cd "${KOKORO_ARTIFACTS_DIR}"/git/otelcol-google/google-built-opentelemetry-collector
 
-mkdir -p dist
+function cheat() {
+  mkdir -p dist
 
-gsutil cp -r gs://cloud-built-otel-collector-file-transfers/martijnvs-temp-fast-iterations/297140bc-63c9-4b51-aac5-b64d3310d31a/deb/git/otelcol-google/google-built-opentelemetry-collector/dist/* dist
-gsutil cp -r gs://cloud-built-otel-collector-file-transfers/martijnvs-temp-fast-iterations/297140bc-63c9-4b51-aac5-b64d3310d31a/rpm/git/otelcol-google/google-built-opentelemetry-collector/dist/* dist
+  gsutil cp -r gs://cloud-built-otel-collector-file-transfers/martijnvs-temp-fast-iterations/297140bc-63c9-4b51-aac5-b64d3310d31a/deb/git/otelcol-google/google-built-opentelemetry-collector/dist/* dist
+  gsutil cp -r gs://cloud-built-otel-collector-file-transfers/martijnvs-temp-fast-iterations/297140bc-63c9-4b51-aac5-b64d3310d31a/rpm/git/otelcol-google/google-built-opentelemetry-collector/dist/* dist
+}
 
-# unset GOROOT
-#
-# make goreleaser-release
+function build() {
+  unset GOROOT
+
+  make goreleaser-release
+}
+
+cheat
+# build
 
 ls dist || true  # Temporary, for debugging.
+
+mv dist "${KOKORO_ARTIFACTS_DIR}"/dist
+

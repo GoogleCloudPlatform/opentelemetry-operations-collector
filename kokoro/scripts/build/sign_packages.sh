@@ -27,8 +27,8 @@ function print_layout() {
 }
 print_layout
 
-chmod 777 "${PKG_DIR}"
-chmod 666 "${PKG_DIR}"/*
+chmod 777 "${PKG_DIR}" || echo chmod 777 failed
+chmod 666 "${PKG_DIR}"/* || echo chmod 666 failed
 
 /escalated_sign/escalated_sign.py --tool=linux_gpg_sign \
   --job-dir=/escalated_sign_jobs -- \
@@ -37,3 +37,5 @@ chmod 666 "${PKG_DIR}"/*
 /escalated_sign/escalated_sign.py --tool=linux_gpg_sign \
   --job-dir=/escalated_sign_jobs -- \
   --loglevel=debug "${PKG_DIR}"/*.rpm
+
+exit 7 # check chmod output

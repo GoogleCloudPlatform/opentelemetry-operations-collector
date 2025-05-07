@@ -79,3 +79,5 @@ connectors:
 providers:
 
 replaces:
+# https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/39912
+- github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver => github.com/ridwanmsharif/opentelemetry-collector-contrib/receiver/prometheusreceiver v0.0.0-20250506222945-7c6fb072b376

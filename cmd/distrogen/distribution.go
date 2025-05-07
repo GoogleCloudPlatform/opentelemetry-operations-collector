@@ -28,6 +28,9 @@ import (
 
 var ErrNoDiff = errors.New("no differences found with previous generation")
 
+// -rw-r--r--
+var DefaultFileMode fs.FileMode = 0644
+
 type BuildContainerOption string
 
 const (
@@ -134,6 +137,7 @@ type DistributionGenerator struct {
 	GeneratePath       string
 	Registry           *Registry
 	CustomTemplatesDir fs.FS
+	FileMode           fs.FileMode
 }
 
 // NewDistributionGenerator creates a DistributionGenerator.
@@ -141,6 +145,8 @@ func NewDistributionGenerator(spec *DistributionSpec, registry *Registry, forceG
 	d := DistributionGenerator{
 		Spec:     spec,
 		Registry: registry,
+		// -rw-r--r--
+		FileMode: DefaultFileMode,
 	}
 	d.GenerateDirName = spec.Name
 
@@ -174,13 +180,13 @@ func (d *DistributionGenerator) Generate() error {
 	if err != nil {
 		return err
 	}
-	templates, err := GetEmbeddedTemplateSet(templateContext)
+	templates, err := GetEmbeddedTemplateSet(templateContext, d.FileMode)
 	if err != nil {
 		return err
 	}
 
 	if d.CustomTemplatesDir != nil {
-		customTemplates, err := GetTemplateSetFromDir(d.CustomTemplatesDir, templateContext)
+		customTemplates, err := GetTemplateSetFromDir(d.CustomTemplatesDir, templateContext, d.FileMode)
 		if err != nil {
 			return err
 		}
@@ -189,6 +195,8 @@ func (d *DistributionGenerator) Generate() error {
 		// defaults will overwrite the embedded version with the custom version.
 		mapMerge(templates, customTemplates)
 	}
+
+	templates.RenameExceptionalTemplates(d.Spec)
 
 	for _, tmpl := range templates {
 		if err := tmpl.Render(d.GeneratePath); err != nil {
@@ -207,7 +215,7 @@ func (d *DistributionGenerator) Generate() error {
 // this existing generation, as well as a method of detecting whether a new generation
 // needs to be done at all (if no spec changes no need to generate).
 func (d *DistributionGenerator) WriteSpec() error {
-	return yamlMarshalToFile(d.Spec, filepath.Join(d.GeneratePath, "spec.yaml"))
+	return yamlMarshalToFile(d.Spec, filepath.Join(d.GeneratePath, "spec.yaml"), d.FileMode)
 }
 
 // MoveGeneratedDirToWd performs the final step of the generation, moving the generated temp
@@ -386,6 +394,9 @@ type TemplateContext struct {
 	Extensions RegistryComponents
 	Connectors RegistryComponents
 	Providers  RegistryComponents
+
+	SystemdServiceName  string
+	SystemdConfFileName string
 }
 
 // NewTemplateContextFromSpec creates a TemplateContext from a DistributionSpec and a Registry.
@@ -414,6 +425,9 @@ func NewTemplateContextFromSpec(spec *DistributionSpec, registry *Registry) (*Te
 	mapMerge(errs, err)
 	context.Providers, err = registry.Providers.LoadAllComponents(spec.Components.Providers, otelVersion)
 	mapMerge(errs, err)
+
+	context.SystemdServiceName = spec.BinaryName + ".service"
+	context.SystemdConfFileName = spec.BinaryName + ".conf"
 
 	if len(errs) > 0 {
 		return nil, errs

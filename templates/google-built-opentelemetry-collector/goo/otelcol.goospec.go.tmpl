@@ -1,0 +1,30 @@
+{{`{{$PKG_VERSION := printf "%s@1" .PKG_VERSION -}}`}}
+{{`{{$ARCH := .ARCH -}}`}}
+{{`{{$GOOS := .GOOS -}}`}}
+{{`{{$GOARCH := .GOARCH -}}`}}
+{{`{{$INSTALL_DIR := or (.INSTALL_DIR) "<ProgramFiles>/Google/OpenTelemetry Collector" -}}`}}
+{
+  "name": "{{ .Name }}",
+  "version": "{{`{{$PKG_VERSION}}`}}",
+  "arch": "{{`{{$ARCH}}`}}",
+  "authors": "Google Cloud Platform",
+  "license": "http://www.apache.org/licenses/LICENSE-2.0",
+  "description": "{{ .Description }}",
+  "files": {
+    "dist/{{ .BinaryName }}-windows_windows_amd64_v1/{{ .BinaryName }}.exe": "{{`{{$INSTALL_DIR}}`}}/bin/{{ .BinaryName }}.exe"
+  },
+  "install": {
+    "path": "goo/maint.ps1",
+    "args": ["-InstallDir:\"{{`{{$INSTALL_DIR}}`}}\"", "-Action:install"]
+  },
+  "uninstall": {
+    "path": "goo/maint.ps1",
+    "args": ["-InstallDir:\"{{`{{$INSTALL_DIR}}`}}\"", "-Action:uninstall"]
+  },
+  "sources": [{
+      "include": [
+        "dist/{{ .BinaryName }}-windows_windows_amd64_v1/{{ .BinaryName }}.exe",
+        "config.yaml"
+      ]
+  }]
+}

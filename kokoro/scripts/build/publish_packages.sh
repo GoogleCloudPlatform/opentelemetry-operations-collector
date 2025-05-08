@@ -13,5 +13,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# We may need to upload the signed packages to somewhere so that tests can see them.
-# This is just left unimplemented for now though.
+# This script uploads the package files to a GCS bucket so that tests can read
+# the packages from there. This is simpler than using Artifact Registry because
+# the credential forwarding is more seamless. Non-public AR repos are a bit
+# finicky to use.
+
+set -eux
+set -o pipefail
+
+# TODO: pick better bucket
+# TODO: pick bucket based on environment (dev/prod)
+BUCKET="gs://stackdriver-test-143416-untrusted-file-transfers/google-otel-packages/${KOKORO_BUILD_ID}"
+BUCKET_WITH_SLASH="${BUCKET}/"
+
+gsutil cp -r "${KOKORO_GFILE_DIR}"/* "${BUCKET_WITH_SLASH}"
+
+echo "_BUILD_ARTIFACTS_PACKAGE_GCS=${BUCKET}" > "${KOKORO_ARTIFACTS_DIR}/__output_parameters__"

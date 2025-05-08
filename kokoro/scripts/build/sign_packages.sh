@@ -28,4 +28,3 @@ chmod 666 "${PKG_DIR}"/*
 /escalated_sign/escalated_sign.py --tool=linux_gpg_sign \
   --job-dir=/escalated_sign_jobs -- \
   --loglevel=debug "${PKG_DIR}"/*.rpm
-

@@ -7,6 +7,7 @@ package googlesecretsprovider // import "github.com/open-telemetry/opentelemetry
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -24,7 +25,12 @@ type secretsManagerClient interface {
 }
 
 const (
-	schemeName = "googlesecretsprovider"
+	schemeName = "googlesecretmanagerprovider"
+)
+
+var (
+	ErrURINotSupported     = errors.New("uri is not supported by Google Secret Manager Provider")
+	ErrAccessSecretVersion = errors.New("failed to access secret version")
 )
 
 type provider struct {
@@ -41,33 +47,28 @@ func newProvider(confmap.ProviderSettings) confmap.Provider {
 
 func (p *provider) Retrieve(ctx context.Context, uri string, _ confmap.WatcherFunc) (*confmap.Retrieved, error) {
 	if !strings.HasPrefix(uri, schemeName+":") {
-		return nil, fmt.Errorf("%q uri is not supported by %q provider", uri, schemeName)
+		return nil, fmt.Errorf("%q: %w", uri, ErrURINotSupported)
 	}
 	secretName := strings.TrimPrefix(uri, schemeName+":")
-
 	if p.client == nil {
 		client, err := secretmanager.NewClient(ctx)
 		if err != nil {
-
 			return nil, fmt.Errorf("failed to create a Google secret manager client: %w", err)
 		}
-		defer client.Close()
 		p.client = client
 	}
 	req := &secretmanagerpb.AccessSecretVersionRequest{
 		Name: secretName,
 	}
 	resp, err := p.client.AccessSecretVersion(ctx, req)
-
 	if err != nil {
-		var apiErr *apierror.APIError
 		apiErr, ok := apierror.FromError(err)
-		if !ok {
-			return nil, fmt.Errorf("failed to access secret version: %w", err)
-		}
-		return nil, fmt.Errorf("failed to access secret version: %v", apiErr.Error())
-	}
 
+		if !ok {
+			return nil, fmt.Errorf("%w : %w", ErrAccessSecretVersion, err)
+		}
+		return nil, fmt.Errorf("%w: %v", ErrAccessSecretVersion, apiErr.Error())
+	}
 	return confmap.NewRetrieved(string(resp.GetPayload().GetData()))
 }
 
@@ -75,6 +76,9 @@ func (*provider) Scheme() string {
 	return schemeName
 }
 
-func (*provider) Shutdown(context.Context) error {
+func (p *provider) Shutdown(context.Context) error {
+	if p.client != nil {
+		p.client.Close()
+	}
 	return nil
 }

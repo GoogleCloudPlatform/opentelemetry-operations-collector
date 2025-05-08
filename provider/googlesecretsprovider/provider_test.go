@@ -5,33 +5,36 @@ package googlesecretsprovider
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"testing"
 
 	"cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
 	gax "github.com/googleapis/gax-go/v2"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/confmap"
+	"google.golang.org/grpc/codes"
 )
 
 // Define a mock secretsManagerClient for testing
 type mockSecretsManagerClient struct {
-	err          error
-	secretString string
+	validSecrets map[string]string
+	clientClosed bool
 }
 
-func (m *mockSecretsManagerClient) AccessSecretVersion(ctx context.Context, req *secretmanagerpb.AccessSecretVersionRequest, opts ...gax.CallOption) (*secretmanagerpb.AccessSecretVersionResponse, error) {
-	if m.err != nil {
-		return nil, m.err
+func (m *mockSecretsManagerClient) AccessSecretVersion(_ context.Context, req *secretmanagerpb.AccessSecretVersionRequest, _ ...gax.CallOption) (*secretmanagerpb.AccessSecretVersionResponse, error) {
+	secretString, ok := m.validSecrets[req.Name]
+	if !ok {
+		return nil, fmt.Errorf("secrets entry does not exist, error code: %v", codes.NotFound)
 	}
 	return &secretmanagerpb.AccessSecretVersionResponse{
 		Payload: &secretmanagerpb.SecretPayload{
-			Data: []byte(m.secretString),
+			Data: []byte(secretString),
 		},
 	}, nil
 }
 
 func (m *mockSecretsManagerClient) Close() error {
+	m.clientClosed = true
 	return nil
 }
 
@@ -44,12 +47,11 @@ func TestProvider_Retrieve_Success(t *testing.T) {
 	}{
 		{
 			name: "Happy path: valid uri, secret entry exists and is accessible",
-			uri:  schemeName + ":projects/my-project/secrets/test-secret-id/versions/1",
-			testSecretManager: &mockSecretsManagerClient{
-				err:          nil,
-				secretString: "test-secret-value",
-			},
-			wantSecret: "test-secret-value",
+			uri:  schemeName + ":projects/my-project/secrets/secret-1/versions/1",
+			testSecretManager: &mockSecretsManagerClient{validSecrets: map[string]string{
+				"projects/my-project/secrets/secret-1/versions/1": "secret-1",
+			}},
+			wantSecret: "secret-1",
 		},
 	}
 
@@ -58,70 +60,63 @@ func TestProvider_Retrieve_Success(t *testing.T) {
 			testProvider := &provider{
 				client: tc.testSecretManager,
 			}
-			defer testProvider.client.Close()
 			gotSecret, err := testProvider.Retrieve(context.Background(), tc.uri, nil)
-			if err != nil {
-				t.Errorf("%v: Retrieve() gotError = %v, want nil error", tc.name, err)
-			}
+			require.NoError(t, err)
+
 			gotSecretString, err := gotSecret.AsString()
-			if err != nil {
-				t.Errorf("%v: failed to retrieve the string value of the secret, error: %v", tc.name, err)
-			}
-			if gotSecretString != tc.wantSecret {
-				t.Errorf("%v: Retrieve() gotSecret = %v, want %v", tc.name, gotSecret, tc.wantSecret)
-			}
+			require.NoError(t, err)
+			require.Equal(t, tc.wantSecret, gotSecretString)
 		})
 	}
 }
 
 func TestProvider_Retrieve_Failure(t *testing.T) {
 	tests := []struct {
-		name              string
-		uri               string
-		testSecretManager *mockSecretsManagerClient
+		name      string
+		uri       string
+		wantError error
 	}{
-
 		{
-			name: "Invalid scheme",
-			uri:  "invalidscheme" + ":projects/my-project/secrets/test-secret-id/versions/1",
-			testSecretManager: &mockSecretsManagerClient{
-				err:          errors.New("invalid scheme"),
-				secretString: "test-secret-value",
-			},
+			name:      "Invalid scheme",
+			uri:       "invalidscheme:projects/my-project/secrets/test-secret-id/versions/1",
+			wantError: ErrURINotSupported,
 		},
 		{
-			name: "secret entry does not exist in the secret manager",
-			uri:  schemeName + ":projects/my-project/secrets/non-existent/versions/1",
-			testSecretManager: &mockSecretsManagerClient{
-				err:          errors.New("secret entry does not exist"),
-				secretString: "test-secret-value",
-			},
-		},
-		{
-			name: "invalid secret name",
-			uri:  schemeName + ":projects/my-project/secrets-invalid/non-existent/versions-invalid/1",
-			testSecretManager: &mockSecretsManagerClient{
-				err:          errors.New("secret name is invalid"),
-				secretString: "test-secret-value",
-			},
+			name:      "secret entry does not exist in the secret manager",
+			uri:       schemeName + ":projects/my-project/secrets/non-existent/versions/1",
+			wantError: ErrAccessSecretVersion,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			testProvider := &provider{
-				client: tc.testSecretManager,
+				client: &mockSecretsManagerClient{
+					validSecrets: map[string]string{
+						"projects/my-project/secrets/secret-1/versions/1": "secret-1",
+					},
+				},
 			}
-			defer testProvider.client.Close()
 			_, err := testProvider.Retrieve(context.Background(), tc.uri, nil)
-			if err == nil {
-				t.Errorf("%v: Retrieve() got nil error, want non-nil error", tc.name)
-			}
+			require.Error(t, err)
+			require.ErrorIs(t, err, tc.wantError)
 		})
 	}
 }
+
 func TestFactory(t *testing.T) {
 	p := NewFactory().Create(confmap.ProviderSettings{})
 	_, ok := p.(*provider)
 	require.True(t, ok)
+}
+
+func TestShutdown(t *testing.T) {
+	secretManager := &mockSecretsManagerClient{}
+	testProvider := &provider{
+		client: secretManager,
+	}
+	require.False(t, secretManager.clientClosed)
+	err := testProvider.Shutdown(context.Background())
+	require.NoError(t, err)
+	require.True(t, secretManager.clientClosed)
 }

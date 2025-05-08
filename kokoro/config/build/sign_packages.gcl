@@ -7,9 +7,9 @@ config build = common.build {
     artifacts = common.pkg_artifacts_patterns
   }
 
-  verify_gfile_rules = [{
-    resource = "misc_software://cloud-ops-agents-artifacts/google-cloud-opentelemetry-collector/otelcol-google"
-    artifacts_to_verify = common.pkg_artifacts_patterns
-  }]
-
+  // TODO: b/410866040#comment4 - Enable this when ready.
+  // verify_gfile_rules = [{
+  //   resource = "misc_software://cloud-ops-agents-artifacts/google-cloud-opentelemetry-collector/otelcol-google"
+  //   artifacts_to_verify = common.pkg_artifacts_patterns
+  // }]
 }

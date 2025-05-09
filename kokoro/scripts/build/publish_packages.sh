@@ -21,9 +21,8 @@
 set -eux
 set -o pipefail
 
-# TODO: pick better bucket
 # TODO: pick bucket based on environment (dev/prod)
-BUCKET="gs://stackdriver-test-143416-release-builds/google-otel-packages/${KOKORO_BUILD_ID}"
+BUCKET="gs://cloud-built-otel-collector-file-transfers/google-otel-packages/${KOKORO_BUILD_ID}"
 BUCKET_WITH_SLASH="${BUCKET}/"
 
 gsutil cp -r "${KOKORO_GFILE_DIR}"/* "${BUCKET_WITH_SLASH}"

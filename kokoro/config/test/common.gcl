@@ -1,11 +1,11 @@
 import '../utils/functions.gcl' as functions
 
 template config go_test = {
-  build_file = 'otelcol-google/kokoro/scripts/test/launch_go_test.sh'
+  build_file = 'otelcol-google/kokoro/scripts/test/go_test.sh'
 
   params {
     test_suite = external
-   
+
     environment {
       TEST_SUITE_NAME = test_suite
 

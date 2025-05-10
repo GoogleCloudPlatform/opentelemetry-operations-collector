@@ -61,8 +61,6 @@ export ZONES
 
 set_image_specs
 
-export_to_sponge_config "ARCH" "${ARCH:-}"
-
 # AGENT_PACKAGES_IN_GCS is used to tell Ops Agent integration tests
 # (https://github.com/GoogleCloudPlatform/ops-agent/tree/master/integration_test)
 # to install and use this custom build of the agent instead.

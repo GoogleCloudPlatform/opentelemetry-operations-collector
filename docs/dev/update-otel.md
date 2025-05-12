@@ -23,13 +23,13 @@ If you have added a new component upstream that needs to be added to one of our 
 Edit [registry.yaml](../../cmd/distrogen/registry.yaml) like so (choose the correct section for your component type, this assumes it's a receiver):
 ```yaml
 receivers:
-  newcomponent:
-    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/newcomponentreceiver
-    docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/newcomponentreceiver/README.md
+  componentname:
+    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/componentnamereceiver
+    docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/componentnamereceiver/README.md
 ```
 This will allow you to refer to it in a spec:
 ```yaml
 components:
   receivers:
-    - newcomponent
+    - componentname
 ```

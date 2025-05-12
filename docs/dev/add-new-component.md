@@ -45,4 +45,4 @@ If you are adding a new local component:
 
 After this, you will be able to refer to the component in the respective spec file.
 
-[embedded registry](../../cmd/distrogen/registry.yaml)]
+[embedded registry]: ../../cmd/distrogen/registry.yaml

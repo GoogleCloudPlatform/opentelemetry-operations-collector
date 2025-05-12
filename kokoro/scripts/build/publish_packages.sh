@@ -15,8 +15,8 @@
 
 # This script uploads the package files to a GCS bucket so that tests can read
 # the packages from there. This is simpler than using Artifact Registry because
-# the credential forwarding is more seamless. Non-public AR repos are a bit
-# finicky to use.
+# there is no need to take extra steps to forward credentials through
+# apt/yum (and zypper is even worse).
 
 set -eux
 set -o pipefail
@@ -24,6 +24,6 @@ set -o pipefail
 BUCKET="gs://${_GOOGLE_OTEL_STAGING_BUCKET}/google-otel-packages/${KOKORO_BUILD_ID}"
 BUCKET_WITH_SLASH="${BUCKET}/"
 
-gsutil cp -r "${KOKORO_GFILE_DIR}"/* "${BUCKET_WITH_SLASH}"
+gcloud storage cp "${KOKORO_GFILE_DIR}"/dist/* "${BUCKET_WITH_SLASH}"
 
 echo "_BUILD_ARTIFACTS_PACKAGE_GCS=${BUCKET}" > "${KOKORO_ARTIFACTS_DIR}/__output_parameters__"

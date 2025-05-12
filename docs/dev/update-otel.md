@@ -15,21 +15,3 @@ Most of the time, the `opentelemetry_contrib_version` is the same as the `opente
 ## Updating Stable Version
 
 Go to [the core repo](https://github.com/open-telemetry/opentelemetry-collector) and look at the GitHub Release entry for the `opentelemetry_version` you are updating to. The `v1.x.x` version will be specified within the same Release entry name, and this is the `stable` version to use. We are working on automation to automatically detect this from the repo directly; this works for component updating but not for distribution generation yet (see #287).
-
-## Adding a new component
-
-If you have added a new component upstream that needs to be added to one of our collectors, you will need to update the `distrogen` embedded registry so you can refer to it in spec files.
-
-Edit [registry.yaml](../../cmd/distrogen/registry.yaml) like so (choose the correct section for your component type, this assumes it's a receiver):
-```yaml
-receivers:
-  componentname:
-    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/componentnamereceiver
-    docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/componentnamereceiver/README.md
-```
-This will allow you to refer to it in a spec:
-```yaml
-components:
-  receivers:
-    - componentname
-```

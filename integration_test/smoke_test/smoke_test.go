@@ -36,8 +36,11 @@ import (
 )
 
 const (
-	// This suffix helps Kokoro set the right Content-type for log files. See b/202432085.
-	txtSuffix = ".txt"
+	resourceType = "gce_instance"
+)
+
+var (
+	testRunID = os.Getenv("KOKORO_BUILD_ID")
 )
 
 // recommendedMachineType returns a reasonable setting for a VM's machine type
@@ -76,6 +79,9 @@ func runDiagnostics(ctx context.Context, logger *logging.DirectoryLogger, vm *gc
 	gce.RunRemotely(ctx, logger.ToFile("journalctl_otelcol.txt"), vm, "sudo journalctl -u otelcol-google")
 	gce.RunRemotely(ctx, logger.ToFile("journalctl_full_output.txt"), vm, "sudo journalctl -xe")
 
+	// This suffix helps Kokoro set the right Content-type for log files. See b/202432085.
+	txtSuffix := ".txt"
+
 	fileList := []string{
 		gce.SyslogLocation(vm.ImageSpec),
 		collectorConfigPath(vm.ImageSpec),
@@ -112,13 +118,6 @@ func commonSetupWithExtraCreateArgumentsAndMetadata(t *testing.T, imageSpec stri
 		runDiagnostics(ctx, logger, vm)
 	})
 	return ctx, logger, vm
-}
-
-// setupMainLogAndVM sets up a VM for testing and returns it, along with a logger
-// that writes to a file called main_log.txt.
-func setupMainLogAndVM(t *testing.T, imageSpec string) (context.Context, *log.Logger, *gce.VM) {
-	ctx, dirLog, vm := commonSetupWithExtraCreateArgumentsAndMetadata(t, imageSpec, nil, nil)
-	return ctx, dirLog.ToMainLog(), vm
 }
 
 // PackageLocation describes a location where packages live.
@@ -286,17 +285,113 @@ func setupOtelCollector(ctx context.Context, logger *log.Logger, vm *gce.VM, con
 	return setupOtelCollectorFrom(ctx, logger, vm, config, locationFromEnvVars())
 }
 
-func TestInstall(t *testing.T) {
+func MetricsTest(ctx context.Context, t *testing.T, logger *log.Logger, vm *gce.VM) {
+	representativeMetric := "workload.googleapis.com/otelcol_exporter_sent_metric_points"
+
+	window := 10 * time.Minute
+	filters := []string{
+		fmt.Sprintf("metric.type = %q", representativeMetric),
+		fmt.Sprintf("resource.type = %q", resourceType),
+		fmt.Sprintf("metric.labels.otelcol_google_smoke = %s", testRunID),
+	}
+	_, err := gce.WaitForMetric(ctx, logger, vm, representativeMetric, window, filters, false /*isPrometheus*/)
+	if err != nil {
+		logger.Printf("Could not find representative metric: %q", representativeMetric)
+		t.Fatal(err)
+	}
+	logger.Print("Found metric; subtest complete.")
+}
+
+func LoggingTest(ctx context.Context, t *testing.T, logger *log.Logger, vm *gce.VM) {
+	labelName := "otelcol_google_smoke"
+	window := 10 * time.Minute
+	query := fmt.Sprintf(`resource.type="%s" AND labels.%s="%s"`, resourceType, labelName, testRunID)
+	if err := gce.WaitForLog(ctx, logger, vm, "google-otelcol/smoke-test", window, query); err != nil {
+		t.Fatal(err)
+	}
+	logger.Print("Found log; subtest complete.")
+}
+
+func TracesTest(ctx context.Context, t *testing.T, logger *log.Logger, vm *gce.VM) {
+	options := gce.WaitForTraceOptions{
+		Window:  10 * time.Minute,
+		Filters: []string{fmt.Sprintf("+otelcol_google_smoke:%s", testRunID)},
+	}
+	trace, err := gce.WaitForTrace(ctx, logger, vm, options)
+	if err != nil {
+		t.Fatalf("Could not find any matching traces: %w", err)
+	}
+	logger.Printf("Found trace, subtest complete: %+v", trace)
+}
+
+func TestSmoke(t *testing.T) {
 	t.Parallel()
 	gce.RunForEachImage(t, func(t *testing.T, imageSpec string) {
 		t.Parallel()
 		if gce.IsWindows(imageSpec) {
 			t.SkipNow()
 		}
-		ctx, logger, vm := setupMainLogAndVM(t, imageSpec)
+		ctx, dirLog, vm := commonSetupWithExtraCreateArgumentsAndMetadata(t, imageSpec, nil, nil)
+		logger := dirLog.ToMainLog()
 
-		if err := setupOtelCollector(ctx, logger, vm, ""); err != nil {
+		config := fmt.Sprintf(`receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4317
+processors:
+  resourcedetection:
+    detectors:
+    - gcp
+  transform:
+    error_mode: ignore
+    metric_statements:
+    - context: datapoint
+      statements:
+      - set(attributes["otelcol_google_smoke"], "%s")
+    log_statements:
+    - context: log
+      statements:
+      - set(attributes["otelcol_google_smoke"], "%s")
+    trace_statements:
+    - context: spanevent
+      statements:
+      - set(resource.attributes["otelcol_google_smoke"], "%s")
+exporters:
+  googlecloud:
+    log:
+      default_log_name: google-otelcol/smoke-test
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [resourcedetection, transform]
+      exporters: [googlecloud]
+  telemetry:
+    metrics:
+      readers:
+        - periodic:
+            exporter:
+              otlp:
+                protocol: http/protobuf
+                endpoint: 0.0.0.0:4317
+`, testRunID, testRunID, testRunID)
+
+		if err := setupOtelCollector(ctx, logger, vm, config); err != nil {
 			t.Fatal(err)
 		}
+
+		t.Run("metrics", func(t *testing.T) {
+			t.Parallel()
+			MetricsTest(ctx, t, logger, vm)
+		})
+		t.Run("logging", func(t *testing.T) {
+			t.Parallel()
+			LoggingTest(ctx, t, logger, vm)
+		})
+		t.Run("traces", func(t *testing.T) {
+			t.Parallel()
+			TracesTest(ctx, t, logger, vm)
+		})
 	})
 }

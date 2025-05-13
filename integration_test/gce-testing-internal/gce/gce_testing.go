@@ -406,9 +406,9 @@ func lookupMetric(ctx context.Context, logger *log.Logger, vm *VM, metric string
 }
 
 // lookupTrace does a single lookup of any trace from the given VM in the backend.
-func lookupTrace(ctx context.Context, vm *VM, window time.Duration) *trace.TraceIterator {
+func lookupTrace(ctx context.Context, vm *VM, options WaitForTraceOptions) *trace.TraceIterator {
 	now := time.Now()
-	start := timestamppb.New(now.Add(-window))
+	start := timestamppb.New(now.Add(-options.Window))
 	end := timestamppb.New(now)
 	filter := fmt.Sprintf("+g.co/r/gce_instance/instance_id:%d", vm.ID)
 	req := &cloudtrace.ListTracesRequest{
@@ -512,10 +512,15 @@ func WaitForMetricSeries(ctx context.Context, logger *log.Logger, vm *VM, metric
 	return nil, fmt.Errorf("WaitForMetricSeries(metric=%s, extraFilters=%v) failed: %s", metric, extraFilters, exhaustedRetriesSuffix)
 }
 
-// Temporary overload for WaitForTrace, which will soon change to have a
-// different signature.
+type WaitForTraceOptions struct {
+	// Trailing time window to include in the query, measured from now.
+	Window time.Duration
+}
+
+// Temporary overload for WaitForTrace.
+// TODO: Switch all callers to WaitForTrace and delete this.
 func WaitForTraceDeprecated(ctx context.Context, logger *log.Logger, vm *VM, window time.Duration) (*cloudtrace.Trace, error) {
-	return WaitForTrace(ctx, logger, vm, window)
+	return WaitForTrace(ctx, logger, vm, WaitForTraceOptions{Window: window})
 }
 
 // WaitForTrace looks for any trace from the given VM in the backend and returns
@@ -526,9 +531,9 @@ func WaitForTraceDeprecated(ctx context.Context, logger *log.Logger, vm *VM, win
 // Only the ProjectId and TraceId fields are populated. To get other fields,
 // including spans, call traceClient.GetTrace with the TraceID returned from
 // this function.
-func WaitForTrace(ctx context.Context, logger *log.Logger, vm *VM, window time.Duration) (*cloudtrace.Trace, error) {
+func WaitForTrace(ctx context.Context, logger *log.Logger, vm *VM, options WaitForTraceOptions) (*cloudtrace.Trace, error) {
 	for attempt := 1; attempt <= TraceQueryMaxAttempts; attempt++ {
-		it := lookupTrace(ctx, vm, window)
+		it := lookupTrace(ctx, vm, options)
 		trace, err := firstTrace(it)
 		if trace != nil && err == nil {
 			return trace, nil

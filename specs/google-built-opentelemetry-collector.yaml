@@ -21,9 +21,9 @@ blurb: >-
   The Google-Built OpenTelemetry Collector is an open-source, production-ready build
   of the upstream OpenTelemetry Collector that is built with upstream OpenTelemetry
   components.
-opentelemetry_version: 0.125.0
-opentelemetry_contrib_version: 0.125.0
-opentelemetry_stable_version: 1.31.0
+opentelemetry_version: 0.126.0
+opentelemetry_contrib_version: 0.126.0
+opentelemetry_stable_version: 1.32.0
 binary_name: otelcol-google
 collector_cgo: false
 go_version: 1.24.3
@@ -127,3 +127,4 @@ components:
     - http
     - https
     - yaml
+    - googlesecretmanager

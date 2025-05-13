@@ -145,7 +145,7 @@ clean-build-dir:
 
 .PHONY: goreleaser-release
 goreleaser-release: $(GORELEASER_BIN) ocb-generate
-	$(SET_GO_BIN_PATH) $(GORELEASER_BIN) release --snapshot --clean
+	$(SET_GO_BIN_PATH) $(GORELEASER_BIN) release --clean
 	# I love umask it's my favourite
 	chmod -R o+r ./dist
 

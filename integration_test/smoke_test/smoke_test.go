@@ -73,7 +73,7 @@ func runDiagnostics(ctx context.Context, logger *logging.DirectoryLogger, vm *gc
 		panic("Unimplemented call to runDiagnostics for Windows")
 	}
 
-	gce.RunRemotely(ctx, logger.ToFile("journalctl_otelcol.txt"), vm, "sudo journalctl -u otelcol")
+	gce.RunRemotely(ctx, logger.ToFile("journalctl_otelcol.txt"), vm, "sudo journalctl -u otelcol-google")
 	gce.RunRemotely(ctx, logger.ToFile("journalctl_full_output.txt"), vm, "sudo journalctl -xe")
 
 	fileList := []string{

@@ -31,7 +31,7 @@ function set_image_specs() {
     echo "ARCH is required." 1>&2
     return 1
   fi
-  
+
   # Extracts all representative and exhaustive image_specs matching $ARCH from distros.yaml.
   IMAGE_SPECS="$(python3 -c "import yaml
 all_distros = []
@@ -61,13 +61,7 @@ export ZONES
 
 set_image_specs
 
-# AGENT_PACKAGES_IN_GCS is used to tell Ops Agent integration tests
-# (https://github.com/GoogleCloudPlatform/ops-agent/tree/master/integration_test)
-# to install and use this custom build of the agent instead.
-AGENT_PACKAGES_IN_GCS="gs://invalid-bucket/"
-export AGENT_PACKAGES_IN_GCS
-
-LOGS_DIR=logs
+LOGS_DIR="${KOKORO_ARTIFACTS_DIR}/logs"
 mkdir -p "${LOGS_DIR}"
 
 cd "integration_test/${TEST_SUITE_NAME}"

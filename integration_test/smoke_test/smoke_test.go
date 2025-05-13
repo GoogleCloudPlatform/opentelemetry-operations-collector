@@ -182,7 +182,7 @@ func installPackageFromGCS(ctx context.Context, logger *log.Logger, vm *gce.VM, 
 	if err := gce.InstallGsutilIfNeeded(ctx, logger, vm); err != nil {
 		return err
 	}
-	unameOutput, err := gce.RunRemotely(ctx, logger, vm, "uname --hardware-platform")
+	unameOutput, err := gce.RunRemotely(ctx, logger, vm, "uname --machine")
 	if err != nil {
 		return err
 	}

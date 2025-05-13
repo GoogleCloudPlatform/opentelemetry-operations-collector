@@ -512,6 +512,12 @@ func WaitForMetricSeries(ctx context.Context, logger *log.Logger, vm *VM, metric
 	return nil, fmt.Errorf("WaitForMetricSeries(metric=%s, extraFilters=%v) failed: %s", metric, extraFilters, exhaustedRetriesSuffix)
 }
 
+// Temporary overload for WaitForTrace, which will soon change to have a
+// different signature.
+func WaitForTraceDeprecated(ctx context.Context, logger *log.Logger, vm *VM, window time.Duration) (*cloudtrace.Trace, error) {
+	return WaitForTrace(ctx, logger, vm, window)
+}
+
 // WaitForTrace looks for any trace from the given VM in the backend and returns
 // it if it exists. An error is returned otherwise. This function will retry
 // "no data" errors a fixed number of times. This is useful because it takes

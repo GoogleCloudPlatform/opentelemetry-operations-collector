@@ -26,6 +26,28 @@ BUCKET_WITH_SLASH="${BUCKET}/"
 
 gcloud storage cp "${KOKORO_GFILE_DIR}"/dist/* "${BUCKET_WITH_SLASH}"
 
+APT_REPO="gboc-apt-standard-${KOKORO_BUILD_ID}"
+YUM_REPO="gboc-yum-standard-${KOKORO_BUILD_ID}"
 
+LOCATION=us
+DESCRIPTION="Staging repository for GBOC Linux Packages"
+# "ephemeral=true" will cause the repo to be cleaned up after a month
+LABELS="ephemeral=true,kokoro_build_id=${KOKORO_BUILD_ID}"
 
-echo "_BUILD_ARTIFACTS_PACKAGE_GCS=${BUCKET}" > "${KOKORO_ARTIFACTS_DIR}/__output_parameters__"
+gcloud artifacts repositories create "${APT_REPO}" \
+    --repository-format=apt \
+    --project="${_STAGING_ARTIFACTS_PROJECT_ID}" \
+    --location="${LOCATION}" \
+    --description="${DESCRIPTION}" \
+    --labels="${LABELS}"
+
+gcloud artifacts repositories create "${YUM_REPO}" \
+    --repository-format=yum \
+    --project="${_STAGING_ARTIFACTS_PROJECT_ID}" \
+    --location="${LOCATION}" \
+    --description="${DESCRIPTION}" \
+    --labels="${LABELS}"
+
+echo "_BUILD_ARTIFACTS_PACKAGE_GCS=${BUCKET}
+_APT_STAGING_REPO=${APT_REPO}
+_YUM_STAGING_REPO=${YUM_REPO}" > "${KOKORO_ARTIFACTS_DIR}/__output_parameters__"

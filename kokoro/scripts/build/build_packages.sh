@@ -36,21 +36,18 @@ function cheat() {
 function build() {
   unset GOROOT
 
-  # TODO: remove this
-  echo "_VERSION: ${_VERSION}"
-
   # Avoids "fatal: detected dubious ownership in repository" errors.
   #git config --global --add safe.directory "${KOKORO_ARTIFACTS_DIR}/git/otelcol-google"
 
   make goreleaser-release
 }
 
-cheat
-# build
+# cheat
+build
 
-./dist/otelcol-google-linux_linux_amd64_v1 version || echo 'version 1 failed'
-./dist/otelcol-google-linux_linux_amd64_v1 -version || echo 'version 2 failed'
-./dist/otelcol-google-linux_linux_amd64_v1 --version || echo 'version 3 failed'
+./dist/otelcol-google-linux_linux_amd64_v1/otelcol-google version || echo 'version 1 failed'
+./dist/otelcol-google-linux_linux_amd64_v1/otelcol-google -version || echo 'version 2 failed'
+./dist/otelcol-google-linux_linux_amd64_v1/otelcol-google --version || echo 'version 3 failed'
 
 ls dist || true  # Temporary, for debugging.
 

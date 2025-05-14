@@ -320,7 +320,7 @@ func TracesTest(ctx context.Context, t *testing.T, logger *log.Logger, vm *gce.V
 	}
 	trace, err := gce.WaitForTrace(ctx, logger, vm, options)
 	if err != nil {
-		t.Fatalf("Could not find any matching traces: %w", err)
+		t.Fatalf("Could not find any matching traces: %v", err)
 	}
 	logger.Printf("Found trace, subtest complete: %+v", trace)
 }

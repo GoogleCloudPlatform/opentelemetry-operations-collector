@@ -50,6 +50,7 @@ components:
         - k8sattributes
         - logdedup
         - metricstransform
+        - metricstarttime
         - probabilisticsampler
         - redaction
         - remotetap

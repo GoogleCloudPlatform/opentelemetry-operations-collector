@@ -290,9 +290,8 @@ func MetricsTest(ctx context.Context, t *testing.T, logger *log.Logger, vm *gce.
 
 	window := 10 * time.Minute
 	filters := []string{
-		fmt.Sprintf("metric.type = %q", representativeMetric),
 		fmt.Sprintf("resource.type = %q", resourceType),
-		fmt.Sprintf("metric.labels.otelcol_google_smoke = %s", testRunID),
+		fmt.Sprintf("metric.labels.otelcol_google_smoke = %q", testRunID),
 	}
 	_, err := gce.WaitForMetric(ctx, logger, vm, representativeMetric, window, filters, false /*isPrometheus*/)
 	if err != nil {

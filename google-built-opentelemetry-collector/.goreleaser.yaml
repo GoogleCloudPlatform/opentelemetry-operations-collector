@@ -73,3 +73,5 @@ nfpms:
     maintainer: Google Cloud Platform <google@google.com> # something better than this
     description: OpenTelemetry Collector Built By Google
     license: Apache 2.0
+release:
+  disable: true

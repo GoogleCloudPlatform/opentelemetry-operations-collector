@@ -49,6 +49,7 @@ The Google-Built OpenTelemetry Collector is an open-source, production-ready bui
 | logdedup | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/logdedupprocessor/README.md) |
 | memorylimiter | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/processor/memorylimiterprocessor/README.md) |
 | metricsgeneration | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/metricsgenerationprocessor/README.md) |
+| metricstarttime | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/metricstarttimeprocessor/README.md) |
 | metricstransform | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/metricstransformprocessor/README.md) |
 | probabilisticsampler | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/probabilisticsamplerprocessor/README.md) |
 | redaction | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/redactionprocessor/README.md) |

@@ -28,6 +28,10 @@ template config go_test = {
       TRANSFERS_BUCKET = 'stackdriver-test-143416-untrusted-file-transfers'
       SERVICE_EMAIL =
           'build-and-test-external@stackdriver-test-143416.iam.gserviceaccount.com'
+
+      // Tell the test where the logs will be uploaded to (GCS in this case).
+      LOG_UPLOAD_URL_ROOT =
+          'https://console.cloud.google.com/storage/browser/stackdriver-test-143416-gboc-test-logs/'
     }
   }
   action = [{

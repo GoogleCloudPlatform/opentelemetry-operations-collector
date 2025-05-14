@@ -18,15 +18,6 @@ set -o pipefail
 
 PKG_DIR="${KOKORO_GFILE_DIR}"/dist
 
-# Temporary, for debugging.
-function print_layout() {
-  echo "${KOKORO_GFILE_DIR}"
-  ls "${KOKORO_GFILE_DIR}" || true
-  ls "${KOKORO_GFILE_DIR}"/dist || true
-  ls "${KOKORO_ARTIFACTS_DIR}" || true
-}
-print_layout
-
 chmod 777 "${PKG_DIR}"
 chmod 666 "${PKG_DIR}"/*
 

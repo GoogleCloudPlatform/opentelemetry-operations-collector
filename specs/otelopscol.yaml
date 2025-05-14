@@ -14,7 +14,7 @@
 
 name: otelopscol
 description: "OpenTelemetry Collector binary used by the Ops Agent"
-opentelemetry_version: 0.121.0
+opentelemetry_version: 0.126.0
 binary_name: otelopscol
 build_container: ubuntu
 collector_cgo: true
@@ -79,4 +79,10 @@ components:
     - otlphttp
   extensions:
     - zpages
+  providers:
+    - googlesecretmanager
 
+replaces:
+  - from: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver
+    to: github.com/ridwanmsharif/opentelemetry-collector-contrib/receiver/prometheusreceiver v0.0.0-20250506222945-7c6fb072b376
+    reason: https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/39912

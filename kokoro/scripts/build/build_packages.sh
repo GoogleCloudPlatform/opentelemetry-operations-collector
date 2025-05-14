@@ -15,17 +15,16 @@
 
 set -eux
 
-# Temporary, for debugging.
-function print_layout() {
-  echo "${KOKORO_ARTIFACTS_DIR}"
-  ls "${KOKORO_ARTIFACTS_DIR}" || true
-  pwd
-  ls .
-}
-print_layout
-
 cd "${KOKORO_ARTIFACTS_DIR}"/git/otelcol-google/google-built-opentelemetry-collector
+
+# The image we're using at the moment has set GOROOT and that mucks everything
+# up. Unset it and let's look for a cleaner image to use as a base.
+unset GOROOT
 
 make goreleaser-release
 
-ls dist || true  # Temporary, for debugging.
+ls dist || echo 'expected outputs to be put into a "dist" directory, proceeding anyway'
+
+# Put the output folder directly in KOKORO_ARTIFACTS_DIR instead of being deeply
+# nested within it.
+mv dist "${KOKORO_ARTIFACTS_DIR}"/dist

@@ -40,6 +40,9 @@ builds:
       - "-trimpath"
       - "-buildvcs=false"
 
+snapshot:
+  version_template: "{{ Env._VERSION }}"
+
 nfpms:
   - package_name: otelcol-google
     contents:

@@ -36,8 +36,10 @@ function cheat() {
 function build() {
   unset GOROOT
 
+  echo "_VERSION: ${_VERSION}"
+
   # Avoids "fatal: detected dubious ownership in repository" errors.
-  git config --global --add safe.directory "${KOKORO_ARTIFACTS_DIR}/git/otelcol-google"
+  #git config --global --add safe.directory "${KOKORO_ARTIFACTS_DIR}/git/otelcol-google"
 
   make goreleaser-release
 }

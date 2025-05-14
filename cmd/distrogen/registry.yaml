@@ -323,6 +323,9 @@ processors:
     metricsgeneration:
         gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricsgenerationprocessor
         docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/metricsgenerationprocessor/README.md
+    metricstarttime:
+        gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstarttimeprocessor
+        docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/metricstarttimeprocessor/README.md
     metricstransform:
         gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor
         docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/metricstransformprocessor/README.md

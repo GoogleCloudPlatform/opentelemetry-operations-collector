@@ -639,3 +639,7 @@ providers:
         gomod: go.opentelemetry.io/collector/confmap/provider/yamlprovider
         stable: true
         docs_url: https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/confmap/provider/yamlprovider
+    googlesecretmanager:
+        gomod: github.com/open-telemetry/opentelemetry-collector-contrib/confmap/provider/googlesecretmanagerprovider
+        stable: true
+        docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/confmap/provider/googlesecretmanagerprovider

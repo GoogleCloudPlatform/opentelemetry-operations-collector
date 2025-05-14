@@ -63,7 +63,7 @@ func collectorConfigPath(imageSpec string) string {
 	if gce.IsWindows(imageSpec) {
 		panic("Unimplemented call to collectorConfigPath for Windows")
 	}
-	return "/etc/otelcol/config.yaml"
+	return "/etc/otelcol-google/config.yaml"
 }
 
 // runDiagnostics will fetch as much debugging info as it can from the

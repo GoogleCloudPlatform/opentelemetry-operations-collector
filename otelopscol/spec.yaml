@@ -5,8 +5,8 @@ description: OpenTelemetry Collector binary used by the Ops Agent
 blurb: ""
 build_container: ubuntu
 version: ""
-opentelemetry_version: 0.121.0
-opentelemetry_contrib_version: 0.121.0
+opentelemetry_version: 0.126.0
+opentelemetry_contrib_version: 0.126.0
 opentelemetry_stable_version: ""
 go_version: 1.23.2
 binary_name: otelopscol
@@ -69,6 +69,8 @@ components:
         - otlphttp
     extensions:
         - zpages
+    providers:
+        - googlesecretmanager
 replaces:
     - from: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver
       to: github.com/ridwanmsharif/opentelemetry-collector-contrib/receiver/prometheusreceiver v0.0.0-20250506222945-7c6fb072b376

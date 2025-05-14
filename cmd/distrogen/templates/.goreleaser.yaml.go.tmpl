@@ -1,6 +1,9 @@
 version: 2
 project_name: opentelemetry-operations-collector
 
+snapshot:
+  version_template: {{ .Version }}
+
 env:
   - LD_FLAGS=-s -w
   - CGO_ENABLED={{ if .CollectorCGO }}1{{else}}0{{end}}

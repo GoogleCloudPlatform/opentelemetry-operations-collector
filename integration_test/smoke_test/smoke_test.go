@@ -76,7 +76,7 @@ func runDiagnostics(ctx context.Context, logger *logging.DirectoryLogger, vm *gc
 		panic("Unimplemented call to runDiagnostics for Windows")
 	}
 
-	gce.RunRemotely(ctx, logger.ToFile("journalctl_otelcol.txt"), vm, "sudo journalctl -u otelcol-google")
+	gce.RunRemotely(ctx, logger.ToFile("journalctl_otelcol-google.txt"), vm, "sudo journalctl -u otelcol-google")
 	gce.RunRemotely(ctx, logger.ToFile("journalctl_full_output.txt"), vm, "sudo journalctl -xe")
 
 	// This suffix helps Kokoro set the right Content-type for log files. See b/202432085.
@@ -140,7 +140,7 @@ func restartCommandForPlatform(platform string) string {
 	if gce.IsWindows(platform) {
 		panic("Unimplemented call to restartCommandForPlatform for Windows")
 	}
-	return "sudo systemctl restart otelcol"
+	return "sudo systemctl restart otelcol-google"
 }
 
 // isRPMBased checks if the image spec is RPM based.

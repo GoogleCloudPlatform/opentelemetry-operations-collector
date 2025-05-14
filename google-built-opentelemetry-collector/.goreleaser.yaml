@@ -41,7 +41,7 @@ builds:
       - "-buildvcs=false"
 
 snapshot:
-  version_template: "{{ Env._VERSION }}"
+  version_template: "{{ .Env._VERSION }}"
 
 nfpms:
   - package_name: otelcol-google

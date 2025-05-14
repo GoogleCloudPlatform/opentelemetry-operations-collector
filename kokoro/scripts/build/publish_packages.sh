@@ -26,4 +26,6 @@ BUCKET_WITH_SLASH="${BUCKET}/"
 
 gcloud storage cp "${KOKORO_GFILE_DIR}"/dist/* "${BUCKET_WITH_SLASH}"
 
+
+
 echo "_BUILD_ARTIFACTS_PACKAGE_GCS=${BUCKET}" > "${KOKORO_ARTIFACTS_DIR}/__output_parameters__"

@@ -77,7 +77,7 @@ extensions:
 connectors:
 
 providers:
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/confmap/provider/googlesecretmanagerprovider v
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/confmap/provider/googlesecretmanagerprovider v0.126.0
 
 replaces:
 # https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/39912

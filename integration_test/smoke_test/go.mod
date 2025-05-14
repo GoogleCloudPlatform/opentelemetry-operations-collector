@@ -2,7 +2,7 @@ module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/integra
 
 go 1.24
 
-require github.com/GoogleCloudPlatform/opentelemetry-operations-collector/integration_test/gce-testing-internal v0.0.0-20250512153010-d7d11bd362d0
+require github.com/GoogleCloudPlatform/opentelemetry-operations-collector/integration_test/gce-testing-internal v0.0.0-20250514143559-51c69ab4318b
 
 require (
 	cel.dev/expr v0.20.0 // indirect

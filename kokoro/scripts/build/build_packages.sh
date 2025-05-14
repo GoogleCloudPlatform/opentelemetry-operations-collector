@@ -36,6 +36,7 @@ function cheat() {
 function build() {
   unset GOROOT
 
+  # TODO: remove this
   echo "_VERSION: ${_VERSION}"
 
   # Avoids "fatal: detected dubious ownership in repository" errors.

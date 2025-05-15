@@ -34,19 +34,19 @@ DESCRIPTION="Staging repository for GBOC Linux Packages"
 # "ephemeral=true" will cause the repo to be cleaned up after a month
 LABELS="ephemeral=true,kokoro_build_id=${KOKORO_BUILD_ID}"
 
-gcloud artifacts repositories create "${APT_REPO}" \
-    --repository-format=apt \
-    --project="${_STAGING_ARTIFACTS_PROJECT_ID}" \
-    --location="${LOCATION}" \
-    --description="${DESCRIPTION}" \
-    --labels="${LABELS}"
-
-gcloud artifacts repositories create "${YUM_REPO}" \
-    --repository-format=yum \
-    --project="${_STAGING_ARTIFACTS_PROJECT_ID}" \
-    --location="${LOCATION}" \
-    --description="${DESCRIPTION}" \
-    --labels="${LABELS}"
+##gcloud artifacts repositories create "${APT_REPO}" \
+##    --repository-format=apt \
+##    --project="${_STAGING_ARTIFACTS_PROJECT_ID}" \
+##    --location="${LOCATION}" \
+##    --description="${DESCRIPTION}" \
+##    --labels="${LABELS}"
+##
+##gcloud artifacts repositories create "${YUM_REPO}" \
+##    --repository-format=yum \
+##    --project="${_STAGING_ARTIFACTS_PROJECT_ID}" \
+##    --location="${LOCATION}" \
+##    --description="${DESCRIPTION}" \
+##    --labels="${LABELS}"
 
 echo "_BUILD_ARTIFACTS_PACKAGE_GCS=${BUCKET}
 _APT_STAGING_REPO=${APT_REPO}

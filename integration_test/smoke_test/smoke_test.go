@@ -16,6 +16,7 @@
 // - ZONES
 // - IMAGE_SPECS
 // - PROJECT
+// - OTELCOL_CONFIGS_DIR
 // - _BUILD_ARTIFACTS_PACKAGE_GCS (optional)
 
 package smoke
@@ -29,6 +30,7 @@ import (
 	"path"
 	"strings"
 	"testing"
+	"text/template"
 	"time"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/integration_test/gce-testing-internal/gce"
@@ -284,7 +286,7 @@ func MetricsTest(ctx context.Context, t *testing.T, logger *log.Logger, vm *gce.
 	window := 10 * time.Minute
 	filters := []string{
 		fmt.Sprintf("resource.type = %q", resourceType),
-		fmt.Sprintf("metric.labels.otelcol_google_smoke = %q", testRunID),
+		fmt.Sprintf("metric.labels.otelcol_google_e2e = %q", testRunID),
 	}
 	_, err := gce.WaitForMetric(ctx, logger, vm, representativeMetric, window, filters, false /*isPrometheus*/)
 	if err != nil {
@@ -295,9 +297,8 @@ func MetricsTest(ctx context.Context, t *testing.T, logger *log.Logger, vm *gce.
 }
 
 func LoggingTest(ctx context.Context, t *testing.T, logger *log.Logger, vm *gce.VM) {
-	labelName := "otelcol_google_smoke"
 	window := 10 * time.Minute
-	query := fmt.Sprintf(`resource.type="%s" AND labels.%s="%s"`, resourceType, labelName, testRunID)
+	query := fmt.Sprintf(`resource.type="%s" AND labels.otelcol_google_e2e="%s"`, resourceType, testRunID)
 	if err := gce.WaitForLog(ctx, logger, vm, "google-otelcol/smoke-test", window, query); err != nil {
 		t.Fatal(err)
 	}
@@ -308,7 +309,7 @@ func TracesTest(ctx context.Context, t *testing.T, logger *log.Logger, vm *gce.V
 	options := gce.WaitForTraceOptions{
 		Window: 10 * time.Minute,
 		// TODO: reenable this
-		//Filters: []string{fmt.Sprintf("+otelcol_google_smoke:%s", testRunID)},
+		//Filters: []string{fmt.Sprintf("+otelcol_google_e2e:%s", testRunID)},
 	}
 	trace, err := gce.WaitForTrace(ctx, logger, vm, options)
 	if err != nil {
@@ -317,8 +318,43 @@ func TracesTest(ctx context.Context, t *testing.T, logger *log.Logger, vm *gce.V
 	logger.Printf("Found trace, subtest complete: %+v", trace)
 }
 
+// getSmokeOtelcolConfig reads smoke.yaml from OTEL_CONFIGS_DIR and returns it
+// after substituting in TestRunID.
+func getSmokeOtelcolConfig(t *testing.T) string {
+	configDir := os.Getenv("OTELCOL_CONFIGS_DIR")
+	if configDir == "" {
+		t.Fatal("Must pass nonempty value for OTELCOL_CONFIGS_DIR")
+	}
+	configPath := path.Join(configDir, "smoke.yaml")
+	t.Logf("Reading otelcol config from %q", configPath)
+
+	temp, err := template.New("smoke.yaml").ParseFiles(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	type Data struct {
+		TestRunID string
+	}
+	data := Data{
+		TestRunID: os.Getenv("KOKORO_BUILD_ID"),
+	}
+	if data.TestRunID == "" {
+		t.Fatal("This test does not support being run outside of Kokoro.")
+	}
+	var builder strings.Builder
+	if err := temp.Execute(&builder, data); err != nil {
+		t.Fatal(err)
+	}
+
+	return builder.String()
+}
+
 func TestSmoke(t *testing.T) {
 	t.Parallel()
+
+	config := getSmokeOtelcolConfig(t)
+
 	gce.RunForEachImage(t, func(t *testing.T, imageSpec string) {
 		t.Parallel()
 		if gce.IsWindows(imageSpec) {
@@ -327,49 +363,7 @@ func TestSmoke(t *testing.T) {
 		ctx, dirLog, vm := commonSetupWithExtraCreateArgumentsAndMetadata(t, imageSpec, nil, nil)
 		logger := dirLog.ToMainLog()
 
-		config := fmt.Sprintf(`receivers:
-  otlp:
-    protocols:
-      http:
-        endpoint: 0.0.0.0:4317
-processors:
-  resourcedetection:
-    detectors:
-    - gcp
-  transform:
-    error_mode: ignore
-    metric_statements:
-    - context: datapoint
-      statements:
-      - set(attributes["otelcol_google_smoke"], "%s")
-    log_statements:
-    - context: log
-      statements:
-      - set(attributes["otelcol_google_smoke"], "%s")
-    trace_statements:
-    - context: spanevent
-      statements:
-      - set(resource.attributes["otelcol_google_smoke"], "%s")
-exporters:
-  googlecloud:
-    log:
-      default_log_name: google-otelcol/smoke-test
-service:
-  pipelines:
-    metrics:
-      receivers: [otlp]
-      processors: [resourcedetection, transform]
-      exporters: [googlecloud]
-  telemetry:
-    metrics:
-      readers:
-        - periodic:
-            exporter:
-              otlp:
-                protocol: http/protobuf
-                endpoint: 0.0.0.0:4317
-`, testRunID, testRunID, testRunID)
-
+		logger.Printf("Installing otelcol with the following config: \n%s", config)
 		if err := setupOtelCollector(ctx, logger, vm, config); err != nil {
 			t.Fatal(err)
 		}

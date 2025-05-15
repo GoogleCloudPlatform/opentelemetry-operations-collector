@@ -1,0 +1,47 @@
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: localhost:4317
+processors:
+  resourcedetection:
+    detectors:
+    - gcp
+  transform:
+    metric_statements:
+    - context: datapoint
+      statements:
+      - set(attributes["otelcol_google_e2e"], "{{.TestRunID}}")
+    log_statements:
+    - context: log
+      statements:
+      - set(attributes["otelcol_google_e2e"], "{{.TestRunID}}")
+    trace_statements:
+    - context: spanevent
+      statements:
+      - set(resource.attributes["otelcol_google_e2e"], "{{.TestRunID}}")
+exporters:
+  googlecloud:
+    log:
+      default_log_name: google-otelcol/smoke-test
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [resourcedetection, transform]
+      exporters: [googlecloud]
+  telemetry:
+    metrics:
+      readers:
+        - periodic:
+            exporter:
+              otlp:
+                protocol: http/protobuf
+                endpoint: localhost:4317
+    logs:
+      processors:
+      - batch:
+          exporter:
+            otlp:
+              protocol: http/protobuf
+              endpoint: localhost:4317

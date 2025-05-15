@@ -66,6 +66,9 @@ mkdir -p "${LOGS_DIR}"
 
 cd "integration_test/${TEST_SUITE_NAME}"
 
+OTELCOL_CONFIGS_DIR="../otelcol_configs"
+export OTELCOL_CONFIGS_DIR
+
 # Boost the max number of open files from 1024 to 1 million.
 ulimit -n 1000000
 

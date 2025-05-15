@@ -45,11 +45,5 @@ function build() {
 cheat
 #build
 
-./dist/otelcol-google-linux_linux_amd64_v1/otelcol-google version || echo 'version 1 failed'
-./dist/otelcol-google-linux_linux_amd64_v1/otelcol-google -version || echo 'version 2 failed'
-./dist/otelcol-google-linux_linux_amd64_v1/otelcol-google --version || echo 'version 3 failed'
-
-ls dist || true  # Temporary, for debugging.
-
 mv dist "${KOKORO_ARTIFACTS_DIR}"/dist
 

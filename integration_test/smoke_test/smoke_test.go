@@ -182,13 +182,6 @@ func installPackageFromGCS(ctx context.Context, logger *log.Logger, vm *gce.VM, 
 		return err
 	}
 
-	/////////////////////////
-	gce.RunRemotely(ctx, logger, vm, "uname --hardware-platform")
-	gce.RunRemotely(ctx, logger, vm, "sudo uname --hardware-platform")
-	gce.RunRemotely(ctx, logger, vm, "uname --machine")
-	gce.RunRemotely(ctx, logger, vm, "sudo uname --machine")
-	/////////////////////////
-
 	unameOutput, err := gce.RunRemotely(ctx, logger, vm, "uname --machine")
 	if err != nil {
 		return err

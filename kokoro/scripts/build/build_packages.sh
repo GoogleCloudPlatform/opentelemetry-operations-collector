@@ -42,8 +42,8 @@ function build() {
   make goreleaser-release
 }
 
-# cheat
-build
+cheat
+#build
 
 ./dist/otelcol-google-linux_linux_amd64_v1/otelcol-google version || echo 'version 1 failed'
 ./dist/otelcol-google-linux_linux_amd64_v1/otelcol-google -version || echo 'version 2 failed'

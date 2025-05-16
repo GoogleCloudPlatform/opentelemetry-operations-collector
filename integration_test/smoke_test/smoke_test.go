@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Env variables:
+// Env variables (TODO: comment)
 // - ZONES
 // - IMAGE_SPECS
 // - PROJECT

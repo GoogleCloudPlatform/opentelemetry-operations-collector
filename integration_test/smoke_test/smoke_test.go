@@ -307,9 +307,8 @@ func LoggingTest(ctx context.Context, t *testing.T, logger *log.Logger, vm *gce.
 
 func TracesTest(ctx context.Context, t *testing.T, logger *log.Logger, vm *gce.VM) {
 	options := gce.WaitForTraceOptions{
-		Window: 10 * time.Minute,
-		// TODO: reenable this
-		//Filters: []string{fmt.Sprintf("+otelcol_google_e2e:%s", testRunID)},
+		Window:  10 * time.Minute,
+		Filters: []string{fmt.Sprintf("+otelcol_google_e2e:%s", testRunID)},
 	}
 	trace, err := gce.WaitForTrace(ctx, logger, vm, options)
 	if err != nil {

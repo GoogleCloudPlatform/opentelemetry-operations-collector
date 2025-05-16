@@ -13,10 +13,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This script uploads the package files to a GCS bucket so that tests can read
-# the packages from there. This is simpler than using Artifact Registry because
-# there is no need to take extra steps to forward credentials through
-# apt/yum (and zypper is even worse).
+# This script uploads the package files to two places:
+# 1. A GCS bucket so that tests can read the packages from there.
+#    This is simpler than using Artifact Registry.
+# 2. Artifact Registry, so that we can use a Louhi Promotion (not yet
+#    implemented by Louhi) to publish the artifacts in a MOSS-friendly way.
 
 set -eux
 set -o pipefail
@@ -26,32 +27,24 @@ BUCKET_WITH_SLASH="${BUCKET}/"
 
 gcloud storage cp "${KOKORO_GFILE_DIR}"/dist/* "${BUCKET_WITH_SLASH}"
 
-APT_REPO="gboc-apt-standard-${KOKORO_BUILD_ID}"
-YUM_REPO="gboc-yum-standard-${KOKORO_BUILD_ID}"
-
 LOCATION=us
 DESCRIPTION="Staging repository for GBOC Linux Packages"
-# "ephemeral=true" will cause the repo to be cleaned up after a month
+# "ephemeral=true" will cause the following flow to clean up the repo after a month:
+# https://louhi.dev/6025093129699328/flow-configuration/07c78361-6487-4f09-8708-7ac478e8daaa
 LABELS="ephemeral=true,kokoro_build_id=${KOKORO_BUILD_ID}"
 
-# TODO: b/410866113 - enable this once we have a (secure) solution that works in
-# the Production environment (i.e.
-# _STAGING_ARTIFACTS_PROJECT_ID=cloud-ops-agents-art-staging_).
-#
-## gcloud artifacts repositories create "${APT_REPO}" \
-##     --repository-format=apt \
-##     --project="${_STAGING_ARTIFACTS_PROJECT_ID}" \
-##     --location="${LOCATION}" \
-##     --description="${DESCRIPTION}" \
-##     --labels="${LABELS}"
-## 
-## gcloud artifacts repositories create "${YUM_REPO}" \
-##     --repository-format=yum \
-##     --project="${_STAGING_ARTIFACTS_PROJECT_ID}" \
-##     --location="${LOCATION}" \
-##     --description="${DESCRIPTION}" \
-##     --labels="${LABELS}"
+for PACKAGE in "${KOKORO_GFILE_DIR}"/dist/*.deb; do
+  gcloud artifacts apt upload "${_APT_STAGING_REPO}" \
+    --project="${_STAGING_ARTIFACTS_PROJECT_ID}" \
+    --location="${LOCATION}" \
+    --source="${PACKAGE}"
+done
 
-echo "_BUILD_ARTIFACTS_PACKAGE_GCS=${BUCKET}
-_APT_STAGING_REPO=${APT_REPO}
-_YUM_STAGING_REPO=${YUM_REPO}" > "${KOKORO_ARTIFACTS_DIR}/__output_parameters__"
+for PACKAGE in "${KOKORO_GFILE_DIR}"/dist/*.rpm; do
+  gcloud artifacts yum upload "${_YUM_STAGING_REPO}" \
+    --project="${_STAGING_ARTIFACTS_PROJECT_ID}" \
+    --location="${LOCATION}" \
+    --source="${PACKAGE}"
+done
+
+echo "_BUILD_ARTIFACTS_PACKAGE_GCS=${BUCKET}" > "${KOKORO_ARTIFACTS_DIR}/__output_parameters__"

@@ -410,10 +410,12 @@ func lookupTrace(ctx context.Context, vm *VM, options WaitForTraceOptions) *trac
 	now := time.Now()
 	start := timestamppb.New(now.Add(-options.Window))
 	end := timestamppb.New(now)
-	filter := fmt.Sprintf("+g.co/r/gce_instance/instance_id:%d", vm.ID)
+	filters := []string{
+		fmt.Sprintf("+g.co/r/gce_instance/instance_id:%d", vm.ID),
+	}
 	req := &cloudtrace.ListTracesRequest{
 		ProjectId: vm.Project,
-		Filter:    filter,
+		Filter:    strings.Join(append(filters, options.Filters...), " "),
 		StartTime: start,
 		EndTime:   end,
 	}
@@ -515,6 +517,11 @@ func WaitForMetricSeries(ctx context.Context, logger *log.Logger, vm *VM, metric
 type WaitForTraceOptions struct {
 	// Trailing time window to include in the query, measured from now.
 	Window time.Duration
+
+	// These are filter terms, for the filter field of:
+	// https://cloud.google.com/trace/docs/reference/v2/rpc/google.devtools.cloudtrace.v1#listtracesrequest
+	// WaitForTraces also adds a filter on the VM's instance ID automatically.
+	Filters []string
 }
 
 // Temporary overload for WaitForTrace.

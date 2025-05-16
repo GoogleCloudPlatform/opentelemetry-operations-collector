@@ -299,7 +299,7 @@ func MetricsTest(ctx context.Context, t *testing.T, logger *log.Logger, vm *gce.
 func LoggingTest(ctx context.Context, t *testing.T, logger *log.Logger, vm *gce.VM) {
 	window := 10 * time.Minute
 	query := fmt.Sprintf(`resource.type="%s" AND labels.otelcol_google_e2e="%s"`, resourceType, testRunID)
-	if err := gce.WaitForLog(ctx, logger, vm, "google-otelcol/smoke-test", window, query); err != nil {
+	if err := gce.WaitForLog(ctx, logger, vm, "google-otelcol-smoke-test", window, query); err != nil {
 		t.Fatal(err)
 	}
 	logger.Print("Found log; subtest complete.")

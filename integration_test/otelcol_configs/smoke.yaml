@@ -23,7 +23,7 @@ processors:
 exporters:
   googlecloud:
     log:
-      default_log_name: "google-otelcol/smoke-test"
+      default_log_name: "google-otelcol-smoke-test"
 service:
   pipelines:
     metrics:

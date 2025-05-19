@@ -7,15 +7,13 @@ template config build = {
     }
 
     container_properties {
-      // Other options are available, especially foundry-based ones,
-      // once we get permission to use them.
       docker_image = 'us-central1-docker.pkg.dev/kokoro-container-bakery/kokoro/ubuntu/ubuntu2204/full:next'
     }
 
     action = cond(params.artifacts == [], [], [
       {
         // We are using "legacy Generic Artifacts"
-        // (go/kokoro-generic-artifacts-legacy) for now because Louhi
+        // (http://go/kokoro-generic-artifacts-legacy) for now because Louhi
         // does not yet support the replacement. See b/367727311.
         define_artifacts = {
           regex = params.artifacts

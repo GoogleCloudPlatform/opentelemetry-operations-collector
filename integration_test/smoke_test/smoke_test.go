@@ -12,12 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Env variables (TODO: comment)
-// - ZONES
-// - IMAGE_SPECS
-// - PROJECT
-// - OTELCOL_CONFIGS_DIR
-// - _BUILD_ARTIFACTS_PACKAGE_GCS (optional)
+/*
+Basic tests for the OTel collector.
+
+Environment variables needed by this test:
+ZONES: comma-separated list of what zones to run in.
+PROJECT: GCP project to run in.
+IMAGE_SPECS: comma-separated list of image specs, see gce_testing.go for details.
+OTELCOL_CONFIGS_DIR: path to config files for otelcol to use for testing.
+_BUILD_ARTIFACTS_PACKAGE_GCS: gsutil URI for a directory containing otelcol-google
+package files. Should start with 'gs://'.
+*/
 
 package smoke
 

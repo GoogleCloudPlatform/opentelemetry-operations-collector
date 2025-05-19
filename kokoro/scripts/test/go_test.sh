@@ -86,6 +86,7 @@ fi
 go_test_args=(
   -test.parallel=1000
   -timeout=3h
+  -tags=integration_test
 )
 if [[ -n "${TEST_SELECTOR:-}" ]]; then
   go_test_args+=( "-test.run=${TEST_SELECTOR}" )

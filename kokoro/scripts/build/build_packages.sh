@@ -23,8 +23,6 @@ unset GOROOT
 
 make goreleaser-release
 
-ls dist || echo 'expected outputs to be put into a "dist" directory, proceeding anyway'
-
 # Put the output folder directly in KOKORO_ARTIFACTS_DIR instead of being deeply
 # nested within it.
 mv dist "${KOKORO_ARTIFACTS_DIR}"/dist

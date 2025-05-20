@@ -29,8 +29,6 @@ config build = common.build {
       // Path to the container tar file produced by the build. For a container build,
       // this should always be "container/container.tar"
       source = 'container/container.tar'
-      // Full output path on Artifact Registry including desired container name.
-      // ex. us-central1-docker.pkg.dev/my-project/my-repo/my-container
       destination = 'us-docker.pkg.dev/cloud-ops-agents-art-staging/google-cloud-opentelemetry-collector-staging/otelcol-google'
     },
   ]

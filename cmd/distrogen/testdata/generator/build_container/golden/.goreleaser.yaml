@@ -15,7 +15,6 @@ builds:
     goos:
       - linux
     goarch:
-      - "386"
       - amd64
       - arm64
     goarm:
@@ -43,16 +42,6 @@ builds:
     flags:
       - "-trimpath"
       - "-buildvcs=false"
-
-archives:
-  - id: basic-distro
-    builds:
-      - otelcol-basic-linux
-    name_template: '{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}{{ if .Mips }}_{{ .Mips }}{{ end }}'
-  - id: basic-distro-windows
-    builds:
-      - otelcol-basic-windows
-    name_template: '{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}{{ if .Mips }}_{{ .Mips }}{{ end }}'
 
 nfpms:
   - package_name: otelcol-basic

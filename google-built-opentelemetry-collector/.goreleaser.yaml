@@ -2,7 +2,7 @@ version: 2
 project_name: opentelemetry-operations-collector
 
 snapshot:
-  version_template: 0.124.1
+  version_template: 0.126.0
 
 env:
   - LD_FLAGS=-s -w
@@ -15,7 +15,6 @@ builds:
     goos:
       - linux
     goarch:
-      - "386"
       - amd64
       - arm64
     goarm:
@@ -43,16 +42,6 @@ builds:
     flags:
       - "-trimpath"
       - "-buildvcs=false"
-
-archives:
-  - id: google-built-opentelemetry-collector
-    builds:
-      - otelcol-google-linux
-    name_template: '{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}{{ if .Mips }}_{{ .Mips }}{{ end }}'
-  - id: google-built-opentelemetry-collector-windows
-    builds:
-      - otelcol-google-windows
-    name_template: '{{ .Binary }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}{{ if .Mips }}_{{ .Mips }}{{ end }}'
 
 nfpms:
   - package_name: otelcol-google

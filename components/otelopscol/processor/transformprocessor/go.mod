@@ -1,4 +1,4 @@
-module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/agenttransformprocessor
+module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/transformprocessor
 
 go 1.23.2
 

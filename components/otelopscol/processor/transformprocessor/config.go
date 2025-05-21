@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:build !windows
-// +build !windows
+package transformprocessor
 
-//go:generate mdatagen metadata.yaml
+import "github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor"
 
-package agenttransformprocessor
+type Config struct {
+	transformprocessor.Config
+}

@@ -19,28 +19,11 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/ottl"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/ottl/contexts/ottllog"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor"
-	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/processor"
 )
 
-type CustomFactory struct {
-	processor.Factory
-}
-
-func (f CustomFactory) CreateDefaultConfig() component.Config {
-	config := f.Factory.CreateDefaultConfig()
-	tConfig, ok := config.(*transformprocessor.Config)
-	if ok {
-		tConfig.AdditionalLogFuncs = []ottl.Factory[ottllog.TransformContext]{ottlfuncs.NewExtractPatternsRubyRegexFactory[ottllog.TransformContext]()}
-		return tConfig
-	}
-	return config
-}
-
 // NewFactory create a factory for the transform processor.
 func NewFactory() processor.Factory {
-	oldFactory := transformprocessor.NewFactory()
-	customFactory := CustomFactory{Factory: oldFactory}
-
-	return customFactory
+	additionaLogFunctions := []ottl.Factory[ottllog.TransformContext]{ottlfuncs.NewExtractPatternsRubyRegexFactory[ottllog.TransformContext]()}
+	return transformprocessor.NewFactory(transformprocessor.WithAdditionalLogFunctions(additionaLogFunctions))
 }

@@ -24,6 +24,9 @@ GO_BIN_DIR ?= $(TOOLS_DIR)/go/bin
 GO_BIN ?= $(GO_BIN_DIR)/go
 SET_GO_BIN_PATH ?= PATH="$(GO_BIN_DIR):$$PATH"
 
+ONIGMO_VERSION ?= 6.1.3
+ONIG_REPOSITORY := https://github.com/k-takata/Onigmo
+
 .PHONY: build
 build: $(COLLECTOR_BINARY_NAME)
 
@@ -34,7 +37,7 @@ image: image-build image-push
 clean: clean-tools clean-collector
 
 .PHONY: install-tools
-install-tools: go ocb
+install-tools: go ocb install-onigmo
 
 ###################
 # Image Build
@@ -102,15 +105,18 @@ collector-build: clean-collector $(COLLECTOR_BINARY_NAME)
 
 # Using OCB and the local manifest file, build a collector.
 $(COLLECTOR_BINARY_NAME): $(OCB_BIN)
+	$(MAKE) install-onigmo
 	$(SET_GO_BIN_PATH) $(OCB_BIN) --skip-compilation --verbose --config manifest.yaml
 	cd $(COLLECTOR_BUILD_TEMP_DIR) && \
 		GOWORK=off \
 		CGO_ENABLED=$(COLLECTOR_CGO) \
 		GOOS=$(TARGETOS) GOARCH=$(TARGETARCH) \
+		CGO_CFLAGS="-I $(TOOLS_DIR)/onigmo-${ONIGMO_VERSION}" \
+		CGO_LDFLAGS="-L $(TOOLS_DIR)/onigmo-${ONIGMO_VERSION}/.libs -lonigmo" \
 		$(GO_BIN) build \
 			-buildvcs=$(COLLECTOR_BUILDVCS) \
 			-tags=$(COLLECTOR_BUILD_TAGS) \
-			--ldflags="-s -w $(COLLECTOR_LD_FLAGS)" \
+			--ldflags="-s -w -extldflags "-static" $(COLLECTOR_LD_FLAGS)" \
 			-o ../otelopscol \
 			.
 	$(MAKE) clean-build-dir
@@ -164,6 +170,15 @@ $(OCB_BIN): $(GO_BIN)
 	GOBIN=$(TOOLS_DIR) CGO_ENABLED=0 GOARCH=$(BUILDARCH) $(GO_BIN) install -trimpath -ldflags="-s -w" go.opentelemetry.io/collector/cmd/builder@$(OTEL_VERSION_TAG) ;\
 	mv $(TOOLS_DIR)/builder $(OCB_BIN) ;\
 	}
+
+.PHONY: install-onigmo
+install-onigmo: $(TOOLS_DIR)
+	cd ${TOOLS_DIR} && \
+	curl -LO ${ONIG_REPOSITORY}/releases/download/Onigmo-${ONIGMO_VERSION}/onigmo-${ONIGMO_VERSION}.tar.gz && \
+	tar -xvzf onigmo-${ONIGMO_VERSION}.tar.gz && \
+	rm onigmo-${ONIGMO_VERSION}.tar.gz && \
+	cd onigmo-${ONIGMO_VERSION} && \
+	./configure --prefix=/usr && make
 
 .PHONY: clean-tools
 clean-tools:

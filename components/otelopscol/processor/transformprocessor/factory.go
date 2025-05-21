@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package agenttransformprocessor
+package transformprocessor
 
 import (
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/agenttransformprocessor/internal/ottlfuncs"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/transformprocessor/internal/ottlfuncs"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/ottl"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/ottl/contexts/ottllog"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor"

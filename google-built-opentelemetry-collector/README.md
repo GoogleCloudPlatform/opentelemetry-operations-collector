@@ -58,7 +58,7 @@ The Google-Built OpenTelemetry Collector is an open-source, production-ready bui
 | resource | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/resourceprocessor/README.md) |
 | resourcedetection | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/resourcedetectionprocessor/README.md) |
 | tailsampling | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/tailsamplingprocessor/README.md) |
-| transform | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/agenttransformprocessor/README.md) |
+| transform | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/transformprocessor/README.md) |
 
 
 ## Exporters

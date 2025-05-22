@@ -29,6 +29,7 @@ The Google-Built OpenTelemetry Collector is an open-source, production-ready bui
 | redis | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/redisreceiver/README.md) |
 | statsd | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/statsdreceiver/README.md) |
 | syslog | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/syslogreceiver/README.md) |
+| wasm | [docs](No docs linked for component) |
 | zipkin | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/zipkinreceiver/README.md) |
 
 

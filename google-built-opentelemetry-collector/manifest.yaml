@@ -8,6 +8,8 @@ dist:
   output_path: ./_build
 
 receivers:
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/receiver/wasmreceiver v0.126.0
+  path: ../components/google-built-opentelemetry-collector/receiver/wasmreceiver
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/dockerstatsreceiver v0.126.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver v0.126.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/fluentforwardreceiver v0.126.0

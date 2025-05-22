@@ -1,0 +1,15 @@
+receivers:
+  wasm:
+    wasm_path: ../internal/wasmplugin/metrics.wasm
+    allow_file_access: "/"
+    collection_interval: 5s
+
+exporters:
+  debug:
+    verbosity: detailed
+
+service:
+  pipelines:
+    metrics:
+      receivers: [wasm]
+      exporters: [debug]

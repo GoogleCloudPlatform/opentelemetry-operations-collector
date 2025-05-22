@@ -37,6 +37,7 @@ components:
         - redis
         - statsd
         - syslog
+        - wasm
     processors:
         - batch
         - memorylimiter

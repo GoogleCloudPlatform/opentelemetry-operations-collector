@@ -225,3 +225,10 @@ ifndef GO_MOD
 else
 	TARGET=update-go-module $(MAKE) target-all-modules GO_MOD=$(GO_MOD)$(if "$(GO_MOD_VERSION), GO_MOD_VERSION=$(GO_MOD_VERSION),)
 endif
+
+#############
+# Experiment
+#############
+
+metrics.wasm:
+	cd internal/wasmplugin && GOOS=wasip1 GOARCH=wasm go build -buildmode=c-shared -o metrics.wasm .

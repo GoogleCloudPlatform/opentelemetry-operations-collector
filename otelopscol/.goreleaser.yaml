@@ -17,8 +17,6 @@ builds:
     goarch:
       - amd64
       - arm64
-    goarm:
-      - "7"
     binary: otelopscol
     dir: _build
     ldflags:
@@ -32,9 +30,6 @@ builds:
       - windows
     goarch:
       - amd64
-      - arm64
-    goarm:
-      - "7"
     binary: otelopscol
     dir: _build
     ldflags:
@@ -66,8 +61,7 @@ nfpms:
       rpm:
         dependencies:
           - /bin/sh
-    id: otelopscol
-    builds:
+    ids:
       - otelopscol-linux
     formats:
       - deb

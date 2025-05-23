@@ -15,6 +15,7 @@
 name: otelopscol
 description: "OpenTelemetry Collector binary used by the Ops Agent"
 opentelemetry_version: 0.126.0
+opentelemetry_stable_version: v1.32.0
 binary_name: otelopscol
 build_container: ubuntu
 collector_cgo: true
@@ -83,4 +84,3 @@ components:
     - googlesecretmanager
     - file
     - env
-    

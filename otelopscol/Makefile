@@ -24,8 +24,6 @@ GO_BIN_DIR ?= $(TOOLS_DIR)/go/bin
 GO_BIN ?= $(GO_BIN_DIR)/go
 SET_GO_BIN_PATH ?= PATH="$(GO_BIN_DIR):$$PATH"
 
-SET_GO_BIN_PATH ?= PATH="$(GO_BIN_DIR):${PATH}"
-
 GORELEASER_BIN ?= $(TOOLS_DIR)/goreleaser
 
 .PHONY: build

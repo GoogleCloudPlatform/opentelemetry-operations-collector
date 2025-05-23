@@ -7,7 +7,7 @@ build_container: ubuntu
 version: ""
 opentelemetry_version: 0.126.0
 opentelemetry_contrib_version: 0.126.0
-opentelemetry_stable_version: ""
+opentelemetry_stable_version: v1.32.0
 go_version: 1.23.2
 binary_name: otelopscol
 build_tags: gpu

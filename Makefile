@@ -15,7 +15,7 @@ setup-hooks:
 	git config core.hooksPath $(PWD)/hooks
 
 .PHONY: precommit
-precommit: checklicense misspell lint compare-all
+precommit: checklicense misspell lint compare-all test-distrogen
 
 .PHONY: presubmit
 presubmit: checklicense misspell lint compare-all
@@ -54,10 +54,10 @@ test-google-otel-components test-otelopscol-components: go.work
 RUN_DISTROGEN=go run ./cmd/distrogen
 
 .PHONY: gen-all
-gen-all: gen-google-built-otel gen-otelopscol
+gen-all: distrogen-golden-update gen-google-built-otel gen-otelopscol
 
 .PHONY: regen-all
-regen-all: regen-google-built-otel regen-otelopscol
+regen-all: distrogen-golden-update regen-google-built-otel regen-otelopscol
 
 .PHONY: compare-all
 compare-all:
@@ -113,9 +113,13 @@ test-all:
 tidy-all:
 	TARGET="tidy" $(MAKE) target-all-modules
 
+.PHONY: test-distrogen
+test-distrogen:
+	@go test ./cmd/distrogen
+
 .PHONY: distrogen-golden-update
 distrogen-golden-update:
-	go test ./cmd/distrogen -update
+	@go test ./cmd/distrogen -update
 
 ###########
 # Workspace
@@ -123,6 +127,7 @@ distrogen-golden-update:
 
 ALL_DIRECTORIES = find . -type d  -print0
 EXCLUDE_TOOLS_DIRS = grep -z -v ".*\.tools.*"
+EXCLUDE_BUILD_DIRS = grep -z -v -e ".*_build.*" -e ".*dist.*"
 
 .PHONY: workspace
 workspace: go.work
@@ -131,6 +136,7 @@ go.work:
 	go work init
 	$(ALL_DIRECTORIES) |\
 	$(EXCLUDE_TOOLS_DIRS) |\
+	$(EXCLUDE_BUILD_DIRS) |\
 	xargs -0 go work use
 
 .PHONY: clean-workspace
@@ -170,6 +176,7 @@ install-tools: tools-dir
 	$(TOOL_LIST)
 
 ADDLICENSE_IGNORES = -ignore "**/.tools/**/*" \
+					-ignore "**/dist/**/*" \
 					-ignore "**/docs/**/*" \
 					-ignore "**/*.md" \
 					-ignore "**/testdata/*" \

@@ -25,6 +25,8 @@ GO_BIN_DIR ?= $(TOOLS_DIR)/go/bin
 GO_BIN ?= $(GO_BIN_DIR)/go
 SET_GO_BIN_PATH ?= PATH="$(GO_BIN_DIR):$$PATH"
 
+GORELEASER_BIN ?= $(TOOLS_DIR)/goreleaser
+
 .PHONY: build
 build: $(COLLECTOR_BINARY_NAME)
 
@@ -101,9 +103,12 @@ endif
 .PHONY: collector-build
 collector-build: clean-collector $(COLLECTOR_BINARY_NAME)
 
-# Using OCB and the local manifest file, build a collector.
-$(COLLECTOR_BINARY_NAME): $(OCB_BIN)
+.PHONY: ocb-generate
+ocb-generate: $(OCB_BIN)
 	$(SET_GO_BIN_PATH) $(OCB_BIN) --skip-compilation --verbose --config manifest.yaml
+
+# Using OCB and the local manifest file, build a collector.
+$(COLLECTOR_BINARY_NAME): ocb-generate
 	cd $(COLLECTOR_BUILD_TEMP_DIR) && \
 		GOWORK=off \
 		CGO_ENABLED=$(COLLECTOR_CGO) \
@@ -117,8 +122,7 @@ $(COLLECTOR_BINARY_NAME): $(OCB_BIN)
 	$(MAKE) clean-build-dir
 
 .PHONY: collector-package-list
-collector-package-list: $(OCB_BIN)
-	PATH="$(GO_BIN_DIR):${PATH}" GOWORK=off CGO_ENABLED=$(COLLECTOR_CGO) $(OCB_BIN) --ldflags="$(COLLECTOR_LD_FLAGS)" --verbose --skip-compilation --config manifest.yaml
+collector-package-list: ocb-generate
 	cd $(COLLECTOR_BUILD_TEMP_DIR) && \
 		GOWORK=off go list -deps -f '{{ .ImportPath }} {{ .Module }}' ./... > ../packages.txt
 	grep -v '<nil>' packages.txt | sort -u > packages.txt
@@ -134,6 +138,17 @@ clean-build-dir:
 	rm -rf $(COLLECTOR_BUILD_TEMP_DIR)
 
 ###################
+# Goreleaser build
+###################
+# These targets are for invoking goreleaser.
+
+.PHONY: goreleaser-release
+goreleaser-release: $(GORELEASER_BIN) ocb-generate
+	$(SET_GO_BIN_PATH) $(GORELEASER_BIN) release --snapshot --clean
+	# I love umask it's my favourite
+	chmod -R o+r ./dist
+
+###################
 # Tools
 ###################
 # These targets are for installing separate tools
@@ -144,6 +159,9 @@ ocb: $(OCB_BIN)
 
 .PHONY: go
 go: $(GO_BIN)
+
+.PHONY: goreleaser
+goreleaser: $(GORELEASER_BIN)
 
 # Install the required version of Go.
 $(GO_BIN): GO_ARCHIVE = go$(GO_VERSION).$(BUILDOS)-$(BUILDARCH).tar.gz
@@ -164,6 +182,14 @@ $(OCB_BIN): $(GO_BIN)
 	echo "Installing ocb at $(TOOLS_DIR)" ;\
 	GOBIN=$(TOOLS_DIR) CGO_ENABLED=0 GOARCH=$(BUILDARCH) $(GO_BIN) install -trimpath -ldflags="-s -w" go.opentelemetry.io/collector/cmd/builder@$(OTEL_VERSION_TAG) ;\
 	mv $(TOOLS_DIR)/builder $(OCB_BIN) ;\
+	}
+
+$(GORELEASER_BIN): $(GO_BIN) $(OCB_BIN)
+	@{ \
+	set -e ;\
+	mkdir -p $(TOOLS_DIR) ;\
+	echo "Installing goreleaser at $(TOOLS_DIR)" ;\
+	GOBIN=$(TOOLS_DIR) CGO_ENABLED=0 $(GO_BIN) install -trimpath -ldflags="-s -w" github.com/goreleaser/goreleaser/v2@latest ;\
 	}
 
 .PHONY: clean-tools

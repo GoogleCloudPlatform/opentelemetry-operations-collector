@@ -26,6 +26,8 @@ mv "${KOKORO_GFILE_DIR}"/dist .
 
 make -f goopack.mk goo-package
 
+mv googet/*.goo dist
+
 # Put the output folder directly in KOKORO_ARTIFACTS_DIR instead of being deeply
 # nested within it.
 mv dist "${KOKORO_ARTIFACTS_DIR}"/dist

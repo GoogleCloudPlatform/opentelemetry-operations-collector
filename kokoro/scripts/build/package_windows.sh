@@ -21,6 +21,7 @@ cd "${KOKORO_ARTIFACTS_DIR}"/git/otelcol-google/google-built-opentelemetry-colle
 # up. Unset it and let's look for a cleaner image to use as a base.
 unset GOROOT
 
+# Copy over all binaries and packages built/signed from previous stages.
 mv "${KOKORO_GFILE_DIR}"/dist .
 
 make -f goopack.mk goo-package

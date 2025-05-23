@@ -13,6 +13,6 @@
 @REM limitations under the License.
 
 mkdir "%KOKORO_ARTIFACTS_DIR%\dist"
-copy "%KOKORO_GFILE_DIR%"\dist\*.exe "%KOKORO_ARTIFACTS_DIR%\dist"
+copy "%KOKORO_GFILE_DIR%"\dist\* "%KOKORO_ARTIFACTS_DIR%\dist"
 
 ksigntool sign GOOGLE_EXTERNAL /v /debug /t http://timestamp.digicert.com "%KOKORO_ARTIFACTS_DIR%"\dist\*.exe

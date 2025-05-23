@@ -26,4 +26,4 @@ template config build = {
     env_vars = functions.environment_variables(params.environment)
 }
 
-pkg_artifacts_patterns = ['**/*.deb', '**/*.rpm']
+pkg_artifacts_patterns = ['**/*.deb', '**/*.rpm', '**/*.exe']

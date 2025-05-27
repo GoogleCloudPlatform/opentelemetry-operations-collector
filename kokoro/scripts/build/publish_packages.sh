@@ -47,4 +47,11 @@ for PACKAGE in "${KOKORO_GFILE_DIR}"/dist/*.rpm; do
     --source="${PACKAGE}"
 done
 
+for PACKAGE in "${KOKORO_GFILE_DIR}"/dist/*.goo; do
+  gcloud artifacts googet upload "${_GOO_STAGING_REPO}" \
+    --project="${_STAGING_ARTIFACTS_PROJECT_ID}" \
+    --location="${LOCATION}" \
+    --source="${PACKAGE}"
+done
+
 echo "_BUILD_ARTIFACTS_PACKAGE_GCS=${BUCKET}" > "${KOKORO_ARTIFACTS_DIR}/__output_parameters__"

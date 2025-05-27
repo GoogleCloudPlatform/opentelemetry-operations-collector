@@ -221,7 +221,7 @@ target-all-modules: go.work
 ifndef TARGET
 	@echo "No TARGET defined."
 else
-	go list -f "{{ .Dir }}" -m | grep -v ".*internal/tools.*" |\
+	go list -f "{{ .Dir }}" -m | grep -v -e ".*internal/tools.*" -e ".*integration_test/smoke_test.*" |\
 	GOWORK=off xargs -t -I '{}' $(MAKE) -C {} $(TARGET)
 endif
 

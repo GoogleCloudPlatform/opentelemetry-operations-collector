@@ -12,7 +12,8 @@
 @REM See the License for the specific language governing permissions and
 @REM limitations under the License.
 
-mkdir "%KOKORO_ARTIFACTS_DIR%\dist"
-copy "%KOKORO_GFILE_DIR%"\dist\* "%KOKORO_ARTIFACTS_DIR%\dist"
+ksigntool sign GOOGLE_EXTERNAL /v /debug /t http://timestamp.digicert.com "%KOKORO_GFILE_DIR%"\dist\*\*.exe
 
-ksigntool sign GOOGLE_EXTERNAL /v /debug /t http://timestamp.digicert.com "%KOKORO_ARTIFACTS_DIR%"\dist\*.exe
+@REM Copy input directory into the artifacts directory recursively.
+robocopy "%KOKORO_GFILE_DIR%"\dist "%KOKORO_ARTIFACTS_DIR%"\dist /E
+

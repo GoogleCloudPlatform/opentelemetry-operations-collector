@@ -48,7 +48,7 @@ for PACKAGE in "${KOKORO_GFILE_DIR}"/dist/*.rpm; do
 done
 
 for PACKAGE in "${KOKORO_GFILE_DIR}"/dist/*.goo; do
-  gcloud artifacts googet upload "${_GOO_STAGING_REPO}" \
+  gcloud artifacts googet upload "${_GOOGET_STAGING_REPO}" \
     --project="${_STAGING_ARTIFACTS_PROJECT_ID}" \
     --location="${LOCATION}" \
     --source="${PACKAGE}"

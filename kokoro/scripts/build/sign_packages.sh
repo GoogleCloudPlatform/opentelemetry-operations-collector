@@ -29,5 +29,14 @@ chmod 666 "${PKG_DIR}"/*
   --job-dir=/escalated_sign_jobs -- \
   --loglevel=debug "${PKG_DIR}"/*.rpm
 
+ls -lR "${PKG_DIR}" || echo ls failed  # For debugging.
+
+# This build needs to pass through the windows .exe too, and
+# needs chmods to avoid "permission denied" Kokoro/rsync errors.
+chmod 777 "${PKG_DIR}"/*windows*/
+chmod 666 "${PKG_DIR}"/*windows*/*
+
+ls -lR "${PKG_DIR}" || echo ls failed  # For debugging.
+
 mv "${PKG_DIR}" "${KOKORO_ARTIFACTS_DIR}"
 

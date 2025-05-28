@@ -37,8 +37,6 @@ function set_image_specs() {
 all_distros = []
 targets=yaml.safe_load(open('distros.yaml'))['targets']
 for target in targets:
-  if target == 'windows':
-    continue
   test_distros = targets[target]['architectures']['${ARCH}']['test_distros']
   all_distros += test_distros['representative']
   if 'exhaustive' in test_distros:

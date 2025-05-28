@@ -23,6 +23,11 @@ unset GOROOT
 
 make goreleaser-release
 
+# Move the windows binary from:
+# dist/otelcol-google-windows_windows_amd64_v1/otelcol-google.exe ->
+# dist/otelcol-google.exe
+mv dist/*/*.exe dist
+
 # Put the output folder directly in KOKORO_ARTIFACTS_DIR instead of being deeply
 # nested within it.
 mv dist "${KOKORO_ARTIFACTS_DIR}"/dist

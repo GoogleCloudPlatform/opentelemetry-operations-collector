@@ -1,7 +1,7 @@
 import 'common.gcl' as common
 
 config build = common.build {
-  build_file = 'otelcol-google/kokoro/scripts/build/sign_packages.sh'
+  build_file = 'otelcol-google/kokoro/scripts/build/sign_linux_packages.sh'
 
   params {
     artifacts = common.pkg_artifacts_patterns

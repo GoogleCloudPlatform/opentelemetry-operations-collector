@@ -123,9 +123,9 @@ $(COLLECTOR_BINARY_NAME): ocb-generate
 .PHONY: collector-package-list
 collector-package-list: ocb-generate
 	cd $(COLLECTOR_BUILD_TEMP_DIR) && \
-		GOWORK=off go list -deps -f '{{ .ImportPath }} {{ .Module }}' ./... > ../packages.txt
-	grep -v '<nil>' packages.txt | sort -u > packages.txt
-	rm -rf $(COLLECTOR_BUILD_TEMP_DIR)
+		GOWORK=off go list -deps -f '{{ .ImportPath }} {{ .Module }}' ./... |\
+		grep -v '<nil>' |\
+		sort -u > ../packages.txt
 
 # Delete any existing built collector binary.
 .PHONY: clean-collector

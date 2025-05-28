@@ -5,8 +5,10 @@ GOOPACK_ARCH ?= x86_64
 GOOPACK_GOARCH ?= amd64
 GOOPACK_DEST ?= googet
 
+COLLECTOR_WINDOWS ?= dist/otelcol-google-windows_windows_amd64_v1/otelcol-google.exe
+
 .PHONY: goo-package
-goo-package: $(GOOPACK_BIN) goreleaser-release
+goo-package: $(GOOPACK_BIN) $(COLLECTOR_WINDOWS)
 	mkdir -p $(GOOPACK_DEST) && \
 		$(GOOPACK_BIN) -output_dir $(GOOPACK_DEST) \
 			-var:PKG_VERSION=0.127.0 \
@@ -14,6 +16,9 @@ goo-package: $(GOOPACK_BIN) goreleaser-release
 			-var:GOOS=windows \
 			-var:GOARCH=$(GOOPACK_GOARCH) \
 			goo/otelcol.goospec
+
+$(COLLECTOR_WINDOWS):
+	$(MAKE) goreleaser-release
 
 .PHONY: goopack
 goopack: $(GOOPACK_BIN)

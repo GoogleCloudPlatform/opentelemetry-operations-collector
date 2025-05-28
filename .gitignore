@@ -20,3 +20,6 @@ go.work.sum
 # Binaries from builds
 /google-built-opentelemetry-collector/otelcol-google
 /otelopscol/otelopscol
+
+# Package list files
+**/packages.txt

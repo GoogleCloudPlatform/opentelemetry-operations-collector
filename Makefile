@@ -33,8 +33,8 @@ update-otelopscol-components: SPEC_FILE := specs/otelopscol.yaml
 update-otelopscol-components: COMPONENT_DIR := components/otelopscol
 
 update-google-otel-components update-otelopscol-components: DISTROGEN_QUERY := go run ./cmd/distrogen -spec $(SPEC_FILE) -query
-update-google-otel-components update-otelopscol-components: export OTEL_VERSION := v$(shell $(DISTROGEN_QUERY) opentelemetry_version)
-update-google-otel-components update-otelopscol-components: export OTEL_CONTRIB_VERSION := v$(shell $(DISTROGEN_QUERY) opentelemetry_contrib_version)
+update-google-otel-components update-otelopscol-components: export OTEL_VERSION = v$(shell $(DISTROGEN_QUERY) opentelemetry_version)
+update-google-otel-components update-otelopscol-components: export OTEL_CONTRIB_VERSION = v$(shell $(DISTROGEN_QUERY) opentelemetry_contrib_version)
 update-google-otel-components update-otelopscol-components: go.work install-tools
 	cd $(COMPONENT_DIR) && PATH="$(TOOLS_DIR):${PATH}" $(MAKE) update-components
 
@@ -212,9 +212,10 @@ misspell:
 # more sophisticated if we want to supply separate tags for every subcomponent. For
 # now it is pretty simply.
 .PHONY: tag-repo
+tag-repo: GOOGLE_OTEL_VERSION = v$(shell go run ./cmd/distrogen -spec specs/google-built-opentelemetry-collector.yaml -query version)
 tag-repo:
-	git tag -a $(OTEL_VERSION) -m "Update to OpenTelemetry Collector version $(OTEL_VERSION)"
-	@echo "Created git tag $(OTEL_VERSION). If it looks good, push it to the remote by running: git push origin $(OTEL_VERSION)"
+	git tag -a $(GOOGLE_OTEL_VERSION) -m "Update to OpenTelemetry Collector version $(OTEL_VERSION)"
+	@echo "Created git tag $(GOOGLE_OTEL_VERSION). If it looks good, push it to the remote by running: git push origin $(GOOGLE_OTEL_VERSION)"
 
 .PHONY: target-all-modules
 target-all-modules: go.work

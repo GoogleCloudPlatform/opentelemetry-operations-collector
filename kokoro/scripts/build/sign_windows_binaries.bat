@@ -12,7 +12,7 @@
 @REM See the License for the specific language governing permissions and
 @REM limitations under the License.
 
-ksigntool sign GOOGLE_EXTERNAL /v /debug /t http://timestamp.digicert.com "%KOKORO_GFILE_DIR%"\dist\*\*.exe
+ksigntool sign GOOGLE_EXTERNAL /v /debug /t http://timestamp.digicert.com "%KOKORO_GFILE_DIR%"\dist\otelcol-google-windows_windows_amd64_v1\*.exe
 
 @REM Copy input directory into the artifacts directory recursively.
 robocopy "%KOKORO_GFILE_DIR%"\dist "%KOKORO_ARTIFACTS_DIR%"\dist /E

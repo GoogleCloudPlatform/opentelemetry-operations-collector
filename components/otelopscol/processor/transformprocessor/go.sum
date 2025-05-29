@@ -18,8 +18,8 @@ github.com/elastic/go-grok v0.3.1 h1:WEhUxe2KrwycMnlvMimJXvzRa7DoByJB4PVUIE1ZD/U
 github.com/elastic/go-grok v0.3.1/go.mod h1:n38ls8ZgOboZRgKcjMY8eFeZFMmcL9n2lP0iHhIDk64=
 github.com/elastic/lunes v0.1.0 h1:amRtLPjwkWtzDF/RKzcEPMvSsSseLDLW+bnhfNSLRe4=
 github.com/elastic/lunes v0.1.0/go.mod h1:xGphYIt3XdZRtyWosHQTErsQTd4OP1p9wsbVoHelrd4=
-github.com/franciscovalentecastro/opentelemetry-collector-contrib/processor/transformprocessor v0.54.1-0.20250521204238-5338205d65d3 h1:uoqAVBvsr2UrhoOuE+PFX3KhrKRzOPgrawrIvcBbE+U=
-github.com/franciscovalentecastro/opentelemetry-collector-contrib/processor/transformprocessor v0.54.1-0.20250521204238-5338205d65d3/go.mod h1:T7hfPR3sKgDBeHX7Bk8jgt99eVHRc62uOah1Cm/YzH4=
+github.com/franciscovalentecastro/opentelemetry-collector-contrib/processor/transformprocessor v0.54.1-0.20250522022653-e6321fae6718 h1:YPDUY9Bo36sg1/Dgui5no9AX3X4oes7WsH4HDJY/9xg=
+github.com/franciscovalentecastro/opentelemetry-collector-contrib/processor/transformprocessor v0.54.1-0.20250522022653-e6321fae6718/go.mod h1:T7hfPR3sKgDBeHX7Bk8jgt99eVHRc62uOah1Cm/YzH4=
 github.com/go-enry/go-onigmo v0.0.0-20210518020254-1b99997f3cf1 h1:yCE3pIp1vObjOhZ1L4IZlGoOE2W+sl/HEyghgORLLpc=
 github.com/go-enry/go-onigmo v0.0.0-20210518020254-1b99997f3cf1/go.mod h1:uIFFfiYFfNbRIMOm3rLqvF9peS4/fZfbkuW6E7eAZL8=
 github.com/go-enry/go-oniguruma v1.2.1/go.mod h1:bWDhYP+S6xZQgiRL7wlTScFYBe023B6ilRZbCAD5Hf4=

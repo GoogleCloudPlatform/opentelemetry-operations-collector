@@ -14,7 +14,7 @@ require (
 	go.uber.org/goleak v1.3.0
 )
 
-replace github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor v0.126.0 => github.com/franciscovalentecastro/opentelemetry-collector-contrib/processor/transformprocessor v0.54.1-0.20250521204238-5338205d65d3
+replace github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor v0.126.0 => github.com/franciscovalentecastro/opentelemetry-collector-contrib/processor/transformprocessor v0.54.1-0.20250522022653-e6321fae6718
 
 require (
 	github.com/alecthomas/participle/v2 v2.1.4 // indirect

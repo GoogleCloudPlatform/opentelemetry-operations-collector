@@ -83,5 +83,5 @@ providers:
 - gomod: go.opentelemetry.io/collector/confmap/provider/fileprovider v1.36.0
 
 replaces:
-- github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor v0.126.0 => github.com/franciscovalentecastro/opentelemetry-collector-contrib/processor/transformprocessor v0.54.1-0.20250521204238-5338205d65d3
+- github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor v0.126.0 => github.com/franciscovalentecastro/opentelemetry-collector-contrib/processor/transformprocessor v0.54.1-0.20250522022653-e6321fae6718
 

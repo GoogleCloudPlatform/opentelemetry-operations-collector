@@ -75,13 +75,14 @@ func collectorConfigPath(imageSpec string) string {
 	return "/etc/otelcol-google/config.yaml"
 }
 
+// See runDiagnostics().
 func runDiagnosticsWindows(ctx context.Context, logger *logging.DirectoryLogger, vm *gce.VM) {
 	gce.RunRemotely(ctx, logger.ToFile("windows_System_log.txt"), vm, "Get-WinEvent -LogName System | Format-Table -AutoSize -Wrap")
 	gce.RunRemotely(ctx, logger.ToFile("Get-Service_output.txt"), vm, "Get-Service otelcol-google | Format-Table -AutoSize -Wrap")
 	gce.RunRemotely(ctx, logger.ToFile("otelcol-google-logs.txt"), vm, "Get-WinEvent -FilterHashtable @{ Logname='Application'; ProviderName='otelcol-google' } | Format-Table -AutoSize -Wrap")
 
-	conf := collectorConfigPath(vm.ImageSpec)
-	gce.RunRemotely(ctx, logger.ToFile("config.yaml"), vm, fmt.Sprintf("Get-Content -Path '%s' -Raw", conf))
+	configPath := collectorConfigPath(vm.ImageSpec)
+	gce.RunRemotely(ctx, logger.ToFile("config.yaml"), vm, fmt.Sprintf("Get-Content -Path '%s' -Raw", configPath))
 }
 
 // runDiagnostics will fetch as much debugging info as it can from the

@@ -70,9 +70,19 @@ func recommendedMachineType(imageSpec string) string {
 // the config is stored.
 func collectorConfigPath(imageSpec string) string {
 	if gce.IsWindows(imageSpec) {
-		panic("Unimplemented call to collectorConfigPath for Windows")
+		return `C:\Program Files\Google\OpenTelemetry Collector\config.yaml`
 	}
 	return "/etc/otelcol-google/config.yaml"
+}
+
+// See runDiagnostics().
+func runDiagnosticsWindows(ctx context.Context, logger *logging.DirectoryLogger, vm *gce.VM) {
+	gce.RunRemotely(ctx, logger.ToFile("windows_System_log.txt"), vm, "Get-WinEvent -LogName System | Format-Table -AutoSize -Wrap")
+	gce.RunRemotely(ctx, logger.ToFile("Get-Service_output.txt"), vm, "Get-Service otelcol-google | Format-Table -AutoSize -Wrap")
+	gce.RunRemotely(ctx, logger.ToFile("otelcol-google-logs.txt"), vm, "Get-WinEvent -FilterHashtable @{ Logname='Application'; ProviderName='otelcol-google' } | Format-Table -AutoSize -Wrap")
+
+	configPath := collectorConfigPath(vm.ImageSpec)
+	gce.RunRemotely(ctx, logger.ToFile("config.yaml"), vm, fmt.Sprintf("Get-Content -Path '%s' -Raw", configPath))
 }
 
 // runDiagnostics will fetch as much debugging info as it can from the
@@ -82,7 +92,7 @@ func collectorConfigPath(imageSpec string) string {
 func runDiagnostics(ctx context.Context, logger *logging.DirectoryLogger, vm *gce.VM) {
 	logger.ToMainLog().Printf("Starting runDiagnostics()...")
 	if gce.IsWindows(vm.ImageSpec) {
-		panic("Unimplemented call to runDiagnostics for Windows")
+		runDiagnosticsWindows(ctx, logger, vm)
 	}
 
 	gce.RunRemotely(ctx, logger.ToFile("journalctl_otelcol-google.txt"), vm, "sudo journalctl -u otelcol-google")
@@ -147,7 +157,7 @@ func locationFromEnvVars() PackageLocation {
 
 func restartCommandForPlatform(platform string) string {
 	if gce.IsWindows(platform) {
-		panic("Unimplemented call to restartCommandForPlatform for Windows")
+		return "Restart-Service otelcol-google -Force"
 	}
 	return "sudo systemctl restart otelcol-google"
 }

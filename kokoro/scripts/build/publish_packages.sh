@@ -25,7 +25,9 @@ set -o pipefail
 BUCKET="gs://${_GOOGLE_OTEL_STAGING_BUCKET}/google-otel-packages/${KOKORO_BUILD_ID}"
 BUCKET_WITH_SLASH="${BUCKET}/"
 
-gcloud storage cp "${KOKORO_GFILE_DIR}"/dist/* "${BUCKET_WITH_SLASH}"
+gcloud storage cp "${KOKORO_GFILE_DIR}"/dist/*.deb "${BUCKET_WITH_SLASH}"
+gcloud storage cp "${KOKORO_GFILE_DIR}"/dist/*.rpm "${BUCKET_WITH_SLASH}"
+gcloud storage cp "${KOKORO_GFILE_DIR}"/dist/*.goo "${BUCKET_WITH_SLASH}"
 
 LOCATION=us
 DESCRIPTION="Staging repository for GBOC Linux Packages"

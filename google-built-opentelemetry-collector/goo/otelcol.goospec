@@ -24,7 +24,8 @@
   "sources": [{
       "include": [
         "dist/otelcol-google-windows_windows_amd64_v1/otelcol-google.exe",
-        "config.yaml"
+        "config.yaml",
+        "goo/maint.ps1"
       ]
   }]
 }

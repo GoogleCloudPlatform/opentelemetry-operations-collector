@@ -93,6 +93,7 @@ func runDiagnostics(ctx context.Context, logger *logging.DirectoryLogger, vm *gc
 	logger.ToMainLog().Printf("Starting runDiagnostics()...")
 	if gce.IsWindows(vm.ImageSpec) {
 		runDiagnosticsWindows(ctx, logger, vm)
+		return
 	}
 
 	gce.RunRemotely(ctx, logger.ToFile("journalctl_otelcol-google.txt"), vm, "sudo journalctl -u otelcol-google")

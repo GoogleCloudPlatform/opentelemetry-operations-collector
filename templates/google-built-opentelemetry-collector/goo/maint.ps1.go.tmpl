@@ -33,7 +33,7 @@ $configFilePath = "$InstallDir\config.yaml"
 if ($Action -eq "install") {
     if (-not(Test-Path -Path $configFilePath -PathType Leaf)) {
          try {
-             Copy-Item -Path "$($PSScriptRoot.TrimEnd("\goo"))\config\config.yaml" -Destination "$configFilePath"
+             Copy-Item -Path "$($PSScriptRoot.TrimEnd("\goo"))\config.yaml" -Destination "$configFilePath"
              Write-Host "The file [$configFilePath] has been created."
          }
          catch {

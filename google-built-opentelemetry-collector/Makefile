@@ -120,8 +120,8 @@ $(COLLECTOR_BINARY_NAME): ocb-generate
 			.
 	$(MAKE) clean-build-dir
 
-.PHONY: collector-package-list
-collector-package-list: ocb-generate
+.PHONY: collector-module-list
+collector-module-list: ocb-generate
 	cd $(COLLECTOR_BUILD_TEMP_DIR) && \
 		GOWORK=off go list -deps -f '{{ .Module }}' ./... |\
 		grep -v '<nil>' |\

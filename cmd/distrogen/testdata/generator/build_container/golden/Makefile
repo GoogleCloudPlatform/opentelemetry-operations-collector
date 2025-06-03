@@ -124,7 +124,7 @@ $(COLLECTOR_BINARY_NAME): ocb-generate
 .PHONY: collector-package-list
 collector-package-list: ocb-generate
 	cd $(COLLECTOR_BUILD_TEMP_DIR) && \
-		GOWORK=off go list -deps -f '{{ .ImportPath }} {{ .Module }}' ./... |\
+		GOWORK=off go list -deps -f '{{ .Module }}' ./... |\
 		grep -v '<nil>' |\
 		sort -u > ../packages.txt
 

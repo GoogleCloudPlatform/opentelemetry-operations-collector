@@ -21,8 +21,8 @@ import (
 
 	scpb "cloud.google.com/go/servicecontrol/apiv1/servicecontrolpb"
 
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/exporter/googleservicecontrolexporter"
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/exporter/googleservicecontrolexporter/internal/metadata"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter/internal/metadata"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"

@@ -19,9 +19,9 @@ import (
 	"testing"
 	"time"
 
-	sc "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/exporter/googleservicecontrolexporter"
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/exporter/googleservicecontrolexporter/integrationtest/testcases"
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/exporter/googleservicecontrolexporter/internal/metadata"
+	sc "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter/integrationtest/testcases"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter/internal/metadata"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/exporter/exportertest"

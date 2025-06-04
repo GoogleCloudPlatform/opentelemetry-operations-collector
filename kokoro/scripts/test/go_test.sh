@@ -18,7 +18,7 @@ set -u
 set -x
 set -o pipefail
 
-# cd to google-built-opentelemetry-collector.
+# cd to the root of this git repo.
 cd "$(readlink -f "$(dirname "$0")")"
 cd ../../../
 
@@ -26,21 +26,17 @@ cd ../../../
 git config --global --add safe.directory "$(pwd)"
 
 function set_image_specs() {
-  # if ARCH is not set, return an error
-  if [[ -z "${ARCH:-}" ]]; then
-    echo "ARCH is required." 1>&2
-    return 1
-  fi
-
-  # Extracts all representative and exhaustive image_specs matching $ARCH from distros.yaml.
+  # Extracts all representative and exhaustive image_specs from distros.yaml.
   IMAGE_SPECS="$(python3 -c "import yaml
 all_distros = []
-targets=yaml.safe_load(open('distros.yaml'))['targets']
+targets = yaml.safe_load(open('distros.yaml'))['targets']
 for target in targets:
-  test_distros = targets[target]['architectures']['${ARCH}']['test_distros']
-  all_distros += test_distros['representative']
-  if 'exhaustive' in test_distros:
-    all_distros += test_distros['exhaustive']
+  arches = targets[target]['architectures']
+  for arch in arches:
+    test_distros = arches[arch]['test_distros']
+    all_distros += test_distros['representative']
+    if 'exhaustive' in test_distros:
+      all_distros += test_distros['exhaustive']
 print(','.join(all_distros))")"
   export IMAGE_SPECS
 }
@@ -52,8 +48,8 @@ print(','.join(all_distros))")"
 # set to 512 as per this article:
 # https://cloud.google.com/knowledge/kb/sles-unable-to-fetch-updates-when-behind-cloud-nat-000004450
 #
-# T2A machines are only available on us-central1-{a,b,f}. Hardcoding these zones
-# will make it easier to support aarch64 in the future.
+# T2A machines (which are needed for arm64 tests) are only available in
+# us-central1-{a,b,f}.
 ZONES=us-central1-a,us-central1-b,us-central1-f
 export ZONES
 

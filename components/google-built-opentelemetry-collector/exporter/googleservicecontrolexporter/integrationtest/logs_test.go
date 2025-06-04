@@ -70,7 +70,9 @@ func TestLogs(t *testing.T) {
 					Indent:    "  ",
 				}.Marshal(req)
 				require.NoError(t, err)
-				allRequests += string(reqJson) + "\n"
+				normalizedJson, err := testcases.NormalizeJson(reqJson)
+				require.NoError(t, err)
+				allRequests += string(normalizedJson) + "\n"
 			}
 
 			golden.Assert(t, allRequests, test.ExpectFixturePath)

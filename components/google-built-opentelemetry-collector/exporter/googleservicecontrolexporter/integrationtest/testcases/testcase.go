@@ -15,6 +15,7 @@
 package testcases
 
 import (
+	"encoding/json"
 	"os"
 	"testing"
 	"time"
@@ -89,4 +90,18 @@ func NormalizeRequestFixture(t testing.TB, fixture *scpb.ReportRequest) {
 		op.EndTime = &timestamppb.Timestamp{}
 		op.OperationId = ""
 	}
+}
+
+// NormalizeJson normalizes the JSON bytes; the protojson.Marshal() function
+// does not guarantee the the output will be stable across runs; it may change
+// orders or the number of whitespaces between the keys and values, etc. This
+// function makes sure we get stable results for our golden tests
+func NormalizeJson(jsonBytes []byte) ([]byte, error) {
+	var v interface{}
+	err := json.Unmarshal(jsonBytes, &v)
+	if err != nil {
+		return nil, err
+	}
+
+	return json.MarshalIndent(v, "", "  ")
 }

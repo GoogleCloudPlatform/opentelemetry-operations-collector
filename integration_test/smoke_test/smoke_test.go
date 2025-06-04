@@ -78,7 +78,6 @@ func collectorConfigPath(imageSpec string) string {
 // See runDiagnostics().
 func runDiagnosticsWindows(ctx context.Context, logger *logging.DirectoryLogger, vm *gce.VM) {
 	gce.RunRemotely(ctx, logger.ToFile("windows_System_log.txt"), vm, "Get-WinEvent -LogName System | Format-Table -AutoSize -Wrap")
-	gce.RunRemotely(ctx, logger.ToFile("Get-Service_output.txt"), vm, "Get-Service otelcol-google | Format-Table -AutoSize -Wrap")
 	gce.RunRemotely(ctx, logger.ToFile("otelcol-google-logs.txt"), vm, "Get-WinEvent -FilterHashtable @{ Logname='Application'; ProviderName='otelcol-google' } | Format-Table -AutoSize -Wrap")
 
 	configPath := collectorConfigPath(vm.ImageSpec)
@@ -158,7 +157,7 @@ func locationFromEnvVars() PackageLocation {
 
 func restartCommandForPlatform(platform string) string {
 	if gce.IsWindows(platform) {
-		return "Restart-Service otelcol-google -Force"
+		panic("Unimplemented call to restartCommandForPlatform on Windows.")
 	}
 	return "sudo systemctl restart otelcol-google"
 }
@@ -268,31 +267,42 @@ func restartOtelCollector(ctx context.Context, logger *log.Logger, vm *gce.VM) e
 // setupOtelCollectorFrom is an overload of setupOtelCollector that allows the callsite to
 // decide which version of the collector gets installed.
 func setupOtelCollectorFrom(ctx context.Context, logger *log.Logger, vm *gce.VM, config string, location PackageLocation) error {
+	if config == "" {
+		return fmt.Errorf("setupOtelCollectorFrom() doesn't support an empty config string")
+	}
+
 	if err := installOtelCollector(ctx, logger, vm, location); err != nil {
 		return err
 	}
-	startupDelay := 20 * time.Second
-	if len(config) > 0 {
-		if gce.IsWindows(vm.ImageSpec) {
-			// Sleep to avoid some flaky errors when restarting the collector because the
-			// services have not fully started up yet.
-			time.Sleep(startupDelay)
-		}
-		if err := gce.UploadContent(ctx, logger, vm, strings.NewReader(config), collectorConfigPath(vm.ImageSpec)); err != nil {
+
+	if gce.IsWindows(vm.ImageSpec) {
+		// Sidestep some quoting issues with spaces in the default config location.
+		uploadedConfigPath := `C:\configUpload\otel-config.yaml`
+		if err := gce.UploadContent(ctx, logger, vm, strings.NewReader(config), uploadedConfigPath); err != nil {
 			return fmt.Errorf("setupOtelCollectorFrom() failed to upload config file: %v", err)
 		}
-	}
 
-	// The collector only needs a restart if the config is not empty.
-	if len(config) > 0 {
-		return restartOtelCollector(ctx, logger, vm)
+		quotedOtelPath := "`\"C:\\Program Files\\Google\\OpenTelemetry Collector\\bin\\otelcol-google.exe`\""
+		// The best way I've found to start a process asynchronously
+		// (Start-Process and Start-Job didn't detach properly).
+		// One downside is that standard output and standard error are lost.
+		if _, err := gce.RunRemotely(ctx, logger, vm, fmt.Sprintf(`Invoke-WmiMethod -ComputerName . -Class Win32_Process -Name Create -ArgumentList "%s --config=%s"`, quotedOtelPath, uploadedConfigPath)); err != nil {
+			return fmt.Errorf("setupOtelCollectorFrom() failed to start otel collector process: %v", err)
+		}
+		// Give the collector time to start up.
+		time.Sleep(10 * time.Second)
+
+		return nil
+	}  // End windows handling.
+
+	defaultConfigPath := collectorConfigPath(vm.ImageSpec)
+	if err := gce.UploadContent(ctx, logger, vm, strings.NewReader(config), defaultConfigPath); err != nil {
+		return fmt.Errorf("setupOtelCollectorFrom() failed to upload config file: %v", err)
 	}
-	// Give the collector time to start up.
-	time.Sleep(startupDelay)
-	return nil
+	return restartOtelCollector(ctx, logger, vm)
 }
 
-// setupOtelCollector installs the Otel collector with the given config (leave it empty for the default config).
+// setupOtelCollector installs the Otel collector with the given (nonempty) config.
 // The version of the collector to install is determined by _BUILD_ARTIFACTS_PACKAGE_GCS.
 func setupOtelCollector(ctx context.Context, logger *log.Logger, vm *gce.VM, config string) error {
 	return setupOtelCollectorFrom(ctx, logger, vm, config, locationFromEnvVars())

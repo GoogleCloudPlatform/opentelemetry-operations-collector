@@ -46,11 +46,6 @@ import (
 
 const (
 	resourceType = "gce_instance"
-
-	// TODO: relocate these.
-	// TODO: comment
-	stdoutPathWindows = `C:\Users\test_user\AppData\Local\Temp\otelcol_stdout.txt`
-	stderrPathWindows = `C:\Users\test_user\AppData\Local\Temp\otelcol_stderr.txt`
 )
 
 var (
@@ -87,9 +82,6 @@ func runDiagnosticsWindows(ctx context.Context, logger *logging.DirectoryLogger,
 
 	configPath := collectorConfigPath(vm.ImageSpec)
 	gce.RunRemotely(ctx, logger.ToFile("config.yaml"), vm, fmt.Sprintf("Get-Content -Path '%s' -Raw", configPath))
-
-	gce.RunRemotely(ctx, logger.ToFile("otelcol_stdout.txt"), vm, fmt.Sprintf("Get-Content -Path '%s' -Raw", stdoutPathWindows))
-	gce.RunRemotely(ctx, logger.ToFile("otelcol_stderr.txt"), vm, fmt.Sprintf("Get-Content -Path '%s' -Raw", stderrPathWindows))
 }
 
 // runDiagnostics will fetch as much debugging info as it can from the
@@ -274,83 +266,46 @@ func restartOtelCollector(ctx context.Context, logger *log.Logger, vm *gce.VM) e
 
 // setupOtelCollectorFrom is an overload of setupOtelCollector that allows the callsite to
 // decide which version of the collector gets installed.
-func setupOtelCollectorFrom(ctx context.Context, logger *log.Logger, vm *gce.VM, config string, location PackageLocation, shard int) error {
+func setupOtelCollectorFrom(ctx context.Context, logger *log.Logger, vm *gce.VM, config string, location PackageLocation) error {
+	if config == "" {
+		return fmt.Errorf("setupOtelCollectorFrom() doesn't support an empty config string")
+	}
+
 	if err := installOtelCollector(ctx, logger, vm, location); err != nil {
 		return err
 	}
-	defaultConfigPath := collectorConfigPath(vm.ImageSpec)
-	if _, err := gce.RunRemotely(ctx, logger, vm, fmt.Sprintf("Get-Content -Path '%s' -Raw", defaultConfigPath)); err != nil {
-		return fmt.Errorf("setupOtelCollectorFrom() failed to fetch default config: %v", err)
-		// TODO: check that this is well-formed or whatever.
-	}
 
-
-	// TODO: unnest this
 	if gce.IsWindows(vm.ImageSpec) {
 		// Sidestep some quoting issues with spaces in the default config location.
 		uploadedConfigPath := `C:\configUpload\otel-config.yaml`
-		if len(config) > 0 {
-			if err := gce.UploadContent(ctx, logger, vm, strings.NewReader(config), uploadedConfigPath); err != nil {
-				return fmt.Errorf("setupOtelCollectorFrom() failed to upload config file: %v", err)
-			}
+		if err := gce.UploadContent(ctx, logger, vm, strings.NewReader(config), uploadedConfigPath); err != nil {
+			return fmt.Errorf("setupOtelCollectorFrom() failed to upload config file: %v", err)
 		}
-		if shard == 0 {
-			// Start-Process with --config
 
-			// This quoting is very finicky.
-			// TODO: consider uploading to a less quoting-unfriendly location.
-			escapedArgs := fmt.Sprintf("\"`\"--config=%s`\"\"", uploadedConfigPath)
-			if _, err := gce.RunRemotely(ctx, logger, vm, fmt.Sprintf(`Start-Process -FilePath 'C:\Program Files\Google\OpenTelemetry Collector\bin\otelcol-google.exe' -RedirectStandardOutput '%s' -RedirectStandardError '%s' -ArgumentList %s`, stdoutPathWindows, stderrPathWindows, escapedArgs)); err != nil {
-				return fmt.Errorf("setupOtelCollectorFrom() failed to start otel collector process: %v", err)
-			}
-		} else if shard == 1 {
-			// Start-Process with --config, with Sleep
-			escapedArgs := fmt.Sprintf("\"`\"--config=%s`\"\"", uploadedConfigPath)
-			if _, err := gce.RunRemotely(ctx, logger, vm, fmt.Sprintf(`Start-Process -FilePath 'C:\Program Files\Google\OpenTelemetry Collector\bin\otelcol-google.exe' -RedirectStandardOutput '%s' -RedirectStandardError '%s' -ArgumentList %s ; Start-Sleep -Seconds 125`, stdoutPathWindows, stderrPathWindows, escapedArgs)); err != nil {
-				return fmt.Errorf("setupOtelCollectorFrom() failed to start otel collector process: %v", err)
-			}
-		} else if shard == 2 {
-			// Start-Job with --config
-			if _, err := gce.RunRemotely(ctx, logger, vm, fmt.Sprintf(`Start-Job -ScriptBlock { & "C:\Program Files\Google\OpenTelemetry Collector\bin\otelcol-google.exe" --config='%s' *> '%s' }`, uploadedConfigPath, stdoutPathWindows)); err != nil {
-				return fmt.Errorf("setupOtelCollectorFrom() failed to start otel collector process: %v", err)
-			}
-		} else if shard == 3 {
-			// Start-Job with --config, with Sleep
-			if _, err := gce.RunRemotely(ctx, logger, vm, fmt.Sprintf(`Start-Job -ScriptBlock { & "C:\Program Files\Google\OpenTelemetry Collector\bin\otelcol-google.exe" --config='%s' *> '%s' }; Start-Sleep -Seconds 125`, uploadedConfigPath, stdoutPathWindows)); err != nil {
-				return fmt.Errorf("setupOtelCollectorFrom() failed to start otel collector process: %v", err)
-			}
-		} else if shard == 4 {
-			// Invoke-WmiMethod with --config
-			quotedOtelPath := "`\"C:\\Program Files\\Google\\OpenTelemetry Collector\\bin\\otelcol-google.exe`\""
-			if _, err := gce.RunRemotely(ctx, logger, vm, fmt.Sprintf(`Invoke-WmiMethod -ComputerName . -Class Win32_Process -Name Create -ArgumentList "%s --config=%s"`, quotedOtelPath, uploadedConfigPath)); err != nil {
-				return fmt.Errorf("setupOtelCollectorFrom() failed to start otel collector process: %v", err)
-			}
-		} else if shard == 5 {
-			// Invoke-WmiMethod with --config, with Sleep
-			quotedOtelPath := "`\"C:\\Program Files\\Google\\OpenTelemetry Collector\\bin\\otelcol-google.exe`\""
-			if _, err := gce.RunRemotely(ctx, logger, vm, fmt.Sprintf(`Invoke-WmiMethod -ComputerName . -Class Win32_Process -Name Create -ArgumentList "%s --config=%s" ; Start-Sleep -Seconds 125`, quotedOtelPath, uploadedConfigPath)); err != nil {
-				return fmt.Errorf("setupOtelCollectorFrom() failed to start otel collector process: %v", err)
-			}
-		} else {
-			panic("unimplemented shard #")
+		quotedOtelPath := "`\"C:\\Program Files\\Google\\OpenTelemetry Collector\\bin\\otelcol-google.exe`\""
+		// The best way I've found to start a process asynchronously
+		// (Start-Process and Start-Job didn't detach properly).
+		// One downside is that standard output and standard error are lost.
+		if _, err := gce.RunRemotely(ctx, logger, vm, fmt.Sprintf(`Invoke-WmiMethod -ComputerName . -Class Win32_Process -Name Create -ArgumentList "%s --config=%s"`, quotedOtelPath, uploadedConfigPath)); err != nil {
+			return fmt.Errorf("setupOtelCollectorFrom() failed to start otel collector process: %v", err)
 		}
-	} else {
-		if len(config) > 0 {
-			if err := gce.UploadContent(ctx, logger, vm, strings.NewReader(config), defaultConfigPath); err != nil {
-				return fmt.Errorf("setupOtelCollectorFrom() failed to upload config file: %v", err)
-			}
-			return restartOtelCollector(ctx, logger, vm)
-		}
+		// Give the collector time to start up.
+		time.Sleep(10 * time.Second)
+
+		return nil
+	}  // End windows handling.
+
+	defaultConfigPath := collectorConfigPath(vm.ImageSpec)
+	if err := gce.UploadContent(ctx, logger, vm, strings.NewReader(config), defaultConfigPath); err != nil {
+		return fmt.Errorf("setupOtelCollectorFrom() failed to upload config file: %v", err)
 	}
-	// Give the collector time to start up.
-	time.Sleep(10 * time.Second)
-	return nil
+	return restartOtelCollector(ctx, logger, vm)
 }
 
-// setupOtelCollector installs the Otel collector with the given config (leave it empty for the default config).
+// setupOtelCollector installs the Otel collector with the given (nonempty) config.
 // The version of the collector to install is determined by _BUILD_ARTIFACTS_PACKAGE_GCS.
-func setupOtelCollector(ctx context.Context, logger *log.Logger, vm *gce.VM, config string, shard int) error {
-	return setupOtelCollectorFrom(ctx, logger, vm, config, locationFromEnvVars(), shard)
+func setupOtelCollector(ctx context.Context, logger *log.Logger, vm *gce.VM, config string) error {
+	return setupOtelCollectorFrom(ctx, logger, vm, config, locationFromEnvVars())
 }
 
 func MetricsTest(ctx context.Context, t *testing.T, logger *log.Logger, vm *gce.VM) {
@@ -429,34 +384,26 @@ func TestSmoke(t *testing.T) {
 
 	gce.RunForEachImage(t, func(t *testing.T, imageSpec string) {
 		t.Parallel()
-		// TODO: remove shards
-		for shard := 0; shard < 5; shard++ {
-			shard := shard
-			t.Run(fmt.Sprintf("shard_%v", shard), func(t *testing.T) {
-				t.Parallel()
 
-				ctx, dirLog, vm := commonSetupWithExtraCreateArgumentsAndMetadata(t, imageSpec, nil, nil)
-				logger := dirLog.ToMainLog()
+		ctx, dirLog, vm := commonSetupWithExtraCreateArgumentsAndMetadata(t, imageSpec, nil, nil)
+		logger := dirLog.ToMainLog()
 
-				logger.Printf("Installing otelcol with the following config: \n%s", config)
-				if err := setupOtelCollector(ctx, logger, vm, config, shard); err != nil {
-					t.Fatal(err)
-				}
-
-				t.Run("metrics", func(t *testing.T) {
-					t.Parallel()
-					MetricsTest(ctx, t, logger, vm)
-				})
-				t.Run("logging", func(t *testing.T) {
-					t.Parallel()
-					LoggingTest(ctx, t, logger, vm)
-				})
-				t.Run("traces", func(t *testing.T) {
-					t.Parallel()
-					TracesTest(ctx, t, logger, vm)
-				})
-			})
-			t.Logf("shard %v finished with failed=%v", shard, t.Failed())
+		logger.Printf("Installing otelcol with the following config: \n%s", config)
+		if err := setupOtelCollector(ctx, logger, vm, config); err != nil {
+			t.Fatal(err)
 		}
+
+		t.Run("metrics", func(t *testing.T) {
+			t.Parallel()
+			MetricsTest(ctx, t, logger, vm)
+		})
+		t.Run("logging", func(t *testing.T) {
+			t.Parallel()
+			LoggingTest(ctx, t, logger, vm)
+		})
+		t.Run("traces", func(t *testing.T) {
+			t.Parallel()
+			TracesTest(ctx, t, logger, vm)
+		})
 	})
 }

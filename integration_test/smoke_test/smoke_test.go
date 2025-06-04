@@ -384,7 +384,6 @@ func TestSmoke(t *testing.T) {
 
 	gce.RunForEachImage(t, func(t *testing.T, imageSpec string) {
 		t.Parallel()
-
 		ctx, dirLog, vm := commonSetupWithExtraCreateArgumentsAndMetadata(t, imageSpec, nil, nil)
 		logger := dirLog.ToMainLog()
 

@@ -12,8 +12,6 @@ cloud.google.com/go/longrunning v0.6.4 h1:3tyw9rO3E2XVXzSApn1gyEEnH2K9SynNQjMlBi
 cloud.google.com/go/longrunning v0.6.4/go.mod h1:ttZpLCe6e7EXvn9OxpBRx7kZEB0efv8yBO6YnVMfhJs=
 cloud.google.com/go/servicecontrol v1.14.5 h1:Tj2Q5IooeBlzC/HzdsW2Vrvxl6Vk+6KhOfR1WCJMYiM=
 cloud.google.com/go/servicecontrol v1.14.5/go.mod h1:pjfgXTzmAWEG8hg8ZOEmQfoRN2hVEY+L2Blf8SXTXX0=
-github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter v0.0.0-20250604165452-c5441c35eb68 h1:23m8iunIO6HZAQR/a1N45k70fukm8SLF/SDfOrDB2xc=
-github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter v0.0.0-20250604165452-c5441c35eb68/go.mod h1:dDGgWa4/BBEWBGDlr5m+bqFBALqeE2d9dRZHoQk0I5Q=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
 github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=
 github.com/cenkalti/backoff/v4 v4.3.0 h1:MyRJ/UdXutAwSAT+s3wNd7MfTIcy71VQueUuFK343L8=

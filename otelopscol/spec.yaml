@@ -59,7 +59,6 @@ components:
         - metricstarttime
         - agentmetrics
         - casttosum
-        - modifyscope
         - normalizesums
     exporters:
         - file

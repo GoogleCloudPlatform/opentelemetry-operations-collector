@@ -70,7 +70,6 @@ components:
     # Within this repo
     - agentmetrics
     - casttosum
-    - modifyscope
     - normalizesums
   exporters:
     - file

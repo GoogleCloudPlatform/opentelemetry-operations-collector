@@ -35,9 +35,6 @@ processors:
   casttosum:
     gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/casttosumprocessor v0.0.0
     path: "../components/otelopscol/processor/casttosumprocessor"
-  modifyscope:
-    gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/modifyscopeprocessor v0.0.0
-    path: "../components/otelopscol/processor/modifyscopeprocessor"
   normalizesums:
     gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/normalizesumsprocessor v0.0.0
     path: "../components/otelopscol/processor/normalizesumsprocessor"

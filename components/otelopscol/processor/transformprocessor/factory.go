@@ -25,5 +25,8 @@ import (
 // NewFactory create a factory for the transform processor.
 func NewFactory() processor.Factory {
 	additionaLogFunctions := []ottl.Factory[ottllog.TransformContext]{ottlfuncs.NewExtractPatternsRubyRegexFactory[ottllog.TransformContext]()}
-	return transformprocessor.NewFactory(transformprocessor.WithAdditionalLogFunctions(additionaLogFunctions))
+	return transformprocessor.NewFactoryWithOptions(
+		transformprocessor.WithLogFunctions(transformprocessor.DefaultLogFunctions()),
+		transformprocessor.WithLogFunctions(additionaLogFunctions),
+	)
 }

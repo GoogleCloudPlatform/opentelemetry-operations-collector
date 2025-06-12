@@ -8,80 +8,79 @@ dist:
   output_path: ./_build
 
 receivers:
-- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/receiver/dcgmreceiver v0.130.0
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/receiver/dcgmreceiver v0.128.0
   path: ../components/otelopscol/receiver/dcgmreceiver
-- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/receiver/mongodbreceiver v0.130.0
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/receiver/mongodbreceiver v0.128.0
   path: ../components/otelopscol/receiver/mongodbreceiver
-- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/receiver/nvmlreceiver v0.130.0
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/receiver/nvmlreceiver v0.128.0
   path: ../components/otelopscol/receiver/nvmlreceiver
-- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/receiver/varnishreceiver v0.130.0
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/receiver/varnishreceiver v0.128.0
   path: ../components/otelopscol/receiver/varnishreceiver
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/activedirectorydsreceiver v0.130.0
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/aerospikereceiver v0.130.0
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/apachereceiver v0.130.0
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/couchdbreceiver v0.130.0
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/elasticsearchreceiver v0.130.0
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver v0.130.0
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/flinkmetricsreceiver v0.130.0
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver v0.130.0
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/iisreceiver v0.130.0
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver v0.130.0
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/journaldreceiver v0.130.0
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/memcachedreceiver v0.130.0
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/mysqlreceiver v0.130.0
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/nginxreceiver v0.130.0
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/otlpjsonfilereceiver v0.130.0
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/postgresqlreceiver v0.130.0
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver v0.130.0
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/rabbitmqreceiver v0.130.0
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/redisreceiver v0.130.0
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/saphanareceiver v0.130.0
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/sqlqueryreceiver v0.130.0
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/sqlserverreceiver v0.130.0
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowseventlogreceiver v0.130.0
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowsperfcountersreceiver v0.130.0
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/zookeeperreceiver v0.130.0
-- gomod: go.opentelemetry.io/collector/receiver/otlpreceiver v0.130.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/activedirectorydsreceiver v0.128.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/aerospikereceiver v0.128.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/apachereceiver v0.128.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/couchdbreceiver v0.128.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/elasticsearchreceiver v0.128.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver v0.128.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/flinkmetricsreceiver v0.128.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver v0.128.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/iisreceiver v0.128.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver v0.128.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/journaldreceiver v0.128.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/memcachedreceiver v0.128.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/mysqlreceiver v0.128.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/nginxreceiver v0.128.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/otlpjsonfilereceiver v0.128.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/postgresqlreceiver v0.128.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver v0.128.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/rabbitmqreceiver v0.128.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/redisreceiver v0.128.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/saphanareceiver v0.128.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/sqlqueryreceiver v0.128.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/sqlserverreceiver v0.128.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowseventlogreceiver v0.128.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowsperfcountersreceiver v0.128.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/zookeeperreceiver v0.128.0
+- gomod: go.opentelemetry.io/collector/receiver/otlpreceiver v0.128.0
 
 processors:
-- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/agentmetricsprocessor v0.130.0
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/agentmetricsprocessor v0.128.0
   path: ../components/otelopscol/processor/agentmetricsprocessor
-- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/casttosumprocessor v0.130.0
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/casttosumprocessor v0.128.0
   path: ../components/otelopscol/processor/casttosumprocessor
-- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/modifyscopeprocessor v0.130.0
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/modifyscopeprocessor v0.128.0
   path: ../components/otelopscol/processor/modifyscopeprocessor
-- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/normalizesumsprocessor v0.130.0
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/normalizesumsprocessor v0.128.0
   path: ../components/otelopscol/processor/normalizesumsprocessor
-- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/transformprocessor v0.126.0
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/transformprocessor v0.128.0
   path: ../components/otelopscol/processor/transformprocessor
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/cumulativetodeltaprocessor v0.126.0
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/deltatorateprocessor v0.126.0
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.126.0
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/groupbyattrsprocessor v0.126.0
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor v0.126.0
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor v0.126.0
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourceprocessor v0.126.0
-- gomod: go.opentelemetry.io/collector/processor/batchprocessor v0.126.0
-- gomod: go.opentelemetry.io/collector/processor/memorylimiterprocessor v0.126.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/cumulativetodeltaprocessor v0.128.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/deltatorateprocessor v0.128.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.128.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/groupbyattrsprocessor v0.128.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor v0.128.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor v0.128.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourceprocessor v0.128.0
+- gomod: go.opentelemetry.io/collector/processor/batchprocessor v0.128.0
+- gomod: go.opentelemetry.io/collector/processor/memorylimiterprocessor v0.128.0
 
 exporters:
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/fileexporter v0.130.0
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter v0.130.0
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlemanagedprometheusexporter v0.130.0
-- gomod: go.opentelemetry.io/collector/exporter/debugexporter v0.130.0
-- gomod: go.opentelemetry.io/collector/exporter/otlpexporter v0.130.0
-- gomod: go.opentelemetry.io/collector/exporter/otlphttpexporter v0.130.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/fileexporter v0.128.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter v0.128.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlemanagedprometheusexporter v0.128.0
+- gomod: go.opentelemetry.io/collector/exporter/debugexporter v0.128.0
+- gomod: go.opentelemetry.io/collector/exporter/otlpexporter v0.128.0
+- gomod: go.opentelemetry.io/collector/exporter/otlphttpexporter v0.128.0
 
 extensions:
-- gomod: go.opentelemetry.io/collector/extension/zpagesextension v0.130.0
+- gomod: go.opentelemetry.io/collector/extension/zpagesextension v0.128.0
 
 connectors:
 
 providers:
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/confmap/provider/googlesecretmanagerprovider v0.130.0
-- gomod: go.opentelemetry.io/collector/confmap/provider/envprovider v1.36.0
-- gomod: go.opentelemetry.io/collector/confmap/provider/fileprovider v1.36.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/confmap/provider/googlesecretmanagerprovider v0.128.0
+- gomod: go.opentelemetry.io/collector/confmap/provider/envprovider v0.128.0
+- gomod: go.opentelemetry.io/collector/confmap/provider/fileprovider v0.128.0
 
 replaces:
 - github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor v0.126.0 => github.com/franciscovalentecastro/opentelemetry-collector-contrib/processor/transformprocessor v0.54.1-0.20250522022653-e6321fae6718
-

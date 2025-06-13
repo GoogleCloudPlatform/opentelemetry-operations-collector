@@ -15,6 +15,7 @@ ARG CERT_CONTAINER="alpine:3"
 ARG BUILD_CONTAINER="alpine:3"
 FROM --platform=${BUILDPLATFORM:-linux/amd64} ${BUILD_CONTAINER} AS build
 
+RUN echo ${$TEAM_NAME}
 RUN apk --update add make curl
 
 ARG PROJECT_ROOT

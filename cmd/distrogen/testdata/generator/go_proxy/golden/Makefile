@@ -10,6 +10,7 @@ COLLECTOR_CGO = 0
 COLLECTOR_BUILDVCS ?= false
 COLLECTOR_BUILD_TAGS ?= 
 
+DOCKER_REPO ?= us-docker.pkg.dev/pretend-repo/otelcol-basic
 DOCKER_LOCAL_IMAGE_TAG ?= $(COLLECTOR_BINARY_NAME)
 DOCKER_IMAGE_TAG = $(DOCKER_REPO)/$(COLLECTOR_BINARY_NAME):$(VERSION)
 
@@ -24,7 +25,7 @@ GO_BIN_DIR ?= $(TOOLS_DIR)/go/bin
 GO_BIN ?= $(GO_BIN_DIR)/go
 SET_GO_BIN_PATH ?= PATH="$(GO_BIN_DIR):$$PATH"
 
-USE_GO_PROXY ?= 
+USE_GO_PROXY ?= https://not-real.org,direct
 
 GORELEASER_BIN ?= $(TOOLS_DIR)/goreleaser
 

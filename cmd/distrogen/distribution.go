@@ -61,6 +61,7 @@ type DistributionSpec struct {
 	Replaces                    ComponentReplaces       `yaml:"replaces,omitempty"`
 	CustomValues                map[string]any          `yaml:"custom_values,omitempty"`
 	FeatureGates                FeatureGates            `yaml:"feature_gates"`
+	GoProxy                     string                  `yaml:"go_proxy,omitempty"`
 }
 
 // Diff will compare two different DistributionSpecs.

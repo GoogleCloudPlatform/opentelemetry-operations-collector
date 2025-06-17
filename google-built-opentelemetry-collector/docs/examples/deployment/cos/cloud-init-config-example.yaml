@@ -122,6 +122,11 @@ write_files:
           - batch
           exporters:
           - googlecloud
+      # Internal telemetry for the collector supports both push and pull-based telemetry data transmission.
+      # Leveraging the pre-configured OTLP receiver eliminates the need for an additional port.
+      #
+      # Docs:
+      # https://opentelemetry.io/docs/collector/internal-telemetry/
       telemetry:
         metrics:
           readers:

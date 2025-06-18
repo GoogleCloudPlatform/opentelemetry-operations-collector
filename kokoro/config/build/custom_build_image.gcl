@@ -19,6 +19,10 @@ config build = common.build {
       value =
           'us-docker.pkg.dev/artifact-foundry-prod/docker-3p-trusted/alpine:3'
     },
+    {
+      key = '_TEST_CUSTOM_COMPONENTS'
+      value = '${CUSTOM_COMPONENTS}'
+    }
   ]
   // I'm not sure why, but this build doesn't seem to need container_properties;
   // null it out for now.

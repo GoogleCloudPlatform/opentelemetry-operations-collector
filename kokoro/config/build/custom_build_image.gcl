@@ -6,6 +6,13 @@ config build = common.build {
 
   container_build_argument = env_vars
 
+  env_vars = [
+      {
+        key = 'CUSTOM_COMPONENTS'
+        value = 'GOO'
+      },
+  ]
+
   // I'm not sure why, but this build doesn't seem to need container_properties;
   // null it out for now.
   container_properties = null

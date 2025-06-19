@@ -21,7 +21,7 @@ config build = common.build {
     },
     {
       key = '_TEST_CUSTOM_COMPONENTS'
-      value = '$[CUSTOM_COMPONENTS]'
+      value = params.environment
     }
   ]
   // I'm not sure why, but this build doesn't seem to need container_properties;

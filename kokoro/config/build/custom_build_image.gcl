@@ -22,7 +22,7 @@ config build = common.build {
 
   // I'm not sure why, but this build doesn't seem to need container_properties;
   // null it out for now.
-  container_properties = {
+  container_properties {
     docker_image = 'gcr.io/cloud-builders/docker:latest'
     provide_buildkit_builder = true
   }

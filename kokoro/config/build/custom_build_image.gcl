@@ -1,4 +1,5 @@
 import 'common.gcl' as common
+import '../utils/functions.gcl' as functions
 
 config build = common.build {
   dockerfile_path =

@@ -1,13 +1,16 @@
 import 'common.gcl' as common
 
 config build = common.build {
-  dockerfile_path = 'git/otelcol-google/custom-build/Dockerfile'
+  build_file =
+      'git/otelcol-google/custom-build/build.sh'
 
-  container_build_argument = env_vars
 
   // I'm not sure why, but this build doesn't seem to need container_properties;
   // null it out for now.
-  container_properties = null
+  container_properties = {
+    docker_image = 'gcr.io/cloud-builders/docker:latest'
+    provide_buildkit_builder = true
+  }
 
   container_artifact = [
     {

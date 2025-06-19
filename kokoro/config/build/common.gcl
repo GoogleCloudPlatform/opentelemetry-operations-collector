@@ -21,13 +21,6 @@ template config build = {
         }
       },
     ])
-
-    env_vars = [
-    {
-    key = "CUSTOM_COMPONENTS",
-    value = "${TEST_CUSTOM_COMPONENTS}"
-    }
-    ]
 }
 
 pkg_artifacts_patterns = ['**/*.deb', '**/*.rpm', '**/*.exe', '**/*.goo']

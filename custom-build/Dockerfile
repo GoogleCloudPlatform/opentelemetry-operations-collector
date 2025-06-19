@@ -1,4 +1,4 @@
-FROM marketplace.gcr.io/google/ubuntu2404:latest as gcloud
+FROM marketplace.gcr.io/google/ubuntu2404:latest
 
 RUN apt-get -y update && \
     apt-get -y install gcc python2.7 python-dev python3-pip wget ca-certificates \

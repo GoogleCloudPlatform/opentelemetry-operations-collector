@@ -2,7 +2,6 @@ import '../utils/functions.gcl' as functions
 
 template config build = {
     params {
-      environment {}
       artifacts = []
     }
 
@@ -22,8 +21,6 @@ template config build = {
         }
       },
     ])
-
-    env_vars = functions.environment_variables(params.environment)
 }
 
 pkg_artifacts_patterns = ['**/*.deb', '**/*.rpm', '**/*.exe', '**/*.goo']

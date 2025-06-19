@@ -24,7 +24,7 @@ GO_BIN_DIR ?= $(TOOLS_DIR)/go/bin
 GO_BIN ?= $(GO_BIN_DIR)/go
 SET_GO_BIN_PATH ?= PATH="$(GO_BIN_DIR):$$PATH"
 
-USE_GO_PROXY ?= 
+USE_GO_PROXY ?=  "https://us-go.pkg.dev/access-aoss/assuredoss-go"
 
 GORELEASER_BIN ?= $(TOOLS_DIR)/goreleaser
 
@@ -111,7 +111,10 @@ ocb-generate: $(OCB_BIN)
 # Using OCB and the local manifest file, build a collector.
 $(COLLECTOR_BINARY_NAME): ocb-generate
 	cd $(COLLECTOR_BUILD_TEMP_DIR) && \
-		$(if $(USE_GO_PROXY),GOPROXY=$(USE_GO_PROXY),) \
+		$(if $(USE_GO_PROXY), \
+			go run github.com/GoogleCloudPlatform/artifact-registry-go-tools/cmd/auth@v0.4.0 add-locations --locations=us && \
+			go run github.com/GoogleCloudPlatform/artifact-registry-go-tools/cmd/auth@v0.4.0 refresh && \
+			export GOPROXY=$(USE_GO_PROXY)) && \
 		GOWORK=off \
 		CGO_ENABLED=$(COLLECTOR_CGO) \
 		GOOS=$(TARGETOS) GOARCH=$(TARGETARCH) \

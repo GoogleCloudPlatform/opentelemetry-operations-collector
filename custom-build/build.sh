@@ -13,4 +13,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-docker build --build-arg CUSTOM_COMPONENTS=${CUSTOM_COMPONENTS} --output=type=oci,dest=$KOKORO_ARTIFACTS_DIR/container.tar --file git/otelcol-google/custom-build/Dockerfile.build
+docker build --build-arg CUSTOM_COMPONENTS=${CUSTOM_COMPONENTS} --output=type=oci,dest=$KOKORO_ARTIFACTS_DIR/container.tar --file git/otelcol-google/custom-build/Dockerfile.build .

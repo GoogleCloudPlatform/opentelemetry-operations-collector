@@ -19,8 +19,13 @@ set -eux
 # up. Unset it and let's look for a cleaner image to use as a base.
 unset GOROOT
 #echo $GOOGLE_APPLICATION_CREDENTIALS
-gcloud secrets versions access 1 --secret=aoss-ar-repos-authentication-credential --project=372639168729 > $(HOME)/.netrc
-echo $(HOME)/.netrc
+echo "Installing Google Cloud SDK..."
+apt-get update
+apt-get install -y google-cloud-cli
+echo "Verifying gcloud installation..."
+gcloud version
+gcloud secrets versions access 1 --secret=aoss-ar-repos-authentication-credential --project=372639168729 > $HOME/.netrc
+echo $HOME/.netrc
 
 docker build --build-arg AOSS_AUTH_TOKEN=${GOOGLE_APPLICATION_CREDENTIALS} --output=type=oci,dest=$KOKORO_ARTIFACTS_DIR/container.tar --file git/otelcol-google/aoss/Dockerfile.build .
 

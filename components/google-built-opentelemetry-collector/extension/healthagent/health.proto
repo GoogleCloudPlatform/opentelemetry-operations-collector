@@ -14,7 +14,7 @@
 
 syntax = "proto3";
 
-package healthagent;
+package cloud.saasaccelerator.protos.agent;
 
 import "google/protobuf/any.proto";
 

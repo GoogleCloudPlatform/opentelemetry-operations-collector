@@ -1,7 +1,7 @@
 import 'common.gcl' as common
 
 config build = common.build {
-  build_file = 'otelcol-google/kokoro/scripts/build/build_images_with_aoss.sh'
+  build_file = 'otelcol-google/aoss/build_images_with_aoss.sh'
   container_build_argument = [
     {
       key = 'PROJECT_ROOT'

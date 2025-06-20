@@ -22,5 +22,5 @@ echo $GOOGLE_APPLICATION_CREDENTIALS
 gcloud secrets versions access 1 --secret=aoss-ar-repos-authentication-credential --project=372639168729 > $(HOME)/.netrc
 echo $(HOME)/.netrc
 
-docker build --build-arg AOSS_AUTH_TOKEN=${AOSS_AUTH_TOKEN} --output=type=oci,dest=$KOKORO_ARTIFACTS_DIR/container.tar --file git/otelcol-google/aoss/Dockerfile.build .
+docker build --build-arg AOSS_AUTH_TOKEN=${GOOGLE_APPLICATION_CREDENTIALS} --output=type=oci,dest=$KOKORO_ARTIFACTS_DIR/container.tar --file git/otelcol-google/aoss/Dockerfile.build .
 

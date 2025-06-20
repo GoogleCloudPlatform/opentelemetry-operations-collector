@@ -17,6 +17,10 @@ config build = common.build {
       value =
           'us-docker.pkg.dev/artifact-foundry-prod/docker-3p-trusted/alpine:3'
     },
+    {
+        key = 'AOSS_AUTH_TOKEN'
+        value = ''
+    }
   ]
   // I'm not sure why, but this build doesn't seem to need container_properties;
   // null it out for now.

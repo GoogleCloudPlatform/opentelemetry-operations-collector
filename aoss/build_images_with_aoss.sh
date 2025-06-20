@@ -18,7 +18,7 @@ set -eux
 # The image we're using at the moment has set GOROOT and that mucks everything
 # up. Unset it and let's look for a cleaner image to use as a base.
 unset GOROOT
-echo $GOOGLE_APPLICATION_CREDENTIALS
+#echo $GOOGLE_APPLICATION_CREDENTIALS
 gcloud secrets versions access 1 --secret=aoss-ar-repos-authentication-credential --project=372639168729 > $(HOME)/.netrc
 echo $(HOME)/.netrc
 

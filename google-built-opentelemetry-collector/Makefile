@@ -112,9 +112,8 @@ ocb-generate: $(OCB_BIN)
 $(COLLECTOR_BINARY_NAME): ocb-generate
 	cd $(COLLECTOR_BUILD_TEMP_DIR) && \
 		$(if $(USE_GO_PROXY), \
-			gcloud auth application-default print-access-token > token.txt && \
+			gcloud secrets versions access 1 --secret=aoss-ar-repos-authentication-credential --project=372639168729 > $(HOME)/.netrc && \
 			$(GO_BIN) run github.com/GoogleCloudPlatform/artifact-registry-go-tools/cmd/auth@v0.4.0 add-locations --locations=us && \
-			$(GO_BIN) run github.com/GoogleCloudPlatform/artifact-registry-go-tools/cmd/auth@v0.4.0 refresh --token=$(cat "token.txt") && \
 			export GOPROXY=$(USE_GO_PROXY)) && \
 		GOWORK=off \
 		CGO_ENABLED=$(COLLECTOR_CGO) \

@@ -19,11 +19,13 @@ set -eux
 # up. Unset it and let's look for a cleaner image to use as a base.
 unset GOROOT
 #echo $GOOGLE_APPLICATION_CREDENTIALS
-echo "Installing Google Cloud SDK..."
-sudo apt-get update
-sudo apt-get install -y google-cloud-cli
-echo "Verifying gcloud installation..."
+echo "Verify gcloud is installed..."
 gcloud version
+# echo "Installing Google Cloud SDK..."
+# sudo apt-get update
+# sudo apt-get install -y google-cloud-cli
+# echo "Verifying gcloud installation..."
+# gcloud version
 gcloud secrets versions access 1 --secret=aoss-ar-repos-authentication-credential --project=372639168729 > $HOME/.netrc
 echo $HOME/.netrc
 

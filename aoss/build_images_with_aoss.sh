@@ -20,8 +20,8 @@ set -eux
 unset GOROOT
 #echo $GOOGLE_APPLICATION_CREDENTIALS
 echo "Installing Google Cloud SDK..."
-apt-get update
-apt-get install -y google-cloud-cli
+sudo apt-get update
+sudo apt-get install -y google-cloud-cli
 echo "Verifying gcloud installation..."
 gcloud version
 gcloud secrets versions access 1 --secret=aoss-ar-repos-authentication-credential --project=372639168729 > $HOME/.netrc

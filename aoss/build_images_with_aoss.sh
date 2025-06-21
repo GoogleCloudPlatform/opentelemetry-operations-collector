@@ -15,13 +15,19 @@
 
 set -eux
 
-cd "${KOKORO_ARTIFACTS_DIR}"/git/otelcol-google/google-built-opentelemetry-collector
-
 # The image we're using at the moment has set GOROOT and that mucks everything
 # up. Unset it and let's look for a cleaner image to use as a base.
 unset GOROOT
-make goreleaser-release
+#echo $GOOGLE_APPLICATION_CREDENTIALS
+echo "Verify gcloud is installed..."
+gcloud version
+# echo "Installing Google Cloud SDK..."
+# sudo apt-get update
+# sudo apt-get install -y google-cloud-cli
+# echo "Verifying gcloud installation..."
+# gcloud version
 
-# Put the output folder directly in KOKORO_ARTIFACTS_DIR instead of being deeply
-# nested within it.
-mv dist "${KOKORO_ARTIFACTS_DIR}"/dist
+
+export AOSS_AUTH_TOKEN="$(gcloud secrets versions access 1 --secret=aoss-ar-repos-authentication-credential --project=372639168729)"
+docker build --build-arg AOSS_AUTH_TOKEN="${AOSS_AUTH_TOKEN}" --output=dest=$KOKORO_ARTIFACTS_DIR/container.tar --file git/otelcol-google/google-built-opentelemetry-collector/Dockerfile.build .
+

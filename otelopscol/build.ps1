@@ -48,8 +48,36 @@ powershell.exe -Command $installOcbCommand
 $ocbBin="$toolsDir\builder.exe"
 
 # Generate the collector source.
-$ocbGenerateCommand="`$env:PATH='${goBinDir};${PATH}'; `$env:CGO_ENABLED=0; $ocbBin --skip-compilation --verbose --config manifest.yaml"
+$ocbGenerateCommand="`$env:PATH='${goBinDir};${PATH}'; `$env:CGO_ENABLED=1; $ocbBin --skip-compilation --verbose --config manifest.yaml"
 powershell.exe -Command $ocbGenerateCommand
+
+# Download Visual Studio Tools 2019
+$vsBuildtoolsBinDir="$toolsDir\vsBuildtools"
+$vsBuildtoolsInstallerPath="./vs_buildtools.exe"
+$vsReleaseChannelPath="./VisualStudio.chman"
+$vsBuildtoolsDownloadURL="https://aka.ms/vs/16/release/vs_buildtools.exe"
+$vsChannelDownloadURL="https://aka.ms/vs/16/release/channel"
+Invoke-WebRequest $vsBuildtoolsDownloadURL -OutFile $vsBuildtoolsInstallerPath
+Invoke-WebRequest $vsChannelDownloadURL -OutFile $vsReleaseChannelPath
+Start-Process /local/vs_buildtools.exe `
+    -ArgumentList '--quiet ', '--wait ', '--norestart ', '--nocache', `
+    '--installPath C:\BuildTools', `
+    '--channelUri C:\local\VisualStudio.chman', `
+    '--installChannelUri C:\local\VisualStudio.chman', `
+    '--add Microsoft.VisualStudio.Workload.VCTools', `
+    '--includeRecommended'  -NoNewWindow -Wait;
+Remove-Item $vsBuildtoolsInstallerPath
+Remove-Item $vsReleaseChannelPath
+
+# Build Onigmo.
+$onigmoBinDir="$toolsDir\onigmo"
+$onigmoTarPath="./onigmo-6.1.3.tar.gz"
+$onigmoDownloadURL="https://github.com/k-takata/Onigmo/releases/download/Onigmo-6.1.3/onigmo-6.1.3.tar.gz"
+Invoke-WebRequest $onigmoDownloadURL -OutFile $onigmoTarPath
+tar -C $toolsDir -xvzf $onigmoTarPath
+Remove-Item $onigmoTarPath
+Move-Item -Path "$toolsDir\onigmo-6.1.3" -Destination $onigmoBinDir
+Invoke-Item "$onigmoBinDir\build_nmake.cmd"
 
 # Build the collector.
 $ldFlags="-s -w"
@@ -57,6 +85,6 @@ if ($jmxHash -ne "") {
     $ldFlags+=" -X github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver.MetricsGathererHash=$jmxHash"
 }
 $buildCollectorCommand=@"
-`$env:GOWORK='off'; cd _build; $goBin build -p 32 -buildvcs=false -o '{0}/google-cloud-metrics-agent_windows_amd64.exe' --ldflags='{1}' .
+`$env:GOWORK='off' `$env:CGO_ENABLED=1 `$env:CGO_CFLAGS="-I $onigmoBinDir" `$env:CGO_LDFLAGS="-L $onigmoBinDir\.libs -lonigmo" \; cd _build; $goBin build -p 32 -buildvcs=false -o '{0}/google-cloud-metrics-agent_windows_amd64.exe' --ldflags='{1}' .
 "@ -f $outDir, $ldFlags
 powershell.exe -Command $buildCollectorCommand

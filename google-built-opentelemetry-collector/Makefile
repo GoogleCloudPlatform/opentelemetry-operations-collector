@@ -111,7 +111,7 @@ ocb-generate: $(OCB_BIN)
 # Using OCB and the local manifest file, build a collector.
 $(COLLECTOR_BINARY_NAME): ocb-generate
 	cd $(COLLECTOR_BUILD_TEMP_DIR) && \
-		$(if $(USE_GO_PROXY),GOPROXY=$(USE_GO_PROXY),) \
+		$(if $(USE_GO_PROXY), export GOPROXY=$(USE_GO_PROXY),) \
 		GOWORK=off \
 		CGO_ENABLED=$(COLLECTOR_CGO) \
 		GOOS=$(TARGETOS) GOARCH=$(TARGETARCH) \

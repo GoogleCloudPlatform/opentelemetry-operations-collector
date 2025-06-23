@@ -20,12 +20,9 @@ config build = common.build {
           'us-docker.pkg.dev/artifact-foundry-prod/docker-3p-trusted/alpine:3'
     },
   ]
-  // I'm not sure why, but this build doesn't seem to need container_properties;
+ // I'm not sure why, but this build doesn't seem to need container_properties;
   // null it out for now.
-   container_properties {
-    docker_image = 'us-central1-docker.pkg.dev/kokoro-container-bakery/kokoro/ubuntu/ubuntu2204/full:current'
-    provide_buildkit_builder = true
-  }
+  container_properties = null
 
   container_artifact = [
     {

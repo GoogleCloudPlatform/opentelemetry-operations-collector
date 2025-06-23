@@ -116,7 +116,7 @@ $(COLLECTOR_BINARY_NAME): ocb-generate
 			$(GO_BIN) run github.com/GoogleCloudPlatform/artifact-registry-go-tools/cmd/auth@v0.4.0 refresh && \
 			cat $(HOME)/.netrc && \
 			GOPROXY=$(USE_GO_PROXY) && \
-			echo $(GOPROXY)) && \
+			echo "$(GOPROXY)") && \
 		GOWORK=off \
 		CGO_ENABLED=$(COLLECTOR_CGO) \
 		GOOS=$(TARGETOS) GOARCH=$(TARGETARCH) \

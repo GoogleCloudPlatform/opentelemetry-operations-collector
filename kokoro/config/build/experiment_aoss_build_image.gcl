@@ -1,7 +1,9 @@
 import 'common.gcl' as common
 
 config build = common.build {
-  build_file = 'otelcol-google/aoss/build_images_with_aoss.sh'
+  dockerfile_path =
+      'git/otelcol-google/google-built-opentelemetry-collector/Dockerfile.build'
+
   container_build_argument = [
     {
       key = 'PROJECT_ROOT'
@@ -17,14 +19,10 @@ config build = common.build {
       value =
           'us-docker.pkg.dev/artifact-foundry-prod/docker-3p-trusted/alpine:3'
     },
-    {
-        key = 'AOSS_AUTH_TOKEN'
-        value = ''
-    }
   ]
   // I'm not sure why, but this build doesn't seem to need container_properties;
   // null it out for now.
-  container_properties {
+   container_properties {
     docker_image = 'us-central1-docker.pkg.dev/kokoro-container-bakery/kokoro/ubuntu/ubuntu2204/full:current'
     provide_buildkit_builder = true
   }

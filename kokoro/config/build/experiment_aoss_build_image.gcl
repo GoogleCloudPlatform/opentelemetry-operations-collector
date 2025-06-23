@@ -25,7 +25,7 @@ config build = common.build {
   // I'm not sure why, but this build doesn't seem to need container_properties;
   // null it out for now.
   container_properties {
-    docker_image = 'gcr.io/cloud-builders/docker:latest'
+    docker_image = 'us-central1-docker.pkg.dev/kokoro-container-bakery/kokoro/ubuntu/ubuntu2204/full:current'
     provide_buildkit_builder = true
   }
 

@@ -20,6 +20,7 @@ cd "${KOKORO_ARTIFACTS_DIR}"/git/otelcol-google/google-built-opentelemetry-colle
 # The image we're using at the moment has set GOROOT and that mucks everything
 # up. Unset it and let's look for a cleaner image to use as a base.
 unset GOROOT
+
 make goreleaser-release
 
 # Put the output folder directly in KOKORO_ARTIFACTS_DIR instead of being deeply

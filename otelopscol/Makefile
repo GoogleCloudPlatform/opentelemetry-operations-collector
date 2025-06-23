@@ -25,7 +25,8 @@ GO_BIN ?= $(GO_BIN_DIR)/go
 SET_GO_BIN_PATH ?= PATH="$(GO_BIN_DIR):$$PATH"
 
 ONIGMO_VERSION ?= 6.1.3
-ONIG_REPOSITORY := https://github.com/k-takata/Onigmo
+ONIGMO_REPOSITORY := https://github.com/k-takata/Onigmo
+ONIGMO_BIN ?= $(TOOLS_DIR)/onigmo
 
 USE_GO_PROXY ?= 
 
@@ -41,7 +42,7 @@ image: image-build image-push
 clean: clean-tools clean-collector
 
 .PHONY: install-tools
-install-tools: go ocb install-onigmo
+install-tools: go ocb onigmo
 
 ###################
 # Image Build
@@ -109,17 +110,16 @@ collector-build: clean-collector $(COLLECTOR_BINARY_NAME)
 
 .PHONY: ocb-generate
 ocb-generate: $(OCB_BIN)
-	$(MAKE) install-onigmo
 	$(SET_GO_BIN_PATH) $(OCB_BIN) --skip-compilation --verbose --config manifest.yaml
 
 # Using OCB and the local manifest file, build a collector.
-$(COLLECTOR_BINARY_NAME): ocb-generate
+$(COLLECTOR_BINARY_NAME): $(ONIGMO_BIN) ocb-generate
 	cd $(COLLECTOR_BUILD_TEMP_DIR) && \
 		GOWORK=off \
 		CGO_ENABLED=$(COLLECTOR_CGO) \
 		GOOS=$(TARGETOS) GOARCH=$(TARGETARCH) \
-		CGO_CFLAGS="-I $(TOOLS_DIR)/onigmo-${ONIGMO_VERSION}" \
-		CGO_LDFLAGS="-L $(TOOLS_DIR)/onigmo-${ONIGMO_VERSION}/.libs -lonigmo" \
+		CGO_CFLAGS="-I $(ONIGMO_BIN)" \
+		CGO_LDFLAGS="-L $(ONIGMO_BIN)/.libs -lonigmo" \
 		$(GO_BIN) build \
 			-buildvcs=$(COLLECTOR_BUILDVCS) \
 			-tags=$(COLLECTOR_BUILD_TAGS) \
@@ -167,6 +167,9 @@ ocb: $(OCB_BIN)
 .PHONY: go
 go: $(GO_BIN)
 
+.PHONY: onigmo
+onigmo: $(ONIGMO_BIN)
+
 .PHONY: goreleaser
 goreleaser: $(GORELEASER_BIN)
 
@@ -191,14 +194,20 @@ $(OCB_BIN): $(GO_BIN)
 	mv $(TOOLS_DIR)/builder $(OCB_BIN) ;\
 	}
 
-.PHONY: install-onigmo
-install-onigmo: $(TOOLS_DIR)
-	cd ${TOOLS_DIR} && \
-	curl -LO ${ONIG_REPOSITORY}/releases/download/Onigmo-${ONIGMO_VERSION}/onigmo-${ONIGMO_VERSION}.tar.gz && \
-	tar -xvzf onigmo-${ONIGMO_VERSION}.tar.gz && \
-	rm onigmo-${ONIGMO_VERSION}.tar.gz && \
-	cd onigmo-${ONIGMO_VERSION} && \
-	./configure --disable-shared --prefix=/usr && make
+$(ONIGMO_BIN): ONIGMO_ARCHIVE = onigmo-$(ONIGMO_VERSION).tar.gz
+$(ONIGMO_BIN):
+	@{ \
+	set -e ;\
+	mkdir -p $(TOOLS_DIR) ;\
+	echo "Installing onigmo at $(TOOLS_DIR)" ;\
+	curl -LO $(ONIGMO_REPOSITORY)/releases/download/Onigmo-$(ONIGMO_VERSION)/$(ONIGMO_ARCHIVE) ;\
+	tar -C $(TOOLS_DIR) -xvzf $(ONIGMO_ARCHIVE) ;\
+	mv $(TOOLS_DIR)/onigmo-$(ONIGMO_VERSION) $(ONIGMO_BIN) ;\
+	rm $(ONIGMO_ARCHIVE) ;\
+	cd $(ONIGMO_BIN) ;\
+	./configure --enable-static --disable-shared --prefix=/usr ;\
+	make ;\
+	}
 
 $(GORELEASER_BIN): $(GO_BIN) $(OCB_BIN)
 	@{ \

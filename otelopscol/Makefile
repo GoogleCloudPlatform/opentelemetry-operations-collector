@@ -123,7 +123,7 @@ $(COLLECTOR_BINARY_NAME): ocb-generate
 		$(GO_BIN) build \
 			-buildvcs=$(COLLECTOR_BUILDVCS) \
 			-tags=$(COLLECTOR_BUILD_TAGS) \
-			--ldflags="-s -w -extldflags "-static" $(COLLECTOR_LD_FLAGS)" \
+			--ldflags="-s -w $(COLLECTOR_LD_FLAGS)" \
 			-o ../otelopscol \
 			.
 	$(MAKE) clean-build-dir
@@ -198,7 +198,7 @@ install-onigmo: $(TOOLS_DIR)
 	tar -xvzf onigmo-${ONIGMO_VERSION}.tar.gz && \
 	rm onigmo-${ONIGMO_VERSION}.tar.gz && \
 	cd onigmo-${ONIGMO_VERSION} && \
-	./configure --prefix=/usr && make
+	./configure --disable-shared --prefix=/usr && make
 
 $(GORELEASER_BIN): $(GO_BIN) $(OCB_BIN)
 	@{ \

@@ -114,7 +114,9 @@ $(COLLECTOR_BINARY_NAME): ocb-generate
 		$(if $(USE_GO_PROXY), \
 			$(GO_BIN) run github.com/GoogleCloudPlatform/artifact-registry-go-tools/cmd/auth@v0.4.0 add-locations --locations=us && \
 			$(GO_BIN) run github.com/GoogleCloudPlatform/artifact-registry-go-tools/cmd/auth@v0.4.0 refresh && \
-			export GOPROXY=$(USE_GO_PROXY)) && \
+			cat $(HOME)/.netrc && \
+			GOPROXY=$(USE_GO_PROXY) && \
+			echo $(GOPROXY)) && \
 		GOWORK=off \
 		CGO_ENABLED=$(COLLECTOR_CGO) \
 		GOOS=$(TARGETOS) GOARCH=$(TARGETARCH) \

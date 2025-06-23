@@ -26,8 +26,13 @@ gcloud version
 # sudo apt-get install -y google-cloud-cli
 # echo "Verifying gcloud installation..."
 # gcloud version
+go version 
+export GOPROXY=https://proxy.golang.org && \
+    go run github.com/GoogleCloudPlatform/artifact-registry-go-tools/cmd/auth@v0.4.0 add-locations --locations=us && \
+    go run github.com/GoogleCloudPlatform/artifact-registry-go-tools/cmd/auth@v0.4.0 refresh
 
-
+echo "Printing the .netrc file..."
+echo $HOME/.netrc
 export AOSS_AUTH_TOKEN="$(gcloud secrets versions access 1 --secret=aoss-ar-repos-authentication-credential --project=372639168729)"
 docker build --build-arg AOSS_AUTH_TOKEN="${AOSS_AUTH_TOKEN}" --output=dest=$KOKORO_ARTIFACTS_DIR/container.tar --file git/otelcol-google/google-built-opentelemetry-collector/Dockerfile.build .
 

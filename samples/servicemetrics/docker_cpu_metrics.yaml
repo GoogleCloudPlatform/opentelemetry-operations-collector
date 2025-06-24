@@ -100,7 +100,7 @@ service:
                    transform/ucp_internal_docker_set_container_name,
                    resource/ucp_internal_docker_remove_container_name,
                    batch/ucp_internal_batch]
-      exporters: [servicecontrol/ucp_internal_servicecontrol]
+      exporters: [googleservicecontrol/ucp_internal_servicecontrol]
 
     # Separate pipeline for docker cpu percent, since we're scaling the value with `metricsgenerationprocessor`.
     metrics/ucp_internal_saasmanagement_docker_cpu_percent:
@@ -115,4 +115,4 @@ service:
                    transform/ucp_internal_docker_set_container_name,
                    resource/ucp_internal_docker_remove_container_name,
                    batch/ucp_internal_batch]
-      exporters: [servicecontrol/ucp_internal_servicecontrol]
+      exporters: [googleservicecontrol/ucp_internal_servicecontrol]

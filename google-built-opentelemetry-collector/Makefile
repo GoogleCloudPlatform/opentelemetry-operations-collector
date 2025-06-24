@@ -106,14 +106,13 @@ collector-build: clean-collector $(COLLECTOR_BINARY_NAME)
 
 .PHONY: ocb-generate
 ocb-generate: $(OCB_BIN)
-	$(SET_GO_BIN_PATH) $(OCB_BIN) --skip-compilation --verbose --config manifest.yaml
+	$(SET_GO_BIN_PATH) $(if $(USE_GO_PROXY),GOPROXY=$(USE_GO_PROXY),) $(OCB_BIN) --skip-compilation --verbose --config manifest.yaml
 
 # Using OCB and the local manifest file, build a collector.
 $(COLLECTOR_BINARY_NAME): ocb-generate
-	cd $(COLLECTOR_BUILD_TEMP_DIR) && \
-		$(if $(USE_GO_PROXY), export GOPROXY=$(USE_GO_PROXY),) \
+	cd $(COLLECTOR_BUILD_TEMP_DIR)  && \
 		GOWORK=off \
-		CGO_ENABLED=$(COLLECTOR_CGO) \
+		CGO_ENABLED=$(COLLECTOR_CGO)  \
 		GOOS=$(TARGETOS) GOARCH=$(TARGETARCH) \
 		$(GO_BIN) build \
 			-buildvcs=$(COLLECTOR_BUILDVCS) \

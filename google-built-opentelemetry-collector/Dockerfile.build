@@ -12,7 +12,7 @@
 # any custom components contained within your full project structure.
 ARG PROJECT_ROOT="."
 ARG CERT_CONTAINER="alpine:3"
-ARG BUILD_CONTAINER="google/cloud-sdk:alpine"
+ARG BUILD_CONTAINER="alpine:3"
 FROM --platform=${BUILDPLATFORM:-linux/amd64} ${BUILD_CONTAINER} AS build
 
 RUN apk --update add make curl

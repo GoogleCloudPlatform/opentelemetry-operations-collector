@@ -12,7 +12,7 @@
 # any custom components contained within your full project structure.
 ARG PROJECT_ROOT="."
 # Currently, this container has to be alpine based.
-ARG BUILD_CONTAINER="alpine:3"
+ARG BUILD_CONTAINER="google/cloud-sdk:alpine"
 
 FROM ${BUILD_CONTAINER} AS build
 

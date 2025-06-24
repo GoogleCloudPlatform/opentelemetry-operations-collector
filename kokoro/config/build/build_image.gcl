@@ -12,7 +12,7 @@ config build = common.build {
     {
       key = 'BUILD_CONTAINER'
       value =
-          'us-docker.pkg.dev/artifact-foundry-prod/docker-3p-trusted/alpine:3'
+          'us-docker.pkg.dev/artifact-foundry-prod/docker-3p-trusted/google/cloud-sdk:alpine'
     },
     {
       key = 'CERT_CONTAINER'

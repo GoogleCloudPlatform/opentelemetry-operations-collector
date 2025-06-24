@@ -29,8 +29,11 @@ param (
     [string]$outDir = "."
 )
 
-# Set up tools directory.
+# Environment
 $startDir = (Get-Location)
+$startEnvPath = $env:Path 
+
+# Set up tools directory.
 $toolsDir="" + (Get-Location) + "\.tools" # Powershell moment
 New-Item -ItemType Directory -Force -Path $toolsDir | Out-Null
 
@@ -41,8 +44,10 @@ Invoke-WebRequest $msysDownloadURL -OutFile $msysInstallerPath
 Start-Process $msysInstallerPath -ArgumentList 'in', '--confirm-command', `
     '--accept-messages', '--root', 'C:/msys64' -NoNewWindow -Wait;
 Remove-Item $msysInstallerPath
-$env:Path += ";C:\msys64\usr\bin"
+$env:Path = "C:\msys64\usr\bin"
 pacman -S --noconfirm make cmake gcc
+
+C:\msys64\usr\bin\cmake -DCMAKE_C_COMPILER = 'C:\msys64\usr\bin\gcc' -D CMAKE_MAKE_PROGRAM = 'C:\msys64\usr\bin\make' .
 
 # Build Onigmo.
 $onigmoDir="$toolsDir\onigmo"
@@ -79,7 +84,7 @@ powershell.exe -Command $ocbGenerateCommand
 # Build the collector.
 pacman -R --noconfirm gcc make cmake
 pacman -S --noconfirm mingw-w64-x86_64-gcc
-$env:Path += ";C:\msys64\mingw64\bin"
+$env:Path = "C:\msys64\mingw64\bin"
 $ldFlags="-s -w"
 if ($jmxHash -ne "") {
     $ldFlags+=" -X github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver.MetricsGathererHash=$jmxHash"
@@ -88,3 +93,5 @@ $buildCollectorCommand=@"
 `$env:GOWORK='off'; `$env:CGO_ENABLED=1; `$env:CGO_CFLAGS='-I $onigmoDir'; `$env:CGO_LDFLAGS='-L $onigmoDir\library -lonigmo'; cd _build; $goBin build -p 32 -buildvcs=false -o '{0}/google-cloud-metrics-agent_windows_amd64.exe' --ldflags='{1}' .
 "@ -f $outDir, $ldFlags
 powershell.exe -Command $buildCollectorCommand
+
+$env:Path = $startEnvPath

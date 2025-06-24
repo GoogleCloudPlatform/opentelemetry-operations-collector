@@ -106,12 +106,11 @@ collector-build: clean-collector $(COLLECTOR_BINARY_NAME)
 
 .PHONY: ocb-generate
 ocb-generate: $(OCB_BIN)
-	$(SET_GO_BIN_PATH) $(OCB_BIN) --skip-compilation --verbose --config manifest.yaml
+	$(SET_GO_BIN_PATH) $(if $(USE_GO_PROXY),GOPROXY=$(USE_GO_PROXY),) $(OCB_BIN) --skip-compilation --verbose --config manifest.yaml
 
 # Using OCB and the local manifest file, build a collector.
 $(COLLECTOR_BINARY_NAME): ocb-generate
 	cd $(COLLECTOR_BUILD_TEMP_DIR) && \
-		$(if $(USE_GO_PROXY),GOPROXY=$(USE_GO_PROXY),) \
 		GOWORK=off \
 		CGO_ENABLED=$(COLLECTOR_CGO) \
 		GOOS=$(TARGETOS) GOARCH=$(TARGETARCH) \
@@ -146,7 +145,7 @@ clean-build-dir:
 
 .PHONY: goreleaser-release
 goreleaser-release: $(GORELEASER_BIN) ocb-generate
-	$(SET_GO_BIN_PATH) $(if $(USE_GO_PROXY),GOPROXY=$(USE_GO_PROXY) ,)$(GORELEASER_BIN) release --snapshot --clean
+	$(SET_GO_BIN_PATH) $(GORELEASER_BIN) release --snapshot --clean
 	# I love umask it's my favourite
 	chmod -R o+r ./dist
 

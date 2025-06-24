@@ -24,7 +24,7 @@ GO_BIN_DIR ?= $(TOOLS_DIR)/go/bin
 GO_BIN ?= $(GO_BIN_DIR)/go
 SET_GO_BIN_PATH ?= PATH="$(GO_BIN_DIR):$$PATH"
 
-USE_GO_PROXY ?= 
+USE_GO_PROXY ?= "https://us-go.pkg.dev/access-aoss/assuredoss-go"
 
 GORELEASER_BIN ?= $(TOOLS_DIR)/goreleaser
 
@@ -106,12 +106,16 @@ collector-build: clean-collector $(COLLECTOR_BINARY_NAME)
 
 .PHONY: ocb-generate
 ocb-generate: $(OCB_BIN)
-	$(SET_GO_BIN_PATH) $(OCB_BIN) --skip-compilation --verbose --config manifest.yaml
+	$(SET_GO_BIN_PATH) && \
+	$(if $(USE_GO_PROXY), \
+	go run github.com/GoogleCloudPlatform/artifact-registry-go-tools/cmd/auth@v0.4.0 add-locations --locations=us && \
+	go run github.com/GoogleCloudPlatform/artifact-registry-go-tools/cmd/auth@v0.4.0 refresh && \
+	GOPROXY=$(USE_GO_PROXY) && ) \
+	$(OCB_BIN) --skip-compilation --verbose --config manifest.yaml
 
 # Using OCB and the local manifest file, build a collector.
 $(COLLECTOR_BINARY_NAME): ocb-generate
 	cd $(COLLECTOR_BUILD_TEMP_DIR) && \
-		$(if $(USE_GO_PROXY),GOPROXY=$(USE_GO_PROXY),) \
 		GOWORK=off \
 		CGO_ENABLED=$(COLLECTOR_CGO) \
 		GOOS=$(TARGETOS) GOARCH=$(TARGETARCH) \
@@ -146,7 +150,7 @@ clean-build-dir:
 
 .PHONY: goreleaser-release
 goreleaser-release: $(GORELEASER_BIN) ocb-generate
-	$(SET_GO_BIN_PATH) $(if $(USE_GO_PROXY),GOPROXY=$(USE_GO_PROXY) ,)$(GORELEASER_BIN) release --snapshot --clean
+	$(SET_GO_BIN_PATH) $(GORELEASER_BIN) release --snapshot --clean
 	# I love umask it's my favourite
 	chmod -R o+r ./dist
 

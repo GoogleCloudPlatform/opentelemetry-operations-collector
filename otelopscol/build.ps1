@@ -84,7 +84,7 @@ Invoke-Expression -Command $ocbGenerateCommand
 
 # Setup MINGW for go build
 $env:Path = "C:\msys64\usr\bin;C:\msys64\mingw64\bin"
-pacman.exe -S --noconfirm mingw-w64-x86_64-gcc
+pacman -S --noconfirm mingw-w64-x86_64-gcc
 
 # Build the collector.
 $ldFlags="-s -w"

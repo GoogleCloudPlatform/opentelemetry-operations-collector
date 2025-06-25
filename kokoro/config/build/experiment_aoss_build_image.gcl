@@ -2,7 +2,7 @@ import 'common.gcl' as common
 
 config build = common.build {
   dockerfile_path =
-      'git/otelcol-google/google-built-opentelemetry-collector/Dockerfile.build'
+      'git/otelcol-google/google-built-opentelemetry-collector/Dockerfile.image_with_gcloud.build'
 
   container_build_argument = [
     {
@@ -20,7 +20,7 @@ config build = common.build {
           'us-docker.pkg.dev/artifact-foundry-prod/docker-3p-trusted/alpine:3'
     },
   ]
-  // I'm not sure why, but this build doesn't seem to need container_properties;
+ // I'm not sure why, but this build doesn't seem to need container_properties;
   // null it out for now.
   container_properties = null
 

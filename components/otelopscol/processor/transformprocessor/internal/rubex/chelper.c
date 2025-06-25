@@ -23,7 +23,7 @@ int NewOnigRegex( char *pattern, int pattern_length, int option,
 
     memset(*error_buffer, 0, ONIG_MAX_ERROR_MESSAGE_LEN * sizeof(char));
 
-    ret = onig_new(regex, pattern_start, pattern_end, (OnigOptionType)(option), *encoding, OnigSyntaxRuby, *error_info);
+    ret = onig_new(regex, pattern_start, pattern_end, (OnigOptionType)(option), *encoding, ONIG_SYNTAX_RUBY, *error_info);
 
     if (ret != ONIG_NORMAL) {
         error_msg_len = onig_error_code_to_str((unsigned char*)(*error_buffer), ret, *error_info);

@@ -1,5 +1,4 @@
-module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/transformprocessor
-
+module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/transformprocessor
 go 1.23.2
 
 require (

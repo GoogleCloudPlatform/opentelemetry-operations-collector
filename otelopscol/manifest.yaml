@@ -52,7 +52,7 @@ processors:
   path: ../components/otelopscol/processor/modifyscopeprocessor
 - gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/normalizesumsprocessor v0.128.0
   path: ../components/otelopscol/processor/normalizesumsprocessor
-- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/transformprocessor v0.128.0
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/transformprocessor v0.128.0
   path: ../components/otelopscol/processor/transformprocessor
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/cumulativetodeltaprocessor v0.128.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/deltatorateprocessor v0.128.0

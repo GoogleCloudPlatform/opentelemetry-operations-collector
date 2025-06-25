@@ -26,7 +26,7 @@ ARG BUILDARCH
 ARG BUILDOS
 ARG TARGETOS
 ARG TARGETARCH
-RUN make -f Makefile.pull_modules_from_ar_repo build
+RUN make -f pull_modules_from_ar_repos.mk aoss-build
 
 FROM ${CERT_CONTAINER} AS certs
 RUN apk --update add ca-certificates

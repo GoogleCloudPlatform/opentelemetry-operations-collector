@@ -15,7 +15,7 @@
 package transformprocessor
 
 import (
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/processor/transformprocessor/internal/ottlfuncs"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/transformprocessor/internal/ottlfuncs"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/ottl"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/ottl/contexts/ottllog"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor"

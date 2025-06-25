@@ -7,9 +7,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/transformprocessor/internal/rubex"
 	"go.opentelemetry.io/collector/pdata/pcommon"
-
-	onigmo "github.com/go-enry/go-onigmo"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/ottl"
 )
@@ -34,7 +33,7 @@ func createExtractPatternsRubyRegexFunction[K any](_ ottl.FunctionContext, oArgs
 }
 
 func extractPatternsRubyRegex[K any](target ottl.StringGetter[K], pattern string) (ottl.ExprFunc[K], error) {
-	r, err := onigmo.NewRegexp(pattern, onigmo.EncodingUTF8, onigmo.OptionNone, onigmo.SyntaxRuby)
+	r, err := rubex.NewRegexp(pattern, rubex.ONIG_OPTION_DEFAULT)
 	if err != nil {
 		return nil, fmt.Errorf("the pattern supplied to ExtractPatternsRubyRegex is not a valid pattern: %w", err)
 	}

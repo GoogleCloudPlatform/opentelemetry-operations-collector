@@ -37,7 +37,7 @@ $startEnvPath = $env:Path
 $toolsDir="" + (Get-Location) + "\.tools" # Powershell moment
 New-Item -ItemType Directory -Force -Path $toolsDir | Out-Null
 
-# Download MSYS, GCC and MAKE
+# Install MSYS
 $msysInstallerPath="./msys2-x86_64.exe"
 $msysDownloadURL="https://github.com/msys2/msys2-installer/releases/download/2025-06-22/msys2-x86_64-20250622.exe"
 Invoke-WebRequest $msysDownloadURL -OutFile $msysInstallerPath
@@ -45,8 +45,7 @@ Start-Process $msysInstallerPath -ArgumentList 'in', '--confirm-command', `
     '--accept-messages', '--root', 'C:/msys64' -NoNewWindow -Wait;
 Remove-Item $msysInstallerPath
 
-
-# Build Onigmo.
+# Download onigmo.
 $onigmoDir="$toolsDir\onigmo"
 $onigmoZipPath="./Onigmo.zip"
 $onigmoDownloadURL="https://github.com/fluent/onigmo/archive/refs/heads/master.zip"
@@ -54,6 +53,8 @@ Invoke-WebRequest $onigmoDownloadURL -OutFile $onigmoZipPath
 Expand-Archive -Path $onigmoZipPath -DestinationPath $toolsDir
 Remove-Item $onigmoZipPath
 Move-Item -Path "$toolsDir\onigmo-master" -Destination $onigmoDir
+
+# Install GCC, MAKE, CMAKE and build onigmo.
 $env:Path = "C:\msys64\usr\bin"
 pacman -S --noconfirm make cmake gcc
 Set-Location -Path $onigmoDir

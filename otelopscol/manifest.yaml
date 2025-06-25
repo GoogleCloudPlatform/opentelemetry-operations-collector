@@ -82,5 +82,3 @@ providers:
 - gomod: go.opentelemetry.io/collector/confmap/provider/envprovider v0.128.0
 - gomod: go.opentelemetry.io/collector/confmap/provider/fileprovider v0.128.0
 
-replaces:
-

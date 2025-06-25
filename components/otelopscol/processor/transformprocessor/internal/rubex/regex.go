@@ -34,8 +34,9 @@ type Regexp struct {
 	errorInfo *C.OnigErrorInfo
 	errorBuf  *C.char
 
-	numCaptures    int32
-	namedGroupInfo NamedGroupInfo
+	numCaptures        int32
+	namedGroupInfo     NamedGroupInfo
+	orderedNamedGroups []string
 }
 
 // NewRegexp creates and initializes a new Regexp with the given pattern and option.
@@ -121,6 +122,10 @@ func (re *Regexp) Free() {
 	}
 }
 
+func (re *Regexp) SubexpNames() []string {
+	return re.orderedNamedGroups
+}
+
 func (re *Regexp) getNamedGroupInfo() NamedGroupInfo {
 	numNamedGroups := int(C.onig_number_of_names(re.regex))
 	// when any named capture exists, there is no numbered capture even if
@@ -130,6 +135,7 @@ func (re *Regexp) getNamedGroupInfo() NamedGroupInfo {
 	}
 
 	namedGroupInfo := make(map[string]int)
+	re.orderedNamedGroups = make([]string, 0, numNamedGroups)
 
 	//try to get the names
 	bufferSize := len(re.pattern) * 2
@@ -154,6 +160,7 @@ func (re *Regexp) getNamedGroupInfo() NamedGroupInfo {
 	for i, nameAsBytes := range namesAsBytes {
 		name := string(nameAsBytes)
 		namedGroupInfo[name] = int(groupNumbers[i])
+		re.orderedNamedGroups = append(re.orderedNamedGroups, name)
 	}
 
 	return namedGroupInfo

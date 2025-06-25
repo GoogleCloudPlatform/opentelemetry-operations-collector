@@ -40,7 +40,8 @@ func extractPatternsRubyRegex[K any](target ottl.StringGetter[K], pattern string
 	}
 
 	namedCaptureGroups := 0
-	for _, groupName := range r.SubexpNames() {
+	subExpNames := r.SubexpNames()
+	for _, groupName := range subExpNames {
 		if groupName != "" {
 			namedCaptureGroups++
 		}

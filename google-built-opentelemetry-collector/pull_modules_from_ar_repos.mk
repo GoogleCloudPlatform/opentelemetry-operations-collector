@@ -1,6 +1,5 @@
 include ./Makefile
 
-
 AR_AUTH_BIN = $(TOOLS_DIR)/auth
 
 $(AR_AUTH_BIN): $(GO_BIN)

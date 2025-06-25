@@ -29,41 +29,9 @@ param (
     [string]$outDir = "."
 )
 
-# Environment
-$startDir = (Get-Location)
-$startEnvPath = $env:Path
-
 # Set up tools directory.
 $toolsDir="" + (Get-Location) + "\.tools" # Powershell moment
 New-Item -ItemType Directory -Force -Path $toolsDir | Out-Null
-
-# Install MSYS
-$msysInstallerPath="./msys2-x86_64.exe"
-$msysDownloadURL="https://github.com/msys2/msys2-installer/releases/download/2025-06-22/msys2-x86_64-20250622.exe"
-Invoke-WebRequest $msysDownloadURL -OutFile $msysInstallerPath
-Start-Process $msysInstallerPath -ArgumentList 'in', '--confirm-command', `
-    '--accept-messages', '--root', 'C:/msys64' -NoNewWindow -Wait;
-Remove-Item $msysInstallerPath
-
-# Download onigmo.
-$onigmoDir="$toolsDir\onigmo"
-$onigmoZipPath="./Onigmo.zip"
-$onigmoDownloadURL="https://github.com/fluent/onigmo/archive/refs/heads/master.zip"
-Invoke-WebRequest $onigmoDownloadURL -OutFile $onigmoZipPath
-Expand-Archive -Path $onigmoZipPath -DestinationPath $toolsDir
-Remove-Item $onigmoZipPath
-Move-Item -Path "$toolsDir\onigmo-master" -Destination $onigmoDir
-
-# Install GCC, MAKE, CMAKE and build onigmo.
-$env:Path = "C:\msys64\usr\bin"
-pacman -S --noconfirm make cmake gcc
-Set-Location -Path $onigmoDir
-cmake -DONIGMO_SHARED_LIB=No .
-make
-Set-Location -Path $startDir
-Rename-Item -Path "$onigmoDir\library\libonigmo-static.a" -NewName "libonigmo.a"
-pacman -R --noconfirm make cmake gcc
-$env:Path = $startEnvPath
 
 # Download Go.
 $goZipPath="./go.windows-amd64.zip"
@@ -75,17 +43,13 @@ $goBinDir="$toolsDir\go\bin"
 $goBin="$goBinDir\go"
 
 # Download OCB.
-$installOcbCommand="`$env:GOBIN='$toolsDir'; `$env:CGO_ENABLED=1; $goBin install -trimpath -ldflags='-s -w' go.opentelemetry.io/collector/cmd/builder@v0.126.0"
-Invoke-Expression -Command $installOcbCommand
+$installOcbCommand="`$env:GOBIN='$toolsDir'; `$env:CGO_ENABLED=0; $goBin install -trimpath -ldflags='-s -w' go.opentelemetry.io/collector/cmd/builder@v0.126.0"
+powershell.exe -Command $installOcbCommand
 $ocbBin="$toolsDir\builder.exe"
 
 # Generate the collector source.
-$ocbGenerateCommand="`$env:PATH='${goBinDir};${PATH}'; `$env:CGO_ENABLED=1; $ocbBin --skip-compilation --verbose --config manifest.yaml"
-Invoke-Expression -Command $ocbGenerateCommand
-
-# Setup MINGW for go build
-$env:Path = "C:\msys64\usr\bin;C:\msys64\mingw64\bin"
-pacman -S --noconfirm mingw-w64-x86_64-gcc
+$ocbGenerateCommand="`$env:PATH='${goBinDir};${PATH}'; `$env:CGO_ENABLED=0; $ocbBin --skip-compilation --verbose --config manifest.yaml"
+powershell.exe -Command $ocbGenerateCommand
 
 # Build the collector.
 $ldFlags="-s -w"
@@ -93,7 +57,6 @@ if ($jmxHash -ne "") {
     $ldFlags+=" -X github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver.MetricsGathererHash=$jmxHash"
 }
 $buildCollectorCommand=@"
-`$env:GOWORK='off'; `$env:CGO_ENABLED=1; `$env:CGO_CFLAGS='-I $onigmoDir'; `$env:CGO_LDFLAGS='-L $onigmoDir\library -lonigmo'; cd _build; $goBin build -p 32 -buildvcs=false -o '{0}/google-cloud-metrics-agent_windows_amd64.exe' --ldflags='{1}' .
+`$env:GOWORK='off'; cd _build; $goBin build -p 32 -buildvcs=false -o '{0}/google-cloud-metrics-agent_windows_amd64.exe' --ldflags='{1}' .
 "@ -f $outDir, $ldFlags
-Invoke-Expression -Command $buildCollectorCommand
-$env:Path = $startEnvPath
+powershell.exe -Command $buildCollectorCommand

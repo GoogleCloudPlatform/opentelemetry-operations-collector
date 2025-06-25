@@ -24,10 +24,6 @@ GO_BIN_DIR ?= $(TOOLS_DIR)/go/bin
 GO_BIN ?= $(GO_BIN_DIR)/go
 SET_GO_BIN_PATH ?= PATH="$(GO_BIN_DIR):$$PATH"
 
-ONIGMO_VERSION ?= 6.1.3
-ONIGMO_REPOSITORY := https://github.com/k-takata/Onigmo
-ONIGMO_BIN ?= $(TOOLS_DIR)/onigmo
-
 USE_GO_PROXY ?= 
 
 GORELEASER_BIN ?= $(TOOLS_DIR)/goreleaser
@@ -42,7 +38,7 @@ image: image-build image-push
 clean: clean-tools clean-collector
 
 .PHONY: install-tools
-install-tools: go ocb onigmo
+install-tools: go ocb
 
 ###################
 # Image Build
@@ -113,13 +109,11 @@ ocb-generate: $(OCB_BIN)
 	$(SET_GO_BIN_PATH) $(OCB_BIN) --skip-compilation --verbose --config manifest.yaml
 
 # Using OCB and the local manifest file, build a collector.
-$(COLLECTOR_BINARY_NAME): ocb-generate onigmo
+$(COLLECTOR_BINARY_NAME): ocb-generate
 	cd $(COLLECTOR_BUILD_TEMP_DIR) && \
 		GOWORK=off \
 		CGO_ENABLED=$(COLLECTOR_CGO) \
 		GOOS=$(TARGETOS) GOARCH=$(TARGETARCH) \
-		CGO_CFLAGS="-I $(ONIGMO_BIN)" \
-		CGO_LDFLAGS="-L $(ONIGMO_BIN)/.libs -lonigmo" \
 		$(GO_BIN) build \
 			-buildvcs=$(COLLECTOR_BUILDVCS) \
 			-tags=$(COLLECTOR_BUILD_TAGS) \
@@ -167,9 +161,6 @@ ocb: $(OCB_BIN)
 .PHONY: go
 go: $(GO_BIN)
 
-.PHONY: onigmo
-onigmo: $(ONIGMO_BIN)
-
 .PHONY: goreleaser
 goreleaser: $(GORELEASER_BIN)
 
@@ -192,21 +183,6 @@ $(OCB_BIN): $(GO_BIN)
 	echo "Installing ocb at $(TOOLS_DIR)" ;\
 	GOBIN=$(TOOLS_DIR) CGO_ENABLED=0 GOARCH=$(BUILDARCH) $(GO_BIN) install -trimpath -ldflags="-s -w" go.opentelemetry.io/collector/cmd/builder@$(OTEL_VERSION_TAG) ;\
 	mv $(TOOLS_DIR)/builder $(OCB_BIN) ;\
-	}
-
-$(ONIGMO_BIN): ONIGMO_ARCHIVE = onigmo-$(ONIGMO_VERSION).tar.gz
-$(ONIGMO_BIN):
-	@{ \
-	set -e ;\
-	mkdir -p $(TOOLS_DIR) ;\
-	echo "Installing onigmo at $(TOOLS_DIR)" ;\
-	curl -LO $(ONIGMO_REPOSITORY)/releases/download/Onigmo-$(ONIGMO_VERSION)/$(ONIGMO_ARCHIVE) ;\
-	tar -C $(TOOLS_DIR) -xvzf $(ONIGMO_ARCHIVE) ;\
-	mv $(TOOLS_DIR)/onigmo-$(ONIGMO_VERSION) $(ONIGMO_BIN) ;\
-	rm $(ONIGMO_ARCHIVE) ;\
-	cd $(ONIGMO_BIN) ;\
-	./configure --enable-static --disable-shared --prefix=/usr ;\
-	make ;\
 	}
 
 $(GORELEASER_BIN): $(GO_BIN) $(OCB_BIN)

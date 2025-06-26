@@ -34,35 +34,35 @@ func Test_extractPatternsRubyRegex(t *testing.T) {
 				expectedMap.PutStr("c", "d")
 			},
 		},
-		// {
-		// 	name: "no pattern found",
-		// 	target: &ottl.StandardStringGetter[any]{
-		// 		Getter: func(_ context.Context, _ any) (any, error) {
-		// 			return `a=b c=d`, nil
-		// 		},
-		// 	},
-		// 	pattern: `^a=(?<a>\w+)$`,
-		// 	want:    func(_ pcommon.Map) {},
-		// },
-		// {
-		// 	name: "complex pattern",
-		// 	target: &ottl.StandardStringGetter[any]{
-		// 		Getter: func(_ context.Context, _ any) (any, error) {
-		// 			return `<13>1 2006-01-02T15:04:05+0700 vm_name_1 my_app_id n n n qqqqrrrr`, nil
-		// 		},
-		// 	},
-		// 	pattern: `^\<(?<pri>[0-9]{1,5})\>1 (?<time>[^ ]+) (?<host>[^ ]+) (?<ident>[^ ]+) (?<pid>[n0-9]+) (?<msgid>[^ ]+) (?<extradata>(\[(.*?)\]|n)) (?<message>.+)$`,
-		// 	want: func(expectedMap pcommon.Map) {
-		// 		expectedMap.PutStr("pri", "13")
-		// 		expectedMap.PutStr("time", "2006-01-02T15:04:05+0700")
-		// 		expectedMap.PutStr("host", "vm_name_1")
-		// 		expectedMap.PutStr("ident", "my_app_id")
-		// 		expectedMap.PutStr("pid", "n")
-		// 		expectedMap.PutStr("msgid", "n")
-		// 		expectedMap.PutStr("extradata", "n")
-		// 		expectedMap.PutStr("message", "qqqqrrrr")
-		// 	},
-		// },
+		{
+			name: "no pattern found",
+			target: &ottl.StandardStringGetter[any]{
+				Getter: func(_ context.Context, _ any) (any, error) {
+					return `a=b c=d`, nil
+				},
+			},
+			pattern: `^a=(?<a>\w+)$`,
+			want:    func(_ pcommon.Map) {},
+		},
+		{
+			name: "complex pattern",
+			target: &ottl.StandardStringGetter[any]{
+				Getter: func(_ context.Context, _ any) (any, error) {
+					return `<13>1 2006-01-02T15:04:05+0700 vm_name_1 my_app_id n n n qqqqrrrr`, nil
+				},
+			},
+			pattern: `^\<(?<pri>[0-9]{1,5})\>1 (?<time>[^ ]+) (?<host>[^ ]+) (?<ident>[^ ]+) (?<pid>[n0-9]+) (?<msgid>[^ ]+) (?<extradata>(\[(.*?)\]|n)) (?<message>.+)$`,
+			want: func(expectedMap pcommon.Map) {
+				expectedMap.PutStr("pri", "13")
+				expectedMap.PutStr("time", "2006-01-02T15:04:05+0700")
+				expectedMap.PutStr("host", "vm_name_1")
+				expectedMap.PutStr("ident", "my_app_id")
+				expectedMap.PutStr("pid", "n")
+				expectedMap.PutStr("msgid", "n")
+				expectedMap.PutStr("extradata", "n")
+				expectedMap.PutStr("message", "qqqqrrrr")
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -122,40 +122,40 @@ func Test_extractPatternsRubyRegex_validation(t *testing.T) {
 	}
 }
 
-// func Test_extractPatternsRubyRegex_bad_input(t *testing.T) {
-// 	tests := []struct {
-// 		name    string
-// 		target  ottl.StringGetter[any]
-// 		pattern string
-// 	}{
-// 		{
-// 			name: "target is non-string",
-// 			target: &ottl.StandardStringGetter[any]{
-// 				Getter: func(_ context.Context, _ any) (any, error) {
-// 					return 123, nil
-// 				},
-// 			},
-// 			pattern: "(?P<line>.*)",
-// 		},
-// 		{
-// 			name: "target is nil",
-// 			target: &ottl.StandardStringGetter[any]{
-// 				Getter: func(_ context.Context, _ any) (any, error) {
-// 					return nil, nil
-// 				},
-// 			},
-// 			pattern: "(?P<line>.*)",
-// 		},
-// 	}
+func Test_extractPatternsRubyRegex_bad_input(t *testing.T) {
+	tests := []struct {
+		name    string
+		target  ottl.StringGetter[any]
+		pattern string
+	}{
+		{
+			name: "target is non-string",
+			target: &ottl.StandardStringGetter[any]{
+				Getter: func(_ context.Context, _ any) (any, error) {
+					return 123, nil
+				},
+			},
+			pattern: "(?<line>.*)",
+		},
+		{
+			name: "target is nil",
+			target: &ottl.StandardStringGetter[any]{
+				Getter: func(_ context.Context, _ any) (any, error) {
+					return nil, nil
+				},
+			},
+			pattern: "(?<line>.*)",
+		},
+	}
 
-// 	for _, tt := range tests {
-// 		t.Run(tt.name, func(t *testing.T) {
-// 			exprFunc, err := extractPatternsRubyRegex[any](tt.target, tt.pattern)
-// 			assert.NoError(t, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			exprFunc, err := extractPatternsRubyRegex[any](tt.target, tt.pattern)
+			assert.NoError(t, err)
 
-// 			result, err := exprFunc(nil, nil)
-// 			assert.Error(t, err)
-// 			assert.Nil(t, result)
-// 		})
-// 	}
-// }
+			result, err := exprFunc(nil, nil)
+			assert.Error(t, err)
+			assert.Nil(t, result)
+		})
+	}
+}

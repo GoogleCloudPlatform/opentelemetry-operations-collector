@@ -12,6 +12,4 @@ $(AR_AUTH_BIN): $(GO_BIN)
 
 .PHONY: aoss-build
 aoss-build: $(AR_AUTH_BIN)
-	$(AR_AUTH_BIN) add-locations --locations=us && \
-	$(AR_AUTH_BIN) refresh && \
 	$(MAKE) build

@@ -53,7 +53,6 @@
 | groupbyattrs | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/groupbyattrsprocessor/README.md) |
 | memorylimiter | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/processor/memorylimiterprocessor/README.md) |
 | metricstransform | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/metricstransformprocessor/README.md) |
-| modifyscope | [docs](No docs linked for component) |
 | normalizesums | [docs](No docs linked for component) |
 | resource | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/resourceprocessor/README.md) |
 | resourcedetection | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/resourcedetectionprocessor/README.md) |
@@ -92,4 +91,3 @@
 | env | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/confmap/provider/envprovider) |
 | file | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/confmap/provider/fileprovider) |
 | googlesecretmanager | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/confmap/provider/googlesecretmanagerprovider) |
-

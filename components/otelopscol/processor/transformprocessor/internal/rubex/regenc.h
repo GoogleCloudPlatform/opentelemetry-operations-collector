@@ -33,7 +33,11 @@
 #define ONIGURUMA_EXPORT
 #endif
 
-#include "config.h"
+#if defined(_WIN32) || defined(_WIN64)
+  #include "config_windows.h"
+#else
+  #include "config.h"
+#endif
 
 #ifndef ONIG_NO_STANDARD_C_HEADERS
 #include <stddef.h>

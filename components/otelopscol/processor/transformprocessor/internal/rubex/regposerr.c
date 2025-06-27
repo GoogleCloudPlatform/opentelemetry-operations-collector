@@ -34,7 +34,12 @@
 #define ONIGURUMA_EXPORT
 #endif
 
-#include "config.h"
+#if defined(_WIN32) || defined(_WIN64)
+  #include "config_windows.h"
+#else
+  #include "config.h"
+#endif
+
 #include "onigposix.h"
 
 #undef regex_t

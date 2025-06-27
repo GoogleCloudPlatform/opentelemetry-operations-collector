@@ -62,7 +62,7 @@ $ocbBin="$toolsDir\builder.exe"
 $ocbGenerateCommand="`$env:PATH='${goBinDir};${PATH}'; `$env:CGO_ENABLED=1; $ocbBin --skip-compilation --verbose --config manifest.yaml"
 Invoke-Expression -Command $ocbGenerateCommand
 
-# Setup MINGW for go build
+# Setup MINGW for go build.
 $env:Path = "C:\msys64\usr\bin;C:\msys64\mingw64\bin"
 pacman -S --noconfirm mingw-w64-x86_64-gcc
 

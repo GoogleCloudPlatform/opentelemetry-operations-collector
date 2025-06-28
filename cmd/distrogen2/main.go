@@ -170,12 +170,12 @@ type queryCommand struct {
 	flags flag.FlagSet
 
 	spec  *string
-	query *string
+	field *string
 }
 
 func (cmd *queryCommand) ParseArgs(args []string) error {
 	cmd.spec = setSpecFlag(&cmd.flags)
-	cmd.query = cmd.flags.String("query", "", "Field to query from the spec")
+	cmd.field = cmd.flags.String("field", "", "Field to query from the spec")
 
 	cmd.flags.Parse(args)
 	return nil
@@ -191,7 +191,7 @@ func (cmd *queryCommand) Run() error {
 		return err
 	}
 
-	val, err := spec.Query(*cmd.query)
+	val, err := spec.Query(*cmd.field)
 	if err != nil {
 		return err
 	}
@@ -207,13 +207,13 @@ type componentCommand struct {
 
 	spec          *string
 	componentType *string
-	name          *string
+	componentName *string
 }
 
 func (cmd *componentCommand) ParseArgs(args []string) error {
 	cmd.spec = setSpecFlag(&cmd.flags)
 	cmd.componentType = cmd.flags.String("type", "", "Type of component")
-	cmd.name = cmd.flags.String("name", "", "Name of component")
+	cmd.componentName = cmd.flags.String("name", "", "Name of component")
 
 	cmd.flags.Parse(args)
 	return nil
@@ -226,7 +226,7 @@ func (cmd *componentCommand) Run() error {
 	if *cmd.componentType == "" {
 		return errors.New("missing -type flag")
 	}
-	if *cmd.name == "" {
+	if *cmd.componentName == "" {
 		return errors.New("missing -name flag")
 	}
 
@@ -235,7 +235,7 @@ func (cmd *componentCommand) Run() error {
 		return err
 	}
 
-	generator, err := NewComponentGenerator(spec, ComponentType(*cmd.componentType), *cmd.name)
+	generator, err := NewComponentGenerator(spec, ComponentType(*cmd.componentType), *cmd.componentName)
 	if err != nil {
 		return err
 	}

@@ -18,6 +18,29 @@ generate:
 regenerate:
 	$(GENERATE_CMD) -force
 
+############
+# Components
+############
+
+DISTROGEN_QUERY = $(DISTROGEN_BIN) query -spec $(SPEC_FILE) -field
+
+.PHONY: update-components
+update-components: export OTEL_VERSION = v$(shell $(DISTROGEN_QUERY) opentelemetry_version)
+update-components: export OTEL_CONTRIB_VERSION = v$(shell $(DISTROGEN_QUERY) opentelemetry_contrib_version)
+update-components:
+	cd $(COMPONENT_DIR) && PATH="$(TOOLS_DIR):${PATH}" GOWORK=off $(MAKE) update-components
+
+DISTROGEN_COMPONENT = $(DISTROGEN_BIN) component
+
+.PHONY: add-component
+add-component:
+ifndef TYPE
+	$(error must specify a TYPE)
+else ifndef NAME
+	$(error must specify a NAME)
+endif
+	$(DISTROGEN_COMPONENT) -spec $(SPEC_FILE) -type $(TYPE) -name $(NAME)
+
 ###########
 # Workspace
 ###########
@@ -40,16 +63,4 @@ go.work:
 clean-workspace:
 	rm -f go.work
 	rm -f go.work.sum
-
-############
-# Components
-############
-
-DISTROGEN_QUERY := $(DISTROGEN_BIN) generate -spec $(SPEC_FILE) -query
-
-.PHONY: update-components
-update-components: export OTEL_VERSION = v$(shell $(DISTROGEN_QUERY) opentelemetry_version)
-update-components: export OTEL_CONTRIB_VERSION = v$(shell $(DISTROGEN_QUERY) opentelemetry_contrib_version)
-update-components:
-	cd $(COMPONENT_DIR) && PATH="$(TOOLS_DIR):${PATH}" GOWORK=off $(MAKE) update-components
 

@@ -8,4 +8,3 @@ exporters: {}
 connectors: {}
 extensions: {}
 providers: {}
-path: components/registry.yaml

@@ -51,6 +51,8 @@ type Registry struct {
 	Extensions RegistryComponents `yaml:"extensions"`
 	Providers  RegistryComponents `yaml:"providers"`
 
+	Releases RegistryComponentReleases `yaml:"releases,omitempty"`
+
 	Path string `yaml:"-"`
 }
 
@@ -185,12 +187,13 @@ type otelComponentVersion struct {
 type RegistryComponent struct {
 	Name string `yaml:"-"`
 
-	GoMod         *GoModuleID `yaml:"gomod"`
-	Import        string      `yaml:"import,omitempty"`
-	Path          string      `yaml:"path,omitempty"`
-	Stable        bool        `yaml:"stable,omitempty"`
-	StartRevision string      `yaml:"start_revision,omitempty"`
-	DocsURL       string      `yaml:"docs_url,omitempty"`
+	GoMod         *GoModuleID               `yaml:"gomod"`
+	Import        string                    `yaml:"import,omitempty"`
+	Path          string                    `yaml:"path,omitempty"`
+	Stable        bool                      `yaml:"stable,omitempty"`
+	StartRevision string                    `yaml:"start_revision,omitempty"`
+	DocsURL       string                    `yaml:"docs_url,omitempty"`
+	Releases      RegistryComponentReleases `yaml:"releases,omitempty"`
 }
 
 // RenderDocsURL renders the docs URL into a template.
@@ -234,6 +237,17 @@ func (c *RegistryComponent) GetOCBComponent() OCBManifestComponent {
 		Path:   c.Path,
 	}
 }
+
+// RegistryComponentRelease is a particular tag of a component that declares
+// the Collector library version it supports.
+type RegistryComponentRelease struct {
+	Tag                         string `yaml:"version"`
+	OpenTelemetryVersion        string `yaml:"opentelemetry_version"`
+	OpenTelemetryContribVersion string `yaml:"opentelemetry_contrib_version,omitempty"`
+}
+
+// RegistryComponentReleases is a map of tags to release details.
+type RegistryComponentReleases map[string]RegistryComponentRelease
 
 // RegistryComponents is a map of registry component names to component
 // details.

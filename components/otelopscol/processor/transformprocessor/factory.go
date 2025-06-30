@@ -15,7 +15,6 @@
 package transformprocessor
 
 import (
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/transformprocessor/internal/ottlfuncs"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/ottl"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/ottl/contexts/ottllog"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor"
@@ -24,7 +23,7 @@ import (
 
 // NewFactory create a factory for the transform processor.
 func NewFactory() processor.Factory {
-	additionaLogFunctions := []ottl.Factory[ottllog.TransformContext]{ottlfuncs.NewExtractPatternsRubyRegexFactory[ottllog.TransformContext]()}
+	additionaLogFunctions := []ottl.Factory[ottllog.TransformContext]{NewExtractPatternsRubyRegexFactory[ottllog.TransformContext]()}
 	return transformprocessor.NewFactoryWithOptions(
 		transformprocessor.WithLogFunctions(transformprocessor.DefaultLogFunctions()),
 		transformprocessor.WithLogFunctions(additionaLogFunctions),

@@ -1,17 +1,17 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
-package ottlfuncs
+package transformprocessor
 
 import (
 	"context"
 	"fmt"
 
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/transformprocessor/internal/rubex"
-
 	"go.opentelemetry.io/collector/pdata/pcommon"
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/ottl"
+
+	rubex "github.com/go-enry/go-oniguruma"
 )
 
 type ExtractPatternsRubyRegexArguments[K any] struct {

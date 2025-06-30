@@ -2,7 +2,7 @@
 
 # Variables filled in from distro specification
 VERSION ?= 0.128.0
-OTEL_VERSION ?= 0.128.0
+OTEL_VERSION ?= 0.129.0
 OTEL_VERSION_TAG = v$(OTEL_VERSION)
 COLLECTOR_BINARY_NAME = otelcol-google
 COLLECTOR_BUILD_TEMP_DIR = $(PWD)/_build

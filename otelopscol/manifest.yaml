@@ -82,3 +82,7 @@ providers:
 - gomod: go.opentelemetry.io/collector/confmap/provider/envprovider v0.128.0
 - gomod: go.opentelemetry.io/collector/confmap/provider/fileprovider v0.128.0
 
+replaces:
+ - oniguruma => ../../third_party/oniguruma/src
+ - github.com/go-enry/go-oniguruma v1.2.1 => ../../third_party/go-oniguruma/
+

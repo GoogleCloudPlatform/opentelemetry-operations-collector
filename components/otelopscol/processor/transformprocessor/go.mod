@@ -3,6 +3,7 @@ module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/compone
 go 1.24.2
 
 require (
+	github.com/go-enry/go-oniguruma v1.2.1
 	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/ottl v0.128.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor v0.128.1-0.20250621154232-1b827159a146
 	github.com/stretchr/testify v1.10.0
@@ -72,5 +73,10 @@ require (
 	google.golang.org/protobuf v1.36.6 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
+	oniguruma v0.0.0-00010101000000-000000000000 // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
+
+replace oniguruma => ../../../../third_party/oniguruma/src
+
+replace github.com/go-enry/go-oniguruma v1.2.1 => ../../../../third_party/go-oniguruma

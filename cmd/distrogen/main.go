@@ -15,24 +15,44 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"log/slog"
+	"net/http"
 	"os"
+	"slices"
+
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/cmd/distrogen/internal/command"
+	"gopkg.in/yaml.v3"
 )
 
 var (
 	logLevel            = new(slog.LevelVar)
 	logger              = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel}))
 	unexpectErrExitCode = 2
+
+	errNoSpecFlag = errors.New("missing -spec flag")
 )
 
 func main() {
-	flag.Parse()
+	runner := command.NewRunner()
+
+	runner.Register("generate", &generateCommand{})
+	runner.Register("query", &queryCommand{})
+	runner.Register("otel_component_versions", &otelComponentVersionsCommand{})
+
+	detectVerboseFlag()
+
+	if len(os.Args) <= 2 {
+		log.Fatal("must specify a command")
+	}
+
 	var exitCodeErr *ExitCodeError
-	if err := run(); err != nil {
+	if err := runner.Run(os.Args[1]); err != nil {
 		if errors.Is(err, ErrNoDiff) {
 			// No diff means we just want to log the error
 			// but not exit with code 1.
@@ -46,60 +66,43 @@ func main() {
 	}
 }
 
-func run() error {
-	if *flagVerbose {
+func detectVerboseFlag() {
+	if vArg := slices.Index(os.Args, "-v"); vArg != -1 {
 		logLevel.Set(slog.LevelDebug)
+		os.Args = slices.Delete(os.Args, vArg, vArg+1)
 	}
-
-	if *flagQuery != "" {
-		return querySpec()
-	}
-	if *flagOtelConfig != "" {
-		return generateSpec()
-	}
-	return generateDistribution()
 }
 
-func generateSpec() error {
-	distro := &DistributionSpec{}
-	otelConfigMap, err := yamlUnmarshalFromFile[map[string]any](*flagOtelConfig)
-	if err != nil {
-		return err
-	}
-	distro.Components, err = ComponentsFromOTelConfig(*otelConfigMap)
-	if err != nil {
-		return err
-	}
-	return yamlMarshalToFile(distro, "generated_spec.yaml", DefaultFileMode)
+func setSpecFlag(flags *flag.FlagSet) *string {
+	return flags.String("spec", "", "The distribution specification to use")
 }
 
-func querySpec() error {
-	if *flagSpec == "" {
+type generateCommand struct {
+	flags flag.FlagSet
+
+	registries *command.ArrayFlag
+	spec       *string
+	force      *bool
+	templates  *string
+	compare    *bool
+}
+
+func (cmd *generateCommand) ParseArgs(args []string) error {
+	cmd.spec = setSpecFlag(&cmd.flags)
+	cmd.force = cmd.flags.Bool("force", false, "Force generate even if there are no differences detected")
+	cmd.registries = command.NewArrayFlag(&cmd.flags, "registry", "Provide additional component registries")
+	cmd.templates = cmd.flags.String("templates", "", "Path to custom templates directory")
+	cmd.compare = cmd.flags.Bool("compare", false, "Allows you to compare the generated distribution to the existing")
+
+	return cmd.flags.Parse(args)
+}
+
+func (cmd *generateCommand) Run() error {
+	if *cmd.spec == "" {
 		return errNoSpecFlag
 	}
 
-	spec, err := NewDistributionSpec(*flagSpec)
-	if err != nil {
-		return err
-	}
-
-	val, err := spec.Query(*flagQuery)
-	if err != nil {
-		return err
-	}
-	// Using Println instead of logger since the results
-	// may be piped to another program.
-	fmt.Println(val)
-	return nil
-}
-
-func generateDistribution() error {
-	specPath := *flagSpec
-	if *flagSpec == "" {
-		return errNoSpecFlag
-	}
-
-	spec, err := NewDistributionSpec(specPath)
+	spec, err := NewDistributionSpec(*cmd.spec)
 	if err != nil {
 		return err
 	}
@@ -109,7 +112,7 @@ func generateDistribution() error {
 		return err
 	}
 
-	for _, registryPath := range *flagRegistry {
+	for _, registryPath := range *cmd.registries {
 		additionalRegistry, err := LoadRegistry(registryPath)
 		if err != nil {
 			return err
@@ -117,26 +120,115 @@ func generateDistribution() error {
 		registry.Merge(additionalRegistry)
 	}
 
-	generator, err := NewDistributionGenerator(spec, registry, *flagForce)
+	generator, err := NewDistributionGenerator(spec, registry, *cmd.force)
 	if err != nil {
 		return err
 	}
 	defer generator.Clean()
-
-	if *flagCustomTemplates != "" {
-		generator.CustomTemplatesDir = os.DirFS(*flagCustomTemplates)
-	}
+	generator.CustomTemplatesDir = os.DirFS(*cmd.templates)
 
 	if err := generator.Generate(); err != nil {
 		return err
 	}
 
-	var resultErr error
-	if *flagCompare {
-		resultErr = generator.Compare()
-	} else {
-		resultErr = generator.MoveGeneratedDirToWd()
+	if *cmd.compare {
+		return generator.Compare()
 	}
 
-	return resultErr
+	return generator.MoveGeneratedDirToWd()
+}
+
+type queryCommand struct {
+	flags flag.FlagSet
+
+	spec  *string
+	field *string
+}
+
+func (cmd *queryCommand) ParseArgs(args []string) error {
+	cmd.spec = setSpecFlag(&cmd.flags)
+	cmd.field = cmd.flags.String("field", "", "Field to query from the spec")
+
+	return cmd.flags.Parse(args)
+}
+
+func (cmd *queryCommand) Run() error {
+	if *cmd.spec == "" {
+		return errNoSpecFlag
+	}
+
+	spec, err := NewDistributionSpec(*cmd.spec)
+	if err != nil {
+		return err
+	}
+
+	val, err := spec.Query(*cmd.field)
+	if err != nil {
+		return err
+	}
+
+	// Using Println instead of logger since the results
+	// may be piped to another program.
+	fmt.Println(val)
+	return nil
+}
+
+type otelComponentVersionsCommand struct {
+	flags flag.FlagSet
+
+	otelVersion *string
+}
+
+func (cmd *otelComponentVersionsCommand) ParseArgs(args []string) error {
+	cmd.otelVersion = cmd.flags.String("otel_version", "", "The OpenTelemetry version to fetch component versions for")
+
+	return cmd.flags.Parse(args)
+}
+
+func (cmd *otelComponentVersionsCommand) Run() error {
+	type moduleSet struct {
+		Version string   `yaml:"version"`
+		Modules []string `yaml:"modules"`
+	}
+	type versions struct {
+		ModuleSets      map[string]moduleSet `yaml:"module-sets"`
+		ExcludedModules []string             `yaml:"excluded-modules"`
+	}
+
+	if *cmd.otelVersion == "" {
+		return fmt.Errorf("otel_version flag is required")
+	}
+
+	s := bufio.NewScanner(os.Stdin)
+	var allModules []string
+	for s.Scan() {
+		allModules = append(allModules, s.Text())
+	}
+	if err := s.Err(); err != nil {
+		return err
+	}
+
+	response, err := http.Get(fmt.Sprintf("https://raw.githubusercontent.com/open-telemetry/opentelemetry-collector/refs/tags/%s/versions.yaml", *cmd.otelVersion))
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	content, err := io.ReadAll(response.Body)
+	if err != nil {
+		return err
+	}
+	var componentVersions versions
+	if err := yaml.Unmarshal(content, &componentVersions); err != nil {
+		return err
+	}
+
+	for _, moduleSet := range componentVersions.ModuleSets {
+		for _, module := range allModules {
+			if slices.Contains(moduleSet.Modules, module) {
+				fmt.Printf("%s@%s\n", module, moduleSet.Version)
+			}
+		}
+	}
+
+	return nil
 }

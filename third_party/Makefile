@@ -2,7 +2,6 @@
 generate-third-party-deps:
 	git clone git@github.com:go-enry/go-oniguruma.git
 	cd go-oniguruma && \
-	pwd && \
 	git checkout v1.2.1 && \
 	git apply ../go-oniguruma.patch && \
 	rm -rf .git  && \
@@ -10,7 +9,6 @@ generate-third-party-deps:
 
 	git clone git@github.com:kkos/oniguruma.git
 	cd oniguruma && \
-	pwd && \
 	git checkout v6.9.10 && \
 	git apply ../oniguruma.patch && \
 	rm -rf .git && \

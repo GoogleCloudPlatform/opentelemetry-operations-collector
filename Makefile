@@ -184,7 +184,7 @@ ADDLICENSE_IGNORES = -ignore "**/.tools/**/*" \
 					-ignore "**/google-built-opentelemetry-collector/*" \
 					-ignore "**/otelopscol/*" \
 					-ignore "**/spec.yaml" \
-					-ignore "**/third_party/*"
+					-ignore "**/third_party/**/*"
 .PHONY: addlicense
 addlicense: $(ADDLICENSE)
 	@$(ADDLICENSE) -c "Google LLC" -l apache $(ADDLICENSE_IGNORES) .

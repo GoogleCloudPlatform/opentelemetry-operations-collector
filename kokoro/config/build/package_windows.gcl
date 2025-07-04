@@ -1,7 +1,7 @@
 import 'common.gcl' as common
 
 config build = common.build {
-  build_file = 'otelcol-google/kokoro/scripts/build/packaging/package_windows.sh'
+  build_file = 'otelcol-google/kokoro/scripts/build/package_windows.sh'
 
   params {
     artifacts = common.pkg_artifacts_patterns

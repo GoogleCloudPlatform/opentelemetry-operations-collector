@@ -50,6 +50,7 @@ components:
         - deltatorate
         - filter
         - groupbyattrs
+        - interval
         - metricstransform
         - resourcedetection
         - resource
@@ -67,6 +68,8 @@ components:
         - debug
         - otlp
         - otlphttp
+    connectors:
+        - routing
     extensions:
         - zpages
         - googleclientauth

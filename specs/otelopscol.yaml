@@ -60,6 +60,7 @@ components:
     - deltatorate
     - filter
     - groupbyattrs
+    - interval
     - metricstransform
     - resourcedetection
     - resource
@@ -84,3 +85,5 @@ components:
     - googlesecretmanager
     - file
     - env
+  connectors:
+    - routing

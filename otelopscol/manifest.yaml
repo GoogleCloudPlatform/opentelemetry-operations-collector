@@ -56,6 +56,7 @@ processors:
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/deltatorateprocessor v0.126.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.126.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/groupbyattrsprocessor v0.126.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/intervalprocessor v0.126.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor v0.126.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor v0.126.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourceprocessor v0.126.0
@@ -75,6 +76,7 @@ extensions:
 - gomod: go.opentelemetry.io/collector/extension/zpagesextension v0.126.0
 
 connectors:
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/connector/routingconnector v0.126.0
 
 providers:
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/confmap/provider/googlesecretmanagerprovider v0.126.0

@@ -51,6 +51,7 @@ components:
         - filter
         - groupbyattrs
         - interval
+        - metricsgeneration
         - metricstransform
         - resourcedetection
         - resource

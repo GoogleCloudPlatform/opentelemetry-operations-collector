@@ -57,6 +57,7 @@ processors:
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.131.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/groupbyattrsprocessor v0.131.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/intervalprocessor v0.126.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricsgenerationprocessor v0.126.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstarttimeprocessor v0.131.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor v0.131.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor v0.131.0

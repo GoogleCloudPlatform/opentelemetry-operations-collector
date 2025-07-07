@@ -53,6 +53,7 @@
 | groupbyattrs | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/groupbyattrsprocessor/README.md) |
 | interval | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/intervalprocessor/README.md) |
 | memorylimiter | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/processor/memorylimiterprocessor/README.md) |
+| metricsgeneration | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/metricsgenerationprocessor/README.md) |
 | metricstransform | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/metricstransformprocessor/README.md) |
 | modifyscope | [docs](No docs linked for component) |
 | normalizesums | [docs](No docs linked for component) |

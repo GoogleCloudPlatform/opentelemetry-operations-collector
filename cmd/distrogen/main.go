@@ -17,7 +17,6 @@ package main
 import (
 	"bufio"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -27,6 +26,7 @@ import (
 	"slices"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/cmd/distrogen/internal/command"
+	flag "github.com/spf13/pflag"
 	"gopkg.in/yaml.v3"
 )
 
@@ -35,7 +35,7 @@ var (
 	logger              = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel}))
 	unexpectErrExitCode = 2
 
-	errNoSpecFlag = errors.New("missing -spec flag")
+	errNoSpecFlag = errors.New("missing --spec flag")
 )
 
 func main() {
@@ -67,9 +67,15 @@ func main() {
 }
 
 func detectVerboseFlag() {
-	if vArg := slices.Index(os.Args, "-v"); vArg != -1 {
+	verboseArg := slices.Index(os.Args, "--verbose")
+	vArg := slices.Index(os.Args, "-v")
+	if vArg != -1 {
 		logLevel.Set(slog.LevelDebug)
 		os.Args = slices.Delete(os.Args, vArg, vArg+1)
+	}
+	if verboseArg != -1 {
+		logLevel.Set(slog.LevelDebug)
+		os.Args = slices.Delete(os.Args, verboseArg, verboseArg+1)
 	}
 }
 
@@ -80,7 +86,7 @@ func setSpecFlag(flags *flag.FlagSet) *string {
 type generateCommand struct {
 	flags flag.FlagSet
 
-	registries *command.ArrayFlag
+	registries *[]string
 	spec       *string
 	force      *bool
 	templates  *string
@@ -89,8 +95,8 @@ type generateCommand struct {
 
 func (cmd *generateCommand) ParseArgs(args []string) error {
 	cmd.spec = setSpecFlag(&cmd.flags)
-	cmd.force = cmd.flags.Bool("force", false, "Force generate even if there are no differences detected")
-	cmd.registries = command.NewArrayFlag(&cmd.flags, "registry", "Provide additional component registries")
+	cmd.force = cmd.flags.BoolP("force", "f", false, "Force generate even if there are no differences detected")
+	cmd.registries = cmd.flags.StringArray("registry", []string{}, "Provide additional component registries")
 	cmd.templates = cmd.flags.String("templates", "", "Path to custom templates directory")
 	cmd.compare = cmd.flags.Bool("compare", false, "Allows you to compare the generated distribution to the existing")
 

@@ -39,9 +39,9 @@ components:
   providers:
     - yaml
 ```
-Run `distrogen` with your spec:
+Run `distrogen generate` with your spec:
 ```
-distrogen -spec spec.yaml
+distrogen generate --spec spec.yaml
 ```
 It will generate a `basic-distro` directory. In that directory you can run `make build` to build a binary, or `make image-build` to build a binary as well as the resulting Docker container.
 
@@ -101,7 +101,7 @@ components:
 ```
 And finally, provide any number of registries to `distrogen` when generating:
 ```
-distrogen -spec spec.yaml -registry registry.yaml # -registry another_registry.yaml to provide another
+distrogen generate --spec spec.yaml --registry registry.yaml # --registry another_registry.yaml to provide another
 ```
 
 ## Custom Templates
@@ -123,5 +123,5 @@ drwxr-x--- 3 user user 4096 Mar 20 00:07 docs
 
 Provide your custom template directory to `distrogen`:
 ```
-distrogen -spec spec.yaml -custom_templates ./templates
+distrogen generate --spec spec.yaml --templates ./templates
 ```

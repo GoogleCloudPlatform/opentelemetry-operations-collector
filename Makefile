@@ -63,43 +63,43 @@ regen-all: distrogen-golden-update regen-google-built-otel regen-otelopscol
 compare-all:
 	@./internal/tools/scripts/compare.sh
 
-GEN_GOOGLE_BUILT_OTEL=$(RUN_DISTROGEN) generate -spec ./specs/google-built-opentelemetry-collector.yaml \
-								 -registry ./components/google-built-opentelemetry-collector/registry.yaml \
-								 -templates ./templates/google-built-opentelemetry-collector
+GEN_GOOGLE_BUILT_OTEL=$(RUN_DISTROGEN) generate --spec ./specs/google-built-opentelemetry-collector.yaml \
+								 --registry ./components/google-built-opentelemetry-collector/registry.yaml \
+								 --templates ./templates/google-built-opentelemetry-collector
 .PHONY: gen-google-built-otel
 gen-google-built-otel:
 	@$(GEN_GOOGLE_BUILT_OTEL)
 
 .PHONY: regen-google-built-otel
 regen-google-built-otel:
-	@$(GEN_GOOGLE_BUILT_OTEL) -force
+	@$(GEN_GOOGLE_BUILT_OTEL) --force
 
 .PHONY: regen-google-built-otel-v
 regen-google-built-otel-v:
-	@$(GEN_GOOGLE_BUILT_OTEL) -force -v
+	@$(GEN_GOOGLE_BUILT_OTEL) --force -v
 
 .PHONY: compare-google-built-otel
 compare-google-built-otel:
-	@$(GEN_GOOGLE_BUILT_OTEL) -force -compare
+	@$(GEN_GOOGLE_BUILT_OTEL) --force --compare
 
-GEN_OTELOPSCOL=$(RUN_DISTROGEN) generate -spec ./specs/otelopscol.yaml \
-								-registry ./components/otelopscol/registry.yaml \
-								-templates ./templates/otelopscol
+GEN_OTELOPSCOL=$(RUN_DISTROGEN) generate --spec ./specs/otelopscol.yaml \
+								--registry ./components/otelopscol/registry.yaml \
+								--templates ./templates/otelopscol
 .PHONY: gen-otelopscol
 gen-otelopscol:
 	@$(GEN_OTELOPSCOL)
 
 .PHONY: regen-otelopscol
 regen-otelopscol:
-	@$(GEN_OTELOPSCOL) -force
+	@$(GEN_OTELOPSCOL) -f
 
 .PHONY: regen-otelopscol-v
 regen-otelopscol-v:
-	@$(GEN_OTELOPSCOL) -force -v
+	@$(GEN_OTELOPSCOL) -f -v
 
 .PHONY: compare-otelopscol
 compare-otelopscol:
-	@$(GEN_OTELOPSCOL) -force -compare
+	@$(GEN_OTELOPSCOL) --force --compare
 
 #########
 # Testing

@@ -17,6 +17,7 @@ package command
 import (
 	"errors"
 	"fmt"
+	"log"
 	"os"
 )
 
@@ -47,6 +48,9 @@ func NewRunner() *Runner {
 }
 
 func (cs *Runner) Register(name string, cmd Command) {
+	if _, exists := cs.commands[name]; exists {
+		log.Panicf(`developer error: command with name "%s" already exists`, name)
+	}
 	cs.commands[name] = cmd
 }
 

@@ -1,20 +1,27 @@
-.PHONY: generate-third-party-deps
-generate-third-party-deps:
-	git clone git@github.com:go-enry/go-oniguruma.git
+go-oniguruma:
+	DIR=$$(mktemp -d) && \
+	echo "$(abspath $@)" && \
+	cd $$DIR && \
+	git clone --branch v1.2.1 git@github.com:go-enry/go-oniguruma.git go-oniguruma && \
 	cd go-oniguruma && \
-	git checkout v1.2.1 && \
-	git apply ../go-oniguruma.patch && \
-	rm -rf .git  && \
-	rm -rf .github
+	git apply $(abspath go-oniguruma.patch) && \
+	rm -rf "$(abspath $@)" && \
+	cp -a $$DIR"/go-oniguruma" "$(abspath $@)"
 
-	git clone git@github.com:kkos/oniguruma.git
+oniguruma:
+	DIR=$$(mktemp -d) && \
+	echo "$(abspath $@)" && \
+	cd $$DIR && \
+	git clone --branch v6.9.10 git@github.com:kkos/oniguruma.git oniguruma && \
 	cd oniguruma && \
-	git checkout v6.9.10 && \
-	git apply ../oniguruma.patch && \
-	rm -rf .git && \
-	rm -rf .github
+	git apply $(abspath oniguruma.patch) && \
+	rm -rf "$(abspath $@)" && \
+	cp -a $$DIR"/oniguruma" "$(abspath $@)"
 
-.PHONY: clean-third-party-deps
-clean-third-party-deps:
+.PHONY: get_dependencies
+get_dependencies: go-oniguruma oniguruma
+
+.PHONY: clean
+clean:
 	rm -rf go-oniguruma
 	rm -rf oniguruma

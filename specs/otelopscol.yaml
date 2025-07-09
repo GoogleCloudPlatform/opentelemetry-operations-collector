@@ -89,6 +89,9 @@ replaces:
   - from: oniguruma
     to: ../../third_party/oniguruma/src
     reason: Modified version of third party library.
-  - from: github.com/go-enry/go-oniguruma v1.2.1
+  - from: go-oniguruma
     to: ../../third_party/go-oniguruma/
     reason: Modified version of third party library.
+  - from: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/ottlfuncs
+    to: ../../internal/ottlfuncs/
+    reason: Add internal folder internal package.

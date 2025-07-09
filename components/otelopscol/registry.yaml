@@ -44,4 +44,4 @@ processors:
   transform:
     gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/transformprocessor v0.0.0
     path: "../components/otelopscol/processor/transformprocessor"
-    docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/transformprocessor/README.md
+    docs_url: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/transformprocessor/README.md

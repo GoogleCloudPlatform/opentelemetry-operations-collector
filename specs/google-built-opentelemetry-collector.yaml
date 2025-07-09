@@ -26,7 +26,6 @@ opentelemetry_contrib_version: 0.129.0
 opentelemetry_stable_version: 1.35.0
 binary_name: otelcol-google
 collector_cgo: false
-go_proxy: https://us-go.pkg.dev/access-aoss/assuredoss-go
 go_version: 1.24.4
 
 feature_gates:

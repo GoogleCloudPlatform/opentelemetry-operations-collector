@@ -108,3 +108,4 @@ components:
 feature_gates:
     - exporter.googlemanagedprometheus.intToDouble
     - exporter.googlecloud.CustomMonitoredResources
+go_proxy: https://us-go.pkg.dev/access-aoss/assuredoss-go

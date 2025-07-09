@@ -24,7 +24,7 @@ GO_BIN_DIR ?= $(TOOLS_DIR)/go/bin
 GO_BIN ?= $(GO_BIN_DIR)/go
 SET_GO_BIN_PATH ?= PATH="$(GO_BIN_DIR):$$PATH"
 
-USE_GO_PROXY ?= 
+USE_GO_PROXY ?= https://us-go.pkg.dev/access-aoss/assuredoss-go
 
 GORELEASER_BIN ?= $(TOOLS_DIR)/goreleaser
 

@@ -86,5 +86,7 @@ replaces:
 # Modified version of third party library.
 - oniguruma => ../../third_party/oniguruma/src
 # Modified version of third party library.
-- github.com/go-enry/go-oniguruma v1.2.1 => ../../third_party/go-oniguruma/
+- go-oniguruma => ../../third_party/go-oniguruma/
+# Add internal folder internal package.
+- github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/ottlfuncs => ../../internal/ottlfuncs/
 

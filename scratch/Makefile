@@ -2,13 +2,14 @@ MAKEFLAGS += --no-print-directory
 
 SPEC_FILE = google-built-opentelemetry-collector.yaml
 
-DISTROGEN_BIN ?= distrogen2
+# TODO: temp for development
+DISTROGEN_BIN ?= go run ../cmd/distrogen
 
 ###########
 # Generate
 ###########
 
-GENERATE_CMD = $(DISTROGEN_BIN) generate -spec $(SPEC_FILE) -templates ./templates
+GENERATE_CMD = $(DISTROGEN_BIN) generate --spec $(SPEC_FILE) --templates ./templates
 
 .PHONY: generate
 generate:
@@ -22,7 +23,7 @@ regenerate:
 # Components
 ############
 
-DISTROGEN_QUERY = $(DISTROGEN_BIN) query -spec $(SPEC_FILE) -field
+DISTROGEN_QUERY = $(DISTROGEN_BIN) query --spec $(SPEC_FILE) --field
 
 .PHONY: update-components
 update-components: export OTEL_VERSION = v$(shell $(DISTROGEN_QUERY) opentelemetry_version)
@@ -39,11 +40,13 @@ ifndef TYPE
 else ifndef NAME
 	$(error must specify a NAME)
 endif
-	$(DISTROGEN_COMPONENT) -spec $(SPEC_FILE) -type $(TYPE) -name $(NAME)
+	$(DISTROGEN_COMPONENT) --spec $(SPEC_FILE) --type $(TYPE) --name $(NAME)
 
 ###########
 # Workspace
 ###########
+
+# TODO: unsure about whether this will be needed. Maybe?
 
 ALL_DIRECTORIES = find . -type d  -print0
 EXCLUDE_TOOLS_DIRS = grep -z -v ".*\.tools.*"
@@ -63,4 +66,3 @@ go.work:
 clean-workspace:
 	rm -f go.work
 	rm -f go.work.sum
-

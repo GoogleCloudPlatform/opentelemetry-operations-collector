@@ -60,8 +60,9 @@ type DistributionSpec struct {
 	Components                  *DistributionComponents `yaml:"components"`
 	Replaces                    ComponentReplaces       `yaml:"replaces,omitempty"`
 	CustomValues                map[string]any          `yaml:"custom_values,omitempty"`
-	FeatureGates                FeatureGates            `yaml:"feature_gates"`
+	FeatureGates                FeatureGates            `yaml:"feature_gates,omitempty"`
 	GoProxy                     string                  `yaml:"go_proxy,omitempty"`
+	ComponentModuleBase         string                  `yaml:"component_module_base"`
 }
 
 // Diff will compare two different DistributionSpecs.
@@ -149,7 +150,7 @@ func NewDistributionGenerator(spec *DistributionSpec, registry *Registry, forceG
 		// -rw-r--r--
 		FileMode: DefaultFileMode,
 	}
-	d.GenerateDirName = spec.Name
+	d.GenerateDirName = spec.BinaryName
 
 	if !forceGenerate {
 		specCache, err := yamlUnmarshalFromFile[DistributionSpec](filepath.Join(d.GenerateDirName, "spec.yaml"))
@@ -181,9 +182,13 @@ func (d *DistributionGenerator) Generate() error {
 	if err != nil {
 		return err
 	}
-	templates, err := GetEmbeddedTemplateSet(templateContext, d.FileMode)
+	templates, err := GetDistributionTemplateSet(templateContext, d.FileMode)
 	if err != nil {
 		return err
+	}
+
+	for _, tmpl := range templates {
+		logger.Debug("context of template", "ctx", tmpl.Context)
 	}
 
 	if d.CustomTemplatesDir != nil {
@@ -200,6 +205,7 @@ func (d *DistributionGenerator) Generate() error {
 	templates.RenameExceptionalTemplates(d.Spec)
 
 	for _, tmpl := range templates {
+		logger.Debug("context of template", "ctx", tmpl.Context)
 		if err := tmpl.Render(d.GeneratePath); err != nil {
 			return err
 		}

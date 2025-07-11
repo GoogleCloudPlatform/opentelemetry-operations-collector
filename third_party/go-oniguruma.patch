@@ -22,7 +22,7 @@ index 4d00e7f..e053c0d 100644
  extern int NewOnigRegex( char *pattern, int pattern_length, int option,
                                    OnigRegex *regex, OnigEncoding *encoding, OnigErrorInfo **error_info, char **error_buffer);
 diff --git a/go.mod b/go.mod
-index 59236e0..60d6ecc 100644
+index 59236e0..0bf5850 100644
 --- a/go.mod
 +++ b/go.mod
 @@ -1,3 +1,7 @@
@@ -31,11 +31,11 @@ index 59236e0..60d6ecc 100644
 -go 1.14
 +go 1.24.0
 +
-+require oniguruma v0.0.0-00010101000000-000000000000
++require oniguruma v0.0.0
 +
 +replace oniguruma => ../oniguruma/src
 diff --git a/regex.go b/regex.go
-index fbe661a..78258b8 100644
+index fbe661a..c16c0b1 100644
 --- a/regex.go
 +++ b/regex.go
 @@ -1,10 +1,7 @@
@@ -49,15 +49,16 @@ index fbe661a..78258b8 100644
  #include "chelper.h"
  */
  import "C"
-@@ -14,6 +11,7 @@ import (
- 	"errors"
- 	"fmt"
- 	"io"
-+	_ "oniguruma"
- 	"runtime"
- 	"strconv"
+@@ -19,6 +16,8 @@ import (
  	"sync"
-@@ -37,6 +35,7 @@ type Regexp struct {
+ 	"unicode/utf8"
+ 	"unsafe"
++
++	_ "oniguruma"
+ )
+ 
+ const numMatchStartSize = 4
+@@ -37,6 +36,7 @@ type Regexp struct {
  
  	numCaptures    int32
  	namedGroupInfo NamedGroupInfo
@@ -65,7 +66,7 @@ index fbe661a..78258b8 100644
  }
  
  // NewRegexp creates and initializes a new Regexp with the given pattern and option.
-@@ -122,6 +121,10 @@ func (re *Regexp) Free() {
+@@ -122,6 +122,10 @@ func (re *Regexp) Free() {
  	}
  }
  
@@ -76,7 +77,7 @@ index fbe661a..78258b8 100644
  func (re *Regexp) getNamedGroupInfo() NamedGroupInfo {
  	numNamedGroups := int(C.onig_number_of_names(re.regex))
  	// when any named capture exists, there is no numbered capture even if
-@@ -152,9 +155,11 @@ func (re *Regexp) getNamedGroupInfo() NamedGroupInfo {
+@@ -152,9 +156,11 @@ func (re *Regexp) getNamedGroupInfo() NamedGroupInfo {
  		))
  	}
  

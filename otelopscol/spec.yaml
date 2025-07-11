@@ -5,9 +5,9 @@ description: OpenTelemetry Collector binary used by the Ops Agent
 blurb: ""
 build_container: ubuntu
 version: ""
-opentelemetry_version: 0.126.0
-opentelemetry_contrib_version: 0.126.0
-opentelemetry_stable_version: 1.32.0
+opentelemetry_version: 0.129.0
+opentelemetry_contrib_version: 0.129.0
+opentelemetry_stable_version: 1.35.0
 go_version: 1.23.2
 binary_name: otelopscol
 build_tags: gpu
@@ -73,4 +73,14 @@ components:
         - googlesecretmanager
         - file
         - env
+replaces:
+    - from: oniguruma
+      to: ../../third_party/oniguruma/src
+      reason: Modified version of third party library.
+    - from: github.com/go-enry/go-oniguruma
+      to: ../../third_party/go-oniguruma/
+      reason: Modified version of third party library.
+    - from: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/ottlfuncs
+      to: ../../internal/ottlfuncs/
+      reason: Add internal ottlfuncs package.
 feature_gates: []

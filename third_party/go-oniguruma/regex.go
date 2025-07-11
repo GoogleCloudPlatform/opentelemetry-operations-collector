@@ -11,12 +11,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	_ "oniguruma"
 	"runtime"
 	"strconv"
 	"sync"
 	"unicode/utf8"
 	"unsafe"
+
+	_ "oniguruma"
 )
 
 const numMatchStartSize = 4

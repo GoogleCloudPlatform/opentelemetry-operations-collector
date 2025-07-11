@@ -82,5 +82,5 @@ replaces:
       reason: Modified version of third party library.
     - from: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/ottlfuncs
       to: ../../internal/ottlfuncs/
-      reason: Add internal folder internal package.
+      reason: Add internal ottlfuncs package.
 feature_gates: []

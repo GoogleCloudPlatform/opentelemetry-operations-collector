@@ -21,14 +21,16 @@ oniguruma:
 .PHONY: go-oniguruma.patch
 go-oniguruma.patch:
 	cd go-oniguruma && \
+	git fetch --tags origin && \
 	git add . && \
-	git diff --staged > $(abspath go-oniguruma.patch)
+	git diff --staged v1.2.1 > $(abspath go-oniguruma.patch)
 
 .PHONY: oniguruma.patch
 oniguruma.patch:
 	cd oniguruma && \
+	git fetch --tags origin && \
 	git add . && \
-	git diff --staged > $(abspath oniguruma.patch)
+	git diff --staged v6.9.10 > $(abspath oniguruma.patch)
 
 .PHONY: get_dependencies
 get_dependencies: go-oniguruma oniguruma

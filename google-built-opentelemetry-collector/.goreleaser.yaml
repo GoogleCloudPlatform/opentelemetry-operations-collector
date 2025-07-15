@@ -2,7 +2,7 @@ version: 2
 project_name: opentelemetry-operations-collector
 
 snapshot:
-  version_template: 0.129.0
+  version_template: 0.130.0
 
 env:
   - LD_FLAGS=-s -w

@@ -43,7 +43,7 @@ type Config struct {
 
 	TimeoutConfig             exporterhelper.TimeoutConfig `mapstructure:",squash"` // squash ensures fields are correctly decoded in embedded struct.
 	configretry.BackOffConfig `mapstructure:"retry_on_failure"`
-	QueueConfig               exporterhelper.QueueConfig `mapstructure:"sending_queue"`
+	QueueConfig               exporterhelper.QueueBatchConfig `mapstructure:"sending_queue"`
 }
 
 type LogConfig struct {

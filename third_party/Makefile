@@ -18,15 +18,13 @@ oniguruma:
 	rm -rf "$(abspath $@)" && \
 	cp -a $$DIR"/oniguruma" "$(abspath $@)"
 
-.PHONY: go-oniguruma.patch
-go-oniguruma.patch:
+go-oniguruma.patch: go-oniguruma/*
 	cd go-oniguruma && \
 	git fetch --tags origin && \
 	git add . && \
 	git diff --staged v1.2.1 > $(abspath go-oniguruma.patch)
 
-.PHONY: oniguruma.patch
-oniguruma.patch:
+oniguruma.patch: oniguruma/*
 	cd oniguruma && \
 	git fetch --tags origin && \
 	git add . && \

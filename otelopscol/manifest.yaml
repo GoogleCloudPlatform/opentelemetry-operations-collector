@@ -84,9 +84,9 @@ providers:
 
 replaces:
 # Modified version of third party library.
-- oniguruma => ../../third_party/oniguruma/src
+- github.com/GoogleCloudPlatform/opentelemetry-operations-collector/third_party/oniguruma/src => ../../third_party/oniguruma/src
 # Modified version of third party library.
-- github.com/go-enry/go-oniguruma => ../../third_party/go-oniguruma/
+- github.com/GoogleCloudPlatform/opentelemetry-operations-collector/third_party/go-oniguruma => ../../third_party/go-oniguruma/
 # Add internal ottlfuncs package.
 - github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/ottlfuncs => ../../internal/ottlfuncs/
 

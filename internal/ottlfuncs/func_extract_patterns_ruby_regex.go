@@ -22,7 +22,7 @@ import (
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/ottl"
 
-	rubex "github.com/go-enry/go-oniguruma"
+	rubex "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/third_party/go-oniguruma"
 )
 
 type ExtractPatternsRubyRegexArguments[K any] struct {

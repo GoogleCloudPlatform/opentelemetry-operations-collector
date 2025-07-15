@@ -37,6 +37,7 @@ components:
         - redis
         - statsd
         - syslog
+        - googlecloudmonitoring
     processors:
         - batch
         - memorylimiter

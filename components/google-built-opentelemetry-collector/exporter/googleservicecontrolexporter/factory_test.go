@@ -64,7 +64,7 @@ func TestCreateExporterFromConfig(t *testing.T) {
 					MaxInterval:     10 * time.Second,
 					MaxElapsedTime:  200 * time.Second,
 				},
-				QueueConfig: exporterhelper.QueueConfig{
+				QueueConfig: exporterhelper.QueueBatchConfig{
 					Enabled:      true,
 					NumConsumers: 5,
 					QueueSize:    1000,

@@ -1,7 +1,7 @@
-module github.com/go-enry/go-oniguruma
+module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/third_party/go-oniguruma
 
 go 1.24.0
 
-require oniguruma v0.0.0
+require github.com/GoogleCloudPlatform/opentelemetry-operations-collector/third_party/oniguruma/src v0.0.0
 
-replace oniguruma => ../oniguruma/src
+replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/third_party/oniguruma/src => ../oniguruma/src

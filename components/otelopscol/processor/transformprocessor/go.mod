@@ -15,6 +15,8 @@ require (
 )
 
 require (
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/third_party/go-oniguruma v0.0.0 // indirect
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/third_party/oniguruma/src v0.0.0 // indirect
 	github.com/alecthomas/participle/v2 v2.1.4 // indirect
 	github.com/antchfx/xmlquery v1.4.4 // indirect
 	github.com/antchfx/xpath v1.3.4 // indirect
@@ -22,7 +24,6 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/elastic/go-grok v0.3.1 // indirect
 	github.com/elastic/lunes v0.1.0 // indirect
-	github.com/go-enry/go-oniguruma v1.2.1 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
@@ -82,12 +83,11 @@ require (
 	google.golang.org/protobuf v1.36.6 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	oniguruma v0.0.0 // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
 
 replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/ottlfuncs => ../../../../internal/ottlfuncs
 
-replace oniguruma => ../../../../third_party/oniguruma/src
+replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/third_party/oniguruma/src v0.0.0 => ../../../../third_party/oniguruma/src
 
-replace github.com/go-enry/go-oniguruma v1.2.1 => ../../../../third_party/go-oniguruma
+replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/third_party/go-oniguruma v0.0.0 => ../../../../third_party/go-oniguruma

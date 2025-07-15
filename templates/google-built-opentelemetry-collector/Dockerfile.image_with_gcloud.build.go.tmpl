@@ -38,7 +38,7 @@ RUN make -f pull_modules_from_ar_repos.mk aoss-build
 FROM ${CERT_CONTAINER} AS certs
 RUN apk --update add ca-certificates
 
-FROM scratch
+FROM gcr.io/distroless/static
 
 ARG USER_UID=10001
 USER ${USER_UID}

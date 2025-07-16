@@ -1,15 +1,3 @@
-diff --git a/.gitignore b/.gitignore
-index 71ffb4c..5a6a548 100644
---- a/.gitignore
-+++ b/.gitignore
-@@ -4,7 +4,6 @@ ltmain.sh
- stamp-h1
- configure
- config.status
--config.h
- config.h.in
- onig-config
- libtool
 diff --git a/src/config.h b/src/config.h
 new file mode 100644
 index 0000000..da845b5

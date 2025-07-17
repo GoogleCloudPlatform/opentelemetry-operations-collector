@@ -212,10 +212,9 @@ misspell:
 # more sophisticated if we want to supply separate tags for every subcomponent. For
 # now it is pretty simply.
 .PHONY: tag-repo
-tag-repo: GOOGLE_OTEL_VERSION = v$(shell go run ./cmd/distrogen query -spec specs/google-built-opentelemetry-collector.yaml -field version)
+tag-repo: GBOC_TAG = v$(shell go run ./cmd/distrogen query --spec specs/google-built-opentelemetry-collector.yaml --field version)
 tag-repo:
-	git tag -a $(GOOGLE_OTEL_VERSION) -m "Update to OpenTelemetry Collector version $(OTEL_VERSION)"
-	@echo "Created git tag $(GOOGLE_OTEL_VERSION). If it looks good, push it to the remote by running: git push origin $(GOOGLE_OTEL_VERSION)"
+	bash ./internal/tools/scripts/tag.sh $(GBOC_TAG)
 
 .PHONY: target-all-modules
 target-all-modules: go.work

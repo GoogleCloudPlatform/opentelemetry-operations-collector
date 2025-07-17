@@ -5,7 +5,6 @@ ONIGURUMA_RELEASE = v6.9.10
 # Copying only "$$DIR"/go-oniguruma"/*" non-hidden files and folders.
 go-oniguruma:
 	DIR=$$(mktemp -d) && \
-	echo "$(abspath $@)" && \
 	cd $$DIR && \
 	git clone --branch $(GO_ONIGURUMA_RELEASE) git@github.com:go-enry/go-oniguruma.git go-oniguruma && \
 	cd go-oniguruma && \
@@ -18,7 +17,6 @@ go-oniguruma:
 # Copying only "$$DIR"/oniguruma"/*" non-hidden files and folders.
 oniguruma:
 	DIR=$$(mktemp -d) && \
-	echo "$(abspath $@)" && \
 	cd $$DIR && \
 	git clone --branch $(ONIGURUMA_RELEASE) git@github.com:kkos/oniguruma.git oniguruma && \
 	cd oniguruma && \

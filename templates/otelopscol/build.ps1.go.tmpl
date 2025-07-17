@@ -29,9 +29,20 @@ param (
     [string]$outDir = "."
 )
 
+# Store PATH
+$startEnvPath = $env:Path
+
 # Set up tools directory.
 $toolsDir="" + (Get-Location) + "\.tools" # Powershell moment
 New-Item -ItemType Directory -Force -Path $toolsDir | Out-Null
+
+# Download and install MSYS2.
+$msysInstallerPath="./msys2-x86_64.exe"
+$msysDownloadURL="https://github.com/msys2/msys2-installer/releases/download/2025-06-22/msys2-x86_64-20250622.exe"
+Invoke-WebRequest $msysDownloadURL -OutFile $msysInstallerPath
+Start-Process $msysInstallerPath -ArgumentList 'in', '--confirm-command', `
+    '--accept-messages', '--root', 'C:/msys64' -NoNewWindow -Wait;
+Remove-Item $msysInstallerPath
 
 # Download Go.
 $goZipPath="./go.windows-amd64.zip"
@@ -43,13 +54,17 @@ $goBinDir="$toolsDir\go\bin"
 $goBin="$goBinDir\go"
 
 # Download OCB.
-$installOcbCommand="`$env:GOBIN='$toolsDir'; `$env:CGO_ENABLED=0; $goBin install -trimpath -ldflags='-s -w' go.opentelemetry.io/collector/cmd/builder@v{{ .OpenTelemetryVersion }}"
-powershell.exe -Command $installOcbCommand
+$installOcbCommand="`$env:GOBIN='$toolsDir'; `$env:CGO_ENABLED=1; $goBin install -trimpath -ldflags='-s -w' go.opentelemetry.io/collector/cmd/builder@v{{ .OpenTelemetryVersion }}"
+Invoke-Expression -Command $installOcbCommand
 $ocbBin="$toolsDir\builder.exe"
 
 # Generate the collector source.
-$ocbGenerateCommand="`$env:PATH='${goBinDir};${PATH}'; `$env:CGO_ENABLED=0; $ocbBin --skip-compilation --verbose --config manifest.yaml"
-powershell.exe -Command $ocbGenerateCommand
+$ocbGenerateCommand="`$env:PATH='${goBinDir};${PATH}'; `$env:CGO_ENABLED=1; $ocbBin --skip-compilation --verbose --config manifest.yaml"
+Invoke-Expression -Command $ocbGenerateCommand
+
+# Setup MINGW for go build.
+$env:Path = "C:\msys64\usr\bin;C:\msys64\mingw64\bin"
+pacman -S --noconfirm mingw-w64-x86_64-gcc
 
 # Build the collector.
 $ldFlags="-s -w"
@@ -57,6 +72,9 @@ if ($jmxHash -ne "") {
     $ldFlags+=" -X github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver.MetricsGathererHash=$jmxHash"
 }
 $buildCollectorCommand=@"
-`$env:GOWORK='off'; cd _build; $goBin build -p 32 -buildvcs=false -o '{0}/google-cloud-metrics-agent_windows_amd64.exe' --ldflags='{1}' .
+`$env:GOWORK='off'; `$env:CGO_ENABLED=1; cd _build; $goBin build -p 32 -buildvcs=false -o '{0}/google-cloud-metrics-agent_windows_amd64.exe' --ldflags='{1}' .
 "@ -f $outDir, $ldFlags
-powershell.exe -Command $buildCollectorCommand
+Invoke-Expression -Command $buildCollectorCommand
+
+# Restore PATH
+$env:Path = $startEnvPath

@@ -74,13 +74,7 @@ components:
         - file
         - env
 replaces:
-    - from: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/third_party/oniguruma/src
-      to: ../../third_party/oniguruma/src
-      reason: Modified version of third party library.
-    - from: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/third_party/go-oniguruma
-      to: ../../third_party/go-oniguruma/
-      reason: Modified version of third party library.
-    - from: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/ottlfuncs
-      to: ../../internal/ottlfuncs/
-      reason: Add internal ottlfuncs package.
+    - from: github.com/GoogleCloudPlatform/opentelemetry-operations-collector
+      to: ../../
+      reason: Reference root module of repository to find dependency packages.
 feature_gates: []

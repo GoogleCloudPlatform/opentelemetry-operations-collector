@@ -3,7 +3,7 @@ module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/compone
 go 1.24.4
 
 require (
-	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/ottlfuncs v0.130.0
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector v0.130.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/ottl v0.130.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor v0.128.1-0.20250621154232-1b827159a146
 	github.com/stretchr/testify v1.10.0
@@ -15,8 +15,6 @@ require (
 )
 
 require (
-	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/third_party/go-oniguruma v0.130.0 // indirect
-	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/third_party/oniguruma/src v0.130.0 // indirect
 	github.com/alecthomas/participle/v2 v2.1.4 // indirect
 	github.com/antchfx/xmlquery v1.4.4 // indirect
 	github.com/antchfx/xpath v1.3.4 // indirect
@@ -86,8 +84,4 @@ require (
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
 
-replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/ottlfuncs => ../../../../internal/ottlfuncs
-
-replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/third_party/oniguruma/src => ../../../../third_party/oniguruma/src
-
-replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/third_party/go-oniguruma => ../../../../third_party/go-oniguruma
+replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector => ../../../../

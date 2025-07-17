@@ -83,10 +83,6 @@ providers:
 - gomod: go.opentelemetry.io/collector/confmap/provider/fileprovider v1.36.0
 
 replaces:
-# Modified version of third party library.
-- github.com/GoogleCloudPlatform/opentelemetry-operations-collector/third_party/oniguruma/src => ../../third_party/oniguruma/src
-# Modified version of third party library.
-- github.com/GoogleCloudPlatform/opentelemetry-operations-collector/third_party/go-oniguruma => ../../third_party/go-oniguruma/
-# Add internal ottlfuncs package.
-- github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/ottlfuncs => ../../internal/ottlfuncs/
+# Reference root module of repository to find dependency packages.
+- github.com/GoogleCloudPlatform/opentelemetry-operations-collector => ../../
 

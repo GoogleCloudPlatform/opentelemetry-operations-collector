@@ -140,15 +140,6 @@ index 0000000..d4f73d7
 +#define DEFAULT_KCODE KCODE_NONE
 +#define DLEXT ".so"
 +#define DLEXT2 ".dll"
-diff --git a/src/go.mod b/src/go.mod
-new file mode 100644
-index 0000000..234085a
---- /dev/null
-+++ b/src/go.mod
-@@ -0,0 +1,3 @@
-+module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/third_party/oniguruma/src
-+
-+go 1.24.0
 diff --git a/src/mktable.c b/src/mktable.c
 index 1a624e7..91e1020 100644
 --- a/src/mktable.c

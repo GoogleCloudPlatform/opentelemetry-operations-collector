@@ -1,7 +1,8 @@
 GO_ONIGURUMA_RELEASE = v1.2.1
 ONIGURUMA_RELEASE = v6.9.10
 
-# Clone release v1.2.1 of github.com:go-enry/go-oniguruma
+# Clone release v1.2.1 of github.com:go-enry/go-oniguruma.
+# Copying only "$$DIR"/go-oniguruma"/*" non-hidden files and folders.
 go-oniguruma:
 	DIR=$$(mktemp -d) && \
 	echo "$(abspath $@)" && \
@@ -13,7 +14,8 @@ go-oniguruma:
 	mkdir "$(abspath $@)" && \
 	cp -a $$DIR"/go-oniguruma"/* "$(abspath $@)"
 
-# Clone release v6.9.10 of github.com:kkos/oniguruma
+# Clone release v6.9.10 of github.com:kkos/oniguruma.
+# Copying only "$$DIR"/oniguruma"/*" non-hidden files and folders.
 oniguruma:
 	DIR=$$(mktemp -d) && \
 	echo "$(abspath $@)" && \
@@ -25,7 +27,8 @@ oniguruma:
 	mkdir "$(abspath $@)" && \
 	cp -a $$DIR"/oniguruma"/* "$(abspath $@)"
 
-# Copy all files in go-oniguruma/* folder to a cloned repo and "git diff" into go-oniguruma.patch
+# Copy all files in "go-oniguruma/*" folder to a cloned repo and "git diff" into go-oniguruma.patch.
+# Using "git add --all --force" to disregard possible uses of ".gitignore" in the repo.
 go-oniguruma.patch: go-oniguruma/*
 	DIR=$$(mktemp -d) && \
 	cd $$DIR && \
@@ -36,7 +39,8 @@ go-oniguruma.patch: go-oniguruma/*
 	git add --all --force && \
 	git diff --staged $(GO_ONIGURUMA_RELEASE) > $(abspath $@)
 
-# Copy all files in oniguruma/* folder to a cloned repo and "git diff" into oniguruma.patch
+# Copy all files in oniguruma/* folder to a cloned repo and "git diff" into oniguruma.patch.
+# Using "git add --all --force" to disregard possible uses of ".gitignore" in the repo.
 oniguruma.patch: oniguruma/*
 	DIR=$$(mktemp -d) && \
 	cd $$DIR && \

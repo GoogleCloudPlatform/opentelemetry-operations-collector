@@ -579,6 +579,9 @@ extensions:
     healthcheck:
         gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/healthcheckextension
         docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/healthcheckextension/README.md
+    healthcheckv2:
+        gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/healthcheckv2extension
+        docs_url: https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/extension/healthcheckv2extension/README.md
     hostobserver:
         gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/observer/hostobserver
         docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/observer/README.md

@@ -18,8 +18,6 @@ status:
   class: extension
   stability:
     beta: [extension]
-  # Missing property "spec"
-  spec: []
   codeowners:
     active: [jinghan-ma]
 

@@ -52,6 +52,8 @@ processors:
   path: ../components/otelopscol/processor/modifyscopeprocessor
 - gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/normalizesumsprocessor v0.130.0
   path: ../components/otelopscol/processor/normalizesumsprocessor
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/transformprocessor v0.130.0
+  path: ../components/otelopscol/processor/transformprocessor
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/cumulativetodeltaprocessor v0.130.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/deltatorateprocessor v0.130.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.130.0
@@ -59,7 +61,6 @@ processors:
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor v0.130.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor v0.130.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourceprocessor v0.130.0
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor v0.130.0
 - gomod: go.opentelemetry.io/collector/processor/batchprocessor v0.130.0
 - gomod: go.opentelemetry.io/collector/processor/memorylimiterprocessor v0.130.0
 
@@ -82,4 +83,6 @@ providers:
 - gomod: go.opentelemetry.io/collector/confmap/provider/fileprovider v1.36.0
 
 replaces:
+# Reference root module of repository to find dependency packages.
+- github.com/GoogleCloudPlatform/opentelemetry-operations-collector => ../../
 

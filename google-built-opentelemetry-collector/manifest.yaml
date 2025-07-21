@@ -78,6 +78,7 @@ extensions:
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/googleclientauthextension v0.130.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/headerssetterextension v0.130.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/healthcheckextension v0.130.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/healthcheckv2extension v0.130.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/httpforwarderextension v0.130.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/oauth2clientauthextension v0.130.0
   path: ../components/google-built-opentelemetry-collector/extension/oauth2clientauthextension

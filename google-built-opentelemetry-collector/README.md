@@ -89,6 +89,7 @@ The Google-Built OpenTelemetry Collector is an open-source, production-ready bui
 | headerssetter | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/headerssetterextension/README.md) |
 | healthagent | [docs](No docs linked for component) |
 | healthcheck | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/healthcheckextension/README.md) |
+| healthcheckv2 | [docs](https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/extension/healthcheckv2extension/README.md) |
 | hostobserver | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/observer/README.md) |
 | httpforwarder | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/httpforwarderextension/README.md) |
 | k8sobserver | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/observer/README.md) |

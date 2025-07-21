@@ -102,6 +102,7 @@ components:
     - headerssetter
     - healthagent
     - healthcheck
+    - healthcheckv2
     - httpforwarder
     - oauth2clientauth
     - hostobserver

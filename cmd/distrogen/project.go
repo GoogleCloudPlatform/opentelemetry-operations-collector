@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 )
 
 var (
@@ -23,6 +24,16 @@ func NewProjectGenerator(spec *DistributionSpec) (*ProjectGenerator, error) {
 	}, nil
 }
 
+func (pg *ProjectGenerator) generateSet(outDir string, templateSet TemplateSet) error {
+	for _, tmpl := range templateSet {
+		if err := tmpl.Render(outDir); err != nil {
+			logger.Debug(fmt.Sprintf("failed to render %s", tmpl.Name), "err", err)
+			return err
+		}
+	}
+	return nil
+}
+
 func (pg *ProjectGenerator) Generate() error {
 	componentTemplates, err := GetComponentsTemplateSet(pg, pg.FileMode)
 	if err != nil {
@@ -32,6 +43,11 @@ func (pg *ProjectGenerator) Generate() error {
 	makeTemplates, err := GetMakeTemplateSet(pg, pg.FileMode)
 	if err != nil {
 		logger.Debug("failed to get make templates", "err", err)
+		return err
+	}
+	projectTemplates, err := GetProjectTemplateSet(pg, pg.FileMode)
+	if err != nil {
+		logger.Debug("failed to get project templates", "err", err)
 		return err
 	}
 
@@ -45,26 +61,23 @@ func (pg *ProjectGenerator) Generate() error {
 	if err := os.MkdirAll("templates", pg.FileMode); err != nil {
 		dirErrors = append(dirErrors, err)
 	}
+	if _, err := os.Create(path.Join("templates", EMPTY_FILE_NAME)); err != nil {
+		dirErrors = append(dirErrors, err)
+	}
 	if len(dirErrors) > 0 {
 		return errors.Join(dirErrors...)
 	}
 
 	// var renderErr error
 
-	for _, tmpl := range componentTemplates {
-		if err := tmpl.Render("components"); err != nil {
-			logger.Debug(fmt.Sprintf("failed to render %s", tmpl.Name), "err", err)
-			// renderErr = err
-			return err
-		}
+	if err := pg.generateSet("components", componentTemplates); err != nil {
+		return err
 	}
-
-	for _, tmpl := range makeTemplates {
-		if err := tmpl.Render("make"); err != nil {
-			logger.Debug(fmt.Sprintf("failed to render %s", tmpl.Name), "err", err)
-			// renderErr = err
-			return err
-		}
+	if err := pg.generateSet("make", makeTemplates); err != nil {
+		return err
+	}
+	if err := pg.generateSet(".", projectTemplates); err != nil {
+		return err
 	}
 
 	return nil

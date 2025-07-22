@@ -42,6 +42,7 @@ const (
 // It contains all the information that will be formatted into the default set of
 // templates/user provided templates.
 type DistributionSpec struct {
+	Path                        string                  `yaml:"-"`
 	Name                        string                  `yaml:"name"`
 	Module                      string                  `yaml:"module"`
 	DisplayName                 string                  `yaml:"display_name"`
@@ -106,6 +107,9 @@ func NewDistributionSpec(path string) (*DistributionSpec, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// The name of the spec.yaml file might be different from the binary name
+	spec.Path = path
 
 	// It is a rare case where the contrib version falls out of sync with
 	// the canonical OpenTelemetry version, most of the time it is the same.

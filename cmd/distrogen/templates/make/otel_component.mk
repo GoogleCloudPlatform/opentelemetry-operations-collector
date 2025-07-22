@@ -21,7 +21,7 @@ STABLE_COMPONENTS_PATTERN = -e "^go.opentelemetry.io/collector/pdata" \
 							-e "^go.opentelemetry.io/collector/config/confignet" \
 							-e "^go.opentelemetry.io/collector/consumer"
 
-LIST_DIRECT_MODULES = go list -m -f '{{if not (or .Indirect .Main)}}{{.Path}}{{end}}' all
+LIST_DIRECT_MODULES = go list -m -f '{{`{{if not (or .Indirect .Main)}}{{.Path}}{{end}}`}}' all
 INCLUDE_COLLECTOR_CORE_COMPONENTS = grep "^go.opentelemetry.io" | grep -v "^go.opentelemetry.io/otel"
 INCLUDE_COLLECTOR_STABLE_CORE_COMPONENTS = grep $(STABLE_COMPONENTS_PATTERN)
 EXCLUDE_COLLECTOR_STABLE_CORE_COMPONENTS = grep -v $(STABLE_COMPONENTS_PATTERN)

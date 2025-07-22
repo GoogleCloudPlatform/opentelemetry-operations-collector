@@ -1,6 +1,0 @@
-type: example
-
-status:
-  class: receiver
-  stability:
-    development: [logs, metrics, traces]

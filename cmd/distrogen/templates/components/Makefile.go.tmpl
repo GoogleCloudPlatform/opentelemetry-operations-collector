@@ -33,7 +33,7 @@ target-all-modules:
 ifndef TARGET
 	@echo "No TARGET defined."
 else
-	go list -f "{{ .Dir }}" -m | grep ".*$(PWD).*" | grep -v ".*internal/tools.*" |\
+	go list -f '{{`{{ .Dir }}`}}' -m | grep ".*$(PWD).*" | grep -v ".*internal/tools.*" |\
 		GOWORK=off \
 		PATH="$(TOOLS_DIR):${PATH}" \
 		xargs -t -I '{}' $(MAKE) -C {} $(TARGET)

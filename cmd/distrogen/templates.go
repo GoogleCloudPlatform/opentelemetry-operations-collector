@@ -26,6 +26,8 @@ import (
 	"text/template"
 )
 
+const EMPTY_FILE_NAME = ".empty"
+
 //go:embed templates/*
 var embeddedTemplatesFS embed.FS
 
@@ -145,6 +147,9 @@ func GetTemplateSetFromDir(dir fs.FS, templateContext any, fileMode fs.FileMode)
 		if d.IsDir() {
 			return nil
 		}
+		if filepath.Base(path) == EMPTY_FILE_NAME {
+			return nil
+		}
 		return templates.AddTemplate(path, templateContext, dir, fileMode)
 	})
 
@@ -165,6 +170,10 @@ func GetIndividualComponentTemplateSet(templateContext any, fileMode fs.FileMode
 
 func GetMakeTemplateSet(templateContext any, fileMode fs.FileMode) (TemplateSet, error) {
 	return getEmbeddedTemplateSet(templateContext, "make", fileMode)
+}
+
+func GetProjectTemplateSet(templateContext any, fileMode fs.FileMode) (TemplateSet, error) {
+	return getEmbeddedTemplateSet(templateContext, "project", fileMode)
 }
 
 // GetDistributionTemplateSet will get the template set from the template FS embedded

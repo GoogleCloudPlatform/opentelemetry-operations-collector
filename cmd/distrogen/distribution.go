@@ -57,6 +57,7 @@ type DistributionSpec struct {
 	BuildTags                   string                  `yaml:"build_tags"`
 	CollectorCGO                bool                    `yaml:"collector_cgo"`
 	DockerRepo                  string                  `yaml:"docker_repo"`
+	Registries                  []*CustomRegistry       `yaml:"registries,omitempty"`
 	Components                  *DistributionComponents `yaml:"components"`
 	Replaces                    ComponentReplaces       `yaml:"replaces,omitempty"`
 	CustomValues                map[string]any          `yaml:"custom_values,omitempty"`
@@ -99,6 +100,50 @@ func (s *DistributionSpec) Query(field string) (string, error) {
 	return "", fmt.Errorf("field '%s': %w", field, ErrQueryValueNotFound)
 }
 
+func (s *DistributionSpec) GetOpenTelemetryComponentVersion() *otelComponentVersion {
+	return &otelComponentVersion{
+		core:       s.OpenTelemetryVersion,
+		coreStable: s.OpenTelemetryStableVersion,
+		contrib:    s.OpenTelemetryContribVersion,
+	}
+}
+
+var ErrRegistryVersionIncompatible = errors.New("the registry version is incompatible with the distribution")
+
+func (s *DistributionSpec) GetAllRegistries() (Registries, error) {
+	specOpenTelemetryVersions := s.GetOpenTelemetryComponentVersion()
+	embeddedRegistry, err := LoadEmbeddedRegistry()
+	if err != nil {
+		return nil, err
+	}
+	embeddedRegistry.OpenTelemetryVersions = specOpenTelemetryVersions
+	registries := Registries{}
+	for _, r := range s.Registries {
+		registryConfig, err := r.GetRegistryConfig()
+		if err != nil {
+			return nil, err
+		}
+		if registryConfig.Release.OpenTelemetryCollectorVersion != "" &&
+			registryConfig.Release.OpenTelemetryCollectorVersion != s.OpenTelemetryVersion {
+			return nil, fmt.Errorf(
+				"%w: registry %s is at collector version %s, distribution collector version is %s",
+				ErrRegistryVersionIncompatible,
+				r.Name,
+				registryConfig.Release.OpenTelemetryCollectorVersion,
+				s.OpenTelemetryVersion,
+			)
+		}
+		registry := registryConfig.MakeRegistry()
+		registry.Version = registryConfig.Release.Version
+		registry.OpenTelemetryVersions = specOpenTelemetryVersions
+		registries = append(registries, registry)
+	}
+	// Embedded registry is appended at the end as it takes lowest priority
+	// for component lookup.
+	registries = append(registries, embeddedRegistry)
+	return registries, nil
+}
+
 // NewDistributionSpec loads the DistributionSpec from a yaml file.
 func NewDistributionSpec(path string) (*DistributionSpec, error) {
 	spec, err := yamlUnmarshalFromFile[DistributionSpec](path)
@@ -136,16 +181,20 @@ type DistributionGenerator struct {
 	Spec               *DistributionSpec
 	GenerateDirName    string
 	GeneratePath       string
-	Registry           *Registry
+	Registries         Registries
 	CustomTemplatesDir fs.FS
 	FileMode           fs.FileMode
 }
 
 // NewDistributionGenerator creates a DistributionGenerator.
-func NewDistributionGenerator(spec *DistributionSpec, registry *Registry, forceGenerate bool) (*DistributionGenerator, error) {
+func NewDistributionGenerator(spec *DistributionSpec, forceGenerate bool) (*DistributionGenerator, error) {
+	registries, err := spec.GetAllRegistries()
+	if err != nil {
+		return nil, err
+	}
 	d := DistributionGenerator{
-		Spec:     spec,
-		Registry: registry,
+		Spec:       spec,
+		Registries: registries,
 		// -rw-r--r--
 		FileMode: DefaultFileMode,
 	}
@@ -177,7 +226,7 @@ func NewDistributionGenerator(spec *DistributionSpec, registry *Registry, forceG
 // in a temporary local directory, and upon there no errors in the generation
 // will move it into the destination path.
 func (d *DistributionGenerator) Generate() error {
-	templateContext, err := NewTemplateContextFromSpec(d.Spec, d.Registry)
+	templateContext, err := NewTemplateContextFromSpec(d.Spec, d.Registries)
 	if err != nil {
 		return err
 	}
@@ -403,36 +452,31 @@ type TemplateContext struct {
 // NewTemplateContextFromSpec creates a TemplateContext from a DistributionSpec and a Registry.
 // It is expected that this registry will be already merged with the registries provided by the
 // user.
-func NewTemplateContextFromSpec(spec *DistributionSpec, registry *Registry) (*TemplateContext, error) {
+func NewTemplateContextFromSpec(spec *DistributionSpec, registries Registries) (*TemplateContext, error) {
 	context := TemplateContext{DistributionSpec: spec}
-
-	otelVersion := otelComponentVersion{
-		core:       spec.OpenTelemetryVersion,
-		coreStable: spec.OpenTelemetryStableVersion,
-		contrib:    spec.OpenTelemetryContribVersion,
-	}
-
-	errs := make(CollectionError)
-	var err CollectionError
-	context.Receivers, err = registry.Receivers.LoadAllComponents(spec.Components.Receivers, otelVersion)
-	mapMerge(errs, err)
-	context.Processors, err = registry.Processors.LoadAllComponents(spec.Components.Processors, otelVersion)
-	mapMerge(errs, err)
-	context.Exporters, err = registry.Exporters.LoadAllComponents(spec.Components.Exporters, otelVersion)
-	mapMerge(errs, err)
-	context.Connectors, err = registry.Connectors.LoadAllComponents(spec.Components.Connectors, otelVersion)
-	mapMerge(errs, err)
-	context.Extensions, err = registry.Extensions.LoadAllComponents(spec.Components.Extensions, otelVersion)
-	mapMerge(errs, err)
-	context.Providers, err = registry.Providers.LoadAllComponents(spec.Components.Providers, otelVersion)
-	mapMerge(errs, err)
 
 	context.SystemdServiceName = spec.BinaryName + ".service"
 	context.SystemdConfFileName = spec.BinaryName + ".conf"
 
+	errs := make(CollectionError)
+	var err CollectionError
+	context.Receivers, err = registries.LoadAllComponents(ReceiverType, spec.Components.Receivers)
+	mapMerge(errs, err)
+	context.Processors, err = registries.LoadAllComponents(ProcessorType, spec.Components.Processors)
+	mapMerge(errs, err)
+	context.Exporters, err = registries.LoadAllComponents(ExporterType, spec.Components.Exporters)
+	mapMerge(errs, err)
+	context.Connectors, err = registries.LoadAllComponents(ConnectorType, spec.Components.Connectors)
+	mapMerge(errs, err)
+	context.Extensions, err = registries.LoadAllComponents(ExtensionType, spec.Components.Extensions)
+	mapMerge(errs, err)
+	context.Providers, err = registries.LoadAllComponents(ProviderType, spec.Components.Providers)
+	mapMerge(errs, err)
+
 	if len(errs) > 0 {
 		return nil, errs
 	}
+
 	return &context, nil
 }
 

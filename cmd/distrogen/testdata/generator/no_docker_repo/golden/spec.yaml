@@ -14,18 +14,18 @@ build_tags: ""
 collector_cgo: false
 docker_repo: ""
 components:
-    receivers:
-        - otlp
-    processors:
-        - batch
-        - memorylimiter
-    exporters:
-        - otlp
-    connectors:
-        - forward
-    extensions:
-        - pprof
-    providers:
-        - yaml
+  receivers:
+  - otlp
+  processors:
+  - batch
+  - memorylimiter
+  exporters:
+  - otlp
+  connectors:
+  - forward
+  extensions:
+  - pprof
+  providers:
+  - yaml
 feature_gates:
-    - exporter.googlemanagedprometheus.intToDouble
+- exporter.googlemanagedprometheus.intToDouble

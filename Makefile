@@ -64,11 +64,14 @@ compare-all:
 	@./internal/tools/scripts/compare.sh
 
 GEN_GOOGLE_BUILT_OTEL=$(RUN_DISTROGEN) generate --spec ./specs/google-built-opentelemetry-collector.yaml \
-								 --registry ./components/google-built-opentelemetry-collector/registry.yaml \
 								 --templates ./templates/google-built-opentelemetry-collector
 .PHONY: gen-google-built-otel
 gen-google-built-otel:
 	@$(GEN_GOOGLE_BUILT_OTEL)
+
+.PHONY: gen-google-built-otel
+gen-google-built-otel-v:
+	@$(GEN_GOOGLE_BUILT_OTEL) -v
 
 .PHONY: regen-google-built-otel
 regen-google-built-otel:
@@ -83,7 +86,6 @@ compare-google-built-otel:
 	@$(GEN_GOOGLE_BUILT_OTEL) --force --compare
 
 GEN_OTELOPSCOL=$(RUN_DISTROGEN) generate --spec ./specs/otelopscol.yaml \
-								--registry ./components/otelopscol/registry.yaml \
 								--templates ./templates/otelopscol
 .PHONY: gen-otelopscol
 gen-otelopscol:

@@ -18,7 +18,7 @@ GBOC_TAG=$1
 set -e
 
 git tag -a ${GBOC_TAG} -m "Update to OpenTelemetry Collector version ${GBOC_TAG}"
-printf "Created git tag ${GBOC_TAG}. Would you like to push? (y/n)"
+printf "Created git tag ${GBOC_TAG}. Would you like to push? (y/n) "
 read yn
 if [ $yn != ${yn#[Yy]} ]; then
     git push origin ${GBOC_TAG}

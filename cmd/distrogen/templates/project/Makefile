@@ -56,15 +56,8 @@ regen: $(DISTROGEN_BIN)
 regen-v: $(DISTROGEN_BIN)
 	@$(GEN_OTEL) --force -v
 
-.PHONY: compare-all
-compare-all:
-	@./internal/tools/scripts/compare.sh
-
 GEN_OTEL = @$(DISTROGEN_BIN) generate --spec $(SPEC_FILE) \
 								 --registry ./components/registry.yaml \
-								 --templates ./templates
-
-#########
 # Testing
 #########
 
@@ -126,17 +119,13 @@ $(DISTROGEN_BIN): install-tools
 tools-dir:
 	@mkdir -p $(TOOLS_DIR)
 
-TOOL_LIST ?= github.com/client9/misspell/cmd/misspell \
-			 github.com/GoogleCloudPlatform/opentelemetry-operations-collector/cmd/distrogen \
-			 github.com/golangci/golangci-lint/cmd/golangci-lint \
-			 golang.org/x/tools/cmd/goimports \
-			 ./cmd/otel_component_versions
+TOOL_LIST ?= github.com/GoogleCloudPlatform/opentelemetry-operations-collector/cmd/distrogen@latest \
+			 github.com/golangci/golangci-lint/cmd/golangci-lint@latest  \
+			 golang.org/x/tools/cmd/goimports@latest
 
 .PHONY: install-tools
 install-tools: tools-dir
-	cd internal/tools && \
-	GOBIN=$(TOOLS_DIR) go install \
-	$(TOOL_LIST)
+	@echo "$(TOOL_LIST)" | xargs -n 1 -I {} sh -c 'GOBIN=$(TOOLS_DIR) go install {}'
 
 .PHONY: lint
 lint:
@@ -171,7 +160,7 @@ target-all-modules: go.work
 ifndef TARGET
 	@echo "No TARGET defined."
 else
-	go list -f '{{`{{ .Dir }}`}}' -m | grep -v -e ".*internal/tools.*" -e ".*integration_test/smoke_test.*" |\
+	go list -f '{{`{{ .Dir }}`}}' -m | grep -v -e ".*/.tools.*" -e ".*integration_test/smoke_test.*" |\
 	GOWORK=off xargs -t -I '{}' $(MAKE) -C {} $(TARGET)
 endif
 

@@ -3,7 +3,7 @@ include ./make/maintenance.mk
 
 MAKEFLAGS += --no-print-directory
 
-SPEC_FILE = {{ .Spec.Path }}
+SPEC_FILE = google-built-opentelemetry-collector.yaml
 
 #############
 # Development
@@ -100,6 +100,7 @@ clean-workspace:
 	rm -f go.work
 	rm -f go.work.sum
 
+
 #######
 # Tools
 #######
@@ -159,7 +160,7 @@ target-all-modules: go.work
 ifndef TARGET
 	@echo "No TARGET defined."
 else
-	go list -f '{{`{{ .Dir }}`}}' -m | grep -v -e ".*/.tools.*" -e ".*integration_test/smoke_test.*" |\
+	go list -f '{{ .Dir }}' -m | grep -v -e ".*/.tools.*" -e ".*integration_test/smoke_test.*" |\
 	GOWORK=off xargs -t -I '{}' $(MAKE) -C {} $(TARGET)
 endif
 

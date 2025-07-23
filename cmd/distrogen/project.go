@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"io/fs"
 	"os"
 	"path"
@@ -22,16 +21,6 @@ func NewProjectGenerator(spec *DistributionSpec) (*ProjectGenerator, error) {
 		Spec:     spec,
 		FileMode: DefaultProjectFileMode,
 	}, nil
-}
-
-func (pg *ProjectGenerator) generateSet(outDir string, templateSet TemplateSet) error {
-	for _, tmpl := range templateSet {
-		if err := tmpl.Render(outDir); err != nil {
-			logger.Debug(fmt.Sprintf("failed to render %s", tmpl.Name), "err", err)
-			return err
-		}
-	}
-	return nil
 }
 
 func (pg *ProjectGenerator) Generate() error {
@@ -70,13 +59,13 @@ func (pg *ProjectGenerator) Generate() error {
 
 	// var renderErr error
 
-	if err := pg.generateSet("components", componentTemplates); err != nil {
+	if err := GenerateTemplateSet("components", componentTemplates); err != nil {
 		return err
 	}
-	if err := pg.generateSet("make", makeTemplates); err != nil {
+	if err := GenerateTemplateSet("make", makeTemplates); err != nil {
 		return err
 	}
-	if err := pg.generateSet(".", projectTemplates); err != nil {
+	if err := GenerateTemplateSet(".", projectTemplates); err != nil {
 		return err
 	}
 

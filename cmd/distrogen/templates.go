@@ -42,6 +42,16 @@ type TemplateFile struct {
 	FileMode fs.FileMode
 }
 
+func GenerateTemplateSet(outDir string, templateSet TemplateSet) error {
+	for _, tmpl := range templateSet {
+		if err := tmpl.Render(outDir); err != nil {
+			logger.Debug(fmt.Sprintf("failed to render %s", tmpl.Name), "err", err)
+			return err
+		}
+	}
+	return nil
+}
+
 // outputPath gets the intended destination output path for the rendered template.
 func (tf *TemplateFile) outputPath() string {
 	tfPath := strings.TrimSuffix(tf.FilePath, filepath.Base(tf.FilePath))
@@ -174,6 +184,10 @@ func GetMakeTemplateSet(templateContext any, fileMode fs.FileMode) (TemplateSet,
 
 func GetProjectTemplateSet(templateContext any, fileMode fs.FileMode) (TemplateSet, error) {
 	return getEmbeddedTemplateSet(templateContext, "project", fileMode)
+}
+
+func GetInternalTemplateSet(templateContext any, fileMode fs.FileMode) (TemplateSet, error) {
+	return getEmbeddedTemplateSet(templateContext, "internal", fileMode)
 }
 
 // GetDistributionTemplateSet will get the template set from the template FS embedded

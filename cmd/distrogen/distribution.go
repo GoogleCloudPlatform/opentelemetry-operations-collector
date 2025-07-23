@@ -64,6 +64,7 @@ type DistributionSpec struct {
 	FeatureGates                FeatureGates            `yaml:"feature_gates,omitempty"`
 	GoProxy                     string                  `yaml:"go_proxy,omitempty"`
 	ComponentModuleBase         string                  `yaml:"component_module_base"`
+	DistrogenVersion            string                  `yaml:"distrogen_version"`
 }
 
 // Diff will compare two different DistributionSpecs.

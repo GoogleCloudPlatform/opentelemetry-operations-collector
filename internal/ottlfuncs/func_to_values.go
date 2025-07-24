@@ -42,34 +42,23 @@ func createToValuesFunction[K any](_ ottl.FunctionContext, oArgs ottl.Arguments)
 }
 
 func toValues[K any](target ottl.PSliceGetter[K]) (ottl.ExprFunc[K], error) {
-
 	return func(ctx context.Context, tCtx K) (any, error) {
-		res := []any{}
+		res := pcommon.NewSlice()
 		target, err := target.Get(ctx, tCtx)
 		if err != nil {
 			return nil, err
 		}
+
 		for i := 0; i < target.Len(); i++ {
-			v := target.At(i)
-			if v.Type() == pcommon.ValueTypeMap {
-				res = append(res, values(v.Map())...)
+			m := target.At(i)
+			if m.Type() == pcommon.ValueTypeMap {
+				for _, v := range m.Map().All() {
+					v.CopyTo(res.AppendEmpty())
+				}
 			} else {
-				return nil, fmt.Errorf("ToValues expects a slice of pcommon.Map, but got %s", v.Type())
+				return nil, fmt.Errorf("ToValues expects a slice of pcommon.Map, but got %s", m.Type())
 			}
 		}
-
-		resSlice := pcommon.NewSlice()
-		if err := resSlice.FromRaw(res); err != nil {
-			return nil, err
-		}
-		return resSlice, nil
+		return res, nil
 	}, nil
-}
-
-func values(m pcommon.Map) []any {
-	rv := []any{}
-	for _, v := range m.All() {
-		rv = append(rv, v.AsRaw())
-	}
-	return rv
 }

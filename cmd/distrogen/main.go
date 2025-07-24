@@ -133,6 +133,7 @@ func (cmd *generateCommand) Run() error {
 		return err
 	}
 	defer generator.Clean()
+
 	generator.CustomTemplatesDir = os.DirFS(*cmd.templates)
 
 	if err := generator.Generate(); err != nil {
@@ -143,7 +144,16 @@ func (cmd *generateCommand) Run() error {
 		return generator.Compare()
 	}
 
-	return generator.MoveGeneratedDirToWd()
+	if err := generator.MoveGeneratedDirToWd(); err != nil {
+		return err
+	}
+
+	distrogenGenerator, err := NewDistrogenGenerator(spec)
+	if err != nil {
+		return nil
+	}
+
+	return distrogenGenerator.Generate()
 }
 
 type queryCommand struct {
@@ -320,5 +330,14 @@ func (cmd *componentCommand) Run() error {
 		return err
 	}
 
-	return generator.Generate()
+	if err := generator.Generate(); err != nil {
+		return nil
+	}
+
+	distrogenGenerator, err := NewDistrogenGenerator(spec)
+	if err != nil {
+		return nil
+	}
+
+	return distrogenGenerator.Generate()
 }

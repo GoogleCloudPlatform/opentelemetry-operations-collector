@@ -55,7 +55,7 @@ func NewComponentGenerator(spec *DistributionSpec, componentType ComponentType, 
 		return nil, fmt.Errorf("%w: %s", errInvalidComponentType, componentType)
 	}
 
-	g.ModuleURL = spec.ComponentModuleBase + g.Path
+	g.ModuleURL = path.Join(spec.ComponentModuleBase, g.Path)
 
 	return g, nil
 }
@@ -97,7 +97,7 @@ func (g *ComponentGenerator) Generate() error {
 			AllowBlankTag: true,
 		},
 		Name: g.Name,
-		Path: path.Join("../", g.Path),
+		Path: "../" + g.Path,
 	})
 	if err := registry.Save(); err != nil {
 		return err

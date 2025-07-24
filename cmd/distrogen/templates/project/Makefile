@@ -57,7 +57,10 @@ regen-v: $(DISTROGEN_BIN)
 	@$(GEN_OTEL) --force -v
 
 GEN_OTEL = $(DISTROGEN_BIN) generate --spec $(SPEC_FILE) \
-								 --registry ./components/registry.yaml
+								 --registry ./components/registry.yaml \
+								 --templates ./templates
+
+#########
 # Testing
 #########
 

@@ -52,6 +52,27 @@ func Test_toValues(t *testing.T) {
 
 			wantRaw: []any{"Software Protection", "stopped"},
 		},
+		{
+			name: "a slice of maps, with entries in different order, to ensure order is preserved in the result",
+			target: []ottl.PMapGetter[any]{
+				ottl.StandardPMapGetter[any]{
+					Getter: func(_ context.Context, _ any) (any, error) {
+						m := pcommon.NewMap()
+						m.PutStr("param2", "stopped")
+						return m, nil
+					},
+				},
+				ottl.StandardPMapGetter[any]{
+					Getter: func(_ context.Context, _ any) (any, error) {
+						m := pcommon.NewMap()
+						m.PutStr("param1", "Software Protection")
+						return m, nil
+					},
+				},
+			},
+
+			wantRaw: []any{"stopped", "Software Protection"},
+		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {

@@ -28,7 +28,7 @@ binary_name: otelcol-google
 collector_cgo: false
 go_version: 1.24.4
 component_module_base: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/scratch
-distrogen_version: ec10f6e4fdf4b913eaa4b9be21715576e6e455c9
+distrogen_version: v0.130.1-0.20250723190959-af25ab6a5a0e
 
 feature_gates:
   - exporter.googlemanagedprometheus.intToDouble
@@ -58,7 +58,7 @@ components:
     - redis
     - statsd
     - syslog
-    - example
+    - sample
 
   processors:
     - batch

@@ -186,8 +186,8 @@ func GetProjectTemplateSet(templateContext any, fileMode fs.FileMode) (TemplateS
 	return getEmbeddedTemplateSet(templateContext, "project", fileMode)
 }
 
-func GetInternalTemplateSet(templateContext any, fileMode fs.FileMode) (TemplateSet, error) {
-	return getEmbeddedTemplateSet(templateContext, "internal", fileMode)
+func GetDistrogenTemplateSet(templateContext any, fileMode fs.FileMode) (TemplateSet, error) {
+	return getEmbeddedTemplateSet(templateContext, "distrogen", fileMode)
 }
 
 // GetDistributionTemplateSet will get the template set from the template FS embedded

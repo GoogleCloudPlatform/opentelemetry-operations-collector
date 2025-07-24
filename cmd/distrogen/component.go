@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 )
 
@@ -96,7 +97,7 @@ func (g *ComponentGenerator) Generate() error {
 			AllowBlankTag: true,
 		},
 		Name: g.Name,
-		Path: "../" + g.Path,
+		Path: path.Join("../", g.Path),
 	})
 	if err := registry.Save(); err != nil {
 		return err

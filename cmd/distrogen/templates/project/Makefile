@@ -10,7 +10,7 @@ SPEC_FILE = {{ .Spec.Path }}
 #############
 
 .PHONY: dev-setup
-dev-setup: install-tools workspace setup-hooks
+dev-setup: install-distrogen workspace setup-hooks
 
 .PHONY: setup-hooks
 setup-hooks:
@@ -32,7 +32,7 @@ update-otel-components: COMPONENT_DIR := components
 update-otel-components: DISTROGEN_QUERY := $(DISTROGEN_BIN) -spec $(SPEC_FILE) -field
 update-otel-components: export OTEL_VERSION = v$(shell $(DISTROGEN_QUERY) opentelemetry_version)
 update-otel-components: export OTEL_CONTRIB_VERSION = v$(shell $(DISTROGEN_QUERY) opentelemetry_contrib_version)
-update-otel-components: go.work install-tools
+update-otel-components: go.work install-distrogen
 	cd $(COMPONENT_DIR) && PATH="$(TOOLS_DIR):${PATH}" $(MAKE) update-components
 
 .PHONY: test-otel-components
@@ -56,8 +56,8 @@ regen: $(DISTROGEN_BIN)
 regen-v: $(DISTROGEN_BIN)
 	@$(GEN_OTEL) --force -v
 
-GEN_OTEL = @$(DISTROGEN_BIN) generate --spec $(SPEC_FILE) \
-								 --registry ./components/registry.yaml \
+GEN_OTEL = $(DISTROGEN_BIN) generate --spec $(SPEC_FILE) \
+								 --registry ./components/registry.yaml
 # Testing
 #########
 
@@ -109,7 +109,7 @@ DISTROGEN_BIN ?= $(TOOLS_DIR)/distrogen
 GOLANGCI_LINT = $(TOOLS_DIR)/golangci-lint
 MISSPELL = $(TOOLS_DIR)/misspell
 
-$(DISTROGEN_BIN): install-tools
+$(DISTROGEN_BIN): install-distrogen
 
 # This is a PHONY target cause if you make it as a normal recipe
 # it gets very confused because the creation date of the .tools
@@ -118,13 +118,11 @@ $(DISTROGEN_BIN): install-tools
 tools-dir:
 	@mkdir -p $(TOOLS_DIR)
 
-TOOL_LIST ?= github.com/GoogleCloudPlatform/opentelemetry-operations-collector/cmd/distrogen@ec10f6e4fdf4b913eaa4b9be21715576e6e455c9 \
-			 github.com/golangci/golangci-lint/cmd/golangci-lint@latest  \
-			 golang.org/x/tools/cmd/goimports@latest
+TOOL_LIST ?= github.com/GoogleCloudPlatform/opentelemetry-operations-collector/cmd/distrogen@ec10f6e4fdf4b913eaa4b9be21715576e6e455c9
 
-.PHONY: install-tools
-install-tools: tools-dir
-	echo "$(TOOL_LIST)" | xargs -n 1 -I {} sh -c 'GOBIN=$(TOOLS_DIR) go install {}'
+.PHONY: install-distrogen
+install-distrogen: tools-dir
+	GOBIN=$(TOOLS_DIR) go install github.com/GoogleCloudPlatform/opentelemetry-operations-collector/cmd/distrogen@$(shell cat .distrogen/VERSION)
 
 .PHONY: lint
 lint:

@@ -273,11 +273,13 @@ func (cmd *projectCommand) Run() error {
 	if err := generator.Generate(); err != nil {
 		return err
 	}
-	internalGenerator, err := NewInternalGenerator(spec, *cmd.tools)
+
+	distrogenGenerator, err := NewDistrogenGenerator(spec)
 	if err != nil {
 		return err
 	}
-	return internalGenerator.Generate()
+
+	return distrogenGenerator.Generate()
 }
 
 type componentCommand struct {
@@ -319,35 +321,4 @@ func (cmd *componentCommand) Run() error {
 	}
 
 	return generator.Generate()
-}
-
-type internalCommand struct {
-	flags flag.FlagSet
-	tools *[]string
-	spec  *string
-}
-
-func (cmd *internalCommand) ParseArgs(args []string) error {
-	cmd.spec = setSpecFlag(&cmd.flags)
-	cmd.tools = cmd.flags.StringArray("tools", []string{}, "Provide additional tools to install")
-
-	cmd.flags.Parse(args)
-	return nil
-}
-
-func (cmd *internalCommand) Run() error {
-	if *cmd.spec == "" {
-		return errNoSpecFlag
-	}
-
-	spec, err := NewDistributionSpec(*cmd.spec)
-	if err != nil {
-		return err
-	}
-
-	internalGenerator, err := NewInternalGenerator(spec, *cmd.tools)
-	if err != nil {
-		return err
-	}
-	return internalGenerator.Generate()
 }

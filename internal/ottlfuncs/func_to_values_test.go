@@ -28,25 +28,22 @@ func Test_toValues(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		target  []ottl.PMapGetter[any]
+		target  ottl.PSliceGetter[any]
 		wantRaw []any
 	}{
 		{
 			name: "a slice of maps with string values",
-			target: []ottl.PMapGetter[any]{
-				ottl.StandardPMapGetter[any]{
-					Getter: func(_ context.Context, _ any) (any, error) {
-						m := pcommon.NewMap()
-						m.PutStr("param1", "Software Protection")
-						return m, nil
-					},
-				},
-				ottl.StandardPMapGetter[any]{
-					Getter: func(_ context.Context, _ any) (any, error) {
-						m := pcommon.NewMap()
-						m.PutStr("param2", "stopped")
-						return m, nil
-					},
+			target: ottl.StandardPSliceGetter[any]{
+				Getter: func(context.Context, any) (any, error) {
+					s := pcommon.NewSlice()
+
+					m1 := s.AppendEmpty().SetEmptyMap()
+					m1.PutStr("param1", "Software Protection")
+
+					m2 := s.AppendEmpty().SetEmptyMap()
+					m2.PutStr("param2", "stopped")
+					return s, nil
+
 				},
 			},
 
@@ -54,20 +51,17 @@ func Test_toValues(t *testing.T) {
 		},
 		{
 			name: "a slice of maps, with entries in different order, to ensure order is preserved in the result",
-			target: []ottl.PMapGetter[any]{
-				ottl.StandardPMapGetter[any]{
-					Getter: func(_ context.Context, _ any) (any, error) {
-						m := pcommon.NewMap()
-						m.PutStr("param2", "stopped")
-						return m, nil
-					},
-				},
-				ottl.StandardPMapGetter[any]{
-					Getter: func(_ context.Context, _ any) (any, error) {
-						m := pcommon.NewMap()
-						m.PutStr("param1", "Software Protection")
-						return m, nil
-					},
+			target: ottl.StandardPSliceGetter[any]{
+				Getter: func(context.Context, any) (any, error) {
+					s := pcommon.NewSlice()
+
+					m1 := s.AppendEmpty().SetEmptyMap()
+					m1.PutStr("param2", "stopped")
+
+					m2 := s.AppendEmpty().SetEmptyMap()
+					m2.PutStr("param1", "Software Protection")
+					return s, nil
+
 				},
 			},
 

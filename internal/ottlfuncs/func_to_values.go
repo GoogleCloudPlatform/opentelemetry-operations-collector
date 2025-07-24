@@ -17,6 +17,7 @@ package ottlfuncs
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"go.opentelemetry.io/collector/pdata/pcommon"
 
@@ -24,7 +25,7 @@ import (
 )
 
 type ToValuesArguments[K any] struct {
-	Target []ottl.PMapGetter[K]
+	Target ottl.PSliceGetter[K]
 }
 
 func NewToValuesFactory[K any]() ottl.Factory[K] {
@@ -40,16 +41,21 @@ func createToValuesFunction[K any](_ ottl.FunctionContext, oArgs ottl.Arguments)
 	return toValues(args.Target)
 }
 
-func toValues[K any](target []ottl.PMapGetter[K]) (ottl.ExprFunc[K], error) {
+func toValues[K any](target ottl.PSliceGetter[K]) (ottl.ExprFunc[K], error) {
 
 	return func(ctx context.Context, tCtx K) (any, error) {
 		res := []any{}
-		for _, mapGetter := range target {
-			m, err := mapGetter.Get(ctx, tCtx)
-			if err != nil {
-				return nil, err
+		target, err := target.Get(ctx, tCtx)
+		if err != nil {
+			return nil, err
+		}
+		for i := 0; i < target.Len(); i++ {
+			v := target.At(i)
+			if v.Type() == pcommon.ValueTypeMap {
+				res = append(res, values(v.Map())...)
+			} else {
+				return nil, fmt.Errorf("ToValues expects a slice of pcommon.Map, but got %s", v.Type())
 			}
-			res = append(res, values(m)...)
 		}
 
 		resSlice := pcommon.NewSlice()

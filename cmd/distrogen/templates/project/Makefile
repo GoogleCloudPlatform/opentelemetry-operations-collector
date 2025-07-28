@@ -45,20 +45,20 @@ test-otel-components: go.work
 # Distro Generation
 ###################
 
+GEN_OTEL = $(DISTROGEN_BIN) generate --spec $(SPEC_FILE) \
+								 --registry ./components/registry.yaml \
+								 --templates ./templates
+
 .PHONY: gen
 gen: distrogen
 	@$(GEN_OTEL)
 
 .PHONY: regen
-regen: $(DISTROGEN_BIN)
+regen: distrogen
 	@$(GEN_OTEL) --force
 
-regen-v: $(DISTROGEN_BIN)
+regen-v: distrogen
 	@$(GEN_OTEL) --force -v
-
-GEN_OTEL = $(DISTROGEN_BIN) generate --spec $(SPEC_FILE) \
-								 --registry ./components/registry.yaml \
-								 --templates ./templates
 
 #########
 # Testing
@@ -107,12 +107,11 @@ clean-workspace:
 # Tools
 #######
 
-TOOLS_DIR = $(PWD)/.tools
+TOOLS_DIR ?= $(PWD)/.tools
 DISTROGEN_BIN ?= $(TOOLS_DIR)/distrogen
-GOLANGCI_LINT = $(TOOLS_DIR)/golangci-lint
-MISSPELL = $(TOOLS_DIR)/misspell
 
-$(DISTROGEN_BIN): install-distrogen
+$(DISTROGEN_BIN): tools-dir
+	GOBIN=$(TOOLS_DIR) go install github.com/GoogleCloudPlatform/opentelemetry-operations-collector/cmd/distrogen@$(shell cat .distrogen/VERSION)
 
 # This is a PHONY target cause if you make it as a normal recipe
 # it gets very confused because the creation date of the .tools
@@ -120,24 +119,6 @@ $(DISTROGEN_BIN): install-distrogen
 .PHONY: tools-dir
 tools-dir:
 	@mkdir -p $(TOOLS_DIR)
-
-TOOL_LIST ?= github.com/GoogleCloudPlatform/opentelemetry-operations-collector/cmd/distrogen@ec10f6e4fdf4b913eaa4b9be21715576e6e455c9
-
-.PHONY: install-distrogen
-install-distrogen: tools-dir
-	GOBIN=$(TOOLS_DIR) go install github.com/GoogleCloudPlatform/opentelemetry-operations-collector/cmd/distrogen@$(shell cat .distrogen/VERSION)
-
-.PHONY: lint
-lint:
-	$(GOLANGCI_LINT) run --allow-parallel-runners --build-tags=$(GO_BUILD_TAGS) --timeout=20m
-
-.PHONY: lint-fix
-lint-fix:
-	$(GOLANGCI_LINT) run --fix --allow-parallel-runners --build-tags=$(GO_BUILD_TAGS) --timeout=20m
-
-.PHONY: misspell
-misspell:
-	@output=`$(MISSPELL) -error ./docs` && echo misspell finished successfully || (echo misspell errors:\\n$$output && exit 1)
 
 .PHONY: distrogen
 distrogen: $(DISTROGEN_BIN)

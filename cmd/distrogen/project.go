@@ -39,6 +39,11 @@ func (pg *ProjectGenerator) Generate() error {
 		logger.Debug("failed to get project templates", "err", err)
 		return err
 	}
+	distrogenTemplateSet, err := GetDistrogenTemplateSet(pg, pg.FileMode)
+	if err != nil {
+		logger.Debug("failed to get component templates", "err", err)
+		return err
+	}
 
 	var dirErrors []error
 	if err := os.MkdirAll("components", pg.FileMode); err != nil {
@@ -53,11 +58,12 @@ func (pg *ProjectGenerator) Generate() error {
 	if _, err := os.Create(path.Join("templates", EMPTY_FILE_NAME)); err != nil {
 		dirErrors = append(dirErrors, err)
 	}
+	if err := os.MkdirAll(".distrogen", pg.FileMode); err != nil {
+		return err
+	}
 	if len(dirErrors) > 0 {
 		return errors.Join(dirErrors...)
 	}
-
-	// var renderErr error
 
 	if err := GenerateTemplateSet("components", componentTemplates); err != nil {
 		return err
@@ -68,19 +74,9 @@ func (pg *ProjectGenerator) Generate() error {
 	if err := GenerateTemplateSet(".", projectTemplates); err != nil {
 		return err
 	}
+	if err := GenerateTemplateSet(".distrogen", distrogenTemplateSet); err != nil {
+		return err
+	}
 
 	return nil
-
-	// renderFail:
-	//
-	//	errs := []error{renderErr}
-	//	if err := os.RemoveAll("components"); err != nil {
-	//		logger.Debug("failed to remove components dir", "err", err)
-	//		errs = append(errs, err)
-	//	}
-	//	if err := os.RemoveAll("make"); err != nil {
-	//		logger.Debug("failed to remove make dir", "err", err)
-	//		errs = append(errs, err)
-	//	}
-	//	return errors.Join(errs...)
 }

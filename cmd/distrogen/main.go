@@ -148,12 +148,7 @@ func (cmd *generateCommand) Run() error {
 		return err
 	}
 
-	distrogenGenerator, err := NewDistrogenGenerator(spec)
-	if err != nil {
-		return nil
-	}
-
-	return distrogenGenerator.Generate()
+	return generator.Generate()
 }
 
 type queryCommand struct {
@@ -280,16 +275,7 @@ func (cmd *projectCommand) Run() error {
 		return err
 	}
 
-	if err := generator.Generate(); err != nil {
-		return err
-	}
-
-	distrogenGenerator, err := NewDistrogenGenerator(spec)
-	if err != nil {
-		return err
-	}
-
-	return distrogenGenerator.Generate()
+	return generator.Generate()
 }
 
 type componentCommand struct {
@@ -330,14 +316,5 @@ func (cmd *componentCommand) Run() error {
 		return err
 	}
 
-	if err := generator.Generate(); err != nil {
-		return nil
-	}
-
-	distrogenGenerator, err := NewDistrogenGenerator(spec)
-	if err != nil {
-		return nil
-	}
-
-	return distrogenGenerator.Generate()
+	return generator.Generate()
 }

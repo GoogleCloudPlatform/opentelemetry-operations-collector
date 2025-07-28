@@ -67,8 +67,8 @@ type DistributionSpec struct {
 	DistrogenVersion            string                  `yaml:"distrogen_version"`
 }
 
-// GetGoMajorVersion will parse the GoVersion in the spec and return a version without a patch
-func (s *DistributionSpec) GetGoMajorVersion() string {
+// RenderGoMajorVersion will parse the GoVersion in the spec and return a version without a patch
+func (s *DistributionSpec) RenderGoMajorVersion() string {
 	split := strings.Split(s.GoVersion, ".")
 	if len(split) < 2 {
 		return s.GoVersion

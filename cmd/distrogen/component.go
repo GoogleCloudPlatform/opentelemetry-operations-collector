@@ -67,7 +67,6 @@ func (g *ComponentGenerator) Generate() error {
 	}
 
 	if err := os.MkdirAll(g.Path, g.FileMode); err != nil {
-		logger.Debug("generator", "generator", *g)
 		return err
 	}
 

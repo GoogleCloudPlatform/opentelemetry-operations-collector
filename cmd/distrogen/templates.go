@@ -149,7 +149,6 @@ func (ts TemplateSet) RenameExceptionalTemplates(spec *DistributionSpec) {
 // will collect them into a TemplateSet.
 func GetTemplateSetFromDir(dir fs.FS, templateContext any, fileMode fs.FileMode) (TemplateSet, error) {
 	templates := TemplateSet{}
-
 	err := fs.WalkDir(dir, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -187,7 +186,7 @@ func GetProjectTemplateSet(templateContext any, fileMode fs.FileMode) (TemplateS
 }
 
 func GetDistrogenTemplateSet(templateContext any, fileMode fs.FileMode) (TemplateSet, error) {
-	return getEmbeddedTemplateSet(templateContext, "distrogen", fileMode)
+	return getEmbeddedTemplateSet(templateContext, filepath.Join("project", "distrogen"), fileMode)
 }
 
 // GetDistributionTemplateSet will get the template set from the template FS embedded

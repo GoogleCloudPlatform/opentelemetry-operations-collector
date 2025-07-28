@@ -27,7 +27,10 @@ var componentType component.Type = component.MustNewType("transform")
 
 // NewFactory create a factory for the transform processor.
 func NewFactory() processor.Factory {
-	additionaLogFunctions := []ottl.Factory[ottllog.TransformContext]{ottlfuncs.NewExtractPatternsRubyRegexFactory[ottllog.TransformContext]()}
+	additionaLogFunctions := []ottl.Factory[ottllog.TransformContext]{
+		ottlfuncs.NewExtractPatternsRubyRegexFactory[ottllog.TransformContext](),
+		ottlfuncs.NewToValuesFactory[ottllog.TransformContext](),
+	}
 	return transformprocessor.NewFactoryWithOptions(
 		transformprocessor.WithLogFunctions(transformprocessor.DefaultLogFunctions()),
 		transformprocessor.WithLogFunctions(additionaLogFunctions),

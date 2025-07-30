@@ -1,0 +1,13 @@
+- region: us
+  name: United States
+- region: us-west2
+  name: Los Angeles
+- region: us-east1
+  name: Iowa
+- region: asia-south1
+  name: Mumbai
+- region: southamerica-east1
+  name: São Paulo
+- region: europe-west3
+  name: Frankfurt
+

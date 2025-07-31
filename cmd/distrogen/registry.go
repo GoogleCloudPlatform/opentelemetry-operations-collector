@@ -24,8 +24,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/goccy/go-yaml"
-	"github.com/mitchellh/mapstructure"
 )
 
 //go:embed registry.yaml

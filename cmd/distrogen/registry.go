@@ -34,8 +34,8 @@ var registryContent []byte
 var ErrComponentNotFound = errors.New("component not found")
 
 type ReleaseInfo struct {
-	Version                       string `yaml:"version"`
-	OpenTelemetryCollectorVersion string `yaml:"opentelemetry_collector_version"`
+	Version                       string `yaml:"version,omitempty"`
+	OpenTelemetryCollectorVersion string `yaml:"opentelemetry_collector_version,omitempty"`
 }
 
 // RegistryConfig is a collection of components that can be used in
@@ -221,7 +221,7 @@ func (gm *GoModuleID) String() string {
 // it into the struct.
 func (gm *GoModuleID) UnmarshalYAML(b []byte) error {
 	// The module ID may have a version.
-	moduleStr := string(b)
+	moduleStr := strings.TrimSpace(string(b))
 	moduleComponents := strings.Split(moduleStr, " ")
 	gm.URL = moduleComponents[0]
 	if len(moduleComponents) > 1 {
@@ -308,24 +308,6 @@ func (c *RegistryComponent) GetOCBComponent() OCBManifestComponent {
 // details.
 type RegistryComponents map[string]*RegistryComponent
 
-// // LoadAllComponents will take a list of component names and load them
-// // from the registry, attaching the appropriate version tag.
-// func (rl RegistryComponents) LoadAllComponents(names []string) (RegistryComponents, CollectionError) {
-// 	components := RegistryComponents{}
-// 	errs := make(CollectionError)
-
-// 	for _, name := range names {
-// 		entry, err := rl.LoadComponent(name)
-// 		if err != nil {
-// 			errs[name] = ErrComponentNotFound
-// 			continue
-// 		}
-// 		components[name] = entry
-// 	}
-
-// 	return components, errs
-// }
-
 func (rcs RegistryComponents) LoadComponent(name string) (*RegistryComponent, error) {
 	entry, ok := rcs[name]
 	if !ok {
@@ -372,7 +354,6 @@ const (
 type CustomRegistry struct {
 	Name           string               `mapstructure:"name"`
 	Source         CustomRegistrySource `mapstructure:"source"`
-	Version        string               `mapstructure:"version"`
 	RegistryConfig map[string]any       `mapstructure:",remain"`
 }
 
@@ -445,7 +426,7 @@ func (l *GithubRegistryLoader) LoadRegistryConfig() (*RegistryConfig, error) {
 		return nil, err
 	}
 
-	var r RegistryConfig
+	r := RegistryConfig{}
 	if err := yaml.Unmarshal(body, &r); err != nil {
 		return nil, err
 	}

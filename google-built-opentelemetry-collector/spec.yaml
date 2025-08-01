@@ -16,8 +16,6 @@ docker_repo: ""
 registries:
 - name: local_components
   source: local
-  useopentelemetrycollectorversion: false
-  version: ""
   registryconfig:
     path: ./components/google-built-opentelemetry-collector/registry.yaml
 components:

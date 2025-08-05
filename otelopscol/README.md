@@ -76,6 +76,7 @@
 
 | Component Name | Documentation |
 | -------------- | ------------- |
+| googleclientauth | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/googleclientauthextension/README.md) |
 | zpages | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/extension/zpagesextension/README.md) |
 
 

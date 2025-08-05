@@ -28,8 +28,20 @@ import (
 
 const EMPTY_FILE_NAME = ".empty"
 
-//go:embed templates/*
-var embeddedTemplatesFS embed.FS
+//go:embed templates/component/*
+var embeddedComponentTemplatesFS embed.FS
+
+//go:embed templates/components/*
+var embeddedComponentsTemplatesFS embed.FS
+
+//go:embed templates/distribution/*
+var embeddedDistributionTemplatesFS embed.FS
+
+//go:embed templates/make/*
+var embeddedMakeTemplatesFS embed.FS
+
+//go:embed templates/project/*
+var embeddedProjectTemplatesFS embed.FS
 
 // TemplateFile is the information about a template file
 // that will be rendered for a distribution.
@@ -63,8 +75,8 @@ func (tf *TemplateFile) outputPath() string {
 // set provided by the user.
 func (tf *TemplateFile) getTextTemplate() (*template.Template, error) {
 	return template.
-		New(filepath.Base(tf.FSPath)).
-		ParseFS(tf.FS, tf.FSPath)
+		New(filepath.Base(tf.FilePath)).
+		ParseFS(tf.FS, tf.FilePath)
 }
 
 // Render will render the template into a file in the
@@ -149,11 +161,12 @@ func (ts TemplateSet) RenameExceptionalTemplates(spec *DistributionSpec) {
 // will collect them into a TemplateSet.
 func GetTemplateSetFromDir(dir fs.FS, templateContext any, fileMode fs.FileMode) (TemplateSet, error) {
 	templates := TemplateSet{}
+
 	err := fs.WalkDir(dir, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if d.IsDir() {
+		if d.IsDir() || !strings.HasSuffix(d.Name(), ".go.tmpl") {
 			return nil
 		}
 		if filepath.Base(path) == EMPTY_FILE_NAME {
@@ -166,35 +179,59 @@ func GetTemplateSetFromDir(dir fs.FS, templateContext any, fileMode fs.FileMode)
 }
 
 func GetDistributionTemplateSet(templateContext any, fileMode fs.FileMode) (TemplateSet, error) {
-	return getEmbeddedTemplateSet(templateContext, "distribution", fileMode)
+	embedFSSub, err := fs.Sub(embeddedDistributionTemplatesFS, filepath.Join("templates", "distribution"))
+	if err != nil {
+		return nil, err
+	}
+	return getEmbeddedTemplateSet(templateContext, embedFSSub, fileMode)
 }
 
 func GetComponentsTemplateSet(templateContext any, fileMode fs.FileMode) (TemplateSet, error) {
-	return getEmbeddedTemplateSet(templateContext, "components", fileMode)
+	embedFSSub, err := fs.Sub(embeddedComponentsTemplatesFS, filepath.Join("templates", "components"))
+	if err != nil {
+		return nil, err
+	}
+	return getEmbeddedTemplateSet(templateContext, embedFSSub, fileMode)
 }
 
 func GetIndividualComponentTemplateSet(templateContext any, fileMode fs.FileMode) (TemplateSet, error) {
-	return getEmbeddedTemplateSet(templateContext, "component", fileMode)
+	embedFSSub, err := fs.Sub(embeddedComponentTemplatesFS, filepath.Join("templates", "component"))
+	if err != nil {
+		return nil, err
+	}
+	return getEmbeddedTemplateSet(templateContext, embedFSSub, fileMode)
 }
 
 func GetMakeTemplateSet(templateContext any, fileMode fs.FileMode) (TemplateSet, error) {
-	return getEmbeddedTemplateSet(templateContext, "make", fileMode)
+	embedFSSub, err := fs.Sub(embeddedMakeTemplatesFS, filepath.Join("templates", "make"))
+	if err != nil {
+		return nil, err
+	}
+	return getEmbeddedTemplateSet(templateContext, embedFSSub, fileMode)
 }
 
 func GetProjectTemplateSet(templateContext any, fileMode fs.FileMode) (TemplateSet, error) {
-	return getEmbeddedTemplateSet(templateContext, "project", fileMode)
+	embedFSSub, err := fs.Sub(embeddedProjectTemplatesFS, filepath.Join("templates", "project"))
+	if err != nil {
+		return nil, err
+	}
+	return getEmbeddedTemplateSet(templateContext, embedFSSub, fileMode)
 }
 
 func GetDistrogenTemplateSet(templateContext any, fileMode fs.FileMode) (TemplateSet, error) {
-	return getEmbeddedTemplateSet(templateContext, filepath.Join("project", "distrogen"), fileMode)
+	embedFSSub, err := fs.Sub(embeddedProjectTemplatesFS, filepath.Join("templates", "project", "distrogen"))
+	if err != nil {
+		return nil, err
+	}
+	return getEmbeddedTemplateSet(templateContext, embedFSSub, fileMode)
 }
 
 // GetDistributionTemplateSet will get the template set from the template FS embedded
 // into the distrogen binary.
-func getEmbeddedTemplateSet(templateContext any, path string, fileMode fs.FileMode) (TemplateSet, error) {
-	embeddedTemplatesSubFS, err := fs.Sub(embeddedTemplatesFS, filepath.Join("templates", path))
+func getEmbeddedTemplateSet(templateContext any, embeddedFs fs.FS, fileMode fs.FileMode) (TemplateSet, error) {
+	templates, err := GetTemplateSetFromDir(embeddedFs, templateContext, fileMode)
 	if err != nil {
 		return nil, err
 	}
-	return GetTemplateSetFromDir(embeddedTemplatesSubFS, templateContext, fileMode)
+	return templates, nil
 }

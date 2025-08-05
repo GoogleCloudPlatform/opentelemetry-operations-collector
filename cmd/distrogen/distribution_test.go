@@ -15,23 +15,23 @@
 package main
 
 import (
-	"io/fs"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"gotest.tools/v3/assert"
-	"gotest.tools/v3/golden"
 )
 
-var testdataSubpath = "generator"
-var testdataFullPath = filepath.Join("testdata", "generator")
+var (
+	testdataSubpath              = filepath.Join("generator", "distribution")
+	testdataFullDistributionPath = filepath.Join("testdata", "generator", "distribution")
+)
 
-func TestTemplateGenerationFromSpec(t *testing.T) {
+func TestDistributionTemplateGeneration(t *testing.T) {
 	registry, err := LoadEmbeddedRegistry()
 	assert.NilError(t, err)
 
-	testDirs, err := os.ReadDir(testdataFullPath)
+	testDirs, err := os.ReadDir(testdataFullDistributionPath)
 	assert.NilError(t, err)
 	for _, d := range testDirs {
 		if !d.IsDir() {
@@ -46,7 +46,7 @@ func TestTemplateGenerationFromSpec(t *testing.T) {
 }
 
 func testGeneratorCase(t *testing.T, registry *Registry, testFolder string) {
-	specPath := filepath.Join(testdataFullPath, testFolder, "spec.yaml")
+	specPath := filepath.Join(testdataFullDistributionPath, testFolder, "spec.yaml")
 
 	d, err := NewDistributionSpec(specPath)
 	assert.NilError(t, err)
@@ -54,68 +54,21 @@ func testGeneratorCase(t *testing.T, registry *Registry, testFolder string) {
 	g, err := NewDistributionGenerator(d, registry, true)
 	assert.NilError(t, err)
 
-	// Ensure the template directory exists before generation.
-	customTemplates := filepath.Join(testdataFullPath, testFolder, "templates")
-	_, err = os.Stat(customTemplates)
-	if err == nil {
+	// If custom templates exist for the test case, use them.
+	customTemplates := filepath.Join(testdataFullDistributionPath, testFolder, "templates")
+	if _, err := os.Stat(customTemplates); err == nil {
 		g.CustomTemplatesDir = os.DirFS(customTemplates)
 	}
+
 	err = g.Generate()
 	assert.NilError(t, err)
 	t.Cleanup(func() {
 		g.Clean()
 	})
 
-	generatedFiles, err := filesInDirAsSet(g.GeneratePath)
-	assert.NilError(t, err)
-getGoldenFiles:
-	goldenFiles, err := filesInDirAsSet(filepath.Join(testdataFullPath, testFolder, "golden"))
-	if os.IsNotExist(err) {
-		t.Logf("golden folder not found in %s, creating it.", testFolder)
-		err := os.Mkdir(filepath.Join(testdataFullPath, testFolder, "golden"), 0755)
-		assert.NilError(t, err)
-		goto getGoldenFiles
-	}
-
-	testFailed := false
-	for generatedFile := range generatedFiles {
-		_, foundFile := goldenFiles[generatedFile]
-		if !golden.FlagUpdate() {
-			foundCheck := assert.Check(t, foundFile, "generated file not found in golden folder: %s", generatedFile)
-			if !foundCheck {
-				testFailed = true
-				continue
-			}
-		}
-		goldenFiles[generatedFile] = true
-		generatedFiles[generatedFile] = true
-		generatedContent, err := os.ReadFile(filepath.Join(g.GeneratePath, generatedFile))
-		assert.NilError(t, err)
-		golden.Assert(t, string(generatedContent), filepath.Join(testdataSubpath, testFolder, "golden", generatedFile))
-	}
-	assert.Assert(t, !testFailed, "golden check failed, generation did not equal golden files")
-
-	for file, found := range goldenFiles {
-		assert.Check(t, found, "golden file %s not found in generated folder", file)
-	}
-	for file, found := range generatedFiles {
-		assert.Check(t, found, "generated file %s not found in golden folder", file)
-	}
-}
-
-func filesInDirAsSet(dir string) (map[string]bool, error) {
-	fileSet := make(map[string]bool)
-	err := fs.WalkDir(os.DirFS(dir), ".", func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			return nil
-		}
-		fileSet[path] = false
-		return nil
-	})
-	return fileSet, err
+	goldenPath := filepath.Join(testdataFullDistributionPath, testFolder, "golden")
+	goldenSubPath := filepath.Join(testdataSubpath, testFolder, "golden")
+	assertGoldenFiles(t, g.GeneratePath, goldenPath, goldenSubPath)
 }
 
 func TestSpecQuery(t *testing.T) {

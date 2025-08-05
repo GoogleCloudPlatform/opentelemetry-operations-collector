@@ -201,10 +201,6 @@ func (d *DistributionGenerator) Generate() error {
 		return err
 	}
 
-	for _, tmpl := range templates {
-		logger.Debug("context of template", "ctx", tmpl.Context)
-	}
-
 	if d.CustomTemplatesDir != nil {
 		customTemplates, err := GetTemplateSetFromDir(d.CustomTemplatesDir, templateContext, d.FileMode)
 		if err != nil {
@@ -219,7 +215,6 @@ func (d *DistributionGenerator) Generate() error {
 	templates.RenameExceptionalTemplates(d.Spec)
 
 	for _, tmpl := range templates {
-		logger.Debug("context of template", "ctx", tmpl.Context)
 		if err := tmpl.Render(d.GeneratePath); err != nil {
 			return err
 		}

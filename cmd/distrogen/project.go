@@ -4,7 +4,7 @@ import (
 	"errors"
 	"io/fs"
 	"os"
-	"path"
+	"path/filepath"
 )
 
 var (
@@ -12,8 +12,9 @@ var (
 )
 
 type ProjectGenerator struct {
-	Spec     *DistributionSpec
-	FileMode fs.FileMode
+	Spec       *DistributionSpec
+	FileMode   fs.FileMode
+	CustomPath string
 }
 
 func NewProjectGenerator(spec *DistributionSpec) (*ProjectGenerator, error) {
@@ -45,36 +46,45 @@ func (pg *ProjectGenerator) Generate() error {
 		return err
 	}
 
+	generatePath := "."
+	if pg.CustomPath != "" {
+		generatePath = pg.CustomPath
+	}
+
+	generateComponentsPath := filepath.Join(generatePath, "components")
+	generateMakePath := filepath.Join(generatePath, "make")
+
 	var dirErrors []error
-	if err := os.MkdirAll("components", pg.FileMode); err != nil {
+	if err := os.MkdirAll(generateComponentsPath, pg.FileMode); err != nil {
 		dirErrors = append(dirErrors, err)
 	}
-	if err := os.MkdirAll("make", pg.FileMode); err != nil {
+	if err := os.MkdirAll(generateMakePath, pg.FileMode); err != nil {
 		dirErrors = append(dirErrors, err)
 	}
-	if err := os.MkdirAll("templates", pg.FileMode); err != nil {
+	if err := os.MkdirAll(filepath.Join(generatePath, "templates"), pg.FileMode); err != nil {
 		dirErrors = append(dirErrors, err)
 	}
-	if _, err := os.Create(path.Join("templates", EMPTY_FILE_NAME)); err != nil {
+	if _, err := os.Create(filepath.Join(generatePath, "templates", EMPTY_FILE_NAME)); err != nil {
 		dirErrors = append(dirErrors, err)
 	}
-	if err := os.MkdirAll(".distrogen", pg.FileMode); err != nil {
+
+	if err := os.MkdirAll(filepath.Join(generatePath, ".distrogen"), pg.FileMode); err != nil {
 		return err
 	}
 	if len(dirErrors) > 0 {
 		return errors.Join(dirErrors...)
 	}
 
-	if err := GenerateTemplateSet("components", componentTemplates); err != nil {
+	if err := GenerateTemplateSet(generateComponentsPath, componentTemplates); err != nil {
 		return err
 	}
-	if err := GenerateTemplateSet("make", makeTemplates); err != nil {
+	if err := GenerateTemplateSet(generateMakePath, makeTemplates); err != nil {
 		return err
 	}
-	if err := GenerateTemplateSet(".", projectTemplates); err != nil {
+	if err := GenerateTemplateSet(filepath.Join(generatePath, "."), projectTemplates); err != nil {
 		return err
 	}
-	if err := GenerateTemplateSet(".distrogen", distrogenTemplateSet); err != nil {
+	if err := GenerateTemplateSet(filepath.Join(generatePath, ".distrogen"), distrogenTemplateSet); err != nil {
 		return err
 	}
 

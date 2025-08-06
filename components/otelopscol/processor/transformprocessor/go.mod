@@ -1,6 +1,6 @@
 module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/transformprocessor
 
-go 1.24.4
+go 1.24
 
 require (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector v0.130.0

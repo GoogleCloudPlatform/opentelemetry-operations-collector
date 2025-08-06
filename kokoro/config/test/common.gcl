@@ -34,11 +34,6 @@ template config go_test = {
           'https://console.cloud.google.com/storage/browser/stackdriver-test-143416-gboc-test-logs/'
     }
   }
-  action = [{
-      define_artifacts = {
-          regex = ['logs/**']
-      }
-  }]
   xunit_test_results = [{
         target_name = "gce-e2e-testing-except-cos"
         result_xml_path = "logs/sponge_log.xml"

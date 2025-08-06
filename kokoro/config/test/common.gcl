@@ -40,11 +40,11 @@ template config go_test = {
       }
   }]
   xunit_test_results = [{
-        target_name: "gce-e2e-testing-except-cos"
-        result_xml_path: "logs/sponge_log.xml"
+        target_name = "gce-e2e-testing-except-cos"
+        result_xml_path = "logs/sponge_log.xml"
   }]
   container_artifact = [{
-    test_target_names: "gce-e2e-testing-except-cos"
+    test_target_names = "gce-e2e-testing-except-cos"
   }]
   env_vars = functions.environment_variables(params.environment)
 }

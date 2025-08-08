@@ -30,6 +30,17 @@ var registryContent []byte
 
 var ErrComponentNotFound = errors.New("component not found")
 
+type ComponentType string
+
+const (
+	Receiver  ComponentType = "receiver"
+	Processor ComponentType = "processor"
+	Exporter  ComponentType = "exporter"
+	Connector ComponentType = "connector"
+	Extension ComponentType = "extension"
+	Provider  ComponentType = "provider"
+)
+
 // Registry is a collection of components that can be used in
 // a collector distribution.
 type Registry struct {
@@ -39,6 +50,7 @@ type Registry struct {
 	Connectors RegistryComponents `yaml:"connectors"`
 	Extensions RegistryComponents `yaml:"extensions"`
 	Providers  RegistryComponents `yaml:"providers"`
+	Path       string             `yaml:"-"`
 }
 
 // NewRegistry will create an empty registry object with the
@@ -68,6 +80,7 @@ func LoadEmbeddedRegistry() (*Registry, error) {
 func LoadRegistry(path string) (*Registry, error) {
 	r := NewRegistry()
 	err := yamlUnmarshalFromFileInto(path, r)
+	r.Path = path
 	return r, err
 }
 
@@ -81,6 +94,35 @@ func (r *Registry) Merge(r2 *Registry) {
 	mapMerge(r.Connectors, r2.Connectors)
 	mapMerge(r.Extensions, r2.Extensions)
 	mapMerge(r.Providers, r2.Providers)
+}
+
+func (r *Registry) Add(componentType ComponentType, component *RegistryComponent) {
+	switch componentType {
+	case Receiver:
+		r.Receivers[component.Name] = component
+	case Processor:
+		r.Processors[component.Name] = component
+	case Exporter:
+		r.Exporters[component.Name] = component
+	case Connector:
+		r.Connectors[component.Name] = component
+	case Extension:
+		r.Extensions[component.Name] = component
+	case Provider:
+		r.Providers[component.Name] = component
+	}
+}
+
+func (r *Registry) Save() error {
+	if r.Path == "" {
+		return errors.New("cannot save registry: no path set")
+	}
+
+	if err := yamlMarshalToFile(r, r.Path, DefaultProjectFileMode); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // GoModuleID is intended for stringifying/unmarshalling to
@@ -140,13 +182,14 @@ type otelComponentVersion struct {
 // RegistryComponent is the type used as a basis for Registry.
 // It contains all the information needed to output a
 type RegistryComponent struct {
+	Name string `yaml:"-"`
+
 	GoMod         *GoModuleID `yaml:"gomod"`
 	Import        string      `yaml:"import,omitempty"`
-	Name          string      `yaml:"string,omitempty"`
 	Path          string      `yaml:"path,omitempty"`
 	Stable        bool        `yaml:"stable,omitempty"`
 	StartRevision string      `yaml:"start_revision,omitempty"`
-	DocsURL       string      `yaml:"docs_url"`
+	DocsURL       string      `yaml:"docs_url,omitempty"`
 }
 
 // RenderDocsURL renders the docs URL into a template.
@@ -189,6 +232,14 @@ func (c *RegistryComponent) GetOCBComponent() OCBManifestComponent {
 		Name:   c.Name,
 		Path:   c.Path,
 	}
+}
+
+// RegistryComponentRelease is a particular tag of a component that declares
+// the Collector library version it supports.
+type RegistryComponentRelease struct {
+	Tag                         string `yaml:"version"`
+	OpenTelemetryVersion        string `yaml:"opentelemetry_version"`
+	OpenTelemetryContribVersion string `yaml:"opentelemetry_contrib_version,omitempty"`
 }
 
 // RegistryComponents is a map of registry component names to component

@@ -24,6 +24,17 @@ config build = common.build {
   // null it out for now.
   container_properties = null
 
+  env_vars = [
+    {
+      key: "GOPROXY"
+      value: "https://us-go.pkg.dev/artifact-foundry-prod/golang-3p-trusted"
+    },
+    {
+      key: "GOSUMDB"
+      value: "off"
+    },
+  ]
+
   container_artifact = [
     {
       // Path to the container tar file produced by the build. For a container build,

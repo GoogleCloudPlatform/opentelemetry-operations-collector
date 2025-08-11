@@ -32,7 +32,7 @@ update-google-otel-components: COMPONENT_DIR := components/google-built-opentele
 update-otelopscol-components: SPEC_FILE := specs/otelopscol.yaml
 update-otelopscol-components: COMPONENT_DIR := components/otelopscol
 
-update-google-otel-components update-otelopscol-components: DISTROGEN_QUERY := go run ./cmd/distrogen query -spec $(SPEC_FILE) -field
+update-google-otel-components update-otelopscol-components: DISTROGEN_QUERY := go run ./cmd/distrogen query --spec $(SPEC_FILE) --field
 update-google-otel-components update-otelopscol-components: export OTEL_VERSION = v$(shell $(DISTROGEN_QUERY) opentelemetry_version)
 update-google-otel-components update-otelopscol-components: export OTEL_CONTRIB_VERSION = v$(shell $(DISTROGEN_QUERY) opentelemetry_contrib_version)
 update-google-otel-components update-otelopscol-components: go.work install-tools
@@ -183,7 +183,8 @@ ADDLICENSE_IGNORES = -ignore "**/.tools/**/*" \
 					-ignore "**/golden/*" \
 					-ignore "**/google-built-opentelemetry-collector/*" \
 					-ignore "**/otelopscol/*" \
-					-ignore "**/spec.yaml"
+					-ignore "**/spec.yaml" \
+					-ignore "**/third_party/**/*"
 .PHONY: addlicense
 addlicense: $(ADDLICENSE)
 	@$(ADDLICENSE) -c "Google LLC" -l apache $(ADDLICENSE_IGNORES) .
@@ -212,10 +213,9 @@ misspell:
 # more sophisticated if we want to supply separate tags for every subcomponent. For
 # now it is pretty simply.
 .PHONY: tag-repo
-tag-repo: GOOGLE_OTEL_VERSION = v$(shell go run ./cmd/distrogen query -spec specs/google-built-opentelemetry-collector.yaml -field version)
+tag-repo: GBOC_TAG = v$(shell go run ./cmd/distrogen query --spec specs/google-built-opentelemetry-collector.yaml --field version)
 tag-repo:
-	git tag -a $(GOOGLE_OTEL_VERSION) -m "Update to OpenTelemetry Collector version $(OTEL_VERSION)"
-	@echo "Created git tag $(GOOGLE_OTEL_VERSION). If it looks good, push it to the remote by running: git push origin $(GOOGLE_OTEL_VERSION)"
+	bash ./internal/tools/scripts/tag.sh $(GBOC_TAG)
 
 .PHONY: target-all-modules
 target-all-modules: go.work

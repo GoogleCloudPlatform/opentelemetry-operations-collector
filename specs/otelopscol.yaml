@@ -80,7 +80,13 @@ components:
     - otlphttp
   extensions:
     - zpages
+    - googleclientauth
   providers:
     - googlesecretmanager
     - file
     - env
+
+replaces:
+  - from: github.com/GoogleCloudPlatform/opentelemetry-operations-collector
+    to: ../../
+    reason: Reference root module of repository to find dependency packages.

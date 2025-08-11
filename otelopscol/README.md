@@ -57,7 +57,7 @@
 | normalizesums | [docs](No docs linked for component) |
 | resource | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/resourceprocessor/README.md) |
 | resourcedetection | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/resourcedetectionprocessor/README.md) |
-| transform | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/transformprocessor/README.md) |
+| transform | [docs](github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/transformprocessor/README.md) |
 
 
 ## Exporters
@@ -76,6 +76,7 @@
 
 | Component Name | Documentation |
 | -------------- | ------------- |
+| googleclientauth | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/googleclientauthextension/README.md) |
 | zpages | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/extension/zpagesextension/README.md) |
 
 

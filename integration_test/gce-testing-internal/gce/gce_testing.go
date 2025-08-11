@@ -1293,11 +1293,15 @@ func verifyVMCreation(ctx context.Context, logger *log.Logger, vm *VM) error {
 		}
 	}
 
-	// Pre-installed jupyter services on DLVM images cause port conflicts for third-party apps.
-	// See b/347107292.
 	if IsDLVMImage(vm.ImageSpec) {
+		// TODO(b/347107292): Pre-installed jupyter services on DLVM images cause port conflicts for third-party apps.
 		if _, err := RunRemotely(ctx, logger, vm, "sudo service jupyter stop || true"); err != nil {
 			return fmt.Errorf("attemptCreateInstance() failed to stop pre-installed jupyter service: %v", err)
+		}
+
+		// TODO(b/434754681): DLVM image still refers to the non-existent bullseye-backports repo.
+		if _, err := RunRemotely(ctx, logger, vm, "sudo sed --in-place --regexp-extended 's/deb[^ ]* [^ ]+ bullseye-backports .*//' /etc/apt/sources.list"); err != nil {
+			return fmt.Errorf("attemptCreateInstance() failed to remove bullseye-backports repo: %v", err)
 		}
 	}
 

@@ -112,7 +112,7 @@ func createExporterThroughOTel(t *testing.T, timeout time.Duration, retryEnabled
 	// For example: `ConsumeMetrics` function becomes asynchronous
 	// (it just adds tasks to the queue, and then worker goroutines pull from that queue at some point in the future).
 	// Thus, we disable queueing, and only test it using integration tests.
-	conf.QueueConfig = exporterhelper.QueueConfig{
+	conf.QueueConfig = exporterhelper.QueueBatchConfig{
 		Enabled: false,
 	}
 

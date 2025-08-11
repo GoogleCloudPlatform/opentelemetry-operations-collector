@@ -27,7 +27,7 @@ config build = common.build {
   env_vars = [
     {
       key = "GOPROXY"
-      value = "https://us-go.pkg.dev/artifact-foundry-prod/golang-3p-trusted"
+      value = "https://us-go.pkg.dev/access-aoss/assuredoss-go"
     },
     {
       key = "GOSUMDB"

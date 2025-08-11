@@ -13,7 +13,7 @@ ARG CERT_CONTAINER="debian:bookworm"
 ARG BUILD_CONTAINER="google/cloud-sdk@sha256:cad12907540b1a43c9279503796723817e62da1f8fd3b8723755effb9d55e1e1"
 FROM --platform=${BUILDPLATFORM:-linux/amd64} ${BUILD_CONTAINER} AS build
 RUN rm -f /etc/apt/sources.list.d/* /etc/apt/sources.list
-RUN echo 'deb https://us-apt.pkg.dev/remote/artifact-foundry-prod/debian-3p-remote-bookworm bookworm main' | sudo tee -a  /etc/apt/sources.list.d/artifact-registry.list
+RUN echo 'deb https://us-apt.pkg.dev/remote/artifact-foundry-prod/debian-3p-remote-bookworm bookworm main' | tee -a  /etc/apt/sources.list.d/artifact-registry.list
 RUN apt-get install -y make curl
 
 ARG PROJECT_ROOT
@@ -29,7 +29,7 @@ RUN make -f pull_modules_from_ar_repos.mk aoss-build
 
 FROM ${CERT_CONTAINER} AS certs
 RUN rm -f /etc/apt/sources.list.d/* /etc/apt/sources.list
-RUN echo 'deb https://us-apt.pkg.dev/remote/artifact-foundry-prod/debian-3p-remote-bookworm bookworm main' | sudo tee -a  /etc/apt/sources.list.d/artifact-registry.list
+RUN echo 'deb https://us-apt.pkg.dev/remote/artifact-foundry-prod/debian-3p-remote-bookworm bookworm main' | tee -a  /etc/apt/sources.list.d/artifact-registry.list
 RUN apt-get install -y ca-certificates
 
 FROM gcr.io/distroless/static

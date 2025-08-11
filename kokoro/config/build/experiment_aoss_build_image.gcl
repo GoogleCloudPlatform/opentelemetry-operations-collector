@@ -12,12 +12,12 @@ config build = common.build {
     {
       key = 'BUILD_CONTAINER'
       value =
-          'us-docker.pkg.dev/artifact-foundry-prod/docker-3p-trusted/google/cloud-sdk@sha256:cad12907540b1a43c9279503796723817e62da1f8fd3b8723755effb9d55e1e1'
+          'us-docker.pkg.dev/artifact-foundry-prod/docker-3p-trusted/debian:bookworm'
     },
     {
       key = 'CERT_CONTAINER'
       value =
-          'us-docker.pkg.dev/artifact-foundry-prod/docker-3p-trusted/alpine:3'
+          'us-docker.pkg.dev/artifact-foundry-prod/docker-3p-trusted/debian:bookworm'
     },
   ]
  // I'm not sure why, but this build doesn't seem to need container_properties;

@@ -20,7 +20,8 @@ RUN apt-get update && apt-get install -y make curl{{ if .CollectorCGO }} build-e
 ARG BUILD_CONTAINER="google/cloud-sdk@sha256:cad12907540b1a43c9279503796723817e62da1f8fd3b8723755effb9d55e1e1"
 FROM --platform=${BUILDPLATFORM:-linux/amd64} ${BUILD_CONTAINER} AS build
 
-RUN apk --update add make curl{{ if .CollectorCGO }} alpine-sdk{{ end }}
+RUN echo 'deb ar+https://us-apt.pkg.dev/project/artifact-foundry-prod standard-debian-bookworm-3p-l1 main' | sudo tee -a  /etc/apt/sources.list.d/artifact-registry.list
+Run apt-get update && apt-get install -y make curl
 
 {{ end -}}
 

@@ -34,7 +34,7 @@ ARG BUILDARCH
 ARG BUILDOS
 ARG TARGETOS
 ARG TARGETARCH
-RUN make -f pull_modules_from_ar_repos.mk aoss-build
+RUN make GO_BIN_DIR=/usr/local/go/bin -f pull_modules_from_ar_repos.mk aoss-build
 
 FROM ${CERT_CONTAINER} AS certs
 RUN rm -f /etc/apt/sources.list.d/* /etc/apt/sources.list

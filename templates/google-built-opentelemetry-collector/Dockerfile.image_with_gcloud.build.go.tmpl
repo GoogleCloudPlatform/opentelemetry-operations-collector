@@ -21,7 +21,7 @@ ARG BUILD_CONTAINER="google/cloud-sdk@sha256:cad12907540b1a43c9279503796723817e6
 FROM --platform=${BUILDPLATFORM:-linux/amd64} ${BUILD_CONTAINER} AS build
 RUN rm -f /etc/apt/sources.list.d/* /etc/apt/sources.list
 RUN echo 'deb https://us-apt.pkg.dev/remote/artifact-foundry-prod/debian-3p-remote-bookworm bookworm main' | tee -a  /etc/apt/sources.list.d/artifact-registry.list
-RUN apt-get install -y make curl
+RUN apt-get update && apt-get install -y make curl
 
 {{ end -}}
 
@@ -39,7 +39,7 @@ RUN make -f pull_modules_from_ar_repos.mk aoss-build
 FROM ${CERT_CONTAINER} AS certs
 RUN rm -f /etc/apt/sources.list.d/* /etc/apt/sources.list
 RUN echo 'deb https://us-apt.pkg.dev/remote/artifact-foundry-prod/debian-3p-remote-bookworm bookworm main' | tee -a  /etc/apt/sources.list.d/artifact-registry.list
-RUN apt-get install -y ca-certificates
+RUN apt-get update && apt-get install -y ca-certificates
 
 FROM gcr.io/distroless/static
 

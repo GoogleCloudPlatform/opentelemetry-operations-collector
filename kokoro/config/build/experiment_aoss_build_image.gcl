@@ -17,7 +17,7 @@ config build = common.build {
     {
       key = 'CERT_CONTAINER'
       value =
-          'us-docker.pkg.dev/artifact-foundry-prod/docker-3p-trusted/debian@sha256:7fffa50b6e734de104d6e98545d45fec5a487089b6e25c86cf6614ccbcf6e40c'
+          'us-docker.pkg.dev/artifact-foundry-prod/docker-3p-trusted/golang@sha256:7fffa50b6e734de104d6e98545d45fec5a487089b6e25c86cf6614ccbcf6e40c'
     },
   ]
  // I'm not sure why, but this build doesn't seem to need container_properties;

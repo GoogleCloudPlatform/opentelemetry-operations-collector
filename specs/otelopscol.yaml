@@ -66,6 +66,7 @@ components:
     - transform
     - batch
     - memorylimiter
+    - metricstarttime
     # Within this repo
     - agentmetrics
     - casttosum

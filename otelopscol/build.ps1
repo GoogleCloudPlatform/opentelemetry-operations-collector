@@ -54,7 +54,7 @@ $goBinDir="$toolsDir\go\bin"
 $goBin="$goBinDir\go"
 
 # Download OCB.
-$installOcbCommand="`$env:GOBIN='$toolsDir'; `$env:CGO_ENABLED=1; $goBin install -trimpath -ldflags='-s -w' go.opentelemetry.io/collector/cmd/builder@v0.130.0"
+$installOcbCommand="`$env:GOBIN='$toolsDir'; `$env:CGO_ENABLED=1; $goBin install -trimpath -ldflags='-s -w' go.opentelemetry.io/collector/cmd/builder@v0.131.0"
 Invoke-Expression -Command $installOcbCommand
 $ocbBin="$toolsDir\builder.exe"
 

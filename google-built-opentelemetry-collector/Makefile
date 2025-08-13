@@ -178,7 +178,8 @@ $(GO_BIN):
 	}
 
 $(OCB_BIN): $(GO_BIN)
-	@{ \
+	{ \
+    echo "$(USE_GO_PROXY)"
 	set -e ;\
 	mkdir -p $(TOOLS_DIR) ;\
 	echo "Installing ocb at $(TOOLS_DIR)" ;\

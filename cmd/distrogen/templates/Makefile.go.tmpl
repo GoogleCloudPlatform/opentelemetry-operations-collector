@@ -117,6 +117,7 @@ $(COLLECTOR_BINARY_NAME): ocb-generate
 		GOWORK=off \
 		CGO_ENABLED=$(COLLECTOR_CGO) \
 		GOOS=$(TARGETOS) GOARCH=$(TARGETARCH) \
+		$(if $(USE_GO_PROXY),GOPROXY=$(USE_GO_PROXY),) \
 		$(GO_BIN) build \
 			-buildvcs=$(COLLECTOR_BUILDVCS) \
 			-tags=$(COLLECTOR_BUILD_TAGS) \
@@ -184,7 +185,7 @@ $(OCB_BIN): $(GO_BIN)
 	set -e ;\
 	mkdir -p $(TOOLS_DIR) ;\
 	echo "Installing ocb at $(TOOLS_DIR)" ;\
-	GOBIN=$(TOOLS_DIR) CGO_ENABLED=0 GOARCH=$(BUILDARCH) $(GO_BIN) install -trimpath -ldflags="-s -w" go.opentelemetry.io/collector/cmd/builder@$(OTEL_VERSION_TAG) ;\
+	GOBIN=$(TOOLS_DIR) $(if $(USE_GO_PROXY),GOPROXY=$(USE_GO_PROXY),) CGO_ENABLED=0 GOARCH=$(BUILDARCH) $(GO_BIN) install -trimpath -ldflags="-s -w" go.opentelemetry.io/collector/cmd/builder@$(OTEL_VERSION_TAG) ;\
 	mv $(TOOLS_DIR)/builder $(OCB_BIN) ;\
 	}
 

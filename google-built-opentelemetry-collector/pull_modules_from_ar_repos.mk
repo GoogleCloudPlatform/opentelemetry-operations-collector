@@ -12,4 +12,4 @@ $(AR_AUTH_BIN): $(GO_BIN)
 
 .PHONY: aoss-build
 aoss-build: $(AR_AUTH_BIN)
-	$(MAKE) USE_GO_PROXY=https://us-go.pkg.dev/access-aoss/assuredoss-go build
+	$(MAKE) build

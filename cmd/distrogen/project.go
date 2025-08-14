@@ -46,9 +46,13 @@ func (pg *ProjectGenerator) Generate() error {
 		return err
 	}
 
+	registry := NewRegistry()
+	registry.Path = componentRegistryPath
+
 	generatePath := "."
 	if pg.CustomPath != "" {
 		generatePath = pg.CustomPath
+		registry.Path = filepath.Join(pg.CustomPath, componentRegistryPath)
 	}
 
 	generateComponentsPath := filepath.Join(generatePath, "components")
@@ -73,6 +77,10 @@ func (pg *ProjectGenerator) Generate() error {
 	}
 	if len(dirErrors) > 0 {
 		return errors.Join(dirErrors...)
+	}
+
+	if err := registry.Save(); err != nil {
+		return err
 	}
 
 	if err := GenerateTemplateSet(generateComponentsPath, componentTemplates); err != nil {

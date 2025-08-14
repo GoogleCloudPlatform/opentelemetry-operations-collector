@@ -10,6 +10,7 @@ import (
 )
 
 var errInvalidComponentType = errors.New("invalid component type")
+var componentRegistryPath = filepath.Join("components", "registry.yaml")
 
 type ComponentGenerator struct {
 	Spec     *DistributionSpec
@@ -80,7 +81,7 @@ func (g *ComponentGenerator) Generate() error {
 		}
 	}
 
-	registryPath := "components/registry.yaml"
+	registryPath := componentRegistryPath
 	registry, err := LoadRegistry(registryPath)
 	if err != nil {
 		if !os.IsNotExist(err) {

@@ -14,7 +14,7 @@
 
 name: otelopscol
 description: "OpenTelemetry Collector binary used by the Ops Agent"
-opentelemetry_version: 0.130.0
+opentelemetry_version: 0.131.0
 opentelemetry_stable_version: 1.36.0
 binary_name: otelopscol
 build_container: ubuntu

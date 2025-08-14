@@ -12,12 +12,12 @@ config build = common.build {
     {
       key = 'BUILD_CONTAINER'
       value =
-          'us-docker.pkg.dev/artifact-foundry-prod/docker-3p-trusted/golang@sha256:7fffa50b6e734de104d6e98545d45fec5a487089b6e25c86cf6614ccbcf6e40c'
+          'us-docker.pkg.dev/artifact-foundry-prod/docker-3p-trusted/golang@sha256:4e00d5a819a6e8914870b79dfa6500ad4e05b9653d63a7a6a656aa5039878810'
     },
     {
       key = 'CERT_CONTAINER'
       value =
-          'us-docker.pkg.dev/artifact-foundry-prod/docker-3p-trusted/golang@sha256:7fffa50b6e734de104d6e98545d45fec5a487089b6e25c86cf6614ccbcf6e40c'
+          'us-docker.pkg.dev/artifact-foundry-prod/docker-3p-trusted/golang@sha256:4e00d5a819a6e8914870b79dfa6500ad4e05b9653d63a7a6a656aa5039878810'
     },
   ]
  // I'm not sure why, but this build doesn't seem to need container_properties;

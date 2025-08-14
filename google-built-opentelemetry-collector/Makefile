@@ -106,7 +106,7 @@ collector-build: clean-collector $(COLLECTOR_BINARY_NAME)
 
 .PHONY: ocb-generate
 ocb-generate: $(OCB_BIN)
-	$(SET_GO_BIN_PATH) $(if $(USE_GO_PROXY),GOPROXY=$(USE_GO_PROXY),) $(OCB_BIN) --skip-compilation --verbose --config manifest.yaml
+	$(SET_GO_BIN_PATH) $(if $(USE_GO_PROXY),GOPROXY=$(USE_GO_PROXY) GOSUMDB=off,) $(OCB_BIN) --skip-compilation --verbose --config manifest.yaml
 
 # Using OCB and the local manifest file, build a collector.
 $(COLLECTOR_BINARY_NAME): ocb-generate
@@ -114,7 +114,7 @@ $(COLLECTOR_BINARY_NAME): ocb-generate
 		GOWORK=off \
 		CGO_ENABLED=$(COLLECTOR_CGO) \
 		GOOS=$(TARGETOS) GOARCH=$(TARGETARCH) \
-		$(if $(USE_GO_PROXY),GOPROXY=$(USE_GO_PROXY),) \
+		$(if $(USE_GO_PROXY),GOPROXY=$(USE_GO_PROXY) GOSUMDB=off,) \
 		$(GO_BIN) build \
 			-buildvcs=$(COLLECTOR_BUILDVCS) \
 			-tags=$(COLLECTOR_BUILD_TAGS) \
@@ -182,7 +182,7 @@ $(OCB_BIN): $(GO_BIN)
 	set -e ;\
 	mkdir -p $(TOOLS_DIR) ;\
 	echo "Installing ocb at $(TOOLS_DIR)" ;\
-	GOBIN=$(TOOLS_DIR) $(if $(USE_GO_PROXY),GOPROXY=$(USE_GO_PROXY),) CGO_ENABLED=0 GOARCH=$(BUILDARCH) $(GO_BIN) install -trimpath -ldflags="-s -w" go.opentelemetry.io/collector/cmd/builder@$(OTEL_VERSION_TAG) ;\
+	GOBIN=$(TOOLS_DIR) $(if $(USE_GO_PROXY),GOPROXY=$(USE_GO_PROXY) GOSUMDB=off,) CGO_ENABLED=0 GOARCH=$(BUILDARCH) $(GO_BIN) install -trimpath -ldflags="-s -w" go.opentelemetry.io/collector/cmd/builder@$(OTEL_VERSION_TAG) ;\
 	mv $(TOOLS_DIR)/builder $(OCB_BIN) ;\
 	}
 

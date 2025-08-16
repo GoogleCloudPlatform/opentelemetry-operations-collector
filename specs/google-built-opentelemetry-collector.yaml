@@ -28,6 +28,12 @@ binary_name: otelcol-google
 collector_cgo: false
 go_version: 1.24.5
 
+registries:
+  - name: local_components
+    source: local
+    path: "./components/google-built-opentelemetry-collector/registry.yaml"
+
+
 feature_gates:
   - exporter.googlemanagedprometheus.intToDouble
   - exporter.googlecloud.CustomMonitoredResources

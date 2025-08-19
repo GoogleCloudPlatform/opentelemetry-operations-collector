@@ -73,6 +73,8 @@ components:
     - agentmetrics
     - casttosum
     - normalizesums
+    - cumulativetodelta
+    - deltatocumulative
   exporters:
     - file
     - googlecloud

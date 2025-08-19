@@ -47,6 +47,7 @@ components:
         - otlpjsonfile
     processors:
         - cumulativetodelta
+        - deltatocumulative
         - deltatorate
         - filter
         - groupbyattrs
@@ -62,8 +63,6 @@ components:
         - agentmetrics
         - casttosum
         - normalizesums
-        - cumulativetodelta
-        - deltatocumulative
     exporters:
         - file
         - googlecloud

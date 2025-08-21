@@ -217,6 +217,10 @@ processors:
           enabled: false
         os.version:
           enabled: true
+        os.build.id:
+          enabled: true
+        os.name:
+          enabled: true
 
   metricstransform/ucp_internal_saasmanagement_hostmetrics_system:
     transforms:
@@ -233,11 +237,13 @@ processors:
     metric_statements:
     - context: datapoint
       statements:
-      - set(attributes["name"], resource.attributes["os.version"]) where metric.name == "saasmanagement.googleapis.com/instance/vm/os/name"
+      - set(attributes["name"], Format("%s_%s_%s", [resource.attributes["os.name"], resource.attributes["os.version"], resource.attributes["os.build.id"]])) where metric.name == "saasmanagement.googleapis.com/instance/vm/os/name"
       - set(value_int, 1) where metric.name == "saasmanagement.googleapis.com/instance/vm/os/name"
     - context: resource
       statements:
       - delete_key(attributes, "os.version")
+      - delete_key(attributes, "os.build.id")
+      - delete_key(attributes, "os.name")
 
 service:
   pipelines:

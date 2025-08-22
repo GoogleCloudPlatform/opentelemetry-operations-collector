@@ -22,9 +22,9 @@ The backend connection type count.
 
 #### Attributes
 
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| kind | The backend connection types. | Str: ``success``, ``recycle``, ``reuse``, ``fail``, ``unhealthy``, ``busy``, ``retry`` |
+| Name | Description | Values | Optional |
+| ---- | ----------- | ------ | -------- |
+| kind | The backend connection types. | Str: ``success``, ``recycle``, ``reuse``, ``fail``, ``unhealthy``, ``busy``, ``retry`` | false |
 
 ### varnish.backend.request.count
 
@@ -44,9 +44,9 @@ The cache operation type count.
 
 #### Attributes
 
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| operation | The cache operation types | Str: ``hit``, ``miss``, ``hit_pass`` |
+| Name | Description | Values | Optional |
+| ---- | ----------- | ------ | -------- |
+| operation | The cache operation types | Str: ``hit``, ``miss``, ``hit_pass`` | false |
 
 ### varnish.client.request.count
 
@@ -58,9 +58,9 @@ The client request count.
 
 #### Attributes
 
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| state | The client request states. | Str: ``received``, ``dropped`` |
+| Name | Description | Values | Optional |
+| ---- | ----------- | ------ | -------- |
+| state | The client request states. | Str: ``received``, ``dropped`` | false |
 
 ### varnish.client.request.error.count
 
@@ -72,9 +72,9 @@ The client request errors received by status code.
 
 #### Attributes
 
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| status_code | An HTTP status code. | Any Str |
+| Name | Description | Values | Optional |
+| ---- | ----------- | ------ | -------- |
+| status_code | An HTTP status code. | Any Str | false |
 
 ### varnish.object.count
 
@@ -118,9 +118,9 @@ The session connection type count.
 
 #### Attributes
 
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| kind | The session connection types. | Str: ``accepted``, ``dropped``, ``failed`` |
+| Name | Description | Values | Optional |
+| ---- | ----------- | ------ | -------- |
+| kind | The session connection types. | Str: ``accepted``, ``dropped``, ``failed`` | false |
 
 ### varnish.thread.operation.count
 
@@ -132,9 +132,9 @@ The thread operation type count.
 
 #### Attributes
 
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| operation | The thread operation types. | Str: ``created``, ``destroyed``, ``failed`` |
+| Name | Description | Values | Optional |
+| ---- | ----------- | ------ | -------- |
+| operation | The thread operation types. | Str: ``created``, ``destroyed``, ``failed`` | false |
 
 ## Resource Attributes
 

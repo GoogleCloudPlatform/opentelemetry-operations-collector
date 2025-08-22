@@ -30,9 +30,9 @@ Clock throttle total duration.
 
 #### Attributes
 
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| gpu.clock.violation | Reason for throttling, one of [power, thermal, sync_boost, board_limit, low_util, reliability, app_clock, base_clock]. | Str: ``power``, ``thermal``, ``sync_boost``, ``board_limit``, ``low_util``, ``reliability``, ``app_clock``, ``base_clock`` |
+| Name | Description | Values | Optional |
+| ---- | ----------- | ------ | -------- |
+| gpu.clock.violation | Reason for throttling, one of [power, thermal, sync_boost, board_limit, low_util, reliability, app_clock, base_clock]. | Str: ``power``, ``thermal``, ``sync_boost``, ``board_limit``, ``low_util``, ``reliability``, ``app_clock``, ``base_clock`` | false |
 
 ### gpu.dcgm.codec.decoder.utilization
 
@@ -60,9 +60,9 @@ Data corruption errors.
 
 #### Attributes
 
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| gpu.error.type | The type of error, one of [sbe, dbe]. | Str: ``sbe``, ``dbe`` |
+| Name | Description | Values | Optional |
+| ---- | ----------- | ------ | -------- |
+| gpu.error.type | The type of error, one of [sbe, dbe]. | Str: ``sbe``, ``dbe`` | false |
 
 ### gpu.dcgm.energy_consumption
 
@@ -90,9 +90,9 @@ Current number of GPU memory bytes used by state. Summing the values of all stat
 
 #### Attributes
 
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| gpu.memory.state | GPU memory state, one of [free, used, reserved]. | Str: ``used``, ``free``, ``reserved`` |
+| Name | Description | Values | Optional |
+| ---- | ----------- | ------ | -------- |
+| gpu.memory.state | GPU memory state, one of [free, used, reserved]. | Str: ``used``, ``free``, ``reserved`` | false |
 
 ### gpu.dcgm.nvlink.io
 
@@ -104,9 +104,9 @@ The number of bytes sent over NVLink, not including protocol headers.
 
 #### Attributes
 
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| network.io.direction | Direction of the link traffic, one of [transmit, receive]. | Str: ``transmit``, ``receive`` |
+| Name | Description | Values | Optional |
+| ---- | ----------- | ------ | -------- |
+| network.io.direction | Direction of the link traffic, one of [transmit, receive]. | Str: ``transmit``, ``receive`` | false |
 
 ### gpu.dcgm.pcie.io
 
@@ -118,9 +118,9 @@ The number of bytes sent over the PCIe bus, including both protocol headers and 
 
 #### Attributes
 
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| network.io.direction | Direction of the link traffic, one of [transmit, receive]. | Str: ``transmit``, ``receive`` |
+| Name | Description | Values | Optional |
+| ---- | ----------- | ------ | -------- |
+| network.io.direction | Direction of the link traffic, one of [transmit, receive]. | Str: ``transmit``, ``receive`` | false |
 
 ### gpu.dcgm.pipe.utilization
 
@@ -132,9 +132,9 @@ Fraction of cycles the corresponding GPU pipe was active, averaged over time and
 
 #### Attributes
 
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| gpu.pipe | GPU pipe in use, one of [tensor, fp64, fp32, fp16]. | Str: ``tensor``, ``fp64``, ``fp32``, ``fp16`` |
+| Name | Description | Values | Optional |
+| ---- | ----------- | ------ | -------- |
+| gpu.pipe | GPU pipe in use, one of [tensor, fp64, fp32, fp16]. | Str: ``tensor``, ``fp64``, ``fp32``, ``fp16`` | false |
 
 ### gpu.dcgm.sm.utilization
 
@@ -188,9 +188,9 @@ XID errors.
 
 #### Attributes
 
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| gpu.error.xid | The XID code for the error, 1..143. | Any Int |
+| Name | Description | Values | Optional |
+| ---- | ----------- | ------ | -------- |
+| gpu.error.xid | The XID code for the error, 1..143. | Any Int | false |
 
 ## Resource Attributes
 

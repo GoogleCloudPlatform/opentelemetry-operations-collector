@@ -4,4 +4,5 @@ This is the same filter processor as [opentelemetry-collector-contrib/processor/
 
 This processor provides the following additional OTTL functions : 
 - [ExtractPatternsRubyRegex](func_extract_patterns_ruby_regex.go)
+- [IsMatchRubyRegex](func_is_match_ruby_regex.go)
 - [ToValues](func_to_values.go)

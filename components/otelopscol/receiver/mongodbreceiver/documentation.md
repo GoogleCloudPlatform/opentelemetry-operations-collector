@@ -22,9 +22,9 @@ The number of cache operations of the instance.
 
 #### Attributes
 
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| type | The result of a cache request. | Str: ``hit``, ``miss`` |
+| Name | Description | Values | Optional |
+| ---- | ----------- | ------ | -------- |
+| type | The result of a cache request. | Str: ``hit``, ``miss`` | false |
 
 ### mongodb.collection.count
 
@@ -36,9 +36,9 @@ The number of collections.
 
 #### Attributes
 
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| database | The name of a database. | Any Str |
+| Name | Description | Values | Optional |
+| ---- | ----------- | ------ | -------- |
+| database | The name of a database. | Any Str | false |
 
 ### mongodb.connection.count
 
@@ -50,10 +50,10 @@ The number of connections.
 
 #### Attributes
 
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| database | The name of a database. | Any Str |
-| type | The status of the connection. | Str: ``active``, ``available``, ``current`` |
+| Name | Description | Values | Optional |
+| ---- | ----------- | ------ | -------- |
+| database | The name of a database. | Any Str | false |
+| type | The status of the connection. | Str: ``active``, ``available``, ``current`` | false |
 
 ### mongodb.cursor.count
 
@@ -81,9 +81,9 @@ The size of the collection. Data compression does not affect this value.
 
 #### Attributes
 
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| database | The name of a database. | Any Str |
+| Name | Description | Values | Optional |
+| ---- | ----------- | ------ | -------- |
+| database | The name of a database. | Any Str | false |
 
 ### mongodb.database.count
 
@@ -103,10 +103,10 @@ The number of document operations executed.
 
 #### Attributes
 
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| database | The name of a database. | Any Str |
-| operation | The MongoDB operation being counted. | Str: ``insert``, ``query``, ``update``, ``delete``, ``getmore``, ``command`` |
+| Name | Description | Values | Optional |
+| ---- | ----------- | ------ | -------- |
+| database | The name of a database. | Any Str | false |
+| operation | The MongoDB operation being counted. | Str: ``insert``, ``query``, ``update``, ``delete``, ``getmore``, ``command`` | false |
 
 ### mongodb.extent.count
 
@@ -118,9 +118,9 @@ The number of extents.
 
 #### Attributes
 
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| database | The name of a database. | Any Str |
+| Name | Description | Values | Optional |
+| ---- | ----------- | ------ | -------- |
+| database | The name of a database. | Any Str | false |
 
 ### mongodb.global_lock.time
 
@@ -140,10 +140,10 @@ The number of times an index has been accessed.
 
 #### Attributes
 
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| database | The name of a database. | Any Str |
-| collection | The name of a collection. | Any Str |
+| Name | Description | Values | Optional |
+| ---- | ----------- | ------ | -------- |
+| database | The name of a database. | Any Str | false |
+| collection | The name of a collection. | Any Str | false |
 
 ### mongodb.index.count
 
@@ -155,9 +155,9 @@ The number of indexes.
 
 #### Attributes
 
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| database | The name of a database. | Any Str |
+| Name | Description | Values | Optional |
+| ---- | ----------- | ------ | -------- |
+| database | The name of a database. | Any Str | false |
 
 ### mongodb.index.size
 
@@ -169,9 +169,9 @@ Sum of the space allocated to all indexes in the database, including free index 
 
 #### Attributes
 
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| database | The name of a database. | Any Str |
+| Name | Description | Values | Optional |
+| ---- | ----------- | ------ | -------- |
+| database | The name of a database. | Any Str | false |
 
 ### mongodb.memory.usage
 
@@ -183,10 +183,10 @@ The amount of memory used.
 
 #### Attributes
 
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| database | The name of a database. | Any Str |
-| type | The type of memory used. | Str: ``resident``, ``virtual`` |
+| Name | Description | Values | Optional |
+| ---- | ----------- | ------ | -------- |
+| database | The name of a database. | Any Str | false |
+| type | The type of memory used. | Str: ``resident``, ``virtual`` | false |
 
 ### mongodb.network.io.receive
 
@@ -222,9 +222,9 @@ The number of objects.
 
 #### Attributes
 
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| database | The name of a database. | Any Str |
+| Name | Description | Values | Optional |
+| ---- | ----------- | ------ | -------- |
+| database | The name of a database. | Any Str | false |
 
 ### mongodb.operation.count
 
@@ -236,9 +236,9 @@ The number of operations executed.
 
 #### Attributes
 
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| operation | The MongoDB operation being counted. | Str: ``insert``, ``query``, ``update``, ``delete``, ``getmore``, ``command`` |
+| Name | Description | Values | Optional |
+| ---- | ----------- | ------ | -------- |
+| operation | The MongoDB operation being counted. | Str: ``insert``, ``query``, ``update``, ``delete``, ``getmore``, ``command`` | false |
 
 ### mongodb.operation.time
 
@@ -250,9 +250,9 @@ The total time spent performing operations.
 
 #### Attributes
 
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| operation | The MongoDB operation being counted. | Str: ``insert``, ``query``, ``update``, ``delete``, ``getmore``, ``command`` |
+| Name | Description | Values | Optional |
+| ---- | ----------- | ------ | -------- |
+| operation | The MongoDB operation being counted. | Str: ``insert``, ``query``, ``update``, ``delete``, ``getmore``, ``command`` | false |
 
 ### mongodb.session.count
 
@@ -274,9 +274,9 @@ If collection data is compressed it reflects the compressed size.
 
 #### Attributes
 
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| database | The name of a database. | Any Str |
+| Name | Description | Values | Optional |
+| ---- | ----------- | ------ | -------- |
+| database | The name of a database. | Any Str | false |
 
 ## Optional Metrics
 
@@ -298,11 +298,11 @@ Number of times the lock was acquired in the specified mode.
 
 #### Attributes
 
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| database | The name of a database. | Any Str |
-| lock_type | The Resource over which the Lock controls access | Str: ``parallel_batch_write_mode``, ``replication_state_transition``, ``global``, ``database``, ``collection``, ``mutex``, ``metadata``, ``oplog`` |
-| lock_mode | The mode of Lock which denotes the degree of access | Str: ``shared``, ``exclusive``, ``intent_shared``, ``intent_exclusive`` |
+| Name | Description | Values | Optional |
+| ---- | ----------- | ------ | -------- |
+| database | The name of a database. | Any Str | false |
+| lock_type | The Resource over which the Lock controls access | Str: ``parallel_batch_write_mode``, ``replication_state_transition``, ``global``, ``database``, ``collection``, ``mutex``, ``metadata``, ``oplog`` | false |
+| lock_mode | The mode of Lock which denotes the degree of access | Str: ``shared``, ``exclusive``, ``intent_shared``, ``intent_exclusive`` | false |
 
 ### mongodb.lock.acquire.time
 
@@ -314,11 +314,11 @@ Cumulative wait time for the lock acquisitions.
 
 #### Attributes
 
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| database | The name of a database. | Any Str |
-| lock_type | The Resource over which the Lock controls access | Str: ``parallel_batch_write_mode``, ``replication_state_transition``, ``global``, ``database``, ``collection``, ``mutex``, ``metadata``, ``oplog`` |
-| lock_mode | The mode of Lock which denotes the degree of access | Str: ``shared``, ``exclusive``, ``intent_shared``, ``intent_exclusive`` |
+| Name | Description | Values | Optional |
+| ---- | ----------- | ------ | -------- |
+| database | The name of a database. | Any Str | false |
+| lock_type | The Resource over which the Lock controls access | Str: ``parallel_batch_write_mode``, ``replication_state_transition``, ``global``, ``database``, ``collection``, ``mutex``, ``metadata``, ``oplog`` | false |
+| lock_mode | The mode of Lock which denotes the degree of access | Str: ``shared``, ``exclusive``, ``intent_shared``, ``intent_exclusive`` | false |
 
 ### mongodb.lock.acquire.wait_count
 
@@ -330,11 +330,11 @@ Number of times the lock acquisitions encountered waits because the locks were h
 
 #### Attributes
 
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| database | The name of a database. | Any Str |
-| lock_type | The Resource over which the Lock controls access | Str: ``parallel_batch_write_mode``, ``replication_state_transition``, ``global``, ``database``, ``collection``, ``mutex``, ``metadata``, ``oplog`` |
-| lock_mode | The mode of Lock which denotes the degree of access | Str: ``shared``, ``exclusive``, ``intent_shared``, ``intent_exclusive`` |
+| Name | Description | Values | Optional |
+| ---- | ----------- | ------ | -------- |
+| database | The name of a database. | Any Str | false |
+| lock_type | The Resource over which the Lock controls access | Str: ``parallel_batch_write_mode``, ``replication_state_transition``, ``global``, ``database``, ``collection``, ``mutex``, ``metadata``, ``oplog`` | false |
+| lock_mode | The mode of Lock which denotes the degree of access | Str: ``shared``, ``exclusive``, ``intent_shared``, ``intent_exclusive`` | false |
 
 ### mongodb.lock.deadlock.count
 
@@ -346,11 +346,11 @@ Number of times the lock acquisitions encountered deadlocks.
 
 #### Attributes
 
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| database | The name of a database. | Any Str |
-| lock_type | The Resource over which the Lock controls access | Str: ``parallel_batch_write_mode``, ``replication_state_transition``, ``global``, ``database``, ``collection``, ``mutex``, ``metadata``, ``oplog`` |
-| lock_mode | The mode of Lock which denotes the degree of access | Str: ``shared``, ``exclusive``, ``intent_shared``, ``intent_exclusive`` |
+| Name | Description | Values | Optional |
+| ---- | ----------- | ------ | -------- |
+| database | The name of a database. | Any Str | false |
+| lock_type | The Resource over which the Lock controls access | Str: ``parallel_batch_write_mode``, ``replication_state_transition``, ``global``, ``database``, ``collection``, ``mutex``, ``metadata``, ``oplog`` | false |
+| lock_mode | The mode of Lock which denotes the degree of access | Str: ``shared``, ``exclusive``, ``intent_shared``, ``intent_exclusive`` | false |
 
 ## Resource Attributes
 

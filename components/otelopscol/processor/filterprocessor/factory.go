@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package transformprocessor
+package filterprocessor
 
 import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/ottlfuncs"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/ottl"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/ottl/contexts/ottllog"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/processor"
 )
 
-var componentType component.Type = component.MustNewType("transform")
+var componentType component.Type = component.MustNewType("filter")
 
 // NewFactory create a factory for the transform processor.
 func NewFactory() processor.Factory {
@@ -32,8 +32,8 @@ func NewFactory() processor.Factory {
 		ottlfuncs.NewIsMatchRubyRegexFactory[ottllog.TransformContext](),
 		ottlfuncs.NewToValuesFactory[ottllog.TransformContext](),
 	}
-	return transformprocessor.NewFactoryWithOptions(
-		transformprocessor.WithLogFunctions(transformprocessor.DefaultLogFunctions()),
-		transformprocessor.WithLogFunctions(additionaLogFunctions),
+	return filterprocessor.NewFactoryWithOptions(
+		filterprocessor.WithLogFunctions(filterprocessor.DefaultLogFunctions()),
+		filterprocessor.WithLogFunctions(additionaLogFunctions),
 	)
 }

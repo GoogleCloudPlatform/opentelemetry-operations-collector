@@ -320,6 +320,9 @@ processors:
     logdedup:
         gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/logdedupprocessor
         docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/logdedupprocessor/README.md
+    logstransform:
+        gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/logstransformprocessor
+        docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/logstransformprocessor/README.md
     memorylimiter:
         gomod: go.opentelemetry.io/collector/processor/memorylimiterprocessor
         docs_url: https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/processor/memorylimiterprocessor/README.md

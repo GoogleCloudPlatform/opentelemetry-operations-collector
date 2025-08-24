@@ -26,8 +26,8 @@ import (
 	"slices"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/cmd/distrogen/internal/command"
+	"github.com/goccy/go-yaml"
 	flag "github.com/spf13/pflag"
-	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -86,17 +86,15 @@ func setSpecFlag(flags *flag.FlagSet) *string {
 type generateCommand struct {
 	flags flag.FlagSet
 
-	registries *[]string
-	spec       *string
-	force      *bool
-	templates  *string
-	compare    *bool
+	spec      *string
+	force     *bool
+	templates *string
+	compare   *bool
 }
 
 func (cmd *generateCommand) ParseArgs(args []string) error {
 	cmd.spec = setSpecFlag(&cmd.flags)
 	cmd.force = cmd.flags.BoolP("force", "f", false, "Force generate even if there are no differences detected")
-	cmd.registries = cmd.flags.StringArray("registry", []string{}, "Provide additional component registries")
 	cmd.templates = cmd.flags.String("templates", "", "Path to custom templates directory")
 	cmd.compare = cmd.flags.Bool("compare", false, "Allows you to compare the generated distribution to the existing")
 
@@ -113,20 +111,7 @@ func (cmd *generateCommand) Run() error {
 		return err
 	}
 
-	registry, err := LoadEmbeddedRegistry()
-	if err != nil {
-		return err
-	}
-
-	for _, registryPath := range *cmd.registries {
-		additionalRegistry, err := LoadRegistry(registryPath)
-		if err != nil {
-			return err
-		}
-		registry.Merge(additionalRegistry)
-	}
-
-	generator, err := NewDistributionGenerator(spec, registry, *cmd.force)
+	generator, err := NewDistributionGenerator(spec, *cmd.force)
 	if err != nil {
 		return err
 	}

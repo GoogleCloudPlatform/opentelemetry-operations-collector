@@ -14,6 +14,8 @@
 
 name: otelopscol
 description: "OpenTelemetry Collector binary used by the Ops Agent"
+module: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/otelopscol
+version: v0.131.0
 opentelemetry_version: 0.131.0
 opentelemetry_stable_version: 1.36.0
 binary_name: otelopscol
@@ -60,6 +62,7 @@ components:
     - deltatorate
     - filter
     - groupbyattrs
+    - logstransform
     - metricstransform
     - resourcedetection
     - resource

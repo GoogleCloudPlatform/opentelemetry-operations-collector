@@ -22,12 +22,12 @@ Current number of GPU memory bytes used by state. Summing the values of all stat
 
 #### Attributes
 
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| model | GPU model | Any Str |
-| gpu_number | GPU index starting at 0. | Any Str |
-| uuid | GPU universally unique identifier | Any Str |
-| memory_state | GPU memory used or free. | Str: ``used``, ``free`` |
+| Name | Description | Values | Optional |
+| ---- | ----------- | ------ | -------- |
+| model | GPU model | Any Str | false |
+| gpu_number | GPU index starting at 0. | Any Str | false |
+| uuid | GPU universally unique identifier | Any Str | false |
+| memory_state | GPU memory used or free. | Str: ``used``, ``free`` | false |
 
 ### nvml.gpu.processes.max_bytes_used
 
@@ -39,16 +39,16 @@ Maximum total GPU memory in bytes that was ever allocated by the process.
 
 #### Attributes
 
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| model | GPU model | Any Str |
-| gpu_number | GPU index starting at 0. | Any Str |
-| uuid | GPU universally unique identifier | Any Str |
-| pid | Process ID. | Any Int |
-| process | Process name. | Any Str |
-| command | Process command. | Any Str |
-| command_line | Process command line, 1024 characters maximum. | Any Str |
-| owner | Process owner. | Any Str |
+| Name | Description | Values | Optional |
+| ---- | ----------- | ------ | -------- |
+| model | GPU model | Any Str | false |
+| gpu_number | GPU index starting at 0. | Any Str | false |
+| uuid | GPU universally unique identifier | Any Str | false |
+| pid | Process ID. | Any Int | false |
+| process | Process name. | Any Str | false |
+| command | Process command. | Any Str | false |
+| command_line | Process command line, 1024 characters maximum. | Any Str | false |
+| owner | Process owner. | Any Str | false |
 
 ### nvml.gpu.processes.utilization
 
@@ -60,16 +60,16 @@ Fraction of time over the process's life thus far during which one or more kerne
 
 #### Attributes
 
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| model | GPU model | Any Str |
-| gpu_number | GPU index starting at 0. | Any Str |
-| uuid | GPU universally unique identifier | Any Str |
-| pid | Process ID. | Any Int |
-| process | Process name. | Any Str |
-| command | Process command. | Any Str |
-| command_line | Process command line, 1024 characters maximum. | Any Str |
-| owner | Process owner. | Any Str |
+| Name | Description | Values | Optional |
+| ---- | ----------- | ------ | -------- |
+| model | GPU model | Any Str | false |
+| gpu_number | GPU index starting at 0. | Any Str | false |
+| uuid | GPU universally unique identifier | Any Str | false |
+| pid | Process ID. | Any Int | false |
+| process | Process name. | Any Str | false |
+| command | Process command. | Any Str | false |
+| command_line | Process command line, 1024 characters maximum. | Any Str | false |
+| owner | Process owner. | Any Str | false |
 
 ### nvml.gpu.utilization
 
@@ -81,8 +81,8 @@ Fraction of time GPU was not idle since the last sample.
 
 #### Attributes
 
-| Name | Description | Values |
-| ---- | ----------- | ------ |
-| model | GPU model | Any Str |
-| gpu_number | GPU index starting at 0. | Any Str |
-| uuid | GPU universally unique identifier | Any Str |
+| Name | Description | Values | Optional |
+| ---- | ----------- | ------ | -------- |
+| model | GPU model | Any Str | false |
+| gpu_number | GPU index starting at 0. | Any Str | false |
+| uuid | GPU universally unique identifier | Any Str | false |

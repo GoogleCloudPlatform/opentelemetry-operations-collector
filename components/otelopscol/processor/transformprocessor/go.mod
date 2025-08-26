@@ -3,7 +3,7 @@ module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/compone
 go 1.24
 
 require (
-	github.com/GoogleCloudPlatform/opentelemetry-operations-collector v0.130.0
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector v0.131.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/ottl v0.131.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor v0.131.0
 	github.com/stretchr/testify v1.10.0

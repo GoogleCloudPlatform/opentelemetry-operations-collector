@@ -119,7 +119,7 @@ func NewDistributionSpec(path string) (*DistributionSpec, error) {
 	}
 
 	// The name of the spec.yaml file might be different from the binary name
-	spec.Path = path
+	spec.Path = filepath.Base(path)
 
 	// It is a rare case where the contrib version falls out of sync with
 	// the canonical OpenTelemetry version, most of the time it is the same.

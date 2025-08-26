@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"path"
 	"path/filepath"
 )
 
@@ -56,7 +55,7 @@ func NewComponentGenerator(spec *DistributionSpec, componentType ComponentType, 
 		return nil, fmt.Errorf("%w: %s", errInvalidComponentType, componentType)
 	}
 
-	g.ModuleURL = path.Join(spec.ComponentModuleBase, g.Path)
+	g.ModuleURL = spec.Module
 
 	return g, nil
 }

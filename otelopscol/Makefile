@@ -2,7 +2,7 @@
 
 # Variables filled in from distro specification
 VERSION ?= v0.131.0
-OTEL_VERSION ?= 0.131.0
+OTEL_VERSION ?= 0.133.0
 OTEL_VERSION_TAG = v$(OTEL_VERSION)
 COLLECTOR_BINARY_NAME = otelopscol
 COLLECTOR_BUILD_TEMP_DIR = $(PWD)/_build

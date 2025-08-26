@@ -24,7 +24,6 @@ import (
 )
 
 // filesInDirAsSet returns the set of file names within a given directory.
-// Subdirectories are ignored.
 func filesInDirAsSet(dir string) (map[string]struct{}, error) {
 	files, err := os.ReadDir(dir)
 	if err != nil {
@@ -34,7 +33,15 @@ func filesInDirAsSet(dir string) (map[string]struct{}, error) {
 
 	fileSet := make(map[string]struct{})
 	for _, file := range files {
-		if !file.IsDir() {
+		if file.IsDir() {
+			nestedFileSet, err := filesInDirAsSet(filepath.Join(dir, file.Name()))
+			if err != nil {
+				return nil, err
+			}
+			for f := range nestedFileSet {
+				fileSet[filepath.Join(file.Name(), f)] = struct{}{}
+			}
+		} else {
 			fileSet[file.Name()] = struct{}{}
 		}
 	}

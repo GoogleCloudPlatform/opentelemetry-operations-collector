@@ -12,8 +12,8 @@
 # any custom components contained within your full project structure.
 ARG PROJECT_ROOT="."
 ARG CERT_CONTAINER="alpine:3"
-{{ if eq .BuildContainer "ubuntu" -}}
-ARG BUILD_CONTAINER="ubuntu:24.04"
+{{ if eq .BuildContainer "debian" -}}
+ARG BUILD_CONTAINER="debian:bookworm"
 FROM --platform=${BUILDPLATFORM:-linux/amd64} ${BUILD_CONTAINER} AS build
 
 RUN apt-get update && apt-get install -y make curl{{ if .CollectorCGO }} build-essential{{ end }}

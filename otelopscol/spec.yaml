@@ -12,6 +12,7 @@ go_version: 1.23.2
 binary_name: otelopscol
 build_tags: gpu
 collector_cgo: true
+boringcrypto: false
 docker_repo: ""
 components:
     receivers:

@@ -35,7 +35,7 @@ type BuildContainerOption string
 
 const (
 	Alpine BuildContainerOption = "alpine"
-	Ubuntu BuildContainerOption = "ubuntu"
+	Debian BuildContainerOption = "debian"
 )
 
 // DistributionSpec is the specification for a new OpenTelemetry Collector distribution.
@@ -56,6 +56,7 @@ type DistributionSpec struct {
 	BinaryName                  string                  `yaml:"binary_name"`
 	BuildTags                   string                  `yaml:"build_tags"`
 	CollectorCGO                bool                    `yaml:"collector_cgo"`
+	BoringCrypto                bool                    `yaml:"boringcrypto"`
 	DockerRepo                  string                  `yaml:"docker_repo"`
 	Components                  *DistributionComponents `yaml:"components"`
 	Replaces                    ComponentReplaces       `yaml:"replaces,omitempty"`
@@ -114,6 +115,13 @@ func NewDistributionSpec(path string) (*DistributionSpec, error) {
 
 	if spec.BuildContainer == "" {
 		spec.BuildContainer = Alpine
+	}
+
+	// If BoringCrypto is set, CGO must be enabled and only the debian
+	// build container can be used.
+	if spec.BoringCrypto {
+		spec.CollectorCGO = true
+		spec.BuildContainer = Debian
 	}
 
 	return spec, nil

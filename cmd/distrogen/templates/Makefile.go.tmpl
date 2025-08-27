@@ -115,6 +115,9 @@ ocb-generate: $(OCB_BIN)
 $(COLLECTOR_BINARY_NAME): ocb-generate
 	cd $(COLLECTOR_BUILD_TEMP_DIR) && \
 		GOWORK=off \
+		{{ if .BoringCrypto -}}
+		GOEXPERIMENT=boringcrypto \
+		{{ end -}}
 		CGO_ENABLED=$(COLLECTOR_CGO) \
 		GOOS=$(TARGETOS) GOARCH=$(TARGETARCH) \
 		$(GO_BIN) build \

@@ -4,7 +4,7 @@ dist:
   module: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/otelopscol
   name: otelopscol
   description: OpenTelemetry Collector binary used by the Ops Agent
-  version: v0.131.0
+  version: v0.133.0
   output_path: ./_build
 
 receivers:

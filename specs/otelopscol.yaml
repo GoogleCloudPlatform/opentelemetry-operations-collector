@@ -62,6 +62,7 @@ components:
     - deltatorate
     - filter
     - groupbyattrs
+    - interval
     - logstransform
     - metricstransform
     - resourcedetection

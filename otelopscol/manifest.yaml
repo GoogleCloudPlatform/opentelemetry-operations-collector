@@ -48,6 +48,8 @@ processors:
   path: ../components/otelopscol/processor/agentmetricsprocessor
 - gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/casttosumprocessor v0.133.0
   path: ../components/otelopscol/processor/casttosumprocessor
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/filterprocessor v0.133.0
+  path: ../components/otelopscol/processor/filterprocessor
 - gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/normalizesumsprocessor v0.133.0
   path: ../components/otelopscol/processor/normalizesumsprocessor
 - gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/transformprocessor v0.133.0
@@ -55,7 +57,6 @@ processors:
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/cumulativetodeltaprocessor v0.133.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/deltatocumulativeprocessor v0.133.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/deltatorateprocessor v0.133.0
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.133.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/groupbyattrsprocessor v0.133.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/intervalprocessor v0.133.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/logstransformprocessor v0.133.0

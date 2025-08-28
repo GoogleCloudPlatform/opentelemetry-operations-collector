@@ -78,13 +78,6 @@ GEN_GOOGLE_BUILT_OTEL=$(RUN_DISTROGEN) generate --spec ./specs/google-built-open
 								 --registry ./components/google-built-opentelemetry-collector/registry.yaml \
 								 --templates ./templates/google-built-opentelemetry-collector
 .PHONY: gen-google-built-otel
-###################
-# Releases
-###################
-
-.PHONY: prepare-release-google-built-otel
-prepare-release-google-built-otel: update-
-
 gen-google-built-otel:
 	@$(GEN_GOOGLE_BUILT_OTEL)
 

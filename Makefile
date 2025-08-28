@@ -20,6 +20,17 @@ precommit: checklicense misspell lint compare-all test-distrogen
 .PHONY: presubmit
 presubmit: checklicense misspell lint compare-all
 
+
+#######################
+# Update Distributions
+#######################
+
+.PHONY: update-google-built-otel
+update-google-built-otel: update-google-otel-components test-google-otel-components gen-google-built-otel
+
+.PHONY: update-otelopscol
+update-otelopscol: update-otelopscol-components test-otelopscol-components gen-otelopscol
+
 ##########################
 # Updating OTel Components
 ##########################

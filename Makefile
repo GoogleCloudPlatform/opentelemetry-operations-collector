@@ -20,6 +20,17 @@ precommit: checklicense misspell lint compare-all test-distrogen
 .PHONY: presubmit
 presubmit: checklicense misspell lint compare-all
 
+
+#######################
+# Update Distributions
+#######################
+
+.PHONY: update-google-built-otel
+update-google-built-otel: update-google-otel-components test-google-otel-components gen-google-built-otel
+
+.PHONY: update-otelopscol
+update-otelopscol: update-otelopscol-components test-otelopscol-components gen-otelopscol
+
 ##########################
 # Updating OTel Components
 ##########################
@@ -67,6 +78,13 @@ GEN_GOOGLE_BUILT_OTEL=$(RUN_DISTROGEN) generate --spec ./specs/google-built-open
 								 --registry ./components/google-built-opentelemetry-collector/registry.yaml \
 								 --templates ./templates/google-built-opentelemetry-collector
 .PHONY: gen-google-built-otel
+###################
+# Releases
+###################
+
+.PHONY: prepare-release-google-built-otel
+prepare-release-google-built-otel: update-
+
 gen-google-built-otel:
 	@$(GEN_GOOGLE_BUILT_OTEL)
 

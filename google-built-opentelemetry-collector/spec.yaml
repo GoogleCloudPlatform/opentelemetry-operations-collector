@@ -13,100 +13,107 @@ binary_name: otelcol-google
 build_tags: ""
 collector_cgo: false
 docker_repo: ""
+registries:
+- name: local_components
+  source: local
+  useopentelemetrycollectorversion: false
+  version: ""
+  registryconfig:
+    path: ./components/google-built-opentelemetry-collector/registry.yaml
 components:
-    receivers:
-        - otlp
-        - otlpjsonfile
-        - filelog
-        - fluentforward
-        - hostmetrics
-        - httpcheck
-        - jaeger
-        - journald
-        - k8scluster
-        - k8sevents
-        - k8sobjects
-        - kubeletstats
-        - opencensus
-        - otelarrow
-        - prometheus
-        - receivercreator
-        - zipkin
-        - dockerstats
-        - jmx
-        - redis
-        - statsd
-        - syslog
-        - googlecloudmonitoring
-    processors:
-        - batch
-        - memorylimiter
-        - attributes
-        - cumulativetodelta
-        - deltatocumulative
-        - deltatorate
-        - filter
-        - groupbyattrs
-        - groupbytrace
-        - k8sattributes
-        - logdedup
-        - metricstransform
-        - metricstarttime
-        - probabilisticsampler
-        - redaction
-        - remotetap
-        - resourcedetection
-        - resource
-        - tailsampling
-        - transform
-        - interval
-        - metricsgeneration
-    exporters:
-        - debug
-        - nop
-        - otlp
-        - otlphttp
-        - file
-        - loadbalancing
-        - otelarrow
-        - googlecloud
-        - googlemanagedprometheus
-        - googleservicecontrol
-    connectors:
-        - forward
-        - count
-        - exceptions
-        - failover
-        - otlpjson
-        - roundrobin
-        - routing
-        - servicegraph
-        - spanmetrics
-    extensions:
-        - zpages
-        - ack
-        - basicauth
-        - bearertokenauth
-        - headerssetter
-        - healthagent
-        - healthcheck
-        - healthcheckv2
-        - httpforwarder
-        - oauth2clientauth
-        - hostobserver
-        - k8sobserver
-        - oidcauth
-        - opamp
-        - pprof
-        - filestorage
-        - googleclientauth
-    providers:
-        - env
-        - file
-        - http
-        - https
-        - yaml
-        - googlesecretmanager
+  receivers:
+  - otlp
+  - otlpjsonfile
+  - filelog
+  - fluentforward
+  - hostmetrics
+  - httpcheck
+  - jaeger
+  - journald
+  - k8scluster
+  - k8sevents
+  - k8sobjects
+  - kubeletstats
+  - opencensus
+  - otelarrow
+  - prometheus
+  - receivercreator
+  - zipkin
+  - dockerstats
+  - jmx
+  - redis
+  - statsd
+  - syslog
+  - googlecloudmonitoring
+  processors:
+  - batch
+  - memorylimiter
+  - attributes
+  - cumulativetodelta
+  - deltatocumulative
+  - deltatorate
+  - filter
+  - groupbyattrs
+  - groupbytrace
+  - k8sattributes
+  - logdedup
+  - metricstransform
+  - metricstarttime
+  - probabilisticsampler
+  - redaction
+  - remotetap
+  - resourcedetection
+  - resource
+  - tailsampling
+  - transform
+  - interval
+  - metricsgeneration
+  exporters:
+  - debug
+  - nop
+  - otlp
+  - otlphttp
+  - file
+  - loadbalancing
+  - otelarrow
+  - googlecloud
+  - googlemanagedprometheus
+  - googleservicecontrol
+  connectors:
+  - forward
+  - count
+  - exceptions
+  - failover
+  - otlpjson
+  - roundrobin
+  - routing
+  - servicegraph
+  - spanmetrics
+  extensions:
+  - zpages
+  - ack
+  - basicauth
+  - bearertokenauth
+  - headerssetter
+  - healthagent
+  - healthcheck
+  - healthcheckv2
+  - httpforwarder
+  - oauth2clientauth
+  - hostobserver
+  - k8sobserver
+  - oidcauth
+  - opamp
+  - pprof
+  - filestorage
+  - googleclientauth
+  providers:
+  - env
+  - file
+  - http
+  - https
+  - yaml
+  - googlesecretmanager
 feature_gates:
-    - exporter.googlemanagedprometheus.intToDouble
-    - exporter.googlecloud.CustomMonitoredResources
+- exporter.googlemanagedprometheus.intToDouble
+- exporter.googlecloud.CustomMonitoredResources

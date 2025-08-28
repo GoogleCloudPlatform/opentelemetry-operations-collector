@@ -84,6 +84,7 @@ components:
   extensions:
     - zpages
     - googleclientauth
+    - pprof
   providers:
     - googlesecretmanager
     - file

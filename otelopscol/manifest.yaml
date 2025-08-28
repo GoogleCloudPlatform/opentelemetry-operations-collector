@@ -74,6 +74,7 @@ exporters:
 
 extensions:
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/googleclientauthextension v0.133.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/pprofextension v0.133.0
 - gomod: go.opentelemetry.io/collector/extension/zpagesextension v0.133.0
 
 connectors:

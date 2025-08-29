@@ -29,6 +29,7 @@ receivers:
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/redisreceiver v0.133.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/statsdreceiver v0.133.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/syslogreceiver v0.133.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/tcplogreceiver v0.133.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/zipkinreceiver v0.133.0
 - gomod: go.opentelemetry.io/collector/receiver/otlpreceiver v0.133.0
 

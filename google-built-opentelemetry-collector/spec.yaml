@@ -38,6 +38,7 @@ components:
         - statsd
         - syslog
         - googlecloudmonitoring
+        - tcplog
     processors:
         - batch
         - memorylimiter

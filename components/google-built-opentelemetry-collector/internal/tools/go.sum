@@ -63,6 +63,8 @@ github.com/spf13/pflag v1.0.7 h1:vN6T9TfwStFPFM5XzjsvmzZkLuaLX+HS+0SeFLRgU6M=
 github.com/spf13/pflag v1.0.7/go.mod h1:McXfInJRrz4CZXVZOBLb0bTZqETkiAhM9Iw0y3An2Bg=
 github.com/spf13/pflag v1.0.9 h1:9exaQaMOCwffKiiiYk6/BndUBv+iRViNW+4lEMi0PvY=
 github.com/spf13/pflag v1.0.9/go.mod h1:McXfInJRrz4CZXVZOBLb0bTZqETkiAhM9Iw0y3An2Bg=
+github.com/spf13/pflag v1.0.10 h1:4EBh2KAYBwaONj6b2Ye1GiHfwjqyROoF4RwYO+vPwFk=
+github.com/spf13/pflag v1.0.10/go.mod h1:McXfInJRrz4CZXVZOBLb0bTZqETkiAhM9Iw0y3An2Bg=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UVUgZn+9EI=
 github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
@@ -89,6 +91,8 @@ go.opentelemetry.io/collector/cmd/mdatagen v0.131.0 h1:1o4o26+A0b3y0oBNxcdyuYVvS
 go.opentelemetry.io/collector/cmd/mdatagen v0.131.0/go.mod h1:gi/mNLi2gIde4Ufs2N9/gehgMKAlJqJZgYJFi+2aCq0=
 go.opentelemetry.io/collector/cmd/mdatagen v0.133.0 h1:yt7kY0JNfjLrdYfJf7Y/SQ8L6uoEW44ZaHnBOWjwSsk=
 go.opentelemetry.io/collector/cmd/mdatagen v0.133.0/go.mod h1:zlASI+UnLkS3k1KYdOJnkdYoUIz9oYDXkxG4MEBqciM=
+go.opentelemetry.io/collector/cmd/mdatagen v0.134.0 h1:U2DCWnjaL6LjJ0d0MVTbvjVWgMV1QS5FmOJ8TaLuSa0=
+go.opentelemetry.io/collector/cmd/mdatagen v0.134.0/go.mod h1:aEQaUtopEv3WVu4DlNfUOu/+xbHDh5cN4fhwWmigRoc=
 go.opentelemetry.io/collector/component v1.30.0 h1:HXjqBHaQ47/EEuWdnkjr4Y3kRWvmyWIDvqa1Q262Fls=
 go.opentelemetry.io/collector/component v1.30.0/go.mod h1:vfM9kN+BM6oHBXWibquiprz8CVawxd4/aYy3nbhme3E=
 go.opentelemetry.io/collector/component v1.31.0 h1:9LzU8X1RhV3h8/QsAoTX23aFUfoJ3EUc9O/vK+hFpSI=

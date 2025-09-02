@@ -4,10 +4,10 @@ display_name: Google-Built OpenTelemetry Collector
 description: OpenTelemetry Collector Built By Google
 blurb: The Google-Built OpenTelemetry Collector is an open-source, production-ready build of the upstream OpenTelemetry Collector that is built with upstream OpenTelemetry components.
 build_container: alpine
-version: 0.133.0
-opentelemetry_version: 0.133.0
-opentelemetry_contrib_version: 0.133.0
-opentelemetry_stable_version: 1.37.0
+version: 0.134.0
+opentelemetry_version: 0.134.0
+opentelemetry_contrib_version: 0.134.0
+opentelemetry_stable_version: 1.40.0
 go_version: 1.24.5
 binary_name: otelcol-google
 build_tags: ""
@@ -27,7 +27,6 @@ components:
         - k8sevents
         - k8sobjects
         - kubeletstats
-        - opencensus
         - otelarrow
         - prometheus
         - receivercreator

@@ -9,7 +9,6 @@ import (
 )
 
 var errInvalidComponentType = errors.New("invalid component type")
-var componentRegistryPath = filepath.Join("components", "registry.yaml")
 
 type ComponentGenerator struct {
 	Spec     *DistributionSpec

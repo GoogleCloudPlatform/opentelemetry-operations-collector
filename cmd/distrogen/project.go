@@ -25,11 +25,6 @@ func NewProjectGenerator(spec *DistributionSpec) (*ProjectGenerator, error) {
 }
 
 func (pg *ProjectGenerator) Generate() error {
-	componentTemplates, err := GetComponentsTemplateSet(pg, pg.FileMode)
-	if err != nil {
-		logger.Debug("failed to get component templates", "err", err)
-		return err
-	}
 	makeTemplates, err := GetMakeTemplateSet(pg, pg.FileMode)
 	if err != nil {
 		logger.Debug("failed to get make templates", "err", err)
@@ -46,22 +41,21 @@ func (pg *ProjectGenerator) Generate() error {
 		return err
 	}
 
-	registry := NewRegistry()
-	registry.Path = componentRegistryPath
+	crg := NewComponentsRegistryGenerator()
 
 	generatePath := "."
 	if pg.CustomPath != "" {
 		generatePath = pg.CustomPath
-		registry.Path = filepath.Join(pg.CustomPath, componentRegistryPath)
+		crg.Path = generatePath
 	}
 
-	generateComponentsPath := filepath.Join(generatePath, "components")
 	generateMakePath := filepath.Join(generatePath, "make")
 
-	var dirErrors []error
-	if err := os.MkdirAll(generateComponentsPath, pg.FileMode); err != nil {
-		dirErrors = append(dirErrors, err)
+	if err := crg.Generate(); err != nil {
+		return err
 	}
+
+	var dirErrors []error
 	if err := os.MkdirAll(generateMakePath, pg.FileMode); err != nil {
 		dirErrors = append(dirErrors, err)
 	}
@@ -79,13 +73,6 @@ func (pg *ProjectGenerator) Generate() error {
 		return errors.Join(dirErrors...)
 	}
 
-	if err := registry.Save(); err != nil {
-		return err
-	}
-
-	if err := GenerateTemplateSet(generateComponentsPath, componentTemplates); err != nil {
-		return err
-	}
 	if err := GenerateTemplateSet(generateMakePath, makeTemplates); err != nil {
 		return err
 	}

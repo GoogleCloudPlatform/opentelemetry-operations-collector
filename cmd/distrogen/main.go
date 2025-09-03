@@ -46,12 +46,9 @@ func main() {
 	runner.Register("otel_component_versions", &otelComponentVersionsCommand{})
 	runner.Register("project", &projectCommand{})
 	runner.Register("component", &componentCommand{})
+	runner.Register("registry", &componentsCommand{})
 
 	detectVerboseFlag()
-
-	if len(os.Args) <= 2 {
-		log.Fatal("must specify a command")
-	}
 
 	var exitCodeErr *ExitCodeError
 	if err := runner.Run(os.Args[1]); err != nil {
@@ -315,6 +312,20 @@ func (cmd *componentCommand) Run() error {
 	if err != nil {
 		return err
 	}
+
+	return generator.Generate()
+}
+
+type componentsCommand struct {
+	flags flag.FlagSet
+}
+
+func (cmd *componentsCommand) ParseArgs(args []string) error {
+	return nil
+}
+
+func (cmd *componentsCommand) Run() error {
+	generator := NewComponentsRegistryGenerator()
 
 	return generator.Generate()
 }

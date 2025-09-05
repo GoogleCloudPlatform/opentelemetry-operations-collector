@@ -219,7 +219,7 @@ func GetProjectTemplateSet(templateContext any, fileMode fs.FileMode) (TemplateS
 }
 
 func GetDistrogenTemplateSet(templateContext any, fileMode fs.FileMode) (TemplateSet, error) {
-	embedFSSub, err := fs.Sub(embeddedProjectTemplatesFS, filepath.Join("templates", "project", "distrogen"))
+	embedFSSub, err := fs.Sub(embeddedProjectTemplatesFS, filepath.Join("templates", "project", ".distrogen"))
 	if err != nil {
 		return nil, err
 	}

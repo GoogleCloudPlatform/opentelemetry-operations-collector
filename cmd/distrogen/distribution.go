@@ -213,7 +213,6 @@ func (d *DistributionGenerator) Generate() error {
 	}
 
 	templates.RenameExceptionalTemplates(d.Spec)
-
 	for _, tmpl := range templates {
 		if err := tmpl.Render(d.GeneratePath); err != nil {
 			return err

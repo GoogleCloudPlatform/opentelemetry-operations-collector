@@ -46,7 +46,7 @@ func main() {
 	runner.Register("otel_component_versions", &otelComponentVersionsCommand{})
 	runner.Register("project", &projectCommand{})
 	runner.Register("component", &componentCommand{})
-	runner.Register("registry", &componentsCommand{})
+	runner.Register("registry", &registryCommand{})
 
 	detectVerboseFlag()
 
@@ -316,15 +316,15 @@ func (cmd *componentCommand) Run() error {
 	return generator.Generate()
 }
 
-type componentsCommand struct {
+type registryCommand struct {
 	flags flag.FlagSet
 }
 
-func (cmd *componentsCommand) ParseArgs(args []string) error {
+func (cmd *registryCommand) ParseArgs(args []string) error {
 	return nil
 }
 
-func (cmd *componentsCommand) Run() error {
+func (cmd *registryCommand) Run() error {
 	generator := NewComponentsRegistryGenerator()
 
 	return generator.Generate()

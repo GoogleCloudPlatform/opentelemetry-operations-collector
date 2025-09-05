@@ -69,14 +69,8 @@ func (g *ComponentGenerator) Generate() error {
 		return err
 	}
 
-	for _, tmpl := range componentTemplates {
-		// Setting the filepath to just the filename is equivalent
-		// to saying that the file should just go in the root of
-		// whatever path was sent to Render.
-		tmpl.FilePath = tmpl.Name
-		if err := tmpl.Render(g.Path); err != nil {
-			return err
-		}
+	if err := GenerateTemplateSet(g.Path, componentTemplates); err != nil {
+		return err
 	}
 
 	registryPath := componentRegistryPath

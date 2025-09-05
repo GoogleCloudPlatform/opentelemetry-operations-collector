@@ -66,9 +66,6 @@ func (pg *ProjectGenerator) Generate() error {
 		dirErrors = append(dirErrors, err)
 	}
 
-	if err := os.MkdirAll(filepath.Join(generatePath, ".distrogen"), pg.FileMode); err != nil {
-		return err
-	}
 	if len(dirErrors) > 0 {
 		return errors.Join(dirErrors...)
 	}

@@ -1,6 +1,0 @@
-type: foo
-
-status:
-  class: receiver
-  stability:
-    development: [logs, metrics, traces]

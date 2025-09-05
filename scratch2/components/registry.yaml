@@ -1,9 +1,0 @@
-receivers:
-    foo:
-        gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/google-built-opentelemetry-collector
-        path: ../components/receiver/fooreceiver
-processors: {}
-exporters: {}
-connectors: {}
-extensions: {}
-providers: {}

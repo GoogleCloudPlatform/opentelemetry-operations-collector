@@ -48,6 +48,7 @@
 | batch | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/processor/batchprocessor/README.md) |
 | casttosum | [docs](No docs linked for component) |
 | cumulativetodelta | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/cumulativetodeltaprocessor/README.md) |
+| deltatocumulative | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/deltatocumulativeprocessor/README.md) |
 | deltatorate | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/deltatorateprocessor/README.md) |
 | filter | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/filterprocessor/README.md) |
 | groupbyattrs | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/groupbyattrsprocessor/README.md) |

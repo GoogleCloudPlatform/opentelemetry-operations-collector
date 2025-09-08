@@ -26,7 +26,11 @@ ARG BUILDARCH
 ARG BUILDOS
 ARG TARGETOS
 ARG TARGETARCH
-RUN make build
+RUN if [ "${TARGETARCH}" = "arm64" ] && [ "${BUILDARCH}" != "arm64" ]; then \
+        apt-get install -y gcc-aarch64-linux-gnu libc6-dev-arm64-cross; \
+        CC=aarch64-linux-gnu-gcc; \
+    fi && \
+    CC=${CC} make build
 FROM ${CERT_CONTAINER} AS certs
 RUN apk --update add ca-certificates
 

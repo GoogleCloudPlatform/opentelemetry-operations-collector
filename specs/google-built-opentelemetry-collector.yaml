@@ -25,8 +25,11 @@ opentelemetry_version: 0.134.0
 opentelemetry_contrib_version: 0.134.0
 opentelemetry_stable_version: 1.40.0
 binary_name: otelcol-google
-boringcrypto: true
 go_version: 1.24.5
+
+boringcrypto: true
+collector_cgo: true
+build_container: debian
 
 feature_gates:
   - exporter.googlemanagedprometheus.intToDouble

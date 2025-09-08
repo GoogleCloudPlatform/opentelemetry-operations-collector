@@ -120,8 +120,14 @@ func NewDistributionSpec(path string) (*DistributionSpec, error) {
 	// If BoringCrypto is set, CGO must be enabled and only the debian
 	// build container can be used.
 	if spec.BoringCrypto {
-		spec.CollectorCGO = true
-		spec.BuildContainer = Debian
+		if !spec.CollectorCGO {
+			logger.Warn("collector_cgo must be set to true for boringcrypto builds, setting to true")
+			spec.CollectorCGO = true
+		}
+		if spec.BuildContainer != Debian {
+			logger.Warn("build_container must be set to debian for boringcrypto builds, setting to debian")
+			spec.BuildContainer = Debian
+		}
 	}
 
 	return spec, nil

@@ -30,6 +30,7 @@ config build = common.build {
       // this should always be "container/container.tar"
       source = 'container/container.tar'
       destination = 'us-docker.pkg.dev/cloud-ops-agents-art-staging/google-cloud-opentelemetry-collector-dev/otelcol-google'
+      platform = 'linux/amd64,linux/arm64'
     },
   ]
 }

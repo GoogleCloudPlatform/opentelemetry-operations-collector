@@ -13,13 +13,13 @@
 ARG PROJECT_ROOT="."
 ARG CERT_CONTAINER="alpine:3"
 {{ if eq .BuildContainer "debian" -}}
-ARG BUILD_CONTAINER="debian:bookworm"
+ARG BUILD_CONTAINER="debian"
 FROM --platform=${BUILDPLATFORM:-linux/amd64} ${BUILD_CONTAINER} AS build
 
 RUN apt-get update && apt-get install -y make curl{{ if .CollectorCGO }} build-essential{{ end }}
 
 {{ else -}}
-ARG BUILD_CONTAINER="alpine:3"
+ARG BUILD_CONTAINER="alpine"
 FROM --platform=${BUILDPLATFORM:-linux/amd64} ${BUILD_CONTAINER} AS build
 
 RUN apk --update add make curl{{ if .CollectorCGO }} alpine-sdk{{ end }}

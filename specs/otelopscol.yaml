@@ -19,7 +19,7 @@ version: v0.133.0
 opentelemetry_version: 0.133.0
 opentelemetry_stable_version: 1.39.0
 binary_name: otelopscol
-build_container: ubuntu
+build_container: debian
 collector_cgo: true
 go_version: 1.23.2
 build_tags: gpu

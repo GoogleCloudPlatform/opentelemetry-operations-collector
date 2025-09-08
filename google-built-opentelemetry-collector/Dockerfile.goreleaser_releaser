@@ -12,10 +12,10 @@
 # any custom components contained within your full project structure.
 ARG PROJECT_ROOT="."
 # Currently, this container has to be alpine based.
-ARG BUILD_CONTAINER="debian:bookworm"
+ARG BUILD_CONTAINER="debian"
 FROM ${BUILD_CONTAINER} AS build
 
-RUN apt-get update && apt-get install -y make curl build-essential
+RUN apt-get update && apt-get install -y make curl git build-essential
 
 ARG PROJECT_ROOT
 COPY ${PROJECT_ROOT} /

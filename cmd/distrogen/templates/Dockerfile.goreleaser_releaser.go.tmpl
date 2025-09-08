@@ -13,16 +13,16 @@
 ARG PROJECT_ROOT="."
 # Currently, this container has to be alpine based.
 {{ if eq .BuildContainer "debian" -}}
-ARG BUILD_CONTAINER="debian:bookworm"
+ARG BUILD_CONTAINER="debian"
 FROM ${BUILD_CONTAINER} AS build
 
-RUN apt-get update && apt-get install -y make curl{{ if .CollectorCGO }} build-essential{{ end }}
+RUN apt-get update && apt-get install -y make curl git{{ if .CollectorCGO }} build-essential{{ end }}
 
 {{ else -}}
-ARG BUILD_CONTAINER="alpine:3"
+ARG BUILD_CONTAINER="alpine"
 FROM ${BUILD_CONTAINER} AS build
 
-RUN apk --update add make curl{{ if .CollectorCGO }} alpine-sdk{{ end }}
+RUN apk --update add make curl git{{ if .CollectorCGO }} alpine-sdk{{ end }}
 
 {{ end -}}
 

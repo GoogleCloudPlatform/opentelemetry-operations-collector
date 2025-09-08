@@ -13,7 +13,7 @@ binary_name: otelcol-google
 build_tags: ""
 collector_cgo: true
 boringcrypto: true
-docker_repo: us-docker.pkg.dev/experimental-braydonk/google-otel
+docker_repo: ""
 components:
     receivers:
         - otlp

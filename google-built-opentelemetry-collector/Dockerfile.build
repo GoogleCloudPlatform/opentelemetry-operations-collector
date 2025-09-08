@@ -12,7 +12,7 @@
 # any custom components contained within your full project structure.
 ARG PROJECT_ROOT="."
 ARG CERT_CONTAINER="alpine:3"
-ARG BUILD_CONTAINER="debian:bookworm"
+ARG BUILD_CONTAINER="debian"
 FROM --platform=${BUILDPLATFORM:-linux/amd64} ${BUILD_CONTAINER} AS build
 
 RUN apt-get update && apt-get install -y make curl build-essential

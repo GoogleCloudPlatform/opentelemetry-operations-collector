@@ -28,8 +28,6 @@ binary_name: otelcol-google
 boringcrypto: true
 go_version: 1.24.5
 
-docker_repo: us-docker.pkg.dev/experimental-braydonk/google-otel
-
 feature_gates:
   - exporter.googlemanagedprometheus.intToDouble
   - exporter.googlecloud.CustomMonitoredResources

@@ -12,10 +12,10 @@
 # any custom components contained within your full project structure.
 ARG PROJECT_ROOT="."
 # Currently, this container has to be alpine based.
-ARG BUILD_CONTAINER="alpine:3"
+ARG BUILD_CONTAINER="debian"
 FROM ${BUILD_CONTAINER} AS build
 
-RUN apk --update add make curl alpine-sdk
+RUN apt-get update && apt-get install -y make curl git build-essential
 
 ARG PROJECT_ROOT
 COPY ${PROJECT_ROOT} /

@@ -87,4 +87,6 @@ providers:
 replaces:
 # Reference root module of repository to find dependency packages.
 - github.com/GoogleCloudPlatform/opentelemetry-operations-collector => ../../
+# Panic in gosnowflake v1.16.0. See https://github.com/snowflakedb/gosnowflake/issues/1533.
+- github.com/snowflakedb/gosnowflake/gosnowflake => github.com/snowflakedb/gosnowflake/gosnowflake v1.15.0
 

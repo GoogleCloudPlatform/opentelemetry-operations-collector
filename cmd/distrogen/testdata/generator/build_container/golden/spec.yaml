@@ -12,6 +12,7 @@ go_version: 1.24.0
 binary_name: otelcol-basic
 build_tags: ""
 collector_cgo: true
+boringcrypto: false
 docker_repo: us-docker.pkg.dev/pretend-repo/otelcol-basic
 components:
     receivers:

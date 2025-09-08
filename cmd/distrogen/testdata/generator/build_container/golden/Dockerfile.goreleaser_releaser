@@ -13,10 +13,9 @@
 ARG PROJECT_ROOT="."
 # Currently, this container has to be alpine based.
 ARG BUILD_CONTAINER="alpine:3"
-
 FROM ${BUILD_CONTAINER} AS build
 
-RUN apk --update add make curl git alpine-sdk
+RUN apk --update add make curl alpine-sdk
 
 ARG PROJECT_ROOT
 COPY ${PROJECT_ROOT} /

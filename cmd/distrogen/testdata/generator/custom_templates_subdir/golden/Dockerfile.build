@@ -27,7 +27,6 @@ ARG BUILDOS
 ARG TARGETOS
 ARG TARGETARCH
 RUN make build
-
 FROM ${CERT_CONTAINER} AS certs
 RUN apk --update add ca-certificates
 

@@ -191,6 +191,7 @@ ADDLICENSE_IGNORES = -ignore "**/.tools/**/*" \
 					-ignore "**/docs/**/*" \
 					-ignore "**/*.md" \
 					-ignore "**/testdata/*" \
+					-ignore "**/testdata/**/*" \
 					-ignore "**/golden/*" \
 					-ignore "**/google-built-opentelemetry-collector/*" \
 					-ignore "**/otelopscol/*" \

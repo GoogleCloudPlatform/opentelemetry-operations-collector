@@ -6,7 +6,7 @@ snapshot:
 
 env:
   - LD_FLAGS=-s -w
-  - CGO_ENABLED=0
+  - CGO_ENABLED=1
   - BUILD_FLAGS=-trimpath
   - GOWORK=off
 

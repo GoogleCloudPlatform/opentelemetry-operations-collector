@@ -11,7 +11,6 @@ opentelemetry_stable_version: 1.39.0
 go_version: 1.23.2
 binary_name: otelopscol
 build_tags: gpu
-collector_cgo: true
 boringcrypto: false
 docker_repo: ""
 components:
@@ -82,3 +81,4 @@ replaces:
       to: ../../
       reason: Reference root module of repository to find dependency packages.
 feature_gates: []
+collector_cgo: true

@@ -55,7 +55,6 @@ type DistributionSpec struct {
 	GoVersion                   string                  `yaml:"go_version"`
 	BinaryName                  string                  `yaml:"binary_name"`
 	BuildTags                   string                  `yaml:"build_tags"`
-	CollectorCGO                bool                    `yaml:"collector_cgo"`
 	BoringCrypto                bool                    `yaml:"boringcrypto"`
 	DockerRepo                  string                  `yaml:"docker_repo"`
 	Components                  *DistributionComponents `yaml:"components"`
@@ -63,6 +62,10 @@ type DistributionSpec struct {
 	CustomValues                map[string]any          `yaml:"custom_values,omitempty"`
 	FeatureGates                FeatureGates            `yaml:"feature_gates"`
 	GoProxy                     string                  `yaml:"go_proxy,omitempty"`
+
+	// CollectorCGO determines whether the Collector will be built with CGO. It is a
+	// *bool to differentiate between the user setting it manually in the config or not.
+	CollectorCGO *bool `yaml:"collector_cgo,omitempty"`
 }
 
 // Diff will compare two different DistributionSpecs.
@@ -100,6 +103,11 @@ func (s *DistributionSpec) Query(field string) (string, error) {
 	return "", fmt.Errorf("field '%s': %w", field, ErrQueryValueNotFound)
 }
 
+var (
+	ErrSpecValidationBoringCryptoWithoutCGO    = errors.New("boringcrypto build is not possible with collector_cgo turned off")
+	ErrSpecValidationBoringCryptoWithoutDebian = errors.New("boringcrypto is only possible with the debian build container")
+)
+
 // NewDistributionSpec loads the DistributionSpec from a yaml file.
 func NewDistributionSpec(path string) (*DistributionSpec, error) {
 	spec, err := yamlUnmarshalFromFile[DistributionSpec](path)
@@ -107,27 +115,27 @@ func NewDistributionSpec(path string) (*DistributionSpec, error) {
 		return nil, err
 	}
 
-	// It is a rare case where the contrib version falls out of sync with
-	// the canonical OpenTelemetry version, most of the time it is the same.
-	if spec.OpenTelemetryContribVersion == "" {
-		spec.OpenTelemetryContribVersion = spec.OpenTelemetryVersion
-	}
-
 	if spec.BuildContainer == "" {
-		spec.BuildContainer = Alpine
+		spec.BuildContainer = Debian
 	}
 
 	// If BoringCrypto is set, CGO must be enabled and only the debian
 	// build container can be used.
 	if spec.BoringCrypto {
-		if !spec.CollectorCGO {
-			logger.Warn("collector_cgo must be set to true for boringcrypto builds, setting to true")
-			spec.CollectorCGO = true
+		// If CGO was manually set to false in the config, return a validation error.
+		if spec.CollectorCGO != nil && !*spec.CollectorCGO {
+			return nil, ErrSpecValidationBoringCryptoWithoutCGO
 		}
+		// If build container is manually set to something other than debian, return a validation error.
 		if spec.BuildContainer != Debian {
-			logger.Warn("build_container must be set to debian for boringcrypto builds, setting to debian")
-			spec.BuildContainer = Debian
+			return nil, fmt.Errorf("%w, build_container was set to %s", ErrSpecValidationBoringCryptoWithoutDebian, spec.BuildContainer)
 		}
+	}
+
+	// It is a rare case where the contrib version falls out of sync with
+	// the canonical OpenTelemetry version, most of the time it is the same.
+	if spec.OpenTelemetryContribVersion == "" {
+		spec.OpenTelemetryContribVersion = spec.OpenTelemetryVersion
 	}
 
 	return spec, nil

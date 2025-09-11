@@ -80,4 +80,7 @@ replaces:
     - from: github.com/GoogleCloudPlatform/opentelemetry-operations-collector
       to: ../../
       reason: Reference root module of repository to find dependency packages.
+    - from: github.com/snowflakedb/gosnowflake
+      to: github.com/snowflakedb/gosnowflake v1.15.0
+      reason: Panic in gosnowflake v1.16.0. See https://github.com/snowflakedb/gosnowflake/issues/1533.
 feature_gates: []

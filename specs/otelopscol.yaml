@@ -59,9 +59,11 @@ components:
     - otlpjsonfile
   processors:
     - cumulativetodelta
+    - deltatocumulative
     - deltatorate
     - filter
     - groupbyattrs
+    - interval
     - logstransform
     - metricstransform
     - resourcedetection

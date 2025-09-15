@@ -15,15 +15,14 @@
 package ottlfuncs
 
 import (
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/ottlfuncs"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/ottl"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/ottl/contexts/ottllog"
 )
 
 func LogFunctions() []ottl.Factory[ottllog.TransformContext] {
 	return []ottl.Factory[ottllog.TransformContext]{
-		ottlfuncs.NewExtractPatternsRubyRegexFactory[ottllog.TransformContext](),
-		ottlfuncs.NewIsMatchRubyRegexFactory[ottllog.TransformContext](),
-		ottlfuncs.NewToValuesFactory[ottllog.TransformContext](),
+		NewExtractPatternsRubyRegexFactory[ottllog.TransformContext](),
+		NewIsMatchRubyRegexFactory[ottllog.TransformContext](),
+		NewToValuesFactory[ottllog.TransformContext](),
 	}
 }

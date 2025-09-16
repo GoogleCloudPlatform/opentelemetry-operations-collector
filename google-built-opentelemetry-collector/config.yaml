@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 # This file is the same as what is provided in the upstream otelcol and otelcol-contrib distribution container.
-# https://github.com/open-telemetry/opentelemetry-collector-releases/blob/8e11cfc9f1e0bd78e6a26140849c357ab3f0e4db/distributions/otelcol/config.yaml
+# https://github.com/open-telemetry/opentelemetry-collector-releases/blob/6722b0720b1249fde53c819b423db9e797a7c0b6/distributions/otelcol/config.yaml
 #
 # To limit exposure to denial of service attacks, change the host in endpoints below from 0.0.0.0 to a specific network interface.
 # See https://github.com/open-telemetry/opentelemetry-collector/blob/main/docs/security-best-practices.md#safeguards-against-denial-of-service-attacks

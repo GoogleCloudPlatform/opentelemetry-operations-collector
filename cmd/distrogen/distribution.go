@@ -63,9 +63,8 @@ type DistributionSpec struct {
 	FeatureGates                FeatureGates            `yaml:"feature_gates"`
 	GoProxy                     string                  `yaml:"go_proxy,omitempty"`
 
-	// CollectorCGO determines whether the Collector will be built with CGO. It is a
-	// *bool to differentiate between the user setting it manually in the config or not.
-	CollectorCGO *bool `yaml:"collector_cgo,omitempty"`
+	// CollectorCGO determines whether the Collector will be built with CGO.
+	CollectorCGO bool `yaml:"collector_cgo,omitempty"`
 }
 
 // Diff will compare two different DistributionSpecs.
@@ -123,7 +122,7 @@ func NewDistributionSpec(path string) (*DistributionSpec, error) {
 	// build container can be used.
 	if spec.BoringCrypto {
 		// If CGO was manually set to false in the config, return a validation error.
-		if spec.CollectorCGO != nil && !*spec.CollectorCGO {
+		if !spec.CollectorCGO {
 			return nil, ErrSpecValidationBoringCryptoWithoutCGO
 		}
 		// If build container is manually set to something other than debian, return a validation error.

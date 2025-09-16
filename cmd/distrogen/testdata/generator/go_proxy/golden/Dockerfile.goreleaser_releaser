@@ -14,7 +14,7 @@ ARG PROJECT_ROOT="."
 ARG BUILD_CONTAINER="debian"
 FROM ${BUILD_CONTAINER} AS build
 
-RUN apt-get update && apt-get install -y make curl git build-essential
+RUN apt-get update && apt-get install -y make curl git
 
 ARG PROJECT_ROOT
 COPY ${PROJECT_ROOT} /

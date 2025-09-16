@@ -12,12 +12,12 @@ config build = common.build {
     {
       key = 'BUILD_CONTAINER'
       value =
-          'us-docker.pkg.dev/google.com/api-project-999119582588/go-boringcrypto-internal@sha256:5e292c54d2d37534a367761cbc0b69b81d717c730f824e0f7abdcd54133e43f1'
+          'us-docker.pkg.dev/google.com/api-project-999119582588/go-boringcrypto-internal/golang@sha256:5e292c54d2d37534a367761cbc0b69b81d717c730f824e0f7abdcd54133e43f1'
     },
     {
       key = 'CERT_CONTAINER'
       value =
-          'us-docker.pkg.dev/google.com/api-project-999119582588/go-boringcrypto-internal@sha256:5e292c54d2d37534a367761cbc0b69b81d717c730f824e0f7abdcd54133e43f1'
+          'us-docker.pkg.dev/google.com/api-project-999119582588/go-boringcrypto-internal/golang@sha256:5e292c54d2d37534a367761cbc0b69b81d717c730f824e0f7abdcd54133e43f1'
     },
   ]
  // I'm not sure why, but this build doesn't seem to need container_properties;

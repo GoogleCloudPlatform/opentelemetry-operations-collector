@@ -15,7 +15,7 @@ ARG CERT_CONTAINER="alpine:3"
 ARG BUILD_CONTAINER="debian"
 FROM --platform=${BUILDPLATFORM:-linux/amd64} ${BUILD_CONTAINER} AS build
 
-RUN apt-get update && apt-get install -y make curl build-essential
+RUN apt-get update && apt-get install -y make curl
 
 ARG PROJECT_ROOT
 COPY ${PROJECT_ROOT} /
@@ -26,11 +26,7 @@ ARG BUILDARCH
 ARG BUILDOS
 ARG TARGETOS
 ARG TARGETARCH
-RUN if [ "${TARGETARCH}" = "arm64" ] && [ "${BUILDARCH}" != "arm64" ]; then \
-        apt-get install -y gcc-aarch64-linux-gnu libc6-dev-arm64-cross; \
-        CC=aarch64-linux-gnu-gcc; \
-    fi && \
-    CC=${CC} make build
+RUN make build
 FROM ${CERT_CONTAINER} AS certs
 RUN apk --update add ca-certificates
 

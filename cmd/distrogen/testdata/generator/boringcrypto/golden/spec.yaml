@@ -29,3 +29,4 @@ components:
         - yaml
 feature_gates:
     - exporter.googlemanagedprometheus.intToDouble
+collector_cgo: true

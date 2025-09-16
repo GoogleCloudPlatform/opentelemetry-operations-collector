@@ -16,6 +16,8 @@ name: basic-distro
 
 # What this test case is testing.
 boringcrypto: true
+# Collector CGO needs to be set to true manually.
+collector_cgo: true
 
 display_name: Basic OTel
 version: 0.121.0

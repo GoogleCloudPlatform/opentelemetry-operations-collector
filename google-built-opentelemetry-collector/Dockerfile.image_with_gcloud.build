@@ -26,7 +26,6 @@ ARG BUILDOS
 ARG TARGETOS
 ARG TARGETARCH
 RUN if [ "${TARGETARCH}" = "arm64" ] && [ "${BUILDARCH}" != "arm64" ]; then \
-        apt-get install -y gcc-aarch64-linux-gnu libc6-dev-arm64-cross; \
         CC=aarch64-linux-gnu-gcc; \
     fi && \
     CC=${CC} GO_BIN_DIR=/usr/local/go/bin make -f pull_modules_from_ar_repos.mk aoss-build

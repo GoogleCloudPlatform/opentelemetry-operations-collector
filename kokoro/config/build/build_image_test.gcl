@@ -1,0 +1,35 @@
+import 'common.gcl' as common
+
+config build = common.build {
+  dockerfile_path =
+      'git/otelcol-google/google-built-opentelemetry-collector/Dockerfile.image_with_gcloud.build'
+
+  container_build_argument = [
+    {
+      key = 'PROJECT_ROOT'
+      value = 'git/otelcol-google'
+    },
+    {
+      key = 'BUILD_CONTAINER'
+      value =
+          'us-docker.pkg.dev/google.com/api-project-999119582588/go-boringcrypto-internal'
+    },
+    {
+      key = 'CERT_CONTAINER'
+      value =
+          'us-docker.pkg.dev/google.com/api-project-999119582588/go-boringcrypto-internal'
+    },
+  ]
+ // I'm not sure why, but this build doesn't seem to need container_properties;
+  // null it out for now.
+  container_properties = null
+
+  container_artifact = [
+    {
+      // Path to the container tar file produced by the build. For a container build,
+      // this should always be "container/container.tar"
+      source = 'container/container.tar'
+      destination = 'us-docker.pkg.dev/cloud-ops-agents-art-staging/google-cloud-opentelemetry-collector-dev/otelcol-google'
+    },
+  ]
+}

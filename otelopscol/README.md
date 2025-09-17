@@ -50,7 +50,7 @@
 | cumulativetodelta | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/cumulativetodeltaprocessor/README.md) |
 | deltatocumulative | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/deltatocumulativeprocessor/README.md) |
 | deltatorate | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/deltatorateprocessor/README.md) |
-| filter | [docs](https://www.github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/filterprocessor/README.md) |
+| filter | [docs](/components/otelopscol/processor/filterprocessor/README.md) |
 | groupbyattrs | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/groupbyattrsprocessor/README.md) |
 | interval | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/intervalprocessor/README.md) |
 | logstransform | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/logstransformprocessor/README.md) |
@@ -60,7 +60,7 @@
 | normalizesums | [docs](No docs linked for component) |
 | resource | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/resourceprocessor/README.md) |
 | resourcedetection | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/resourcedetectionprocessor/README.md) |
-| transform | [docs](https://www.github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/transformprocessor/README.md) |
+| transform | [docs](/components/otelopscol/processor/transformprocessor/README.md) |
 
 
 ## Exporters

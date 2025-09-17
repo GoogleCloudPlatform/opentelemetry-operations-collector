@@ -38,7 +38,11 @@ processors:
   normalizesums:
     gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/normalizesumsprocessor v0.0.0
     path: "../components/otelopscol/processor/normalizesumsprocessor"
+  filter:
+    gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/filterprocessor v0.0.0
+    path: "../components/otelopscol/processor/filterprocessor"
+    docs_url: /components/otelopscol/processor/filterprocessor/README.md
   transform:
     gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/transformprocessor v0.0.0
     path: "../components/otelopscol/processor/transformprocessor"
-    docs_url: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/transformprocessor/README.md
+    docs_url: /components/otelopscol/processor/transformprocessor/README.md

@@ -8,7 +8,7 @@ COLLECTOR_BINARY_NAME = otelcol-google
 COLLECTOR_BUILD_TEMP_DIR = $(PWD)/_build
 COLLECTOR_CGO = 1
 COLLECTOR_BUILDVCS ?= false
-COLLECTOR_BUILD_TAGS ?=
+COLLECTOR_BUILD_TAGS ?= 
 
 DOCKER_LOCAL_IMAGE_TAG ?= $(COLLECTOR_BINARY_NAME)
 DOCKER_IMAGE_TAG = $(DOCKER_REPO)/$(COLLECTOR_BINARY_NAME):$(VERSION)
@@ -24,7 +24,7 @@ GO_BIN_DIR ?= $(TOOLS_DIR)/go/bin
 GO_BIN ?= $(GO_BIN_DIR)/go
 SET_GO_BIN_PATH ?= PATH="$(GO_BIN_DIR):$$PATH"
 
-USE_GO_PROXY ?=
+USE_GO_PROXY ?= 
 
 GORELEASER_BIN ?= $(TOOLS_DIR)/goreleaser
 
@@ -119,7 +119,7 @@ $(COLLECTOR_BINARY_NAME): ocb-generate
 		$(GO_BIN) build \
 			-buildvcs=$(COLLECTOR_BUILDVCS) \
 			-tags=$(COLLECTOR_BUILD_TAGS) \
-			--ldflags="$(COLLECTOR_LD_FLAGS)" \
+			--ldflags="-s -w $(COLLECTOR_LD_FLAGS)" \
 			-o ../otelcol-google \
 			.
 	$(MAKE) clean-build-dir

@@ -73,6 +73,7 @@
 | googlemanagedprometheus | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/googlemanagedprometheusexporter/README.md) |
 | otlp | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/exporter/otlpexporter/README.md) |
 | otlphttp | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/exporter/otlphttpexporter/README.md) |
+| prometheus | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/prometheusexporter/README.md) |
 
 
 ## Extensions

@@ -196,6 +196,9 @@ receivers:
     prometheus:
         gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver
         docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/prometheusreceiver/README.md
+    prometheusremotewrite:
+        gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusremotewritereceiver
+        docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/prometheusremotewritereceiver/README.md
     pulsar:
         gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/pulsarreceiver
         docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/pulsarreceiver/README.md

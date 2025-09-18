@@ -48,6 +48,7 @@ components:
     - kubeletstats
     - otelarrow
     - prometheus
+    - prometheusremotewrite
     - receivercreator
     - zipkin
     - dockerstats
@@ -93,6 +94,7 @@ components:
     - googlecloud
     - googlemanagedprometheus
     - googleservicecontrol
+    - prometheus
 
   extensions:
     - zpages

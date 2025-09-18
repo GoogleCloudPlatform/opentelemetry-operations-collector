@@ -59,18 +59,18 @@ service:
             exporter:
               otlp:
                 protocol: http/protobuf
-                endpoint: localhost:4317
+                endpoint: http://localhost:4317
     logs:
       processors:
       - batch:
           exporter:
             otlp:
               protocol: http/protobuf
-              endpoint: localhost:4317
+              endpoint: http://localhost:4317
     traces:
       processors:
       - batch:
           exporter:
             otlp:
               protocol: http/protobuf
-              endpoint: localhost:4317
+              endpoint: http://localhost:4317

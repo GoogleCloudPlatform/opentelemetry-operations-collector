@@ -15,7 +15,7 @@
 name: basic-distro
 
 # What this test case is testing.
-build_container: ubuntu
+build_container: debian
 collector_cgo: true
 
 display_name: Basic OTel

@@ -71,6 +71,32 @@ func testGeneratorCase(t *testing.T, registry *Registry, testFolder string) {
 	assertGoldenFiles(t, g.GeneratePath, goldenPath, goldenSubPath)
 }
 
+func TestSpecValidationError(t *testing.T) {
+	testCases := []struct {
+		name        string
+		expectedErr error
+	}{
+		{
+			name:        "boringcrypto_alpine_build_container",
+			expectedErr: ErrSpecValidationBoringCryptoWithoutDebian,
+		},
+		{
+			name:        "boringcrypto_cgo_off",
+			expectedErr: ErrSpecValidationBoringCryptoWithoutCGO,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			testConfigPath := filepath.Join("testdata", "invalid", tc.name+".yaml")
+			_, err := NewDistributionSpec(testConfigPath)
+			assert.ErrorIs(t, err, tc.expectedErr)
+		})
+	}
+}
+
 func TestSpecQuery(t *testing.T) {
 	otelVer := "v0.124.0"
 	spec := &DistributionSpec{

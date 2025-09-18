@@ -35,7 +35,7 @@ type BuildContainerOption string
 
 const (
 	Alpine BuildContainerOption = "alpine"
-	Ubuntu BuildContainerOption = "ubuntu"
+	Debian BuildContainerOption = "debian"
 )
 
 // DistributionSpec is the specification for a new OpenTelemetry Collector distribution.
@@ -56,13 +56,16 @@ type DistributionSpec struct {
 	GoVersion                   string                  `yaml:"go_version"`
 	BinaryName                  string                  `yaml:"binary_name"`
 	BuildTags                   string                  `yaml:"build_tags"`
-	CollectorCGO                bool                    `yaml:"collector_cgo"`
+	BoringCrypto                bool                    `yaml:"boringcrypto"`
 	DockerRepo                  string                  `yaml:"docker_repo"`
 	Components                  *DistributionComponents `yaml:"components"`
 	Replaces                    ComponentReplaces       `yaml:"replaces,omitempty"`
 	CustomValues                map[string]any          `yaml:"custom_values,omitempty"`
 	FeatureGates                FeatureGates            `yaml:"feature_gates,omitempty"`
 	GoProxy                     string                  `yaml:"go_proxy,omitempty"`
+
+	// CollectorCGO determines whether the Collector will be built with CGO.
+	CollectorCGO bool `yaml:"collector_cgo,omitempty"`
 	ComponentModuleBase         string                  `yaml:"component_module_base"`
 	DistrogenVersion            string                  `yaml:"distrogen_version"`
 }
@@ -111,11 +114,33 @@ func (s *DistributionSpec) Query(field string) (string, error) {
 	return "", fmt.Errorf("field '%s': %w", field, ErrQueryValueNotFound)
 }
 
+var (
+	ErrSpecValidationBoringCryptoWithoutCGO    = errors.New("boringcrypto build is not possible with collector_cgo turned off")
+	ErrSpecValidationBoringCryptoWithoutDebian = errors.New("boringcrypto is only possible with the debian build container")
+)
+
 // NewDistributionSpec loads the DistributionSpec from a yaml file.
 func NewDistributionSpec(path string) (*DistributionSpec, error) {
 	spec, err := yamlUnmarshalFromFile[DistributionSpec](path)
 	if err != nil {
 		return nil, err
+	}
+
+	if spec.BuildContainer == "" {
+		spec.BuildContainer = Debian
+	}
+
+	// If BoringCrypto is set, CGO must be enabled and only the debian
+	// build container can be used.
+	if spec.BoringCrypto {
+		// If CGO was manually set to false in the config, return a validation error.
+		if !spec.CollectorCGO {
+			return nil, ErrSpecValidationBoringCryptoWithoutCGO
+		}
+		// If build container is manually set to something other than debian, return a validation error.
+		if spec.BuildContainer != Debian {
+			return nil, fmt.Errorf("%w, build_container was set to %s", ErrSpecValidationBoringCryptoWithoutDebian, spec.BuildContainer)
+		}
 	}
 
 	// The name of the spec.yaml file might be different from the binary name
@@ -125,10 +150,6 @@ func NewDistributionSpec(path string) (*DistributionSpec, error) {
 	// the canonical OpenTelemetry version, most of the time it is the same.
 	if spec.OpenTelemetryContribVersion == "" {
 		spec.OpenTelemetryContribVersion = spec.OpenTelemetryVersion
-	}
-
-	if spec.BuildContainer == "" {
-		spec.BuildContainer = Alpine
 	}
 
 	return spec, nil

@@ -10,20 +10,11 @@
 # any custom components contained within your full project structure.
 ARG PROJECT_ROOT="."
 ARG CERT_CONTAINER="debian:bookworm"
-{{ if eq .BuildContainer "ubuntu" -}}
-ARG BUILD_CONTAINER="ubuntu:24.04"
-FROM --platform=${BUILDPLATFORM:-linux/amd64} ${BUILD_CONTAINER} AS build
-
-RUN apt-get update && apt-get install -y make curl{{ if .CollectorCGO }} build-essential{{ end }}
-
-{{ else -}}
 ARG BUILD_CONTAINER="google/cloud-sdk@sha256:cad12907540b1a43c9279503796723817e62da1f8fd3b8723755effb9d55e1e1"
-FROM --platform=${BUILDPLATFORM:-linux/amd64} ${BUILD_CONTAINER} AS build
+FROM --platform=${BUILDPLATFORM} ${BUILD_CONTAINER} AS build
 RUN rm -f /etc/apt/sources.list.d/* /etc/apt/sources.list
 RUN echo 'deb https://us-apt.pkg.dev/remote/artifact-foundry-prod/debian-3p-remote-bookworm bookworm main' | tee -a  /etc/apt/sources.list.d/artifact-registry.list
-RUN apt-get update && apt-get install -y make curl
-
-{{ end -}}
+RUN apt-get update && apt-get install -y make curl build-essential
 
 ARG PROJECT_ROOT
 COPY ${PROJECT_ROOT} /
@@ -34,7 +25,14 @@ ARG BUILDARCH
 ARG BUILDOS
 ARG TARGETOS
 ARG TARGETARCH
-RUN make GO_BIN_DIR=/usr/local/go/bin -f pull_modules_from_ar_repos.mk aoss-build
+RUN if [ "${TARGETARCH}" = "arm64" ] && [ "${BUILDARCH}" != "arm64" ]; then \
+        CC=aarch64-linux-gnu-gcc; \
+    fi && \
+    CC=${CC} make GO_BIN_DIR=/usr/local/go/bin -f pull_modules_from_ar_repos.mk aoss-build
+
+RUN mkdir --mode=0755 /etc/{{ .BinaryName }}
+RUN cp /{{ .Name }}/config.yaml /etc/{{ .BinaryName }}/config.yaml
+RUN chmod 0644 /etc/{{ .BinaryName }}/config.yaml
 
 FROM ${CERT_CONTAINER} AS certs
 RUN rm -f /etc/apt/sources.list.d/* /etc/apt/sources.list
@@ -48,7 +46,7 @@ USER ${USER_UID}
 
 COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=build --chmod=755 /{{ .Name }}/{{ .BinaryName }} /{{ .BinaryName }}
-COPY --from=build --chmod=644 /{{ .Name }}/config.yaml /etc/{{ .BinaryName }}/config.yaml
+COPY --from=build /etc/{{ .BinaryName }} /etc/{{ .BinaryName }}
 
 ENTRYPOINT ["/{{ .BinaryName }}"{{ $length := len .FeatureGates }}{{ if gt $length 0 }}, "--feature-gates={{ .FeatureGates.Render }}"{{ end }}]
 CMD ["--config=/etc/{{ .BinaryName }}/config.yaml"]

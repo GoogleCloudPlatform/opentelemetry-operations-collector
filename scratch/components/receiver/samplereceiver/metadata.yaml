@@ -1,0 +1,6 @@
+type: sample
+
+status:
+  class: receiver
+  stability:
+    development: [logs, metrics, traces]

@@ -30,6 +30,10 @@ RUN if [ "${TARGETARCH}" = "arm64" ] && [ "${BUILDARCH}" != "arm64" ]; then \
     fi && \
     CC=${CC} GO_BIN_DIR=/usr/local/go/bin make -f pull_modules_from_ar_repos.mk aoss-build
 
+RUN mkdir --mode=0755 /etc/otelcol-google
+RUN cp /google-built-opentelemetry-collector/config.yaml /etc/otelcol-google/config.yaml
+RUN chmod 0644 /etc/otelcol-google/config.yaml
+
 FROM ${CERT_CONTAINER} AS certs
 RUN rm -f /etc/apt/sources.list.d/* /etc/apt/sources.list
 RUN echo 'deb https://us-apt.pkg.dev/remote/artifact-foundry-prod/debian-3p-remote-bookworm bookworm main' | tee -a  /etc/apt/sources.list.d/artifact-registry.list
@@ -42,7 +46,7 @@ USER ${USER_UID}
 
 COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=build --chmod=755 /google-built-opentelemetry-collector/otelcol-google /otelcol-google
-COPY --from=build --chmod=644 /google-built-opentelemetry-collector/config.yaml /etc/otelcol-google/config.yaml
+COPY --from=build /etc/otelcol-google /etc/otelcol-google
 
 ENTRYPOINT ["/otelcol-google", "--feature-gates=exporter.googlemanagedprometheus.intToDouble,exporter.googlecloud.CustomMonitoredResources"]
 CMD ["--config=/etc/otelcol-google/config.yaml"]

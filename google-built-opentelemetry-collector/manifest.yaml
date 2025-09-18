@@ -24,6 +24,7 @@ receivers:
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/otelarrowreceiver v0.134.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/otlpjsonfilereceiver v0.134.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver v0.134.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusremotewritereceiver v0.134.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/receivercreator v0.134.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/redisreceiver v0.134.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/statsdreceiver v0.134.0
@@ -64,6 +65,7 @@ exporters:
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlemanagedprometheusexporter v0.134.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/loadbalancingexporter v0.134.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/otelarrowexporter v0.134.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/prometheusexporter v0.134.0
 - gomod: go.opentelemetry.io/collector/exporter/debugexporter v0.134.0
 - gomod: go.opentelemetry.io/collector/exporter/nopexporter v0.134.0
 - gomod: go.opentelemetry.io/collector/exporter/otlpexporter v0.134.0

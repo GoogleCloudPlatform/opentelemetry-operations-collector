@@ -29,6 +29,7 @@ components:
         - kubeletstats
         - otelarrow
         - prometheus
+        - prometheusremotewrite
         - receivercreator
         - zipkin
         - dockerstats
@@ -72,6 +73,7 @@ components:
         - googlecloud
         - googlemanagedprometheus
         - googleservicecontrol
+        - prometheus
     connectors:
         - forward
         - count

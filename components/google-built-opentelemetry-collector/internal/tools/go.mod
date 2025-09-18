@@ -22,7 +22,7 @@ require (
 	github.com/spf13/cobra v1.10.1 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
-	go.opentelemetry.io/collector/cmd/mdatagen v0.134.0 // indirect
+	go.opentelemetry.io/collector/cmd/mdatagen v0.135.0 // indirect
 	go.opentelemetry.io/collector/component v1.41.0 // indirect
 	go.opentelemetry.io/collector/confmap v1.41.0 // indirect
 	go.opentelemetry.io/collector/confmap/provider/fileprovider v1.41.0 // indirect

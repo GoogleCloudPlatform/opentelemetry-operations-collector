@@ -97,6 +97,8 @@ go.opentelemetry.io/collector/cmd/mdatagen v0.133.0 h1:yt7kY0JNfjLrdYfJf7Y/SQ8L6
 go.opentelemetry.io/collector/cmd/mdatagen v0.133.0/go.mod h1:zlASI+UnLkS3k1KYdOJnkdYoUIz9oYDXkxG4MEBqciM=
 go.opentelemetry.io/collector/cmd/mdatagen v0.134.0 h1:U2DCWnjaL6LjJ0d0MVTbvjVWgMV1QS5FmOJ8TaLuSa0=
 go.opentelemetry.io/collector/cmd/mdatagen v0.134.0/go.mod h1:aEQaUtopEv3WVu4DlNfUOu/+xbHDh5cN4fhwWmigRoc=
+go.opentelemetry.io/collector/cmd/mdatagen v0.135.0 h1:7O2EzG3E04W97hEJIqNXuqQXntCRGrJoQFQ7F4dGSDQ=
+go.opentelemetry.io/collector/cmd/mdatagen v0.135.0/go.mod h1:z/+tRMvpuYPd7ArFXmGYaBf7lpcmvVgnlwg6cZdB7gc=
 go.opentelemetry.io/collector/component v1.30.0 h1:HXjqBHaQ47/EEuWdnkjr4Y3kRWvmyWIDvqa1Q262Fls=
 go.opentelemetry.io/collector/component v1.30.0/go.mod h1:vfM9kN+BM6oHBXWibquiprz8CVawxd4/aYy3nbhme3E=
 go.opentelemetry.io/collector/component v1.31.0 h1:9LzU8X1RhV3h8/QsAoTX23aFUfoJ3EUc9O/vK+hFpSI=

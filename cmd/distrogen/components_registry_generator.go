@@ -23,6 +23,8 @@ func NewComponentsRegistryGenerator() *ComponentsRegistryGenerator {
 	return g
 }
 
+// The component registry is for custom components built within this repository.
+// Upstream components are managed in the internal registry at cmd/distrogen/registry.yaml.
 func (g *ComponentsRegistryGenerator) Generate() error {
 	registry := NewRegistry()
 

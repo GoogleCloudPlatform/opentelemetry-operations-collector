@@ -11,10 +11,10 @@
 ARG PROJECT_ROOT="."
 ARG CERT_CONTAINER="debian:bookworm"
 ARG BUILD_CONTAINER="google/cloud-sdk@sha256:cad12907540b1a43c9279503796723817e62da1f8fd3b8723755effb9d55e1e1"
-FROM --platform=${BUILDPLATFORM:-linux/amd64} ${BUILD_CONTAINER} AS build
+FROM --platform=${BUILDPLATFORM} ${BUILD_CONTAINER} AS build
 RUN rm -f /etc/apt/sources.list.d/* /etc/apt/sources.list
 RUN echo 'deb https://us-apt.pkg.dev/remote/artifact-foundry-prod/debian-3p-remote-bookworm bookworm main' | tee -a  /etc/apt/sources.list.d/artifact-registry.list
-RUN apt-get update && apt-get install -y make curl
+RUN apt-get update && apt-get install -y make curl build-essential
 
 ARG PROJECT_ROOT
 COPY ${PROJECT_ROOT} /
@@ -25,7 +25,10 @@ ARG BUILDARCH
 ARG BUILDOS
 ARG TARGETOS
 ARG TARGETARCH
-RUN make GO_BIN_DIR=/usr/local/go/bin -f pull_modules_from_ar_repos.mk aoss-build
+RUN if [ "${TARGETARCH}" = "arm64" ] && [ "${BUILDARCH}" != "arm64" ]; then \
+        CC=aarch64-linux-gnu-gcc; \
+    fi && \
+    CC=${CC} make GO_BIN_DIR=/usr/local/go/bin -f pull_modules_from_ar_repos.mk aoss-build
 
 RUN mkdir --mode=0755 /etc/otelcol-google
 RUN cp /google-built-opentelemetry-collector/config.yaml /etc/otelcol-google/config.yaml

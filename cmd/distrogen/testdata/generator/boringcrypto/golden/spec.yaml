@@ -11,7 +11,7 @@ opentelemetry_stable_version: 1.27.0
 go_version: 1.24.0
 binary_name: otelcol-basic
 build_tags: ""
-boringcrypto: false
+boringcrypto: true
 docker_repo: us-docker.pkg.dev/pretend-repo/otelcol-basic
 components:
     receivers:

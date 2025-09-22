@@ -28,7 +28,7 @@ ARG TARGETARCH
 RUN if [ "${TARGETARCH}" = "arm64" ] && [ "${BUILDARCH}" != "arm64" ]; then \
         CC=aarch64-linux-gnu-gcc; \
     fi && \
-    CC=${CC} make GO_BIN_DIR=/usr/local/go/bin -f USE_GO_PROXY=https://us-go.pkg.dev/access-aoss/assuredoss-go build
+    CC=${CC} make GO_BIN_DIR=/usr/local/go/bin USE_GO_PROXY=https://us-go.pkg.dev/access-aoss/assuredoss-go build
 
 RUN mkdir --mode=0755 /etc/otelcol-google
 RUN cp /google-built-opentelemetry-collector/config.yaml /etc/otelcol-google/config.yaml

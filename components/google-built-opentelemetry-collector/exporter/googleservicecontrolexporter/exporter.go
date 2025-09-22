@@ -333,7 +333,10 @@ func (e *MetricsExporter) createMetricValueSet(metric pmetric.Metric) (*scpb.Met
 		mv, startTime = e.createNumericMetricValues(metric.Sum().DataPoints(), metric.Sum().AggregationTemporality())
 	case pmetric.MetricTypeHistogram:
 		mv, startTime = e.createHistogramMetricValues(metric.Histogram())
-	// TODO(b/401006109): handle ExponentialHistogram and Summary types
+	case pmetric.MetricTypeExponentialHistogram:
+		mv, startTime = e.createExponentialHistogramMetricValues(metric.ExponentialHistogram())
+	case pmetric.MetricTypeSummary:
+		mv, startTime = e.createSummaryMetricValues(metric.Summary())
 	default:
 		e.logger.Warn("Metric type unsupported", zap.String("type", t.String()))
 	}
@@ -446,6 +449,62 @@ func (e *MetricsExporter) createHistogramMetricValues(m pmetric.Histogram) ([]*s
 	return ret, earliestStart
 }
 
+func (e *MetricsExporter) createExponentialHistogramMetricValues(m pmetric.ExponentialHistogram) ([]*scpb.MetricValue, time.Time) {
+	var earliestStart time.Time
+	points := m.DataPoints()
+	ret := make([]*scpb.MetricValue, points.Len())
+
+	for i := 0; i < points.Len(); i++ {
+		point := points.At(i)
+		start := point.StartTimestamp().AsTime()
+		end := point.Timestamp().AsTime()
+
+		start, end = e.getStartEndTimes(m.AggregationTemporality(), start, end)
+
+		if earliestStart.IsZero() || start.Before(earliestStart) {
+			earliestStart = start
+		}
+
+		mv := &scpb.MetricValue{
+			Labels:    attributesToStringMap(point.Attributes()),
+			StartTime: timestamppb.New(start),
+			EndTime:   timestamppb.New(end),
+		}
+		mv.Value = &scpb.MetricValue_DistributionValue{translateExponentialHistogramValue(point)}
+		ret[i] = mv
+	}
+
+	return ret, earliestStart
+}
+
+func (e *MetricsExporter) createSummaryMetricValues(m pmetric.Summary) ([]*scpb.MetricValue, time.Time) {
+	var earliestStart time.Time
+	points := m.DataPoints()
+	ret := make([]*scpb.MetricValue, points.Len())
+
+	for i := 0; i < points.Len(); i++ {
+		point := points.At(i)
+		start := point.StartTimestamp().AsTime()
+		end := point.Timestamp().AsTime()
+
+		start, end = e.getStartEndTimes(m.AggregationTemporality(), start, end)
+
+		if earliestStart.IsZero() || start.Before(earliestStart) {
+			earliestStart = start
+		}
+
+		mv := &scpb.MetricValue{
+			Labels:    attributesToStringMap(point.Attributes()),
+			StartTime: timestamppb.New(start),
+			EndTime:   timestamppb.New(end),
+		}
+		mv.Value = &scpb.MetricValue_DistributionValue{translateSummaryValue(point)}
+		ret[i] = mv
+	}
+
+	return ret, earliestStart
+}
+
 func attributesToStringMap(attr pcommon.Map) map[string]string {
 	m := map[string]string{}
 	attr.Range(func(k string, v pcommon.Value) bool {
@@ -469,6 +528,127 @@ func translateDistributionValue(value pmetric.HistogramDataPoint) *scpb.Distribu
 	exemplars := value.Exemplars()
 	// We compute `sum` from `exemplars`, instead of getting it from `value.Sum()`.
 	// Sum is optional in pmetric.HistogramDataPoint.
+	// Note that Exemplars are optional as well.
+	var sum float64
+	for i := 0; i < exemplars.Len(); i++ {
+		ex := exemplars.At(i)
+		// Service Control only has double value type:
+		// https://github.com/googleapis/googleapis/blob/40bad3ea0d48ecf250296ea7438035b8e45227dd/google/api/distribution.proto#L147,
+		// so we convert everything to float64.
+		var value float64
+		switch ex.ValueType() {
+		case pmetric.ExemplarValueTypeDouble:
+			value = ex.DoubleValue()
+		case pmetric.ExemplarValueTypeInt:
+			value = float64(ex.IntValue())
+		}
+		sum += value
+		result.Exemplars = append(result.Exemplars, &distribution.Distribution_Exemplar{
+			Value:     value,
+			Timestamp: timestamppb.New(ex.Timestamp().AsTime()),
+		})
+	}
+
+	// Service Control API does not like if we set non-zero mean and deviation when count=0:
+	// https://github.com/googleapis/google-api-go-client/blob/8a616df18563c9fedaead92873d200cd8c2d0503/servicecontrol/v1/servicecontrol-gen.go#L853
+	if value.Count() > 0 {
+		if exemplars.Len() > 0 {
+			// We can calculate everything ourselves.
+			mean := sum / float64(value.Count())
+			result.Mean = mean
+
+			// SumOfSquaredDeviation calculation:
+			// https://github.com/googleapis/google-api-go-client/blob/8a616df18563c9fedaead92873d200cd8c2d0503/servicecontrol/v1/servicecontrol-gen.go#L860
+			var sumDev float64
+			for _, exemplar := range result.Exemplars {
+				dev := exemplar.Value - mean
+				sumDev += dev * dev
+			}
+			result.SumOfSquaredDeviation = sumDev
+		} else {
+			// We can only hope that `value.Sum()` is populated, and calculate `result.Mean` from that.
+			// There is no way to calculate `result.SumOfSquaredDeviation`.
+			result.Mean = value.Sum() / float64(value.Count())
+		}
+	}
+	return result
+}
+
+func translateExponentialHistogramValue(value pmetric.ExponentialHistogramDataPoint) *scpb.Distribution {
+	result := &scpb.Distribution{
+		Count: int64(value.Count()),
+		BucketOption: &scpb.Distribution_ExponentialBuckets_{
+			&scpb.Distribution_ExponentialBuckets{
+				Scale: value.Scale(),
+				NumFiniteBuckets: int64(value.NumFiniteBuckets()),
+			},
+		},
+		BucketCounts: toInt64Slice(value.BucketCounts().AsRaw()),
+	}
+
+	exemplars := value.Exemplars()
+	// We compute `sum` from `exemplars`, instead of getting it from `value.Sum()`.
+	// Sum is optional in pmetric.ExponentialHistogramDataPoint.
+	// Note that Exemplars are optional as well.
+	var sum float64
+	for i := 0; i < exemplars.Len(); i++ {
+		ex := exemplars.At(i)
+		// Service Control only has double value type:
+		// https://github.com/googleapis/googleapis/blob/40bad3ea0d48ecf250296ea7438035b8e45227dd/google/api/distribution.proto#L147,
+		// so we convert everything to float64.
+		var value float64
+		switch ex.ValueType() {
+		case pmetric.ExemplarValueTypeDouble:
+			value = ex.DoubleValue()
+		case pmetric.ExemplarValueTypeInt:
+			value = float64(ex.IntValue())
+		}
+		sum += value
+		result.Exemplars = append(result.Exemplars, &distribution.Distribution_Exemplar{
+			Value:     value,
+			Timestamp: timestamppb.New(ex.Timestamp().AsTime()),
+		})
+	}
+
+	// Service Control API does not like if we set non-zero mean and deviation when count=0:
+	// https://github.com/googleapis/google-api-go-client/blob/8a616df18563c9fedaead92873d200cd8c2d0503/servicecontrol/v1/servicecontrol-gen.go#L853
+	if value.Count() > 0 {
+		if exemplars.Len() > 0 {
+			// We can calculate everything ourselves.
+			mean := sum / float64(value.Count())
+			result.Mean = mean
+
+			// SumOfSquaredDeviation calculation:
+			// https://github.com/googleapis/google-api-go-client/blob/8a616df18563c9fedaead92873d200cd8c2d0503/servicecontrol/v1/servicecontrol-gen.go#L860
+			var sumDev float64
+			for _, exemplar := range result.Exemplars {
+				dev := exemplar.Value - mean
+				sumDev += dev * dev
+			}
+			result.SumOfSquaredDeviation = sumDev
+		} else {
+			// We can only hope that `value.Sum()` is populated, and calculate `result.Mean` from that.
+			// There is no way to calculate `result.SumOfSquaredDeviation`.
+			result.Mean = value.Sum() / float64(value.Count())
+		}
+	}
+	return result
+}
+
+func translateSummaryValue(value pmetric.SummaryDataPoint) *scpb.Distribution {
+	result := &scpb.Distribution{
+		Count: int64(value.Count()),
+		BucketOption: &scpb.Distribution_ExplicitBuckets_{
+			&scpb.Distribution_ExplicitBuckets{
+				Bounds: value.ExplicitBounds().AsRaw(),
+			},
+		},
+		BucketCounts: toInt64Slice(value.BucketCounts().AsRaw()),
+	}
+
+	exemplars := value.Exemplars()
+	// We compute `sum` from `exemplars`, instead of getting it from `value.Sum()`.
+	// Sum is optional in pmetric.SummaryDataPoint.
 	// Note that Exemplars are optional as well.
 	var sum float64
 	for i := 0; i < exemplars.Len(); i++ {

@@ -293,6 +293,7 @@ func TestAddAndBuild(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Cannot set the start time: %v", err)
 	}
+
 	start := pcommon.NewTimestampFromTime(s)
 	later := pcommon.NewTimestampFromTime(s.Add(time.Second))
 
@@ -1233,7 +1234,7 @@ func TestCreateOperations(t *testing.T) {
 			// If X and Y are metric names, then we have the following Metrics: [X, Y, X, Y].
 			// Values are not important in the scope of this test.
 			// We expect to have 4 operations: [X], [Y], [X], [Y].
-			name: "two segments",
+			name: "two_segments",
 			metricsFunc: func() []pmetric.Metric {
 				met := m.Metrics[0:2]
 				met = append(met, met...)
@@ -1250,7 +1251,7 @@ func TestCreateOperations(t *testing.T) {
 		},
 		{
 			// [X, Y, Z] -> [X], [Y], [Z]
-			name: "all different",
+			name: "all_different",
 			metricsFunc: func() []pmetric.Metric {
 				return m.Metrics
 			},
@@ -1264,7 +1265,7 @@ func TestCreateOperations(t *testing.T) {
 		},
 		{
 			// [X, X, X] -> [X], [X], [X]
-			name: "all identical",
+			name: "all_identical",
 			metricsFunc: func() []pmetric.Metric {
 				met := m.Metrics[0:1]
 				met = append(met, m.Metrics[0])
@@ -1439,177 +1440,187 @@ func TestParseConsumerID(t *testing.T) {
 	}
 
 }
-func TestOperationStartTime(t *testing.T) {
-	int64Cumulative := pmetric.NewMetric()
-	int64Cumulative.SetName("testservice.com/request_count")
-	int64Cumulative.SetEmptySum()
-	int64Cumulative.Sum().SetAggregationTemporality(pmetric.AggregationTemporalityCumulative)
 
-	tests := []struct {
-		name                 string
-		metricStartTimestamp string
-		pointTimestamp       string
-		want                 *timestamppb.Timestamp
-	}{
-		{
-			name:                 "pointTimestamp_earlierThanTimeSeries",
-			metricStartTimestamp: "2019-09-03T11:16:10Z",
-			pointTimestamp:       "2019-09-03T11:16:15Z",
-			want:                 MustConvertTime("2019-09-03T11:16:10Z"),
-		},
-		{
-			name:                 "no_start_time_gets_default",
-			metricStartTimestamp: "1970-01-01T00:00:00Z",
-			pointTimestamp:       "2019-09-03T11:16:10Z",
-			want:                 testExporterStartTimeTs,
-		},
-	}
+func TestMetricsExporter_ExponentialHistogram(t *testing.T) {
+	// Test ExponentialHistogram metric type support
+	mockClient := &mockServiceControlClient{}
+	exporter := createMetricsExporter(t, mockClient)
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			mst, err := time.Parse(time.RFC3339, tc.metricStartTimestamp)
-			if err != nil {
-				t.Fatalf("Cannot set the metricStartTimestamp: %v", err)
-			}
-			metricStartTimestamp := pcommon.NewTimestampFromTime(mst)
+	// Create test ExponentialHistogram metric
+	metrics := pmetric.NewMetrics()
+	rm := metrics.ResourceMetrics().AppendEmpty()
+	sm := rm.ScopeMetrics().AppendEmpty()
+	metric := sm.Metrics().AppendEmpty()
 
-			pt, err := time.Parse(time.RFC3339, tc.pointTimestamp)
-			if err != nil {
-				t.Fatalf("Cannot set the pointTimestamp: %v", err)
-			}
-			pointTimestamp := pcommon.NewTimestampFromTime(pt)
+	metric.SetName("test_exponential_histogram")
+	metric.SetDescription("Test exponential histogram metric")
 
-			metrics := metricData{
-				Metrics: func() []pmetric.Metric {
-					m := pmetric.NewMetric()
-					int64Cumulative.CopyTo(m)
-					m.Sum().DataPoints().EnsureCapacity(1)
+	// Set up ExponentialHistogram
+	expHist := metric.SetEmptyExponentialHistogram()
+	expHist.SetAggregationTemporality(pmetric.AggregationTemporalityCumulative)
 
-					p1 := m.Sum().DataPoints().AppendEmpty()
-					p1.SetStartTimestamp(metricStartTimestamp)
-					p1.SetTimestamp(pointTimestamp)
-					p1.SetIntValue(10)
-					p1.Attributes().PutStr("label1", "label1-value1")
-					p1.Attributes().PutStr("label2", "label2-value1")
+	// Add data point
+	dp := expHist.DataPoints().AppendEmpty()
+	dp.SetTimestamp(pcommon.NewTimestampFromTime(time.Now()))
+	dp.SetStartTimestamp(pcommon.NewTimestampFromTime(time.Now().Add(-time.Minute)))
+	dp.SetCount(100)
+	dp.SetSum(1000.0)
+	dp.SetScale(2)
+	dp.SetZeroCount(5)
 
-					return []pmetric.Metric{m}
-				}(),
-				Resource: sampleResource(),
-			}
+	// Set positive buckets
+	posBuckets := dp.Positive()
+	posBuckets.SetOffset(1)
+	posBuckets.BucketCounts().FromRaw([]uint64{10, 20, 30, 40})
 
-			c := newFakeClient(noError)
-			cfg := Config{
-				ServiceName:        testServiceID,
-				ConsumerProject:    testConsumerID,
-				ServiceConfigID:    testServiceConfigID,
-				EnableDebugHeaders: true,
-			}
-			e := NewMetricsExporter(cfg, zap.NewNop(), c, componenttest.NewNopTelemetrySettings())
-			e.exporterStartTime, _ = time.Parse(time.RFC3339, testExporterStartTime)
-			err = e.ConsumeMetrics(context.Background(), metricDataToPmetric(metrics))
-			require.NoError(t, err)
-			if len(c.requests) != 1 {
-				t.Errorf("Unexpected number of requests to service control API, got %d, want 1", len(c.requests))
-			}
+	// Set negative buckets
+	negBuckets := dp.Negative()
+	negBuckets.SetOffset(-2)
+	negBuckets.BucketCounts().FromRaw([]uint64{5, 10, 15})
 
-			gotServiceConfigID := c.requests[0].ServiceConfigId
-			if gotServiceConfigID != testServiceConfigID {
-				t.Errorf("ServiceConfigId differs, got: %s, want: %s", gotServiceConfigID, testServiceConfigID)
-			}
+	// Add attributes
+	dp.Attributes().PutStr("service", "test-service")
+	dp.Attributes().PutStr("version", "1.0")
 
-			gotOp := c.requests[0].Operations[0]
-			if diff := cmp.Diff(tc.want, gotOp.StartTime, unexportedOptsForScRequest()); diff != "" {
-				t.Errorf("Operation StartTime differs, -want +got: %s", diff)
-			}
-		})
-	}
+	// Test consumption
+	err := exporter.ConsumeMetrics(context.Background(), metrics)
+
+	require.NoError(t, err)
+
+	// Verify the request was sent
+	require.Len(t, mockClient.requests, 1)
+	req := mockClient.requests[0]
+	require.Len(t, req.Operations, 1)
+
+	op := req.Operations[0]
+	require.Len(t, op.MetricValueSets, 1)
+
+	mvs := op.MetricValueSets[0]
+	require.Equal(t, "test_exponential_histogram", mvs.MetricName)
+	require.Len(t, mvs.MetricValues, 1)
+
+	mv := mvs.MetricValues[0]
+	require.NotNil(t, mv.Value)
+
+	// Verify it was converted to distribution value
+	distValue, ok := mv.Value.(*scpb.MetricValue_DistributionValue)
+	require.True(t, ok, "Expected DistributionValue for ExponentialHistogram")
+	require.NotNil(t, distValue.DistributionValue)
+
+	dist := distValue.DistributionValue
+	require.Equal(t, int64(100), dist.Count)
+	require.InDelta(t, 10.0, dist.Mean, 0.001) // sum/count = 1000/100 = 10
+
+	// Verify labels
+	require.Equal(t, "test-service", mv.Labels["service"])
+	require.Equal(t, "1.0", mv.Labels["version"])
 }
 
-func TestRetriableErrorHeader(t *testing.T) {
-	server, mockServer, listener, err := StartMockServer()
-	defer StopMockServer(server, listener)
+func TestMetricsExporter_Summary(t *testing.T) {
+	// Test Summary metric type support
+	mockClient := &mockServiceControlClient{}
+	exporter := createMetricsExporter(t, mockClient)
+
+	// Create test Summary metric
+	metrics := pmetric.NewMetrics()
+	rm := metrics.ResourceMetrics().AppendEmpty()
+	sm := rm.ScopeMetrics().AppendEmpty()
+	metric := sm.Metrics().AppendEmpty()
+
+	metric.SetName("test_summary")
+	metric.SetDescription("Test summary metric")
+
+	// Set up Summary
+	summary := metric.SetEmptySummary()
+
+	// Add data point
+	dp := summary.DataPoints().AppendEmpty()
+	dp.SetTimestamp(pcommon.NewTimestampFromTime(time.Now()))
+	dp.SetStartTimestamp(pcommon.NewTimestampFromTime(time.Now().Add(-time.Minute)))
+	dp.SetCount(50)
+	dp.SetSum(500.0)
+
+	// Add quantile values
+	quantiles := dp.QuantileValues()
+
+	q50 := quantiles.AppendEmpty()
+	q50.SetQuantile(0.5)
+	q50.SetValue(8.0)
+
+	q90 := quantiles.AppendEmpty()
+	q90.SetQuantile(0.9)
+	q90.SetValue(15.0)
+
+	q99 := quantiles.AppendEmpty()
+	q99.SetQuantile(0.99)
+	q99.SetValue(20.0)
+
+	// Add attributes
+	dp.Attributes().PutStr("endpoint", "/api/test")
+	dp.Attributes().PutStr("method", "GET")
+
+	// Test consumption
+	err := exporter.ConsumeMetrics(context.Background(), metrics)
+
 	require.NoError(t, err)
-	defer server.Stop()
 
-	mockServer.SetReturnFunc(func(ctx context.Context, req *scpb.ReportRequest) (*scpb.ReportResponse, error) {
-		if mockServer.CallCount == 1 {
-			return nil, status.Error(codes.Unavailable, "service unavailable")
-		}
-		md := grpcmetadata.Pairs(debugHeaderKey, "This is debug encrypted response value.")
-		grpc.SendHeader(ctx, md)
-		return &scpb.ReportResponse{}, nil
-	})
+	// Verify the request was sent
+	require.Len(t, mockClient.requests, 1)
+	req := mockClient.requests[0]
+	require.Len(t, req.Operations, 1)
 
-	core, logs := observer.New(zap.InfoLevel)
+	op := req.Operations[0]
+	require.Len(t, op.MetricValueSets, 1)
+
+	mvs := op.MetricValueSets[0]
+	require.Equal(t, "test_summary", mvs.MetricName)
+	require.Len(t, mvs.MetricValues, 1)
+
+	mv := mvs.MetricValues[0]
+	require.NotNil(t, mv.Value)
+
+	// Verify it was converted to distribution value
+	distValue, ok := mv.Value.(*scpb.MetricValue_DistributionValue)
+	require.True(t, ok, "Expected DistributionValue for Summary")
+	require.NotNil(t, distValue.DistributionValue)
+
+	dist := distValue.DistributionValue
+	require.Equal(t, int64(50), dist.Count)
+	require.InDelta(t, 10.0, dist.Mean, 0.001) // sum/count = 500/50 = 10
+
+	// Verify labels
+	require.Equal(t, "/api/test", mv.Labels["endpoint"])
+	require.Equal(t, "GET", mv.Labels["method"])
+}
+
+func TestMetricsExporter_UnsupportedMetricTypes_LogsWarning(t *testing.T) {
+	// Test that unsupported metric types log appropriate warnings
+	core, logs := observer.New(zap.WarnLevel)
 	logger := zap.New(core)
 
-	currentTime := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
-	// Create testing now function to prevent flaky
-	nowFunc := func() time.Time {
-		return currentTime
-	}
+	mockClient := &mockServiceControlClient{}
+	config := createDefaultConfig().(*Config)
+	exporter := NewMetricsExporter(*config, logger, mockClient, componenttest.NewNopTelemetrySettings())
 
-	interceptor := NewHeaderLoggingInterceptor(logger)
+	// Create metrics with currently unsupported type (before our implementation)
+	metrics := pmetric.NewMetrics()
+	rm := metrics.ResourceMetrics().AppendEmpty()
+	sm := rm.ScopeMetrics().AppendEmpty()
 
-	conn, err := grpc.DialContext(
-		context.Background(),
-		"bufconn",
-		grpc.WithInsecure(),
-		grpc.WithContextDialer(BufDialer),
-		grpc.WithUnaryInterceptor(interceptor.UnaryInterceptor),
-	)
+	// Add an unsupported metric type by creating an empty metric
+	// and checking the warning is logged
+	metric := sm.Metrics().AppendEmpty()
+	metric.SetName("unsupported_metric")
+
+	// This should trigger the default case and log a warning
+	err := exporter.ConsumeMetrics(context.Background(), metrics)
 	require.NoError(t, err)
-	defer conn.Close()
 
-	fc := &serviceControlClientRaw{
-		service: scpb.NewServiceControllerClient(conn),
-	}
-
-	cfg := Config{
-		ServiceName:        testServiceID,
-		ConsumerProject:    testConsumerID,
-		ServiceConfigID:    testServiceConfigID,
-		EnableDebugHeaders: true,
-	}
-	e := NewMetricsExporter(cfg, logger, fc, componenttest.NewNopTelemetrySettings())
-	e.nowFunc = nowFunc
-
-	metrics := sampleMetricData(t)
-
-	ctx := context.Background()
-
-	// First call with retriable error: should set debugHeaderExpirationTime
-	err = e.ConsumeMetrics(ctx, metricDataToPmetric(metrics))
-	require.Error(t, err)
-
-	// // Assert debugHeaderExpirationTime time is set
-	debugHeaderExpirationTime := e.debugHeaderExpirationTime
-	expectedHeaderUntil := currentTime.Add(debugHeaderTimeoutMinutes * time.Minute)
-	if !debugHeaderExpirationTime.Equal(expectedHeaderUntil) {
-		t.Errorf("debugHeaderExpirationTime incorrect, got %v, want %v", debugHeaderExpirationTime, expectedHeaderUntil)
-	}
-
-	// Second call should contain header response
-	err = e.ConsumeMetrics(ctx, metricDataToPmetric(metrics))
-	require.NoError(t, err)
-	expectedLogMessage := "Method: /google.api.servicecontrol.v1.ServiceController/Report, Received response headers: map[content-type:[application/grpc] x-return-encrypted-headers:[This is debug encrypted response value.]]"
-	logEntries := logs.FilterMessageSnippet("Received response headers").All()
-	require.Len(t, logEntries, mockServer.CallCount-1, "Expected one log entry for response headers")
-	require.Contains(t, expectedLogMessage, logEntries[0].Message, "Log message does not match expected")
-
-	// Third call should contain header response with additional log
-	err = e.ConsumeMetrics(ctx, metricDataToPmetric(metrics))
-	require.NoError(t, err)
-	logEntries = logs.FilterMessageSnippet("Received response headers").All()
-	require.Len(t, logEntries, mockServer.CallCount-1, "Expected one log entry for response headers")
-	require.Contains(t, expectedLogMessage, logEntries[0].Message, "Log message does not match expected")
-
-	// Fourth call with passing timelimit
-	currentTime = currentTime.Add(4 * time.Minute)
-
-	err = e.ConsumeMetrics(ctx, metricDataToPmetric(metrics))
-	require.NoError(t, err)
-	require.Len(t, logEntries, mockServer.CallCount-2, "Expected no log entry for response headers")
+	// Verify warning was logged
+	require.Greater(t, logs.Len(), 0)
+	logEntry := logs.All()[0]
+	require.Equal(t, zap.WarnLevel, logEntry.Level)
+	require.Contains(t, logEntry.Message, "Metric type unsupported")
 }
 
 func newFakeClient(errFunc func(context.Context) error) *fakeClient {

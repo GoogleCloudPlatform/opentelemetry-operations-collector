@@ -28,7 +28,7 @@ ARG TARGETARCH
 RUN if [ "${TARGETARCH}" = "arm64" ] && [ "${BUILDARCH}" != "arm64" ]; then \
         CC=aarch64-linux-gnu-gcc; \
     fi && \
-    CC=${CC} make GO_BIN_DIR=/usr/local/go/bin -f pull_modules_from_ar_repos.mk aoss-build
+    CC=${CC} make GO_BIN_DIR=/usr/local/go/bin -f USE_GO_PROXY=https://us-go.pkg.dev/access-aoss/assuredoss-go build
 
 RUN mkdir --mode=0755 /etc/{{ .BinaryName }}
 RUN cp /{{ .Name }}/config.yaml /etc/{{ .BinaryName }}/config.yaml

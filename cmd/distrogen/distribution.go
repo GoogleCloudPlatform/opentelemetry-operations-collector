@@ -65,9 +65,9 @@ type DistributionSpec struct {
 	GoProxy                     string                  `yaml:"go_proxy,omitempty"`
 
 	// CollectorCGO determines whether the Collector will be built with CGO.
-	CollectorCGO bool `yaml:"collector_cgo,omitempty"`
-	ComponentModuleBase         string                  `yaml:"component_module_base"`
-	DistrogenVersion            string                  `yaml:"distrogen_version"`
+	CollectorCGO        bool   `yaml:"collector_cgo,omitempty"`
+	ComponentModuleBase string `yaml:"component_module_base"`
+	DistrogenVersion    string `yaml:"distrogen_version"`
 }
 
 // RenderGoMajorVersion will parse the GoVersion in the spec and return a version without a patch
@@ -185,7 +185,7 @@ func NewDistributionGenerator(spec *DistributionSpec, registry *Registry, forceG
 		// -rw-r--r--
 		FileMode: DefaultFileMode,
 	}
-	d.GenerateDirName = spec.BinaryName
+	d.GenerateDirName = spec.Name
 
 	if !forceGenerate {
 		specCache, err := yamlUnmarshalFromFile[DistributionSpec](filepath.Join(d.GenerateDirName, "spec.yaml"))

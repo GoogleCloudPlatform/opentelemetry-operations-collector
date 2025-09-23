@@ -1,9 +1,0 @@
-receivers:
-    sample:
-        gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/scratch/components/receiver/samplereceiver
-        path: ../components/receiver/samplereceiver
-processors: {}
-exporters: {}
-connectors: {}
-extensions: {}
-providers: {}

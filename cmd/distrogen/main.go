@@ -253,8 +253,7 @@ func (cmd *projectCommand) ParseArgs(args []string) error {
 	cmd.spec = setSpecFlag(&cmd.flags)
 	cmd.tools = cmd.flags.StringArray("tools", []string{}, "Provide additional tools to install")
 
-	cmd.flags.Parse(args)
-	return nil
+	return cmd.flags.Parse(args)
 }
 
 func (cmd *projectCommand) Run() error {
@@ -288,8 +287,7 @@ func (cmd *componentCommand) ParseArgs(args []string) error {
 	cmd.componentType = cmd.flags.String("type", "", "Type of component")
 	cmd.componentName = cmd.flags.String("name", "", "Name of component")
 
-	cmd.flags.Parse(args)
-	return nil
+	return cmd.flags.Parse(args)
 }
 
 func (cmd *componentCommand) Run() error {
@@ -317,7 +315,6 @@ func (cmd *componentCommand) Run() error {
 }
 
 type registryCommand struct {
-	flags flag.FlagSet
 }
 
 func (cmd *registryCommand) ParseArgs(args []string) error {

@@ -42,6 +42,7 @@ const (
 // It contains all the information that will be formatted into the default set of
 // templates/user provided templates.
 type DistributionSpec struct {
+	Path                        string                  `yaml:"-"`
 	Name                        string                  `yaml:"name"`
 	Module                      string                  `yaml:"module"`
 	DisplayName                 string                  `yaml:"display_name"`
@@ -60,11 +61,22 @@ type DistributionSpec struct {
 	Components                  *DistributionComponents `yaml:"components"`
 	Replaces                    ComponentReplaces       `yaml:"replaces,omitempty"`
 	CustomValues                map[string]any          `yaml:"custom_values,omitempty"`
-	FeatureGates                FeatureGates            `yaml:"feature_gates"`
+	FeatureGates                FeatureGates            `yaml:"feature_gates,omitempty"`
 	GoProxy                     string                  `yaml:"go_proxy,omitempty"`
 
 	// CollectorCGO determines whether the Collector will be built with CGO.
-	CollectorCGO bool `yaml:"collector_cgo,omitempty"`
+	CollectorCGO        bool   `yaml:"collector_cgo,omitempty"`
+	ComponentModuleBase string `yaml:"component_module_base"`
+	DistrogenVersion    string `yaml:"distrogen_version"`
+}
+
+// RenderGoMajorVersion will parse the GoVersion in the spec and return a version without a patch
+func (s *DistributionSpec) RenderGoMajorVersion() string {
+	split := strings.Split(s.GoVersion, ".")
+	if len(split) < 2 {
+		return s.GoVersion
+	}
+	return fmt.Sprintf("%s.%s", split[0], split[1])
 }
 
 // Diff will compare two different DistributionSpecs.
@@ -130,6 +142,9 @@ func NewDistributionSpec(path string) (*DistributionSpec, error) {
 			return nil, fmt.Errorf("%w, build_container was set to %s", ErrSpecValidationBoringCryptoWithoutDebian, spec.BuildContainer)
 		}
 	}
+
+	// The name of the spec.yaml file might be different from the binary name
+	spec.Path = filepath.Base(path)
 
 	// It is a rare case where the contrib version falls out of sync with
 	// the canonical OpenTelemetry version, most of the time it is the same.
@@ -202,7 +217,7 @@ func (d *DistributionGenerator) Generate() error {
 	if err != nil {
 		return err
 	}
-	templates, err := GetEmbeddedTemplateSet(templateContext, d.FileMode)
+	templates, err := GetDistributionTemplateSet(templateContext, d.FileMode)
 	if err != nil {
 		return err
 	}
@@ -219,7 +234,6 @@ func (d *DistributionGenerator) Generate() error {
 	}
 
 	templates.RenameExceptionalTemplates(d.Spec)
-
 	for _, tmpl := range templates {
 		if err := tmpl.Render(d.GeneratePath); err != nil {
 			return err

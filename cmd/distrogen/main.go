@@ -141,11 +141,7 @@ func (cmd *generateCommand) Run() error {
 		return generator.Compare()
 	}
 
-	if err := generator.MoveGeneratedDirToWd(); err != nil {
-		return err
-	}
-
-	return nil
+	return generator.MoveGeneratedDirToWd()
 }
 
 type queryCommand struct {

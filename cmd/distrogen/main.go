@@ -145,7 +145,7 @@ func (cmd *generateCommand) Run() error {
 		return err
 	}
 
-	return generator.Generate()
+	return nil
 }
 
 type queryCommand struct {

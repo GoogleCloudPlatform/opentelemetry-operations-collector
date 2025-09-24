@@ -2,6 +2,6 @@ regions:
   - us
   - us-west2
   - us-east1
-  - asia-south1
-  - southamerica-east1
-  - europe-west3
+  - asia-southeast1
+  - southamerica-west1
+  - europe-west4

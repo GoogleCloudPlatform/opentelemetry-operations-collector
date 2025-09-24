@@ -13,6 +13,8 @@ binary_name: otelcol-google
 build_tags: ""
 boringcrypto: true
 docker_repo: ""
+component_module_base: "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/google-built-opentelemetry-collector"
+distrogen_version: "v0.130.1-0.20250724183747-261516e1bff1"
 components:
     receivers:
         - otlp

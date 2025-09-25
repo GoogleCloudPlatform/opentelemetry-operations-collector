@@ -60,6 +60,7 @@ components:
     - statsd
     - syslog
     - googlecloudmonitoring
+    - googlecloudpubsub
     - tcplog
 
   processors:
@@ -97,6 +98,7 @@ components:
     - googlecloud
     - googlemanagedprometheus
     - googleservicecontrol
+    - googlecloudpubsub
     - prometheus
 
   extensions:

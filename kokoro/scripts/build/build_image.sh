@@ -12,7 +12,7 @@ set -e
 ## This allows gotestsum to wrap an arbitrary command.
 #/go/bin/gotestsum --format=standard-verbose --junitfile=$KOKORO_ARTIFACTS_DIR/report.xml -- "${PACKAGES}"
 
-docker build google-built-opentelemetry-collector \
+docker buildx build \
 --file google-built-opentelemetry-collector/Dockerfile.image_with_gcloud.build \
 --platform linux/amd64,linux/arm64 \
 --build-arg PROJECT_ROOT='git/otelcol-google' \

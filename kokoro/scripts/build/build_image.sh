@@ -11,9 +11,10 @@ set -e
 ## Run the make target using gotestsum's raw-command argument.
 ## This allows gotestsum to wrap an arbitrary command.
 #/go/bin/gotestsum --format=standard-verbose --junitfile=$KOKORO_ARTIFACTS_DIR/report.xml -- "${PACKAGES}"
+pwd
 
 docker buildx build \
---file google-built-opentelemetry-collector/Dockerfile.image_with_gcloud.build \
+--file otelcol-google/google-built-opentelemetry-collector/Dockerfile.image_with_gcloud.build \
 --platform linux/amd64,linux/arm64 \
 --build-arg PROJECT_ROOT='git/otelcol-google' \
 --build-arg BUILD_CONTAINER='us-docker.pkg.dev/google.com/api-project-999119582588/go-boringcrypto-internal/golang@sha256:5e292c54d2d37534a367761cbc0b69b81d717c730f824e0f7abdcd54133e43f1' \

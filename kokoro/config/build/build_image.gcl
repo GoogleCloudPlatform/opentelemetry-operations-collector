@@ -3,7 +3,7 @@ import 'common.gcl' as common
 config build = common.build {
   build_script = 'kokoro/scripts/build/build_image.sh'
 
-  container_properties = {
+  container_properties {
     provide_buildkit_builder= true
   }
 

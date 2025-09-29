@@ -1,3 +1,14 @@
+GOPROXY=https://us-go.pkg.dev/artifact-foundry-prod/golang-3p-trusted go install gotest.tools/gotestsum@v1.12.3
+
+#PACKAGES=$(go list -f "{{ .Dir }}" -m | \
+#grep ".*opentelemetry-operations-collector/components.*" | \
+#grep -v ".*internal/tools.*" | \
+#tr '\n' ' ')
+#
+## Run the make target using gotestsum's raw-command argument.
+## This allows gotestsum to wrap an arbitrary command.
+#/go/bin/gotestsum --format=standard-verbose --junitfile=$KOKORO_ARTIFACTS_DIR/report.xml -- "${PACKAGES}"
+
 docker build google-built-opentelemetry-collector \
 --file google-built-opentelemetry-collector/Dockerfile.image_with_gcloud.build \
 --platform linux/amd64,linux/arm64 \

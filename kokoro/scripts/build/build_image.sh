@@ -1,3 +1,6 @@
+#!/bin/bash
+
+set -e
 #GOPROXY=https://us-go.pkg.dev/artifact-foundry-prod/golang-3p-trusted go install gotest.tools/gotestsum@v1.12.3
 
 #PACKAGES=$(go list -f "{{ .Dir }}" -m | \

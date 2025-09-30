@@ -35,13 +35,14 @@ type BuildContainerOption string
 
 const (
 	Alpine BuildContainerOption = "alpine"
-	Ubuntu BuildContainerOption = "ubuntu"
+	Debian BuildContainerOption = "debian"
 )
 
 // DistributionSpec is the specification for a new OpenTelemetry Collector distribution.
 // It contains all the information that will be formatted into the default set of
 // templates/user provided templates.
 type DistributionSpec struct {
+	Path                        string                  `yaml:"-"`
 	Name                        string                  `yaml:"name"`
 	Module                      string                  `yaml:"module"`
 	DisplayName                 string                  `yaml:"display_name"`
@@ -55,14 +56,28 @@ type DistributionSpec struct {
 	GoVersion                   string                  `yaml:"go_version"`
 	BinaryName                  string                  `yaml:"binary_name"`
 	BuildTags                   string                  `yaml:"build_tags"`
-	CollectorCGO                bool                    `yaml:"collector_cgo"`
+	BoringCrypto                bool                    `yaml:"boringcrypto"`
 	DockerRepo                  string                  `yaml:"docker_repo"`
 	Registries                  []*CustomRegistry       `yaml:"registries,omitempty"`
 	Components                  *DistributionComponents `yaml:"components"`
 	Replaces                    ComponentReplaces       `yaml:"replaces,omitempty"`
 	CustomValues                map[string]any          `yaml:"custom_values,omitempty"`
-	FeatureGates                FeatureGates            `yaml:"feature_gates"`
+	FeatureGates                FeatureGates            `yaml:"feature_gates,omitempty"`
 	GoProxy                     string                  `yaml:"go_proxy,omitempty"`
+
+	// CollectorCGO determines whether the Collector will be built with CGO.
+	CollectorCGO        bool   `yaml:"collector_cgo,omitempty"`
+	ComponentModuleBase string `yaml:"component_module_base"`
+	DistrogenVersion    string `yaml:"distrogen_version"`
+}
+
+// RenderGoMajorVersion will parse the GoVersion in the spec and return a version without a patch
+func (s *DistributionSpec) RenderGoMajorVersion() string {
+	split := strings.Split(s.GoVersion, ".")
+	if len(split) < 2 {
+		return s.GoVersion
+	}
+	return fmt.Sprintf("%s.%s", split[0], split[1])
 }
 
 // Diff will compare two different DistributionSpecs.
@@ -144,6 +159,11 @@ func (s *DistributionSpec) GetAllRegistries() (Registries, error) {
 	return registries, nil
 }
 
+var (
+	ErrSpecValidationBoringCryptoWithoutCGO    = errors.New("boringcrypto build is not possible with collector_cgo turned off")
+	ErrSpecValidationBoringCryptoWithoutDebian = errors.New("boringcrypto is only possible with the debian build container")
+)
+
 // NewDistributionSpec loads the DistributionSpec from a yaml file.
 func NewDistributionSpec(path string) (*DistributionSpec, error) {
 	spec, err := yamlUnmarshalFromFile[DistributionSpec](path)
@@ -151,14 +171,30 @@ func NewDistributionSpec(path string) (*DistributionSpec, error) {
 		return nil, err
 	}
 
+	if spec.BuildContainer == "" {
+		spec.BuildContainer = Debian
+	}
+
+	// If BoringCrypto is set, CGO must be enabled and only the debian
+	// build container can be used.
+	if spec.BoringCrypto {
+		// If CGO was manually set to false in the config, return a validation error.
+		if !spec.CollectorCGO {
+			return nil, ErrSpecValidationBoringCryptoWithoutCGO
+		}
+		// If build container is manually set to something other than debian, return a validation error.
+		if spec.BuildContainer != Debian {
+			return nil, fmt.Errorf("%w, build_container was set to %s", ErrSpecValidationBoringCryptoWithoutDebian, spec.BuildContainer)
+		}
+	}
+
+	// The name of the spec.yaml file might be different from the binary name
+	spec.Path = filepath.Base(path)
+
 	// It is a rare case where the contrib version falls out of sync with
 	// the canonical OpenTelemetry version, most of the time it is the same.
 	if spec.OpenTelemetryContribVersion == "" {
 		spec.OpenTelemetryContribVersion = spec.OpenTelemetryVersion
-	}
-
-	if spec.BuildContainer == "" {
-		spec.BuildContainer = Alpine
 	}
 
 	return spec, nil
@@ -230,7 +266,7 @@ func (d *DistributionGenerator) Generate() error {
 	if err != nil {
 		return err
 	}
-	templates, err := GetEmbeddedTemplateSet(templateContext, d.FileMode)
+	templates, err := GetDistributionTemplateSet(templateContext, d.FileMode)
 	if err != nil {
 		return err
 	}
@@ -247,7 +283,6 @@ func (d *DistributionGenerator) Generate() error {
 	}
 
 	templates.RenameExceptionalTemplates(d.Spec)
-
 	for _, tmpl := range templates {
 		if err := tmpl.Render(d.GeneratePath); err != nil {
 			return err
@@ -460,17 +495,17 @@ func NewTemplateContextFromSpec(spec *DistributionSpec, registries Registries) (
 
 	errs := make(CollectionError)
 	var err CollectionError
-	context.Receivers, err = registries.LoadAllComponents(ReceiverType, spec.Components.Receivers)
+	context.Receivers, err = registries.LoadAllComponents(Receiver, spec.Components.Receivers)
 	mapMerge(errs, err)
-	context.Processors, err = registries.LoadAllComponents(ProcessorType, spec.Components.Processors)
+	context.Processors, err = registries.LoadAllComponents(Processor, spec.Components.Processors)
 	mapMerge(errs, err)
-	context.Exporters, err = registries.LoadAllComponents(ExporterType, spec.Components.Exporters)
+	context.Exporters, err = registries.LoadAllComponents(Exporter, spec.Components.Exporters)
 	mapMerge(errs, err)
-	context.Connectors, err = registries.LoadAllComponents(ConnectorType, spec.Components.Connectors)
+	context.Connectors, err = registries.LoadAllComponents(Connector, spec.Components.Connectors)
 	mapMerge(errs, err)
-	context.Extensions, err = registries.LoadAllComponents(ExtensionType, spec.Components.Extensions)
+	context.Extensions, err = registries.LoadAllComponents(Extension, spec.Components.Extensions)
 	mapMerge(errs, err)
-	context.Providers, err = registries.LoadAllComponents(ProviderType, spec.Components.Providers)
+	context.Providers, err = registries.LoadAllComponents(Provider, spec.Components.Providers)
 	mapMerge(errs, err)
 
 	if len(errs) > 0 {

@@ -14,10 +14,12 @@
 
 name: otelopscol
 description: "OpenTelemetry Collector binary used by the Ops Agent"
-opentelemetry_version: 0.130.0
-opentelemetry_stable_version: 1.36.0
+module: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/otelopscol
+version: v0.136.0
+opentelemetry_version: 0.136.0
+opentelemetry_stable_version: 1.42.0
 binary_name: otelopscol
-build_container: ubuntu
+build_container: debian
 collector_cgo: true
 go_version: 1.23.2
 build_tags: gpu
@@ -62,19 +64,22 @@ components:
     - otlpjsonfile
   processors:
     - cumulativetodelta
+    - deltatocumulative
     - deltatorate
     - filter
     - groupbyattrs
+    - interval
+    - logstransform
     - metricstransform
     - resourcedetection
     - resource
     - transform
     - batch
     - memorylimiter
+    - metricstarttime
     # Within this repo
     - agentmetrics
     - casttosum
-    - modifyscope
     - normalizesums
   exporters:
     - file
@@ -83,9 +88,11 @@ components:
     - debug
     - otlp
     - otlphttp
+    - prometheus
   extensions:
     - zpages
     - googleclientauth
+    - pprof
   providers:
     - googlesecretmanager
     - file

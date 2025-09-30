@@ -1,0 +1,9 @@
+components:
+  connector: {}
+  exporter: {}
+  extension: {}
+  processor: {}
+  provider: {}
+  receiver: {}
+opentelemetryversions: null
+version: ""

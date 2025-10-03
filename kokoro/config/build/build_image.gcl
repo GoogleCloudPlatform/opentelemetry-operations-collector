@@ -31,5 +31,11 @@ config build = common.build {
       source = 'container/container.tar'
       destination = 'us-docker.pkg.dev/cloud-ops-agents-art-staging/google-cloud-opentelemetry-collector-staging/otelcol-google'
     },
+    {
+      // Path to the container tar file produced by the build. For a container build,
+      // this should always be "container/container.tar"
+      source = 'container/container.tar'
+      destination = 'us-east1-docker.pkg.dev/cloud-ops-agents-art-staging/google-cloud-opentelemetry-collector-staging/otelcol-google'
+    },
   ]
 }

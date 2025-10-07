@@ -104,10 +104,10 @@ func NewRegistryComponentCollection() RegistryComponentCollection {
 }
 
 type Registry struct {
-	Components            RegistryComponentCollection
-	OpenTelemetryVersions *otelComponentVersion
-	Version               string
-	Path                  string `yaml:"-"`
+	Components            RegistryComponentCollection `yaml:"components"`
+	OpenTelemetryVersions *otelComponentVersion       `yaml:"opentelemetry_versions"`
+	Version               string                      `yaml:"version"`
+	Path                  string                      `yaml:"-"`
 }
 
 func NewRegistry() *Registry {

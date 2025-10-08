@@ -14,20 +14,20 @@ build_tags: ""
 boringcrypto: false
 docker_repo: us-docker.pkg.dev/pretend-repo/otelcol-basic
 components:
-    receivers:
-        - otlp
-    processors:
-        - batch
-        - memorylimiter
-    exporters:
-        - otlp
-    connectors:
-        - forward
-    extensions:
-        - pprof
-    providers:
-        - yaml
+  receivers:
+  - otlp
+  processors:
+  - batch
+  - memorylimiter
+  exporters:
+  - otlp
+  connectors:
+  - forward
+  extensions:
+  - pprof
+  providers:
+  - yaml
 feature_gates:
-    - exporter.googlemanagedprometheus.intToDouble
+- exporter.googlemanagedprometheus.intToDouble
 component_module_base: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/basic
 distrogen_version: v0.130.1-0.20250724183747-261516e1bff1

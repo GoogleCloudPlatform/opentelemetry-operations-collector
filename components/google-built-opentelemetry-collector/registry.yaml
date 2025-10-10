@@ -15,7 +15,6 @@
 exporters:
   googleservicecontrol:
     gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter v0.0.0
-    path: "../components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter"
 
 extensions:
   healthagent:

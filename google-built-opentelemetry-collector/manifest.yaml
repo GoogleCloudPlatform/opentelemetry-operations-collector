@@ -60,7 +60,6 @@ processors:
 
 exporters:
 - gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter v0.137.0
-  path: ../components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/fileexporter v0.137.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter v0.137.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudpubsubexporter v0.137.0

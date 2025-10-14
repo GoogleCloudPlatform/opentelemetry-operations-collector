@@ -87,6 +87,7 @@ components:
         - routing
         - servicegraph
         - spanmetrics
+        - signaltometrics
     extensions:
         - zpages
         - ack

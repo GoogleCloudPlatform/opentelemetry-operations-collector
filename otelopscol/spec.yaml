@@ -13,7 +13,79 @@ binary_name: otelopscol
 build_tags: gpu
 boringcrypto: false
 docker_repo: ""
+registries:
+- name: local_components
+  source: local
+  registryconfig:
+    path: ./components/otelopscol/registry.yaml
 components:
+<<<<<<< HEAD
+  receivers:
+  - activedirectoryds
+  - aerospike
+  - apache
+  - couchdb
+  - elasticsearch
+  - filelog
+  - flinkmetrics
+  - hostmetrics
+  - iis
+  - jmx
+  - memcached
+  - mysql
+  - nginx
+  - postgresql
+  - prometheus
+  - otlp
+  - rabbitmq
+  - redis
+  - saphana
+  - sqlquery
+  - sqlserver
+  - windowseventlog
+  - windowsperfcounters
+  - zookeeper
+  - dcgm
+  - mongodb
+  - nvml
+  - varnish
+  - journald
+  - otlpjsonfile
+  processors:
+  - cumulativetodelta
+  - deltatorate
+  - filter
+  - groupbyattrs
+  - metricstransform
+  - resourcedetection
+  - resource
+  - transform
+  - batch
+  - memorylimiter
+  - agentmetrics
+  - casttosum
+  - modifyscope
+  - normalizesums
+  exporters:
+  - file
+  - googlecloud
+  - googlemanagedprometheus
+  - debug
+  - otlp
+  - otlphttp
+  extensions:
+  - zpages
+  - googleclientauth
+  providers:
+  - googlesecretmanager
+  - file
+  - env
+replaces:
+- from: github.com/GoogleCloudPlatform/opentelemetry-operations-collector
+  to: ../../
+  reason: Reference root module of repository to find dependency packages.
+feature_gates: []
+=======
     receivers:
         - activedirectoryds
         - aerospike
@@ -86,3 +158,4 @@ replaces:
 collector_cgo: true
 component_module_base: ""
 distrogen_version: ""
+>>>>>>> master

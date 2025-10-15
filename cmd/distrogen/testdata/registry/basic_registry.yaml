@@ -12,22 +12,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+release:
+  version: 1.0.0
+
 receivers:
   testreceiver:
-    gomod: github.com/test/receiver v1.0.0
+    gomod: github.com/test/receiver
 
 processors:
   testprocessor:
-    gomod: github.com/test/processor v1.0.0
+    gomod: github.com/test/processor
 
 exporters:
   testexporter:
-    gomod: github.com/test/exporter v1.0.0
+    gomod: github.com/test/exporter
 
 connectors:
   testconnector:
-    gomod: github.com/test/connector v1.0.0
+    gomod: github.com/test/connector
 
 extensions:
   testextension:
-    gomod: github.com/test/extension v1.0.0
+    gomod: github.com/test/extension

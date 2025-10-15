@@ -28,9 +28,6 @@ var (
 )
 
 func TestDistributionTemplateGeneration(t *testing.T) {
-	registry, err := LoadEmbeddedRegistry()
-	assert.NilError(t, err)
-
 	testDirs, err := os.ReadDir(testdataFullDistributionPath)
 	assert.NilError(t, err)
 	for _, d := range testDirs {
@@ -40,18 +37,18 @@ func TestDistributionTemplateGeneration(t *testing.T) {
 
 		name := d.Name()
 		t.Run(name, func(t *testing.T) {
-			testGeneratorCase(t, registry, name)
+			testGeneratorCase(t, name)
 		})
 	}
 }
 
-func testGeneratorCase(t *testing.T, registry *Registry, testFolder string) {
+func testGeneratorCase(t *testing.T, testFolder string, registries ...*Registry) {
 	specPath := filepath.Join(testdataFullDistributionPath, testFolder, "spec.yaml")
 
 	d, err := NewDistributionSpec(specPath)
 	assert.NilError(t, err)
 
-	g, err := NewDistributionGenerator(d, registry, true)
+	g, err := NewDistributionGenerator(d, true)
 	assert.NilError(t, err)
 
 	// If custom templates exist for the test case, use them.

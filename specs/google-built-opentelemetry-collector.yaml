@@ -131,6 +131,7 @@ components:
     - routing
     - servicegraph
     - spanmetrics
+    - signaltometrics
 
   providers:
     - env

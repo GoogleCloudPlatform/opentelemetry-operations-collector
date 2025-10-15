@@ -117,6 +117,7 @@ The Google-Built OpenTelemetry Collector is an open-source, production-ready bui
 | roundrobin | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/connector/roundrobinconnector/README.md) |
 | routing | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/connector/routingconnector/README.md) |
 | servicegraph | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/connector/servicegraphconnector/README.md) |
+| signaltometrics | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/connector/signaltometricsconnector/README.md) |
 | spanmetrics | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/connector/spanmetricsconnector/README.md) |
 
 

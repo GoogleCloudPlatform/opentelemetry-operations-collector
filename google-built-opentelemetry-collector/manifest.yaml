@@ -103,6 +103,7 @@ connectors:
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/connector/roundrobinconnector v0.137.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/connector/routingconnector v0.137.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/connector/servicegraphconnector v0.137.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/connector/signaltometricsconnector v0.137.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/connector/spanmetricsconnector v0.137.0
 - gomod: go.opentelemetry.io/collector/connector/forwardconnector v0.137.0
 

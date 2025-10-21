@@ -34,8 +34,9 @@ var registryContent []byte
 var ErrComponentNotFound = errors.New("component not found")
 
 type ReleaseInfo struct {
-	Version                       string `yaml:"version,omitempty"`
-	OpenTelemetryCollectorVersion string `yaml:"opentelemetry_collector_version,omitempty"`
+	Version                       string            `yaml:"version,omitempty"`
+	OpenTelemetryCollectorVersion string            `yaml:"opentelemetry_collector_version,omitempty"`
+	Replaces                      ComponentReplaces `yaml:"replaces,omitempty"`
 }
 
 // RegistryConfig is a collection of components that can be used in
@@ -87,6 +88,7 @@ func (rc *RegistryConfig) MakeRegistry() *Registry {
 		core:    rc.Release.OpenTelemetryCollectorVersion,
 		contrib: rc.Release.OpenTelemetryCollectorVersion,
 	}
+	registry.Replaces = rc.Release.Replaces
 	registry.Version = rc.Release.Version
 	return registry
 }
@@ -105,9 +107,11 @@ func NewRegistryComponentCollection() RegistryComponentCollection {
 
 type Registry struct {
 	Components            RegistryComponentCollection `yaml:"components"`
-	OpenTelemetryVersions *otelComponentVersion       `yaml:"opentelemetry_versions"`
-	Version               string                      `yaml:"version"`
+	OpenTelemetryVersions *otelComponentVersion       `yaml:"opentelemetry_versions,omitempty"`
+	Version               string                      `yaml:"version,omitempty"`
+	Replaces              ComponentReplaces           `yaml:"replaces,omitempty"`
 	Path                  string                      `yaml:"-"`
+	Used                  bool                        `yaml:"-"`
 }
 
 func NewRegistry() *Registry {
@@ -141,6 +145,7 @@ func (r *Registry) LoadAllComponents(componentType ComponentType, names []string
 			continue
 		}
 		components[name] = component
+		r.Used = true
 	}
 	return components, errs
 }

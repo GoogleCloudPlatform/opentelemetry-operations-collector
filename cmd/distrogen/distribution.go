@@ -512,6 +512,12 @@ func NewTemplateContextFromSpec(spec *DistributionSpec, registries Registries) (
 		return nil, errs
 	}
 
+	for _, registry := range registries {
+		if registry.Used {
+			context.DistributionSpec.Replaces = append(context.DistributionSpec.Replaces, registry.Replaces...)
+		}
+	}
+
 	return &context, nil
 }
 

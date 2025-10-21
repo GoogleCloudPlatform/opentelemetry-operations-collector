@@ -5,5 +5,3 @@ components:
   processor: {}
   provider: {}
   receiver: {}
-opentelemetryversions: null
-version: ""

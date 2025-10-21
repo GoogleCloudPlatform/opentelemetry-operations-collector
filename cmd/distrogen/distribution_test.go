@@ -57,11 +57,11 @@ func testGeneratorCase(t *testing.T, testFolder string, registries ...*Registry)
 		g.CustomTemplatesDir = os.DirFS(customTemplates)
 	}
 
-	err = g.Generate()
-	assert.NilError(t, err)
 	t.Cleanup(func() {
 		g.Clean()
 	})
+	err = g.Generate()
+	assert.NilError(t, err)
 
 	goldenPath := filepath.Join(testdataFullDistributionPath, testFolder, "golden")
 	goldenSubPath := filepath.Join(testdataSubpath, testFolder, "golden")

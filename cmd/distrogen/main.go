@@ -85,15 +85,17 @@ func setSpecFlag(flags *flag.FlagSet) *string {
 type generateCommand struct {
 	flags flag.FlagSet
 
-	spec      *string
-	force     *bool
-	templates *string
-	compare   *bool
+	spec       *string
+	force      *bool
+	templates  *string
+	compare    *bool
+	registries *[]string
 }
 
 func (cmd *generateCommand) ParseArgs(args []string) error {
 	cmd.spec = setSpecFlag(&cmd.flags)
 	cmd.force = cmd.flags.BoolP("force", "f", false, "Force generate even if there are no differences detected")
+	cmd.registries = cmd.flags.StringArray("registry", []string{}, "Provide additional component registries")
 	cmd.templates = cmd.flags.String("templates", "", "Path to custom templates directory")
 	cmd.compare = cmd.flags.Bool("compare", false, "Allows you to compare the generated distribution to the existing")
 
@@ -108,6 +110,24 @@ func (cmd *generateCommand) Run() error {
 	spec, err := NewDistributionSpec(*cmd.spec)
 	if err != nil {
 		return err
+	}
+
+	// All registries passed in via command line flags will
+	// be treated as new local source registries. They will
+	// take priority over registries in the config file, which
+	// also means they take priority over the embedded registry.
+	if len(*cmd.registries) > 0 {
+		newRegistries := make([]*CustomRegistry, len(*cmd.registries))
+		for _, registryPath := range *cmd.registries {
+			registry, err := NewLocalRegistry(registryPath)
+			if err != nil {
+				return err
+			}
+			newRegistries = append(newRegistries, registry)
+		}
+		// The new registries are prepended to put them in the right
+		// priority order.
+		spec.Registries = append(newRegistries, spec.Registries...)
 	}
 
 	generator, err := NewDistributionGenerator(spec, *cmd.force)

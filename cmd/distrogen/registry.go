@@ -21,6 +21,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -465,4 +466,20 @@ func (l *GithubRegistryLoader) LoadRegistryConfig() (*RegistryConfig, error) {
 		return nil, err
 	}
 	return &r, nil
+}
+
+// NewLocalRegistry allows manual instantiation of a local registry configuration.
+// This exists mainly for instantiating local registries from command line flags.
+func NewLocalRegistry(registryPath string) (*CustomRegistry, error) {
+	registryName := filepath.Base(registryPath)
+	var registryConfig map[string]any
+	err := mapstructure.Decode(LocalRegistryLoader{Path: registryPath}, &registryConfig)
+	if err != nil {
+		return nil, err
+	}
+	return &CustomRegistry{
+		Name:           registryName,
+		Source:         SourceLocal,
+		RegistryConfig: registryConfig,
+	}, nil
 }

@@ -14,19 +14,21 @@ build_tags: ""
 boringcrypto: true
 docker_repo: us-docker.pkg.dev/pretend-repo/otelcol-basic
 components:
-    receivers:
-        - otlp
-    processors:
-        - batch
-        - memorylimiter
-    exporters:
-        - otlp
-    connectors:
-        - forward
-    extensions:
-        - pprof
-    providers:
-        - yaml
+  receivers:
+  - otlp
+  processors:
+  - batch
+  - memorylimiter
+  exporters:
+  - otlp
+  connectors:
+  - forward
+  extensions:
+  - pprof
+  providers:
+  - yaml
 feature_gates:
-    - exporter.googlemanagedprometheus.intToDouble
+- exporter.googlemanagedprometheus.intToDouble
 collector_cgo: true
+component_module_base: ""
+distrogen_version: ""

@@ -18,11 +18,15 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
+	"net/http"
+	"path/filepath"
 	"slices"
 	"strings"
 
-	"gopkg.in/yaml.v3"
+	"github.com/go-viper/mapstructure/v2"
+	"github.com/goccy/go-yaml"
 )
 
 //go:embed registry.yaml
@@ -30,6 +34,13 @@ var registryContent []byte
 
 var ErrComponentNotFound = errors.New("component not found")
 
+type ReleaseInfo struct {
+	Version                       string            `yaml:"version,omitempty"`
+	OpenTelemetryCollectorVersion string            `yaml:"opentelemetry_collector_version,omitempty"`
+	Replaces                      ComponentReplaces `yaml:"replaces,omitempty"`
+}
+
+// RegistryConfig is a collection of components that can be used in
 type ComponentType string
 
 const (
@@ -43,7 +54,8 @@ const (
 
 // Registry is a collection of components that can be used in
 // a collector distribution.
-type Registry struct {
+type RegistryConfig struct {
+	Release    ReleaseInfo        `yaml:"release,omitempty"`
 	Receivers  RegistryComponents `yaml:"receivers"`
 	Processors RegistryComponents `yaml:"processors"`
 	Exporters  RegistryComponents `yaml:"exporters"`
@@ -53,64 +65,142 @@ type Registry struct {
 	Path       string             `yaml:"-"`
 }
 
-// NewRegistry will create an empty registry object with the
-// component lists preallocated.
-func NewRegistry() *Registry {
-	return &Registry{
-		Receivers:  RegistryComponents{},
-		Processors: RegistryComponents{},
-		Exporters:  RegistryComponents{},
-		Connectors: RegistryComponents{},
-		Extensions: RegistryComponents{},
-		Providers:  RegistryComponents{},
+func (rc *RegistryConfig) MakeRegistry() *Registry {
+	registry := NewRegistry()
+	if rc.Receivers != nil {
+		registry.Components[Receiver] = rc.Receivers
 	}
+	if rc.Processors != nil {
+		registry.Components[Processor] = rc.Processors
+	}
+	if rc.Exporters != nil {
+		registry.Components[Exporter] = rc.Exporters
+	}
+	if rc.Connectors != nil {
+		registry.Components[Connector] = rc.Connectors
+	}
+	if rc.Extensions != nil {
+		registry.Components[Extension] = rc.Extensions
+	}
+	if rc.Providers != nil {
+		registry.Components[Provider] = rc.Providers
+	}
+	registry.OpenTelemetryVersions = &otelComponentVersion{
+		core:    rc.Release.OpenTelemetryCollectorVersion,
+		contrib: rc.Release.OpenTelemetryCollectorVersion,
+	}
+	registry.Replaces = rc.Release.Replaces
+	registry.Version = rc.Release.Version
+	return registry
+}
+
+var AllComponentTypes = []ComponentType{Receiver, Processor, Exporter, Connector, Extension, Provider}
+
+type RegistryComponentCollection map[ComponentType]RegistryComponents
+
+func NewRegistryComponentCollection() RegistryComponentCollection {
+	collection := RegistryComponentCollection{}
+	for _, t := range AllComponentTypes {
+		collection[t] = RegistryComponents{}
+	}
+	return collection
+}
+
+type Registry struct {
+	Components            RegistryComponentCollection `yaml:"components"`
+	OpenTelemetryVersions *otelComponentVersion       `yaml:"opentelemetry_versions,omitempty"`
+	Version               string                      `yaml:"version,omitempty"`
+	Replaces              ComponentReplaces           `yaml:"replaces,omitempty"`
+	Path                  string                      `yaml:"-"`
+	Used                  bool                        `yaml:"-"`
+}
+
+func NewRegistry() *Registry {
+	return &Registry{Components: NewRegistryComponentCollection()}
+}
+
+func (r *Registry) LookupComponent(componentType ComponentType, name string) (*RegistryComponent, error) {
+	if _, ok := r.Components[componentType]; !ok {
+		panic(fmt.Sprintf("Invalid component type codepath found, requested componentType was %s. Please report this to maintainers if you see this message.", componentType))
+	}
+	component, err := r.Components[componentType].LoadComponent(name)
+	if err != nil {
+		return nil, err
+	}
+
+	if r.Version != "" {
+		component.ApplyVersion(r.Version)
+	} else {
+		component.ApplyOTelVersion(r.OpenTelemetryVersions)
+	}
+	return component, nil
+}
+
+func (r *Registry) LoadAllComponents(componentType ComponentType, names []string) (RegistryComponents, CollectionError) {
+	components := RegistryComponents{}
+	errs := CollectionError{}
+	for _, name := range names {
+		component, err := r.LookupComponent(componentType, name)
+		if err != nil {
+			errs[name] = err
+			continue
+		}
+		components[name] = component
+		r.Used = true
+	}
+	return components, errs
+}
+
+type Registries []*Registry
+
+func (rs Registries) LookupComponent(componentType ComponentType, name string) (*RegistryComponent, error) {
+	var component *RegistryComponent
+	var err error
+	for _, r := range rs {
+		component, err = r.LookupComponent(componentType, name)
+		if err == nil {
+			r.Used = true
+			return component, nil
+		}
+	}
+	return nil, ErrComponentNotFound
+}
+
+func (rs Registries) LoadAllComponents(componentType ComponentType, names []string) (RegistryComponents, CollectionError) {
+	components := RegistryComponents{}
+	errs := CollectionError{}
+	for _, name := range names {
+		component, err := rs.LookupComponent(componentType, name)
+		if err != nil {
+			errs[name] = err
+			continue
+		}
+		components[name] = component
+	}
+	return components, errs
 }
 
 // LoadEmbeddedRegistry will load the registry embedded in the
 // distrogen binary.
 func LoadEmbeddedRegistry() (*Registry, error) {
-	var r Registry
-	if err := yaml.Unmarshal(registryContent, &r); err != nil {
+	r := &RegistryConfig{}
+	if err := yaml.Unmarshal(registryContent, r); err != nil {
 		return nil, err
 	}
-	return &r, nil
+	return r.MakeRegistry(), nil
 }
 
 // LoadRegistry will load a registry from a yaml file.
 func LoadRegistry(path string) (*Registry, error) {
-	r := NewRegistry()
-	err := yamlUnmarshalFromFileInto(path, r)
-	r.Path = path
-	return r, err
-}
-
-// Merge will merge another registry into this one. If the provided
-// registry contains any of the same entry keys as the current
-// registry, it will be overridden.
-func (r *Registry) Merge(r2 *Registry) {
-	mapMerge(r.Receivers, r2.Receivers)
-	mapMerge(r.Processors, r2.Processors)
-	mapMerge(r.Exporters, r2.Exporters)
-	mapMerge(r.Connectors, r2.Connectors)
-	mapMerge(r.Extensions, r2.Extensions)
-	mapMerge(r.Providers, r2.Providers)
+	r := &RegistryConfig{}
+	if err := yamlUnmarshalFromFileInto(path, r); err != nil {
+		return nil, err
+	}
+	return r.MakeRegistry(), nil
 }
 
 func (r *Registry) Add(componentType ComponentType, component *RegistryComponent) {
-	switch componentType {
-	case Receiver:
-		r.Receivers[component.Name] = component
-	case Processor:
-		r.Processors[component.Name] = component
-	case Exporter:
-		r.Exporters[component.Name] = component
-	case Connector:
-		r.Connectors[component.Name] = component
-	case Extension:
-		r.Extensions[component.Name] = component
-	case Provider:
-		r.Providers[component.Name] = component
-	}
+	r.Components[componentType][component.Name] = component
 }
 
 func (r *Registry) Save() error {
@@ -152,12 +242,12 @@ func (gm *GoModuleID) String() string {
 	return fmt.Sprintf("%s %s", gm.URL, tag)
 }
 
-// UnmarshalYAML implements the yaml.Unmarshaler interface.
+// UnmarshalYAML implements the yaml.BytesUnmarshaler interface.
 // It takes a properly formed Go Module ID string and unpacks
 // it into the struct.
-func (gm *GoModuleID) UnmarshalYAML(value *yaml.Node) error {
+func (gm *GoModuleID) UnmarshalYAML(b []byte) error {
 	// The module ID may have a version.
-	moduleStr := value.Value
+	moduleStr := strings.TrimSpace(string(b))
 	moduleComponents := strings.Split(moduleStr, " ")
 	gm.URL = moduleComponents[0]
 	if len(moduleComponents) > 1 {
@@ -166,11 +256,11 @@ func (gm *GoModuleID) UnmarshalYAML(value *yaml.Node) error {
 	return nil
 }
 
-// MarshalYAML implements the yaml.Marshaler interface. It leverages
+// MarshalYAML implements the yaml.BytesMarshaler interface. It leverages
 // the String method to allow outputting the value into a YAML document
 // in the module ID string form.
-func (gm *GoModuleID) MarshalYAML() (interface{}, error) {
-	return gm.String(), nil
+func (gm *GoModuleID) MarshalYAML() ([]byte, error) {
+	return []byte(gm.String()), nil
 }
 
 type otelComponentVersion struct {
@@ -205,13 +295,20 @@ func (c *RegistryComponent) IsContrib() bool {
 	return strings.Contains(c.GoMod.URL, "github.com/open-telemetry/opentelemetry-collector-contrib")
 }
 
-func (c *RegistryComponent) ApplyOTelVersion(otelVersion otelComponentVersion) {
+func (c *RegistryComponent) ApplyOTelVersion(otelVersion *otelComponentVersion) {
+	if otelVersion == nil {
+		return
+	}
 	c.GoMod.Tag = "v" + otelVersion.core
 	if c.Stable {
 		c.GoMod.Tag = "v" + otelVersion.coreStable
 	} else if c.IsContrib() {
 		c.GoMod.Tag = "v" + otelVersion.contrib
 	}
+}
+
+func (c *RegistryComponent) ApplyVersion(version string) {
+	c.GoMod.Tag = "v" + version
 }
 
 // OCBManifestComponent is a reflection of the fields for an
@@ -246,30 +343,11 @@ type RegistryComponentRelease struct {
 // details.
 type RegistryComponents map[string]*RegistryComponent
 
-// LoadAllComponents will take a list of component names and load them
-// from the registry, attaching the appropriate version tag.
-func (rl RegistryComponents) LoadAllComponents(names []string, otelVersion otelComponentVersion) (RegistryComponents, CollectionError) {
-	components := RegistryComponents{}
-	errs := make(CollectionError)
-
-	for _, name := range names {
-		entry, err := rl.LoadComponent(name, otelVersion)
-		if err != nil {
-			errs[name] = ErrComponentNotFound
-			continue
-		}
-		components[name] = entry
-	}
-
-	return components, errs
-}
-
-func (rl RegistryComponents) LoadComponent(name string, otelVersion otelComponentVersion) (*RegistryComponent, error) {
-	entry, ok := rl[name]
+func (rcs RegistryComponents) LoadComponent(name string) (*RegistryComponent, error) {
+	entry, ok := rcs[name]
 	if !ok {
 		return nil, ErrComponentNotFound
 	}
-	entry.ApplyOTelVersion(otelVersion)
 	return entry, nil
 }
 
@@ -299,4 +377,109 @@ func (cs RegistryComponents) RenderOCBComponents() string {
 	})
 
 	return renderYaml(renderComponents)
+}
+
+type CustomRegistrySource string
+
+const (
+	SourceLocal  CustomRegistrySource = "local"
+	SourceGitHub CustomRegistrySource = "github"
+)
+
+type CustomRegistry struct {
+	Name           string               `mapstructure:"name"`
+	Source         CustomRegistrySource `mapstructure:"source"`
+	RegistryConfig map[string]any       `mapstructure:",remain"`
+}
+
+// UnmarshalYAML implements the `yaml.BytesUnmarshaler` interface. It is
+// to allow decoding using `mapstructure` to leverage the `remain` tag.
+func (c *CustomRegistry) UnmarshalYAML(b []byte) error {
+	var raw map[string]any
+	if err := yaml.Unmarshal(b, &raw); err != nil {
+		return err
+	}
+
+	return mapstructure.Decode(raw, c)
+}
+
+func (c *CustomRegistry) GetRegistryConfig() (*RegistryConfig, error) {
+	var loader RegistryLoader
+	switch c.Source {
+	case SourceLocal:
+		var localLoader LocalRegistryLoader
+		if err := mapstructure.Decode(c.RegistryConfig, &localLoader); err != nil {
+			return nil, err
+		}
+		loader = &localLoader
+	case SourceGitHub:
+		var githubLoader GithubRegistryLoader
+		if err := mapstructure.Decode(c.RegistryConfig, &githubLoader); err != nil {
+			return nil, err
+		}
+		loader = &githubLoader
+	default:
+		return nil, fmt.Errorf("unknown registry source: %s", c.Source)
+	}
+	return loader.LoadRegistryConfig()
+}
+
+type RegistryLoader interface {
+	LoadRegistryConfig() (*RegistryConfig, error)
+}
+
+type LocalRegistryLoader struct {
+	Path string `mapstructure:"path"`
+}
+
+func (l *LocalRegistryLoader) LoadRegistryConfig() (*RegistryConfig, error) {
+	r := &RegistryConfig{}
+	err := yamlUnmarshalFromFileInto(l.Path, r)
+	return r, err
+}
+
+type GithubRegistryLoader struct {
+	Repo     string `mapstructure:"repo"`
+	Revision string `mapstructure:"revision"`
+	Path     string `mapstructure:"path"`
+}
+
+func (l *GithubRegistryLoader) LoadRegistryConfig() (*RegistryConfig, error) {
+	url := fmt.Sprintf("https://raw.githubusercontent.com/%s/%s/%s", l.Repo, l.Revision, l.Path)
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("could not retrieve registry from github: %s", resp.Status)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	r := RegistryConfig{}
+	if err := yaml.Unmarshal(body, &r); err != nil {
+		return nil, err
+	}
+	return &r, nil
+}
+
+// NewLocalRegistry allows manual instantiation of a local registry configuration.
+// This exists mainly for instantiating local registries from command line flags.
+func NewLocalRegistry(registryPath string) (*CustomRegistry, error) {
+	registryName := filepath.Base(registryPath)
+	var registryConfig map[string]any
+	err := mapstructure.Decode(LocalRegistryLoader{Path: registryPath}, &registryConfig)
+	if err != nil {
+		return nil, err
+	}
+	return &CustomRegistry{
+		Name:           registryName,
+		Source:         SourceLocal,
+		RegistryConfig: registryConfig,
+	}, nil
 }

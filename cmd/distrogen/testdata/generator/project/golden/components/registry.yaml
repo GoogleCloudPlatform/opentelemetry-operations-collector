@@ -1,6 +1,7 @@
-receivers: {}
-processors: {}
-exporters: {}
-connectors: {}
-extensions: {}
-providers: {}
+components:
+  connector: {}
+  exporter: {}
+  extension: {}
+  processor: {}
+  provider: {}
+  receiver: {}

@@ -26,13 +26,13 @@ var componentRegistryPath = filepath.Join("components", "registry.yaml")
 type ComponentsRegistryGenerator struct {
 	FileMode fs.FileMode
 
-	Path string
+	GeneratePath string
 }
 
 func NewComponentsRegistryGenerator() *ComponentsRegistryGenerator {
 	g := &ComponentsRegistryGenerator{
-		FileMode: DefaultProjectFileMode,
-		Path:     ".",
+		FileMode:     DefaultProjectFileMode,
+		GeneratePath: ".",
 	}
 	return g
 }
@@ -42,7 +42,7 @@ func NewComponentsRegistryGenerator() *ComponentsRegistryGenerator {
 func (g *ComponentsRegistryGenerator) Generate() error {
 	registry := NewRegistry()
 
-	generateComponentsPath := filepath.Join(g.Path, "components")
+	generateComponentsPath := filepath.Join(g.GeneratePath, "components")
 	registry.Path = filepath.Join(generateComponentsPath, "registry.yaml")
 
 	var dirErrors []error

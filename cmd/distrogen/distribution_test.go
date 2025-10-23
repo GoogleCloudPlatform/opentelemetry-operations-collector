@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/cmd/distrogen/internal/generatortest"
 	"gotest.tools/v3/assert"
 )
 
@@ -28,9 +29,6 @@ var (
 )
 
 func TestDistributionTemplateGeneration(t *testing.T) {
-	registry, err := LoadEmbeddedRegistry()
-	assert.NilError(t, err)
-
 	testDirs, err := os.ReadDir(testdataFullDistributionPath)
 	assert.NilError(t, err)
 	for _, d := range testDirs {
@@ -39,36 +37,36 @@ func TestDistributionTemplateGeneration(t *testing.T) {
 		}
 
 		name := d.Name()
-		t.Run(name, func(t *testing.T) {
-			testGeneratorCase(t, registry, name)
-		})
+
+		generatorTester := generatortest.NewGeneratorTester(
+			filepath.Join(testdataSubpath, name),
+			runDistributionGenerator,
+		)
+
+		t.Run(name, generatorTester.Run)
 	}
 }
 
-func testGeneratorCase(t *testing.T, registry *Registry, testFolder string) {
-	specPath := filepath.Join(testdataFullDistributionPath, testFolder, "spec.yaml")
-
+func runDistributionGenerator(t *testing.T) string {
+	specPath := "spec.yaml"
 	d, err := NewDistributionSpec(specPath)
 	assert.NilError(t, err)
-
-	g, err := NewDistributionGenerator(d, registry, true)
+	g, err := NewDistributionGenerator(d, true)
 	assert.NilError(t, err)
 
 	// If custom templates exist for the test case, use them.
-	customTemplates := filepath.Join(testdataFullDistributionPath, testFolder, "templates")
+	customTemplates := "templates"
 	if _, err := os.Stat(customTemplates); err == nil {
 		g.CustomTemplatesDir = os.DirFS(customTemplates)
 	}
 
-	err = g.Generate()
-	assert.NilError(t, err)
 	t.Cleanup(func() {
 		g.Clean()
 	})
+	err = g.Generate()
+	assert.NilError(t, err)
 
-	goldenPath := filepath.Join(testdataFullDistributionPath, testFolder, "golden")
-	goldenSubPath := filepath.Join(testdataSubpath, testFolder, "golden")
-	assertGoldenFiles(t, g.GeneratePath, goldenPath, goldenSubPath)
+	return g.GeneratePath
 }
 
 func TestSpecValidationError(t *testing.T) {

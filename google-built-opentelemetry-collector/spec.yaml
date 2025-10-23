@@ -19,7 +19,6 @@ registries:
   registryconfig:
     path: ./components/google-built-opentelemetry-collector/registry.yaml
 components:
-<<<<<<< HEAD
   receivers:
   - otlp
   - otlpjsonfile
@@ -33,9 +32,9 @@ components:
   - k8sevents
   - k8sobjects
   - kubeletstats
-  - opencensus
   - otelarrow
   - prometheus
+  - prometheusremotewrite
   - receivercreator
   - zipkin
   - dockerstats
@@ -44,6 +43,8 @@ components:
   - statsd
   - syslog
   - googlecloudmonitoring
+  - googlecloudpubsub
+  - tcplog
   processors:
   - batch
   - memorylimiter
@@ -78,6 +79,9 @@ components:
   - googlecloud
   - googlemanagedprometheus
   - googleservicecontrol
+  - googlecloudpubsub
+  - prometheus
+  - prometheusremotewrite
   connectors:
   - forward
   - count
@@ -88,6 +92,7 @@ components:
   - routing
   - servicegraph
   - spanmetrics
+  - signaltometrics
   extensions:
   - zpages
   - ack
@@ -116,110 +121,6 @@ components:
 feature_gates:
 - exporter.googlemanagedprometheus.intToDouble
 - exporter.googlecloud.CustomMonitoredResources
-=======
-    receivers:
-        - otlp
-        - otlpjsonfile
-        - filelog
-        - fluentforward
-        - hostmetrics
-        - httpcheck
-        - jaeger
-        - journald
-        - k8scluster
-        - k8sevents
-        - k8sobjects
-        - kubeletstats
-        - otelarrow
-        - prometheus
-        - prometheusremotewrite
-        - receivercreator
-        - zipkin
-        - dockerstats
-        - jmx
-        - redis
-        - statsd
-        - syslog
-        - googlecloudmonitoring
-        - googlecloudpubsub
-        - tcplog
-    processors:
-        - batch
-        - memorylimiter
-        - attributes
-        - cumulativetodelta
-        - deltatocumulative
-        - deltatorate
-        - filter
-        - groupbyattrs
-        - groupbytrace
-        - k8sattributes
-        - logdedup
-        - metricstransform
-        - metricstarttime
-        - probabilisticsampler
-        - redaction
-        - remotetap
-        - resourcedetection
-        - resource
-        - tailsampling
-        - transform
-        - interval
-        - metricsgeneration
-    exporters:
-        - debug
-        - nop
-        - otlp
-        - otlphttp
-        - file
-        - loadbalancing
-        - otelarrow
-        - googlecloud
-        - googlemanagedprometheus
-        - googleservicecontrol
-        - googlecloudpubsub
-        - prometheus
-        - prometheusremotewrite
-    connectors:
-        - forward
-        - count
-        - exceptions
-        - failover
-        - otlpjson
-        - roundrobin
-        - routing
-        - servicegraph
-        - spanmetrics
-        - signaltometrics
-    extensions:
-        - zpages
-        - ack
-        - basicauth
-        - bearertokenauth
-        - headerssetter
-        - healthagent
-        - healthcheck
-        - healthcheckv2
-        - httpforwarder
-        - oauth2clientauth
-        - hostobserver
-        - k8sobserver
-        - oidcauth
-        - opamp
-        - pprof
-        - filestorage
-        - googleclientauth
-    providers:
-        - env
-        - file
-        - http
-        - https
-        - yaml
-        - googlesecretmanager
-feature_gates:
-    - exporter.googlemanagedprometheus.intToDouble
-    - exporter.googlecloud.CustomMonitoredResources
 collector_cgo: true
 component_module_base: ""
 distrogen_version: ""
->>>>>>> master

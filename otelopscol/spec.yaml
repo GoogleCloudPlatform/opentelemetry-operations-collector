@@ -19,7 +19,6 @@ registries:
   registryconfig:
     path: ./components/otelopscol/registry.yaml
 components:
-<<<<<<< HEAD
   receivers:
   - activedirectoryds
   - aerospike
@@ -53,18 +52,21 @@ components:
   - otlpjsonfile
   processors:
   - cumulativetodelta
+  - deltatocumulative
   - deltatorate
   - filter
   - groupbyattrs
+  - interval
+  - logstransform
   - metricstransform
   - resourcedetection
   - resource
   - transform
   - batch
   - memorylimiter
+  - metricstarttime
   - agentmetrics
   - casttosum
-  - modifyscope
   - normalizesums
   exporters:
   - file
@@ -73,9 +75,11 @@ components:
   - debug
   - otlp
   - otlphttp
+  - prometheus
   extensions:
   - zpages
   - googleclientauth
+  - pprof
   providers:
   - googlesecretmanager
   - file
@@ -84,78 +88,6 @@ replaces:
 - from: github.com/GoogleCloudPlatform/opentelemetry-operations-collector
   to: ../../
   reason: Reference root module of repository to find dependency packages.
-feature_gates: []
-=======
-    receivers:
-        - activedirectoryds
-        - aerospike
-        - apache
-        - couchdb
-        - elasticsearch
-        - filelog
-        - flinkmetrics
-        - hostmetrics
-        - iis
-        - jmx
-        - memcached
-        - mysql
-        - nginx
-        - postgresql
-        - prometheus
-        - otlp
-        - rabbitmq
-        - redis
-        - saphana
-        - sqlquery
-        - sqlserver
-        - windowseventlog
-        - windowsperfcounters
-        - zookeeper
-        - dcgm
-        - mongodb
-        - nvml
-        - varnish
-        - journald
-        - otlpjsonfile
-    processors:
-        - cumulativetodelta
-        - deltatocumulative
-        - deltatorate
-        - filter
-        - groupbyattrs
-        - interval
-        - logstransform
-        - metricstransform
-        - resourcedetection
-        - resource
-        - transform
-        - batch
-        - memorylimiter
-        - metricstarttime
-        - agentmetrics
-        - casttosum
-        - normalizesums
-    exporters:
-        - file
-        - googlecloud
-        - googlemanagedprometheus
-        - debug
-        - otlp
-        - otlphttp
-        - prometheus
-    extensions:
-        - zpages
-        - googleclientauth
-        - pprof
-    providers:
-        - googlesecretmanager
-        - file
-        - env
-replaces:
-    - from: github.com/GoogleCloudPlatform/opentelemetry-operations-collector
-      to: ../../
-      reason: Reference root module of repository to find dependency packages.
 collector_cgo: true
 component_module_base: ""
 distrogen_version: ""
->>>>>>> master

@@ -1,16 +1,14 @@
 TOOLS_DIR = $(PWD)/.tools
 MDATAGEN_BIN = $(TOOLS_DIR)/mdatagen
 
-.PHONY: update-otel-components
+.PHONY: update-components
 update-components: export OTEL_VERSION := $(OTEL_VERSION)
 update-components: export OTEL_CONTRIB_VERSION := $(OTEL_CONTRIB_VERSION)
 update-components: update-deps tidy-components update-mdatagen generate-components
 
 .PHONY: update-mdatagen
 update-mdatagen: tools-dir
-	cd internal/tools && \
-		go get -u go.opentelemetry.io/collector/cmd/mdatagen@$(OTEL_VERSION) && \
-		GOBIN=$(TOOLS_DIR) go install go.opentelemetry.io/collector/cmd/mdatagen
+	GOBIN=$(TOOLS_DIR) go install go.opentelemetry.io/collector/cmd/mdatagen@$(OTEL_VERSION)
 
 .PHONY: update-deps
 update-deps:

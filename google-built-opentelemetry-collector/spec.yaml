@@ -4,11 +4,11 @@ display_name: Google-Built OpenTelemetry Collector
 description: OpenTelemetry Collector Built By Google
 blurb: The Google-Built OpenTelemetry Collector is an open-source, production-ready build of the upstream OpenTelemetry Collector that is built with upstream OpenTelemetry components.
 build_container: debian
-version: 0.136.0
-opentelemetry_version: 0.136.0
-opentelemetry_contrib_version: 0.136.0
-opentelemetry_stable_version: 1.42.0
-go_version: 1.24.7
+version: 0.138.0
+opentelemetry_version: 0.138.0
+opentelemetry_contrib_version: 0.138.0
+opentelemetry_stable_version: 1.44.0
+go_version: 1.24.9
 binary_name: otelcol-google
 build_tags: ""
 boringcrypto: true
@@ -190,6 +190,7 @@ feature_gates:
         - routing
         - servicegraph
         - spanmetrics
+        - signaltometrics
     extensions:
         - zpages
         - ack

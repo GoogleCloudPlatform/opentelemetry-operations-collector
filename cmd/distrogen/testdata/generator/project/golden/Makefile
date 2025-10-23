@@ -22,17 +22,38 @@ precommit: misspell lint test-distrogen
 .PHONY: presubmit
 presubmit: misspell lint
 
+#######
+# Tools
+#######
+
+TOOLS_DIR ?= $(PWD)/.tools
+DISTROGEN_BIN ?= $(TOOLS_DIR)/distrogen
+
+$(DISTROGEN_BIN): tools-dir
+	GOBIN=$(TOOLS_DIR) go install github.com/GoogleCloudPlatform/opentelemetry-operations-collector/cmd/distrogen@$(shell cat .distrogen/VERSION)
+
+# This is a PHONY target cause if you make it as a normal recipe
+# it gets very confused because the creation date of the .tools
+# directory is newer than the tools inside it.
+.PHONY: tools-dir
+tools-dir:
+	@mkdir -p $(TOOLS_DIR)
+
+.PHONY: distrogen
+distrogen: $(DISTROGEN_BIN)
+
+
 ##########################
 # Updating OTel Components
 ##########################
 
-.PHONY: update-google-otel-components
+.PHONY: update-otel-components
 
 update-otel-components: COMPONENT_DIR := components
-update-otel-components: DISTROGEN_QUERY := $(DISTROGEN_BIN) -spec $(SPEC_FILE) -field
+update-otel-components: DISTROGEN_QUERY := $(DISTROGEN_BIN) query --spec $(SPEC_FILE) --field
 update-otel-components: export OTEL_VERSION = v$(shell $(DISTROGEN_QUERY) opentelemetry_version)
 update-otel-components: export OTEL_CONTRIB_VERSION = v$(shell $(DISTROGEN_QUERY) opentelemetry_contrib_version)
-update-otel-components: go.work install-distrogen
+update-otel-components: go.work
 	cd $(COMPONENT_DIR) && PATH="$(TOOLS_DIR):${PATH}" $(MAKE) update-components
 
 .PHONY: test-otel-components
@@ -102,26 +123,6 @@ go.work:
 clean-workspace:
 	rm -f go.work
 	rm -f go.work.sum
-
-#######
-# Tools
-#######
-
-TOOLS_DIR ?= $(PWD)/.tools
-DISTROGEN_BIN ?= $(TOOLS_DIR)/distrogen
-
-$(DISTROGEN_BIN): tools-dir
-	GOBIN=$(TOOLS_DIR) go install github.com/GoogleCloudPlatform/opentelemetry-operations-collector/cmd/distrogen@$(shell cat .distrogen/VERSION)
-
-# This is a PHONY target cause if you make it as a normal recipe
-# it gets very confused because the creation date of the .tools
-# directory is newer than the tools inside it.
-.PHONY: tools-dir
-tools-dir:
-	@mkdir -p $(TOOLS_DIR)
-
-.PHONY: distrogen
-distrogen: $(DISTROGEN_BIN)
 
 #########
 # Utility

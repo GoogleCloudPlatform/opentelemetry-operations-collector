@@ -69,23 +69,6 @@ func runDistributionGenerator(t *testing.T) string {
 	return g.GeneratePath
 }
 
-// func testGeneratorCase(t *testing.T, testFolder string, registries ...*Registry) {
-// 	popd, err := os.Getwd()
-// 	assert.NilError(t, err)
-// 	testWd := filepath.Join(testdataFullDistributionPath, testFolder)
-// 	err = os.Chdir(testWd)
-// 	assert.NilError(t, err)
-// 	t.Cleanup(func() {
-// 	})
-
-// 	err = os.Chdir(popd)
-// 	assert.NilError(t, err)
-
-// 	goldenPath := filepath.Join(testdataFullDistributionPath, testFolder, "golden")
-// 	goldenSubPath := filepath.Join(testdataSubpath, testFolder, "golden")
-// 	assertGoldenFiles(t, g.GeneratePath, goldenPath, goldenSubPath)
-// }
-
 func TestSpecValidationError(t *testing.T) {
 	testCases := []struct {
 		name        string

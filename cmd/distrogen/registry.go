@@ -158,6 +158,7 @@ func (rs Registries) LookupComponent(componentType ComponentType, name string) (
 	for _, r := range rs {
 		component, err = r.LookupComponent(componentType, name)
 		if err == nil {
+			r.Used = true
 			return component, nil
 		}
 	}
@@ -405,17 +406,17 @@ func (c *CustomRegistry) GetRegistryConfig() (*RegistryConfig, error) {
 	var loader RegistryLoader
 	switch c.Source {
 	case SourceLocal:
-		var localConfig LocalRegistryLoader
-		if err := mapstructure.Decode(c.RegistryConfig, &localConfig); err != nil {
+		var localLoader LocalRegistryLoader
+		if err := mapstructure.Decode(c.RegistryConfig, &localLoader); err != nil {
 			return nil, err
 		}
-		loader = &localConfig
+		loader = &localLoader
 	case SourceGitHub:
-		var githubConfig GithubRegistryLoader
-		if err := mapstructure.Decode(c.RegistryConfig, &githubConfig); err != nil {
+		var githubLoader GithubRegistryLoader
+		if err := mapstructure.Decode(c.RegistryConfig, &githubLoader); err != nil {
 			return nil, err
 		}
-		loader = &githubConfig
+		loader = &githubLoader
 	default:
 		return nil, fmt.Errorf("unknown registry source: %s", c.Source)
 	}

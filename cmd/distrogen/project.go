@@ -26,9 +26,9 @@ var (
 )
 
 type ProjectGenerator struct {
-	Spec       *DistributionSpec
-	FileMode   fs.FileMode
-	CustomPath string
+	Spec         *DistributionSpec
+	FileMode     fs.FileMode
+	GeneratePath string
 }
 
 func NewProjectGenerator(spec *DistributionSpec) (*ProjectGenerator, error) {
@@ -57,13 +57,16 @@ func (pg *ProjectGenerator) Generate() error {
 
 	crg := NewComponentsRegistryGenerator()
 
-	generatePath := "."
-	if pg.CustomPath != "" {
-		generatePath = pg.CustomPath
-		crg.Path = generatePath
+	if pg.GeneratePath == "" {
+		wd, err := os.Getwd()
+		if err != nil {
+			return err
+		}
+		pg.GeneratePath = wd
 	}
+	crg.GeneratePath = pg.GeneratePath
 
-	generateMakePath := filepath.Join(generatePath, "make")
+	generateMakePath := filepath.Join(pg.GeneratePath, "make")
 
 	if err := crg.Generate(); err != nil {
 		return err
@@ -73,10 +76,10 @@ func (pg *ProjectGenerator) Generate() error {
 	if err := os.MkdirAll(generateMakePath, pg.FileMode); err != nil {
 		dirErrors = append(dirErrors, err)
 	}
-	if err := os.MkdirAll(filepath.Join(generatePath, "templates"), pg.FileMode); err != nil {
+	if err := os.MkdirAll(filepath.Join(pg.GeneratePath, "templates"), pg.FileMode); err != nil {
 		dirErrors = append(dirErrors, err)
 	}
-	if _, err := os.Create(filepath.Join(generatePath, "templates", EMPTY_FILE_NAME)); err != nil {
+	if _, err := os.Create(filepath.Join(pg.GeneratePath, "templates", EMPTY_FILE_NAME)); err != nil {
 		dirErrors = append(dirErrors, err)
 	}
 
@@ -87,10 +90,10 @@ func (pg *ProjectGenerator) Generate() error {
 	if err := GenerateTemplateSet(generateMakePath, makeTemplates); err != nil {
 		return err
 	}
-	if err := GenerateTemplateSet(filepath.Join(generatePath, "."), projectTemplates); err != nil {
+	if err := GenerateTemplateSet(filepath.Join(pg.GeneratePath, "."), projectTemplates); err != nil {
 		return err
 	}
-	if err := GenerateTemplateSet(filepath.Join(generatePath, ".distrogen"), distrogenTemplateSet); err != nil {
+	if err := GenerateTemplateSet(filepath.Join(pg.GeneratePath, ".distrogen"), distrogenTemplateSet); err != nil {
 		return err
 	}
 

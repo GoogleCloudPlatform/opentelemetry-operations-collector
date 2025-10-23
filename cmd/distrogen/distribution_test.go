@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/cmd/distrogen/internal/generatortest"
 	"gotest.tools/v3/assert"
 )
 
@@ -36,23 +37,25 @@ func TestDistributionTemplateGeneration(t *testing.T) {
 		}
 
 		name := d.Name()
-		t.Run(name, func(t *testing.T) {
-			testGeneratorCase(t, name)
-		})
+
+		generatorTester := generatortest.NewGeneratorTester(
+			filepath.Join(testdataSubpath, name),
+			runDistributionGenerator,
+		)
+
+		t.Run(name, generatorTester.Run)
 	}
 }
 
-func testGeneratorCase(t *testing.T, testFolder string, registries ...*Registry) {
-	specPath := filepath.Join(testdataFullDistributionPath, testFolder, "spec.yaml")
-
+func runDistributionGenerator(t *testing.T) string {
+	specPath := "spec.yaml"
 	d, err := NewDistributionSpec(specPath)
 	assert.NilError(t, err)
-
 	g, err := NewDistributionGenerator(d, true)
 	assert.NilError(t, err)
 
 	// If custom templates exist for the test case, use them.
-	customTemplates := filepath.Join(testdataFullDistributionPath, testFolder, "templates")
+	customTemplates := "templates"
 	if _, err := os.Stat(customTemplates); err == nil {
 		g.CustomTemplatesDir = os.DirFS(customTemplates)
 	}
@@ -63,10 +66,25 @@ func testGeneratorCase(t *testing.T, testFolder string, registries ...*Registry)
 	err = g.Generate()
 	assert.NilError(t, err)
 
-	goldenPath := filepath.Join(testdataFullDistributionPath, testFolder, "golden")
-	goldenSubPath := filepath.Join(testdataSubpath, testFolder, "golden")
-	assertGoldenFiles(t, g.GeneratePath, goldenPath, goldenSubPath)
+	return g.GeneratePath
 }
+
+// func testGeneratorCase(t *testing.T, testFolder string, registries ...*Registry) {
+// 	popd, err := os.Getwd()
+// 	assert.NilError(t, err)
+// 	testWd := filepath.Join(testdataFullDistributionPath, testFolder)
+// 	err = os.Chdir(testWd)
+// 	assert.NilError(t, err)
+// 	t.Cleanup(func() {
+// 	})
+
+// 	err = os.Chdir(popd)
+// 	assert.NilError(t, err)
+
+// 	goldenPath := filepath.Join(testdataFullDistributionPath, testFolder, "golden")
+// 	goldenSubPath := filepath.Join(testdataSubpath, testFolder, "golden")
+// 	assertGoldenFiles(t, g.GeneratePath, goldenPath, goldenSubPath)
+// }
 
 func TestSpecValidationError(t *testing.T) {
 	testCases := []struct {

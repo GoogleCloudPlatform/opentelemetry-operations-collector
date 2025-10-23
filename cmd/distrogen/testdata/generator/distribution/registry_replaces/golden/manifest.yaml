@@ -8,6 +8,8 @@ dist:
   output_path: ./_build
 
 receivers:
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/pretendreceiver v0.1.0
+  path: ../components/pretendreceiver
 - gomod: go.opentelemetry.io/collector/receiver/otlpreceiver v0.121.0
 
 processors:
@@ -27,4 +29,8 @@ providers:
 - gomod: go.opentelemetry.io/collector/confmap/provider/yamlprovider v1.27.0
 
 replaces:
+# For a test
+- github.com/google/pretend_module v0.69.0 => ./pretend_module
+# For a test
+- github.com/google/pretend_module v0.69.0 => ./pretend_module
 

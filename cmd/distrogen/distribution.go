@@ -151,6 +151,7 @@ func (s *DistributionSpec) GetAllRegistries() (Registries, error) {
 		registry := registryConfig.MakeRegistry()
 		registry.Version = registryConfig.Release.Version
 		registry.OpenTelemetryVersions = specOpenTelemetryVersions
+		registry.Replaces = append(registry.Replaces, registryConfig.Release.Replaces...)
 		registries = append(registries, registry)
 	}
 	// Embedded registry is appended at the end as it takes lowest priority
@@ -250,7 +251,12 @@ func NewDistributionGenerator(spec *DistributionSpec, forceGenerate bool) (*Dist
 		}
 	}
 
-	tmpDir, err := os.MkdirTemp(".", d.GenerateDirName)
+	wd, err := os.Getwd()
+	if err != nil {
+		return nil, err
+	}
+
+	tmpDir, err := os.MkdirTemp(wd, d.GenerateDirName)
 	if err != nil {
 		return nil, err
 	}
@@ -259,8 +265,8 @@ func NewDistributionGenerator(spec *DistributionSpec, forceGenerate bool) (*Dist
 }
 
 // Generate will generate the distribution. It will generate the distribution
-// in a temporary local directory, and upon there no errors in the generation
-// will move it into the destination path.
+// in a temporary local directory, and upon there being no errors in the
+// generation will move it into the destination path.
 func (d *DistributionGenerator) Generate() error {
 	templateContext, err := NewTemplateContextFromSpec(d.Spec, d.Registries)
 	if err != nil {
@@ -513,7 +519,7 @@ func NewTemplateContextFromSpec(spec *DistributionSpec, registries Registries) (
 	}
 
 	for _, registry := range registries {
-		if registry.Used {
+		if registry.Used && len(registry.Replaces) > 0 {
 			context.DistributionSpec.Replaces = append(context.DistributionSpec.Replaces, registry.Replaces...)
 		}
 	}

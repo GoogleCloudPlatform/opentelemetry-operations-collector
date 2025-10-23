@@ -9,6 +9,7 @@ A basic collector distro
 | Component Name | Documentation |
 | -------------- | ------------- |
 | otlp | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/receiver/otlpreceiver/README.md) |
+| pretend | [docs](No docs linked for component) |
 
 
 ## Processors

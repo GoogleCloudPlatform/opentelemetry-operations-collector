@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-release_info:
+release:
   version: 0.1.0
-  opentelemetry_collector_version: 0.137.0
+  opentelemetry_collector_version: 0.121.0
   replaces:
   - from: github.com/google/pretend_module v0.69.0
     to: ./pretend_module

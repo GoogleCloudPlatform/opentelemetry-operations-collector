@@ -1285,6 +1285,14 @@ func verifyVMCreation(ctx context.Context, logger *log.Logger, vm *VM) error {
 		}
 	}
 
+	// Removing flaky rhel-8 repositories due to b/444243563
+	if isRHEL8(vm.ImageSpec) {
+		if _, err := RunRemotely(ctx,
+			logger, vm, `sudo yum -y --disablerepo=rhui-rhel*-8-* install yum-utils && sudo yum-config-manager --disable "rhui-rhel*-8-*"`); err != nil {
+			return fmt.Errorf("disabling flaky repos failed: %w", err)
+		}
+	}
+
 	// Removing flaky rhel-7 repositories due to b/265341502
 	if isRHEL7SAPHA(vm.ImageSpec) {
 		if _, err := RunRemotely(ctx,
@@ -1583,6 +1591,10 @@ func IsCentOS(imageSpec string) bool {
 
 func IsRHEL(imageSpec string) bool {
 	return strings.HasPrefix(imageSpec, "rhel-")
+}
+
+func isRHEL8(imageSpec string) bool {
+	return strings.HasPrefix(imageSpec, "rhel-8")
 }
 
 func isRHEL7SAPHA(imageSpec string) bool {

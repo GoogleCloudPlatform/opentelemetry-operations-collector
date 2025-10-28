@@ -183,7 +183,7 @@ TOOL_LIST ?= github.com/google/addlicense \
 			 ./cmd/otel_component_versions
 
 .PHONY: install-tools
-install-tools: tools-dir
+install-tools: tools-dir $(GOLANGCI_LINT)
 	cd internal/tools && \
 	GOBIN=$(TOOLS_DIR) go install \
 	$(TOOL_LIST)

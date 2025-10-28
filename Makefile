@@ -167,6 +167,9 @@ MISSPELL = $(TOOLS_DIR)/misspell
 
 $(ADDLICENSE): install-tools
 
+$(GOLANGCI_LINT):
+	GOBIN=$(TOOLS_DIR) go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.5.0
+
 # This is a PHONY target cause if you make it as a normal recipe
 # it gets very confused because the creation date of the .tools
 # directory is newer than the tools inside it.
@@ -176,7 +179,6 @@ tools-dir:
 
 TOOL_LIST ?= github.com/google/addlicense \
 			 github.com/client9/misspell/cmd/misspell \
-			 github.com/golangci/golangci-lint/cmd/golangci-lint \
 			 golang.org/x/tools/cmd/goimports \
 			 ./cmd/otel_component_versions
 

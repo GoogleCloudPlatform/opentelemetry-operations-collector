@@ -10,7 +10,7 @@ SPEC_FILE = spec.yaml
 #############
 
 .PHONY: dev-setup
-dev-setup: install-distrogen workspace setup-hooks
+dev-setup: workspace setup-hooks
 
 .PHONY: setup-hooks
 setup-hooks:

@@ -27,57 +27,54 @@ import (
 
 func Test_extractPatternsRubyRegex(t *testing.T) {
 	tests := []struct {
-		name    string
-		target  ottl.StringGetter[any]
-		pattern string
-		want    func(pcommon.Map)
+		name            string
+		target          ottl.StringGetter[any]
+		pattern         string
+		omitEmptyValues bool
+		want            func(pcommon.Map)
 	}{
 		{
-			name: "extract patterns",
+			name: "keep empty values",
 			target: &ottl.StandardStringGetter[any]{
 				Getter: func(_ context.Context, _ any) (any, error) {
-					return `a=b c=d`, nil
+					return `<13>1 2006-01-02T15:04:05+0700  my_app_id n n n `, nil
 				},
 			},
-			pattern: `^a=(?<a>\w+)\s+c=(?<c>\w+)$`,
-			want: func(expectedMap pcommon.Map) {
-				expectedMap.PutStr("a", "b")
-				expectedMap.PutStr("c", "d")
-			},
-		},
-		{
-			name: "no pattern found",
-			target: &ottl.StandardStringGetter[any]{
-				Getter: func(_ context.Context, _ any) (any, error) {
-					return `a=b c=d`, nil
-				},
-			},
-			pattern: `^a=(?<a>\w+)$`,
-			want:    func(_ pcommon.Map) {},
-		},
-		{
-			name: "complex pattern",
-			target: &ottl.StandardStringGetter[any]{
-				Getter: func(_ context.Context, _ any) (any, error) {
-					return `<13>1 2006-01-02T15:04:05+0700 vm_name_1 my_app_id n n n qqqqrrrr`, nil
-				},
-			},
-			pattern: `^\<(?<pri>[0-9]{1,5})\>1 (?<time>[^ ]+) (?<host>[^ ]+) (?<ident>[^ ]+) (?<pid>[n0-9]+) (?<msgid>[^ ]+) (?<extradata>(\[(.*?)\]|n)) (?<message>.+)$`,
+			pattern:         `^\<(?<pri>[0-9]{1,5})\>1 (?<time>[^ ]+) (?<host>.*) (?<ident>[^ ]+) (?<pid>[n0-9]+) (?<msgid>[^ ]+) (?<extradata>(\[(.*?)\]|n)) (?<message>.*)$`,
+			omitEmptyValues: false,
 			want: func(expectedMap pcommon.Map) {
 				expectedMap.PutStr("pri", "13")
 				expectedMap.PutStr("time", "2006-01-02T15:04:05+0700")
-				expectedMap.PutStr("host", "vm_name_1")
+				expectedMap.PutStr("host", "")
 				expectedMap.PutStr("ident", "my_app_id")
 				expectedMap.PutStr("pid", "n")
 				expectedMap.PutStr("msgid", "n")
 				expectedMap.PutStr("extradata", "n")
-				expectedMap.PutStr("message", "qqqqrrrr")
+				expectedMap.PutStr("message", "")
+			},
+		},
+		{
+			name: "omit empty values",
+			target: &ottl.StandardStringGetter[any]{
+				Getter: func(_ context.Context, _ any) (any, error) {
+					return `<13>1 2006-01-02T15:04:05+0700  my_app_id n n n `, nil
+				},
+			},
+			pattern:         `^\<(?<pri>[0-9]{1,5})\>1 (?<time>[^ ]+) (?<host>.*) (?<ident>[^ ]+) (?<pid>[n0-9]+) (?<msgid>[^ ]+) (?<extradata>(\[(.*?)\]|n)) (?<message>.*)$`,
+			omitEmptyValues: true,
+			want: func(expectedMap pcommon.Map) {
+				expectedMap.PutStr("pri", "13")
+				expectedMap.PutStr("time", "2006-01-02T15:04:05+0700")
+				expectedMap.PutStr("ident", "my_app_id")
+				expectedMap.PutStr("pid", "n")
+				expectedMap.PutStr("msgid", "n")
+				expectedMap.PutStr("extradata", "n")
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			exprFunc, err := extractPatternsRubyRegex(tt.target, tt.pattern)
+			exprFunc, err := extractPatternsRubyRegex(tt.target, tt.pattern, tt.omitEmptyValues)
 			assert.NoError(t, err)
 
 			result, err := exprFunc(context.Background(), nil)
@@ -101,9 +98,10 @@ func Test_extractPatternsRubyRegex(t *testing.T) {
 
 func Test_extractPatternsRubyRegex_validation(t *testing.T) {
 	tests := []struct {
-		name    string
-		target  ottl.StringGetter[any]
-		pattern string
+		name            string
+		target          ottl.StringGetter[any]
+		pattern         string
+		omitEmptyValues bool
 	}{
 		{
 			name: "bad regex",
@@ -126,7 +124,7 @@ func Test_extractPatternsRubyRegex_validation(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			exprFunc, err := extractPatternsRubyRegex[any](tt.target, tt.pattern)
+			exprFunc, err := extractPatternsRubyRegex[any](tt.target, tt.pattern, tt.omitEmptyValues)
 			assert.Error(t, err)
 			assert.Nil(t, exprFunc)
 		})
@@ -135,9 +133,10 @@ func Test_extractPatternsRubyRegex_validation(t *testing.T) {
 
 func Test_extractPatternsRubyRegex_bad_input(t *testing.T) {
 	tests := []struct {
-		name    string
-		target  ottl.StringGetter[any]
-		pattern string
+		name            string
+		target          ottl.StringGetter[any]
+		pattern         string
+		omitEmptyValues bool
 	}{
 		{
 			name: "target is non-string",
@@ -161,7 +160,7 @@ func Test_extractPatternsRubyRegex_bad_input(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			exprFunc, err := extractPatternsRubyRegex[any](tt.target, tt.pattern)
+			exprFunc, err := extractPatternsRubyRegex[any](tt.target, tt.pattern, tt.omitEmptyValues)
 			assert.NoError(t, err)
 
 			result, err := exprFunc(nil, nil)

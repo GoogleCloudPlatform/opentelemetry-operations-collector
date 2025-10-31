@@ -54,6 +54,11 @@ func (pg *ProjectGenerator) Generate() error {
 		logger.Debug("failed to get component templates", "err", err)
 		return err
 	}
+	scriptTemplateSet, err := GetScriptTemplateSet(pg, pg.FileMode)
+	if err != nil {
+		logger.Debug("failed to get component templates", "err", err)
+		return err
+	}
 
 	crg := NewComponentsRegistryGenerator()
 
@@ -63,17 +68,21 @@ func (pg *ProjectGenerator) Generate() error {
 		crg.Path = generatePath
 	}
 
-	generateMakePath := filepath.Join(generatePath, "make")
-
 	if err := crg.Generate(); err != nil {
 		return err
 	}
+
+	generateMakePath := filepath.Join(generatePath, "make")
+	generateScriptsPath := filepath.Join(generatePath, "scripts")
 
 	var dirErrors []error
 	if err := os.MkdirAll(generateMakePath, pg.FileMode); err != nil {
 		dirErrors = append(dirErrors, err)
 	}
 	if err := os.MkdirAll(filepath.Join(generatePath, "templates"), pg.FileMode); err != nil {
+		dirErrors = append(dirErrors, err)
+	}
+	if err := os.MkdirAll(generateScriptsPath, pg.FileMode); err != nil {
 		dirErrors = append(dirErrors, err)
 	}
 	if _, err := os.Create(filepath.Join(generatePath, "templates", EMPTY_FILE_NAME)); err != nil {
@@ -85,6 +94,9 @@ func (pg *ProjectGenerator) Generate() error {
 	}
 
 	if err := GenerateTemplateSet(generateMakePath, makeTemplates); err != nil {
+		return err
+	}
+	if err := GenerateTemplateSet(generateScriptsPath, scriptTemplateSet); err != nil {
 		return err
 	}
 	if err := GenerateTemplateSet(filepath.Join(generatePath, "."), projectTemplates); err != nil {

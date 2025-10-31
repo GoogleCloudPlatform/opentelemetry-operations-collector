@@ -24,7 +24,7 @@ import (
 	"os"
 	"slices"
 
-	"gopkg.in/yaml.v3"
+	"github.com/goccy/go-yaml"
 )
 
 var flagOTelVersion = flag.String("otel_version", "", "The OpenTelemetry version to fetch component versions for")

@@ -1,5 +1,5 @@
 name: basic-distro
-module: ""
+module: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/google-built-opentelemetry-collector/cmd/distrogen/testdata/generator/project/golden
 display_name: Basic OTel
 description: A basic distribution of the OpenTelemetry Collector
 blurb: A basic collector distro
@@ -12,10 +12,16 @@ go_version: 1.24.0
 binary_name: otelcol-basic
 build_tags: ""
 boringcrypto: false
-docker_repo: ""
+docker_repo: us-docker.pkg.dev/pretend-repo/otelcol-basic
+registries:
+- name: test
+  source: local
+  registryconfig:
+    path: ./registry.yaml
 components:
   receivers:
   - otlp
+  - pretend
   processors:
   - batch
   - memorylimiter
@@ -27,7 +33,14 @@ components:
   - pprof
   providers:
   - yaml
+replaces:
+- from: github.com/google/pretend_module v0.69.0
+  to: ./pretend_module
+  reason: For a test
+- from: github.com/google/pretend_module v0.69.0
+  to: ./pretend_module
+  reason: For a test
 feature_gates:
 - exporter.googlemanagedprometheus.intToDouble
-component_module_base: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/basic
-distrogen_version: v0.130.1-0.20250724183747-261516e1bff1
+component_module_base: ""
+distrogen_version: ""

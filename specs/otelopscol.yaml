@@ -24,6 +24,11 @@ collector_cgo: true
 go_version: 1.23.2
 build_tags: gpu
 
+registries:
+  - name: local_components
+    source: local
+    path: "./components/otelopscol/registry.yaml"
+
 components:
   receivers:
     - activedirectoryds

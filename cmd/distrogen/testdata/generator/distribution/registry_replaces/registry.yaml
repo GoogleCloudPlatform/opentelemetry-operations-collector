@@ -13,24 +13,14 @@
 # limitations under the License.
 
 release:
-  version: 1.0.0
+  version: 0.1.0
+  opentelemetry_collector_version: 0.121.0
+  replaces:
+  - from: github.com/google/pretend_module v0.69.0
+    to: ./pretend_module
+    reason: "For a test"
 
 receivers:
-  testreceiver:
-    gomod: github.com/test/receiver
-
-processors:
-  testprocessor:
-    gomod: github.com/test/processor
-
-exporters:
-  testexporter:
-    gomod: github.com/test/exporter
-
-connectors:
-  testconnector:
-    gomod: github.com/test/connector
-
-extensions:
-  testextension:
-    gomod: github.com/test/extension
+  pretend:
+    gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/pretendreceiver
+    path: "../components/pretendreceiver"

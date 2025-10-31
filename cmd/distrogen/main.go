@@ -26,8 +26,8 @@ import (
 	"slices"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/cmd/distrogen/internal/command"
+	"github.com/goccy/go-yaml"
 	flag "github.com/spf13/pflag"
-	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -85,11 +85,11 @@ func setSpecFlag(flags *flag.FlagSet) *string {
 type generateCommand struct {
 	flags flag.FlagSet
 
-	registries *[]string
 	spec       *string
 	force      *bool
 	templates  *string
 	compare    *bool
+	registries *[]string
 }
 
 func (cmd *generateCommand) ParseArgs(args []string) error {
@@ -112,20 +112,25 @@ func (cmd *generateCommand) Run() error {
 		return err
 	}
 
-	registry, err := LoadEmbeddedRegistry()
-	if err != nil {
-		return err
-	}
-
-	for _, registryPath := range *cmd.registries {
-		additionalRegistry, err := LoadRegistry(registryPath)
-		if err != nil {
-			return err
+	// All registries passed in via command line flags will
+	// be treated as new local source registries. They will
+	// take priority over registries in the config file, which
+	// also means they take priority over the embedded registry.
+	if len(*cmd.registries) > 0 {
+		newRegistries := make([]*CustomRegistry, len(*cmd.registries))
+		for _, registryPath := range *cmd.registries {
+			registry, err := NewLocalRegistry(registryPath)
+			if err != nil {
+				return err
+			}
+			newRegistries = append(newRegistries, registry)
 		}
-		registry.Merge(additionalRegistry)
+		// The new registries are prepended to put them in the right
+		// priority order.
+		spec.Registries = append(newRegistries, spec.Registries...)
 	}
 
-	generator, err := NewDistributionGenerator(spec, registry, *cmd.force)
+	generator, err := NewDistributionGenerator(spec, *cmd.force)
 	if err != nil {
 		return err
 	}

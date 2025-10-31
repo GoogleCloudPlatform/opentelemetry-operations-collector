@@ -20,7 +20,6 @@ import (
 	"strings"
 	"testing"
 
-	"gopkg.in/yaml.v3"
 	"gotest.tools/v3/assert"
 )
 
@@ -36,16 +35,16 @@ func TestLoadRegistry(t *testing.T) {
 	registry, err := LoadRegistry(registryTestData("basic_registry.yaml"))
 	assert.NilError(t, err)
 	assert.Assert(t, registry != nil)
-	assert.Assert(t, registry.Receivers["testreceiver"] != nil, "Expected 'testreceiver' to be loaded")
-	assert.Equal(t, registry.Receivers["testreceiver"].GoMod.URL, "github.com/test/receiver")
-	assert.Assert(t, registry.Processors["testprocessor"] != nil, "Expected 'testprocessor' to be loaded")
-	assert.Equal(t, registry.Processors["testprocessor"].GoMod.URL, "github.com/test/processor")
-	assert.Assert(t, registry.Exporters["testexporter"] != nil, "Expected 'testexporter' to be loaded")
-	assert.Equal(t, registry.Exporters["testexporter"].GoMod.URL, "github.com/test/exporter")
-	assert.Assert(t, registry.Connectors["testconnector"] != nil, "Expected 'testconnector' to be loaded")
-	assert.Equal(t, registry.Connectors["testconnector"].GoMod.URL, "github.com/test/connector")
-	assert.Assert(t, registry.Extensions["testextension"] != nil, "Expected 'testextension' to be loaded")
-	assert.Equal(t, registry.Extensions["testextension"].GoMod.URL, "github.com/test/extension")
+	assert.Assert(t, registry.Components[Receiver]["testreceiver"] != nil, "Expected 'testreceiver' to be loaded")
+	assert.Equal(t, registry.Components[Receiver]["testreceiver"].GoMod.URL, "github.com/test/receiver")
+	assert.Assert(t, registry.Components[Processor]["testprocessor"] != nil, "Expected 'testprocessor' to be loaded")
+	assert.Equal(t, registry.Components[Processor]["testprocessor"].GoMod.URL, "github.com/test/processor")
+	assert.Assert(t, registry.Components[Exporter]["testexporter"] != nil, "Expected 'testexporter' to be loaded")
+	assert.Equal(t, registry.Components[Exporter]["testexporter"].GoMod.URL, "github.com/test/exporter")
+	assert.Assert(t, registry.Components[Connector]["testconnector"] != nil, "Expected 'testconnector' to be loaded")
+	assert.Equal(t, registry.Components[Connector]["testconnector"].GoMod.URL, "github.com/test/connector")
+	assert.Assert(t, registry.Components[Extension]["testextension"] != nil, "Expected 'testextension' to be loaded")
+	assert.Equal(t, registry.Components[Extension]["testextension"].GoMod.URL, "github.com/test/extension")
 }
 
 func TestLoadRegistry_Error(t *testing.T) {
@@ -69,7 +68,7 @@ func TestLoadRegistry_Error(t *testing.T) {
 				// parsing fails so we have to use an ugly string compare.
 				// This yaml package is abandoned so it is unlikely to change
 				// any time soon.
-				return strings.Contains(err.Error(), "yaml: line")
+				return strings.Contains(err.Error(), "mapping value is not allowed in this context")
 			},
 		},
 	}
@@ -78,68 +77,6 @@ func TestLoadRegistry_Error(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := LoadRegistry(registryTestData(tc.path))
 			assert.Assert(t, tc.errCheck(err), "error check failed for %v", err)
-		})
-	}
-}
-
-func TestRegistry_Merge(t *testing.T) {
-	testCases := []struct {
-		name               string
-		r1                 func() *Registry
-		r2                 func() *Registry
-		expectedReceivers  int
-		expectedProcessors int
-	}{
-		{
-			name: "Merge Different Components",
-			r1: func() *Registry {
-				r := NewRegistry()
-				r.Receivers = RegistryComponents{
-					"receiver1": {GoMod: &GoModuleID{URL: "github.com/r1"}},
-				}
-				return r
-			},
-			r2: func() *Registry {
-				r := NewRegistry()
-				r.Receivers = RegistryComponents{
-					"receiver2": {GoMod: &GoModuleID{URL: "github.com/r2"}},
-				}
-				r.Processors = RegistryComponents{
-					"processor1": {GoMod: &GoModuleID{URL: "github.com/p1"}},
-				}
-				return r
-			},
-			expectedReceivers:  2,
-			expectedProcessors: 1,
-		},
-		{
-			name: "Override Existing Component",
-			r1: func() *Registry {
-				r := NewRegistry()
-				r.Receivers = RegistryComponents{
-					"receiver1": {GoMod: &GoModuleID{URL: "github.com/r1"}},
-				}
-				return r
-			},
-			r2: func() *Registry {
-				r := NewRegistry()
-				r.Receivers = RegistryComponents{
-					"receiver1": {GoMod: &GoModuleID{URL: "github.com/r2"}},
-				}
-				return r
-			},
-			expectedReceivers:  1,
-			expectedProcessors: 0,
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			r1 := tc.r1()
-			r2 := tc.r2()
-			r1.Merge(r2)
-			assert.Equal(t, len(r1.Receivers), tc.expectedReceivers)
-			assert.Equal(t, len(r1.Processors), tc.expectedProcessors)
 		})
 	}
 }
@@ -199,8 +136,7 @@ func TestGoModuleID_UnmarshalYAML(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			var gm GoModuleID
-			node := yaml.Node{Value: tc.input}
-			err := gm.UnmarshalYAML(&node)
+			err := gm.UnmarshalYAML([]byte(tc.input))
 
 			if tc.expectedError {
 				assert.Error(t, err, "")
@@ -217,7 +153,7 @@ func TestGoModuleID_MarshalYAML(t *testing.T) {
 	gm := &GoModuleID{URL: "github.com/test/module", Tag: "v1.2.3"}
 	result, err := gm.MarshalYAML()
 	assert.NilError(t, err)
-	assert.Equal(t, result.(string), "github.com/test/module v1.2.3")
+	assert.Equal(t, string(result), "github.com/test/module v1.2.3")
 }
 
 func TestRegistryComponent_RenderDocsURL(t *testing.T) {
@@ -306,7 +242,7 @@ func TestRegistryComponent_ApplyOTelVersion(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			c := &RegistryComponent{GoMod: &GoModuleID{URL: tc.url}, Stable: tc.stable}
-			c.ApplyOTelVersion(otelVersion)
+			c.ApplyOTelVersion(&otelVersion)
 			assert.Equal(t, c.GoMod.Tag, tc.expected)
 		})
 	}
@@ -322,31 +258,15 @@ func TestRegistryComponent_GetOCBComponent(t *testing.T) {
 	assert.Equal(t, ocb.Path, c.Path)
 }
 
-func TestRegistryComponents_LoadAllComponents(t *testing.T) {
-	otelVersion := otelComponentVersion{core: "1.2.3", coreStable: "1.0.0", contrib: "0.5.0"}
-	rl := RegistryComponents{
-		"component1": {GoMod: &GoModuleID{URL: "github.com/c1"}},
-		"component2": {GoMod: &GoModuleID{URL: "github.com/c2"}},
-	}
-	names := []string{"component1", "component2", "component3"}
-	components, errs := rl.LoadAllComponents(names, otelVersion)
-	assert.Equal(t, len(components), 2)
-	assert.Equal(t, len(errs), 1)
-	assert.ErrorContains(t, errs["component3"], "component not found")
-	assert.Equal(t, components["component1"].GoMod.Tag, "v1.2.3")
-}
-
 func TestRegistryComponents_LoadComponent(t *testing.T) {
-	otelVersion := otelComponentVersion{core: "1.2.3", coreStable: "1.0.0", contrib: "0.5.0"}
 	rl := RegistryComponents{
 		"component1": {GoMod: &GoModuleID{URL: "github.com/c1"}},
 	}
-	component, err := rl.LoadComponent("component1", otelVersion)
+	component, err := rl.LoadComponent("component1")
 	assert.NilError(t, err)
 	assert.Equal(t, component.GoMod.URL, "github.com/c1")
-	assert.Equal(t, component.GoMod.Tag, "v1.2.3")
 
-	_, err = rl.LoadComponent("nonexistent", otelVersion)
+	_, err = rl.LoadComponent("nonexistent")
 	assert.ErrorIs(t, err, ErrComponentNotFound)
 }
 

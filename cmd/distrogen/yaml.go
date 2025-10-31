@@ -19,7 +19,7 @@ import (
 	"io/fs"
 	"os"
 
-	"gopkg.in/yaml.v3"
+	"github.com/goccy/go-yaml"
 )
 
 func yamlUnmarshalFromFile[T any](path string) (*T, error) {
@@ -42,7 +42,7 @@ func yamlUnmarshalFromFileInto[T any](path string, value *T) error {
 		return err
 	}
 
-	err = yaml.Unmarshal(content, &value)
+	err = yaml.Unmarshal(content, value)
 	if err != nil {
 		return fmt.Errorf("error parsing %s: %w", path, err)
 	}

@@ -19,50 +19,39 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/cmd/distrogen/internal/generatortest"
 	"gotest.tools/v3/assert"
 )
 
 var (
-	testdataFullProjectPath = filepath.Join("testdata", "generator", "project")
+	testdataProjectSubpath = filepath.Join("generator", "project")
 )
 
 func TestProjectTemplateGeneration(t *testing.T) {
-	registry, err := LoadEmbeddedRegistry()
-	assert.NilError(t, err)
+	generatorTester := generatortest.NewGeneratorTester(
+		testdataProjectSubpath,
+		runProjectGenerator,
+	)
 
-	t.Run("project", func(t *testing.T) {
-		testProjectGeneratorCase(t, registry, "project")
-	})
+	generatorTester.Run(t)
 }
 
-func testProjectGeneratorCase(t *testing.T, registry *Registry, testFolder string) {
-	specPath := filepath.Join(testdataFullProjectPath, "spec.yaml")
-
-	// Create a temporary directory to generate files in, to avoid polluting testdata.
-	tempDir, err := os.MkdirTemp("", "project-generator-test")
-	assert.NilError(t, err)
-	t.Cleanup(func() {
-		os.RemoveAll(tempDir)
-	})
-
-	// The generator expects the spec file to be in the project path, so copy it there.
-	specData, err := os.ReadFile(specPath)
-	assert.NilError(t, err)
-	tempSpecPath := filepath.Join(tempDir, "spec.yaml")
-	err = os.WriteFile(tempSpecPath, specData, 0644)
-	assert.NilError(t, err)
-
-	d, err := NewDistributionSpec(tempSpecPath)
+func runProjectGenerator(t *testing.T) string {
+	specPath := "spec.yaml"
+	d, err := NewDistributionSpec(specPath)
 	assert.NilError(t, err)
 
 	p, err := NewProjectGenerator(d)
 	assert.NilError(t, err)
-	p.CustomPath = tempDir
+
+	// In this case we want the generated project to end up in a directory called
+	// "golden".
+	wd, err := os.Getwd()
+	assert.NilError(t, err)
+	p.GeneratePath = filepath.Join(wd, "golden")
 
 	err = p.Generate()
 	assert.NilError(t, err)
 
-	goldenPath := filepath.Join(testdataFullProjectPath, "golden")
-	goldenSubPath := filepath.Join("generator", "project", "golden")
-	assertGoldenFiles(t, p.CustomPath, goldenPath, goldenSubPath)
+	return p.GeneratePath
 }

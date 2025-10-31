@@ -5,6 +5,9 @@ MAKEFLAGS += --no-print-directory
 
 SPEC_FILE = spec.yaml
 
+OTEL_VERSION = 0.121.0
+OTEL_CONTRIB_VERSION = 0.121.0
+
 #############
 # Development
 #############
@@ -28,9 +31,15 @@ presubmit: misspell lint
 
 TOOLS_DIR ?= $(PWD)/.tools
 DISTROGEN_BIN ?= $(TOOLS_DIR)/distrogen
+MDATAGEN_BIN ?= $(TOOLS_DIR)/mdatagen
 
-$(DISTROGEN_BIN): tools-dir
+$(DISTROGEN_BIN):
+	$(MAKE) tools-dir
 	GOBIN=$(TOOLS_DIR) go install github.com/GoogleCloudPlatform/opentelemetry-operations-collector/cmd/distrogen@$(shell cat .distrogen/VERSION)
+
+$(MDATAGEN_BIN):
+	$(MAKE) tools-dir
+	GOBIN=$(TOOLS_DIR) bash ./scripts/download_mdatagen.sh v$(OTEL_VERSION)
 
 # This is a PHONY target cause if you make it as a normal recipe
 # it gets very confused because the creation date of the .tools
@@ -42,19 +51,15 @@ tools-dir:
 .PHONY: distrogen
 distrogen: $(DISTROGEN_BIN)
 
-
 ##########################
 # Updating OTel Components
 ##########################
 
 .PHONY: update-otel-components
 
-update-otel-components: COMPONENT_DIR := components
-update-otel-components: DISTROGEN_QUERY := $(DISTROGEN_BIN) query --spec $(SPEC_FILE) --field
-update-otel-components: export OTEL_VERSION = v$(shell $(DISTROGEN_QUERY) opentelemetry_version)
-update-otel-components: export OTEL_CONTRIB_VERSION = v$(shell $(DISTROGEN_QUERY) opentelemetry_contrib_version)
-update-otel-components: go.work
-	cd $(COMPONENT_DIR) && PATH="$(TOOLS_DIR):${PATH}" $(MAKE) update-components
+update-otel-components: workspace-update $(MDATAGEN_BIN)
+	export PATH="$(TOOLS_DIR):${PATH}" && cd components &&\
+	$(MAKE) OTEL_VERSION=v$(OTEL_VERSION) OTEL_CONTRIB_VERSION=v$(OTEL_CONTRIB_VERSION) update-components
 
 .PHONY: test-otel-components
 
@@ -93,14 +98,6 @@ test-all:
 tidy-all:
 	TARGET="tidy" $(MAKE) target-all-modules
 
-.PHONY: test-distrogen
-test-distrogen:
-	@go test ./cmd/distrogen
-
-.PHONY: distrogen-golden-update
-distrogen-golden-update:
-	@go test ./cmd/distrogen -update
-
 ###########
 # Workspace
 ###########
@@ -109,11 +106,12 @@ ALL_DIRECTORIES = find . -type d  -print0
 EXCLUDE_TOOLS_DIRS = grep -z -v ".*\.tools.*"
 EXCLUDE_BUILD_DIRS = grep -z -v -e ".*_build.*" -e ".*dist.*"
 
-.PHONY: workspace
-workspace: go.work
-
 go.work:
 	go work init
+	$(MAKE) workspace-update
+
+.PHONY: workspace-update
+workspace-update: go.work
 	$(ALL_DIRECTORIES) |\
 	$(EXCLUDE_TOOLS_DIRS) |\
 	$(EXCLUDE_BUILD_DIRS) |\
@@ -128,22 +126,13 @@ clean-workspace:
 # Utility
 #########
 
-# This target will tag the git repo using the OTel version. Eventually this may be
-# more sophisticated if we want to supply separate tags for every subcomponent. For
-# now it is pretty simply.
-.PHONY: tag-repo
-tag-repo: VERSION = v$(shell go run ./cmd/distrogen query -spec $(SPEC_FILE) -field version)
-tag-repo:
-	git tag -a $(VERSION) -m "Update to OpenTelemetry Collector version $(OTEL_VERSION)"
-	@echo "Created git tag $(VERSION). If it looks good, push it to the remote by running: git push origin $(VERSION)"
-
 .PHONY: target-all-modules
 target-all-modules: go.work
 ifndef TARGET
 	@echo "No TARGET defined."
 else
 	go list -f '{{ .Dir }}' -m | grep -v -e ".*/.tools.*" -e ".*integration_test/smoke_test.*" |\
-	GOWORK=off xargs -t -I '{}' $(MAKE) -C {} $(TARGET)
+	xargs -t -I '{}' $(MAKE) -C {} $(TARGET)
 endif
 
 .PHONY: update-go-module-in-all

@@ -43,6 +43,9 @@ var embeddedMakeTemplatesFS embed.FS
 //go:embed templates/project/*
 var embeddedProjectTemplatesFS embed.FS
 
+//go:embed templates/scripts/*
+var embeddedScriptsTemplatesFS embed.FS
+
 // TemplateFile is the information about a template file
 // that will be rendered for a distribution.
 type TemplateFile struct {
@@ -220,6 +223,14 @@ func GetProjectTemplateSet(templateContext any, fileMode fs.FileMode) (TemplateS
 
 func GetDistrogenTemplateSet(templateContext any, fileMode fs.FileMode) (TemplateSet, error) {
 	embedFSSub, err := fs.Sub(embeddedProjectTemplatesFS, filepath.Join("templates", "project", ".distrogen"))
+	if err != nil {
+		return nil, err
+	}
+	return getEmbeddedTemplateSet(templateContext, embedFSSub, fileMode)
+}
+
+func GetScriptTemplateSet(templateContext any, fileMode fs.FileMode) (TemplateSet, error) {
+	embedFSSub, err := fs.Sub(embeddedScriptsTemplatesFS, filepath.Join("templates", "scripts"))
 	if err != nil {
 		return nil, err
 	}

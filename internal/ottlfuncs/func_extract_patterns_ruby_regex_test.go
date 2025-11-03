@@ -34,6 +34,48 @@ func Test_extractPatternsRubyRegex(t *testing.T) {
 		want            func(pcommon.Map)
 	}{
 		{
+			name: "extract patterns",
+			target: &ottl.StandardStringGetter[any]{
+				Getter: func(_ context.Context, _ any) (any, error) {
+					return `a=b c=d`, nil
+				},
+			},
+			pattern: `^a=(?<a>\w+)\s+c=(?<c>\w+)$`,
+			want: func(expectedMap pcommon.Map) {
+				expectedMap.PutStr("a", "b")
+				expectedMap.PutStr("c", "d")
+			},
+		},
+		{
+			name: "no pattern found",
+			target: &ottl.StandardStringGetter[any]{
+				Getter: func(_ context.Context, _ any) (any, error) {
+					return `a=b c=d`, nil
+				},
+			},
+			pattern: `^a=(?<a>\w+)$`,
+			want:    func(_ pcommon.Map) {},
+		},
+		{
+			name: "complex pattern",
+			target: &ottl.StandardStringGetter[any]{
+				Getter: func(_ context.Context, _ any) (any, error) {
+					return `<13>1 2006-01-02T15:04:05+0700 vm_name_1 my_app_id n n n qqqqrrrr`, nil
+				},
+			},
+			pattern: `^\<(?<pri>[0-9]{1,5})\>1 (?<time>[^ ]+) (?<host>[^ ]+) (?<ident>[^ ]+) (?<pid>[n0-9]+) (?<msgid>[^ ]+) (?<extradata>(\[(.*?)\]|n)) (?<message>.+)$`,
+			want: func(expectedMap pcommon.Map) {
+				expectedMap.PutStr("pri", "13")
+				expectedMap.PutStr("time", "2006-01-02T15:04:05+0700")
+				expectedMap.PutStr("host", "vm_name_1")
+				expectedMap.PutStr("ident", "my_app_id")
+				expectedMap.PutStr("pid", "n")
+				expectedMap.PutStr("msgid", "n")
+				expectedMap.PutStr("extradata", "n")
+				expectedMap.PutStr("message", "qqqqrrrr")
+			},
+		},
+		{
 			name: "keep empty values",
 			target: &ottl.StandardStringGetter[any]{
 				Getter: func(_ context.Context, _ any) (any, error) {

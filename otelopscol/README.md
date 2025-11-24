@@ -36,6 +36,7 @@
 | sqlquery | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/sqlqueryreceiver/README.md) |
 | sqlserver | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/sqlserverreceiver/README.md) |
 | syslog | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/syslogreceiver/README.md) |
+| tcplog | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/tcplogreceiver/README.md) |
 | varnish | [docs](No docs linked for component) |
 | windowseventlog | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/windowseventlogreceiver/README.md) |
 | windowsperfcounters | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/windowsperfcountersreceiver/README.md) |

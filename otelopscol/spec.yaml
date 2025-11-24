@@ -38,6 +38,7 @@ components:
         - sqlquery
         - sqlserver
         - syslog
+        - tcplog
         - windowseventlog
         - windowsperfcounters
         - zookeeper

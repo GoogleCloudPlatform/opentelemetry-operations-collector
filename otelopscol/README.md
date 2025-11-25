@@ -16,6 +16,7 @@
 | elasticsearch | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/elasticsearchreceiver/README.md) |
 | filelog | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/filelogreceiver/README.md) |
 | flinkmetrics | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/flinkmetricsreceiver/README.md) |
+| fluentforward | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/fluentforwardreceiver/README.md) |
 | hostmetrics | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/hostmetricsreceiver/README.md) |
 | iis | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/iisreceiver/README.md) |
 | jmx | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/jmxreceiver/README.md) |
@@ -34,6 +35,8 @@
 | saphana | [docs](No docs linked for component) |
 | sqlquery | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/sqlqueryreceiver/README.md) |
 | sqlserver | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/sqlserverreceiver/README.md) |
+| syslog | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/syslogreceiver/README.md) |
+| tcplog | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/tcplogreceiver/README.md) |
 | varnish | [docs](No docs linked for component) |
 | windowseventlog | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/windowseventlogreceiver/README.md) |
 | windowsperfcounters | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/windowsperfcountersreceiver/README.md) |
@@ -48,9 +51,11 @@
 | batch | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/processor/batchprocessor/README.md) |
 | casttosum | [docs](No docs linked for component) |
 | cumulativetodelta | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/cumulativetodeltaprocessor/README.md) |
+| deltatocumulative | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/deltatocumulativeprocessor/README.md) |
 | deltatorate | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/deltatorateprocessor/README.md) |
-| filter | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/filterprocessor/README.md) |
+| filter | [docs](/components/otelopscol/processor/filterprocessor/README.md) |
 | groupbyattrs | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/groupbyattrsprocessor/README.md) |
+| interval | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/intervalprocessor/README.md) |
 | logstransform | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/logstransformprocessor/README.md) |
 | memorylimiter | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/processor/memorylimiterprocessor/README.md) |
 | metricstarttime | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/metricstarttimeprocessor/README.md) |
@@ -58,7 +63,7 @@
 | normalizesums | [docs](No docs linked for component) |
 | resource | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/resourceprocessor/README.md) |
 | resourcedetection | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/resourcedetectionprocessor/README.md) |
-| transform | [docs](github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/transformprocessor/README.md) |
+| transform | [docs](/components/otelopscol/processor/transformprocessor/README.md) |
 
 
 ## Exporters
@@ -71,6 +76,7 @@
 | googlemanagedprometheus | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/googlemanagedprometheusexporter/README.md) |
 | otlp | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/exporter/otlpexporter/README.md) |
 | otlphttp | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/exporter/otlphttpexporter/README.md) |
+| prometheus | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/prometheusexporter/README.md) |
 
 
 ## Extensions

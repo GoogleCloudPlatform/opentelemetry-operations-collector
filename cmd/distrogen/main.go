@@ -44,12 +44,11 @@ func main() {
 	runner.Register("generate", &generateCommand{})
 	runner.Register("query", &queryCommand{})
 	runner.Register("otel_component_versions", &otelComponentVersionsCommand{})
+	runner.Register("project", &projectCommand{})
+	runner.Register("component", &componentCommand{})
+	runner.Register("registry", &registryCommand{})
 
 	detectVerboseFlag()
-
-	if len(os.Args) <= 2 {
-		log.Fatal("must specify a command")
-	}
 
 	var exitCodeErr *ExitCodeError
 	if err := runner.Run(os.Args[1]); err != nil {
@@ -131,6 +130,7 @@ func (cmd *generateCommand) Run() error {
 		return err
 	}
 	defer generator.Clean()
+
 	generator.CustomTemplatesDir = os.DirFS(*cmd.templates)
 
 	if err := generator.Generate(); err != nil {
@@ -237,4 +237,88 @@ func (cmd *otelComponentVersionsCommand) Run() error {
 	}
 
 	return nil
+}
+
+type projectCommand struct {
+	flags flag.FlagSet
+	tools *[]string
+	spec  *string
+}
+
+func (cmd *projectCommand) ParseArgs(args []string) error {
+	cmd.spec = setSpecFlag(&cmd.flags)
+	cmd.tools = cmd.flags.StringArray("tools", []string{}, "Provide additional tools to install")
+
+	return cmd.flags.Parse(args)
+}
+
+func (cmd *projectCommand) Run() error {
+	if *cmd.spec == "" {
+		return errNoSpecFlag
+	}
+
+	spec, err := NewDistributionSpec(*cmd.spec)
+	if err != nil {
+		return err
+	}
+
+	generator, err := NewProjectGenerator(spec)
+	if err != nil {
+		return err
+	}
+
+	return generator.Generate()
+}
+
+type componentCommand struct {
+	flags flag.FlagSet
+
+	spec          *string
+	componentType *string
+	componentName *string
+}
+
+func (cmd *componentCommand) ParseArgs(args []string) error {
+	cmd.spec = setSpecFlag(&cmd.flags)
+	cmd.componentType = cmd.flags.String("type", "", "Type of component")
+	cmd.componentName = cmd.flags.String("name", "", "Name of component")
+
+	return cmd.flags.Parse(args)
+}
+
+func (cmd *componentCommand) Run() error {
+	if *cmd.spec == "" {
+		return errNoSpecFlag
+	}
+	if *cmd.componentType == "" {
+		return errors.New("missing --type flag")
+	}
+	if *cmd.componentName == "" {
+		return errors.New("missing --name flag")
+	}
+
+	spec, err := NewDistributionSpec(*cmd.spec)
+	if err != nil {
+		return err
+	}
+
+	generator, err := NewComponentGenerator(spec, ComponentType(*cmd.componentType), *cmd.componentName)
+	if err != nil {
+		return err
+	}
+
+	return generator.Generate()
+}
+
+type registryCommand struct {
+}
+
+func (cmd *registryCommand) ParseArgs(args []string) error {
+	return nil
+}
+
+func (cmd *registryCommand) Run() error {
+	generator := NewComponentsRegistryGenerator()
+
+	return generator.Generate()
 }

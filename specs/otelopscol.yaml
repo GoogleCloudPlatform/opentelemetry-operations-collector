@@ -15,11 +15,11 @@
 name: otelopscol
 description: "OpenTelemetry Collector binary used by the Ops Agent"
 module: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/otelopscol
-version: v0.133.0
-opentelemetry_version: 0.133.0
-opentelemetry_stable_version: 1.39.0
+version: v0.136.0
+opentelemetry_version: 0.136.0
+opentelemetry_stable_version: 1.42.0
 binary_name: otelopscol
-build_container: ubuntu
+build_container: debian
 collector_cgo: true
 go_version: 1.23.2
 build_tags: gpu
@@ -33,6 +33,7 @@ components:
     - elasticsearch
     - filelog
     - flinkmetrics
+    - fluentforward
     - hostmetrics
     - iis
     - jmx
@@ -47,6 +48,8 @@ components:
     - saphana
     - sqlquery
     - sqlserver
+    - syslog
+    - tcplog
     - windowseventlog
     - windowsperfcounters
     # Within this repo
@@ -59,9 +62,11 @@ components:
     - otlpjsonfile
   processors:
     - cumulativetodelta
+    - deltatocumulative
     - deltatorate
     - filter
     - groupbyattrs
+    - interval
     - logstransform
     - metricstransform
     - resourcedetection
@@ -81,6 +86,7 @@ components:
     - debug
     - otlp
     - otlphttp
+    - prometheus
   extensions:
     - zpages
     - googleclientauth

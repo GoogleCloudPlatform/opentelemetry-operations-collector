@@ -16,8 +16,6 @@ package transformprocessor
 
 import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/ottlfuncs"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/ottl"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/ottl/contexts/ottllog"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/processor"
@@ -27,12 +25,9 @@ var componentType component.Type = component.MustNewType("transform")
 
 // NewFactory create a factory for the transform processor.
 func NewFactory() processor.Factory {
-	additionaLogFunctions := []ottl.Factory[ottllog.TransformContext]{
-		ottlfuncs.NewExtractPatternsRubyRegexFactory[ottllog.TransformContext](),
-		ottlfuncs.NewToValuesFactory[ottllog.TransformContext](),
-	}
 	return transformprocessor.NewFactoryWithOptions(
 		transformprocessor.WithLogFunctions(transformprocessor.DefaultLogFunctions()),
-		transformprocessor.WithLogFunctions(additionaLogFunctions),
+		// Add log functions defined in ottlfuncs.
+		transformprocessor.WithLogFunctions(ottlfuncs.LogFunctions()),
 	)
 }

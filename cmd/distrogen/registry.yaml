@@ -511,6 +511,7 @@ exporters:
     zipkin:
         gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/zipkinexporter
         docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/zipkinexporter/README.md
+
 connectors:
     count:
         gomod: github.com/open-telemetry/opentelemetry-collector-contrib/connector/countconnector
@@ -545,6 +546,10 @@ connectors:
     spanmetrics:
         gomod: github.com/open-telemetry/opentelemetry-collector-contrib/connector/spanmetricsconnector
         docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/connector/spanmetricsconnector/README.md
+    signaltometrics:
+        gomod: github.com/open-telemetry/opentelemetry-collector-contrib/connector/signaltometricsconnector
+        docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/connector/signaltometricsconnector/README.md
+
 extensions:
     ack:
         gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/ackextension

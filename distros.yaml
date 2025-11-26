@@ -127,7 +127,9 @@ targets:
           representative:
           - suse-cloud:sles-15
           exhaustive:
+          - suse-cloud:sles-15-sp6
           - suse-sap-cloud:sles-15-sp6-sap
+          - suse-sap-cloud:sles-15-sp7-sap
           - opensuse-cloud:opensuse-leap
           - opensuse-cloud=opensuse-leap-15-6-v20251017-x86-64
       aarch64:
@@ -135,6 +137,7 @@ targets:
           representative:
           - suse-cloud:sles-15-arm64
           exhaustive:
+          - suse-cloud:sles-15-sp6-arm64
           - opensuse-cloud:opensuse-leap-arm64
           - opensuse-cloud=opensuse-leap-15-6-v20251017-arm64
   windows:

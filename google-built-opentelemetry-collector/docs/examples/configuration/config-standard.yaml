@@ -146,6 +146,4 @@ service:
               otlp:
                 protocol: grpc
                 endpoint: localhost:4317
-                # This can be removed if you configure tls
-                # settings on your otlp receiver.
                 insecure: true

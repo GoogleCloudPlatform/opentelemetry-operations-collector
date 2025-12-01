@@ -22,7 +22,7 @@ ZONES: comma-separated list of what zones to run in.
 PROJECT: GCP project to run in.
 IMAGE_SPECS: comma-separated list of image specs, see gce_testing.go for details.
 OTELCOL_CONFIGS_DIR: path to config files for otelcol to use for testing.
-_BUILD_ARTIFACTS_PACKAGE_GCS: gsutil URI for a directory containing otelcol-google
+_BUILD_ARTIFACTS_PACKAGE_GCS: "gcloud storage" URI for a directory containing otelcol-google
 package files. Should start with 'gs://'.
 */
 
@@ -197,7 +197,7 @@ func installPackageFromGCS(ctx context.Context, logger *log.Logger, vm *gce.VM, 
 	if _, err := gce.RunRemotely(ctx, logger, vm, "mkdir -p /tmp/collectorUpload"); err != nil {
 		return err
 	}
-	if err := gce.InstallGsutilIfNeeded(ctx, logger, vm); err != nil {
+	if err := gce.InstallGcloudIfNeeded(ctx, logger, vm); err != nil {
 		return err
 	}
 

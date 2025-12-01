@@ -178,7 +178,7 @@ func installWindowsPackageFromGCS(ctx context.Context, logger *log.Logger, vm *g
 	if _, err := gce.RunRemotely(ctx, logger, vm, "New-Item -ItemType directory -Path C:\\collectorUpload"); err != nil {
 		return err
 	}
-	if _, err := gce.RunRemotely(ctx, logger, vm, fmt.Sprintf("gsutil cp -r %s/*.goo C:\\collectorUpload", gcsPath)); err != nil {
+	if _, err := gce.RunRemotely(ctx, logger, vm, fmt.Sprintf("gcloud storage cp -r %s/*.goo C:\\collectorUpload", gcsPath)); err != nil {
 		return fmt.Errorf("error copying down collector package from GCS: %v", err)
 	}
 	if _, err := gce.RunRemotely(ctx, logger, vm, "googet -noconfirm -verbose install -reinstall (Get-ChildItem C:\\collectorUpload\\*.goo | Select-Object -Expand FullName)"); err != nil {
@@ -220,7 +220,7 @@ func installPackageFromGCS(ctx context.Context, logger *log.Logger, vm *gce.VM, 
 		ext = ".rpm"
 	}
 	pkgSelector := gcsPath + "/*" + arch + ext
-	if _, err := gce.RunRemotely(ctx, logger, vm, "sudo gsutil cp -r "+pkgSelector+" /tmp/collectorUpload"); err != nil {
+	if _, err := gce.RunRemotely(ctx, logger, vm, "sudo gcloud storage cp -r "+pkgSelector+" /tmp/collectorUpload"); err != nil {
 		return fmt.Errorf("error copying down collector package from GCS: %v", err)
 	}
 	// Print the contents of /tmp/collectorUpload into the logs.
@@ -293,7 +293,7 @@ func setupOtelCollectorFrom(ctx context.Context, logger *log.Logger, vm *gce.VM,
 		time.Sleep(10 * time.Second)
 
 		return nil
-	}  // End windows handling.
+	} // End windows handling.
 
 	defaultConfigPath := collectorConfigPath(vm.ImageSpec)
 	if err := gce.UploadContent(ctx, logger, vm, strings.NewReader(config), defaultConfigPath); err != nil {

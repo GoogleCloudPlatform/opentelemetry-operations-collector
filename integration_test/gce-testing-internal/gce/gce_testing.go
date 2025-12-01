@@ -943,11 +943,11 @@ func UploadContent(ctx context.Context, logger *log.Logger, vm *VM, content io.R
 		_, err = RunRemotely(ctx, logger, vm, fmt.Sprintf(`New-Item -Path "%s" -ItemType File -Force ;Read-GcsObject -Force -Bucket "%s" -ObjectName "%s" -OutFile "%s"`, remotePath, object.BucketName(), object.ObjectName(), remotePath))
 		return err
 	}
-	if err := InstallGsutilIfNeeded(ctx, logger, vm); err != nil {
+	if err := InstallGcloudIfNeeded(ctx, logger, vm); err != nil {
 		return err
 	}
 	objectPath := fmt.Sprintf("gs://%s/%s", object.BucketName(), object.ObjectName())
-	_, err = RunRemotely(ctx, logger, vm, fmt.Sprintf("sudo gsutil cp '%s' '%s'", objectPath, remotePath))
+	_, err = RunRemotely(ctx, logger, vm, fmt.Sprintf("sudo gcloud storage cp '%s' '%s'", objectPath, remotePath))
 	return err
 }
 
@@ -1939,7 +1939,7 @@ func InstallGrpcurlIfNeeded(ctx context.Context, logger *log.Logger, vm *VM) err
 		}
 
 		logger.Printf("grpcurl not found, installing it...")
-		installCmd := `gsutil cp gs://ops-agents-public-buckets-vendored-deps/mirrored-content/grpcurl/v1.8.6/grpcurl_1.8.6_windows_x86_64.zip C:\agentPlugin;Expand-Archive -Path "C:\agentPlugin\grpcurl_1.8.6_windows_x86_64.zip" -DestinationPath "C:\" -Force;ls "C:\"`
+		installCmd := `gcloud storage cp gs://ops-agents-public-buckets-vendored-deps/mirrored-content/grpcurl/v1.8.6/grpcurl_1.8.6_windows_x86_64.zip C:\agentPlugin;Expand-Archive -Path "C:\agentPlugin\grpcurl_1.8.6_windows_x86_64.zip" -DestinationPath "C:\" -Force;ls "C:\"`
 
 		_, err := RunRemotely(ctx, logger, vm, installCmd)
 		return err
@@ -1956,29 +1956,29 @@ func InstallGrpcurlIfNeeded(ctx context.Context, logger *log.Logger, vm *VM) err
 		arch = "arm64"
 	}
 
-	installCmd := fmt.Sprintf("sudo gsutil cp gs://ops-agents-public-buckets-vendored-deps/mirrored-content/grpcurl/v1.8.6/grpcurl_1.8.6_linux_%s.tar.gz /tmp/agentPlugin && sudo tar -xzf /tmp/agentPlugin/grpcurl_1.8.6_linux_%s.tar.gz --no-overwrite-dir -C /usr/local/bin", arch, arch)
+	installCmd := fmt.Sprintf("sudo gcloud storage cp gs://ops-agents-public-buckets-vendored-deps/mirrored-content/grpcurl/v1.8.6/grpcurl_1.8.6_linux_%s.tar.gz /tmp/agentPlugin && sudo tar -xzf /tmp/agentPlugin/grpcurl_1.8.6_linux_%s.tar.gz --no-overwrite-dir -C /usr/local/bin", arch, arch)
 	installCmd = `set -ex
 ` + installCmd
 	_, err := RunRemotely(ctx, logger, vm, installCmd)
 	return err
 }
 
-// InstallGsutilIfNeeded installs gsutil on instances that don't already have
+// InstallGcloudIfNeeded installs gcloud cli on instances that don't already have
 // it installed. This is only currently the case for some old versions of SUSE.
-func InstallGsutilIfNeeded(ctx context.Context, logger *log.Logger, vm *VM) error {
+func InstallGcloudIfNeeded(ctx context.Context, logger *log.Logger, vm *VM) error {
 	if IsWindows(vm.ImageSpec) {
 		return nil
 	}
-	if _, err := RunRemotely(ctx, logger, vm, "sudo gsutil --version"); err == nil {
-		// Success, no need to install gsutil.
+	if _, err := RunRemotely(ctx, logger, vm, "sudo gcloud --version"); err == nil {
+		// Success, no need to install gcloud.
 		return nil
 	}
-	logger.Printf("gsutil not found, installing it...")
+	logger.Printf("gcloud not found, installing it...")
 
-	// SUSE seems to be the only distro without gsutil, so what follows is all
+	// SUSE seems to be the only distro without gcloud, so what follows is all
 	// very SUSE-specific.
 	if !IsSUSEVM(vm) {
-		return installErr("gsutil", vm.OS.ID)
+		return installErr("gcloud", vm.OS.ID)
 	}
 
 	gcloudArch := "x86_64"
@@ -2006,8 +2006,6 @@ INSTALL_DIR="$(readlink --canonicalize .)"
 
 # Upgrade to the latest version
 sudo ${INSTALL_DIR}/google-cloud-sdk/bin/gcloud components update --quiet
-
-sudo ln -s ${INSTALL_DIR}/google-cloud-sdk/bin/gsutil /usr/bin/gsutil
 `
 	// b/308962066: The GCloud CLI ARM Linux tarballs do not have bundled Python
 	// and the GCloud CLI requires Python >= 3.8. Install Python311 for ARM VMs
@@ -2015,7 +2013,7 @@ sudo ln -s ${INSTALL_DIR}/google-cloud-sdk/bin/gsutil /usr/bin/gsutil
 		// This is what's used on openSUSE.
 		repoSetupCmd := "sudo zypper --non-interactive refresh"
 		if strings.Contains(vm.ImageSpec, "sles-12") {
-			return installErr("gsutil", vm.ImageSpec)
+			return installErr("gcloud", vm.ImageSpec)
 		}
 		// For SLES 15 ARM: use a vendored repo to reduce flakiness of the
 		// external repos. See http://go/sdi/releases/build-test-release/vendored
@@ -2030,21 +2028,13 @@ sudo zypper --non-interactive refresh test-vendor`
 ` + repoSetupCmd + `
 sudo zypper --non-interactive install python311 python3-certifi
 
-# On SLES 15 and OpenSUSE Leap arm, python3 is Python 3.6. Tell gsutil/gcloud to use python3.11.
+# On SLES 15 and OpenSUSE Leap arm, python3 is Python 3.6. Tell gcloud to use python3.11.
 export CLOUDSDK_PYTHON=/usr/bin/python3.11
 
 ` + installFromTarball + `
 
 # Upgrade to the latest version
 sudo CLOUDSDK_PYTHON=/usr/bin/python3.11 ${INSTALL_DIR}/google-cloud-sdk/bin/gcloud components update --quiet
-
-# Make a "gsutil" bash script in /usr/bin that runs the copy of gsutil that
-# was installed into $INSTALL_DIR with CLOUDSDK_PYTHON set.
-sudo tee /usr/bin/gsutil > /dev/null << EOF
-#!/usr/bin/env bash
-CLOUDSDK_PYTHON=/usr/bin/python3.11 ${INSTALL_DIR}/google-cloud-sdk/bin/gsutil "\$@"
-EOF
-sudo chmod a+x /usr/bin/gsutil
 `
 	}
 

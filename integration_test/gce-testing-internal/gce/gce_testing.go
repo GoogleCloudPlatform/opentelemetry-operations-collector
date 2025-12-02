@@ -689,7 +689,7 @@ func AssertLogMissing(ctx context.Context, logger *log.Logger, vm *VM, logNameRe
 			return nil
 		}
 		logger.Printf("Query returned found=%v, err=%v, attempt=%d", found, err, attempt)
-		if err != nil && !strings.Contains(err.Error(), "Internal error encountered") {
+		if err != nil && !strings.Contains(err.Error(), "Internal error encountered") && !strings.Contains(err.Error(), "Quota") {
 			// A non-retryable error.
 			return fmt.Errorf("AssertLogMissing() failed: %v", err)
 		}

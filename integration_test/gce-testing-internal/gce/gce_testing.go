@@ -2006,6 +2006,8 @@ INSTALL_DIR="$(readlink --canonicalize .)"
 
 # Upgrade to the latest version
 sudo ${INSTALL_DIR}/google-cloud-sdk/bin/gcloud components update --quiet
+
+sudo ln -s ${INSTALL_DIR}/google-cloud-sdk/bin/gcloud /usr/bin/gcloud
 `
 	// b/308962066: The GCloud CLI ARM Linux tarballs do not have bundled Python
 	// and the GCloud CLI requires Python >= 3.8. Install Python311 for ARM VMs

@@ -2035,6 +2035,14 @@ export CLOUDSDK_PYTHON=/usr/bin/python3.11
 
 # Upgrade to the latest version
 sudo CLOUDSDK_PYTHON=/usr/bin/python3.11 ${INSTALL_DIR}/google-cloud-sdk/bin/gcloud components update --quiet
+
+# Make a "gcloud" bash script in /usr/bin that runs the copy of gcloud that
+# was installed into $INSTALL_DIR with CLOUDSDK_PYTHON set.
+sudo tee /usr/bin/gcloud > /dev/null << EOF
+#!/usr/bin/env bash
+CLOUDSDK_PYTHON=/usr/bin/python3.11 ${INSTALL_DIR}/google-cloud-sdk/bin/gcloud "\$@"
+EOF
+sudo chmod a+x /usr/bin/gcloud
 `
 	}
 

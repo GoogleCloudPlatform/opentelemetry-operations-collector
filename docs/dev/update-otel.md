@@ -11,6 +11,7 @@ Updating the OpenTelemetry version for a distribution requires updating the spec
 1. Run `make gen-<distribution>`.
 1. Change to the distribution directory.
 1. Run `make build` in the distribution directory to ensure the build still works after the update.
+1. GOOGLERS ONLY: Update the containers used in the Kokoro build config. You will need to search for the most up-to-date bookworm tag for the `CERT_CONTAINER` in Airlock, and for the desired Go version for the `boringcrypto` `BUILD_CONTAINER` by pasting the image URL into your browser (non-Googlers will get an authentication error attempting this).
 
 ## Updating Contrib Version
 

@@ -23,14 +23,43 @@ resource_attributes:
   database:
     description: The name of a database.
     type: string
+    enabled: true
 
 attributes:
-  database:
-    description: The name of a database.
-    type: string
   collection:
     description: The name of a collection.
     type: string
+  connection_type:
+    name_override: type
+    description: The status of the connection.
+    type: string
+    enum:
+      - active
+      - available
+      - current
+  database:
+    description: The name of a database.
+    type: string
+  lock_mode:
+    description: The mode of Lock which denotes the degree of access
+    type: string
+    enum:
+      - shared
+      - exclusive
+      - intent_shared
+      - intent_exclusive
+  lock_type:
+    description: The Resource over which the Lock controls access
+    type: string
+    enum:
+      - parallel_batch_write_mode
+      - replication_state_transition
+      - global
+      - database
+      - collection
+      - mutex
+      - metadata
+      - oplog
   memory_type:
     name_override: type
     description: The type of memory used.
@@ -48,40 +77,12 @@ attributes:
       - delete
       - getmore
       - command
-  connection_type:
-    name_override: type
-    description: The status of the connection.
-    type: string
-    enum:
-      - active
-      - available
-      - current
   type:
     description: The result of a cache request.
     type: string
     enum:
       - hit
       - miss
-  lock_type:
-    description: The Resource over which the Lock controls access
-    type: string
-    enum:
-      - parallel_batch_write_mode
-      - replication_state_transition
-      - global
-      - database
-      - collection
-      - mutex
-      - metadata
-      - oplog
-  lock_mode:
-    description: The mode of Lock which denotes the degree of access
-    type: string
-    enum:
-      - shared
-      - exclusive
-      - intent_shared
-      - intent_exclusive
 
 metrics:
   mongodb.cache.operations:
@@ -93,6 +94,8 @@ metrics:
       value_type: int
       monotonic: true
     attributes: [type]
+    stability:
+      level: development
   mongodb.collection.count:
     description: The number of collections.
     unit: "{collections}"
@@ -102,15 +105,8 @@ metrics:
       value_type: int
       monotonic: false
     attributes: [database]
-  mongodb.data.size:
-    description: The size of the collection. Data compression does not affect this value.
-    unit: By
-    enabled: true
-    sum:
-      aggregation_temporality: cumulative
-      value_type: int
-      monotonic: false
-    attributes: [database]
+    stability:
+      level: development
   mongodb.connection.count:
     description: The number of connections.
     unit: "{connections}"
@@ -120,6 +116,63 @@ metrics:
       aggregation_temporality: cumulative
       monotonic: false
     attributes: [database, connection_type]
+    stability:
+      level: development
+  mongodb.cursor.count:
+    description: The number of open cursors maintained for clients.
+    unit: "{cursors}"
+    enabled: true
+    sum:
+      value_type: int
+      aggregation_temporality: cumulative
+      monotonic: false
+    attributes: []
+    stability:
+      level: development
+  mongodb.cursor.timeout.count:
+    description: The number of cursors that have timed out.
+    unit: "{cursors}"
+    enabled: true
+    sum:
+      value_type: int
+      aggregation_temporality: cumulative
+      monotonic: false
+    attributes: []
+    stability:
+      level: development
+  mongodb.data.size:
+    description: The size of the collection. Data compression does not affect this value.
+    unit: By
+    enabled: true
+    sum:
+      aggregation_temporality: cumulative
+      value_type: int
+      monotonic: false
+    attributes: [database]
+    stability:
+      level: development
+  mongodb.database.count:
+    description: The number of existing databases.
+    unit: "{databases}"
+    enabled: true
+    sum:
+      value_type: int
+      aggregation_temporality: cumulative
+      monotonic: false
+    attributes: []
+    stability:
+      level: development
+  mongodb.document.operation.count:
+    description: The number of document operations executed.
+    unit: "{documents}"
+    enabled: true
+    sum:
+      value_type: int
+      aggregation_temporality: cumulative
+      monotonic: false
+    attributes: [database, operation]
+    stability:
+      level: development
   mongodb.extent.count:
     description: The number of extents.
     unit: "{extents}"
@@ -129,6 +182,8 @@ metrics:
       value_type: int
       monotonic: false
     attributes: [database]
+    stability:
+      level: development
   mongodb.global_lock.time:
     description: The time the global lock has been held.
     unit: ms
@@ -138,6 +193,19 @@ metrics:
       value_type: int
       monotonic: true
     attributes: []
+    stability:
+      level: development
+  mongodb.index.access.count:
+    description: The number of times an index has been accessed.
+    unit: "{accesses}"
+    enabled: true
+    sum:
+      value_type: int
+      aggregation_temporality: cumulative
+      monotonic: false
+    attributes: [database, collection]
+    stability:
+      level: development
   mongodb.index.count:
     description: The number of indexes.
     unit: "{indexes}"
@@ -147,6 +215,8 @@ metrics:
       value_type: int
       monotonic: false
     attributes: [database]
+    stability:
+      level: development
   mongodb.index.size:
     description: Sum of the space allocated to all indexes in the database, including free index space.
     unit: By
@@ -156,6 +226,52 @@ metrics:
       value_type: int
       monotonic: false
     attributes: [database]
+    stability:
+      level: development
+  mongodb.lock.acquire.count:
+    description: Number of times the lock was acquired in the specified mode.
+    unit: "{count}"
+    enabled: false
+    sum:
+      value_type: int
+      aggregation_temporality: cumulative
+      monotonic: true
+    attributes: [database, lock_type, lock_mode]
+    stability:
+      level: development
+  mongodb.lock.acquire.time:
+    description: Cumulative wait time for the lock acquisitions.
+    unit: "microseconds"
+    enabled: false
+    sum:
+      value_type: int
+      aggregation_temporality: cumulative
+      monotonic: true
+    attributes: [database, lock_type, lock_mode]
+    stability:
+      level: development
+  mongodb.lock.acquire.wait_count:
+    description: Number of times the lock acquisitions encountered waits because the locks were held in a conflicting mode.
+    unit: "{count}"
+    enabled: false
+    sum:
+      value_type: int
+      aggregation_temporality: cumulative
+      monotonic: true
+    attributes: [database, lock_type, lock_mode]
+    stability:
+      level: development
+  mongodb.lock.deadlock.count:
+    description: Number of times the lock acquisitions encountered deadlocks.
+    unit: "{count}"
+    enabled: false
+    sum:
+      value_type: int
+      aggregation_temporality: cumulative
+      monotonic: true
+    attributes: [database, lock_type, lock_mode]
+    stability:
+      level: development
   mongodb.memory.usage:
     description: The amount of memory used.
     unit: By
@@ -165,6 +281,41 @@ metrics:
       value_type: int
       monotonic: false
     attributes: [database, memory_type]
+    stability:
+      level: development
+  mongodb.network.io.receive:
+    description: The number of bytes received.
+    unit: By
+    enabled: true
+    sum:
+      value_type: int
+      aggregation_temporality: cumulative
+      monotonic: false
+    attributes: []
+    stability:
+      level: development
+  mongodb.network.io.transmit:
+    description: The number of by transmitted.
+    unit: By
+    enabled: true
+    sum:
+      value_type: int
+      aggregation_temporality: cumulative
+      monotonic: false
+    attributes: []
+    stability:
+      level: development
+  mongodb.network.request.count:
+    description: The number of requests received by the server.
+    unit: "{requests}"
+    enabled: true
+    sum:
+      value_type: int
+      aggregation_temporality: cumulative
+      monotonic: false
+    attributes: []
+    stability:
+      level: development
   mongodb.object.count:
     description: The number of objects.
     unit: "{objects}"
@@ -174,6 +325,8 @@ metrics:
       value_type: int
       monotonic: false
     attributes: [database]
+    stability:
+      level: development
   mongodb.operation.count:
     description: The number of operations executed.
     unit: "{operations}"
@@ -183,6 +336,30 @@ metrics:
       value_type: int
       monotonic: true
     attributes: [operation]
+    stability:
+      level: development
+  mongodb.operation.time:
+    description: The total time spent performing operations.
+    unit: ms
+    enabled: true
+    sum:
+      value_type: int
+      aggregation_temporality: cumulative
+      monotonic: true
+    attributes: [operation]
+    stability:
+      level: development
+  mongodb.session.count:
+    description: The total number of active sessions.
+    unit: "{sessions}"
+    enabled: true
+    sum:
+      value_type: int
+      aggregation_temporality: cumulative
+      monotonic: false
+    attributes: []
+    stability:
+      level: development
   mongodb.storage.size:
     description: The total amount of storage allocated to this collection.
     extended_documentation: If collection data is compressed it reflects the compressed size.
@@ -193,129 +370,5 @@ metrics:
       value_type: int
       monotonic: true
     attributes: [database]
-  mongodb.database.count:
-    description: The number of existing databases.
-    unit: "{databases}"
-    enabled: true
-    sum:
-      value_type: int
-      aggregation_temporality: cumulative
-      monotonic: false
-    attributes: []
-  mongodb.index.access.count:
-    description: The number of times an index has been accessed.
-    unit: "{accesses}"
-    enabled: true
-    sum:
-      value_type: int
-      aggregation_temporality: cumulative
-      monotonic: false
-    attributes: [database, collection]
-  mongodb.document.operation.count:
-    description: The number of document operations executed.
-    unit: "{documents}"
-    enabled: true
-    sum:
-      value_type: int
-      aggregation_temporality: cumulative
-      monotonic: false
-    attributes: [database, operation]
-  mongodb.network.io.receive:
-    description: The number of bytes received.
-    unit: By
-    enabled: true
-    sum:
-      value_type: int
-      aggregation_temporality: cumulative
-      monotonic: false
-    attributes: []
-  mongodb.network.io.transmit:
-    description: The number of by transmitted.
-    unit: By
-    enabled: true
-    sum:
-      value_type: int
-      aggregation_temporality: cumulative
-      monotonic: false
-    attributes: []
-  mongodb.network.request.count:
-    description: The number of requests received by the server.
-    unit: "{requests}"
-    enabled: true
-    sum:
-      value_type: int
-      aggregation_temporality: cumulative
-      monotonic: false
-    attributes: []
-  mongodb.operation.time:
-    description: The total time spent performing operations.
-    unit: ms
-    enabled: true
-    sum:
-      value_type: int
-      aggregation_temporality: cumulative
-      monotonic: true
-    attributes: [operation]
-  mongodb.session.count:
-    description: The total number of active sessions.
-    unit: "{sessions}"
-    enabled: true
-    sum:
-      value_type: int
-      aggregation_temporality: cumulative
-      monotonic: false
-    attributes: []
-  mongodb.cursor.count:
-    description: The number of open cursors maintained for clients.
-    unit: "{cursors}"
-    enabled: true
-    sum:
-      value_type: int
-      aggregation_temporality: cumulative
-      monotonic: false
-    attributes: []
-  mongodb.cursor.timeout.count:
-    description: The number of cursors that have timed out.
-    unit: "{cursors}"
-    enabled: true
-    sum:
-      value_type: int
-      aggregation_temporality: cumulative
-      monotonic: false
-    attributes: []
-  mongodb.lock.acquire.count:
-    description: Number of times the lock was acquired in the specified mode.
-    unit: "{count}"
-    enabled: false
-    sum:
-      value_type: int
-      aggregation_temporality: cumulative
-      monotonic: true
-    attributes: [database, lock_type, lock_mode]
-  mongodb.lock.acquire.wait_count:
-    description: Number of times the lock acquisitions encountered waits because the locks were held in a conflicting mode.
-    unit: "{count}"
-    enabled: false
-    sum:
-      value_type: int
-      aggregation_temporality: cumulative
-      monotonic: true
-    attributes: [database, lock_type, lock_mode]
-  mongodb.lock.acquire.time:
-    description: Cumulative wait time for the lock acquisitions.
-    unit: "microseconds"
-    enabled: false
-    sum:
-      value_type: int
-      aggregation_temporality: cumulative
-      monotonic: true
-    attributes: [database, lock_type, lock_mode]
-  mongodb.lock.deadlock.count:
-    description: Number of times the lock acquisitions encountered deadlocks.
-    unit: "{count}"
-    enabled: false
-    sum:
-      value_type: int
-      aggregation_temporality: cumulative
-      monotonic: true
-    attributes: [database, lock_type, lock_mode]
+    stability:
+      level: development

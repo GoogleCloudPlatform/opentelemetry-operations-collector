@@ -238,10 +238,18 @@ else
 	GOWORK=off xargs -t -I '{}' $(MAKE) -C {} $(TARGET)
 endif
 
+.PHONY: target-all-modules-include-internal
+target-all-modules-include-internal: go.work
+ifndef TARGET
+	@echo "No TARGET defined."
+else
+	go list -f "{{ .Dir }}" -m | GOWORK=off xargs -t -I '{}' $(MAKE) -C {} $(TARGET)
+endif
+
 .PHONY: update-go-module-in-all
 update-go-module-in-all:
 ifndef GO_MOD
 	@echo "must specify a GO_MOD"
 else
-	TARGET=update-go-module $(MAKE) target-all-modules GO_MOD=$(GO_MOD)$(if "$(GO_MOD_VERSION), GO_MOD_VERSION=$(GO_MOD_VERSION),)
+	TARGET=update-go-module $(MAKE) target-all-modules-include-internal GO_MOD=$(GO_MOD)$(if "$(GO_MOD_VERSION), GO_MOD_VERSION=$(GO_MOD_VERSION),)
 endif

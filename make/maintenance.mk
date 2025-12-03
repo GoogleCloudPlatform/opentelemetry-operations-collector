@@ -1,5 +1,6 @@
+GO_MOD_VERSION ?= latest
+
 .PHONY: update-go-module
-update-go-module: GO_MOD_VERSION ?= latest
 update-go-module:
 ifndef GO_MOD
 	@echo "Missing a GO_MOD to update"

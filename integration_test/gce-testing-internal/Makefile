@@ -1,5 +1,2 @@
 include ../../make/maintenance.mk
-
-.PHONY: test
-test:
-	go test ./...
+include ../../make/common.mk

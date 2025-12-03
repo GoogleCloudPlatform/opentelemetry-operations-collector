@@ -23,6 +23,7 @@ receivers:
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/elasticsearchreceiver v0.136.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver v0.136.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/flinkmetricsreceiver v0.136.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/fluentforwardreceiver v0.136.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver v0.136.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/iisreceiver v0.136.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver v0.136.0
@@ -38,6 +39,8 @@ receivers:
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/saphanareceiver v0.136.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/sqlqueryreceiver v0.136.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/sqlserverreceiver v0.136.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/syslogreceiver v0.136.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/tcplogreceiver v0.136.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowseventlogreceiver v0.136.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowsperfcountersreceiver v0.136.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/zookeeperreceiver v0.136.0

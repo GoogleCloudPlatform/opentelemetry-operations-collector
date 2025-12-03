@@ -33,6 +33,7 @@ components:
     - elasticsearch
     - filelog
     - flinkmetrics
+    - fluentforward
     - hostmetrics
     - iis
     - jmx
@@ -47,6 +48,8 @@ components:
     - saphana
     - sqlquery
     - sqlserver
+    - syslog
+    - tcplog
     - windowseventlog
     - windowsperfcounters
     # Within this repo

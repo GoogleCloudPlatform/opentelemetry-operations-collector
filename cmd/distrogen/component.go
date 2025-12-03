@@ -68,7 +68,7 @@ func NewComponentGenerator(spec *DistributionSpec, componentType ComponentType, 
 		return nil, fmt.Errorf("%w: %s", errInvalidComponentType, componentType)
 	}
 
-	g.ModuleURL = spec.Module
+	g.ModuleURL = fmt.Sprintf("%s/%s", spec.Module, g.Path)
 
 	return g, nil
 }

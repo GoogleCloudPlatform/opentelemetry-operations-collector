@@ -30,6 +30,13 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-24.04]
+        # The OpenTelemetry Collector modules all support one Go version
+        # back from current mainline release.
+        # We build GBOC with the most current Go version possible.
+        # As a result, we run CI on one version back and current.
+        # We have had very rare problems with particular Go updates
+        # (mainly to do with CGO) so testing one version back
+        # also helps avoid that.
         go: [1.24, 1.25]
     runs-on: ${{matrix.os}}
     steps:

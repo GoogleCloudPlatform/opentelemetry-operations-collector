@@ -1,13 +1,13 @@
 module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/tools
 
-go 1.24
+go 1.24.0
 
 require (
 	github.com/client9/misspell v0.3.4
 	github.com/golangci/golangci-lint v1.64.6
 	github.com/google/addlicense v1.1.1
 	go.opentelemetry.io/collector/cmd/mdatagen v0.111.0
-	golang.org/x/tools v0.30.0
+	golang.org/x/tools v0.38.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -202,11 +202,14 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	golang.org/x/exp/typeparams v0.0.0-20250210185358-939b2ce775ac // indirect
-	golang.org/x/mod v0.23.0 // indirect
-	golang.org/x/net v0.38.0 // indirect
-	golang.org/x/sync v0.12.0 // indirect
-	golang.org/x/sys v0.31.0 // indirect
-	golang.org/x/text v0.23.0 // indirect
+	golang.org/x/mod v0.29.0 // indirect
+	golang.org/x/net v0.47.0 // indirect
+	golang.org/x/sync v0.18.0 // indirect
+	golang.org/x/sys v0.38.0 // indirect
+	golang.org/x/telemetry v0.0.0-20251008203120-078029d740a8 // indirect
+	golang.org/x/text v0.31.0 // indirect
+	golang.org/x/tools/go/expect v0.1.1-deprecated // indirect
+	golang.org/x/tools/go/packages/packagestest v0.1.1-deprecated // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250127172529-29210b9bc287 // indirect
 	google.golang.org/grpc v1.70.0 // indirect
 	google.golang.org/protobuf v1.36.5 // indirect

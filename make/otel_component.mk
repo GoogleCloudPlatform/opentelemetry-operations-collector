@@ -24,10 +24,11 @@ INCLUDE_COLLECTOR_CORE_COMPONENTS = grep "^go.opentelemetry.io" | grep -v "^go.o
 INCLUDE_COLLECTOR_STABLE_CORE_COMPONENTS = grep $(STABLE_COMPONENTS_PATTERN)
 EXCLUDE_COLLECTOR_STABLE_CORE_COMPONENTS = grep -v $(STABLE_COMPONENTS_PATTERN)
 INCLUDE_CONTRIB_COMPONENTS = grep "^github.com/open-telemetry/opentelemetry-collector-contrib"
+INCLUDE_OPERATIONS_COLLECTOR_COMPONENTS = grep "^github.com/GoogleCloudPlatform/opentelemetry-operations-collector"
 GO_GET_ALL = xargs --no-run-if-empty -t -I '{}' go get -tags=gpu {}
 
 .PHONY: update-components
-update-components: core-components contrib-components
+update-components: core-components contrib-components operations-collector-components
 
 .PHONY: core-components
 core-components:
@@ -40,4 +41,10 @@ core-components:
 contrib-components:
 	$(LIST_DIRECT_MODULES) | \
 		$(INCLUDE_CONTRIB_COMPONENTS) | \
+		$(GO_GET_ALL)@$(OTEL_CONTRIB_VERSION)
+
+.PHONY: operations-collector-components
+contrib-components:
+	$(LIST_DIRECT_MODULES) | \
+		$(INCLUDE_OPERATIONS_COLLECTOR_COMPONENTS) | \
 		$(GO_GET_ALL)@$(OTEL_CONTRIB_VERSION)

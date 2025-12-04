@@ -23,6 +23,7 @@ resource_attributes:
   varnish.cache.name:
     description: The name of the cache.
     type: string
+    enabled: true
 
 attributes:
   backend_connection_type:
@@ -35,11 +36,10 @@ attributes:
     name_override: operation
     description: The cache operation types
     enum: [hit, miss, hit_pass]
-  thread_operations:
+  http.status_code:
     type: string
-    name_override: operation
-    description: The thread operation types.
-    enum: [created, destroyed, failed]
+    name_override: status_code
+    description: An HTTP status code.
   session_type:
     type: string
     name_override: kind
@@ -50,10 +50,11 @@ attributes:
     name_override: state
     description: The client request states.
     enum: [received, dropped]
-  http.status_code:
+  thread_operations:
     type: string
-    name_override: status_code
-    description: An HTTP status code.
+    name_override: operation
+    description: The thread operation types.
+    enum: [created, destroyed, failed]
 
 metrics:
   varnish.backend.connection.count:
@@ -65,87 +66,8 @@ metrics:
       monotonic: true
       aggregation_temporality: cumulative
     attributes: [backend_connection_type]
-  varnish.cache.operation.count:
-    enabled: true
-    description: The cache operation type count.
-    unit: "{operations}"
-    sum:
-      value_type: int
-      monotonic: true
-      aggregation_temporality: cumulative
-    attributes: [cache_operations]
-  varnish.thread.operation.count:
-    enabled: true
-    description: The thread operation type count.
-    unit: "{operations}"
-    sum:
-      value_type: int
-      monotonic: true
-      aggregation_temporality: cumulative
-    attributes: [thread_operations]
-  varnish.session.count:
-    enabled: true
-    description: The session connection type count.
-    unit: "{connections}"
-    sum:
-      value_type: int
-      monotonic: true
-      aggregation_temporality: cumulative
-    attributes: [session_type]
-  varnish.object.nuked:
-    enabled: true
-    description: The objects that have been forcefully evicted from storage count.
-    unit: "{objects}"
-    sum:
-      value_type: int
-      monotonic: true
-      aggregation_temporality: cumulative
-    attributes: []
-  varnish.object.moved:
-    enabled: true
-    description: The moved operations done on the LRU list count.
-    unit: "{objects}"
-    sum:
-      value_type: int
-      monotonic: true
-      aggregation_temporality: cumulative
-    attributes: []
-  varnish.object.expired:
-    enabled: true
-    description: The expired objects from old age count.
-    unit: "{objects}"
-    sum:
-      value_type: int
-      monotonic: true
-      aggregation_temporality: cumulative
-    attributes: []
-  varnish.object.count:
-    enabled: true
-    description: The HTTP objects in the cache count.
-    unit: "{objects}"
-    sum:
-      value_type: int
-      monotonic: false
-      aggregation_temporality: cumulative
-    attributes: []
-  varnish.client.request.count:
-    enabled: true
-    description: The client request count.
-    unit: "{requests}"
-    sum:
-      value_type: int
-      monotonic: true
-      aggregation_temporality: cumulative
-    attributes: [state]
-  varnish.client.request.error.count:
-    enabled: true
-    description: The client request errors received by status code.
-    unit: "{requests}"
-    sum:
-      value_type: int
-      monotonic: true
-      aggregation_temporality: cumulative
-    attributes: [http.status_code]
+    stability:
+      level: development
   varnish.backend.request.count:
     enabled: true
     description: The backend requests count.
@@ -155,3 +77,105 @@ metrics:
       monotonic: true
       aggregation_temporality: cumulative
     attributes: []
+    stability:
+      level: development
+  varnish.cache.operation.count:
+    enabled: true
+    description: The cache operation type count.
+    unit: "{operations}"
+    sum:
+      value_type: int
+      monotonic: true
+      aggregation_temporality: cumulative
+    attributes: [cache_operations]
+    stability:
+      level: development
+  varnish.client.request.count:
+    enabled: true
+    description: The client request count.
+    unit: "{requests}"
+    sum:
+      value_type: int
+      monotonic: true
+      aggregation_temporality: cumulative
+    attributes: [state]
+    stability:
+      level: development
+  varnish.client.request.error.count:
+    enabled: true
+    description: The client request errors received by status code.
+    unit: "{requests}"
+    sum:
+      value_type: int
+      monotonic: true
+      aggregation_temporality: cumulative
+    attributes: [http.status_code]
+    stability:
+      level: development
+  varnish.object.count:
+    enabled: true
+    description: The HTTP objects in the cache count.
+    unit: "{objects}"
+    sum:
+      value_type: int
+      monotonic: false
+      aggregation_temporality: cumulative
+    attributes: []
+    stability:
+      level: development
+  varnish.object.expired:
+    enabled: true
+    description: The expired objects from old age count.
+    unit: "{objects}"
+    sum:
+      value_type: int
+      monotonic: true
+      aggregation_temporality: cumulative
+    attributes: []
+    stability:
+      level: development
+  varnish.object.moved:
+    enabled: true
+    description: The moved operations done on the LRU list count.
+    unit: "{objects}"
+    sum:
+      value_type: int
+      monotonic: true
+      aggregation_temporality: cumulative
+    attributes: []
+    stability:
+      level: development
+  varnish.object.nuked:
+    enabled: true
+    description: The objects that have been forcefully evicted from storage count.
+    unit: "{objects}"
+    sum:
+      value_type: int
+      monotonic: true
+      aggregation_temporality: cumulative
+    attributes: []
+    stability:
+      level: development
+  varnish.session.count:
+    enabled: true
+    description: The session connection type count.
+    unit: "{connections}"
+    sum:
+      value_type: int
+      monotonic: true
+      aggregation_temporality: cumulative
+    attributes: [session_type]
+    stability:
+      level: development
+  varnish.thread.operation.count:
+    enabled: true
+    description: The thread operation type count.
+    unit: "{operations}"
+    sum:
+      value_type: int
+      monotonic: true
+      aggregation_temporality: cumulative
+    attributes: [thread_operations]
+    stability:
+      level: development
+

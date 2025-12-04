@@ -20,6 +20,11 @@ status:
 
 
 resource_attributes:
+  gpu.model:
+    type: string
+    description: GPU model name.
+    enabled: true
+
   gpu.number:
     type: string
     description: GPU index starting at 0.
@@ -30,12 +35,21 @@ resource_attributes:
     description: GPU universally unique identifier.
     enabled: true
 
-  gpu.model:
-    type: string
-    description: GPU model name.
-    enabled: true
-
 attributes:
+  gpu.clock.violation:
+    type: string
+    description: Reason for throttling, one of [power, thermal, sync_boost, board_limit, low_util, reliability, app_clock, base_clock].
+    enum: [power, thermal, sync_boost, board_limit, low_util, reliability, app_clock, base_clock]
+
+  gpu.error.type:
+    type: string
+    description: The type of error, one of [sbe, dbe].
+    enum: [sbe, dbe]
+
+  gpu.error.xid:
+    type: int
+    description: The XID code for the error, 1..143.
+
   gpu.memory.state:
     type: string
     description: GPU memory state, one of [free, used, reserved].
@@ -51,114 +65,7 @@ attributes:
     description: Direction of the link traffic, one of [transmit, receive].
     enum: [transmit, receive]
 
-  gpu.clock.violation:
-    type: string
-    description: Reason for throttling, one of [power, thermal, sync_boost, board_limit, low_util, reliability, app_clock, base_clock].
-    enum: [power, thermal, sync_boost, board_limit, low_util, reliability, app_clock, base_clock]
-
-  gpu.error.type:
-    type: string
-    description: The type of error, one of [sbe, dbe].
-    enum: [sbe, dbe]
-
-  gpu.error.xid:
-    type: int
-    description: The XID code for the error, 1..143.
-
 metrics:
-  gpu.dcgm.utilization:
-    description: Ratio of time the graphics engine is active.
-    unit: "1"
-    gauge:
-      value_type: double
-    enabled: true
-
-  gpu.dcgm.sm.utilization:
-    description: Fraction of time at least one warp was active on a multiprocessor, averaged over all multiprocessors.
-    unit: "1"
-    gauge:
-      value_type: double
-    enabled: true
-
-  gpu.dcgm.sm.occupancy:
-    description: Fraction of the number of warps resident on a multiprocessor, averaged over all multiprocessors.
-    unit: "1"
-    gauge:
-      value_type: double
-    enabled: false
-
-  gpu.dcgm.pipe.utilization:
-    description: Fraction of cycles the corresponding GPU pipe was active, averaged over time and all multiprocessors.
-    unit: "1"
-    gauge:
-      value_type: double
-    attributes: [gpu.pipe]
-    enabled: true
-
-  gpu.dcgm.codec.encoder.utilization:
-    description: Encoder utilization.
-    unit: "1"
-    gauge:
-      value_type: double
-    enabled: true
-
-  gpu.dcgm.codec.decoder.utilization:
-    description: Decoder utilization.
-    unit: "1"
-    gauge:
-      value_type: double
-    enabled: true
-
-  gpu.dcgm.memory.bytes_used:
-    description: Current number of GPU memory bytes used by state. Summing the values of all states yields the total GPU memory space.
-    unit: By
-    gauge:
-      value_type: int
-    attributes: [gpu.memory.state]
-    enabled: true
-
-  gpu.dcgm.memory.bandwidth_utilization:
-    description: Fraction of cycles data was being sent or received from GPU memory.
-    unit: "1"
-    gauge:
-      value_type: double
-    enabled: true
-
-  gpu.dcgm.pcie.io:
-    description: The number of bytes sent over the PCIe bus, including both protocol headers and data payloads.
-    unit: By
-    sum:
-      value_type: int
-      aggregation_temporality: cumulative
-      monotonic: true
-    attributes: [network.io.direction]
-    enabled: true
-
-  gpu.dcgm.nvlink.io:
-    description: The number of bytes sent over NVLink, not including protocol headers.
-    unit: By
-    sum:
-      value_type: int
-      aggregation_temporality: cumulative
-      monotonic: true
-    attributes: [network.io.direction]
-    enabled: true
-
-  gpu.dcgm.energy_consumption:
-    description: Total energy consumption for the GPU in J since the driver was last reloaded.
-    unit: J
-    sum:
-      value_type: double
-      aggregation_temporality: cumulative
-      monotonic: true
-    enabled: true
-
-  gpu.dcgm.temperature:
-    description: Current temperature readings for the device, in ˚C.
-    unit: Cel
-    gauge:
-      value_type: double
-    enabled: true
 
   gpu.dcgm.clock.frequency:
     description: Multiprocessor clock frequency.
@@ -166,6 +73,8 @@ metrics:
     gauge:
       value_type: double
     enabled: true
+    stability:
+      level: development
 
   gpu.dcgm.clock.throttle_duration.time:
     description: Clock throttle total duration.
@@ -176,6 +85,26 @@ metrics:
       monotonic: true
     attributes: [gpu.clock.violation]
     enabled: true
+    stability:
+      level: development
+
+  gpu.dcgm.codec.decoder.utilization:
+    description: Decoder utilization.
+    unit: "1"
+    gauge:
+      value_type: double
+    enabled: true
+    stability:
+      level: development
+
+  gpu.dcgm.codec.encoder.utilization:
+    description: Encoder utilization.
+    unit: "1"
+    gauge:
+      value_type: double
+    enabled: true
+    stability:
+      level: development
 
   gpu.dcgm.ecc_errors:
     description: Data corruption errors.
@@ -186,6 +115,108 @@ metrics:
       monotonic: true
     attributes: [gpu.error.type]
     enabled: true
+    stability:
+      level: development
+
+  gpu.dcgm.energy_consumption:
+    description: Total energy consumption for the GPU in J since the driver was last reloaded.
+    unit: J
+    sum:
+      value_type: double
+      aggregation_temporality: cumulative
+      monotonic: true
+    enabled: true
+    stability:
+      level: development
+
+  gpu.dcgm.memory.bandwidth_utilization:
+    description: Fraction of cycles data was being sent or received from GPU memory.
+    unit: "1"
+    gauge:
+      value_type: double
+    enabled: true
+    stability:
+      level: development
+
+  gpu.dcgm.memory.bytes_used:
+    description: Current number of GPU memory bytes used by state. Summing the values of all states yields the total GPU memory space.
+    unit: By
+    gauge:
+      value_type: int
+    attributes: [gpu.memory.state]
+    enabled: true
+    stability:
+      level: development
+
+  gpu.dcgm.nvlink.io:
+    description: The number of bytes sent over NVLink, not including protocol headers.
+    unit: By
+    sum:
+      value_type: int
+      aggregation_temporality: cumulative
+      monotonic: true
+    attributes: [network.io.direction]
+    enabled: true
+    stability:
+      level: development
+
+  gpu.dcgm.pcie.io:
+    description: The number of bytes sent over the PCIe bus, including both protocol headers and data payloads.
+    unit: By
+    sum:
+      value_type: int
+      aggregation_temporality: cumulative
+      monotonic: true
+    attributes: [network.io.direction]
+    enabled: true
+    stability:
+      level: development
+
+  gpu.dcgm.pipe.utilization:
+    description: Fraction of cycles the corresponding GPU pipe was active, averaged over time and all multiprocessors.
+    unit: "1"
+    gauge:
+      value_type: double
+    attributes: [gpu.pipe]
+    enabled: true
+    stability:
+      level: development
+
+  gpu.dcgm.sm.occupancy:
+    description: Fraction of the number of warps resident on a multiprocessor, averaged over all multiprocessors.
+    unit: "1"
+    gauge:
+      value_type: double
+    enabled: false
+    stability:
+      level: development
+
+  gpu.dcgm.sm.utilization:
+    description: Fraction of time at least one warp was active on a multiprocessor, averaged over all multiprocessors.
+    unit: "1"
+    gauge:
+      value_type: double
+    enabled: true
+    stability:
+      level: development
+
+  gpu.dcgm.temperature:
+    description: Current temperature readings for the device, in ˚C.
+    unit: Cel
+    gauge:
+      value_type: double
+    enabled: true
+    stability:
+      level: development
+
+  gpu.dcgm.utilization:
+    description: Ratio of time the graphics engine is active.
+    unit: "1"
+    gauge:
+      value_type: double
+    enabled: true
+    stability:
+      level: development
 
   gpu.dcgm.xid_errors:
     description: XID errors.
@@ -196,3 +227,5 @@ metrics:
       monotonic: true
     attributes: [gpu.error.xid]
     enabled: false
+    stability:
+      level: development

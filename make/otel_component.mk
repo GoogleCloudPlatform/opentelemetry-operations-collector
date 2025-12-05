@@ -44,7 +44,7 @@ contrib-components:
 		$(GO_GET_ALL)@$(OTEL_CONTRIB_VERSION)
 
 .PHONY: operations-collector-components
-contrib-components:
+operations-collector-components:
 	$(LIST_DIRECT_MODULES) | \
 		$(INCLUDE_OPERATIONS_COLLECTOR_COMPONENTS) | \
 		$(GO_GET_ALL)@$(OTEL_CONTRIB_VERSION)

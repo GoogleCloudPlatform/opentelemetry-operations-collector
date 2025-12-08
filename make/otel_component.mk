@@ -42,9 +42,15 @@ contrib-components:
 	$(LIST_DIRECT_MODULES) | \
 		$(INCLUDE_CONTRIB_COMPONENTS) | \
 		$(GO_GET_ALL)@$(OTEL_CONTRIB_VERSION)
+# 1. Define the specific filter variable for each target
+contrib-components: FILTER := $(INCLUDE_CONTRIB_COMPONENTS)
+operations-collector-components: FILTER := $(INCLUDE_OPERATIONS_COLLECTOR_COMPONENTS)
 
-.PHONY: operations-collector-components
-operations-collector-components:
+# 2. Define the PHONY targets
+.PHONY: contrib-components operations-collector-components
+
+# 3. Define the shared recipe
+contrib-components operations-collector-components:
 	$(LIST_DIRECT_MODULES) | \
-		$(INCLUDE_OPERATIONS_COLLECTOR_COMPONENTS) | \
+		$(FILTER) | \
 		$(GO_GET_ALL)@$(OTEL_CONTRIB_VERSION)

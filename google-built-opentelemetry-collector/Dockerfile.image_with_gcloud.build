@@ -34,12 +34,12 @@ RUN mkdir --mode=0755 /etc/otelcol-google
 RUN cp /google-built-opentelemetry-collector/config.yaml /etc/otelcol-google/config.yaml
 RUN chmod 0644 /etc/otelcol-google/config.yaml
 
-FROM --platform=${BUILDPLATFORM} ${CERT_CONTAINER} AS certs
+FROM ${CERT_CONTAINER} AS certs
 RUN rm -f /etc/apt/sources.list.d/* /etc/apt/sources.list
 RUN echo 'deb https://us-apt.pkg.dev/remote/artifact-foundry-prod/debian-3p-remote-bookworm bookworm main' | tee -a  /etc/apt/sources.list.d/artifact-registry.list
 RUN apt-get update && apt-get install -y ca-certificates
 
-FROM --platform=${BUILDPLATFORM} gcr.io/distroless/static
+FROM gcr.io/distroless/static
 
 ARG USER_UID=10001
 USER ${USER_UID}

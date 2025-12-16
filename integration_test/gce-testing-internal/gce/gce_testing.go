@@ -1963,13 +1963,19 @@ func InstallGrpcurlIfNeeded(ctx context.Context, logger *log.Logger, vm *VM) err
 	return err
 }
 
+// verifyGcloudInstallation checks if the gcloud command is installed correctly in the VM.
+func verifyGcloudInstallation(ctx context.Context, logger *log.Logger, vm *VM) error {
+	_, err := RunRemotely(ctx, logger, vm, "sudo gcloud --version")
+	return err
+}
+
 // InstallGcloudIfNeeded installs gcloud cli on instances that don't already have
 // it installed. This is only currently the case for some old versions of SUSE.
 func InstallGcloudIfNeeded(ctx context.Context, logger *log.Logger, vm *VM) error {
 	if IsWindows(vm.ImageSpec) {
 		return nil
 	}
-	if _, err := RunRemotely(ctx, logger, vm, "sudo gcloud --version"); err == nil {
+	if err := verifyGcloudInstallation(ctx, logger, vm); err == nil {
 		// Success, no need to install gcloud.
 		return nil
 	}
@@ -2048,8 +2054,13 @@ sudo chmod a+x /usr/bin/gcloud
 `
 	}
 
-	_, err := RunRemotely(ctx, logger, vm, installCmd)
-	return err
+	if _, err := RunRemotely(ctx, logger, vm, installCmd); err != nil {
+		return fmt.Errorf("failed to install gcloud: %w", err)
+	}
+	if err := verifyGcloudInstallation(ctx, logger, vm); err != nil {
+		return fmt.Errorf("gcloud not installed correctly: %w", err)
+	}
+	return nil
 }
 
 // instance is a subset of the official instance type from the GCE compute API

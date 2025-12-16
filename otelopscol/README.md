@@ -83,6 +83,7 @@
 
 | Component Name | Documentation |
 | -------------- | ------------- |
+| filestorage | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/storage/README.md) |
 | googleclientauth | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/googleclientauthextension/README.md) |
 | pprof | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/pprofextension/README.md) |
 | zpages | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/extension/zpagesextension/README.md) |

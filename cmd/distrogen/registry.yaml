@@ -580,7 +580,7 @@ extensions:
         docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/observer/README.md
     filestorage:
         gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/storage/filestorage
-        docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/storage/README.md
+        docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/storage/filestorage/README.md
     googleclientauth:
         gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/googleclientauthextension
         docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/googleclientauthextension/README.md

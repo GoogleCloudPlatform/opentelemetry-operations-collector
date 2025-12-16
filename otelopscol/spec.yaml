@@ -78,6 +78,7 @@ components:
         - zpages
         - googleclientauth
         - pprof
+        - filestorage
     providers:
         - googlesecretmanager
         - file

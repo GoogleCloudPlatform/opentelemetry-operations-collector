@@ -4,7 +4,7 @@ go 1.24.0
 
 toolchain go1.24.3
 
-require github.com/GoogleCloudPlatform/opentelemetry-operations-collector/integration_test/gce-testing-internal v0.0.0-20250520145917-6d05292683bf
+require github.com/GoogleCloudPlatform/opentelemetry-operations-collector/integration_test/gce-testing-internal v0.0.0-20251216185654-2f0871644f9d
 
 require (
 	cel.dev/expr v0.20.0 // indirect

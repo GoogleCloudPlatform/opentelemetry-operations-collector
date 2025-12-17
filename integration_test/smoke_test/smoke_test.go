@@ -24,6 +24,16 @@ IMAGE_SPECS: comma-separated list of image specs, see gce_testing.go for details
 OTELCOL_CONFIGS_DIR: path to config files for otelcol to use for testing.
 _BUILD_ARTIFACTS_PACKAGE_GCS: "gcloud storage" URI for a directory containing otelcol-google
 package files. Should start with 'gs://'.
+
+When running this test outside of Kokoro, a test invocation looks like this
+(though some variables were REDACTED):
+
+PROJECT=[REDACTED] \
+  _BUILD_ARTIFACTS_PACKAGE_GCS=[REDACTED] \
+  IMAGE_SPECS=windows-cloud:windows-2019-core,debian-cloud:debian-12 \
+  ZONES=us-central1-a,us-central1-b,us-central1-f \
+  OTELCOL_CONFIGS_DIR=../otelcol_configs \
+  go test -v smoke_test.go -tags=integration_test -timeout=2h -test.parallel=1000
 */
 
 package smoke
@@ -42,6 +52,7 @@ import (
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/integration_test/gce-testing-internal/gce"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/integration_test/gce-testing-internal/logging"
+	"github.com/google/uuid"
 )
 
 const (
@@ -49,7 +60,7 @@ const (
 )
 
 var (
-	testRunID = os.Getenv("KOKORO_BUILD_ID")
+	testRunID = uuid.NewString()
 )
 
 // recommendedMachineType returns a reasonable setting for a VM's machine type
@@ -364,10 +375,7 @@ func getSmokeOtelcolConfig(t *testing.T) string {
 		TestRunID string
 	}
 	data := Data{
-		TestRunID: os.Getenv("KOKORO_BUILD_ID"),
-	}
-	if data.TestRunID == "" {
-		t.Fatal("This test does not support being run outside of Kokoro.")
+		TestRunID: testRunID,
 	}
 	var builder strings.Builder
 	if err := temp.Execute(&builder, data); err != nil {

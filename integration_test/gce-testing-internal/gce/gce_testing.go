@@ -1982,8 +1982,9 @@ func InstallGcloudIfNeeded(ctx context.Context, logger *log.Logger, vm *VM) erro
 	if isRockyLinux9(vm.ImageSpec) && IsARM(vm.ImageSpec) {
 		// Downgrade "gcloud" in rocky linux 9 arm due to bug with default python 3.9.
 		// https://github.com/googleapis/python-api-core/issues/857
-		_, err := RunRemotely(ctx, logger, vm, "sudo dnf install google-cloud-cli-540.0.0-1 -y")
-		return err
+		if _, err := RunRemotely(ctx, logger, vm, "sudo dnf install google-cloud-cli-540.0.0-1 -y"); err != nil {
+			return err
+		}
 	}
 	if err := verifyGcloudInstallation(ctx, logger, vm); err == nil {
 		// Success, no need to install gcloud.

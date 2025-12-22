@@ -653,6 +653,13 @@ func WaitForLog(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex st
 	return err
 }
 
+func shouldRetryHasMatchingLog(err error) bool {
+	// Logging API queries can hit quota, especially when multiple people are running tests.
+	return strings.Contains(err.Error(), "Quota") ||
+		// Rarely, a log query fails due to internal errors in the logging API.
+		strings.Contains(err.Error(), "Internal error encountered")
+}
+
 // QueryLog looks in the logging backend for a log matching the given query,
 // over the trailing time interval specified by the given window.
 // Returns the first log entry found, or an error if the log could not be
@@ -665,7 +672,7 @@ func QueryLog(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex stri
 			return first, nil
 		}
 		logger.Printf("Query returned found=%v, err=%v, attempt=%d", found, err, attempt)
-		if err != nil && !strings.Contains(err.Error(), "Internal error encountered") && !strings.Contains(err.Error(), "Quota") {
+		if err != nil && !shouldRetryHasMatchingLog(err) {
 			// A non-retryable error.
 			return nil, fmt.Errorf("QueryLog() failed: %v", err)
 		}
@@ -689,7 +696,7 @@ func AssertLogMissing(ctx context.Context, logger *log.Logger, vm *VM, logNameRe
 			return nil
 		}
 		logger.Printf("Query returned found=%v, err=%v, attempt=%d", found, err, attempt)
-		if err != nil && !strings.Contains(err.Error(), "Internal error encountered") && !strings.Contains(err.Error(), "Quota") {
+		if err != nil && !shouldRetryHasMatchingLog(err) {
 			// A non-retryable error.
 			return fmt.Errorf("AssertLogMissing() failed: %v", err)
 		}

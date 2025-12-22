@@ -1583,10 +1583,6 @@ func IsRHEL(imageSpec string) bool {
 	return strings.HasPrefix(imageSpec, "rhel-")
 }
 
-func isRocky9(imageSpec string) bool {
-	return strings.Contains(imageSpec, "rhel-9")
-}
-
 func isRHEL7SAPHA(imageSpec string) bool {
 	return strings.Contains(imageSpec, "rhel-7") && strings.HasPrefix(imageSpec, "rhel-sap-cloud")
 }
@@ -1971,31 +1967,12 @@ func verifyGcloudInstallation(ctx context.Context, logger *log.Logger, vm *VM) e
 	return err
 }
 
-// UpgradePythonIfNeeded updates the python version that gcloud uses when needed.
-// This is only currently neede for Rocky Linux ARM.
-func UpgradePythonIfNeeded(ctx context.Context, logger *log.Logger, vm *VM) error {
-	if isRocky9(vm.ImageSpec) && IsARM(vm.ImageSpec) {
-		installPython312 := `
-			sudo dnf install python3.12 -y
-			export CLOUDSDK_PYTHON=/usr/bin/python3.12
-		`
-		_, err := RunRemotely(ctx, logger, vm, installPython312)
-		return err
-	}
-	return nil
-}
-
 // InstallGcloudIfNeeded installs gcloud cli on instances that don't already have
 // it installed. This is only currently the case for some old versions of SUSE.
 func InstallGcloudIfNeeded(ctx context.Context, logger *log.Logger, vm *VM) error {
 	if IsWindows(vm.ImageSpec) {
 		return nil
 	}
-	if err := UpgradePythonIfNeeded(ctx, logger, vm); err == nil {
-		// Success, no need to install gcloud.
-		return nil
-	}
-
 	if err := verifyGcloudInstallation(ctx, logger, vm); err == nil {
 		// Success, no need to install gcloud.
 		return nil

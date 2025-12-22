@@ -131,13 +131,13 @@ const (
 	// Retries are spaced by 10 seconds, so 40 retries denotes 6 minutes 40 seconds total.
 	QueryMaxAttempts              = 40 // 6 minutes 40 seconds total.
 	queryMaxAttemptsMetricMissing = 5  // 50 seconds total.
-	queryMaxAttemptsLogMissing    = 5  // 50 seconds total.
 	queryBackoffDuration          = 10 * time.Second
 
 	// LogQueryMaxAttempts is the default number of retries when calling WaitForLog.
 	// Retries are spaced by 30 seconds, so 15 retries denotes 7 minutes 30 seconds total.
-	LogQueryMaxAttempts     = 15 // 7 minutes 30 seconds total.
-	logQueryBackoffDuration = 30 * time.Second
+	LogQueryMaxAttempts        = 15 // 7 minutes 30 seconds total.
+	queryMaxAttemptsLogMissing = 10 // 5 minutes total.
+	logQueryBackoffDuration    = 30 * time.Second
 
 	// traceQueryDerate is the number of backoff durations to wait before retrying a trace query.
 	// Cloud Trace quota is incredibly low, and each call to ListTraces uses 25 quota tokens.
@@ -653,6 +653,13 @@ func WaitForLog(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex st
 	return err
 }
 
+func shouldRetryHasMatchingLog(err error) bool {
+	// Logging API queries can hit quota, especially when multiple people are running tests.
+	return strings.Contains(err.Error(), "Quota") ||
+		// Rarely, a log query fails due to internal errors in the logging API.
+		strings.Contains(err.Error(), "Internal error encountered")
+}
+
 // QueryLog looks in the logging backend for a log matching the given query,
 // over the trailing time interval specified by the given window.
 // Returns the first log entry found, or an error if the log could not be
@@ -665,7 +672,7 @@ func QueryLog(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex stri
 			return first, nil
 		}
 		logger.Printf("Query returned found=%v, err=%v, attempt=%d", found, err, attempt)
-		if err != nil && !strings.Contains(err.Error(), "Internal error encountered") && !strings.Contains(err.Error(), "Quota") {
+		if err != nil && !shouldRetryHasMatchingLog(err) {
 			// A non-retryable error.
 			return nil, fmt.Errorf("QueryLog() failed: %v", err)
 		}
@@ -677,7 +684,7 @@ func QueryLog(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex stri
 
 // AssertLogMissing looks in the logging backend for a log matching the given query
 // and returns success if no data is found. To consider possible transient errors
-// while querying the backend we make queryMaxAttemptsMetricMissing query attempts.
+// while querying the backend we make queryMaxAttemptsLogMissing query attempts.
 func AssertLogMissing(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string) error {
 	for attempt := 1; attempt <= queryMaxAttemptsLogMissing; attempt++ {
 		found, _, err := hasMatchingLog(ctx, logger, vm, logNameRegex, window, query)
@@ -689,16 +696,14 @@ func AssertLogMissing(ctx context.Context, logger *log.Logger, vm *VM, logNameRe
 			return nil
 		}
 		logger.Printf("Query returned found=%v, err=%v, attempt=%d", found, err, attempt)
-		if err != nil && !strings.Contains(err.Error(), "Internal error encountered") {
+		if err != nil && !shouldRetryHasMatchingLog(err) {
 			// A non-retryable error.
 			return fmt.Errorf("AssertLogMissing() failed: %v", err)
 		}
 		// found was false, or we hit a retryable error.
 		time.Sleep(logQueryBackoffDuration)
 	}
-
-	// Success
-	return nil
+	return fmt.Errorf("AssertLogMissing() failed: no successful queries to the backend for log %s, exhausted retries", logNameRegex)
 }
 
 // CommandOutput holds the textual output from running a subprocess.

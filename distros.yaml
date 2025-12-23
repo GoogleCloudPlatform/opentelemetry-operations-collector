@@ -129,16 +129,14 @@ targets:
           exhaustive:
           - suse-sap-cloud:sles-15-sp6-sap
           - opensuse-cloud:opensuse-leap
-          - opensuse-cloud=opensuse-leap-15-5-v20250110-x86-64
-          - opensuse-cloud=opensuse-leap-15-6-v20250130-x86-64
+          - opensuse-cloud=opensuse-leap-15-6-v20251017-x86-64
       aarch64:
         test_distros:
           representative:
           - suse-cloud:sles-15-arm64
           exhaustive:
           - opensuse-cloud:opensuse-leap-arm64
-          - opensuse-cloud=opensuse-leap-15-5-v20250110-arm64
-          - opensuse-cloud=opensuse-leap-15-6-v20250130-arm64
+          - opensuse-cloud=opensuse-leap-15-6-v20251017-arm64
   windows:
     package_extension:
       goo
@@ -150,7 +148,7 @@ targets:
           representative:
           - windows-cloud:windows-2016-core
           - windows-cloud:windows-2025
-          - windows-sql-cloud:sql-std-2019-win-2019
+          - windows-sql-cloud:sql-std-2019-win-2022
           - windows-sql-cloud:sql-std-2022-win-2025
           exhaustive:
           - windows-cloud:windows-2016
@@ -159,4 +157,5 @@ targets:
           - windows-cloud:windows-2019-core
           - windows-cloud:windows-2022-core
           - windows-cloud:windows-2025-core
+          - windows-sql-cloud:sql-std-2022-win-2019
           - windows-sql-cloud:sql-std-2022-win-2022

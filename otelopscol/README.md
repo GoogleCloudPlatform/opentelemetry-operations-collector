@@ -16,6 +16,7 @@
 | elasticsearch | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/elasticsearchreceiver/README.md) |
 | filelog | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/filelogreceiver/README.md) |
 | flinkmetrics | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/flinkmetricsreceiver/README.md) |
+| fluentforward | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/fluentforwardreceiver/README.md) |
 | hostmetrics | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/hostmetricsreceiver/README.md) |
 | iis | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/iisreceiver/README.md) |
 | jmx | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/jmxreceiver/README.md) |
@@ -34,6 +35,8 @@
 | saphana | [docs](No docs linked for component) |
 | sqlquery | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/sqlqueryreceiver/README.md) |
 | sqlserver | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/sqlserverreceiver/README.md) |
+| syslog | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/syslogreceiver/README.md) |
+| tcplog | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/tcplogreceiver/README.md) |
 | varnish | [docs](No docs linked for component) |
 | windowseventlog | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/windowseventlogreceiver/README.md) |
 | windowsperfcounters | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/windowsperfcountersreceiver/README.md) |
@@ -73,12 +76,14 @@
 | googlemanagedprometheus | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/googlemanagedprometheusexporter/README.md) |
 | otlp | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/exporter/otlpexporter/README.md) |
 | otlphttp | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/exporter/otlphttpexporter/README.md) |
+| prometheus | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/prometheusexporter/README.md) |
 
 
 ## Extensions
 
 | Component Name | Documentation |
 | -------------- | ------------- |
+| filestorage | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/storage/filestorage/README.md) |
 | googleclientauth | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/googleclientauthextension/README.md) |
 | pprof | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/pprofextension/README.md) |
 | zpages | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/extension/zpagesextension/README.md) |

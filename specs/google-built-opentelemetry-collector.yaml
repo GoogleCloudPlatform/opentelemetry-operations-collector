@@ -15,18 +15,21 @@
 name: google-built-opentelemetry-collector
 module: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/google-built-opentelemetry-collector
 display_name: Google-Built OpenTelemetry Collector
-version: 0.134.0
+version: 0.141.0
 description: "OpenTelemetry Collector Built By Google"
 blurb: >-
   The Google-Built OpenTelemetry Collector is an open-source, production-ready build
   of the upstream OpenTelemetry Collector that is built with upstream OpenTelemetry
   components.
-opentelemetry_version: 0.134.0
-opentelemetry_contrib_version: 0.134.0
-opentelemetry_stable_version: 1.40.0
+opentelemetry_version: 0.141.0
+opentelemetry_contrib_version: 0.141.0
+opentelemetry_stable_version: 1.47.0
 binary_name: otelcol-google
-collector_cgo: false
-go_version: 1.24.5
+go_version: 1.25.5
+
+boringcrypto: true
+collector_cgo: true
+build_container: debian
 
 feature_gates:
   - exporter.googlemanagedprometheus.intToDouble
@@ -48,6 +51,7 @@ components:
     - kubeletstats
     - otelarrow
     - prometheus
+    - prometheusremotewrite
     - receivercreator
     - zipkin
     - dockerstats
@@ -56,6 +60,7 @@ components:
     - statsd
     - syslog
     - googlecloudmonitoring
+    - googlecloudpubsub
     - tcplog
 
   processors:
@@ -93,6 +98,9 @@ components:
     - googlecloud
     - googlemanagedprometheus
     - googleservicecontrol
+    - googlecloudpubsub
+    - prometheus
+    - prometheusremotewrite
 
   extensions:
     - zpages
@@ -123,6 +131,7 @@ components:
     - routing
     - servicegraph
     - spanmetrics
+    - signaltometrics
 
   providers:
     - env

@@ -191,6 +191,7 @@ ADDLICENSE_IGNORES = -ignore "**/.tools/**/*" \
 					-ignore "**/docs/**/*" \
 					-ignore "**/*.md" \
 					-ignore "**/testdata/*" \
+					-ignore "**/testdata/**/*" \
 					-ignore "**/golden/*" \
 					-ignore "**/google-built-opentelemetry-collector/*" \
 					-ignore "**/otelopscol/*" \
@@ -228,12 +229,29 @@ tag-repo: GBOC_TAG = v$(shell go run ./cmd/distrogen query --spec specs/google-b
 tag-repo:
 	bash ./internal/tools/scripts/tag.sh $(GBOC_TAG)
 
+EXCLUDE_INTERNAL_TOOLS =  grep -v ".*internal/tools.*"
+EXCLUDE_SMOKE_TEST = grep -v ".*integration_test/smoke_test.*"
+EXCLUDE_TESTDATA = grep -v ".*testdata.*"
+
 .PHONY: target-all-modules
 target-all-modules: go.work
 ifndef TARGET
 	@echo "No TARGET defined."
 else
-	go list -f "{{ .Dir }}" -m | grep -v -e ".*internal/tools.*" -e ".*integration_test/smoke_test.*" |\
+	go list -f "{{ .Dir }}" -m |\
+	$(EXCLUDE_INTERNAL_TOOLS) |\
+	$(EXCLUDE_SMOKE_TEST) |\
+	$(EXCLUDE_TESTDATA) |\
+	GOWORK=off xargs -t -I '{}' $(MAKE) -C {} $(TARGET)
+endif
+
+.PHONY: target-all-modules-include-internal
+target-all-modules-include-internal: go.work
+ifndef TARGET
+	@echo "No TARGET defined."
+else
+	go list -f "{{ .Dir }}" -m |\
+	$(EXCLUDE_TESTDATA) |\
 	GOWORK=off xargs -t -I '{}' $(MAKE) -C {} $(TARGET)
 endif
 
@@ -242,5 +260,6 @@ update-go-module-in-all:
 ifndef GO_MOD
 	@echo "must specify a GO_MOD"
 else
-	TARGET=update-go-module $(MAKE) target-all-modules GO_MOD=$(GO_MOD)$(if "$(GO_MOD_VERSION), GO_MOD_VERSION=$(GO_MOD_VERSION),)
+	TARGET=update-go-module $(MAKE) target-all-modules-include-internal GO_MOD=$(GO_MOD)$(if "$(GO_MOD_VERSION), GO_MOD_VERSION=$(GO_MOD_VERSION),)
+	TARGET=tidy $(MAKE) target-all-modules-include-internal
 endif

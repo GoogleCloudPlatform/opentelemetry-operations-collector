@@ -131,13 +131,13 @@ const (
 	// Retries are spaced by 10 seconds, so 40 retries denotes 6 minutes 40 seconds total.
 	QueryMaxAttempts              = 40 // 6 minutes 40 seconds total.
 	queryMaxAttemptsMetricMissing = 5  // 50 seconds total.
-	queryMaxAttemptsLogMissing    = 5  // 50 seconds total.
 	queryBackoffDuration          = 10 * time.Second
 
 	// LogQueryMaxAttempts is the default number of retries when calling WaitForLog.
 	// Retries are spaced by 30 seconds, so 15 retries denotes 7 minutes 30 seconds total.
-	LogQueryMaxAttempts     = 15 // 7 minutes 30 seconds total.
-	logQueryBackoffDuration = 30 * time.Second
+	LogQueryMaxAttempts        = 15 // 7 minutes 30 seconds total.
+	queryMaxAttemptsLogMissing = 10 // 5 minutes total.
+	logQueryBackoffDuration    = 30 * time.Second
 
 	// traceQueryDerate is the number of backoff durations to wait before retrying a trace query.
 	// Cloud Trace quota is incredibly low, and each call to ListTraces uses 25 quota tokens.
@@ -653,6 +653,13 @@ func WaitForLog(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex st
 	return err
 }
 
+func shouldRetryHasMatchingLog(err error) bool {
+	// Logging API queries can hit quota, especially when multiple people are running tests.
+	return strings.Contains(err.Error(), "Quota") ||
+		// Rarely, a log query fails due to internal errors in the logging API.
+		strings.Contains(err.Error(), "Internal error encountered")
+}
+
 // QueryLog looks in the logging backend for a log matching the given query,
 // over the trailing time interval specified by the given window.
 // Returns the first log entry found, or an error if the log could not be
@@ -665,7 +672,7 @@ func QueryLog(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex stri
 			return first, nil
 		}
 		logger.Printf("Query returned found=%v, err=%v, attempt=%d", found, err, attempt)
-		if err != nil && !strings.Contains(err.Error(), "Internal error encountered") && !strings.Contains(err.Error(), "Quota") {
+		if err != nil && !shouldRetryHasMatchingLog(err) {
 			// A non-retryable error.
 			return nil, fmt.Errorf("QueryLog() failed: %v", err)
 		}
@@ -677,7 +684,7 @@ func QueryLog(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex stri
 
 // AssertLogMissing looks in the logging backend for a log matching the given query
 // and returns success if no data is found. To consider possible transient errors
-// while querying the backend we make queryMaxAttemptsMetricMissing query attempts.
+// while querying the backend we make queryMaxAttemptsLogMissing query attempts.
 func AssertLogMissing(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string) error {
 	for attempt := 1; attempt <= queryMaxAttemptsLogMissing; attempt++ {
 		found, _, err := hasMatchingLog(ctx, logger, vm, logNameRegex, window, query)
@@ -689,16 +696,14 @@ func AssertLogMissing(ctx context.Context, logger *log.Logger, vm *VM, logNameRe
 			return nil
 		}
 		logger.Printf("Query returned found=%v, err=%v, attempt=%d", found, err, attempt)
-		if err != nil && !strings.Contains(err.Error(), "Internal error encountered") {
+		if err != nil && !shouldRetryHasMatchingLog(err) {
 			// A non-retryable error.
 			return fmt.Errorf("AssertLogMissing() failed: %v", err)
 		}
 		// found was false, or we hit a retryable error.
 		time.Sleep(logQueryBackoffDuration)
 	}
-
-	// Success
-	return nil
+	return fmt.Errorf("AssertLogMissing() failed: no successful queries to the backend for log %s, exhausted retries", logNameRegex)
 }
 
 // CommandOutput holds the textual output from running a subprocess.
@@ -943,11 +948,11 @@ func UploadContent(ctx context.Context, logger *log.Logger, vm *VM, content io.R
 		_, err = RunRemotely(ctx, logger, vm, fmt.Sprintf(`New-Item -Path "%s" -ItemType File -Force ;Read-GcsObject -Force -Bucket "%s" -ObjectName "%s" -OutFile "%s"`, remotePath, object.BucketName(), object.ObjectName(), remotePath))
 		return err
 	}
-	if err := InstallGsutilIfNeeded(ctx, logger, vm); err != nil {
+	if err := InstallGcloudIfNeeded(ctx, logger, vm); err != nil {
 		return err
 	}
 	objectPath := fmt.Sprintf("gs://%s/%s", object.BucketName(), object.ObjectName())
-	_, err = RunRemotely(ctx, logger, vm, fmt.Sprintf("sudo gsutil cp '%s' '%s'", objectPath, remotePath))
+	_, err = RunRemotely(ctx, logger, vm, fmt.Sprintf("sudo gcloud storage cp '%s' '%s'", objectPath, remotePath))
 	return err
 }
 
@@ -1597,6 +1602,10 @@ func isRHEL8(imageSpec string) bool {
 	return strings.HasPrefix(imageSpec, "rhel-8")
 }
 
+func isRHEL9(imageSpec string) bool {
+	return strings.Contains(imageSpec, "rhel-9") || strings.Contains(imageSpec, "rocky-linux-9")
+}
+
 func isRHEL7SAPHA(imageSpec string) bool {
 	return strings.Contains(imageSpec, "rhel-7") && strings.HasPrefix(imageSpec, "rhel-sap-cloud")
 }
@@ -1951,7 +1960,7 @@ func InstallGrpcurlIfNeeded(ctx context.Context, logger *log.Logger, vm *VM) err
 		}
 
 		logger.Printf("grpcurl not found, installing it...")
-		installCmd := `gsutil cp gs://ops-agents-public-buckets-vendored-deps/mirrored-content/grpcurl/v1.8.6/grpcurl_1.8.6_windows_x86_64.zip C:\agentPlugin;Expand-Archive -Path "C:\agentPlugin\grpcurl_1.8.6_windows_x86_64.zip" -DestinationPath "C:\" -Force;ls "C:\"`
+		installCmd := `gcloud storage cp gs://ops-agents-public-buckets-vendored-deps/mirrored-content/grpcurl/v1.8.6/grpcurl_1.8.6_windows_x86_64.zip C:\agentPlugin;Expand-Archive -Path "C:\agentPlugin\grpcurl_1.8.6_windows_x86_64.zip" -DestinationPath "C:\" -Force;ls "C:\"`
 
 		_, err := RunRemotely(ctx, logger, vm, installCmd)
 		return err
@@ -1968,29 +1977,50 @@ func InstallGrpcurlIfNeeded(ctx context.Context, logger *log.Logger, vm *VM) err
 		arch = "arm64"
 	}
 
-	installCmd := fmt.Sprintf("sudo gsutil cp gs://ops-agents-public-buckets-vendored-deps/mirrored-content/grpcurl/v1.8.6/grpcurl_1.8.6_linux_%s.tar.gz /tmp/agentPlugin && sudo tar -xzf /tmp/agentPlugin/grpcurl_1.8.6_linux_%s.tar.gz --no-overwrite-dir -C /usr/local/bin", arch, arch)
+	installCmd := fmt.Sprintf("sudo gcloud storage cp gs://ops-agents-public-buckets-vendored-deps/mirrored-content/grpcurl/v1.8.6/grpcurl_1.8.6_linux_%s.tar.gz /tmp/agentPlugin && sudo tar -xzf /tmp/agentPlugin/grpcurl_1.8.6_linux_%s.tar.gz --no-overwrite-dir -C /usr/local/bin", arch, arch)
 	installCmd = `set -ex
 ` + installCmd
 	_, err := RunRemotely(ctx, logger, vm, installCmd)
 	return err
 }
 
-// InstallGsutilIfNeeded installs gsutil on instances that don't already have
+// downgradeGcloudIfNeeded downgrades gcloud installation to working version in specific distros.
+func downgradeGcloudIfNeeded(ctx context.Context, logger *log.Logger, vm *VM) error {
+	if isRHEL9(vm.ImageSpec) && IsARM(vm.ImageSpec) {
+		// Downgrade "gcloud" in rhel 9 arm and rocky linux 9 arm due to bug with default python 3.9.
+		// https://github.com/googleapis/python-api-core/issues/857
+		if _, err := RunRemotely(ctx, logger, vm, "sudo dnf install google-cloud-cli-540.0.0-1 -y"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// verifyGcloudInstallation checks if the gcloud command is installed correctly in the VM.
+func verifyGcloudInstallation(ctx context.Context, logger *log.Logger, vm *VM) error {
+	_, err := RunRemotely(ctx, logger, vm, "sudo gcloud --version")
+	return err
+}
+
+// InstallGcloudIfNeeded installs gcloud cli on instances that don't already have
 // it installed. This is only currently the case for some old versions of SUSE.
-func InstallGsutilIfNeeded(ctx context.Context, logger *log.Logger, vm *VM) error {
+func InstallGcloudIfNeeded(ctx context.Context, logger *log.Logger, vm *VM) error {
 	if IsWindows(vm.ImageSpec) {
 		return nil
 	}
-	if _, err := RunRemotely(ctx, logger, vm, "sudo gsutil --version"); err == nil {
-		// Success, no need to install gsutil.
+	if err := downgradeGcloudIfNeeded(ctx, logger, vm); err != nil {
+		return fmt.Errorf("failed to downgrade gcloud installation: %w", err)
+	}
+	if err := verifyGcloudInstallation(ctx, logger, vm); err == nil {
+		// Success, no need to install gcloud.
 		return nil
 	}
-	logger.Printf("gsutil not found, installing it...")
+	logger.Printf("gcloud not found, installing it...")
 
-	// SUSE seems to be the only distro without gsutil, so what follows is all
+	// SUSE seems to be the only distro without gcloud, so what follows is all
 	// very SUSE-specific.
 	if !IsSUSEVM(vm) {
-		return installErr("gsutil", vm.OS.ID)
+		return installErr("gcloud", vm.OS.ID)
 	}
 
 	gcloudArch := "x86_64"
@@ -2019,7 +2049,7 @@ INSTALL_DIR="$(readlink --canonicalize .)"
 # Upgrade to the latest version
 sudo ${INSTALL_DIR}/google-cloud-sdk/bin/gcloud components update --quiet
 
-sudo ln -s ${INSTALL_DIR}/google-cloud-sdk/bin/gsutil /usr/bin/gsutil
+sudo ln -s ${INSTALL_DIR}/google-cloud-sdk/bin/gcloud /usr/bin/gcloud
 `
 	// b/308962066: The GCloud CLI ARM Linux tarballs do not have bundled Python
 	// and the GCloud CLI requires Python >= 3.8. Install Python311 for ARM VMs
@@ -2027,7 +2057,7 @@ sudo ln -s ${INSTALL_DIR}/google-cloud-sdk/bin/gsutil /usr/bin/gsutil
 		// This is what's used on openSUSE.
 		repoSetupCmd := "sudo zypper --non-interactive refresh"
 		if strings.Contains(vm.ImageSpec, "sles-12") {
-			return installErr("gsutil", vm.ImageSpec)
+			return installErr("gcloud", vm.ImageSpec)
 		}
 		// For SLES 15 ARM: use a vendored repo to reduce flakiness of the
 		// external repos. See http://go/sdi/releases/build-test-release/vendored
@@ -2042,7 +2072,7 @@ sudo zypper --non-interactive refresh test-vendor`
 ` + repoSetupCmd + `
 sudo zypper --non-interactive install python311 python3-certifi
 
-# On SLES 15 and OpenSUSE Leap arm, python3 is Python 3.6. Tell gsutil/gcloud to use python3.11.
+# On SLES 15 and OpenSUSE Leap arm, python3 is Python 3.6. Tell gcloud to use python3.11.
 export CLOUDSDK_PYTHON=/usr/bin/python3.11
 
 ` + installFromTarball + `
@@ -2050,18 +2080,23 @@ export CLOUDSDK_PYTHON=/usr/bin/python3.11
 # Upgrade to the latest version
 sudo CLOUDSDK_PYTHON=/usr/bin/python3.11 ${INSTALL_DIR}/google-cloud-sdk/bin/gcloud components update --quiet
 
-# Make a "gsutil" bash script in /usr/bin that runs the copy of gsutil that
+# Make a "gcloud" bash script in /usr/bin that runs the copy of gcloud that
 # was installed into $INSTALL_DIR with CLOUDSDK_PYTHON set.
-sudo tee /usr/bin/gsutil > /dev/null << EOF
+sudo tee /usr/bin/gcloud > /dev/null << EOF
 #!/usr/bin/env bash
-CLOUDSDK_PYTHON=/usr/bin/python3.11 ${INSTALL_DIR}/google-cloud-sdk/bin/gsutil "\$@"
+CLOUDSDK_PYTHON=/usr/bin/python3.11 ${INSTALL_DIR}/google-cloud-sdk/bin/gcloud "\$@"
 EOF
-sudo chmod a+x /usr/bin/gsutil
+sudo chmod a+x /usr/bin/gcloud
 `
 	}
 
-	_, err := RunRemotely(ctx, logger, vm, installCmd)
-	return err
+	if _, err := RunRemotely(ctx, logger, vm, installCmd); err != nil {
+		return fmt.Errorf("failed to install gcloud: %w", err)
+	}
+	if err := verifyGcloudInstallation(ctx, logger, vm); err != nil {
+		return fmt.Errorf("gcloud not installed correctly: %w", err)
+	}
+	return nil
 }
 
 // instance is a subset of the official instance type from the GCE compute API

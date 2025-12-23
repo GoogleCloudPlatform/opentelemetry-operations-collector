@@ -26,8 +26,9 @@ import (
 )
 
 type ExtractPatternsRubyRegexArguments[K any] struct {
-	Target  ottl.StringGetter[K]
-	Pattern string
+	Target          ottl.StringGetter[K]
+	Pattern         string
+	OmitEmptyValues ottl.Optional[bool]
 }
 
 func NewExtractPatternsRubyRegexFactory[K any]() ottl.Factory[K] {
@@ -41,10 +42,15 @@ func createExtractPatternsRubyRegexFunction[K any](_ ottl.FunctionContext, oArgs
 		return nil, fmt.Errorf("ExtractPatternsRubyRegexFactory args must be of type *ExtractPatternsRubyRegexArguments[K]")
 	}
 
-	return extractPatternsRubyRegex(args.Target, args.Pattern)
+	omitEmptyValues := false
+	if !args.OmitEmptyValues.IsEmpty() {
+		omitEmptyValues = args.OmitEmptyValues.Get()
+	}
+
+	return extractPatternsRubyRegex(args.Target, args.Pattern, omitEmptyValues)
 }
 
-func extractPatternsRubyRegex[K any](target ottl.StringGetter[K], pattern string) (ottl.ExprFunc[K], error) {
+func extractPatternsRubyRegex[K any](target ottl.StringGetter[K], pattern string, omitEmtpyValues bool) (ottl.ExprFunc[K], error) {
 	r, err := rubex.NewRegexp(pattern, rubex.ONIG_OPTION_DEFAULT)
 	if err != nil {
 		return nil, fmt.Errorf("the pattern supplied to ExtractPatternsRubyRegex is not a valid pattern: %w", err)
@@ -76,6 +82,9 @@ func extractPatternsRubyRegex[K any](target ottl.StringGetter[K], pattern string
 		result := pcommon.NewMap()
 		for i, subexp := range r.SubexpNames() {
 			if subexp != "" {
+				if omitEmtpyValues && matches[i+1] == "" {
+					continue
+				}
 				result.PutStr(subexp, matches[i+1])
 			}
 		}

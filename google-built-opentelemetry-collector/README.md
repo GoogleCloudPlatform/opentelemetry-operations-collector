@@ -12,6 +12,7 @@ The Google-Built OpenTelemetry Collector is an open-source, production-ready bui
 | filelog | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/filelogreceiver/README.md) |
 | fluentforward | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/fluentforwardreceiver/README.md) |
 | googlecloudmonitoring | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/googlecloudmonitoringreceiver/README.md) |
+| googlecloudpubsub | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/googlecloudpubsubreceiver/README.md) |
 | hostmetrics | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/hostmetricsreceiver/README.md) |
 | httpcheck | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/httpcheckreceiver/README.md) |
 | jaeger | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/jaegerreceiver/README.md) |
@@ -25,6 +26,7 @@ The Google-Built OpenTelemetry Collector is an open-source, production-ready bui
 | otlp | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/receiver/otlpreceiver/README.md) |
 | otlpjsonfile | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/otlpjsonfilereceiver/README.md) |
 | prometheus | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/prometheusreceiver/README.md) |
+| prometheusremotewrite | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/prometheusremotewritereceiver/README.md) |
 | receivercreator | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/receivercreator/README.md) |
 | redis | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/redisreceiver/README.md) |
 | statsd | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/statsdreceiver/README.md) |
@@ -68,6 +70,7 @@ The Google-Built OpenTelemetry Collector is an open-source, production-ready bui
 | debug | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/exporter/debugexporter/README.md) |
 | file | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/fileexporter/README.md) |
 | googlecloud | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/googlecloudexporter/README.md) |
+| googlecloudpubsub | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/googlecloudpubsubexporter/README.md) |
 | googlemanagedprometheus | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/googlemanagedprometheusexporter/README.md) |
 | googleservicecontrol | [docs](No docs linked for component) |
 | loadbalancing | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/loadbalancingexporter/README.md) |
@@ -75,6 +78,8 @@ The Google-Built OpenTelemetry Collector is an open-source, production-ready bui
 | otelarrow | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/otelarrowexporter/README.md) |
 | otlp | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/exporter/otlpexporter/README.md) |
 | otlphttp | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/exporter/otlphttpexporter/README.md) |
+| prometheus | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/prometheusexporter/README.md) |
+| prometheusremotewrite | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/prometheusremotewriteexporter/README.md) |
 
 
 ## Extensions
@@ -112,6 +117,7 @@ The Google-Built OpenTelemetry Collector is an open-source, production-ready bui
 | roundrobin | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/connector/roundrobinconnector/README.md) |
 | routing | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/connector/routingconnector/README.md) |
 | servicegraph | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/connector/servicegraphconnector/README.md) |
+| signaltometrics | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/connector/signaltometricsconnector/README.md) |
 | spanmetrics | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/connector/spanmetricsconnector/README.md) |
 
 

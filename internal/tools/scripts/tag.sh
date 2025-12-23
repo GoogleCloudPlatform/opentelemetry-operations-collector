@@ -13,16 +13,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-GBOC_TAG=$1
-
 set -e
 
-git tag -a ${GBOC_TAG} -m "Update to OpenTelemetry Collector version ${GBOC_TAG}"
-printf "Created git tag ${GBOC_TAG}. Would you like to push? (y/n) "
-read yn
-if [ $yn != ${yn#[Yy]} ]; then
-    git push origin ${GBOC_TAG}
-else
-    git tag -d ${GBOC_TAG}
-    echo "Removed tag ${GBOC_TAG}"
-fi
+function tag_repo() {
+    git tag -a ${1} -m "Update to OpenTelemetry Collector version ${1}"
+    printf "Created git tag ${1}. Would you like to push? (y/n) "
+    read yn
+    if [ "$yn" != "${yn#[Yy]}" ]; then
+        git push origin ${1}
+    else
+        git tag -d ${1}
+        echo "Removed tag ${1}"
+    fi
+}
+
+GBOC_TAG=$1
+SERVICE_CONTROL_TAG="components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter/${GBOC_TAG}"
+
+tag_repo "$GBOC_TAG"
+tag_repo "$SERVICE_CONTROL_TAG"

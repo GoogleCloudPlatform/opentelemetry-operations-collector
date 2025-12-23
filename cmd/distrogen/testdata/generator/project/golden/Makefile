@@ -1,0 +1,144 @@
+include ./make/common.mk
+include ./make/maintenance.mk
+
+MAKEFLAGS += --no-print-directory
+
+SPEC_FILE = spec.yaml
+
+OTEL_VERSION = 0.121.0
+OTEL_CONTRIB_VERSION = 0.121.0
+
+#############
+# Development
+#############
+
+.PHONY: dev-setup
+dev-setup: workspace setup-hooks
+
+.PHONY: setup-hooks
+setup-hooks:
+	git config core.hooksPath $(PWD)/hooks
+
+.PHONY: precommit
+precommit: misspell lint test-distrogen
+
+.PHONY: presubmit
+presubmit: misspell lint
+
+#######
+# Tools
+#######
+
+TOOLS_DIR ?= $(PWD)/.tools
+DISTROGEN_BIN ?= $(TOOLS_DIR)/distrogen
+MDATAGEN_BIN ?= $(TOOLS_DIR)/mdatagen
+
+$(DISTROGEN_BIN):
+	$(MAKE) tools-dir
+	GOBIN=$(TOOLS_DIR) go install github.com/GoogleCloudPlatform/opentelemetry-operations-collector/cmd/distrogen@$(shell cat .distrogen/VERSION)
+
+$(MDATAGEN_BIN):
+	$(MAKE) tools-dir
+	GOBIN=$(TOOLS_DIR) bash ./scripts/download_mdatagen.sh v$(OTEL_VERSION)
+
+# This is a PHONY target cause if you make it as a normal recipe
+# it gets very confused because the creation date of the .tools
+# directory is newer than the tools inside it.
+.PHONY: tools-dir
+tools-dir:
+	@mkdir -p $(TOOLS_DIR)
+
+.PHONY: distrogen
+distrogen: $(DISTROGEN_BIN)
+
+##########################
+# Updating OTel Components
+##########################
+
+.PHONY: update-otel-components
+
+update-otel-components: workspace-update $(MDATAGEN_BIN)
+	export PATH="$(TOOLS_DIR):${PATH}" && cd components &&\
+	$(MAKE) OTEL_VERSION=v$(OTEL_VERSION) OTEL_CONTRIB_VERSION=v$(OTEL_CONTRIB_VERSION) update-components
+
+.PHONY: test-otel-components
+
+test-otel-components: COMPONENT_DIR := components
+test-otel-components: go.work
+	cd $(COMPONENT_DIR) && $(MAKE) test-components
+
+###################
+# Distro Generation
+###################
+
+GEN_OTEL = $(DISTROGEN_BIN) generate --spec $(SPEC_FILE) \
+								 --registry ./components/registry.yaml \
+								 --templates ./templates
+
+.PHONY: gen
+gen: distrogen
+	@$(GEN_OTEL)
+
+.PHONY: regen
+regen: distrogen
+	@$(GEN_OTEL) --force
+
+regen-v: distrogen
+	@$(GEN_OTEL) --force -v
+
+#########
+# Testing
+#########
+
+.PHONY: test-all
+test-all:
+	TARGET="test" $(MAKE) target-all-modules
+
+.PHONY: tidy-all
+tidy-all:
+	TARGET="tidy" $(MAKE) target-all-modules
+
+###########
+# Workspace
+###########
+
+ALL_DIRECTORIES = find . -type d  -print0
+EXCLUDE_TOOLS_DIRS = grep -z -v ".*\.tools.*"
+EXCLUDE_BUILD_DIRS = grep -z -v -e ".*_build.*" -e ".*dist.*"
+
+go.work:
+	go work init
+	$(MAKE) workspace-update
+
+.PHONY: workspace-update
+workspace-update: go.work
+	$(ALL_DIRECTORIES) |\
+	$(EXCLUDE_TOOLS_DIRS) |\
+	$(EXCLUDE_BUILD_DIRS) |\
+	xargs -0 go work use
+
+.PHONY: clean-workspace
+clean-workspace:
+	rm -f go.work
+	rm -f go.work.sum
+
+#########
+# Utility
+#########
+
+.PHONY: target-all-modules
+target-all-modules: go.work
+ifndef TARGET
+	@echo "No TARGET defined."
+else
+	go list -f '{{ .Dir }}' -m | grep -v -e ".*/.tools.*" -e ".*integration_test/smoke_test.*" |\
+	xargs -t -I '{}' $(MAKE) -C {} $(TARGET)
+endif
+
+.PHONY: update-go-module-in-all
+update-go-module-in-all:
+ifndef GO_MOD
+	@echo "must specify a GO_MOD"
+else
+	TARGET=update-go-module $(MAKE) target-all-modules GO_MOD=$(GO_MOD)$(if "$(GO_MOD_VERSION), GO_MOD_VERSION=$(GO_MOD_VERSION),)
+endif

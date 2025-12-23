@@ -16,73 +16,73 @@ metrics:
 
 Current number of GPU memory bytes used by state. Summing the values of all states yields the total GPU memory space.
 
-| Unit | Metric Type | Value Type |
-| ---- | ----------- | ---------- |
-| By | Gauge | Int |
+| Unit | Metric Type | Value Type | Stability |
+| ---- | ----------- | ---------- | --------- |
+| By | Gauge | Int | Development |
 
 #### Attributes
 
-| Name | Description | Values | Optional |
+| Name | Description | Values | Requirement Level |
 | ---- | ----------- | ------ | -------- |
-| model | GPU model | Any Str | false |
-| gpu_number | GPU index starting at 0. | Any Str | false |
-| uuid | GPU universally unique identifier | Any Str | false |
-| memory_state | GPU memory used or free. | Str: ``used``, ``free`` | false |
+| model | GPU model | Any Str | Recommended |
+| gpu_number | GPU index starting at 0. | Any Str | Recommended |
+| uuid | GPU universally unique identifier | Any Str | Recommended |
+| memory_state | GPU memory used or free. | Str: ``used``, ``free`` | Recommended |
 
 ### nvml.gpu.processes.max_bytes_used
 
 Maximum total GPU memory in bytes that was ever allocated by the process.
 
-| Unit | Metric Type | Value Type |
-| ---- | ----------- | ---------- |
-| By | Gauge | Int |
+| Unit | Metric Type | Value Type | Stability |
+| ---- | ----------- | ---------- | --------- |
+| By | Gauge | Int | Development |
 
 #### Attributes
 
-| Name | Description | Values | Optional |
+| Name | Description | Values | Requirement Level |
 | ---- | ----------- | ------ | -------- |
-| model | GPU model | Any Str | false |
-| gpu_number | GPU index starting at 0. | Any Str | false |
-| uuid | GPU universally unique identifier | Any Str | false |
-| pid | Process ID. | Any Int | false |
-| process | Process name. | Any Str | false |
-| command | Process command. | Any Str | false |
-| command_line | Process command line, 1024 characters maximum. | Any Str | false |
-| owner | Process owner. | Any Str | false |
+| model | GPU model | Any Str | Recommended |
+| gpu_number | GPU index starting at 0. | Any Str | Recommended |
+| uuid | GPU universally unique identifier | Any Str | Recommended |
+| pid | Process ID. | Any Int | Recommended |
+| process | Process name. | Any Str | Recommended |
+| command | Process command. | Any Str | Recommended |
+| command_line | Process command line, 1024 characters maximum. | Any Str | Recommended |
+| owner | Process owner. | Any Str | Recommended |
 
 ### nvml.gpu.processes.utilization
 
 Fraction of time over the process's life thus far during which one or more kernels was executing on the GPU.
 
-| Unit | Metric Type | Value Type |
-| ---- | ----------- | ---------- |
-| 1 | Gauge | Double |
+| Unit | Metric Type | Value Type | Stability |
+| ---- | ----------- | ---------- | --------- |
+| 1 | Gauge | Double | Development |
 
 #### Attributes
 
-| Name | Description | Values | Optional |
+| Name | Description | Values | Requirement Level |
 | ---- | ----------- | ------ | -------- |
-| model | GPU model | Any Str | false |
-| gpu_number | GPU index starting at 0. | Any Str | false |
-| uuid | GPU universally unique identifier | Any Str | false |
-| pid | Process ID. | Any Int | false |
-| process | Process name. | Any Str | false |
-| command | Process command. | Any Str | false |
-| command_line | Process command line, 1024 characters maximum. | Any Str | false |
-| owner | Process owner. | Any Str | false |
+| model | GPU model | Any Str | Recommended |
+| gpu_number | GPU index starting at 0. | Any Str | Recommended |
+| uuid | GPU universally unique identifier | Any Str | Recommended |
+| pid | Process ID. | Any Int | Recommended |
+| process | Process name. | Any Str | Recommended |
+| command | Process command. | Any Str | Recommended |
+| command_line | Process command line, 1024 characters maximum. | Any Str | Recommended |
+| owner | Process owner. | Any Str | Recommended |
 
 ### nvml.gpu.utilization
 
 Fraction of time GPU was not idle since the last sample.
 
-| Unit | Metric Type | Value Type |
-| ---- | ----------- | ---------- |
-| 1 | Gauge | Double |
+| Unit | Metric Type | Value Type | Stability |
+| ---- | ----------- | ---------- | --------- |
+| 1 | Gauge | Double | Development |
 
 #### Attributes
 
-| Name | Description | Values | Optional |
+| Name | Description | Values | Requirement Level |
 | ---- | ----------- | ------ | -------- |
-| model | GPU model | Any Str | false |
-| gpu_number | GPU index starting at 0. | Any Str | false |
-| uuid | GPU universally unique identifier | Any Str | false |
+| model | GPU model | Any Str | Recommended |
+| gpu_number | GPU index starting at 0. | Any Str | Recommended |
+| uuid | GPU universally unique identifier | Any Str | Recommended |

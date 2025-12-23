@@ -1590,8 +1590,8 @@ func IsRHEL(imageSpec string) bool {
 	return strings.HasPrefix(imageSpec, "rhel-")
 }
 
-func isRockyLinux9(imageSpec string) bool {
-	return strings.Contains(imageSpec, "rocky-linux-9")
+func isRHEL9(imageSpec string) bool {
+	return strings.Contains(imageSpec, "rhel-9") || strings.Contains(imageSpec, "rocky-linux-9")
 }
 
 func isRHEL7SAPHA(imageSpec string) bool {
@@ -1972,6 +1972,18 @@ func InstallGrpcurlIfNeeded(ctx context.Context, logger *log.Logger, vm *VM) err
 	return err
 }
 
+// downgradeGcloudIfNeeded downgrades gcloud installation to working version in specific distros.
+func downgradeGcloudIfNeeded(ctx context.Context, logger *log.Logger, vm *VM) error {
+	if isRHEL9(vm.ImageSpec) && IsARM(vm.ImageSpec) {
+		// Downgrade "gcloud" in rhel 9 arm and rocky linux 9 arm due to bug with default python 3.9.
+		// https://github.com/googleapis/python-api-core/issues/857
+		if _, err := RunRemotely(ctx, logger, vm, "sudo dnf install google-cloud-cli-540.0.0-1 -y"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // verifyGcloudInstallation checks if the gcloud command is installed correctly in the VM.
 func verifyGcloudInstallation(ctx context.Context, logger *log.Logger, vm *VM) error {
 	_, err := RunRemotely(ctx, logger, vm, "sudo gcloud --version")
@@ -1984,12 +1996,8 @@ func InstallGcloudIfNeeded(ctx context.Context, logger *log.Logger, vm *VM) erro
 	if IsWindows(vm.ImageSpec) {
 		return nil
 	}
-	if isRockyLinux9(vm.ImageSpec) && IsARM(vm.ImageSpec) {
-		// Downgrade "gcloud" in rocky linux 9 arm due to bug with default python 3.9.
-		// https://github.com/googleapis/python-api-core/issues/857
-		if _, err := RunRemotely(ctx, logger, vm, "sudo dnf install google-cloud-cli-540.0.0-1 -y"); err != nil {
-			return err
-		}
+	if err := downgradeGcloudIfNeeded(ctx, logger, vm); err != nil {
+		return fmt.Errorf("failed to downgrade gcloud installation: %w", err)
 	}
 	if err := verifyGcloudInstallation(ctx, logger, vm); err == nil {
 		// Success, no need to install gcloud.

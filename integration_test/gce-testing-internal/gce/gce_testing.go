@@ -1599,7 +1599,7 @@ func IsRHEL(imageSpec string) bool {
 }
 
 func isRHEL8(imageSpec string) bool {
-	return strings.HasPrefix(imageSpec, "rhel-8")
+	return strings.Contains(imageSpec, "rhel-8")
 }
 
 func isRHEL9(imageSpec string) bool {

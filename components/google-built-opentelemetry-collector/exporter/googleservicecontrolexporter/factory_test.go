@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/config/configoptional"
 	"go.opentelemetry.io/collector/config/configretry"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
 	"go.opentelemetry.io/collector/exporter/exportertest"
@@ -64,12 +65,11 @@ func TestCreateExporterFromConfig(t *testing.T) {
 					MaxInterval:     10 * time.Second,
 					MaxElapsedTime:  200 * time.Second,
 				},
-				QueueConfig: exporterhelper.QueueBatchConfig{
-					Enabled:      true,
+				QueueConfig: configoptional.Some(exporterhelper.QueueBatchConfig{
 					NumConsumers: 5,
 					QueueSize:    1000,
 					Sizer:        exporterhelper.RequestSizerTypeRequests,
-				},
+				}),
 				ServiceControlEndpoint:     "test.googleapis.com:443",
 				ConsumerProject:            "my-project-id",
 				ServiceName:                "test.service.name",

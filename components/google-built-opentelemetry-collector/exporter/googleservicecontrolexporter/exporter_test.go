@@ -26,6 +26,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component/componenttest"
+	"go.opentelemetry.io/collector/config/configoptional"
 	"go.opentelemetry.io/collector/config/configretry"
 	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
@@ -112,9 +113,7 @@ func createExporterThroughOTel(t *testing.T, timeout time.Duration, retryEnabled
 	// For example: `ConsumeMetrics` function becomes asynchronous
 	// (it just adds tasks to the queue, and then worker goroutines pull from that queue at some point in the future).
 	// Thus, we disable queueing, and only test it using integration tests.
-	conf.QueueConfig = exporterhelper.QueueBatchConfig{
-		Enabled: false,
-	}
+	conf.QueueConfig = configoptional.Default(exporterhelper.NewDefaultQueueConfig())
 
 	settings := exportertest.NewNopSettings(metadata.Type)
 	e, err := createMetricsExporter(context.Background(), settings, conf)

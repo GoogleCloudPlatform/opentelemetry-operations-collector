@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/config/configoptional"
 	"go.opentelemetry.io/collector/config/configretry"
 	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
@@ -79,15 +80,14 @@ func createDefaultConfig() component.Config {
 		},
 		// QueueSettings are described in
 		// https://github.com/open-telemetry/opentelemetry-collector/blob/v0.54.0/exporter/exporterhelper/queued_retry_inmemory.go.
-		QueueConfig: exporterhelper.QueueBatchConfig{
-			Enabled:      true,
+		QueueConfig: configoptional.Some(exporterhelper.QueueBatchConfig{
 			NumConsumers: 10,
 			// Limit queue size to prevent memory growing in case of API outage.
 			// This queue grows only in case of retries.
 			QueueSize: 3000,
 			// SizerTypeRequests (RequestSizerTypeRequests) is the default in NewDefaultQueueConfig()
 			Sizer: exporterhelper.RequestSizerTypeRequests,
-		},
+		}),
 		LogConfig: LogConfig{
 			OperationName: LogDefaultOperationName,
 		},

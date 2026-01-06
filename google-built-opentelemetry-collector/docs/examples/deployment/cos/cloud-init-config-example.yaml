@@ -134,4 +134,5 @@ write_files:
                 exporter:
                   otlp:
                     protocol: grpc
-                    endpoint: localhost:4317
+                    endpoint: http://localhost:4317
+                    insecure: true

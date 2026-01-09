@@ -1602,6 +1602,14 @@ func IsDLVMImage(imageSpec string) bool {
 	return strings.HasPrefix(imageSpec, "ml-images")
 }
 
+func IsRocky(imageSpec string) bool {
+	return strings.Contains(imageSpec, "rocky-linux-")
+}
+
+func IsRpm(imageSpec string) bool {
+	return IsRHEL(imageSpec) || IsSUSEImageSpec(imageSpec) || IsRocky(imageSpec) || IsCentOS(imageSpec)
+}
+
 func IsARM(imageSpec string) bool {
 	// At the time of writing, all ARM images and image families on GCE
 	// contain "arm64" (and none contain "aarch" nor "arm" without the "64").

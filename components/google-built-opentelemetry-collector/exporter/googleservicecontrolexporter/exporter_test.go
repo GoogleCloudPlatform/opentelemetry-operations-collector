@@ -157,7 +157,7 @@ func createExporterWithSleepingScServer(t *testing.T, timeout time.Duration, ret
 
 	defaultClientProvider := clientProvider
 	scClient := newFakeClient(sleeper)
-	clientProvider = func(_ string, _ bool, _ bool, _ *zap.Logger, _ ...grpc.DialOption) (ServiceControlClient, error) {
+	clientProvider = func(_ string, _ bool, _ bool, _ bool, _ *zap.Logger, _ ...grpc.DialOption) (ServiceControlClient, error) {
 		return scClient, nil
 	}
 	defer func() {

@@ -924,6 +924,11 @@ func UploadContent(ctx context.Context, logger *log.Logger, vm *VM, content io.R
 	}()
 	object := storageClient.Bucket(transfersBucket).Object(path.Join(vm.Name, remotePath))
 	writer := object.NewWriter(ctx)
+	// We mainly use UploadContent for scripts, which are small relative to the
+	// default ChunkSize of 16 MB.
+	// Making ChunkSize smaller helps with heap pressure when running many tests
+	// in parallel.
+	writer.ChunkSize = 256_000
 	_, copyErr := io.Copy(writer, content)
 	// We have to make sure to call Close() here in order to tell it to finish
 	// the upload operation.

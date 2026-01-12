@@ -157,7 +157,7 @@ func locationFromEnvVars() PackageLocation {
 
 func restartCommandForPlatform(platform string) string {
 	if gce.IsWindows(platform) {
-		return "Restart-Service -Force google-built-opentelemetry-collector"
+		return "Restart-Service -Force otelcol-google"
 	}
 	return "sudo systemctl restart otelcol-google"
 }

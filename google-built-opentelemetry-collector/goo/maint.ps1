@@ -28,7 +28,7 @@ $envFromMatch = {
 }
 $InstallDir = [regex]::Replace($InstallDir,'^<([^>]+)>',$envFromMatch)
 $configFilePath = "$InstallDir\config.yaml"
-$serviceName = "google-built-opentelemetry-collector"
+$serviceName = "otelcol-google"
 
 function Set-ServiceConfig {
     & sc.exe failure $serviceName reset= 60 actions= restart/1000/restart/2000

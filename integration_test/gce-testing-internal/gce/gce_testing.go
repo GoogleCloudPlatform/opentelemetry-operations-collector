@@ -802,6 +802,26 @@ func SetupGcloudConfigDir(ctx context.Context, directory string) error {
 	return nil
 }
 
+// DisableGcloudLogging disables gcloud's built-in command log.
+// This only works on Linux.
+func DisableGcloudLogging(ctx context.Context) error {
+	_, err := runCommand(ctx, log.New(io.Discard, "", 0), nil, []string{"gcloud", "config", "set", "core/disable_file_logging", "True"}, nil)
+	return err
+}
+
+// DeleteGcloudLogs deletes all of the gcloud command logs currently stored in
+// the gcloud config directory.
+// This only works on Linux.
+func DeleteGcloudLogs(ctx context.Context) error {
+	configDir, err := getGcloudConfigDir(ctx)
+	if err != nil {
+		return err
+	}
+	logsDir := path.Join(configDir, "logs")
+	_, err = runCommand(ctx, log.New(io.Discard, "", 0), nil, []string{"rm", "-rf", logsDir}, nil)
+	return err
+}
+
 const (
 	gcloudConfigDirKey = "__gcloud_config_dir__"
 )

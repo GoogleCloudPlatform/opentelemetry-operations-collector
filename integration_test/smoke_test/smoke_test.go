@@ -157,7 +157,7 @@ func locationFromEnvVars() PackageLocation {
 
 func restartCommandForPlatform(platform string) string {
 	if gce.IsWindows(platform) {
-		panic("Unimplemented call to restartCommandForPlatform on Windows.")
+		return "Restart-Service -Force otelcol-google"
 	}
 	return "sudo systemctl restart otelcol-google"
 }
@@ -276,24 +276,9 @@ func setupOtelCollectorFrom(ctx context.Context, logger *log.Logger, vm *gce.VM,
 	}
 
 	if gce.IsWindows(vm.ImageSpec) {
-		// Sidestep some quoting issues with spaces in the default config location.
-		uploadedConfigPath := `C:\configUpload\otel-config.yaml`
-		if err := gce.UploadContent(ctx, logger, vm, strings.NewReader(config), uploadedConfigPath); err != nil {
-			return fmt.Errorf("setupOtelCollectorFrom() failed to upload config file: %v", err)
-		}
-
-		quotedOtelPath := "`\"C:\\Program Files\\Google\\OpenTelemetry Collector\\bin\\otelcol-google.exe`\""
-		// The best way I've found to start a process asynchronously
-		// (Start-Process and Start-Job didn't detach properly).
-		// One downside is that standard output and standard error are lost.
-		if _, err := gce.RunRemotely(ctx, logger, vm, fmt.Sprintf(`Invoke-WmiMethod -ComputerName . -Class Win32_Process -Name Create -ArgumentList "%s --config=%s"`, quotedOtelPath, uploadedConfigPath)); err != nil {
-			return fmt.Errorf("setupOtelCollectorFrom() failed to start otel collector process: %v", err)
-		}
 		// Give the collector time to start up.
 		time.Sleep(10 * time.Second)
-
-		return nil
-	} // End windows handling.
+	}
 
 	defaultConfigPath := collectorConfigPath(vm.ImageSpec)
 	if err := gce.UploadContent(ctx, logger, vm, strings.NewReader(config), defaultConfigPath); err != nil {

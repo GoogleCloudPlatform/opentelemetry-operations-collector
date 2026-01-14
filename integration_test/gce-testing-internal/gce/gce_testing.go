@@ -150,7 +150,7 @@ const (
 	// Cloud Trace quota is incredibly low, and each call to ListTraces uses 25 quota tokens.
 	traceQueryDerate = 6 // = 30 seconds with above settings
 
-	vmInitTimeout                     = 20 * time.Minute
+	vmInitTimeout                     = 6 * time.Minute
 	vmInitBackoffDuration             = 10 * time.Second
 	vmInitPokeSSHTimeout              = 30 * time.Second
 	vmWinPasswordResetBackoffDuration = 30 * time.Second
@@ -1531,6 +1531,12 @@ func attemptCreateInstance(ctx context.Context, logger *log.Logger, options VMOp
 		},
 	}
 
+	if jsonRequest, err := json.MarshalIndent(req, "", "  "); err == nil {
+		logger.Printf("instances.Insert request:\n%s\n", jsonRequest)
+	} else {
+		logger.Printf("Error marshalling instances.Insert request: %v\n", err)
+	}
+
 	op, err := instancesClient.Insert(ctx, req)
 	if err != nil {
 		// Note: we don't try and delete the VM in this case because there is
@@ -1549,6 +1555,12 @@ func attemptCreateInstance(ctx context.Context, logger *log.Logger, options VMOp
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	if jsonInstance, err := json.MarshalIndent(instance, "", "  "); err == nil {
+		logger.Printf("instances.Insert instance:\n%s\n", jsonInstance)
+	} else {
+		logger.Printf("Error marshalling instances.Insert instance: %v\n", err)
 	}
 
 	defer func() {
@@ -1798,7 +1810,7 @@ func CreateInstance(origCtx context.Context, logger *log.Logger, options VMOptio
 	// immediately.
 	// If retriable errors happen quickly, there will be more than 3 attempts.
 	// If retriable errors happen slowly, there will still be at least 3 attempts.
-	ctx, cancel := context.WithTimeout(origCtx, 3*vmInitTimeout)
+	ctx, cancel := context.WithTimeout(origCtx, vmInitTimeout)
 	defer cancel()
 
 	var vm *VM

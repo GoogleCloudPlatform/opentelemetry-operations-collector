@@ -87,15 +87,22 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
+
+	compute "cloud.google.com/go/compute/apiv1"
+	"cloud.google.com/go/compute/apiv1/computepb"
 )
 
 var (
 	storageClient   *storage.Client
 	transfersBucket string
 
-	monClient   *monitoring.MetricClient
-	logClients  *logClientFactory
-	traceClient *trace.Client
+	monClient                   *monitoring.MetricClient
+	logClients                  *logClientFactory
+	traceClient                 *trace.Client
+	instancesClient             *compute.InstancesClient
+	disksClient                 *compute.DisksClient
+	instanceGroupManagersClient *compute.InstanceGroupManagersClient
+	instanceTemplatesClient     *compute.InstanceTemplatesClient
 
 	zonePicker *weightedRoundRobin
 
@@ -182,6 +189,22 @@ func init() {
 	traceClient, err = trace.NewClient(ctx)
 	if err != nil {
 		log.Fatalf("trace.NewClient() failed: %v", err)
+	}
+	instancesClient, err = compute.NewInstancesRESTClient(ctx)
+	if err != nil {
+		log.Fatalf("compute.NewInstancesRESTClient() failed: %v", err)
+	}
+	disksClient, err = compute.NewDisksRESTClient(ctx)
+	if err != nil {
+		log.Fatalf("compute.NewDisksRESTClient() failed: %v", err)
+	}
+	instanceGroupManagersClient, err = compute.NewInstanceGroupManagersRESTClient(ctx)
+	if err != nil {
+		log.Fatalf("compute.NewInstanceGroupManagersRESTClient() failed: %v", err)
+	}
+	instanceTemplatesClient, err = compute.NewInstanceTemplatesRESTClient(ctx)
+	if err != nil {
+		log.Fatalf("compute.NewInstanceTemplatesRESTClient() failed: %v", err)
 	}
 
 	zonePicker, err = newZonePicker(os.Getenv("ZONES"))
@@ -1346,6 +1369,11 @@ func verifyVMCreation(ctx context.Context, logger *log.Logger, vm *VM) error {
 	return nil
 }
 
+// Ptr returns a pointer to the given value.
+func Ptr[T any](v T) *T {
+	return &v
+}
+
 func additionalCreateInstanceArgs(options VMOptions, vm *VM) ([]string, error) {
 	args := []string{}
 	newMetadata, err := addFrameworkMetadata(vm.ImageSpec, options.Metadata)
@@ -1394,33 +1422,132 @@ func additionalCreateInstanceArgs(options VMOptions, vm *VM) ([]string, error) {
 func attemptCreateInstance(ctx context.Context, logger *log.Logger, options VMOptions) (vmToReturn *VM, errToReturn error) {
 	vm := createVMFromVMOptions(options)
 
-	imageFamilyScope := options.ImageFamilyScope
-
-	if imageFamilyScope == "" {
-		imageFamilyScope = "global"
+	newMetadata, err := addFrameworkMetadata(vm.ImageSpec, options.Metadata)
+	if err != nil {
+		return nil, fmt.Errorf("attemptCreateInstance() could not construct valid metadata: %v", err)
+	}
+	newLabels, err := addFrameworkLabels(options.Labels)
+	if err != nil {
+		return nil, fmt.Errorf("attemptCreateInstance() could not construct valid labels: %v", err)
 	}
 
-	args := []string{
-		// "beta" is needed for --max-run-duration.
-		"beta", "compute", "instances", "create", vm.Name,
-		"--project=" + vm.Project,
-		"--zone=" + vm.Zone,
-		"--machine-type=" + vm.MachineType,
-		"--image-family-scope=" + imageFamilyScope,
-		"--network=" + vm.Network,
-		"--format=json",
+	var items []*computepb.Items
+	for k, v := range newMetadata {
+		items = append(items, &computepb.Items{
+			Key:   &k,
+			Value: &v,
+		})
 	}
 
-	additionalArgs, err := additionalCreateInstanceArgs(options, vm)
+	// TODO: this is awkward, make this cleaner
+	image_flags, err := gcloudFlagsFromImageSpec(vm.ImageSpec)
 	if err != nil {
 		return nil, err
 	}
-	args = append(args, additionalArgs...)
+	imageProject := strings.Split(image_flags[0], "=")[1]
+	var imageUrl string
+	if strings.HasPrefix(image_flags[1], "--image-family") {
+		imageFamily := strings.Split(image_flags[1], "=")[1]
+		imageUrl = fmt.Sprintf("projects/%s/global/images/family/%s", imageProject, imageFamily)
+	} else {
+		imageName := strings.Split(image_flags[1], "=")[1]
+		imageUrl = fmt.Sprintf("projects/%s/global/images/%s", imageProject, imageName)
+	}
 
-	output, err := RunGcloud(ctx, logger, "", args)
+	var serviceAccounts []*computepb.ServiceAccount
+	email := os.Getenv("SERVICE_EMAIL")
+	if email == "" {
+		email = "default"
+	}
+	serviceAccounts = append(serviceAccounts, &computepb.ServiceAccount{
+		Email: &email,
+		Scopes: []string{
+			// TODO: Verify that these are the correct scopes. These were determined
+			// by running a `gcloud compute instances create` command and logging
+			// the raw API request.
+			"https://www.googleapis.com/auth/devstorage.read_only",
+			"https://www.googleapis.com/auth/logging.write",
+			"https://www.googleapis.com/auth/monitoring.write",
+			"https://www.googleapis.com/auth/pubsub",
+			"https://www.googleapis.com/auth/service.management.readonly",
+			"https://www.googleapis.com/auth/servicecontrol",
+			"https://www.googleapis.com/auth/trace.append",
+		},
+	})
+
+	var accessConfigs []*computepb.AccessConfig
+	if internalIP := os.Getenv("USE_INTERNAL_IP"); internalIP != "true" {
+		accessConfigs = append(accessConfigs, &computepb.AccessConfig{
+			Name: Ptr("external-nat"),
+			Type: Ptr("ONE_TO_ONE_NAT"),
+		})
+	}
+
+	scheduling := &computepb.Scheduling{
+		AutomaticRestart: Ptr(true),
+	}
+	if options.TimeToLive != "" {
+		scheduling.InstanceTerminationAction = Ptr("DELETE")
+		scheduling.ProvisioningModel = Ptr("STANDARD")
+		ttl, err := time.ParseDuration(options.TimeToLive)
+		if err != nil {
+			return nil, fmt.Errorf("invalid format for TimeToLive: %s", options.TimeToLive)
+		}
+		scheduling.MaxRunDuration = &computepb.Duration{
+			Seconds: Ptr(int64(ttl.Seconds())),
+		}
+	}
+
+	req := &computepb.InsertInstanceRequest{Project: vm.Project,
+		Zone: vm.Zone,
+		InstanceResource: &computepb.Instance{
+			Name:        &vm.Name,
+			MachineType: Ptr(fmt.Sprintf("zones/%s/machineTypes/%s", vm.Zone, vm.MachineType)),
+			Disks: []*computepb.AttachedDisk{
+				{
+					InitializeParams: &computepb.AttachedDiskInitializeParams{
+						SourceImage: &imageUrl,
+					},
+					AutoDelete: Ptr(true),
+					Boot:       Ptr(true),
+					Type:       Ptr("PERSISTENT"),
+					Mode:       Ptr("READ_WRITE"),
+				},
+			},
+			NetworkInterfaces: []*computepb.NetworkInterface{
+				{
+					Name:          Ptr(fmt.Sprintf("global/networks/%s", vm.Network)),
+					AccessConfigs: accessConfigs,
+				},
+			},
+			Metadata: &computepb.Metadata{
+				Items: items,
+			},
+			Labels:             newLabels,
+			ServiceAccounts:    serviceAccounts,
+			Scheduling:         scheduling,
+			CanIpForward:       Ptr(false),
+			DeletionProtection: Ptr(false),
+		},
+	}
+
+	op, err := instancesClient.Insert(ctx, req)
 	if err != nil {
 		// Note: we don't try and delete the VM in this case because there is
 		// nothing to delete.
+		return nil, err
+	}
+
+	if err := op.Wait(ctx); err != nil {
+		return nil, err
+	}
+
+	instance, err := instancesClient.Get(ctx, &computepb.GetInstanceRequest{
+		Project:  vm.Project,
+		Zone:     vm.Zone,
+		Instance: vm.Name,
+	})
+	if err != nil {
 		return nil, err
 	}
 
@@ -1437,19 +1564,11 @@ func attemptCreateInstance(ctx context.Context, logger *log.Logger, options VMOp
 	}()
 
 	// Pull the instance ID and external IP address out of the output.
-	id, err := extractID(output.Stdout)
-	if err != nil {
-		return nil, err
-	}
-	vm.ID = id
-
+	vm.ID = int64(*instance.Id)
 	logger.Printf("Instance Log: %v", instanceLogURL(vm))
-
-	ipAddress, err := extractIPAddress(output.Stdout)
-	if err != nil {
-		return nil, err
+	if len(instance.NetworkInterfaces) > 0 && len(instance.NetworkInterfaces[0].AccessConfigs) > 0 {
+		vm.IPAddress = *instance.NetworkInterfaces[0].AccessConfigs[0].NatIP
 	}
-	vm.IPAddress = ipAddress
 
 	// This is just informational, so it's ok if it fails. Just warn and proceed.
 	if _, err := DescribeVMDisk(ctx, logger, vm); err != nil {
@@ -1476,28 +1595,6 @@ func attemptCreateManagedInstanceGroupVM(ctx context.Context, logger *log.Logger
 		VM: createVMFromVMOptions(options),
 	}
 
-	// Step #1 : Create vm instance template
-	createTemplateArgs := []string{
-		// "beta" is needed for --max-run-duration.
-		"beta", "compute", "instance-templates", "create", migVM.InstanceTemplateName(),
-		"--project=" + migVM.Project,
-		"--machine-type=" + migVM.MachineType,
-		"--network=" + migVM.Network,
-		"--format=json",
-	}
-	additionalArgs, err := additionalCreateInstanceArgs(options, migVM.VM)
-	if err != nil {
-		return nil, err
-	}
-	createTemplateArgs = append(createTemplateArgs, additionalArgs...)
-
-	output, err := RunGcloud(ctx, logger, "", createTemplateArgs)
-	if err != nil {
-		// Note: we don't try and delete the instance template or managed instance group
-		// in this case because there is nothing to delete.
-		return nil, err
-	}
-
 	defer func() {
 		if errToReturn != nil {
 			// This function is responsible for deleting the ManagedInstanceGroupVM in all error cases.
@@ -1510,78 +1607,95 @@ func attemptCreateManagedInstanceGroupVM(ctx context.Context, logger *log.Logger
 		}
 	}()
 
-	// Step #2 : Create empty Managed Instance Group using template.
-	createMIGArgs := []string{
-		"compute", "instance-groups", "managed", "create", migVM.ManagedInstanceGroupName(),
-		"--project=" + migVM.Project,
-		"--zone=" + migVM.Zone,
-		"--size=0",
-		"--template=" + migVM.InstanceTemplateName(),
-		"--format=json",
+	// Step #1 : Create vm instance template
+	templateReq, err := buildInstanceTemplateRequest(options, migVM.VM)
+	if err != nil {
+		return nil, err
+	}
+	op, err := instanceTemplatesClient.Insert(ctx, templateReq)
+	if err != nil {
+		return nil, err
+	}
+	if err := op.Wait(ctx); err != nil {
+		return nil, err
 	}
 
-	output, err = RunGcloud(ctx, logger, "", createMIGArgs)
+	// Step #2 : Create empty Managed Instance Group using template.
+	createMIGReq := &computepb.InsertInstanceGroupManagerRequest{
+		Project: migVM.Project,
+		Zone:    migVM.Zone,
+		InstanceGroupManagerResource: &computepb.InstanceGroupManager{
+			Name:             Ptr(migVM.ManagedInstanceGroupName()),
+			InstanceTemplate: Ptr(templateReq.InstanceTemplateResource.GetSelfLink()),
+			BaseInstanceName: &migVM.Name,
+			TargetSize:       Ptr(int32(0)),
+		},
+	}
+	op, err = instanceGroupManagersClient.Insert(ctx, createMIGReq)
 	if err != nil {
+		return nil, err
+	}
+	if err := op.Wait(ctx); err != nil {
 		return nil, err
 	}
 
 	// Step #3 : Create test VM in Managed Instance Group.
-	createVMArgs := []string{
-		"compute", "instance-groups", "managed", "create-instance", migVM.ManagedInstanceGroupName(),
-		"--instance=" + migVM.Name,
-		"--project=" + migVM.Project,
-		"--zone=" + migVM.Zone,
-		"--format=json",
+	createVMReq := &computepb.CreateInstancesInstanceGroupManagerRequest{
+		Project:              migVM.Project,
+		Zone:                 migVM.Zone,
+		InstanceGroupManager: migVM.ManagedInstanceGroupName(),
+		InstanceGroupManagersCreateInstancesRequestResource: &computepb.InstanceGroupManagersCreateInstancesRequest{
+			Instances: []*computepb.PerInstanceConfig{
+				{
+					Name: &migVM.Name,
+				},
+			},
+		},
 	}
-
-	output, err = RunGcloud(ctx, logger, "", createVMArgs)
+	op, err = instanceGroupManagersClient.CreateInstances(ctx, createVMReq)
 	if err != nil {
+		return nil, err
+	}
+	if err := op.Wait(ctx); err != nil {
 		return nil, err
 	}
 
 	// Step #4 : Wait until Managed Instance Group is stable with a 300s timeout.
-	waitUntilStableArgs := []string{
-		"compute", "instance-groups", "managed", "wait-until", migVM.ManagedInstanceGroupName(),
-		"--stable",
-		"--timeout=300",
-		"--project=" + migVM.Project,
-		"--zone=" + migVM.Zone,
-		"--format=json",
-	}
-
-	output, err = RunGcloud(ctx, logger, "", waitUntilStableArgs)
-	if err != nil {
-		return nil, err
+	waitCtx, cancel := context.WithTimeout(ctx, 300*time.Second)
+	defer cancel()
+	for {
+		mig, err := instanceGroupManagersClient.Get(waitCtx, &computepb.GetInstanceGroupManagerRequest{
+			Project:              migVM.Project,
+			Zone:                 migVM.Zone,
+			InstanceGroupManager: migVM.ManagedInstanceGroupName(),
+		})
+		if err != nil {
+			return nil, err
+		}
+		if mig.Status.GetIsStable() {
+			break
+		}
+		time.Sleep(5 * time.Second)
 	}
 
 	// Step #5 : Query newly created VM metadata.
-	listVMArgs := []string{
-		"compute", "instances", "list",
-		"--filter=name=( '" + migVM.Name + "' ... )",
-		"--project=" + migVM.Project,
-		"--zones=" + migVM.Zone,
-		"--format=json",
-	}
-
-	output, err = RunGcloud(ctx, logger, "", listVMArgs)
+	instance, err := instancesClient.Get(ctx, &computepb.GetInstanceRequest{
+		Project:  migVM.Project,
+		Zone:     migVM.Zone,
+		Instance: migVM.Name,
+	})
 	if err != nil {
 		return nil, err
 	}
 
 	// Pull the instance ID and external IP address out of the output.
-	id, err := extractID(output.Stdout)
-	if err != nil {
-		return nil, err
-	}
-	migVM.ID = id
+	migVM.ID = int64(*instance.Id)
 
 	logger.Printf("Instance Log: %v", instanceLogURL(migVM.VM))
 
-	ipAddress, err := extractIPAddress(output.Stdout)
-	if err != nil {
-		return nil, err
+	if len(instance.NetworkInterfaces) > 0 && len(instance.NetworkInterfaces[0].AccessConfigs) > 0 {
+		migVM.IPAddress = *instance.NetworkInterfaces[0].AccessConfigs[0].NatIP
 	}
-	migVM.IPAddress = ipAddress
 
 	// This is just informational, so it's ok if it fails. Just warn and proceed.
 	if _, err := DescribeVMDisk(ctx, logger, migVM.VM); err != nil {
@@ -1745,13 +1859,12 @@ func CreateManagedInstanceGroupVM(origCtx context.Context, logger *log.Logger, o
 }
 
 // DescribeVMDisk queries the VM disk information.
-func DescribeVMDisk(ctx context.Context, logger *log.Logger, vm *VM) (CommandOutput, error) {
+func DescribeVMDisk(ctx context.Context, logger *log.Logger, vm *VM) (*computepb.Disk, error) {
 	// RunGcloud will log the output of the command, so we don't need to.
-	return RunGcloud(ctx, logger, "", []string{
-		"compute", "disks", "describe", vm.Name,
-		"--project=" + vm.Project,
-		"--zone=" + vm.Zone,
-		"--format=json",
+	return disksClient.Get(ctx, &computepb.GetDiskRequest{
+		Disk:    vm.Name,
+		Project: vm.Project,
+		Zone:    vm.Zone,
 	})
 }
 
@@ -1820,11 +1933,12 @@ func handleDeleteError(err error, attempt int) error {
 	if strings.Contains(err.Error(), "Error 50") {
 		return err
 	}
+	st, ok := status.FromError(err)
 	// "not found" can happen when a previous attempt actually did delete
 	// the VM but there was some communication problem along the way.
 	// Consider that a successful deletion. Only do this when there has
 	// been a previous attempt.
-	if strings.Contains(err.Error(), "not found") && attempt > 1 {
+	if (ok && st.Code() == codes.NotFound || strings.Contains(err.Error(), "not found")) && attempt > 1 {
 		return nil
 	}
 	// Wrap other errors in backoff.Permanent() to avoid retrying those.
@@ -1840,26 +1954,26 @@ func DeleteInstance(logger *log.Logger, vm *VM) error {
 		logger.Printf("VM %v was already deleted, skipping delete.", vm.Name)
 		return nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-	defer cancel()
-	backoffPolicy := backoff.WithContext(backoff.WithMaxRetries(backoff.NewConstantBackOff(30*time.Second), 10), ctx)
-	attempt := 0
-	tryDelete := func() error {
-		attempt++
-		_, err := RunGcloud(ctx, logger, "",
-			[]string{
-				"compute", "instances", "delete",
-				"--project=" + vm.Project,
-				"--zone=" + vm.Zone,
-				vm.Name,
-			})
+	var attempt int
+	deleteFunc := func() error {
+		attempt += 1
+		req := &computepb.DeleteInstanceRequest{
+			Project:  vm.Project,
+			Zone:     vm.Zone,
+			Instance: vm.Name,
+		}
+		op, err := instancesClient.Delete(context.Background(), req)
+		if err == nil {
+			err = op.Wait(context.Background())
+		}
 		return handleDeleteError(err, attempt)
 	}
-	err := backoff.Retry(tryDelete, backoffPolicy)
-	if err == nil {
-		vm.AlreadyDeleted = true
+	backoffPolicy := backoff.WithMaxRetries(backoff.NewConstantBackOff(time.Minute), 3)
+	if err := backoff.Retry(deleteFunc, backoffPolicy); err != nil {
+		return err
 	}
-	return err
+	vm.AlreadyDeleted = true
+	return nil
 }
 
 // DeleteManagedInstanceGroupVM deletes the given Managed Instance Group VM instance synchronously.
@@ -1871,44 +1985,50 @@ func DeleteManagedInstanceGroupVM(logger *log.Logger, migVM *ManagedInstanceGrou
 		logger.Printf("Managed Instance Group %v was already deleted, skipping delete.", migVM.Name)
 		return nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-	defer cancel()
-	backoffPolicy := backoff.WithContext(backoff.WithMaxRetries(backoff.NewConstantBackOff(30*time.Second), 10), ctx)
-	attempt := 0
-	tryDeleteMIG := func() error {
-		attempt++
-		_, err := RunGcloud(ctx, logger, "",
-			[]string{
-				"compute", "instance-groups", "managed", "delete", migVM.ManagedInstanceGroupName(),
-				"--project=" + migVM.Project,
-				"--zone=" + migVM.Zone,
-			})
+	var multiErr error
+	// Delete MIG
+	var attempt int
+	deleteMIGFunc := func() error {
+		attempt += 1
+		req := &computepb.DeleteInstanceGroupManagerRequest{
+			Project:              migVM.Project,
+			Zone:                 migVM.Zone,
+			InstanceGroupManager: migVM.ManagedInstanceGroupName(),
+		}
+		op, err := instanceGroupManagersClient.Delete(context.Background(), req)
 		if err == nil {
-			return nil
+			err = op.Wait(context.Background())
 		}
 		return handleDeleteError(err, attempt)
 	}
-	err := backoff.Retry(tryDeleteMIG, backoffPolicy)
-	if err != nil {
-		return err
+	backoffPolicy := backoff.WithMaxRetries(backoff.NewConstantBackOff(time.Minute), 3)
+	if err := backoff.Retry(deleteMIGFunc, backoffPolicy); err != nil {
+		multiErr = multierr.Append(multiErr, err)
 	}
 
+	// Delete instance template
 	attempt = 0
-	tryDeleteTemplate := func() error {
-		attempt++
-		_, err = RunGcloud(ctx, logger, "",
-			[]string{
-				"compute", "instance-templates", "delete", migVM.InstanceTemplateName(),
-				"--project=" + migVM.Project,
-			})
+	deleteTemplateFunc := func() error {
+		attempt += 1
+		req := &computepb.DeleteInstanceTemplateRequest{
+			Project:          migVM.Project,
+			InstanceTemplate: migVM.InstanceTemplateName(),
+		}
+		op, err := instanceTemplatesClient.Delete(context.Background(), req)
+		if err == nil {
+			err = op.Wait(context.Background())
+		}
 		return handleDeleteError(err, attempt)
 	}
-	err = backoff.Retry(tryDeleteTemplate, backoffPolicy)
-	if err == nil {
-		migVM.AlreadyDeleted = true
+	backoffPolicy = backoff.WithMaxRetries(backoff.NewConstantBackOff(time.Minute), 3)
+	if err := backoff.Retry(deleteTemplateFunc, backoffPolicy); err != nil {
+		multiErr = multierr.Append(multiErr, err)
 	}
 
-	return err
+	if multiErr == nil {
+		migVM.AlreadyDeleted = true
+	}
+	return multiErr
 }
 
 // StopInstance shuts down a VM instance.
@@ -2524,4 +2644,104 @@ func RemoveTagFromVm(ctx context.Context, logger *log.Logger, vm *VM, tags []str
 		return output, err
 	}
 	return output, nil
+}
+
+// TODO: merge this somehow with attemptCreateInstance
+func buildInstanceTemplateRequest(options VMOptions, vm *VM) (*computepb.InsertInstanceTemplateRequest, error) {
+	newMetadata, err := addFrameworkMetadata(vm.ImageSpec, options.Metadata)
+	if err != nil {
+		return nil, fmt.Errorf("buildInstanceTemplateRequest() could not construct valid metadata: %v", err)
+	}
+	newLabels, err := addFrameworkLabels(options.Labels)
+	if err != nil {
+		return nil, fmt.Errorf("buildInstanceTemplateRequest() could not construct valid labels: %v", err)
+	}
+
+	var items []*computepb.Items
+	for k, v := range newMetadata {
+		k := k
+		v := v
+		items = append(items, &computepb.Items{
+			Key:   &k,
+			Value: &v,
+		})
+	}
+
+	image_flags, err := gcloudFlagsFromImageSpec(vm.ImageSpec)
+	if err != nil {
+		return nil, err
+	}
+	imageProject := strings.Split(image_flags[0], "=")[1]
+	var imageUrl string
+	if strings.HasPrefix(image_flags[1], "--image-family") {
+		imageFamily := strings.Split(image_flags[1], "=")[1]
+		imageUrl = fmt.Sprintf("projects/%s/global/images/family/%s", imageProject, imageFamily)
+	} else {
+		imageName := strings.Split(image_flags[1], "=")[1]
+		imageUrl = fmt.Sprintf("projects/%s/global/images/%s", imageProject, imageName)
+	}
+
+	var serviceAccounts []*computepb.ServiceAccount
+	if email := os.Getenv("SERVICE_EMAIL"); email != "" {
+		serviceAccounts = append(serviceAccounts, &computepb.ServiceAccount{
+			Email: &email,
+			Scopes: []string{
+				"https://www.googleapis.com/auth/cloud-platform",
+			},
+		})
+	}
+
+	var accessConfigs []*computepb.AccessConfig
+	if internalIP := os.Getenv("USE_INTERNAL_IP"); internalIP != "true" {
+		accessConfigs = append(accessConfigs, &computepb.AccessConfig{
+			Name:        Ptr("External NAT"),
+			NetworkTier: Ptr("PREMIUM"),
+		})
+	}
+
+	scheduling := &computepb.Scheduling{
+		InstanceTerminationAction: Ptr("DELETE"),
+	}
+	if options.TimeToLive != "" {
+		scheduling.ProvisioningModel = Ptr("STANDARD")
+		ttl, err := time.ParseDuration(options.TimeToLive)
+		if err != nil {
+			return nil, fmt.Errorf("invalid format for TimeToLive: %s", options.TimeToLive)
+		}
+		scheduling.MaxRunDuration = &computepb.Duration{
+			Seconds: Ptr(int64(ttl.Seconds())),
+		}
+	}
+
+	return &computepb.InsertInstanceTemplateRequest{
+		Project: vm.Project,
+		InstanceTemplateResource: &computepb.InstanceTemplate{
+			Name: Ptr(vm.Name + "-tmpl"),
+			Properties: &computepb.InstanceProperties{
+				MachineType: &vm.MachineType,
+				Disks: []*computepb.AttachedDisk{
+					{
+						InitializeParams: &computepb.AttachedDiskInitializeParams{
+							SourceImage: &imageUrl,
+						},
+						AutoDelete: Ptr(true),
+						Boot:       Ptr(true),
+						Type:       Ptr("PERSISTENT"),
+					},
+				},
+				NetworkInterfaces: []*computepb.NetworkInterface{
+					{
+						Name:          &vm.Network,
+						AccessConfigs: accessConfigs,
+					},
+				},
+				Metadata: &computepb.Metadata{
+					Items: items,
+				},
+				Labels:          newLabels,
+				ServiceAccounts: serviceAccounts,
+				Scheduling:      scheduling,
+			},
+		},
+	}, nil
 }

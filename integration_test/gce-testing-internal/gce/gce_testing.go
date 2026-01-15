@@ -64,7 +64,6 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -790,72 +789,6 @@ func runCommand(ctx context.Context, logger *log.Logger, stdin io.Reader, args [
 	return output, err
 }
 
-// getGcloudConfigDir returns the current gcloud configuration directory.
-func getGcloudConfigDir(ctx context.Context) (string, error) {
-	out, err := RunGcloud(ctx, log.New(io.Discard, "", 0), "", []string{"info", "--format=value[terminator=''](config.paths.global_config_dir)"})
-	if err != nil {
-		return "", err
-	}
-	return out.Stdout, nil
-}
-
-// getDirectoryWithTrailingDot returns the given directory with
-// a trailing '/.'.
-func getDirectoryWithTrailingDot(directory string) string {
-	// Can't just use filepath.Join(directory, "."), because it eats dot path
-	// segments. See https://stackoverflow.com/a/51670536.
-	return filepath.Clean(directory) + string(filepath.Separator) + "."
-}
-
-// SetupGcloudConfigDir sets up a new gcloud configuration directory.
-// This copies the contents of the context-specified configuration directory
-// into the new directory.
-// This only works on Linux.
-func SetupGcloudConfigDir(ctx context.Context, directory string) error {
-	currentConfigDir, err := getGcloudConfigDir(ctx)
-	if err != nil {
-		return err
-	}
-	// TODO: Replace with os.CopyFS() once available.
-	from := getDirectoryWithTrailingDot(currentConfigDir)
-	to := getDirectoryWithTrailingDot(directory)
-	if _, err := runCommand(ctx, log.New(io.Discard, "", 0), nil, []string{"cp", "-r", from, to}, nil); err != nil {
-		return err
-	}
-	return nil
-}
-
-// DisableGcloudLogging disables gcloud's built-in command log.
-// This only works on Linux.
-func DisableGcloudLogging(ctx context.Context) error {
-	_, err := runCommand(ctx, log.New(io.Discard, "", 0), nil, []string{"gcloud", "config", "set", "core/disable_file_logging", "True"}, nil)
-	return err
-}
-
-// DeleteGcloudLogs deletes all of the gcloud command logs currently stored in
-// the gcloud config directory.
-// This only works on Linux.
-func DeleteGcloudLogs(ctx context.Context) error {
-	configDir, err := getGcloudConfigDir(ctx)
-	if err != nil {
-		return err
-	}
-	logsDir := path.Join(configDir, "logs")
-	_, err = runCommand(ctx, log.New(io.Discard, "", 0), nil, []string{"rm", "-rf", logsDir}, nil)
-	return err
-}
-
-const (
-	gcloudConfigDirKey = "__gcloud_config_dir__"
-)
-
-// WithGcloudConfigDir returns a context that records the desired value of the
-// gcloud configuration directory. Invoking RunGcloud with that context will
-// set the configuration directory for the gcloud command to that value.
-func WithGcloudConfigDir(ctx context.Context, directory string) context.Context {
-	return context.WithValue(ctx, gcloudConfigDirKey, directory)
-}
-
 // RunGcloud invokes a gcloud binary from runfiles and waits until it finishes.
 // Returns the stdout and stderr and an error if the binary had a nonzero exit
 // code. args is a slice containing the arguments to pass to gcloud.
@@ -867,9 +800,6 @@ func WithGcloudConfigDir(ctx context.Context, directory string) context.Context 
 func RunGcloud(ctx context.Context, logger *log.Logger, stdin string, args []string) (CommandOutput, error) {
 	logger.Printf("Running command: gcloud %v", args)
 	env := make(map[string]string)
-	if configDir := ctx.Value(gcloudConfigDirKey); configDir != nil {
-		env["CLOUDSDK_CONFIG"] = configDir.(string)
-	}
 	return runCommand(ctx, logger, strings.NewReader(stdin), append([]string{gcloudPath}, args...), env)
 }
 
@@ -1558,7 +1488,7 @@ func attemptCreateInstance(ctx context.Context, logger *log.Logger, options VMOp
 	}
 
 	if jsonInstance, err := json.MarshalIndent(instance, "", "  "); err == nil {
-		logger.Printf("instances.Insert instance:\n%s\n", jsonInstance)
+		logger.Printf("Returned instance:\n%s\n", jsonInstance)
 	} else {
 		logger.Printf("Error marshalling instances.Insert instance: %v\n", err)
 	}
@@ -1575,12 +1505,14 @@ func attemptCreateInstance(ctx context.Context, logger *log.Logger, options VMOp
 		}
 	}()
 
-	// Pull the instance ID and external IP address out of the output.
-	vm.ID = int64(*instance.Id)
-	logger.Printf("Instance Log: %v", instanceLogURL(vm))
-	if len(instance.NetworkInterfaces) > 0 && len(instance.NetworkInterfaces[0].AccessConfigs) > 0 {
-		vm.IPAddress = *instance.NetworkInterfaces[0].AccessConfigs[0].NatIP
+	vm.ID = int64(instance.GetId())
+	if ip, err := extractIPAddress(instance); err != nil {
+		return nil, err
+	} else {
+		vm.IPAddress = ip
 	}
+
+	logger.Printf("Instance Log: %v", instanceLogURL(vm))
 
 	// This is just informational, so it's ok if it fails. Just warn and proceed.
 	if _, err := DescribeVMDisk(ctx, logger, vm); err != nil {
@@ -1882,15 +1814,18 @@ func DescribeVMDisk(ctx context.Context, logger *log.Logger, vm *VM) (*computepb
 
 // RemoveExternalIP deletes the external ip for an instance.
 func RemoveExternalIP(ctx context.Context, logger *log.Logger, vm *VM) error {
-	_, err := RunGcloud(ctx, logger, "",
-		[]string{
-			"compute", "instances", "delete-access-config",
-			"--project=" + vm.Project,
-			"--zone=" + vm.Zone,
-			vm.Name,
-			"--access-config-name=external-nat",
-		})
-	return err
+	req := &computepb.DeleteAccessConfigInstanceRequest{
+		Project:          vm.Project,
+		Zone:             vm.Zone,
+		Instance:         vm.Name,
+		AccessConfig:     "external-nat",
+		NetworkInterface: "nic0", // Default network interface name
+	}
+	op, err := instancesClient.DeleteAccessConfig(ctx, req)
+	if err != nil {
+		return err
+	}
+	return op.Wait(ctx)
 }
 
 // SetEnvironmentVariables sets the environment variables in the envVariables map on the given vm in a os-dependent way.
@@ -2045,14 +1980,16 @@ func DeleteManagedInstanceGroupVM(logger *log.Logger, migVM *ManagedInstanceGrou
 
 // StopInstance shuts down a VM instance.
 func StopInstance(ctx context.Context, logger *log.Logger, vm *VM) error {
-	_, err := RunGcloud(ctx, logger, "",
-		[]string{
-			"compute", "instances", "stop",
-			"--project=" + vm.Project,
-			"--zone=" + vm.Zone,
-			vm.Name,
-		})
-	return err
+	req := &computepb.StopInstanceRequest{
+		Project:  vm.Project,
+		Zone:     vm.Zone,
+		Instance: vm.Name,
+	}
+	op, err := instancesClient.Stop(ctx, req)
+	if err != nil {
+		return err
+	}
+	return op.Wait(ctx)
 }
 
 // StartInstance boots a previously-stopped VM instance.
@@ -2061,17 +1998,26 @@ func StartInstance(ctx context.Context, logger *log.Logger, vm *VM) error {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Minute)
 	defer cancel()
 
-	var output CommandOutput
+	var instance *computepb.Instance
 	tryStart := func() error {
-		var err error
-		output, err = RunGcloud(ctx, logger, "",
-			[]string{
-				"compute", "instances", "start",
-				"--project=" + vm.Project,
-				"--zone=" + vm.Zone,
-				vm.Name,
-				"--format=json",
+		req := &computepb.StartInstanceRequest{
+			Project:  vm.Project,
+			Zone:     vm.Zone,
+			Instance: vm.Name,
+		}
+		op, err := instancesClient.Start(ctx, req)
+		if err == nil {
+			err = op.Wait(ctx)
+		}
+
+		if err == nil {
+			instance, err = instancesClient.Get(ctx, &computepb.GetInstanceRequest{
+				Project:  vm.Project,
+				Zone:     vm.Zone,
+				Instance: vm.Name,
 			})
+		}
+
 		// Sometimes we see errors about running out of CPU quota or IP addresses,
 		// Back off and retry in these cases, just like CreateInstance().
 		if err != nil && !strings.Contains(err.Error(), "Quota") {
@@ -2085,12 +2031,11 @@ func StartInstance(ctx context.Context, logger *log.Logger, vm *VM) error {
 		return err
 	}
 
-	ipAddress, err := extractIPAddress(output.Stdout)
+	ipAddress, err := extractIPAddress(instance)
 	if err != nil {
 		return err
 	}
 	vm.IPAddress = ipAddress
-
 	return waitForStart(ctx, logger, vm)
 }
 
@@ -2273,21 +2218,6 @@ type instance struct {
 	}
 }
 
-// extractSingleInstances parses the input serialized JSON description of a
-// list of instances, and returns the only instance in the list. If the JSON
-// parse fails or if there isn't exactly one instance in the list once it's
-// been parsed, extractSingleInstance returns an error.
-func extractSingleInstance(stdout string) (instance, error) {
-	var instances []instance
-	if err := json.Unmarshal([]byte(stdout), &instances); err != nil {
-		return instance{}, fmt.Errorf("could not parse JSON from %q: %v", stdout, err)
-	}
-	if len(instances) != 1 {
-		return instance{}, fmt.Errorf("should be exactly one instance in list. stdout: %q. Parsed result: %#v", stdout, instances)
-	}
-	return instances[0], nil
-}
-
 // extractIPAddress pulls the IP address out of the stdout from a gcloud
 // create/start command with --format=json. By default it returns the external
 // IP address, which is visible to entities outside the project the VM is
@@ -2296,18 +2226,13 @@ func extractSingleInstance(stdout string) (instance, error) {
 // firewall settings set up for the project we use on Kokoro. Here is a
 // drawing of my best understanding of the situation when trying to connect
 // to VMs in various ways: http://go/sdi-testing-network-drawing
-func extractIPAddress(stdout string) (string, error) {
-	instance, err := extractSingleInstance(stdout)
-	if err != nil {
-		return "", err
-	}
-
+func extractIPAddress(instance *computepb.Instance) (string, error) {
 	if len(instance.NetworkInterfaces) == 0 {
 		return "", fmt.Errorf("empty NetworkInterfaces list in %#v", instance)
 	}
 
 	if os.Getenv("USE_INTERNAL_IP") == "true" {
-		internalIP := instance.NetworkInterfaces[0].NetworkIP
+		internalIP := instance.NetworkInterfaces[0].GetNetworkIP()
 		if internalIP == "" {
 			return "", fmt.Errorf("empty internal IP (networkInterfaces[0].NetworkIP) in instance %#v", instance)
 		}
@@ -2317,21 +2242,11 @@ func extractIPAddress(stdout string) (string, error) {
 	if len(instance.NetworkInterfaces[0].AccessConfigs) == 0 {
 		return "", fmt.Errorf("empty NetworkInterfaces[0].AccessConfigs list in %#v", instance)
 	}
-	externalIP := instance.NetworkInterfaces[0].AccessConfigs[0].NatIP
+	externalIP := instance.NetworkInterfaces[0].AccessConfigs[0].GetNatIP()
 	if externalIP == "" {
 		return "", fmt.Errorf("empty external IP (networkInterfaces[0].AccessConfigs[0].NatIP) in instance %#v", instance)
 	}
 	return externalIP, nil
-}
-
-// ExtractID pulls the instance ID out of the stdout from a gcloud create/start
-// command with --format=json.
-func extractID(stdout string) (int64, error) {
-	instance, err := extractSingleInstance(stdout)
-	if err != nil {
-		return 0, err
-	}
-	return strconv.ParseInt(instance.ID, 10, 64)
 }
 
 // FetchMetadata retrieves the instance metadata for the given VM.
@@ -2617,45 +2532,76 @@ func areTagsValid(tags []string) (bool, error) {
 	return true, nil
 }
 
-func AddTagToVm(ctx context.Context, logger *log.Logger, vm *VM, tags []string) (CommandOutput, error) {
-	var output CommandOutput
+func AddTagToVm(ctx context.Context, logger *log.Logger, vm *VM, tags []string) error {
 	if valid, err := areTagsValid(tags); !valid {
 		logger.Printf("Unable to add tag to VM: %v", err)
-		return output, err
+		return err
 	}
-	args := []string{
-		"compute", "instances", "add-tags", vm.Name,
-		"--zone=" + vm.Zone,
-		"--project=" + vm.Project,
-		"--tags=" + strings.Join(tags, ","),
-	}
-	output, err := RunGcloud(ctx, logger, "", args)
+	instance, err := instancesClient.Get(ctx, &computepb.GetInstanceRequest{
+		Project:  vm.Project,
+		Zone:     vm.Zone,
+		Instance: vm.Name,
+	})
 	if err != nil {
-		logger.Printf("Unable to add tag to VM: %v", err)
-		return output, err
+		return err
 	}
-	return output, nil
+	newTags := &computepb.Tags{
+		Fingerprint: instance.Tags.Fingerprint,
+		Items:       append(instance.Tags.Items, tags...),
+	}
+	op, err := instancesClient.SetTags(ctx, &computepb.SetTagsInstanceRequest{
+		Project:      vm.Project,
+		Zone:         vm.Zone,
+		Instance:     vm.Name,
+		TagsResource: newTags,
+	})
+	if err != nil {
+		return err
+	}
+
+	return op.Wait(ctx)
 }
 
-func RemoveTagFromVm(ctx context.Context, logger *log.Logger, vm *VM, tags []string) (CommandOutput, error) {
-	var output CommandOutput
+func RemoveTagFromVm(ctx context.Context, logger *log.Logger, vm *VM, tags []string) error {
 	if valid, err := areTagsValid(tags); !valid {
 		logger.Printf("Unable to remove tag from VM: %v", err)
-		return output, err
+		return err
 	}
-	args := []string{
-		"compute", "instances", "remove-tags", vm.Name,
-		"--zone=" + vm.Zone,
-		"--project=" + vm.Project,
-		"--tags=" + strings.Join(tags, ","),
+	instance, err := instancesClient.Get(ctx, &computepb.GetInstanceRequest{
+		Project:  vm.Project,
+		Zone:     vm.Zone,
+		Instance: vm.Name,
+	})
+	if err != nil {
+		return err
 	}
 
-	output, err := RunGcloud(ctx, logger, "", args)
-	if err != nil {
-		logger.Printf("Unable remove tag from VM: %v", err)
-		return output, err
+	tagsToRemove := make(map[string]bool)
+	for _, tag := range tags {
+		tagsToRemove[tag] = true
 	}
-	return output, nil
+
+	var updatedTags []string
+	for _, tag := range instance.Tags.Items {
+		if !tagsToRemove[tag] {
+			updatedTags = append(updatedTags, tag)
+		}
+	}
+
+	newTags := &computepb.Tags{
+		Fingerprint: instance.Tags.Fingerprint,
+		Items:       updatedTags,
+	}
+	op, err := instancesClient.SetTags(ctx, &computepb.SetTagsInstanceRequest{
+		Project:      vm.Project,
+		Zone:         vm.Zone,
+		Instance:     vm.Name,
+		TagsResource: newTags,
+	})
+	if err != nil {
+		return err
+	}
+	return op.Wait(ctx)
 }
 
 // TODO: merge this somehow with attemptCreateInstance

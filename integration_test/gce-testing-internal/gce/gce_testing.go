@@ -949,15 +949,16 @@ func UploadContent(ctx context.Context, logger *log.Logger, vm *VM, content io.R
 		}
 	}()
 
-	if IsWindows(vm.ImageSpec) {
-		_, err = RunRemotely(ctx, logger, vm, fmt.Sprintf(`New-Item -Path "%s" -ItemType File -Force ;Read-GcsObject -Force -Bucket "%s" -ObjectName "%s" -OutFile "%s"`, remotePath, object.BucketName(), object.ObjectName(), remotePath))
-		return err
-	}
 	if err := InstallGcloudIfNeeded(ctx, logger, vm); err != nil {
 		return err
 	}
 	objectPath := fmt.Sprintf("gs://%s/%s", object.BucketName(), object.ObjectName())
-	_, err = RunRemotely(ctx, logger, vm, fmt.Sprintf("sudo gcloud storage cp '%s' '%s'", objectPath, remotePath))
+	gcloudCmd := fmt.Sprintf("gcloud storage cp '%s' '%s'", objectPath, remotePath)
+	if IsWindows(vm.ImageSpec) {
+		_, err = RunRemotely(ctx, logger, vm, gcloudCmd)
+		return err
+	}
+	_, err = RunRemotely(ctx, logger, vm, fmt.Sprintf("sudo %s", gcloudCmd))
 	return err
 }
 
@@ -1015,7 +1016,7 @@ func RunScriptRemotely(ctx context.Context, logger *log.Logger, vm *VM, scriptCo
 	if IsWindows(vm.ImageSpec) {
 		// Use a UUID for the script name in case RunScriptRemotely is being
 		// called concurrently on the same VM.
-		scriptPath := "C:\\" + uuid.NewString() + ".ps1"
+		scriptPath := "C:\\tmp\\" + uuid.NewString() + ".ps1"
 		if err := UploadContent(ctx, logger, vm, strings.NewReader(scriptContents), scriptPath); err != nil {
 			return CommandOutput{}, err
 		}

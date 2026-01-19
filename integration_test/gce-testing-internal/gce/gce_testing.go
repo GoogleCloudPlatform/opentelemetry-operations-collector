@@ -606,9 +606,9 @@ func AssertMetricMissing(ctx context.Context, logger *log.Logger, vm *VM, metric
 
 // hasMatchingLog looks in the logging backend for a log matching the given query,
 // over the trailing time interval specified by the given window.
-// Returns an integer with a count of logs found in the backend matching the query,
+// Returns a boolean indicating whether the log was present in the backend,
 // plus the first log entry found, or an error if the lookup failed.
-func hasMatchingLog(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string) (int, *cloudlogging.Entry, error) {
+func hasMatchingLog(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string) (bool, *cloudlogging.Entry, error) {
 	start := time.Now().Add(-window)
 
 	t := start.Format(time.RFC3339)
@@ -620,11 +620,11 @@ func hasMatchingLog(ctx context.Context, logger *log.Logger, vm *VM, logNameRege
 
 	logClient, err := logClients.new(vm.Project)
 	if err != nil {
-		return 0, nil, fmt.Errorf("hasMatchingLog() failed to obtain logClient for project %v: %v", vm.Project, err)
+		return false, nil, fmt.Errorf("hasMatchingLog() failed to obtain logClient for project %v: %v", vm.Project, err)
 	}
 	it := logClient.Entries(ctx, logadmin.Filter(filter))
+	found := false
 
-	var logCount int = 0
 	var first *cloudlogging.Entry
 	// Loop through the iterator printing out each matching log entry. We could return true on the
 	// first match, but it's nice for debugging to print out all matches into the logs.
@@ -634,22 +634,22 @@ func hasMatchingLog(ctx context.Context, logger *log.Logger, vm *VM, logNameRege
 			break
 		}
 		if err != nil {
-			return 0, nil, err
+			return false, nil, err
 		}
 		logger.Printf("Found matching log entry: %v", entry)
-		logCount++
+		found = true
 		if first == nil {
 			first = entry
 		}
 	}
-	return logCount, first, nil
+	return found, first, nil
 }
 
 // WaitForLog looks in the logging backend for a log matching the given query,
 // over the trailing time interval specified by the given window.
 // Returns an error if the log could not be found after LogQueryMaxAttempts retries.
 func WaitForLog(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string) error {
-	_, _, err := QueryLog(ctx, logger, vm, logNameRegex, window, query, LogQueryMaxAttempts)
+	_, err := QueryLog(ctx, logger, vm, logNameRegex, window, query, LogQueryMaxAttempts)
 	return err
 }
 
@@ -662,24 +662,24 @@ func shouldRetryHasMatchingLog(err error) bool {
 
 // QueryLog looks in the logging backend for a log matching the given query,
 // over the trailing time interval specified by the given window.
-// Returns the first log entry found with the count of found entries, or an
-// error if the log could not be found after some retries.
-func QueryLog(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string, maxAttempts int) (int, *cloudlogging.Entry, error) {
+// Returns the first log entry found, or an error if the log could not be
+// found after some retries.
+func QueryLog(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string, maxAttempts int) (*cloudlogging.Entry, error) {
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		count, first, err := hasMatchingLog(ctx, logger, vm, logNameRegex, window, query)
-		if count > 0 {
+		found, first, err := hasMatchingLog(ctx, logger, vm, logNameRegex, window, query)
+		if found {
 			// Success.
-			return count, first, nil
+			return first, nil
 		}
-		logger.Printf("Query returned count=%v, err=%v, attempt=%d", count, err, attempt)
+		logger.Printf("Query returned found=%v, err=%v, attempt=%d", found, err, attempt)
 		if err != nil && !shouldRetryHasMatchingLog(err) {
 			// A non-retryable error.
-			return 0, nil, fmt.Errorf("QueryLog() failed: %v", err)
+			return nil, fmt.Errorf("QueryLog() failed: %v", err)
 		}
 		// found was false, or we hit a retryable error.
 		time.Sleep(logQueryBackoffDuration)
 	}
-	return 0, nil, fmt.Errorf("QueryLog() failed: %s not found, exhausted retries", logNameRegex)
+	return nil, fmt.Errorf("QueryLog() failed: %s not found, exhausted retries", logNameRegex)
 }
 
 // AssertLogMissing looks in the logging backend for a log matching the given query
@@ -687,15 +687,15 @@ func QueryLog(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex stri
 // while querying the backend we make queryMaxAttemptsLogMissing query attempts.
 func AssertLogMissing(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string) error {
 	for attempt := 1; attempt <= queryMaxAttemptsLogMissing; attempt++ {
-		count, _, err := hasMatchingLog(ctx, logger, vm, logNameRegex, window, query)
+		found, _, err := hasMatchingLog(ctx, logger, vm, logNameRegex, window, query)
 		if err == nil {
-			if count > 0 {
+			if found {
 				return fmt.Errorf("AssertLogMissing(log=%q): %v failed: unexpectedly found data for log", query, err)
 			}
 			// Success
 			return nil
 		}
-		logger.Printf("Query returned count=%v, err=%v, attempt=%d", count, err, attempt)
+		logger.Printf("Query returned found=%v, err=%v, attempt=%d", found, err, attempt)
 		if err != nil && !shouldRetryHasMatchingLog(err) {
 			// A non-retryable error.
 			return fmt.Errorf("AssertLogMissing() failed: %v", err)

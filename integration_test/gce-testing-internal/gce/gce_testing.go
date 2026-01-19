@@ -607,8 +607,8 @@ func AssertMetricMissing(ctx context.Context, logger *log.Logger, vm *VM, metric
 // hasMatchingLog looks in the logging backend for a log matching the given query,
 // over the trailing time interval specified by the given window.
 // Returns a boolean indicating whether the log was present in the backend,
-// plus the first log entry found, or an error if the lookup failed.
-func hasMatchingLog(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string) (bool, *cloudlogging.Entry, error) {
+// plus all the matching log entries found, or an error if the lookup failed.
+func hasMatchingLog(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string) (bool, []*cloudlogging.Entry, error) {
 	start := time.Now().Add(-window)
 
 	t := start.Format(time.RFC3339)
@@ -625,9 +625,9 @@ func hasMatchingLog(ctx context.Context, logger *log.Logger, vm *VM, logNameRege
 	it := logClient.Entries(ctx, logadmin.Filter(filter))
 	found := false
 
-	var first *cloudlogging.Entry
-	// Loop through the iterator printing out each matching log entry. We could return true on the
-	// first match, but it's nice for debugging to print out all matches into the logs.
+	var matchingLogs []*cloudlogging.Entry
+	// Loop through the iterator printing out each matching log entry.
+	// It is helpful for debugging to print out all matches into the logs.
 	for {
 		entry, err := it.Next()
 		if err == iterator.Done {
@@ -638,11 +638,12 @@ func hasMatchingLog(ctx context.Context, logger *log.Logger, vm *VM, logNameRege
 		}
 		logger.Printf("Found matching log entry: %v", entry)
 		found = true
-		if first == nil {
-			first = entry
-		}
+		matchingLogs = append(matchingLogs, entry)
 	}
-	return found, first, nil
+	if found && len(matchingLogs) == 0 {
+		return false, nil, fmt.Errorf("hasMatchingLog() internal logic error: found is true but matchingLogs is empty")
+	}
+	return found, matchingLogs, nil
 }
 
 // WaitForLog looks in the logging backend for a log matching the given query,
@@ -666,10 +667,36 @@ func shouldRetryHasMatchingLog(err error) bool {
 // found after some retries.
 func QueryLog(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string, maxAttempts int) (*cloudlogging.Entry, error) {
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		found, first, err := hasMatchingLog(ctx, logger, vm, logNameRegex, window, query)
+		found, matchingLogs, err := hasMatchingLog(ctx, logger, vm, logNameRegex, window, query)
+		if found {
+			if len(matchingLogs) > 0 {
+				// Success.
+				return matchingLogs[0], nil
+			}
+			// This should never happen if we found at least one log (found == true).
+			return nil, fmt.Errorf("QueryLog() internal logic error: found is true but matchingLogs is empty")
+		}
+		logger.Printf("Query returned found=%v, err=%v, attempt=%d", found, err, attempt)
+		if err != nil && !shouldRetryHasMatchingLog(err) {
+			// A non-retryable error.
+			return nil, fmt.Errorf("QueryLog() failed: %v", err)
+		}
+		// found was false, or we hit a retryable error.
+		time.Sleep(logQueryBackoffDuration)
+	}
+	return nil, fmt.Errorf("QueryLog() failed: %s not found, exhausted retries", logNameRegex)
+}
+
+// QueryAllLog looks in the logging backend for a log matching the given query,
+// over the trailing time interval specified by the given window.
+// Returns all the log entries found, or an error if the log could not be
+// found after some retries.
+func QueryAllLogs(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string, maxAttempts int) ([]*cloudlogging.Entry, error) {
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		found, matchingLogs, err := hasMatchingLog(ctx, logger, vm, logNameRegex, window, query)
 		if found {
 			// Success.
-			return first, nil
+			return matchingLogs, nil
 		}
 		logger.Printf("Query returned found=%v, err=%v, attempt=%d", found, err, attempt)
 		if err != nil && !shouldRetryHasMatchingLog(err) {

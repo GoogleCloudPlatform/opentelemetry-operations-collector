@@ -604,7 +604,7 @@ func AssertMetricMissing(ctx context.Context, logger *log.Logger, vm *VM, metric
 	return nil
 }
 
-// findMatchingLogs looks in the logging backend for a log matching the given query,
+// findMatchingLogs looks in the logging backend for logs matching the given query,
 // over the trailing time interval specified by the given window.
 // Returns all the matching log entries found, or an error if the lookup failed.
 func findMatchingLogs(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string) ([]*cloudlogging.Entry, error) {
@@ -655,7 +655,7 @@ func shouldRetryHasMatchingLog(err error) bool {
 		strings.Contains(err.Error(), "Internal error encountered")
 }
 
-// QueryLog looks in the logging backend for a log matching the given query,
+// QueryLog looks in the logging backend for logs matching the given query,
 // over the trailing time interval specified by the given window.
 // Returns the first log entry found, or an error if the log could not be
 // found after some retries.

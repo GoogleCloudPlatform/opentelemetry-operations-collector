@@ -655,7 +655,7 @@ func shouldRetryHasMatchingLog(err error) bool {
 		strings.Contains(err.Error(), "Internal error encountered")
 }
 
-// QueryLog looks in the logging backend for logs matching the given query,
+// QueryLog looks in the logging backend a log matching the given query,
 // over the trailing time interval specified by the given window.
 // Returns the first log entry found, or an error if the log could not be
 // found after some retries.
@@ -677,9 +677,11 @@ func QueryLog(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex stri
 func QueryAllLogs(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string, maxAttempts int) ([]*cloudlogging.Entry, error) {
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		matchingLogs, err := findMatchingLogs(ctx, logger, vm, logNameRegex, window, query)
-		if len(matchingLogs) > 0 {
-			// Success.
-			return matchingLogs, nil
+		if err == nil {
+			if len(matchingLogs) > 0 {
+				// Success.
+				return matchingLogs, nil
+			}
 		}
 		logger.Printf("Query returned matchingLogs=%v, err=%v, attempt=%d", matchingLogs, err, attempt)
 		if err != nil && !shouldRetryHasMatchingLog(err) {

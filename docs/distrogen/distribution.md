@@ -19,7 +19,7 @@ The distribution specification is a YAML configuration file which `distrogen` us
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `name` | string | | The name for the distribution. |
-| `display_name` | string | A human-readable name to use for the distribution. It is used in the title for the generated README.  |
+| `display_name` | string | | A human-readable name to use for the distribution. It is used in the title for the generated README.  |
 | `description` | string | | The human readable description of the distribution. It also gets formatted into the default user agent for `otlp` and `otlphttp` exporters. |
 | `blurb` | string | | An optional description of the distribution to go in the generated README. |
 | `binary_name` | string | | The name of the resulting built binary. Also used for the Docker image tag. |

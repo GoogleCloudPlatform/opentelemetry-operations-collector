@@ -4,7 +4,7 @@ dist:
   module: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/google-built-opentelemetry-collector
   name: otelcol-google
   description: OpenTelemetry Collector Built By Google
-  version: 0.143.0
+  version: 0.144.0
   output_path: ./_build
 
 receivers:

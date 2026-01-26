@@ -327,16 +327,16 @@ func (d *DistributionGenerator) Compare() error {
 		)
 	}
 
-	logger.Debug("comparing %s to %s", d.GeneratePath, generateDest)
+	logger.Debug("comparing ", d.GeneratePath, generateDest)
 
-	generatedContent, err := d.getGeneratedFilesInDir()
+	generatedContent, err := d.getGeneratedFilesInDir(d.GeneratePath)
 	if err != nil {
 		return wrapExitCodeError(
 			unexpectErrExitCode,
 			fmt.Errorf("could not get generated files: %w", err),
 		)
 	}
-	existingContent, err := d.getGeneratedFilesInDir()
+	existingContent, err := d.getGeneratedFilesInDir(generateDest)
 	if err != nil {
 		return wrapExitCodeError(
 			unexpectErrExitCode,
@@ -372,15 +372,10 @@ func (d *DistributionGenerator) Compare() error {
 	return nil
 }
 
-func (dg *DistributionGenerator) getGeneratedFilesInDir() (map[string]*generatedFile, error) {
-	wd, err := os.Getwd()
-	if err != nil {
-		return nil, fmt.Errorf("could not get working directory: %w", err)
-	}
-	dir := filepath.Join(wd, dg.GenerateDirName)
+func (dg *DistributionGenerator) getGeneratedFilesInDir(dir string) (map[string]*generatedFile, error) {
 	files := map[string]*generatedFile{}
 
-	err = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}

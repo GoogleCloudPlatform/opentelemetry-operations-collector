@@ -663,11 +663,9 @@ func QueryLog(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex stri
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		matchingLogs, err := findMatchingLogs(ctx, logger, vm, logNameRegex, window, query)
 		found := len(matchingLogs) > 0
-		if err == nil {
-			if found {
-				// Success.
-				return matchingLogs[0], nil
-			}
+		if err == nil && found {
+			// Success.
+			return matchingLogs[0], nil
 		}
 		logger.Printf("Query returned found=%t, matchingLogs=%v, err=%v, attempt=%d", found, matchingLogs, err, attempt)
 		if err != nil && !shouldRetryHasMatchingLog(err) {

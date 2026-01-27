@@ -660,27 +660,12 @@ func shouldRetryHasMatchingLog(err error) bool {
 // Returns the first log entry found, or an error if the log could not be
 // found after some retries.
 func QueryLog(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string, maxAttempts int) (*cloudlogging.Entry, error) {
-	matchingLogs, err := QueryAllLogs(ctx, logger, vm, logNameRegex, window, query, maxAttempts)
-	if err != nil {
-		return nil, err
-	}
-	if len(matchingLogs) > 0 {
-		return matchingLogs[0], nil
-	}
-	return nil, fmt.Errorf("QueryLog() failed: %s not found, exhausted retries", logNameRegex)
-}
-
-// QueryAllLog looks in the logging backend for logs matching the given query,
-// over the trailing time interval specified by the given window.
-// Returns all the log entries found, or an error if no log could not be
-// found after some retries.
-func QueryAllLogs(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string, maxAttempts int) ([]*cloudlogging.Entry, error) {
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		matchingLogs, err := findMatchingLogs(ctx, logger, vm, logNameRegex, window, query)
 		if err == nil {
 			if len(matchingLogs) > 0 {
 				// Success.
-				return matchingLogs, nil
+				return matchingLogs[0], nil
 			}
 		}
 		logger.Printf("Query returned matchingLogs=%v, err=%v, attempt=%d", matchingLogs, err, attempt)
@@ -694,26 +679,39 @@ func QueryAllLogs(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex 
 	return nil, fmt.Errorf("QueryAllLogs() failed: %s not found, exhausted retries", logNameRegex)
 }
 
-// AssertLogMissing looks in the logging backend for a log matching the given query
-// and returns success if no data is found. To consider possible transient errors
-// while querying the backend we make queryMaxAttemptsLogMissing query attempts.
-func AssertLogMissing(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string) error {
-	for attempt := 1; attempt <= queryMaxAttemptsLogMissing; attempt++ {
+// QueryAllLogs looks in the logging backend for logs matching the given query,
+// over the trailing time interval specified by the given window.
+// Returns all the log entries found, or an error if no successful queries to the
+// backend. To consider possible transient errors while querying the backend we
+// make LogQueryMaxAttempts query attempts.
+func QueryAllLogs(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string, maxAttempts int) ([]*cloudlogging.Entry, error) {
+	for attempt := 1; attempt <= LogQueryMaxAttempts; attempt++ {
 		matchingLogs, err := findMatchingLogs(ctx, logger, vm, logNameRegex, window, query)
 		if err == nil {
-			if len(matchingLogs) > 0 {
-				return fmt.Errorf("AssertLogMissing(log=%q): %v failed: unexpectedly found data for log", query, err)
-			}
-			// Success
-			return nil
+			// Success.
+			return matchingLogs, nil
 		}
 		logger.Printf("Query returned matchingLogs=%v, err=%v, attempt=%d", matchingLogs, err, attempt)
 		if err != nil && !shouldRetryHasMatchingLog(err) {
 			// A non-retryable error.
-			return fmt.Errorf("AssertLogMissing() failed: %v", err)
+			return nil, fmt.Errorf("QueryLog() failed: %v", err)
 		}
 		// found was false, or we hit a retryable error.
 		time.Sleep(logQueryBackoffDuration)
+	}
+	return nil, fmt.Errorf("QueryAllLogs() failed: %s no succesful queries to the backend, exhausted retries", logNameRegex)
+}
+
+// AssertLogMissing looks in the logging backend for a log matching the given query
+// and returns success if no data is found. To consider possible transient errors
+// while querying the backend we make queryMaxAttemptsLogMissing query attempts.
+func AssertLogMissing(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string) error {
+	matchingLogs, err := QueryAllLogs(ctx, logger, vm, logNameRegex, window, query, LogQueryMaxAttempts)
+	if err != nil {
+		return fmt.Errorf("AssertLogMissing() failed: %v", err)
+	}
+	if len(matchingLogs) > 0 {
+		return fmt.Errorf("AssertLogMissing(log=%q): %v failed: unexpectedly found data for log", query, err)
 	}
 	return fmt.Errorf("AssertLogMissing() failed: no successful queries to the backend for log %s, exhausted retries", logNameRegex)
 }

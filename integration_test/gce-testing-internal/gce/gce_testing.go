@@ -705,7 +705,7 @@ func QueryAllLogs(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex 
 // and returns success if no data is found. To consider possible transient errors
 // while querying the backend we make queryMaxAttemptsLogMissing query attempts.
 func AssertLogMissing(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string) error {
-	matchingLogs, err := QueryAllLogs(ctx, logger, vm, logNameRegex, window, query, LogQueryMaxAttempts)
+	matchingLogs, err := QueryAllLogs(ctx, logger, vm, logNameRegex, window, query, queryMaxAttemptsLogMissing)
 	if err != nil {
 		return fmt.Errorf("AssertLogMissing() failed: %v", err)
 	}

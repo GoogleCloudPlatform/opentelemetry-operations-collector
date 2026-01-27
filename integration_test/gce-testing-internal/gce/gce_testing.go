@@ -655,20 +655,21 @@ func shouldRetryHasMatchingLog(err error) bool {
 		strings.Contains(err.Error(), "Internal error encountered")
 }
 
-// QueryLog looks in the logging backend a log matching the given query,
+// QueryLog looks in the logging backend for a log matching the given query,
 // over the trailing time interval specified by the given window.
 // Returns the first log entry found, or an error if the log could not be
 // found after some retries.
 func QueryLog(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string, maxAttempts int) (*cloudlogging.Entry, error) {
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		matchingLogs, err := findMatchingLogs(ctx, logger, vm, logNameRegex, window, query)
+		found := len(matchingLogs) > 0
 		if err == nil {
-			if len(matchingLogs) > 0 {
+			if found {
 				// Success.
 				return matchingLogs[0], nil
 			}
 		}
-		logger.Printf("Query returned matchingLogs=%v, err=%v, attempt=%d", matchingLogs, err, attempt)
+		logger.Printf("Query returned found=%t, matchingLogs=%v, err=%v, attempt=%d", found, matchingLogs, err, attempt)
 		if err != nil && !shouldRetryHasMatchingLog(err) {
 			// A non-retryable error.
 			return nil, fmt.Errorf("QueryLog() failed: %v", err)
@@ -676,7 +677,7 @@ func QueryLog(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex stri
 		// found was false, or we hit a retryable error.
 		time.Sleep(logQueryBackoffDuration)
 	}
-	return nil, fmt.Errorf("QueryAllLogs() failed: %s not found, exhausted retries", logNameRegex)
+	return nil, fmt.Errorf("QueryLog() failed: %s not found, exhausted retries", logNameRegex)
 }
 
 // QueryAllLogs looks in the logging backend for logs matching the given query,
@@ -694,7 +695,7 @@ func QueryAllLogs(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex 
 		logger.Printf("Query returned matchingLogs=%v, err=%v, attempt=%d", matchingLogs, err, attempt)
 		if err != nil && !shouldRetryHasMatchingLog(err) {
 			// A non-retryable error.
-			return nil, fmt.Errorf("QueryLog() failed: %v", err)
+			return nil, fmt.Errorf("QueryAllLogs() failed: %v", err)
 		}
 		// found was false, or we hit a retryable error.
 		time.Sleep(logQueryBackoffDuration)

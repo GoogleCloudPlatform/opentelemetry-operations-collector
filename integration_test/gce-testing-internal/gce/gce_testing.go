@@ -706,11 +706,15 @@ func QueryAllLogs(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex 
 // while querying the backend we make queryMaxAttemptsLogMissing query attempts.
 func AssertLogMissing(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string) error {
 	matchingLogs, err := QueryAllLogs(ctx, logger, vm, logNameRegex, window, query, queryMaxAttemptsLogMissing)
+	if err == nil {
+		if len(matchingLogs) > 0 {
+			return fmt.Errorf("AssertLogMissing(log=%q): %v failed: unexpectedly found data for log", query, err)
+		}
+		// Success.
+		return nil
+	}
 	if err != nil {
 		return fmt.Errorf("AssertLogMissing() failed: %v", err)
-	}
-	if len(matchingLogs) > 0 {
-		return fmt.Errorf("AssertLogMissing(log=%q): %v failed: unexpectedly found data for log", query, err)
 	}
 	return fmt.Errorf("AssertLogMissing() failed: no successful queries to the backend for log %s, exhausted retries", logNameRegex)
 }

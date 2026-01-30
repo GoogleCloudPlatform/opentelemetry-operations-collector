@@ -713,10 +713,7 @@ func AssertLogMissing(ctx context.Context, logger *log.Logger, vm *VM, logNameRe
 		// Success.
 		return nil
 	}
-	if err != nil {
-		return fmt.Errorf("AssertLogMissing() failed: %v", err)
-	}
-	return fmt.Errorf("AssertLogMissing() failed: no successful queries to the backend for log %s, exhausted retries", logNameRegex)
+	return fmt.Errorf("AssertLogMissing(log=%q): %v failed: no successful queries to the backend for log %s, exhausted retries", query, err, logNameRegex)
 }
 
 // CommandOutput holds the textual output from running a subprocess.

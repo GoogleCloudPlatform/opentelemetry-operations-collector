@@ -682,16 +682,16 @@ func QueryLog(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex stri
 // over the trailing time interval specified by the given window.
 // Returns all the log entries found, or an error if no successful queries to the
 // backend. To consider possible transient errors while querying the backend we
-// make LogQueryMaxAttempts query attempts.
+// make maxAttempts query attempts.
 func QueryAllLogs(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string, maxAttempts int) ([]*cloudlogging.Entry, error) {
-	for attempt := 1; attempt <= LogQueryMaxAttempts; attempt++ {
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
 		matchingLogs, err := findMatchingLogs(ctx, logger, vm, logNameRegex, window, query)
 		if err == nil {
 			// Success.
 			return matchingLogs, nil
 		}
 		logger.Printf("Query returned matchingLogs=%v, err=%v, attempt=%d", matchingLogs, err, attempt)
-		if err != nil && !shouldRetryHasMatchingLog(err) {
+		if !shouldRetryHasMatchingLog(err) {
 			// A non-retryable error.
 			return nil, fmt.Errorf("QueryAllLogs() failed: %v", err)
 		}

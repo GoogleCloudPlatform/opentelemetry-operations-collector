@@ -105,7 +105,7 @@ func createLogExporter(ctx context.Context, settings exporter.Settings, cfg comp
 	exp := NewLogsExporter(*oCfg, settings.Logger, *c, settings.TelemetrySettings)
 	return exporterhelper.NewLogs(ctx, settings, cfg, exp.ConsumeLogs,
 		exporterhelper.WithCapabilities(exp.Capabilities()),
-		// TODO: disable timeout and backoff for now
+		// TODO(b/480150119): disable timeout and backoff for now
 		// exporterhelper.WithTimeout(oCfg.TimeoutConfig),
 		// exporterhelper.WithRetry(oCfg.BackOffConfig),
 		exporterhelper.WithQueue(oCfg.QueueConfig),

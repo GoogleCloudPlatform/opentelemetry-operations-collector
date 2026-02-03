@@ -15,9 +15,9 @@
 name: otelopscol
 description: "OpenTelemetry Collector binary used by the Ops Agent"
 module: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/otelopscol
-version: v0.138.0
-opentelemetry_version: 0.138.0
-opentelemetry_stable_version: 1.44.0
+version: v0.145.0
+opentelemetry_version: 0.145.0
+opentelemetry_stable_version: 1.51.0
 binary_name: otelopscol
 build_container: debian
 collector_cgo: true

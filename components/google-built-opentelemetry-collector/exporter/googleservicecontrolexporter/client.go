@@ -45,13 +45,19 @@ type serviceControlClientLibrary struct {
 	service *servicecontrol.ServiceControllerClient
 }
 
-func NewServiceControllerClient(endpoint string, useRawServiceControlClient bool, enableDebugHeaders bool, logger *zap.Logger, opts ...grpc.DialOption) (ServiceControlClient, error) {
+func NewServiceControllerClient(endpoint string, useRawServiceControlClient bool, insecure bool, enableDebugHeaders bool, logger *zap.Logger, opts ...grpc.DialOption) (ServiceControlClient, error) {
 	ctx := context.Background()
-	// Use client library. Ignore grpc dial options.
 	if !useRawServiceControlClient {
-		// Enable gRPC response interceptor for debug header
 		var clientOpts []option.ClientOption
+		// Convert grpc dialOptions (userAgent etc.) to clientOptions
+		for _, opt := range opts {
+			clientOpts = append(clientOpts, option.WithGRPCDialOption(opt))
+		}
+		if insecure {
+			clientOpts = append(clientOpts, option.WithoutAuthentication())
+		}
 		if enableDebugHeaders {
+			// Enable gRPC response interceptor for debug header
 			interceptor := NewHeaderLoggingInterceptor(logger)
 			clientOpts = append(clientOpts, option.WithGRPCDialOption(grpc.WithUnaryInterceptor(interceptor.UnaryInterceptor)))
 		}

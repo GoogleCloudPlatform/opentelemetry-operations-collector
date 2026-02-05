@@ -4,10 +4,10 @@ display_name: ""
 description: OpenTelemetry Collector binary used by the Ops Agent
 blurb: ""
 build_container: debian
-version: v0.138.0
-opentelemetry_version: 0.138.0
-opentelemetry_contrib_version: 0.138.0
-opentelemetry_stable_version: 1.44.0
+version: v0.145.0
+opentelemetry_version: 0.145.0
+opentelemetry_contrib_version: 0.145.0
+opentelemetry_stable_version: 1.51.0
 go_version: 1.23.2
 binary_name: otelopscol
 build_tags: gpu

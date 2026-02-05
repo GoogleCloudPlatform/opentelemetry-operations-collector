@@ -110,6 +110,7 @@ func (m *metricNvmlGpuMemoryBytesUsed) emit(metrics pmetric.MetricSlice) {
 
 func newMetricNvmlGpuMemoryBytesUsed(cfg MetricConfig) metricNvmlGpuMemoryBytesUsed {
 	m := metricNvmlGpuMemoryBytesUsed{config: cfg}
+
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -168,6 +169,7 @@ func (m *metricNvmlGpuProcessesMaxBytesUsed) emit(metrics pmetric.MetricSlice) {
 
 func newMetricNvmlGpuProcessesMaxBytesUsed(cfg MetricConfig) metricNvmlGpuProcessesMaxBytesUsed {
 	m := metricNvmlGpuProcessesMaxBytesUsed{config: cfg}
+
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -226,6 +228,7 @@ func (m *metricNvmlGpuProcessesUtilization) emit(metrics pmetric.MetricSlice) {
 
 func newMetricNvmlGpuProcessesUtilization(cfg MetricConfig) metricNvmlGpuProcessesUtilization {
 	m := metricNvmlGpuProcessesUtilization{config: cfg}
+
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -279,6 +282,7 @@ func (m *metricNvmlGpuUtilization) emit(metrics pmetric.MetricSlice) {
 
 func newMetricNvmlGpuUtilization(cfg MetricConfig) metricNvmlGpuUtilization {
 	m := metricNvmlGpuUtilization{config: cfg}
+
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()

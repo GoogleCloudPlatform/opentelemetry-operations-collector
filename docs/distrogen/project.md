@@ -75,10 +75,10 @@ All tools are downloaded to a local folder it creates called `.tools`. This fold
 
 ## Custom Components
 
+NOTE: This feature is under construction and the documentation will be updated when it works properly.
+
 The biggest strength for a full project setup is for custom components. In your project you can:
 
 * Add code for custom Collector components as separate Go modules in the `components/<type>` subfolder
 * Automatically update Collector library dependencies across all components easily
 * Manage a local registry that can will allow you to refer to your custom components in your distribution
-
-This feature is under construction and the documentation will be updated when it works properly.

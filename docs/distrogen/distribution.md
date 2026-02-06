@@ -61,9 +61,8 @@ Leverages [Build Platform Variables](#build-platform-variables).
 
 ### goreleaser
 
-The `goreleaser-release` target does a local goreleaser release using [the `snapshot` feature](https://goreleaser.com/customization/snapshots/).
-
-The `local-container-goreleaser` target does the same thing, but within a temporary container based on `Dockerfile.goreleaser_releaser`. If you are using this target, it is recommended not to set any target variables. Please note that this target takes a super duper long time.
+The `goreleaser-release` target does a local goreleaser release using [the `snapshot` feature](https://goreleaser.com/customization/snapshots/). This target will be run directly on the machine.  
+The `local-container-goreleaser` target also does a goreleaser release with `snapshot`, but within a temporary container based on `Dockerfile.goreleaser_releaser`. This means your build environment is entirely containerized. This is particularly useful for situations like `cgo_enabled` and `boring_crypto`, where `Dockerfile.goreleaser_releaser` will ensure to download the necessary C build toolchains. If you are using this target, it is recommended not to set any target variables. Please note that this target takes a very long time.
 
 [Tools](#tool-variables) used: `GO_BIN`, `OCB_BIN`, `GORELEASER_BIN`
 
@@ -74,22 +73,26 @@ The `local-container-goreleaser` target does the same thing, but within a tempor
 
 ### Docker Targets
 
-Builds a Collector docker image and pushes it to the configured Docker repo destination.
+The Docker targets are for building Collector image and pushing them to the configured Docker repo destination.
 
-The `image` target will call [`build`](#build) first to build a Collector binary on the host machine which will be to the image. This is good for local development,
+The `image-build` target will call [`build`](#build) first to build a Collector binary on the host machine which will then be copied into the container. This is good for local development,
 and will likely be faster to build. 
 
-The `image-full` target will use the alternate Dockerfile that actually builds the Collector binary
+The `image-build-full` target will use the alternate Dockerfile that actually builds the Collector binary
 within an earlier image layer to copy to the resulting final image. The final image produced will look
 the same as the other method; this is mostly for scenarios where you want to perform the entire
-process from within a Dockerfile.
+build process from within a Dockerfile without the host machine involved.
+
+The `image-push` command will push the built image from either `image-build` or `image-build-full` (whichever you most recently ran) and
+push it to the configured `docker_repo`.
+
+The `image` and `image-full` are convenience targets that will first call `image-build` or `image-build-full` respectively followed by `image-push`.
 
 The `image-build-cross-platform` target will build a multiplatform image for `linux/amd64` and `linux/arm64`. You must run `make multiplatform-builder` once to use this target.
 (Making this automatic as part of the target would be nice, but isn't currently possible because
-of the way the `buildx create` command works).
-
-If you wish to just build an image and not push to a repo, you can use the `image-build`/`image-build-full`
-for respective build on host/build in container processes. The `image-build-cross-platform` target has to push due to the way the multiplatform building command works.
+of the way the `buildx create` command works).  
+Unlike the `image-build*` targets, the `image-build-cross-platform` target has to push due to the way the multiplatform building command works.
+There is no available target to just do the cross-platform build without a subsequent push.
 
 The following variables are shared by all targets.
 

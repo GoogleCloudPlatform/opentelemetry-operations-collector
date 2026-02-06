@@ -31,6 +31,9 @@ builds:
     goarch:
       - amd64
     binary: otelcol-basic
+    ldflags:
+      - "-s"
+      - "-w"
     flags:
       - "-trimpath"
       - "-buildvcs=false"

@@ -52,6 +52,9 @@ builds:
     goarch:
       - amd64
     binary: {{ .BinaryName }}
+    ldflags:
+      - "-s"
+      - "-w"
     flags:
       - "-trimpath"
       - "-buildvcs=false"

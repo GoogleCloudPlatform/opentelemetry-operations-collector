@@ -26,8 +26,8 @@ var componentType component.Type = component.MustNewType("filter")
 // NewFactory create a factory for the transform processor.
 func NewFactory() processor.Factory {
 	return filterprocessor.NewFactoryWithOptions(
-		filterprocessor.WithLogFunctions(filterprocessor.DefaultLogFunctions()),
+		filterprocessor.WithLogFunctionsNew(filterprocessor.DefaultLogFunctionsNew()),
 		// Add log functions defined in ottlfuncs.
-		filterprocessor.WithLogFunctions(ottlfuncs.LogFunctions()),
+		filterprocessor.WithLogFunctionsNew(ottlfuncs.LogFunctions()),
 	)
 }

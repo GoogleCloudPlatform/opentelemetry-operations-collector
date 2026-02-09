@@ -5,25 +5,46 @@ snapshot:
   version_template: {{ .Version }}
 
 env:
-  - LD_FLAGS=-s -w
-  - CGO_ENABLED=0 # TODO: CGO is not supported in goreleaser yet.
-  - BUILD_FLAGS=-trimpath
   - GOWORK=off
+  - CGO_ENABLED=0
 
 builds:
   - id: {{ .BinaryName }}-linux
+    {{- if .CollectorCGO }}
+    env:
+    - CGO_ENABLED=1
+    {{ if .BoringCrypto -}}
+    - GOEXPERIMENT=boringcrypto
+    {{- end }}
+    {{- end }}
     goos:
       - linux
     goarch:
       - amd64
       - arm64
-    binary: {{ .BinaryName }}
-    dir: _build
+    {{ if .BoringCrypto -}}
+    overrides:
+      - goos: linux
+        goarch: arm64
+        env:
+          - CC=aarch64-linux-gnu-gcc
+      - goos: linux
+        goarch: amd64
+        env:
+          - CC=x86_64-linux-gnu-gcc
+    {{- end }}
     ldflags:
-      - "-s -w"
+      - "-s"
+      - "-w"
+      {{- if .BoringCrypto }}
+      - "-linkmode=external"
+      - "-extldflags=-static"
+      {{- end }}
     flags:
       - "-trimpath"
       - "-buildvcs=false"
+    binary: {{ .BinaryName }}
+    dir: _build
 
   - id: {{ .BinaryName }}-windows
     goos:
@@ -31,12 +52,13 @@ builds:
     goarch:
       - amd64
     binary: {{ .BinaryName }}
-    dir: _build
     ldflags:
-      - "-s -w"
+      - "-s"
+      - "-w"
     flags:
       - "-trimpath"
       - "-buildvcs=false"
+    dir: _build
 
 nfpms:
   - package_name: {{ .BinaryName }}

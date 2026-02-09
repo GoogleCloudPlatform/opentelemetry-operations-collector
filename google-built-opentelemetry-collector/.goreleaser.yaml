@@ -5,25 +5,38 @@ snapshot:
   version_template: 0.144.0
 
 env:
-  - LD_FLAGS=-s -w
-  - CGO_ENABLED=0 # TODO: CGO is not supported in goreleaser yet.
-  - BUILD_FLAGS=-trimpath
   - GOWORK=off
+  - CGO_ENABLED=0
 
 builds:
   - id: otelcol-google-linux
+    env:
+    - CGO_ENABLED=1
+    - GOEXPERIMENT=boringcrypto
     goos:
       - linux
     goarch:
       - amd64
       - arm64
-    binary: otelcol-google
-    dir: _build
+    overrides:
+      - goos: linux
+        goarch: arm64
+        env:
+          - CC=aarch64-linux-gnu-gcc
+      - goos: linux
+        goarch: amd64
+        env:
+          - CC=x86_64-linux-gnu-gcc
     ldflags:
-      - "-s -w"
+      - "-s"
+      - "-w"
+      - "-linkmode=external"
+      - "-extldflags=-static"
     flags:
       - "-trimpath"
       - "-buildvcs=false"
+    binary: otelcol-google
+    dir: _build
 
   - id: otelcol-google-windows
     goos:
@@ -31,12 +44,13 @@ builds:
     goarch:
       - amd64
     binary: otelcol-google
-    dir: _build
     ldflags:
-      - "-s -w"
+      - "-s"
+      - "-w"
     flags:
       - "-trimpath"
       - "-buildvcs=false"
+    dir: _build
 
 nfpms:
   - package_name: otelcol-google

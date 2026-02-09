@@ -274,6 +274,7 @@ func (m *metricVarnishBackendConnectionCount) emit(metrics pmetric.MetricSlice) 
 
 func newMetricVarnishBackendConnectionCount(cfg MetricConfig) metricVarnishBackendConnectionCount {
 	m := metricVarnishBackendConnectionCount{config: cfg}
+
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -325,6 +326,7 @@ func (m *metricVarnishBackendRequestCount) emit(metrics pmetric.MetricSlice) {
 
 func newMetricVarnishBackendRequestCount(cfg MetricConfig) metricVarnishBackendRequestCount {
 	m := metricVarnishBackendRequestCount{config: cfg}
+
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -378,6 +380,7 @@ func (m *metricVarnishCacheOperationCount) emit(metrics pmetric.MetricSlice) {
 
 func newMetricVarnishCacheOperationCount(cfg MetricConfig) metricVarnishCacheOperationCount {
 	m := metricVarnishCacheOperationCount{config: cfg}
+
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -431,6 +434,7 @@ func (m *metricVarnishClientRequestCount) emit(metrics pmetric.MetricSlice) {
 
 func newMetricVarnishClientRequestCount(cfg MetricConfig) metricVarnishClientRequestCount {
 	m := metricVarnishClientRequestCount{config: cfg}
+
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -484,6 +488,7 @@ func (m *metricVarnishClientRequestErrorCount) emit(metrics pmetric.MetricSlice)
 
 func newMetricVarnishClientRequestErrorCount(cfg MetricConfig) metricVarnishClientRequestErrorCount {
 	m := metricVarnishClientRequestErrorCount{config: cfg}
+
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -535,6 +540,7 @@ func (m *metricVarnishObjectCount) emit(metrics pmetric.MetricSlice) {
 
 func newMetricVarnishObjectCount(cfg MetricConfig) metricVarnishObjectCount {
 	m := metricVarnishObjectCount{config: cfg}
+
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -586,6 +592,7 @@ func (m *metricVarnishObjectExpired) emit(metrics pmetric.MetricSlice) {
 
 func newMetricVarnishObjectExpired(cfg MetricConfig) metricVarnishObjectExpired {
 	m := metricVarnishObjectExpired{config: cfg}
+
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -637,6 +644,7 @@ func (m *metricVarnishObjectMoved) emit(metrics pmetric.MetricSlice) {
 
 func newMetricVarnishObjectMoved(cfg MetricConfig) metricVarnishObjectMoved {
 	m := metricVarnishObjectMoved{config: cfg}
+
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -688,6 +696,7 @@ func (m *metricVarnishObjectNuked) emit(metrics pmetric.MetricSlice) {
 
 func newMetricVarnishObjectNuked(cfg MetricConfig) metricVarnishObjectNuked {
 	m := metricVarnishObjectNuked{config: cfg}
+
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -741,6 +750,7 @@ func (m *metricVarnishSessionCount) emit(metrics pmetric.MetricSlice) {
 
 func newMetricVarnishSessionCount(cfg MetricConfig) metricVarnishSessionCount {
 	m := metricVarnishSessionCount{config: cfg}
+
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -794,6 +804,7 @@ func (m *metricVarnishThreadOperationCount) emit(metrics pmetric.MetricSlice) {
 
 func newMetricVarnishThreadOperationCount(cfg MetricConfig) metricVarnishThreadOperationCount {
 	m := metricVarnishThreadOperationCount{config: cfg}
+
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()

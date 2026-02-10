@@ -5,28 +5,25 @@ snapshot:
   version_template: 0.121.0
 
 env:
+  - LD_FLAGS=-s -w
+  - CGO_ENABLED=0 # TODO: CGO is not supported in goreleaser yet.
+  - BUILD_FLAGS=-trimpath
   - GOWORK=off
-  - CGO_ENABLED=0
 
 builds:
   - id: otelcol-basic-linux
-    env:
-    - CGO_ENABLED=1
-    
     goos:
       - linux
     goarch:
       - amd64
       - arm64
-    
+    binary: otelcol-basic
+    dir: _build
     ldflags:
-      - "-s"
-      - "-w"
+      - "-s -w"
     flags:
       - "-trimpath"
       - "-buildvcs=false"
-    binary: otelcol-basic
-    dir: _build
 
   - id: otelcol-basic-windows
     goos:
@@ -34,13 +31,12 @@ builds:
     goarch:
       - amd64
     binary: otelcol-basic
+    dir: _build
     ldflags:
-      - "-s"
-      - "-w"
+      - "-s -w"
     flags:
       - "-trimpath"
       - "-buildvcs=false"
-    dir: _build
 
 nfpms:
   - package_name: otelcol-basic

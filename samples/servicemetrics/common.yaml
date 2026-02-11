@@ -54,11 +54,46 @@ processors:
       value: "${location}"
       action: upsert
 
+  resourcedetection/ucp_gcp_metadata:
+    # https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/processor/resourcedetectionprocessor/README.md#gcp-metadata
+    detectors: [gcp]
+    timeout: 2s
+    override: false
+    gcp:
+      resource_attributes:
+        cloud.account.id:
+          enabled: false
+        cloud.availability_zone:
+          enabled: false
+        cloud.platform:
+          enabled: false
+        cloud.provider:
+          enabled: false
+        cloud.region:
+          enabled: false
+        gcp.gce.instance_group_manager.name:
+          enabled: false
+        gcp.gce.instance_group_manager.region:
+          enabled: false
+        gcp.gce.instance_group_manager.zone:
+          enabled: false
+        host.id:
+          enabled: false
+        host.name:
+          enabled: true
+        host.type:
+          enabled: false
+
   transform/ucp_internal_saasmanagement_add_node_id:
     metric_statements:
     - context: datapoint
       statements:
-      - set(attributes["node_id"], "${node_id}")
+      - set(attributes["node_id"], resource.attributes["host.name"])
+    # The `delete_key` here must be in the `resource` context to ensure it occurs after the
+    # `set` above.
+    - context: resource
+      statements:
+      - delete_key(resource.attributes, "host.name")
 
   batch/ucp_internal_batch:
     # Batch size should be such that the total request is <= 1 Mb.

@@ -55,9 +55,8 @@ processors:
       action: upsert
 
   resourcedetection/ucp_gcp_metadata:
-    # https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/processor/resourcedetectionprocessor/README.md#gcp-metadata
     detectors: [gcp]
-    timeout: 2s
+    timeout: 10s
     override: false
     gcp:
       resource_attributes:

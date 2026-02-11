@@ -56,7 +56,7 @@ processors:
 
   resourcedetection/ucp_gcp_metadata:
     detectors: [gcp]
-    timeout: 10s
+    timeout: 5s
     override: false
     gcp:
       resource_attributes:

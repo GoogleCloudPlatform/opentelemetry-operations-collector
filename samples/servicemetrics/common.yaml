@@ -53,9 +53,6 @@ processors:
     - key: location
       value: "${location}"
       action: upsert
-    - key: node_id
-      value: "${node_id:-}"
-      action: upsert
 
   resourcedetection/ucp_gcp_metadata:
     detectors: [gcp]
@@ -90,8 +87,8 @@ processors:
     metric_statements:
     - context: datapoint
       statements:
-      - set(attributes["node_id"], resource.attributes["node_id"]) where resource.attributes["node_id"] != ""
-      - set(attributes["node_id"], resource.attributes["host.name"]) where attributes["node_id"] == ""
+      - set(attributes["node_id"], "${env:node_id:-}") where "${env:node_id:-}" != ""
+      - set(attributes["node_id"], resource.attributes["host.name"]) where "${env:node_id:-}" == ""
     # The `delete_key` here must be in the `resource` context to ensure it occurs after the
     # `set` above.
     - context: resource

@@ -70,3 +70,33 @@ nfpms:
     maintainer: Google Cloud Platform <google@google.com> # something better than this
     description: A basic distribution of the OpenTelemetry Collector
     license: Apache 2.0
+
+archives:
+  - id: "otelcol-basic-tarball"
+    ids:
+      - "otelcol-basic-linux"
+      - "otelcol-basic-windows"
+    formats:
+      - "tar.gz"
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats:
+        - "zip"
+
+signs:
+  - cmd: cosign
+    signature: ${artifact}.sig
+    certificate: ${artifact}.pem
+    args:
+      - "sign-blob"
+      - "--output-signature"
+      - "${artifact}.sig"
+      - "--output-certificate"
+      - "${artifact}.pem"
+      - "${artifact}"
+      - "--yes"
+    artifacts: archive
+    env:
+      - SIGSTORE_NO_CACHE=true
+    output: true

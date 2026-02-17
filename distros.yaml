@@ -132,7 +132,6 @@ targets:
         test_distros:
           representative:
           - suse-cloud:sles-15-arm64
-          exhaustive:
   windows:
     package_extension:
       goo

@@ -91,9 +91,9 @@ signs:
     args:
       - "sign-blob"
       - "--output-signature"
-      - "${artifact}.sig"
+      - "${signature}"
       - "--output-certificate"
-      - "${artifact}.pem"
+      - "${certificate}"
       - "${artifact}"
       - "--yes"
     artifacts: archive

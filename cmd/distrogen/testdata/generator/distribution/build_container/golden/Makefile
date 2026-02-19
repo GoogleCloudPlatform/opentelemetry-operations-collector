@@ -29,6 +29,9 @@ USE_GO_PROXY ?=
 
 GORELEASER_BIN ?= $(TOOLS_DIR)/goreleaser
 
+COSIGN_BIN ?= $(TOOLS_DIR)/cosign
+SET_COSIGN_BIN_PATH ?= PATH="$(TOOLS_DIR):$$PATH"
+
 .PHONY: build
 build: $(COLLECTOR_BINARY_NAME)
 
@@ -145,8 +148,8 @@ clean-build-dir:
 # These targets are for invoking goreleaser.
 
 .PHONY: goreleaser-release
-goreleaser-release: $(GORELEASER_BIN) ocb-generate
-	$(SET_GO_BIN_PATH) $(GORELEASER_BIN) release --snapshot --clean
+goreleaser-release: $(GORELEASER_BIN) $(COSIGN_BIN) ocb-generate
+	$(SET_GO_BIN_PATH) $(SET_COSIGN_BIN_PATH) $(GORELEASER_BIN) release --snapshot --clean
 	# I love umask it's my favourite
 	chmod -R o+r ./dist
 
@@ -164,6 +167,9 @@ go: $(GO_BIN)
 
 .PHONY: goreleaser
 goreleaser: $(GORELEASER_BIN)
+
+.PHONY: cosign
+cosign: $(COSIGN_BIN)
 
 # Install the required version of Go.
 $(GO_BIN): GO_ARCHIVE = go$(GO_VERSION).$(BUILDOS)-$(BUILDARCH).tar.gz
@@ -192,6 +198,14 @@ $(GORELEASER_BIN): $(GO_BIN) $(OCB_BIN)
 	mkdir -p $(TOOLS_DIR) ;\
 	echo "Installing goreleaser at $(TOOLS_DIR)" ;\
 	GOBIN=$(TOOLS_DIR) CGO_ENABLED=0 $(GO_BIN) install -trimpath -ldflags="-s -w" github.com/goreleaser/goreleaser/v2@latest ;\
+	}
+
+$(COSIGN_BIN): $(GO_BIN) $(OCB_BIN)
+	@{ \
+	set -e ;\
+	mkdir -p $(TOOLS_DIR) ;\
+	echo "Installing cosign at $(TOOLS_DIR)" ;\
+	GOBIN=$(TOOLS_DIR) CGO_ENABLED=0 $(GO_BIN) install -trimpath -ldflags="-s -w" github.com/sigstore/cosign/v2/cmd/cosign@latest ;\
 	}
 
 .PHONY: clean-tools

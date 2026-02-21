@@ -145,5 +145,5 @@ service:
             exporter:
               otlp:
                 protocol: grpc
-                endpoint: http://localhost:4317
+                endpoint: localhost:4317
                 insecure: true

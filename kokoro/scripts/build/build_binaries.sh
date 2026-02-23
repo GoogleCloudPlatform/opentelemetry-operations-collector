@@ -22,7 +22,7 @@ cd "${KOKORO_ARTIFACTS_DIR}"/git/otelcol-google/google-built-opentelemetry-colle
 unset GOROOT
 
 _GOOGLE_OTEL_SIGNING_IDENTITY=oidc-test@lujieduan-dev.iam.gserviceaccount.com
-SIGSTORE_ID_TOKEN=$(gcloud auth print-identity-token --audiences=sigstore --include-email --impersonate-service-account=${_GOOGLE_OTEL_SIGNING_IDENTITY} 2>/dev/null) make goreleaser-release
+SIGSTORE_ID_TOKEN=$(gcloud auth print-identity-token --audiences=sigstore --include-email --impersonate-service-account=${_GOOGLE_OTEL_SIGNING_IDENTITY}) make goreleaser-release
 
 # Put the output folder directly in KOKORO_ARTIFACTS_DIR instead of being deeply
 # nested within it.

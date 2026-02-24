@@ -25,6 +25,7 @@ set +x
 SIGSTORE_ID_TOKEN=$(gcloud auth print-identity-token --audiences=sigstore --include-email --impersonate-service-account=${_GOOGLE_OTEL_SIGNING_IDENTITY} 2>/dev/null) make goreleaser-release
 set -x
 
+ls -al dist
 # Put the output folder directly in KOKORO_ARTIFACTS_DIR instead of being deeply
 # nested within it.
 mv dist "${KOKORO_ARTIFACTS_DIR}"/dist

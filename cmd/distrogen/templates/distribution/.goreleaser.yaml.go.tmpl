@@ -78,7 +78,7 @@ archives:
       - "{{ .BinaryName }}-windows"
     formats:
       - "tar.gz"
-    name_template: "{{ "{{" }} .ProjectName {{ "}}" }}_{{ "{{" }} .Version {{ "}}" }}_{{ "{{" }} .Os {{ "}}" }}_{{ "{{" }} .Arch {{ "}}" }}"
+    name_template: "{{ .BinaryName }}_{{ "{{" }} .Version {{ "}}" }}_{{ "{{" }} .Os {{ "}}" }}_{{ "{{" }} .Arch {{ "}}" }}"
     format_overrides:
       - goos: windows
         formats:

@@ -37,7 +37,7 @@ jobs:
         # We have had very rare problems with particular Go updates
         # (mainly to do with CGO) so testing one version back
         # also helps avoid that.
-        go: [1.24, 1.25]
+        go: [1.25, 1.26]
     runs-on: ${{matrix.os}}
     steps:
       - uses: actions/checkout@v2

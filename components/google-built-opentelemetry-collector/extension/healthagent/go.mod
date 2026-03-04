@@ -7,7 +7,7 @@ require (
 	go.opentelemetry.io/collector/component v1.53.0
 	go.opentelemetry.io/collector/component/componentstatus v0.147.0
 	go.opentelemetry.io/collector/extension v1.53.0
-	go.opentelemetry.io/collector/otelcol/otelcoltest v0.146.0
+	go.opentelemetry.io/collector/otelcol/otelcoltest v0.147.0
 	go.opentelemetry.io/otel/metric v1.41.0
 	go.uber.org/zap v1.27.1
 	google.golang.org/grpc v1.79.1
@@ -56,10 +56,10 @@ require (
 	go.opentelemetry.io/collector/component/componenttest v0.147.0 // indirect
 	go.opentelemetry.io/collector/config/configtelemetry v0.147.0 // indirect
 	go.opentelemetry.io/collector/confmap v1.53.0 // indirect
-	go.opentelemetry.io/collector/confmap/provider/envprovider v1.51.0 // indirect
+	go.opentelemetry.io/collector/confmap/provider/envprovider v1.53.0 // indirect
 	go.opentelemetry.io/collector/confmap/provider/fileprovider v1.53.0 // indirect
-	go.opentelemetry.io/collector/confmap/provider/httpprovider v1.51.0 // indirect
-	go.opentelemetry.io/collector/confmap/provider/yamlprovider v1.51.0 // indirect
+	go.opentelemetry.io/collector/confmap/provider/httpprovider v1.53.0 // indirect
+	go.opentelemetry.io/collector/confmap/provider/yamlprovider v1.53.0 // indirect
 	go.opentelemetry.io/collector/confmap/xconfmap v0.147.0 // indirect
 	go.opentelemetry.io/collector/connector v0.147.0 // indirect
 	go.opentelemetry.io/collector/connector/connectortest v0.147.0 // indirect

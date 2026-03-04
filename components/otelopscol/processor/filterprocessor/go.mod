@@ -3,14 +3,14 @@ module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/compone
 go 1.25.0
 
 require (
-	github.com/GoogleCloudPlatform/opentelemetry-operations-collector v0.145.0
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector v0.0.0-00010101000000-000000000000
 	github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.145.0
 	github.com/stretchr/testify v1.11.1
 	go.opentelemetry.io/collector/component v1.53.0
 	go.opentelemetry.io/collector/component/componenttest v0.147.0
-	go.opentelemetry.io/collector/consumer/consumertest v0.147.0
-	go.opentelemetry.io/collector/processor v1.53.0
-	go.opentelemetry.io/collector/processor/processortest v0.147.0
+	go.opentelemetry.io/collector/consumer/consumertest v0.145.0
+	go.opentelemetry.io/collector/processor v1.51.0
+	go.opentelemetry.io/collector/processor/processortest v0.145.0
 )
 
 require (
@@ -46,13 +46,13 @@ require (
 	github.com/ua-parser/uap-go v0.0.0-20240611065828-3a4781585db6 // indirect
 	github.com/zeebo/xxh3 v1.1.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
-	go.opentelemetry.io/collector/component/componentstatus v0.147.0 // indirect
+	go.opentelemetry.io/collector/component/componentstatus v0.146.0 // indirect
 	go.opentelemetry.io/collector/confmap v1.53.0 // indirect
 	go.opentelemetry.io/collector/confmap/xconfmap v0.147.0 // indirect
 	go.opentelemetry.io/collector/consumer v1.53.0 // indirect
 	go.opentelemetry.io/collector/consumer/xconsumer v0.147.0 // indirect
 	go.opentelemetry.io/collector/featuregate v1.53.0 // indirect
-	go.opentelemetry.io/collector/internal/componentalias v0.147.0 // indirect
+	go.opentelemetry.io/collector/internal/componentalias v0.146.0 // indirect
 	go.opentelemetry.io/collector/pdata v1.53.0 // indirect
 	go.opentelemetry.io/collector/pdata/pprofile v0.147.0 // indirect
 	go.opentelemetry.io/collector/pdata/testdata v0.147.0 // indirect
@@ -60,7 +60,7 @@ require (
 	go.opentelemetry.io/collector/pipeline/xpipeline v0.147.0 // indirect
 	go.opentelemetry.io/collector/processor/processorhelper v0.145.0 // indirect
 	go.opentelemetry.io/collector/processor/processorhelper/xprocessorhelper v0.145.0 // indirect
-	go.opentelemetry.io/collector/processor/xprocessor v0.147.0 // indirect
+	go.opentelemetry.io/collector/processor/xprocessor v0.145.0 // indirect
 	go.opentelemetry.io/otel v1.41.0 // indirect
 	go.opentelemetry.io/otel/metric v1.41.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.40.0 // indirect

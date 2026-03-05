@@ -1,5 +1,7 @@
 import '../utils/functions.gcl' as functions
 
+build_image = 'us-docker.pkg.dev/google.com/api-project-999119582588/go-boringcrypto-internal/golang@sha256:773e06d539804d75beb6cd9783191ae08c2731d16afecf67a80e93743ce04f65'
+
 template config build = {
     params {
       environment {}
@@ -9,7 +11,7 @@ template config build = {
     container_properties {
       // Other options are available, especially foundry-based ones,
       // once we get permission to use them.
-      docker_image = 'us-central1-docker.pkg.dev/kokoro-container-bakery/kokoro/ubuntu/ubuntu2204/full:next'
+      docker_image = build_image
     }
 
     action = cond(params.artifacts == [], [], [

@@ -99,4 +99,3 @@ signs:
     artifacts: archive
     env:
       - SIGSTORE_NO_CACHE=true
-    output: true

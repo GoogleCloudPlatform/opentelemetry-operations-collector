@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/collector/confmap/xconfmap"
 	"go.opentelemetry.io/collector/consumer/consumertest"
 	"go.opentelemetry.io/collector/receiver/receivertest"
 	"go.opentelemetry.io/collector/scraper/scraperhelper"
@@ -34,8 +35,7 @@ func TestType(t *testing.T) {
 
 func TestValidConfig(t *testing.T) {
 	factory := NewFactory()
-	cfg := factory.CreateDefaultConfig()
-	require.NotNil(t, cfg, "failed to create default config")
+	require.NoError(t, xconfmap.Validate(factory.CreateDefaultConfig()))
 }
 
 func TestCreateMetricsReceiver(t *testing.T) {

@@ -64,8 +64,7 @@ metrics:
     gauge:
       value_type: int
     attributes: [model, gpu_number, uuid, memory_state]
-    stability:
-      level: development
+    stability: development
 
   nvml.gpu.processes.max_bytes_used:
     enabled: true
@@ -74,8 +73,7 @@ metrics:
     gauge:
       value_type: int
     attributes: [model, gpu_number, uuid, pid, process, command, command_line, owner]
-    stability:
-      level: development
+    stability: development
 
   nvml.gpu.processes.utilization:
     enabled: true
@@ -84,8 +82,7 @@ metrics:
     gauge:
       value_type: double
     attributes: [model, gpu_number, uuid, pid, process, command, command_line, owner]
-    stability:
-      level: development
+    stability: development
 
   nvml.gpu.utilization:
     enabled: true
@@ -94,5 +91,4 @@ metrics:
     gauge:
       value_type: double
     attributes: [model, gpu_number, uuid]
-    stability:
-      level: development
+    stability: development

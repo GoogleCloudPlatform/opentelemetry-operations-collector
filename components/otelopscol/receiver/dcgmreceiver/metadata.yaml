@@ -73,8 +73,7 @@ metrics:
     gauge:
       value_type: double
     enabled: true
-    stability:
-      level: development
+    stability: development
 
   gpu.dcgm.clock.throttle_duration.time:
     description: Clock throttle total duration.
@@ -85,8 +84,7 @@ metrics:
       monotonic: true
     attributes: [gpu.clock.violation]
     enabled: true
-    stability:
-      level: development
+    stability: development
 
   gpu.dcgm.codec.decoder.utilization:
     description: Decoder utilization.
@@ -94,8 +92,7 @@ metrics:
     gauge:
       value_type: double
     enabled: true
-    stability:
-      level: development
+    stability: development
 
   gpu.dcgm.codec.encoder.utilization:
     description: Encoder utilization.
@@ -103,8 +100,7 @@ metrics:
     gauge:
       value_type: double
     enabled: true
-    stability:
-      level: development
+    stability: development
 
   gpu.dcgm.ecc_errors:
     description: Data corruption errors.
@@ -115,8 +111,7 @@ metrics:
       monotonic: true
     attributes: [gpu.error.type]
     enabled: true
-    stability:
-      level: development
+    stability: development
 
   gpu.dcgm.energy_consumption:
     description: Total energy consumption for the GPU in J since the driver was last reloaded.
@@ -126,8 +121,7 @@ metrics:
       aggregation_temporality: cumulative
       monotonic: true
     enabled: true
-    stability:
-      level: development
+    stability: development
 
   gpu.dcgm.memory.bandwidth_utilization:
     description: Fraction of cycles data was being sent or received from GPU memory.
@@ -135,8 +129,7 @@ metrics:
     gauge:
       value_type: double
     enabled: true
-    stability:
-      level: development
+    stability: development
 
   gpu.dcgm.memory.bytes_used:
     description: Current number of GPU memory bytes used by state. Summing the values of all states yields the total GPU memory space.
@@ -145,8 +138,7 @@ metrics:
       value_type: int
     attributes: [gpu.memory.state]
     enabled: true
-    stability:
-      level: development
+    stability: development
 
   gpu.dcgm.nvlink.io:
     description: The number of bytes sent over NVLink, not including protocol headers.
@@ -157,8 +149,7 @@ metrics:
       monotonic: true
     attributes: [network.io.direction]
     enabled: true
-    stability:
-      level: development
+    stability: development
 
   gpu.dcgm.pcie.io:
     description: The number of bytes sent over the PCIe bus, including both protocol headers and data payloads.
@@ -169,8 +160,7 @@ metrics:
       monotonic: true
     attributes: [network.io.direction]
     enabled: true
-    stability:
-      level: development
+    stability: development
 
   gpu.dcgm.pipe.utilization:
     description: Fraction of cycles the corresponding GPU pipe was active, averaged over time and all multiprocessors.
@@ -179,8 +169,7 @@ metrics:
       value_type: double
     attributes: [gpu.pipe]
     enabled: true
-    stability:
-      level: development
+    stability: development
 
   gpu.dcgm.sm.occupancy:
     description: Fraction of the number of warps resident on a multiprocessor, averaged over all multiprocessors.
@@ -188,8 +177,7 @@ metrics:
     gauge:
       value_type: double
     enabled: false
-    stability:
-      level: development
+    stability: development
 
   gpu.dcgm.sm.utilization:
     description: Fraction of time at least one warp was active on a multiprocessor, averaged over all multiprocessors.
@@ -197,8 +185,7 @@ metrics:
     gauge:
       value_type: double
     enabled: true
-    stability:
-      level: development
+    stability: development
 
   gpu.dcgm.temperature:
     description: Current temperature readings for the device, in ˚C.
@@ -206,8 +193,7 @@ metrics:
     gauge:
       value_type: double
     enabled: true
-    stability:
-      level: development
+    stability: development
 
   gpu.dcgm.utilization:
     description: Ratio of time the graphics engine is active.
@@ -215,8 +201,7 @@ metrics:
     gauge:
       value_type: double
     enabled: true
-    stability:
-      level: development
+    stability: development
 
   gpu.dcgm.xid_errors:
     description: XID errors.
@@ -227,5 +212,4 @@ metrics:
       monotonic: true
     attributes: [gpu.error.xid]
     enabled: false
-    stability:
-      level: development
+    stability: development

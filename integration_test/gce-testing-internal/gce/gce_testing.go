@@ -410,12 +410,9 @@ func lookupTrace(ctx context.Context, vm *VM, options WaitForTraceOptions) *trac
 	now := time.Now()
 	start := timestamppb.New(now.Add(-options.Window))
 	end := timestamppb.New(now)
-	filters := []string{
-		fmt.Sprintf("+g.co/r/gce_instance/instance_id:%d", vm.ID),
-	}
 	req := &cloudtrace.ListTracesRequest{
 		ProjectId: vm.Project,
-		Filter:    strings.Join(append(filters, options.Filters...), " "),
+		Filter:    strings.Join(options.Filters, " "),
 		StartTime: start,
 		EndTime:   end,
 	}

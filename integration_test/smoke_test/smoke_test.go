@@ -322,7 +322,7 @@ func TracesTest(ctx context.Context, t *testing.T, logger *log.Logger, vm *gce.V
 	options := gce.WaitForTraceOptions{
 		Window: 10 * time.Minute,
 		Filters: []string{
-			fmt.Sprintf("+otelcol_google_e2e:%s", testRunID)},
+			fmt.Sprintf("+otelcol_google_e2e:%s", testRunID),
 			fmt.Sprintf("+g.co/r/gce_instance/instance_id:%d", vm.ID),
 		},
 	}

@@ -2,7 +2,7 @@ module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/compone
 
 go 1.25.0
 
-require go.opentelemetry.io/collector/cmd/mdatagen v0.144.0
+require go.opentelemetry.io/collector/cmd/mdatagen v0.147.0
 
 require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -27,9 +27,9 @@ require (
 	go.opentelemetry.io/collector/featuregate v1.53.0 // indirect
 	go.opentelemetry.io/collector/filter v0.147.0 // indirect
 	go.opentelemetry.io/collector/pdata v1.53.0 // indirect
-	go.opentelemetry.io/otel v1.41.0 // indirect
-	go.opentelemetry.io/otel/metric v1.41.0 // indirect
-	go.opentelemetry.io/otel/trace v1.41.0 // indirect
+	go.opentelemetry.io/otel v1.42.0 // indirect
+	go.opentelemetry.io/otel/metric v1.42.0 // indirect
+	go.opentelemetry.io/otel/trace v1.42.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.1 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect

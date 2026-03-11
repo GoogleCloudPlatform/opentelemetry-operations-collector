@@ -28,6 +28,8 @@ BUCKET_WITH_SLASH="${BUCKET}/"
 gcloud storage cp "${KOKORO_GFILE_DIR}"/dist/*.deb "${BUCKET_WITH_SLASH}"
 gcloud storage cp "${KOKORO_GFILE_DIR}"/dist/*.rpm "${BUCKET_WITH_SLASH}"
 gcloud storage cp "${KOKORO_GFILE_DIR}"/dist/*.goo "${BUCKET_WITH_SLASH}"
+gcloud storage cp "${KOKORO_GFILE_DIR}"/dist/otelcol-google*.tar.gz* "${BUCKET_WITH_SLASH}"
+gcloud storage cp "${KOKORO_GFILE_DIR}"/dist/otelcol-google*.zip* "${BUCKET_WITH_SLASH}"
 
 LOCATION=us
 DESCRIPTION="Staging repository for GBOC Linux Packages"

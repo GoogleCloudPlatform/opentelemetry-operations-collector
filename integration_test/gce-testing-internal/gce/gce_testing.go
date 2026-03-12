@@ -2037,6 +2037,12 @@ func InstallGcloudIfNeeded(ctx context.Context, logger *log.Logger, vm *VM) erro
 		gcloudArch = "arm"
 	}
 	gcloudPkg := "google-cloud-cli-453.0.0-linux-" + gcloudArch + ".tar.gz"
+	isSles16 := strings.Contains(vm.ImageSpec, "sles-16")
+	if isSles16 {
+		// Use the latest gcloud for SLES 16, as older versions (453.0.0)
+		// contain apitools bugs that break with python3.13.
+		gcloudPkg = "google-cloud-cli-linux-" + gcloudArch + ".tar.gz"
+	}
 	installFromTarball := `
 curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/` + gcloudPkg + `
 INSTALL_DIR="$(readlink --canonicalize .)"
@@ -2063,8 +2069,11 @@ sudo ln -s ${INSTALL_DIR}/google-cloud-sdk/bin/gcloud /usr/bin/gcloud
 	// b/308962066: The GCloud CLI ARM Linux tarballs do not have bundled Python
 	// and the GCloud CLI requires Python >= 3.8. Install Python311 for ARM VMs
 	if IsARM(vm.ImageSpec) {
+		pythonPkg := "python311 python3-certifi"
+		pythonBin := "/usr/bin/python3.11"
 		// This is what's used on openSUSE.
 		repoSetupCmd := "sudo zypper --non-interactive refresh"
+
 		if strings.Contains(vm.ImageSpec, "sles-12") {
 			return installErr("gcloud", vm.ImageSpec)
 		}
@@ -2075,25 +2084,34 @@ sudo ln -s ${INSTALL_DIR}/google-cloud-sdk/bin/gcloud /usr/bin/gcloud
 			repoSetupCmd = `sudo zypper --non-interactive addrepo -g -t YUM https://us-yum.pkg.dev/projects/cloud-ops-agents-artifacts-dev/google-cloud-monitoring-sles15-aarch64-test-vendor test-vendor
 sudo rpm --import https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
 sudo zypper --non-interactive refresh test-vendor`
+		} else if isSles16 {
+			// SLES 16 already comes with python 3.13+ installed as /usr/bin/python3
+			pythonBin = "/usr/bin/python3"
 		}
 
 		installCmd = `set -ex
-` + repoSetupCmd + `
-sudo zypper --non-interactive install python311 python3-certifi
+`
+		// Only run repo setup and package installation if it's not SLES 16
+		if !isSles16 {
+			installCmd += repoSetupCmd + `
+sudo zypper --non-interactive install ` + pythonPkg + `
+`
+		}
 
-# On SLES 15 and OpenSUSE Leap arm, python3 is Python 3.6. Tell gcloud to use python3.11.
-export CLOUDSDK_PYTHON=/usr/bin/python3.11
+		installCmd += `
+# Tell gcloud to use the designated python executable.
+export CLOUDSDK_PYTHON=` + pythonBin + `
 
 ` + installFromTarball + `
 
 # Upgrade to the latest version
-sudo CLOUDSDK_PYTHON=/usr/bin/python3.11 ${INSTALL_DIR}/google-cloud-sdk/bin/gcloud components update --quiet
+sudo CLOUDSDK_PYTHON=` + pythonBin + ` ${INSTALL_DIR}/google-cloud-sdk/bin/gcloud components update --quiet
 
 # Make a "gcloud" bash script in /usr/bin that runs the copy of gcloud that
 # was installed into $INSTALL_DIR with CLOUDSDK_PYTHON set.
 sudo tee /usr/bin/gcloud > /dev/null << EOF
 #!/usr/bin/env bash
-CLOUDSDK_PYTHON=/usr/bin/python3.11 ${INSTALL_DIR}/google-cloud-sdk/bin/gcloud "\$@"
+CLOUDSDK_PYTHON=` + pythonBin + ` ${INSTALL_DIR}/google-cloud-sdk/bin/gcloud "\$@"
 EOF
 sudo chmod a+x /usr/bin/gcloud
 `

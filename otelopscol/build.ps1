@@ -72,7 +72,7 @@ if ($jmxHash -ne "") {
     $ldFlags+=" -X github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver.MetricsGathererHash=$jmxHash"
 }
 $buildCollectorCommand=@"
-`$env:GOWORK='off'; `$env:CGO_ENABLED=1; cd _build; $goBin build -p 32 -buildvcs=false -o '{0}/google-cloud-metrics-agent_windows_amd64.exe' --ldflags='{1}' .
+`$env:GOWORK='off'; `$env:CGO_ENABLED=1; cd _build; $goBin build -p 32 -buildvcs=false -o '{0}/google-cloud-metrics-agent_windows_amd64.exe' --ldflags='{1}' --gcflags='all=-N -l' .
 "@ -f $outDir, $ldFlags
 Invoke-Expression -Command $buildCollectorCommand
 

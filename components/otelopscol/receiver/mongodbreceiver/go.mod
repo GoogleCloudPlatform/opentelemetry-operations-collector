@@ -12,6 +12,7 @@ require (
 	go.opentelemetry.io/collector/config/confignet v1.53.0
 	go.opentelemetry.io/collector/config/configtls v1.53.0
 	go.opentelemetry.io/collector/confmap v1.53.0
+	go.opentelemetry.io/collector/confmap/xconfmap v0.147.0
 	go.opentelemetry.io/collector/consumer v1.53.0
 	go.opentelemetry.io/collector/consumer/consumertest v0.147.0
 	go.opentelemetry.io/collector/filter v0.147.0
@@ -56,7 +57,6 @@ require (
 	github.com/youmark/pkcs8 v0.0.0-20240726163527-a2c0da244d78 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/collector/config/configopaque v1.53.0 // indirect
-	go.opentelemetry.io/collector/confmap/xconfmap v0.147.0 // indirect
 	go.opentelemetry.io/collector/consumer/consumererror v0.147.0 // indirect
 	go.opentelemetry.io/collector/consumer/xconsumer v0.147.0 // indirect
 	go.opentelemetry.io/collector/featuregate v1.53.0 // indirect

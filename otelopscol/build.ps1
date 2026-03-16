@@ -46,7 +46,7 @@ Remove-Item $msysInstallerPath
 
 # Download Go.
 $goZipPath="./go.windows-amd64.zip"
-$goDownloadURL="https://go.dev/dl/go1.23.2.windows-amd64.zip"
+$goDownloadURL="https://go.dev/dl/go1.25.0.windows-amd64.zip"
 Invoke-WebRequest $goDownloadURL -OutFile $goZipPath
 Expand-Archive -Path $goZipPath -DestinationPath $toolsDir
 Remove-Item $goZipPath

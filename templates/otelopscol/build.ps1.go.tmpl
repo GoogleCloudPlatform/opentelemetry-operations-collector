@@ -37,26 +37,41 @@ $toolsDir="" + (Get-Location) + "\.tools" # Powershell moment
 New-Item -ItemType Directory -Force -Path $toolsDir | Out-Null
 
 # Download and install MSYS2.
-$msysInstallerPath="./msys2-x86_64.exe"
-$msysDownloadURL="https://github.com/msys2/msys2-installer/releases/download/2025-06-22/msys2-x86_64-20250622.exe"
-Invoke-WebRequest $msysDownloadURL -OutFile $msysInstallerPath
-Start-Process $msysInstallerPath -ArgumentList 'in', '--confirm-command', `
-    '--accept-messages', '--root', 'C:/msys64' -NoNewWindow -Wait;
-Remove-Item $msysInstallerPath
+if (-not (Test-Path "C:\msys64")) {
+    Write-Host "Installing MSYS2..."
+    $msysInstallerPath="./msys2-x86_64.exe"
+    $msysDownloadURL="https://github.com/msys2/msys2-installer/releases/download/2025-06-22/msys2-x86_64-20250622.exe"
+    Invoke-WebRequest $msysDownloadURL -OutFile $msysInstallerPath
+    Start-Process $msysInstallerPath -ArgumentList 'in', '--confirm-command', `
+        '--accept-messages', '--root', 'C:/msys64' -NoNewWindow -Wait;
+    Remove-Item $msysInstallerPath
+} else {
+    Write-Host "MSYS2 already installed at C:\msys64"
+}
 
 # Download Go.
-$goZipPath="./go.windows-amd64.zip"
-$goDownloadURL="https://go.dev/dl/go{{ .GoVersion }}.windows-amd64.zip"
-Invoke-WebRequest $goDownloadURL -OutFile $goZipPath
-Expand-Archive -Path $goZipPath -DestinationPath $toolsDir
-Remove-Item $goZipPath
 $goBinDir="$toolsDir\go\bin"
 $goBin="$goBinDir\go"
+if (-not (Test-Path "$goBin.exe")) {
+    Write-Host "Installing Go..."
+    $goZipPath="./go.windows-amd64.zip"
+    $goDownloadURL="https://go.dev/dl/go{{ .GoVersion }}.windows-amd64.zip"
+    Invoke-WebRequest $goDownloadURL -OutFile $goZipPath
+    Expand-Archive -Path $goZipPath -DestinationPath $toolsDir
+    Remove-Item $goZipPath
+} else {
+    Write-Host "Go already installed at $goBinDir"
+}
 
 # Download OCB.
-$installOcbCommand="`$env:GOBIN='$toolsDir'; `$env:CGO_ENABLED=1; $goBin install -trimpath -ldflags='-s -w' go.opentelemetry.io/collector/cmd/builder@v{{ .OpenTelemetryVersion }}"
-Invoke-Expression -Command $installOcbCommand
 $ocbBin="$toolsDir\builder.exe"
+if (-not (Test-Path $ocbBin)) {
+    Write-Host "Installing OCB..."
+    $installOcbCommand="`$env:GOBIN='$toolsDir'; `$env:CGO_ENABLED=1; $goBin install -trimpath -ldflags='-s -w' go.opentelemetry.io/collector/cmd/builder@v{{ .OpenTelemetryVersion }}"
+    Invoke-Expression -Command $installOcbCommand
+} else {
+    Write-Host "OCB already installed at $ocbBin"
+}
 
 # Generate the collector source.
 $ocbGenerateCommand="`$env:PATH='${goBinDir};${PATH}'; `$env:CGO_ENABLED=1; $ocbBin --skip-compilation --verbose --config manifest.yaml"
@@ -64,7 +79,12 @@ Invoke-Expression -Command $ocbGenerateCommand
 
 # Setup MINGW for go build.
 $env:Path = "C:\msys64\usr\bin;C:\msys64\mingw64\bin"
-pacman -S --noconfirm mingw-w64-x86_64-gcc
+if (-not (Test-Path "C:\msys64\mingw64\bin\gcc.exe")) {
+    Write-Host "Installing MINGW GCC..."
+    pacman -S --noconfirm mingw-w64-x86_64-gcc
+} else {
+    Write-Host "MINGW GCC already installed"
+}
 
 # Build the collector.
 $ldFlags="-s -w"

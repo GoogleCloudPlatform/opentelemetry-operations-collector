@@ -46,7 +46,7 @@ Remove-Item $msysInstallerPath
 
 # Download Go.
 $goZipPath="./go.windows-amd64.zip"
-$goDownloadURL="https://go.dev/dl/go1.25.0.windows-amd64.zip"
+$goDownloadURL="https://go.dev/dl/go1.23.2.windows-amd64.zip"
 Invoke-WebRequest $goDownloadURL -OutFile $goZipPath
 Expand-Archive -Path $goZipPath -DestinationPath $toolsDir
 Remove-Item $goZipPath
@@ -72,7 +72,7 @@ if ($jmxHash -ne "") {
     $ldFlags+=" -X github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver.MetricsGathererHash=$jmxHash"
 }
 $buildCollectorCommand=@"
-`$env:GOWORK='off'; `$env:CGO_ENABLED=1; cd _build; $goBin build -p 32 -buildvcs=false -o '{0}/google-cloud-metrics-agent_windows_amd64.exe' --ldflags='{1}' --gcflags='all=-N -l' .
+`$env:GOWORK='off'; `$env:CGO_ENABLED=1; cd _build; $goBin build -p 32 -buildvcs=false -o '{0}/google-cloud-metrics-agent_windows_amd64.exe' --ldflags='{1}' .
 "@ -f $outDir, $ldFlags
 Invoke-Expression -Command $buildCollectorCommand
 

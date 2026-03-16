@@ -8,7 +8,7 @@ version: v0.147.0
 opentelemetry_version: 0.147.0
 opentelemetry_contrib_version: 0.147.0
 opentelemetry_stable_version: 1.53.0
-go_version: 1.25.0
+go_version: 1.23.2
 binary_name: otelopscol
 build_tags: gpu
 boringcrypto: false

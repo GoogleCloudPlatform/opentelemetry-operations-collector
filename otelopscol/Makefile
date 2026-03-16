@@ -21,7 +21,7 @@ TOOLS_DIR = $(PWD)/.tools
 
 OCB_BIN ?= $(TOOLS_DIR)/ocb
 
-GO_VERSION = 1.25.0
+GO_VERSION = 1.23.2
 GO_BIN_DIR ?= $(TOOLS_DIR)/go/bin
 GO_BIN ?= $(GO_BIN_DIR)/go
 SET_GO_BIN_PATH ?= PATH="$(GO_BIN_DIR):$$PATH"

@@ -42,6 +42,8 @@ function Run-Command {
 # Store PATH
 $startEnvPath = $env:Path
 
+try {
+
 # Set up tools directory.
 $toolsDir="" + (Get-Location) + "\.tools" # Powershell moment
 New-Item -ItemType Directory -Force -Path $toolsDir | Out-Null
@@ -107,5 +109,7 @@ $buildCollectorCommand=@"
 "@ -f $outDir, $ldFlags
 Run-Command $buildCollectorCommand
 
-# Restore PATH
-$env:Path = $startEnvPath
+} finally {
+    # Restore PATH
+    $env:Path = $startEnvPath
+}

@@ -29,6 +29,16 @@ param (
     [string]$outDir = "."
 )
 
+$ErrorActionPreference = "Stop"
+
+function Run-Command {
+    param ([string]$Command)
+    Invoke-Expression -Command $Command
+    if ($LASTEXITCODE -ne 0) {
+        throw "Command failed with exit code $LASTEXITCODE : $Command"
+    }
+}
+
 # Store PATH
 $startEnvPath = $env:Path
 
@@ -44,6 +54,7 @@ if (-not (Test-Path "C:\msys64")) {
     Invoke-WebRequest $msysDownloadURL -OutFile $msysInstallerPath
     Start-Process $msysInstallerPath -ArgumentList 'in', '--confirm-command', `
         '--accept-messages', '--root', 'C:/msys64' -NoNewWindow -Wait;
+    if ($LASTEXITCODE -ne 0) { throw "MSYS2 installation failed with exit code $LASTEXITCODE" }
     Remove-Item $msysInstallerPath
 } else {
     Write-Host "MSYS2 already installed at C:\msys64"
@@ -68,20 +79,21 @@ $ocbBin="$toolsDir\builder.exe"
 if (-not (Test-Path $ocbBin)) {
     Write-Host "Installing OCB..."
     $installOcbCommand="`$env:GOBIN='$toolsDir'; `$env:CGO_ENABLED=1; $goBin install -trimpath -ldflags='-s -w' go.opentelemetry.io/collector/cmd/builder@v0.147.0"
-    Invoke-Expression -Command $installOcbCommand
+    Run-Command $installOcbCommand
 } else {
     Write-Host "OCB already installed at $ocbBin"
 }
 
 # Generate the collector source.
 $ocbGenerateCommand="`$env:PATH='${goBinDir};${PATH}'; `$env:CGO_ENABLED=1; $ocbBin --skip-compilation --verbose --config manifest.yaml"
-Invoke-Expression -Command $ocbGenerateCommand
+Run-Command $ocbGenerateCommand
 
 # Setup MINGW for go build.
 $env:Path = "C:\msys64\usr\bin;C:\msys64\mingw64\bin"
 if (-not (Test-Path "C:\msys64\mingw64\bin\gcc.exe")) {
     Write-Host "Installing MINGW GCC..."
     pacman -S --noconfirm mingw-w64-x86_64-gcc
+    if ($LASTEXITCODE -ne 0) { throw "Installing MINGW GCC failed with exit code $LASTEXITCODE" }
 } else {
     Write-Host "MINGW GCC already installed"
 }
@@ -94,7 +106,7 @@ if ($jmxHash -ne "") {
 $buildCollectorCommand=@"
 `$env:GOWORK='off'; `$env:CGO_ENABLED=1; cd _build; $goBin build -p 32 -buildvcs=false -o '{0}/google-cloud-metrics-agent_windows_amd64.exe' --ldflags='{1}' .
 "@ -f $outDir, $ldFlags
-Invoke-Expression -Command $buildCollectorCommand
+Run-Command $buildCollectorCommand
 
 # Restore PATH
 $env:Path = $startEnvPath

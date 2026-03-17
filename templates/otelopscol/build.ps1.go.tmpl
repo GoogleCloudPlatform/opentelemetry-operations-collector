@@ -54,7 +54,6 @@ if (-not (Test-Path "C:\msys64")) {
     Invoke-WebRequest $msysDownloadURL -OutFile $msysInstallerPath
     Start-Process $msysInstallerPath -ArgumentList 'in', '--confirm-command', `
         '--accept-messages', '--root', 'C:/msys64' -NoNewWindow -Wait;
-    if ($LASTEXITCODE -ne 0) { throw "MSYS2 installation failed with exit code $LASTEXITCODE" }
     Remove-Item $msysInstallerPath
 } else {
     Write-Host "MSYS2 already installed at C:\msys64"

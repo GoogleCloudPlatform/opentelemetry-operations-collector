@@ -1306,7 +1306,7 @@ func verifyVMCreation(ctx context.Context, logger *log.Logger, vm *VM) error {
 	// Removing flaky rhui repositories due to b/265341502
 	if IsRHEL(vm.ImageSpec) {
 		if _, err := RunRemotely(ctx,
-			logger, vm, `sudo yum -y --disablerepo=rhui-rhel* install dnf-plugins-core && sudo yum config-manager --disable "rhui-rhel*"`); err != nil {
+			logger, vm, `sudo yum -y --disablerepo=rhui-* install dnf-plugins-core && sudo yum config-manager --disable "rhui-*"`); err != nil {
 			return fmt.Errorf("disabling flaky repos failed: %w", err)
 		}
 	}

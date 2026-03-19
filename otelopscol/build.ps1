@@ -67,7 +67,7 @@ $goBin="$goBinDir\go"
 if (-not (Test-Path "$goBin.exe")) {
     Write-Host "Installing Go..."
     $goZipPath="./go.windows-amd64.zip"
-    $goDownloadURL="https://go.dev/dl/go1.23.2.windows-amd64.zip"
+    $goDownloadURL="https://go.dev/dl/go1.26.1.windows-amd64.zip"
     Invoke-WebRequest $goDownloadURL -OutFile $goZipPath
     Expand-Archive -Path $goZipPath -DestinationPath $toolsDir
     Remove-Item $goZipPath
@@ -79,7 +79,7 @@ if (-not (Test-Path "$goBin.exe")) {
 $ocbBin="$toolsDir\builder.exe"
 if (-not (Test-Path $ocbBin)) {
     Write-Host "Installing OCB..."
-    $installOcbCommand="`$env:GOBIN='$toolsDir'; `$env:CGO_ENABLED=1; $goBin install -trimpath -ldflags='-s -w' go.opentelemetry.io/collector/cmd/builder@v0.147.0"
+    $installOcbCommand="`$env:GOBIN='$toolsDir'; `$env:CGO_ENABLED=1; $goBin install -trimpath -ldflags='-s -w' go.opentelemetry.io/collector/cmd/builder@v0.148.0"
     Run-Command $installOcbCommand
 } else {
     Write-Host "OCB already installed at $ocbBin"

@@ -24,7 +24,7 @@ on:
 
 env:
   # Default minimum version of Go to support.
-  DEFAULT_GO_VERSION: 1.24
+  DEFAULT_GO_VERSION: 1.25
 jobs:
   build:
     strategy:
@@ -37,7 +37,7 @@ jobs:
         # We have had very rare problems with particular Go updates
         # (mainly to do with CGO) so testing one version back
         # also helps avoid that.
-        go: [1.24, 1.25]
+        go: [1.25, 1.26]
     runs-on: ${{matrix.os}}
     steps:
       - uses: actions/checkout@v2
@@ -60,7 +60,7 @@ jobs:
     strategy:
       matrix:
         distro: [google-otel, otelopscol]
-        go: [1.24, 1.25]
+        go: [1.25, 1.26]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v2

@@ -10,7 +10,7 @@ update-components: update-deps tidy-components update-mdatagen generate-componen
 update-mdatagen: tools-dir
 	cd internal/tools && \
 		go get -u go.opentelemetry.io/collector/cmd/mdatagen@$(OTEL_VERSION) && \
-		GOBIN=$(TOOLS_DIR) go install go.opentelemetry.io/collector/cmd/mdatagen
+		GOBIN=$(TOOLS_DIR) GOWORK=off go install go.opentelemetry.io/collector/cmd/mdatagen
 
 .PHONY: update-deps
 update-deps:

@@ -27,10 +27,18 @@ func TestMetricsBuilderConfig(t *testing.T) {
 			name: "all_set",
 			want: MetricsBuilderConfig{
 				Metrics: MetricsConfig{
-					NvmlGpuMemoryBytesUsed:       MetricConfig{Enabled: true},
-					NvmlGpuProcessesMaxBytesUsed: MetricConfig{Enabled: true},
-					NvmlGpuProcessesUtilization:  MetricConfig{Enabled: true},
-					NvmlGpuUtilization:           MetricConfig{Enabled: true},
+					NvmlGpuMemoryBytesUsed: MetricConfig{
+						Enabled: true,
+					},
+					NvmlGpuProcessesMaxBytesUsed: MetricConfig{
+						Enabled: true,
+					},
+					NvmlGpuProcessesUtilization: MetricConfig{
+						Enabled: true,
+					},
+					NvmlGpuUtilization: MetricConfig{
+						Enabled: true,
+					},
 				},
 			},
 		},
@@ -38,10 +46,18 @@ func TestMetricsBuilderConfig(t *testing.T) {
 			name: "none_set",
 			want: MetricsBuilderConfig{
 				Metrics: MetricsConfig{
-					NvmlGpuMemoryBytesUsed:       MetricConfig{Enabled: false},
-					NvmlGpuProcessesMaxBytesUsed: MetricConfig{Enabled: false},
-					NvmlGpuProcessesUtilization:  MetricConfig{Enabled: false},
-					NvmlGpuUtilization:           MetricConfig{Enabled: false},
+					NvmlGpuMemoryBytesUsed: MetricConfig{
+						Enabled: false,
+					},
+					NvmlGpuProcessesMaxBytesUsed: MetricConfig{
+						Enabled: false,
+					},
+					NvmlGpuProcessesUtilization: MetricConfig{
+						Enabled: false,
+					},
+					NvmlGpuUtilization: MetricConfig{
+						Enabled: false,
+					},
 				},
 			},
 		},

@@ -1900,7 +1900,6 @@ func DeleteManagedInstanceGroupVM(logger *log.Logger, migVM *ManagedInstanceGrou
 }
 
 // StopInstance shuts down a VM instance.
-// Also waits for the instance to be fully stopped.
 func StopInstance(ctx context.Context, logger *log.Logger, vm *VM) error {
 	_, err := RunGcloud(ctx, logger, "",
 		[]string{
@@ -1909,36 +1908,7 @@ func StopInstance(ctx context.Context, logger *log.Logger, vm *VM) error {
 			"--zone=" + vm.Zone,
 			vm.Name,
 		})
-	if err != nil {
-		return err
-	}
-	return waitForStop(ctx, logger, vm)
-}
-
-// waitForStop waits until the VM is fully stopped (TERMINATED).
-func waitForStop(ctx context.Context, logger *log.Logger, vm *VM) error {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-	defer cancel()
-
-	checkStatus := func() error {
-		output, err := RunGcloud(ctx, logger, "", []string{
-			"compute", "instances", "describe", vm.Name,
-			"--project=" + vm.Project,
-			"--zone=" + vm.Zone,
-			"--format=value(status)",
-		})
-		if err != nil {
-			return err
-		}
-		status := strings.TrimSpace(output.Stdout)
-		if status != "TERMINATED" {
-			return fmt.Errorf("instance status is %q, waiting for TERMINATED", status)
-		}
-		return nil
-	}
-
-	backoffPolicy := backoff.WithContext(backoff.NewConstantBackOff(10*time.Second), ctx)
-	return backoff.Retry(checkStatus, backoffPolicy)
+	return err
 }
 
 // StartInstance boots a previously-stopped VM instance.

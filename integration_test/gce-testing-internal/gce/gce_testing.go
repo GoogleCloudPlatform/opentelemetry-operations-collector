@@ -2036,13 +2036,7 @@ func InstallGcloudIfNeeded(ctx context.Context, logger *log.Logger, vm *VM) erro
 	if IsARM(vm.ImageSpec) {
 		gcloudArch = "arm"
 	}
-	gcloudPkg := "google-cloud-cli-453.0.0-linux-" + gcloudArch + ".tar.gz"
-	isSles16 := strings.Contains(vm.ImageSpec, "sles-16")
-	if isSles16 {
-		// Use the latest gcloud for SLES 16, as older versions (453.0.0)
-		// contain apitools bugs that break with python3.13.
-		gcloudPkg = "google-cloud-cli-linux-" + gcloudArch + ".tar.gz"
-	}
+	gcloudPkg := "google-cloud-cli-561.0.0-linux-" + gcloudArch + ".tar.gz"
 	installFromTarball := `
 curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/` + gcloudPkg + `
 INSTALL_DIR="$(readlink --canonicalize .)"
@@ -2069,33 +2063,27 @@ sudo ln -s ${INSTALL_DIR}/google-cloud-sdk/bin/gcloud /usr/bin/gcloud
 	// b/308962066: The GCloud CLI ARM Linux tarballs do not have bundled Python
 	// and the GCloud CLI requires Python >= 3.8. Install Python311 for ARM VMs
 	if IsARM(vm.ImageSpec) {
-		pythonPkg := "python311 python3-certifi"
 		pythonBin := "/usr/bin/python3.11"
 		// This is what's used on openSUSE.
 		repoSetupCmd := "sudo zypper --non-interactive refresh"
-
 		if strings.Contains(vm.ImageSpec, "sles-12") {
 			return installErr("gcloud", vm.ImageSpec)
 		}
 		// For SLES 15 ARM: use a vendored repo to reduce flakiness of the
 		// external repos. See http://go/sdi/releases/build-test-release/vendored
 		// for details.
+		installCmd = `set -ex
+`
 		if strings.Contains(vm.ImageSpec, "sles-15") {
 			repoSetupCmd = `sudo zypper --non-interactive addrepo -g -t YUM https://us-yum.pkg.dev/projects/cloud-ops-agents-artifacts-dev/google-cloud-monitoring-sles15-aarch64-test-vendor test-vendor
 sudo rpm --import https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
 sudo zypper --non-interactive refresh test-vendor`
-		} else if isSles16 {
+			installCmd += repoSetupCmd + `
+sudo zypper --non-interactive install python311 python3-certifi
+`
+		} else if strings.Contains(vm.ImageSpec, "sles-16") {
 			// SLES 16 already comes with python 3.13+ installed as /usr/bin/python3
 			pythonBin = "/usr/bin/python3"
-		}
-
-		installCmd = `set -ex
-`
-		// Only run repo setup and package installation if it's not SLES 16
-		if !isSles16 {
-			installCmd += repoSetupCmd + `
-sudo zypper --non-interactive install ` + pythonPkg + `
-`
 		}
 
 		installCmd += `

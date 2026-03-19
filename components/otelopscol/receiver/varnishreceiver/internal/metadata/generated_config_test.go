@@ -27,17 +27,39 @@ func TestMetricsBuilderConfig(t *testing.T) {
 			name: "all_set",
 			want: MetricsBuilderConfig{
 				Metrics: MetricsConfig{
-					VarnishBackendConnectionCount:  MetricConfig{Enabled: true},
-					VarnishBackendRequestCount:     MetricConfig{Enabled: true},
-					VarnishCacheOperationCount:     MetricConfig{Enabled: true},
-					VarnishClientRequestCount:      MetricConfig{Enabled: true},
-					VarnishClientRequestErrorCount: MetricConfig{Enabled: true},
-					VarnishObjectCount:             MetricConfig{Enabled: true},
-					VarnishObjectExpired:           MetricConfig{Enabled: true},
-					VarnishObjectMoved:             MetricConfig{Enabled: true},
-					VarnishObjectNuked:             MetricConfig{Enabled: true},
-					VarnishSessionCount:            MetricConfig{Enabled: true},
-					VarnishThreadOperationCount:    MetricConfig{Enabled: true},
+					VarnishBackendConnectionCount: MetricConfig{
+						Enabled: true,
+					},
+					VarnishBackendRequestCount: MetricConfig{
+						Enabled: true,
+					},
+					VarnishCacheOperationCount: MetricConfig{
+						Enabled: true,
+					},
+					VarnishClientRequestCount: MetricConfig{
+						Enabled: true,
+					},
+					VarnishClientRequestErrorCount: MetricConfig{
+						Enabled: true,
+					},
+					VarnishObjectCount: MetricConfig{
+						Enabled: true,
+					},
+					VarnishObjectExpired: MetricConfig{
+						Enabled: true,
+					},
+					VarnishObjectMoved: MetricConfig{
+						Enabled: true,
+					},
+					VarnishObjectNuked: MetricConfig{
+						Enabled: true,
+					},
+					VarnishSessionCount: MetricConfig{
+						Enabled: true,
+					},
+					VarnishThreadOperationCount: MetricConfig{
+						Enabled: true,
+					},
 				},
 				ResourceAttributes: ResourceAttributesConfig{
 					VarnishCacheName: ResourceAttributeConfig{Enabled: true},
@@ -48,17 +70,39 @@ func TestMetricsBuilderConfig(t *testing.T) {
 			name: "none_set",
 			want: MetricsBuilderConfig{
 				Metrics: MetricsConfig{
-					VarnishBackendConnectionCount:  MetricConfig{Enabled: false},
-					VarnishBackendRequestCount:     MetricConfig{Enabled: false},
-					VarnishCacheOperationCount:     MetricConfig{Enabled: false},
-					VarnishClientRequestCount:      MetricConfig{Enabled: false},
-					VarnishClientRequestErrorCount: MetricConfig{Enabled: false},
-					VarnishObjectCount:             MetricConfig{Enabled: false},
-					VarnishObjectExpired:           MetricConfig{Enabled: false},
-					VarnishObjectMoved:             MetricConfig{Enabled: false},
-					VarnishObjectNuked:             MetricConfig{Enabled: false},
-					VarnishSessionCount:            MetricConfig{Enabled: false},
-					VarnishThreadOperationCount:    MetricConfig{Enabled: false},
+					VarnishBackendConnectionCount: MetricConfig{
+						Enabled: false,
+					},
+					VarnishBackendRequestCount: MetricConfig{
+						Enabled: false,
+					},
+					VarnishCacheOperationCount: MetricConfig{
+						Enabled: false,
+					},
+					VarnishClientRequestCount: MetricConfig{
+						Enabled: false,
+					},
+					VarnishClientRequestErrorCount: MetricConfig{
+						Enabled: false,
+					},
+					VarnishObjectCount: MetricConfig{
+						Enabled: false,
+					},
+					VarnishObjectExpired: MetricConfig{
+						Enabled: false,
+					},
+					VarnishObjectMoved: MetricConfig{
+						Enabled: false,
+					},
+					VarnishObjectNuked: MetricConfig{
+						Enabled: false,
+					},
+					VarnishSessionCount: MetricConfig{
+						Enabled: false,
+					},
+					VarnishThreadOperationCount: MetricConfig{
+						Enabled: false,
+					},
 				},
 				ResourceAttributes: ResourceAttributesConfig{
 					VarnishCacheName: ResourceAttributeConfig{Enabled: false},

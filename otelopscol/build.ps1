@@ -68,8 +68,8 @@ if ($env:GO_BIN_PATH -and (Test-Path $env:GO_BIN_PATH)) {
     $goBinDir = Split-Path $goBin
 } else {
     $goBinDir="$toolsDir\go\bin"
-    $goBin="$goBinDir\go"
-    if (-not (Test-Path "$goBin.exe")) {
+    $goBin="$goBinDir\go.exe"
+    if (-not (Test-Path "$goBin")) {
         Write-Host "Installing Go..."
         $goZipPath="./go.windows-amd64.zip"
         $goDownloadURL="https://go.dev/dl/go1.26.1.windows-amd64.zip"

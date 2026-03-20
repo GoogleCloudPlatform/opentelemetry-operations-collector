@@ -1,7 +1,7 @@
 # TODO: This could be better
 .PHONY: test
 test:
-	go test -gcflags='all=-N -l' ./...
+	go test ./...
 
 .PHONY: tidy
 tidy:

@@ -27,32 +27,84 @@ func TestMetricsBuilderConfig(t *testing.T) {
 			name: "all_set",
 			want: MetricsBuilderConfig{
 				Metrics: MetricsConfig{
-					MongodbCacheOperations:        MetricConfig{Enabled: true},
-					MongodbCollectionCount:        MetricConfig{Enabled: true},
-					MongodbConnectionCount:        MetricConfig{Enabled: true},
-					MongodbCursorCount:            MetricConfig{Enabled: true},
-					MongodbCursorTimeoutCount:     MetricConfig{Enabled: true},
-					MongodbDataSize:               MetricConfig{Enabled: true},
-					MongodbDatabaseCount:          MetricConfig{Enabled: true},
-					MongodbDocumentOperationCount: MetricConfig{Enabled: true},
-					MongodbExtentCount:            MetricConfig{Enabled: true},
-					MongodbGlobalLockTime:         MetricConfig{Enabled: true},
-					MongodbIndexAccessCount:       MetricConfig{Enabled: true},
-					MongodbIndexCount:             MetricConfig{Enabled: true},
-					MongodbIndexSize:              MetricConfig{Enabled: true},
-					MongodbLockAcquireCount:       MetricConfig{Enabled: true},
-					MongodbLockAcquireTime:        MetricConfig{Enabled: true},
-					MongodbLockAcquireWaitCount:   MetricConfig{Enabled: true},
-					MongodbLockDeadlockCount:      MetricConfig{Enabled: true},
-					MongodbMemoryUsage:            MetricConfig{Enabled: true},
-					MongodbNetworkIoReceive:       MetricConfig{Enabled: true},
-					MongodbNetworkIoTransmit:      MetricConfig{Enabled: true},
-					MongodbNetworkRequestCount:    MetricConfig{Enabled: true},
-					MongodbObjectCount:            MetricConfig{Enabled: true},
-					MongodbOperationCount:         MetricConfig{Enabled: true},
-					MongodbOperationTime:          MetricConfig{Enabled: true},
-					MongodbSessionCount:           MetricConfig{Enabled: true},
-					MongodbStorageSize:            MetricConfig{Enabled: true},
+					MongodbCacheOperations: MetricConfig{
+						Enabled: true,
+					},
+					MongodbCollectionCount: MetricConfig{
+						Enabled: true,
+					},
+					MongodbConnectionCount: MetricConfig{
+						Enabled: true,
+					},
+					MongodbCursorCount: MetricConfig{
+						Enabled: true,
+					},
+					MongodbCursorTimeoutCount: MetricConfig{
+						Enabled: true,
+					},
+					MongodbDataSize: MetricConfig{
+						Enabled: true,
+					},
+					MongodbDatabaseCount: MetricConfig{
+						Enabled: true,
+					},
+					MongodbDocumentOperationCount: MetricConfig{
+						Enabled: true,
+					},
+					MongodbExtentCount: MetricConfig{
+						Enabled: true,
+					},
+					MongodbGlobalLockTime: MetricConfig{
+						Enabled: true,
+					},
+					MongodbIndexAccessCount: MetricConfig{
+						Enabled: true,
+					},
+					MongodbIndexCount: MetricConfig{
+						Enabled: true,
+					},
+					MongodbIndexSize: MetricConfig{
+						Enabled: true,
+					},
+					MongodbLockAcquireCount: MetricConfig{
+						Enabled: true,
+					},
+					MongodbLockAcquireTime: MetricConfig{
+						Enabled: true,
+					},
+					MongodbLockAcquireWaitCount: MetricConfig{
+						Enabled: true,
+					},
+					MongodbLockDeadlockCount: MetricConfig{
+						Enabled: true,
+					},
+					MongodbMemoryUsage: MetricConfig{
+						Enabled: true,
+					},
+					MongodbNetworkIoReceive: MetricConfig{
+						Enabled: true,
+					},
+					MongodbNetworkIoTransmit: MetricConfig{
+						Enabled: true,
+					},
+					MongodbNetworkRequestCount: MetricConfig{
+						Enabled: true,
+					},
+					MongodbObjectCount: MetricConfig{
+						Enabled: true,
+					},
+					MongodbOperationCount: MetricConfig{
+						Enabled: true,
+					},
+					MongodbOperationTime: MetricConfig{
+						Enabled: true,
+					},
+					MongodbSessionCount: MetricConfig{
+						Enabled: true,
+					},
+					MongodbStorageSize: MetricConfig{
+						Enabled: true,
+					},
 				},
 				ResourceAttributes: ResourceAttributesConfig{
 					Database: ResourceAttributeConfig{Enabled: true},
@@ -63,32 +115,84 @@ func TestMetricsBuilderConfig(t *testing.T) {
 			name: "none_set",
 			want: MetricsBuilderConfig{
 				Metrics: MetricsConfig{
-					MongodbCacheOperations:        MetricConfig{Enabled: false},
-					MongodbCollectionCount:        MetricConfig{Enabled: false},
-					MongodbConnectionCount:        MetricConfig{Enabled: false},
-					MongodbCursorCount:            MetricConfig{Enabled: false},
-					MongodbCursorTimeoutCount:     MetricConfig{Enabled: false},
-					MongodbDataSize:               MetricConfig{Enabled: false},
-					MongodbDatabaseCount:          MetricConfig{Enabled: false},
-					MongodbDocumentOperationCount: MetricConfig{Enabled: false},
-					MongodbExtentCount:            MetricConfig{Enabled: false},
-					MongodbGlobalLockTime:         MetricConfig{Enabled: false},
-					MongodbIndexAccessCount:       MetricConfig{Enabled: false},
-					MongodbIndexCount:             MetricConfig{Enabled: false},
-					MongodbIndexSize:              MetricConfig{Enabled: false},
-					MongodbLockAcquireCount:       MetricConfig{Enabled: false},
-					MongodbLockAcquireTime:        MetricConfig{Enabled: false},
-					MongodbLockAcquireWaitCount:   MetricConfig{Enabled: false},
-					MongodbLockDeadlockCount:      MetricConfig{Enabled: false},
-					MongodbMemoryUsage:            MetricConfig{Enabled: false},
-					MongodbNetworkIoReceive:       MetricConfig{Enabled: false},
-					MongodbNetworkIoTransmit:      MetricConfig{Enabled: false},
-					MongodbNetworkRequestCount:    MetricConfig{Enabled: false},
-					MongodbObjectCount:            MetricConfig{Enabled: false},
-					MongodbOperationCount:         MetricConfig{Enabled: false},
-					MongodbOperationTime:          MetricConfig{Enabled: false},
-					MongodbSessionCount:           MetricConfig{Enabled: false},
-					MongodbStorageSize:            MetricConfig{Enabled: false},
+					MongodbCacheOperations: MetricConfig{
+						Enabled: false,
+					},
+					MongodbCollectionCount: MetricConfig{
+						Enabled: false,
+					},
+					MongodbConnectionCount: MetricConfig{
+						Enabled: false,
+					},
+					MongodbCursorCount: MetricConfig{
+						Enabled: false,
+					},
+					MongodbCursorTimeoutCount: MetricConfig{
+						Enabled: false,
+					},
+					MongodbDataSize: MetricConfig{
+						Enabled: false,
+					},
+					MongodbDatabaseCount: MetricConfig{
+						Enabled: false,
+					},
+					MongodbDocumentOperationCount: MetricConfig{
+						Enabled: false,
+					},
+					MongodbExtentCount: MetricConfig{
+						Enabled: false,
+					},
+					MongodbGlobalLockTime: MetricConfig{
+						Enabled: false,
+					},
+					MongodbIndexAccessCount: MetricConfig{
+						Enabled: false,
+					},
+					MongodbIndexCount: MetricConfig{
+						Enabled: false,
+					},
+					MongodbIndexSize: MetricConfig{
+						Enabled: false,
+					},
+					MongodbLockAcquireCount: MetricConfig{
+						Enabled: false,
+					},
+					MongodbLockAcquireTime: MetricConfig{
+						Enabled: false,
+					},
+					MongodbLockAcquireWaitCount: MetricConfig{
+						Enabled: false,
+					},
+					MongodbLockDeadlockCount: MetricConfig{
+						Enabled: false,
+					},
+					MongodbMemoryUsage: MetricConfig{
+						Enabled: false,
+					},
+					MongodbNetworkIoReceive: MetricConfig{
+						Enabled: false,
+					},
+					MongodbNetworkIoTransmit: MetricConfig{
+						Enabled: false,
+					},
+					MongodbNetworkRequestCount: MetricConfig{
+						Enabled: false,
+					},
+					MongodbObjectCount: MetricConfig{
+						Enabled: false,
+					},
+					MongodbOperationCount: MetricConfig{
+						Enabled: false,
+					},
+					MongodbOperationTime: MetricConfig{
+						Enabled: false,
+					},
+					MongodbSessionCount: MetricConfig{
+						Enabled: false,
+					},
+					MongodbStorageSize: MetricConfig{
+						Enabled: false,
+					},
 				},
 				ResourceAttributes: ResourceAttributesConfig{
 					Database: ResourceAttributeConfig{Enabled: false},

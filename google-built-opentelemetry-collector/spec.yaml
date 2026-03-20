@@ -113,6 +113,10 @@ components:
         - https
         - yaml
         - googlesecretmanager
+replaces:
+    - from: github.com/buger/jsonparser
+      to: github.com/buger/jsonparser v1.1.2
+      reason: Force update buger/jsonparser to v1.1.2 to fix vulnerability
 feature_gates:
     - exporter.googlemanagedprometheus.intToDouble
     - exporter.googlecloud.CustomMonitoredResources

@@ -62,17 +62,23 @@ if (-not (Test-Path "C:\msys64")) {
 }
 
 # Download Go.
-$goBinDir="$toolsDir\go\bin"
-$goBin="$goBinDir\go"
-if (-not (Test-Path "$goBin.exe")) {
-    Write-Host "Installing Go..."
-    $goZipPath="./go.windows-amd64.zip"
-    $goDownloadURL="https://go.dev/dl/go1.26.1.windows-amd64.zip"
-    Invoke-WebRequest $goDownloadURL -OutFile $goZipPath
-    Expand-Archive -Path $goZipPath -DestinationPath $toolsDir
-    Remove-Item $goZipPath
+if ($env:GO_BIN_PATH -and (Test-Path $env:GO_BIN_PATH)) {
+    Write-Host "Using customized Go from GO_BIN_PATH: $env:GO_BIN_PATH"
+    $goBin = $env:GO_BIN_PATH
+    $goBinDir = Split-Path $goBin
 } else {
-    Write-Host "Go already installed at $goBinDir"
+    $goBinDir="$toolsDir\go\bin"
+    $goBin="$goBinDir\go"
+    if (-not (Test-Path "$goBin.exe")) {
+        Write-Host "Installing Go..."
+        $goZipPath="./go.windows-amd64.zip"
+        $goDownloadURL="https://go.dev/dl/go1.26.1.windows-amd64.zip"
+        Invoke-WebRequest $goDownloadURL -OutFile $goZipPath
+        Expand-Archive -Path $goZipPath -DestinationPath $toolsDir
+        Remove-Item $goZipPath
+    } else {
+        Write-Host "Go already installed at $goBinDir"
+    }
 }
 
 # Download OCB.

@@ -95,4 +95,6 @@ providers:
 replaces:
 # Reference root module of repository to find dependency packages.
 - github.com/GoogleCloudPlatform/opentelemetry-operations-collector => ../../
+# Force update buger/jsonparser to v1.1.2 to fix vulnerability
+- github.com/buger/jsonparser => github.com/buger/jsonparser v1.1.2
 

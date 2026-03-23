@@ -116,4 +116,6 @@ providers:
 - gomod: go.opentelemetry.io/collector/confmap/provider/yamlprovider v1.54.0
 
 replaces:
+# Force update buger/jsonparser to v1.1.2 to fix vulnerability
+- github.com/buger/jsonparser => github.com/buger/jsonparser v1.1.2
 

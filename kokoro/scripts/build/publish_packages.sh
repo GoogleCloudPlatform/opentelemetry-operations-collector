@@ -58,7 +58,7 @@ for PACKAGE in "${KOKORO_GFILE_DIR}"/dist/*.goo; do
     --source="${PACKAGE}"
 done
 
-for PACKAGE in "${KOKORO_GFILE_DIR}"/dist/otelcol-google*linux_amd64.tar.gz*; do
+for PACKAGE in "${KOKORO_GFILE_DIR}"/dist/*linux_amd64.tar.gz*; do
   gcloud artifacts generic upload \
     --repository="${_ARCHIVE_STAGING_REPO}" \
     --project="${_STAGING_ARTIFACTS_PROJECT_ID}" \
@@ -68,7 +68,7 @@ for PACKAGE in "${KOKORO_GFILE_DIR}"/dist/otelcol-google*linux_amd64.tar.gz*; do
     --version="${_VERSION}-${_LOUHI_EXECUTION_ID}"
 done
 
-for PACKAGE in "${KOKORO_GFILE_DIR}"/dist/otelcol-google*linux_arm64.tar.gz*; do
+for PACKAGE in "${KOKORO_GFILE_DIR}"/dist/*linux_arm64.tar.gz*; do
   gcloud artifacts generic upload \
     --repository="${_ARCHIVE_STAGING_REPO}" \
     --project="${_STAGING_ARTIFACTS_PROJECT_ID}" \
@@ -78,7 +78,7 @@ for PACKAGE in "${KOKORO_GFILE_DIR}"/dist/otelcol-google*linux_arm64.tar.gz*; do
     --version="${_VERSION}-${_LOUHI_EXECUTION_ID}"
 done
 
-for PACKAGE in "${KOKORO_GFILE_DIR}"/dist/otelcol-google*windows_amd64.zip*; do
+for PACKAGE in "${KOKORO_GFILE_DIR}"/dist/*windows_amd64.zip*; do
   gcloud artifacts generic upload \
     --repository="${_ARCHIVE_STAGING_REPO}" \
     --project="${_STAGING_ARTIFACTS_PROJECT_ID}" \

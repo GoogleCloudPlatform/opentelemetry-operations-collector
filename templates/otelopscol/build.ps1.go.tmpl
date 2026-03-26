@@ -110,6 +110,20 @@ function Generate-CollectorSource {
     Run-Command $ocbGenerateCommand
 }
 
+function Set-BuildEnvironment {
+    Write-Host "Temporarily updating PATH for build and ensuring GCC is present..."
+    $originalPath = $env:Path
+    $env:Path = "C:\msys64\usr\bin;C:\msys64\mingw64\bin;$originalPath"
+
+    if (-not (Test-Path "C:\msys64\mingw64\bin\gcc.exe")) {
+        Write-Host "Installing MINGW GCC..."
+        Run-Command "pacman -S --noconfirm mingw-w64-x86_64-gcc"
+    } else {
+        Write-Host "MINGW GCC already installed"
+    }
+    return $originalPath
+}
+
 function Build-WindowsCollector {
     param (
         [string]$goBin,
@@ -117,17 +131,9 @@ function Build-WindowsCollector {
         [string]$outDir
     )
 
-    $startEnvPath = $env:Path
+    $originalPath = $null
     try {
-        Write-Host "Temporarily updating PATH for build..."
-        $env:Path = "C:\msys64\usr\bin;C:\msys64\mingw64\bin;$startEnvPath"
-
-        if (-not (Test-Path "C:\msys64\mingw64\bin\gcc.exe")) {
-            Write-Host "Installing MINGW GCC..."
-            Run-Command "pacman -S --noconfirm mingw-w64-x86_64-gcc"
-        } else {
-            Write-Host "MINGW GCC already installed"
-        }
+        $originalPath = Set-BuildEnvironment
 
         Write-Host "Building the collector..."
         $ldFlags = "-s -w"
@@ -147,8 +153,10 @@ function Build-WindowsCollector {
         Write-Host "Build complete."
     }
     finally {
-        Write-Host "Restoring original PATH."
-        $env:Path = $startEnvPath
+        if ($originalPath) {
+            Write-Host "Restoring original PATH."
+            $env:Path = $originalPath
+        }
     }
 }
 

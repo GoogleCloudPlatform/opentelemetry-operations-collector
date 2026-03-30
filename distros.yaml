@@ -128,15 +128,10 @@ targets:
           - suse-cloud:sles-15
           exhaustive:
           - suse-sap-cloud:sles-15-sp6-sap
-          - opensuse-cloud:opensuse-leap
-          - opensuse-cloud=opensuse-leap-15-6-v20251017-x86-64
       aarch64:
         test_distros:
           representative:
           - suse-cloud:sles-15-arm64
-          exhaustive:
-          - opensuse-cloud:opensuse-leap-arm64
-          - opensuse-cloud=opensuse-leap-15-6-v20251017-arm64
   windows:
     package_extension:
       goo

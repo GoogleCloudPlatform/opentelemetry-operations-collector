@@ -15,17 +15,17 @@
 name: google-built-opentelemetry-collector
 module: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/google-built-opentelemetry-collector
 display_name: Google-Built OpenTelemetry Collector
-version: 0.144.0
+version: 0.148.0
 description: "OpenTelemetry Collector Built By Google"
 blurb: >-
   The Google-Built OpenTelemetry Collector is an open-source, production-ready build
   of the upstream OpenTelemetry Collector that is built with upstream OpenTelemetry
   components.
-opentelemetry_version: 0.144.0
-opentelemetry_contrib_version: 0.144.0
-opentelemetry_stable_version: 1.50.0
+opentelemetry_version: 0.148.0
+opentelemetry_contrib_version: 0.148.0
+opentelemetry_stable_version: 1.54.0
 binary_name: otelcol-google
-go_version: 1.25.6
+go_version: 1.26.1
 
 boringcrypto: true
 collector_cgo: true
@@ -140,3 +140,8 @@ components:
     - https
     - yaml
     - googlesecretmanager
+
+replaces:
+  - from: github.com/buger/jsonparser
+    to: github.com/buger/jsonparser v1.1.2
+    reason: Force update buger/jsonparser to v1.1.2 to fix vulnerability

@@ -2,7 +2,7 @@ version: 2
 project_name: opentelemetry-operations-collector
 
 snapshot:
-  version_template: v0.138.0
+  version_template: v0.148.0
 
 env:
   - LD_FLAGS=-s -w
@@ -70,3 +70,32 @@ nfpms:
     maintainer: Google Cloud Platform <google@google.com> # something better than this
     description: OpenTelemetry Collector binary used by the Ops Agent
     license: Apache 2.0
+
+archives:
+  - id: "otelopscol-tarball"
+    ids:
+      - "otelopscol-linux"
+      - "otelopscol-windows"
+    formats:
+      - "tar.gz"
+    name_template: "otelopscol_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats:
+        - "zip"
+
+signs:
+  - cmd: cosign
+    signature: ${artifact}.sig
+    certificate: ${artifact}.pem
+    args:
+      - "sign-blob"
+      - "--output-signature"
+      - "${signature}"
+      - "--output-certificate"
+      - "${certificate}"
+      - "${artifact}"
+      - "--yes"
+    artifacts: archive
+    env:
+      - SIGSTORE_NO_CACHE=true

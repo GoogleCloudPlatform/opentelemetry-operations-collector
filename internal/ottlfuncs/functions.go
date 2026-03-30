@@ -19,10 +19,10 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/ottl/contexts/ottllog"
 )
 
-func LogFunctions() []ottl.Factory[ottllog.TransformContext] {
-	return []ottl.Factory[ottllog.TransformContext]{
-		NewExtractPatternsRubyRegexFactory[ottllog.TransformContext](),
-		NewIsMatchRubyRegexFactory[ottllog.TransformContext](),
-		NewToValuesFactory[ottllog.TransformContext](),
+func LogFunctions() []ottl.Factory[*ottllog.TransformContext] {
+	return []ottl.Factory[*ottllog.TransformContext]{
+		NewExtractPatternsRubyRegexFactory[*ottllog.TransformContext](),
+		NewIsMatchRubyRegexFactory[*ottllog.TransformContext](),
+		NewToValuesFactory[*ottllog.TransformContext](),
 	}
 }

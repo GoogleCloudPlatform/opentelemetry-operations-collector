@@ -17,6 +17,7 @@ package googleservicecontrolexporter
 import (
 	"context"
 	"fmt"
+	"runtime"
 	"strings"
 	"time"
 
@@ -104,7 +105,7 @@ func createLogExporter(ctx context.Context, settings exporter.Settings, cfg comp
 	exp := NewLogsExporter(*oCfg, settings.Logger, *c, settings.TelemetrySettings)
 	return exporterhelper.NewLogs(ctx, settings, cfg, exp.ConsumeLogs,
 		exporterhelper.WithCapabilities(exp.Capabilities()),
-		// TODO: disable timeout and backoff for now
+		// TODO(b/480150119): disable timeout and backoff for now
 		// exporterhelper.WithTimeout(oCfg.TimeoutConfig),
 		// exporterhelper.WithRetry(oCfg.BackOffConfig),
 		exporterhelper.WithQueue(oCfg.QueueConfig),
@@ -132,10 +133,15 @@ func createMetricsExporter(ctx context.Context, settings exporter.Settings, cfg 
 }
 
 func createClient(ctx context.Context, oCfg *Config, settings exporter.Settings) (*ServiceControlClient, error) {
-	opts := []grpc.DialOption{}
+	userAgent := fmt.Sprintf("%s/%s (%s/%s)",
+		settings.BuildInfo.Description, settings.BuildInfo.Version, runtime.GOOS, runtime.GOARCH)
+	opts := []grpc.DialOption{
+		grpc.WithUserAgent(userAgent),
+	}
+	useRawServiceControlClient := strings.TrimSpace(strings.ToLower(oCfg.UseRawServiceControlClient)) == "true"
 	if oCfg.UseInsecure {
 		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	} else {
+	} else if useRawServiceControlClient {
 		var credentials = google.NewDefaultCredentials()
 		if oCfg.ImpersonateServiceAccount != "" {
 			src, err := impersonate.CredentialsTokenSource(ctx,
@@ -154,8 +160,7 @@ func createClient(ctx context.Context, oCfg *Config, settings exporter.Settings)
 		opts = append(opts, grpc.WithCredentialsBundle(credentials))
 	}
 
-	useRawServiceControlClient := strings.TrimSpace(strings.ToLower(oCfg.UseRawServiceControlClient)) == "true"
-	c, err := clientProvider(oCfg.ServiceControlEndpoint, useRawServiceControlClient, oCfg.EnableDebugHeaders, settings.Logger, opts...)
+	c, err := clientProvider(oCfg.ServiceControlEndpoint, useRawServiceControlClient, oCfg.UseInsecure, oCfg.EnableDebugHeaders, settings.Logger, opts...)
 	if err != nil {
 		return nil, err
 	}

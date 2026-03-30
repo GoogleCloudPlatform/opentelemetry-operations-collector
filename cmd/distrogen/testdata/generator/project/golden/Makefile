@@ -5,26 +5,6 @@ MAKEFLAGS += --no-print-directory
 
 SPEC_FILE = spec.yaml
 
-OTEL_VERSION = 0.121.0
-OTEL_CONTRIB_VERSION = 0.121.0
-
-#############
-# Development
-#############
-
-.PHONY: dev-setup
-dev-setup: workspace setup-hooks
-
-.PHONY: setup-hooks
-setup-hooks:
-	git config core.hooksPath $(PWD)/hooks
-
-.PHONY: precommit
-precommit: misspell lint test-distrogen
-
-.PHONY: presubmit
-presubmit: misspell lint
-
 #######
 # Tools
 #######
@@ -55,17 +35,19 @@ distrogen: $(DISTROGEN_BIN)
 # Updating OTel Components
 ##########################
 
-.PHONY: update-otel-components
+COMPONENT_DIR = components
 
 update-otel-components: workspace-update $(MDATAGEN_BIN)
 	export PATH="$(TOOLS_DIR):${PATH}" && cd components &&\
 	$(MAKE) OTEL_VERSION=v$(OTEL_VERSION) OTEL_CONTRIB_VERSION=v$(OTEL_CONTRIB_VERSION) update-components
 
 .PHONY: test-otel-components
-
-test-otel-components: COMPONENT_DIR := components
 test-otel-components: go.work
 	cd $(COMPONENT_DIR) && $(MAKE) test-components
+
+.PHONY: tidy-otel-components
+tidy-otel-components: go.work
+	cd $(COMPONENT_DIR) && $(MAKE) tidy-components
 
 ###################
 # Distro Generation
@@ -85,18 +67,6 @@ regen: distrogen
 
 regen-v: distrogen
 	@$(GEN_OTEL) --force -v
-
-#########
-# Testing
-#########
-
-.PHONY: test-all
-test-all:
-	TARGET="test" $(MAKE) target-all-modules
-
-.PHONY: tidy-all
-tidy-all:
-	TARGET="tidy" $(MAKE) target-all-modules
 
 ###########
 # Workspace
@@ -121,24 +91,3 @@ workspace-update: go.work
 clean-workspace:
 	rm -f go.work
 	rm -f go.work.sum
-
-#########
-# Utility
-#########
-
-.PHONY: target-all-modules
-target-all-modules: go.work
-ifndef TARGET
-	@echo "No TARGET defined."
-else
-	go list -f '{{ .Dir }}' -m | grep -v -e ".*/.tools.*" -e ".*integration_test/smoke_test.*" |\
-	xargs -t -I '{}' $(MAKE) -C {} $(TARGET)
-endif
-
-.PHONY: update-go-module-in-all
-update-go-module-in-all:
-ifndef GO_MOD
-	@echo "must specify a GO_MOD"
-else
-	TARGET=update-go-module $(MAKE) target-all-modules GO_MOD=$(GO_MOD)$(if "$(GO_MOD_VERSION), GO_MOD_VERSION=$(GO_MOD_VERSION),)
-endif

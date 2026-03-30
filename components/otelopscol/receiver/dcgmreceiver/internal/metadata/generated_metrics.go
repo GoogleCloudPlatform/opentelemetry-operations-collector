@@ -294,6 +294,7 @@ func (m *metricGpuDcgmClockFrequency) emit(metrics pmetric.MetricSlice) {
 
 func newMetricGpuDcgmClockFrequency(cfg MetricConfig) metricGpuDcgmClockFrequency {
 	m := metricGpuDcgmClockFrequency{config: cfg}
+
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -347,6 +348,7 @@ func (m *metricGpuDcgmClockThrottleDurationTime) emit(metrics pmetric.MetricSlic
 
 func newMetricGpuDcgmClockThrottleDurationTime(cfg MetricConfig) metricGpuDcgmClockThrottleDurationTime {
 	m := metricGpuDcgmClockThrottleDurationTime{config: cfg}
+
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -396,6 +398,7 @@ func (m *metricGpuDcgmCodecDecoderUtilization) emit(metrics pmetric.MetricSlice)
 
 func newMetricGpuDcgmCodecDecoderUtilization(cfg MetricConfig) metricGpuDcgmCodecDecoderUtilization {
 	m := metricGpuDcgmCodecDecoderUtilization{config: cfg}
+
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -445,6 +448,7 @@ func (m *metricGpuDcgmCodecEncoderUtilization) emit(metrics pmetric.MetricSlice)
 
 func newMetricGpuDcgmCodecEncoderUtilization(cfg MetricConfig) metricGpuDcgmCodecEncoderUtilization {
 	m := metricGpuDcgmCodecEncoderUtilization{config: cfg}
+
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -498,6 +502,7 @@ func (m *metricGpuDcgmEccErrors) emit(metrics pmetric.MetricSlice) {
 
 func newMetricGpuDcgmEccErrors(cfg MetricConfig) metricGpuDcgmEccErrors {
 	m := metricGpuDcgmEccErrors{config: cfg}
+
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -549,6 +554,7 @@ func (m *metricGpuDcgmEnergyConsumption) emit(metrics pmetric.MetricSlice) {
 
 func newMetricGpuDcgmEnergyConsumption(cfg MetricConfig) metricGpuDcgmEnergyConsumption {
 	m := metricGpuDcgmEnergyConsumption{config: cfg}
+
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -598,6 +604,7 @@ func (m *metricGpuDcgmMemoryBandwidthUtilization) emit(metrics pmetric.MetricSli
 
 func newMetricGpuDcgmMemoryBandwidthUtilization(cfg MetricConfig) metricGpuDcgmMemoryBandwidthUtilization {
 	m := metricGpuDcgmMemoryBandwidthUtilization{config: cfg}
+
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -649,6 +656,7 @@ func (m *metricGpuDcgmMemoryBytesUsed) emit(metrics pmetric.MetricSlice) {
 
 func newMetricGpuDcgmMemoryBytesUsed(cfg MetricConfig) metricGpuDcgmMemoryBytesUsed {
 	m := metricGpuDcgmMemoryBytesUsed{config: cfg}
+
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -702,6 +710,7 @@ func (m *metricGpuDcgmNvlinkIo) emit(metrics pmetric.MetricSlice) {
 
 func newMetricGpuDcgmNvlinkIo(cfg MetricConfig) metricGpuDcgmNvlinkIo {
 	m := metricGpuDcgmNvlinkIo{config: cfg}
+
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -755,6 +764,7 @@ func (m *metricGpuDcgmPcieIo) emit(metrics pmetric.MetricSlice) {
 
 func newMetricGpuDcgmPcieIo(cfg MetricConfig) metricGpuDcgmPcieIo {
 	m := metricGpuDcgmPcieIo{config: cfg}
+
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -806,6 +816,7 @@ func (m *metricGpuDcgmPipeUtilization) emit(metrics pmetric.MetricSlice) {
 
 func newMetricGpuDcgmPipeUtilization(cfg MetricConfig) metricGpuDcgmPipeUtilization {
 	m := metricGpuDcgmPipeUtilization{config: cfg}
+
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -855,6 +866,7 @@ func (m *metricGpuDcgmSmOccupancy) emit(metrics pmetric.MetricSlice) {
 
 func newMetricGpuDcgmSmOccupancy(cfg MetricConfig) metricGpuDcgmSmOccupancy {
 	m := metricGpuDcgmSmOccupancy{config: cfg}
+
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -904,6 +916,7 @@ func (m *metricGpuDcgmSmUtilization) emit(metrics pmetric.MetricSlice) {
 
 func newMetricGpuDcgmSmUtilization(cfg MetricConfig) metricGpuDcgmSmUtilization {
 	m := metricGpuDcgmSmUtilization{config: cfg}
+
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -953,6 +966,7 @@ func (m *metricGpuDcgmTemperature) emit(metrics pmetric.MetricSlice) {
 
 func newMetricGpuDcgmTemperature(cfg MetricConfig) metricGpuDcgmTemperature {
 	m := metricGpuDcgmTemperature{config: cfg}
+
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -1002,6 +1016,7 @@ func (m *metricGpuDcgmUtilization) emit(metrics pmetric.MetricSlice) {
 
 func newMetricGpuDcgmUtilization(cfg MetricConfig) metricGpuDcgmUtilization {
 	m := metricGpuDcgmUtilization{config: cfg}
+
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()
@@ -1055,6 +1070,7 @@ func (m *metricGpuDcgmXidErrors) emit(metrics pmetric.MetricSlice) {
 
 func newMetricGpuDcgmXidErrors(cfg MetricConfig) metricGpuDcgmXidErrors {
 	m := metricGpuDcgmXidErrors{config: cfg}
+
 	if cfg.Enabled {
 		m.data = pmetric.NewMetric()
 		m.init()

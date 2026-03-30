@@ -154,6 +154,7 @@ service:
                    metricstransform/ucp_internal_rename_device,
                    filter/ucp_internal_hostmetrics_after_transform,
                    resource/ucp_internal_saasmanagement_instance,
+                   resourcedetection/ucp_gcp_metadata,
                    transform/ucp_internal_saasmanagement_add_node_id,
                    batch/ucp_internal_batch]
       exporters: [googleservicecontrol/ucp_internal_servicecontrol]
@@ -164,6 +165,7 @@ service:
                    metricstransform/ucp_internal_rename_device,
                    filter/ucp_internal_hostmetrics_after_transform,
                    resource/ucp_internal_saasmanagement_instance,
+                   resourcedetection/ucp_gcp_metadata,
                    transform/ucp_internal_saasmanagement_add_node_id,
                    batch/ucp_internal_batch]
       exporters: [googleservicecontrol/ucp_internal_servicecontrol]

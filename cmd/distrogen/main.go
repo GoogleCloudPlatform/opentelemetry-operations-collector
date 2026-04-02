@@ -388,14 +388,3 @@ func (cmd *registryCommand) Run() error {
 
 	return generator.Generate()
 }
-
-type skillCommand struct {
-}
-
-func (cmd *skillCommand) ParseArgs(args []string) error {
-	return nil
-}
-
-func (cmd *skillCommand) Run() error {
-	return nil
-}

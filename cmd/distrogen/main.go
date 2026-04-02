@@ -42,7 +42,10 @@ func main() {
 	runner := createCommandRunner()
 
 	if detectHelpFlag() {
-		runner.Run("help")
+		if err := runner.Run("help"); err != nil {
+			// Should be an impossible case.
+			panic(err)
+		}
 		return
 	}
 

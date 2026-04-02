@@ -1144,7 +1144,7 @@ func addFrameworkMetadata(imageSpec string, inputMetadata map[string]string) (ma
 		}
 		// TODO(b/380470389): we actually *can't* do RunRemotely() on DLVM images due to a bug.
 		// The workaround for the bug is to deploy a fix in-VM via startup scripts.
-		if strings.Contains(imageSpec, "common-gpu-debian-11-py310") {
+		if strings.Contains(imageSpec, "common-cu124-debian-11-py310") {
 			metadataCopy["startup-script"] = fmt.Sprintf(`
 #!/bin/bash
 # Give time for the guest agent and jupyter stuff to finish modifying

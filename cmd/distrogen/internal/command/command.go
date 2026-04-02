@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 )
 
 var errCommandNotFound = errors.New("command not found")
@@ -29,6 +30,7 @@ var errCommandNotFound = errors.New("command not found")
 type Command interface {
 	Run() error
 	ParseArgs(args []string) error
+	Usage() string
 }
 
 // Runner has a set of registered named commands that
@@ -42,9 +44,11 @@ type Runner struct {
 }
 
 func NewRunner() *Runner {
-	return &Runner{
+	r := &Runner{
 		commands: make(map[string]Command),
 	}
+	r.Register("help", &helpCommand{runner: r})
+	return r
 }
 
 func (cs *Runner) Register(name string, cmd Command) {
@@ -80,4 +84,37 @@ func (cs *Runner) Run(name string) (err error) {
 		return err
 	}
 	return cmd.Run()
+}
+
+type helpCommand struct {
+	runner *Runner
+}
+
+func (h *helpCommand) Run() error {
+	var keys []string
+	for k := range h.runner.commands {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	fmt.Println("Usage: distrogen <command> [flags]")
+	fmt.Println("Available Commands:")
+	for _, k := range keys {
+		cmd := h.runner.commands[k]
+		fmt.Printf("\n  %s\n", k)
+		usage := cmd.Usage()
+		if usage != "" {
+			// Indent usage
+			fmt.Println(usage)
+		}
+	}
+	return nil
+}
+
+func (h *helpCommand) ParseArgs(args []string) error {
+	return nil
+}
+
+func (h *helpCommand) Usage() string {
+	return "    Prints help for all commands"
 }

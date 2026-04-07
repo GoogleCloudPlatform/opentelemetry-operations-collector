@@ -33,7 +33,6 @@ targets:
         test_distros:
           representative:
           - debian-cloud:debian-11
-          - ml-images:common-cu124-debian-11-py310
   centos8:
     package_extension:
       rpm
@@ -82,6 +81,7 @@ targets:
           - ubuntu-os-cloud:ubuntu-2404-lts-amd64
           exhaustive:
           - ubuntu-os-cloud:ubuntu-minimal-2404-lts-amd64
+          - ml-images:common-cu128-ubuntu-2404-nvidia-570
       aarch64:
         test_distros:
           representative:

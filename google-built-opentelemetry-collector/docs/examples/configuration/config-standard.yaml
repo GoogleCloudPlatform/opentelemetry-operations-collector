@@ -67,6 +67,12 @@ processors:
       - set(attributes["exported_project_id"], attributes["project_id"])
       - delete_key(attributes, "project_id")
 
+  resource/gcp_project_id:
+    attributes:
+    - key: gcp.project_id
+      value: ${GOOGLE_CLOUD_PROJECT}
+      action: insert
+
 exporters:
   # The googlecloud exporter will export telemetry to different
   # Google Cloud services:
@@ -87,6 +93,13 @@ exporters:
   # https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/googlemanagedprometheusexporter
   googlemanagedprometheus:
 
+  # The otlphttp exporter is used to send traces to Google Cloud Trace using OTLP http/proto
+  otlphttp:
+    encoding: proto
+    endpoint: https://telemetry.googleapis.com
+    auth:
+      authenticator: googleclientauth
+
 extensions:
   # Opens an endpoint on 13133 that can be used to check the
   # status of the collector. Since this does not configure the
@@ -100,10 +113,12 @@ extensions:
   # https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/healthcheckextension
   health_check:
     endpoint: 0.0.0.0:13133
+  googleclientauth:
 
 service:
   extensions:
   - health_check
+  - googleclientauth
   pipelines:
     logs:
       receivers:
@@ -130,9 +145,10 @@ service:
       processors:
       - resourcedetection
       - memory_limiter
+      - resource/gcp_project_id
       - batch
       exporters:
-      - googlecloud
+      - otlphttp
   # Internal telemetry for the collector supports both push and pull-based telemetry data transmission.
   # Leveraging the pre-configured OTLP receiver eliminates the need for an additional port.
   #

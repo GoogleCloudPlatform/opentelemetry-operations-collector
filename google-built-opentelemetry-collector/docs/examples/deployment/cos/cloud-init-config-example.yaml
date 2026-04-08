@@ -72,6 +72,12 @@ write_files:
           - set(attributes["exported_project_id"], attributes["project_id"])
           - delete_key(attributes, "project_id")
 
+      resource/gcp_project_id:
+        attributes:
+        - key: gcp.project_id
+          value: ${GOOGLE_CLOUD_PROJECT}
+          action: insert
+
     exporters:
       # The googlecloud exporter will export telemetry to different
       # Google Cloud services:
@@ -92,7 +98,19 @@ write_files:
       # https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/googlemanagedprometheusexporter
       googlemanagedprometheus:
 
+      # The otlphttp exporter is used to send traces to Google Cloud Trace using OTLP http/proto
+      otlphttp:
+        encoding: proto
+        endpoint: https://telemetry.googleapis.com
+        auth:
+          authenticator: googleclientauth
+
+    extensions:
+      googleclientauth:
+
     service:
+      extensions:
+      - googleclientauth
       pipelines:
         logs:
           receivers:
@@ -119,9 +137,10 @@ write_files:
           processors:
           - resourcedetection
           - memory_limiter
+          - resource/gcp_project_id
           - batch
           exporters:
-          - googlecloud
+          - otlphttp
       # Internal telemetry for the collector supports both push and pull-based telemetry data transmission.
       # Leveraging the pre-configured OTLP receiver eliminates the need for an additional port.
       #

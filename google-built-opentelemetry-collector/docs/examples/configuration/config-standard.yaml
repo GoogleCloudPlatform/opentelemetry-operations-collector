@@ -93,10 +93,11 @@ exporters:
   # https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/googlemanagedprometheusexporter
   googlemanagedprometheus:
 
-  # The otlphttp exporter is used to send traces to Google Cloud Trace using OTLP http/proto
-  otlphttp:
-    encoding: proto
-    endpoint: https://telemetry.googleapis.com
+  # The otlp exporter is used to send traces to Google Cloud Trace using OTLP gRPC
+  otlp:
+    endpoint: telemetry.googleapis.com:443
+    compression: none
+    balancer_name: pick_first
     auth:
       authenticator: googleclientauth
 
@@ -148,7 +149,7 @@ service:
       - transform/set_project_id
       - batch
       exporters:
-      - otlphttp
+      - otlp
   # Internal telemetry for the collector supports both push and pull-based telemetry data transmission.
   # Leveraging the pre-configured OTLP receiver eliminates the need for an additional port.
   #

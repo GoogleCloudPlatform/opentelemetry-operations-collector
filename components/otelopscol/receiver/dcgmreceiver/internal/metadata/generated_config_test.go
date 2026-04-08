@@ -27,22 +27,54 @@ func TestMetricsBuilderConfig(t *testing.T) {
 			name: "all_set",
 			want: MetricsBuilderConfig{
 				Metrics: MetricsConfig{
-					GpuDcgmClockFrequency:             MetricConfig{Enabled: true},
-					GpuDcgmClockThrottleDurationTime:  MetricConfig{Enabled: true},
-					GpuDcgmCodecDecoderUtilization:    MetricConfig{Enabled: true},
-					GpuDcgmCodecEncoderUtilization:    MetricConfig{Enabled: true},
-					GpuDcgmEccErrors:                  MetricConfig{Enabled: true},
-					GpuDcgmEnergyConsumption:          MetricConfig{Enabled: true},
-					GpuDcgmMemoryBandwidthUtilization: MetricConfig{Enabled: true},
-					GpuDcgmMemoryBytesUsed:            MetricConfig{Enabled: true},
-					GpuDcgmNvlinkIo:                   MetricConfig{Enabled: true},
-					GpuDcgmPcieIo:                     MetricConfig{Enabled: true},
-					GpuDcgmPipeUtilization:            MetricConfig{Enabled: true},
-					GpuDcgmSmOccupancy:                MetricConfig{Enabled: true},
-					GpuDcgmSmUtilization:              MetricConfig{Enabled: true},
-					GpuDcgmTemperature:                MetricConfig{Enabled: true},
-					GpuDcgmUtilization:                MetricConfig{Enabled: true},
-					GpuDcgmXidErrors:                  MetricConfig{Enabled: true},
+					GpuDcgmClockFrequency: MetricConfig{
+						Enabled: true,
+					},
+					GpuDcgmClockThrottleDurationTime: MetricConfig{
+						Enabled: true,
+					},
+					GpuDcgmCodecDecoderUtilization: MetricConfig{
+						Enabled: true,
+					},
+					GpuDcgmCodecEncoderUtilization: MetricConfig{
+						Enabled: true,
+					},
+					GpuDcgmEccErrors: MetricConfig{
+						Enabled: true,
+					},
+					GpuDcgmEnergyConsumption: MetricConfig{
+						Enabled: true,
+					},
+					GpuDcgmMemoryBandwidthUtilization: MetricConfig{
+						Enabled: true,
+					},
+					GpuDcgmMemoryBytesUsed: MetricConfig{
+						Enabled: true,
+					},
+					GpuDcgmNvlinkIo: MetricConfig{
+						Enabled: true,
+					},
+					GpuDcgmPcieIo: MetricConfig{
+						Enabled: true,
+					},
+					GpuDcgmPipeUtilization: MetricConfig{
+						Enabled: true,
+					},
+					GpuDcgmSmOccupancy: MetricConfig{
+						Enabled: true,
+					},
+					GpuDcgmSmUtilization: MetricConfig{
+						Enabled: true,
+					},
+					GpuDcgmTemperature: MetricConfig{
+						Enabled: true,
+					},
+					GpuDcgmUtilization: MetricConfig{
+						Enabled: true,
+					},
+					GpuDcgmXidErrors: MetricConfig{
+						Enabled: true,
+					},
 				},
 				ResourceAttributes: ResourceAttributesConfig{
 					GpuModel:  ResourceAttributeConfig{Enabled: true},
@@ -55,22 +87,54 @@ func TestMetricsBuilderConfig(t *testing.T) {
 			name: "none_set",
 			want: MetricsBuilderConfig{
 				Metrics: MetricsConfig{
-					GpuDcgmClockFrequency:             MetricConfig{Enabled: false},
-					GpuDcgmClockThrottleDurationTime:  MetricConfig{Enabled: false},
-					GpuDcgmCodecDecoderUtilization:    MetricConfig{Enabled: false},
-					GpuDcgmCodecEncoderUtilization:    MetricConfig{Enabled: false},
-					GpuDcgmEccErrors:                  MetricConfig{Enabled: false},
-					GpuDcgmEnergyConsumption:          MetricConfig{Enabled: false},
-					GpuDcgmMemoryBandwidthUtilization: MetricConfig{Enabled: false},
-					GpuDcgmMemoryBytesUsed:            MetricConfig{Enabled: false},
-					GpuDcgmNvlinkIo:                   MetricConfig{Enabled: false},
-					GpuDcgmPcieIo:                     MetricConfig{Enabled: false},
-					GpuDcgmPipeUtilization:            MetricConfig{Enabled: false},
-					GpuDcgmSmOccupancy:                MetricConfig{Enabled: false},
-					GpuDcgmSmUtilization:              MetricConfig{Enabled: false},
-					GpuDcgmTemperature:                MetricConfig{Enabled: false},
-					GpuDcgmUtilization:                MetricConfig{Enabled: false},
-					GpuDcgmXidErrors:                  MetricConfig{Enabled: false},
+					GpuDcgmClockFrequency: MetricConfig{
+						Enabled: false,
+					},
+					GpuDcgmClockThrottleDurationTime: MetricConfig{
+						Enabled: false,
+					},
+					GpuDcgmCodecDecoderUtilization: MetricConfig{
+						Enabled: false,
+					},
+					GpuDcgmCodecEncoderUtilization: MetricConfig{
+						Enabled: false,
+					},
+					GpuDcgmEccErrors: MetricConfig{
+						Enabled: false,
+					},
+					GpuDcgmEnergyConsumption: MetricConfig{
+						Enabled: false,
+					},
+					GpuDcgmMemoryBandwidthUtilization: MetricConfig{
+						Enabled: false,
+					},
+					GpuDcgmMemoryBytesUsed: MetricConfig{
+						Enabled: false,
+					},
+					GpuDcgmNvlinkIo: MetricConfig{
+						Enabled: false,
+					},
+					GpuDcgmPcieIo: MetricConfig{
+						Enabled: false,
+					},
+					GpuDcgmPipeUtilization: MetricConfig{
+						Enabled: false,
+					},
+					GpuDcgmSmOccupancy: MetricConfig{
+						Enabled: false,
+					},
+					GpuDcgmSmUtilization: MetricConfig{
+						Enabled: false,
+					},
+					GpuDcgmTemperature: MetricConfig{
+						Enabled: false,
+					},
+					GpuDcgmUtilization: MetricConfig{
+						Enabled: false,
+					},
+					GpuDcgmXidErrors: MetricConfig{
+						Enabled: false,
+					},
 				},
 				ResourceAttributes: ResourceAttributesConfig{
 					GpuModel:  ResourceAttributeConfig{Enabled: false},

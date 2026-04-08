@@ -3,8 +3,8 @@
 DISTRIBUTION_NAME = google-built-opentelemetry-collector
 
 # Variables filled in from distro specification
-VERSION ?= 0.144.0
-OTEL_VERSION ?= 0.144.0
+VERSION ?= 0.148.0
+OTEL_VERSION ?= 0.148.0
 OTEL_VERSION_TAG = v$(OTEL_VERSION)
 COLLECTOR_BINARY_NAME = otelcol-google
 COLLECTOR_BUILD_TEMP_DIR = $(PWD)/_build
@@ -21,7 +21,7 @@ TOOLS_DIR = $(PWD)/.tools
 
 OCB_BIN ?= $(TOOLS_DIR)/ocb
 
-GO_VERSION = 1.25.6
+GO_VERSION = 1.26.1
 GO_BIN_DIR ?= $(TOOLS_DIR)/go/bin
 GO_BIN ?= $(GO_BIN_DIR)/go
 SET_GO_BIN_PATH ?= PATH="$(GO_BIN_DIR):$$PATH"
@@ -29,6 +29,9 @@ SET_GO_BIN_PATH ?= PATH="$(GO_BIN_DIR):$$PATH"
 USE_GO_PROXY ?= 
 
 GORELEASER_BIN ?= $(TOOLS_DIR)/goreleaser
+
+COSIGN_BIN ?= $(TOOLS_DIR)/cosign
+SET_COSIGN_BIN_PATH ?= PATH="$(TOOLS_DIR):$$PATH"
 
 .PHONY: build
 build: $(COLLECTOR_BINARY_NAME)
@@ -154,8 +157,8 @@ clean-build-dir:
 # These targets are for invoking goreleaser.
 
 .PHONY: goreleaser-release
-goreleaser-release: $(GORELEASER_BIN) ocb-generate
-	$(SET_GO_BIN_PATH) $(GORELEASER_BIN) release --snapshot --clean
+goreleaser-release: $(GORELEASER_BIN) $(COSIGN_BIN) ocb-generate
+	$(SET_GO_BIN_PATH) $(SET_COSIGN_BIN_PATH) $(GORELEASER_BIN) release --snapshot --clean
 	# I love umask it's my favourite
 	chmod -R o+r ./dist
 
@@ -185,6 +188,9 @@ go: $(GO_BIN)
 .PHONY: goreleaser
 goreleaser: $(GORELEASER_BIN)
 
+.PHONY: cosign
+cosign: $(COSIGN_BIN)
+
 # Install the required version of Go.
 $(GO_BIN): GO_ARCHIVE = go$(GO_VERSION).$(BUILDOS)-$(BUILDARCH).tar.gz
 $(GO_BIN):
@@ -212,6 +218,14 @@ $(GORELEASER_BIN): $(GO_BIN) $(OCB_BIN)
 	mkdir -p $(TOOLS_DIR) ;\
 	echo "Installing goreleaser at $(TOOLS_DIR)" ;\
 	GOBIN=$(TOOLS_DIR) CGO_ENABLED=0 $(GO_BIN) install -trimpath -ldflags="-s -w" github.com/goreleaser/goreleaser/v2@latest ;\
+	}
+
+$(COSIGN_BIN): $(GO_BIN) $(OCB_BIN)
+	@{ \
+	set -e ;\
+	mkdir -p $(TOOLS_DIR) ;\
+	echo "Installing cosign at $(TOOLS_DIR)" ;\
+	GOBIN=$(TOOLS_DIR) CGO_ENABLED=0 $(GO_BIN) install -trimpath -ldflags="-s -w" github.com/sigstore/cosign/v2/cmd/cosign@latest ;\
 	}
 
 .PHONY: clean-tools

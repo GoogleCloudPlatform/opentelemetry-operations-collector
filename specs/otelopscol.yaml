@@ -15,13 +15,13 @@
 name: otelopscol
 description: "OpenTelemetry Collector binary used by the Ops Agent"
 module: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/otelopscol
-version: v0.147.0
-opentelemetry_version: 0.147.0
-opentelemetry_stable_version: 1.53.0
+version: v0.148.0
+opentelemetry_version: 0.148.0
+opentelemetry_stable_version: 1.54.0
 binary_name: otelopscol
 build_container: debian
 collector_cgo: true
-go_version: 1.23.2
+go_version: 1.26.1
 build_tags: gpu
 
 components:
@@ -101,3 +101,6 @@ replaces:
   - from: github.com/GoogleCloudPlatform/opentelemetry-operations-collector
     to: ../../
     reason: Reference root module of repository to find dependency packages.
+  - from: github.com/buger/jsonparser
+    to: github.com/buger/jsonparser v1.1.2
+    reason: Force update buger/jsonparser to v1.1.2 to fix vulnerability

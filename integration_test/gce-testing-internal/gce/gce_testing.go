@@ -1142,25 +1142,6 @@ func addFrameworkMetadata(imageSpec string, inputMetadata map[string]string) (ma
 		if _, ok := metadataCopy["startup-script"]; ok {
 			return nil, errors.New("the 'startup-script' metadata key is reserved for future use. Instead, wait for the instance to be ready and then run things with RunRemotely() or RunScriptRemotely()")
 		}
-		// TODO(b/380470389): we actually *can't* do RunRemotely() on DLVM images due to a bug.
-		// The workaround for the bug is to deploy a fix in-VM via startup scripts.
-		if strings.Contains(imageSpec, "common-gpu-debian-11-py310") {
-			metadataCopy["startup-script"] = fmt.Sprintf(`
-#!/bin/bash
-# Give time for the guest agent and jupyter stuff to finish modifying
-# /etc/passwd and test_user home directory
-sleep 120
-HOMEDIR=/home/%[1]s
-SSHFILE=$HOMEDIR/.ssh/authorized_keys
-if [ ! -f "$SSHFILE" ]; then
-  sudo mkdir -p "$HOMEDIR/.ssh"
-  sudo touch "$SSHFILE"
-fi
-sudo chown -R %[1]s:%[1]s "$HOMEDIR"
-sudo chmod 600 "$SSHFILE"`,
-				sshUserName,
-			)
-		}
 	}
 	return metadataCopy, nil
 }
@@ -1306,7 +1287,7 @@ func verifyVMCreation(ctx context.Context, logger *log.Logger, vm *VM) error {
 	// Removing flaky rhui repositories due to b/265341502
 	if IsRHEL(vm.ImageSpec) {
 		if _, err := RunRemotely(ctx,
-			logger, vm, `sudo yum -y --disablerepo=rhui-rhel* install dnf-plugins-core && sudo yum config-manager --disable "rhui-rhel*"`); err != nil {
+			logger, vm, `sudo yum -y --disablerepo=rhui-* install dnf-plugins-core && sudo yum config-manager --disable "rhui-*"`); err != nil {
 			return fmt.Errorf("disabling flaky repos failed: %w", err)
 		}
 	}
@@ -2036,7 +2017,7 @@ func InstallGcloudIfNeeded(ctx context.Context, logger *log.Logger, vm *VM) erro
 	if IsARM(vm.ImageSpec) {
 		gcloudArch = "arm"
 	}
-	gcloudPkg := "google-cloud-cli-453.0.0-linux-" + gcloudArch + ".tar.gz"
+	gcloudPkg := "google-cloud-cli-561.0.0-linux-" + gcloudArch + ".tar.gz"
 	installFromTarball := `
 curl -O https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/` + gcloudPkg + `
 INSTALL_DIR="$(readlink --canonicalize .)"
@@ -2063,6 +2044,7 @@ sudo ln -s ${INSTALL_DIR}/google-cloud-sdk/bin/gcloud /usr/bin/gcloud
 	// b/308962066: The GCloud CLI ARM Linux tarballs do not have bundled Python
 	// and the GCloud CLI requires Python >= 3.8. Install Python311 for ARM VMs
 	if IsARM(vm.ImageSpec) {
+		pythonBin := "/usr/bin/python3.11"
 		// This is what's used on openSUSE.
 		repoSetupCmd := "sudo zypper --non-interactive refresh"
 		if strings.Contains(vm.ImageSpec, "sles-12") {
@@ -2071,29 +2053,34 @@ sudo ln -s ${INSTALL_DIR}/google-cloud-sdk/bin/gcloud /usr/bin/gcloud
 		// For SLES 15 ARM: use a vendored repo to reduce flakiness of the
 		// external repos. See http://go/sdi/releases/build-test-release/vendored
 		// for details.
+		installCmd = `set -ex
+`
 		if strings.Contains(vm.ImageSpec, "sles-15") {
 			repoSetupCmd = `sudo zypper --non-interactive addrepo -g -t YUM https://us-yum.pkg.dev/projects/cloud-ops-agents-artifacts-dev/google-cloud-monitoring-sles15-aarch64-test-vendor test-vendor
 sudo rpm --import https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg
 sudo zypper --non-interactive refresh test-vendor`
+			installCmd += repoSetupCmd + `
+sudo zypper --non-interactive install python311 python3-certifi
+`
+		} else if strings.Contains(vm.ImageSpec, "sles-16") {
+			// SLES 16 already comes with python 3.13+ installed as /usr/bin/python3
+			pythonBin = "/usr/bin/python3"
 		}
 
-		installCmd = `set -ex
-` + repoSetupCmd + `
-sudo zypper --non-interactive install python311 python3-certifi
-
-# On SLES 15 and OpenSUSE Leap arm, python3 is Python 3.6. Tell gcloud to use python3.11.
-export CLOUDSDK_PYTHON=/usr/bin/python3.11
+		installCmd += `
+# Tell gcloud to use the designated python executable.
+export CLOUDSDK_PYTHON=` + pythonBin + `
 
 ` + installFromTarball + `
 
 # Upgrade to the latest version
-sudo CLOUDSDK_PYTHON=/usr/bin/python3.11 ${INSTALL_DIR}/google-cloud-sdk/bin/gcloud components update --quiet
+sudo CLOUDSDK_PYTHON=` + pythonBin + ` ${INSTALL_DIR}/google-cloud-sdk/bin/gcloud components update --quiet
 
 # Make a "gcloud" bash script in /usr/bin that runs the copy of gcloud that
 # was installed into $INSTALL_DIR with CLOUDSDK_PYTHON set.
 sudo tee /usr/bin/gcloud > /dev/null << EOF
 #!/usr/bin/env bash
-CLOUDSDK_PYTHON=/usr/bin/python3.11 ${INSTALL_DIR}/google-cloud-sdk/bin/gcloud "\$@"
+CLOUDSDK_PYTHON=` + pythonBin + ` ${INSTALL_DIR}/google-cloud-sdk/bin/gcloud "\$@"
 EOF
 sudo chmod a+x /usr/bin/gcloud
 `

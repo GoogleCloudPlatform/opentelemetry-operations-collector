@@ -67,11 +67,11 @@ processors:
       - set(attributes["exported_project_id"], attributes["project_id"])
       - delete_key(attributes, "project_id")
 
-  resource/gcp_project_id:
-    attributes:
-    - key: gcp.project_id
-      value: ${GOOGLE_CLOUD_PROJECT}
-      action: insert
+  transform/set_project_id:
+    error_mode: ignore
+    trace_statements:
+    - set(resource.attributes["gcp.project_id"], resource.attributes["gcp.project.id"]) where resource.attributes["gcp.project.id"] != nil
+    - set(resource.attributes["gcp.project_id"], resource.attributes["cloud.account.id"]) where resource.attributes["gcp.project_id"] == nil and resource.attributes["cloud.account.id"] != nil
 
 exporters:
   # The googlecloud exporter will export telemetry to different
@@ -145,7 +145,7 @@ service:
       processors:
       - resourcedetection
       - memory_limiter
-      - resource/gcp_project_id
+      - transform/set_project_id
       - batch
       exporters:
       - otlphttp

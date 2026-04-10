@@ -84,6 +84,10 @@ func TestSpecValidationError(t *testing.T) {
 			name:        "boringcrypto_cgo_off",
 			expectedErr: ErrSpecValidationBoringCryptoWithoutCGO,
 		},
+		{
+			name:        "vendor_deps_without_permanent_ocb",
+			expectedErr: ErrSpecValidationVendorDepsWithoutPermanentOCB,
+		},
 	}
 
 	for _, tc := range testCases {

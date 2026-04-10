@@ -120,6 +120,8 @@ replaces:
 feature_gates:
     - exporter.googlemanagedprometheus.intToDouble
     - exporter.googlecloud.CustomMonitoredResources
+permanent_ocb_directory: true
 collector_cgo: true
 component_module_base: ""
 distrogen_version: ""
+ocboutputdir: generated_collector

@@ -17,6 +17,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -30,6 +31,11 @@ var ErrNoDiff = errors.New("no differences found with previous generation")
 
 // -rw-r--r--
 var DefaultFileMode fs.FileMode = 0644
+
+const (
+	tempOCBDirname = "_build"
+	permanentOCBDirname = "generated_collector"
+)
 
 type BuildContainerOption string
 
@@ -63,11 +69,15 @@ type DistributionSpec struct {
 	CustomValues                map[string]any          `yaml:"custom_values,omitempty"`
 	FeatureGates                FeatureGates            `yaml:"feature_gates,omitempty"`
 	GoProxy                     string                  `yaml:"go_proxy,omitempty"`
+	PermanentOCBDirectory       bool                    `yaml:"permanent_ocb_directory,omitempty"`
+	VendorDependencies          bool                    `yaml:"vendor_dependencies,omitempty"`
 
 	// CollectorCGO determines whether the Collector will be built with CGO.
 	CollectorCGO        bool   `yaml:"collector_cgo,omitempty"`
 	ComponentModuleBase string `yaml:"component_module_base"`
 	DistrogenVersion    string `yaml:"distrogen_version"`
+
+	OCBOutputDir string
 }
 
 // RenderGoMajorVersion will parse the GoVersion in the spec and return a version without a patch
@@ -117,6 +127,7 @@ func (s *DistributionSpec) Query(field string) (string, error) {
 var (
 	ErrSpecValidationBoringCryptoWithoutCGO    = errors.New("boringcrypto build is not possible with collector_cgo turned off")
 	ErrSpecValidationBoringCryptoWithoutDebian = errors.New("boringcrypto is only possible with the debian build container")
+	ErrSpecValidationVendorDepsWithoutPermanentOCB = errors.New("vendor_dependencies is only possible with permanent_ocb_directory set to true")
 )
 
 // NewDistributionSpec loads the DistributionSpec from a yaml file.
@@ -150,6 +161,19 @@ func NewDistributionSpec(path string) (*DistributionSpec, error) {
 	// the canonical OpenTelemetry version, most of the time it is the same.
 	if spec.OpenTelemetryContribVersion == "" {
 		spec.OpenTelemetryContribVersion = spec.OpenTelemetryVersion
+	}
+
+	// If the PermanentOCBDirectory feature is not set,
+	// default OCBOutputPath to a default value
+	// that is properly gitignored in project mode.
+	if !spec.PermanentOCBDirectory {
+		spec.OCBOutputDir = tempOCBDirname
+	} else {
+		spec.OCBOutputDir = permanentOCBDirname
+	}
+
+	if spec.VendorDependencies && !spec.PermanentOCBDirectory {
+		return nil, ErrSpecValidationVendorDepsWithoutPermanentOCB
 	}
 
 	return spec, nil
@@ -201,7 +225,7 @@ func NewDistributionGenerator(spec *DistributionSpec, registry *Registry, forceG
 		}
 	}
 
-	tmpDir, err := os.MkdirTemp(".", d.GenerateDirName)
+	tmpDir, err := os.MkdirTemp("", d.GenerateDirName)
 	if err != nil {
 		return nil, err
 	}
@@ -264,24 +288,9 @@ func (d *DistributionGenerator) MoveGeneratedDirToWd() (err error) {
 	}
 
 	generateDest := filepath.Join(wd, d.GenerateDirName)
-	bkpPath := generateDest + "-bkp"
 
-	// Check if the distribution directory exists, rename it to backup
-	// if it does.
-	if _, err := os.Open(generateDest); err == nil {
-		if err := os.Rename(generateDest, bkpPath); err != nil {
-			return err
-		}
-
-		// Delete the backup. Sets the named `err` return value
-		// if removal of backup fails.
-		defer func() {
-			err = os.RemoveAll(bkpPath)
-		}()
-	}
-
-	// Move generated directory to working directory.
-	if err := os.Rename(d.GeneratePath, generateDest); err != nil {
+	// Copy generated files to working directory.
+	if err := copyDir(d.GeneratePath, generateDest); err != nil {
 		return err
 	}
 
@@ -389,6 +398,11 @@ func (dg *DistributionGenerator) getGeneratedFilesInDir(dir string) (map[string]
 			return nil
 		}
 
+		// Don't include the collector directory in comparison.
+		if strings.Contains(path, "/"+permanentOCBDirname+"/") {
+			return nil
+		}
+
 		if d.Name() == dg.Spec.BinaryName {
 			return nil
 		}
@@ -414,6 +428,10 @@ func (d *DistributionGenerator) Clean() {
 	}
 }
 
+type TemplateConstants struct {
+	TempOCBDirname string
+}
+
 // TemplateContext is the context that will be passed into any default or user
 // provided templates.
 type TemplateContext struct {
@@ -428,13 +446,20 @@ type TemplateContext struct {
 
 	SystemdServiceName  string
 	SystemdConfFileName string
+
+	Constants TemplateConstants
 }
 
 // NewTemplateContextFromSpec creates a TemplateContext from a DistributionSpec and a Registry.
 // It is expected that this registry will be already merged with the registries provided by the
 // user.
 func NewTemplateContextFromSpec(spec *DistributionSpec, registry *Registry) (*TemplateContext, error) {
-	context := TemplateContext{DistributionSpec: spec}
+	context := TemplateContext{
+		DistributionSpec: spec,
+		Constants: TemplateConstants{
+			TempOCBDirname: tempOCBDirname,
+		},
+	}
 
 	otelVersion := otelComponentVersion{
 		core:       spec.OpenTelemetryVersion,
@@ -517,4 +542,51 @@ func (rs ComponentReplaces) Render() string {
 		result += fmt.Sprintf("%s\n", r)
 	}
 	return result
+}
+
+// copyDir recursively copies the contents of a source directory to a destination directory
+// one file at a time. This is done deliberately to ensure that when updating the generated
+// distribution, we only replace files that are actually distrogen-managed templates.
+func copyDir(src, dst string) error {
+	return filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		dstPath := filepath.Join(dst, rel)
+
+		if d.IsDir() {
+			info, err := d.Info()
+			if err != nil {
+				return err
+			}
+			return os.MkdirAll(dstPath, info.Mode())
+		}
+
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+
+		srcFile, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer srcFile.Close()
+
+		dstFile, err := os.OpenFile(dstPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, info.Mode())
+		if err != nil {
+			return err
+		}
+		defer dstFile.Close()
+
+		if _, err := io.Copy(dstFile, srcFile); err != nil {
+			return err
+		}
+
+		return nil
+	})
 }

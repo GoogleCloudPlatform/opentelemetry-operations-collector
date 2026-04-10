@@ -133,7 +133,7 @@ COLLECTOR_LD_FLAGS_STRIP ?= -s -w
 COLLECTOR_LD_FLAGS_STATIC_LINK ?= -linkmode=external -extldflags=-static
 
 # Using OCB and the local manifest file, build a collector.
-$(COLLECTOR_BINARY_NAME): $(COLLECTOR_BUILD_DIR)
+$(COLLECTOR_BINARY_NAME): $(COLLECTOR_BUILD_DIR) $(GO_BIN)
 	cd $(COLLECTOR_BUILD_DIR) && \
 		GOWORK=off \
 		GOEXPERIMENT=boringcrypto \

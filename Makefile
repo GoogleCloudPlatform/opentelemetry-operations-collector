@@ -26,7 +26,7 @@ presubmit: checklicense misspell lint compare-all
 #######################
 
 .PHONY: update-google-built-otel
-update-google-built-otel: update-google-otel-components test-google-otel-components gen-google-built-otel
+update-google-built-otel: update-google-otel-components test-google-otel-components gen-google-built-otel update-ocb-google-built-otel
 
 .PHONY: update-otelopscol
 update-otelopscol: update-otelopscol-components test-otelopscol-components gen-otelopscol
@@ -80,18 +80,25 @@ GEN_GOOGLE_BUILT_OTEL=$(RUN_DISTROGEN) generate --spec ./specs/google-built-open
 .PHONY: gen-google-built-otel
 gen-google-built-otel:
 	@$(GEN_GOOGLE_BUILT_OTEL)
+	@cd google-built-opentelemetry-collector && $(MAKE) clean-tools
 
 .PHONY: regen-google-built-otel
 regen-google-built-otel:
 	@$(GEN_GOOGLE_BUILT_OTEL) --force
+	@cd google-built-opentelemetry-collector && $(MAKE) clean-tools
 
 .PHONY: regen-google-built-otel-v
 regen-google-built-otel-v:
 	@$(GEN_GOOGLE_BUILT_OTEL) --force -v
+	@cd google-built-opentelemetry-collector && $(MAKE) clean-tools
 
 .PHONY: compare-google-built-otel
 compare-google-built-otel:
 	@$(GEN_GOOGLE_BUILT_OTEL) --force --compare
+
+.PHONY: update-ocb-google-built-otel
+update-ocb-google-built-otel:
+	cd google-built-opentelemetry-collector && $(MAKE) update-ocb-directory
 
 GEN_OTELOPSCOL=$(RUN_DISTROGEN) generate --spec ./specs/otelopscol.yaml \
 								--registry ./components/otelopscol/registry.yaml \
@@ -99,14 +106,17 @@ GEN_OTELOPSCOL=$(RUN_DISTROGEN) generate --spec ./specs/otelopscol.yaml \
 .PHONY: gen-otelopscol
 gen-otelopscol:
 	@$(GEN_OTELOPSCOL)
+	@cd otelopscol && $(MAKE) clean-tools
 
 .PHONY: regen-otelopscol
 regen-otelopscol:
 	@$(GEN_OTELOPSCOL) -f
+	@cd otelopscol && $(MAKE) clean-tools
 
 .PHONY: regen-otelopscol-v
 regen-otelopscol-v:
 	@$(GEN_OTELOPSCOL) -f -v
+	@cd otelopscol && $(MAKE) clean-tools
 
 .PHONY: compare-otelopscol
 compare-otelopscol:

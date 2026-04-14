@@ -32,3 +32,4 @@ feature_gates:
 collector_cgo: true
 component_module_base: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/basic
 distrogen_version: v0.130.1-0.20250724183747-261516e1bff1
+ocboutputdir: _build

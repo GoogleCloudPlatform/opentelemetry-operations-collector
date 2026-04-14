@@ -12,6 +12,7 @@ SPEC_FILE = spec.yaml
 TOOLS_DIR ?= $(PWD)/.tools
 DISTROGEN_BIN ?= $(TOOLS_DIR)/distrogen
 MDATAGEN_BIN ?= $(TOOLS_DIR)/mdatagen
+DISTRO_DIR = $(PWD)/basic-distro
 
 $(DISTROGEN_BIN):
 	$(MAKE) tools-dir
@@ -19,7 +20,7 @@ $(DISTROGEN_BIN):
 
 $(MDATAGEN_BIN):
 	$(MAKE) tools-dir
-	GOBIN=$(TOOLS_DIR) bash ./scripts/download_mdatagen.sh v$(OTEL_VERSION)
+	GOBIN=$(TOOLS_DIR) bash ./scripts/download_mdatagen.sh $${OTEL_VERSION}
 
 # This is a PHONY target cause if you make it as a normal recipe
 # it gets very confused because the creation date of the .tools
@@ -37,9 +38,17 @@ distrogen: $(DISTROGEN_BIN)
 
 COMPONENT_DIR = components
 
-update-otel-components: workspace-update $(MDATAGEN_BIN)
-	export PATH="$(TOOLS_DIR):${PATH}" && cd components &&\
-	$(MAKE) OTEL_VERSION=v$(OTEL_VERSION) OTEL_CONTRIB_VERSION=v$(OTEL_CONTRIB_VERSION) update-components
+DISTROGEN_QUERY = $(DISTROGEN_BIN) query --spec $(SPEC_FILE) --field
+
+.PHONY: update-otel-components
+update-otel-components: $(DISTROGEN_BIN) $(MDATAGEN_BIN) workspace-update
+	export OTEL_VERSION = v$(shell $(DISTROGEN_QUERY) opentelemetry_version) && \
+	export OTEL_CONTRIB_VERSION = v$(shell $(DISTROGEN_QUERY) opentelemetry_contrib_version) && \
+	export PATH="$(TOOLS_DIR):${PATH}" && \
+	cd components && \
+	$(MAKE) update-components
+	$(MAKE) gen
+
 
 .PHONY: test-otel-components
 test-otel-components: go.work

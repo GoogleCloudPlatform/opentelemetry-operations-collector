@@ -93,3 +93,4 @@ replaces:
 collector_cgo: true
 component_module_base: ""
 distrogen_version: ""
+ocboutputdir: _build

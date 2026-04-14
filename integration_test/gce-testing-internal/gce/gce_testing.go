@@ -833,6 +833,9 @@ func RunGcloud(ctx context.Context, logger *log.Logger, stdin string, args []str
 	env := make(map[string]string)
 	if configDir := ctx.Value(gcloudConfigDirKey); configDir != nil {
 		env["CLOUDSDK_CONFIG"] = configDir.(string)
+		// TODO(b/502589964): Disabling background tasks may reduce connection flakiness
+		env["CLOUDSDK_COMPONENT_MANAGER_DISABLE_UPDATE_CHECK"] = "true"
+		env["CLOUDSDK_CORE_DISABLE_USAGE_REPORTING"] = "true"
 	}
 	return runCommand(ctx, logger, strings.NewReader(stdin), append([]string{gcloudPath}, args...), env)
 }

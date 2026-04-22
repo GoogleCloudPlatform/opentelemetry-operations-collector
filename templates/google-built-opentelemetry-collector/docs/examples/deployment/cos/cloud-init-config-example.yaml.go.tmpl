@@ -83,7 +83,6 @@ write_files:
       # Google Cloud services:
       # Logs -> Cloud Logging
       # Metrics -> Cloud Monitoring
-      # Traces -> Cloud Trace
       #
       # Docs:
       # https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/googlecloudexporter
@@ -98,7 +97,7 @@ write_files:
       # https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/googlemanagedprometheusexporter
       googlemanagedprometheus:
 
-      # The otlp exporter is used to send traces to Google Cloud Trace using OTLP gRPC
+      # The otlp exporter is used to send traces to GCP Telemetry API using OTLP gRPC
       otlp:
         endpoint: telemetry.googleapis.com:443
         compression: none

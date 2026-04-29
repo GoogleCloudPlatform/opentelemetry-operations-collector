@@ -22,12 +22,12 @@ Current number of GPU memory bytes used by state. Summing the values of all stat
 
 #### Attributes
 
-| Name | Description | Values | Requirement Level |
-| ---- | ----------- | ------ | -------- |
-| model | GPU model | Any Str | Recommended |
-| gpu_number | GPU index starting at 0. | Any Str | Recommended |
-| uuid | GPU universally unique identifier | Any Str | Recommended |
-| memory_state | GPU memory used or free. | Str: ``used``, ``free`` | Recommended |
+| Name | Description | Values | Requirement Level | Semantic Convention |
+| ---- | ----------- | ------ | ----------------- | ------------------- |
+| model | GPU model | Any Str | Recommended | - |
+| gpu_number | GPU index starting at 0. | Any Str | Recommended | - |
+| uuid | GPU universally unique identifier | Any Str | Recommended | - |
+| memory_state | GPU memory used or free. | Str: ``used``, ``free`` | Recommended | - |
 
 ### nvml.gpu.processes.max_bytes_used
 
@@ -39,16 +39,16 @@ Maximum total GPU memory in bytes that was ever allocated by the process.
 
 #### Attributes
 
-| Name | Description | Values | Requirement Level |
-| ---- | ----------- | ------ | -------- |
-| model | GPU model | Any Str | Recommended |
-| gpu_number | GPU index starting at 0. | Any Str | Recommended |
-| uuid | GPU universally unique identifier | Any Str | Recommended |
-| pid | Process ID. | Any Int | Recommended |
-| process | Process name. | Any Str | Recommended |
-| command | Process command. | Any Str | Recommended |
-| command_line | Process command line, 1024 characters maximum. | Any Str | Recommended |
-| owner | Process owner. | Any Str | Recommended |
+| Name | Description | Values | Requirement Level | Semantic Convention |
+| ---- | ----------- | ------ | ----------------- | ------------------- |
+| model | GPU model | Any Str | Recommended | - |
+| gpu_number | GPU index starting at 0. | Any Str | Recommended | - |
+| uuid | GPU universally unique identifier | Any Str | Recommended | - |
+| pid | Process ID. | Any Int | Recommended | - |
+| process | Process name. | Any Str | Recommended | - |
+| command | Process command. | Any Str | Recommended | - |
+| command_line | Process command line, 1024 characters maximum. | Any Str | Recommended | - |
+| owner | Process owner. | Any Str | Recommended | - |
 
 ### nvml.gpu.processes.utilization
 
@@ -60,16 +60,16 @@ Fraction of time over the process's life thus far during which one or more kerne
 
 #### Attributes
 
-| Name | Description | Values | Requirement Level |
-| ---- | ----------- | ------ | -------- |
-| model | GPU model | Any Str | Recommended |
-| gpu_number | GPU index starting at 0. | Any Str | Recommended |
-| uuid | GPU universally unique identifier | Any Str | Recommended |
-| pid | Process ID. | Any Int | Recommended |
-| process | Process name. | Any Str | Recommended |
-| command | Process command. | Any Str | Recommended |
-| command_line | Process command line, 1024 characters maximum. | Any Str | Recommended |
-| owner | Process owner. | Any Str | Recommended |
+| Name | Description | Values | Requirement Level | Semantic Convention |
+| ---- | ----------- | ------ | ----------------- | ------------------- |
+| model | GPU model | Any Str | Recommended | - |
+| gpu_number | GPU index starting at 0. | Any Str | Recommended | - |
+| uuid | GPU universally unique identifier | Any Str | Recommended | - |
+| pid | Process ID. | Any Int | Recommended | - |
+| process | Process name. | Any Str | Recommended | - |
+| command | Process command. | Any Str | Recommended | - |
+| command_line | Process command line, 1024 characters maximum. | Any Str | Recommended | - |
+| owner | Process owner. | Any Str | Recommended | - |
 
 ### nvml.gpu.utilization
 
@@ -81,8 +81,8 @@ Fraction of time GPU was not idle since the last sample.
 
 #### Attributes
 
-| Name | Description | Values | Requirement Level |
-| ---- | ----------- | ------ | -------- |
-| model | GPU model | Any Str | Recommended |
-| gpu_number | GPU index starting at 0. | Any Str | Recommended |
-| uuid | GPU universally unique identifier | Any Str | Recommended |
+| Name | Description | Values | Requirement Level | Semantic Convention |
+| ---- | ----------- | ------ | ----------------- | ------------------- |
+| model | GPU model | Any Str | Recommended | - |
+| gpu_number | GPU index starting at 0. | Any Str | Recommended | - |
+| uuid | GPU universally unique identifier | Any Str | Recommended | - |

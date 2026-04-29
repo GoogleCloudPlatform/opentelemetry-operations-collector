@@ -30,9 +30,9 @@ Clock throttle total duration.
 
 #### Attributes
 
-| Name | Description | Values | Requirement Level |
-| ---- | ----------- | ------ | -------- |
-| gpu.clock.violation | Reason for throttling, one of [power, thermal, sync_boost, board_limit, low_util, reliability, app_clock, base_clock]. | Str: ``power``, ``thermal``, ``sync_boost``, ``board_limit``, ``low_util``, ``reliability``, ``app_clock``, ``base_clock`` | Recommended |
+| Name | Description | Values | Requirement Level | Semantic Convention |
+| ---- | ----------- | ------ | ----------------- | ------------------- |
+| gpu.clock.violation | Reason for throttling, one of [power, thermal, sync_boost, board_limit, low_util, reliability, app_clock, base_clock]. | Str: ``power``, ``thermal``, ``sync_boost``, ``board_limit``, ``low_util``, ``reliability``, ``app_clock``, ``base_clock`` | Recommended | - |
 
 ### gpu.dcgm.codec.decoder.utilization
 
@@ -60,9 +60,9 @@ Data corruption errors.
 
 #### Attributes
 
-| Name | Description | Values | Requirement Level |
-| ---- | ----------- | ------ | -------- |
-| gpu.error.type | The type of error, one of [sbe, dbe]. | Str: ``sbe``, ``dbe`` | Recommended |
+| Name | Description | Values | Requirement Level | Semantic Convention |
+| ---- | ----------- | ------ | ----------------- | ------------------- |
+| gpu.error.type | The type of error, one of [sbe, dbe]. | Str: ``sbe``, ``dbe`` | Recommended | - |
 
 ### gpu.dcgm.energy_consumption
 
@@ -90,9 +90,9 @@ Current number of GPU memory bytes used by state. Summing the values of all stat
 
 #### Attributes
 
-| Name | Description | Values | Requirement Level |
-| ---- | ----------- | ------ | -------- |
-| gpu.memory.state | GPU memory state, one of [free, used, reserved]. | Str: ``used``, ``free``, ``reserved`` | Recommended |
+| Name | Description | Values | Requirement Level | Semantic Convention |
+| ---- | ----------- | ------ | ----------------- | ------------------- |
+| gpu.memory.state | GPU memory state, one of [free, used, reserved]. | Str: ``used``, ``free``, ``reserved`` | Recommended | - |
 
 ### gpu.dcgm.nvlink.io
 
@@ -104,9 +104,9 @@ The number of bytes sent over NVLink, not including protocol headers.
 
 #### Attributes
 
-| Name | Description | Values | Requirement Level |
-| ---- | ----------- | ------ | -------- |
-| network.io.direction | Direction of the link traffic, one of [transmit, receive]. | Str: ``transmit``, ``receive`` | Recommended |
+| Name | Description | Values | Requirement Level | Semantic Convention |
+| ---- | ----------- | ------ | ----------------- | ------------------- |
+| network.io.direction | Direction of the link traffic, one of [transmit, receive]. | Str: ``transmit``, ``receive`` | Recommended | - |
 
 ### gpu.dcgm.pcie.io
 
@@ -118,9 +118,9 @@ The number of bytes sent over the PCIe bus, including both protocol headers and 
 
 #### Attributes
 
-| Name | Description | Values | Requirement Level |
-| ---- | ----------- | ------ | -------- |
-| network.io.direction | Direction of the link traffic, one of [transmit, receive]. | Str: ``transmit``, ``receive`` | Recommended |
+| Name | Description | Values | Requirement Level | Semantic Convention |
+| ---- | ----------- | ------ | ----------------- | ------------------- |
+| network.io.direction | Direction of the link traffic, one of [transmit, receive]. | Str: ``transmit``, ``receive`` | Recommended | - |
 
 ### gpu.dcgm.pipe.utilization
 
@@ -132,9 +132,9 @@ Fraction of cycles the corresponding GPU pipe was active, averaged over time and
 
 #### Attributes
 
-| Name | Description | Values | Requirement Level |
-| ---- | ----------- | ------ | -------- |
-| gpu.pipe | GPU pipe in use, one of [tensor, fp64, fp32, fp16]. | Str: ``tensor``, ``fp64``, ``fp32``, ``fp16`` | Recommended |
+| Name | Description | Values | Requirement Level | Semantic Convention |
+| ---- | ----------- | ------ | ----------------- | ------------------- |
+| gpu.pipe | GPU pipe in use, one of [tensor, fp64, fp32, fp16]. | Str: ``tensor``, ``fp64``, ``fp32``, ``fp16`` | Recommended | - |
 
 ### gpu.dcgm.sm.utilization
 
@@ -188,14 +188,14 @@ XID errors.
 
 #### Attributes
 
-| Name | Description | Values | Requirement Level |
-| ---- | ----------- | ------ | -------- |
-| gpu.error.xid | The XID code for the error, 1..143. | Any Int | Recommended |
+| Name | Description | Values | Requirement Level | Semantic Convention |
+| ---- | ----------- | ------ | ----------------- | ------------------- |
+| gpu.error.xid | The XID code for the error, 1..143. | Any Int | Recommended | - |
 
 ## Resource Attributes
 
-| Name | Description | Values | Enabled |
-| ---- | ----------- | ------ | ------- |
-| gpu.model | GPU model name. | Any Str | true |
-| gpu.number | GPU index starting at 0. | Any Str | true |
-| gpu.uuid | GPU universally unique identifier. | Any Str | true |
+| Name | Description | Values | Enabled | Semantic Convention |
+| ---- | ----------- | ------ | ------- | ------------------- |
+| gpu.model | GPU model name. | Any Str | true | - |
+| gpu.number | GPU index starting at 0. | Any Str | true | - |
+| gpu.uuid | GPU universally unique identifier. | Any Str | true | - |

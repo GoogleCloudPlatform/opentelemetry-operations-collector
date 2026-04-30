@@ -187,9 +187,9 @@ func TestMetricsBuilder(t *testing.T) {
 					assert.Equal(t, ts, dp.Timestamp())
 					assert.Equal(t, pmetric.NumberDataPointValueTypeDouble, dp.ValueType())
 					assert.InDelta(t, float64(1), dp.DoubleValue(), 0.01)
-					attrVal, ok := dp.Attributes().Get("gpu.clock.violation")
+					gpuClockViolationAttrVal, ok := dp.Attributes().Get("gpu.clock.violation")
 					assert.True(t, ok)
-					assert.Equal(t, "power", attrVal.Str())
+					assert.Equal(t, "power", gpuClockViolationAttrVal.Str())
 				case "gpu.dcgm.codec.decoder.utilization":
 					assert.False(t, validatedMetrics["gpu.dcgm.codec.decoder.utilization"], "Found a duplicate in the metrics slice: gpu.dcgm.codec.decoder.utilization")
 					validatedMetrics["gpu.dcgm.codec.decoder.utilization"] = true
@@ -228,9 +228,9 @@ func TestMetricsBuilder(t *testing.T) {
 					assert.Equal(t, ts, dp.Timestamp())
 					assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
 					assert.Equal(t, int64(1), dp.IntValue())
-					attrVal, ok := dp.Attributes().Get("gpu.error.type")
+					gpuErrorTypeAttrVal, ok := dp.Attributes().Get("gpu.error.type")
 					assert.True(t, ok)
-					assert.Equal(t, "sbe", attrVal.Str())
+					assert.Equal(t, "sbe", gpuErrorTypeAttrVal.Str())
 				case "gpu.dcgm.energy_consumption":
 					assert.False(t, validatedMetrics["gpu.dcgm.energy_consumption"], "Found a duplicate in the metrics slice: gpu.dcgm.energy_consumption")
 					validatedMetrics["gpu.dcgm.energy_consumption"] = true
@@ -269,9 +269,9 @@ func TestMetricsBuilder(t *testing.T) {
 					assert.Equal(t, ts, dp.Timestamp())
 					assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
 					assert.Equal(t, int64(1), dp.IntValue())
-					attrVal, ok := dp.Attributes().Get("gpu.memory.state")
+					gpuMemoryStateAttrVal, ok := dp.Attributes().Get("gpu.memory.state")
 					assert.True(t, ok)
-					assert.Equal(t, "used", attrVal.Str())
+					assert.Equal(t, "used", gpuMemoryStateAttrVal.Str())
 				case "gpu.dcgm.nvlink.io":
 					assert.False(t, validatedMetrics["gpu.dcgm.nvlink.io"], "Found a duplicate in the metrics slice: gpu.dcgm.nvlink.io")
 					validatedMetrics["gpu.dcgm.nvlink.io"] = true
@@ -286,9 +286,9 @@ func TestMetricsBuilder(t *testing.T) {
 					assert.Equal(t, ts, dp.Timestamp())
 					assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
 					assert.Equal(t, int64(1), dp.IntValue())
-					attrVal, ok := dp.Attributes().Get("network.io.direction")
+					networkIoDirectionAttrVal, ok := dp.Attributes().Get("network.io.direction")
 					assert.True(t, ok)
-					assert.Equal(t, "transmit", attrVal.Str())
+					assert.Equal(t, "transmit", networkIoDirectionAttrVal.Str())
 				case "gpu.dcgm.pcie.io":
 					assert.False(t, validatedMetrics["gpu.dcgm.pcie.io"], "Found a duplicate in the metrics slice: gpu.dcgm.pcie.io")
 					validatedMetrics["gpu.dcgm.pcie.io"] = true
@@ -303,9 +303,9 @@ func TestMetricsBuilder(t *testing.T) {
 					assert.Equal(t, ts, dp.Timestamp())
 					assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
 					assert.Equal(t, int64(1), dp.IntValue())
-					attrVal, ok := dp.Attributes().Get("network.io.direction")
+					networkIoDirectionAttrVal, ok := dp.Attributes().Get("network.io.direction")
 					assert.True(t, ok)
-					assert.Equal(t, "transmit", attrVal.Str())
+					assert.Equal(t, "transmit", networkIoDirectionAttrVal.Str())
 				case "gpu.dcgm.pipe.utilization":
 					assert.False(t, validatedMetrics["gpu.dcgm.pipe.utilization"], "Found a duplicate in the metrics slice: gpu.dcgm.pipe.utilization")
 					validatedMetrics["gpu.dcgm.pipe.utilization"] = true
@@ -318,9 +318,9 @@ func TestMetricsBuilder(t *testing.T) {
 					assert.Equal(t, ts, dp.Timestamp())
 					assert.Equal(t, pmetric.NumberDataPointValueTypeDouble, dp.ValueType())
 					assert.InDelta(t, float64(1), dp.DoubleValue(), 0.01)
-					attrVal, ok := dp.Attributes().Get("gpu.pipe")
+					gpuPipeAttrVal, ok := dp.Attributes().Get("gpu.pipe")
 					assert.True(t, ok)
-					assert.Equal(t, "tensor", attrVal.Str())
+					assert.Equal(t, "tensor", gpuPipeAttrVal.Str())
 				case "gpu.dcgm.sm.occupancy":
 					assert.False(t, validatedMetrics["gpu.dcgm.sm.occupancy"], "Found a duplicate in the metrics slice: gpu.dcgm.sm.occupancy")
 					validatedMetrics["gpu.dcgm.sm.occupancy"] = true
@@ -383,9 +383,9 @@ func TestMetricsBuilder(t *testing.T) {
 					assert.Equal(t, ts, dp.Timestamp())
 					assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
 					assert.Equal(t, int64(1), dp.IntValue())
-					attrVal, ok := dp.Attributes().Get("gpu.error.xid")
+					gpuErrorXidAttrVal, ok := dp.Attributes().Get("gpu.error.xid")
 					assert.True(t, ok)
-					assert.EqualValues(t, 13, attrVal.Int())
+					assert.EqualValues(t, 13, gpuErrorXidAttrVal.Int())
 				}
 			}
 		})

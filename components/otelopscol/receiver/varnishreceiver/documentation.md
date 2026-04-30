@@ -22,9 +22,9 @@ The backend connection type count.
 
 #### Attributes
 
-| Name | Description | Values | Requirement Level |
-| ---- | ----------- | ------ | -------- |
-| kind | The backend connection types. | Str: ``success``, ``recycle``, ``reuse``, ``fail``, ``unhealthy``, ``busy``, ``retry`` | Recommended |
+| Name | Description | Values | Requirement Level | Semantic Convention |
+| ---- | ----------- | ------ | ----------------- | ------------------- |
+| kind | The backend connection types. | Str: ``success``, ``recycle``, ``reuse``, ``fail``, ``unhealthy``, ``busy``, ``retry`` | Recommended | - |
 
 ### varnish.backend.request.count
 
@@ -44,9 +44,9 @@ The cache operation type count.
 
 #### Attributes
 
-| Name | Description | Values | Requirement Level |
-| ---- | ----------- | ------ | -------- |
-| operation | The cache operation types | Str: ``hit``, ``miss``, ``hit_pass`` | Recommended |
+| Name | Description | Values | Requirement Level | Semantic Convention |
+| ---- | ----------- | ------ | ----------------- | ------------------- |
+| operation | The cache operation types | Str: ``hit``, ``miss``, ``hit_pass`` | Recommended | - |
 
 ### varnish.client.request.count
 
@@ -58,9 +58,9 @@ The client request count.
 
 #### Attributes
 
-| Name | Description | Values | Requirement Level |
-| ---- | ----------- | ------ | -------- |
-| state | The client request states. | Str: ``received``, ``dropped`` | Recommended |
+| Name | Description | Values | Requirement Level | Semantic Convention |
+| ---- | ----------- | ------ | ----------------- | ------------------- |
+| state | The client request states. | Str: ``received``, ``dropped`` | Recommended | - |
 
 ### varnish.client.request.error.count
 
@@ -72,9 +72,9 @@ The client request errors received by status code.
 
 #### Attributes
 
-| Name | Description | Values | Requirement Level |
-| ---- | ----------- | ------ | -------- |
-| status_code | An HTTP status code. | Any Str | Recommended |
+| Name | Description | Values | Requirement Level | Semantic Convention |
+| ---- | ----------- | ------ | ----------------- | ------------------- |
+| status_code | An HTTP status code. | Any Str | Recommended | - |
 
 ### varnish.object.count
 
@@ -118,9 +118,9 @@ The session connection type count.
 
 #### Attributes
 
-| Name | Description | Values | Requirement Level |
-| ---- | ----------- | ------ | -------- |
-| kind | The session connection types. | Str: ``accepted``, ``dropped``, ``failed`` | Recommended |
+| Name | Description | Values | Requirement Level | Semantic Convention |
+| ---- | ----------- | ------ | ----------------- | ------------------- |
+| kind | The session connection types. | Str: ``accepted``, ``dropped``, ``failed`` | Recommended | - |
 
 ### varnish.thread.operation.count
 
@@ -132,12 +132,12 @@ The thread operation type count.
 
 #### Attributes
 
-| Name | Description | Values | Requirement Level |
-| ---- | ----------- | ------ | -------- |
-| operation | The thread operation types. | Str: ``created``, ``destroyed``, ``failed`` | Recommended |
+| Name | Description | Values | Requirement Level | Semantic Convention |
+| ---- | ----------- | ------ | ----------------- | ------------------- |
+| operation | The thread operation types. | Str: ``created``, ``destroyed``, ``failed`` | Recommended | - |
 
 ## Resource Attributes
 
-| Name | Description | Values | Enabled |
-| ---- | ----------- | ------ | ------- |
-| varnish.cache.name | The name of the cache. | Any Str | true |
+| Name | Description | Values | Enabled | Semantic Convention |
+| ---- | ----------- | ------ | ------- | ------------------- |
+| varnish.cache.name | The name of the cache. | Any Str | true | - |

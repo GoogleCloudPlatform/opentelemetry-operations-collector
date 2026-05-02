@@ -39,14 +39,15 @@ var (
 )
 
 func main() {
-	runner := command.NewRunner()
+	runner := createCommandRunner()
 
-	runner.Register("generate", &generateCommand{})
-	runner.Register("query", &queryCommand{})
-	runner.Register("otel_component_versions", &otelComponentVersionsCommand{})
-	runner.Register("project", &projectCommand{})
-	runner.Register("component", &componentCommand{})
-	runner.Register("registry", &registryCommand{})
+	if detectHelpFlag() {
+		if err := runner.Run("help"); err != nil {
+			// Should be an impossible case.
+			panic(err)
+		}
+		return
+	}
 
 	detectVerboseFlag()
 
@@ -78,6 +79,25 @@ func detectVerboseFlag() {
 	}
 }
 
+func detectHelpFlag() bool {
+	helpArg := slices.Index(os.Args, "--help")
+	hArg := slices.Index(os.Args, "-h")
+	return helpArg != -1 || hArg != -1
+}
+
+func createCommandRunner() *command.Runner {
+	runner := command.NewRunner()
+
+	runner.Register("generate", newGenerateCommand())
+	runner.Register("query", newQueryCommand())
+	runner.Register("otel_component_versions", newOtelComponentVersionsCommand())
+	runner.Register("project", newProjectCommand())
+	runner.Register("component", newComponentCommand())
+	runner.Register("registry", newRegistryCommand())
+
+	return runner
+}
+
 func setSpecFlag(flags *flag.FlagSet) *string {
 	return flags.String("spec", "", "The distribution specification to use")
 }
@@ -92,15 +112,24 @@ type generateCommand struct {
 	compare    *bool
 }
 
-func (cmd *generateCommand) ParseArgs(args []string) error {
+func newGenerateCommand() *generateCommand {
+	cmd := &generateCommand{}
 	cmd.spec = setSpecFlag(&cmd.flags)
 	cmd.force = cmd.flags.BoolP("force", "f", false, "Force generate even if there are no differences detected")
 	cmd.registries = cmd.flags.StringArray("registry", []string{}, "Provide additional component registries")
 	cmd.templates = cmd.flags.String("templates", "", "Path to custom templates directory")
 	cmd.compare = cmd.flags.Bool("compare", false, "Allows you to compare the generated distribution to the existing")
+	return cmd
+}
 
+func (cmd *generateCommand) ParseArgs(args []string) error {
 	return cmd.flags.Parse(args)
 }
+
+func (cmd *generateCommand) Usage() string {
+	return cmd.flags.FlagUsages()
+}
+
 
 func (cmd *generateCommand) Run() error {
 	if *cmd.spec == "" {
@@ -151,11 +180,19 @@ type queryCommand struct {
 	field *string
 }
 
-func (cmd *queryCommand) ParseArgs(args []string) error {
+func newQueryCommand() *queryCommand {
+	cmd := &queryCommand{}
 	cmd.spec = setSpecFlag(&cmd.flags)
 	cmd.field = cmd.flags.String("field", "", "Field to query from the spec")
+	return cmd
+}
 
+func (cmd *queryCommand) ParseArgs(args []string) error {
 	return cmd.flags.Parse(args)
+}
+
+func (cmd *queryCommand) Usage() string {
+	return cmd.flags.FlagUsages()
 }
 
 func (cmd *queryCommand) Run() error {
@@ -185,10 +222,18 @@ type otelComponentVersionsCommand struct {
 	otelVersion *string
 }
 
-func (cmd *otelComponentVersionsCommand) ParseArgs(args []string) error {
+func newOtelComponentVersionsCommand() *otelComponentVersionsCommand {
+	cmd := &otelComponentVersionsCommand{}
 	cmd.otelVersion = cmd.flags.String("otel_version", "", "The OpenTelemetry version to fetch component versions for")
+	return cmd
+}
 
+func (cmd *otelComponentVersionsCommand) ParseArgs(args []string) error {
 	return cmd.flags.Parse(args)
+}
+
+func (cmd *otelComponentVersionsCommand) Usage() string {
+	return cmd.flags.FlagUsages()
 }
 
 func (cmd *otelComponentVersionsCommand) Run() error {
@@ -245,11 +290,19 @@ type projectCommand struct {
 	spec  *string
 }
 
-func (cmd *projectCommand) ParseArgs(args []string) error {
+func newProjectCommand() *projectCommand {
+	cmd := &projectCommand{}
 	cmd.spec = setSpecFlag(&cmd.flags)
 	cmd.tools = cmd.flags.StringArray("tools", []string{}, "Provide additional tools to install")
+	return cmd
+}
 
+func (cmd *projectCommand) ParseArgs(args []string) error {
 	return cmd.flags.Parse(args)
+}
+
+func (cmd *projectCommand) Usage() string {
+	return cmd.flags.FlagUsages()
 }
 
 func (cmd *projectCommand) Run() error {
@@ -278,12 +331,20 @@ type componentCommand struct {
 	componentName *string
 }
 
-func (cmd *componentCommand) ParseArgs(args []string) error {
+func newComponentCommand() *componentCommand {
+	cmd := &componentCommand{}
 	cmd.spec = setSpecFlag(&cmd.flags)
 	cmd.componentType = cmd.flags.String("type", "", "Type of component")
 	cmd.componentName = cmd.flags.String("name", "", "Name of component")
+	return cmd
+}
 
+func (cmd *componentCommand) ParseArgs(args []string) error {
 	return cmd.flags.Parse(args)
+}
+
+func (cmd *componentCommand) Usage() string {
+	return cmd.flags.FlagUsages()
 }
 
 func (cmd *componentCommand) Run() error {
@@ -315,6 +376,14 @@ type registryCommand struct {
 
 func (cmd *registryCommand) ParseArgs(args []string) error {
 	return nil
+}
+
+func newRegistryCommand() *registryCommand {
+	return &registryCommand{}
+}
+
+func (cmd *registryCommand) Usage() string {
+	return ""
 }
 
 func (cmd *registryCommand) Run() error {

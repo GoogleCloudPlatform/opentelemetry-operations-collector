@@ -88,6 +88,8 @@ extensions:
 connectors:
 
 providers:
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/provider/googlecloudopsagentprovider v0.151.0
+  path: ../components/otelopscol/provider/googlecloudopsagentprovider
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/confmap/provider/googlesecretmanagerprovider v0.151.0
 - gomod: go.opentelemetry.io/collector/confmap/provider/envprovider v1.57.0
 - gomod: go.opentelemetry.io/collector/confmap/provider/fileprovider v1.57.0
@@ -97,4 +99,5 @@ replaces:
 - github.com/GoogleCloudPlatform/opentelemetry-operations-collector => ../../
 # Force update buger/jsonparser to v1.1.2 to fix vulnerability
 - github.com/buger/jsonparser => github.com/buger/jsonparser v1.1.2
+- github.com/prometheus/prometheus => github.com/prometheus/prometheus v0.311.2-0.20260409145810-72293ff1d2e0
 

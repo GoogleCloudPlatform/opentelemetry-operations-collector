@@ -1069,13 +1069,25 @@ const (
 )
 
 // prepareSLES runs some preliminary steps that get a SLES VM ready to install packages.
-// First it repeatedly runs registercloudguest, then it repeatedly tries installing a dummy package until it succeeds.
+// First, it repeatedly checks guestregister.service (which runs registercloudguest),
+// then it runs registercloudguest directly as a fallback if the service fails.
+// Next, it repeatedly tries installing a dummy package until it succeeds.
 // When that happens, the VM is ready to install packages.
 // See b/148612123 and b/196246592 for some history about this.
 func prepareSLES(ctx context.Context, logger *log.Logger, vm *VM) error {
+	registerScript := `
+		max_attempts=10
+		attempt=1
+		while sudo systemctl is-active --quiet guestregister.service && [ "$attempt" -le "$max_attempts" ]; do
+			sleep 5
+			attempt=$((attempt+1))
+		done
+		if sudo systemctl is-failed --quiet guestregister.service; then
+			sudo /usr/sbin/registercloudguest --force
+		fi`
 	backoffPolicy := backoff.WithContext(backoff.WithMaxRetries(backoff.NewConstantBackOff(5*time.Second), 5), ctx) // 5 attempts.
 	err := backoff.Retry(func() error {
-		_, err := RunRemotely(ctx, logger, vm, "sudo /usr/sbin/registercloudguest --force")
+		_, err := RunScriptRemotely(ctx, logger, vm, registerScript, []string{}, map[string]string{})
 		return err
 	}, backoffPolicy)
 	if err != nil {

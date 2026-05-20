@@ -155,9 +155,9 @@ func TestMetricsBuilder(t *testing.T) {
 					assert.Equal(t, ts, dp.Timestamp())
 					assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
 					assert.Equal(t, int64(1), dp.IntValue())
-					attrVal, ok := dp.Attributes().Get("kind")
+					backendConnectionTypeAttrVal, ok := dp.Attributes().Get("kind")
 					assert.True(t, ok)
-					assert.Equal(t, "success", attrVal.Str())
+					assert.Equal(t, "success", backendConnectionTypeAttrVal.Str())
 				case "varnish.backend.request.count":
 					assert.False(t, validatedMetrics["varnish.backend.request.count"], "Found a duplicate in the metrics slice: varnish.backend.request.count")
 					validatedMetrics["varnish.backend.request.count"] = true
@@ -186,9 +186,9 @@ func TestMetricsBuilder(t *testing.T) {
 					assert.Equal(t, ts, dp.Timestamp())
 					assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
 					assert.Equal(t, int64(1), dp.IntValue())
-					attrVal, ok := dp.Attributes().Get("operation")
+					cacheOperationsAttrVal, ok := dp.Attributes().Get("operation")
 					assert.True(t, ok)
-					assert.Equal(t, "hit", attrVal.Str())
+					assert.Equal(t, "hit", cacheOperationsAttrVal.Str())
 				case "varnish.client.request.count":
 					assert.False(t, validatedMetrics["varnish.client.request.count"], "Found a duplicate in the metrics slice: varnish.client.request.count")
 					validatedMetrics["varnish.client.request.count"] = true
@@ -203,9 +203,9 @@ func TestMetricsBuilder(t *testing.T) {
 					assert.Equal(t, ts, dp.Timestamp())
 					assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
 					assert.Equal(t, int64(1), dp.IntValue())
-					attrVal, ok := dp.Attributes().Get("state")
+					stateAttrVal, ok := dp.Attributes().Get("state")
 					assert.True(t, ok)
-					assert.Equal(t, "received", attrVal.Str())
+					assert.Equal(t, "received", stateAttrVal.Str())
 				case "varnish.client.request.error.count":
 					assert.False(t, validatedMetrics["varnish.client.request.error.count"], "Found a duplicate in the metrics slice: varnish.client.request.error.count")
 					validatedMetrics["varnish.client.request.error.count"] = true
@@ -220,9 +220,9 @@ func TestMetricsBuilder(t *testing.T) {
 					assert.Equal(t, ts, dp.Timestamp())
 					assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
 					assert.Equal(t, int64(1), dp.IntValue())
-					attrVal, ok := dp.Attributes().Get("status_code")
+					httpStatusCodeAttrVal, ok := dp.Attributes().Get("status_code")
 					assert.True(t, ok)
-					assert.Equal(t, "http.status_code-val", attrVal.Str())
+					assert.Equal(t, "http.status_code-val", httpStatusCodeAttrVal.Str())
 				case "varnish.object.count":
 					assert.False(t, validatedMetrics["varnish.object.count"], "Found a duplicate in the metrics slice: varnish.object.count")
 					validatedMetrics["varnish.object.count"] = true
@@ -293,9 +293,9 @@ func TestMetricsBuilder(t *testing.T) {
 					assert.Equal(t, ts, dp.Timestamp())
 					assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
 					assert.Equal(t, int64(1), dp.IntValue())
-					attrVal, ok := dp.Attributes().Get("kind")
+					sessionTypeAttrVal, ok := dp.Attributes().Get("kind")
 					assert.True(t, ok)
-					assert.Equal(t, "accepted", attrVal.Str())
+					assert.Equal(t, "accepted", sessionTypeAttrVal.Str())
 				case "varnish.thread.operation.count":
 					assert.False(t, validatedMetrics["varnish.thread.operation.count"], "Found a duplicate in the metrics slice: varnish.thread.operation.count")
 					validatedMetrics["varnish.thread.operation.count"] = true
@@ -310,9 +310,9 @@ func TestMetricsBuilder(t *testing.T) {
 					assert.Equal(t, ts, dp.Timestamp())
 					assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
 					assert.Equal(t, int64(1), dp.IntValue())
-					attrVal, ok := dp.Attributes().Get("operation")
+					threadOperationsAttrVal, ok := dp.Attributes().Get("operation")
 					assert.True(t, ok)
-					assert.Equal(t, "created", attrVal.Str())
+					assert.Equal(t, "created", threadOperationsAttrVal.Str())
 				}
 			}
 		})

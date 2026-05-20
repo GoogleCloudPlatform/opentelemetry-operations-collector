@@ -77,7 +77,7 @@ type DistributionSpec struct {
 	ComponentModuleBase string `yaml:"component_module_base"`
 	DistrogenVersion    string `yaml:"distrogen_version"`
 
-	OCBOutputDir string
+	OCBOutputDir string `yaml:"-"`
 }
 
 // RenderGoMajorVersion will parse the GoVersion in the spec and return a version without a patch

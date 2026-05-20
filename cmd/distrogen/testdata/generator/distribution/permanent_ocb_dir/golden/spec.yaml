@@ -32,4 +32,3 @@ feature_gates:
 permanent_ocb_directory: true
 component_module_base: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/basic
 distrogen_version: v0.148.0
-ocboutputdir: generated_collector

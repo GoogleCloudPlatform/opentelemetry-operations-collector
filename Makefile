@@ -80,14 +80,17 @@ GEN_GOOGLE_BUILT_OTEL=$(RUN_DISTROGEN) generate --spec ./specs/google-built-open
 .PHONY: gen-google-built-otel
 gen-google-built-otel:
 	@$(GEN_GOOGLE_BUILT_OTEL)
+	@cd google-built-opentelemetry-collector && $(MAKE) clean-tools && $(MAKE) update-ocb-directory
 
 .PHONY: regen-google-built-otel
 regen-google-built-otel:
 	@$(GEN_GOOGLE_BUILT_OTEL) --force
+	@cd google-built-opentelemetry-collector && $(MAKE) clean-tools && $(MAKE) update-ocb-directory
 
 .PHONY: regen-google-built-otel-v
 regen-google-built-otel-v:
 	@$(GEN_GOOGLE_BUILT_OTEL) --force -v
+	@cd google-built-opentelemetry-collector && $(MAKE) clean-tools && $(MAKE) update-ocb-directory
 
 .PHONY: compare-google-built-otel
 compare-google-built-otel:
@@ -99,14 +102,17 @@ GEN_OTELOPSCOL=$(RUN_DISTROGEN) generate --spec ./specs/otelopscol.yaml \
 .PHONY: gen-otelopscol
 gen-otelopscol:
 	@$(GEN_OTELOPSCOL)
+	@cd otelopscol && $(MAKE) clean-tools
 
 .PHONY: regen-otelopscol
 regen-otelopscol:
 	@$(GEN_OTELOPSCOL) -f
+	@cd otelopscol && $(MAKE) clean-tools
 
 .PHONY: regen-otelopscol-v
 regen-otelopscol-v:
 	@$(GEN_OTELOPSCOL) -f -v
+	@cd otelopscol && $(MAKE) clean-tools
 
 .PHONY: compare-otelopscol
 compare-otelopscol:

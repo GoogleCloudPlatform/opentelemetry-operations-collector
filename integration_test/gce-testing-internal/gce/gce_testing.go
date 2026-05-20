@@ -1069,13 +1069,25 @@ const (
 )
 
 // prepareSLES runs some preliminary steps that get a SLES VM ready to install packages.
-// First it repeatedly runs registercloudguest, then it repeatedly tries installing a dummy package until it succeeds.
+// First, it repeatedly checks guestregister.service (which runs registercloudguest),
+// then it runs registercloudguest directly as a fallback if the service fails.
+// Next, it repeatedly tries installing a dummy package until it succeeds.
 // When that happens, the VM is ready to install packages.
 // See b/148612123 and b/196246592 for some history about this.
 func prepareSLES(ctx context.Context, logger *log.Logger, vm *VM) error {
+	registerScript := `
+		max_attempts=10
+		attempt=1
+		while sudo systemctl is-active --quiet guestregister.service && [ "$attempt" -le "$max_attempts" ]; do
+			sleep 5
+			attempt=$((attempt+1))
+		done
+		if sudo systemctl is-failed --quiet guestregister.service; then
+			sudo /usr/sbin/registercloudguest --force
+		fi`
 	backoffPolicy := backoff.WithContext(backoff.WithMaxRetries(backoff.NewConstantBackOff(5*time.Second), 5), ctx) // 5 attempts.
 	err := backoff.Retry(func() error {
-		_, err := RunRemotely(ctx, logger, vm, "sudo /usr/sbin/registercloudguest --force")
+		_, err := RunScriptRemotely(ctx, logger, vm, registerScript, []string{}, map[string]string{})
 		return err
 	}, backoffPolicy)
 	if err != nil {
@@ -1141,25 +1153,6 @@ func addFrameworkMetadata(imageSpec string, inputMetadata map[string]string) (ma
 	} else {
 		if _, ok := metadataCopy["startup-script"]; ok {
 			return nil, errors.New("the 'startup-script' metadata key is reserved for future use. Instead, wait for the instance to be ready and then run things with RunRemotely() or RunScriptRemotely()")
-		}
-		// TODO(b/380470389): we actually *can't* do RunRemotely() on DLVM images due to a bug.
-		// The workaround for the bug is to deploy a fix in-VM via startup scripts.
-		if strings.Contains(imageSpec, "common-gpu-debian-11-py310") {
-			metadataCopy["startup-script"] = fmt.Sprintf(`
-#!/bin/bash
-# Give time for the guest agent and jupyter stuff to finish modifying
-# /etc/passwd and test_user home directory
-sleep 120
-HOMEDIR=/home/%[1]s
-SSHFILE=$HOMEDIR/.ssh/authorized_keys
-if [ ! -f "$SSHFILE" ]; then
-  sudo mkdir -p "$HOMEDIR/.ssh"
-  sudo touch "$SSHFILE"
-fi
-sudo chown -R %[1]s:%[1]s "$HOMEDIR"
-sudo chmod 600 "$SSHFILE"`,
-				sshUserName,
-			)
 		}
 	}
 	return metadataCopy, nil

@@ -16,7 +16,7 @@ package filterprocessor
 
 import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/ottlfuncs"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor"
+	contribfilter "github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/processor"
 )
@@ -25,9 +25,9 @@ var componentType component.Type = component.MustNewType("filter")
 
 // NewFactory create a factory for the transform processor.
 func NewFactory() processor.Factory {
-	return filterprocessor.NewFactoryWithOptions(
-		filterprocessor.WithLogFunctionsNew(filterprocessor.DefaultLogFunctionsNew()),
+	return contribfilter.NewFactoryWithOptions(
+		contribfilter.WithLogFunctionsNew(contribfilter.DefaultLogFunctionsNew()),
 		// Add log functions defined in ottlfuncs.
-		filterprocessor.WithLogFunctionsNew(ottlfuncs.LogFunctions()),
+		contribfilter.WithLogFunctionsNew(ottlfuncs.LogFunctions()),
 	)
 }

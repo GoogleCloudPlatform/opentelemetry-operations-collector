@@ -31,21 +31,20 @@ func TestResourceBuilder(t *testing.T) {
 			default:
 				assert.Failf(t, "unexpected test case: %s", tt)
 			}
-
-			val, ok := res.Attributes().Get("gpu.model")
+			gpuModelAttrVal, ok := res.Attributes().Get("gpu.model")
 			assert.True(t, ok)
 			if ok {
-				assert.Equal(t, "gpu.model-val", val.Str())
+				assert.Equal(t, "gpu.model-val", gpuModelAttrVal.Str())
 			}
-			val, ok = res.Attributes().Get("gpu.number")
+			gpuNumberAttrVal, ok := res.Attributes().Get("gpu.number")
 			assert.True(t, ok)
 			if ok {
-				assert.Equal(t, "gpu.number-val", val.Str())
+				assert.Equal(t, "gpu.number-val", gpuNumberAttrVal.Str())
 			}
-			val, ok = res.Attributes().Get("gpu.uuid")
+			gpuUUIDAttrVal, ok := res.Attributes().Get("gpu.uuid")
 			assert.True(t, ok)
 			if ok {
-				assert.Equal(t, "gpu.uuid-val", val.Str())
+				assert.Equal(t, "gpu.uuid-val", gpuUUIDAttrVal.Str())
 			}
 		})
 	}

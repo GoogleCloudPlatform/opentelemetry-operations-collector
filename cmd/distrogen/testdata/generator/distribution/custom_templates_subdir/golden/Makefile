@@ -155,7 +155,7 @@ collector-module-list: ocb-generate
 
 # Delete any existing built collector binary.
 .PHONY: clean-collector
-clean-collector: clean-build-dir
+clean-collector: clean-build-temp-dir
 	rm -f $(COLLECTOR_BINARY_NAME)
 
 .PHONY: clean-build-temp-dir

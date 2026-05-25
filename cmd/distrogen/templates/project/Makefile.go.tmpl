@@ -16,9 +16,13 @@ DISTROGEN_VERSION ?= $(shell $(DISTROGEN_QUERY) distrogen_version)
 MDATAGEN_BIN ?= $(TOOLS_DIR)/mdatagen
 DISTRO_DIR = $(PWD)/{{ .Spec.Name }}
 
-$(DISTROGEN_BIN):
+$(DISTROGEN_BIN): $(SPEC_FILE)
 	$(MAKE) tools-dir
-	GOBIN=$(TOOLS_DIR) go install github.com/GoogleCloudPlatform/opentelemetry-operations-collector/cmd/distrogen@$(DISTROGEN_VERSION)
+	@CURRENT_VERSION=$$(go version -m $(DISTROGEN_BIN) 2>/dev/null | awk '$$1 == "mod" {print $$3}'); \
+	if [ "$$CURRENT_VERSION" != "$(DISTROGEN_VERSION)" ]; then \
+		echo "Updating distrogen to $(DISTROGEN_VERSION)..."; \
+		GOBIN=$(TOOLS_DIR) go install github.com/GoogleCloudPlatform/opentelemetry-operations-collector/cmd/distrogen@$(DISTROGEN_VERSION); \
+	fi
 
 $(MDATAGEN_BIN):
 	$(MAKE) tools-dir

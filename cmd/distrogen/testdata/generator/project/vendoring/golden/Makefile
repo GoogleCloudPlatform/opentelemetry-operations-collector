@@ -14,7 +14,7 @@ DISTROGEN_BIN ?= $(TOOLS_DIR)/distrogen
 DISTROGEN_QUERY = $(if $(wildcard $(DISTROGEN_BIN)),$(DISTROGEN_BIN),distrogen) query --spec $(SPEC_FILE) --field
 DISTROGEN_VERSION ?= $(shell $(DISTROGEN_QUERY) distrogen_version)
 MDATAGEN_BIN ?= $(TOOLS_DIR)/mdatagen
-DISTRO_DIR = $(PWD)/basic-distro
+DISTRO_DIR = $(PWD)/
 
 $(DISTROGEN_BIN):
 	$(MAKE) tools-dir
@@ -50,7 +50,6 @@ update-otel-components: $(DISTROGEN_BIN) $(MDATAGEN_BIN) workspace-update
 	$(MAKE) update-components
 	$(MAKE) gen
 
-
 .PHONY: test-otel-components
 test-otel-components: go.work
 	cd $(COMPONENT_DIR) && $(MAKE) test-components
@@ -71,12 +70,15 @@ GEN_OTEL = $(DISTROGEN_BIN) generate --spec $(SPEC_FILE) \
 gen: distrogen
 	@$(GEN_OTEL)
 
+
 .PHONY: regen
 regen: distrogen
 	@$(GEN_OTEL) --force
 
+
 regen-v: distrogen
 	@$(GEN_OTEL) --force -v
+
 
 ###########
 # Workspace

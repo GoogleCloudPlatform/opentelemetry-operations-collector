@@ -121,9 +121,9 @@ collector-build: clean-collector $(COLLECTOR_BINARY_NAME)
 # since the collector build target will always clean up the _build directory.
 $(COLLECTOR_BUILD_DIR):
 	$(MAKE) ocb-generate
-
 .PHONY: update-ocb-directory
 update-ocb-directory: ocb-generate
+
 .PHONY: ocb-generate
 ocb-generate: $(OCB_BIN)
 	$(RUN_GO_COMMAND) $(OCB_BIN) --skip-compilation --verbose --config manifest.yaml

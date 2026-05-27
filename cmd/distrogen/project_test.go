@@ -23,6 +23,7 @@ import (
 )
 
 var (
+	projectTestdataSubpath  = filepath.Join("generator", "project")
 	testdataFullProjectPath = filepath.Join("testdata", "generator", "project")
 )
 
@@ -30,13 +31,22 @@ func TestProjectTemplateGeneration(t *testing.T) {
 	registry, err := LoadEmbeddedRegistry()
 	assert.NilError(t, err)
 
-	t.Run("project", func(t *testing.T) {
-		testProjectGeneratorCase(t, registry, "project")
-	})
+	testDirs, err := os.ReadDir(testdataFullProjectPath)
+	assert.NilError(t, err)
+	for _, d := range testDirs {
+		if !d.IsDir() {
+			continue
+		}
+
+		name := d.Name()
+		t.Run(name, func(t *testing.T) {
+			testProjectGeneratorCase(t, registry, name)
+		})
+	}
 }
 
 func testProjectGeneratorCase(t *testing.T, registry *Registry, testFolder string) {
-	specPath := filepath.Join(testdataFullProjectPath, "spec.yaml")
+	specPath := filepath.Join(testdataFullProjectPath, testFolder, "spec.yaml")
 
 	// Create a temporary directory to generate files in, to avoid polluting testdata.
 	tempDir, err := os.MkdirTemp("", "project-generator-test")
@@ -62,7 +72,7 @@ func testProjectGeneratorCase(t *testing.T, registry *Registry, testFolder strin
 	err = p.Generate()
 	assert.NilError(t, err)
 
-	goldenPath := filepath.Join(testdataFullProjectPath, "golden")
-	goldenSubPath := filepath.Join("generator", "project", "golden")
+	goldenPath := filepath.Join(testdataFullProjectPath, testFolder, "golden")
+	goldenSubPath := filepath.Join(projectTestdataSubpath, testFolder, "golden")
 	assertGoldenFiles(t, p.CustomPath, goldenPath, goldenSubPath)
 }

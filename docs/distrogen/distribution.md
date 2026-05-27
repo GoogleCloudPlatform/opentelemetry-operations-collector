@@ -34,6 +34,8 @@ The distribution specification is a YAML configuration file which `distrogen` us
 | `feature_gates` | string[] | | The [`featuregates`](https://github.com/open-telemetry/opentelemetry-collector/tree/main/featuregate) to enable in the Collector. This is leveraged in the default `ENTRYPOINT` of image builds. |
 | `components` | | | See [Components](#components). |
 | `distrogen_version` | | | The version of the `distrogen` command to use. This is leveraged during [Project management](./project.md). |
+| `permanent_ocb_directory` | bool | false | Whether to use a permanent directory for the OCB-generated collector directory. By default, `ocb` will generate to a temporary directory called `_build` which is cleaned up after build. If `true`, `ocb` will generate a directory called `generated_collector` that is not cleaned up, allowing it to be tracked in source control. See [Permanent OCB Directory mode](#permanent-ocb-directory-mode) for more details. |
+| `vendor_dependencies` | bool | false | Whether to vendor the dependencies of the distribution. This is only possible if `permanent_ocb_directory` is set to `true`. When set, `go mod vendor` will be run when updating the generated collector directory. See [Vendored Dependencies](#vendored-dependencies) for more details. |
 
 ### Components
 
@@ -135,6 +137,16 @@ Used to control multiplatform building. Shared across multiple targets.
 | `BUILDARCH` | Architecture being used for build. | `amd64` |
 
 These variables are specified with the naming scheme of [Docker multi-platform build arguments](https://docs.docker.com/build/building/variables/#multi-platform-build-arguments). There are places where the Makefile will interpret these and use them as values for `GOOS` and `GOARCH`.
+
+## Permanent OCB Directory Mode
+
+If you are using the `permanent_ocb_dir` field in the distro spec, then the OCB output will be placed in a `generated_collector` folder in your distribution, instead of the temporary `_build` which the build processes will automatically clean up. This is useful if you want to ensure you have fully reproducible builds tracked in source control. When you use the default mode with a temporary OCB directory generated every build, the dependencies are likely to change every time as the `go mod tidy` operation in the OCB generation process may resolve newer dependencies than the previous build.
+
+When using this feature, the `generated_collector` folder will not automatically be updated as part of normal distribution generation. This is to allow the possibility for updating the distribution's templates without blowing away your current `generated_collector` folder. In [Project mode][./project.md], running `update-otel-components` will automatically update the `generated_collector` folder after generation if you have `permanent_ocb_dir` mode configured. In addition, when using the `build` target the `generated_collector` folder will not be automatically generated like when using the default temporary OCB directory mode.
+
+### Vendor Dependencies
+
+In addition, you can also tell distrogen to vendor dependencies by setting the `vendor_deps` field in the distro spec. This will cause the `update-ocb-dir` target in the distribution Makefile to also run `go mod vendor` in the OCB directory when updating. 
 
 [^1]: The simplest method to provide an environment variable is inline. I.e. to provide `COLLECTOR_BUILDVCS` to `build`, the command line would look like `COLLECTOR_BUILDVCS=true make build`.
 

@@ -29,11 +29,10 @@ func TestResourceBuilder(t *testing.T) {
 			default:
 				assert.Failf(t, "unexpected test case: %s", tt)
 			}
-
-			val, ok := res.Attributes().Get("varnish.cache.name")
+			varnishCacheNameAttrVal, ok := res.Attributes().Get("varnish.cache.name")
 			assert.True(t, ok)
 			if ok {
-				assert.Equal(t, "varnish.cache.name-val", val.Str())
+				assert.Equal(t, "varnish.cache.name-val", varnishCacheNameAttrVal.Str())
 			}
 		})
 	}

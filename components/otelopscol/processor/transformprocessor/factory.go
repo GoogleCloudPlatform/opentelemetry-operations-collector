@@ -16,7 +16,7 @@ package transformprocessor
 
 import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/ottlfuncs"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor"
+	contribtransform "github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/processor"
 )
@@ -25,9 +25,9 @@ var componentType component.Type = component.MustNewType("transform")
 
 // NewFactory create a factory for the transform processor.
 func NewFactory() processor.Factory {
-	return transformprocessor.NewFactoryWithOptions(
-		transformprocessor.WithLogFunctionsNew(transformprocessor.DefaultLogFunctionsNew()),
+	return contribtransform.NewFactoryWithOptions(
+		contribtransform.WithLogFunctionsNew(contribtransform.DefaultLogFunctionsNew()),
 		// Add log functions defined in ottlfuncs.
-		transformprocessor.WithLogFunctionsNew(ottlfuncs.LogFunctions()),
+		contribtransform.WithLogFunctionsNew(ottlfuncs.LogFunctions()),
 	)
 }

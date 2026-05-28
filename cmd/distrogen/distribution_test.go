@@ -117,7 +117,7 @@ func TestSpecQueryNotFound(t *testing.T) {
 	assert.ErrorIs(t, err, ErrQueryValueNotFound)
 }
 
-func TestDetectToolChange(t *testing.T) {
+func TestDetectDistributionToolChange(t *testing.T) {
 	original := &DistributionSpec{
 		OpenTelemetryVersion: "v0.100.0",
 		GoVersion:            "1.22.0",
@@ -169,7 +169,64 @@ func TestDetectToolChange(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.current.DetectToolChange(original), tc.expected)
+			assert.Equal(t, tc.current.DetectDistributionToolChange(original), tc.expected)
+		})
+	}
+}
+
+func TestDetectProjectToolChange(t *testing.T) {
+	original := &DistributionSpec{
+		OpenTelemetryVersion: "v0.100.0",
+		DistrogenVersion:     "v0.1.0",
+		Description:          "original description",
+	}
+
+	testCases := []struct {
+		name     string
+		current  *DistributionSpec
+		expected bool
+	}{
+		{
+			name: "no changes",
+			current: &DistributionSpec{
+				OpenTelemetryVersion: "v0.100.0",
+				DistrogenVersion:     "v0.1.0",
+				Description:          "original description",
+			},
+			expected: false,
+		},
+		{
+			name: "only description changes",
+			current: &DistributionSpec{
+				OpenTelemetryVersion: "v0.100.0",
+				DistrogenVersion:     "v0.1.0",
+				Description:          "new description",
+			},
+			expected: false,
+		},
+		{
+			name: "opentelemetry version changes",
+			current: &DistributionSpec{
+				OpenTelemetryVersion: "v0.101.0",
+				DistrogenVersion:     "v0.1.0",
+				Description:          "original description",
+			},
+			expected: true,
+		},
+		{
+			name: "distrogen version changes",
+			current: &DistributionSpec{
+				OpenTelemetryVersion: "v0.100.0",
+				DistrogenVersion:     "v0.2.0",
+				Description:          "original description",
+			},
+			expected: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.current.DetectProjectToolChange(original), tc.expected)
 		})
 	}
 }

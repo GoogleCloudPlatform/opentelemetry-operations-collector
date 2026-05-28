@@ -27,10 +27,16 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-var ErrNoDiff = errors.New("no differences found with previous generation")
+var (
+	ErrNoDiff = errors.New("no differences found with previous generation")
+)
 
-// -rw-r--r--
-var DefaultFileMode fs.FileMode = 0644
+const (
+	// -rw-r--r--
+	DefaultFileMode fs.FileMode = 0644
+
+	ToolsDir = ".tools"
+)
 
 const (
 	tempOCBDirname = "_build"
@@ -95,14 +101,30 @@ func (s *DistributionSpec) Diff(s2 *DistributionSpec) bool {
 	return diff != ""
 }
 
-// DetectToolChange will compare two distribution specs and return
-// true if any of the tools require an update.
-func (s *DistributionSpec) DetectToolChange(original *DistributionSpec) bool {
+// DetectDistributionToolChange will compare two distribution specs and return
+// true if any of the distribution-level tools require an update.
+func (s *DistributionSpec) DetectDistributionToolChange(original *DistributionSpec) bool {
 	if !s.Diff(original) {
 		return false
 	}
 
 	toolChangeRequired := s.OpenTelemetryVersion != original.OpenTelemetryVersion || s.GoVersion != original.GoVersion
+	if toolChangeRequired {
+		logger.Debug("detected required tool change")
+	} else {
+		logger.Debug("tools can be persisted")
+	}
+	return toolChangeRequired
+}
+
+// DetectProjectToolChange will compare two distribution specs and return
+// true if any of the project-level tools require an update.
+func (s *DistributionSpec) DetectProjectToolChange(original *DistributionSpec) bool {
+	if !s.Diff(original) {
+		return false
+	}
+
+	toolChangeRequired := s.OpenTelemetryVersion != original.OpenTelemetryVersion || s.DistrogenVersion != original.DistrogenVersion
 	if toolChangeRequired {
 		logger.Debug("detected required tool change")
 	} else {
@@ -215,7 +237,8 @@ type DistributionGenerator struct {
 	Registry           *Registry
 	CustomTemplatesDir fs.FS
 	FileMode           fs.FileMode
-	CleanTools bool
+
+	cleanTools bool
 }
 
 // NewDistributionGenerator creates a DistributionGenerator.
@@ -228,7 +251,7 @@ func NewDistributionGenerator(spec *DistributionSpec, registry *Registry, forceG
 	}
 	d.GenerateDirName = spec.Name
 
-	specCache, err := yamlUnmarshalFromFile[DistributionSpec](filepath.Join(d.GenerateDirName, "spec.yaml"))
+	cachedSpec, err := d.ReadCachedSpec()
 	if err != nil {
 		if !os.IsNotExist(err) {
 			logger.Debug(fmt.Sprintf("generated spec could not be read: %v", err))
@@ -237,12 +260,12 @@ func NewDistributionGenerator(spec *DistributionSpec, registry *Registry, forceG
 	} else {
 		// If we're not force generating, check if the spec changed
 		// and short-circuit if we didn't.
-		if !forceGenerate && !d.Spec.Diff(specCache) {
+		if !forceGenerate && !d.Spec.Diff(cachedSpec) {
 			return nil, ErrNoDiff
 		}
 
 		// Check if the spec changes require reinstalling tools.
-		d.CleanTools = d.Spec.DetectToolChange(specCache)
+		d.cleanTools = d.Spec.DetectDistributionToolChange(cachedSpec)
 	}
 
 	tmpDir, err := os.MkdirTemp("", d.GenerateDirName)
@@ -283,19 +306,23 @@ func (d *DistributionGenerator) Generate() error {
 			return err
 		}
 	}
-	if err := d.WriteSpec(); err != nil {
+	if err := d.CacheSpec(); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-// WriteSpec renders the DistributionSpec in a yaml file that lives in the generated
+// CacheSpec renders the DistributionSpec in a yaml file that lives in the generated
 // distribution. This is a human readable way to keep track of what spec was used for
 // this existing generation, as well as a method of detecting whether a new generation
 // needs to be done at all (if no spec changes no need to generate).
-func (d *DistributionGenerator) WriteSpec() error {
+func (d *DistributionGenerator) CacheSpec() error {
 	return yamlMarshalToFile(d.Spec, filepath.Join(d.GeneratePath, "spec.yaml"), d.FileMode)
+}
+
+func (d *DistributionGenerator) ReadCachedSpec() (*DistributionSpec, error) {
+	return yamlUnmarshalFromFile[DistributionSpec](filepath.Join(d.GenerateDirName, "spec.yaml"))
 }
 
 // MoveGeneratedDirToWd performs the final step of the generation, moving the generated temp
@@ -316,8 +343,8 @@ func (d *DistributionGenerator) MoveGeneratedDirToWd() (err error) {
 
 	// If the spec change required tool reinstallation, clean up the
 	// existing .tools directory in the generate destination.
-	if d.CleanTools {
-		toolsPath := filepath.Join(generateDest, ".tools")
+	if d.cleanTools {
+		toolsPath := filepath.Join(generateDest, ToolsDir)
 		if err := os.RemoveAll(toolsPath); err != nil {
 			return err
 		}

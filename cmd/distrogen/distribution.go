@@ -95,6 +95,22 @@ func (s *DistributionSpec) Diff(s2 *DistributionSpec) bool {
 	return diff != ""
 }
 
+// DetectToolChange will compare two distribution specs and return
+// true if any of the tools require an update.
+func (s *DistributionSpec) DetectToolChange(original *DistributionSpec) bool {
+	if !s.Diff(original) {
+		return false
+	}
+
+	toolChangeRequired := s.OpenTelemetryVersion != original.OpenTelemetryVersion || s.GoVersion != original.GoVersion
+	if toolChangeRequired {
+		logger.Debug("detected required tool change")
+	} else {
+		logger.Debug("tools can be persisted")
+	}
+	return toolChangeRequired
+}
+
 var ErrQueryValueNotFound = errors.New("not found in spec")
 var ErrQueryValueInvalid = errors.New("found in spec but unsupported type")
 
@@ -199,6 +215,7 @@ type DistributionGenerator struct {
 	Registry           *Registry
 	CustomTemplatesDir fs.FS
 	FileMode           fs.FileMode
+	CleanTools bool
 }
 
 // NewDistributionGenerator creates a DistributionGenerator.
@@ -211,18 +228,21 @@ func NewDistributionGenerator(spec *DistributionSpec, registry *Registry, forceG
 	}
 	d.GenerateDirName = spec.Name
 
-	if !forceGenerate {
-		specCache, err := yamlUnmarshalFromFile[DistributionSpec](filepath.Join(d.GenerateDirName, "spec.yaml"))
-		if err != nil {
+	specCache, err := yamlUnmarshalFromFile[DistributionSpec](filepath.Join(d.GenerateDirName, "spec.yaml"))
+	if err != nil {
+		if !os.IsNotExist(err) {
 			logger.Debug(fmt.Sprintf("generated spec could not be read: %v", err))
-			if !os.IsNotExist(err) {
-				return nil, err
-			}
-		} else {
-			if !d.Spec.Diff(specCache) {
-				return nil, ErrNoDiff
-			}
+			return nil, err
 		}
+	} else {
+		// If we're not force generating, check if the spec changed
+		// and short-circuit if we didn't.
+		if !forceGenerate && !d.Spec.Diff(specCache) {
+			return nil, ErrNoDiff
+		}
+
+		// Check if the spec changes require reinstalling tools.
+		d.CleanTools = d.Spec.DetectToolChange(specCache)
 	}
 
 	tmpDir, err := os.MkdirTemp("", d.GenerateDirName)
@@ -292,6 +312,15 @@ func (d *DistributionGenerator) MoveGeneratedDirToWd() (err error) {
 	// Copy generated files to working directory.
 	if err := copyDir(d.GeneratePath, generateDest); err != nil {
 		return err
+	}
+
+	// If the spec change required tool reinstallation, clean up the
+	// existing .tools directory in the generate destination.
+	if d.CleanTools {
+		toolsPath := filepath.Join(generateDest, ".tools")
+		if err := os.RemoveAll(toolsPath); err != nil {
+			return err
+		}
 	}
 
 	return nil

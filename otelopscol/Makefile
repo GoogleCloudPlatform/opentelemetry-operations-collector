@@ -7,6 +7,7 @@ VERSION = v0.151.0
 OTEL_VERSION = 0.151.0
 OTEL_VERSION_TAG = v$(OTEL_VERSION)
 COLLECTOR_BINARY_NAME = otelopscol
+COLLECTOR_BINARY_NAME_EXE = $(COLLECTOR_BINARY_NAME).exe
 COLLECTOR_BUILD_TEMP_DIR = $(PWD)/_build
 COLLECTOR_BUILD_DIR = $(PWD)/_build
 COLLECTOR_CGO = 1
@@ -37,6 +38,9 @@ SET_COSIGN_BIN_PATH ?= PATH="$(TOOLS_DIR):$$PATH"
 
 .PHONY: build
 build: $(COLLECTOR_BINARY_NAME)
+
+.PHONY: build-win
+build-win: $(COLLECTOR_BINARY_NAME_EXE)
 
 .PHONY: image
 image: image-build image-push
@@ -145,6 +149,20 @@ $(COLLECTOR_BINARY_NAME): $(COLLECTOR_BUILD_DIR) $(GO_BIN)
 			.
 	$(MAKE) clean-build-temp-dir
 
+# Build a Windows collector binary.
+# Note: distrogen currently does not support BoringCrypto and CGO for Windows builds.
+$(COLLECTOR_BINARY_NAME_EXE): $(COLLECTOR_BUILD_DIR) $(GO_BIN)
+	cd $(COLLECTOR_BUILD_DIR) && \
+		GOWORK=off \
+		CGO_ENABLED=0 \
+		GOOS=windows GOARCH=$(TARGETARCH) \
+		$(GO_BIN) build \
+			-buildvcs=$(COLLECTOR_BUILDVCS) \
+			-tags=$(COLLECTOR_BUILD_TAGS) \
+			-o ../otelopscol.exe \
+			.
+	$(MAKE) clean-build-temp-dir
+
 .PHONY: collector-module-list
 collector-module-list: ocb-generate
 	cd $(COLLECTOR_BUILD_TEMP_DIR) && \
@@ -155,7 +173,7 @@ collector-module-list: ocb-generate
 # Delete any existing built collector binary.
 .PHONY: clean-collector
 clean-collector: clean-build-temp-dir
-	rm -f $(COLLECTOR_BINARY_NAME)
+	rm -f $(COLLECTOR_BINARY_NAME) $(COLLECTOR_BINARY_NAME_EXE)
 
 .PHONY: clean-build-temp-dir
 clean-build-temp-dir:

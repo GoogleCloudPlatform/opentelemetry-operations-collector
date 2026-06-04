@@ -15,39 +15,18 @@ boringcrypto: false
 docker_repo: ""
 components:
     receivers:
-        - activedirectoryds
-        - aerospike
-        - apache
-        - couchdb
-        - elasticsearch
         - filelog
-        - flinkmetrics
         - fluentforward
         - hostmetrics
         - iis
-        - jmx
-        - memcached
-        - mysql
-        - nginx
-        - postgresql
         - prometheus
         - otlp
-        - rabbitmq
-        - redis
-        - saphana
-        - sqlquery
-        - sqlserver
         - syslog
-        - tcplog
         - windowseventlog
         - windowsperfcounters
-        - zookeeper
         - dcgm
-        - mongodb
         - nvml
-        - varnish
         - journald
-        - otlpjsonfile
     processors:
         - cumulativetodelta
         - deltatocumulative
@@ -55,7 +34,6 @@ components:
         - filter
         - groupbyattrs
         - interval
-        - logstransform
         - metricstransform
         - resourcedetection
         - resource
@@ -64,16 +42,11 @@ components:
         - memorylimiter
         - metricstarttime
         - agentmetrics
-        - casttosum
         - normalizesums
     exporters:
-        - file
-        - googlecloud
-        - googlemanagedprometheus
-        - debug
         - otlp
         - otlphttp
-        - prometheus
+        - debug
     extensions:
         - zpages
         - googleclientauth

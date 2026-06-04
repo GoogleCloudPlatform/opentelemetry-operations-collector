@@ -27,40 +27,19 @@ build_tags: gpu
 
 components:
   receivers:
-    - activedirectoryds
-    - aerospike
-    - apache
-    - couchdb
-    - elasticsearch
     - filelog
-    - flinkmetrics
     - fluentforward
     - hostmetrics
     - iis
-    - jmx
-    - memcached
-    - mysql
-    - nginx
-    - postgresql
     - prometheus
     - otlp
-    - rabbitmq
-    - redis
-    - saphana
-    - sqlquery
-    - sqlserver
     - syslog
-    - tcplog
     - windowseventlog
     - windowsperfcounters
     # Within this repo
-    - zookeeper
     - dcgm
-    - mongodb
     - nvml
-    - varnish
     - journald
-    - otlpjsonfile
   processors:
     - cumulativetodelta
     - deltatocumulative
@@ -68,7 +47,6 @@ components:
     - filter
     - groupbyattrs
     - interval
-    - logstransform
     - metricstransform
     - resourcedetection
     - resource
@@ -78,16 +56,11 @@ components:
     - metricstarttime
     # Within this repo
     - agentmetrics
-    - casttosum
     - normalizesums
   exporters:
-    - file
-    - googlecloud
-    - googlemanagedprometheus
-    - debug
     - otlp
     - otlphttp
-    - prometheus
+    - debug
   extensions:
     - zpages
     - googleclientauth

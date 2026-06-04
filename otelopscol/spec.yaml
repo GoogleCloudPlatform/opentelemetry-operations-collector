@@ -27,6 +27,7 @@ components:
         - dcgm
         - nvml
         - journald
+        - otlpjsonfile
     processors:
         - cumulativetodelta
         - deltatocumulative

@@ -19,12 +19,6 @@ receivers:
   nvml:
     gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/receiver/nvmlreceiver v0.0.0
     path: "../components/otelopscol/receiver/nvmlreceiver"
-  mongodb:
-    gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/receiver/mongodbreceiver v0.0.0
-    path: "../components/otelopscol/receiver/mongodbreceiver"
-  varnish:
-    gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/receiver/varnishreceiver v0.0.0
-    path: "../components/otelopscol/receiver/varnishreceiver"
   saphana:
     gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/saphanareceiver
 
@@ -32,9 +26,6 @@ processors:
   agentmetrics:
     gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/agentmetricsprocessor v0.0.0
     path: "../components/otelopscol/processor/agentmetricsprocessor"
-  casttosum:
-    gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/casttosumprocessor v0.0.0
-    path: "../components/otelopscol/processor/casttosumprocessor"
   normalizesums:
     gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/normalizesumsprocessor v0.0.0
     path: "../components/otelopscol/processor/normalizesumsprocessor"

@@ -23,6 +23,8 @@ components:
         - otlp
         - syslog
         - sqlserver
+        - sqlquery
+        - mysql
         - windowseventlog
         - windowsperfcounters
         - journald

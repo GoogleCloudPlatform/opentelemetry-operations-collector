@@ -14,10 +14,12 @@
 | hostmetrics | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/hostmetricsreceiver/README.md) |
 | iis | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/iisreceiver/README.md) |
 | journald | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/journaldreceiver/README.md) |
+| mysql | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/mysqlreceiver/README.md) |
 | nvml | [docs](No docs linked for component) |
 | otlp | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/receiver/otlpreceiver/README.md) |
 | otlpjsonfile | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/otlpjsonfilereceiver/README.md) |
 | prometheus | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/prometheusreceiver/README.md) |
+| sqlquery | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/sqlqueryreceiver/README.md) |
 | sqlserver | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/sqlserverreceiver/README.md) |
 | syslog | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/syslogreceiver/README.md) |
 | windowseventlog | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/windowseventlogreceiver/README.md) |

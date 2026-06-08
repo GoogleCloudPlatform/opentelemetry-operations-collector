@@ -93,7 +93,7 @@ function Ensure-OCB {
     $ocbBin = Join-Path $toolsDir "builder.exe"
     if (-not (Test-Path $ocbBin)) {
         Write-Host "Installing OCB..."
-        $installOcbCommand = "`$env:GOBIN='$toolsDir'; `$env:CGO_ENABLED=1; $goBin install -trimpath -ldflags='-s -w' go.opentelemetry.io/collector/cmd/builder@v0.148.0"
+        $installOcbCommand = "`$env:GOBIN='$toolsDir'; `$env:CGO_ENABLED=1; $goBin install -trimpath -ldflags='-s -w' go.opentelemetry.io/collector/cmd/builder@v0.151.0"
         Run-Command $installOcbCommand
     } else {
         Write-Host "OCB already installed at $ocbBin"

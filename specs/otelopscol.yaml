@@ -34,13 +34,14 @@ components:
     - prometheus
     - otlp
     - syslog
+    - sqlserver
     - windowseventlog
     - windowsperfcounters
+    - journald
+    - otlpjsonfile
     # Within this repo
     - dcgm
     - nvml
-    - journald
-    - otlpjsonfile
   processors:
     - cumulativetodelta
     - deltatocumulative

@@ -22,12 +22,13 @@ components:
         - prometheus
         - otlp
         - syslog
+        - sqlserver
         - windowseventlog
         - windowsperfcounters
-        - dcgm
-        - nvml
         - journald
         - otlpjsonfile
+        - dcgm
+        - nvml
     processors:
         - cumulativetodelta
         - deltatocumulative

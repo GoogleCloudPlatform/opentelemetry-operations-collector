@@ -27,7 +27,7 @@ GO_VERSION = 1.26.1
 GO_BIN_DIR ?= $(TOOLS_DIR)/go/bin
 GO_BIN ?= $(GO_BIN_DIR)/go
 SET_GO_BIN_PATH ?= PATH="$(GO_BIN_DIR):$$PATH"
-RUN_GO_COMMAND = $(SET_GO_BIN_PATH) GOWORK=off $(if $(USE_GO_PROXY),GOPROXY=$(USE_GO_PROXY),)
+GO_COMMAND_ENV = $(SET_GO_BIN_PATH) GOWORK=off $(if $(USE_GO_PROXY),GOPROXY=$(USE_GO_PROXY),)
 
 USE_GO_PROXY ?= 
 
@@ -128,7 +128,7 @@ $(COLLECTOR_BUILD_DIR):
 
 .PHONY: ocb-generate
 ocb-generate: $(OCB_BIN)
-	$(RUN_GO_COMMAND) $(OCB_BIN) --skip-compilation --verbose --config manifest.yaml
+	$(GO_COMMAND_ENV) $(OCB_BIN) --skip-compilation --verbose --config manifest.yaml
 
 
 COLLECTOR_LD_FLAGS ?=
@@ -138,10 +138,9 @@ COLLECTOR_LD_FLAGS_STATIC_LINK ?=
 # Using OCB and the local manifest file, build a collector.
 $(COLLECTOR_BINARY_NAME): $(COLLECTOR_BUILD_DIR) $(GO_BIN)
 	cd $(COLLECTOR_BUILD_DIR) && \
-		GOWORK=off \
 		CGO_ENABLED=$(COLLECTOR_CGO) \
 		GOOS=$(TARGETOS) GOARCH=$(TARGETARCH) \
-		$(GO_BIN) build \
+		$(GO_COMMAND_ENV) $(GO_BIN) build \
 			-buildvcs=$(COLLECTOR_BUILDVCS) \
 			-tags=$(COLLECTOR_BUILD_TAGS) \
 			-ldflags="$(COLLECTOR_LD_FLAGS_STRIP) $(COLLECTOR_LD_FLAGS_STATIC_LINK) $(COLLECTOR_LD_FLAGS)" \
@@ -153,10 +152,9 @@ $(COLLECTOR_BINARY_NAME): $(COLLECTOR_BUILD_DIR) $(GO_BIN)
 # Note: distrogen currently does not support BoringCrypto and CGO for Windows builds.
 $(COLLECTOR_BINARY_NAME_EXE): $(COLLECTOR_BUILD_DIR) $(GO_BIN)
 	cd $(COLLECTOR_BUILD_DIR) && \
-		GOWORK=off \
 		CGO_ENABLED=0 \
 		GOOS=windows GOARCH=$(TARGETARCH) \
-		$(GO_BIN) build \
+		$(GO_COMMAND_ENV) $(GO_BIN) build \
 			-buildvcs=$(COLLECTOR_BUILDVCS) \
 			-tags=$(COLLECTOR_BUILD_TAGS) \
 			-o ../otelopscol.exe \

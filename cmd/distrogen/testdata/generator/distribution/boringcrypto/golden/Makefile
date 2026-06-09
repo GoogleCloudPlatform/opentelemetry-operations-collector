@@ -139,7 +139,7 @@ COLLECTOR_LD_FLAGS_STATIC_LINK ?= -linkmode=external -extldflags=-static
 # Using OCB and the local manifest file, build a collector.
 $(COLLECTOR_BINARY_NAME): $(COLLECTOR_BUILD_DIR) $(GO_BIN)
 	cd $(COLLECTOR_BUILD_DIR) && \
-		GOWORK=off \
+		GOWORK=off $(if $(USE_GO_PROXY),GOPROXY=$(USE_GO_PROXY),) \
 		GOEXPERIMENT=boringcrypto \
 		CGO_ENABLED=$(COLLECTOR_CGO) \
 		GOOS=$(TARGETOS) GOARCH=$(TARGETARCH) \
@@ -155,7 +155,7 @@ $(COLLECTOR_BINARY_NAME): $(COLLECTOR_BUILD_DIR) $(GO_BIN)
 # Note: distrogen currently does not support BoringCrypto and CGO for Windows builds.
 $(COLLECTOR_BINARY_NAME_EXE): $(COLLECTOR_BUILD_DIR) $(GO_BIN)
 	cd $(COLLECTOR_BUILD_DIR) && \
-		GOWORK=off \
+		GOWORK=off $(if $(USE_GO_PROXY),GOPROXY=$(USE_GO_PROXY),) \
 		CGO_ENABLED=0 \
 		GOOS=windows GOARCH=$(TARGETARCH) \
 		$(GO_BIN) build \

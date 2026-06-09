@@ -39,7 +39,7 @@ const (
 )
 
 const (
-	tempOCBDirname = "_build"
+	tempOCBDirname      = "_build"
 	permanentOCBDirname = "generated_collector"
 )
 
@@ -163,8 +163,8 @@ func (s *DistributionSpec) Query(field string) (string, error) {
 }
 
 var (
-	ErrSpecValidationBoringCryptoWithoutCGO    = errors.New("boringcrypto build is not possible with collector_cgo turned off")
-	ErrSpecValidationBoringCryptoWithoutDebian = errors.New("boringcrypto is only possible with the debian build container")
+	ErrSpecValidationBoringCryptoWithoutCGO        = errors.New("boringcrypto build is not possible with collector_cgo turned off")
+	ErrSpecValidationBoringCryptoWithoutDebian     = errors.New("boringcrypto is only possible with the debian build container")
 	ErrSpecValidationVendorDepsWithoutPermanentOCB = errors.New("vendor_dependencies is only possible with permanent_ocb_directory set to true")
 )
 

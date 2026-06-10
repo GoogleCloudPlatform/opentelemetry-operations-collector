@@ -1,3 +1,0 @@
-package oniguruma
-
-import "C"

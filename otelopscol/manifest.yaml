@@ -30,12 +30,10 @@ receivers:
 processors:
 - gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/agentmetricsprocessor v0.151.0
   path: ../components/otelopscol/processor/agentmetricsprocessor
-- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/filterprocessor v0.151.0
-  path: ../components/otelopscol/processor/filterprocessor
 - gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/normalizesumsprocessor v0.151.0
+
   path: ../components/otelopscol/processor/normalizesumsprocessor
-- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/transformprocessor v0.151.0
-  path: ../components/otelopscol/processor/transformprocessor
+
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/cumulativetodeltaprocessor v0.151.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/deltatocumulativeprocessor v0.151.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/deltatorateprocessor v0.151.0

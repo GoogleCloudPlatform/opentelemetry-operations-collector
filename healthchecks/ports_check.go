@@ -21,8 +21,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/GoogleCloudPlatform/ops-agent/confgenerator/otel"
-	"github.com/GoogleCloudPlatform/ops-agent/confgenerator/portutil"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/confgenerator/otel"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/confgenerator/portutil"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/logs"
 )
 

@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/logs"
-	"github.com/GoogleCloudPlatform/ops-agent/platform"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/platform"
 )
 
 type networkRequest struct {

@@ -22,7 +22,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GoogleCloudPlatform/ops-agent/confgenerator/resourcedetector"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/confgenerator/resourcedetector"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/logs"
 	collogspb "go.opentelemetry.io/proto/otlp/collector/logs/v1"
 	metricspb "go.opentelemetry.io/proto/otlp/collector/metrics/v1"

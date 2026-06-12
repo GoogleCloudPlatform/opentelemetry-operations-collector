@@ -83,9 +83,7 @@ replaces:
   - from: github.com/GoogleCloudPlatform/opentelemetry-operations-collector
     to: ../../
     reason: Reference root module of repository to find dependency packages.
-  - from: github.com/GoogleCloudPlatform/ops-agent
-    to: ../../../../
-    reason: Import confgenerator from main repository.
+
 
   - from: github.com/buger/jsonparser
     to: github.com/buger/jsonparser v1.1.2

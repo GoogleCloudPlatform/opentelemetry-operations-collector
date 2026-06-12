@@ -3,7 +3,7 @@ module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/compone
 go 1.25.0
 
 require (
-	github.com/GoogleCloudPlatform/ops-agent v0.0.0
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector v0.0.0-00010101000000-000000000000
 	go.opentelemetry.io/collector/confmap v1.57.0
 	go.uber.org/zap v1.28.0
 )
@@ -18,6 +18,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.11.2 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/compute/armcompute/v5 v5.7.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/network/armnetwork/v4 v4.3.0 // indirect
+	github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c // indirect
 	github.com/AzureAD/microsoft-authentication-library-for-go v1.6.0 // indirect
 	github.com/Code-Hex/go-generics-cache v1.5.1 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.30.0 // indirect
@@ -131,6 +132,7 @@ require (
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
+	github.com/moby/sys/sequential v0.7.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
@@ -206,4 +208,4 @@ require (
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
 
-replace github.com/GoogleCloudPlatform/ops-agent => ../../../../../../
+replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector => ../../../../

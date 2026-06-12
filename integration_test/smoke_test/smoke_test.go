@@ -166,6 +166,7 @@ func restartCommandForPlatform(platform string) string {
 func isRPMBased(imageSpec string) bool {
 	return strings.HasPrefix(imageSpec, "centos-cloud") ||
 		strings.HasPrefix(imageSpec, "rhel-") ||
+		strings.Contains(imageSpec, "almalinux-") ||
 		strings.HasPrefix(imageSpec, "rocky-linux-cloud") ||
 		strings.HasPrefix(imageSpec, "suse-cloud") ||
 		strings.HasPrefix(imageSpec, "suse-sap-cloud") ||

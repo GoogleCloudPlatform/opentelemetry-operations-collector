@@ -1593,7 +1593,7 @@ func IsCentOS(imageSpec string) bool {
 }
 
 func IsRHEL(imageSpec string) bool {
-	return strings.HasPrefix(imageSpec, "rhel-")
+	return strings.HasPrefix(imageSpec, "rhel-") || strings.Contains(imageSpec, "almalinux-")
 }
 
 func isRHEL9(imageSpec string) bool {

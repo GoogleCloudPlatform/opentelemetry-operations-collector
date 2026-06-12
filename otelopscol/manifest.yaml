@@ -54,6 +54,8 @@ exporters:
 - gomod: go.opentelemetry.io/collector/exporter/otlphttpexporter v0.151.0
 
 extensions:
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/extension/opsagenthealthchecksextension v0.151.0
+  path: ../components/otelopscol/extension/opsagenthealthchecksextension
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/googleclientauthextension v0.151.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/pprofextension v0.151.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/storage/filestorage v0.151.0

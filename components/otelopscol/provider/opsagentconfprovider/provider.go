@@ -1,3 +1,17 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package opsagentconfprovider
 
 import (
@@ -49,7 +63,14 @@ func (p *provider) Retrieve(ctx context.Context, uri string, watcher confmap.Wat
 	if outDir == "" {
 		outDir = "/run/google-cloud-ops-agent"
 	}
-	stateDir := "/var/lib/google-cloud-ops-agent"
+	stateDir := os.Getenv("STATE_DIRECTORY")
+	if stateDir == "" {
+		stateDir = "/var/lib/google-cloud-ops-agent"
+	}
+	logsDir := os.Getenv("LOG_DIRECTORY")
+	if logsDir == "" {
+		logsDir = "/var/log/google-cloud-ops-agent"
+	}
 
 	uc, err := confgenerator.MergeConfFiles(ctx, configPath)
 	if err != nil {
@@ -61,7 +82,7 @@ func (p *provider) Retrieve(ctx context.Context, uri string, watcher confmap.Wat
 		return nil, fmt.Errorf("failed to generate self metrics: %w", err)
 	}
 
-	otelConfig, err := uc.GenerateOtelConfig(ctx, outDir, stateDir)
+	otelConfig, err := uc.GenerateOtelConfig(ctx, logsDir, outDir, stateDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate otel config: %w", err)
 	}

@@ -43,3 +43,8 @@ providers:
     gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/provider/opsagentconfprovider v0.0.0
     path: "../components/otelopscol/provider/opsagentconfprovider"
 
+extensions:
+  opsagenthealthchecks:
+    gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/extension/opsagenthealthchecksextension v0.0.0
+    path: "../components/otelopscol/extension/opsagenthealthchecksextension"
+

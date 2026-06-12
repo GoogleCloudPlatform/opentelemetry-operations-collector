@@ -70,6 +70,8 @@ components:
     - googleclientauth
     - pprof
     - filestorage
+    - opsagenthealthchecks
+
   providers:
     - googlesecretmanager
     - file

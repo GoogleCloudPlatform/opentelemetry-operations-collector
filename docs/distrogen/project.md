@@ -75,10 +75,26 @@ All tools are downloaded to a local folder it creates called `.tools`. This fold
 
 ## Custom Components
 
-NOTE: This feature is under construction and the documentation will be updated when it works properly.
+The primary advantage of using a `distrogen` project is the ability to easily manage custom Collector components. The project structure allows you to:
+* Scaffold new components as separate Go modules under the `components/` directory.
+* Automatically update OpenTelemetry library dependencies across all of your custom components.
+* Maintain a local registry (`components/registry.yaml`) so your distribution can seamlessly discover and build your components.
 
-The biggest strength for a full project setup is for custom components. In your project you can:
+### Generating a Component
 
-* Add code for custom Collector components as separate Go modules in the `components/<type>` subfolder
-* Automatically update Collector library dependencies across all components easily
-* Manage a local registry that can will allow you to refer to your custom components in your distribution
+To scaffold a new component, use the [`distrogen component`](./command.md#component) command:
+
+```bash
+distrogen component --spec <spec_file> --type <type> --name <name>
+```
+
+For example:
+```bash
+distrogen component --spec spec.yaml --type receiver --name foo
+```
+
+This command will:
+1. Create a new directory at `components/receiver/fooreceiver` populated with boilerplate files (`Makefile`, `go.mod`, and `metadata.yaml`).
+2. Register the new component in `components/registry.yaml` so it is available to your distribution.
+
+> **Note:** Generating a component makes it available, but does not automatically add it to your built distribution. To include it, you must add the component to the `components` section of your `spec.yaml` file and regenerate your distribution.

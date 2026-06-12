@@ -389,3 +389,36 @@ func TestRegistryComponents_RenderOCBComponents(t *testing.T) {
 		})
 	}
 }
+
+func TestComponentsRegistryGenerator_PreservesExistingRegistry(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "registry-generator-test")
+	assert.NilError(t, err)
+	t.Cleanup(func() {
+		os.RemoveAll(tempDir)
+	})
+
+	componentsDir := filepath.Join(tempDir, "components")
+	err = os.MkdirAll(componentsDir, 0755)
+	assert.NilError(t, err)
+
+	// Create an existing registry with some components
+	existingRegistry := NewRegistry()
+	existingRegistry.Path = filepath.Join(componentsDir, "registry.yaml")
+	existingRegistry.Receivers["customreceiver"] = &RegistryComponent{
+		GoMod: &GoModuleID{URL: "github.com/custom/receiver", Tag: "v1.0.0"},
+	}
+	err = existingRegistry.Save()
+	assert.NilError(t, err)
+
+	// Run generator
+	crg := NewComponentsRegistryGenerator()
+	crg.Path = tempDir
+	err = crg.Generate()
+	assert.NilError(t, err)
+
+	// Load the registry back and verify it still has the component
+	loadedRegistry, err := LoadRegistry(existingRegistry.Path)
+	assert.NilError(t, err)
+	assert.Assert(t, loadedRegistry.Receivers["customreceiver"] != nil, "Expected customreceiver to be preserved")
+	assert.Equal(t, loadedRegistry.Receivers["customreceiver"].GoMod.URL, "github.com/custom/receiver")
+}

@@ -3,7 +3,7 @@ include ./make/maintenance.mk
 
 MAKEFLAGS += --no-print-directory
 
-SPEC_FILE = {{ .Spec.Path }}
+SPEC_FILE = spec.yaml
 
 #######
 # Tools
@@ -14,7 +14,7 @@ DISTROGEN_BIN ?= $(TOOLS_DIR)/distrogen
 DISTROGEN_QUERY = $(if $(wildcard $(DISTROGEN_BIN)),$(DISTROGEN_BIN),distrogen) query --spec $(SPEC_FILE) --field
 DISTROGEN_VERSION ?= $(shell $(DISTROGEN_QUERY) distrogen_version)
 MDATAGEN_BIN ?= $(TOOLS_DIR)/mdatagen
-DISTRO_DIR = $(PWD)/{{ .Spec.Name }}
+DISTRO_DIR = $(PWD)/basic-distro
 
 $(DISTROGEN_BIN):
 	$(MAKE) tools-dir
@@ -69,16 +69,16 @@ GEN_OTEL = $(DISTROGEN_BIN) generate --spec $(SPEC_FILE) \
 .PHONY: gen
 gen: distrogen
 	@$(GEN_OTEL)
-{{ if .Spec.PermanentOCBDirectory }}	cd $(DISTRO_DIR) && make ocb-generate{{- end }}
+
 
 .PHONY: regen
 regen: distrogen
 	@$(GEN_OTEL) --force
-{{ if .Spec.PermanentOCBDirectory }}	cd $(DISTRO_DIR) && make ocb-generate{{- end }}
+
 
 regen-v: distrogen
 	@$(GEN_OTEL) --force -v
-{{ if .Spec.PermanentOCBDirectory }}	cd $(DISTRO_DIR) && make ocb-generate{{- end }}
+
 
 ###########
 # Workspace

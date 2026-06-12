@@ -116,3 +116,117 @@ func TestSpecQueryNotFound(t *testing.T) {
 	_, err := spec.Query("random_field_name")
 	assert.ErrorIs(t, err, ErrQueryValueNotFound)
 }
+
+func TestDetectDistributionToolChange(t *testing.T) {
+	original := &DistributionSpec{
+		OpenTelemetryVersion: "v0.100.0",
+		GoVersion:            "1.22.0",
+		Description:          "original description",
+	}
+
+	testCases := []struct {
+		name     string
+		current  *DistributionSpec
+		expected bool
+	}{
+		{
+			name: "no changes",
+			current: &DistributionSpec{
+				OpenTelemetryVersion: "v0.100.0",
+				GoVersion:            "1.22.0",
+				Description:          "original description",
+			},
+			expected: false,
+		},
+		{
+			name: "only description changes",
+			current: &DistributionSpec{
+				OpenTelemetryVersion: "v0.100.0",
+				GoVersion:            "1.22.0",
+				Description:          "new description",
+			},
+			expected: false,
+		},
+		{
+			name: "opentelemetry version changes",
+			current: &DistributionSpec{
+				OpenTelemetryVersion: "v0.101.0",
+				GoVersion:            "1.22.0",
+				Description:          "original description",
+			},
+			expected: true,
+		},
+		{
+			name: "go version changes",
+			current: &DistributionSpec{
+				OpenTelemetryVersion: "v0.100.0",
+				GoVersion:            "1.23.0",
+				Description:          "original description",
+			},
+			expected: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.current.DetectDistributionToolChange(original), tc.expected)
+		})
+	}
+}
+
+func TestDetectProjectToolChange(t *testing.T) {
+	original := &DistributionSpec{
+		OpenTelemetryVersion: "v0.100.0",
+		DistrogenVersion:     "v0.1.0",
+		Description:          "original description",
+	}
+
+	testCases := []struct {
+		name     string
+		current  *DistributionSpec
+		expected bool
+	}{
+		{
+			name: "no changes",
+			current: &DistributionSpec{
+				OpenTelemetryVersion: "v0.100.0",
+				DistrogenVersion:     "v0.1.0",
+				Description:          "original description",
+			},
+			expected: false,
+		},
+		{
+			name: "only description changes",
+			current: &DistributionSpec{
+				OpenTelemetryVersion: "v0.100.0",
+				DistrogenVersion:     "v0.1.0",
+				Description:          "new description",
+			},
+			expected: false,
+		},
+		{
+			name: "opentelemetry version changes",
+			current: &DistributionSpec{
+				OpenTelemetryVersion: "v0.101.0",
+				DistrogenVersion:     "v0.1.0",
+				Description:          "original description",
+			},
+			expected: true,
+		},
+		{
+			name: "distrogen version changes",
+			current: &DistributionSpec{
+				OpenTelemetryVersion: "v0.100.0",
+				DistrogenVersion:     "v0.2.0",
+				Description:          "original description",
+			},
+			expected: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.current.DetectProjectToolChange(original), tc.expected)
+		})
+	}
+}

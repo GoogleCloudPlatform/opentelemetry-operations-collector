@@ -11,12 +11,14 @@ SPEC_FILE = spec.yaml
 
 TOOLS_DIR ?= $(PWD)/.tools
 DISTROGEN_BIN ?= $(TOOLS_DIR)/distrogen
+DISTROGEN_QUERY = $(if $(wildcard $(DISTROGEN_BIN)),$(DISTROGEN_BIN),distrogen) query --spec $(SPEC_FILE) --field
+DISTROGEN_VERSION ?= $(shell $(DISTROGEN_QUERY) distrogen_version)
 MDATAGEN_BIN ?= $(TOOLS_DIR)/mdatagen
-DISTRO_DIR = $(PWD)/basic-distro
+DISTRO_DIR = $(PWD)/
 
 $(DISTROGEN_BIN):
 	$(MAKE) tools-dir
-	GOBIN=$(TOOLS_DIR) go install github.com/GoogleCloudPlatform/opentelemetry-operations-collector/cmd/distrogen@$(shell cat .distrogen/VERSION)
+	GOBIN=$(TOOLS_DIR) go install github.com/GoogleCloudPlatform/opentelemetry-operations-collector/cmd/distrogen@$(DISTROGEN_VERSION)
 
 $(MDATAGEN_BIN):
 	$(MAKE) tools-dir
@@ -38,7 +40,6 @@ distrogen: $(DISTROGEN_BIN)
 
 COMPONENT_DIR = components
 
-DISTROGEN_QUERY = $(DISTROGEN_BIN) query --spec $(SPEC_FILE) --field
 
 .PHONY: update-otel-components
 update-otel-components: $(DISTROGEN_BIN) $(MDATAGEN_BIN) workspace-update
@@ -48,7 +49,6 @@ update-otel-components: $(DISTROGEN_BIN) $(MDATAGEN_BIN) workspace-update
 	cd components && \
 	$(MAKE) update-components
 	$(MAKE) gen
-
 
 .PHONY: test-otel-components
 test-otel-components: go.work
@@ -70,12 +70,15 @@ GEN_OTEL = $(DISTROGEN_BIN) generate --spec $(SPEC_FILE) \
 gen: distrogen
 	@$(GEN_OTEL)
 
+
 .PHONY: regen
 regen: distrogen
 	@$(GEN_OTEL) --force
 
+
 regen-v: distrogen
 	@$(GEN_OTEL) --force -v
+
 
 ###########
 # Workspace

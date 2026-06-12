@@ -69,16 +69,16 @@ GEN_OTEL = $(DISTROGEN_BIN) generate --spec $(SPEC_FILE) \
 .PHONY: gen
 gen: distrogen
 	@$(GEN_OTEL)
-{{ if .Spec.PermanentOCBDirectory }}	cd $(DISTRO_DIR) && make update-ocb-directory{{- end }}
+{{ if .Spec.PermanentOCBDirectory }}	cd $(DISTRO_DIR) && make ocb-generate{{- end }}
 
 .PHONY: regen
 regen: distrogen
 	@$(GEN_OTEL) --force
-{{ if .Spec.PermanentOCBDirectory }}	cd $(DISTRO_DIR) && make update-ocb-directory{{- end }}
+{{ if .Spec.PermanentOCBDirectory }}	cd $(DISTRO_DIR) && make ocb-generate{{- end }}
 
 regen-v: distrogen
 	@$(GEN_OTEL) --force -v
-{{ if .Spec.PermanentOCBDirectory }}	cd $(DISTRO_DIR) && make update-ocb-directory{{- end }}
+{{ if .Spec.PermanentOCBDirectory }}	cd $(DISTRO_DIR) && make ocb-generate{{- end }}
 
 ###########
 # Workspace

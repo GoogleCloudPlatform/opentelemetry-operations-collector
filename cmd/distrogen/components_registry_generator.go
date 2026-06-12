@@ -40,10 +40,17 @@ func NewComponentsRegistryGenerator() *ComponentsRegistryGenerator {
 // The component registry is for custom components built within this repository.
 // Upstream components are managed in the internal registry at cmd/distrogen/registry.yaml.
 func (g *ComponentsRegistryGenerator) Generate() error {
-	registry := NewRegistry()
-
 	generateComponentsPath := filepath.Join(g.Path, "components")
-	registry.Path = filepath.Join(generateComponentsPath, "registry.yaml")
+	registryPath := filepath.Join(generateComponentsPath, "registry.yaml")
+
+	registry, err := LoadRegistry(registryPath)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return err
+		}
+		registry = NewRegistry()
+		registry.Path = registryPath
+	}
 
 	var dirErrors []error
 	if err := os.MkdirAll(generateComponentsPath, g.FileMode); err != nil {

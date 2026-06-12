@@ -80,17 +80,17 @@ GEN_GOOGLE_BUILT_OTEL=$(RUN_DISTROGEN) generate --spec ./specs/google-built-open
 .PHONY: gen-google-built-otel
 gen-google-built-otel:
 	@$(GEN_GOOGLE_BUILT_OTEL)
-	@cd google-built-opentelemetry-collector && $(MAKE) clean-tools && $(MAKE) update-ocb-directory
+	@cd google-built-opentelemetry-collector && $(MAKE) clean-tools && $(MAKE) ocb-generate
 
 .PHONY: regen-google-built-otel
 regen-google-built-otel:
 	@$(GEN_GOOGLE_BUILT_OTEL) --force
-	@cd google-built-opentelemetry-collector && $(MAKE) clean-tools && $(MAKE) update-ocb-directory
+	@cd google-built-opentelemetry-collector && $(MAKE) clean-tools && $(MAKE) ocb-generate
 
 .PHONY: regen-google-built-otel-v
 regen-google-built-otel-v:
 	@$(GEN_GOOGLE_BUILT_OTEL) --force -v
-	@cd google-built-opentelemetry-collector && $(MAKE) clean-tools && $(MAKE) update-ocb-directory
+	@cd google-built-opentelemetry-collector && $(MAKE) clean-tools && $(MAKE) ocb-generate
 
 .PHONY: compare-google-built-otel
 compare-google-built-otel:

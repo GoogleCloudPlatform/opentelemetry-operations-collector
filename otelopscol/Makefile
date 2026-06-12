@@ -126,6 +126,7 @@ collector-build: clean-collector $(COLLECTOR_BINARY_NAME)
 $(COLLECTOR_BUILD_DIR):
 	$(MAKE) ocb-generate
 
+
 .PHONY: ocb-generate
 ocb-generate: $(OCB_BIN)
 	$(GO_COMMAND_ENV) $(OCB_BIN) --skip-compilation --verbose --config manifest.yaml

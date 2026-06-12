@@ -129,10 +129,6 @@ collector-build: clean-collector $(COLLECTOR_BINARY_NAME)
 $(COLLECTOR_BUILD_DIR):
 	$(MAKE) ocb-generate
 
-{{- if .PermanentOCBDirectory }}
-.PHONY: update-ocb-directory
-update-ocb-directory: ocb-generate
-{{- end }}
 
 .PHONY: ocb-generate
 ocb-generate: $(OCB_BIN)

@@ -1597,7 +1597,7 @@ func IsRHEL(imageSpec string) bool {
 }
 
 func isRHEL9(imageSpec string) bool {
-	return strings.Contains(imageSpec, "rhel-9") || strings.Contains(imageSpec, "rocky-linux-9") || strings.Contains(imageSpec, "almalinux-9")
+	return strings.Contains(imageSpec, "rhel-9") || strings.Contains(imageSpec, "rocky-linux-9")
 }
 
 func isRHEL7SAPHA(imageSpec string) bool {
@@ -1609,7 +1609,7 @@ func IsDLVMImage(imageSpec string) bool {
 }
 
 func IsRocky(imageSpec string) bool {
-	return strings.Contains(imageSpec, "rocky-linux-") || strings.Contains(imageSpec, "almalinux-")
+	return strings.Contains(imageSpec, "rocky-linux-")
 }
 
 func IsRpm(imageSpec string) bool {

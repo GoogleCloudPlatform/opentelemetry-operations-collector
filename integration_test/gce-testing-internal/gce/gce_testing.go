@@ -1408,7 +1408,7 @@ func attemptCreateInstance(ctx context.Context, logger *log.Logger, options VMOp
 	defer func() {
 		if errToReturn != nil {
 			// This function is responsible for deleting the VM in all error cases.
-			errToReturn = multierr.Append(errToReturn, DeleteInstance(logger, vm))
+			errToReturn = multierr.Append(errToReturn, DeleteInstance(ctx, logger, vm))
 			// Make sure to never return both a valid VM object and an error.
 			vmToReturn = nil
 		}
@@ -1482,7 +1482,7 @@ func attemptCreateManagedInstanceGroupVM(ctx context.Context, logger *log.Logger
 	defer func() {
 		if errToReturn != nil {
 			// This function is responsible for deleting the ManagedInstanceGroupVM in all error cases.
-			errToReturn = multierr.Append(errToReturn, DeleteManagedInstanceGroupVM(logger, migVM))
+			errToReturn = multierr.Append(errToReturn, DeleteManagedInstanceGroupVM(ctx, logger, migVM))
 			// Make sure to never return both a valid ManagedInstanceGroupVM object and an error.
 			migVmToReturn = nil
 		}
@@ -1814,20 +1814,25 @@ func handleDeleteError(err error, attempt int) error {
 
 // DeleteInstance deletes the given VM instance synchronously.
 // Does nothing if the VM was already deleted.
-// Doesn't take a Context argument because even if the test has timed out or is
-// cancelled, we still want to delete the VMs.
-func DeleteInstance(logger *log.Logger, vm *VM) error {
+// Uses the passed-in context to extract the gcloud configuration directory,
+// but uses a separate background context with timeout for the actual deletion
+// to ensure it completes even if the test context is cancelled.
+func DeleteInstance(ctx context.Context, logger *log.Logger, vm *VM) error {
 	if vm.AlreadyDeleted {
 		logger.Printf("VM %v was already deleted, skipping delete.", vm.Name)
 		return nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	configDir := ctx.Value(gcloudConfigDirKey)
+	deleteCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
-	backoffPolicy := backoff.WithContext(backoff.WithMaxRetries(backoff.NewConstantBackOff(30*time.Second), 10), ctx)
+	if configDir != nil {
+		deleteCtx = WithGcloudConfigDir(deleteCtx, configDir.(string))
+	}
+	backoffPolicy := backoff.WithContext(backoff.WithMaxRetries(backoff.NewConstantBackOff(30*time.Second), 10), deleteCtx)
 	attempt := 0
 	tryDelete := func() error {
 		attempt++
-		_, err := RunGcloud(ctx, logger, "",
+		_, err := RunGcloud(deleteCtx, logger, "",
 			[]string{
 				"compute", "instances", "delete",
 				"--project=" + vm.Project,
@@ -1845,20 +1850,25 @@ func DeleteInstance(logger *log.Logger, vm *VM) error {
 
 // DeleteManagedInstanceGroupVM deletes the given Managed Instance Group VM instance synchronously.
 // Does nothing if the Managed Instance Group VM was already deleted.
-// Doesn't take a Context argument because even if the test has timed out or is
-// cancelled, we still want to delete the Managed Instance Group.
-func DeleteManagedInstanceGroupVM(logger *log.Logger, migVM *ManagedInstanceGroupVM) error {
+// Uses the passed-in context to extract the gcloud configuration directory,
+// but uses a separate background context with timeout for the actual deletion
+// to ensure it completes even if the test context is cancelled.
+func DeleteManagedInstanceGroupVM(ctx context.Context, logger *log.Logger, migVM *ManagedInstanceGroupVM) error {
 	if migVM.AlreadyDeleted {
 		logger.Printf("Managed Instance Group %v was already deleted, skipping delete.", migVM.Name)
 		return nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	configDir := ctx.Value(gcloudConfigDirKey)
+	deleteCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
-	backoffPolicy := backoff.WithContext(backoff.WithMaxRetries(backoff.NewConstantBackOff(30*time.Second), 10), ctx)
+	if configDir != nil {
+		deleteCtx = WithGcloudConfigDir(deleteCtx, configDir.(string))
+	}
+	backoffPolicy := backoff.WithContext(backoff.WithMaxRetries(backoff.NewConstantBackOff(30*time.Second), 10), deleteCtx)
 	attempt := 0
 	tryDeleteMIG := func() error {
 		attempt++
-		_, err := RunGcloud(ctx, logger, "",
+		_, err := RunGcloud(deleteCtx, logger, "",
 			[]string{
 				"compute", "instance-groups", "managed", "delete", migVM.ManagedInstanceGroupName(),
 				"--project=" + migVM.Project,
@@ -1877,7 +1887,7 @@ func DeleteManagedInstanceGroupVM(logger *log.Logger, migVM *ManagedInstanceGrou
 	attempt = 0
 	tryDeleteTemplate := func() error {
 		attempt++
-		_, err = RunGcloud(ctx, logger, "",
+		_, err = RunGcloud(deleteCtx, logger, "",
 			[]string{
 				"compute", "instance-templates", "delete", migVM.InstanceTemplateName(),
 				"--project=" + migVM.Project,
@@ -2405,7 +2415,7 @@ func SetupVM(ctx context.Context, t *testing.T, logger *log.Logger, options VMOp
 		t.Fatalf("SetupVM() error creating instance: %v", err)
 	}
 	t.Cleanup(func() {
-		if err := DeleteInstance(logger, vm); err != nil {
+		if err := DeleteInstance(ctx, logger, vm); err != nil {
 			t.Errorf("SetupVM() error deleting instance: %v", err)
 		}
 	})
@@ -2425,7 +2435,7 @@ func SetupManagedInstanceGroupVM(ctx context.Context, t *testing.T, logger *log.
 		t.Fatalf("SetupManagedInstanceGroupVM() error creating instance: %v", err)
 	}
 	t.Cleanup(func() {
-		if err := DeleteManagedInstanceGroupVM(logger, migVM); err != nil {
+		if err := DeleteManagedInstanceGroupVM(ctx, logger, migVM); err != nil {
 			t.Errorf("SetupManagedInstanceGroupVM() error deleting instance: %v", err)
 		}
 	})

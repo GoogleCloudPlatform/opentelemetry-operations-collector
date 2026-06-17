@@ -3,14 +3,18 @@ all_set:
   metrics:
     varnish.backend.connection.count:
       enabled: true
+      attributes: ["kind"]
     varnish.backend.request.count:
       enabled: true
     varnish.cache.operation.count:
       enabled: true
+      attributes: ["operation"]
     varnish.client.request.count:
       enabled: true
+      attributes: ["state"]
     varnish.client.request.error.count:
       enabled: true
+      attributes: ["status_code"]
     varnish.object.count:
       enabled: true
     varnish.object.expired:
@@ -21,8 +25,43 @@ all_set:
       enabled: true
     varnish.session.count:
       enabled: true
+      attributes: ["kind"]
     varnish.thread.operation.count:
       enabled: true
+      attributes: ["operation"]
+  resource_attributes:
+    varnish.cache.name:
+      enabled: true
+reaggregate_set:
+  metrics:
+    varnish.backend.connection.count:
+      enabled: true
+      attributes: []
+    varnish.backend.request.count:
+      enabled: true
+    varnish.cache.operation.count:
+      enabled: true
+      attributes: []
+    varnish.client.request.count:
+      enabled: true
+      attributes: []
+    varnish.client.request.error.count:
+      enabled: true
+      attributes: []
+    varnish.object.count:
+      enabled: true
+    varnish.object.expired:
+      enabled: true
+    varnish.object.moved:
+      enabled: true
+    varnish.object.nuked:
+      enabled: true
+    varnish.session.count:
+      enabled: true
+      attributes: []
+    varnish.thread.operation.count:
+      enabled: true
+      attributes: []
   resource_attributes:
     varnish.cache.name:
       enabled: true
@@ -30,14 +69,18 @@ none_set:
   metrics:
     varnish.backend.connection.count:
       enabled: false
+      attributes: ["kind"]
     varnish.backend.request.count:
       enabled: false
     varnish.cache.operation.count:
       enabled: false
+      attributes: ["operation"]
     varnish.client.request.count:
       enabled: false
+      attributes: ["state"]
     varnish.client.request.error.count:
       enabled: false
+      attributes: ["status_code"]
     varnish.object.count:
       enabled: false
     varnish.object.expired:
@@ -48,8 +91,10 @@ none_set:
       enabled: false
     varnish.session.count:
       enabled: false
+      attributes: ["kind"]
     varnish.thread.operation.count:
       enabled: false
+      attributes: ["operation"]
   resource_attributes:
     varnish.cache.name:
       enabled: false

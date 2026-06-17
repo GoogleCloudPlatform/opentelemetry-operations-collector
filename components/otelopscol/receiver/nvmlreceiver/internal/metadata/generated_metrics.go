@@ -3,12 +3,20 @@
 package metadata
 
 import (
+	"slices"
 	"time"
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/receiver"
+)
+
+const (
+	AggregationStrategySum = "sum"
+	AggregationStrategyAvg = "avg"
+	AggregationStrategyMin = "min"
+	AggregationStrategyMax = "max"
 )
 
 // AttributeMemoryState specifies the value memory_state attribute.
@@ -64,9 +72,10 @@ type metricInfo struct {
 }
 
 type metricNvmlGpuMemoryBytesUsed struct {
-	data     pmetric.Metric // data buffer for generated metric.
-	config   MetricConfig   // metric config provided by user.
-	capacity int            // max observed number of data points added to the metric.
+	data          pmetric.Metric                     // data buffer for generated metric.
+	config        NvmlGpuMemoryBytesUsedMetricConfig // metric config provided by user.
+	capacity      int                                // max observed number of data points added to the metric.
+	aggDataPoints []int64                            // slice containing number of aggregated datapoints at each index
 }
 
 // init fills nvml.gpu.memory.bytes_used metric with initial data.
@@ -76,20 +85,57 @@ func (m *metricNvmlGpuMemoryBytesUsed) init() {
 	m.data.SetUnit("By")
 	m.data.SetEmptyGauge()
 	m.data.Gauge().DataPoints().EnsureCapacity(m.capacity)
+	m.aggDataPoints = m.aggDataPoints[:0]
 }
 
 func (m *metricNvmlGpuMemoryBytesUsed) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, memoryStateAttributeValue string) {
 	if !m.config.Enabled {
 		return
 	}
-	dp := m.data.Gauge().DataPoints().AppendEmpty()
+
+	dp := pmetric.NewNumberDataPoint()
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
+	if slices.Contains(m.config.EnabledAttributes, NvmlGpuMemoryBytesUsedMetricAttributeKeyModel) {
+		dp.Attributes().PutStr("model", modelAttributeValue)
+	}
+	if slices.Contains(m.config.EnabledAttributes, NvmlGpuMemoryBytesUsedMetricAttributeKeyGpuNumber) {
+		dp.Attributes().PutStr("gpu_number", gpuNumberAttributeValue)
+	}
+	if slices.Contains(m.config.EnabledAttributes, NvmlGpuMemoryBytesUsedMetricAttributeKeyUuid) {
+		dp.Attributes().PutStr("uuid", uuidAttributeValue)
+	}
+	if slices.Contains(m.config.EnabledAttributes, NvmlGpuMemoryBytesUsedMetricAttributeKeyMemoryState) {
+		dp.Attributes().PutStr("memory_state", memoryStateAttributeValue)
+	}
+
+	var s string
+	dps := m.data.Gauge().DataPoints()
+	for i := 0; i < dps.Len(); i++ {
+		dpi := dps.At(i)
+		if dp.Attributes().Equal(dpi.Attributes()) && dp.StartTimestamp() == dpi.StartTimestamp() && dp.Timestamp() == dpi.Timestamp() {
+			switch s = m.config.AggregationStrategy; s {
+			case AggregationStrategySum, AggregationStrategyAvg:
+				dpi.SetIntValue(dpi.IntValue() + val)
+				m.aggDataPoints[i] += 1
+				return
+			case AggregationStrategyMin:
+				if dpi.IntValue() > val {
+					dpi.SetIntValue(val)
+				}
+				return
+			case AggregationStrategyMax:
+				if dpi.IntValue() < val {
+					dpi.SetIntValue(val)
+				}
+				return
+			}
+		}
+	}
+
 	dp.SetIntValue(val)
-	dp.Attributes().PutStr("model", modelAttributeValue)
-	dp.Attributes().PutStr("gpu_number", gpuNumberAttributeValue)
-	dp.Attributes().PutStr("uuid", uuidAttributeValue)
-	dp.Attributes().PutStr("memory_state", memoryStateAttributeValue)
+	m.aggDataPoints = append(m.aggDataPoints, 1)
+	dp.MoveTo(dps.AppendEmpty())
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
@@ -102,13 +148,18 @@ func (m *metricNvmlGpuMemoryBytesUsed) updateCapacity() {
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
 func (m *metricNvmlGpuMemoryBytesUsed) emit(metrics pmetric.MetricSlice) {
 	if m.config.Enabled && m.data.Gauge().DataPoints().Len() > 0 {
+		if m.config.AggregationStrategy == AggregationStrategyAvg {
+			for i, aggCount := range m.aggDataPoints {
+				m.data.Gauge().DataPoints().At(i).SetIntValue(m.data.Gauge().DataPoints().At(i).IntValue() / aggCount)
+			}
+		}
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
 		m.init()
 	}
 }
 
-func newMetricNvmlGpuMemoryBytesUsed(cfg MetricConfig) metricNvmlGpuMemoryBytesUsed {
+func newMetricNvmlGpuMemoryBytesUsed(cfg NvmlGpuMemoryBytesUsedMetricConfig) metricNvmlGpuMemoryBytesUsed {
 	m := metricNvmlGpuMemoryBytesUsed{config: cfg}
 
 	if cfg.Enabled {
@@ -119,9 +170,10 @@ func newMetricNvmlGpuMemoryBytesUsed(cfg MetricConfig) metricNvmlGpuMemoryBytesU
 }
 
 type metricNvmlGpuProcessesMaxBytesUsed struct {
-	data     pmetric.Metric // data buffer for generated metric.
-	config   MetricConfig   // metric config provided by user.
-	capacity int            // max observed number of data points added to the metric.
+	data          pmetric.Metric                           // data buffer for generated metric.
+	config        NvmlGpuProcessesMaxBytesUsedMetricConfig // metric config provided by user.
+	capacity      int                                      // max observed number of data points added to the metric.
+	aggDataPoints []int64                                  // slice containing number of aggregated datapoints at each index
 }
 
 // init fills nvml.gpu.processes.max_bytes_used metric with initial data.
@@ -131,24 +183,69 @@ func (m *metricNvmlGpuProcessesMaxBytesUsed) init() {
 	m.data.SetUnit("By")
 	m.data.SetEmptyGauge()
 	m.data.Gauge().DataPoints().EnsureCapacity(m.capacity)
+	m.aggDataPoints = m.aggDataPoints[:0]
 }
 
 func (m *metricNvmlGpuProcessesMaxBytesUsed) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val int64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, pidAttributeValue int64, processAttributeValue string, commandAttributeValue string, commandLineAttributeValue string, ownerAttributeValue string) {
 	if !m.config.Enabled {
 		return
 	}
-	dp := m.data.Gauge().DataPoints().AppendEmpty()
+
+	dp := pmetric.NewNumberDataPoint()
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
+	if slices.Contains(m.config.EnabledAttributes, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyModel) {
+		dp.Attributes().PutStr("model", modelAttributeValue)
+	}
+	if slices.Contains(m.config.EnabledAttributes, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyGpuNumber) {
+		dp.Attributes().PutStr("gpu_number", gpuNumberAttributeValue)
+	}
+	if slices.Contains(m.config.EnabledAttributes, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyUuid) {
+		dp.Attributes().PutStr("uuid", uuidAttributeValue)
+	}
+	if slices.Contains(m.config.EnabledAttributes, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyPid) {
+		dp.Attributes().PutInt("pid", pidAttributeValue)
+	}
+	if slices.Contains(m.config.EnabledAttributes, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyProcess) {
+		dp.Attributes().PutStr("process", processAttributeValue)
+	}
+	if slices.Contains(m.config.EnabledAttributes, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyCommand) {
+		dp.Attributes().PutStr("command", commandAttributeValue)
+	}
+	if slices.Contains(m.config.EnabledAttributes, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyCommandLine) {
+		dp.Attributes().PutStr("command_line", commandLineAttributeValue)
+	}
+	if slices.Contains(m.config.EnabledAttributes, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyOwner) {
+		dp.Attributes().PutStr("owner", ownerAttributeValue)
+	}
+
+	var s string
+	dps := m.data.Gauge().DataPoints()
+	for i := 0; i < dps.Len(); i++ {
+		dpi := dps.At(i)
+		if dp.Attributes().Equal(dpi.Attributes()) && dp.StartTimestamp() == dpi.StartTimestamp() && dp.Timestamp() == dpi.Timestamp() {
+			switch s = m.config.AggregationStrategy; s {
+			case AggregationStrategySum, AggregationStrategyAvg:
+				dpi.SetIntValue(dpi.IntValue() + val)
+				m.aggDataPoints[i] += 1
+				return
+			case AggregationStrategyMin:
+				if dpi.IntValue() > val {
+					dpi.SetIntValue(val)
+				}
+				return
+			case AggregationStrategyMax:
+				if dpi.IntValue() < val {
+					dpi.SetIntValue(val)
+				}
+				return
+			}
+		}
+	}
+
 	dp.SetIntValue(val)
-	dp.Attributes().PutStr("model", modelAttributeValue)
-	dp.Attributes().PutStr("gpu_number", gpuNumberAttributeValue)
-	dp.Attributes().PutStr("uuid", uuidAttributeValue)
-	dp.Attributes().PutInt("pid", pidAttributeValue)
-	dp.Attributes().PutStr("process", processAttributeValue)
-	dp.Attributes().PutStr("command", commandAttributeValue)
-	dp.Attributes().PutStr("command_line", commandLineAttributeValue)
-	dp.Attributes().PutStr("owner", ownerAttributeValue)
+	m.aggDataPoints = append(m.aggDataPoints, 1)
+	dp.MoveTo(dps.AppendEmpty())
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
@@ -161,13 +258,18 @@ func (m *metricNvmlGpuProcessesMaxBytesUsed) updateCapacity() {
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
 func (m *metricNvmlGpuProcessesMaxBytesUsed) emit(metrics pmetric.MetricSlice) {
 	if m.config.Enabled && m.data.Gauge().DataPoints().Len() > 0 {
+		if m.config.AggregationStrategy == AggregationStrategyAvg {
+			for i, aggCount := range m.aggDataPoints {
+				m.data.Gauge().DataPoints().At(i).SetIntValue(m.data.Gauge().DataPoints().At(i).IntValue() / aggCount)
+			}
+		}
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
 		m.init()
 	}
 }
 
-func newMetricNvmlGpuProcessesMaxBytesUsed(cfg MetricConfig) metricNvmlGpuProcessesMaxBytesUsed {
+func newMetricNvmlGpuProcessesMaxBytesUsed(cfg NvmlGpuProcessesMaxBytesUsedMetricConfig) metricNvmlGpuProcessesMaxBytesUsed {
 	m := metricNvmlGpuProcessesMaxBytesUsed{config: cfg}
 
 	if cfg.Enabled {
@@ -178,9 +280,10 @@ func newMetricNvmlGpuProcessesMaxBytesUsed(cfg MetricConfig) metricNvmlGpuProces
 }
 
 type metricNvmlGpuProcessesUtilization struct {
-	data     pmetric.Metric // data buffer for generated metric.
-	config   MetricConfig   // metric config provided by user.
-	capacity int            // max observed number of data points added to the metric.
+	data          pmetric.Metric                          // data buffer for generated metric.
+	config        NvmlGpuProcessesUtilizationMetricConfig // metric config provided by user.
+	capacity      int                                     // max observed number of data points added to the metric.
+	aggDataPoints []float64                               // slice containing number of aggregated datapoints at each index
 }
 
 // init fills nvml.gpu.processes.utilization metric with initial data.
@@ -190,24 +293,69 @@ func (m *metricNvmlGpuProcessesUtilization) init() {
 	m.data.SetUnit("1")
 	m.data.SetEmptyGauge()
 	m.data.Gauge().DataPoints().EnsureCapacity(m.capacity)
+	m.aggDataPoints = m.aggDataPoints[:0]
 }
 
 func (m *metricNvmlGpuProcessesUtilization) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string, pidAttributeValue int64, processAttributeValue string, commandAttributeValue string, commandLineAttributeValue string, ownerAttributeValue string) {
 	if !m.config.Enabled {
 		return
 	}
-	dp := m.data.Gauge().DataPoints().AppendEmpty()
+
+	dp := pmetric.NewNumberDataPoint()
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
+	if slices.Contains(m.config.EnabledAttributes, NvmlGpuProcessesUtilizationMetricAttributeKeyModel) {
+		dp.Attributes().PutStr("model", modelAttributeValue)
+	}
+	if slices.Contains(m.config.EnabledAttributes, NvmlGpuProcessesUtilizationMetricAttributeKeyGpuNumber) {
+		dp.Attributes().PutStr("gpu_number", gpuNumberAttributeValue)
+	}
+	if slices.Contains(m.config.EnabledAttributes, NvmlGpuProcessesUtilizationMetricAttributeKeyUuid) {
+		dp.Attributes().PutStr("uuid", uuidAttributeValue)
+	}
+	if slices.Contains(m.config.EnabledAttributes, NvmlGpuProcessesUtilizationMetricAttributeKeyPid) {
+		dp.Attributes().PutInt("pid", pidAttributeValue)
+	}
+	if slices.Contains(m.config.EnabledAttributes, NvmlGpuProcessesUtilizationMetricAttributeKeyProcess) {
+		dp.Attributes().PutStr("process", processAttributeValue)
+	}
+	if slices.Contains(m.config.EnabledAttributes, NvmlGpuProcessesUtilizationMetricAttributeKeyCommand) {
+		dp.Attributes().PutStr("command", commandAttributeValue)
+	}
+	if slices.Contains(m.config.EnabledAttributes, NvmlGpuProcessesUtilizationMetricAttributeKeyCommandLine) {
+		dp.Attributes().PutStr("command_line", commandLineAttributeValue)
+	}
+	if slices.Contains(m.config.EnabledAttributes, NvmlGpuProcessesUtilizationMetricAttributeKeyOwner) {
+		dp.Attributes().PutStr("owner", ownerAttributeValue)
+	}
+
+	var s string
+	dps := m.data.Gauge().DataPoints()
+	for i := 0; i < dps.Len(); i++ {
+		dpi := dps.At(i)
+		if dp.Attributes().Equal(dpi.Attributes()) && dp.StartTimestamp() == dpi.StartTimestamp() && dp.Timestamp() == dpi.Timestamp() {
+			switch s = m.config.AggregationStrategy; s {
+			case AggregationStrategySum, AggregationStrategyAvg:
+				dpi.SetDoubleValue(dpi.DoubleValue() + val)
+				m.aggDataPoints[i] += 1
+				return
+			case AggregationStrategyMin:
+				if dpi.DoubleValue() > val {
+					dpi.SetDoubleValue(val)
+				}
+				return
+			case AggregationStrategyMax:
+				if dpi.DoubleValue() < val {
+					dpi.SetDoubleValue(val)
+				}
+				return
+			}
+		}
+	}
+
 	dp.SetDoubleValue(val)
-	dp.Attributes().PutStr("model", modelAttributeValue)
-	dp.Attributes().PutStr("gpu_number", gpuNumberAttributeValue)
-	dp.Attributes().PutStr("uuid", uuidAttributeValue)
-	dp.Attributes().PutInt("pid", pidAttributeValue)
-	dp.Attributes().PutStr("process", processAttributeValue)
-	dp.Attributes().PutStr("command", commandAttributeValue)
-	dp.Attributes().PutStr("command_line", commandLineAttributeValue)
-	dp.Attributes().PutStr("owner", ownerAttributeValue)
+	m.aggDataPoints = append(m.aggDataPoints, 1)
+	dp.MoveTo(dps.AppendEmpty())
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
@@ -220,13 +368,18 @@ func (m *metricNvmlGpuProcessesUtilization) updateCapacity() {
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
 func (m *metricNvmlGpuProcessesUtilization) emit(metrics pmetric.MetricSlice) {
 	if m.config.Enabled && m.data.Gauge().DataPoints().Len() > 0 {
+		if m.config.AggregationStrategy == AggregationStrategyAvg {
+			for i, aggCount := range m.aggDataPoints {
+				m.data.Gauge().DataPoints().At(i).SetDoubleValue(m.data.Gauge().DataPoints().At(i).DoubleValue() / aggCount)
+			}
+		}
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
 		m.init()
 	}
 }
 
-func newMetricNvmlGpuProcessesUtilization(cfg MetricConfig) metricNvmlGpuProcessesUtilization {
+func newMetricNvmlGpuProcessesUtilization(cfg NvmlGpuProcessesUtilizationMetricConfig) metricNvmlGpuProcessesUtilization {
 	m := metricNvmlGpuProcessesUtilization{config: cfg}
 
 	if cfg.Enabled {
@@ -237,9 +390,10 @@ func newMetricNvmlGpuProcessesUtilization(cfg MetricConfig) metricNvmlGpuProcess
 }
 
 type metricNvmlGpuUtilization struct {
-	data     pmetric.Metric // data buffer for generated metric.
-	config   MetricConfig   // metric config provided by user.
-	capacity int            // max observed number of data points added to the metric.
+	data          pmetric.Metric                 // data buffer for generated metric.
+	config        NvmlGpuUtilizationMetricConfig // metric config provided by user.
+	capacity      int                            // max observed number of data points added to the metric.
+	aggDataPoints []float64                      // slice containing number of aggregated datapoints at each index
 }
 
 // init fills nvml.gpu.utilization metric with initial data.
@@ -249,19 +403,54 @@ func (m *metricNvmlGpuUtilization) init() {
 	m.data.SetUnit("1")
 	m.data.SetEmptyGauge()
 	m.data.Gauge().DataPoints().EnsureCapacity(m.capacity)
+	m.aggDataPoints = m.aggDataPoints[:0]
 }
 
 func (m *metricNvmlGpuUtilization) recordDataPoint(start pcommon.Timestamp, ts pcommon.Timestamp, val float64, modelAttributeValue string, gpuNumberAttributeValue string, uuidAttributeValue string) {
 	if !m.config.Enabled {
 		return
 	}
-	dp := m.data.Gauge().DataPoints().AppendEmpty()
+
+	dp := pmetric.NewNumberDataPoint()
 	dp.SetStartTimestamp(start)
 	dp.SetTimestamp(ts)
+	if slices.Contains(m.config.EnabledAttributes, NvmlGpuUtilizationMetricAttributeKeyModel) {
+		dp.Attributes().PutStr("model", modelAttributeValue)
+	}
+	if slices.Contains(m.config.EnabledAttributes, NvmlGpuUtilizationMetricAttributeKeyGpuNumber) {
+		dp.Attributes().PutStr("gpu_number", gpuNumberAttributeValue)
+	}
+	if slices.Contains(m.config.EnabledAttributes, NvmlGpuUtilizationMetricAttributeKeyUuid) {
+		dp.Attributes().PutStr("uuid", uuidAttributeValue)
+	}
+
+	var s string
+	dps := m.data.Gauge().DataPoints()
+	for i := 0; i < dps.Len(); i++ {
+		dpi := dps.At(i)
+		if dp.Attributes().Equal(dpi.Attributes()) && dp.StartTimestamp() == dpi.StartTimestamp() && dp.Timestamp() == dpi.Timestamp() {
+			switch s = m.config.AggregationStrategy; s {
+			case AggregationStrategySum, AggregationStrategyAvg:
+				dpi.SetDoubleValue(dpi.DoubleValue() + val)
+				m.aggDataPoints[i] += 1
+				return
+			case AggregationStrategyMin:
+				if dpi.DoubleValue() > val {
+					dpi.SetDoubleValue(val)
+				}
+				return
+			case AggregationStrategyMax:
+				if dpi.DoubleValue() < val {
+					dpi.SetDoubleValue(val)
+				}
+				return
+			}
+		}
+	}
+
 	dp.SetDoubleValue(val)
-	dp.Attributes().PutStr("model", modelAttributeValue)
-	dp.Attributes().PutStr("gpu_number", gpuNumberAttributeValue)
-	dp.Attributes().PutStr("uuid", uuidAttributeValue)
+	m.aggDataPoints = append(m.aggDataPoints, 1)
+	dp.MoveTo(dps.AppendEmpty())
 }
 
 // updateCapacity saves max length of data point slices that will be used for the slice capacity.
@@ -274,13 +463,18 @@ func (m *metricNvmlGpuUtilization) updateCapacity() {
 // emit appends recorded metric data to a metrics slice and prepares it for recording another set of data points.
 func (m *metricNvmlGpuUtilization) emit(metrics pmetric.MetricSlice) {
 	if m.config.Enabled && m.data.Gauge().DataPoints().Len() > 0 {
+		if m.config.AggregationStrategy == AggregationStrategyAvg {
+			for i, aggCount := range m.aggDataPoints {
+				m.data.Gauge().DataPoints().At(i).SetDoubleValue(m.data.Gauge().DataPoints().At(i).DoubleValue() / aggCount)
+			}
+		}
 		m.updateCapacity()
 		m.data.MoveTo(metrics.AppendEmpty())
 		m.init()
 	}
 }
 
-func newMetricNvmlGpuUtilization(cfg MetricConfig) metricNvmlGpuUtilization {
+func newMetricNvmlGpuUtilization(cfg NvmlGpuUtilizationMetricConfig) metricNvmlGpuUtilization {
 	m := metricNvmlGpuUtilization{config: cfg}
 
 	if cfg.Enabled {

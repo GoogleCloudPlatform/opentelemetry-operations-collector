@@ -3,16 +3,31 @@
 package metadata
 
 import (
+	"fmt"
+
 	"go.opentelemetry.io/collector/confmap"
 )
 
-// MetricConfig provides common config for a particular metric.
-type MetricConfig struct {
+// NvmlGpuMemoryBytesUsedMetricAttributeKey specifies the key of an attribute for the nvml.gpu.memory.bytes_used metric.
+type NvmlGpuMemoryBytesUsedMetricAttributeKey string
+
+const (
+	NvmlGpuMemoryBytesUsedMetricAttributeKeyModel       NvmlGpuMemoryBytesUsedMetricAttributeKey = "model"
+	NvmlGpuMemoryBytesUsedMetricAttributeKeyGpuNumber   NvmlGpuMemoryBytesUsedMetricAttributeKey = "gpu_number"
+	NvmlGpuMemoryBytesUsedMetricAttributeKeyUuid        NvmlGpuMemoryBytesUsedMetricAttributeKey = "uuid"
+	NvmlGpuMemoryBytesUsedMetricAttributeKeyMemoryState NvmlGpuMemoryBytesUsedMetricAttributeKey = "memory_state"
+)
+
+// NvmlGpuMemoryBytesUsedMetricConfig provides config for the nvml.gpu.memory.bytes_used metric.
+type NvmlGpuMemoryBytesUsedMetricConfig struct {
 	Enabled          bool `mapstructure:"enabled"`
 	enabledSetByUser bool
+
+	AggregationStrategy string                                     `mapstructure:"aggregation_strategy"`
+	EnabledAttributes   []NvmlGpuMemoryBytesUsedMetricAttributeKey `mapstructure:"attributes"`
 }
 
-func (ms *MetricConfig) Unmarshal(parser *confmap.Conf) error {
+func (ms *NvmlGpuMemoryBytesUsedMetricConfig) Unmarshal(parser *confmap.Conf) error {
 	if parser == nil {
 		return nil
 	}
@@ -26,27 +41,213 @@ func (ms *MetricConfig) Unmarshal(parser *confmap.Conf) error {
 	return nil
 }
 
+func (ms *NvmlGpuMemoryBytesUsedMetricConfig) Validate() error {
+	for _, val := range ms.EnabledAttributes {
+		switch val {
+		case NvmlGpuMemoryBytesUsedMetricAttributeKeyModel, NvmlGpuMemoryBytesUsedMetricAttributeKeyGpuNumber, NvmlGpuMemoryBytesUsedMetricAttributeKeyUuid, NvmlGpuMemoryBytesUsedMetricAttributeKeyMemoryState:
+		default:
+			return fmt.Errorf("metric nvml.gpu.memory.bytes_used doesn't have an attribute %v, valid attributes: [model, gpu_number, uuid, memory_state]", val)
+		}
+	}
+
+	switch ms.AggregationStrategy {
+	case AggregationStrategySum, AggregationStrategyAvg, AggregationStrategyMin, AggregationStrategyMax:
+	default:
+		return fmt.Errorf("invalid aggregation strategy %q, valid strategies: [%s, %s, %s, %s]", ms.AggregationStrategy, AggregationStrategySum, AggregationStrategyAvg, AggregationStrategyMin, AggregationStrategyMax)
+	}
+
+	return nil
+}
+
+// NvmlGpuProcessesMaxBytesUsedMetricAttributeKey specifies the key of an attribute for the nvml.gpu.processes.max_bytes_used metric.
+type NvmlGpuProcessesMaxBytesUsedMetricAttributeKey string
+
+const (
+	NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyModel       NvmlGpuProcessesMaxBytesUsedMetricAttributeKey = "model"
+	NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyGpuNumber   NvmlGpuProcessesMaxBytesUsedMetricAttributeKey = "gpu_number"
+	NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyUuid        NvmlGpuProcessesMaxBytesUsedMetricAttributeKey = "uuid"
+	NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyPid         NvmlGpuProcessesMaxBytesUsedMetricAttributeKey = "pid"
+	NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyProcess     NvmlGpuProcessesMaxBytesUsedMetricAttributeKey = "process"
+	NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyCommand     NvmlGpuProcessesMaxBytesUsedMetricAttributeKey = "command"
+	NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyCommandLine NvmlGpuProcessesMaxBytesUsedMetricAttributeKey = "command_line"
+	NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyOwner       NvmlGpuProcessesMaxBytesUsedMetricAttributeKey = "owner"
+)
+
+// NvmlGpuProcessesMaxBytesUsedMetricConfig provides config for the nvml.gpu.processes.max_bytes_used metric.
+type NvmlGpuProcessesMaxBytesUsedMetricConfig struct {
+	Enabled          bool `mapstructure:"enabled"`
+	enabledSetByUser bool
+
+	AggregationStrategy string                                           `mapstructure:"aggregation_strategy"`
+	EnabledAttributes   []NvmlGpuProcessesMaxBytesUsedMetricAttributeKey `mapstructure:"attributes"`
+}
+
+func (ms *NvmlGpuProcessesMaxBytesUsedMetricConfig) Unmarshal(parser *confmap.Conf) error {
+	if parser == nil {
+		return nil
+	}
+
+	err := parser.Unmarshal(ms)
+	if err != nil {
+		return err
+	}
+
+	ms.enabledSetByUser = parser.IsSet("enabled")
+	return nil
+}
+
+func (ms *NvmlGpuProcessesMaxBytesUsedMetricConfig) Validate() error {
+	for _, val := range ms.EnabledAttributes {
+		switch val {
+		case NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyModel, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyGpuNumber, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyUuid, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyPid, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyProcess, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyCommand, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyCommandLine, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyOwner:
+		default:
+			return fmt.Errorf("metric nvml.gpu.processes.max_bytes_used doesn't have an attribute %v, valid attributes: [model, gpu_number, uuid, pid, process, command, command_line, owner]", val)
+		}
+	}
+
+	switch ms.AggregationStrategy {
+	case AggregationStrategySum, AggregationStrategyAvg, AggregationStrategyMin, AggregationStrategyMax:
+	default:
+		return fmt.Errorf("invalid aggregation strategy %q, valid strategies: [%s, %s, %s, %s]", ms.AggregationStrategy, AggregationStrategySum, AggregationStrategyAvg, AggregationStrategyMin, AggregationStrategyMax)
+	}
+
+	return nil
+}
+
+// NvmlGpuProcessesUtilizationMetricAttributeKey specifies the key of an attribute for the nvml.gpu.processes.utilization metric.
+type NvmlGpuProcessesUtilizationMetricAttributeKey string
+
+const (
+	NvmlGpuProcessesUtilizationMetricAttributeKeyModel       NvmlGpuProcessesUtilizationMetricAttributeKey = "model"
+	NvmlGpuProcessesUtilizationMetricAttributeKeyGpuNumber   NvmlGpuProcessesUtilizationMetricAttributeKey = "gpu_number"
+	NvmlGpuProcessesUtilizationMetricAttributeKeyUuid        NvmlGpuProcessesUtilizationMetricAttributeKey = "uuid"
+	NvmlGpuProcessesUtilizationMetricAttributeKeyPid         NvmlGpuProcessesUtilizationMetricAttributeKey = "pid"
+	NvmlGpuProcessesUtilizationMetricAttributeKeyProcess     NvmlGpuProcessesUtilizationMetricAttributeKey = "process"
+	NvmlGpuProcessesUtilizationMetricAttributeKeyCommand     NvmlGpuProcessesUtilizationMetricAttributeKey = "command"
+	NvmlGpuProcessesUtilizationMetricAttributeKeyCommandLine NvmlGpuProcessesUtilizationMetricAttributeKey = "command_line"
+	NvmlGpuProcessesUtilizationMetricAttributeKeyOwner       NvmlGpuProcessesUtilizationMetricAttributeKey = "owner"
+)
+
+// NvmlGpuProcessesUtilizationMetricConfig provides config for the nvml.gpu.processes.utilization metric.
+type NvmlGpuProcessesUtilizationMetricConfig struct {
+	Enabled          bool `mapstructure:"enabled"`
+	enabledSetByUser bool
+
+	AggregationStrategy string                                          `mapstructure:"aggregation_strategy"`
+	EnabledAttributes   []NvmlGpuProcessesUtilizationMetricAttributeKey `mapstructure:"attributes"`
+}
+
+func (ms *NvmlGpuProcessesUtilizationMetricConfig) Unmarshal(parser *confmap.Conf) error {
+	if parser == nil {
+		return nil
+	}
+
+	err := parser.Unmarshal(ms)
+	if err != nil {
+		return err
+	}
+
+	ms.enabledSetByUser = parser.IsSet("enabled")
+	return nil
+}
+
+func (ms *NvmlGpuProcessesUtilizationMetricConfig) Validate() error {
+	for _, val := range ms.EnabledAttributes {
+		switch val {
+		case NvmlGpuProcessesUtilizationMetricAttributeKeyModel, NvmlGpuProcessesUtilizationMetricAttributeKeyGpuNumber, NvmlGpuProcessesUtilizationMetricAttributeKeyUuid, NvmlGpuProcessesUtilizationMetricAttributeKeyPid, NvmlGpuProcessesUtilizationMetricAttributeKeyProcess, NvmlGpuProcessesUtilizationMetricAttributeKeyCommand, NvmlGpuProcessesUtilizationMetricAttributeKeyCommandLine, NvmlGpuProcessesUtilizationMetricAttributeKeyOwner:
+		default:
+			return fmt.Errorf("metric nvml.gpu.processes.utilization doesn't have an attribute %v, valid attributes: [model, gpu_number, uuid, pid, process, command, command_line, owner]", val)
+		}
+	}
+
+	switch ms.AggregationStrategy {
+	case AggregationStrategySum, AggregationStrategyAvg, AggregationStrategyMin, AggregationStrategyMax:
+	default:
+		return fmt.Errorf("invalid aggregation strategy %q, valid strategies: [%s, %s, %s, %s]", ms.AggregationStrategy, AggregationStrategySum, AggregationStrategyAvg, AggregationStrategyMin, AggregationStrategyMax)
+	}
+
+	return nil
+}
+
+// NvmlGpuUtilizationMetricAttributeKey specifies the key of an attribute for the nvml.gpu.utilization metric.
+type NvmlGpuUtilizationMetricAttributeKey string
+
+const (
+	NvmlGpuUtilizationMetricAttributeKeyModel     NvmlGpuUtilizationMetricAttributeKey = "model"
+	NvmlGpuUtilizationMetricAttributeKeyGpuNumber NvmlGpuUtilizationMetricAttributeKey = "gpu_number"
+	NvmlGpuUtilizationMetricAttributeKeyUuid      NvmlGpuUtilizationMetricAttributeKey = "uuid"
+)
+
+// NvmlGpuUtilizationMetricConfig provides config for the nvml.gpu.utilization metric.
+type NvmlGpuUtilizationMetricConfig struct {
+	Enabled          bool `mapstructure:"enabled"`
+	enabledSetByUser bool
+
+	AggregationStrategy string                                 `mapstructure:"aggregation_strategy"`
+	EnabledAttributes   []NvmlGpuUtilizationMetricAttributeKey `mapstructure:"attributes"`
+}
+
+func (ms *NvmlGpuUtilizationMetricConfig) Unmarshal(parser *confmap.Conf) error {
+	if parser == nil {
+		return nil
+	}
+
+	err := parser.Unmarshal(ms)
+	if err != nil {
+		return err
+	}
+
+	ms.enabledSetByUser = parser.IsSet("enabled")
+	return nil
+}
+
+func (ms *NvmlGpuUtilizationMetricConfig) Validate() error {
+	for _, val := range ms.EnabledAttributes {
+		switch val {
+		case NvmlGpuUtilizationMetricAttributeKeyModel, NvmlGpuUtilizationMetricAttributeKeyGpuNumber, NvmlGpuUtilizationMetricAttributeKeyUuid:
+		default:
+			return fmt.Errorf("metric nvml.gpu.utilization doesn't have an attribute %v, valid attributes: [model, gpu_number, uuid]", val)
+		}
+	}
+
+	switch ms.AggregationStrategy {
+	case AggregationStrategySum, AggregationStrategyAvg, AggregationStrategyMin, AggregationStrategyMax:
+	default:
+		return fmt.Errorf("invalid aggregation strategy %q, valid strategies: [%s, %s, %s, %s]", ms.AggregationStrategy, AggregationStrategySum, AggregationStrategyAvg, AggregationStrategyMin, AggregationStrategyMax)
+	}
+
+	return nil
+}
+
 // MetricsConfig provides config for nvml metrics.
 type MetricsConfig struct {
-	NvmlGpuMemoryBytesUsed       MetricConfig `mapstructure:"nvml.gpu.memory.bytes_used"`
-	NvmlGpuProcessesMaxBytesUsed MetricConfig `mapstructure:"nvml.gpu.processes.max_bytes_used"`
-	NvmlGpuProcessesUtilization  MetricConfig `mapstructure:"nvml.gpu.processes.utilization"`
-	NvmlGpuUtilization           MetricConfig `mapstructure:"nvml.gpu.utilization"`
+	NvmlGpuMemoryBytesUsed       NvmlGpuMemoryBytesUsedMetricConfig       `mapstructure:"nvml.gpu.memory.bytes_used"`
+	NvmlGpuProcessesMaxBytesUsed NvmlGpuProcessesMaxBytesUsedMetricConfig `mapstructure:"nvml.gpu.processes.max_bytes_used"`
+	NvmlGpuProcessesUtilization  NvmlGpuProcessesUtilizationMetricConfig  `mapstructure:"nvml.gpu.processes.utilization"`
+	NvmlGpuUtilization           NvmlGpuUtilizationMetricConfig           `mapstructure:"nvml.gpu.utilization"`
 }
 
 func DefaultMetricsConfig() MetricsConfig {
 	return MetricsConfig{
-		NvmlGpuMemoryBytesUsed: MetricConfig{
-			Enabled: true,
+		NvmlGpuMemoryBytesUsed: NvmlGpuMemoryBytesUsedMetricConfig{
+			Enabled:             true,
+			AggregationStrategy: AggregationStrategyAvg,
+			EnabledAttributes:   []NvmlGpuMemoryBytesUsedMetricAttributeKey{NvmlGpuMemoryBytesUsedMetricAttributeKeyModel, NvmlGpuMemoryBytesUsedMetricAttributeKeyGpuNumber, NvmlGpuMemoryBytesUsedMetricAttributeKeyUuid, NvmlGpuMemoryBytesUsedMetricAttributeKeyMemoryState},
 		},
-		NvmlGpuProcessesMaxBytesUsed: MetricConfig{
-			Enabled: true,
+		NvmlGpuProcessesMaxBytesUsed: NvmlGpuProcessesMaxBytesUsedMetricConfig{
+			Enabled:             true,
+			AggregationStrategy: AggregationStrategyAvg,
+			EnabledAttributes:   []NvmlGpuProcessesMaxBytesUsedMetricAttributeKey{NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyModel, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyGpuNumber, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyUuid, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyPid, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyProcess, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyCommand, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyCommandLine, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyOwner},
 		},
-		NvmlGpuProcessesUtilization: MetricConfig{
-			Enabled: true,
+		NvmlGpuProcessesUtilization: NvmlGpuProcessesUtilizationMetricConfig{
+			Enabled:             true,
+			AggregationStrategy: AggregationStrategyAvg,
+			EnabledAttributes:   []NvmlGpuProcessesUtilizationMetricAttributeKey{NvmlGpuProcessesUtilizationMetricAttributeKeyModel, NvmlGpuProcessesUtilizationMetricAttributeKeyGpuNumber, NvmlGpuProcessesUtilizationMetricAttributeKeyUuid, NvmlGpuProcessesUtilizationMetricAttributeKeyPid, NvmlGpuProcessesUtilizationMetricAttributeKeyProcess, NvmlGpuProcessesUtilizationMetricAttributeKeyCommand, NvmlGpuProcessesUtilizationMetricAttributeKeyCommandLine, NvmlGpuProcessesUtilizationMetricAttributeKeyOwner},
 		},
-		NvmlGpuUtilization: MetricConfig{
-			Enabled: true,
+		NvmlGpuUtilization: NvmlGpuUtilizationMetricConfig{
+			Enabled:             true,
+			AggregationStrategy: AggregationStrategyAvg,
+			EnabledAttributes:   []NvmlGpuUtilizationMetricAttributeKey{NvmlGpuUtilizationMetricAttributeKeyModel, NvmlGpuUtilizationMetricAttributeKeyGpuNumber, NvmlGpuUtilizationMetricAttributeKeyUuid},
 		},
 	}
 }

@@ -3,19 +3,41 @@ all_set:
   metrics:
     nvml.gpu.memory.bytes_used:
       enabled: true
+      attributes: ["model","gpu_number","uuid","memory_state"]
     nvml.gpu.processes.max_bytes_used:
       enabled: true
+      attributes: ["model","gpu_number","uuid","pid","process","command","command_line","owner"]
     nvml.gpu.processes.utilization:
       enabled: true
+      attributes: ["model","gpu_number","uuid","pid","process","command","command_line","owner"]
     nvml.gpu.utilization:
       enabled: true
+      attributes: ["model","gpu_number","uuid"]
+reaggregate_set:
+  metrics:
+    nvml.gpu.memory.bytes_used:
+      enabled: true
+      attributes: []
+    nvml.gpu.processes.max_bytes_used:
+      enabled: true
+      attributes: []
+    nvml.gpu.processes.utilization:
+      enabled: true
+      attributes: []
+    nvml.gpu.utilization:
+      enabled: true
+      attributes: []
 none_set:
   metrics:
     nvml.gpu.memory.bytes_used:
       enabled: false
+      attributes: ["model","gpu_number","uuid","memory_state"]
     nvml.gpu.processes.max_bytes_used:
       enabled: false
+      attributes: ["model","gpu_number","uuid","pid","process","command","command_line","owner"]
     nvml.gpu.processes.utilization:
       enabled: false
+      attributes: ["model","gpu_number","uuid","pid","process","command","command_line","owner"]
     nvml.gpu.utilization:
       enabled: false
+      attributes: ["model","gpu_number","uuid"]

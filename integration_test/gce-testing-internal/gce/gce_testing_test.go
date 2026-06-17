@@ -484,6 +484,46 @@ func TestUploadContent(t *testing.T) {
 	})
 }
 
+func TestRunCommandEnvMerging(t *testing.T) {
+	// Set a unique environment variable
+	testKey := "TEST_ENV_VAR_FOR_GCE_TESTING"
+	testVal := "unique_value_12345"
+	t.Setenv(testKey, testVal)
+
+	// Set gcloudPath to "env" to print environment
+	gce.SetGcloudPath("env")
+	defer func() {
+		// Restore gcloudPath
+		if path := os.Getenv("GCLOUD_BIN"); path != "" {
+			gce.SetGcloudPath(path)
+		} else {
+			gce.SetGcloudPath("gcloud")
+		}
+	}()
+
+	// Create a context with a config dir to trigger env merging
+	ctx := context.Background()
+	ctx = gce.WithGcloudConfigDir(ctx, "/tmp/mock-config-dir")
+
+	// Run "gcloud" (which is now "env")
+	output, err := gce.RunGcloud(ctx, log.New(io.Discard, "", 0), "", nil)
+	if err != nil {
+		t.Fatalf("RunGcloud failed: %v", err)
+	}
+
+	// Check if our test variable is in the output
+	expectedLine := fmt.Sprintf("%s=%s", testKey, testVal)
+	if !strings.Contains(output.Stdout, expectedLine) {
+		t.Errorf("Expected environment to contain %q, but it was not found. Output:\n%s", expectedLine, output.Stdout)
+	}
+
+	// Also check if CLOUDSDK_CONFIG is present and has the correct value
+	expectedConfigLine := "CLOUDSDK_CONFIG=/tmp/mock-config-dir"
+	if !strings.Contains(output.Stdout, expectedConfigLine) {
+		t.Errorf("Expected environment to contain %q, but it was not found. Output:\n%s", expectedConfigLine, output.Stdout)
+	}
+}
+
 func TestMain(m *testing.M) {
 	code := m.Run()
 	gce.CleanupKeysOrDie()

@@ -752,11 +752,10 @@ func runCommand(ctx context.Context, logger *log.Logger, stdin io.Reader, args [
 	cmd.Stdout = io.MultiWriter(&stdoutBuilder, interleavedWriter)
 	cmd.Stderr = io.MultiWriter(&stderrBuilder, interleavedWriter)
 	if len(env) > 0 {
-		environment := []string{}
+		cmd.Env = os.Environ()
 		for k, v := range env {
-			environment = append(environment, fmt.Sprintf("%s=%s", k, v))
+			cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
 		}
-		cmd.Env = environment
 	}
 
 	err := cmd.Run()
@@ -1838,6 +1837,7 @@ func DeleteInstance(ctx context.Context, logger *log.Logger, vm *VM) error {
 				"--project=" + vm.Project,
 				"--zone=" + vm.Zone,
 				vm.Name,
+				"--quiet",
 			})
 		return handleDeleteError(err, attempt)
 	}
@@ -1873,6 +1873,7 @@ func DeleteManagedInstanceGroupVM(ctx context.Context, logger *log.Logger, migVM
 				"compute", "instance-groups", "managed", "delete", migVM.ManagedInstanceGroupName(),
 				"--project=" + migVM.Project,
 				"--zone=" + migVM.Zone,
+				"--quiet",
 			})
 		if err == nil {
 			return nil
@@ -1891,6 +1892,7 @@ func DeleteManagedInstanceGroupVM(ctx context.Context, logger *log.Logger, migVM
 			[]string{
 				"compute", "instance-templates", "delete", migVM.InstanceTemplateName(),
 				"--project=" + migVM.Project,
+				"--quiet",
 			})
 		return handleDeleteError(err, attempt)
 	}

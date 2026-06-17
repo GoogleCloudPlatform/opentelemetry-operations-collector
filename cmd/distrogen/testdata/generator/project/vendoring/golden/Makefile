@@ -11,15 +11,18 @@ SPEC_FILE = spec.yaml
 
 TOOLS_DIR ?= $(PWD)/.tools
 DISTROGEN_BIN ?= $(TOOLS_DIR)/distrogen
+DISTROGEN_QUERY = $(if $(wildcard $(DISTROGEN_BIN)),$(DISTROGEN_BIN),distrogen) query --spec $(SPEC_FILE) --field
+DISTROGEN_VERSION ?= $(shell $(DISTROGEN_QUERY) distrogen_version)
 MDATAGEN_BIN ?= $(TOOLS_DIR)/mdatagen
+DISTRO_DIR = $(PWD)/
 
 $(DISTROGEN_BIN):
 	$(MAKE) tools-dir
-	GOBIN=$(TOOLS_DIR) go install github.com/GoogleCloudPlatform/opentelemetry-operations-collector/cmd/distrogen@$(shell cat .distrogen/VERSION)
+	GOBIN=$(TOOLS_DIR) go install github.com/GoogleCloudPlatform/opentelemetry-operations-collector/cmd/distrogen@$(DISTROGEN_VERSION)
 
 $(MDATAGEN_BIN):
 	$(MAKE) tools-dir
-	GOBIN=$(TOOLS_DIR) bash ./scripts/download_mdatagen.sh v$(OTEL_VERSION)
+	GOBIN=$(TOOLS_DIR) bash ./scripts/download_mdatagen.sh $${OTEL_VERSION}
 
 # This is a PHONY target cause if you make it as a normal recipe
 # it gets very confused because the creation date of the .tools
@@ -37,9 +40,15 @@ distrogen: $(DISTROGEN_BIN)
 
 COMPONENT_DIR = components
 
-update-otel-components: workspace-update $(MDATAGEN_BIN)
-	export PATH="$(TOOLS_DIR):${PATH}" && cd components &&\
-	$(MAKE) OTEL_VERSION=v$(OTEL_VERSION) OTEL_CONTRIB_VERSION=v$(OTEL_CONTRIB_VERSION) update-components
+
+.PHONY: update-otel-components
+update-otel-components: $(DISTROGEN_BIN) $(MDATAGEN_BIN) workspace-update
+	export OTEL_VERSION = v$(shell $(DISTROGEN_QUERY) opentelemetry_version) && \
+	export OTEL_CONTRIB_VERSION = v$(shell $(DISTROGEN_QUERY) opentelemetry_contrib_version) && \
+	export PATH="$(TOOLS_DIR):${PATH}" && \
+	cd components && \
+	$(MAKE) update-components
+	$(MAKE) gen
 
 .PHONY: test-otel-components
 test-otel-components: go.work
@@ -61,12 +70,15 @@ GEN_OTEL = $(DISTROGEN_BIN) generate --spec $(SPEC_FILE) \
 gen: distrogen
 	@$(GEN_OTEL)
 
+
 .PHONY: regen
 regen: distrogen
 	@$(GEN_OTEL) --force
 
+
 regen-v: distrogen
 	@$(GEN_OTEL) --force -v
+
 
 ###########
 # Workspace

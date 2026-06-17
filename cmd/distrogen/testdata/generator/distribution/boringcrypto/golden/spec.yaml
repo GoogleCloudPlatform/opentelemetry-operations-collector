@@ -30,3 +30,5 @@ components:
 feature_gates:
     - exporter.googlemanagedprometheus.intToDouble
 collector_cgo: true
+component_module_base: ""
+distrogen_version: ""

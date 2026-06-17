@@ -3,11 +3,13 @@
 DISTRIBUTION_NAME = basic-distro
 
 # Variables filled in from distro specification
-VERSION ?= 0.121.0
-OTEL_VERSION ?= 0.121.0
+VERSION = 0.121.0
+OTEL_VERSION = 0.121.0
 OTEL_VERSION_TAG = v$(OTEL_VERSION)
 COLLECTOR_BINARY_NAME = otelcol-basic
+COLLECTOR_BINARY_NAME_EXE = $(COLLECTOR_BINARY_NAME).exe
 COLLECTOR_BUILD_TEMP_DIR = $(PWD)/_build
+COLLECTOR_BUILD_DIR = $(PWD)/_build
 COLLECTOR_CGO = 1
 COLLECTOR_BUILDVCS ?= false
 COLLECTOR_BUILD_TAGS ?= 
@@ -26,6 +28,7 @@ GO_VERSION = 1.24.0
 GO_BIN_DIR ?= $(TOOLS_DIR)/go/bin
 GO_BIN ?= $(GO_BIN_DIR)/go
 SET_GO_BIN_PATH ?= PATH="$(GO_BIN_DIR):$$PATH"
+GO_COMMAND_ENV = $(SET_GO_BIN_PATH) GOWORK=off $(if $(USE_GO_PROXY),GOPROXY=$(USE_GO_PROXY),)
 
 USE_GO_PROXY ?= 
 
@@ -36,6 +39,9 @@ SET_COSIGN_BIN_PATH ?= PATH="$(TOOLS_DIR):$$PATH"
 
 .PHONY: build
 build: $(COLLECTOR_BINARY_NAME)
+
+.PHONY: build-win
+build-win: $(COLLECTOR_BINARY_NAME_EXE)
 
 .PHONY: image
 image: image-build image-push
@@ -113,27 +119,49 @@ endif
 .PHONY: collector-build
 collector-build: clean-collector $(COLLECTOR_BINARY_NAME)
 
+# If the COLLECTOR_BUILD_DIR is set to the permanent OCB directory
+# value, then this will ensure that the permanent OCB directory is
+# not updated. If COLLECTOR_BUILD_DIR is set to the same value as
+# COLLECTOR_BUILD_TEMP_DIR, then the OCB directory will be regenerated
+# since the collector build target will always clean up the _build directory.
+$(COLLECTOR_BUILD_DIR):
+	$(MAKE) ocb-generate
+
+
 .PHONY: ocb-generate
 ocb-generate: $(OCB_BIN)
-	$(SET_GO_BIN_PATH) $(if $(USE_GO_PROXY),GOPROXY=$(USE_GO_PROXY),) $(OCB_BIN) --skip-compilation --verbose --config manifest.yaml
+	$(GO_COMMAND_ENV) $(OCB_BIN) --skip-compilation --verbose --config manifest.yaml
+
 
 COLLECTOR_LD_FLAGS ?=
 COLLECTOR_LD_FLAGS_STRIP ?= -s -w
 COLLECTOR_LD_FLAGS_STATIC_LINK ?= 
 
 # Using OCB and the local manifest file, build a collector.
-$(COLLECTOR_BINARY_NAME): ocb-generate
-	cd $(COLLECTOR_BUILD_TEMP_DIR) && \
-		GOWORK=off \
+$(COLLECTOR_BINARY_NAME): $(COLLECTOR_BUILD_DIR) $(GO_BIN)
+	cd $(COLLECTOR_BUILD_DIR) && \
 		CGO_ENABLED=$(COLLECTOR_CGO) \
 		GOOS=$(TARGETOS) GOARCH=$(TARGETARCH) \
-		$(GO_BIN) build \
+		$(GO_COMMAND_ENV) $(GO_BIN) build \
 			-buildvcs=$(COLLECTOR_BUILDVCS) \
 			-tags=$(COLLECTOR_BUILD_TAGS) \
 			-ldflags="$(COLLECTOR_LD_FLAGS_STRIP) $(COLLECTOR_LD_FLAGS_STATIC_LINK) $(COLLECTOR_LD_FLAGS)" \
 			-o ../otelcol-basic \
 			.
-	$(MAKE) clean-build-dir
+	$(MAKE) clean-build-temp-dir
+
+# Build a Windows collector binary.
+# Note: distrogen currently does not support BoringCrypto and CGO for Windows builds.
+$(COLLECTOR_BINARY_NAME_EXE): $(COLLECTOR_BUILD_DIR) $(GO_BIN)
+	cd $(COLLECTOR_BUILD_DIR) && \
+		CGO_ENABLED=0 \
+		GOOS=windows GOARCH=$(TARGETARCH) \
+		$(GO_COMMAND_ENV) $(GO_BIN) build \
+			-buildvcs=$(COLLECTOR_BUILDVCS) \
+			-tags=$(COLLECTOR_BUILD_TAGS) \
+			-o ../otelcol-basic.exe \
+			.
+	$(MAKE) clean-build-temp-dir
 
 .PHONY: collector-module-list
 collector-module-list: ocb-generate
@@ -144,11 +172,11 @@ collector-module-list: ocb-generate
 
 # Delete any existing built collector binary.
 .PHONY: clean-collector
-clean-collector: clean-build-dir
-	rm -f $(COLLECTOR_BINARY_NAME)
+clean-collector: clean-build-temp-dir
+	rm -f $(COLLECTOR_BINARY_NAME) $(COLLECTOR_BINARY_NAME_EXE)
 
-.PHONY: clean-build-dir
-clean-build-dir:
+.PHONY: clean-build-temp-dir
+clean-build-temp-dir:
 	rm -rf $(COLLECTOR_BUILD_TEMP_DIR)
 
 ###################
@@ -230,4 +258,4 @@ $(COSIGN_BIN): $(GO_BIN) $(OCB_BIN)
 
 .PHONY: clean-tools
 clean-tools:
-	rm -rf $(TOOLS_DIR)
+	@rm -rf $(TOOLS_DIR)

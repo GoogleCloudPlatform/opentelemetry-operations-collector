@@ -17,6 +17,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -26,10 +27,21 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-var ErrNoDiff = errors.New("no differences found with previous generation")
+var (
+	ErrNoDiff = errors.New("no differences found with previous generation")
+)
 
-// -rw-r--r--
-var DefaultFileMode fs.FileMode = 0644
+const (
+	// -rw-r--r--
+	DefaultFileMode fs.FileMode = 0644
+
+	ToolsDir = ".tools"
+)
+
+const (
+	tempOCBDirname = "_build"
+	permanentOCBDirname = "generated_collector"
+)
 
 type BuildContainerOption string
 
@@ -63,11 +75,15 @@ type DistributionSpec struct {
 	CustomValues                map[string]any          `yaml:"custom_values,omitempty"`
 	FeatureGates                FeatureGates            `yaml:"feature_gates,omitempty"`
 	GoProxy                     string                  `yaml:"go_proxy,omitempty"`
+	PermanentOCBDirectory       bool                    `yaml:"permanent_ocb_directory,omitempty"`
+	VendorDependencies          bool                    `yaml:"vendor_dependencies,omitempty"`
 
 	// CollectorCGO determines whether the Collector will be built with CGO.
 	CollectorCGO        bool   `yaml:"collector_cgo,omitempty"`
 	ComponentModuleBase string `yaml:"component_module_base"`
 	DistrogenVersion    string `yaml:"distrogen_version"`
+
+	OCBOutputDir string `yaml:"-"`
 }
 
 // RenderGoMajorVersion will parse the GoVersion in the spec and return a version without a patch
@@ -83,6 +99,38 @@ func (s *DistributionSpec) RenderGoMajorVersion() string {
 func (s *DistributionSpec) Diff(s2 *DistributionSpec) bool {
 	diff := cmp.Diff(s, s2)
 	return diff != ""
+}
+
+// DetectDistributionToolChange will compare two distribution specs and return
+// true if any of the distribution-level tools require an update.
+func (s *DistributionSpec) DetectDistributionToolChange(original *DistributionSpec) bool {
+	if !s.Diff(original) {
+		return false
+	}
+
+	toolChangeRequired := s.OpenTelemetryVersion != original.OpenTelemetryVersion || s.GoVersion != original.GoVersion
+	if toolChangeRequired {
+		logger.Debug("detected required tool change")
+	} else {
+		logger.Debug("tools can be persisted")
+	}
+	return toolChangeRequired
+}
+
+// DetectProjectToolChange will compare two distribution specs and return
+// true if any of the project-level tools require an update.
+func (s *DistributionSpec) DetectProjectToolChange(original *DistributionSpec) bool {
+	if !s.Diff(original) {
+		return false
+	}
+
+	toolChangeRequired := s.OpenTelemetryVersion != original.OpenTelemetryVersion || s.DistrogenVersion != original.DistrogenVersion
+	if toolChangeRequired {
+		logger.Debug("detected required tool change")
+	} else {
+		logger.Debug("tools can be persisted")
+	}
+	return toolChangeRequired
 }
 
 var ErrQueryValueNotFound = errors.New("not found in spec")
@@ -117,6 +165,7 @@ func (s *DistributionSpec) Query(field string) (string, error) {
 var (
 	ErrSpecValidationBoringCryptoWithoutCGO    = errors.New("boringcrypto build is not possible with collector_cgo turned off")
 	ErrSpecValidationBoringCryptoWithoutDebian = errors.New("boringcrypto is only possible with the debian build container")
+	ErrSpecValidationVendorDepsWithoutPermanentOCB = errors.New("vendor_dependencies is only possible with permanent_ocb_directory set to true")
 )
 
 // NewDistributionSpec loads the DistributionSpec from a yaml file.
@@ -152,6 +201,19 @@ func NewDistributionSpec(path string) (*DistributionSpec, error) {
 		spec.OpenTelemetryContribVersion = spec.OpenTelemetryVersion
 	}
 
+	// If the PermanentOCBDirectory feature is not set,
+	// default OCBOutputPath to a default value
+	// that is properly gitignored in project mode.
+	if !spec.PermanentOCBDirectory {
+		spec.OCBOutputDir = tempOCBDirname
+	} else {
+		spec.OCBOutputDir = permanentOCBDirname
+	}
+
+	if spec.VendorDependencies && !spec.PermanentOCBDirectory {
+		return nil, ErrSpecValidationVendorDepsWithoutPermanentOCB
+	}
+
 	return spec, nil
 }
 
@@ -175,6 +237,8 @@ type DistributionGenerator struct {
 	Registry           *Registry
 	CustomTemplatesDir fs.FS
 	FileMode           fs.FileMode
+
+	cleanTools bool
 }
 
 // NewDistributionGenerator creates a DistributionGenerator.
@@ -187,21 +251,24 @@ func NewDistributionGenerator(spec *DistributionSpec, registry *Registry, forceG
 	}
 	d.GenerateDirName = spec.Name
 
-	if !forceGenerate {
-		specCache, err := yamlUnmarshalFromFile[DistributionSpec](filepath.Join(d.GenerateDirName, "spec.yaml"))
-		if err != nil {
+	cachedSpec, err := d.ReadCachedSpec()
+	if err != nil {
+		if !os.IsNotExist(err) {
 			logger.Debug(fmt.Sprintf("generated spec could not be read: %v", err))
-			if !os.IsNotExist(err) {
-				return nil, err
-			}
-		} else {
-			if !d.Spec.Diff(specCache) {
-				return nil, ErrNoDiff
-			}
+			return nil, err
 		}
+	} else {
+		// If we're not force generating, check if the spec changed
+		// and short-circuit if we didn't.
+		if !forceGenerate && !d.Spec.Diff(cachedSpec) {
+			return nil, ErrNoDiff
+		}
+
+		// Check if the spec changes require reinstalling tools.
+		d.cleanTools = d.Spec.DetectDistributionToolChange(cachedSpec)
 	}
 
-	tmpDir, err := os.MkdirTemp(".", d.GenerateDirName)
+	tmpDir, err := os.MkdirTemp("", d.GenerateDirName)
 	if err != nil {
 		return nil, err
 	}
@@ -239,19 +306,23 @@ func (d *DistributionGenerator) Generate() error {
 			return err
 		}
 	}
-	if err := d.WriteSpec(); err != nil {
+	if err := d.CacheSpec(); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-// WriteSpec renders the DistributionSpec in a yaml file that lives in the generated
+// CacheSpec renders the DistributionSpec in a yaml file that lives in the generated
 // distribution. This is a human readable way to keep track of what spec was used for
 // this existing generation, as well as a method of detecting whether a new generation
 // needs to be done at all (if no spec changes no need to generate).
-func (d *DistributionGenerator) WriteSpec() error {
+func (d *DistributionGenerator) CacheSpec() error {
 	return yamlMarshalToFile(d.Spec, filepath.Join(d.GeneratePath, "spec.yaml"), d.FileMode)
+}
+
+func (d *DistributionGenerator) ReadCachedSpec() (*DistributionSpec, error) {
+	return yamlUnmarshalFromFile[DistributionSpec](filepath.Join(d.GenerateDirName, "spec.yaml"))
 }
 
 // MoveGeneratedDirToWd performs the final step of the generation, moving the generated temp
@@ -264,25 +335,19 @@ func (d *DistributionGenerator) MoveGeneratedDirToWd() (err error) {
 	}
 
 	generateDest := filepath.Join(wd, d.GenerateDirName)
-	bkpPath := generateDest + "-bkp"
 
-	// Check if the distribution directory exists, rename it to backup
-	// if it does.
-	if _, err := os.Open(generateDest); err == nil {
-		if err := os.Rename(generateDest, bkpPath); err != nil {
-			return err
-		}
-
-		// Delete the backup. Sets the named `err` return value
-		// if removal of backup fails.
-		defer func() {
-			err = os.RemoveAll(bkpPath)
-		}()
+	// Copy generated files to working directory.
+	if err := copyDir(d.GeneratePath, generateDest); err != nil {
+		return err
 	}
 
-	// Move generated directory to working directory.
-	if err := os.Rename(d.GeneratePath, generateDest); err != nil {
-		return err
+	// If the spec change required tool reinstallation, clean up the
+	// existing .tools directory in the generate destination.
+	if d.cleanTools {
+		toolsPath := filepath.Join(generateDest, ToolsDir)
+		if err := os.RemoveAll(toolsPath); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -389,6 +454,11 @@ func (dg *DistributionGenerator) getGeneratedFilesInDir(dir string) (map[string]
 			return nil
 		}
 
+		// Don't include the collector directory in comparison.
+		if strings.Contains(path, "/"+permanentOCBDirname+"/") {
+			return nil
+		}
+
 		if d.Name() == dg.Spec.BinaryName {
 			return nil
 		}
@@ -414,6 +484,10 @@ func (d *DistributionGenerator) Clean() {
 	}
 }
 
+type TemplateConstants struct {
+	TempOCBDirname string
+}
+
 // TemplateContext is the context that will be passed into any default or user
 // provided templates.
 type TemplateContext struct {
@@ -428,13 +502,20 @@ type TemplateContext struct {
 
 	SystemdServiceName  string
 	SystemdConfFileName string
+
+	Constants TemplateConstants
 }
 
 // NewTemplateContextFromSpec creates a TemplateContext from a DistributionSpec and a Registry.
 // It is expected that this registry will be already merged with the registries provided by the
 // user.
 func NewTemplateContextFromSpec(spec *DistributionSpec, registry *Registry) (*TemplateContext, error) {
-	context := TemplateContext{DistributionSpec: spec}
+	context := TemplateContext{
+		DistributionSpec: spec,
+		Constants: TemplateConstants{
+			TempOCBDirname: tempOCBDirname,
+		},
+	}
 
 	otelVersion := otelComponentVersion{
 		core:       spec.OpenTelemetryVersion,
@@ -517,4 +598,51 @@ func (rs ComponentReplaces) Render() string {
 		result += fmt.Sprintf("%s\n", r)
 	}
 	return result
+}
+
+// copyDir recursively copies the contents of a source directory to a destination directory
+// one file at a time. This is done deliberately to ensure that when updating the generated
+// distribution, we only replace files that are actually distrogen-managed templates.
+func copyDir(src, dst string) error {
+	return filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		dstPath := filepath.Join(dst, rel)
+
+		if d.IsDir() {
+			info, err := d.Info()
+			if err != nil {
+				return err
+			}
+			return os.MkdirAll(dstPath, info.Mode())
+		}
+
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+
+		srcFile, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer srcFile.Close()
+
+		dstFile, err := os.OpenFile(dstPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, info.Mode())
+		if err != nil {
+			return err
+		}
+		defer dstFile.Close()
+
+		if _, err := io.Copy(dstFile, srcFile); err != nil {
+			return err
+		}
+
+		return nil
+	})
 }

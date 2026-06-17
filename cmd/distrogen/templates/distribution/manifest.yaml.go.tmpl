@@ -5,7 +5,7 @@ dist:
   name: {{ .BinaryName }}
   description: {{ .Description }}
   version: {{ .Version }}
-  output_path: ./_build
+  output_path: ./{{ .OCBOutputDir }}
 
 receivers:
 {{ .Receivers.RenderOCBComponents }}

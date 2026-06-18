@@ -22,7 +22,7 @@ opentelemetry_stable_version: 1.60.0
 binary_name: otelopscol
 build_container: debian
 collector_cgo: true
-go_version: 1.26.1
+go_version: 1.26.4
 build_tags: gpu
 
 components:

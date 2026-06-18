@@ -25,7 +25,7 @@ opentelemetry_version: 0.154.0
 opentelemetry_contrib_version: 0.154.0
 opentelemetry_stable_version: 1.60.0
 binary_name: otelcol-google
-go_version: 1.26.2
+go_version: 1.26.4
 permanent_ocb_directory: true
 
 boringcrypto: true

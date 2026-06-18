@@ -3,17 +3,29 @@
 package metadata
 
 import (
+	"fmt"
+
 	"go.opentelemetry.io/collector/confmap"
 	"go.opentelemetry.io/collector/filter"
 )
 
-// MetricConfig provides common config for a particular metric.
-type MetricConfig struct {
+// VarnishBackendConnectionCountMetricAttributeKey specifies the key of an attribute for the varnish.backend.connection.count metric.
+type VarnishBackendConnectionCountMetricAttributeKey string
+
+const (
+	VarnishBackendConnectionCountMetricAttributeKeyBackendConnectionType VarnishBackendConnectionCountMetricAttributeKey = "kind"
+)
+
+// VarnishBackendConnectionCountMetricConfig provides config for the varnish.backend.connection.count metric.
+type VarnishBackendConnectionCountMetricConfig struct {
 	Enabled          bool `mapstructure:"enabled"`
 	enabledSetByUser bool
+
+	AggregationStrategy string                                            `mapstructure:"aggregation_strategy"`
+	EnabledAttributes   []VarnishBackendConnectionCountMetricAttributeKey `mapstructure:"attributes"`
 }
 
-func (ms *MetricConfig) Unmarshal(parser *confmap.Conf) error {
+func (ms *VarnishBackendConnectionCountMetricConfig) Unmarshal(parser *confmap.Conf) error {
 	if parser == nil {
 		return nil
 	}
@@ -27,55 +39,425 @@ func (ms *MetricConfig) Unmarshal(parser *confmap.Conf) error {
 	return nil
 }
 
+func (ms *VarnishBackendConnectionCountMetricConfig) Validate() error {
+	for _, val := range ms.EnabledAttributes {
+		switch val {
+		case VarnishBackendConnectionCountMetricAttributeKeyBackendConnectionType:
+		default:
+			return fmt.Errorf("metric varnish.backend.connection.count doesn't have an attribute %v, valid attributes: [kind]", val)
+		}
+	}
+
+	switch ms.AggregationStrategy {
+	case AggregationStrategySum, AggregationStrategyAvg, AggregationStrategyMin, AggregationStrategyMax:
+	default:
+		return fmt.Errorf("invalid aggregation strategy %q, valid strategies: [%s, %s, %s, %s]", ms.AggregationStrategy, AggregationStrategySum, AggregationStrategyAvg, AggregationStrategyMin, AggregationStrategyMax)
+	}
+
+	return nil
+}
+
+// VarnishBackendRequestCountMetricConfig provides config for the varnish.backend.request.count metric.
+type VarnishBackendRequestCountMetricConfig struct {
+	Enabled          bool `mapstructure:"enabled"`
+	enabledSetByUser bool
+}
+
+func (ms *VarnishBackendRequestCountMetricConfig) Unmarshal(parser *confmap.Conf) error {
+	if parser == nil {
+		return nil
+	}
+
+	err := parser.Unmarshal(ms)
+	if err != nil {
+		return err
+	}
+
+	ms.enabledSetByUser = parser.IsSet("enabled")
+	return nil
+}
+
+// VarnishCacheOperationCountMetricAttributeKey specifies the key of an attribute for the varnish.cache.operation.count metric.
+type VarnishCacheOperationCountMetricAttributeKey string
+
+const (
+	VarnishCacheOperationCountMetricAttributeKeyCacheOperations VarnishCacheOperationCountMetricAttributeKey = "operation"
+)
+
+// VarnishCacheOperationCountMetricConfig provides config for the varnish.cache.operation.count metric.
+type VarnishCacheOperationCountMetricConfig struct {
+	Enabled          bool `mapstructure:"enabled"`
+	enabledSetByUser bool
+
+	AggregationStrategy string                                         `mapstructure:"aggregation_strategy"`
+	EnabledAttributes   []VarnishCacheOperationCountMetricAttributeKey `mapstructure:"attributes"`
+}
+
+func (ms *VarnishCacheOperationCountMetricConfig) Unmarshal(parser *confmap.Conf) error {
+	if parser == nil {
+		return nil
+	}
+
+	err := parser.Unmarshal(ms)
+	if err != nil {
+		return err
+	}
+
+	ms.enabledSetByUser = parser.IsSet("enabled")
+	return nil
+}
+
+func (ms *VarnishCacheOperationCountMetricConfig) Validate() error {
+	for _, val := range ms.EnabledAttributes {
+		switch val {
+		case VarnishCacheOperationCountMetricAttributeKeyCacheOperations:
+		default:
+			return fmt.Errorf("metric varnish.cache.operation.count doesn't have an attribute %v, valid attributes: [operation]", val)
+		}
+	}
+
+	switch ms.AggregationStrategy {
+	case AggregationStrategySum, AggregationStrategyAvg, AggregationStrategyMin, AggregationStrategyMax:
+	default:
+		return fmt.Errorf("invalid aggregation strategy %q, valid strategies: [%s, %s, %s, %s]", ms.AggregationStrategy, AggregationStrategySum, AggregationStrategyAvg, AggregationStrategyMin, AggregationStrategyMax)
+	}
+
+	return nil
+}
+
+// VarnishClientRequestCountMetricAttributeKey specifies the key of an attribute for the varnish.client.request.count metric.
+type VarnishClientRequestCountMetricAttributeKey string
+
+const (
+	VarnishClientRequestCountMetricAttributeKeyState VarnishClientRequestCountMetricAttributeKey = "state"
+)
+
+// VarnishClientRequestCountMetricConfig provides config for the varnish.client.request.count metric.
+type VarnishClientRequestCountMetricConfig struct {
+	Enabled          bool `mapstructure:"enabled"`
+	enabledSetByUser bool
+
+	AggregationStrategy string                                        `mapstructure:"aggregation_strategy"`
+	EnabledAttributes   []VarnishClientRequestCountMetricAttributeKey `mapstructure:"attributes"`
+}
+
+func (ms *VarnishClientRequestCountMetricConfig) Unmarshal(parser *confmap.Conf) error {
+	if parser == nil {
+		return nil
+	}
+
+	err := parser.Unmarshal(ms)
+	if err != nil {
+		return err
+	}
+
+	ms.enabledSetByUser = parser.IsSet("enabled")
+	return nil
+}
+
+func (ms *VarnishClientRequestCountMetricConfig) Validate() error {
+	for _, val := range ms.EnabledAttributes {
+		switch val {
+		case VarnishClientRequestCountMetricAttributeKeyState:
+		default:
+			return fmt.Errorf("metric varnish.client.request.count doesn't have an attribute %v, valid attributes: [state]", val)
+		}
+	}
+
+	switch ms.AggregationStrategy {
+	case AggregationStrategySum, AggregationStrategyAvg, AggregationStrategyMin, AggregationStrategyMax:
+	default:
+		return fmt.Errorf("invalid aggregation strategy %q, valid strategies: [%s, %s, %s, %s]", ms.AggregationStrategy, AggregationStrategySum, AggregationStrategyAvg, AggregationStrategyMin, AggregationStrategyMax)
+	}
+
+	return nil
+}
+
+// VarnishClientRequestErrorCountMetricAttributeKey specifies the key of an attribute for the varnish.client.request.error.count metric.
+type VarnishClientRequestErrorCountMetricAttributeKey string
+
+const (
+	VarnishClientRequestErrorCountMetricAttributeKeyHTTPStatusCode VarnishClientRequestErrorCountMetricAttributeKey = "status_code"
+)
+
+// VarnishClientRequestErrorCountMetricConfig provides config for the varnish.client.request.error.count metric.
+type VarnishClientRequestErrorCountMetricConfig struct {
+	Enabled          bool `mapstructure:"enabled"`
+	enabledSetByUser bool
+
+	AggregationStrategy string                                             `mapstructure:"aggregation_strategy"`
+	EnabledAttributes   []VarnishClientRequestErrorCountMetricAttributeKey `mapstructure:"attributes"`
+}
+
+func (ms *VarnishClientRequestErrorCountMetricConfig) Unmarshal(parser *confmap.Conf) error {
+	if parser == nil {
+		return nil
+	}
+
+	err := parser.Unmarshal(ms)
+	if err != nil {
+		return err
+	}
+
+	ms.enabledSetByUser = parser.IsSet("enabled")
+	return nil
+}
+
+func (ms *VarnishClientRequestErrorCountMetricConfig) Validate() error {
+	for _, val := range ms.EnabledAttributes {
+		switch val {
+		case VarnishClientRequestErrorCountMetricAttributeKeyHTTPStatusCode:
+		default:
+			return fmt.Errorf("metric varnish.client.request.error.count doesn't have an attribute %v, valid attributes: [status_code]", val)
+		}
+	}
+
+	switch ms.AggregationStrategy {
+	case AggregationStrategySum, AggregationStrategyAvg, AggregationStrategyMin, AggregationStrategyMax:
+	default:
+		return fmt.Errorf("invalid aggregation strategy %q, valid strategies: [%s, %s, %s, %s]", ms.AggregationStrategy, AggregationStrategySum, AggregationStrategyAvg, AggregationStrategyMin, AggregationStrategyMax)
+	}
+
+	return nil
+}
+
+// VarnishObjectCountMetricConfig provides config for the varnish.object.count metric.
+type VarnishObjectCountMetricConfig struct {
+	Enabled          bool `mapstructure:"enabled"`
+	enabledSetByUser bool
+}
+
+func (ms *VarnishObjectCountMetricConfig) Unmarshal(parser *confmap.Conf) error {
+	if parser == nil {
+		return nil
+	}
+
+	err := parser.Unmarshal(ms)
+	if err != nil {
+		return err
+	}
+
+	ms.enabledSetByUser = parser.IsSet("enabled")
+	return nil
+}
+
+// VarnishObjectExpiredMetricConfig provides config for the varnish.object.expired metric.
+type VarnishObjectExpiredMetricConfig struct {
+	Enabled          bool `mapstructure:"enabled"`
+	enabledSetByUser bool
+}
+
+func (ms *VarnishObjectExpiredMetricConfig) Unmarshal(parser *confmap.Conf) error {
+	if parser == nil {
+		return nil
+	}
+
+	err := parser.Unmarshal(ms)
+	if err != nil {
+		return err
+	}
+
+	ms.enabledSetByUser = parser.IsSet("enabled")
+	return nil
+}
+
+// VarnishObjectMovedMetricConfig provides config for the varnish.object.moved metric.
+type VarnishObjectMovedMetricConfig struct {
+	Enabled          bool `mapstructure:"enabled"`
+	enabledSetByUser bool
+}
+
+func (ms *VarnishObjectMovedMetricConfig) Unmarshal(parser *confmap.Conf) error {
+	if parser == nil {
+		return nil
+	}
+
+	err := parser.Unmarshal(ms)
+	if err != nil {
+		return err
+	}
+
+	ms.enabledSetByUser = parser.IsSet("enabled")
+	return nil
+}
+
+// VarnishObjectNukedMetricConfig provides config for the varnish.object.nuked metric.
+type VarnishObjectNukedMetricConfig struct {
+	Enabled          bool `mapstructure:"enabled"`
+	enabledSetByUser bool
+}
+
+func (ms *VarnishObjectNukedMetricConfig) Unmarshal(parser *confmap.Conf) error {
+	if parser == nil {
+		return nil
+	}
+
+	err := parser.Unmarshal(ms)
+	if err != nil {
+		return err
+	}
+
+	ms.enabledSetByUser = parser.IsSet("enabled")
+	return nil
+}
+
+// VarnishSessionCountMetricAttributeKey specifies the key of an attribute for the varnish.session.count metric.
+type VarnishSessionCountMetricAttributeKey string
+
+const (
+	VarnishSessionCountMetricAttributeKeySessionType VarnishSessionCountMetricAttributeKey = "kind"
+)
+
+// VarnishSessionCountMetricConfig provides config for the varnish.session.count metric.
+type VarnishSessionCountMetricConfig struct {
+	Enabled          bool `mapstructure:"enabled"`
+	enabledSetByUser bool
+
+	AggregationStrategy string                                  `mapstructure:"aggregation_strategy"`
+	EnabledAttributes   []VarnishSessionCountMetricAttributeKey `mapstructure:"attributes"`
+}
+
+func (ms *VarnishSessionCountMetricConfig) Unmarshal(parser *confmap.Conf) error {
+	if parser == nil {
+		return nil
+	}
+
+	err := parser.Unmarshal(ms)
+	if err != nil {
+		return err
+	}
+
+	ms.enabledSetByUser = parser.IsSet("enabled")
+	return nil
+}
+
+func (ms *VarnishSessionCountMetricConfig) Validate() error {
+	for _, val := range ms.EnabledAttributes {
+		switch val {
+		case VarnishSessionCountMetricAttributeKeySessionType:
+		default:
+			return fmt.Errorf("metric varnish.session.count doesn't have an attribute %v, valid attributes: [kind]", val)
+		}
+	}
+
+	switch ms.AggregationStrategy {
+	case AggregationStrategySum, AggregationStrategyAvg, AggregationStrategyMin, AggregationStrategyMax:
+	default:
+		return fmt.Errorf("invalid aggregation strategy %q, valid strategies: [%s, %s, %s, %s]", ms.AggregationStrategy, AggregationStrategySum, AggregationStrategyAvg, AggregationStrategyMin, AggregationStrategyMax)
+	}
+
+	return nil
+}
+
+// VarnishThreadOperationCountMetricAttributeKey specifies the key of an attribute for the varnish.thread.operation.count metric.
+type VarnishThreadOperationCountMetricAttributeKey string
+
+const (
+	VarnishThreadOperationCountMetricAttributeKeyThreadOperations VarnishThreadOperationCountMetricAttributeKey = "operation"
+)
+
+// VarnishThreadOperationCountMetricConfig provides config for the varnish.thread.operation.count metric.
+type VarnishThreadOperationCountMetricConfig struct {
+	Enabled          bool `mapstructure:"enabled"`
+	enabledSetByUser bool
+
+	AggregationStrategy string                                          `mapstructure:"aggregation_strategy"`
+	EnabledAttributes   []VarnishThreadOperationCountMetricAttributeKey `mapstructure:"attributes"`
+}
+
+func (ms *VarnishThreadOperationCountMetricConfig) Unmarshal(parser *confmap.Conf) error {
+	if parser == nil {
+		return nil
+	}
+
+	err := parser.Unmarshal(ms)
+	if err != nil {
+		return err
+	}
+
+	ms.enabledSetByUser = parser.IsSet("enabled")
+	return nil
+}
+
+func (ms *VarnishThreadOperationCountMetricConfig) Validate() error {
+	for _, val := range ms.EnabledAttributes {
+		switch val {
+		case VarnishThreadOperationCountMetricAttributeKeyThreadOperations:
+		default:
+			return fmt.Errorf("metric varnish.thread.operation.count doesn't have an attribute %v, valid attributes: [operation]", val)
+		}
+	}
+
+	switch ms.AggregationStrategy {
+	case AggregationStrategySum, AggregationStrategyAvg, AggregationStrategyMin, AggregationStrategyMax:
+	default:
+		return fmt.Errorf("invalid aggregation strategy %q, valid strategies: [%s, %s, %s, %s]", ms.AggregationStrategy, AggregationStrategySum, AggregationStrategyAvg, AggregationStrategyMin, AggregationStrategyMax)
+	}
+
+	return nil
+}
+
 // MetricsConfig provides config for varnish metrics.
 type MetricsConfig struct {
-	VarnishBackendConnectionCount  MetricConfig `mapstructure:"varnish.backend.connection.count"`
-	VarnishBackendRequestCount     MetricConfig `mapstructure:"varnish.backend.request.count"`
-	VarnishCacheOperationCount     MetricConfig `mapstructure:"varnish.cache.operation.count"`
-	VarnishClientRequestCount      MetricConfig `mapstructure:"varnish.client.request.count"`
-	VarnishClientRequestErrorCount MetricConfig `mapstructure:"varnish.client.request.error.count"`
-	VarnishObjectCount             MetricConfig `mapstructure:"varnish.object.count"`
-	VarnishObjectExpired           MetricConfig `mapstructure:"varnish.object.expired"`
-	VarnishObjectMoved             MetricConfig `mapstructure:"varnish.object.moved"`
-	VarnishObjectNuked             MetricConfig `mapstructure:"varnish.object.nuked"`
-	VarnishSessionCount            MetricConfig `mapstructure:"varnish.session.count"`
-	VarnishThreadOperationCount    MetricConfig `mapstructure:"varnish.thread.operation.count"`
+	VarnishBackendConnectionCount  VarnishBackendConnectionCountMetricConfig  `mapstructure:"varnish.backend.connection.count"`
+	VarnishBackendRequestCount     VarnishBackendRequestCountMetricConfig     `mapstructure:"varnish.backend.request.count"`
+	VarnishCacheOperationCount     VarnishCacheOperationCountMetricConfig     `mapstructure:"varnish.cache.operation.count"`
+	VarnishClientRequestCount      VarnishClientRequestCountMetricConfig      `mapstructure:"varnish.client.request.count"`
+	VarnishClientRequestErrorCount VarnishClientRequestErrorCountMetricConfig `mapstructure:"varnish.client.request.error.count"`
+	VarnishObjectCount             VarnishObjectCountMetricConfig             `mapstructure:"varnish.object.count"`
+	VarnishObjectExpired           VarnishObjectExpiredMetricConfig           `mapstructure:"varnish.object.expired"`
+	VarnishObjectMoved             VarnishObjectMovedMetricConfig             `mapstructure:"varnish.object.moved"`
+	VarnishObjectNuked             VarnishObjectNukedMetricConfig             `mapstructure:"varnish.object.nuked"`
+	VarnishSessionCount            VarnishSessionCountMetricConfig            `mapstructure:"varnish.session.count"`
+	VarnishThreadOperationCount    VarnishThreadOperationCountMetricConfig    `mapstructure:"varnish.thread.operation.count"`
 }
 
 func DefaultMetricsConfig() MetricsConfig {
 	return MetricsConfig{
-		VarnishBackendConnectionCount: MetricConfig{
+		VarnishBackendConnectionCount: VarnishBackendConnectionCountMetricConfig{
+			Enabled:             true,
+			AggregationStrategy: AggregationStrategySum,
+			EnabledAttributes:   []VarnishBackendConnectionCountMetricAttributeKey{VarnishBackendConnectionCountMetricAttributeKeyBackendConnectionType},
+		},
+		VarnishBackendRequestCount: VarnishBackendRequestCountMetricConfig{
 			Enabled: true,
 		},
-		VarnishBackendRequestCount: MetricConfig{
+		VarnishCacheOperationCount: VarnishCacheOperationCountMetricConfig{
+			Enabled:             true,
+			AggregationStrategy: AggregationStrategySum,
+			EnabledAttributes:   []VarnishCacheOperationCountMetricAttributeKey{VarnishCacheOperationCountMetricAttributeKeyCacheOperations},
+		},
+		VarnishClientRequestCount: VarnishClientRequestCountMetricConfig{
+			Enabled:             true,
+			AggregationStrategy: AggregationStrategySum,
+			EnabledAttributes:   []VarnishClientRequestCountMetricAttributeKey{VarnishClientRequestCountMetricAttributeKeyState},
+		},
+		VarnishClientRequestErrorCount: VarnishClientRequestErrorCountMetricConfig{
+			Enabled:             true,
+			AggregationStrategy: AggregationStrategySum,
+			EnabledAttributes:   []VarnishClientRequestErrorCountMetricAttributeKey{VarnishClientRequestErrorCountMetricAttributeKeyHTTPStatusCode},
+		},
+		VarnishObjectCount: VarnishObjectCountMetricConfig{
 			Enabled: true,
 		},
-		VarnishCacheOperationCount: MetricConfig{
+		VarnishObjectExpired: VarnishObjectExpiredMetricConfig{
 			Enabled: true,
 		},
-		VarnishClientRequestCount: MetricConfig{
+		VarnishObjectMoved: VarnishObjectMovedMetricConfig{
 			Enabled: true,
 		},
-		VarnishClientRequestErrorCount: MetricConfig{
+		VarnishObjectNuked: VarnishObjectNukedMetricConfig{
 			Enabled: true,
 		},
-		VarnishObjectCount: MetricConfig{
-			Enabled: true,
+		VarnishSessionCount: VarnishSessionCountMetricConfig{
+			Enabled:             true,
+			AggregationStrategy: AggregationStrategySum,
+			EnabledAttributes:   []VarnishSessionCountMetricAttributeKey{VarnishSessionCountMetricAttributeKeySessionType},
 		},
-		VarnishObjectExpired: MetricConfig{
-			Enabled: true,
-		},
-		VarnishObjectMoved: MetricConfig{
-			Enabled: true,
-		},
-		VarnishObjectNuked: MetricConfig{
-			Enabled: true,
-		},
-		VarnishSessionCount: MetricConfig{
-			Enabled: true,
-		},
-		VarnishThreadOperationCount: MetricConfig{
-			Enabled: true,
+		VarnishThreadOperationCount: VarnishThreadOperationCountMetricConfig{
+			Enabled:             true,
+			AggregationStrategy: AggregationStrategySum,
+			EnabledAttributes:   []VarnishThreadOperationCountMetricAttributeKey{VarnishThreadOperationCountMetricAttributeKeyThreadOperations},
 		},
 	}
 }

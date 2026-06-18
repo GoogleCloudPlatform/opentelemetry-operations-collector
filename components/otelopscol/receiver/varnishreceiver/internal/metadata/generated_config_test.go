@@ -26,38 +26,50 @@ func TestMetricsBuilderConfig(t *testing.T) {
 			name: "all_set",
 			want: MetricsBuilderConfig{
 				Metrics: MetricsConfig{
-					VarnishBackendConnectionCount: MetricConfig{
+					VarnishBackendConnectionCount: VarnishBackendConnectionCountMetricConfig{
+						Enabled:             true,
+						AggregationStrategy: AggregationStrategySum,
+						EnabledAttributes:   []VarnishBackendConnectionCountMetricAttributeKey{VarnishBackendConnectionCountMetricAttributeKeyBackendConnectionType},
+					},
+					VarnishBackendRequestCount: VarnishBackendRequestCountMetricConfig{
 						Enabled: true,
 					},
-					VarnishBackendRequestCount: MetricConfig{
+					VarnishCacheOperationCount: VarnishCacheOperationCountMetricConfig{
+						Enabled:             true,
+						AggregationStrategy: AggregationStrategySum,
+						EnabledAttributes:   []VarnishCacheOperationCountMetricAttributeKey{VarnishCacheOperationCountMetricAttributeKeyCacheOperations},
+					},
+					VarnishClientRequestCount: VarnishClientRequestCountMetricConfig{
+						Enabled:             true,
+						AggregationStrategy: AggregationStrategySum,
+						EnabledAttributes:   []VarnishClientRequestCountMetricAttributeKey{VarnishClientRequestCountMetricAttributeKeyState},
+					},
+					VarnishClientRequestErrorCount: VarnishClientRequestErrorCountMetricConfig{
+						Enabled:             true,
+						AggregationStrategy: AggregationStrategySum,
+						EnabledAttributes:   []VarnishClientRequestErrorCountMetricAttributeKey{VarnishClientRequestErrorCountMetricAttributeKeyHTTPStatusCode},
+					},
+					VarnishObjectCount: VarnishObjectCountMetricConfig{
 						Enabled: true,
 					},
-					VarnishCacheOperationCount: MetricConfig{
+					VarnishObjectExpired: VarnishObjectExpiredMetricConfig{
 						Enabled: true,
 					},
-					VarnishClientRequestCount: MetricConfig{
+					VarnishObjectMoved: VarnishObjectMovedMetricConfig{
 						Enabled: true,
 					},
-					VarnishClientRequestErrorCount: MetricConfig{
+					VarnishObjectNuked: VarnishObjectNukedMetricConfig{
 						Enabled: true,
 					},
-					VarnishObjectCount: MetricConfig{
-						Enabled: true,
+					VarnishSessionCount: VarnishSessionCountMetricConfig{
+						Enabled:             true,
+						AggregationStrategy: AggregationStrategySum,
+						EnabledAttributes:   []VarnishSessionCountMetricAttributeKey{VarnishSessionCountMetricAttributeKeySessionType},
 					},
-					VarnishObjectExpired: MetricConfig{
-						Enabled: true,
-					},
-					VarnishObjectMoved: MetricConfig{
-						Enabled: true,
-					},
-					VarnishObjectNuked: MetricConfig{
-						Enabled: true,
-					},
-					VarnishSessionCount: MetricConfig{
-						Enabled: true,
-					},
-					VarnishThreadOperationCount: MetricConfig{
-						Enabled: true,
+					VarnishThreadOperationCount: VarnishThreadOperationCountMetricConfig{
+						Enabled:             true,
+						AggregationStrategy: AggregationStrategySum,
+						EnabledAttributes:   []VarnishThreadOperationCountMetricAttributeKey{VarnishThreadOperationCountMetricAttributeKeyThreadOperations},
 					},
 				},
 				ResourceAttributes: ResourceAttributesConfig{
@@ -69,38 +81,50 @@ func TestMetricsBuilderConfig(t *testing.T) {
 			name: "none_set",
 			want: MetricsBuilderConfig{
 				Metrics: MetricsConfig{
-					VarnishBackendConnectionCount: MetricConfig{
+					VarnishBackendConnectionCount: VarnishBackendConnectionCountMetricConfig{
+						Enabled:             false,
+						AggregationStrategy: AggregationStrategySum,
+						EnabledAttributes:   []VarnishBackendConnectionCountMetricAttributeKey{VarnishBackendConnectionCountMetricAttributeKeyBackendConnectionType},
+					},
+					VarnishBackendRequestCount: VarnishBackendRequestCountMetricConfig{
 						Enabled: false,
 					},
-					VarnishBackendRequestCount: MetricConfig{
+					VarnishCacheOperationCount: VarnishCacheOperationCountMetricConfig{
+						Enabled:             false,
+						AggregationStrategy: AggregationStrategySum,
+						EnabledAttributes:   []VarnishCacheOperationCountMetricAttributeKey{VarnishCacheOperationCountMetricAttributeKeyCacheOperations},
+					},
+					VarnishClientRequestCount: VarnishClientRequestCountMetricConfig{
+						Enabled:             false,
+						AggregationStrategy: AggregationStrategySum,
+						EnabledAttributes:   []VarnishClientRequestCountMetricAttributeKey{VarnishClientRequestCountMetricAttributeKeyState},
+					},
+					VarnishClientRequestErrorCount: VarnishClientRequestErrorCountMetricConfig{
+						Enabled:             false,
+						AggregationStrategy: AggregationStrategySum,
+						EnabledAttributes:   []VarnishClientRequestErrorCountMetricAttributeKey{VarnishClientRequestErrorCountMetricAttributeKeyHTTPStatusCode},
+					},
+					VarnishObjectCount: VarnishObjectCountMetricConfig{
 						Enabled: false,
 					},
-					VarnishCacheOperationCount: MetricConfig{
+					VarnishObjectExpired: VarnishObjectExpiredMetricConfig{
 						Enabled: false,
 					},
-					VarnishClientRequestCount: MetricConfig{
+					VarnishObjectMoved: VarnishObjectMovedMetricConfig{
 						Enabled: false,
 					},
-					VarnishClientRequestErrorCount: MetricConfig{
+					VarnishObjectNuked: VarnishObjectNukedMetricConfig{
 						Enabled: false,
 					},
-					VarnishObjectCount: MetricConfig{
-						Enabled: false,
+					VarnishSessionCount: VarnishSessionCountMetricConfig{
+						Enabled:             false,
+						AggregationStrategy: AggregationStrategySum,
+						EnabledAttributes:   []VarnishSessionCountMetricAttributeKey{VarnishSessionCountMetricAttributeKeySessionType},
 					},
-					VarnishObjectExpired: MetricConfig{
-						Enabled: false,
-					},
-					VarnishObjectMoved: MetricConfig{
-						Enabled: false,
-					},
-					VarnishObjectNuked: MetricConfig{
-						Enabled: false,
-					},
-					VarnishSessionCount: MetricConfig{
-						Enabled: false,
-					},
-					VarnishThreadOperationCount: MetricConfig{
-						Enabled: false,
+					VarnishThreadOperationCount: VarnishThreadOperationCountMetricConfig{
+						Enabled:             false,
+						AggregationStrategy: AggregationStrategySum,
+						EnabledAttributes:   []VarnishThreadOperationCountMetricAttributeKey{VarnishThreadOperationCountMetricAttributeKeyThreadOperations},
 					},
 				},
 				ResourceAttributes: ResourceAttributesConfig{
@@ -112,7 +136,7 @@ func TestMetricsBuilderConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := loadMetricsBuilderConfig(t, tt.name)
-			diff := cmp.Diff(tt.want, cfg, cmpopts.IgnoreUnexported(MetricConfig{}, ResourceAttributeConfig{}))
+			diff := cmp.Diff(tt.want, cfg, cmpopts.IgnoreUnexported(VarnishBackendConnectionCountMetricConfig{}, VarnishBackendRequestCountMetricConfig{}, VarnishCacheOperationCountMetricConfig{}, VarnishClientRequestCountMetricConfig{}, VarnishClientRequestErrorCountMetricConfig{}, VarnishObjectCountMetricConfig{}, VarnishObjectExpiredMetricConfig{}, VarnishObjectMovedMetricConfig{}, VarnishObjectNukedMetricConfig{}, VarnishSessionCountMetricConfig{}, VarnishThreadOperationCountMetricConfig{}, ResourceAttributeConfig{}))
 			require.Emptyf(t, diff, "Config mismatch (-expected +actual):\n%s", diff)
 		})
 	}

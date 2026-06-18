@@ -19,6 +19,7 @@ const (
 	testDataSetDefault testDataSet = iota
 	testDataSetAll
 	testDataSetNone
+	testDataSetReag
 )
 
 func TestMetricsBuilder(t *testing.T) {
@@ -37,6 +38,11 @@ func TestMetricsBuilder(t *testing.T) {
 			resAttrsSet: testDataSetAll,
 		},
 		{
+			name:        "reaggregate_set",
+			metricsSet:  testDataSetReag,
+			resAttrsSet: testDataSetReag,
+		},
+		{
 			name:        "none_set",
 			metricsSet:  testDataSetNone,
 			resAttrsSet: testDataSetNone,
@@ -51,9 +57,16 @@ func TestMetricsBuilder(t *testing.T) {
 			settings := receivertest.NewNopSettings(receivertest.NopType)
 			settings.Logger = zap.New(observedZapCore)
 			mb := NewMetricsBuilder(loadMetricsBuilderConfig(t, tt.name), settings, WithStartTime(start))
+			aggMap := make(map[string]string) // contains the aggregation strategies for each metric name
+			aggMap["nvml.gpu.memory.bytes_used"] = mb.metricNvmlGpuMemoryBytesUsed.config.AggregationStrategy
+			aggMap["nvml.gpu.processes.max_bytes_used"] = mb.metricNvmlGpuProcessesMaxBytesUsed.config.AggregationStrategy
+			aggMap["nvml.gpu.processes.utilization"] = mb.metricNvmlGpuProcessesUtilization.config.AggregationStrategy
+			aggMap["nvml.gpu.utilization"] = mb.metricNvmlGpuUtilization.config.AggregationStrategy
 
 			expectedWarnings := 0
-			assert.Equal(t, expectedWarnings, observedLogs.Len())
+			if tt.metricsSet != testDataSetReag {
+				assert.Equal(t, expectedWarnings, observedLogs.Len())
+			}
 
 			defaultMetricsCount := 0
 			allMetricsCount := 0
@@ -61,21 +74,39 @@ func TestMetricsBuilder(t *testing.T) {
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordNvmlGpuMemoryBytesUsedDataPoint(ts, 1, "model-val", "gpu_number-val", "uuid-val", AttributeMemoryStateUsed)
+			if tt.name == "reaggregate_set" {
+				mb.RecordNvmlGpuMemoryBytesUsedDataPoint(ts, 3, "model-val-2", "gpu_number-val-2", "uuid-val-2", AttributeMemoryStateFree)
+			}
 
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordNvmlGpuProcessesMaxBytesUsedDataPoint(ts, 1, "model-val", "gpu_number-val", "uuid-val", 3, "process-val", "command-val", "command_line-val", "owner-val")
+			if tt.name == "reaggregate_set" {
+				mb.RecordNvmlGpuProcessesMaxBytesUsedDataPoint(ts, 3, "model-val-2", "gpu_number-val-2", "uuid-val-2", 4, "process-val-2", "command-val-2", "command_line-val-2", "owner-val-2")
+			}
 
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordNvmlGpuProcessesUtilizationDataPoint(ts, 1, "model-val", "gpu_number-val", "uuid-val", 3, "process-val", "command-val", "command_line-val", "owner-val")
+			if tt.name == "reaggregate_set" {
+				mb.RecordNvmlGpuProcessesUtilizationDataPoint(ts, 3, "model-val-2", "gpu_number-val-2", "uuid-val-2", 4, "process-val-2", "command-val-2", "command_line-val-2", "owner-val-2")
+			}
 
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordNvmlGpuUtilizationDataPoint(ts, 1, "model-val", "gpu_number-val", "uuid-val")
+			if tt.name == "reaggregate_set" {
+				mb.RecordNvmlGpuUtilizationDataPoint(ts, 3, "model-val-2", "gpu_number-val-2", "uuid-val-2")
+			}
 
 			res := pcommon.NewResource()
 			metrics := mb.Emit(WithResource(res))
+			if tt.name == "reaggregate_set" {
+				assert.Empty(t, mb.metricNvmlGpuMemoryBytesUsed.aggDataPoints)
+				assert.Empty(t, mb.metricNvmlGpuProcessesMaxBytesUsed.aggDataPoints)
+				assert.Empty(t, mb.metricNvmlGpuProcessesUtilization.aggDataPoints)
+				assert.Empty(t, mb.metricNvmlGpuUtilization.aggDataPoints)
+			}
 
 			if tt.expectEmpty {
 				assert.Equal(t, 0, metrics.ResourceMetrics().Len())
@@ -103,122 +134,260 @@ func TestMetricsBuilder(t *testing.T) {
 			for _, mi := range allMetricsList {
 				switch mi.Name() {
 				case "nvml.gpu.memory.bytes_used":
-					assert.False(t, validatedMetrics["nvml.gpu.memory.bytes_used"], "Found a duplicate in the metrics slice: nvml.gpu.memory.bytes_used")
-					validatedMetrics["nvml.gpu.memory.bytes_used"] = true
-					assert.Equal(t, pmetric.MetricTypeGauge, mi.Type())
-					assert.Equal(t, 1, mi.Gauge().DataPoints().Len())
-					assert.Equal(t, "Current number of GPU memory bytes used by state. Summing the values of all states yields the total GPU memory space.", mi.Description())
-					assert.Equal(t, "By", mi.Unit())
-					dp := mi.Gauge().DataPoints().At(0)
-					assert.Equal(t, start, dp.StartTimestamp())
-					assert.Equal(t, ts, dp.Timestamp())
-					assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
-					assert.Equal(t, int64(1), dp.IntValue())
-					modelAttrVal, ok := dp.Attributes().Get("model")
-					assert.True(t, ok)
-					assert.Equal(t, "model-val", modelAttrVal.Str())
-					gpuNumberAttrVal, ok := dp.Attributes().Get("gpu_number")
-					assert.True(t, ok)
-					assert.Equal(t, "gpu_number-val", gpuNumberAttrVal.Str())
-					uuidAttrVal, ok := dp.Attributes().Get("uuid")
-					assert.True(t, ok)
-					assert.Equal(t, "uuid-val", uuidAttrVal.Str())
-					memoryStateAttrVal, ok := dp.Attributes().Get("memory_state")
-					assert.True(t, ok)
-					assert.Equal(t, "used", memoryStateAttrVal.Str())
+					if tt.name != "reaggregate_set" {
+						assert.False(t, validatedMetrics["nvml.gpu.memory.bytes_used"], "Found a duplicate in the metrics slice: nvml.gpu.memory.bytes_used")
+						validatedMetrics["nvml.gpu.memory.bytes_used"] = true
+						assert.Equal(t, pmetric.MetricTypeGauge, mi.Type())
+						assert.Equal(t, 1, mi.Gauge().DataPoints().Len())
+						assert.Equal(t, "Current number of GPU memory bytes used by state. Summing the values of all states yields the total GPU memory space.", mi.Description())
+						assert.Equal(t, "By", mi.Unit())
+						dp := mi.Gauge().DataPoints().At(0)
+						assert.Equal(t, start, dp.StartTimestamp())
+						assert.Equal(t, ts, dp.Timestamp())
+						assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
+						assert.Equal(t, int64(1), dp.IntValue())
+						modelAttrVal, ok := dp.Attributes().Get("model")
+						assert.True(t, ok)
+						assert.Equal(t, "model-val", modelAttrVal.Str())
+						gpuNumberAttrVal, ok := dp.Attributes().Get("gpu_number")
+						assert.True(t, ok)
+						assert.Equal(t, "gpu_number-val", gpuNumberAttrVal.Str())
+						uuidAttrVal, ok := dp.Attributes().Get("uuid")
+						assert.True(t, ok)
+						assert.Equal(t, "uuid-val", uuidAttrVal.Str())
+						memoryStateAttrVal, ok := dp.Attributes().Get("memory_state")
+						assert.True(t, ok)
+						assert.Equal(t, "used", memoryStateAttrVal.Str())
+					} else {
+						assert.False(t, validatedMetrics["nvml.gpu.memory.bytes_used"], "Found a duplicate in the metrics slice: nvml.gpu.memory.bytes_used")
+						validatedMetrics["nvml.gpu.memory.bytes_used"] = true
+						assert.Equal(t, pmetric.MetricTypeGauge, mi.Type())
+						assert.Equal(t, 1, mi.Gauge().DataPoints().Len())
+						assert.Equal(t, "Current number of GPU memory bytes used by state. Summing the values of all states yields the total GPU memory space.", mi.Description())
+						assert.Equal(t, "By", mi.Unit())
+						dp := mi.Gauge().DataPoints().At(0)
+						assert.Equal(t, start, dp.StartTimestamp())
+						assert.Equal(t, ts, dp.Timestamp())
+						assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
+						switch aggMap["nvml.gpu.memory.bytes_used"] {
+						case "sum":
+							assert.Equal(t, int64(4), dp.IntValue())
+						case "avg":
+							assert.Equal(t, int64(2), dp.IntValue())
+						case "min":
+							assert.Equal(t, int64(1), dp.IntValue())
+						case "max":
+							assert.Equal(t, int64(3), dp.IntValue())
+						}
+						_, ok := dp.Attributes().Get("model")
+						assert.False(t, ok)
+						_, ok = dp.Attributes().Get("gpu_number")
+						assert.False(t, ok)
+						_, ok = dp.Attributes().Get("uuid")
+						assert.False(t, ok)
+						_, ok = dp.Attributes().Get("memory_state")
+						assert.False(t, ok)
+					}
 				case "nvml.gpu.processes.max_bytes_used":
-					assert.False(t, validatedMetrics["nvml.gpu.processes.max_bytes_used"], "Found a duplicate in the metrics slice: nvml.gpu.processes.max_bytes_used")
-					validatedMetrics["nvml.gpu.processes.max_bytes_used"] = true
-					assert.Equal(t, pmetric.MetricTypeGauge, mi.Type())
-					assert.Equal(t, 1, mi.Gauge().DataPoints().Len())
-					assert.Equal(t, "Maximum total GPU memory in bytes that was ever allocated by the process.", mi.Description())
-					assert.Equal(t, "By", mi.Unit())
-					dp := mi.Gauge().DataPoints().At(0)
-					assert.Equal(t, start, dp.StartTimestamp())
-					assert.Equal(t, ts, dp.Timestamp())
-					assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
-					assert.Equal(t, int64(1), dp.IntValue())
-					modelAttrVal, ok := dp.Attributes().Get("model")
-					assert.True(t, ok)
-					assert.Equal(t, "model-val", modelAttrVal.Str())
-					gpuNumberAttrVal, ok := dp.Attributes().Get("gpu_number")
-					assert.True(t, ok)
-					assert.Equal(t, "gpu_number-val", gpuNumberAttrVal.Str())
-					uuidAttrVal, ok := dp.Attributes().Get("uuid")
-					assert.True(t, ok)
-					assert.Equal(t, "uuid-val", uuidAttrVal.Str())
-					pidAttrVal, ok := dp.Attributes().Get("pid")
-					assert.True(t, ok)
-					assert.EqualValues(t, 3, pidAttrVal.Int())
-					processAttrVal, ok := dp.Attributes().Get("process")
-					assert.True(t, ok)
-					assert.Equal(t, "process-val", processAttrVal.Str())
-					commandAttrVal, ok := dp.Attributes().Get("command")
-					assert.True(t, ok)
-					assert.Equal(t, "command-val", commandAttrVal.Str())
-					commandLineAttrVal, ok := dp.Attributes().Get("command_line")
-					assert.True(t, ok)
-					assert.Equal(t, "command_line-val", commandLineAttrVal.Str())
-					ownerAttrVal, ok := dp.Attributes().Get("owner")
-					assert.True(t, ok)
-					assert.Equal(t, "owner-val", ownerAttrVal.Str())
+					if tt.name != "reaggregate_set" {
+						assert.False(t, validatedMetrics["nvml.gpu.processes.max_bytes_used"], "Found a duplicate in the metrics slice: nvml.gpu.processes.max_bytes_used")
+						validatedMetrics["nvml.gpu.processes.max_bytes_used"] = true
+						assert.Equal(t, pmetric.MetricTypeGauge, mi.Type())
+						assert.Equal(t, 1, mi.Gauge().DataPoints().Len())
+						assert.Equal(t, "Maximum total GPU memory in bytes that was ever allocated by the process.", mi.Description())
+						assert.Equal(t, "By", mi.Unit())
+						dp := mi.Gauge().DataPoints().At(0)
+						assert.Equal(t, start, dp.StartTimestamp())
+						assert.Equal(t, ts, dp.Timestamp())
+						assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
+						assert.Equal(t, int64(1), dp.IntValue())
+						modelAttrVal, ok := dp.Attributes().Get("model")
+						assert.True(t, ok)
+						assert.Equal(t, "model-val", modelAttrVal.Str())
+						gpuNumberAttrVal, ok := dp.Attributes().Get("gpu_number")
+						assert.True(t, ok)
+						assert.Equal(t, "gpu_number-val", gpuNumberAttrVal.Str())
+						uuidAttrVal, ok := dp.Attributes().Get("uuid")
+						assert.True(t, ok)
+						assert.Equal(t, "uuid-val", uuidAttrVal.Str())
+						pidAttrVal, ok := dp.Attributes().Get("pid")
+						assert.True(t, ok)
+						assert.EqualValues(t, 3, pidAttrVal.Int())
+						processAttrVal, ok := dp.Attributes().Get("process")
+						assert.True(t, ok)
+						assert.Equal(t, "process-val", processAttrVal.Str())
+						commandAttrVal, ok := dp.Attributes().Get("command")
+						assert.True(t, ok)
+						assert.Equal(t, "command-val", commandAttrVal.Str())
+						commandLineAttrVal, ok := dp.Attributes().Get("command_line")
+						assert.True(t, ok)
+						assert.Equal(t, "command_line-val", commandLineAttrVal.Str())
+						ownerAttrVal, ok := dp.Attributes().Get("owner")
+						assert.True(t, ok)
+						assert.Equal(t, "owner-val", ownerAttrVal.Str())
+					} else {
+						assert.False(t, validatedMetrics["nvml.gpu.processes.max_bytes_used"], "Found a duplicate in the metrics slice: nvml.gpu.processes.max_bytes_used")
+						validatedMetrics["nvml.gpu.processes.max_bytes_used"] = true
+						assert.Equal(t, pmetric.MetricTypeGauge, mi.Type())
+						assert.Equal(t, 1, mi.Gauge().DataPoints().Len())
+						assert.Equal(t, "Maximum total GPU memory in bytes that was ever allocated by the process.", mi.Description())
+						assert.Equal(t, "By", mi.Unit())
+						dp := mi.Gauge().DataPoints().At(0)
+						assert.Equal(t, start, dp.StartTimestamp())
+						assert.Equal(t, ts, dp.Timestamp())
+						assert.Equal(t, pmetric.NumberDataPointValueTypeInt, dp.ValueType())
+						switch aggMap["nvml.gpu.processes.max_bytes_used"] {
+						case "sum":
+							assert.Equal(t, int64(4), dp.IntValue())
+						case "avg":
+							assert.Equal(t, int64(2), dp.IntValue())
+						case "min":
+							assert.Equal(t, int64(1), dp.IntValue())
+						case "max":
+							assert.Equal(t, int64(3), dp.IntValue())
+						}
+						_, ok := dp.Attributes().Get("model")
+						assert.False(t, ok)
+						_, ok = dp.Attributes().Get("gpu_number")
+						assert.False(t, ok)
+						_, ok = dp.Attributes().Get("uuid")
+						assert.False(t, ok)
+						_, ok = dp.Attributes().Get("pid")
+						assert.False(t, ok)
+						_, ok = dp.Attributes().Get("process")
+						assert.False(t, ok)
+						_, ok = dp.Attributes().Get("command")
+						assert.False(t, ok)
+						_, ok = dp.Attributes().Get("command_line")
+						assert.False(t, ok)
+						_, ok = dp.Attributes().Get("owner")
+						assert.False(t, ok)
+					}
 				case "nvml.gpu.processes.utilization":
-					assert.False(t, validatedMetrics["nvml.gpu.processes.utilization"], "Found a duplicate in the metrics slice: nvml.gpu.processes.utilization")
-					validatedMetrics["nvml.gpu.processes.utilization"] = true
-					assert.Equal(t, pmetric.MetricTypeGauge, mi.Type())
-					assert.Equal(t, 1, mi.Gauge().DataPoints().Len())
-					assert.Equal(t, "Fraction of time over the process's life thus far during which one or more kernels was executing on the GPU.", mi.Description())
-					assert.Equal(t, "1", mi.Unit())
-					dp := mi.Gauge().DataPoints().At(0)
-					assert.Equal(t, start, dp.StartTimestamp())
-					assert.Equal(t, ts, dp.Timestamp())
-					assert.Equal(t, pmetric.NumberDataPointValueTypeDouble, dp.ValueType())
-					assert.InDelta(t, float64(1), dp.DoubleValue(), 0.01)
-					modelAttrVal, ok := dp.Attributes().Get("model")
-					assert.True(t, ok)
-					assert.Equal(t, "model-val", modelAttrVal.Str())
-					gpuNumberAttrVal, ok := dp.Attributes().Get("gpu_number")
-					assert.True(t, ok)
-					assert.Equal(t, "gpu_number-val", gpuNumberAttrVal.Str())
-					uuidAttrVal, ok := dp.Attributes().Get("uuid")
-					assert.True(t, ok)
-					assert.Equal(t, "uuid-val", uuidAttrVal.Str())
-					pidAttrVal, ok := dp.Attributes().Get("pid")
-					assert.True(t, ok)
-					assert.EqualValues(t, 3, pidAttrVal.Int())
-					processAttrVal, ok := dp.Attributes().Get("process")
-					assert.True(t, ok)
-					assert.Equal(t, "process-val", processAttrVal.Str())
-					commandAttrVal, ok := dp.Attributes().Get("command")
-					assert.True(t, ok)
-					assert.Equal(t, "command-val", commandAttrVal.Str())
-					commandLineAttrVal, ok := dp.Attributes().Get("command_line")
-					assert.True(t, ok)
-					assert.Equal(t, "command_line-val", commandLineAttrVal.Str())
-					ownerAttrVal, ok := dp.Attributes().Get("owner")
-					assert.True(t, ok)
-					assert.Equal(t, "owner-val", ownerAttrVal.Str())
+					if tt.name != "reaggregate_set" {
+						assert.False(t, validatedMetrics["nvml.gpu.processes.utilization"], "Found a duplicate in the metrics slice: nvml.gpu.processes.utilization")
+						validatedMetrics["nvml.gpu.processes.utilization"] = true
+						assert.Equal(t, pmetric.MetricTypeGauge, mi.Type())
+						assert.Equal(t, 1, mi.Gauge().DataPoints().Len())
+						assert.Equal(t, "Fraction of time over the process's life thus far during which one or more kernels was executing on the GPU.", mi.Description())
+						assert.Equal(t, "1", mi.Unit())
+						dp := mi.Gauge().DataPoints().At(0)
+						assert.Equal(t, start, dp.StartTimestamp())
+						assert.Equal(t, ts, dp.Timestamp())
+						assert.Equal(t, pmetric.NumberDataPointValueTypeDouble, dp.ValueType())
+						assert.InDelta(t, float64(1), dp.DoubleValue(), 0.01)
+						modelAttrVal, ok := dp.Attributes().Get("model")
+						assert.True(t, ok)
+						assert.Equal(t, "model-val", modelAttrVal.Str())
+						gpuNumberAttrVal, ok := dp.Attributes().Get("gpu_number")
+						assert.True(t, ok)
+						assert.Equal(t, "gpu_number-val", gpuNumberAttrVal.Str())
+						uuidAttrVal, ok := dp.Attributes().Get("uuid")
+						assert.True(t, ok)
+						assert.Equal(t, "uuid-val", uuidAttrVal.Str())
+						pidAttrVal, ok := dp.Attributes().Get("pid")
+						assert.True(t, ok)
+						assert.EqualValues(t, 3, pidAttrVal.Int())
+						processAttrVal, ok := dp.Attributes().Get("process")
+						assert.True(t, ok)
+						assert.Equal(t, "process-val", processAttrVal.Str())
+						commandAttrVal, ok := dp.Attributes().Get("command")
+						assert.True(t, ok)
+						assert.Equal(t, "command-val", commandAttrVal.Str())
+						commandLineAttrVal, ok := dp.Attributes().Get("command_line")
+						assert.True(t, ok)
+						assert.Equal(t, "command_line-val", commandLineAttrVal.Str())
+						ownerAttrVal, ok := dp.Attributes().Get("owner")
+						assert.True(t, ok)
+						assert.Equal(t, "owner-val", ownerAttrVal.Str())
+					} else {
+						assert.False(t, validatedMetrics["nvml.gpu.processes.utilization"], "Found a duplicate in the metrics slice: nvml.gpu.processes.utilization")
+						validatedMetrics["nvml.gpu.processes.utilization"] = true
+						assert.Equal(t, pmetric.MetricTypeGauge, mi.Type())
+						assert.Equal(t, 1, mi.Gauge().DataPoints().Len())
+						assert.Equal(t, "Fraction of time over the process's life thus far during which one or more kernels was executing on the GPU.", mi.Description())
+						assert.Equal(t, "1", mi.Unit())
+						dp := mi.Gauge().DataPoints().At(0)
+						assert.Equal(t, start, dp.StartTimestamp())
+						assert.Equal(t, ts, dp.Timestamp())
+						assert.Equal(t, pmetric.NumberDataPointValueTypeDouble, dp.ValueType())
+						switch aggMap["nvml.gpu.processes.utilization"] {
+						case "sum":
+							assert.InDelta(t, float64(4), dp.DoubleValue(), 0.01)
+						case "avg":
+							assert.InDelta(t, float64(2), dp.DoubleValue(), 0.01)
+						case "min":
+							assert.InDelta(t, float64(1), dp.DoubleValue(), 0.01)
+						case "max":
+							assert.InDelta(t, float64(3), dp.DoubleValue(), 0.01)
+						}
+						_, ok := dp.Attributes().Get("model")
+						assert.False(t, ok)
+						_, ok = dp.Attributes().Get("gpu_number")
+						assert.False(t, ok)
+						_, ok = dp.Attributes().Get("uuid")
+						assert.False(t, ok)
+						_, ok = dp.Attributes().Get("pid")
+						assert.False(t, ok)
+						_, ok = dp.Attributes().Get("process")
+						assert.False(t, ok)
+						_, ok = dp.Attributes().Get("command")
+						assert.False(t, ok)
+						_, ok = dp.Attributes().Get("command_line")
+						assert.False(t, ok)
+						_, ok = dp.Attributes().Get("owner")
+						assert.False(t, ok)
+					}
 				case "nvml.gpu.utilization":
-					assert.False(t, validatedMetrics["nvml.gpu.utilization"], "Found a duplicate in the metrics slice: nvml.gpu.utilization")
-					validatedMetrics["nvml.gpu.utilization"] = true
-					assert.Equal(t, pmetric.MetricTypeGauge, mi.Type())
-					assert.Equal(t, 1, mi.Gauge().DataPoints().Len())
-					assert.Equal(t, "Fraction of time GPU was not idle since the last sample.", mi.Description())
-					assert.Equal(t, "1", mi.Unit())
-					dp := mi.Gauge().DataPoints().At(0)
-					assert.Equal(t, start, dp.StartTimestamp())
-					assert.Equal(t, ts, dp.Timestamp())
-					assert.Equal(t, pmetric.NumberDataPointValueTypeDouble, dp.ValueType())
-					assert.InDelta(t, float64(1), dp.DoubleValue(), 0.01)
-					modelAttrVal, ok := dp.Attributes().Get("model")
-					assert.True(t, ok)
-					assert.Equal(t, "model-val", modelAttrVal.Str())
-					gpuNumberAttrVal, ok := dp.Attributes().Get("gpu_number")
-					assert.True(t, ok)
-					assert.Equal(t, "gpu_number-val", gpuNumberAttrVal.Str())
-					uuidAttrVal, ok := dp.Attributes().Get("uuid")
-					assert.True(t, ok)
-					assert.Equal(t, "uuid-val", uuidAttrVal.Str())
+					if tt.name != "reaggregate_set" {
+						assert.False(t, validatedMetrics["nvml.gpu.utilization"], "Found a duplicate in the metrics slice: nvml.gpu.utilization")
+						validatedMetrics["nvml.gpu.utilization"] = true
+						assert.Equal(t, pmetric.MetricTypeGauge, mi.Type())
+						assert.Equal(t, 1, mi.Gauge().DataPoints().Len())
+						assert.Equal(t, "Fraction of time GPU was not idle since the last sample.", mi.Description())
+						assert.Equal(t, "1", mi.Unit())
+						dp := mi.Gauge().DataPoints().At(0)
+						assert.Equal(t, start, dp.StartTimestamp())
+						assert.Equal(t, ts, dp.Timestamp())
+						assert.Equal(t, pmetric.NumberDataPointValueTypeDouble, dp.ValueType())
+						assert.InDelta(t, float64(1), dp.DoubleValue(), 0.01)
+						modelAttrVal, ok := dp.Attributes().Get("model")
+						assert.True(t, ok)
+						assert.Equal(t, "model-val", modelAttrVal.Str())
+						gpuNumberAttrVal, ok := dp.Attributes().Get("gpu_number")
+						assert.True(t, ok)
+						assert.Equal(t, "gpu_number-val", gpuNumberAttrVal.Str())
+						uuidAttrVal, ok := dp.Attributes().Get("uuid")
+						assert.True(t, ok)
+						assert.Equal(t, "uuid-val", uuidAttrVal.Str())
+					} else {
+						assert.False(t, validatedMetrics["nvml.gpu.utilization"], "Found a duplicate in the metrics slice: nvml.gpu.utilization")
+						validatedMetrics["nvml.gpu.utilization"] = true
+						assert.Equal(t, pmetric.MetricTypeGauge, mi.Type())
+						assert.Equal(t, 1, mi.Gauge().DataPoints().Len())
+						assert.Equal(t, "Fraction of time GPU was not idle since the last sample.", mi.Description())
+						assert.Equal(t, "1", mi.Unit())
+						dp := mi.Gauge().DataPoints().At(0)
+						assert.Equal(t, start, dp.StartTimestamp())
+						assert.Equal(t, ts, dp.Timestamp())
+						assert.Equal(t, pmetric.NumberDataPointValueTypeDouble, dp.ValueType())
+						switch aggMap["nvml.gpu.utilization"] {
+						case "sum":
+							assert.InDelta(t, float64(4), dp.DoubleValue(), 0.01)
+						case "avg":
+							assert.InDelta(t, float64(2), dp.DoubleValue(), 0.01)
+						case "min":
+							assert.InDelta(t, float64(1), dp.DoubleValue(), 0.01)
+						case "max":
+							assert.InDelta(t, float64(3), dp.DoubleValue(), 0.01)
+						}
+						_, ok := dp.Attributes().Get("model")
+						assert.False(t, ok)
+						_, ok = dp.Attributes().Get("gpu_number")
+						assert.False(t, ok)
+						_, ok = dp.Attributes().Get("uuid")
+						assert.False(t, ok)
+					}
 				}
 			}
 		})

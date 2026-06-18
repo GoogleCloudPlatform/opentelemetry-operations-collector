@@ -26,53 +26,67 @@ func TestMetricsBuilderConfig(t *testing.T) {
 			name: "all_set",
 			want: MetricsBuilderConfig{
 				Metrics: MetricsConfig{
-					GpuDcgmClockFrequency: MetricConfig{
+					GpuDcgmClockFrequency: GpuDcgmClockFrequencyMetricConfig{
 						Enabled: true,
 					},
-					GpuDcgmClockThrottleDurationTime: MetricConfig{
+					GpuDcgmClockThrottleDurationTime: GpuDcgmClockThrottleDurationTimeMetricConfig{
+						Enabled:             true,
+						AggregationStrategy: AggregationStrategySum,
+						EnabledAttributes:   []GpuDcgmClockThrottleDurationTimeMetricAttributeKey{GpuDcgmClockThrottleDurationTimeMetricAttributeKeyGpuClockViolation},
+					},
+					GpuDcgmCodecDecoderUtilization: GpuDcgmCodecDecoderUtilizationMetricConfig{
 						Enabled: true,
 					},
-					GpuDcgmCodecDecoderUtilization: MetricConfig{
+					GpuDcgmCodecEncoderUtilization: GpuDcgmCodecEncoderUtilizationMetricConfig{
 						Enabled: true,
 					},
-					GpuDcgmCodecEncoderUtilization: MetricConfig{
+					GpuDcgmEccErrors: GpuDcgmEccErrorsMetricConfig{
+						Enabled:             true,
+						AggregationStrategy: AggregationStrategySum,
+						EnabledAttributes:   []GpuDcgmEccErrorsMetricAttributeKey{GpuDcgmEccErrorsMetricAttributeKeyGpuErrorType},
+					},
+					GpuDcgmEnergyConsumption: GpuDcgmEnergyConsumptionMetricConfig{
 						Enabled: true,
 					},
-					GpuDcgmEccErrors: MetricConfig{
+					GpuDcgmMemoryBandwidthUtilization: GpuDcgmMemoryBandwidthUtilizationMetricConfig{
 						Enabled: true,
 					},
-					GpuDcgmEnergyConsumption: MetricConfig{
+					GpuDcgmMemoryBytesUsed: GpuDcgmMemoryBytesUsedMetricConfig{
+						Enabled:             true,
+						AggregationStrategy: AggregationStrategyAvg,
+						EnabledAttributes:   []GpuDcgmMemoryBytesUsedMetricAttributeKey{GpuDcgmMemoryBytesUsedMetricAttributeKeyGpuMemoryState},
+					},
+					GpuDcgmNvlinkIo: GpuDcgmNvlinkIoMetricConfig{
+						Enabled:             true,
+						AggregationStrategy: AggregationStrategySum,
+						EnabledAttributes:   []GpuDcgmNvlinkIoMetricAttributeKey{GpuDcgmNvlinkIoMetricAttributeKeyNetworkIoDirection},
+					},
+					GpuDcgmPcieIo: GpuDcgmPcieIoMetricConfig{
+						Enabled:             true,
+						AggregationStrategy: AggregationStrategySum,
+						EnabledAttributes:   []GpuDcgmPcieIoMetricAttributeKey{GpuDcgmPcieIoMetricAttributeKeyNetworkIoDirection},
+					},
+					GpuDcgmPipeUtilization: GpuDcgmPipeUtilizationMetricConfig{
+						Enabled:             true,
+						AggregationStrategy: AggregationStrategyAvg,
+						EnabledAttributes:   []GpuDcgmPipeUtilizationMetricAttributeKey{GpuDcgmPipeUtilizationMetricAttributeKeyGpuPipe},
+					},
+					GpuDcgmSmOccupancy: GpuDcgmSmOccupancyMetricConfig{
 						Enabled: true,
 					},
-					GpuDcgmMemoryBandwidthUtilization: MetricConfig{
+					GpuDcgmSmUtilization: GpuDcgmSmUtilizationMetricConfig{
 						Enabled: true,
 					},
-					GpuDcgmMemoryBytesUsed: MetricConfig{
+					GpuDcgmTemperature: GpuDcgmTemperatureMetricConfig{
 						Enabled: true,
 					},
-					GpuDcgmNvlinkIo: MetricConfig{
+					GpuDcgmUtilization: GpuDcgmUtilizationMetricConfig{
 						Enabled: true,
 					},
-					GpuDcgmPcieIo: MetricConfig{
-						Enabled: true,
-					},
-					GpuDcgmPipeUtilization: MetricConfig{
-						Enabled: true,
-					},
-					GpuDcgmSmOccupancy: MetricConfig{
-						Enabled: true,
-					},
-					GpuDcgmSmUtilization: MetricConfig{
-						Enabled: true,
-					},
-					GpuDcgmTemperature: MetricConfig{
-						Enabled: true,
-					},
-					GpuDcgmUtilization: MetricConfig{
-						Enabled: true,
-					},
-					GpuDcgmXidErrors: MetricConfig{
-						Enabled: true,
+					GpuDcgmXidErrors: GpuDcgmXidErrorsMetricConfig{
+						Enabled:             true,
+						AggregationStrategy: AggregationStrategySum,
+						EnabledAttributes:   []GpuDcgmXidErrorsMetricAttributeKey{GpuDcgmXidErrorsMetricAttributeKeyGpuErrorXid},
 					},
 				},
 				ResourceAttributes: ResourceAttributesConfig{
@@ -86,53 +100,67 @@ func TestMetricsBuilderConfig(t *testing.T) {
 			name: "none_set",
 			want: MetricsBuilderConfig{
 				Metrics: MetricsConfig{
-					GpuDcgmClockFrequency: MetricConfig{
+					GpuDcgmClockFrequency: GpuDcgmClockFrequencyMetricConfig{
 						Enabled: false,
 					},
-					GpuDcgmClockThrottleDurationTime: MetricConfig{
+					GpuDcgmClockThrottleDurationTime: GpuDcgmClockThrottleDurationTimeMetricConfig{
+						Enabled:             false,
+						AggregationStrategy: AggregationStrategySum,
+						EnabledAttributes:   []GpuDcgmClockThrottleDurationTimeMetricAttributeKey{GpuDcgmClockThrottleDurationTimeMetricAttributeKeyGpuClockViolation},
+					},
+					GpuDcgmCodecDecoderUtilization: GpuDcgmCodecDecoderUtilizationMetricConfig{
 						Enabled: false,
 					},
-					GpuDcgmCodecDecoderUtilization: MetricConfig{
+					GpuDcgmCodecEncoderUtilization: GpuDcgmCodecEncoderUtilizationMetricConfig{
 						Enabled: false,
 					},
-					GpuDcgmCodecEncoderUtilization: MetricConfig{
+					GpuDcgmEccErrors: GpuDcgmEccErrorsMetricConfig{
+						Enabled:             false,
+						AggregationStrategy: AggregationStrategySum,
+						EnabledAttributes:   []GpuDcgmEccErrorsMetricAttributeKey{GpuDcgmEccErrorsMetricAttributeKeyGpuErrorType},
+					},
+					GpuDcgmEnergyConsumption: GpuDcgmEnergyConsumptionMetricConfig{
 						Enabled: false,
 					},
-					GpuDcgmEccErrors: MetricConfig{
+					GpuDcgmMemoryBandwidthUtilization: GpuDcgmMemoryBandwidthUtilizationMetricConfig{
 						Enabled: false,
 					},
-					GpuDcgmEnergyConsumption: MetricConfig{
+					GpuDcgmMemoryBytesUsed: GpuDcgmMemoryBytesUsedMetricConfig{
+						Enabled:             false,
+						AggregationStrategy: AggregationStrategyAvg,
+						EnabledAttributes:   []GpuDcgmMemoryBytesUsedMetricAttributeKey{GpuDcgmMemoryBytesUsedMetricAttributeKeyGpuMemoryState},
+					},
+					GpuDcgmNvlinkIo: GpuDcgmNvlinkIoMetricConfig{
+						Enabled:             false,
+						AggregationStrategy: AggregationStrategySum,
+						EnabledAttributes:   []GpuDcgmNvlinkIoMetricAttributeKey{GpuDcgmNvlinkIoMetricAttributeKeyNetworkIoDirection},
+					},
+					GpuDcgmPcieIo: GpuDcgmPcieIoMetricConfig{
+						Enabled:             false,
+						AggregationStrategy: AggregationStrategySum,
+						EnabledAttributes:   []GpuDcgmPcieIoMetricAttributeKey{GpuDcgmPcieIoMetricAttributeKeyNetworkIoDirection},
+					},
+					GpuDcgmPipeUtilization: GpuDcgmPipeUtilizationMetricConfig{
+						Enabled:             false,
+						AggregationStrategy: AggregationStrategyAvg,
+						EnabledAttributes:   []GpuDcgmPipeUtilizationMetricAttributeKey{GpuDcgmPipeUtilizationMetricAttributeKeyGpuPipe},
+					},
+					GpuDcgmSmOccupancy: GpuDcgmSmOccupancyMetricConfig{
 						Enabled: false,
 					},
-					GpuDcgmMemoryBandwidthUtilization: MetricConfig{
+					GpuDcgmSmUtilization: GpuDcgmSmUtilizationMetricConfig{
 						Enabled: false,
 					},
-					GpuDcgmMemoryBytesUsed: MetricConfig{
+					GpuDcgmTemperature: GpuDcgmTemperatureMetricConfig{
 						Enabled: false,
 					},
-					GpuDcgmNvlinkIo: MetricConfig{
+					GpuDcgmUtilization: GpuDcgmUtilizationMetricConfig{
 						Enabled: false,
 					},
-					GpuDcgmPcieIo: MetricConfig{
-						Enabled: false,
-					},
-					GpuDcgmPipeUtilization: MetricConfig{
-						Enabled: false,
-					},
-					GpuDcgmSmOccupancy: MetricConfig{
-						Enabled: false,
-					},
-					GpuDcgmSmUtilization: MetricConfig{
-						Enabled: false,
-					},
-					GpuDcgmTemperature: MetricConfig{
-						Enabled: false,
-					},
-					GpuDcgmUtilization: MetricConfig{
-						Enabled: false,
-					},
-					GpuDcgmXidErrors: MetricConfig{
-						Enabled: false,
+					GpuDcgmXidErrors: GpuDcgmXidErrorsMetricConfig{
+						Enabled:             false,
+						AggregationStrategy: AggregationStrategySum,
+						EnabledAttributes:   []GpuDcgmXidErrorsMetricAttributeKey{GpuDcgmXidErrorsMetricAttributeKeyGpuErrorXid},
 					},
 				},
 				ResourceAttributes: ResourceAttributesConfig{
@@ -146,7 +174,7 @@ func TestMetricsBuilderConfig(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := loadMetricsBuilderConfig(t, tt.name)
-			diff := cmp.Diff(tt.want, cfg, cmpopts.IgnoreUnexported(MetricConfig{}, ResourceAttributeConfig{}))
+			diff := cmp.Diff(tt.want, cfg, cmpopts.IgnoreUnexported(GpuDcgmClockFrequencyMetricConfig{}, GpuDcgmClockThrottleDurationTimeMetricConfig{}, GpuDcgmCodecDecoderUtilizationMetricConfig{}, GpuDcgmCodecEncoderUtilizationMetricConfig{}, GpuDcgmEccErrorsMetricConfig{}, GpuDcgmEnergyConsumptionMetricConfig{}, GpuDcgmMemoryBandwidthUtilizationMetricConfig{}, GpuDcgmMemoryBytesUsedMetricConfig{}, GpuDcgmNvlinkIoMetricConfig{}, GpuDcgmPcieIoMetricConfig{}, GpuDcgmPipeUtilizationMetricConfig{}, GpuDcgmSmOccupancyMetricConfig{}, GpuDcgmSmUtilizationMetricConfig{}, GpuDcgmTemperatureMetricConfig{}, GpuDcgmUtilizationMetricConfig{}, GpuDcgmXidErrorsMetricConfig{}, ResourceAttributeConfig{}))
 			require.Emptyf(t, diff, "Config mismatch (-expected +actual):\n%s", diff)
 		})
 	}

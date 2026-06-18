@@ -230,3 +230,70 @@ func TestDetectProjectToolChange(t *testing.T) {
 		})
 	}
 }
+
+func TestUpdateDistributionSpecFile(t *testing.T) {
+	testCases := []struct {
+		name           string
+		initialContent string
+		field          string
+		value          string
+		expectedErr    string
+		expectedOutput string
+	}{
+		{
+			name: "successful update preserves comments",
+			initialContent: `# a comment
+go_version: 1.22.0
+`,
+			field:          "go_version",
+			value:          "1.23.0",
+			expectedOutput: `# a comment
+go_version: 1.23.0
+`,
+		},
+		{
+			name:           "invalid field name error",
+			initialContent: "go_version: 1.22.0",
+			field:          "invalid_field",
+			value:          "value",
+			expectedErr:    "is not a valid spec field",
+		},
+		{
+			name:           "ignored field error",
+			initialContent: "go_version: 1.22.0",
+			field:          "-",
+			value:          "value",
+			expectedErr:    "cannot be updated",
+		},
+		{
+			name: "non-scalar field update error",
+			initialContent: `components:
+  receivers: [foo]`,
+			field:       "components",
+			value:       "bar",
+			expectedErr: "is not a scalar type and cannot be updated via CLI",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			tempDir := t.TempDir()
+			specPath := filepath.Join(tempDir, "spec.yaml")
+
+			err := os.WriteFile(specPath, []byte(tc.initialContent), 0644)
+			assert.NilError(t, err)
+
+			err = UpdateDistributionSpecFile(specPath, tc.field, tc.value)
+			if tc.expectedErr != "" {
+				assert.ErrorContains(t, err, tc.expectedErr)
+				return
+			}
+
+			assert.NilError(t, err)
+			updatedContent, err := os.ReadFile(specPath)
+			assert.NilError(t, err)
+			assert.Equal(t, string(updatedContent), tc.expectedOutput)
+		})
+	}
+}

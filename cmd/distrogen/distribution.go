@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"github.com/google/go-cmp/cmp"
+	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -645,4 +646,69 @@ func copyDir(src, dst string) error {
 
 		return nil
 	})
+}
+
+// UpdateDistributionSpecFile parses the YAML into a yaml.Node to preserve comments
+// and updates the scalar field with the provided value.
+func UpdateDistributionSpecFile(path string, field string, value string) error {
+	specStruct := &DistributionSpec{}
+	v := reflect.ValueOf(specStruct).Elem()
+	t := v.Type()
+	validField := false
+	for i := 0; i < t.NumField(); i++ {
+		yamlTag := t.Field(i).Tag.Get("yaml")
+		tagName := strings.Split(yamlTag, ",")[0]
+		if tagName == field {
+			if tagName == "-" {
+				return fmt.Errorf("field '%s' cannot be updated", field)
+			}
+			validField = true
+			break
+		}
+	}
+	if !validField {
+		return fmt.Errorf("field '%s' is not a valid spec field", field)
+	}
+
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	var node yaml.Node
+	if err := yaml.Unmarshal(content, &node); err != nil {
+		return err
+	}
+
+	// The document node should contain a mapping node at its root
+	if len(node.Content) == 0 || node.Content[0].Kind != yaml.MappingNode {
+		return errors.New("invalid spec yaml format")
+	}
+
+	mappingNode := node.Content[0]
+	found := false
+	for i := 0; i < len(mappingNode.Content); i += 2 {
+		keyNode := mappingNode.Content[i]
+		if keyNode.Value == field {
+			valueNode := mappingNode.Content[i+1]
+			// We only handle scalar updates for now
+			if valueNode.Kind != yaml.ScalarNode {
+				return fmt.Errorf("field '%s' is not a scalar type and cannot be updated via CLI", field)
+			}
+			valueNode.SetString(value)
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("field '%s' not found in %s", field, path)
+	}
+
+	out, err := yaml.Marshal(&node)
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(path, out, DefaultFileMode)
 }

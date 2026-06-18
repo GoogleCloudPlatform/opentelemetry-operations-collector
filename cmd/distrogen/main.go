@@ -94,6 +94,7 @@ func createCommandRunner() *command.Runner {
 	runner.Register("project", newProjectCommand())
 	runner.Register("component", newComponentCommand())
 	runner.Register("registry", newRegistryCommand())
+	runner.Register("update-spec", newUpdateSpecCommand())
 
 	return runner
 }
@@ -389,4 +390,42 @@ func (cmd *registryCommand) Run() error {
 	generator := NewComponentsRegistryGenerator()
 
 	return generator.Generate()
+}
+
+type updateSpecCommand struct {
+	flags flag.FlagSet
+
+	spec  *string
+	field *string
+	value *string
+}
+
+func newUpdateSpecCommand() *updateSpecCommand {
+	cmd := &updateSpecCommand{}
+	cmd.spec = setSpecFlag(&cmd.flags)
+	cmd.field = cmd.flags.String("field", "", "Field to update in the spec")
+	cmd.value = cmd.flags.String("value", "", "New value for the field")
+	return cmd
+}
+
+func (cmd *updateSpecCommand) ParseArgs(args []string) error {
+	return cmd.flags.Parse(args)
+}
+
+func (cmd *updateSpecCommand) Usage() string {
+	return cmd.flags.FlagUsages()
+}
+
+func (cmd *updateSpecCommand) Run() error {
+	if *cmd.spec == "" {
+		return errNoSpecFlag
+	}
+	if *cmd.field == "" {
+		return errors.New("missing --field flag")
+	}
+	if *cmd.value == "" {
+		return errors.New("missing --value flag")
+	}
+
+	return UpdateDistributionSpecFile(*cmd.spec, *cmd.field, *cmd.value)
 }

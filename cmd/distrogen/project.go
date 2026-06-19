@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	DistrogenMetadataDir = ".distrogen"
+	DistrogenMetadataDir   = ".distrogen"
 	DefaultProjectFileMode = fs.ModePerm
 )
 
@@ -34,7 +34,7 @@ type ProjectGenerator struct {
 	FileMode   fs.FileMode
 	CustomPath string
 
-	cleanTools bool
+	cleanTools   bool
 	generatePath string
 }
 

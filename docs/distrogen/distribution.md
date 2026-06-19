@@ -14,6 +14,10 @@ With all this combined, you can build a custom Collector binary from a provided 
 
 The distribution specification is a YAML configuration file which `distrogen` uses to fill out the various templates it generates. 
 
+### Updating the Specification
+
+If you need to programmatically update fields in the `spec.yaml` without opening a text editor, you can use the `distrogen update-spec` command. This command preserves comments and formatting while applying updates to fields. It also supports complex updates, such as appending structures to arrays or targeting nested fields. See the [Commands guide](./command.md#update-spec) for details.
+
 ### Fields
 
 | Field | Type | Default | Description |

@@ -61,6 +61,17 @@ The `component` command generates a new component. Only used in [project mode](.
 
 The `registry` command generates a new components registry. This command has no flags.
 
+## `update-spec`
+
+The `update-spec` command updates a field in a distribution specification.
+
+| Flag | Shorthand | Description |
+|------|-----------|-------------|
+| `--spec` | | The distribution specification to use |
+| `--field` | | Field to update in the spec. Supports nested structs via `::` (e.g. `foo::bar`). Target arrays will automatically append the value. |
+| `--value` | | New value for the field |
+| `--stdin` | | Read JSON value from stdin instead of using `--value`. Ideal for complex types like appending structs to an array. |
+
 ## Array Flags
 
 The usage of array flags is to provide one instance of the flag for each additional entry. For example, to provide multiple registries with the `--registry` flag, you provide them like so:

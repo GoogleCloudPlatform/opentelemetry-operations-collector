@@ -1,0 +1,5 @@
+name: missing intermediate struct error
+field: components::receivers
+value: foo
+initial_content: 'name: test'
+expected_error: not found in

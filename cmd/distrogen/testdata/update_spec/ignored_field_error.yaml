@@ -1,0 +1,5 @@
+name: ignored field error
+field: '-'
+value: value
+initial_content: 'go_version: 1.22.0'
+expected_error: cannot be updated

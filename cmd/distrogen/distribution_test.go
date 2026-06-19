@@ -230,3 +230,4 @@ func TestDetectProjectToolChange(t *testing.T) {
 		})
 	}
 }
+

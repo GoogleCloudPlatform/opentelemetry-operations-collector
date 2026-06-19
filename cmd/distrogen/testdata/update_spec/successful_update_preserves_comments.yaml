@@ -1,0 +1,9 @@
+name: successful update preserves comments
+field: go_version
+value: 1.23.0
+initial_content: |
+    # a comment
+    go_version: 1.22.0
+expected_output: |
+    # a comment
+    go_version: 1.23.0

@@ -398,6 +398,7 @@ type updateSpecCommand struct {
 	spec  *string
 	field *string
 	value *string
+	stdin *bool
 }
 
 func newUpdateSpecCommand() *updateSpecCommand {
@@ -405,6 +406,7 @@ func newUpdateSpecCommand() *updateSpecCommand {
 	cmd.spec = setSpecFlag(&cmd.flags)
 	cmd.field = cmd.flags.String("field", "", "Field to update in the spec")
 	cmd.value = cmd.flags.String("value", "", "New value for the field")
+	cmd.stdin = cmd.flags.Bool("stdin", false, "Read JSON value from stdin")
 	return cmd
 }
 
@@ -423,9 +425,22 @@ func (cmd *updateSpecCommand) Run() error {
 	if *cmd.field == "" {
 		return errors.New("missing --field flag")
 	}
-	if *cmd.value == "" {
-		return errors.New("missing --value flag")
+
+	var valBytes []byte
+	var isStdin bool
+	if *cmd.stdin {
+		isStdin = true
+		b, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return fmt.Errorf("failed to read from stdin: %w", err)
+		}
+		valBytes = b
+	} else {
+		if *cmd.value == "" {
+			return errors.New("missing --value flag (or --stdin)")
+		}
+		valBytes = []byte(*cmd.value)
 	}
 
-	return UpdateDistributionSpecFile(*cmd.spec, *cmd.field, *cmd.value)
+	return UpdateDistributionSpecFile(*cmd.spec, *cmd.field, valBytes, isStdin)
 }

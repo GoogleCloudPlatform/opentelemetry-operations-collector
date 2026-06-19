@@ -69,8 +69,9 @@ Available Commands:
 
   update-spec
       --spec string    The distribution specification to use
-      --field string   Field to update in the spec
+      --field string   Field to update in the spec. Supports nested structs via `::` (e.g. `foo::bar`).
       --value string   New value for the field
+      --stdin          Read JSON value from stdin instead of using --value. Ideal for complex types like arrays/structs.
 ```
 
 ### 3. Testing

@@ -1,0 +1,5 @@
+name: missing array error
+field: feature_gates
+value: foo
+initial_content: 'name: test'
+expected_error: not found in

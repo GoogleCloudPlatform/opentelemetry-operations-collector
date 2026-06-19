@@ -144,7 +144,7 @@ distrogen-golden-update:
 
 ALL_DIRECTORIES = find . -type d  -print0
 EXCLUDE_TOOLS_DIRS = grep -z -v ".*\.tools.*"
-EXCLUDE_BUILD_DIRS = grep -z -v -e ".*_build.*" -e ".*dist.*"
+EXCLUDE_BUILD_DIRS = grep -z -v -e ".*_build.*" -e ".*dist.*" -e ".*generated_collector.*"
 
 .PHONY: workspace
 workspace: go.work

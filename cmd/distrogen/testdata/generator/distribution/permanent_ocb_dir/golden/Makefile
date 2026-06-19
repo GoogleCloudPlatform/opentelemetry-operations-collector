@@ -124,12 +124,15 @@ collector-build: clean-collector $(COLLECTOR_BINARY_NAME)
 # COLLECTOR_BUILD_TEMP_DIR, then the OCB directory will be regenerated
 # since the collector build target will always clean up the _build directory.
 $(COLLECTOR_BUILD_DIR):
-	$(MAKE) ocb-generate
+	MODULE_UPDATE=true $(MAKE) ocb-generate
 
+.PHONY: update-ocb-directory
+update-ocb-directory:
+	MODULE_UPDATE=true $(MAKE) ocb-generate
 
 .PHONY: ocb-generate
 ocb-generate: $(OCB_BIN)
-	$(GO_COMMAND_ENV) $(OCB_BIN) --skip-compilation --verbose --config manifest.yaml
+	$(GO_COMMAND_ENV) $(OCB_BIN) --skip-compilation $(if $(MODULE_UPDATE),,--skip-get-modules) --verbose --config manifest.yaml
 
 
 COLLECTOR_LD_FLAGS ?=

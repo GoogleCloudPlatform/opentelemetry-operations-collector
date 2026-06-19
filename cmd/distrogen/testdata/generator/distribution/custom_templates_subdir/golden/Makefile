@@ -118,6 +118,7 @@ endif
 # Unconditionally build a new collector.
 .PHONY: collector-build
 collector-build: clean-collector $(COLLECTOR_BINARY_NAME)
+MODULE_UPDATE ?= true
 
 # If the COLLECTOR_BUILD_DIR is set to the permanent OCB directory
 # value, then this will ensure that the permanent OCB directory is
@@ -125,12 +126,13 @@ collector-build: clean-collector $(COLLECTOR_BINARY_NAME)
 # COLLECTOR_BUILD_TEMP_DIR, then the OCB directory will be regenerated
 # since the collector build target will always clean up the _build directory.
 $(COLLECTOR_BUILD_DIR):
-	$(MAKE) ocb-generate
+	MODULE_UPDATE=true $(MAKE) ocb-generate
+
 
 
 .PHONY: ocb-generate
 ocb-generate: $(OCB_BIN)
-	$(GO_COMMAND_ENV) $(OCB_BIN) --skip-compilation --verbose --config manifest.yaml
+	$(GO_COMMAND_ENV) $(OCB_BIN) --skip-compilation $(if $(MODULE_UPDATE),,--skip-get-modules) --verbose --config manifest.yaml
 
 
 COLLECTOR_LD_FLAGS ?=

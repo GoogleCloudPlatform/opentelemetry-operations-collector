@@ -131,7 +131,7 @@ update-ocb-directory:
 # This target is to ensure that if the target does not yet exist, OCB will
 # be run while also getting go modules. We have to guarantee this is done the
 # first time you generate the directory.
-$(COLLECTOR_BUILD_DIR):
+$(COLLECTOR_BUILD_DIR): $(OCB_BIN)
 	$(GO_COMMAND_ENV) $(OCB_BIN) --skip-compilation --verbose --config manifest.yaml
 
 .PHONY: ocb-generate

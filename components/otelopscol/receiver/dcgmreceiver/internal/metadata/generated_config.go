@@ -3,17 +3,19 @@
 package metadata
 
 import (
+	"fmt"
+
 	"go.opentelemetry.io/collector/confmap"
 	"go.opentelemetry.io/collector/filter"
 )
 
-// MetricConfig provides common config for a particular metric.
-type MetricConfig struct {
+// GpuDcgmClockFrequencyMetricConfig provides config for the gpu.dcgm.clock.frequency metric.
+type GpuDcgmClockFrequencyMetricConfig struct {
 	Enabled          bool `mapstructure:"enabled"`
 	enabledSetByUser bool
 }
 
-func (ms *MetricConfig) Unmarshal(parser *confmap.Conf) error {
+func (ms *GpuDcgmClockFrequencyMetricConfig) Unmarshal(parser *confmap.Conf) error {
 	if parser == nil {
 		return nil
 	}
@@ -27,75 +29,585 @@ func (ms *MetricConfig) Unmarshal(parser *confmap.Conf) error {
 	return nil
 }
 
+// GpuDcgmClockThrottleDurationTimeMetricAttributeKey specifies the key of an attribute for the gpu.dcgm.clock.throttle_duration.time metric.
+type GpuDcgmClockThrottleDurationTimeMetricAttributeKey string
+
+const (
+	GpuDcgmClockThrottleDurationTimeMetricAttributeKeyGpuClockViolation GpuDcgmClockThrottleDurationTimeMetricAttributeKey = "gpu.clock.violation"
+)
+
+// GpuDcgmClockThrottleDurationTimeMetricConfig provides config for the gpu.dcgm.clock.throttle_duration.time metric.
+type GpuDcgmClockThrottleDurationTimeMetricConfig struct {
+	Enabled          bool `mapstructure:"enabled"`
+	enabledSetByUser bool
+
+	AggregationStrategy string                                               `mapstructure:"aggregation_strategy"`
+	EnabledAttributes   []GpuDcgmClockThrottleDurationTimeMetricAttributeKey `mapstructure:"attributes"`
+}
+
+func (ms *GpuDcgmClockThrottleDurationTimeMetricConfig) Unmarshal(parser *confmap.Conf) error {
+	if parser == nil {
+		return nil
+	}
+
+	err := parser.Unmarshal(ms)
+	if err != nil {
+		return err
+	}
+
+	ms.enabledSetByUser = parser.IsSet("enabled")
+	return nil
+}
+
+func (ms *GpuDcgmClockThrottleDurationTimeMetricConfig) Validate() error {
+	for _, val := range ms.EnabledAttributes {
+		switch val {
+		case GpuDcgmClockThrottleDurationTimeMetricAttributeKeyGpuClockViolation:
+		default:
+			return fmt.Errorf("metric gpu.dcgm.clock.throttle_duration.time doesn't have an attribute %v, valid attributes: [gpu.clock.violation]", val)
+		}
+	}
+
+	switch ms.AggregationStrategy {
+	case AggregationStrategySum, AggregationStrategyAvg, AggregationStrategyMin, AggregationStrategyMax:
+	default:
+		return fmt.Errorf("invalid aggregation strategy %q, valid strategies: [%s, %s, %s, %s]", ms.AggregationStrategy, AggregationStrategySum, AggregationStrategyAvg, AggregationStrategyMin, AggregationStrategyMax)
+	}
+
+	return nil
+}
+
+// GpuDcgmCodecDecoderUtilizationMetricConfig provides config for the gpu.dcgm.codec.decoder.utilization metric.
+type GpuDcgmCodecDecoderUtilizationMetricConfig struct {
+	Enabled          bool `mapstructure:"enabled"`
+	enabledSetByUser bool
+}
+
+func (ms *GpuDcgmCodecDecoderUtilizationMetricConfig) Unmarshal(parser *confmap.Conf) error {
+	if parser == nil {
+		return nil
+	}
+
+	err := parser.Unmarshal(ms)
+	if err != nil {
+		return err
+	}
+
+	ms.enabledSetByUser = parser.IsSet("enabled")
+	return nil
+}
+
+// GpuDcgmCodecEncoderUtilizationMetricConfig provides config for the gpu.dcgm.codec.encoder.utilization metric.
+type GpuDcgmCodecEncoderUtilizationMetricConfig struct {
+	Enabled          bool `mapstructure:"enabled"`
+	enabledSetByUser bool
+}
+
+func (ms *GpuDcgmCodecEncoderUtilizationMetricConfig) Unmarshal(parser *confmap.Conf) error {
+	if parser == nil {
+		return nil
+	}
+
+	err := parser.Unmarshal(ms)
+	if err != nil {
+		return err
+	}
+
+	ms.enabledSetByUser = parser.IsSet("enabled")
+	return nil
+}
+
+// GpuDcgmEccErrorsMetricAttributeKey specifies the key of an attribute for the gpu.dcgm.ecc_errors metric.
+type GpuDcgmEccErrorsMetricAttributeKey string
+
+const (
+	GpuDcgmEccErrorsMetricAttributeKeyGpuErrorType GpuDcgmEccErrorsMetricAttributeKey = "gpu.error.type"
+)
+
+// GpuDcgmEccErrorsMetricConfig provides config for the gpu.dcgm.ecc_errors metric.
+type GpuDcgmEccErrorsMetricConfig struct {
+	Enabled          bool `mapstructure:"enabled"`
+	enabledSetByUser bool
+
+	AggregationStrategy string                               `mapstructure:"aggregation_strategy"`
+	EnabledAttributes   []GpuDcgmEccErrorsMetricAttributeKey `mapstructure:"attributes"`
+}
+
+func (ms *GpuDcgmEccErrorsMetricConfig) Unmarshal(parser *confmap.Conf) error {
+	if parser == nil {
+		return nil
+	}
+
+	err := parser.Unmarshal(ms)
+	if err != nil {
+		return err
+	}
+
+	ms.enabledSetByUser = parser.IsSet("enabled")
+	return nil
+}
+
+func (ms *GpuDcgmEccErrorsMetricConfig) Validate() error {
+	for _, val := range ms.EnabledAttributes {
+		switch val {
+		case GpuDcgmEccErrorsMetricAttributeKeyGpuErrorType:
+		default:
+			return fmt.Errorf("metric gpu.dcgm.ecc_errors doesn't have an attribute %v, valid attributes: [gpu.error.type]", val)
+		}
+	}
+
+	switch ms.AggregationStrategy {
+	case AggregationStrategySum, AggregationStrategyAvg, AggregationStrategyMin, AggregationStrategyMax:
+	default:
+		return fmt.Errorf("invalid aggregation strategy %q, valid strategies: [%s, %s, %s, %s]", ms.AggregationStrategy, AggregationStrategySum, AggregationStrategyAvg, AggregationStrategyMin, AggregationStrategyMax)
+	}
+
+	return nil
+}
+
+// GpuDcgmEnergyConsumptionMetricConfig provides config for the gpu.dcgm.energy_consumption metric.
+type GpuDcgmEnergyConsumptionMetricConfig struct {
+	Enabled          bool `mapstructure:"enabled"`
+	enabledSetByUser bool
+}
+
+func (ms *GpuDcgmEnergyConsumptionMetricConfig) Unmarshal(parser *confmap.Conf) error {
+	if parser == nil {
+		return nil
+	}
+
+	err := parser.Unmarshal(ms)
+	if err != nil {
+		return err
+	}
+
+	ms.enabledSetByUser = parser.IsSet("enabled")
+	return nil
+}
+
+// GpuDcgmMemoryBandwidthUtilizationMetricConfig provides config for the gpu.dcgm.memory.bandwidth_utilization metric.
+type GpuDcgmMemoryBandwidthUtilizationMetricConfig struct {
+	Enabled          bool `mapstructure:"enabled"`
+	enabledSetByUser bool
+}
+
+func (ms *GpuDcgmMemoryBandwidthUtilizationMetricConfig) Unmarshal(parser *confmap.Conf) error {
+	if parser == nil {
+		return nil
+	}
+
+	err := parser.Unmarshal(ms)
+	if err != nil {
+		return err
+	}
+
+	ms.enabledSetByUser = parser.IsSet("enabled")
+	return nil
+}
+
+// GpuDcgmMemoryBytesUsedMetricAttributeKey specifies the key of an attribute for the gpu.dcgm.memory.bytes_used metric.
+type GpuDcgmMemoryBytesUsedMetricAttributeKey string
+
+const (
+	GpuDcgmMemoryBytesUsedMetricAttributeKeyGpuMemoryState GpuDcgmMemoryBytesUsedMetricAttributeKey = "gpu.memory.state"
+)
+
+// GpuDcgmMemoryBytesUsedMetricConfig provides config for the gpu.dcgm.memory.bytes_used metric.
+type GpuDcgmMemoryBytesUsedMetricConfig struct {
+	Enabled          bool `mapstructure:"enabled"`
+	enabledSetByUser bool
+
+	AggregationStrategy string                                     `mapstructure:"aggregation_strategy"`
+	EnabledAttributes   []GpuDcgmMemoryBytesUsedMetricAttributeKey `mapstructure:"attributes"`
+}
+
+func (ms *GpuDcgmMemoryBytesUsedMetricConfig) Unmarshal(parser *confmap.Conf) error {
+	if parser == nil {
+		return nil
+	}
+
+	err := parser.Unmarshal(ms)
+	if err != nil {
+		return err
+	}
+
+	ms.enabledSetByUser = parser.IsSet("enabled")
+	return nil
+}
+
+func (ms *GpuDcgmMemoryBytesUsedMetricConfig) Validate() error {
+	for _, val := range ms.EnabledAttributes {
+		switch val {
+		case GpuDcgmMemoryBytesUsedMetricAttributeKeyGpuMemoryState:
+		default:
+			return fmt.Errorf("metric gpu.dcgm.memory.bytes_used doesn't have an attribute %v, valid attributes: [gpu.memory.state]", val)
+		}
+	}
+
+	switch ms.AggregationStrategy {
+	case AggregationStrategySum, AggregationStrategyAvg, AggregationStrategyMin, AggregationStrategyMax:
+	default:
+		return fmt.Errorf("invalid aggregation strategy %q, valid strategies: [%s, %s, %s, %s]", ms.AggregationStrategy, AggregationStrategySum, AggregationStrategyAvg, AggregationStrategyMin, AggregationStrategyMax)
+	}
+
+	return nil
+}
+
+// GpuDcgmNvlinkIoMetricAttributeKey specifies the key of an attribute for the gpu.dcgm.nvlink.io metric.
+type GpuDcgmNvlinkIoMetricAttributeKey string
+
+const (
+	GpuDcgmNvlinkIoMetricAttributeKeyNetworkIoDirection GpuDcgmNvlinkIoMetricAttributeKey = "network.io.direction"
+)
+
+// GpuDcgmNvlinkIoMetricConfig provides config for the gpu.dcgm.nvlink.io metric.
+type GpuDcgmNvlinkIoMetricConfig struct {
+	Enabled          bool `mapstructure:"enabled"`
+	enabledSetByUser bool
+
+	AggregationStrategy string                              `mapstructure:"aggregation_strategy"`
+	EnabledAttributes   []GpuDcgmNvlinkIoMetricAttributeKey `mapstructure:"attributes"`
+}
+
+func (ms *GpuDcgmNvlinkIoMetricConfig) Unmarshal(parser *confmap.Conf) error {
+	if parser == nil {
+		return nil
+	}
+
+	err := parser.Unmarshal(ms)
+	if err != nil {
+		return err
+	}
+
+	ms.enabledSetByUser = parser.IsSet("enabled")
+	return nil
+}
+
+func (ms *GpuDcgmNvlinkIoMetricConfig) Validate() error {
+	for _, val := range ms.EnabledAttributes {
+		switch val {
+		case GpuDcgmNvlinkIoMetricAttributeKeyNetworkIoDirection:
+		default:
+			return fmt.Errorf("metric gpu.dcgm.nvlink.io doesn't have an attribute %v, valid attributes: [network.io.direction]", val)
+		}
+	}
+
+	switch ms.AggregationStrategy {
+	case AggregationStrategySum, AggregationStrategyAvg, AggregationStrategyMin, AggregationStrategyMax:
+	default:
+		return fmt.Errorf("invalid aggregation strategy %q, valid strategies: [%s, %s, %s, %s]", ms.AggregationStrategy, AggregationStrategySum, AggregationStrategyAvg, AggregationStrategyMin, AggregationStrategyMax)
+	}
+
+	return nil
+}
+
+// GpuDcgmPcieIoMetricAttributeKey specifies the key of an attribute for the gpu.dcgm.pcie.io metric.
+type GpuDcgmPcieIoMetricAttributeKey string
+
+const (
+	GpuDcgmPcieIoMetricAttributeKeyNetworkIoDirection GpuDcgmPcieIoMetricAttributeKey = "network.io.direction"
+)
+
+// GpuDcgmPcieIoMetricConfig provides config for the gpu.dcgm.pcie.io metric.
+type GpuDcgmPcieIoMetricConfig struct {
+	Enabled          bool `mapstructure:"enabled"`
+	enabledSetByUser bool
+
+	AggregationStrategy string                            `mapstructure:"aggregation_strategy"`
+	EnabledAttributes   []GpuDcgmPcieIoMetricAttributeKey `mapstructure:"attributes"`
+}
+
+func (ms *GpuDcgmPcieIoMetricConfig) Unmarshal(parser *confmap.Conf) error {
+	if parser == nil {
+		return nil
+	}
+
+	err := parser.Unmarshal(ms)
+	if err != nil {
+		return err
+	}
+
+	ms.enabledSetByUser = parser.IsSet("enabled")
+	return nil
+}
+
+func (ms *GpuDcgmPcieIoMetricConfig) Validate() error {
+	for _, val := range ms.EnabledAttributes {
+		switch val {
+		case GpuDcgmPcieIoMetricAttributeKeyNetworkIoDirection:
+		default:
+			return fmt.Errorf("metric gpu.dcgm.pcie.io doesn't have an attribute %v, valid attributes: [network.io.direction]", val)
+		}
+	}
+
+	switch ms.AggregationStrategy {
+	case AggregationStrategySum, AggregationStrategyAvg, AggregationStrategyMin, AggregationStrategyMax:
+	default:
+		return fmt.Errorf("invalid aggregation strategy %q, valid strategies: [%s, %s, %s, %s]", ms.AggregationStrategy, AggregationStrategySum, AggregationStrategyAvg, AggregationStrategyMin, AggregationStrategyMax)
+	}
+
+	return nil
+}
+
+// GpuDcgmPipeUtilizationMetricAttributeKey specifies the key of an attribute for the gpu.dcgm.pipe.utilization metric.
+type GpuDcgmPipeUtilizationMetricAttributeKey string
+
+const (
+	GpuDcgmPipeUtilizationMetricAttributeKeyGpuPipe GpuDcgmPipeUtilizationMetricAttributeKey = "gpu.pipe"
+)
+
+// GpuDcgmPipeUtilizationMetricConfig provides config for the gpu.dcgm.pipe.utilization metric.
+type GpuDcgmPipeUtilizationMetricConfig struct {
+	Enabled          bool `mapstructure:"enabled"`
+	enabledSetByUser bool
+
+	AggregationStrategy string                                     `mapstructure:"aggregation_strategy"`
+	EnabledAttributes   []GpuDcgmPipeUtilizationMetricAttributeKey `mapstructure:"attributes"`
+}
+
+func (ms *GpuDcgmPipeUtilizationMetricConfig) Unmarshal(parser *confmap.Conf) error {
+	if parser == nil {
+		return nil
+	}
+
+	err := parser.Unmarshal(ms)
+	if err != nil {
+		return err
+	}
+
+	ms.enabledSetByUser = parser.IsSet("enabled")
+	return nil
+}
+
+func (ms *GpuDcgmPipeUtilizationMetricConfig) Validate() error {
+	for _, val := range ms.EnabledAttributes {
+		switch val {
+		case GpuDcgmPipeUtilizationMetricAttributeKeyGpuPipe:
+		default:
+			return fmt.Errorf("metric gpu.dcgm.pipe.utilization doesn't have an attribute %v, valid attributes: [gpu.pipe]", val)
+		}
+	}
+
+	switch ms.AggregationStrategy {
+	case AggregationStrategySum, AggregationStrategyAvg, AggregationStrategyMin, AggregationStrategyMax:
+	default:
+		return fmt.Errorf("invalid aggregation strategy %q, valid strategies: [%s, %s, %s, %s]", ms.AggregationStrategy, AggregationStrategySum, AggregationStrategyAvg, AggregationStrategyMin, AggregationStrategyMax)
+	}
+
+	return nil
+}
+
+// GpuDcgmSmOccupancyMetricConfig provides config for the gpu.dcgm.sm.occupancy metric.
+type GpuDcgmSmOccupancyMetricConfig struct {
+	Enabled          bool `mapstructure:"enabled"`
+	enabledSetByUser bool
+}
+
+func (ms *GpuDcgmSmOccupancyMetricConfig) Unmarshal(parser *confmap.Conf) error {
+	if parser == nil {
+		return nil
+	}
+
+	err := parser.Unmarshal(ms)
+	if err != nil {
+		return err
+	}
+
+	ms.enabledSetByUser = parser.IsSet("enabled")
+	return nil
+}
+
+// GpuDcgmSmUtilizationMetricConfig provides config for the gpu.dcgm.sm.utilization metric.
+type GpuDcgmSmUtilizationMetricConfig struct {
+	Enabled          bool `mapstructure:"enabled"`
+	enabledSetByUser bool
+}
+
+func (ms *GpuDcgmSmUtilizationMetricConfig) Unmarshal(parser *confmap.Conf) error {
+	if parser == nil {
+		return nil
+	}
+
+	err := parser.Unmarshal(ms)
+	if err != nil {
+		return err
+	}
+
+	ms.enabledSetByUser = parser.IsSet("enabled")
+	return nil
+}
+
+// GpuDcgmTemperatureMetricConfig provides config for the gpu.dcgm.temperature metric.
+type GpuDcgmTemperatureMetricConfig struct {
+	Enabled          bool `mapstructure:"enabled"`
+	enabledSetByUser bool
+}
+
+func (ms *GpuDcgmTemperatureMetricConfig) Unmarshal(parser *confmap.Conf) error {
+	if parser == nil {
+		return nil
+	}
+
+	err := parser.Unmarshal(ms)
+	if err != nil {
+		return err
+	}
+
+	ms.enabledSetByUser = parser.IsSet("enabled")
+	return nil
+}
+
+// GpuDcgmUtilizationMetricConfig provides config for the gpu.dcgm.utilization metric.
+type GpuDcgmUtilizationMetricConfig struct {
+	Enabled          bool `mapstructure:"enabled"`
+	enabledSetByUser bool
+}
+
+func (ms *GpuDcgmUtilizationMetricConfig) Unmarshal(parser *confmap.Conf) error {
+	if parser == nil {
+		return nil
+	}
+
+	err := parser.Unmarshal(ms)
+	if err != nil {
+		return err
+	}
+
+	ms.enabledSetByUser = parser.IsSet("enabled")
+	return nil
+}
+
+// GpuDcgmXidErrorsMetricAttributeKey specifies the key of an attribute for the gpu.dcgm.xid_errors metric.
+type GpuDcgmXidErrorsMetricAttributeKey string
+
+const (
+	GpuDcgmXidErrorsMetricAttributeKeyGpuErrorXid GpuDcgmXidErrorsMetricAttributeKey = "gpu.error.xid"
+)
+
+// GpuDcgmXidErrorsMetricConfig provides config for the gpu.dcgm.xid_errors metric.
+type GpuDcgmXidErrorsMetricConfig struct {
+	Enabled          bool `mapstructure:"enabled"`
+	enabledSetByUser bool
+
+	AggregationStrategy string                               `mapstructure:"aggregation_strategy"`
+	EnabledAttributes   []GpuDcgmXidErrorsMetricAttributeKey `mapstructure:"attributes"`
+}
+
+func (ms *GpuDcgmXidErrorsMetricConfig) Unmarshal(parser *confmap.Conf) error {
+	if parser == nil {
+		return nil
+	}
+
+	err := parser.Unmarshal(ms)
+	if err != nil {
+		return err
+	}
+
+	ms.enabledSetByUser = parser.IsSet("enabled")
+	return nil
+}
+
+func (ms *GpuDcgmXidErrorsMetricConfig) Validate() error {
+	for _, val := range ms.EnabledAttributes {
+		switch val {
+		case GpuDcgmXidErrorsMetricAttributeKeyGpuErrorXid:
+		default:
+			return fmt.Errorf("metric gpu.dcgm.xid_errors doesn't have an attribute %v, valid attributes: [gpu.error.xid]", val)
+		}
+	}
+
+	switch ms.AggregationStrategy {
+	case AggregationStrategySum, AggregationStrategyAvg, AggregationStrategyMin, AggregationStrategyMax:
+	default:
+		return fmt.Errorf("invalid aggregation strategy %q, valid strategies: [%s, %s, %s, %s]", ms.AggregationStrategy, AggregationStrategySum, AggregationStrategyAvg, AggregationStrategyMin, AggregationStrategyMax)
+	}
+
+	return nil
+}
+
 // MetricsConfig provides config for dcgm metrics.
 type MetricsConfig struct {
-	GpuDcgmClockFrequency             MetricConfig `mapstructure:"gpu.dcgm.clock.frequency"`
-	GpuDcgmClockThrottleDurationTime  MetricConfig `mapstructure:"gpu.dcgm.clock.throttle_duration.time"`
-	GpuDcgmCodecDecoderUtilization    MetricConfig `mapstructure:"gpu.dcgm.codec.decoder.utilization"`
-	GpuDcgmCodecEncoderUtilization    MetricConfig `mapstructure:"gpu.dcgm.codec.encoder.utilization"`
-	GpuDcgmEccErrors                  MetricConfig `mapstructure:"gpu.dcgm.ecc_errors"`
-	GpuDcgmEnergyConsumption          MetricConfig `mapstructure:"gpu.dcgm.energy_consumption"`
-	GpuDcgmMemoryBandwidthUtilization MetricConfig `mapstructure:"gpu.dcgm.memory.bandwidth_utilization"`
-	GpuDcgmMemoryBytesUsed            MetricConfig `mapstructure:"gpu.dcgm.memory.bytes_used"`
-	GpuDcgmNvlinkIo                   MetricConfig `mapstructure:"gpu.dcgm.nvlink.io"`
-	GpuDcgmPcieIo                     MetricConfig `mapstructure:"gpu.dcgm.pcie.io"`
-	GpuDcgmPipeUtilization            MetricConfig `mapstructure:"gpu.dcgm.pipe.utilization"`
-	GpuDcgmSmOccupancy                MetricConfig `mapstructure:"gpu.dcgm.sm.occupancy"`
-	GpuDcgmSmUtilization              MetricConfig `mapstructure:"gpu.dcgm.sm.utilization"`
-	GpuDcgmTemperature                MetricConfig `mapstructure:"gpu.dcgm.temperature"`
-	GpuDcgmUtilization                MetricConfig `mapstructure:"gpu.dcgm.utilization"`
-	GpuDcgmXidErrors                  MetricConfig `mapstructure:"gpu.dcgm.xid_errors"`
+	GpuDcgmClockFrequency             GpuDcgmClockFrequencyMetricConfig             `mapstructure:"gpu.dcgm.clock.frequency"`
+	GpuDcgmClockThrottleDurationTime  GpuDcgmClockThrottleDurationTimeMetricConfig  `mapstructure:"gpu.dcgm.clock.throttle_duration.time"`
+	GpuDcgmCodecDecoderUtilization    GpuDcgmCodecDecoderUtilizationMetricConfig    `mapstructure:"gpu.dcgm.codec.decoder.utilization"`
+	GpuDcgmCodecEncoderUtilization    GpuDcgmCodecEncoderUtilizationMetricConfig    `mapstructure:"gpu.dcgm.codec.encoder.utilization"`
+	GpuDcgmEccErrors                  GpuDcgmEccErrorsMetricConfig                  `mapstructure:"gpu.dcgm.ecc_errors"`
+	GpuDcgmEnergyConsumption          GpuDcgmEnergyConsumptionMetricConfig          `mapstructure:"gpu.dcgm.energy_consumption"`
+	GpuDcgmMemoryBandwidthUtilization GpuDcgmMemoryBandwidthUtilizationMetricConfig `mapstructure:"gpu.dcgm.memory.bandwidth_utilization"`
+	GpuDcgmMemoryBytesUsed            GpuDcgmMemoryBytesUsedMetricConfig            `mapstructure:"gpu.dcgm.memory.bytes_used"`
+	GpuDcgmNvlinkIo                   GpuDcgmNvlinkIoMetricConfig                   `mapstructure:"gpu.dcgm.nvlink.io"`
+	GpuDcgmPcieIo                     GpuDcgmPcieIoMetricConfig                     `mapstructure:"gpu.dcgm.pcie.io"`
+	GpuDcgmPipeUtilization            GpuDcgmPipeUtilizationMetricConfig            `mapstructure:"gpu.dcgm.pipe.utilization"`
+	GpuDcgmSmOccupancy                GpuDcgmSmOccupancyMetricConfig                `mapstructure:"gpu.dcgm.sm.occupancy"`
+	GpuDcgmSmUtilization              GpuDcgmSmUtilizationMetricConfig              `mapstructure:"gpu.dcgm.sm.utilization"`
+	GpuDcgmTemperature                GpuDcgmTemperatureMetricConfig                `mapstructure:"gpu.dcgm.temperature"`
+	GpuDcgmUtilization                GpuDcgmUtilizationMetricConfig                `mapstructure:"gpu.dcgm.utilization"`
+	GpuDcgmXidErrors                  GpuDcgmXidErrorsMetricConfig                  `mapstructure:"gpu.dcgm.xid_errors"`
 }
 
 func DefaultMetricsConfig() MetricsConfig {
 	return MetricsConfig{
-		GpuDcgmClockFrequency: MetricConfig{
+		GpuDcgmClockFrequency: GpuDcgmClockFrequencyMetricConfig{
 			Enabled: true,
 		},
-		GpuDcgmClockThrottleDurationTime: MetricConfig{
+		GpuDcgmClockThrottleDurationTime: GpuDcgmClockThrottleDurationTimeMetricConfig{
+			Enabled:             true,
+			AggregationStrategy: AggregationStrategySum,
+			EnabledAttributes:   []GpuDcgmClockThrottleDurationTimeMetricAttributeKey{GpuDcgmClockThrottleDurationTimeMetricAttributeKeyGpuClockViolation},
+		},
+		GpuDcgmCodecDecoderUtilization: GpuDcgmCodecDecoderUtilizationMetricConfig{
 			Enabled: true,
 		},
-		GpuDcgmCodecDecoderUtilization: MetricConfig{
+		GpuDcgmCodecEncoderUtilization: GpuDcgmCodecEncoderUtilizationMetricConfig{
 			Enabled: true,
 		},
-		GpuDcgmCodecEncoderUtilization: MetricConfig{
+		GpuDcgmEccErrors: GpuDcgmEccErrorsMetricConfig{
+			Enabled:             true,
+			AggregationStrategy: AggregationStrategySum,
+			EnabledAttributes:   []GpuDcgmEccErrorsMetricAttributeKey{GpuDcgmEccErrorsMetricAttributeKeyGpuErrorType},
+		},
+		GpuDcgmEnergyConsumption: GpuDcgmEnergyConsumptionMetricConfig{
 			Enabled: true,
 		},
-		GpuDcgmEccErrors: MetricConfig{
+		GpuDcgmMemoryBandwidthUtilization: GpuDcgmMemoryBandwidthUtilizationMetricConfig{
 			Enabled: true,
 		},
-		GpuDcgmEnergyConsumption: MetricConfig{
-			Enabled: true,
+		GpuDcgmMemoryBytesUsed: GpuDcgmMemoryBytesUsedMetricConfig{
+			Enabled:             true,
+			AggregationStrategy: AggregationStrategyAvg,
+			EnabledAttributes:   []GpuDcgmMemoryBytesUsedMetricAttributeKey{GpuDcgmMemoryBytesUsedMetricAttributeKeyGpuMemoryState},
 		},
-		GpuDcgmMemoryBandwidthUtilization: MetricConfig{
-			Enabled: true,
+		GpuDcgmNvlinkIo: GpuDcgmNvlinkIoMetricConfig{
+			Enabled:             true,
+			AggregationStrategy: AggregationStrategySum,
+			EnabledAttributes:   []GpuDcgmNvlinkIoMetricAttributeKey{GpuDcgmNvlinkIoMetricAttributeKeyNetworkIoDirection},
 		},
-		GpuDcgmMemoryBytesUsed: MetricConfig{
-			Enabled: true,
+		GpuDcgmPcieIo: GpuDcgmPcieIoMetricConfig{
+			Enabled:             true,
+			AggregationStrategy: AggregationStrategySum,
+			EnabledAttributes:   []GpuDcgmPcieIoMetricAttributeKey{GpuDcgmPcieIoMetricAttributeKeyNetworkIoDirection},
 		},
-		GpuDcgmNvlinkIo: MetricConfig{
-			Enabled: true,
+		GpuDcgmPipeUtilization: GpuDcgmPipeUtilizationMetricConfig{
+			Enabled:             true,
+			AggregationStrategy: AggregationStrategyAvg,
+			EnabledAttributes:   []GpuDcgmPipeUtilizationMetricAttributeKey{GpuDcgmPipeUtilizationMetricAttributeKeyGpuPipe},
 		},
-		GpuDcgmPcieIo: MetricConfig{
-			Enabled: true,
-		},
-		GpuDcgmPipeUtilization: MetricConfig{
-			Enabled: true,
-		},
-		GpuDcgmSmOccupancy: MetricConfig{
+		GpuDcgmSmOccupancy: GpuDcgmSmOccupancyMetricConfig{
 			Enabled: false,
 		},
-		GpuDcgmSmUtilization: MetricConfig{
+		GpuDcgmSmUtilization: GpuDcgmSmUtilizationMetricConfig{
 			Enabled: true,
 		},
-		GpuDcgmTemperature: MetricConfig{
+		GpuDcgmTemperature: GpuDcgmTemperatureMetricConfig{
 			Enabled: true,
 		},
-		GpuDcgmUtilization: MetricConfig{
+		GpuDcgmUtilization: GpuDcgmUtilizationMetricConfig{
 			Enabled: true,
 		},
-		GpuDcgmXidErrors: MetricConfig{
-			Enabled: false,
+		GpuDcgmXidErrors: GpuDcgmXidErrorsMetricConfig{
+			Enabled:             false,
+			AggregationStrategy: AggregationStrategySum,
+			EnabledAttributes:   []GpuDcgmXidErrorsMetricAttributeKey{GpuDcgmXidErrorsMetricAttributeKeyGpuErrorXid},
 		},
 	}
 }

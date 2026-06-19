@@ -130,7 +130,6 @@ func (cmd *generateCommand) Usage() string {
 	return cmd.flags.FlagUsages()
 }
 
-
 func (cmd *generateCommand) Run() error {
 	if *cmd.spec == "" {
 		return errNoSpecFlag

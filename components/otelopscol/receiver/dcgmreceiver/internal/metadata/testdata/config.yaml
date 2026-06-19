@@ -5,24 +5,30 @@ all_set:
       enabled: true
     gpu.dcgm.clock.throttle_duration.time:
       enabled: true
+      attributes: ["gpu.clock.violation"]
     gpu.dcgm.codec.decoder.utilization:
       enabled: true
     gpu.dcgm.codec.encoder.utilization:
       enabled: true
     gpu.dcgm.ecc_errors:
       enabled: true
+      attributes: ["gpu.error.type"]
     gpu.dcgm.energy_consumption:
       enabled: true
     gpu.dcgm.memory.bandwidth_utilization:
       enabled: true
     gpu.dcgm.memory.bytes_used:
       enabled: true
+      attributes: ["gpu.memory.state"]
     gpu.dcgm.nvlink.io:
       enabled: true
+      attributes: ["network.io.direction"]
     gpu.dcgm.pcie.io:
       enabled: true
+      attributes: ["network.io.direction"]
     gpu.dcgm.pipe.utilization:
       enabled: true
+      attributes: ["gpu.pipe"]
     gpu.dcgm.sm.occupancy:
       enabled: true
     gpu.dcgm.sm.utilization:
@@ -33,6 +39,55 @@ all_set:
       enabled: true
     gpu.dcgm.xid_errors:
       enabled: true
+      attributes: ["gpu.error.xid"]
+  resource_attributes:
+    gpu.model:
+      enabled: true
+    gpu.number:
+      enabled: true
+    gpu.uuid:
+      enabled: true
+reaggregate_set:
+  metrics:
+    gpu.dcgm.clock.frequency:
+      enabled: true
+    gpu.dcgm.clock.throttle_duration.time:
+      enabled: true
+      attributes: []
+    gpu.dcgm.codec.decoder.utilization:
+      enabled: true
+    gpu.dcgm.codec.encoder.utilization:
+      enabled: true
+    gpu.dcgm.ecc_errors:
+      enabled: true
+      attributes: []
+    gpu.dcgm.energy_consumption:
+      enabled: true
+    gpu.dcgm.memory.bandwidth_utilization:
+      enabled: true
+    gpu.dcgm.memory.bytes_used:
+      enabled: true
+      attributes: []
+    gpu.dcgm.nvlink.io:
+      enabled: true
+      attributes: []
+    gpu.dcgm.pcie.io:
+      enabled: true
+      attributes: []
+    gpu.dcgm.pipe.utilization:
+      enabled: true
+      attributes: []
+    gpu.dcgm.sm.occupancy:
+      enabled: true
+    gpu.dcgm.sm.utilization:
+      enabled: true
+    gpu.dcgm.temperature:
+      enabled: true
+    gpu.dcgm.utilization:
+      enabled: true
+    gpu.dcgm.xid_errors:
+      enabled: true
+      attributes: []
   resource_attributes:
     gpu.model:
       enabled: true
@@ -46,24 +101,30 @@ none_set:
       enabled: false
     gpu.dcgm.clock.throttle_duration.time:
       enabled: false
+      attributes: ["gpu.clock.violation"]
     gpu.dcgm.codec.decoder.utilization:
       enabled: false
     gpu.dcgm.codec.encoder.utilization:
       enabled: false
     gpu.dcgm.ecc_errors:
       enabled: false
+      attributes: ["gpu.error.type"]
     gpu.dcgm.energy_consumption:
       enabled: false
     gpu.dcgm.memory.bandwidth_utilization:
       enabled: false
     gpu.dcgm.memory.bytes_used:
       enabled: false
+      attributes: ["gpu.memory.state"]
     gpu.dcgm.nvlink.io:
       enabled: false
+      attributes: ["network.io.direction"]
     gpu.dcgm.pcie.io:
       enabled: false
+      attributes: ["network.io.direction"]
     gpu.dcgm.pipe.utilization:
       enabled: false
+      attributes: ["gpu.pipe"]
     gpu.dcgm.sm.occupancy:
       enabled: false
     gpu.dcgm.sm.utilization:
@@ -74,6 +135,7 @@ none_set:
       enabled: false
     gpu.dcgm.xid_errors:
       enabled: false
+      attributes: ["gpu.error.xid"]
   resource_attributes:
     gpu.model:
       enabled: false

@@ -38,6 +38,19 @@ builds:
       - "-trimpath"
       - "-buildvcs=false"
 
+  - id: {{ .BinaryName }}-darwin
+    goos:
+      - darwin
+    goarch:
+      - arm64
+    binary: {{ .BinaryName }}
+    dir: {{ .OCBOutputDir }}
+    ldflags:
+      - "-s -w"
+    flags:
+      - "-trimpath"
+      - "-buildvcs=false"
+
 nfpms:
   - package_name: {{ .BinaryName }}
     contents:
@@ -76,6 +89,7 @@ archives:
     ids:
       - "{{ .BinaryName }}-linux"
       - "{{ .BinaryName }}-windows"
+      - "{{ .BinaryName }}-darwin"
     formats:
       - "tar.gz"
     name_template: "{{ .BinaryName }}_{{ "{{" }} .Version {{ "}}" }}_{{ "{{" }} .Os {{ "}}" }}_{{ "{{" }} .Arch {{ "}}" }}"

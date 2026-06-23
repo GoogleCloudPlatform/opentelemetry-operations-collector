@@ -1,0 +1,7 @@
+name: Change Identifier
+initial_content: |
+    version: 0.137.0-foo.5
+    prerelease_identifier: gke
+expected_output: |
+    version: 0.137.0-gke.0
+    prerelease_identifier: gke

@@ -99,6 +99,11 @@ regen-v: distrogen
 	cd $(DISTRO_DIR) && make ocb-generate
 {{- end }}
 
+.PHONY: bump-hotfix
+bump-hotfix: distrogen
+	$(DISTROGEN_BIN) bump_hotfix --spec $(SPEC_FILE)
+	$(MAKE) gen
+
 ###########
 # Workspace
 ###########

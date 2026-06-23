@@ -22,6 +22,8 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/google/go-cmp/cmp"
@@ -37,6 +39,13 @@ const (
 	DefaultFileMode fs.FileMode = 0644
 
 	ToolsDir = ".tools"
+
+	DefaultPrereleaseIdentifier = "hotfix"
+	VersionRegexPattern         = `^(\d+\.\d+\.\d+)(?:-([^.]+)\.(\d+))?$`
+)
+
+var (
+	VersionRegex = regexp.MustCompile(VersionRegexPattern)
 )
 
 const (
@@ -81,8 +90,9 @@ type DistributionSpec struct {
 
 	// CollectorCGO determines whether the Collector will be built with CGO.
 	CollectorCGO        bool   `yaml:"collector_cgo,omitempty"`
-	ComponentModuleBase string `yaml:"component_module_base"`
-	DistrogenVersion    string `yaml:"distrogen_version"`
+	ComponentModuleBase  string `yaml:"component_module_base"`
+	DistrogenVersion     string `yaml:"distrogen_version"`
+	PrereleaseIdentifier string `yaml:"prerelease_identifier,omitempty"`
 
 	OCBOutputDir string `yaml:"-"`
 }
@@ -697,6 +707,44 @@ func UpdateDistributionSpecFile(path string, fieldPath string, valueBytes []byte
 	}
 
 	return os.WriteFile(path, out, DefaultFileMode)
+}
+
+func BumpHotfix(specPath string, identifierOverride string) error {
+	spec, err := yamlUnmarshalFromFile[DistributionSpec](specPath)
+	if err != nil {
+		return err
+	}
+
+	identifier := spec.PrereleaseIdentifier
+	if identifierOverride != "" {
+		identifier = identifierOverride
+	}
+
+	if identifier == "" {
+		identifier = DefaultPrereleaseIdentifier
+	}
+
+	currentVersion := spec.Version
+	var newVersion string
+
+	// Match: Core(-Identifier.Counter)?
+	matches := VersionRegex.FindStringSubmatch(currentVersion)
+	if matches == nil {
+		return fmt.Errorf("invalid version format: %s", currentVersion)
+	}
+
+	core := matches[1]
+	existingId := matches[2]
+	counterStr := matches[3]
+
+	if existingId == identifier {
+		counter, _ := strconv.Atoi(counterStr)
+		newVersion = fmt.Sprintf("%s-%s.%d", core, identifier, counter+1)
+	} else {
+		newVersion = fmt.Sprintf("%s-%s.0", core, identifier)
+	}
+
+	return UpdateDistributionSpecFile(specPath, "version", []byte(newVersion), false)
 }
 
 func validateSpecFieldPath(t reflect.Type, fieldParts []string, fullPath string) error {

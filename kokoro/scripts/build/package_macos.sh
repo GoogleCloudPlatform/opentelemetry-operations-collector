@@ -20,10 +20,10 @@ cd "${KOKORO_ARTIFACTS_DIR}"/git/otelcol-google/google-built-opentelemetry-colle
 # Copy over all binaries and packages built/signed from previous stages.
 mv "${KOKORO_GFILE_DIR}"/dist .
 
-# Extract the macOS arm64 tarball, package it as a dmg.
+# Copy the macOS arm64 binary, package it as a dmg.
 VERSION=$(grep '^version:' spec.yaml | awk '{print $2}')
 mkdir -p /tmp/dmg_root
-tar -xzf dist/otelcol-google_"${VERSION}"_darwin_arm64.tar.gz -C /tmp/dmg_root
+cp dist/otelcol-google_"${VERSION}"_darwin_arm64 /tmp/dmg_root/otelcol-google
 hdiutil create -fs HFS+ -srcfolder /tmp/dmg_root -volname "otelcol-google-${VERSION}" dist/otelcol-google_"${VERSION}"_darwin_arm64.dmg
 
 # Put the output folder directly in KOKORO_ARTIFACTS_DIR instead of being deeply

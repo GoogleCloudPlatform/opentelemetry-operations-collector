@@ -81,62 +81,51 @@ func TestMetricsBuilder(t *testing.T) {
 
 			defaultMetricsCount := 0
 			allMetricsCount := 0
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordVarnishBackendConnectionCountDataPoint(ts, 1, AttributeBackendConnectionTypeSuccess)
 			if tt.name == "reaggregate_set" {
 				mb.RecordVarnishBackendConnectionCountDataPoint(ts, 3, AttributeBackendConnectionTypeRecycle)
 			}
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordVarnishBackendRequestCountDataPoint(ts, 1)
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordVarnishCacheOperationCountDataPoint(ts, 1, AttributeCacheOperationsHit)
 			if tt.name == "reaggregate_set" {
 				mb.RecordVarnishCacheOperationCountDataPoint(ts, 3, AttributeCacheOperationsMiss)
 			}
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordVarnishClientRequestCountDataPoint(ts, 1, AttributeStateReceived)
 			if tt.name == "reaggregate_set" {
 				mb.RecordVarnishClientRequestCountDataPoint(ts, 3, AttributeStateDropped)
 			}
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordVarnishClientRequestErrorCountDataPoint(ts, 1, "http.status_code-val")
 			if tt.name == "reaggregate_set" {
 				mb.RecordVarnishClientRequestErrorCountDataPoint(ts, 3, "http.status_code-val-2")
 			}
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordVarnishObjectCountDataPoint(ts, 1)
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordVarnishObjectExpiredDataPoint(ts, 1)
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordVarnishObjectMovedDataPoint(ts, 1)
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordVarnishObjectNukedDataPoint(ts, 1)
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordVarnishSessionCountDataPoint(ts, 1, AttributeSessionTypeAccepted)
 			if tt.name == "reaggregate_set" {
 				mb.RecordVarnishSessionCountDataPoint(ts, 3, AttributeSessionTypeDropped)
 			}
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordVarnishThreadOperationCountDataPoint(ts, 1, AttributeThreadOperationsCreated)

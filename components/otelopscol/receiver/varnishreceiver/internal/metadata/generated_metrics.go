@@ -3,14 +3,13 @@
 package metadata
 
 import (
-	"slices"
-	"time"
-
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/filter"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/receiver"
+	"slices"
+	"time"
 )
 
 const (
@@ -184,19 +183,23 @@ var MapAttributeThreadOperations = map[string]AttributeThreadOperations{
 
 var MetricsInfo = metricsInfo{
 	VarnishBackendConnectionCount: metricInfo{
-		Name: "varnish.backend.connection.count",
+		Name:       "varnish.backend.connection.count",
+		Attributes: []string{"backend_connection_type"},
 	},
 	VarnishBackendRequestCount: metricInfo{
 		Name: "varnish.backend.request.count",
 	},
 	VarnishCacheOperationCount: metricInfo{
-		Name: "varnish.cache.operation.count",
+		Name:       "varnish.cache.operation.count",
+		Attributes: []string{"cache_operations"},
 	},
 	VarnishClientRequestCount: metricInfo{
-		Name: "varnish.client.request.count",
+		Name:       "varnish.client.request.count",
+		Attributes: []string{"state"},
 	},
 	VarnishClientRequestErrorCount: metricInfo{
-		Name: "varnish.client.request.error.count",
+		Name:       "varnish.client.request.error.count",
+		Attributes: []string{"http.status_code"},
 	},
 	VarnishObjectCount: metricInfo{
 		Name: "varnish.object.count",
@@ -211,10 +214,12 @@ var MetricsInfo = metricsInfo{
 		Name: "varnish.object.nuked",
 	},
 	VarnishSessionCount: metricInfo{
-		Name: "varnish.session.count",
+		Name:       "varnish.session.count",
+		Attributes: []string{"session_type"},
 	},
 	VarnishThreadOperationCount: metricInfo{
-		Name: "varnish.thread.operation.count",
+		Name:       "varnish.thread.operation.count",
+		Attributes: []string{"thread_operations"},
 	},
 }
 
@@ -233,7 +238,8 @@ type metricsInfo struct {
 }
 
 type metricInfo struct {
-	Name string
+	Name       string
+	Attributes []string
 }
 
 type metricVarnishBackendConnectionCount struct {

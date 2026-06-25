@@ -12,15 +12,33 @@ SPEC_FILE = spec.yaml
 TOOLS_DIR ?= $(PWD)/.tools
 DISTROGEN_BIN ?= $(TOOLS_DIR)/distrogen
 DISTROGEN_QUERY = $(if $(wildcard $(DISTROGEN_BIN)),$(DISTROGEN_BIN),distrogen) query --spec $(SPEC_FILE) --field
-DISTROGEN_VERSION ?= $(shell $(DISTROGEN_QUERY) distrogen_version)
 MDATAGEN_BIN ?= $(TOOLS_DIR)/mdatagen
 DISTRO_DIR = $(PWD)/basic-distro
 
-$(DISTROGEN_BIN):
+.PHONY: install-distrogen
+install-distrogen:
 	$(MAKE) tools-dir
 	GOBIN=$(TOOLS_DIR) go install github.com/GoogleCloudPlatform/opentelemetry-operations-collector/cmd/distrogen@$(DISTROGEN_VERSION)
 
-$(MDATAGEN_BIN):
+$(DISTROGEN_BIN):
+	$(MAKE) install-distrogen
+
+# This phony target does a version comparison with the distrogen binary
+# installed at DISTROGEN_BIN and the version of distrogen that the spec is asking for.
+# If the versions differ, it will reinstall the version of distrogen that the spec wants.
+# The version check can be skipped if the env var FORCE_DISTROGEN_VERSION is set. This allows you
+# to use a specific distrogen binary if you've built it yourself.
+.phony: distrogen
+distrogen: $(DISTROGEN_BIN)
+	INSTALLED_DISTROGEN_VERSION=$$($(DISTROGEN_BIN) version) && \
+	DISTROGEN_VERSION=$$($(DISTROGEN_QUERY) distrogen_version) && \
+	if [ -z "$(FORCE_DISTROGEN_VERSION)" ] && \
+		[ "$${DISTROGEN_VERSION}" != "$${INSTALLED_DISTROGEN_VERSION}" ]; then \
+		$(MAKE) install-distrogen; \
+	fi
+
+.PHONY: mdatagen
+mdatagen:
 	$(MAKE) tools-dir
 	export OTEL_VERSION=v$(shell $(DISTROGEN_QUERY) opentelemetry_version) && \
 	GOBIN=$(TOOLS_DIR) bash ./scripts/download_mdatagen.sh $${OTEL_VERSION}
@@ -39,8 +57,15 @@ distrogen: $(DISTROGEN_BIN)
 # Updating OTel Components
 ##########################
 
-COMPONENT_DIR = components
+# The project-update target will update the distrogen project using
+# the requested DISTROGEN_PROJECT_VERSION.
+# Please note that this process will overwrite this Makefile so it
+# may look different after running this target.
+.PHONY: project-update
+project-update: distrogen
+	$(DISTROGEN_BIN) project --spec spec.yaml
 
+COMPONENT_DIR = components
 
 .PHONY: update-otel-components
 update-otel-components: $(DISTROGEN_BIN) $(MDATAGEN_BIN) workspace-update

@@ -1,0 +1,22 @@
+name: append struct to array via stdin
+field: replaces
+is_stdin: true
+value: |-
+    {
+      "from": "github.com/buger/jsonparser",
+      "to": "github.com/buger/jsonparser v1.1.2",
+      "reason": "Force update buger/jsonparser to v1.1.2 to fix vulnerability"
+    }
+initial_content: |-
+    replaces:
+        - from: old
+          to: old_new
+          reason: test
+expected_output: |
+    replaces:
+        - from: old
+          to: old_new
+          reason: test
+        - from: github.com/buger/jsonparser
+          to: github.com/buger/jsonparser v1.1.2
+          reason: Force update buger/jsonparser to v1.1.2 to fix vulnerability

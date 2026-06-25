@@ -1,0 +1,10 @@
+name: append to array via scalar
+field: feature_gates
+value: bar
+initial_content: |-
+    feature_gates:
+        - foo
+expected_output: |
+    feature_gates:
+        - foo
+        - bar

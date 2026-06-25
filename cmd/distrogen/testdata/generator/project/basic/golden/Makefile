@@ -22,6 +22,7 @@ $(DISTROGEN_BIN):
 
 $(MDATAGEN_BIN):
 	$(MAKE) tools-dir
+	export OTEL_VERSION=v$(shell $(DISTROGEN_QUERY) opentelemetry_version) && \
 	GOBIN=$(TOOLS_DIR) bash ./scripts/download_mdatagen.sh $${OTEL_VERSION}
 
 # This is a PHONY target cause if you make it as a normal recipe
@@ -43,8 +44,8 @@ COMPONENT_DIR = components
 
 .PHONY: update-otel-components
 update-otel-components: $(DISTROGEN_BIN) $(MDATAGEN_BIN) workspace-update
-	export OTEL_VERSION = v$(shell $(DISTROGEN_QUERY) opentelemetry_version) && \
-	export OTEL_CONTRIB_VERSION = v$(shell $(DISTROGEN_QUERY) opentelemetry_contrib_version) && \
+	export OTEL_VERSION=v$(shell $(DISTROGEN_QUERY) opentelemetry_version) && \
+	export OTEL_CONTRIB_VERSION=v$(shell $(DISTROGEN_QUERY) opentelemetry_contrib_version) && \
 	export PATH="$(TOOLS_DIR):${PATH}" && \
 	cd components && \
 	$(MAKE) update-components
@@ -70,15 +71,12 @@ GEN_OTEL = $(DISTROGEN_BIN) generate --spec $(SPEC_FILE) \
 gen: distrogen
 	@$(GEN_OTEL)
 
-
 .PHONY: regen
 regen: distrogen
 	@$(GEN_OTEL) --force
 
-
 regen-v: distrogen
 	@$(GEN_OTEL) --force -v
-
 
 ###########
 # Workspace

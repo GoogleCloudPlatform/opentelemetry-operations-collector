@@ -41,11 +41,10 @@ const (
 	ToolsDir = ".tools"
 
 	DefaultPrereleaseIdentifier = "hotfix"
-	VersionRegexPattern         = `^(\d+\.\d+\.\d+)(?:-([^.]+)\.(\d+))?$`
 )
 
 var (
-	VersionRegex = regexp.MustCompile(VersionRegexPattern)
+	VersionRegex = regexp.MustCompile(`^(\d+\.\d+\.\d+)(?:-([^.]+)\.(\d+))?$`)
 )
 
 const (
@@ -89,7 +88,7 @@ type DistributionSpec struct {
 	VendorDependencies          bool                    `yaml:"vendor_dependencies,omitempty"`
 
 	// CollectorCGO determines whether the Collector will be built with CGO.
-	CollectorCGO        bool   `yaml:"collector_cgo,omitempty"`
+	CollectorCGO         bool   `yaml:"collector_cgo,omitempty"`
 	ComponentModuleBase  string `yaml:"component_module_base"`
 	DistrogenVersion     string `yaml:"distrogen_version"`
 	PrereleaseIdentifier string `yaml:"prerelease_identifier,omitempty"`

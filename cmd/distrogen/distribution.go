@@ -833,3 +833,19 @@ func clearStyle(n *yaml.Node) {
 		clearStyle(c)
 	}
 }
+
+// BuildTagsList returns the build tags as a slice of strings, split by comma.
+func (s *DistributionSpec) BuildTagsList() []string {
+	if s.BuildTags == "" {
+		return nil
+	}
+	tags := strings.Split(s.BuildTags, ",")
+	var cleanTags []string
+	for _, t := range tags {
+		t = strings.TrimSpace(t)
+		if t != "" {
+			cleanTags = append(cleanTags, t)
+		}
+	}
+	return cleanTags
+}

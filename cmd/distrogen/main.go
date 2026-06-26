@@ -94,6 +94,7 @@ func createCommandRunner() *command.Runner {
 	runner.Register("project", newProjectCommand())
 	runner.Register("component", newComponentCommand())
 	runner.Register("registry", newRegistryCommand())
+	runner.Register("update-spec", newUpdateSpecCommand())
 
 	return runner
 }
@@ -389,4 +390,57 @@ func (cmd *registryCommand) Run() error {
 	generator := NewComponentsRegistryGenerator()
 
 	return generator.Generate()
+}
+
+type updateSpecCommand struct {
+	flags flag.FlagSet
+
+	spec  *string
+	field *string
+	value *string
+	stdin *bool
+}
+
+func newUpdateSpecCommand() *updateSpecCommand {
+	cmd := &updateSpecCommand{}
+	cmd.spec = setSpecFlag(&cmd.flags)
+	cmd.field = cmd.flags.String("field", "", "Field to update in the spec")
+	cmd.value = cmd.flags.String("value", "", "New value for the field")
+	cmd.stdin = cmd.flags.Bool("stdin", false, "Read JSON value from stdin")
+	return cmd
+}
+
+func (cmd *updateSpecCommand) ParseArgs(args []string) error {
+	return cmd.flags.Parse(args)
+}
+
+func (cmd *updateSpecCommand) Usage() string {
+	return cmd.flags.FlagUsages()
+}
+
+func (cmd *updateSpecCommand) Run() error {
+	if *cmd.spec == "" {
+		return errNoSpecFlag
+	}
+	if *cmd.field == "" {
+		return errors.New("missing --field flag")
+	}
+
+	var valBytes []byte
+	var isStdin bool
+	if *cmd.stdin {
+		isStdin = true
+		b, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return fmt.Errorf("failed to read from stdin: %w", err)
+		}
+		valBytes = b
+	} else {
+		if *cmd.value == "" {
+			return errors.New("missing --value flag (or --stdin)")
+		}
+		valBytes = []byte(*cmd.value)
+	}
+
+	return UpdateDistributionSpecFile(*cmd.spec, *cmd.field, valBytes, isStdin)
 }

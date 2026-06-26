@@ -1,0 +1,5 @@
+name: invalid field name error
+field: invalid_field
+value: value
+initial_content: 'go_version: 1.22.0'
+expected_error: is not a valid spec field

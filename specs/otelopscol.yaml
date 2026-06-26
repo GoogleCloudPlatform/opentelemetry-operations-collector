@@ -23,7 +23,7 @@ binary_name: otelopscol
 build_container: debian
 collector_cgo: true
 go_version: 1.26.4
-build_tags: gpu
+build_tags: gpu,remove_all_sd,enable_gce_sd,enable_kubernetes_sd
 
 components:
   receivers:

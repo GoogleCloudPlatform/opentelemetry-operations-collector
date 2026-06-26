@@ -12,7 +12,7 @@ COLLECTOR_BUILD_TEMP_DIR = $(PWD)/_build
 COLLECTOR_BUILD_DIR = $(PWD)/_build
 COLLECTOR_CGO = 1
 COLLECTOR_BUILDVCS ?= false
-COLLECTOR_BUILD_TAGS ?= gpu
+COLLECTOR_BUILD_TAGS ?= gpu,remove_all_sd,enable_gce_sd,enable_kubernetes_sd
 
 DOCKER_LOCAL_IMAGE_TAG ?= $(COLLECTOR_BINARY_NAME)
 DOCKER_IMAGE_TAG = $(DOCKER_REPO)/$(COLLECTOR_BINARY_NAME):$(VERSION)
@@ -117,19 +117,25 @@ endif
 # Unconditionally build a new collector.
 .PHONY: collector-build
 collector-build: clean-collector $(COLLECTOR_BINARY_NAME)
+MODULE_UPDATE ?= true
+
+
 
 # If the COLLECTOR_BUILD_DIR is set to the permanent OCB directory
 # value, then this will ensure that the permanent OCB directory is
 # not updated. If COLLECTOR_BUILD_DIR is set to the same value as
 # COLLECTOR_BUILD_TEMP_DIR, then the OCB directory will be regenerated
 # since the collector build target will always clean up the _build directory.
-$(COLLECTOR_BUILD_DIR):
-	$(MAKE) ocb-generate
-
+#
+# This target is to ensure that if the target does not yet exist, OCB will
+# be run while also getting go modules. We have to guarantee this is done the
+# first time you generate the directory.
+$(COLLECTOR_BUILD_DIR): $(OCB_BIN)
+	$(GO_COMMAND_ENV) $(OCB_BIN) --skip-compilation --verbose --config manifest.yaml
 
 .PHONY: ocb-generate
-ocb-generate: $(OCB_BIN)
-	$(GO_COMMAND_ENV) $(OCB_BIN) --skip-compilation --verbose --config manifest.yaml
+ocb-generate: $(OCB_BIN) $(COLLECTOR_BUILD_DIR)
+	$(GO_COMMAND_ENV) $(OCB_BIN) --skip-compilation $(if $(MODULE_UPDATE),,--skip-get-modules) --verbose --config manifest.yaml
 
 
 COLLECTOR_LD_FLAGS ?=

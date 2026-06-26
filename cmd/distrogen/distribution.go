@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"github.com/google/go-cmp/cmp"
+	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -645,4 +646,154 @@ func copyDir(src, dst string) error {
 
 		return nil
 	})
+}
+
+func UpdateDistributionSpecFile(path string, fieldPath string, valueBytes []byte, isStdin bool) error {
+	fieldParts := strings.Split(fieldPath, "::")
+
+	specStruct := &DistributionSpec{}
+	v := reflect.ValueOf(specStruct).Elem()
+	t := v.Type()
+
+	if err := validateSpecFieldPath(t, fieldParts, fieldPath); err != nil {
+		return err
+	}
+
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	var node yaml.Node
+	if err := yaml.Unmarshal(content, &node); err != nil {
+		return err
+	}
+
+	if len(node.Content) == 0 || node.Content[0].Kind != yaml.MappingNode {
+		return errors.New("invalid spec yaml format")
+	}
+
+	inputNode, err := createInputNode(valueBytes, isStdin)
+	if err != nil {
+		return err
+	}
+
+	targetNode, err := findTargetYamlNode(node.Content[0], fieldParts, path)
+	if err != nil {
+		return err
+	}
+
+	if targetNode.Kind == yaml.SequenceNode {
+		targetNode.Content = append(targetNode.Content, inputNode)
+	} else {
+		*targetNode = *inputNode
+	}
+
+	clearStyle(&node)
+
+	out, err := yaml.Marshal(&node)
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(path, out, DefaultFileMode)
+}
+
+func validateSpecFieldPath(t reflect.Type, fieldParts []string, fullPath string) error {
+	currentType := t
+	for _, part := range fieldParts {
+		if currentType.Kind() == reflect.Ptr {
+			currentType = currentType.Elem()
+		}
+		if currentType.Kind() != reflect.Struct {
+			return fmt.Errorf("field '%s' is not a valid spec field", fullPath)
+		}
+
+		found := false
+		for i := 0; i < currentType.NumField(); i++ {
+			f := currentType.Field(i)
+			yamlTag := f.Tag.Get("yaml")
+			tagName := strings.Split(yamlTag, ",")[0]
+			if tagName == part {
+				if tagName == "-" {
+					return fmt.Errorf("field '%s' cannot be updated", fullPath)
+				}
+				currentType = f.Type
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("field '%s' is not a valid spec field", fullPath)
+		}
+	}
+	return nil
+}
+
+func createInputNode(valueBytes []byte, isStdin bool) (*yaml.Node, error) {
+	if isStdin {
+		var docNode yaml.Node
+		if err := yaml.Unmarshal(valueBytes, &docNode); err != nil {
+			return nil, fmt.Errorf("failed to parse stdin value: %w", err)
+		}
+		if len(docNode.Content) == 0 {
+			return nil, errors.New("empty stdin value")
+		}
+		return docNode.Content[0], nil
+	}
+	return &yaml.Node{
+		Kind:  yaml.ScalarNode,
+		Value: string(valueBytes),
+	}, nil
+}
+
+func findTargetYamlNode(currentNode *yaml.Node, fieldParts []string, path string) (*yaml.Node, error) {
+	var targetNode *yaml.Node
+
+	for partIndex, part := range fieldParts {
+		if currentNode.Kind != yaml.MappingNode {
+			return nil, fmt.Errorf("node at '%s' is not a mapping", part)
+		}
+
+		found := false
+		for i := 0; i < len(currentNode.Content); i += 2 {
+			if currentNode.Content[i].Value == part {
+				found = true
+				if partIndex == len(fieldParts)-1 {
+					targetNode = currentNode.Content[i+1]
+				} else {
+					currentNode = currentNode.Content[i+1]
+				}
+				break
+			}
+		}
+
+		if !found {
+			return nil, fmt.Errorf("field '%s' not found in %s", part, path)
+		}
+	}
+	return targetNode, nil
+}
+
+func clearStyle(n *yaml.Node) {
+	n.Style = 0
+	for _, c := range n.Content {
+		clearStyle(c)
+	}
+}
+
+// BuildTagsList returns the build tags as a slice of strings, split by comma.
+func (s *DistributionSpec) BuildTagsList() []string {
+	if s.BuildTags == "" {
+		return nil
+	}
+	tags := strings.Split(s.BuildTags, ",")
+	var cleanTags []string
+	for _, t := range tags {
+		t = strings.TrimSpace(t)
+		if t != "" {
+			cleanTags = append(cleanTags, t)
+		}
+	}
+	return cleanTags
 }

@@ -72,3 +72,9 @@ replaces:
 # Force update buger/jsonparser to v1.1.2 to fix vulnerability
 - github.com/buger/jsonparser => github.com/buger/jsonparser v1.1.2
 
+build:
+  build_tags:
+    - gpu
+    - remove_all_sd
+    - enable_gce_sd
+    - enable_kubernetes_sd

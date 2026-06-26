@@ -2,4 +2,4 @@ name: Default Identifier
 initial_content: |
     version: 0.137.0
 expected_output: |
-    version: 0.137.0-hotfix.0
+    version: 0.137.1-hotfix.0

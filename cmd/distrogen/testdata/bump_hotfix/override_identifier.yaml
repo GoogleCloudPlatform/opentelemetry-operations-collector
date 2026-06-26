@@ -4,5 +4,5 @@ initial_content: |
     version: 0.137.0-gke.0
     prerelease_identifier: gke
 expected_output: |
-    version: 0.137.0-foo.0
+    version: 0.137.1-foo.0
     prerelease_identifier: gke

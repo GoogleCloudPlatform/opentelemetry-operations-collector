@@ -741,7 +741,12 @@ func BumpHotfix(specPath string, identifierOverride string) error {
 		counter, _ := strconv.Atoi(counterStr)
 		newVersion = fmt.Sprintf("%s-%s.%d", core, identifier, counter+1)
 	} else {
-		newVersion = fmt.Sprintf("%s-%s.0", core, identifier)
+		coreParts := strings.Split(core, ".")
+		patch, err := strconv.Atoi(coreParts[2])
+		if err != nil {
+			return fmt.Errorf("invalid patch version: %s", coreParts[2])
+		}
+		newVersion = fmt.Sprintf("%s.%s.%d-%s.0", coreParts[0], coreParts[1], patch+1, identifier)
 	}
 
 	return UpdateDistributionSpecFile(specPath, "version", []byte(newVersion), false)

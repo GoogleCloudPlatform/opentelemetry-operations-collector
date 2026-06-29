@@ -103,6 +103,11 @@ regen: distrogen
 regen-v: distrogen
 	@$(GEN_OTEL) --force -v
 
+.PHONY: bump-hotfix
+bump-hotfix: distrogen
+	$(DISTROGEN_BIN) bump_hotfix --spec $(SPEC_FILE)
+	$(MAKE) gen
+
 ###########
 # Workspace
 ###########

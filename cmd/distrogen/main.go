@@ -112,8 +112,10 @@ func createCommandRunner() *command.Runner {
 	runner.Register("project", newProjectCommand())
 	runner.Register("component", newComponentCommand())
 	runner.Register("registry", newRegistryCommand())
-	runner.Register("update-spec", newUpdateSpecCommand())
 	runner.Register("version", newVersionCommand())
+	runner.Register("update_spec", newUpdateSpecCommand())
+	runner.Register("bump_hotfix", newBumpHotfixCommand())
+
 
 	return runner
 }
@@ -482,4 +484,34 @@ func (cmd *versionCommand) Usage() string {
 func (cmd *versionCommand) Run() error {
 	fmt.Println(Version)
 	return nil
+}
+
+type bumpHotfixCommand struct {
+	flags flag.FlagSet
+
+	spec                 *string
+	prereleaseIdentifier *string
+}
+
+func newBumpHotfixCommand() *bumpHotfixCommand {
+	cmd := &bumpHotfixCommand{}
+	cmd.spec = setSpecFlag(&cmd.flags)
+	cmd.prereleaseIdentifier = cmd.flags.String("prerelease-identifier", "", "Override the prerelease identifier")
+	return cmd
+}
+
+func (cmd *bumpHotfixCommand) ParseArgs(args []string) error {
+	return cmd.flags.Parse(args)
+}
+
+func (cmd *bumpHotfixCommand) Usage() string {
+	return cmd.flags.FlagUsages()
+}
+
+func (cmd *bumpHotfixCommand) Run() error {
+	if *cmd.spec == "" {
+		return errNoSpecFlag
+	}
+
+	return BumpHotfix(*cmd.spec, *cmd.prereleaseIdentifier)
 }

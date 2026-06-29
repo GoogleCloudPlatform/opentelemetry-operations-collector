@@ -111,6 +111,11 @@ regen-v: distrogen
 	@$(GEN_OTEL) --force -v
 	cd $(DISTRO_DIR) && make ocb-generate
 
+.PHONY: bump-hotfix
+bump-hotfix: distrogen
+	$(DISTROGEN_BIN) bump_hotfix --spec $(SPEC_FILE)
+	$(MAKE) gen
+
 ###########
 # Workspace
 ###########

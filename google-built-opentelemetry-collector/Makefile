@@ -3,8 +3,8 @@
 DISTRIBUTION_NAME = google-built-opentelemetry-collector
 
 # Variables filled in from distro specification
-VERSION = 0.154.0
-OTEL_VERSION = 0.154.0
+VERSION = 0.155.0
+OTEL_VERSION = 0.155.0
 OTEL_VERSION_TAG = v$(OTEL_VERSION)
 COLLECTOR_BINARY_NAME = otelcol-google
 COLLECTOR_BINARY_NAME_EXE = $(COLLECTOR_BINARY_NAME).exe

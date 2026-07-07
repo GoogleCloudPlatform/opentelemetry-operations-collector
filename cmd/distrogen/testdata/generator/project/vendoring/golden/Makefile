@@ -18,7 +18,7 @@ DISTRO_DIR = $(PWD)/basic-distro
 .PHONY: install-distrogen
 install-distrogen:
 	$(MAKE) tools-dir
-	GOBIN=$(TOOLS_DIR) go install github.com/GoogleCloudPlatform/opentelemetry-operations-collector/cmd/distrogen@$(DISTROGEN_VERSION)
+	GOBIN=$(TOOLS_DIR) go install github.com/GoogleCloudPlatform/opentelemetry-operations-collector/cmd/distrogen@$$(DISTROGEN_VERSION)
 
 $(DISTROGEN_BIN):
 	$(MAKE) install-distrogen

@@ -180,6 +180,90 @@ func TestMetricsBuilderConfig(t *testing.T) {
 	}
 }
 
+func TestGpuDcgmClockThrottleDurationTimeMetricsConfig_Validate(t *testing.T) {
+	cfg := DefaultMetricsConfig().GpuDcgmClockThrottleDurationTime
+	require.NoError(t, cfg.Validate())
+
+	cfg.EnabledAttributes = []GpuDcgmClockThrottleDurationTimeMetricAttributeKey{"invalid"}
+	require.ErrorContains(t, cfg.Validate(), "metric gpu.dcgm.clock.throttle_duration.time doesn't have an attribute invalid, valid attributes: [gpu.clock.violation]")
+
+	cfg = DefaultMetricsConfig().GpuDcgmClockThrottleDurationTime
+	cfg.AggregationStrategy = "invalid"
+	require.ErrorContains(t, cfg.Validate(), "invalid aggregation strategy")
+}
+
+func TestGpuDcgmEccErrorsMetricsConfig_Validate(t *testing.T) {
+	cfg := DefaultMetricsConfig().GpuDcgmEccErrors
+	require.NoError(t, cfg.Validate())
+
+	cfg.EnabledAttributes = []GpuDcgmEccErrorsMetricAttributeKey{"invalid"}
+	require.ErrorContains(t, cfg.Validate(), "metric gpu.dcgm.ecc_errors doesn't have an attribute invalid, valid attributes: [gpu.error.type]")
+
+	cfg = DefaultMetricsConfig().GpuDcgmEccErrors
+	cfg.AggregationStrategy = "invalid"
+	require.ErrorContains(t, cfg.Validate(), "invalid aggregation strategy")
+}
+
+func TestGpuDcgmMemoryBytesUsedMetricsConfig_Validate(t *testing.T) {
+	cfg := DefaultMetricsConfig().GpuDcgmMemoryBytesUsed
+	require.NoError(t, cfg.Validate())
+
+	cfg.EnabledAttributes = []GpuDcgmMemoryBytesUsedMetricAttributeKey{"invalid"}
+	require.ErrorContains(t, cfg.Validate(), "metric gpu.dcgm.memory.bytes_used doesn't have an attribute invalid, valid attributes: [gpu.memory.state]")
+
+	cfg = DefaultMetricsConfig().GpuDcgmMemoryBytesUsed
+	cfg.AggregationStrategy = "invalid"
+	require.ErrorContains(t, cfg.Validate(), "invalid aggregation strategy")
+}
+
+func TestGpuDcgmNvlinkIoMetricsConfig_Validate(t *testing.T) {
+	cfg := DefaultMetricsConfig().GpuDcgmNvlinkIo
+	require.NoError(t, cfg.Validate())
+
+	cfg.EnabledAttributes = []GpuDcgmNvlinkIoMetricAttributeKey{"invalid"}
+	require.ErrorContains(t, cfg.Validate(), "metric gpu.dcgm.nvlink.io doesn't have an attribute invalid, valid attributes: [network.io.direction]")
+
+	cfg = DefaultMetricsConfig().GpuDcgmNvlinkIo
+	cfg.AggregationStrategy = "invalid"
+	require.ErrorContains(t, cfg.Validate(), "invalid aggregation strategy")
+}
+
+func TestGpuDcgmPcieIoMetricsConfig_Validate(t *testing.T) {
+	cfg := DefaultMetricsConfig().GpuDcgmPcieIo
+	require.NoError(t, cfg.Validate())
+
+	cfg.EnabledAttributes = []GpuDcgmPcieIoMetricAttributeKey{"invalid"}
+	require.ErrorContains(t, cfg.Validate(), "metric gpu.dcgm.pcie.io doesn't have an attribute invalid, valid attributes: [network.io.direction]")
+
+	cfg = DefaultMetricsConfig().GpuDcgmPcieIo
+	cfg.AggregationStrategy = "invalid"
+	require.ErrorContains(t, cfg.Validate(), "invalid aggregation strategy")
+}
+
+func TestGpuDcgmPipeUtilizationMetricsConfig_Validate(t *testing.T) {
+	cfg := DefaultMetricsConfig().GpuDcgmPipeUtilization
+	require.NoError(t, cfg.Validate())
+
+	cfg.EnabledAttributes = []GpuDcgmPipeUtilizationMetricAttributeKey{"invalid"}
+	require.ErrorContains(t, cfg.Validate(), "metric gpu.dcgm.pipe.utilization doesn't have an attribute invalid, valid attributes: [gpu.pipe]")
+
+	cfg = DefaultMetricsConfig().GpuDcgmPipeUtilization
+	cfg.AggregationStrategy = "invalid"
+	require.ErrorContains(t, cfg.Validate(), "invalid aggregation strategy")
+}
+
+func TestGpuDcgmXidErrorsMetricsConfig_Validate(t *testing.T) {
+	cfg := DefaultMetricsConfig().GpuDcgmXidErrors
+	require.NoError(t, cfg.Validate())
+
+	cfg.EnabledAttributes = []GpuDcgmXidErrorsMetricAttributeKey{"invalid"}
+	require.ErrorContains(t, cfg.Validate(), "metric gpu.dcgm.xid_errors doesn't have an attribute invalid, valid attributes: [gpu.error.xid]")
+
+	cfg = DefaultMetricsConfig().GpuDcgmXidErrors
+	cfg.AggregationStrategy = "invalid"
+	require.ErrorContains(t, cfg.Validate(), "invalid aggregation strategy")
+}
+
 func loadMetricsBuilderConfig(t *testing.T, name string) MetricsBuilderConfig {
 	cm, err := confmaptest.LoadConf(filepath.Join("testdata", "config.yaml"))
 	require.NoError(t, err)

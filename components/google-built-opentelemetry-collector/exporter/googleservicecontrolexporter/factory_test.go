@@ -33,6 +33,8 @@ import (
 	"go.opentelemetry.io/collector/otelcol/otelcoltest"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	grpcmd "google.golang.org/grpc/metadata"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter/internal/metadata"
@@ -429,5 +431,25 @@ func TestCreateClientUserAgent(t *testing.T) {
 				assert.Equal(t, expected, got[0], "user-agent header mismatch")
 			}
 		})
+	}
+}
+
+type mockBundle struct{}
+
+func (mockBundle) TransportCredentials() credentials.TransportCredentials {
+	return insecure.NewCredentials()
+}
+
+func (mockBundle) PerRPCCredentials() credentials.PerRPCCredentials {
+	return nil
+}
+
+func (b mockBundle) NewWithMode(mode string) (credentials.Bundle, error) {
+	return b, nil
+}
+
+func init() {
+	getCredentials = func(ctx context.Context, impersonateAccount string) (credentials.Bundle, error) {
+		return mockBundle{}, nil
 	}
 }

@@ -3,13 +3,12 @@
 package metadata
 
 import (
-	"slices"
-	"time"
-
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/receiver"
+	"slices"
+	"time"
 )
 
 const (
@@ -47,16 +46,20 @@ var MapAttributeMemoryState = map[string]AttributeMemoryState{
 
 var MetricsInfo = metricsInfo{
 	NvmlGpuMemoryBytesUsed: metricInfo{
-		Name: "nvml.gpu.memory.bytes_used",
+		Name:       "nvml.gpu.memory.bytes_used",
+		Attributes: []string{"model", "gpu_number", "uuid", "memory_state"},
 	},
 	NvmlGpuProcessesMaxBytesUsed: metricInfo{
-		Name: "nvml.gpu.processes.max_bytes_used",
+		Name:       "nvml.gpu.processes.max_bytes_used",
+		Attributes: []string{"model", "gpu_number", "uuid", "pid", "process", "command", "command_line", "owner"},
 	},
 	NvmlGpuProcessesUtilization: metricInfo{
-		Name: "nvml.gpu.processes.utilization",
+		Name:       "nvml.gpu.processes.utilization",
+		Attributes: []string{"model", "gpu_number", "uuid", "pid", "process", "command", "command_line", "owner"},
 	},
 	NvmlGpuUtilization: metricInfo{
-		Name: "nvml.gpu.utilization",
+		Name:       "nvml.gpu.utilization",
+		Attributes: []string{"model", "gpu_number", "uuid"},
 	},
 }
 
@@ -68,7 +71,8 @@ type metricsInfo struct {
 }
 
 type metricInfo struct {
-	Name string
+	Name       string
+	Attributes []string
 }
 
 type metricNvmlGpuMemoryBytesUsed struct {
@@ -102,7 +106,7 @@ func (m *metricNvmlGpuMemoryBytesUsed) recordDataPoint(start pcommon.Timestamp, 
 	if slices.Contains(m.config.EnabledAttributes, NvmlGpuMemoryBytesUsedMetricAttributeKeyGpuNumber) {
 		dp.Attributes().PutStr("gpu_number", gpuNumberAttributeValue)
 	}
-	if slices.Contains(m.config.EnabledAttributes, NvmlGpuMemoryBytesUsedMetricAttributeKeyUuid) {
+	if slices.Contains(m.config.EnabledAttributes, NvmlGpuMemoryBytesUsedMetricAttributeKeyUUID) {
 		dp.Attributes().PutStr("uuid", uuidAttributeValue)
 	}
 	if slices.Contains(m.config.EnabledAttributes, NvmlGpuMemoryBytesUsedMetricAttributeKeyMemoryState) {
@@ -200,7 +204,7 @@ func (m *metricNvmlGpuProcessesMaxBytesUsed) recordDataPoint(start pcommon.Times
 	if slices.Contains(m.config.EnabledAttributes, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyGpuNumber) {
 		dp.Attributes().PutStr("gpu_number", gpuNumberAttributeValue)
 	}
-	if slices.Contains(m.config.EnabledAttributes, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyUuid) {
+	if slices.Contains(m.config.EnabledAttributes, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyUUID) {
 		dp.Attributes().PutStr("uuid", uuidAttributeValue)
 	}
 	if slices.Contains(m.config.EnabledAttributes, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyPid) {
@@ -310,7 +314,7 @@ func (m *metricNvmlGpuProcessesUtilization) recordDataPoint(start pcommon.Timest
 	if slices.Contains(m.config.EnabledAttributes, NvmlGpuProcessesUtilizationMetricAttributeKeyGpuNumber) {
 		dp.Attributes().PutStr("gpu_number", gpuNumberAttributeValue)
 	}
-	if slices.Contains(m.config.EnabledAttributes, NvmlGpuProcessesUtilizationMetricAttributeKeyUuid) {
+	if slices.Contains(m.config.EnabledAttributes, NvmlGpuProcessesUtilizationMetricAttributeKeyUUID) {
 		dp.Attributes().PutStr("uuid", uuidAttributeValue)
 	}
 	if slices.Contains(m.config.EnabledAttributes, NvmlGpuProcessesUtilizationMetricAttributeKeyPid) {
@@ -420,7 +424,7 @@ func (m *metricNvmlGpuUtilization) recordDataPoint(start pcommon.Timestamp, ts p
 	if slices.Contains(m.config.EnabledAttributes, NvmlGpuUtilizationMetricAttributeKeyGpuNumber) {
 		dp.Attributes().PutStr("gpu_number", gpuNumberAttributeValue)
 	}
-	if slices.Contains(m.config.EnabledAttributes, NvmlGpuUtilizationMetricAttributeKeyUuid) {
+	if slices.Contains(m.config.EnabledAttributes, NvmlGpuUtilizationMetricAttributeKeyUUID) {
 		dp.Attributes().PutStr("uuid", uuidAttributeValue)
 	}
 

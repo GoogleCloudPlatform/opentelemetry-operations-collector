@@ -21,3 +21,10 @@ providers:
 {{ .Providers.RenderOCBComponents }}
 replaces:
 {{ .Replaces.Render }}
+{{- if .BuildTagsList }}
+build:
+  build_tags:
+    {{- range .BuildTagsList }}
+    - {{ . }}
+    {{- end }}
+{{- end }}

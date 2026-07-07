@@ -141,6 +141,77 @@ func TestMetricsBuilderConfig(t *testing.T) {
 		})
 	}
 }
+func TestVarnishBackendConnectionCountMetricsConfig_Validate(t *testing.T) {
+	cfg := DefaultMetricsConfig().VarnishBackendConnectionCount
+	require.NoError(t, cfg.Validate())
+
+	cfg.EnabledAttributes = []VarnishBackendConnectionCountMetricAttributeKey{"invalid"}
+	require.ErrorContains(t, cfg.Validate(), "metric varnish.backend.connection.count doesn't have an attribute invalid, valid attributes: [kind]")
+
+	cfg = DefaultMetricsConfig().VarnishBackendConnectionCount
+	cfg.AggregationStrategy = "invalid"
+	require.ErrorContains(t, cfg.Validate(), "invalid aggregation strategy")
+}
+
+func TestVarnishCacheOperationCountMetricsConfig_Validate(t *testing.T) {
+	cfg := DefaultMetricsConfig().VarnishCacheOperationCount
+	require.NoError(t, cfg.Validate())
+
+	cfg.EnabledAttributes = []VarnishCacheOperationCountMetricAttributeKey{"invalid"}
+	require.ErrorContains(t, cfg.Validate(), "metric varnish.cache.operation.count doesn't have an attribute invalid, valid attributes: [operation]")
+
+	cfg = DefaultMetricsConfig().VarnishCacheOperationCount
+	cfg.AggregationStrategy = "invalid"
+	require.ErrorContains(t, cfg.Validate(), "invalid aggregation strategy")
+}
+
+func TestVarnishClientRequestCountMetricsConfig_Validate(t *testing.T) {
+	cfg := DefaultMetricsConfig().VarnishClientRequestCount
+	require.NoError(t, cfg.Validate())
+
+	cfg.EnabledAttributes = []VarnishClientRequestCountMetricAttributeKey{"invalid"}
+	require.ErrorContains(t, cfg.Validate(), "metric varnish.client.request.count doesn't have an attribute invalid, valid attributes: [state]")
+
+	cfg = DefaultMetricsConfig().VarnishClientRequestCount
+	cfg.AggregationStrategy = "invalid"
+	require.ErrorContains(t, cfg.Validate(), "invalid aggregation strategy")
+}
+
+func TestVarnishClientRequestErrorCountMetricsConfig_Validate(t *testing.T) {
+	cfg := DefaultMetricsConfig().VarnishClientRequestErrorCount
+	require.NoError(t, cfg.Validate())
+
+	cfg.EnabledAttributes = []VarnishClientRequestErrorCountMetricAttributeKey{"invalid"}
+	require.ErrorContains(t, cfg.Validate(), "metric varnish.client.request.error.count doesn't have an attribute invalid, valid attributes: [status_code]")
+
+	cfg = DefaultMetricsConfig().VarnishClientRequestErrorCount
+	cfg.AggregationStrategy = "invalid"
+	require.ErrorContains(t, cfg.Validate(), "invalid aggregation strategy")
+}
+
+func TestVarnishSessionCountMetricsConfig_Validate(t *testing.T) {
+	cfg := DefaultMetricsConfig().VarnishSessionCount
+	require.NoError(t, cfg.Validate())
+
+	cfg.EnabledAttributes = []VarnishSessionCountMetricAttributeKey{"invalid"}
+	require.ErrorContains(t, cfg.Validate(), "metric varnish.session.count doesn't have an attribute invalid, valid attributes: [kind]")
+
+	cfg = DefaultMetricsConfig().VarnishSessionCount
+	cfg.AggregationStrategy = "invalid"
+	require.ErrorContains(t, cfg.Validate(), "invalid aggregation strategy")
+}
+
+func TestVarnishThreadOperationCountMetricsConfig_Validate(t *testing.T) {
+	cfg := DefaultMetricsConfig().VarnishThreadOperationCount
+	require.NoError(t, cfg.Validate())
+
+	cfg.EnabledAttributes = []VarnishThreadOperationCountMetricAttributeKey{"invalid"}
+	require.ErrorContains(t, cfg.Validate(), "metric varnish.thread.operation.count doesn't have an attribute invalid, valid attributes: [operation]")
+
+	cfg = DefaultMetricsConfig().VarnishThreadOperationCount
+	cfg.AggregationStrategy = "invalid"
+	require.ErrorContains(t, cfg.Validate(), "invalid aggregation strategy")
+}
 
 func loadMetricsBuilderConfig(t *testing.T, name string) MetricsBuilderConfig {
 	cm, err := confmaptest.LoadConf(filepath.Join("testdata", "config.yaml"))

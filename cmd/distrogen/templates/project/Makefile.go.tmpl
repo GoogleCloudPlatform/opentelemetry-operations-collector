@@ -17,11 +17,12 @@ DISTRO_DIR = $(PWD)/{{ .Spec.Name }}
 
 .PHONY: install-distrogen
 install-distrogen:
-	$(MAKE) tools-dir
-	GOBIN=$(TOOLS_DIR) go install github.com/GoogleCloudPlatform/opentelemetry-operations-collector/cmd/distrogen@$$(DISTROGEN_VERSION)
+	@$(MAKE) tools-dir
+	@echo "Installing distrogen at version $${DISTROGEN_VERSION}..."
+	@GOBIN=$(TOOLS_DIR) go install github.com/GoogleCloudPlatform/opentelemetry-operations-collector/cmd/distrogen@$${DISTROGEN_VERSION}
 
 $(DISTROGEN_BIN):
-	$(MAKE) install-distrogen
+	@DISTROGEN_VERSION=latest $(MAKE) install-distrogen
 
 # This phony target does a version comparison with the distrogen binary
 # installed at DISTROGEN_BIN and the version of distrogen that the spec is asking for.
@@ -30,17 +31,18 @@ $(DISTROGEN_BIN):
 # to use a specific distrogen binary if you've built it yourself.
 .phony: distrogen
 distrogen: $(DISTROGEN_BIN)
-	INSTALLED_DISTROGEN_VERSION=$$($(DISTROGEN_BIN) version) && \
-	DISTROGEN_VERSION=$$($(DISTROGEN_QUERY) distrogen_version) && \
+	@export INSTALLED_DISTROGEN_VERSION=$$($(DISTROGEN_BIN) version) && \
+	export DISTROGEN_VERSION=$$($(DISTROGEN_QUERY) distrogen_version) && \
 	if [ -z "$(FORCE_DISTROGEN_VERSION)" ] && \
 		[ "$${DISTROGEN_VERSION}" != "$${INSTALLED_DISTROGEN_VERSION}" ]; then \
+		echo "Detected out of date distrogen version. Installing $${DISTROGEN_VERSION}"; \
 		$(MAKE) install-distrogen; \
 	fi
 
 .PHONY: mdatagen
 mdatagen:
-	$(MAKE) tools-dir
-	export OTEL_VERSION=v$(shell $(DISTROGEN_QUERY) opentelemetry_version) && \
+	@$(MAKE) tools-dir
+	@export OTEL_VERSION=v$(shell $(DISTROGEN_QUERY) opentelemetry_version) && \
 	GOBIN=$(TOOLS_DIR) bash ./scripts/download_mdatagen.sh $${OTEL_VERSION}
 
 # This is a PHONY target cause if you make it as a normal recipe
@@ -49,9 +51,6 @@ mdatagen:
 .PHONY: tools-dir
 tools-dir:
 	@mkdir -p $(TOOLS_DIR)
-
-.PHONY: distrogen
-distrogen: $(DISTROGEN_BIN)
 
 ##########################
 # Updating OTel Components

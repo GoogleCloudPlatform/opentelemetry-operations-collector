@@ -40,6 +40,9 @@ components:
         - googlecloudmonitoring
         - googlecloudpubsub
         - tcplog
+        - windowseventlog
+        - iis
+        - windowsperfcounters
     processors:
         - batch
         - memorylimiter

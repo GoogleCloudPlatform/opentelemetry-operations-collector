@@ -15,6 +15,7 @@ receivers:
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/googlecloudpubsubreceiver v0.156.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver v0.156.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/httpcheckreceiver v0.156.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/iisreceiver v0.156.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jaegerreceiver v0.156.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver v0.156.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/journaldreceiver v0.156.0
@@ -31,6 +32,8 @@ receivers:
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/statsdreceiver v0.156.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/syslogreceiver v0.156.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/tcplogreceiver v0.156.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowseventlogreceiver v0.156.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowsperfcountersreceiver v0.156.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/zipkinreceiver v0.156.0
 - gomod: go.opentelemetry.io/collector/receiver/otlpreceiver v0.156.0
 

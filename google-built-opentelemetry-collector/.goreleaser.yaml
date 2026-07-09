@@ -38,6 +38,19 @@ builds:
       - "-trimpath"
       - "-buildvcs=false"
 
+  - id: otelcol-google-darwin
+    goos:
+      - darwin
+    goarch:
+      - arm64
+    binary: otelcol-google
+    dir: generated_collector
+    ldflags:
+      - "-s -w"
+    flags:
+      - "-trimpath"
+      - "-buildvcs=false"
+
 nfpms:
   - package_name: otelcol-google
     contents:
@@ -76,6 +89,7 @@ archives:
     ids:
       - "otelcol-google-linux"
       - "otelcol-google-windows"
+      - "otelcol-google-darwin"
     formats:
       - "tar.gz"
     name_template: "otelcol-google_{{ .Version }}_{{ .Os }}_{{ .Arch }}"

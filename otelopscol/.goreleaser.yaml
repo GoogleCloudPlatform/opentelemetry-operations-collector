@@ -38,6 +38,19 @@ builds:
       - "-trimpath"
       - "-buildvcs=false"
 
+  - id: otelopscol-darwin
+    goos:
+      - darwin
+    goarch:
+      - arm64
+    binary: otelopscol
+    dir: _build
+    ldflags:
+      - "-s -w"
+    flags:
+      - "-trimpath"
+      - "-buildvcs=false"
+
 nfpms:
   - package_name: otelopscol
     contents:
@@ -76,6 +89,7 @@ archives:
     ids:
       - "otelopscol-linux"
       - "otelopscol-windows"
+      - "otelopscol-darwin"
     formats:
       - "tar.gz"
     name_template: "otelopscol_{{ .Version }}_{{ .Os }}_{{ .Arch }}"

@@ -24,18 +24,16 @@ import (
 	"gotest.tools/v3/assert"
 )
 
-type updateSpecTestCase struct {
-	Name           string `yaml:"name"`
-	Field          string `yaml:"field"`
-	IsStdin        bool   `yaml:"is_stdin,omitempty"`
-	Value          string `yaml:"value"`
-	InitialContent string `yaml:"initial_content"`
-	ExpectedOutput string `yaml:"expected_output"`
-	ExpectedError  string `yaml:"expected_error"`
+type bumpHotfixTestCase struct {
+	Name               string `yaml:"name"`
+	IdentifierOverride string `yaml:"identifier_override,omitempty"`
+	InitialContent     string `yaml:"initial_content"`
+	ExpectedOutput     string `yaml:"expected_output"`
+	ExpectedError      string `yaml:"expected_error,omitempty"`
 }
 
-func TestUpdateDistributionSpecFile(t *testing.T) {
-	testdataDir := filepath.Join("testdata", "update_spec")
+func TestBumpHotfix(t *testing.T) {
+	testdataDir := filepath.Join("testdata", "bump_hotfix")
 	files, err := os.ReadDir(testdataDir)
 	assert.NilError(t, err)
 
@@ -48,7 +46,7 @@ func TestUpdateDistributionSpecFile(t *testing.T) {
 		content, err := os.ReadFile(filePath)
 		assert.NilError(t, err)
 
-		var tc updateSpecTestCase
+		var tc bumpHotfixTestCase
 		err = yaml.Unmarshal(content, &tc)
 		assert.NilError(t, err)
 
@@ -60,7 +58,7 @@ func TestUpdateDistributionSpecFile(t *testing.T) {
 			err := os.WriteFile(specPath, []byte(tc.InitialContent), 0644)
 			assert.NilError(t, err)
 
-			err = UpdateDistributionSpecFile(specPath, tc.Field, []byte(tc.Value), tc.IsStdin)
+			err = BumpHotfix(specPath, tc.IdentifierOverride)
 			if tc.ExpectedError != "" {
 				assert.ErrorContains(t, err, tc.ExpectedError)
 				return
@@ -71,7 +69,7 @@ func TestUpdateDistributionSpecFile(t *testing.T) {
 			assert.NilError(t, err)
 
 			if diff := cmp.Diff(tc.ExpectedOutput, string(updatedContent)); diff != "" {
-				t.Errorf("UpdateDistributionSpecFile() mismatch (-want +got):\n%s", diff)
+				t.Errorf("BumpHotfix() mismatch (-want +got):\n%s", diff)
 			}
 		})
 	}

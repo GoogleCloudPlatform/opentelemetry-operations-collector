@@ -3,14 +3,13 @@
 package metadata
 
 import (
-	"slices"
-	"time"
-
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/filter"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/receiver"
+	"slices"
+	"time"
 )
 
 const (
@@ -230,13 +229,16 @@ var MapAttributeType = map[string]AttributeType{
 
 var MetricsInfo = metricsInfo{
 	MongodbCacheOperations: metricInfo{
-		Name: "mongodb.cache.operations",
+		Name:       "mongodb.cache.operations",
+		Attributes: []string{"type"},
 	},
 	MongodbCollectionCount: metricInfo{
-		Name: "mongodb.collection.count",
+		Name:       "mongodb.collection.count",
+		Attributes: []string{"database"},
 	},
 	MongodbConnectionCount: metricInfo{
-		Name: "mongodb.connection.count",
+		Name:       "mongodb.connection.count",
+		Attributes: []string{"database", "connection_type"},
 	},
 	MongodbCursorCount: metricInfo{
 		Name: "mongodb.cursor.count",
@@ -245,43 +247,54 @@ var MetricsInfo = metricsInfo{
 		Name: "mongodb.cursor.timeout.count",
 	},
 	MongodbDataSize: metricInfo{
-		Name: "mongodb.data.size",
+		Name:       "mongodb.data.size",
+		Attributes: []string{"database"},
 	},
 	MongodbDatabaseCount: metricInfo{
 		Name: "mongodb.database.count",
 	},
 	MongodbDocumentOperationCount: metricInfo{
-		Name: "mongodb.document.operation.count",
+		Name:       "mongodb.document.operation.count",
+		Attributes: []string{"database", "operation"},
 	},
 	MongodbExtentCount: metricInfo{
-		Name: "mongodb.extent.count",
+		Name:       "mongodb.extent.count",
+		Attributes: []string{"database"},
 	},
 	MongodbGlobalLockTime: metricInfo{
 		Name: "mongodb.global_lock.time",
 	},
 	MongodbIndexAccessCount: metricInfo{
-		Name: "mongodb.index.access.count",
+		Name:       "mongodb.index.access.count",
+		Attributes: []string{"database", "collection"},
 	},
 	MongodbIndexCount: metricInfo{
-		Name: "mongodb.index.count",
+		Name:       "mongodb.index.count",
+		Attributes: []string{"database"},
 	},
 	MongodbIndexSize: metricInfo{
-		Name: "mongodb.index.size",
+		Name:       "mongodb.index.size",
+		Attributes: []string{"database"},
 	},
 	MongodbLockAcquireCount: metricInfo{
-		Name: "mongodb.lock.acquire.count",
+		Name:       "mongodb.lock.acquire.count",
+		Attributes: []string{"database", "lock_type", "lock_mode"},
 	},
 	MongodbLockAcquireTime: metricInfo{
-		Name: "mongodb.lock.acquire.time",
+		Name:       "mongodb.lock.acquire.time",
+		Attributes: []string{"database", "lock_type", "lock_mode"},
 	},
 	MongodbLockAcquireWaitCount: metricInfo{
-		Name: "mongodb.lock.acquire.wait_count",
+		Name:       "mongodb.lock.acquire.wait_count",
+		Attributes: []string{"database", "lock_type", "lock_mode"},
 	},
 	MongodbLockDeadlockCount: metricInfo{
-		Name: "mongodb.lock.deadlock.count",
+		Name:       "mongodb.lock.deadlock.count",
+		Attributes: []string{"database", "lock_type", "lock_mode"},
 	},
 	MongodbMemoryUsage: metricInfo{
-		Name: "mongodb.memory.usage",
+		Name:       "mongodb.memory.usage",
+		Attributes: []string{"database", "memory_type"},
 	},
 	MongodbNetworkIoReceive: metricInfo{
 		Name: "mongodb.network.io.receive",
@@ -293,19 +306,23 @@ var MetricsInfo = metricsInfo{
 		Name: "mongodb.network.request.count",
 	},
 	MongodbObjectCount: metricInfo{
-		Name: "mongodb.object.count",
+		Name:       "mongodb.object.count",
+		Attributes: []string{"database"},
 	},
 	MongodbOperationCount: metricInfo{
-		Name: "mongodb.operation.count",
+		Name:       "mongodb.operation.count",
+		Attributes: []string{"operation"},
 	},
 	MongodbOperationTime: metricInfo{
-		Name: "mongodb.operation.time",
+		Name:       "mongodb.operation.time",
+		Attributes: []string{"operation"},
 	},
 	MongodbSessionCount: metricInfo{
 		Name: "mongodb.session.count",
 	},
 	MongodbStorageSize: metricInfo{
-		Name: "mongodb.storage.size",
+		Name:       "mongodb.storage.size",
+		Attributes: []string{"database"},
 	},
 }
 
@@ -339,7 +356,8 @@ type metricsInfo struct {
 }
 
 type metricInfo struct {
-	Name string
+	Name       string
+	Attributes []string
 }
 
 type metricMongodbCacheOperations struct {

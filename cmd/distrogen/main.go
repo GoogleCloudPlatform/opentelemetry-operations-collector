@@ -116,7 +116,6 @@ func createCommandRunner() *command.Runner {
 	runner.Register("update_spec", newUpdateSpecCommand())
 	runner.Register("bump_hotfix", newBumpHotfixCommand())
 
-
 	return runner
 }
 

@@ -99,25 +99,6 @@ archives:
         - "zip"
 
 
-binary_signs:
-  - id: sign-darwin-binary
-    cmd: cosign
-    signature: ${artifact}.sig
-    certificate: ${artifact}.pem
-    args:
-      - "sign-blob"
-      - "--output-signature"
-      - "${signature}"
-      - "--output-certificate"
-      - "${certificate}"
-      - "${artifact}"
-      - "--yes"
-    artifacts: binary
-    ids:
-      - "otelopscol-darwin"
-    env:
-      - SIGSTORE_NO_CACHE=true
-
 signs:
   - cmd: cosign
     signature: ${artifact}.sig

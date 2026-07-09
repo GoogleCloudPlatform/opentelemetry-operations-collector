@@ -101,19 +101,18 @@ archives:
         formats:
         - "binary"
 
-# TODO: Uncomment this signs block when building official signed releases.
-# signs:
-#   - cmd: cosign
-#     signature: ${artifact}.sig
-#     certificate: ${artifact}.pem
-#     args:
-#       - "sign-blob"
-#       - "--output-signature"
-#       - "${signature}"
-#       - "--output-certificate"
-#       - "${certificate}"
-#       - "${artifact}"
-#       - "--yes"
-#     artifacts: archive
-#     env:
-#       - SIGSTORE_NO_CACHE=true
+signs:
+  - cmd: cosign
+    signature: ${artifact}.sig
+    certificate: ${artifact}.pem
+    args:
+      - "sign-blob"
+      - "--output-signature"
+      - "${signature}"
+      - "--output-certificate"
+      - "${certificate}"
+      - "${artifact}"
+      - "--yes"
+    artifacts: archive
+    env:
+      - SIGSTORE_NO_CACHE=true

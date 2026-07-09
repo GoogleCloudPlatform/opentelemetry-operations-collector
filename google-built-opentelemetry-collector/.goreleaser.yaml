@@ -97,9 +97,7 @@ archives:
       - goos: windows
         formats:
         - "zip"
-      - goos: darwin
-        formats:
-        - "binary"
+
 
 signs:
   - cmd: cosign

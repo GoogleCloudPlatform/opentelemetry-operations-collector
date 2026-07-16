@@ -211,11 +211,11 @@ func (e *Exporter) pushReportRequest(ctx context.Context, req *scpb.ReportReques
 	resp, err := e.client.Report(ctx, req)
 
 	if err != nil {
-		// ReportStatus tells health check that we had an error.
-		componentstatus.ReportStatus(e.host, componentstatus.NewRecoverableErrorEvent(err))
 		e.logFailedReportReq(req, err)
 
 		if shouldRetry(err) {
+			// ReportStatus tells health check that we had a retriable error.
+			componentstatus.ReportStatus(e.host, componentstatus.NewRecoverableErrorEvent(err))
 			if e.enableDebugHeaders {
 				// Get retriable error and enable debug header: Add encrypted debug header for 3 min
 				e.debugHeaderMutex.Lock()
@@ -226,6 +226,8 @@ func (e *Exporter) pushReportRequest(ctx context.Context, req *scpb.ReportReques
 			}
 			return err
 		}
+		// ReportStatus tells health check that we had a permanent error (e.g. PermissionDenied).
+		componentstatus.ReportStatus(e.host, componentstatus.NewPermanentErrorEvent(err))
 		// "Permanent" tells OTel retry machinery that request should not be retried.
 		return consumererror.NewPermanent(err)
 	}

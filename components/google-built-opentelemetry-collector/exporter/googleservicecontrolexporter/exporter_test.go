@@ -25,6 +25,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/component/componentstatus"
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/config/configoptional"
 	"go.opentelemetry.io/collector/config/configretry"
@@ -1645,3 +1647,67 @@ var cleanOperation = cmp.Transformer("cleanOperation", func(op *scpb.Operation) 
 	tmp.EndTime = nil
 	return tmp
 })
+
+type fakeStatusReporterHost struct {
+	component.Host
+	events []*componentstatus.Event
+	mu     sync.Mutex
+}
+
+func (f *fakeStatusReporterHost) Report(e *componentstatus.Event) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.events = append(f.events, e)
+}
+
+func TestReportStatus_PermanentAndRecoverableErrors(t *testing.T) {
+	tests := []struct {
+		name           string
+		errFunc        func(context.Context) error
+		expectedStatus componentstatus.Status
+	}{
+		{
+			name: "recoverable error (unavailable)",
+			errFunc: func(context.Context) error {
+				return status.Error(codes.Unavailable, "service unavailable")
+			},
+			expectedStatus: componentstatus.StatusRecoverableError,
+		},
+		{
+			name: "permanent error (permission denied)",
+			errFunc: func(context.Context) error {
+				return status.Error(codes.PermissionDenied, "permission denied")
+			},
+			expectedStatus: componentstatus.StatusPermanentError,
+		},
+		{
+			name: "success",
+			errFunc: func(context.Context) error {
+				return nil
+			},
+			expectedStatus: componentstatus.StatusOK,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			metrics := sampleMetricData(t)
+			c := newFakeClient(tc.errFunc)
+			cfg := Config{
+				ServiceName:     testServiceID,
+				ConsumerProject: testConsumerID,
+				ServiceConfigID: testServiceConfigID,
+			}
+			e := NewMetricsExporter(cfg, zap.NewNop(), c, componenttest.NewNopTelemetrySettings())
+			fakeHost := &fakeStatusReporterHost{Host: componenttest.NewNopHost()}
+			require.NoError(t, e.Start(context.Background(), fakeHost))
+
+			_ = e.ConsumeMetrics(context.Background(), metricDataToPmetric(metrics))
+
+			fakeHost.mu.Lock()
+			defer fakeHost.mu.Unlock()
+			require.Len(t, fakeHost.events, 1)
+			require.Equal(t, tc.expectedStatus, fakeHost.events[0].Status())
+		})
+	}
+}

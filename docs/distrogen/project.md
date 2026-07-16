@@ -43,6 +43,15 @@ The `gen` target will generate a distribution. `regen` will do a generation with
 |----------|---------|---------|
 | `SPEC_FILE` | The spec file to use for generation. | The spec file used to generate the project. |
 
+### `project-update`
+
+The `project-update` target will update the distrogen project itself using a requested `DISTROGEN_PROJECT_VERSION`.
+Please note that this process will overwrite the Makefile, so it may look different after running this target.
+
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `DISTROGEN_PROJECT_VERSION` | The version of distrogen to use to update the project. | `latest` |
+
 ### `update-otel-components`
 
 The `update-otel-components` target will update all local components to use the versions of
@@ -68,6 +77,12 @@ If any of these variables are not provided, the Makefile will install the tool l
 |----------|---------|---------|
 | `DISTROGEN_BIN` | Provide a valid `distrogen` binary path. | `.tools/distrogen`. Will install using the `distrogen_version` field from the spec. |
 | `MDATAGEN_BIN` | Provide a valid `mdatagen` binary path. | `.tools/mdatagen`. Will install using the `opentelemetry_version` field from the spec. |
+
+#### Distrogen Version Check
+
+When executing targets that depend on `distrogen`, the Makefile compares the version of the installed `DISTROGEN_BIN` against the `distrogen_version` requested in `spec.yaml`. If they differ, it will reinstall the required version.
+
+To bypass this check (e.g., if you want to use a locally built custom binary), you can set the `FORCE_DISTROGEN_VERSION` environment variable to any non-empty value.
 
 #### Tools Directory
 

@@ -194,8 +194,8 @@ XID errors.
 
 ## Resource Attributes
 
-| Name | Description | Values | Enabled | Semantic Convention |
-| ---- | ----------- | ------ | ------- | ------------------- |
-| gpu.model | GPU model name. | Any Str | true | - |
-| gpu.number | GPU index starting at 0. | Any Str | true | - |
-| gpu.uuid | GPU universally unique identifier. | Any Str | true | - |
+| Name | Description | Values | Enabled | Semantic Convention | Stability |
+| ---- | ----------- | ------ | ------- | ------------------- | --------- |
+| gpu.model | GPU model name. | Any Str | true | - | - |
+| gpu.number | GPU index starting at 0. | Any Str | true | - | - |
+| gpu.uuid | GPU universally unique identifier. | Any Str | true | - | - |

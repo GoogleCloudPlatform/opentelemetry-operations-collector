@@ -88,6 +88,9 @@ type Exporter struct {
 	debugHeaderMutex          sync.Mutex
 	debugHeaderExpirationTime time.Time
 	nowFunc                   func() time.Time
+
+	statusMu   sync.Mutex
+	lastStatus componentstatus.Status
 }
 
 // TODO(lujieduan): move MetricsExporter specific code to a separate file.
@@ -196,6 +199,15 @@ func (e *MetricsExporter) ConsumeMetrics(ctx context.Context, m pmetric.Metrics)
 	return e.pushReportRequest(ctx, req)
 }
 
+func (e *Exporter) reportStatus(ev *componentstatus.Event) {
+	e.statusMu.Lock()
+	defer e.statusMu.Unlock()
+	if e.lastStatus != ev.Status() {
+		e.lastStatus = ev.Status()
+		componentstatus.ReportStatus(e.host, ev)
+	}
+}
+
 func (e *Exporter) pushReportRequest(ctx context.Context, req *scpb.ReportRequest) error {
 	// Check if we need to add the debug encrypted header
 	if e.enableDebugHeaders {
@@ -215,7 +227,7 @@ func (e *Exporter) pushReportRequest(ctx context.Context, req *scpb.ReportReques
 
 		if shouldRetry(err) {
 			// ReportStatus tells health check that we had a retriable error.
-			componentstatus.ReportStatus(e.host, componentstatus.NewRecoverableErrorEvent(err))
+			e.reportStatus(componentstatus.NewRecoverableErrorEvent(err))
 			if e.enableDebugHeaders {
 				// Get retriable error and enable debug header: Add encrypted debug header for 3 min
 				e.debugHeaderMutex.Lock()
@@ -227,7 +239,7 @@ func (e *Exporter) pushReportRequest(ctx context.Context, req *scpb.ReportReques
 			return err
 		}
 		// ReportStatus tells health check that we had a permanent error (e.g. PermissionDenied).
-		componentstatus.ReportStatus(e.host, componentstatus.NewPermanentErrorEvent(err))
+		e.reportStatus(componentstatus.NewPermanentErrorEvent(err))
 		// "Permanent" tells OTel retry machinery that request should not be retried.
 		return consumererror.NewPermanent(err)
 	}
@@ -237,7 +249,7 @@ func (e *Exporter) pushReportRequest(ctx context.Context, req *scpb.ReportReques
 	}
 
 	// ReportStatus tells health check that everything is OK.
-	componentstatus.ReportStatus(e.host, componentstatus.NewEvent(componentstatus.StatusOK))
+	e.reportStatus(componentstatus.NewEvent(componentstatus.StatusOK))
 
 	return nil
 }

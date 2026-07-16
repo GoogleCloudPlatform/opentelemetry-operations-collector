@@ -15,7 +15,7 @@ setup-hooks:
 	git config core.hooksPath $(PWD)/hooks
 
 .PHONY: precommit
-precommit: checklicense misspell lint compare-all test-distrogen
+precommit: checklicense misspell lint compare-all test-distrogen validate-samples
 
 .PHONY: presubmit
 presubmit: checklicense misspell lint compare-all
@@ -133,6 +133,10 @@ tidy-all:
 .PHONY: test-distrogen
 test-distrogen:
 	@go test ./cmd/distrogen
+
+.PHONY: validate-samples
+validate-samples:
+	@./internal/tools/scripts/validate_samples.sh
 
 .PHONY: distrogen-golden-update
 distrogen-golden-update:

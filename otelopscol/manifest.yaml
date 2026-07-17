@@ -93,6 +93,8 @@ providers:
 - gomod: go.opentelemetry.io/collector/confmap/provider/fileprovider v1.62.0
 
 replaces:
+# 
+- github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal => github.com/quentinmit/opentelemetry-collector-contrib/internal/coreinternal strptime-L
 # Reference root module of repository to find dependency packages.
 - github.com/GoogleCloudPlatform/opentelemetry-operations-collector => ../../
 # Force update buger/jsonparser to v1.1.2 to fix vulnerability

@@ -26,16 +26,20 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/config/configoptional"
 	"go.opentelemetry.io/collector/config/configretry"
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
 	"go.opentelemetry.io/collector/exporter/exportertest"
 	"go.opentelemetry.io/collector/otelcol/otelcoltest"
+	"go.opentelemetry.io/collector/pdata/plog"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/codes"
 	grpcmd "google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter/internal/metadata"
 )
@@ -87,6 +91,15 @@ func TestCreateExporterFromConfig(t *testing.T) {
 				LogConfig: LogConfig{
 					DefaultLogName: "log-name",
 					OperationName:  "test-operation-name",
+					TimeoutConfig:  exporterhelper.TimeoutConfig{Timeout: 5 * time.Second},
+					BackOffConfig: configretry.BackOffConfig{
+						Enabled:             true,
+						InitialInterval:     2 * time.Second,
+						RandomizationFactor: 0.5,
+						Multiplier:          1.5,
+						MaxInterval:         5 * time.Second,
+						MaxElapsedTime:      50 * time.Second,
+					},
 				},
 			},
 		},
@@ -452,4 +465,294 @@ func init() {
 	getCredentials = func(ctx context.Context, impersonateAccount string) (credentials.Bundle, error) {
 		return mockBundle{}, nil
 	}
+}
+
+func TestCreateLogsExporterDefaultBehavior(t *testing.T) {
+	defaultClientProvider := clientProvider
+	clientProvider = func(endpoint string, useRawServiceControlClient bool, insecure bool, enableDebugHeaders bool, logger *zap.Logger, opts ...grpc.DialOption) (ServiceControlClient, error) {
+		mockServerOpts := []grpc.DialOption{
+			grpc.WithContextDialer(BufDialer),
+		}
+		opts = append(opts, mockServerOpts...)
+		return defaultClientProvider(endpoint, useRawServiceControlClient, insecure, enableDebugHeaders, logger, opts...)
+	}
+	defer func() {
+		clientProvider = defaultClientProvider
+	}()
+
+	ctx := context.Background()
+	server, mockServer, listener, err := StartMockServer()
+	require.NoError(t, err)
+	defer StopMockServer(server, listener)
+	defer server.Stop()
+
+	mockServer.SetReturnFunc(func(ctx context.Context, req *scpb.ReportRequest) (*scpb.ReportResponse, error) {
+		return nil, status.Error(codes.Unavailable, "temporarily unavailable")
+	})
+
+	factory := NewFactory()
+	cfg := factory.CreateDefaultConfig().(*Config)
+	cfg.ServiceControlEndpoint = "bufconn"
+	cfg.UseInsecure = true
+	cfg.UseRawServiceControlClient = "true"
+	cfg.LogConfig.DefaultLogName = "default-log-name"
+	// Disable queueing to test synchronous error return from exporter
+	cfg.QueueConfig = configoptional.Default(exporterhelper.NewDefaultQueueConfig())
+
+	logsExporter, err := factory.CreateLogs(ctx, exportertest.NewNopSettings(metadata.Type), cfg)
+	require.NoError(t, err)
+	require.NotNil(t, logsExporter)
+	defer logsExporter.Shutdown(ctx)
+
+	err = logsExporter.Start(ctx, componenttest.NewNopHost())
+	require.NoError(t, err)
+
+	err = logsExporter.ConsumeLogs(ctx, logDataToPlog([]logData{
+		{
+			Logs: func() []plog.LogRecord {
+				log := plog.NewLogRecord()
+				log.Body().SetStr("test default behavior log")
+				return []plog.LogRecord{log}
+			}(),
+			Resource: emptyResource(),
+		},
+	}))
+	require.Error(t, err, "expected error when server returns Unavailable and retries are disabled by default")
+	assert.Equal(t, 1, mockServer.CallCount, "expected exactly 1 call (no retries by default)")
+}
+
+func TestCreateLogsExporterSingleRetry(t *testing.T) {
+	defaultClientProvider := clientProvider
+	clientProvider = func(endpoint string, useRawServiceControlClient bool, insecure bool, enableDebugHeaders bool, logger *zap.Logger, opts ...grpc.DialOption) (ServiceControlClient, error) {
+		mockServerOpts := []grpc.DialOption{
+			grpc.WithContextDialer(BufDialer),
+		}
+		opts = append(opts, mockServerOpts...)
+		return defaultClientProvider(endpoint, useRawServiceControlClient, insecure, enableDebugHeaders, logger, opts...)
+	}
+	defer func() {
+		clientProvider = defaultClientProvider
+	}()
+
+	ctx := context.Background()
+	server, mockServer, listener, err := StartMockServer()
+	require.NoError(t, err)
+	defer StopMockServer(server, listener)
+	defer server.Stop()
+
+	mockServer.SetReturnFunc(func(ctx context.Context, req *scpb.ReportRequest) (*scpb.ReportResponse, error) {
+		if mockServer.CallCount == 1 {
+			return nil, status.Error(codes.Unavailable, "temporarily unavailable")
+		}
+		return &scpb.ReportResponse{}, nil
+	})
+
+	factory := NewFactory()
+	cfg := factory.CreateDefaultConfig().(*Config)
+	cfg.ServiceControlEndpoint = "bufconn"
+	cfg.UseInsecure = true
+	cfg.UseRawServiceControlClient = "true"
+	cfg.LogConfig.DefaultLogName = "default-log-name"
+	cfg.QueueConfig = configoptional.Default(exporterhelper.NewDefaultQueueConfig())
+	cfg.LogConfig.BackOffConfig.Enabled = true
+	cfg.LogConfig.BackOffConfig.InitialInterval = 10 * time.Millisecond
+	cfg.LogConfig.BackOffConfig.MaxInterval = 50 * time.Millisecond
+	cfg.LogConfig.BackOffConfig.MaxElapsedTime = 500 * time.Millisecond
+
+	logsExporter, err := factory.CreateLogs(ctx, exportertest.NewNopSettings(metadata.Type), cfg)
+	require.NoError(t, err)
+	require.NotNil(t, logsExporter)
+	defer logsExporter.Shutdown(ctx)
+
+	err = logsExporter.Start(ctx, componenttest.NewNopHost())
+	require.NoError(t, err)
+
+	err = logsExporter.ConsumeLogs(ctx, logDataToPlog([]logData{
+		{
+			Logs: func() []plog.LogRecord {
+				log := plog.NewLogRecord()
+				log.Body().SetStr("test single retry log")
+				return []plog.LogRecord{log}
+			}(),
+			Resource: emptyResource(),
+		},
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, 2, mockServer.CallCount, "expected exactly 2 calls due to retry")
+}
+
+func TestCreateLogsExporterMultipleRetries(t *testing.T) {
+	defaultClientProvider := clientProvider
+	clientProvider = func(endpoint string, useRawServiceControlClient bool, insecure bool, enableDebugHeaders bool, logger *zap.Logger, opts ...grpc.DialOption) (ServiceControlClient, error) {
+		mockServerOpts := []grpc.DialOption{
+			grpc.WithContextDialer(BufDialer),
+		}
+		opts = append(opts, mockServerOpts...)
+		return defaultClientProvider(endpoint, useRawServiceControlClient, insecure, enableDebugHeaders, logger, opts...)
+	}
+	defer func() {
+		clientProvider = defaultClientProvider
+	}()
+
+	ctx := context.Background()
+	server, mockServer, listener, err := StartMockServer()
+	require.NoError(t, err)
+	defer StopMockServer(server, listener)
+	defer server.Stop()
+
+	mockServer.SetReturnFunc(func(ctx context.Context, req *scpb.ReportRequest) (*scpb.ReportResponse, error) {
+		if mockServer.CallCount <= 2 {
+			return nil, status.Error(codes.Unavailable, "temporarily unavailable")
+		}
+		return &scpb.ReportResponse{}, nil
+	})
+
+	factory := NewFactory()
+	cfg := factory.CreateDefaultConfig().(*Config)
+	cfg.ServiceControlEndpoint = "bufconn"
+	cfg.UseInsecure = true
+	cfg.UseRawServiceControlClient = "true"
+	cfg.LogConfig.DefaultLogName = "default-log-name"
+	cfg.QueueConfig = configoptional.Default(exporterhelper.NewDefaultQueueConfig())
+	cfg.LogConfig.BackOffConfig.Enabled = true
+	cfg.LogConfig.BackOffConfig.InitialInterval = 10 * time.Millisecond
+	cfg.LogConfig.BackOffConfig.MaxInterval = 50 * time.Millisecond
+	cfg.LogConfig.BackOffConfig.MaxElapsedTime = 500 * time.Millisecond
+
+	logsExporter, err := factory.CreateLogs(ctx, exportertest.NewNopSettings(metadata.Type), cfg)
+	require.NoError(t, err)
+	require.NotNil(t, logsExporter)
+	defer logsExporter.Shutdown(ctx)
+
+	err = logsExporter.Start(ctx, componenttest.NewNopHost())
+	require.NoError(t, err)
+
+	err = logsExporter.ConsumeLogs(ctx, logDataToPlog([]logData{
+		{
+			Logs: func() []plog.LogRecord {
+				log := plog.NewLogRecord()
+				log.Body().SetStr("test multiple retries log")
+				return []plog.LogRecord{log}
+			}(),
+			Resource: emptyResource(),
+		},
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, 3, mockServer.CallCount, "expected exactly 3 calls (2 failures, 1 success)")
+}
+
+func TestCreateLogsExporterRetryMaxElapsedTime(t *testing.T) {
+	defaultClientProvider := clientProvider
+	clientProvider = func(endpoint string, useRawServiceControlClient bool, insecure bool, enableDebugHeaders bool, logger *zap.Logger, opts ...grpc.DialOption) (ServiceControlClient, error) {
+		mockServerOpts := []grpc.DialOption{
+			grpc.WithContextDialer(BufDialer),
+		}
+		opts = append(opts, mockServerOpts...)
+		return defaultClientProvider(endpoint, useRawServiceControlClient, insecure, enableDebugHeaders, logger, opts...)
+	}
+	defer func() {
+		clientProvider = defaultClientProvider
+	}()
+
+	ctx := context.Background()
+	server, mockServer, listener, err := StartMockServer()
+	require.NoError(t, err)
+	defer StopMockServer(server, listener)
+	defer server.Stop()
+
+	mockServer.SetReturnFunc(func(ctx context.Context, req *scpb.ReportRequest) (*scpb.ReportResponse, error) {
+		return nil, status.Error(codes.Unavailable, "permanently unavailable")
+	})
+
+	factory := NewFactory()
+	cfg := factory.CreateDefaultConfig().(*Config)
+	cfg.ServiceControlEndpoint = "bufconn"
+	cfg.UseInsecure = true
+	cfg.UseRawServiceControlClient = "true"
+	cfg.LogConfig.DefaultLogName = "default-log-name"
+	cfg.QueueConfig = configoptional.Default(exporterhelper.NewDefaultQueueConfig())
+	cfg.LogConfig.BackOffConfig.Enabled = true
+	cfg.LogConfig.BackOffConfig.InitialInterval = 10 * time.Millisecond
+	cfg.LogConfig.BackOffConfig.MaxInterval = 20 * time.Millisecond
+	cfg.LogConfig.BackOffConfig.MaxElapsedTime = 60 * time.Millisecond
+
+	logsExporter, err := factory.CreateLogs(ctx, exportertest.NewNopSettings(metadata.Type), cfg)
+	require.NoError(t, err)
+	require.NotNil(t, logsExporter)
+	defer logsExporter.Shutdown(ctx)
+
+	err = logsExporter.Start(ctx, componenttest.NewNopHost())
+	require.NoError(t, err)
+
+	err = logsExporter.ConsumeLogs(ctx, logDataToPlog([]logData{
+		{
+			Logs: func() []plog.LogRecord {
+				log := plog.NewLogRecord()
+				log.Body().SetStr("test max elapsed time log")
+				return []plog.LogRecord{log}
+			}(),
+			Resource: emptyResource(),
+		},
+	}))
+	require.Error(t, err, "expected error when MaxElapsedTime expires after repeated failures")
+	assert.GreaterOrEqual(t, mockServer.CallCount, 2, "expected multiple retry attempts before MaxElapsedTime expired")
+}
+
+func TestCreateLogsExporterTimeout(t *testing.T) {
+	defaultClientProvider := clientProvider
+	clientProvider = func(endpoint string, useRawServiceControlClient bool, insecure bool, enableDebugHeaders bool, logger *zap.Logger, opts ...grpc.DialOption) (ServiceControlClient, error) {
+		mockServerOpts := []grpc.DialOption{
+			grpc.WithContextDialer(BufDialer),
+		}
+		opts = append(opts, mockServerOpts...)
+		return defaultClientProvider(endpoint, useRawServiceControlClient, insecure, enableDebugHeaders, logger, opts...)
+	}
+	defer func() {
+		clientProvider = defaultClientProvider
+	}()
+
+	ctx := context.Background()
+	server, mockServer, listener, err := StartMockServer()
+	require.NoError(t, err)
+	defer StopMockServer(server, listener)
+	defer server.Stop()
+
+	mockServer.SetReturnFunc(func(ctx context.Context, req *scpb.ReportRequest) (*scpb.ReportResponse, error) {
+		select {
+		case <-ctx.Done():
+			return nil, status.Error(codes.Canceled, "request canceled by timeout")
+		case <-time.After(200 * time.Millisecond):
+		}
+		return &scpb.ReportResponse{}, nil
+	})
+
+	factory := NewFactory()
+	cfg := factory.CreateDefaultConfig().(*Config)
+	cfg.ServiceControlEndpoint = "bufconn"
+	cfg.UseInsecure = true
+	cfg.UseRawServiceControlClient = "true"
+	cfg.LogConfig.DefaultLogName = "default-log-name"
+	cfg.QueueConfig = configoptional.Default(exporterhelper.NewDefaultQueueConfig())
+	cfg.LogConfig.BackOffConfig.Enabled = false
+	cfg.LogConfig.TimeoutConfig.Timeout = 50 * time.Millisecond
+
+	logsExporter, err := factory.CreateLogs(ctx, exportertest.NewNopSettings(metadata.Type), cfg)
+	require.NoError(t, err)
+	require.NotNil(t, logsExporter)
+	defer logsExporter.Shutdown(ctx)
+
+	err = logsExporter.Start(ctx, componenttest.NewNopHost())
+	require.NoError(t, err)
+
+	err = logsExporter.ConsumeLogs(ctx, logDataToPlog([]logData{
+		{
+			Logs: func() []plog.LogRecord {
+				log := plog.NewLogRecord()
+				log.Body().SetStr("test timeout log")
+				return []plog.LogRecord{log}
+			}(),
+			Resource: emptyResource(),
+		},
+	}))
+	require.Error(t, err, "expected error when server response exceeds configured timeout")
 }

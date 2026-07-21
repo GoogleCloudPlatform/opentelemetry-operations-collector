@@ -75,6 +75,14 @@ func NewFactory() exporter.Factory {
 }
 
 func createDefaultConfig() component.Config {
+	// For logs, we use OpenTelemetry's default timeout (5s) and backoff config (5s initial interval,
+	// 30s max interval, 300s max elapsed time).
+	// However, we set Enabled to false by default so that there is completely no behavior change
+	// for existing deployments compared to when WithTimeout and WithRetry were omitted.
+	// Users who need retries (e.g., b/500822102) can explicitly opt in by setting enabled: true in YAML.
+	logBackOff := configretry.NewDefaultBackOffConfig()
+	logBackOff.Enabled = false
+
 	return &Config{
 		TimeoutConfig:              exporterhelper.TimeoutConfig{Timeout: defaultTimeout},
 		ServiceControlEndpoint:     defaultEndpoint,
@@ -109,6 +117,8 @@ func createDefaultConfig() component.Config {
 		}),
 		LogConfig: LogConfig{
 			OperationName: LogDefaultOperationName,
+			TimeoutConfig: exporterhelper.NewDefaultTimeoutConfig(),
+			BackOffConfig: logBackOff,
 		},
 	}
 }
@@ -123,9 +133,11 @@ func createLogExporter(ctx context.Context, settings exporter.Settings, cfg comp
 	exp := NewLogsExporter(*oCfg, settings.Logger, *c, settings.TelemetrySettings)
 	return exporterhelper.NewLogs(ctx, settings, cfg, exp.ConsumeLogs,
 		exporterhelper.WithCapabilities(exp.Capabilities()),
-		// TODO(b/480150119): disable timeout and backoff for now
-		// exporterhelper.WithTimeout(oCfg.TimeoutConfig),
-		// exporterhelper.WithRetry(oCfg.BackOffConfig),
+		// WithTimeout and WithRetry use log-specific settings (oCfg.LogConfig).
+		// By default, timeout is 5s (NewDefaultTimeoutConfig) and retry is disabled (Enabled: false),
+		// ensuring completely no runtime behavior change unless explicitly configured by the user.
+		exporterhelper.WithTimeout(oCfg.LogConfig.TimeoutConfig),
+		exporterhelper.WithRetry(oCfg.LogConfig.BackOffConfig),
 		exporterhelper.WithQueue(oCfg.QueueConfig),
 		exporterhelper.WithStart(exp.Start),
 		exporterhelper.WithShutdown(exp.Shutdown),

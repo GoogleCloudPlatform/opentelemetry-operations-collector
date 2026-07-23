@@ -560,7 +560,7 @@ func TestIsSSHTransportError(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			actual := gce.IsSSHTransportErrorForTest(gce.CommandOutput{}, tc.err)
+			actual := gce.IsSSHTransportErrorForTest(tc.err)
 			if actual != tc.expected {
 				t.Errorf("isSSHTransportError(%v) = %v; expected %v", tc.err, actual, tc.expected)
 			}

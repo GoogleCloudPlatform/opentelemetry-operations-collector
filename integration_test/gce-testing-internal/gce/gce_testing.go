@@ -938,12 +938,16 @@ func RunRemotelyStdin(ctx context.Context, logger *log.Logger, vm *VM, stdin io.
 	)
 
 	attempt := 0
+	var runErr error
 	err = backoff.Retry(func() error {
 		attempt++
-		output, err = runCommand(ctx, logger, stdin, args, nil)
-		if err != nil && isSSHTransportError(output, err) {
-			logger.Printf("SSH transport attempt %d to VM %s (%s) failed (%v), retrying...", attempt, vm.Name, vm.IPAddress, err)
-			return err
+		output, runErr = runCommand(ctx, logger, stdin, args, nil)
+		if runErr != nil {
+			if isSSHTransportError(output, runErr) {
+				logger.Printf("SSH transport attempt %d to VM %s (%s) failed (%v), retrying...", attempt, vm.Name, vm.IPAddress, runErr)
+				return runErr
+			}
+			return backoff.Permanent(runErr)
 		}
 		return nil
 	}, backoffPolicy)

@@ -838,9 +838,9 @@ func RunGcloud(ctx context.Context, logger *log.Logger, stdin string, args []str
 
 var (
 	sshOptions = []string{
-		// In some situations, ssh will hang when connecting to a new VM unless
-		// it has an explicit connection timeout set.
-		"-oConnectTimeout=120",
+		// Fail fast on dropped SSH TCP SYN packets instead of hanging for 120s.
+		"-oConnectTimeout=15",
+		"-oConnectionAttempts=3",
 		// StrictHostKeyChecking is disabled because the host keys are unknown
 		// to us at the start of the test.
 		"-oStrictHostKeyChecking=no",
@@ -882,9 +882,32 @@ func RunRemotely(ctx context.Context, logger *log.Logger, vm *VM, command string
 	return RunRemotelyStdin(ctx, logger, vm, nil, command)
 }
 
+// isSSHTransportError returns true if the error was caused by an SSH connection/transport failure
+// (e.g. TCP SYN timeout, connection dropped/refused) rather than a command failing on the remote host.
+func isSSHTransportError(out CommandOutput, err error) bool {
+	if err == nil {
+		return false
+	}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == 255 {
+		return true
+	}
+	errStr := err.Error()
+	return strings.Contains(errStr, "exit status 255") ||
+		strings.Contains(errStr, "ssh: connect to host") ||
+		strings.Contains(errStr, "Connection timed out") ||
+		strings.Contains(errStr, "Connection refused") ||
+		strings.Contains(errStr, "Host key verification failed")
+}
+
+// IsSSHTransportErrorForTest exports isSSHTransportError for unit testing.
+func IsSSHTransportErrorForTest(out CommandOutput, err error) bool {
+	return isSSHTransportError(out, err)
+}
+
 // RunRemotelyStdin is just like RunRemotely but it accepts an io.Reader
 // for what data to pass in over standard input to the command.
-func RunRemotelyStdin(ctx context.Context, logger *log.Logger, vm *VM, stdin io.Reader, command string) (_ CommandOutput, err error) {
+func RunRemotelyStdin(ctx context.Context, logger *log.Logger, vm *VM, stdin io.Reader, command string) (output CommandOutput, err error) {
 	logger.Printf("Running command remotely: %v", command)
 	defer func() {
 		if err != nil {
@@ -908,7 +931,24 @@ func RunRemotelyStdin(ctx context.Context, logger *log.Logger, vm *VM, stdin io.
 	args = append(args, "-oIdentityFile="+privateKeyFile)
 	args = append(args, sshOptions...)
 	args = append(args, wrappedCommand)
-	return runCommand(ctx, logger, stdin, args, nil)
+
+	backoffPolicy := backoff.WithContext(
+		backoff.WithMaxRetries(backoff.NewConstantBackOff(3*time.Second), 3),
+		ctx,
+	)
+
+	attempt := 0
+	err = backoff.Retry(func() error {
+		attempt++
+		output, err = runCommand(ctx, logger, stdin, args, nil)
+		if err != nil && isSSHTransportError(output, err) {
+			logger.Printf("SSH transport attempt %d to VM %s (%s) failed (%v), retrying...", attempt, vm.Name, vm.IPAddress, err)
+			return err
+		}
+		return nil
+	}, backoffPolicy)
+
+	return output, err
 }
 
 // UploadContent takes an io.Reader and uploads its contents as a file to a
@@ -2011,9 +2051,8 @@ func downgradeGcloudIfNeeded(ctx context.Context, logger *log.Logger, vm *VM) er
 }
 
 // verifyGcloudInstallation checks if the gcloud command is installed correctly in the VM.
-func verifyGcloudInstallation(ctx context.Context, logger *log.Logger, vm *VM) error {
-	_, err := RunRemotely(ctx, logger, vm, "sudo gcloud --version")
-	return err
+func verifyGcloudInstallation(ctx context.Context, logger *log.Logger, vm *VM) (CommandOutput, error) {
+	return RunRemotely(ctx, logger, vm, "sudo gcloud --version")
 }
 
 // InstallGcloudIfNeeded installs gcloud cli on instances that don't already have
@@ -2025,9 +2064,13 @@ func InstallGcloudIfNeeded(ctx context.Context, logger *log.Logger, vm *VM) erro
 	if err := downgradeGcloudIfNeeded(ctx, logger, vm); err != nil {
 		return fmt.Errorf("failed to downgrade gcloud installation: %w", err)
 	}
-	if err := verifyGcloudInstallation(ctx, logger, vm); err == nil {
+	out, err := verifyGcloudInstallation(ctx, logger, vm)
+	if err == nil {
 		// Success, no need to install gcloud.
 		return nil
+	}
+	if isSSHTransportError(out, err) {
+		return fmt.Errorf("failed to verify gcloud due to SSH connection error: %w", err)
 	}
 	logger.Printf("gcloud not found, installing it...")
 
@@ -2113,7 +2156,7 @@ sudo chmod a+x /usr/bin/gcloud
 	if _, err := RunRemotely(ctx, logger, vm, installCmd); err != nil {
 		return fmt.Errorf("failed to install gcloud: %w", err)
 	}
-	if err := verifyGcloudInstallation(ctx, logger, vm); err != nil {
+	if _, err := verifyGcloudInstallation(ctx, logger, vm); err != nil {
 		return fmt.Errorf("gcloud not installed correctly: %w", err)
 	}
 	return nil

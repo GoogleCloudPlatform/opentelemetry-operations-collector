@@ -88,3 +88,19 @@ jobs:
           lfs: true
       - name: Build Distro
         run: cd ${{matrix.distro}} && make image-build-full
+
+  validate-samples:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+          fetch-depth: 0
+          lfs: true
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.DEFAULT_GO_VERSION }}
+          cache: true
+      - name: Validate Samples
+        run: make validate-samples
+

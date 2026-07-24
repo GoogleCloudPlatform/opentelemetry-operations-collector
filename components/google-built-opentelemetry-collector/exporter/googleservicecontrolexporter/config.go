@@ -55,6 +55,9 @@ type LogConfig struct {
 	// OperationName sets the operation name for Service Control logs. If not
 	// set, default to `log_entry`
 	OperationName string `mapstructure:"operation_name"`
+
+	TimeoutConfig             exporterhelper.TimeoutConfig `mapstructure:",squash"` // squash ensures fields are correctly decoded in embedded struct.
+	configretry.BackOffConfig `mapstructure:"retry_on_failure"`
 }
 
 func (c *Config) Validate() error {

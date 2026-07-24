@@ -15,7 +15,7 @@ setup-hooks:
 	git config core.hooksPath $(PWD)/hooks
 
 .PHONY: precommit
-precommit: checklicense misspell lint compare-all test-distrogen
+precommit: checklicense misspell lint compare-all test-distrogen validate-samples
 
 .PHONY: presubmit
 presubmit: checklicense misspell lint compare-all
@@ -134,6 +134,10 @@ tidy-all:
 test-distrogen:
 	@go test ./cmd/distrogen
 
+.PHONY: validate-samples
+validate-samples:
+	@./internal/tools/scripts/validate_samples.sh
+
 .PHONY: distrogen-golden-update
 distrogen-golden-update:
 	@go test ./cmd/distrogen -update
@@ -238,6 +242,7 @@ tag-repo:
 EXCLUDE_INTERNAL_TOOLS =  grep -v ".*internal/tools.*"
 EXCLUDE_SMOKE_TEST = grep -v ".*integration_test/smoke_test.*"
 EXCLUDE_TESTDATA = grep -v ".*testdata.*"
+EXCLUDE_GENERATED_COLLECTOR = grep -v ".*generated_collector.*"
 
 .PHONY: target-all-modules
 target-all-modules: go.work
@@ -248,6 +253,7 @@ else
 	$(EXCLUDE_INTERNAL_TOOLS) |\
 	$(EXCLUDE_SMOKE_TEST) |\
 	$(EXCLUDE_TESTDATA) |\
+	$(EXCLUDE_GENERATED_COLLECTOR) |\
 	GOWORK=off xargs -t -I '{}' $(MAKE) -C {} $(TARGET)
 endif
 
@@ -258,6 +264,7 @@ ifndef TARGET
 else
 	go list -f "{{ .Dir }}" -m |\
 	$(EXCLUDE_TESTDATA) |\
+	$(EXCLUDE_GENERATED_COLLECTOR) |\
 	GOWORK=off xargs -t -I '{}' $(MAKE) -C {} $(TARGET)
 endif
 

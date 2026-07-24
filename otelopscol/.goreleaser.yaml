@@ -2,7 +2,7 @@ version: 2
 project_name: opentelemetry-operations-collector
 
 snapshot:
-  version_template: v0.154.0
+  version_template: v0.156.0
 
 env:
   - LD_FLAGS=-s -w
@@ -30,6 +30,19 @@ builds:
       - windows
     goarch:
       - amd64
+    binary: otelopscol
+    dir: _build
+    ldflags:
+      - "-s -w"
+    flags:
+      - "-trimpath"
+      - "-buildvcs=false"
+
+  - id: otelopscol-darwin
+    goos:
+      - darwin
+    goarch:
+      - arm64
     binary: otelopscol
     dir: _build
     ldflags:
@@ -76,6 +89,7 @@ archives:
     ids:
       - "otelopscol-linux"
       - "otelopscol-windows"
+      - "otelopscol-darwin"
     formats:
       - "tar.gz"
     name_template: "otelopscol_{{ .Version }}_{{ .Os }}_{{ .Arch }}"

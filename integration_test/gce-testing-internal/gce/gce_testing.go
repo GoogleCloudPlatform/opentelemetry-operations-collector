@@ -1960,6 +1960,21 @@ func StopInstance(ctx context.Context, logger *log.Logger, vm *VM) error {
 	return err
 }
 
+func shouldRetryStartVM(err error) bool {
+	if err == nil {
+		return false
+	}
+	// Starting instances can hit CPU quota or IP address allocation errors.
+	return strings.Contains(err.Error(), "Quota") ||
+		// Instance starting can fail due to temporary zone hardware stockout (ZONE_RESOURCE_POOL_EXHAUSTED).
+		strings.Contains(err.Error(), "currently unavailable") ||
+		strings.Contains(err.Error(), "ZONE_RESOURCE_POOL_EXHAUSTED") ||
+		// Rarely, instance starting fails due to internal compute API errors.
+		strings.Contains(err.Error(), "Internal error") ||
+		// gcloud sqlite database lock contention under concurrency.
+		strings.Contains(err.Error(), "database is locked")
+}
+
 // StartInstance boots a previously-stopped VM instance.
 // Also waits for the instance to be started up.
 func StartInstance(ctx context.Context, logger *log.Logger, vm *VM) error {
@@ -1977,9 +1992,9 @@ func StartInstance(ctx context.Context, logger *log.Logger, vm *VM) error {
 				vm.Name,
 				"--format=json",
 			})
-		// Sometimes we see errors about running out of CPU quota or IP addresses,
+		// Sometimes we see errors about running out of CPU quota, zone stockouts, or IP addresses.
 		// Back off and retry in these cases, just like CreateInstance().
-		if err != nil && !strings.Contains(err.Error(), "Quota") {
+		if err != nil && !shouldRetryStartVM(err) {
 			err = backoff.Permanent(err)
 		}
 		// Returning a non-permanent error triggers retries.

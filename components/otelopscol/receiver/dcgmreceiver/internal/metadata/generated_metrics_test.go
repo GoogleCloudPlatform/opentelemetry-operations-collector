@@ -82,62 +82,51 @@ func TestMetricsBuilder(t *testing.T) {
 
 			defaultMetricsCount := 0
 			allMetricsCount := 0
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordGpuDcgmClockFrequencyDataPoint(ts, 1)
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(ts, 1, AttributeGpuClockViolationPower)
 			if tt.name == "reaggregate_set" {
 				mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(ts, 3, AttributeGpuClockViolationThermal)
 			}
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordGpuDcgmCodecDecoderUtilizationDataPoint(ts, 1)
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordGpuDcgmCodecEncoderUtilizationDataPoint(ts, 1)
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordGpuDcgmEccErrorsDataPoint(ts, 1, AttributeGpuErrorTypeSbe)
 			if tt.name == "reaggregate_set" {
 				mb.RecordGpuDcgmEccErrorsDataPoint(ts, 3, AttributeGpuErrorTypeDbe)
 			}
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordGpuDcgmEnergyConsumptionDataPoint(ts, 1)
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordGpuDcgmMemoryBandwidthUtilizationDataPoint(ts, 1)
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordGpuDcgmMemoryBytesUsedDataPoint(ts, 1, AttributeGpuMemoryStateUsed)
 			if tt.name == "reaggregate_set" {
 				mb.RecordGpuDcgmMemoryBytesUsedDataPoint(ts, 3, AttributeGpuMemoryStateFree)
 			}
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordGpuDcgmNvlinkIoDataPoint(ts, 1, AttributeNetworkIoDirectionTransmit)
 			if tt.name == "reaggregate_set" {
 				mb.RecordGpuDcgmNvlinkIoDataPoint(ts, 3, AttributeNetworkIoDirectionReceive)
 			}
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordGpuDcgmPcieIoDataPoint(ts, 1, AttributeNetworkIoDirectionTransmit)
 			if tt.name == "reaggregate_set" {
 				mb.RecordGpuDcgmPcieIoDataPoint(ts, 3, AttributeNetworkIoDirectionReceive)
 			}
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordGpuDcgmPipeUtilizationDataPoint(ts, 1, AttributeGpuPipeTensor)
@@ -147,15 +136,12 @@ func TestMetricsBuilder(t *testing.T) {
 
 			allMetricsCount++
 			mb.RecordGpuDcgmSmOccupancyDataPoint(ts, 1)
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordGpuDcgmSmUtilizationDataPoint(ts, 1)
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordGpuDcgmTemperatureDataPoint(ts, 1)
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordGpuDcgmUtilizationDataPoint(ts, 1)

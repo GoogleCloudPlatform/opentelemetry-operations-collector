@@ -70,28 +70,24 @@ func TestMetricsBuilder(t *testing.T) {
 
 			defaultMetricsCount := 0
 			allMetricsCount := 0
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordNvmlGpuMemoryBytesUsedDataPoint(ts, 1, "model-val", "gpu_number-val", "uuid-val", AttributeMemoryStateUsed)
 			if tt.name == "reaggregate_set" {
 				mb.RecordNvmlGpuMemoryBytesUsedDataPoint(ts, 3, "model-val-2", "gpu_number-val-2", "uuid-val-2", AttributeMemoryStateFree)
 			}
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordNvmlGpuProcessesMaxBytesUsedDataPoint(ts, 1, "model-val", "gpu_number-val", "uuid-val", 3, "process-val", "command-val", "command_line-val", "owner-val")
 			if tt.name == "reaggregate_set" {
 				mb.RecordNvmlGpuProcessesMaxBytesUsedDataPoint(ts, 3, "model-val-2", "gpu_number-val-2", "uuid-val-2", 4, "process-val-2", "command-val-2", "command_line-val-2", "owner-val-2")
 			}
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordNvmlGpuProcessesUtilizationDataPoint(ts, 1, "model-val", "gpu_number-val", "uuid-val", 3, "process-val", "command-val", "command_line-val", "owner-val")
 			if tt.name == "reaggregate_set" {
 				mb.RecordNvmlGpuProcessesUtilizationDataPoint(ts, 3, "model-val-2", "gpu_number-val-2", "uuid-val-2", 4, "process-val-2", "command-val-2", "command_line-val-2", "owner-val-2")
 			}
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordNvmlGpuUtilizationDataPoint(ts, 1, "model-val", "gpu_number-val", "uuid-val")

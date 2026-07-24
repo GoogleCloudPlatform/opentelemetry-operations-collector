@@ -15,6 +15,7 @@ The Google-Built OpenTelemetry Collector is an open-source, production-ready bui
 | googlecloudpubsub | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/googlecloudpubsubreceiver/README.md) |
 | hostmetrics | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/hostmetricsreceiver/README.md) |
 | httpcheck | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/httpcheckreceiver/README.md) |
+| iis | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/iisreceiver/README.md) |
 | jaeger | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/jaegerreceiver/README.md) |
 | jmx | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/jmxreceiver/README.md) |
 | journald | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/journaldreceiver/README.md) |
@@ -32,6 +33,8 @@ The Google-Built OpenTelemetry Collector is an open-source, production-ready bui
 | statsd | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/statsdreceiver/README.md) |
 | syslog | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/syslogreceiver/README.md) |
 | tcplog | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/tcplogreceiver/README.md) |
+| windowseventlog | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/windowseventlogreceiver/README.md) |
+| windowsperfcounters | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/windowsperfcountersreceiver/README.md) |
 | zipkin | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/zipkinreceiver/README.md) |
 
 

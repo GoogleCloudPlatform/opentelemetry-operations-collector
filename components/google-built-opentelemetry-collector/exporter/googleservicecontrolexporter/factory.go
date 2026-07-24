@@ -28,6 +28,7 @@ import (
 	"go.opentelemetry.io/collector/exporter/exporterhelper"
 	"google.golang.org/api/impersonate"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/google"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/credentials/oauth"
@@ -45,6 +46,23 @@ var (
 	defaultTimeout  = 16 * time.Second
 	defaultEndpoint = "servicecontrol.googleapis.com:443"
 	clientProvider  = NewServiceControllerClient
+	getCredentials  = func(ctx context.Context, impersonateAccount string) (credentials.Bundle, error) {
+		if impersonateAccount != "" {
+			src, err := impersonate.CredentialsTokenSource(ctx,
+				impersonate.CredentialsConfig{
+					TargetPrincipal: impersonateAccount,
+					Scopes:          []string{"https://www.googleapis.com/auth/cloud-platform"},
+				})
+			if err != nil {
+				return nil, fmt.Errorf("failed to impersonate serviceAccount: %w", err)
+			}
+			return google.NewDefaultCredentialsWithOptions(
+				google.DefaultCredentialsOptions{
+					PerRPCCreds:     oauth.TokenSource{TokenSource: src},
+					ALTSPerRPCCreds: nil}), nil
+		}
+		return google.NewDefaultCredentials(), nil
+	}
 )
 
 func NewFactory() exporter.Factory {
@@ -57,6 +75,14 @@ func NewFactory() exporter.Factory {
 }
 
 func createDefaultConfig() component.Config {
+	// For logs, we use OpenTelemetry's default timeout (5s) and backoff config (5s initial interval,
+	// 30s max interval, 300s max elapsed time).
+	// However, we set Enabled to false by default so that there is completely no behavior change
+	// for existing deployments compared to when WithTimeout and WithRetry were omitted.
+	// Users who need retries (e.g., b/500822102) can explicitly opt in by setting enabled: true in YAML.
+	logBackOff := configretry.NewDefaultBackOffConfig()
+	logBackOff.Enabled = false
+
 	return &Config{
 		TimeoutConfig:              exporterhelper.TimeoutConfig{Timeout: defaultTimeout},
 		ServiceControlEndpoint:     defaultEndpoint,
@@ -91,6 +117,8 @@ func createDefaultConfig() component.Config {
 		}),
 		LogConfig: LogConfig{
 			OperationName: LogDefaultOperationName,
+			TimeoutConfig: exporterhelper.NewDefaultTimeoutConfig(),
+			BackOffConfig: logBackOff,
 		},
 	}
 }
@@ -105,9 +133,11 @@ func createLogExporter(ctx context.Context, settings exporter.Settings, cfg comp
 	exp := NewLogsExporter(*oCfg, settings.Logger, *c, settings.TelemetrySettings)
 	return exporterhelper.NewLogs(ctx, settings, cfg, exp.ConsumeLogs,
 		exporterhelper.WithCapabilities(exp.Capabilities()),
-		// TODO(b/480150119): disable timeout and backoff for now
-		// exporterhelper.WithTimeout(oCfg.TimeoutConfig),
-		// exporterhelper.WithRetry(oCfg.BackOffConfig),
+		// WithTimeout and WithRetry use log-specific settings (oCfg.LogConfig).
+		// By default, timeout is 5s (NewDefaultTimeoutConfig) and retry is disabled (Enabled: false),
+		// ensuring completely no runtime behavior change unless explicitly configured by the user.
+		exporterhelper.WithTimeout(oCfg.LogConfig.TimeoutConfig),
+		exporterhelper.WithRetry(oCfg.LogConfig.BackOffConfig),
 		exporterhelper.WithQueue(oCfg.QueueConfig),
 		exporterhelper.WithStart(exp.Start),
 		exporterhelper.WithShutdown(exp.Shutdown),
@@ -142,22 +172,11 @@ func createClient(ctx context.Context, oCfg *Config, settings exporter.Settings)
 	if oCfg.UseInsecure {
 		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	} else if useRawServiceControlClient {
-		var credentials = google.NewDefaultCredentials()
-		if oCfg.ImpersonateServiceAccount != "" {
-			src, err := impersonate.CredentialsTokenSource(ctx,
-				impersonate.CredentialsConfig{
-					TargetPrincipal: oCfg.ImpersonateServiceAccount,
-					Scopes:          []string{"https://www.googleapis.com/auth/cloud-platform"},
-				})
-			if err != nil {
-				return nil, fmt.Errorf("failed to impersonate serviceAccount: %w", err)
-			}
-			credentials = google.NewDefaultCredentialsWithOptions(
-				google.DefaultCredentialsOptions{
-					PerRPCCreds:     oauth.TokenSource{TokenSource: src},
-					ALTSPerRPCCreds: nil})
+		creds, err := getCredentials(ctx, oCfg.ImpersonateServiceAccount)
+		if err != nil {
+			return nil, err
 		}
-		opts = append(opts, grpc.WithCredentialsBundle(credentials))
+		opts = append(opts, grpc.WithCredentialsBundle(creds))
 	}
 
 	c, err := clientProvider(oCfg.ServiceControlEndpoint, useRawServiceControlClient, oCfg.UseInsecure, oCfg.EnableDebugHeaders, settings.Logger, opts...)

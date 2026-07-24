@@ -69,7 +69,7 @@ func TestUpdateDistributionSpecFile(t *testing.T) {
 			assert.NilError(t, err)
 			updatedContent, err := os.ReadFile(specPath)
 			assert.NilError(t, err)
-			
+
 			if diff := cmp.Diff(tc.ExpectedOutput, string(updatedContent)); diff != "" {
 				t.Errorf("UpdateDistributionSpecFile() mismatch (-want +got):\n%s", diff)
 			}

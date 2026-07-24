@@ -93,79 +93,66 @@ func TestMetricsBuilder(t *testing.T) {
 
 			defaultMetricsCount := 0
 			allMetricsCount := 0
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordMongodbCacheOperationsDataPoint(ts, 1, AttributeTypeHit)
 			if tt.name == "reaggregate_set" {
 				mb.RecordMongodbCacheOperationsDataPoint(ts, 3, AttributeTypeMiss)
 			}
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordMongodbCollectionCountDataPoint(ts, 1, "database-val")
 			if tt.name == "reaggregate_set" {
 				mb.RecordMongodbCollectionCountDataPoint(ts, 3, "database-val-2")
 			}
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordMongodbConnectionCountDataPoint(ts, 1, "database-val", AttributeConnectionTypeActive)
 			if tt.name == "reaggregate_set" {
 				mb.RecordMongodbConnectionCountDataPoint(ts, 3, "database-val-2", AttributeConnectionTypeAvailable)
 			}
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordMongodbCursorCountDataPoint(ts, 1)
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordMongodbCursorTimeoutCountDataPoint(ts, 1)
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordMongodbDataSizeDataPoint(ts, 1, "database-val")
 			if tt.name == "reaggregate_set" {
 				mb.RecordMongodbDataSizeDataPoint(ts, 3, "database-val-2")
 			}
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordMongodbDatabaseCountDataPoint(ts, 1)
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordMongodbDocumentOperationCountDataPoint(ts, 1, "database-val", AttributeOperationInsert)
 			if tt.name == "reaggregate_set" {
 				mb.RecordMongodbDocumentOperationCountDataPoint(ts, 3, "database-val-2", AttributeOperationQuery)
 			}
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordMongodbExtentCountDataPoint(ts, 1, "database-val")
 			if tt.name == "reaggregate_set" {
 				mb.RecordMongodbExtentCountDataPoint(ts, 3, "database-val-2")
 			}
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordMongodbGlobalLockTimeDataPoint(ts, 1)
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordMongodbIndexAccessCountDataPoint(ts, 1, "database-val", "collection-val")
 			if tt.name == "reaggregate_set" {
 				mb.RecordMongodbIndexAccessCountDataPoint(ts, 3, "database-val-2", "collection-val-2")
 			}
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordMongodbIndexCountDataPoint(ts, 1, "database-val")
 			if tt.name == "reaggregate_set" {
 				mb.RecordMongodbIndexCountDataPoint(ts, 3, "database-val-2")
 			}
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordMongodbIndexSizeDataPoint(ts, 1, "database-val")
@@ -196,51 +183,42 @@ func TestMetricsBuilder(t *testing.T) {
 			if tt.name == "reaggregate_set" {
 				mb.RecordMongodbLockDeadlockCountDataPoint(ts, 3, "database-val-2", AttributeLockTypeReplicationStateTransition, AttributeLockModeExclusive)
 			}
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordMongodbMemoryUsageDataPoint(ts, 1, "database-val", AttributeMemoryTypeResident)
 			if tt.name == "reaggregate_set" {
 				mb.RecordMongodbMemoryUsageDataPoint(ts, 3, "database-val-2", AttributeMemoryTypeVirtual)
 			}
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordMongodbNetworkIoReceiveDataPoint(ts, 1)
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordMongodbNetworkIoTransmitDataPoint(ts, 1)
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordMongodbNetworkRequestCountDataPoint(ts, 1)
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordMongodbObjectCountDataPoint(ts, 1, "database-val")
 			if tt.name == "reaggregate_set" {
 				mb.RecordMongodbObjectCountDataPoint(ts, 3, "database-val-2")
 			}
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordMongodbOperationCountDataPoint(ts, 1, AttributeOperationInsert)
 			if tt.name == "reaggregate_set" {
 				mb.RecordMongodbOperationCountDataPoint(ts, 3, AttributeOperationQuery)
 			}
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordMongodbOperationTimeDataPoint(ts, 1, AttributeOperationInsert)
 			if tt.name == "reaggregate_set" {
 				mb.RecordMongodbOperationTimeDataPoint(ts, 3, AttributeOperationQuery)
 			}
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordMongodbSessionCountDataPoint(ts, 1)
-
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordMongodbStorageSizeDataPoint(ts, 1, "database-val")

@@ -36,6 +36,7 @@ import (
 	"context"
 	"crypto/md5"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -521,6 +522,49 @@ func TestRunCommandEnvMerging(t *testing.T) {
 	expectedConfigLine := "CLOUDSDK_CONFIG=/tmp/mock-config-dir"
 	if !strings.Contains(output.Stdout, expectedConfigLine) {
 		t.Errorf("Expected environment to contain %q, but it was not found. Output:\n%s", expectedConfigLine, output.Stdout)
+	}
+}
+
+func TestIsSSHTransportError(t *testing.T) {
+	testCases := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{
+			name:     "nil error",
+			err:      nil,
+			expected: false,
+		},
+		{
+			name:     "generic command failure",
+			err:      errors.New("Command failed: cat /nonexistent\nexit status 1"),
+			expected: false,
+		},
+		{
+			name:     "ssh connection timed out",
+			err:      errors.New("Command failed: ssh test_user@10.128.2.24\nexit status 255\nstdout+stderr: ssh: connect to host 10.128.2.24 port 22: Connection timed out"),
+			expected: true,
+		},
+		{
+			name:     "ssh connection refused",
+			err:      errors.New("Command failed: ssh test_user@10.128.2.24\nexit status 255\nstdout+stderr: ssh: connect to host 10.128.2.24 port 22: Connection refused"),
+			expected: true,
+		},
+		{
+			name:     "exit status 255 error",
+			err:      errors.New("Command failed: ssh\nexit status 255"),
+			expected: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := gce.IsSSHTransportErrorForTest(gce.CommandOutput{}, tc.err)
+			if actual != tc.expected {
+				t.Errorf("isSSHTransportError(%v) = %v; expected %v", tc.err, actual, tc.expected)
+			}
+		})
 	}
 }
 

@@ -10,7 +10,7 @@ require (
 	go.opentelemetry.io/collector/otelcol/otelcoltest v0.156.0
 	go.opentelemetry.io/otel/metric v1.44.0
 	go.uber.org/zap v1.28.0
-	google.golang.org/grpc v1.82.0
+	google.golang.org/grpc v1.82.1
 	google.golang.org/protobuf v1.36.11
 )
 

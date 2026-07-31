@@ -116,6 +116,16 @@ github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd/go.mod h1:6dJ
 github.com/modern-go/reflect2 v1.0.2/go.mod h1:yWuevngMOJpCy52FWWMvUC8ws7m/LJsjYzDa0/r8luk=
 github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee h1:W5t00kpgFdJifH4BDsTlE89Zl93FEloxaWZfGcifgq8=
 github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee/go.mod h1:yWuevngMOJpCy52FWWMvUC8ws7m/LJsjYzDa0/r8luk=
+github.com/open-telemetry/opentelemetry-collector-contrib/internal/common v0.156.0 h1:NbW0V2xBmQ7WWzlVsJw61/nLxQM5kSKhkwQClLPo3TA=
+github.com/open-telemetry/opentelemetry-collector-contrib/internal/common v0.156.0/go.mod h1:552gyph19MYV0RWg+j5zXTOVrXfmSJa3hinSvVJMj24=
+github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal v0.156.0 h1:wca5xIy5I/8CAylZYgOYzj5P5JAAicBA8uNtiRNh2Zo=
+github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal v0.156.0/go.mod h1:CaT/YS8vvoNgsLewbtwDpS0mAgsHXNXceSPzlP+TeJI=
+github.com/open-telemetry/opentelemetry-collector-contrib/pkg/golden v0.156.0 h1:SCjJcfLQUNrvS3pxmTCpkauG+EuBO9FfpYxwZGh1R2k=
+github.com/open-telemetry/opentelemetry-collector-contrib/pkg/golden v0.156.0/go.mod h1:a2EWclAv09obxPpx4JrIDGlcoU5XmsC9Z55hN43InIM=
+github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatatest v0.156.0 h1:TaVowoyPtdhUwoQ1Q8BfKNfLR/o/uzQbqw1yXDDh+qU=
+github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatatest v0.156.0/go.mod h1:ctcl2y2QGid6re21XtVXie2vfndDeFBawU7xNLHj/nA=
+github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatautil v0.156.0 h1:K+3RiL9FC4/4xmZwgCY1Wg5fr4Wrf9OnYDf4F2tR5qY=
+github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatautil v0.156.0/go.mod h1:2N4pEbxN0lw3vb1zYlXK/okuTC+hRFbLEbgdcoP13mM=
 github.com/opencontainers/go-digest v1.0.0 h1:apOUWs51W5PlhuyGyz9FCeeBIOUDA/6nW8Oi/yOhh5U=
 github.com/opencontainers/go-digest v1.0.0/go.mod h1:0JzlMkj0TRzQZfJkVvzbP0HBR3IKzErnv2BNG4W4MAM=
 github.com/opencontainers/image-spec v1.1.1 h1:y0fUlFfIZhPF1W537XOLg0/fcx6zcHCJwooC2xJA040=

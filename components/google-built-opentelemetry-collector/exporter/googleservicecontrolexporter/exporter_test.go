@@ -1620,18 +1620,46 @@ func newFakeClient(errFunc func(context.Context) error) *fakeClient {
 	}
 }
 
+func newFakeClientWithReportAllErrors() *fakeClient {
+	return &fakeClient{
+		requests:        []*scpb.ReportRequest{},
+		errFunc:         noError,
+		reportAllErrors: true,
+	}
+}
+
+func newFakeClientWithPartialReportErrors(reportErrors []*scpb.ReportResponse_ReportError) *fakeClient {
+	return &fakeClient{
+		requests:     []*scpb.ReportRequest{},
+		errFunc:      noError,
+		reportErrors: reportErrors,
+	}
+}
+
 type fakeClient struct {
-	requests []*scpb.ReportRequest
-	errFunc  func(context.Context) error
-	mutex    sync.Mutex
+	requests        []*scpb.ReportRequest
+	errFunc         func(context.Context) error
+	reportErrors    []*scpb.ReportResponse_ReportError
+	reportAllErrors bool
+	mutex           sync.Mutex
 }
 
 func (c *fakeClient) Report(ctx context.Context, request *scpb.ReportRequest) (*scpb.ReportResponse, error) {
 	c.mutex.Lock()
 	c.requests = append(c.requests, request)
+	reportErrors := c.reportErrors
+	if c.reportAllErrors {
+		reportErrors = make([]*scpb.ReportResponse_ReportError, len(request.Operations))
+		for i, op := range request.Operations {
+			reportErrors[i] = &scpb.ReportResponse_ReportError{
+				OperationId: op.OperationId,
+				Status:      status.New(codes.PermissionDenied, "permission denied").Proto(),
+			}
+		}
+	}
 	c.mutex.Unlock()
 	return &scpb.ReportResponse{
-		ReportErrors:    nil,
+		ReportErrors:    reportErrors,
 		ServiceConfigId: "fake-id",
 	}, c.errFunc(ctx)
 }
@@ -1663,28 +1691,41 @@ func (f *fakeStatusReporterHost) Report(e *componentstatus.Event) {
 func TestReportStatus_PermanentAndRecoverableErrors(t *testing.T) {
 	tests := []struct {
 		name           string
-		errFunc        func(context.Context) error
+		client         *fakeClient
 		expectedStatus componentstatus.Status
 	}{
 		{
 			name: "recoverable error (unavailable)",
-			errFunc: func(context.Context) error {
+			client: newFakeClient(func(context.Context) error {
 				return status.Error(codes.Unavailable, "service unavailable")
-			},
+			}),
 			expectedStatus: componentstatus.StatusRecoverableError,
 		},
 		{
 			name: "permanent error (permission denied)",
-			errFunc: func(context.Context) error {
+			client: newFakeClient(func(context.Context) error {
 				return status.Error(codes.PermissionDenied, "permission denied")
-			},
+			}),
 			expectedStatus: componentstatus.StatusPermanentError,
 		},
 		{
-			name: "success",
-			errFunc: func(context.Context) error {
-				return nil
-			},
+			name:           "all operations rejected by service control",
+			client:         newFakeClientWithReportAllErrors(),
+			expectedStatus: componentstatus.StatusPermanentError,
+		},
+		{
+			name: "partial operations rejected by service control",
+			client: newFakeClientWithPartialReportErrors([]*scpb.ReportResponse_ReportError{
+				{
+					OperationId: "op-1",
+					Status:      status.New(codes.PermissionDenied, "permission denied").Proto(),
+				},
+			}),
+			expectedStatus: componentstatus.StatusRecoverableError,
+		},
+		{
+			name:           "success",
+			client:         newFakeClient(noError),
 			expectedStatus: componentstatus.StatusOK,
 		},
 	}
@@ -1692,13 +1733,12 @@ func TestReportStatus_PermanentAndRecoverableErrors(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			metrics := sampleMetricData(t)
-			c := newFakeClient(tc.errFunc)
 			cfg := Config{
 				ServiceName:     testServiceID,
 				ConsumerProject: testConsumerID,
 				ServiceConfigID: testServiceConfigID,
 			}
-			e := NewMetricsExporter(cfg, zap.NewNop(), c, componenttest.NewNopTelemetrySettings())
+			e := NewMetricsExporter(cfg, zap.NewNop(), tc.client, componenttest.NewNopTelemetrySettings())
 			fakeHost := &fakeStatusReporterHost{Host: componenttest.NewNopHost()}
 			require.NoError(t, e.Start(context.Background(), fakeHost))
 

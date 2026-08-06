@@ -244,12 +244,21 @@ func (e *Exporter) pushReportRequest(ctx context.Context, req *scpb.ReportReques
 		return consumererror.NewPermanent(err)
 	}
 
-	for _, re := range resp.GetReportErrors() {
+	reportErrors := resp.GetReportErrors()
+	for _, re := range reportErrors {
 		e.logger.Warnf("Service Control Report() partially failed, operation %s rejected: %+v", re.OperationId, re.Status)
 	}
 
-	// ReportStatus tells health check that everything is OK.
-	e.reportStatus(componentstatus.NewEvent(componentstatus.StatusOK))
+	if len(reportErrors) > 0 && len(reportErrors) == len(req.Operations) {
+		err := fmt.Errorf("all service control operations rejected (e.g. %s: %s)", reportErrors[0].GetOperationId(), reportErrors[0].GetStatus().GetMessage())
+		e.reportStatus(componentstatus.NewPermanentErrorEvent(err))
+		return consumererror.NewPermanent(err)
+	} else if len(reportErrors) > 0 {
+		e.reportStatus(componentstatus.NewRecoverableErrorEvent(fmt.Errorf("%d/%d service control operations rejected", len(reportErrors), len(req.Operations))))
+	} else {
+		// ReportStatus tells health check that everything is OK.
+		e.reportStatus(componentstatus.NewEvent(componentstatus.StatusOK))
+	}
 
 	return nil
 }

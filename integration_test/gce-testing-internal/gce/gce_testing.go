@@ -2071,8 +2071,21 @@ func downgradeGcloudIfNeeded(ctx context.Context, logger *log.Logger, vm *VM) er
 
 // verifyGcloudInstallation checks if the gcloud command is installed correctly in the VM.
 func verifyGcloudInstallation(ctx context.Context, logger *log.Logger, vm *VM) error {
-	_, err := RunRemotely(ctx, logger, vm, "sudo gcloud --version")
-	return err
+	// On Snap-managed distributions (e.g. Ubuntu 24.04 / ML images), wait for snapd to finish
+	// mounting and linking pre-seeded snaps (including google-cloud-cli) on first boot.
+	waitCmd := "if command -v snap >/dev/null 2>&1; then sudo snap wait system seed.loaded || true; fi"
+	if _, err := RunRemotely(ctx, logger, vm, waitCmd); err != nil && isSSHTransportError(err) {
+		return fmt.Errorf("failed waiting for snap initialization due to SSH error: %w", err)
+	}
+
+	backoffPolicy := backoff.WithContext(backoff.WithMaxRetries(backoff.NewConstantBackOff(3*time.Second), 5), ctx)
+	return backoff.Retry(func() error {
+		_, err := RunRemotely(ctx, logger, vm, "sudo gcloud --version")
+		if err != nil && isSSHTransportError(err) {
+			return backoff.Permanent(err)
+		}
+		return err
+	}, backoffPolicy)
 }
 
 // InstallGcloudIfNeeded installs gcloud cli on instances that don't already have

@@ -101,12 +101,6 @@ processors:
       - set(attributes["service.namespace"], resource.attributes["service.namespace"]) where resource.attributes["service.namespace"] != nil
       - set(attributes["service.instance.id"], resource.attributes["service.instance.id"]) where resource.attributes["service.instance.id"] != nil
 
-  transform/set_project_id:
-    error_mode: ignore
-    trace_statements:
-    - set(resource.attributes["gcp.project_id"], resource.attributes["gcp.project.id"]) where resource.attributes["gcp.project.id"] != nil
-    - set(resource.attributes["gcp.project_id"], resource.attributes["cloud.account.id"]) where resource.attributes["gcp.project_id"] == nil and resource.attributes["cloud.account.id"] != nil
-
 exporters:
   # The otlp_grpc exporter is used to send telemetry (logs, metrics, traces) to GCP Telemetry API using OTLP gRPC.
   #
@@ -169,7 +163,6 @@ service:
       - resourcedetection
       - resource/gcp_project_id
       - memory_limiter
-      - transform/set_project_id
       - batch
       exporters:
       - otlp_grpc

@@ -50,6 +50,13 @@ processors:
     detectors: [gcp]
     timeout: 10s
 
+  # The metricstarttime processor sets start time on delta metrics for OTLP export.
+  #
+  # Docs:
+  # https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/metricstarttimeprocessor
+  metricstarttime:
+    strategy: subtract_initial_point
+
   transform/collision:
     metric_statements:
     - context: datapoint
@@ -67,6 +74,23 @@ processors:
       - set(attributes["exported_project_id"], attributes["project_id"])
       - delete_key(attributes, "project_id")
 
+  transform/otlp_grpc/preserve_instrumentation_source_version:
+    error_mode: ignore
+    log_statements:
+    - context: log
+      statements:
+      - set(attributes["instrumentation_source"], instrumentation_scope.name) where instrumentation_scope.name != ""
+      - set(attributes["instrumentation_version"], instrumentation_scope.version) where instrumentation_scope.version != ""
+
+  transform/otlp_grpc/copy_service_resource_labels:
+    error_mode: ignore
+    log_statements:
+    - context: log
+      statements:
+      - set(attributes["service.name"], resource.attributes["service.name"]) where resource.attributes["service.name"] != nil
+      - set(attributes["service.namespace"], resource.attributes["service.namespace"]) where resource.attributes["service.namespace"] != nil
+      - set(attributes["service.instance.id"], resource.attributes["service.instance.id"]) where resource.attributes["service.instance.id"] != nil
+
   transform/set_project_id:
     error_mode: ignore
     trace_statements:
@@ -74,28 +98,27 @@ processors:
     - set(resource.attributes["gcp.project_id"], resource.attributes["cloud.account.id"]) where resource.attributes["gcp.project_id"] == nil and resource.attributes["cloud.account.id"] != nil
 
 exporters:
-  # The googlecloud exporter will export telemetry to different
-  # Google Cloud services:
-  # Logs -> Cloud Logging
-  # Metrics -> Cloud Monitoring
+  # The otlp_grpc exporters are used to send telemetry to GCP Telemetry API using OTLP gRPC:
+  # Logs -> GCP Telemetry API (LogsService)
+  # Metrics -> GCP Telemetry API (MetricsService)
+  # Traces -> GCP Telemetry API (TraceService)
   #
   # Docs:
-  # https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/googlecloudexporter
-  googlecloud:
-    log:
-      default_log_name: opentelemetry-collector
-
-  # The googlemanagedprometheus exporter will send metrics to
-  # Google Managed Service for Prometheus.
-  #
-  # Docs:
-  # https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/googlemanagedprometheusexporter
-  googlemanagedprometheus:
-
-  # The otlp exporter is used to send traces to GCP Telemetry API using OTLP gRPC
-  otlp:
+  # https://github.com/open-telemetry/opentelemetry-collector/tree/main/exporter/otlpexporter
+  otlp_grpc/logs:
     endpoint: telemetry.googleapis.com:443
-    compression: none
+    balancer_name: pick_first
+    auth:
+      authenticator: googleclientauth
+
+  otlp_grpc/metrics:
+    endpoint: telemetry.googleapis.com:443
+    balancer_name: pick_first
+    auth:
+      authenticator: googleclientauth
+
+  otlp_grpc/traces:
+    endpoint: telemetry.googleapis.com:443
     balancer_name: pick_first
     auth:
       authenticator: googleclientauth
@@ -125,20 +148,23 @@ service:
       - otlp
       processors:
       - resourcedetection
+      - transform/otlp_grpc/preserve_instrumentation_source_version
+      - transform/otlp_grpc/copy_service_resource_labels
       - memory_limiter
       - batch
       exporters:
-      - googlecloud
+      - otlp_grpc/logs
     metrics/otlp:
       receivers:
       - otlp
       processors:
       - resourcedetection
       - transform/collision
+      - metricstarttime
       - memory_limiter
       - batch
       exporters:
-      - googlemanagedprometheus
+      - otlp_grpc/metrics
     traces:
       receivers:
       - otlp
@@ -148,7 +174,7 @@ service:
       - transform/set_project_id
       - batch
       exporters:
-      - otlp
+      - otlp_grpc/traces
   # Internal telemetry for the collector supports both push and pull-based telemetry data transmission.
   # Leveraging the pre-configured OTLP receiver eliminates the need for an additional port.
   #

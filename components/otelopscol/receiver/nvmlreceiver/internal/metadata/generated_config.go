@@ -14,7 +14,7 @@ type NvmlGpuMemoryBytesUsedMetricAttributeKey string
 const (
 	NvmlGpuMemoryBytesUsedMetricAttributeKeyModel       NvmlGpuMemoryBytesUsedMetricAttributeKey = "model"
 	NvmlGpuMemoryBytesUsedMetricAttributeKeyGpuNumber   NvmlGpuMemoryBytesUsedMetricAttributeKey = "gpu_number"
-	NvmlGpuMemoryBytesUsedMetricAttributeKeyUuid        NvmlGpuMemoryBytesUsedMetricAttributeKey = "uuid"
+	NvmlGpuMemoryBytesUsedMetricAttributeKeyUUID        NvmlGpuMemoryBytesUsedMetricAttributeKey = "uuid"
 	NvmlGpuMemoryBytesUsedMetricAttributeKeyMemoryState NvmlGpuMemoryBytesUsedMetricAttributeKey = "memory_state"
 )
 
@@ -44,7 +44,7 @@ func (ms *NvmlGpuMemoryBytesUsedMetricConfig) Unmarshal(parser *confmap.Conf) er
 func (ms *NvmlGpuMemoryBytesUsedMetricConfig) Validate() error {
 	for _, val := range ms.EnabledAttributes {
 		switch val {
-		case NvmlGpuMemoryBytesUsedMetricAttributeKeyModel, NvmlGpuMemoryBytesUsedMetricAttributeKeyGpuNumber, NvmlGpuMemoryBytesUsedMetricAttributeKeyUuid, NvmlGpuMemoryBytesUsedMetricAttributeKeyMemoryState:
+		case NvmlGpuMemoryBytesUsedMetricAttributeKeyModel, NvmlGpuMemoryBytesUsedMetricAttributeKeyGpuNumber, NvmlGpuMemoryBytesUsedMetricAttributeKeyUUID, NvmlGpuMemoryBytesUsedMetricAttributeKeyMemoryState:
 		default:
 			return fmt.Errorf("metric nvml.gpu.memory.bytes_used doesn't have an attribute %v, valid attributes: [model, gpu_number, uuid, memory_state]", val)
 		}
@@ -65,7 +65,7 @@ type NvmlGpuProcessesMaxBytesUsedMetricAttributeKey string
 const (
 	NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyModel       NvmlGpuProcessesMaxBytesUsedMetricAttributeKey = "model"
 	NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyGpuNumber   NvmlGpuProcessesMaxBytesUsedMetricAttributeKey = "gpu_number"
-	NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyUuid        NvmlGpuProcessesMaxBytesUsedMetricAttributeKey = "uuid"
+	NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyUUID        NvmlGpuProcessesMaxBytesUsedMetricAttributeKey = "uuid"
 	NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyPid         NvmlGpuProcessesMaxBytesUsedMetricAttributeKey = "pid"
 	NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyProcess     NvmlGpuProcessesMaxBytesUsedMetricAttributeKey = "process"
 	NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyCommand     NvmlGpuProcessesMaxBytesUsedMetricAttributeKey = "command"
@@ -99,7 +99,7 @@ func (ms *NvmlGpuProcessesMaxBytesUsedMetricConfig) Unmarshal(parser *confmap.Co
 func (ms *NvmlGpuProcessesMaxBytesUsedMetricConfig) Validate() error {
 	for _, val := range ms.EnabledAttributes {
 		switch val {
-		case NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyModel, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyGpuNumber, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyUuid, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyPid, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyProcess, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyCommand, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyCommandLine, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyOwner:
+		case NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyModel, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyGpuNumber, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyUUID, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyPid, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyProcess, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyCommand, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyCommandLine, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyOwner:
 		default:
 			return fmt.Errorf("metric nvml.gpu.processes.max_bytes_used doesn't have an attribute %v, valid attributes: [model, gpu_number, uuid, pid, process, command, command_line, owner]", val)
 		}
@@ -120,7 +120,7 @@ type NvmlGpuProcessesUtilizationMetricAttributeKey string
 const (
 	NvmlGpuProcessesUtilizationMetricAttributeKeyModel       NvmlGpuProcessesUtilizationMetricAttributeKey = "model"
 	NvmlGpuProcessesUtilizationMetricAttributeKeyGpuNumber   NvmlGpuProcessesUtilizationMetricAttributeKey = "gpu_number"
-	NvmlGpuProcessesUtilizationMetricAttributeKeyUuid        NvmlGpuProcessesUtilizationMetricAttributeKey = "uuid"
+	NvmlGpuProcessesUtilizationMetricAttributeKeyUUID        NvmlGpuProcessesUtilizationMetricAttributeKey = "uuid"
 	NvmlGpuProcessesUtilizationMetricAttributeKeyPid         NvmlGpuProcessesUtilizationMetricAttributeKey = "pid"
 	NvmlGpuProcessesUtilizationMetricAttributeKeyProcess     NvmlGpuProcessesUtilizationMetricAttributeKey = "process"
 	NvmlGpuProcessesUtilizationMetricAttributeKeyCommand     NvmlGpuProcessesUtilizationMetricAttributeKey = "command"
@@ -154,7 +154,7 @@ func (ms *NvmlGpuProcessesUtilizationMetricConfig) Unmarshal(parser *confmap.Con
 func (ms *NvmlGpuProcessesUtilizationMetricConfig) Validate() error {
 	for _, val := range ms.EnabledAttributes {
 		switch val {
-		case NvmlGpuProcessesUtilizationMetricAttributeKeyModel, NvmlGpuProcessesUtilizationMetricAttributeKeyGpuNumber, NvmlGpuProcessesUtilizationMetricAttributeKeyUuid, NvmlGpuProcessesUtilizationMetricAttributeKeyPid, NvmlGpuProcessesUtilizationMetricAttributeKeyProcess, NvmlGpuProcessesUtilizationMetricAttributeKeyCommand, NvmlGpuProcessesUtilizationMetricAttributeKeyCommandLine, NvmlGpuProcessesUtilizationMetricAttributeKeyOwner:
+		case NvmlGpuProcessesUtilizationMetricAttributeKeyModel, NvmlGpuProcessesUtilizationMetricAttributeKeyGpuNumber, NvmlGpuProcessesUtilizationMetricAttributeKeyUUID, NvmlGpuProcessesUtilizationMetricAttributeKeyPid, NvmlGpuProcessesUtilizationMetricAttributeKeyProcess, NvmlGpuProcessesUtilizationMetricAttributeKeyCommand, NvmlGpuProcessesUtilizationMetricAttributeKeyCommandLine, NvmlGpuProcessesUtilizationMetricAttributeKeyOwner:
 		default:
 			return fmt.Errorf("metric nvml.gpu.processes.utilization doesn't have an attribute %v, valid attributes: [model, gpu_number, uuid, pid, process, command, command_line, owner]", val)
 		}
@@ -175,7 +175,7 @@ type NvmlGpuUtilizationMetricAttributeKey string
 const (
 	NvmlGpuUtilizationMetricAttributeKeyModel     NvmlGpuUtilizationMetricAttributeKey = "model"
 	NvmlGpuUtilizationMetricAttributeKeyGpuNumber NvmlGpuUtilizationMetricAttributeKey = "gpu_number"
-	NvmlGpuUtilizationMetricAttributeKeyUuid      NvmlGpuUtilizationMetricAttributeKey = "uuid"
+	NvmlGpuUtilizationMetricAttributeKeyUUID      NvmlGpuUtilizationMetricAttributeKey = "uuid"
 )
 
 // NvmlGpuUtilizationMetricConfig provides config for the nvml.gpu.utilization metric.
@@ -204,7 +204,7 @@ func (ms *NvmlGpuUtilizationMetricConfig) Unmarshal(parser *confmap.Conf) error 
 func (ms *NvmlGpuUtilizationMetricConfig) Validate() error {
 	for _, val := range ms.EnabledAttributes {
 		switch val {
-		case NvmlGpuUtilizationMetricAttributeKeyModel, NvmlGpuUtilizationMetricAttributeKeyGpuNumber, NvmlGpuUtilizationMetricAttributeKeyUuid:
+		case NvmlGpuUtilizationMetricAttributeKeyModel, NvmlGpuUtilizationMetricAttributeKeyGpuNumber, NvmlGpuUtilizationMetricAttributeKeyUUID:
 		default:
 			return fmt.Errorf("metric nvml.gpu.utilization doesn't have an attribute %v, valid attributes: [model, gpu_number, uuid]", val)
 		}
@@ -232,22 +232,22 @@ func DefaultMetricsConfig() MetricsConfig {
 		NvmlGpuMemoryBytesUsed: NvmlGpuMemoryBytesUsedMetricConfig{
 			Enabled:             true,
 			AggregationStrategy: AggregationStrategyAvg,
-			EnabledAttributes:   []NvmlGpuMemoryBytesUsedMetricAttributeKey{NvmlGpuMemoryBytesUsedMetricAttributeKeyModel, NvmlGpuMemoryBytesUsedMetricAttributeKeyGpuNumber, NvmlGpuMemoryBytesUsedMetricAttributeKeyUuid, NvmlGpuMemoryBytesUsedMetricAttributeKeyMemoryState},
+			EnabledAttributes:   []NvmlGpuMemoryBytesUsedMetricAttributeKey{NvmlGpuMemoryBytesUsedMetricAttributeKeyModel, NvmlGpuMemoryBytesUsedMetricAttributeKeyGpuNumber, NvmlGpuMemoryBytesUsedMetricAttributeKeyUUID, NvmlGpuMemoryBytesUsedMetricAttributeKeyMemoryState},
 		},
 		NvmlGpuProcessesMaxBytesUsed: NvmlGpuProcessesMaxBytesUsedMetricConfig{
 			Enabled:             true,
 			AggregationStrategy: AggregationStrategyAvg,
-			EnabledAttributes:   []NvmlGpuProcessesMaxBytesUsedMetricAttributeKey{NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyModel, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyGpuNumber, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyUuid, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyPid, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyProcess, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyCommand, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyCommandLine, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyOwner},
+			EnabledAttributes:   []NvmlGpuProcessesMaxBytesUsedMetricAttributeKey{NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyModel, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyGpuNumber, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyUUID, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyPid, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyProcess, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyCommand, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyCommandLine, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyOwner},
 		},
 		NvmlGpuProcessesUtilization: NvmlGpuProcessesUtilizationMetricConfig{
 			Enabled:             true,
 			AggregationStrategy: AggregationStrategyAvg,
-			EnabledAttributes:   []NvmlGpuProcessesUtilizationMetricAttributeKey{NvmlGpuProcessesUtilizationMetricAttributeKeyModel, NvmlGpuProcessesUtilizationMetricAttributeKeyGpuNumber, NvmlGpuProcessesUtilizationMetricAttributeKeyUuid, NvmlGpuProcessesUtilizationMetricAttributeKeyPid, NvmlGpuProcessesUtilizationMetricAttributeKeyProcess, NvmlGpuProcessesUtilizationMetricAttributeKeyCommand, NvmlGpuProcessesUtilizationMetricAttributeKeyCommandLine, NvmlGpuProcessesUtilizationMetricAttributeKeyOwner},
+			EnabledAttributes:   []NvmlGpuProcessesUtilizationMetricAttributeKey{NvmlGpuProcessesUtilizationMetricAttributeKeyModel, NvmlGpuProcessesUtilizationMetricAttributeKeyGpuNumber, NvmlGpuProcessesUtilizationMetricAttributeKeyUUID, NvmlGpuProcessesUtilizationMetricAttributeKeyPid, NvmlGpuProcessesUtilizationMetricAttributeKeyProcess, NvmlGpuProcessesUtilizationMetricAttributeKeyCommand, NvmlGpuProcessesUtilizationMetricAttributeKeyCommandLine, NvmlGpuProcessesUtilizationMetricAttributeKeyOwner},
 		},
 		NvmlGpuUtilization: NvmlGpuUtilizationMetricConfig{
 			Enabled:             true,
 			AggregationStrategy: AggregationStrategyAvg,
-			EnabledAttributes:   []NvmlGpuUtilizationMetricAttributeKey{NvmlGpuUtilizationMetricAttributeKeyModel, NvmlGpuUtilizationMetricAttributeKeyGpuNumber, NvmlGpuUtilizationMetricAttributeKeyUuid},
+			EnabledAttributes:   []NvmlGpuUtilizationMetricAttributeKey{NvmlGpuUtilizationMetricAttributeKeyModel, NvmlGpuUtilizationMetricAttributeKeyGpuNumber, NvmlGpuUtilizationMetricAttributeKeyUUID},
 		},
 	}
 }

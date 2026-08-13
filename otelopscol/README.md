@@ -19,7 +19,7 @@
 | fluentforward | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/fluentforwardreceiver/README.md) |
 | hostmetrics | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/hostmetricsreceiver/README.md) |
 | iis | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/iisreceiver/README.md) |
-| jmx | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/jmxreceiver/README.md) |
+| jmx | [docs](No docs linked for component) |
 | journald | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/journaldreceiver/README.md) |
 | memcached | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/memcachedreceiver/README.md) |
 | mongodb | [docs](No docs linked for component) |

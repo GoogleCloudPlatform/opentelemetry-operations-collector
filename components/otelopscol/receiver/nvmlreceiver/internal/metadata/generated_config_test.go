@@ -29,22 +29,22 @@ func TestMetricsBuilderConfig(t *testing.T) {
 					NvmlGpuMemoryBytesUsed: NvmlGpuMemoryBytesUsedMetricConfig{
 						Enabled:             true,
 						AggregationStrategy: AggregationStrategyAvg,
-						EnabledAttributes:   []NvmlGpuMemoryBytesUsedMetricAttributeKey{NvmlGpuMemoryBytesUsedMetricAttributeKeyModel, NvmlGpuMemoryBytesUsedMetricAttributeKeyGpuNumber, NvmlGpuMemoryBytesUsedMetricAttributeKeyUuid, NvmlGpuMemoryBytesUsedMetricAttributeKeyMemoryState},
+						EnabledAttributes:   []NvmlGpuMemoryBytesUsedMetricAttributeKey{NvmlGpuMemoryBytesUsedMetricAttributeKeyModel, NvmlGpuMemoryBytesUsedMetricAttributeKeyGpuNumber, NvmlGpuMemoryBytesUsedMetricAttributeKeyUUID, NvmlGpuMemoryBytesUsedMetricAttributeKeyMemoryState},
 					},
 					NvmlGpuProcessesMaxBytesUsed: NvmlGpuProcessesMaxBytesUsedMetricConfig{
 						Enabled:             true,
 						AggregationStrategy: AggregationStrategyAvg,
-						EnabledAttributes:   []NvmlGpuProcessesMaxBytesUsedMetricAttributeKey{NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyModel, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyGpuNumber, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyUuid, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyPid, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyProcess, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyCommand, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyCommandLine, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyOwner},
+						EnabledAttributes:   []NvmlGpuProcessesMaxBytesUsedMetricAttributeKey{NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyModel, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyGpuNumber, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyUUID, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyPid, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyProcess, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyCommand, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyCommandLine, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyOwner},
 					},
 					NvmlGpuProcessesUtilization: NvmlGpuProcessesUtilizationMetricConfig{
 						Enabled:             true,
 						AggregationStrategy: AggregationStrategyAvg,
-						EnabledAttributes:   []NvmlGpuProcessesUtilizationMetricAttributeKey{NvmlGpuProcessesUtilizationMetricAttributeKeyModel, NvmlGpuProcessesUtilizationMetricAttributeKeyGpuNumber, NvmlGpuProcessesUtilizationMetricAttributeKeyUuid, NvmlGpuProcessesUtilizationMetricAttributeKeyPid, NvmlGpuProcessesUtilizationMetricAttributeKeyProcess, NvmlGpuProcessesUtilizationMetricAttributeKeyCommand, NvmlGpuProcessesUtilizationMetricAttributeKeyCommandLine, NvmlGpuProcessesUtilizationMetricAttributeKeyOwner},
+						EnabledAttributes:   []NvmlGpuProcessesUtilizationMetricAttributeKey{NvmlGpuProcessesUtilizationMetricAttributeKeyModel, NvmlGpuProcessesUtilizationMetricAttributeKeyGpuNumber, NvmlGpuProcessesUtilizationMetricAttributeKeyUUID, NvmlGpuProcessesUtilizationMetricAttributeKeyPid, NvmlGpuProcessesUtilizationMetricAttributeKeyProcess, NvmlGpuProcessesUtilizationMetricAttributeKeyCommand, NvmlGpuProcessesUtilizationMetricAttributeKeyCommandLine, NvmlGpuProcessesUtilizationMetricAttributeKeyOwner},
 					},
 					NvmlGpuUtilization: NvmlGpuUtilizationMetricConfig{
 						Enabled:             true,
 						AggregationStrategy: AggregationStrategyAvg,
-						EnabledAttributes:   []NvmlGpuUtilizationMetricAttributeKey{NvmlGpuUtilizationMetricAttributeKeyModel, NvmlGpuUtilizationMetricAttributeKeyGpuNumber, NvmlGpuUtilizationMetricAttributeKeyUuid},
+						EnabledAttributes:   []NvmlGpuUtilizationMetricAttributeKey{NvmlGpuUtilizationMetricAttributeKeyModel, NvmlGpuUtilizationMetricAttributeKeyGpuNumber, NvmlGpuUtilizationMetricAttributeKeyUUID},
 					},
 				},
 			},
@@ -56,22 +56,22 @@ func TestMetricsBuilderConfig(t *testing.T) {
 					NvmlGpuMemoryBytesUsed: NvmlGpuMemoryBytesUsedMetricConfig{
 						Enabled:             false,
 						AggregationStrategy: AggregationStrategyAvg,
-						EnabledAttributes:   []NvmlGpuMemoryBytesUsedMetricAttributeKey{NvmlGpuMemoryBytesUsedMetricAttributeKeyModel, NvmlGpuMemoryBytesUsedMetricAttributeKeyGpuNumber, NvmlGpuMemoryBytesUsedMetricAttributeKeyUuid, NvmlGpuMemoryBytesUsedMetricAttributeKeyMemoryState},
+						EnabledAttributes:   []NvmlGpuMemoryBytesUsedMetricAttributeKey{NvmlGpuMemoryBytesUsedMetricAttributeKeyModel, NvmlGpuMemoryBytesUsedMetricAttributeKeyGpuNumber, NvmlGpuMemoryBytesUsedMetricAttributeKeyUUID, NvmlGpuMemoryBytesUsedMetricAttributeKeyMemoryState},
 					},
 					NvmlGpuProcessesMaxBytesUsed: NvmlGpuProcessesMaxBytesUsedMetricConfig{
 						Enabled:             false,
 						AggregationStrategy: AggregationStrategyAvg,
-						EnabledAttributes:   []NvmlGpuProcessesMaxBytesUsedMetricAttributeKey{NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyModel, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyGpuNumber, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyUuid, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyPid, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyProcess, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyCommand, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyCommandLine, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyOwner},
+						EnabledAttributes:   []NvmlGpuProcessesMaxBytesUsedMetricAttributeKey{NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyModel, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyGpuNumber, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyUUID, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyPid, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyProcess, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyCommand, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyCommandLine, NvmlGpuProcessesMaxBytesUsedMetricAttributeKeyOwner},
 					},
 					NvmlGpuProcessesUtilization: NvmlGpuProcessesUtilizationMetricConfig{
 						Enabled:             false,
 						AggregationStrategy: AggregationStrategyAvg,
-						EnabledAttributes:   []NvmlGpuProcessesUtilizationMetricAttributeKey{NvmlGpuProcessesUtilizationMetricAttributeKeyModel, NvmlGpuProcessesUtilizationMetricAttributeKeyGpuNumber, NvmlGpuProcessesUtilizationMetricAttributeKeyUuid, NvmlGpuProcessesUtilizationMetricAttributeKeyPid, NvmlGpuProcessesUtilizationMetricAttributeKeyProcess, NvmlGpuProcessesUtilizationMetricAttributeKeyCommand, NvmlGpuProcessesUtilizationMetricAttributeKeyCommandLine, NvmlGpuProcessesUtilizationMetricAttributeKeyOwner},
+						EnabledAttributes:   []NvmlGpuProcessesUtilizationMetricAttributeKey{NvmlGpuProcessesUtilizationMetricAttributeKeyModel, NvmlGpuProcessesUtilizationMetricAttributeKeyGpuNumber, NvmlGpuProcessesUtilizationMetricAttributeKeyUUID, NvmlGpuProcessesUtilizationMetricAttributeKeyPid, NvmlGpuProcessesUtilizationMetricAttributeKeyProcess, NvmlGpuProcessesUtilizationMetricAttributeKeyCommand, NvmlGpuProcessesUtilizationMetricAttributeKeyCommandLine, NvmlGpuProcessesUtilizationMetricAttributeKeyOwner},
 					},
 					NvmlGpuUtilization: NvmlGpuUtilizationMetricConfig{
 						Enabled:             false,
 						AggregationStrategy: AggregationStrategyAvg,
-						EnabledAttributes:   []NvmlGpuUtilizationMetricAttributeKey{NvmlGpuUtilizationMetricAttributeKeyModel, NvmlGpuUtilizationMetricAttributeKeyGpuNumber, NvmlGpuUtilizationMetricAttributeKeyUuid},
+						EnabledAttributes:   []NvmlGpuUtilizationMetricAttributeKey{NvmlGpuUtilizationMetricAttributeKeyModel, NvmlGpuUtilizationMetricAttributeKeyGpuNumber, NvmlGpuUtilizationMetricAttributeKeyUUID},
 					},
 				},
 			},
@@ -84,6 +84,53 @@ func TestMetricsBuilderConfig(t *testing.T) {
 			require.Emptyf(t, diff, "Config mismatch (-expected +actual):\n%s", diff)
 		})
 	}
+}
+func TestNvmlGpuMemoryBytesUsedMetricsConfig_Validate(t *testing.T) {
+	cfg := DefaultMetricsConfig().NvmlGpuMemoryBytesUsed
+	require.NoError(t, cfg.Validate())
+
+	cfg.EnabledAttributes = []NvmlGpuMemoryBytesUsedMetricAttributeKey{"invalid"}
+	require.ErrorContains(t, cfg.Validate(), "metric nvml.gpu.memory.bytes_used doesn't have an attribute invalid, valid attributes: [model, gpu_number, uuid, memory_state]")
+
+	cfg = DefaultMetricsConfig().NvmlGpuMemoryBytesUsed
+	cfg.AggregationStrategy = "invalid"
+	require.ErrorContains(t, cfg.Validate(), "invalid aggregation strategy")
+}
+
+func TestNvmlGpuProcessesMaxBytesUsedMetricsConfig_Validate(t *testing.T) {
+	cfg := DefaultMetricsConfig().NvmlGpuProcessesMaxBytesUsed
+	require.NoError(t, cfg.Validate())
+
+	cfg.EnabledAttributes = []NvmlGpuProcessesMaxBytesUsedMetricAttributeKey{"invalid"}
+	require.ErrorContains(t, cfg.Validate(), "metric nvml.gpu.processes.max_bytes_used doesn't have an attribute invalid, valid attributes: [model, gpu_number, uuid, pid, process, command, command_line, owner]")
+
+	cfg = DefaultMetricsConfig().NvmlGpuProcessesMaxBytesUsed
+	cfg.AggregationStrategy = "invalid"
+	require.ErrorContains(t, cfg.Validate(), "invalid aggregation strategy")
+}
+
+func TestNvmlGpuProcessesUtilizationMetricsConfig_Validate(t *testing.T) {
+	cfg := DefaultMetricsConfig().NvmlGpuProcessesUtilization
+	require.NoError(t, cfg.Validate())
+
+	cfg.EnabledAttributes = []NvmlGpuProcessesUtilizationMetricAttributeKey{"invalid"}
+	require.ErrorContains(t, cfg.Validate(), "metric nvml.gpu.processes.utilization doesn't have an attribute invalid, valid attributes: [model, gpu_number, uuid, pid, process, command, command_line, owner]")
+
+	cfg = DefaultMetricsConfig().NvmlGpuProcessesUtilization
+	cfg.AggregationStrategy = "invalid"
+	require.ErrorContains(t, cfg.Validate(), "invalid aggregation strategy")
+}
+
+func TestNvmlGpuUtilizationMetricsConfig_Validate(t *testing.T) {
+	cfg := DefaultMetricsConfig().NvmlGpuUtilization
+	require.NoError(t, cfg.Validate())
+
+	cfg.EnabledAttributes = []NvmlGpuUtilizationMetricAttributeKey{"invalid"}
+	require.ErrorContains(t, cfg.Validate(), "metric nvml.gpu.utilization doesn't have an attribute invalid, valid attributes: [model, gpu_number, uuid]")
+
+	cfg = DefaultMetricsConfig().NvmlGpuUtilization
+	cfg.AggregationStrategy = "invalid"
+	require.ErrorContains(t, cfg.Validate(), "invalid aggregation strategy")
 }
 
 func loadMetricsBuilderConfig(t *testing.T, name string) MetricsBuilderConfig {

@@ -127,7 +127,7 @@ func TestGpuUtilizationIsAveraged(t *testing.T) {
 		device nvml.Device, _type nvml.SamplingType, LastSeenTimeStamp uint64) (nvml.ValueType, []nvml.Sample, nvml.Return) {
 		sampleCount := 61
 		samples := make([]nvml.Sample, sampleCount)
-		for i, _ := range samples {
+		for i := range samples {
 			x := float64(i) / float64(sampleCount) * math.Pi
 			y := int64(100.0 * math.Sin(x) * math.Sin(x))
 			*(*int64)(unsafe.Pointer(&samples[i].SampleValue[0])) = y

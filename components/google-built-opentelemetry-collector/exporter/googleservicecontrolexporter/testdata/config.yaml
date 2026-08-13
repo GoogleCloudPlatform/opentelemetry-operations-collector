@@ -30,6 +30,12 @@ exporters:
     log:
       default_log_name: "log-name"
       operation_name: "test-operation-name"
+      timeout: "5s"
+      retry_on_failure:
+        enabled: true
+        initial_interval: "2s"
+        max_interval: "5s"
+        max_elapsed_time: "50s"
 
   googleservicecontrol/required_params:
     service_name: "test.service.name"

@@ -121,9 +121,6 @@ receivers:
     jaeger:
         gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jaegerreceiver
         docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/jaegerreceiver/README.md
-    jmx:
-        gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver
-        docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/jmxreceiver/README.md
     journald:
         gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/journaldreceiver
         docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/journaldreceiver/README.md

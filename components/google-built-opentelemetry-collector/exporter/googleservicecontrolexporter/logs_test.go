@@ -131,7 +131,7 @@ func TestLogsAddAndBuild(t *testing.T) {
 		{
 			name: "empty log, empty monitoredresource",
 			logs: []logData{
-				logData{
+				{
 					Logs: func() []plog.LogRecord {
 						log := plog.NewLogRecord()
 						log.SetTimestamp(timestamp)
@@ -150,7 +150,7 @@ func TestLogsAddAndBuild(t *testing.T) {
 		{
 			name: "empty log, empty monitoredresource, with observerd timestamp",
 			logs: []logData{
-				logData{
+				{
 					Logs: func() []plog.LogRecord {
 						log := plog.NewLogRecord()
 						log.SetObservedTimestamp(timestamp)
@@ -169,7 +169,7 @@ func TestLogsAddAndBuild(t *testing.T) {
 		{
 			name: "log with json, empty monitoredresource",
 			logs: []logData{
-				logData{
+				{
 					Logs: func() []plog.LogRecord {
 						log := plog.NewLogRecord()
 						log.Body().SetEmptyMap().PutStr("this", "is json")
@@ -192,7 +192,7 @@ func TestLogsAddAndBuild(t *testing.T) {
 		{
 			name: "log with invalid json byte body returns raw byte string",
 			logs: []logData{
-				logData{
+				{
 					Logs: func() []plog.LogRecord {
 						log := plog.NewLogRecord()
 						log.Body().SetEmptyBytes().FromRaw([]byte(`"this is not json"`))
@@ -213,7 +213,7 @@ func TestLogsAddAndBuild(t *testing.T) {
 		{
 			name: "log with json and httpRequest, empty monitoredresource",
 			logs: []logData{
-				logData{
+				{
 					Logs: func() []plog.LogRecord {
 						log := plog.NewLogRecord()
 						log.Body().SetEmptyMap().PutStr("message", "hello!")
@@ -267,7 +267,7 @@ func TestLogsAddAndBuild(t *testing.T) {
 		{
 			name: "log with httpRequest attribute unsupported type",
 			logs: []logData{
-				logData{
+				{
 					Logs: func() []plog.LogRecord {
 						log := plog.NewLogRecord()
 						log.Body().SetEmptyMap().PutStr("message", "hello!")
@@ -291,7 +291,7 @@ func TestLogsAddAndBuild(t *testing.T) {
 		{
 			name: "log body with string value",
 			logs: []logData{
-				logData{
+				{
 					Logs: func() []plog.LogRecord {
 						log := plog.NewLogRecord()
 						log.Body().SetStr("{\"message\": \"hello!\"}")
@@ -314,7 +314,7 @@ func TestLogsAddAndBuild(t *testing.T) {
 		{
 			name: "log with log name set in attributes",
 			logs: []logData{
-				logData{
+				{
 					Logs: func() []plog.LogRecord {
 						log := plog.NewLogRecord()
 						log.Attributes().PutStr(LogNameAttributeKey, "foo-log")
@@ -338,7 +338,7 @@ func TestLogsAddAndBuild(t *testing.T) {
 		{
 			name: "set default log name through config",
 			logs: []logData{
-				logData{
+				{
 					Logs: func() []plog.LogRecord {
 						log := plog.NewLogRecord()
 						log.Body().SetStr("test1")
@@ -364,7 +364,7 @@ func TestLogsAddAndBuild(t *testing.T) {
 		{
 			name: "set default log name through config, but log name attribute should take priority",
 			logs: []logData{
-				logData{
+				{
 					Logs: func() []plog.LogRecord {
 						log := plog.NewLogRecord()
 						log.Attributes().PutStr(LogNameAttributeKey, "foo-log")
@@ -391,7 +391,7 @@ func TestLogsAddAndBuild(t *testing.T) {
 		{
 			name: "set insert id from insert id attribute",
 			logs: []logData{
-				logData{
+				{
 					Logs: func() []plog.LogRecord {
 						log := plog.NewLogRecord()
 						log.Attributes().PutStr(InsertIdAttributeKey, "foo-insert-id")
@@ -412,7 +412,7 @@ func TestLogsAddAndBuild(t *testing.T) {
 		{
 			name: "parse severity number correctly",
 			logs: []logData{
-				logData{
+				{
 					Logs: func() []plog.LogRecord {
 						log := plog.NewLogRecord()
 						log.SetSeverityNumber(18)
@@ -433,7 +433,7 @@ func TestLogsAddAndBuild(t *testing.T) {
 		{
 			name: "log with invalid severity number",
 			logs: []logData{
-				logData{
+				{
 					Logs: func() []plog.LogRecord {
 						log := plog.NewLogRecord()
 						log.SetSeverityNumber(100)
@@ -454,7 +454,7 @@ func TestLogsAddAndBuild(t *testing.T) {
 		{
 			name: "parse severity text correctly",
 			logs: []logData{
-				logData{
+				{
 					Logs: func() []plog.LogRecord {
 						log := plog.NewLogRecord()
 						log.SetSeverityText("ERROR")
@@ -475,7 +475,7 @@ func TestLogsAddAndBuild(t *testing.T) {
 		{
 			name: "parse severity number over severiy text",
 			logs: []logData{
-				logData{
+				{
 					Logs: func() []plog.LogRecord {
 						log := plog.NewLogRecord()
 						// 11 is NOTICE
@@ -498,7 +498,7 @@ func TestLogsAddAndBuild(t *testing.T) {
 		{
 			name: "parse severity text over severiy number when number is invalid",
 			logs: []logData{
-				logData{
+				{
 					Logs: func() []plog.LogRecord {
 						log := plog.NewLogRecord()
 						log.SetSeverityNumber(0)
@@ -520,7 +520,7 @@ func TestLogsAddAndBuild(t *testing.T) {
 		{
 			name: "log with valid sourceLocation (bytes)",
 			logs: []logData{
-				logData{
+				{
 					Logs: func() []plog.LogRecord {
 						log := plog.NewLogRecord()
 						log.Attributes().PutStr(LogNameAttributeKey, "foo-log")
@@ -552,7 +552,7 @@ func TestLogsAddAndBuild(t *testing.T) {
 		{
 			name: "log with invalid sourceLocation (bytes)",
 			logs: []logData{
-				logData{
+				{
 					Logs: func() []plog.LogRecord {
 						log := plog.NewLogRecord()
 						log.Attributes().PutStr(LogNameAttributeKey, "foo-log")
@@ -570,7 +570,7 @@ func TestLogsAddAndBuild(t *testing.T) {
 		{
 			name: "log with valid sourceLocation (map)",
 			logs: []logData{
-				logData{
+				{
 					Logs: func() []plog.LogRecord {
 						log := plog.NewLogRecord()
 						sourceLocationMap := log.Attributes().PutEmptyMap(SourceLocationAttributeKey)
@@ -598,7 +598,7 @@ func TestLogsAddAndBuild(t *testing.T) {
 		{
 			name: "log with invalid sourceLocation (map)",
 			logs: []logData{
-				logData{
+				{
 					Logs: func() []plog.LogRecord {
 						log := plog.NewLogRecord()
 						sourceLocationMap := log.Attributes().PutEmptyMap(SourceLocationAttributeKey)
@@ -613,7 +613,7 @@ func TestLogsAddAndBuild(t *testing.T) {
 		{
 			name: "log with valid sourceLocation (string)",
 			logs: []logData{
-				logData{
+				{
 					Logs: func() []plog.LogRecord {
 						log := plog.NewLogRecord()
 						log.Attributes().PutStr(
@@ -641,7 +641,7 @@ func TestLogsAddAndBuild(t *testing.T) {
 		{
 			name: "log with invalid sourceLocation (string)",
 			logs: []logData{
-				logData{
+				{
 					Logs: func() []plog.LogRecord {
 						log := plog.NewLogRecord()
 						log.Attributes().PutStr(
@@ -658,7 +658,7 @@ func TestLogsAddAndBuild(t *testing.T) {
 		{
 			name: "log with unsupported sourceLocation type",
 			logs: []logData{
-				logData{
+				{
 					Logs: func() []plog.LogRecord {
 						log := plog.NewLogRecord()
 						log.Attributes().PutBool(SourceLocationAttributeKey, true)
@@ -676,7 +676,7 @@ func TestLogsAddAndBuild(t *testing.T) {
 		{
 			name: "two logs",
 			logs: []logData{
-				logData{
+				{
 					Logs: func() []plog.LogRecord {
 						log1 := plog.NewLogRecord()
 						log1.Attributes().PutStr(LogNameAttributeKey, "foo-log-1")
@@ -712,7 +712,7 @@ func TestLogsAddAndBuild(t *testing.T) {
 		{
 			name: "two logs with log labels",
 			logs: []logData{
-				logData{
+				{
 					Logs: func() []plog.LogRecord {
 						log1 := plog.NewLogRecord()
 						log1.Attributes().PutStr(LogNameAttributeKey, "foo-log-1")
@@ -756,7 +756,7 @@ func TestLogsAddAndBuild(t *testing.T) {
 		{
 			name: "log with json, sample monitoredresource",
 			logs: []logData{
-				logData{
+				{
 					Logs: func() []plog.LogRecord {
 						log := plog.NewLogRecord()
 						log.Body().SetEmptyMap().PutStr("this", "is json")
@@ -784,7 +784,7 @@ func TestLogsAddAndBuild(t *testing.T) {
 		{
 			name: "log with json, sample monitoredresource and labels",
 			logs: []logData{
-				logData{
+				{
 					Logs: func() []plog.LogRecord {
 						log := plog.NewLogRecord()
 						log.Body().SetEmptyMap().PutStr("this", "is json")
@@ -817,7 +817,7 @@ func TestLogsAddAndBuild(t *testing.T) {
 		{
 			name: "two logs with same monitored resource",
 			logs: []logData{
-				logData{
+				{
 					Logs: func() []plog.LogRecord {
 						log1 := plog.NewLogRecord()
 						log1.Attributes().PutStr(LogNameAttributeKey, "foo-log-1")
@@ -858,7 +858,7 @@ func TestLogsAddAndBuild(t *testing.T) {
 		{
 			name: "three logs with different monitored resource",
 			logs: []logData{
-				logData{
+				{
 					Logs: func() []plog.LogRecord {
 						log1 := plog.NewLogRecord()
 						log1.Attributes().PutStr(LogNameAttributeKey, "foo-log-1")
@@ -872,7 +872,7 @@ func TestLogsAddAndBuild(t *testing.T) {
 					}(),
 					Resource: sampleResource(),
 				},
-				logData{
+				{
 					Logs: func() []plog.LogRecord {
 						log1 := plog.NewLogRecord()
 						log1.Attributes().PutStr(LogNameAttributeKey, "foo-log-1")

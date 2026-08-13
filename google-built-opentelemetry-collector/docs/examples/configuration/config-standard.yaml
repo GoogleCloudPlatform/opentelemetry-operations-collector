@@ -50,6 +50,16 @@ processors:
     detectors: [gcp]
     timeout: 10s
 
+  # The resource/gcp_project_id processor sets the GCP project ID attribute on telemetry data exported via OTLP.
+  #
+  # Docs:
+  # https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/resourceprocessor
+  resource/gcp_project_id:
+    attributes:
+    - action: insert
+      key: gcp.project_id
+      value: ${GOOGLE_CLOUD_PROJECT}
+
   # The metricstarttime processor sets start time on delta metrics for OTLP export.
   #
   # Docs:
@@ -133,6 +143,7 @@ service:
       - otlp
       processors:
       - resourcedetection
+      - resource/gcp_project_id
       - transform/otlp_grpc/preserve_instrumentation_source_version
       - transform/otlp_grpc/copy_service_resource_labels
       - memory_limiter
@@ -144,6 +155,7 @@ service:
       - otlp
       processors:
       - resourcedetection
+      - resource/gcp_project_id
       - transform/collision
       - metricstarttime
       - memory_limiter
@@ -155,6 +167,7 @@ service:
       - otlp
       processors:
       - resourcedetection
+      - resource/gcp_project_id
       - memory_limiter
       - transform/set_project_id
       - batch

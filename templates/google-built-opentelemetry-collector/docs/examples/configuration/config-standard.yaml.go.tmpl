@@ -98,26 +98,11 @@ processors:
     - set(resource.attributes["gcp.project_id"], resource.attributes["cloud.account.id"]) where resource.attributes["gcp.project_id"] == nil and resource.attributes["cloud.account.id"] != nil
 
 exporters:
-  # The otlp_grpc exporters are used to send telemetry to GCP Telemetry API using OTLP gRPC:
-  # Logs -> GCP Telemetry API (LogsService)
-  # Metrics -> GCP Telemetry API (MetricsService)
-  # Traces -> GCP Telemetry API (TraceService)
+  # The otlp_grpc exporter is used to send telemetry (logs, metrics, traces) to GCP Telemetry API using OTLP gRPC.
   #
   # Docs:
   # https://github.com/open-telemetry/opentelemetry-collector/tree/main/exporter/otlpexporter
-  otlp_grpc/logs:
-    endpoint: telemetry.googleapis.com:443
-    balancer_name: pick_first
-    auth:
-      authenticator: googleclientauth
-
-  otlp_grpc/metrics:
-    endpoint: telemetry.googleapis.com:443
-    balancer_name: pick_first
-    auth:
-      authenticator: googleclientauth
-
-  otlp_grpc/traces:
+  otlp_grpc:
     endpoint: telemetry.googleapis.com:443
     balancer_name: pick_first
     auth:
@@ -153,7 +138,7 @@ service:
       - memory_limiter
       - batch
       exporters:
-      - otlp_grpc/logs
+      - otlp_grpc
     metrics/otlp:
       receivers:
       - otlp
@@ -164,7 +149,7 @@ service:
       - memory_limiter
       - batch
       exporters:
-      - otlp_grpc/metrics
+      - otlp_grpc
     traces:
       receivers:
       - otlp
@@ -174,7 +159,7 @@ service:
       - transform/set_project_id
       - batch
       exporters:
-      - otlp_grpc/traces
+      - otlp_grpc
   # Internal telemetry for the collector supports both push and pull-based telemetry data transmission.
   # Leveraging the pre-configured OTLP receiver eliminates the need for an additional port.
   #

@@ -89,6 +89,17 @@ write_files:
           - set(attributes["exported_project_id"], attributes["project_id"])
           - delete_key(attributes, "project_id")
 
+      # For each Prometheus unknown-typed metric, which is a gauge, create a counter that is an exact copy of this metric.
+      # The GCP OTLP endpoint will add appropriate suffixes for the counter and gauge.
+      transform/prometheus_unknown_types:
+        error_mode: ignore
+        metric_statements:
+        - context: metric
+          statements:
+          - copy_metric(Concat([metric.name, "unknowncounter"], ":")) where metric.metadata["prometheus.type"] == "unknown" and not HasSuffix(metric.name, ":unknowncounter")
+          - convert_gauge_to_sum("cumulative", true) where HasSuffix(metric.name, ":unknowncounter")
+          - set(metric.name, Substring(metric.name, 0, Len(metric.name)-Len(":unknowncounter"))) where HasSuffix(metric.name, ":unknowncounter")
+
       transform/otlp_grpc/preserve_instrumentation_source_version:
         error_mode: ignore
         log_statements:
@@ -143,6 +154,7 @@ write_files:
           - resourcedetection
           - resource/gcp_project_id
           - transform/collision
+          - transform/prometheus_unknown_types
           - metricstarttime
           - memory_limiter
           - batch

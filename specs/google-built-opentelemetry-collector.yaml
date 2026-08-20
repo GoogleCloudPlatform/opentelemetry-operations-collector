@@ -56,7 +56,6 @@ components:
     - receivercreator
     - zipkin
     - dockerstats
-    - jmx
     - redis
     - statsd
     - syslog

@@ -866,8 +866,6 @@ github.com/open-telemetry/opentelemetry-collector-contrib/receiver/iisreceiver v
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/iisreceiver v0.156.0/go.mod h1:/X5iin6MEAT1s8Xttla3Jhbv+Uf3fqgwA+7BqBoGcpM=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jaegerreceiver v0.156.0 h1:5wRMROYkAyZCUVqguu7573pBTWq++/AK0GaEZzC+ncg=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jaegerreceiver v0.156.0/go.mod h1:/ZBVGaLPGS0jCIM66dF8/en1akVe7pN/K0oqnUFyXU0=
-github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver v0.156.0 h1:pbQJ6SKoFWlZzDlSlPxGXyqwzyWeob7TCAZRydUhS+Y=
-github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver v0.156.0/go.mod h1:daLSrYUFFh1NYCTZrGQ5cn28gBRP4csDEYq4Y/wr6as=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/journaldreceiver v0.156.0 h1:0zJXhrlgXcOojHmhTy/IWAdjg8s+RsaGNEl7dETW838=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/journaldreceiver v0.156.0/go.mod h1:IInsyp1gv3iwy3PgDbxLhfu69hfItX1m2tlL3ccpPDw=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/k8sclusterreceiver v0.156.0 h1:sZ3ZJliT1gGqk/GFpkCS+/3Fj1p9az9VVx9An+jhh8E=
@@ -1501,8 +1499,8 @@ google.golang.org/genproto/googleapis/api v0.0.0-20260526163538-3dc84a4a5aaa h1:
 google.golang.org/genproto/googleapis/api v0.0.0-20260526163538-3dc84a4a5aaa/go.mod h1:q4lMZS6kskjT5HvCPrnnypcDPVJqT/f4nfxmkE7gryY=
 google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa h1:mZHHdPZl0dbGHCflZgAq/Q468DWVFcU2whhB2KAo8fk=
 google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa/go.mod h1:4Hqkh8ycfw05ld/3BWL7rJOSfebL2Q+DVDeRgYgxUU8=
-google.golang.org/grpc v1.82.0 h1:vguDnZUPjE26w09A63VoxZPnvPjB5Riyc0mkXPFmAIU=
-google.golang.org/grpc v1.82.0/go.mod h1:yzTZ1TB1Z3SG+LIYaI+WiE8D5+PZ3ArnrSp8zF3+/ZA=
+google.golang.org/grpc v1.82.1 h1:NnAxzGRA0677vCa4BUkOAnO5+FfQqVl9iUXeD0IqcGE=
+google.golang.org/grpc v1.82.1/go.mod h1:yzTZ1TB1Z3SG+LIYaI+WiE8D5+PZ3ArnrSp8zF3+/ZA=
 google.golang.org/protobuf v1.36.11 h1:fV6ZwhNocDyBLK0dj+fg8ektcVegBBuEolpbTQyBNVE=
 google.golang.org/protobuf v1.36.11/go.mod h1:HTf+CrKn2C3g5S8VImy6tdcUvCska2kB7j23XfzDpco=
 gopkg.in/alecthomas/kingpin.v2 v2.2.6/go.mod h1:FMv+mEhP44yOT+4EoQTLFTRgOQ1FBLkstjWtayDeSgw=

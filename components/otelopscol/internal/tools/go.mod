@@ -2,7 +2,7 @@ module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/compone
 
 go 1.26.0
 
-require go.opentelemetry.io/collector/cmd/mdatagen v0.158.0
+require go.opentelemetry.io/collector/cmd/mdatagen v0.159.0
 
 require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect

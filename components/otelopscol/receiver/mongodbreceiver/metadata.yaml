@@ -227,7 +227,7 @@ metrics:
     stability: development
   mongodb.lock.acquire.time:
     description: Cumulative wait time for the lock acquisitions.
-    unit: "microseconds"
+    unit: "us" ## UCUM (Unified Code for Units of Measure) microseconds unit 
     enabled: false
     sum:
       value_type: int

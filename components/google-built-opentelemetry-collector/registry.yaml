@@ -17,12 +17,6 @@ exporters:
     gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter v0.0.0
     path: "../components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter"
 
-receivers:
-  #TODO(b/483465937): Remove from GBOC
-  jmx:
-    gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver v0.0.0
-    path: "../components/otelopscol/receiver/jmxreceiver"
-
 extensions:
   healthagent:
     gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/healthagent v0.0.0 v0.0.0

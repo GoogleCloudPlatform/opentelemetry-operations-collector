@@ -15,17 +15,17 @@
 name: google-built-opentelemetry-collector
 module: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/google-built-opentelemetry-collector
 display_name: Google-Built OpenTelemetry Collector
-version: 0.156.1
+version: 0.159.0
 description: "OpenTelemetry Collector Built By Google"
 blurb: >-
   The Google-Built OpenTelemetry Collector is an open-source, production-ready build
   of the upstream OpenTelemetry Collector that is built with upstream OpenTelemetry
   components.
-opentelemetry_version: 0.156.0
-opentelemetry_contrib_version: 0.156.0
-opentelemetry_stable_version: 1.62.0
+opentelemetry_version: 0.159.0
+opentelemetry_contrib_version: 0.159.0
+opentelemetry_stable_version: 1.65.0
 binary_name: otelcol-google
-go_version: 1.26.4
+go_version: 1.26.7
 permanent_ocb_directory: true
 
 boringcrypto: true
@@ -56,7 +56,6 @@ components:
     - receivercreator
     - zipkin
     - dockerstats
-    - jmx
     - redis
     - statsd
     - syslog

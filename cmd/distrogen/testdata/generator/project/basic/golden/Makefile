@@ -67,7 +67,7 @@ project-update: distrogen
 COMPONENT_DIR = components
 
 .PHONY: update-otel-components
-update-otel-components: $(DISTROGEN_BIN) $(MDATAGEN_BIN) workspace-update
+update-otel-components: distrogen mdatagen workspace-update
 	export OTEL_VERSION=v$(shell $(DISTROGEN_QUERY) opentelemetry_version) && \
 	export OTEL_CONTRIB_VERSION=v$(shell $(DISTROGEN_QUERY) opentelemetry_contrib_version) && \
 	export PATH="$(TOOLS_DIR):${PATH}" && \

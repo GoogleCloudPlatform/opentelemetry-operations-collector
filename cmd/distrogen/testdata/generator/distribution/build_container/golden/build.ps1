@@ -19,7 +19,7 @@ if (-not (Test-Path $TarDir)) {
 }
 
 # Ensure the correct version of Go is installed
-$GoVersion = "{{ .Spec.GoVersion }}"
+$GoVersion = "1.24.0"
 $ToolsDir = Join-Path $PSScriptRoot ".tools"
 $GoDir = Join-Path $ToolsDir "go"
 $GoBinDir = Join-Path $GoDir "bin"
@@ -52,7 +52,7 @@ if ($LASTEXITCODE -ne 0) {
 
 # Execute docker build inside the distribution directory
 Write-Host "Building Docker image..."
-docker build --build-arg WINDOWS_VERSION=$env:_WINDOWS_VERSION -f Dockerfile.windows.build -t {{ .Spec.BinaryName }}-windows:latest .
+docker build --build-arg WINDOWS_VERSION=$env:_WINDOWS_VERSION -f Dockerfile.windows.build -t otelcol-basic-windows:latest .
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Docker build failed with exit code $LASTEXITCODE"
     exit $LASTEXITCODE
@@ -60,7 +60,7 @@ if ($LASTEXITCODE -ne 0) {
 
 # Save the docker image as a tar archive
 Write-Host "Saving Docker image to $TarPath..."
-docker save {{ .Spec.BinaryName }}-windows:latest -o $TarPath
+docker save otelcol-basic-windows:latest -o $TarPath
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Docker save failed with exit code $LASTEXITCODE"
     exit $LASTEXITCODE

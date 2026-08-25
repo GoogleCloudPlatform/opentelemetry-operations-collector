@@ -1,6 +1,6 @@
 module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter
 
-go 1.25.0
+go 1.26.0
 
 require (
 	cloud.google.com/go/logging v1.13.1

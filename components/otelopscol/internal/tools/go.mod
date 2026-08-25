@@ -1,6 +1,6 @@
 module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/internal/tools
 
-go 1.25.0
+go 1.26.0
 
 require go.opentelemetry.io/collector/cmd/mdatagen v0.156.0
 

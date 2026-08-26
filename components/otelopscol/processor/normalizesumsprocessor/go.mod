@@ -1,6 +1,6 @@
 module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/normalizesumsprocessor
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatautil v0.156.0

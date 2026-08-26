@@ -1,6 +1,6 @@
 module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/receiver/dcgmreceiver
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/NVIDIA/go-dcgm v0.0.0-20240910155525-85ceb314ca65

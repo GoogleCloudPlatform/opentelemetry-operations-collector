@@ -1,6 +1,6 @@
 module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/integration_test/smoke_test
 
-go 1.25.0
+go 1.26.0
 
 require github.com/GoogleCloudPlatform/opentelemetry-operations-collector/integration_test/gce-testing-internal v0.0.0-20260119145159-eff68fc7b8ef
 

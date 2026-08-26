@@ -1,6 +1,6 @@
 module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/agentmetricsprocessor
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/stretchr/testify v1.11.1

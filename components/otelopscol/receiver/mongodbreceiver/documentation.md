@@ -310,7 +310,7 @@ Cumulative wait time for the lock acquisitions.
 
 | Unit | Metric Type | Value Type | Aggregation Temporality | Monotonic | Stability |
 | ---- | ----------- | ---------- | ----------------------- | --------- | --------- |
-| microseconds | Sum | Int | Cumulative | true | Development |
+| us | Sum | Int | Cumulative | true | Development |
 
 #### Attributes
 
@@ -354,6 +354,6 @@ Number of times the lock acquisitions encountered deadlocks.
 
 ## Resource Attributes
 
-| Name | Description | Values | Enabled | Semantic Convention |
-| ---- | ----------- | ------ | ------- | ------------------- |
-| database | The name of a database. | Any Str | true | - |
+| Name | Description | Values | Enabled | Semantic Convention | Stability |
+| ---- | ----------- | ------ | ------- | ------------------- | --------- |
+| database | The name of a database. | Any Str | true | - | - |

@@ -2,11 +2,12 @@
 
 module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/google-built-opentelemetry-collector
 
-go 1.25.7
+go 1.26.0
 
 require (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter v0.159.0
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/healthagent v0.159.0
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider v0.159.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/confmap/provider/googlesecretmanagerprovider v0.159.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/connector/countconnector v0.159.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/connector/exceptionsconnector v0.159.0
@@ -573,5 +574,7 @@ replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/compon
 replace github.com/open-telemetry/opentelemetry-collector-contrib/extension/oauth2clientauthextension v0.159.0 => ../../components/google-built-opentelemetry-collector/extension/oauth2clientauthextension
 
 replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter v0.159.0 => ../../components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter
+
+replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider v0.159.0 => ../../components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider
 
 replace github.com/buger/jsonparser => github.com/buger/jsonparser v1.1.2

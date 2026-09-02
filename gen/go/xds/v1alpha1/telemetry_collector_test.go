@@ -37,7 +37,6 @@ func TestTelemetryCollector_AnyPackaging(t *testing.T) {
 
 	// Wrap inside TelemetryCollector (Tier 2).
 	collector := &xdsv1alpha1.TelemetryCollector{
-		Name: "test-collector-fleet",
 		Policies: []*corev3.TypedExtensionConfig{
 			{
 				Name:        "default-log-filter",
@@ -53,7 +52,6 @@ func TestTelemetryCollector_AnyPackaging(t *testing.T) {
 	unmarshaled := &xdsv1alpha1.TelemetryCollector{}
 	require.NoError(t, proto.Unmarshal(data, unmarshaled))
 
-	assert.Equal(t, collector.GetName(), unmarshaled.GetName())
 	require.Len(t, unmarshaled.GetPolicies(), 1)
 	assert.Equal(t, "default-log-filter", unmarshaled.GetPolicies()[0].GetName())
 

@@ -44,16 +44,13 @@ const (
 //	"type.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector"
 type TelemetryCollector struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Name of the collector configuration resource, typically corresponding to
-	// the fleet ID, rollout cluster, or individual node identifier.
-	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	// Ordered list of policies applied to telemetry passing through this collector.
 	// Each policy is encapsulated inside a standard Envoy TypedExtensionConfig
 	// where:
 	//   - `name`: The policy identifier or descriptive name.
 	//   - `typed_config`: A `google.protobuf.Any` wrapping a pure policy definition
 	//     (e.g., `type.googleapis.com/google.telemetry.policy.v1alpha1.LogFilterPolicy`).
-	Policies      []*v3.TypedExtensionConfig `protobuf:"bytes,2,rep,name=policies,proto3" json:"policies,omitempty"`
+	Policies      []*v3.TypedExtensionConfig `protobuf:"bytes,1,rep,name=policies,proto3" json:"policies,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -88,13 +85,6 @@ func (*TelemetryCollector) Descriptor() ([]byte, []int) {
 	return file_xds_v1alpha1_telemetry_collector_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *TelemetryCollector) GetName() string {
-	if x != nil {
-		return x.Name
-	}
-	return ""
-}
-
 func (x *TelemetryCollector) GetPolicies() []*v3.TypedExtensionConfig {
 	if x != nil {
 		return x.Policies
@@ -106,10 +96,9 @@ var File_xds_v1alpha1_telemetry_collector_proto protoreflect.FileDescriptor
 
 const file_xds_v1alpha1_telemetry_collector_proto_rawDesc = "" +
 	"\n" +
-	"&xds/v1alpha1/telemetry_collector.proto\x12\x1dgoogle.telemetry.xds.v1alpha1\x1a$envoy/config/core/v3/extension.proto\"p\n" +
-	"\x12TelemetryCollector\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\x12F\n" +
-	"\bpolicies\x18\x02 \x03(\v2*.envoy.config.core.v3.TypedExtensionConfigR\bpoliciesB\xb6\x02\n" +
+	"&xds/v1alpha1/telemetry_collector.proto\x12\x1dgoogle.telemetry.xds.v1alpha1\x1a$envoy/config/core/v3/extension.proto\"\\\n" +
+	"\x12TelemetryCollector\x12F\n" +
+	"\bpolicies\x18\x01 \x03(\v2*.envoy.config.core.v3.TypedExtensionConfigR\bpoliciesB\xb6\x02\n" +
 	"!com.google.telemetry.xds.v1alpha1B\x17TelemetryCollectorProtoP\x01Zagithub.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/xds/v1alpha1;xdsv1alpha1\xa2\x02\x03GTX\xaa\x02\x1dGoogle.Telemetry.Xds.V1alpha1\xca\x02\x1dGoogle\\Telemetry\\Xds\\V1alpha1\xe2\x02)Google\\Telemetry\\Xds\\V1alpha1\\GPBMetadata\xea\x02 Google::Telemetry::Xds::V1alpha1b\x06proto3"
 
 var (

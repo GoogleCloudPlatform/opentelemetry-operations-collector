@@ -59,7 +59,7 @@ message LogMatcher {
   }
 
   // If true, inverts the result of the predicate (logical NOT).
-  bool negate = 20;
+  bool negate = 2;
 }
 
 // LogFieldSelector designates a first-class OTel log field, attribute, or metadata.

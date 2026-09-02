@@ -241,7 +241,7 @@ type LogMatcher struct {
 	//	*LogMatcher_Regex
 	Predicate isLogMatcher_Predicate `protobuf_oneof:"predicate"`
 	// If true, inverts the result of the predicate (logical NOT).
-	Negate        bool `protobuf:"varint,20,opt,name=negate,proto3" json:"negate,omitempty"`
+	Negate        bool `protobuf:"varint,2,opt,name=negate,proto3" json:"negate,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -555,7 +555,7 @@ const file_policy_v1alpha1_log_filter_policy_proto_rawDesc = "" +
 	" \x01(\v2\x16.google.protobuf.EmptyH\x00R\x06exists\x12\x16\n" +
 	"\x05exact\x18\v \x01(\tH\x00R\x05exact\x12\x16\n" +
 	"\x05regex\x18\f \x01(\tH\x00R\x05regex\x12\x16\n" +
-	"\x06negate\x18\x14 \x01(\bR\x06negateB\v\n" +
+	"\x06negate\x18\x02 \x01(\bR\x06negateB\v\n" +
 	"\tpredicate\"\x9c\x03\n" +
 	"\x10LogFieldSelector\x12U\n" +
 	"\frecord_field\x18\x01 \x01(\x0e20.google.telemetry.policy.v1alpha1.LogRecordFieldH\x00R\vrecordField\x12%\n" +

@@ -50,8 +50,10 @@ type TelemetryCollector struct {
 	//   - `name`: The policy identifier or descriptive name.
 	//   - `typed_config`: A `google.protobuf.Any` wrapping a pure policy definition
 	//     (e.g., `type.googleapis.com/google.telemetry.policy.v1alpha1.LogFilterPolicy`).
-	//     The encapsulated policy type should align with OTEP policy definitions and
-	//     the type names used for OpAMP custom messages.
+	//     The encapsulated policy type should align with OTEP policy definitions
+	//     (https://github.com/open-telemetry/opentelemetry-specification/blob/main/oteps/4738-telemetry-policy.md)
+	//     and the type names used for OpAMP custom messages
+	//     (https://opentelemetry.io/docs/specs/opamp/#custom-messages).
 	Policies      []*v3.TypedExtensionConfig `protobuf:"bytes,1,rep,name=policies,proto3" json:"policies,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

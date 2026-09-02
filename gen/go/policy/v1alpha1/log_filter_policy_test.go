@@ -21,6 +21,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/emptypb"
 
 	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
 )
@@ -58,10 +59,11 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 					},
 				},
 				Predicate: &policyv1alpha1.LogMatcher_Exists{
-					Exists: true,
+					Exists: &emptypb.Empty{},
 				},
 				Negate: true,
 			},
+
 			{
 				Target: &policyv1alpha1.LogFieldSelector{
 					Target: &policyv1alpha1.LogFieldSelector_ScopeAttribute{

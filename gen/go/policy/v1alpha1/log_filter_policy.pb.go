@@ -23,6 +23,7 @@ package policyv1alpha1
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -289,13 +290,13 @@ func (x *LogMatcher) GetPredicate() isLogMatcher_Predicate {
 	return nil
 }
 
-func (x *LogMatcher) GetExists() bool {
+func (x *LogMatcher) GetExists() *emptypb.Empty {
 	if x != nil {
 		if x, ok := x.Predicate.(*LogMatcher_Exists); ok {
 			return x.Exists
 		}
 	}
-	return false
+	return nil
 }
 
 func (x *LogMatcher) GetExact() string {
@@ -329,7 +330,7 @@ type isLogMatcher_Predicate interface {
 
 type LogMatcher_Exists struct {
 	// Matches if the selected field or attribute exists.
-	Exists bool `protobuf:"varint,10,opt,name=exists,proto3,oneof"`
+	Exists *emptypb.Empty `protobuf:"bytes,10,opt,name=exists,proto3,oneof"`
 }
 
 type LogMatcher_Exact struct {
@@ -542,16 +543,16 @@ var File_policy_v1alpha1_log_filter_policy_proto protoreflect.FileDescriptor
 
 const file_policy_v1alpha1_log_filter_policy_proto_rawDesc = "" +
 	"\n" +
-	"'policy/v1alpha1/log_filter_policy.proto\x12 google.telemetry.policy.v1alpha1\"\xab\x01\n" +
+	"'policy/v1alpha1/log_filter_policy.proto\x12 google.telemetry.policy.v1alpha1\x1a\x1bgoogle/protobuf/empty.proto\"\xab\x01\n" +
 	"\x0fLogFilterPolicy\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12@\n" +
 	"\x06action\x18\x02 \x01(\x0e2(.google.telemetry.policy.v1alpha1.ActionR\x06action\x12F\n" +
-	"\amatches\x18\x03 \x03(\v2,.google.telemetry.policy.v1alpha1.LogMatcherR\amatches\"\xc7\x01\n" +
+	"\amatches\x18\x03 \x03(\v2,.google.telemetry.policy.v1alpha1.LogMatcherR\amatches\"\xdf\x01\n" +
 	"\n" +
 	"LogMatcher\x12J\n" +
-	"\x06target\x18\x01 \x01(\v22.google.telemetry.policy.v1alpha1.LogFieldSelectorR\x06target\x12\x18\n" +
+	"\x06target\x18\x01 \x01(\v22.google.telemetry.policy.v1alpha1.LogFieldSelectorR\x06target\x120\n" +
 	"\x06exists\x18\n" +
-	" \x01(\bH\x00R\x06exists\x12\x16\n" +
+	" \x01(\v2\x16.google.protobuf.EmptyH\x00R\x06exists\x12\x16\n" +
 	"\x05exact\x18\v \x01(\tH\x00R\x05exact\x12\x16\n" +
 	"\x05regex\x18\f \x01(\tH\x00R\x05regex\x12\x16\n" +
 	"\x06negate\x18\x14 \x01(\bR\x06negateB\v\n" +
@@ -600,17 +601,19 @@ var file_policy_v1alpha1_log_filter_policy_proto_goTypes = []any{
 	(*LogFilterPolicy)(nil),  // 2: google.telemetry.policy.v1alpha1.LogFilterPolicy
 	(*LogMatcher)(nil),       // 3: google.telemetry.policy.v1alpha1.LogMatcher
 	(*LogFieldSelector)(nil), // 4: google.telemetry.policy.v1alpha1.LogFieldSelector
+	(*emptypb.Empty)(nil),    // 5: google.protobuf.Empty
 }
 var file_policy_v1alpha1_log_filter_policy_proto_depIdxs = []int32{
 	0, // 0: google.telemetry.policy.v1alpha1.LogFilterPolicy.action:type_name -> google.telemetry.policy.v1alpha1.Action
 	3, // 1: google.telemetry.policy.v1alpha1.LogFilterPolicy.matches:type_name -> google.telemetry.policy.v1alpha1.LogMatcher
 	4, // 2: google.telemetry.policy.v1alpha1.LogMatcher.target:type_name -> google.telemetry.policy.v1alpha1.LogFieldSelector
-	1, // 3: google.telemetry.policy.v1alpha1.LogFieldSelector.record_field:type_name -> google.telemetry.policy.v1alpha1.LogRecordField
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	5, // 3: google.telemetry.policy.v1alpha1.LogMatcher.exists:type_name -> google.protobuf.Empty
+	1, // 4: google.telemetry.policy.v1alpha1.LogFieldSelector.record_field:type_name -> google.telemetry.policy.v1alpha1.LogRecordField
+	5, // [5:5] is the sub-list for method output_type
+	5, // [5:5] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_policy_v1alpha1_log_filter_policy_proto_init() }

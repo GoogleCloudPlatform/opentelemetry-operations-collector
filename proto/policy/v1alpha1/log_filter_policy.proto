@@ -16,6 +16,8 @@ syntax = "proto3";
 
 package google.telemetry.policy.v1alpha1;
 
+import "google/protobuf/empty.proto";
+
 option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1;policyv1alpha1";
 
 // LogFilterPolicy defines an intent-based rule for retaining or dropping
@@ -47,7 +49,7 @@ message LogMatcher {
   // Exactly one predicate must be set.
   oneof predicate {
     // Matches if the selected field or attribute exists.
-    bool exists = 10;
+    google.protobuf.Empty exists = 10;
 
     // Exact string equality match.
     string exact = 11;

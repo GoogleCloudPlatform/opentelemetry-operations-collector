@@ -19,6 +19,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -63,7 +64,6 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 				},
 				Negate: true,
 			},
-
 			{
 				Target: &policyv1alpha1.LogFieldSelector{
 					Target: &policyv1alpha1.LogFieldSelector_ScopeAttribute{
@@ -117,7 +117,6 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 		},
 	}
 
-
 	// Verify Any packaging.
 	anyPolicy, err := anypb.New(policy)
 	require.NoError(t, err)
@@ -135,3 +134,62 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 	assert.Equal(t, policyv1alpha1.Action_ACTION_DROP, unmarshaled.GetAction())
 	require.Len(t, unmarshaled.GetMatches(), 8)
 }
+
+func TestLogFilterPolicy_JSONSerialization(t *testing.T) {
+	policy := &policyv1alpha1.LogFilterPolicy{
+		Id:     "drop-noisy-healthchecks",
+		Action: policyv1alpha1.Action_ACTION_DROP,
+		Matches: []*policyv1alpha1.LogMatcher{
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
+						LogAttribute: "http.route",
+					},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Exact{
+					Exact: "/healthz",
+				},
+				Negate: false,
+			},
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_ResourceField{
+						ResourceField: policyv1alpha1.ResourceField_RESOURCE_FIELD_SCHEMA_URL,
+					},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Exists{
+					Exists: &emptypb.Empty{},
+				},
+				Negate: true,
+			},
+		},
+	}
+
+	// ProtoJSON marshal and unmarshal round-trip.
+	jsonData, err := protojson.Marshal(policy)
+	require.NoError(t, err)
+
+	unmarshaled := &policyv1alpha1.LogFilterPolicy{}
+	require.NoError(t, protojson.Unmarshal(jsonData, unmarshaled))
+	assert.True(t, proto.Equal(policy, unmarshaled))
+
+	// Zero-value handling: ACTION_UNSPECIFIED explicit.
+	jsonWithUnspecified := []byte(`{"id": "unspecified-policy", "action": "ACTION_UNSPECIFIED"}`)
+	zeroPolicy := &policyv1alpha1.LogFilterPolicy{}
+	require.NoError(t, protojson.Unmarshal(jsonWithUnspecified, zeroPolicy))
+	assert.Equal(t, "unspecified-policy", zeroPolicy.GetId())
+	assert.Equal(t, policyv1alpha1.Action_ACTION_UNSPECIFIED, zeroPolicy.GetAction())
+
+	// Action omitted in JSON defaults to ACTION_UNSPECIFIED.
+	jsonOmittedAction := []byte(`{"id": "omitted-action-policy"}`)
+	omittedPolicy := &policyv1alpha1.LogFilterPolicy{}
+	require.NoError(t, protojson.Unmarshal(jsonOmittedAction, omittedPolicy))
+	assert.Equal(t, "omitted-action-policy", omittedPolicy.GetId())
+	assert.Equal(t, policyv1alpha1.Action_ACTION_UNSPECIFIED, omittedPolicy.GetAction())
+
+	// EmitUnpopulated includes ACTION_UNSPECIFIED in output.
+	marshaledUnpopulated, err := protojson.MarshalOptions{EmitUnpopulated: true}.Marshal(zeroPolicy)
+	require.NoError(t, err)
+	assert.Contains(t, string(marshaledUnpopulated), `"action":"ACTION_UNSPECIFIED"`)
+}
+

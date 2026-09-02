@@ -1,0 +1,40 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package google.telemetry.xds.v1alpha1;
+
+import "envoy/config/core/v3/extension.proto";
+
+option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/xds/v1alpha1;xdsv1alpha1";
+
+// TelemetryCollector is the canonical xDS resource representing the desired
+// telemetry policy configuration for an OpenTelemetry Collector fleet or node.
+//
+// Canonical TypeURL:
+//   "type.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector"
+message TelemetryCollector {
+  // Name of the collector configuration resource, typically corresponding to
+  // the fleet ID, rollout cluster, or individual node identifier.
+  string name = 1;
+
+  // Ordered list of policies applied to telemetry passing through this collector.
+  // Each policy is encapsulated inside a standard Envoy TypedExtensionConfig
+  // where:
+  // - `name`: The policy identifier or descriptive name.
+  // - `typed_config`: A `google.protobuf.Any` wrapping a pure policy definition
+  //   (e.g., `type.googleapis.com/google.telemetry.policy.v1alpha1.LogFilterPolicy`).
+  repeated envoy.config.core.v3.TypedExtensionConfig policies = 2;
+}

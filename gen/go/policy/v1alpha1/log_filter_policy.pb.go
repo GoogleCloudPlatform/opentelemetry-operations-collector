@@ -100,10 +100,18 @@ const (
 	// The string severity of the log (e.g. "INFO", "ERROR", "DEBUG").
 	LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT LogRecordField = 2
 	// The numerical severity of the log (1-24 per OpenTelemetry specification).
+	// When evaluated against string predicates (`exact`, `regex`), this matches
+	// against the canonical base-10 integer string representation (e.g. "17").
 	LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER LogRecordField = 3
 	// The 16-byte trace identifier associated with the log record.
+	// When evaluated against string predicates (`exact`, `regex`), this matches
+	// against the 32-character lowercase hexadecimal string representation
+	// per the OpenTelemetry / W3C Trace Context specification.
 	LogRecordField_LOG_RECORD_FIELD_TRACE_ID LogRecordField = 4
 	// The 8-byte span identifier associated with the log record.
+	// When evaluated against string predicates (`exact`, `regex`), this matches
+	// against the 16-character lowercase hexadecimal string representation
+	// per the OpenTelemetry / W3C Trace Context specification.
 	LogRecordField_LOG_RECORD_FIELD_SPAN_ID LogRecordField = 5
 )
 

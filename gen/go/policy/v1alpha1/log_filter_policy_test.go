@@ -76,8 +76,8 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 			},
 			{
 				Target: &policyv1alpha1.LogFieldSelector{
-					Target: &policyv1alpha1.LogFieldSelector_ScopeName{
-						ScopeName: true,
+					Target: &policyv1alpha1.LogFieldSelector_ScopeField{
+						ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_NAME,
 					},
 				},
 				Predicate: &policyv1alpha1.LogMatcher_Exact{
@@ -86,8 +86,8 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 			},
 			{
 				Target: &policyv1alpha1.LogFieldSelector{
-					Target: &policyv1alpha1.LogFieldSelector_ScopeVersion{
-						ScopeVersion: true,
+					Target: &policyv1alpha1.LogFieldSelector_ScopeField{
+						ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_VERSION,
 					},
 				},
 				Predicate: &policyv1alpha1.LogMatcher_Exact{
@@ -96,8 +96,8 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 			},
 			{
 				Target: &policyv1alpha1.LogFieldSelector{
-					Target: &policyv1alpha1.LogFieldSelector_ResourceSchemaUrl{
-						ResourceSchemaUrl: true,
+					Target: &policyv1alpha1.LogFieldSelector_ResourceField{
+						ResourceField: policyv1alpha1.ResourceField_RESOURCE_FIELD_SCHEMA_URL,
 					},
 				},
 				Predicate: &policyv1alpha1.LogMatcher_Exact{
@@ -106,8 +106,8 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 			},
 			{
 				Target: &policyv1alpha1.LogFieldSelector{
-					Target: &policyv1alpha1.LogFieldSelector_ScopeSchemaUrl{
-						ScopeSchemaUrl: true,
+					Target: &policyv1alpha1.LogFieldSelector_ScopeField{
+						ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_SCHEMA_URL,
 					},
 				},
 				Predicate: &policyv1alpha1.LogMatcher_Exact{
@@ -116,6 +116,7 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 			},
 		},
 	}
+
 
 	// Verify Any packaging.
 	anyPolicy, err := anypb.New(policy)

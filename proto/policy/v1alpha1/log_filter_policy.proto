@@ -77,19 +77,11 @@ message LogFieldSelector {
     // Instrumentation scope attribute by key (e.g. "library.name").
     string scope_attribute = 4;
 
-    // Matches the Instrumentation Scope name.
-    // (-- api-linter: core::0122::name-suffix=disabled
-    //     aip.dev/not-precedent: Matches OpenTelemetry InstrumentationScope name. --)
-    bool scope_name = 5;
+    // Standard first-class OpenTelemetry InstrumentationScope fields.
+    ScopeField scope_field = 5;
 
-    // Matches the Instrumentation Scope version.
-    bool scope_version = 6;
-
-    // Matches the Resource Schema URL.
-    bool resource_schema_url = 7;
-
-    // Matches the Instrumentation Scope Schema URL.
-    bool scope_schema_url = 8;
+    // Standard first-class OpenTelemetry Resource fields.
+    ResourceField resource_field = 6;
   }
 }
 
@@ -124,4 +116,28 @@ enum LogRecordField {
 
   // The 8-byte span identifier associated with the log record.
   LOG_RECORD_FIELD_SPAN_ID = 5;
+}
+
+// ScopeField identifies standard first-class fields of an InstrumentationScope.
+enum ScopeField {
+  // Default unspecified scope field.
+  SCOPE_FIELD_UNSPECIFIED = 0;
+
+  // The name of the instrumentation scope (e.g. library or package name).
+  SCOPE_FIELD_NAME = 1;
+
+  // The version of the instrumentation scope.
+  SCOPE_FIELD_VERSION = 2;
+
+  // The schema URL of the instrumentation scope.
+  SCOPE_FIELD_SCHEMA_URL = 3;
+}
+
+// ResourceField identifies standard first-class fields of a Resource.
+enum ResourceField {
+  // Default unspecified resource field.
+  RESOURCE_FIELD_UNSPECIFIED = 0;
+
+  // The schema URL of the resource.
+  RESOURCE_FIELD_SCHEMA_URL = 1;
 }

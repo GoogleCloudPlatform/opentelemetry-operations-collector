@@ -154,6 +154,112 @@ func (LogRecordField) EnumDescriptor() ([]byte, []int) {
 	return file_policy_v1alpha1_log_filter_policy_proto_rawDescGZIP(), []int{1}
 }
 
+// ScopeField identifies standard first-class fields of an InstrumentationScope.
+type ScopeField int32
+
+const (
+	// Default unspecified scope field.
+	ScopeField_SCOPE_FIELD_UNSPECIFIED ScopeField = 0
+	// The name of the instrumentation scope (e.g. library or package name).
+	ScopeField_SCOPE_FIELD_NAME ScopeField = 1
+	// The version of the instrumentation scope.
+	ScopeField_SCOPE_FIELD_VERSION ScopeField = 2
+	// The schema URL of the instrumentation scope.
+	ScopeField_SCOPE_FIELD_SCHEMA_URL ScopeField = 3
+)
+
+// Enum value maps for ScopeField.
+var (
+	ScopeField_name = map[int32]string{
+		0: "SCOPE_FIELD_UNSPECIFIED",
+		1: "SCOPE_FIELD_NAME",
+		2: "SCOPE_FIELD_VERSION",
+		3: "SCOPE_FIELD_SCHEMA_URL",
+	}
+	ScopeField_value = map[string]int32{
+		"SCOPE_FIELD_UNSPECIFIED": 0,
+		"SCOPE_FIELD_NAME":        1,
+		"SCOPE_FIELD_VERSION":     2,
+		"SCOPE_FIELD_SCHEMA_URL":  3,
+	}
+)
+
+func (x ScopeField) Enum() *ScopeField {
+	p := new(ScopeField)
+	*p = x
+	return p
+}
+
+func (x ScopeField) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ScopeField) Descriptor() protoreflect.EnumDescriptor {
+	return file_policy_v1alpha1_log_filter_policy_proto_enumTypes[2].Descriptor()
+}
+
+func (ScopeField) Type() protoreflect.EnumType {
+	return &file_policy_v1alpha1_log_filter_policy_proto_enumTypes[2]
+}
+
+func (x ScopeField) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ScopeField.Descriptor instead.
+func (ScopeField) EnumDescriptor() ([]byte, []int) {
+	return file_policy_v1alpha1_log_filter_policy_proto_rawDescGZIP(), []int{2}
+}
+
+// ResourceField identifies standard first-class fields of a Resource.
+type ResourceField int32
+
+const (
+	// Default unspecified resource field.
+	ResourceField_RESOURCE_FIELD_UNSPECIFIED ResourceField = 0
+	// The schema URL of the resource.
+	ResourceField_RESOURCE_FIELD_SCHEMA_URL ResourceField = 1
+)
+
+// Enum value maps for ResourceField.
+var (
+	ResourceField_name = map[int32]string{
+		0: "RESOURCE_FIELD_UNSPECIFIED",
+		1: "RESOURCE_FIELD_SCHEMA_URL",
+	}
+	ResourceField_value = map[string]int32{
+		"RESOURCE_FIELD_UNSPECIFIED": 0,
+		"RESOURCE_FIELD_SCHEMA_URL":  1,
+	}
+)
+
+func (x ResourceField) Enum() *ResourceField {
+	p := new(ResourceField)
+	*p = x
+	return p
+}
+
+func (x ResourceField) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ResourceField) Descriptor() protoreflect.EnumDescriptor {
+	return file_policy_v1alpha1_log_filter_policy_proto_enumTypes[3].Descriptor()
+}
+
+func (ResourceField) Type() protoreflect.EnumType {
+	return &file_policy_v1alpha1_log_filter_policy_proto_enumTypes[3]
+}
+
+func (x ResourceField) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ResourceField.Descriptor instead.
+func (ResourceField) EnumDescriptor() ([]byte, []int) {
+	return file_policy_v1alpha1_log_filter_policy_proto_rawDescGZIP(), []int{3}
+}
+
 // LogFilterPolicy defines an intent-based rule for retaining or dropping
 // log records based on structured field and attribute matches.
 //
@@ -358,10 +464,8 @@ type LogFieldSelector struct {
 	//	*LogFieldSelector_LogAttribute
 	//	*LogFieldSelector_ResourceAttribute
 	//	*LogFieldSelector_ScopeAttribute
-	//	*LogFieldSelector_ScopeName
-	//	*LogFieldSelector_ScopeVersion
-	//	*LogFieldSelector_ResourceSchemaUrl
-	//	*LogFieldSelector_ScopeSchemaUrl
+	//	*LogFieldSelector_ScopeField
+	//	*LogFieldSelector_ResourceField
 	Target        isLogFieldSelector_Target `protobuf_oneof:"target"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -440,40 +544,22 @@ func (x *LogFieldSelector) GetScopeAttribute() string {
 	return ""
 }
 
-func (x *LogFieldSelector) GetScopeName() bool {
+func (x *LogFieldSelector) GetScopeField() ScopeField {
 	if x != nil {
-		if x, ok := x.Target.(*LogFieldSelector_ScopeName); ok {
-			return x.ScopeName
+		if x, ok := x.Target.(*LogFieldSelector_ScopeField); ok {
+			return x.ScopeField
 		}
 	}
-	return false
+	return ScopeField_SCOPE_FIELD_UNSPECIFIED
 }
 
-func (x *LogFieldSelector) GetScopeVersion() bool {
+func (x *LogFieldSelector) GetResourceField() ResourceField {
 	if x != nil {
-		if x, ok := x.Target.(*LogFieldSelector_ScopeVersion); ok {
-			return x.ScopeVersion
+		if x, ok := x.Target.(*LogFieldSelector_ResourceField); ok {
+			return x.ResourceField
 		}
 	}
-	return false
-}
-
-func (x *LogFieldSelector) GetResourceSchemaUrl() bool {
-	if x != nil {
-		if x, ok := x.Target.(*LogFieldSelector_ResourceSchemaUrl); ok {
-			return x.ResourceSchemaUrl
-		}
-	}
-	return false
-}
-
-func (x *LogFieldSelector) GetScopeSchemaUrl() bool {
-	if x != nil {
-		if x, ok := x.Target.(*LogFieldSelector_ScopeSchemaUrl); ok {
-			return x.ScopeSchemaUrl
-		}
-	}
-	return false
+	return ResourceField_RESOURCE_FIELD_UNSPECIFIED
 }
 
 type isLogFieldSelector_Target interface {
@@ -500,27 +586,14 @@ type LogFieldSelector_ScopeAttribute struct {
 	ScopeAttribute string `protobuf:"bytes,4,opt,name=scope_attribute,json=scopeAttribute,proto3,oneof"`
 }
 
-type LogFieldSelector_ScopeName struct {
-	// Matches the Instrumentation Scope name.
-	// (-- api-linter: core::0122::name-suffix=disabled
-	//
-	//	aip.dev/not-precedent: Matches OpenTelemetry InstrumentationScope name. --)
-	ScopeName bool `protobuf:"varint,5,opt,name=scope_name,json=scopeName,proto3,oneof"`
+type LogFieldSelector_ScopeField struct {
+	// Standard first-class OpenTelemetry InstrumentationScope fields.
+	ScopeField ScopeField `protobuf:"varint,5,opt,name=scope_field,json=scopeField,proto3,enum=google.telemetry.policy.v1alpha1.ScopeField,oneof"`
 }
 
-type LogFieldSelector_ScopeVersion struct {
-	// Matches the Instrumentation Scope version.
-	ScopeVersion bool `protobuf:"varint,6,opt,name=scope_version,json=scopeVersion,proto3,oneof"`
-}
-
-type LogFieldSelector_ResourceSchemaUrl struct {
-	// Matches the Resource Schema URL.
-	ResourceSchemaUrl bool `protobuf:"varint,7,opt,name=resource_schema_url,json=resourceSchemaUrl,proto3,oneof"`
-}
-
-type LogFieldSelector_ScopeSchemaUrl struct {
-	// Matches the Instrumentation Scope Schema URL.
-	ScopeSchemaUrl bool `protobuf:"varint,8,opt,name=scope_schema_url,json=scopeSchemaUrl,proto3,oneof"`
+type LogFieldSelector_ResourceField struct {
+	// Standard first-class OpenTelemetry Resource fields.
+	ResourceField ResourceField `protobuf:"varint,6,opt,name=resource_field,json=resourceField,proto3,enum=google.telemetry.policy.v1alpha1.ResourceField,oneof"`
 }
 
 func (*LogFieldSelector_RecordField) isLogFieldSelector_Target() {}
@@ -531,13 +604,9 @@ func (*LogFieldSelector_ResourceAttribute) isLogFieldSelector_Target() {}
 
 func (*LogFieldSelector_ScopeAttribute) isLogFieldSelector_Target() {}
 
-func (*LogFieldSelector_ScopeName) isLogFieldSelector_Target() {}
+func (*LogFieldSelector_ScopeField) isLogFieldSelector_Target() {}
 
-func (*LogFieldSelector_ScopeVersion) isLogFieldSelector_Target() {}
-
-func (*LogFieldSelector_ResourceSchemaUrl) isLogFieldSelector_Target() {}
-
-func (*LogFieldSelector_ScopeSchemaUrl) isLogFieldSelector_Target() {}
+func (*LogFieldSelector_ResourceField) isLogFieldSelector_Target() {}
 
 var File_policy_v1alpha1_log_filter_policy_proto protoreflect.FileDescriptor
 
@@ -556,17 +625,15 @@ const file_policy_v1alpha1_log_filter_policy_proto_rawDesc = "" +
 	"\x05exact\x18\v \x01(\tH\x00R\x05exact\x12\x16\n" +
 	"\x05regex\x18\f \x01(\tH\x00R\x05regex\x12\x16\n" +
 	"\x06negate\x18\x02 \x01(\bR\x06negateB\v\n" +
-	"\tpredicate\"\x9c\x03\n" +
+	"\tpredicate\"\xa1\x03\n" +
 	"\x10LogFieldSelector\x12U\n" +
 	"\frecord_field\x18\x01 \x01(\x0e20.google.telemetry.policy.v1alpha1.LogRecordFieldH\x00R\vrecordField\x12%\n" +
 	"\rlog_attribute\x18\x02 \x01(\tH\x00R\flogAttribute\x12/\n" +
 	"\x12resource_attribute\x18\x03 \x01(\tH\x00R\x11resourceAttribute\x12)\n" +
-	"\x0fscope_attribute\x18\x04 \x01(\tH\x00R\x0escopeAttribute\x12\x1f\n" +
-	"\n" +
-	"scope_name\x18\x05 \x01(\bH\x00R\tscopeName\x12%\n" +
-	"\rscope_version\x18\x06 \x01(\bH\x00R\fscopeVersion\x120\n" +
-	"\x13resource_schema_url\x18\a \x01(\bH\x00R\x11resourceSchemaUrl\x12*\n" +
-	"\x10scope_schema_url\x18\b \x01(\bH\x00R\x0escopeSchemaUrlB\b\n" +
+	"\x0fscope_attribute\x18\x04 \x01(\tH\x00R\x0escopeAttribute\x12O\n" +
+	"\vscope_field\x18\x05 \x01(\x0e2,.google.telemetry.policy.v1alpha1.ScopeFieldH\x00R\n" +
+	"scopeField\x12X\n" +
+	"\x0eresource_field\x18\x06 \x01(\x0e2/.google.telemetry.policy.v1alpha1.ResourceFieldH\x00R\rresourceFieldB\b\n" +
 	"\x06target*B\n" +
 	"\x06Action\x12\x16\n" +
 	"\x12ACTION_UNSPECIFIED\x10\x00\x12\x0f\n" +
@@ -578,7 +645,16 @@ const file_policy_v1alpha1_log_filter_policy_proto_rawDesc = "" +
 	"\x1eLOG_RECORD_FIELD_SEVERITY_TEXT\x10\x02\x12$\n" +
 	" LOG_RECORD_FIELD_SEVERITY_NUMBER\x10\x03\x12\x1d\n" +
 	"\x19LOG_RECORD_FIELD_TRACE_ID\x10\x04\x12\x1c\n" +
-	"\x18LOG_RECORD_FIELD_SPAN_ID\x10\x05B\xc8\x02\n" +
+	"\x18LOG_RECORD_FIELD_SPAN_ID\x10\x05*t\n" +
+	"\n" +
+	"ScopeField\x12\x1b\n" +
+	"\x17SCOPE_FIELD_UNSPECIFIED\x10\x00\x12\x14\n" +
+	"\x10SCOPE_FIELD_NAME\x10\x01\x12\x17\n" +
+	"\x13SCOPE_FIELD_VERSION\x10\x02\x12\x1a\n" +
+	"\x16SCOPE_FIELD_SCHEMA_URL\x10\x03*N\n" +
+	"\rResourceField\x12\x1e\n" +
+	"\x1aRESOURCE_FIELD_UNSPECIFIED\x10\x00\x12\x1d\n" +
+	"\x19RESOURCE_FIELD_SCHEMA_URL\x10\x01B\xc8\x02\n" +
 	"$com.google.telemetry.policy.v1alpha1B\x14LogFilterPolicyProtoP\x01Zggithub.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1;policyv1alpha1\xa2\x02\x03GTP\xaa\x02 Google.Telemetry.Policy.V1alpha1\xca\x02 Google\\Telemetry\\Policy\\V1alpha1\xe2\x02,Google\\Telemetry\\Policy\\V1alpha1\\GPBMetadata\xea\x02#Google::Telemetry::Policy::V1alpha1b\x06proto3"
 
 var (
@@ -593,27 +669,31 @@ func file_policy_v1alpha1_log_filter_policy_proto_rawDescGZIP() []byte {
 	return file_policy_v1alpha1_log_filter_policy_proto_rawDescData
 }
 
-var file_policy_v1alpha1_log_filter_policy_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_policy_v1alpha1_log_filter_policy_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
 var file_policy_v1alpha1_log_filter_policy_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_policy_v1alpha1_log_filter_policy_proto_goTypes = []any{
 	(Action)(0),              // 0: google.telemetry.policy.v1alpha1.Action
 	(LogRecordField)(0),      // 1: google.telemetry.policy.v1alpha1.LogRecordField
-	(*LogFilterPolicy)(nil),  // 2: google.telemetry.policy.v1alpha1.LogFilterPolicy
-	(*LogMatcher)(nil),       // 3: google.telemetry.policy.v1alpha1.LogMatcher
-	(*LogFieldSelector)(nil), // 4: google.telemetry.policy.v1alpha1.LogFieldSelector
-	(*emptypb.Empty)(nil),    // 5: google.protobuf.Empty
+	(ScopeField)(0),          // 2: google.telemetry.policy.v1alpha1.ScopeField
+	(ResourceField)(0),       // 3: google.telemetry.policy.v1alpha1.ResourceField
+	(*LogFilterPolicy)(nil),  // 4: google.telemetry.policy.v1alpha1.LogFilterPolicy
+	(*LogMatcher)(nil),       // 5: google.telemetry.policy.v1alpha1.LogMatcher
+	(*LogFieldSelector)(nil), // 6: google.telemetry.policy.v1alpha1.LogFieldSelector
+	(*emptypb.Empty)(nil),    // 7: google.protobuf.Empty
 }
 var file_policy_v1alpha1_log_filter_policy_proto_depIdxs = []int32{
 	0, // 0: google.telemetry.policy.v1alpha1.LogFilterPolicy.action:type_name -> google.telemetry.policy.v1alpha1.Action
-	3, // 1: google.telemetry.policy.v1alpha1.LogFilterPolicy.matches:type_name -> google.telemetry.policy.v1alpha1.LogMatcher
-	4, // 2: google.telemetry.policy.v1alpha1.LogMatcher.target:type_name -> google.telemetry.policy.v1alpha1.LogFieldSelector
-	5, // 3: google.telemetry.policy.v1alpha1.LogMatcher.exists:type_name -> google.protobuf.Empty
+	5, // 1: google.telemetry.policy.v1alpha1.LogFilterPolicy.matches:type_name -> google.telemetry.policy.v1alpha1.LogMatcher
+	6, // 2: google.telemetry.policy.v1alpha1.LogMatcher.target:type_name -> google.telemetry.policy.v1alpha1.LogFieldSelector
+	7, // 3: google.telemetry.policy.v1alpha1.LogMatcher.exists:type_name -> google.protobuf.Empty
 	1, // 4: google.telemetry.policy.v1alpha1.LogFieldSelector.record_field:type_name -> google.telemetry.policy.v1alpha1.LogRecordField
-	5, // [5:5] is the sub-list for method output_type
-	5, // [5:5] is the sub-list for method input_type
-	5, // [5:5] is the sub-list for extension type_name
-	5, // [5:5] is the sub-list for extension extendee
-	0, // [0:5] is the sub-list for field type_name
+	2, // 5: google.telemetry.policy.v1alpha1.LogFieldSelector.scope_field:type_name -> google.telemetry.policy.v1alpha1.ScopeField
+	3, // 6: google.telemetry.policy.v1alpha1.LogFieldSelector.resource_field:type_name -> google.telemetry.policy.v1alpha1.ResourceField
+	7, // [7:7] is the sub-list for method output_type
+	7, // [7:7] is the sub-list for method input_type
+	7, // [7:7] is the sub-list for extension type_name
+	7, // [7:7] is the sub-list for extension extendee
+	0, // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_policy_v1alpha1_log_filter_policy_proto_init() }
@@ -631,17 +711,15 @@ func file_policy_v1alpha1_log_filter_policy_proto_init() {
 		(*LogFieldSelector_LogAttribute)(nil),
 		(*LogFieldSelector_ResourceAttribute)(nil),
 		(*LogFieldSelector_ScopeAttribute)(nil),
-		(*LogFieldSelector_ScopeName)(nil),
-		(*LogFieldSelector_ScopeVersion)(nil),
-		(*LogFieldSelector_ResourceSchemaUrl)(nil),
-		(*LogFieldSelector_ScopeSchemaUrl)(nil),
+		(*LogFieldSelector_ScopeField)(nil),
+		(*LogFieldSelector_ResourceField)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_policy_v1alpha1_log_filter_policy_proto_rawDesc), len(file_policy_v1alpha1_log_filter_policy_proto_rawDesc)),
-			NumEnums:      2,
+			NumEnums:      4,
 			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   0,

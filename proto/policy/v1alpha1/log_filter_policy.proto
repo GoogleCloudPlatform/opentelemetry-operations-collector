@@ -18,11 +18,108 @@ package google.telemetry.policy.v1alpha1;
 
 option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1;policyv1alpha1";
 
-// LogFilterPolicy defines an intent-based rule for filtering log records.
+// LogFilterPolicy defines an intent-based rule for retaining or dropping
+// log records based on structured field and attribute matches.
 //
-// Policies are declarative and transport-agnostic.
-//
-// Note: Detailed filter conditions, matchers, and action semantics are deferred
-// to a subsequent design. This message is currently stubbed to establish the
-// package hierarchy, repository organization, and xDS transport plumbing.
-message LogFilterPolicy {}
+// Policies are declarative, atomic, and transport-agnostic.
+message LogFilterPolicy {
+  // Unique identifier for the policy within its configuration scope
+  // (e.g. "drop-noisy-healthchecks", "retain-error-logs").
+  string id = 1;
+
+  // The filtering action to take when all `matches` conditions evaluate to true.
+  Action action = 2;
+
+  // Conditions evaluated against incoming log records.
+  // All matchers in this list are ANDed together: all conditions must evaluate
+  // to true for the policy action to take effect. If empty, the policy matches
+  // all log records.
+  repeated LogMatcher matches = 3;
+}
+
+// LogMatcher defines a single predicate evaluated against a specific log field
+// or attribute.
+message LogMatcher {
+  // The field, attribute, or metadata to inspect. Exactly one must be set.
+  LogFieldSelector target = 1;
+
+  // The comparison predicate to evaluate against the target value.
+  // Exactly one predicate must be set.
+  oneof predicate {
+    // Matches if the selected field or attribute exists.
+    bool exists = 10;
+
+    // Exact string equality match.
+    string exact = 11;
+
+    // Regular expression match using RE2 syntax.
+    string regex = 12;
+  }
+
+  // If true, inverts the result of the predicate (logical NOT).
+  bool negate = 20;
+}
+
+// LogFieldSelector designates a first-class OTel log field, attribute, or metadata.
+message LogFieldSelector {
+  oneof target {
+    // Standard first-class OpenTelemetry LogRecord fields.
+    LogRecordField record_field = 1;
+
+    // Log record attribute by key (e.g. "http.route", "user_id").
+    string log_attribute = 2;
+
+    // Resource attribute by key (e.g. "service.name", "k8s.pod.name").
+    string resource_attribute = 3;
+
+    // Instrumentation scope attribute by key (e.g. "library.name").
+    string scope_attribute = 4;
+
+    // Matches the Instrumentation Scope name.
+    // (-- api-linter: core::0122::name-suffix=disabled
+    //     aip.dev/not-precedent: Matches OpenTelemetry InstrumentationScope name. --)
+    bool scope_name = 5;
+
+    // Matches the Instrumentation Scope version.
+    bool scope_version = 6;
+
+    // Matches the Resource Schema URL.
+    bool resource_schema_url = 7;
+
+    // Matches the Instrumentation Scope Schema URL.
+    bool scope_schema_url = 8;
+  }
+}
+
+// Action specifies what to do with a log record that matches all conditions.
+enum Action {
+  // Default unspecified action. A policy with an unspecified action is invalid.
+  ACTION_UNSPECIFIED = 0;
+
+  // Keep the matching log record and forward it to downstream pipelines.
+  ACTION_KEEP = 1;
+
+  // Drop the matching log record completely.
+  ACTION_DROP = 2;
+}
+
+// LogRecordField identifies standard first-class fields of an OpenTelemetry LogRecord.
+enum LogRecordField {
+  // Default unspecified log record field.
+  LOG_RECORD_FIELD_UNSPECIFIED = 0;
+
+  // The primary message body of the log record.
+  LOG_RECORD_FIELD_BODY = 1;
+
+  // The string severity of the log (e.g. "INFO", "ERROR", "DEBUG").
+  LOG_RECORD_FIELD_SEVERITY_TEXT = 2;
+
+  // The numerical severity of the log (1-24 per OpenTelemetry specification).
+  LOG_RECORD_FIELD_SEVERITY_NUMBER = 3;
+
+  // The 16-byte trace identifier associated with the log record.
+  LOG_RECORD_FIELD_TRACE_ID = 4;
+
+  // The 8-byte span identifier associated with the log record.
+  LOG_RECORD_FIELD_SPAN_ID = 5;
+}

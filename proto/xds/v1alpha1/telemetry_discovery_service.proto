@@ -23,10 +23,11 @@ option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-col
 // TelemetryDiscoveryService provides the xDS discovery contract for
 // TelemetryCollector resources.
 //
-// While production clients and Traffic Director multiplex discovery using
-// `envoy.service.discovery.v3.AggregatedDiscoveryService` (ADS), defining this
-// service establishes the canonical xDS resource contract and enables point-to-point
-// streaming for testing and specialized proxies.
+// Clients should prefer using the Aggregated Discovery Service (ADS)
+// (`envoy.service.discovery.v3.AggregatedDiscoveryService`) for flexibility
+// in resource discovery. Defining this dedicated service establishes the canonical
+// xDS resource contract and enables point-to-point discovery for testing and
+// specialized control planes (such as Cloud Service Mesh).
 service TelemetryDiscoveryService {
   // Bidirectional streaming discovery for TelemetryCollector resources.
   rpc StreamTelemetryCollectors(stream envoy.service.discovery.v3.DiscoveryRequest) returns (stream envoy.service.discovery.v3.DiscoveryResponse);

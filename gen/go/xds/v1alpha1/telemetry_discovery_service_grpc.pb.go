@@ -46,10 +46,11 @@ const (
 // TelemetryDiscoveryService provides the xDS discovery contract for
 // TelemetryCollector resources.
 //
-// While production clients and Traffic Director multiplex discovery using
-// `envoy.service.discovery.v3.AggregatedDiscoveryService` (ADS), defining this
-// service establishes the canonical xDS resource contract and enables point-to-point
-// streaming for testing and specialized proxies.
+// Clients should prefer using the Aggregated Discovery Service (ADS)
+// (`envoy.service.discovery.v3.AggregatedDiscoveryService`) for flexibility
+// in resource discovery. Defining this dedicated service establishes the canonical
+// xDS resource contract and enables point-to-point discovery for testing and
+// specialized control planes (such as Cloud Service Mesh).
 type TelemetryDiscoveryServiceClient interface {
 	// Bidirectional streaming discovery for TelemetryCollector resources.
 	StreamTelemetryCollectors(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[v3.DiscoveryRequest, v3.DiscoveryResponse], error)
@@ -110,10 +111,11 @@ func (c *telemetryDiscoveryServiceClient) FetchTelemetryCollectors(ctx context.C
 // TelemetryDiscoveryService provides the xDS discovery contract for
 // TelemetryCollector resources.
 //
-// While production clients and Traffic Director multiplex discovery using
-// `envoy.service.discovery.v3.AggregatedDiscoveryService` (ADS), defining this
-// service establishes the canonical xDS resource contract and enables point-to-point
-// streaming for testing and specialized proxies.
+// Clients should prefer using the Aggregated Discovery Service (ADS)
+// (`envoy.service.discovery.v3.AggregatedDiscoveryService`) for flexibility
+// in resource discovery. Defining this dedicated service establishes the canonical
+// xDS resource contract and enables point-to-point discovery for testing and
+// specialized control planes (such as Cloud Service Mesh).
 type TelemetryDiscoveryServiceServer interface {
 	// Bidirectional streaming discovery for TelemetryCollector resources.
 	StreamTelemetryCollectors(grpc.BidiStreamingServer[v3.DiscoveryRequest, v3.DiscoveryResponse]) error

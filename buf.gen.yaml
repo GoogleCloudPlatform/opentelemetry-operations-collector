@@ -1,5 +1,4 @@
-#!/usr/bin/env bash
-# Copyright 2025 Google LLC
+# Copyright 2026 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,15 +12,18 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-make compare-google-built-otel
-GOOGLE_OTEL_RESULT=$?
-make compare-otelopscol
-OTELOPSCOL_RESULT=$?
-make compare-protos
-PROTOS_RESULT=$?
-
-# If any result is 2, which is what `make` exits with when
-# any check exits with code 1, exit this script with code 1.
-if [[ $GOOGLE_OTEL_RESULT -eq 2 || $OTELOPSCOL_RESULT -eq 2 || $PROTOS_RESULT -eq 2 ]]; then
-    exit 1
-fi
+version: v2
+managed:
+  enabled: true
+  override:
+    - file_option: go_package_prefix
+      value: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go
+  disable:
+    - module: buf.build/envoyproxy/envoy
+plugins:
+  - local: protoc-gen-go
+    out: gen/go
+    opt: paths=source_relative
+  - local: protoc-gen-go-grpc
+    out: gen/go
+    opt: paths=source_relative

@@ -1,0 +1,28 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package google.telemetry.policy.v1alpha1;
+
+option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1;policyv1alpha1";
+
+// LogFilterPolicy defines an intent-based rule for filtering log records.
+//
+// Policies are declarative and transport-agnostic.
+//
+// Note: Detailed filter conditions, matchers, and action semantics are deferred
+// to a subsequent design. This message is currently stubbed to establish the
+// package hierarchy, repository organization, and xDS transport plumbing.
+message LogFilterPolicy {}

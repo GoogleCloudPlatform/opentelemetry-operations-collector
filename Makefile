@@ -64,11 +64,41 @@ test-google-otel-components test-otelopscol-components: go.work
 
 RUN_DISTROGEN=go run ./cmd/distrogen
 
+TOOLS_DIR = $(PWD)/.tools
+
+####################
+# Proto Generation
+####################
+
+BUF = $(TOOLS_DIR)/buf
+API_LINTER = $(TOOLS_DIR)/api-linter
+PROTOC_GEN_GO = $(TOOLS_DIR)/protoc-gen-go
+PROTOC_GEN_GO_GRPC = $(TOOLS_DIR)/protoc-gen-go-grpc
+
+$(BUF): install-tools
+$(API_LINTER): install-tools
+$(PROTOC_GEN_GO): install-tools
+$(PROTOC_GEN_GO_GRPC): install-tools
+
+.PHONY: gen-protos
+gen-protos: $(BUF) $(PROTOC_GEN_GO) $(PROTOC_GEN_GO_GRPC)
+	PATH="$(TOOLS_DIR):$${PATH}" $(BUF) generate
+
+.PHONY: lint-protos
+lint-protos: $(BUF) $(API_LINTER)
+	$(BUF) lint
+	$(BUF) format -d --exit-code
+	$(API_LINTER) --config=.api-linter.yaml --set-exit-status --proto-path=proto $$(find proto/policy -name '*.proto')
+
+.PHONY: compare-protos
+compare-protos: gen-protos
+	@git diff --exit-code gen/go && test -z "$$(git status --porcelain gen/go)" || (echo "Generated proto files in gen/go are out-of-date. Run 'make gen-protos' to regenerate." && exit 1)
+
 .PHONY: gen-all
-gen-all: distrogen-golden-update gen-google-built-otel gen-otelopscol
+gen-all: distrogen-golden-update gen-google-built-otel gen-otelopscol gen-protos
 
 .PHONY: regen-all
-regen-all: distrogen-golden-update regen-google-built-otel regen-otelopscol
+regen-all: distrogen-golden-update regen-google-built-otel regen-otelopscol gen-protos
 
 .PHONY: compare-all
 compare-all:
@@ -165,12 +195,6 @@ clean-workspace:
 	rm -f go.work
 	rm -f go.work.sum
 
-#######
-# Tools
-#######
-
-TOOLS_DIR = $(PWD)/.tools
-
 ADDLICENSE = $(TOOLS_DIR)/addlicense
 GOLANGCI_LINT = $(TOOLS_DIR)/golangci-lint
 MISSPELL = $(TOOLS_DIR)/misspell
@@ -188,6 +212,10 @@ TOOL_LIST ?= github.com/google/addlicense \
 			 github.com/client9/misspell/cmd/misspell \
 			 github.com/golangci/golangci-lint/cmd/golangci-lint \
 			 golang.org/x/tools/cmd/goimports \
+			 github.com/bufbuild/buf/cmd/buf \
+			 github.com/googleapis/api-linter/cmd/api-linter \
+			 google.golang.org/protobuf/cmd/protoc-gen-go \
+			 google.golang.org/grpc/cmd/protoc-gen-go-grpc \
 			 ./cmd/otel_component_versions
 
 .PHONY: install-tools

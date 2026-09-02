@@ -104,6 +104,7 @@ components:
     - googlecloudpubsub
     - prometheus
     - prometheusremotewrite
+    - syslog
 
   extensions:
     - zpages

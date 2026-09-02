@@ -30,6 +30,7 @@ import (
 	otelarrowexporter "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/otelarrowexporter"
 	prometheusexporter "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/prometheusexporter"
 	prometheusremotewriteexporter "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/prometheusremotewriteexporter"
+	syslogexporter "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/syslogexporter"
 	debugexporter "go.opentelemetry.io/collector/exporter/debugexporter"
 	nopexporter "go.opentelemetry.io/collector/exporter/nopexporter"
 	otlpexporter "go.opentelemetry.io/collector/exporter/otlpexporter"
@@ -236,6 +237,7 @@ func components() (otelcol.Factories, error) {
 		otelarrowexporter.NewFactory(),
 		prometheusexporter.NewFactory(),
 		prometheusremotewriteexporter.NewFactory(),
+		syslogexporter.NewFactory(),
 		debugexporter.NewFactory(),
 		nopexporter.NewFactory(),
 		otlpexporter.NewFactory(),
@@ -254,6 +256,7 @@ func components() (otelcol.Factories, error) {
 		otelarrowexporter.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/otelarrowexporter v0.159.0",
 		prometheusexporter.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/prometheusexporter v0.159.0",
 		prometheusremotewriteexporter.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/prometheusremotewriteexporter v0.159.0",
+		syslogexporter.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/syslogexporter v0.159.0",
 		debugexporter.NewFactory().Type(): "go.opentelemetry.io/collector/exporter/debugexporter v0.159.0",
 		nopexporter.NewFactory().Type(): "go.opentelemetry.io/collector/exporter/nopexporter v0.159.0",
 		otlpexporter.NewFactory().Type(): "go.opentelemetry.io/collector/exporter/otlpexporter v0.159.0",

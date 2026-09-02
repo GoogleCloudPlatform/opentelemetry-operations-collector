@@ -2,7 +2,7 @@
 
 module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/google-built-opentelemetry-collector
 
-go 1.25.7
+go 1.26.0
 
 require (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter v0.159.0
@@ -25,6 +25,7 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/otelarrowexporter v0.159.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/prometheusexporter v0.159.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/prometheusremotewriteexporter v0.159.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/syslogexporter v0.159.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/extension/ackextension v0.159.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/extension/basicauthextension v0.159.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/extension/bearertokenauthextension v0.159.0

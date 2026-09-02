@@ -17,9 +17,6 @@ syntax = "proto3";
 package google.telemetry.policy.v1alpha1;
 
 option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1;policyv1alpha1";
-option java_multiple_files = true;
-option java_outer_classname = "LogFilterPolicyProto";
-option java_package = "com.google.telemetry.policy.v1alpha1";
 
 // LogFilterPolicy defines an intent-based rule for filtering log records.
 //

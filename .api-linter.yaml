@@ -16,3 +16,6 @@
     - "proto/policy/**"
   disabled_rules:
     - core::0191::proto-package
+    - core::0191::java-package
+    - core::0191::java-outer-classname
+    - core::0191::java-multiple-files

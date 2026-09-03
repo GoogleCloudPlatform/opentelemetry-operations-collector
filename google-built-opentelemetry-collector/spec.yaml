@@ -115,6 +115,7 @@ components:
         - https
         - yaml
         - googlesecretmanager
+        - googlecontrolplane
 replaces:
     - from: github.com/buger/jsonparser
       to: github.com/buger/jsonparser v1.1.2

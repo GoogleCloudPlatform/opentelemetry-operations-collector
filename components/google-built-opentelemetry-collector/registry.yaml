@@ -24,3 +24,8 @@ extensions:
   oauth2clientauth:
     gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/oauth2clientauthextension v0.0.0
     path: "../components/google-built-opentelemetry-collector/extension/oauth2clientauthextension"
+
+providers:
+  googlecontrolplane:
+    gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider v0.0.0
+    path: "../components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider"

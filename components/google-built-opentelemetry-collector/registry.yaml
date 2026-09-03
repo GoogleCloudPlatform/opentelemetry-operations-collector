@@ -17,9 +17,14 @@ exporters:
     gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter v0.0.0
     path: "../components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter"
 
+processors:
+  googlepolicy:
+    gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor v0.0.0
+    path: "../components/google-built-opentelemetry-collector/processor/googlepolicyprocessor"
+
 extensions:
   healthagent:
-    gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/healthagent v0.0.0 v0.0.0
+    gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/healthagent v0.0.0
     path: "../components/google-built-opentelemetry-collector/extension/healthagent"
   oauth2clientauth:
     gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/oauth2clientauthextension v0.0.0

@@ -12,7 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:generate mdatagen metadata.yaml
+package googlepolicyprocessor
 
-// Package googlecontrolplaneprovider implements an OpenTelemetry Collector configuration provider for Google Control Plane.
-package googlecontrolplaneprovider // import "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider"
+import "go.opentelemetry.io/collector/component"
+
+// Config defines configuration for the googlepolicy processor.
+type Config struct {
+}
+
+var _ component.Config = (*Config)(nil)
+
+// Validate checks if the processor configuration is valid.
+func (cfg *Config) Validate() error {
+	return nil
+}

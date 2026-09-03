@@ -47,6 +47,7 @@ The Google-Built OpenTelemetry Collector is an open-source, production-ready bui
 | deltatocumulative | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/deltatocumulativeprocessor/README.md) |
 | deltatorate | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/deltatorateprocessor/README.md) |
 | filter | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/filterprocessor/README.md) |
+| googlepolicy | [docs](No docs linked for component) |
 | groupbyattrs | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/groupbyattrsprocessor/README.md) |
 | groupbytrace | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/groupbytraceprocessor/README.md) |
 | interval | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/intervalprocessor/README.md) |

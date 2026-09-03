@@ -8,8 +8,8 @@ import (
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/confmap"
-	googlesecretmanagerprovider "github.com/open-telemetry/opentelemetry-collector-contrib/confmap/provider/googlesecretmanagerprovider"
 	googlecontrolplaneprovider "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider"
+	googlesecretmanagerprovider "github.com/open-telemetry/opentelemetry-collector-contrib/confmap/provider/googlesecretmanagerprovider"
 	envprovider "go.opentelemetry.io/collector/confmap/provider/envprovider"
 	fileprovider "go.opentelemetry.io/collector/confmap/provider/fileprovider"
 	httpprovider "go.opentelemetry.io/collector/confmap/provider/httpprovider"

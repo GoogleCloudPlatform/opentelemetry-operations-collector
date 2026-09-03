@@ -7,6 +7,7 @@ go 1.26.0
 require (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter v0.159.0
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/healthagent v0.159.0
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor v0.159.0
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider v0.159.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/confmap/provider/googlesecretmanagerprovider v0.159.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/connector/countconnector v0.159.0
@@ -88,7 +89,7 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowsperfcountersreceiver v0.159.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/zipkinreceiver v0.159.0
 	go.opentelemetry.io/collector/component v1.65.0
-	go.opentelemetry.io/collector/confmap v1.65.0
+	go.opentelemetry.io/collector/confmap v1.66.0
 	go.opentelemetry.io/collector/confmap/provider/envprovider v1.65.0
 	go.opentelemetry.io/collector/confmap/provider/fileprovider v1.65.0
 	go.opentelemetry.io/collector/confmap/provider/httpprovider v1.65.0
@@ -140,6 +141,7 @@ require (
 	github.com/DataDog/go-sqllexer v0.1.12 // indirect
 	github.com/DeRuina/timberjack v1.4.6 // indirect
 	github.com/GehirnInc/crypt v0.0.0-20230320061759-8cc1b52080c5 // indirect
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy v0.0.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.35.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector v0.59.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector/googlemanagedprometheus v0.59.0 // indirect
@@ -412,7 +414,7 @@ require (
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/stackitcloud/stackit-sdk-go/core v0.26.0 // indirect
 	github.com/stretchr/objx v0.5.3 // indirect
-	github.com/stretchr/testify v1.11.1 // indirect
+	github.com/stretchr/testify v1.12.1 // indirect
 	github.com/tg123/go-htpasswd v1.2.5 // indirect
 	github.com/tidwall/gjson v1.19.0 // indirect
 	github.com/tidwall/match v1.2.0 // indirect
@@ -464,7 +466,7 @@ require (
 	go.opentelemetry.io/collector/extension/extensionmiddleware v0.159.0 // indirect
 	go.opentelemetry.io/collector/extension/extensiontest v0.159.0 // indirect
 	go.opentelemetry.io/collector/extension/xextension v0.159.0 // indirect
-	go.opentelemetry.io/collector/featuregate v1.65.0 // indirect
+	go.opentelemetry.io/collector/featuregate v1.66.0 // indirect
 	go.opentelemetry.io/collector/filter v0.159.0 // indirect
 	go.opentelemetry.io/collector/internal/componentalias v0.159.0 // indirect
 	go.opentelemetry.io/collector/internal/fanoutconsumer v0.159.0 // indirect
@@ -569,12 +571,16 @@ require (
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
 
+replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider v0.159.0 => ../../components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider
+
 replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/healthagent v0.159.0 => ../../components/google-built-opentelemetry-collector/extension/healthagent
 
 replace github.com/open-telemetry/opentelemetry-collector-contrib/extension/oauth2clientauthextension v0.159.0 => ../../components/google-built-opentelemetry-collector/extension/oauth2clientauthextension
 
 replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter v0.159.0 => ../../components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter
 
-replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider v0.159.0 => ../../components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider
+replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor v0.159.0 => ../../components/google-built-opentelemetry-collector/processor/googlepolicyprocessor
 
 replace github.com/buger/jsonparser => github.com/buger/jsonparser v1.1.2
+
+replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy => ../../pkg/googlepolicy

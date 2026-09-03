@@ -1,22 +1,28 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider
 
 go 1.26.0
 
-require go.opentelemetry.io/collector/confmap v1.65.0
-
 require (
-	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
-	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
-	github.com/gobwas/glob v0.2.3 // indirect
-	github.com/hashicorp/go-version v1.9.0 // indirect
-	github.com/knadh/koanf/maps v0.1.3 // indirect
-	github.com/knadh/koanf/providers/confmap v1.0.1 // indirect
-	github.com/knadh/koanf/v2 v2.3.6 // indirect
-	github.com/mitchellh/copystructure v1.2.0 // indirect
-	github.com/mitchellh/reflectwalk v1.0.2 // indirect
-	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
-	go.opentelemetry.io/collector/featuregate v1.65.0 // indirect
-	go.uber.org/multierr v1.11.0 // indirect
-	go.uber.org/zap v1.28.0 // indirect
-	go.yaml.in/yaml/v3 v3.0.5 // indirect
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy v0.0.0
+	github.com/fsnotify/fsnotify v1.10.1
+	github.com/stretchr/testify v1.11.1
+	go.opentelemetry.io/collector/confmap v1.65.0
+	go.uber.org/goleak v1.3.0
+	go.uber.org/zap v1.28.0
 )
+
+replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy => ../../../../pkg/googlepolicy

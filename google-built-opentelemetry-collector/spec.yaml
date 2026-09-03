@@ -65,6 +65,7 @@ components:
         - transform
         - interval
         - metricsgeneration
+        - googlepolicy
     exporters:
         - debug
         - nop
@@ -120,6 +121,9 @@ replaces:
     - from: github.com/buger/jsonparser
       to: github.com/buger/jsonparser v1.1.2
       reason: Force update buger/jsonparser to v1.1.2 to fix vulnerability
+    - from: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy
+      to: ../../pkg/googlepolicy
+      reason: Local dependency for googlecontrolplaneprovider
 feature_gates:
     - exporter.googlemanagedprometheus.intToDouble
     - exporter.googlecloud.CustomMonitoredResources

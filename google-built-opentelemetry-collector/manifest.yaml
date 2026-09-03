@@ -37,6 +37,8 @@ receivers:
 - gomod: go.opentelemetry.io/collector/receiver/otlpreceiver v0.159.0
 
 processors:
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor v0.159.0
+  path: ../components/google-built-opentelemetry-collector/processor/googlepolicyprocessor
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/attributesprocessor v0.159.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/cumulativetodeltaprocessor v0.159.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/deltatocumulativeprocessor v0.159.0
@@ -122,4 +124,6 @@ providers:
 replaces:
 # Force update buger/jsonparser to v1.1.2 to fix vulnerability
 - github.com/buger/jsonparser => github.com/buger/jsonparser v1.1.2
+# Local dependency for googlecontrolplaneprovider
+- github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy => ../../pkg/googlepolicy
 

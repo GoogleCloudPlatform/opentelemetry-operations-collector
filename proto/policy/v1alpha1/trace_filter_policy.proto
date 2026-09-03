@@ -21,30 +21,30 @@ import "policy/v1alpha1/common_policy_types.proto";
 
 option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1;policyv1alpha1";
 
-// LogFilterPolicy defines an intent-based rule for retaining or dropping
-// log records based on structured field and attribute matches.
+// TraceFilterPolicy defines an intent-based rule for retaining or dropping
+// spans based on structured field, attribute, and status matches.
 //
 // Policies are declarative, atomic, and transport-agnostic.
-message LogFilterPolicy {
+message TraceFilterPolicy {
   // Unique identifier for the policy within its configuration scope
-  // (e.g. a UUID or namespaced URI like "io.opentelemetry.operator/{namespace}/policies/retain-error-logs").
+  // (e.g. a UUID or namespaced URI like "io.opentelemetry.operator/{namespace}/policies/retain-error-spans").
   string id = 1;
 
   // The filtering action to take when all `matches` conditions evaluate to true.
   optional Action action = 2;
 
-  // Conditions evaluated against incoming log records.
+  // Conditions evaluated against incoming spans.
   // All matchers in this list are ANDed together: all conditions must evaluate
   // to true for the policy action to take effect.
   // At least one matcher is required; a policy with no matchers is invalid.
-  repeated LogMatcher matches = 3;
+  repeated TraceMatcher matches = 3;
 }
 
-// LogMatcher defines a single predicate evaluated against a specific log field
-// or attribute.
-message LogMatcher {
-  // The field, attribute, or metadata to inspect. Exactly one must be set.
-  LogFieldSelector target = 1;
+// TraceMatcher defines a single predicate evaluated against a specific span field,
+// attribute, or status.
+message TraceMatcher {
+  // The span field, attribute, or metadata to inspect. Exactly one must be set.
+  TraceFieldSelector target = 1;
 
   // The comparison predicate to evaluate against the target value.
   // Exactly one predicate must be set.
@@ -63,14 +63,14 @@ message LogMatcher {
   bool negate = 2;
 }
 
-// LogFieldSelector designates a first-class OTel log field, attribute, or metadata.
-message LogFieldSelector {
+// TraceFieldSelector designates a first-class OTel span field, attribute, or metadata.
+message TraceFieldSelector {
   oneof target {
-    // Standard first-class OpenTelemetry LogRecord fields (OTLP path: log_record.*).
-    LogRecordField record_field = 1;
+    // Standard first-class OpenTelemetry Span fields (OTLP path: span.*).
+    SpanRecordField record_field = 1;
 
-    // Log record attribute by key (OTLP path: log_record.attributes[*], e.g. "http.route", "user_id").
-    string log_attribute = 2;
+    // Span attribute by key (OTLP path: span.attributes[*], e.g. "http.route", "db.system", "rpc.method").
+    string span_attribute = 2;
 
     // Resource attribute by key (OTLP path: resource.attributes[*], e.g. "service.name", "k8s.pod.name").
     string resource_attribute = 3;
@@ -83,31 +83,43 @@ message LogFieldSelector {
   }
 }
 
-// LogRecordField identifies standard first-class fields of an OpenTelemetry LogRecord.
-enum LogRecordField {
-  // Default unspecified log record field.
-  LOG_RECORD_FIELD_UNSPECIFIED = 0;
+// SpanRecordField identifies standard first-class fields of an OpenTelemetry Span.
+enum SpanRecordField {
+  // Default unspecified span record field.
+  SPAN_RECORD_FIELD_UNSPECIFIED = 0;
 
-  // The primary message body of the log record.
-  LOG_RECORD_FIELD_BODY = 1;
+  // The operation name of the span (e.g. "HTTP GET /users", "SELECT * FROM users").
+  SPAN_RECORD_FIELD_NAME = 1;
 
-  // The string severity of the log (e.g. "INFO", "ERROR", "DEBUG").
-  LOG_RECORD_FIELD_SEVERITY_TEXT = 2;
-
-  // The numerical severity of the log (1-24 per OpenTelemetry specification).
-  // When evaluated against string predicates (`exact`, `regex`), this matches
-  // against the canonical base-10 integer string representation (e.g. "17").
-  LOG_RECORD_FIELD_SEVERITY_NUMBER = 3;
-
-  // The 16-byte trace identifier associated with the log record.
+  // The 16-byte trace identifier associated with the span.
   // When evaluated against string predicates (`exact`, `regex`), this matches
   // against the 32-character lowercase hexadecimal string representation
   // per the OpenTelemetry / W3C Trace Context specification.
-  LOG_RECORD_FIELD_TRACE_ID = 4;
+  SPAN_RECORD_FIELD_TRACE_ID = 2;
 
-  // The 8-byte span identifier associated with the log record.
+  // The 8-byte span identifier.
   // When evaluated against string predicates (`exact`, `regex`), this matches
   // against the 16-character lowercase hexadecimal string representation
   // per the OpenTelemetry / W3C Trace Context specification.
-  LOG_RECORD_FIELD_SPAN_ID = 5;
+  SPAN_RECORD_FIELD_SPAN_ID = 3;
+
+  // The 8-byte parent span identifier.
+  // When evaluated against string predicates (`exact`, `regex`), this matches
+  // against the 16-character lowercase hexadecimal string representation
+  // per the OpenTelemetry / W3C Trace Context specification.
+  SPAN_RECORD_FIELD_PARENT_SPAN_ID = 4;
+
+  // The status message describing an error.
+  SPAN_RECORD_FIELD_STATUS_MESSAGE = 5;
+
+  // The span kind (e.g. "INTERNAL", "SERVER", "CLIENT", "PRODUCER", "CONSUMER").
+  // When evaluated against string predicates (`exact`, `regex`), this matches
+  // against uppercase span kind string names.
+  SPAN_RECORD_FIELD_KIND = 6;
+
+  // The span status code (e.g. "OK", "ERROR", "UNSET").
+  // When evaluated against string predicates (`exact`, `regex`), this matches
+  // against uppercase status code string names (without the "STATUS_CODE_"
+  // prefix, matching OpenTelemetry specification conventions).
+  SPAN_RECORD_FIELD_STATUS_CODE = 7;
 }

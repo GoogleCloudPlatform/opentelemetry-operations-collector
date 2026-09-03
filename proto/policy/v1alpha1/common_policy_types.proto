@@ -1,0 +1,46 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package google.telemetry.policy.v1alpha1;
+
+option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1;policyv1alpha1";
+
+// Action specifies what to do with a telemetry record that matches all conditions.
+enum Action {
+  // Default unspecified action. A policy with an unspecified action is invalid.
+  ACTION_UNSPECIFIED = 0;
+
+  // Keep the matching telemetry record and forward it to downstream pipelines.
+  ACTION_KEEP = 1;
+
+  // Drop the matching telemetry record completely.
+  ACTION_DROP = 2;
+}
+
+// ScopeField identifies standard first-class fields of an InstrumentationScope.
+enum ScopeField {
+  // Default unspecified scope field.
+  SCOPE_FIELD_UNSPECIFIED = 0;
+
+  // The name of the instrumentation scope (e.g. library or package name).
+  SCOPE_FIELD_NAME = 1;
+
+  // The version of the instrumentation scope.
+  SCOPE_FIELD_VERSION = 2;
+
+  // The schema URL of the instrumentation scope.
+  SCOPE_FIELD_SCHEMA_URL = 3;
+}

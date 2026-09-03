@@ -34,8 +34,8 @@ message LogFilterPolicy {
 
   // Conditions evaluated against incoming log records.
   // All matchers in this list are ANDed together: all conditions must evaluate
-  // to true for the policy action to take effect. If empty, the policy matches
-  // all log records.
+  // to true for the policy action to take effect.
+  // At least one matcher is required; a policy with no matchers is invalid.
   repeated LogMatcher matches = 3;
 }
 

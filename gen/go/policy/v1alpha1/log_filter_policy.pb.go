@@ -281,8 +281,8 @@ type LogFilterPolicy struct {
 	Action *Action `protobuf:"varint,2,opt,name=action,proto3,enum=google.telemetry.policy.v1alpha1.Action,oneof" json:"action,omitempty"`
 	// Conditions evaluated against incoming log records.
 	// All matchers in this list are ANDed together: all conditions must evaluate
-	// to true for the policy action to take effect. If empty, the policy matches
-	// all log records.
+	// to true for the policy action to take effect.
+	// At least one matcher is required; a policy with no matchers is invalid.
 	Matches       []*LogMatcher `protobuf:"bytes,3,rep,name=matches,proto3" json:"matches,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

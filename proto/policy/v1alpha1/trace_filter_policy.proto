@@ -1,0 +1,125 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package google.telemetry.policy.v1alpha1;
+
+import "google/protobuf/empty.proto";
+import "policy/v1alpha1/log_filter_policy.proto";
+
+option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1;policyv1alpha1";
+
+// TraceFilterPolicy defines an intent-based rule for retaining or dropping
+// spans based on structured field, attribute, and status matches.
+//
+// Policies are declarative, atomic, and transport-agnostic.
+message TraceFilterPolicy {
+  // Unique identifier for the policy within its configuration scope
+  // (e.g. a UUID or namespaced URI like "io.opentelemetry.operator/{namespace}/policies/retain-error-spans").
+  string id = 1;
+
+  // The filtering action to take when all `matches` conditions evaluate to true.
+  optional Action action = 2;
+
+  // Conditions evaluated against incoming spans.
+  // All matchers in this list are ANDed together: all conditions must evaluate
+  // to true for the policy action to take effect.
+  // At least one matcher is required; a policy with no matchers is invalid.
+  repeated TraceMatcher matches = 3;
+}
+
+// TraceMatcher defines a single predicate evaluated against a specific span field,
+// attribute, or status.
+message TraceMatcher {
+  // The span field, attribute, or metadata to inspect. Exactly one must be set.
+  TraceFieldSelector target = 1;
+
+  // The comparison predicate to evaluate against the target value.
+  // Exactly one predicate must be set.
+  oneof predicate {
+    // Matches if the selected field or attribute exists.
+    google.protobuf.Empty exists = 10;
+
+    // Exact string equality match.
+    string exact = 11;
+
+    // Regular expression match using RE2 syntax.
+    string regex = 12;
+  }
+
+  // If true, inverts the result of the predicate (logical NOT).
+  bool negate = 2;
+}
+
+// TraceFieldSelector designates a first-class OTel span field, attribute, or metadata.
+message TraceFieldSelector {
+  oneof target {
+    // Standard first-class OpenTelemetry Span fields (OTLP path: span.*).
+    SpanRecordField record_field = 1;
+
+    // Span attribute by key (OTLP path: span.attributes[*], e.g. "http.route", "db.system", "rpc.method").
+    string span_attribute = 2;
+
+    // Resource attribute by key (OTLP path: resource.attributes[*], e.g. "service.name", "k8s.pod.name").
+    string resource_attribute = 3;
+
+    // Instrumentation scope attribute by key (OTLP path: scope.attributes[*], e.g. "library.name").
+    string scope_attribute = 4;
+
+    // Standard first-class OpenTelemetry InstrumentationScope fields (OTLP path: scope.*).
+    ScopeField scope_field = 5;
+  }
+}
+
+// SpanRecordField identifies standard first-class fields of an OpenTelemetry Span.
+enum SpanRecordField {
+  // Default unspecified span record field.
+  SPAN_RECORD_FIELD_UNSPECIFIED = 0;
+
+  // The operation name of the span (e.g. "HTTP GET /users", "SELECT * FROM users").
+  SPAN_RECORD_FIELD_NAME = 1;
+
+  // The 16-byte trace identifier associated with the span.
+  // When evaluated against string predicates (`exact`, `regex`), this matches
+  // against the 32-character lowercase hexadecimal string representation
+  // per the OpenTelemetry / W3C Trace Context specification.
+  SPAN_RECORD_FIELD_TRACE_ID = 2;
+
+  // The 8-byte span identifier.
+  // When evaluated against string predicates (`exact`, `regex`), this matches
+  // against the 16-character lowercase hexadecimal string representation
+  // per the OpenTelemetry / W3C Trace Context specification.
+  SPAN_RECORD_FIELD_SPAN_ID = 3;
+
+  // The 8-byte parent span identifier.
+  // When evaluated against string predicates (`exact`, `regex`), this matches
+  // against the 16-character lowercase hexadecimal string representation
+  // per the OpenTelemetry / W3C Trace Context specification.
+  SPAN_RECORD_FIELD_PARENT_SPAN_ID = 4;
+
+  // The status message describing an error.
+  SPAN_RECORD_FIELD_STATUS_MESSAGE = 5;
+
+  // The span kind (e.g. "INTERNAL", "SERVER", "CLIENT", "PRODUCER", "CONSUMER").
+  // When evaluated against string predicates (`exact`, `regex`), this matches
+  // against uppercase span kind string names.
+  SPAN_RECORD_FIELD_KIND = 6;
+
+  // The span status code (e.g. "OK", "ERROR", "UNSET").
+  // When evaluated against string predicates (`exact`, `regex`), this matches
+  // against uppercase status code string names (without the "STATUS_CODE_"
+  // prefix, matching OpenTelemetry specification conventions).
+  SPAN_RECORD_FIELD_STATUS_CODE = 7;
+}

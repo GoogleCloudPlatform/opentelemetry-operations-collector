@@ -180,7 +180,9 @@ func (cmd *generateCommand) Run() error {
 	}
 	defer generator.Clean()
 
-	generator.CustomTemplatesDir = os.DirFS(*cmd.templates)
+	if *cmd.templates != "" {
+		generator.CustomTemplatesDir = os.DirFS(*cmd.templates)
+	}
 
 	if err := generator.Generate(); err != nil {
 		return err

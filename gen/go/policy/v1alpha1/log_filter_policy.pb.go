@@ -275,7 +275,7 @@ func (ResourceField) EnumDescriptor() ([]byte, []int) {
 type LogFilterPolicy struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Unique identifier for the policy within its configuration scope
-	// (e.g. "drop-noisy-healthchecks", "retain-error-logs").
+	// (e.g. a UUID or namespaced URI like "io.opentelemetry.operator/{namespace}/policies/retain-error-logs").
 	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	// The filtering action to take when all `matches` conditions evaluate to true.
 	Action *Action `protobuf:"varint,2,opt,name=action,proto3,enum=google.telemetry.policy.v1alpha1.Action,oneof" json:"action,omitempty"`

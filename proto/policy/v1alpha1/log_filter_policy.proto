@@ -26,7 +26,7 @@ option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-col
 // Policies are declarative, atomic, and transport-agnostic.
 message LogFilterPolicy {
   // Unique identifier for the policy within its configuration scope
-  // (e.g. "drop-noisy-healthchecks", "retain-error-logs").
+  // (e.g. a UUID or namespaced URI like "io.opentelemetry.operator/{namespace}/policies/retain-error-logs").
   string id = 1;
 
   // The filtering action to take when all `matches` conditions evaluate to true.

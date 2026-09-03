@@ -79,9 +79,6 @@ message LogFieldSelector {
 
     // Standard first-class OpenTelemetry InstrumentationScope fields (OTLP path: scope.*).
     ScopeField scope_field = 5;
-
-    // Standard first-class OpenTelemetry Resource fields (OTLP path: resource.*).
-    ResourceField resource_field = 6;
   }
 }
 
@@ -139,13 +136,4 @@ enum ScopeField {
 
   // The schema URL of the instrumentation scope.
   SCOPE_FIELD_SCHEMA_URL = 3;
-}
-
-// ResourceField identifies standard first-class fields of a Resource.
-enum ResourceField {
-  // Default unspecified resource field.
-  RESOURCE_FIELD_UNSPECIFIED = 0;
-
-  // The schema URL of the resource.
-  RESOURCE_FIELD_SCHEMA_URL = 1;
 }

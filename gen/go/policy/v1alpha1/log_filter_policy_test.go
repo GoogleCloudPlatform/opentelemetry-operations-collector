@@ -97,16 +97,6 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 			},
 			{
 				Target: &policyv1alpha1.LogFieldSelector{
-					Target: &policyv1alpha1.LogFieldSelector_ResourceField{
-						ResourceField: policyv1alpha1.ResourceField_RESOURCE_FIELD_SCHEMA_URL,
-					},
-				},
-				Predicate: &policyv1alpha1.LogMatcher_Exact{
-					Exact: "https://opentelemetry.io/schemas/1.24.0",
-				},
-			},
-			{
-				Target: &policyv1alpha1.LogFieldSelector{
 					Target: &policyv1alpha1.LogFieldSelector_ScopeField{
 						ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_SCHEMA_URL,
 					},
@@ -134,7 +124,7 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 	assert.Equal(t, "drop-noisy-healthchecks", unmarshaled.GetId())
 	assert.NotNil(t, unmarshaled.Action)
 	assert.Equal(t, policyv1alpha1.Action_ACTION_DROP, unmarshaled.GetAction())
-	require.Len(t, unmarshaled.GetMatches(), 8)
+	require.Len(t, unmarshaled.GetMatches(), 7)
 }
 
 func TestLogFilterPolicy_JSONSerialization(t *testing.T) {
@@ -155,8 +145,8 @@ func TestLogFilterPolicy_JSONSerialization(t *testing.T) {
 			},
 			{
 				Target: &policyv1alpha1.LogFieldSelector{
-					Target: &policyv1alpha1.LogFieldSelector_ResourceField{
-						ResourceField: policyv1alpha1.ResourceField_RESOURCE_FIELD_SCHEMA_URL,
+					Target: &policyv1alpha1.LogFieldSelector_ScopeField{
+						ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_SCHEMA_URL,
 					},
 				},
 				Predicate: &policyv1alpha1.LogMatcher_Exists{
@@ -166,6 +156,7 @@ func TestLogFilterPolicy_JSONSerialization(t *testing.T) {
 			},
 		},
 	}
+
 
 	// ProtoJSON marshal and unmarshal round-trip.
 	jsonData, err := protojson.Marshal(policy)

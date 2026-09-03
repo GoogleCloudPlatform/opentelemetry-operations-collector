@@ -17,6 +17,7 @@ syntax = "proto3";
 package google.telemetry.policy.v1alpha1;
 
 import "google/protobuf/empty.proto";
+import "policy/v1alpha1/common_policy_types.proto";
 
 option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1;policyv1alpha1";
 
@@ -82,18 +83,6 @@ message LogFieldSelector {
   }
 }
 
-// Action specifies what to do with a log record that matches all conditions.
-enum Action {
-  // Default unspecified action. A policy with an unspecified action is invalid.
-  ACTION_UNSPECIFIED = 0;
-
-  // Keep the matching log record and forward it to downstream pipelines.
-  ACTION_KEEP = 1;
-
-  // Drop the matching log record completely.
-  ACTION_DROP = 2;
-}
-
 // LogRecordField identifies standard first-class fields of an OpenTelemetry LogRecord.
 enum LogRecordField {
   // Default unspecified log record field.
@@ -121,19 +110,4 @@ enum LogRecordField {
   // against the 16-character lowercase hexadecimal string representation
   // per the OpenTelemetry / W3C Trace Context specification.
   LOG_RECORD_FIELD_SPAN_ID = 5;
-}
-
-// ScopeField identifies standard first-class fields of an InstrumentationScope.
-enum ScopeField {
-  // Default unspecified scope field.
-  SCOPE_FIELD_UNSPECIFIED = 0;
-
-  // The name of the instrumentation scope (e.g. library or package name).
-  SCOPE_FIELD_NAME = 1;
-
-  // The version of the instrumentation scope.
-  SCOPE_FIELD_VERSION = 2;
-
-  // The schema URL of the instrumentation scope.
-  SCOPE_FIELD_SCHEMA_URL = 3;
 }

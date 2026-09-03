@@ -458,7 +458,7 @@ var File_policy_v1alpha1_trace_filter_policy_proto protoreflect.FileDescriptor
 
 const file_policy_v1alpha1_trace_filter_policy_proto_rawDesc = "" +
 	"\n" +
-	")policy/v1alpha1/trace_filter_policy.proto\x12 google.telemetry.policy.v1alpha1\x1a\x1bgoogle/protobuf/empty.proto\x1a'policy/v1alpha1/log_filter_policy.proto\"\xbf\x01\n" +
+	")policy/v1alpha1/trace_filter_policy.proto\x12 google.telemetry.policy.v1alpha1\x1a\x1bgoogle/protobuf/empty.proto\x1a)policy/v1alpha1/common_policy_types.proto\"\xbf\x01\n" +
 	"\x11TraceFilterPolicy\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12E\n" +
 	"\x06action\x18\x02 \x01(\x0e2(.google.telemetry.policy.v1alpha1.ActionH\x00R\x06action\x88\x01\x01\x12H\n" +
@@ -533,7 +533,7 @@ func file_policy_v1alpha1_trace_filter_policy_proto_init() {
 	if File_policy_v1alpha1_trace_filter_policy_proto != nil {
 		return
 	}
-	file_policy_v1alpha1_log_filter_policy_proto_init()
+	file_policy_v1alpha1_common_policy_types_proto_init()
 	file_policy_v1alpha1_trace_filter_policy_proto_msgTypes[0].OneofWrappers = []any{}
 	file_policy_v1alpha1_trace_filter_policy_proto_msgTypes[1].OneofWrappers = []any{
 		(*TraceMatcher_Exists)(nil),

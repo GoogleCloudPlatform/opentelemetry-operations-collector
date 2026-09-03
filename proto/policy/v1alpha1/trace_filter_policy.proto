@@ -17,7 +17,7 @@ syntax = "proto3";
 package google.telemetry.policy.v1alpha1;
 
 import "google/protobuf/empty.proto";
-import "policy/v1alpha1/log_filter_policy.proto";
+import "policy/v1alpha1/common_policy_types.proto";
 
 option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1;policyv1alpha1";
 

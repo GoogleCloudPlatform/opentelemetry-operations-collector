@@ -37,6 +37,8 @@ const (
 )
 
 // SpanRecordField identifies standard first-class fields of an OpenTelemetry Span.
+// When evaluated with `exists`, first-class fields evaluate to true when set
+// to a non-default (non-empty / non-zero) value.
 type SpanRecordField int32
 
 const (
@@ -55,15 +57,23 @@ const (
 	// per the OpenTelemetry / W3C Trace Context specification.
 	SpanRecordField_SPAN_RECORD_FIELD_SPAN_ID SpanRecordField = 3
 	// The 8-byte parent span identifier.
-	// When evaluated against string predicates (`exact`, `regex`), this matches
-	// against the 16-character lowercase hexadecimal string representation
-	// per the OpenTelemetry / W3C Trace Context specification.
+	// Root spans have no parent span identifier (in OpenTelemetry data models,
+	// parent_span_id is empty or all zeroes).
+	// When evaluated with `exists`, this evaluates to false for root spans (and true
+	// with `negate: true`, allowing explicit targeting or exemption of root spans).
+	// When evaluated against string predicates (`exact`, `regex`), a root span matches
+	// against the empty string `""`. For child spans, this matches against the
+	// 16-character lowercase hexadecimal string representation per the OpenTelemetry /
+	// W3C Trace Context specification.
 	SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID SpanRecordField = 4
 	// The status message describing an error.
 	SpanRecordField_SPAN_RECORD_FIELD_STATUS_MESSAGE SpanRecordField = 5
 	// The span kind (e.g. "INTERNAL", "SERVER", "CLIENT", "PRODUCER", "CONSUMER").
 	// When evaluated against string predicates (`exact`, `regex`), this matches
-	// against uppercase span kind string names.
+	// against uppercase span kind string names without the "SPAN_KIND_" prefix
+	// (matching OpenTelemetry specification conventions). Per the OpenTelemetry
+	// specification, if span kind is unset or SPAN_KIND_UNSPECIFIED,
+	// implementations treat it as "INTERNAL".
 	SpanRecordField_SPAN_RECORD_FIELD_KIND SpanRecordField = 6
 	// The span status code (e.g. "OK", "ERROR", "UNSET").
 	// When evaluated against string predicates (`exact`, `regex`), this matches
@@ -127,6 +137,19 @@ func (SpanRecordField) EnumDescriptor() ([]byte, []int) {
 // spans based on structured field, attribute, and status matches.
 //
 // Policies are declarative, atomic, and transport-agnostic.
+//
+// Evaluation Granularity & Action Precedence:
+//   - Span-Level Granularity: Spans are evaluated independently without trace
+//     reassembly. Filter policies remain fast, stateless, and evaluated per span.
+//   - Independent Decisions & Orphan Spans: Dropping a span does not drop its
+//     descendants. Dropping an intermediate span in a trace leaves child spans
+//     behind as orphans with a dangling parent_span_id.
+//   - Action Precedence & Exemptions: Telemetry passes through by default (default
+//     allow). When multiple policies match a span, ACTION_KEEP always overrides
+//     ACTION_DROP (keep always overrides drop). ACTION_KEEP acts as an explicit
+//     exemption retaining matching spans; it does not prune non-matching spans.
+//     To implement an allowlist that prunes non-matching spans, authors specify
+//     ACTION_DROP with negate: true on the matchers.
 type TraceFilterPolicy struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Unique identifier for the policy within its configuration scope
@@ -299,6 +322,12 @@ type isTraceMatcher_Predicate interface {
 
 type TraceMatcher_Exists struct {
 	// Matches if the selected field or attribute exists.
+	// For attributes, this evaluates to true if the attribute key exists.
+	// For first-class fields (record_field, scope_field) that lack explicit
+	// presence tracking in the OpenTelemetry data model, this evaluates to true
+	// when the field is set to a non-default (non-zero/non-empty) value, and
+	// false when absent or default (e.g. absent parent_span_id on a root span,
+	// or empty string/unset).
 	Exists *emptypb.Empty `protobuf:"bytes,10,opt,name=exists,proto3,oneof"`
 }
 
@@ -309,6 +338,9 @@ type TraceMatcher_Exact struct {
 
 type TraceMatcher_Regex struct {
 	// Regular expression match using RE2 syntax.
+	// Evaluates as an unanchored partial match (like Go regexp.MatchString and
+	// OpenTelemetry OTTL IsMatch). Callers requiring full string equality must
+	// provide explicit anchors ('^' and '$').
 	Regex string `protobuf:"bytes,12,opt,name=regex,proto3,oneof"`
 }
 

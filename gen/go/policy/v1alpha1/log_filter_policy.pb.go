@@ -37,6 +37,8 @@ const (
 )
 
 // LogRecordField identifies standard first-class fields of an OpenTelemetry LogRecord.
+// When evaluated with `exists`, first-class fields evaluate to true when set
+// to a non-default (non-empty / non-zero) value.
 type LogRecordField int32
 
 const (
@@ -113,6 +115,15 @@ func (LogRecordField) EnumDescriptor() ([]byte, []int) {
 // log records based on structured field and attribute matches.
 //
 // Policies are declarative, atomic, and transport-agnostic.
+//
+// Evaluation Granularity & Action Precedence:
+//   - Record-Level Granularity: Log records are evaluated individually.
+//   - Action Precedence & Exemptions: Telemetry passes through by default (default
+//     allow). When multiple policies match a log record, ACTION_KEEP always
+//     overrides ACTION_DROP (keep always overrides drop). ACTION_KEEP acts as an
+//     explicit exemption retaining matching log records; it does not prune
+//     non-matching log records. To implement an allowlist that prunes non-matching
+//     log records, authors specify ACTION_DROP with negate: true on the matchers.
 type LogFilterPolicy struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Unique identifier for the policy within its configuration scope
@@ -285,6 +296,11 @@ type isLogMatcher_Predicate interface {
 
 type LogMatcher_Exists struct {
 	// Matches if the selected field or attribute exists.
+	// For attributes, this evaluates to true if the attribute key exists.
+	// For first-class fields (record_field, scope_field) that lack explicit
+	// presence tracking in the OpenTelemetry data model, this evaluates to true
+	// when the field is set to a non-default (non-zero/non-empty) value, and
+	// false when absent or default (e.g. empty string or 0).
 	Exists *emptypb.Empty `protobuf:"bytes,10,opt,name=exists,proto3,oneof"`
 }
 
@@ -295,6 +311,9 @@ type LogMatcher_Exact struct {
 
 type LogMatcher_Regex struct {
 	// Regular expression match using RE2 syntax.
+	// Evaluates as an unanchored partial match (like Go regexp.MatchString and
+	// OpenTelemetry OTTL IsMatch). Callers requiring full string equality must
+	// provide explicit anchors ('^' and '$').
 	Regex string `protobuf:"bytes,12,opt,name=regex,proto3,oneof"`
 }
 

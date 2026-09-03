@@ -15,10 +15,10 @@ setup-hooks:
 	git config core.hooksPath $(PWD)/hooks
 
 .PHONY: precommit
-precommit: checklicense misspell lint compare-all test-distrogen validate-samples
+precommit: checklicense misspell lint compare-all test-distrogen test-protos validate-samples
 
 .PHONY: presubmit
-presubmit: checklicense misspell lint compare-all
+presubmit: checklicense misspell lint compare-all test-protos
 
 
 #######################
@@ -93,6 +93,10 @@ lint-protos: $(BUF) $(API_LINTER)
 .PHONY: compare-protos
 compare-protos: gen-protos
 	@git diff --exit-code gen/go && test -z "$$(git status --porcelain gen/go)" || (echo "Generated proto files in gen/go are out-of-date. Run 'make gen-protos' to regenerate." && exit 1)
+
+.PHONY: test-protos
+test-protos:
+	go test -v ./gen/go/...
 
 .PHONY: gen-all
 gen-all: distrogen-golden-update gen-google-built-otel gen-otelopscol gen-protos

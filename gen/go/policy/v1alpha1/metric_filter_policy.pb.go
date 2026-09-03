@@ -37,6 +37,8 @@ const (
 )
 
 // MetricDescriptorField identifies top-level descriptor fields of an OpenTelemetry Metric.
+// When evaluated with `exists`, first-class fields evaluate to true when set
+// to a non-default (non-empty / non-zero) value.
 type MetricDescriptorField int32
 
 const (
@@ -307,6 +309,11 @@ type isMetricMatcher_Predicate interface {
 
 type MetricMatcher_Exists struct {
 	// Matches if the selected field or attribute exists.
+	// For attributes, this evaluates to true if the attribute key exists.
+	// For first-class fields (descriptor_field, scope_field) that lack explicit
+	// presence tracking in the OpenTelemetry data model, this evaluates to true
+	// when the field is set to a non-default (non-zero/non-empty) value, and
+	// false when absent or default (e.g. empty string or 0).
 	Exists *emptypb.Empty `protobuf:"bytes,10,opt,name=exists,proto3,oneof"`
 }
 

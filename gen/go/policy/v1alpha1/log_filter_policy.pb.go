@@ -278,7 +278,7 @@ type LogFilterPolicy struct {
 	// (e.g. "drop-noisy-healthchecks", "retain-error-logs").
 	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	// The filtering action to take when all `matches` conditions evaluate to true.
-	Action Action `protobuf:"varint,2,opt,name=action,proto3,enum=google.telemetry.policy.v1alpha1.Action" json:"action,omitempty"`
+	Action *Action `protobuf:"varint,2,opt,name=action,proto3,enum=google.telemetry.policy.v1alpha1.Action,oneof" json:"action,omitempty"`
 	// Conditions evaluated against incoming log records.
 	// All matchers in this list are ANDed together: all conditions must evaluate
 	// to true for the policy action to take effect. If empty, the policy matches
@@ -326,8 +326,8 @@ func (x *LogFilterPolicy) GetId() string {
 }
 
 func (x *LogFilterPolicy) GetAction() Action {
-	if x != nil {
-		return x.Action
+	if x != nil && x.Action != nil {
+		return *x.Action
 	}
 	return Action_ACTION_UNSPECIFIED
 }
@@ -620,11 +620,12 @@ var File_policy_v1alpha1_log_filter_policy_proto protoreflect.FileDescriptor
 
 const file_policy_v1alpha1_log_filter_policy_proto_rawDesc = "" +
 	"\n" +
-	"'policy/v1alpha1/log_filter_policy.proto\x12 google.telemetry.policy.v1alpha1\x1a\x1bgoogle/protobuf/empty.proto\"\xab\x01\n" +
+	"'policy/v1alpha1/log_filter_policy.proto\x12 google.telemetry.policy.v1alpha1\x1a\x1bgoogle/protobuf/empty.proto\"\xbb\x01\n" +
 	"\x0fLogFilterPolicy\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12@\n" +
-	"\x06action\x18\x02 \x01(\x0e2(.google.telemetry.policy.v1alpha1.ActionR\x06action\x12F\n" +
-	"\amatches\x18\x03 \x03(\v2,.google.telemetry.policy.v1alpha1.LogMatcherR\amatches\"\xdf\x01\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12E\n" +
+	"\x06action\x18\x02 \x01(\x0e2(.google.telemetry.policy.v1alpha1.ActionH\x00R\x06action\x88\x01\x01\x12F\n" +
+	"\amatches\x18\x03 \x03(\v2,.google.telemetry.policy.v1alpha1.LogMatcherR\amatchesB\t\n" +
+	"\a_action\"\xdf\x01\n" +
 	"\n" +
 	"LogMatcher\x12J\n" +
 	"\x06target\x18\x01 \x01(\v22.google.telemetry.policy.v1alpha1.LogFieldSelectorR\x06target\x120\n" +
@@ -709,6 +710,7 @@ func file_policy_v1alpha1_log_filter_policy_proto_init() {
 	if File_policy_v1alpha1_log_filter_policy_proto != nil {
 		return
 	}
+	file_policy_v1alpha1_log_filter_policy_proto_msgTypes[0].OneofWrappers = []any{}
 	file_policy_v1alpha1_log_filter_policy_proto_msgTypes[1].OneofWrappers = []any{
 		(*LogMatcher_Exists)(nil),
 		(*LogMatcher_Exact)(nil),

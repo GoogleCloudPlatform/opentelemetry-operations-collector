@@ -30,8 +30,9 @@ import (
 func TestLogFilterPolicy_Serialization(t *testing.T) {
 	policy := &policyv1alpha1.LogFilterPolicy{
 		Id:     "drop-noisy-healthchecks",
-		Action: policyv1alpha1.Action_ACTION_DROP,
+		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
 		Matches: []*policyv1alpha1.LogMatcher{
+
 			{
 				Target: &policyv1alpha1.LogFieldSelector{
 					Target: &policyv1alpha1.LogFieldSelector_RecordField{
@@ -131,6 +132,7 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 
 	assert.True(t, proto.Equal(policy, unmarshaled))
 	assert.Equal(t, "drop-noisy-healthchecks", unmarshaled.GetId())
+	assert.NotNil(t, unmarshaled.Action)
 	assert.Equal(t, policyv1alpha1.Action_ACTION_DROP, unmarshaled.GetAction())
 	require.Len(t, unmarshaled.GetMatches(), 8)
 }
@@ -138,7 +140,7 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 func TestLogFilterPolicy_JSONSerialization(t *testing.T) {
 	policy := &policyv1alpha1.LogFilterPolicy{
 		Id:     "drop-noisy-healthchecks",
-		Action: policyv1alpha1.Action_ACTION_DROP,
+		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
 		Matches: []*policyv1alpha1.LogMatcher{
 			{
 				Target: &policyv1alpha1.LogFieldSelector{
@@ -172,19 +174,22 @@ func TestLogFilterPolicy_JSONSerialization(t *testing.T) {
 	unmarshaled := &policyv1alpha1.LogFilterPolicy{}
 	require.NoError(t, protojson.Unmarshal(jsonData, unmarshaled))
 	assert.True(t, proto.Equal(policy, unmarshaled))
+	assert.NotNil(t, unmarshaled.Action)
 
 	// Zero-value handling: ACTION_UNSPECIFIED explicit.
 	jsonWithUnspecified := []byte(`{"id": "unspecified-policy", "action": "ACTION_UNSPECIFIED"}`)
 	zeroPolicy := &policyv1alpha1.LogFilterPolicy{}
 	require.NoError(t, protojson.Unmarshal(jsonWithUnspecified, zeroPolicy))
 	assert.Equal(t, "unspecified-policy", zeroPolicy.GetId())
+	assert.NotNil(t, zeroPolicy.Action)
 	assert.Equal(t, policyv1alpha1.Action_ACTION_UNSPECIFIED, zeroPolicy.GetAction())
 
-	// Action omitted in JSON defaults to ACTION_UNSPECIFIED.
+	// Action omitted in JSON defaults to ACTION_UNSPECIFIED but Action pointer is nil.
 	jsonOmittedAction := []byte(`{"id": "omitted-action-policy"}`)
 	omittedPolicy := &policyv1alpha1.LogFilterPolicy{}
 	require.NoError(t, protojson.Unmarshal(jsonOmittedAction, omittedPolicy))
 	assert.Equal(t, "omitted-action-policy", omittedPolicy.GetId())
+	assert.Nil(t, omittedPolicy.Action)
 	assert.Equal(t, policyv1alpha1.Action_ACTION_UNSPECIFIED, omittedPolicy.GetAction())
 
 	// EmitUnpopulated includes ACTION_UNSPECIFIED in output.
@@ -192,4 +197,6 @@ func TestLogFilterPolicy_JSONSerialization(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(marshaledUnpopulated), `"action":"ACTION_UNSPECIFIED"`)
 }
+
+
 

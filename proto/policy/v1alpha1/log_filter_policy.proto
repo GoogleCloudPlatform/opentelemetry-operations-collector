@@ -30,7 +30,7 @@ message LogFilterPolicy {
   string id = 1;
 
   // The filtering action to take when all `matches` conditions evaluate to true.
-  Action action = 2;
+  optional Action action = 2;
 
   // Conditions evaluated against incoming log records.
   // All matchers in this list are ANDed together: all conditions must evaluate

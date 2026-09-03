@@ -1,0 +1,129 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+version: 2
+project_name: opentelemetry-operations-collector
+
+snapshot:
+  version_template: 0.156.1
+
+env:
+  - LD_FLAGS=-s -w
+  - CGO_ENABLED=0 # TODO: CGO is not supported in goreleaser yet.
+  - BUILD_FLAGS=-trimpath
+  - GOWORK=off
+
+builds:
+  - id: otelcol-google-policy-linux
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    binary: otelcol-google-policy
+    dir: generated_collector
+    ldflags:
+      - "-s -w"
+    flags:
+      - "-trimpath"
+      - "-buildvcs=false"
+
+  - id: otelcol-google-policy-windows
+    goos:
+      - windows
+    goarch:
+      - amd64
+    binary: otelcol-google-policy
+    dir: generated_collector
+    ldflags:
+      - "-s -w"
+    flags:
+      - "-trimpath"
+      - "-buildvcs=false"
+
+  - id: otelcol-google-policy-darwin
+    goos:
+      - darwin
+    goarch:
+      - arm64
+    binary: otelcol-google-policy
+    dir: generated_collector
+    ldflags:
+      - "-s -w"
+    flags:
+      - "-trimpath"
+      - "-buildvcs=false"
+
+nfpms:
+  - package_name: otelcol-google-policy
+    contents:
+      - src: otelcol-google-policy.service
+        dst: /lib/systemd/system/otelcol-google-policy.service
+      - src: otelcol-google-policy.conf
+        dst: /etc/otelcol-google-policy/otelcol-google-policy.conf
+        type: config|noreplace
+        file_info:
+          mode: 0644
+      - src: config.yaml
+        dst: /etc/otelcol-google-policy/config.yaml
+        type: config|noreplace
+        file_info:
+          mode: 0644
+    scripts:
+      preinstall: preinstall.sh
+      postinstall: postinstall.sh
+      preremove: preremove.sh
+    overrides:
+      rpm:
+        dependencies:
+          - /bin/sh
+    ids:
+      - otelcol-google-policy-linux
+    formats:
+      - deb
+      - rpm
+    umask: 0
+    maintainer: Google Cloud Platform <google@google.com> # something better than this
+    description: OpenTelemetry Collector Built By Google with experimental policy support
+    license: Apache 2.0
+
+archives:
+  - id: "otelcol-google-policy-tarball"
+    ids:
+      - "otelcol-google-policy-linux"
+      - "otelcol-google-policy-windows"
+      - "otelcol-google-policy-darwin"
+    formats:
+      - "tar.gz"
+    name_template: "otelcol-google-policy_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats:
+        - "zip"
+
+signs:
+  - cmd: cosign
+    signature: ${artifact}.sig
+    certificate: ${artifact}.pem
+    args:
+      - "sign-blob"
+      - "--output-signature"
+      - "${signature}"
+      - "--output-certificate"
+      - "${certificate}"
+      - "${artifact}"
+      - "--yes"
+    artifacts: archive
+    env:
+      - SIGSTORE_NO_CACHE=true

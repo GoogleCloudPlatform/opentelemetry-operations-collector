@@ -1,0 +1,9 @@
+ARG WINDOWS_VERSION=2019
+ARG WINBASE=mcr.microsoft.com/windows/servercore:ltsc${WINDOWS_VERSION}
+FROM ${WINBASE} AS windows
+
+COPY otelcol-google-policy.exe /otelcol-google-policy.exe
+COPY config.yaml /etc/otelcol-google-policy/config.yaml
+
+ENTRYPOINT ["/otelcol-google-policy.exe", "--feature-gates=exporter.googlemanagedprometheus.intToDouble,exporter.googlecloud.CustomMonitoredResources"]
+CMD ["--config=/etc/otelcol-google-policy/config.yaml"]

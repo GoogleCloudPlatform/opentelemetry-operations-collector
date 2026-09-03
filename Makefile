@@ -95,7 +95,7 @@ compare-protos: gen-protos
 	@git diff --exit-code gen/go && test -z "$$(git status --porcelain gen/go)" || (echo "Generated proto files in gen/go are out-of-date. Run 'make gen-protos' to regenerate." && exit 1)
 
 .PHONY: gen-all
-gen-all: distrogen-golden-update gen-google-built-otel gen-otelopscol gen-protos
+gen-all: distrogen-golden-update gen-google-built-otel gen-otelopscol gen-gboc-policies gen-protos
 
 .PHONY: regen-all
 regen-all: distrogen-golden-update regen-google-built-otel regen-otelopscol gen-protos
@@ -147,6 +147,28 @@ regen-otelopscol-v:
 .PHONY: compare-otelopscol
 compare-otelopscol:
 	@$(GEN_OTELOPSCOL) --force --compare
+
+GEN_GBOC_POLICIES=$(RUN_DISTROGEN) generate --spec ./specs/gboc-policies.yaml \
+								--registry ./components/google-built-opentelemetry-collector/registry.yaml
+.PHONY: gen-gboc-policies
+gen-gboc-policies:
+	@$(GEN_GBOC_POLICIES)
+	@cd gboc-policies && $(MAKE) clean-tools
+
+.PHONY: regen-gboc-policies
+regen-gboc-policies:
+	@$(GEN_GBOC_POLICIES) -f
+	@cd gboc-policies && $(MAKE) clean-tools
+
+.PHONY: regen-gboc-policies-v
+regen-gboc-polcieis-v:
+	@$(GEN_GBOC_POLICIES) -f -v
+	@cd gboc-policies && $(MAKE) clean-tools
+
+.PHONY: compare-gboc-policies
+compare-gboc-policies:
+	@$(GEN_OTELOPSCOL) --force --compare
+
 
 #########
 # Testing

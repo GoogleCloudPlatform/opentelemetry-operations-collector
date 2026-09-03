@@ -65,22 +65,22 @@ message LogMatcher {
 // LogFieldSelector designates a first-class OTel log field, attribute, or metadata.
 message LogFieldSelector {
   oneof target {
-    // Standard first-class OpenTelemetry LogRecord fields.
+    // Standard first-class OpenTelemetry LogRecord fields (OTLP path: log_record.*).
     LogRecordField record_field = 1;
 
-    // Log record attribute by key (e.g. "http.route", "user_id").
+    // Log record attribute by key (OTLP path: log_record.attributes[*], e.g. "http.route", "user_id").
     string log_attribute = 2;
 
-    // Resource attribute by key (e.g. "service.name", "k8s.pod.name").
+    // Resource attribute by key (OTLP path: resource.attributes[*], e.g. "service.name", "k8s.pod.name").
     string resource_attribute = 3;
 
-    // Instrumentation scope attribute by key (e.g. "library.name").
+    // Instrumentation scope attribute by key (OTLP path: scope.attributes[*], e.g. "library.name").
     string scope_attribute = 4;
 
-    // Standard first-class OpenTelemetry InstrumentationScope fields.
+    // Standard first-class OpenTelemetry InstrumentationScope fields (OTLP path: scope.*).
     ScopeField scope_field = 5;
 
-    // Standard first-class OpenTelemetry Resource fields.
+    // Standard first-class OpenTelemetry Resource fields (OTLP path: resource.*).
     ResourceField resource_field = 6;
   }
 }

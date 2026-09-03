@@ -575,32 +575,32 @@ type isLogFieldSelector_Target interface {
 }
 
 type LogFieldSelector_RecordField struct {
-	// Standard first-class OpenTelemetry LogRecord fields.
+	// Standard first-class OpenTelemetry LogRecord fields (OTLP path: log_record.*).
 	RecordField LogRecordField `protobuf:"varint,1,opt,name=record_field,json=recordField,proto3,enum=google.telemetry.policy.v1alpha1.LogRecordField,oneof"`
 }
 
 type LogFieldSelector_LogAttribute struct {
-	// Log record attribute by key (e.g. "http.route", "user_id").
+	// Log record attribute by key (OTLP path: log_record.attributes[*], e.g. "http.route", "user_id").
 	LogAttribute string `protobuf:"bytes,2,opt,name=log_attribute,json=logAttribute,proto3,oneof"`
 }
 
 type LogFieldSelector_ResourceAttribute struct {
-	// Resource attribute by key (e.g. "service.name", "k8s.pod.name").
+	// Resource attribute by key (OTLP path: resource.attributes[*], e.g. "service.name", "k8s.pod.name").
 	ResourceAttribute string `protobuf:"bytes,3,opt,name=resource_attribute,json=resourceAttribute,proto3,oneof"`
 }
 
 type LogFieldSelector_ScopeAttribute struct {
-	// Instrumentation scope attribute by key (e.g. "library.name").
+	// Instrumentation scope attribute by key (OTLP path: scope.attributes[*], e.g. "library.name").
 	ScopeAttribute string `protobuf:"bytes,4,opt,name=scope_attribute,json=scopeAttribute,proto3,oneof"`
 }
 
 type LogFieldSelector_ScopeField struct {
-	// Standard first-class OpenTelemetry InstrumentationScope fields.
+	// Standard first-class OpenTelemetry InstrumentationScope fields (OTLP path: scope.*).
 	ScopeField ScopeField `protobuf:"varint,5,opt,name=scope_field,json=scopeField,proto3,enum=google.telemetry.policy.v1alpha1.ScopeField,oneof"`
 }
 
 type LogFieldSelector_ResourceField struct {
-	// Standard first-class OpenTelemetry Resource fields.
+	// Standard first-class OpenTelemetry Resource fields (OTLP path: resource.*).
 	ResourceField ResourceField `protobuf:"varint,6,opt,name=resource_field,json=resourceField,proto3,enum=google.telemetry.policy.v1alpha1.ResourceField,oneof"`
 }
 

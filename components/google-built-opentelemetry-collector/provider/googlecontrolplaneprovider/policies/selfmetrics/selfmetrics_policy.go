@@ -56,16 +56,12 @@ func (p *SelfMetricsPolicy) Validate() error {
 }
 
 func (p *SelfMetricsPolicy) Evaluate(ctx context.Context) (*confmap.Retrieved, error) {
-	if err := collectorid.GenerateCollectorID(); err != nil {
-		return nil, fmt.Errorf("failed to generate collector ID: %w", err)
-	}
-
 	collectorID := ctx.Value(contextKeyCollectorID)
-	if collectorID == "" {
+	if collectorID == nil || collectorID == "" {
 		return nil, ErrNoCollectorID
 	}
 	fleetID := ctx.Value(contextKeyFleetID)
-	if fleetID == "" {
+	if fleetID == nil || fleetID == "" {
 		return nil, ErrNoFleetID
 	}
 

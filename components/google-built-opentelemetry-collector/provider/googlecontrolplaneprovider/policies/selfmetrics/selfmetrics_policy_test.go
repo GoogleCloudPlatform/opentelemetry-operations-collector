@@ -4,15 +4,12 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplane/internal/collectorid"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestSelfMetricsPolicy_Evaluate(t *testing.T) {
-	require.NoError(t, collectorid.GenerateCollectorID())
-
 	policy := &SelfMetricsPolicy{
 		Name: "custom_self_obs",
 		Port: 9999,
@@ -22,7 +19,11 @@ func TestSelfMetricsPolicy_Evaluate(t *testing.T) {
 	assert.Equal(t, PolicyType, policy.PolicyType())
 	assert.Equal(t, googlepolicy.PolicyClassSource, policy.PolicyClass())
 
-	ret, err := policy.Evaluate(t.Context())
+	collectorID := "custom-collector-id"
+	fleetID := "1234"
+	ctx := policy.ContextSetup(t.Context(), collectorID, fleetID)
+
+	ret, err := policy.Evaluate(ctx)
 	require.NoError(t, err)
 	require.NotNil(t, ret)
 
@@ -39,7 +40,7 @@ func TestSelfMetricsPolicy_Evaluate(t *testing.T) {
 	assert.Equal(t, []any{
 		map[string]any{
 			"name":  "service.instance.id",
-			"value": collectorid.CollectorID,
+			"value": collectorID,
 		},
 		map[string]any{
 			"name":  "gcp.fleet_id",
@@ -83,17 +84,13 @@ func TestSelfMetricsPolicy_Evaluate(t *testing.T) {
 }
 
 func TestSelfMetricsPolicy_Evaluate_ExampleYamlMatch(t *testing.T) {
-	collectorid.CollectorID = "76728b45-8fcf-4cc8-a09e-c67283bfa79c"
-	defer func() {
-		collectorid.CollectorID = ""
-	}()
-
 	policy := &SelfMetricsPolicy{
 		Name: "default_self_observability",
 		Port: 8888,
 	}
 
-	ret, err := policy.Evaluate(t.Context())
+	ctx := policy.ContextSetup(t.Context(), "76728b45-8fcf-4cc8-a09e-c67283bfa79c", "1234")
+	ret, err := policy.Evaluate(ctx)
 	require.NoError(t, err)
 
 	conf, err := ret.AsConf()
@@ -139,4 +136,20 @@ func TestSelfMetricsPolicy_Evaluate_ExampleYamlMatch(t *testing.T) {
 			},
 		},
 	}, readers[0])
+}
+
+func TestSelfMetricsPolicy_Evaluate_MissingContext(t *testing.T) {
+	policy := &SelfMetricsPolicy{
+		Name: "test_missing_context",
+		Port: 8888,
+	}
+
+	// Missing collector ID
+	_, err := policy.Evaluate(t.Context())
+	require.ErrorIs(t, err, ErrNoCollectorID)
+
+	// Missing fleet ID
+	ctx := policy.ContextSetup(t.Context(), "collector-123", "")
+	_, err = policy.Evaluate(ctx)
+	require.ErrorIs(t, err, ErrNoFleetID)
 }

@@ -156,11 +156,304 @@ func (ScopeField) EnumDescriptor() ([]byte, []int) {
 	return file_policy_v1alpha1_common_policy_types_proto_rawDescGZIP(), []int{1}
 }
 
+// AttributePath specifies how to access an attribute value.
+//   - A single-element array accesses a flat attribute (e.g. ["http.status_code"]).
+//   - Multiple elements traverse nested maps (e.g. ["http", "request", "method"]).
+//   - When traversing array/list values, string segments representing non-negative
+//     integers (e.g. "0", "100") are interpreted as zero-based array indices
+//     (e.g. ["items", "0", "id"]).
+type AttributePath struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Path segments for attribute traversal.
+	Path          []string `protobuf:"bytes,1,rep,name=path,proto3" json:"path,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AttributePath) Reset() {
+	*x = AttributePath{}
+	mi := &file_policy_v1alpha1_common_policy_types_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AttributePath) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AttributePath) ProtoMessage() {}
+
+func (x *AttributePath) ProtoReflect() protoreflect.Message {
+	mi := &file_policy_v1alpha1_common_policy_types_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AttributePath.ProtoReflect.Descriptor instead.
+func (*AttributePath) Descriptor() ([]byte, []int) {
+	return file_policy_v1alpha1_common_policy_types_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *AttributePath) GetPath() []string {
+	if x != nil {
+		return x.Path
+	}
+	return nil
+}
+
+// Value carries a typed scalar for equality and containment comparisons.
+// Exactly one variant must be set.
+type Value struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The typed scalar value.
+	//
+	// Types that are valid to be assigned to Value:
+	//
+	//	*Value_StringValue
+	//	*Value_IntValue
+	//	*Value_BoolValue
+	//	*Value_DoubleValue
+	//	*Value_BytesValue
+	Value         isValue_Value `protobuf_oneof:"value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Value) Reset() {
+	*x = Value{}
+	mi := &file_policy_v1alpha1_common_policy_types_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Value) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Value) ProtoMessage() {}
+
+func (x *Value) ProtoReflect() protoreflect.Message {
+	mi := &file_policy_v1alpha1_common_policy_types_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Value.ProtoReflect.Descriptor instead.
+func (*Value) Descriptor() ([]byte, []int) {
+	return file_policy_v1alpha1_common_policy_types_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *Value) GetValue() isValue_Value {
+	if x != nil {
+		return x.Value
+	}
+	return nil
+}
+
+func (x *Value) GetStringValue() string {
+	if x != nil {
+		if x, ok := x.Value.(*Value_StringValue); ok {
+			return x.StringValue
+		}
+	}
+	return ""
+}
+
+func (x *Value) GetIntValue() int64 {
+	if x != nil {
+		if x, ok := x.Value.(*Value_IntValue); ok {
+			return x.IntValue
+		}
+	}
+	return 0
+}
+
+func (x *Value) GetBoolValue() bool {
+	if x != nil {
+		if x, ok := x.Value.(*Value_BoolValue); ok {
+			return x.BoolValue
+		}
+	}
+	return false
+}
+
+func (x *Value) GetDoubleValue() float64 {
+	if x != nil {
+		if x, ok := x.Value.(*Value_DoubleValue); ok {
+			return x.DoubleValue
+		}
+	}
+	return 0
+}
+
+func (x *Value) GetBytesValue() []byte {
+	if x != nil {
+		if x, ok := x.Value.(*Value_BytesValue); ok {
+			return x.BytesValue
+		}
+	}
+	return nil
+}
+
+type isValue_Value interface {
+	isValue_Value()
+}
+
+type Value_StringValue struct {
+	// String value.
+	StringValue string `protobuf:"bytes,1,opt,name=string_value,json=stringValue,proto3,oneof"`
+}
+
+type Value_IntValue struct {
+	// 64-bit signed integer value (e.g. http.status_code = 200).
+	IntValue int64 `protobuf:"varint,2,opt,name=int_value,json=intValue,proto3,oneof"`
+}
+
+type Value_BoolValue struct {
+	// Boolean value.
+	BoolValue bool `protobuf:"varint,3,opt,name=bool_value,json=boolValue,proto3,oneof"`
+}
+
+type Value_DoubleValue struct {
+	// 64-bit floating point value.
+	DoubleValue float64 `protobuf:"fixed64,4,opt,name=double_value,json=doubleValue,proto3,oneof"`
+}
+
+type Value_BytesValue struct {
+	// Byte sequence value.
+	BytesValue []byte `protobuf:"bytes,5,opt,name=bytes_value,json=bytesValue,proto3,oneof"`
+}
+
+func (*Value_StringValue) isValue_Value() {}
+
+func (*Value_IntValue) isValue_Value() {}
+
+func (*Value_BoolValue) isValue_Value() {}
+
+func (*Value_DoubleValue) isValue_Value() {}
+
+func (*Value_BytesValue) isValue_Value() {}
+
+// NumericValue carries a typed number for ordering comparisons (gt, gte, lt, lte).
+// Exactly one variant must be set.
+type NumericValue struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The typed numeric value.
+	//
+	// Types that are valid to be assigned to Value:
+	//
+	//	*NumericValue_IntValue
+	//	*NumericValue_DoubleValue
+	Value         isNumericValue_Value `protobuf_oneof:"value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *NumericValue) Reset() {
+	*x = NumericValue{}
+	mi := &file_policy_v1alpha1_common_policy_types_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NumericValue) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NumericValue) ProtoMessage() {}
+
+func (x *NumericValue) ProtoReflect() protoreflect.Message {
+	mi := &file_policy_v1alpha1_common_policy_types_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NumericValue.ProtoReflect.Descriptor instead.
+func (*NumericValue) Descriptor() ([]byte, []int) {
+	return file_policy_v1alpha1_common_policy_types_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *NumericValue) GetValue() isNumericValue_Value {
+	if x != nil {
+		return x.Value
+	}
+	return nil
+}
+
+func (x *NumericValue) GetIntValue() int64 {
+	if x != nil {
+		if x, ok := x.Value.(*NumericValue_IntValue); ok {
+			return x.IntValue
+		}
+	}
+	return 0
+}
+
+func (x *NumericValue) GetDoubleValue() float64 {
+	if x != nil {
+		if x, ok := x.Value.(*NumericValue_DoubleValue); ok {
+			return x.DoubleValue
+		}
+	}
+	return 0
+}
+
+type isNumericValue_Value interface {
+	isNumericValue_Value()
+}
+
+type NumericValue_IntValue struct {
+	// 64-bit signed integer value.
+	IntValue int64 `protobuf:"varint,1,opt,name=int_value,json=intValue,proto3,oneof"`
+}
+
+type NumericValue_DoubleValue struct {
+	// 64-bit floating point value.
+	DoubleValue float64 `protobuf:"fixed64,2,opt,name=double_value,json=doubleValue,proto3,oneof"`
+}
+
+func (*NumericValue_IntValue) isNumericValue_Value() {}
+
+func (*NumericValue_DoubleValue) isNumericValue_Value() {}
+
 var File_policy_v1alpha1_common_policy_types_proto protoreflect.FileDescriptor
 
 const file_policy_v1alpha1_common_policy_types_proto_rawDesc = "" +
 	"\n" +
-	")policy/v1alpha1/common_policy_types.proto\x12 google.telemetry.policy.v1alpha1*B\n" +
+	")policy/v1alpha1/common_policy_types.proto\x12 google.telemetry.policy.v1alpha1\"#\n" +
+	"\rAttributePath\x12\x12\n" +
+	"\x04path\x18\x01 \x03(\tR\x04path\"\xbd\x01\n" +
+	"\x05Value\x12#\n" +
+	"\fstring_value\x18\x01 \x01(\tH\x00R\vstringValue\x12\x1d\n" +
+	"\tint_value\x18\x02 \x01(\x03H\x00R\bintValue\x12\x1f\n" +
+	"\n" +
+	"bool_value\x18\x03 \x01(\bH\x00R\tboolValue\x12#\n" +
+	"\fdouble_value\x18\x04 \x01(\x01H\x00R\vdoubleValue\x12!\n" +
+	"\vbytes_value\x18\x05 \x01(\fH\x00R\n" +
+	"bytesValueB\a\n" +
+	"\x05value\"[\n" +
+	"\fNumericValue\x12\x1d\n" +
+	"\tint_value\x18\x01 \x01(\x03H\x00R\bintValue\x12#\n" +
+	"\fdouble_value\x18\x02 \x01(\x01H\x00R\vdoubleValueB\a\n" +
+	"\x05value*B\n" +
 	"\x06Action\x12\x16\n" +
 	"\x12ACTION_UNSPECIFIED\x10\x00\x12\x0f\n" +
 	"\vACTION_KEEP\x10\x01\x12\x0f\n" +
@@ -186,9 +479,13 @@ func file_policy_v1alpha1_common_policy_types_proto_rawDescGZIP() []byte {
 }
 
 var file_policy_v1alpha1_common_policy_types_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_policy_v1alpha1_common_policy_types_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_policy_v1alpha1_common_policy_types_proto_goTypes = []any{
-	(Action)(0),     // 0: google.telemetry.policy.v1alpha1.Action
-	(ScopeField)(0), // 1: google.telemetry.policy.v1alpha1.ScopeField
+	(Action)(0),           // 0: google.telemetry.policy.v1alpha1.Action
+	(ScopeField)(0),       // 1: google.telemetry.policy.v1alpha1.ScopeField
+	(*AttributePath)(nil), // 2: google.telemetry.policy.v1alpha1.AttributePath
+	(*Value)(nil),         // 3: google.telemetry.policy.v1alpha1.Value
+	(*NumericValue)(nil),  // 4: google.telemetry.policy.v1alpha1.NumericValue
 }
 var file_policy_v1alpha1_common_policy_types_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -203,19 +500,31 @@ func file_policy_v1alpha1_common_policy_types_proto_init() {
 	if File_policy_v1alpha1_common_policy_types_proto != nil {
 		return
 	}
+	file_policy_v1alpha1_common_policy_types_proto_msgTypes[1].OneofWrappers = []any{
+		(*Value_StringValue)(nil),
+		(*Value_IntValue)(nil),
+		(*Value_BoolValue)(nil),
+		(*Value_DoubleValue)(nil),
+		(*Value_BytesValue)(nil),
+	}
+	file_policy_v1alpha1_common_policy_types_proto_msgTypes[2].OneofWrappers = []any{
+		(*NumericValue_IntValue)(nil),
+		(*NumericValue_DoubleValue)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_policy_v1alpha1_common_policy_types_proto_rawDesc), len(file_policy_v1alpha1_common_policy_types_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   0,
+			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_policy_v1alpha1_common_policy_types_proto_goTypes,
 		DependencyIndexes: file_policy_v1alpha1_common_policy_types_proto_depIdxs,
 		EnumInfos:         file_policy_v1alpha1_common_policy_types_proto_enumTypes,
+		MessageInfos:      file_policy_v1alpha1_common_policy_types_proto_msgTypes,
 	}.Build()
 	File_policy_v1alpha1_common_policy_types_proto = out.File
 	file_policy_v1alpha1_common_policy_types_proto_goTypes = nil

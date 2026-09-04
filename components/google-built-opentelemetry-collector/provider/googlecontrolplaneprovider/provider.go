@@ -126,11 +126,19 @@ func (p *provider) Retrieve(ctx context.Context, uri string, watcher confmap.Wat
 }
 
 func (p *provider) evaluateActivePolicySet() (*confmap.Retrieved, error) {
+	// 0. This is a recursive function. If there is no longer an active policy set in `pkg/googlepolicy`,
+	// we respond with the base case of only evaluating the built-in policies.
+
 	// 1. Get a copy of the current active policy set from `pkg/googlepolicy`.
 
 	// 2. Load any destination policies. There can be 0 or 1. If there are more than
 	// that, return an error.
 
+	// 3. Apply the active destination policies. If the previous step did not yield any,
+	// use the built-in one.
+
+	// 4.
+	return nil, nil
 }
 
 // Scheme returns the URI scheme supported by this provider.

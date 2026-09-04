@@ -15,10 +15,12 @@
 package googlepolicy
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"time"
 
+	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/confmap"
 )
 
@@ -49,7 +51,28 @@ type Policy interface {
 // will implement (currently Destination and Source policies).
 type ComponentPolicy interface {
 	Policy
-	Evaluate() (confmap.Retrieved, error)
+	Evaluate(ctx context.Context) (*confmap.Retrieved, error)
+}
+
+// SourcePolicy is an extended interface that any Source policy will implement.
+// It allows extra steps for producing individual pipelines out of the components
+// generated during `Evaluate`.
+type SourcePolicy interface {
+	ComponentPolicy
+	LogsPipelines(preExportProcessors []component.ID, exporters []component.ID, extensions []component.ID) (*confmap.Retrieved, error)
+	MetricsPipelines(preExportProcessors []component.ID, exporters []component.ID, extensions []component.ID) (*confmap.Retrieved, error)
+	TracesPipelines(preExportProcessors []component.ID, exporters []component.ID, extensions []component.ID) (*confmap.Retrieved, error)
+}
+
+// DestinationPolicy is an extended interface that any Destination policy
+// will implement.
+type DestinationPolicy interface {
+	ComponentPolicy
+	ExporterIDs() []component.ID
+	PreProcessMetricIDs() []component.ID
+	PreProcessLogIDs() []component.ID
+	PreProcessTraceIDs() []component.ID
+	ExtensionIDs() []component.ID
 }
 
 // PolicyDriver is the interface that is used to load a policy
@@ -165,46 +188,16 @@ func (ps *PolicySet) Clone() *PolicySet {
 	return clone
 }
 
-// type GCPPolicy struct {
-// 	Name           string `json:"name"`
-// 	ProjectID      string `json:"project_id"`
-// 	UniverseDomain string `json:"universe_domain"`
-// 	AuthFile       string `json:"auth_file"`
-// }
+// GenericDriver is a driver that can be used
+// to register policy support when all you need
+// is a simple mapstructure unmarshal.
+type GenericDriver[P Policy] struct{}
 
-// var _ ComponentPolicy = (*GCPPolicy)(nil)
-
-// func (p *GCPPolicy) PolicyName() string {
-// 	return p.Name
-// }
-
-// func (p *GCPPolicy) PolicyType() string {
-// 	return "gcp_destination"
-// }
-
-// func (p *GCPPolicy) PolicyClass() PolicyClass {
-// 	return PolicyClassDestination
-// }
-
-// func (p *GCPPolicy) Evaluate() (confmap.Retrieved, error) {
-// 	authenticator := googleclientauthextension.Config{}
-// 	// ugly hardcoded lol
-// 	authType, _ := component.NewType("googleclientauth")
-// 	authID := component.NewIDWithName(authType, p.Name)
-
-// 	otlpExporter := &otlpexporter.Config{
-// 		ClientConfig: configgrpc.ClientConfig{
-// 			Endpoint: "telemetry.googleapis.com:443",
-// 			Auth: configoptional.Some(configauth.Config{
-// 				AuthenticatorID: authID,
-// 			}),
-// 		},
-// 	}
-// }
-
-// func (p *GCPPolicy) Validate() error {
-// 	if p.Name == "" {
-// 		return errors.New("policy must be named")
-// 	}
-// 	return nil
-// }
+func (gd *GenericDriver[P]) LoadPolicy(raw map[string]any) (Policy, error) {
+	var p P
+	conf := confmap.NewFromStringMap(raw)
+	if err := conf.Unmarshal(&p); err != nil {
+		return nil, err
+	}
+	return p, nil
+}

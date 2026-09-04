@@ -1,0 +1,33 @@
+receivers:
+    otlp/default_self_observability:
+        grpc:
+            endpoint: localhost:${env:RESERVED_PORT_BY_PROVIDER_FOR_SELF_OBS}
+
+service:
+    telemetry:
+        resource:
+            attributes:
+                - name: service.instance.id
+                  value: "76728b45-8fcf-4cc8-a09e-c67283bfa79c" # The collector ID generated on startup
+                - name: gcp.fleet_id
+                  value: "1234"
+        logs:
+            level: info
+            processors:
+            - batch:
+                exporter:
+                    otlp:
+                        endpoint: http://localhost:${env:RESERVED_PORT_BY_PROVIDER_FOR_SELF_OBS}
+                        protocol: grpc
+                        insecure: true
+        metrics:
+            level: normal
+            readers:
+            - periodic:
+                interval: 5000
+                timeout: 30000
+                exporter:
+                    otlp:
+                    endpoint: http://localhost:${env:RESERVED_PORT_BY_PROVIDER_FOR_SELF_OBS}
+                    protocol: grpc
+                    insecure: true

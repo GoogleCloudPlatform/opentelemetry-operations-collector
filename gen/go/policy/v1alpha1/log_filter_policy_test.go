@@ -189,5 +189,14 @@ func TestLogFilterPolicy_JSONSerialization(t *testing.T) {
 	assert.Contains(t, string(marshaledUnpopulated), `"action":"ACTION_UNSPECIFIED"`)
 }
 
+func TestLogFilterPolicy_EnumValues(t *testing.T) {
+	assert.Equal(t, policyv1alpha1.LogRecordField(0), policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_UNSPECIFIED)
+	assert.Equal(t, policyv1alpha1.LogRecordField(1), policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY)
+	assert.Equal(t, policyv1alpha1.LogRecordField(2), policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT)
+	assert.Equal(t, policyv1alpha1.LogRecordField(3), policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER)
+	assert.Equal(t, policyv1alpha1.LogRecordField(4), policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID)
+	assert.Equal(t, policyv1alpha1.LogRecordField(5), policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID)
+}
+
 
 

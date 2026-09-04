@@ -1851,8 +1851,18 @@ func handleDeleteError(err error, attempt int) error {
 	if strings.Contains(err.Error(), "not found") && attempt > 1 {
 		return nil
 	}
+	// If the deletion command timed out and was killed, assume the command ran
+	// and let the 4-hour janitor job handle any lingering VMs (b/556836152).
+	if strings.Contains(err.Error(), "signal: killed") || strings.Contains(err.Error(), "deadline exceeded") {
+		return nil
+	}
 	// Wrap other errors in backoff.Permanent() to avoid retrying those.
 	return backoff.Permanent(err)
+}
+
+// HandleDeleteErrorForTest exports handleDeleteError for unit testing.
+func HandleDeleteErrorForTest(err error, attempt int) error {
+	return handleDeleteError(err, attempt)
 }
 
 // DeleteInstance deletes the given VM instance synchronously.

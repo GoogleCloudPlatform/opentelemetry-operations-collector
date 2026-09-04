@@ -7,6 +7,7 @@ import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/collector/component"
 )
 
 func TestSelfMetricsPolicy_Evaluate(t *testing.T) {
@@ -23,11 +24,7 @@ func TestSelfMetricsPolicy_Evaluate(t *testing.T) {
 	fleetID := "1234"
 	ctx := policy.ContextSetup(t.Context(), collectorID, fleetID)
 
-	ret, err := policy.Evaluate(ctx)
-	require.NoError(t, err)
-	require.NotNil(t, ret)
-
-	conf, err := ret.AsConf()
+	conf, err := policy.Evaluate(ctx)
 	require.NoError(t, err)
 	require.NotNil(t, conf)
 
@@ -90,10 +87,7 @@ func TestSelfMetricsPolicy_Evaluate_ExampleYamlMatch(t *testing.T) {
 	}
 
 	ctx := policy.ContextSetup(t.Context(), "76728b45-8fcf-4cc8-a09e-c67283bfa79c", "1234")
-	ret, err := policy.Evaluate(ctx)
-	require.NoError(t, err)
-
-	conf, err := ret.AsConf()
+	conf, err := policy.Evaluate(ctx)
 	require.NoError(t, err)
 
 	assert.Equal(t, "localhost:8888", conf.Get("receivers::otlp/default_self_observability::protocols::grpc::endpoint"))
@@ -152,4 +146,37 @@ func TestSelfMetricsPolicy_Evaluate_MissingContext(t *testing.T) {
 	ctx := policy.ContextSetup(t.Context(), "collector-123", "")
 	_, err = policy.Evaluate(ctx)
 	require.ErrorIs(t, err, ErrNoFleetID)
+}
+
+func TestSelfMetricsPolicy_Pipelines(t *testing.T) {
+	policy := &SelfMetricsPolicy{
+		Name: "test_policy",
+		Port: 8888,
+	}
+
+	preProcLog := component.MustNewIDWithName("queue_batch", "batch_logs")
+	preProcMetric := component.MustNewIDWithName("queue_batch", "batch_metrics")
+	exporter := component.MustNewIDWithName("otlp_grpc", "gcp")
+	extension := component.MustNewIDWithName("googleclientauth", "auth")
+
+	// LogsPipelines
+	logsConf, err := policy.LogsPipelines([]component.ID{preProcLog}, []component.ID{exporter}, []component.ID{extension})
+	require.NoError(t, err)
+	require.NotNil(t, logsConf)
+	assert.Equal(t, []any{"otlp/test_policy"}, logsConf.Get("service::pipelines::logs/test_policy::receivers"))
+	assert.Equal(t, []any{"queue_batch/batch_logs"}, logsConf.Get("service::pipelines::logs/test_policy::processors"))
+	assert.Equal(t, []any{"otlp_grpc/gcp"}, logsConf.Get("service::pipelines::logs/test_policy::exporters"))
+
+	// MetricsPipelines
+	metricsConf, err := policy.MetricsPipelines([]component.ID{preProcMetric}, []component.ID{exporter}, []component.ID{extension})
+	require.NoError(t, err)
+	require.NotNil(t, metricsConf)
+	assert.Equal(t, []any{"otlp/test_policy"}, metricsConf.Get("service::pipelines::metrics/test_policy::receivers"))
+	assert.Equal(t, []any{"queue_batch/batch_metrics"}, metricsConf.Get("service::pipelines::metrics/test_policy::processors"))
+	assert.Equal(t, []any{"otlp_grpc/gcp"}, metricsConf.Get("service::pipelines::metrics/test_policy::exporters"))
+
+	// TracesPipelines (should return nil, nil)
+	tracesConf, err := policy.TracesPipelines(nil, []component.ID{exporter}, []component.ID{extension})
+	require.NoError(t, err)
+	assert.Nil(t, tracesConf)
 }

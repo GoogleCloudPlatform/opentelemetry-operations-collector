@@ -11,8 +11,10 @@ import (
 	"go.opentelemetry.io/collector/config/configtelemetry"
 	"go.opentelemetry.io/collector/confmap"
 	"go.opentelemetry.io/collector/otelcol"
+	"go.opentelemetry.io/collector/pipeline"
 	"go.opentelemetry.io/collector/receiver/otlpreceiver"
 	"go.opentelemetry.io/collector/service"
+	"go.opentelemetry.io/collector/service/pipelines"
 	"go.opentelemetry.io/collector/service/telemetry/otelconftelemetry"
 	config "go.opentelemetry.io/contrib/otelconf/v0.3.0"
 	"go.uber.org/zap/zapcore"
@@ -55,7 +57,7 @@ func (p *SelfMetricsPolicy) Validate() error {
 	panic("unimplemented")
 }
 
-func (p *SelfMetricsPolicy) Evaluate(ctx context.Context) (*confmap.Retrieved, error) {
+func (p *SelfMetricsPolicy) Evaluate(ctx context.Context) (*confmap.Conf, error) {
 	collectorID := ctx.Value(contextKeyCollectorID)
 	if collectorID == nil || collectorID == "" {
 		return nil, ErrNoCollectorID
@@ -145,19 +147,42 @@ func (p *SelfMetricsPolicy) Evaluate(ctx context.Context) (*confmap.Retrieved, e
 		return nil, fmt.Errorf("policy implementation failure for %s: marshaling config got error '%w'", p.PolicyName(), err)
 	}
 
-	return confmap.NewRetrieved(cm.ToStringMap())
+	return cm, nil
 }
 
-func (p *SelfMetricsPolicy) LogsPipelines(preExportProcessors []component.ID, exporters []component.ID, extensions []component.ID) (*confmap.Retrieved, error) {
-	panic("unimplemented")
+func (p *SelfMetricsPolicy) LogsPipelines(preExportProcessors []component.ID, exporters []component.ID, _ []component.ID) (*confmap.Conf, error) {
+	return p.createPipeline(pipeline.SignalLogs, preExportProcessors, exporters)
 }
 
-func (p *SelfMetricsPolicy) MetricsPipelines(preExportProcessors []component.ID, exporters []component.ID, extensions []component.ID) (*confmap.Retrieved, error) {
-	panic("unimplemented")
+func (p *SelfMetricsPolicy) MetricsPipelines(preExportProcessors []component.ID, exporters []component.ID, _ []component.ID) (*confmap.Conf, error) {
+	return p.createPipeline(pipeline.SignalMetrics, preExportProcessors, exporters)
 }
 
-func (p *SelfMetricsPolicy) TracesPipelines(preExportProcessors []component.ID, exporters []component.ID, extensions []component.ID) (*confmap.Retrieved, error) {
-	panic("unimplemented")
+func (p *SelfMetricsPolicy) TracesPipelines(_ []component.ID, _ []component.ID, _ []component.ID) (*confmap.Conf, error) {
+	return nil, nil
+}
+
+func (p *SelfMetricsPolicy) createPipeline(signal pipeline.Signal, preExportProcessors []component.ID, exporters []component.ID) (*confmap.Conf, error) {
+	otlpReceiverType, _ := component.NewType("otlp")
+	otlpReceiverID := component.NewIDWithName(otlpReceiverType, p.Name)
+
+	pipeID := pipeline.NewIDWithName(signal, p.Name)
+	conf := &otelcol.Config{
+		Service: service.Config{
+			Pipelines: pipelines.Config{
+				pipeID: &pipelines.PipelineConfig{
+					Receivers:  []component.ID{otlpReceiverID},
+					Processors: preExportProcessors,
+					Exporters:  exporters,
+				},
+			},
+		},
+	}
+	cm := confmap.New()
+	if err := cm.Marshal(conf); err != nil {
+		return nil, fmt.Errorf("policy implementation failure for %s: marshaling %s pipeline got error '%w'", p.PolicyName(), signal, err)
+	}
+	return cm, nil
 }
 
 func (p *SelfMetricsPolicy) ContextSetup(ctx context.Context, collectorID, fleetID string) context.Context {

@@ -1,6 +1,7 @@
 package googlecontrolplaneprovider
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -14,7 +15,11 @@ var CollectorName string
 
 type hostnameFunc func() (string, error)
 
-var getHostname hostnameFunc = os.Hostname
+var (
+	getHostname hostnameFunc = os.Hostname
+
+	ErrFailedToGenerateCollectorID = errors.New("failed to generate collector ID")
+)
 
 func GenerateCollectorID() error {
 	// If there is already a CollectorID, no need to generate one.
@@ -32,7 +37,7 @@ func GenerateCollectorID() error {
 		var err error
 		CollectorName, err = getHostname()
 		if err != nil {
-			return err
+			return fmt.Errorf("%w: %w", ErrFailedToGenerateCollectorID, err)
 		}
 	}
 

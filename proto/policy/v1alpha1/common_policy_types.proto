@@ -18,6 +18,52 @@ package google.telemetry.policy.v1alpha1;
 
 option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1;policyv1alpha1";
 
+// AttributePath specifies how to access an attribute value.
+// - A single-element array accesses a flat attribute (e.g. ["http.status_code"]).
+// - Multiple elements traverse nested maps (e.g. ["http", "request", "method"]).
+// - When traversing array/list values, string segments representing non-negative
+//   integers (e.g. "0", "100") are interpreted as zero-based array indices
+//   (e.g. ["items", "0", "id"]).
+message AttributePath {
+  // Path segments for attribute traversal.
+  repeated string path = 1;
+}
+
+// Value carries a typed scalar for equality and containment comparisons.
+// Exactly one variant must be set.
+message Value {
+  // The typed scalar value.
+  oneof value {
+    // String value.
+    string string_value = 1;
+
+    // 64-bit signed integer value (e.g. http.status_code = 200).
+    int64 int_value = 2;
+
+    // Boolean value.
+    bool bool_value = 3;
+
+    // 64-bit floating point value.
+    double double_value = 4;
+
+    // Byte sequence value.
+    bytes bytes_value = 5;
+  }
+}
+
+// NumericValue carries a typed number for ordering comparisons (gt, gte, lt, lte).
+// Exactly one variant must be set.
+message NumericValue {
+  // The typed numeric value.
+  oneof value {
+    // 64-bit signed integer value.
+    int64 int_value = 1;
+
+    // 64-bit floating point value.
+    double double_value = 2;
+  }
+}
+
 // Action specifies what to do with a telemetry record that matches all conditions.
 //
 // Evaluation Semantics & Action Precedence:

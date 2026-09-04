@@ -78,14 +78,37 @@ message MetricMatcher {
     // false when absent or default (e.g. empty string or 0).
     google.protobuf.Empty exists = 10;
 
-    // Exact string equality match.
-    string exact = 11;
+    // Typed scalar equality match (supporting string, int64, bool, double, bytes).
+    Value equals = 11;
 
     // Regular expression match using RE2 syntax.
     // Evaluates as an unanchored partial match (like Go regexp.MatchString and
     // OpenTelemetry OTTL IsMatch). Callers requiring full string equality must
-    // provide explicit anchors ('^' and '$').
+    // provide explicit anchors ('^' and '$'). Applies strictly to string
+    // fields and string attribute values.
     string regex = 12;
+
+    // Matches if the target numeric value is strictly greater than this value.
+    // Applies strictly to int64 and double fields and attribute values.
+    NumericValue gt = 13;
+
+    // Matches if the target numeric value is greater than or equal to this value.
+    // Applies strictly to int64 and double fields and attribute values.
+    NumericValue gte = 14;
+
+    // Matches if the target numeric value is strictly less than this value.
+    // Applies strictly to int64 and double fields and attribute values.
+    NumericValue lt = 15;
+
+    // Matches if the target numeric value is less than or equal to this value.
+    // Applies strictly to int64 and double fields and attribute values.
+    NumericValue lte = 16;
+
+    // Value containment:
+    // - For list (ArrayValue) attributes: matches if any element in the list equals this value.
+    // - For string fields or attribute values: matches if the string contains this value's string_value as a substring.
+    // - For bytes fields or attribute values: matches if the bytes contain this value's bytes_value as a subsequence.
+    Value contains = 17;
   }
 
   // If true, inverts the result of the predicate (logical NOT).
@@ -95,19 +118,19 @@ message MetricMatcher {
 // MetricFieldSelector designates a first-class OTel metric field, attribute, or metadata.
 message MetricFieldSelector {
   oneof target {
-    // Top-level metric descriptor fields (OTLP path: metric.*).
+    // Top-level metric descriptor fields (e.g. name, description, unit).
     MetricDescriptorField descriptor_field = 1;
 
-    // Attribute on an individual metric data point (OTLP path: metric.*.data_points[*].attributes[*], e.g. "http.status_code", "env").
-    string datapoint_attribute = 2;
+    // Attribute on an individual metric data point by key or path (e.g. ["http.status_code"] or ["env"]).
+    AttributePath datapoint_attribute = 2;
 
-    // Resource attribute by key (OTLP path: resource.attributes[*], e.g. "service.name", "k8s.pod.name").
-    string resource_attribute = 3;
+    // Resource attribute by key or path (e.g. ["service.name"] or ["host", "id"]).
+    AttributePath resource_attribute = 3;
 
-    // Instrumentation scope attribute by key (OTLP path: scope.attributes[*], e.g. "library.name").
-    string scope_attribute = 4;
+    // Instrumentation scope attribute by key or path (e.g. ["library.name"]).
+    AttributePath scope_attribute = 4;
 
-    // Standard first-class OpenTelemetry InstrumentationScope fields (OTLP path: scope.*).
+    // Standard first-class OpenTelemetry InstrumentationScope fields (e.g. name, version).
     ScopeField scope_field = 5;
   }
 }
@@ -130,15 +153,15 @@ enum MetricDescriptorField {
 
   // The primary data type of the metric (e.g. "GAUGE", "SUM", "HISTOGRAM",
   // "EXPONENTIAL_HISTOGRAM", "SUMMARY"). When selected, string predicates
-  // (`exact`, `regex`) evaluate against uppercase type names.
+  // (`equals` with string_value, `regex`) evaluate against uppercase type names.
   METRIC_DESCRIPTOR_FIELD_TYPE = 4;
 
   // The aggregation temporality of the metric (OTLP path: metric.*.aggregation_temporality,
   // e.g. for Sum, Histogram, ExponentialHistogram). When selected, string predicates
-  // (`exact`, `regex`) evaluate against uppercase names: "DELTA" or "CUMULATIVE".
+  // (`equals` with string_value, `regex`) evaluate against uppercase names: "DELTA" or "CUMULATIVE".
   METRIC_DESCRIPTOR_FIELD_AGGREGATION_TEMPORALITY = 5;
 
   // Whether a Sum metric is monotonic (OTLP path: metric.sum.is_monotonic).
-  // When selected, string predicates (`exact`, `regex`) evaluate against "true" or "false".
+  // Evaluates against typed `equals` (`bool_value`), or "true"/"false" for `regex`.
   METRIC_DESCRIPTOR_FIELD_IS_MONOTONIC = 6;
 }

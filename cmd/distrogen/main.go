@@ -28,7 +28,7 @@ import (
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/cmd/distrogen/internal/command"
 	flag "github.com/spf13/pflag"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v4"
 )
 
 var (
@@ -180,7 +180,9 @@ func (cmd *generateCommand) Run() error {
 	}
 	defer generator.Clean()
 
-	generator.CustomTemplatesDir = os.DirFS(*cmd.templates)
+	if *cmd.templates != "" {
+		generator.CustomTemplatesDir = os.DirFS(*cmd.templates)
+	}
 
 	if err := generator.Generate(); err != nil {
 		return err

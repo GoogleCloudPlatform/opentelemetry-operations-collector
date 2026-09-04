@@ -149,8 +149,6 @@ func (fpm *filePolicyManager) PolicyEvaluationResult(revisionID string, _ error)
 	// source, but we have no one to tell. :)
 
 	// TODO: What we may do is log some events here.
-
-	return
 }
 
 func (fpm *filePolicyManager) URI() *url.URL {

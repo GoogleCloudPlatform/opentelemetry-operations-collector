@@ -36,6 +36,15 @@ const (
 )
 
 // Action specifies what to do with a telemetry record that matches all conditions.
+//
+// Evaluation Semantics & Action Precedence:
+//   - Default Allow: Telemetry records or streams pass through by default if no
+//     policy matches.
+//   - Keep Overrides Drop: When multiple policies match a record, ACTION_KEEP
+//     always overrides ACTION_DROP (keep always overrides drop). ACTION_KEEP acts as
+//     an explicit exemption retaining matching records; it does not prune
+//     non-matching records. To implement an allowlist that prunes non-matching
+//     records, authors specify ACTION_DROP with negate: true on the matchers.
 type Action int32
 
 const (
@@ -89,6 +98,8 @@ func (Action) EnumDescriptor() ([]byte, []int) {
 }
 
 // ScopeField identifies standard first-class fields of an InstrumentationScope.
+// For presence checking with `exists`, these fields lack explicit presence
+// tracking in OpenTelemetry and evaluate to true when set to a non-empty string.
 type ScopeField int32
 
 const (

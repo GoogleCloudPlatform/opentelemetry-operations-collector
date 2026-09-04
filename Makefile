@@ -88,7 +88,7 @@ gen-protos: $(BUF) $(PROTOC_GEN_GO) $(PROTOC_GEN_GO_GRPC)
 lint-protos: $(BUF) $(API_LINTER)
 	$(BUF) lint
 	$(BUF) format -d --exit-code
-	$(API_LINTER) --config=.api-linter.yaml --set-exit-status --proto-path=proto $$(find proto/policy -name '*.proto')
+	cd proto && $(API_LINTER) --config=../.api-linter.yaml --set-exit-status --proto-path=. $$(find policy -name '*.proto')
 
 .PHONY: compare-protos
 compare-protos: gen-protos

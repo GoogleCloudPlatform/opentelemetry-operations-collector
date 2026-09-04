@@ -40,12 +40,12 @@ jobs:
         go: [1.25, 1.26]
     runs-on: ${{matrix.os}}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           submodules: true
           fetch-depth: 0
           lfs: true
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           go-version: ${{ matrix.go }}
           cache: true
@@ -63,7 +63,7 @@ jobs:
         go: [1.25, 1.26]
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           submodules: true
           fetch-depth: 0
@@ -81,7 +81,7 @@ jobs:
         distro: [google-built-opentelemetry-collector, otelopscol]
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           submodules: true
           fetch-depth: 0
@@ -92,12 +92,12 @@ jobs:
   validate-samples:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           submodules: true
           fetch-depth: 0
           lfs: true
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
         with:
           go-version: ${{ env.DEFAULT_GO_VERSION }}
           cache: true

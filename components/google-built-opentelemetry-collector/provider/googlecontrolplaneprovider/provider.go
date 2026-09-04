@@ -19,8 +19,13 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
+	"reflect"
 	"strings"
 
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider/policies/gcpdestination"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider/policies/selfmetrics"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"go.opentelemetry.io/collector/confmap"
 	"go.uber.org/zap"
 )
@@ -50,6 +55,13 @@ var (
 	ErrEmptyURI = errors.New("uri cannot be empty")
 
 	ErrManagerAlreadyConfigured = errors.New("the provider is already configured to manage policies")
+
+	ErrMultipleDestinationPolicies = errors.New("more than one destination policy found")
+)
+
+var (
+	BuiltInDestinationPolicy = &gcpdestination.GCPDestinationPolicy{Name: "default_gcp_destination"}
+	BuiltInSelfMetricsPolicy = &selfmetrics.SelfMetricsPolicy{Name: "default_self_metrics"}
 )
 
 const (
@@ -79,6 +91,11 @@ func newProvider(set confmap.ProviderSettings) confmap.Provider {
 
 // Retrieve retrieves the configuration from the Google Control Plane provider for the given URI.
 func (p *provider) Retrieve(ctx context.Context, uri string, watcher confmap.WatcherFunc) (*confmap.Retrieved, error) {
+	// Try to generate a Collector ID. If it already exists, this is a no-op.
+	if err := GenerateCollectorID(); err != nil {
+		return nil, err
+	}
+
 	confmapScheme, uri, found := strings.Cut(uri, ":")
 	if !found {
 		return nil, fmt.Errorf("%q: %w: %w", uri, ErrURINotSupported, ErrURINoScheme)
@@ -108,7 +125,7 @@ func (p *provider) Retrieve(ctx context.Context, uri string, watcher confmap.Wat
 		if p.manager.URI().String() != target.String() {
 			return nil, fmt.Errorf("%q: %w: %s", uri, ErrManagerAlreadyConfigured, target)
 		} else {
-			return p.evaluateActivePolicySet()
+			return p.evaluateActivePolicySet(ctx)
 		}
 	}
 
@@ -129,26 +146,173 @@ func (p *provider) Retrieve(ctx context.Context, uri string, watcher confmap.Wat
 		if err := p.manager.Start(); err != nil {
 			return nil, fmt.Errorf("%q: %w", uri, err)
 		}
+	case innerSchemeComponent:
 	default:
 		return nil, fmt.Errorf("%q: %w: %s", uri, ErrURIInvalidInnerScheme, target.Scheme)
 	}
-	return p.evaluateActivePolicySet()
+
+	return p.evaluateActivePolicySet(ctx)
 }
 
-func (p *provider) evaluateActivePolicySet() (*confmap.Retrieved, error) {
-	// 0. This is a recursive function. If there is no longer an active policy set in `pkg/googlepolicy`,
-	// we respond with the base case of only evaluating the built-in policies.
+func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrieved, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 
-	// 1. Get a copy of the current active policy set from `pkg/googlepolicy`.
+	collectorID := CollectorID
+	if v, ok := ctx.Value("COLLECTOR_ID").(string); ok && v != "" {
+		collectorID = v
+	}
 
-	// 2. Load any destination policies. There can be 0 or 1. If there are more than
+	fleetID := os.Getenv("FLEET_ID")
+	if v, ok := ctx.Value("FLEET_ID").(string); ok && v != "" {
+		fleetID = v
+	}
+
+	// Get a copy of the current active policy set from `pkg/googlepolicy`. If there is
+	// no active policy set detected, we will only evaluate the built-in policies.
+	activePolicySet := googlepolicy.ActivePolicySet()
+	if activePolicySet == nil {
+		activePolicySet = &googlepolicy.PolicySet{}
+	}
+
+	// Root conf object, each policy evaluation will merge into this confmap.
+	conf := confmap.New()
+
+	// Load any destination policies from activePolicySet. There can be 0 or 1. If there are more than
 	// that, return an error.
+	destPolicies := activePolicySet.LoadPoliciesOfClass(googlepolicy.PolicyClassDestination)
+	if len(destPolicies) > 1 {
+		return nil, fmt.Errorf("%w: found %d destination policies", ErrMultipleDestinationPolicies, len(destPolicies))
+	}
 
-	// 3. Apply the active destination policies. If the previous step did not yield any,
+	// Apply the active destination policy. If the previous step did not yield any from the set,
 	// use the built-in one.
+	var destPolicy googlepolicy.DestinationPolicy = BuiltInDestinationPolicy
+	if len(destPolicies) == 1 {
+		dp, ok := destPolicies[0].(googlepolicy.DestinationPolicy)
+		if !ok {
+			return nil, fmt.Errorf("destination policy %q does not implement DestinationPolicy", destPolicies[0].PolicyName())
+		}
+		destPolicy = dp
+	}
+	destConf, err := destPolicy.Evaluate(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to evaluate destination policy %q: %w", destPolicy.PolicyName(), err)
+	}
+	if err := conf.Merge(cleanConf(destConf)); err != nil {
+		return nil, fmt.Errorf("failed to merge config for destination policy %q: %w", destPolicy.PolicyName(), err)
+	}
 
-	// 4.
-	return confmap.NewRetrievedFromYAML([]byte{})
+	// Load all source policies from the active policy set.
+	sourcePolicies := activePolicySet.LoadPoliciesOfClass(googlepolicy.PolicyClassSource)
+
+	// If a selfmetrics policy is not found among the sources, add the built-in selfmetrics policy
+	// to the sources.
+	hasSelfMetrics := false
+	for _, sp := range sourcePolicies {
+		if sp.PolicyType() == selfmetrics.PolicyType {
+			hasSelfMetrics = true
+			break
+		}
+	}
+	if !hasSelfMetrics {
+		sourcePolicies = append(sourcePolicies, BuiltInSelfMetricsPolicy)
+	}
+
+	// Evaluate each source. Some policy types may be exceptional. The main exception is selfmetrics.
+	// If a policy with type selfmetrics is found, call the ContextSetup method on it before evaluating.
+	// Make the exceptional policy handling extendable for future policies that may need exceptions
+	// (switch case on policy type probably).
+	for _, sp := range sourcePolicies {
+		srcPolicy, ok := sp.(googlepolicy.SourcePolicy)
+		if !ok {
+			return nil, fmt.Errorf("source policy %q does not implement SourcePolicy", sp.PolicyName())
+		}
+
+		var sourceConf *confmap.Conf
+		var err error
+
+		switch p := srcPolicy.(type) {
+		case *selfmetrics.SelfMetricsPolicy:
+			evalCtx := p.ContextSetup(ctx, collectorID, fleetID)
+			sourceConf, err = p.Evaluate(evalCtx)
+		default:
+			sourceConf, err = srcPolicy.Evaluate(ctx)
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to evaluate source policy %q: %w", sp.PolicyName(), err)
+		}
+		if err := conf.Merge(cleanConf(sourceConf)); err != nil {
+			return nil, fmt.Errorf("failed to merge config for source policy %q: %w", sp.PolicyName(), err)
+		}
+
+		logsPipelines, err := srcPolicy.LogsPipelines(destPolicy.PreProcessLogIDs(), destPolicy.ExporterIDs(), destPolicy.ExtensionIDs())
+		if err != nil {
+			return nil, fmt.Errorf("failed to load logs pipelines for source policy %q: %w", sp.PolicyName(), err)
+		}
+		if logsPipelines != nil {
+			if err := conf.Merge(cleanConf(logsPipelines)); err != nil {
+				return nil, fmt.Errorf("failed to merge logs pipelines for source policy %q: %w", sp.PolicyName(), err)
+			}
+		}
+
+		metricsPipelines, err := srcPolicy.MetricsPipelines(destPolicy.PreProcessMetricIDs(), destPolicy.ExporterIDs(), destPolicy.ExtensionIDs())
+		if err != nil {
+			return nil, fmt.Errorf("failed to load metrics pipelines for source policy %q: %w", sp.PolicyName(), err)
+		}
+		if metricsPipelines != nil {
+			if err := conf.Merge(cleanConf(metricsPipelines)); err != nil {
+				return nil, fmt.Errorf("failed to merge metrics pipelines for source policy %q: %w", sp.PolicyName(), err)
+			}
+		}
+
+		tracesPipelines, err := srcPolicy.TracesPipelines(destPolicy.PreProcessTraceIDs(), destPolicy.ExporterIDs(), destPolicy.ExtensionIDs())
+		if err != nil {
+			return nil, fmt.Errorf("failed to load traces pipelines for source policy %q: %w", sp.PolicyName(), err)
+		}
+		if tracesPipelines != nil {
+			if err := conf.Merge(cleanConf(tracesPipelines)); err != nil {
+				return nil, fmt.Errorf("failed to merge traces pipelines for source policy %q: %w", sp.PolicyName(), err)
+			}
+		}
+	}
+
+	// Validate the fully merged confmap.
+	if err := confmap.Validate(conf); err != nil {
+		return nil, fmt.Errorf("failed to validate merged configuration: %w", err)
+	}
+
+	return confmap.NewRetrieved(conf.ToStringMap())
+}
+
+func cleanConf(c *confmap.Conf) *confmap.Conf {
+	if c == nil {
+		return confmap.New()
+	}
+	m := c.ToStringMap()
+	cleanNilEntries(m)
+	return confmap.NewFromStringMap(m)
+}
+
+func cleanNilEntries(m map[string]any) {
+	for k, v := range m {
+		if v == nil {
+			delete(m, k)
+			continue
+		}
+		rv := reflect.ValueOf(v)
+		switch rv.Kind() {
+		case reflect.Map, reflect.Slice, reflect.Ptr, reflect.Interface:
+			if rv.IsNil() {
+				delete(m, k)
+				continue
+			}
+		}
+		if subMap, ok := v.(map[string]any); ok {
+			cleanNilEntries(subMap)
+		}
+	}
 }
 
 // Scheme returns the URI scheme supported by this provider.

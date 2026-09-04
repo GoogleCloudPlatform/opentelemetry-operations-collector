@@ -51,7 +51,7 @@ type Policy interface {
 // will implement (currently Destination and Source policies).
 type ComponentPolicy interface {
 	Policy
-	Evaluate(ctx context.Context) (*confmap.Retrieved, error)
+	Evaluate(ctx context.Context) (*confmap.Conf, error)
 }
 
 // SourcePolicy is an extended interface that any Source policy will implement.
@@ -59,9 +59,9 @@ type ComponentPolicy interface {
 // generated during `Evaluate`.
 type SourcePolicy interface {
 	ComponentPolicy
-	LogsPipelines(preExportProcessors []component.ID, exporters []component.ID, extensions []component.ID) (*confmap.Retrieved, error)
-	MetricsPipelines(preExportProcessors []component.ID, exporters []component.ID, extensions []component.ID) (*confmap.Retrieved, error)
-	TracesPipelines(preExportProcessors []component.ID, exporters []component.ID, extensions []component.ID) (*confmap.Retrieved, error)
+	LogsPipelines(preExportProcessors []component.ID, exporters []component.ID, extensions []component.ID) (*confmap.Conf, error)
+	MetricsPipelines(preExportProcessors []component.ID, exporters []component.ID, extensions []component.ID) (*confmap.Conf, error)
+	TracesPipelines(preExportProcessors []component.ID, exporters []component.ID, extensions []component.ID) (*confmap.Conf, error)
 }
 
 // DestinationPolicy is an extended interface that any Destination policy

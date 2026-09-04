@@ -64,7 +64,7 @@ func (p *GCPDestinationPolicy) PolicyClass() googlepolicy.PolicyClass {
 	return googlepolicy.PolicyClassDestination
 }
 
-func (p *GCPDestinationPolicy) Evaluate(_ context.Context) (*confmap.Retrieved, error) {
+func (p *GCPDestinationPolicy) Evaluate(_ context.Context) (*confmap.Conf, error) {
 	conf := &otelcol.Config{}
 	authenticator := googleclientauthextension.NewFactory().CreateDefaultConfig().(*googleclientauthextension.Config)
 	authenticator.Config.Project = p.ProjectID
@@ -116,21 +116,17 @@ func (p *GCPDestinationPolicy) Evaluate(_ context.Context) (*confmap.Retrieved, 
 		queueBatchTracesID:  component.Config(queueBatchTrace),
 	}
 
-	if err := confmap.Validate(conf); err != nil {
-		return nil, fmt.Errorf("policy implementation failure for %s: validating config got error '%w'", p.PolicyName(), err)
-	}
-
-	p.extensionIDs = append(p.extensionIDs, authID)
-	p.exporterIDs = append(p.exporterIDs, otlpExporterID)
-	p.preprocessorLogIDs = append(p.preprocessorLogIDs, queueBatchLogsID)
-	p.preprocessorMetricIDs = append(p.preprocessorMetricIDs, queueBatchMetricsID)
-	p.preprocessorTraceIDs = append(p.preprocessorTraceIDs, queueBatchTracesID)
+	p.extensionIDs = []component.ID{authID}
+	p.exporterIDs = []component.ID{otlpExporterID}
+	p.preprocessorLogIDs = []component.ID{queueBatchLogsID}
+	p.preprocessorMetricIDs = []component.ID{queueBatchMetricsID}
+	p.preprocessorTraceIDs = []component.ID{queueBatchTracesID}
 
 	cm := confmap.New()
 	if err := cm.Marshal(conf); err != nil {
 		return nil, fmt.Errorf("policy implementation failure for %s: marshaling config got error '%w'", p.PolicyName(), err)
 	}
-	return confmap.NewRetrieved(cm.ToStringMap())
+	return cm, nil
 }
 
 func (p *GCPDestinationPolicy) Validate() error {

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package collectorid
+package googlecontrolplaneprovider
 
 import (
 	"errors"
@@ -92,3 +92,4 @@ func TestGenerateCollectorID_GetHostnameError(t *testing.T) {
 	assert.Empty(t, CollectorID)
 	assert.Empty(t, CollectorName)
 }
+

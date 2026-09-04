@@ -19,6 +19,15 @@ package google.telemetry.policy.v1alpha1;
 option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1;policyv1alpha1";
 
 // Action specifies what to do with a telemetry record that matches all conditions.
+//
+// Evaluation Semantics & Action Precedence:
+// - Default Allow: Telemetry records or streams pass through by default if no
+//   policy matches.
+// - Keep Overrides Drop: When multiple policies match a record, ACTION_KEEP
+//   always overrides ACTION_DROP (keep always overrides drop). ACTION_KEEP acts as
+//   an explicit exemption retaining matching records; it does not prune
+//   non-matching records. To implement an allowlist that prunes non-matching
+//   records, authors specify ACTION_DROP with negate: true on the matchers.
 enum Action {
   // Default unspecified action. A policy with an unspecified action is invalid.
   ACTION_UNSPECIFIED = 0;
@@ -31,6 +40,8 @@ enum Action {
 }
 
 // ScopeField identifies standard first-class fields of an InstrumentationScope.
+// For presence checking with `exists`, these fields lack explicit presence
+// tracking in OpenTelemetry and evaluate to true when set to a non-empty string.
 enum ScopeField {
   // Default unspecified scope field.
   SCOPE_FIELD_UNSPECIFIED = 0;

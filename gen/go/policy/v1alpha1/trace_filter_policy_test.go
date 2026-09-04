@@ -260,3 +260,65 @@ func TestTraceFilterPolicy_JSONSerialization(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(marshaledUnpopulated), `"action":"ACTION_UNSPECIFIED"`)
 }
+
+func TestTraceFilterPolicy_ParentSpanIDAndKindMatchers(t *testing.T) {
+	// Policy targeting root spans (absent parent_span_id: exists with negate: true or exact: "")
+	rootSpanPolicy := &policyv1alpha1.TraceFilterPolicy{
+		Id:     "target-root-spans",
+		Action: actionPtr(policyv1alpha1.Action_ACTION_KEEP),
+		Matches: []*policyv1alpha1.TraceMatcher{
+			{
+				Target: &policyv1alpha1.TraceFieldSelector{
+					Target: &policyv1alpha1.TraceFieldSelector_RecordField{
+						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID,
+					},
+				},
+				Predicate: &policyv1alpha1.TraceMatcher_Exists{
+					Exists: &emptypb.Empty{},
+				},
+				Negate: true,
+			},
+			{
+				Target: &policyv1alpha1.TraceFieldSelector{
+					Target: &policyv1alpha1.TraceFieldSelector_RecordField{
+						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_KIND,
+					},
+				},
+				Predicate: &policyv1alpha1.TraceMatcher_Exact{
+					Exact: "INTERNAL",
+				},
+			},
+		},
+	}
+
+	data, err := proto.Marshal(rootSpanPolicy)
+	require.NoError(t, err)
+
+	unmarshaled := &policyv1alpha1.TraceFilterPolicy{}
+	require.NoError(t, proto.Unmarshal(data, unmarshaled))
+	assert.True(t, proto.Equal(rootSpanPolicy, unmarshaled))
+
+	// Policy targeting child spans with explicit 16-char hex parent_span_id.
+	childSpanPolicy := &policyv1alpha1.TraceFilterPolicy{
+		Id:     "target-child-spans",
+		Action: actionPtr(policyv1alpha1.Action_ACTION_DROP),
+		Matches: []*policyv1alpha1.TraceMatcher{
+			{
+				Target: &policyv1alpha1.TraceFieldSelector{
+					Target: &policyv1alpha1.TraceFieldSelector_RecordField{
+						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID,
+					},
+				},
+				Predicate: &policyv1alpha1.TraceMatcher_Exact{
+					Exact: "0123456789abcdef",
+				},
+			},
+		},
+	}
+
+	data, err = proto.Marshal(childSpanPolicy)
+	require.NoError(t, err)
+	unmarshaledChild := &policyv1alpha1.TraceFilterPolicy{}
+	require.NoError(t, proto.Unmarshal(data, unmarshaledChild))
+	assert.True(t, proto.Equal(childSpanPolicy, unmarshaledChild))
+}

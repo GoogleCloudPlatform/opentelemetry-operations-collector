@@ -66,14 +66,37 @@ message LogMatcher {
     // false when absent or default (e.g. empty string or 0).
     google.protobuf.Empty exists = 10;
 
-    // Exact string equality match.
-    string exact = 11;
+    // Typed scalar equality match (supporting string, int64, bool, double, bytes).
+    Value equals = 11;
 
     // Regular expression match using RE2 syntax.
     // Evaluates as an unanchored partial match (like Go regexp.MatchString and
     // OpenTelemetry OTTL IsMatch). Callers requiring full string equality must
-    // provide explicit anchors ('^' and '$').
+    // provide explicit anchors ('^' and '$'). Applies strictly to string
+    // fields and string attribute values.
     string regex = 12;
+
+    // Matches if the target numeric value is strictly greater than this value.
+    // Applies strictly to int64 and double fields and attribute values.
+    NumericValue gt = 13;
+
+    // Matches if the target numeric value is greater than or equal to this value.
+    // Applies strictly to int64 and double fields and attribute values.
+    NumericValue gte = 14;
+
+    // Matches if the target numeric value is strictly less than this value.
+    // Applies strictly to int64 and double fields and attribute values.
+    NumericValue lt = 15;
+
+    // Matches if the target numeric value is less than or equal to this value.
+    // Applies strictly to int64 and double fields and attribute values.
+    NumericValue lte = 16;
+
+    // Value containment:
+    // - For list (ArrayValue) attributes: matches if any element in the list equals this value.
+    // - For string fields or attribute values: matches if the string contains this value's string_value as a substring.
+    // - For bytes fields or attribute values: matches if the bytes contain this value's bytes_value as a subsequence.
+    Value contains = 17;
   }
 
   // If true, inverts the result of the predicate (logical NOT).
@@ -83,19 +106,19 @@ message LogMatcher {
 // LogFieldSelector designates a first-class OTel log field, attribute, or metadata.
 message LogFieldSelector {
   oneof target {
-    // Standard first-class OpenTelemetry LogRecord fields (OTLP path: log_record.*).
+    // Standard first-class OpenTelemetry LogRecord fields (e.g. severity_number, body).
     LogRecordField record_field = 1;
 
-    // Log record attribute by key (OTLP path: log_record.attributes[*], e.g. "http.route", "user_id").
-    string log_attribute = 2;
+    // Log record attribute by key or path (e.g. ["http.route"] or ["http", "method"]).
+    AttributePath log_attribute = 2;
 
-    // Resource attribute by key (OTLP path: resource.attributes[*], e.g. "service.name", "k8s.pod.name").
-    string resource_attribute = 3;
+    // Resource attribute by key or path (e.g. ["service.name"] or ["host", "id"]).
+    AttributePath resource_attribute = 3;
 
-    // Instrumentation scope attribute by key (OTLP path: scope.attributes[*], e.g. "library.name").
-    string scope_attribute = 4;
+    // Instrumentation scope attribute by key or path (e.g. ["library.name"]).
+    AttributePath scope_attribute = 4;
 
-    // Standard first-class OpenTelemetry InstrumentationScope fields (OTLP path: scope.*).
+    // Standard first-class OpenTelemetry InstrumentationScope fields (e.g. name, version).
     ScopeField scope_field = 5;
   }
 }
@@ -114,8 +137,8 @@ enum LogRecordField {
   LOG_RECORD_FIELD_SEVERITY_TEXT = 2;
 
   // The numerical severity of the log (1-24 per OpenTelemetry specification).
-  // When evaluated against string predicates (`exact`, `regex`), this matches
-  // against the canonical base-10 integer string representation (e.g. "17").
+  // Evaluates against typed `equals` (`int_value`), numeric range comparisons
+  // (`gt`, `gte`, `lt`, `lte`), or canonical base-10 string representations for `regex`.
   LOG_RECORD_FIELD_SEVERITY_NUMBER = 3;
 
   // The 16-byte trace identifier associated with the log record.

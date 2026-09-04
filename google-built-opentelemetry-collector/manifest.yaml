@@ -126,4 +126,6 @@ replaces:
 - github.com/buger/jsonparser => github.com/buger/jsonparser v1.1.2
 # Local dependency for googlecontrolplaneprovider
 - github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy => ../../pkg/googlepolicy
+# Local dependency for root module protos
+- github.com/GoogleCloudPlatform/opentelemetry-operations-collector => ../..
 

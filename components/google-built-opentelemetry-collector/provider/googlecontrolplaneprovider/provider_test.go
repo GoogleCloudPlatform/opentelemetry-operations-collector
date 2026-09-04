@@ -16,8 +16,11 @@ package googlecontrolplaneprovider
 
 import (
 	"context"
+	"errors"
+	"io"
 	"testing"
 
+	discoveryv3 "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/confmap"
@@ -61,20 +64,72 @@ func TestEmptyTarget(t *testing.T) {
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
 
-func TestRetrieve(t *testing.T) {
+func TestUnsupportedInnerScheme(t *testing.T) {
 	p := createProvider()
-	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:my-config", nil)
-	require.NoError(t, err)
-	require.NotNil(t, ret)
-
-	conf, err := ret.AsConf()
-	require.NoError(t, err)
-	assert.NotNil(t, conf)
-
+	_, err := p.Retrieve(context.Background(), "googlecontrolplane:my-config", nil)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrURIInvalidInnerScheme)
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
 
 func TestShutdown(t *testing.T) {
 	p := createProvider()
 	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+type mockADSServer struct {
+	discoveryv3.UnimplementedAggregatedDiscoveryServiceServer
+	receivedReq chan *discoveryv3.DiscoveryRequest
+	sendResp    chan *discoveryv3.DiscoveryResponse
+}
+
+func newMockADSServer() *mockADSServer {
+	return &mockADSServer{
+		receivedReq: make(chan *discoveryv3.DiscoveryRequest, 10),
+		sendResp:    make(chan *discoveryv3.DiscoveryResponse, 10),
+	}
+}
+
+func (s *mockADSServer) StreamAggregatedResources(stream discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error {
+	ctx := stream.Context()
+	errCh := make(chan error, 2)
+
+	go func() {
+		for {
+			req, err := stream.Recv()
+			if err != nil {
+				errCh <- err
+				return
+			}
+			s.receivedReq <- req
+		}
+	}()
+
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				errCh <- ctx.Err()
+				return
+			case resp, ok := <-s.sendResp:
+				if !ok {
+					return
+				}
+				if err := stream.Send(resp); err != nil {
+					errCh <- err
+					return
+				}
+			}
+		}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return nil
+	case err := <-errCh:
+		if errors.Is(err, context.Canceled) || errors.Is(err, io.EOF) {
+			return nil
+		}
+		return err
+	}
 }

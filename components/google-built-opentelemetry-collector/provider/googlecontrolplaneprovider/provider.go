@@ -27,6 +27,9 @@ import (
 
 const (
 	schemeName = "googlecontrolplane"
+
+	defaultXdsTypeURL = "type.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector"
+	defaultFleetID    = "test-fleet-01"
 )
 
 var (
@@ -52,6 +55,7 @@ var (
 const (
 	innerSchemeFile      = "file"
 	innerSchemeComponent = "component"
+	innerSchemeXDS       = "xds"
 )
 
 var _ confmap.Provider = (*provider)(nil)
@@ -117,11 +121,17 @@ func (p *provider) Retrieve(ctx context.Context, uri string, watcher confmap.Wat
 		if err := p.manager.Start(); err != nil {
 			return nil, fmt.Errorf("%q: %w", uri, err)
 		}
-	case innerSchemeComponent, "":
+	case innerSchemeXDS:
+		p.manager, err = NewXDSPolicyManager(p.logger, target, watcher)
+		if err != nil {
+			return nil, fmt.Errorf("%q: %w", uri, err)
+		}
+		if err := p.manager.Start(); err != nil {
+			return nil, fmt.Errorf("%q: %w", uri, err)
+		}
 	default:
 		return nil, fmt.Errorf("%q: %w: %s", uri, ErrURIInvalidInnerScheme, target.Scheme)
 	}
-
 	return p.evaluateActivePolicySet()
 }
 

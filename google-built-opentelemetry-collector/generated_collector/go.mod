@@ -549,7 +549,7 @@ require (
 	google.golang.org/api v0.287.1 // indirect
 	google.golang.org/genproto v0.0.0-20260519071638-aa98bba5eb94 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260803160001-6ac0973c030d // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260803160001-6ac0973c030d // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260819154853-08b0e4226688 // indirect
 	google.golang.org/grpc v1.83.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
@@ -584,3 +584,4 @@ replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/compon
 replace github.com/buger/jsonparser => github.com/buger/jsonparser v1.1.2
 
 replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy => ../../pkg/googlepolicy
+replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector => ../..

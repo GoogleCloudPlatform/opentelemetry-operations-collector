@@ -153,3 +153,6 @@ replaces:
   - from: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy
     to: ../../pkg/googlepolicy
     reason: Local dependency for googlecontrolplaneprovider
+  - from: github.com/GoogleCloudPlatform/opentelemetry-operations-collector
+    to: ../..
+    reason: Local dependency for root module protos

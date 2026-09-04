@@ -16,12 +16,14 @@ require (
 	go.opentelemetry.io/collector/confmap v1.66.0
 	go.opentelemetry.io/collector/exporter/otlpexporter v0.160.0
 	go.opentelemetry.io/collector/otelcol v0.160.0
+	go.opentelemetry.io/collector/pipeline v1.66.0
 	go.opentelemetry.io/collector/processor/queuebatchprocessor v0.160.0
 	go.opentelemetry.io/collector/receiver/otlpreceiver v0.160.0
 	go.opentelemetry.io/collector/service v0.160.0
 	go.opentelemetry.io/contrib/otelconf v0.25.0
 	go.uber.org/goleak v1.3.0
 	go.uber.org/zap v1.28.0
+	go.yaml.in/yaml/v4 v4.0.0-rc.6
 )
 
 require (
@@ -121,7 +123,6 @@ require (
 	go.opentelemetry.io/collector/pdata/pprofile v0.160.0 // indirect
 	go.opentelemetry.io/collector/pdata/testdata v0.160.0 // indirect
 	go.opentelemetry.io/collector/pdata/xpdata v0.160.0 // indirect
-	go.opentelemetry.io/collector/pipeline v1.66.0 // indirect
 	go.opentelemetry.io/collector/pipeline/xpipeline v0.160.0 // indirect
 	go.opentelemetry.io/collector/processor v1.66.0 // indirect
 	go.opentelemetry.io/collector/processor/processortest v0.160.0 // indirect

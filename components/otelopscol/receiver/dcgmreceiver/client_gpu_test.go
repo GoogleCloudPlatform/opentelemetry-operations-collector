@@ -34,7 +34,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v4"
 	"gotest.tools/v3/golden"
 )
 

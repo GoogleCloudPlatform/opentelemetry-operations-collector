@@ -553,6 +553,11 @@ func TestIsSSHTransportError(t *testing.T) {
 			expected: true,
 		},
 		{
+			name:     "ssh connection reset by peer",
+			err:      errors.New("Command failed: ssh test_user@10.128.2.24\nexit status 255\nstdout+stderr: kex_exchange_identification: read: Connection reset by peer"),
+			expected: true,
+		},
+		{
 			name:     "exit status 255 error",
 			err:      errors.New("Command failed: ssh\nexit status 255"),
 			expected: true,

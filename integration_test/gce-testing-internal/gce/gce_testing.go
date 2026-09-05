@@ -897,6 +897,8 @@ func isSSHTransportError(err error) bool {
 		strings.Contains(errStr, "ssh: connect to host") ||
 		strings.Contains(errStr, "Connection timed out") ||
 		strings.Contains(errStr, "Connection refused") ||
+		strings.Contains(errStr, "Connection reset by peer") ||
+		strings.Contains(errStr, "kex_exchange_identification") ||
 		strings.Contains(errStr, "Host key verification failed")
 }
 
@@ -932,8 +934,14 @@ func RunRemotelyStdin(ctx context.Context, logger *log.Logger, vm *VM, stdin io.
 	args = append(args, sshOptions...)
 	args = append(args, wrappedCommand)
 
+	// Retry up to 10 times with 3s backoff (~30s total retry window) strictly for
+	// SSH transport errors (exit status 255 / connection refused/reset/timeout).
+	// This bridges the 10-15s network handover window on newly booted VMs where
+	// google-guest-agent rolls back network configurations and triggers NetworkManager
+	// DHCP renegotiation (b/557287367), especially on fast-booting ARM64 instances.
+	// Non-transport command errors (e.g. exit status 1 or 2) fail immediately on attempt 1.
 	backoffPolicy := backoff.WithContext(
-		backoff.WithMaxRetries(backoff.NewConstantBackOff(3*time.Second), 3),
+		backoff.WithMaxRetries(backoff.NewConstantBackOff(3*time.Second), 10),
 		ctx,
 	)
 

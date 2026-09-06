@@ -25,6 +25,7 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/otelarrowexporter v0.159.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/prometheusexporter v0.159.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/prometheusremotewriteexporter v0.159.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/syslogexporter v0.159.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/extension/ackextension v0.159.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/extension/basicauthextension v0.159.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/extension/bearertokenauthextension v0.159.0

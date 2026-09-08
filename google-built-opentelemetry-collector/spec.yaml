@@ -79,6 +79,7 @@ components:
         - googlecloudpubsub
         - prometheus
         - prometheusremotewrite
+        - syslog
     connectors:
         - forward
         - count

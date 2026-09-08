@@ -671,6 +671,8 @@ github.com/open-telemetry/opentelemetry-collector-contrib/exporter/prometheusexp
 github.com/open-telemetry/opentelemetry-collector-contrib/exporter/prometheusexporter v0.159.0/go.mod h1:AQOnja7LC/r2bQPeumRs2JcZ4ggdNwqkrsKkt3ZqqLY=
 github.com/open-telemetry/opentelemetry-collector-contrib/exporter/prometheusremotewriteexporter v0.159.0 h1:9MGptirtNasrWqiJaxxOL35aLMb7kOxNKDaPKWN5fMA=
 github.com/open-telemetry/opentelemetry-collector-contrib/exporter/prometheusremotewriteexporter v0.159.0/go.mod h1:fY+vpUhz2YuMRQ2CCqILSNWQ4eWnivSpIZXsYEA7Uao=
+github.com/open-telemetry/opentelemetry-collector-contrib/exporter/syslogexporter v0.159.0 h1:qfmFyaSIkAYodwvNDtFxO393AAXPwlYtMvUvJAQby5Q=
+github.com/open-telemetry/opentelemetry-collector-contrib/exporter/syslogexporter v0.159.0/go.mod h1:pqnhmgGHA/O3Q6sMU+FUMfOsmhCHZhbWT5DzdvY7TSs=
 github.com/open-telemetry/opentelemetry-collector-contrib/extension/ackextension v0.159.0 h1:1GCUDWgZWdcS5q/bxW/TvK2fxH0kYX49exHee76Agls=
 github.com/open-telemetry/opentelemetry-collector-contrib/extension/ackextension v0.159.0/go.mod h1:QiXukeKgNGuYa9AMknHqBR87k51RJ9JCw6IbWTTc8bE=
 github.com/open-telemetry/opentelemetry-collector-contrib/extension/basicauthextension v0.159.0 h1:9/vYsrPXQOIBfqDfeysfNf3krlWoIwki3XQ69ZUnICc=

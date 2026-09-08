@@ -9,7 +9,6 @@ require (
 	go.opentelemetry.io/collector/config/configopaque v1.65.0
 	go.opentelemetry.io/collector/config/configtls v1.65.0
 	go.opentelemetry.io/collector/confmap v1.65.0
-	go.opentelemetry.io/collector/confmap/xconfmap v0.159.0
 	go.opentelemetry.io/collector/extension v1.65.0
 	go.opentelemetry.io/collector/extension/extensionauth v1.65.0
 	go.opentelemetry.io/collector/extension/extensiontest v0.159.0
@@ -17,7 +16,7 @@ require (
 	go.uber.org/multierr v1.11.0
 	go.uber.org/zap v1.28.0
 	golang.org/x/oauth2 v0.36.0
-	google.golang.org/grpc v1.83.0
+	google.golang.org/grpc v1.83.1
 )
 
 require (

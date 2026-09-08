@@ -25,7 +25,7 @@ extensions:
         token_type: access_token
 processors:
     googlepolicy: {}
-    queue_batch/default_gcp_destination_batch_logs:
+    queuebatch/default_gcp_destination_batch_logs:
         batch:
             flush_timeout: 200ms
             max_size: 8192
@@ -37,7 +37,7 @@ processors:
         queue_size: 10
         sizer: {}
         wait_for_result: false
-    queue_batch/default_gcp_destination_batch_metrics:
+    queuebatch/default_gcp_destination_batch_metrics:
         batch:
             flush_timeout: 200ms
             max_size: 200
@@ -49,7 +49,7 @@ processors:
         queue_size: 10
         sizer: {}
         wait_for_result: false
-    queue_batch/default_gcp_destination_batch_traces:
+    queuebatch/default_gcp_destination_batch_traces:
         batch:
             flush_timeout: 200ms
             max_size: 25000
@@ -72,13 +72,15 @@ receivers:
                 read_buffer_size: 524288
                 transport: tcp
 service:
+    extensions:
+        - googleclientauth/default_gcp_destination
     pipelines:
         logs/default_self_metrics:
             exporters:
                 - otlp_grpc/default_gcp_destination
             processors:
                 - googlepolicy
-                - queue_batch/default_gcp_destination_batch_logs
+                - queuebatch/default_gcp_destination_batch_logs
             receivers:
                 - otlp/default_self_metrics
         metrics/default_self_metrics:
@@ -86,12 +88,12 @@ service:
                 - otlp_grpc/default_gcp_destination
             processors:
                 - googlepolicy
-                - queue_batch/default_gcp_destination_batch_metrics
+                - queuebatch/default_gcp_destination_batch_metrics
             receivers:
                 - otlp/default_self_metrics
     telemetry:
         logs:
-            encoding: ""
+            encoding: json
             level: info
             processors:
                 - batch:

@@ -32,11 +32,13 @@ import (
 
 const (
 	PolicyTypeShort     = "log_filter"
+	PolicyTypeProto     = "google.telemetry.policy.v1alpha1.LogFilterPolicy"
 	PolicyTypeCanonical = "type.googleapis.com/google.telemetry.policy.v1alpha1.LogFilterPolicy"
 )
 
 func init() {
 	_ = googlepolicy.RegisterPolicyDriver(PolicyTypeShort, &Driver{})
+	_ = googlepolicy.RegisterPolicyDriver(PolicyTypeProto, &Driver{})
 	_ = googlepolicy.RegisterPolicyDriver(PolicyTypeCanonical, &Driver{})
 }
 

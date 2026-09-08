@@ -203,7 +203,13 @@ type GenericDriver[P Policy] struct{}
 
 func (gd *GenericDriver[P]) LoadPolicy(raw map[string]any) (Policy, error) {
 	var p P
-	conf := confmap.NewFromStringMap(raw)
+	cleanRaw := make(map[string]any, len(raw))
+	for k, v := range raw {
+		if k != "type" {
+			cleanRaw[k] = v
+		}
+	}
+	conf := confmap.NewFromStringMap(cleanRaw)
 	if err := conf.Unmarshal(&p); err != nil {
 		return nil, err
 	}

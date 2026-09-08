@@ -68,7 +68,10 @@ func (p *SelfMetricsPolicy) PolicyClass() googlepolicy.PolicyClass {
 }
 
 func (p *SelfMetricsPolicy) Validate() error {
-	panic("unimplemented")
+	if p.Name == "" {
+		return errors.New("policy must be named")
+	}
+	return nil
 }
 
 func (p *SelfMetricsPolicy) Evaluate(ctx context.Context) (*confmap.Conf, error) {
@@ -106,7 +109,8 @@ func (p *SelfMetricsPolicy) Evaluate(ctx context.Context) (*confmap.Conf, error)
 				},
 			},
 			Logs: otelconftelemetry.LogsConfig{
-				Level: zapcore.InfoLevel,
+				Level:    zapcore.InfoLevel,
+				Encoding: "json",
 				Processors: []config.LogRecordProcessor{
 					{
 						Batch: &config.BatchLogRecordProcessor{
@@ -164,25 +168,26 @@ func (p *SelfMetricsPolicy) Evaluate(ctx context.Context) (*confmap.Conf, error)
 	return cm, nil
 }
 
-func (p *SelfMetricsPolicy) LogsPipelines(preExportProcessors []component.ID, exporters []component.ID, _ []component.ID) (*confmap.Conf, error) {
-	return p.createPipeline(pipeline.SignalLogs, preExportProcessors, exporters)
+func (p *SelfMetricsPolicy) LogsPipelines(preExportProcessors []component.ID, exporters []component.ID, extensions []component.ID) (*confmap.Conf, error) {
+	return p.createPipeline(pipeline.SignalLogs, preExportProcessors, exporters, extensions)
 }
 
-func (p *SelfMetricsPolicy) MetricsPipelines(preExportProcessors []component.ID, exporters []component.ID, _ []component.ID) (*confmap.Conf, error) {
-	return p.createPipeline(pipeline.SignalMetrics, preExportProcessors, exporters)
+func (p *SelfMetricsPolicy) MetricsPipelines(preExportProcessors []component.ID, exporters []component.ID, extensions []component.ID) (*confmap.Conf, error) {
+	return p.createPipeline(pipeline.SignalMetrics, preExportProcessors, exporters, extensions)
 }
 
 func (p *SelfMetricsPolicy) TracesPipelines(_ []component.ID, _ []component.ID, _ []component.ID) (*confmap.Conf, error) {
 	return nil, nil
 }
 
-func (p *SelfMetricsPolicy) createPipeline(signal pipeline.Signal, preExportProcessors []component.ID, exporters []component.ID) (*confmap.Conf, error) {
+func (p *SelfMetricsPolicy) createPipeline(signal pipeline.Signal, preExportProcessors []component.ID, exporters []component.ID, extensions []component.ID) (*confmap.Conf, error) {
 	otlpReceiverType, _ := component.NewType("otlp")
 	otlpReceiverID := component.NewIDWithName(otlpReceiverType, p.Name)
 
 	pipeID := pipeline.NewIDWithName(signal, p.Name)
 	conf := &otelcol.Config{
 		Service: service.Config{
+			Extensions: extensions,
 			Pipelines: pipelines.Config{
 				pipeID: &pipelines.PipelineConfig{
 					Receivers:  []component.ID{otlpReceiverID},

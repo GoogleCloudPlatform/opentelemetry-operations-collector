@@ -24,6 +24,7 @@ extensions:
         token_header: authorization
         token_type: access_token
 processors:
+    googlepolicy: {}
     queue_batch/default_gcp_destination_batch_logs:
         batch:
             flush_timeout: 200ms
@@ -76,6 +77,7 @@ service:
             exporters:
                 - otlp_grpc/default_gcp_destination
             processors:
+                - googlepolicy
                 - queue_batch/default_gcp_destination_batch_logs
             receivers:
                 - otlp/default_self_metrics
@@ -83,6 +85,7 @@ service:
             exporters:
                 - otlp_grpc/default_gcp_destination
             processors:
+                - googlepolicy
                 - queue_batch/default_gcp_destination_batch_metrics
             receivers:
                 - otlp/default_self_metrics

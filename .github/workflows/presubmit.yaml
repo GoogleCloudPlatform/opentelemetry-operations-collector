@@ -15,7 +15,7 @@
 name: Presubmit
 permissions:
   contents: read
-  pull-requests: write
+  pull-requests: read
 
 on:
   pull_request:

@@ -51,14 +51,68 @@ func TestMetricFilterPolicy_Serialization(t *testing.T) {
 						DescriptorField: policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE,
 					},
 				},
-				Predicate: &policyv1alpha1.MetricMatcher_Exact{
-					Exact: "HISTOGRAM",
+				Predicate: &policyv1alpha1.MetricMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_StringValue{
+							StringValue: "HISTOGRAM",
+						},
+					},
 				},
 			},
 			{
 				Target: &policyv1alpha1.MetricFieldSelector{
 					Target: &policyv1alpha1.MetricFieldSelector_DatapointAttribute{
-						DatapointAttribute: "http.status_code",
+						DatapointAttribute: &policyv1alpha1.AttributePath{
+							Path: []string{"http.status_code"},
+						},
+					},
+				},
+				Predicate: &policyv1alpha1.MetricMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_IntValue{
+							IntValue: 200,
+						},
+					},
+				},
+			},
+			{
+				Target: &policyv1alpha1.MetricFieldSelector{
+					Target: &policyv1alpha1.MetricFieldSelector_DatapointAttribute{
+						DatapointAttribute: &policyv1alpha1.AttributePath{
+							Path: []string{"http.status_code"},
+						},
+					},
+				},
+				Predicate: &policyv1alpha1.MetricMatcher_Gte{
+					Gte: &policyv1alpha1.NumericValue{
+						Value: &policyv1alpha1.NumericValue_IntValue{
+							IntValue: 400,
+						},
+					},
+				},
+			},
+			{
+				Target: &policyv1alpha1.MetricFieldSelector{
+					Target: &policyv1alpha1.MetricFieldSelector_DatapointAttribute{
+						DatapointAttribute: &policyv1alpha1.AttributePath{
+							Path: []string{"pools", "active"},
+						},
+					},
+				},
+				Predicate: &policyv1alpha1.MetricMatcher_Contains{
+					Contains: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_StringValue{
+							StringValue: "worker",
+						},
+					},
+				},
+			},
+			{
+				Target: &policyv1alpha1.MetricFieldSelector{
+					Target: &policyv1alpha1.MetricFieldSelector_DatapointAttribute{
+						DatapointAttribute: &policyv1alpha1.AttributePath{
+							Path: []string{"http.status_code"},
+						},
 					},
 				},
 				Predicate: &policyv1alpha1.MetricMatcher_Exists{
@@ -69,21 +123,33 @@ func TestMetricFilterPolicy_Serialization(t *testing.T) {
 			{
 				Target: &policyv1alpha1.MetricFieldSelector{
 					Target: &policyv1alpha1.MetricFieldSelector_ResourceAttribute{
-						ResourceAttribute: "service.name",
+						ResourceAttribute: &policyv1alpha1.AttributePath{
+							Path: []string{"service.name"},
+						},
 					},
 				},
-				Predicate: &policyv1alpha1.MetricMatcher_Exact{
-					Exact: "frontend",
+				Predicate: &policyv1alpha1.MetricMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_StringValue{
+							StringValue: "frontend",
+						},
+					},
 				},
 			},
 			{
 				Target: &policyv1alpha1.MetricFieldSelector{
 					Target: &policyv1alpha1.MetricFieldSelector_ScopeAttribute{
-						ScopeAttribute: "library.name",
+						ScopeAttribute: &policyv1alpha1.AttributePath{
+							Path: []string{"library.name"},
+						},
 					},
 				},
-				Predicate: &policyv1alpha1.MetricMatcher_Exact{
-					Exact: "net/http",
+				Predicate: &policyv1alpha1.MetricMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_StringValue{
+							StringValue: "net/http",
+						},
+					},
 				},
 			},
 			{
@@ -92,8 +158,12 @@ func TestMetricFilterPolicy_Serialization(t *testing.T) {
 						ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_NAME,
 					},
 				},
-				Predicate: &policyv1alpha1.MetricMatcher_Exact{
-					Exact: "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp",
+				Predicate: &policyv1alpha1.MetricMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_StringValue{
+							StringValue: "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp",
+						},
+					},
 				},
 			},
 			{
@@ -102,8 +172,12 @@ func TestMetricFilterPolicy_Serialization(t *testing.T) {
 						ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_VERSION,
 					},
 				},
-				Predicate: &policyv1alpha1.MetricMatcher_Exact{
-					Exact: "v0.40.0",
+				Predicate: &policyv1alpha1.MetricMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_StringValue{
+							StringValue: "v0.40.0",
+						},
+					},
 				},
 			},
 			{
@@ -112,8 +186,12 @@ func TestMetricFilterPolicy_Serialization(t *testing.T) {
 						ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_SCHEMA_URL,
 					},
 				},
-				Predicate: &policyv1alpha1.MetricMatcher_Exact{
-					Exact: "https://opentelemetry.io/schemas/1.24.0",
+				Predicate: &policyv1alpha1.MetricMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_StringValue{
+							StringValue: "https://opentelemetry.io/schemas/1.24.0",
+						},
+					},
 				},
 			},
 			{
@@ -122,8 +200,12 @@ func TestMetricFilterPolicy_Serialization(t *testing.T) {
 						DescriptorField: policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_AGGREGATION_TEMPORALITY,
 					},
 				},
-				Predicate: &policyv1alpha1.MetricMatcher_Exact{
-					Exact: "DELTA",
+				Predicate: &policyv1alpha1.MetricMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_StringValue{
+							StringValue: "DELTA",
+						},
+					},
 				},
 			},
 			{
@@ -132,8 +214,12 @@ func TestMetricFilterPolicy_Serialization(t *testing.T) {
 						DescriptorField: policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_IS_MONOTONIC,
 					},
 				},
-				Predicate: &policyv1alpha1.MetricMatcher_Exact{
-					Exact: "true",
+				Predicate: &policyv1alpha1.MetricMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_BoolValue{
+							BoolValue: true,
+						},
+					},
 				},
 			},
 		},
@@ -150,7 +236,7 @@ func TestMetricFilterPolicy_Serialization(t *testing.T) {
 	assert.NotNil(t, unmarshaled.Action)
 	assert.Equal(t, policy.GetId(), unmarshaled.GetId())
 	assert.Equal(t, policy.GetAction(), unmarshaled.GetAction())
-	require.Len(t, unmarshaled.GetMatches(), 10)
+	require.Len(t, unmarshaled.GetMatches(), 13)
 
 	// Check descriptor field name matcher.
 	matcher0 := unmarshaled.GetMatches()[0]
@@ -163,30 +249,45 @@ func TestMetricFilterPolicy_Serialization(t *testing.T) {
 	matcher1 := unmarshaled.GetMatches()[1]
 	descFieldType := matcher1.GetTarget().GetDescriptorField()
 	assert.Equal(t, policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE, descFieldType)
-	assert.Equal(t, "HISTOGRAM", matcher1.GetExact())
+	assert.Equal(t, "HISTOGRAM", matcher1.GetEquals().GetStringValue())
+
+	// Check datapoint attribute equals matcher with int value.
+	matcher2 := unmarshaled.GetMatches()[2]
+	assert.Equal(t, "http.status_code", matcher2.GetTarget().GetDatapointAttribute().GetPath()[0])
+	assert.Equal(t, int64(200), matcher2.GetEquals().GetIntValue())
+
+	// Check datapoint attribute gte matcher with int value.
+	matcher3 := unmarshaled.GetMatches()[3]
+	assert.Equal(t, "http.status_code", matcher3.GetTarget().GetDatapointAttribute().GetPath()[0])
+	assert.Equal(t, int64(400), matcher3.GetGte().GetIntValue())
+
+	// Check contains matcher.
+	matcher4 := unmarshaled.GetMatches()[4]
+	assert.Equal(t, []string{"pools", "active"}, matcher4.GetTarget().GetDatapointAttribute().GetPath())
+	assert.Equal(t, "worker", matcher4.GetContains().GetStringValue())
 
 	// Check datapoint attribute exists matcher with negate.
-	matcher2 := unmarshaled.GetMatches()[2]
-	assert.Equal(t, "http.status_code", matcher2.GetTarget().GetDatapointAttribute())
-	assert.NotNil(t, matcher2.GetExists())
-	assert.True(t, matcher2.GetNegate())
+	matcher5 := unmarshaled.GetMatches()[5]
+	assert.Equal(t, "http.status_code", matcher5.GetTarget().GetDatapointAttribute().GetPath()[0])
+	assert.NotNil(t, matcher5.GetExists())
+	assert.True(t, matcher5.GetNegate())
 
 	// Check scope field matcher.
-	matcher5 := unmarshaled.GetMatches()[5]
-	assert.Equal(t, policyv1alpha1.ScopeField_SCOPE_FIELD_NAME, matcher5.GetTarget().GetScopeField())
-	assert.Equal(t, "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp", matcher5.GetExact())
+	matcher8 := unmarshaled.GetMatches()[8]
+	assert.Equal(t, policyv1alpha1.ScopeField_SCOPE_FIELD_NAME, matcher8.GetTarget().GetScopeField())
+	assert.Equal(t, "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp", matcher8.GetEquals().GetStringValue())
 
 	// Check descriptor field aggregation temporality matcher.
-	matcher8 := unmarshaled.GetMatches()[8]
-	descFieldTemporality := matcher8.GetTarget().GetDescriptorField()
+	matcher11 := unmarshaled.GetMatches()[11]
+	descFieldTemporality := matcher11.GetTarget().GetDescriptorField()
 	assert.Equal(t, policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_AGGREGATION_TEMPORALITY, descFieldTemporality)
-	assert.Equal(t, "DELTA", matcher8.GetExact())
+	assert.Equal(t, "DELTA", matcher11.GetEquals().GetStringValue())
 
 	// Check descriptor field is monotonic matcher.
-	matcher9 := unmarshaled.GetMatches()[9]
-	descFieldMonotonic := matcher9.GetTarget().GetDescriptorField()
+	matcher12 := unmarshaled.GetMatches()[12]
+	descFieldMonotonic := matcher12.GetTarget().GetDescriptorField()
 	assert.Equal(t, policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_IS_MONOTONIC, descFieldMonotonic)
-	assert.Equal(t, "true", matcher9.GetExact())
+	assert.True(t, matcher12.GetEquals().GetBoolValue())
 }
 
 func TestMetricFilterPolicy_AnyPackaging(t *testing.T) {
@@ -234,11 +335,17 @@ func TestMetricFilterPolicy_JSONSerialization(t *testing.T) {
 			{
 				Target: &policyv1alpha1.MetricFieldSelector{
 					Target: &policyv1alpha1.MetricFieldSelector_DatapointAttribute{
-						DatapointAttribute: "http.status_code",
+						DatapointAttribute: &policyv1alpha1.AttributePath{
+							Path: []string{"http.status_code"},
+						},
 					},
 				},
-				Predicate: &policyv1alpha1.MetricMatcher_Exact{
-					Exact: "200",
+				Predicate: &policyv1alpha1.MetricMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_IntValue{
+							IntValue: 200,
+						},
+					},
 				},
 				Negate: false,
 			},

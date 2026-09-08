@@ -229,8 +229,13 @@ type TraceMatcher struct {
 	// Types that are valid to be assigned to Predicate:
 	//
 	//	*TraceMatcher_Exists
-	//	*TraceMatcher_Exact
+	//	*TraceMatcher_Equals
 	//	*TraceMatcher_Regex
+	//	*TraceMatcher_Gt
+	//	*TraceMatcher_Gte
+	//	*TraceMatcher_Lt
+	//	*TraceMatcher_Lte
+	//	*TraceMatcher_Contains
 	Predicate isTraceMatcher_Predicate `protobuf_oneof:"predicate"`
 	// If true, inverts the result of the predicate (logical NOT).
 	Negate        bool `protobuf:"varint,2,opt,name=negate,proto3" json:"negate,omitempty"`
@@ -291,13 +296,13 @@ func (x *TraceMatcher) GetExists() *emptypb.Empty {
 	return nil
 }
 
-func (x *TraceMatcher) GetExact() string {
+func (x *TraceMatcher) GetEquals() *Value {
 	if x != nil {
-		if x, ok := x.Predicate.(*TraceMatcher_Exact); ok {
-			return x.Exact
+		if x, ok := x.Predicate.(*TraceMatcher_Equals); ok {
+			return x.Equals
 		}
 	}
-	return ""
+	return nil
 }
 
 func (x *TraceMatcher) GetRegex() string {
@@ -307,6 +312,51 @@ func (x *TraceMatcher) GetRegex() string {
 		}
 	}
 	return ""
+}
+
+func (x *TraceMatcher) GetGt() *NumericValue {
+	if x != nil {
+		if x, ok := x.Predicate.(*TraceMatcher_Gt); ok {
+			return x.Gt
+		}
+	}
+	return nil
+}
+
+func (x *TraceMatcher) GetGte() *NumericValue {
+	if x != nil {
+		if x, ok := x.Predicate.(*TraceMatcher_Gte); ok {
+			return x.Gte
+		}
+	}
+	return nil
+}
+
+func (x *TraceMatcher) GetLt() *NumericValue {
+	if x != nil {
+		if x, ok := x.Predicate.(*TraceMatcher_Lt); ok {
+			return x.Lt
+		}
+	}
+	return nil
+}
+
+func (x *TraceMatcher) GetLte() *NumericValue {
+	if x != nil {
+		if x, ok := x.Predicate.(*TraceMatcher_Lte); ok {
+			return x.Lte
+		}
+	}
+	return nil
+}
+
+func (x *TraceMatcher) GetContains() *Value {
+	if x != nil {
+		if x, ok := x.Predicate.(*TraceMatcher_Contains); ok {
+			return x.Contains
+		}
+	}
+	return nil
 }
 
 func (x *TraceMatcher) GetNegate() bool {
@@ -331,24 +381,67 @@ type TraceMatcher_Exists struct {
 	Exists *emptypb.Empty `protobuf:"bytes,10,opt,name=exists,proto3,oneof"`
 }
 
-type TraceMatcher_Exact struct {
-	// Exact string equality match.
-	Exact string `protobuf:"bytes,11,opt,name=exact,proto3,oneof"`
+type TraceMatcher_Equals struct {
+	// Typed scalar equality match (supporting string, int64, bool, double, bytes).
+	Equals *Value `protobuf:"bytes,11,opt,name=equals,proto3,oneof"`
 }
 
 type TraceMatcher_Regex struct {
 	// Regular expression match using RE2 syntax.
 	// Evaluates as an unanchored partial match (like Go regexp.MatchString and
 	// OpenTelemetry OTTL IsMatch). Callers requiring full string equality must
-	// provide explicit anchors ('^' and '$').
+	// provide explicit anchors ('^' and '$'). Applies strictly to string
+	// fields and string attribute values.
 	Regex string `protobuf:"bytes,12,opt,name=regex,proto3,oneof"`
+}
+
+type TraceMatcher_Gt struct {
+	// Matches if the target numeric value is strictly greater than this value.
+	// Applies strictly to int64 and double fields and attribute values.
+	Gt *NumericValue `protobuf:"bytes,13,opt,name=gt,proto3,oneof"`
+}
+
+type TraceMatcher_Gte struct {
+	// Matches if the target numeric value is greater than or equal to this value.
+	// Applies strictly to int64 and double fields and attribute values.
+	Gte *NumericValue `protobuf:"bytes,14,opt,name=gte,proto3,oneof"`
+}
+
+type TraceMatcher_Lt struct {
+	// Matches if the target numeric value is strictly less than this value.
+	// Applies strictly to int64 and double fields and attribute values.
+	Lt *NumericValue `protobuf:"bytes,15,opt,name=lt,proto3,oneof"`
+}
+
+type TraceMatcher_Lte struct {
+	// Matches if the target numeric value is less than or equal to this value.
+	// Applies strictly to int64 and double fields and attribute values.
+	Lte *NumericValue `protobuf:"bytes,16,opt,name=lte,proto3,oneof"`
+}
+
+type TraceMatcher_Contains struct {
+	// Value containment:
+	// - For list (ArrayValue) attributes: matches if any element in the list equals this value.
+	// - For string fields or attribute values: matches if the string contains this value's string_value as a substring.
+	// - For bytes fields or attribute values: matches if the bytes contain this value's bytes_value as a subsequence.
+	Contains *Value `protobuf:"bytes,17,opt,name=contains,proto3,oneof"`
 }
 
 func (*TraceMatcher_Exists) isTraceMatcher_Predicate() {}
 
-func (*TraceMatcher_Exact) isTraceMatcher_Predicate() {}
+func (*TraceMatcher_Equals) isTraceMatcher_Predicate() {}
 
 func (*TraceMatcher_Regex) isTraceMatcher_Predicate() {}
+
+func (*TraceMatcher_Gt) isTraceMatcher_Predicate() {}
+
+func (*TraceMatcher_Gte) isTraceMatcher_Predicate() {}
+
+func (*TraceMatcher_Lt) isTraceMatcher_Predicate() {}
+
+func (*TraceMatcher_Lte) isTraceMatcher_Predicate() {}
+
+func (*TraceMatcher_Contains) isTraceMatcher_Predicate() {}
 
 // TraceFieldSelector designates a first-class OTel span field, attribute, or metadata.
 type TraceFieldSelector struct {
@@ -411,31 +504,31 @@ func (x *TraceFieldSelector) GetRecordField() SpanRecordField {
 	return SpanRecordField_SPAN_RECORD_FIELD_UNSPECIFIED
 }
 
-func (x *TraceFieldSelector) GetSpanAttribute() string {
+func (x *TraceFieldSelector) GetSpanAttribute() *AttributePath {
 	if x != nil {
 		if x, ok := x.Target.(*TraceFieldSelector_SpanAttribute); ok {
 			return x.SpanAttribute
 		}
 	}
-	return ""
+	return nil
 }
 
-func (x *TraceFieldSelector) GetResourceAttribute() string {
+func (x *TraceFieldSelector) GetResourceAttribute() *AttributePath {
 	if x != nil {
 		if x, ok := x.Target.(*TraceFieldSelector_ResourceAttribute); ok {
 			return x.ResourceAttribute
 		}
 	}
-	return ""
+	return nil
 }
 
-func (x *TraceFieldSelector) GetScopeAttribute() string {
+func (x *TraceFieldSelector) GetScopeAttribute() *AttributePath {
 	if x != nil {
 		if x, ok := x.Target.(*TraceFieldSelector_ScopeAttribute); ok {
 			return x.ScopeAttribute
 		}
 	}
-	return ""
+	return nil
 }
 
 func (x *TraceFieldSelector) GetScopeField() ScopeField {
@@ -452,27 +545,27 @@ type isTraceFieldSelector_Target interface {
 }
 
 type TraceFieldSelector_RecordField struct {
-	// Standard first-class OpenTelemetry Span fields (OTLP path: span.*).
+	// Standard first-class OpenTelemetry Span fields (e.g. name, status_code).
 	RecordField SpanRecordField `protobuf:"varint,1,opt,name=record_field,json=recordField,proto3,enum=google.telemetry.policy.v1alpha1.SpanRecordField,oneof"`
 }
 
 type TraceFieldSelector_SpanAttribute struct {
-	// Span attribute by key (OTLP path: span.attributes[*], e.g. "http.route", "db.system", "rpc.method").
-	SpanAttribute string `protobuf:"bytes,2,opt,name=span_attribute,json=spanAttribute,proto3,oneof"`
+	// Span attribute by key or path (e.g. ["http.route"] or ["rpc", "service"]).
+	SpanAttribute *AttributePath `protobuf:"bytes,2,opt,name=span_attribute,json=spanAttribute,proto3,oneof"`
 }
 
 type TraceFieldSelector_ResourceAttribute struct {
-	// Resource attribute by key (OTLP path: resource.attributes[*], e.g. "service.name", "k8s.pod.name").
-	ResourceAttribute string `protobuf:"bytes,3,opt,name=resource_attribute,json=resourceAttribute,proto3,oneof"`
+	// Resource attribute by key or path (e.g. ["service.name"] or ["host", "id"]).
+	ResourceAttribute *AttributePath `protobuf:"bytes,3,opt,name=resource_attribute,json=resourceAttribute,proto3,oneof"`
 }
 
 type TraceFieldSelector_ScopeAttribute struct {
-	// Instrumentation scope attribute by key (OTLP path: scope.attributes[*], e.g. "library.name").
-	ScopeAttribute string `protobuf:"bytes,4,opt,name=scope_attribute,json=scopeAttribute,proto3,oneof"`
+	// Instrumentation scope attribute by key or path (e.g. ["library.name"]).
+	ScopeAttribute *AttributePath `protobuf:"bytes,4,opt,name=scope_attribute,json=scopeAttribute,proto3,oneof"`
 }
 
 type TraceFieldSelector_ScopeField struct {
-	// Standard first-class OpenTelemetry InstrumentationScope fields (OTLP path: scope.*).
+	// Standard first-class OpenTelemetry InstrumentationScope fields (e.g. name, version).
 	ScopeField ScopeField `protobuf:"varint,5,opt,name=scope_field,json=scopeField,proto3,enum=google.telemetry.policy.v1alpha1.ScopeField,oneof"`
 }
 
@@ -495,20 +588,25 @@ const file_policy_v1alpha1_trace_filter_policy_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12E\n" +
 	"\x06action\x18\x02 \x01(\x0e2(.google.telemetry.policy.v1alpha1.ActionH\x00R\x06action\x88\x01\x01\x12H\n" +
 	"\amatches\x18\x03 \x03(\v2..google.telemetry.policy.v1alpha1.TraceMatcherR\amatchesB\t\n" +
-	"\a_action\"\xe3\x01\n" +
+	"\a_action\"\xe1\x04\n" +
 	"\fTraceMatcher\x12L\n" +
 	"\x06target\x18\x01 \x01(\v24.google.telemetry.policy.v1alpha1.TraceFieldSelectorR\x06target\x120\n" +
 	"\x06exists\x18\n" +
-	" \x01(\v2\x16.google.protobuf.EmptyH\x00R\x06exists\x12\x16\n" +
-	"\x05exact\x18\v \x01(\tH\x00R\x05exact\x12\x16\n" +
-	"\x05regex\x18\f \x01(\tH\x00R\x05regex\x12\x16\n" +
+	" \x01(\v2\x16.google.protobuf.EmptyH\x00R\x06exists\x12A\n" +
+	"\x06equals\x18\v \x01(\v2'.google.telemetry.policy.v1alpha1.ValueH\x00R\x06equals\x12\x16\n" +
+	"\x05regex\x18\f \x01(\tH\x00R\x05regex\x12@\n" +
+	"\x02gt\x18\r \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x02gt\x12B\n" +
+	"\x03gte\x18\x0e \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x03gte\x12@\n" +
+	"\x02lt\x18\x0f \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x02lt\x12B\n" +
+	"\x03lte\x18\x10 \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x03lte\x12E\n" +
+	"\bcontains\x18\x11 \x01(\v2'.google.telemetry.policy.v1alpha1.ValueH\x00R\bcontains\x12\x16\n" +
 	"\x06negate\x18\x02 \x01(\bR\x06negateB\v\n" +
-	"\tpredicate\"\xcc\x02\n" +
+	"\tpredicate\"\xdf\x03\n" +
 	"\x12TraceFieldSelector\x12V\n" +
-	"\frecord_field\x18\x01 \x01(\x0e21.google.telemetry.policy.v1alpha1.SpanRecordFieldH\x00R\vrecordField\x12'\n" +
-	"\x0espan_attribute\x18\x02 \x01(\tH\x00R\rspanAttribute\x12/\n" +
-	"\x12resource_attribute\x18\x03 \x01(\tH\x00R\x11resourceAttribute\x12)\n" +
-	"\x0fscope_attribute\x18\x04 \x01(\tH\x00R\x0escopeAttribute\x12O\n" +
+	"\frecord_field\x18\x01 \x01(\x0e21.google.telemetry.policy.v1alpha1.SpanRecordFieldH\x00R\vrecordField\x12X\n" +
+	"\x0espan_attribute\x18\x02 \x01(\v2/.google.telemetry.policy.v1alpha1.AttributePathH\x00R\rspanAttribute\x12`\n" +
+	"\x12resource_attribute\x18\x03 \x01(\v2/.google.telemetry.policy.v1alpha1.AttributePathH\x00R\x11resourceAttribute\x12Z\n" +
+	"\x0fscope_attribute\x18\x04 \x01(\v2/.google.telemetry.policy.v1alpha1.AttributePathH\x00R\x0escopeAttribute\x12O\n" +
 	"\vscope_field\x18\x05 \x01(\x0e2,.google.telemetry.policy.v1alpha1.ScopeFieldH\x00R\n" +
 	"scopeFieldB\b\n" +
 	"\x06target*\x9a\x02\n" +
@@ -544,20 +642,32 @@ var file_policy_v1alpha1_trace_filter_policy_proto_goTypes = []any{
 	(*TraceFieldSelector)(nil), // 3: google.telemetry.policy.v1alpha1.TraceFieldSelector
 	(Action)(0),                // 4: google.telemetry.policy.v1alpha1.Action
 	(*emptypb.Empty)(nil),      // 5: google.protobuf.Empty
-	(ScopeField)(0),            // 6: google.telemetry.policy.v1alpha1.ScopeField
+	(*Value)(nil),              // 6: google.telemetry.policy.v1alpha1.Value
+	(*NumericValue)(nil),       // 7: google.telemetry.policy.v1alpha1.NumericValue
+	(*AttributePath)(nil),      // 8: google.telemetry.policy.v1alpha1.AttributePath
+	(ScopeField)(0),            // 9: google.telemetry.policy.v1alpha1.ScopeField
 }
 var file_policy_v1alpha1_trace_filter_policy_proto_depIdxs = []int32{
-	4, // 0: google.telemetry.policy.v1alpha1.TraceFilterPolicy.action:type_name -> google.telemetry.policy.v1alpha1.Action
-	2, // 1: google.telemetry.policy.v1alpha1.TraceFilterPolicy.matches:type_name -> google.telemetry.policy.v1alpha1.TraceMatcher
-	3, // 2: google.telemetry.policy.v1alpha1.TraceMatcher.target:type_name -> google.telemetry.policy.v1alpha1.TraceFieldSelector
-	5, // 3: google.telemetry.policy.v1alpha1.TraceMatcher.exists:type_name -> google.protobuf.Empty
-	0, // 4: google.telemetry.policy.v1alpha1.TraceFieldSelector.record_field:type_name -> google.telemetry.policy.v1alpha1.SpanRecordField
-	6, // 5: google.telemetry.policy.v1alpha1.TraceFieldSelector.scope_field:type_name -> google.telemetry.policy.v1alpha1.ScopeField
-	6, // [6:6] is the sub-list for method output_type
-	6, // [6:6] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	4,  // 0: google.telemetry.policy.v1alpha1.TraceFilterPolicy.action:type_name -> google.telemetry.policy.v1alpha1.Action
+	2,  // 1: google.telemetry.policy.v1alpha1.TraceFilterPolicy.matches:type_name -> google.telemetry.policy.v1alpha1.TraceMatcher
+	3,  // 2: google.telemetry.policy.v1alpha1.TraceMatcher.target:type_name -> google.telemetry.policy.v1alpha1.TraceFieldSelector
+	5,  // 3: google.telemetry.policy.v1alpha1.TraceMatcher.exists:type_name -> google.protobuf.Empty
+	6,  // 4: google.telemetry.policy.v1alpha1.TraceMatcher.equals:type_name -> google.telemetry.policy.v1alpha1.Value
+	7,  // 5: google.telemetry.policy.v1alpha1.TraceMatcher.gt:type_name -> google.telemetry.policy.v1alpha1.NumericValue
+	7,  // 6: google.telemetry.policy.v1alpha1.TraceMatcher.gte:type_name -> google.telemetry.policy.v1alpha1.NumericValue
+	7,  // 7: google.telemetry.policy.v1alpha1.TraceMatcher.lt:type_name -> google.telemetry.policy.v1alpha1.NumericValue
+	7,  // 8: google.telemetry.policy.v1alpha1.TraceMatcher.lte:type_name -> google.telemetry.policy.v1alpha1.NumericValue
+	6,  // 9: google.telemetry.policy.v1alpha1.TraceMatcher.contains:type_name -> google.telemetry.policy.v1alpha1.Value
+	0,  // 10: google.telemetry.policy.v1alpha1.TraceFieldSelector.record_field:type_name -> google.telemetry.policy.v1alpha1.SpanRecordField
+	8,  // 11: google.telemetry.policy.v1alpha1.TraceFieldSelector.span_attribute:type_name -> google.telemetry.policy.v1alpha1.AttributePath
+	8,  // 12: google.telemetry.policy.v1alpha1.TraceFieldSelector.resource_attribute:type_name -> google.telemetry.policy.v1alpha1.AttributePath
+	8,  // 13: google.telemetry.policy.v1alpha1.TraceFieldSelector.scope_attribute:type_name -> google.telemetry.policy.v1alpha1.AttributePath
+	9,  // 14: google.telemetry.policy.v1alpha1.TraceFieldSelector.scope_field:type_name -> google.telemetry.policy.v1alpha1.ScopeField
+	15, // [15:15] is the sub-list for method output_type
+	15, // [15:15] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_policy_v1alpha1_trace_filter_policy_proto_init() }
@@ -569,8 +679,13 @@ func file_policy_v1alpha1_trace_filter_policy_proto_init() {
 	file_policy_v1alpha1_trace_filter_policy_proto_msgTypes[0].OneofWrappers = []any{}
 	file_policy_v1alpha1_trace_filter_policy_proto_msgTypes[1].OneofWrappers = []any{
 		(*TraceMatcher_Exists)(nil),
-		(*TraceMatcher_Exact)(nil),
+		(*TraceMatcher_Equals)(nil),
 		(*TraceMatcher_Regex)(nil),
+		(*TraceMatcher_Gt)(nil),
+		(*TraceMatcher_Gte)(nil),
+		(*TraceMatcher_Lt)(nil),
+		(*TraceMatcher_Lte)(nil),
+		(*TraceMatcher_Contains)(nil),
 	}
 	file_policy_v1alpha1_trace_filter_policy_proto_msgTypes[2].OneofWrappers = []any{
 		(*TraceFieldSelector_RecordField)(nil),

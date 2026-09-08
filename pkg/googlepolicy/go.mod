@@ -1,6 +1,6 @@
 module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy
 
-go 1.26.0
+go 1.26.6
 
 require (
 	github.com/stretchr/testify v1.12.1

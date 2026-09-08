@@ -158,7 +158,6 @@ func (s *mockADSServer) StreamAggregatedResources(stream discoveryv3.AggregatedD
 		return err
 	}
 }
-
 type mockDestinationPolicy struct {
 	name string
 }

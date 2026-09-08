@@ -196,6 +196,7 @@ func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrie
 		}
 		destPolicy = dp
 	}
+
 	destConf, err := destPolicy.Evaluate(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to evaluate destination policy %q: %w", destPolicy.PolicyName(), err)

@@ -47,17 +47,135 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 			{
 				Target: &policyv1alpha1.LogFieldSelector{
 					Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
-						LogAttribute: "http.route",
+						LogAttribute: &policyv1alpha1.AttributePath{
+							Path: []string{"http.route"},
+						},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Exact{
-					Exact: "/healthz",
+				Predicate: &policyv1alpha1.LogMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_StringValue{
+							StringValue: "/healthz",
+						},
+					},
+				},
+			},
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
+						LogAttribute: &policyv1alpha1.AttributePath{
+							Path: []string{"http.status_code"},
+						},
+					},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_IntValue{
+							IntValue: 200,
+						},
+					},
+				},
+			},
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
+						LogAttribute: &policyv1alpha1.AttributePath{
+							Path: []string{"feature_flag.enabled"},
+						},
+					},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_BoolValue{
+							BoolValue: true,
+						},
+					},
+				},
+			},
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
+						LogAttribute: &policyv1alpha1.AttributePath{
+							Path: []string{"sampling.threshold"},
+						},
+					},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_DoubleValue{
+							DoubleValue: 0.05,
+						},
+					},
+				},
+			},
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
+						LogAttribute: &policyv1alpha1.AttributePath{
+							Path: []string{"binary.signature"},
+						},
+					},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_BytesValue{
+							BytesValue: []byte{0xde, 0xad, 0xbe, 0xef},
+						},
+					},
+				},
+			},
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
+						LogAttribute: &policyv1alpha1.AttributePath{
+							Path: []string{"user", "roles"},
+						},
+					},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Contains{
+					Contains: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_StringValue{
+							StringValue: "admin",
+						},
+					},
+				},
+			},
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_RecordField{
+						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER,
+					},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Gte{
+					Gte: &policyv1alpha1.NumericValue{
+						Value: &policyv1alpha1.NumericValue_IntValue{
+							IntValue: 17, // ERROR
+						},
+					},
+				},
+			},
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
+						LogAttribute: &policyv1alpha1.AttributePath{
+							Path: []string{"latency_seconds"},
+						},
+					},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Gt{
+					Gt: &policyv1alpha1.NumericValue{
+						Value: &policyv1alpha1.NumericValue_DoubleValue{
+							DoubleValue: 2.5,
+						},
+					},
 				},
 			},
 			{
 				Target: &policyv1alpha1.LogFieldSelector{
 					Target: &policyv1alpha1.LogFieldSelector_ResourceAttribute{
-						ResourceAttribute: "service.name",
+						ResourceAttribute: &policyv1alpha1.AttributePath{
+							Path: []string{"service.name"},
+						},
 					},
 				},
 				Predicate: &policyv1alpha1.LogMatcher_Exists{
@@ -68,11 +186,17 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 			{
 				Target: &policyv1alpha1.LogFieldSelector{
 					Target: &policyv1alpha1.LogFieldSelector_ScopeAttribute{
-						ScopeAttribute: "library.name",
+						ScopeAttribute: &policyv1alpha1.AttributePath{
+							Path: []string{"library.name"},
+						},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Exact{
-					Exact: "my-library",
+				Predicate: &policyv1alpha1.LogMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_StringValue{
+							StringValue: "my-library",
+						},
+					},
 				},
 			},
 			{
@@ -81,8 +205,12 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 						ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_NAME,
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Exact{
-					Exact: "my-scope",
+				Predicate: &policyv1alpha1.LogMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_StringValue{
+							StringValue: "my-scope",
+						},
+					},
 				},
 			},
 			{
@@ -91,8 +219,12 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 						ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_VERSION,
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Exact{
-					Exact: "v1.2.3",
+				Predicate: &policyv1alpha1.LogMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_StringValue{
+							StringValue: "v1.2.3",
+						},
+					},
 				},
 			},
 			{
@@ -101,8 +233,12 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 						ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_SCHEMA_URL,
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Exact{
-					Exact: "https://opentelemetry.io/schemas/1.24.0",
+				Predicate: &policyv1alpha1.LogMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_StringValue{
+							StringValue: "https://opentelemetry.io/schemas/1.24.0",
+						},
+					},
 				},
 			},
 		},
@@ -124,7 +260,7 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 	assert.Equal(t, "drop-noisy-healthchecks", unmarshaled.GetId())
 	assert.NotNil(t, unmarshaled.Action)
 	assert.Equal(t, policyv1alpha1.Action_ACTION_DROP, unmarshaled.GetAction())
-	require.Len(t, unmarshaled.GetMatches(), 7)
+	require.Len(t, unmarshaled.GetMatches(), 14)
 }
 
 func TestLogFilterPolicy_JSONSerialization(t *testing.T) {
@@ -135,13 +271,35 @@ func TestLogFilterPolicy_JSONSerialization(t *testing.T) {
 			{
 				Target: &policyv1alpha1.LogFieldSelector{
 					Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
-						LogAttribute: "http.route",
+						LogAttribute: &policyv1alpha1.AttributePath{
+							Path: []string{"http.route"},
+						},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Exact{
-					Exact: "/healthz",
+				Predicate: &policyv1alpha1.LogMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_StringValue{
+							StringValue: "/healthz",
+						},
+					},
 				},
 				Negate: false,
+			},
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
+						LogAttribute: &policyv1alpha1.AttributePath{
+							Path: []string{"http.status_code"},
+						},
+					},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Gte{
+					Gte: &policyv1alpha1.NumericValue{
+						Value: &policyv1alpha1.NumericValue_IntValue{
+							IntValue: 400,
+						},
+					},
+				},
 			},
 			{
 				Target: &policyv1alpha1.LogFieldSelector{
@@ -156,6 +314,7 @@ func TestLogFilterPolicy_JSONSerialization(t *testing.T) {
 			},
 		},
 	}
+
 
 
 	// ProtoJSON marshal and unmarshal round-trip.

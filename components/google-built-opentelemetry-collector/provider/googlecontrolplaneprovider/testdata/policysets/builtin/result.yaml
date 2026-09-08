@@ -1,0 +1,116 @@
+exporters:
+    otlp_grpc/default_gcp_destination:
+        auth:
+            authenticator: googleclientauth/default_gcp_destination
+        balancer_name: ""
+        endpoint: telemetry.googleapis.com:443
+        retry_on_failure:
+            enabled: false
+            initial_interval: 0s
+            max_elapsed_time: 0s
+            max_interval: 0s
+            multiplier: 0
+            randomization_factor: 0
+        timeout: 0s
+extensions:
+    googleclientauth/default_gcp_destination:
+        project: ""
+        quota_project: ""
+        scopes:
+            - https://www.googleapis.com/auth/cloud-platform
+            - https://www.googleapis.com/auth/logging.write
+            - https://www.googleapis.com/auth/monitoring.write
+            - https://www.googleapis.com/auth/trace.append
+        token_header: authorization
+        token_type: access_token
+processors:
+    queue_batch/default_gcp_destination_batch_logs:
+        batch:
+            flush_timeout: 200ms
+            max_size: 8192
+            min_size: 8192
+            partition: {}
+            sizer: {}
+        block_on_overflow: true
+        num_consumers: 1
+        queue_size: 10
+        sizer: {}
+        wait_for_result: false
+    queue_batch/default_gcp_destination_batch_metrics:
+        batch:
+            flush_timeout: 200ms
+            max_size: 200
+            min_size: 200
+            partition: {}
+            sizer: {}
+        block_on_overflow: true
+        num_consumers: 1
+        queue_size: 10
+        sizer: {}
+        wait_for_result: false
+    queue_batch/default_gcp_destination_batch_traces:
+        batch:
+            flush_timeout: 200ms
+            max_size: 25000
+            min_size: 25000
+            partition: {}
+            sizer: {}
+        block_on_overflow: true
+        num_consumers: 1
+        queue_size: 10
+        sizer: {}
+        wait_for_result: false
+receivers:
+    otlp/default_self_metrics:
+        protocols:
+            grpc:
+                endpoint: localhost:0
+                keepalive:
+                    enforcement_policy: {}
+                    server_parameters: {}
+                read_buffer_size: 524288
+                transport: tcp
+service:
+    pipelines:
+        logs/default_self_metrics:
+            exporters:
+                - otlp_grpc/default_gcp_destination
+            processors:
+                - queue_batch/default_gcp_destination_batch_logs
+            receivers:
+                - otlp/default_self_metrics
+        metrics/default_self_metrics:
+            exporters:
+                - otlp_grpc/default_gcp_destination
+            processors:
+                - queue_batch/default_gcp_destination_batch_metrics
+            receivers:
+                - otlp/default_self_metrics
+    telemetry:
+        logs:
+            encoding: ""
+            level: info
+            processors:
+                - batch:
+                    exporter:
+                        otlp:
+                            endpoint: http://localhost:0
+                            insecure: true
+                            protocol: grpc
+        metrics:
+            level: Normal
+            readers:
+                - periodic:
+                    exporter:
+                        otlp:
+                            endpoint: http://localhost:0
+                            insecure: true
+                            protocol: grpc
+                    interval: 5000
+                    timeout: 30000
+        resource:
+            attributes:
+                - name: service.instance.id
+                  value: 76728b45-8fcf-4cc8-a09e-c67283bfa79c
+                - name: gcp.fleet_id
+                  value: "1234"

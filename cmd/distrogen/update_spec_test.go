@@ -20,7 +20,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v4"
 	"gotest.tools/v3/assert"
 )
 

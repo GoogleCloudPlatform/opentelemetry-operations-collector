@@ -14,6 +14,7 @@
 
 - included_paths:
     - "proto/policy/**"
+    - "policy/**"
   disabled_rules:
     - core::0191::proto-package
     - core::0191::java-package

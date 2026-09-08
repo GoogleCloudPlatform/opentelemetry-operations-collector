@@ -23,6 +23,7 @@ package policyv1alpha1
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	emptypb "google.golang.org/protobuf/types/known/emptypb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -35,15 +36,106 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// LogFilterPolicy defines an intent-based rule for filtering log records.
+// LogRecordField identifies standard first-class fields of an OpenTelemetry LogRecord.
+// When evaluated with `exists`, first-class fields evaluate to true when set
+// to a non-default (non-empty / non-zero) value.
+type LogRecordField int32
+
+const (
+	// Default unspecified log record field.
+	LogRecordField_LOG_RECORD_FIELD_UNSPECIFIED LogRecordField = 0
+	// The primary message body of the log record.
+	LogRecordField_LOG_RECORD_FIELD_BODY LogRecordField = 1
+	// The string severity of the log (e.g. "INFO", "ERROR", "DEBUG").
+	LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT LogRecordField = 2
+	// The numerical severity of the log (1-24 per OpenTelemetry specification).
+	// Evaluates against typed `equals` (`int_value`), numeric range comparisons
+	// (`gt`, `gte`, `lt`, `lte`), or canonical base-10 string representations for `regex`.
+	LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER LogRecordField = 3
+	// The 16-byte trace identifier associated with the log record.
+	// When evaluated against string predicates (`exact`, `regex`), this matches
+	// against the 32-character lowercase hexadecimal string representation
+	// per the OpenTelemetry / W3C Trace Context specification.
+	LogRecordField_LOG_RECORD_FIELD_TRACE_ID LogRecordField = 4
+	// The 8-byte span identifier associated with the log record.
+	// When evaluated against string predicates (`exact`, `regex`), this matches
+	// against the 16-character lowercase hexadecimal string representation
+	// per the OpenTelemetry / W3C Trace Context specification.
+	LogRecordField_LOG_RECORD_FIELD_SPAN_ID LogRecordField = 5
+)
+
+// Enum value maps for LogRecordField.
+var (
+	LogRecordField_name = map[int32]string{
+		0: "LOG_RECORD_FIELD_UNSPECIFIED",
+		1: "LOG_RECORD_FIELD_BODY",
+		2: "LOG_RECORD_FIELD_SEVERITY_TEXT",
+		3: "LOG_RECORD_FIELD_SEVERITY_NUMBER",
+		4: "LOG_RECORD_FIELD_TRACE_ID",
+		5: "LOG_RECORD_FIELD_SPAN_ID",
+	}
+	LogRecordField_value = map[string]int32{
+		"LOG_RECORD_FIELD_UNSPECIFIED":     0,
+		"LOG_RECORD_FIELD_BODY":            1,
+		"LOG_RECORD_FIELD_SEVERITY_TEXT":   2,
+		"LOG_RECORD_FIELD_SEVERITY_NUMBER": 3,
+		"LOG_RECORD_FIELD_TRACE_ID":        4,
+		"LOG_RECORD_FIELD_SPAN_ID":         5,
+	}
+)
+
+func (x LogRecordField) Enum() *LogRecordField {
+	p := new(LogRecordField)
+	*p = x
+	return p
+}
+
+func (x LogRecordField) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (LogRecordField) Descriptor() protoreflect.EnumDescriptor {
+	return file_policy_v1alpha1_log_filter_policy_proto_enumTypes[0].Descriptor()
+}
+
+func (LogRecordField) Type() protoreflect.EnumType {
+	return &file_policy_v1alpha1_log_filter_policy_proto_enumTypes[0]
+}
+
+func (x LogRecordField) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use LogRecordField.Descriptor instead.
+func (LogRecordField) EnumDescriptor() ([]byte, []int) {
+	return file_policy_v1alpha1_log_filter_policy_proto_rawDescGZIP(), []int{0}
+}
+
+// LogFilterPolicy defines an intent-based rule for retaining or dropping
+// log records based on structured field and attribute matches.
 //
-// Policies are declarative and transport-agnostic.
+// Policies are declarative, atomic, and transport-agnostic.
 //
-// Note: Detailed filter conditions, matchers, and action semantics are deferred
-// to a subsequent design. This message is currently stubbed to establish the
-// package hierarchy, repository organization, and xDS transport plumbing.
+// Evaluation Granularity & Action Precedence:
+//   - Record-Level Granularity: Log records are evaluated individually.
+//   - Action Precedence & Exemptions: Telemetry passes through by default (default
+//     allow). When multiple policies match a log record, ACTION_KEEP always
+//     overrides ACTION_DROP (keep always overrides drop). ACTION_KEEP acts as an
+//     explicit exemption retaining matching log records; it does not prune
+//     non-matching log records. To implement an allowlist that prunes non-matching
+//     log records, authors specify ACTION_DROP with negate: true on the matchers.
 type LogFilterPolicy struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Unique identifier for the policy within its configuration scope
+	// (e.g. a UUID or namespaced URI like "io.opentelemetry.operator/{namespace}/policies/retain-error-logs").
+	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	// The filtering action to take when all `matches` conditions evaluate to true.
+	Action *Action `protobuf:"varint,2,opt,name=action,proto3,enum=google.telemetry.policy.v1alpha1.Action,oneof" json:"action,omitempty"`
+	// Conditions evaluated against incoming log records.
+	// All matchers in this list are ANDed together: all conditions must evaluate
+	// to true for the policy action to take effect.
+	// At least one matcher is required; a policy with no matchers is invalid.
+	Matches       []*LogMatcher `protobuf:"bytes,3,rep,name=matches,proto3" json:"matches,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -78,12 +170,427 @@ func (*LogFilterPolicy) Descriptor() ([]byte, []int) {
 	return file_policy_v1alpha1_log_filter_policy_proto_rawDescGZIP(), []int{0}
 }
 
+func (x *LogFilterPolicy) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *LogFilterPolicy) GetAction() Action {
+	if x != nil && x.Action != nil {
+		return *x.Action
+	}
+	return Action_ACTION_UNSPECIFIED
+}
+
+func (x *LogFilterPolicy) GetMatches() []*LogMatcher {
+	if x != nil {
+		return x.Matches
+	}
+	return nil
+}
+
+// LogMatcher defines a single predicate evaluated against a specific log field
+// or attribute.
+type LogMatcher struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The field, attribute, or metadata to inspect. Exactly one must be set.
+	Target *LogFieldSelector `protobuf:"bytes,1,opt,name=target,proto3" json:"target,omitempty"`
+	// The comparison predicate to evaluate against the target value.
+	// Exactly one predicate must be set.
+	//
+	// Types that are valid to be assigned to Predicate:
+	//
+	//	*LogMatcher_Exists
+	//	*LogMatcher_Equals
+	//	*LogMatcher_Regex
+	//	*LogMatcher_Gt
+	//	*LogMatcher_Gte
+	//	*LogMatcher_Lt
+	//	*LogMatcher_Lte
+	//	*LogMatcher_Contains
+	Predicate isLogMatcher_Predicate `protobuf_oneof:"predicate"`
+	// If true, inverts the result of the predicate (logical NOT).
+	Negate        bool `protobuf:"varint,2,opt,name=negate,proto3" json:"negate,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LogMatcher) Reset() {
+	*x = LogMatcher{}
+	mi := &file_policy_v1alpha1_log_filter_policy_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogMatcher) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogMatcher) ProtoMessage() {}
+
+func (x *LogMatcher) ProtoReflect() protoreflect.Message {
+	mi := &file_policy_v1alpha1_log_filter_policy_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogMatcher.ProtoReflect.Descriptor instead.
+func (*LogMatcher) Descriptor() ([]byte, []int) {
+	return file_policy_v1alpha1_log_filter_policy_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *LogMatcher) GetTarget() *LogFieldSelector {
+	if x != nil {
+		return x.Target
+	}
+	return nil
+}
+
+func (x *LogMatcher) GetPredicate() isLogMatcher_Predicate {
+	if x != nil {
+		return x.Predicate
+	}
+	return nil
+}
+
+func (x *LogMatcher) GetExists() *emptypb.Empty {
+	if x != nil {
+		if x, ok := x.Predicate.(*LogMatcher_Exists); ok {
+			return x.Exists
+		}
+	}
+	return nil
+}
+
+func (x *LogMatcher) GetEquals() *Value {
+	if x != nil {
+		if x, ok := x.Predicate.(*LogMatcher_Equals); ok {
+			return x.Equals
+		}
+	}
+	return nil
+}
+
+func (x *LogMatcher) GetRegex() string {
+	if x != nil {
+		if x, ok := x.Predicate.(*LogMatcher_Regex); ok {
+			return x.Regex
+		}
+	}
+	return ""
+}
+
+func (x *LogMatcher) GetGt() *NumericValue {
+	if x != nil {
+		if x, ok := x.Predicate.(*LogMatcher_Gt); ok {
+			return x.Gt
+		}
+	}
+	return nil
+}
+
+func (x *LogMatcher) GetGte() *NumericValue {
+	if x != nil {
+		if x, ok := x.Predicate.(*LogMatcher_Gte); ok {
+			return x.Gte
+		}
+	}
+	return nil
+}
+
+func (x *LogMatcher) GetLt() *NumericValue {
+	if x != nil {
+		if x, ok := x.Predicate.(*LogMatcher_Lt); ok {
+			return x.Lt
+		}
+	}
+	return nil
+}
+
+func (x *LogMatcher) GetLte() *NumericValue {
+	if x != nil {
+		if x, ok := x.Predicate.(*LogMatcher_Lte); ok {
+			return x.Lte
+		}
+	}
+	return nil
+}
+
+func (x *LogMatcher) GetContains() *Value {
+	if x != nil {
+		if x, ok := x.Predicate.(*LogMatcher_Contains); ok {
+			return x.Contains
+		}
+	}
+	return nil
+}
+
+func (x *LogMatcher) GetNegate() bool {
+	if x != nil {
+		return x.Negate
+	}
+	return false
+}
+
+type isLogMatcher_Predicate interface {
+	isLogMatcher_Predicate()
+}
+
+type LogMatcher_Exists struct {
+	// Matches if the selected field or attribute exists.
+	// For attributes, this evaluates to true if the attribute key exists.
+	// For first-class fields (record_field, scope_field) that lack explicit
+	// presence tracking in the OpenTelemetry data model, this evaluates to true
+	// when the field is set to a non-default (non-zero/non-empty) value, and
+	// false when absent or default (e.g. empty string or 0).
+	Exists *emptypb.Empty `protobuf:"bytes,10,opt,name=exists,proto3,oneof"`
+}
+
+type LogMatcher_Equals struct {
+	// Typed scalar equality match (supporting string, int64, bool, double, bytes).
+	Equals *Value `protobuf:"bytes,11,opt,name=equals,proto3,oneof"`
+}
+
+type LogMatcher_Regex struct {
+	// Regular expression match using RE2 syntax.
+	// Evaluates as an unanchored partial match (like Go regexp.MatchString and
+	// OpenTelemetry OTTL IsMatch). Callers requiring full string equality must
+	// provide explicit anchors ('^' and '$'). Applies strictly to string
+	// fields and string attribute values.
+	Regex string `protobuf:"bytes,12,opt,name=regex,proto3,oneof"`
+}
+
+type LogMatcher_Gt struct {
+	// Matches if the target numeric value is strictly greater than this value.
+	// Applies strictly to int64 and double fields and attribute values.
+	Gt *NumericValue `protobuf:"bytes,13,opt,name=gt,proto3,oneof"`
+}
+
+type LogMatcher_Gte struct {
+	// Matches if the target numeric value is greater than or equal to this value.
+	// Applies strictly to int64 and double fields and attribute values.
+	Gte *NumericValue `protobuf:"bytes,14,opt,name=gte,proto3,oneof"`
+}
+
+type LogMatcher_Lt struct {
+	// Matches if the target numeric value is strictly less than this value.
+	// Applies strictly to int64 and double fields and attribute values.
+	Lt *NumericValue `protobuf:"bytes,15,opt,name=lt,proto3,oneof"`
+}
+
+type LogMatcher_Lte struct {
+	// Matches if the target numeric value is less than or equal to this value.
+	// Applies strictly to int64 and double fields and attribute values.
+	Lte *NumericValue `protobuf:"bytes,16,opt,name=lte,proto3,oneof"`
+}
+
+type LogMatcher_Contains struct {
+	// Value containment:
+	// - For list (ArrayValue) attributes: matches if any element in the list equals this value.
+	// - For string fields or attribute values: matches if the string contains this value's string_value as a substring.
+	// - For bytes fields or attribute values: matches if the bytes contain this value's bytes_value as a subsequence.
+	Contains *Value `protobuf:"bytes,17,opt,name=contains,proto3,oneof"`
+}
+
+func (*LogMatcher_Exists) isLogMatcher_Predicate() {}
+
+func (*LogMatcher_Equals) isLogMatcher_Predicate() {}
+
+func (*LogMatcher_Regex) isLogMatcher_Predicate() {}
+
+func (*LogMatcher_Gt) isLogMatcher_Predicate() {}
+
+func (*LogMatcher_Gte) isLogMatcher_Predicate() {}
+
+func (*LogMatcher_Lt) isLogMatcher_Predicate() {}
+
+func (*LogMatcher_Lte) isLogMatcher_Predicate() {}
+
+func (*LogMatcher_Contains) isLogMatcher_Predicate() {}
+
+// LogFieldSelector designates a first-class OTel log field, attribute, or metadata.
+type LogFieldSelector struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Target:
+	//
+	//	*LogFieldSelector_RecordField
+	//	*LogFieldSelector_LogAttribute
+	//	*LogFieldSelector_ResourceAttribute
+	//	*LogFieldSelector_ScopeAttribute
+	//	*LogFieldSelector_ScopeField
+	Target        isLogFieldSelector_Target `protobuf_oneof:"target"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LogFieldSelector) Reset() {
+	*x = LogFieldSelector{}
+	mi := &file_policy_v1alpha1_log_filter_policy_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogFieldSelector) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogFieldSelector) ProtoMessage() {}
+
+func (x *LogFieldSelector) ProtoReflect() protoreflect.Message {
+	mi := &file_policy_v1alpha1_log_filter_policy_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogFieldSelector.ProtoReflect.Descriptor instead.
+func (*LogFieldSelector) Descriptor() ([]byte, []int) {
+	return file_policy_v1alpha1_log_filter_policy_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *LogFieldSelector) GetTarget() isLogFieldSelector_Target {
+	if x != nil {
+		return x.Target
+	}
+	return nil
+}
+
+func (x *LogFieldSelector) GetRecordField() LogRecordField {
+	if x != nil {
+		if x, ok := x.Target.(*LogFieldSelector_RecordField); ok {
+			return x.RecordField
+		}
+	}
+	return LogRecordField_LOG_RECORD_FIELD_UNSPECIFIED
+}
+
+func (x *LogFieldSelector) GetLogAttribute() *AttributePath {
+	if x != nil {
+		if x, ok := x.Target.(*LogFieldSelector_LogAttribute); ok {
+			return x.LogAttribute
+		}
+	}
+	return nil
+}
+
+func (x *LogFieldSelector) GetResourceAttribute() *AttributePath {
+	if x != nil {
+		if x, ok := x.Target.(*LogFieldSelector_ResourceAttribute); ok {
+			return x.ResourceAttribute
+		}
+	}
+	return nil
+}
+
+func (x *LogFieldSelector) GetScopeAttribute() *AttributePath {
+	if x != nil {
+		if x, ok := x.Target.(*LogFieldSelector_ScopeAttribute); ok {
+			return x.ScopeAttribute
+		}
+	}
+	return nil
+}
+
+func (x *LogFieldSelector) GetScopeField() ScopeField {
+	if x != nil {
+		if x, ok := x.Target.(*LogFieldSelector_ScopeField); ok {
+			return x.ScopeField
+		}
+	}
+	return ScopeField_SCOPE_FIELD_UNSPECIFIED
+}
+
+type isLogFieldSelector_Target interface {
+	isLogFieldSelector_Target()
+}
+
+type LogFieldSelector_RecordField struct {
+	// Standard first-class OpenTelemetry LogRecord fields (e.g. severity_number, body).
+	RecordField LogRecordField `protobuf:"varint,1,opt,name=record_field,json=recordField,proto3,enum=google.telemetry.policy.v1alpha1.LogRecordField,oneof"`
+}
+
+type LogFieldSelector_LogAttribute struct {
+	// Log record attribute by key or path (e.g. ["http.route"] or ["http", "method"]).
+	LogAttribute *AttributePath `protobuf:"bytes,2,opt,name=log_attribute,json=logAttribute,proto3,oneof"`
+}
+
+type LogFieldSelector_ResourceAttribute struct {
+	// Resource attribute by key or path (e.g. ["service.name"] or ["host", "id"]).
+	ResourceAttribute *AttributePath `protobuf:"bytes,3,opt,name=resource_attribute,json=resourceAttribute,proto3,oneof"`
+}
+
+type LogFieldSelector_ScopeAttribute struct {
+	// Instrumentation scope attribute by key or path (e.g. ["library.name"]).
+	ScopeAttribute *AttributePath `protobuf:"bytes,4,opt,name=scope_attribute,json=scopeAttribute,proto3,oneof"`
+}
+
+type LogFieldSelector_ScopeField struct {
+	// Standard first-class OpenTelemetry InstrumentationScope fields (e.g. name, version).
+	ScopeField ScopeField `protobuf:"varint,5,opt,name=scope_field,json=scopeField,proto3,enum=google.telemetry.policy.v1alpha1.ScopeField,oneof"`
+}
+
+func (*LogFieldSelector_RecordField) isLogFieldSelector_Target() {}
+
+func (*LogFieldSelector_LogAttribute) isLogFieldSelector_Target() {}
+
+func (*LogFieldSelector_ResourceAttribute) isLogFieldSelector_Target() {}
+
+func (*LogFieldSelector_ScopeAttribute) isLogFieldSelector_Target() {}
+
+func (*LogFieldSelector_ScopeField) isLogFieldSelector_Target() {}
+
 var File_policy_v1alpha1_log_filter_policy_proto protoreflect.FileDescriptor
 
 const file_policy_v1alpha1_log_filter_policy_proto_rawDesc = "" +
 	"\n" +
-	"'policy/v1alpha1/log_filter_policy.proto\x12 google.telemetry.policy.v1alpha1\"\x11\n" +
-	"\x0fLogFilterPolicyB\xc8\x02\n" +
+	"'policy/v1alpha1/log_filter_policy.proto\x12 google.telemetry.policy.v1alpha1\x1a\x1bgoogle/protobuf/empty.proto\x1a)policy/v1alpha1/common_policy_types.proto\"\xbb\x01\n" +
+	"\x0fLogFilterPolicy\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12E\n" +
+	"\x06action\x18\x02 \x01(\x0e2(.google.telemetry.policy.v1alpha1.ActionH\x00R\x06action\x88\x01\x01\x12F\n" +
+	"\amatches\x18\x03 \x03(\v2,.google.telemetry.policy.v1alpha1.LogMatcherR\amatchesB\t\n" +
+	"\a_action\"\xdd\x04\n" +
+	"\n" +
+	"LogMatcher\x12J\n" +
+	"\x06target\x18\x01 \x01(\v22.google.telemetry.policy.v1alpha1.LogFieldSelectorR\x06target\x120\n" +
+	"\x06exists\x18\n" +
+	" \x01(\v2\x16.google.protobuf.EmptyH\x00R\x06exists\x12A\n" +
+	"\x06equals\x18\v \x01(\v2'.google.telemetry.policy.v1alpha1.ValueH\x00R\x06equals\x12\x16\n" +
+	"\x05regex\x18\f \x01(\tH\x00R\x05regex\x12@\n" +
+	"\x02gt\x18\r \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x02gt\x12B\n" +
+	"\x03gte\x18\x0e \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x03gte\x12@\n" +
+	"\x02lt\x18\x0f \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x02lt\x12B\n" +
+	"\x03lte\x18\x10 \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x03lte\x12E\n" +
+	"\bcontains\x18\x11 \x01(\v2'.google.telemetry.policy.v1alpha1.ValueH\x00R\bcontains\x12\x16\n" +
+	"\x06negate\x18\x02 \x01(\bR\x06negateB\v\n" +
+	"\tpredicate\"\xda\x03\n" +
+	"\x10LogFieldSelector\x12U\n" +
+	"\frecord_field\x18\x01 \x01(\x0e20.google.telemetry.policy.v1alpha1.LogRecordFieldH\x00R\vrecordField\x12V\n" +
+	"\rlog_attribute\x18\x02 \x01(\v2/.google.telemetry.policy.v1alpha1.AttributePathH\x00R\flogAttribute\x12`\n" +
+	"\x12resource_attribute\x18\x03 \x01(\v2/.google.telemetry.policy.v1alpha1.AttributePathH\x00R\x11resourceAttribute\x12Z\n" +
+	"\x0fscope_attribute\x18\x04 \x01(\v2/.google.telemetry.policy.v1alpha1.AttributePathH\x00R\x0escopeAttribute\x12O\n" +
+	"\vscope_field\x18\x05 \x01(\x0e2,.google.telemetry.policy.v1alpha1.ScopeFieldH\x00R\n" +
+	"scopeFieldB\b\n" +
+	"\x06target*\xd4\x01\n" +
+	"\x0eLogRecordField\x12 \n" +
+	"\x1cLOG_RECORD_FIELD_UNSPECIFIED\x10\x00\x12\x19\n" +
+	"\x15LOG_RECORD_FIELD_BODY\x10\x01\x12\"\n" +
+	"\x1eLOG_RECORD_FIELD_SEVERITY_TEXT\x10\x02\x12$\n" +
+	" LOG_RECORD_FIELD_SEVERITY_NUMBER\x10\x03\x12\x1d\n" +
+	"\x19LOG_RECORD_FIELD_TRACE_ID\x10\x04\x12\x1c\n" +
+	"\x18LOG_RECORD_FIELD_SPAN_ID\x10\x05B\xc8\x02\n" +
 	"$com.google.telemetry.policy.v1alpha1B\x14LogFilterPolicyProtoP\x01Zggithub.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1;policyv1alpha1\xa2\x02\x03GTP\xaa\x02 Google.Telemetry.Policy.V1alpha1\xca\x02 Google\\Telemetry\\Policy\\V1alpha1\xe2\x02,Google\\Telemetry\\Policy\\V1alpha1\\GPBMetadata\xea\x02#Google::Telemetry::Policy::V1alpha1b\x06proto3"
 
 var (
@@ -98,16 +605,41 @@ func file_policy_v1alpha1_log_filter_policy_proto_rawDescGZIP() []byte {
 	return file_policy_v1alpha1_log_filter_policy_proto_rawDescData
 }
 
-var file_policy_v1alpha1_log_filter_policy_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
+var file_policy_v1alpha1_log_filter_policy_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_policy_v1alpha1_log_filter_policy_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_policy_v1alpha1_log_filter_policy_proto_goTypes = []any{
-	(*LogFilterPolicy)(nil), // 0: google.telemetry.policy.v1alpha1.LogFilterPolicy
+	(LogRecordField)(0),      // 0: google.telemetry.policy.v1alpha1.LogRecordField
+	(*LogFilterPolicy)(nil),  // 1: google.telemetry.policy.v1alpha1.LogFilterPolicy
+	(*LogMatcher)(nil),       // 2: google.telemetry.policy.v1alpha1.LogMatcher
+	(*LogFieldSelector)(nil), // 3: google.telemetry.policy.v1alpha1.LogFieldSelector
+	(Action)(0),              // 4: google.telemetry.policy.v1alpha1.Action
+	(*emptypb.Empty)(nil),    // 5: google.protobuf.Empty
+	(*Value)(nil),            // 6: google.telemetry.policy.v1alpha1.Value
+	(*NumericValue)(nil),     // 7: google.telemetry.policy.v1alpha1.NumericValue
+	(*AttributePath)(nil),    // 8: google.telemetry.policy.v1alpha1.AttributePath
+	(ScopeField)(0),          // 9: google.telemetry.policy.v1alpha1.ScopeField
 }
 var file_policy_v1alpha1_log_filter_policy_proto_depIdxs = []int32{
-	0, // [0:0] is the sub-list for method output_type
-	0, // [0:0] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	4,  // 0: google.telemetry.policy.v1alpha1.LogFilterPolicy.action:type_name -> google.telemetry.policy.v1alpha1.Action
+	2,  // 1: google.telemetry.policy.v1alpha1.LogFilterPolicy.matches:type_name -> google.telemetry.policy.v1alpha1.LogMatcher
+	3,  // 2: google.telemetry.policy.v1alpha1.LogMatcher.target:type_name -> google.telemetry.policy.v1alpha1.LogFieldSelector
+	5,  // 3: google.telemetry.policy.v1alpha1.LogMatcher.exists:type_name -> google.protobuf.Empty
+	6,  // 4: google.telemetry.policy.v1alpha1.LogMatcher.equals:type_name -> google.telemetry.policy.v1alpha1.Value
+	7,  // 5: google.telemetry.policy.v1alpha1.LogMatcher.gt:type_name -> google.telemetry.policy.v1alpha1.NumericValue
+	7,  // 6: google.telemetry.policy.v1alpha1.LogMatcher.gte:type_name -> google.telemetry.policy.v1alpha1.NumericValue
+	7,  // 7: google.telemetry.policy.v1alpha1.LogMatcher.lt:type_name -> google.telemetry.policy.v1alpha1.NumericValue
+	7,  // 8: google.telemetry.policy.v1alpha1.LogMatcher.lte:type_name -> google.telemetry.policy.v1alpha1.NumericValue
+	6,  // 9: google.telemetry.policy.v1alpha1.LogMatcher.contains:type_name -> google.telemetry.policy.v1alpha1.Value
+	0,  // 10: google.telemetry.policy.v1alpha1.LogFieldSelector.record_field:type_name -> google.telemetry.policy.v1alpha1.LogRecordField
+	8,  // 11: google.telemetry.policy.v1alpha1.LogFieldSelector.log_attribute:type_name -> google.telemetry.policy.v1alpha1.AttributePath
+	8,  // 12: google.telemetry.policy.v1alpha1.LogFieldSelector.resource_attribute:type_name -> google.telemetry.policy.v1alpha1.AttributePath
+	8,  // 13: google.telemetry.policy.v1alpha1.LogFieldSelector.scope_attribute:type_name -> google.telemetry.policy.v1alpha1.AttributePath
+	9,  // 14: google.telemetry.policy.v1alpha1.LogFieldSelector.scope_field:type_name -> google.telemetry.policy.v1alpha1.ScopeField
+	15, // [15:15] is the sub-list for method output_type
+	15, // [15:15] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_policy_v1alpha1_log_filter_policy_proto_init() }
@@ -115,18 +647,38 @@ func file_policy_v1alpha1_log_filter_policy_proto_init() {
 	if File_policy_v1alpha1_log_filter_policy_proto != nil {
 		return
 	}
+	file_policy_v1alpha1_common_policy_types_proto_init()
+	file_policy_v1alpha1_log_filter_policy_proto_msgTypes[0].OneofWrappers = []any{}
+	file_policy_v1alpha1_log_filter_policy_proto_msgTypes[1].OneofWrappers = []any{
+		(*LogMatcher_Exists)(nil),
+		(*LogMatcher_Equals)(nil),
+		(*LogMatcher_Regex)(nil),
+		(*LogMatcher_Gt)(nil),
+		(*LogMatcher_Gte)(nil),
+		(*LogMatcher_Lt)(nil),
+		(*LogMatcher_Lte)(nil),
+		(*LogMatcher_Contains)(nil),
+	}
+	file_policy_v1alpha1_log_filter_policy_proto_msgTypes[2].OneofWrappers = []any{
+		(*LogFieldSelector_RecordField)(nil),
+		(*LogFieldSelector_LogAttribute)(nil),
+		(*LogFieldSelector_ResourceAttribute)(nil),
+		(*LogFieldSelector_ScopeAttribute)(nil),
+		(*LogFieldSelector_ScopeField)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_policy_v1alpha1_log_filter_policy_proto_rawDesc), len(file_policy_v1alpha1_log_filter_policy_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   1,
+			NumEnums:      1,
+			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_policy_v1alpha1_log_filter_policy_proto_goTypes,
 		DependencyIndexes: file_policy_v1alpha1_log_filter_policy_proto_depIdxs,
+		EnumInfos:         file_policy_v1alpha1_log_filter_policy_proto_enumTypes,
 		MessageInfos:      file_policy_v1alpha1_log_filter_policy_proto_msgTypes,
 	}.Build()
 	File_policy_v1alpha1_log_filter_policy_proto = out.File

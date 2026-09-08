@@ -22,6 +22,7 @@ import (
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/confmap"
+	"go.opentelemetry.io/collector/pdata/plog"
 )
 
 var (
@@ -45,6 +46,13 @@ type Policy interface {
 	PolicyType() string
 	PolicyClass() PolicyClass
 	Validate() error
+}
+
+// LogRecordFilter is an interface implemented by policies of class transformation
+// that filter log records.
+type LogRecordFilter interface {
+	Policy
+	ShouldDrop(log plog.LogRecord, scope plog.ScopeLogs, res plog.ResourceLogs) bool
 }
 
 // ComponentPolicy is an extended interface that any policy that produces config

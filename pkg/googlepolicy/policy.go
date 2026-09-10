@@ -23,6 +23,8 @@ import (
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/confmap"
 	"go.opentelemetry.io/collector/pdata/plog"
+	"go.opentelemetry.io/collector/pdata/pmetric"
+	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 
 var (
@@ -53,6 +55,27 @@ type Policy interface {
 type LogRecordFilter interface {
 	Policy
 	ShouldDrop(log plog.LogRecord, scope plog.ScopeLogs, res plog.ResourceLogs) bool
+}
+
+// LogRecordMutator is an interface implemented by policies of class transformation
+// that mutate or redact log records in-place.
+type LogRecordMutator interface {
+	Policy
+	Mutate(log plog.LogRecord, scope plog.ScopeLogs, res plog.ResourceLogs) error
+}
+
+// MetricFilter is an interface implemented by policies of class transformation
+// that filter metric data points or instruments.
+type MetricFilter interface {
+	Policy
+	ShouldDropMetric(metric pmetric.Metric, scope pmetric.ScopeMetrics, res pmetric.ResourceMetrics) bool
+}
+
+// TraceSpanFilter is an interface implemented by policies of class transformation
+// that filter trace spans.
+type TraceSpanFilter interface {
+	Policy
+	ShouldDropSpan(span ptrace.Span, scope ptrace.ScopeSpans, res ptrace.ResourceSpans) bool
 }
 
 // ComponentPolicy is an extended interface that any policy that produces config

@@ -284,7 +284,7 @@ func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrie
 // positioned prior to policies, and that all resourcedetection processors include the "gcp" detector.
 func (p *provider) ensureResourceDetection(conf *confmap.Conf) (*confmap.Conf, error) {
 	if conf == nil {
-		return confmap.New(), nil
+		conf = confmap.New()
 	}
 	rawMap := conf.ToStringMap()
 

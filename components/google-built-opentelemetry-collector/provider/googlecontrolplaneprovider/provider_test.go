@@ -286,6 +286,22 @@ func TestRetrieve_ActivePolicySetWithOtherSource(t *testing.T) {
 func TestEnsureResourceDetection(t *testing.T) {
 	p := &provider{}
 
+	t.Run("creates default resourcedetection when conf is nil", func(t *testing.T) {
+		out, err := p.ensureResourceDetection(nil)
+		require.NoError(t, err)
+		require.NotNil(t, out)
+
+		detectors, ok := out.Get("processors::resourcedetection::detectors").([]string)
+		if !ok {
+			dList := out.Get("processors::resourcedetection::detectors").([]any)
+			for _, d := range dList {
+				detectors = append(detectors, fmt.Sprint(d))
+			}
+		}
+		assert.Equal(t, []string{"gcp"}, detectors)
+		assert.Equal(t, "10s", out.Get("processors::resourcedetection::timeout"))
+	})
+
 	t.Run("creates default resourcedetection when none exists", func(t *testing.T) {
 		input := confmap.NewFromStringMap(map[string]any{
 			"service": map[string]any{

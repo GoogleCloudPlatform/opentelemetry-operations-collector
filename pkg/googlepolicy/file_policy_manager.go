@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package googlecontrolplaneprovider
+package googlepolicy
 
 import (
 	"bytes"
@@ -29,13 +29,12 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"github.com/fsnotify/fsnotify"
 	"go.uber.org/zap"
 )
 
 var (
-	_ policyManager = (*filePolicyManager)(nil)
+	_ Manager = (*filePolicyManager)(nil)
 
 	// ErrPolicySetUnchanged indicates that the policy set has not changed.
 	ErrPolicySetUnchanged = errors.New("policy set has not changed")
@@ -50,7 +49,7 @@ type filePolicyManager struct {
 	wg          sync.WaitGroup
 }
 
-func NewFilePolicyManager(logger *zap.Logger, uri *url.URL) (*filePolicyManager, error) {
+func NewFilePolicyManager(logger *zap.Logger, uri *url.URL) (Manager, error) {
 	// 1. Determine the directory we're looking at.
 	// The file scheme expects a path to a directory on the current host.
 	policyDir := uri.Path
@@ -156,8 +155,8 @@ func (fpm *filePolicyManager) URI() *url.URL {
 }
 
 func (fpm *filePolicyManager) loadPolicySet() error {
-	// 0. Load the active policy set from `pkg/googlepolicy`. (may be nil)
-	activePolicySet := googlepolicy.ActivePolicySet()
+	// 0. Load the active policy set. (may be nil)
+	activePolicySet := ActivePolicySet()
 
 	// 1. Read all policy files in directory by assuming all json files found in the directory are policies.
 	// Add them to a map of filename to readers so that the bytes of each file can be read.
@@ -209,7 +208,7 @@ func (fpm *filePolicyManager) loadPolicySet() error {
 	}
 
 	// 3. Create a new policy set by unmarshalling each JSON file into `map[string]any` individually and
-	// passing them all to `pkg/googlepolicy.MakePolicySet` using the calculated revision ID from the previous step.
+	// passing them all to `MakePolicySet` using the calculated revision ID from the previous step.
 	// (If a file can't be successfully unmarshalled, skip it and Debug log the error)
 	rawPolicies := make([]map[string]any, 0, len(filenames))
 	for _, name := range filenames {
@@ -230,12 +229,12 @@ func (fpm *filePolicyManager) loadPolicySet() error {
 		rawPolicies = append(rawPolicies, rawPolicy)
 	}
 
-	policySet, err := googlepolicy.MakePolicySet(revisionID, rawPolicies)
+	policySet, err := MakePolicySet(revisionID, rawPolicies)
 	if err != nil {
 		return fmt.Errorf("failed to make policy set: %w", err)
 	}
 
-	// 4. If the policy set was successfully constructed, register it as the new active policy set in `pkg/googlepolicy`.
-	googlepolicy.SetActivePolicySet(policySet)
+	// 4. If the policy set was successfully constructed, register it as the new active policy set.
+	SetActivePolicySet(policySet)
 	return nil
 }

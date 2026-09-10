@@ -55,25 +55,8 @@ jobs:
         run: make presubmit
       - name: Run presubmit (GPU on)
         run: GO_BUILD_TAGS=gpu make presubmit
-
-  test-components:
-    strategy:
-      matrix:
-        distro: [google-otel, otelopscol]
-        go: [1.25, 1.26]
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@0717577d45739eb3c851188b29f50ed6c0b2194e # v2
-        with:
-          submodules: true
-          fetch-depth: 0
-          lfs: true
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
-        with:
-          go-version: ${{ matrix.go }}
-          cache: true
-      - name: Test Components
-        run: make test-${{matrix.distro}}-components
+      - name: Run tests
+        run: make test-all
 
   test-distros:
     strategy:

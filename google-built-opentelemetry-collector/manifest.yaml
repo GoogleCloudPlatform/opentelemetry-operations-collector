@@ -61,6 +61,7 @@ processors:
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor v0.160.0
 - gomod: go.opentelemetry.io/collector/processor/batchprocessor v0.160.0
 - gomod: go.opentelemetry.io/collector/processor/memorylimiterprocessor v0.160.0
+- gomod: go.opentelemetry.io/collector/processor/queuebatchprocessor v0.160.0
 
 exporters:
 - gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter v0.160.0

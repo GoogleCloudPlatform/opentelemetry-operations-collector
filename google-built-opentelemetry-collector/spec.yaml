@@ -66,6 +66,7 @@ components:
         - interval
         - metricsgeneration
         - googlepolicy
+        - queuebatch
     exporters:
         - debug
         - nop

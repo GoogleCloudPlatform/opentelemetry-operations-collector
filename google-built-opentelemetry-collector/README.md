@@ -58,6 +58,7 @@ The Google-Built OpenTelemetry Collector is an open-source, production-ready bui
 | metricstarttime | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/metricstarttimeprocessor/README.md) |
 | metricstransform | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/metricstransformprocessor/README.md) |
 | probabilisticsampler | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/probabilisticsamplerprocessor/README.md) |
+| queuebatch | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/processor/queuebatchprocessor/README.md) |
 | redaction | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/redactionprocessor/README.md) |
 | remotetap | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/remotetapprocessor/README.md) |
 | resource | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/resourceprocessor/README.md) |

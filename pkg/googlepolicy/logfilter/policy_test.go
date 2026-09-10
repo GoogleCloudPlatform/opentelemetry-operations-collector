@@ -192,7 +192,7 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 		assert.NoError(t, pol.Validate())
 
 		assert.True(t, pol.Matches(log, scope, res))
-		assert.True(t, pol.ShouldDrop(log, scope, res))
+		assert.True(t, pol.ShouldDropLog(log, scope, res))
 	})
 
 	t.Run("Action DROP non-matching record", func(t *testing.T) {
@@ -221,7 +221,7 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.False(t, pol.Matches(log, scope, res))
-		assert.False(t, pol.ShouldDrop(log, scope, res))
+		assert.False(t, pol.ShouldDropLog(log, scope, res))
 	})
 
 	t.Run("Action KEEP matching record", func(t *testing.T) {
@@ -251,7 +251,7 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 
 		assert.True(t, pol.Matches(log, scope, res))
 		// Since it matches the KEEP policy, it should NOT be dropped!
-		assert.False(t, pol.ShouldDrop(log, scope, res))
+		assert.False(t, pol.ShouldDropLog(log, scope, res))
 	})
 
 	t.Run("Action KEEP non-matching record", func(t *testing.T) {
@@ -281,7 +281,7 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 
 		assert.False(t, pol.Matches(log, scope, res))
 		// Since it does not match the KEEP policy, it SHOULD be dropped!
-		assert.True(t, pol.ShouldDrop(log, scope, res))
+		assert.True(t, pol.ShouldDropLog(log, scope, res))
 	})
 
 	t.Run("Multiple matchers AND semantics", func(t *testing.T) {
@@ -701,8 +701,8 @@ func TestDriverLoadPolicy(t *testing.T) {
 
 	log, scope, res := newTestLogBundle()
 	log.Body().SetStr("drop this line")
-	assert.True(t, lrf.ShouldDrop(log, scope, res))
+	assert.True(t, lrf.ShouldDropLog(log, scope, res))
 
 	log.Body().SetStr("keep this line")
-	assert.False(t, lrf.ShouldDrop(log, scope, res))
+	assert.False(t, lrf.ShouldDropLog(log, scope, res))
 }

@@ -156,10 +156,10 @@ func (p *Policy) Matches(log plog.LogRecord, scope plog.ScopeLogs, res plog.Reso
 	return true
 }
 
-// ShouldDrop returns true if the given log record should be dropped according to this policy.
+// ShouldDropLog returns true if the given log record should be dropped according to this policy.
 // For ACTION_DROP: returns true if the log matches all conditions.
 // For ACTION_KEEP: returns true if the log does NOT match all conditions (i.e. not kept).
-func (p *Policy) ShouldDrop(log plog.LogRecord, scope plog.ScopeLogs, res plog.ResourceLogs) bool {
+func (p *Policy) ShouldDropLog(log plog.LogRecord, scope plog.ScopeLogs, res plog.ResourceLogs) bool {
 	matches := p.Matches(log, scope, res)
 	switch p.Action() {
 	case policyv1alpha1.Action_ACTION_DROP:

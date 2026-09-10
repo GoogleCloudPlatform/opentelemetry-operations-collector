@@ -163,7 +163,7 @@ func (p *googlePolicyProcessor) processLogs(_ context.Context, ld plog.Logs) (pl
 		rl.ScopeLogs().RemoveIf(func(sl plog.ScopeLogs) bool {
 			sl.LogRecords().RemoveIf(func(lr plog.LogRecord) bool {
 				for _, lf := range filters {
-					if lf.ShouldDrop(lr, sl, rl) {
+					if lf.ShouldDropLog(lr, sl, rl) {
 						return true
 					}
 				}

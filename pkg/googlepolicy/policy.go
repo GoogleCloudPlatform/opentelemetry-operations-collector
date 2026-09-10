@@ -54,7 +54,7 @@ type Policy interface {
 // that filter log records.
 type LogRecordFilter interface {
 	Policy
-	ShouldDrop(log plog.LogRecord, scope plog.ScopeLogs, res plog.ResourceLogs) bool
+	ShouldDropLog(log plog.LogRecord, scope plog.ScopeLogs, res plog.ResourceLogs) bool
 }
 
 // MetricFilter is an interface implemented by policies of class transformation

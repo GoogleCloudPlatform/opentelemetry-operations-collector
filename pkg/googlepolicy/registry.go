@@ -87,6 +87,9 @@ func ActivePolicySet() *PolicySet {
 func ActivePolicySetRevisionID() string {
 	policySetMu.RLock()
 	defer policySetMu.RUnlock()
+	if activePolicySet == nil {
+		return ""
+	}
 	return activePolicySet.RevisionID
 }
 

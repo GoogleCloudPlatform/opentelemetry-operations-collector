@@ -4,7 +4,6 @@ go 1.26.6
 
 require (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy v0.0.0
-	github.com/fsnotify/fsnotify v1.10.1
 	github.com/google/uuid v1.6.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/extension/googleclientauthextension v0.160.0
 	github.com/stretchr/testify v1.12.1
@@ -41,6 +40,7 @@ require (
 	github.com/ebitengine/purego v0.10.2 // indirect
 	github.com/felixge/httpsnoop v1.1.0 // indirect
 	github.com/foxboron/go-tpm-keyfiles v0.0.0-20251226215517-609e4778396f // indirect
+	github.com/fsnotify/fsnotify v1.10.1 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.2 // indirect
 	github.com/go-logr/logr v1.4.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect

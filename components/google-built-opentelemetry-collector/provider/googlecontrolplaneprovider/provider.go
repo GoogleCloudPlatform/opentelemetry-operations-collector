@@ -71,7 +71,7 @@ var _ confmap.Provider = (*provider)(nil)
 type provider struct {
 	logger *zap.Logger
 
-	manager policyManager
+	manager googlepolicy.Manager
 }
 
 // NewFactory returns a new confmap.ProviderFactory that creates a Google Control Plane configuration provider.
@@ -127,7 +127,7 @@ func (p *provider) Retrieve(ctx context.Context, uri string, watcher confmap.Wat
 
 	switch target.Scheme {
 	case innerSchemeFile:
-		p.manager, err = NewFilePolicyManager(p.logger, target)
+		p.manager, err = googlepolicy.NewFilePolicyManager(p.logger, target)
 		if err != nil {
 			return nil, fmt.Errorf("%q: %w", uri, err)
 		}
@@ -315,11 +315,4 @@ func (p *provider) Shutdown(context.Context) error {
 		p.manager.Stop()
 	}
 	return nil
-}
-
-type policyManager interface {
-	Start() error
-	Stop() error
-	URI() *url.URL
-	PolicyEvaluationResult(revisionID string, err error)
 }

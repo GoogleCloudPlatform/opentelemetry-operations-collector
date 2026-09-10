@@ -21,7 +21,6 @@ import (
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"go.opentelemetry.io/collector/component"
-	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/pdata/ptrace"
@@ -46,37 +45,39 @@ func newGooglePolicyProcessor(cfg *Config, logger *zap.Logger) *googlePolicyProc
 
 func (p *googlePolicyProcessor) start(_ context.Context, _ component.Host) error {
 	p.logger.Info("Starting Google policy processor")
+	p.stopCh = make(chan struct{})
+	p.watcherCh = googlepolicy.RegisterWatcherChannel()
 
-	// 1. Initial compilation of active transformation policies
 	p.reloadPolicies()
 
-	// 2. Register for dynamic policy updates
-	p.watcherCh = googlepolicy.RegisterWatcherChannel()
-	p.stopCh = make(chan struct{})
-
 	p.wg.Add(1)
-	go p.watchPolicyUpdates()
+	go p.watchPolicies()
 
 	return nil
 }
 
 func (p *googlePolicyProcessor) reloadPolicies() {
-	activeSet := googlepolicy.ActivePolicySet()
-	var policies []googlepolicy.TransformationPolicy
-	if activeSet != nil {
-		policies = activeSet.TransformationPolicies()
-	}
-
-	ev, err := NewEvaluator(policies)
-	if err != nil {
-		p.logger.Error("Failed to compile active transformation policies", zap.Error(err))
+	ps := googlepolicy.ActivePolicySet()
+	if ps == nil {
+		p.evaluator.Store(nil)
 		return
 	}
+
+	policies := ps.TransformationPolicies()
+	ev, err := NewEvaluator(policies)
+	if err != nil {
+		p.logger.Error("Failed to compile updated transformation policies", zap.Error(err))
+		return
+	}
+
 	p.evaluator.Store(ev)
-	p.logger.Debug("Reloaded transformation policies", zap.Int("policy_count", len(policies)))
+	p.logger.Info("Successfully compiled and updated transformation policy engine",
+		zap.String("revision_id", ps.RevisionID),
+		zap.Int("policy_count", len(policies)),
+	)
 }
 
-func (p *googlePolicyProcessor) watchPolicyUpdates() {
+func (p *googlePolicyProcessor) watchPolicies() {
 	defer p.wg.Done()
 	for {
 		select {
@@ -105,117 +106,22 @@ func (p *googlePolicyProcessor) shutdown(_ context.Context) error {
 }
 
 func (p *googlePolicyProcessor) processLogs(_ context.Context, ld plog.Logs) (plog.Logs, error) {
-	ev := p.evaluator.Load()
-	if ev == nil {
-		return ld, nil
+	if ev := p.evaluator.Load(); ev != nil {
+		ev.FilterLogs(ld)
 	}
-
-	ld.ResourceLogs().RemoveIf(func(rl plog.ResourceLogs) bool {
-		resource := rl.Resource()
-		resourceSchemaURL := rl.SchemaUrl()
-
-		rl.ScopeLogs().RemoveIf(func(sl plog.ScopeLogs) bool {
-			scope := sl.Scope()
-			scopeSchemaURL := sl.SchemaUrl()
-
-			sl.LogRecords().RemoveIf(func(lr plog.LogRecord) bool {
-				return ev.EvalLog(lr, resource, scope, resourceSchemaURL, scopeSchemaURL)
-			})
-
-			return sl.LogRecords().Len() == 0
-		})
-
-		return rl.ScopeLogs().Len() == 0
-	})
-
 	return ld, nil
 }
 
 func (p *googlePolicyProcessor) processMetrics(_ context.Context, md pmetric.Metrics) (pmetric.Metrics, error) {
-	ev := p.evaluator.Load()
-	if ev == nil {
-		return md, nil
+	if ev := p.evaluator.Load(); ev != nil {
+		ev.FilterMetrics(md)
 	}
-
-	md.ResourceMetrics().RemoveIf(func(rm pmetric.ResourceMetrics) bool {
-		resource := rm.Resource()
-		resourceSchemaURL := rm.SchemaUrl()
-
-		rm.ScopeMetrics().RemoveIf(func(sm pmetric.ScopeMetrics) bool {
-			scope := sm.Scope()
-			scopeSchemaURL := sm.SchemaUrl()
-
-			sm.Metrics().RemoveIf(func(m pmetric.Metric) bool {
-				return p.processMetricDatapoints(m, resource, scope, resourceSchemaURL, scopeSchemaURL, ev)
-			})
-
-			return sm.Metrics().Len() == 0
-		})
-
-		return rm.ScopeMetrics().Len() == 0
-	})
-
 	return md, nil
 }
 
-func (p *googlePolicyProcessor) processMetricDatapoints(m pmetric.Metric, resource pcommon.Resource, scope pcommon.InstrumentationScope, resSchema, scopeSchema string, ev *Evaluator) bool {
-	switch m.Type() {
-	case pmetric.MetricTypeGauge:
-		m.Gauge().DataPoints().RemoveIf(func(dp pmetric.NumberDataPoint) bool {
-			return ev.EvalMetricDatapoint(m, dp.Attributes(), pmetric.AggregationTemporalityUnspecified, resource, scope, resSchema, scopeSchema)
-		})
-		return m.Gauge().DataPoints().Len() == 0
-	case pmetric.MetricTypeSum:
-		sum := m.Sum()
-		sum.DataPoints().RemoveIf(func(dp pmetric.NumberDataPoint) bool {
-			return ev.EvalMetricDatapoint(m, dp.Attributes(), sum.AggregationTemporality(), resource, scope, resSchema, scopeSchema)
-		})
-		return sum.DataPoints().Len() == 0
-	case pmetric.MetricTypeHistogram:
-		hist := m.Histogram()
-		hist.DataPoints().RemoveIf(func(dp pmetric.HistogramDataPoint) bool {
-			return ev.EvalMetricDatapoint(m, dp.Attributes(), hist.AggregationTemporality(), resource, scope, resSchema, scopeSchema)
-		})
-		return hist.DataPoints().Len() == 0
-	case pmetric.MetricTypeExponentialHistogram:
-		expHist := m.ExponentialHistogram()
-		expHist.DataPoints().RemoveIf(func(dp pmetric.ExponentialHistogramDataPoint) bool {
-			return ev.EvalMetricDatapoint(m, dp.Attributes(), expHist.AggregationTemporality(), resource, scope, resSchema, scopeSchema)
-		})
-		return expHist.DataPoints().Len() == 0
-	case pmetric.MetricTypeSummary:
-		m.Summary().DataPoints().RemoveIf(func(dp pmetric.SummaryDataPoint) bool {
-			return ev.EvalMetricDatapoint(m, dp.Attributes(), pmetric.AggregationTemporalityUnspecified, resource, scope, resSchema, scopeSchema)
-		})
-		return m.Summary().DataPoints().Len() == 0
-	default:
-		return false
-	}
-}
-
 func (p *googlePolicyProcessor) processTraces(_ context.Context, td ptrace.Traces) (ptrace.Traces, error) {
-	ev := p.evaluator.Load()
-	if ev == nil {
-		return td, nil
+	if ev := p.evaluator.Load(); ev != nil {
+		ev.FilterTraces(td)
 	}
-
-	td.ResourceSpans().RemoveIf(func(rs ptrace.ResourceSpans) bool {
-		resource := rs.Resource()
-		resourceSchemaURL := rs.SchemaUrl()
-
-		rs.ScopeSpans().RemoveIf(func(ss ptrace.ScopeSpans) bool {
-			scope := ss.Scope()
-			scopeSchemaURL := ss.SchemaUrl()
-
-			ss.Spans().RemoveIf(func(span ptrace.Span) bool {
-				return ev.EvalTraceSpan(span, resource, scope, resourceSchemaURL, scopeSchemaURL)
-			})
-
-			return ss.Spans().Len() == 0
-		})
-
-		return rs.ScopeSpans().Len() == 0
-	})
-
 	return td, nil
 }

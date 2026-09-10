@@ -99,17 +99,33 @@ func TestEvaluator_LogFiltering(t *testing.T) {
 	// 1. INFO log in staging -> NOT dropped (no match, default allow)
 	lr1 := plog.NewLogRecord()
 	lr1.SetSeverityText("INFO")
-	assert.False(t, ev.EvalLog(lr1, res, scope, "", ""))
+	assert.False(t, ev.EvalLog(LogContext{Record: lr1, Resource: res, Scope: scope}))
 
 	// 2. DEBUG log in staging -> DROPPED (matches dropDebug)
 	lr2 := plog.NewLogRecord()
 	lr2.SetSeverityText("DEBUG_VERBOSE")
-	assert.True(t, ev.EvalLog(lr2, res, scope, "", ""))
+	assert.True(t, ev.EvalLog(LogContext{Record: lr2, Resource: res, Scope: scope}))
 
 	// 3. DEBUG log in production -> NOT dropped (keepProd overrides dropDebug)
 	resProd := pcommon.NewResource()
 	resProd.Attributes().PutStr("env", "production")
-	assert.False(t, ev.EvalLog(lr2, resProd, scope, "", ""))
+	assert.False(t, ev.EvalLog(LogContext{Record: lr2, Resource: resProd, Scope: scope}))
+
+	// Test FilterLogs batch pruning
+	ld := plog.NewLogs()
+	rl := ld.ResourceLogs().AppendEmpty()
+	rl.Resource().Attributes().PutStr("env", "staging")
+	sl := rl.ScopeLogs().AppendEmpty()
+	l1 := sl.LogRecords().AppendEmpty()
+	l1.SetSeverityText("INFO")
+	l2 := sl.LogRecords().AppendEmpty()
+	l2.SetSeverityText("DEBUG_VERBOSE")
+
+	ev.FilterLogs(ld)
+	require.Equal(t, 1, ld.ResourceLogs().Len())
+	require.Equal(t, 1, ld.ResourceLogs().At(0).ScopeLogs().Len())
+	require.Equal(t, 1, ld.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().Len())
+	assert.Equal(t, "INFO", ld.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().At(0).SeverityText())
 }
 
 func TestEvaluator_LogNestedAttributeAndNegate(t *testing.T) {
@@ -148,13 +164,13 @@ func TestEvaluator_LogNestedAttributeAndNegate(t *testing.T) {
 	lrGet := plog.NewLogRecord()
 	httpMap := lrGet.Attributes().PutEmptyMap("http")
 	httpMap.PutStr("method", "GET")
-	assert.False(t, ev.EvalLog(lrGet, res, scope, "", ""))
+	assert.False(t, ev.EvalLog(LogContext{Record: lrGet, Resource: res, Scope: scope}))
 
 	// 2. POST log -> DROPPED (equals GET is false, negate is true -> matches drop rule)
 	lrPost := plog.NewLogRecord()
 	httpMap2 := lrPost.Attributes().PutEmptyMap("http")
 	httpMap2.PutStr("method", "POST")
-	assert.True(t, ev.EvalLog(lrPost, res, scope, "", ""))
+	assert.True(t, ev.EvalLog(LogContext{Record: lrPost, Resource: res, Scope: scope}))
 }
 
 func TestEvaluator_MetricFiltering(t *testing.T) {
@@ -205,19 +221,37 @@ func TestEvaluator_MetricFiltering(t *testing.T) {
 	mHist := pmetric.NewMetric()
 	mHist.SetName("http.server.duration")
 	mHist.SetEmptyHistogram()
-	assert.True(t, ev.EvalMetricDatapoint(mHist, dpAttrs, pmetric.AggregationTemporalityCumulative, res, scope, "", ""))
+	assert.True(t, ev.EvalMetric(MetricContext{
+		Metric:                 mHist,
+		DatapointAttributes:    dpAttrs,
+		AggregationTemporality: pmetric.AggregationTemporalityCumulative,
+		Resource:               res,
+		Scope:                  scope,
+	}))
 
 	// Gauge metric with same name -> NOT dropped (different type)
 	mGauge := pmetric.NewMetric()
 	mGauge.SetName("http.server.duration")
 	mGauge.SetEmptyGauge()
-	assert.False(t, ev.EvalMetricDatapoint(mGauge, dpAttrs, pmetric.AggregationTemporalityUnspecified, res, scope, "", ""))
+	assert.False(t, ev.EvalMetric(MetricContext{
+		Metric:                 mGauge,
+		DatapointAttributes:    dpAttrs,
+		AggregationTemporality: pmetric.AggregationTemporalityUnspecified,
+		Resource:               res,
+		Scope:                  scope,
+	}))
 
 	// Other metric -> NOT dropped
 	mOther := pmetric.NewMetric()
 	mOther.SetName("system.cpu.load")
 	mOther.SetEmptyGauge()
-	assert.False(t, ev.EvalMetricDatapoint(mOther, dpAttrs, pmetric.AggregationTemporalityUnspecified, res, scope, "", ""))
+	assert.False(t, ev.EvalMetric(MetricContext{
+		Metric:                 mOther,
+		DatapointAttributes:    dpAttrs,
+		AggregationTemporality: pmetric.AggregationTemporalityUnspecified,
+		Resource:               res,
+		Scope:                  scope,
+	}))
 }
 
 func TestEvaluator_TraceFiltering(t *testing.T) {
@@ -263,17 +297,17 @@ func TestEvaluator_TraceFiltering(t *testing.T) {
 	s1 := ptrace.NewSpan()
 	s1.SetName("healthcheck.ping")
 	s1.SetKind(ptrace.SpanKindInternal)
-	assert.True(t, ev.EvalTraceSpan(s1, res, scope, "", ""))
+	assert.True(t, ev.EvalTrace(TraceContext{Span: s1, Resource: res, Scope: scope}))
 
 	// Server healthcheck span -> NOT dropped (kind is SERVER, not INTERNAL)
 	s2 := ptrace.NewSpan()
 	s2.SetName("healthcheck.ping")
 	s2.SetKind(ptrace.SpanKindServer)
-	assert.False(t, ev.EvalTraceSpan(s2, res, scope, "", ""))
+	assert.False(t, ev.EvalTrace(TraceContext{Span: s2, Resource: res, Scope: scope}))
 
 	// User request span -> NOT dropped
 	s3 := ptrace.NewSpan()
 	s3.SetName("get_user")
 	s3.SetKind(ptrace.SpanKindInternal)
-	assert.False(t, ev.EvalTraceSpan(s3, res, scope, "", ""))
+	assert.False(t, ev.EvalTrace(TraceContext{Span: s3, Resource: res, Scope: scope}))
 }

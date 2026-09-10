@@ -37,6 +37,8 @@ receivers:
 - gomod: go.opentelemetry.io/collector/receiver/otlpreceiver v0.160.0
 
 processors:
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor v0.160.0
+  path: ../components/google-built-opentelemetry-collector/processor/googlepolicyprocessor
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/attributesprocessor v0.160.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/cumulativetodeltaprocessor v0.160.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/deltatocumulativeprocessor v0.160.0
@@ -59,6 +61,7 @@ processors:
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor v0.160.0
 - gomod: go.opentelemetry.io/collector/processor/batchprocessor v0.160.0
 - gomod: go.opentelemetry.io/collector/processor/memorylimiterprocessor v0.160.0
+- gomod: go.opentelemetry.io/collector/processor/queuebatchprocessor v0.160.0
 
 exporters:
 - gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter v0.160.0
@@ -111,6 +114,8 @@ connectors:
 - gomod: go.opentelemetry.io/collector/connector/forwardconnector v0.160.0
 
 providers:
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplane v0.160.0
+  path: ../components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/confmap/provider/googlesecretmanagerprovider v0.160.0
 - gomod: go.opentelemetry.io/collector/confmap/provider/envprovider v1.66.0
 - gomod: go.opentelemetry.io/collector/confmap/provider/fileprovider v1.66.0
@@ -121,4 +126,8 @@ providers:
 replaces:
 # Force update buger/jsonparser to v1.1.2 to fix vulnerability
 - github.com/buger/jsonparser => github.com/buger/jsonparser v1.1.2
+# Local module replacement for policy package
+- github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy => ../../pkg/googlepolicy
+# Local module replacement for root repository
+- github.com/GoogleCloudPlatform/opentelemetry-operations-collector => ../..
 

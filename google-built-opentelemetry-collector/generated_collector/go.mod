@@ -2,11 +2,13 @@
 
 module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/google-built-opentelemetry-collector
 
-go 1.26.0
+go 1.26.6
 
 require (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter v0.160.0
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/healthagent v0.160.0
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor v0.160.0
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplane v0.160.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/confmap/provider/googlesecretmanagerprovider v0.160.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/connector/countconnector v0.160.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/connector/exceptionsconnector v0.160.0
@@ -107,6 +109,7 @@ require (
 	go.opentelemetry.io/collector/processor v1.66.0
 	go.opentelemetry.io/collector/processor/batchprocessor v0.160.0
 	go.opentelemetry.io/collector/processor/memorylimiterprocessor v0.160.0
+	go.opentelemetry.io/collector/processor/queuebatchprocessor v0.160.0
 	go.opentelemetry.io/collector/receiver v1.66.0
 	go.opentelemetry.io/collector/receiver/otlpreceiver v0.160.0
 	go.opentelemetry.io/collector/service v0.160.0
@@ -140,6 +143,8 @@ require (
 	github.com/DataDog/go-sqllexer v0.1.12 // indirect
 	github.com/DeRuina/timberjack v1.4.7 // indirect
 	github.com/GehirnInc/crypt v0.0.0-20230320061759-8cc1b52080c5 // indirect
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector v0.160.0 // indirect
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy v0.0.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.36.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector v0.60.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector/googlemanagedprometheus v0.60.0 // indirect
@@ -574,10 +579,18 @@ require (
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
 
+replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplane v0.160.0 => ../../components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider
+
 replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/healthagent v0.160.0 => ../../components/google-built-opentelemetry-collector/extension/healthagent
 
 replace github.com/open-telemetry/opentelemetry-collector-contrib/extension/oauth2clientauthextension v0.160.0 => ../../components/google-built-opentelemetry-collector/extension/oauth2clientauthextension
 
 replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter v0.160.0 => ../../components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter
 
+replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor v0.160.0 => ../../components/google-built-opentelemetry-collector/processor/googlepolicyprocessor
+
 replace github.com/buger/jsonparser => github.com/buger/jsonparser v1.1.2
+
+replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy => ../../pkg/googlepolicy
+
+replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector => ../..

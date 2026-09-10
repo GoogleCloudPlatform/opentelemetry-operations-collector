@@ -48,9 +48,9 @@ func compileTracePolicy(p *policyv1alpha1.TraceFilterPolicy) (*compiledTracePoli
 	return cp, nil
 }
 
-// FilterTraces filters traces in-place across the Resource -> Scope -> Span hierarchy.
+// TransformTraces applies active transformation policies in-place across the Resource -> Scope -> Span hierarchy.
 // Dropped spans are pruned, and empty scopes/resources are removed.
-func (e *Evaluator) FilterTraces(td ptrace.Traces) {
+func (e *Evaluator) TransformTraces(td ptrace.Traces) {
 	if len(e.tracePolicies) == 0 {
 		return
 	}

@@ -111,7 +111,7 @@ func TestEvaluator_LogFiltering(t *testing.T) {
 	resProd.Attributes().PutStr("env", "production")
 	assert.False(t, ev.EvalLog(LogContext{Record: lr2, Resource: resProd, Scope: scope}))
 
-	// Test FilterLogs batch pruning
+	// Test TransformLogs batch pruning
 	ld := plog.NewLogs()
 	rl := ld.ResourceLogs().AppendEmpty()
 	rl.Resource().Attributes().PutStr("env", "staging")
@@ -121,7 +121,7 @@ func TestEvaluator_LogFiltering(t *testing.T) {
 	l2 := sl.LogRecords().AppendEmpty()
 	l2.SetSeverityText("DEBUG_VERBOSE")
 
-	ev.FilterLogs(ld)
+	ev.TransformLogs(ld)
 	require.Equal(t, 1, ld.ResourceLogs().Len())
 	require.Equal(t, 1, ld.ResourceLogs().At(0).ScopeLogs().Len())
 	require.Equal(t, 1, ld.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().Len())
@@ -252,6 +252,23 @@ func TestEvaluator_MetricFiltering(t *testing.T) {
 		Resource:               res,
 		Scope:                  scope,
 	}))
+
+	// Test TransformMetrics batch pruning
+	md := pmetric.NewMetrics()
+	rm := md.ResourceMetrics().AppendEmpty()
+	sm := rm.ScopeMetrics().AppendEmpty()
+	m1 := sm.Metrics().AppendEmpty()
+	m1.SetName("http.server.duration")
+	m1.SetEmptyHistogram().DataPoints().AppendEmpty()
+	m2 := sm.Metrics().AppendEmpty()
+	m2.SetName("system.cpu.load")
+	m2.SetEmptyGauge().DataPoints().AppendEmpty()
+
+	ev.TransformMetrics(md)
+	require.Equal(t, 1, md.ResourceMetrics().Len())
+	require.Equal(t, 1, md.ResourceMetrics().At(0).ScopeMetrics().Len())
+	require.Equal(t, 1, md.ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics().Len())
+	assert.Equal(t, "system.cpu.load", md.ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics().At(0).Name())
 }
 
 func TestEvaluator_TraceFiltering(t *testing.T) {
@@ -310,4 +327,21 @@ func TestEvaluator_TraceFiltering(t *testing.T) {
 	s3.SetName("get_user")
 	s3.SetKind(ptrace.SpanKindInternal)
 	assert.False(t, ev.EvalTrace(TraceContext{Span: s3, Resource: res, Scope: scope}))
+
+	// Test TransformTraces batch pruning
+	td := ptrace.NewTraces()
+	rs := td.ResourceSpans().AppendEmpty()
+	ss := rs.ScopeSpans().AppendEmpty()
+	span1 := ss.Spans().AppendEmpty()
+	span1.SetName("healthcheck.ping")
+	span1.SetKind(ptrace.SpanKindInternal)
+	span2 := ss.Spans().AppendEmpty()
+	span2.SetName("get_user")
+	span2.SetKind(ptrace.SpanKindInternal)
+
+	ev.TransformTraces(td)
+	require.Equal(t, 1, td.ResourceSpans().Len())
+	require.Equal(t, 1, td.ResourceSpans().At(0).ScopeSpans().Len())
+	require.Equal(t, 1, td.ResourceSpans().At(0).ScopeSpans().At(0).Spans().Len())
+	assert.Equal(t, "get_user", td.ResourceSpans().At(0).ScopeSpans().At(0).Spans().At(0).Name())
 }

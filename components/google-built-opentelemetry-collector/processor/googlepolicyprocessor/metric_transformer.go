@@ -49,9 +49,9 @@ func compileMetricPolicy(p *policyv1alpha1.MetricFilterPolicy) (*compiledMetricP
 	return cp, nil
 }
 
-// FilterMetrics filters metrics in-place across the Resource -> Scope -> Metric -> Datapoints hierarchy.
+// TransformMetrics applies active transformation policies in-place across the Resource -> Scope -> Metric -> Datapoints hierarchy.
 // Dropped datapoints are pruned, and empty metrics/scopes/resources are removed.
-func (e *Evaluator) FilterMetrics(md pmetric.Metrics) {
+func (e *Evaluator) TransformMetrics(md pmetric.Metrics) {
 	if len(e.metricPolicies) == 0 {
 		return
 	}
@@ -65,7 +65,7 @@ func (e *Evaluator) FilterMetrics(md pmetric.Metrics) {
 			scopeSchemaURL := sm.SchemaUrl()
 
 			sm.Metrics().RemoveIf(func(m pmetric.Metric) bool {
-				return e.filterMetricDataPoints(m, resource, scope, resourceSchemaURL, scopeSchemaURL)
+				return e.transformMetricDataPoints(m, resource, scope, resourceSchemaURL, scopeSchemaURL)
 			})
 
 			return sm.Metrics().Len() == 0
@@ -75,32 +75,32 @@ func (e *Evaluator) FilterMetrics(md pmetric.Metrics) {
 	})
 }
 
-func (e *Evaluator) filterMetricDataPoints(m pmetric.Metric, resource pcommon.Resource, scope pcommon.InstrumentationScope, resourceSchemaURL, scopeSchemaURL string) bool {
+func (e *Evaluator) transformMetricDataPoints(m pmetric.Metric, resource pcommon.Resource, scope pcommon.InstrumentationScope, resourceSchemaURL, scopeSchemaURL string) bool {
 	switch m.Type() {
 	case pmetric.MetricTypeGauge:
-		e.filterNumberDataPoints(m, m.Gauge().DataPoints(), pmetric.AggregationTemporalityUnspecified, resource, scope, resourceSchemaURL, scopeSchemaURL)
+		e.transformNumberDataPoints(m, m.Gauge().DataPoints(), pmetric.AggregationTemporalityUnspecified, resource, scope, resourceSchemaURL, scopeSchemaURL)
 		return m.Gauge().DataPoints().Len() == 0
 	case pmetric.MetricTypeSum:
 		sum := m.Sum()
-		e.filterNumberDataPoints(m, sum.DataPoints(), sum.AggregationTemporality(), resource, scope, resourceSchemaURL, scopeSchemaURL)
+		e.transformNumberDataPoints(m, sum.DataPoints(), sum.AggregationTemporality(), resource, scope, resourceSchemaURL, scopeSchemaURL)
 		return sum.DataPoints().Len() == 0
 	case pmetric.MetricTypeHistogram:
 		hist := m.Histogram()
-		e.filterHistogramDataPoints(m, hist.DataPoints(), hist.AggregationTemporality(), resource, scope, resourceSchemaURL, scopeSchemaURL)
+		e.transformHistogramDataPoints(m, hist.DataPoints(), hist.AggregationTemporality(), resource, scope, resourceSchemaURL, scopeSchemaURL)
 		return hist.DataPoints().Len() == 0
 	case pmetric.MetricTypeExponentialHistogram:
 		expHist := m.ExponentialHistogram()
-		e.filterExponentialHistogramDataPoints(m, expHist.DataPoints(), expHist.AggregationTemporality(), resource, scope, resourceSchemaURL, scopeSchemaURL)
+		e.transformExponentialHistogramDataPoints(m, expHist.DataPoints(), expHist.AggregationTemporality(), resource, scope, resourceSchemaURL, scopeSchemaURL)
 		return expHist.DataPoints().Len() == 0
 	case pmetric.MetricTypeSummary:
-		e.filterSummaryDataPoints(m, m.Summary().DataPoints(), resource, scope, resourceSchemaURL, scopeSchemaURL)
+		e.transformSummaryDataPoints(m, m.Summary().DataPoints(), resource, scope, resourceSchemaURL, scopeSchemaURL)
 		return m.Summary().DataPoints().Len() == 0
 	default:
 		return false
 	}
 }
 
-func (e *Evaluator) filterNumberDataPoints(m pmetric.Metric, datapoints pmetric.NumberDataPointSlice, temporality pmetric.AggregationTemporality, resource pcommon.Resource, scope pcommon.InstrumentationScope, resourceSchemaURL, scopeSchemaURL string) {
+func (e *Evaluator) transformNumberDataPoints(m pmetric.Metric, datapoints pmetric.NumberDataPointSlice, temporality pmetric.AggregationTemporality, resource pcommon.Resource, scope pcommon.InstrumentationScope, resourceSchemaURL, scopeSchemaURL string) {
 	datapoints.RemoveIf(func(dp pmetric.NumberDataPoint) bool {
 		ctx := MetricContext{
 			Metric:                 m,
@@ -115,7 +115,7 @@ func (e *Evaluator) filterNumberDataPoints(m pmetric.Metric, datapoints pmetric.
 	})
 }
 
-func (e *Evaluator) filterHistogramDataPoints(m pmetric.Metric, datapoints pmetric.HistogramDataPointSlice, temporality pmetric.AggregationTemporality, resource pcommon.Resource, scope pcommon.InstrumentationScope, resourceSchemaURL, scopeSchemaURL string) {
+func (e *Evaluator) transformHistogramDataPoints(m pmetric.Metric, datapoints pmetric.HistogramDataPointSlice, temporality pmetric.AggregationTemporality, resource pcommon.Resource, scope pcommon.InstrumentationScope, resourceSchemaURL, scopeSchemaURL string) {
 	datapoints.RemoveIf(func(dp pmetric.HistogramDataPoint) bool {
 		ctx := MetricContext{
 			Metric:                 m,
@@ -130,7 +130,7 @@ func (e *Evaluator) filterHistogramDataPoints(m pmetric.Metric, datapoints pmetr
 	})
 }
 
-func (e *Evaluator) filterExponentialHistogramDataPoints(m pmetric.Metric, datapoints pmetric.ExponentialHistogramDataPointSlice, temporality pmetric.AggregationTemporality, resource pcommon.Resource, scope pcommon.InstrumentationScope, resourceSchemaURL, scopeSchemaURL string) {
+func (e *Evaluator) transformExponentialHistogramDataPoints(m pmetric.Metric, datapoints pmetric.ExponentialHistogramDataPointSlice, temporality pmetric.AggregationTemporality, resource pcommon.Resource, scope pcommon.InstrumentationScope, resourceSchemaURL, scopeSchemaURL string) {
 	datapoints.RemoveIf(func(dp pmetric.ExponentialHistogramDataPoint) bool {
 		ctx := MetricContext{
 			Metric:                 m,
@@ -145,7 +145,7 @@ func (e *Evaluator) filterExponentialHistogramDataPoints(m pmetric.Metric, datap
 	})
 }
 
-func (e *Evaluator) filterSummaryDataPoints(m pmetric.Metric, datapoints pmetric.SummaryDataPointSlice, resource pcommon.Resource, scope pcommon.InstrumentationScope, resourceSchemaURL, scopeSchemaURL string) {
+func (e *Evaluator) transformSummaryDataPoints(m pmetric.Metric, datapoints pmetric.SummaryDataPointSlice, resource pcommon.Resource, scope pcommon.InstrumentationScope, resourceSchemaURL, scopeSchemaURL string) {
 	datapoints.RemoveIf(func(dp pmetric.SummaryDataPoint) bool {
 		ctx := MetricContext{
 			Metric:                 m,

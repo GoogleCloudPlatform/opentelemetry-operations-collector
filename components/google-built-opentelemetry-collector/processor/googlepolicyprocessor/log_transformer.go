@@ -48,9 +48,9 @@ func compileLogPolicy(p *policyv1alpha1.LogFilterPolicy) (*compiledLogPolicy, er
 	return cp, nil
 }
 
-// FilterLogs filters logs in-place across the Resource -> Scope -> Record hierarchy.
+// TransformLogs applies active transformation policies in-place across the Resource -> Scope -> Record hierarchy.
 // Dropped records are pruned, and empty scopes/resources are removed.
-func (e *Evaluator) FilterLogs(ld plog.Logs) {
+func (e *Evaluator) TransformLogs(ld plog.Logs) {
 	if len(e.logPolicies) == 0 {
 		return
 	}

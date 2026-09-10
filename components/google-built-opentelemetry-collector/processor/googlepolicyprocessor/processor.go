@@ -107,21 +107,21 @@ func (p *googlePolicyProcessor) shutdown(_ context.Context) error {
 
 func (p *googlePolicyProcessor) processLogs(_ context.Context, ld plog.Logs) (plog.Logs, error) {
 	if ev := p.evaluator.Load(); ev != nil {
-		ev.FilterLogs(ld)
+		ev.TransformLogs(ld)
 	}
 	return ld, nil
 }
 
 func (p *googlePolicyProcessor) processMetrics(_ context.Context, md pmetric.Metrics) (pmetric.Metrics, error) {
 	if ev := p.evaluator.Load(); ev != nil {
-		ev.FilterMetrics(md)
+		ev.TransformMetrics(md)
 	}
 	return md, nil
 }
 
 func (p *googlePolicyProcessor) processTraces(_ context.Context, td ptrace.Traces) (ptrace.Traces, error) {
 	if ev := p.evaluator.Load(); ev != nil {
-		ev.FilterTraces(td)
+		ev.TransformTraces(td)
 	}
 	return td, nil
 }

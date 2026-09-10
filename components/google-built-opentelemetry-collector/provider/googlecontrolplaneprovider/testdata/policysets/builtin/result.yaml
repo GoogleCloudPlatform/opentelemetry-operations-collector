@@ -60,6 +60,9 @@ processors:
         queue_size: 10
         sizer: {}
         wait_for_result: false
+    resourcedetection:
+        detectors:
+            - gcp
 receivers:
     otlp/default_self_metrics:
         protocols:
@@ -76,6 +79,7 @@ service:
             exporters:
                 - otlp_grpc/default_gcp_destination
             processors:
+                - resourcedetection
                 - queue_batch/default_gcp_destination_batch_logs
             receivers:
                 - otlp/default_self_metrics
@@ -83,6 +87,7 @@ service:
             exporters:
                 - otlp_grpc/default_gcp_destination
             processors:
+                - resourcedetection
                 - queue_batch/default_gcp_destination_batch_metrics
             receivers:
                 - otlp/default_self_metrics

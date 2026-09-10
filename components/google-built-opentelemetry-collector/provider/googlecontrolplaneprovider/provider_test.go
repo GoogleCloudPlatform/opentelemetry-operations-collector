@@ -16,6 +16,7 @@ package googlecontrolplaneprovider
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplane/policies/selfmetrics"
@@ -82,6 +83,7 @@ func TestRetrieve(t *testing.T) {
 	assert.True(t, conf.IsSet("service::telemetry::resource::attributes"))
 	assert.True(t, conf.IsSet("service::pipelines::logs/default_self_metrics"))
 	assert.True(t, conf.IsSet("service::pipelines::metrics/default_self_metrics"))
+	assert.True(t, conf.IsSet("processors::resourcedetection"))
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
@@ -279,4 +281,133 @@ func TestRetrieve_ActivePolicySetWithOtherSource(t *testing.T) {
 	assert.True(t, conf.IsSet("receivers::otlp/default_self_metrics"))
 
 	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestEnsureResourceDetection(t *testing.T) {
+	p := &provider{}
+
+	t.Run("creates default resourcedetection when none exists", func(t *testing.T) {
+		input := confmap.NewFromStringMap(map[string]any{
+			"service": map[string]any{
+				"pipelines": map[string]any{
+					"logs": map[string]any{
+						"processors": []any{"queue_batch"},
+					},
+				},
+			},
+		})
+		out, err := p.ensureResourceDetection(input)
+		require.NoError(t, err)
+
+		detectors, ok := out.Get("processors::resourcedetection::detectors").([]string)
+		if !ok {
+			dList := out.Get("processors::resourcedetection::detectors").([]any)
+			for _, d := range dList {
+				detectors = append(detectors, fmt.Sprint(d))
+			}
+		}
+		assert.Equal(t, []string{"gcp"}, detectors)
+
+		procs, ok := out.Get("service::pipelines::logs::processors").([]string)
+		if !ok {
+			pList := out.Get("service::pipelines::logs::processors").([]any)
+			for _, pr := range pList {
+				procs = append(procs, fmt.Sprint(pr))
+			}
+		}
+		assert.Equal(t, []string{"resourcedetection", "queue_batch"}, procs)
+	})
+
+	t.Run("appends gcp to the end of existing detectors", func(t *testing.T) {
+		input := confmap.NewFromStringMap(map[string]any{
+			"processors": map[string]any{
+				"resourcedetection": map[string]any{
+					"detectors": []any{"env", "system"},
+				},
+			},
+			"service": map[string]any{
+				"pipelines": map[string]any{
+					"logs": map[string]any{
+						"processors": []any{"queue_batch"},
+					},
+				},
+			},
+		})
+		out, err := p.ensureResourceDetection(input)
+		require.NoError(t, err)
+
+		detectors, ok := out.Get("processors::resourcedetection::detectors").([]string)
+		if !ok {
+			dList := out.Get("processors::resourcedetection::detectors").([]any)
+			for _, d := range dList {
+				detectors = append(detectors, fmt.Sprint(d))
+			}
+		}
+		assert.Equal(t, []string{"env", "system", "gcp"}, detectors)
+	})
+
+	t.Run("does not duplicate gcp if already present", func(t *testing.T) {
+		input := confmap.NewFromStringMap(map[string]any{
+			"processors": map[string]any{
+				"resourcedetection": map[string]any{
+					"detectors": []any{"env", "gcp"},
+				},
+			},
+			"service": map[string]any{
+				"pipelines": map[string]any{
+					"metrics": map[string]any{
+						"processors": []any{"resourcedetection", "batch"},
+					},
+				},
+			},
+		})
+		out, err := p.ensureResourceDetection(input)
+		require.NoError(t, err)
+
+		detectors, ok := out.Get("processors::resourcedetection::detectors").([]string)
+		if !ok {
+			dList := out.Get("processors::resourcedetection::detectors").([]any)
+			for _, d := range dList {
+				detectors = append(detectors, fmt.Sprint(d))
+			}
+		}
+		assert.Equal(t, []string{"env", "gcp"}, detectors)
+	})
+
+	t.Run("handles custom named resourcedetection and deduplicates", func(t *testing.T) {
+		input := confmap.NewFromStringMap(map[string]any{
+			"processors": map[string]any{
+				"resourcedetection/custom": map[string]any{
+					"detectors": []any{"system"},
+				},
+			},
+			"service": map[string]any{
+				"pipelines": map[string]any{
+					"logs": map[string]any{
+						"processors": []any{"some_proc", "resourcedetection/custom", "resourcedetection/custom"},
+					},
+				},
+			},
+		})
+		out, err := p.ensureResourceDetection(input)
+		require.NoError(t, err)
+
+		detectors, ok := out.Get("processors::resourcedetection/custom::detectors").([]string)
+		if !ok {
+			dList := out.Get("processors::resourcedetection/custom::detectors").([]any)
+			for _, d := range dList {
+				detectors = append(detectors, fmt.Sprint(d))
+			}
+		}
+		assert.Equal(t, []string{"system", "gcp"}, detectors)
+
+		procs, ok := out.Get("service::pipelines::logs::processors").([]string)
+		if !ok {
+			pList := out.Get("service::pipelines::logs::processors").([]any)
+			for _, pr := range pList {
+				procs = append(procs, fmt.Sprint(pr))
+			}
+		}
+		assert.Equal(t, []string{"resourcedetection/custom", "some_proc"}, procs)
+	})
 }

@@ -303,12 +303,16 @@ func (p *provider) ensureResourceDetection(conf *confmap.Conf) (*confmap.Conf, e
 		}
 	}
 
-	// For any existing resourcedetection processor, ensure "gcp" is in its detectors (at the end).
+	// For any existing resourcedetection processor, ensure "gcp" is in its detectors (at the end),
+	// and default timeout to 10s if not set.
 	for _, rdID := range rdIDs {
 		rdConfig, _ := processorsRaw[rdID].(map[string]any)
 		if rdConfig == nil {
 			rdConfig = make(map[string]any)
 			processorsRaw[rdID] = rdConfig
+		}
+		if _, ok := rdConfig["timeout"]; !ok {
+			rdConfig["timeout"] = "10s"
 		}
 		var detectors []string
 		hasGCP := false
@@ -339,6 +343,7 @@ func (p *provider) ensureResourceDetection(conf *confmap.Conf) (*confmap.Conf, e
 	if len(rdIDs) == 0 {
 		processorsRaw[defaultRDID] = map[string]any{
 			"detectors": []string{"gcp"},
+			"timeout":   "10s",
 		}
 		rdIDs = append(rdIDs, defaultRDID)
 	}

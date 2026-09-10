@@ -63,6 +63,7 @@ processors:
     resourcedetection:
         detectors:
             - gcp
+        timeout: 10s
 receivers:
     otlp/default_self_metrics:
         protocols:

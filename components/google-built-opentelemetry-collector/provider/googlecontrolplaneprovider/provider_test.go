@@ -307,6 +307,7 @@ func TestEnsureResourceDetection(t *testing.T) {
 			}
 		}
 		assert.Equal(t, []string{"gcp"}, detectors)
+		assert.Equal(t, "10s", out.Get("processors::resourcedetection::timeout"))
 
 		procs, ok := out.Get("service::pipelines::logs::processors").([]string)
 		if !ok {
@@ -344,6 +345,29 @@ func TestEnsureResourceDetection(t *testing.T) {
 			}
 		}
 		assert.Equal(t, []string{"env", "system", "gcp"}, detectors)
+		assert.Equal(t, "10s", out.Get("processors::resourcedetection::timeout"))
+	})
+
+	t.Run("preserves existing timeout", func(t *testing.T) {
+		input := confmap.NewFromStringMap(map[string]any{
+			"processors": map[string]any{
+				"resourcedetection": map[string]any{
+					"detectors": []any{"env"},
+					"timeout":   "5s",
+				},
+			},
+			"service": map[string]any{
+				"pipelines": map[string]any{
+					"logs": map[string]any{
+						"processors": []any{"queue_batch"},
+					},
+				},
+			},
+		})
+		out, err := p.ensureResourceDetection(input)
+		require.NoError(t, err)
+
+		assert.Equal(t, "5s", out.Get("processors::resourcedetection::timeout"))
 	})
 
 	t.Run("does not duplicate gcp if already present", func(t *testing.T) {
@@ -400,6 +424,7 @@ func TestEnsureResourceDetection(t *testing.T) {
 			}
 		}
 		assert.Equal(t, []string{"system", "gcp"}, detectors)
+		assert.Equal(t, "10s", out.Get("processors::resourcedetection/custom::timeout"))
 
 		procs, ok := out.Get("service::pipelines::logs::processors").([]string)
 		if !ok {

@@ -8,8 +8,14 @@ The Google-Built OpenTelemetry Collector is an open-source, production-ready bui
 
 | Component Name | Documentation |
 | -------------- | ------------- |
+| activedirectoryds | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/activedirectorydsreceiver/README.md) |
+| aerospike | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/aerospikereceiver/README.md) |
+| apache | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/apachereceiver/README.md) |
+| couchdb | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/couchdbreceiver/README.md) |
 | dockerstats | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/dockerstatsreceiver/README.md) |
+| elasticsearch | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/elasticsearchreceiver/README.md) |
 | filelog | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/filelogreceiver/README.md) |
+| flinkmetrics | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/flinkmetricsreceiver/README.md) |
 | fluentforward | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/fluentforwardreceiver/README.md) |
 | googlecloudmonitoring | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/googlecloudmonitoringreceiver/README.md) |
 | googlecloudpubsub | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/googlecloudpubsubreceiver/README.md) |
@@ -21,20 +27,30 @@ The Google-Built OpenTelemetry Collector is an open-source, production-ready bui
 | k8scluster | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/k8sclusterreceiver/README.md) |
 | k8sevents | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/k8seventsreceiver/README.md) |
 | k8sobjects | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/k8sobjectsreceiver/README.md) |
+| kafka | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/kafkareceiver/README.md) |
 | kubeletstats | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/kubeletstatsreceiver/README.md) |
+| memcached | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/memcachedreceiver/README.md) |
+| mongodb | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/mongodbreceiver/README.md) |
+| mysql | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/mysqlreceiver/README.md) |
+| nginx | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/nginxreceiver/README.md) |
+| oracledb | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/oracledbreceiver/README.md) |
 | otelarrow | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/otelarrowreceiver/README.md) |
 | otlp | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/receiver/otlpreceiver/README.md) |
 | otlpjsonfile | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/otlpjsonfilereceiver/README.md) |
+| postgresql | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/postgresqlreceiver/README.md) |
 | prometheus | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/prometheusreceiver/README.md) |
 | prometheusremotewrite | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/prometheusremotewritereceiver/README.md) |
+| rabbitmq | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/rabbitmqreceiver/README.md) |
 | receivercreator | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/receivercreator/README.md) |
 | redis | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/redisreceiver/README.md) |
+| saphana | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/saphanareceiver/README.md) |
 | statsd | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/statsdreceiver/README.md) |
 | syslog | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/syslogreceiver/README.md) |
 | tcplog | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/tcplogreceiver/README.md) |
 | windowseventlog | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/windowseventlogreceiver/README.md) |
 | windowsperfcounters | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/windowsperfcountersreceiver/README.md) |
 | zipkin | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/zipkinreceiver/README.md) |
+| zookeeper | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/zookeeperreceiver/README.md) |
 
 
 ## Processors

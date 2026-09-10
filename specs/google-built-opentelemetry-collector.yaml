@@ -65,6 +65,22 @@ components:
     - windowseventlog
     - iis
     - windowsperfcounters
+    - activedirectoryds
+    - aerospike
+    - apache
+    - couchdb
+    - elasticsearch
+    - flinkmetrics
+    - kafka
+    - memcached
+    - mongodb
+    - mysql
+    - nginx
+    - oracledb
+    - postgresql
+    - rabbitmq
+    - saphana
+    - zookeeper
 
   processors:
     - batch

@@ -113,7 +113,15 @@ func (p *GCPDestinationPolicy) Evaluate(_ context.Context) (*confmap.Conf, error
 	googlePolicyType, _ := component.NewType("googlepolicy")
 	googlePolicyID := component.NewID(googlePolicyType)
 
+	resourceDetectionType, _ := component.NewType("resourcedetection")
+	resourceDetectionID := component.NewID(resourceDetectionType)
+
+	type resourceDetectionConfig struct {
+		Detectors []string `mapstructure:"detectors"`
+	}
+
 	conf.Processors = map[component.ID]component.Config{
+		resourceDetectionID: &resourceDetectionConfig{Detectors: []string{"gcp"}},
 		googlePolicyID:      &struct{}{},
 		queueBatchLogsID:    component.Config(queueBatchLog),
 		queueBatchMetricsID: component.Config(queueBatchMetric),
@@ -122,9 +130,9 @@ func (p *GCPDestinationPolicy) Evaluate(_ context.Context) (*confmap.Conf, error
 
 	p.extensionIDs = []component.ID{authID}
 	p.exporterIDs = []component.ID{otlpExporterID}
-	p.preprocessorLogIDs = []component.ID{googlePolicyID, queueBatchLogsID}
-	p.preprocessorMetricIDs = []component.ID{googlePolicyID, queueBatchMetricsID}
-	p.preprocessorTraceIDs = []component.ID{googlePolicyID, queueBatchTracesID}
+	p.preprocessorLogIDs = []component.ID{resourceDetectionID, googlePolicyID, queueBatchLogsID}
+	p.preprocessorMetricIDs = []component.ID{resourceDetectionID, googlePolicyID, queueBatchMetricsID}
+	p.preprocessorTraceIDs = []component.ID{resourceDetectionID, googlePolicyID, queueBatchTracesID}
 
 	cm := confmap.New()
 	if err := cm.Marshal(conf); err != nil {

@@ -29,7 +29,6 @@ import (
 	xdsv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/xds/v1alpha1"
 )
 
-
 func actionPtr(a policyv1alpha1.Action) *policyv1alpha1.Action {
 	return &a
 }
@@ -275,13 +274,10 @@ func TestTraceFilterPolicy_EnumValues(t *testing.T) {
 	assert.Equal(t, policyv1alpha1.SpanRecordField(6), policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_KIND)
 	assert.Equal(t, policyv1alpha1.SpanRecordField(7), policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_STATUS_CODE)
 
-
-
 	assert.Equal(t, policyv1alpha1.ScopeField(0), policyv1alpha1.ScopeField_SCOPE_FIELD_UNSPECIFIED)
 	assert.Equal(t, policyv1alpha1.ScopeField(1), policyv1alpha1.ScopeField_SCOPE_FIELD_NAME)
 	assert.Equal(t, policyv1alpha1.ScopeField(2), policyv1alpha1.ScopeField_SCOPE_FIELD_VERSION)
 	assert.Equal(t, policyv1alpha1.ScopeField(3), policyv1alpha1.ScopeField_SCOPE_FIELD_SCHEMA_URL)
-
 
 }
 

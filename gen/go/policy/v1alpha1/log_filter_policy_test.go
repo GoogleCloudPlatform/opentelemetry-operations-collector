@@ -315,8 +315,6 @@ func TestLogFilterPolicy_JSONSerialization(t *testing.T) {
 		},
 	}
 
-
-
 	// ProtoJSON marshal and unmarshal round-trip.
 	jsonData, err := protojson.Marshal(policy)
 	require.NoError(t, err)
@@ -356,6 +354,3 @@ func TestLogFilterPolicy_EnumValues(t *testing.T) {
 	assert.Equal(t, policyv1alpha1.LogRecordField(4), policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID)
 	assert.Equal(t, policyv1alpha1.LogRecordField(5), policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID)
 }
-
-
-

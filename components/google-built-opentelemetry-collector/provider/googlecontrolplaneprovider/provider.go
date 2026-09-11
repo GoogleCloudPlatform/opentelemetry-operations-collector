@@ -267,12 +267,135 @@ func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrie
 		}
 	}
 
+	conf, err = p.ensureResourceDetection(conf)
+	if err != nil {
+		return nil, fmt.Errorf("failed to configure resource detection: %w", err)
+	}
+
 	// Validate the fully merged confmap.
 	if err := confmap.Validate(conf); err != nil {
 		return nil, fmt.Errorf("failed to validate merged configuration: %w", err)
 	}
 
 	return confmap.NewRetrieved(conf.ToStringMap())
+}
+
+// ensureResourceDetection ensures that every pipeline has a resourcedetection processor
+// positioned prior to policies, and that all resourcedetection processors include the "gcp" detector.
+func (p *provider) ensureResourceDetection(conf *confmap.Conf) (*confmap.Conf, error) {
+	if conf == nil {
+		conf = confmap.New()
+	}
+	rawMap := conf.ToStringMap()
+
+	processorsRaw, _ := rawMap["processors"].(map[string]any)
+	if processorsRaw == nil {
+		processorsRaw = make(map[string]any)
+		rawMap["processors"] = processorsRaw
+	}
+
+	// Find all processors of type resourcedetection.
+	var rdIDs []string
+	for key := range processorsRaw {
+		parts := strings.Split(key, "/")
+		if parts[0] == "resourcedetection" {
+			rdIDs = append(rdIDs, key)
+		}
+	}
+
+	// For any existing resourcedetection processor, ensure "gcp" is in its detectors (at the end),
+	// and default timeout to 10s if not set.
+	for _, rdID := range rdIDs {
+		rdConfig, _ := processorsRaw[rdID].(map[string]any)
+		if rdConfig == nil {
+			rdConfig = make(map[string]any)
+			processorsRaw[rdID] = rdConfig
+		}
+		if _, ok := rdConfig["timeout"]; !ok {
+			rdConfig["timeout"] = "10s"
+		}
+		var detectors []string
+		hasGCP := false
+		if dList, ok := rdConfig["detectors"].([]any); ok {
+			for _, d := range dList {
+				s := fmt.Sprint(d)
+				detectors = append(detectors, s)
+				if s == "gcp" {
+					hasGCP = true
+				}
+			}
+		} else if dList, ok := rdConfig["detectors"].([]string); ok {
+			for _, s := range dList {
+				detectors = append(detectors, s)
+				if s == "gcp" {
+					hasGCP = true
+				}
+			}
+		}
+		if !hasGCP {
+			detectors = append(detectors, "gcp")
+		}
+		rdConfig["detectors"] = detectors
+	}
+
+	// If no resourcedetection processor is defined, create the default one.
+	defaultRDID := "resourcedetection"
+	if len(rdIDs) == 0 {
+		processorsRaw[defaultRDID] = map[string]any{
+			"detectors": []string{"gcp"},
+			"timeout":   "10s",
+		}
+		rdIDs = append(rdIDs, defaultRDID)
+	}
+
+	// Ensure every pipeline in service::pipelines has a resourcedetection processor at the beginning.
+	serviceMap, _ := rawMap["service"].(map[string]any)
+	if serviceMap != nil {
+		pipelinesMap, _ := serviceMap["pipelines"].(map[string]any)
+		for _, pipeVal := range pipelinesMap {
+			pipeMap, ok := pipeVal.(map[string]any)
+			if !ok {
+				continue
+			}
+			var procs []string
+			if pList, ok := pipeMap["processors"].([]any); ok {
+				for _, p := range pList {
+					procs = append(procs, fmt.Sprint(p))
+				}
+			} else if pList, ok := pipeMap["processors"].([]string); ok {
+				procs = append(procs, pList...)
+			}
+
+			// Check if any processor in procs is of type resourcedetection.
+			var nonRDProcs []string
+			var foundRDID string
+
+			for _, p := range procs {
+				parts := strings.Split(p, "/")
+				if parts[0] == "resourcedetection" {
+					if foundRDID == "" {
+						foundRDID = p
+					}
+					// Deduplicate: ignore subsequent resourcedetection processors in the same pipeline
+				} else {
+					nonRDProcs = append(nonRDProcs, p)
+				}
+			}
+
+			targetRDID := defaultRDID
+			if len(rdIDs) > 0 {
+				targetRDID = rdIDs[0]
+			}
+			if foundRDID != "" {
+				targetRDID = foundRDID
+			}
+
+			// Place targetRDID at the beginning (prior to policies and pre-export processors)
+			pipeMap["processors"] = append([]string{targetRDID}, nonRDProcs...)
+		}
+	}
+
+	return confmap.NewFromStringMap(rawMap), nil
 }
 
 func cleanConf(c *confmap.Conf) *confmap.Conf {

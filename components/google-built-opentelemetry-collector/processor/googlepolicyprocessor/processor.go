@@ -16,7 +16,11 @@ package googlepolicyprocessor
 
 import (
 	"context"
+	"sync"
+	"sync/atomic"
 
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
+	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/pdata/ptrace"
@@ -24,8 +28,12 @@ import (
 )
 
 type googlePolicyProcessor struct {
-	cfg    *Config
-	logger *zap.Logger
+	cfg       *Config
+	logger    *zap.Logger
+	evaluator atomic.Pointer[Evaluator]
+	watcherCh googlepolicy.WatcherChannel
+	stopCh    chan struct{}
+	wg        sync.WaitGroup
 }
 
 func newGooglePolicyProcessor(cfg *Config, logger *zap.Logger) *googlePolicyProcessor {
@@ -35,17 +43,85 @@ func newGooglePolicyProcessor(cfg *Config, logger *zap.Logger) *googlePolicyProc
 	}
 }
 
-func (p *googlePolicyProcessor) processTraces(_ context.Context, td ptrace.Traces) (ptrace.Traces, error) {
-	// TODO: Apply policy transformations to traces.
-	return td, nil
+func (p *googlePolicyProcessor) start(_ context.Context, _ component.Host) error {
+	p.logger.Info("Starting Google policy processor")
+	p.stopCh = make(chan struct{})
+	p.watcherCh = googlepolicy.RegisterWatcherChannel()
+
+	p.reloadPolicies()
+
+	p.wg.Add(1)
+	go p.watchPolicies()
+
+	return nil
 }
 
-func (p *googlePolicyProcessor) processMetrics(_ context.Context, md pmetric.Metrics) (pmetric.Metrics, error) {
-	// TODO: Apply policy transformations to metrics.
-	return md, nil
+func (p *googlePolicyProcessor) reloadPolicies() {
+	ps := googlepolicy.ActivePolicySet()
+	if ps == nil {
+		p.evaluator.Store(nil)
+		return
+	}
+
+	policies := ps.TransformationPolicies()
+	ev, err := NewEvaluator(policies)
+	if err != nil {
+		p.logger.Error("Failed to compile updated transformation policies", zap.Error(err))
+		return
+	}
+
+	p.evaluator.Store(ev)
+	p.logger.Info("Successfully compiled and updated transformation policy engine",
+		zap.String("revision_id", ps.RevisionID),
+		zap.Int("policy_count", len(policies)),
+	)
+}
+
+func (p *googlePolicyProcessor) watchPolicies() {
+	defer p.wg.Done()
+	for {
+		select {
+		case <-p.stopCh:
+			return
+		case _, ok := <-p.watcherCh:
+			if !ok {
+				return
+			}
+			p.logger.Info("Detected policy set update, reloading transformation policies")
+			p.reloadPolicies()
+		}
+	}
+}
+
+func (p *googlePolicyProcessor) shutdown(_ context.Context) error {
+	p.logger.Info("Shutting down Google policy processor")
+	if p.stopCh != nil {
+		close(p.stopCh)
+	}
+	if p.watcherCh != nil {
+		googlepolicy.UnregisterWatcherChannel(p.watcherCh)
+	}
+	p.wg.Wait()
+	return nil
 }
 
 func (p *googlePolicyProcessor) processLogs(_ context.Context, ld plog.Logs) (plog.Logs, error) {
-	// TODO: Apply policy transformations to logs.
+	if ev := p.evaluator.Load(); ev != nil {
+		ev.TransformLogs(ld)
+	}
 	return ld, nil
+}
+
+func (p *googlePolicyProcessor) processMetrics(_ context.Context, md pmetric.Metrics) (pmetric.Metrics, error) {
+	if ev := p.evaluator.Load(); ev != nil {
+		ev.TransformMetrics(md)
+	}
+	return md, nil
+}
+
+func (p *googlePolicyProcessor) processTraces(_ context.Context, td ptrace.Traces) (ptrace.Traces, error) {
+	if ev := p.evaluator.Load(); ev != nil {
+		ev.TransformTraces(td)
+	}
+	return td, nil
 }

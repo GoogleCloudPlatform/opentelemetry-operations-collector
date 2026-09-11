@@ -75,6 +75,23 @@ type DestinationPolicy interface {
 	ExtensionIDs() []component.ID
 }
 
+// Signal represents an OpenTelemetry telemetry signal type.
+type Signal string
+
+const (
+	SignalLogs    Signal = "logs"
+	SignalMetrics Signal = "metrics"
+	SignalTraces  Signal = "traces"
+)
+
+// TransformationPolicy is an extended interface that any Transformation policy
+// will implement. It represents policies that transform, filter, or sample
+// telemetry data in the collector pipelines.
+type TransformationPolicy interface {
+	Policy
+	TargetSignals() []Signal
+}
+
 // PolicyDriver is the interface that is used to load a policy
 // object of a known policy type.
 type PolicyDriver interface {
@@ -137,6 +154,19 @@ func (ps *PolicySet) LoadPoliciesOfClass(class PolicyClass) []Policy {
 	for _, pse := range ps.Policies {
 		if pse.PolicyObj.PolicyClass() == class {
 			foundPolicies = append(foundPolicies, pse.PolicyObj)
+		}
+	}
+	return foundPolicies
+}
+
+// TransformationPolicies returns all policies in the set that implement TransformationPolicy.
+func (ps *PolicySet) TransformationPolicies() []TransformationPolicy {
+	foundPolicies := make([]TransformationPolicy, 0)
+	for _, pse := range ps.Policies {
+		if pse.PolicyObj.PolicyClass() == PolicyClassTransformation {
+			if tp, ok := pse.PolicyObj.(TransformationPolicy); ok {
+				foundPolicies = append(foundPolicies, tp)
+			}
 		}
 	}
 	return foundPolicies

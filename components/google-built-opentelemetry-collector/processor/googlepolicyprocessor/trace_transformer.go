@@ -49,10 +49,11 @@ func compileTracePolicy(p *policyv1alpha1.TraceFilterPolicy) (*compiledTracePoli
 }
 
 // TransformTraces applies active transformation policies in-place across the Resource -> Scope -> Span hierarchy.
-// Dropped spans are pruned, and empty scopes/resources are removed.
-func (e *Evaluator) TransformTraces(td ptrace.Traces) {
+// Dropped spans are pruned, empty scopes/resources are removed, and batch transformation stats are returned.
+func (e *Evaluator) TransformTraces(td ptrace.Traces) TransformStats {
+	stats := newTransformStats()
 	if len(e.tracePolicies) == 0 {
-		return
+		return stats
 	}
 
 	td.ResourceSpans().RemoveIf(func(rs ptrace.ResourceSpans) bool {
@@ -71,7 +72,18 @@ func (e *Evaluator) TransformTraces(td ptrace.Traces) {
 					ResourceSchemaURL: resourceSchemaURL,
 					ScopeSchemaURL:    scopeSchemaURL,
 				}
-				return e.EvalTrace(ctx)
+				res := e.evaluateTrace(ctx)
+				if res.Drop {
+					stats.Dropped++
+				} else if len(res.Evaluations) > 0 {
+					stats.Kept++
+				} else {
+					stats.NoMatch++
+				}
+				for _, ev := range res.Evaluations {
+					stats.recordPolicy(ev.PolicyID, ev.Result)
+				}
+				return res.Drop
 			})
 
 			return ss.Spans().Len() == 0
@@ -79,17 +91,25 @@ func (e *Evaluator) TransformTraces(td ptrace.Traces) {
 
 		return rs.ScopeSpans().Len() == 0
 	})
+
+	return stats
 }
 
-// EvalTrace returns true if the span should be DROPPED, false if KEPT.
-func (e *Evaluator) EvalTrace(ctx TraceContext) bool {
+type traceEvalResult struct {
+	Drop        bool
+	Evaluations []PolicyEvaluation
+}
+
+func (e *Evaluator) evaluateTrace(ctx TraceContext) traceEvalResult {
 	if len(e.tracePolicies) == 0 {
-		return false
+		return traceEvalResult{Drop: false}
 	}
 
+	var matchingPolicies []*compiledTracePolicy
 	var hasKeep, hasDrop bool
 	for _, p := range e.tracePolicies {
 		if p.matches(ctx) {
+			matchingPolicies = append(matchingPolicies, p)
 			if p.action == policyv1alpha1.Action_ACTION_KEEP {
 				hasKeep = true
 			} else if p.action == policyv1alpha1.Action_ACTION_DROP {
@@ -98,13 +118,31 @@ func (e *Evaluator) EvalTrace(ctx TraceContext) bool {
 		}
 	}
 
+	var res traceEvalResult
 	if hasKeep {
-		return false
+		res.Drop = false
+		for _, p := range matchingPolicies {
+			if p.action == policyv1alpha1.Action_ACTION_KEEP {
+				res.Evaluations = append(res.Evaluations, PolicyEvaluation{PolicyID: p.id, Result: ResultKept})
+			} else {
+				res.Evaluations = append(res.Evaluations, PolicyEvaluation{PolicyID: p.id, Result: ResultNoMatch})
+			}
+		}
+	} else if hasDrop {
+		res.Drop = true
+		for _, p := range matchingPolicies {
+			res.Evaluations = append(res.Evaluations, PolicyEvaluation{PolicyID: p.id, Result: ResultDropped})
+		}
+	} else {
+		res.Drop = false
 	}
-	if hasDrop {
-		return true
-	}
-	return false
+
+	return res
+}
+
+// EvalTrace returns true if the span should be DROPPED, false if KEPT.
+func (e *Evaluator) EvalTrace(ctx TraceContext) bool {
+	return e.evaluateTrace(ctx).Drop
 }
 
 func (p *compiledTracePolicy) matches(ctx TraceContext) bool {

@@ -50,10 +50,11 @@ func compileMetricPolicy(p *policyv1alpha1.MetricFilterPolicy) (*compiledMetricP
 }
 
 // TransformMetrics applies active transformation policies in-place across the Resource -> Scope -> Metric -> Datapoints hierarchy.
-// Dropped datapoints are pruned, and empty metrics/scopes/resources are removed.
-func (e *Evaluator) TransformMetrics(md pmetric.Metrics) {
+// Dropped datapoints are pruned, empty metrics/scopes/resources are removed, and batch transformation stats are returned.
+func (e *Evaluator) TransformMetrics(md pmetric.Metrics) TransformStats {
+	stats := newTransformStats()
 	if len(e.metricPolicies) == 0 {
-		return
+		return stats
 	}
 
 	md.ResourceMetrics().RemoveIf(func(rm pmetric.ResourceMetrics) bool {
@@ -65,7 +66,7 @@ func (e *Evaluator) TransformMetrics(md pmetric.Metrics) {
 			scopeSchemaURL := sm.SchemaUrl()
 
 			sm.Metrics().RemoveIf(func(m pmetric.Metric) bool {
-				return e.transformMetricDataPoints(m, resource, scope, resourceSchemaURL, scopeSchemaURL)
+				return e.transformMetricDataPoints(&stats, m, resource, scope, resourceSchemaURL, scopeSchemaURL)
 			})
 
 			return sm.Metrics().Len() == 0
@@ -73,34 +74,36 @@ func (e *Evaluator) TransformMetrics(md pmetric.Metrics) {
 
 		return rm.ScopeMetrics().Len() == 0
 	})
+
+	return stats
 }
 
-func (e *Evaluator) transformMetricDataPoints(m pmetric.Metric, resource pcommon.Resource, scope pcommon.InstrumentationScope, resourceSchemaURL, scopeSchemaURL string) bool {
+func (e *Evaluator) transformMetricDataPoints(stats *TransformStats, m pmetric.Metric, resource pcommon.Resource, scope pcommon.InstrumentationScope, resourceSchemaURL, scopeSchemaURL string) bool {
 	switch m.Type() {
 	case pmetric.MetricTypeGauge:
-		e.transformNumberDataPoints(m, m.Gauge().DataPoints(), pmetric.AggregationTemporalityUnspecified, resource, scope, resourceSchemaURL, scopeSchemaURL)
+		e.transformNumberDataPoints(stats, m, m.Gauge().DataPoints(), pmetric.AggregationTemporalityUnspecified, resource, scope, resourceSchemaURL, scopeSchemaURL)
 		return m.Gauge().DataPoints().Len() == 0
 	case pmetric.MetricTypeSum:
 		sum := m.Sum()
-		e.transformNumberDataPoints(m, sum.DataPoints(), sum.AggregationTemporality(), resource, scope, resourceSchemaURL, scopeSchemaURL)
+		e.transformNumberDataPoints(stats, m, sum.DataPoints(), sum.AggregationTemporality(), resource, scope, resourceSchemaURL, scopeSchemaURL)
 		return sum.DataPoints().Len() == 0
 	case pmetric.MetricTypeHistogram:
 		hist := m.Histogram()
-		e.transformHistogramDataPoints(m, hist.DataPoints(), hist.AggregationTemporality(), resource, scope, resourceSchemaURL, scopeSchemaURL)
+		e.transformHistogramDataPoints(stats, m, hist.DataPoints(), hist.AggregationTemporality(), resource, scope, resourceSchemaURL, scopeSchemaURL)
 		return hist.DataPoints().Len() == 0
 	case pmetric.MetricTypeExponentialHistogram:
 		expHist := m.ExponentialHistogram()
-		e.transformExponentialHistogramDataPoints(m, expHist.DataPoints(), expHist.AggregationTemporality(), resource, scope, resourceSchemaURL, scopeSchemaURL)
+		e.transformExponentialHistogramDataPoints(stats, m, expHist.DataPoints(), expHist.AggregationTemporality(), resource, scope, resourceSchemaURL, scopeSchemaURL)
 		return expHist.DataPoints().Len() == 0
 	case pmetric.MetricTypeSummary:
-		e.transformSummaryDataPoints(m, m.Summary().DataPoints(), resource, scope, resourceSchemaURL, scopeSchemaURL)
+		e.transformSummaryDataPoints(stats, m, m.Summary().DataPoints(), resource, scope, resourceSchemaURL, scopeSchemaURL)
 		return m.Summary().DataPoints().Len() == 0
 	default:
 		return false
 	}
 }
 
-func (e *Evaluator) transformNumberDataPoints(m pmetric.Metric, datapoints pmetric.NumberDataPointSlice, temporality pmetric.AggregationTemporality, resource pcommon.Resource, scope pcommon.InstrumentationScope, resourceSchemaURL, scopeSchemaURL string) {
+func (e *Evaluator) transformNumberDataPoints(stats *TransformStats, m pmetric.Metric, datapoints pmetric.NumberDataPointSlice, temporality pmetric.AggregationTemporality, resource pcommon.Resource, scope pcommon.InstrumentationScope, resourceSchemaURL, scopeSchemaURL string) {
 	datapoints.RemoveIf(func(dp pmetric.NumberDataPoint) bool {
 		ctx := MetricContext{
 			Metric:                 m,
@@ -111,11 +114,22 @@ func (e *Evaluator) transformNumberDataPoints(m pmetric.Metric, datapoints pmetr
 			ResourceSchemaURL:      resourceSchemaURL,
 			ScopeSchemaURL:         scopeSchemaURL,
 		}
-		return e.EvalMetric(ctx)
+		res := e.evaluateMetric(ctx)
+		if res.Drop {
+			stats.Dropped++
+		} else if len(res.Evaluations) > 0 {
+			stats.Kept++
+		} else {
+			stats.NoMatch++
+		}
+		for _, ev := range res.Evaluations {
+			stats.recordPolicy(ev.PolicyID, ev.Result)
+		}
+		return res.Drop
 	})
 }
 
-func (e *Evaluator) transformHistogramDataPoints(m pmetric.Metric, datapoints pmetric.HistogramDataPointSlice, temporality pmetric.AggregationTemporality, resource pcommon.Resource, scope pcommon.InstrumentationScope, resourceSchemaURL, scopeSchemaURL string) {
+func (e *Evaluator) transformHistogramDataPoints(stats *TransformStats, m pmetric.Metric, datapoints pmetric.HistogramDataPointSlice, temporality pmetric.AggregationTemporality, resource pcommon.Resource, scope pcommon.InstrumentationScope, resourceSchemaURL, scopeSchemaURL string) {
 	datapoints.RemoveIf(func(dp pmetric.HistogramDataPoint) bool {
 		ctx := MetricContext{
 			Metric:                 m,
@@ -126,11 +140,22 @@ func (e *Evaluator) transformHistogramDataPoints(m pmetric.Metric, datapoints pm
 			ResourceSchemaURL:      resourceSchemaURL,
 			ScopeSchemaURL:         scopeSchemaURL,
 		}
-		return e.EvalMetric(ctx)
+		res := e.evaluateMetric(ctx)
+		if res.Drop {
+			stats.Dropped++
+		} else if len(res.Evaluations) > 0 {
+			stats.Kept++
+		} else {
+			stats.NoMatch++
+		}
+		for _, ev := range res.Evaluations {
+			stats.recordPolicy(ev.PolicyID, ev.Result)
+		}
+		return res.Drop
 	})
 }
 
-func (e *Evaluator) transformExponentialHistogramDataPoints(m pmetric.Metric, datapoints pmetric.ExponentialHistogramDataPointSlice, temporality pmetric.AggregationTemporality, resource pcommon.Resource, scope pcommon.InstrumentationScope, resourceSchemaURL, scopeSchemaURL string) {
+func (e *Evaluator) transformExponentialHistogramDataPoints(stats *TransformStats, m pmetric.Metric, datapoints pmetric.ExponentialHistogramDataPointSlice, temporality pmetric.AggregationTemporality, resource pcommon.Resource, scope pcommon.InstrumentationScope, resourceSchemaURL, scopeSchemaURL string) {
 	datapoints.RemoveIf(func(dp pmetric.ExponentialHistogramDataPoint) bool {
 		ctx := MetricContext{
 			Metric:                 m,
@@ -141,11 +166,22 @@ func (e *Evaluator) transformExponentialHistogramDataPoints(m pmetric.Metric, da
 			ResourceSchemaURL:      resourceSchemaURL,
 			ScopeSchemaURL:         scopeSchemaURL,
 		}
-		return e.EvalMetric(ctx)
+		res := e.evaluateMetric(ctx)
+		if res.Drop {
+			stats.Dropped++
+		} else if len(res.Evaluations) > 0 {
+			stats.Kept++
+		} else {
+			stats.NoMatch++
+		}
+		for _, ev := range res.Evaluations {
+			stats.recordPolicy(ev.PolicyID, ev.Result)
+		}
+		return res.Drop
 	})
 }
 
-func (e *Evaluator) transformSummaryDataPoints(m pmetric.Metric, datapoints pmetric.SummaryDataPointSlice, resource pcommon.Resource, scope pcommon.InstrumentationScope, resourceSchemaURL, scopeSchemaURL string) {
+func (e *Evaluator) transformSummaryDataPoints(stats *TransformStats, m pmetric.Metric, datapoints pmetric.SummaryDataPointSlice, resource pcommon.Resource, scope pcommon.InstrumentationScope, resourceSchemaURL, scopeSchemaURL string) {
 	datapoints.RemoveIf(func(dp pmetric.SummaryDataPoint) bool {
 		ctx := MetricContext{
 			Metric:                 m,
@@ -156,19 +192,36 @@ func (e *Evaluator) transformSummaryDataPoints(m pmetric.Metric, datapoints pmet
 			ResourceSchemaURL:      resourceSchemaURL,
 			ScopeSchemaURL:         scopeSchemaURL,
 		}
-		return e.EvalMetric(ctx)
+		res := e.evaluateMetric(ctx)
+		if res.Drop {
+			stats.Dropped++
+		} else if len(res.Evaluations) > 0 {
+			stats.Kept++
+		} else {
+			stats.NoMatch++
+		}
+		for _, ev := range res.Evaluations {
+			stats.recordPolicy(ev.PolicyID, ev.Result)
+		}
+		return res.Drop
 	})
 }
 
-// EvalMetric returns true if the datapoint should be DROPPED, false if KEPT.
-func (e *Evaluator) EvalMetric(ctx MetricContext) bool {
+type metricEvalResult struct {
+	Drop        bool
+	Evaluations []PolicyEvaluation
+}
+
+func (e *Evaluator) evaluateMetric(ctx MetricContext) metricEvalResult {
 	if len(e.metricPolicies) == 0 {
-		return false
+		return metricEvalResult{Drop: false}
 	}
 
+	var matchingPolicies []*compiledMetricPolicy
 	var hasKeep, hasDrop bool
 	for _, p := range e.metricPolicies {
 		if p.matches(ctx) {
+			matchingPolicies = append(matchingPolicies, p)
 			if p.action == policyv1alpha1.Action_ACTION_KEEP {
 				hasKeep = true
 			} else if p.action == policyv1alpha1.Action_ACTION_DROP {
@@ -177,13 +230,31 @@ func (e *Evaluator) EvalMetric(ctx MetricContext) bool {
 		}
 	}
 
+	var res metricEvalResult
 	if hasKeep {
-		return false
+		res.Drop = false
+		for _, p := range matchingPolicies {
+			if p.action == policyv1alpha1.Action_ACTION_KEEP {
+				res.Evaluations = append(res.Evaluations, PolicyEvaluation{PolicyID: p.id, Result: ResultKept})
+			} else {
+				res.Evaluations = append(res.Evaluations, PolicyEvaluation{PolicyID: p.id, Result: ResultNoMatch})
+			}
+		}
+	} else if hasDrop {
+		res.Drop = true
+		for _, p := range matchingPolicies {
+			res.Evaluations = append(res.Evaluations, PolicyEvaluation{PolicyID: p.id, Result: ResultDropped})
+		}
+	} else {
+		res.Drop = false
 	}
-	if hasDrop {
-		return true
-	}
-	return false
+
+	return res
+}
+
+// EvalMetric returns true if the datapoint should be DROPPED, false if KEPT.
+func (e *Evaluator) EvalMetric(ctx MetricContext) bool {
+	return e.evaluateMetric(ctx).Drop
 }
 
 func (p *compiledMetricPolicy) matches(ctx MetricContext) bool {

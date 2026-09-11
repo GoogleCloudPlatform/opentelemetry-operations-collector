@@ -49,10 +49,11 @@ func compileLogPolicy(p *policyv1alpha1.LogFilterPolicy) (*compiledLogPolicy, er
 }
 
 // TransformLogs applies active transformation policies in-place across the Resource -> Scope -> Record hierarchy.
-// Dropped records are pruned, and empty scopes/resources are removed.
-func (e *Evaluator) TransformLogs(ld plog.Logs) {
+// Dropped records are pruned, empty scopes/resources are removed, and batch transformation stats are returned.
+func (e *Evaluator) TransformLogs(ld plog.Logs) TransformStats {
+	stats := newTransformStats()
 	if len(e.logPolicies) == 0 {
-		return
+		return stats
 	}
 
 	ld.ResourceLogs().RemoveIf(func(rl plog.ResourceLogs) bool {
@@ -71,7 +72,18 @@ func (e *Evaluator) TransformLogs(ld plog.Logs) {
 					ResourceSchemaURL: resourceSchemaURL,
 					ScopeSchemaURL:    scopeSchemaURL,
 				}
-				return e.EvalLog(ctx)
+				res := e.evaluateLog(ctx)
+				if res.Drop {
+					stats.Dropped++
+				} else if len(res.Evaluations) > 0 {
+					stats.Kept++
+				} else {
+					stats.NoMatch++
+				}
+				for _, ev := range res.Evaluations {
+					stats.recordPolicy(ev.PolicyID, ev.Result)
+				}
+				return res.Drop
 			})
 
 			return sl.LogRecords().Len() == 0
@@ -79,17 +91,25 @@ func (e *Evaluator) TransformLogs(ld plog.Logs) {
 
 		return rl.ScopeLogs().Len() == 0
 	})
+
+	return stats
 }
 
-// EvalLog returns true if the log record should be DROPPED, false if it should be KEPT.
-func (e *Evaluator) EvalLog(ctx LogContext) bool {
+type logEvalResult struct {
+	Drop        bool
+	Evaluations []PolicyEvaluation
+}
+
+func (e *Evaluator) evaluateLog(ctx LogContext) logEvalResult {
 	if len(e.logPolicies) == 0 {
-		return false
+		return logEvalResult{Drop: false}
 	}
 
+	var matchingPolicies []*compiledLogPolicy
 	var hasKeep, hasDrop bool
 	for _, p := range e.logPolicies {
 		if p.matches(ctx) {
+			matchingPolicies = append(matchingPolicies, p)
 			if p.action == policyv1alpha1.Action_ACTION_KEEP {
 				hasKeep = true
 			} else if p.action == policyv1alpha1.Action_ACTION_DROP {
@@ -98,13 +118,31 @@ func (e *Evaluator) EvalLog(ctx LogContext) bool {
 		}
 	}
 
+	var res logEvalResult
 	if hasKeep {
-		return false // KEEP always overrides DROP
+		res.Drop = false
+		for _, p := range matchingPolicies {
+			if p.action == policyv1alpha1.Action_ACTION_KEEP {
+				res.Evaluations = append(res.Evaluations, PolicyEvaluation{PolicyID: p.id, Result: ResultKept})
+			} else {
+				res.Evaluations = append(res.Evaluations, PolicyEvaluation{PolicyID: p.id, Result: ResultNoMatch})
+			}
+		}
+	} else if hasDrop {
+		res.Drop = true
+		for _, p := range matchingPolicies {
+			res.Evaluations = append(res.Evaluations, PolicyEvaluation{PolicyID: p.id, Result: ResultDropped})
+		}
+	} else {
+		res.Drop = false
 	}
-	if hasDrop {
-		return true // Drop matching record
-	}
-	return false // Default allow
+
+	return res
+}
+
+// EvalLog returns true if the log record should be DROPPED, false if it should be KEPT.
+func (e *Evaluator) EvalLog(ctx LogContext) bool {
+	return e.evaluateLog(ctx).Drop
 }
 
 func (p *compiledLogPolicy) matches(ctx LogContext) bool {

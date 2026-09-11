@@ -19,27 +19,32 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor/internal/metadata"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/pdata/ptrace"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/zap"
 )
 
 type googlePolicyProcessor struct {
 	cfg       *Config
 	logger    *zap.Logger
+	telemetry *metadata.TelemetryBuilder
 	evaluator atomic.Pointer[Evaluator]
 	watcherCh googlepolicy.WatcherChannel
 	stopCh    chan struct{}
 	wg        sync.WaitGroup
 }
 
-func newGooglePolicyProcessor(cfg *Config, logger *zap.Logger) *googlePolicyProcessor {
+func newGooglePolicyProcessor(cfg *Config, logger *zap.Logger, telemetry *metadata.TelemetryBuilder) *googlePolicyProcessor {
 	return &googlePolicyProcessor{
-		cfg:    cfg,
-		logger: logger,
+		cfg:       cfg,
+		logger:    logger,
+		telemetry: telemetry,
 	}
 }
 
@@ -105,23 +110,71 @@ func (p *googlePolicyProcessor) shutdown(_ context.Context) error {
 	return nil
 }
 
-func (p *googlePolicyProcessor) processLogs(_ context.Context, ld plog.Logs) (plog.Logs, error) {
+func (p *googlePolicyProcessor) recordBatchMetrics(ctx context.Context, telemetryType string, stats TransformStats) {
+	if p.telemetry == nil {
+		return
+	}
+
+	// Tier 1: Aggregate records
+	if stats.Dropped > 0 {
+		p.telemetry.ProcessorGooglepolicyRecords.Add(ctx, stats.Dropped, metric.WithAttributes(
+			attribute.String("telemetry_type", telemetryType),
+			attribute.String("result", string(ResultDropped)),
+		))
+	}
+	if stats.Kept > 0 {
+		p.telemetry.ProcessorGooglepolicyRecords.Add(ctx, stats.Kept, metric.WithAttributes(
+			attribute.String("telemetry_type", telemetryType),
+			attribute.String("result", string(ResultKept)),
+		))
+	}
+	if stats.NoMatch > 0 {
+		p.telemetry.ProcessorGooglepolicyRecords.Add(ctx, stats.NoMatch, metric.WithAttributes(
+			attribute.String("telemetry_type", telemetryType),
+			attribute.String("result", string(ResultNoMatch)),
+		))
+	}
+	if stats.Transformed > 0 {
+		p.telemetry.ProcessorGooglepolicyRecords.Add(ctx, stats.Transformed, metric.WithAttributes(
+			attribute.String("telemetry_type", telemetryType),
+			attribute.String("result", string(ResultTransformed)),
+		))
+	}
+
+	// Tier 2: Per-policy records
+	for policyID, outcomes := range stats.PolicyRecords {
+		for result, count := range outcomes {
+			if count > 0 {
+				p.telemetry.ProcessorGooglepolicyPolicyRecords.Add(ctx, count, metric.WithAttributes(
+					attribute.String("policy_id", policyID),
+					attribute.String("telemetry_type", telemetryType),
+					attribute.String("result", string(result)),
+				))
+			}
+		}
+	}
+}
+
+func (p *googlePolicyProcessor) processLogs(ctx context.Context, ld plog.Logs) (plog.Logs, error) {
 	if ev := p.evaluator.Load(); ev != nil {
-		ev.TransformLogs(ld)
+		stats := ev.TransformLogs(ld)
+		p.recordBatchMetrics(ctx, "logs", stats)
 	}
 	return ld, nil
 }
 
-func (p *googlePolicyProcessor) processMetrics(_ context.Context, md pmetric.Metrics) (pmetric.Metrics, error) {
+func (p *googlePolicyProcessor) processMetrics(ctx context.Context, md pmetric.Metrics) (pmetric.Metrics, error) {
 	if ev := p.evaluator.Load(); ev != nil {
-		ev.TransformMetrics(md)
+		stats := ev.TransformMetrics(md)
+		p.recordBatchMetrics(ctx, "metrics", stats)
 	}
 	return md, nil
 }
 
-func (p *googlePolicyProcessor) processTraces(_ context.Context, td ptrace.Traces) (ptrace.Traces, error) {
+func (p *googlePolicyProcessor) processTraces(ctx context.Context, td ptrace.Traces) (ptrace.Traces, error) {
 	if ev := p.evaluator.Load(); ev != nil {
-		ev.TransformTraces(td)
+		stats := ev.TransformTraces(td)
+		p.recordBatchMetrics(ctx, "traces", stats)
 	}
 	return td, nil
 }

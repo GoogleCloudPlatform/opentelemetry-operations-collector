@@ -49,3 +49,43 @@ type TraceContext struct {
 	ResourceSchemaURL string
 	ScopeSchemaURL    string
 }
+
+// PolicyResult represents the outcome of evaluating a telemetry item.
+type PolicyResult string
+
+const (
+	ResultDropped     PolicyResult = "dropped"
+	ResultKept        PolicyResult = "kept"
+	ResultNoMatch     PolicyResult = "no_match"
+	ResultTransformed PolicyResult = "transformed"
+)
+
+// PolicyEvaluation tracks the evaluation outcome for a specific policy.
+type PolicyEvaluation struct {
+	PolicyID string
+	Result   PolicyResult
+}
+
+// TransformStats collects telemetry metrics during a batch transformation pass.
+type TransformStats struct {
+	Dropped     int64
+	Kept        int64
+	NoMatch     int64
+	Transformed int64
+
+	// PolicyRecords maps policyID -> outcome -> count
+	PolicyRecords map[string]map[PolicyResult]int64
+}
+
+func newTransformStats() TransformStats {
+	return TransformStats{
+		PolicyRecords: make(map[string]map[PolicyResult]int64),
+	}
+}
+
+func (s *TransformStats) recordPolicy(policyID string, res PolicyResult) {
+	if s.PolicyRecords[policyID] == nil {
+		s.PolicyRecords[policyID] = make(map[PolicyResult]int64)
+	}
+	s.PolicyRecords[policyID][res]++
+}

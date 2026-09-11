@@ -24,3 +24,50 @@ status:
 
 tests:
   config:
+
+telemetry:
+  metrics:
+    processor_googlepolicy_policy_records:
+      enabled: false
+      description: Number of telemetry records processed by each transformation policy
+      unit: "1"
+      sum:
+        value_type: int
+        monotonic: true
+      attributes:
+        - policy_id
+        - result
+        - telemetry_type
+      stability: development
+
+    processor_googlepolicy_records:
+      enabled: true
+      description: Number of telemetry records processed by the Google policy processor
+      unit: "1"
+      sum:
+        value_type: int
+        monotonic: true
+      attributes:
+        - result
+        - telemetry_type
+      stability: development
+
+attributes:
+  policy_id:
+    description: The unique identifier of the transformation policy
+    type: string
+  result:
+    description: The outcome of policy evaluation
+    type: string
+    enum:
+      - dropped
+      - kept
+      - no_match
+      - transformed
+  telemetry_type:
+    description: The signal type of the telemetry item
+    type: string
+    enum:
+      - logs
+      - metrics
+      - traces

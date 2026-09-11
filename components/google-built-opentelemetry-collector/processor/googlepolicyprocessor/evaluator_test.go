@@ -121,7 +121,9 @@ func TestEvaluator_LogFiltering(t *testing.T) {
 	l2 := sl.LogRecords().AppendEmpty()
 	l2.SetSeverityText("DEBUG_VERBOSE")
 
-	ev.TransformLogs(ld)
+	stats := ev.TransformLogs(ld)
+	require.Equal(t, int64(1), stats.Dropped)
+	require.Equal(t, int64(1), stats.NoMatch)
 	require.Equal(t, 1, ld.ResourceLogs().Len())
 	require.Equal(t, 1, ld.ResourceLogs().At(0).ScopeLogs().Len())
 	require.Equal(t, 1, ld.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().Len())
@@ -264,7 +266,9 @@ func TestEvaluator_MetricFiltering(t *testing.T) {
 	m2.SetName("system.cpu.load")
 	m2.SetEmptyGauge().DataPoints().AppendEmpty()
 
-	ev.TransformMetrics(md)
+	stats := ev.TransformMetrics(md)
+	require.Equal(t, int64(1), stats.Dropped)
+	require.Equal(t, int64(1), stats.NoMatch)
 	require.Equal(t, 1, md.ResourceMetrics().Len())
 	require.Equal(t, 1, md.ResourceMetrics().At(0).ScopeMetrics().Len())
 	require.Equal(t, 1, md.ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics().Len())
@@ -339,7 +343,9 @@ func TestEvaluator_TraceFiltering(t *testing.T) {
 	span2.SetName("get_user")
 	span2.SetKind(ptrace.SpanKindInternal)
 
-	ev.TransformTraces(td)
+	stats := ev.TransformTraces(td)
+	require.Equal(t, int64(1), stats.Dropped)
+	require.Equal(t, int64(1), stats.NoMatch)
 	require.Equal(t, 1, td.ResourceSpans().Len())
 	require.Equal(t, 1, td.ResourceSpans().At(0).ScopeSpans().Len())
 	require.Equal(t, 1, td.ResourceSpans().At(0).ScopeSpans().At(0).Spans().Len())

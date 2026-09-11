@@ -90,6 +90,21 @@ replaces:
     - from: github.com/buger/jsonparser
       to: github.com/buger/jsonparser v1.1.2
       reason: Force update buger/jsonparser to v1.1.2 to fix vulnerability
+    - from: github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector
+      to: github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector v0.62.0
+      reason: Update to opentelemetry-operations-go v0.62.0
+    - from: github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector/googlemanagedprometheus
+      to: github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector/googlemanagedprometheus v0.62.0
+      reason: Update to opentelemetry-operations-go v0.62.0
+    - from: github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric
+      to: github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.62.0
+      reason: Update to opentelemetry-operations-go v0.62.0
+    - from: github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/cloudmock
+      to: github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/cloudmock v0.62.0
+      reason: Update to opentelemetry-operations-go v0.62.0
+    - from: github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping
+      to: github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.62.0
+      reason: Update to opentelemetry-operations-go v0.62.0
 collector_cgo: true
 component_module_base: ""
 distrogen_version: ""

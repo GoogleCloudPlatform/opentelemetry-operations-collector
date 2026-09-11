@@ -168,6 +168,7 @@ func init() {
 	if err != nil {
 		log.Fatalf("storage.NewClient() failed: %v:", err)
 	}
+	storageClient.SetRetry(storage.WithPolicy(storage.RetryAlways))
 	transfersBucket = os.Getenv("TRANSFERS_BUCKET")
 	if transfersBucket == "" {
 		transfersBucket = "stackdriver-test-143416-file-transfers"
@@ -1002,8 +1003,12 @@ func UploadContent(ctx context.Context, logger *log.Logger, vm *VM, content io.R
 	// (note that the go client libraries use resumable uploads).
 	defer func() {
 		deleteErr := object.Delete(ctx)
-		if deleteErr != nil {
-			err = fmt.Errorf("UploadContent() finished with err=%v, then cleanup of %v finished with err=%v", err, object.ObjectName(), deleteErr)
+		if deleteErr != nil && !errors.Is(deleteErr, storage.ErrObjectNotExist) {
+			if err == nil {
+				logger.Printf("UploadContent() succeeded, ignoring transient cleanup error of %v: %v", object.ObjectName(), deleteErr)
+			} else {
+				err = fmt.Errorf("UploadContent() finished with err=%v, then cleanup of %v finished with err=%v", err, object.ObjectName(), deleteErr)
+			}
 		}
 	}()
 
@@ -1012,11 +1017,17 @@ func UploadContent(ctx context.Context, logger *log.Logger, vm *VM, content io.R
 	}
 	objectPath := fmt.Sprintf("gs://%s/%s", object.BucketName(), object.ObjectName())
 	gcloudCmd := fmt.Sprintf("gcloud storage cp '%s' '%s'", objectPath, remotePath)
-	if IsWindows(vm.ImageSpec) {
-		_, err = RunRemotely(ctx, logger, vm, gcloudCmd)
-		return err
+	if !IsWindows(vm.ImageSpec) {
+		gcloudCmd = fmt.Sprintf("sudo %s", gcloudCmd)
 	}
-	_, err = RunRemotely(ctx, logger, vm, fmt.Sprintf("sudo %s", gcloudCmd))
+	downloadBackoff := backoff.WithContext(backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 3), ctx)
+	err = backoff.Retry(func() error {
+		_, runErr := RunRemotely(ctx, logger, vm, gcloudCmd)
+		if runErr != nil {
+			logger.Printf("Transient error downloading %s to %s on VM, retrying: %v", objectPath, remotePath, runErr)
+		}
+		return runErr
+	}, downloadBackoff)
 	return err
 }
 

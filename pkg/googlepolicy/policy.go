@@ -22,6 +22,9 @@ import (
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/confmap"
+	"go.opentelemetry.io/collector/pdata/plog"
+	"go.opentelemetry.io/collector/pdata/pmetric"
+	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 
 var (
@@ -45,6 +48,27 @@ type Policy interface {
 	PolicyType() string
 	PolicyClass() PolicyClass
 	Validate() error
+}
+
+// LogRecordFilter is an interface implemented by policies of class transformation
+// that filter log records.
+type LogRecordFilter interface {
+	Policy
+	ShouldDropLog(log plog.LogRecord, scope plog.ScopeLogs, res plog.ResourceLogs) bool
+}
+
+// MetricFilter is an interface implemented by policies of class transformation
+// that filter metric data points or instruments.
+type MetricFilter interface {
+	Policy
+	ShouldDropMetric(metric pmetric.Metric, scope pmetric.ScopeMetrics, res pmetric.ResourceMetrics) bool
+}
+
+// TraceSpanFilter is an interface implemented by policies of class transformation
+// that filter trace spans.
+type TraceSpanFilter interface {
+	Policy
+	ShouldDropSpan(span ptrace.Span, scope ptrace.ScopeSpans, res ptrace.ResourceSpans) bool
 }
 
 // ComponentPolicy is an extended interface that any policy that produces config
@@ -225,7 +249,13 @@ type GenericDriver[P Policy] struct{}
 
 func (gd *GenericDriver[P]) LoadPolicy(raw map[string]any) (Policy, error) {
 	var p P
-	conf := confmap.NewFromStringMap(raw)
+	cleanRaw := make(map[string]any, len(raw))
+	for k, v := range raw {
+		if k != "type" {
+			cleanRaw[k] = v
+		}
+	}
+	conf := confmap.NewFromStringMap(cleanRaw)
 	if err := conf.Unmarshal(&p); err != nil {
 		return nil, err
 	}

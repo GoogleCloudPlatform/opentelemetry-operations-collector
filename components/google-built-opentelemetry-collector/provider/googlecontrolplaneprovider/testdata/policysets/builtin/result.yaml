@@ -24,6 +24,7 @@ extensions:
         token_header: authorization
         token_type: access_token
 processors:
+    googlepolicy: {}
     queue_batch/default_gcp_destination_batch_logs:
         batch:
             flush_timeout: 200ms
@@ -60,6 +61,9 @@ processors:
         queue_size: 10
         sizer: {}
         wait_for_result: false
+    resourcedetection:
+        detectors:
+            - gcp
 receivers:
     otlp/default_self_metrics:
         protocols:
@@ -71,11 +75,15 @@ receivers:
                 read_buffer_size: 524288
                 transport: tcp
 service:
+    extensions:
+        - googleclientauth/default_gcp_destination
     pipelines:
         logs/default_self_metrics:
             exporters:
                 - otlp_grpc/default_gcp_destination
             processors:
+                - resourcedetection
+                - googlepolicy
                 - queue_batch/default_gcp_destination_batch_logs
             receivers:
                 - otlp/default_self_metrics
@@ -83,12 +91,14 @@ service:
             exporters:
                 - otlp_grpc/default_gcp_destination
             processors:
+                - resourcedetection
+                - googlepolicy
                 - queue_batch/default_gcp_destination_batch_metrics
             receivers:
                 - otlp/default_self_metrics
     telemetry:
         logs:
-            encoding: ""
+            encoding: json
             level: info
             processors:
                 - batch:

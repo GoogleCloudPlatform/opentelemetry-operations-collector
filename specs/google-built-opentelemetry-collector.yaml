@@ -89,6 +89,8 @@ components:
     - transform
     - interval
     - metricsgeneration
+    - googlepolicy
+    - queuebatch
 
   exporters:
     - debug
@@ -144,8 +146,15 @@ components:
     - https
     - yaml
     - googlesecretmanager
+    - googlecontrolplane
 
 replaces:
   - from: github.com/buger/jsonparser
     to: github.com/buger/jsonparser v1.1.2
     reason: Force update buger/jsonparser to v1.1.2 to fix vulnerability
+  - from: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy
+    to: ../../pkg/googlepolicy
+    reason: Local module replacement for policy package
+  - from: github.com/GoogleCloudPlatform/opentelemetry-operations-collector
+    to: ../..
+    reason: Local module replacement for root repository

@@ -136,12 +136,16 @@ func notifyWatchers() {
 // SetActivePolicySet will set a new active policy set, moving the current
 // active policy set to the previous sets.
 func SetActivePolicySet(policySet *PolicySet) {
-	if policySet == nil {
-		return
-	}
-
 	policySetMu.Lock()
 	defer policySetMu.Unlock()
+
+	if policySet == nil {
+		if activePolicySet != nil {
+			activePolicySet = nil
+			notifyWatchers()
+		}
+		return
+	}
 
 	if activePolicySet != nil && activePolicySet.RevisionID == policySet.RevisionID {
 		return

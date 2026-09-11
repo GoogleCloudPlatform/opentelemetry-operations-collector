@@ -31,6 +31,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor/internal/metadata"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/logfilter"
 )
 
 func TestProcessTraces_NilEngine(t *testing.T) {
@@ -568,4 +569,115 @@ func TestProcessTraces_Telemetry(t *testing.T) {
 	}
 	assert.Equal(t, int64(1), counts["dropped"])
 	assert.Equal(t, int64(1), counts["no_match"])
+}
+
+func TestProcessLogs_WithRealLogFilterPolicy(t *testing.T) {
+	p := newGooglePolicyProcessor(&Config{}, zap.NewNop(), nil)
+	require.NoError(t, p.start(context.Background(), componenttest.NewNopHost()))
+	defer func() { _ = p.shutdown(context.Background()) }()
+
+	dropPolicy, err := logfilter.NewPolicyFromProto(&policyv1alpha1.LogFilterPolicy{
+		Id:     "drop-debug-logs",
+		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+		Matches: []*policyv1alpha1.LogMatcher{
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_RecordField{
+						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
+					},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_StringValue{
+							StringValue: "DROP_THIS_LINE",
+						},
+					},
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	ps := &googlepolicy.PolicySet{
+		RevisionID: "rev-real-filter",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			dropPolicy.PolicyName(): {PolicyObj: dropPolicy},
+		},
+	}
+	googlepolicy.SetActivePolicySet(ps)
+	defer googlepolicy.SetActivePolicySet(nil)
+
+	assert.Eventually(t, func() bool {
+		ev := p.evaluator.Load()
+		return ev != nil && len(ev.logPolicies) > 0
+	}, 1*time.Second, 10*time.Millisecond)
+
+	ld := plog.NewLogs()
+	rl := ld.ResourceLogs().AppendEmpty()
+	sl := rl.ScopeLogs().AppendEmpty()
+
+	lr1 := sl.LogRecords().AppendEmpty()
+	lr1.Body().SetStr("DROP_THIS_LINE")
+
+	lr2 := sl.LogRecords().AppendEmpty()
+	lr2.Body().SetStr("KEEP_THIS_LINE")
+
+	out, err := p.processLogs(context.Background(), ld)
+	require.NoError(t, err)
+
+	require.Equal(t, 1, out.ResourceLogs().Len())
+	require.Equal(t, 1, out.ResourceLogs().At(0).ScopeLogs().Len())
+	records := out.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords()
+	require.Equal(t, 1, records.Len())
+	assert.Equal(t, "KEEP_THIS_LINE", records.At(0).Body().AsString())
+}
+
+func TestProcessLogs_LoadFromRawJSONPolicySet(t *testing.T) {
+	p := newGooglePolicyProcessor(&Config{}, zap.NewNop(), nil)
+	require.NoError(t, p.start(context.Background(), componenttest.NewNopHost()))
+	defer func() { _ = p.shutdown(context.Background()) }()
+
+	rawPolicy := map[string]any{
+		"type":   "log_filter",
+		"id":     "drop-warn-logs",
+		"action": "ACTION_DROP",
+		"matches": []any{
+			map[string]any{
+				"target": map[string]any{
+					"record_field": "LOG_RECORD_FIELD_SEVERITY_TEXT",
+				},
+				"equals": map[string]any{
+					"string_value": "WARN",
+				},
+			},
+		},
+	}
+
+	ps, err := googlepolicy.MakePolicySet("rev-raw", []map[string]any{rawPolicy})
+	require.NoError(t, err)
+	googlepolicy.SetActivePolicySet(ps)
+	defer googlepolicy.SetActivePolicySet(nil)
+
+	assert.Eventually(t, func() bool {
+		ev := p.evaluator.Load()
+		return ev != nil && len(ev.logPolicies) > 0
+	}, 1*time.Second, 10*time.Millisecond)
+
+	ld := plog.NewLogs()
+	rl := ld.ResourceLogs().AppendEmpty()
+	sl := rl.ScopeLogs().AppendEmpty()
+
+	lWarn := sl.LogRecords().AppendEmpty()
+	lWarn.SetSeverityText("WARN")
+
+	lInfo := sl.LogRecords().AppendEmpty()
+	lInfo.SetSeverityText("INFO")
+
+	out, err := p.processLogs(context.Background(), ld)
+	require.NoError(t, err)
+
+	require.Equal(t, 1, out.ResourceLogs().Len())
+	records := out.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords()
+	require.Equal(t, 1, records.Len())
+	assert.Equal(t, "INFO", records.At(0).SeverityText())
 }

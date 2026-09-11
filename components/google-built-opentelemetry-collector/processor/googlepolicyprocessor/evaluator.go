@@ -72,7 +72,19 @@ func NewEvaluator(policies []googlepolicy.TransformationPolicy) (*Evaluator, err
 			continue
 		}
 		raw := any(tp)
-		if pp, ok := tp.(ProtoPolicy); ok {
+		if pp, ok := tp.(interface {
+			Proto() *policyv1alpha1.LogFilterPolicy
+		}); ok {
+			raw = pp.Proto()
+		} else if pp, ok := tp.(interface {
+			Proto() *policyv1alpha1.MetricFilterPolicy
+		}); ok {
+			raw = pp.Proto()
+		} else if pp, ok := tp.(interface {
+			Proto() *policyv1alpha1.TraceFilterPolicy
+		}); ok {
+			raw = pp.Proto()
+		} else if pp, ok := tp.(ProtoPolicy); ok {
 			raw = pp.Proto()
 		}
 

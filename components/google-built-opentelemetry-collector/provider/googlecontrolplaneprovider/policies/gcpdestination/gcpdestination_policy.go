@@ -120,8 +120,44 @@ func (p *GCPDestinationPolicy) Evaluate(_ context.Context) (*confmap.Conf, error
 		Detectors []string `mapstructure:"detectors"`
 	}
 
+	resourceType, _ := component.NewType("resource")
+	resourceProjectID := component.NewIDWithName(resourceType, fmt.Sprintf("%s_gcp_project_id", p.Name))
+
+	type resourceAttributeAction struct {
+		Action        string `mapstructure:"action"`
+		Key           string `mapstructure:"key"`
+		Value         any    `mapstructure:"value,omitempty"`
+		FromAttribute string `mapstructure:"from_attribute,omitempty"`
+	}
+
+	type resourceConfig struct {
+		Attributes []resourceAttributeAction `mapstructure:"attributes"`
+	}
+
+	var resourceAttrs []resourceAttributeAction
+	if p.ProjectID != "" {
+		resourceAttrs = append(resourceAttrs, resourceAttributeAction{
+			Action: "insert",
+			Key:    "gcp.project_id",
+			Value:  p.ProjectID,
+		})
+	}
+	resourceAttrs = append(resourceAttrs,
+		resourceAttributeAction{
+			Action:        "insert",
+			Key:           "gcp.project_id",
+			FromAttribute: "cloud.account.id",
+		},
+		resourceAttributeAction{
+			Action:        "insert",
+			Key:           "gcp.project_id",
+			FromAttribute: "gcp.project.id",
+		},
+	)
+
 	conf.Processors = map[component.ID]component.Config{
 		resourceDetectionID: &resourceDetectionConfig{Detectors: []string{"gcp"}},
+		resourceProjectID:   &resourceConfig{Attributes: resourceAttrs},
 		googlePolicyID:      &struct{}{},
 		queueBatchLogsID:    component.Config(queueBatchLog),
 		queueBatchMetricsID: component.Config(queueBatchMetric),
@@ -130,9 +166,9 @@ func (p *GCPDestinationPolicy) Evaluate(_ context.Context) (*confmap.Conf, error
 
 	p.extensionIDs = []component.ID{authID}
 	p.exporterIDs = []component.ID{otlpExporterID}
-	p.preprocessorLogIDs = []component.ID{resourceDetectionID, googlePolicyID, queueBatchLogsID}
-	p.preprocessorMetricIDs = []component.ID{resourceDetectionID, googlePolicyID, queueBatchMetricsID}
-	p.preprocessorTraceIDs = []component.ID{resourceDetectionID, googlePolicyID, queueBatchTracesID}
+	p.preprocessorLogIDs = []component.ID{resourceDetectionID, resourceProjectID, googlePolicyID, queueBatchLogsID}
+	p.preprocessorMetricIDs = []component.ID{resourceDetectionID, resourceProjectID, googlePolicyID, queueBatchMetricsID}
+	p.preprocessorTraceIDs = []component.ID{resourceDetectionID, resourceProjectID, googlePolicyID, queueBatchTracesID}
 
 	cm := confmap.New()
 	if err := cm.Marshal(conf); err != nil {

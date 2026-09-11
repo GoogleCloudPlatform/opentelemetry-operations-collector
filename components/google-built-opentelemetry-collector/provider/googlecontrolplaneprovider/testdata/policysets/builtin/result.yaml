@@ -61,6 +61,14 @@ processors:
         queue_size: 10
         sizer: {}
         wait_for_result: false
+    resource/default_gcp_destination_gcp_project_id:
+        attributes:
+            - action: insert
+              from_attribute: cloud.account.id
+              key: gcp.project_id
+            - action: insert
+              from_attribute: gcp.project.id
+              key: gcp.project_id
     resourcedetection:
         detectors:
             - gcp
@@ -83,6 +91,7 @@ service:
                 - otlp_grpc/default_gcp_destination
             processors:
                 - resourcedetection
+                - resource/default_gcp_destination_gcp_project_id
                 - googlepolicy
                 - queue_batch/default_gcp_destination_batch_logs
             receivers:
@@ -92,6 +101,7 @@ service:
                 - otlp_grpc/default_gcp_destination
             processors:
                 - resourcedetection
+                - resource/default_gcp_destination_gcp_project_id
                 - googlepolicy
                 - queue_batch/default_gcp_destination_batch_metrics
             receivers:

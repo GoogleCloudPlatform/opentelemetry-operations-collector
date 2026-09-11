@@ -90,7 +90,7 @@ func (p *GCPDestinationPolicy) Evaluate(_ context.Context) (*confmap.Conf, error
 		otlpExporterID: component.Config(otlpExporter),
 	}
 
-	queueBatchType, _ := component.NewType("queue_batch")
+	queueBatchType := queuebatchprocessor.NewFactory().Type()
 
 	queueBatchLog := queuebatchprocessor.NewFactory().CreateDefaultConfig().(*queuebatchprocessor.Config)
 	batchSubconfig := queueBatchLog.Batch.GetOrInsertDefault()

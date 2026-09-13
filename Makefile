@@ -183,6 +183,7 @@ distrogen-golden-update:
 ALL_DIRECTORIES = find . -type d  -print0
 EXCLUDE_TOOLS_DIRS = grep -z -v ".*\.tools.*"
 EXCLUDE_BUILD_DIRS = grep -z -v -e ".*_build.*" -e ".*dist.*"
+EXCLUDE_GENERATED_COLLECTOR_DIRS = grep -z -v ".*generated_collector.*"
 
 .PHONY: workspace
 workspace: go.work
@@ -192,6 +193,7 @@ go.work:
 	$(ALL_DIRECTORIES) |\
 	$(EXCLUDE_TOOLS_DIRS) |\
 	$(EXCLUDE_BUILD_DIRS) |\
+	$(EXCLUDE_GENERATED_COLLECTOR_DIRS) |\
 	xargs -0 go work use
 
 .PHONY: clean-workspace
@@ -272,7 +274,7 @@ tag-repo:
 	bash ./internal/tools/scripts/tag.sh $(GBOC_TAG)
 
 EXCLUDE_INTERNAL_TOOLS =  grep -v ".*internal/tools.*"
-EXCLUDE_SMOKE_TEST = grep -v ".*integration_test/smoke_test.*"
+EXCLUDE_INTEGRATION_TESTS = grep -v ".*integration_test.*"
 EXCLUDE_TESTDATA = grep -v ".*testdata.*"
 EXCLUDE_GENERATED_COLLECTOR = grep -v ".*generated_collector.*"
 
@@ -283,7 +285,7 @@ ifndef TARGET
 else
 	go list -f "{{ .Dir }}" -m |\
 	$(EXCLUDE_INTERNAL_TOOLS) |\
-	$(EXCLUDE_SMOKE_TEST) |\
+	$(EXCLUDE_INTEGRATION_TESTS) |\
 	$(EXCLUDE_TESTDATA) |\
 	$(EXCLUDE_GENERATED_COLLECTOR) |\
 	GOWORK=off xargs -t -I '{}' $(MAKE) -C {} $(TARGET)

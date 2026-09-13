@@ -36,9 +36,10 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 
 	xdsv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/xds/v1alpha1"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 )
 
-var _ policyManager = (*xdsPolicyManager)(nil)
+var _ googlepolicy.Manager = (*xdsPolicyManager)(nil)
 
 // xdsPolicyManager connects to an xDS control plane, prints received TelemetryCollector objects, and ACKs them.
 type xdsPolicyManager struct {

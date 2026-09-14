@@ -89,59 +89,67 @@ func (p *SelfMetricsPolicy) Evaluate(ctx context.Context) (*confmap.Conf, error)
 	interval := 5000
 	timeout := 30000
 
-	conf.Service = service.Config{
-		Telemetry: &otelconftelemetry.Config{
-			Resource: otelconftelemetry.ResourceConfig{
-				Resource: config.Resource{
-					Attributes: []config.AttributeNameValue{
-						{
-							Name:  "service.instance.id",
-							Value: collectorID,
-						},
-						{
-							Name:  "gcp.fleet_id",
-							Value: fleetID,
-						},
+	// Start from the telemetry factory's default config and override only what
+	// this policy actually cares about. Building otelconftelemetry.Config as a
+	// literal silently drops every default the factory supplies -- most
+	// importantly Logs.Encoding, whose zero value makes the collector fail at
+	// startup with "failed to create logger: no encoder name specified", but
+	// also log sampling and the stderr output paths.
+	telemetryCfg := otelconftelemetry.NewFactory().CreateDefaultConfig().(*otelconftelemetry.Config)
+
+	telemetryCfg.Resource = otelconftelemetry.ResourceConfig{
+		Resource: config.Resource{
+			Attributes: []config.AttributeNameValue{
+				{
+					Name:  "service.instance.id",
+					Value: collectorID,
+				},
+				{
+					Name:  "gcp.fleet_id",
+					Value: fleetID,
+				},
+			},
+		},
+	}
+
+	telemetryCfg.Logs.Level = zapcore.InfoLevel
+	telemetryCfg.Logs.Processors = []config.LogRecordProcessor{
+		{
+			Batch: &config.BatchLogRecordProcessor{
+				Exporter: config.LogRecordExporter{
+					OTLP: &config.OTLP{
+						Endpoint: &endpoint,
+						Protocol: &protocol,
+						Insecure: &insecure,
 					},
 				},
 			},
-			Logs: otelconftelemetry.LogsConfig{
-				Level: zapcore.InfoLevel,
-				Processors: []config.LogRecordProcessor{
-					{
-						Batch: &config.BatchLogRecordProcessor{
-							Exporter: config.LogRecordExporter{
-								OTLP: &config.OTLP{
-									Endpoint: &endpoint,
-									Protocol: &protocol,
-									Insecure: &insecure,
-								},
-							},
-						},
-					},
-				},
-			},
-			Metrics: otelconftelemetry.MetricsConfig{
-				Level: configtelemetry.LevelNormal,
-				MeterProvider: config.MeterProvider{
-					Readers: []config.MetricReader{
-						{
-							Periodic: &config.PeriodicMetricReader{
-								Interval: &interval,
-								Timeout:  &timeout,
-								Exporter: config.PushMetricExporter{
-									OTLP: &config.OTLPMetric{
-										Endpoint: &endpoint,
-										Protocol: &protocol,
-										Insecure: &insecure,
-									},
-								},
-							},
+		},
+	}
+
+	telemetryCfg.Metrics.Level = configtelemetry.LevelNormal
+	// Replaces the factory's default Prometheus pull reader on :8888, which
+	// this collector does not expose.
+	telemetryCfg.Metrics.MeterProvider = config.MeterProvider{
+		Readers: []config.MetricReader{
+			{
+				Periodic: &config.PeriodicMetricReader{
+					Interval: &interval,
+					Timeout:  &timeout,
+					Exporter: config.PushMetricExporter{
+						OTLP: &config.OTLPMetric{
+							Endpoint: &endpoint,
+							Protocol: &protocol,
+							Insecure: &insecure,
 						},
 					},
 				},
 			},
 		},
+	}
+
+	conf.Service = service.Config{
+		Telemetry: telemetryCfg,
 	}
 
 	otlpReceiver := otlpreceiver.NewFactory().CreateDefaultConfig().(*otlpreceiver.Config)

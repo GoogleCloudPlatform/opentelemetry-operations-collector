@@ -21,9 +21,9 @@
 package xdsv1alpha1
 
 import (
-	v3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	anypb "google.golang.org/protobuf/types/known/anypb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -45,16 +45,14 @@ const (
 type TelemetryCollector struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Ordered list of policies applied to telemetry passing through this collector.
-	// Each policy is encapsulated inside a standard Envoy TypedExtensionConfig
-	// where:
-	//   - `name`: The policy identifier or descriptive name.
-	//   - `typed_config`: A `google.protobuf.Any` wrapping a pure policy definition
-	//     (e.g., `type.googleapis.com/google.telemetry.policy.v1alpha1.LogFilterPolicy`).
-	//     The encapsulated policy type should align with OTEP policy definitions
-	//     (https://github.com/open-telemetry/opentelemetry-specification/blob/main/oteps/4738-telemetry-policy.md)
-	//     and the type names used for OpAMP custom messages
-	//     (https://opentelemetry.io/docs/specs/opamp/#custom-messages).
-	Policies      []*v3.TypedExtensionConfig `protobuf:"bytes,1,rep,name=policies,proto3" json:"policies,omitempty"`
+	// Each policy is encapsulated inside a standard `google.protobuf.Any` wrapping
+	// a pure policy definition (e.g.,
+	// `type.googleapis.com/google.telemetry.policy.v1alpha1.LogFilterPolicy`).
+	// The encapsulated policy type should align with OTEP policy definitions
+	// (https://github.com/open-telemetry/opentelemetry-specification/blob/main/oteps/4738-telemetry-policy.md)
+	// and the type names used for OpAMP custom messages
+	// (https://opentelemetry.io/docs/specs/opamp/#custom-messages).
+	Policies      []*anypb.Any `protobuf:"bytes,1,rep,name=policies,proto3" json:"policies,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -89,7 +87,7 @@ func (*TelemetryCollector) Descriptor() ([]byte, []int) {
 	return file_xds_v1alpha1_telemetry_collector_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *TelemetryCollector) GetPolicies() []*v3.TypedExtensionConfig {
+func (x *TelemetryCollector) GetPolicies() []*anypb.Any {
 	if x != nil {
 		return x.Policies
 	}
@@ -100,9 +98,9 @@ var File_xds_v1alpha1_telemetry_collector_proto protoreflect.FileDescriptor
 
 const file_xds_v1alpha1_telemetry_collector_proto_rawDesc = "" +
 	"\n" +
-	"&xds/v1alpha1/telemetry_collector.proto\x12\x1dgoogle.telemetry.xds.v1alpha1\x1a$envoy/config/core/v3/extension.proto\"\\\n" +
-	"\x12TelemetryCollector\x12F\n" +
-	"\bpolicies\x18\x01 \x03(\v2*.envoy.config.core.v3.TypedExtensionConfigR\bpoliciesB\xb6\x02\n" +
+	"&xds/v1alpha1/telemetry_collector.proto\x12\x1dgoogle.telemetry.xds.v1alpha1\x1a\x19google/protobuf/any.proto\"F\n" +
+	"\x12TelemetryCollector\x120\n" +
+	"\bpolicies\x18\x01 \x03(\v2\x14.google.protobuf.AnyR\bpoliciesB\xb6\x02\n" +
 	"!com.google.telemetry.xds.v1alpha1B\x17TelemetryCollectorProtoP\x01Zagithub.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/xds/v1alpha1;xdsv1alpha1\xa2\x02\x03GTX\xaa\x02\x1dGoogle.Telemetry.Xds.V1alpha1\xca\x02\x1dGoogle\\Telemetry\\Xds\\V1alpha1\xe2\x02)Google\\Telemetry\\Xds\\V1alpha1\\GPBMetadata\xea\x02 Google::Telemetry::Xds::V1alpha1b\x06proto3"
 
 var (
@@ -119,11 +117,11 @@ func file_xds_v1alpha1_telemetry_collector_proto_rawDescGZIP() []byte {
 
 var file_xds_v1alpha1_telemetry_collector_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
 var file_xds_v1alpha1_telemetry_collector_proto_goTypes = []any{
-	(*TelemetryCollector)(nil),      // 0: google.telemetry.xds.v1alpha1.TelemetryCollector
-	(*v3.TypedExtensionConfig)(nil), // 1: envoy.config.core.v3.TypedExtensionConfig
+	(*TelemetryCollector)(nil), // 0: google.telemetry.xds.v1alpha1.TelemetryCollector
+	(*anypb.Any)(nil),          // 1: google.protobuf.Any
 }
 var file_xds_v1alpha1_telemetry_collector_proto_depIdxs = []int32{
-	1, // 0: google.telemetry.xds.v1alpha1.TelemetryCollector.policies:type_name -> envoy.config.core.v3.TypedExtensionConfig
+	1, // 0: google.telemetry.xds.v1alpha1.TelemetryCollector.policies:type_name -> google.protobuf.Any
 	1, // [1:1] is the sub-list for method output_type
 	1, // [1:1] is the sub-list for method input_type
 	1, // [1:1] is the sub-list for extension type_name

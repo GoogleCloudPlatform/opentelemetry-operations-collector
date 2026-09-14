@@ -17,7 +17,6 @@ package policyv1alpha1_test
 import (
 	"testing"
 
-	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -302,12 +301,7 @@ func TestMetricFilterPolicy_AnyPackaging(t *testing.T) {
 
 	// Wrap inside TelemetryCollector.
 	collector := &xdsv1alpha1.TelemetryCollector{
-		Policies: []*corev3.TypedExtensionConfig{
-			{
-				Name:        "metric-filter-policy",
-				TypedConfig: anyPolicy,
-			},
-		},
+		Policies: []*anypb.Any{anyPolicy},
 	}
 
 	// Verify round-trip serialization.
@@ -318,10 +312,10 @@ func TestMetricFilterPolicy_AnyPackaging(t *testing.T) {
 	require.NoError(t, proto.Unmarshal(data, unmarshaled))
 
 	require.Len(t, unmarshaled.GetPolicies(), 1)
-	assert.Equal(t, "metric-filter-policy", unmarshaled.GetPolicies()[0].GetName())
+	assert.Equal(t, "type.googleapis.com/google.telemetry.policy.v1alpha1.MetricFilterPolicy", unmarshaled.GetPolicies()[0].GetTypeUrl())
 
 	unpackedPolicy := &policyv1alpha1.MetricFilterPolicy{}
-	require.NoError(t, unmarshaled.GetPolicies()[0].GetTypedConfig().UnmarshalTo(unpackedPolicy))
+	require.NoError(t, unmarshaled.GetPolicies()[0].UnmarshalTo(unpackedPolicy))
 	assert.Equal(t, "drop-metrics-policy", unpackedPolicy.GetId())
 	assert.NotNil(t, unpackedPolicy.Action)
 	assert.Equal(t, policyv1alpha1.Action_ACTION_DROP, unpackedPolicy.GetAction())

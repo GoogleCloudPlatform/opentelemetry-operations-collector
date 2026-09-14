@@ -17,7 +17,6 @@ package xdsv1alpha1_test
 import (
 	"testing"
 
-	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
@@ -29,7 +28,9 @@ import (
 
 func TestTelemetryCollector_AnyPackaging(t *testing.T) {
 	// Create pure policy (Tier 1).
-	policy := &policyv1alpha1.LogFilterPolicy{}
+	policy := &policyv1alpha1.LogFilterPolicy{
+		Id: "default-log-filter",
+	}
 
 	anyPolicy, err := anypb.New(policy)
 	require.NoError(t, err)
@@ -37,12 +38,7 @@ func TestTelemetryCollector_AnyPackaging(t *testing.T) {
 
 	// Wrap inside TelemetryCollector (Tier 2).
 	collector := &xdsv1alpha1.TelemetryCollector{
-		Policies: []*corev3.TypedExtensionConfig{
-			{
-				Name:        "default-log-filter",
-				TypedConfig: anyPolicy,
-			},
-		},
+		Policies: []*anypb.Any{anyPolicy},
 	}
 
 	// Verify serialization round-trip.
@@ -53,8 +49,9 @@ func TestTelemetryCollector_AnyPackaging(t *testing.T) {
 	require.NoError(t, proto.Unmarshal(data, unmarshaled))
 
 	require.Len(t, unmarshaled.GetPolicies(), 1)
-	assert.Equal(t, "default-log-filter", unmarshaled.GetPolicies()[0].GetName())
+	assert.Equal(t, "type.googleapis.com/google.telemetry.policy.v1alpha1.LogFilterPolicy", unmarshaled.GetPolicies()[0].GetTypeUrl())
 
 	unpackedPolicy := &policyv1alpha1.LogFilterPolicy{}
-	require.NoError(t, unmarshaled.GetPolicies()[0].GetTypedConfig().UnmarshalTo(unpackedPolicy))
+	require.NoError(t, unmarshaled.GetPolicies()[0].UnmarshalTo(unpackedPolicy))
+	assert.Equal(t, "default-log-filter", unpackedPolicy.GetId())
 }

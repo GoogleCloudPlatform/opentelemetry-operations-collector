@@ -15,7 +15,10 @@
 package googlepolicyprocessor
 
 import (
+	"errors"
+
 	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 
@@ -31,6 +34,12 @@ type compiledTraceMatcher struct {
 }
 
 func compileTracePolicy(p *policyv1alpha1.TraceFilterPolicy) (*compiledTracePolicy, error) {
+	if p.GetAction() == policyv1alpha1.Action_ACTION_UNSPECIFIED {
+		return nil, errors.New("policy action must be specified")
+	}
+	if len(p.GetMatches()) == 0 {
+		return nil, errors.New("policy must have at least one matcher")
+	}
 	cp := &compiledTracePolicy{
 		id:     p.GetId(),
 		action: p.GetAction(),
@@ -87,24 +96,18 @@ func (e *Evaluator) EvalTrace(ctx TraceContext) bool {
 		return false
 	}
 
-	var hasKeep, hasDrop bool
+	var hasDrop bool
 	for _, p := range e.tracePolicies {
 		if p.matches(ctx) {
 			if p.action == policyv1alpha1.Action_ACTION_KEEP {
-				hasKeep = true
-			} else if p.action == policyv1alpha1.Action_ACTION_DROP {
+				return false
+			}
+			if p.action == policyv1alpha1.Action_ACTION_DROP {
 				hasDrop = true
 			}
 		}
 	}
-
-	if hasKeep {
-		return false
-	}
-	if hasDrop {
-		return true
-	}
-	return false
+	return hasDrop
 }
 
 func (p *compiledTracePolicy) matches(ctx TraceContext) bool {
@@ -142,7 +145,7 @@ func extractTraceTarget(ctx TraceContext, target *policyv1alpha1.TraceFieldSelec
 		case policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID:
 			psid := ctx.Span.ParentSpanID()
 			if psid.IsEmpty() {
-				return nil, false
+				return "", false
 			}
 			return psid.String(), true
 		case policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_STATUS_MESSAGE:
@@ -156,12 +159,24 @@ func extractTraceTarget(ctx TraceContext, target *policyv1alpha1.TraceFieldSelec
 			return nil, false
 		}
 	case *policyv1alpha1.TraceFieldSelector_SpanAttribute:
+		if ctx.Span == (ptrace.Span{}) {
+			return nil, false
+		}
 		return lookupPath(ctx.Span.Attributes(), t.SpanAttribute.GetPath())
 	case *policyv1alpha1.TraceFieldSelector_ResourceAttribute:
+		if ctx.Resource == (pcommon.Resource{}) {
+			return nil, false
+		}
 		return lookupPath(ctx.Resource.Attributes(), t.ResourceAttribute.GetPath())
 	case *policyv1alpha1.TraceFieldSelector_ScopeAttribute:
+		if ctx.Scope == (pcommon.InstrumentationScope{}) {
+			return nil, false
+		}
 		return lookupPath(ctx.Scope.Attributes(), t.ScopeAttribute.GetPath())
 	case *policyv1alpha1.TraceFieldSelector_ScopeField:
+		if ctx.Scope == (pcommon.InstrumentationScope{}) {
+			return nil, false
+		}
 		switch t.ScopeField {
 		case policyv1alpha1.ScopeField_SCOPE_FIELD_NAME:
 			s := ctx.Scope.Name()

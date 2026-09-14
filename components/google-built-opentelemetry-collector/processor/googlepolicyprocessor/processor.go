@@ -33,6 +33,7 @@ type googlePolicyProcessor struct {
 	evaluator atomic.Pointer[Evaluator]
 	watcherCh googlepolicy.WatcherChannel
 	stopCh    chan struct{}
+	stopOnce  sync.Once
 	wg        sync.WaitGroup
 }
 
@@ -46,6 +47,7 @@ func newGooglePolicyProcessor(cfg *Config, logger *zap.Logger) *googlePolicyProc
 func (p *googlePolicyProcessor) start(_ context.Context, _ component.Host) error {
 	p.logger.Info("Starting Google policy processor")
 	p.stopCh = make(chan struct{})
+	p.stopOnce = sync.Once{}
 	p.watcherCh = googlepolicy.RegisterWatcherChannel()
 
 	p.reloadPolicies()
@@ -95,12 +97,14 @@ func (p *googlePolicyProcessor) watchPolicies() {
 
 func (p *googlePolicyProcessor) shutdown(_ context.Context) error {
 	p.logger.Info("Shutting down Google policy processor")
-	if p.stopCh != nil {
-		close(p.stopCh)
-	}
-	if p.watcherCh != nil {
-		googlepolicy.UnregisterWatcherChannel(p.watcherCh)
-	}
+	p.stopOnce.Do(func() {
+		if p.stopCh != nil {
+			close(p.stopCh)
+		}
+		if p.watcherCh != nil {
+			googlepolicy.UnregisterWatcherChannel(p.watcherCh)
+		}
+	})
 	p.wg.Wait()
 	return nil
 }

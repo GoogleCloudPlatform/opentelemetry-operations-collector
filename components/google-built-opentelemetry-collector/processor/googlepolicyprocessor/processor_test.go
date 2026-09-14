@@ -304,3 +304,50 @@ func TestProcessLogs_DynamicPolicyUpdate(t *testing.T) {
 		return err == nil && out.ResourceLogs().Len() == 0
 	}, 1*time.Second, 10*time.Millisecond)
 }
+
+func TestProcessor_DoubleShutdownAndReloadFailure(t *testing.T) {
+	// Set an invalid policy (empty matchers) to trigger compile error in reloadPolicies
+	invalidPolicy := &testTransformationPolicy{
+		name:    "invalid-log-policy",
+		signals: []googlepolicy.Signal{googlepolicy.SignalLogs},
+		pb: &policyv1alpha1.LogFilterPolicy{
+			Id:     "invalid-log-policy",
+			Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+			// Matches is empty -> compileLogPolicy returns error
+		},
+	}
+
+	googlepolicy.SetActivePolicySet(&googlepolicy.PolicySet{
+		RevisionID: "rev-invalid",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			"invalid-log-policy": {
+				PolicyObj: invalidPolicy,
+			},
+		},
+	})
+	defer googlepolicy.SetActivePolicySet(nil)
+
+	p := newGooglePolicyProcessor(&Config{}, zap.NewNop())
+	require.NoError(t, p.start(context.Background(), componenttest.NewNopHost()))
+
+	// Evaluator should remain nil due to compilation error
+	assert.Nil(t, p.evaluator.Load())
+
+	// Calling shutdown multiple times must not panic (Review Issue #12)
+	require.NoError(t, p.shutdown(context.Background()))
+	require.NoError(t, p.shutdown(context.Background()))
+}
+
+func TestProcessor_WatcherChannelClosed(t *testing.T) {
+	p := newGooglePolicyProcessor(&Config{}, zap.NewNop())
+	p.stopCh = make(chan struct{})
+	ch := make(chan struct{})
+	p.watcherCh = ch
+
+	p.wg.Add(1)
+	go p.watchPolicies()
+
+	// Closing watcherCh directly should cause watchPolicies goroutine to exit cleanly
+	close(ch)
+	p.wg.Wait()
+}

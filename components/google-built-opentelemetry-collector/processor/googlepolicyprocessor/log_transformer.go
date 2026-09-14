@@ -15,7 +15,10 @@
 package googlepolicyprocessor
 
 import (
+	"errors"
+
 	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
 )
 
@@ -31,6 +34,12 @@ type compiledLogMatcher struct {
 }
 
 func compileLogPolicy(p *policyv1alpha1.LogFilterPolicy) (*compiledLogPolicy, error) {
+	if p.GetAction() == policyv1alpha1.Action_ACTION_UNSPECIFIED {
+		return nil, errors.New("policy action must be specified")
+	}
+	if len(p.GetMatches()) == 0 {
+		return nil, errors.New("policy must have at least one matcher")
+	}
 	cp := &compiledLogPolicy{
 		id:     p.GetId(),
 		action: p.GetAction(),
@@ -87,24 +96,18 @@ func (e *Evaluator) EvalLog(ctx LogContext) bool {
 		return false
 	}
 
-	var hasKeep, hasDrop bool
+	var hasDrop bool
 	for _, p := range e.logPolicies {
 		if p.matches(ctx) {
 			if p.action == policyv1alpha1.Action_ACTION_KEEP {
-				hasKeep = true
-			} else if p.action == policyv1alpha1.Action_ACTION_DROP {
+				return false // KEEP always overrides DROP
+			}
+			if p.action == policyv1alpha1.Action_ACTION_DROP {
 				hasDrop = true
 			}
 		}
 	}
-
-	if hasKeep {
-		return false // KEEP always overrides DROP
-	}
-	if hasDrop {
-		return true // Drop matching record
-	}
-	return false // Default allow
+	return hasDrop
 }
 
 func (p *compiledLogPolicy) matches(ctx LogContext) bool {
@@ -125,8 +128,14 @@ func extractLogTarget(ctx LogContext, target *policyv1alpha1.LogFieldSelector) (
 	case *policyv1alpha1.LogFieldSelector_RecordField:
 		switch t.RecordField {
 		case policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY:
-			s := ctx.Record.Body().AsString()
-			return s, s != ""
+			if ctx.Record.Body().Type() == pcommon.ValueTypeEmpty {
+				return nil, false
+			}
+			val := pcommonValueToAny(ctx.Record.Body())
+			if s, ok := val.(string); ok {
+				return s, s != ""
+			}
+			return val, true
 		case policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT:
 			s := ctx.Record.SeverityText()
 			return s, s != ""
@@ -149,12 +158,24 @@ func extractLogTarget(ctx LogContext, target *policyv1alpha1.LogFieldSelector) (
 			return nil, false
 		}
 	case *policyv1alpha1.LogFieldSelector_LogAttribute:
+		if ctx.Record == (plog.LogRecord{}) {
+			return nil, false
+		}
 		return lookupPath(ctx.Record.Attributes(), t.LogAttribute.GetPath())
 	case *policyv1alpha1.LogFieldSelector_ResourceAttribute:
+		if ctx.Resource == (pcommon.Resource{}) {
+			return nil, false
+		}
 		return lookupPath(ctx.Resource.Attributes(), t.ResourceAttribute.GetPath())
 	case *policyv1alpha1.LogFieldSelector_ScopeAttribute:
+		if ctx.Scope == (pcommon.InstrumentationScope{}) {
+			return nil, false
+		}
 		return lookupPath(ctx.Scope.Attributes(), t.ScopeAttribute.GetPath())
 	case *policyv1alpha1.LogFieldSelector_ScopeField:
+		if ctx.Scope == (pcommon.InstrumentationScope{}) {
+			return nil, false
+		}
 		switch t.ScopeField {
 		case policyv1alpha1.ScopeField_SCOPE_FIELD_NAME:
 			s := ctx.Scope.Name()

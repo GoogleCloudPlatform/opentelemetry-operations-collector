@@ -15,15 +15,18 @@
 package googlepolicyprocessor
 
 import (
+	"errors"
+
 	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 )
 
 type compiledMetricPolicy struct {
-	id       string
-	action   policyv1alpha1.Action
-	matchers []*compiledMetricMatcher
+	id               string
+	action           policyv1alpha1.Action
+	isDatapointLevel bool
+	matchers         []*compiledMetricMatcher
 }
 
 type compiledMetricMatcher struct {
@@ -32,6 +35,12 @@ type compiledMetricMatcher struct {
 }
 
 func compileMetricPolicy(p *policyv1alpha1.MetricFilterPolicy) (*compiledMetricPolicy, error) {
+	if p.GetAction() == policyv1alpha1.Action_ACTION_UNSPECIFIED {
+		return nil, errors.New("policy action must be specified")
+	}
+	if len(p.GetMatches()) == 0 {
+		return nil, errors.New("policy must have at least one matcher")
+	}
 	cp := &compiledMetricPolicy{
 		id:     p.GetId(),
 		action: p.GetAction(),
@@ -40,6 +49,9 @@ func compileMetricPolicy(p *policyv1alpha1.MetricFilterPolicy) (*compiledMetricP
 		pred, err := compilePredicate(m.GetPredicate(), m.GetNegate())
 		if err != nil {
 			return nil, err
+		}
+		if _, ok := m.GetTarget().GetTarget().(*policyv1alpha1.MetricFieldSelector_DatapointAttribute); ok {
+			cp.isDatapointLevel = true
 		}
 		cp.matchers = append(cp.matchers, &compiledMetricMatcher{
 			target: m.GetTarget(),
@@ -76,28 +88,82 @@ func (e *Evaluator) TransformMetrics(md pmetric.Metrics) {
 }
 
 func (e *Evaluator) transformMetricDataPoints(m pmetric.Metric, resource pcommon.Resource, scope pcommon.InstrumentationScope, resourceSchemaURL, scopeSchemaURL string) bool {
+	var temporality pmetric.AggregationTemporality
+	var initialLen int
 	switch m.Type() {
 	case pmetric.MetricTypeGauge:
-		e.transformNumberDataPoints(m, m.Gauge().DataPoints(), pmetric.AggregationTemporalityUnspecified, resource, scope, resourceSchemaURL, scopeSchemaURL)
+		temporality = pmetric.AggregationTemporalityUnspecified
+		initialLen = m.Gauge().DataPoints().Len()
+	case pmetric.MetricTypeSum:
+		temporality = m.Sum().AggregationTemporality()
+		initialLen = m.Sum().DataPoints().Len()
+	case pmetric.MetricTypeHistogram:
+		temporality = m.Histogram().AggregationTemporality()
+		initialLen = m.Histogram().DataPoints().Len()
+	case pmetric.MetricTypeExponentialHistogram:
+		temporality = m.ExponentialHistogram().AggregationTemporality()
+		initialLen = m.ExponentialHistogram().DataPoints().Len()
+	case pmetric.MetricTypeSummary:
+		temporality = pmetric.AggregationTemporalityUnspecified
+		initialLen = m.Summary().DataPoints().Len()
+	default:
+		return false
+	}
+
+	instrumentCtx := MetricContext{
+		Metric:                 m,
+		DatapointAttributes:    pcommon.NewMap(),
+		AggregationTemporality: temporality,
+		Resource:               resource,
+		Scope:                  scope,
+		ResourceSchemaURL:      resourceSchemaURL,
+		ScopeSchemaURL:         scopeSchemaURL,
+	}
+
+	if initialLen == 0 || !e.hasDatapointMetricPolicies {
+		return e.evalMetricInstrumentOnly(instrumentCtx)
+	}
+
+	for _, p := range e.metricPolicies {
+		if !p.isDatapointLevel && p.action == policyv1alpha1.Action_ACTION_KEEP && p.matches(instrumentCtx) {
+			return false
+		}
+	}
+
+	switch m.Type() {
+	case pmetric.MetricTypeGauge:
+		e.transformNumberDataPoints(m, m.Gauge().DataPoints(), temporality, resource, scope, resourceSchemaURL, scopeSchemaURL)
 		return m.Gauge().DataPoints().Len() == 0
 	case pmetric.MetricTypeSum:
-		sum := m.Sum()
-		e.transformNumberDataPoints(m, sum.DataPoints(), sum.AggregationTemporality(), resource, scope, resourceSchemaURL, scopeSchemaURL)
-		return sum.DataPoints().Len() == 0
+		e.transformNumberDataPoints(m, m.Sum().DataPoints(), temporality, resource, scope, resourceSchemaURL, scopeSchemaURL)
+		return m.Sum().DataPoints().Len() == 0
 	case pmetric.MetricTypeHistogram:
-		hist := m.Histogram()
-		e.transformHistogramDataPoints(m, hist.DataPoints(), hist.AggregationTemporality(), resource, scope, resourceSchemaURL, scopeSchemaURL)
-		return hist.DataPoints().Len() == 0
+		e.transformHistogramDataPoints(m, m.Histogram().DataPoints(), temporality, resource, scope, resourceSchemaURL, scopeSchemaURL)
+		return m.Histogram().DataPoints().Len() == 0
 	case pmetric.MetricTypeExponentialHistogram:
-		expHist := m.ExponentialHistogram()
-		e.transformExponentialHistogramDataPoints(m, expHist.DataPoints(), expHist.AggregationTemporality(), resource, scope, resourceSchemaURL, scopeSchemaURL)
-		return expHist.DataPoints().Len() == 0
+		e.transformExponentialHistogramDataPoints(m, m.ExponentialHistogram().DataPoints(), temporality, resource, scope, resourceSchemaURL, scopeSchemaURL)
+		return m.ExponentialHistogram().DataPoints().Len() == 0
 	case pmetric.MetricTypeSummary:
 		e.transformSummaryDataPoints(m, m.Summary().DataPoints(), resource, scope, resourceSchemaURL, scopeSchemaURL)
 		return m.Summary().DataPoints().Len() == 0
 	default:
 		return false
 	}
+}
+
+func (e *Evaluator) evalMetricInstrumentOnly(ctx MetricContext) bool {
+	var hasDrop bool
+	for _, p := range e.metricPolicies {
+		if !p.isDatapointLevel && p.matches(ctx) {
+			if p.action == policyv1alpha1.Action_ACTION_KEEP {
+				return false
+			}
+			if p.action == policyv1alpha1.Action_ACTION_DROP {
+				hasDrop = true
+			}
+		}
+	}
+	return hasDrop
 }
 
 func (e *Evaluator) transformNumberDataPoints(m pmetric.Metric, datapoints pmetric.NumberDataPointSlice, temporality pmetric.AggregationTemporality, resource pcommon.Resource, scope pcommon.InstrumentationScope, resourceSchemaURL, scopeSchemaURL string) {
@@ -166,24 +232,18 @@ func (e *Evaluator) EvalMetric(ctx MetricContext) bool {
 		return false
 	}
 
-	var hasKeep, hasDrop bool
+	var hasDrop bool
 	for _, p := range e.metricPolicies {
 		if p.matches(ctx) {
 			if p.action == policyv1alpha1.Action_ACTION_KEEP {
-				hasKeep = true
-			} else if p.action == policyv1alpha1.Action_ACTION_DROP {
+				return false
+			}
+			if p.action == policyv1alpha1.Action_ACTION_DROP {
 				hasDrop = true
 			}
 		}
 	}
-
-	if hasKeep {
-		return false
-	}
-	if hasDrop {
-		return true
-	}
-	return false
+	return hasDrop
 }
 
 func (p *compiledMetricPolicy) matches(ctx MetricContext) bool {
@@ -215,17 +275,34 @@ func extractMetricTarget(ctx MetricContext, target *policyv1alpha1.MetricFieldSe
 		case policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE:
 			return metricTypeToString(ctx.Metric.Type()), true
 		case policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_AGGREGATION_TEMPORALITY:
+			if ctx.AggregationTemporality == pmetric.AggregationTemporalityUnspecified {
+				return nil, false
+			}
 			return temporalityToString(ctx.AggregationTemporality), true
+		case policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_IS_MONOTONIC:
+			if ctx.Metric.Type() == pmetric.MetricTypeSum {
+				return ctx.Metric.Sum().IsMonotonic(), true
+			}
+			return nil, false
 		default:
 			return nil, false
 		}
 	case *policyv1alpha1.MetricFieldSelector_DatapointAttribute:
 		return lookupPath(ctx.DatapointAttributes, t.DatapointAttribute.GetPath())
 	case *policyv1alpha1.MetricFieldSelector_ResourceAttribute:
+		if ctx.Resource == (pcommon.Resource{}) {
+			return nil, false
+		}
 		return lookupPath(ctx.Resource.Attributes(), t.ResourceAttribute.GetPath())
 	case *policyv1alpha1.MetricFieldSelector_ScopeAttribute:
+		if ctx.Scope == (pcommon.InstrumentationScope{}) {
+			return nil, false
+		}
 		return lookupPath(ctx.Scope.Attributes(), t.ScopeAttribute.GetPath())
 	case *policyv1alpha1.MetricFieldSelector_ScopeField:
+		if ctx.Scope == (pcommon.InstrumentationScope{}) {
+			return nil, false
+		}
 		switch t.ScopeField {
 		case policyv1alpha1.ScopeField_SCOPE_FIELD_NAME:
 			s := ctx.Scope.Name()
@@ -246,27 +323,27 @@ func extractMetricTarget(ctx MetricContext, target *policyv1alpha1.MetricFieldSe
 func metricTypeToString(t pmetric.MetricType) string {
 	switch t {
 	case pmetric.MetricTypeGauge:
-		return "gauge"
+		return "GAUGE"
 	case pmetric.MetricTypeSum:
-		return "sum"
+		return "SUM"
 	case pmetric.MetricTypeHistogram:
-		return "histogram"
+		return "HISTOGRAM"
 	case pmetric.MetricTypeExponentialHistogram:
-		return "exponential_histogram"
+		return "EXPONENTIAL_HISTOGRAM"
 	case pmetric.MetricTypeSummary:
-		return "summary"
+		return "SUMMARY"
 	default:
-		return "unspecified"
+		return "UNSPECIFIED"
 	}
 }
 
 func temporalityToString(t pmetric.AggregationTemporality) string {
 	switch t {
 	case pmetric.AggregationTemporalityDelta:
-		return "delta"
+		return "DELTA"
 	case pmetric.AggregationTemporalityCumulative:
-		return "cumulative"
+		return "CUMULATIVE"
 	default:
-		return "unspecified"
+		return "UNSPECIFIED"
 	}
 }

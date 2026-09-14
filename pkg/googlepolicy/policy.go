@@ -18,6 +18,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	"go.opentelemetry.io/collector/component"
@@ -156,6 +158,9 @@ func (ps *PolicySet) LoadPoliciesOfClass(class PolicyClass) []Policy {
 			foundPolicies = append(foundPolicies, pse.PolicyObj)
 		}
 	}
+	slices.SortFunc(foundPolicies, func(a, b Policy) int {
+		return strings.Compare(a.PolicyName(), b.PolicyName())
+	})
 	return foundPolicies
 }
 
@@ -169,6 +174,9 @@ func (ps *PolicySet) TransformationPolicies() []TransformationPolicy {
 			}
 		}
 	}
+	slices.SortFunc(foundPolicies, func(a, b TransformationPolicy) int {
+		return strings.Compare(a.PolicyName(), b.PolicyName())
+	})
 	return foundPolicies
 }
 

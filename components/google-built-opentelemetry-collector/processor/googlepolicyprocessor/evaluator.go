@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
@@ -34,9 +35,10 @@ type ProtoPolicy interface {
 
 // Evaluator evaluates telemetry data against compiled Google transformation policies.
 type Evaluator struct {
-	logPolicies    []*compiledLogPolicy
-	metricPolicies []*compiledMetricPolicy
-	tracePolicies  []*compiledTracePolicy
+	logPolicies                []*compiledLogPolicy
+	metricPolicies             []*compiledMetricPolicy
+	hasDatapointMetricPolicies bool
+	tracePolicies              []*compiledTracePolicy
 }
 
 type predicateType int
@@ -87,6 +89,9 @@ func NewEvaluator(policies []googlepolicy.TransformationPolicy) (*Evaluator, err
 			cp, err := compileMetricPolicy(p)
 			if err != nil {
 				return nil, fmt.Errorf("failed to compile metric policy %s: %w", p.GetId(), err)
+			}
+			if cp.isDatapointLevel {
+				ev.hasDatapointMetricPolicies = true
 			}
 			ev.metricPolicies = append(ev.metricPolicies, cp)
 		case *policyv1alpha1.TraceFilterPolicy:
@@ -188,49 +193,57 @@ func compilePredicate(predicate any, negate bool) (matcherPredicate, error) {
 
 func (p *matcherPredicate) evaluate(val any, exists bool) bool {
 	matched := false
+	hasVal := exists || val != nil
 	switch p.typ {
 	case predExists:
 		matched = exists
 	case predEquals:
-		if exists && p.equalsVal != nil {
+		if hasVal && p.equalsVal != nil {
 			matched = matchEquals(val, p.equalsVal)
 		}
 	case predRegex:
-		if exists && p.regex != nil {
-			if s, ok := val.(string); ok {
-				matched = p.regex.MatchString(s)
+		if hasVal && p.regex != nil {
+			switch v := val.(type) {
+			case string:
+				matched = p.regex.MatchString(v)
+			case int64:
+				matched = p.regex.MatchString(strconv.FormatInt(v, 10))
+			case int:
+				matched = p.regex.MatchString(strconv.Itoa(v))
+			case bool:
+				matched = p.regex.MatchString(strconv.FormatBool(v))
 			}
 		}
 	case predGt:
-		if exists && p.gtVal != nil {
+		if hasVal && p.gtVal != nil {
 			if num, ok := toFloat64(val); ok {
 				targetNum := numericToFloat64(p.gtVal)
 				matched = num > targetNum
 			}
 		}
 	case predGte:
-		if exists && p.gteVal != nil {
+		if hasVal && p.gteVal != nil {
 			if num, ok := toFloat64(val); ok {
 				targetNum := numericToFloat64(p.gteVal)
 				matched = num >= targetNum
 			}
 		}
 	case predLt:
-		if exists && p.ltVal != nil {
+		if hasVal && p.ltVal != nil {
 			if num, ok := toFloat64(val); ok {
 				targetNum := numericToFloat64(p.ltVal)
 				matched = num < targetNum
 			}
 		}
 	case predLte:
-		if exists && p.lteVal != nil {
+		if hasVal && p.lteVal != nil {
 			if num, ok := toFloat64(val); ok {
 				targetNum := numericToFloat64(p.lteVal)
 				matched = num <= targetNum
 			}
 		}
 	case predContains:
-		if exists && p.containsVal != nil {
+		if hasVal && p.containsVal != nil {
 			matched = matchContains(val, p.containsVal)
 		}
 	}
@@ -334,7 +347,7 @@ func numericToFloat64(nv *policyv1alpha1.NumericValue) float64 {
 }
 
 func lookupPath(attrs pcommon.Map, path []string) (any, bool) {
-	if len(path) == 0 {
+	if len(path) == 0 || attrs == (pcommon.Map{}) {
 		return nil, false
 	}
 	var current pcommon.Value
@@ -346,14 +359,22 @@ func lookupPath(attrs pcommon.Map, path []string) (any, bool) {
 			}
 			current = v
 		} else {
-			if current.Type() != pcommon.ValueTypeMap {
+			switch current.Type() {
+			case pcommon.ValueTypeMap:
+				v, ok := current.Map().Get(key)
+				if !ok {
+					return nil, false
+				}
+				current = v
+			case pcommon.ValueTypeSlice:
+				idx, err := strconv.Atoi(key)
+				if err != nil || idx < 0 || idx >= current.Slice().Len() {
+					return nil, false
+				}
+				current = current.Slice().At(idx)
+			default:
 				return nil, false
 			}
-			v, ok := current.Map().Get(key)
-			if !ok {
-				return nil, false
-			}
-			current = v
 		}
 	}
 	return pcommonValueToAny(current), true

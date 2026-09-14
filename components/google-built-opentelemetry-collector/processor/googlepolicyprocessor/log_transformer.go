@@ -20,10 +20,11 @@ import (
 )
 
 // TransformLogs applies active transformation policies in-place across the Resource -> Scope -> Record hierarchy.
-// Dropped records are pruned, and empty scopes/resources are removed.
-func (e *Evaluator) TransformLogs(ld plog.Logs) {
+// Dropped records are pruned, empty scopes/resources are removed, and batch transformation stats are returned.
+func (e *Evaluator) TransformLogs(ld plog.Logs) TransformStats {
+	stats := newTransformStats()
 	if len(e.logPolicies) == 0 {
-		return
+		return stats
 	}
 
 	ld.ResourceLogs().RemoveIf(func(rl plog.ResourceLogs) bool {
@@ -34,15 +35,26 @@ func (e *Evaluator) TransformLogs(ld plog.Logs) {
 			scope := sl.Scope()
 			scopeSchemaURL := sl.SchemaUrl()
 
+			var ctx LogContext
+			ctx.Resource = resource
+			ctx.Scope = scope
+			ctx.ResourceSchemaURL = resourceSchemaURL
+			ctx.ScopeSchemaURL = scopeSchemaURL
+
 			sl.LogRecords().RemoveIf(func(lr plog.LogRecord) bool {
-				ctx := LogContext{
-					Record:            lr,
-					Resource:          resource,
-					Scope:             scope,
-					ResourceSchemaURL: resourceSchemaURL,
-					ScopeSchemaURL:    scopeSchemaURL,
+				ctx.Record = lr
+				res := e.evaluateLog(ctx)
+				if res.Drop {
+					stats.Dropped++
+				} else if len(res.Evaluations) > 0 {
+					stats.Kept++
+				} else {
+					stats.NoMatch++
 				}
-				return e.EvalLog(ctx)
+				for _, ev := range res.Evaluations {
+					stats.recordPolicy(ev.PolicyID, ev.Result)
+				}
+				return res.Drop
 			})
 
 			return sl.LogRecords().Len() == 0
@@ -50,19 +62,66 @@ func (e *Evaluator) TransformLogs(ld plog.Logs) {
 
 		return rl.ScopeLogs().Len() == 0
 	})
+
+	return stats
+}
+
+type logEvalResult struct {
+	Drop        bool
+	Evaluations []PolicyEvaluation
+}
+
+type matchedLogPolicy struct {
+	id  string
+	res googlepolicy.EvalResult
+}
+
+func (e *Evaluator) evaluateLog(ctx LogContext) logEvalResult {
+	if len(e.logPolicies) == 0 {
+		return logEvalResult{Drop: false}
+	}
+
+	var matchingPolicies []matchedLogPolicy
+	var hasKeep, hasDrop bool
+	for _, p := range e.logPolicies {
+		evalRes := p.EvaluateLog(ctx)
+		if evalRes != googlepolicy.EvalNoMatch {
+			matchingPolicies = append(matchingPolicies, matchedLogPolicy{
+				id:  p.PolicyName(),
+				res: evalRes,
+			})
+			if evalRes == googlepolicy.EvalKeep {
+				hasKeep = true
+			} else if evalRes == googlepolicy.EvalDrop {
+				hasDrop = true
+			}
+		}
+	}
+
+	var res logEvalResult
+	if hasKeep {
+		res.Drop = false
+		for _, p := range matchingPolicies {
+			if p.res == googlepolicy.EvalKeep {
+				res.Evaluations = append(res.Evaluations, PolicyEvaluation{PolicyID: p.id, Result: ResultKept})
+			} else {
+				res.Evaluations = append(res.Evaluations, PolicyEvaluation{PolicyID: p.id, Result: ResultNoMatch})
+			}
+		}
+	} else if hasDrop {
+		res.Drop = true
+		for _, p := range matchingPolicies {
+			res.Evaluations = append(res.Evaluations, PolicyEvaluation{PolicyID: p.id, Result: ResultDropped})
+		}
+	} else {
+		res.Drop = false
+	}
+
+	return res
 }
 
 // EvalLog returns true if the log record should be DROPPED, false if KEPT.
 // A matching ACTION_KEEP policy exempts the record outright.
 func (e *Evaluator) EvalLog(ctx LogContext) bool {
-	var hasDrop bool
-	for _, p := range e.logPolicies {
-		switch p.EvaluateLog(ctx) {
-		case googlepolicy.EvalKeep:
-			return false
-		case googlepolicy.EvalDrop:
-			hasDrop = true
-		}
-	}
-	return hasDrop
+	return e.evaluateLog(ctx).Drop
 }

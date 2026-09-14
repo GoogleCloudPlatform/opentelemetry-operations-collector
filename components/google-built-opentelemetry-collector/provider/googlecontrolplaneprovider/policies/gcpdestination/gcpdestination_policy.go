@@ -25,6 +25,7 @@ import (
 	"go.opentelemetry.io/collector/config/configauth"
 	"go.opentelemetry.io/collector/config/configoptional"
 	"go.opentelemetry.io/collector/confmap"
+	"go.opentelemetry.io/collector/exporter/exporterhelper"
 	"go.opentelemetry.io/collector/exporter/otlpexporter"
 	"go.opentelemetry.io/collector/otelcol"
 	"go.opentelemetry.io/collector/processor/queuebatchprocessor"
@@ -91,6 +92,19 @@ func (p *GCPDestinationPolicy) Evaluate(_ context.Context) (*confmap.Conf, error
 	otlpExporter.ClientConfig.Auth = configoptional.Some(configauth.Config{
 		AuthenticatorID: authID,
 	})
+
+	// Every pipeline feeding this exporter goes through a queuebatch processor
+	// below, which already provides the queue and the batching. Leaving the
+	// exporter's own sending queue enabled would stack a second, redundant
+	// buffer in front of the same export path.
+	//
+	// Setting None here is only half the job: a None Optional marshals to nil,
+	// the nil key is then dropped from the generated config, and a config that
+	// simply omits `sending_queue` gets the factory default (queue enabled)
+	// back when the collector loads it. The disable has to be written out
+	// explicitly, which is done after marshaling below.
+	otlpExporter.QueueConfig = configoptional.None[exporterhelper.QueueBatchConfig]()
+
 	otlpExporterType, _ := component.NewType("otlp_grpc")
 	otlpExporterID := component.NewIDWithName(otlpExporterType, p.Name)
 
@@ -138,6 +152,23 @@ func (p *GCPDestinationPolicy) Evaluate(_ context.Context) (*confmap.Conf, error
 	if err := cm.Marshal(conf); err != nil {
 		return nil, fmt.Errorf("policy implementation failure for %s: marshaling config got error '%w'", p.PolicyName(), err)
 	}
+
+	// See the QueueConfig comment above. configoptional reads `enabled` on
+	// unmarshal and turns the section into None, but it never writes that key
+	// on marshal, so the disable has to be added to the generated config here.
+	disableSendingQueue := confmap.NewFromStringMap(map[string]any{
+		"exporters": map[string]any{
+			otlpExporterID.String(): map[string]any{
+				"sending_queue": map[string]any{
+					"enabled": false,
+				},
+			},
+		},
+	})
+	if err := cm.Merge(disableSendingQueue); err != nil {
+		return nil, fmt.Errorf("policy implementation failure for %s: disabling exporter sending queue got error '%w'", p.PolicyName(), err)
+	}
+
 	return cm, nil
 }
 

@@ -9,10 +9,10 @@ require (
 	github.com/stretchr/testify v1.12.1
 	go.opentelemetry.io/collector/component v1.66.0
 	go.opentelemetry.io/collector/config/configauth v1.66.0
-	go.opentelemetry.io/collector/config/configgrpc v1.66.0
 	go.opentelemetry.io/collector/config/configoptional v1.66.0
 	go.opentelemetry.io/collector/config/configtelemetry v0.160.0
 	go.opentelemetry.io/collector/confmap v1.66.0
+	go.opentelemetry.io/collector/exporter/exporterhelper v0.160.0
 	go.opentelemetry.io/collector/exporter/otlpexporter v0.160.0
 	go.opentelemetry.io/collector/otelcol v0.160.0
 	go.opentelemetry.io/collector/pipeline v1.66.0
@@ -88,6 +88,7 @@ require (
 	go.opentelemetry.io/collector/component/componentstatus v0.160.0 // indirect
 	go.opentelemetry.io/collector/component/componenttest v0.160.0 // indirect
 	go.opentelemetry.io/collector/config/configcompression v1.66.0 // indirect
+	go.opentelemetry.io/collector/config/configgrpc v1.66.0 // indirect
 	go.opentelemetry.io/collector/config/confighttp v0.160.0 // indirect
 	go.opentelemetry.io/collector/config/configmiddleware v1.66.0 // indirect
 	go.opentelemetry.io/collector/config/confignet v1.66.0 // indirect
@@ -104,7 +105,6 @@ require (
 	go.opentelemetry.io/collector/consumer/consumertest v0.160.0 // indirect
 	go.opentelemetry.io/collector/consumer/xconsumer v0.160.0 // indirect
 	go.opentelemetry.io/collector/exporter v1.66.0 // indirect
-	go.opentelemetry.io/collector/exporter/exporterhelper v0.160.0 // indirect
 	go.opentelemetry.io/collector/exporter/exporterhelper/xexporterhelper v0.160.0 // indirect
 	go.opentelemetry.io/collector/exporter/exportertest v0.160.0 // indirect
 	go.opentelemetry.io/collector/exporter/xexporter v0.160.0 // indirect

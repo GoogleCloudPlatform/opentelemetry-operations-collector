@@ -21,10 +21,11 @@ import (
 )
 
 // TransformMetrics applies active transformation policies in-place across the Resource -> Scope -> Metric -> Datapoints hierarchy.
-// Dropped datapoints are pruned, and empty metrics/scopes/resources are removed.
-func (e *Evaluator) TransformMetrics(md pmetric.Metrics) {
+// Dropped datapoints are pruned, empty metrics/scopes/resources are removed, and batch transformation stats are returned.
+func (e *Evaluator) TransformMetrics(md pmetric.Metrics) TransformStats {
+	stats := newTransformStats()
 	if len(e.metricPolicies) == 0 {
-		return
+		return stats
 	}
 
 	md.ResourceMetrics().RemoveIf(func(rm pmetric.ResourceMetrics) bool {
@@ -36,7 +37,7 @@ func (e *Evaluator) TransformMetrics(md pmetric.Metrics) {
 			scopeSchemaURL := sm.SchemaUrl()
 
 			sm.Metrics().RemoveIf(func(m pmetric.Metric) bool {
-				return e.transformMetricDataPoints(m, MetricContext{
+				return e.transformMetricDataPoints(&stats, m, MetricContext{
 					Metric:              m,
 					DatapointAttributes: pcommon.NewMap(),
 					Resource:            resource,
@@ -51,12 +52,14 @@ func (e *Evaluator) TransformMetrics(md pmetric.Metrics) {
 
 		return rm.ScopeMetrics().Len() == 0
 	})
+
+	return stats
 }
 
 // transformMetricDataPoints evaluates one instrument and returns true if the
 // whole metric should be dropped. The passed context carries everything except
 // the instrument-specific temporality, which is filled in here.
-func (e *Evaluator) transformMetricDataPoints(m pmetric.Metric, ctx MetricContext) bool {
+func (e *Evaluator) transformMetricDataPoints(stats *TransformStats, m pmetric.Metric, ctx MetricContext) bool {
 	var datapointCount int
 	switch m.Type() {
 	case pmetric.MetricTypeGauge:
@@ -79,35 +82,59 @@ func (e *Evaluator) transformMetricDataPoints(m pmetric.Metric, ctx MetricContex
 	// With no datapoint-level policies (or no datapoints to inspect) the whole
 	// instrument can be decided in one pass.
 	if datapointCount == 0 || !e.hasDatapointMetricPolicies {
-		return e.evalMetricPolicies(ctx, true)
+		res := e.evaluateMetric(ctx, true)
+		if datapointCount > 0 {
+			recordMetricEvalStats(stats, res, int64(datapointCount))
+		}
+		return res.Drop
 	}
 
 	// An instrument-level KEEP exempts every datapoint below it, so it has to be
 	// checked before any pruning happens.
 	for _, p := range e.metricPolicies {
 		if !p.IsDatapointLevel() && p.EvaluateMetric(ctx) == googlepolicy.EvalKeep {
+			stats.Kept += int64(datapointCount)
+			for i := 0; i < datapointCount; i++ {
+				stats.recordPolicy(p.PolicyName(), ResultKept)
+			}
 			return false
 		}
 	}
 
 	switch m.Type() {
 	case pmetric.MetricTypeGauge:
-		pruneDatapoints[pmetric.NumberDataPoint](e, m.Gauge().DataPoints(), ctx)
+		pruneDatapoints[pmetric.NumberDataPoint](e, stats, m.Gauge().DataPoints(), ctx)
 		return m.Gauge().DataPoints().Len() == 0
 	case pmetric.MetricTypeSum:
-		pruneDatapoints[pmetric.NumberDataPoint](e, m.Sum().DataPoints(), ctx)
+		pruneDatapoints[pmetric.NumberDataPoint](e, stats, m.Sum().DataPoints(), ctx)
 		return m.Sum().DataPoints().Len() == 0
 	case pmetric.MetricTypeHistogram:
-		pruneDatapoints[pmetric.HistogramDataPoint](e, m.Histogram().DataPoints(), ctx)
+		pruneDatapoints[pmetric.HistogramDataPoint](e, stats, m.Histogram().DataPoints(), ctx)
 		return m.Histogram().DataPoints().Len() == 0
 	case pmetric.MetricTypeExponentialHistogram:
-		pruneDatapoints[pmetric.ExponentialHistogramDataPoint](e, m.ExponentialHistogram().DataPoints(), ctx)
+		pruneDatapoints[pmetric.ExponentialHistogramDataPoint](e, stats, m.ExponentialHistogram().DataPoints(), ctx)
 		return m.ExponentialHistogram().DataPoints().Len() == 0
 	case pmetric.MetricTypeSummary:
-		pruneDatapoints[pmetric.SummaryDataPoint](e, m.Summary().DataPoints(), ctx)
+		pruneDatapoints[pmetric.SummaryDataPoint](e, stats, m.Summary().DataPoints(), ctx)
 		return m.Summary().DataPoints().Len() == 0
 	default:
 		return false
+	}
+}
+
+func recordMetricEvalStats(stats *TransformStats, res metricEvalResult, count int64) {
+	if res.Drop {
+		stats.Dropped += count
+	} else if len(res.Evaluations) > 0 {
+		stats.Kept += count
+	} else {
+		stats.NoMatch += count
+	}
+	for _, ev := range res.Evaluations {
+		if stats.PolicyRecords[ev.PolicyID] == nil {
+			stats.PolicyRecords[ev.PolicyID] = make(map[PolicyResult]int64)
+		}
+		stats.PolicyRecords[ev.PolicyID][ev.Result] += count
 	}
 }
 
@@ -123,35 +150,74 @@ type datapointSlice[DP datapoint] interface {
 
 // pruneDatapoints removes the datapoints that the active policies drop. The
 // base context is copied per datapoint so that only DatapointAttributes varies.
-func pruneDatapoints[DP datapoint, S datapointSlice[DP]](e *Evaluator, datapoints S, base MetricContext) {
+func pruneDatapoints[DP datapoint, S datapointSlice[DP]](e *Evaluator, stats *TransformStats, datapoints S, base MetricContext) {
 	datapoints.RemoveIf(func(dp DP) bool {
 		ctx := base
 		ctx.DatapointAttributes = dp.Attributes()
-		return e.EvalMetric(ctx)
+		res := e.evaluateMetric(ctx, false)
+		recordMetricEvalStats(stats, res, 1)
+		return res.Drop
 	})
 }
 
-// EvalMetric returns true if the datapoint should be DROPPED, false if KEPT.
-func (e *Evaluator) EvalMetric(ctx MetricContext) bool {
-	return e.evalMetricPolicies(ctx, false)
+type metricEvalResult struct {
+	Drop        bool
+	Evaluations []PolicyEvaluation
 }
 
-// evalMetricPolicies folds the policy outcomes into a single drop decision. A
-// matching ACTION_KEEP policy exempts the item outright and overrides any DROP.
-// When instrumentOnly is set, policies that inspect datapoint attributes are
-// skipped because there is no datapoint in the context to inspect.
-func (e *Evaluator) evalMetricPolicies(ctx MetricContext, instrumentOnly bool) bool {
-	var hasDrop bool
+type matchedMetricPolicy struct {
+	id  string
+	res googlepolicy.EvalResult
+}
+
+func (e *Evaluator) evaluateMetric(ctx MetricContext, instrumentOnly bool) metricEvalResult {
+	if len(e.metricPolicies) == 0 {
+		return metricEvalResult{Drop: false}
+	}
+
+	var matchingPolicies []matchedMetricPolicy
+	var hasKeep, hasDrop bool
 	for _, p := range e.metricPolicies {
 		if instrumentOnly && p.IsDatapointLevel() {
 			continue
 		}
-		switch p.EvaluateMetric(ctx) {
-		case googlepolicy.EvalKeep:
-			return false
-		case googlepolicy.EvalDrop:
-			hasDrop = true
+		evalRes := p.EvaluateMetric(ctx)
+		if evalRes != googlepolicy.EvalNoMatch {
+			matchingPolicies = append(matchingPolicies, matchedMetricPolicy{
+				id:  p.PolicyName(),
+				res: evalRes,
+			})
+			if evalRes == googlepolicy.EvalKeep {
+				hasKeep = true
+			} else if evalRes == googlepolicy.EvalDrop {
+				hasDrop = true
+			}
 		}
 	}
-	return hasDrop
+
+	var res metricEvalResult
+	if hasKeep {
+		res.Drop = false
+		for _, p := range matchingPolicies {
+			if p.res == googlepolicy.EvalKeep {
+				res.Evaluations = append(res.Evaluations, PolicyEvaluation{PolicyID: p.id, Result: ResultKept})
+			} else {
+				res.Evaluations = append(res.Evaluations, PolicyEvaluation{PolicyID: p.id, Result: ResultNoMatch})
+			}
+		}
+	} else if hasDrop {
+		res.Drop = true
+		for _, p := range matchingPolicies {
+			res.Evaluations = append(res.Evaluations, PolicyEvaluation{PolicyID: p.id, Result: ResultDropped})
+		}
+	} else {
+		res.Drop = false
+	}
+
+	return res
+}
+
+// EvalMetric returns true if the datapoint should be DROPPED, false if KEPT.
+func (e *Evaluator) EvalMetric(ctx MetricContext) bool {
+	return e.evaluateMetric(ctx, false).Drop
 }

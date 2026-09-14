@@ -16,7 +16,7 @@ syntax = "proto3";
 
 package google.telemetry.xds.v1alpha1;
 
-import "envoy/config/core/v3/extension.proto";
+import "google/protobuf/any.proto";
 
 option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/xds/v1alpha1;xdsv1alpha1";
 
@@ -27,14 +27,12 @@ option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-col
 //   "type.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector"
 message TelemetryCollector {
   // Ordered list of policies applied to telemetry passing through this collector.
-  // Each policy is encapsulated inside a standard Envoy TypedExtensionConfig
-  // where:
-  // - `name`: The policy identifier or descriptive name.
-  // - `typed_config`: A `google.protobuf.Any` wrapping a pure policy definition
-  //   (e.g., `type.googleapis.com/google.telemetry.policy.v1alpha1.LogFilterPolicy`).
-  //   The encapsulated policy type should align with OTEP policy definitions
-  //   (https://github.com/open-telemetry/opentelemetry-specification/blob/main/oteps/4738-telemetry-policy.md)
-  //   and the type names used for OpAMP custom messages
-  //   (https://opentelemetry.io/docs/specs/opamp/#custom-messages).
-  repeated envoy.config.core.v3.TypedExtensionConfig policies = 1;
+  // Each policy is encapsulated inside a standard `google.protobuf.Any` wrapping
+  // a pure policy definition (e.g.,
+  // `type.googleapis.com/google.telemetry.policy.v1alpha1.LogFilterPolicy`).
+  // The encapsulated policy type should align with OTEP policy definitions
+  // (https://github.com/open-telemetry/opentelemetry-specification/blob/main/oteps/4738-telemetry-policy.md)
+  // and the type names used for OpAMP custom messages
+  // (https://opentelemetry.io/docs/specs/opamp/#custom-messages).
+  repeated google.protobuf.Any policies = 1;
 }

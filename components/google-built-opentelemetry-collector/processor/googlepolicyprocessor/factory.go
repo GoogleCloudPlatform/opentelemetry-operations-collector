@@ -56,6 +56,8 @@ func createTracesProcessor(
 		nextConsumer,
 		proc.processTraces,
 		processorhelper.WithCapabilities(defaultCapabilities),
+		processorhelper.WithStart(proc.start),
+		processorhelper.WithShutdown(proc.shutdown),
 	)
 }
 
@@ -73,6 +75,8 @@ func createMetricsProcessor(
 		nextConsumer,
 		proc.processMetrics,
 		processorhelper.WithCapabilities(defaultCapabilities),
+		processorhelper.WithStart(proc.start),
+		processorhelper.WithShutdown(proc.shutdown),
 	)
 }
 
@@ -90,5 +94,7 @@ func createLogsProcessor(
 		nextConsumer,
 		proc.processLogs,
 		processorhelper.WithCapabilities(defaultCapabilities),
+		processorhelper.WithStart(proc.start),
+		processorhelper.WithShutdown(proc.shutdown),
 	)
 }

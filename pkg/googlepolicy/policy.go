@@ -18,6 +18,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	"go.opentelemetry.io/collector/component"
@@ -73,6 +75,23 @@ type DestinationPolicy interface {
 	PreProcessLogIDs() []component.ID
 	PreProcessTraceIDs() []component.ID
 	ExtensionIDs() []component.ID
+}
+
+// Signal represents an OpenTelemetry telemetry signal type.
+type Signal string
+
+const (
+	SignalLogs    Signal = "logs"
+	SignalMetrics Signal = "metrics"
+	SignalTraces  Signal = "traces"
+)
+
+// TransformationPolicy is an extended interface that any Transformation policy
+// will implement. It represents policies that transform, filter, or sample
+// telemetry data in the collector pipelines.
+type TransformationPolicy interface {
+	Policy
+	TargetSignals() []Signal
 }
 
 // PolicyDriver is the interface that is used to load a policy
@@ -139,6 +158,25 @@ func (ps *PolicySet) LoadPoliciesOfClass(class PolicyClass) []Policy {
 			foundPolicies = append(foundPolicies, pse.PolicyObj)
 		}
 	}
+	slices.SortFunc(foundPolicies, func(a, b Policy) int {
+		return strings.Compare(a.PolicyName(), b.PolicyName())
+	})
+	return foundPolicies
+}
+
+// TransformationPolicies returns all policies in the set that implement TransformationPolicy.
+func (ps *PolicySet) TransformationPolicies() []TransformationPolicy {
+	foundPolicies := make([]TransformationPolicy, 0)
+	for _, pse := range ps.Policies {
+		if pse.PolicyObj.PolicyClass() == PolicyClassTransformation {
+			if tp, ok := pse.PolicyObj.(TransformationPolicy); ok {
+				foundPolicies = append(foundPolicies, tp)
+			}
+		}
+	}
+	slices.SortFunc(foundPolicies, func(a, b TransformationPolicy) int {
+		return strings.Compare(a.PolicyName(), b.PolicyName())
+	})
 	return foundPolicies
 }
 

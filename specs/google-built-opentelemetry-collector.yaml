@@ -65,6 +65,7 @@ components:
     - windowseventlog
     - iis
     - windowsperfcounters
+    - sqlserver
     - activedirectoryds
     - apache
     - couchdb

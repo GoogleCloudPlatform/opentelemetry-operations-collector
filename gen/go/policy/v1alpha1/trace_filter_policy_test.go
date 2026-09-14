@@ -17,7 +17,6 @@ package policyv1alpha1_test
 import (
 	"testing"
 
-	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -238,12 +237,7 @@ func TestTraceFilterPolicy_AnyPackaging(t *testing.T) {
 	assert.Equal(t, "type.googleapis.com/google.telemetry.policy.v1alpha1.TraceFilterPolicy", anyPolicy.GetTypeUrl())
 
 	collector := &xdsv1alpha1.TelemetryCollector{
-		Policies: []*corev3.TypedExtensionConfig{
-			{
-				Name:        "default-trace-filter",
-				TypedConfig: anyPolicy,
-			},
-		},
+		Policies: []*anypb.Any{anyPolicy},
 	}
 
 	data, err := proto.Marshal(collector)
@@ -253,10 +247,10 @@ func TestTraceFilterPolicy_AnyPackaging(t *testing.T) {
 	require.NoError(t, proto.Unmarshal(data, unmarshaledCollector))
 
 	require.Len(t, unmarshaledCollector.GetPolicies(), 1)
-	assert.Equal(t, "default-trace-filter", unmarshaledCollector.GetPolicies()[0].GetName())
+	assert.Equal(t, "type.googleapis.com/google.telemetry.policy.v1alpha1.TraceFilterPolicy", unmarshaledCollector.GetPolicies()[0].GetTypeUrl())
 
 	unpackedPolicy := &policyv1alpha1.TraceFilterPolicy{}
-	require.NoError(t, unmarshaledCollector.GetPolicies()[0].GetTypedConfig().UnmarshalTo(unpackedPolicy))
+	require.NoError(t, unmarshaledCollector.GetPolicies()[0].UnmarshalTo(unpackedPolicy))
 	assert.Equal(t, "retain-error-spans", unpackedPolicy.GetId())
 	assert.Equal(t, policyv1alpha1.Action_ACTION_KEEP, unpackedPolicy.GetAction())
 }

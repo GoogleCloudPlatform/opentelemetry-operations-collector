@@ -16,6 +16,7 @@ package googlecontrolplaneprovider
 
 import (
 	"context"
+	"net/url"
 	"testing"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider/policies/selfmetrics"
@@ -163,6 +164,34 @@ func TestRetrieve_NoFleetID(t *testing.T) {
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
 
+// TestRetrieve_XDSServerUnreachable asserts that a control plane that is down
+// does not stop the collector from starting: the xDS connection is retried in
+// the background while the collector comes up on its built-in policies.
+func TestRetrieve_XDSServerUnreachable(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	p := createProvider()
+
+	// Port 1 on loopback: nothing is listening, so the connection cannot be
+	// established and the manager is left retrying with backoff.
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:xds://127.0.0.1:1?insecure=true", nil)
+	require.NoError(t, err, "an unreachable xDS control plane must not block collector startup")
+	require.NotNil(t, ret)
+
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+
+	// The built-in destination and self metrics policies are still applied...
+	assert.True(t, conf.IsSet("exporters::otlp_grpc/default_gcp_destination"))
+	assert.True(t, conf.IsSet("receivers::otlp/default_self_metrics"))
+
+	// ...so the collector always has at least one pipeline to stand up with,
+	// even though no policies were ever received from the control plane.
+	assert.True(t, conf.IsSet("service::pipelines::metrics/default_self_metrics"))
+	assert.True(t, conf.IsSet("service::pipelines::logs/default_self_metrics"))
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
 func TestRetrieve_MultipleDestinationPolicies(t *testing.T) {
 	t.Setenv("FLEET_ID", "1234")
 	p := createProvider()
@@ -279,4 +308,101 @@ func TestRetrieve_ActivePolicySetWithOtherSource(t *testing.T) {
 	assert.True(t, conf.IsSet("receivers::otlp/default_self_metrics"))
 
 	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+// TestResolveFleetID pins the precedence of the three fleet sources.
+//
+// The URI has to win. NewXDSPolicyManager independently applies URI-first
+// precedence when it derives the xDS node's cluster, so if this helper
+// preferred the environment the collector would subscribe to one fleet's
+// policies while stamping its telemetry with another fleet's ID.
+func TestResolveFleetID(t *testing.T) {
+	mustParse := func(raw string) *url.URL {
+		t.Helper()
+		u, err := url.Parse(raw)
+		require.NoError(t, err)
+		return u
+	}
+
+	ctxWith := func(v string) context.Context {
+		return context.WithValue(context.Background(), "FLEET_ID", v)
+	}
+
+	tests := []struct {
+		name string
+		ctx  context.Context
+		uri  *url.URL
+		env  string
+		want string
+	}{
+		{
+			name: "canonical gcp.fleet_id beats context and environment",
+			ctx:  ctxWith("from-ctx"),
+			uri:  mustParse("xds://telemetrydirector.googleapis.com?gcp.fleet_id=from-uri&project=p"),
+			env:  "from-env",
+			want: "from-uri",
+		},
+		{
+			// gcp.fleet_id is the only accepted spelling; the older ?fleet=
+			// must not be picked up, or a stale config would silently
+			// subscribe to the wrong fleet.
+			name: "legacy fleet spelling is ignored",
+			ctx:  ctxWith("from-ctx"),
+			uri:  mustParse("xds://host:443?fleet=legacy-uri"),
+			env:  "from-env",
+			want: "from-ctx",
+		},
+		{
+			name: "context used when the uri carries no fleet",
+			ctx:  ctxWith("from-ctx"),
+			uri:  mustParse("xds://host:443"),
+			env:  "from-env",
+			want: "from-ctx",
+		},
+		{
+			name: "environment is the last resort",
+			ctx:  context.Background(),
+			uri:  mustParse("xds://host:443"),
+			env:  "from-env",
+			want: "from-env",
+		},
+		{
+			name: "nil uri is tolerated",
+			ctx:  ctxWith("from-ctx"),
+			uri:  nil,
+			env:  "from-env",
+			want: "from-ctx",
+		},
+		{
+			name: "empty when nothing is set",
+			ctx:  context.Background(),
+			uri:  mustParse("xds://host:443"),
+			env:  "",
+			want: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("FLEET_ID", tt.env)
+			assert.Equal(t, tt.want, resolveFleetID(tt.ctx, tt.uri))
+		})
+	}
+}
+
+// TestResolveFleetIDMatchesManager guards the invariant that actually matters:
+// whatever the provider resolves is what the xDS manager will use as its node
+// cluster, so the subscription and the policy evaluation cannot disagree.
+func TestResolveFleetIDMatchesManager(t *testing.T) {
+	t.Setenv("FLEET_ID", "from-env")
+	uri, err := url.Parse("xds://telemetrydirector.googleapis.com?gcp.fleet_id=from-uri&project=p")
+	require.NoError(t, err)
+
+	ctx := context.WithValue(context.Background(), "FLEET_ID", "from-ctx")
+	resolved := resolveFleetID(ctx, uri)
+
+	// NewXDSPolicyManager derives the node cluster with googlepolicy.FleetIDFromURI;
+	// the provider must already agree with that choice.
+	assert.Equal(t, googlepolicy.FleetIDFromURI(uri), resolved)
+	assert.Equal(t, "from-uri", resolved)
 }

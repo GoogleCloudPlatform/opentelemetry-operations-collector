@@ -18,8 +18,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/configoptional"
 	"go.opentelemetry.io/collector/config/configtelemetry"
@@ -42,6 +44,7 @@ const PolicyType = "self_metrics"
 
 const contextKeyCollectorID = "COLLECTOR_ID"
 const contextKeyFleetID = "FLEET_ID"
+const contextKeyProjectID = "PROJECT_ID"
 
 type SelfMetricsPolicy struct {
 	Name string `mapstructure:"name"`
@@ -81,6 +84,23 @@ func (p *SelfMetricsPolicy) Evaluate(ctx context.Context) (*confmap.Conf, error)
 		return nil, ErrNoFleetID
 	}
 
+	attrs := []config.AttributeNameValue{
+		{
+			Name:  "service.instance.id",
+			Value: collectorID,
+		},
+		{
+			Name:  "gcp.fleet_id",
+			Value: fleetID,
+		},
+	}
+	if v := ctx.Value(contextKeyProjectID); v != nil && v != "" {
+		attrs = append(attrs, config.AttributeNameValue{
+			Name:  "gcp.project_id",
+			Value: v,
+		})
+	}
+
 	conf := &otelcol.Config{}
 
 	endpoint := fmt.Sprintf("http://localhost:%d", p.Port)
@@ -88,7 +108,6 @@ func (p *SelfMetricsPolicy) Evaluate(ctx context.Context) (*confmap.Conf, error)
 	insecure := true
 	interval := 5000
 	timeout := 30000
-
 	// Start from the telemetry factory's default config and override only what
 	// this policy actually cares about. Building otelconftelemetry.Config as a
 	// literal silently drops every default the factory supplies -- most
@@ -99,16 +118,7 @@ func (p *SelfMetricsPolicy) Evaluate(ctx context.Context) (*confmap.Conf, error)
 
 	telemetryCfg.Resource = otelconftelemetry.ResourceConfig{
 		Resource: config.Resource{
-			Attributes: []config.AttributeNameValue{
-				{
-					Name:  "service.instance.id",
-					Value: collectorID,
-				},
-				{
-					Name:  "gcp.fleet_id",
-					Value: fleetID,
-				},
-			},
+			Attributes: attrs,
 		},
 	}
 
@@ -164,6 +174,40 @@ func (p *SelfMetricsPolicy) Evaluate(ctx context.Context) (*confmap.Conf, error)
 		otlpReceiverID: component.Config(otlpReceiver),
 	}
 
+	rdType, _ := component.NewType("resourcedetection")
+	rdID := component.NewIDWithName(rdType, p.Name)
+	rdCfg := resourcedetectionprocessor.NewFactory().CreateDefaultConfig().(*resourcedetectionprocessor.Config)
+	rdCfg.Detectors = []string{"gcp"}
+	rdCfg.Override = false
+	rdCfg.ClientConfig.Timeout = 2 * time.Second
+
+	transformType, _ := component.NewType("transform")
+	transformID := component.NewIDWithName(transformType, p.Name)
+	transformCfg := map[string]any{
+		"error_mode": "ignore",
+		"log_statements": []map[string]any{
+			{
+				"context": "resource",
+				"statements": []string{
+					`set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil`,
+				},
+			},
+		},
+		"metric_statements": []map[string]any{
+			{
+				"context": "resource",
+				"statements": []string{
+					`set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil`,
+				},
+			},
+		},
+	}
+
+	conf.Processors = map[component.ID]component.Config{
+		rdID:        component.Config(rdCfg),
+		transformID: component.Config(transformCfg),
+	}
+
 	cm := confmap.New()
 	if err := cm.Marshal(conf); err != nil {
 		return nil, fmt.Errorf("policy implementation failure for %s: marshaling config got error '%w'", p.PolicyName(), err)
@@ -188,13 +232,21 @@ func (p *SelfMetricsPolicy) createPipeline(signal pipeline.Signal, preExportProc
 	otlpReceiverType, _ := component.NewType("otlp")
 	otlpReceiverID := component.NewIDWithName(otlpReceiverType, p.Name)
 
+	rdType, _ := component.NewType("resourcedetection")
+	rdID := component.NewIDWithName(rdType, p.Name)
+
+	transformType, _ := component.NewType("transform")
+	transformID := component.NewIDWithName(transformType, p.Name)
+
+	processors := append([]component.ID{rdID, transformID}, preExportProcessors...)
+
 	pipeID := pipeline.NewIDWithName(signal, p.Name)
 	conf := &otelcol.Config{
 		Service: service.Config{
 			Pipelines: pipelines.Config{
 				pipeID: &pipelines.PipelineConfig{
 					Receivers:  []component.ID{otlpReceiverID},
-					Processors: preExportProcessors,
+					Processors: processors,
 					Exporters:  exporters,
 				},
 			},

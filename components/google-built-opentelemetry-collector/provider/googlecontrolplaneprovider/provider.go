@@ -23,8 +23,8 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplane/policies/gcpdestination"
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplane/policies/selfmetrics"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider/policies/gcpdestination"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider/policies/selfmetrics"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"go.opentelemetry.io/collector/confmap"
 	"go.uber.org/zap"
@@ -58,7 +58,7 @@ var (
 
 var (
 	BuiltInDestinationPolicy = &gcpdestination.GCPDestinationPolicy{Name: "default_gcp_destination"}
-	BuiltInSelfMetricsPolicy = &selfmetrics.SelfMetricsPolicy{Name: "default_self_metrics"}
+	BuiltInSelfMetricsPolicy = &selfmetrics.SelfMetricsPolicy{Name: "default_self_metrics", Port: 18888}
 )
 
 const (
@@ -155,6 +155,23 @@ func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrie
 	fleetID := os.Getenv("FLEET_ID")
 	if v, ok := ctx.Value("FLEET_ID").(string); ok && v != "" {
 		fleetID = v
+	}
+	if fleetID == "" && p.manager != nil && p.manager.URI() != nil {
+		fleetID = p.manager.URI().Query().Get("fleet")
+	}
+	if fleetID != "" {
+		ctx = context.WithValue(ctx, "FLEET_ID", fleetID)
+	}
+
+	var projectID string
+	if v, ok := ctx.Value("PROJECT_ID").(string); ok && v != "" {
+		projectID = v
+	}
+	if projectID == "" && p.manager != nil && p.manager.URI() != nil {
+		projectID = p.manager.URI().Query().Get("project")
+	}
+	if projectID != "" {
+		ctx = context.WithValue(ctx, "PROJECT_ID", projectID)
 	}
 
 	// Get a copy of the current active policy set from `pkg/googlepolicy`. If there is

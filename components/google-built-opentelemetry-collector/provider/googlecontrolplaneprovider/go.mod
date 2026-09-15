@@ -17,6 +17,7 @@ module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/compone
 go 1.26.6
 
 require (
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/event v0.0.0
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy v0.0.0
 	github.com/google/uuid v1.6.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/extension/googleclientauthextension v0.160.0
@@ -229,7 +230,7 @@ require (
 	go.opentelemetry.io/collector/receiver/receivertest v0.160.0 // indirect
 	go.opentelemetry.io/collector/receiver/xreceiver v0.160.0 // indirect
 	go.opentelemetry.io/collector/service/hostcapabilities v0.160.0 // indirect
-	go.opentelemetry.io/contrib/bridges/otelzap v0.20.0 // indirect
+	go.opentelemetry.io/contrib/bridges/otelzap v0.20.1 // indirect
 	go.opentelemetry.io/contrib/detectors/aws/ecs v1.45.0 // indirect
 	go.opentelemetry.io/contrib/detectors/aws/eks v1.45.0 // indirect
 	go.opentelemetry.io/contrib/detectors/aws/elasticbeanstalk v0.17.0 // indirect
@@ -296,6 +297,6 @@ require (
 )
 
 replace (
-	github.com/GoogleCloudPlatform/opentelemetry-operations-collector => ../../../../
-	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy => ../../../../pkg/googlepolicy
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/event v0.0.0 => ../../../../pkg/event
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy v0.0.0 => ../../../../pkg/googlepolicy
 )

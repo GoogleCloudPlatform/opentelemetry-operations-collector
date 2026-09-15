@@ -1,0 +1,62 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+file_format: definition/2
+
+attributes:
+  - key: policy.id
+    type: string
+    stability: development
+    brief: Unique identifier of the policy being evaluated.
+    examples: ["policy-123"]
+
+  - key: policy.set.revision.id
+    type: string
+    stability: development
+    brief: Unique identifier of the policy set revision containing the policy.
+    examples: ["886313e1-3b8a-5372-9b90-0c9aee199e5d"]
+
+events:
+  - name: policy.evaluate.error
+    stability: development
+    requirement_level: recommended
+    brief: Recorded when an error occurs while evaluating a policy.
+    note: |
+      This event is recorded whenever policy evaluation fails.
+      The event body MUST contain the human-readable failure message describing the evaluation error.
+      Timestamp MUST be set to the time when the evaluation failure occurred.
+      Default severity level is ERROR.
+    annotations:
+      severity: error
+    attributes:
+      - ref: policy.id
+        requirement_level: required
+      - ref: policy.set.revision.id
+        requirement_level: required
+
+  - name: policy.set.invalid
+    stability: development
+    requirement_level: recommended
+    brief: Recorded when a policy set is structurally invalid and cannot be applied.
+    note: |
+      This event is recorded when an entire policy set fails validation (for example,
+      containing multiple destination policies).
+      The event body MUST contain the human-readable error message describing why the policy set is invalid.
+      Timestamp MUST be set to the time when the invalid policy set was rejected.
+      Default severity level is ERROR.
+    annotations:
+      severity: error
+    attributes:
+      - ref: policy.set.revision.id
+        requirement_level: required

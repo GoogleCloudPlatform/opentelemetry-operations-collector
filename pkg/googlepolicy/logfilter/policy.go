@@ -108,7 +108,10 @@ func NewPolicyFromProto(pb *policyv1alpha1.LogFilterPolicy) (*Policy, error) {
 
 	matchers := make([]compiledMatcher, 0, len(pb.GetMatches()))
 	for i, m := range pb.GetMatches() {
-		cm, err := compileMatcher(m)
+	}
+	if pb.GetId() == "" {
+		return nil, errors.New("log filter policy id cannot be empty")
+	}
 		if err != nil {
 			return nil, fmt.Errorf("matcher[%d]: %w", i, err)
 		}

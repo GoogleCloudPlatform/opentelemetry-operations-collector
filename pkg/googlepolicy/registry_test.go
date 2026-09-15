@@ -306,3 +306,33 @@ func TestWatcherChannel_NonBlockingWhenFull(t *testing.T) {
 		t.Fatal("expected pending signal on watcher channel")
 	}
 }
+
+// TestStripTypeKey pins the envelope-stripping contract. "type" selects the
+// driver and has no counterpart in any policy proto, so the registry must
+// remove it before handing the map to a driver -- and must not mutate the
+// caller's map while doing so.
+func TestStripTypeKey(t *testing.T) {
+	raw := map[string]any{
+		"type":   "log_filter",
+		"id":     "keep-other-keys",
+		"action": "ACTION_DROP",
+	}
+
+	stripped := stripTypeKey(raw)
+
+	assert.NotContains(t, stripped, "type")
+	assert.Equal(t, "keep-other-keys", stripped["id"])
+	assert.Equal(t, "ACTION_DROP", stripped["action"])
+	// The caller's map is untouched.
+	assert.Contains(t, raw, "type")
+}
+
+// TestStripTypeKeyWithoutTypeKey covers the no-op path: a map that never had
+// the envelope key still round-trips unchanged.
+func TestStripTypeKeyWithoutTypeKey(t *testing.T) {
+	raw := map[string]any{"id": "no-envelope"}
+
+	stripped := stripTypeKey(raw)
+
+	assert.Equal(t, raw, stripped)
+}

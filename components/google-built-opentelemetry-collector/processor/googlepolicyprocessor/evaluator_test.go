@@ -19,6 +19,9 @@ import (
 
 	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/logfilter"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/metricfilter"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/tracefilter"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/pcommon"
@@ -28,65 +31,117 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-type testTransformationPolicy struct {
-	name    string
-	signals []googlepolicy.Signal
-	pb      proto.Message
+// All predicate compilation, target extraction and value matching now live in
+// pkg/googlepolicy/{logfilter,metricfilter,tracefilter} and their shared
+// internal/matcher package, and are unit-tested there. The processor is
+// pipeline plumbing, so everything below drives it through its public surface:
+// NewEvaluator + Transform{Logs,Metrics,Traces} + Eval{Log,Metric,Trace}.
+
+// nonEvaluatorPolicy is a TransformationPolicy that implements none of the
+// per-signal evaluator interfaces. NewEvaluator has no way to evaluate such a
+// policy, so it must reject it at load time.
+type nonEvaluatorPolicy struct {
+	name string
 }
 
-func (p *testTransformationPolicy) PolicyName() string { return p.name }
-func (p *testTransformationPolicy) PolicyType() string { return "test_policy" }
-func (p *testTransformationPolicy) PolicyClass() googlepolicy.PolicyClass {
+func (p *nonEvaluatorPolicy) PolicyName() string { return p.name }
+func (p *nonEvaluatorPolicy) PolicyType() string { return "non_evaluator" }
+func (p *nonEvaluatorPolicy) PolicyClass() googlepolicy.PolicyClass {
 	return googlepolicy.PolicyClassTransformation
 }
-func (p *testTransformationPolicy) Validate() error                      { return nil }
-func (p *testTransformationPolicy) TargetSignals() []googlepolicy.Signal { return p.signals }
-func (p *testTransformationPolicy) Proto() proto.Message                 { return p.pb }
+func (p *nonEvaluatorPolicy) Validate() error                      { return nil }
+func (p *nonEvaluatorPolicy) TargetSignals() []googlepolicy.Signal { return nil }
+
+// fakeMetricPolicy is a hand-written MetricPolicyEvaluator used to observe how
+// often, and with which datapoint attributes, the Evaluator invokes a metric
+// policy. It is the only way to assert the two-tier instrument-vs-datapoint
+// optimisation from outside the package.
+type fakeMetricPolicy struct {
+	name           string
+	datapointLevel bool
+	result         googlepolicy.EvalResult
+	// eval, when set, overrides result.
+	eval func(ctx googlepolicy.MetricContext) googlepolicy.EvalResult
+
+	calls              int
+	seenDatapointAttrs []map[string]any
+}
+
+func (p *fakeMetricPolicy) PolicyName() string { return p.name }
+func (p *fakeMetricPolicy) PolicyType() string { return "fake_metric" }
+func (p *fakeMetricPolicy) PolicyClass() googlepolicy.PolicyClass {
+	return googlepolicy.PolicyClassTransformation
+}
+func (p *fakeMetricPolicy) Validate() error { return nil }
+func (p *fakeMetricPolicy) TargetSignals() []googlepolicy.Signal {
+	return []googlepolicy.Signal{googlepolicy.SignalMetrics}
+}
+func (p *fakeMetricPolicy) IsDatapointLevel() bool { return p.datapointLevel }
+func (p *fakeMetricPolicy) EvaluateMetric(ctx googlepolicy.MetricContext) googlepolicy.EvalResult {
+	p.calls++
+	p.seenDatapointAttrs = append(p.seenDatapointAttrs, ctx.DatapointAttributes.AsRaw())
+	if p.eval != nil {
+		return p.eval(ctx)
+	}
+	return p.result
+}
+
+// fakeLogPolicy is a hand-written LogPolicyEvaluator that is not a
+// logfilter.Policy, pinning that NewEvaluator dispatches on the evaluator
+// interface rather than on a concrete filter-package type.
+type fakeLogPolicy struct {
+	result googlepolicy.EvalResult
+}
+
+func (p *fakeLogPolicy) PolicyName() string { return "fake-log" }
+func (p *fakeLogPolicy) PolicyType() string { return "fake_log" }
+func (p *fakeLogPolicy) PolicyClass() googlepolicy.PolicyClass {
+	return googlepolicy.PolicyClassTransformation
+}
+func (p *fakeLogPolicy) Validate() error { return nil }
+func (p *fakeLogPolicy) TargetSignals() []googlepolicy.Signal {
+	return []googlepolicy.Signal{googlepolicy.SignalLogs}
+}
+func (p *fakeLogPolicy) EvaluateLog(googlepolicy.LogContext) googlepolicy.EvalResult {
+	return p.result
+}
 
 func TestEvaluator_LogFiltering(t *testing.T) {
 	// Policy 1: Drop logs where severity_text regex matches "^DEBUG"
-	dropDebug := &testTransformationPolicy{
-		name:    "drop-debug",
-		signals: []googlepolicy.Signal{googlepolicy.SignalLogs},
-		pb: &policyv1alpha1.LogFilterPolicy{
-			Id:     "drop-debug",
-			Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-			Matches: []*policyv1alpha1.LogMatcher{
-				{
-					Target: &policyv1alpha1.LogFieldSelector{
-						Target: &policyv1alpha1.LogFieldSelector_RecordField{
-							RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT,
-						},
+	dropDebug := mustPolicy(t, &policyv1alpha1.LogFilterPolicy{
+		Id:     "drop-debug",
+		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+		Matches: []*policyv1alpha1.LogMatcher{
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_RecordField{
+						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT,
 					},
-					Predicate: &policyv1alpha1.LogMatcher_Regex{Regex: "^DEBUG"},
 				},
+				Predicate: &policyv1alpha1.LogMatcher_Regex{Regex: "^DEBUG"},
 			},
 		},
-	}
+	})
 
 	// Policy 2: Keep logs (exemption) where resource attribute env == "production"
-	keepProd := &testTransformationPolicy{
-		name:    "keep-prod",
-		signals: []googlepolicy.Signal{googlepolicy.SignalLogs},
-		pb: &policyv1alpha1.LogFilterPolicy{
-			Id:     "keep-prod",
-			Action: policyv1alpha1.Action_ACTION_KEEP.Enum(),
-			Matches: []*policyv1alpha1.LogMatcher{
-				{
-					Target: &policyv1alpha1.LogFieldSelector{
-						Target: &policyv1alpha1.LogFieldSelector_ResourceAttribute{
-							ResourceAttribute: &policyv1alpha1.AttributePath{Path: []string{"env"}},
-						},
+	keepProd := mustPolicy(t, &policyv1alpha1.LogFilterPolicy{
+		Id:     "keep-prod",
+		Action: policyv1alpha1.Action_ACTION_KEEP.Enum(),
+		Matches: []*policyv1alpha1.LogMatcher{
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_ResourceAttribute{
+						ResourceAttribute: &policyv1alpha1.AttributePath{Path: []string{"env"}},
 					},
-					Predicate: &policyv1alpha1.LogMatcher_Equals{
-						Equals: &policyv1alpha1.Value{
-							Value: &policyv1alpha1.Value_StringValue{StringValue: "production"},
-						},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_StringValue{StringValue: "production"},
 					},
 				},
 			},
 		},
-	}
+	})
 
 	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{dropDebug, keepProd})
 	require.NoError(t, err)
@@ -129,30 +184,26 @@ func TestEvaluator_LogFiltering(t *testing.T) {
 }
 
 func TestEvaluator_LogNestedAttributeAndNegate(t *testing.T) {
-	// Drop logs where http.request.method != "GET" (negated equals)
-	dropNonGet := &testTransformationPolicy{
-		name:    "drop-non-get",
-		signals: []googlepolicy.Signal{googlepolicy.SignalLogs},
-		pb: &policyv1alpha1.LogFilterPolicy{
-			Id:     "drop-non-get",
-			Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-			Matches: []*policyv1alpha1.LogMatcher{
-				{
-					Target: &policyv1alpha1.LogFieldSelector{
-						Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
-							LogAttribute: &policyv1alpha1.AttributePath{Path: []string{"http", "method"}},
-						},
+	// Drop logs where http.method != "GET" (negated equals)
+	dropNonGet := mustPolicy(t, &policyv1alpha1.LogFilterPolicy{
+		Id:     "drop-non-get",
+		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+		Matches: []*policyv1alpha1.LogMatcher{
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
+						LogAttribute: &policyv1alpha1.AttributePath{Path: []string{"http", "method"}},
 					},
-					Predicate: &policyv1alpha1.LogMatcher_Equals{
-						Equals: &policyv1alpha1.Value{
-							Value: &policyv1alpha1.Value_StringValue{StringValue: "GET"},
-						},
-					},
-					Negate: true,
 				},
+				Predicate: &policyv1alpha1.LogMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_StringValue{StringValue: "GET"},
+					},
+				},
+				Negate: true,
 			},
 		},
-	}
+	})
 
 	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{dropNonGet})
 	require.NoError(t, err)
@@ -175,40 +226,36 @@ func TestEvaluator_LogNestedAttributeAndNegate(t *testing.T) {
 
 func TestEvaluator_MetricFiltering(t *testing.T) {
 	// Drop metrics named "http.server.duration" with type "histogram"
-	dropHist := &testTransformationPolicy{
-		name:    "drop-duration-histogram",
-		signals: []googlepolicy.Signal{googlepolicy.SignalMetrics},
-		pb: &policyv1alpha1.MetricFilterPolicy{
-			Id:     "drop-duration-histogram",
-			Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-			Matches: []*policyv1alpha1.MetricMatcher{
-				{
-					Target: &policyv1alpha1.MetricFieldSelector{
-						Target: &policyv1alpha1.MetricFieldSelector_DescriptorField{
-							DescriptorField: policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME,
-						},
-					},
-					Predicate: &policyv1alpha1.MetricMatcher_Equals{
-						Equals: &policyv1alpha1.Value{
-							Value: &policyv1alpha1.Value_StringValue{StringValue: "http.server.duration"},
-						},
+	dropHist := mustPolicy(t, &policyv1alpha1.MetricFilterPolicy{
+		Id:     "drop-duration-histogram",
+		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+		Matches: []*policyv1alpha1.MetricMatcher{
+			{
+				Target: &policyv1alpha1.MetricFieldSelector{
+					Target: &policyv1alpha1.MetricFieldSelector_DescriptorField{
+						DescriptorField: policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME,
 					},
 				},
-				{
-					Target: &policyv1alpha1.MetricFieldSelector{
-						Target: &policyv1alpha1.MetricFieldSelector_DescriptorField{
-							DescriptorField: policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE,
-						},
+				Predicate: &policyv1alpha1.MetricMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_StringValue{StringValue: "http.server.duration"},
 					},
-					Predicate: &policyv1alpha1.MetricMatcher_Equals{
-						Equals: &policyv1alpha1.Value{
-							Value: &policyv1alpha1.Value_StringValue{StringValue: "HISTOGRAM"},
-						},
+				},
+			},
+			{
+				Target: &policyv1alpha1.MetricFieldSelector{
+					Target: &policyv1alpha1.MetricFieldSelector_DescriptorField{
+						DescriptorField: policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE,
+					},
+				},
+				Predicate: &policyv1alpha1.MetricMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_StringValue{StringValue: "HISTOGRAM"},
 					},
 				},
 			},
 		},
-	}
+	})
 
 	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{dropHist})
 	require.NoError(t, err)
@@ -273,36 +320,32 @@ func TestEvaluator_MetricFiltering(t *testing.T) {
 
 func TestEvaluator_TraceFiltering(t *testing.T) {
 	// Drop internal spans with name starting with "healthcheck"
-	dropHealthcheck := &testTransformationPolicy{
-		name:    "drop-healthcheck",
-		signals: []googlepolicy.Signal{googlepolicy.SignalTraces},
-		pb: &policyv1alpha1.TraceFilterPolicy{
-			Id:     "drop-healthcheck",
-			Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-			Matches: []*policyv1alpha1.TraceMatcher{
-				{
-					Target: &policyv1alpha1.TraceFieldSelector{
-						Target: &policyv1alpha1.TraceFieldSelector_RecordField{
-							RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME,
-						},
+	dropHealthcheck := mustPolicy(t, &policyv1alpha1.TraceFilterPolicy{
+		Id:     "drop-healthcheck",
+		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+		Matches: []*policyv1alpha1.TraceMatcher{
+			{
+				Target: &policyv1alpha1.TraceFieldSelector{
+					Target: &policyv1alpha1.TraceFieldSelector_RecordField{
+						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME,
 					},
-					Predicate: &policyv1alpha1.TraceMatcher_Regex{Regex: "^healthcheck"},
 				},
-				{
-					Target: &policyv1alpha1.TraceFieldSelector{
-						Target: &policyv1alpha1.TraceFieldSelector_RecordField{
-							RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_KIND,
-						},
+				Predicate: &policyv1alpha1.TraceMatcher_Regex{Regex: "^healthcheck"},
+			},
+			{
+				Target: &policyv1alpha1.TraceFieldSelector{
+					Target: &policyv1alpha1.TraceFieldSelector_RecordField{
+						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_KIND,
 					},
-					Predicate: &policyv1alpha1.TraceMatcher_Equals{
-						Equals: &policyv1alpha1.Value{
-							Value: &policyv1alpha1.Value_StringValue{StringValue: "INTERNAL"},
-						},
+				},
+				Predicate: &policyv1alpha1.TraceMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_StringValue{StringValue: "INTERNAL"},
 					},
 				},
 			},
 		},
-	}
+	})
 
 	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{dropHealthcheck})
 	require.NoError(t, err)
@@ -346,696 +389,156 @@ func TestEvaluator_TraceFiltering(t *testing.T) {
 	assert.Equal(t, "get_user", td.ResourceSpans().At(0).ScopeSpans().At(0).Spans().At(0).Name())
 }
 
-// rawProtoLogPolicy tests NewEvaluator with a policy that does NOT implement ProtoPolicy
-// (directly embeds *policyv1alpha1.LogFilterPolicy).
-type rawProtoLogPolicy struct {
-	*policyv1alpha1.LogFilterPolicy
+// TestNewEvaluator_Dispatch covers how NewEvaluator routes each kind of
+// TransformationPolicy it can be handed.
+func TestNewEvaluator_Dispatch(t *testing.T) {
+	t.Run("nil policies are skipped", func(t *testing.T) {
+		ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{nil})
+		require.NoError(t, err)
+		require.NotNil(t, ev)
+		assert.Empty(t, ev.logPolicies)
+		assert.Empty(t, ev.metricPolicies)
+		assert.Empty(t, ev.tracePolicies)
+	})
+
+	t.Run("compiled policies are routed to their signal", func(t *testing.T) {
+		ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{
+			mustPolicy(t, newDropLogBodyProto("pre-log", "BAD")),
+			mustPolicy(t, newDropMetricNameProto("pre-metric", "drop.me")),
+			mustPolicy(t, newDropSpanNameProto("pre-trace", "drop.span")),
+		})
+		require.NoError(t, err)
+		require.Len(t, ev.logPolicies, 1)
+		require.Len(t, ev.metricPolicies, 1)
+		require.Len(t, ev.tracePolicies, 1)
+
+		lr := plog.NewLogRecord()
+		lr.Body().SetStr("BAD")
+		assert.True(t, ev.EvalLog(LogContext{Record: lr}))
+
+		m := pmetric.NewMetric()
+		m.SetName("drop.me")
+		m.SetEmptyGauge()
+		assert.True(t, ev.EvalMetric(MetricContext{Metric: m, DatapointAttributes: pcommon.NewMap()}))
+
+		span := ptrace.NewSpan()
+		span.SetName("drop.span")
+		assert.True(t, ev.EvalTrace(TraceContext{Span: span}))
+	})
+
+	t.Run("dispatch is by evaluator interface, not by concrete type", func(t *testing.T) {
+		// fakeLogPolicy is not a logfilter.Policy; implementing
+		// LogPolicyEvaluator is all it takes to land on the log path.
+		ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{
+			&fakeLogPolicy{result: googlepolicy.EvalDrop},
+		})
+		require.NoError(t, err)
+		require.Len(t, ev.logPolicies, 1)
+		assert.True(t, ev.EvalLog(LogContext{Record: plog.NewLogRecord()}))
+	})
+
+	t.Run("datapoint-level metric policies are flagged", func(t *testing.T) {
+		instrumentOnly, err := NewEvaluator([]googlepolicy.TransformationPolicy{
+			mustPolicy(t, newDropMetricNameProto("by-name", "drop.me")),
+		})
+		require.NoError(t, err)
+		assert.False(t, instrumentOnly.hasDatapointMetricPolicies)
+
+		withDatapoint, err := NewEvaluator([]googlepolicy.TransformationPolicy{
+			mustPolicy(t, newDropMetricNameProto("by-name", "drop.me")),
+			mustPolicy(t, newDropDatapointAttrProto("by-attr", "drop_me", "true")),
+		})
+		require.NoError(t, err)
+		assert.True(t, withDatapoint.hasDatapointMetricPolicies)
+	})
 }
 
-func (p *rawProtoLogPolicy) PolicyName() string { return p.GetId() }
-func (p *rawProtoLogPolicy) PolicyType() string { return "raw_log" }
-func (p *rawProtoLogPolicy) PolicyClass() googlepolicy.PolicyClass {
-	return googlepolicy.PolicyClassTransformation
-}
-func (p *rawProtoLogPolicy) Validate() error                      { return nil }
-func (p *rawProtoLogPolicy) TargetSignals() []googlepolicy.Signal { return nil }
+// TestNewEvaluator_RejectsPolicyWithoutEvaluator pins the fail-fast contract: a
+// transformation policy that implements none of the three per-signal evaluator
+// interfaces can never be evaluated, so NewEvaluator must surface a descriptive
+// error at load time rather than panicking or silently skipping the policy.
+//
+// Rejecting a *malformed* policy proto is the owning filter package's job (each
+// NewPolicyFromProto validates before returning a policy) and is covered there.
+func TestNewEvaluator_RejectsPolicyWithoutEvaluator(t *testing.T) {
+	bad := &nonEvaluatorPolicy{name: "not-an-evaluator"}
 
-func TestEvaluator_PredicatesAndTypes(t *testing.T) {
-	// Test compilePredicate errors and all predicate types
-	_, err := compilePredicate(nil, false)
-	assert.Error(t, err)
+	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{
+		mustPolicy(t, newDropLogBodyProto("good-log", "BAD")),
+		bad,
+	})
 
-	_, err = compilePredicate(&policyv1alpha1.LogMatcher_Regex{Regex: "[invalid"}, false)
-	assert.Error(t, err)
-	_, err = compilePredicate(&policyv1alpha1.MetricMatcher_Regex{Regex: "[invalid"}, false)
-	assert.Error(t, err)
-	_, err = compilePredicate(&policyv1alpha1.TraceMatcher_Regex{Regex: "[invalid"}, false)
-	assert.Error(t, err)
-
-	// Exists predicate
-	pExists, err := compilePredicate(&policyv1alpha1.LogMatcher_Exists{}, false)
-	require.NoError(t, err)
-	assert.True(t, pExists.evaluate("val", true))
-	assert.False(t, pExists.evaluate("", false))
-
-	// Regex on string, int64, int, bool
-	pRegex, err := compilePredicate(&policyv1alpha1.MetricMatcher_Regex{Regex: "^(42|true|hello)$"}, false)
-	require.NoError(t, err)
-	assert.True(t, pRegex.evaluate("hello", true))
-	assert.True(t, pRegex.evaluate(int64(42), true))
-	assert.True(t, pRegex.evaluate(int(42), true))
-	assert.True(t, pRegex.evaluate(true, true))
-	assert.False(t, pRegex.evaluate(false, true))
-	assert.False(t, pRegex.evaluate(99, true))
-
-	// Regex on TraceMatcher
-	pTraceRegex, err := compilePredicate(&policyv1alpha1.TraceMatcher_Regex{Regex: "^span"}, false)
-	require.NoError(t, err)
-	assert.True(t, pTraceRegex.evaluate("span-1", true))
-
-	// Equals on all types (string, int, double, bool, bytes)
-	pEqInt, _ := compilePredicate(&policyv1alpha1.LogMatcher_Equals{
-		Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_IntValue{IntValue: 100}},
-	}, false)
-	assert.True(t, pEqInt.evaluate(int64(100), true))
-	assert.True(t, pEqInt.evaluate(int(100), true))
-	assert.True(t, pEqInt.evaluate(int32(100), true))
-	assert.True(t, pEqInt.evaluate(uint64(100), true))
-	assert.True(t, pEqInt.evaluate(uint32(100), true))
-	assert.False(t, pEqInt.evaluate("not-an-int", true))
-
-	pEqDouble, _ := compilePredicate(&policyv1alpha1.MetricMatcher_Equals{
-		Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_DoubleValue{DoubleValue: 3.5}},
-	}, false)
-	assert.True(t, pEqDouble.evaluate(float64(3.5), true))
-	assert.True(t, pEqDouble.evaluate(float32(3.5), true))
-	assert.False(t, pEqDouble.evaluate("str", true))
-
-	pEqBool, _ := compilePredicate(&policyv1alpha1.TraceMatcher_Equals{
-		Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_BoolValue{BoolValue: true}},
-	}, false)
-	assert.True(t, pEqBool.evaluate(true, true))
-	assert.False(t, pEqBool.evaluate(false, true))
-
-	pEqBytes, _ := compilePredicate(&policyv1alpha1.LogMatcher_Equals{
-		Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_BytesValue{BytesValue: []byte{1, 2, 3}}},
-	}, false)
-	assert.True(t, pEqBytes.evaluate([]byte{1, 2, 3}, true))
-	assert.False(t, pEqBytes.evaluate([]byte{4, 5}, true))
-
-	// Numeric comparisons: Gt, Gte, Lt, Lte across Log, Metric, Trace matchers
-	pGtInt, _ := compilePredicate(&policyv1alpha1.LogMatcher_Gt{
-		Gt: &policyv1alpha1.NumericValue{Value: &policyv1alpha1.NumericValue_IntValue{IntValue: 10}},
-	}, false)
-	assert.True(t, pGtInt.evaluate(int64(11), true))
-	assert.False(t, pGtInt.evaluate(int64(10), true))
-
-	pGtMetric, _ := compilePredicate(&policyv1alpha1.MetricMatcher_Gt{
-		Gt: &policyv1alpha1.NumericValue{Value: &policyv1alpha1.NumericValue_DoubleValue{DoubleValue: 5.5}},
-	}, false)
-	assert.True(t, pGtMetric.evaluate(float64(6.0), true))
-
-	pGtTrace, _ := compilePredicate(&policyv1alpha1.TraceMatcher_Gt{
-		Gt: &policyv1alpha1.NumericValue{},
-	}, false)
-	assert.True(t, pGtTrace.evaluate(int(1), true))
-
-	pGteLog, _ := compilePredicate(&policyv1alpha1.LogMatcher_Gte{
-		Gte: &policyv1alpha1.NumericValue{Value: &policyv1alpha1.NumericValue_IntValue{IntValue: 10}},
-	}, false)
-	assert.True(t, pGteLog.evaluate(int32(10), true))
-
-	pGteMetric, _ := compilePredicate(&policyv1alpha1.MetricMatcher_Gte{
-		Gte: &policyv1alpha1.NumericValue{Value: &policyv1alpha1.NumericValue_IntValue{IntValue: 10}},
-	}, false)
-	assert.True(t, pGteMetric.evaluate(uint64(10), true))
-
-	pGteTrace, _ := compilePredicate(&policyv1alpha1.TraceMatcher_Gte{
-		Gte: &policyv1alpha1.NumericValue{Value: &policyv1alpha1.NumericValue_IntValue{IntValue: 10}},
-	}, false)
-	assert.True(t, pGteTrace.evaluate(uint32(10), true))
-
-	pLtLog, _ := compilePredicate(&policyv1alpha1.LogMatcher_Lt{
-		Lt: &policyv1alpha1.NumericValue{Value: &policyv1alpha1.NumericValue_DoubleValue{DoubleValue: 5.0}},
-	}, false)
-	assert.True(t, pLtLog.evaluate(float32(4.0), true))
-
-	pLtMetric, _ := compilePredicate(&policyv1alpha1.MetricMatcher_Lt{
-		Lt: &policyv1alpha1.NumericValue{Value: &policyv1alpha1.NumericValue_IntValue{IntValue: 5}},
-	}, false)
-	assert.True(t, pLtMetric.evaluate(int64(4), true))
-
-	pLtTrace, _ := compilePredicate(&policyv1alpha1.TraceMatcher_Lt{
-		Lt: &policyv1alpha1.NumericValue{Value: &policyv1alpha1.NumericValue_IntValue{IntValue: 5}},
-	}, false)
-	assert.True(t, pLtTrace.evaluate(int64(4), true))
-
-	pLteLog, _ := compilePredicate(&policyv1alpha1.LogMatcher_Lte{
-		Lte: &policyv1alpha1.NumericValue{Value: &policyv1alpha1.NumericValue_IntValue{IntValue: 5}},
-	}, false)
-	assert.True(t, pLteLog.evaluate(int64(5), true))
-
-	pLteMetric, _ := compilePredicate(&policyv1alpha1.MetricMatcher_Lte{
-		Lte: &policyv1alpha1.NumericValue{Value: &policyv1alpha1.NumericValue_IntValue{IntValue: 5}},
-	}, false)
-	assert.True(t, pLteMetric.evaluate(int64(5), true))
-
-	pLteTrace, _ := compilePredicate(&policyv1alpha1.TraceMatcher_Lte{
-		Lte: &policyv1alpha1.NumericValue{Value: &policyv1alpha1.NumericValue_IntValue{IntValue: 5}},
-	}, false)
-	assert.True(t, pLteTrace.evaluate(int64(5), true))
-
-	// Contains on string, bytes, slice
-	pContainsStr, _ := compilePredicate(&policyv1alpha1.LogMatcher_Contains{
-		Contains: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "sub"}},
-	}, false)
-	assert.True(t, pContainsStr.evaluate("my_substring", true))
-	assert.True(t, pContainsStr.evaluate([]any{"a", "sub", "b"}, true))
-	assert.False(t, pContainsStr.evaluate([]any{"a", "b"}, true))
-	assert.False(t, pContainsStr.evaluate(123, true))
-
-	pContainsBytes, _ := compilePredicate(&policyv1alpha1.MetricMatcher_Contains{
-		Contains: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_BytesValue{BytesValue: []byte{2, 3}}},
-	}, false)
-	assert.True(t, pContainsBytes.evaluate([]byte{1, 2, 3, 4}, true))
-
-	pContainsTrace, _ := compilePredicate(&policyv1alpha1.TraceMatcher_Contains{
-		Contains: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_IntValue{IntValue: 42}},
-	}, false)
-	assert.True(t, pContainsTrace.evaluate([]any{int64(10), int64(42)}, true))
+	require.Error(t, err)
+	assert.Nil(t, ev, "a rejected policy must not yield a half-populated evaluator")
+	assert.ErrorContains(t, err, "not-an-evaluator")
+	assert.ErrorContains(t, err, "*googlepolicyprocessor.nonEvaluatorPolicy")
+	assert.ErrorContains(t, err, "googlepolicy.LogPolicyEvaluator")
+	assert.ErrorContains(t, err, "googlepolicy.MetricPolicyEvaluator")
+	assert.ErrorContains(t, err, "googlepolicy.TracePolicyEvaluator")
 }
 
-func TestEvaluator_LookupPathAndValueTypes(t *testing.T) {
-	m := pcommon.NewMap()
-	m.PutStr("str", "val")
-	m.PutInt("int", 123)
-	m.PutDouble("double", 4.56)
-	m.PutBool("bool", true)
-	m.PutEmptyBytes("bytes").FromRaw([]byte{9, 8})
-	subMap := m.PutEmptyMap("nested")
-	subMap.PutStr("inner", "found")
-	sl := m.PutEmptySlice("items")
-	sl.AppendEmpty().SetStr("zero")
-	sl.AppendEmpty().SetInt(10)
-	mapInSlice := sl.AppendEmpty().SetEmptyMap()
-	mapInSlice.PutStr("deep", "value")
+// TestEvaluator_NoPoliciesIsNoOp pins the fast paths taken when a signal has no
+// policies at all: the pdata tree must be left completely untouched.
+func TestEvaluator_NoPoliciesIsNoOp(t *testing.T) {
+	ev := &Evaluator{}
 
-	// Empty path
-	val, ok := lookupPath(m, nil)
-	assert.False(t, ok)
-	assert.Nil(t, val)
-
-	// Missing top-level key
-	_, ok = lookupPath(m, []string{"missing"})
-	assert.False(t, ok)
-
-	// Scalar types
-	v, ok := lookupPath(m, []string{"int"})
-	assert.True(t, ok)
-	assert.Equal(t, int64(123), v)
-
-	v, ok = lookupPath(m, []string{"double"})
-	assert.True(t, ok)
-	assert.Equal(t, 4.56, v)
-
-	v, ok = lookupPath(m, []string{"bool"})
-	assert.True(t, ok)
-	assert.Equal(t, true, v)
-
-	v, ok = lookupPath(m, []string{"bytes"})
-	assert.True(t, ok)
-	assert.Equal(t, []byte{9, 8}, v)
-
-	v, ok = lookupPath(m, []string{"items"})
-	assert.True(t, ok)
-	assert.IsType(t, []any{}, v)
-
-	// Map fallback in pcommonValueToAny
-	mapVal := pcommon.NewValueMap()
-	mapVal.Map().PutStr("k", "v")
-	assert.NotEmpty(t, pcommonValueToAny(mapVal))
-
-	// Nested map lookup
-	v, ok = lookupPath(m, []string{"nested", "inner"})
-	assert.True(t, ok)
-	assert.Equal(t, "found", v)
-
-	// Missing nested map key
-	_, ok = lookupPath(m, []string{"nested", "missing"})
-	assert.False(t, ok)
-
-	// Array/slice indexing (Review Issue #5)
-	v, ok = lookupPath(m, []string{"items", "0"})
-	assert.True(t, ok)
-	assert.Equal(t, "zero", v)
-
-	v, ok = lookupPath(m, []string{"items", "1"})
-	assert.True(t, ok)
-	assert.Equal(t, int64(10), v)
-
-	// Nested map inside slice
-	v, ok = lookupPath(m, []string{"items", "2", "deep"})
-	assert.True(t, ok)
-	assert.Equal(t, "value", v)
-
-	// Out of bounds / negative / non-integer slice index
-	_, ok = lookupPath(m, []string{"items", "99"})
-	assert.False(t, ok)
-	_, ok = lookupPath(m, []string{"items", "-1"})
-	assert.False(t, ok)
-	_, ok = lookupPath(m, []string{"items", "not_an_int"})
-	assert.False(t, ok)
-
-	// Attempt to traverse into a scalar
-	_, ok = lookupPath(m, []string{"str", "deeper"})
-	assert.False(t, ok)
-}
-
-func TestEvaluator_CompileErrorsAndValidation(t *testing.T) {
-	// Nil policy in slice is ignored
-	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{nil})
-	require.NoError(t, err)
-	assert.NotNil(t, ev)
-
-	// Empty matchers validation (Review Issue #2)
-	_, err = NewEvaluator([]googlepolicy.TransformationPolicy{
-		&testTransformationPolicy{
-			pb: &policyv1alpha1.LogFilterPolicy{
-				Id:     "empty-log",
-				Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-			},
-		},
-	})
-	assert.ErrorContains(t, err, "at least one matcher")
-
-	_, err = NewEvaluator([]googlepolicy.TransformationPolicy{
-		&testTransformationPolicy{
-			pb: &policyv1alpha1.MetricFilterPolicy{
-				Id:     "empty-metric",
-				Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-			},
-		},
-	})
-	assert.ErrorContains(t, err, "at least one matcher")
-
-	_, err = NewEvaluator([]googlepolicy.TransformationPolicy{
-		&testTransformationPolicy{
-			pb: &policyv1alpha1.TraceFilterPolicy{
-				Id:     "empty-trace",
-				Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-			},
-		},
-	})
-	assert.ErrorContains(t, err, "at least one matcher")
-
-	// Unspecified action validation
-	_, err = compileLogPolicy(&policyv1alpha1.LogFilterPolicy{
-		Id:     "no-action",
-		Action: policyv1alpha1.Action_ACTION_UNSPECIFIED.Enum(),
-	})
-	assert.ErrorContains(t, err, "action must be specified")
-
-	_, err = compileMetricPolicy(&policyv1alpha1.MetricFilterPolicy{
-		Id:     "no-action",
-		Action: policyv1alpha1.Action_ACTION_UNSPECIFIED.Enum(),
-	})
-	assert.ErrorContains(t, err, "action must be specified")
-
-	_, err = compileTracePolicy(&policyv1alpha1.TraceFilterPolicy{
-		Id:     "no-action",
-		Action: policyv1alpha1.Action_ACTION_UNSPECIFIED.Enum(),
-	})
-	assert.ErrorContains(t, err, "action must be specified")
-
-	// Invalid predicate inside compile*Policy
-	_, err = compileLogPolicy(&policyv1alpha1.LogFilterPolicy{
-		Id:     "bad-regex",
-		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-		Matches: []*policyv1alpha1.LogMatcher{
-			{Predicate: &policyv1alpha1.LogMatcher_Regex{Regex: "[invalid"}},
-		},
-	})
-	assert.Error(t, err)
-
-	_, err = compileMetricPolicy(&policyv1alpha1.MetricFilterPolicy{
-		Id:     "bad-regex",
-		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-		Matches: []*policyv1alpha1.MetricMatcher{
-			{Predicate: &policyv1alpha1.MetricMatcher_Regex{Regex: "[invalid"}},
-		},
-	})
-	assert.Error(t, err)
-
-	_, err = compileTracePolicy(&policyv1alpha1.TraceFilterPolicy{
-		Id:     "bad-regex",
-		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-		Matches: []*policyv1alpha1.TraceMatcher{
-			{Predicate: &policyv1alpha1.TraceMatcher_Regex{Regex: "[invalid"}},
-		},
-	})
-	assert.Error(t, err)
-}
-
-func TestEvaluator_LogAllTargetsAndBodyTypes(t *testing.T) {
-	// Test empty evaluator on TransformLogs & EvalLog
-	emptyEv := &Evaluator{}
 	ld := plog.NewLogs()
-	emptyEv.TransformLogs(ld)
-	assert.False(t, emptyEv.EvalLog(LogContext{}))
+	ld.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty().LogRecords().AppendEmpty()
+	ev.TransformLogs(ld)
+	assert.Equal(t, 1, ld.ResourceLogs().Len())
+	assert.Equal(t, 1, ld.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().Len())
+	assert.False(t, ev.EvalLog(LogContext{Record: plog.NewLogRecord()}))
 
-	ctx := LogContext{
-		Record:         plog.NewLogRecord(),
-		Resource:       pcommon.NewResource(),
-		Scope:          pcommon.NewInstrumentationScope(),
-		ScopeSchemaURL: "https://opentelemetry.io/schemas/1.0.0",
-	}
+	md := pmetric.NewMetrics()
+	emptyMetric := md.ResourceMetrics().AppendEmpty().ScopeMetrics().AppendEmpty().Metrics().AppendEmpty()
+	emptyMetric.SetEmptyGauge()
+	ev.TransformMetrics(md)
+	assert.Equal(t, 1, md.ResourceMetrics().Len())
+	assert.Equal(t, 1, md.ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics().Len())
+	assert.False(t, ev.EvalMetric(MetricContext{
+		Metric:              pmetric.NewMetric(),
+		DatapointAttributes: pcommon.NewMap(),
+	}))
 
-	// Nil target
-	v, ok := extractLogTarget(ctx, nil)
-	assert.False(t, ok)
-	assert.Nil(t, v)
-
-	// Unspecified target
-	_, ok = extractLogTarget(ctx, &policyv1alpha1.LogFieldSelector{})
-	assert.False(t, ok)
-
-	// Body: empty vs string vs int (Review Issue #8)
-	_, ok = extractLogTarget(ctx, &policyv1alpha1.LogFieldSelector{
-		Target: &policyv1alpha1.LogFieldSelector_RecordField{
-			RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
-		},
-	})
-	assert.False(t, ok)
-
-	ctx.Record.Body().SetStr("")
-	v, ok = extractLogTarget(ctx, &policyv1alpha1.LogFieldSelector{
-		Target: &policyv1alpha1.LogFieldSelector_RecordField{
-			RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
-		},
-	})
-	assert.False(t, ok)
-	assert.Equal(t, "", v) // non-nil string allows equals: ""
-
-	ctx.Record.Body().SetInt(999)
-	v, ok = extractLogTarget(ctx, &policyv1alpha1.LogFieldSelector{
-		Target: &policyv1alpha1.LogFieldSelector_RecordField{
-			RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
-		},
-	})
-	assert.True(t, ok)
-	assert.Equal(t, int64(999), v)
-
-	// SeverityNumber
-	ctx.Record.SetSeverityNumber(plog.SeverityNumberInfo)
-	v, ok = extractLogTarget(ctx, &policyv1alpha1.LogFieldSelector{
-		Target: &policyv1alpha1.LogFieldSelector_RecordField{
-			RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER,
-		},
-	})
-	assert.True(t, ok)
-	assert.Equal(t, int64(plog.SeverityNumberInfo), v)
-
-	// TraceID and SpanID (empty vs populated)
-	_, ok = extractLogTarget(ctx, &policyv1alpha1.LogFieldSelector{
-		Target: &policyv1alpha1.LogFieldSelector_RecordField{
-			RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID,
-		},
-	})
-	assert.False(t, ok)
-
-	_, ok = extractLogTarget(ctx, &policyv1alpha1.LogFieldSelector{
-		Target: &policyv1alpha1.LogFieldSelector_RecordField{
-			RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID,
-		},
-	})
-	assert.False(t, ok)
-
-	ctx.Record.SetTraceID([16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16})
-	ctx.Record.SetSpanID([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
-	v, ok = extractLogTarget(ctx, &policyv1alpha1.LogFieldSelector{
-		Target: &policyv1alpha1.LogFieldSelector_RecordField{
-			RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID,
-		},
-	})
-	assert.True(t, ok)
-	assert.NotEmpty(t, v)
-
-	v, ok = extractLogTarget(ctx, &policyv1alpha1.LogFieldSelector{
-		Target: &policyv1alpha1.LogFieldSelector_RecordField{
-			RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID,
-		},
-	})
-	assert.True(t, ok)
-	assert.NotEmpty(t, v)
-
-	// Unspecified RecordField
-	_, ok = extractLogTarget(ctx, &policyv1alpha1.LogFieldSelector{
-		Target: &policyv1alpha1.LogFieldSelector_RecordField{
-			RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_UNSPECIFIED,
-		},
-	})
-	assert.False(t, ok)
-
-	// Scope attributes and Scope fields
-	ctx.Scope.Attributes().PutStr("sa", "sval")
-	ctx.Scope.SetName("my.scope")
-	ctx.Scope.SetVersion("v1.2")
-
-	v, ok = extractLogTarget(ctx, &policyv1alpha1.LogFieldSelector{
-		Target: &policyv1alpha1.LogFieldSelector_ScopeAttribute{
-			ScopeAttribute: &policyv1alpha1.AttributePath{Path: []string{"sa"}},
-		},
-	})
-	assert.True(t, ok)
-	assert.Equal(t, "sval", v)
-
-	v, ok = extractLogTarget(ctx, &policyv1alpha1.LogFieldSelector{
-		Target: &policyv1alpha1.LogFieldSelector_ScopeField{
-			ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_NAME,
-		},
-	})
-	assert.True(t, ok)
-	assert.Equal(t, "my.scope", v)
-
-	v, ok = extractLogTarget(ctx, &policyv1alpha1.LogFieldSelector{
-		Target: &policyv1alpha1.LogFieldSelector_ScopeField{
-			ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_VERSION,
-		},
-	})
-	assert.True(t, ok)
-	assert.Equal(t, "v1.2", v)
-
-	v, ok = extractLogTarget(ctx, &policyv1alpha1.LogFieldSelector{
-		Target: &policyv1alpha1.LogFieldSelector_ScopeField{
-			ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_SCHEMA_URL,
-		},
-	})
-	assert.True(t, ok)
-	assert.Equal(t, "https://opentelemetry.io/schemas/1.0.0", v)
-
-	_, ok = extractLogTarget(ctx, &policyv1alpha1.LogFieldSelector{
-		Target: &policyv1alpha1.LogFieldSelector_ScopeField{
-			ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_UNSPECIFIED,
-		},
-	})
-	assert.False(t, ok)
-}
-
-func TestEvaluator_MetricAllTargetsAndDatapointEvaluation(t *testing.T) {
-	emptyEv := &Evaluator{}
-	emptyEv.TransformMetrics(pmetric.NewMetrics())
-	assert.False(t, emptyEv.EvalMetric(MetricContext{}))
-
-	// Check enum string helpers directly
-	assert.Equal(t, "GAUGE", metricTypeToString(pmetric.MetricTypeGauge))
-	assert.Equal(t, "SUM", metricTypeToString(pmetric.MetricTypeSum))
-	assert.Equal(t, "HISTOGRAM", metricTypeToString(pmetric.MetricTypeHistogram))
-	assert.Equal(t, "EXPONENTIAL_HISTOGRAM", metricTypeToString(pmetric.MetricTypeExponentialHistogram))
-	assert.Equal(t, "SUMMARY", metricTypeToString(pmetric.MetricTypeSummary))
-	assert.Equal(t, "UNSPECIFIED", metricTypeToString(pmetric.MetricTypeEmpty))
-
-	assert.Equal(t, "DELTA", temporalityToString(pmetric.AggregationTemporalityDelta))
-	assert.Equal(t, "CUMULATIVE", temporalityToString(pmetric.AggregationTemporalityCumulative))
-	assert.Equal(t, "UNSPECIFIED", temporalityToString(pmetric.AggregationTemporalityUnspecified))
-
-	// Test extractMetricTarget fields (Description, Unit, Temporality, IsMonotonic, Scope)
-	mSum := pmetric.NewMetric()
-	mSum.SetName("req.count")
-	mSum.SetDescription("Total requests")
-	mSum.SetUnit("1")
-	sum := mSum.SetEmptySum()
-	sum.SetIsMonotonic(true)
-	sum.SetAggregationTemporality(pmetric.AggregationTemporalityDelta)
-
-	ctx := MetricContext{
-		Metric:                 mSum,
-		DatapointAttributes:    pcommon.NewMap(),
-		AggregationTemporality: pmetric.AggregationTemporalityDelta,
-		Resource:               pcommon.NewResource(),
-		Scope:                  pcommon.NewInstrumentationScope(),
-		ScopeSchemaURL:         "https://schema.test",
-	}
-	ctx.DatapointAttributes.PutStr("dp_key", "dp_val")
-	ctx.Resource.Attributes().PutStr("res_key", "res_val")
-	ctx.Scope.Attributes().PutStr("scope_key", "scope_val")
-	ctx.Scope.SetName("scope.name")
-	ctx.Scope.SetVersion("1.0")
-
-	_, ok := extractMetricTarget(ctx, nil)
-	assert.False(t, ok)
-	_, ok = extractMetricTarget(ctx, &policyv1alpha1.MetricFieldSelector{})
-	assert.False(t, ok)
-
-	v, ok := extractMetricTarget(ctx, &policyv1alpha1.MetricFieldSelector{
-		Target: &policyv1alpha1.MetricFieldSelector_DescriptorField{
-			DescriptorField: policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_DESCRIPTION,
-		},
-	})
-	assert.True(t, ok)
-	assert.Equal(t, "Total requests", v)
-
-	v, ok = extractMetricTarget(ctx, &policyv1alpha1.MetricFieldSelector{
-		Target: &policyv1alpha1.MetricFieldSelector_DescriptorField{
-			DescriptorField: policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_UNIT,
-		},
-	})
-	assert.True(t, ok)
-	assert.Equal(t, "1", v)
-
-	v, ok = extractMetricTarget(ctx, &policyv1alpha1.MetricFieldSelector{
-		Target: &policyv1alpha1.MetricFieldSelector_DescriptorField{
-			DescriptorField: policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_AGGREGATION_TEMPORALITY,
-		},
-	})
-	assert.True(t, ok)
-	assert.Equal(t, "DELTA", v)
-
-	// Unspecified temporality returns nil, false (Review Issue #10)
-	ctxUnspecifiedTemp := ctx
-	ctxUnspecifiedTemp.AggregationTemporality = pmetric.AggregationTemporalityUnspecified
-	_, ok = extractMetricTarget(ctxUnspecifiedTemp, &policyv1alpha1.MetricFieldSelector{
-		Target: &policyv1alpha1.MetricFieldSelector_DescriptorField{
-			DescriptorField: policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_AGGREGATION_TEMPORALITY,
-		},
-	})
-	assert.False(t, ok)
-
-	// IsMonotonic on Sum vs Gauge (Review Issue #4)
-	v, ok = extractMetricTarget(ctx, &policyv1alpha1.MetricFieldSelector{
-		Target: &policyv1alpha1.MetricFieldSelector_DescriptorField{
-			DescriptorField: policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_IS_MONOTONIC,
-		},
-	})
-	assert.True(t, ok)
-	assert.Equal(t, true, v)
-
-	mGauge := pmetric.NewMetric()
-	mGauge.SetEmptyGauge()
-	ctxGauge := ctx
-	ctxGauge.Metric = mGauge
-	_, ok = extractMetricTarget(ctxGauge, &policyv1alpha1.MetricFieldSelector{
-		Target: &policyv1alpha1.MetricFieldSelector_DescriptorField{
-			DescriptorField: policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_IS_MONOTONIC,
-		},
-	})
-	assert.False(t, ok)
-
-	// Unspecified DescriptorField
-	_, ok = extractMetricTarget(ctx, &policyv1alpha1.MetricFieldSelector{
-		Target: &policyv1alpha1.MetricFieldSelector_DescriptorField{
-			DescriptorField: policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_UNSPECIFIED,
-		},
-	})
-	assert.False(t, ok)
-
-	// Attributes & Scope fields
-	v, ok = extractMetricTarget(ctx, &policyv1alpha1.MetricFieldSelector{
-		Target: &policyv1alpha1.MetricFieldSelector_DatapointAttribute{
-			DatapointAttribute: &policyv1alpha1.AttributePath{Path: []string{"dp_key"}},
-		},
-	})
-	assert.True(t, ok)
-	assert.Equal(t, "dp_val", v)
-
-	v, ok = extractMetricTarget(ctx, &policyv1alpha1.MetricFieldSelector{
-		Target: &policyv1alpha1.MetricFieldSelector_ResourceAttribute{
-			ResourceAttribute: &policyv1alpha1.AttributePath{Path: []string{"res_key"}},
-		},
-	})
-	assert.True(t, ok)
-	assert.Equal(t, "res_val", v)
-
-	v, ok = extractMetricTarget(ctx, &policyv1alpha1.MetricFieldSelector{
-		Target: &policyv1alpha1.MetricFieldSelector_ScopeAttribute{
-			ScopeAttribute: &policyv1alpha1.AttributePath{Path: []string{"scope_key"}},
-		},
-	})
-	assert.True(t, ok)
-	assert.Equal(t, "scope_val", v)
-
-	v, ok = extractMetricTarget(ctx, &policyv1alpha1.MetricFieldSelector{
-		Target: &policyv1alpha1.MetricFieldSelector_ScopeField{
-			ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_NAME,
-		},
-	})
-	assert.True(t, ok)
-	assert.Equal(t, "scope.name", v)
-
-	v, ok = extractMetricTarget(ctx, &policyv1alpha1.MetricFieldSelector{
-		Target: &policyv1alpha1.MetricFieldSelector_ScopeField{
-			ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_VERSION,
-		},
-	})
-	assert.True(t, ok)
-	assert.Equal(t, "1.0", v)
-
-	v, ok = extractMetricTarget(ctx, &policyv1alpha1.MetricFieldSelector{
-		Target: &policyv1alpha1.MetricFieldSelector_ScopeField{
-			ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_SCHEMA_URL,
-		},
-	})
-	assert.True(t, ok)
-	assert.Equal(t, "https://schema.test", v)
-
-	_, ok = extractMetricTarget(ctx, &policyv1alpha1.MetricFieldSelector{
-		Target: &policyv1alpha1.MetricFieldSelector_ScopeField{
-			ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_UNSPECIFIED,
-		},
-	})
-	assert.False(t, ok)
+	td := ptrace.NewTraces()
+	td.ResourceSpans().AppendEmpty().ScopeSpans().AppendEmpty().Spans().AppendEmpty()
+	ev.TransformTraces(td)
+	assert.Equal(t, 1, td.ResourceSpans().Len())
+	assert.Equal(t, 1, td.ResourceSpans().At(0).ScopeSpans().At(0).Spans().Len())
+	assert.False(t, ev.EvalTrace(TraceContext{Span: ptrace.NewSpan()}))
 }
 
 func TestEvaluator_MetricDatapointPruningAndEmptyMetrics(t *testing.T) {
 	// Policy 1: Datapoint-level DROP where datapoint attribute "drop_me" == "true"
-	dropDpPolicy := &testTransformationPolicy{
-		name: "drop-dp",
-		pb: &policyv1alpha1.MetricFilterPolicy{
-			Id:     "drop-dp",
-			Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-			Matches: []*policyv1alpha1.MetricMatcher{
-				{
-					Target: &policyv1alpha1.MetricFieldSelector{
-						Target: &policyv1alpha1.MetricFieldSelector_DatapointAttribute{
-							DatapointAttribute: &policyv1alpha1.AttributePath{Path: []string{"drop_me"}},
-						},
-					},
-					Predicate: &policyv1alpha1.MetricMatcher_Equals{
-						Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "true"}},
-					},
-				},
-			},
-		},
-	}
+	dropDpPolicy := mustPolicy(t, newDropDatapointAttrProto("drop-dp", "drop_me", "true"))
 
 	// Policy 2: Instrument-level KEEP where metric name == "exempt.metric"
-	keepInstrumentPolicy := &testTransformationPolicy{
-		name: "keep-exempt",
-		pb: &policyv1alpha1.MetricFilterPolicy{
-			Id:     "keep-exempt",
-			Action: policyv1alpha1.Action_ACTION_KEEP.Enum(),
-			Matches: []*policyv1alpha1.MetricMatcher{
-				{
-					Target: &policyv1alpha1.MetricFieldSelector{
-						Target: &policyv1alpha1.MetricFieldSelector_DescriptorField{
-							DescriptorField: policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME,
-						},
+	keepInstrumentPolicy := mustPolicy(t, &policyv1alpha1.MetricFilterPolicy{
+		Id:     "keep-exempt",
+		Action: policyv1alpha1.Action_ACTION_KEEP.Enum(),
+		Matches: []*policyv1alpha1.MetricMatcher{
+			{
+				Target: &policyv1alpha1.MetricFieldSelector{
+					Target: &policyv1alpha1.MetricFieldSelector_DescriptorField{
+						DescriptorField: policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME,
 					},
-					Predicate: &policyv1alpha1.MetricMatcher_Equals{
-						Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "exempt.metric"}},
-					},
+				},
+				Predicate: &policyv1alpha1.MetricMatcher_Equals{
+					Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "exempt.metric"}},
 				},
 			},
 		},
-	}
+	})
 
 	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{dropDpPolicy, keepInstrumentPolicy})
 	require.NoError(t, err)
+	require.True(t, ev.hasDatapointMetricPolicies)
 
 	md := pmetric.NewMetrics()
 	rm := md.ResourceMetrics().AppendEmpty()
 	sm := rm.ScopeMetrics().AppendEmpty()
 
-	// 1. Metric with 0 datapoints (Review Issue #1): should NOT be dropped by datapoint policy!
+	// 1. Metric with 0 datapoints: must NOT be dropped by the datapoint policy.
 	mEmptyGauge := sm.Metrics().AppendEmpty()
 	mEmptyGauge.SetName("empty.gauge")
 	mEmptyGauge.SetEmptyGauge()
@@ -1066,7 +569,7 @@ func TestEvaluator_MetricDatapointPruningAndEmptyMetrics(t *testing.T) {
 	sdp := mSummary.SetEmptySummary().DataPoints().AppendEmpty()
 	sdp.Attributes().PutStr("drop_me", "false")
 
-	// 6. Exempt metric (instrument KEEP) with drop_me="true" -> KEPT via short-circuit!
+	// 6. Exempt metric (instrument KEEP) with drop_me="true" -> KEPT via short-circuit
 	mExempt := sm.Metrics().AppendEmpty()
 	mExempt.SetName("exempt.metric")
 	edp := mExempt.SetEmptyGauge().DataPoints().AppendEmpty()
@@ -1076,14 +579,15 @@ func TestEvaluator_MetricDatapointPruningAndEmptyMetrics(t *testing.T) {
 	mUnset := sm.Metrics().AppendEmpty()
 	mUnset.SetName("unset.type")
 
-	// 8. Empty metric matching KEEP policy -> evalMetricInstrumentOnly KEEP branch
+	// 8. Empty metric matching the KEEP policy -> instrument-only KEEP branch
 	mEmptyExempt := sm.Metrics().AppendEmpty()
 	mEmptyExempt.SetName("exempt.metric")
 	mEmptyExempt.SetEmptyGauge()
 
-	// 9. Direct EvalMetric with KEEP policy matching
+	// 9. Direct EvalMetric with the KEEP policy matching
 	assert.False(t, ev.EvalMetric(MetricContext{
-		Metric: mEmptyExempt,
+		Metric:              mEmptyExempt,
+		DatapointAttributes: pcommon.NewMap(),
 	}))
 
 	ev.TransformMetrics(md)
@@ -1094,69 +598,222 @@ func TestEvaluator_MetricDatapointPruningAndEmptyMetrics(t *testing.T) {
 	assert.Equal(t, "empty.gauge", metrics.At(0).Name())
 	assert.Equal(t, 0, metrics.At(0).Gauge().DataPoints().Len())
 	assert.Equal(t, "partial.sum", metrics.At(1).Name())
-	assert.Equal(t, 1, metrics.At(1).Sum().DataPoints().Len())
+	require.Equal(t, 1, metrics.At(1).Sum().DataPoints().Len())
+	dropMe, ok := metrics.At(1).Sum().DataPoints().At(0).Attributes().Get("drop_me")
+	require.True(t, ok)
+	assert.Equal(t, "false", dropMe.Str())
+	assert.Equal(t, "kept.exphist", metrics.At(2).Name())
+	assert.Equal(t, 1, metrics.At(2).ExponentialHistogram().DataPoints().Len())
+	assert.Equal(t, "kept.summary", metrics.At(3).Name())
+	assert.Equal(t, 1, metrics.At(3).Summary().DataPoints().Len())
 	assert.Equal(t, "exempt.metric", metrics.At(4).Name())
 	assert.Equal(t, 1, metrics.At(4).Gauge().DataPoints().Len())
+	assert.Equal(t, "unset.type", metrics.At(5).Name())
+	assert.Equal(t, "exempt.metric", metrics.At(6).Name())
 }
 
-func TestEvaluator_TraceAllTargetsAndRootSpanParentID(t *testing.T) {
-	emptyEv := &Evaluator{}
-	emptyEv.TransformTraces(ptrace.NewTraces())
-	assert.False(t, emptyEv.EvalTrace(TraceContext{}))
+// TestEvaluator_MetricInstrumentLevelDropByType drives every pmetric type
+// through TransformMetrics, asserting that the processor surfaces the right
+// instrument type to the policy and prunes only the intended instrument.
+func TestEvaluator_MetricInstrumentLevelDropByType(t *testing.T) {
+	tests := []struct {
+		typeName string
+		expected []string
+	}{
+		{"GAUGE", []string{"sum.metric", "histogram.metric", "exphistogram.metric", "summary.metric"}},
+		{"SUM", []string{"gauge.metric", "histogram.metric", "exphistogram.metric", "summary.metric"}},
+		{"HISTOGRAM", []string{"gauge.metric", "sum.metric", "exphistogram.metric", "summary.metric"}},
+		{"EXPONENTIAL_HISTOGRAM", []string{"gauge.metric", "sum.metric", "histogram.metric", "summary.metric"}},
+		{"SUMMARY", []string{"gauge.metric", "sum.metric", "histogram.metric", "exphistogram.metric"}},
+	}
 
-	// Check enum string helpers
-	assert.Equal(t, "INTERNAL", spanKindToString(ptrace.SpanKindInternal))
-	assert.Equal(t, "SERVER", spanKindToString(ptrace.SpanKindServer))
-	assert.Equal(t, "CLIENT", spanKindToString(ptrace.SpanKindClient))
-	assert.Equal(t, "PRODUCER", spanKindToString(ptrace.SpanKindProducer))
-	assert.Equal(t, "CONSUMER", spanKindToString(ptrace.SpanKindConsumer))
-	assert.Equal(t, "INTERNAL", spanKindToString(ptrace.SpanKindUnspecified))
+	for _, tc := range tests {
+		t.Run(tc.typeName, func(t *testing.T) {
+			ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{
+				mustPolicy(t, newDropMetricDescriptorProto("drop-by-type",
+					policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE, tc.typeName)),
+			})
+			require.NoError(t, err)
+			require.False(t, ev.hasDatapointMetricPolicies)
 
-	assert.Equal(t, "OK", spanStatusToString(ptrace.StatusCodeOk))
-	assert.Equal(t, "ERROR", spanStatusToString(ptrace.StatusCodeError))
-	assert.Equal(t, "UNSET", spanStatusToString(ptrace.StatusCodeUnset))
+			md := newAllMetricTypes()
+			ev.TransformMetrics(md)
+			assert.Equal(t, tc.expected, metricNames(md))
+		})
+	}
 
-	// Root span parent_span_id matching (Review Issue #6 & #7)
-	// Policy: Drop root spans (where parent_span_id == "") unless status_code == "OK" (KEEP)
-	dropRootSpans := &testTransformationPolicy{
-		name: "drop-root",
-		pb: &policyv1alpha1.TraceFilterPolicy{
-			Id:     "drop-root",
-			Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-			Matches: []*policyv1alpha1.TraceMatcher{
-				{
-					Target: &policyv1alpha1.TraceFieldSelector{
-						Target: &policyv1alpha1.TraceFieldSelector_RecordField{
-							RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID,
-						},
+	t.Run("unset instrument type never matches", func(t *testing.T) {
+		ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{
+			mustPolicy(t, newDropMetricDescriptorProto("drop-unspecified",
+				policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE, "UNSPECIFIED")),
+		})
+		require.NoError(t, err)
+
+		md := pmetric.NewMetrics()
+		sm := md.ResourceMetrics().AppendEmpty().ScopeMetrics().AppendEmpty()
+		sm.Metrics().AppendEmpty().SetName("unset.type")
+
+		ev.TransformMetrics(md)
+		// transformMetricDataPoints bails out on MetricTypeEmpty before any
+		// policy runs, so the instrument survives regardless of the policy.
+		assert.Equal(t, []string{"unset.type"}, metricNames(md))
+	})
+}
+
+// TestEvaluator_MetricTemporalityIsPerInstrument asserts the processor fills
+// MetricContext.AggregationTemporality from the concrete instrument, and leaves
+// it unspecified for instruments that have no temporality (gauge, summary).
+func TestEvaluator_MetricTemporalityIsPerInstrument(t *testing.T) {
+	tests := []struct {
+		temporality string
+		expected    []string
+	}{
+		{"DELTA", []string{"gauge.metric", "sum.metric", "histogram.metric", "summary.metric"}},
+		{"CUMULATIVE", []string{"gauge.metric", "exphistogram.metric", "summary.metric"}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.temporality, func(t *testing.T) {
+			ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{
+				mustPolicy(t, newDropMetricDescriptorProto("drop-by-temporality",
+					policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_AGGREGATION_TEMPORALITY, tc.temporality)),
+			})
+			require.NoError(t, err)
+
+			md := newAllMetricTypes()
+			ev.TransformMetrics(md)
+			assert.Equal(t, tc.expected, metricNames(md))
+		})
+	}
+}
+
+// TestEvaluator_MetricTwoTierEvaluation pins the instrument-level vs
+// datapoint-level optimisation by counting policy invocations.
+func TestEvaluator_MetricTwoTierEvaluation(t *testing.T) {
+	newSumWithDatapoints := func(names ...string) pmetric.Metrics {
+		md := pmetric.NewMetrics()
+		sm := md.ResourceMetrics().AppendEmpty().ScopeMetrics().AppendEmpty()
+		m := sm.Metrics().AppendEmpty()
+		m.SetName("the.sum")
+		dps := m.SetEmptySum().DataPoints()
+		for _, n := range names {
+			dps.AppendEmpty().Attributes().PutStr("dp", n)
+		}
+		return md
+	}
+
+	t.Run("instrument-level policy is evaluated once per instrument", func(t *testing.T) {
+		fake := &fakeMetricPolicy{name: "instrument", result: googlepolicy.EvalDrop}
+		ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{fake})
+		require.NoError(t, err)
+		require.False(t, ev.hasDatapointMetricPolicies)
+
+		md := newSumWithDatapoints("a", "b", "c")
+		ev.TransformMetrics(md)
+
+		assert.Equal(t, 1, fake.calls, "instrument-level policy must not be re-evaluated per datapoint")
+		assert.Equal(t, []map[string]any{{}}, fake.seenDatapointAttrs,
+			"instrument-level evaluation must not see datapoint attributes")
+		assert.Empty(t, metricNames(md), "instrument DROP removes the whole instrument, scope and resource")
+	})
+
+	t.Run("datapoint-level policy is evaluated once per datapoint", func(t *testing.T) {
+		fake := &fakeMetricPolicy{
+			name:           "datapoint",
+			datapointLevel: true,
+			eval: func(ctx googlepolicy.MetricContext) googlepolicy.EvalResult {
+				if v, ok := ctx.DatapointAttributes.Get("dp"); ok && v.Str() != "keep" {
+					return googlepolicy.EvalDrop
+				}
+				return googlepolicy.EvalNoMatch
+			},
+		}
+		ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{fake})
+		require.NoError(t, err)
+		require.True(t, ev.hasDatapointMetricPolicies)
+
+		md := newSumWithDatapoints("a", "keep", "c")
+		ev.TransformMetrics(md)
+
+		assert.Equal(t, 3, fake.calls)
+		require.Equal(t, []string{"the.sum"}, metricNames(md))
+		dps := md.ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics().At(0).Sum().DataPoints()
+		require.Equal(t, 1, dps.Len())
+		v, ok := dps.At(0).Attributes().Get("dp")
+		require.True(t, ok)
+		assert.Equal(t, "keep", v.Str())
+	})
+
+	t.Run("instrument-level KEEP short-circuits datapoint pruning", func(t *testing.T) {
+		keep := &fakeMetricPolicy{name: "keep", result: googlepolicy.EvalKeep}
+		drop := &fakeMetricPolicy{name: "drop", datapointLevel: true, result: googlepolicy.EvalDrop}
+		ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{keep, drop})
+		require.NoError(t, err)
+
+		md := newSumWithDatapoints("a", "b", "c")
+		ev.TransformMetrics(md)
+
+		assert.Equal(t, 1, keep.calls)
+		assert.Equal(t, 0, drop.calls, "an instrument-level KEEP must exempt every datapoint below it")
+		require.Equal(t, []string{"the.sum"}, metricNames(md))
+		assert.Equal(t, 3, md.ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics().At(0).Sum().DataPoints().Len())
+	})
+
+	t.Run("datapoint-level policies are skipped for instruments with no datapoints", func(t *testing.T) {
+		drop := &fakeMetricPolicy{name: "drop", datapointLevel: true, result: googlepolicy.EvalDrop}
+		ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{drop})
+		require.NoError(t, err)
+
+		md := pmetric.NewMetrics()
+		sm := md.ResourceMetrics().AppendEmpty().ScopeMetrics().AppendEmpty()
+		m := sm.Metrics().AppendEmpty()
+		m.SetName("empty.gauge")
+		m.SetEmptyGauge()
+
+		ev.TransformMetrics(md)
+
+		assert.Equal(t, 0, drop.calls,
+			"a datapoint-level policy must never decide an instrument that has no datapoints")
+		assert.Equal(t, []string{"empty.gauge"}, metricNames(md))
+	})
+}
+
+// TestEvaluator_TraceKeepOverridesDrop covers the KEEP-as-exemption rule on the
+// trace path, including the root-span (empty parent_span_id) case.
+func TestEvaluator_TraceKeepOverridesDrop(t *testing.T) {
+	dropRootSpans := mustPolicy(t, &policyv1alpha1.TraceFilterPolicy{
+		Id:     "drop-root",
+		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+		Matches: []*policyv1alpha1.TraceMatcher{
+			{
+				Target: &policyv1alpha1.TraceFieldSelector{
+					Target: &policyv1alpha1.TraceFieldSelector_RecordField{
+						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID,
 					},
-					Predicate: &policyv1alpha1.TraceMatcher_Equals{
-						Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: ""}},
-					},
+				},
+				Predicate: &policyv1alpha1.TraceMatcher_Equals{
+					Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: ""}},
 				},
 			},
 		},
-	}
+	})
 
-	keepOkSpans := &testTransformationPolicy{
-		name: "keep-ok",
-		pb: &policyv1alpha1.TraceFilterPolicy{
-			Id:     "keep-ok",
-			Action: policyv1alpha1.Action_ACTION_KEEP.Enum(),
-			Matches: []*policyv1alpha1.TraceMatcher{
-				{
-					Target: &policyv1alpha1.TraceFieldSelector{
-						Target: &policyv1alpha1.TraceFieldSelector_RecordField{
-							RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_STATUS_CODE,
-						},
+	keepOkSpans := mustPolicy(t, &policyv1alpha1.TraceFilterPolicy{
+		Id:     "keep-ok",
+		Action: policyv1alpha1.Action_ACTION_KEEP.Enum(),
+		Matches: []*policyv1alpha1.TraceMatcher{
+			{
+				Target: &policyv1alpha1.TraceFieldSelector{
+					Target: &policyv1alpha1.TraceFieldSelector_RecordField{
+						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_STATUS_CODE,
 					},
-					Predicate: &policyv1alpha1.TraceMatcher_Equals{
-						Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "OK"}},
-					},
+				},
+				Predicate: &policyv1alpha1.TraceMatcher_Equals{
+					Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "OK"}},
 				},
 			},
 		},
-	}
+	})
 
 	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{dropRootSpans, keepOkSpans})
 	require.NoError(t, err)
@@ -1174,138 +831,296 @@ func TestEvaluator_TraceAllTargetsAndRootSpanParentID(t *testing.T) {
 
 	// Child span with ParentSpanID set -> KEPT
 	childSpan := ptrace.NewSpan()
+	childSpan.SetName("child")
 	childSpan.SetParentSpanID([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
 	assert.False(t, ev.EvalTrace(TraceContext{Span: childSpan}))
 
-	// Test all extractTraceTarget branches
-	ctx := TraceContext{
-		Span:           childSpan,
-		Resource:       pcommon.NewResource(),
-		Scope:          pcommon.NewInstrumentationScope(),
-		ScopeSchemaURL: "https://trace.schema",
+	// Same three spans through the batch walk.
+	td := ptrace.NewTraces()
+	ss := td.ResourceSpans().AppendEmpty().ScopeSpans().AppendEmpty()
+	rootSpan.CopyTo(ss.Spans().AppendEmpty())
+	rootSpanOk.CopyTo(ss.Spans().AppendEmpty())
+	childSpan.CopyTo(ss.Spans().AppendEmpty())
+
+	ev.TransformTraces(td)
+	require.Equal(t, 1, td.ResourceSpans().Len())
+	spans := td.ResourceSpans().At(0).ScopeSpans().At(0).Spans()
+	require.Equal(t, 2, spans.Len())
+	assert.Equal(t, "root-ok", spans.At(0).Name())
+	assert.Equal(t, "child", spans.At(1).Name())
+}
+
+// TestEvaluator_TransformPrunesEmptyScopesAndResources asserts that each
+// Transform* walk removes scopes that lose all their items and resources that
+// lose all their scopes, for all three signals.
+func TestEvaluator_TransformPrunesEmptyScopesAndResources(t *testing.T) {
+	t.Run("logs", func(t *testing.T) {
+		ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{
+			mustPolicy(t, newDropLogBodyProto("drop-log", "DROP")),
+		})
+		require.NoError(t, err)
+
+		ld := plog.NewLogs()
+		rl0 := ld.ResourceLogs().AppendEmpty()
+		rl0.Resource().Attributes().PutStr("host", "survivor")
+		sl00 := rl0.ScopeLogs().AppendEmpty()
+		sl00.Scope().SetName("scope.keeps")
+		sl00.LogRecords().AppendEmpty().Body().SetStr("KEEP")
+		sl00.LogRecords().AppendEmpty().Body().SetStr("DROP")
+		sl01 := rl0.ScopeLogs().AppendEmpty()
+		sl01.Scope().SetName("scope.empties")
+		sl01.LogRecords().AppendEmpty().Body().SetStr("DROP")
+
+		rl1 := ld.ResourceLogs().AppendEmpty()
+		rl1.Resource().Attributes().PutStr("host", "doomed")
+		rl1.ScopeLogs().AppendEmpty().LogRecords().AppendEmpty().Body().SetStr("DROP")
+
+		ev.TransformLogs(ld)
+
+		require.Equal(t, 1, ld.ResourceLogs().Len())
+		host, ok := ld.ResourceLogs().At(0).Resource().Attributes().Get("host")
+		require.True(t, ok)
+		assert.Equal(t, "survivor", host.Str())
+		require.Equal(t, 1, ld.ResourceLogs().At(0).ScopeLogs().Len())
+		assert.Equal(t, "scope.keeps", ld.ResourceLogs().At(0).ScopeLogs().At(0).Scope().Name())
+		records := ld.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords()
+		require.Equal(t, 1, records.Len())
+		assert.Equal(t, "KEEP", records.At(0).Body().Str())
+	})
+
+	t.Run("metrics", func(t *testing.T) {
+		ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{
+			mustPolicy(t, newDropMetricNameProto("drop-metric", "drop.me")),
+		})
+		require.NoError(t, err)
+
+		md := pmetric.NewMetrics()
+		rm0 := md.ResourceMetrics().AppendEmpty()
+		rm0.Resource().Attributes().PutStr("host", "survivor")
+		sm00 := rm0.ScopeMetrics().AppendEmpty()
+		sm00.Scope().SetName("scope.keeps")
+		appendGauge(sm00, "keep.me")
+		appendGauge(sm00, "drop.me")
+		sm01 := rm0.ScopeMetrics().AppendEmpty()
+		sm01.Scope().SetName("scope.empties")
+		appendGauge(sm01, "drop.me")
+
+		rm1 := md.ResourceMetrics().AppendEmpty()
+		rm1.Resource().Attributes().PutStr("host", "doomed")
+		appendGauge(rm1.ScopeMetrics().AppendEmpty(), "drop.me")
+
+		ev.TransformMetrics(md)
+
+		require.Equal(t, 1, md.ResourceMetrics().Len())
+		host, ok := md.ResourceMetrics().At(0).Resource().Attributes().Get("host")
+		require.True(t, ok)
+		assert.Equal(t, "survivor", host.Str())
+		require.Equal(t, 1, md.ResourceMetrics().At(0).ScopeMetrics().Len())
+		assert.Equal(t, "scope.keeps", md.ResourceMetrics().At(0).ScopeMetrics().At(0).Scope().Name())
+		assert.Equal(t, []string{"keep.me"}, metricNames(md))
+	})
+
+	t.Run("traces", func(t *testing.T) {
+		ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{
+			mustPolicy(t, newDropSpanNameProto("drop-trace", "drop.span")),
+		})
+		require.NoError(t, err)
+
+		td := ptrace.NewTraces()
+		rs0 := td.ResourceSpans().AppendEmpty()
+		rs0.Resource().Attributes().PutStr("host", "survivor")
+		ss00 := rs0.ScopeSpans().AppendEmpty()
+		ss00.Scope().SetName("scope.keeps")
+		ss00.Spans().AppendEmpty().SetName("keep.span")
+		ss00.Spans().AppendEmpty().SetName("drop.span")
+		ss01 := rs0.ScopeSpans().AppendEmpty()
+		ss01.Scope().SetName("scope.empties")
+		ss01.Spans().AppendEmpty().SetName("drop.span")
+
+		rs1 := td.ResourceSpans().AppendEmpty()
+		rs1.Resource().Attributes().PutStr("host", "doomed")
+		rs1.ScopeSpans().AppendEmpty().Spans().AppendEmpty().SetName("drop.span")
+
+		ev.TransformTraces(td)
+
+		require.Equal(t, 1, td.ResourceSpans().Len())
+		host, ok := td.ResourceSpans().At(0).Resource().Attributes().Get("host")
+		require.True(t, ok)
+		assert.Equal(t, "survivor", host.Str())
+		require.Equal(t, 1, td.ResourceSpans().At(0).ScopeSpans().Len())
+		assert.Equal(t, "scope.keeps", td.ResourceSpans().At(0).ScopeSpans().At(0).Scope().Name())
+		spans := td.ResourceSpans().At(0).ScopeSpans().At(0).Spans()
+		require.Equal(t, 1, spans.Len())
+		assert.Equal(t, "keep.span", spans.At(0).Name())
+	})
+}
+
+// --- policy helpers --------------------------------------------------------
+
+// mustPolicy compiles a filter policy proto with its owning filter package and
+// returns the resulting TransformationPolicy. This is exactly what the
+// googlepolicy registry hands NewEvaluator in production: an already-compiled
+// policy that implements the matching per-signal evaluator interface.
+func mustPolicy(t *testing.T, pb proto.Message) googlepolicy.TransformationPolicy {
+	t.Helper()
+	switch p := pb.(type) {
+	case *policyv1alpha1.LogFilterPolicy:
+		pol, err := logfilter.NewPolicyFromProto(p)
+		require.NoError(t, err)
+		return pol
+	case *policyv1alpha1.MetricFilterPolicy:
+		pol, err := metricfilter.NewPolicyFromProto(p)
+		require.NoError(t, err)
+		return pol
+	case *policyv1alpha1.TraceFilterPolicy:
+		pol, err := tracefilter.NewPolicyFromProto(p)
+		require.NoError(t, err)
+		return pol
+	default:
+		t.Fatalf("mustPolicy: unsupported policy proto %T", pb)
+		return nil
 	}
-	childSpan.SetTraceID([16]byte{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1})
-	childSpan.SetSpanID([8]byte{2, 2, 2, 2, 2, 2, 2, 2})
-	childSpan.Status().SetMessage("err_msg")
-	childSpan.Attributes().PutStr("span_k", "span_v")
-	ctx.Resource.Attributes().PutStr("res_k", "res_v")
-	ctx.Scope.Attributes().PutStr("scope_k", "scope_v")
-	ctx.Scope.SetName("trace.scope")
-	ctx.Scope.SetVersion("2.0")
+}
 
-	_, ok := extractTraceTarget(ctx, nil)
-	assert.False(t, ok)
-	_, ok = extractTraceTarget(ctx, &policyv1alpha1.TraceFieldSelector{})
-	assert.False(t, ok)
+// --- policy proto builders -------------------------------------------------
 
-	// Empty TraceID/SpanID
-	emptySpanCtx := TraceContext{Span: ptrace.NewSpan()}
-	_, ok = extractTraceTarget(emptySpanCtx, &policyv1alpha1.TraceFieldSelector{
-		Target: &policyv1alpha1.TraceFieldSelector_RecordField{
-			RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID,
+func newDropLogBodyProto(id, body string) *policyv1alpha1.LogFilterPolicy {
+	return &policyv1alpha1.LogFilterPolicy{
+		Id:     id,
+		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+		Matches: []*policyv1alpha1.LogMatcher{
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_RecordField{
+						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
+					},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Equals{
+					Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: body}},
+				},
+			},
 		},
-	})
-	assert.False(t, ok)
-	_, ok = extractTraceTarget(emptySpanCtx, &policyv1alpha1.TraceFieldSelector{
-		Target: &policyv1alpha1.TraceFieldSelector_RecordField{
-			RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_SPAN_ID,
-		},
-	})
-	assert.False(t, ok)
+	}
+}
 
-	// Populated TraceID, SpanID, ParentSpanID, StatusMessage
-	v, ok := extractTraceTarget(ctx, &policyv1alpha1.TraceFieldSelector{
-		Target: &policyv1alpha1.TraceFieldSelector_RecordField{
-			RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID,
+func newDropMetricDescriptorProto(id string, field policyv1alpha1.MetricDescriptorField, value string) *policyv1alpha1.MetricFilterPolicy {
+	return &policyv1alpha1.MetricFilterPolicy{
+		Id:     id,
+		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+		Matches: []*policyv1alpha1.MetricMatcher{
+			{
+				Target: &policyv1alpha1.MetricFieldSelector{
+					Target: &policyv1alpha1.MetricFieldSelector_DescriptorField{DescriptorField: field},
+				},
+				Predicate: &policyv1alpha1.MetricMatcher_Equals{
+					Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: value}},
+				},
+			},
 		},
-	})
-	assert.True(t, ok)
-	assert.NotEmpty(t, v)
+	}
+}
 
-	v, ok = extractTraceTarget(ctx, &policyv1alpha1.TraceFieldSelector{
-		Target: &policyv1alpha1.TraceFieldSelector_RecordField{
-			RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_SPAN_ID,
-		},
-	})
-	assert.True(t, ok)
-	assert.NotEmpty(t, v)
+func newDropMetricNameProto(id, name string) *policyv1alpha1.MetricFilterPolicy {
+	return newDropMetricDescriptorProto(id, policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME, name)
+}
 
-	v, ok = extractTraceTarget(ctx, &policyv1alpha1.TraceFieldSelector{
-		Target: &policyv1alpha1.TraceFieldSelector_RecordField{
-			RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID,
+func newDropDatapointAttrProto(id, key, value string) *policyv1alpha1.MetricFilterPolicy {
+	return &policyv1alpha1.MetricFilterPolicy{
+		Id:     id,
+		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+		Matches: []*policyv1alpha1.MetricMatcher{
+			{
+				Target: &policyv1alpha1.MetricFieldSelector{
+					Target: &policyv1alpha1.MetricFieldSelector_DatapointAttribute{
+						DatapointAttribute: &policyv1alpha1.AttributePath{Path: []string{key}},
+					},
+				},
+				Predicate: &policyv1alpha1.MetricMatcher_Equals{
+					Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: value}},
+				},
+			},
 		},
-	})
-	assert.True(t, ok)
-	assert.NotEmpty(t, v)
+	}
+}
 
-	v, ok = extractTraceTarget(ctx, &policyv1alpha1.TraceFieldSelector{
-		Target: &policyv1alpha1.TraceFieldSelector_RecordField{
-			RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_STATUS_MESSAGE,
+func newDropSpanNameProto(id, name string) *policyv1alpha1.TraceFilterPolicy {
+	return &policyv1alpha1.TraceFilterPolicy{
+		Id:     id,
+		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+		Matches: []*policyv1alpha1.TraceMatcher{
+			{
+				Target: &policyv1alpha1.TraceFieldSelector{
+					Target: &policyv1alpha1.TraceFieldSelector_RecordField{
+						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME,
+					},
+				},
+				Predicate: &policyv1alpha1.TraceMatcher_Equals{
+					Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: name}},
+				},
+			},
 		},
-	})
-	assert.True(t, ok)
-	assert.Equal(t, "err_msg", v)
+	}
+}
 
-	_, ok = extractTraceTarget(ctx, &policyv1alpha1.TraceFieldSelector{
-		Target: &policyv1alpha1.TraceFieldSelector_RecordField{
-			RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_UNSPECIFIED,
-		},
-	})
-	assert.False(t, ok)
+// --- pdata builders --------------------------------------------------------
 
-	// Span, Resource, Scope attributes & Scope fields
-	v, ok = extractTraceTarget(ctx, &policyv1alpha1.TraceFieldSelector{
-		Target: &policyv1alpha1.TraceFieldSelector_SpanAttribute{
-			SpanAttribute: &policyv1alpha1.AttributePath{Path: []string{"span_k"}},
-		},
-	})
-	assert.True(t, ok)
-	assert.Equal(t, "span_v", v)
+// appendGauge appends a gauge instrument carrying a single datapoint. An
+// instrument with no type set is skipped by transformMetricDataPoints before
+// any policy runs, so fixtures must always pick a concrete type.
+func appendGauge(sm pmetric.ScopeMetrics, name string) pmetric.Metric {
+	m := sm.Metrics().AppendEmpty()
+	m.SetName(name)
+	m.SetEmptyGauge().DataPoints().AppendEmpty()
+	return m
+}
 
-	v, ok = extractTraceTarget(ctx, &policyv1alpha1.TraceFieldSelector{
-		Target: &policyv1alpha1.TraceFieldSelector_ResourceAttribute{
-			ResourceAttribute: &policyv1alpha1.AttributePath{Path: []string{"res_k"}},
-		},
-	})
-	assert.True(t, ok)
-	assert.Equal(t, "res_v", v)
+// newAllMetricTypes returns a batch holding one instrument of each pmetric
+// type, each with a single datapoint. Sum and Histogram are CUMULATIVE,
+// ExponentialHistogram is DELTA; Gauge and Summary have no temporality.
+func newAllMetricTypes() pmetric.Metrics {
+	md := pmetric.NewMetrics()
+	sm := md.ResourceMetrics().AppendEmpty().ScopeMetrics().AppendEmpty()
 
-	v, ok = extractTraceTarget(ctx, &policyv1alpha1.TraceFieldSelector{
-		Target: &policyv1alpha1.TraceFieldSelector_ScopeAttribute{
-			ScopeAttribute: &policyv1alpha1.AttributePath{Path: []string{"scope_k"}},
-		},
-	})
-	assert.True(t, ok)
-	assert.Equal(t, "scope_v", v)
+	gauge := sm.Metrics().AppendEmpty()
+	gauge.SetName("gauge.metric")
+	gauge.SetEmptyGauge().DataPoints().AppendEmpty()
 
-	v, ok = extractTraceTarget(ctx, &policyv1alpha1.TraceFieldSelector{
-		Target: &policyv1alpha1.TraceFieldSelector_ScopeField{
-			ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_NAME,
-		},
-	})
-	assert.True(t, ok)
-	assert.Equal(t, "trace.scope", v)
+	sum := sm.Metrics().AppendEmpty()
+	sum.SetName("sum.metric")
+	sumData := sum.SetEmptySum()
+	sumData.SetAggregationTemporality(pmetric.AggregationTemporalityCumulative)
+	sumData.DataPoints().AppendEmpty()
 
-	v, ok = extractTraceTarget(ctx, &policyv1alpha1.TraceFieldSelector{
-		Target: &policyv1alpha1.TraceFieldSelector_ScopeField{
-			ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_VERSION,
-		},
-	})
-	assert.True(t, ok)
-	assert.Equal(t, "2.0", v)
+	hist := sm.Metrics().AppendEmpty()
+	hist.SetName("histogram.metric")
+	histData := hist.SetEmptyHistogram()
+	histData.SetAggregationTemporality(pmetric.AggregationTemporalityCumulative)
+	histData.DataPoints().AppendEmpty()
 
-	v, ok = extractTraceTarget(ctx, &policyv1alpha1.TraceFieldSelector{
-		Target: &policyv1alpha1.TraceFieldSelector_ScopeField{
-			ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_SCHEMA_URL,
-		},
-	})
-	assert.True(t, ok)
-	assert.Equal(t, "https://trace.schema", v)
+	expHist := sm.Metrics().AppendEmpty()
+	expHist.SetName("exphistogram.metric")
+	expHistData := expHist.SetEmptyExponentialHistogram()
+	expHistData.SetAggregationTemporality(pmetric.AggregationTemporalityDelta)
+	expHistData.DataPoints().AppendEmpty()
 
-	_, ok = extractTraceTarget(ctx, &policyv1alpha1.TraceFieldSelector{
-		Target: &policyv1alpha1.TraceFieldSelector_ScopeField{
-			ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_UNSPECIFIED,
-		},
-	})
-	assert.False(t, ok)
+	summary := sm.Metrics().AppendEmpty()
+	summary.SetName("summary.metric")
+	summary.SetEmptySummary().DataPoints().AppendEmpty()
+
+	return md
+}
+
+// metricNames flattens every surviving instrument name in a batch.
+func metricNames(md pmetric.Metrics) []string {
+	var names []string
+	for i := 0; i < md.ResourceMetrics().Len(); i++ {
+		sms := md.ResourceMetrics().At(i).ScopeMetrics()
+		for j := 0; j < sms.Len(); j++ {
+			ms := sms.At(j).Metrics()
+			for k := 0; k < ms.Len(); k++ {
+				names = append(names, ms.At(k).Name())
+			}
+		}
+	}
+	return names
 }

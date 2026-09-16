@@ -49,13 +49,13 @@ func isMatchRubyRegex[K any](target ottl.StringLikeGetter[K], pattern string) (o
 		return nil, fmt.Errorf("the pattern supplied to IsMatchRubyRegex is not a valid regexp pattern: %w", err)
 	}
 	return func(ctx context.Context, tCtx K) (any, error) {
-		val, err := target.Get(ctx, tCtx)
+		val, ok, err := target.Get(ctx, tCtx)
 		if err != nil {
 			return nil, err
 		}
-		if val == nil {
+		if !ok {
 			return false, nil
 		}
-		return compiledPattern.MatchString(*val), nil
+		return compiledPattern.MatchString(val), nil
 	}, nil
 }

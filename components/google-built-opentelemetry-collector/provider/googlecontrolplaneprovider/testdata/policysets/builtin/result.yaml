@@ -28,6 +28,7 @@ extensions:
         token_header: authorization
         token_type: access_token
 processors:
+    googlepolicy: {}
     queuebatch/default_gcp_destination_batch_logs:
         batch:
             flush_timeout: 200ms

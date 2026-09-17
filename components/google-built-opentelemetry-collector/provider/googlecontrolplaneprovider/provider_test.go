@@ -144,7 +144,21 @@ func (m *mockSourcePolicy) Evaluate(context.Context) (*confmap.Conf, error) {
 	}), nil
 }
 func (m *mockSourcePolicy) LogsPipelines(preExportProcessors []component.ID, exporters []component.ID, extensions []component.ID) (*confmap.Conf, error) {
-	return nil, nil
+	procStrs := make([]any, 0, len(preExportProcessors))
+	for _, id := range preExportProcessors {
+		procStrs = append(procStrs, id.String())
+	}
+	return confmap.NewFromStringMap(map[string]any{
+		"service": map[string]any{
+			"pipelines": map[string]any{
+				"logs/" + m.name: map[string]any{
+					"receivers":  []any{"otlp/" + m.name},
+					"processors": procStrs,
+					"exporters":  []any{"otlp_grpc/default_gcp_destination"},
+				},
+			},
+		},
+	}), nil
 }
 func (m *mockSourcePolicy) MetricsPipelines(preExportProcessors []component.ID, exporters []component.ID, extensions []component.ID) (*confmap.Conf, error) {
 	return nil, nil
@@ -276,6 +290,8 @@ func TestRetrieve_ActivePolicySetWithCustomSelfMetrics(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, conf.IsSet("receivers::otlp/custom_self_metrics"))
 	assert.False(t, conf.IsSet("receivers::otlp/default_self_metrics"))
+	assert.NotContains(t, conf.Get("service::pipelines::logs/custom_self_metrics::processors"), "googlepolicy")
+	assert.NotContains(t, conf.Get("service::pipelines::metrics/custom_self_metrics::processors"), "googlepolicy")
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
@@ -304,8 +320,12 @@ func TestRetrieve_ActivePolicySetWithOtherSource(t *testing.T) {
 	conf, err := ret.AsConf()
 	require.NoError(t, err)
 	assert.True(t, conf.IsSet("receivers::otlp/other_source"))
-	// Built-in self metrics should also be added
+	// Customer source pipelines MUST include googlepolicy processor
+	assert.Contains(t, conf.Get("service::pipelines::logs/other_source::processors"), "googlepolicy")
+	// Built-in self metrics should also be added, but MUST bypass googlepolicy processor
 	assert.True(t, conf.IsSet("receivers::otlp/default_self_metrics"))
+	assert.NotContains(t, conf.Get("service::pipelines::logs/default_self_metrics::processors"), "googlepolicy")
+	assert.NotContains(t, conf.Get("service::pipelines::metrics/default_self_metrics::processors"), "googlepolicy")
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
@@ -405,4 +425,62 @@ func TestResolveFleetIDMatchesManager(t *testing.T) {
 	// the provider must already agree with that choice.
 	assert.Equal(t, googlepolicy.FleetIDFromURI(uri), resolved)
 	assert.Equal(t, "from-uri", resolved)
+}
+
+func TestFilterPolicyDriversRegistered(t *testing.T) {
+	// Verify that importing googlecontrolplaneprovider registers log_filter,
+	// metric_filter, and trace_filter policy drivers in googlepolicy.
+	for _, tc := range []struct {
+		policyType string
+		raw        map[string]any
+	}{
+		{
+			policyType: "log_filter",
+			raw: map[string]any{
+				"type":   "log_filter",
+				"id":     "test-log",
+				"action": "ACTION_DROP",
+				"matches": []any{
+					map[string]any{
+						"target": map[string]any{"record_field": "LOG_RECORD_FIELD_BODY"},
+						"exists": map[string]any{},
+					},
+				},
+			},
+		},
+		{
+			policyType: "metric_filter",
+			raw: map[string]any{
+				"type":   "metric_filter",
+				"id":     "test-metric",
+				"action": "ACTION_DROP",
+				"matches": []any{
+					map[string]any{
+						"target": map[string]any{"descriptor_field": "METRIC_DESCRIPTOR_FIELD_NAME"},
+						"exists": map[string]any{},
+					},
+				},
+			},
+		},
+		{
+			policyType: "trace_filter",
+			raw: map[string]any{
+				"type":   "trace_filter",
+				"id":     "test-trace",
+				"action": "ACTION_DROP",
+				"matches": []any{
+					map[string]any{
+						"target": map[string]any{"record_field": "SPAN_RECORD_FIELD_NAME"},
+						"exists": map[string]any{},
+					},
+				},
+			},
+		},
+	} {
+		t.Run(tc.policyType, func(t *testing.T) {
+			pol, err := googlepolicy.LoadPolicy(tc.policyType, tc.raw)
+			require.NoError(t, err, "driver for %s must be registered", tc.policyType)
+			assert.NotNil(t, pol)
+		})
+	}
 }

@@ -23,10 +23,16 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider/policies/gcpdestination"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider/policies/selfmetrics"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
+	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/logfilter"
+	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/metricfilter"
+	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/tracefilter"
+	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/confmap"
+	"go.opentelemetry.io/collector/otelcol"
 	"go.uber.org/zap"
 )
 
@@ -274,6 +280,26 @@ func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrie
 		return nil, fmt.Errorf("failed to merge config for destination policy %q: %w", destPolicy.PolicyName(), err)
 	}
 
+	googlePolicyFactory := googlepolicyprocessor.NewFactory()
+	googlePolicyID := component.NewID(googlePolicyFactory.Type())
+
+	googlePolicyConf := &otelcol.Config{
+		Processors: map[component.ID]component.Config{
+			googlePolicyID: googlePolicyFactory.CreateDefaultConfig(),
+		},
+	}
+	gpCm := confmap.New()
+	if err := gpCm.Marshal(googlePolicyConf); err != nil {
+		return nil, fmt.Errorf("failed to marshal googlepolicy processor config: %w", err)
+	}
+	if err := conf.Merge(cleanConf(gpCm)); err != nil {
+		return nil, fmt.Errorf("failed to merge googlepolicy processor config: %w", err)
+	}
+
+	preProcessLogIDs := append([]component.ID{googlePolicyID}, destPolicy.PreProcessLogIDs()...)
+	preProcessMetricIDs := append([]component.ID{googlePolicyID}, destPolicy.PreProcessMetricIDs()...)
+	preProcessTraceIDs := append([]component.ID{googlePolicyID}, destPolicy.PreProcessTraceIDs()...)
+
 	// Load all source policies from the active policy set.
 	sourcePolicies := activePolicySet.LoadPoliciesOfClass(googlepolicy.PolicyClassSource)
 
@@ -307,7 +333,18 @@ func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrie
 			return nil, fmt.Errorf("failed to merge config for source policy %q: %w", sp.PolicyName(), err)
 		}
 
-		logsPipelines, err := srcPolicy.LogsPipelines(destPolicy.PreProcessLogIDs(), destPolicy.ExporterIDs(), destPolicy.ExtensionIDs())
+		var logProcIDs, metricProcIDs, traceProcIDs []component.ID
+		if sp.PolicyType() == selfmetrics.PolicyType {
+			logProcIDs = destPolicy.PreProcessLogIDs()
+			metricProcIDs = destPolicy.PreProcessMetricIDs()
+			traceProcIDs = destPolicy.PreProcessTraceIDs()
+		} else {
+			logProcIDs = preProcessLogIDs
+			metricProcIDs = preProcessMetricIDs
+			traceProcIDs = preProcessTraceIDs
+		}
+
+		logsPipelines, err := srcPolicy.LogsPipelines(logProcIDs, destPolicy.ExporterIDs(), destPolicy.ExtensionIDs())
 		if err != nil {
 			return nil, fmt.Errorf("failed to load logs pipelines for source policy %q: %w", sp.PolicyName(), err)
 		}
@@ -317,7 +354,7 @@ func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrie
 			}
 		}
 
-		metricsPipelines, err := srcPolicy.MetricsPipelines(destPolicy.PreProcessMetricIDs(), destPolicy.ExporterIDs(), destPolicy.ExtensionIDs())
+		metricsPipelines, err := srcPolicy.MetricsPipelines(metricProcIDs, destPolicy.ExporterIDs(), destPolicy.ExtensionIDs())
 		if err != nil {
 			return nil, fmt.Errorf("failed to load metrics pipelines for source policy %q: %w", sp.PolicyName(), err)
 		}
@@ -327,7 +364,7 @@ func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrie
 			}
 		}
 
-		tracesPipelines, err := srcPolicy.TracesPipelines(destPolicy.PreProcessTraceIDs(), destPolicy.ExporterIDs(), destPolicy.ExtensionIDs())
+		tracesPipelines, err := srcPolicy.TracesPipelines(traceProcIDs, destPolicy.ExporterIDs(), destPolicy.ExtensionIDs())
 		if err != nil {
 			return nil, fmt.Errorf("failed to load traces pipelines for source policy %q: %w", sp.PolicyName(), err)
 		}

@@ -121,9 +121,6 @@ receivers:
     jaeger:
         gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jaegerreceiver
         docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/jaegerreceiver/README.md
-    jmx:
-        gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver
-        docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/jmxreceiver/README.md
     journald:
         gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/journaldreceiver
         docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/journaldreceiver/README.md
@@ -296,6 +293,9 @@ processors:
     batch:
         gomod: go.opentelemetry.io/collector/processor/batchprocessor
         docs_url: https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/processor/batchprocessor/README.md
+    queuebatch:
+        gomod: go.opentelemetry.io/collector/processor/queuebatchprocessor
+        docs_url: https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/processor/queuebatchprocessor/README.md
     cumulativetodelta:
         gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/cumulativetodeltaprocessor
         docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/cumulativetodeltaprocessor/README.md

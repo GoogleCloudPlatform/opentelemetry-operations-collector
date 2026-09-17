@@ -3,14 +3,13 @@
 package metadata
 
 import (
-	"slices"
-	"time"
-
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/filter"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/receiver"
+	"slices"
+	"time"
 )
 
 const (
@@ -191,7 +190,8 @@ var MetricsInfo = metricsInfo{
 		Name: "gpu.dcgm.clock.frequency",
 	},
 	GpuDcgmClockThrottleDurationTime: metricInfo{
-		Name: "gpu.dcgm.clock.throttle_duration.time",
+		Name:       "gpu.dcgm.clock.throttle_duration.time",
+		Attributes: []string{"gpu.clock.violation"},
 	},
 	GpuDcgmCodecDecoderUtilization: metricInfo{
 		Name: "gpu.dcgm.codec.decoder.utilization",
@@ -200,7 +200,8 @@ var MetricsInfo = metricsInfo{
 		Name: "gpu.dcgm.codec.encoder.utilization",
 	},
 	GpuDcgmEccErrors: metricInfo{
-		Name: "gpu.dcgm.ecc_errors",
+		Name:       "gpu.dcgm.ecc_errors",
+		Attributes: []string{"gpu.error.type"},
 	},
 	GpuDcgmEnergyConsumption: metricInfo{
 		Name: "gpu.dcgm.energy_consumption",
@@ -209,16 +210,20 @@ var MetricsInfo = metricsInfo{
 		Name: "gpu.dcgm.memory.bandwidth_utilization",
 	},
 	GpuDcgmMemoryBytesUsed: metricInfo{
-		Name: "gpu.dcgm.memory.bytes_used",
+		Name:       "gpu.dcgm.memory.bytes_used",
+		Attributes: []string{"gpu.memory.state"},
 	},
 	GpuDcgmNvlinkIo: metricInfo{
-		Name: "gpu.dcgm.nvlink.io",
+		Name:       "gpu.dcgm.nvlink.io",
+		Attributes: []string{"network.io.direction"},
 	},
 	GpuDcgmPcieIo: metricInfo{
-		Name: "gpu.dcgm.pcie.io",
+		Name:       "gpu.dcgm.pcie.io",
+		Attributes: []string{"network.io.direction"},
 	},
 	GpuDcgmPipeUtilization: metricInfo{
-		Name: "gpu.dcgm.pipe.utilization",
+		Name:       "gpu.dcgm.pipe.utilization",
+		Attributes: []string{"gpu.pipe"},
 	},
 	GpuDcgmSmOccupancy: metricInfo{
 		Name: "gpu.dcgm.sm.occupancy",
@@ -233,7 +238,8 @@ var MetricsInfo = metricsInfo{
 		Name: "gpu.dcgm.utilization",
 	},
 	GpuDcgmXidErrors: metricInfo{
-		Name: "gpu.dcgm.xid_errors",
+		Name:       "gpu.dcgm.xid_errors",
+		Attributes: []string{"gpu.error.xid"},
 	},
 }
 
@@ -257,7 +263,8 @@ type metricsInfo struct {
 }
 
 type metricInfo struct {
-	Name string
+	Name       string
+	Attributes []string
 }
 
 type metricGpuDcgmClockFrequency struct {

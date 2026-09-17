@@ -1,0 +1,5 @@
+name: Invalid Version Format
+initial_content: |
+    version: invalid
+    prerelease_identifier: gke
+expected_error: invalid version format

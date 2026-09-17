@@ -15,10 +15,10 @@ setup-hooks:
 	git config core.hooksPath $(PWD)/hooks
 
 .PHONY: precommit
-precommit: checklicense misspell lint compare-all test-distrogen
+precommit: checklicense misspell lint compare-all test-distrogen test-protos validate-samples
 
 .PHONY: presubmit
-presubmit: checklicense misspell lint compare-all
+presubmit: checklicense misspell lint compare-all test-protos
 
 
 #######################
@@ -64,11 +64,45 @@ test-google-otel-components test-otelopscol-components: go.work
 
 RUN_DISTROGEN=go run ./cmd/distrogen
 
+TOOLS_DIR = $(PWD)/.tools
+
+####################
+# Proto Generation
+####################
+
+BUF = $(TOOLS_DIR)/buf
+API_LINTER = $(TOOLS_DIR)/api-linter
+PROTOC_GEN_GO = $(TOOLS_DIR)/protoc-gen-go
+PROTOC_GEN_GO_GRPC = $(TOOLS_DIR)/protoc-gen-go-grpc
+
+$(BUF): install-tools
+$(API_LINTER): install-tools
+$(PROTOC_GEN_GO): install-tools
+$(PROTOC_GEN_GO_GRPC): install-tools
+
+.PHONY: gen-protos
+gen-protos: $(BUF) $(PROTOC_GEN_GO) $(PROTOC_GEN_GO_GRPC)
+	PATH="$(TOOLS_DIR):$${PATH}" $(BUF) generate
+
+.PHONY: lint-protos
+lint-protos: $(BUF) $(API_LINTER)
+	$(BUF) lint
+	$(BUF) format -d --exit-code
+	cd proto && $(API_LINTER) --config=../.api-linter.yaml --set-exit-status --proto-path=. $$(find policy -name '*.proto')
+
+.PHONY: compare-protos
+compare-protos: gen-protos
+	@git diff --exit-code gen/go && test -z "$$(git status --porcelain gen/go)" || (echo "Generated proto files in gen/go are out-of-date. Run 'make gen-protos' to regenerate." && exit 1)
+
+.PHONY: test-protos
+test-protos:
+	go test -v ./gen/go/...
+
 .PHONY: gen-all
-gen-all: distrogen-golden-update gen-google-built-otel gen-otelopscol
+gen-all: distrogen-golden-update gen-google-built-otel gen-otelopscol gen-protos
 
 .PHONY: regen-all
-regen-all: distrogen-golden-update regen-google-built-otel regen-otelopscol
+regen-all: distrogen-golden-update regen-google-built-otel regen-otelopscol gen-protos
 
 .PHONY: compare-all
 compare-all:
@@ -134,6 +168,10 @@ tidy-all:
 test-distrogen:
 	@go test ./cmd/distrogen
 
+.PHONY: validate-samples
+validate-samples:
+	@./internal/tools/scripts/validate_samples.sh
+
 .PHONY: distrogen-golden-update
 distrogen-golden-update:
 	@go test ./cmd/distrogen -update
@@ -144,7 +182,8 @@ distrogen-golden-update:
 
 ALL_DIRECTORIES = find . -type d  -print0
 EXCLUDE_TOOLS_DIRS = grep -z -v ".*\.tools.*"
-EXCLUDE_BUILD_DIRS = grep -z -v -e ".*_build.*" -e ".*dist.*" -e ".*generated_collector.*"
+EXCLUDE_BUILD_DIRS = grep -z -v -e ".*_build.*" -e ".*dist.*"
+EXCLUDE_GENERATED_COLLECTOR_DIRS = grep -z -v ".*generated_collector.*"
 
 .PHONY: workspace
 workspace: go.work
@@ -154,18 +193,13 @@ go.work:
 	$(ALL_DIRECTORIES) |\
 	$(EXCLUDE_TOOLS_DIRS) |\
 	$(EXCLUDE_BUILD_DIRS) |\
+	$(EXCLUDE_GENERATED_COLLECTOR_DIRS) |\
 	xargs -0 go work use
 
 .PHONY: clean-workspace
 clean-workspace:
 	rm -f go.work
 	rm -f go.work.sum
-
-#######
-# Tools
-#######
-
-TOOLS_DIR = $(PWD)/.tools
 
 ADDLICENSE = $(TOOLS_DIR)/addlicense
 GOLANGCI_LINT = $(TOOLS_DIR)/golangci-lint
@@ -184,6 +218,10 @@ TOOL_LIST ?= github.com/google/addlicense \
 			 github.com/client9/misspell/cmd/misspell \
 			 github.com/golangci/golangci-lint/cmd/golangci-lint \
 			 golang.org/x/tools/cmd/goimports \
+			 github.com/bufbuild/buf/cmd/buf \
+			 github.com/googleapis/api-linter/cmd/api-linter \
+			 google.golang.org/protobuf/cmd/protoc-gen-go \
+			 google.golang.org/grpc/cmd/protoc-gen-go-grpc \
 			 ./cmd/otel_component_versions
 
 .PHONY: install-tools
@@ -236,8 +274,9 @@ tag-repo:
 	bash ./internal/tools/scripts/tag.sh $(GBOC_TAG)
 
 EXCLUDE_INTERNAL_TOOLS =  grep -v ".*internal/tools.*"
-EXCLUDE_SMOKE_TEST = grep -v ".*integration_test/smoke_test.*"
+EXCLUDE_INTEGRATION_TESTS = grep -v ".*integration_test.*"
 EXCLUDE_TESTDATA = grep -v ".*testdata.*"
+EXCLUDE_GENERATED_COLLECTOR = grep -v ".*generated_collector.*"
 
 .PHONY: target-all-modules
 target-all-modules: go.work
@@ -246,8 +285,9 @@ ifndef TARGET
 else
 	go list -f "{{ .Dir }}" -m |\
 	$(EXCLUDE_INTERNAL_TOOLS) |\
-	$(EXCLUDE_SMOKE_TEST) |\
+	$(EXCLUDE_INTEGRATION_TESTS) |\
 	$(EXCLUDE_TESTDATA) |\
+	$(EXCLUDE_GENERATED_COLLECTOR) |\
 	GOWORK=off xargs -t -I '{}' $(MAKE) -C {} $(TARGET)
 endif
 
@@ -258,6 +298,7 @@ ifndef TARGET
 else
 	go list -f "{{ .Dir }}" -m |\
 	$(EXCLUDE_TESTDATA) |\
+	$(EXCLUDE_GENERATED_COLLECTOR) |\
 	GOWORK=off xargs -t -I '{}' $(MAKE) -C {} $(TARGET)
 endif
 

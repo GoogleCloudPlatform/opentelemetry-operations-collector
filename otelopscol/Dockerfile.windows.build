@@ -1,0 +1,9 @@
+ARG WINDOWS_VERSION=2019
+ARG WINBASE=mcr.microsoft.com/windows/servercore:ltsc${WINDOWS_VERSION}
+FROM ${WINBASE} AS windows
+
+COPY otelopscol.exe /otelopscol.exe
+COPY config.yaml /etc/otelopscol/config.yaml
+
+ENTRYPOINT ["/otelopscol.exe"]
+CMD ["--config=/etc/otelopscol/config.yaml"]

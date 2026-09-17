@@ -15,12 +15,13 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v4"
 	"gotest.tools/v3/assert"
 )
 
@@ -65,11 +66,8 @@ func TestLoadRegistry_Error(t *testing.T) {
 			name: "Invalid YAML",
 			path: "invalid_yaml.yaml",
 			errCheck: func(err error) bool {
-				// The yaml package doesn't return a typed error when the
-				// parsing fails so we have to use an ugly string compare.
-				// This yaml package is abandoned so it is unlikely to change
-				// any time soon.
-				return strings.Contains(err.Error(), "yaml: line")
+				var loadErr *yaml.LoadError
+				return errors.As(err, &loadErr)
 			},
 		},
 	}

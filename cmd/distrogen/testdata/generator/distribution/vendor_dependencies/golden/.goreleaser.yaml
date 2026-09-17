@@ -38,6 +38,19 @@ builds:
       - "-trimpath"
       - "-buildvcs=false"
 
+  - id: otelcol-basic-darwin
+    goos:
+      - darwin
+    goarch:
+      - arm64
+    binary: otelcol-basic
+    dir: generated_collector
+    ldflags:
+      - "-s -w"
+    flags:
+      - "-trimpath"
+      - "-buildvcs=false"
+
 nfpms:
   - package_name: otelcol-basic
     contents:
@@ -76,6 +89,7 @@ archives:
     ids:
       - "otelcol-basic-linux"
       - "otelcol-basic-windows"
+      - "otelcol-basic-darwin"
     formats:
       - "tar.gz"
     name_template: "otelcol-basic_{{ .Version }}_{{ .Os }}_{{ .Arch }}"

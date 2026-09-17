@@ -28,6 +28,8 @@ import (
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.uber.org/zap"
+
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/logfilter"
 )
 
 func TestProcessTraces_NilEngine(t *testing.T) {
@@ -64,28 +66,24 @@ func TestProcessLogs_NilEngine(t *testing.T) {
 }
 
 func TestProcessLogs_WithActivePolicy(t *testing.T) {
-	dropPolicy := &testTransformationPolicy{
-		name:    "drop-secret-logs",
-		signals: []googlepolicy.Signal{googlepolicy.SignalLogs},
-		pb: &policyv1alpha1.LogFilterPolicy{
-			Id:     "drop-secret-logs",
-			Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-			Matches: []*policyv1alpha1.LogMatcher{
-				{
-					Target: &policyv1alpha1.LogFieldSelector{
-						Target: &policyv1alpha1.LogFieldSelector_RecordField{
-							RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
-						},
+	dropPolicy := mustPolicy(t, &policyv1alpha1.LogFilterPolicy{
+		Id:     "drop-secret-logs",
+		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+		Matches: []*policyv1alpha1.LogMatcher{
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_RecordField{
+						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
 					},
-					Predicate: &policyv1alpha1.LogMatcher_Equals{
-						Equals: &policyv1alpha1.Value{
-							Value: &policyv1alpha1.Value_StringValue{StringValue: "secret message"},
-						},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_StringValue{StringValue: "secret message"},
 					},
 				},
 			},
 		},
-	}
+	})
 
 	ps := &googlepolicy.PolicySet{
 		RevisionID: "rev-1",
@@ -123,28 +121,24 @@ func TestProcessLogs_WithActivePolicy(t *testing.T) {
 }
 
 func TestProcessMetrics_WithActivePolicy(t *testing.T) {
-	dropPolicy := &testTransformationPolicy{
-		name:    "drop-internal-metric",
-		signals: []googlepolicy.Signal{googlepolicy.SignalMetrics},
-		pb: &policyv1alpha1.MetricFilterPolicy{
-			Id:     "drop-internal-metric",
-			Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-			Matches: []*policyv1alpha1.MetricMatcher{
-				{
-					Target: &policyv1alpha1.MetricFieldSelector{
-						Target: &policyv1alpha1.MetricFieldSelector_DescriptorField{
-							DescriptorField: policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME,
-						},
+	dropPolicy := mustPolicy(t, &policyv1alpha1.MetricFilterPolicy{
+		Id:     "drop-internal-metric",
+		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+		Matches: []*policyv1alpha1.MetricMatcher{
+			{
+				Target: &policyv1alpha1.MetricFieldSelector{
+					Target: &policyv1alpha1.MetricFieldSelector_DescriptorField{
+						DescriptorField: policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME,
 					},
-					Predicate: &policyv1alpha1.MetricMatcher_Equals{
-						Equals: &policyv1alpha1.Value{
-							Value: &policyv1alpha1.Value_StringValue{StringValue: "internal.heartbeat"},
-						},
+				},
+				Predicate: &policyv1alpha1.MetricMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_StringValue{StringValue: "internal.heartbeat"},
 					},
 				},
 			},
 		},
-	}
+	})
 
 	ps := &googlepolicy.PolicySet{
 		RevisionID: "rev-metrics-1",
@@ -184,28 +178,24 @@ func TestProcessMetrics_WithActivePolicy(t *testing.T) {
 }
 
 func TestProcessTraces_WithActivePolicy(t *testing.T) {
-	dropPolicy := &testTransformationPolicy{
-		name:    "drop-healthcheck-span",
-		signals: []googlepolicy.Signal{googlepolicy.SignalTraces},
-		pb: &policyv1alpha1.TraceFilterPolicy{
-			Id:     "drop-healthcheck-span",
-			Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-			Matches: []*policyv1alpha1.TraceMatcher{
-				{
-					Target: &policyv1alpha1.TraceFieldSelector{
-						Target: &policyv1alpha1.TraceFieldSelector_RecordField{
-							RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME,
-						},
+	dropPolicy := mustPolicy(t, &policyv1alpha1.TraceFilterPolicy{
+		Id:     "drop-healthcheck-span",
+		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+		Matches: []*policyv1alpha1.TraceMatcher{
+			{
+				Target: &policyv1alpha1.TraceFieldSelector{
+					Target: &policyv1alpha1.TraceFieldSelector_RecordField{
+						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME,
 					},
-					Predicate: &policyv1alpha1.TraceMatcher_Equals{
-						Equals: &policyv1alpha1.Value{
-							Value: &policyv1alpha1.Value_StringValue{StringValue: "/healthz"},
-						},
+				},
+				Predicate: &policyv1alpha1.TraceMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_StringValue{StringValue: "/healthz"},
 					},
 				},
 			},
 		},
-	}
+	})
 
 	ps := &googlepolicy.PolicySet{
 		RevisionID: "rev-traces-1",
@@ -265,28 +255,24 @@ func TestProcessLogs_DynamicPolicyUpdate(t *testing.T) {
 	assert.Equal(t, 1, out1.ResourceLogs().Len())
 
 	// 2. Set new policy set that drops "test log"
-	dropPolicy := &testTransformationPolicy{
-		name:    "drop-test-log",
-		signals: []googlepolicy.Signal{googlepolicy.SignalLogs},
-		pb: &policyv1alpha1.LogFilterPolicy{
-			Id:     "drop-test-log",
-			Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-			Matches: []*policyv1alpha1.LogMatcher{
-				{
-					Target: &policyv1alpha1.LogFieldSelector{
-						Target: &policyv1alpha1.LogFieldSelector_RecordField{
-							RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
-						},
+	dropPolicy := mustPolicy(t, &policyv1alpha1.LogFilterPolicy{
+		Id:     "drop-test-log",
+		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+		Matches: []*policyv1alpha1.LogMatcher{
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_RecordField{
+						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
 					},
-					Predicate: &policyv1alpha1.LogMatcher_Equals{
-						Equals: &policyv1alpha1.Value{
-							Value: &policyv1alpha1.Value_StringValue{StringValue: "test log"},
-						},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_StringValue{StringValue: "test log"},
 					},
 				},
 			},
 		},
-	}
+	})
 
 	googlepolicy.SetActivePolicySet(&googlepolicy.PolicySet{
 		RevisionID: "rev-update-1",
@@ -305,16 +291,122 @@ func TestProcessLogs_DynamicPolicyUpdate(t *testing.T) {
 	}, 1*time.Second, 10*time.Millisecond)
 }
 
-func TestProcessor_DoubleShutdownAndReloadFailure(t *testing.T) {
-	// Set an invalid policy (empty matchers) to trigger compile error in reloadPolicies
-	invalidPolicy := &testTransformationPolicy{
-		name:    "invalid-log-policy",
-		signals: []googlepolicy.Signal{googlepolicy.SignalLogs},
-		pb: &policyv1alpha1.LogFilterPolicy{
-			Id:     "invalid-log-policy",
-			Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-			// Matches is empty -> compileLogPolicy returns error
+func TestProcessLogs_WithRealLogFilterPolicy(t *testing.T) {
+	p := newGooglePolicyProcessor(&Config{}, zap.NewNop())
+	require.NoError(t, p.start(context.Background(), componenttest.NewNopHost()))
+	defer func() { _ = p.shutdown(context.Background()) }()
+
+	dropPolicy, err := logfilter.NewPolicyFromProto(&policyv1alpha1.LogFilterPolicy{
+		Id:     "drop-debug-logs",
+		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+		Matches: []*policyv1alpha1.LogMatcher{
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_RecordField{
+						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
+					},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_StringValue{
+							StringValue: "DROP_THIS_LINE",
+						},
+					},
+				},
+			},
 		},
+	})
+	require.NoError(t, err)
+
+	ps := &googlepolicy.PolicySet{
+		RevisionID: "rev-real-filter",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			dropPolicy.PolicyName(): {PolicyObj: dropPolicy},
+		},
+	}
+	googlepolicy.SetActivePolicySet(ps)
+	defer googlepolicy.SetActivePolicySet(nil)
+
+	assert.Eventually(t, func() bool {
+		ev := p.evaluator.Load()
+		return ev != nil && len(ev.logPolicies) > 0
+	}, 1*time.Second, 10*time.Millisecond)
+
+	ld := plog.NewLogs()
+	rl := ld.ResourceLogs().AppendEmpty()
+	sl := rl.ScopeLogs().AppendEmpty()
+
+	lr1 := sl.LogRecords().AppendEmpty()
+	lr1.Body().SetStr("DROP_THIS_LINE")
+
+	lr2 := sl.LogRecords().AppendEmpty()
+	lr2.Body().SetStr("KEEP_THIS_LINE")
+
+	out, err := p.processLogs(context.Background(), ld)
+	require.NoError(t, err)
+
+	require.Equal(t, 1, out.ResourceLogs().Len())
+	require.Equal(t, 1, out.ResourceLogs().At(0).ScopeLogs().Len())
+	records := out.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords()
+	require.Equal(t, 1, records.Len())
+	assert.Equal(t, "KEEP_THIS_LINE", records.At(0).Body().AsString())
+}
+
+func TestProcessLogs_LoadFromRawJSONPolicySet(t *testing.T) {
+	p := newGooglePolicyProcessor(&Config{}, zap.NewNop())
+	require.NoError(t, p.start(context.Background(), componenttest.NewNopHost()))
+	defer func() { _ = p.shutdown(context.Background()) }()
+
+	rawPolicy := map[string]any{
+		"type":   "log_filter",
+		"id":     "drop-warn-logs",
+		"action": "ACTION_DROP",
+		"matches": []any{
+			map[string]any{
+				"target": map[string]any{
+					"record_field": "LOG_RECORD_FIELD_SEVERITY_TEXT",
+				},
+				"equals": map[string]any{
+					"string_value": "WARN",
+				},
+			},
+		},
+	}
+
+	ps, err := googlepolicy.MakePolicySet("rev-raw", []map[string]any{rawPolicy})
+	require.NoError(t, err)
+	googlepolicy.SetActivePolicySet(ps)
+	defer googlepolicy.SetActivePolicySet(nil)
+
+	assert.Eventually(t, func() bool {
+		ev := p.evaluator.Load()
+		return ev != nil && len(ev.logPolicies) > 0
+	}, 1*time.Second, 10*time.Millisecond)
+
+	ld := plog.NewLogs()
+	rl := ld.ResourceLogs().AppendEmpty()
+	sl := rl.ScopeLogs().AppendEmpty()
+
+	lWarn := sl.LogRecords().AppendEmpty()
+	lWarn.SetSeverityText("WARN")
+
+	lInfo := sl.LogRecords().AppendEmpty()
+	lInfo.SetSeverityText("INFO")
+
+	out, err := p.processLogs(context.Background(), ld)
+	require.NoError(t, err)
+
+	require.Equal(t, 1, out.ResourceLogs().Len())
+	records := out.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords()
+	require.Equal(t, 1, records.Len())
+	assert.Equal(t, "INFO", records.At(0).SeverityText())
+}
+
+func TestProcessor_DoubleShutdownAndReloadFailure(t *testing.T) {
+	// Set a TransformationPolicy that implements none of the per-signal evaluator
+	// interfaces so NewEvaluator rejects it and reloadPolicies fails.
+	invalidPolicy := &nonEvaluatorPolicy{
+		name: "invalid-log-policy",
 	}
 
 	googlepolicy.SetActivePolicySet(&googlepolicy.PolicySet{

@@ -15,391 +15,68 @@
 package googlepolicyprocessor
 
 import (
-	"bytes"
 	"fmt"
-	"regexp"
-	"strconv"
-	"strings"
 
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
-	"go.opentelemetry.io/collector/pdata/pcommon"
-	"google.golang.org/protobuf/proto"
 )
 
-// ProtoPolicy is an optional interface that a TransformationPolicy can implement
-// to provide its underlying protobuf message.
-type ProtoPolicy interface {
-	Proto() proto.Message
-}
-
-// Evaluator evaluates telemetry data against compiled Google transformation policies.
+// Evaluator holds the compiled transformation policies for each signal. All
+// matching logic lives in the pkg/googlepolicy filter packages; the Evaluator
+// only walks the pdata trees and applies the KEEP/DROP outcomes they return.
 type Evaluator struct {
-	logPolicies                []*compiledLogPolicy
-	metricPolicies             []*compiledMetricPolicy
+	logPolicies                []googlepolicy.LogPolicyEvaluator
+	metricPolicies             []googlepolicy.MetricPolicyEvaluator
+	instrumentMetricPolicies   []googlepolicy.MetricPolicyEvaluator
+	datapointMetricPolicies    []googlepolicy.MetricPolicyEvaluator
 	hasDatapointMetricPolicies bool
-	tracePolicies              []*compiledTracePolicy
-}
-
-type predicateType int
-
-const (
-	predExists predicateType = iota
-	predEquals
-	predRegex
-	predGt
-	predGte
-	predLt
-	predLte
-	predContains
-)
-
-type matcherPredicate struct {
-	typ         predicateType
-	equalsVal   *policyv1alpha1.Value
-	regex       *regexp.Regexp
-	gtVal       *policyv1alpha1.NumericValue
-	gteVal      *policyv1alpha1.NumericValue
-	ltVal       *policyv1alpha1.NumericValue
-	lteVal      *policyv1alpha1.NumericValue
-	containsVal *policyv1alpha1.Value
-	negate      bool
+	tracePolicies              []googlepolicy.TracePolicyEvaluator
 }
 
 // NewEvaluator compiles a slice of TransformationPolicy objects into an Evaluator.
+//
+// Policies loaded through the googlepolicy registry already arrive compiled by
+// their owning filter package and implement the per-signal evaluator interfaces
+// directly. A transformation policy that implements none of them cannot be
+// evaluated, so it is rejected here rather than silently ignored.
 func NewEvaluator(policies []googlepolicy.TransformationPolicy) (*Evaluator, error) {
 	ev := &Evaluator{}
 	for _, tp := range policies {
 		if tp == nil {
 			continue
 		}
-		raw := any(tp)
-		if pp, ok := tp.(ProtoPolicy); ok {
-			raw = pp.Proto()
-		}
 
-		switch p := raw.(type) {
-		case *policyv1alpha1.LogFilterPolicy:
-			cp, err := compileLogPolicy(p)
-			if err != nil {
-				return nil, fmt.Errorf("failed to compile log policy %s: %w", p.GetId(), err)
-			}
-			ev.logPolicies = append(ev.logPolicies, cp)
-		case *policyv1alpha1.MetricFilterPolicy:
-			cp, err := compileMetricPolicy(p)
-			if err != nil {
-				return nil, fmt.Errorf("failed to compile metric policy %s: %w", p.GetId(), err)
-			}
-			if cp.isDatapointLevel {
-				ev.hasDatapointMetricPolicies = true
-			}
-			ev.metricPolicies = append(ev.metricPolicies, cp)
-		case *policyv1alpha1.TraceFilterPolicy:
-			cp, err := compileTracePolicy(p)
-			if err != nil {
-				return nil, fmt.Errorf("failed to compile trace policy %s: %w", p.GetId(), err)
-			}
-			ev.tracePolicies = append(ev.tracePolicies, cp)
+		switch p := tp.(type) {
+		case googlepolicy.LogPolicyEvaluator:
+			ev.addLogPolicy(p)
+		case googlepolicy.MetricPolicyEvaluator:
+			ev.addMetricPolicy(p)
+		case googlepolicy.TracePolicyEvaluator:
+			ev.addTracePolicy(p)
+		default:
+			return nil, fmt.Errorf(
+				"transformation policy %q (%T) implements none of googlepolicy.LogPolicyEvaluator, "+
+					"googlepolicy.MetricPolicyEvaluator or googlepolicy.TracePolicyEvaluator: "+
+					"transformation policies must implement one of them",
+				tp.PolicyName(), tp)
 		}
 	}
 	return ev, nil
 }
 
-func compilePredicate(predicate any, negate bool) (matcherPredicate, error) {
-	pred := matcherPredicate{negate: negate}
-	switch p := predicate.(type) {
-	case *policyv1alpha1.LogMatcher_Exists, *policyv1alpha1.MetricMatcher_Exists, *policyv1alpha1.TraceMatcher_Exists:
-		pred.typ = predExists
-	case *policyv1alpha1.LogMatcher_Equals:
-		pred.typ = predEquals
-		pred.equalsVal = p.Equals
-	case *policyv1alpha1.MetricMatcher_Equals:
-		pred.typ = predEquals
-		pred.equalsVal = p.Equals
-	case *policyv1alpha1.TraceMatcher_Equals:
-		pred.typ = predEquals
-		pred.equalsVal = p.Equals
-	case *policyv1alpha1.LogMatcher_Regex:
-		re, err := regexp.Compile(p.Regex)
-		if err != nil {
-			return pred, fmt.Errorf("invalid regex '%s': %w", p.Regex, err)
-		}
-		pred.typ = predRegex
-		pred.regex = re
-	case *policyv1alpha1.MetricMatcher_Regex:
-		re, err := regexp.Compile(p.Regex)
-		if err != nil {
-			return pred, fmt.Errorf("invalid regex '%s': %w", p.Regex, err)
-		}
-		pred.typ = predRegex
-		pred.regex = re
-	case *policyv1alpha1.TraceMatcher_Regex:
-		re, err := regexp.Compile(p.Regex)
-		if err != nil {
-			return pred, fmt.Errorf("invalid regex '%s': %w", p.Regex, err)
-		}
-		pred.typ = predRegex
-		pred.regex = re
-	case *policyv1alpha1.LogMatcher_Gt:
-		pred.typ = predGt
-		pred.gtVal = p.Gt
-	case *policyv1alpha1.MetricMatcher_Gt:
-		pred.typ = predGt
-		pred.gtVal = p.Gt
-	case *policyv1alpha1.TraceMatcher_Gt:
-		pred.typ = predGt
-		pred.gtVal = p.Gt
-	case *policyv1alpha1.LogMatcher_Gte:
-		pred.typ = predGte
-		pred.gteVal = p.Gte
-	case *policyv1alpha1.MetricMatcher_Gte:
-		pred.typ = predGte
-		pred.gteVal = p.Gte
-	case *policyv1alpha1.TraceMatcher_Gte:
-		pred.typ = predGte
-		pred.gteVal = p.Gte
-	case *policyv1alpha1.LogMatcher_Lt:
-		pred.typ = predLt
-		pred.ltVal = p.Lt
-	case *policyv1alpha1.MetricMatcher_Lt:
-		pred.typ = predLt
-		pred.ltVal = p.Lt
-	case *policyv1alpha1.TraceMatcher_Lt:
-		pred.typ = predLt
-		pred.ltVal = p.Lt
-	case *policyv1alpha1.LogMatcher_Lte:
-		pred.typ = predLte
-		pred.lteVal = p.Lte
-	case *policyv1alpha1.MetricMatcher_Lte:
-		pred.typ = predLte
-		pred.lteVal = p.Lte
-	case *policyv1alpha1.TraceMatcher_Lte:
-		pred.typ = predLte
-		pred.lteVal = p.Lte
-	case *policyv1alpha1.LogMatcher_Contains:
-		pred.typ = predContains
-		pred.containsVal = p.Contains
-	case *policyv1alpha1.MetricMatcher_Contains:
-		pred.typ = predContains
-		pred.containsVal = p.Contains
-	case *policyv1alpha1.TraceMatcher_Contains:
-		pred.typ = predContains
-		pred.containsVal = p.Contains
-	default:
-		return pred, fmt.Errorf("unsupported or nil predicate: %T", predicate)
-	}
-	return pred, nil
+func (e *Evaluator) addLogPolicy(p googlepolicy.LogPolicyEvaluator) {
+	e.logPolicies = append(e.logPolicies, p)
 }
 
-func (p *matcherPredicate) evaluate(val any, exists bool) bool {
-	matched := false
-	hasVal := exists || val != nil
-	switch p.typ {
-	case predExists:
-		matched = exists
-	case predEquals:
-		if hasVal && p.equalsVal != nil {
-			matched = matchEquals(val, p.equalsVal)
-		}
-	case predRegex:
-		if hasVal && p.regex != nil {
-			switch v := val.(type) {
-			case string:
-				matched = p.regex.MatchString(v)
-			case int64:
-				matched = p.regex.MatchString(strconv.FormatInt(v, 10))
-			case int:
-				matched = p.regex.MatchString(strconv.Itoa(v))
-			case bool:
-				matched = p.regex.MatchString(strconv.FormatBool(v))
-			}
-		}
-	case predGt:
-		if hasVal && p.gtVal != nil {
-			if num, ok := toFloat64(val); ok {
-				targetNum := numericToFloat64(p.gtVal)
-				matched = num > targetNum
-			}
-		}
-	case predGte:
-		if hasVal && p.gteVal != nil {
-			if num, ok := toFloat64(val); ok {
-				targetNum := numericToFloat64(p.gteVal)
-				matched = num >= targetNum
-			}
-		}
-	case predLt:
-		if hasVal && p.ltVal != nil {
-			if num, ok := toFloat64(val); ok {
-				targetNum := numericToFloat64(p.ltVal)
-				matched = num < targetNum
-			}
-		}
-	case predLte:
-		if hasVal && p.lteVal != nil {
-			if num, ok := toFloat64(val); ok {
-				targetNum := numericToFloat64(p.lteVal)
-				matched = num <= targetNum
-			}
-		}
-	case predContains:
-		if hasVal && p.containsVal != nil {
-			matched = matchContains(val, p.containsVal)
-		}
-	}
-
-	if p.negate {
-		return !matched
-	}
-	return matched
-}
-
-func matchEquals(val any, expected *policyv1alpha1.Value) bool {
-	switch exp := expected.Value.(type) {
-	case *policyv1alpha1.Value_StringValue:
-		s, ok := val.(string)
-		return ok && s == exp.StringValue
-	case *policyv1alpha1.Value_IntValue:
-		if num, ok := toInt64(val); ok {
-			return num == exp.IntValue
-		}
-	case *policyv1alpha1.Value_DoubleValue:
-		if num, ok := toFloat64(val); ok {
-			return num == exp.DoubleValue
-		}
-	case *policyv1alpha1.Value_BoolValue:
-		b, ok := val.(bool)
-		return ok && b == exp.BoolValue
-	case *policyv1alpha1.Value_BytesValue:
-		b, ok := val.([]byte)
-		return ok && bytes.Equal(b, exp.BytesValue)
-	}
-	return false
-}
-
-func matchContains(val any, expected *policyv1alpha1.Value) bool {
-	switch v := val.(type) {
-	case string:
-		if exp, ok := expected.Value.(*policyv1alpha1.Value_StringValue); ok {
-			return strings.Contains(v, exp.StringValue)
-		}
-	case []byte:
-		if exp, ok := expected.Value.(*policyv1alpha1.Value_BytesValue); ok {
-			return bytes.Contains(v, exp.BytesValue)
-		}
-	case []any:
-		for _, elem := range v {
-			if matchEquals(elem, expected) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func toFloat64(val any) (float64, bool) {
-	switch v := val.(type) {
-	case float64:
-		return v, true
-	case float32:
-		return float64(v), true
-	case int64:
-		return float64(v), true
-	case int:
-		return float64(v), true
-	case int32:
-		return float64(v), true
-	case uint64:
-		return float64(v), true
-	case uint32:
-		return float64(v), true
-	default:
-		return 0, false
+func (e *Evaluator) addMetricPolicy(p googlepolicy.MetricPolicyEvaluator) {
+	e.metricPolicies = append(e.metricPolicies, p)
+	if p.IsDatapointLevel() {
+		e.hasDatapointMetricPolicies = true
+		e.datapointMetricPolicies = append(e.datapointMetricPolicies, p)
+	} else {
+		e.instrumentMetricPolicies = append(e.instrumentMetricPolicies, p)
 	}
 }
 
-func toInt64(val any) (int64, bool) {
-	switch v := val.(type) {
-	case int64:
-		return v, true
-	case int:
-		return int64(v), true
-	case int32:
-		return int64(v), true
-	case uint64:
-		return int64(v), true
-	case uint32:
-		return int64(v), true
-	default:
-		return 0, false
-	}
-}
-
-func numericToFloat64(nv *policyv1alpha1.NumericValue) float64 {
-	switch v := nv.Value.(type) {
-	case *policyv1alpha1.NumericValue_DoubleValue:
-		return v.DoubleValue
-	case *policyv1alpha1.NumericValue_IntValue:
-		return float64(v.IntValue)
-	default:
-		return 0
-	}
-}
-
-func lookupPath(attrs pcommon.Map, path []string) (any, bool) {
-	if len(path) == 0 || attrs == (pcommon.Map{}) {
-		return nil, false
-	}
-	var current pcommon.Value
-	for i, key := range path {
-		if i == 0 {
-			v, ok := attrs.Get(key)
-			if !ok {
-				return nil, false
-			}
-			current = v
-		} else {
-			switch current.Type() {
-			case pcommon.ValueTypeMap:
-				v, ok := current.Map().Get(key)
-				if !ok {
-					return nil, false
-				}
-				current = v
-			case pcommon.ValueTypeSlice:
-				idx, err := strconv.Atoi(key)
-				if err != nil || idx < 0 || idx >= current.Slice().Len() {
-					return nil, false
-				}
-				current = current.Slice().At(idx)
-			default:
-				return nil, false
-			}
-		}
-	}
-	return pcommonValueToAny(current), true
-}
-
-func pcommonValueToAny(v pcommon.Value) any {
-	switch v.Type() {
-	case pcommon.ValueTypeStr:
-		return v.Str()
-	case pcommon.ValueTypeInt:
-		return v.Int()
-	case pcommon.ValueTypeDouble:
-		return v.Double()
-	case pcommon.ValueTypeBool:
-		return v.Bool()
-	case pcommon.ValueTypeBytes:
-		return v.Bytes().AsRaw()
-	case pcommon.ValueTypeSlice:
-		s := v.Slice()
-		res := make([]any, s.Len())
-		for i := 0; i < s.Len(); i++ {
-			res[i] = pcommonValueToAny(s.At(i))
-		}
-		return res
-	default:
-		return v.AsString()
-	}
+func (e *Evaluator) addTracePolicy(p googlepolicy.TracePolicyEvaluator) {
+	e.tracePolicies = append(e.tracePolicies, p)
 }

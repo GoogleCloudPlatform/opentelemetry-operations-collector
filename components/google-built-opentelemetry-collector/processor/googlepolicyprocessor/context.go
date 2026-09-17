@@ -15,37 +15,17 @@
 package googlepolicyprocessor
 
 import (
-	"go.opentelemetry.io/collector/pdata/pcommon"
-	"go.opentelemetry.io/collector/pdata/plog"
-	"go.opentelemetry.io/collector/pdata/pmetric"
-	"go.opentelemetry.io/collector/pdata/ptrace"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 )
 
-// LogContext holds the contextual information needed to evaluate a single log record.
-type LogContext struct {
-	Record            plog.LogRecord
-	Resource          pcommon.Resource
-	Scope             pcommon.InstrumentationScope
-	ResourceSchemaURL string
-	ScopeSchemaURL    string
-}
-
-// MetricContext holds the contextual information needed to evaluate a single metric datapoint.
-type MetricContext struct {
-	Metric                 pmetric.Metric
-	DatapointAttributes    pcommon.Map
-	AggregationTemporality pmetric.AggregationTemporality
-	Resource               pcommon.Resource
-	Scope                  pcommon.InstrumentationScope
-	ResourceSchemaURL      string
-	ScopeSchemaURL         string
-}
-
-// TraceContext holds the contextual information needed to evaluate a single trace span.
-type TraceContext struct {
-	Span              ptrace.Span
-	Resource          pcommon.Resource
-	Scope             pcommon.InstrumentationScope
-	ResourceSchemaURL string
-	ScopeSchemaURL    string
-}
+// The evaluation contexts are owned by pkg/googlepolicy, where the filter
+// policies that consume them live. These aliases keep the processor's own call
+// sites readable without introducing a second definition.
+type (
+	// LogContext holds the contextual information needed to evaluate a single log record.
+	LogContext = googlepolicy.LogContext
+	// MetricContext holds the contextual information needed to evaluate a single metric datapoint.
+	MetricContext = googlepolicy.MetricContext
+	// TraceContext holds the contextual information needed to evaluate a single trace span.
+	TraceContext = googlepolicy.TraceContext
+)

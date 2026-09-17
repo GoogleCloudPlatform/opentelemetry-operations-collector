@@ -21,6 +21,7 @@ processors:
       match_type: regexp
       action: combine
       new_name: "saasmanagement.googleapis.com/instance/vm/container/cpu/usage_time_unscaled"
+      aggregation_type: sum
       operations:
       - action: update_label
         label: state

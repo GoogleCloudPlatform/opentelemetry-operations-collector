@@ -168,6 +168,7 @@ func init() {
 	if err != nil {
 		log.Fatalf("storage.NewClient() failed: %v:", err)
 	}
+	storageClient.SetRetry(storage.WithPolicy(storage.RetryAlways))
 	transfersBucket = os.Getenv("TRANSFERS_BUCKET")
 	if transfersBucket == "" {
 		transfersBucket = "stackdriver-test-143416-file-transfers"
@@ -838,9 +839,9 @@ func RunGcloud(ctx context.Context, logger *log.Logger, stdin string, args []str
 
 var (
 	sshOptions = []string{
-		// In some situations, ssh will hang when connecting to a new VM unless
-		// it has an explicit connection timeout set.
-		"-oConnectTimeout=120",
+		// Fail fast on dropped SSH TCP SYN packets instead of hanging for 120s.
+		"-oConnectTimeout=15",
+		"-oConnectionAttempts=3",
 		// StrictHostKeyChecking is disabled because the host keys are unknown
 		// to us at the start of the test.
 		"-oStrictHostKeyChecking=no",
@@ -882,9 +883,34 @@ func RunRemotely(ctx context.Context, logger *log.Logger, vm *VM, command string
 	return RunRemotelyStdin(ctx, logger, vm, nil, command)
 }
 
+// isSSHTransportError returns true if the error was caused by an SSH connection/transport failure
+// (e.g. TCP SYN timeout, connection dropped/refused) rather than a command failing on the remote host.
+func isSSHTransportError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == 255 {
+		return true
+	}
+	errStr := err.Error()
+	return strings.Contains(errStr, "exit status 255") ||
+		strings.Contains(errStr, "ssh: connect to host") ||
+		strings.Contains(errStr, "Connection timed out") ||
+		strings.Contains(errStr, "Connection refused") ||
+		strings.Contains(errStr, "Connection reset by peer") ||
+		strings.Contains(errStr, "kex_exchange_identification") ||
+		strings.Contains(errStr, "Host key verification failed")
+}
+
+// IsSSHTransportErrorForTest exports isSSHTransportError for unit testing.
+func IsSSHTransportErrorForTest(err error) bool {
+	return isSSHTransportError(err)
+}
+
 // RunRemotelyStdin is just like RunRemotely but it accepts an io.Reader
 // for what data to pass in over standard input to the command.
-func RunRemotelyStdin(ctx context.Context, logger *log.Logger, vm *VM, stdin io.Reader, command string) (_ CommandOutput, err error) {
+func RunRemotelyStdin(ctx context.Context, logger *log.Logger, vm *VM, stdin io.Reader, command string) (output CommandOutput, err error) {
 	logger.Printf("Running command remotely: %v", command)
 	defer func() {
 		if err != nil {
@@ -908,7 +934,34 @@ func RunRemotelyStdin(ctx context.Context, logger *log.Logger, vm *VM, stdin io.
 	args = append(args, "-oIdentityFile="+privateKeyFile)
 	args = append(args, sshOptions...)
 	args = append(args, wrappedCommand)
-	return runCommand(ctx, logger, stdin, args, nil)
+
+	// Retry up to 10 times with 3s backoff (~30s total retry window) strictly for
+	// SSH transport errors (exit status 255 / connection refused/reset/timeout).
+	// This bridges the 10-15s network handover window on newly booted VMs where
+	// google-guest-agent rolls back network configurations and triggers NetworkManager
+	// DHCP renegotiation (b/557287367), especially on fast-booting ARM64 instances.
+	// Non-transport command errors (e.g. exit status 1 or 2) fail immediately on attempt 1.
+	backoffPolicy := backoff.WithContext(
+		backoff.WithMaxRetries(backoff.NewConstantBackOff(3*time.Second), 10),
+		ctx,
+	)
+
+	attempt := 0
+	var runErr error
+	err = backoff.Retry(func() error {
+		attempt++
+		output, runErr = runCommand(ctx, logger, stdin, args, nil)
+		if runErr != nil {
+			if isSSHTransportError(runErr) {
+				logger.Printf("SSH transport attempt %d to VM %s (%s) failed (%v), retrying...", attempt, vm.Name, vm.IPAddress, runErr)
+				return runErr
+			}
+			return backoff.Permanent(runErr)
+		}
+		return nil
+	}, backoffPolicy)
+
+	return output, err
 }
 
 // UploadContent takes an io.Reader and uploads its contents as a file to a
@@ -950,8 +1003,12 @@ func UploadContent(ctx context.Context, logger *log.Logger, vm *VM, content io.R
 	// (note that the go client libraries use resumable uploads).
 	defer func() {
 		deleteErr := object.Delete(ctx)
-		if deleteErr != nil {
-			err = fmt.Errorf("UploadContent() finished with err=%v, then cleanup of %v finished with err=%v", err, object.ObjectName(), deleteErr)
+		if deleteErr != nil && !errors.Is(deleteErr, storage.ErrObjectNotExist) {
+			if err == nil {
+				logger.Printf("UploadContent() succeeded, ignoring transient cleanup error of %v: %v", object.ObjectName(), deleteErr)
+			} else {
+				err = fmt.Errorf("UploadContent() finished with err=%v, then cleanup of %v finished with err=%v", err, object.ObjectName(), deleteErr)
+			}
 		}
 	}()
 
@@ -960,11 +1017,17 @@ func UploadContent(ctx context.Context, logger *log.Logger, vm *VM, content io.R
 	}
 	objectPath := fmt.Sprintf("gs://%s/%s", object.BucketName(), object.ObjectName())
 	gcloudCmd := fmt.Sprintf("gcloud storage cp '%s' '%s'", objectPath, remotePath)
-	if IsWindows(vm.ImageSpec) {
-		_, err = RunRemotely(ctx, logger, vm, gcloudCmd)
-		return err
+	if !IsWindows(vm.ImageSpec) {
+		gcloudCmd = fmt.Sprintf("sudo %s", gcloudCmd)
 	}
-	_, err = RunRemotely(ctx, logger, vm, fmt.Sprintf("sudo %s", gcloudCmd))
+	downloadBackoff := backoff.WithContext(backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 3), ctx)
+	err = backoff.Retry(func() error {
+		_, runErr := RunRemotely(ctx, logger, vm, gcloudCmd)
+		if runErr != nil {
+			logger.Printf("Transient error downloading %s to %s on VM, retrying: %v", objectPath, remotePath, runErr)
+		}
+		return runErr
+	}, downloadBackoff)
 	return err
 }
 
@@ -1807,8 +1870,18 @@ func handleDeleteError(err error, attempt int) error {
 	if strings.Contains(err.Error(), "not found") && attempt > 1 {
 		return nil
 	}
+	// If the deletion command timed out and was killed, assume the command ran
+	// and let the 4-hour janitor job handle any lingering VMs (b/556836152).
+	if strings.Contains(err.Error(), "signal: killed") || strings.Contains(err.Error(), "deadline exceeded") {
+		return nil
+	}
 	// Wrap other errors in backoff.Permanent() to avoid retrying those.
 	return backoff.Permanent(err)
+}
+
+// HandleDeleteErrorForTest exports handleDeleteError for unit testing.
+func HandleDeleteErrorForTest(err error, attempt int) error {
+	return handleDeleteError(err, attempt)
 }
 
 // DeleteInstance deletes the given VM instance synchronously.
@@ -1916,6 +1989,21 @@ func StopInstance(ctx context.Context, logger *log.Logger, vm *VM) error {
 	return err
 }
 
+func shouldRetryStartVM(err error) bool {
+	if err == nil {
+		return false
+	}
+	// Starting instances can hit CPU quota or IP address allocation errors.
+	return strings.Contains(err.Error(), "Quota") ||
+		// Instance starting can fail due to temporary zone hardware stockout (ZONE_RESOURCE_POOL_EXHAUSTED).
+		strings.Contains(err.Error(), "currently unavailable") ||
+		strings.Contains(err.Error(), "ZONE_RESOURCE_POOL_EXHAUSTED") ||
+		// Rarely, instance starting fails due to internal compute API errors.
+		strings.Contains(err.Error(), "Internal error") ||
+		// gcloud sqlite database lock contention under concurrency.
+		strings.Contains(err.Error(), "database is locked")
+}
+
 // StartInstance boots a previously-stopped VM instance.
 // Also waits for the instance to be started up.
 func StartInstance(ctx context.Context, logger *log.Logger, vm *VM) error {
@@ -1933,9 +2021,9 @@ func StartInstance(ctx context.Context, logger *log.Logger, vm *VM) error {
 				vm.Name,
 				"--format=json",
 			})
-		// Sometimes we see errors about running out of CPU quota or IP addresses,
+		// Sometimes we see errors about running out of CPU quota, zone stockouts, or IP addresses.
 		// Back off and retry in these cases, just like CreateInstance().
-		if err != nil && !strings.Contains(err.Error(), "Quota") {
+		if err != nil && !shouldRetryStartVM(err) {
 			err = backoff.Permanent(err)
 		}
 		// Returning a non-permanent error triggers retries.
@@ -2012,8 +2100,21 @@ func downgradeGcloudIfNeeded(ctx context.Context, logger *log.Logger, vm *VM) er
 
 // verifyGcloudInstallation checks if the gcloud command is installed correctly in the VM.
 func verifyGcloudInstallation(ctx context.Context, logger *log.Logger, vm *VM) error {
-	_, err := RunRemotely(ctx, logger, vm, "sudo gcloud --version")
-	return err
+	// On Snap-managed distributions (e.g. Ubuntu 24.04 / ML images), wait for snapd to finish
+	// mounting and linking pre-seeded snaps (including google-cloud-cli) on first boot.
+	waitCmd := "if command -v snap >/dev/null 2>&1; then sudo snap wait system seed.loaded || true; fi"
+	if _, err := RunRemotely(ctx, logger, vm, waitCmd); err != nil && isSSHTransportError(err) {
+		return fmt.Errorf("failed waiting for snap initialization due to SSH error: %w", err)
+	}
+
+	backoffPolicy := backoff.WithContext(backoff.WithMaxRetries(backoff.NewConstantBackOff(3*time.Second), 5), ctx)
+	return backoff.Retry(func() error {
+		_, err := RunRemotely(ctx, logger, vm, "sudo gcloud --version")
+		if err != nil && isSSHTransportError(err) {
+			return backoff.Permanent(err)
+		}
+		return err
+	}, backoffPolicy)
 }
 
 // InstallGcloudIfNeeded installs gcloud cli on instances that don't already have
@@ -2028,6 +2129,8 @@ func InstallGcloudIfNeeded(ctx context.Context, logger *log.Logger, vm *VM) erro
 	if err := verifyGcloudInstallation(ctx, logger, vm); err == nil {
 		// Success, no need to install gcloud.
 		return nil
+	} else if isSSHTransportError(err) {
+		return fmt.Errorf("failed to verify gcloud due to SSH connection error: %w", err)
 	}
 	logger.Printf("gcloud not found, installing it...")
 

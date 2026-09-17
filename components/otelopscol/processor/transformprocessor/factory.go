@@ -26,8 +26,8 @@ var componentType component.Type = component.MustNewType("transform")
 // NewFactory create a factory for the transform processor.
 func NewFactory() processor.Factory {
 	return contribtransform.NewFactoryWithOptions(
-		contribtransform.WithLogFunctionsNew(contribtransform.DefaultLogFunctionsNew()),
+		contribtransform.WithLogFunctions(contribtransform.DefaultLogFunctions()),
 		// Add log functions defined in ottlfuncs.
-		contribtransform.WithLogFunctionsNew(ottlfuncs.LogFunctions()),
+		contribtransform.WithLogFunctions(ottlfuncs.LogFunctions()),
 	)
 }

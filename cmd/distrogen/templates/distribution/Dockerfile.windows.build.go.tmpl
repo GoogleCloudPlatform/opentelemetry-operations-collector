@@ -1,0 +1,9 @@
+ARG WINDOWS_VERSION=2019
+ARG WINBASE=mcr.microsoft.com/windows/servercore:ltsc${WINDOWS_VERSION}
+FROM ${WINBASE} AS windows
+
+COPY {{ .BinaryName }}.exe /{{ .BinaryName }}.exe
+COPY config.yaml /etc/{{ .BinaryName }}/config.yaml
+
+ENTRYPOINT ["/{{ .BinaryName }}.exe"{{ $length := len .FeatureGates }}{{ if gt $length 0 }}, "--feature-gates={{ .FeatureGates.Render }}"{{ end }}]
+CMD ["--config=/etc/{{ .BinaryName }}/config.yaml"]

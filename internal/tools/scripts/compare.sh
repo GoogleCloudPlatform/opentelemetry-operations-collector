@@ -17,9 +17,11 @@ make compare-google-built-otel
 GOOGLE_OTEL_RESULT=$?
 make compare-otelopscol
 OTELOPSCOL_RESULT=$?
+make compare-protos
+PROTOS_RESULT=$?
 
-# If either result is 2, which is what `make` exits with when
-# either check exits with code 1, exit this script with code 1.
-if [[ $GOOGLE_OTEL_RESULT -eq 2 || $OTELOPSCOL_RESULT -eq 2 ]]; then
+# If any result is 2, which is what `make` exits with when
+# any check exits with code 1, exit this script with code 1.
+if [[ $GOOGLE_OTEL_RESULT -eq 2 || $OTELOPSCOL_RESULT -eq 2 || $PROTOS_RESULT -eq 2 ]]; then
     exit 1
 fi

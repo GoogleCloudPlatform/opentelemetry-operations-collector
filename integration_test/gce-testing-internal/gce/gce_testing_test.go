@@ -36,6 +36,7 @@ import (
 	"context"
 	"crypto/md5"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -46,6 +47,7 @@ import (
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/integration_test/gce-testing-internal/gce"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/integration_test/gce-testing-internal/logging"
+	"github.com/cenkalti/backoff/v4"
 )
 
 // recommendedMachineType returns a reasonable setting for a VM's machine type
@@ -521,6 +523,137 @@ func TestRunCommandEnvMerging(t *testing.T) {
 	expectedConfigLine := "CLOUDSDK_CONFIG=/tmp/mock-config-dir"
 	if !strings.Contains(output.Stdout, expectedConfigLine) {
 		t.Errorf("Expected environment to contain %q, but it was not found. Output:\n%s", expectedConfigLine, output.Stdout)
+	}
+}
+
+func TestIsSSHTransportError(t *testing.T) {
+	testCases := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{
+			name:     "nil error",
+			err:      nil,
+			expected: false,
+		},
+		{
+			name:     "generic command failure",
+			err:      errors.New("Command failed: cat /nonexistent\nexit status 1"),
+			expected: false,
+		},
+		{
+			name:     "ssh connection timed out",
+			err:      errors.New("Command failed: ssh test_user@10.128.2.24\nexit status 255\nstdout+stderr: ssh: connect to host 10.128.2.24 port 22: Connection timed out"),
+			expected: true,
+		},
+		{
+			name:     "ssh connection refused",
+			err:      errors.New("Command failed: ssh test_user@10.128.2.24\nexit status 255\nstdout+stderr: ssh: connect to host 10.128.2.24 port 22: Connection refused"),
+			expected: true,
+		},
+		{
+			name:     "ssh connection reset by peer",
+			err:      errors.New("Command failed: ssh test_user@10.128.2.24\nexit status 255\nstdout+stderr: kex_exchange_identification: read: Connection reset by peer"),
+			expected: true,
+		},
+		{
+			name:     "exit status 255 error",
+			err:      errors.New("Command failed: ssh\nexit status 255"),
+			expected: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := gce.IsSSHTransportErrorForTest(tc.err)
+			if actual != tc.expected {
+				t.Errorf("isSSHTransportError(%v) = %v; expected %v", tc.err, actual, tc.expected)
+			}
+		})
+	}
+}
+
+func TestHandleDeleteError(t *testing.T) {
+	testCases := []struct {
+		name        string
+		err         error
+		attempt     int
+		expectNil   bool
+		expectPerm  bool
+		expectRetry bool
+	}{
+		{
+			name:      "nil error returns nil",
+			err:       nil,
+			attempt:   1,
+			expectNil: true,
+		},
+		{
+			name:        "quota error is retriable",
+			err:         errors.New("Quota exceeded for QuotaMetric"),
+			attempt:     1,
+			expectRetry: true,
+		},
+		{
+			name:        "503 error is retriable",
+			err:         errors.New("Error 503: Service Unavailable"),
+			attempt:     1,
+			expectRetry: true,
+		},
+		{
+			name:      "signal: killed is treated as success (nil)",
+			err:       errors.New("Command failed: [gcloud compute instances delete ...]\nsignal: killed\nstdout+stderr: "),
+			attempt:   1,
+			expectNil: true,
+		},
+		{
+			name:      "deadline exceeded is treated as success (nil)",
+			err:       errors.New("Command failed: [gcloud compute instances delete ...]\ncontext deadline exceeded\nstdout+stderr: "),
+			attempt:   1,
+			expectNil: true,
+		},
+		{
+			name:       "not found on attempt 1 is permanent",
+			err:        errors.New("Error 404: The resource '...' was not found"),
+			attempt:    1,
+			expectPerm: true,
+		},
+		{
+			name:      "not found on attempt 2 is success",
+			err:       errors.New("Error 404: The resource '...' was not found"),
+			attempt:   2,
+			expectNil: true,
+		},
+		{
+			name:       "generic error is permanent",
+			err:        errors.New("Error 400: Bad Request"),
+			attempt:    1,
+			expectPerm: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			res := gce.HandleDeleteErrorForTest(tc.err, tc.attempt)
+			if tc.expectNil && res != nil {
+				t.Errorf("HandleDeleteErrorForTest(%v, %d) = %v, expected nil", tc.err, tc.attempt, res)
+			}
+			if tc.expectRetry {
+				if res == nil {
+					t.Errorf("HandleDeleteErrorForTest(%v, %d) = nil, expected retriable error", tc.err, tc.attempt)
+				} else if _, isPerm := res.(*backoff.PermanentError); isPerm {
+					t.Errorf("HandleDeleteErrorForTest(%v, %d) returned PermanentError, expected retriable error", tc.err, tc.attempt)
+				}
+			}
+			if tc.expectPerm {
+				if res == nil {
+					t.Errorf("HandleDeleteErrorForTest(%v, %d) = nil, expected PermanentError", tc.err, tc.attempt)
+				} else if _, isPerm := res.(*backoff.PermanentError); !isPerm {
+					t.Errorf("HandleDeleteErrorForTest(%v, %d) = %T (%v), expected PermanentError", tc.err, tc.attempt, res, res)
+				}
+			}
+		})
 	}
 }
 

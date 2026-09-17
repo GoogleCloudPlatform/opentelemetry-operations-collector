@@ -30,19 +30,21 @@ const (
 var ProjectSpecCachePath = filepath.Join(DistrogenMetadataDir, "spec.yaml")
 
 type ProjectGenerator struct {
-	Spec       *DistributionSpec
-	FileMode   fs.FileMode
-	CustomPath string
+	Spec                    *DistributionSpec
+	CustomPath              string
+	CurrentDistrogenVersion string
 
+	fileMode     fs.FileMode
 	cleanTools   bool
 	generatePath string
 }
 
 func NewProjectGenerator(spec *DistributionSpec) (*ProjectGenerator, error) {
 	pg := &ProjectGenerator{
-		Spec:     spec,
-		FileMode: DefaultProjectFileMode,
+		Spec:                    spec,
+		CurrentDistrogenVersion: Version,
 
+		fileMode:     DefaultProjectFileMode,
 		generatePath: ".",
 	}
 
@@ -62,22 +64,22 @@ func NewProjectGenerator(spec *DistributionSpec) (*ProjectGenerator, error) {
 }
 
 func (pg *ProjectGenerator) Generate() error {
-	makeTemplates, err := GetMakeTemplateSet(pg, pg.FileMode)
+	makeTemplates, err := GetMakeTemplateSet(pg, pg.fileMode)
 	if err != nil {
 		logger.Debug("failed to get make templates", "err", err)
 		return err
 	}
-	projectTemplates, err := GetProjectTemplateSet(pg, pg.FileMode)
+	projectTemplates, err := GetProjectTemplateSet(pg, pg.fileMode)
 	if err != nil {
 		logger.Debug("failed to get project templates", "err", err)
 		return err
 	}
-	distrogenTemplateSet, err := GetDistrogenTemplateSet(pg, pg.FileMode)
+	distrogenTemplateSet, err := GetDistrogenTemplateSet(pg, pg.fileMode)
 	if err != nil {
 		logger.Debug("failed to get component templates", "err", err)
 		return err
 	}
-	scriptTemplateSet, err := GetScriptTemplateSet(pg, pg.FileMode)
+	scriptTemplateSet, err := GetScriptTemplateSet(pg, pg.fileMode)
 	if err != nil {
 		logger.Debug("failed to get script templates", "err", err)
 		return err
@@ -98,13 +100,13 @@ func (pg *ProjectGenerator) Generate() error {
 	generateScriptsPath := filepath.Join(pg.generatePath, "scripts")
 
 	var dirErrors []error
-	if err := os.MkdirAll(generateMakePath, pg.FileMode); err != nil {
+	if err := os.MkdirAll(generateMakePath, pg.fileMode); err != nil {
 		dirErrors = append(dirErrors, err)
 	}
-	if err := os.MkdirAll(filepath.Join(pg.generatePath, "templates"), pg.FileMode); err != nil {
+	if err := os.MkdirAll(filepath.Join(pg.generatePath, "templates"), pg.fileMode); err != nil {
 		dirErrors = append(dirErrors, err)
 	}
-	if err := os.MkdirAll(generateScriptsPath, pg.FileMode); err != nil {
+	if err := os.MkdirAll(generateScriptsPath, pg.fileMode); err != nil {
 		dirErrors = append(dirErrors, err)
 	}
 	if _, err := os.Create(filepath.Join(pg.generatePath, "templates", EMPTY_FILE_NAME)); err != nil {

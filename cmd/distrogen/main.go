@@ -23,11 +23,12 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"runtime/debug"
 	"slices"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/cmd/distrogen/internal/command"
 	flag "github.com/spf13/pflag"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v4"
 )
 
 var (
@@ -36,7 +37,24 @@ var (
 	unexpectErrExitCode = 2
 
 	errNoSpecFlag = errors.New("missing --spec flag")
+
+	Version = ""
 )
+
+func init() {
+	// If the Version was not set via ldflags, set it using the
+	// build debug info which should have been included (default buildvcs=true flag).
+	// If no Version set in ldflags and buildvcs=false on the distrogen build,
+	// set to a fallback value.
+	if Version == "" {
+		info, ok := debug.ReadBuildInfo()
+		if ok {
+			Version = info.Main.Version
+		} else {
+			Version = "dev"
+		}
+	}
+}
 
 func main() {
 	runner := createCommandRunner()
@@ -94,7 +112,9 @@ func createCommandRunner() *command.Runner {
 	runner.Register("project", newProjectCommand())
 	runner.Register("component", newComponentCommand())
 	runner.Register("registry", newRegistryCommand())
-	runner.Register("update-spec", newUpdateSpecCommand())
+	runner.Register("version", newVersionCommand())
+	runner.Register("update_spec", newUpdateSpecCommand())
+	runner.Register("bump_hotfix", newBumpHotfixCommand())
 
 	return runner
 }
@@ -160,7 +180,9 @@ func (cmd *generateCommand) Run() error {
 	}
 	defer generator.Clean()
 
-	generator.CustomTemplatesDir = os.DirFS(*cmd.templates)
+	if *cmd.templates != "" {
+		generator.CustomTemplatesDir = os.DirFS(*cmd.templates)
+	}
 
 	if err := generator.Generate(); err != nil {
 		return err
@@ -443,4 +465,54 @@ func (cmd *updateSpecCommand) Run() error {
 	}
 
 	return UpdateDistributionSpecFile(*cmd.spec, *cmd.field, valBytes, isStdin)
+}
+
+type versionCommand struct {
+}
+
+func newVersionCommand() *versionCommand {
+	return &versionCommand{}
+}
+
+func (cmd *versionCommand) ParseArgs(args []string) error {
+	return nil
+}
+
+func (cmd *versionCommand) Usage() string {
+	return ""
+}
+
+func (cmd *versionCommand) Run() error {
+	fmt.Println(Version)
+	return nil
+}
+
+type bumpHotfixCommand struct {
+	flags flag.FlagSet
+
+	spec                 *string
+	prereleaseIdentifier *string
+}
+
+func newBumpHotfixCommand() *bumpHotfixCommand {
+	cmd := &bumpHotfixCommand{}
+	cmd.spec = setSpecFlag(&cmd.flags)
+	cmd.prereleaseIdentifier = cmd.flags.String("prerelease-identifier", "", "Override the prerelease identifier")
+	return cmd
+}
+
+func (cmd *bumpHotfixCommand) ParseArgs(args []string) error {
+	return cmd.flags.Parse(args)
+}
+
+func (cmd *bumpHotfixCommand) Usage() string {
+	return cmd.flags.FlagUsages()
+}
+
+func (cmd *bumpHotfixCommand) Run() error {
+	if *cmd.spec == "" {
+		return errNoSpecFlag
+	}
+
+	return BumpHotfix(*cmd.spec, *cmd.prereleaseIdentifier)
 }

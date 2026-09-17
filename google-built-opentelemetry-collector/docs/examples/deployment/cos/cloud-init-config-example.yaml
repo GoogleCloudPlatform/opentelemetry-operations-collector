@@ -55,6 +55,23 @@ write_files:
         detectors: [gcp]
         timeout: 10s
 
+      # The resource/gcp_project_id processor sets the GCP project ID attribute on telemetry data exported via OTLP.
+      #
+      # Docs:
+      # https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/resourceprocessor
+      resource/gcp_project_id:
+        attributes:
+        - action: insert
+          key: gcp.project_id
+          value: ${GOOGLE_CLOUD_PROJECT}
+
+      # The metricstarttime processor sets start time on delta metrics for OTLP export.
+      #
+      # Docs:
+      # https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/metricstarttimeprocessor
+      metricstarttime:
+        strategy: subtract_initial_point
+
       transform/collision:
         metric_statements:
         - context: datapoint
@@ -72,35 +89,41 @@ write_files:
           - set(attributes["exported_project_id"], attributes["project_id"])
           - delete_key(attributes, "project_id")
 
-      transform/set_project_id:
+      # For each Prometheus unknown-typed metric, which is a gauge, create a counter that is an exact copy of this metric.
+      # The GCP OTLP endpoint will add appropriate suffixes for the counter and gauge.
+      transform/prometheus_unknown_types:
         error_mode: ignore
-        trace_statements:
-        - set(resource.attributes["gcp.project_id"], resource.attributes["gcp.project.id"]) where resource.attributes["gcp.project.id"] != nil
-        - set(resource.attributes["gcp.project_id"], resource.attributes["cloud.account.id"]) where resource.attributes["gcp.project_id"] == nil and resource.attributes["cloud.account.id"] != nil
+        metric_statements:
+        - context: metric
+          statements:
+          - copy_metric(Concat([metric.name, "unknowncounter"], ":")) where metric.metadata["prometheus.type"] == "unknown" and not HasSuffix(metric.name, ":unknowncounter")
+          - convert_gauge_to_sum("cumulative", true) where HasSuffix(metric.name, ":unknowncounter")
+          - set(metric.name, Substring(metric.name, 0, Len(metric.name)-Len(":unknowncounter"))) where HasSuffix(metric.name, ":unknowncounter")
+
+      transform/otlp_grpc/preserve_instrumentation_source_version:
+        error_mode: ignore
+        log_statements:
+        - context: log
+          statements:
+          - set(attributes["instrumentation_source"], instrumentation_scope.name) where instrumentation_scope.name != ""
+          - set(attributes["instrumentation_version"], instrumentation_scope.version) where instrumentation_scope.version != ""
+
+      transform/otlp_grpc/copy_service_resource_labels:
+        error_mode: ignore
+        log_statements:
+        - context: log
+          statements:
+          - set(attributes["service.name"], resource.attributes["service.name"]) where resource.attributes["service.name"] != nil
+          - set(attributes["service.namespace"], resource.attributes["service.namespace"]) where resource.attributes["service.namespace"] != nil
+          - set(attributes["service.instance.id"], resource.attributes["service.instance.id"]) where resource.attributes["service.instance.id"] != nil
 
     exporters:
-      # The googlecloud exporter will export telemetry to different
-      # Google Cloud services:
-      # Logs -> Cloud Logging
-      # Metrics -> Cloud Monitoring
+      # The otlp_grpc exporter is used to send telemetry (logs, metrics, traces) to GCP Telemetry API using OTLP gRPC.
       #
       # Docs:
-      # https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/googlecloudexporter
-      googlecloud:
-        log:
-          default_log_name: opentelemetry-collector
-
-      # The googlemanagedprometheus exporter will send metrics to
-      # Google Managed Service for Prometheus.
-      #
-      # Docs:
-      # https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/googlemanagedprometheusexporter
-      googlemanagedprometheus:
-
-      # The otlp exporter is used to send traces to GCP Telemetry API using OTLP gRPC
-      otlp:
+      # https://github.com/open-telemetry/opentelemetry-collector/tree/main/exporter/otlpexporter
+      otlp_grpc:
         endpoint: telemetry.googleapis.com:443
-        compression: none
         balancer_name: pick_first
         auth:
           authenticator: googleclientauth
@@ -117,30 +140,36 @@ write_files:
           - otlp
           processors:
           - resourcedetection
+          - resource/gcp_project_id
+          - transform/otlp_grpc/preserve_instrumentation_source_version
+          - transform/otlp_grpc/copy_service_resource_labels
           - memory_limiter
           - batch
           exporters:
-          - googlecloud
+          - otlp_grpc
         metrics/otlp:
           receivers:
           - otlp
           processors:
           - resourcedetection
+          - resource/gcp_project_id
           - transform/collision
+          - transform/prometheus_unknown_types
+          - metricstarttime
           - memory_limiter
           - batch
           exporters:
-          - googlemanagedprometheus
+          - otlp_grpc
         traces:
           receivers:
           - otlp
           processors:
           - resourcedetection
+          - resource/gcp_project_id
           - memory_limiter
-          - transform/set_project_id
           - batch
           exporters:
-          - otlp
+          - otlp_grpc
       # Internal telemetry for the collector supports both push and pull-based telemetry data transmission.
       # Leveraging the pre-configured OTLP receiver eliminates the need for an additional port.
       #

@@ -72,6 +72,10 @@ The `update-spec` command updates a field in a distribution specification.
 | `--value` | | New value for the field |
 | `--stdin` | | Read JSON value from stdin instead of using `--value`. Ideal for complex types like appending structs to an array. |
 
+## `version`
+
+The `version` command prints the version of the `distrogen` tool. This command has no flags.
+
 ## Array Flags
 
 The usage of array flags is to provide one instance of the flag for each additional entry. For example, to provide multiple registries with the `--registry` flag, you provide them like so:

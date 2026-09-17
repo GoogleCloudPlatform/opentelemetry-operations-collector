@@ -111,7 +111,7 @@ func (fpm *filePolicyManager) Start() error {
 				if !ok {
 					return
 				}
-				if strings.EqualFold(filepath.Ext(event.Name), ".json") && (event.Has(fsnotify.Write) || event.Has(fsnotify.Create)) {
+				if strings.EqualFold(filepath.Ext(event.Name), ".json") && (event.Has(fsnotify.Write) || event.Has(fsnotify.Create) || event.Has(fsnotify.Remove) || event.Has(fsnotify.Rename)) {
 					_ = fpm.loadPolicySet()
 				}
 			case _, ok := <-watcher.Errors:

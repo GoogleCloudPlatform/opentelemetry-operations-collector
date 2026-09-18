@@ -40,7 +40,7 @@ func TestNewXDSPolicyManager_Validation(t *testing.T) {
 	// newManager builds a manager with valid defaults for everything the test
 	// is not exercising.
 	newManager := func(rawURI string) (Manager, error) {
-		return NewXDSPolicyManager(logger, mustParse(rawURI), "collector-abc", "fleet-1", nil)
+		return NewXDSPolicyManager(logger, mustParse(rawURI), "collector-abc")
 	}
 
 	t.Run("empty URI host and path", func(t *testing.T) {
@@ -49,51 +49,59 @@ func TestNewXDSPolicyManager_Validation(t *testing.T) {
 	})
 
 	t.Run("nil URI", func(t *testing.T) {
-		_, err := NewXDSPolicyManager(logger, nil, "collector-abc", "fleet-1", nil)
+		_, err := NewXDSPolicyManager(logger, nil, "collector-abc")
 		require.ErrorIs(t, err, ErrXDSMissingServerAddr)
 	})
 
 	t.Run("missing collector ID", func(t *testing.T) {
-		_, err := NewXDSPolicyManager(logger, mustParse("xds://127.0.0.1:8080"), "", "fleet-1", nil)
+		_, err := NewXDSPolicyManager(logger, mustParse("xds://127.0.0.1:8080"), "")
 		require.ErrorIs(t, err, ErrXDSMissingCollectorID)
 	})
 
 	t.Run("missing fleet ID", func(t *testing.T) {
 		t.Setenv("FLEET_ID", "")
-		_, err := NewXDSPolicyManager(logger, mustParse("xds://127.0.0.1:8080"), "collector-abc", "", nil)
+		_, err := NewXDSPolicyManager(logger, mustParse("xds://127.0.0.1:8080"), "collector-abc")
 		require.ErrorIs(t, err, ErrXDSMissingFleetID)
 	})
 
 	t.Run("fleet ID from environment", func(t *testing.T) {
 		t.Setenv("FLEET_ID", "fleet-from-env")
-		mgr, err := NewXDSPolicyManager(logger, mustParse("xds://127.0.0.1:8080"), "collector-abc", "", nil)
+		mgr, err := NewXDSPolicyManager(logger, mustParse("xds://127.0.0.1:8080"), "collector-abc")
 		require.NoError(t, err)
 		assert.Equal(t, "fleet-from-env", mgr.(*xdsPolicyManager).fleetID)
 	})
 
-	t.Run("fleet query parameter wins over argument", func(t *testing.T) {
-		mgr, err := newManager("xds://127.0.0.1:8080?gcp.fleet_id=fleet-from-uri")
+	t.Run("fleet query parameter wins over environment", func(t *testing.T) {
+		t.Setenv("FLEET_ID", "fleet-from-env")
+		mgr, err := newManager("xds://127.0.0.1:8080?fleet=fleet-from-uri")
 		require.NoError(t, err)
 		assert.Equal(t, "fleet-from-uri", mgr.(*xdsPolicyManager).fleetID)
 	})
 
 	t.Run("invalid insecure flag", func(t *testing.T) {
-		_, err := newManager("xds://127.0.0.1:8080?insecure=maybe")
+		_, err := newManager("xds://127.0.0.1:8080?fleet=fleet-1&insecure=maybe")
 		require.ErrorIs(t, err, ErrXDSInvalidInsecureFlag)
 	})
 
 	t.Run("valid URI", func(t *testing.T) {
-		uri := mustParse("xds://127.0.0.1:8080?gcp.fleet_id=fleet-1&insecure=true")
-		mgr, err := NewXDSPolicyManager(logger, uri, "collector-abc", "fleet-1", nil)
+		uri := mustParse("xds://127.0.0.1:8080?fleet=fleet-1&insecure=true")
+		mgr, err := NewXDSPolicyManager(logger, uri, "collector-abc")
 		require.NoError(t, err)
 		assert.Equal(t, uri, mgr.URI())
 
 		m := mgr.(*xdsPolicyManager)
 		assert.Equal(t, "127.0.0.1:8080", m.serverAddr)
 		assert.Equal(t, "collector-abc", m.collectorID)
-		assert.Equal(t, defaultXdsTypeURL, m.typeURL)
+		assert.Equal(t, "fleet-1", m.fleetID)
 		assert.True(t, m.insecure)
+
+		// Asserted explicitly because every stream test overrides this field to
+		// keep itself fast. If the constructor stopped setting it the zero value
+		// would make Start's wait expire immediately -- silently disabling the
+		// initial sync -- and no other test would notice.
+		assert.Equal(t, defaultInitialSyncTimeout, m.initialSyncTimeout)
 	})
+
 }
 
 func TestExtractRawPolicies_TelemetryCollector(t *testing.T) {

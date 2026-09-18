@@ -142,10 +142,15 @@ func (p *provider) Retrieve(ctx context.Context, uri string, watcher confmap.Wat
 			return nil, fmt.Errorf("%q: %w", uri, err)
 		}
 	case innerSchemeXDS:
-		p.manager, err = googlepolicy.NewXDSPolicyManager(p.logger, target, CollectorID, resolveFleetID(ctx, target), watcher)
+		// The manager derives everything else it needs -- control plane address
+		// and fleet ID -- from the URI itself.
+		p.manager, err = googlepolicy.NewXDSPolicyManager(p.logger, target, CollectorID)
 		if err != nil {
 			return nil, fmt.Errorf("%q: %w", uri, err)
 		}
+		// Start does not block on the control plane being reachable; an
+		// unreachable one is retried in the background so the collector can
+		// still come up on its built-in policies.
 		if err := p.manager.Start(); err != nil {
 			return nil, fmt.Errorf("%q: %w", uri, err)
 		}
@@ -157,89 +162,34 @@ func (p *provider) Retrieve(ctx context.Context, uri string, watcher confmap.Wat
 	return p.evaluateActivePolicySet(ctx)
 }
 
-// resolveFleetID determines the fleet this collector belongs to.
-//
-// The xDS URI's fleet parameter wins, then an explicit value on the context,
-// then the ambient environment. That order matters: NewXDSPolicyManager applies
-// the same URI-first precedence when deriving the xDS node's cluster, so any
-// other order here would let the fleet the collector *subscribes* as drift from
-// the fleet its policies are *evaluated* for -- the collector would receive one
-// fleet's policies while labelling its telemetry with another's. The URI is
-// parsed by googlepolicy.FleetIDFromURI so both agree on the parameter name.
-//
-// uri may be nil, for callers that have no manager URI to consult.
-func resolveFleetID(ctx context.Context, uri *url.URL) string {
-	if v := googlepolicy.FleetIDFromURI(uri); v != "" {
-		return v
-	}
-	if ctx != nil {
-		if v, ok := ctx.Value("FLEET_ID").(string); ok && v != "" {
-			return v
-		}
-	}
-	return os.Getenv("FLEET_ID")
-}
-
-// projectQueryParam is the xDS URI parameter carrying the GCP project. It is
-// optional: when absent, selfmetrics emits no gcp.project_id and the built-in
-// resource detection falls back to the project the collector is running in.
-const projectQueryParam = "project"
-
-// resolveProjectID determines the project the collector's own telemetry is
-// attributed to, using the same URI-first precedence as resolveFleetID so the
-// two identifiers behave consistently.
-//
-// uri may be nil.
-func resolveProjectID(ctx context.Context, uri *url.URL) string {
-	if uri != nil {
-		if v := uri.Query().Get(projectQueryParam); v != "" {
-			return v
-		}
-	}
-	if ctx != nil {
-		if v, ok := ctx.Value("PROJECT_ID").(string); ok && v != "" {
-			return v
-		}
-	}
-	return ""
-}
-
-// managerURI returns the URI the active manager was built from, or nil.
-func (p *provider) managerURI() *url.URL {
-	if p.manager == nil {
-		return nil
-	}
-	return p.manager.URI()
-}
-
 func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrieved, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 
-	// Resolve the three identifiers that policies may need and put all of them
-	// on the context. The context is the single channel: a policy reads what it
-	// needs with ctx.Value and does not care how the provider worked it out.
-	//
-	// The collector ID is generated once in GenerateCollectorID (UUIDv5 over
-	// COLLECTOR_NAME or the hostname); the fleet and project IDs come from the
-	// xDS URI, as in
-	//
-	//	googlecontrolplane:xds://telemetrydirector.googleapis.com?gcp.fleet_id=FLEET&project=PROJECT
 	collectorID := CollectorID
 	if v, ok := ctx.Value("COLLECTOR_ID").(string); ok && v != "" {
 		collectorID = v
 	}
-	if collectorID != "" {
-		ctx = context.WithValue(ctx, "COLLECTOR_ID", collectorID)
-	}
 
-	fleetID := resolveFleetID(ctx, p.managerURI())
+	fleetID := os.Getenv("FLEET_ID")
+	if v, ok := ctx.Value("FLEET_ID").(string); ok && v != "" {
+		fleetID = v
+	}
+	if fleetID == "" && p.manager != nil && p.manager.URI() != nil {
+		fleetID = p.manager.URI().Query().Get("fleet")
+	}
 	if fleetID != "" {
 		ctx = context.WithValue(ctx, "FLEET_ID", fleetID)
 	}
 
-	projectID := resolveProjectID(ctx, p.managerURI())
+	var projectID string
+	if v, ok := ctx.Value("PROJECT_ID").(string); ok && v != "" {
+		projectID = v
+	}
+	if projectID == "" && p.manager != nil && p.manager.URI() != nil {
+		projectID = p.manager.URI().Query().Get("project")
+	}
 	if projectID != "" {
 		ctx = context.WithValue(ctx, "PROJECT_ID", projectID)
 	}
@@ -316,16 +266,26 @@ func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrie
 		sourcePolicies = append(sourcePolicies, BuiltInSelfMetricsPolicy)
 	}
 
-	// Evaluate each source against the same context. Every identifier a policy
-	// might need (collector, fleet and project ID) was placed on the context
-	// above, so no policy type needs special handling here.
+	// Evaluate each source. Some policy types may be exceptional. The main exception is selfmetrics.
+	// If a policy with type selfmetrics is found, call the ContextSetup method on it before evaluating.
+	// Make the exceptional policy handling extendable for future policies that may need exceptions
+	// (switch case on policy type probably).
 	for _, sp := range sourcePolicies {
 		srcPolicy, ok := sp.(googlepolicy.SourcePolicy)
 		if !ok {
 			return nil, fmt.Errorf("source policy %q does not implement SourcePolicy", sp.PolicyName())
 		}
 
-		sourceConf, err := srcPolicy.Evaluate(ctx)
+		var sourceConf *confmap.Conf
+		var err error
+
+		switch p := srcPolicy.(type) {
+		case *selfmetrics.SelfMetricsPolicy:
+			evalCtx := p.ContextSetup(ctx, collectorID, fleetID)
+			sourceConf, err = p.Evaluate(evalCtx)
+		default:
+			sourceConf, err = srcPolicy.Evaluate(ctx)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("failed to evaluate source policy %q: %w", sp.PolicyName(), err)
 		}

@@ -31,7 +31,6 @@ import (
 
 	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	discoveryv3 "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
-	"go.opentelemetry.io/collector/confmap"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -42,6 +41,8 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
+	grpcstatus "google.golang.org/grpc/status"
+
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/anypb"
 
@@ -49,16 +50,26 @@ import (
 )
 
 const (
-	defaultXdsTypeURL = "type.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector"
+	// xdsPolicyTypeURL is the one resource type this manager subscribes to. It
+	// is fixed rather than configurable: the control plane only ever serves
+	// TelemetryCollector resources, and the decoding path below is written
+	// against that schema, so a different type could be subscribed to but not
+	// usefully interpreted.
+	xdsPolicyTypeURL = "type.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector"
 
-	// FleetIDQueryParam is the canonical query parameter carrying the fleet ID:
+	// FleetIDQueryParam is the query parameter carrying the fleet ID:
 	//
-	//	googlecontrolplane:xds://telemetrydirector.googleapis.com?gcp.fleet_id=FLEET&project=PROJECT
-	FleetIDQueryParam = "gcp.fleet_id"
+	//	googlecontrolplane:xds://telemetrydirector.googleapis.com?fleet=FLEET&project=PROJECT
+	//
+	// This deliberately matches the parameter the googlecontrolplane provider
+	// reads when it resolves the fleet for the self metrics policy. If the two
+	// ever diverge, a single URI would subscribe to one fleet's policies while
+	// attributing the collector's own telemetry to another -- or, because a
+	// missing fleet ID is fatal for self metrics, fail to start at all.
+	FleetIDQueryParam = "fleet"
 
 	// fleetIDEnvVar is the environment variable consulted for the fleet ID when
-	// the URI carries no fleet query parameter and no fleet ID was supplied in
-	// the settings.
+	// the URI carries no fleet query parameter.
 	fleetIDEnvVar = "FLEET_ID"
 
 	// defaultRegion is the locality region reported to the control plane.
@@ -86,6 +97,21 @@ const (
 	// EnforcementPolicy{MinTime: 30s} so these values are honored.
 	keepaliveTime    = 60 * time.Second
 	keepaliveTimeout = 20 * time.Second
+
+	// defaultInitialSyncTimeout bounds how long Start blocks waiting for the
+	// control plane's first response.
+	//
+	// Start blocks at all because the confmap provider calls it and then
+	// immediately builds the collector's pipelines from the active policy set.
+	// Nothing rebuilds that config later, so a policy set that arrives after
+	// Retrieve has returned cannot influence the pipelines until the next
+	// restart. Waiting briefly here is what lets the first revision take effect.
+	//
+	// It is bounded, and expiry is not an error, because the alternative -- a
+	// collector that refuses to start because its control plane is down -- is
+	// far worse than one that starts on its built-in policies and picks up the
+	// real ones moments later.
+	defaultInitialSyncTimeout = 5 * time.Second
 )
 
 var (
@@ -124,23 +150,23 @@ type xdsPolicyManager struct {
 	serverAddr  string
 	collectorID string
 	fleetID     string
-	typeURL     string
 	insecure    bool
 
-	// watcher is the confmap watcher used to trigger a configuration reload.
-	//
-	// It is deliberately never invoked today: the only policies delivered over
-	// xDS are transformation (filter) policies, which googlepolicyprocessor picks
-	// up straight from the active policy set via its own watcher channel, with no
-	// collector config regeneration required. It must start being called once
-	// source or destination policies are delivered over xDS, since those do
-	// require the config to be rebuilt.
-	watcher confmap.WatcherFunc
+	// NOTE: there is deliberately no confmap reload hook here. The only policies
+	// delivered over xDS today are transformation (filter) policies, which
+	// googlepolicyprocessor picks up straight from the active policy set via its
+	// own watcher channel, with no collector config regeneration required. Once
+	// source or destination policies are delivered over xDS, this manager will
+	// need a confmap.WatcherFunc to rebuild the config.
 
 	// Backoff bounds and the sleep function, overridable in tests.
 	backoffInitial time.Duration
 	backoffMax     time.Duration
 	timeAfter      func(time.Duration) <-chan time.Time
+
+	// initialSyncTimeout bounds Start's wait for the first exchange with the
+	// control plane. Overridable in tests.
+	initialSyncTimeout time.Duration
 
 	// extraDialOpts is appended to the dial options. Tests use it to reach an
 	// in-memory listener; it is empty in production.
@@ -150,6 +176,13 @@ type xdsPolicyManager struct {
 	// I/O, or waiting on wg).
 	mu     sync.Mutex
 	cancel context.CancelFunc
+
+	// ready is closed once the stream loop has either completed one valid
+	// exchange with the control plane or stopped trying. Start waits on it.
+	// readyClosed guards against closing it twice; a sync.Once is avoided here
+	// because the pair is recreated on every Start and a Once cannot be copied.
+	ready       chan struct{}
+	readyClosed bool
 
 	// wg tracks the stream goroutine so Stop can wait for it to exit.
 	wg sync.WaitGroup
@@ -161,22 +194,46 @@ type xdsPolicyManager struct {
 
 // NewXDSPolicyManager creates a manager for the given `xds://` URI.
 //
+// # URI form
+//
+// In full, as written in the collector's config:
+//
+//	googlecontrolplane:xds://HOST[:PORT][?fleet=FLEET][&project=PROJECT][&insecure=BOOL]
+//
+// for example:
+//
+//	googlecontrolplane:xds://telemetrydirector.googleapis.com:443?fleet=my-fleet&project=my-project
+//	googlecontrolplane:xds://127.0.0.1:18000?fleet=my-fleet&insecure=true
+//
+// The `googlecontrolplane:` prefix selects the confmap provider and is stripped
+// before the remainder reaches this constructor, so the uri argument here starts
+// at `xds://`. The opaque spelling `xds:HOST:PORT` is accepted as well.
+//
+// # Components
+//
+//	HOST[:PORT] - required. Address of the xDS control plane.
+//	fleet       - required, unless $FLEET_ID is set; the URI wins over the
+//	              environment. Used as this node's xDS cluster, and read back off
+//	              URI() by the provider to attribute the collector's own telemetry.
+//	project     - optional, and NOT read here. The provider reads it off URI() to
+//	              stamp gcp.project_id on self metrics; when absent, resource
+//	              detection falls back to the project the collector runs in.
+//	insecure    - optional bool, default false. False connects with TLS 1.2+ and
+//	              an ADC-derived ID token per RPC; true connects in plaintext with
+//	              no credentials, which is intended for local control planes.
+//
+// Unrecognized query parameters are ignored. The subscribed resource type is
+// deliberately not configurable -- see xdsPolicyTypeURL.
+//
+// # Arguments
+//
 // collectorID identifies this collector to the control plane as the xDS node ID.
 // It is passed in rather than read from the environment because the confmap
 // provider derives it, and that package already depends on this one.
 //
-// fleetID is consulted only when the URI carries no `fleet` query parameter; if
-// both are empty, $FLEET_ID is used.
-//
-// Recognized URI query parameters:
-//
-//	fleet    - fleet ID, takes precedence over the fleetID argument and $FLEET_ID
-//	type_url - resource type URL to subscribe to
-//	insecure - if true, connect in plaintext without credentials
-//
 // All configuration is validated here, so a manager that constructs
 // successfully can always Start.
-func NewXDSPolicyManager(logger *zap.Logger, uri *url.URL, collectorID, fleetID string, watcher confmap.WatcherFunc) (Manager, error) {
+func NewXDSPolicyManager(logger *zap.Logger, uri *url.URL, collectorID string) (Manager, error) {
 	if uri == nil {
 		return nil, ErrXDSMissingServerAddr
 	}
@@ -191,20 +248,13 @@ func NewXDSPolicyManager(logger *zap.Logger, uri *url.URL, collectorID, fleetID 
 
 	query := uri.Query()
 
-	// Explicit URI configuration wins over the value resolved by the caller,
-	// which in turn wins over the ambient environment.
-	if uriFleet := FleetIDFromURI(uri); uriFleet != "" {
-		fleetID = uriFleet
-	} else if fleetID == "" {
+	// Explicit URI configuration wins over the ambient environment.
+	fleetID := FleetIDFromURI(uri)
+	if fleetID == "" {
 		fleetID = os.Getenv(fleetIDEnvVar)
 	}
 	if fleetID == "" {
 		return nil, ErrXDSMissingFleetID
-	}
-
-	typeURL := query.Get("type_url")
-	if typeURL == "" {
-		typeURL = defaultXdsTypeURL
 	}
 
 	var isInsecure bool
@@ -221,17 +271,16 @@ func NewXDSPolicyManager(logger *zap.Logger, uri *url.URL, collectorID, fleetID 
 	}
 
 	return &xdsPolicyManager{
-		logger:         logger,
-		uri:            uri,
-		serverAddr:     serverAddr,
-		collectorID:    collectorID,
-		fleetID:        fleetID,
-		typeURL:        typeURL,
-		insecure:       isInsecure,
-		watcher:        watcher,
-		backoffInitial: defaultBackoffInitial,
-		backoffMax:     defaultBackoffMax,
-		timeAfter:      time.After,
+		logger:             logger,
+		uri:                uri,
+		serverAddr:         serverAddr,
+		collectorID:        collectorID,
+		fleetID:            fleetID,
+		insecure:           isInsecure,
+		backoffInitial:     defaultBackoffInitial,
+		backoffMax:         defaultBackoffMax,
+		timeAfter:          time.After,
+		initialSyncTimeout: defaultInitialSyncTimeout,
 	}, nil
 }
 
@@ -256,9 +305,9 @@ func serverAddrFromURI(uri *url.URL) string {
 // FleetIDFromURI returns the fleet ID carried by an xDS URI, or "" if it carries
 // none.
 //
-// This is exported so that the confmap provider resolves the fleet exactly the
-// way NewXDSPolicyManager does. When the two disagreed, the collector would
-// subscribe to one fleet's policies while attributing its telemetry to another.
+// It reads the same `fleet` parameter that the googlecontrolplane provider
+// reads when resolving the fleet for the self metrics policy, so one URI drives
+// both the xDS subscription and the collector's own telemetry attribution.
 func FleetIDFromURI(uri *url.URL) string {
 	if uri == nil {
 		return ""
@@ -266,10 +315,21 @@ func FleetIDFromURI(uri *url.URL) string {
 	return uri.Query().Get(FleetIDQueryParam)
 }
 
-// Start launches the background stream loop. It does not wait for the initial
-// connection: the control plane being unreachable at startup is treated exactly
-// like a mid-stream disconnect, and is retried with backoff rather than
-// preventing the collector from starting on its built-in policies.
+// Start launches the background stream loop and waits, briefly, for the control
+// plane to answer once.
+//
+// The wait exists because of how the confmap provider uses this manager: it
+// calls Start and then immediately evaluates the active policy set into the
+// collector's pipelines. Nothing rebuilds that config afterwards, so a revision
+// that lands after Start has returned cannot affect the pipelines until the
+// process restarts. Blocking here is what gives the first revision a chance to
+// be included.
+//
+// The wait is bounded by initialSyncTimeout and never turns into an error.
+// Whatever happens -- the control plane is down, slow, or rejects us -- Start
+// returns nil and the collector comes up on its built-in policies while the
+// stream keeps retrying in the background. The only error it can return is
+// ErrXDSAlreadyStarted.
 func (m *xdsPolicyManager) Start() error {
 	m.mu.Lock()
 	if m.cancel != nil {
@@ -279,6 +339,11 @@ func (m *xdsPolicyManager) Start() error {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
+	// Recreated per Start so the manager can be restarted after Stop.
+	m.ready = make(chan struct{})
+	m.readyClosed = false
+	ready := m.ready
+	timeout := m.initialSyncTimeout
 	m.wg.Add(1)
 	m.mu.Unlock()
 
@@ -286,11 +351,35 @@ func (m *xdsPolicyManager) Start() error {
 		zap.String("server", m.serverAddr),
 		zap.String("fleet", m.fleetID),
 		zap.String("collector_id", m.collectorID),
-		zap.String("type_url", m.typeURL),
+		zap.String("type_url", xdsPolicyTypeURL),
 	)
 
 	go m.run(ctx)
+
+	select {
+	case <-ready:
+		// Either the control plane answered, or the loop gave up; in both cases
+		// there is nothing further to wait for.
+	case <-m.timeAfter(timeout):
+		m.logger.Warn("Timed out waiting for the initial xDS policy set; starting on built-in policies",
+			zap.String("server", m.serverAddr),
+			zap.Duration("timeout", timeout),
+		)
+	}
+
 	return nil
+}
+
+// markReady releases anything blocked in Start. It is safe to call repeatedly
+// and from any goroutine.
+func (m *xdsPolicyManager) markReady() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.ready != nil && !m.readyClosed {
+		m.readyClosed = true
+		close(m.ready)
+	}
 }
 
 // Stop terminates the background stream loop and waits for it to exit. It is
@@ -328,6 +417,10 @@ func (m *xdsPolicyManager) PolicyEvaluationResult(string, error) {}
 // with exponential backoff whenever it drops.
 func (m *xdsPolicyManager) run(ctx context.Context) {
 	defer m.wg.Done()
+	// Once this loop is gone there will never be an initial sync, so anything
+	// still blocked in Start must be released regardless of why we exited:
+	// Stop cancelled us, or the control plane rejected our credentials.
+	defer m.markReady()
 
 	node := &corev3.Node{
 		Id:      m.collectorID,
@@ -381,6 +474,20 @@ func (m *xdsPolicyManager) run(ctx context.Context) {
 			backoff = 0
 		}
 
+		// Being told we are not allowed to subscribe is a configuration or
+		// provisioning problem, not a transient one: retrying cannot fix it and
+		// would only spam the control plane. Give up on the stream for good and
+		// leave the collector running on whatever policies it already has.
+		if isTerminalAuthError(err) {
+			m.logger.Error("xDS control plane rejected this collector's credentials; giving up on remote policies and continuing on built-in policies",
+				zap.String("server", m.serverAddr),
+				zap.String("fleet", m.fleetID),
+				zap.String("collector_id", m.collectorID),
+				zap.Error(err),
+			)
+			return
+		}
+
 		m.logger.Warn("xDS stream closed, reconnecting",
 			zap.String("server", m.serverAddr),
 			zap.String("last_applied_version", m.LastAppliedVersion()),
@@ -391,6 +498,28 @@ func (m *xdsPolicyManager) run(ctx context.Context) {
 		if backoff, ok = m.waitBeforeRetry(ctx, backoff); !ok {
 			return
 		}
+	}
+}
+
+// isTerminalAuthError reports whether the control plane refused this collector
+// outright. Unauthenticated and PermissionDenied describe the caller, not the
+// call, so the same request will keep failing until the collector's identity or
+// the control plane's authorization changes -- neither of which a retry can do.
+//
+// Note that this deliberately covers only rejections that came back from the
+// server. Failing to obtain credentials locally (see ResolveTokenSource) stays
+// retryable, because that is usually a metadata server blip rather than a
+// verdict on this collector.
+func isTerminalAuthError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	switch grpcstatus.Code(err) {
+	case codes.Unauthenticated, codes.PermissionDenied:
+		return true
+	default:
+		return false
 	}
 }
 
@@ -409,7 +538,7 @@ func (m *xdsPolicyManager) streamPolicies(ctx context.Context, conn *grpc.Client
 	// can skip re-sending an unchanged revision.
 	if err := stream.Send(&discoveryv3.DiscoveryRequest{
 		Node:        node,
-		TypeUrl:     m.typeURL,
+		TypeUrl:     xdsPolicyTypeURL,
 		VersionInfo: m.LastAppliedVersion(),
 	}); err != nil {
 		return false, fmt.Errorf("failed to send DiscoveryRequest to %s: %w", m.serverAddr, err)
@@ -418,7 +547,7 @@ func (m *xdsPolicyManager) streamPolicies(ctx context.Context, conn *grpc.Client
 	m.logger.Info("Connected to xDS server and sent DiscoveryRequest",
 		zap.String("server", m.serverAddr),
 		zap.String("fleet", m.fleetID),
-		zap.String("type_url", m.typeURL),
+		zap.String("type_url", xdsPolicyTypeURL),
 	)
 
 	progressed := false
@@ -444,10 +573,10 @@ func (m *xdsPolicyManager) handleResponse(stream discoveryv3.AggregatedDiscovery
 	//
 	// An empty type URL is treated as our own, since a server that only serves
 	// one resource type may omit it.
-	if respTypeURL := resp.GetTypeUrl(); respTypeURL != "" && respTypeURL != m.typeURL {
+	if respTypeURL := resp.GetTypeUrl(); respTypeURL != "" && respTypeURL != xdsPolicyTypeURL {
 		m.logger.Debug("Ignoring xDS response for an unrelated resource type",
 			zap.String("type_url", respTypeURL),
-			zap.String("subscribed_type_url", m.typeURL),
+			zap.String("subscribed_type_url", xdsPolicyTypeURL),
 		)
 		return
 	}
@@ -465,6 +594,9 @@ func (m *xdsPolicyManager) handleResponse(stream discoveryv3.AggregatedDiscovery
 		if err := m.sendACK(stream, node, version, resp.GetNonce()); err != nil {
 			m.logger.Error("Failed to send xDS ACK", zap.String("version", version), zap.Error(err))
 		}
+		// The revision the control plane wants is the one already in effect, so
+		// as far as Start is concerned the collector is in sync.
+		m.markReady()
 		return
 	}
 
@@ -508,6 +640,11 @@ func (m *xdsPolicyManager) handleResponse(stream discoveryv3.AggregatedDiscovery
 			zap.Error(err),
 		)
 	}
+
+	// The policy set is live, so Start can stop waiting and let the provider
+	// evaluate it. Only reached once the revision was accepted; a NACKed
+	// revision leaves Start waiting for a good one (or for its timeout).
+	m.markReady()
 }
 
 // LastAppliedVersion returns the version_info of the most recent policy set that
@@ -555,7 +692,7 @@ func (m *xdsPolicyManager) sendACK(stream discoveryv3.AggregatedDiscoveryService
 
 	return stream.Send(&discoveryv3.DiscoveryRequest{
 		Node:          node,
-		TypeUrl:       m.typeURL,
+		TypeUrl:       xdsPolicyTypeURL,
 		VersionInfo:   versionInfo,
 		ResponseNonce: nonce,
 	})
@@ -566,7 +703,7 @@ func (m *xdsPolicyManager) sendACK(stream discoveryv3.AggregatedDiscoveryService
 func (m *xdsPolicyManager) sendNACK(stream discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesClient, node *corev3.Node, nonce string, cause error) {
 	err := stream.Send(&discoveryv3.DiscoveryRequest{
 		Node:          node,
-		TypeUrl:       m.typeURL,
+		TypeUrl:       xdsPolicyTypeURL,
 		VersionInfo:   m.LastAppliedVersion(),
 		ResponseNonce: nonce,
 		ErrorDetail: &status.Status{

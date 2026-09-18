@@ -259,13 +259,6 @@ func (p *SelfMetricsPolicy) createPipeline(signal pipeline.Signal, preExportProc
 	return cm, nil
 }
 
-// ContextSetup returns ctx with the collector and fleet identifiers this
-// policy reads in Evaluate.
-//
-// Callers that already populate those values -- the googlecontrolplane
-// provider derives them from the xDS URI and puts them on the context before
-// evaluating any policy -- do not need to call this; it exists for callers
-// that hold the identifiers directly.
 func (p *SelfMetricsPolicy) ContextSetup(ctx context.Context, collectorID, fleetID string) context.Context {
 	ctx = context.WithValue(ctx, contextKeyCollectorID, collectorID)
 	ctx = context.WithValue(ctx, contextKeyFleetID, fleetID)

@@ -17,8 +17,10 @@ package opsagentconfprovider
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
 
 	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/apps"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/confgenerator"
@@ -46,35 +48,51 @@ func (p *provider) Retrieve(ctx context.Context, uri string, watcher confmap.Wat
 	if p.logger != nil {
 		p.logger.Info("Retrieving config via opsagentconfprovider", zap.String("uri", uri))
 	}
-	u, err := url.Parse(uri)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse uri %q: %w", uri, err)
-	}
 
-	configPath := u.Path
+	configPath := strings.TrimPrefix(uri, "opsagentconf:")
 	if configPath == "" {
-		configPath = u.Opaque
-	}
-	if configPath == "" {
-		configPath = "/etc/google-cloud-ops-agent/config.yaml"
+		if runtime.GOOS == "windows" {
+			configPath = filepath.Join("C:", "Program Files/Google/Cloud Operations/Ops Agent/config/config.yaml")
+		} else {
+			configPath = "/etc/google-cloud-ops-agent/config.yaml"
+		}
 	}
 
 	outDir := os.Getenv("RUNTIME_DIRECTORY")
 	if outDir == "" {
-		outDir = "/run/google-cloud-ops-agent"
+		if runtime.GOOS == "windows" {
+			outDir = filepath.Join(os.Getenv("PROGRAMDATA"), "Google/Cloud Operations/Ops Agent/generated_configs/otel")
+		} else {
+			outDir = "/run/google-cloud-ops-agent"
+		}
 	}
 	stateDir := os.Getenv("STATE_DIRECTORY")
 	if stateDir == "" {
-		stateDir = "/var/lib/google-cloud-ops-agent"
+		if runtime.GOOS == "windows" {
+			stateDir = filepath.Join(os.Getenv("PROGRAMDATA"), "Google/Cloud Operations/Ops Agent/run")
+		} else {
+			stateDir = "/var/lib/google-cloud-ops-agent"
+		}
 	}
 	logsDir := os.Getenv("LOG_DIRECTORY")
 	if logsDir == "" {
-		logsDir = "/var/log/google-cloud-ops-agent"
+		logsDir = os.Getenv("LOGS_DIRECTORY")
+	}
+	if logsDir == "" {
+		if runtime.GOOS == "windows" {
+			logsDir = filepath.Join(os.Getenv("PROGRAMDATA"), "Google/Cloud Operations/Ops Agent/log")
+		} else {
+			logsDir = "/var/log/google-cloud-ops-agent"
+		}
 	}
 
 	uc, err := confgenerator.MergeConfFiles(ctx, configPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to merge config files: %w", err)
+	}
+
+	if err := os.MkdirAll(outDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create runtime directory %q: %w", outDir, err)
 	}
 
 	err = self_metrics.GenerateOpsAgentSelfMetricsOTLPJSON(ctx, configPath, outDir)

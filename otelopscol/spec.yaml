@@ -90,6 +90,9 @@ replaces:
     - from: github.com/buger/jsonparser
       to: github.com/buger/jsonparser v1.1.2
       reason: Force update buger/jsonparser to v1.1.2 to fix vulnerability
+    - from: github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector
+      to: github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector v0.62.0
+      reason: Update collector exporter to add `gcp.operation` support.
 collector_cgo: true
 component_module_base: ""
 distrogen_version: ""

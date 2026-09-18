@@ -1,0 +1,38 @@
+- resourceMetrics:
+    - resource:
+        attributes:
+            - key: service.name
+              value:
+                stringValue: payment-gateway
+      scopeMetrics:
+        - metrics:
+            - description: Total RPC server calls
+              name: rpc.server.calls
+              sum:
+                aggregationTemporality: 2
+                dataPoints:
+                    - asInt: "100"
+                      attributes:
+                        - key: env
+                          value:
+                            stringValue: ephemeral
+                        - key: service.tier
+                          value:
+                            stringValue: critical
+                      startTimeUnixNano: "1700000000000000000"
+                      timeUnixNano: "1700000010000000000"
+                    - asInt: "1200"
+                      attributes:
+                        - key: env
+                          value:
+                            stringValue: prod
+                        - key: service.tier
+                          value:
+                            stringValue: standard
+                      startTimeUnixNano: "1700000000000000000"
+                      timeUnixNano: "1700000010000000000"
+                isMonotonic: true
+              unit: '{call}'
+          scope:
+            name: rpc.metrics
+            version: 1.0.0

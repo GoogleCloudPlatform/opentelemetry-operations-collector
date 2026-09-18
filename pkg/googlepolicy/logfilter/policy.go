@@ -43,11 +43,18 @@ func init() {
 // Driver implements googlepolicy.PolicyDriver for loading LogFilterPolicy configurations.
 type Driver struct{}
 
-var _ googlepolicy.PolicyDriver = (*Driver)(nil)
+var _ googlepolicy.ProtoPolicyDriver = (*Driver)(nil)
 
 // PolicyName returns the registered policy type handled by this driver.
 func (d *Driver) PolicyName() string {
 	return PolicyType
+}
+
+// PolicyProto returns the proto message this driver loads from. The registry
+// uses its descriptor to route policies that arrive as a bare proto with no
+// explicit policy type in the body.
+func (d *Driver) PolicyProto() proto.Message {
+	return &policyv1alpha1.LogFilterPolicy{}
 }
 
 // LoadPolicy unmarshals a raw policy configuration map into a compiled *Policy.

@@ -22,6 +22,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
+
+	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
 )
 
 func resetState(t *testing.T) {
@@ -31,6 +35,9 @@ func resetState(t *testing.T) {
 	activePolicySet = nil
 	previousPolicySets = []*PolicySet{}
 	watcherChannels = []chan struct{}{}
+	// Restored here as well as by the tests that shrink it, so a test that
+	// forgets cannot quietly change the outcome of everything that runs after.
+	maxPreviousPolicySets = defaultMaxPreviousPolicySets
 }
 
 func TestActivePolicySet_InitialState(t *testing.T) {
@@ -102,6 +109,43 @@ func TestSetActivePolicySet_TransitionsAndRollback(t *testing.T) {
 	RollbackActivePolicySet()
 	assert.Nil(t, ActivePolicySet())
 	assert.Empty(t, PreviousPolicySets())
+}
+
+func TestSetActivePolicySet_HistoryIsBounded(t *testing.T) {
+	resetState(t)
+
+	maxPreviousPolicySets = 3
+	defer func() { maxPreviousPolicySets = defaultMaxPreviousPolicySets }()
+
+	// Far more revisions than the cap, as a long-lived collector would see.
+	const revisions = 20
+	for i := 0; i < revisions; i++ {
+		SetActivePolicySet(&PolicySet{
+			RevisionID: fmt.Sprintf("rev-%d", i),
+			ReceivedAt: time.Now(),
+		})
+	}
+
+	prev := PreviousPolicySets()
+	require.Len(t, prev, maxPreviousPolicySets)
+
+	// The newest are kept and the oldest dropped, not the other way around.
+	require.NotNil(t, ActivePolicySet())
+	assert.Equal(t, "rev-19", ActivePolicySet().RevisionID)
+	assert.Equal(t, "rev-18", prev[0].RevisionID)
+	assert.Equal(t, "rev-17", prev[1].RevisionID)
+	assert.Equal(t, "rev-16", prev[2].RevisionID)
+
+	// The dropped sets must be unreachable, not just past the end of the
+	// slice. A trim written as a plain re-slice would pass every assertion
+	// above while leaving all twenty revisions alive in the backing array,
+	// which is precisely the leak the bound exists to close.
+	policySetMu.RLock()
+	defer policySetMu.RUnlock()
+	backing := previousPolicySets[:cap(previousPolicySets)]
+	for i := len(previousPolicySets); i < len(backing); i++ {
+		assert.Nilf(t, backing[i], "backing array slot %d still references a dropped policy set", i)
+	}
 }
 
 func TestPolicySet_PreviousPolicySets_Isolation(t *testing.T) {
@@ -335,4 +379,78 @@ func TestStripTypeKeyWithoutTypeKey(t *testing.T) {
 	stripped := stripTypeKey(raw)
 
 	assert.Equal(t, raw, stripped)
+}
+
+// fakeProtoDriver claims whatever proto it is handed, standing in for a real
+// driver without dragging one of the filter packages into this test binary.
+type fakeProtoDriver struct {
+	msg proto.Message
+}
+
+func (d *fakeProtoDriver) LoadPolicy(map[string]any) (Policy, error) { return nil, nil }
+func (d *fakeProtoDriver) PolicyProto() proto.Message                { return d.msg }
+
+// unregisterForTest undoes a registration, since the registry is process-global
+// and has no removal API of its own.
+func unregisterForTest(t *testing.T, policyType string, protoName protoreflect.FullName) {
+	t.Helper()
+	t.Cleanup(func() {
+		delete(policyRegistry, policyType)
+		if protoName != "" {
+			delete(policyProtoRegistry, protoName)
+		}
+	})
+}
+
+func TestRegisterPolicyDriver_IndexesDeclaredProto(t *testing.T) {
+	protoName := (&policyv1alpha1.LogFilterPolicy{}).ProtoReflect().Descriptor().FullName()
+	unregisterForTest(t, "proto_indexed", protoName)
+
+	require.NoError(t, RegisterPolicyDriver("proto_indexed", &fakeProtoDriver{msg: &policyv1alpha1.LogFilterPolicy{}}))
+
+	got, ok := PolicyTypeForProto(protoName)
+	require.True(t, ok)
+	assert.Equal(t, "proto_indexed", got)
+}
+
+// TestRegisterPolicyDriver_DriverWithoutProtoIsNotIndexed covers the built-in
+// source and destination policies, which are plain Go structs with no wire
+// proto. They must stay loadable by name while remaining unreachable over xDS.
+func TestRegisterPolicyDriver_DriverWithoutProtoIsNotIndexed(t *testing.T) {
+	unregisterForTest(t, "no_proto", "")
+
+	require.NoError(t, RegisterPolicyDriver("no_proto", &GenericDriver[*mockTransformationPolicy]{}))
+
+	assert.Contains(t, policyRegistry, "no_proto")
+	for _, policyType := range policyProtoRegistry {
+		assert.NotEqual(t, "no_proto", policyType)
+	}
+}
+
+// TestRegisterPolicyDriver_RejectsDuplicateProto guards the routing table
+// against ambiguity: two drivers claiming one proto would make the destination
+// of an incoming policy depend on package initialisation order.
+func TestRegisterPolicyDriver_RejectsDuplicateProto(t *testing.T) {
+	protoName := (&policyv1alpha1.TraceFilterPolicy{}).ProtoReflect().Descriptor().FullName()
+	unregisterForTest(t, "first_claim", protoName)
+	unregisterForTest(t, "second_claim", "")
+
+	require.NoError(t, RegisterPolicyDriver("first_claim", &fakeProtoDriver{msg: &policyv1alpha1.TraceFilterPolicy{}}))
+
+	err := RegisterPolicyDriver("second_claim", &fakeProtoDriver{msg: &policyv1alpha1.TraceFilterPolicy{}})
+	require.ErrorIs(t, err, ErrPolicyProtoAlreadyRegistered)
+	assert.Contains(t, err.Error(), "first_claim")
+
+	// The rejected driver is not left half-registered.
+	assert.NotContains(t, policyRegistry, "second_claim")
+	got, _ := PolicyTypeForProto(protoName)
+	assert.Equal(t, "first_claim", got)
+}
+
+func TestRegisterPolicyDriver_RejectsNilProto(t *testing.T) {
+	unregisterForTest(t, "nil_proto", "")
+
+	err := RegisterPolicyDriver("nil_proto", &fakeProtoDriver{msg: nil})
+	require.ErrorIs(t, err, ErrPolicyProtoInvalid)
+	assert.NotContains(t, policyRegistry, "nil_proto")
 }

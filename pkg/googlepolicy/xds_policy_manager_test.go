@@ -73,20 +73,28 @@ func TestNewXDSPolicyManager_Validation(t *testing.T) {
 		assert.Equal(t, "fleet-from-env", mgr.(*xdsPolicyManager).fleetID)
 	})
 
-	t.Run("fleet query parameter wins over environment", func(t *testing.T) {
+	t.Run("environment wins over fleet query parameter", func(t *testing.T) {
+		// The provider resolves the fleet environment-first, and the two must
+		// agree: this value becomes the xDS node cluster selecting which
+		// fleet's policies arrive, while the provider's becomes the
+		// gcp.fleet_id attribute on the collector's own telemetry.
 		t.Setenv("FLEET_ID", "fleet-from-env")
-		mgr, err := newManager("xds://127.0.0.1:8080?fleet=fleet-from-uri")
+		mgr, err := newManager("xds://127.0.0.1:8080?gcp.fleet_id=fleet-from-uri")
 		require.NoError(t, err)
-		assert.Equal(t, "fleet-from-uri", mgr.(*xdsPolicyManager).fleetID)
+		assert.Equal(t, "fleet-from-env", mgr.(*xdsPolicyManager).fleetID)
 	})
 
 	t.Run("invalid insecure flag", func(t *testing.T) {
-		_, err := newManager("xds://127.0.0.1:8080?fleet=fleet-1&insecure=maybe")
+		_, err := newManager("xds://127.0.0.1:8080?gcp.fleet_id=fleet-1&insecure=maybe")
 		require.ErrorIs(t, err, ErrXDSInvalidInsecureFlag)
 	})
 
 	t.Run("valid URI", func(t *testing.T) {
-		uri := mustParse("xds://127.0.0.1:8080?fleet=fleet-1&insecure=true")
+		// Explicit, because the environment now outranks the URI and an
+		// ambient FLEET_ID would otherwise decide this test's outcome.
+		t.Setenv("FLEET_ID", "")
+
+		uri := mustParse("xds://127.0.0.1:8080?gcp.fleet_id=fleet-1&insecure=true")
 		mgr, err := NewXDSPolicyManager(logger, uri, "collector-abc")
 		require.NoError(t, err)
 		assert.Equal(t, uri, mgr.URI())

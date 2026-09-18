@@ -60,17 +60,21 @@ const (
 
 	// FleetIDQueryParam is the query parameter carrying the fleet ID:
 	//
-	//	googlecontrolplane:xds://telemetrydirector.googleapis.com?fleet=FLEET&project=PROJECT
+	//	googlecontrolplane:xds://telemetrydirector.googleapis.com?gcp.fleet_id=FLEET&project=PROJECT
 	//
-	// This deliberately matches the parameter the googlecontrolplane provider
-	// reads when it resolves the fleet for the self metrics policy. If the two
-	// ever diverge, a single URI would subscribe to one fleet's policies while
-	// attributing the collector's own telemetry to another -- or, because a
-	// missing fleet ID is fatal for self metrics, fail to start at all.
-	FleetIDQueryParam = "fleet"
+	// It is spelled the same as the gcp.fleet_id resource attribute the fleet
+	// ends up on, so the URI, the xDS node cluster and the collector's own
+	// telemetry all name it identically.
+	//
+	// Both this manager and the googlecontrolplane provider read the fleet
+	// through this one constant. If the two ever diverge, a single URI would
+	// subscribe to one fleet's policies while attributing the collector's own
+	// telemetry to another -- or, because a missing fleet ID is fatal for self
+	// metrics, fail to start at all.
+	FleetIDQueryParam = "gcp.fleet_id"
 
-	// fleetIDEnvVar is the environment variable consulted for the fleet ID when
-	// the URI carries no fleet query parameter.
+	// fleetIDEnvVar is the environment variable consulted for the fleet ID. It
+	// is consulted before the URI, matching the provider's resolution order.
 	fleetIDEnvVar = "FLEET_ID"
 
 	// defaultRegion is the locality region reported to the control plane.
@@ -119,7 +123,7 @@ var (
 	// Configuration errors, returned by NewXDSPolicyManager.
 	ErrXDSMissingServerAddr   = errors.New("xDS server address cannot be empty in URI")
 	ErrXDSMissingCollectorID  = errors.New("a collector ID is required for the xDS policy manager")
-	ErrXDSMissingFleetID      = errors.New("a fleet ID is required for the xDS policy manager: set the 'fleet' URI query parameter or the FLEET_ID environment variable")
+	ErrXDSMissingFleetID      = errors.New("a fleet ID is required for the xDS policy manager: set the FLEET_ID environment variable or the 'gcp.fleet_id' URI query parameter")
 	ErrXDSInvalidInsecureFlag = errors.New("invalid 'insecure' URI query parameter, expected a boolean")
 
 	// Lifecycle errors.
@@ -199,12 +203,12 @@ type xdsPolicyManager struct {
 //
 // In full, as written in the collector's config:
 //
-//	googlecontrolplane:xds://HOST[:PORT][?fleet=FLEET][&project=PROJECT][&insecure=BOOL]
+//	googlecontrolplane:xds://HOST[:PORT][?gcp.fleet_id=FLEET][&project=PROJECT][&insecure=BOOL]
 //
 // for example:
 //
-//	googlecontrolplane:xds://telemetrydirector.googleapis.com:443?fleet=my-fleet&project=my-project
-//	googlecontrolplane:xds://127.0.0.1:18000?fleet=my-fleet&insecure=true
+//	googlecontrolplane:xds://telemetrydirector.googleapis.com:443?gcp.fleet_id=my-fleet&project=my-project
+//	googlecontrolplane:xds://127.0.0.1:18000?gcp.fleet_id=my-fleet&insecure=true
 //
 // The `googlecontrolplane:` prefix selects the confmap provider and is stripped
 // before the remainder reaches this constructor, so the uri argument here starts
@@ -212,16 +216,17 @@ type xdsPolicyManager struct {
 //
 // # Components
 //
-//	HOST[:PORT] - required. Address of the xDS control plane.
-//	fleet       - required, unless $FLEET_ID is set; the URI wins over the
-//	              environment. Used as this node's xDS cluster, and read back off
-//	              URI() by the provider to attribute the collector's own telemetry.
-//	project     - optional, and NOT read here. The provider reads it off URI() to
-//	              stamp gcp.project_id on self metrics; when absent, resource
-//	              detection falls back to the project the collector runs in.
-//	insecure    - optional bool, default false. False connects with TLS 1.2+ and
-//	              an ADC-derived ID token per RPC; true connects in plaintext with
-//	              no credentials, which is intended for local control planes.
+//	HOST[:PORT]  - required. Address of the xDS control plane.
+//	gcp.fleet_id - required, unless $FLEET_ID is set; the environment wins over
+//	               the URI, matching how the provider resolves it. Used as this
+//	               node's xDS cluster, and read back off URI() by the provider
+//	               to attribute the collector's own telemetry.
+//	project      - optional, and NOT read here. The provider reads it off URI() to
+//	               stamp gcp.project_id on self metrics; when absent, resource
+//	               detection falls back to the project the collector runs in.
+//	insecure     - optional bool, default false. False connects with TLS 1.2+ and
+//	               an ADC-derived ID token per RPC; true connects in plaintext with
+//	               no credentials, which is intended for local control planes.
 //
 // Unrecognized query parameters are ignored. The subscribed resource type is
 // deliberately not configurable -- see xdsPolicyTypeURL.
@@ -249,10 +254,15 @@ func NewXDSPolicyManager(logger *zap.Logger, uri *url.URL, collectorID string) (
 
 	query := uri.Query()
 
-	// Explicit URI configuration wins over the ambient environment.
-	fleetID := FleetIDFromURI(uri)
+	// Environment first, then the URI. This is the order the googlecontrolplane
+	// provider resolves the fleet in, and the two must agree: the manager's
+	// answer becomes the xDS node cluster that selects which fleet's policies
+	// arrive, while the provider's becomes the gcp.fleet_id attribute on this
+	// collector's own telemetry. Resolving them differently would let a
+	// collector enforce one fleet's policies while reporting itself as another.
+	fleetID := os.Getenv(fleetIDEnvVar)
 	if fleetID == "" {
-		fleetID = os.Getenv(fleetIDEnvVar)
+		fleetID = FleetIDFromURI(uri)
 	}
 	if fleetID == "" {
 		return nil, ErrXDSMissingFleetID

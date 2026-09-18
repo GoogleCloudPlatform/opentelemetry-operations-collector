@@ -128,7 +128,7 @@ func startFakeADSServer(t *testing.T, srv *fakeADSServer) grpc.DialOption {
 func newTestManager(t *testing.T, dialOpt grpc.DialOption) *xdsPolicyManager {
 	t.Helper()
 
-	u, err := url.Parse("xds://127.0.0.1:8080?insecure=true&fleet=fleet-1")
+	u, err := url.Parse("xds://127.0.0.1:8080?insecure=true&gcp.fleet_id=fleet-1")
 	require.NoError(t, err)
 
 	mgr, err := NewXDSPolicyManager(zaptest.NewLogger(t), u, "collector-abc")

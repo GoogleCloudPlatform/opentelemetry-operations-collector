@@ -172,12 +172,16 @@ func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrie
 		collectorID = v
 	}
 
+	// Environment, then context, then the URI. The manager resolves the fleet
+	// in the same order off the same query parameter, and must arrive at the
+	// same answer: its value selects which fleet's policies this collector
+	// receives, while this one attributes the collector's own telemetry.
 	fleetID := os.Getenv("FLEET_ID")
 	if v, ok := ctx.Value("FLEET_ID").(string); ok && v != "" {
 		fleetID = v
 	}
-	if fleetID == "" && p.manager != nil && p.manager.URI() != nil {
-		fleetID = p.manager.URI().Query().Get("fleet")
+	if fleetID == "" && p.manager != nil {
+		fleetID = googlepolicy.FleetIDFromURI(p.manager.URI())
 	}
 	if fleetID != "" {
 		ctx = context.WithValue(ctx, "FLEET_ID", fleetID)

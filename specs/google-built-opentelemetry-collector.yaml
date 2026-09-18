@@ -65,6 +65,17 @@ components:
     - windowseventlog
     - iis
     - windowsperfcounters
+    - sqlserver
+    - activedirectoryds
+    - apache
+    - couchdb
+    - elasticsearch
+    - memcached
+    - mongodb
+    - mysql
+    - nginx
+    - postgresql
+    - rabbitmq
 
   processors:
     - batch

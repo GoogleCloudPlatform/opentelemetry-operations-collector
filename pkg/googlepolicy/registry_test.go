@@ -22,6 +22,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
+
+	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
 )
 
 func resetState(t *testing.T) {
@@ -335,4 +339,78 @@ func TestStripTypeKeyWithoutTypeKey(t *testing.T) {
 	stripped := stripTypeKey(raw)
 
 	assert.Equal(t, raw, stripped)
+}
+
+// fakeProtoDriver claims whatever proto it is handed, standing in for a real
+// driver without dragging one of the filter packages into this test binary.
+type fakeProtoDriver struct {
+	msg proto.Message
+}
+
+func (d *fakeProtoDriver) LoadPolicy(map[string]any) (Policy, error) { return nil, nil }
+func (d *fakeProtoDriver) PolicyProto() proto.Message                { return d.msg }
+
+// unregisterForTest undoes a registration, since the registry is process-global
+// and has no removal API of its own.
+func unregisterForTest(t *testing.T, policyType string, protoName protoreflect.FullName) {
+	t.Helper()
+	t.Cleanup(func() {
+		delete(policyRegistry, policyType)
+		if protoName != "" {
+			delete(policyProtoRegistry, protoName)
+		}
+	})
+}
+
+func TestRegisterPolicyDriver_IndexesDeclaredProto(t *testing.T) {
+	protoName := (&policyv1alpha1.LogFilterPolicy{}).ProtoReflect().Descriptor().FullName()
+	unregisterForTest(t, "proto_indexed", protoName)
+
+	require.NoError(t, RegisterPolicyDriver("proto_indexed", &fakeProtoDriver{msg: &policyv1alpha1.LogFilterPolicy{}}))
+
+	got, ok := PolicyTypeForProto(protoName)
+	require.True(t, ok)
+	assert.Equal(t, "proto_indexed", got)
+}
+
+// TestRegisterPolicyDriver_DriverWithoutProtoIsNotIndexed covers the built-in
+// source and destination policies, which are plain Go structs with no wire
+// proto. They must stay loadable by name while remaining unreachable over xDS.
+func TestRegisterPolicyDriver_DriverWithoutProtoIsNotIndexed(t *testing.T) {
+	unregisterForTest(t, "no_proto", "")
+
+	require.NoError(t, RegisterPolicyDriver("no_proto", &GenericDriver[*mockTransformationPolicy]{}))
+
+	assert.Contains(t, policyRegistry, "no_proto")
+	for _, policyType := range policyProtoRegistry {
+		assert.NotEqual(t, "no_proto", policyType)
+	}
+}
+
+// TestRegisterPolicyDriver_RejectsDuplicateProto guards the routing table
+// against ambiguity: two drivers claiming one proto would make the destination
+// of an incoming policy depend on package initialisation order.
+func TestRegisterPolicyDriver_RejectsDuplicateProto(t *testing.T) {
+	protoName := (&policyv1alpha1.TraceFilterPolicy{}).ProtoReflect().Descriptor().FullName()
+	unregisterForTest(t, "first_claim", protoName)
+	unregisterForTest(t, "second_claim", "")
+
+	require.NoError(t, RegisterPolicyDriver("first_claim", &fakeProtoDriver{msg: &policyv1alpha1.TraceFilterPolicy{}}))
+
+	err := RegisterPolicyDriver("second_claim", &fakeProtoDriver{msg: &policyv1alpha1.TraceFilterPolicy{}})
+	require.ErrorIs(t, err, ErrPolicyProtoAlreadyRegistered)
+	assert.Contains(t, err.Error(), "first_claim")
+
+	// The rejected driver is not left half-registered.
+	assert.NotContains(t, policyRegistry, "second_claim")
+	got, _ := PolicyTypeForProto(protoName)
+	assert.Equal(t, "first_claim", got)
+}
+
+func TestRegisterPolicyDriver_RejectsNilProto(t *testing.T) {
+	unregisterForTest(t, "nil_proto", "")
+
+	err := RegisterPolicyDriver("nil_proto", &fakeProtoDriver{msg: nil})
+	require.ErrorIs(t, err, ErrPolicyProtoInvalid)
+	assert.NotContains(t, policyRegistry, "nil_proto")
 }

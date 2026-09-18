@@ -1698,3 +1698,16 @@ func TestDriverLoadPolicyIgnoresUnknownFields(t *testing.T) {
 	lr, sl, rl := newTestLogBundle()
 	assert.Equal(t, googlepolicy.EvalDrop, logPol.EvaluateLog(logContext(lr, sl, rl)))
 }
+
+// TestDriverRoutesItsProto pins the link between the proto a control plane puts
+// on the wire and the policy type this driver is registered under. It is the
+// only reason a LogFilterPolicy delivered over xDS reaches this package:
+// the wire message carries no policy type of its own, so the registry has to
+// recognise it by descriptor.
+func TestDriverRoutesItsProto(t *testing.T) {
+	protoName := (&policyv1alpha1.LogFilterPolicy{}).ProtoReflect().Descriptor().FullName()
+
+	got, ok := googlepolicy.PolicyTypeForProto(protoName)
+	require.True(t, ok, "no policy type is registered for %s, so log filter policies cannot be routed", protoName)
+	assert.Equal(t, PolicyType, got)
+}

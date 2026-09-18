@@ -19,17 +19,28 @@ import (
 	"fmt"
 	"slices"
 	"sync"
+
+	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 var (
-	ErrPolicyTypeAlreadyRegistered = errors.New("policy type already registered")
-	ErrPolicyTypeNotFound          = errors.New("no driver found for policy type")
-	ErrPolicyFailedToLoad          = errors.New("failed to load policy")
-	ErrPolicyFailedValidation      = errors.New("policy validation failed")
+	ErrPolicyTypeAlreadyRegistered  = errors.New("policy type already registered")
+	ErrPolicyProtoAlreadyRegistered = errors.New("policy proto already registered")
+	ErrPolicyProtoInvalid           = errors.New("policy driver returned an invalid proto")
+	ErrPolicyTypeNotFound           = errors.New("no driver found for policy type")
+	ErrPolicyFailedToLoad           = errors.New("failed to load policy")
+	ErrPolicyFailedValidation       = errors.New("policy validation failed")
 )
 
 // policyRegistry is a central map that tracks all supported policies registered by any components.
 var policyRegistry = map[string]PolicyDriver{}
+
+// policyProtoRegistry routes a policy proto's fully qualified message name to
+// the policy type registered for it. Only drivers implementing
+// ProtoPolicyDriver appear here, which is deliberate: it is the set of policies
+// that can be delivered as a bare proto rather than as an authored config with
+// an explicit "type" field.
+var policyProtoRegistry = map[protoreflect.FullName]string{}
 
 var (
 	policySetMu        sync.RWMutex
@@ -43,12 +54,42 @@ type WatcherChannel <-chan struct{}
 
 // RegisterPolicyDriver is how a component registers support for a new policy by providing
 // its own PolicyDriver and Policy.
+//
+// If the driver also implements ProtoPolicyDriver, its proto message name is
+// registered as a route to policyType, so a policy arriving as a bare proto can
+// be matched to this driver.
 func RegisterPolicyDriver(policyType string, driver PolicyDriver) error {
 	if _, ok := policyRegistry[policyType]; ok {
 		return fmt.Errorf("%w: %s", ErrPolicyTypeAlreadyRegistered, policyType)
 	}
+
+	// Resolved before anything is written, so a rejected proto claim does not
+	// leave the driver half-registered.
+	protoDriver, hasProto := driver.(ProtoPolicyDriver)
+	var protoName protoreflect.FullName
+	if hasProto {
+		msg := protoDriver.PolicyProto()
+		if msg == nil {
+			return fmt.Errorf("%w: %s returned a nil proto", ErrPolicyProtoInvalid, policyType)
+		}
+		protoName = msg.ProtoReflect().Descriptor().FullName()
+		if existing, dup := policyProtoRegistry[protoName]; dup {
+			return fmt.Errorf("%w: %s is already routed to policy type %s", ErrPolicyProtoAlreadyRegistered, protoName, existing)
+		}
+	}
+
 	policyRegistry[policyType] = driver
+	if hasProto {
+		policyProtoRegistry[protoName] = policyType
+	}
 	return nil
+}
+
+// PolicyTypeForProto returns the policy type registered for a policy proto's
+// fully qualified message name, and whether one was found.
+func PolicyTypeForProto(name protoreflect.FullName) (string, bool) {
+	policyType, ok := policyProtoRegistry[name]
+	return policyType, ok
 }
 
 // LoadPolicy will attempt to load a policy given a policy type and raw policy config.

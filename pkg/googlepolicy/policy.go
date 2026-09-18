@@ -28,6 +28,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/pdata/ptrace"
+	"google.golang.org/protobuf/proto"
 )
 
 var (
@@ -170,6 +171,28 @@ type TransformationPolicy interface {
 // object of a known policy type.
 type PolicyDriver interface {
 	LoadPolicy(raw map[string]any) (Policy, error)
+}
+
+// ProtoPolicyDriver is an optional extension of PolicyDriver for policies that
+// have a wire proto. Implementing it registers the proto's message name as a
+// route to the driver's policy type.
+//
+// This is what lets a policy delivered over xDS reach a driver at all. Such a
+// policy arrives as a bare google.protobuf.Any whose body carries no "type"
+// field -- LogFilterPolicy and friends have no such field -- so the message
+// identity in the type URL is the only routing information available. Every
+// other delivery path has the policy type written out by whoever authored the
+// config, which is the assumption MakePolicySet documents.
+//
+// Drivers whose policy has no proto representation, such as the built-in
+// source and destination policies that are plain Go structs, simply do not
+// implement this and remain unreachable over xDS.
+type ProtoPolicyDriver interface {
+	PolicyDriver
+
+	// PolicyProto returns an empty instance of the policy's proto message.
+	// Only its descriptor is read; the value is never populated or retained.
+	PolicyProto() proto.Message
 }
 
 // PolicySet is the translation of a set of policies received from a given source

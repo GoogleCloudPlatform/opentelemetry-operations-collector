@@ -22,9 +22,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/structpb"
 
+	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
 	xdsv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/xds/v1alpha1"
 )
 
@@ -135,33 +137,6 @@ func TestExtractRawPolicies_TelemetryCollector(t *testing.T) {
 	assert.Equal(t, "mock_transformation", rawPolicies[0]["type"])
 }
 
-func TestExtractRawPolicies_BackfillsType(t *testing.T) {
-	// A policy body that does not state its own type: it has to be recovered
-	// from the type URL of the enclosing Any.
-	payload, err := structpb.NewStruct(map[string]any{"some_field": "some_value"})
-	require.NoError(t, err)
-
-	payloadAny, err := anypb.New(payload)
-	require.NoError(t, err)
-
-	collectorAny, err := anypb.New(&xdsv1alpha1.TelemetryCollector{
-		Policies: []*anypb.Any{payloadAny},
-	})
-	require.NoError(t, err)
-
-	rawPolicies, err := extractRawPolicies(&discoveryv3.DiscoveryResponse{
-		VersionInfo: "v1",
-		Resources:   []*anypb.Any{collectorAny},
-	})
-	require.NoError(t, err)
-	require.Len(t, rawPolicies, 1)
-	// structpb.Struct -> "type.googleapis.com/google.protobuf.Struct" -> "Struct".
-	assert.Equal(t, "Struct", rawPolicies[0]["type"])
-	assert.Equal(t, "some_value", rawPolicies[0]["some_field"])
-	// Nothing supplies a name any more when the body does not carry one.
-	assert.NotContains(t, rawPolicies[0], "name")
-}
-
 func TestExtractRawPolicies_Errors(t *testing.T) {
 	validPayload, err := structpb.NewStruct(map[string]any{
 		"name": "good-policy",
@@ -264,22 +239,82 @@ func TestExtractRawPolicies_Errors(t *testing.T) {
 	}
 }
 
-func TestPolicyTypeFromTypeURL(t *testing.T) {
-	tests := []struct {
-		typeURL string
-		want    string
-	}{
-		{"type.googleapis.com/google.telemetry.xds.v1alpha1.LogFilter", "LogFilter"},
-		{"type.googleapis.com/LogFilter", "LogFilter"},
-		{"LogFilter", "LogFilter"},
-		{"", ""},
-	}
+// protoDriver claims a proto the way the real filter drivers do. Those drivers
+// cannot be imported here, since they import this package, so the routing path
+// is exercised against their protos with a stand-in driver.
+type protoDriver struct {
+	dummyPolicyDriver
+	msg proto.Message
+}
 
-	for _, tc := range tests {
-		t.Run(tc.typeURL, func(t *testing.T) {
-			assert.Equal(t, tc.want, policyTypeFromTypeURL(tc.typeURL))
-		})
-	}
+func (d *protoDriver) PolicyProto() proto.Message { return d.msg }
+
+// registerProtoDriverForTest registers a driver claiming msg, and unregisters
+// it afterwards since the registry is process-global.
+func registerProtoDriverForTest(t *testing.T, policyType string, msg proto.Message) {
+	t.Helper()
+	require.NoError(t, RegisterPolicyDriver(policyType, &protoDriver{msg: msg}))
+	t.Cleanup(func() {
+		delete(policyRegistry, policyType)
+		delete(policyProtoRegistry, msg.ProtoReflect().Descriptor().FullName())
+	})
+}
+
+// TestExtractRawPolicies_RoutesBareProtoToItsDriver covers a policy shaped the
+// way a control plane actually sends one: a bare LogFilterPolicy Any whose body
+// carries no "type" field, because the proto has no such field. The policy type
+// has to come from the driver that claimed the proto.
+//
+// Deriving it from the type URL instead produced "LogFilterPolicy", which no
+// driver is registered under, so every policy of this shape was rejected and
+// took its whole revision down with it. The existing tests missed this because
+// they all send either a mock policy type or a structpb.Struct carrying an
+// explicit "type" key, neither of which reaches this branch.
+func TestExtractRawPolicies_RoutesBareProtoToItsDriver(t *testing.T) {
+	const policyType = "log_filter"
+	registerProtoDriverForTest(t, policyType, &policyv1alpha1.LogFilterPolicy{})
+
+	policyAny, err := anypb.New(&policyv1alpha1.LogFilterPolicy{Id: "retain-errors"})
+	require.NoError(t, err)
+	collectorAny, err := anypb.New(&xdsv1alpha1.TelemetryCollector{
+		Policies: []*anypb.Any{policyAny},
+	})
+	require.NoError(t, err)
+
+	rawPolicies, err := extractRawPolicies(&discoveryv3.DiscoveryResponse{
+		VersionInfo: "v1",
+		Resources:   []*anypb.Any{collectorAny},
+	})
+	require.NoError(t, err)
+	require.Len(t, rawPolicies, 1)
+
+	assert.Equal(t, policyType, rawPolicies[0]["type"])
+	// The body survives the round trip alongside the backfilled type.
+	assert.Equal(t, "retain-errors", rawPolicies[0]["id"])
+	// Nothing synthesizes a name: the TypedExtensionConfig wrapper that used
+	// to carry one is gone, and drivers read their own identifier from the body.
+	assert.NotContains(t, rawPolicies[0], "name")
+}
+
+// TestExtractRawPolicies_UnclaimedProtoIsRejectedByName checks that a policy no
+// driver claims is reported by proto name, which is the thing an operator needs
+// in order to tell a typo apart from a collector built without that policy.
+func TestExtractRawPolicies_UnclaimedProtoIsRejectedByName(t *testing.T) {
+	// Nothing registers MetricFilterPolicy in this test binary.
+	policyAny, err := anypb.New(&policyv1alpha1.MetricFilterPolicy{})
+	require.NoError(t, err)
+	collectorAny, err := anypb.New(&xdsv1alpha1.TelemetryCollector{
+		Policies: []*anypb.Any{policyAny},
+	})
+	require.NoError(t, err)
+
+	rawPolicies, err := extractRawPolicies(&discoveryv3.DiscoveryResponse{
+		VersionInfo: "v1",
+		Resources:   []*anypb.Any{collectorAny},
+	})
+	require.ErrorIs(t, err, ErrXDSResourceNotPolicy)
+	assert.Contains(t, err.Error(), "google.telemetry.policy.v1alpha1.MetricFilterPolicy")
+	assert.Empty(t, rawPolicies)
 }
 
 func TestTokenAuth_RequireTransportSecurity(t *testing.T) {

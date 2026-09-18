@@ -1524,3 +1524,16 @@ func TestUnsetSpanStringFieldsReportAbsent(t *testing.T) {
 	assert.False(t, exists)
 	assert.Equal(t, "", val)
 }
+
+// TestDriverRoutesItsProto pins the link between the proto a control plane puts
+// on the wire and the policy type this driver is registered under. It is the
+// only reason a TraceFilterPolicy delivered over xDS reaches this package:
+// the wire message carries no policy type of its own, so the registry has to
+// recognise it by descriptor.
+func TestDriverRoutesItsProto(t *testing.T) {
+	protoName := (&policyv1alpha1.TraceFilterPolicy{}).ProtoReflect().Descriptor().FullName()
+
+	got, ok := googlepolicy.PolicyTypeForProto(protoName)
+	require.True(t, ok, "no policy type is registered for %s, so trace filter policies cannot be routed", protoName)
+	assert.Equal(t, PolicyType, got)
+}

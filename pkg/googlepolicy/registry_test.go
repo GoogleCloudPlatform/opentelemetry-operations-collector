@@ -35,6 +35,9 @@ func resetState(t *testing.T) {
 	activePolicySet = nil
 	previousPolicySets = []*PolicySet{}
 	watcherChannels = []chan struct{}{}
+	// Restored here as well as by the tests that shrink it, so a test that
+	// forgets cannot quietly change the outcome of everything that runs after.
+	maxPreviousPolicySets = defaultMaxPreviousPolicySets
 }
 
 func TestActivePolicySet_InitialState(t *testing.T) {
@@ -106,6 +109,43 @@ func TestSetActivePolicySet_TransitionsAndRollback(t *testing.T) {
 	RollbackActivePolicySet()
 	assert.Nil(t, ActivePolicySet())
 	assert.Empty(t, PreviousPolicySets())
+}
+
+func TestSetActivePolicySet_HistoryIsBounded(t *testing.T) {
+	resetState(t)
+
+	maxPreviousPolicySets = 3
+	defer func() { maxPreviousPolicySets = defaultMaxPreviousPolicySets }()
+
+	// Far more revisions than the cap, as a long-lived collector would see.
+	const revisions = 20
+	for i := 0; i < revisions; i++ {
+		SetActivePolicySet(&PolicySet{
+			RevisionID: fmt.Sprintf("rev-%d", i),
+			ReceivedAt: time.Now(),
+		})
+	}
+
+	prev := PreviousPolicySets()
+	require.Len(t, prev, maxPreviousPolicySets)
+
+	// The newest are kept and the oldest dropped, not the other way around.
+	require.NotNil(t, ActivePolicySet())
+	assert.Equal(t, "rev-19", ActivePolicySet().RevisionID)
+	assert.Equal(t, "rev-18", prev[0].RevisionID)
+	assert.Equal(t, "rev-17", prev[1].RevisionID)
+	assert.Equal(t, "rev-16", prev[2].RevisionID)
+
+	// The dropped sets must be unreachable, not just past the end of the
+	// slice. A trim written as a plain re-slice would pass every assertion
+	// above while leaving all twenty revisions alive in the backing array,
+	// which is precisely the leak the bound exists to close.
+	policySetMu.RLock()
+	defer policySetMu.RUnlock()
+	backing := previousPolicySets[:cap(previousPolicySets)]
+	for i := len(previousPolicySets); i < len(backing); i++ {
+		assert.Nilf(t, backing[i], "backing array slot %d still references a dropped policy set", i)
+	}
 }
 
 func TestPolicySet_PreviousPolicySets_Isolation(t *testing.T) {

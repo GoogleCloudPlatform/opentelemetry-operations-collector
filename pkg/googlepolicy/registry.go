@@ -42,6 +42,27 @@ var policyRegistry = map[string]PolicyDriver{}
 // an explicit "type" field.
 var policyProtoRegistry = map[protoreflect.FullName]string{}
 
+// maxPreviousPolicySets bounds how many superseded policy sets are retained.
+//
+// A collector attached to a control plane takes a new revision for the lifetime
+// of the process, and every superseded set was previously kept forever. Each one
+// pins its whole Policies map -- every loaded policy object, with whatever
+// compiled matchers and statements it holds -- so an untrimmed history is a slow
+// leak proportional to how often the fleet's policies are edited, on a process
+// expected to run for months.
+//
+// The depth is not correctness-bearing: rollback only ever walks back one set at
+// a time, and nothing outside tests reads the history today. It is sized to
+// leave room to inspect recent revisions when debugging, not to guarantee that
+// any particular revision is still reachable.
+//
+// Declared as a var so tests can shrink it without pushing hundreds of
+// revisions through the registry; defaultMaxPreviousPolicySets lets them put it
+// back without restating the number.
+const defaultMaxPreviousPolicySets = 10
+
+var maxPreviousPolicySets = defaultMaxPreviousPolicySets
+
 var (
 	policySetMu        sync.RWMutex
 	activePolicySet    *PolicySet
@@ -151,7 +172,9 @@ func ActivePolicySetRevisionID() string {
 	return activePolicySet.RevisionID
 }
 
-// PreviousPolicySets returns a shallow copy of past policy sets, ordered newest to oldest.
+// PreviousPolicySets returns a shallow copy of past policy sets, ordered newest
+// to oldest. At most maxPreviousPolicySets are retained, so an older revision
+// may have already been dropped.
 func PreviousPolicySets() []*PolicySet {
 	policySetMu.RLock()
 	defer policySetMu.RUnlock()
@@ -192,7 +215,8 @@ func notifyWatchers() {
 }
 
 // SetActivePolicySet will set a new active policy set, moving the current
-// active policy set to the previous sets.
+// active policy set to the previous sets and dropping the oldest of those once
+// maxPreviousPolicySets is exceeded.
 func SetActivePolicySet(policySet *PolicySet) {
 	policySetMu.Lock()
 	defer policySetMu.Unlock()
@@ -210,6 +234,13 @@ func SetActivePolicySet(policySet *PolicySet) {
 	}
 	if activePolicySet != nil {
 		previousPolicySets = slices.Insert(previousPolicySets, 0, activePolicySet)
+		// Trim from the tail, dropping the oldest. slices.Delete clears the
+		// vacated elements, which matters here: re-slicing alone would leave
+		// the dropped sets reachable from the backing array and defeat the
+		// bound entirely.
+		if len(previousPolicySets) > maxPreviousPolicySets {
+			previousPolicySets = slices.Delete(previousPolicySets, maxPreviousPolicySets, len(previousPolicySets))
+		}
 	}
 	activePolicySet = policySet
 	notifyWatchers()

@@ -318,6 +318,68 @@ func TestXDSPolicyManager_NACKsUndecodableResource(t *testing.T) {
 	assert.Nil(t, ActivePolicySet())
 }
 
+// A revision is only rejected when nothing in it is usable. If at least one
+// policy loads, it is applied and the revision is ACKed, so a single bad policy
+// from the control plane cannot disable all enforcement.
+func TestXDSPolicyManager_ACKsRevisionWithSomeUsablePolicies(t *testing.T) {
+	resetActivePolicySet(t)
+
+	ackReceived := make(chan *discoveryv3.DiscoveryRequest, 1)
+
+	srv := &fakeADSServer{streamOpened: make(chan struct{}, 8)}
+	srv.handlers = []func(discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error{
+		func(stream discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error {
+			if _, err := srv.recv(stream); err != nil {
+				return err
+			}
+			// One resource the collector understands, one it does not.
+			if err := stream.Send(&discoveryv3.DiscoveryResponse{
+				VersionInfo: "rev-partial",
+				Nonce:       "nonce-partial",
+				TypeUrl:     xdsPolicyTypeURL,
+				Resources: []*anypb.Any{
+					policyResource(t, "log-filter", "mock_transformation"),
+					{
+						TypeUrl: "type.googleapis.com/does.not.Exist",
+						Value:   []byte("garbage"),
+					},
+				},
+			}); err != nil {
+				return err
+			}
+			ack, err := srv.recv(stream)
+			if err != nil {
+				return err
+			}
+			ackReceived <- ack
+			<-stream.Context().Done()
+			return stream.Context().Err()
+		},
+	}
+
+	m := newTestManager(t, startFakeADSServer(t, srv))
+	require.NoError(t, m.Start())
+	t.Cleanup(func() { require.NoError(t, m.Stop()) })
+
+	var ack *discoveryv3.DiscoveryRequest
+	select {
+	case ack = <-ackReceived:
+	case <-time.After(10 * time.Second):
+		t.Fatal("timed out waiting for ACK")
+	}
+
+	require.Nil(t, ack.GetErrorDetail(), "a revision with at least one usable policy must be ACKed")
+	assert.Equal(t, "rev-partial", ack.GetVersionInfo())
+	assert.Equal(t, "nonce-partial", ack.GetResponseNonce())
+
+	// The policy that loaded is applied; the undecodable resource is dropped.
+	active := ActivePolicySet()
+	require.NotNil(t, active)
+	assert.Equal(t, "rev-partial", active.RevisionID)
+	assert.Contains(t, active.Policies, "log-filter")
+	assert.Len(t, active.Policies, 1, "only the usable policy is applied")
+}
+
 func TestXDSPolicyManager_Lifecycle(t *testing.T) {
 	srv := &fakeADSServer{streamOpened: make(chan struct{}, 8)}
 	m := newTestManager(t, startFakeADSServer(t, srv))

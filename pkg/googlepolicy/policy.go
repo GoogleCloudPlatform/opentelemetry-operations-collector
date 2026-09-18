@@ -211,6 +211,14 @@ type PolicySetEntry struct {
 	Error     error
 }
 
+// MakePolicySet builds a PolicySet from raw policy configs on a best-effort
+// basis: every config that cannot be turned into a valid Policy is skipped and
+// recorded, and the successfully loaded ones are still returned.
+//
+// The returned PolicySet is always non-nil, so a non-nil error does not mean
+// there is nothing usable. Callers decide how strict to be: compare
+// len(ps.Policies) against the number of inputs to detect a partial set, and
+// reject the whole thing if that is not acceptable.
 func MakePolicySet(revisionID string, rawPolicyConfigs []map[string]any) (*PolicySet, error) {
 	ps := &PolicySet{
 		Policies:   make(map[string]*PolicySetEntry, len(rawPolicyConfigs)),
@@ -226,11 +234,13 @@ func MakePolicySet(revisionID string, rawPolicyConfigs []map[string]any) (*Polic
 		// type. This will match up with the registered PolicyDriver.
 		policyTypeRaw, ok := rawPolicyConfig["type"]
 		if !ok {
-			return nil, fmt.Errorf("%w for policy at index %d", ErrPolicyTypeFieldMissing, i)
+			errs = append(errs, fmt.Errorf("%w for policy at index %d", ErrPolicyTypeFieldMissing, i))
+			continue
 		}
 		policyType, ok := policyTypeRaw.(string)
 		if !ok {
-			return nil, fmt.Errorf("%w for policy at index %d", ErrPolicyTypeFieldWrongType, i)
+			errs = append(errs, fmt.Errorf("%w for policy at index %d", ErrPolicyTypeFieldWrongType, i))
+			continue
 		}
 
 		p, err := LoadPolicy(policyType, rawPolicyConfig)

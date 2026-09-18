@@ -612,9 +612,34 @@ func (m *xdsPolicyManager) handleResponse(stream discoveryv3.AggregatedDiscovery
 		return
 	}
 
-	rawPolicies, err := extractRawPolicies(resp)
-	if err != nil {
-		m.logger.Warn("Failed to extract policies from DiscoveryResponse, sending NACK",
+	// Decoding and loading are both best-effort. A revision that carries a
+	// mix of usable and unusable policies is still worth applying: enforcing
+	// the policies we understood beats enforcing nothing while the control
+	// plane is corrected. Failures are collected and reported, and only a
+	// revision that yields nothing usable is rejected outright.
+	rawPolicies, extractErr := extractRawPolicies(resp)
+	if extractErr != nil {
+		m.logger.Warn("Some xDS resources could not be decoded and will be skipped",
+			zap.String("version", resp.GetVersionInfo()),
+			zap.Error(extractErr),
+		)
+	}
+
+	// 1. Validate & create policy set from DiscoveryResponse.
+	policySet, makeErr := MakePolicySet(resp.GetVersionInfo(), rawPolicies)
+	if makeErr != nil {
+		m.logger.Warn("Some policies in the xDS revision could not be loaded and will be skipped",
+			zap.String("version", resp.GetVersionInfo()),
+			zap.Error(makeErr),
+		)
+	}
+
+	// Nothing survived, and the reason was an error rather than the control
+	// plane deliberately sending an empty revision. Applying this would
+	// silently disable all policy enforcement, so it is rejected and the
+	// previous revision stays in place.
+	if err := errors.Join(extractErr, makeErr); err != nil && len(policySet.Policies) == 0 {
+		m.logger.Warn("xDS revision contains no usable policies, sending NACK",
 			zap.String("version", resp.GetVersionInfo()),
 			zap.Error(err),
 		)
@@ -625,21 +650,10 @@ func (m *xdsPolicyManager) handleResponse(stream discoveryv3.AggregatedDiscovery
 	// A response for our own type carrying no resources is the control plane
 	// telling us to drop everything. That is legitimate, but it disables all
 	// policy enforcement, so it is never done quietly.
-	if len(rawPolicies) == 0 && ActivePolicySet() != nil {
+	if active := ActivePolicySet(); len(policySet.Policies) == 0 && active != nil && len(active.Policies) > 0 {
 		m.logger.Warn("xDS revision contains no policies, clearing the active policy set",
 			zap.String("version", resp.GetVersionInfo()),
 		)
-	}
-
-	// 1. Validate & create policy set from DiscoveryResponse.
-	policySet, err := MakePolicySet(resp.GetVersionInfo(), rawPolicies)
-	if err != nil {
-		m.logger.Warn("Failed to make policy set, sending NACK",
-			zap.String("version", resp.GetVersionInfo()),
-			zap.Error(err),
-		)
-		m.sendNACK(stream, node, resp.GetNonce(), err)
-		return
 	}
 
 	// 2. Activate in memory (googlepolicyprocessor immediately picks this up).

@@ -520,7 +520,8 @@ func (m *xdsPolicyManager) run(ctx context.Context) {
 // Note that this deliberately covers only rejections that came back from the
 // server. Failing to obtain credentials locally (see ResolveTokenSource) stays
 // retryable, because that is usually a metadata server blip rather than a
-// verdict on this collector.
+// verdict on this collector. TokenAuth.GetRequestMetadata is what keeps that
+// true for per-RPC token fetches; see the comment there before changing it.
 func isTerminalAuthError(err error) bool {
 	if err == nil {
 		return false
@@ -967,7 +968,17 @@ var _ credentials.PerRPCCredentials = (*TokenAuth)(nil)
 func (a *TokenAuth) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
 	tok, err := a.TS.Token()
 	if err != nil {
-		return nil, err
+		// Returned as a status, not a bare error, because gRPC relabels bare
+		// errors from per-RPC credentials as Unauthenticated
+		// (internal/transport/http2_client.go, getTrAuthData). That is the code
+		// isTerminalAuthError treats as a verdict on this collector, so a
+		// metadata server blip during a reconnect would permanently end the xDS
+		// loop -- the pipeline would keep running on stale policies and never
+		// hear from the control plane again.
+		//
+		// Unavailable says what actually happened, and unlike the codes
+		// restricted by gRFC A54 it survives gRPC's own rewriting.
+		return nil, grpcstatus.Errorf(codes.Unavailable, "failed to obtain per-RPC auth token: %v", err)
 	}
 	return map[string]string{"authorization": "Bearer " + tok.AccessToken}, nil
 }

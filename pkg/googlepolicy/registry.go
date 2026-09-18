@@ -54,12 +54,16 @@ func RegisterPolicyDriver(policyType string, driver PolicyDriver) error {
 // LoadPolicy will attempt to load a policy given a policy type and raw policy config.
 // It checks the registry for a PolicyDriver for the given policyType and attempts to
 // load a Policy object using the raw policy config provided.
+//
+// The "type" routing envelope key is removed before the driver sees the config:
+// it selects the driver in the registry and is stripped so component policies
+// (which use strict struct unmarshaling) do not reject it as an unmapped field.
 func LoadPolicy(policyType string, rawPolicy map[string]any) (Policy, error) {
 	driver, ok := policyRegistry[policyType]
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", ErrPolicyTypeNotFound, policyType)
 	}
-	p, err := driver.LoadPolicy(rawPolicy)
+	p, err := driver.LoadPolicy(stripTypeKey(rawPolicy))
 	if err != nil {
 		return nil, fmt.Errorf("%w %s: %w", ErrPolicyFailedToLoad, policyType, err)
 	}
@@ -67,6 +71,19 @@ func LoadPolicy(policyType string, rawPolicy map[string]any) (Policy, error) {
 		return nil, fmt.Errorf("%w for policy %s: %w", ErrPolicyFailedValidation, p.PolicyName(), err)
 	}
 	return p, nil
+}
+
+// stripTypeKey returns a copy of raw without the "type" routing envelope key,
+// leaving the caller's map untouched.
+func stripTypeKey(raw map[string]any) map[string]any {
+	stripped := make(map[string]any, len(raw))
+	for k, v := range raw {
+		if k == "type" {
+			continue
+		}
+		stripped[k] = v
+	}
+	return stripped
 }
 
 // ActivePolicySet returns a copy of the currently active policy set, or nil if none is set.
@@ -136,12 +153,16 @@ func notifyWatchers() {
 // SetActivePolicySet will set a new active policy set, moving the current
 // active policy set to the previous sets.
 func SetActivePolicySet(policySet *PolicySet) {
-	if policySet == nil {
-		return
-	}
-
 	policySetMu.Lock()
 	defer policySetMu.Unlock()
+
+	if policySet == nil {
+		if activePolicySet != nil {
+			activePolicySet = nil
+			notifyWatchers()
+		}
+		return
+	}
 
 	if activePolicySet != nil && activePolicySet.RevisionID == policySet.RevisionID {
 		return

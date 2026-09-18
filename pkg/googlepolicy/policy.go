@@ -18,10 +18,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/confmap"
+	"go.opentelemetry.io/collector/pdata/pcommon"
+	"go.opentelemetry.io/collector/pdata/plog"
+	"go.opentelemetry.io/collector/pdata/pmetric"
+	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 
 var (
@@ -45,6 +51,74 @@ type Policy interface {
 	PolicyType() string
 	PolicyClass() PolicyClass
 	Validate() error
+}
+
+// EvalResult represents the outcome of evaluating a telemetry item against a policy.
+type EvalResult uint8
+
+const (
+	// EvalNoMatch indicates the policy conditions did not match the item.
+	EvalNoMatch EvalResult = iota
+	// EvalKeep indicates the policy matched and explicitly keeps the item (ACTION_KEEP).
+	EvalKeep
+	// EvalDrop indicates the policy matched and drops the item (ACTION_DROP).
+	EvalDrop
+)
+
+// LogContext holds the contextual information needed to evaluate a single log record.
+type LogContext struct {
+	Record            plog.LogRecord
+	Resource          pcommon.Resource
+	Scope             pcommon.InstrumentationScope
+	ResourceSchemaURL string
+	ScopeSchemaURL    string
+}
+
+// LogPolicyEvaluator is implemented by transformation policies that evaluate
+// log records (e.g., LogFilterPolicy in pkg/googlepolicy/logfilter).
+type LogPolicyEvaluator interface {
+	TransformationPolicy
+	EvaluateLog(ctx LogContext) EvalResult
+}
+
+// MetricContext holds the contextual information needed to evaluate a single
+// metric datapoint. DatapointAttributes is empty when the policy set is
+// evaluated at instrument level only.
+type MetricContext struct {
+	Metric                 pmetric.Metric
+	DatapointAttributes    pcommon.Map
+	AggregationTemporality pmetric.AggregationTemporality
+	Resource               pcommon.Resource
+	Scope                  pcommon.InstrumentationScope
+	ResourceSchemaURL      string
+	ScopeSchemaURL         string
+}
+
+// MetricPolicyEvaluator is implemented by transformation policies that evaluate
+// metric datapoints (e.g., MetricFilterPolicy in pkg/googlepolicy/metricfilter).
+type MetricPolicyEvaluator interface {
+	TransformationPolicy
+	EvaluateMetric(ctx MetricContext) EvalResult
+	// IsDatapointLevel reports whether any matcher inspects datapoint
+	// attributes. Policies that do not can be evaluated once per instrument
+	// instead of once per datapoint.
+	IsDatapointLevel() bool
+}
+
+// TraceContext holds the contextual information needed to evaluate a single span.
+type TraceContext struct {
+	Span              ptrace.Span
+	Resource          pcommon.Resource
+	Scope             pcommon.InstrumentationScope
+	ResourceSchemaURL string
+	ScopeSchemaURL    string
+}
+
+// TracePolicyEvaluator is implemented by transformation policies that evaluate
+// spans (e.g., TraceFilterPolicy in pkg/googlepolicy/tracefilter).
+type TracePolicyEvaluator interface {
+	TransformationPolicy
+	EvaluateTrace(ctx TraceContext) EvalResult
 }
 
 // ComponentPolicy is an extended interface that any policy that produces config
@@ -73,6 +147,23 @@ type DestinationPolicy interface {
 	PreProcessLogIDs() []component.ID
 	PreProcessTraceIDs() []component.ID
 	ExtensionIDs() []component.ID
+}
+
+// Signal represents an OpenTelemetry telemetry signal type.
+type Signal string
+
+const (
+	SignalLogs    Signal = "logs"
+	SignalMetrics Signal = "metrics"
+	SignalTraces  Signal = "traces"
+)
+
+// TransformationPolicy is an extended interface that any Transformation policy
+// will implement. It represents policies that transform, filter, or sample
+// telemetry data in the collector pipelines.
+type TransformationPolicy interface {
+	Policy
+	TargetSignals() []Signal
 }
 
 // PolicyDriver is the interface that is used to load a policy
@@ -139,6 +230,25 @@ func (ps *PolicySet) LoadPoliciesOfClass(class PolicyClass) []Policy {
 			foundPolicies = append(foundPolicies, pse.PolicyObj)
 		}
 	}
+	slices.SortFunc(foundPolicies, func(a, b Policy) int {
+		return strings.Compare(a.PolicyName(), b.PolicyName())
+	})
+	return foundPolicies
+}
+
+// TransformationPolicies returns all policies in the set that implement TransformationPolicy.
+func (ps *PolicySet) TransformationPolicies() []TransformationPolicy {
+	foundPolicies := make([]TransformationPolicy, 0)
+	for _, pse := range ps.Policies {
+		if pse.PolicyObj.PolicyClass() == PolicyClassTransformation {
+			if tp, ok := pse.PolicyObj.(TransformationPolicy); ok {
+				foundPolicies = append(foundPolicies, tp)
+			}
+		}
+	}
+	slices.SortFunc(foundPolicies, func(a, b TransformationPolicy) int {
+		return strings.Compare(a.PolicyName(), b.PolicyName())
+	})
 	return foundPolicies
 }
 
@@ -193,6 +303,9 @@ func (ps *PolicySet) Clone() *PolicySet {
 // is a simple mapstructure unmarshal.
 type GenericDriver[P Policy] struct{}
 
+// LoadPolicy decodes the raw policy config into P. The "type" routing envelope
+// key has already been removed by LoadPolicy in the registry, so strict
+// mapstructure decoding succeeds.
 func (gd *GenericDriver[P]) LoadPolicy(raw map[string]any) (Policy, error) {
 	var p P
 	conf := confmap.NewFromStringMap(raw)

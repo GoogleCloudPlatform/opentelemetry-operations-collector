@@ -23,6 +23,9 @@ import (
 	"go.opentelemetry.io/collector/processor/processorhelper"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor/internal/metadata"
+	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/logfilter"
+	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/metricfilter"
+	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/tracefilter"
 )
 
 var defaultCapabilities = consumer.Capabilities{MutatesData: true}
@@ -56,6 +59,8 @@ func createTracesProcessor(
 		nextConsumer,
 		proc.processTraces,
 		processorhelper.WithCapabilities(defaultCapabilities),
+		processorhelper.WithStart(proc.start),
+		processorhelper.WithShutdown(proc.shutdown),
 	)
 }
 
@@ -73,6 +78,8 @@ func createMetricsProcessor(
 		nextConsumer,
 		proc.processMetrics,
 		processorhelper.WithCapabilities(defaultCapabilities),
+		processorhelper.WithStart(proc.start),
+		processorhelper.WithShutdown(proc.shutdown),
 	)
 }
 
@@ -90,5 +97,7 @@ func createLogsProcessor(
 		nextConsumer,
 		proc.processLogs,
 		processorhelper.WithCapabilities(defaultCapabilities),
+		processorhelper.WithStart(proc.start),
+		processorhelper.WithShutdown(proc.shutdown),
 	)
 }

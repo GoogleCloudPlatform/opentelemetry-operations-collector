@@ -15,8 +15,10 @@
 package selfmetrics
 
 import (
+	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"github.com/stretchr/testify/assert"
@@ -92,6 +94,16 @@ func TestSelfMetricsPolicy_Evaluate(t *testing.T) {
 			},
 		},
 	}, conf.Get("service::telemetry::metrics::readers"))
+
+	// Verify resourcedetection processor
+	assert.Equal(t, []any{"gcp"}, conf.Get("processors::resourcedetection/custom_self_obs::detectors"))
+	assert.Equal(t, false, conf.Get("processors::resourcedetection/custom_self_obs::override"))
+	assert.Equal(t, 10*time.Second, conf.Get("processors::resourcedetection/custom_self_obs::timeout"))
+
+	// Verify transform processor
+	assert.Equal(t, "ignore", conf.Get("processors::transform/custom_self_obs::error_mode"))
+	assert.NotNil(t, conf.Get("processors::transform/custom_self_obs::log_statements"))
+	assert.NotNil(t, conf.Get("processors::transform/custom_self_obs::metric_statements"))
 }
 
 func TestSelfMetricsPolicy_Evaluate_ExampleYamlMatch(t *testing.T) {
@@ -168,8 +180,8 @@ func TestSelfMetricsPolicy_Pipelines(t *testing.T) {
 		Port: 8888,
 	}
 
-	preProcLog := component.MustNewIDWithName("queue_batch", "batch_logs")
-	preProcMetric := component.MustNewIDWithName("queue_batch", "batch_metrics")
+	preProcLog := component.MustNewIDWithName("queuebatch", "batch_logs")
+	preProcMetric := component.MustNewIDWithName("queuebatch", "batch_metrics")
 	exporter := component.MustNewIDWithName("otlp_grpc", "gcp")
 	extension := component.MustNewIDWithName("googleclientauth", "auth")
 
@@ -178,7 +190,7 @@ func TestSelfMetricsPolicy_Pipelines(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, logsConf)
 	assert.Equal(t, []any{"otlp/test_policy"}, logsConf.Get("service::pipelines::logs/test_policy::receivers"))
-	assert.Equal(t, []any{"queue_batch/batch_logs"}, logsConf.Get("service::pipelines::logs/test_policy::processors"))
+	assert.Equal(t, []any{"resourcedetection/test_policy", "transform/test_policy", "queuebatch/batch_logs"}, logsConf.Get("service::pipelines::logs/test_policy::processors"))
 	assert.Equal(t, []any{"otlp_grpc/gcp"}, logsConf.Get("service::pipelines::logs/test_policy::exporters"))
 
 	// MetricsPipelines
@@ -186,11 +198,43 @@ func TestSelfMetricsPolicy_Pipelines(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, metricsConf)
 	assert.Equal(t, []any{"otlp/test_policy"}, metricsConf.Get("service::pipelines::metrics/test_policy::receivers"))
-	assert.Equal(t, []any{"queue_batch/batch_metrics"}, metricsConf.Get("service::pipelines::metrics/test_policy::processors"))
+	assert.Equal(t, []any{"resourcedetection/test_policy", "transform/test_policy", "queuebatch/batch_metrics"}, metricsConf.Get("service::pipelines::metrics/test_policy::processors"))
 	assert.Equal(t, []any{"otlp_grpc/gcp"}, metricsConf.Get("service::pipelines::metrics/test_policy::exporters"))
 
 	// TracesPipelines (should return nil, nil)
 	tracesConf, err := policy.TracesPipelines(nil, []component.ID{exporter}, []component.ID{extension})
 	require.NoError(t, err)
 	assert.Nil(t, tracesConf)
+}
+
+func TestSelfMetricsPolicy_Evaluate_WithProjectID(t *testing.T) {
+	policy := &SelfMetricsPolicy{
+		Name: "test_project_self_obs",
+		Port: 9999,
+	}
+
+	collectorID := "custom-collector-id"
+	fleetID := "demo-fleet"
+	ctx := policy.ContextSetup(t.Context(), collectorID, fleetID)
+	ctx = context.WithValue(ctx, contextKeyProjectID, "my-gcp-project")
+
+	conf, err := policy.Evaluate(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, conf)
+
+	// Verify service telemetry resource attributes include gcp.project_id
+	assert.Equal(t, []any{
+		map[string]any{
+			"name":  "service.instance.id",
+			"value": collectorID,
+		},
+		map[string]any{
+			"name":  "gcp.fleet_id",
+			"value": "demo-fleet",
+		},
+		map[string]any{
+			"name":  "gcp.project_id",
+			"value": "my-gcp-project",
+		},
+	}, conf.Get("service::telemetry::resource::attributes"))
 }

@@ -89,7 +89,7 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowseventlogreceiver v0.160.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowsperfcountersreceiver v0.160.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/zipkinreceiver v0.160.0
-	go.opentelemetry.io/collector/component v1.66.0
+	go.opentelemetry.io/collector/component v1.67.0
 	go.opentelemetry.io/collector/confmap v1.66.0
 	go.opentelemetry.io/collector/confmap/provider/envprovider v1.66.0
 	go.opentelemetry.io/collector/confmap/provider/fileprovider v1.66.0
@@ -143,7 +143,7 @@ require (
 	github.com/DataDog/go-sqllexer v0.1.12 // indirect
 	github.com/DeRuina/timberjack v1.4.7 // indirect
 	github.com/GehirnInc/crypt v0.0.0-20230320061759-8cc1b52080c5 // indirect
-	github.com/GoogleCloudPlatform/opentelemetry-operations-collector v0.0.0 // indirect
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector v0.160.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy v0.0.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.36.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector v0.60.0 // indirect
@@ -441,7 +441,7 @@ require (
 	go.etcd.io/bbolt v1.5.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/collector v0.160.0 // indirect
-	go.opentelemetry.io/collector/client v1.66.0 // indirect
+	go.opentelemetry.io/collector/client v1.67.0 // indirect
 	go.opentelemetry.io/collector/component/componentstatus v0.160.0 // indirect
 	go.opentelemetry.io/collector/component/componenttest v0.160.0 // indirect
 	go.opentelemetry.io/collector/config/configauth v1.66.0 // indirect
@@ -458,7 +458,7 @@ require (
 	go.opentelemetry.io/collector/confmap/xconfmap v0.160.0 // indirect
 	go.opentelemetry.io/collector/connector/connectortest v0.160.0 // indirect
 	go.opentelemetry.io/collector/connector/xconnector v0.160.0 // indirect
-	go.opentelemetry.io/collector/consumer v1.66.0 // indirect
+	go.opentelemetry.io/collector/consumer v1.67.0 // indirect
 	go.opentelemetry.io/collector/consumer/consumererror v0.160.0 // indirect
 	go.opentelemetry.io/collector/consumer/consumererror/xconsumererror v0.160.0 // indirect
 	go.opentelemetry.io/collector/consumer/consumertest v0.160.0 // indirect
@@ -472,15 +472,15 @@ require (
 	go.opentelemetry.io/collector/extension/extensionmiddleware v0.160.0 // indirect
 	go.opentelemetry.io/collector/extension/extensiontest v0.160.0 // indirect
 	go.opentelemetry.io/collector/extension/xextension v0.160.0 // indirect
-	go.opentelemetry.io/collector/featuregate v1.66.0 // indirect
+	go.opentelemetry.io/collector/featuregate v1.67.0 // indirect
 	go.opentelemetry.io/collector/filter v0.160.0 // indirect
 	go.opentelemetry.io/collector/internal/componentalias v0.160.0 // indirect
 	go.opentelemetry.io/collector/internal/fanoutconsumer v0.160.0 // indirect
 	go.opentelemetry.io/collector/internal/memorylimiter v0.160.0 // indirect
 	go.opentelemetry.io/collector/internal/sharedcomponent v0.160.0 // indirect
 	go.opentelemetry.io/collector/internal/telemetry v0.160.0 // indirect
-	go.opentelemetry.io/collector/pdata v1.66.0 // indirect
-	go.opentelemetry.io/collector/pdata/pprofile v0.160.0 // indirect
+	go.opentelemetry.io/collector/pdata v1.67.0 // indirect
+	go.opentelemetry.io/collector/pdata/pprofile v0.161.0 // indirect
 	go.opentelemetry.io/collector/pdata/testdata v0.160.0 // indirect
 	go.opentelemetry.io/collector/pdata/xpdata v0.160.0 // indirect
 	go.opentelemetry.io/collector/pipeline v1.66.0 // indirect
@@ -592,5 +592,3 @@ replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/compon
 replace github.com/buger/jsonparser => github.com/buger/jsonparser v1.1.2
 
 replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy => ../../pkg/googlepolicy
-
-replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector => ../..

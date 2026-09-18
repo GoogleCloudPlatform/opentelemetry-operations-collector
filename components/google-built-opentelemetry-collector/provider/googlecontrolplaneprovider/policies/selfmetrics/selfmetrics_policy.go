@@ -70,7 +70,10 @@ func (p *SelfMetricsPolicy) PolicyClass() googlepolicy.PolicyClass {
 }
 
 func (p *SelfMetricsPolicy) Validate() error {
-	panic("unimplemented")
+	if p.Name == "" {
+		return errors.New("policy must be named")
+	}
+	return nil
 }
 
 func (p *SelfMetricsPolicy) Evaluate(ctx context.Context) (*confmap.Conf, error) {

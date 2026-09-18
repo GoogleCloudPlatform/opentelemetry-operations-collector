@@ -1,0 +1,29 @@
+- resourceLogs:
+    - resource:
+        attributes:
+            - key: env
+              value:
+                stringValue: prod
+      scopeLogs:
+        - logRecords:
+            - body:
+                stringValue: PROD_DEBUG_EXEMPTED_BY_KEEP
+              severityNumber: 5
+              severityText: DEBUG
+              timeUnixNano: "1700000000000000000"
+          scope:
+            name: app.logger
+    - resource:
+        attributes:
+            - key: env
+              value:
+                stringValue: staging
+      scopeLogs:
+        - logRecords:
+            - body:
+                stringValue: STAGING_ERROR_KEPT_NO_MATCH
+              severityNumber: 17
+              severityText: ERROR
+              timeUnixNano: "1700000002000000000"
+          scope:
+            name: app.logger

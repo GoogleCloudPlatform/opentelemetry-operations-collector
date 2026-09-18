@@ -1,0 +1,27 @@
+- resourceLogs:
+    - resource:
+        attributes:
+            - key: service.name
+              value:
+                stringValue: api-gateway
+      scopeLogs:
+        - logRecords:
+            - attributes:
+                - key: http
+                  value:
+                    kvlistValue:
+                        values:
+                            - key: headers
+                              value:
+                                kvlistValue:
+                                    values:
+                                        - key: authorization
+                                          value:
+                                            stringValue: Bearer public-token-123
+              body:
+                stringValue: PUBLIC_TOKEN_REQUEST
+              severityNumber: 9
+              severityText: INFO
+              timeUnixNano: "1700000000000000000"
+          scope:
+            name: http.middleware

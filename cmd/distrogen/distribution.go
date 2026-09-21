@@ -63,29 +63,30 @@ const (
 // It contains all the information that will be formatted into the default set of
 // templates/user provided templates.
 type DistributionSpec struct {
-	Path                        string                  `yaml:"-"`
-	Name                        string                  `yaml:"name"`
-	Module                      string                  `yaml:"module"`
-	DisplayName                 string                  `yaml:"display_name"`
-	Description                 string                  `yaml:"description"`
-	Blurb                       string                  `yaml:"blurb"`
-	BuildContainer              BuildContainerOption    `yaml:"build_container"`
-	Version                     string                  `yaml:"version"`
-	OpenTelemetryVersion        string                  `yaml:"opentelemetry_version"`
-	OpenTelemetryContribVersion string                  `yaml:"opentelemetry_contrib_version"`
-	OpenTelemetryStableVersion  string                  `yaml:"opentelemetry_stable_version"`
-	GoVersion                   string                  `yaml:"go_version"`
-	BinaryName                  string                  `yaml:"binary_name"`
-	BuildTags                   string                  `yaml:"build_tags"`
-	BoringCrypto                bool                    `yaml:"boringcrypto"`
-	DockerRepo                  string                  `yaml:"docker_repo"`
-	Components                  *DistributionComponents `yaml:"components"`
-	Replaces                    ComponentReplaces       `yaml:"replaces,omitempty"`
-	CustomValues                map[string]any          `yaml:"custom_values,omitempty"`
-	FeatureGates                FeatureGates            `yaml:"feature_gates,omitempty"`
-	GoProxy                     string                  `yaml:"go_proxy,omitempty"`
-	PermanentOCBDirectory       bool                    `yaml:"permanent_ocb_directory,omitempty"`
-	VendorDependencies          bool                    `yaml:"vendor_dependencies,omitempty"`
+	Path                              string                  `yaml:"-"`
+	Name                              string                  `yaml:"name"`
+	Module                            string                  `yaml:"module"`
+	DisplayName                       string                  `yaml:"display_name"`
+	Description                       string                  `yaml:"description"`
+	Blurb                             string                  `yaml:"blurb"`
+	BuildContainer                    BuildContainerOption    `yaml:"build_container"`
+	Version                           string                  `yaml:"version"`
+	OpenTelemetryVersion              string                  `yaml:"opentelemetry_version"`
+	OpenTelemetryContribVersion       string                  `yaml:"opentelemetry_contrib_version"`
+	OpenTelemetryStableVersion        string                  `yaml:"opentelemetry_stable_version"`
+	OpenTelemetryContribStableVersion string                  `yaml:"opentelemetry_contrib_stable_version,omitempty"`
+	GoVersion                         string                  `yaml:"go_version"`
+	BinaryName                        string                  `yaml:"binary_name"`
+	BuildTags                         string                  `yaml:"build_tags"`
+	BoringCrypto                      bool                    `yaml:"boringcrypto"`
+	DockerRepo                        string                  `yaml:"docker_repo"`
+	Components                        *DistributionComponents `yaml:"components"`
+	Replaces                          ComponentReplaces       `yaml:"replaces,omitempty"`
+	CustomValues                      map[string]any          `yaml:"custom_values,omitempty"`
+	FeatureGates                      FeatureGates            `yaml:"feature_gates,omitempty"`
+	GoProxy                           string                  `yaml:"go_proxy,omitempty"`
+	PermanentOCBDirectory             bool                    `yaml:"permanent_ocb_directory,omitempty"`
+	VendorDependencies                bool                    `yaml:"vendor_dependencies,omitempty"`
 
 	// CollectorCGO determines whether the Collector will be built with CGO.
 	CollectorCGO         bool   `yaml:"collector_cgo,omitempty"`
@@ -528,9 +529,10 @@ func NewTemplateContextFromSpec(spec *DistributionSpec, registry *Registry) (*Te
 	}
 
 	otelVersion := otelComponentVersion{
-		core:       spec.OpenTelemetryVersion,
-		coreStable: spec.OpenTelemetryStableVersion,
-		contrib:    spec.OpenTelemetryContribVersion,
+		core:          spec.OpenTelemetryVersion,
+		coreStable:    spec.OpenTelemetryStableVersion,
+		contrib:       spec.OpenTelemetryContribVersion,
+		contribStable: spec.OpenTelemetryContribStableVersion,
 	}
 
 	errs := make(CollectionError)

@@ -38,8 +38,6 @@ import (
 
 const (
 	schemeName = "googlecontrolplane"
-
-	defaultFleetID = "test-fleet-01"
 )
 
 var (

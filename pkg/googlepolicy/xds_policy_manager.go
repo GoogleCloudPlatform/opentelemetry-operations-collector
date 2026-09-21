@@ -17,7 +17,6 @@ package googlepolicy
 import (
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -44,8 +43,7 @@ import (
 	"google.golang.org/grpc/keepalive"
 	grpcstatus "google.golang.org/grpc/status"
 
-	"google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
 	xdsv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/xds/v1alpha1"
@@ -131,10 +129,13 @@ var (
 	ErrXDSAlreadyStarted = errors.New("xDS policy manager is already started")
 
 	// Resource decoding errors, reported back to the control plane via NACK.
+	//
+	// Failing to route a decoded policy to a driver is not one of these: that
+	// is settled by message identity when the policy is loaded, and reported as
+	// ErrPolicyTypeNotFound.
 	ErrXDSResourceDecode    = errors.New("failed to decode xDS resource")
 	ErrXDSPolicyDecode      = errors.New("failed to decode policy from xDS resource")
 	ErrXDSPolicyMissingBody = errors.New("policy in xDS resource has no typed_config")
-	ErrXDSResourceNotPolicy = errors.New("xDS resource does not contain a policy")
 )
 
 var _ Manager = (*xdsPolicyManager)(nil)
@@ -688,7 +689,7 @@ func (m *xdsPolicyManager) handleResponse(stream discoveryv3.AggregatedDiscovery
 	// the policies we understood beats enforcing nothing while the control
 	// plane is corrected. Failures are collected and reported, and only a
 	// revision that yields nothing usable is rejected outright.
-	rawPolicies, extractErr := extractRawPolicies(resp)
+	policyProtos, extractErr := extractPolicyProtos(resp)
 	if extractErr != nil {
 		m.logger.Warn("Some xDS resources could not be decoded and will be skipped",
 			zap.String("version", resp.GetVersionInfo()),
@@ -697,7 +698,7 @@ func (m *xdsPolicyManager) handleResponse(stream discoveryv3.AggregatedDiscovery
 	}
 
 	// 1. Validate & create policy set from DiscoveryResponse.
-	policySet, makeErr := MakePolicySet(resp.GetVersionInfo(), rawPolicies)
+	policySet, makeErr := MakePolicySetFromProtos(resp.GetVersionInfo(), policyProtos)
 	if makeErr != nil {
 		m.logger.Warn("Some policies in the xDS revision could not be loaded and will be skipped",
 			zap.String("version", resp.GetVersionInfo()),
@@ -830,18 +831,21 @@ func (m *xdsPolicyManager) sendNACK(stream discoveryv3.AggregatedDiscoveryServic
 	}
 }
 
-// extractRawPolicies converts the resources of a DiscoveryResponse into raw
-// policy maps for MakePolicySet.
+// extractPolicyProtos decodes the resources of a DiscoveryResponse into the
+// policy protos they carry, ready for MakePolicySetFromProtos.
 //
 // Every resource that cannot be decoded is reported: a malformed or unknown
 // resource means the control plane sent something this collector cannot honor,
-// and the caller NACKs the whole response rather than silently applying a
-// partial policy set. Successfully decoded policies are still returned alongside
-// the error for logging and debugging.
-func extractRawPolicies(resp *discoveryv3.DiscoveryResponse) ([]map[string]any, error) {
+// and the caller decides what to do about it. Successfully decoded policies are
+// still returned alongside the error, so a revision that is only partly
+// understood can still be applied.
+//
+// Decoding stops at the proto. Which driver a policy belongs to is settled
+// later, by message identity, in LoadPolicyFromProto.
+func extractPolicyProtos(resp *discoveryv3.DiscoveryResponse) ([]proto.Message, error) {
 	var (
-		rawPolicies []map[string]any
-		errs        []error
+		policies []proto.Message
+		errs     []error
 	)
 
 	for i, anyRes := range resp.GetResources() {
@@ -853,42 +857,34 @@ func extractRawPolicies(resp *discoveryv3.DiscoveryResponse) ([]map[string]any, 
 				continue
 			}
 
-			policies, err := policiesFromCollector(collector)
+			collectorPolicies, err := policiesFromCollector(collector)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("resource at index %d: %w", i, err))
 			}
-			rawPolicies = append(rawPolicies, policies...)
+			policies = append(policies, collectorPolicies...)
 			continue
 		}
 
 		// Fallback: a resource that is a bare policy message rather than a
 		// TelemetryCollector wrapper. Routed the same way as a policy inside
 		// the wrapper.
-		raw, protoName, err := rawFromAny(anyRes)
+		msg, err := protoFromAny(anyRes)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("resource at index %d: %w", i, err))
 			continue
 		}
-		if _, ok := raw["type"]; !ok {
-			policyType, ok := PolicyTypeForProto(protoName)
-			if !ok {
-				errs = append(errs, fmt.Errorf("%w: resource at index %d of type %q has no 'type' field and no driver is registered for proto %q", ErrXDSResourceNotPolicy, i, anyRes.GetTypeUrl(), protoName))
-				continue
-			}
-			raw["type"] = policyType
-		}
-		rawPolicies = append(rawPolicies, raw)
+		policies = append(policies, msg)
 	}
 
-	return rawPolicies, errors.Join(errs...)
+	return policies, errors.Join(errs...)
 }
 
 // policiesFromCollector decodes every policy carried by a TelemetryCollector,
 // returning those it could decode along with a joined error for those it could not.
-func policiesFromCollector(collector *xdsv1alpha1.TelemetryCollector) ([]map[string]any, error) {
+func policiesFromCollector(collector *xdsv1alpha1.TelemetryCollector) ([]proto.Message, error) {
 	var (
-		rawPolicies []map[string]any
-		errs        []error
+		policies []proto.Message
+		errs     []error
 	)
 
 	for i, policyAny := range collector.GetPolicies() {
@@ -896,68 +892,37 @@ func policiesFromCollector(collector *xdsv1alpha1.TelemetryCollector) ([]map[str
 			errs = append(errs, fmt.Errorf("%w: policy at index %d", ErrXDSPolicyMissingBody, i))
 			continue
 		}
-		typeURL := policyAny.GetTypeUrl()
 
-		raw, protoName, err := rawFromAny(policyAny)
+		// Policies arrive as a bare google.protobuf.Any rather than being
+		// wrapped in an envoy TypedExtensionConfig, so the message identity is
+		// the only routing information carried outside the body. There is no
+		// enclosing name to backfill -- a driver that needs one reads it from
+		// the body (the filter policies use their own "id" field).
+		msg, err := protoFromAny(policyAny)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("policy at index %d (%q): %w", i, typeURL, err))
+			errs = append(errs, fmt.Errorf("policy at index %d (%q): %w", i, policyAny.GetTypeUrl(), err))
 			continue
 		}
 
-		// Policies now arrive as a bare google.protobuf.Any rather than being
-		// wrapped in an envoy TypedExtensionConfig, so the message identity is
-		// the only routing information carried outside the body. There is no
-		// enclosing name to backfill any more -- a driver that needs one reads
-		// it from the body (the filter policies use their own "id" field).
-		//
-		// The policy type is looked up from the proto each driver declares, not
-		// derived from the type URL: a registry key like "log_filter" cannot be
-		// recovered from the message name "LogFilterPolicy" by any amount of
-		// string surgery.
-		if _, ok := raw["type"]; !ok {
-			policyType, ok := PolicyTypeForProto(protoName)
-			if !ok {
-				errs = append(errs, fmt.Errorf("%w: policy at index %d has no 'type' field and no driver is registered for proto %q",
-					ErrXDSResourceNotPolicy, i, protoName))
-				continue
-			}
-			raw["type"] = policyType
-		}
-
-		rawPolicies = append(rawPolicies, raw)
+		policies = append(policies, msg)
 	}
 
-	return rawPolicies, errors.Join(errs...)
+	return policies, errors.Join(errs...)
 }
 
-// rawFromAny decodes a protobuf Any into the generic map representation that the
-// policy drivers unmarshal from, along with the decoded message's fully
-// qualified name so callers can route on proto identity.
-func rawFromAny(msgAny *anypb.Any) (map[string]any, protoreflect.FullName, error) {
-	typeURL := msgAny.GetTypeUrl()
-
+// protoFromAny unpacks a protobuf Any into the concrete message it holds.
+//
+// The message is passed on as-is. It used to be flattened to a map here and
+// parsed back into the very same message by the driver, which was provably a
+// no-op -- four conversions to arrive where UnmarshalNew had already left us.
+func protoFromAny(msgAny *anypb.Any) (proto.Message, error) {
 	// Resolves against the global proto registry, so this fails for a type the
 	// collector was not built with.
 	msg, err := msgAny.UnmarshalNew()
 	if err != nil {
-		return nil, "", fmt.Errorf("%w: unknown or unregistered type URL %q: %w", ErrXDSPolicyDecode, typeURL, err)
+		return nil, fmt.Errorf("%w: unknown or unregistered type URL %q: %w", ErrXDSPolicyDecode, msgAny.GetTypeUrl(), err)
 	}
-	protoName := msg.ProtoReflect().Descriptor().FullName()
-
-	b, err := protojson.MarshalOptions{UseProtoNames: true}.Marshal(msg)
-	if err != nil {
-		return nil, protoName, fmt.Errorf("%w: type URL %q: %w", ErrXDSPolicyDecode, typeURL, err)
-	}
-
-	var raw map[string]any
-	if err := json.Unmarshal(b, &raw); err != nil {
-		return nil, protoName, fmt.Errorf("%w: type URL %q is not a JSON object: %w", ErrXDSPolicyDecode, typeURL, err)
-	}
-	if raw == nil {
-		return nil, protoName, fmt.Errorf("%w: type URL %q decoded to null", ErrXDSPolicyDecode, typeURL)
-	}
-
-	return raw, protoName, nil
+	return msg, nil
 }
 
 func (m *xdsPolicyManager) dial(ctx context.Context) (*grpc.ClientConn, error) {

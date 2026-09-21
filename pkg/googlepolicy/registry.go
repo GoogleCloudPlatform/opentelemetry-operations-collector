@@ -20,6 +20,7 @@ import (
 	"slices"
 	"sync"
 
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
@@ -27,6 +28,7 @@ var (
 	ErrPolicyTypeAlreadyRegistered  = errors.New("policy type already registered")
 	ErrPolicyProtoAlreadyRegistered = errors.New("policy proto already registered")
 	ErrPolicyProtoInvalid           = errors.New("policy driver returned an invalid proto")
+	ErrPolicyProtoMismatch          = errors.New("policy proto does not match the driver's message type")
 	ErrPolicyTypeNotFound           = errors.New("no driver found for policy type")
 	ErrPolicyFailedToLoad           = errors.New("failed to load policy")
 	ErrPolicyFailedValidation       = errors.New("policy validation failed")
@@ -126,6 +128,44 @@ func LoadPolicy(policyType string, rawPolicy map[string]any) (Policy, error) {
 		return nil, fmt.Errorf("%w: %s", ErrPolicyTypeNotFound, policyType)
 	}
 	p, err := driver.LoadPolicy(stripTypeKey(rawPolicy))
+	if err != nil {
+		return nil, fmt.Errorf("%w %s: %w", ErrPolicyFailedToLoad, policyType, err)
+	}
+	if err := p.Validate(); err != nil {
+		return nil, fmt.Errorf("%w for policy %s: %w", ErrPolicyFailedValidation, p.PolicyName(), err)
+	}
+	return p, nil
+}
+
+// LoadPolicyFromProto loads a policy that arrived as a proto, routing it to a
+// driver by the message's identity rather than by a "type" string in its body.
+//
+// This is the sibling of LoadPolicy for the xDS path, and enforces the same
+// contract: the driver builds the policy and the result is validated before any
+// caller sees it. What it does not do is serialize anything. The message is
+// handed to the driver as-is, which is both faster and the reason a policy
+// proto is free to define a field named "type" without colliding with the
+// routing envelope that authored config relies on.
+func LoadPolicyFromProto(msg proto.Message) (Policy, error) {
+	protoName := msg.ProtoReflect().Descriptor().FullName()
+
+	policyType, ok := PolicyTypeForProto(protoName)
+	if !ok {
+		// Either the control plane sent a policy this collector was not built
+		// with, or a driver exists but never declared this proto. The message
+		// name is what tells those apart, so it is always reported.
+		return nil, fmt.Errorf("%w: no driver is registered for proto %q", ErrPolicyTypeNotFound, protoName)
+	}
+
+	// A type present in policyProtoRegistry was put there by
+	// RegisterPolicyDriver off the back of this same assertion, so this only
+	// fails if the two registries have drifted.
+	driver, ok := policyRegistry[policyType].(ProtoPolicyDriver)
+	if !ok {
+		return nil, fmt.Errorf("%w: %s is routed from proto %q but does not load from one", ErrPolicyTypeNotFound, policyType, protoName)
+	}
+
+	p, err := driver.LoadPolicyProto(msg)
 	if err != nil {
 		return nil, fmt.Errorf("%w %s: %w", ErrPolicyFailedToLoad, policyType, err)
 	}

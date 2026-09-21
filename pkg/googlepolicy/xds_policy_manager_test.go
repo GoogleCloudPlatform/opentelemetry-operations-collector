@@ -15,6 +15,7 @@
 package googlepolicy
 
 import (
+	"fmt"
 	"net/url"
 	"testing"
 
@@ -23,6 +24,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/structpb"
 
@@ -114,10 +116,9 @@ func TestNewXDSPolicyManager_Validation(t *testing.T) {
 
 }
 
-func TestExtractRawPolicies_TelemetryCollector(t *testing.T) {
+func TestExtractPolicyProtos_TelemetryCollector(t *testing.T) {
 	policyPayload, err := structpb.NewStruct(map[string]any{
 		"name": "test-filter",
-		"type": "mock_transformation",
 	})
 	require.NoError(t, err)
 
@@ -136,19 +137,21 @@ func TestExtractRawPolicies_TelemetryCollector(t *testing.T) {
 		Resources:   []*anypb.Any{collectorAny},
 	}
 
-	rawPolicies, err := extractRawPolicies(resp)
+	policies, err := extractPolicyProtos(resp)
 	require.NoError(t, err)
-	require.Len(t, rawPolicies, 1)
-	// Both of these come from the policy body itself -- policies are bare
-	// google.protobuf.Any values, so there is no enclosing wrapper to read.
-	assert.Equal(t, "test-filter", rawPolicies[0]["name"])
-	assert.Equal(t, "mock_transformation", rawPolicies[0]["type"])
+	require.Len(t, policies, 1)
+
+	// The policy comes back as the message it was packed as, not as a
+	// flattened copy of it: nothing between the wire and the driver needs a
+	// generic representation any more.
+	got, ok := policies[0].(*structpb.Struct)
+	require.True(t, ok)
+	assert.True(t, proto.Equal(policyPayload, got))
 }
 
-func TestExtractRawPolicies_Errors(t *testing.T) {
+func TestExtractPolicyProtos_Errors(t *testing.T) {
 	validPayload, err := structpb.NewStruct(map[string]any{
 		"name": "good-policy",
-		"type": "mock_transformation",
 	})
 	require.NoError(t, err)
 	validPayloadAny, err := anypb.New(validPayload)
@@ -210,26 +213,15 @@ func TestExtractRawPolicies_Errors(t *testing.T) {
 			wantCount: 1,
 		},
 		{
-			name:      "bare resource that is not a policy",
+			name:      "bare resource of an unknown type",
 			resources: []*anypb.Any{unknownTypeAny},
 			wantErr:   ErrXDSPolicyDecode,
-		},
-		{
-			name: "bare resource with no type field",
-			resources: func() []*anypb.Any {
-				payload, err := structpb.NewStruct(map[string]any{"name": "typeless"})
-				require.NoError(t, err)
-				payloadAny, err := anypb.New(payload)
-				require.NoError(t, err)
-				return []*anypb.Any{payloadAny}
-			}(),
-			wantErr: ErrXDSResourceNotPolicy,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			rawPolicies, err := extractRawPolicies(&discoveryv3.DiscoveryResponse{
+			policies, err := extractPolicyProtos(&discoveryv3.DiscoveryResponse{
 				VersionInfo: "v1",
 				Resources:   tc.resources,
 			})
@@ -242,7 +234,7 @@ func TestExtractRawPolicies_Errors(t *testing.T) {
 					assert.Contains(t, err.Error(), tc.wantErrText)
 				}
 			}
-			assert.Len(t, rawPolicies, tc.wantCount)
+			assert.Len(t, policies, tc.wantCount)
 		})
 	}
 }
@@ -253,76 +245,97 @@ func TestExtractRawPolicies_Errors(t *testing.T) {
 type protoDriver struct {
 	dummyPolicyDriver
 	msg proto.Message
+
+	// got records the message the driver was handed, so a test can assert what
+	// actually reached it rather than only what came back out.
+	got proto.Message
 }
 
 func (d *protoDriver) PolicyProto() proto.Message { return d.msg }
 
+func (d *protoDriver) LoadPolicyProto(msg proto.Message) (Policy, error) {
+	d.got = msg
+	return &mockTransformationPolicy{name: protoStringField(msg, "id"), signals: []Signal{SignalLogs}}, nil
+}
+
+// protoStringField reads a top-level string field by name, or "" if the message
+// has no such field. The stand-in driver has no generated accessors to call.
+func protoStringField(msg proto.Message, name string) string {
+	m := msg.ProtoReflect()
+	fd := m.Descriptor().Fields().ByName(protoreflect.Name(name))
+	if fd == nil || fd.Kind() != protoreflect.StringKind {
+		return ""
+	}
+	return m.Get(fd).String()
+}
+
 // registerProtoDriverForTest registers a driver claiming msg, and unregisters
 // it afterwards since the registry is process-global.
-func registerProtoDriverForTest(t *testing.T, policyType string, msg proto.Message) {
+func registerProtoDriverForTest(t *testing.T, policyType string, msg proto.Message) *protoDriver {
 	t.Helper()
-	require.NoError(t, RegisterPolicyDriver(policyType, &protoDriver{msg: msg}))
+	d := &protoDriver{msg: msg}
+	require.NoError(t, RegisterPolicyDriver(policyType, d))
 	t.Cleanup(func() {
 		delete(policyRegistry, policyType)
 		delete(policyProtoRegistry, msg.ProtoReflect().Descriptor().FullName())
 	})
+	return d
 }
 
-// TestExtractRawPolicies_RoutesBareProtoToItsDriver covers a policy shaped the
-// way a control plane actually sends one: a bare LogFilterPolicy Any whose body
+// TestMakePolicySetFromProtos_RoutesBareProtoToItsDriver covers a policy shaped
+// the way a control plane actually sends one: a bare LogFilterPolicy whose body
 // carries no "type" field, because the proto has no such field. The policy type
 // has to come from the driver that claimed the proto.
 //
 // Deriving it from the type URL instead produced "LogFilterPolicy", which no
 // driver is registered under, so every policy of this shape was rejected and
-// took its whole revision down with it. The existing tests missed this because
-// they all send either a mock policy type or a structpb.Struct carrying an
-// explicit "type" key, neither of which reaches this branch.
-func TestExtractRawPolicies_RoutesBareProtoToItsDriver(t *testing.T) {
-	const policyType = "log_filter"
-	registerProtoDriverForTest(t, policyType, &policyv1alpha1.LogFilterPolicy{})
+// took its whole revision down with it.
+func TestMakePolicySetFromProtos_RoutesBareProtoToItsDriver(t *testing.T) {
+	d := registerProtoDriverForTest(t, "log_filter", &policyv1alpha1.LogFilterPolicy{})
 
-	policyAny, err := anypb.New(&policyv1alpha1.LogFilterPolicy{Id: "retain-errors"})
-	require.NoError(t, err)
-	collectorAny, err := anypb.New(&xdsv1alpha1.TelemetryCollector{
-		Policies: []*anypb.Any{policyAny},
-	})
-	require.NoError(t, err)
+	policy := &policyv1alpha1.LogFilterPolicy{Id: "retain-errors"}
 
-	rawPolicies, err := extractRawPolicies(&discoveryv3.DiscoveryResponse{
-		VersionInfo: "v1",
-		Resources:   []*anypb.Any{collectorAny},
-	})
+	ps, err := MakePolicySetFromProtos("v1", []proto.Message{policy})
 	require.NoError(t, err)
-	require.Len(t, rawPolicies, 1)
+	require.Len(t, ps.Policies, 1)
+	assert.Contains(t, ps.Policies, "retain-errors")
 
-	assert.Equal(t, policyType, rawPolicies[0]["type"])
-	// The body survives the round trip alongside the backfilled type.
-	assert.Equal(t, "retain-errors", rawPolicies[0]["id"])
-	// Nothing synthesizes a name: the TypedExtensionConfig wrapper that used
-	// to carry one is gone, and drivers read their own identifier from the body.
-	assert.NotContains(t, rawPolicies[0], "name")
+	// The driver is handed the very message that was decoded off the wire.
+	// Nothing re-serializes it on the way, which is the point of the path.
+	assert.Same(t, policy, d.got)
 }
 
-// TestExtractRawPolicies_UnclaimedProtoIsRejectedByName checks that a policy no
-// driver claims is reported by proto name, which is the thing an operator needs
-// in order to tell a typo apart from a collector built without that policy.
-func TestExtractRawPolicies_UnclaimedProtoIsRejectedByName(t *testing.T) {
+// TestMakePolicySetFromProtos_UnclaimedProtoIsRejectedByName checks that a
+// policy no driver claims is reported by proto name, which is the thing an
+// operator needs in order to tell a typo apart from a collector built without
+// that policy.
+func TestMakePolicySetFromProtos_UnclaimedProtoIsRejectedByName(t *testing.T) {
 	// Nothing registers MetricFilterPolicy in this test binary.
-	policyAny, err := anypb.New(&policyv1alpha1.MetricFilterPolicy{})
-	require.NoError(t, err)
-	collectorAny, err := anypb.New(&xdsv1alpha1.TelemetryCollector{
-		Policies: []*anypb.Any{policyAny},
-	})
-	require.NoError(t, err)
+	ps, err := MakePolicySetFromProtos("v1", []proto.Message{&policyv1alpha1.MetricFilterPolicy{}})
 
-	rawPolicies, err := extractRawPolicies(&discoveryv3.DiscoveryResponse{
-		VersionInfo: "v1",
-		Resources:   []*anypb.Any{collectorAny},
-	})
-	require.ErrorIs(t, err, ErrXDSResourceNotPolicy)
+	require.ErrorIs(t, err, ErrPolicyTypeNotFound)
 	assert.Contains(t, err.Error(), "google.telemetry.policy.v1alpha1.MetricFilterPolicy")
-	assert.Empty(t, rawPolicies)
+	assert.Empty(t, ps.Policies)
+}
+
+// TestMakePolicySetFromProtos_KeepsUsablePoliciesFromAMixedRevision pins the
+// best-effort contract on the proto path: one unroutable policy does not cost
+// the revision the policies that were understood. The xDS manager depends on
+// this to tell a partially bad revision from a completely bad one.
+func TestMakePolicySetFromProtos_KeepsUsablePoliciesFromAMixedRevision(t *testing.T) {
+	registerProtoDriverForTest(t, "log_filter", &policyv1alpha1.LogFilterPolicy{})
+
+	ps, err := MakePolicySetFromProtos("v1", []proto.Message{
+		&policyv1alpha1.TraceFilterPolicy{Id: "unclaimed"},
+		&policyv1alpha1.LogFilterPolicy{Id: "usable"},
+	})
+
+	require.ErrorIs(t, err, ErrPolicyTypeNotFound)
+	// The failure is reported by position, since a bare proto has no name of
+	// its own to quote back.
+	assert.Contains(t, err.Error(), "index 0")
+	require.Len(t, ps.Policies, 1)
+	assert.Contains(t, ps.Policies, "usable")
 }
 
 func TestTokenAuth_RequireTransportSecurity(t *testing.T) {
@@ -331,6 +344,12 @@ func TestTokenAuth_RequireTransportSecurity(t *testing.T) {
 	assert.True(t, (&TokenAuth{}).RequireTransportSecurity())
 }
 
+// dummyPolicyDriver stands in for a policy component across the manager tests.
+//
+// It claims google.protobuf.Struct so that tests can put an arbitrary policy
+// body on the wire without depending on a real policy schema, and still be
+// routed the way a real policy is: by the identity of the message, not by a
+// field inside it.
 type dummyPolicyDriver struct{}
 
 func (d *dummyPolicyDriver) LoadPolicy(raw map[string]any) (Policy, error) {
@@ -338,13 +357,33 @@ func (d *dummyPolicyDriver) LoadPolicy(raw map[string]any) (Policy, error) {
 	return &mockTransformationPolicy{name: name, signals: []Signal{SignalLogs}}, nil
 }
 
+func (d *dummyPolicyDriver) PolicyProto() proto.Message { return &structpb.Struct{} }
+
+func (d *dummyPolicyDriver) LoadPolicyProto(msg proto.Message) (Policy, error) {
+	s, ok := msg.(*structpb.Struct)
+	if !ok {
+		return nil, fmt.Errorf("%w: expected *structpb.Struct, got %T", ErrPolicyProtoMismatch, msg)
+	}
+	return d.LoadPolicy(s.AsMap())
+}
+
+// registerDummyDriverForTest registers dummyPolicyDriver under
+// "mock_transformation", tolerating the registration another test already made:
+// the registry is process-global and has no removal API, and every caller wants
+// the same driver in place.
+func registerDummyDriverForTest(t *testing.T) {
+	t.Helper()
+	if _, ok := policyRegistry["mock_transformation"]; ok {
+		return
+	}
+	require.NoError(t, RegisterPolicyDriver("mock_transformation", &dummyPolicyDriver{}))
+}
+
 func TestXDSPolicyLifecycle_SetActivePolicySet(t *testing.T) {
-	// Register driver for test policy type
-	_ = RegisterPolicyDriver("mock_transformation", &dummyPolicyDriver{})
+	registerDummyDriverForTest(t)
 
 	policyPayload, err := structpb.NewStruct(map[string]any{
 		"name": "log-filter-policy",
-		"type": "mock_transformation",
 	})
 	require.NoError(t, err)
 
@@ -363,11 +402,11 @@ func TestXDSPolicyLifecycle_SetActivePolicySet(t *testing.T) {
 		Resources:   []*anypb.Any{collectorAny},
 	}
 
-	rawPolicies, err := extractRawPolicies(resp)
+	policies, err := extractPolicyProtos(resp)
 	require.NoError(t, err)
 
-	// Step 1: MakePolicySet
-	ps, err := MakePolicySet(resp.GetVersionInfo(), rawPolicies)
+	// Step 1: MakePolicySetFromProtos
+	ps, err := MakePolicySetFromProtos(resp.GetVersionInfo(), policies)
 	require.NoError(t, err)
 	require.NotNil(t, ps)
 

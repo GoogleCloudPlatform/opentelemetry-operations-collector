@@ -16,6 +16,7 @@ package googlepolicy
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -28,6 +29,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/pdata/ptrace"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -193,6 +195,15 @@ type ProtoPolicyDriver interface {
 	// PolicyProto returns an empty instance of the policy's proto message.
 	// Only its descriptor is read; the value is never populated or retained.
 	PolicyProto() proto.Message
+
+	// LoadPolicyProto builds a Policy from an already-decoded policy proto.
+	// The message is the one PolicyProto declares; a driver handed anything
+	// else must reject it rather than guess.
+	//
+	// This is required rather than optional so that a driver which declares a
+	// proto cannot silently fall back to the map path: that fallback would be
+	// invisible, and it is the path this method exists to avoid.
+	LoadPolicyProto(msg proto.Message) (Policy, error)
 }
 
 // PolicySet is the translation of a set of policies received from a given source
@@ -220,30 +231,60 @@ type PolicySetEntry struct {
 // len(ps.Policies) against the number of inputs to detect a partial set, and
 // reject the whole thing if that is not acceptable.
 func MakePolicySet(revisionID string, rawPolicyConfigs []map[string]any) (*PolicySet, error) {
+	return makePolicySet(revisionID, rawPolicyConfigs, func(i int, rawPolicyConfig map[string]any) (Policy, error) {
+		// HARD CODED ASSUMPTION: for each entry the map contains a top-level
+		// field called `type` that contains the policy type. This will match up
+		// with the registered PolicyDriver.
+		//
+		// This envelope is what authored config uses to say which driver it
+		// means. Policies that arrive as a proto carry their identity in the
+		// message type instead and go through MakePolicySetFromProtos, which
+		// needs none of this.
+		policyTypeRaw, ok := rawPolicyConfig["type"]
+		if !ok {
+			return nil, fmt.Errorf("%w for policy at index %d", ErrPolicyTypeFieldMissing, i)
+		}
+		policyType, ok := policyTypeRaw.(string)
+		if !ok {
+			return nil, fmt.Errorf("%w for policy at index %d", ErrPolicyTypeFieldWrongType, i)
+		}
+		return LoadPolicy(policyType, rawPolicyConfig)
+	})
+}
+
+// MakePolicySetFromProtos builds a PolicySet from decoded policy protos, on the
+// same best-effort terms as MakePolicySet: see its documentation for how to
+// read the returned set and error together.
+//
+// Each policy is routed to a driver by its message type, so no "type" field is
+// read from -- or needed in -- the policy body.
+func MakePolicySetFromProtos(revisionID string, msgs []proto.Message) (*PolicySet, error) {
+	return makePolicySet(revisionID, msgs, func(i int, msg proto.Message) (Policy, error) {
+		p, err := LoadPolicyFromProto(msg)
+		if err != nil {
+			// A bare proto has no name of its own to report, so the position in
+			// the revision is the only thing that identifies which one failed.
+			return nil, fmt.Errorf("policy at index %d: %w", i, err)
+		}
+		return p, nil
+	})
+}
+
+// makePolicySet accumulates whatever load can make sense of, collecting the
+// failures rather than stopping at the first one. It is the shared body of
+// MakePolicySet and MakePolicySetFromProtos, which differ only in how a single
+// input is turned into a Policy.
+func makePolicySet[T any](revisionID string, inputs []T, load func(int, T) (Policy, error)) (*PolicySet, error) {
 	ps := &PolicySet{
-		Policies:   make(map[string]*PolicySetEntry, len(rawPolicyConfigs)),
+		Policies:   make(map[string]*PolicySetEntry, len(inputs)),
 		RevisionID: revisionID,
 		ReceivedAt: time.Now(),
 	}
 
-	errs := make([]error, 0, len(rawPolicyConfigs))
+	errs := make([]error, 0, len(inputs))
 
-	for i, rawPolicyConfig := range rawPolicyConfigs {
-		// HARD CODED ASSUMPTION: Whether unmarshalled from a set of protos or a set of JSON objects,
-		// for each entry the map will contain a top-level field called `type` that contains the policy
-		// type. This will match up with the registered PolicyDriver.
-		policyTypeRaw, ok := rawPolicyConfig["type"]
-		if !ok {
-			errs = append(errs, fmt.Errorf("%w for policy at index %d", ErrPolicyTypeFieldMissing, i))
-			continue
-		}
-		policyType, ok := policyTypeRaw.(string)
-		if !ok {
-			errs = append(errs, fmt.Errorf("%w for policy at index %d", ErrPolicyTypeFieldWrongType, i))
-			continue
-		}
-
-		p, err := LoadPolicy(policyType, rawPolicyConfig)
+	for i, in := range inputs {
+		p, err := load(i, in)
 		if err != nil {
 			errs = append(errs, err)
 			continue
@@ -346,4 +387,60 @@ func (gd *GenericDriver[P]) LoadPolicy(raw map[string]any) (Policy, error) {
 		return nil, err
 	}
 	return p, nil
+}
+
+// ProtoDriver registers a policy whose canonical form is a proto message,
+// serving both delivery paths from one constructor: a policy that arrives as a
+// proto is handed straight to New, and an authored config is unmarshalled into
+// the same message first.
+//
+// It is generic over the message rather than written out per policy because
+// every such driver was otherwise the same twenty lines, differing only in the
+// message type and the constructor to call.
+type ProtoDriver[P proto.Message] struct {
+	// New compiles a validated proto into the package's Policy. It is a field
+	// rather than a method because the constructor is package-specific and
+	// cannot be reached from the type parameter alone.
+	New func(P) (Policy, error)
+}
+
+// newP returns a fresh, empty P.
+//
+// P is a pointer type, so its zero value is a typed nil, and protobuf-go's
+// generated ProtoReflect tolerates a nil receiver -- it resolves the descriptor
+// from the type, not the value. That makes an instance reachable from the type
+// parameter alone, with no zero-value field to store.
+func (d ProtoDriver[P]) newP() P {
+	var zero P
+	return zero.ProtoReflect().New().Interface().(P)
+}
+
+// PolicyProto returns an empty instance of P for the registry to route on.
+func (d ProtoDriver[P]) PolicyProto() proto.Message { return d.newP() }
+
+// LoadPolicyProto builds the policy directly from the decoded message, which is
+// the whole point of the type: no serialization happens on this path.
+func (d ProtoDriver[P]) LoadPolicyProto(msg proto.Message) (Policy, error) {
+	typed, ok := msg.(P)
+	if !ok {
+		return nil, fmt.Errorf("%w: expected %T, got %T", ErrPolicyProtoMismatch, d.newP(), msg)
+	}
+	return d.New(typed)
+}
+
+// LoadPolicy decodes an authored config into P and loads it. Unknown fields are
+// discarded so that a config written against a newer schema still loads what
+// this build understands, rather than being rejected outright.
+func (d ProtoDriver[P]) LoadPolicy(raw map[string]any) (Policy, error) {
+	jsonBytes, err := json.Marshal(raw)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal raw policy map to json: %w", err)
+	}
+
+	pb := d.newP()
+	if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(jsonBytes, pb); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal into %T: %w", pb, err)
+	}
+
+	return d.New(pb)
 }

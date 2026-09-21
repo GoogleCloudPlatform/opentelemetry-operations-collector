@@ -387,8 +387,9 @@ type fakeProtoDriver struct {
 	msg proto.Message
 }
 
-func (d *fakeProtoDriver) LoadPolicy(map[string]any) (Policy, error) { return nil, nil }
-func (d *fakeProtoDriver) PolicyProto() proto.Message                { return d.msg }
+func (d *fakeProtoDriver) LoadPolicy(map[string]any) (Policy, error)     { return nil, nil }
+func (d *fakeProtoDriver) PolicyProto() proto.Message                    { return d.msg }
+func (d *fakeProtoDriver) LoadPolicyProto(proto.Message) (Policy, error) { return nil, nil }
 
 // unregisterForTest undoes a registration, since the registry is process-global
 // and has no removal API of its own.

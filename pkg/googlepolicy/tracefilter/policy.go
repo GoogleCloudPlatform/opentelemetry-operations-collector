@@ -19,7 +19,6 @@
 package tracefilter
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -28,52 +27,27 @@ import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/matcher"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/ptrace"
-	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
 // PolicyType is the registered policy type identifier for trace filter policies.
 const PolicyType = "trace_filter"
 
+// driver loads a TraceFilterPolicy from either shape it can arrive in: the
+// proto a control plane sends, or the map an authored config decodes to.
+//
+// Exposed to the package (rather than constructed inline in init) so tests
+// exercise the very value that is registered.
+var driver = googlepolicy.ProtoDriver[*policyv1alpha1.TraceFilterPolicy]{
+	New: func(pb *policyv1alpha1.TraceFilterPolicy) (googlepolicy.Policy, error) {
+		return NewPolicyFromProto(pb)
+	},
+}
+
 func init() {
-	if err := googlepolicy.RegisterPolicyDriver(PolicyType, &Driver{}); err != nil {
+	if err := googlepolicy.RegisterPolicyDriver(PolicyType, driver); err != nil {
 		panic(err)
 	}
-}
-
-// Driver implements googlepolicy.PolicyDriver for loading TraceFilterPolicy configurations.
-type Driver struct{}
-
-var _ googlepolicy.ProtoPolicyDriver = (*Driver)(nil)
-
-// PolicyName returns the registered policy type handled by this driver.
-func (d *Driver) PolicyName() string {
-	return PolicyType
-}
-
-// PolicyProto returns the proto message this driver loads from. The registry
-// uses its descriptor to route policies that arrive as a bare proto with no
-// explicit policy type in the body.
-func (d *Driver) PolicyProto() proto.Message {
-	return &policyv1alpha1.TraceFilterPolicy{}
-}
-
-// LoadPolicy unmarshals a raw policy configuration map into a compiled *Policy.
-func (d *Driver) LoadPolicy(raw map[string]any) (googlepolicy.Policy, error) {
-	jsonBytes, err := json.Marshal(raw)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal raw policy map to json: %w", err)
-	}
-
-	pb := &policyv1alpha1.TraceFilterPolicy{}
-	unmarshaler := protojson.UnmarshalOptions{
-		DiscardUnknown: true,
-	}
-	if err := unmarshaler.Unmarshal(jsonBytes, pb); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal into TraceFilterPolicy proto: %w", err)
-	}
-
-	return NewPolicyFromProto(pb)
 }
 
 var (

@@ -149,12 +149,14 @@ func newTestManager(t *testing.T, dialOpt grpc.DialOption) *xdsPolicyManager {
 }
 
 // policyResource builds a DiscoveryResponse resource carrying a single policy.
-func policyResource(t *testing.T, name, policyType string) *anypb.Any {
+//
+// The body is a bare Struct with no policy type in it: routing is by message
+// identity, and dummyPolicyDriver is the driver registered for that message.
+func policyResource(t *testing.T, name string) *anypb.Any {
 	t.Helper()
 
 	payload, err := structpb.NewStruct(map[string]any{
 		"name": name,
-		"type": policyType,
 	})
 	require.NoError(t, err)
 
@@ -181,7 +183,7 @@ func resetActivePolicySet(t *testing.T) {
 }
 
 func TestXDSPolicyManager_ReconnectsWithBackoff(t *testing.T) {
-	_ = RegisterPolicyDriver("mock_transformation", &dummyPolicyDriver{})
+	registerDummyDriverForTest(t)
 	resetActivePolicySet(t)
 
 	ackReceived := make(chan *discoveryv3.DiscoveryRequest, 1)
@@ -204,7 +206,7 @@ func TestXDSPolicyManager_ReconnectsWithBackoff(t *testing.T) {
 				VersionInfo: "rev-1",
 				Nonce:       "nonce-1",
 				TypeUrl:     xdsPolicyTypeURL,
-				Resources:   []*anypb.Any{policyResource(t, "log-filter", "mock_transformation")},
+				Resources:   []*anypb.Any{policyResource(t, "log-filter")},
 			}); err != nil {
 				return err
 			}
@@ -322,6 +324,7 @@ func TestXDSPolicyManager_NACKsUndecodableResource(t *testing.T) {
 // policy loads, it is applied and the revision is ACKed, so a single bad policy
 // from the control plane cannot disable all enforcement.
 func TestXDSPolicyManager_ACKsRevisionWithSomeUsablePolicies(t *testing.T) {
+	registerDummyDriverForTest(t)
 	resetActivePolicySet(t)
 
 	ackReceived := make(chan *discoveryv3.DiscoveryRequest, 1)
@@ -338,7 +341,7 @@ func TestXDSPolicyManager_ACKsRevisionWithSomeUsablePolicies(t *testing.T) {
 				Nonce:       "nonce-partial",
 				TypeUrl:     xdsPolicyTypeURL,
 				Resources: []*anypb.Any{
-					policyResource(t, "log-filter", "mock_transformation"),
+					policyResource(t, "log-filter"),
 					{
 						TypeUrl: "type.googleapis.com/does.not.Exist",
 						Value:   []byte("garbage"),
@@ -460,7 +463,7 @@ func activePolicyNames(t *testing.T) []string {
 // An ADS stream is multiplexed, so unrelated responses are expected traffic; an
 // empty one previously cleared every policy and was ACKed.
 func TestXDSPolicyManager_IgnoresUnrelatedResourceType(t *testing.T) {
-	_ = RegisterPolicyDriver("mock_transformation", &dummyPolicyDriver{})
+	registerDummyDriverForTest(t)
 	resetActivePolicySet(t)
 
 	responded := make(chan *discoveryv3.DiscoveryRequest, 4)
@@ -480,7 +483,7 @@ func TestXDSPolicyManager_IgnoresUnrelatedResourceType(t *testing.T) {
 			// Establish a policy we can watch for damage.
 			if err := stream.Send(&discoveryv3.DiscoveryResponse{
 				VersionInfo: "rev-1", Nonce: "n1", TypeUrl: xdsPolicyTypeURL,
-				Resources: []*anypb.Any{policyResource(t, "log-filter", "mock_transformation")},
+				Resources: []*anypb.Any{policyResource(t, "log-filter")},
 			}); err != nil {
 				return err
 			}
@@ -505,7 +508,7 @@ func TestXDSPolicyManager_IgnoresUnrelatedResourceType(t *testing.T) {
 			// arrival proves the unrelated response was handled (ignored) first.
 			if err := stream.Send(&discoveryv3.DiscoveryResponse{
 				VersionInfo: "rev-3", Nonce: "n3", TypeUrl: xdsPolicyTypeURL,
-				Resources: []*anypb.Any{policyResource(t, "trace-filter", "mock_transformation")},
+				Resources: []*anypb.Any{policyResource(t, "trace-filter")},
 			}); err != nil {
 				return err
 			}
@@ -544,7 +547,7 @@ func TestXDSPolicyManager_IgnoresUnrelatedResourceType(t *testing.T) {
 // TestXDSPolicyManager_SkipsAlreadyAppliedRevision asserts that a repeat of the
 // revision we are already running is ACKed but not re-applied.
 func TestXDSPolicyManager_SkipsAlreadyAppliedRevision(t *testing.T) {
-	_ = RegisterPolicyDriver("mock_transformation", &dummyPolicyDriver{})
+	registerDummyDriverForTest(t)
 	resetActivePolicySet(t)
 
 	responded := make(chan *discoveryv3.DiscoveryRequest, 4)
@@ -557,7 +560,7 @@ func TestXDSPolicyManager_SkipsAlreadyAppliedRevision(t *testing.T) {
 			}
 			if err := stream.Send(&discoveryv3.DiscoveryResponse{
 				VersionInfo: "rev-1", Nonce: "n1", TypeUrl: xdsPolicyTypeURL,
-				Resources: []*anypb.Any{policyResource(t, "log-filter", "mock_transformation")},
+				Resources: []*anypb.Any{policyResource(t, "log-filter")},
 			}); err != nil {
 				return err
 			}
@@ -571,7 +574,7 @@ func TestXDSPolicyManager_SkipsAlreadyAppliedRevision(t *testing.T) {
 			// plane's identity for a revision, so this must not be applied.
 			if err := stream.Send(&discoveryv3.DiscoveryResponse{
 				VersionInfo: "rev-1", Nonce: "n2", TypeUrl: xdsPolicyTypeURL,
-				Resources: []*anypb.Any{policyResource(t, "different-policy", "mock_transformation")},
+				Resources: []*anypb.Any{policyResource(t, "different-policy")},
 			}); err != nil {
 				return err
 			}
@@ -607,7 +610,7 @@ func TestXDSPolicyManager_SkipsAlreadyAppliedRevision(t *testing.T) {
 // counterpart to the filter above: an empty revision for *our own* type really
 // does mean "drop everything", and is applied.
 func TestXDSPolicyManager_EmptyRevisionClearsPolicies(t *testing.T) {
-	_ = RegisterPolicyDriver("mock_transformation", &dummyPolicyDriver{})
+	registerDummyDriverForTest(t)
 	resetActivePolicySet(t)
 
 	responded := make(chan *discoveryv3.DiscoveryRequest, 4)
@@ -620,7 +623,7 @@ func TestXDSPolicyManager_EmptyRevisionClearsPolicies(t *testing.T) {
 			}
 			if err := stream.Send(&discoveryv3.DiscoveryResponse{
 				VersionInfo: "rev-1", Nonce: "n1", TypeUrl: xdsPolicyTypeURL,
-				Resources: []*anypb.Any{policyResource(t, "log-filter", "mock_transformation")},
+				Resources: []*anypb.Any{policyResource(t, "log-filter")},
 			}); err != nil {
 				return err
 			}
@@ -666,7 +669,7 @@ func TestXDSPolicyManager_EmptyRevisionClearsPolicies(t *testing.T) {
 // immediately after Start, so a fire-and-forget Start would race it and silently
 // come up on built-in policies even though the control plane was reachable.
 func TestXDSPolicyManager_StartWaitsForInitialPolicySet(t *testing.T) {
-	_ = RegisterPolicyDriver("mock_transformation", &dummyPolicyDriver{})
+	registerDummyDriverForTest(t)
 	resetActivePolicySet(t)
 
 	srv := &fakeADSServer{streamOpened: make(chan struct{}, 8)}
@@ -680,7 +683,7 @@ func TestXDSPolicyManager_StartWaitsForInitialPolicySet(t *testing.T) {
 			time.Sleep(50 * time.Millisecond)
 			if err := stream.Send(&discoveryv3.DiscoveryResponse{
 				VersionInfo: "rev-1", Nonce: "n1", TypeUrl: xdsPolicyTypeURL,
-				Resources: []*anypb.Any{policyResource(t, "log-filter", "mock_transformation")},
+				Resources: []*anypb.Any{policyResource(t, "log-filter")},
 			}); err != nil {
 				return err
 			}
@@ -836,7 +839,7 @@ func TestXDSPolicyManager_StopUnblocksStart(t *testing.T) {
 // be applied, which is what keeps a collector that booted before its control
 // plane from being stuck on built-in policies forever.
 func TestXDSPolicyManager_AppliesRevisionAfterTimeout(t *testing.T) {
-	_ = RegisterPolicyDriver("mock_transformation", &dummyPolicyDriver{})
+	registerDummyDriverForTest(t)
 	resetActivePolicySet(t)
 
 	responded := make(chan *discoveryv3.DiscoveryRequest, 2)
@@ -851,7 +854,7 @@ func TestXDSPolicyManager_AppliesRevisionAfterTimeout(t *testing.T) {
 			time.Sleep(300 * time.Millisecond)
 			if err := stream.Send(&discoveryv3.DiscoveryResponse{
 				VersionInfo: "rev-late", Nonce: "n1", TypeUrl: xdsPolicyTypeURL,
-				Resources: []*anypb.Any{policyResource(t, "late-filter", "mock_transformation")},
+				Resources: []*anypb.Any{policyResource(t, "late-filter")},
 			}); err != nil {
 				return err
 			}

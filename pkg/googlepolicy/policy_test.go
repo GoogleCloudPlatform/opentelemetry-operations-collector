@@ -267,6 +267,19 @@ func TestMakePolicySetAndGenericDriver(t *testing.T) {
 	})
 	assert.Error(t, err)
 
+	// Partial success: the unusable entries are reported and skipped, but the
+	// policies that did load are still returned.
+	ps, err = MakePolicySet("rev-partial", []map[string]any{
+		{"name": "no-type"},
+		{"type": "driver_test_type", "name": "good-pol"},
+		{"type": "driver_test_type", "name": "bad-pol", "fail_val": true},
+	})
+	assert.ErrorIs(t, err, ErrPolicyTypeFieldMissing)
+	assert.ErrorIs(t, err, ErrPolicyFailedValidation)
+	require.NotNil(t, ps)
+	assert.Contains(t, ps.Policies, "good-pol")
+	assert.Len(t, ps.Policies, 1, "only the usable policy is kept")
+
 	// GenericDriver unmarshal error
 	_, err = driver.LoadPolicy(map[string]any{
 		"name": []int{1, 2, 3}, // invalid type for string field

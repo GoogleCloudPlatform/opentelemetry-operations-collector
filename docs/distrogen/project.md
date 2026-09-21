@@ -55,8 +55,8 @@ Please note that this process will overwrite the Makefile, so it may look differ
 ### `update-otel-components`
 
 The `update-otel-components` target will update all local components to use the versions of
-OpenTelemetry Collector dependencies as outlined in the `opentelemetry_version`, `opentelemetry_contrib_version`,
-and `opentelemetry_stable_version` fields of the distribution spec.
+OpenTelemetry Collector dependencies as outlined in the `opentelemetry_version` and
+`opentelemetry_contrib_version` fields of the distribution spec.
 
 [Tools](#tool-variables) used: `DISTROGEN_BIN`
 

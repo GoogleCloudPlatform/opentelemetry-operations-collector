@@ -842,6 +842,14 @@ var (
 		// Fail fast on dropped SSH TCP SYN packets instead of hanging for 120s.
 		"-oConnectTimeout=15",
 		"-oConnectionAttempts=3",
+		// Abort stalled post-connect SSH handshakes or unresponsive sessions in 45s
+		// (3 * 15s). This is >2.8x the max 16s early-boot guest-agent network bounce
+		// window (b/557287367) to avoid false disconnects on active commands, while
+		// remaining well below OpenSSH's 120s LoginGraceTime so OpenSSH 9.8+
+		// PerSourcePenalties (penalty: exceeded LoginGraceTime) never bans the runner IP
+		// for 90s (b/564525639).
+		"-oServerAliveInterval=15",
+		"-oServerAliveCountMax=3",
 		// StrictHostKeyChecking is disabled because the host keys are unknown
 		// to us at the start of the test.
 		"-oStrictHostKeyChecking=no",
@@ -897,8 +905,11 @@ func isSSHTransportError(err error) bool {
 	return strings.Contains(errStr, "exit status 255") ||
 		strings.Contains(errStr, "ssh: connect to host") ||
 		strings.Contains(errStr, "Connection timed out") ||
+		(strings.Contains(errStr, "Connection to ") && strings.Contains(errStr, " timed out")) ||
+		strings.Contains(errStr, "not responding") ||
 		strings.Contains(errStr, "Connection refused") ||
 		strings.Contains(errStr, "Connection reset by peer") ||
+		strings.Contains(errStr, "Connection closed by remote host") ||
 		strings.Contains(errStr, "kex_exchange_identification") ||
 		strings.Contains(errStr, "Host key verification failed")
 }
@@ -906,6 +917,11 @@ func isSSHTransportError(err error) bool {
 // IsSSHTransportErrorForTest exports isSSHTransportError for unit testing.
 func IsSSHTransportErrorForTest(err error) bool {
 	return isSSHTransportError(err)
+}
+
+// SSHOptionsForTest returns a copy of sshOptions for unit testing.
+func SSHOptionsForTest() []string {
+	return append([]string(nil), sshOptions...)
 }
 
 // RunRemotelyStdin is just like RunRemotely but it accepts an io.Reader

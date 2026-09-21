@@ -35,6 +35,9 @@ var (
 )
 
 // policyRegistry is a central map that tracks all supported policies registered by any components.
+//
+// Unguarded by design; see RegisterPolicyDriver for the contract that makes
+// that safe, and what to do before breaking it.
 var policyRegistry = map[string]PolicyDriver{}
 
 // policyProtoRegistry routes a policy proto's fully qualified message name to
@@ -42,6 +45,8 @@ var policyRegistry = map[string]PolicyDriver{}
 // ProtoPolicyDriver appear here, which is deliberate: it is the set of policies
 // that can be delivered as a bare proto rather than as an authored config with
 // an explicit "type" field.
+//
+// Unguarded by design, on the same terms as policyRegistry.
 var policyProtoRegistry = map[protoreflect.FullName]string{}
 
 // maxPreviousPolicySets bounds how many superseded policy sets are retained.
@@ -81,6 +86,20 @@ type WatcherChannel <-chan struct{}
 // If the driver also implements ProtoPolicyDriver, its proto message name is
 // registered as a route to policyType, so a policy arriving as a bare proto can
 // be matched to this driver.
+//
+// Call this from a package init function, and only from there.
+//
+// The two registries it writes are deliberately unguarded by any mutex. That is
+// safe only because of when the writes happen: package initialisation completes
+// before main runs, so every write is ordered before any goroutine the program
+// later starts, including the xDS stream goroutine that reads both maps on each
+// revision (see LoadPolicyFromProto). Registering after startup -- lazily on
+// first use, or from a component's Start -- would put a map write next to those
+// reads. Go does not treat that as a recoverable error: it kills the process
+// with "fatal error: concurrent map read and map write", intermittently and in
+// production. Guard both maps with a sync.RWMutex before relaxing this, taking
+// a single read lock across both lookups in LoadPolicyFromProto so the two
+// registries cannot be observed disagreeing.
 func RegisterPolicyDriver(policyType string, driver PolicyDriver) error {
 	if _, ok := policyRegistry[policyType]; ok {
 		return fmt.Errorf("%w: %s", ErrPolicyTypeAlreadyRegistered, policyType)

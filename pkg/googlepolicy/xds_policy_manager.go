@@ -177,10 +177,23 @@ type xdsPolicyManager struct {
 	// in-memory listener; it is empty in production.
 	extraDialOpts []grpc.DialOption
 
-	// mu guards cancel below. It is never held across a blocking call (stream
-	// I/O, or waiting on wg).
+	// mu guards cancel, done, ready/readyClosed and lastAppliedVersion below.
+	// It is never held across a blocking call (stream I/O, or waiting on done).
+	//
+	// cancel and done are a pair describing the currently live stream loop, and
+	// are only ever non-nil together. They are cleared by the loop itself as it
+	// exits (see finishRun), never by Stop: that is what makes "cancel != nil"
+	// mean "a loop is still running" rather than "nobody has asked it to stop
+	// yet", so a Start racing a Stop is rejected instead of attaching a second
+	// loop to a teardown already in progress.
 	mu     sync.Mutex
 	cancel context.CancelFunc
+
+	// done is closed once the stream goroutine of the current generation has
+	// fully exited. Stop captures it and waits on that specific channel rather
+	// than on a shared WaitGroup, so it can never end up waiting on a loop
+	// started after it began tearing the previous one down.
+	done chan struct{}
 
 	// ready is closed once the stream loop has either completed one valid
 	// exchange with the control plane or stopped trying. Start waits on it.
@@ -188,9 +201,6 @@ type xdsPolicyManager struct {
 	// because the pair is recreated on every Start and a Once cannot be copied.
 	ready       chan struct{}
 	readyClosed bool
-
-	// wg tracks the stream goroutine so Stop can wait for it to exit.
-	wg sync.WaitGroup
 
 	// lastAppliedVersion is written by the stream goroutine and read by Stop's
 	// callers, so it takes mu as well.
@@ -355,7 +365,8 @@ func (m *xdsPolicyManager) Start() error {
 	m.readyClosed = false
 	ready := m.ready
 	timeout := m.initialSyncTimeout
-	m.wg.Add(1)
+	done := make(chan struct{})
+	m.done = done
 	m.mu.Unlock()
 
 	m.logger.Info("Starting xDS policy manager",
@@ -365,7 +376,15 @@ func (m *xdsPolicyManager) Start() error {
 		zap.String("type_url", xdsPolicyTypeURL),
 	)
 
-	go m.run(ctx)
+	go func() {
+		// Deferred in this order so that by the time done is closed -- which is
+		// the only thing Stop waits on -- the manager has already been returned
+		// to its startable state. A caller that sees Stop return can therefore
+		// call Start immediately and be sure it will not be rejected.
+		defer close(done)
+		defer m.finishRun(done)
+		m.run(ctx)
+	}()
 
 	select {
 	case <-ready:
@@ -393,22 +412,51 @@ func (m *xdsPolicyManager) markReady() {
 	}
 }
 
+// finishRun returns the manager to its startable state as the stream loop of
+// the given generation exits.
+//
+// The generation check matters on a restart: by the time a loop gets here, a
+// later Start may already have installed its own cancel/done pair, and clearing
+// that would advertise a running loop as stopped. Only the loop that still owns
+// the current pair may clear it.
+func (m *xdsPolicyManager) finishRun(done chan struct{}) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.done == done {
+		m.cancel = nil
+		m.done = nil
+	}
+}
+
 // Stop terminates the background stream loop and waits for it to exit. It is
 // safe to call before Start, more than once, and concurrently; afterwards the
 // manager can be started again.
+//
+// A Start that arrives while Stop is still waiting is rejected with
+// ErrXDSAlreadyStarted rather than racing the teardown, because the state saying
+// "a loop is running" is only cleared by the loop itself. Sequential use --
+// Stop returning, then Start -- is unaffected: Stop does not return until that
+// clearing has happened.
 func (m *xdsPolicyManager) Stop() error {
+	// Both halves of the live generation are captured together, so this Stop
+	// can only ever cancel and then wait on the same loop. Waiting on a shared
+	// WaitGroup instead would let a loop started after this point be caught up
+	// in the wait, which for a healthy loop means waiting forever.
 	m.mu.Lock()
 	cancel := m.cancel
-	m.cancel = nil
+	done := m.done
 	m.mu.Unlock()
 
 	if cancel != nil {
 		cancel()
 	}
-	// Waited on outside the lock, since the stream loop takes mu itself. This
-	// is a no-op if the loop was never started, and callers that lost the race
-	// to cancel still block until it has actually exited.
-	m.wg.Wait()
+	// Waited on outside the lock, since the stream loop takes mu itself. Nil
+	// when the loop was never started, or has already exited; otherwise every
+	// caller blocks here, including those that lost the race to cancel.
+	if done != nil {
+		<-done
+	}
 	return nil
 }
 
@@ -427,10 +475,12 @@ func (m *xdsPolicyManager) PolicyEvaluationResult(string, error) {}
 // run maintains the ADS stream for the lifetime of the manager, reconnecting
 // with exponential backoff whenever it drops.
 func (m *xdsPolicyManager) run(ctx context.Context) {
-	defer m.wg.Done()
 	// Once this loop is gone there will never be an initial sync, so anything
 	// still blocked in Start must be released regardless of why we exited:
 	// Stop cancelled us, or the control plane rejected our credentials.
+	//
+	// Clearing the manager's run state is the caller's job (see Start), so that
+	// it is ordered correctly against closing done.
 	defer m.markReady()
 
 	node := &corev3.Node{

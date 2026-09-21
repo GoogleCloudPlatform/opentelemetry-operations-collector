@@ -862,3 +862,95 @@ func TestXDSPolicyManager_AppliesRevisionAfterTimeout(t *testing.T) {
 	}
 	assert.Equal(t, []string{"late-filter"}, activePolicyNames(t))
 }
+
+// TestXDSPolicyManager_StopDoesNotHangWhenStartRaces pins the fix for a
+// deadlock: Stop used to clear the manager's cancel func and then wait on a
+// WaitGroup shared by every generation of the stream loop. A Start landing in
+// that window saw a cleared cancel, concluded nothing was running, and launched
+// a fresh loop with an uncancelled context -- which the in-flight Wait then
+// blocked on forever.
+//
+// Stop now waits only on the loop it cancelled, and a racing Start is turned
+// away instead of starting a second one.
+func TestXDSPolicyManager_StopDoesNotHangWhenStartRaces(t *testing.T) {
+	resetActivePolicySet(t)
+
+	// Repeated because the window is small: a single pass can easily have Start
+	// take mu before Stop and never exercise the interleaving at all.
+	for i := range 20 {
+		srv := &fakeADSServer{streamOpened: make(chan struct{}, 8)}
+		m := newTestManager(t, startFakeADSServer(t, srv))
+
+		require.NoError(t, m.Start())
+		select {
+		case <-srv.streamOpened:
+		case <-time.After(10 * time.Second):
+			t.Fatalf("iteration %d: timed out waiting for the stream to open", i)
+		}
+
+		startDone := make(chan error, 1)
+		stopDone := make(chan error, 1)
+		go func() { startDone <- m.Start() }()
+		go func() { stopDone <- m.Stop() }()
+
+		select {
+		case err := <-stopDone:
+			assert.NoError(t, err)
+		case <-time.After(10 * time.Second):
+			t.Fatalf("iteration %d: Stop deadlocked against a concurrent Start", i)
+		}
+		select {
+		case err := <-startDone:
+			// Either outcome is correct. Whichever took mu first decides: a
+			// Start that got there before Stop started a loop, and one that got
+			// there after was told a loop is still being torn down.
+			if err != nil {
+				assert.ErrorIs(t, err, ErrXDSAlreadyStarted)
+			}
+		case <-time.After(10 * time.Second):
+			t.Fatalf("iteration %d: Start never returned", i)
+		}
+
+		require.NoError(t, m.Stop())
+	}
+}
+
+// TestXDSPolicyManager_RestartableAfterTerminalAuthError asserts that giving up
+// on remote policies leaves a manager that can still be started again.
+//
+// The loop returns on a terminal auth error without anyone calling Stop, so
+// unless it clears its own run state the manager is left advertising a stream
+// loop that no longer exists: every later Start is rejected with
+// ErrXDSAlreadyStarted and the collector can never pick up new credentials
+// without a process restart.
+func TestXDSPolicyManager_RestartableAfterTerminalAuthError(t *testing.T) {
+	resetActivePolicySet(t)
+
+	srv := &fakeADSServer{streamOpened: make(chan struct{}, 8)}
+	srv.handlers = []func(discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error{
+		func(stream discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error {
+			// The request is read before rejecting so the status comes back to
+			// the client through Recv. A server that rejects without reading
+			// races the client's initial Send into io.EOF instead, which is a
+			// separate gap and not what this test is about.
+			if _, err := srv.recv(stream); err != nil {
+				return err
+			}
+			return grpcstatus.Error(codes.PermissionDenied, "collector is not authorized for this fleet")
+		},
+	}
+
+	m := newTestManager(t, startFakeADSServer(t, srv))
+	require.NoError(t, m.Start())
+	t.Cleanup(func() { require.NoError(t, m.Stop()) })
+
+	// Start returns as soon as the loop gives up, so by here it has exited.
+	require.Eventually(t, func() bool {
+		m.mu.Lock()
+		defer m.mu.Unlock()
+		return m.cancel == nil && m.done == nil
+	}, 10*time.Second, 10*time.Millisecond,
+		"a loop that gave up must clear its run state")
+
+	assert.NoError(t, m.Start(), "the manager must be startable after it gave up on remote policies")
+}

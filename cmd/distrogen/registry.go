@@ -174,9 +174,10 @@ func (gm *GoModuleID) MarshalYAML() (interface{}, error) {
 }
 
 type otelComponentVersion struct {
-	core       string
-	coreStable string
-	contrib    string
+	core          string
+	coreStable    string
+	contrib       string
+	contribStable string
 }
 
 // RegistryComponent is the type used as a basis for Registry.
@@ -207,10 +208,13 @@ func (c *RegistryComponent) IsContrib() bool {
 
 func (c *RegistryComponent) ApplyOTelVersion(otelVersion otelComponentVersion) {
 	c.GoMod.Tag = "v" + otelVersion.core
-	if c.Stable {
-		c.GoMod.Tag = "v" + otelVersion.coreStable
-	} else if c.IsContrib() {
+	if c.IsContrib() {
 		c.GoMod.Tag = "v" + otelVersion.contrib
+		if c.Stable {
+			c.GoMod.Tag = "v" + otelVersion.contribStable
+		}
+	} else if c.Stable {
+		c.GoMod.Tag = "v" + otelVersion.coreStable
 	}
 }
 

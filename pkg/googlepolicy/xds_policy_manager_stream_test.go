@@ -732,28 +732,52 @@ func TestXDSPolicyManager_StartGivesUpAfterTimeout(t *testing.T) {
 // rejection ends the loop instead of being retried forever. Unauthenticated and
 // PermissionDenied are verdicts on this collector's identity, so reconnecting
 // only spams the control plane with a request that cannot start succeeding.
+//
+// The two cases differ only in whether the server reads the collector's request
+// before rejecting it, which decides where gRPC surfaces the status. A server
+// that reads first fails the client's Recv with PermissionDenied. A server that
+// rejects outright -- what authorization in an interceptor looks like, and so
+// the more realistic of the two -- has already torn the stream down by the time
+// the client sends, and gRPC reports that to Send as a bare io.EOF with the
+// status available only from Recv. Both must reach isTerminalAuthError; the
+// second did not before the Send path learned to fall through.
 func TestXDSPolicyManager_StopsOnTerminalAuthError(t *testing.T) {
-	resetActivePolicySet(t)
+	for _, tc := range []struct {
+		name       string
+		readsFirst bool
+	}{
+		{name: "server rejects before reading the request", readsFirst: false},
+		{name: "server rejects after reading the request", readsFirst: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resetActivePolicySet(t)
 
-	srv := &fakeADSServer{streamOpened: make(chan struct{}, 8)}
-	srv.handlers = []func(discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error{
-		func(discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error {
-			return grpcstatus.Error(codes.PermissionDenied, "collector is not authorized for this fleet")
-		},
+			srv := &fakeADSServer{streamOpened: make(chan struct{}, 8)}
+			srv.handlers = []func(discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error{
+				func(stream discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error {
+					if tc.readsFirst {
+						if _, err := srv.recv(stream); err != nil {
+							return err
+						}
+					}
+					return grpcstatus.Error(codes.PermissionDenied, "collector is not authorized for this fleet")
+				},
+			}
+
+			m := newTestManager(t, startFakeADSServer(t, srv))
+			// Long enough that a Start returning early proves the loop gave up
+			// rather than that the wait simply expired.
+			m.initialSyncTimeout = 10 * time.Second
+
+			require.NoError(t, m.Start())
+			t.Cleanup(func() { require.NoError(t, m.Stop()) })
+
+			// Backoff here is ~1ms, so any retry would have happened many times over.
+			time.Sleep(100 * time.Millisecond)
+			assert.Equal(t, 1, srv.attemptCount(), "a rejected collector must not reconnect")
+			assert.Nil(t, ActivePolicySet())
+		})
 	}
-
-	m := newTestManager(t, startFakeADSServer(t, srv))
-	// Long enough that a Start returning early proves the loop gave up rather
-	// than that the wait simply expired.
-	m.initialSyncTimeout = 10 * time.Second
-
-	require.NoError(t, m.Start())
-	t.Cleanup(func() { require.NoError(t, m.Stop()) })
-
-	// Backoff here is ~1ms, so any retry would have happened many times over.
-	time.Sleep(50 * time.Millisecond)
-	assert.Equal(t, 1, srv.attemptCount(), "a rejected collector must not reconnect")
-	assert.Nil(t, ActivePolicySet())
 }
 
 func TestIsTerminalAuthError(t *testing.T) {

@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math/rand/v2"
 	"net"
 	"net/url"
@@ -598,19 +599,41 @@ func (m *xdsPolicyManager) streamPolicies(ctx context.Context, conn *grpc.Client
 	// On a fresh stream the client resends the last version it applied with an
 	// empty nonce, so the control plane knows what this collector is running and
 	// can skip re-sending an unchanged revision.
+	//
+	// An io.EOF here is not a send failure so much as a report that the server
+	// has already terminated the stream, and gRPC's contract is that the status
+	// explaining why is only available from Recv. Returning the io.EOF as-is
+	// would strip the one thing run() needs to tell a rejection from a blip: a
+	// control plane that authorizes in an interceptor rejects before it ever
+	// reads this request, so PermissionDenied would arrive looking like a
+	// generic disconnect and be retried forever.
+	//
+	// Falling through leaves that to the loop below, which is also why this
+	// does not simply call Recv here: gRPC delivers buffered messages ahead of
+	// the terminating status, so a revision the server managed to send before
+	// hanging up gets processed instead of quietly discarded. An error the
+	// client produced itself already carries its own status and is returned
+	// directly, per the same contract.
 	if err := stream.Send(&discoveryv3.DiscoveryRequest{
 		Node:        node,
 		TypeUrl:     xdsPolicyTypeURL,
 		VersionInfo: m.LastAppliedVersion(),
 	}); err != nil {
-		return false, fmt.Errorf("failed to send DiscoveryRequest to %s: %w", m.serverAddr, err)
+		if !errors.Is(err, io.EOF) {
+			return false, fmt.Errorf("failed to send DiscoveryRequest to %s: %w", m.serverAddr, err)
+		}
+		// Deliberately not logged as a successful connection below: the request
+		// never reached the server.
+		m.logger.Debug("xDS stream was already closed when sending the initial DiscoveryRequest",
+			zap.String("server", m.serverAddr),
+		)
+	} else {
+		m.logger.Info("Connected to xDS server and sent DiscoveryRequest",
+			zap.String("server", m.serverAddr),
+			zap.String("fleet", m.fleetID),
+			zap.String("type_url", xdsPolicyTypeURL),
+		)
 	}
-
-	m.logger.Info("Connected to xDS server and sent DiscoveryRequest",
-		zap.String("server", m.serverAddr),
-		zap.String("fleet", m.fleetID),
-		zap.String("type_url", xdsPolicyTypeURL),
-	)
 
 	progressed := false
 	for {
@@ -653,9 +676,7 @@ func (m *xdsPolicyManager) handleResponse(stream discoveryv3.AggregatedDiscovery
 	// the control plane is still waiting on a response for this nonce.
 	if version := resp.GetVersionInfo(); version != "" && version == m.LastAppliedVersion() {
 		m.logger.Debug("Re-ACKing an already applied xDS revision", zap.String("version", version))
-		if err := m.sendACK(stream, node, version, resp.GetNonce()); err != nil {
-			m.logger.Error("Failed to send xDS ACK", zap.String("version", version), zap.Error(err))
-		}
+		m.sendACK(stream, node, version, resp.GetNonce())
 		// The revision the control plane wants is the one already in effect, so
 		// as far as Start is concerned the collector is in sync.
 		m.markReady()
@@ -710,12 +731,7 @@ func (m *xdsPolicyManager) handleResponse(stream discoveryv3.AggregatedDiscovery
 	SetActivePolicySet(policySet)
 
 	// 3. Send xDS ACK.
-	if err := m.sendACK(stream, node, resp.GetVersionInfo(), resp.GetNonce()); err != nil {
-		m.logger.Error("Failed to send xDS ACK",
-			zap.String("version", resp.GetVersionInfo()),
-			zap.Error(err),
-		)
-	}
+	m.sendACK(stream, node, resp.GetVersionInfo(), resp.GetNonce())
 
 	// The policy set is live, so Start can stop waiting and let the provider
 	// evaluate it. Only reached once the revision was accepted; a NACKed
@@ -763,19 +779,41 @@ func (m *xdsPolicyManager) waitBeforeRetry(ctx context.Context, base time.Durati
 	return next, true
 }
 
-func (m *xdsPolicyManager) sendACK(stream discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesClient, node *corev3.Node, versionInfo, nonce string) error {
+// sendACK accepts a revision. The version is recorded before the send, since
+// the collector is running those policies either way -- a send that fails only
+// means the control plane has not been told yet.
+//
+// Failures are logged rather than returned. A failed send here means the stream
+// is gone, which the Recv loop is about to observe and report along with the
+// status that actually explains it; returning the error only had both callers
+// duplicate a worse version of that message. It is logged at debug for the same
+// reason: on its own it is noise, and never appears without a better-informed
+// line beside it.
+//
+// Note this deliberately does not call Recv to recover the real status the way
+// streamPolicies' fall-through does. gRPC delivers buffered messages ahead of
+// the terminating status, so a Recv here could consume a DiscoveryResponse that
+// the loop is about to read, dropping a revision to improve a log line.
+func (m *xdsPolicyManager) sendACK(stream discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesClient, node *corev3.Node, versionInfo, nonce string) {
 	m.setLastAppliedVersion(versionInfo)
 
-	return stream.Send(&discoveryv3.DiscoveryRequest{
+	if err := stream.Send(&discoveryv3.DiscoveryRequest{
 		Node:          node,
 		TypeUrl:       xdsPolicyTypeURL,
 		VersionInfo:   versionInfo,
 		ResponseNonce: nonce,
-	})
+	}); err != nil {
+		m.logger.Debug("Failed to send xDS ACK; the stream loop will report why",
+			zap.String("version", versionInfo),
+			zap.Error(err),
+		)
+	}
 }
 
 // sendNACK rejects a response, reporting the version the collector is still
 // running so the control plane knows the update did not take effect.
+//
+// Send failures are handled the same way as in sendACK; see the note there.
 func (m *xdsPolicyManager) sendNACK(stream discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesClient, node *corev3.Node, nonce string, cause error) {
 	err := stream.Send(&discoveryv3.DiscoveryRequest{
 		Node:          node,
@@ -788,7 +826,7 @@ func (m *xdsPolicyManager) sendNACK(stream discoveryv3.AggregatedDiscoveryServic
 		},
 	})
 	if err != nil {
-		m.logger.Error("Failed to send xDS NACK", zap.Error(err))
+		m.logger.Debug("Failed to send xDS NACK; the stream loop will report why", zap.Error(err))
 	}
 }
 

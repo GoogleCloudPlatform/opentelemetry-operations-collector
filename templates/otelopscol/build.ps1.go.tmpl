@@ -26,7 +26,9 @@
 
 param (
     [string]$jmxHash = "",
-    [string]$outDir = "."
+    [string]$outDir = ".",
+    [string]$version = "",
+    [string]$buildDistro = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -128,7 +130,9 @@ function Build-WindowsCollector {
     param (
         [string]$goBin,
         [string]$jmxHash,
-        [string]$outDir
+        [string]$outDir,
+        [string]$version,
+        [string]$buildDistro
     )
 
     $originalPath = $null
@@ -139,6 +143,12 @@ function Build-WindowsCollector {
         $ldFlags = "-s -w"
         if ($jmxHash -ne "") {
             $ldFlags += " -X github.com/open-telemetry/opentelemetry-collector-contrib/receiver/jmxreceiver.MetricsGathererHash=$jmxHash"
+        }
+        if ($version -ne "") {
+            $ldFlags += " -X github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/version.Version=$version"
+        }
+        if ($buildDistro -ne "") {
+            $ldFlags += " -X github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/version.BuildDistro=$buildDistro"
         }
 
         # Ensure output directory exists
@@ -166,6 +176,6 @@ Ensure-MSYS2
 $goBin = Get-GoBin -toolsDir $toolsDir
 $ocbBin = Ensure-OCB -toolsDir $toolsDir -goBin $goBin
 Generate-CollectorSource -ocbBin $ocbBin -goBin $goBin
-Build-WindowsCollector -goBin $goBin -jmxHash $jmxHash -outDir $outDir
+Build-WindowsCollector -goBin $goBin -jmxHash $jmxHash -outDir $outDir -version $version -buildDistro $buildDistro
 
 Write-Host "Script finished."

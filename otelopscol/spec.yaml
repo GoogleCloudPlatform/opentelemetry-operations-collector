@@ -56,10 +56,12 @@ components:
         - googleclientauth
         - pprof
         - filestorage
+        - opsagenthealthchecks
     providers:
         - googlesecretmanager
         - file
         - env
+        - opsagentconf
 replaces:
     - from: github.com/GoogleCloudPlatform/opentelemetry-operations-collector
       to: ../../

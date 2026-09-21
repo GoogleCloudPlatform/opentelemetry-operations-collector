@@ -128,4 +128,8 @@ replaces:
 - github.com/buger/jsonparser => github.com/buger/jsonparser v1.1.2
 # Local dependency for googlecontrolplaneprovider
 - github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy => ../../pkg/googlepolicy
+# Local root module so pkg/googlepolicy builds against in-tree gen/go protos
+- github.com/GoogleCloudPlatform/opentelemetry-operations-collector => ../..
+# Pin ottl to the distro's contrib version; the local root requires v0.161.0, which drops APIs contrib v0.160.0 still calls
+- github.com/open-telemetry/opentelemetry-collector-contrib/pkg/ottl => github.com/open-telemetry/opentelemetry-collector-contrib/pkg/ottl v0.160.0
 

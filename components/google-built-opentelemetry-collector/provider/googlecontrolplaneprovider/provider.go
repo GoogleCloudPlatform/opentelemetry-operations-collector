@@ -39,8 +39,7 @@ import (
 const (
 	schemeName = "googlecontrolplane"
 
-	defaultXdsTypeURL = "type.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector"
-	defaultFleetID    = "test-fleet-01"
+	defaultFleetID = "test-fleet-01"
 )
 
 var (
@@ -73,6 +72,7 @@ var (
 const (
 	innerSchemeFile      = "file"
 	innerSchemeComponent = "component"
+	innerSchemeXDS       = "xds"
 )
 
 var _ confmap.Provider = (*provider)(nil)
@@ -143,6 +143,19 @@ func (p *provider) Retrieve(ctx context.Context, uri string, watcher confmap.Wat
 		if err := p.manager.Start(); err != nil {
 			return nil, fmt.Errorf("%q: %w", uri, err)
 		}
+	case innerSchemeXDS:
+		// The manager derives everything else it needs -- control plane address
+		// and fleet ID -- from the URI itself.
+		p.manager, err = googlepolicy.NewXDSPolicyManager(p.logger, target, CollectorID)
+		if err != nil {
+			return nil, fmt.Errorf("%q: %w", uri, err)
+		}
+		// Start does not block on the control plane being reachable; an
+		// unreachable one is retried in the background so the collector can
+		// still come up on its built-in policies.
+		if err := p.manager.Start(); err != nil {
+			return nil, fmt.Errorf("%q: %w", uri, err)
+		}
 	case innerSchemeComponent:
 	default:
 		return nil, fmt.Errorf("%q: %w: %s", uri, ErrURIInvalidInnerScheme, target.Scheme)
@@ -161,12 +174,16 @@ func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrie
 		collectorID = v
 	}
 
+	// Environment, then context, then the URI. The manager resolves the fleet
+	// in the same order off the same query parameter, and must arrive at the
+	// same answer: its value selects which fleet's policies this collector
+	// receives, while this one attributes the collector's own telemetry.
 	fleetID := os.Getenv("FLEET_ID")
 	if v, ok := ctx.Value("FLEET_ID").(string); ok && v != "" {
 		fleetID = v
 	}
-	if fleetID == "" && p.manager != nil && p.manager.URI() != nil {
-		fleetID = p.manager.URI().Query().Get("fleet")
+	if fleetID == "" && p.manager != nil {
+		fleetID = googlepolicy.FleetIDFromURI(p.manager.URI())
 	}
 	if fleetID != "" {
 		ctx = context.WithValue(ctx, "FLEET_ID", fleetID)

@@ -126,6 +126,12 @@ replaces:
     - from: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy
       to: ../../pkg/googlepolicy
       reason: Local dependency for googlecontrolplaneprovider
+    - from: github.com/GoogleCloudPlatform/opentelemetry-operations-collector
+      to: ../..
+      reason: Local root module so pkg/googlepolicy builds against in-tree gen/go protos
+    - from: github.com/open-telemetry/opentelemetry-collector-contrib/pkg/ottl
+      to: github.com/open-telemetry/opentelemetry-collector-contrib/pkg/ottl v0.160.0
+      reason: Pin ottl to the distro's contrib version; the local root requires v0.161.0, which drops APIs contrib v0.160.0 still calls
 feature_gates:
     - exporter.googlemanagedprometheus.intToDouble
     - exporter.googlecloud.CustomMonitoredResources

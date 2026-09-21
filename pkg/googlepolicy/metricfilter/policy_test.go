@@ -1321,9 +1321,28 @@ func TestPolicyMetadata(t *testing.T) {
 	assert.Same(t, pb, got)
 }
 
-func TestDriverMetadata(t *testing.T) {
-	d := &Driver{}
-	assert.Equal(t, PolicyType, d.PolicyName())
+// TestDriverLoadsFromProto covers the path a policy delivered over xDS takes:
+// the registered driver is handed the decoded message and compiles it, with no
+// serialization in between. The proto reaching the constructor unchanged is the
+// property that matters -- it is what makes the round trip removable.
+func TestDriverLoadsFromProto(t *testing.T) {
+	pb := dropPolicy("from-proto", descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME), equalsString("drop.me"), false)
+
+	p, err := driver.LoadPolicyProto(pb)
+	require.NoError(t, err)
+	assert.Equal(t, "from-proto", p.PolicyName())
+
+	pol, ok := p.(*Policy)
+	require.True(t, ok)
+	assert.Same(t, pb, pol.Proto())
+}
+
+// TestDriverRejectsForeignProto pins the guard that keeps a misrouted policy
+// from being silently coerced: the driver only accepts its own message.
+func TestDriverRejectsForeignProto(t *testing.T) {
+	_, err := driver.LoadPolicyProto(&policyv1alpha1.LogFilterPolicy{Id: "wrong-signal"})
+
+	require.ErrorIs(t, err, googlepolicy.ErrPolicyProtoMismatch)
 }
 
 // TestValidateNilProto covers the defensive nil-proto arm of Validate. A Policy
@@ -1676,7 +1695,7 @@ func TestDriverLoadPolicyIgnoresUnknownFields(t *testing.T) {
 		},
 	}
 
-	p, err := (&Driver{}).LoadPolicy(raw)
+	p, err := driver.LoadPolicy(raw)
 	require.NoError(t, err)
 	assert.Equal(t, "future-compatible-metric-policy", p.PolicyName())
 
@@ -1685,4 +1704,17 @@ func TestDriverLoadPolicyIgnoresUnknownFields(t *testing.T) {
 
 	m, sm, rm := newTestMetricBundle()
 	assert.Equal(t, googlepolicy.EvalDrop, metricPol.EvaluateMetric(metricContext(m, sm, rm)))
+}
+
+// TestDriverRoutesItsProto pins the link between the proto a control plane puts
+// on the wire and the policy type this driver is registered under. It is the
+// only reason a MetricFilterPolicy delivered over xDS reaches this package:
+// the wire message carries no policy type of its own, so the registry has to
+// recognise it by descriptor.
+func TestDriverRoutesItsProto(t *testing.T) {
+	protoName := (&policyv1alpha1.MetricFilterPolicy{}).ProtoReflect().Descriptor().FullName()
+
+	got, ok := googlepolicy.PolicyTypeForProto(protoName)
+	require.True(t, ok, "no policy type is registered for %s, so metric filter policies cannot be routed", protoName)
+	assert.Equal(t, PolicyType, got)
 }

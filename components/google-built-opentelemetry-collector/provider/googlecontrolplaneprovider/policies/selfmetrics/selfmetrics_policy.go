@@ -69,8 +69,22 @@ func (p *SelfMetricsPolicy) PolicyClass() googlepolicy.PolicyClass {
 	return googlepolicy.PolicyClassSource
 }
 
+// Validate checks the fields Evaluate depends on. LoadPolicy calls this for
+// every policy that comes through the registry, including ones sent by a
+// control plane, so it must report an error rather than panic: a panic here
+// takes down the whole collector process on nothing more than a malformed
+// remote policy.
 func (p *SelfMetricsPolicy) Validate() error {
-	panic("unimplemented")
+	if p.Name == "" {
+		return errors.New("policy must be named")
+	}
+	// Evaluate builds a receiver endpoint and the matching telemetry exporter
+	// endpoint from this port. Port 0 would bind an arbitrary free port that
+	// the exporter's "localhost:0" endpoint could never reach.
+	if p.Port < 1 || p.Port > 65535 {
+		return fmt.Errorf("port must be between 1 and 65535, got %d", p.Port)
+	}
+	return nil
 }
 
 func (p *SelfMetricsPolicy) Evaluate(ctx context.Context) (*confmap.Conf, error) {

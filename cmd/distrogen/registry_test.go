@@ -272,9 +272,10 @@ func TestRegistryComponent_IsContrib(t *testing.T) {
 
 func TestRegistryComponent_ApplyOTelVersion(t *testing.T) {
 	otelVersion := otelComponentVersion{
-		core:       "1.2.3",
-		coreStable: "1.0.0",
-		contrib:    "0.5.0",
+		core:          "1.2.3",
+		coreStable:    "1.0.0",
+		contrib:       "0.5.0",
+		contribStable: "2.0.0",
 	}
 
 	testCases := []struct {
@@ -298,6 +299,12 @@ func TestRegistryComponent_ApplyOTelVersion(t *testing.T) {
 			name:     "Contrib Component",
 			url:      "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/test",
 			expected: "v0.5.0",
+		},
+		{
+			name:     "Stable Contrib Component",
+			url:      "github.com/open-telemetry/opentelemetry-collector-contrib/processor/test",
+			stable:   true,
+			expected: "v2.0.0",
 		},
 	}
 

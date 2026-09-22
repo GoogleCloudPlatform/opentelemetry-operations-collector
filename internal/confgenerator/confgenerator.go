@@ -192,22 +192,6 @@ func (uc *UnifiedConfig) GenerateOtelConfig(ctx context.Context, logsDir, outDir
 	return mc.Generate(ctx)
 }
 
-func (uc *UnifiedConfig) GenerateOtelConfigMap(ctx context.Context, logsDir, outDir, stateDir string) (map[string]any, string, error) {
-	mc, err := uc.modularConfig(ctx, logsDir, outDir, stateDir)
-	if err != nil {
-		return nil, "", err
-	}
-	configMap, err := mc.GenerateMap(ctx)
-	if err != nil {
-		return nil, "", err
-	}
-	otelConfig, err := mc.Generate(ctx)
-	if err != nil {
-		return nil, "", err
-	}
-	return configMap, otelConfig, nil
-}
-
 func (p PipelineInstance) OTelComponents(ctx context.Context) (map[string]otel.ReceiverPipeline, map[string]otel.Pipeline, error) {
 	outR := make(map[string]otel.ReceiverPipeline)
 	outP := make(map[string]otel.Pipeline)

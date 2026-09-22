@@ -100,7 +100,7 @@ func (p *provider) Retrieve(ctx context.Context, uri string, watcher confmap.Wat
 		return nil, fmt.Errorf("failed to generate self metrics: %w", err)
 	}
 
-	configMap, otelConfig, err := uc.GenerateOtelConfigMap(ctx, logsDir, outDir, stateDir)
+	otelConfig, err := uc.GenerateOtelConfig(ctx, logsDir, outDir, stateDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate otel config: %w", err)
 	}
@@ -113,7 +113,7 @@ func (p *provider) Retrieve(ctx context.Context, uri string, watcher confmap.Wat
 		p.logger.Info("Generated OTEL config", zap.String("config", otelConfig))
 	}
 
-	return confmap.NewRetrieved(configMap)
+	return confmap.NewRetrievedFromYAML([]byte(otelConfig))
 }
 
 func (p *provider) Scheme() string {

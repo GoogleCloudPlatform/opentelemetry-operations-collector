@@ -238,3 +238,76 @@ func TestSelfMetricsPolicy_Evaluate_WithProjectID(t *testing.T) {
 		},
 	}, conf.Get("service::telemetry::resource::attributes"))
 }
+
+// TestSelfMetricsPolicy_Validate covers the path a control plane can reach.
+// This driver is registered, so LoadPolicy calls Validate on any self_metrics
+// policy that arrives over xDS; while Validate panicked, a single malformed
+// remote policy was enough to take down the collector process.
+func TestSelfMetricsPolicy_Validate(t *testing.T) {
+	tests := []struct {
+		name    string
+		policy  *SelfMetricsPolicy
+		wantErr string
+	}{
+		{
+			name:   "valid",
+			policy: &SelfMetricsPolicy{Name: "self_metrics", Port: 18888},
+		},
+		{
+			name:    "missing name",
+			policy:  &SelfMetricsPolicy{Port: 18888},
+			wantErr: "policy must be named",
+		},
+		{
+			// The zero value, which is what an omitted port unmarshals to.
+			name:    "zero port",
+			policy:  &SelfMetricsPolicy{Name: "self_metrics"},
+			wantErr: "port must be between 1 and 65535",
+		},
+		{
+			name:    "port out of range",
+			policy:  &SelfMetricsPolicy{Name: "self_metrics", Port: 70000},
+			wantErr: "port must be between 1 and 65535",
+		},
+		{
+			name:    "negative port",
+			policy:  &SelfMetricsPolicy{Name: "self_metrics", Port: -1},
+			wantErr: "port must be between 1 and 65535",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			// Fails the test rather than crashing the run if Validate ever
+			// goes back to panicking.
+			require.NotPanics(t, func() {
+				err := tc.policy.Validate()
+				if tc.wantErr == "" {
+					assert.NoError(t, err)
+					return
+				}
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.wantErr)
+			})
+		})
+	}
+}
+
+// TestSelfMetricsPolicy_Validate_LoadableFromRegistry exercises the whole
+// remote path: the registered driver unmarshals a raw config and validates it,
+// which is what a policy delivered by a control plane goes through.
+func TestSelfMetricsPolicy_Validate_LoadableFromRegistry(t *testing.T) {
+	loaded, err := googlepolicy.LoadPolicy(PolicyType, map[string]any{
+		"type": PolicyType,
+		"name": "remote_self_metrics",
+		"port": 19999,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "remote_self_metrics", loaded.PolicyName())
+
+	_, err = googlepolicy.LoadPolicy(PolicyType, map[string]any{
+		"type": PolicyType,
+		"name": "no_port",
+	})
+	require.ErrorIs(t, err, googlepolicy.ErrPolicyFailedValidation)
+}

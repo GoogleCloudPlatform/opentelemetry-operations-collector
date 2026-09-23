@@ -19,7 +19,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"io"
 	"math/rand/v2"
 	"net"
 	"net/url"
@@ -27,26 +26,29 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
-	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	discoveryv3 "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
+	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
+	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/zap"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/idtoken"
-	"google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
 	grpcstatus "google.golang.org/grpc/status"
-
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 
 	xdsv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/xds/v1alpha1"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/grpctransport"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/xdsclient"
 )
 
 const (
@@ -92,29 +94,11 @@ const (
 
 	// Keepalive ping interval and the window allowed for a reply. Together they
 	// bound how long a silently dead connection can go unnoticed.
-	//
-	// These must be paired with the control plane's gRPC enforcement policy:
-	// a server's default keepalive.EnforcementPolicy.MinTime is 5 minutes, and
-	// pinging faster than that earns a GOAWAY with ENHANCE_YOUR_CALM. gRPC then
-	// doubles Time on its own, so a mismatch degrades to slower detection rather
-	// than a reconnect loop, but the control plane should set
-	// EnforcementPolicy{MinTime: 30s} so these values are honored.
 	keepaliveTime    = 60 * time.Second
 	keepaliveTimeout = 20 * time.Second
 
 	// defaultInitialSyncTimeout bounds how long Start blocks waiting for the
 	// control plane's first response.
-	//
-	// Start blocks at all because the confmap provider calls it and then
-	// immediately builds the collector's pipelines from the active policy set.
-	// Nothing rebuilds that config later, so a policy set that arrives after
-	// Retrieve has returned cannot influence the pipelines until the next
-	// restart. Waiting briefly here is what lets the first revision take effect.
-	//
-	// It is bounded, and expiry is not an error, because the alternative -- a
-	// collector that refuses to start because its control plane is down -- is
-	// far worse than one that starts on its built-in policies and picks up the
-	// real ones moments later.
 	defaultInitialSyncTimeout = 5 * time.Second
 )
 
@@ -129,10 +113,6 @@ var (
 	ErrXDSAlreadyStarted = errors.New("xDS policy manager is already started")
 
 	// Resource decoding errors, reported back to the control plane via NACK.
-	//
-	// Failing to route a decoded policy to a driver is not one of these: that
-	// is settled by message identity when the policy is loaded, and reported as
-	// ErrPolicyTypeNotFound.
 	ErrXDSResourceDecode    = errors.New("failed to decode xDS resource")
 	ErrXDSPolicyDecode      = errors.New("failed to decode policy from xDS resource")
 	ErrXDSPolicyMissingBody = errors.New("policy in xDS resource has no typed_config")
@@ -140,15 +120,24 @@ var (
 
 var _ Manager = (*xdsPolicyManager)(nil)
 
-// xdsPolicyManager connects to an xDS control plane, parses received policies,
-// updates ActivePolicySet, and sends ACKs/NACKs over the ADS stream.
-//
-// The manager keeps the stream alive for the lifetime of the collector: if the
-// stream drops, it reconnects with exponential backoff. The active policy set is
-// never cleared on disconnect, so the rest of the pipeline keeps running on the
-// last known good policies while the manager is reconnecting.
+// XDSPolicyManagerOption configures optional settings on xdsPolicyManager.
+type XDSPolicyManagerOption func(*xdsPolicyManager)
+
+// WithMeterProvider configures the OpenTelemetry MeterProvider used to record
+// grpc.xds_client.* self-observability metrics. If unset, otel.GetMeterProvider()
+// is used.
+func WithMeterProvider(mp metric.MeterProvider) XDSPolicyManagerOption {
+	return func(m *xdsPolicyManager) {
+		m.meterProvider = mp
+	}
+}
+
+// xdsPolicyManager connects to an xDS control plane using grpc-go's generic
+// xdsclient.XDSClient, parses received policies, updates ActivePolicySet, and
+// sends ACKs/NACKs over the ADS stream.
 type xdsPolicyManager struct {
-	logger *zap.Logger
+	logger        *zap.Logger
+	meterProvider metric.MeterProvider
 
 	// Connection settings, resolved once in the constructor and never written
 	// again. Being immutable, they are read from the stream goroutine without
@@ -158,13 +147,6 @@ type xdsPolicyManager struct {
 	collectorID string
 	fleetID     string
 	insecure    bool
-
-	// NOTE: there is deliberately no confmap reload hook here. The only policies
-	// delivered over xDS today are transformation (filter) policies, which
-	// googlepolicyprocessor picks up straight from the active policy set via its
-	// own watcher channel, with no collector config regeneration required. Once
-	// source or destination policies are delivered over xDS, this manager will
-	// need a confmap.WatcherFunc to rebuild the config.
 
 	// Backoff bounds and the sleep function, overridable in tests.
 	backoffInitial time.Duration
@@ -179,79 +161,20 @@ type xdsPolicyManager struct {
 	// in-memory listener; it is empty in production.
 	extraDialOpts []grpc.DialOption
 
-	// mu guards cancel, done, ready/readyClosed and lastAppliedVersion below.
-	// It is never held across a blocking call (stream I/O, or waiting on done).
-	//
-	// cancel and done are a pair describing the currently live stream loop, and
-	// are only ever non-nil together. They are cleared by the loop itself as it
-	// exits (see finishRun), never by Stop: that is what makes "cancel != nil"
-	// mean "a loop is still running" rather than "nobody has asked it to stop
-	// yet", so a Start racing a Stop is rejected instead of attaching a second
-	// loop to a teardown already in progress.
 	mu     sync.Mutex
 	cancel context.CancelFunc
+	done   chan struct{}
 
-	// done is closed once the stream goroutine of the current generation has
-	// fully exited. Stop captures it and waits on that specific channel rather
-	// than on a shared WaitGroup, so it can never end up waiting on a loop
-	// started after it began tearing the previous one down.
-	done chan struct{}
-
-	// ready is closed once the stream loop has either completed one valid
-	// exchange with the control plane or stopped trying. Start waits on it.
-	// readyClosed guards against closing it twice; a sync.Once is avoided here
-	// because the pair is recreated on every Start and a Once cannot be copied.
 	ready       chan struct{}
 	readyClosed bool
 
-	// lastAppliedVersion is written by the stream goroutine and read by Stop's
-	// callers, so it takes mu as well.
-	lastAppliedVersion string
+	lastAppliedVersion  string
+	lastAppliedRawBytes []byte
+	activeClient        *xdsclient.XDSClient
 }
 
 // NewXDSPolicyManager creates a manager for the given `xds://` URI.
-//
-// # URI form
-//
-// In full, as written in the collector's config:
-//
-//	googlecontrolplane:xds://HOST[:PORT][?gcp.fleet_id=FLEET][&project=PROJECT][&insecure=BOOL]
-//
-// for example:
-//
-//	googlecontrolplane:xds://telemetrydirector.googleapis.com:443?gcp.fleet_id=my-fleet&project=my-project
-//	googlecontrolplane:xds://127.0.0.1:18000?gcp.fleet_id=my-fleet&insecure=true
-//
-// The `googlecontrolplane:` prefix selects the confmap provider and is stripped
-// before the remainder reaches this constructor, so the uri argument here starts
-// at `xds://`. The opaque spelling `xds:HOST:PORT` is accepted as well.
-//
-// # Components
-//
-//	HOST[:PORT]  - required. Address of the xDS control plane.
-//	gcp.fleet_id - required, unless $FLEET_ID is set; the environment wins over
-//	               the URI, matching how the provider resolves it. Used as this
-//	               node's xDS cluster, and read back off URI() by the provider
-//	               to attribute the collector's own telemetry.
-//	project      - optional, and NOT read here. The provider reads it off URI() to
-//	               stamp gcp.project_id on self metrics; when absent, resource
-//	               detection falls back to the project the collector runs in.
-//	insecure     - optional bool, default false. False connects with TLS 1.2+ and
-//	               an ADC-derived ID token per RPC; true connects in plaintext with
-//	               no credentials, which is intended for local control planes.
-//
-// Unrecognized query parameters are ignored. The subscribed resource type is
-// deliberately not configurable -- see xdsPolicyTypeURL.
-//
-// # Arguments
-//
-// collectorID identifies this collector to the control plane as the xDS node ID.
-// It is passed in rather than read from the environment because the confmap
-// provider derives it, and that package already depends on this one.
-//
-// All configuration is validated here, so a manager that constructs
-// successfully can always Start.
-func NewXDSPolicyManager(logger *zap.Logger, uri *url.URL, collectorID string) (Manager, error) {
+func NewXDSPolicyManager(logger *zap.Logger, uri *url.URL, collectorID string, opts ...XDSPolicyManagerOption) (Manager, error) {
 	if uri == nil {
 		return nil, ErrXDSMissingServerAddr
 	}
@@ -266,12 +189,6 @@ func NewXDSPolicyManager(logger *zap.Logger, uri *url.URL, collectorID string) (
 
 	query := uri.Query()
 
-	// Environment first, then the URI. This is the order the googlecontrolplane
-	// provider resolves the fleet in, and the two must agree: the manager's
-	// answer becomes the xDS node cluster that selects which fleet's policies
-	// arrive, while the provider's becomes the gcp.fleet_id attribute on this
-	// collector's own telemetry. Resolving them differently would let a
-	// collector enforce one fleet's policies while reporting itself as another.
 	fleetID := os.Getenv(fleetIDEnvVar)
 	if fleetID == "" {
 		fleetID = FleetIDFromURI(uri)
@@ -293,7 +210,7 @@ func NewXDSPolicyManager(logger *zap.Logger, uri *url.URL, collectorID string) (
 		logger = zap.NewNop()
 	}
 
-	return &xdsPolicyManager{
+	m := &xdsPolicyManager{
 		logger:             logger,
 		uri:                uri,
 		serverAddr:         serverAddr,
@@ -304,18 +221,15 @@ func NewXDSPolicyManager(logger *zap.Logger, uri *url.URL, collectorID string) (
 		backoffMax:         defaultBackoffMax,
 		timeAfter:          time.After,
 		initialSyncTimeout: defaultInitialSyncTimeout,
-	}, nil
+	}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(m)
+		}
+	}
+	return m, nil
 }
 
-// serverAddrFromURI pulls the host[:port] out of an xDS URI. It may arrive as an
-// authority ("xds://host:port") or, when the URI is opaque ("xds:host:port"),
-// as the opaque section or the path.
-//
-// The port may be omitted, as it is in the canonical production form
-// "xds://telemetrydirector.googleapis.com". gRPC's DNS resolver defaults a
-// portless target to 443, and ResolveTokenSource falls back to the bare host
-// when net.SplitHostPort fails, so the OIDC audience still comes out as
-// "https://telemetrydirector.googleapis.com".
 func serverAddrFromURI(uri *url.URL) string {
 	for _, candidate := range []string{uri.Host, uri.Opaque, uri.Path} {
 		if addr := strings.TrimPrefix(candidate, "/"); addr != "" {
@@ -327,10 +241,6 @@ func serverAddrFromURI(uri *url.URL) string {
 
 // FleetIDFromURI returns the fleet ID carried by an xDS URI, or "" if it carries
 // none.
-//
-// It reads the same `fleet` parameter that the googlecontrolplane provider
-// reads when resolving the fleet for the self metrics policy, so one URI drives
-// both the xDS subscription and the collector's own telemetry attribution.
 func FleetIDFromURI(uri *url.URL) string {
 	if uri == nil {
 		return ""
@@ -338,21 +248,8 @@ func FleetIDFromURI(uri *url.URL) string {
 	return uri.Query().Get(FleetIDQueryParam)
 }
 
-// Start launches the background stream loop and waits, briefly, for the control
-// plane to answer once.
-//
-// The wait exists because of how the confmap provider uses this manager: it
-// calls Start and then immediately evaluates the active policy set into the
-// collector's pipelines. Nothing rebuilds that config afterwards, so a revision
-// that lands after Start has returned cannot affect the pipelines until the
-// process restarts. Blocking here is what gives the first revision a chance to
-// be included.
-//
-// The wait is bounded by initialSyncTimeout and never turns into an error.
-// Whatever happens -- the control plane is down, slow, or rejects us -- Start
-// returns nil and the collector comes up on its built-in policies while the
-// stream keeps retrying in the background. The only error it can return is
-// ErrXDSAlreadyStarted.
+// Start launches the background xdsclient stream and waits, briefly, for the
+// control plane to answer once.
 func (m *xdsPolicyManager) Start() error {
 	m.mu.Lock()
 	if m.cancel != nil {
@@ -362,7 +259,6 @@ func (m *xdsPolicyManager) Start() error {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
-	// Recreated per Start so the manager can be restarted after Stop.
 	m.ready = make(chan struct{})
 	m.readyClosed = false
 	ready := m.ready
@@ -379,19 +275,13 @@ func (m *xdsPolicyManager) Start() error {
 	)
 
 	go func() {
-		// Deferred in this order so that by the time done is closed -- which is
-		// the only thing Stop waits on -- the manager has already been returned
-		// to its startable state. A caller that sees Stop return can therefore
-		// call Start immediately and be sure it will not be rejected.
 		defer close(done)
 		defer m.finishRun(done)
-		m.run(ctx)
+		m.run(ctx, cancel)
 	}()
 
 	select {
 	case <-ready:
-		// Either the control plane answered, or the loop gave up; in both cases
-		// there is nothing further to wait for.
 	case <-m.timeAfter(timeout):
 		m.logger.Warn("Timed out waiting for the initial xDS policy set; starting on built-in policies",
 			zap.String("server", m.serverAddr),
@@ -402,8 +292,6 @@ func (m *xdsPolicyManager) Start() error {
 	return nil
 }
 
-// markReady releases anything blocked in Start. It is safe to call repeatedly
-// and from any goroutine.
 func (m *xdsPolicyManager) markReady() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -414,13 +302,6 @@ func (m *xdsPolicyManager) markReady() {
 	}
 }
 
-// finishRun returns the manager to its startable state as the stream loop of
-// the given generation exits.
-//
-// The generation check matters on a restart: by the time a loop gets here, a
-// later Start may already have installed its own cancel/done pair, and clearing
-// that would advertise a running loop as stopped. Only the loop that still owns
-// the current pair may clear it.
 func (m *xdsPolicyManager) finishRun(done chan struct{}) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -431,20 +312,8 @@ func (m *xdsPolicyManager) finishRun(done chan struct{}) {
 	}
 }
 
-// Stop terminates the background stream loop and waits for it to exit. It is
-// safe to call before Start, more than once, and concurrently; afterwards the
-// manager can be started again.
-//
-// A Start that arrives while Stop is still waiting is rejected with
-// ErrXDSAlreadyStarted rather than racing the teardown, because the state saying
-// "a loop is running" is only cleared by the loop itself. Sequential use --
-// Stop returning, then Start -- is unaffected: Stop does not return until that
-// clearing has happened.
+// Stop terminates the background stream loop and waits for it to exit.
 func (m *xdsPolicyManager) Stop() error {
-	// Both halves of the live generation are captured together, so this Stop
-	// can only ever cancel and then wait on the same loop. Waiting on a shared
-	// WaitGroup instead would let a loop started after this point be caught up
-	// in the wait, which for a healthy loop means waiting forever.
 	m.mu.Lock()
 	cancel := m.cancel
 	done := m.done
@@ -453,9 +322,6 @@ func (m *xdsPolicyManager) Stop() error {
 	if cancel != nil {
 		cancel()
 	}
-	// Waited on outside the lock, since the stream loop takes mu itself. Nil
-	// when the loop was never started, or has already exited; otherwise every
-	// caller blocks here, including those that lost the race to cancel.
 	if done != nil {
 		<-done
 	}
@@ -468,276 +334,32 @@ func (m *xdsPolicyManager) URI() *url.URL {
 }
 
 // PolicyEvaluationResult satisfies the Manager interface.
-//
-// TODO: Defer the ACK until the policy set has actually been evaluated, and NACK
-// the corresponding nonce when evaluation fails, so the control plane is not told
-// a revision is live when it could not be applied.
 func (m *xdsPolicyManager) PolicyEvaluationResult(string, error) {}
 
-// run maintains the ADS stream for the lifetime of the manager, reconnecting
-// with exponential backoff whenever it drops.
-func (m *xdsPolicyManager) run(ctx context.Context) {
-	// Once this loop is gone there will never be an initial sync, so anything
-	// still blocked in Start must be released regardless of why we exited:
-	// Stop cancelled us, or the control plane rejected our credentials.
-	//
-	// Clearing the manager's run state is the caller's job (see Start), so that
-	// it is ordered correctly against closing done.
-	defer m.markReady()
-
-	node := &corev3.Node{
-		Id:      m.collectorID,
-		Cluster: m.fleetID,
-		Locality: &corev3.Locality{
-			Region: defaultRegion,
-		},
+// DumpResources returns the current CSDS ClientStatusResponse from the active
+// xDSClient, or an error if the manager is not currently running.
+func (m *xdsPolicyManager) DumpResources() (*v3statuspb.ClientStatusResponse, error) {
+	m.mu.Lock()
+	c := m.activeClient
+	m.mu.Unlock()
+	if c == nil {
+		return nil, errors.New("xDS client is not running")
 	}
-
-	// A single ClientConn is reused across stream attempts; gRPC reconnects the
-	// underlying transport on its own. Only the stream is re-established here.
-	var conn *grpc.ClientConn
-	defer func() {
-		if conn != nil {
-			_ = conn.Close()
-		}
-	}()
-
-	backoff := time.Duration(0)
-	for {
-		if ctx.Err() != nil {
-			return
-		}
-
-		if conn == nil {
-			newConn, err := m.dial(ctx)
-			if err != nil {
-				m.logger.Error("Failed to connect to xDS server, retrying",
-					zap.String("server", m.serverAddr),
-					zap.Error(err),
-				)
-				var ok bool
-				if backoff, ok = m.waitBeforeRetry(ctx, backoff); !ok {
-					return
-				}
-				continue
-			}
-			conn = newConn
-		}
-
-		// The active policy set is intentionally left in place across
-		// disconnects so the pipeline keeps running on the last good revision.
-		progressed, err := m.streamPolicies(ctx, conn, node)
-		if ctx.Err() != nil {
-			return
-		}
-
-		// A stream that delivered at least one response proves the endpoint is
-		// healthy, so the next failure starts over from the minimum delay.
-		if progressed {
-			backoff = 0
-		}
-
-		// Being told we are not allowed to subscribe is a configuration or
-		// provisioning problem, not a transient one: retrying cannot fix it and
-		// would only spam the control plane. Give up on the stream for good and
-		// leave the collector running on whatever policies it already has.
-		if isTerminalAuthError(err) {
-			m.logger.Error("xDS control plane rejected this collector's credentials; giving up on remote policies and continuing on built-in policies",
-				zap.String("server", m.serverAddr),
-				zap.String("fleet", m.fleetID),
-				zap.String("collector_id", m.collectorID),
-				zap.Error(err),
-			)
-			return
-		}
-
-		m.logger.Warn("xDS stream closed, reconnecting",
-			zap.String("server", m.serverAddr),
-			zap.String("last_applied_version", m.LastAppliedVersion()),
-			zap.Error(err),
-		)
-
-		var ok bool
-		if backoff, ok = m.waitBeforeRetry(ctx, backoff); !ok {
-			return
-		}
-	}
-}
-
-// isTerminalAuthError reports whether the control plane refused this collector
-// outright. Unauthenticated and PermissionDenied describe the caller, not the
-// call, so the same request will keep failing until the collector's identity or
-// the control plane's authorization changes -- neither of which a retry can do.
-//
-// Note that this deliberately covers only rejections that came back from the
-// server. Failing to obtain credentials locally (see ResolveTokenSource) stays
-// retryable, because that is usually a metadata server blip rather than a
-// verdict on this collector. TokenAuth.GetRequestMetadata is what keeps that
-// true for per-RPC token fetches; see the comment there before changing it.
-func isTerminalAuthError(err error) bool {
-	if err == nil {
-		return false
-	}
-
-	switch grpcstatus.Code(err) {
-	case codes.Unauthenticated, codes.PermissionDenied:
-		return true
-	default:
-		return false
-	}
-}
-
-// streamPolicies opens an ADS stream and processes responses until it fails or
-// the context is cancelled. It reports whether any response was received, which
-// the caller uses to decide whether to reset the backoff.
-func (m *xdsPolicyManager) streamPolicies(ctx context.Context, conn *grpc.ClientConn, node *corev3.Node) (bool, error) {
-	client := discoveryv3.NewAggregatedDiscoveryServiceClient(conn)
-	stream, err := client.StreamAggregatedResources(ctx)
+	raw, err := c.DumpResources()
 	if err != nil {
-		return false, fmt.Errorf("failed to open xDS stream to %s: %w", m.serverAddr, err)
+		return nil, err
 	}
-
-	// On a fresh stream the client resends the last version it applied with an
-	// empty nonce, so the control plane knows what this collector is running and
-	// can skip re-sending an unchanged revision.
-	//
-	// An io.EOF here is not a send failure so much as a report that the server
-	// has already terminated the stream, and gRPC's contract is that the status
-	// explaining why is only available from Recv. Returning the io.EOF as-is
-	// would strip the one thing run() needs to tell a rejection from a blip: a
-	// control plane that authorizes in an interceptor rejects before it ever
-	// reads this request, so PermissionDenied would arrive looking like a
-	// generic disconnect and be retried forever.
-	//
-	// Falling through leaves that to the loop below, which is also why this
-	// does not simply call Recv here: gRPC delivers buffered messages ahead of
-	// the terminating status, so a revision the server managed to send before
-	// hanging up gets processed instead of quietly discarded. An error the
-	// client produced itself already carries its own status and is returned
-	// directly, per the same contract.
-	if err := stream.Send(&discoveryv3.DiscoveryRequest{
-		Node:        node,
-		TypeUrl:     xdsPolicyTypeURL,
-		VersionInfo: m.LastAppliedVersion(),
-	}); err != nil {
-		if !errors.Is(err, io.EOF) {
-			return false, fmt.Errorf("failed to send DiscoveryRequest to %s: %w", m.serverAddr, err)
-		}
-		// Deliberately not logged as a successful connection below: the request
-		// never reached the server.
-		m.logger.Debug("xDS stream was already closed when sending the initial DiscoveryRequest",
-			zap.String("server", m.serverAddr),
-		)
-	} else {
-		m.logger.Info("Connected to xDS server and sent DiscoveryRequest",
-			zap.String("server", m.serverAddr),
-			zap.String("fleet", m.fleetID),
-			zap.String("type_url", xdsPolicyTypeURL),
-		)
+	resp := &v3statuspb.ClientStatusResponse{}
+	if err := proto.Unmarshal(raw, resp); err != nil {
+		return nil, err
 	}
-
-	progressed := false
-	for {
-		resp, err := stream.Recv()
-		if err != nil {
-			return progressed, err
-		}
-		progressed = true
-
-		m.handleResponse(stream, node, resp)
-	}
+	return resp, nil
 }
 
-// handleResponse validates a DiscoveryResponse, activates the policies it
-// carries, and ACKs or NACKs it.
-func (m *xdsPolicyManager) handleResponse(stream discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesClient, node *corev3.Node, resp *discoveryv3.DiscoveryResponse) {
-	// An ADS stream is multiplexed across resource types. A response for a type
-	// this manager never subscribed to says nothing about our policies, so it is
-	// ignored outright: it must not be able to replace, and therefore clear, the
-	// active policy set. It is also not ACKed, since we are not a subscriber to
-	// that type and the server owns the nonce bookkeeping for it.
-	//
-	// An empty type URL is treated as our own, since a server that only serves
-	// one resource type may omit it.
-	if respTypeURL := resp.GetTypeUrl(); respTypeURL != "" && respTypeURL != xdsPolicyTypeURL {
-		m.logger.Debug("Ignoring xDS response for an unrelated resource type",
-			zap.String("type_url", respTypeURL),
-			zap.String("subscribed_type_url", xdsPolicyTypeURL),
-		)
-		return
-	}
-
-	m.logger.Info("Received xDS DiscoveryResponse",
-		zap.String("version", resp.GetVersionInfo()),
-		zap.String("nonce", resp.GetNonce()),
-		zap.Int("resources", len(resp.GetResources())),
-	)
-
-	// Already running this revision. Re-applying it would be wasted work, but
-	// the control plane is still waiting on a response for this nonce.
-	if version := resp.GetVersionInfo(); version != "" && version == m.LastAppliedVersion() {
-		m.logger.Debug("Re-ACKing an already applied xDS revision", zap.String("version", version))
-		m.sendACK(stream, node, version, resp.GetNonce())
-		// The revision the control plane wants is the one already in effect, so
-		// as far as Start is concerned the collector is in sync.
-		m.markReady()
-		return
-	}
-
-	// Decoding and loading are both best-effort. A revision that carries a
-	// mix of usable and unusable policies is still worth applying: enforcing
-	// the policies we understood beats enforcing nothing while the control
-	// plane is corrected. Failures are collected and reported, and only a
-	// revision that yields nothing usable is rejected outright.
-	policyProtos, extractErr := extractPolicyProtos(resp)
-	if extractErr != nil {
-		m.logger.Warn("Some xDS resources could not be decoded and will be skipped",
-			zap.String("version", resp.GetVersionInfo()),
-			zap.Error(extractErr),
-		)
-	}
-
-	// 1. Validate & create policy set from DiscoveryResponse.
-	policySet, makeErr := MakePolicySetFromProtos(resp.GetVersionInfo(), policyProtos)
-	if makeErr != nil {
-		m.logger.Warn("Some policies in the xDS revision could not be loaded and will be skipped",
-			zap.String("version", resp.GetVersionInfo()),
-			zap.Error(makeErr),
-		)
-	}
-
-	// Nothing survived, and the reason was an error rather than the control
-	// plane deliberately sending an empty revision. Applying this would
-	// silently disable all policy enforcement, so it is rejected and the
-	// previous revision stays in place.
-	if err := errors.Join(extractErr, makeErr); err != nil && len(policySet.Policies) == 0 {
-		m.logger.Warn("xDS revision contains no usable policies, sending NACK",
-			zap.String("version", resp.GetVersionInfo()),
-			zap.Error(err),
-		)
-		m.sendNACK(stream, node, resp.GetNonce(), err)
-		return
-	}
-
-	// A response for our own type carrying no resources is the control plane
-	// telling us to drop everything. That is legitimate, but it disables all
-	// policy enforcement, so it is never done quietly.
-	if active := ActivePolicySet(); len(policySet.Policies) == 0 && active != nil && len(active.Policies) > 0 {
-		m.logger.Warn("xDS revision contains no policies, clearing the active policy set",
-			zap.String("version", resp.GetVersionInfo()),
-		)
-	}
-
-	// 2. Activate in memory (googlepolicyprocessor immediately picks this up).
-	SetActivePolicySet(policySet)
-
-	// 3. Send xDS ACK.
-	m.sendACK(stream, node, resp.GetVersionInfo(), resp.GetNonce())
-
-	// The policy set is live, so Start can stop waiting and let the provider
-	// evaluate it. Only reached once the revision was accepted; a NACKed
-	// revision leaves Start waiting for a good one (or for its timeout).
-	m.markReady()
+func (m *xdsPolicyManager) setClient(c *xdsclient.XDSClient) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.activeClient = c
 }
 
 // LastAppliedVersion returns the version_info of the most recent policy set that
@@ -754,102 +376,367 @@ func (m *xdsPolicyManager) setLastAppliedVersion(versionInfo string) {
 	m.lastAppliedVersion = versionInfo
 }
 
-// waitBeforeRetry blocks for the current backoff delay (with jitter applied) and
-// returns the next base delay. It reports false if the context was cancelled
-// while waiting, in which case the caller must stop.
-func (m *xdsPolicyManager) waitBeforeRetry(ctx context.Context, base time.Duration) (time.Duration, bool) {
-	if base <= 0 {
-		base = m.backoffInitial
-	}
-	if base > m.backoffMax {
-		base = m.backoffMax
-	}
-
-	// Randomize within +/- backoffJitterFraction so a fleet of collectors that
-	// lost the control plane together does not stampede it on recovery.
-	jitter := 1 + backoffJitterFraction*(2*rand.Float64()-1)
-	delay := time.Duration(float64(base) * jitter)
-
-	select {
-	case <-ctx.Done():
-		return base, false
-	case <-m.timeAfter(delay):
-	}
-
-	next := min(time.Duration(float64(base)*backoffMultiplier), m.backoffMax)
-	return next, true
+func (m *xdsPolicyManager) setLastAppliedState(versionInfo string, rawBytes []byte) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.lastAppliedVersion = versionInfo
+	m.lastAppliedRawBytes = rawBytes
 }
 
-// sendACK accepts a revision. The version is recorded before the send, since
-// the collector is running those policies either way -- a send that fails only
-// means the control plane has not been told yet.
-//
-// Failures are logged rather than returned. A failed send here means the stream
-// is gone, which the Recv loop is about to observe and report along with the
-// status that actually explains it; returning the error only had both callers
-// duplicate a worse version of that message. It is logged at debug for the same
-// reason: on its own it is noise, and never appears without a better-informed
-// line beside it.
-//
-// Note this deliberately does not call Recv to recover the real status the way
-// streamPolicies' fall-through does. gRPC delivers buffered messages ahead of
-// the terminating status, so a Recv here could consume a DiscoveryResponse that
-// the loop is about to read, dropping a revision to improve a log line.
-func (m *xdsPolicyManager) sendACK(stream discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesClient, node *corev3.Node, versionInfo, nonce string) {
-	m.setLastAppliedVersion(versionInfo)
+func (m *xdsPolicyManager) getLastAppliedRawBytes() []byte {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.lastAppliedRawBytes
+}
 
-	if err := stream.Send(&discoveryv3.DiscoveryRequest{
-		Node:          node,
-		TypeUrl:       xdsPolicyTypeURL,
-		VersionInfo:   versionInfo,
-		ResponseNonce: nonce,
-	}); err != nil {
-		m.logger.Debug("Failed to send xDS ACK; the stream loop will report why",
-			zap.String("version", versionInfo),
-			zap.Error(err),
+func (m *xdsPolicyManager) backoffDelay(retries int) time.Duration {
+	m.mu.Lock()
+	base := m.backoffInitial
+	maxDelay := m.backoffMax
+	m.mu.Unlock()
+	if base <= 0 {
+		base = defaultBackoffInitial
+	}
+	if maxDelay <= 0 {
+		maxDelay = defaultBackoffMax
+	}
+	for i := 0; i < retries && base < maxDelay; i++ {
+		base = min(time.Duration(float64(base)*backoffMultiplier), maxDelay)
+	}
+	if base > maxDelay {
+		base = maxDelay
+	}
+	jitter := 1 + backoffJitterFraction*(2*rand.Float64()-1)
+	return time.Duration(float64(base) * jitter)
+}
+
+func (m *xdsPolicyManager) run(ctx context.Context, cancel context.CancelFunc) {
+	defer m.markReady()
+
+	metricsReporter := newOTelMetricsReporter(m.meterProvider, m.serverAddr)
+	defer metricsReporter.close()
+
+	tb := &policyTransportBuilder{
+		m:      m,
+		mCtx:   ctx,
+		cancel: cancel,
+	}
+
+	rType := xdsclient.ResourceType{
+		TypeURL:                    xdsPolicyTypeURL,
+		TypeName:                   "TelemetryCollector",
+		AllResourcesRequiredInSotW: true,
+		Decoder:                    &telemetryCollectorDecoder{m: m},
+		InitialVersion:             m.LastAppliedVersion(),
+	}
+
+	cfg := xdsclient.Config{
+		Servers: []xdsclient.ServerConfig{{
+			ServerIdentifier: clients.ServerIdentifier{ServerURI: m.serverAddr},
+		}},
+		Node: clients.Node{
+			ID:       m.collectorID,
+			Cluster:  m.fleetID,
+			Locality: clients.Locality{Region: defaultRegion},
+		},
+		TransportBuilder: tb,
+		ResourceTypes: map[string]xdsclient.ResourceType{
+			xdsPolicyTypeURL: rType,
+		},
+		MetricsReporter: metricsReporter,
+		Logger:          newZapDepthLogger(m.logger),
+		Backoff:         m.backoffDelay,
+		TimeAfter:       m.timeAfter,
+		Target:          m.serverAddr,
+	}
+
+	client, err := xdsclient.New(cfg)
+	if err != nil {
+		m.logger.Error("Failed to initialize xDS client", zap.Error(err))
+		return
+	}
+	m.setClient(client)
+	defer func() {
+		m.setClient(nil)
+		client.Close()
+	}()
+
+	cancelWatch := client.WatchResource(xdsPolicyTypeURL, "", &policyResourceWatcher{})
+	defer cancelWatch()
+
+	<-ctx.Done()
+}
+
+// policyResourceWatcher implements xdsclient.ResourceWatcher. Because SotW
+// policy activation happens synchronously inside telemetryCollectorDecoder.DecodeAll
+// prior to sending the ACK/NACK on the wire, this watcher's role is to release
+// adsFlowControl by invoking done() on every callback.
+type policyResourceWatcher struct{}
+
+func (*policyResourceWatcher) ResourceChanged(_ xdsclient.ResourceData, done func()) {
+	done()
+}
+
+func (*policyResourceWatcher) ResourceError(_ error, done func()) {
+	done()
+}
+
+func (*policyResourceWatcher) AmbientError(_ error, done func()) {
+	done()
+}
+
+type policyResourceData struct {
+	version  string
+	rawBytes []byte
+}
+
+func (p *policyResourceData) Equal(other xdsclient.ResourceData) bool {
+	o, ok := other.(*policyResourceData)
+	if !ok {
+		return false
+	}
+	return p.version == o.version
+}
+
+func (p *policyResourceData) Bytes() []byte {
+	return p.rawBytes
+}
+
+// telemetryCollectorDecoder implements xdsclient.Decoder and xdsclient.BatchDecoder.
+type telemetryCollectorDecoder struct {
+	m *xdsPolicyManager
+}
+
+var _ xdsclient.Decoder = (*telemetryCollectorDecoder)(nil)
+var _ xdsclient.BatchDecoder = (*telemetryCollectorDecoder)(nil)
+
+func (d *telemetryCollectorDecoder) Decode(resource *xdsclient.AnyProto, options xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
+	return d.DecodeAll([]*xdsclient.AnyProto{resource}, options)
+}
+
+func (d *telemetryCollectorDecoder) DecodeAll(resources []*xdsclient.AnyProto, options xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
+	anyResources := make([]*anypb.Any, len(resources))
+	for i, r := range resources {
+		anyResources[i] = r.ToAny()
+	}
+
+	d.m.logger.Info("Received xDS DiscoveryResponse",
+		zap.String("version", options.Version),
+		zap.Int("resources", len(anyResources)),
+	)
+
+	if version := options.Version; version != "" && version == d.m.LastAppliedVersion() {
+		d.m.logger.Debug("Re-ACKing an already applied xDS revision", zap.String("version", version))
+		d.m.markReady()
+		return &xdsclient.DecodeResult{
+			Name: "",
+			Resource: &policyResourceData{
+				version:  version,
+				rawBytes: d.m.getLastAppliedRawBytes(),
+			},
+		}, nil
+	}
+
+	policyProtos, extractErr := extractPolicyProtosFromAnys(anyResources)
+	if extractErr != nil {
+		d.m.logger.Warn("Some xDS resources could not be decoded and will be skipped",
+			zap.String("version", options.Version),
+			zap.Error(extractErr),
 		)
 	}
+
+	policySet, makeErr := MakePolicySetFromProtos(options.Version, policyProtos)
+	if makeErr != nil {
+		d.m.logger.Warn("Some policies in the xDS revision could not be loaded and will be skipped",
+			zap.String("version", options.Version),
+			zap.Error(makeErr),
+		)
+	}
+
+	if err := errors.Join(extractErr, makeErr); err != nil && len(policySet.Policies) == 0 {
+		d.m.logger.Warn("xDS revision contains no usable policies, sending NACK",
+			zap.String("version", options.Version),
+			zap.Error(err),
+		)
+		return nil, err
+	}
+
+	if active := ActivePolicySet(); len(policySet.Policies) == 0 && active != nil && len(active.Policies) > 0 {
+		d.m.logger.Warn("xDS revision contains no policies, clearing the active policy set",
+			zap.String("version", options.Version),
+		)
+	}
+
+	var rawBytes []byte
+	if len(anyResources) > 0 && anyResources[0] != nil {
+		rawBytes = anyResources[0].GetValue()
+	}
+
+	SetActivePolicySet(policySet)
+	d.m.setLastAppliedState(options.Version, rawBytes)
+	d.m.markReady()
+
+	return &xdsclient.DecodeResult{
+		Name: "",
+		Resource: &policyResourceData{
+			version:  options.Version,
+			rawBytes: rawBytes,
+		},
+	}, nil
 }
 
-// sendNACK rejects a response, reporting the version the collector is still
-// running so the control plane knows the update did not take effect.
-//
-// Send failures are handled the same way as in sendACK; see the note there.
-func (m *xdsPolicyManager) sendNACK(stream discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesClient, node *corev3.Node, nonce string, cause error) {
-	err := stream.Send(&discoveryv3.DiscoveryRequest{
-		Node:          node,
-		TypeUrl:       xdsPolicyTypeURL,
-		VersionInfo:   m.LastAppliedVersion(),
-		ResponseNonce: nonce,
-		ErrorDetail: &status.Status{
-			Code:    int32(codes.InvalidArgument),
-			Message: cause.Error(),
-		},
-	})
+// policyTransportBuilder implements clients.TransportBuilder with lazy dialing
+// and synchronous terminal auth error interception.
+type policyTransportBuilder struct {
+	m      *xdsPolicyManager
+	mCtx   context.Context
+	cancel context.CancelFunc
+}
+
+func (b *policyTransportBuilder) Build(_ clients.ServerIdentifier) (clients.Transport, error) {
+	return &policyTransport{
+		m:      b.m,
+		mCtx:   b.mCtx,
+		cancel: b.cancel,
+	}, nil
+}
+
+type policyTransport struct {
+	m                  *xdsPolicyManager
+	mCtx               context.Context
+	cancel             context.CancelFunc
+	terminalAuthFailed atomic.Bool
+
+	mu sync.Mutex
+	cc *grpc.ClientConn
+}
+
+func (pt *policyTransport) abortOnTerminalAuth(err error) {
+	if pt.terminalAuthFailed.CompareAndSwap(false, true) {
+		pt.m.logger.Error("xDS control plane rejected this collector's credentials; giving up on remote policies and continuing on built-in policies",
+			zap.String("server", pt.m.serverAddr),
+			zap.String("fleet", pt.m.fleetID),
+			zap.String("collector_id", pt.m.collectorID),
+			zap.Error(err),
+		)
+		pt.m.markReady()
+		pt.cancel()
+	}
+}
+
+func (pt *policyTransport) NewStream(streamCtx context.Context, method string) (clients.Stream, error) {
+	if pt.mCtx.Err() != nil || pt.terminalAuthFailed.Load() {
+		return nil, context.Canceled
+	}
+
+	pt.mu.Lock()
+	cc := pt.cc
+	if cc == nil {
+		var err error
+		cc, err = pt.m.dial(pt.mCtx)
+		if err != nil {
+			pt.mu.Unlock()
+			if isTerminalAuthError(err) {
+				pt.abortOnTerminalAuth(err)
+				return nil, err
+			}
+			pt.m.logger.Error("Failed to connect to xDS server, retrying",
+				zap.String("server", pt.m.serverAddr),
+				zap.Error(err),
+			)
+			return nil, err
+		}
+		pt.cc = cc
+	}
+	pt.mu.Unlock()
+
+	combinedCtx, cancelStream := context.WithCancel(streamCtx)
+	stopWatch := context.AfterFunc(pt.mCtx, cancelStream)
+
+	s, err := cc.NewStream(combinedCtx, &grpc.StreamDesc{ClientStreams: true, ServerStreams: true}, method)
 	if err != nil {
-		m.logger.Debug("Failed to send xDS NACK; the stream loop will report why", zap.Error(err))
+		stopWatch()
+		cancelStream()
+		if isTerminalAuthError(err) {
+			pt.abortOnTerminalAuth(err)
+		}
+		return nil, err
+	}
+
+	return &policyStream{
+		inner:        grpctransport.NewClientStream(s),
+		pt:           pt,
+		stopWatch:    stopWatch,
+		cancelStream: cancelStream,
+	}, nil
+}
+
+func (pt *policyTransport) Close() {
+	pt.mu.Lock()
+	cc := pt.cc
+	pt.cc = nil
+	pt.mu.Unlock()
+	if cc != nil {
+		_ = cc.Close()
+	}
+}
+
+type policyStream struct {
+	inner        clients.Stream
+	pt           *policyTransport
+	stopWatch    func() bool
+	cancelStream context.CancelFunc
+}
+
+func (ps *policyStream) Send(msg []byte) error {
+	return ps.inner.Send(msg)
+}
+
+func (ps *policyStream) Recv() ([]byte, error) {
+	msg, err := ps.inner.Recv()
+	if err != nil {
+		ps.stopWatch()
+		ps.cancelStream()
+		if isTerminalAuthError(err) {
+			ps.pt.abortOnTerminalAuth(err)
+		} else if ps.pt.mCtx.Err() == nil {
+			ps.pt.m.logger.Warn("xDS stream closed, reconnecting",
+				zap.String("server", ps.pt.m.serverAddr),
+				zap.String("last_applied_version", ps.pt.m.LastAppliedVersion()),
+				zap.Error(err),
+			)
+		}
+		return nil, err
+	}
+	return msg, nil
+}
+
+func isTerminalAuthError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	switch grpcstatus.Code(err) {
+	case codes.Unauthenticated, codes.PermissionDenied:
+		return true
+	default:
+		return false
 	}
 }
 
 // extractPolicyProtos decodes the resources of a DiscoveryResponse into the
 // policy protos they carry, ready for MakePolicySetFromProtos.
-//
-// Every resource that cannot be decoded is reported: a malformed or unknown
-// resource means the control plane sent something this collector cannot honor,
-// and the caller decides what to do about it. Successfully decoded policies are
-// still returned alongside the error, so a revision that is only partly
-// understood can still be applied.
-//
-// Decoding stops at the proto. Which driver a policy belongs to is settled
-// later, by message identity, in LoadPolicyFromProto.
 func extractPolicyProtos(resp *discoveryv3.DiscoveryResponse) ([]proto.Message, error) {
+	return extractPolicyProtosFromAnys(resp.GetResources())
+}
+
+func extractPolicyProtosFromAnys(resources []*anypb.Any) ([]proto.Message, error) {
 	var (
 		policies []proto.Message
 		errs     []error
 	)
 
-	for i, anyRes := range resp.GetResources() {
-		// The expected shape: a TelemetryCollector carrying a list of policies.
+	for i, anyRes := range resources {
 		if anyRes.MessageIs(&xdsv1alpha1.TelemetryCollector{}) {
 			collector := &xdsv1alpha1.TelemetryCollector{}
 			if err := anyRes.UnmarshalTo(collector); err != nil {
@@ -865,9 +752,6 @@ func extractPolicyProtos(resp *discoveryv3.DiscoveryResponse) ([]proto.Message, 
 			continue
 		}
 
-		// Fallback: a resource that is a bare policy message rather than a
-		// TelemetryCollector wrapper. Routed the same way as a policy inside
-		// the wrapper.
 		msg, err := protoFromAny(anyRes)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("resource at index %d: %w", i, err))
@@ -879,8 +763,6 @@ func extractPolicyProtos(resp *discoveryv3.DiscoveryResponse) ([]proto.Message, 
 	return policies, errors.Join(errs...)
 }
 
-// policiesFromCollector decodes every policy carried by a TelemetryCollector,
-// returning those it could decode along with a joined error for those it could not.
 func policiesFromCollector(collector *xdsv1alpha1.TelemetryCollector) ([]proto.Message, error) {
 	var (
 		policies []proto.Message
@@ -893,11 +775,6 @@ func policiesFromCollector(collector *xdsv1alpha1.TelemetryCollector) ([]proto.M
 			continue
 		}
 
-		// Policies arrive as a bare google.protobuf.Any rather than being
-		// wrapped in an envoy TypedExtensionConfig, so the message identity is
-		// the only routing information carried outside the body. There is no
-		// enclosing name to backfill -- a driver that needs one reads it from
-		// the body (the filter policies use their own "id" field).
 		msg, err := protoFromAny(policyAny)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("policy at index %d (%q): %w", i, policyAny.GetTypeUrl(), err))
@@ -910,14 +787,7 @@ func policiesFromCollector(collector *xdsv1alpha1.TelemetryCollector) ([]proto.M
 	return policies, errors.Join(errs...)
 }
 
-// protoFromAny unpacks a protobuf Any into the concrete message it holds.
-//
-// The message is passed on as-is. It used to be flattened to a map here and
-// parsed back into the very same message by the driver, which was provably a
-// no-op -- four conversions to arrive where UnmarshalNew had already left us.
 func protoFromAny(msgAny *anypb.Any) (proto.Message, error) {
-	// Resolves against the global proto registry, so this fails for a type the
-	// collector was not built with.
 	msg, err := msgAny.UnmarshalNew()
 	if err != nil {
 		return nil, fmt.Errorf("%w: unknown or unregistered type URL %q: %w", ErrXDSPolicyDecode, msgAny.GetTypeUrl(), err)
@@ -926,26 +796,16 @@ func protoFromAny(msgAny *anypb.Any) (proto.Message, error) {
 }
 
 func (m *xdsPolicyManager) dial(ctx context.Context) (*grpc.ClientConn, error) {
-	// Without keepalive, gRPC only notices a dead connection when the peer
-	// actively closes it. An ADS stream is idle for long stretches by nature, so
-	// a silently dropped connection (NAT eviction, LB idle reaping, a black-holed
-	// route) would leave Recv blocked indefinitely and the reconnect loop below
-	// would never run. These pings bound that detection at Time+Timeout.
 	dialOpts := []grpc.DialOption{
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
-			Time:    keepaliveTime,
-			Timeout: keepaliveTimeout,
-			// Pings are only needed while the ADS stream is open, which is
-			// exactly when a hang would go unnoticed. Leaving this false also
-			// keeps us within the default server enforcement policy, which
-			// counts pings sent with no active stream as a violation.
+			Time:                keepaliveTime,
+			Timeout:             keepaliveTimeout,
 			PermitWithoutStream: false,
 		}),
+		grpc.WithDefaultCallOptions(grpc.ForceCodec(grpctransport.ByteCodec())),
 	}
 
 	if m.insecure {
-		// No credentials are attached in this mode: TokenAuth requires transport
-		// security, so bearer tokens are never sent over a plaintext connection.
 		dialOpts = append(dialOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	} else {
 		tokenSource, err := ResolveTokenSource(ctx, m.serverAddr)
@@ -962,20 +822,10 @@ func (m *xdsPolicyManager) dial(ctx context.Context) (*grpc.ClientConn, error) {
 
 	dialOpts = append(dialOpts, m.extraDialOpts...)
 
-	// This dial is lazy: it sets up the ClientConn but does not wait for the
-	// connection to be established, so failures surface on the stream instead
-	// and are handled by the reconnect loop.
 	return grpc.NewClient(m.serverAddr, dialOpts...)
 }
 
 // ResolveTokenSource returns a TokenSource providing Google OIDC ID tokens.
-// It supports:
-//  1. GCE / GKE / Service Accounts: Uses idtoken.NewTokenSource (queries VM metadata server or SA key).
-//  2. Cloudtop / Developer Workstations: idtoken fails on "authorized_user" credentials, so it
-//     falls back to ADC with OpenID scopes and extracts the ID token via GoogleIDTokenSource.
-//
-// TODO(b/563374717): pick the credential per endpoint. ID tokens are right for
-// the Cloud Run shim; telemetrydirector.googleapis.com wants an OAuth2 access token.
 func ResolveTokenSource(ctx context.Context, serverAddr string) (oauth2.TokenSource, error) {
 	host, _, err := net.SplitHostPort(serverAddr)
 	if err != nil {
@@ -983,12 +833,10 @@ func ResolveTokenSource(ctx context.Context, serverAddr string) (oauth2.TokenSou
 	}
 	audience := "https://" + host
 
-	// 1. GCE / GKE / Service Accounts: metadata server or SA key
 	if idTS, err := idtoken.NewTokenSource(ctx, audience); err == nil {
 		return idTS, nil
 	}
 
-	// 2. Cloudtop / Developer Workstation: ADC user credentials fallback
 	defTS, err := google.DefaultTokenSource(ctx, "openid", "email")
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve ADC: %w", err)
@@ -1002,8 +850,7 @@ func ResolveTokenSource(ctx context.Context, serverAddr string) (oauth2.TokenSou
 	return oauth2.ReuseTokenSource(initialTok, wrapped), nil
 }
 
-// GoogleIDTokenSource extracts the OIDC ID token from OAuth2 credentials
-// (where it is stored in tok.Extra("id_token")) so tok.AccessToken contains the ID token.
+// GoogleIDTokenSource extracts the OIDC ID token from OAuth2 credentials.
 type GoogleIDTokenSource struct {
 	Src oauth2.TokenSource
 }
@@ -1024,8 +871,7 @@ func (s *GoogleIDTokenSource) Token() (*oauth2.Token, error) {
 	}, nil
 }
 
-// TokenAuth adapts an oauth2.TokenSource to gRPC's credentials.PerRPCCredentials interface,
-// injecting the Authorization: Bearer <id_token> header into each outgoing gRPC request.
+// TokenAuth adapts an oauth2.TokenSource to gRPC's credentials.PerRPCCredentials interface.
 type TokenAuth struct {
 	TS oauth2.TokenSource
 }
@@ -1035,24 +881,11 @@ var _ credentials.PerRPCCredentials = (*TokenAuth)(nil)
 func (a *TokenAuth) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
 	tok, err := a.TS.Token()
 	if err != nil {
-		// Returned as a status, not a bare error, because gRPC relabels bare
-		// errors from per-RPC credentials as Unauthenticated
-		// (internal/transport/http2_client.go, getTrAuthData). That is the code
-		// isTerminalAuthError treats as a verdict on this collector, so a
-		// metadata server blip during a reconnect would permanently end the xDS
-		// loop -- the pipeline would keep running on stale policies and never
-		// hear from the control plane again.
-		//
-		// Unavailable says what actually happened, and unlike the codes
-		// restricted by gRFC A54 it survives gRPC's own rewriting.
 		return nil, grpcstatus.Errorf(codes.Unavailable, "failed to obtain per-RPC auth token: %v", err)
 	}
 	return map[string]string{"authorization": "Bearer " + tok.AccessToken}, nil
 }
 
-// RequireTransportSecurity satisfies the credentials.PerRPCCredentials interface.
-// It returns true so that gRPC refuses to send the bearer token over a
-// connection that is not protected by transport security.
 func (a *TokenAuth) RequireTransportSecurity() bool {
 	return true
 }

@@ -1,0 +1,598 @@
+/*
+ *
+ * Copyright 2025 gRPC authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+package xdsclient
+
+import (
+	"context"
+	"fmt"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/google/uuid"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/protobuf/testing/protocmp"
+	anypb "google.golang.org/protobuf/types/known/anypb"
+
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/grpctransport"
+	xdstestutils "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/internal/testutils"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/internal/testutils/fakeserver"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/xdsclient/internal/xdsresource"
+
+	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
+	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
+)
+
+// xdsChannelForTest creates an xdsChannel to the specified serverURI for
+// testing purposes.
+func xdsChannelForTest(t *testing.T, serverURI, nodeID string, watchExpiryTimeout time.Duration) *xdsChannel {
+	t.Helper()
+
+	// Create a grpc transport to the above management server.
+	si := clients.ServerIdentifier{
+		ServerURI:  serverURI,
+		Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "insecure"},
+	}
+	configs := map[string]grpctransport.Config{"insecure": {Credentials: insecure.NewBundle()}}
+	tr, err := (grpctransport.NewBuilder(configs)).Build(si)
+	if err != nil {
+		t.Fatalf("Failed to create a transport for server config %v: %v", si, err)
+	}
+
+	serverCfg := ServerConfig{
+		ServerIdentifier: si,
+	}
+	clientConfig := Config{
+		Servers:       []ServerConfig{serverCfg},
+		Node:          clients.Node{ID: nodeID},
+		ResourceTypes: map[string]ResourceType{xdsresource.V3ListenerURL: listenerType},
+	}
+	// Create an xdsChannel that uses everything set up above.
+	xc, err := newXDSChannel(xdsChannelOpts{
+		transport:          tr,
+		serverConfig:       &serverCfg,
+		clientConfig:       &clientConfig,
+		eventHandler:       newTestEventHandler(),
+		watchExpiryTimeout: watchExpiryTimeout,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create xdsChannel: %v", err)
+	}
+	t.Cleanup(func() { xc.close() })
+	return xc
+}
+
+// verifyUpdateAndMetadata verifies that the event handler received the expected
+// updates and metadata.  It checks that the received resource type matches the
+// expected type, and that the received updates and metadata match the expected
+// values. The function ignores the timestamp fields in the metadata, as those
+// are expected to be different.
+func verifyUpdateAndMetadata(ctx context.Context, t *testing.T, eh *testEventHandler, wantUpdates map[string]dataAndErrTuple, wantMD xdsresource.UpdateMetadata) {
+	t.Helper()
+
+	gotTyp, gotUpdates, gotMD, err := eh.waitForUpdate(ctx)
+	if err != nil {
+		t.Fatalf("Timeout when waiting for update callback to be invoked on the event handler")
+	}
+
+	if gotTyp != listenerType {
+		t.Fatalf("Got resource type %v, want %v", gotTyp, listenerType)
+	}
+	opts := cmp.Options{
+		protocmp.Transform(),
+		cmpopts.EquateEmpty(),
+		cmpopts.EquateErrors(),
+		cmpopts.IgnoreFields(xdsresource.UpdateMetadata{}, "Timestamp"),
+		cmpopts.IgnoreFields(xdsresource.UpdateErrorMetadata{}, "Timestamp"),
+	}
+	if diff := cmp.Diff(wantUpdates, gotUpdates, opts); diff != "" {
+		t.Fatalf("Got unexpected diff in update (-want +got):\n%s\n want: %+v\n got: %+v", diff, wantUpdates, gotUpdates)
+	}
+	if diff := cmp.Diff(wantMD, gotMD, opts); diff != "" {
+		t.Fatalf("Got unexpected diff in update (-want +got):\n%s\n want: %v\n got: %v", diff, wantMD, gotMD)
+	}
+}
+
+// Tests different failure cases when creating a new xdsChannel. It checks that
+// the xdsChannel creation fails when any of the required options (transport,
+// serverConfig, bootstrapConfig, or resourceTypeGetter) are missing or nil.
+func (s) TestChannel_New_FailureCases(t *testing.T) {
+	type fakeTransport struct {
+		clients.Transport
+	}
+
+	tests := []struct {
+		name       string
+		opts       xdsChannelOpts
+		wantErrStr string
+	}{
+		{
+			name:       "emptyTransport",
+			opts:       xdsChannelOpts{},
+			wantErrStr: "transport is nil",
+		},
+		{
+			name:       "emptyServerConfig",
+			opts:       xdsChannelOpts{transport: &fakeTransport{}},
+			wantErrStr: "serverConfig is nil",
+		},
+		{
+			name: "emptyCConfig",
+			opts: xdsChannelOpts{
+				transport:    &fakeTransport{},
+				serverConfig: &ServerConfig{},
+			},
+			wantErrStr: "clientConfig is nil",
+		},
+		{
+			name: "emptyEventHandler",
+			opts: xdsChannelOpts{
+				transport:    &fakeTransport{},
+				serverConfig: &ServerConfig{},
+				clientConfig: &Config{},
+			},
+			wantErrStr: "eventHandler is nil",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := newXDSChannel(test.opts); err == nil || !strings.Contains(err.Error(), test.wantErrStr) {
+				t.Fatalf("newXDSChannel() = %v, want %q", err, test.wantErrStr)
+			}
+		})
+	}
+}
+
+// Tests different scenarios of the xdsChannel receiving a response from the
+// management server. In all scenarios, the xdsChannel is expected to pass the
+// received responses as-is to the resource parsing functionality specified by
+// the resourceTypeGetter.
+func (s) TestChannel_ADS_HandleResponseFromManagementServer(t *testing.T) {
+	const (
+		listenerName1 = "listener-name-1"
+		listenerName2 = "listener-name-2"
+		routeName     = "route-name"
+		clusterName   = "cluster-name"
+	)
+	var (
+		badlyMarshaledResource = &anypb.Any{
+			TypeUrl: "type.googleapis.com/envoy.config.listener.v3.Listener",
+			Value:   []byte{1, 2, 3, 4},
+		}
+		apiListener = &v3listenerpb.ApiListener{
+			ApiListener: xdstestutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
+				RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+					RouteConfig: &v3routepb.RouteConfiguration{
+						Name: routeName},
+				},
+			}),
+		}
+		listener1 = xdstestutils.MarshalAny(t, &v3listenerpb.Listener{
+			Name:        listenerName1,
+			ApiListener: apiListener,
+		})
+		listener2 = xdstestutils.MarshalAny(t, &v3listenerpb.Listener{
+			Name:        listenerName2,
+			ApiListener: apiListener,
+		})
+	)
+
+	tests := []struct {
+		desc                     string
+		resourceNamesToRequest   []string
+		managementServerResponse *v3discoverypb.DiscoveryResponse
+		wantUpdates              map[string]dataAndErrTuple
+		wantMD                   xdsresource.UpdateMetadata
+		wantErr                  error
+	}{
+		{
+			desc:                   "one bad resource - deserialization failure",
+			resourceNamesToRequest: []string{listenerName1},
+			managementServerResponse: &v3discoverypb.DiscoveryResponse{
+				VersionInfo: "0",
+				TypeUrl:     "type.googleapis.com/envoy.config.listener.v3.Listener",
+				Resources:   []*anypb.Any{badlyMarshaledResource},
+			},
+			wantUpdates: nil, // No updates expected as the response runs into unmarshaling errors.
+			wantMD: xdsresource.UpdateMetadata{
+				Status:  xdsresource.ServiceStatusNACKed,
+				Version: "0",
+				ErrState: &xdsresource.UpdateErrorMetadata{
+					Version: "0",
+					Err:     cmpopts.AnyError,
+				},
+			},
+			wantErr: cmpopts.AnyError,
+		},
+		{
+			desc:                   "one bad resource - validation failure",
+			resourceNamesToRequest: []string{listenerName1},
+			managementServerResponse: &v3discoverypb.DiscoveryResponse{
+				VersionInfo: "0",
+				TypeUrl:     "type.googleapis.com/envoy.config.listener.v3.Listener",
+				Resources: []*anypb.Any{xdstestutils.MarshalAny(t, &v3listenerpb.Listener{
+					Name: listenerName1,
+					ApiListener: &v3listenerpb.ApiListener{
+						ApiListener: xdstestutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
+							RouteSpecifier: &v3httppb.HttpConnectionManager_ScopedRoutes{},
+						}),
+					},
+				})},
+			},
+			wantUpdates: map[string]dataAndErrTuple{
+				listenerName1: {
+					Err: cmpopts.AnyError,
+				},
+			},
+			wantMD: xdsresource.UpdateMetadata{
+				Status:  xdsresource.ServiceStatusNACKed,
+				Version: "0",
+				ErrState: &xdsresource.UpdateErrorMetadata{
+					Version: "0",
+					Err:     cmpopts.AnyError,
+				},
+			},
+		},
+		{
+			desc:                   "two bad resources",
+			resourceNamesToRequest: []string{listenerName1, listenerName2},
+			managementServerResponse: &v3discoverypb.DiscoveryResponse{
+				VersionInfo: "0",
+				TypeUrl:     "type.googleapis.com/envoy.config.listener.v3.Listener",
+				Resources: []*anypb.Any{
+					badlyMarshaledResource,
+					xdstestutils.MarshalAny(t, &v3listenerpb.Listener{
+						Name: listenerName2,
+						ApiListener: &v3listenerpb.ApiListener{
+							ApiListener: xdstestutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
+								RouteSpecifier: &v3httppb.HttpConnectionManager_ScopedRoutes{},
+							}),
+						},
+					}),
+				},
+			},
+			wantUpdates: map[string]dataAndErrTuple{
+				listenerName2: {
+					Err: cmpopts.AnyError,
+				},
+			},
+			wantMD: xdsresource.UpdateMetadata{
+				Status:  xdsresource.ServiceStatusNACKed,
+				Version: "0",
+				ErrState: &xdsresource.UpdateErrorMetadata{
+					Version: "0",
+					Err:     cmpopts.AnyError,
+				},
+			},
+		},
+		{
+			desc:                   "one good resource",
+			resourceNamesToRequest: []string{listenerName1},
+			managementServerResponse: &v3discoverypb.DiscoveryResponse{
+				VersionInfo: "0",
+				TypeUrl:     "type.googleapis.com/envoy.config.listener.v3.Listener",
+				Resources:   []*anypb.Any{listener1},
+			},
+			wantUpdates: map[string]dataAndErrTuple{
+				listenerName1: {
+					Resource: &listenerResourceData{Resource: listenerUpdate{
+						RouteConfigName: routeName,
+						Raw:             listener1.GetValue(),
+					}},
+				},
+			},
+			wantMD: xdsresource.UpdateMetadata{
+				Status:  xdsresource.ServiceStatusACKed,
+				Version: "0",
+			},
+		},
+		{
+			desc:                   "one good and one bad - deserialization failure",
+			resourceNamesToRequest: []string{listenerName1, listenerName2},
+			managementServerResponse: &v3discoverypb.DiscoveryResponse{
+				VersionInfo: "0",
+				TypeUrl:     "type.googleapis.com/envoy.config.listener.v3.Listener",
+				Resources: []*anypb.Any{
+					badlyMarshaledResource,
+					listener2,
+				},
+			},
+			wantUpdates: map[string]dataAndErrTuple{
+				listenerName2: {
+					Resource: &listenerResourceData{Resource: listenerUpdate{
+						RouteConfigName: routeName,
+						Raw:             listener2.GetValue(),
+					}},
+				},
+			},
+			wantMD: xdsresource.UpdateMetadata{
+				Status:  xdsresource.ServiceStatusNACKed,
+				Version: "0",
+				ErrState: &xdsresource.UpdateErrorMetadata{
+					Version: "0",
+					Err:     cmpopts.AnyError,
+				},
+			},
+		},
+		{
+			desc:                   "one good and one bad - validation failure",
+			resourceNamesToRequest: []string{listenerName1, listenerName2},
+			managementServerResponse: &v3discoverypb.DiscoveryResponse{
+				VersionInfo: "0",
+				TypeUrl:     "type.googleapis.com/envoy.config.listener.v3.Listener",
+				Resources: []*anypb.Any{
+					xdstestutils.MarshalAny(t, &v3listenerpb.Listener{
+						Name: listenerName1,
+						ApiListener: &v3listenerpb.ApiListener{
+							ApiListener: xdstestutils.MarshalAny(t, &v3httppb.HttpConnectionManager{
+								RouteSpecifier: &v3httppb.HttpConnectionManager_ScopedRoutes{},
+							}),
+						},
+					}),
+					listener2,
+				},
+			},
+			wantUpdates: map[string]dataAndErrTuple{
+				listenerName1: {Err: cmpopts.AnyError},
+				listenerName2: {
+					Resource: &listenerResourceData{Resource: listenerUpdate{
+						RouteConfigName: routeName,
+						Raw:             listener2.GetValue(),
+					}},
+				},
+			},
+			wantMD: xdsresource.UpdateMetadata{
+				Status:  xdsresource.ServiceStatusNACKed,
+				Version: "0",
+				ErrState: &xdsresource.UpdateErrorMetadata{
+					Version: "0",
+					Err:     cmpopts.AnyError,
+				},
+			},
+		},
+		{
+			desc:                   "two good resources",
+			resourceNamesToRequest: []string{listenerName1, listenerName2},
+			managementServerResponse: &v3discoverypb.DiscoveryResponse{
+				VersionInfo: "0",
+				TypeUrl:     "type.googleapis.com/envoy.config.listener.v3.Listener",
+				Resources:   []*anypb.Any{listener1, listener2},
+			},
+			wantUpdates: map[string]dataAndErrTuple{
+				listenerName1: {
+					Resource: &listenerResourceData{Resource: listenerUpdate{
+						RouteConfigName: routeName,
+						Raw:             listener1.GetValue(),
+					}},
+				},
+				listenerName2: {
+					Resource: &listenerResourceData{Resource: listenerUpdate{
+						RouteConfigName: routeName,
+						Raw:             listener2.GetValue(),
+					}},
+				},
+			},
+			wantMD: xdsresource.UpdateMetadata{
+				Status:  xdsresource.ServiceStatusACKed,
+				Version: "0",
+			},
+		},
+		{
+			desc:                   "two resources when we requested one",
+			resourceNamesToRequest: []string{listenerName1},
+			managementServerResponse: &v3discoverypb.DiscoveryResponse{
+				VersionInfo: "0",
+				TypeUrl:     "type.googleapis.com/envoy.config.listener.v3.Listener",
+				Resources:   []*anypb.Any{listener1, listener2},
+			},
+			wantUpdates: map[string]dataAndErrTuple{
+				listenerName1: {
+					Resource: &listenerResourceData{Resource: listenerUpdate{
+						RouteConfigName: routeName,
+						Raw:             listener1.GetValue(),
+					}},
+				},
+				listenerName2: {
+					Resource: &listenerResourceData{Resource: listenerUpdate{
+						RouteConfigName: routeName,
+						Raw:             listener2.GetValue(),
+					}},
+				},
+			},
+			wantMD: xdsresource.UpdateMetadata{
+				Status:  xdsresource.ServiceStatusACKed,
+				Version: "0",
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+			defer cancel()
+
+			// Start a fake xDS management server and configure the response it
+			// would send to its client.
+			mgmtServer, cleanup, err := fakeserver.StartServer(nil)
+			if err != nil {
+				t.Fatalf("Failed to start fake xDS server: %v", err)
+			}
+			defer cleanup()
+			t.Logf("Started xDS management server on %s", mgmtServer.Address)
+			mgmtServer.XDSResponseChan <- &fakeserver.Response{Resp: test.managementServerResponse}
+
+			// Create an xdsChannel for the test with a long watch expiry timer
+			// to ensure that watches don't expire for the duration of the test.
+			nodeID := uuid.New().String()
+			xc := xdsChannelForTest(t, mgmtServer.Address, nodeID, 2*defaultTestTimeout)
+			defer xc.close()
+
+			// Subscribe to the resources specified in the test table.
+			for _, name := range test.resourceNamesToRequest {
+				xc.subscribe(listenerType, name)
+			}
+
+			// Wait for an update callback on the event handler and verify the
+			// contents of the update and the metadata.
+			verifyUpdateAndMetadata(ctx, t, xc.eventHandler.(*testEventHandler), test.wantUpdates, test.wantMD)
+		})
+	}
+}
+
+// waitForResourceNames waits for the wantNames to be received on namesCh.
+// Returns a non-nil error if the context expires before that.
+func waitForResourceNames(ctx context.Context, namesCh chan []string, wantNames []string) error {
+	var lastRequestedNames []string
+	for ; ; <-time.After(defaultTestShortTimeout) {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("timeout waiting for resources %v to be requested from the management server. Last requested resources: %v", wantNames, lastRequestedNames)
+		case gotNames := <-namesCh:
+			if cmp.Equal(gotNames, wantNames, cmpopts.EquateEmpty(), cmpopts.SortSlices(func(s1, s2 string) bool { return s1 < s2 })) {
+				return nil
+			}
+			lastRequestedNames = gotNames
+		}
+	}
+}
+
+// newTestEventHandler creates a new testEventHandler instance with the
+// necessary channels for testing the xdsChannel.
+func newTestEventHandler() *testEventHandler {
+	return &testEventHandler{
+		typeCh:    make(chan ResourceType, 1),
+		updateCh:  make(chan map[string]dataAndErrTuple, 1),
+		mdCh:      make(chan xdsresource.UpdateMetadata, 1),
+		nameCh:    make(chan string, 1),
+		connErrCh: make(chan error, 1),
+	}
+}
+
+// testEventHandler is a struct that implements the xdsChannelEventhandler
+// interface.  It is used to receive events from an xdsChannel, and has multiple
+// channels on which it makes these events available to the test.
+type testEventHandler struct {
+	typeCh    chan ResourceType               // Resource type of an update or resource-does-not-exist error.
+	updateCh  chan map[string]dataAndErrTuple // Resource updates.
+	mdCh      chan xdsresource.UpdateMetadata // Metadata from an update.
+	nameCh    chan string                     // Name of the non-existent resource.
+	connErrCh chan error                      // Connectivity error.
+}
+
+func (ta *testEventHandler) adsStreamFailure(err error) {
+	ta.connErrCh <- err
+}
+
+func (ta *testEventHandler) waitForStreamFailure(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-ta.connErrCh:
+	}
+	return nil
+}
+
+func (ta *testEventHandler) adsResourceUpdate(typ ResourceType, updates map[string]dataAndErrTuple, md xdsresource.UpdateMetadata, onDone func()) {
+	ta.typeCh <- typ
+	ta.updateCh <- updates
+	ta.mdCh <- md
+	onDone()
+}
+
+// waitForUpdate waits for the next resource update event from the xdsChannel.
+// It returns the resource type, the resource updates, and the update metadata.
+// If the context is canceled, it returns an error.
+func (ta *testEventHandler) waitForUpdate(ctx context.Context) (ResourceType, map[string]dataAndErrTuple, xdsresource.UpdateMetadata, error) {
+	var typ ResourceType
+	var updates map[string]dataAndErrTuple
+	var md xdsresource.UpdateMetadata
+
+	select {
+	case typ = <-ta.typeCh:
+	case <-ctx.Done():
+		return ResourceType{}, nil, xdsresource.UpdateMetadata{}, ctx.Err()
+	}
+
+	select {
+	case updates = <-ta.updateCh:
+	case <-ctx.Done():
+		return ResourceType{}, nil, xdsresource.UpdateMetadata{}, ctx.Err()
+	}
+
+	select {
+	case md = <-ta.mdCh:
+	case <-ctx.Done():
+		return ResourceType{}, nil, xdsresource.UpdateMetadata{}, ctx.Err()
+	}
+	return typ, updates, md, nil
+}
+
+func (ta *testEventHandler) adsResourceDoesNotExist(typ ResourceType, name string) {
+	ta.typeCh <- typ
+	ta.nameCh <- name
+}
+
+// waitForResourceDoesNotExist waits for the next resource-does-not-exist event
+// from the xdsChannel. It returns the resource type and the resource name. If
+// the context is canceled, it returns an error.
+func (ta *testEventHandler) waitForResourceDoesNotExist(ctx context.Context) (ResourceType, string, error) {
+	var typ ResourceType
+	var name string
+
+	select {
+	case typ = <-ta.typeCh:
+	case <-ctx.Done():
+		return ResourceType{}, "", ctx.Err()
+	}
+
+	select {
+	case name = <-ta.nameCh:
+	case <-ctx.Done():
+		return ResourceType{}, "", ctx.Err()
+	}
+	return typ, name, nil
+}
+
+type panicDecoder struct{}
+
+func (panicDecoder) Decode(*AnyProto, DecodeOptions) (*DecodeResult, error) {
+	panic("simulate panic")
+}
+
+// TestDecodeResponse_PanicRecoveryEnabled tests the panic recovery mechanism
+// in decodeResponse.
+func (s) TestDecodeResponse_PanicRecoveryEnabled(t *testing.T) {
+	rType := &ResourceType{
+		TypeName: "resourceType",
+		Decoder:  panicDecoder{},
+	}
+	resp := response{resources: []*anypb.Any{{Value: []byte("test")}}}
+	wantErr := "recovered from panic during resource parsing"
+
+	xc := &xdsChannel{}
+	if _, _, err := xc.decodeResponse(rType, resp); err == nil || !strings.Contains(err.Error(), wantErr) {
+		t.Fatalf("decodeResponse() failed with err: %v, want %q", err, wantErr)
+	}
+}

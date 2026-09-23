@@ -1,0 +1,11 @@
+{
+  "type": "log_filter",
+  "id": "drop-everything",
+  "action": "ACTION_DROP",
+  "matches": [
+    {
+      "target": { "record_field": "LOG_RECORD_FIELD_BODY" },
+      "exists": {}
+    }
+  ]
+}

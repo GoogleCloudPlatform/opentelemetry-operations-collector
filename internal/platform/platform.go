@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/confgenerator/resourcedetector"
 	"github.com/shirou/gopsutil/host"
@@ -28,6 +29,7 @@ type Platform struct {
 	WindowsBuildNumber string
 	WinlogV1Channels   []string
 	HostInfo           *host.InfoStat
+	DistroCodename     string
 	HasNvidiaGpu       bool
 	ResourceOverride   resourcedetector.Resource
 	// Resource override only for GCE metadata unit testing
@@ -102,4 +104,51 @@ func (p Platform) GetResource() (resourcedetector.Resource, error) {
 	}
 	r, err := resourcedetector.GetResource()
 	return r, err
+}
+
+// BuildDistro returns the distribution identifier used in the agent version
+// label and User-Agent header (e.g. "bookworm", "noble", "el9", "sles15",
+// "windows-ltsc2022"). It falls back to "build_distro" when the platform is
+// synthetic or unrecognized (such as in golden configuration tests).
+func (p Platform) BuildDistro() string {
+	if p.Type == Windows {
+		switch p.WindowsBuildNumber {
+		case "14393":
+			return "windows-ltsc2016"
+		case "17763":
+			return "windows-ltsc2019"
+		case "20348":
+			return "windows-ltsc2022"
+		case "26100":
+			return "windows-ltsc2025"
+		default:
+			// Unlisted real Windows Server builds default to windows-ltsc2022
+			// (matching the single Windows package builder image), while synthetic
+			// test platforms (e.g. Platform="win_platform") fall back to "build_distro".
+			if p.HostInfo != nil && strings.HasPrefix(strings.ToLower(p.HostInfo.Platform), "microsoft windows") {
+				return "windows-ltsc2022"
+			}
+			return "build_distro"
+		}
+	} else if p.Type == Linux && p.HostInfo != nil {
+		major, _, _ := strings.Cut(p.HostInfo.PlatformVersion, ".")
+		switch p.HostInfo.PlatformFamily {
+		case "debian":
+			if p.DistroCodename != "" {
+				return p.DistroCodename
+			}
+		case "rhel":
+			if major != "" {
+				return "el" + major
+			}
+		case "suse":
+			if major == "42" {
+				major = "12"
+			}
+			if major != "" {
+				return "sles" + major
+			}
+		}
+	}
+	return "build_distro"
 }

@@ -105,10 +105,6 @@ func (p *provider) Retrieve(ctx context.Context, uri string, watcher confmap.Wat
 		return nil, fmt.Errorf("failed to generate otel config: %w", err)
 	}
 
-	if err := confgenerator.WriteConfigFile([]byte(otelConfig), filepath.Join(outDir, "otel.yaml")); err != nil {
-		return nil, fmt.Errorf("failed to write generated otel config: %w", err)
-	}
-
 	if p.logger != nil {
 		p.logger.Info("Generated OTEL config", zap.String("config", otelConfig))
 	}

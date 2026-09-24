@@ -230,7 +230,7 @@ func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrie
 	if err != nil {
 		return nil, fmt.Errorf("failed to evaluate destination policy %q: %w", destPolicy.PolicyName(), err)
 	}
-	if err := conf.Merge(cleanConf(destConf)); err != nil {
+	if err := mergeConf(conf, destConf); err != nil {
 		return nil, fmt.Errorf("failed to merge config for destination policy %q: %w", destPolicy.PolicyName(), err)
 	}
 
@@ -293,7 +293,7 @@ func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrie
 		if err != nil {
 			return nil, fmt.Errorf("failed to evaluate source policy %q: %w", sp.PolicyName(), err)
 		}
-		if err := conf.Merge(cleanConf(sourceConf)); err != nil {
+		if err := mergeConf(conf, sourceConf); err != nil {
 			return nil, fmt.Errorf("failed to merge config for source policy %q: %w", sp.PolicyName(), err)
 		}
 
@@ -313,7 +313,7 @@ func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrie
 			return nil, fmt.Errorf("failed to load logs pipelines for source policy %q: %w", sp.PolicyName(), err)
 		}
 		if logsPipelines != nil {
-			if err := conf.Merge(cleanConf(logsPipelines)); err != nil {
+			if err := mergeConf(conf, logsPipelines); err != nil {
 				return nil, fmt.Errorf("failed to merge logs pipelines for source policy %q: %w", sp.PolicyName(), err)
 			}
 		}
@@ -323,7 +323,7 @@ func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrie
 			return nil, fmt.Errorf("failed to load metrics pipelines for source policy %q: %w", sp.PolicyName(), err)
 		}
 		if metricsPipelines != nil {
-			if err := conf.Merge(cleanConf(metricsPipelines)); err != nil {
+			if err := mergeConf(conf, metricsPipelines); err != nil {
 				return nil, fmt.Errorf("failed to merge metrics pipelines for source policy %q: %w", sp.PolicyName(), err)
 			}
 		}
@@ -333,7 +333,7 @@ func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrie
 			return nil, fmt.Errorf("failed to load traces pipelines for source policy %q: %w", sp.PolicyName(), err)
 		}
 		if tracesPipelines != nil {
-			if err := conf.Merge(cleanConf(tracesPipelines)); err != nil {
+			if err := mergeConf(conf, tracesPipelines); err != nil {
 				return nil, fmt.Errorf("failed to merge traces pipelines for source policy %q: %w", sp.PolicyName(), err)
 			}
 		}
@@ -345,6 +345,68 @@ func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrie
 	}
 
 	return confmap.NewRetrieved(conf.ToStringMap())
+}
+
+// mergeConf merges src into dst, preserving the union of service::extensions.
+//
+// confmap.Merge replaces slices rather than appending to them, so when a second
+// policy declares service::extensions it overwrites, rather than extends, the
+// list the first one set. That failure is silent and destructive: the
+// destination policy's authenticator disappears from the list, the collector
+// never instantiates it, and startup fails with "authenticator not found" while
+// the extension is still plainly visible under the top level extensions key.
+//
+// Maps do merge correctly, so only the service::extensions list needs this.
+func mergeConf(dst *confmap.Conf, src *confmap.Conf) error {
+	before := serviceExtensions(dst)
+	if err := dst.Merge(cleanConf(src)); err != nil {
+		return err
+	}
+
+	union := mergeStringsUnique(before, serviceExtensions(dst))
+	if len(union) == 0 {
+		return nil
+	}
+
+	// Merging again replaces the list a final time, now with the union.
+	return dst.Merge(confmap.NewFromStringMap(map[string]any{
+		"service": map[string]any{"extensions": union},
+	}))
+}
+
+// serviceExtensions reads service::extensions as a list of component ID
+// strings. The value arrives as []any after a round trip through
+// confmap.ToStringMap, but may still be []string when set directly.
+func serviceExtensions(c *confmap.Conf) []string {
+	switch list := c.Get("service::extensions").(type) {
+	case []string:
+		return list
+	case []any:
+		out := make([]string, 0, len(list))
+		for _, e := range list {
+			out = append(out, fmt.Sprint(e))
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
+// mergeStringsUnique concatenates lists, dropping duplicates and preserving
+// first-seen order so the generated config stays stable across runs.
+func mergeStringsUnique(lists ...[]string) []any {
+	seen := map[string]struct{}{}
+	var out []any
+	for _, list := range lists {
+		for _, s := range list {
+			if _, dup := seen[s]; dup {
+				continue
+			}
+			seen[s] = struct{}{}
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 func cleanConf(c *confmap.Conf) *confmap.Conf {

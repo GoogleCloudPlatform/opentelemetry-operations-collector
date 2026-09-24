@@ -12,13 +12,13 @@ dev-setup: install-tools workspace setup-hooks
 
 .PHONY: setup-hooks
 setup-hooks:
-	git config core.hooksPath $(PWD)/hooks
+	git config core.hooksPath $(CURDIR)/hooks
 
 .PHONY: precommit
-precommit: checklicense misspell lint compare-all test-distrogen test-protos validate-samples
+precommit: checklicense misspell lint compare-all test-distrogen test-protos test-events validate-samples
 
 .PHONY: presubmit
-presubmit: checklicense misspell lint compare-all test-protos
+presubmit: checklicense misspell lint compare-all test-protos test-events
 
 
 #######################
@@ -64,7 +64,7 @@ test-google-otel-components test-otelopscol-components: go.work
 
 RUN_DISTROGEN=go run ./cmd/distrogen
 
-TOOLS_DIR = $(PWD)/.tools
+TOOLS_DIR = $(CURDIR)/.tools
 
 ####################
 # Proto Generation
@@ -98,11 +98,39 @@ compare-protos: gen-protos
 test-protos:
 	go test -v ./gen/go/...
 
+####################
+# Event Generation
+####################
+
+WEAVER_VERSION ?= v0.26.1
+WEAVER_IMAGE ?= otel/weaver:$(WEAVER_VERSION)
+WEAVER = docker run --rm --user "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -w /workspace $(WEAVER_IMAGE)
+
+.PHONY: gen-events
+gen-events:
+	$(WEAVER) registry generate --v2 -r pkg/event/schema -t pkg/event/templates go pkg/event
+
+.PHONY: check-events
+check-events:
+	$(WEAVER) registry check --v2 -r pkg/event/schema
+
+.PHONY: compare-events
+compare-events:
+	@TMP_DIR=$$(mktemp -d) && \
+	trap 'rm -rf "$$TMP_DIR"' EXIT && \
+	docker run --rm --user "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -v "$$TMP_DIR:/output" -w /workspace $(WEAVER_IMAGE) registry generate --v2 --quiet -r pkg/event/schema -t pkg/event/templates go /output && \
+	diff -u pkg/event/generated_events.go "$$TMP_DIR/generated_events.go" || \
+	(echo "Generated event files in pkg/event are out-of-date. Run 'make gen-events' to regenerate." && exit 1)
+
+.PHONY: test-events
+test-events:
+	cd pkg/event && go test -v ./...
+
 .PHONY: gen-all
-gen-all: distrogen-golden-update gen-google-built-otel gen-otelopscol gen-protos
+gen-all: distrogen-golden-update gen-google-built-otel gen-otelopscol gen-protos gen-events
 
 .PHONY: regen-all
-regen-all: distrogen-golden-update regen-google-built-otel regen-otelopscol gen-protos
+regen-all: distrogen-golden-update regen-google-built-otel regen-otelopscol gen-protos gen-events
 
 .PHONY: compare-all
 compare-all:

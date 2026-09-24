@@ -19,6 +19,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/event"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/pdata/plog"
@@ -59,6 +60,17 @@ func (p *googlePolicyProcessor) start(_ context.Context, _ component.Host) error
 }
 
 func (p *googlePolicyProcessor) reloadPolicies() {
+	revID, failed := googlepolicy.TakeActiveFailedPolicies()
+	for _, fp := range failed {
+		event.RecordPolicyEvaluateErrorEvent(
+			p.logger,
+			fp.Err,
+			fp.ID,
+			revID,
+			event.WithPolicyEvaluateErrorEventErrorType(googlepolicy.ClassifyPolicyError(fp.Err)),
+		)
+	}
+
 	ps := googlepolicy.ActivePolicySet()
 	if ps == nil {
 		p.evaluator.Store(nil)

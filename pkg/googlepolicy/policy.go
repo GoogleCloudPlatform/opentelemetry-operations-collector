@@ -206,12 +206,19 @@ type ProtoPolicyDriver interface {
 	LoadPolicyProto(msg proto.Message) (Policy, error)
 }
 
+// FailedPolicy represents a policy configuration that failed to load or validate.
+type FailedPolicy struct {
+	ID  string
+	Err error
+}
+
 // PolicySet is the translation of a set of policies received from a given source
 // into internal representations that the Collector can use to evaluate.
 type PolicySet struct {
-	Policies   map[string]*PolicySetEntry
-	RevisionID string
-	ReceivedAt time.Time
+	Policies       map[string]*PolicySetEntry
+	FailedPolicies []FailedPolicy
+	RevisionID     string
+	ReceivedAt     time.Time
 }
 
 // PolicySetEntry contains the given policy object and a mark for whether it has
@@ -231,25 +238,35 @@ type PolicySetEntry struct {
 // len(ps.Policies) against the number of inputs to detect a partial set, and
 // reject the whole thing if that is not acceptable.
 func MakePolicySet(revisionID string, rawPolicyConfigs []map[string]any) (*PolicySet, error) {
-	return makePolicySet(revisionID, rawPolicyConfigs, func(i int, rawPolicyConfig map[string]any) (Policy, error) {
-		// HARD CODED ASSUMPTION: for each entry the map contains a top-level
-		// field called `type` that contains the policy type. This will match up
-		// with the registered PolicyDriver.
-		//
-		// This envelope is what authored config uses to say which driver it
-		// means. Policies that arrive as a proto carry their identity in the
-		// message type instead and go through MakePolicySetFromProtos, which
-		// needs none of this.
-		policyTypeRaw, ok := rawPolicyConfig["type"]
-		if !ok {
-			return nil, fmt.Errorf("%w for policy at index %d", ErrPolicyTypeFieldMissing, i)
-		}
-		policyType, ok := policyTypeRaw.(string)
-		if !ok {
-			return nil, fmt.Errorf("%w for policy at index %d", ErrPolicyTypeFieldWrongType, i)
-		}
-		return LoadPolicy(policyType, rawPolicyConfig)
-	})
+	return makePolicySet(
+		revisionID,
+		rawPolicyConfigs,
+		func(i int, rawPolicyConfig map[string]any) (Policy, error) {
+			// HARD CODED ASSUMPTION: for each entry the map contains a top-level
+			// field called `type` that contains the policy type. This will match up
+			// with the registered PolicyDriver.
+			//
+			// This envelope is what authored config uses to say which driver it
+			// means. Policies that arrive as a proto carry their identity in the
+			// message type instead and go through MakePolicySetFromProtos, which
+			// needs none of this.
+			policyTypeRaw, ok := rawPolicyConfig["type"]
+			if !ok {
+				return nil, fmt.Errorf("%w for policy at index %d", ErrPolicyTypeFieldMissing, i)
+			}
+			policyType, ok := policyTypeRaw.(string)
+			if !ok {
+				return nil, fmt.Errorf("%w for policy at index %d", ErrPolicyTypeFieldWrongType, i)
+			}
+			return LoadPolicy(policyType, rawPolicyConfig)
+		},
+		func(i int, rawPolicyConfig map[string]any) string {
+			if id, ok := rawPolicyConfig["id"].(string); ok && id != "" {
+				return id
+			}
+			return fmt.Sprintf("index_%d", i)
+		},
+	)
 }
 
 // MakePolicySetFromProtos builds a PolicySet from decoded policy protos, on the
@@ -259,22 +276,34 @@ func MakePolicySet(revisionID string, rawPolicyConfigs []map[string]any) (*Polic
 // Each policy is routed to a driver by its message type, so no "type" field is
 // read from -- or needed in -- the policy body.
 func MakePolicySetFromProtos(revisionID string, msgs []proto.Message) (*PolicySet, error) {
-	return makePolicySet(revisionID, msgs, func(i int, msg proto.Message) (Policy, error) {
-		p, err := LoadPolicyFromProto(msg)
-		if err != nil {
-			// A bare proto has no name of its own to report, so the position in
-			// the revision is the only thing that identifies which one failed.
-			return nil, fmt.Errorf("policy at index %d: %w", i, err)
-		}
-		return p, nil
-	})
+	return makePolicySet(
+		revisionID,
+		msgs,
+		func(i int, msg proto.Message) (Policy, error) {
+			p, err := LoadPolicyFromProto(msg)
+			if err != nil {
+				// A bare proto has no name of its own to report, so the position in
+				// the revision is the only thing that identifies which one failed.
+				return nil, fmt.Errorf("policy at index %d: %w", i, err)
+			}
+			return p, nil
+		},
+		func(i int, msg proto.Message) string {
+			if idGetter, ok := msg.(interface{ GetId() string }); ok {
+				if id := idGetter.GetId(); id != "" {
+					return id
+				}
+			}
+			return fmt.Sprintf("index_%d", i)
+		},
+	)
 }
 
 // makePolicySet accumulates whatever load can make sense of, collecting the
 // failures rather than stopping at the first one. It is the shared body of
 // MakePolicySet and MakePolicySetFromProtos, which differ only in how a single
 // input is turned into a Policy.
-func makePolicySet[T any](revisionID string, inputs []T, load func(int, T) (Policy, error)) (*PolicySet, error) {
+func makePolicySet[T any](revisionID string, inputs []T, load func(int, T) (Policy, error), idOf func(int, T) string) (*PolicySet, error) {
 	ps := &PolicySet{
 		Policies:   make(map[string]*PolicySetEntry, len(inputs)),
 		RevisionID: revisionID,
@@ -287,6 +316,10 @@ func makePolicySet[T any](revisionID string, inputs []T, load func(int, T) (Poli
 		p, err := load(i, in)
 		if err != nil {
 			errs = append(errs, err)
+			ps.FailedPolicies = append(ps.FailedPolicies, FailedPolicy{
+				ID:  idOf(i, in),
+				Err: err,
+			})
 			continue
 		}
 
@@ -294,6 +327,21 @@ func makePolicySet[T any](revisionID string, inputs []T, load func(int, T) (Poli
 	}
 
 	return ps, errors.Join(errs...)
+}
+
+// ClassifyPolicyError returns a canonical OpenTelemetry error.type value
+// describing the class of policy load or evaluation error.
+func ClassifyPolicyError(err error) string {
+	switch {
+	case errors.Is(err, ErrPolicyTypeNotFound):
+		return "policy_type_not_found"
+	case errors.Is(err, ErrPolicyFailedValidation):
+		return "policy_failed_validation"
+	case errors.Is(err, ErrPolicyFailedToLoad):
+		return "policy_failed_to_load"
+	default:
+		return "policy_evaluation_failed"
+	}
 }
 
 // LoadPoliciesOfClass does what it says on the box.
@@ -368,6 +416,9 @@ func (ps *PolicySet) Clone() *PolicySet {
 		for k, v := range ps.Policies {
 			clone.Policies[k] = v.Clone()
 		}
+	}
+	if len(ps.FailedPolicies) > 0 {
+		clone.FailedPolicies = slices.Clone(ps.FailedPolicies)
 	}
 	return clone
 }

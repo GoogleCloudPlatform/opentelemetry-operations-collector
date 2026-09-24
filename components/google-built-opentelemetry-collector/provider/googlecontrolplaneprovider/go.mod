@@ -18,6 +18,7 @@ go 1.26.6
 
 require (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor v0.0.0-00010101000000-000000000000
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/event v0.0.0
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy v0.0.0
 	github.com/google/uuid v1.6.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/extension/googleclientauthextension v0.160.0
@@ -229,5 +230,6 @@ require (
 replace (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector => ../../../../
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor => ../../processor/googlepolicyprocessor
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/event v0.0.0 => ../../../../pkg/event
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy => ../../../../pkg/googlepolicy
 )

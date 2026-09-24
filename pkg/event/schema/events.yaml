@@ -1,0 +1,91 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+file_format: definition/2
+
+attributes:
+  - key: error.type
+    type: string
+    stability: stable
+    brief: Describes a class of error the operation ended with.
+    examples: ["policy_type_not_found", "policy_failed_to_load", "policy_failed_validation", "policy_evaluation_failed"]
+
+  - key: gcp.policy.class
+    type:
+      members:
+        - id: source
+          value: "source"
+          brief: Source policy class.
+          stability: development
+        - id: destination
+          value: "destination"
+          brief: Destination policy class.
+          stability: development
+        - id: transformation
+          value: "transformation"
+          brief: Transformation policy class.
+          stability: development
+    stability: development
+    brief: The class of the policy being evaluated.
+    examples: ["source", "destination", "transformation"]
+
+  - key: gcp.policy.id
+    type: string
+    stability: development
+    brief: Unique identifier of the policy being evaluated.
+    examples: ["policy-123"]
+
+  - key: gcp.policy.set.revision.id
+    type: string
+    stability: development
+    brief: Unique identifier of the policy set revision containing the policy.
+    examples: ["886313e1-3b8a-5372-9b90-0c9aee199e5d"]
+
+events:
+  - name: gcp.policy.evaluate.error
+    stability: development
+    requirement_level: recommended
+    brief: Recorded when an error occurs while evaluating a policy.
+    note: |
+      This event is recorded whenever policy evaluation fails.
+      The event body MUST contain the human-readable failure message describing the evaluation error.
+      Timestamp MUST be set to the time when the evaluation failure occurred.
+      Default severity level is ERROR.
+    annotations:
+      severity: error
+    attributes:
+      - ref: gcp.policy.id
+        requirement_level: required
+      - ref: gcp.policy.set.revision.id
+        requirement_level: required
+      - ref: error.type
+        requirement_level: recommended
+      - ref: gcp.policy.class
+        requirement_level: recommended
+
+  - name: gcp.policy.set.invalid
+    stability: development
+    requirement_level: recommended
+    brief: Recorded when a policy set is structurally invalid and cannot be applied.
+    note: |
+      This event is recorded when an entire policy set fails validation (for example,
+      containing multiple destination policies).
+      The event body MUST contain the human-readable error message describing why the policy set is invalid.
+      Timestamp MUST be set to the time when the invalid policy set was rejected.
+      Default severity level is ERROR.
+    annotations:
+      severity: error
+    attributes:
+      - ref: gcp.policy.set.revision.id
+        requirement_level: required

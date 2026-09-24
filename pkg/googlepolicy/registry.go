@@ -218,6 +218,20 @@ func ActivePolicySet() *PolicySet {
 	return activePolicySet.Clone()
 }
 
+// TakeActiveFailedPolicies atomically claims and clears any FailedPolicies on
+// the currently active PolicySet so that per-policy load errors in a revision
+// are reported at most once across the provider and processors.
+func TakeActiveFailedPolicies() (string, []FailedPolicy) {
+	policySetMu.Lock()
+	defer policySetMu.Unlock()
+	if activePolicySet == nil || len(activePolicySet.FailedPolicies) == 0 {
+		return "", nil
+	}
+	failed := activePolicySet.FailedPolicies
+	activePolicySet.FailedPolicies = nil
+	return activePolicySet.RevisionID, failed
+}
+
 // ActivePolicySetRevisionID returns the revision ID of the active policy set.
 // Sometimes the only thing we need to know about the active policy set is the
 // revision ID, so rather than forcing callers to get a reference to the entire

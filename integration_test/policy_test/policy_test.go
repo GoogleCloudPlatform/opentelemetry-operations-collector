@@ -33,6 +33,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/googlecontrolplaneextension"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider"
 	"github.com/google/go-cmp/cmp"
@@ -450,6 +451,7 @@ func testCollectorFactories() (otelcol.Factories, error) {
 	}
 	factories.Extensions, err = otelcol.MakeFactoryMap[extension.Factory](
 		newStubExtensionFactory("googleclientauth"),
+		googlecontrolplaneextension.NewFactory(),
 	)
 	if err != nil {
 		return otelcol.Factories{}, err

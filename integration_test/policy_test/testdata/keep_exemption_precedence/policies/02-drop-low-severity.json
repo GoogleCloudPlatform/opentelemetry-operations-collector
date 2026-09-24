@@ -1,0 +1,11 @@
+{
+  "type": "log_filter",
+  "id": "drop-debug-and-info",
+  "action": "ACTION_DROP",
+  "matches": [
+    {
+      "target": { "record_field": "LOG_RECORD_FIELD_SEVERITY_NUMBER" },
+      "lt": { "int_value": 13 }
+    }
+  ]
+}

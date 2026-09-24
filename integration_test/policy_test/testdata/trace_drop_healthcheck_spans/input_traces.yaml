@@ -1,0 +1,35 @@
+resourceSpans:
+  - resource:
+      attributes:
+        - key: service.name
+          value:
+            stringValue: frontend-proxy
+    scopeSpans:
+      - scope:
+          name: otelhttp
+          version: 0.50.0
+        spans:
+          - traceId: "0102030405060708090a0b0c0d0e0f10"
+            spanId: "0102030405060708"
+            name: GET /healthz
+            kind: 2
+            startTimeUnixNano: "1700000000000000000"
+            endTimeUnixNano: "1700000001000000000"
+            attributes:
+              - key: http.target
+                value:
+                  stringValue: /healthz
+            status:
+              code: 1
+          - traceId: "0102030405060708090a0b0c0d0e0f11"
+            spanId: "0102030405060709"
+            name: POST /api/v1/orders
+            kind: 2
+            startTimeUnixNano: "1700000002000000000"
+            endTimeUnixNano: "1700000005000000000"
+            attributes:
+              - key: http.target
+                value:
+                  stringValue: /api/v1/orders
+            status:
+              code: 1

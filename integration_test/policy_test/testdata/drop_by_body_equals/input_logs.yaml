@@ -1,0 +1,29 @@
+resourceLogs:
+  - resource:
+      attributes:
+        - key: service.name
+          value:
+            stringValue: checkout-service
+    scopeLogs:
+      - scope:
+          name: app.logger
+          version: 1.0.0
+        logRecords:
+          - timeUnixNano: "1700000000000000000"
+            severityNumber: 9
+            severityText: INFO
+            body:
+              stringValue: KEEP_THIS_LOG_LINE
+            attributes:
+              - key: env
+                value:
+                  stringValue: prod
+          - timeUnixNano: "1700000001000000000"
+            severityNumber: 5
+            severityText: DEBUG
+            body:
+              stringValue: DROP_THIS_LOG_LINE
+            attributes:
+              - key: env
+                value:
+                  stringValue: prod

@@ -842,6 +842,14 @@ var (
 		// Fail fast on dropped SSH TCP SYN packets instead of hanging for 120s.
 		"-oConnectTimeout=15",
 		"-oConnectionAttempts=3",
+		// Abort stalled post-connect SSH handshakes or unresponsive sessions in 45s
+		// (3 * 15s). This is >2.8x the max 16s early-boot guest-agent network bounce
+		// window (b/557287367) to avoid false disconnects on active commands, while
+		// remaining well below OpenSSH's 120s LoginGraceTime so OpenSSH 9.8+
+		// PerSourcePenalties (penalty: exceeded LoginGraceTime) never bans the runner IP
+		// for 90s (b/564525639).
+		"-oServerAliveInterval=15",
+		"-oServerAliveCountMax=3",
 		// StrictHostKeyChecking is disabled because the host keys are unknown
 		// to us at the start of the test.
 		"-oStrictHostKeyChecking=no",
@@ -897,8 +905,11 @@ func isSSHTransportError(err error) bool {
 	return strings.Contains(errStr, "exit status 255") ||
 		strings.Contains(errStr, "ssh: connect to host") ||
 		strings.Contains(errStr, "Connection timed out") ||
+		(strings.Contains(errStr, "Connection to ") && strings.Contains(errStr, " timed out")) ||
+		strings.Contains(errStr, "not responding") ||
 		strings.Contains(errStr, "Connection refused") ||
 		strings.Contains(errStr, "Connection reset by peer") ||
+		strings.Contains(errStr, "Connection closed by remote host") ||
 		strings.Contains(errStr, "kex_exchange_identification") ||
 		strings.Contains(errStr, "Host key verification failed")
 }
@@ -906,6 +917,11 @@ func isSSHTransportError(err error) bool {
 // IsSSHTransportErrorForTest exports isSSHTransportError for unit testing.
 func IsSSHTransportErrorForTest(err error) bool {
 	return isSSHTransportError(err)
+}
+
+// SSHOptionsForTest returns a copy of sshOptions for unit testing.
+func SSHOptionsForTest() []string {
+	return append([]string(nil), sshOptions...)
 }
 
 // RunRemotelyStdin is just like RunRemotely but it accepts an io.Reader
@@ -2056,34 +2072,42 @@ func RestartInstance(ctx context.Context, logger *log.Logger, vm *VM) error {
 // InstallGrpcurlIfNeeded installs grpcurl on instances that don't already have
 // it installed.
 func InstallGrpcurlIfNeeded(ctx context.Context, logger *log.Logger, vm *VM) error {
+	var installCmd string
 	if IsWindows(vm.ImageSpec) {
 		if _, err := RunRemotely(ctx, logger, vm, "Get-Command grpcurl"); err == nil {
 			return nil
 		}
 
 		logger.Printf("grpcurl not found, installing it...")
-		installCmd := `gcloud storage cp gs://ops-agents-public-buckets-vendored-deps/mirrored-content/grpcurl/v1.8.6/grpcurl_1.8.6_windows_x86_64.zip C:\agentPlugin;Expand-Archive -Path "C:\agentPlugin\grpcurl_1.8.6_windows_x86_64.zip" -DestinationPath "C:\" -Force;ls "C:\"`
+		installCmd = `gcloud storage cp gs://ops-agents-public-buckets-vendored-deps/mirrored-content/grpcurl/v1.8.6/grpcurl_1.8.6_windows_x86_64.zip C:\agentPlugin;Expand-Archive -Path "C:\agentPlugin\grpcurl_1.8.6_windows_x86_64.zip" -DestinationPath "C:\" -Force;ls "C:\"`
+	} else {
+		if _, err := RunRemotely(ctx, logger, vm, "which grpcurl"); err == nil {
+			return nil
+		}
 
-		_, err := RunRemotely(ctx, logger, vm, installCmd)
-		return err
-	}
+		logger.Printf("grpcurl not found, installing it...")
+		if err := InstallGcloudIfNeeded(ctx, logger, vm); err != nil {
+			return err
+		}
 
-	if _, err := RunRemotely(ctx, logger, vm, "which grpcurl"); err == nil {
-		return nil
-	}
+		arch := "x86_64"
+		if IsARM(vm.ImageSpec) {
+			arch = "arm64"
+		}
 
-	logger.Printf("grpcurl not found, installing it...")
-
-	arch := "x86_64"
-	if IsARM(vm.ImageSpec) {
-		arch = "arm64"
-	}
-
-	installCmd := fmt.Sprintf("sudo gcloud storage cp gs://ops-agents-public-buckets-vendored-deps/mirrored-content/grpcurl/v1.8.6/grpcurl_1.8.6_linux_%s.tar.gz /tmp/agentPlugin && sudo tar -xzf /tmp/agentPlugin/grpcurl_1.8.6_linux_%s.tar.gz --no-overwrite-dir -C /usr/local/bin", arch, arch)
-	installCmd = `set -ex
+		installCmd = fmt.Sprintf("sudo gcloud storage cp gs://ops-agents-public-buckets-vendored-deps/mirrored-content/grpcurl/v1.8.6/grpcurl_1.8.6_linux_%s.tar.gz /tmp/agentPlugin && sudo tar -xzf /tmp/agentPlugin/grpcurl_1.8.6_linux_%s.tar.gz --no-overwrite-dir -C /usr/local/bin", arch, arch)
+		installCmd = `set -ex
 ` + installCmd
-	_, err := RunRemotely(ctx, logger, vm, installCmd)
-	return err
+	}
+
+	downloadBackoff := backoff.WithContext(backoff.WithMaxRetries(backoff.NewConstantBackOff(3*time.Second), 5), ctx)
+	return backoff.Retry(func() error {
+		_, runErr := RunRemotely(ctx, logger, vm, installCmd)
+		if runErr != nil {
+			logger.Printf("Transient error installing grpcurl on VM, retrying: %v", runErr)
+		}
+		return runErr
+	}, downloadBackoff)
 }
 
 // downgradeGcloudIfNeeded downgrades gcloud installation to working version in specific distros.
@@ -2101,8 +2125,9 @@ func downgradeGcloudIfNeeded(ctx context.Context, logger *log.Logger, vm *VM) er
 // verifyGcloudInstallation checks if the gcloud command is installed correctly in the VM.
 func verifyGcloudInstallation(ctx context.Context, logger *log.Logger, vm *VM) error {
 	// On Snap-managed distributions (e.g. Ubuntu 24.04 / ML images), wait for snapd to finish
-	// mounting and linking pre-seeded snaps (including google-cloud-cli) on first boot.
-	waitCmd := "if command -v snap >/dev/null 2>&1; then sudo snap wait system seed.loaded || true; fi"
+	// mounting and linking pre-seeded snaps (including google-cloud-cli) on first boot, and
+	// hold background snap auto-refreshes so snapd does not unlink /snap/bin/gcloud mid-test (b/564557187).
+	waitCmd := "if command -v snap >/dev/null 2>&1; then sudo snap wait system seed.loaded || true; sudo snap set system refresh.hold=\"$(date --date='tomorrow' +%Y-%m-%dT%H:%M:%S%:z)\" || true; fi"
 	if _, err := RunRemotely(ctx, logger, vm, waitCmd); err != nil && isSSHTransportError(err) {
 		return fmt.Errorf("failed waiting for snap initialization due to SSH error: %w", err)
 	}

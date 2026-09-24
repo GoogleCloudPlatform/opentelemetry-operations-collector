@@ -1,0 +1,15 @@
+{
+  "type": "trace_filter",
+  "id": "keep-root-spans",
+  "action": "ACTION_KEEP",
+  "matches": [
+    {
+      "target": {
+        "record_field": "SPAN_RECORD_FIELD_PARENT_SPAN_ID"
+      },
+      "equals": {
+        "string_value": ""
+      }
+    }
+  ]
+}

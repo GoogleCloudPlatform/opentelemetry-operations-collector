@@ -29,6 +29,7 @@ import (
 	"go.opentelemetry.io/collector/pipeline"
 	"go.opentelemetry.io/collector/receiver/otlpreceiver"
 	"go.opentelemetry.io/collector/service"
+	"go.opentelemetry.io/collector/service/extensions"
 	"go.opentelemetry.io/collector/service/pipelines"
 	"go.opentelemetry.io/collector/service/telemetry/otelconftelemetry"
 	config "go.opentelemetry.io/contrib/otelconf/v0.3.0"
@@ -174,6 +175,29 @@ func (p *SelfMetricsPolicy) Evaluate(ctx context.Context) (*confmap.Conf, error)
 	conf.Service = service.Config{
 		Telemetry: telemetryCfg,
 	}
+
+	// The control plane extension reports policy set state on the collector's
+	// internal MeterProvider, which the periodic reader configured above pushes
+	// into this policy's own OTLP receiver. It is enabled here rather than in
+	// the distribution's static config because it only reports anything
+	// meaningful when the control plane provider is driving the collector,
+	// which is exactly when this policy is evaluated.
+	//
+	// Configured as a raw map for the same reason resourcedetection and
+	// transform below are: it keeps the provider from taking a module
+	// dependency on the extension. The extension's Config is intentionally
+	// empty, since policy set identity is derived from the active policy set
+	// rather than configured.
+	cpExtType, _ := component.NewType("googlecontrolplane")
+	cpExtID := component.NewIDWithName(cpExtType, p.Name)
+
+	conf.Extensions = map[component.ID]component.Config{
+		cpExtID: component.Config(map[string]any{}),
+	}
+
+	// Declaring the extension above only defines it; the collector instantiates
+	// nothing that is not also listed under service::extensions.
+	conf.Service.Extensions = extensions.Config{cpExtID}
 
 	otlpReceiver := otlpreceiver.NewFactory().CreateDefaultConfig().(*otlpreceiver.Config)
 	otlpReceiver.Protocols.HTTP = configoptional.None[otlpreceiver.HTTPConfig]()

@@ -42,6 +42,7 @@ import (
 	"log"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -558,6 +559,21 @@ func TestIsSSHTransportError(t *testing.T) {
 			expected: true,
 		},
 		{
+			name:     "ssh connection closed by remote host",
+			err:      errors.New("Command failed: ssh test_user@10.128.2.30\nexit status 255\nstdout+stderr: kex_exchange_identification: Connection closed by remote host"),
+			expected: true,
+		},
+		{
+			name:     "ssh server alive timeout preauth",
+			err:      errors.New("Command failed: ssh test_user@10.128.2.30\nexit status 255\nstdout+stderr: Connection to 10.128.2.30 port 22 timed out"),
+			expected: true,
+		},
+		{
+			name:     "ssh server not responding",
+			err:      errors.New("Command failed: ssh test_user@10.128.2.30\nexit status 255\nstdout+stderr: Timeout, server 10.128.2.30 not responding."),
+			expected: true,
+		},
+		{
 			name:     "exit status 255 error",
 			err:      errors.New("Command failed: ssh\nexit status 255"),
 			expected: true,
@@ -571,6 +587,41 @@ func TestIsSSHTransportError(t *testing.T) {
 				t.Errorf("isSSHTransportError(%v) = %v; expected %v", tc.err, actual, tc.expected)
 			}
 		})
+	}
+}
+
+func TestSSHOptionsLivenessBounds(t *testing.T) {
+	opts := gce.SSHOptionsForTest()
+	var interval, countMax int
+	for _, opt := range opts {
+		if v, ok := strings.CutPrefix(opt, "-oServerAliveInterval="); ok {
+			var err error
+			interval, err = strconv.Atoi(v)
+			if err != nil {
+				t.Fatalf("invalid ServerAliveInterval %q: %v", opt, err)
+			}
+		}
+		if v, ok := strings.CutPrefix(opt, "-oServerAliveCountMax="); ok {
+			var err error
+			countMax, err = strconv.Atoi(v)
+			if err != nil {
+				t.Fatalf("invalid ServerAliveCountMax %q: %v", opt, err)
+			}
+		}
+	}
+	if interval <= 0 || countMax <= 0 {
+		t.Fatalf("expected positive ServerAliveInterval (%d) and ServerAliveCountMax (%d) in sshOptions: %v", interval, countMax, opts)
+	}
+	totalTimeoutSec := interval * countMax
+	// Must be strictly greater than the max 16s early-boot guest-agent network
+	// bounce window (b/557287367) so active SSH commands are not falsely killed.
+	if totalTimeoutSec <= 16 {
+		t.Errorf("total keepalive timeout (%ds) must be > 16s guest-agent network bounce window", totalTimeoutSec)
+	}
+	// Must be strictly less than OpenSSH's 120s LoginGraceTime so stalled pre-auth
+	// connections abort before triggering OpenSSH 9.8+ PerSourcePenalties (b/564525639).
+	if totalTimeoutSec >= 120 {
+		t.Errorf("total keepalive timeout (%ds) must be < 120s OpenSSH LoginGraceTime", totalTimeoutSec)
 	}
 }
 

@@ -1,0 +1,15 @@
+{
+  "type": "trace_filter",
+  "id": "keep-error-status-spans",
+  "action": "ACTION_KEEP",
+  "matches": [
+    {
+      "target": {
+        "record_field": "SPAN_RECORD_FIELD_STATUS_CODE"
+      },
+      "equals": {
+        "string_value": "ERROR"
+      }
+    }
+  ]
+}

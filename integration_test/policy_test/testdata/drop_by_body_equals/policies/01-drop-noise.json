@@ -1,0 +1,11 @@
+{
+  "type": "log_filter",
+  "id": "drop-debug-noise",
+  "action": "ACTION_DROP",
+  "matches": [
+    {
+      "target": { "record_field": "LOG_RECORD_FIELD_BODY" },
+      "equals": { "string_value": "DROP_THIS_LOG_LINE" }
+    }
+  ]
+}

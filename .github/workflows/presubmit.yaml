@@ -57,6 +57,8 @@ jobs:
         run: GO_BUILD_TAGS=gpu make presubmit
       - name: Run tests
         run: make test-all
+      - name: Run policy integration tests
+        run: make -C integration_test/policy_test test
 
   test-distros:
     strategy:

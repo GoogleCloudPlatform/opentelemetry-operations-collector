@@ -25,11 +25,11 @@ import (
 var versionLabelTemplate = template.Must(template.New("versionlabel").Parse(`{{.Prefix}}/{{.AgentVersion}}-{{.BuildDistro}}`))
 var userAgentTemplate = template.Must(template.New("useragent").Parse(`{{.Prefix}}/{{.AgentVersion}} (BuildDistro={{.BuildDistro}};Platform={{.Platform}};ShortName={{.ShortName}};ShortVersion={{.ShortVersion}})`))
 
-func expandTemplate(t *template.Template, prefix string, extraParams map[string]string) (string, error) {
+func (p Platform) expandTemplate(t *template.Template, prefix string, extraParams map[string]string) (string, error) {
 	params := map[string]string{
 		"Prefix":       prefix,
 		"AgentVersion": version.Version,
-		"BuildDistro":  version.BuildDistro,
+		"BuildDistro":  p.BuildDistro(),
 	}
 	for k, v := range extraParams {
 		params[k] = v
@@ -43,7 +43,7 @@ func expandTemplate(t *template.Template, prefix string, extraParams map[string]
 }
 
 func (p Platform) VersionLabel(prefix string) (string, error) {
-	return expandTemplate(versionLabelTemplate, prefix, nil)
+	return p.expandTemplate(versionLabelTemplate, prefix, nil)
 }
 
 func (p Platform) UserAgent(prefix string) (string, error) {
@@ -52,5 +52,5 @@ func (p Platform) UserAgent(prefix string) (string, error) {
 		"ShortName":    p.HostInfo.Platform,
 		"ShortVersion": p.HostInfo.PlatformVersion,
 	}
-	return expandTemplate(userAgentTemplate, prefix, extraParams)
+	return p.expandTemplate(userAgentTemplate, prefix, extraParams)
 }

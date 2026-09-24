@@ -1,0 +1,20 @@
+resourceLogs:
+  - resource:
+      attributes:
+        - key: service.name
+          value:
+            stringValue: noisy-service
+    scopeLogs:
+      - scope:
+          name: noisy.logger
+        logRecords:
+          - timeUnixNano: "1700000000000000000"
+            severityNumber: 9
+            severityText: INFO
+            body:
+              stringValue: FIRST_DROPPED_LOG
+          - timeUnixNano: "1700000001000000000"
+            severityNumber: 13
+            severityText: WARN
+            body:
+              stringValue: SECOND_DROPPED_LOG

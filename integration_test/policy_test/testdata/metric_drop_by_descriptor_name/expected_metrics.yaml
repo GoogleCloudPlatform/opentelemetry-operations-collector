@@ -1,0 +1,32 @@
+- resourceMetrics:
+    - resource:
+        attributes:
+            - key: service.name
+              value:
+                stringValue: checkout-service
+      scopeMetrics:
+        - metrics:
+            - description: Duration of HTTP server requests
+              name: http.server.request.duration
+              sum:
+                aggregationTemporality: 2
+                dataPoints:
+                    - asDouble: 42.5
+                      attributes:
+                        - key: http.method
+                          value:
+                            stringValue: GET
+                      startTimeUnixNano: "1700000000000000000"
+                      timeUnixNano: "1700000010000000000"
+                    - asDouble: 120.75
+                      attributes:
+                        - key: http.method
+                          value:
+                            stringValue: POST
+                      startTimeUnixNano: "1700000000000000000"
+                      timeUnixNano: "1700000010000000000"
+                isMonotonic: true
+              unit: ms
+          scope:
+            name: go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp
+            version: 0.50.0

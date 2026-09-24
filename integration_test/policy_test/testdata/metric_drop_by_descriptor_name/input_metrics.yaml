@@ -1,0 +1,44 @@
+resourceMetrics:
+  - resource:
+      attributes:
+        - key: service.name
+          value:
+            stringValue: checkout-service
+    scopeMetrics:
+      - scope:
+          name: go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp
+          version: 0.50.0
+        metrics:
+          - name: http.server.request.duration
+            description: Duration of HTTP server requests
+            unit: ms
+            sum:
+              aggregationTemporality: 2
+              isMonotonic: true
+              dataPoints:
+                - attributes:
+                    - key: http.method
+                      value:
+                        stringValue: GET
+                  startTimeUnixNano: "1700000000000000000"
+                  timeUnixNano: "1700000010000000000"
+                  asDouble: 42.5
+                - attributes:
+                    - key: http.method
+                      value:
+                        stringValue: POST
+                  startTimeUnixNano: "1700000000000000000"
+                  timeUnixNano: "1700000010000000000"
+                  asDouble: 120.75
+          - name: internal.debug.gc_pause
+            description: Internal debug GC pause metric to be dropped
+            unit: us
+            gauge:
+              dataPoints:
+                - attributes:
+                    - key: gc.generation
+                      value:
+                        stringValue: young
+                  startTimeUnixNano: "1700000000000000000"
+                  timeUnixNano: "1700000010000000000"
+                  asInt: "950"

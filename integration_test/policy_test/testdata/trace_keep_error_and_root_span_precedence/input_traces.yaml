@@ -1,0 +1,38 @@
+resourceSpans:
+  - resource:
+      attributes:
+        - key: service.name
+          value:
+            stringValue: order-processor
+    scopeSpans:
+      - scope:
+          name: app.tracer
+          version: 1.0.0
+        spans:
+          - traceId: "0102030405060708090a0b0c0d0e0f20"
+            spanId: "0102030405060721"
+            parentSpanId: "0102030405060723"
+            name: db.query.failed
+            kind: 1
+            startTimeUnixNano: "1700000000000000000"
+            endTimeUnixNano: "1700000001000000000"
+            status:
+              code: 2
+              message: deadlock detected
+          - traceId: "0102030405060708090a0b0c0d0e0f20"
+            spanId: "0102030405060722"
+            parentSpanId: "0102030405060723"
+            name: cache.lookup
+            kind: 1
+            startTimeUnixNano: "1700000002000000000"
+            endTimeUnixNano: "1700000003000000000"
+            status:
+              code: 1
+          - traceId: "0102030405060708090a0b0c0d0e0f20"
+            spanId: "0102030405060723"
+            name: root.internal.worker
+            kind: 1
+            startTimeUnixNano: "1700000004000000000"
+            endTimeUnixNano: "1700000005000000000"
+            status:
+              code: 1

@@ -262,9 +262,9 @@ func TestRetrieve_MultipleDestinationPolicies(t *testing.T) {
 	assert.Equal(t, zapcore.ErrorLevel, entry.Level)
 	assert.Contains(t, entry.Message, "more than one destination policy found")
 	assert.Equal(t, map[string]any{
-		"event.name":             event.PolicySetInvalidEventName,
-		"policy.set.revision.id": "rev-mult-dest",
-		"context":                "context.Background.WithValue(FLEET_ID, 1234)",
+		"event.name":                 event.PolicySetInvalidEventName,
+		"gcp.policy.set.revision.id": "rev-mult-dest",
+		"context":                    "context.Background.WithValue(FLEET_ID, 1234)",
 	}, entry.ContextMap())
 
 	assert.NoError(t, p.Shutdown(context.Background()))
@@ -476,11 +476,49 @@ func TestRetrieve_RecordsPolicyEvaluateErrorEventOnFailure(t *testing.T) {
 	assert.Equal(t, zapcore.ErrorLevel, entry.Level)
 	assert.Contains(t, entry.Message, "failed to evaluate source policy \"failing_source\": boom")
 	assert.Equal(t, map[string]any{
-		"event.name":             event.PolicyEvaluateErrorEventName,
-		"policy.id":              "failing_source",
-		"policy.set.revision.id": "886313e1-3b8a-5372-9b90-0c9aee199e5d",
-		"context":                "context.Background.WithValue(FLEET_ID, 1234)",
+		"event.name":                 event.PolicyEvaluateErrorEventName,
+		"gcp.policy.id":              "failing_source",
+		"gcp.policy.set.revision.id": "886313e1-3b8a-5372-9b90-0c9aee199e5d",
+		"context":                    "context.Background.WithValue(FLEET_ID, 1234)",
 	}, entry.ContextMap())
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestRetrieve_BuiltinPolicyErrorDoesNotRollbackActivePolicySet(t *testing.T) {
+	t.Setenv("FLEET_ID", "")
+	core, recorded := observer.New(zapcore.InfoLevel)
+	logger := zap.New(core)
+	p := createProviderWithLogger(logger)
+
+	ps := &googlepolicy.PolicySet{
+		RevisionID: "rev-should-stay-active",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			"valid_source": {PolicyObj: &mockSourcePolicy{name: "valid_source"}},
+		},
+	}
+	googlepolicy.SetActivePolicySet(ps)
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	_, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.ErrorIs(t, err, selfmetrics.ErrNoFleetID)
+
+	// Built-in policy failures must NOT roll back the active policy set or attribute the error to activePolicySet.RevisionID.
+	require.NotNil(t, googlepolicy.ActivePolicySet())
+	assert.Equal(t, "rev-should-stay-active", googlepolicy.ActivePolicySet().RevisionID)
+
+	entries := recorded.All()
+	require.Len(t, entries, 1)
+	assert.Equal(t, map[string]any{
+		"event.name":                 event.PolicyEvaluateErrorEventName,
+		"gcp.policy.id":              "default_self_metrics",
+		"gcp.policy.set.revision.id": "",
+		"context":                    "context.Background",
+	}, entries[0].ContextMap())
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }

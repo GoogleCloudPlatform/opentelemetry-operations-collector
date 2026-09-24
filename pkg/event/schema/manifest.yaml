@@ -15,4 +15,4 @@
 name: otelopscol
 description: OpenTelemetry Operations Collector event semantic conventions
 semconv_version: 0.1.0
-schema_url: https://opentelemetry.io/schemas/0.1.0
+schema_url: https://googlecloudplatform.github.io/opentelemetry-operations-collector/schemas/0.1.0

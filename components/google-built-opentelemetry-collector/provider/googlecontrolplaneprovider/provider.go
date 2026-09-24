@@ -225,18 +225,25 @@ func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrie
 	}
 
 	for {
+		_, failed := googlepolicy.TakeActiveFailedPolicies()
 		activePolicySet := googlepolicy.ActivePolicySet()
 		isBuiltinFallback := activePolicySet == nil
 		if isBuiltinFallback {
 			activePolicySet = &googlepolicy.PolicySet{}
+		} else if len(failed) > 0 {
+			activePolicySet.FailedPolicies = failed
 		}
 
-		ret, err := p.evaluatePolicySet(ctx, collectorID, fleetID, activePolicySet)
+		ret, isBuiltinErr, err := p.evaluatePolicySet(ctx, collectorID, fleetID, activePolicySet)
 		if err == nil {
 			if !isBuiltinFallback && p.manager != nil {
 				p.manager.PolicyEvaluationResult(activePolicySet.RevisionID, nil)
 			}
 			return ret, nil
+		}
+
+		if isBuiltinErr {
+			return nil, err
 		}
 
 		if !isBuiltinFallback && p.manager != nil {
@@ -251,7 +258,11 @@ func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrie
 	}
 }
 
-func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fleetID string, activePolicySet *googlepolicy.PolicySet) (*confmap.Retrieved, error) {
+func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fleetID string, activePolicySet *googlepolicy.PolicySet) (*confmap.Retrieved, bool, error) {
+	for _, fp := range activePolicySet.FailedPolicies {
+		p.recordPolicyEvaluateError(ctx, fp.ID, activePolicySet.RevisionID, fp.Err)
+	}
+
 	// Root conf object, each policy evaluation will merge into this confmap.
 	conf := confmap.New()
 
@@ -261,7 +272,7 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 	if len(destPolicies) > 1 {
 		err := fmt.Errorf("%w: found %d destination policies", ErrMultipleDestinationPolicies, len(destPolicies))
 		p.recordPolicySetInvalid(ctx, activePolicySet.RevisionID, err)
-		return nil, err
+		return nil, false, err
 	}
 
 	var destPolicy googlepolicy.DestinationPolicy
@@ -284,13 +295,13 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 		var err error
 		destPolicy, destConf, err = p.evaluateDestinationPolicy(ctx, BuiltInDestinationPolicy)
 		if err != nil {
-			p.recordPolicyEvaluateError(ctx, BuiltInDestinationPolicy.PolicyName(), activePolicySet.RevisionID, err)
-			return nil, err
+			p.recordPolicyEvaluateError(ctx, BuiltInDestinationPolicy.PolicyName(), "", err)
+			return nil, true, err
 		}
 		if err := conf.Merge(destConf); err != nil {
 			err = fmt.Errorf("failed to merge config for destination policy %q: %w", BuiltInDestinationPolicy.PolicyName(), err)
-			p.recordPolicyEvaluateError(ctx, BuiltInDestinationPolicy.PolicyName(), activePolicySet.RevisionID, err)
-			return nil, err
+			p.recordPolicyEvaluateError(ctx, BuiltInDestinationPolicy.PolicyName(), "", err)
+			return nil, true, err
 		}
 	}
 
@@ -304,10 +315,10 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 	}
 	gpCm := confmap.New()
 	if err := gpCm.Marshal(googlePolicyConf); err != nil {
-		return nil, fmt.Errorf("failed to marshal googlepolicy processor config: %w", err)
+		return nil, true, fmt.Errorf("failed to marshal googlepolicy processor config: %w", err)
 	}
 	if err := conf.Merge(cleanConf(gpCm)); err != nil {
-		return nil, fmt.Errorf("failed to merge googlepolicy processor config: %w", err)
+		return nil, true, fmt.Errorf("failed to merge googlepolicy processor config: %w", err)
 	}
 
 	preProcessLogIDs := append([]component.ID{googlePolicyID}, destPolicy.PreProcessLogIDs()...)
@@ -339,13 +350,13 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 	if !appliedSelfMetrics {
 		policyConf, err := p.evaluateSingleSourcePolicy(ctx, collectorID, fleetID, BuiltInSelfMetricsPolicy, destPolicy, preProcessLogIDs, preProcessMetricIDs, preProcessTraceIDs)
 		if err != nil {
-			p.recordPolicyEvaluateError(ctx, BuiltInSelfMetricsPolicy.PolicyName(), activePolicySet.RevisionID, err)
-			return nil, err
+			p.recordPolicyEvaluateError(ctx, BuiltInSelfMetricsPolicy.PolicyName(), "", err)
+			return nil, true, err
 		}
 		if err := conf.Merge(policyConf); err != nil {
 			err = fmt.Errorf("failed to merge config for source policy %q: %w", BuiltInSelfMetricsPolicy.PolicyName(), err)
-			p.recordPolicyEvaluateError(ctx, BuiltInSelfMetricsPolicy.PolicyName(), activePolicySet.RevisionID, err)
-			return nil, err
+			p.recordPolicyEvaluateError(ctx, BuiltInSelfMetricsPolicy.PolicyName(), "", err)
+			return nil, true, err
 		}
 	}
 
@@ -353,10 +364,11 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 	if err := confmap.Validate(conf); err != nil {
 		err = fmt.Errorf("failed to validate merged configuration: %w", err)
 		p.recordPolicySetInvalid(ctx, activePolicySet.RevisionID, err)
-		return nil, err
+		return nil, false, err
 	}
 
-	return confmap.NewRetrieved(conf.ToStringMap())
+	ret, err := confmap.NewRetrieved(conf.ToStringMap())
+	return ret, false, err
 }
 
 func (p *provider) evaluateDestinationPolicy(ctx context.Context, dp googlepolicy.Policy) (googlepolicy.DestinationPolicy, *confmap.Conf, error) {

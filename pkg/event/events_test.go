@@ -69,16 +69,16 @@ func TestRecordPolicyEvaluateErrorEvent_ZapObserver(t *testing.T) {
 	assert.Equal(t, "failed to compile regex expression", entry.Message)
 	assert.Equal(t, zapcore.ErrorLevel, entry.Level)
 	assert.Equal(t, map[string]any{
-		"event.name":             PolicyEvaluateErrorEventName,
-		"policy.id":              "policy-123",
-		"policy.set.revision.id": "886313e1-3b8a-5372-9b90-0c9aee199e5d",
+		"event.name":                 PolicyEvaluateErrorEventName,
+		"gcp.policy.id":              "policy-123",
+		"gcp.policy.set.revision.id": "886313e1-3b8a-5372-9b90-0c9aee199e5d",
 	}, entry.ContextMap())
 }
 
 func TestRecordPolicyEvaluateErrorEvent_OtelZapBridge(t *testing.T) {
 	recLogger := &recordingLogger{}
 	provider := &recordingLoggerProvider{logger: recLogger}
-	core := otelzap.NewCore("test", otelzap.WithLoggerProvider(provider))
+	core := otelzap.NewCore("test", otelzap.WithLoggerProvider(provider), otelzap.WithSchemaURL(SchemaURL))
 	logger := zap.New(core)
 
 	RecordPolicyEvaluateErrorEvent(
@@ -101,10 +101,10 @@ func TestRecordPolicyEvaluateErrorEvent_OtelZapBridge(t *testing.T) {
 	})
 
 	assert.Equal(t, map[string]any{
-		"event.name":             PolicyEvaluateErrorEventName,
-		"policy.id":              "policy-789",
-		"policy.set.revision.id": "cfbfa0d5-2960-5b88-888c-f4937062d26b",
-		"custom.key":             "custom-val",
+		"event.name":                 PolicyEvaluateErrorEventName,
+		"gcp.policy.id":              "policy-789",
+		"gcp.policy.set.revision.id": "cfbfa0d5-2960-5b88-888c-f4937062d26b",
+		"custom.key":                 "custom-val",
 	}, attrs)
 }
 
@@ -124,7 +124,7 @@ func TestRecordPolicySetInvalidEvent(t *testing.T) {
 	assert.Equal(t, "more than one destination policy found", entry.Message)
 	assert.Equal(t, zapcore.ErrorLevel, entry.Level)
 	assert.Equal(t, map[string]any{
-		"event.name":             PolicySetInvalidEventName,
-		"policy.set.revision.id": "886313e1-3b8a-5372-9b90-0c9aee199e5d",
+		"event.name":                 PolicySetInvalidEventName,
+		"gcp.policy.set.revision.id": "886313e1-3b8a-5372-9b90-0c9aee199e5d",
 	}, entry.ContextMap())
 }

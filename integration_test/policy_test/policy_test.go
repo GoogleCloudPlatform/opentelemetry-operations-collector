@@ -179,15 +179,25 @@ func startMockOTLPServer(t *testing.T) (*mockOTLPServer, string) {
 	return s, ln.Addr().String()
 }
 
-func allocateEphemeralPort(t *testing.T) int {
+func allocateEphemeralPorts(t *testing.T, count int) []int {
 	t.Helper()
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("failed to allocate ephemeral port: %v", err)
+	listeners := make([]net.Listener, 0, count)
+	ports := make([]int, 0, count)
+	for i := 0; i < count; i++ {
+		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			for _, l := range listeners {
+				_ = l.Close()
+			}
+			t.Fatalf("failed to allocate ephemeral port: %v", err)
+		}
+		listeners = append(listeners, ln)
+		ports = append(ports, ln.Addr().(*net.TCPAddr).Port)
 	}
-	port := ln.Addr().(*net.TCPAddr).Port
-	_ = ln.Close()
-	return port
+	for _, ln := range listeners {
+		_ = ln.Close()
+	}
+	return ports
 }
 
 func readYAMLAsJSONBytes(t *testing.T, yamlPath string) []byte {
@@ -537,9 +547,11 @@ func startInProcessCollector(t *testing.T, policiesDir, pipelineCfgPath string) 
 		t.Fatalf("failed to create in-process collector: %v", err)
 	}
 
-	runErrCh := make(chan error, 1)
+	colDone := make(chan struct{})
+	var runErr error
 	go func() {
-		runErrCh <- col.Run(context.Background())
+		defer close(colDone)
+		runErr = col.Run(context.Background())
 	}()
 
 	var shutdownOnce sync.Once
@@ -547,9 +559,9 @@ func startInProcessCollector(t *testing.T, policiesDir, pipelineCfgPath string) 
 		shutdownOnce.Do(func() {
 			col.Shutdown()
 			select {
-			case err := <-runErrCh:
-				if err != nil {
-					t.Logf("in-process collector exited with: %v", err)
+			case <-colDone:
+				if runErr != nil {
+					t.Logf("in-process collector exited with: %v", runErr)
 				}
 			case <-time.After(10 * time.Second):
 				t.Fatalf("timed out waiting for in-process collector shutdown.\nlogs:\n%s", logBuf.String())
@@ -566,8 +578,8 @@ func startInProcessCollector(t *testing.T, policiesDir, pipelineCfgPath string) 
 			break
 		}
 		select {
-		case err := <-runErrCh:
-			t.Fatalf("in-process collector exited before becoming ready: %v\nlogs:\n%s", err, logBuf.String())
+		case <-colDone:
+			t.Fatalf("in-process collector exited before becoming ready: %v\nlogs:\n%s", runErr, logBuf.String())
 		default:
 		}
 		if time.Now().After(deadline) {
@@ -667,17 +679,14 @@ func startSubprocessCollector(t *testing.T, otelcolBin, policiesDir, pipelineCfg
 	}
 }
 
-func testPipelineConfig(otlpReceiverAddr, selfReceiverAddr, mockExporterAddr string) string {
+func testPipelineConfig(otlpReceiverAddr, mockExporterAddr string) string {
 	return fmt.Sprintf(`receivers:
   otlp/test_in:
     protocols:
       grpc:
         endpoint: %s
-  otlp/self_in:
-    protocols:
-      grpc:
-        endpoint: %s
 exporters:
+  nop: {}
   otlp_grpc/test_out:
     endpoint: %s
     sending_queue:
@@ -706,14 +715,14 @@ service:
       processors: [googlepolicy]
       exporters: [otlp_grpc/test_out]
     logs/default_self_metrics:
-      receivers: [otlp/self_in]
+      receivers: [otlp/default_self_metrics]
       processors: []
-      exporters: [otlp_grpc/test_out]
+      exporters: [nop]
     metrics/default_self_metrics:
-      receivers: [otlp/self_in]
+      receivers: [otlp/default_self_metrics]
       processors: []
-      exporters: [otlp_grpc/test_out]
-`, otlpReceiverAddr, selfReceiverAddr, mockExporterAddr)
+      exporters: [nop]
+`, otlpReceiverAddr, mockExporterAddr)
 }
 
 func TestPolicyIntegration(t *testing.T) {
@@ -747,10 +756,10 @@ type testHarness struct {
 func startTestHarness(t *testing.T, otelcolBin, tempDir, policiesDir string) *testHarness {
 	t.Helper()
 	mockSrv, mockExporterAddr := startMockOTLPServer(t)
-	otlpReceiverAddr := fmt.Sprintf("127.0.0.1:%d", allocateEphemeralPort(t))
-	selfReceiverAddr := fmt.Sprintf("127.0.0.1:%d", allocateEphemeralPort(t))
+	ports := allocateEphemeralPorts(t, 1)
+	otlpReceiverAddr := fmt.Sprintf("127.0.0.1:%d", ports[0])
 
-	pipelineCfg := testPipelineConfig(otlpReceiverAddr, selfReceiverAddr, mockExporterAddr)
+	pipelineCfg := testPipelineConfig(otlpReceiverAddr, mockExporterAddr)
 	pipelineCfgPath := filepath.Join(tempDir, "test_pipeline.yaml")
 	if err := os.WriteFile(pipelineCfgPath, []byte(pipelineCfg), 0644); err != nil {
 		t.Fatalf("failed to write test_pipeline.yaml: %v", err)
@@ -965,5 +974,220 @@ func TestPolicyHotReload(t *testing.T) {
 
 	if !reloaded {
 		t.Fatalf("timed out waiting for fsnotify policy hot-reload to drop 'drop-after-reload'.\ncollector logs:\n%s", col.logs())
+	}
+}
+
+func TestUnsupportedPolicyEmitsErrorEvent(t *testing.T) {
+	otelcolBin := resolveOtelcolBinary(t)
+	tempDir := t.TempDir()
+
+	policiesDir := filepath.Join(tempDir, "policies")
+	if err := os.MkdirAll(policiesDir, 0755); err != nil {
+		t.Fatalf("failed to create policies directory: %v", err)
+	}
+
+	// Provide a valid log_filter policy alongside an unsupported policy type.
+	validPolicy := `{
+  "type": "log_filter",
+  "id": "valid-log-filter-policy",
+  "action": "ACTION_DROP",
+  "matches": [
+    {
+      "target": {
+        "record_field": "LOG_RECORD_FIELD_BODY"
+      },
+      "equals": {
+        "string_value": "drop-me"
+      }
+    }
+  ]
+}`
+	unsupportedPolicy := `{
+  "type": "unsupported_policy_type",
+  "id": "unsupported-policy-1"
+}`
+	if err := os.WriteFile(filepath.Join(policiesDir, "01-valid-filter.json"), []byte(validPolicy), 0644); err != nil {
+		t.Fatalf("failed to write valid policy: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(policiesDir, "02-unsupported.json"), []byte(unsupportedPolicy), 0644); err != nil {
+		t.Fatalf("failed to write unsupported policy: %v", err)
+	}
+
+	mockSrv, mockExporterAddr := startMockOTLPServer(t)
+	ports := allocateEphemeralPorts(t, 1)
+	otlpReceiverAddr := fmt.Sprintf("127.0.0.1:%d", ports[0])
+
+	// Route logs/default_self_metrics from otlp/default_self_metrics (BuiltInSelfMetricsPolicy on localhost:18888)
+	// to otlp_grpc/test_out with a fast 50ms BatchLogRecordProcessor schedule_delay.
+	pipelineCfg := fmt.Sprintf(`receivers:
+  otlp/test_in:
+    protocols:
+      grpc:
+        endpoint: %s
+exporters:
+  nop: {}
+  otlp_grpc/test_out:
+    endpoint: %s
+    sending_queue:
+      enabled: false
+    tls:
+      insecure: true
+service:
+  extensions: []
+  telemetry:
+    logs:
+      level: info
+      processors:
+        - batch:
+            schedule_delay: 50
+            export_timeout: 200
+            exporter:
+              otlp:
+                protocol: grpc
+                endpoint: http://127.0.0.1:18888
+                insecure: true
+                timeout: 200
+    metrics:
+      level: none
+      readers: []
+  pipelines:
+    logs/test:
+      receivers: [otlp/test_in]
+      processors: [googlepolicy]
+      exporters: [otlp_grpc/test_out]
+    metrics/test:
+      receivers: [otlp/test_in]
+      processors: [googlepolicy]
+      exporters: [otlp_grpc/test_out]
+    traces/test:
+      receivers: [otlp/test_in]
+      processors: [googlepolicy]
+      exporters: [otlp_grpc/test_out]
+    logs/default_self_metrics:
+      receivers: [otlp/default_self_metrics]
+      processors: []
+      exporters: [otlp_grpc/test_out]
+    metrics/default_self_metrics:
+      receivers: [otlp/default_self_metrics]
+      processors: []
+      exporters: [nop]
+`, otlpReceiverAddr, mockExporterAddr)
+
+	pipelineCfgPath := filepath.Join(tempDir, "test_pipeline.yaml")
+	if err := os.WriteFile(pipelineCfgPath, []byte(pipelineCfg), 0644); err != nil {
+		t.Fatalf("failed to write test_pipeline.yaml: %v", err)
+	}
+
+	col := startCollector(t, otelcolBin, policiesDir, pipelineCfgPath)
+
+	type capturedEvent struct {
+		EventName      string
+		PolicyID       string
+		RevisionID     string
+		Body           string
+		Severity       string
+		SeverityNumber plog.SeverityNumber
+	}
+
+	findErrorEvents := func(batches []plog.Logs) []capturedEvent {
+		var out []capturedEvent
+		for _, ld := range batches {
+			for i := 0; i < ld.ResourceLogs().Len(); i++ {
+				rl := ld.ResourceLogs().At(i)
+				for j := 0; j < rl.ScopeLogs().Len(); j++ {
+					sl := rl.ScopeLogs().At(j)
+					for k := 0; k < sl.LogRecords().Len(); k++ {
+						lr := sl.LogRecords().At(k)
+						evName, ok := lr.Attributes().Get("event.name")
+						if !ok || evName.Str() != "gcp.policy.evaluate.error" {
+							continue
+						}
+						var policyID, revID string
+						if v, ok := lr.Attributes().Get("gcp.policy.id"); ok {
+							policyID = v.Str()
+						}
+						if v, ok := lr.Attributes().Get("gcp.policy.set.revision.id"); ok {
+							revID = v.Str()
+						}
+						out = append(out, capturedEvent{
+							EventName:      evName.Str(),
+							PolicyID:       policyID,
+							RevisionID:     revID,
+							Body:           lr.Body().Str(),
+							Severity:       lr.SeverityText(),
+							SeverityNumber: lr.SeverityNumber(),
+						})
+					}
+				}
+			}
+		}
+		return out
+	}
+
+	var gotEvents []capturedEvent
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		gotEvents = findErrorEvents(mockSrv.CollectedLogs())
+		if len(gotEvents) >= 1 {
+			break
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+
+	if len(gotEvents) != 1 {
+		col.shutdown(t)
+		t.Fatalf("expected exactly 1 startup gcp.policy.evaluate.error event, got %d (%+v).\ncollector logs:\n%s", len(gotEvents), gotEvents, col.logs())
+	}
+
+	startupEvent := gotEvents[0]
+	if startupEvent.PolicyID != "unsupported-policy-1" {
+		t.Errorf("gcp.policy.id = %q, want %q", startupEvent.PolicyID, "unsupported-policy-1")
+	}
+	if startupEvent.RevisionID == "" {
+		t.Errorf("expected non-empty gcp.policy.set.revision.id attribute on gcp.policy.evaluate.error event")
+	}
+	if !strings.Contains(startupEvent.Body, "no driver found for policy type: unsupported_policy_type") {
+		t.Errorf("event body = %q, want substring %q", startupEvent.Body, "no driver found for policy type: unsupported_policy_type")
+	}
+	if !strings.EqualFold(startupEvent.Severity, "ERROR") || startupEvent.SeverityNumber != plog.SeverityNumberError {
+		t.Errorf("event severity = %q (%v), want ERROR (%v)", startupEvent.Severity, startupEvent.SeverityNumber, plog.SeverityNumberError)
+	}
+
+	// Now hot-reload a second unsupported policy into the directory and verify a new gcp.policy.evaluate.error event is emitted.
+	hotReloadUnsupported := `{
+  "type": "another_unsupported_type",
+  "id": "unsupported-policy-2"
+}`
+	if err := os.WriteFile(filepath.Join(policiesDir, "03-unsupported-hot-reload.json"), []byte(hotReloadUnsupported), 0644); err != nil {
+		col.shutdown(t)
+		t.Fatalf("failed to write hot-reloaded unsupported policy: %v", err)
+	}
+
+	var hotReloadEvent *capturedEvent
+	deadline = time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		gotEvents = findErrorEvents(mockSrv.CollectedLogs())
+		for i := range gotEvents {
+			if gotEvents[i].PolicyID == "unsupported-policy-2" {
+				hotReloadEvent = &gotEvents[i]
+				break
+			}
+		}
+		if hotReloadEvent != nil {
+			break
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+
+	col.shutdown(t)
+
+	if hotReloadEvent == nil {
+		t.Fatalf("timed out waiting for hot-reloaded gcp.policy.evaluate.error event for unsupported-policy-2 (got %+v).\ncollector logs:\n%s", gotEvents, col.logs())
+	}
+	if hotReloadEvent.RevisionID == "" || hotReloadEvent.RevisionID == startupEvent.RevisionID {
+		t.Errorf("expected new revision ID on hot-reloaded error event, got %q (startup was %q)", hotReloadEvent.RevisionID, startupEvent.RevisionID)
+	}
+	if !strings.Contains(hotReloadEvent.Body, "no driver found for policy type: another_unsupported_type") {
+		t.Errorf("hot-reload event body = %q, want substring %q", hotReloadEvent.Body, "no driver found for policy type: another_unsupported_type")
 	}
 }

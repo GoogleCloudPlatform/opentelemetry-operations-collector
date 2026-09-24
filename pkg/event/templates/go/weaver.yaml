@@ -43,6 +43,6 @@ text_maps:
     error: zapcore.ErrorLevel
 templates:
   - template: "events.go.j2"
-    filter: .registry
+    filter: "{schema_url: .schema_url, attributes: .registry.attributes, events: .registry.events}"
     application_mode: single
     file_name: "generated_events.go"

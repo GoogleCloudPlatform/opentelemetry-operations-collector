@@ -23,39 +23,42 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// PolicyEvaluateErrorEventName is the event name for policy.evaluate.error.
-const PolicyEvaluateErrorEventName = "policy.evaluate.error"
+// SchemaURL is the OpenTelemetry schema URL for events in this package.
+const SchemaURL = "https://googlecloudplatform.github.io/opentelemetry-operations-collector/schemas/0.1.0"
+
+// PolicyEvaluateErrorEventName is the event name for gcp.policy.evaluate.error.
+const PolicyEvaluateErrorEventName = "gcp.policy.evaluate.error"
 
 type policyEvaluateErrorEventConfig struct {
 	level  zapcore.Level
 	fields []zap.Field
 }
 
-// PolicyEvaluateErrorEventOption applies optional settings or attributes to a policy.evaluate.error event record.
+// PolicyEvaluateErrorEventOption applies optional settings or attributes to a gcp.policy.evaluate.error event record.
 type PolicyEvaluateErrorEventOption func(*policyEvaluateErrorEventConfig)
 
-// WithPolicyEvaluateErrorEventContext attaches a context.Context to a policy.evaluate.error event record for trace correlation.
+// WithPolicyEvaluateErrorEventContext attaches a context.Context to a gcp.policy.evaluate.error event record for trace correlation.
 func WithPolicyEvaluateErrorEventContext(ctx context.Context) PolicyEvaluateErrorEventOption {
 	return func(c *policyEvaluateErrorEventConfig) {
 		c.fields = append(c.fields, zap.Any("context", ctx))
 	}
 }
 
-// WithPolicyEvaluateErrorEventLevel sets the log level on a policy.evaluate.error event record.
+// WithPolicyEvaluateErrorEventLevel sets the log level on a gcp.policy.evaluate.error event record.
 func WithPolicyEvaluateErrorEventLevel(level zapcore.Level) PolicyEvaluateErrorEventOption {
 	return func(c *policyEvaluateErrorEventConfig) {
 		c.level = level
 	}
 }
 
-// WithPolicyEvaluateErrorEventFields adds custom zap fields to a policy.evaluate.error event record.
+// WithPolicyEvaluateErrorEventFields adds custom zap fields to a gcp.policy.evaluate.error event record.
 func WithPolicyEvaluateErrorEventFields(fields ...zap.Field) PolicyEvaluateErrorEventOption {
 	return func(c *policyEvaluateErrorEventConfig) {
 		c.fields = append(c.fields, fields...)
 	}
 }
 
-// RecordPolicyEvaluateErrorEvent records the "policy.evaluate.error" event.
+// RecordPolicyEvaluateErrorEvent records the "gcp.policy.evaluate.error" event.
 //
 // Recorded when an error occurs while evaluating a policy.
 func RecordPolicyEvaluateErrorEvent(
@@ -69,8 +72,8 @@ func RecordPolicyEvaluateErrorEvent(
 		level: zapcore.ErrorLevel,
 		fields: []zap.Field{
 			zap.String("event.name", PolicyEvaluateErrorEventName),
-			zap.String("policy.id", policyID),
-			zap.String("policy.set.revision.id", policySetRevisionID),
+			zap.String("gcp.policy.id", policyID),
+			zap.String("gcp.policy.set.revision.id", policySetRevisionID),
 		},
 	}
 	for _, opt := range opts {
@@ -83,39 +86,39 @@ func RecordPolicyEvaluateErrorEvent(
 	logger.Log(cfg.level, body, cfg.fields...)
 }
 
-// PolicySetInvalidEventName is the event name for policy.set.invalid.
-const PolicySetInvalidEventName = "policy.set.invalid"
+// PolicySetInvalidEventName is the event name for gcp.policy.set.invalid.
+const PolicySetInvalidEventName = "gcp.policy.set.invalid"
 
 type policySetInvalidEventConfig struct {
 	level  zapcore.Level
 	fields []zap.Field
 }
 
-// PolicySetInvalidEventOption applies optional settings or attributes to a policy.set.invalid event record.
+// PolicySetInvalidEventOption applies optional settings or attributes to a gcp.policy.set.invalid event record.
 type PolicySetInvalidEventOption func(*policySetInvalidEventConfig)
 
-// WithPolicySetInvalidEventContext attaches a context.Context to a policy.set.invalid event record for trace correlation.
+// WithPolicySetInvalidEventContext attaches a context.Context to a gcp.policy.set.invalid event record for trace correlation.
 func WithPolicySetInvalidEventContext(ctx context.Context) PolicySetInvalidEventOption {
 	return func(c *policySetInvalidEventConfig) {
 		c.fields = append(c.fields, zap.Any("context", ctx))
 	}
 }
 
-// WithPolicySetInvalidEventLevel sets the log level on a policy.set.invalid event record.
+// WithPolicySetInvalidEventLevel sets the log level on a gcp.policy.set.invalid event record.
 func WithPolicySetInvalidEventLevel(level zapcore.Level) PolicySetInvalidEventOption {
 	return func(c *policySetInvalidEventConfig) {
 		c.level = level
 	}
 }
 
-// WithPolicySetInvalidEventFields adds custom zap fields to a policy.set.invalid event record.
+// WithPolicySetInvalidEventFields adds custom zap fields to a gcp.policy.set.invalid event record.
 func WithPolicySetInvalidEventFields(fields ...zap.Field) PolicySetInvalidEventOption {
 	return func(c *policySetInvalidEventConfig) {
 		c.fields = append(c.fields, fields...)
 	}
 }
 
-// RecordPolicySetInvalidEvent records the "policy.set.invalid" event.
+// RecordPolicySetInvalidEvent records the "gcp.policy.set.invalid" event.
 //
 // Recorded when a policy set is structurally invalid and cannot be applied.
 func RecordPolicySetInvalidEvent(
@@ -128,7 +131,7 @@ func RecordPolicySetInvalidEvent(
 		level: zapcore.ErrorLevel,
 		fields: []zap.Field{
 			zap.String("event.name", PolicySetInvalidEventName),
-			zap.String("policy.set.revision.id", policySetRevisionID),
+			zap.String("gcp.policy.set.revision.id", policySetRevisionID),
 		},
 	}
 	for _, opt := range opts {

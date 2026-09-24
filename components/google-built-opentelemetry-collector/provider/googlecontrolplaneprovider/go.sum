@@ -321,8 +321,8 @@ go.opentelemetry.io/collector/service/hostcapabilities v0.160.0 h1:XgTV+MbgOHdwf
 go.opentelemetry.io/collector/service/hostcapabilities v0.160.0/go.mod h1:AR4zKEimC8dT6qqWIiCcUxk7XL+O7wpIU6rrnhO1nV8=
 go.opentelemetry.io/collector/service/telemetry/telemetrytest v0.160.0 h1:cgse3g1EmsjZ2ItYjCV3H45B91xGBDtbA85NqWf4QLc=
 go.opentelemetry.io/collector/service/telemetry/telemetrytest v0.160.0/go.mod h1:lA7gscAbNydq2zaMITROoJdBC27G+WLBk3JcgjWA8ro=
-go.opentelemetry.io/contrib/bridges/otelzap v0.20.1 h1:piZS6uocc7ODKtb9Fq2ayIVOT+N8jfvWhfoA9QTxef4=
-go.opentelemetry.io/contrib/bridges/otelzap v0.20.1/go.mod h1:FfAgLPYhn6ZhkVFzS2BOAnJF0IAAw7GJUVB+ZVtMSyo=
+go.opentelemetry.io/contrib/bridges/otelzap v0.20.0 h1:wgsHT2HLf1KEZtCkd6ZGynPdeIyFsCSKsHyDBW9vEJk=
+go.opentelemetry.io/contrib/bridges/otelzap v0.20.0/go.mod h1:NZCU/Hi3EdSS6LxcNJOO39Y5z95R9QY5iQ2Ym6IOFTU=
 go.opentelemetry.io/contrib/detectors/aws/ecs v1.45.0 h1:SIHXqRfox1Uz20yN0mtAidKU7SpMY1F08Kne52W5lIs=
 go.opentelemetry.io/contrib/detectors/aws/ecs v1.45.0/go.mod h1:RkxcEsr+yajGeP6Q876PZq5ELVZxtfhbpogowN3xIuE=
 go.opentelemetry.io/contrib/detectors/aws/eks v1.45.0 h1:nsQvMufr0boocNMXihxeeTCVvztsfO7web525q6jITQ=

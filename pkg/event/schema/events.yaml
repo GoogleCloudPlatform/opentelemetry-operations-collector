@@ -15,20 +15,20 @@
 file_format: definition/2
 
 attributes:
-  - key: policy.id
+  - key: gcp.policy.id
     type: string
     stability: development
     brief: Unique identifier of the policy being evaluated.
     examples: ["policy-123"]
 
-  - key: policy.set.revision.id
+  - key: gcp.policy.set.revision.id
     type: string
     stability: development
     brief: Unique identifier of the policy set revision containing the policy.
     examples: ["886313e1-3b8a-5372-9b90-0c9aee199e5d"]
 
 events:
-  - name: policy.evaluate.error
+  - name: gcp.policy.evaluate.error
     stability: development
     requirement_level: recommended
     brief: Recorded when an error occurs while evaluating a policy.
@@ -40,12 +40,12 @@ events:
     annotations:
       severity: error
     attributes:
-      - ref: policy.id
+      - ref: gcp.policy.id
         requirement_level: required
-      - ref: policy.set.revision.id
+      - ref: gcp.policy.set.revision.id
         requirement_level: required
 
-  - name: policy.set.invalid
+  - name: gcp.policy.set.invalid
     stability: development
     requirement_level: recommended
     brief: Recorded when a policy set is structurally invalid and cannot be applied.
@@ -58,5 +58,5 @@ events:
     annotations:
       severity: error
     attributes:
-      - ref: policy.set.revision.id
+      - ref: gcp.policy.set.revision.id
         requirement_level: required

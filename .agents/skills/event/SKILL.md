@@ -48,13 +48,13 @@ When designing or reviewing events in `pkg/event/schema/events.yaml`, strictly f
   * The event identity is always recorded in the `event.name` attribute (`zap.String("event.name", <Event>EventName)`).
 
 ### 2. Event Naming
-* Name events after **meaningful domain occurrences** using dot-separated namespaces (e.g., `policy.evaluate.error`, `collector.config.reload`), not generic nouns or log lines.
+* Name events after **meaningful domain occurrences** using dot-separated namespaces (e.g., `gcp.policy.evaluate.error`, `gcp.collector.config.reload`), not generic nouns or log lines. Custom conventions should be namespaced under `gcp.`.
 
 ### 3. Encoding Default Severity in Annotations
 Events default to `zapcore.InfoLevel` unless specified otherwise via `annotations.severity` in `events.yaml`:
 ```yaml
 events:
-  - name: policy.evaluate.error
+  - name: gcp.policy.evaluate.error
     annotations:
       severity: error # Supported values: debug, info, warn, error
 ```
@@ -77,11 +77,12 @@ Define reusable attributes under the top-level `attributes:` section of `events.
 
 ## How Generated Code Works
 
-For an event named `policy.evaluate.error` with `annotations.severity: error` and required attributes `policy.id` (string) and `policy.set.revision.id` (string), Weaver generates:
+For an event named `gcp.policy.evaluate.error` with `annotations.severity: error` and required attributes `gcp.policy.id` (string) and `gcp.policy.set.revision.id` (string), Weaver generates:
 
-1. **Event Name Constant:**
+1. **Schema URL and Event Name Constants:**
    ```go
-   const PolicyEvaluateErrorEventName = "policy.evaluate.error"
+   const SchemaURL = "https://googlecloudplatform.github.io/opentelemetry-operations-collector/schemas/0.1.0"
+   const PolicyEvaluateErrorEventName = "gcp.policy.evaluate.error"
    ```
 2. **Functional Options (`PolicyEvaluateErrorEventOption`):**
    * `WithPolicyEvaluateErrorEventContext(ctx context.Context)`: Attaches `zap.Any("context", ctx)` so the OpenTelemetry `otelzap` bridge correlates `TraceID` and `SpanID` on the emitted `log.Record`.
@@ -110,14 +111,14 @@ Ensure the file starts with `file_format: definition/2`. Add any new attributes 
 file_format: definition/2
 
 attributes:
-  - key: policy.id
+  - key: gcp.policy.id
     type: string
     stability: development
     brief: Unique identifier of the policy being evaluated.
     examples: ["policy-123"]
 
 events:
-  - name: policy.evaluate.error
+  - name: gcp.policy.evaluate.error
     stability: development
     requirement_level: recommended
     brief: Recorded when an error occurs while evaluating a policy.
@@ -129,7 +130,7 @@ events:
     annotations:
       severity: error
     attributes:
-      - ref: policy.id
+      - ref: gcp.policy.id
         requirement_level: required
 ```
 
@@ -177,7 +178,7 @@ make precommit
 If you need to customize how Go code is generated:
 
 1. **Template Configuration (`pkg/event/templates/go/weaver.yaml`)**:
-   * Uses `filter: .registry` to pass the resolved v2 registry to `events.go.j2`.
+   * Uses `filter: '{schema_url: .schema_url, attributes: .registry.attributes, events: .registry.events}'` to pass the resolved v2 registry and schema URL to `events.go.j2`.
    * `text_maps.go_types` maps Weaver types (`string`, `int`, `double`, `boolean`) to Go types.
    * `text_maps.zap_field_constructors` maps Weaver types to `zap` field constructors (`zap.String`, `zap.Int64`, etc.).
    * `text_maps.zap_levels` maps `annotations.severity` (`debug`, `info`, `warn`, `error`) to `zapcore.Level` constants.

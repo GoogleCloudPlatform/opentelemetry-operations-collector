@@ -22,11 +22,37 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
+// SchemaURL is the OpenTelemetry schema URL for events in this package.
+const SchemaURL = "{{ ctx.schema_url }}"
+
+{% macro normalize_key(key) -%}
+{%- if key is startingwith("gcp.") -%}
+{{ key[4:] | replace(".", "_") | replace("-", "_") }}
+{%- else -%}
+{{ key | replace(".", "_") | replace("-", "_") }}
+{%- endif -%}
+{%- endmacro -%}
 {% macro go_export_name(key) -%}
-{{ key | pascal_case | replace("Id", "ID") | replace("Url", "URL") | replace("Http", "HTTP") | replace("Grpc", "GRPC") }}
+{%- set norm = normalize_key(key) | trim -%}
+{%- for seg in norm.split("_") -%}
+{%- if (seg | lower) in ["id", "url", "http", "grpc", "gcp"] -%}
+{{ seg | upper }}
+{%- else -%}
+{{ seg | capitalize }}
+{%- endif -%}
+{%- endfor -%}
 {%- endmacro -%}
 {% macro go_param_name(key) -%}
-{{ key | camel_case | replace("Id", "ID") | replace("Url", "URL") | replace("Http", "HTTP") | replace("Grpc", "GRPC") }}
+{%- set norm = normalize_key(key) | trim -%}
+{%- for seg in norm.split("_") -%}
+{%- if loop.first -%}
+{{ seg | lower }}
+{%- elif (seg | lower) in ["id", "url", "http", "grpc", "gcp"] -%}
+{{ seg | upper }}
+{%- else -%}
+{{ seg | capitalize }}
+{%- endif -%}
+{%- endfor -%}
 {%- endmacro -%}
 {% macro go_type(attr) -%}
 {%- set attr_key = attr.key or attr.name -%}

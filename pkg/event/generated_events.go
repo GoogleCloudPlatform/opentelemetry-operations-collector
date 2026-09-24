@@ -26,6 +26,20 @@ import (
 // SchemaURL is the OpenTelemetry schema URL for events in this package.
 const SchemaURL = "https://googlecloudplatform.github.io/opentelemetry-operations-collector/schemas/0.1.0"
 
+// PolicyClass represents the possible values for the "gcp.policy.class" attribute.
+//
+// The class of the policy being evaluated.
+type PolicyClass string
+
+const (
+	// PolicyClassSource: Source policy class.
+	PolicyClassSource PolicyClass = "source"
+	// PolicyClassDestination: Destination policy class.
+	PolicyClassDestination PolicyClass = "destination"
+	// PolicyClassTransformation: Transformation policy class.
+	PolicyClassTransformation PolicyClass = "transformation"
+)
+
 // PolicyEvaluateErrorEventName is the event name for gcp.policy.evaluate.error.
 const PolicyEvaluateErrorEventName = "gcp.policy.evaluate.error"
 
@@ -55,6 +69,24 @@ func WithPolicyEvaluateErrorEventLevel(level zapcore.Level) PolicyEvaluateErrorE
 func WithPolicyEvaluateErrorEventFields(fields ...zap.Field) PolicyEvaluateErrorEventOption {
 	return func(c *policyEvaluateErrorEventConfig) {
 		c.fields = append(c.fields, fields...)
+	}
+}
+
+// WithPolicyEvaluateErrorEventErrorType sets the "error.type" attribute on a gcp.policy.evaluate.error event record.
+//
+// Describes a class of error the operation ended with.
+func WithPolicyEvaluateErrorEventErrorType(val string) PolicyEvaluateErrorEventOption {
+	return func(c *policyEvaluateErrorEventConfig) {
+		c.fields = append(c.fields, zap.String("error.type", val))
+	}
+}
+
+// WithPolicyEvaluateErrorEventPolicyClass sets the "gcp.policy.class" attribute on a gcp.policy.evaluate.error event record.
+//
+// The class of the policy being evaluated.
+func WithPolicyEvaluateErrorEventPolicyClass(val PolicyClass) PolicyEvaluateErrorEventOption {
+	return func(c *policyEvaluateErrorEventConfig) {
+		c.fields = append(c.fields, zap.String("gcp.policy.class", string(val)))
 	}
 }
 

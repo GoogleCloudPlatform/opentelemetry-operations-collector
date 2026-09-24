@@ -329,6 +329,21 @@ func makePolicySet[T any](revisionID string, inputs []T, load func(int, T) (Poli
 	return ps, errors.Join(errs...)
 }
 
+// ClassifyPolicyError returns a canonical OpenTelemetry error.type value
+// describing the class of policy load or evaluation error.
+func ClassifyPolicyError(err error) string {
+	switch {
+	case errors.Is(err, ErrPolicyTypeNotFound):
+		return "policy_type_not_found"
+	case errors.Is(err, ErrPolicyFailedValidation):
+		return "policy_failed_validation"
+	case errors.Is(err, ErrPolicyFailedToLoad):
+		return "policy_failed_to_load"
+	default:
+		return "policy_evaluation_failed"
+	}
+}
+
 // LoadPoliciesOfClass does what it says on the box.
 func (ps *PolicySet) LoadPoliciesOfClass(class PolicyClass) []Policy {
 	foundPolicies := make([]Policy, 0, len(ps.Policies))

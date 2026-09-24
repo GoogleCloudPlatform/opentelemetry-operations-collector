@@ -15,6 +15,31 @@
 file_format: definition/2
 
 attributes:
+  - key: error.type
+    type: string
+    stability: stable
+    brief: Describes a class of error the operation ended with.
+    examples: ["policy_type_not_found", "policy_failed_to_load", "policy_failed_validation", "policy_evaluation_failed"]
+
+  - key: gcp.policy.class
+    type:
+      members:
+        - id: source
+          value: "source"
+          brief: Source policy class.
+          stability: development
+        - id: destination
+          value: "destination"
+          brief: Destination policy class.
+          stability: development
+        - id: transformation
+          value: "transformation"
+          brief: Transformation policy class.
+          stability: development
+    stability: development
+    brief: The class of the policy being evaluated.
+    examples: ["source", "destination", "transformation"]
+
   - key: gcp.policy.id
     type: string
     stability: development
@@ -44,6 +69,10 @@ events:
         requirement_level: required
       - ref: gcp.policy.set.revision.id
         requirement_level: required
+      - ref: error.type
+        requirement_level: recommended
+      - ref: gcp.policy.class
+        requirement_level: recommended
 
   - name: gcp.policy.set.invalid
     stability: development

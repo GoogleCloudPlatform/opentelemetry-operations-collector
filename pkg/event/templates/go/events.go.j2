@@ -22,17 +22,14 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
-// SchemaURL is the OpenTelemetry schema URL for events in this package.
-const SchemaURL = "{{ ctx.schema_url }}"
-
-{% macro normalize_key(key) -%}
+{%- macro normalize_key(key) -%}
 {%- if key is startingwith("gcp.") -%}
 {{ key[4:] | replace(".", "_") | replace("-", "_") }}
 {%- else -%}
 {{ key | replace(".", "_") | replace("-", "_") }}
 {%- endif -%}
 {%- endmacro -%}
-{% macro go_export_name(key) -%}
+{%- macro go_export_name(key) -%}
 {%- set norm = normalize_key(key) | trim -%}
 {%- for seg in norm.split("_") -%}
 {%- if (seg | lower) in ["id", "url", "http", "grpc", "gcp"] -%}
@@ -42,7 +39,7 @@ const SchemaURL = "{{ ctx.schema_url }}"
 {%- endif -%}
 {%- endfor -%}
 {%- endmacro -%}
-{% macro go_param_name(key) -%}
+{%- macro go_param_name(key) -%}
 {%- set norm = normalize_key(key) | trim -%}
 {%- for seg in norm.split("_") -%}
 {%- if loop.first -%}
@@ -54,7 +51,7 @@ const SchemaURL = "{{ ctx.schema_url }}"
 {%- endif -%}
 {%- endfor -%}
 {%- endmacro -%}
-{% macro go_type(attr) -%}
+{%- macro go_type(attr) -%}
 {%- set attr_key = attr.key or attr.name -%}
 {%- if attr.type is mapping -%}
 {{ go_export_name(attr_key) }}
@@ -62,17 +59,21 @@ const SchemaURL = "{{ ctx.schema_url }}"
 {{ attr.type | map_text("go_types") }}
 {%- endif -%}
 {%- endmacro -%}
-{% macro zap_field(attr, var_name) -%}
+{%- macro zap_field(attr, var_name) -%}
 {%- set attr_key = attr.key or attr.name -%}
 {%- if attr.type is mapping -%}
 zap.String("{{ attr_key }}", string({{ var_name }}))
 {%- else -%}
 {{ attr.type | map_text("zap_field_constructors") }}("{{ attr_key }}", {{ var_name }})
 {%- endif -%}
-{%- endmacro -%}
-{% for attr in ctx.attributes | sort(attribute="key") %}
+{%- endmacro %}
+
+// SchemaURL is the OpenTelemetry schema URL for events in this package.
+const SchemaURL = "{{ ctx.schema_url }}"
+{%- for attr in ctx.attributes | sort(attribute="key") -%}
 {%- if attr.type is mapping and attr.type.members %}
 {%- set enum_type = go_export_name(attr.key) %}
+
 // {{ enum_type }} represents the possible values for the "{{ attr.key }}" attribute.
 //
 {{ attr.brief | comment }}
@@ -85,8 +86,8 @@ const (
 {%- endfor %}
 )
 {% endif -%}
-{% endfor -%}
-{% for event in ctx.events | sort(attribute="name") %}
+{%- endfor -%}
+{%- for event in ctx.events | sort(attribute="name") %}
 {%- set event_pascal = go_export_name(event.name) -%}
 {%- if event_pascal is endingwith("Event") -%}
 {%- set event_base = event_pascal[:-5] -%}

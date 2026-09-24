@@ -61,6 +61,8 @@ func TestRecordPolicyEvaluateErrorEvent_ZapObserver(t *testing.T) {
 		errors.New("failed to compile regex expression"),
 		"policy-123",
 		"886313e1-3b8a-5372-9b90-0c9aee199e5d",
+		WithPolicyEvaluateErrorEventErrorType("policy_failed_validation"),
+		WithPolicyEvaluateErrorEventPolicyClass(PolicyClassTransformation),
 	)
 
 	entries := recorded.All()
@@ -72,6 +74,8 @@ func TestRecordPolicyEvaluateErrorEvent_ZapObserver(t *testing.T) {
 		"event.name":                 PolicyEvaluateErrorEventName,
 		"gcp.policy.id":              "policy-123",
 		"gcp.policy.set.revision.id": "886313e1-3b8a-5372-9b90-0c9aee199e5d",
+		"error.type":                 "policy_failed_validation",
+		"gcp.policy.class":           "transformation",
 	}, entry.ContextMap())
 }
 

@@ -479,6 +479,8 @@ func TestRetrieve_RecordsPolicyEvaluateErrorEventOnFailure(t *testing.T) {
 		"event.name":                 event.PolicyEvaluateErrorEventName,
 		"gcp.policy.id":              "failing_source",
 		"gcp.policy.set.revision.id": "886313e1-3b8a-5372-9b90-0c9aee199e5d",
+		"error.type":                 "policy_evaluation_failed",
+		"gcp.policy.class":           "source",
 		"context":                    "context.Background.WithValue(FLEET_ID, 1234)",
 	}, entry.ContextMap())
 
@@ -517,6 +519,8 @@ func TestRetrieve_BuiltinPolicyErrorDoesNotRollbackActivePolicySet(t *testing.T)
 		"event.name":                 event.PolicyEvaluateErrorEventName,
 		"gcp.policy.id":              "default_self_metrics",
 		"gcp.policy.set.revision.id": "",
+		"error.type":                 "policy_evaluation_failed",
+		"gcp.policy.class":           "source",
 		"context":                    "context.Background",
 	}, entries[0].ContextMap())
 

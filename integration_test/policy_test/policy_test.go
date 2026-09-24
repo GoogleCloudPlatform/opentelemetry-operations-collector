@@ -1084,6 +1084,7 @@ service:
 		EventName      string
 		PolicyID       string
 		RevisionID     string
+		ErrorType      string
 		Body           string
 		Severity       string
 		SeverityNumber plog.SeverityNumber
@@ -1102,17 +1103,21 @@ service:
 						if !ok || evName.Str() != "gcp.policy.evaluate.error" {
 							continue
 						}
-						var policyID, revID string
+						var policyID, revID, errType string
 						if v, ok := lr.Attributes().Get("gcp.policy.id"); ok {
 							policyID = v.Str()
 						}
 						if v, ok := lr.Attributes().Get("gcp.policy.set.revision.id"); ok {
 							revID = v.Str()
 						}
+						if v, ok := lr.Attributes().Get("error.type"); ok {
+							errType = v.Str()
+						}
 						out = append(out, capturedEvent{
 							EventName:      evName.Str(),
 							PolicyID:       policyID,
 							RevisionID:     revID,
+							ErrorType:      errType,
 							Body:           lr.Body().Str(),
 							Severity:       lr.SeverityText(),
 							SeverityNumber: lr.SeverityNumber(),
@@ -1145,6 +1150,9 @@ service:
 	}
 	if startupEvent.RevisionID == "" {
 		t.Errorf("expected non-empty gcp.policy.set.revision.id attribute on gcp.policy.evaluate.error event")
+	}
+	if startupEvent.ErrorType != "policy_type_not_found" {
+		t.Errorf("error.type = %q, want %q", startupEvent.ErrorType, "policy_type_not_found")
 	}
 	if !strings.Contains(startupEvent.Body, "no driver found for policy type: unsupported_policy_type") {
 		t.Errorf("event body = %q, want substring %q", startupEvent.Body, "no driver found for policy type: unsupported_policy_type")
@@ -1186,6 +1194,9 @@ service:
 	}
 	if hotReloadEvent.RevisionID == "" || hotReloadEvent.RevisionID == startupEvent.RevisionID {
 		t.Errorf("expected new revision ID on hot-reloaded error event, got %q (startup was %q)", hotReloadEvent.RevisionID, startupEvent.RevisionID)
+	}
+	if hotReloadEvent.ErrorType != "policy_type_not_found" {
+		t.Errorf("hot-reload error.type = %q, want %q", hotReloadEvent.ErrorType, "policy_type_not_found")
 	}
 	if !strings.Contains(hotReloadEvent.Body, "no driver found for policy type: another_unsupported_type") {
 		t.Errorf("hot-reload event body = %q, want substring %q", hotReloadEvent.Body, "no driver found for policy type: another_unsupported_type")

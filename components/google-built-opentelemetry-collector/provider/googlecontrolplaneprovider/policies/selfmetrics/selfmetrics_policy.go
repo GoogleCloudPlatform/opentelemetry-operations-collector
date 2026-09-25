@@ -188,8 +188,14 @@ func (p *SelfMetricsPolicy) Evaluate(ctx context.Context) (*confmap.Conf, error)
 	// dependency on the extension. The extension's Config is intentionally
 	// empty, since policy set identity is derived from the active policy set
 	// rather than configured.
+	//
+	// The ID is deliberately unnamed, unlike googleclientauth/<policy> in the
+	// destination policy. The extension reads process wide state, has no
+	// per-policy config and is not referenced by ID from any pipeline, so a
+	// single googlecontrolplane instance per collector is the right shape, the
+	// same way the googlepolicy processor is registered.
 	cpExtType, _ := component.NewType("googlecontrolplane")
-	cpExtID := component.NewIDWithName(cpExtType, p.Name)
+	cpExtID := component.NewID(cpExtType)
 
 	conf.Extensions = map[component.ID]component.Config{
 		cpExtID: component.Config(map[string]any{}),

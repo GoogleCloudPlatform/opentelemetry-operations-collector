@@ -110,7 +110,7 @@ func TestExtension_ReportsActivePolicySet(t *testing.T) {
 	}, attrsOf(setActive[0]))
 }
 
-// A collector with no active policy set must still emit a policy_set.active
+// A collector with no active policy set must still emit a gcp.policy.set.active
 // series, otherwise joins against other collector metrics silently drop rows.
 func TestExtension_ReportsZeroWhenNoActivePolicySet(t *testing.T) {
 	ext, reader := newTestExtension(t, fakeSource{})
@@ -181,10 +181,10 @@ func TestExtension_NilMeterProviderIsNotFatal(t *testing.T) {
 }
 
 // When identity cannot be derived, for example a collector running file sourced
-// policies whose names are not resource names, policy_set.id must still appear
-// as a label, just empty. Omitting the key entirely would give the series a
-// different attribute set than a control plane managed collector, so a query
-// written against one would not match the other.
+// policies whose names are not resource names, gcp.policy.set.id must still
+// appear as a label, just empty. Omitting the key entirely would give the
+// series a different attribute set than a control plane managed collector, so
+// a query written against one would not match the other.
 func TestExtension_UnderivablePolicySetIDIsEmptyNotAbsent(t *testing.T) {
 	ext, reader := newTestExtension(t, fakeSource{revisionID: "rev-123"})
 
@@ -207,10 +207,10 @@ func TestExtension_UnderivablePolicySetIDIsEmptyNotAbsent(t *testing.T) {
 // keys, so these are queried with PromQL's UTF-8 quoted syntax rather than an
 // underscored alias.
 func TestMetricContractIsStable(t *testing.T) {
-	assert.Equal(t, "policy_set.active", metricPolicySetActive)
+	assert.Equal(t, "gcp.policy.set.active", metricPolicySetActive)
 
-	assert.Equal(t, "policy_set.id", attrPolicySetID)
-	assert.Equal(t, "policy_set.revision", attrPolicySetRevision)
+	assert.Equal(t, "gcp.policy.set.id", attrPolicySetID)
+	assert.Equal(t, "gcp.policy.set.revision.id", attrPolicySetRevision)
 }
 
 type mutableSource struct {

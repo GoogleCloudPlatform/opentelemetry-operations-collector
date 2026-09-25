@@ -50,6 +50,18 @@ func TestRegistrySource_NoActivePolicySet(t *testing.T) {
 	assert.Equal(t, PolicySetState{}, registrySource{}.ActivePolicySet())
 }
 
+// An activated policy set with no policies, as produced by an empty policy
+// directory or an xDS revision that clears all policies, enforces nothing and
+// must read as inactive even though it carries a revision.
+func TestRegistrySource_EmptyPolicySetIsInactive(t *testing.T) {
+	setActivePolicySet(t, &googlepolicy.PolicySet{
+		RevisionID: "rev-empty",
+		Policies:   map[string]*googlepolicy.PolicySetEntry{},
+	})
+
+	assert.Equal(t, PolicySetState{}, registrySource{}.ActivePolicySet())
+}
+
 func TestPolicySetNameOf(t *testing.T) {
 	for _, tc := range []struct {
 		name      string

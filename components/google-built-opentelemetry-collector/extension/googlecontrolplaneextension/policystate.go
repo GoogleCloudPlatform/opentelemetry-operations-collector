@@ -90,9 +90,14 @@ type registrySource struct{}
 
 var _ PolicyStateSource = registrySource{}
 
+// ActivePolicySet treats a policy set with no policies the same as no policy
+// set. Both managers activate such a set with a non-empty revision: the file
+// manager for an empty policy directory, and the xDS manager when the control
+// plane sends an empty revision to clear all policies. Nothing is enforced in
+// either case, so reporting it as active would be misleading.
 func (registrySource) ActivePolicySet() PolicySetState {
 	ps := googlepolicy.ActivePolicySet()
-	if ps == nil {
+	if ps == nil || len(ps.Policies) == 0 {
 		return PolicySetState{}
 	}
 	return PolicySetState{

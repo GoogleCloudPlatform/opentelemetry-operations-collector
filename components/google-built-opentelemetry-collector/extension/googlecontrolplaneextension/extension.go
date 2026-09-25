@@ -29,15 +29,16 @@ import (
 
 // Metric and attribute names.
 //
-// policy_set is one namespace component, snake_case per the OpenTelemetry
-// naming rules, because a policy set is a single entity rather than a
-// sub-namespace of policy. policy_set.active names the value it reports: 1 when
-// a policy set is active, 0 otherwise.
+// These are custom conventions, so they live under the gcp. namespace to avoid
+// colliding with any future upstream OpenTelemetry policy conventions. The
+// attribute keys match the ones used by the policy events in pkg/event, so the
+// metric can be correlated with them. gcp.policy.set.active names the value it
+// reports: 1 when a policy set is active, 0 otherwise.
 const (
-	metricPolicySetActive = "policy_set.active"
+	metricPolicySetActive = "gcp.policy.set.active"
 
-	attrPolicySetID       = "policy_set.id"
-	attrPolicySetRevision = "policy_set.revision"
+	attrPolicySetID       = "gcp.policy.set.id"
+	attrPolicySetRevision = "gcp.policy.set.revision.id"
 )
 
 type controlPlaneExtension struct {
@@ -81,7 +82,7 @@ func (e *controlPlaneExtension) Start(_ context.Context, _ component.Host) error
 	// The gauge deliberately declares no unit. It reports state, not a
 	// quantity, and the OTLP to Prometheus translation turns the dimensionless
 	// unit "1" into a _ratio name suffix, which would render this as
-	// policy_set_active_ratio.
+	// gcp_policy_set_active_ratio.
 	policySetActive, err := meter.Int64ObservableGauge(
 		metricPolicySetActive,
 		metric.WithDescription("Whether a control plane policy set is currently active, labeled with its identity."),

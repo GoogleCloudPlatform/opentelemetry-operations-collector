@@ -390,3 +390,61 @@ func TestFilterPolicyDriversRegistered(t *testing.T) {
 		})
 	}
 }
+
+// TestMergeConfUnionsServiceExtensions pins the behaviour that makes it safe for
+// more than one policy to declare an extension.
+//
+// confmap.Merge replaces slices, so a plain Merge would leave only the last
+// policy's extension in the list. The dropped extension stays visible under the
+// top level extensions key, so the config looks correct right up until the
+// collector refuses to start because an exporter references an authenticator
+// that was never instantiated.
+func TestMergeConfUnionsServiceExtensions(t *testing.T) {
+	conf := confmap.New()
+
+	destination := confmap.NewFromStringMap(map[string]any{
+		"service": map[string]any{
+			"extensions": []any{"googleclientauth/default_gcp_destination"},
+		},
+	})
+	selfMetrics := confmap.NewFromStringMap(map[string]any{
+		"service": map[string]any{
+			"extensions": []any{"googlecontrolplane/default_self_metrics"},
+		},
+	})
+
+	require.NoError(t, mergeConf(conf, destination))
+	require.NoError(t, mergeConf(conf, selfMetrics))
+
+	assert.Equal(t, []any{
+		"googleclientauth/default_gcp_destination",
+		"googlecontrolplane/default_self_metrics",
+	}, conf.Get("service::extensions"))
+}
+
+func TestMergeConfDeduplicatesServiceExtensions(t *testing.T) {
+	conf := confmap.New()
+	declare := func() *confmap.Conf {
+		return confmap.NewFromStringMap(map[string]any{
+			"service": map[string]any{
+				"extensions": []any{"googleclientauth/default_gcp_destination"},
+			},
+		})
+	}
+
+	require.NoError(t, mergeConf(conf, declare()))
+	require.NoError(t, mergeConf(conf, declare()))
+
+	assert.Equal(t, []any{"googleclientauth/default_gcp_destination"}, conf.Get("service::extensions"))
+}
+
+// TestMergeConfWithoutServiceExtensions guards the common case: a policy that
+// declares no extensions must not introduce an empty service::extensions key.
+func TestMergeConfWithoutServiceExtensions(t *testing.T) {
+	conf := confmap.New()
+	require.NoError(t, mergeConf(conf, confmap.NewFromStringMap(map[string]any{
+		"receivers": map[string]any{"otlp/x": map[string]any{}},
+	})))
+
+	assert.False(t, conf.IsSet("service::extensions"))
+}

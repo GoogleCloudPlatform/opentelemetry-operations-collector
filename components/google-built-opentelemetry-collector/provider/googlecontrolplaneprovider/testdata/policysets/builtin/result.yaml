@@ -27,6 +27,7 @@ extensions:
             - https://www.googleapis.com/auth/trace.append
         token_header: authorization
         token_type: access_token
+    googlecontrolplane: {}
 processors:
     googlepolicy: {}
     queuebatch/default_gcp_destination_batch_logs:
@@ -93,6 +94,7 @@ receivers:
 service:
     extensions:
         - googleclientauth/default_gcp_destination
+        - googlecontrolplane
     pipelines:
         logs/default_self_metrics:
             exporters:

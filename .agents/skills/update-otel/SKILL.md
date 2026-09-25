@@ -17,8 +17,7 @@ Ensure you are in the root of the `opentelemetry-operations-collector` repositor
 
 2. **Update versions in the spec file**:
    - Find the upstream release versions you want to update to (e.g., `v0.154.0` which corresponds to core `v1.60.0`).
-   - Update `opentelemetry_version` and `opentelemetry_contrib_version` (usually they match).
-   - Update `opentelemetry_stable_version` to the corresponding core version.
+   - Update `opentelemetry_version` and `opentelemetry_contrib_version` (usually they match). Stable `v1.x.x` component versions are detected from the upstream `versions.yaml` and must not be specified in the spec.
    - Update the distribution `version` (usually matches `opentelemetry_contrib_version`).
    - (Optional) Check if there is a newer patch version for the `go_version` and update it if desired.
 

@@ -1,20 +1,14 @@
 name: basic-distro
 
 # What this test case is testing.
-boringcrypto: true
-collector_cgo: true
-build_container: alpine
+# opentelemetry_version is missing.
 
 display_name: Basic OTel
 version: 0.121.0
 description: "A basic distribution of the OpenTelemetry Collector"
 blurb: "A basic collector distro"
-opentelemetry_version: 0.121.0
 binary_name: otelcol-basic
 go_version: 1.24.0
-
-feature_gates:
-  - exporter.googlemanagedprometheus.intToDouble
 
 docker_repo: us-docker.pkg.dev/pretend-repo/otelcol-basic
 
@@ -24,16 +18,9 @@ components:
 
   processors:
     - batch
-    - memorylimiter
 
   exporters:
     - otlp
-
-  extensions:
-    - pprof
-
-  connectors:
-    - forward
 
   providers:
     - yaml

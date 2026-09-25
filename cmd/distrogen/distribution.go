@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -63,30 +64,28 @@ const (
 // It contains all the information that will be formatted into the default set of
 // templates/user provided templates.
 type DistributionSpec struct {
-	Path                              string                  `yaml:"-"`
-	Name                              string                  `yaml:"name"`
-	Module                            string                  `yaml:"module"`
-	DisplayName                       string                  `yaml:"display_name"`
-	Description                       string                  `yaml:"description"`
-	Blurb                             string                  `yaml:"blurb"`
-	BuildContainer                    BuildContainerOption    `yaml:"build_container"`
-	Version                           string                  `yaml:"version"`
-	OpenTelemetryVersion              string                  `yaml:"opentelemetry_version"`
-	OpenTelemetryContribVersion       string                  `yaml:"opentelemetry_contrib_version"`
-	OpenTelemetryStableVersion        string                  `yaml:"opentelemetry_stable_version"`
-	OpenTelemetryContribStableVersion string                  `yaml:"opentelemetry_contrib_stable_version,omitempty"`
-	GoVersion                         string                  `yaml:"go_version"`
-	BinaryName                        string                  `yaml:"binary_name"`
-	BuildTags                         string                  `yaml:"build_tags"`
-	BoringCrypto                      bool                    `yaml:"boringcrypto"`
-	DockerRepo                        string                  `yaml:"docker_repo"`
-	Components                        *DistributionComponents `yaml:"components"`
-	Replaces                          ComponentReplaces       `yaml:"replaces,omitempty"`
-	CustomValues                      map[string]any          `yaml:"custom_values,omitempty"`
-	FeatureGates                      FeatureGates            `yaml:"feature_gates,omitempty"`
-	GoProxy                           string                  `yaml:"go_proxy,omitempty"`
-	PermanentOCBDirectory             bool                    `yaml:"permanent_ocb_directory,omitempty"`
-	VendorDependencies                bool                    `yaml:"vendor_dependencies,omitempty"`
+	Path                        string                  `yaml:"-"`
+	Name                        string                  `yaml:"name"`
+	Module                      string                  `yaml:"module"`
+	DisplayName                 string                  `yaml:"display_name"`
+	Description                 string                  `yaml:"description"`
+	Blurb                       string                  `yaml:"blurb"`
+	BuildContainer              BuildContainerOption    `yaml:"build_container"`
+	Version                     string                  `yaml:"version"`
+	OpenTelemetryVersion        string                  `yaml:"opentelemetry_version"`
+	OpenTelemetryContribVersion string                  `yaml:"opentelemetry_contrib_version"`
+	GoVersion                   string                  `yaml:"go_version"`
+	BinaryName                  string                  `yaml:"binary_name"`
+	BuildTags                   string                  `yaml:"build_tags"`
+	BoringCrypto                bool                    `yaml:"boringcrypto"`
+	DockerRepo                  string                  `yaml:"docker_repo"`
+	Components                  *DistributionComponents `yaml:"components"`
+	Replaces                    ComponentReplaces       `yaml:"replaces,omitempty"`
+	CustomValues                map[string]any          `yaml:"custom_values,omitempty"`
+	FeatureGates                FeatureGates            `yaml:"feature_gates,omitempty"`
+	GoProxy                     string                  `yaml:"go_proxy,omitempty"`
+	PermanentOCBDirectory       bool                    `yaml:"permanent_ocb_directory,omitempty"`
+	VendorDependencies          bool                    `yaml:"vendor_dependencies,omitempty"`
 
 	// CollectorCGO determines whether the Collector will be built with CGO.
 	CollectorCGO         bool   `yaml:"collector_cgo,omitempty"`
@@ -177,6 +176,7 @@ var (
 	ErrSpecValidationBoringCryptoWithoutCGO        = errors.New("boringcrypto build is not possible with collector_cgo turned off")
 	ErrSpecValidationBoringCryptoWithoutDebian     = errors.New("boringcrypto is only possible with the debian build container")
 	ErrSpecValidationVendorDepsWithoutPermanentOCB = errors.New("vendor_dependencies is only possible with permanent_ocb_directory set to true")
+	ErrSpecValidationMissingOTelVersion            = errors.New("opentelemetry_version is required")
 )
 
 // NewDistributionSpec loads the DistributionSpec from a yaml file.
@@ -206,10 +206,18 @@ func NewDistributionSpec(path string) (*DistributionSpec, error) {
 	// The name of the spec.yaml file might be different from the binary name
 	spec.Path = filepath.Base(path)
 
+	if spec.OpenTelemetryVersion == "" {
+		return nil, ErrSpecValidationMissingOTelVersion
+	}
+
 	// It is a rare case where the contrib version falls out of sync with
 	// the canonical OpenTelemetry version, most of the time it is the same.
 	if spec.OpenTelemetryContribVersion == "" {
 		spec.OpenTelemetryContribVersion = spec.OpenTelemetryVersion
+	}
+
+	if err := warnRemovedSpecFields(path); err != nil {
+		return nil, err
 	}
 
 	// If the PermanentOCBDirectory feature is not set,
@@ -226,6 +234,37 @@ func NewDistributionSpec(path string) (*DistributionSpec, error) {
 	}
 
 	return spec, nil
+}
+
+// removedSpecFields are fields that used to be part of DistributionSpec. YAML
+// parsing is not strict, so they are parsed separately to warn about a spec
+// that still carries them instead of silently ignoring the value.
+type removedSpecFields struct {
+	OpenTelemetryStableVersion        string `yaml:"opentelemetry_stable_version"`
+	OpenTelemetryContribStableVersion string `yaml:"opentelemetry_contrib_stable_version"`
+}
+
+// warnRemovedSpecFields logs a warning for each removed field a spec still sets.
+func warnRemovedSpecFields(path string) error {
+	removed, err := yamlUnmarshalFromFile[removedSpecFields](path)
+	if err != nil {
+		return err
+	}
+
+	for field, value := range map[string]string{
+		"opentelemetry_stable_version":         removed.OpenTelemetryStableVersion,
+		"opentelemetry_contrib_stable_version": removed.OpenTelemetryContribStableVersion,
+	} {
+		if value == "" {
+			continue
+		}
+		logger.Warn(
+			"spec field is no longer used and will be ignored, stable versions are now read from the OpenTelemetry versions.yaml",
+			slog.String("field", field),
+			slog.String("value", value),
+		)
+	}
+	return nil
 }
 
 // DistributionComponents is a set of components with RegistryComponent names
@@ -529,10 +568,9 @@ func NewTemplateContextFromSpec(spec *DistributionSpec, registry *Registry) (*Te
 	}
 
 	otelVersion := otelComponentVersion{
-		core:          spec.OpenTelemetryVersion,
-		coreStable:    spec.OpenTelemetryStableVersion,
-		contrib:       spec.OpenTelemetryContribVersion,
-		contribStable: spec.OpenTelemetryContribStableVersion,
+		core:    spec.OpenTelemetryVersion,
+		contrib: spec.OpenTelemetryContribVersion,
+		modules: registry.moduleVersions,
 	}
 
 	errs := make(CollectionError)

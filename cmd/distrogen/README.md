@@ -17,7 +17,6 @@ version: 0.121.0
 description: "A basic distribution of the OpenTelemetry Collector"
 blurb: "A basic collector distro"
 opentelemetry_version: 0.121.0
-opentelemetry_stable_version: 1.27.0
 binary_name: otelcol-basic
 collector_cgo: false
 go_version: 1.24.0
@@ -75,7 +74,6 @@ version: 0.121.0
 description: "A basic distribution of the OpenTelemetry Collector"
 blurb: "A basic collector distro"
 opentelemetry_version: 0.121.0
-opentelemetry_stable_version: 1.27.0
 binary_name: otelcol-basic
 collector_cgo: false
 go_version: 1.24.0

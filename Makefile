@@ -221,14 +221,14 @@ TOOL_LIST ?= github.com/google/addlicense \
 			 github.com/bufbuild/buf/cmd/buf \
 			 github.com/googleapis/api-linter/cmd/api-linter \
 			 google.golang.org/protobuf/cmd/protoc-gen-go \
-			 google.golang.org/grpc/cmd/protoc-gen-go-grpc \
-			 ./cmd/otel_component_versions
+			 google.golang.org/grpc/cmd/protoc-gen-go-grpc
 
 .PHONY: install-tools
 install-tools: tools-dir
 	cd internal/tools && \
 	GOBIN=$(TOOLS_DIR) go install \
 	$(TOOL_LIST)
+	GOBIN=$(TOOLS_DIR) go install ./cmd/distrogen
 
 ADDLICENSE_IGNORES = -ignore "**/.tools/**/*" \
 					-ignore "**/dist/**/*" \

@@ -641,23 +641,18 @@ extensions:
 providers:
     env:
         gomod: go.opentelemetry.io/collector/confmap/provider/envprovider
-        stable: true
         docs_url: https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/confmap/provider/envprovider
     file:
         gomod: go.opentelemetry.io/collector/confmap/provider/fileprovider
-        stable: true
         docs_url: https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/confmap/provider/fileprovider
     http:
         gomod: go.opentelemetry.io/collector/confmap/provider/httpprovider
-        stable: true
         docs_url: https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/confmap/provider/httpprovider
     https:
         gomod: go.opentelemetry.io/collector/confmap/provider/httpsprovider
-        stable: true
         docs_url: https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/confmap/provider/httpsprovider
     yaml:
         gomod: go.opentelemetry.io/collector/confmap/provider/yamlprovider
-        stable: true
         docs_url: https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/confmap/provider/yamlprovider
     googlesecretmanager:
         gomod: github.com/open-telemetry/opentelemetry-collector-contrib/confmap/provider/googlesecretmanagerprovider

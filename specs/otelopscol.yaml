@@ -18,7 +18,6 @@ module: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/otelop
 version: v0.161.0
 opentelemetry_version: 0.161.0
 opentelemetry_contrib_version: 0.161.0
-opentelemetry_stable_version: 1.67.0
 binary_name: otelopscol
 build_container: debian
 collector_cgo: true

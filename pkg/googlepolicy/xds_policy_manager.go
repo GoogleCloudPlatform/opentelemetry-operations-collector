@@ -50,12 +50,16 @@ import (
 )
 
 const (
+	// xdsResourceType is the fully qualified name of the TelemetryCollector
+	// message: the resource type as it appears in an xdstp:// resource name.
+	xdsResourceType = "google.telemetry.xds.v1alpha1.TelemetryCollector"
+
 	// xdsPolicyTypeURL is the one resource type this manager subscribes to. It
 	// is fixed rather than configurable: the control plane only ever serves
 	// TelemetryCollector resources, and the decoding path below is written
 	// against that schema, so a different type could be subscribed to but not
 	// usefully interpreted.
-	xdsPolicyTypeURL = "type.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector"
+	xdsPolicyTypeURL = "type.googleapis.com/" + xdsResourceType
 
 	// FleetIDQueryParam is the query parameter carrying the fleet ID:
 	//
@@ -72,11 +76,19 @@ const (
 	// metrics, fail to start at all.
 	FleetIDQueryParam = "gcp.fleet_id"
 
+	// ProjectQueryParam is the query parameter carrying the project that owns
+	// the fleet. Like the fleet ID, it is read through this one constant by
+	// both this manager, which names the project in the resource it subscribes
+	// to, and the googlecontrolplane provider, which stamps it on the
+	// collector's own telemetry as gcp.project_id.
+	ProjectQueryParam = "project"
+
 	// fleetIDEnvVar is the environment variable consulted for the fleet ID. It
 	// is consulted before the URI, matching the provider's resolution order.
 	fleetIDEnvVar = "FLEET_ID"
 
-	// defaultRegion is the locality region reported to the control plane.
+	// defaultRegion is the locality region reported to the control plane, and
+	// the region in the authority of the subscribed xdstp:// resource name.
 	// TODO: Derive this from the environment (GCE metadata / GKE topology labels)
 	// rather than hardcoding a single region.
 	defaultRegion = "asia-east1"
@@ -123,6 +135,7 @@ var (
 	ErrXDSMissingServerAddr   = errors.New("xDS server address cannot be empty in URI")
 	ErrXDSMissingCollectorID  = errors.New("a collector ID is required for the xDS policy manager")
 	ErrXDSMissingFleetID      = errors.New("a fleet ID is required for the xDS policy manager: set the FLEET_ID environment variable or the 'gcp.fleet_id' URI query parameter")
+	ErrXDSMissingProject      = errors.New("a project is required for the xDS policy manager: set the 'project' URI query parameter")
 	ErrXDSInvalidInsecureFlag = errors.New("invalid 'insecure' URI query parameter, expected a boolean")
 
 	// Lifecycle errors.
@@ -158,6 +171,11 @@ type xdsPolicyManager struct {
 	collectorID string
 	fleetID     string
 	insecure    bool
+
+	// resourceName is the xdstp:// name of the fleet's TelemetryCollector
+	// resource. Every DiscoveryRequest on the stream subscribes to it; see
+	// xdstpResourceName.
+	resourceName string
 
 	// NOTE: there is deliberately no confmap reload hook here. The only policies
 	// delivered over xDS today are transformation (filter) policies, which
@@ -215,12 +233,12 @@ type xdsPolicyManager struct {
 //
 // In full, as written in the collector's config:
 //
-//	googlecontrolplane:xds://HOST[:PORT][?gcp.fleet_id=FLEET][&project=PROJECT][&insecure=BOOL]
+//	googlecontrolplane:xds://HOST[:PORT]?gcp.fleet_id=FLEET&project=PROJECT[&insecure=BOOL]
 //
 // for example:
 //
 //	googlecontrolplane:xds://telemetrydirector.googleapis.com:443?gcp.fleet_id=my-fleet&project=my-project
-//	googlecontrolplane:xds://127.0.0.1:18000?gcp.fleet_id=my-fleet&insecure=true
+//	googlecontrolplane:xds://127.0.0.1:18000?gcp.fleet_id=my-fleet&project=my-project&insecure=true
 //
 // The `googlecontrolplane:` prefix selects the confmap provider and is stripped
 // before the remainder reaches this constructor, so the uri argument here starts
@@ -230,12 +248,15 @@ type xdsPolicyManager struct {
 //
 //	HOST[:PORT]  - required. Address of the xDS control plane.
 //	gcp.fleet_id - required, unless $FLEET_ID is set; the environment wins over
-//	               the URI, matching how the provider resolves it. Used as this
-//	               node's xDS cluster, and read back off URI() by the provider
-//	               to attribute the collector's own telemetry.
-//	project      - optional, and NOT read here. The provider reads it off URI() to
-//	               stamp gcp.project_id on self metrics; when absent, resource
-//	               detection falls back to the project the collector runs in.
+//	               the URI, matching how the provider resolves it. Names the
+//	               fleet in the subscribed resource (see xdstpResourceName), is
+//	               sent as this node's xDS cluster, and is read back off URI()
+//	               by the provider to attribute the collector's own telemetry.
+//	project      - required. The project that owns the fleet, named alongside it
+//	               in the subscribed resource. It is sent as given; no lookup
+//	               between project ID and number is done here. The provider
+//	               also reads it off URI() to stamp gcp.project_id on self
+//	               metrics.
 //	insecure     - optional bool, default false. False connects with TLS 1.2+ and
 //	               an ADC-derived ID token per RPC; true connects in plaintext with
 //	               no credentials, which is intended for local control planes.
@@ -280,6 +301,14 @@ func NewXDSPolicyManager(logger *zap.Logger, uri *url.URL, collectorID string) (
 		return nil, ErrXDSMissingFleetID
 	}
 
+	// Unlike the fleet, the project has no environment override.
+	project := query.Get(ProjectQueryParam)
+	if project == "" {
+		// TODO: Fall back to the project detected from the environment, as
+		// resource detection already does for the collector's own telemetry.
+		return nil, ErrXDSMissingProject
+	}
+
 	var isInsecure bool
 	if raw := query.Get("insecure"); raw != "" {
 		parsed, err := strconv.ParseBool(raw)
@@ -300,6 +329,7 @@ func NewXDSPolicyManager(logger *zap.Logger, uri *url.URL, collectorID string) (
 		collectorID:        collectorID,
 		fleetID:            fleetID,
 		insecure:           isInsecure,
+		resourceName:       xdstpResourceName(defaultRegion, project, fleetID),
 		backoffInitial:     defaultBackoffInitial,
 		backoffMax:         defaultBackoffMax,
 		timeAfter:          time.After,
@@ -328,14 +358,34 @@ func serverAddrFromURI(uri *url.URL) string {
 // FleetIDFromURI returns the fleet ID carried by an xDS URI, or "" if it carries
 // none.
 //
-// It reads the same `fleet` parameter that the googlecontrolplane provider
-// reads when resolving the fleet for the self metrics policy, so one URI drives
-// both the xDS subscription and the collector's own telemetry attribution.
+// It reads the same `gcp.fleet_id` parameter that the googlecontrolplane
+// provider reads when resolving the fleet for the self metrics policy, so one
+// URI drives both the xDS subscription and the collector's own telemetry
+// attribution.
 func FleetIDFromURI(uri *url.URL) string {
 	if uri == nil {
 		return ""
 	}
 	return uri.Query().Get(FleetIDQueryParam)
+}
+
+// xdstpResourceName returns the xdstp:// name of the TelemetryCollector
+// resource that holds a fleet's policies:
+//
+//	xdstp://traffic-director-REGION.xds.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector/projects/PROJECT/fleets/FLEET
+//
+// The control plane looks up the fleet's policies by this name, not by the
+// node's cluster. A request that names no resource is a wildcard subscription,
+// which gives it no fleet to look up: the collector would connect and
+// authenticate, then never receive a policy.
+//
+// Every request on the stream carries the name, ACKs and NACKs included. In
+// state-of-the-world xDS each request restates the whole subscription, so a
+// request without the name would change the subscription rather than confirm
+// it.
+func xdstpResourceName(region, project, fleetID string) string {
+	return fmt.Sprintf("xdstp://traffic-director-%s.xds.googleapis.com/%s/projects/%s/fleets/%s",
+		region, xdsResourceType, project, fleetID)
 }
 
 // Start launches the background stream loop and waits, briefly, for the control
@@ -375,6 +425,7 @@ func (m *xdsPolicyManager) Start() error {
 		zap.String("server", m.serverAddr),
 		zap.String("fleet", m.fleetID),
 		zap.String("collector_id", m.collectorID),
+		zap.String("resource_name", m.resourceName),
 		zap.String("type_url", xdsPolicyTypeURL),
 	)
 
@@ -616,9 +667,10 @@ func (m *xdsPolicyManager) streamPolicies(ctx context.Context, conn *grpc.Client
 	// client produced itself already carries its own status and is returned
 	// directly, per the same contract.
 	if err := stream.Send(&discoveryv3.DiscoveryRequest{
-		Node:        node,
-		TypeUrl:     xdsPolicyTypeURL,
-		VersionInfo: m.LastAppliedVersion(),
+		Node:          node,
+		TypeUrl:       xdsPolicyTypeURL,
+		ResourceNames: []string{m.resourceName},
+		VersionInfo:   m.LastAppliedVersion(),
 	}); err != nil {
 		if !errors.Is(err, io.EOF) {
 			return false, fmt.Errorf("failed to send DiscoveryRequest to %s: %w", m.serverAddr, err)
@@ -632,6 +684,7 @@ func (m *xdsPolicyManager) streamPolicies(ctx context.Context, conn *grpc.Client
 		m.logger.Info("Connected to xDS server and sent DiscoveryRequest",
 			zap.String("server", m.serverAddr),
 			zap.String("fleet", m.fleetID),
+			zap.String("resource_name", m.resourceName),
 			zap.String("type_url", xdsPolicyTypeURL),
 		)
 	}
@@ -801,6 +854,7 @@ func (m *xdsPolicyManager) sendACK(stream discoveryv3.AggregatedDiscoveryService
 	if err := stream.Send(&discoveryv3.DiscoveryRequest{
 		Node:          node,
 		TypeUrl:       xdsPolicyTypeURL,
+		ResourceNames: []string{m.resourceName},
 		VersionInfo:   versionInfo,
 		ResponseNonce: nonce,
 	}); err != nil {
@@ -819,6 +873,7 @@ func (m *xdsPolicyManager) sendNACK(stream discoveryv3.AggregatedDiscoveryServic
 	err := stream.Send(&discoveryv3.DiscoveryRequest{
 		Node:          node,
 		TypeUrl:       xdsPolicyTypeURL,
+		ResourceNames: []string{m.resourceName},
 		VersionInfo:   m.LastAppliedVersion(),
 		ResponseNonce: nonce,
 		ErrorDetail: &status.Status{

@@ -123,12 +123,18 @@ func startFakeADSServer(t *testing.T, srv *fakeADSServer) grpc.DialOption {
 	})
 }
 
+// testResourceName is the xdstp:// name newTestManager's URI subscribes to.
+// It is spelled out rather than derived with xdstpResourceName, so a manager
+// that stops setting the name, or builds it wrong, cannot pass by agreeing
+// with itself.
+const testResourceName = "xdstp://traffic-director-" + defaultRegion + ".xds.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector/projects/my-project/fleets/fleet-1"
+
 // newTestManager builds a manager wired to the fake server, with a negligible
 // backoff so reconnect tests stay fast.
 func newTestManager(t *testing.T, dialOpt grpc.DialOption) *xdsPolicyManager {
 	t.Helper()
 
-	u, err := url.Parse("xds://127.0.0.1:8080?insecure=true&gcp.fleet_id=fleet-1")
+	u, err := url.Parse("xds://127.0.0.1:8080?insecure=true&gcp.fleet_id=fleet-1&project=my-project")
 	require.NoError(t, err)
 
 	mgr, err := NewXDSPolicyManager(zaptest.NewLogger(t), u, "collector-abc")
@@ -265,6 +271,13 @@ func TestXDSPolicyManager_ReconnectsWithBackoff(t *testing.T) {
 	reconnect := requests[len(requests)-1]
 	assert.Equal(t, "rev-1", reconnect.GetVersionInfo(), "reconnect must resend the last applied version")
 	assert.Empty(t, reconnect.GetResponseNonce(), "a fresh stream carries no nonce")
+
+	// Every request restates the subscription, the first on each stream and
+	// the ACK alike. A request without it would leave the control plane no
+	// fleet to look up.
+	for i, req := range requests {
+		assert.Equal(t, []string{testResourceName}, req.GetResourceNames(), "request %d", i)
+	}
 }
 
 func TestXDSPolicyManager_NACKsUndecodableResource(t *testing.T) {
@@ -314,6 +327,7 @@ func TestXDSPolicyManager_NACKsUndecodableResource(t *testing.T) {
 	require.NotNil(t, nack.GetErrorDetail(), "an undecodable resource must be NACKed")
 	assert.Contains(t, nack.GetErrorDetail().GetMessage(), "does.not.Exist")
 	assert.Equal(t, "nonce-bad", nack.GetResponseNonce())
+	assert.Equal(t, []string{testResourceName}, nack.GetResourceNames(), "a NACK must restate the subscription")
 	assert.Empty(t, nack.GetVersionInfo(), "NACK reports the last applied version, which is none")
 
 	// A rejected response must not become the active policy set.

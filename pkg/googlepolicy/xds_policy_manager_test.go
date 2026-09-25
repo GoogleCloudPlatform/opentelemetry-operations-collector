@@ -64,13 +64,13 @@ func TestNewXDSPolicyManager_Validation(t *testing.T) {
 
 	t.Run("missing fleet ID", func(t *testing.T) {
 		t.Setenv("FLEET_ID", "")
-		_, err := NewXDSPolicyManager(logger, mustParse("xds://127.0.0.1:8080"), "collector-abc")
+		_, err := NewXDSPolicyManager(logger, mustParse("xds://127.0.0.1:8080?project=my-project"), "collector-abc")
 		require.ErrorIs(t, err, ErrXDSMissingFleetID)
 	})
 
 	t.Run("fleet ID from environment", func(t *testing.T) {
 		t.Setenv("FLEET_ID", "fleet-from-env")
-		mgr, err := NewXDSPolicyManager(logger, mustParse("xds://127.0.0.1:8080"), "collector-abc")
+		mgr, err := NewXDSPolicyManager(logger, mustParse("xds://127.0.0.1:8080?project=my-project"), "collector-abc")
 		require.NoError(t, err)
 		assert.Equal(t, "fleet-from-env", mgr.(*xdsPolicyManager).fleetID)
 	})
@@ -81,13 +81,23 @@ func TestNewXDSPolicyManager_Validation(t *testing.T) {
 		// fleet's policies arrive, while the provider's becomes the
 		// gcp.fleet_id attribute on the collector's own telemetry.
 		t.Setenv("FLEET_ID", "fleet-from-env")
-		mgr, err := newManager("xds://127.0.0.1:8080?gcp.fleet_id=fleet-from-uri")
+		mgr, err := newManager("xds://127.0.0.1:8080?gcp.fleet_id=fleet-from-uri&project=my-project")
 		require.NoError(t, err)
-		assert.Equal(t, "fleet-from-env", mgr.(*xdsPolicyManager).fleetID)
+		m := mgr.(*xdsPolicyManager)
+		assert.Equal(t, "fleet-from-env", m.fleetID)
+		// The subscribed name must follow the same fleet, or the collector would
+		// report one fleet as its cluster while asking for another's policies.
+		assert.Equal(t, xdstpResourceName(defaultRegion, "my-project", "fleet-from-env"), m.resourceName)
+	})
+
+	t.Run("missing project", func(t *testing.T) {
+		t.Setenv("FLEET_ID", "")
+		_, err := newManager("xds://127.0.0.1:8080?gcp.fleet_id=fleet-1")
+		require.ErrorIs(t, err, ErrXDSMissingProject)
 	})
 
 	t.Run("invalid insecure flag", func(t *testing.T) {
-		_, err := newManager("xds://127.0.0.1:8080?gcp.fleet_id=fleet-1&insecure=maybe")
+		_, err := newManager("xds://127.0.0.1:8080?gcp.fleet_id=fleet-1&project=my-project&insecure=maybe")
 		require.ErrorIs(t, err, ErrXDSInvalidInsecureFlag)
 	})
 
@@ -96,7 +106,7 @@ func TestNewXDSPolicyManager_Validation(t *testing.T) {
 		// ambient FLEET_ID would otherwise decide this test's outcome.
 		t.Setenv("FLEET_ID", "")
 
-		uri := mustParse("xds://127.0.0.1:8080?gcp.fleet_id=fleet-1&insecure=true")
+		uri := mustParse("xds://127.0.0.1:8080?gcp.fleet_id=fleet-1&project=my-project&insecure=true")
 		mgr, err := NewXDSPolicyManager(logger, uri, "collector-abc")
 		require.NoError(t, err)
 		assert.Equal(t, uri, mgr.URI())
@@ -106,6 +116,7 @@ func TestNewXDSPolicyManager_Validation(t *testing.T) {
 		assert.Equal(t, "collector-abc", m.collectorID)
 		assert.Equal(t, "fleet-1", m.fleetID)
 		assert.True(t, m.insecure)
+		assert.Equal(t, xdstpResourceName(defaultRegion, "my-project", "fleet-1"), m.resourceName)
 
 		// Asserted explicitly because every stream test overrides this field to
 		// keep itself fast. If the constructor stopped setting it the zero value
@@ -114,6 +125,16 @@ func TestNewXDSPolicyManager_Validation(t *testing.T) {
 		assert.Equal(t, defaultInitialSyncTimeout, m.initialSyncTimeout)
 	})
 
+}
+
+// The resource name is what the control plane looks the fleet up by, so its
+// exact spelling is the contract: a name that is off by one character
+// subscribes to nothing, and no error says so.
+func TestXDSTPResourceName(t *testing.T) {
+	assert.Equal(t,
+		"xdstp://traffic-director-us-central1.xds.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector/projects/my-project/fleets/my-fleet",
+		xdstpResourceName("us-central1", "my-project", "my-fleet"),
+	)
 }
 
 func TestExtractPolicyProtos_TelemetryCollector(t *testing.T) {

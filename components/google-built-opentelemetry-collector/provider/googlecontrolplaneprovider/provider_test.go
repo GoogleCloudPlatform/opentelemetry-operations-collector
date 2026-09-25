@@ -190,7 +190,7 @@ func TestRetrieve_XDSServerUnreachable(t *testing.T) {
 
 	// Port 1 on loopback: nothing is listening, so the stream can never be
 	// established and the manager is left retrying with backoff.
-	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:xds://127.0.0.1:1?insecure=true", nil)
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:xds://127.0.0.1:1?project=my-project&insecure=true", nil)
 	require.NoError(t, err, "an unreachable xDS control plane must not block collector startup")
 	require.NotNil(t, ret)
 

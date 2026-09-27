@@ -193,6 +193,13 @@ func TestXDSPolicyManager_Metrics(t *testing.T) {
 	connectedPts := findInt64GaugePoints(rm, "grpc.xds_client.connected")
 	require.Len(t, connectedPts, 1, "expected 1 series for grpc.xds_client.connected")
 	assert.Equal(t, int64(1), connectedPts[0].Value, "connected gauge must be 1 while stream 2 is active")
+	for _, sm := range rm.ScopeMetrics {
+		for _, m := range sm.Metrics {
+			if m.Name == "grpc.xds_client.connected" {
+				assert.Equal(t, "{connected}", m.Unit)
+			}
+		}
+	}
 
 	resourcePts := findInt64GaugePoints(rm, "grpc.xds_client.resources")
 	require.NotEmpty(t, resourcePts, "expected grpc.xds_client.resources gauge points")

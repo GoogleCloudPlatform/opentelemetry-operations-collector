@@ -71,7 +71,7 @@ func newOTelMetricsReporter(mp metric.MeterProvider, target string) *otelMetrics
 	connectedGauge, _ := meter.Int64ObservableGauge(
 		"grpc.xds_client.connected",
 		metric.WithDescription("Whether or not the xDS client currently has a working ADS stream to the xDS server."),
-		metric.WithUnit("{bool}"),
+		metric.WithUnit("{connected}"),
 	)
 	resourcesGauge, _ := meter.Int64ObservableGauge(
 		"grpc.xds_client.resources",

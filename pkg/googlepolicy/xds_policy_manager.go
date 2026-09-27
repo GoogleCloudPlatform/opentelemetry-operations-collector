@@ -567,10 +567,7 @@ func (d *telemetryCollectorDecoder) DecodeAll(resources []*xdsclient.AnyProto, o
 		)
 	}
 
-	var rawBytes []byte
-	if len(anyResources) > 0 && anyResources[0] != nil {
-		rawBytes = anyResources[0].GetValue()
-	}
+	rawBytes := marshalCollectorBytes(policyProtos)
 
 	SetActivePolicySet(policySet)
 	d.m.setLastAppliedState(options.Version, rawBytes)
@@ -583,6 +580,20 @@ func (d *telemetryCollectorDecoder) DecodeAll(resources []*xdsclient.AnyProto, o
 			rawBytes: rawBytes,
 		},
 	}, nil
+}
+
+func marshalCollectorBytes(policyProtos []proto.Message) []byte {
+	if len(policyProtos) == 0 {
+		return nil
+	}
+	policies := make([]*anypb.Any, 0, len(policyProtos))
+	for _, p := range policyProtos {
+		if a, err := anypb.New(p); err == nil {
+			policies = append(policies, a)
+		}
+	}
+	rawBytes, _ := proto.Marshal(&xdsv1alpha1.TelemetryCollector{Policies: policies})
+	return rawBytes
 }
 
 // policyTransportBuilder implements clients.TransportBuilder with lazy dialing

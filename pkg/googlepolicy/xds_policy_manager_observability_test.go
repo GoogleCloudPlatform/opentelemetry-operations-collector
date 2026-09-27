@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	xdsv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/xds/v1alpha1"
 )
@@ -294,13 +295,26 @@ func TestXDSPolicyManager_CSDSDumpResources(t *testing.T) {
 	ackCh := make(chan *discoveryv3.DiscoveryRequest, 1)
 	nackCh := make(chan *discoveryv3.DiscoveryRequest, 1)
 
+	barePayload, err := structpb.NewStruct(map[string]any{"name": "bare-policy"})
+	require.NoError(t, err)
+	bareAny, err := anypb.New(barePayload)
+	require.NoError(t, err)
+
 	srv := &fakeADSServer{streamOpened: make(chan struct{}, 8)}
 	srv.handlers = []func(discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error{
 		func(stream discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error {
 			if _, err := srv.recv(stream); err != nil {
 				return err
 			}
-			if err := stream.Send(validRevisionResponse(t, "rev-1", "nonce-1", "log-filter")); err != nil {
+			if err := stream.Send(&discoveryv3.DiscoveryResponse{
+				VersionInfo: "rev-1",
+				Nonce:       "nonce-1",
+				TypeUrl:     xdsPolicyTypeURL,
+				Resources: []*anypb.Any{
+					policyResource(t, "log-filter"),
+					bareAny,
+				},
+			}); err != nil {
 				return err
 			}
 			ack, err := srv.recv(stream)
@@ -371,9 +385,10 @@ func TestXDSPolicyManager_CSDSDumpResources(t *testing.T) {
 	assert.Equal(t, "rev-bad", cfg.GetErrorState().GetVersionInfo())
 	assert.Contains(t, cfg.GetErrorState().GetDetails(), "does.not.Exist")
 
-	// Verify the cached XdsConfig payload unmarshals cleanly into xdsv1alpha1.TelemetryCollector.
+	// Verify the cached XdsConfig payload unmarshals cleanly into xdsv1alpha1.TelemetryCollector
+	// and preserves all resources (including bare policy protos).
 	require.NotNil(t, cfg.GetXdsConfig())
 	var dumpedCollector xdsv1alpha1.TelemetryCollector
 	require.NoError(t, cfg.GetXdsConfig().UnmarshalTo(&dumpedCollector))
-	assert.Len(t, dumpedCollector.GetPolicies(), 1)
+	assert.Len(t, dumpedCollector.GetPolicies(), 2)
 }

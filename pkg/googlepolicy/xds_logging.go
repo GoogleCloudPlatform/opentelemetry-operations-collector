@@ -110,6 +110,6 @@ func (l *zapDepthLogger) FatalDepth(_ int, args ...any) {
 	l.logger.Fatal(formatArgs(args...))
 }
 
-func (l *zapDepthLogger) V(_ int) bool {
-	return true
+func (l *zapDepthLogger) V(level int) bool {
+	return level < 9 && l.logger.Core().Enabled(zap.DebugLevel)
 }

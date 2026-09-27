@@ -270,6 +270,14 @@ func TestXDSPolicyManager_Logging(t *testing.T) {
 	}
 	assert.True(t, sawPrefixLogger, "expected xdsclient PrefixLogger messages ([xds-client ...]) to be routed to *zap.Logger")
 	assert.True(t, sawManagerLog, "expected manager lifecycle logs to be emitted to *zap.Logger")
+
+	dl := newZapDepthLogger(logger)
+	assert.True(t, dl.V(2), "V(2) should be enabled when zap is at DebugLevel")
+	assert.False(t, dl.V(9), "V(9) per-RPC logging should be disabled")
+
+	infoCore, _ := observer.New(zapcore.InfoLevel)
+	infoDL := newZapDepthLogger(zap.New(infoCore))
+	assert.False(t, infoDL.V(2), "V(2) should be disabled when zap is at InfoLevel")
 }
 
 func TestXDSPolicyManager_CSDSDumpResources(t *testing.T) {

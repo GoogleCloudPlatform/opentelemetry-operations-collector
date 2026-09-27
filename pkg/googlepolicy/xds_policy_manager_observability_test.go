@@ -88,9 +88,14 @@ func TestXDSPolicyManager_Metrics(t *testing.T) {
 	registerDummyDriverForTest(t)
 	resetActivePolicySet(t)
 
-	ackCh := make(chan *discoveryv3.DiscoveryRequest, 1)
+	ackCh := make(chan *discoveryv3.DiscoveryRequest, 2)
 	nackCh := make(chan *discoveryv3.DiscoveryRequest, 1)
 	closeStreamCh := make(chan struct{})
+
+	invalidResource := &anypb.Any{
+		TypeUrl: "type.googleapis.com/does.not.Exist",
+		Value:   []byte("invalid"),
+	}
 
 	srv := &fakeADSServer{streamOpened: make(chan struct{}, 8)}
 	srv.handlers = []func(discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error{
@@ -99,29 +104,53 @@ func TestXDSPolicyManager_Metrics(t *testing.T) {
 			_, _ = srv.recv(stream)
 			return grpcstatus.Error(codes.Unavailable, "simulated control plane failure")
 		},
-		// Second stream: sends valid rev-1 (ACKed), then invalid rev-bad (NACKed), then waits for closeStreamCh.
+		// Second stream: sends 2 valid resources in rev-1 (ACKed), then 1 valid + 1 invalid in rev-partial (ACKed),
+		// then 2 invalid resources in rev-bad (NACKed), then waits for closeStreamCh.
 		func(stream discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error {
 			if _, err := srv.recv(stream); err != nil {
 				return err
 			}
-			if err := stream.Send(validRevisionResponse(t, "rev-1", "nonce-1", "log-filter")); err != nil {
+			if err := stream.Send(&discoveryv3.DiscoveryResponse{
+				VersionInfo: "rev-1",
+				Nonce:       "nonce-1",
+				TypeUrl:     xdsPolicyTypeURL,
+				Resources: []*anypb.Any{
+					policyResource(t, "log-filter"),
+					policyResource(t, "trace-filter"),
+				},
+			}); err != nil {
 				return err
 			}
-			ack, err := srv.recv(stream)
+			ack1, err := srv.recv(stream)
 			if err != nil {
 				return err
 			}
-			ackCh <- ack
+			ackCh <- ack1
 
-			// Send an invalid revision to trigger ResourceUpdateInvalid and nacked_but_cached state.
+			// Partial revision: 1 valid resource and 1 invalid resource skipped inside DecodeAll.
+			if err := stream.Send(&discoveryv3.DiscoveryResponse{
+				VersionInfo: "rev-partial",
+				Nonce:       "nonce-partial",
+				TypeUrl:     xdsPolicyTypeURL,
+				Resources: []*anypb.Any{
+					policyResource(t, "metric-filter"),
+					invalidResource,
+				},
+			}); err != nil {
+				return err
+			}
+			ack2, err := srv.recv(stream)
+			if err != nil {
+				return err
+			}
+			ackCh <- ack2
+
+			// Send an invalid revision with 2 invalid resources to trigger ResourceUpdateInvalid (+2) and nacked_but_cached state.
 			if err := stream.Send(&discoveryv3.DiscoveryResponse{
 				VersionInfo: "rev-bad",
 				Nonce:       "nonce-2",
 				TypeUrl:     xdsPolicyTypeURL,
-				Resources: []*anypb.Any{{
-					TypeUrl: "type.googleapis.com/does.not.Exist",
-					Value:   []byte("invalid"),
-				}},
+				Resources:   []*anypb.Any{invalidResource, invalidResource},
 			}); err != nil {
 				return err
 			}
@@ -160,11 +189,13 @@ func TestXDSPolicyManager_Metrics(t *testing.T) {
 	require.NoError(t, m.Start())
 	t.Cleanup(func() { require.NoError(t, m.Stop()) })
 
-	// 1. Wait for ACK of rev-1 and NACK of rev-bad.
-	select {
-	case <-ackCh:
-	case <-time.After(5 * time.Second):
-		t.Fatal("timed out waiting for ACK")
+	// 1. Wait for ACKs of rev-1 and rev-partial, and NACK of rev-bad.
+	for range 2 {
+		select {
+		case <-ackCh:
+		case <-time.After(5 * time.Second):
+			t.Fatal("timed out waiting for ACK")
+		}
 	}
 	select {
 	case <-nackCh:
@@ -178,14 +209,14 @@ func TestXDSPolicyManager_Metrics(t *testing.T) {
 
 	validPts := findInt64SumPoints(rm, "grpc.xds_client.resource_updates_valid")
 	require.Len(t, validPts, 1, "expected 1 series for grpc.xds_client.resource_updates_valid")
-	assert.Equal(t, int64(1), validPts[0].Value)
+	assert.Equal(t, int64(3), validPts[0].Value, "2 valid from rev-1 + 1 valid from rev-partial")
 	assert.Equal(t, "127.0.0.1:8080", attrValue(validPts[0].Attributes, "grpc.target"))
 	assert.Equal(t, "127.0.0.1:8080", attrValue(validPts[0].Attributes, "grpc.xds.server"))
 	assert.Equal(t, "TelemetryCollector", attrValue(validPts[0].Attributes, "grpc.xds.resource_type"))
 
 	invalidPts := findInt64SumPoints(rm, "grpc.xds_client.resource_updates_invalid")
 	require.Len(t, invalidPts, 1, "expected 1 series for grpc.xds_client.resource_updates_invalid")
-	assert.Equal(t, int64(1), invalidPts[0].Value)
+	assert.Equal(t, int64(3), invalidPts[0].Value, "1 skipped invalid from rev-partial + 2 invalid from rev-bad")
 
 	failurePts := findInt64SumPoints(rm, "grpc.xds_client.server_failure")
 	require.Len(t, failurePts, 1, "expected 1 series for grpc.xds_client.server_failure from stream 1")

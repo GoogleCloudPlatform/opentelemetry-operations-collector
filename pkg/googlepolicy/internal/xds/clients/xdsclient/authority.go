@@ -370,9 +370,22 @@ func (a *authority) handleADSResourceUpdate(serverConfig *ServerConfig, rType Re
 
 		if err := uErr.Err; err != nil {
 			if a.metricsReporter != nil {
-				a.metricsReporter.ReportMetric(&metrics.ResourceUpdateInvalid{
-					ServerURI: serverConfig.ServerIdentifier.ServerURI, ResourceType: rType.TypeName,
-				})
+				invalidCount := 1
+				if uErr.BatchDecoded {
+					invalidCount = uErr.InvalidCount
+				}
+				for range invalidCount {
+					a.metricsReporter.ReportMetric(&metrics.ResourceUpdateInvalid{
+						ServerURI: serverConfig.ServerIdentifier.ServerURI, ResourceType: rType.TypeName,
+					})
+				}
+				if uErr.BatchDecoded {
+					for range uErr.ValidCount {
+						a.metricsReporter.ReportMetric(&metrics.ResourceUpdateValid{
+							ServerURI: serverConfig.ServerIdentifier.ServerURI, ResourceType: rType.TypeName,
+						})
+					}
+				}
 			}
 
 			// Notify watchers only if this is not a duplicated error from the previous update.
@@ -401,9 +414,20 @@ func (a *authority) handleADSResourceUpdate(serverConfig *ServerConfig, rType Re
 		}
 
 		if a.metricsReporter != nil {
-			a.metricsReporter.ReportMetric(&metrics.ResourceUpdateValid{
-				ServerURI: serverConfig.ServerIdentifier.ServerURI, ResourceType: rType.TypeName,
-			})
+			validCount := 1
+			if uErr.BatchDecoded {
+				validCount = uErr.ValidCount
+				for range uErr.InvalidCount {
+					a.metricsReporter.ReportMetric(&metrics.ResourceUpdateInvalid{
+						ServerURI: serverConfig.ServerIdentifier.ServerURI, ResourceType: rType.TypeName,
+					})
+				}
+			}
+			for range validCount {
+				a.metricsReporter.ReportMetric(&metrics.ResourceUpdateValid{
+					ServerURI: serverConfig.ServerIdentifier.ServerURI, ResourceType: rType.TypeName,
+				})
+			}
 		}
 
 		if state.deletionIgnored {

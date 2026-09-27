@@ -66,8 +66,11 @@ type response struct {
 // dataAndErrTuple is a struct that holds a resource and an error. It is used to
 // return a resource and any associated error from a function.
 type dataAndErrTuple struct {
-	Resource ResourceData
-	Err      error
+	Resource     ResourceData
+	Err          error
+	ValidCount   int
+	InvalidCount int
+	BatchDecoded bool
 }
 
 // adsStreamEventHandler is an interface that defines the callbacks for events that

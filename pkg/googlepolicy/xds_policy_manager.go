@@ -534,6 +534,7 @@ func (d *telemetryCollectorDecoder) DecodeAll(resources []*xdsclient.AnyProto, o
 				version:  version,
 				rawBytes: d.m.getLastAppliedRawBytes(),
 			},
+			ValidCount: len(anyResources),
 		}, nil
 	}
 
@@ -553,12 +554,30 @@ func (d *telemetryCollectorDecoder) DecodeAll(resources []*xdsclient.AnyProto, o
 		)
 	}
 
+	validCount := len(anyResources)
+	var invalidCount int
+	if extractErr != nil || makeErr != nil {
+		validCount = 0
+		for _, anyRes := range anyResources {
+			resProtos, resExtractErr := extractPolicyProtosFromAnys([]*anypb.Any{anyRes})
+			_, resMakeErr := MakePolicySetFromProtos(options.Version, resProtos)
+			if resExtractErr != nil || resMakeErr != nil {
+				invalidCount++
+			} else {
+				validCount++
+			}
+		}
+	}
+
 	if err := errors.Join(extractErr, makeErr); err != nil && len(policySet.Policies) == 0 {
 		d.m.logger.Warn("xDS revision contains no usable policies, sending NACK",
 			zap.String("version", options.Version),
 			zap.Error(err),
 		)
-		return nil, err
+		return &xdsclient.DecodeResult{
+			ValidCount:   validCount,
+			InvalidCount: invalidCount,
+		}, err
 	}
 
 	if active := ActivePolicySet(); len(policySet.Policies) == 0 && active != nil && len(active.Policies) > 0 {
@@ -579,6 +598,8 @@ func (d *telemetryCollectorDecoder) DecodeAll(resources []*xdsclient.AnyProto, o
 			version:  options.Version,
 			rawBytes: rawBytes,
 		},
+		ValidCount:   validCount,
+		InvalidCount: invalidCount,
 	}, nil
 }
 

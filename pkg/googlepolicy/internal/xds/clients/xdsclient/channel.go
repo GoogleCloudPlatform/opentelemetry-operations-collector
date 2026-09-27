@@ -258,11 +258,29 @@ func (xc *xdsChannel) decodeResponse(rType *ResourceType, resp response) (map[st
 			return bd.DecodeAll(anyProtos, *opts)
 		}()
 		if err != nil {
+			invalidCount := len(resp.resources)
+			var validCount int
+			if result != nil && (result.ValidCount > 0 || result.InvalidCount > 0) {
+				validCount = result.ValidCount
+				invalidCount = result.InvalidCount
+			} else if invalidCount == 0 {
+				invalidCount = 1
+			}
 			perResourceErrors[""] = err
-			ret[""] = dataAndErrTuple{Err: xdsresource.NewError(xdsresource.ErrorTypeNACKed, err.Error())}
+			ret[""] = dataAndErrTuple{
+				Err:          xdsresource.NewError(xdsresource.ErrorTypeNACKed, err.Error()),
+				ValidCount:   validCount,
+				InvalidCount: invalidCount,
+				BatchDecoded: true,
+			}
 		} else if result != nil {
 			name := xdsresource.ParseName(result.Name).String()
-			ret[name] = dataAndErrTuple{Resource: result.Resource}
+			ret[name] = dataAndErrTuple{
+				Resource:     result.Resource,
+				ValidCount:   result.ValidCount,
+				InvalidCount: result.InvalidCount,
+				BatchDecoded: true,
+			}
 		}
 	} else {
 		for _, r := range resp.resources {

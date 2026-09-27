@@ -121,6 +121,12 @@ type DecodeResult struct {
 	// Resource contains the configuration associated with the decoded
 	// resource.
 	Resource ResourceData
+
+	// ValidCount and InvalidCount optionally report the number of valid and
+	// invalid resources processed by a BatchDecoder when multiple resources in
+	// a DiscoveryResponse are collapsed into a single DecodeResult.
+	ValidCount   int
+	InvalidCount int
 }
 
 // ResourceData contains the configuration data sent by the xDS management

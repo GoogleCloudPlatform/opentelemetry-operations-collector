@@ -187,7 +187,6 @@ func (s *adsStreamImpl) subscribe(typ ResourceType, name string) {
 		// subscription request for this type.
 		state = &resourceTypeState{
 			subscribedResources: make(map[string]*xdsresource.ResourceWatchState),
-			version:             typ.InitialVersion,
 		}
 		s.resourceTypeState[typ] = state
 	}

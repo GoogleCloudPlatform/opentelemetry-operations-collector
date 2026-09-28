@@ -45,10 +45,6 @@ type ResourceType struct {
 	// Decoder is used to deserialize and validate an xDS resource received
 	// from the xDS management server.
 	Decoder Decoder
-
-	// InitialVersion is an optional version string sent in the initial
-	// DiscoveryRequest when subscribing to this resource type.
-	InitialVersion string
 }
 
 // Decoder wraps the resource-type specific functionality for validation

@@ -427,7 +427,6 @@ func (m *xdsPolicyManager) run(ctx context.Context, cancel context.CancelFunc) {
 		TypeName:                   "TelemetryCollector",
 		AllResourcesRequiredInSotW: true,
 		Decoder:                    &telemetryCollectorDecoder{m: m},
-		InitialVersion:             m.LastAppliedVersion(),
 	}
 
 	cfg := xdsclient.Config{

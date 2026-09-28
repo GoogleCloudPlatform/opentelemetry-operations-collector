@@ -143,11 +143,7 @@ func newTestManager(t *testing.T, dialOpt grpc.DialOption) *xdsPolicyManager {
 	return m
 }
 
-// policyResource builds a DiscoveryResponse resource carrying a single policy.
-//
-// The body is a bare Struct with no policy type in it: routing is by message
-// identity, and dummyPolicyDriver is the driver registered for that message.
-func policyResource(t *testing.T, name string) *anypb.Any {
+func policyPayloadAny(t *testing.T, name string) *anypb.Any {
 	t.Helper()
 
 	payload, err := structpb.NewStruct(map[string]any{
@@ -158,12 +154,27 @@ func policyResource(t *testing.T, name string) *anypb.Any {
 	payloadAny, err := anypb.New(payload)
 	require.NoError(t, err)
 
+	return payloadAny
+}
+
+func collectorResource(t *testing.T, policies ...*anypb.Any) *anypb.Any {
+	t.Helper()
+
 	collectorAny, err := anypb.New(&xdsv1alpha1.TelemetryCollector{
-		Policies: []*anypb.Any{payloadAny},
+		Policies: policies,
 	})
 	require.NoError(t, err)
 
 	return collectorAny
+}
+
+// policyResource builds a DiscoveryResponse resource carrying a single policy.
+//
+// The body is a bare Struct with no policy type in it: routing is by message
+// identity, and dummyPolicyDriver is the driver registered for that message.
+func policyResource(t *testing.T, name string) *anypb.Any {
+	t.Helper()
+	return collectorResource(t, policyPayloadAny(t, name))
 }
 
 // resetActivePolicySet clears the package-global policy state so tests that
@@ -336,11 +347,13 @@ func TestXDSPolicyManager_ACKsRevisionWithSomeUsablePolicies(t *testing.T) {
 				Nonce:       "nonce-partial",
 				TypeUrl:     xdsPolicyTypeURL,
 				Resources: []*anypb.Any{
-					policyResource(t, "log-filter"),
-					{
-						TypeUrl: "type.googleapis.com/does.not.Exist",
-						Value:   []byte("garbage"),
-					},
+					collectorResource(t,
+						policyPayloadAny(t, "log-filter"),
+						&anypb.Any{
+							TypeUrl: "type.googleapis.com/does.not.Exist",
+							Value:   []byte("garbage"),
+						},
+					),
 				},
 			}); err != nil {
 				return err
@@ -371,8 +384,10 @@ func TestXDSPolicyManager_ACKsRevisionWithSomeUsablePolicies(t *testing.T) {
 	assert.Equal(t, "nonce-partial", ack.GetResponseNonce())
 
 	// The policy that loaded is applied; the undecodable resource is dropped.
+	require.Eventually(t, func() bool {
+		return ActivePolicySet() != nil
+	}, 5*time.Second, time.Millisecond)
 	active := ActivePolicySet()
-	require.NotNil(t, active)
 	assert.Equal(t, "rev-partial", active.RevisionID)
 	assert.Contains(t, active.Policies, "log-filter")
 	assert.Len(t, active.Policies, 1, "only the usable policy is applied")
@@ -524,7 +539,9 @@ func TestXDSPolicyManager_IgnoresUnrelatedResourceType(t *testing.T) {
 
 	first := <-responded
 	require.Equal(t, "rev-1", first.GetVersionInfo())
-	require.Equal(t, []string{"log-filter"}, activePolicyNames(t))
+	require.Eventually(t, func() bool {
+		return assert.ObjectsAreEqual([]string{"log-filter"}, activePolicyNames(t))
+	}, 5*time.Second, time.Millisecond)
 	close(firstAsserted)
 
 	<-unrelatedSent
@@ -535,7 +552,9 @@ func TestXDSPolicyManager_IgnoresUnrelatedResourceType(t *testing.T) {
 	assert.Equal(t, "rev-3", third.GetVersionInfo(), "the unrelated response must not be ACKed")
 
 	// rev-2 never touched the policy set; rev-3 replaced it as normal.
-	assert.Equal(t, []string{"trace-filter"}, activePolicyNames(t))
+	require.Eventually(t, func() bool {
+		return assert.ObjectsAreEqual([]string{"trace-filter"}, activePolicyNames(t))
+	}, 5*time.Second, time.Millisecond)
 	assert.Equal(t, "rev-3", ActivePolicySet().RevisionID)
 }
 
@@ -589,7 +608,9 @@ func TestXDSPolicyManager_SkipsAlreadyAppliedRevision(t *testing.T) {
 	t.Cleanup(func() { require.NoError(t, m.Stop()) })
 
 	<-responded
-	require.Equal(t, []string{"log-filter"}, activePolicyNames(t))
+	require.Eventually(t, func() bool {
+		return assert.ObjectsAreEqual([]string{"log-filter"}, activePolicyNames(t))
+	}, 5*time.Second, time.Millisecond)
 
 	// The repeat is still answered, so the control plane is not left waiting.
 	repeat := <-responded
@@ -650,12 +671,16 @@ func TestXDSPolicyManager_EmptyRevisionClearsPolicies(t *testing.T) {
 	t.Cleanup(func() { require.NoError(t, m.Stop()) })
 
 	<-responded
-	require.Equal(t, []string{"log-filter"}, activePolicyNames(t))
+	require.Eventually(t, func() bool {
+		return assert.ObjectsAreEqual([]string{"log-filter"}, activePolicyNames(t))
+	}, 5*time.Second, time.Millisecond)
 
 	cleared := <-responded
 	assert.Equal(t, "rev-2", cleared.GetVersionInfo())
 	assert.Nil(t, cleared.GetErrorDetail())
-	assert.Empty(t, activePolicyNames(t), "an empty revision for our own type clears the policy set")
+	require.Eventually(t, func() bool {
+		return len(activePolicyNames(t)) == 0
+	}, 5*time.Second, time.Millisecond, "an empty revision for our own type clears the policy set")
 }
 
 // TestXDSPolicyManager_StartWaitsForInitialPolicySet asserts the contract the
@@ -856,7 +881,9 @@ func TestXDSPolicyManager_AppliesRevisionAfterTimeout(t *testing.T) {
 	case <-time.After(10 * time.Second):
 		t.Fatal("timed out waiting for the late revision to be applied")
 	}
-	assert.Equal(t, []string{"late-filter"}, activePolicyNames(t))
+	require.Eventually(t, func() bool {
+		return assert.ObjectsAreEqual([]string{"late-filter"}, activePolicyNames(t))
+	}, 5*time.Second, time.Millisecond)
 }
 
 // TestXDSPolicyManager_StopDoesNotHangWhenStartRaces pins the fix for a

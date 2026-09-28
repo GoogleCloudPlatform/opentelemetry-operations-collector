@@ -104,8 +104,9 @@ func TestXDSPolicyManager_Metrics(t *testing.T) {
 			_, _ = srv.recv(stream)
 			return grpcstatus.Error(codes.Unavailable, "simulated control plane failure")
 		},
-		// Second stream: sends 2 valid resources in rev-1 (ACKed), then 1 valid + 1 invalid in rev-partial (ACKed),
-		// then 2 invalid resources in rev-bad (NACKed), then waits for closeStreamCh.
+		// Second stream: sends 1 valid TelemetryCollector resource in rev-1 (ACKed),
+		// then 1 partially valid TelemetryCollector resource in rev-partial (ACKed),
+		// then 1 invalid TelemetryCollector resource in rev-bad (NACKed), then waits for closeStreamCh.
 		func(stream discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error {
 			if _, err := srv.recv(stream); err != nil {
 				return err
@@ -115,8 +116,10 @@ func TestXDSPolicyManager_Metrics(t *testing.T) {
 				Nonce:       "nonce-1",
 				TypeUrl:     xdsPolicyTypeURL,
 				Resources: []*anypb.Any{
-					policyResource(t, "log-filter"),
-					policyResource(t, "trace-filter"),
+					collectorResource(t,
+						policyPayloadAny(t, "log-filter"),
+						policyPayloadAny(t, "trace-filter"),
+					),
 				},
 			}); err != nil {
 				return err
@@ -127,14 +130,16 @@ func TestXDSPolicyManager_Metrics(t *testing.T) {
 			}
 			ackCh <- ack1
 
-			// Partial revision: 1 valid resource and 1 invalid resource skipped inside DecodeAll.
+			// Partial revision: 1 valid policy and 1 invalid policy skipped inside Decode.
 			if err := stream.Send(&discoveryv3.DiscoveryResponse{
 				VersionInfo: "rev-partial",
 				Nonce:       "nonce-partial",
 				TypeUrl:     xdsPolicyTypeURL,
 				Resources: []*anypb.Any{
-					policyResource(t, "metric-filter"),
-					invalidResource,
+					collectorResource(t,
+						policyPayloadAny(t, "metric-filter"),
+						invalidResource,
+					),
 				},
 			}); err != nil {
 				return err
@@ -145,12 +150,14 @@ func TestXDSPolicyManager_Metrics(t *testing.T) {
 			}
 			ackCh <- ack2
 
-			// Send an invalid revision with 2 invalid resources to trigger ResourceUpdateInvalid (+2) and nacked_but_cached state.
+			// Send an invalid revision with no usable policies to trigger ResourceUpdateInvalid and nacked_but_cached state.
 			if err := stream.Send(&discoveryv3.DiscoveryResponse{
 				VersionInfo: "rev-bad",
 				Nonce:       "nonce-2",
 				TypeUrl:     xdsPolicyTypeURL,
-				Resources:   []*anypb.Any{invalidResource, invalidResource},
+				Resources: []*anypb.Any{
+					collectorResource(t, invalidResource, invalidResource),
+				},
 			}); err != nil {
 				return err
 			}
@@ -209,14 +216,14 @@ func TestXDSPolicyManager_Metrics(t *testing.T) {
 
 	validPts := findInt64SumPoints(rm, "grpc.xds_client.resource_updates_valid")
 	require.Len(t, validPts, 1, "expected 1 series for grpc.xds_client.resource_updates_valid")
-	assert.Equal(t, int64(3), validPts[0].Value, "2 valid from rev-1 + 1 valid from rev-partial")
+	assert.Equal(t, int64(2), validPts[0].Value, "1 valid TelemetryCollector from rev-1 + 1 valid from rev-partial")
 	assert.Equal(t, "127.0.0.1:8080", attrValue(validPts[0].Attributes, "grpc.target"))
 	assert.Equal(t, "127.0.0.1:8080", attrValue(validPts[0].Attributes, "grpc.xds.server"))
 	assert.Equal(t, "TelemetryCollector", attrValue(validPts[0].Attributes, "grpc.xds.resource_type"))
 
 	invalidPts := findInt64SumPoints(rm, "grpc.xds_client.resource_updates_invalid")
 	require.Len(t, invalidPts, 1, "expected 1 series for grpc.xds_client.resource_updates_invalid")
-	assert.Equal(t, int64(3), invalidPts[0].Value, "1 skipped invalid from rev-partial + 2 invalid from rev-bad")
+	assert.Equal(t, int64(1), invalidPts[0].Value, "1 invalid TelemetryCollector from rev-bad")
 
 	failurePts := findInt64SumPoints(rm, "grpc.xds_client.server_failure")
 	require.Len(t, failurePts, 1, "expected 1 series for grpc.xds_client.server_failure from stream 1")
@@ -342,8 +349,10 @@ func TestXDSPolicyManager_CSDSDumpResources(t *testing.T) {
 				Nonce:       "nonce-1",
 				TypeUrl:     xdsPolicyTypeURL,
 				Resources: []*anypb.Any{
-					policyResource(t, "log-filter"),
-					bareAny,
+					collectorResource(t,
+						policyPayloadAny(t, "log-filter"),
+						bareAny,
+					),
 				},
 			}); err != nil {
 				return err

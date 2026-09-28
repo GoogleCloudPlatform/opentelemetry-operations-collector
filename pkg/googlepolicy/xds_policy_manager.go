@@ -489,22 +489,39 @@ func (m *xdsPolicyManager) run(ctx context.Context) {
 	<-ctx.Done()
 }
 
-// policyResourceWatcher implements xdsclient.ResourceWatcher. Because SotW
-// policy activation happens synchronously inside telemetryCollectorDecoder.DecodeAll
-// prior to sending the ACK/NACK on the wire, this watcher's role is to release
-// adsFlowControl by invoking done() on every callback, and to unblock Start()
-// on initial resource or stream errors via ResourceError.
+// policyResourceWatcher implements xdsclient.ResourceWatcher. It activates
+// decoded policy sets on ResourceChanged, clears active policies on SotW
+// resource removal and unblocks Start() on ResourceError, and releases
+// adsFlowControl by invoking done() on every callback.
 type policyResourceWatcher struct {
 	m *xdsPolicyManager
 }
 
-func (*policyResourceWatcher) ResourceChanged(_ xdsclient.ResourceData, done func()) {
-	done()
+func (w *policyResourceWatcher) ResourceChanged(data xdsclient.ResourceData, done func()) {
+	defer done()
+	d, ok := data.(*policyResourceData)
+	if !ok || d == nil {
+		return
+	}
+	if d.version == "" || d.version != w.m.LastAppliedVersion() {
+		if active := ActivePolicySet(); len(d.policySet.Policies) == 0 && active != nil && len(active.Policies) > 0 {
+			w.m.logger.Warn("xDS revision contains no policies, clearing the active policy set",
+				zap.String("version", d.version),
+			)
+		}
+		SetActivePolicySet(d.policySet)
+		w.m.setLastAppliedState(d.version, d.rawBytes)
+	}
+	w.m.markReady()
 }
 
 func (w *policyResourceWatcher) ResourceError(_ error, done func()) {
+	defer done()
+	if active := ActivePolicySet(); active != nil && len(active.Policies) > 0 {
+		w.m.logger.Warn("xDS revision contains no policies, clearing the active policy set")
+		SetActivePolicySet(&PolicySet{Policies: map[string]*PolicySetEntry{}})
+	}
 	w.m.markReady()
-	done()
 }
 
 func (*policyResourceWatcher) AmbientError(_ error, done func()) {
@@ -512,8 +529,9 @@ func (*policyResourceWatcher) AmbientError(_ error, done func()) {
 }
 
 type policyResourceData struct {
-	version  string
-	rawBytes []byte
+	policySet *PolicySet
+	version   string
+	rawBytes  []byte
 }
 
 func (p *policyResourceData) Equal(other xdsclient.ResourceData) bool {
@@ -528,23 +546,15 @@ func (p *policyResourceData) Bytes() []byte {
 	return p.rawBytes
 }
 
-// telemetryCollectorDecoder implements xdsclient.Decoder and xdsclient.BatchDecoder.
+// telemetryCollectorDecoder implements xdsclient.Decoder.
 type telemetryCollectorDecoder struct {
 	m *xdsPolicyManager
 }
 
 var _ xdsclient.Decoder = (*telemetryCollectorDecoder)(nil)
-var _ xdsclient.BatchDecoder = (*telemetryCollectorDecoder)(nil)
 
 func (d *telemetryCollectorDecoder) Decode(resource *xdsclient.AnyProto, options xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
-	return d.DecodeAll([]*xdsclient.AnyProto{resource}, options)
-}
-
-func (d *telemetryCollectorDecoder) DecodeAll(resources []*xdsclient.AnyProto, options xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
-	anyResources := make([]*anypb.Any, len(resources))
-	for i, r := range resources {
-		anyResources[i] = r.ToAny()
-	}
+	anyResources := []*anypb.Any{resource.ToAny()}
 
 	d.m.logger.Info("Received xDS DiscoveryResponse",
 		zap.String("version", options.Version),
@@ -553,14 +563,13 @@ func (d *telemetryCollectorDecoder) DecodeAll(resources []*xdsclient.AnyProto, o
 
 	if version := options.Version; version != "" && version == d.m.LastAppliedVersion() {
 		d.m.logger.Debug("Re-ACKing an already applied xDS revision", zap.String("version", version))
-		d.m.markReady()
 		return &xdsclient.DecodeResult{
 			Name: "",
 			Resource: &policyResourceData{
-				version:  version,
-				rawBytes: d.m.getLastAppliedRawBytes(),
+				policySet: ActivePolicySet(),
+				version:   version,
+				rawBytes:  d.m.getLastAppliedRawBytes(),
 			},
-			ValidCount: len(anyResources),
 		}, nil
 	}
 
@@ -580,52 +589,23 @@ func (d *telemetryCollectorDecoder) DecodeAll(resources []*xdsclient.AnyProto, o
 		)
 	}
 
-	validCount := len(anyResources)
-	var invalidCount int
-	if extractErr != nil || makeErr != nil {
-		validCount = 0
-		for _, anyRes := range anyResources {
-			resProtos, resExtractErr := extractPolicyProtosFromAnys([]*anypb.Any{anyRes})
-			_, resMakeErr := MakePolicySetFromProtos(options.Version, resProtos)
-			if resExtractErr != nil || resMakeErr != nil {
-				invalidCount++
-			} else {
-				validCount++
-			}
-		}
-	}
-
 	if err := errors.Join(extractErr, makeErr); err != nil && len(policySet.Policies) == 0 {
 		d.m.logger.Warn("xDS revision contains no usable policies, sending NACK",
 			zap.String("version", options.Version),
 			zap.Error(err),
 		)
-		return &xdsclient.DecodeResult{
-			ValidCount:   validCount,
-			InvalidCount: invalidCount,
-		}, err
-	}
-
-	if active := ActivePolicySet(); len(policySet.Policies) == 0 && active != nil && len(active.Policies) > 0 {
-		d.m.logger.Warn("xDS revision contains no policies, clearing the active policy set",
-			zap.String("version", options.Version),
-		)
+		return &xdsclient.DecodeResult{Name: ""}, err
 	}
 
 	rawBytes := marshalCollectorBytes(policyProtos)
 
-	SetActivePolicySet(policySet)
-	d.m.setLastAppliedState(options.Version, rawBytes)
-	d.m.markReady()
-
 	return &xdsclient.DecodeResult{
 		Name: "",
 		Resource: &policyResourceData{
-			version:  options.Version,
-			rawBytes: rawBytes,
+			policySet: policySet,
+			version:   options.Version,
+			rawBytes:  rawBytes,
 		},
-		ValidCount:   validCount,
-		InvalidCount: invalidCount,
 	}, nil
 }
 

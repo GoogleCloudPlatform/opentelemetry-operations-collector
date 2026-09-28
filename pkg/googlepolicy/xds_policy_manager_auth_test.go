@@ -75,8 +75,6 @@ func TestTokenAuth_LocalTokenFailureIsUnavailable(t *testing.T) {
 
 	assert.Equal(t, codes.Unavailable, grpcstatus.Code(err),
 		"a local token fetch failure must not look like a credential rejection")
-	assert.False(t, isTerminalAuthError(err),
-		"a local token fetch failure must stay retryable")
 	assert.Contains(t, err.Error(), "metadata server unreachable",
 		"the underlying cause must survive so the log is diagnosable")
 }
@@ -85,34 +83,26 @@ func TestTokenAuth_LocalTokenFailureIsUnavailable(t *testing.T) {
 // client so the assertion covers what the transport does to the error, not just
 // what we return.
 //
-// This is the part worth testing end to end: gRPC rewrites a bare error from
-// per-RPC credentials into codes.Unauthenticated, which isTerminalAuthError
-// reads as a verdict on this collector and responds to by ending the xDS loop
-// permanently. Nothing in our package makes that visible, and a dependency bump
-// could change it, so the test pins the behaviour of both variants.
+// gRPC rewrites a bare error from per-RPC credentials into codes.Unauthenticated,
+// whereas wrapping the error with codes.Unavailable preserves the status code
+// across the transport.
 func TestTokenAuth_LocalTokenFailureIsRetryableThroughGRPC(t *testing.T) {
 	tokenErr := errors.New("metadata server unreachable")
 
 	tests := []struct {
-		name           string
-		creds          credentials.PerRPCCredentials
-		wantCode       codes.Code
-		wantTerminal   bool
-		wantTerminalBc string
+		name     string
+		creds    credentials.PerRPCCredentials
+		wantCode codes.Code
 	}{
 		{
-			name:           "bare error is relabelled by gRPC",
-			creds:          bareErrTokenAuth{ts: errTokenSource{err: tokenErr}},
-			wantCode:       codes.Unauthenticated,
-			wantTerminal:   true,
-			wantTerminalBc: "gRPC turns a bare per-RPC creds error into Unauthenticated, which ends the xDS loop for good -- this is the bug the status wrapping avoids",
+			name:     "bare error is relabelled by gRPC",
+			creds:    bareErrTokenAuth{ts: errTokenSource{err: tokenErr}},
+			wantCode: codes.Unauthenticated,
 		},
 		{
-			name:           "status-wrapped error survives",
-			creds:          insecureTokenAuth{&TokenAuth{TS: errTokenSource{err: tokenErr}}},
-			wantCode:       codes.Unavailable,
-			wantTerminal:   false,
-			wantTerminalBc: "a metadata server blip must leave the collector retrying",
+			name:     "status-wrapped error survives",
+			creds:    insecureTokenAuth{&TokenAuth{TS: errTokenSource{err: tokenErr}}},
+			wantCode: codes.Unavailable,
 		},
 	}
 
@@ -135,7 +125,6 @@ func TestTokenAuth_LocalTokenFailureIsRetryableThroughGRPC(t *testing.T) {
 			require.Error(t, err)
 
 			assert.Equal(t, tc.wantCode, grpcstatus.Code(err))
-			assert.Equal(t, tc.wantTerminal, isTerminalAuthError(err), tc.wantTerminalBc)
 		})
 	}
 }

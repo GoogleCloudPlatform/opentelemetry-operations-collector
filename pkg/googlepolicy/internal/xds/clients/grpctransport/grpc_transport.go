@@ -28,7 +28,6 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
-	"google.golang.org/grpc/encoding"
 	"google.golang.org/grpc/grpclog"
 	"google.golang.org/grpc/keepalive"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients"
@@ -210,17 +209,6 @@ func (s *stream) Recv() ([]byte, error) {
 		return nil, err
 	}
 	return typedRes, nil
-}
-
-// ByteCodec returns a gRPC codec that marshals and unmarshals raw []byte
-// protobuf frames without re-encoding.
-func ByteCodec() encoding.Codec {
-	return &byteCodec{}
-}
-
-// NewClientStream wraps a grpc.ClientStream as a clients.Stream.
-func NewClientStream(s grpc.ClientStream) clients.Stream {
-	return &stream{stream: s}
 }
 
 // byteCodec here is still sending proto messages. It's just they are

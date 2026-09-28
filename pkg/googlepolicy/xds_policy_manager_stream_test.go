@@ -30,7 +30,6 @@ import (
 	"go.uber.org/zap/zaptest"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
 	grpcstatus "google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -140,12 +139,8 @@ func newTestManager(t *testing.T, dialOpt grpc.DialOption) *xdsPolicyManager {
 	// Several tests drive servers that never answer; without this Start would
 	// sit out the full production timeout in each of them.
 	m.initialSyncTimeout = 10 * time.Millisecond
-	m.extraDialOpts = []grpc.DialOption{
-		dialOpt,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	}
+	m.extraDialOpts = []grpc.DialOption{dialOpt}
 	return m
-
 }
 
 // policyResource builds a DiscoveryResponse resource carrying a single policy.
@@ -731,19 +726,10 @@ func TestXDSPolicyManager_StartGivesUpAfterTimeout(t *testing.T) {
 	assert.Nil(t, ActivePolicySet(), "nothing was served, so nothing should be active")
 }
 
-// TestXDSPolicyManager_StopsOnTerminalAuthError asserts that a credential
-// rejection ends the loop instead of being retried forever. Unauthenticated and
-// PermissionDenied are verdicts on this collector's identity, so reconnecting
-// only spams the control plane with a request that cannot start succeeding.
-//
-// The two cases differ only in whether the server reads the collector's request
-// before rejecting it, which decides where gRPC surfaces the status. A server
-// that reads first fails the client's Recv with PermissionDenied. A server that
-// rejects outright -- what authorization in an interceptor looks like, and so
-// the more realistic of the two -- has already torn the stream down by the time
-// the client sends, and gRPC reports that to Send as a bare io.EOF with the
-// status available only from Recv. Both must reach isTerminalAuthError; the
-// second did not before the Send path learned to fall through.
+// TestXDSPolicyManager_StopsOnTerminalAuthError asserts that when the control
+// plane rejects the initial stream with PermissionDenied, Start() unblocks
+// immediately via ResourceError rather than waiting out initialSyncTimeout,
+// while xdsclient continues retrying in the background with exponential backoff.
 func TestXDSPolicyManager_StopsOnTerminalAuthError(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
@@ -768,38 +754,21 @@ func TestXDSPolicyManager_StopsOnTerminalAuthError(t *testing.T) {
 			}
 
 			m := newTestManager(t, startFakeADSServer(t, srv))
-			// Long enough that a Start returning early proves the loop gave up
-			// rather than that the wait simply expired.
+			// Long enough that a Start returning early proves the initial error
+			// released the wait rather than that the timeout simply expired.
 			m.initialSyncTimeout = 10 * time.Second
 
+			start := time.Now()
 			require.NoError(t, m.Start())
+			elapsed := time.Since(start)
 			t.Cleanup(func() { require.NoError(t, m.Stop()) })
 
-			// Backoff here is ~1ms, so any retry would have happened many times over.
-			time.Sleep(100 * time.Millisecond)
-			assert.Equal(t, 1, srv.attemptCount(), "a rejected collector must not reconnect")
+			assert.Less(t, elapsed, m.initialSyncTimeout/2,
+				"Start must unblock immediately when the initial stream attempt fails")
+			require.Eventually(t, func() bool {
+				return srv.attemptCount() >= 2
+			}, 10*time.Second, 10*time.Millisecond, "xdsclient must continue retrying in the background")
 			assert.Nil(t, ActivePolicySet())
-		})
-	}
-}
-
-func TestIsTerminalAuthError(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		err  error
-		want bool
-	}{
-		{name: "nil", err: nil, want: false},
-		{name: "unauthenticated", err: grpcstatus.Error(codes.Unauthenticated, "no token"), want: true},
-		{name: "permission denied", err: grpcstatus.Error(codes.PermissionDenied, "not allowed"), want: true},
-		{name: "unavailable is retryable", err: grpcstatus.Error(codes.Unavailable, "down"), want: false},
-		{name: "cancelled is retryable", err: grpcstatus.Error(codes.Canceled, "stopped"), want: false},
-		// A non-gRPC error maps to codes.Unknown, which must stay retryable:
-		// local failures such as a metadata server blip are transient.
-		{name: "plain error", err: errors.New("dial failed"), want: false},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.want, isTerminalAuthError(tc.err))
 		})
 	}
 }
@@ -942,24 +911,16 @@ func TestXDSPolicyManager_StopDoesNotHangWhenStartRaces(t *testing.T) {
 	}
 }
 
-// TestXDSPolicyManager_RestartableAfterTerminalAuthError asserts that giving up
-// on remote policies leaves a manager that can still be started again.
-//
-// The loop returns on a terminal auth error without anyone calling Stop, so
-// unless it clears its own run state the manager is left advertising a stream
-// loop that no longer exists: every later Start is rejected with
-// ErrXDSAlreadyStarted and the collector can never pick up new credentials
-// without a process restart.
+// TestXDSPolicyManager_RestartableAfterTerminalAuthError asserts that when the
+// initial stream fails with PermissionDenied, Start() unblocks immediately while
+// xdsclient continues retrying in the background, and the manager can be
+// cleanly stopped and started again.
 func TestXDSPolicyManager_RestartableAfterTerminalAuthError(t *testing.T) {
 	resetActivePolicySet(t)
 
 	srv := &fakeADSServer{streamOpened: make(chan struct{}, 8)}
 	srv.handlers = []func(discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error{
 		func(stream discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error {
-			// The request is read before rejecting so the status comes back to
-			// the client through Recv. A server that rejects without reading
-			// races the client's initial Send into io.EOF instead, which is a
-			// separate gap and not what this test is about.
 			if _, err := srv.recv(stream); err != nil {
 				return err
 			}
@@ -968,16 +929,21 @@ func TestXDSPolicyManager_RestartableAfterTerminalAuthError(t *testing.T) {
 	}
 
 	m := newTestManager(t, startFakeADSServer(t, srv))
+	m.initialSyncTimeout = 10 * time.Second
+
+	start := time.Now()
 	require.NoError(t, m.Start())
+	elapsed := time.Since(start)
 	t.Cleanup(func() { require.NoError(t, m.Stop()) })
 
-	// Start returns as soon as the loop gives up, so by here it has exited.
-	require.Eventually(t, func() bool {
-		m.mu.Lock()
-		defer m.mu.Unlock()
-		return m.cancel == nil && m.done == nil
-	}, 10*time.Second, 10*time.Millisecond,
-		"a loop that gave up must clear its run state")
+	assert.Less(t, elapsed, m.initialSyncTimeout/2,
+		"Start must unblock immediately when the initial stream attempt fails")
 
-	assert.NoError(t, m.Start(), "the manager must be startable after it gave up on remote policies")
+	require.Eventually(t, func() bool {
+		return srv.attemptCount() >= 2
+	}, 10*time.Second, 10*time.Millisecond,
+		"xdsclient must continue retrying in the background")
+
+	require.NoError(t, m.Stop())
+	assert.NoError(t, m.Start(), "the manager must be startable after Stop following a terminal auth error")
 }

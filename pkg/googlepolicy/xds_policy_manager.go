@@ -26,7 +26,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	discoveryv3 "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
@@ -277,7 +276,7 @@ func (m *xdsPolicyManager) Start() error {
 	go func() {
 		defer close(done)
 		defer m.finishRun(done)
-		m.run(ctx, cancel)
+		m.run(ctx)
 	}()
 
 	select {
@@ -410,17 +409,38 @@ func (m *xdsPolicyManager) backoffDelay(retries int) time.Duration {
 	return time.Duration(float64(base) * jitter)
 }
 
-func (m *xdsPolicyManager) run(ctx context.Context, cancel context.CancelFunc) {
+func (m *xdsPolicyManager) run(ctx context.Context) {
 	defer m.markReady()
 
 	metricsReporter := newOTelMetricsReporter(m.meterProvider, m.serverAddr)
 	defer metricsReporter.close()
 
-	tb := &policyTransportBuilder{
-		m:      m,
-		mCtx:   ctx,
-		cancel: cancel,
+	var credsBundle credentials.Bundle
+	if m.insecure {
+		credsBundle = insecure.NewBundle()
+	} else {
+		credsBundle = &tlsCredentialsBundle{
+			transportCreds: credentials.NewTLS(&tls.Config{MinVersion: tls.VersionTLS12}),
+			perRPCCreds:    &TokenAuth{serverAddr: m.serverAddr},
+		}
 	}
+
+	tb := grpctransport.NewBuilder(map[string]grpctransport.Config{
+		"default": {
+			Credentials: credsBundle,
+			GRPCNewClient: func(target string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
+				opts = append(opts,
+					grpc.WithKeepaliveParams(keepalive.ClientParameters{
+						Time:                keepaliveTime,
+						Timeout:             keepaliveTimeout,
+						PermitWithoutStream: false,
+					}),
+				)
+				opts = append(opts, m.extraDialOpts...)
+				return grpc.NewClient(target, opts...)
+			},
+		},
+	})
 
 	rType := xdsclient.ResourceType{
 		TypeURL:                    xdsPolicyTypeURL,
@@ -431,7 +451,10 @@ func (m *xdsPolicyManager) run(ctx context.Context, cancel context.CancelFunc) {
 
 	cfg := xdsclient.Config{
 		Servers: []xdsclient.ServerConfig{{
-			ServerIdentifier: clients.ServerIdentifier{ServerURI: m.serverAddr},
+			ServerIdentifier: clients.ServerIdentifier{
+				ServerURI:  m.serverAddr,
+				Extensions: grpctransport.ServerIdentifierExtension{ConfigName: "default"},
+			},
 		}},
 		Node: clients.Node{
 			ID:       m.collectorID,
@@ -460,7 +483,7 @@ func (m *xdsPolicyManager) run(ctx context.Context, cancel context.CancelFunc) {
 		client.Close()
 	}()
 
-	cancelWatch := client.WatchResource(xdsPolicyTypeURL, "", &policyResourceWatcher{})
+	cancelWatch := client.WatchResource(xdsPolicyTypeURL, "", &policyResourceWatcher{m: m})
 	defer cancelWatch()
 
 	<-ctx.Done()
@@ -469,14 +492,18 @@ func (m *xdsPolicyManager) run(ctx context.Context, cancel context.CancelFunc) {
 // policyResourceWatcher implements xdsclient.ResourceWatcher. Because SotW
 // policy activation happens synchronously inside telemetryCollectorDecoder.DecodeAll
 // prior to sending the ACK/NACK on the wire, this watcher's role is to release
-// adsFlowControl by invoking done() on every callback.
-type policyResourceWatcher struct{}
+// adsFlowControl by invoking done() on every callback, and to unblock Start()
+// on initial resource or stream errors via ResourceError.
+type policyResourceWatcher struct {
+	m *xdsPolicyManager
+}
 
 func (*policyResourceWatcher) ResourceChanged(_ xdsclient.ResourceData, done func()) {
 	done()
 }
 
-func (*policyResourceWatcher) ResourceError(_ error, done func()) {
+func (w *policyResourceWatcher) ResourceError(_ error, done func()) {
+	w.m.markReady()
 	done()
 }
 
@@ -616,145 +643,6 @@ func marshalCollectorBytes(policyProtos []proto.Message) []byte {
 	return rawBytes
 }
 
-// policyTransportBuilder implements clients.TransportBuilder with lazy dialing
-// and synchronous terminal auth error interception.
-type policyTransportBuilder struct {
-	m      *xdsPolicyManager
-	mCtx   context.Context
-	cancel context.CancelFunc
-}
-
-func (b *policyTransportBuilder) Build(_ clients.ServerIdentifier) (clients.Transport, error) {
-	return &policyTransport{
-		m:      b.m,
-		mCtx:   b.mCtx,
-		cancel: b.cancel,
-	}, nil
-}
-
-type policyTransport struct {
-	m                  *xdsPolicyManager
-	mCtx               context.Context
-	cancel             context.CancelFunc
-	terminalAuthFailed atomic.Bool
-
-	mu sync.Mutex
-	cc *grpc.ClientConn
-}
-
-func (pt *policyTransport) abortOnTerminalAuth(err error) {
-	if pt.terminalAuthFailed.CompareAndSwap(false, true) {
-		pt.m.logger.Error("xDS control plane rejected this collector's credentials; giving up on remote policies and continuing on built-in policies",
-			zap.String("server", pt.m.serverAddr),
-			zap.String("fleet", pt.m.fleetID),
-			zap.String("collector_id", pt.m.collectorID),
-			zap.Error(err),
-		)
-		pt.m.markReady()
-		pt.cancel()
-	}
-}
-
-func (pt *policyTransport) NewStream(streamCtx context.Context, method string) (clients.Stream, error) {
-	if pt.mCtx.Err() != nil || pt.terminalAuthFailed.Load() {
-		return nil, context.Canceled
-	}
-
-	pt.mu.Lock()
-	cc := pt.cc
-	if cc == nil {
-		var err error
-		cc, err = pt.m.dial(pt.mCtx)
-		if err != nil {
-			pt.mu.Unlock()
-			if isTerminalAuthError(err) {
-				pt.abortOnTerminalAuth(err)
-				return nil, err
-			}
-			pt.m.logger.Error("Failed to connect to xDS server, retrying",
-				zap.String("server", pt.m.serverAddr),
-				zap.Error(err),
-			)
-			return nil, err
-		}
-		pt.cc = cc
-	}
-	pt.mu.Unlock()
-
-	combinedCtx, cancelStream := context.WithCancel(streamCtx)
-	stopWatch := context.AfterFunc(pt.mCtx, cancelStream)
-
-	s, err := cc.NewStream(combinedCtx, &grpc.StreamDesc{ClientStreams: true, ServerStreams: true}, method)
-	if err != nil {
-		stopWatch()
-		cancelStream()
-		if isTerminalAuthError(err) {
-			pt.abortOnTerminalAuth(err)
-		}
-		return nil, err
-	}
-
-	return &policyStream{
-		inner:        grpctransport.NewClientStream(s),
-		pt:           pt,
-		stopWatch:    stopWatch,
-		cancelStream: cancelStream,
-	}, nil
-}
-
-func (pt *policyTransport) Close() {
-	pt.mu.Lock()
-	cc := pt.cc
-	pt.cc = nil
-	pt.mu.Unlock()
-	if cc != nil {
-		_ = cc.Close()
-	}
-}
-
-type policyStream struct {
-	inner        clients.Stream
-	pt           *policyTransport
-	stopWatch    func() bool
-	cancelStream context.CancelFunc
-}
-
-func (ps *policyStream) Send(msg []byte) error {
-	return ps.inner.Send(msg)
-}
-
-func (ps *policyStream) Recv() ([]byte, error) {
-	msg, err := ps.inner.Recv()
-	if err != nil {
-		ps.stopWatch()
-		ps.cancelStream()
-		if isTerminalAuthError(err) {
-			ps.pt.abortOnTerminalAuth(err)
-		} else if ps.pt.mCtx.Err() == nil {
-			ps.pt.m.logger.Warn("xDS stream closed, reconnecting",
-				zap.String("server", ps.pt.m.serverAddr),
-				zap.String("last_applied_version", ps.pt.m.LastAppliedVersion()),
-				zap.Error(err),
-			)
-		}
-		return nil, err
-	}
-	return msg, nil
-}
-
-func isTerminalAuthError(err error) bool {
-	if err == nil {
-		return false
-	}
-
-	switch grpcstatus.Code(err) {
-	case codes.Unauthenticated, codes.PermissionDenied:
-		return true
-	default:
-		return false
-	}
-}
-
 // extractPolicyProtos decodes the resources of a DiscoveryResponse into the
 // policy protos they carry, ready for MakePolicySetFromProtos.
 func extractPolicyProtos(resp *discoveryv3.DiscoveryResponse) ([]proto.Message, error) {
@@ -826,34 +714,23 @@ func protoFromAny(msgAny *anypb.Any) (proto.Message, error) {
 	return msg, nil
 }
 
-func (m *xdsPolicyManager) dial(ctx context.Context) (*grpc.ClientConn, error) {
-	dialOpts := []grpc.DialOption{
-		grpc.WithKeepaliveParams(keepalive.ClientParameters{
-			Time:                keepaliveTime,
-			Timeout:             keepaliveTimeout,
-			PermitWithoutStream: false,
-		}),
-		grpc.WithDefaultCallOptions(grpc.ForceCodec(grpctransport.ByteCodec())),
-	}
+type tlsCredentialsBundle struct {
+	transportCreds credentials.TransportCredentials
+	perRPCCreds    credentials.PerRPCCredentials
+}
 
-	if m.insecure {
-		dialOpts = append(dialOpts, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	} else {
-		tokenSource, err := ResolveTokenSource(ctx, m.serverAddr)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve credentials: %w", err)
-		}
+var _ credentials.Bundle = (*tlsCredentialsBundle)(nil)
 
-		tlsCreds := credentials.NewTLS(&tls.Config{MinVersion: tls.VersionTLS12})
-		dialOpts = append(dialOpts, grpc.WithTransportCredentials(tlsCreds))
-		if tokenSource != nil {
-			dialOpts = append(dialOpts, grpc.WithPerRPCCredentials(&TokenAuth{TS: tokenSource}))
-		}
-	}
+func (b *tlsCredentialsBundle) TransportCredentials() credentials.TransportCredentials {
+	return b.transportCreds
+}
 
-	dialOpts = append(dialOpts, m.extraDialOpts...)
+func (b *tlsCredentialsBundle) PerRPCCredentials() credentials.PerRPCCredentials {
+	return b.perRPCCreds
+}
 
-	return grpc.NewClient(m.serverAddr, dialOpts...)
+func (b *tlsCredentialsBundle) NewWithMode(string) (credentials.Bundle, error) {
+	return b, nil
 }
 
 // ResolveTokenSource returns a TokenSource providing Google OIDC ID tokens.
@@ -904,13 +781,28 @@ func (s *GoogleIDTokenSource) Token() (*oauth2.Token, error) {
 
 // TokenAuth adapts an oauth2.TokenSource to gRPC's credentials.PerRPCCredentials interface.
 type TokenAuth struct {
-	TS oauth2.TokenSource
+	mu         sync.Mutex
+	TS         oauth2.TokenSource
+	serverAddr string
 }
 
 var _ credentials.PerRPCCredentials = (*TokenAuth)(nil)
 
 func (a *TokenAuth) GetRequestMetadata(ctx context.Context, uri ...string) (map[string]string, error) {
-	tok, err := a.TS.Token()
+	a.mu.Lock()
+	ts := a.TS
+	if ts == nil && a.serverAddr != "" {
+		var err error
+		ts, err = ResolveTokenSource(ctx, a.serverAddr)
+		if err != nil {
+			a.mu.Unlock()
+			return nil, grpcstatus.Errorf(codes.Unavailable, "failed to resolve credentials: %v", err)
+		}
+		a.TS = ts
+	}
+	a.mu.Unlock()
+
+	tok, err := ts.Token()
 	if err != nil {
 		return nil, grpcstatus.Errorf(codes.Unavailable, "failed to obtain per-RPC auth token: %v", err)
 	}

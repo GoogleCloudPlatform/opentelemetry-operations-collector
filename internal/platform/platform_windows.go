@@ -23,12 +23,14 @@ import (
 func getWindowsBuildNumber() string {
 	key, err := registry.OpenKey(registry.LOCAL_MACHINE, `SOFTWARE\Microsoft\Windows NT\CurrentVersion`, registry.QUERY_VALUE)
 	if err != nil {
-		log.Fatalf("could not open CurrentVersion key: %v", err)
+		log.Printf("could not open CurrentVersion key: %v", err)
+		return ""
 	}
 	defer key.Close()
 	build, _, err := key.GetStringValue("CurrentBuildNumber")
 	if err != nil {
-		log.Fatalf("could not read CurrentBuildNumber: %v", err)
+		log.Printf("could not read CurrentBuildNumber: %v", err)
+		return ""
 	}
 	return build
 }

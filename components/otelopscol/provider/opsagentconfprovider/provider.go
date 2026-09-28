@@ -22,7 +22,6 @@ import (
 	"runtime"
 	"strings"
 
-	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/apps"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/confgenerator"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/self_metrics"
 	"go.opentelemetry.io/collector/confmap"
@@ -58,14 +57,6 @@ func (p *provider) Retrieve(ctx context.Context, uri string, watcher confmap.Wat
 		}
 	}
 
-	outDir := os.Getenv("RUNTIME_DIRECTORY")
-	if outDir == "" {
-		if runtime.GOOS == "windows" {
-			outDir = filepath.Join(os.Getenv("PROGRAMDATA"), "Google/Cloud Operations/Ops Agent/generated_configs/otel")
-		} else {
-			outDir = "/run/google-cloud-ops-agent"
-		}
-	}
 	stateDir := os.Getenv("STATE_DIRECTORY")
 	if stateDir == "" {
 		if runtime.GOOS == "windows" {
@@ -86,21 +77,16 @@ func (p *provider) Retrieve(ctx context.Context, uri string, watcher confmap.Wat
 		}
 	}
 
-	uc, err := confgenerator.MergeConfFiles(ctx, configPath)
+	userUc, uc, err := confgenerator.ReadAndMergeConfFiles(ctx, configPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to merge config files: %w", err)
 	}
 
-	if err := os.MkdirAll(outDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create runtime directory %q: %w", outDir, err)
+	if err := self_metrics.SetSelfMetrics(ctx, userUc, uc); err != nil {
+		return nil, fmt.Errorf("failed to set self metrics: %w", err)
 	}
 
-	err = self_metrics.GenerateOpsAgentSelfMetricsOTLPJSON(ctx, configPath, outDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate self metrics: %w", err)
-	}
-
-	otelConfig, err := uc.GenerateOtelConfig(ctx, logsDir, outDir, stateDir)
+	otelConfig, err := uc.GenerateOtelConfig(ctx, logsDir, stateDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate otel config: %w", err)
 	}

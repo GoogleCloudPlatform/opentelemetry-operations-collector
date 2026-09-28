@@ -28,7 +28,6 @@ components:
         - windowseventlog
         - windowsperfcounters
         - journald
-        - otlpjsonfile
         - dcgm
         - nvml
     processors:

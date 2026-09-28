@@ -90,15 +90,17 @@ func (r PrometheusMetrics) Pipelines(ctx context.Context) ([]otel.ReceiverPipeli
 			}
 		}
 	}
+	receiver, err := prometheusToOtelComponent(r)
+	if err != nil {
+		return nil, err
+	}
 	return []otel.ReceiverPipeline{otel.ReceiverPipeline{
-		Receiver: prometheusToOtelComponent(r),
+		Receiver: receiver,
 		Processors: map[string][]otel.Component{
 			// Expect metrics, without any additional processing.
-			"metrics": []otel.Component{
+			"metrics": append([]otel.Component{
 				otel.GroupByGMPAttrs_OTTL(),
-				otel.MetricUnknownCounter(),
-				otel.MetricsTransform(otel.AddPrefix("prometheus.googleapis.com")),
-			},
+			}, otel.GMPExportProcessors()...),
 		},
 		ResourceDetectionModes: map[string]otel.ResourceDetectionMode{
 			"metrics": otel.None,
@@ -111,11 +113,10 @@ func (r PrometheusMetrics) Pipelines(ctx context.Context) ([]otel.ReceiverPipeli
 //
 // Note: We copy over the prometheus scrape configs and create new ones so calls to `Pipelines()`
 // will return the same result everytime and not change the original prometheus config.
-func prometheusToOtelComponent(m PrometheusMetrics) otel.Component {
+func prometheusToOtelComponent(m PrometheusMetrics) (otel.Component, error) {
 	copyPromConfig, err := deepCopy(m.PromConfig)
 	if err != nil {
-		// This should never happen since we already validated the prometheus config.
-		panic(fmt.Errorf("failed to deep copy prometheus config: %w", err))
+		return otel.Component{}, fmt.Errorf("failed to deep copy prometheus config: %w", err)
 	}
 
 	// Escape the $ characters in the regexes.
@@ -133,7 +134,7 @@ func prometheusToOtelComponent(m PrometheusMetrics) otel.Component {
 	return otel.Component{
 		Type:   "prometheus",
 		Config: map[string]interface{}{"config": copyPromConfig},
-	}
+	}, nil
 }
 
 func deepCopy(config promconfig.Config) (promconfig.Config, error) {
@@ -159,7 +160,6 @@ func validatePrometheusConfig(sl validator.StructLevel) {
 
 	// Validate that the Prometheus config is valid.
 	if field, err := validatePrometheus(promConfig); err != nil {
-		fmt.Printf("Prometheus config validation failed with error: %v", err)
 		sl.ReportError(reflect.ValueOf(promConfig), "config", field, err.Error(), "")
 	}
 }

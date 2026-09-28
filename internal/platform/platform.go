@@ -16,7 +16,6 @@ package platform
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"strings"
 
@@ -74,7 +73,8 @@ func FromContext(ctx context.Context) Platform {
 func detect() Platform {
 	info, err := host.Info()
 	if err != nil {
-		log.Fatalf("Failed to detect platform: %v", err)
+		log.Printf("Failed to detect platform: %v", err)
+		info = &host.InfoStat{}
 	}
 	p := Platform{
 		HostInfo: info,
@@ -93,7 +93,7 @@ func (p Platform) Name() string {
 	} else if p.Type == Linux {
 		return "linux"
 	}
-	panic(fmt.Sprintf("unknown type %v", p.Type))
+	return "unknown"
 }
 
 func (p Platform) GetResource() (resourcedetector.Resource, error) {

@@ -66,7 +66,6 @@ logging:
 `), 0644)
 	require.NoError(t, err)
 
-	t.Setenv("RUNTIME_DIRECTORY", filepath.Join(tmpDir, "run"))
 	t.Setenv("STATE_DIRECTORY", filepath.Join(tmpDir, "state"))
 	t.Setenv("LOGS_DIRECTORY", filepath.Join(tmpDir, "log"))
 
@@ -80,6 +79,11 @@ logging:
 	}).TestContext(context.Background())
 	ret, err := p.Retrieve(ctx, "opsagentconf:"+configPath, nil)
 	require.NoError(t, err)
+
+	entries, err := os.ReadDir(tmpDir)
+	require.NoError(t, err)
+	require.Len(t, entries, 1)
+	require.Equal(t, "config.yaml", entries[0].Name())
 
 	conf, err := ret.AsConf()
 	require.NoError(t, err)

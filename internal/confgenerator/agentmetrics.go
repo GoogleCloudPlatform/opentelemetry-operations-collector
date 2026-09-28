@@ -17,8 +17,6 @@ package confgenerator
 import (
 	"context"
 	"fmt"
-	"path/filepath"
-	"time"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/confgenerator/otel"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/confgenerator/otel/ottl"
@@ -30,7 +28,6 @@ import (
 type AgentSelfMetrics struct {
 	MetricsVersionLabel string
 	OtelPort            int
-	OtelRuntimeDir      string
 }
 
 // Following reference : https://github.com/googleapis/googleapis/blob/master/google/rpc/code.proto
@@ -97,12 +94,6 @@ func (r AgentSelfMetrics) AddSelfMetricsPipelines(receiverPipelines map[string]o
 		ReceiverPipelineName: "agent_prometheus",
 		Processors:           r.LoggingMetricsPipelineProcessors(ctx),
 	}
-
-	receiverPipelines["ops_agent"] = r.OpsAgentPipeline(ctx)
-	pipelines["opsagent"] = otel.Pipeline{
-		Type:                 "metrics",
-		ReceiverPipelineName: "ops_agent",
-	}
 }
 
 func (r AgentSelfMetrics) PrometheusMetricsPipeline(ctx context.Context) otel.ReceiverPipeline {
@@ -147,6 +138,8 @@ func (r AgentSelfMetrics) OtelPipelineProcessors(ctx context.Context) []otel.Com
 	filteredMetrics := []string{
 		"otelcol_exporter_sent_metric_points",
 		"otelcol_exporter_send_failed_metric_points",
+		"ops_agent_enabled_receivers",
+		"ops_agent_feature_tracking",
 		durationCountMetric,
 	}
 	extraTransforms := []map[string]interface{}{
@@ -187,6 +180,16 @@ func (r AgentSelfMetrics) OtelPipelineProcessors(ctx context.Context) []otel.Com
 		otel.RenameMetric("otelcol_process_memory_rss", "agent/memory_usage",
 			// remove service.version label
 			otel.AggregateLabels("sum"),
+		),
+		otel.RenameMetric("ops_agent_enabled_receivers", "agent/ops_agent/enabled_receivers",
+			// change data type from double -> int64
+			otel.ToggleScalarDataType,
+			otel.AggregateLabels("sum", "telemetry_type", "receiver_type"),
+		),
+		otel.RenameMetric("ops_agent_feature_tracking", "agent/internal/ops/feature_tracking",
+			// change data type from double -> int64
+			otel.ToggleScalarDataType,
+			otel.AggregateLabels("sum", "module", "feature", "key", "value"),
 		),
 		apiRequestCount,
 	}
@@ -276,30 +279,6 @@ func (r AgentSelfMetrics) LoggingMetricsPipelineProcessors(ctx context.Context) 
 		// The processor "interval" outputs the last point in each 1 minute interval.
 		otel.Interval("1m"),
 		otel.MetricsTransform(otel.AddPrefix("agent.googleapis.com")),
-	}
-}
-
-func (r AgentSelfMetrics) OpsAgentPipeline(ctx context.Context) otel.ReceiverPipeline {
-	receiverConfig := map[string]any{
-		"include": []string{
-			filepath.Join(r.OtelRuntimeDir, "enabled_receivers_otlp.json"),
-			filepath.Join(r.OtelRuntimeDir, "feature_tracking_otlp.json")},
-		"replay_file":   true,
-		"poll_interval": time.Duration(60 * time.Second).String(),
-		"start_at":      "beginning",
-	}
-	return otel.ReceiverPipeline{
-		Receiver: otel.Component{
-			Type:   "otlpjsonfile",
-			Config: receiverConfig,
-		},
-		Processors: map[string][]otel.Component{
-			"metrics": {
-				otel.Transform("metric", "datapoint", []ottl.Statement{"set(time, Now())"}),
-				otel.MetricsRemoveInstrumentationLibraryLabelsAttributes(),
-				otel.MetricsRemoveServiceAttributes(),
-			},
-		},
 	}
 }
 

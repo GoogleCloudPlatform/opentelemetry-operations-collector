@@ -50,14 +50,9 @@ func setLogNameProcessor(ctx context.Context, logName string) LoggingProcessorMo
 	}
 }
 
-func otelSetLogNameComponents(ctx context.Context, logName string) []otel.Component {
+func otelSetLogNameComponents(ctx context.Context, logName string) ([]otel.Component, error) {
 	p := setLogNameProcessor(ctx, logName)
-	components, err := p.Processors(ctx)
-	if err != nil {
-		// We're generating a hard-coded config, so this should never fail.
-		panic(err)
-	}
-	return components
+	return p.Processors(ctx)
 }
 
 func otelFluentForwardSetLogNameComponents() []otel.Component {

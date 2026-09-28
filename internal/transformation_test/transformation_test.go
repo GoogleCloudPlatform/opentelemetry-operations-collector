@@ -31,7 +31,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/apps"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/confgenerator"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/confgenerator/resourcedetector"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/platform"
@@ -421,5 +420,5 @@ func init() {
 	confgenerator.LoggingProcessorTypes.RegisterType(func() confgenerator.LoggingProcessor { return &confgenerator.LoggingProcessorWindowsEventLogV1{} })
 	confgenerator.LoggingProcessorTypes.RegisterType(func() confgenerator.LoggingProcessor { return &confgenerator.LoggingProcessorWindowsEventLogV2{} })
 	confgenerator.LoggingProcessorTypes.RegisterType(func() confgenerator.LoggingProcessor { return &confgenerator.LoggingProcessorWindowsEventLogRawXML{} })
-	confgenerator.LoggingProcessorTypes.ReplaceType(func() confgenerator.LoggingProcessor { return &apps.LoggingProcessorIisAccess{} })
+	confgenerator.LoggingProcessorTypes.ReplaceType(func() confgenerator.LoggingProcessor { return &confgenerator.LoggingProcessorIisAccess{} })
 }

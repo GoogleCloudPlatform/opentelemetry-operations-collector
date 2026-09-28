@@ -620,12 +620,21 @@ func MetricUnknownCounter() Component {
 	})
 }
 
-// AddPrometheusPrefix ensures prometheus metrics exported via OTLP have the "prometheus.googleapis.com/" prefix
-// so the backend treats them as prometheus metrics even if they contain custom domain prefixes.
-func AddPrometheusPrefix() Component {
-	return Transform("metric", "metric", []ottl.Statement{
-		`set(metric.name, Concat(["prometheus.googleapis.com/", metric.name], "")) where not HasPrefix(metric.name, "prometheus.googleapis.com/")`,
-	})
+// GMPExportProcessors returns the shared processor tail for Google Managed Prometheus metrics.
+func GMPExportProcessors() []Component {
+	return []Component{
+		MetricUnknownCounter(),
+		MetricsTransform(AddPrefix("prometheus.googleapis.com")),
+	}
+}
+
+// ConvertGCMSystemExporterToOtlpExporter removes instrumentation scope and service resource attributes
+// for system metrics exported via OTLP.
+func ConvertGCMSystemExporterToOtlpExporter() []Component {
+	return []Component{
+		MetricsRemoveInstrumentationLibraryLabelsAttributes(),
+		MetricsRemoveServiceAttributes(),
+	}
 }
 
 // This processor prevents telemetry.googleapis.com from populating the LogEntry.otlp field by setting the gcp.use_legacy_mapping resource attribute to true.

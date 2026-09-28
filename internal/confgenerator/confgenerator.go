@@ -90,7 +90,10 @@ func otlpExporterForLogs(userAgent string) otel.Component {
 
 func (uc *UnifiedConfig) getOTelLogLevel() string {
 	logLevel := "info"
-	if uc.Metrics != nil && uc.Metrics.Service != nil && uc.Metrics.Service.LogLevel != "" {
+	if uc.Logging != nil && uc.Logging.Service != nil && uc.Logging.Service.LogLevel != "" && uc.Logging.Service.LogLevel != "info" {
+		logLevel = uc.Logging.Service.LogLevel
+	}
+	if uc.Metrics != nil && uc.Metrics.Service != nil && uc.Metrics.Service.LogLevel != "" && uc.Metrics.Service.LogLevel != "info" {
 		logLevel = uc.Metrics.Service.LogLevel
 	}
 	return logLevel
@@ -113,21 +116,27 @@ func fileStorageExtension(stateDir string) otel.Component {
 	}
 }
 
-func (uc *UnifiedConfig) modularConfig(ctx context.Context, logsDir, outDir, stateDir string) (otel.ModularConfig, error) {
+func (uc *UnifiedConfig) modularConfig(ctx context.Context, logsDir, stateDir string) (otel.ModularConfig, error) {
 	p := platform.FromContext(ctx)
 
-	userAgent, _ := p.UserAgent("Google-Cloud-Ops-Agent-Metrics")
-	metricVersionLabel, _ := p.VersionLabel("google-cloud-ops-agent-metrics")
+	userAgent, err := p.UserAgent("Google-Cloud-Ops-Agent-Metrics")
+	if err != nil {
+		return otel.ModularConfig{}, err
+	}
+	metricVersionLabel, err := p.VersionLabel("google-cloud-ops-agent-metrics")
+	if err != nil {
+		return otel.ModularConfig{}, err
+	}
 
 	receiverPipelines, pipelines, err := uc.generateOtelPipelines(ctx)
 	if err != nil {
 		return otel.ModularConfig{}, err
 	}
 
+	metricsPort := otel.GetMetricsPort()
 	agentSelfMetrics := AgentSelfMetrics{
 		MetricsVersionLabel: metricVersionLabel,
-		OtelPort:            int(uc.GetOtelMetricsPort()),
-		OtelRuntimeDir:      outDir,
+		OtelPort:            int(metricsPort),
 	}
 	agentSelfMetrics.AddSelfMetricsPipelines(receiverPipelines, pipelines, ctx)
 
@@ -140,7 +149,7 @@ func (uc *UnifiedConfig) modularConfig(ctx context.Context, logsDir, outDir, sta
 		LogLevel:          uc.getOTelLogLevel(),
 		ReceiverPipelines: receiverPipelines,
 		Pipelines:         pipelines,
-		MetricsPort:       uc.GetOtelMetricsPort(),
+		MetricsPort:       metricsPort,
 		Exporters: map[string]otel.ExporterComponents{
 			"metrics": {
 				Exporter:       otlpExporterForMetrics(userAgent),
@@ -184,8 +193,8 @@ func (uc *UnifiedConfig) modularConfig(ctx context.Context, logsDir, outDir, sta
 	}, nil
 }
 
-func (uc *UnifiedConfig) GenerateOtelConfig(ctx context.Context, logsDir, outDir, stateDir string) (string, error) {
-	mc, err := uc.modularConfig(ctx, logsDir, outDir, stateDir)
+func (uc *UnifiedConfig) GenerateOtelConfig(ctx context.Context, logsDir, stateDir string) (string, error) {
+	mc, err := uc.modularConfig(ctx, logsDir, stateDir)
 	if err != nil {
 		return "", err
 	}
@@ -201,7 +210,7 @@ func (p PipelineInstance) OTelComponents(ctx context.Context) (map[string]otel.R
 	}
 	gceMetadataAttributesProcessors, err := addGceMetadataAttributesProcessor(ctx).Processors(ctx)
 	if err != nil {
-		panic("Failed to generate static ModifyFields")
+		return nil, nil, fmt.Errorf("failed to generate static ModifyFields: %w", err)
 	}
 	for i, receiverPipeline := range receiverPipelines {
 		receiverPipelineName := strings.ReplaceAll(p.RID, "_", "__")
@@ -216,9 +225,13 @@ func (p PipelineInstance) OTelComponents(ctx context.Context) (map[string]otel.R
 		}
 
 		if _, ok := receiverPipeline.Processors["logs"]; ok {
+			setLogNameComponents, err := otelSetLogNameComponents(ctx, p.RID)
+			if err != nil {
+				return nil, nil, err
+			}
 			receiverPipeline.Processors["logs"] = append(
 				receiverPipeline.Processors["logs"],
-				otelSetLogNameComponents(ctx, p.RID)...,
+				setLogNameComponents...,
 			)
 			if p.Receiver.Type() == "fluent_forward" {
 				receiverPipeline.Processors["logs"] = append(

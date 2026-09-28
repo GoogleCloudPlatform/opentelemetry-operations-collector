@@ -18,7 +18,9 @@ package otel
 import (
 	"context"
 	"fmt"
+	"os"
 	"sort"
+	"strconv"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/platform"
 	yaml "github.com/goccy/go-yaml"
@@ -29,6 +31,16 @@ import (
 
 const MetricsPort = 20201
 const ExperimentalMetricsPortEnv = "EXPERIMENTAL_OPS_AGENT_OTEL_METRICS_PORT"
+
+// GetMetricsPort retrieves the OTel self-metrics port, overridden by EXPERIMENTAL_OPS_AGENT_OTEL_METRICS_PORT if valid.
+func GetMetricsPort() uint16 {
+	if portStr := os.Getenv(ExperimentalMetricsPortEnv); portStr != "" {
+		if port, err := strconv.ParseUint(portStr, 10, 16); err == nil {
+			return uint16(port)
+		}
+	}
+	return MetricsPort
+}
 
 type ResourceDetectionMode int
 

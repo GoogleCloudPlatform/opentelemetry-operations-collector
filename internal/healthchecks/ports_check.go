@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/confgenerator/otel"
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/confgenerator/portutil"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/logs"
 )
 
@@ -67,13 +66,14 @@ func runOtelCollectorCheck(logger logs.StructuredLogger) error {
 		return nil
 	}
 
+	port := int(otel.GetMetricsPort())
 	// Opentelemetry-collector listens in both tcp4 and tcp6. Check for opentelemetry-collector self metrics port.
-	err = runPortCheck(logger, int(portutil.GetPortFromEnv(otel.ExperimentalMetricsPortEnv, otel.MetricsPort)), tcpHost, "tcp4", OtelMetricsPortErr)
+	err = runPortCheck(logger, port, tcpHost, "tcp4", OtelMetricsPortErr)
 	if err != nil {
 		return err
 	}
 
-	err = runPortCheck(logger, int(portutil.GetPortFromEnv(otel.ExperimentalMetricsPortEnv, otel.MetricsPort)), tcp6Host, "tcp6", OtelMetricsPortErr)
+	err = runPortCheck(logger, port, tcp6Host, "tcp6", OtelMetricsPortErr)
 	if err != nil {
 		return err
 	}

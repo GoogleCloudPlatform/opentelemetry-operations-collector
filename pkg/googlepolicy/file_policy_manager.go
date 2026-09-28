@@ -231,10 +231,15 @@ func (fpm *filePolicyManager) loadPolicySet() error {
 
 	policySet, err := MakePolicySet(revisionID, rawPolicies)
 	if err != nil {
-		return fmt.Errorf("failed to make policy set: %w", err)
+		if fpm.logger != nil {
+			fpm.logger.Warn("some policies in directory could not be loaded and will be skipped",
+				zap.String("revision_id", revisionID),
+				zap.Error(err),
+			)
+		}
 	}
 
-	// 4. If the policy set was successfully constructed, register it as the new active policy set.
+	// 4. Register the policy set (including any FailedPolicies) as the new active policy set.
 	SetActivePolicySet(policySet)
 	return nil
 }

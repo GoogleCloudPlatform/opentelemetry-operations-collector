@@ -21,14 +21,12 @@ import (
 	"io"
 	"log"
 	"log/slog"
-	"net/http"
 	"os"
 	"runtime/debug"
 	"slices"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/cmd/distrogen/internal/command"
 	flag "github.com/spf13/pflag"
-	"go.yaml.in/yaml/v4"
 )
 
 var (
@@ -174,6 +172,10 @@ func (cmd *generateCommand) Run() error {
 		registry.Merge(additionalRegistry)
 	}
 
+	if err := registry.ResolveOTelModuleVersions(spec.OpenTelemetryVersion, spec.OpenTelemetryContribVersion); err != nil {
+		return err
+	}
+
 	generator, err := NewDistributionGenerator(spec, registry, *cmd.force)
 	if err != nil {
 		return err
@@ -238,15 +240,19 @@ func (cmd *queryCommand) Run() error {
 	return nil
 }
 
+var errNoOTelVersionFlag = errors.New("at least one of the otel_version or otel_contrib_version flags is required")
+
 type otelComponentVersionsCommand struct {
 	flags flag.FlagSet
 
-	otelVersion *string
+	otelVersion        *string
+	otelContribVersion *string
 }
 
 func newOtelComponentVersionsCommand() *otelComponentVersionsCommand {
 	cmd := &otelComponentVersionsCommand{}
-	cmd.otelVersion = cmd.flags.String("otel_version", "", "The OpenTelemetry version to fetch component versions for")
+	cmd.otelVersion = cmd.flags.String("otel_version", "", "The OpenTelemetry Collector version to fetch component versions for")
+	cmd.otelContribVersion = cmd.flags.String("otel_contrib_version", "", "The OpenTelemetry Collector Contrib version to fetch component versions for")
 	return cmd
 }
 
@@ -258,52 +264,28 @@ func (cmd *otelComponentVersionsCommand) Usage() string {
 	return cmd.flags.FlagUsages()
 }
 
+// Run reads module paths from stdin and writes back the ones that the given
+// releases publish, each with the version it was released at. Modules that are
+// not published at those releases are left out, since there is no version to
+// pin them to.
 func (cmd *otelComponentVersionsCommand) Run() error {
-	type moduleSet struct {
-		Version string   `yaml:"version"`
-		Modules []string `yaml:"modules"`
-	}
-	type versions struct {
-		ModuleSets      map[string]moduleSet `yaml:"module-sets"`
-		ExcludedModules []string             `yaml:"excluded-modules"`
+	if *cmd.otelVersion == "" && *cmd.otelContribVersion == "" {
+		return errNoOTelVersionFlag
 	}
 
-	if *cmd.otelVersion == "" {
-		return fmt.Errorf("otel_version flag is required")
+	moduleVersions, err := resolveOTelModuleVersions(*cmd.otelVersion, *cmd.otelContribVersion)
+	if err != nil {
+		return err
 	}
 
 	s := bufio.NewScanner(os.Stdin)
-	var allModules []string
 	for s.Scan() {
-		allModules = append(allModules, s.Text())
-	}
-	if err := s.Err(); err != nil {
-		return err
-	}
-
-	response, err := http.Get(fmt.Sprintf("https://raw.githubusercontent.com/open-telemetry/opentelemetry-collector/refs/tags/%s/versions.yaml", *cmd.otelVersion))
-	if err != nil {
-		return err
-	}
-	defer response.Body.Close()
-	content, err := io.ReadAll(response.Body)
-	if err != nil {
-		return err
-	}
-	var componentVersions versions
-	if err := yaml.Unmarshal(content, &componentVersions); err != nil {
-		return err
-	}
-
-	for _, moduleSet := range componentVersions.ModuleSets {
-		for _, module := range allModules {
-			if slices.Contains(moduleSet.Modules, module) {
-				fmt.Printf("%s@%s\n", module, moduleSet.Version)
-			}
+		module := s.Text()
+		if version, ok := moduleVersions[module]; ok {
+			fmt.Printf("%s@%s\n", module, version)
 		}
 	}
-
-	return nil
+	return s.Err()
 }
 
 type projectCommand struct {

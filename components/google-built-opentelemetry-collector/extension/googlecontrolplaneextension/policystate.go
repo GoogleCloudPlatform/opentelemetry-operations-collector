@@ -15,24 +15,8 @@
 package googlecontrolplaneextension
 
 import (
-	"regexp"
-	"strings"
-
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 )
-
-// policySetNamePattern matches a fully qualified PolicySet resource name.
-//
-// Anything that does not match is assumed not to have come from the control
-// plane (for example the plain names used by file sourced policies) and is
-// ignored when deriving policy set identity.
-var policySetNamePattern = regexp.MustCompile(`^projects/[^/]+/locations/[^/]+/policySets/[^/]+$`)
-
-// policiesSegment separates the PolicySet resource name from the policy id
-// within a policy resource name:
-//
-//	projects/{p}/locations/{l}/policySets/{ps}/policies/{policy}
-const policiesSegment = "/policies/"
 
 // Per-policy state is deliberately not reported here.
 //
@@ -76,7 +60,8 @@ type PolicyStateSource interface {
 // rollout pair one revision's ID with another's revision.
 type PolicySetState struct {
 	// ID is the PolicySet resource name that the active policies belong to,
-	// or the empty string if it cannot be determined.
+	// or the empty string if it cannot be determined. See
+	// googlepolicy.PolicySet.PolicySetID for how it is derived.
 	ID string
 	// Revision is the revision ID of the active policy set, or the empty
 	// string if no policy set is active.
@@ -101,67 +86,7 @@ func (registrySource) ActivePolicySet() PolicySetState {
 		return PolicySetState{}
 	}
 	return PolicySetState{
-		ID:       policySetID(ps),
+		ID:       ps.PolicySetID,
 		Revision: ps.RevisionID,
 	}
-}
-
-// policySetID derives the PolicySet resource name from the policies
-// themselves.
-//
-// The control plane does not send policy set identity as a field:
-// TelemetryCollector carries only a list of policies, and the shim drops
-// PolicySet.name during translation. It does however build each policy's id as
-//
-//	{policySetName}/policies/{policyID}
-//
-// so the set name is recoverable by splitting off the trailing segment. This
-// keeps identity tied to the policies actually in effect, rather than to a
-// separately configured value that could silently disagree with them.
-//
-// Note this recovers the policy set name only. The revision is genuinely absent
-// from the policy name (PolicySetRevision.name is never propagated), so it
-// comes from PolicySet.RevisionID instead.
-//
-// Names that are not fully qualified resource names are skipped: file sourced
-// and hand written policies use plain names and carry no identity. If the
-// conforming names disagree, the result is empty. Reporting one of several
-// candidate sets would produce a wrong but plausible label, whereas an empty
-// one is visibly wrong and can be alerted on.
-func policySetID(ps *googlepolicy.PolicySet) string {
-	found := ""
-	for _, entry := range ps.Policies {
-		if entry == nil || entry.PolicyObj == nil {
-			continue
-		}
-		id, ok := policySetNameOf(entry.PolicyObj.PolicyName())
-		switch {
-		case !ok:
-			continue
-		case found == "":
-			found = id
-		case found != id:
-			return ""
-		}
-	}
-	return found
-}
-
-// policySetNameOf returns the PolicySet resource name of a control plane
-// policy resource name
-//
-//	projects/{p}/locations/{l}/policySets/{ps}/policies/{id}
-//
-// ok is false if the name is not a policy resource name, which is the case for
-// file sourced and hand written policies.
-func policySetNameOf(policyName string) (policySetName string, ok bool) {
-	idx := strings.LastIndex(policyName, policiesSegment)
-	if idx < 0 {
-		return "", false
-	}
-	prefix := policyName[:idx]
-	if !policySetNamePattern.MatchString(prefix) {
-		return "", false
-	}
-	return prefix, true
 }

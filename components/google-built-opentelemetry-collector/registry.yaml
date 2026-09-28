@@ -19,10 +19,13 @@ exporters:
 
 processors:
   googlepolicy:
-    gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicy v0.0.0
-    path: "../components/google-built-opentelemetry-collector/provider/googlecontrolplane"
+    gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor v0.0.0
+    path: "../components/google-built-opentelemetry-collector/processor/googlepolicyprocessor"
 
 extensions:
+  googlecontrolplane:
+    gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/googlecontrolplaneextension v0.0.0
+    path: "../components/google-built-opentelemetry-collector/extension/googlecontrolplaneextension"
   healthagent:
     gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/healthagent v0.0.0
     path: "../components/google-built-opentelemetry-collector/extension/healthagent"
@@ -32,5 +35,5 @@ extensions:
 
 providers:
   googlecontrolplane:
-    gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplane v0.0.0
-    path: "../components/google-built-opentelemetry-collector/provider/googlecontrolplane"
+    gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider v0.0.0
+    path: "../components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider"

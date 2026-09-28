@@ -174,8 +174,9 @@ func TestPolicySet_MarkAndClone(t *testing.T) {
 	unregistered := &mockTransformationPolicy{name: "unregistered"}
 
 	ps := &PolicySet{
-		RevisionID: "rev-1",
-		ReceivedAt: time.Now(),
+		PolicySetID: "projects/my-proj/locations/us-central1/policySets/ps-1",
+		RevisionID:  "rev-1",
+		ReceivedAt:  time.Now(),
 		Policies: map[string]*PolicySetEntry{
 			"p1": {PolicyObj: p1},
 			"p2": {PolicyObj: p2},
@@ -196,6 +197,7 @@ func TestPolicySet_MarkAndClone(t *testing.T) {
 
 	cloned := ps.Clone()
 	require.NotNil(t, cloned)
+	assert.Equal(t, ps.PolicySetID, cloned.PolicySetID)
 	assert.Equal(t, ps.RevisionID, cloned.RevisionID)
 	require.Len(t, cloned.Policies, 2)
 	assert.True(t, cloned.Policies["p1"].Processed)
@@ -232,10 +234,46 @@ func TestMakePolicySetAndGenericDriver(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, ps)
 	assert.Contains(t, ps.Policies, "test-pol-1")
+	assert.Equal(t, "", ps.PolicySetID, "plain local policy name does not have a control-plane policySet prefix")
 
 	SetActivePolicySet(ps)
 	assert.Equal(t, "rev-make", ActivePolicySetRevisionID())
 	SetActivePolicySet(nil)
+
+	// Control-plane resource name derives PolicySetID
+	ps, err = MakePolicySet("rev-cp", []map[string]any{
+		{"type": "driver_test_type", "name": "projects/my-proj/locations/us-central1/policySets/my-set/policies/pol-1"},
+		{"type": "driver_test_type", "name": "projects/my-proj/locations/us-central1/policySets/my-set/policies/pol-2"},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, ps)
+	assert.Equal(t, "projects/my-proj/locations/us-central1/policySets/my-set", ps.PolicySetID)
+
+	// Failed policies with control-plane resource names still populate PolicySetID
+	ps, err = MakePolicySet("rev-cp-failed", []map[string]any{
+		{"type": "unknown_type_xyz", "id": "projects/my-proj/locations/us-central1/policySets/failed-set/policies/bad-pol"},
+	})
+	assert.Error(t, err)
+	require.NotNil(t, ps)
+	assert.Equal(t, "projects/my-proj/locations/us-central1/policySets/failed-set", ps.PolicySetID)
+
+	// Conflicting policySet prefixes across policies yield empty PolicySetID
+	ps, err = MakePolicySet("rev-cp-conflict", []map[string]any{
+		{"type": "driver_test_type", "name": "projects/my-proj/locations/us-central1/policySets/set-a/policies/pol-1"},
+		{"type": "driver_test_type", "name": "projects/my-proj/locations/us-central1/policySets/set-b/policies/pol-2"},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, ps)
+	assert.Equal(t, "", ps.PolicySetID)
+
+	// Malformed policy resource suffixes (empty policy ID or extra path segments) are ignored
+	ps, err = MakePolicySet("rev-cp-malformed", []map[string]any{
+		{"type": "driver_test_type", "name": "projects/my-proj/locations/us-central1/policySets/set-a/policies/"},
+		{"type": "driver_test_type", "name": "projects/my-proj/locations/us-central1/policySets/set-a/policies/pol-1/extra"},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, ps)
+	assert.Equal(t, "", ps.PolicySetID)
 
 	// Validation failure
 	_, err = MakePolicySet("rev-val-err", []map[string]any{

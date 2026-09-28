@@ -26,6 +26,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/googlecontrolplaneextension/internal/metadata"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/googlecontrolplaneextension/internal/telemetry"
 )
 
 // fakeSource is a PolicyStateSource test double. Because the extension depends
@@ -83,6 +84,14 @@ func attrsOf(dp metricdata.DataPoint[int64]) map[string]string {
 	}
 	return out
 }
+
+// The metric contract, spelled out literally rather than taken from the
+// generated code, so that a rename in the schema fails these tests.
+const (
+	metricPolicySetActive = "gcp.policy.set.active"
+	attrPolicySetID       = "gcp.policy.set.id"
+	attrPolicySetRevision = "gcp.policy.set.revision.id"
+)
 
 const testPolicySetID = "projects/my-project/locations/us-central1/policySets/demo-ps"
 
@@ -206,11 +215,11 @@ func TestExtension_UnderivablePolicySetIDIsEmptyNotAbsent(t *testing.T) {
 // The dots survive into Cloud Monitoring in both the metric name and the label
 // keys, so these are queried with PromQL's UTF-8 quoted syntax rather than an
 // underscored alias.
+//
+// The attribute keys are checked by the tests above, which read the emitted
+// data points by these literal keys.
 func TestMetricContractIsStable(t *testing.T) {
-	assert.Equal(t, "gcp.policy.set.active", metricPolicySetActive)
-
-	assert.Equal(t, "gcp.policy.set.id", attrPolicySetID)
-	assert.Equal(t, "gcp.policy.set.revision.id", attrPolicySetRevision)
+	assert.Equal(t, metricPolicySetActive, telemetry.PolicySetActiveMetricName)
 }
 
 type mutableSource struct {

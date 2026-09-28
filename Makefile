@@ -126,11 +126,36 @@ compare-events:
 test-events:
 	cd pkg/event && go test -v ./...
 
+#################################
+# Control Plane Metric Generation
+#################################
+
+# The googlecontrolplane extension's metrics are defined in a Weaver registry
+# that depends on pkg/event/schema for its attribute definitions.
+CONTROLPLANE_EXT_DIR := components/google-built-opentelemetry-collector/extension/googlecontrolplaneextension
+CONTROLPLANE_METRICS_GEN = registry generate --v2 -r $(CONTROLPLANE_EXT_DIR)/schema -t $(CONTROLPLANE_EXT_DIR)/templates go
+
+.PHONY: gen-controlplane-metrics
+gen-controlplane-metrics:
+	$(WEAVER) $(CONTROLPLANE_METRICS_GEN) $(CONTROLPLANE_EXT_DIR)/internal/telemetry
+
+.PHONY: check-controlplane-metrics
+check-controlplane-metrics:
+	$(WEAVER) registry check --v2 -r $(CONTROLPLANE_EXT_DIR)/schema
+
+.PHONY: compare-controlplane-metrics
+compare-controlplane-metrics:
+	@TMP_DIR=$$(mktemp -d) && \
+	trap 'rm -rf "$$TMP_DIR"' EXIT && \
+	docker run --rm --user "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -v "$$TMP_DIR:/output" -w /workspace $(WEAVER_IMAGE) $(CONTROLPLANE_METRICS_GEN) --quiet /output && \
+	diff -u $(CONTROLPLANE_EXT_DIR)/internal/telemetry/generated_metrics.go "$$TMP_DIR/generated_metrics.go" || \
+	(echo "Generated control plane metric files are out-of-date. Run 'make gen-controlplane-metrics' to regenerate." && exit 1)
+
 .PHONY: gen-all
-gen-all: distrogen-golden-update gen-google-built-otel gen-otelopscol gen-protos gen-events
+gen-all: distrogen-golden-update gen-google-built-otel gen-otelopscol gen-protos gen-events gen-controlplane-metrics
 
 .PHONY: regen-all
-regen-all: distrogen-golden-update regen-google-built-otel regen-otelopscol gen-protos gen-events
+regen-all: distrogen-golden-update regen-google-built-otel regen-otelopscol gen-protos gen-events gen-controlplane-metrics
 
 .PHONY: compare-all
 compare-all:

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 //go:generate mdatagen metadata.yaml
+//go:generate make -C ../../../.. gen-controlplane-metrics
 
 // Package googlecontrolplaneextension reports one self-observability metric
 // about the collector's control plane state: whether a policy set is currently
@@ -29,4 +30,10 @@
 // instantiated exactly once, which gives a single stable time series per
 // collector and avoids the cross-pipeline deduplication that a processor-based
 // implementation would require.
+//
+// The metric is defined in an OpenTelemetry Weaver schema under schema/, and
+// internal/telemetry is generated from it with `make gen-controlplane-metrics`.
+// Its attributes are not redefined there: they are referenced from the
+// pkg/event registry, so the metric always uses the same keys as the policy
+// events and can be correlated with them.
 package googlecontrolplaneextension // import "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/googlecontrolplaneextension"

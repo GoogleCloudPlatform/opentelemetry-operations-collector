@@ -20,25 +20,11 @@ import (
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/extension"
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/zap"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/googlecontrolplaneextension/internal/metadata"
-)
-
-// Metric and attribute names.
-//
-// These are custom conventions, so they live under the gcp. namespace to avoid
-// colliding with any future upstream OpenTelemetry policy conventions. The
-// attribute keys match the ones used by the policy events in pkg/event, so the
-// metric can be correlated with them. gcp.policy.set.active names the value it
-// reports: 1 when a policy set is active, 0 otherwise.
-const (
-	metricPolicySetActive = "gcp.policy.set.active"
-
-	attrPolicySetID       = "gcp.policy.set.id"
-	attrPolicySetRevision = "gcp.policy.set.revision.id"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/googlecontrolplaneextension/internal/telemetry"
 )
 
 type controlPlaneExtension struct {
@@ -47,8 +33,8 @@ type controlPlaneExtension struct {
 	logger *zap.Logger
 	source PolicyStateSource
 
-	policySetActive metric.Int64ObservableGauge
-	registration    metric.Registration
+	metrics      *telemetry.Metrics
+	registration metric.Registration
 }
 
 var _ extension.Extension = (*controlPlaneExtension)(nil)
@@ -62,7 +48,7 @@ func newControlPlaneExtension(cfg *Config, set extension.Settings, source Policy
 	}
 }
 
-// Start registers the observable gauge against the collector's internal
+// Start registers the observable instruments against the collector's internal
 // MeterProvider.
 //
 // Registration happens here rather than in the factory so that it is tied to
@@ -79,20 +65,13 @@ func (e *controlPlaneExtension) Start(_ context.Context, _ component.Host) error
 
 	meter := mp.Meter(metadata.ScopeName)
 
-	// The gauge deliberately declares no unit. It reports state, not a
-	// quantity, and the OTLP to Prometheus translation turns the dimensionless
-	// unit "1" into a _ratio name suffix, which would render this as
-	// gcp_policy_set_active_ratio.
-	policySetActive, err := meter.Int64ObservableGauge(
-		metricPolicySetActive,
-		metric.WithDescription("Whether a control plane policy set is currently active, labeled with its identity."),
-	)
+	metrics, err := telemetry.NewMetrics(meter)
 	if err != nil {
-		return fmt.Errorf("failed to create %s gauge: %w", metricPolicySetActive, err)
+		return err
 	}
-	e.policySetActive = policySetActive
+	e.metrics = metrics
 
-	e.registration, err = meter.RegisterCallback(e.observe, e.policySetActive)
+	e.registration, err = meter.RegisterCallback(e.observe, e.metrics.Observables()...)
 	if err != nil {
 		return fmt.Errorf("failed to register control plane metric callback: %w", err)
 	}
@@ -116,10 +95,7 @@ func (e *controlPlaneExtension) observe(_ context.Context, obs metric.Observer) 
 	if state.Revision != "" {
 		active = 1
 	}
-	obs.ObserveInt64(e.policySetActive, active, metric.WithAttributes(
-		attribute.String(attrPolicySetID, state.ID),
-		attribute.String(attrPolicySetRevision, state.Revision),
-	))
+	e.metrics.ObservePolicySetActive(obs, active, state.ID, state.Revision)
 
 	return nil
 }

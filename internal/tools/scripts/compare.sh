@@ -21,9 +21,11 @@ make compare-protos
 PROTOS_RESULT=$?
 make compare-events
 EVENTS_RESULT=$?
+make compare-controlplane-metrics
+CONTROLPLANE_METRICS_RESULT=$?
 
 # If any result is 2, which is what `make` exits with when
 # any check exits with code 1, exit this script with code 1.
-if [[ $GOOGLE_OTEL_RESULT -eq 2 || $OTELOPSCOL_RESULT -eq 2 || $PROTOS_RESULT -eq 2 || $EVENTS_RESULT -eq 2 ]]; then
+if [[ $GOOGLE_OTEL_RESULT -eq 2 || $OTELOPSCOL_RESULT -eq 2 || $PROTOS_RESULT -eq 2 || $EVENTS_RESULT -eq 2 || $CONTROLPLANE_METRICS_RESULT -eq 2 ]]; then
     exit 1
 fi

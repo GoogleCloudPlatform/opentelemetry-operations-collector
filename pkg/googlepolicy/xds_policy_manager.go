@@ -29,6 +29,7 @@ import (
 	"sync"
 	"time"
 
+	"cloud.google.com/go/compute/metadata"
 	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	discoveryv3 "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	"go.uber.org/zap"
@@ -80,18 +81,40 @@ const (
 	// the fleet. Like the fleet ID, it is read through this one constant by
 	// both this manager, which names the project in the resource it subscribes
 	// to, and the googlecontrolplane provider, which stamps it on the
-	// collector's own telemetry as gcp.project_id.
+	// collector's own telemetry as gcp.project_id (when it is an alphanumeric
+	// project ID rather than a numeric project number).
 	ProjectQueryParam = "project"
+
+	// ProjectNumberQueryParam is the query parameter carrying the numeric
+	// project number that owns the fleet. When set, it takes precedence over
+	// ProjectQueryParam for the xdstp:// resource subscription while leaving
+	// ProjectQueryParam available for the alphanumeric project ID.
+	ProjectNumberQueryParam = "project_number"
+
+	// RegionQueryParam is the query parameter carrying the GCP region used in
+	// the xdstp:// authority and reported on the xDS node's locality.
+	RegionQueryParam = "region"
 
 	// fleetIDEnvVar is the environment variable consulted for the fleet ID. It
 	// is consulted before the URI, matching the provider's resolution order.
 	fleetIDEnvVar = "FLEET_ID"
 
-	// defaultRegion is the locality region reported to the control plane, and
-	// the region in the authority of the subscribed xdstp:// resource name.
-	// TODO: Derive this from the environment (GCE metadata / GKE topology labels)
-	// rather than hardcoding a single region.
+	// Environment variables consulted for project number, project ID, and
+	// region resolution.
+	googleCloudProjectNumberEnvVar = "GOOGLE_CLOUD_PROJECT_NUMBER"
+	projectNumberEnvVar            = "PROJECT_NUMBER"
+	googleCloudProjectEnvVar       = "GOOGLE_CLOUD_PROJECT"
+	cloudRegionEnvVar              = "CLOUD_REGION"
+	googleCloudRegionEnvVar        = "GOOGLE_CLOUD_REGION"
+
+	// defaultRegion is the fallback locality region reported to the control
+	// plane and embedded in the xdstp:// authority when neither the URI, the
+	// environment, nor GCE metadata supplies a region.
 	defaultRegion = "asia-east1"
+
+	// defaultMetadataTimeout bounds GCE metadata queries during manager
+	// construction so an unresponsive metadata server cannot stall startup.
+	defaultMetadataTimeout = 1500 * time.Millisecond
 
 	// Reconnect backoff defaults. The stream is re-established after any error,
 	// with the delay growing from defaultBackoffInitial up to defaultBackoffMax.
@@ -135,7 +158,7 @@ var (
 	ErrXDSMissingServerAddr   = errors.New("xDS server address cannot be empty in URI")
 	ErrXDSMissingCollectorID  = errors.New("a collector ID is required for the xDS policy manager")
 	ErrXDSMissingFleetID      = errors.New("a fleet ID is required for the xDS policy manager: set the FLEET_ID environment variable or the 'gcp.fleet_id' URI query parameter")
-	ErrXDSMissingProject      = errors.New("a project is required for the xDS policy manager: set the 'project' URI query parameter")
+	ErrXDSMissingProject      = errors.New("a project is required for the xDS policy manager: set the 'project_number' or 'project' URI query parameter, GOOGLE_CLOUD_PROJECT_NUMBER / GOOGLE_CLOUD_PROJECT environment variable, or run on GCE")
 	ErrXDSInvalidInsecureFlag = errors.New("invalid 'insecure' URI query parameter, expected a boolean")
 
 	// Lifecycle errors.
@@ -150,6 +173,32 @@ var (
 	ErrXDSPolicyDecode      = errors.New("failed to decode policy from xDS resource")
 	ErrXDSPolicyMissingBody = errors.New("policy in xDS resource has no typed_config")
 )
+
+// gceMetadata abstracts GCE metadata server lookups so unit tests stay fast and
+// hermetic even when run on a GCE host.
+type gceMetadata interface {
+	OnGCE() bool
+	ProjectID(ctx context.Context) (string, error)
+	NumericProjectID(ctx context.Context) (string, error)
+	Zone(ctx context.Context) (string, error)
+}
+
+type realGCEMetadata struct{}
+
+func (realGCEMetadata) OnGCE() bool { return metadata.OnGCE() }
+func (realGCEMetadata) ProjectID(ctx context.Context) (string, error) {
+	return metadata.ProjectIDWithContext(ctx)
+}
+func (realGCEMetadata) NumericProjectID(ctx context.Context) (string, error) {
+	return metadata.NumericProjectIDWithContext(ctx)
+}
+func (realGCEMetadata) Zone(ctx context.Context) (string, error) {
+	return metadata.ZoneWithContext(ctx)
+}
+
+// defaultGCEMetadata is the metadata source consulted by NewXDSPolicyManager.
+// Tests replace it to stub or disable GCE metadata detection.
+var defaultGCEMetadata gceMetadata = realGCEMetadata{}
 
 var _ Manager = (*xdsPolicyManager)(nil)
 
@@ -166,11 +215,15 @@ type xdsPolicyManager struct {
 	// Connection settings, resolved once in the constructor and never written
 	// again. Being immutable, they are read from the stream goroutine without
 	// holding mu.
-	uri         *url.URL
-	serverAddr  string
-	collectorID string
-	fleetID     string
-	insecure    bool
+	uri           *url.URL
+	serverAddr    string
+	collectorID   string
+	fleetID       string
+	projectID     string
+	projectNumber string
+	region        string
+	zone          string
+	insecure      bool
 
 	// resourceName is the xdstp:// name of the fleet's TelemetryCollector
 	// resource. Every DiscoveryRequest on the stream subscribes to it; see
@@ -246,20 +299,27 @@ type xdsPolicyManager struct {
 //
 // # Components
 //
-//	HOST[:PORT]  - required. Address of the xDS control plane.
-//	gcp.fleet_id - required, unless $FLEET_ID is set; the environment wins over
-//	               the URI, matching how the provider resolves it. Names the
-//	               fleet in the subscribed resource (see xdstpResourceName), is
-//	               sent as this node's xDS cluster, and is read back off URI()
-//	               by the provider to attribute the collector's own telemetry.
-//	project      - required. The project that owns the fleet, named alongside it
-//	               in the subscribed resource. It is sent as given; no lookup
-//	               between project ID and number is done here. The provider
-//	               also reads it off URI() to stamp gcp.project_id on self
-//	               metrics.
-//	insecure     - optional bool, default false. False connects with TLS 1.2+ and
-//	               an ADC-derived ID token per RPC; true connects in plaintext with
-//	               no credentials, which is intended for local control planes.
+//	HOST[:PORT]    - required. Address of the xDS control plane.
+//	gcp.fleet_id   - required, unless $FLEET_ID is set; the environment wins over
+//	                 the URI, matching how the provider resolves it. Names the
+//	                 fleet in the subscribed resource (see xdstpResourceName), is
+//	                 sent as this node's xDS cluster, and is read back off URI()
+//	                 by the provider to attribute the collector's own telemetry.
+//	project_number - optional. Numeric project number for the xdstp:// resource
+//	                 subscription. Can also be supplied via
+//	                 $GOOGLE_CLOUD_PROJECT_NUMBER or $PROJECT_NUMBER, a numeric
+//	                 `project` parameter, or GCE metadata detection.
+//	project        - optional when `project_number` or GCE metadata is available.
+//	                 Alphanumeric project ID (used by the provider to stamp
+//	                 gcp.project_id on self metrics, and as fallback for the
+//	                 xdstp:// subscription in non-GCE / test environments) or
+//	                 numeric project number.
+//	region         - optional. GCP region for the xdstp:// authority and node
+//	                 locality; falls back to $CLOUD_REGION / $GOOGLE_CLOUD_REGION,
+//	                 the GCE instance zone, and finally defaultRegion.
+//	insecure       - optional bool, default false. False connects with TLS 1.2+ and
+//	                 an ADC-derived ID token per RPC; true connects in plaintext with
+//	                 no credentials, which is intended for local control planes.
 //
 // Unrecognized query parameters are ignored. The subscribed resource type is
 // deliberately not configurable -- see xdsPolicyTypeURL.
@@ -301,14 +361,6 @@ func NewXDSPolicyManager(logger *zap.Logger, uri *url.URL, collectorID string) (
 		return nil, ErrXDSMissingFleetID
 	}
 
-	// Unlike the fleet, the project has no environment override.
-	project := query.Get(ProjectQueryParam)
-	if project == "" {
-		// TODO: Fall back to the project detected from the environment, as
-		// resource detection already does for the collector's own telemetry.
-		return nil, ErrXDSMissingProject
-	}
-
 	var isInsecure bool
 	if raw := query.Get("insecure"); raw != "" {
 		parsed, err := strconv.ParseBool(raw)
@@ -316,6 +368,11 @@ func NewXDSPolicyManager(logger *zap.Logger, uri *url.URL, collectorID string) (
 			return nil, fmt.Errorf("%w: %q", ErrXDSInvalidInsecureFlag, raw)
 		}
 		isInsecure = parsed
+	}
+
+	projectNumber, projectID, region, zone, err := resolveProjectAndLocality(query)
+	if err != nil {
+		return nil, err
 	}
 
 	if logger == nil {
@@ -328,8 +385,12 @@ func NewXDSPolicyManager(logger *zap.Logger, uri *url.URL, collectorID string) (
 		serverAddr:         serverAddr,
 		collectorID:        collectorID,
 		fleetID:            fleetID,
+		projectID:          projectID,
+		projectNumber:      projectNumber,
+		region:             region,
+		zone:               zone,
 		insecure:           isInsecure,
-		resourceName:       xdstpResourceName(defaultRegion, project, fleetID),
+		resourceName:       xdstpResourceName(region, projectNumber, fleetID),
 		backoffInitial:     defaultBackoffInitial,
 		backoffMax:         defaultBackoffMax,
 		timeAfter:          time.After,
@@ -367,6 +428,115 @@ func FleetIDFromURI(uri *url.URL) string {
 		return ""
 	}
 	return uri.Query().Get(FleetIDQueryParam)
+}
+
+// resolveProjectAndLocality resolves the numeric project number (for the
+// xdstp:// subscription), the alphanumeric project ID (for telemetry
+// attribution), and the collector's region and zone from URI query parameters,
+// environment variables, and GCE metadata.
+func resolveProjectAndLocality(query url.Values) (projectNumber, projectID, region, zone string, err error) {
+	rawProjectNum := query.Get(ProjectNumberQueryParam)
+	if rawProjectNum == "" {
+		rawProjectNum = firstNonEmptyEnv(googleCloudProjectNumberEnvVar, projectNumberEnvVar)
+	}
+
+	rawProject := query.Get(ProjectQueryParam)
+	if rawProject == "" {
+		rawProject = os.Getenv(googleCloudProjectEnvVar)
+	}
+
+	if rawProjectNum != "" {
+		projectNumber = rawProjectNum
+	}
+	if rawProject != "" {
+		if IsNumericProject(rawProject) {
+			if projectNumber == "" {
+				projectNumber = rawProject
+			}
+		} else {
+			projectID = rawProject
+		}
+	}
+
+	region = firstNonEmptyEnv(cloudRegionEnvVar, googleCloudRegionEnvVar)
+	if region == "" {
+		region = query.Get(RegionQueryParam)
+	}
+
+	if defaultGCEMetadata != nil && defaultGCEMetadata.OnGCE() {
+		ctx, cancel := context.WithTimeout(context.Background(), defaultMetadataTimeout)
+		defer cancel()
+
+		if metaZone, zErr := defaultGCEMetadata.Zone(ctx); zErr == nil && metaZone != "" {
+			zone = cleanZone(metaZone)
+			if region == "" {
+				region = regionFromZone(zone)
+			}
+		}
+
+		if projectID == "" || projectNumber == "" {
+			metaProjID, _ := defaultGCEMetadata.ProjectID(ctx)
+			if projectID == "" && metaProjID != "" {
+				projectID = metaProjID
+			}
+			if projectNumber == "" && (rawProject == "" || rawProject == metaProjID) {
+				if metaProjNum, nErr := defaultGCEMetadata.NumericProjectID(ctx); nErr == nil && metaProjNum != "" {
+					projectNumber = metaProjNum
+				}
+			}
+		}
+	}
+
+	if projectNumber == "" && projectID != "" {
+		projectNumber = projectID
+	}
+	if projectNumber == "" {
+		return "", "", "", "", ErrXDSMissingProject
+	}
+	if region == "" {
+		region = defaultRegion
+	}
+	return projectNumber, projectID, region, zone, nil
+}
+
+// IsNumericProject reports whether s is a non-empty string of ASCII digits
+// (i.e. a GCP numeric project number rather than an alphanumeric project ID).
+func IsNumericProject(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func firstNonEmptyEnv(keys ...string) string {
+	for _, k := range keys {
+		if v := os.Getenv(k); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func cleanZone(z string) string {
+	if i := strings.LastIndexByte(z, '/'); i >= 0 {
+		return z[i+1:]
+	}
+	return z
+}
+
+// regionFromZone derives the GCP region from a zone name such as
+// "asia-east1-a" -> "asia-east1".
+func regionFromZone(zone string) string {
+	zone = cleanZone(zone)
+	if i := strings.LastIndexByte(zone, '-'); i > 0 && strings.Contains(zone[:i], "-") {
+		return zone[:i]
+	}
+	return ""
 }
 
 // xdstpResourceName returns the xdstp:// name of the TelemetryCollector
@@ -540,7 +710,7 @@ func (m *xdsPolicyManager) run(ctx context.Context) {
 		Id:      m.collectorID,
 		Cluster: m.fleetID,
 		Locality: &corev3.Locality{
-			Region: defaultRegion,
+			Region: m.region,
 		},
 	}
 

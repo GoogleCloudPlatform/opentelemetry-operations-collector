@@ -209,6 +209,29 @@ func TestRetrieve_XDSServerUnreachable(t *testing.T) {
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
 
+func TestRetrieve_XDSNumericProjectDoesNotClobberProjectID(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	p := createProvider()
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:xds://127.0.0.1:1?project=123456789012&insecure=true", nil)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+
+	rawAttrs := conf.Get("service::telemetry::resource::attributes")
+	attrs, ok := rawAttrs.([]any)
+	require.True(t, ok)
+	for _, entry := range attrs {
+		if m, ok := entry.(map[string]any); ok {
+			assert.NotEqual(t, "gcp.project_id", m["name"], "numeric project number in ?project= must not be stamped as gcp.project_id")
+		}
+	}
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
 func TestRetrieve_MultipleDestinationPolicies(t *testing.T) {
 	t.Setenv("FLEET_ID", "1234")
 	p := createProvider()

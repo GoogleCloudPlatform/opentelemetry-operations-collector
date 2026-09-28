@@ -1717,8 +1717,9 @@ func shouldRetryCreateVM(err error, options VMOptions) bool {
 		// This error is a consequence of running gcloud concurrently, which is actually
 		// unsupported. In the absence of a better fix, just retry such errors.
 		strings.Contains(err.Error(), "database is locked") ||
-		// windows-*-core instances sometimes fail to be ssh-able: b/305721001
-		(IsWindowsCore(options.ImageSpec) && strings.Contains(err.Error(), windowsStartupFailedMessage)) ||
+		// Windows instances sometimes fail to be ssh-able when CorePlugin NetUserAdd
+		// hits error 2236 (NERR_UserInGroup) during sysprep specialize: b/305721001, b/567121343
+		(IsWindows(options.ImageSpec) && strings.Contains(err.Error(), windowsStartupFailedMessage)) ||
 		// SLES instances sometimes fail to be ssh-able: b/186426190
 		(IsSUSEImageSpec(options.ImageSpec) && strings.Contains(err.Error(), startupFailedMessage)) ||
 		strings.Contains(err.Error(), prepareSLESMessage)

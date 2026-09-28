@@ -1,0 +1,39 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+file_format: definition/2
+
+metrics:
+  # The gauge deliberately declares no unit. It reports state, not a
+  # quantity, and the OTLP to Prometheus translation turns the dimensionless
+  # unit "1" into a _ratio name suffix, which would render this as
+  # gcp_policy_set_active_ratio.
+  - name: gcp.policy.set.active
+    instrument: gauge
+    unit: ""
+    stability: development
+    requirement_level: recommended
+    brief: Whether a control plane policy set is currently active, labeled with its identity.
+    note: |
+      Exactly one series is reported per collector. The value is 1 while a
+      policy set with at least one policy is active, and 0 otherwise, in which
+      case both attributes are empty.
+    annotations:
+      code_generation:
+        metric_value_type: int
+    attributes:
+      - ref: gcp.policy.set.id
+        requirement_level: required
+      - ref: gcp.policy.set.revision.id
+        requirement_level: required

@@ -99,38 +99,53 @@ test-protos:
 	go test -v ./gen/go/...
 
 ####################
-# Event Generation
+# Weaver Generation
 ####################
 
 WEAVER_VERSION ?= v0.26.1
 WEAVER_IMAGE ?= otel/weaver:$(WEAVER_VERSION)
-WEAVER = docker run --rm --user "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -w /workspace $(WEAVER_IMAGE)
+WEAVER_RUN = docker run --rm --user "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -w /workspace
+WEAVER = $(WEAVER_RUN) $(WEAVER_IMAGE)
 
-.PHONY: gen-events
-gen-events:
-	$(WEAVER) registry generate --v2 -r pkg/event/schema -t pkg/event/templates go pkg/event
+# Each registry generates into its own output directory.
+#   pkg/event: policy events.
+#   googlecontrolplaneextension: control plane metrics. Its registry depends on
+#     pkg/event/schema for its attribute definitions.
+EVENT_DIR := pkg/event
+EVENT_GEN_ARGS = -r $(EVENT_DIR)/schema -t $(EVENT_DIR)/templates go
+CONTROLPLANE_EXT_DIR := components/google-built-opentelemetry-collector/extension/googlecontrolplaneextension
+CONTROLPLANE_GEN_ARGS = -r $(CONTROLPLANE_EXT_DIR)/schema -t $(CONTROLPLANE_EXT_DIR)/templates go
 
-.PHONY: check-events
-check-events:
-	$(WEAVER) registry check --v2 -r pkg/event/schema
+.PHONY: gen-weaver
+gen-weaver:
+	$(WEAVER) registry generate --v2 $(EVENT_GEN_ARGS) $(EVENT_DIR)
+	$(WEAVER) registry generate --v2 $(CONTROLPLANE_GEN_ARGS) $(CONTROLPLANE_EXT_DIR)/internal/telemetry
 
-.PHONY: compare-events
-compare-events:
+.PHONY: check-weaver
+check-weaver:
+	$(WEAVER) registry check --v2 -r $(EVENT_DIR)/schema
+	$(WEAVER) registry check --v2 -r $(CONTROLPLANE_EXT_DIR)/schema
+
+.PHONY: compare-weaver
+compare-weaver:
 	@TMP_DIR=$$(mktemp -d) && \
 	trap 'rm -rf "$$TMP_DIR"' EXIT && \
-	docker run --rm --user "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -v "$$TMP_DIR:/output" -w /workspace $(WEAVER_IMAGE) registry generate --v2 --quiet -r pkg/event/schema -t pkg/event/templates go /output && \
-	diff -u pkg/event/generated_events.go "$$TMP_DIR/generated_events.go" || \
-	(echo "Generated event files in pkg/event are out-of-date. Run 'make gen-events' to regenerate." && exit 1)
+	mkdir "$$TMP_DIR/event" "$$TMP_DIR/controlplane" && \
+	$(WEAVER_RUN) -v "$$TMP_DIR:/output" $(WEAVER_IMAGE) registry generate --v2 --quiet $(EVENT_GEN_ARGS) /output/event && \
+	$(WEAVER_RUN) -v "$$TMP_DIR:/output" $(WEAVER_IMAGE) registry generate --v2 --quiet $(CONTROLPLANE_GEN_ARGS) /output/controlplane && \
+	diff -u $(EVENT_DIR)/generated_events.go "$$TMP_DIR/event/generated_events.go" && \
+	diff -u $(CONTROLPLANE_EXT_DIR)/internal/telemetry/generated_metrics.go "$$TMP_DIR/controlplane/generated_metrics.go" || \
+	(echo "Weaver generated files are out-of-date. Run 'make gen-weaver' to regenerate." && exit 1)
 
 .PHONY: test-events
 test-events:
 	cd pkg/event && go test -v ./...
 
 .PHONY: gen-all
-gen-all: distrogen-golden-update gen-google-built-otel gen-otelopscol gen-protos gen-events
+gen-all: distrogen-golden-update gen-google-built-otel gen-otelopscol gen-protos gen-weaver
 
 .PHONY: regen-all
-regen-all: distrogen-golden-update regen-google-built-otel regen-otelopscol gen-protos gen-events
+regen-all: distrogen-golden-update regen-google-built-otel regen-otelopscol gen-protos gen-weaver
 
 .PHONY: compare-all
 compare-all:

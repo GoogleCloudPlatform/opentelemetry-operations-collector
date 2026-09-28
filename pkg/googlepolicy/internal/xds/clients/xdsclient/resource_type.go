@@ -64,13 +64,6 @@ type Decoder interface {
 	Decode(resource *AnyProto, options DecodeOptions) (*DecodeResult, error)
 }
 
-// BatchDecoder is an optional interface that a Decoder may implement to decode
-// the entire DiscoveryResponse.Resources slice as a single SotW revision
-// (including empty revisions and partial-success revisions).
-type BatchDecoder interface {
-	DecodeAll(resources []*AnyProto, options DecodeOptions) (*DecodeResult, error)
-}
-
 // AnyProto contains the type URL and serialized proto data of an xDS resource.
 type AnyProto struct {
 	typeURL string
@@ -117,12 +110,6 @@ type DecodeResult struct {
 	// Resource contains the configuration associated with the decoded
 	// resource.
 	Resource ResourceData
-
-	// ValidCount and InvalidCount optionally report the number of valid and
-	// invalid resources processed by a BatchDecoder when multiple resources in
-	// a DiscoveryResponse are collapsed into a single DecodeResult.
-	ValidCount   int
-	InvalidCount int
 }
 
 // ResourceData contains the configuration data sent by the xDS management

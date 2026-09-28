@@ -242,82 +242,40 @@ func (xc *xdsChannel) decodeResponse(rType *ResourceType, resp response) (map[st
 	perResourceErrors := make(map[string]error) // Tracks resource validation errors, where we have a resource name.
 	ret := make(map[string]dataAndErrTuple)     // Return result, a map from resource name to either resource data or error.
 
-	if bd, ok := rType.Decoder.(BatchDecoder); ok {
-		anyProtos := make([]*AnyProto, len(resp.resources))
-		for i, r := range resp.resources {
-			anyProtos[i] = NewAnyProto(r)
-		}
+	for _, r := range resp.resources {
 		result, err := func() (res *DecodeResult, err error) {
 			defer func() {
 				if recoverPanicInResourceParsing {
 					if p := recover(); p != nil {
-						err = fmt.Errorf("recovered from panic during resource parsing, panic: %v", p)
+						err = fmt.Errorf("recovered from panic during resource parsing, resource: %v, panic: %v", r, p)
 					}
 				}
 			}()
-			return bd.DecodeAll(anyProtos, *opts)
+			return rType.Decoder.Decode(NewAnyProto(r), *opts)
 		}()
-		if err != nil {
-			invalidCount := len(resp.resources)
-			var validCount int
-			if result != nil && (result.ValidCount > 0 || result.InvalidCount > 0) {
-				validCount = result.ValidCount
-				invalidCount = result.InvalidCount
-			} else if invalidCount == 0 {
-				invalidCount = 1
-			}
-			perResourceErrors[""] = err
-			ret[""] = dataAndErrTuple{
-				Err:          xdsresource.NewError(xdsresource.ErrorTypeNACKed, err.Error()),
-				ValidCount:   validCount,
-				InvalidCount: invalidCount,
-				BatchDecoded: true,
-			}
-		} else if result != nil {
-			name := xdsresource.ParseName(result.Name).String()
-			ret[name] = dataAndErrTuple{
-				Resource:     result.Resource,
-				ValidCount:   result.ValidCount,
-				InvalidCount: result.InvalidCount,
-				BatchDecoded: true,
-			}
-		}
-	} else {
-		for _, r := range resp.resources {
-			result, err := func() (res *DecodeResult, err error) {
-				defer func() {
-					if recoverPanicInResourceParsing {
-						if p := recover(); p != nil {
-							err = fmt.Errorf("recovered from panic during resource parsing, resource: %v, panic: %v", r, p)
-						}
-					}
-				}()
-				return rType.Decoder.Decode(NewAnyProto(r), *opts)
-			}()
 
-			// Name field of the result is left unpopulated only when resource
-			// deserialization fails.
-			name := ""
-			if result == nil && err == nil {
-				xc.logger.Errorf("Decode() returned nil result and nil error for resource: %v", r)
-				continue
-			}
-			if result != nil {
-				name = xdsresource.ParseName(result.Name).String()
-			}
-			if err == nil {
-				ret[name] = dataAndErrTuple{Resource: result.Resource}
-				continue
-			}
-			if result == nil {
-				topLevelErrors = append(topLevelErrors, err)
-				continue
-			}
-			perResourceErrors[name] = err
-			// Add place holder in the map so we know this resource name was in
-			// the response.
-			ret[name] = dataAndErrTuple{Err: xdsresource.NewError(xdsresource.ErrorTypeNACKed, err.Error())}
+		// Name field of the result is left unpopulated only when resource
+		// deserialization fails.
+		name := ""
+		if result == nil && err == nil {
+			xc.logger.Errorf("Decode() returned nil result and nil error for resource: %v", r)
+			continue
 		}
+		if result != nil {
+			name = xdsresource.ParseName(result.Name).String()
+		}
+		if err == nil {
+			ret[name] = dataAndErrTuple{Resource: result.Resource}
+			continue
+		}
+		if result == nil {
+			topLevelErrors = append(topLevelErrors, err)
+			continue
+		}
+		perResourceErrors[name] = err
+		// Add place holder in the map so we know this resource name was in
+		// the response.
+		ret[name] = dataAndErrTuple{Err: xdsresource.NewError(xdsresource.ErrorTypeNACKed, err.Error())}
 	}
 
 	if len(topLevelErrors) == 0 && len(perResourceErrors) == 0 {

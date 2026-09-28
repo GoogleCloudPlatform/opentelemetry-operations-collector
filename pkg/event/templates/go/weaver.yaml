@@ -1,0 +1,48 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+default_comment_format: go
+comment_formats:
+  go:
+    format: markdown
+    prefix: "// "
+text_maps:
+  go_types:
+    int: int64
+    double: float64
+    boolean: bool
+    string: string
+    int[]: "[]int64"
+    double[]: "[]float64"
+    boolean[]: "[]bool"
+    string[]: "[]string"
+  zap_field_constructors:
+    int: zap.Int64
+    double: zap.Float64
+    boolean: zap.Bool
+    string: zap.String
+    int[]: zap.Int64s
+    double[]: zap.Float64s
+    boolean[]: zap.Bools
+    string[]: zap.Strings
+  zap_levels:
+    debug: zapcore.DebugLevel
+    info: zapcore.InfoLevel
+    warn: zapcore.WarnLevel
+    error: zapcore.ErrorLevel
+templates:
+  - template: "events.go.j2"
+    filter: "{schema_url: .schema_url, attributes: .registry.attributes, events: .registry.events}"
+    application_mode: single
+    file_name: "generated_events.go"

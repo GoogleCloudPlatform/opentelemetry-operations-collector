@@ -92,4 +92,3 @@ func TestGenerateCollectorID_GetHostnameError(t *testing.T) {
 	assert.Empty(t, CollectorID)
 	assert.Empty(t, CollectorName)
 }
-

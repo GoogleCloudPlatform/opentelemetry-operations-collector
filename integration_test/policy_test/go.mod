@@ -31,6 +31,7 @@ require (
 	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector v0.160.0 // indirect
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/event v0.0.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy v0.0.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.36.0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
@@ -209,5 +210,6 @@ replace (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector => ../../
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor => ../../components/google-built-opentelemetry-collector/processor/googlepolicyprocessor
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider => ../../components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/event => ../../pkg/event
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy => ../../pkg/googlepolicy
 )

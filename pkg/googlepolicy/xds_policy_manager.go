@@ -46,6 +46,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	xdsv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/xds/v1alpha1"
 )
@@ -695,6 +696,35 @@ func (m *xdsPolicyManager) URI() *url.URL {
 // a revision is live when it could not be applied.
 func (m *xdsPolicyManager) PolicyEvaluationResult(string, error) {}
 
+// buildNode constructs the xDS Node descriptor sent on every DiscoveryRequest.
+// Locality carries the resolved region and zone, and Metadata carries the
+// OpenTelemetry resource attributes describing this collector instance.
+func (m *xdsPolicyManager) buildNode() *corev3.Node {
+	metaFields := map[string]*structpb.Value{
+		"service.instance.id": structpb.NewStringValue(m.collectorID),
+		"gcp.fleet_id":        structpb.NewStringValue(m.fleetID),
+		"cloud.region":        structpb.NewStringValue(m.region),
+	}
+	if m.projectID != "" {
+		metaFields["gcp.project_id"] = structpb.NewStringValue(m.projectID)
+	}
+	if m.zone != "" {
+		metaFields["cloud.availability_zone"] = structpb.NewStringValue(m.zone)
+	}
+
+	return &corev3.Node{
+		Id:      m.collectorID,
+		Cluster: m.fleetID,
+		Locality: &corev3.Locality{
+			Region: m.region,
+			Zone:   m.zone,
+		},
+		Metadata: &structpb.Struct{
+			Fields: metaFields,
+		},
+	}
+}
+
 // run maintains the ADS stream for the lifetime of the manager, reconnecting
 // with exponential backoff whenever it drops.
 func (m *xdsPolicyManager) run(ctx context.Context) {
@@ -706,13 +736,7 @@ func (m *xdsPolicyManager) run(ctx context.Context) {
 	// it is ordered correctly against closing done.
 	defer m.markReady()
 
-	node := &corev3.Node{
-		Id:      m.collectorID,
-		Cluster: m.fleetID,
-		Locality: &corev3.Locality{
-			Region: m.region,
-		},
-	}
+	node := m.buildNode()
 
 	// A single ClientConn is reused across stream attempts; gRPC reconnects the
 	// underlying transport on its own. Only the stream is re-established here.

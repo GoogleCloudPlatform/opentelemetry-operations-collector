@@ -18,7 +18,6 @@ receivers:
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/iisreceiver v0.161.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/journaldreceiver v0.161.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/mysqlreceiver v0.161.0
-- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/otlpjsonfilereceiver v0.161.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver v0.161.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/sqlqueryreceiver v0.161.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/sqlserverreceiver v0.161.0

@@ -19,29 +19,23 @@ import (
 	"encoding/csv"
 	"errors"
 	"fmt"
-	"log"
 	"reflect"
 	"sort"
 	"strings"
 	"testing"
 	"time"
 
-	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/apps"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/confgenerator"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/confgenerator/otel"
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/confgenerator/resourcedetector"
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/platform"
 	"github.com/google/go-cmp/cmp"
 	"github.com/prometheus/common/model"
 	promconfig "github.com/prometheus/prometheus/config"
 	"github.com/prometheus/prometheus/discovery"
 	"github.com/prometheus/prometheus/model/relabel"
-	"github.com/shirou/gopsutil/host"
 	"gotest.tools/v3/golden"
 )
 
 var emptyUc = confgenerator.UnifiedConfig{}
-var builtInConfLinux = confgenerator.BuiltInConfStructs["linux"]
 
 var expectedFeatureBase = []confgenerator.Feature{
 	{
@@ -63,13 +57,6 @@ var expectedFeatureBase = []confgenerator.Feature{
 		Kind:   "default",
 		Type:   "self_log",
 		Key:    []string{"default_self_log_file_collection"},
-		Value:  "true",
-	},
-	{
-		Module: "logging",
-		Kind:   "service",
-		Type:   "otel_logging",
-		Key:    []string{"otel_logging_supported_config"},
 		Value:  "true",
 	},
 }
@@ -94,13 +81,6 @@ var expectedMetricsPipelineOverriden = []confgenerator.Feature{
 		Kind:   "default",
 		Type:   "self_log",
 		Key:    []string{"default_self_log_file_collection"},
-		Value:  "true",
-	},
-	{
-		Module: "logging",
-		Kind:   "service",
-		Type:   "otel_logging",
-		Key:    []string{"otel_logging_supported_config"},
 		Value:  "true",
 	},
 	{
@@ -142,13 +122,6 @@ var expectedTestFeatureBase = []confgenerator.Feature{
 		Value:  "true",
 	},
 	{
-		Module: "logging",
-		Kind:   "service",
-		Type:   "otel_logging",
-		Key:    []string{"otel_logging_supported_config"},
-		Value:  "true",
-	},
-	{
 		Module: confgenerator.MetricsReceiverTypes.Subagent,
 		Kind:   "receivers",
 		Type:   "metricsReceiverFoo",
@@ -157,29 +130,8 @@ var expectedTestFeatureBase = []confgenerator.Feature{
 	},
 }
 
-func testContext() context.Context {
-	pl := platform.Platform{
-		Type: platform.Linux,
-		HostInfo: &host.InfoStat{
-			Hostname:        "hostname",
-			OS:              "linux",
-			Platform:        "linux_platform",
-			PlatformVersion: "linux_platform_version",
-		},
-		ResourceOverride: resourcedetector.GCEResource{
-			Project:    "my-project",
-			Zone:       "test-zone",
-			InstanceID: "test-instance-id",
-		},
-	}
-	return pl.TestContext(context.Background())
-}
-
 func TestEmptyConfig(t *testing.T) {
-	ctx, cancel := context.WithCancel(testContext())
-	defer cancel()
-
-	features, err := confgenerator.ExtractFeatures(ctx, &emptyUc, builtInConfLinux)
+	features, err := confgenerator.ExtractFeatures(&emptyUc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,7 +143,6 @@ func TestEmptyConfig(t *testing.T) {
 type Test struct {
 	Name          string
 	UserConfig    *confgenerator.UnifiedConfig
-	MergedConfig  *confgenerator.UnifiedConfig
 	Expected      []confgenerator.Feature
 	ExpectedError error
 }
@@ -216,7 +167,6 @@ func TestBed(t *testing.T) {
 					},
 				},
 			},
-			MergedConfig: &emptyUc,
 			Expected: append(
 				expectedTestFeatureBase,
 				confgenerator.Feature{
@@ -244,8 +194,7 @@ func TestBed(t *testing.T) {
 					},
 				},
 			},
-			MergedConfig: &emptyUc,
-			Expected:     expectedTestFeatureBase,
+			Expected: expectedTestFeatureBase,
 		},
 		{
 			Name: "BoolWithAutoTracking",
@@ -263,7 +212,6 @@ func TestBed(t *testing.T) {
 					},
 				},
 			},
-			MergedConfig: &emptyUc,
 			Expected: append(
 				expectedTestFeatureBase,
 				confgenerator.Feature{
@@ -291,8 +239,7 @@ func TestBed(t *testing.T) {
 					},
 				},
 			},
-			MergedConfig: &emptyUc,
-			Expected:     expectedTestFeatureBase,
+			Expected: expectedTestFeatureBase,
 		},
 		{
 			Name: "PointerBool",
@@ -310,7 +257,6 @@ func TestBed(t *testing.T) {
 					},
 				},
 			},
-			MergedConfig: &emptyUc,
 			Expected: append(
 				expectedTestFeatureBase,
 				confgenerator.Feature{
@@ -338,8 +284,7 @@ func TestBed(t *testing.T) {
 					},
 				},
 			},
-			MergedConfig: &emptyUc,
-			Expected:     expectedTestFeatureBase,
+			Expected: expectedTestFeatureBase,
 		},
 		{
 			Name: "Struct",
@@ -359,7 +304,6 @@ func TestBed(t *testing.T) {
 					},
 				},
 			},
-			MergedConfig: &emptyUc,
 			Expected: append(
 				expectedTestFeatureBase,
 				confgenerator.Feature{
@@ -399,7 +343,6 @@ func TestBed(t *testing.T) {
 					},
 				},
 			},
-			MergedConfig: &emptyUc,
 			Expected: append(
 				expectedTestFeatureBase,
 				confgenerator.Feature{
@@ -430,7 +373,6 @@ func TestBed(t *testing.T) {
 					},
 				},
 			},
-			MergedConfig: &emptyUc,
 			Expected: append(
 				expectedTestFeatureBase,
 				confgenerator.Feature{
@@ -474,7 +416,6 @@ func TestBed(t *testing.T) {
 					},
 				},
 			},
-			MergedConfig: &emptyUc,
 			Expected: append(
 				expectedTestFeatureBase,
 				confgenerator.Feature{
@@ -516,7 +457,6 @@ func TestBed(t *testing.T) {
 					},
 				},
 			},
-			MergedConfig:  &emptyUc,
 			ExpectedError: confgenerator.ErrTrackingInlineStruct,
 		},
 		{
@@ -535,7 +475,6 @@ func TestBed(t *testing.T) {
 					},
 				},
 			},
-			MergedConfig: &emptyUc,
 			Expected: append(
 				expectedTestFeatureBase,
 				confgenerator.Feature{
@@ -584,7 +523,6 @@ func TestBed(t *testing.T) {
 					},
 				},
 			},
-			MergedConfig: &emptyUc,
 			Expected: append(
 				expectedTestFeatureBase,
 				confgenerator.Feature{
@@ -633,7 +571,6 @@ func TestBed(t *testing.T) {
 					},
 				},
 			},
-			MergedConfig: &emptyUc,
 			Expected: append(
 				expectedTestFeatureBase,
 				confgenerator.Feature{
@@ -661,8 +598,7 @@ func TestBed(t *testing.T) {
 					},
 				},
 			},
-			MergedConfig: &emptyUc,
-			Expected:     expectedTestFeatureBase,
+			Expected: expectedTestFeatureBase,
 		},
 	}
 
@@ -670,9 +606,7 @@ func TestBed(t *testing.T) {
 		test := test
 		t.Run(test.Name, func(t *testing.T) {
 			t.Parallel()
-			ctx, cancel := context.WithCancel(testContext())
-			defer cancel()
-			actual, err := confgenerator.ExtractFeatures(ctx, test.UserConfig, test.MergedConfig)
+			actual, err := confgenerator.ExtractFeatures(test.UserConfig)
 			if test.ExpectedError != nil {
 				if test.Expected != nil {
 					t.Fatalf("invalid test: %v", test.Name)
@@ -740,20 +674,6 @@ type MetricsReceiverInnerPointer struct {
 	Foo *bool `yaml:"foo" tracking:""`
 }
 
-func TestOtelLoggingSupported(t *testing.T) {
-	userUc := emptyUc
-	ctx, cancel := context.WithCancel(testContext())
-	defer cancel()
-	features, err := confgenerator.ExtractFeatures(ctx, &userUc, builtInConfLinux)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if d := cmp.Diff(features, expectedFeatureBase); d != "" {
-		t.Fatalf("got (-)/want (+):\n%s", d)
-	}
-}
-
 func TestOverrideDefaultPipeline(t *testing.T) {
 	uc := emptyUc
 	uc.Metrics = &confgenerator.Metrics{
@@ -765,9 +685,7 @@ func TestOverrideDefaultPipeline(t *testing.T) {
 			},
 		},
 	}
-	ctx, cancel := context.WithCancel(testContext())
-	defer cancel()
-	features, err := confgenerator.ExtractFeatures(ctx, &uc, &emptyUc)
+	features, err := confgenerator.ExtractFeatures(&uc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -840,9 +758,7 @@ func TestPrometheusFeatureMetrics(t *testing.T) {
 	uc.Metrics = &confgenerator.Metrics{
 		Receivers: receivers,
 	}
-	ctx, cancel := context.WithCancel(testContext())
-	defer cancel()
-	features, err := confgenerator.ExtractFeatures(ctx, &uc, &emptyUc)
+	features, err := confgenerator.ExtractFeatures(&uc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -939,7 +855,7 @@ func TestGolden(t *testing.T) {
 	csvWriter := csv.NewWriter(bufferString)
 	err := csvWriter.WriteAll(features)
 	if err != nil {
-		log.Fatal(err)
+		t.Fatal(err)
 	}
 	csvWriter.Flush()
 
@@ -1062,9 +978,7 @@ func TestNestedStructs(t *testing.T) {
 	uc.Metrics = &confgenerator.Metrics{
 		Receivers: receivers,
 	}
-	ctx, cancel := context.WithCancel(testContext())
-	defer cancel()
-	features, err := confgenerator.ExtractFeatures(ctx, &uc, &emptyUc)
+	features, err := confgenerator.ExtractFeatures(&uc)
 	if err != nil {
 		t.Fatal(err)
 	}

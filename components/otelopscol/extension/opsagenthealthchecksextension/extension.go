@@ -19,6 +19,7 @@ import (
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/healthchecks"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/logs"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/self_metrics"
 	"go.opentelemetry.io/collector/component"
 )
 
@@ -28,6 +29,9 @@ type opsagenthealthchecks struct {
 }
 
 func (ext *opsagenthealthchecks) Start(ctx context.Context, host component.Host) error {
+	if err := self_metrics.RegisterSelfMetrics(ext.logger.MeterProvider); err != nil {
+		return err
+	}
 	ext.logger.Logger.Info("Starting Ops Agent health checks...")
 	go func() {
 		// Create file logger for detailed results

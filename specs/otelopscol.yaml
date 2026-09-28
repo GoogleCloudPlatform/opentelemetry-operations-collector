@@ -40,7 +40,6 @@ components:
     - windowseventlog
     - windowsperfcounters
     - journald
-    - otlpjsonfile
     # Within this repo
     - dcgm
     - nvml

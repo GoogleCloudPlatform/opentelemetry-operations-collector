@@ -15,7 +15,6 @@
 package platform
 
 import (
-	"fmt"
 	"html/template"
 	"strings"
 
@@ -36,7 +35,6 @@ func (p Platform) expandTemplate(t *template.Template, prefix string, extraParam
 	}
 	var b strings.Builder
 	if err := t.Execute(&b, params); err != nil {
-		fmt.Println(err.Error())
 		return "", err
 	}
 	return b.String(), nil

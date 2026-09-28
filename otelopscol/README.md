@@ -17,7 +17,6 @@
 | mysql | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/mysqlreceiver/README.md) |
 | nvml | [docs](No docs linked for component) |
 | otlp | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/receiver/otlpreceiver/README.md) |
-| otlpjsonfile | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/otlpjsonfilereceiver/README.md) |
 | prometheus | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/prometheusreceiver/README.md) |
 | sqlquery | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/sqlqueryreceiver/README.md) |
 | sqlserver | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/sqlserverreceiver/README.md) |

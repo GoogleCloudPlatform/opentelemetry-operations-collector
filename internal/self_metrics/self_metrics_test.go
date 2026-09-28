@@ -18,11 +18,16 @@ import (
 	"context"
 	"testing"
 
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/apps"
-	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/apps"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/confgenerator"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/confgenerator/resourcedetector"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/experiments"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/platform"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/self_metrics"
+	"github.com/shirou/gopsutil/host"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata/metricdatatest"
 	"gotest.tools/v3/assert"
 )
 
@@ -54,7 +59,7 @@ func TestEnabledReceiversDefaultConfig(t *testing.T) {
 			config: &confgenerator.UnifiedConfig{
 				Combined: &confgenerator.Combined{
 					Receivers: map[string]confgenerator.CombinedReceiver{
-						"otlp": apps.ReceiverOTLP{},
+						"otlp": confgenerator.ReceiverOTLP{},
 					},
 				},
 				Logging: &confgenerator.Logging{
@@ -82,6 +87,79 @@ func TestEnabledReceiversDefaultConfig(t *testing.T) {
 			},
 			experimentalFeatures: "otlp_logging",
 		},
+		{
+			name: "multiple_and_unreferenced_receivers",
+			config: &confgenerator.UnifiedConfig{
+				Logging: &confgenerator.Logging{
+					Receivers: map[string]confgenerator.LoggingReceiver{
+						"files_1":       confgenerator.LoggingReceiverFiles{},
+						"files_2":       confgenerator.LoggingReceiverFiles{},
+						"unused_syslog": confgenerator.LoggingReceiverSyslog{},
+					},
+					Service: &confgenerator.LoggingService{
+						Pipelines: map[string]*confgenerator.Pipeline{
+							"default_pipeline": {
+								ReceiverIDs: []string{"files_1"},
+							},
+							"custom_pipeline": {
+								ReceiverIDs: []string{"files_2"},
+							},
+						},
+					},
+				},
+				Metrics: &confgenerator.Metrics{
+					Receivers: map[string]confgenerator.MetricsReceiver{
+						"prom_1":             confgenerator.PrometheusMetrics{},
+						"prom_2":             confgenerator.PrometheusMetrics{},
+						"unused_hostmetrics": confgenerator.MetricsReceiverHostmetrics{},
+					},
+					Service: &confgenerator.MetricsService{
+						Pipelines: map[string]*confgenerator.Pipeline{
+							"default_pipeline": {
+								ReceiverIDs: []string{"prom_1", "prom_2"},
+							},
+						},
+					},
+				},
+			},
+			enabledReceivers: self_metrics.EnabledReceivers{
+				MetricsReceiverCountsByType: map[string]int{"prometheus": 2},
+				LogsReceiverCountsByType:    map[string]int{"files": 2},
+			},
+		},
+		{
+			name: "empty_pipelines",
+			config: &confgenerator.UnifiedConfig{
+				Logging: &confgenerator.Logging{
+					Receivers: map[string]confgenerator.LoggingReceiver{
+						"files": confgenerator.LoggingReceiverFiles{},
+					},
+					Service: &confgenerator.LoggingService{
+						Pipelines: map[string]*confgenerator.Pipeline{
+							"default_pipeline": {
+								ReceiverIDs: []string{},
+							},
+						},
+					},
+				},
+				Metrics: &confgenerator.Metrics{
+					Receivers: map[string]confgenerator.MetricsReceiver{
+						"hostmetrics": confgenerator.MetricsReceiverHostmetrics{},
+					},
+					Service: &confgenerator.MetricsService{
+						Pipelines: map[string]*confgenerator.Pipeline{
+							"default_pipeline": {
+								ReceiverIDs: []string{},
+							},
+						},
+					},
+				},
+			},
+			enabledReceivers: self_metrics.EnabledReceivers{
+				MetricsReceiverCountsByType: map[string]int{},
+				LogsReceiverCountsByType:    map[string]int{},
+			},
+		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := experiments.ContextWithExperiments(context.Background(), experiments.ParseExperimentalFeatures(test.experimentalFeatures))
@@ -90,4 +168,95 @@ func TestEnabledReceiversDefaultConfig(t *testing.T) {
 			assert.DeepEqual(t, eR, test.enabledReceivers)
 		})
 	}
+}
+
+func TestRegisterSelfMetrics(t *testing.T) {
+	pl := platform.Platform{
+		Type: platform.Linux,
+		HostInfo: &host.InfoStat{
+			OS:              "linux",
+			Platform:        "linux_platform",
+			PlatformVersion: "linux_platform_version",
+		},
+		TestGCEResourceOverride: resourcedetector.GCEResource{
+			Project: "test-project",
+		},
+	}
+	ctx := pl.TestContext(context.Background())
+	userUc := &confgenerator.UnifiedConfig{}
+	mergedUc := confgenerator.BuiltInConfStructs["linux"]
+
+	err := self_metrics.SetSelfMetrics(ctx, userUc, mergedUc)
+	assert.NilError(t, err)
+
+	reader := metric.NewManualReader()
+	mp := metric.NewMeterProvider(metric.WithReader(reader))
+
+	err = self_metrics.RegisterSelfMetrics(mp)
+	assert.NilError(t, err)
+
+	var rm metricdata.ResourceMetrics
+	err = reader.Collect(ctx, &rm)
+	assert.NilError(t, err)
+	assert.Assert(t, len(rm.ScopeMetrics) == 1)
+	assert.Assert(t, len(rm.ScopeMetrics[0].Metrics) == 2)
+
+	expectedEnabledReceivers := metricdata.Metrics{
+		Name: "ops_agent_enabled_receivers",
+		Data: metricdata.Gauge[int64]{
+			DataPoints: []metricdata.DataPoint[int64]{
+				{
+					Attributes: attribute.NewSet(
+						attribute.String("telemetry_type", "metrics"),
+						attribute.String("receiver_type", "hostmetrics"),
+					),
+					Value: 1,
+				},
+				{
+					Attributes: attribute.NewSet(
+						attribute.String("telemetry_type", "logs"),
+						attribute.String("receiver_type", "files"),
+					),
+					Value: 1,
+				},
+			},
+		},
+	}
+	metricdatatest.AssertEqual(t, expectedEnabledReceivers, rm.ScopeMetrics[0].Metrics[0], metricdatatest.IgnoreTimestamp())
+
+	expectedFeatureTracking := metricdata.Metrics{
+		Name: "ops_agent_feature_tracking",
+		Data: metricdata.Gauge[int64]{
+			DataPoints: []metricdata.DataPoint[int64]{
+				{
+					Attributes: attribute.NewSet(
+						attribute.String("module", "logging"),
+						attribute.String("feature", "service:pipelines"),
+						attribute.String("key", "default_pipeline_overridden"),
+						attribute.String("value", "false"),
+					),
+					Value: 1,
+				},
+				{
+					Attributes: attribute.NewSet(
+						attribute.String("module", "metrics"),
+						attribute.String("feature", "service:pipelines"),
+						attribute.String("key", "default_pipeline_overridden"),
+						attribute.String("value", "false"),
+					),
+					Value: 1,
+				},
+				{
+					Attributes: attribute.NewSet(
+						attribute.String("module", "global"),
+						attribute.String("feature", "default:self_log"),
+						attribute.String("key", "default_self_log_file_collection"),
+						attribute.String("value", "true"),
+					),
+					Value: 1,
+				},
+			},
+		},
+	}
+	metricdatatest.AssertEqual(t, expectedFeatureTracking, rm.ScopeMetrics[0].Metrics[1], metricdatatest.IgnoreTimestamp())
 }

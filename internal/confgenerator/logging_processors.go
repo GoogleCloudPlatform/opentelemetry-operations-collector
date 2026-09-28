@@ -91,7 +91,7 @@ func (p ParserShared) TypesStatements() (ottl.Statements, error) {
 }
 
 // Handle special fields documented at https://cloud.google.com/stackdriver/docs/solutions/agents/ops-agent/configuration#special-fields
-func (p ParserShared) SpecialFieldsStatements(ctx context.Context) ottl.Statements {
+func (p ParserShared) SpecialFieldsStatements(ctx context.Context) (ottl.Statements, error) {
 	fields := filter.SpecialFields()
 	var names []string
 	for f := range fields {
@@ -113,7 +113,7 @@ func (p ParserShared) SpecialFieldsStatements(ctx context.Context) ottl.Statemen
 			},
 		}}.statements(ctx)
 		if err != nil {
-			panic(err)
+			return nil, err
 		}
 		statements = statements.Append(s)
 	}
@@ -126,7 +126,7 @@ func (p ParserShared) SpecialFieldsStatements(ctx context.Context) ottl.Statemen
 		funcOld.DeleteIf(funcNew.IsPresent()),
 	))
 
-	return statements
+	return statements, nil
 }
 
 // A LoggingProcessorParseJson parses the specified field as JSON.
@@ -174,7 +174,11 @@ func (p LoggingProcessorParseJson) Processors(ctx context.Context) ([]otel.Compo
 	}
 	statements = statements.Append(ts)
 
-	statements = statements.Append(p.SpecialFieldsStatements(ctx))
+	ts, err = p.SpecialFieldsStatements(ctx)
+	if err != nil {
+		return nil, err
+	}
+	statements = statements.Append(ts)
 
 	return []otel.Component{otel.Transform(
 		"log", "log",
@@ -253,7 +257,11 @@ func (p LoggingProcessorParseRegex) Processors(ctx context.Context) ([]otel.Comp
 	}
 	statements = statements.Append(ts)
 
-	statements = statements.Append(p.SpecialFieldsStatements(ctx))
+	ts, err = p.SpecialFieldsStatements(ctx)
+	if err != nil {
+		return nil, err
+	}
+	statements = statements.Append(ts)
 
 	return []otel.Component{otel.Transform(
 		"log", "log",

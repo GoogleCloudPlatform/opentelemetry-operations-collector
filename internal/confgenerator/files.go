@@ -18,7 +18,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 )
 
 // ReadUnifiedConfigFromFile reads the user config file and returns a UnifiedConfig.
@@ -42,16 +41,4 @@ func ReadUnifiedConfigFromFile(ctx context.Context, path string) (*UnifiedConfig
 	}
 
 	return uc, nil
-}
-
-func WriteConfigFile(content []byte, path string) error {
-	// Make sure the directory exists before writing the file.
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return fmt.Errorf("failed to create directory for %q: %w", path, err)
-	}
-	content = append(content, []byte("\n")...)
-	if err := os.WriteFile(path, content, 0644); err != nil {
-		return fmt.Errorf("failed to write file to %q: %w", path, err)
-	}
-	return nil
 }

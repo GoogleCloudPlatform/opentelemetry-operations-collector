@@ -26,9 +26,7 @@ func TestPortOverriddenByEnv(t *testing.T) {
 	os.Setenv(otel.ExperimentalMetricsPortEnv, "40001")
 	defer os.Unsetenv(otel.ExperimentalMetricsPortEnv)
 
-	uc := &UnifiedConfig{}
-
-	if port := uc.GetOtelMetricsPort(); port != 40001 {
+	if port := otel.GetMetricsPort(); port != 40001 {
 		t.Errorf("Expected OTel port 40001, got %d", port)
 	}
 }
@@ -37,21 +35,17 @@ func TestPortDefaultWhenEnvEmpty(t *testing.T) {
 	// Ensure env vars are not set
 	os.Unsetenv(otel.ExperimentalMetricsPortEnv)
 
-	uc := &UnifiedConfig{}
-
-	if port := uc.GetOtelMetricsPort(); port != otel.MetricsPort {
+	if port := otel.GetMetricsPort(); port != otel.MetricsPort {
 		t.Errorf("Expected OTel default port %d, got %d", otel.MetricsPort, port)
 	}
 }
 
 func TestPortInvalidEnvFallbacksToDefault(t *testing.T) {
-	// Set invalid env vars
-	os.Setenv(otel.ExperimentalMetricsPortEnv, "65536") // Out of range for uint16
-	defer os.Unsetenv(otel.ExperimentalMetricsPortEnv)
-
-	uc := &UnifiedConfig{}
-
-	if port := uc.GetOtelMetricsPort(); port != otel.MetricsPort {
-		t.Errorf("Expected OTel default port %d for invalid env, got %d", otel.MetricsPort, port)
+	for _, val := range []string{"invalid", "65536"} {
+		os.Setenv(otel.ExperimentalMetricsPortEnv, val)
+		if port := otel.GetMetricsPort(); port != otel.MetricsPort {
+			t.Errorf("Expected OTel default port %d for invalid env %q, got %d", otel.MetricsPort, val, port)
+		}
+		os.Unsetenv(otel.ExperimentalMetricsPortEnv)
 	}
 }

@@ -17,41 +17,50 @@ package confgenerator
 
 import (
 	"context"
-	"log"
+	"fmt"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/platform"
 )
 
 // MergeConfFiles merges the user provided config with the built-in config struct for the platform.
 func MergeConfFiles(ctx context.Context, userConfPath string) (*UnifiedConfig, error) {
+	_, merged, err := ReadAndMergeConfFiles(ctx, userConfPath)
+	return merged, err
+}
+
+// ReadAndMergeConfFiles reads the user provided config and merges it with the built-in config struct for the platform,
+// returning both the unmerged user config (non-nil) and the merged config.
+func ReadAndMergeConfFiles(ctx context.Context, userConfPath string) (*UnifiedConfig, *UnifiedConfig, error) {
 	builtInStruct := BuiltInConfStructs[platform.FromContext(ctx).Name()]
 
 	// Start with the built-in config.
 	result, err := builtInStruct.DeepCopy(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	overrides, err := ReadUnifiedConfigFromFile(ctx, userConfPath)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Optionally merge the user config file.
 	if overrides != nil {
 		mergeConfigs(result, overrides)
+	} else {
+		overrides = &UnifiedConfig{}
 	}
 
 	if err := result.Validate(ctx); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Ensure the merged config struct fields are valid.
 	v := newValidator()
 	if err := v.StructCtx(ctx, result); err != nil {
-		log.Fatalf("merged config failed to validate: %v", err)
+		return nil, nil, fmt.Errorf("merged config failed to validate: %w", err)
 	}
-	return result, nil
+	return overrides, result, nil
 }
 
 func mergeConfigs(original, overrides *UnifiedConfig) {
@@ -87,13 +96,10 @@ func mergeConfigs(original, overrides *UnifiedConfig) {
 			if overrides.Logging.Service.LogLevel != "info" {
 				original.Logging.Service.LogLevel = overrides.Logging.Service.LogLevel
 			}
-			original.Logging.Service.OTelLogging = overrides.Logging.Service.OTelLogging
 			if overrides.Logging.Service.Compress != "" {
 				original.Logging.Service.Compress = overrides.Logging.Service.Compress
 			}
 			for name, pipeline := range overrides.Logging.Service.Pipelines {
-				// skips logging.service.pipelines.*.exporters
-				pipeline.ExporterIDs = nil
 				if name == "default_pipeline" {
 					// overrides logging.service.pipelines.default_pipeline.receivers
 					if ids := pipeline.ReceiverIDs; ids != nil {
@@ -106,7 +112,11 @@ func mergeConfigs(original, overrides *UnifiedConfig) {
 					}
 				} else {
 					// Overrides logging.service.pipelines.<non_default_pipelines>
-					original.Logging.Service.Pipelines[name] = pipeline
+					// skips logging.service.pipelines.*.exporters
+					original.Logging.Service.Pipelines[name] = &Pipeline{
+						ReceiverIDs:  pipeline.ReceiverIDs,
+						ProcessorIDs: pipeline.ProcessorIDs,
+					}
 				}
 			}
 		}
@@ -127,10 +137,12 @@ func mergeConfigs(original, overrides *UnifiedConfig) {
 				original.Metrics.Service.LogLevel = overrides.Metrics.Service.LogLevel
 			}
 			for name, pipeline := range overrides.Metrics.Service.Pipelines {
-				// skips metrics.service.pipelines.*.exporters
-				pipeline.ExporterIDs = nil
 				// Overrides metrics.service.pipelines.*
-				original.Metrics.Service.Pipelines[name] = pipeline
+				// skips metrics.service.pipelines.*.exporters
+				original.Metrics.Service.Pipelines[name] = &Pipeline{
+					ReceiverIDs:  pipeline.ReceiverIDs,
+					ProcessorIDs: pipeline.ProcessorIDs,
+				}
 			}
 		}
 	}

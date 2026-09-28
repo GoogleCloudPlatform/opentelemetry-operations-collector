@@ -86,6 +86,8 @@ processors:
         - otelcol_process_memory_rss
         - otelcol_exporter_sent_metric_points
         - otelcol_exporter_send_failed_metric_points
+        - ops_agent_enabled_receivers
+        - ops_agent_feature_tracking
         - rpc.client.call.duration_count
   filter/otlp_otlp_0:
     metrics:
@@ -572,6 +574,28 @@ processors:
         aggregation_type: sum
         label_set: []
     - action: update
+      include: ops_agent_enabled_receivers
+      new_name: agent/ops_agent/enabled_receivers
+      operations:
+      - action: toggle_scalar_data_type
+      - action: aggregate_labels
+        aggregation_type: sum
+        label_set:
+        - telemetry_type
+        - receiver_type
+    - action: update
+      include: ops_agent_feature_tracking
+      new_name: agent/internal/ops/feature_tracking
+      operations:
+      - action: toggle_scalar_data_type
+      - action: aggregate_labels
+        aggregation_type: sum
+        label_set:
+        - module
+        - feature
+        - key
+        - value
+    - action: update
       include: rpc.client.call.duration_count
       new_name: agent/api_request_count
       operations:
@@ -826,27 +850,6 @@ processors:
     - context: metric
       statements:
       - set(unit, "1")
-  transform/ops_agent_0:
-    error_mode: ignore
-    metric_statements:
-    - context: datapoint
-      statements:
-      - set(time, Now())
-  transform/ops_agent_1:
-    metric_statements:
-    - context: scope
-      statements:
-      - set(name, "")
-      - set(version, "")
-  transform/ops_agent_2:
-    metric_statements:
-    - context: resource
-      error_mode: silent
-      statements:
-      - delete_key(attributes, "service.name")
-      - delete_key(attributes, "service.instance.id")
-      - delete_key(attributes, "service.namespace")
-      - delete_key(attributes, "service.version")
   transform/otel_0:
     error_mode: ignore
     metric_statements:
@@ -942,13 +945,6 @@ receivers:
     protocols:
       grpc:
         endpoint: 0.0.0.0:4317
-  otlpjsonfile/ops_agent:
-    include:
-    - enabled_receivers_otlp.json
-    - feature_tracking_otlp.json
-    poll_interval: 1m0s
-    replay_file: true
-    start_at: beginning
   prometheus/agent_prometheus:
     config:
       scrape_configs:
@@ -1025,19 +1021,6 @@ service:
       - batch/otlp_grpc/otlp_metrics_metrics_2
       receivers:
       - prometheus/agent_prometheus
-    metrics/opsagent:
-      exporters:
-      - otlp_grpc/otlp_metrics
-      processors:
-      - transform/ops_agent_0
-      - transform/ops_agent_1
-      - transform/ops_agent_2
-      - resourcedetection/_global_0
-      - resource/otlp_grpc/otlp_metrics_metrics_0
-      - metric_start_time/otlp_grpc/otlp_metrics_metrics_1
-      - batch/otlp_grpc/otlp_metrics_metrics_2
-      receivers:
-      - otlpjsonfile/ops_agent
     metrics/otel:
       exporters:
       - otlp_grpc/otlp_metrics

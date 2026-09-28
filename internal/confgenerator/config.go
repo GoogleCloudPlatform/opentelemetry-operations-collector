@@ -25,7 +25,6 @@ import (
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/confgenerator/filter"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/confgenerator/otel"
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/confgenerator/portutil"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/platform"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/internal/set"
 	"github.com/go-playground/validator/v10"
@@ -33,10 +32,6 @@ import (
 	promconfig "github.com/prometheus/prometheus/config"
 	"go.uber.org/multierr"
 )
-
-// BuiltInConfStructs contains the default configuration for each platform.
-// It is populated by an initializer in the `apps` package.
-var BuiltInConfStructs map[string]*UnifiedConfig
 
 // Ops Agent config.
 type UnifiedConfig struct {
@@ -62,10 +57,6 @@ func (uc *UnifiedConfig) HasTraces() bool {
 
 func (uc *UnifiedConfig) HasCombined() bool {
 	return uc.Combined != nil
-}
-
-func (uc *UnifiedConfig) GetOtelMetricsPort() uint16 {
-	return portutil.GetPortFromEnv(otel.ExperimentalMetricsPortEnv, otel.MetricsPort)
 }
 
 func (uc *UnifiedConfig) DeepCopy(ctx context.Context) (*UnifiedConfig, error) {
@@ -207,7 +198,7 @@ func newValidator() *validator.Validate {
 		}
 		tmin, err := time.ParseDuration(fl.Param())
 		if err != nil {
-			panic(err)
+			return false
 		}
 		return t >= tmin
 	})
@@ -237,13 +228,11 @@ func newValidator() *validator.Validate {
 			return false
 		}
 		if parentkind != reflect.Map {
-			fmt.Printf("not map\n")
 			return false
 		}
 		k1 := fl.Field().String()
 		field, err := filter.NewMember(k1)
 		if err != nil {
-			fmt.Printf("newmember %q: %v", fl.Field().String(), err)
 			return false
 		}
 		for _, key := range parent.MapKeys() {
@@ -272,7 +261,7 @@ func newValidator() *validator.Validate {
 		// Currently, instrumentation_source is the only field that is not writable.
 		m2, err := filter.NewMember(InstrumentationSourceLabel)
 		if err != nil {
-			panic(err)
+			return false
 		}
 		return !m2.Equals(*m1)
 	})
@@ -280,11 +269,11 @@ func newValidator() *validator.Validate {
 	v.RegisterValidation("multipleof_time", func(fl validator.FieldLevel) bool {
 		t, ok := fl.Field().Interface().(time.Duration)
 		if !ok {
-			panic(fmt.Sprintf("multipleof_time: could not convert %s to time duration", fl.Field().String()))
+			return false
 		}
 		tfactor, err := time.ParseDuration(fl.Param())
-		if err != nil {
-			panic(fmt.Sprintf("multipleof_time: could not convert %s to time duration", fl.Param()))
+		if err != nil || tfactor == 0 {
+			return false
 		}
 		return t%tfactor == 0
 	})
@@ -293,7 +282,7 @@ func newValidator() *validator.Validate {
 	v.RegisterValidationCtx("winlogchannels", func(ctx context.Context, fl validator.FieldLevel) bool {
 		receiver, ok := fl.Parent().Interface().(LoggingReceiverWindowsEventLog)
 		if !ok {
-			panic(fmt.Sprintf("winlogchannels: could not convert %s's parent to LoggingReceiverWindowsEventLog", fl.Field().String()))
+			return false
 		}
 		if receiver.IsDefaultVersion() {
 			if err := validateWinlogV1Channels(ctx, receiver.Channels); err != nil {
@@ -996,28 +985,6 @@ func (uc *UnifiedConfig) LoggingReceivers(ctx context.Context) (map[string]OTelR
 	return out, nil
 }
 
-func (uc *UnifiedConfig) OTelLoggingSupported(ctx context.Context) bool {
-	ucLogging := UnifiedConfig{
-		Logging: uc.Logging,
-		// The OTLP receiver can be enabled via a combined field to collect OTLP logs using OTel. Therefore, we must include the combined receivers when verifying OTel logging support.
-		Combined: uc.Combined,
-	}
-	ucLoggingCopy, err := ucLogging.DeepCopy(ctx)
-	if err != nil {
-		return false
-	}
-	if ucLoggingCopy.Logging == nil {
-		return true
-	}
-	if ucLoggingCopy.Logging.Service == nil {
-		ucLoggingCopy.Logging.Service = &LoggingService{}
-	}
-	t := true
-	ucLoggingCopy.Logging.Service.OTelLogging = &t
-	_, err = ucLoggingCopy.GenerateOtelConfig(ctx, "", "", "")
-	return err == nil
-}
-
 func (uc *UnifiedConfig) ValidateMetrics(ctx context.Context) error {
 	m := uc.Metrics
 	subagent := "metrics"
@@ -1088,6 +1055,10 @@ func (uc *UnifiedConfig) ValidateTraces() error {
 
 type VersionedReceivers struct {
 	ReceiverVersion string `yaml:"receiver_version,omitempty" tracking:""`
+}
+
+func (v VersionedReceivers) IsV2() bool {
+	return v.ReceiverVersion == "2"
 }
 
 var (

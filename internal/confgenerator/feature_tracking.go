@@ -15,7 +15,6 @@
 package confgenerator
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"reflect"
@@ -74,11 +73,10 @@ type CustomFeatures interface {
 // ExtractFeatures fields that containing a tracking tag will be tracked.
 // Automatic collection of bool or int fields. Any value that exists on tracking
 // tag will be used instead of value from UnifiedConfig.
-func ExtractFeatures(ctx context.Context, userUc, mergedUc *UnifiedConfig) ([]Feature, error) {
+func ExtractFeatures(userUc *UnifiedConfig) ([]Feature, error) {
 	allFeatures := getOverriddenDefaultPipelines(userUc)
 
 	allFeatures = append(allFeatures, getSelfLogCollection(userUc))
-	allFeatures = append(allFeatures, getOTelLoggingSupportedConfig(ctx, mergedUc))
 
 	var err error
 	var tempTrackedFeatures []Feature
@@ -473,23 +471,6 @@ func getMetadata(field reflect.StructField) metadata {
 		// See this for more details: https://pkg.go.dev/gopkg.in/yaml.v2#Unmarshal
 		yamlTag: yamlName,
 	}
-}
-
-// TODO: b/399354366 - Cleanup when OTel Logging Support is fully released.
-func getOTelLoggingSupportedConfig(ctx context.Context, mergedUc *UnifiedConfig) Feature {
-	feature := Feature{
-		Module: "logging",
-		Kind:   "service",
-		Type:   "otel_logging",
-		Key:    []string{"otel_logging_supported_config"},
-		Value:  "false",
-	}
-
-	if mergedUc.OTelLoggingSupported(ctx) {
-		feature.Value = "true"
-	}
-
-	return feature
 }
 
 func getSelfLogCollection(uc *UnifiedConfig) Feature {

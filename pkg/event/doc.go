@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//go:generate make -C ../.. gen-events
+//go:generate make -C ../.. gen-weaver
 
 // Package event provides OpenTelemetry event recording functions generated from semantic convention schemas via OpenTelemetry Weaver.
 package event

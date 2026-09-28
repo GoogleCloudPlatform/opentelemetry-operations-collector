@@ -140,15 +140,15 @@ events:
 Run the Weaver schema check from the repository root (uses Docker `otel/weaver:v0.26.1` with `--v2`):
 
 ```bash
-make check-events
+make check-weaver
 ```
 
 ### Step 3: Regenerate Go Code
 
-Generate `pkg/event/generated_events.go`:
+Generate `pkg/event/generated_events.go`. This also regenerates the googlecontrolplane extension's metrics, whose registry references the attributes in `pkg/event/schema`:
 
 ```bash
-make gen-events
+make gen-weaver
 ```
 *(Alternatively, run `go generate ./pkg/event/...` from the root or `make generate` inside `pkg/event/`.)*
 
@@ -187,4 +187,4 @@ If you need to customize how Go code is generated:
    * Accesses resolved attribute definitions via `ctx.attributes` (where each item has `.key`, `.type`, `.brief`).
    * Accesses resolved event definitions via `ctx.events` (where each item has `.name`, `.brief`, `.note`, `.annotations`, and `.attributes`).
    * Uses the `go_export_name` and `go_param_name` macros to ensure Go initialism conventions (e.g., `id` -> `ID` in exported names and trailing parameter names like `policyID` and `policySetRevisionID`).
-   * After editing `events.go.j2`, always run `make gen-events && make precommit`.
+   * After editing `events.go.j2`, always run `make gen-weaver && make precommit`.

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 //go:generate mdatagen metadata.yaml
-//go:generate make -C ../../../.. gen-controlplane-metrics
+//go:generate make -C ../../../.. gen-weaver
 
 // Package googlecontrolplaneextension reports one self-observability metric
 // about the collector's control plane state: whether a policy set is currently
@@ -32,7 +32,7 @@
 // implementation would require.
 //
 // The metric is defined in an OpenTelemetry Weaver schema under schema/, and
-// internal/telemetry is generated from it with `make gen-controlplane-metrics`.
+// internal/telemetry is generated from it with `make gen-weaver`.
 // Its attributes are not redefined there: they are referenced from the
 // pkg/event registry, so the metric always uses the same keys as the policy
 // events and can be correlated with them.

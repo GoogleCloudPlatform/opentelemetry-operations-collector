@@ -35,6 +35,7 @@ import (
 	nopexporter "go.opentelemetry.io/collector/exporter/nopexporter"
 	otlpexporter "go.opentelemetry.io/collector/exporter/otlpexporter"
 	otlphttpexporter "go.opentelemetry.io/collector/exporter/otlphttpexporter"
+	googlecontrolplaneextension "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/googlecontrolplaneextension"
 	healthagent "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/healthagent"
 	ackextension "github.com/open-telemetry/opentelemetry-collector-contrib/extension/ackextension"
 	basicauthextension "github.com/open-telemetry/opentelemetry-collector-contrib/extension/basicauthextension"
@@ -126,6 +127,7 @@ func components() (otelcol.Factories, error) {
 	}
 
 	factories.Extensions, err = otelcol.MakeFactoryMap[extension.Factory](
+		googlecontrolplaneextension.NewFactory(),
 		healthagent.NewFactory(),
 		ackextension.NewFactory(),
 		basicauthextension.NewFactory(),
@@ -148,6 +150,7 @@ func components() (otelcol.Factories, error) {
 		return otelcol.Factories{}, err
 	}
 	factories.ExtensionModules = makeModulesMap(factories.Extensions, map[component.Type]string{
+		googlecontrolplaneextension.NewFactory().Type(): "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/googlecontrolplaneextension v0.160.0",
 		healthagent.NewFactory().Type(): "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/healthagent v0.160.0",
 		ackextension.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/extension/ackextension v0.160.0",
 		basicauthextension.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/extension/basicauthextension v0.160.0",

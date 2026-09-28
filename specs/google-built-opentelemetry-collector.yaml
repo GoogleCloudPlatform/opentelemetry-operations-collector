@@ -125,6 +125,7 @@ components:
     - pprof
     - filestorage
     - googleclientauth
+    - googlecontrolplane
 
   connectors:
     - forward

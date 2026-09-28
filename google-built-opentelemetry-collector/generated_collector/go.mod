@@ -6,6 +6,7 @@ go 1.26.6
 
 require (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter v0.160.0
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/googlecontrolplaneextension v0.160.0
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/healthagent v0.160.0
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor v0.160.0
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider v0.160.0
@@ -581,6 +582,8 @@ require (
 )
 
 replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider v0.160.0 => ../../components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider
+
+replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/googlecontrolplaneextension v0.160.0 => ../../components/google-built-opentelemetry-collector/extension/googlecontrolplaneextension
 
 replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/healthagent v0.160.0 => ../../components/google-built-opentelemetry-collector/extension/healthagent
 

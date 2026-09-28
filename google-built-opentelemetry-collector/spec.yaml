@@ -110,6 +110,7 @@ components:
         - pprof
         - filestorage
         - googleclientauth
+        - googlecontrolplane
     providers:
         - env
         - file

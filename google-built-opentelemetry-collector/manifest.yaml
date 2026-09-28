@@ -81,6 +81,8 @@ exporters:
 - gomod: go.opentelemetry.io/collector/exporter/otlphttpexporter v0.160.0
 
 extensions:
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/googlecontrolplaneextension v0.160.0
+  path: ../components/google-built-opentelemetry-collector/extension/googlecontrolplaneextension
 - gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/healthagent v0.160.0
   path: ../components/google-built-opentelemetry-collector/extension/healthagent
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/ackextension v0.160.0

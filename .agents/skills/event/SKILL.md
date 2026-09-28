@@ -77,11 +77,11 @@ Define reusable attributes under the top-level `attributes:` section of `events.
 
 ## How Generated Code Works
 
-For an event named `gcp.policy.evaluate.error` with `annotations.severity: error` and required attributes `gcp.policy.id` (string) and `gcp.policy.set.revision.id` (string), Weaver generates:
+For an event named `gcp.policy.evaluate.error` with `annotations.severity: error` and required attributes `gcp.policy.id` (string), `gcp.policy.set.id` (string), and `gcp.policy.set.revision.id` (string), Weaver generates:
 
 1. **Schema URL and Event Name Constants:**
    ```go
-   const SchemaURL = "https://googlecloudplatform.github.io/opentelemetry-operations-collector/schemas/0.1.0"
+   const SchemaURL = "https://opentelemetry.io/schemas/1.40.0"
    const PolicyEvaluateErrorEventName = "gcp.policy.evaluate.error"
    ```
 2. **Functional Options (`PolicyEvaluateErrorEventOption`):**
@@ -94,6 +94,7 @@ For an event named `gcp.policy.evaluate.error` with `annotations.severity: error
        logger *zap.Logger,
        err error,
        policyID string,
+       policySetID string,
        policySetRevisionID string,
        opts ...PolicyEvaluateErrorEventOption,
    )

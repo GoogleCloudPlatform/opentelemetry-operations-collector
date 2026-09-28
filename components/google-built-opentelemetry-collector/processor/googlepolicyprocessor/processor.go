@@ -60,12 +60,13 @@ func (p *googlePolicyProcessor) start(_ context.Context, _ component.Host) error
 }
 
 func (p *googlePolicyProcessor) reloadPolicies() {
-	revID, failed := googlepolicy.TakeActiveFailedPolicies()
+	policySetID, revID, failed := googlepolicy.TakeActiveFailedPolicies()
 	for _, fp := range failed {
 		event.RecordPolicyEvaluateErrorEvent(
 			p.logger,
 			fp.Err,
 			fp.ID,
+			policySetID,
 			revID,
 			event.WithPolicyEvaluateErrorEventErrorType(googlepolicy.ClassifyPolicyError(fp.Err)),
 		)

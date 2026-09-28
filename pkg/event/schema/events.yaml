@@ -46,6 +46,12 @@ attributes:
     brief: Unique identifier of the policy being evaluated.
     examples: ["policy-123"]
 
+  - key: gcp.policy.set.id
+    type: string
+    stability: development
+    brief: Unique identifier of the policy set containing the policy.
+    examples: ["projects/my-project/locations/us-central1/policySets/my-policy-set"]
+
   - key: gcp.policy.set.revision.id
     type: string
     stability: development
@@ -67,6 +73,8 @@ events:
     attributes:
       - ref: gcp.policy.id
         requirement_level: required
+      - ref: gcp.policy.set.id
+        requirement_level: required
       - ref: gcp.policy.set.revision.id
         requirement_level: required
       - ref: error.type
@@ -87,5 +95,7 @@ events:
     annotations:
       severity: error
     attributes:
+      - ref: gcp.policy.set.id
+        requirement_level: required
       - ref: gcp.policy.set.revision.id
         requirement_level: required

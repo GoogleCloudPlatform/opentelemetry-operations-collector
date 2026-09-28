@@ -97,6 +97,7 @@ func RecordPolicyEvaluateErrorEvent(
 	logger *zap.Logger,
 	err error,
 	policyID string,
+	policySetID string,
 	policySetRevisionID string,
 	opts ...PolicyEvaluateErrorEventOption,
 ) {
@@ -105,6 +106,7 @@ func RecordPolicyEvaluateErrorEvent(
 		fields: []zap.Field{
 			zap.String("event.name", PolicyEvaluateErrorEventName),
 			zap.String("gcp.policy.id", policyID),
+			zap.String("gcp.policy.set.id", policySetID),
 			zap.String("gcp.policy.set.revision.id", policySetRevisionID),
 		},
 	}
@@ -156,6 +158,7 @@ func WithPolicySetInvalidEventFields(fields ...zap.Field) PolicySetInvalidEventO
 func RecordPolicySetInvalidEvent(
 	logger *zap.Logger,
 	err error,
+	policySetID string,
 	policySetRevisionID string,
 	opts ...PolicySetInvalidEventOption,
 ) {
@@ -163,6 +166,7 @@ func RecordPolicySetInvalidEvent(
 		level: zapcore.ErrorLevel,
 		fields: []zap.Field{
 			zap.String("event.name", PolicySetInvalidEventName),
+			zap.String("gcp.policy.set.id", policySetID),
 			zap.String("gcp.policy.set.revision.id", policySetRevisionID),
 		},
 	}

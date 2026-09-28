@@ -231,7 +231,8 @@ func TestRetrieve_MultipleDestinationPolicies(t *testing.T) {
 	p := createProviderWithLogger(logger)
 
 	ps := &googlepolicy.PolicySet{
-		RevisionID: "rev-mult-dest",
+		PolicySetID: "projects/my-project/locations/us-central1/policySets/my-policy-set",
+		RevisionID:  "rev-mult-dest",
 		Policies: map[string]*googlepolicy.PolicySetEntry{
 			"dest1": {PolicyObj: &mockDestinationPolicy{name: "dest1"}},
 			"dest2": {PolicyObj: &mockDestinationPolicy{name: "dest2"}},
@@ -263,6 +264,7 @@ func TestRetrieve_MultipleDestinationPolicies(t *testing.T) {
 	assert.Contains(t, entry.Message, "more than one destination policy found")
 	assert.Equal(t, map[string]any{
 		"event.name":                 event.PolicySetInvalidEventName,
+		"gcp.policy.set.id":          "projects/my-project/locations/us-central1/policySets/my-policy-set",
 		"gcp.policy.set.revision.id": "rev-mult-dest",
 		"context":                    "context.Background.WithValue(FLEET_ID, 1234)",
 	}, entry.ContextMap())
@@ -442,7 +444,8 @@ func TestRetrieve_RecordsPolicyEvaluateErrorEventOnFailure(t *testing.T) {
 		name: "valid_source",
 	}
 	ps := &googlepolicy.PolicySet{
-		RevisionID: "886313e1-3b8a-5372-9b90-0c9aee199e5d",
+		PolicySetID: "projects/my-project/locations/us-central1/policySets/my-policy-set",
+		RevisionID:  "886313e1-3b8a-5372-9b90-0c9aee199e5d",
 		Policies: map[string]*googlepolicy.PolicySetEntry{
 			"failing_source": {PolicyObj: failingSource},
 			"valid_source":   {PolicyObj: validSource},
@@ -478,6 +481,7 @@ func TestRetrieve_RecordsPolicyEvaluateErrorEventOnFailure(t *testing.T) {
 	assert.Equal(t, map[string]any{
 		"event.name":                 event.PolicyEvaluateErrorEventName,
 		"gcp.policy.id":              "failing_source",
+		"gcp.policy.set.id":          "projects/my-project/locations/us-central1/policySets/my-policy-set",
 		"gcp.policy.set.revision.id": "886313e1-3b8a-5372-9b90-0c9aee199e5d",
 		"error.type":                 "policy_evaluation_failed",
 		"gcp.policy.class":           "source",
@@ -494,7 +498,8 @@ func TestRetrieve_BuiltinPolicyErrorDoesNotRollbackActivePolicySet(t *testing.T)
 	p := createProviderWithLogger(logger)
 
 	ps := &googlepolicy.PolicySet{
-		RevisionID: "rev-should-stay-active",
+		PolicySetID: "projects/my-project/locations/us-central1/policySets/my-policy-set",
+		RevisionID:  "rev-should-stay-active",
 		Policies: map[string]*googlepolicy.PolicySetEntry{
 			"valid_source": {PolicyObj: &mockSourcePolicy{name: "valid_source"}},
 		},
@@ -518,6 +523,7 @@ func TestRetrieve_BuiltinPolicyErrorDoesNotRollbackActivePolicySet(t *testing.T)
 	assert.Equal(t, map[string]any{
 		"event.name":                 event.PolicyEvaluateErrorEventName,
 		"gcp.policy.id":              "default_self_metrics",
+		"gcp.policy.set.id":          "",
 		"gcp.policy.set.revision.id": "",
 		"error.type":                 "policy_evaluation_failed",
 		"gcp.policy.class":           "source",

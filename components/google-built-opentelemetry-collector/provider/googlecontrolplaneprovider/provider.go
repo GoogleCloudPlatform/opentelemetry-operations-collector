@@ -93,9 +93,14 @@ func newProvider(set confmap.ProviderSettings) confmap.Provider {
 	}
 }
 
-func (p *provider) recordPolicyEvaluateError(ctx context.Context, policyID string, revisionID string, err error, extraOpts ...event.PolicyEvaluateErrorEventOption) {
+func (p *provider) recordPolicyEvaluateError(ctx context.Context, policyID string, ps *googlepolicy.PolicySet, err error, extraOpts ...event.PolicyEvaluateErrorEventOption) {
 	if p.logger == nil {
 		return
+	}
+	var policySetID, revisionID string
+	if ps != nil {
+		policySetID = ps.PolicySetID
+		revisionID = ps.RevisionID
 	}
 	opts := make([]event.PolicyEvaluateErrorEventOption, 0, 2+len(extraOpts))
 	opts = append(opts,
@@ -107,18 +112,25 @@ func (p *provider) recordPolicyEvaluateError(ctx context.Context, policyID strin
 		p.logger,
 		err,
 		policyID,
+		policySetID,
 		revisionID,
 		opts...,
 	)
 }
 
-func (p *provider) recordPolicySetInvalid(ctx context.Context, revisionID string, err error) {
+func (p *provider) recordPolicySetInvalid(ctx context.Context, ps *googlepolicy.PolicySet, err error) {
 	if p.logger == nil {
 		return
+	}
+	var policySetID, revisionID string
+	if ps != nil {
+		policySetID = ps.PolicySetID
+		revisionID = ps.RevisionID
 	}
 	event.RecordPolicySetInvalidEvent(
 		p.logger,
 		err,
+		policySetID,
 		revisionID,
 		event.WithPolicySetInvalidEventContext(ctx),
 	)
@@ -231,7 +243,7 @@ func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrie
 	}
 
 	for {
-		_, failed := googlepolicy.TakeActiveFailedPolicies()
+		_, _, failed := googlepolicy.TakeActiveFailedPolicies()
 		activePolicySet := googlepolicy.ActivePolicySet()
 		isBuiltinFallback := activePolicySet == nil
 		if isBuiltinFallback {
@@ -266,7 +278,7 @@ func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrie
 
 func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fleetID string, activePolicySet *googlepolicy.PolicySet) (*confmap.Retrieved, bool, error) {
 	for _, fp := range activePolicySet.FailedPolicies {
-		p.recordPolicyEvaluateError(ctx, fp.ID, activePolicySet.RevisionID, fp.Err)
+		p.recordPolicyEvaluateError(ctx, fp.ID, activePolicySet, fp.Err)
 	}
 
 	// Root conf object, each policy evaluation will merge into this confmap.
@@ -277,7 +289,7 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 	destPolicies := activePolicySet.LoadPoliciesOfClass(googlepolicy.PolicyClassDestination)
 	if len(destPolicies) > 1 {
 		err := fmt.Errorf("%w: found %d destination policies", ErrMultipleDestinationPolicies, len(destPolicies))
-		p.recordPolicySetInvalid(ctx, activePolicySet.RevisionID, err)
+		p.recordPolicySetInvalid(ctx, activePolicySet, err)
 		return nil, false, err
 	}
 
@@ -288,11 +300,11 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 		var err error
 		destPolicy, destConf, err = p.evaluateDestinationPolicy(ctx, destPolicies[0])
 		if err != nil {
-			p.recordPolicyEvaluateError(ctx, destPolicies[0].PolicyName(), activePolicySet.RevisionID, err, event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassDestination))
+			p.recordPolicyEvaluateError(ctx, destPolicies[0].PolicyName(), activePolicySet, err, event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassDestination))
 			destPolicy = nil
 		} else if err := conf.Merge(destConf); err != nil {
 			err = fmt.Errorf("failed to merge config for destination policy %q: %w", destPolicy.PolicyName(), err)
-			p.recordPolicyEvaluateError(ctx, destPolicy.PolicyName(), activePolicySet.RevisionID, err, event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassDestination))
+			p.recordPolicyEvaluateError(ctx, destPolicy.PolicyName(), activePolicySet, err, event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassDestination))
 			destPolicy = nil
 		}
 	}
@@ -301,12 +313,12 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 		var err error
 		destPolicy, destConf, err = p.evaluateDestinationPolicy(ctx, BuiltInDestinationPolicy)
 		if err != nil {
-			p.recordPolicyEvaluateError(ctx, BuiltInDestinationPolicy.PolicyName(), "", err, event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassDestination))
+			p.recordPolicyEvaluateError(ctx, BuiltInDestinationPolicy.PolicyName(), nil, err, event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassDestination))
 			return nil, true, err
 		}
 		if err := conf.Merge(destConf); err != nil {
 			err = fmt.Errorf("failed to merge config for destination policy %q: %w", BuiltInDestinationPolicy.PolicyName(), err)
-			p.recordPolicyEvaluateError(ctx, BuiltInDestinationPolicy.PolicyName(), "", err, event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassDestination))
+			p.recordPolicyEvaluateError(ctx, BuiltInDestinationPolicy.PolicyName(), nil, err, event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassDestination))
 			return nil, true, err
 		}
 	}
@@ -338,12 +350,12 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 	for _, sp := range sourcePolicies {
 		policyConf, err := p.evaluateSingleSourcePolicy(ctx, collectorID, fleetID, sp, destPolicy, preProcessLogIDs, preProcessMetricIDs, preProcessTraceIDs)
 		if err != nil {
-			p.recordPolicyEvaluateError(ctx, sp.PolicyName(), activePolicySet.RevisionID, err, event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassSource))
+			p.recordPolicyEvaluateError(ctx, sp.PolicyName(), activePolicySet, err, event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassSource))
 			continue
 		}
 		if err := conf.Merge(policyConf); err != nil {
 			err = fmt.Errorf("failed to merge config for source policy %q: %w", sp.PolicyName(), err)
-			p.recordPolicyEvaluateError(ctx, sp.PolicyName(), activePolicySet.RevisionID, err, event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassSource))
+			p.recordPolicyEvaluateError(ctx, sp.PolicyName(), activePolicySet, err, event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassSource))
 			continue
 		}
 		if sp.PolicyType() == selfmetrics.PolicyType {
@@ -356,12 +368,12 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 	if !appliedSelfMetrics {
 		policyConf, err := p.evaluateSingleSourcePolicy(ctx, collectorID, fleetID, BuiltInSelfMetricsPolicy, destPolicy, preProcessLogIDs, preProcessMetricIDs, preProcessTraceIDs)
 		if err != nil {
-			p.recordPolicyEvaluateError(ctx, BuiltInSelfMetricsPolicy.PolicyName(), "", err, event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassSource))
+			p.recordPolicyEvaluateError(ctx, BuiltInSelfMetricsPolicy.PolicyName(), nil, err, event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassSource))
 			return nil, true, err
 		}
 		if err := conf.Merge(policyConf); err != nil {
 			err = fmt.Errorf("failed to merge config for source policy %q: %w", BuiltInSelfMetricsPolicy.PolicyName(), err)
-			p.recordPolicyEvaluateError(ctx, BuiltInSelfMetricsPolicy.PolicyName(), "", err, event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassSource))
+			p.recordPolicyEvaluateError(ctx, BuiltInSelfMetricsPolicy.PolicyName(), nil, err, event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassSource))
 			return nil, true, err
 		}
 	}
@@ -369,7 +381,7 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 	// Validate the fully merged confmap.
 	if err := confmap.Validate(conf); err != nil {
 		err = fmt.Errorf("failed to validate merged configuration: %w", err)
-		p.recordPolicySetInvalid(ctx, activePolicySet.RevisionID, err)
+		p.recordPolicySetInvalid(ctx, activePolicySet, err)
 		return nil, false, err
 	}
 

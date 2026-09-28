@@ -60,6 +60,7 @@ func TestRecordPolicyEvaluateErrorEvent_ZapObserver(t *testing.T) {
 		logger,
 		errors.New("failed to compile regex expression"),
 		"policy-123",
+		"projects/my-project/locations/us-central1/policySets/my-policy-set",
 		"886313e1-3b8a-5372-9b90-0c9aee199e5d",
 		WithPolicyEvaluateErrorEventErrorType("policy_failed_validation"),
 		WithPolicyEvaluateErrorEventPolicyClass(PolicyClassTransformation),
@@ -73,6 +74,7 @@ func TestRecordPolicyEvaluateErrorEvent_ZapObserver(t *testing.T) {
 	assert.Equal(t, map[string]any{
 		"event.name":                 PolicyEvaluateErrorEventName,
 		"gcp.policy.id":              "policy-123",
+		"gcp.policy.set.id":          "projects/my-project/locations/us-central1/policySets/my-policy-set",
 		"gcp.policy.set.revision.id": "886313e1-3b8a-5372-9b90-0c9aee199e5d",
 		"error.type":                 "policy_failed_validation",
 		"gcp.policy.class":           "transformation",
@@ -89,6 +91,7 @@ func TestRecordPolicyEvaluateErrorEvent_OtelZapBridge(t *testing.T) {
 		logger,
 		errors.New("evaluation timed out"),
 		"policy-789",
+		"projects/my-project/locations/us-central1/policySets/my-policy-set",
 		"cfbfa0d5-2960-5b88-888c-f4937062d26b",
 		WithPolicyEvaluateErrorEventFields(zap.String("custom.key", "custom-val")),
 	)
@@ -107,6 +110,7 @@ func TestRecordPolicyEvaluateErrorEvent_OtelZapBridge(t *testing.T) {
 	assert.Equal(t, map[string]any{
 		"event.name":                 PolicyEvaluateErrorEventName,
 		"gcp.policy.id":              "policy-789",
+		"gcp.policy.set.id":          "projects/my-project/locations/us-central1/policySets/my-policy-set",
 		"gcp.policy.set.revision.id": "cfbfa0d5-2960-5b88-888c-f4937062d26b",
 		"custom.key":                 "custom-val",
 	}, attrs)
@@ -119,6 +123,7 @@ func TestRecordPolicySetInvalidEvent(t *testing.T) {
 	RecordPolicySetInvalidEvent(
 		logger,
 		errors.New("more than one destination policy found"),
+		"projects/my-project/locations/us-central1/policySets/my-policy-set",
 		"886313e1-3b8a-5372-9b90-0c9aee199e5d",
 	)
 
@@ -129,6 +134,7 @@ func TestRecordPolicySetInvalidEvent(t *testing.T) {
 	assert.Equal(t, zapcore.ErrorLevel, entry.Level)
 	assert.Equal(t, map[string]any{
 		"event.name":                 PolicySetInvalidEventName,
+		"gcp.policy.set.id":          "projects/my-project/locations/us-central1/policySets/my-policy-set",
 		"gcp.policy.set.revision.id": "886313e1-3b8a-5372-9b90-0c9aee199e5d",
 	}, entry.ContextMap())
 }

@@ -221,15 +221,15 @@ func ActivePolicySet() *PolicySet {
 // TakeActiveFailedPolicies atomically claims and clears any FailedPolicies on
 // the currently active PolicySet so that per-policy load errors in a revision
 // are reported at most once across the provider and processors.
-func TakeActiveFailedPolicies() (string, []FailedPolicy) {
+func TakeActiveFailedPolicies() (policySetID, revisionID string, failed []FailedPolicy) {
 	policySetMu.Lock()
 	defer policySetMu.Unlock()
 	if activePolicySet == nil || len(activePolicySet.FailedPolicies) == 0 {
-		return "", nil
+		return "", "", nil
 	}
-	failed := activePolicySet.FailedPolicies
+	failed = activePolicySet.FailedPolicies
 	activePolicySet.FailedPolicies = nil
-	return activePolicySet.RevisionID, failed
+	return activePolicySet.PolicySetID, activePolicySet.RevisionID, failed
 }
 
 // ActivePolicySetRevisionID returns the revision ID of the active policy set.

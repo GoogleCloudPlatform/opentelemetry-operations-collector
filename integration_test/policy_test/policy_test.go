@@ -986,10 +986,15 @@ func TestUnsupportedPolicyEmitsErrorEvent(t *testing.T) {
 		t.Fatalf("failed to create policies directory: %v", err)
 	}
 
+	const wantPolicySetID = "projects/my-project/locations/us-central1/policySets/my-policy-set"
+	const validPolicyID = wantPolicySetID + "/policies/valid-log-filter-policy"
+	const unsupportedPolicy1ID = wantPolicySetID + "/policies/unsupported-policy-1"
+	const unsupportedPolicy2ID = wantPolicySetID + "/policies/unsupported-policy-2"
+
 	// Provide a valid log_filter policy alongside an unsupported policy type.
-	validPolicy := `{
+	validPolicy := fmt.Sprintf(`{
   "type": "log_filter",
-  "id": "valid-log-filter-policy",
+  "id": %q,
   "action": "ACTION_DROP",
   "matches": [
     {
@@ -1001,11 +1006,11 @@ func TestUnsupportedPolicyEmitsErrorEvent(t *testing.T) {
       }
     }
   ]
-}`
-	unsupportedPolicy := `{
+}`, validPolicyID)
+	unsupportedPolicy := fmt.Sprintf(`{
   "type": "unsupported_policy_type",
-  "id": "unsupported-policy-1"
-}`
+  "id": %q
+}`, unsupportedPolicy1ID)
 	if err := os.WriteFile(filepath.Join(policiesDir, "01-valid-filter.json"), []byte(validPolicy), 0644); err != nil {
 		t.Fatalf("failed to write valid policy: %v", err)
 	}
@@ -1083,6 +1088,7 @@ service:
 	type capturedEvent struct {
 		EventName      string
 		PolicyID       string
+		PolicySetID    string
 		RevisionID     string
 		ErrorType      string
 		Body           string
@@ -1103,9 +1109,12 @@ service:
 						if !ok || evName.Str() != "gcp.policy.evaluate.error" {
 							continue
 						}
-						var policyID, revID, errType string
+						var policyID, policySetID, revID, errType string
 						if v, ok := lr.Attributes().Get("gcp.policy.id"); ok {
 							policyID = v.Str()
+						}
+						if v, ok := lr.Attributes().Get("gcp.policy.set.id"); ok {
+							policySetID = v.Str()
 						}
 						if v, ok := lr.Attributes().Get("gcp.policy.set.revision.id"); ok {
 							revID = v.Str()
@@ -1116,6 +1125,7 @@ service:
 						out = append(out, capturedEvent{
 							EventName:      evName.Str(),
 							PolicyID:       policyID,
+							PolicySetID:    policySetID,
 							RevisionID:     revID,
 							ErrorType:      errType,
 							Body:           lr.Body().Str(),
@@ -1145,8 +1155,11 @@ service:
 	}
 
 	startupEvent := gotEvents[0]
-	if startupEvent.PolicyID != "unsupported-policy-1" {
-		t.Errorf("gcp.policy.id = %q, want %q", startupEvent.PolicyID, "unsupported-policy-1")
+	if startupEvent.PolicyID != unsupportedPolicy1ID {
+		t.Errorf("gcp.policy.id = %q, want %q", startupEvent.PolicyID, unsupportedPolicy1ID)
+	}
+	if startupEvent.PolicySetID != wantPolicySetID {
+		t.Errorf("gcp.policy.set.id = %q, want %q", startupEvent.PolicySetID, wantPolicySetID)
 	}
 	if startupEvent.RevisionID == "" {
 		t.Errorf("expected non-empty gcp.policy.set.revision.id attribute on gcp.policy.evaluate.error event")
@@ -1162,10 +1175,10 @@ service:
 	}
 
 	// Now hot-reload a second unsupported policy into the directory and verify a new gcp.policy.evaluate.error event is emitted.
-	hotReloadUnsupported := `{
+	hotReloadUnsupported := fmt.Sprintf(`{
   "type": "another_unsupported_type",
-  "id": "unsupported-policy-2"
-}`
+  "id": %q
+}`, unsupportedPolicy2ID)
 	if err := os.WriteFile(filepath.Join(policiesDir, "03-unsupported-hot-reload.json"), []byte(hotReloadUnsupported), 0644); err != nil {
 		col.shutdown(t)
 		t.Fatalf("failed to write hot-reloaded unsupported policy: %v", err)
@@ -1176,7 +1189,7 @@ service:
 	for time.Now().Before(deadline) {
 		gotEvents = findErrorEvents(mockSrv.CollectedLogs())
 		for i := range gotEvents {
-			if gotEvents[i].PolicyID == "unsupported-policy-2" {
+			if gotEvents[i].PolicyID == unsupportedPolicy2ID {
 				hotReloadEvent = &gotEvents[i]
 				break
 			}
@@ -1190,7 +1203,10 @@ service:
 	col.shutdown(t)
 
 	if hotReloadEvent == nil {
-		t.Fatalf("timed out waiting for hot-reloaded gcp.policy.evaluate.error event for unsupported-policy-2 (got %+v).\ncollector logs:\n%s", gotEvents, col.logs())
+		t.Fatalf("timed out waiting for hot-reloaded gcp.policy.evaluate.error event for %s (got %+v).\ncollector logs:\n%s", unsupportedPolicy2ID, gotEvents, col.logs())
+	}
+	if hotReloadEvent.PolicySetID != wantPolicySetID {
+		t.Errorf("hot-reload gcp.policy.set.id = %q, want %q", hotReloadEvent.PolicySetID, wantPolicySetID)
 	}
 	if hotReloadEvent.RevisionID == "" || hotReloadEvent.RevisionID == startupEvent.RevisionID {
 		t.Errorf("expected new revision ID on hot-reloaded error event, got %q (startup was %q)", hotReloadEvent.RevisionID, startupEvent.RevisionID)

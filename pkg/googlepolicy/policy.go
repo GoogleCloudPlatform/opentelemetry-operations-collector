@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -32,6 +33,21 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
+
+// policySetNamePattern matches a fully qualified PolicySet resource name:
+//
+//	projects/{p}/locations/{l}/policySets/{ps}
+//
+// Anything that does not match is assumed not to have come from the control
+// plane (for example the plain names used by file-sourced policies) and is
+// ignored when deriving policy set identity.
+var policySetNamePattern = regexp.MustCompile(`^projects/[^/]+/locations/[^/]+/policySets/[^/]+$`)
+
+// policiesSegment separates the PolicySet resource name from the policy ID
+// within a control plane policy resource name:
+//
+//	projects/{p}/locations/{l}/policySets/{ps}/policies/{policy}
+const policiesSegment = "/policies/"
 
 var (
 	ErrPolicyNotFound           = errors.New("policy not found")
@@ -217,6 +233,7 @@ type FailedPolicy struct {
 type PolicySet struct {
 	Policies       map[string]*PolicySetEntry
 	FailedPolicies []FailedPolicy
+	PolicySetID    string
 	RevisionID     string
 	ReceivedAt     time.Time
 }
@@ -326,7 +343,62 @@ func makePolicySet[T any](revisionID string, inputs []T, load func(int, T) (Poli
 		ps.Policies[p.PolicyName()] = &PolicySetEntry{PolicyObj: p}
 	}
 
+	ps.PolicySetID = derivePolicySetID(ps)
+
 	return ps, errors.Join(errs...)
+}
+
+// derivePolicySetID extracts the PolicySet resource name from the policies in ps.
+//
+// Control plane policies carry IDs formatted as:
+//
+//	projects/{p}/locations/{l}/policySets/{ps}/policies/{policyID}
+//
+// Plain names (such as file-sourced policies) are ignored. If policies in the
+// same set claim different policySet resource names, "" is returned.
+func derivePolicySetID(ps *PolicySet) string {
+	found := ""
+	check := func(policyName string) bool {
+		id, ok := policySetNameOf(policyName)
+		if !ok {
+			return true
+		}
+		if found == "" {
+			found = id
+			return true
+		}
+		return found == id
+	}
+	for _, entry := range ps.Policies {
+		if entry == nil || entry.PolicyObj == nil {
+			continue
+		}
+		if !check(entry.PolicyObj.PolicyName()) {
+			return ""
+		}
+	}
+	for _, fp := range ps.FailedPolicies {
+		if !check(fp.ID) {
+			return ""
+		}
+	}
+	return found
+}
+
+func policySetNameOf(policyName string) (string, bool) {
+	idx := strings.LastIndex(policyName, policiesSegment)
+	if idx < 0 {
+		return "", false
+	}
+	suffix := policyName[idx+len(policiesSegment):]
+	if suffix == "" || strings.Contains(suffix, "/") {
+		return "", false
+	}
+	prefix := policyName[:idx]
+	if !policySetNamePattern.MatchString(prefix) {
+		return "", false
+	}
+	return prefix, true
 }
 
 // ClassifyPolicyError returns a canonical OpenTelemetry error.type value
@@ -408,8 +480,9 @@ func (ps *PolicySet) Clone() *PolicySet {
 		return nil
 	}
 	clone := &PolicySet{
-		RevisionID: ps.RevisionID,
-		ReceivedAt: ps.ReceivedAt,
+		PolicySetID: ps.PolicySetID,
+		RevisionID:  ps.RevisionID,
+		ReceivedAt:  ps.ReceivedAt,
 	}
 	if ps.Policies != nil {
 		clone.Policies = make(map[string]*PolicySetEntry, len(ps.Policies))

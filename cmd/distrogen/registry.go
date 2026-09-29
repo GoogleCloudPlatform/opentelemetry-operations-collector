@@ -18,7 +18,9 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
+	"net/http"
 	"slices"
 	"strings"
 
@@ -51,6 +53,12 @@ type Registry struct {
 	Extensions RegistryComponents `yaml:"extensions"`
 	Providers  RegistryComponents `yaml:"providers"`
 	Path       string             `yaml:"-"`
+
+	// moduleVersions is the released version of every module published by the
+	// core and contrib repositories. It is empty until ResolveOTelModuleVersions
+	// is called, in which case components fall back to the release version of
+	// the repository they come from.
+	moduleVersions otelModuleVersions `yaml:"-"`
 }
 
 // NewRegistry will create an empty registry object with the
@@ -174,10 +182,12 @@ func (gm *GoModuleID) MarshalYAML() (interface{}, error) {
 }
 
 type otelComponentVersion struct {
-	core          string
-	coreStable    string
-	contrib       string
-	contribStable string
+	core    string
+	contrib string
+
+	// modules is the released version of each upstream module, taken from the
+	// versions.yaml of the repository that publishes it.
+	modules otelModuleVersions
 }
 
 // RegistryComponent is the type used as a basis for Registry.
@@ -188,7 +198,6 @@ type RegistryComponent struct {
 	GoMod         *GoModuleID `yaml:"gomod"`
 	Import        string      `yaml:"import,omitempty"`
 	Path          string      `yaml:"path,omitempty"`
-	Stable        bool        `yaml:"stable,omitempty"`
 	StartRevision string      `yaml:"start_revision,omitempty"`
 	DocsURL       string      `yaml:"docs_url,omitempty"`
 }
@@ -206,15 +215,24 @@ func (c *RegistryComponent) IsContrib() bool {
 	return strings.Contains(c.GoMod.URL, "github.com/open-telemetry/opentelemetry-collector-contrib")
 }
 
+// ApplyOTelVersion sets the module tag for this component. The version each
+// upstream module was released at is read from the versions.yaml of the
+// repository that publishes it, which is the only way to know whether a module
+// is part of a stable 1.x module set.
+//
+// Modules that upstream does not publish, i.e. components that have been
+// removed from contrib or components local to a project, are tagged with the
+// release version of the repository they belong to.
 func (c *RegistryComponent) ApplyOTelVersion(otelVersion otelComponentVersion) {
+	if tag, ok := otelVersion.modules[c.GoMod.URL]; ok {
+		c.GoMod.Tag = tag
+		return
+	}
+
+	logger.Debug("module not published in versions.yaml, using the repository release version", slog.String("module", c.GoMod.URL))
 	c.GoMod.Tag = "v" + otelVersion.core
 	if c.IsContrib() {
 		c.GoMod.Tag = "v" + otelVersion.contrib
-		if c.Stable {
-			c.GoMod.Tag = "v" + otelVersion.contribStable
-		}
-	} else if c.Stable {
-		c.GoMod.Tag = "v" + otelVersion.coreStable
 	}
 }
 
@@ -303,4 +321,114 @@ func (cs RegistryComponents) RenderOCBComponents() string {
 	})
 
 	return renderYaml(renderComponents)
+}
+
+// otelVersionsYamlURL is the versions.yaml of an OpenTelemetry repository, which
+// declares the version that every module of that repository is released at.
+const otelVersionsYamlURL = "https://raw.githubusercontent.com/open-telemetry/%s/refs/tags/v%s/versions.yaml"
+
+const (
+	otelCoreRepo    = "opentelemetry-collector"
+	otelContribRepo = "opentelemetry-collector-contrib"
+)
+
+// otelModuleVersions maps a Go module path to the version that module was
+// released at, i.e. go.opentelemetry.io/collector/pdata -> v1.67.0.
+type otelModuleVersions map[string]string
+
+// otelVersionsYaml reflects the versions.yaml of an OpenTelemetry repository.
+// Modules are grouped into module sets that are released together, so a
+// repository release covers several versions at once: an unstable set tagged
+// v0.x.x alongside one or more stable sets tagged v1.x.x.
+type otelVersionsYaml struct {
+	ModuleSets map[string]struct {
+		Version string   `yaml:"version"`
+		Modules []string `yaml:"modules"`
+	} `yaml:"module-sets"`
+}
+
+// ResolveOTelModuleVersions reads the versions.yaml of the core and contrib
+// repositories at the given releases, so that every component can be tagged
+// with the version it was actually released at. This is what allows a spec to
+// declare only the repository releases it is based on, rather than restating
+// the version of each stable module set.
+func (r *Registry) ResolveOTelModuleVersions(coreVersion string, contribVersion string) error {
+	moduleVersions, err := resolveOTelModuleVersions(coreVersion, contribVersion)
+	if err != nil {
+		return err
+	}
+	r.moduleVersions = moduleVersions
+	return nil
+}
+
+// resolveOTelModuleVersions collects the module versions published by the core
+// and contrib repositories. Either release may be empty, in which case that
+// repository is skipped.
+func resolveOTelModuleVersions(coreVersion string, contribVersion string) (otelModuleVersions, error) {
+	moduleVersions := otelModuleVersions{}
+
+	for _, repo := range []struct {
+		name    string
+		version string
+	}{
+		{otelCoreRepo, coreVersion},
+		{otelContribRepo, contribVersion},
+	} {
+		if repo.version == "" {
+			continue
+		}
+		versions, err := fetchOTelModuleVersions(repo.name, repo.version)
+		if err != nil {
+			return nil, err
+		}
+		mapMerge(moduleVersions, versions)
+	}
+
+	return moduleVersions, nil
+}
+
+// fetchOTelModuleVersions reads the versions.yaml of an OpenTelemetry
+// repository at the given release. The release may be given either as a bare
+// version or as a tag, i.e. both 0.161.0 and v0.161.0 are accepted.
+func fetchOTelModuleVersions(repo string, version string) (otelModuleVersions, error) {
+	url := fmt.Sprintf(otelVersionsYamlURL, repo, strings.TrimPrefix(version, "v"))
+	logger.Debug("fetching module versions", slog.String("url", url))
+
+	response, err := http.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("could not fetch %s: %w", url, err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("could not fetch %s: %s", url, response.Status)
+	}
+
+	content, err := io.ReadAll(response.Body)
+	if err != nil {
+		return nil, fmt.Errorf("could not read %s: %w", url, err)
+	}
+
+	versions, err := parseOTelModuleVersions(content)
+	if err != nil {
+		return nil, fmt.Errorf("could not parse %s: %w", url, err)
+	}
+	return versions, nil
+}
+
+// parseOTelModuleVersions flattens the module sets of a versions.yaml document
+// into a lookup of module path to the version that module is released at.
+func parseOTelModuleVersions(content []byte) (otelModuleVersions, error) {
+	var versionsYaml otelVersionsYaml
+	if err := yaml.Unmarshal(content, &versionsYaml); err != nil {
+		return nil, err
+	}
+
+	versions := otelModuleVersions{}
+	for _, moduleSet := range versionsYaml.ModuleSets {
+		for _, module := range moduleSet.Modules {
+			versions[module] = moduleSet.Version
+		}
+	}
+	return versions, nil
 }

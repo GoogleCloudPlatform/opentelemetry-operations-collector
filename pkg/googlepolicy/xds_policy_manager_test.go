@@ -15,6 +15,7 @@
 package googlepolicy
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"testing"
@@ -32,7 +33,45 @@ import (
 	xdsv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/xds/v1alpha1"
 )
 
+type fakeGCEMetadata struct {
+	onGCE            bool
+	projectID        string
+	numericProjectID string
+	zone             string
+}
+
+func (f fakeGCEMetadata) OnGCE() bool                               { return f.onGCE }
+func (f fakeGCEMetadata) ProjectID(context.Context) (string, error) { return f.projectID, nil }
+func (f fakeGCEMetadata) NumericProjectID(context.Context) (string, error) {
+	return f.numericProjectID, nil
+}
+func (f fakeGCEMetadata) Zone(context.Context) (string, error) { return f.zone, nil }
+
+func init() {
+	// Disable live GCE metadata queries by default so unit and stream tests are
+	// hermetic even when executed on a GCE VM.
+	defaultGCEMetadata = fakeGCEMetadata{}
+}
+
+func withGCEMetadata(t *testing.T, meta gceMetadata) {
+	t.Helper()
+	prev := defaultGCEMetadata
+	defaultGCEMetadata = meta
+	t.Cleanup(func() { defaultGCEMetadata = prev })
+}
+
+func clearXDSResolutionEnv(t *testing.T) {
+	t.Helper()
+	t.Setenv("FLEET_ID", "")
+	t.Setenv("GOOGLE_CLOUD_PROJECT_NUMBER", "")
+	t.Setenv("PROJECT_NUMBER", "")
+	t.Setenv("GOOGLE_CLOUD_PROJECT", "")
+	t.Setenv("CLOUD_REGION", "")
+	t.Setenv("GOOGLE_CLOUD_REGION", "")
+}
+
 func TestNewXDSPolicyManager_Validation(t *testing.T) {
+	clearXDSResolutionEnv(t)
 	logger := zap.NewNop()
 
 	mustParse := func(rawURI string) *url.URL {
@@ -64,13 +103,13 @@ func TestNewXDSPolicyManager_Validation(t *testing.T) {
 
 	t.Run("missing fleet ID", func(t *testing.T) {
 		t.Setenv("FLEET_ID", "")
-		_, err := NewXDSPolicyManager(logger, mustParse("xds://127.0.0.1:8080"), "collector-abc")
+		_, err := NewXDSPolicyManager(logger, mustParse("xds://127.0.0.1:8080?project=my-project"), "collector-abc")
 		require.ErrorIs(t, err, ErrXDSMissingFleetID)
 	})
 
 	t.Run("fleet ID from environment", func(t *testing.T) {
 		t.Setenv("FLEET_ID", "fleet-from-env")
-		mgr, err := NewXDSPolicyManager(logger, mustParse("xds://127.0.0.1:8080"), "collector-abc")
+		mgr, err := NewXDSPolicyManager(logger, mustParse("xds://127.0.0.1:8080?project=my-project"), "collector-abc")
 		require.NoError(t, err)
 		assert.Equal(t, "fleet-from-env", mgr.(*xdsPolicyManager).fleetID)
 	})
@@ -81,13 +120,23 @@ func TestNewXDSPolicyManager_Validation(t *testing.T) {
 		// fleet's policies arrive, while the provider's becomes the
 		// gcp.fleet_id attribute on the collector's own telemetry.
 		t.Setenv("FLEET_ID", "fleet-from-env")
-		mgr, err := newManager("xds://127.0.0.1:8080?gcp.fleet_id=fleet-from-uri")
+		mgr, err := newManager("xds://127.0.0.1:8080?gcp.fleet_id=fleet-from-uri&project=my-project")
 		require.NoError(t, err)
-		assert.Equal(t, "fleet-from-env", mgr.(*xdsPolicyManager).fleetID)
+		m := mgr.(*xdsPolicyManager)
+		assert.Equal(t, "fleet-from-env", m.fleetID)
+		// The subscribed name must follow the same fleet, or the collector would
+		// report one fleet as its cluster while asking for another's policies.
+		assert.Equal(t, xdstpResourceName(defaultRegion, "my-project", "fleet-from-env"), m.resourceName)
+	})
+
+	t.Run("missing project", func(t *testing.T) {
+		t.Setenv("FLEET_ID", "")
+		_, err := newManager("xds://127.0.0.1:8080?gcp.fleet_id=fleet-1")
+		require.ErrorIs(t, err, ErrXDSMissingProject)
 	})
 
 	t.Run("invalid insecure flag", func(t *testing.T) {
-		_, err := newManager("xds://127.0.0.1:8080?gcp.fleet_id=fleet-1&insecure=maybe")
+		_, err := newManager("xds://127.0.0.1:8080?gcp.fleet_id=fleet-1&project=my-project&insecure=maybe")
 		require.ErrorIs(t, err, ErrXDSInvalidInsecureFlag)
 	})
 
@@ -96,7 +145,7 @@ func TestNewXDSPolicyManager_Validation(t *testing.T) {
 		// ambient FLEET_ID would otherwise decide this test's outcome.
 		t.Setenv("FLEET_ID", "")
 
-		uri := mustParse("xds://127.0.0.1:8080?gcp.fleet_id=fleet-1&insecure=true")
+		uri := mustParse("xds://127.0.0.1:8080?gcp.fleet_id=fleet-1&project=my-project&insecure=true")
 		mgr, err := NewXDSPolicyManager(logger, uri, "collector-abc")
 		require.NoError(t, err)
 		assert.Equal(t, uri, mgr.URI())
@@ -106,6 +155,7 @@ func TestNewXDSPolicyManager_Validation(t *testing.T) {
 		assert.Equal(t, "collector-abc", m.collectorID)
 		assert.Equal(t, "fleet-1", m.fleetID)
 		assert.True(t, m.insecure)
+		assert.Equal(t, xdstpResourceName(defaultRegion, "my-project", "fleet-1"), m.resourceName)
 
 		// Asserted explicitly because every stream test overrides this field to
 		// keep itself fast. If the constructor stopped setting it the zero value
@@ -114,6 +164,105 @@ func TestNewXDSPolicyManager_Validation(t *testing.T) {
 		assert.Equal(t, defaultInitialSyncTimeout, m.initialSyncTimeout)
 	})
 
+}
+
+// The resource name is what the control plane looks the fleet up by, so its
+// exact spelling is the contract: a name that is off by one character
+// subscribes to nothing, and no error says so.
+func TestXDSTPResourceName(t *testing.T) {
+	assert.Equal(t,
+		"xdstp://traffic-director-us-central1.xds.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector/projects/my-project/fleets/my-fleet",
+		xdstpResourceName("us-central1", "my-project", "my-fleet"),
+	)
+}
+
+func TestNewXDSPolicyManager_ProjectAndRegionResolution(t *testing.T) {
+	logger := zap.NewNop()
+
+	mustParse := func(rawURI string) *url.URL {
+		t.Helper()
+		u, err := url.Parse(rawURI)
+		require.NoError(t, err)
+		return u
+	}
+
+	t.Run("project_number and project query params stay distinct", func(t *testing.T) {
+		clearXDSResolutionEnv(t)
+		mgr, err := NewXDSPolicyManager(logger, mustParse("xds://127.0.0.1:8080?gcp.fleet_id=fleet-1&project_number=123456789&project=my-project"), "collector-abc")
+		require.NoError(t, err)
+		m := mgr.(*xdsPolicyManager)
+		assert.Equal(t, "123456789", m.projectNumber)
+		assert.Equal(t, "my-project", m.projectID)
+		assert.Equal(t, xdstpResourceName(defaultRegion, "123456789", "fleet-1"), m.resourceName)
+	})
+
+	t.Run("numeric project query param is treated as project number", func(t *testing.T) {
+		clearXDSResolutionEnv(t)
+		mgr, err := NewXDSPolicyManager(logger, mustParse("xds://127.0.0.1:8080?gcp.fleet_id=fleet-1&project=123456789"), "collector-abc")
+		require.NoError(t, err)
+		m := mgr.(*xdsPolicyManager)
+		assert.Equal(t, "123456789", m.projectNumber)
+		assert.Empty(t, m.projectID)
+		assert.Equal(t, xdstpResourceName(defaultRegion, "123456789", "fleet-1"), m.resourceName)
+	})
+
+	t.Run("GCE metadata fallback resolves project number, project ID, region, and zone", func(t *testing.T) {
+		clearXDSResolutionEnv(t)
+		withGCEMetadata(t, fakeGCEMetadata{
+			onGCE:            true,
+			projectID:        "my-project",
+			numericProjectID: "123456789",
+			zone:             "us-central1-a",
+		})
+
+		// Only fleet ID in URI; project and region come from GCE metadata.
+		mgr, err := NewXDSPolicyManager(logger, mustParse("xds://127.0.0.1:8080?gcp.fleet_id=fleet-1"), "collector-abc")
+		require.NoError(t, err)
+		m := mgr.(*xdsPolicyManager)
+		assert.Equal(t, "123456789", m.projectNumber)
+		assert.Equal(t, "my-project", m.projectID)
+		assert.Equal(t, "us-central1", m.region)
+		assert.Equal(t, "us-central1-a", m.zone)
+		assert.Equal(t, xdstpResourceName("us-central1", "123456789", "fleet-1"), m.resourceName)
+	})
+
+	t.Run("GCE metadata resolves numeric project number when URI supplies matching project ID", func(t *testing.T) {
+		clearXDSResolutionEnv(t)
+		withGCEMetadata(t, fakeGCEMetadata{
+			onGCE:            true,
+			projectID:        "my-project",
+			numericProjectID: "123456789",
+			zone:             "projects/123456789/zones/us-central1-a",
+		})
+
+		mgr, err := NewXDSPolicyManager(logger, mustParse("xds://127.0.0.1:8080?gcp.fleet_id=fleet-1&project=my-project"), "collector-abc")
+		require.NoError(t, err)
+		m := mgr.(*xdsPolicyManager)
+		assert.Equal(t, "123456789", m.projectNumber)
+		assert.Equal(t, "my-project", m.projectID)
+		assert.Equal(t, "us-central1", m.region)
+		assert.Equal(t, "us-central1-a", m.zone)
+		assert.Equal(t, xdstpResourceName("us-central1", "123456789", "fleet-1"), m.resourceName)
+	})
+
+	t.Run("region query parameter overrides defaultRegion", func(t *testing.T) {
+		clearXDSResolutionEnv(t)
+		mgr, err := NewXDSPolicyManager(logger, mustParse("xds://127.0.0.1:8080?gcp.fleet_id=fleet-1&project=123456789&region=us-east1"), "collector-abc")
+		require.NoError(t, err)
+		m := mgr.(*xdsPolicyManager)
+		assert.Equal(t, "us-east1", m.region)
+		assert.Equal(t, xdstpResourceName("us-east1", "123456789", "fleet-1"), m.resourceName)
+	})
+
+	t.Run("CLOUD_REGION environment variable overrides defaultRegion and query parameter", func(t *testing.T) {
+		clearXDSResolutionEnv(t)
+		t.Setenv("CLOUD_REGION", "europe-west1")
+		mgr, err := NewXDSPolicyManager(logger, mustParse("xds://127.0.0.1:8080?gcp.fleet_id=fleet-1&project=123456789&region=us-east1"), "collector-abc")
+		require.NoError(t, err)
+		m := mgr.(*xdsPolicyManager)
+		assert.Equal(t, "europe-west1", m.region)
+		assert.Equal(t, xdstpResourceName("europe-west1", "123456789", "fleet-1"), m.resourceName)
+	})
 }
 
 func TestExtractPolicyProtos_TelemetryCollector(t *testing.T) {

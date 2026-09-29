@@ -123,12 +123,18 @@ func startFakeADSServer(t *testing.T, srv *fakeADSServer) grpc.DialOption {
 	})
 }
 
+// testResourceName is the xdstp:// name newTestManager's URI subscribes to.
+// It is spelled out rather than derived with xdstpResourceName, so a manager
+// that stops setting the name, or builds it wrong, cannot pass by agreeing
+// with itself.
+const testResourceName = "xdstp://traffic-director-" + defaultRegion + ".xds.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector/projects/my-project/fleets/fleet-1"
+
 // newTestManager builds a manager wired to the fake server, with a negligible
 // backoff so reconnect tests stay fast.
 func newTestManager(t *testing.T, dialOpt grpc.DialOption) *xdsPolicyManager {
 	t.Helper()
 
-	u, err := url.Parse("xds://127.0.0.1:8080?insecure=true&gcp.fleet_id=fleet-1")
+	u, err := url.Parse("xds://127.0.0.1:8080?insecure=true&gcp.fleet_id=fleet-1&project=my-project")
 	require.NoError(t, err)
 
 	mgr, err := NewXDSPolicyManager(zaptest.NewLogger(t), u, "collector-abc")
@@ -261,10 +267,85 @@ func TestXDSPolicyManager_ReconnectsWithBackoff(t *testing.T) {
 	assert.Empty(t, initial.GetVersionInfo(), "first request has nothing applied yet")
 	assert.Equal(t, "collector-abc", initial.GetNode().GetId())
 	assert.Equal(t, "fleet-1", initial.GetNode().GetCluster())
+	assert.Equal(t, defaultRegion, initial.GetNode().GetLocality().GetRegion())
+	assert.Empty(t, initial.GetNode().GetLocality().GetZone())
+	assert.Equal(t, map[string]any{
+		"service.instance.id": "collector-abc",
+		"gcp.fleet_id":        "fleet-1",
+		"gcp.project_id":      "my-project",
+		"cloud.region":        defaultRegion,
+	}, initial.GetNode().GetMetadata().AsMap())
 
 	reconnect := requests[len(requests)-1]
 	assert.Equal(t, "rev-1", reconnect.GetVersionInfo(), "reconnect must resend the last applied version")
 	assert.Empty(t, reconnect.GetResponseNonce(), "a fresh stream carries no nonce")
+
+	// Every request restates the subscription, the first on each stream and
+	// the ACK alike. A request without it would leave the control plane no
+	// fleet to look up.
+	for i, req := range requests {
+		assert.Equal(t, []string{testResourceName}, req.GetResourceNames(), "request %d", i)
+	}
+}
+
+func TestXDSPolicyManager_PopulatesNodeLocalityAndMetadataFromGCEMetadata(t *testing.T) {
+	clearXDSResolutionEnv(t)
+	withGCEMetadata(t, fakeGCEMetadata{
+		onGCE:            true,
+		projectID:        "my-project",
+		numericProjectID: "123456789",
+		zone:             "us-central1-a",
+	})
+
+	reqReceived := make(chan *discoveryv3.DiscoveryRequest, 1)
+	srv := &fakeADSServer{streamOpened: make(chan struct{}, 8)}
+	srv.handlers = []func(discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error{
+		func(stream discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error {
+			req, err := srv.recv(stream)
+			if err != nil {
+				return err
+			}
+			reqReceived <- req
+			<-stream.Context().Done()
+			return stream.Context().Err()
+		},
+	}
+
+	dialOpt := startFakeADSServer(t, srv)
+	u, err := url.Parse("xds://127.0.0.1:8080?insecure=true&gcp.fleet_id=fleet-1")
+	require.NoError(t, err)
+
+	mgr, err := NewXDSPolicyManager(zaptest.NewLogger(t), u, "collector-abc")
+	require.NoError(t, err)
+	m := mgr.(*xdsPolicyManager)
+	m.initialSyncTimeout = 10 * time.Millisecond
+	m.extraDialOpts = []grpc.DialOption{
+		dialOpt,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	}
+
+	require.NoError(t, m.Start())
+	t.Cleanup(func() { require.NoError(t, m.Stop()) })
+
+	var req *discoveryv3.DiscoveryRequest
+	select {
+	case req = <-reqReceived:
+	case <-time.After(10 * time.Second):
+		t.Fatal("timed out waiting for DiscoveryRequest")
+	}
+
+	assert.Equal(t, []string{
+		"xdstp://traffic-director-us-central1.xds.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector/projects/123456789/fleets/fleet-1",
+	}, req.GetResourceNames())
+	assert.Equal(t, "us-central1", req.GetNode().GetLocality().GetRegion())
+	assert.Equal(t, "us-central1-a", req.GetNode().GetLocality().GetZone())
+	assert.Equal(t, map[string]any{
+		"service.instance.id":     "collector-abc",
+		"gcp.fleet_id":            "fleet-1",
+		"gcp.project_id":          "my-project",
+		"cloud.region":            "us-central1",
+		"cloud.availability_zone": "us-central1-a",
+	}, req.GetNode().GetMetadata().AsMap())
 }
 
 func TestXDSPolicyManager_NACKsUndecodableResource(t *testing.T) {
@@ -314,6 +395,7 @@ func TestXDSPolicyManager_NACKsUndecodableResource(t *testing.T) {
 	require.NotNil(t, nack.GetErrorDetail(), "an undecodable resource must be NACKed")
 	assert.Contains(t, nack.GetErrorDetail().GetMessage(), "does.not.Exist")
 	assert.Equal(t, "nonce-bad", nack.GetResponseNonce())
+	assert.Equal(t, []string{testResourceName}, nack.GetResourceNames(), "a NACK must restate the subscription")
 	assert.Empty(t, nack.GetVersionInfo(), "NACK reports the last applied version, which is none")
 
 	// A rejected response must not become the active policy set.

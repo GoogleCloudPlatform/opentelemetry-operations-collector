@@ -186,8 +186,8 @@ func (p *provider) Retrieve(ctx context.Context, uri string, watcher confmap.Wat
 			return nil, fmt.Errorf("%q: %w", uri, err)
 		}
 	case innerSchemeXDS:
-		// The manager derives everything else it needs -- control plane address
-		// and fleet ID -- from the URI itself.
+		// The manager derives everything else it needs -- control plane address,
+		// fleet ID and project -- from the URI itself.
 		p.manager, err = googlepolicy.NewXDSPolicyManager(p.logger, target, CollectorID)
 		if err != nil {
 			return nil, fmt.Errorf("%q: %w", uri, err)
@@ -236,7 +236,13 @@ func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrie
 		projectID = v
 	}
 	if projectID == "" && p.manager != nil && p.manager.URI() != nil {
-		projectID = p.manager.URI().Query().Get("project")
+		// A numeric value in ?project= is a GCP project number for the xdstp://
+		// resource subscription, not an alphanumeric project ID. Leave PROJECT_ID
+		// unset in that case so the self-metrics pipeline populates gcp.project_id
+		// from the GCE resource detector's cloud.account.id.
+		if candidate := p.manager.URI().Query().Get(googlepolicy.ProjectQueryParam); !googlepolicy.IsNumericProject(candidate) {
+			projectID = candidate
+		}
 	}
 	if projectID != "" {
 		ctx = context.WithValue(ctx, "PROJECT_ID", projectID)

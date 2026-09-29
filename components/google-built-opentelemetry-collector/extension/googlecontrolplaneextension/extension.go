@@ -63,7 +63,7 @@ func (e *controlPlaneExtension) Start(_ context.Context, _ component.Host) error
 		return nil
 	}
 
-	meter := mp.Meter(metadata.ScopeName)
+	meter := mp.Meter(metadata.ScopeName, metric.WithSchemaURL(telemetry.SchemaURL))
 
 	metrics, err := telemetry.NewMetrics(meter)
 	if err != nil {

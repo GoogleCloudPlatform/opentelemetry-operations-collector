@@ -31,6 +31,13 @@ func TestDistributionTemplateGeneration(t *testing.T) {
 	registry, err := LoadEmbeddedRegistry()
 	assert.NilError(t, err)
 
+	// The module versions are injected rather than resolved so that generation
+	// stays offline. yamlprovider is the only module in the testdata specs that
+	// upstream publishes at a version other than the release version.
+	registry.moduleVersions = otelModuleVersions{
+		"go.opentelemetry.io/collector/confmap/provider/yamlprovider": "v1.27.0",
+	}
+
 	testDirs, err := os.ReadDir(testdataFullDistributionPath)
 	assert.NilError(t, err)
 	for _, d := range testDirs {
@@ -88,6 +95,10 @@ func TestSpecValidationError(t *testing.T) {
 			name:        "vendor_deps_without_permanent_ocb",
 			expectedErr: ErrSpecValidationVendorDepsWithoutPermanentOCB,
 		},
+		{
+			name:        "missing_otel_version",
+			expectedErr: ErrSpecValidationMissingOTelVersion,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -99,6 +110,22 @@ func TestSpecValidationError(t *testing.T) {
 			assert.ErrorIs(t, err, tc.expectedErr)
 		})
 	}
+}
+
+// TestSpecContribVersionDefault also covers a spec that still sets the removed
+// stable version fields, which is warned about but must still load.
+func TestSpecContribVersionDefault(t *testing.T) {
+	specPath := filepath.Join(t.TempDir(), "spec.yaml")
+	err := os.WriteFile(specPath, []byte(`name: basic-distro
+opentelemetry_version: 0.161.0
+opentelemetry_stable_version: 1.67.0
+opentelemetry_contrib_stable_version: 1.0.0
+`), DefaultFileMode)
+	assert.NilError(t, err)
+
+	spec, err := NewDistributionSpec(specPath)
+	assert.NilError(t, err)
+	assert.Equal(t, spec.OpenTelemetryContribVersion, "0.161.0")
 }
 
 func TestSpecQuery(t *testing.T) {

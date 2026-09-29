@@ -272,47 +272,106 @@ func TestRegistryComponent_IsContrib(t *testing.T) {
 
 func TestRegistryComponent_ApplyOTelVersion(t *testing.T) {
 	otelVersion := otelComponentVersion{
-		core:          "1.2.3",
-		coreStable:    "1.0.0",
-		contrib:       "0.5.0",
-		contribStable: "2.0.0",
+		core:    "1.2.3",
+		contrib: "0.5.0",
+		modules: otelModuleVersions{
+			"go.opentelemetry.io/collector/pdata":                                        "v1.0.0",
+			"github.com/open-telemetry/opentelemetry-collector-contrib/processor/stable": "v2.0.0",
+			"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/test":    "v0.5.0",
+		},
 	}
 
 	testCases := []struct {
 		name     string
 		url      string
-		stable   bool
 		expected string
 	}{
 		{
-			name:     "Core Component",
-			url:      "github.com/test/module",
-			expected: "v1.2.3",
-		},
-		{
-			name:     "Stable Core Component",
-			url:      "github.com/test/module",
-			stable:   true,
+			name:     "Published Core Component",
+			url:      "go.opentelemetry.io/collector/pdata",
 			expected: "v1.0.0",
 		},
 		{
-			name:     "Contrib Component",
+			name:     "Published Contrib Component",
 			url:      "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/test",
 			expected: "v0.5.0",
 		},
 		{
-			name:     "Stable Contrib Component",
-			url:      "github.com/open-telemetry/opentelemetry-collector-contrib/processor/test",
-			stable:   true,
+			name:     "Published Stable Contrib Component",
+			url:      "github.com/open-telemetry/opentelemetry-collector-contrib/processor/stable",
 			expected: "v2.0.0",
+		},
+		{
+			name:     "Unpublished Core Component",
+			url:      "github.com/test/module",
+			expected: "v1.2.3",
+		},
+		{
+			name:     "Unpublished Contrib Component",
+			url:      "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/removed",
+			expected: "v0.5.0",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			c := &RegistryComponent{GoMod: &GoModuleID{URL: tc.url}, Stable: tc.stable}
+			c := &RegistryComponent{GoMod: &GoModuleID{URL: tc.url}}
 			c.ApplyOTelVersion(otelVersion)
 			assert.Equal(t, c.GoMod.Tag, tc.expected)
+		})
+	}
+}
+
+func TestParseOTelModuleVersions(t *testing.T) {
+	testCases := []struct {
+		name      string
+		content   string
+		expected  otelModuleVersions
+		expectErr bool
+	}{
+		{
+			name: "Multiple Module Sets",
+			content: `
+module-sets:
+  stable:
+    version: v1.67.0
+    modules:
+      - go.opentelemetry.io/collector/pdata
+      - go.opentelemetry.io/collector/featuregate
+  beta:
+    version: v0.161.0
+    modules:
+      - go.opentelemetry.io/collector/processor/batchprocessor
+excluded-modules:
+  - go.opentelemetry.io/collector/internal/tools
+`,
+			expected: otelModuleVersions{
+				"go.opentelemetry.io/collector/pdata":                    "v1.67.0",
+				"go.opentelemetry.io/collector/featuregate":              "v1.67.0",
+				"go.opentelemetry.io/collector/processor/batchprocessor": "v0.161.0",
+			},
+		},
+		{
+			name:     "Empty Document",
+			content:  "",
+			expected: otelModuleVersions{},
+		},
+		{
+			name:      "Malformed Document",
+			content:   "module-sets: [",
+			expectErr: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			versions, err := parseOTelModuleVersions([]byte(tc.content))
+			if tc.expectErr {
+				assert.Assert(t, err != nil)
+				return
+			}
+			assert.NilError(t, err)
+			assert.DeepEqual(t, versions, tc.expected)
 		})
 	}
 }
@@ -328,7 +387,7 @@ func TestRegistryComponent_GetOCBComponent(t *testing.T) {
 }
 
 func TestRegistryComponents_LoadAllComponents(t *testing.T) {
-	otelVersion := otelComponentVersion{core: "1.2.3", coreStable: "1.0.0", contrib: "0.5.0"}
+	otelVersion := otelComponentVersion{core: "1.2.3", contrib: "0.5.0"}
 	rl := RegistryComponents{
 		"component1": {GoMod: &GoModuleID{URL: "github.com/c1"}},
 		"component2": {GoMod: &GoModuleID{URL: "github.com/c2"}},
@@ -342,7 +401,7 @@ func TestRegistryComponents_LoadAllComponents(t *testing.T) {
 }
 
 func TestRegistryComponents_LoadComponent(t *testing.T) {
-	otelVersion := otelComponentVersion{core: "1.2.3", coreStable: "1.0.0", contrib: "0.5.0"}
+	otelVersion := otelComponentVersion{core: "1.2.3", contrib: "0.5.0"}
 	rl := RegistryComponents{
 		"component1": {GoMod: &GoModuleID{URL: "github.com/c1"}},
 	}

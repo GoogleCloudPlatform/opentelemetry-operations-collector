@@ -144,6 +144,7 @@ require (
 	github.com/DeRuina/timberjack v1.4.7 // indirect
 	github.com/GehirnInc/crypt v0.0.0-20230320061759-8cc1b52080c5 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector v0.160.0 // indirect
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/event v0.0.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy v0.0.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.36.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector v0.60.0 // indirect
@@ -592,6 +593,8 @@ replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/compon
 replace github.com/buger/jsonparser => github.com/buger/jsonparser v1.1.2
 
 replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy => ../../pkg/googlepolicy
+
+replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/event => ../../pkg/event
 
 replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector => ../..
 

@@ -19,9 +19,11 @@ make compare-otelopscol
 OTELOPSCOL_RESULT=$?
 make compare-protos
 PROTOS_RESULT=$?
+make compare-weaver
+WEAVER_RESULT=$?
 
 # If any result is 2, which is what `make` exits with when
 # any check exits with code 1, exit this script with code 1.
-if [[ $GOOGLE_OTEL_RESULT -eq 2 || $OTELOPSCOL_RESULT -eq 2 || $PROTOS_RESULT -eq 2 ]]; then
+if [[ $GOOGLE_OTEL_RESULT -eq 2 || $OTELOPSCOL_RESULT -eq 2 || $PROTOS_RESULT -eq 2 || $WEAVER_RESULT -eq 2 ]]; then
     exit 1
 fi

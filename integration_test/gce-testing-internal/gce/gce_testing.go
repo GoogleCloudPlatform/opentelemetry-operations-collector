@@ -1674,10 +1674,6 @@ func IsRHEL(imageSpec string) bool {
 	return strings.HasPrefix(imageSpec, "rhel-")
 }
 
-func isRHEL9(imageSpec string) bool {
-	return strings.Contains(imageSpec, "rhel-9") || strings.Contains(imageSpec, "rocky-linux-9") || strings.Contains(imageSpec, "almalinux-9")
-}
-
 func isRHEL7SAPHA(imageSpec string) bool {
 	return strings.Contains(imageSpec, "rhel-7") && strings.HasPrefix(imageSpec, "rhel-sap-cloud")
 }
@@ -1721,8 +1717,9 @@ func shouldRetryCreateVM(err error, options VMOptions) bool {
 		// This error is a consequence of running gcloud concurrently, which is actually
 		// unsupported. In the absence of a better fix, just retry such errors.
 		strings.Contains(err.Error(), "database is locked") ||
-		// windows-*-core instances sometimes fail to be ssh-able: b/305721001
-		(IsWindowsCore(options.ImageSpec) && strings.Contains(err.Error(), windowsStartupFailedMessage)) ||
+		// Windows instances sometimes fail to be ssh-able when CorePlugin NetUserAdd
+		// hits error 2236 (NERR_UserInGroup) during sysprep specialize: b/305721001, b/567121343
+		(IsWindows(options.ImageSpec) && strings.Contains(err.Error(), windowsStartupFailedMessage)) ||
 		// SLES instances sometimes fail to be ssh-able: b/186426190
 		(IsSUSEImageSpec(options.ImageSpec) && strings.Contains(err.Error(), startupFailedMessage)) ||
 		strings.Contains(err.Error(), prepareSLESMessage)
@@ -2110,18 +2107,6 @@ func InstallGrpcurlIfNeeded(ctx context.Context, logger *log.Logger, vm *VM) err
 	}, downloadBackoff)
 }
 
-// downgradeGcloudIfNeeded downgrades gcloud installation to working version in specific distros.
-func downgradeGcloudIfNeeded(ctx context.Context, logger *log.Logger, vm *VM) error {
-	if isRHEL9(vm.ImageSpec) && IsARM(vm.ImageSpec) {
-		// Downgrade "gcloud" in rhel 9 arm and rocky linux 9 arm due to bug with default python 3.9.
-		// https://github.com/googleapis/python-api-core/issues/857
-		if _, err := RunRemotely(ctx, logger, vm, "sudo dnf install google-cloud-cli-540.0.0-1 -y"); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // verifyGcloudInstallation checks if the gcloud command is installed correctly in the VM.
 func verifyGcloudInstallation(ctx context.Context, logger *log.Logger, vm *VM) error {
 	// On Snap-managed distributions (e.g. Ubuntu 24.04 / ML images), wait for snapd to finish
@@ -2147,9 +2132,6 @@ func verifyGcloudInstallation(ctx context.Context, logger *log.Logger, vm *VM) e
 func InstallGcloudIfNeeded(ctx context.Context, logger *log.Logger, vm *VM) error {
 	if IsWindows(vm.ImageSpec) {
 		return nil
-	}
-	if err := downgradeGcloudIfNeeded(ctx, logger, vm); err != nil {
-		return fmt.Errorf("failed to downgrade gcloud installation: %w", err)
 	}
 	if err := verifyGcloudInstallation(ctx, logger, vm); err == nil {
 		// Success, no need to install gcloud.

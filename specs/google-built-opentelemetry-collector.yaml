@@ -23,7 +23,6 @@ blurb: >-
   components.
 opentelemetry_version: 0.160.0
 opentelemetry_contrib_version: 0.160.0
-opentelemetry_stable_version: 1.66.0
 binary_name: otelcol-google
 go_version: 1.26.7
 permanent_ocb_directory: true
@@ -155,6 +154,9 @@ replaces:
   - from: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy
     to: ../../pkg/googlepolicy
     reason: Local dependency for googlecontrolplaneprovider
+  - from: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/event
+    to: ../../pkg/event
+    reason: Local dependency for googlepolicyprocessor and googlecontrolplaneprovider
   - from: github.com/GoogleCloudPlatform/opentelemetry-operations-collector
     to: ../..
     reason: Local root module so pkg/googlepolicy builds against in-tree gen/go protos

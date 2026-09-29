@@ -127,7 +127,7 @@ check-weaver:
 	$(WEAVER) registry check --v2 -r $(CONTROLPLANE_EXT_DIR)/schema
 
 .PHONY: compare-weaver
-compare-weaver:
+compare-weaver: check-weaver
 	@TMP_DIR=$$(mktemp -d) && \
 	trap 'rm -rf "$$TMP_DIR"' EXIT && \
 	mkdir "$$TMP_DIR/event" "$$TMP_DIR/controlplane" && \

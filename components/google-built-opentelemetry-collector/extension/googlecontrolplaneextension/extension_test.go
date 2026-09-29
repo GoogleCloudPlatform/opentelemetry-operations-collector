@@ -66,6 +66,8 @@ func collect(t *testing.T, reader *sdkmetric.ManualReader) map[string][]metricda
 
 	out := map[string][]metricdata.DataPoint[int64]{}
 	for _, sm := range rm.ScopeMetrics {
+		assert.Equal(t, metadata.ScopeName, sm.Scope.Name)
+		assert.Equal(t, telemetry.SchemaURL, sm.Scope.SchemaURL)
 		for _, m := range sm.Metrics {
 			g, ok := m.Data.(metricdata.Gauge[int64])
 			if !ok {

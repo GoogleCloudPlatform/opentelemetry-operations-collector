@@ -64,6 +64,9 @@ components:
     - windowseventlog
     - iis
     - windowsperfcounters
+    - nginx
+    - filestats
+    - udplog
 
   processors:
     - batch
@@ -90,6 +93,7 @@ components:
     - metricsgeneration
     - googlepolicy
     - queuebatch
+    - geoip
 
   exporters:
     - debug
@@ -106,6 +110,7 @@ components:
     - prometheus
     - prometheusremotewrite
     - syslog
+    - kafka
 
   extensions:
     - zpages

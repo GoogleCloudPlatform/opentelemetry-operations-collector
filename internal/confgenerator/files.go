@@ -1,0 +1,44 @@
+// Copyright 2020 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package confgenerator
+
+import (
+	"context"
+	"fmt"
+	"os"
+)
+
+// ReadUnifiedConfigFromFile reads the user config file and returns a UnifiedConfig.
+// If the user config file does not exist, it returns nil.
+func ReadUnifiedConfigFromFile(ctx context.Context, path string) (*UnifiedConfig, error) {
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			// If the user config file does not exist, we don't want any overrides.
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to retrieve the user config file %q: %w \n", path, err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	uc, err := UnmarshalYamlToUnifiedConfig(ctx, data)
+	if err != nil {
+		return nil, err
+	}
+
+	return uc, nil
+}

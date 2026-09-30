@@ -1,0 +1,9 @@
+[22:33] found unknown escape character 'd'
+  19 |   processors:
+  20 |     parse-regex:
+  21 |       type: parse_regex
+> 22 |       regex: "^(?<LogTimeStamp>\d+:\d+:\d+) \((?<Vendor>.*)\) (?<Status>IN|OUT|DENIED): \"(?<License>.*)\" (?<User>.*)\@(?<HostName>[\w\d\-\_]+)[^ ]* (?<Details>.*)$"
+                                       ^
+  23 |       time_key: LogTimeStamp
+  24 |       time_format: %H:%M:%S
+  25 |     status-exclude:

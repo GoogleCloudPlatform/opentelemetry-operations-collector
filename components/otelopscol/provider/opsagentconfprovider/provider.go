@@ -62,9 +62,9 @@ func (p *provider) Retrieve(ctx context.Context, uri string, _ confmap.WatcherFu
 		stateDir = defaultStateDir()
 	}
 
-	cfg, err := readAndMergeConfigs(ctx, configPath)
+	cfg, err := readConfig(configPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to merge config files: %w", err)
+		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
 	otelConfig, err := cfg.generateOtelConfig(ctx, stateDir)
@@ -72,11 +72,7 @@ func (p *provider) Retrieve(ctx context.Context, uri string, _ confmap.WatcherFu
 		return nil, fmt.Errorf("failed to generate otel config: %w", err)
 	}
 
-	if p.logger != nil {
-		p.logger.Info("Generated OTEL config", zap.String("config", otelConfig))
-	}
-
-	return confmap.NewRetrievedFromYAML([]byte(otelConfig))
+	return confmap.NewRetrieved(otelConfig)
 }
 
 func (p *provider) Scheme() string {

@@ -20,13 +20,12 @@ import (
 )
 
 const (
-	defaultMetricsPort         = 20201
-	defaultMetricsVersionLabel = "google-cloud-ops-agent-metrics/latest"
-	agentDomainPrefix          = "agent.googleapis.com"
-	rpcDurationMetric          = "rpc.client.call.duration"
-	rpcDurationCountMetric     = "rpc.client.call.duration_count"
-	metricsExportRPCMethod     = "opentelemetry.proto.collector.metrics.v1.MetricsService/Export"
-	logsExportRPCMethod        = "opentelemetry.proto.collector.logs.v1.LogsService/Export"
+	defaultMetricsPort     = 20201
+	agentDomainPrefix      = "agent.googleapis.com"
+	rpcDurationMetric      = "rpc.client.call.duration"
+	rpcDurationCountMetric = "rpc.client.call.duration_count"
+	metricsExportRPCMethod = "opentelemetry.proto.collector.metrics.v1.MetricsService/Export"
+	logsExportRPCMethod    = "opentelemetry.proto.collector.logs.v1.LogsService/Export"
 )
 
 // grpcToHTTPStatus maps canonical gRPC status codes to HTTP status codes

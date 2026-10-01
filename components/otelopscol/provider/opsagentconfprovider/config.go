@@ -18,7 +18,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"runtime"
 
 	"go.yaml.in/yaml/v3"
 )
@@ -73,6 +72,10 @@ func readConfig(configPath string) (*Config, error) {
 }
 
 func (c *Config) generateOtelConfig(_ context.Context, stateDir string) (map[string]any, error) {
+	info := detectHostInfo()
+	userAgent := info.userAgent()
+	versionLabel := info.versionLabel()
+
 	b := &collectorConfig{
 		receivers: map[string]any{},
 		processors: map[string]any{
@@ -89,8 +92,8 @@ func (c *Config) generateOtelConfig(_ context.Context, stateDir string) (map[str
 			},
 		},
 		exporters: map[string]any{
-			"otlp_grpc/otlp_metrics": otlpExporter(),
-			"otlp_grpc/otlp_logs":    otlpLogsExporter(),
+			"otlp_grpc/otlp_metrics": otlpExporter(userAgent),
+			"otlp_grpc/otlp_logs":    otlpLogsExporter(userAgent),
 		},
 		extensions: map[string]any{
 			fileStorageExtensionType:      fileStorageExtension(stateDir),
@@ -105,8 +108,8 @@ func (c *Config) generateOtelConfig(_ context.Context, stateDir string) (map[str
 		"batch/otlp_grpc/otlp_metrics_metrics_2",
 	}
 
-	b.addSelfMetrics(defaultMetricsPort, defaultMetricsVersionLabel, defaultMetricsProcessors)
-	b.addHostmetrics(defaultHostmetricsCollectionInterval, runtime.GOOS == "windows", defaultMetricsProcessors)
+	b.addSelfMetrics(defaultMetricsPort, versionLabel, defaultMetricsProcessors)
+	b.addHostmetrics(defaultHostmetricsCollectionInterval, info.OS == "windows", defaultMetricsProcessors)
 
 	return map[string]any{
 		"receivers":  b.receivers,
@@ -121,18 +124,19 @@ func (c *Config) generateOtelConfig(_ context.Context, stateDir string) (map[str
 	}, nil
 }
 
-func otlpExporter() map[string]any {
+func otlpExporter(userAgent string) map[string]any {
 	return map[string]any{
 		"endpoint":      "telemetry.googleapis.com:443",
 		"balancer_name": "pick_first",
+		"user_agent":    userAgent,
 		"auth": map[string]any{
 			"authenticator": googleClientAuthExtensionType,
 		},
 	}
 }
 
-func otlpLogsExporter() map[string]any {
-	cfg := otlpExporter()
+func otlpLogsExporter(userAgent string) map[string]any {
+	cfg := otlpExporter(userAgent)
 	cfg["sending_queue"] = map[string]any{
 		"enabled":           true,
 		"queue_size":        20000000,

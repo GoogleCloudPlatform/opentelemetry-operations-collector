@@ -213,8 +213,9 @@ func buildProcessorChain(t *testing.T, procIDs []string) (consumer.Metrics, *con
 }
 
 func TestOtelSelfMetricsTransformation(t *testing.T) {
+	expectedVersionLabel := detectHostInfo().versionLabel()
 	promIDs := registerProcessors(map[string]any{}, agentPrometheusProcessors())
-	otelIDs := registerProcessors(map[string]any{}, otelSelfMetricsProcessors(defaultMetricsVersionLabel))
+	otelIDs := registerProcessors(map[string]any{}, otelSelfMetricsProcessors(expectedVersionLabel))
 	chain, sink := buildProcessorChain(t, append(promIDs, otelIDs...))
 
 	md := pmetric.NewMetrics()
@@ -307,7 +308,7 @@ func TestOtelSelfMetricsTransformation(t *testing.T) {
 	assert.Equal(t, int64(42), uptimeDP.IntValue())
 	verVal, ok := uptimeDP.Attributes().Get("version")
 	require.True(t, ok)
-	assert.Equal(t, defaultMetricsVersionLabel, verVal.Str())
+	assert.Equal(t, expectedVersionLabel, verVal.Str())
 
 	apiDP := gotMetrics["agent.googleapis.com/agent/api_request_count"].Sum().DataPoints()
 	require.Equal(t, 1, apiDP.Len())

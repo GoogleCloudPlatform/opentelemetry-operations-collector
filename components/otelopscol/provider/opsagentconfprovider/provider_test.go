@@ -120,6 +120,9 @@ func TestRetrieveEmptyConfig(t *testing.T) {
 	assert.True(t, conf.IsSet("processors::resourcedetection/_global_0"))
 	assert.True(t, conf.IsSet("exporters::otlp_grpc/otlp_metrics"))
 	assert.True(t, conf.IsSet("exporters::otlp_grpc/otlp_logs"))
+	expectedUserAgent := detectHostInfo().userAgent()
+	assert.Equal(t, expectedUserAgent, conf.Get("exporters::otlp_grpc/otlp_metrics::user_agent"))
+	assert.Equal(t, expectedUserAgent, conf.Get("exporters::otlp_grpc/otlp_logs::user_agent"))
 	assert.Equal(t, filepath.Join(stateDir, "file_storage"), conf.Get("extensions::file_storage::directory"))
 	assert.True(t, conf.IsSet("service::telemetry::metrics"))
 

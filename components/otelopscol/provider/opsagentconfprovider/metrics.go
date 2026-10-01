@@ -1,0 +1,225 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package opsagentconfprovider
+
+import (
+	"fmt"
+	"maps"
+	"slices"
+	"strings"
+	"time"
+)
+
+const minCollectionInterval = 10 * time.Second
+
+// Metrics represents metrics pipelines, receivers, and processors in the Ops Agent configuration.
+type Metrics struct {
+	Receivers  map[string]MetricsReceiver  `yaml:"receivers,omitempty"`
+	Processors map[string]MetricsProcessor `yaml:"processors,omitempty"`
+	Service    *MetricsService             `yaml:"service,omitempty"`
+}
+
+// MetricsReceiver represents a metrics receiver in the Ops Agent configuration.
+type MetricsReceiver struct {
+	Type               string `yaml:"type"`
+	CollectionInterval string `yaml:"collection_interval,omitempty"`
+}
+
+// MetricsProcessor represents a metrics processor in the Ops Agent configuration.
+type MetricsProcessor struct {
+	Type           string   `yaml:"type"`
+	MetricsPattern []string `yaml:"metrics_pattern,omitempty,flow"`
+}
+
+// MetricsService represents the metrics service configuration.
+type MetricsService struct {
+	LogLevel  string               `yaml:"log_level,omitempty"`
+	Pipelines map[string]*Pipeline `yaml:"pipelines,omitempty"`
+}
+
+// Pipeline represents a pipeline of receivers and processors.
+type Pipeline struct {
+	ReceiverIDs  []string `yaml:"receivers,omitempty,flow"`
+	ProcessorIDs []string `yaml:"processors,omitempty,flow"`
+}
+
+func defaultMetricsConfig() *Metrics {
+	return &Metrics{
+		Receivers: map[string]MetricsReceiver{
+			"hostmetrics": {
+				Type:               "hostmetrics",
+				CollectionInterval: defaultHostmetricsCollectionInterval,
+			},
+		},
+		Processors: map[string]MetricsProcessor{
+			"metrics_filter": {
+				Type: "exclude_metrics",
+			},
+		},
+		Service: &MetricsService{
+			Pipelines: map[string]*Pipeline{
+				"default_pipeline": {
+					ReceiverIDs:  []string{"hostmetrics"},
+					ProcessorIDs: []string{"metrics_filter"},
+				},
+			},
+		},
+	}
+}
+
+func mergeMetricsConfig(user *Metrics) *Metrics {
+	merged := defaultMetricsConfig()
+	if user == nil {
+		return merged
+	}
+
+	maps.Copy(merged.Receivers, user.Receivers)
+	maps.Copy(merged.Processors, user.Processors)
+
+	if user.Service != nil {
+		if user.Service.LogLevel != "" && user.Service.LogLevel != "info" {
+			merged.Service.LogLevel = user.Service.LogLevel
+		}
+		for name, p := range user.Service.Pipelines {
+			if p == nil {
+				merged.Service.Pipelines[name] = &Pipeline{}
+				continue
+			}
+			merged.Service.Pipelines[name] = &Pipeline{
+				ReceiverIDs:  slices.Clone(p.ReceiverIDs),
+				ProcessorIDs: slices.Clone(p.ProcessorIDs),
+			}
+		}
+	}
+
+	return merged
+}
+
+func validateComponentID(subagent, kind, id string) error {
+	if strings.HasPrefix(id, "lib:") {
+		return fmt.Errorf("%s %s ID %q cannot start with \"lib:\"", subagent, kind, id)
+	}
+	return nil
+}
+
+func (m *Metrics) validate() error {
+	for _, id := range slices.Sorted(maps.Keys(m.Receivers)) {
+		if err := validateComponentID("metrics", "receiver", id); err != nil {
+			return err
+		}
+		r := m.Receivers[id]
+		if r.Type != "hostmetrics" {
+			return fmt.Errorf("metrics receiver %q with type %q is not supported", id, r.Type)
+		}
+		if r.CollectionInterval != "" {
+			d, err := time.ParseDuration(r.CollectionInterval)
+			if err != nil || d < minCollectionInterval {
+				return fmt.Errorf("metrics receiver %q has invalid collection_interval %q: must be a duration >= %s", id, r.CollectionInterval, minCollectionInterval)
+			}
+		}
+	}
+
+	for _, id := range slices.Sorted(maps.Keys(m.Processors)) {
+		if err := validateComponentID("metrics", "processor", id); err != nil {
+			return err
+		}
+		p := m.Processors[id]
+		if p.Type != "exclude_metrics" {
+			return fmt.Errorf("metrics processor %q with type %q is not supported", id, p.Type)
+		}
+	}
+
+	if m.Service == nil {
+		return nil
+	}
+
+	if m.Service.LogLevel != "" {
+		switch m.Service.LogLevel {
+		case "error", "warn", "info", "debug":
+		default:
+			return fmt.Errorf("metrics service has invalid log_level %q", m.Service.LogLevel)
+		}
+	}
+
+	for _, pID := range slices.Sorted(maps.Keys(m.Service.Pipelines)) {
+		if err := validateComponentID("metrics", "pipeline", pID); err != nil {
+			return err
+		}
+		p := m.Service.Pipelines[pID]
+		if p == nil {
+			continue
+		}
+		hostmetricsCount := 0
+		for _, rID := range p.ReceiverIDs {
+			r, ok := m.Receivers[rID]
+			if !ok {
+				return fmt.Errorf("metrics receiver %q from pipeline %q is not defined", rID, pID)
+			}
+			if r.Type == "hostmetrics" {
+				hostmetricsCount++
+				if hostmetricsCount > 1 {
+					return fmt.Errorf("at most one metrics receiver with type %q is allowed in pipeline %q", r.Type, pID)
+				}
+			}
+		}
+		for _, prID := range p.ProcessorIDs {
+			if _, ok := m.Processors[prID]; !ok {
+				return fmt.Errorf("metrics processor %q from pipeline %q is not defined", prID, pID)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (b *collectorConfig) addMetricsPipelines(m *Metrics, isWindows bool, exporterProcessors []string) {
+	if m == nil || m.Service == nil {
+		return
+	}
+	for _, pID := range slices.Sorted(maps.Keys(m.Service.Pipelines)) {
+		p := m.Service.Pipelines[pID]
+		if p == nil {
+			continue
+		}
+		escapedPID := escapeComponentID(pID)
+		for _, rID := range p.ReceiverIDs {
+			r := m.Receivers[rID]
+			escapedRID := escapeComponentID(rID)
+			prefix := fmt.Sprintf("%s_%s", escapedPID, escapedRID)
+
+			receiverName := fmt.Sprintf("hostmetrics/%s", escapedRID)
+			b.receivers[receiverName] = hostmetricsReceiver(r.CollectionInterval, isWindows)
+			receiverProcIDs := registerProcessors(b.processors, hostmetricsProcessors(escapedRID, isWindows))
+
+			pipelineProcIDs := make([]string, 0, len(p.ProcessorIDs))
+			for i, prID := range p.ProcessorIDs {
+				proc := m.Processors[prID]
+				procID := fmt.Sprintf("filter/%s_%d", prefix, i)
+				b.processors[procID] = metricsExcludeRegexpFilterProcessor(proc.MetricsPattern...)
+				pipelineProcIDs = append(pipelineProcIDs, procID)
+			}
+
+			b.pipelines["metrics/"+prefix] = map[string]any{
+				"receivers":  []string{receiverName},
+				"processors": slices.Concat(receiverProcIDs, pipelineProcIDs, exporterProcessors),
+				"exporters":  []string{"otlp_grpc/otlp_metrics"},
+			}
+		}
+	}
+}
+
+func escapeComponentID(id string) string {
+	return strings.ReplaceAll(id, "_", "__")
+}

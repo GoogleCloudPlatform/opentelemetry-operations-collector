@@ -45,8 +45,9 @@ func TestAgentPrometheusReceiver(t *testing.T) {
 }
 
 func TestTelemetryConfig(t *testing.T) {
-	conf := confmap.NewFromStringMap(telemetryConfig(20201))
+	conf := confmap.NewFromStringMap(telemetryConfig(20201, ""))
 	assert.Equal(t, "detailed", conf.Get("metrics::level"))
+	assert.False(t, conf.IsSet("logs"))
 
 	readers, ok := conf.Get("metrics::readers").([]map[string]any)
 	require.True(t, ok)
@@ -58,6 +59,9 @@ func TestTelemetryConfig(t *testing.T) {
 	assert.Equal(t, true, readerConf.Get("pull::exporter::prometheus::without_scope_info"))
 	assert.Equal(t, true, readerConf.Get("pull::exporter::prometheus::without_units"))
 	assert.Equal(t, true, readerConf.Get("pull::exporter::prometheus::without_type_suffix"))
+
+	debugConf := confmap.NewFromStringMap(telemetryConfig(20201, "debug"))
+	assert.Equal(t, "debug", debugConf.Get("logs::level"))
 }
 
 func TestAgentPrometheusProcessors(t *testing.T) {
@@ -171,8 +175,13 @@ func TestRenameLabelValuesSorted(t *testing.T) {
 
 func buildProcessorChain(t *testing.T, procIDs []string) (consumer.Metrics, *consumertest.MetricsSink) {
 	t.Helper()
+	return buildProcessorChainWithConfig(t, "", procIDs)
+}
+
+func buildProcessorChainWithConfig(t *testing.T, configYAML string, procIDs []string) (consumer.Metrics, *consumertest.MetricsSink) {
+	t.Helper()
 	ctx := context.Background()
-	configFile, _ := writeTestConfig(t, "")
+	configFile, _ := writeTestConfig(t, configYAML)
 	factories := testFactories(t)
 
 	configProvider, err := otelcol.NewConfigProvider(otelcol.ConfigProviderSettings{

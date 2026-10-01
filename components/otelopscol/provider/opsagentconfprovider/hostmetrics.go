@@ -14,25 +14,13 @@
 
 package opsagentconfprovider
 
-import "slices"
+import "fmt"
 
 const defaultHostmetricsCollectionInterval = "60s"
 
 var networkDirectionMap = map[string]string{
 	"receive":  "rx",
 	"transmit": "tx",
-}
-
-func (b *collectorConfig) addHostmetrics(collectionInterval string, isWindows bool, exporterProcessors []string) {
-	b.receivers["hostmetrics/hostmetrics"] = hostmetricsReceiver(collectionInterval, isWindows)
-
-	hostProcIDs := registerProcessors(b.processors, hostmetricsProcessors(isWindows))
-
-	b.pipelines["metrics/default__pipeline_hostmetrics"] = map[string]any{
-		"receivers":  []string{"hostmetrics/hostmetrics"},
-		"processors": slices.Concat(hostProcIDs, exporterProcessors),
-		"exporters":  []string{"otlp_grpc/otlp_metrics"},
-	}
 }
 
 func hostmetricsReceiver(collectionInterval string, isWindows bool) map[string]any {
@@ -78,16 +66,16 @@ func hostmetricsReceiver(collectionInterval string, isWindows bool) map[string]a
 	}
 }
 
-func hostmetricsProcessors(isWindows bool) []namedProcessor {
+func hostmetricsProcessors(receiverID string, isWindows bool) []namedProcessor {
 	return []namedProcessor{
 		{
-			id: "agentmetrics/hostmetrics_0",
+			id: fmt.Sprintf("agentmetrics/%s_0", receiverID),
 			config: map[string]any{
 				"blank_label_metrics": []string{"system.cpu.utilization"},
 			},
 		},
 		{
-			id: "filter/hostmetrics_1",
+			id: fmt.Sprintf("filter/%s_1", receiverID),
 			config: metricsExcludeFilterProcessor(
 				"system.network.dropped",
 				"system.filesystem.inodes.usage",
@@ -96,17 +84,17 @@ func hostmetricsProcessors(isWindows bool) []namedProcessor {
 			),
 		},
 		{
-			id: "metricstransform/hostmetrics_2",
+			id: fmt.Sprintf("metricstransform/%s_2", receiverID),
 			config: metricsTransformProcessor(
 				hostmetricsTransforms(isWindows)...,
 			),
 		},
 		{
-			id:     "transform/hostmetrics_3",
+			id:     fmt.Sprintf("transform/%s_3", receiverID),
 			config: removeInstrumentationScopeProcessor(),
 		},
 		{
-			id:     "transform/hostmetrics_4",
+			id:     fmt.Sprintf("transform/%s_4", receiverID),
 			config: removeServiceAttributesProcessor(),
 		},
 	}

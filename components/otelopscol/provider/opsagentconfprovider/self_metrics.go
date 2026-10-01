@@ -116,8 +116,8 @@ func agentPrometheusReceiver(port int) map[string]any {
 	}
 }
 
-func telemetryConfig(port int) map[string]any {
-	return map[string]any{
+func telemetryConfig(port int, logLevel string) map[string]any {
+	cfg := map[string]any{
 		"metrics": map[string]any{
 			"level": "detailed",
 			"readers": []map[string]any{
@@ -137,6 +137,12 @@ func telemetryConfig(port int) map[string]any {
 			},
 		},
 	}
+	if logLevel != "" && logLevel != "info" {
+		cfg["logs"] = map[string]any{
+			"level": "debug",
+		}
+	}
+	return cfg
 }
 
 func extractRPCCountProcessor() map[string]any {

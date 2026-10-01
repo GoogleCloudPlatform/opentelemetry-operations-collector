@@ -161,6 +161,7 @@ func TestRetrieveEmptyConfig(t *testing.T) {
 		"metricstransform/hostmetrics_2",
 		"transform/hostmetrics_3",
 		"transform/hostmetrics_4",
+		"filter/default__pipeline_hostmetrics_0",
 		"resourcedetection/_global_0",
 		"metric_start_time/otlp_grpc/otlp_metrics_metrics_1",
 		"batch/otlp_grpc/otlp_metrics_metrics_2",
@@ -223,6 +224,36 @@ func TestValidateCollectorConfig(t *testing.T) {
 logging: {}
 metrics: {}
 traces: {}
+`,
+		},
+		{
+			name: "custom_hostmetrics_and_exclude_metrics",
+			config: `metrics:
+  receivers:
+    hostmetrics:
+      type: hostmetrics
+      collection_interval: 30s
+  processors:
+    metrics_filter:
+      type: exclude_metrics
+      metrics_pattern:
+        - agent.googleapis.com/processes/*
+        - agent.googleapis.com/cpu/*
+  service:
+    log_level: debug
+    pipelines:
+      default_pipeline:
+        receivers: [hostmetrics]
+        processors: [metrics_filter]
+`,
+		},
+		{
+			name: "disable_default_metrics_pipeline",
+			config: `metrics:
+  service:
+    pipelines:
+      default_pipeline:
+        receivers: []
 `,
 		},
 	}

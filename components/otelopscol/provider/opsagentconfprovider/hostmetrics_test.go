@@ -54,7 +54,7 @@ func TestHostmetricsReceiver(t *testing.T) {
 func TestHostmetricsProcessors(t *testing.T) {
 	t.Run("linux", func(t *testing.T) {
 		procs := map[string]any{}
-		ids := registerProcessors(procs, hostmetricsProcessors(false))
+		ids := registerProcessors(procs, hostmetricsProcessors("hostmetrics", false))
 		assert.Equal(t, []string{
 			"agentmetrics/hostmetrics_0",
 			"filter/hostmetrics_1",
@@ -82,7 +82,7 @@ func TestHostmetricsProcessors(t *testing.T) {
 
 	t.Run("windows", func(t *testing.T) {
 		procs := map[string]any{}
-		registerProcessors(procs, hostmetricsProcessors(true))
+		registerProcessors(procs, hostmetricsProcessors("hostmetrics", true))
 		conf := confmap.NewFromStringMap(procs)
 		transforms, ok := conf.Get("metricstransform/hostmetrics_2::transforms").([]map[string]any)
 		require.True(t, ok)
@@ -93,7 +93,7 @@ func TestHostmetricsProcessors(t *testing.T) {
 }
 
 func TestHostmetricsTransformation(t *testing.T) {
-	hostIDs := registerProcessors(map[string]any{}, hostmetricsProcessors(runtime.GOOS == "windows"))
+	hostIDs := registerProcessors(map[string]any{}, hostmetricsProcessors("hostmetrics", runtime.GOOS == "windows"))
 	chain, sink := buildProcessorChain(t, hostIDs)
 
 	md := pmetric.NewMetrics()

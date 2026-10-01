@@ -15,8 +15,11 @@
 package opsagentconfprovider
 
 import (
+	"fmt"
 	"path"
+	"regexp"
 	"sort"
+	"strings"
 )
 
 type namedProcessor struct {
@@ -76,22 +79,43 @@ func removeServiceAttributesProcessor() map[string]any {
 }
 
 func metricsIncludeFilterProcessor(metricNames ...string) map[string]any {
-	return metricsStrictFilterProcessor("include", metricNames...)
+	return metricsFilterProcessor("include", "strict", metricNames...)
 }
 
 func metricsExcludeFilterProcessor(metricNames ...string) map[string]any {
-	return metricsStrictFilterProcessor("exclude", metricNames...)
+	return metricsFilterProcessor("exclude", "strict", metricNames...)
 }
 
-func metricsStrictFilterProcessor(polarity string, metricNames ...string) map[string]any {
+func metricsExcludeRegexpFilterProcessor(patterns ...string) map[string]any {
+	regexps := make([]string, 0, len(patterns))
+	for _, glob := range patterns {
+		regexps = append(regexps, globToRegex(glob))
+	}
+	return metricsFilterProcessor("exclude", "regexp", regexps...)
+}
+
+func metricsFilterProcessor(polarity, matchType string, metricNames ...string) map[string]any {
+	if metricNames == nil {
+		metricNames = []string{}
+	}
 	return map[string]any{
 		"metrics": map[string]any{
 			polarity: map[string]any{
-				"match_type":   "strict",
+				"match_type":   matchType,
 				"metric_names": metricNames,
 			},
 		},
 	}
+}
+
+// globToRegex converts a metric glob pattern (using '*' wildcards) to an anchored regex pattern.
+func globToRegex(glob string) string {
+	parts := strings.Split(glob, "*")
+	literals := make([]string, 0, len(parts))
+	for _, p := range parts {
+		literals = append(literals, regexp.QuoteMeta(p))
+	}
+	return fmt.Sprintf(`^%s$`, strings.Join(literals, `.*`))
 }
 
 func metricsDatapointFilterProcessor(expressions ...string) map[string]any {

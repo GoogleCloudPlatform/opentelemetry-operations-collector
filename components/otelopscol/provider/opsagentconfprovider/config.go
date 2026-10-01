@@ -18,6 +18,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"go.yaml.in/yaml/v3"
 )
@@ -105,6 +106,7 @@ func (c *Config) generateOtelConfig(_ context.Context, stateDir string) (map[str
 	}
 
 	b.addSelfMetrics(defaultMetricsPort, defaultMetricsVersionLabel, defaultMetricsProcessors)
+	b.addHostmetrics(defaultHostmetricsCollectionInterval, runtime.GOOS == "windows", defaultMetricsProcessors)
 
 	return map[string]any{
 		"receivers":  b.receivers,

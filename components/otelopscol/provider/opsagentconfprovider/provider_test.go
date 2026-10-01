@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/agentmetricsprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/extension/googleclientauthextension"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/extension/storage/filestorage"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor"
@@ -28,6 +29,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -52,11 +54,13 @@ func testFactories(t *testing.T) otelcol.Factories {
 	}
 
 	factories.Receivers, err = otelcol.MakeFactoryMap[receiver.Factory](
+		hostmetricsreceiver.NewFactory(),
 		prometheusreceiver.NewFactory(),
 	)
 	require.NoError(t, err)
 
 	factories.Processors, err = otelcol.MakeFactoryMap[processor.Factory](
+		agentmetricsprocessor.NewFactory(),
 		batchprocessor.NewFactory(),
 		filterprocessor.NewFactory(),
 		intervalprocessor.NewFactory(),
@@ -112,6 +116,7 @@ func TestRetrieveEmptyConfig(t *testing.T) {
 	assert.Contains(t, rawMap, "service")
 
 	assert.True(t, conf.IsSet("receivers::prometheus/agent_prometheus"))
+	assert.True(t, conf.IsSet("receivers::hostmetrics/hostmetrics"))
 	assert.True(t, conf.IsSet("processors::resourcedetection/_global_0"))
 	assert.True(t, conf.IsSet("exporters::otlp_grpc/otlp_metrics"))
 	assert.True(t, conf.IsSet("exporters::otlp_grpc/otlp_logs"))
@@ -147,6 +152,17 @@ func TestRetrieveEmptyConfig(t *testing.T) {
 		"batch/otlp_grpc/otlp_metrics_metrics_2",
 	}, conf.Get("service::pipelines::metrics/loggingmetrics::processors"))
 
+	assert.Equal(t, []string{
+		"agentmetrics/hostmetrics_0",
+		"filter/hostmetrics_1",
+		"metricstransform/hostmetrics_2",
+		"transform/hostmetrics_3",
+		"transform/hostmetrics_4",
+		"resourcedetection/_global_0",
+		"metric_start_time/otlp_grpc/otlp_metrics_metrics_1",
+		"batch/otlp_grpc/otlp_metrics_metrics_2",
+	}, conf.Get("service::pipelines::metrics/default__pipeline_hostmetrics::processors"))
+
 	require.NoError(t, p.Shutdown(context.Background()))
 }
 
@@ -163,6 +179,7 @@ func TestRetrieveNonExistentConfigFile(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, conf.IsSet("service::pipelines::metrics/otel"))
 	assert.True(t, conf.IsSet("service::pipelines::metrics/loggingmetrics"))
+	assert.True(t, conf.IsSet("service::pipelines::metrics/default__pipeline_hostmetrics"))
 }
 
 func TestRetrieveInvalidYAML(t *testing.T) {

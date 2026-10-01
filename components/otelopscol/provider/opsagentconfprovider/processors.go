@@ -76,9 +76,17 @@ func removeServiceAttributesProcessor() map[string]any {
 }
 
 func metricsIncludeFilterProcessor(metricNames ...string) map[string]any {
+	return metricsStrictFilterProcessor("include", metricNames...)
+}
+
+func metricsExcludeFilterProcessor(metricNames ...string) map[string]any {
+	return metricsStrictFilterProcessor("exclude", metricNames...)
+}
+
+func metricsStrictFilterProcessor(polarity string, metricNames ...string) map[string]any {
 	return map[string]any{
 		"metrics": map[string]any{
-			"include": map[string]any{
+			polarity: map[string]any{
 				"match_type":   "strict",
 				"metric_names": metricNames,
 			},
@@ -172,6 +180,13 @@ func toggleScalarDataType() map[string]any {
 	}
 }
 
+func scaleValue(factor float64) map[string]any {
+	return map[string]any{
+		"action":             "experimental_scale_value",
+		"experimental_scale": factor,
+	}
+}
+
 func addLabel(key, value string) map[string]any {
 	return map[string]any{
 		"action":    "add_label",
@@ -185,6 +200,14 @@ func renameLabel(oldKey, newKey string) map[string]any {
 		"action":    "update_label",
 		"label":     oldKey,
 		"new_label": newKey,
+	}
+}
+
+func deleteLabelValue(label, value string) map[string]any {
+	return map[string]any{
+		"action":      "delete_label_value",
+		"label":       label,
+		"label_value": value,
 	}
 }
 
@@ -214,5 +237,15 @@ func aggregateLabels(aggregationType string, labels ...string) map[string]any {
 		"action":           "aggregate_labels",
 		"aggregation_type": aggregationType,
 		"label_set":        labels,
+	}
+}
+
+func aggregateLabelValues(aggregationType, label, newValue string, oldValues ...string) map[string]any {
+	return map[string]any{
+		"action":            "aggregate_label_values",
+		"aggregation_type":  aggregationType,
+		"label":             label,
+		"new_value":         newValue,
+		"aggregated_values": oldValues,
 	}
 }

@@ -22,8 +22,12 @@ import (
 
 	"github.com/open-telemetry/opentelemetry-collector-contrib/extension/googleclientauthextension"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/extension/storage/filestorage"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/intervalprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstarttimeprocessor"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -54,8 +58,12 @@ func testFactories(t *testing.T) otelcol.Factories {
 
 	factories.Processors, err = otelcol.MakeFactoryMap[processor.Factory](
 		batchprocessor.NewFactory(),
+		filterprocessor.NewFactory(),
+		intervalprocessor.NewFactory(),
 		metricstarttimeprocessor.NewFactory(),
+		metricstransformprocessor.NewFactory(),
 		resourcedetectionprocessor.NewFactory(),
+		transformprocessor.NewFactory(),
 	)
 	require.NoError(t, err)
 
@@ -108,34 +116,121 @@ func TestRetrieveEmptyConfig(t *testing.T) {
 	assert.True(t, conf.IsSet("exporters::otlp_grpc/otlp_metrics"))
 	assert.True(t, conf.IsSet("exporters::otlp_grpc/otlp_logs"))
 	assert.Equal(t, filepath.Join(stateDir, "file_storage"), conf.Get("extensions::file_storage::directory"))
-	assert.True(t, conf.IsSet("service::pipelines::metrics/otel"))
-	assert.True(t, conf.IsSet("service::pipelines::metrics/loggingmetrics"))
 	assert.True(t, conf.IsSet("service::telemetry::metrics"))
+
+	assert.Equal(t, []string{
+		"transform/agent_prometheus_0",
+		"transform/agent_prometheus_1",
+		"transform/agent_prometheus_2",
+		"transform/otel_0",
+		"filter/otel_1",
+		"filter/otel_2",
+		"metricstransform/otel_3",
+		"resourcedetection/_global_0",
+		"metric_start_time/otlp_grpc/otlp_metrics_metrics_1",
+		"batch/otlp_grpc/otlp_metrics_metrics_2",
+	}, conf.Get("service::pipelines::metrics/otel::processors"))
+
+	assert.Equal(t, []string{
+		"transform/agent_prometheus_0",
+		"transform/agent_prometheus_1",
+		"transform/agent_prometheus_2",
+		"transform/loggingmetrics_0",
+		"filter/loggingmetrics_1",
+		"filter/loggingmetrics_2",
+		"metricstransform/loggingmetrics_3",
+		"transform/loggingmetrics_4",
+		"interval/loggingmetrics_5",
+		"metricstransform/loggingmetrics_6",
+		"resourcedetection/_global_0",
+		"metric_start_time/otlp_grpc/otlp_metrics_metrics_1",
+		"batch/otlp_grpc/otlp_metrics_metrics_2",
+	}, conf.Get("service::pipelines::metrics/loggingmetrics::processors"))
 
 	require.NoError(t, p.Shutdown(context.Background()))
 }
 
+func TestRetrieveNonExistentConfigFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	missingConfig := filepath.Join(tmpDir, "does_not_exist.yaml")
+	t.Setenv("STATE_DIRECTORY", filepath.Join(tmpDir, "state"))
+
+	p := NewFactory().Create(confmap.ProviderSettings{Logger: zap.NewNop()})
+	retrieved, err := p.Retrieve(context.Background(), "opsagentconf:"+missingConfig, nil)
+	require.NoError(t, err)
+
+	conf, err := retrieved.AsConf()
+	require.NoError(t, err)
+	assert.True(t, conf.IsSet("service::pipelines::metrics/otel"))
+	assert.True(t, conf.IsSet("service::pipelines::metrics/loggingmetrics"))
+}
+
+func TestRetrieveInvalidYAML(t *testing.T) {
+	configFile, _ := writeTestConfig(t, "logging:\n  - invalid: [unclosed\n")
+
+	p := NewFactory().Create(confmap.ProviderSettings{Logger: zap.NewNop()})
+	_, err := p.Retrieve(context.Background(), "opsagentconf:"+configFile, nil)
+	require.ErrorContains(t, err, "failed to read config file")
+}
+
+func TestRetrieveDefaultStateDir(t *testing.T) {
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "config.yaml")
+	require.NoError(t, os.WriteFile(configFile, []byte(""), 0600))
+	t.Setenv("STATE_DIRECTORY", "")
+
+	p := NewFactory().Create(confmap.ProviderSettings{Logger: zap.NewNop()})
+	retrieved, err := p.Retrieve(context.Background(), "opsagentconf:"+configFile, nil)
+	require.NoError(t, err)
+
+	conf, err := retrieved.AsConf()
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(defaultStateDir(), "file_storage"), conf.Get("extensions::file_storage::directory"))
+}
+
 func TestValidateCollectorConfig(t *testing.T) {
-	configFile, _ := writeTestConfig(t, "")
-
-	factories := testFactories(t)
-	providerFactory := NewFactory()
-
-	configProvider, err := otelcol.NewConfigProvider(otelcol.ConfigProviderSettings{
-		ResolverSettings: confmap.ResolverSettings{
-			URIs: []string{"opsagentconf:" + configFile},
-			ProviderFactories: []confmap.ProviderFactory{
-				providerFactory,
-			},
+	testCases := []struct {
+		name   string
+		config string
+	}{
+		{
+			name:   "empty_config",
+			config: "",
 		},
-	})
-	require.NoError(t, err)
+		{
+			name: "empty_sections",
+			config: `combined: {}
+logging: {}
+metrics: {}
+traces: {}
+`,
+		},
+	}
 
-	cfg, err := configProvider.Get(context.Background(), factories)
-	require.NoError(t, err)
-	require.NotNil(t, cfg)
-	require.NoError(t, cfg.Validate())
-	require.NoError(t, configProvider.Shutdown(context.Background()))
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			configFile, _ := writeTestConfig(t, tc.config)
+
+			factories := testFactories(t)
+			providerFactory := NewFactory()
+
+			configProvider, err := otelcol.NewConfigProvider(otelcol.ConfigProviderSettings{
+				ResolverSettings: confmap.ResolverSettings{
+					URIs: []string{"opsagentconf:" + configFile},
+					ProviderFactories: []confmap.ProviderFactory{
+						providerFactory,
+					},
+				},
+			})
+			require.NoError(t, err)
+
+			cfg, err := configProvider.Get(context.Background(), factories)
+			require.NoError(t, err)
+			require.NotNil(t, cfg)
+			require.NoError(t, cfg.Validate())
+			require.NoError(t, configProvider.Shutdown(context.Background()))
+		})
+	}
 }
 
 func TestRetrieveUnsupportedScheme(t *testing.T) {

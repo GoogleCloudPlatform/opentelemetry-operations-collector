@@ -16,7 +16,6 @@ package opsagentconfprovider
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"path/filepath"
 
@@ -24,7 +23,6 @@ import (
 )
 
 const (
-	defaultMetricsPort            = 20201
 	fileStorageExtensionType      = "file_storage"
 	googleClientAuthExtensionType = "googleclientauth"
 )
@@ -49,6 +47,14 @@ type Metrics struct{}
 // Traces represents traces pipelines in the Ops Agent configuration.
 type Traces struct{}
 
+type collectorConfig struct {
+	receivers  map[string]any
+	processors map[string]any
+	exporters  map[string]any
+	extensions map[string]any
+	pipelines  map[string]any
+}
+
 func readConfig(configPath string) (*Config, error) {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
@@ -66,32 +72,30 @@ func readConfig(configPath string) (*Config, error) {
 }
 
 func (c *Config) generateOtelConfig(_ context.Context, stateDir string) (map[string]any, error) {
-	receivers := map[string]any{
-		"prometheus/agent_prometheus": agentPrometheusReceiver(defaultMetricsPort),
-	}
-
-	processors := map[string]any{
-		"resourcedetection/_global_0": map[string]any{
-			"detectors": []string{"gcp"},
+	b := &collectorConfig{
+		receivers: map[string]any{},
+		processors: map[string]any{
+			"resourcedetection/_global_0": map[string]any{
+				"detectors": []string{"gcp"},
+			},
+			"metric_start_time/otlp_grpc/otlp_metrics_metrics_1": map[string]any{
+				"strategy": "subtract_initial_point",
+			},
+			"batch/otlp_grpc/otlp_metrics_metrics_2": map[string]any{
+				"send_batch_max_size": 200,
+				"send_batch_size":     200,
+				"timeout":             "200ms",
+			},
 		},
-		"metric_start_time/otlp_grpc/otlp_metrics_metrics_1": map[string]any{
-			"strategy": "subtract_initial_point",
+		exporters: map[string]any{
+			"otlp_grpc/otlp_metrics": otlpExporter(),
+			"otlp_grpc/otlp_logs":    otlpLogsExporter(),
 		},
-		"batch/otlp_grpc/otlp_metrics_metrics_2": map[string]any{
-			"send_batch_max_size": 200,
-			"send_batch_size":     200,
-			"timeout":             "200ms",
+		extensions: map[string]any{
+			fileStorageExtensionType:      fileStorageExtension(stateDir),
+			googleClientAuthExtensionType: map[string]any{},
 		},
-	}
-
-	exporters := map[string]any{
-		"otlp_grpc/otlp_metrics": otlpExporter(),
-		"otlp_grpc/otlp_logs":    otlpLogsExporter(),
-	}
-
-	extensions := map[string]any{
-		fileStorageExtensionType:      fileStorageExtension(stateDir),
-		googleClientAuthExtensionType: map[string]any{},
+		pipelines: map[string]any{},
 	}
 
 	defaultMetricsProcessors := []string{
@@ -100,50 +104,19 @@ func (c *Config) generateOtelConfig(_ context.Context, stateDir string) (map[str
 		"batch/otlp_grpc/otlp_metrics_metrics_2",
 	}
 
-	pipelines := map[string]any{
-		"metrics/otel": map[string]any{
-			"receivers":  []string{"prometheus/agent_prometheus"},
-			"processors": defaultMetricsProcessors,
-			"exporters":  []string{"otlp_grpc/otlp_metrics"},
-		},
-		"metrics/loggingmetrics": map[string]any{
-			"receivers":  []string{"prometheus/agent_prometheus"},
-			"processors": defaultMetricsProcessors,
-			"exporters":  []string{"otlp_grpc/otlp_metrics"},
-		},
-	}
-
-	service := map[string]any{
-		"extensions": []string{fileStorageExtensionType, googleClientAuthExtensionType},
-		"pipelines":  pipelines,
-		"telemetry":  telemetryConfig(defaultMetricsPort),
-	}
+	b.addSelfMetrics(defaultMetricsPort, defaultMetricsVersionLabel, defaultMetricsProcessors)
 
 	return map[string]any{
-		"receivers":  receivers,
-		"processors": processors,
-		"exporters":  exporters,
-		"extensions": extensions,
-		"service":    service,
+		"receivers":  b.receivers,
+		"processors": b.processors,
+		"exporters":  b.exporters,
+		"extensions": b.extensions,
+		"service": map[string]any{
+			"extensions": []string{fileStorageExtensionType, googleClientAuthExtensionType},
+			"pipelines":  b.pipelines,
+			"telemetry":  telemetryConfig(defaultMetricsPort),
+		},
 	}, nil
-}
-
-func agentPrometheusReceiver(port int) map[string]any {
-	return map[string]any{
-		"config": map[string]any{
-			"scrape_configs": []map[string]any{
-				{
-					"job_name":        "otel-collector",
-					"scrape_interval": "1m",
-					"static_configs": []map[string]any{
-						{
-							"targets": []string{fmt.Sprintf("0.0.0.0:%d", port)},
-						},
-					},
-				},
-			},
-		},
-	}
 }
 
 func otlpExporter() map[string]any {
@@ -179,28 +152,5 @@ func fileStorageExtension(stateDir string) map[string]any {
 	return map[string]any{
 		"directory":        filepath.Join(stateDir, "file_storage"),
 		"create_directory": true,
-	}
-}
-
-func telemetryConfig(port int) map[string]any {
-	return map[string]any{
-		"metrics": map[string]any{
-			"level": "detailed",
-			"readers": []map[string]any{
-				{
-					"pull": map[string]any{
-						"exporter": map[string]any{
-							"prometheus": map[string]any{
-								"host":                "0.0.0.0",
-								"port":                port,
-								"without_scope_info":  true,
-								"without_units":       true,
-								"without_type_suffix": true,
-							},
-						},
-					},
-				},
-			},
-		},
 	}
 }

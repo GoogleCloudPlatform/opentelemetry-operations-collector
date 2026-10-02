@@ -132,6 +132,24 @@ func intervalProcessor(duration string) map[string]any {
 	}
 }
 
+func gcpResourceDetectorProcessor(override bool) map[string]any {
+	cfg := map[string]any{
+		"detectors": []string{"gcp"},
+	}
+	if !override {
+		cfg["override"] = false
+	}
+	return cfg
+}
+
+func batchProcessor() map[string]any {
+	return map[string]any{
+		"send_batch_max_size": 200,
+		"send_batch_size":     200,
+		"timeout":             "200ms",
+	}
+}
+
 func metricsTransformProcessor(transforms ...map[string]any) map[string]any {
 	return map[string]any{
 		"transforms": transforms,
@@ -148,6 +166,15 @@ func renameMetric(oldName, newName string, operations ...map[string]any) map[str
 		out["operations"] = operations
 	}
 	return out
+}
+
+func regexpRenameMetric(includeRegex, newName string) map[string]any {
+	return map[string]any{
+		"include":    includeRegex,
+		"match_type": "regexp",
+		"action":     "update",
+		"new_name":   newName,
+	}
 }
 
 func updateMetric(metricName string, operations ...map[string]any) map[string]any {
@@ -190,12 +217,7 @@ func combineMetrics(includeRegex, newName string, operations ...map[string]any) 
 
 // addMetricPrefix adds a domain prefix to all metrics using regexp substitution.
 func addMetricPrefix(prefix string) map[string]any {
-	return map[string]any{
-		"include":    "^(.*)$",
-		"match_type": "regexp",
-		"action":     "update",
-		"new_name":   path.Join(prefix, "${1}"),
-	}
+	return regexpRenameMetric("^(.*)$", path.Join(prefix, "${1}"))
 }
 
 func toggleScalarDataType() map[string]any {
@@ -272,4 +294,74 @@ func aggregateLabelValues(aggregationType, label, newValue string, oldValues ...
 		"new_value":         newValue,
 		"aggregated_values": oldValues,
 	}
+}
+
+// Keep these in sync:
+// https://github.com/GoogleCloudPlatform/opentelemetry-operations-go/blob/main/exporter/collector/config.go#L158
+var knownDomains = []string{"googleapis.com", "kubernetes.io", "istio.io", "knative.dev"}
+
+func workloadMetricsProcessors(escapedID string) []namedProcessor {
+	knownDomainsRegexEscaped := make([]string, 0, len(knownDomains))
+	for _, d := range knownDomains {
+		knownDomainsRegexEscaped = append(knownDomainsRegexEscaped, regexp.QuoteMeta(d))
+	}
+	return []namedProcessor{
+		{
+			id: fmt.Sprintf("metricstransform/%s_0", escapedID),
+			config: metricsTransformProcessor(
+				regexpRenameMetric(`^(.*)$`, `A${1}`),
+				regexpRenameMetric(fmt.Sprintf(`^A((?:[a-z]+\.)*(?:%s)/.+)$`, strings.Join(knownDomainsRegexEscaped, "|")), `B${1}`),
+				regexpRenameMetric(`^A(.*)$`, `Aworkload.googleapis.com/${1}`),
+				regexpRenameMetric(`^[AB](.*)$`, `${1}`),
+			),
+		},
+	}
+}
+
+func gmpMetricsProcessors(escapedID string) []namedProcessor {
+	stmt := func(target, source string) string {
+		return fmt.Sprintf(`set(%s, %s) where %s != nil and resource.attributes["cloud.platform"] == "gcp_compute_engine"`, target, source, source)
+	}
+	return []namedProcessor{
+		{
+			id:     fmt.Sprintf("resourcedetection/%s_0", escapedID),
+			config: gcpResourceDetectorProcessor(false),
+		},
+		{
+			id: fmt.Sprintf("transform/%s_1", escapedID),
+			config: metricTransformIgnoreProcessor(
+				"datapoint",
+				stmt(`attributes["location"]`, `resource.attributes["cloud.availability_zone"]`),
+				stmt(`attributes["namespace"]`, `Concat([resource.attributes["host.id"], resource.attributes["host.name"]], "/")`),
+				stmt(`attributes["cluster"]`, `"__gce__"`),
+				stmt(`attributes["instance_name"]`, `resource.attributes["host.name"]`),
+				stmt(`attributes["machine_type"]`, `resource.attributes["host.type"]`),
+			),
+		},
+		{
+			id: fmt.Sprintf("groupbyattrs/%s_2", escapedID),
+			config: map[string]any{
+				"keys": []string{"namespace", "cluster", "location"},
+			},
+		},
+		{
+			id:     fmt.Sprintf("transform/%s_3", escapedID),
+			config: metricUnknownCounterProcessor(),
+		},
+		{
+			id: fmt.Sprintf("metricstransform/%s_4", escapedID),
+			config: metricsTransformProcessor(
+				addMetricPrefix("prometheus.googleapis.com"),
+			),
+		},
+	}
+}
+
+func metricUnknownCounterProcessor() map[string]any {
+	return metricTransformIgnoreProcessor(
+		"metric",
+		`copy_metric(Concat([metric.name, "unknowncounter"], ":")) where metric.metadata["prometheus.type"] == "unknown" and not HasSuffix(metric.name, ":unknowncounter")`,
+		`convert_gauge_to_sum("cumulative", true) where HasSuffix(metric.name, ":unknowncounter")`,
+		`set(metric.name, Substring(metric.name, 0, Len(metric.name)-Len(":unknowncounter"))) where HasSuffix(metric.name, ":unknowncounter")`,
+	)
 }

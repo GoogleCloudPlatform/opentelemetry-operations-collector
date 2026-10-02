@@ -91,7 +91,7 @@ func TestMergeMetricsConfig(t *testing.T) {
 }
 
 func TestMetricsValidate(t *testing.T) {
-	require.NoError(t, defaultMetricsConfig().validate())
+	require.NoError(t, defaultMetricsConfig().validate(nil))
 
 	testCases := []struct {
 		name    string
@@ -182,7 +182,7 @@ func TestMetricsValidate(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			m := defaultMetricsConfig()
 			tc.mutate(m)
-			err := m.validate()
+			err := m.validate(nil)
 			require.ErrorContains(t, err, tc.wantErr)
 		})
 	}

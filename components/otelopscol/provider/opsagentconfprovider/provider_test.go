@@ -24,6 +24,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/extension/googleclientauthextension"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/extension/storage/filestorage"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/groupbyattrsprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/intervalprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstarttimeprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor"
@@ -41,6 +42,7 @@ import (
 	"go.opentelemetry.io/collector/processor"
 	"go.opentelemetry.io/collector/processor/batchprocessor"
 	"go.opentelemetry.io/collector/receiver"
+	"go.opentelemetry.io/collector/receiver/otlpreceiver"
 	"go.opentelemetry.io/collector/service/telemetry/otelconftelemetry"
 	"go.uber.org/zap"
 )
@@ -55,6 +57,7 @@ func testFactories(t *testing.T) otelcol.Factories {
 
 	factories.Receivers, err = otelcol.MakeFactoryMap[receiver.Factory](
 		hostmetricsreceiver.NewFactory(),
+		otlpreceiver.NewFactory(),
 		prometheusreceiver.NewFactory(),
 	)
 	require.NoError(t, err)
@@ -63,6 +66,7 @@ func testFactories(t *testing.T) otelcol.Factories {
 		agentmetricsprocessor.NewFactory(),
 		batchprocessor.NewFactory(),
 		filterprocessor.NewFactory(),
+		groupbyattrsprocessor.NewFactory(),
 		intervalprocessor.NewFactory(),
 		metricstarttimeprocessor.NewFactory(),
 		metricstransformprocessor.NewFactory(),
@@ -254,6 +258,49 @@ traces: {}
     pipelines:
       default_pipeline:
         receivers: []
+`,
+		},
+		{
+			name: "combined_otlp_gmp_and_traces",
+			config: `combined:
+  receivers:
+    otlp:
+      type: otlp
+      grpc_endpoint: 127.0.0.1:4317
+      metrics_mode: googlemanagedprometheus
+metrics:
+  service:
+    pipelines:
+      otlp_pipe:
+        receivers: [otlp]
+traces:
+  service:
+    pipelines:
+      otlp_pipe:
+        receivers: [otlp]
+`,
+		},
+		{
+			name: "combined_otlp_gcm_with_exclude_metrics",
+			config: `combined:
+  receivers:
+    otlp:
+      type: otlp
+      metrics_mode: googlecloudmonitoring
+metrics:
+  processors:
+    filter_custom:
+      type: exclude_metrics
+      metrics_pattern:
+        - workload.googleapis.com/secret/*
+  service:
+    pipelines:
+      otlp_pipe:
+        receivers: [otlp]
+        processors: [filter_custom]
+traces:
+  service:
+    pipelines: {}
 `,
 		},
 	}

@@ -551,6 +551,8 @@ github.com/open-telemetry/opentelemetry-collector-contrib/processor/deltatocumul
 github.com/open-telemetry/opentelemetry-collector-contrib/processor/deltatocumulativeprocessor v0.162.0/go.mod h1:jSpyEuzj9k8jeJE+Xf+oqe1lz754hG6TMtzBJs3vwik=
 github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.162.0 h1:v+U9PyEOh3R/6yYpenF3N0Wg6NgoxTMlqpWVy7yCvmI=
 github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.162.0/go.mod h1:9wBur0FYX23ZWpiUHUJT9w3nK02wKvfZ8wWhT7jY5j4=
+github.com/open-telemetry/opentelemetry-collector-contrib/processor/groupbyattrsprocessor v0.162.0 h1:w4V44dOmTrDkr6yU7tfnBIOh7KHn14AScILqn/nY4K4=
+github.com/open-telemetry/opentelemetry-collector-contrib/processor/groupbyattrsprocessor v0.162.0/go.mod h1:DdyGz0aFEDU6og8qStSDaE59LegA2eOK4IM2TbV21jk=
 github.com/open-telemetry/opentelemetry-collector-contrib/processor/intervalprocessor v0.162.0 h1:kUP2F0wNfpEjdIBUh00Qt59hQIc83p4fqlSpk+mtg0I=
 github.com/open-telemetry/opentelemetry-collector-contrib/processor/intervalprocessor v0.162.0/go.mod h1:5fzRq++M2SyQkpNb/DnKgKd764b6+8toAGF7+2huPVY=
 github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstarttimeprocessor v0.162.0 h1:gB3vBRnA/aI4hDD1HS/LPceXrtX5bZQGOmShQdTjvX4=

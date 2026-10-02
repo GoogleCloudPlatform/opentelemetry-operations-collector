@@ -7,6 +7,7 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/extension/googleclientauthextension v0.162.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/extension/storage/filestorage v0.162.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.162.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/processor/groupbyattrsprocessor v0.162.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/processor/intervalprocessor v0.162.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstarttimeprocessor v0.162.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor v0.162.0
@@ -30,6 +31,7 @@ require (
 	go.opentelemetry.io/collector/processor/batchprocessor v0.162.0
 	go.opentelemetry.io/collector/processor/processortest v0.162.0
 	go.opentelemetry.io/collector/receiver v1.68.0
+	go.opentelemetry.io/collector/receiver/otlpreceiver v0.162.0
 	go.opentelemetry.io/collector/service v0.162.0
 	go.uber.org/zap v1.28.0
 	go.yaml.in/yaml/v3 v3.0.5
@@ -312,6 +314,7 @@ require (
 	go.opentelemetry.io/collector/filter v0.162.0 // indirect
 	go.opentelemetry.io/collector/internal/componentalias v0.162.0 // indirect
 	go.opentelemetry.io/collector/internal/fanoutconsumer v0.162.0 // indirect
+	go.opentelemetry.io/collector/internal/sharedcomponent v0.162.0 // indirect
 	go.opentelemetry.io/collector/internal/telemetry v0.162.0 // indirect
 	go.opentelemetry.io/collector/pdata/pprofile v0.162.0 // indirect
 	go.opentelemetry.io/collector/pdata/testdata v0.162.0 // indirect

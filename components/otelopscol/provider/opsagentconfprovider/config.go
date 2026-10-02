@@ -38,14 +38,8 @@ type Config struct {
 	Traces   *Traces   `yaml:"traces,omitempty"`
 }
 
-// Combined represents combined telemetry receivers in the Ops Agent configuration.
-type Combined struct{}
-
 // Logging represents logging pipelines, receivers, and processors in the Ops Agent configuration.
 type Logging struct{}
-
-// Traces represents traces pipelines in the Ops Agent configuration.
-type Traces struct{}
 
 type collectorConfig struct {
 	receivers  map[string]any
@@ -78,7 +72,13 @@ func readConfig(configPath string) (*Config, error) {
 
 func (c *Config) generateOtelConfig(_ context.Context, stateDir string) (map[string]any, error) {
 	metricsCfg := mergeMetricsConfig(c.Metrics)
-	if err := metricsCfg.validate(); err != nil {
+	if err := metricsCfg.validate(c.Combined); err != nil {
+		return nil, err
+	}
+	if err := c.Traces.validate(c.Combined); err != nil {
+		return nil, err
+	}
+	if err := c.Combined.validate(c.Traces != nil); err != nil {
 		return nil, err
 	}
 
@@ -89,17 +89,11 @@ func (c *Config) generateOtelConfig(_ context.Context, stateDir string) (map[str
 	b := &collectorConfig{
 		receivers: map[string]any{},
 		processors: map[string]any{
-			"resourcedetection/_global_0": map[string]any{
-				"detectors": []string{"gcp"},
-			},
+			"resourcedetection/_global_0": gcpResourceDetectorProcessor(true),
 			"metric_start_time/otlp_grpc/otlp_metrics_metrics_1": map[string]any{
 				"strategy": "subtract_initial_point",
 			},
-			"batch/otlp_grpc/otlp_metrics_metrics_2": map[string]any{
-				"send_batch_max_size": 200,
-				"send_batch_size":     200,
-				"timeout":             "200ms",
-			},
+			"batch/otlp_grpc/otlp_metrics_metrics_2": batchProcessor(),
 		},
 		exporters: map[string]any{
 			"otlp_grpc/otlp_metrics": otlpExporter(userAgent),
@@ -119,7 +113,8 @@ func (c *Config) generateOtelConfig(_ context.Context, stateDir string) (map[str
 	}
 
 	b.addSelfMetrics(defaultMetricsPort, versionLabel, defaultMetricsProcessors)
-	b.addMetricsPipelines(metricsCfg, info.OS == "windows", defaultMetricsProcessors)
+	b.addMetricsPipelines(metricsCfg, c.Combined, info.OS == "windows", defaultMetricsProcessors)
+	b.addTracesPipelines(c.Traces, c.Combined, userAgent)
 
 	return map[string]any{
 		"receivers":  b.receivers,

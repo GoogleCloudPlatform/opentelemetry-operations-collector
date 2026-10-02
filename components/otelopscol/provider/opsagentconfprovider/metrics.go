@@ -114,7 +114,7 @@ func validateComponentID(subagent, kind, id string) error {
 	return nil
 }
 
-func (m *Metrics) validate() error {
+func (m *Metrics) validate(combined *Combined) error {
 	for _, id := range slices.Sorted(maps.Keys(m.Receivers)) {
 		if err := validateComponentID("metrics", "receiver", id); err != nil {
 			return err
@@ -127,6 +127,14 @@ func (m *Metrics) validate() error {
 			d, err := time.ParseDuration(r.CollectionInterval)
 			if err != nil || d < minCollectionInterval {
 				return fmt.Errorf("metrics receiver %q has invalid collection_interval %q: must be a duration >= %s", id, r.CollectionInterval, minCollectionInterval)
+			}
+		}
+	}
+
+	if combined != nil {
+		for _, id := range slices.Sorted(maps.Keys(combined.Receivers)) {
+			if _, ok := m.Receivers[id]; ok {
+				return fmt.Errorf("metrics receiver %q has the same name as combined receiver %q", id, id)
 			}
 		}
 	}
@@ -163,16 +171,24 @@ func (m *Metrics) validate() error {
 		}
 		hostmetricsCount := 0
 		for _, rID := range p.ReceiverIDs {
-			r, ok := m.Receivers[rID]
-			if !ok {
-				return fmt.Errorf("metrics receiver %q from pipeline %q is not defined", rID, pID)
+			if r, ok := m.Receivers[rID]; ok {
+				if r.Type == "hostmetrics" {
+					hostmetricsCount++
+					if hostmetricsCount > 1 {
+						return fmt.Errorf("at most one metrics receiver with type %q is allowed in pipeline %q", r.Type, pID)
+					}
+				}
+				continue
 			}
-			if r.Type == "hostmetrics" {
-				hostmetricsCount++
-				if hostmetricsCount > 1 {
-					return fmt.Errorf("at most one metrics receiver with type %q is allowed in pipeline %q", r.Type, pID)
+			if combined != nil {
+				if cr, ok := combined.Receivers[rID]; ok {
+					if !cr.allowCustomProcessors() && len(p.ProcessorIDs) > 0 {
+						return fmt.Errorf("%s receiver is incompatible with Ops Agent processors", rID)
+					}
+					continue
 				}
 			}
+			return fmt.Errorf("metrics receiver %q from pipeline %q is not defined", rID, pID)
 		}
 		for _, prID := range p.ProcessorIDs {
 			if _, ok := m.Processors[prID]; !ok {
@@ -184,7 +200,7 @@ func (m *Metrics) validate() error {
 	return nil
 }
 
-func (b *collectorConfig) addMetricsPipelines(m *Metrics, isWindows bool, exporterProcessors []string) {
+func (b *collectorConfig) addMetricsPipelines(m *Metrics, combined *Combined, isWindows bool, exporterProcessors []string) {
 	if m == nil || m.Service == nil {
 		return
 	}
@@ -195,13 +211,25 @@ func (b *collectorConfig) addMetricsPipelines(m *Metrics, isWindows bool, export
 		}
 		escapedPID := escapeComponentID(pID)
 		for _, rID := range p.ReceiverIDs {
-			r := m.Receivers[rID]
 			escapedRID := escapeComponentID(rID)
 			prefix := fmt.Sprintf("%s_%s", escapedPID, escapedRID)
 
-			receiverName := fmt.Sprintf("hostmetrics/%s", escapedRID)
-			b.receivers[receiverName] = hostmetricsReceiver(r.CollectionInterval, isWindows)
-			receiverProcIDs := registerProcessors(b.processors, hostmetricsProcessors(escapedRID, isWindows))
+			var receiverName string
+			var receiverProcIDs []string
+			pipelineExporterProcs := exporterProcessors
+
+			if r, ok := m.Receivers[rID]; ok {
+				receiverName = fmt.Sprintf("hostmetrics/%s", escapedRID)
+				b.receivers[receiverName] = hostmetricsReceiver(r.CollectionInterval, isWindows)
+				receiverProcIDs = registerProcessors(b.processors, hostmetricsProcessors(escapedRID, isWindows))
+			} else if combined != nil {
+				if cr, ok := combined.Receivers[rID]; ok {
+					receiverName = fmt.Sprintf("otlp/%s", escapedRID)
+					b.receivers[receiverName] = cr.otlpReceiver()
+					receiverProcIDs = registerProcessors(b.processors, cr.otlpMetricsProcessors(escapedRID))
+					pipelineExporterProcs = cr.metricsExporterProcessors(b.processors, exporterProcessors[1:])
+				}
+			}
 
 			pipelineProcIDs := make([]string, 0, len(p.ProcessorIDs))
 			for i, prID := range p.ProcessorIDs {
@@ -213,7 +241,7 @@ func (b *collectorConfig) addMetricsPipelines(m *Metrics, isWindows bool, export
 
 			b.pipelines["metrics/"+prefix] = map[string]any{
 				"receivers":  []string{receiverName},
-				"processors": slices.Concat(receiverProcIDs, pipelineProcIDs, exporterProcessors),
+				"processors": slices.Concat(receiverProcIDs, pipelineProcIDs, pipelineExporterProcs),
 				"exporters":  []string{"otlp_grpc/otlp_metrics"},
 			}
 		}

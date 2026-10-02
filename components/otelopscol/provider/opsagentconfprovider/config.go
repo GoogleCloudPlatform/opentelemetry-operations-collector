@@ -111,7 +111,7 @@ func (c *Config) generateOtelConfig(_ context.Context, stateDir string, info hos
 	}
 
 	b.addSelfMetrics(defaultMetricsPort, versionLabel, defaultMetricsProcessors)
-	b.addMetricsPipelines(metricsCfg, c.Combined, isWindows, defaultMetricsProcessors)
+	b.addMetricsPipelines(metricsCfg, c.Combined, info, defaultMetricsProcessors)
 	b.addTracesPipelines(c.Traces, c.Combined, userAgent)
 
 	return map[string]any{

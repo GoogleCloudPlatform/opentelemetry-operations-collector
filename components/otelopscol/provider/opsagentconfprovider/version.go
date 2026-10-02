@@ -18,6 +18,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -27,6 +28,7 @@ import (
 const (
 	metricsVersionLabelPrefix = "google-cloud-ops-agent-metrics"
 	metricsUserAgentPrefix    = "Google-Cloud-Ops-Agent-Metrics"
+	nvidiaVendorID            = "0x10de"
 )
 
 // Version is the Ops Agent version reported in self-metrics and OTLP User-Agent headers.
@@ -39,6 +41,7 @@ type hostInfo struct {
 	PlatformFamily  string
 	PlatformVersion string
 	DistroCodename  string
+	HasNvidiaGPU    bool
 }
 
 func detectHostInfo() hostInfo {
@@ -53,8 +56,26 @@ func detectHostInfo() hostInfo {
 	}
 	if h.OS != "windows" {
 		h.DistroCodename = readDistroCodename("/etc/os-release", "/usr/lib/os-release")
+		h.HasNvidiaGPU = hasNvidiaGPU("/sys/bus/pci/devices")
 	}
 	return h
+}
+
+func hasNvidiaGPU(sysDevicesPath string) bool {
+	devices, err := os.ReadDir(sysDevicesPath)
+	if err != nil {
+		return false
+	}
+	for _, device := range devices {
+		vendor, err := os.ReadFile(filepath.Join(sysDevicesPath, device.Name(), "vendor"))
+		if err != nil {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(string(vendor)), nvidiaVendorID) {
+			return true
+		}
+	}
+	return false
 }
 
 func (h hostInfo) versionLabel() string {

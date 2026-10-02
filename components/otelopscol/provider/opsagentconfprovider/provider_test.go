@@ -22,8 +22,12 @@ import (
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/agentmetricsprocessor"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/normalizesumsprocessor"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/receiver/dcgmreceiver"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/receiver/nvmlreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/extension/googleclientauthextension"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/extension/storage/filestorage"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/cumulativetodeltaprocessor"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/deltatorateprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/groupbyattrsprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/intervalprocessor"
@@ -60,8 +64,10 @@ func testFactories(t *testing.T) otelcol.Factories {
 	}
 
 	factories.Receivers, err = otelcol.MakeFactoryMap[receiver.Factory](
+		dcgmreceiver.NewFactory(),
 		hostmetricsreceiver.NewFactory(),
 		iisreceiver.NewFactory(),
+		nvmlreceiver.NewFactory(),
 		otlpreceiver.NewFactory(),
 		prometheusreceiver.NewFactory(),
 		sqlserverreceiver.NewFactory(),
@@ -72,6 +78,8 @@ func testFactories(t *testing.T) otelcol.Factories {
 	factories.Processors, err = otelcol.MakeFactoryMap[processor.Factory](
 		agentmetricsprocessor.NewFactory(),
 		batchprocessor.NewFactory(),
+		cumulativetodeltaprocessor.NewFactory(),
+		deltatorateprocessor.NewFactory(),
 		filterprocessor.NewFactory(),
 		groupbyattrsprocessor.NewFactory(),
 		intervalprocessor.NewFactory(),
@@ -225,6 +233,7 @@ func TestValidateCollectorConfig(t *testing.T) {
 	testCases := []struct {
 		name      string
 		isWindows bool
+		hasGPU    bool
 		config    string
 	}{
 		{
@@ -364,6 +373,27 @@ traces:
         receivers: [mssql_v2]
 `,
 		},
+		{
+			name:   "linux_gpu_default_metrics",
+			hasGPU: true,
+			config: "",
+		},
+		{
+			name: "linux_dcgm_v1_and_v2",
+			config: `metrics:
+  receivers:
+    dcgm:
+      type: dcgm
+    dcgm_v2:
+      type: dcgm
+      receiver_version: 2
+      endpoint: 127.0.0.1:5556
+  service:
+    pipelines:
+      dcgm:
+        receivers: [dcgm, dcgm_v2]
+`,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -372,6 +402,7 @@ traces:
 
 			factories := testFactories(t)
 			info := detectHostInfo()
+			info.HasNvidiaGPU = tc.hasGPU
 			if tc.isWindows {
 				info = hostInfo{OS: "windows", Platform: "Microsoft Windows Server 2022 Datacenter", PlatformVersion: "10.0.20348 Build 20348"}
 			}

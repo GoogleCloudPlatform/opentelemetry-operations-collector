@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/confmap"
 	"go.opentelemetry.io/collector/pdata/pmetric"
+	"go.uber.org/zap"
 )
 
 func TestHostmetricsReceiver(t *testing.T) {
@@ -253,4 +254,188 @@ func TestHostmetricsTransformation(t *testing.T) {
 	userOrSyst, ok := procDPs.At(0).Attributes().Get("user_or_syst")
 	require.True(t, ok)
 	assert.Equal(t, "syst", userOrSyst.Str())
+}
+
+func TestRetrieveLinuxGPUNVMLPipeline(t *testing.T) {
+	gpuHost := hostInfo{OS: "linux", HasNvidiaGPU: true}
+
+	t.Run("default_linux_gpu_includes_nvml", func(t *testing.T) {
+		configFile, _ := writeTestConfig(t, "")
+		p := &provider{logger: zap.NewNop(), hostInfo: gpuHost}
+		retrieved, err := p.Retrieve(context.Background(), "opsagentconf:"+configFile, nil)
+		require.NoError(t, err)
+
+		conf, err := retrieved.AsConf()
+		require.NoError(t, err)
+
+		assert.Equal(t, "60s", conf.Get("receivers::nvml/hostmetrics_1::collection_interval"))
+		assert.Equal(t, []string{"nvml/hostmetrics_1"}, conf.Get("service::pipelines::metrics/default__pipeline_hostmetrics_1::receivers"))
+		assert.Equal(t, []string{
+			"metricstransform/hostmetrics_1_0",
+			"transform/hostmetrics_1_1",
+			"transform/hostmetrics_1_2",
+			"filter/default__pipeline_hostmetrics_1_0",
+			"resourcedetection/_global_0",
+			"metric_start_time/otlp_grpc/otlp_metrics_metrics_1",
+			"batch/otlp_grpc/otlp_metrics_metrics_2",
+		}, conf.Get("service::pipelines::metrics/default__pipeline_hostmetrics_1::processors"))
+	})
+
+	t.Run("exclude_gpu_glob_disables_nvml", func(t *testing.T) {
+		userYAML := `metrics:
+  processors:
+    metrics_filter:
+      type: exclude_metrics
+      metrics_pattern:
+        - agent.googleapis.com/gpu/*
+`
+		configFile, _ := writeTestConfig(t, userYAML)
+		p := &provider{logger: zap.NewNop(), hostInfo: gpuHost}
+		retrieved, err := p.Retrieve(context.Background(), "opsagentconf:"+configFile, nil)
+		require.NoError(t, err)
+
+		conf, err := retrieved.AsConf()
+		require.NoError(t, err)
+		assert.False(t, conf.IsSet("receivers::nvml/hostmetrics_1"))
+		assert.False(t, conf.IsSet("service::pipelines::metrics/default__pipeline_hostmetrics_1"))
+	})
+
+	t.Run("exclude_all_four_gpu_metrics_individually_disables_nvml", func(t *testing.T) {
+		userYAML := `metrics:
+  processors:
+    metrics_filter:
+      type: exclude_metrics
+      metrics_pattern:
+        - agent.googleapis.com/gpu/utilization
+        - agent.googleapis.com/gpu/processes/utilization
+        - agent.googleapis.com/gpu/memory/bytes_used
+        - agent.googleapis.com/gpu/processes/max_bytes_used
+`
+		configFile, _ := writeTestConfig(t, userYAML)
+		p := &provider{logger: zap.NewNop(), hostInfo: gpuHost}
+		retrieved, err := p.Retrieve(context.Background(), "opsagentconf:"+configFile, nil)
+		require.NoError(t, err)
+
+		conf, err := retrieved.AsConf()
+		require.NoError(t, err)
+		assert.False(t, conf.IsSet("receivers::nvml/hostmetrics_1"))
+	})
+
+	t.Run("exclude_subset_of_gpu_metrics_retains_nvml", func(t *testing.T) {
+		userYAML := `metrics:
+  processors:
+    metrics_filter:
+      type: exclude_metrics
+      metrics_pattern:
+        - agent.googleapis.com/gpu/processes/*
+`
+		configFile, _ := writeTestConfig(t, userYAML)
+		p := &provider{logger: zap.NewNop(), hostInfo: gpuHost}
+		retrieved, err := p.Retrieve(context.Background(), "opsagentconf:"+configFile, nil)
+		require.NoError(t, err)
+
+		conf, err := retrieved.AsConf()
+		require.NoError(t, err)
+		assert.True(t, conf.IsSet("receivers::nvml/hostmetrics_1"))
+		assert.True(t, conf.IsSet("service::pipelines::metrics/default__pipeline_hostmetrics_1"))
+	})
+
+	t.Run("three_exclude_processors_with_gpu_second_retains_nvml", func(t *testing.T) {
+		userYAML := `metrics:
+  processors:
+    metrics_filter_1:
+      type: exclude_metrics
+      metrics_pattern:
+        - agent.googleapis.com/cpu/*
+    metrics_filter_2:
+      type: exclude_metrics
+      metrics_pattern:
+        - agent.googleapis.com/gpu/*
+    metrics_filter_3:
+      type: exclude_metrics
+      metrics_pattern:
+        - agent.googleapis.com/processes/*
+  service:
+    pipelines:
+      default_pipeline:
+        receivers: [hostmetrics]
+        processors: [metrics_filter_1, metrics_filter_2, metrics_filter_3]
+`
+		configFile, _ := writeTestConfig(t, userYAML)
+		p := &provider{logger: zap.NewNop(), hostInfo: gpuHost}
+		retrieved, err := p.Retrieve(context.Background(), "opsagentconf:"+configFile, nil)
+		require.NoError(t, err)
+
+		conf, err := retrieved.AsConf()
+		require.NoError(t, err)
+		assert.True(t, conf.IsSet("receivers::nvml/hostmetrics_1"))
+		assert.Equal(t, []string{
+			"metricstransform/hostmetrics_1_0",
+			"transform/hostmetrics_1_1",
+			"transform/hostmetrics_1_2",
+			"filter/default__pipeline_hostmetrics_1_0",
+			"filter/default__pipeline_hostmetrics_1_1",
+			"filter/default__pipeline_hostmetrics_1_2",
+			"resourcedetection/_global_0",
+			"metric_start_time/otlp_grpc/otlp_metrics_metrics_1",
+			"batch/otlp_grpc/otlp_metrics_metrics_2",
+		}, conf.Get("service::pipelines::metrics/default__pipeline_hostmetrics_1::processors"))
+	})
+}
+
+func TestNVMLMetricsTransformation(t *testing.T) {
+	gpuHost := hostInfo{OS: "linux", HasNvidiaGPU: true}
+	procIDs := registerProcessors(map[string]any{}, nvmlProcessors("hostmetrics_1"))
+	chain, sink := buildProcessorChainForHost(t, "", gpuHost, procIDs)
+
+	md := pmetric.NewMetrics()
+	rm := md.ResourceMetrics().AppendEmpty()
+	rm.Resource().Attributes().PutStr("service.name", "nvml")
+	rm.Resource().Attributes().PutStr("host.name", "gpu-vm")
+
+	sm := rm.ScopeMetrics().AppendEmpty()
+	sm.Scope().SetName("nvmlreceiver")
+	sm.Scope().SetVersion("0.162.0")
+
+	addGauge := func(name string, val float64) {
+		m := sm.Metrics().AppendEmpty()
+		m.SetName(name)
+		dp := m.SetEmptyGauge().DataPoints().AppendEmpty()
+		dp.SetDoubleValue(val)
+	}
+
+	addGauge("nvml.gpu.utilization", 0.42)
+	addGauge("nvml.gpu.memory.bytes_used", 8589934592)
+	addGauge("nvml.gpu.processes.utilization", 0.15)
+	addGauge("nvml.gpu.processes.max_bytes_used", 4294967296)
+
+	require.NoError(t, chain.ConsumeMetrics(context.Background(), md))
+
+	all := sink.AllMetrics()
+	require.Len(t, all, 1)
+	outRM := all[0].ResourceMetrics().At(0)
+	_, hasServiceName := outRM.Resource().Attributes().Get("service.name")
+	assert.False(t, hasServiceName)
+
+	outSM := outRM.ScopeMetrics().At(0)
+	assert.Empty(t, outSM.Scope().Name())
+	assert.Empty(t, outSM.Scope().Version())
+
+	gotMetrics := make(map[string]pmetric.Metric)
+	for i := 0; i < outSM.Metrics().Len(); i++ {
+		m := outSM.Metrics().At(i)
+		gotMetrics[m.Name()] = m
+	}
+
+	require.Contains(t, gotMetrics, "agent.googleapis.com/gpu/utilization")
+	assert.InDelta(t, 42.0, gotMetrics["agent.googleapis.com/gpu/utilization"].Gauge().DataPoints().At(0).DoubleValue(), 1e-6)
+
+	require.Contains(t, gotMetrics, "agent.googleapis.com/gpu/memory/bytes_used")
+	assert.InDelta(t, 8589934592.0, gotMetrics["agent.googleapis.com/gpu/memory/bytes_used"].Gauge().DataPoints().At(0).DoubleValue(), 1e-6)
+
+	require.Contains(t, gotMetrics, "agent.googleapis.com/gpu/processes/utilization")
+	assert.InDelta(t, 15.0, gotMetrics["agent.googleapis.com/gpu/processes/utilization"].Gauge().DataPoints().At(0).DoubleValue(), 1e-6)
+
+	require.Contains(t, gotMetrics, "agent.googleapis.com/gpu/processes/max_bytes_used")
+	assert.InDelta(t, 4294967296.0, gotMetrics["agent.googleapis.com/gpu/processes/max_bytes_used"].Gauge().DataPoints().At(0).DoubleValue(), 1e-6)
 }

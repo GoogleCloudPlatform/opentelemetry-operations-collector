@@ -223,3 +223,39 @@ func hostmetricsTransforms(isWindows bool) []map[string]any {
 	transforms = append(transforms, addMetricPrefix(agentDomainPrefix))
 	return transforms
 }
+
+var nvmlGPUMetrics = []string{
+	"agent.googleapis.com/gpu/utilization",
+	"agent.googleapis.com/gpu/memory/bytes_used",
+	"agent.googleapis.com/gpu/processes/utilization",
+	"agent.googleapis.com/gpu/processes/max_bytes_used",
+}
+
+func nvmlReceiver(collectionInterval string) map[string]any {
+	return map[string]any{
+		"collection_interval": collectionInterval,
+	}
+}
+
+func nvmlProcessors(escapedID string) []namedProcessor {
+	return []namedProcessor{
+		{
+			id: fmt.Sprintf("metricstransform/%s_0", escapedID),
+			config: metricsTransformProcessor(
+				renameMetric("nvml.gpu.utilization", "gpu/utilization", scaleValue(100)),
+				renameMetric("nvml.gpu.memory.bytes_used", "gpu/memory/bytes_used"),
+				renameMetric("nvml.gpu.processes.utilization", "gpu/processes/utilization", scaleValue(100)),
+				renameMetric("nvml.gpu.processes.max_bytes_used", "gpu/processes/max_bytes_used"),
+				addMetricPrefix(agentDomainPrefix),
+			),
+		},
+		{
+			id:     fmt.Sprintf("transform/%s_1", escapedID),
+			config: removeInstrumentationScopeProcessor(),
+		},
+		{
+			id:     fmt.Sprintf("transform/%s_2", escapedID),
+			config: removeServiceAttributesProcessor(),
+		},
+	}
+}

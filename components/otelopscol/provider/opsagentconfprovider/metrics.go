@@ -17,7 +17,10 @@ package opsagentconfprovider
 import (
 	"fmt"
 	"maps"
+	"net"
+	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -36,6 +39,7 @@ type MetricsReceiver struct {
 	Type               string         `yaml:"type"`
 	CollectionInterval string         `yaml:"collection_interval,omitempty"`
 	ReceiverVersion    string         `yaml:"receiver_version,omitempty"`
+	Endpoint           string         `yaml:"endpoint,omitempty"`
 	Config             map[string]any `yaml:"config,omitempty"`
 }
 
@@ -52,6 +56,19 @@ type MetricsProcessor struct {
 	MetricsPattern []string `yaml:"metrics_pattern,omitempty,flow"`
 }
 
+func (p MetricsProcessor) allMetricsExcluded(metrics ...string) bool {
+nextMetric:
+	for _, metric := range metrics {
+		for _, pattern := range p.MetricsPattern {
+			if matched, _ := regexp.MatchString(globToRegex(pattern), metric); matched {
+				continue nextMetric
+			}
+		}
+		return false
+	}
+	return true
+}
+
 // MetricsService represents the metrics service configuration.
 type MetricsService struct {
 	LogLevel  string               `yaml:"log_level,omitempty"`
@@ -62,6 +79,13 @@ type MetricsService struct {
 type Pipeline struct {
 	ReceiverIDs  []string `yaml:"receivers,omitempty,flow"`
 	ProcessorIDs []string `yaml:"processors,omitempty,flow"`
+}
+
+func (p *Pipeline) disablesNVMLMetrics(processors map[string]MetricsProcessor) bool {
+	if len(p.ProcessorIDs) == 0 {
+		return false
+	}
+	return processors[p.ProcessorIDs[0]].allMetricsExcluded(nvmlGPUMetrics...)
 }
 
 func defaultMetricsConfig(isWindows bool) *Metrics {
@@ -147,12 +171,39 @@ func validateCollectionInterval(id, interval string) error {
 	return nil
 }
 
+func validateEndpoint(id, endpoint string) error {
+	if endpoint == "" {
+		return nil
+	}
+	host, portStr, err := net.SplitHostPort(endpoint)
+	if err != nil || host == "" || strings.ContainsAny(host, " \t") {
+		return fmt.Errorf("metrics receiver %q has invalid endpoint %q: must be a valid host:port", id, endpoint)
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil || port < 1 || port > 65535 {
+		return fmt.Errorf("metrics receiver %q has invalid endpoint %q: must be a valid host:port", id, endpoint)
+	}
+	return nil
+}
+
+func validateReceiverVersion(id, version string) error {
+	switch version {
+	case "", "1", "2":
+		return nil
+	default:
+		return fmt.Errorf("metrics receiver %q has invalid receiver_version %q: must be one of [1 2]", id, version)
+	}
+}
+
 func (m *Metrics) validate(combined *Combined, isWindows bool) error {
 	for _, id := range slices.Sorted(maps.Keys(m.Receivers)) {
 		if err := validateComponentID("metrics", "receiver", id); err != nil {
 			return err
 		}
 		r := m.Receivers[id]
+		if r.Endpoint != "" && r.Type != "dcgm" {
+			return fmt.Errorf("metrics receiver %q with type %q does not support endpoint", id, r.Type)
+		}
 		switch r.Type {
 		case "hostmetrics":
 			if r.Config != nil {
@@ -171,12 +222,26 @@ func (m *Metrics) validate(combined *Combined, isWindows bool) error {
 			if r.Config != nil {
 				return fmt.Errorf("metrics receiver %q with type %q does not support config", id, r.Type)
 			}
-			switch r.ReceiverVersion {
-			case "", "1", "2":
-			default:
-				return fmt.Errorf("metrics receiver %q has invalid receiver_version %q: must be one of [1 2]", id, r.ReceiverVersion)
+			if err := validateReceiverVersion(id, r.ReceiverVersion); err != nil {
+				return err
 			}
 			if err := validateCollectionInterval(id, r.CollectionInterval); err != nil {
+				return err
+			}
+		case "dcgm":
+			if isWindows {
+				return fmt.Errorf("metrics receiver %q with type %q is not supported", id, r.Type)
+			}
+			if r.Config != nil {
+				return fmt.Errorf("metrics receiver %q with type %q does not support config", id, r.Type)
+			}
+			if err := validateReceiverVersion(id, r.ReceiverVersion); err != nil {
+				return err
+			}
+			if err := validateCollectionInterval(id, r.CollectionInterval); err != nil {
+				return err
+			}
+			if err := validateEndpoint(id, r.Endpoint); err != nil {
 				return err
 			}
 		case "prometheus":
@@ -268,10 +333,11 @@ func (m *Metrics) validate(combined *Combined, isWindows bool) error {
 	return nil
 }
 
-func (b *collectorConfig) addMetricsPipelines(m *Metrics, combined *Combined, isWindows bool, exporterProcessors []string) {
+func (b *collectorConfig) addMetricsPipelines(m *Metrics, combined *Combined, info hostInfo, exporterProcessors []string) {
 	if m == nil || m.Service == nil {
 		return
 	}
+	isWindows := info.OS == "windows"
 	for _, pID := range slices.Sorted(maps.Keys(m.Service.Pipelines)) {
 		p := m.Service.Pipelines[pID]
 		if p == nil {
@@ -282,55 +348,59 @@ func (b *collectorConfig) addMetricsPipelines(m *Metrics, combined *Combined, is
 			escapedRID := escapeComponentID(rID)
 			prefix := fmt.Sprintf("%s_%s", escapedPID, escapedRID)
 
-			var receiverName string
-			var receiverProcIDs []string
-			pipelineExporterProcs := exporterProcessors
-
 			if r, ok := m.Receivers[rID]; ok {
 				switch r.Type {
 				case "hostmetrics":
-					receiverName = fmt.Sprintf("hostmetrics/%s", escapedRID)
+					receiverName := fmt.Sprintf("hostmetrics/%s", escapedRID)
 					b.receivers[receiverName] = hostmetricsReceiver(r.CollectionInterval, isWindows)
-					receiverProcIDs = registerProcessors(b.processors, hostmetricsProcessors(escapedRID, isWindows))
+					b.registerMetricsPipeline(m, p, prefix, receiverName, hostmetricsProcessors(escapedRID, isWindows), exporterProcessors)
+					if !isWindows && info.HasNvidiaGPU && !p.disablesNVMLMetrics(m.Processors) {
+						nvmlID := escapedRID + "_1"
+						nvmlReceiverName := fmt.Sprintf("nvml/%s", nvmlID)
+						b.receivers[nvmlReceiverName] = nvmlReceiver(r.collectionInterval())
+						b.registerMetricsPipeline(m, p, prefix+"_1", nvmlReceiverName, nvmlProcessors(nvmlID), exporterProcessors)
+					}
 				case "iis":
-					var receiverCfg map[string]any
-					receiverName, receiverCfg = r.iisReceiver(escapedRID)
+					receiverName, receiverCfg := r.iisReceiver(escapedRID)
 					b.receivers[receiverName] = receiverCfg
-					receiverProcIDs = registerProcessors(b.processors, r.iisProcessors(escapedRID))
+					b.registerMetricsPipeline(m, p, prefix, receiverName, r.iisProcessors(escapedRID), exporterProcessors)
 				case "mssql":
-					var receiverCfg map[string]any
-					receiverName, receiverCfg = r.mssqlReceiver(escapedRID)
+					receiverName, receiverCfg := r.mssqlReceiver(escapedRID)
 					b.receivers[receiverName] = receiverCfg
-					receiverProcIDs = registerProcessors(b.processors, r.mssqlProcessors(escapedRID))
+					b.registerMetricsPipeline(m, p, prefix, receiverName, r.mssqlProcessors(escapedRID), exporterProcessors)
+				case "dcgm":
+					receiverName, receiverCfg := r.dcgmReceiver(escapedRID)
+					b.receivers[receiverName] = receiverCfg
+					b.registerMetricsPipeline(m, p, prefix, receiverName, r.dcgmProcessors(escapedRID), exporterProcessors)
 				case "prometheus":
-					receiverName = fmt.Sprintf("prometheus/%s", escapedRID)
+					receiverName := fmt.Sprintf("prometheus/%s", escapedRID)
 					b.receivers[receiverName] = prometheusReceiver(r.Config)
-					receiverProcIDs = registerProcessors(b.processors, gmpMetricsProcessors(escapedRID))
-					pipelineExporterProcs = exporterProcessors[1:]
+					b.registerMetricsPipeline(m, p, prefix, receiverName, gmpMetricsProcessors(escapedRID), exporterProcessors[1:])
 				}
 			} else if combined != nil {
 				if cr, ok := combined.Receivers[rID]; ok {
-					receiverName = fmt.Sprintf("otlp/%s", escapedRID)
+					receiverName := fmt.Sprintf("otlp/%s", escapedRID)
 					b.receivers[receiverName] = cr.otlpReceiver()
-					receiverProcIDs = registerProcessors(b.processors, cr.otlpMetricsProcessors(escapedRID))
-					pipelineExporterProcs = cr.metricsExporterProcessors(b.processors, exporterProcessors[1:])
+					b.registerMetricsPipeline(m, p, prefix, receiverName, cr.otlpMetricsProcessors(escapedRID), cr.metricsExporterProcessors(b.processors, exporterProcessors[1:]))
 				}
 			}
-
-			pipelineProcIDs := make([]string, 0, len(p.ProcessorIDs))
-			for i, prID := range p.ProcessorIDs {
-				proc := m.Processors[prID]
-				procID := fmt.Sprintf("filter/%s_%d", prefix, i)
-				b.processors[procID] = metricsExcludeRegexpFilterProcessor(proc.MetricsPattern...)
-				pipelineProcIDs = append(pipelineProcIDs, procID)
-			}
-
-			b.pipelines["metrics/"+prefix] = map[string]any{
-				"receivers":  []string{receiverName},
-				"processors": slices.Concat(receiverProcIDs, pipelineProcIDs, pipelineExporterProcs),
-				"exporters":  []string{"otlp_grpc/otlp_metrics"},
-			}
 		}
+	}
+}
+
+func (b *collectorConfig) registerMetricsPipeline(m *Metrics, p *Pipeline, prefix, receiverName string, receiverProcs []namedProcessor, exporterProcessors []string) {
+	receiverProcIDs := registerProcessors(b.processors, receiverProcs)
+	pipelineProcIDs := make([]string, 0, len(p.ProcessorIDs))
+	for i, prID := range p.ProcessorIDs {
+		proc := m.Processors[prID]
+		procID := fmt.Sprintf("filter/%s_%d", prefix, i)
+		b.processors[procID] = metricsExcludeRegexpFilterProcessor(proc.MetricsPattern...)
+		pipelineProcIDs = append(pipelineProcIDs, procID)
+	}
+	b.pipelines["metrics/"+prefix] = map[string]any{
+		"receivers":  []string{receiverName},
+		"processors": slices.Concat(receiverProcIDs, pipelineProcIDs, exporterProcessors),
+		"exporters":  []string{"otlp_grpc/otlp_metrics"},
 	}
 }
 

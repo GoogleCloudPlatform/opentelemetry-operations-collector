@@ -154,6 +154,21 @@ func intervalProcessor(duration string) map[string]any {
 	}
 }
 
+func cumulativeToDeltaProcessor(metrics ...string) map[string]any {
+	return map[string]any{
+		"include": map[string]any{
+			"metrics":    metrics,
+			"match_type": "strict",
+		},
+	}
+}
+
+func deltaToRateProcessor(metrics ...string) map[string]any {
+	return map[string]any{
+		"metrics": metrics,
+	}
+}
+
 func gcpResourceDetectorProcessor(override bool) map[string]any {
 	cfg := map[string]any{
 		"detectors": []string{"gcp"},

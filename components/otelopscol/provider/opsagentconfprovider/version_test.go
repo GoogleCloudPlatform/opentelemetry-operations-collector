@@ -219,3 +219,19 @@ func TestReadDistroCodename(t *testing.T) {
 
 	assert.Empty(t, readDistroCodename(filepath.Join(dir, "nonexistent")))
 }
+
+func TestHasNvidiaGPU(t *testing.T) {
+	dir := t.TempDir()
+	assert.False(t, hasNvidiaGPU(filepath.Join(dir, "nonexistent")))
+	assert.False(t, hasNvidiaGPU(dir))
+
+	intelDir := filepath.Join(dir, "0000:00:01.0")
+	require.NoError(t, os.MkdirAll(intelDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(intelDir, "vendor"), []byte("0x8086\n"), 0600))
+	assert.False(t, hasNvidiaGPU(dir))
+
+	nvidiaDir := filepath.Join(dir, "0000:00:04.0")
+	require.NoError(t, os.MkdirAll(nvidiaDir, 0755))
+	require.NoError(t, os.WriteFile(filepath.Join(nvidiaDir, "vendor"), []byte("0x10DE\n"), 0600))
+	assert.True(t, hasNvidiaGPU(dir))
+}

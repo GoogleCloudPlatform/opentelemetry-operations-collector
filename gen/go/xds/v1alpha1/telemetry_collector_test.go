@@ -55,3 +55,23 @@ func TestTelemetryCollector_AnyPackaging(t *testing.T) {
 	require.NoError(t, unmarshaled.GetPolicies()[0].UnmarshalTo(unpackedPolicy))
 	assert.Equal(t, "default-log-filter", unpackedPolicy.GetId())
 }
+
+func TestTelemetryCollector_PolicySetRevisionRoundTrip(t *testing.T) {
+	const revision = "projects/p/locations/l/policySets/ps/revisions/9f3a0c1e"
+	collector := &xdsv1alpha1.TelemetryCollector{
+		PolicySetRevision: revision,
+	}
+
+	data, err := proto.Marshal(collector)
+	require.NoError(t, err)
+
+	unmarshaled := &xdsv1alpha1.TelemetryCollector{}
+	require.NoError(t, proto.Unmarshal(data, unmarshaled))
+	assert.Equal(t, revision, unmarshaled.GetPolicySetRevision())
+
+	// Manifests from control planes that predate the field decode with an
+	// empty revision.
+	legacy := &xdsv1alpha1.TelemetryCollector{}
+	require.NoError(t, proto.Unmarshal(nil, legacy))
+	assert.Empty(t, legacy.GetPolicySetRevision())
+}

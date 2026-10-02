@@ -27,18 +27,43 @@ import (
 )
 
 func TestMergeMetricsConfig(t *testing.T) {
-	t.Run("nil_user_config_returns_defaults", func(t *testing.T) {
-		merged := mergeMetricsConfig(nil)
-		assert.Equal(t, MetricsReceiver{
-			Type:               "hostmetrics",
-			CollectionInterval: "60s",
-		}, merged.Receivers["hostmetrics"])
+	t.Run("nil_user_config_returns_linux_defaults", func(t *testing.T) {
+		merged := mergeMetricsConfig(nil, false)
+		assert.Equal(t, map[string]MetricsReceiver{
+			"hostmetrics": {
+				Type:               "hostmetrics",
+				CollectionInterval: "60s",
+			},
+		}, merged.Receivers)
 		assert.Equal(t, MetricsProcessor{
 			Type: "exclude_metrics",
 		}, merged.Processors["metrics_filter"])
 		require.NotNil(t, merged.Service)
 		assert.Equal(t, &Pipeline{
 			ReceiverIDs:  []string{"hostmetrics"},
+			ProcessorIDs: []string{"metrics_filter"},
+		}, merged.Service.Pipelines["default_pipeline"])
+	})
+
+	t.Run("nil_user_config_returns_windows_defaults", func(t *testing.T) {
+		merged := mergeMetricsConfig(nil, true)
+		assert.Equal(t, map[string]MetricsReceiver{
+			"hostmetrics": {
+				Type:               "hostmetrics",
+				CollectionInterval: "60s",
+			},
+			"iis": {
+				Type:               "iis",
+				CollectionInterval: "60s",
+			},
+			"mssql": {
+				Type:               "mssql",
+				CollectionInterval: "60s",
+			},
+		}, merged.Receivers)
+		require.NotNil(t, merged.Service)
+		assert.Equal(t, &Pipeline{
+			ReceiverIDs:  []string{"hostmetrics", "iis", "mssql"},
 			ProcessorIDs: []string{"metrics_filter"},
 		}, merged.Service.Pipelines["default_pipeline"])
 	})
@@ -60,7 +85,7 @@ func TestMergeMetricsConfig(t *testing.T) {
 			Service: &MetricsService{
 				LogLevel: "debug",
 			},
-		})
+		}, false)
 		assert.Equal(t, "30s", merged.Receivers["hostmetrics"].CollectionInterval)
 		assert.Equal(t, []string{"agent.googleapis.com/cpu/*"}, merged.Processors["metrics_filter"].MetricsPattern)
 		assert.Equal(t, "debug", merged.Service.LogLevel)
@@ -82,7 +107,7 @@ func TestMergeMetricsConfig(t *testing.T) {
 					"empty_pipeline": nil,
 				},
 			},
-		})
+		}, false)
 		assert.Empty(t, merged.Service.LogLevel)
 		assert.Empty(t, merged.Service.Pipelines["default_pipeline"].ReceiverIDs)
 		assert.Empty(t, merged.Service.Pipelines["default_pipeline"].ProcessorIDs)
@@ -91,7 +116,8 @@ func TestMergeMetricsConfig(t *testing.T) {
 }
 
 func TestMetricsValidate(t *testing.T) {
-	require.NoError(t, defaultMetricsConfig().validate(nil))
+	require.NoError(t, defaultMetricsConfig(false).validate(nil, false))
+	require.NoError(t, defaultMetricsConfig(true).validate(nil, true))
 
 	testCases := []struct {
 		name    string
@@ -111,6 +137,13 @@ func TestMetricsValidate(t *testing.T) {
 				m.Receivers["custom"] = MetricsReceiver{Type: "unknown"}
 			},
 			wantErr: `metrics receiver "custom" with type "unknown" is not supported`,
+		},
+		{
+			name: "hostmetrics_with_receiver_version_rejected",
+			mutate: func(m *Metrics) {
+				m.Receivers["hostmetrics"] = MetricsReceiver{Type: "hostmetrics", ReceiverVersion: "2"}
+			},
+			wantErr: `metrics receiver "hostmetrics" with type "hostmetrics" does not support receiver_version`,
 		},
 		{
 			name: "collection_interval_too_short",
@@ -180,9 +213,9 @@ func TestMetricsValidate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			m := defaultMetricsConfig()
+			m := defaultMetricsConfig(false)
 			tc.mutate(m)
-			err := m.validate(nil)
+			err := m.validate(nil, false)
 			require.ErrorContains(t, err, tc.wantErr)
 		})
 	}

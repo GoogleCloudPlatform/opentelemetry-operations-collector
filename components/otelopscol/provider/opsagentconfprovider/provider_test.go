@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/agentmetricsprocessor"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/normalizesumsprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/extension/googleclientauthextension"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/extension/storage/filestorage"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor"
@@ -31,7 +32,10 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/iisreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/sqlserverreceiver"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowsperfcountersreceiver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/confmap"
@@ -57,8 +61,11 @@ func testFactories(t *testing.T) otelcol.Factories {
 
 	factories.Receivers, err = otelcol.MakeFactoryMap[receiver.Factory](
 		hostmetricsreceiver.NewFactory(),
+		iisreceiver.NewFactory(),
 		otlpreceiver.NewFactory(),
 		prometheusreceiver.NewFactory(),
+		sqlserverreceiver.NewFactory(),
+		windowsperfcountersreceiver.NewFactory(),
 	)
 	require.NoError(t, err)
 
@@ -70,6 +77,7 @@ func testFactories(t *testing.T) otelcol.Factories {
 		intervalprocessor.NewFactory(),
 		metricstarttimeprocessor.NewFactory(),
 		metricstransformprocessor.NewFactory(),
+		normalizesumsprocessor.NewFactory(),
 		resourcedetectionprocessor.NewFactory(),
 		transformprocessor.NewFactory(),
 	)
@@ -215,8 +223,9 @@ func TestRetrieveDefaultStateDir(t *testing.T) {
 
 func TestValidateCollectorConfig(t *testing.T) {
 	testCases := []struct {
-		name   string
-		config string
+		name      string
+		isWindows bool
+		config    string
 	}{
 		{
 			name:   "empty_config",
@@ -331,6 +340,30 @@ traces:
         receivers: [prometheus]
 `,
 		},
+		{
+			name:      "windows_default_metrics",
+			isWindows: true,
+			config:    "",
+		},
+		{
+			name:      "windows_iis_and_mssql_v1_and_v2",
+			isWindows: true,
+			config: `metrics:
+  receivers:
+    iis_v2:
+      type: iis
+      receiver_version: 2
+    mssql_v2:
+      type: mssql
+      receiver_version: 2
+  service:
+    pipelines:
+      iispipeline:
+        receivers: [iis_v2]
+      mssql_v2:
+        receivers: [mssql_v2]
+`,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -338,7 +371,16 @@ traces:
 			configFile, _ := writeTestConfig(t, tc.config)
 
 			factories := testFactories(t)
-			providerFactory := NewFactory()
+			info := detectHostInfo()
+			if tc.isWindows {
+				info = hostInfo{OS: "windows", Platform: "Microsoft Windows Server 2022 Datacenter", PlatformVersion: "10.0.20348 Build 20348"}
+			}
+			providerFactory := confmap.NewProviderFactory(func(set confmap.ProviderSettings) confmap.Provider {
+				return &provider{
+					logger:   set.Logger,
+					hostInfo: info,
+				}
+			})
 
 			configProvider, err := otelcol.NewConfigProvider(otelcol.ConfigProviderSettings{
 				ResolverSettings: confmap.ResolverSettings{

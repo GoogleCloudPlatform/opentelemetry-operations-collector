@@ -180,14 +180,26 @@ func buildProcessorChain(t *testing.T, procIDs []string) (consumer.Metrics, *con
 
 func buildProcessorChainWithConfig(t *testing.T, configYAML string, procIDs []string) (consumer.Metrics, *consumertest.MetricsSink) {
 	t.Helper()
+	return buildProcessorChainForHost(t, configYAML, detectHostInfo(), procIDs)
+}
+
+func buildProcessorChainForHost(t *testing.T, configYAML string, info hostInfo, procIDs []string) (consumer.Metrics, *consumertest.MetricsSink) {
+	t.Helper()
 	ctx := context.Background()
 	configFile, _ := writeTestConfig(t, configYAML)
 	factories := testFactories(t)
 
+	providerFactory := confmap.NewProviderFactory(func(set confmap.ProviderSettings) confmap.Provider {
+		return &provider{
+			logger:   set.Logger,
+			hostInfo: info,
+		}
+	})
+
 	configProvider, err := otelcol.NewConfigProvider(otelcol.ConfigProviderSettings{
 		ResolverSettings: confmap.ResolverSettings{
 			URIs:              []string{"opsagentconf:" + configFile},
-			ProviderFactories: []confmap.ProviderFactory{NewFactory()},
+			ProviderFactories: []confmap.ProviderFactory{providerFactory},
 		},
 	})
 	require.NoError(t, err)

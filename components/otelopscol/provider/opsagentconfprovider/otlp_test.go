@@ -152,7 +152,7 @@ func TestCombinedValidate(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := tc.config.generateOtelConfig(context.Background(), t.TempDir())
+			_, err := tc.config.generateOtelConfig(context.Background(), t.TempDir(), hostInfo{OS: "linux"})
 			require.ErrorContains(t, err, tc.wantErr)
 		})
 	}

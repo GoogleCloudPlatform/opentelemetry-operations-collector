@@ -35,7 +35,15 @@ type Metrics struct {
 type MetricsReceiver struct {
 	Type               string         `yaml:"type"`
 	CollectionInterval string         `yaml:"collection_interval,omitempty"`
+	ReceiverVersion    string         `yaml:"receiver_version,omitempty"`
 	Config             map[string]any `yaml:"config,omitempty"`
+}
+
+func (r MetricsReceiver) collectionInterval() string {
+	if r.CollectionInterval != "" {
+		return r.CollectionInterval
+	}
+	return defaultHostmetricsCollectionInterval
 }
 
 // MetricsProcessor represents a metrics processor in the Ops Agent configuration.
@@ -56,14 +64,27 @@ type Pipeline struct {
 	ProcessorIDs []string `yaml:"processors,omitempty,flow"`
 }
 
-func defaultMetricsConfig() *Metrics {
-	return &Metrics{
-		Receivers: map[string]MetricsReceiver{
-			"hostmetrics": {
-				Type:               "hostmetrics",
-				CollectionInterval: defaultHostmetricsCollectionInterval,
-			},
+func defaultMetricsConfig(isWindows bool) *Metrics {
+	receivers := map[string]MetricsReceiver{
+		"hostmetrics": {
+			Type:               "hostmetrics",
+			CollectionInterval: defaultHostmetricsCollectionInterval,
 		},
+	}
+	defaultReceiverIDs := []string{"hostmetrics"}
+	if isWindows {
+		receivers["iis"] = MetricsReceiver{
+			Type:               "iis",
+			CollectionInterval: defaultHostmetricsCollectionInterval,
+		}
+		receivers["mssql"] = MetricsReceiver{
+			Type:               "mssql",
+			CollectionInterval: defaultHostmetricsCollectionInterval,
+		}
+		defaultReceiverIDs = []string{"hostmetrics", "iis", "mssql"}
+	}
+	return &Metrics{
+		Receivers: receivers,
 		Processors: map[string]MetricsProcessor{
 			"metrics_filter": {
 				Type: "exclude_metrics",
@@ -72,7 +93,7 @@ func defaultMetricsConfig() *Metrics {
 		Service: &MetricsService{
 			Pipelines: map[string]*Pipeline{
 				"default_pipeline": {
-					ReceiverIDs:  []string{"hostmetrics"},
+					ReceiverIDs:  defaultReceiverIDs,
 					ProcessorIDs: []string{"metrics_filter"},
 				},
 			},
@@ -80,8 +101,8 @@ func defaultMetricsConfig() *Metrics {
 	}
 }
 
-func mergeMetricsConfig(user *Metrics) *Metrics {
-	merged := defaultMetricsConfig()
+func mergeMetricsConfig(user *Metrics, isWindows bool) *Metrics {
+	merged := defaultMetricsConfig(isWindows)
 	if user == nil {
 		return merged
 	}
@@ -115,7 +136,18 @@ func validateComponentID(subagent, kind, id string) error {
 	return nil
 }
 
-func (m *Metrics) validate(combined *Combined) error {
+func validateCollectionInterval(id, interval string) error {
+	if interval == "" {
+		return nil
+	}
+	d, err := time.ParseDuration(interval)
+	if err != nil || d < minCollectionInterval {
+		return fmt.Errorf("metrics receiver %q has invalid collection_interval %q: must be a duration >= %s", id, interval, minCollectionInterval)
+	}
+	return nil
+}
+
+func (m *Metrics) validate(combined *Combined, isWindows bool) error {
 	for _, id := range slices.Sorted(maps.Keys(m.Receivers)) {
 		if err := validateComponentID("metrics", "receiver", id); err != nil {
 			return err
@@ -126,15 +158,33 @@ func (m *Metrics) validate(combined *Combined) error {
 			if r.Config != nil {
 				return fmt.Errorf("metrics receiver %q with type %q does not support config", id, r.Type)
 			}
-			if r.CollectionInterval != "" {
-				d, err := time.ParseDuration(r.CollectionInterval)
-				if err != nil || d < minCollectionInterval {
-					return fmt.Errorf("metrics receiver %q has invalid collection_interval %q: must be a duration >= %s", id, r.CollectionInterval, minCollectionInterval)
-				}
+			if r.ReceiverVersion != "" {
+				return fmt.Errorf("metrics receiver %q with type %q does not support receiver_version", id, r.Type)
+			}
+			if err := validateCollectionInterval(id, r.CollectionInterval); err != nil {
+				return err
+			}
+		case "iis", "mssql":
+			if !isWindows {
+				return fmt.Errorf("metrics receiver %q with type %q is not supported", id, r.Type)
+			}
+			if r.Config != nil {
+				return fmt.Errorf("metrics receiver %q with type %q does not support config", id, r.Type)
+			}
+			switch r.ReceiverVersion {
+			case "", "1", "2":
+			default:
+				return fmt.Errorf("metrics receiver %q has invalid receiver_version %q: must be one of [1 2]", id, r.ReceiverVersion)
+			}
+			if err := validateCollectionInterval(id, r.CollectionInterval); err != nil {
+				return err
 			}
 		case "prometheus":
 			if r.CollectionInterval != "" {
 				return fmt.Errorf("metrics receiver %q with type %q does not support collection_interval", id, r.Type)
+			}
+			if r.ReceiverVersion != "" {
+				return fmt.Errorf("metrics receiver %q with type %q does not support receiver_version", id, r.Type)
 			}
 			if err := validatePrometheusConfig(r.Config); err != nil {
 				return fmt.Errorf("metrics receiver %q has invalid prometheus config: %w", id, err)
@@ -182,13 +232,13 @@ func (m *Metrics) validate(combined *Combined) error {
 		if p == nil {
 			continue
 		}
-		hostmetricsCount := 0
+		typeCounts := map[string]int{}
 		for _, rID := range p.ReceiverIDs {
 			if r, ok := m.Receivers[rID]; ok {
 				switch r.Type {
-				case "hostmetrics":
-					hostmetricsCount++
-					if hostmetricsCount > 1 {
+				case "hostmetrics", "iis", "mssql":
+					typeCounts[r.Type]++
+					if typeCounts[r.Type] > 1 {
 						return fmt.Errorf("at most one metrics receiver with type %q is allowed in pipeline %q", r.Type, pID)
 					}
 				case "prometheus":
@@ -242,6 +292,16 @@ func (b *collectorConfig) addMetricsPipelines(m *Metrics, combined *Combined, is
 					receiverName = fmt.Sprintf("hostmetrics/%s", escapedRID)
 					b.receivers[receiverName] = hostmetricsReceiver(r.CollectionInterval, isWindows)
 					receiverProcIDs = registerProcessors(b.processors, hostmetricsProcessors(escapedRID, isWindows))
+				case "iis":
+					var receiverCfg map[string]any
+					receiverName, receiverCfg = r.iisReceiver(escapedRID)
+					b.receivers[receiverName] = receiverCfg
+					receiverProcIDs = registerProcessors(b.processors, r.iisProcessors(escapedRID))
+				case "mssql":
+					var receiverCfg map[string]any
+					receiverName, receiverCfg = r.mssqlReceiver(escapedRID)
+					b.receivers[receiverName] = receiverCfg
+					receiverProcIDs = registerProcessors(b.processors, r.mssqlProcessors(escapedRID))
 				case "prometheus":
 					receiverName = fmt.Sprintf("prometheus/%s", escapedRID)
 					b.receivers[receiverName] = prometheusReceiver(r.Config)

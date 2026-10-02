@@ -53,12 +53,34 @@ func metricTransformIgnoreProcessor(context string, statements ...string) map[st
 	return cfg
 }
 
-func removeInstrumentationScopeProcessor() map[string]any {
+func setInstrumentationScopeProcessor(name, version string) map[string]any {
 	return metricTransformProcessor(
 		"scope",
-		`set(name, "")`,
-		`set(version, "")`,
+		fmt.Sprintf(`set(name, %q)`, name),
+		fmt.Sprintf(`set(version, %q)`, version),
 	)
+}
+
+func flattenResourceAndSetScopeProcessor(scopeName, scopeVersion string, datapointStatements ...string) map[string]any {
+	return map[string]any{
+		"metric_statements": []any{
+			map[string]any{
+				"context":    "datapoint",
+				"statements": datapointStatements,
+			},
+			map[string]any{
+				"context": "scope",
+				"statements": []string{
+					fmt.Sprintf(`set(name, %q)`, scopeName),
+					fmt.Sprintf(`set(version, %q)`, scopeVersion),
+				},
+			},
+		},
+	}
+}
+
+func removeInstrumentationScopeProcessor() map[string]any {
+	return setInstrumentationScopeProcessor("", "")
 }
 
 func removeServiceAttributesProcessor() map[string]any {
@@ -142,6 +164,12 @@ func gcpResourceDetectorProcessor(override bool) map[string]any {
 	return cfg
 }
 
+func metricStartTimeProcessor() map[string]any {
+	return map[string]any{
+		"strategy": "subtract_initial_point",
+	}
+}
+
 func batchProcessor() map[string]any {
 	return map[string]any{
 		"send_batch_max_size": 200,
@@ -175,6 +203,18 @@ func regexpRenameMetric(includeRegex, newName string) map[string]any {
 		"action":     "update",
 		"new_name":   newName,
 	}
+}
+
+func regexpUpdateMetric(includeRegex string, operations ...map[string]any) map[string]any {
+	out := map[string]any{
+		"include":    includeRegex,
+		"match_type": "regexp",
+		"action":     "update",
+	}
+	if len(operations) > 0 {
+		out["operations"] = operations
+	}
+	return out
 }
 
 func updateMetric(metricName string, operations ...map[string]any) map[string]any {

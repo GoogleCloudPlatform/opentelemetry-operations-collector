@@ -70,9 +70,10 @@ func readConfig(configPath string) (*Config, error) {
 	return &cfg, nil
 }
 
-func (c *Config) generateOtelConfig(_ context.Context, stateDir string) (map[string]any, error) {
-	metricsCfg := mergeMetricsConfig(c.Metrics)
-	if err := metricsCfg.validate(c.Combined); err != nil {
+func (c *Config) generateOtelConfig(_ context.Context, stateDir string, info hostInfo) (map[string]any, error) {
+	isWindows := info.OS == "windows"
+	metricsCfg := mergeMetricsConfig(c.Metrics, isWindows)
+	if err := metricsCfg.validate(c.Combined, isWindows); err != nil {
 		return nil, err
 	}
 	if err := c.Traces.validate(c.Combined); err != nil {
@@ -82,18 +83,15 @@ func (c *Config) generateOtelConfig(_ context.Context, stateDir string) (map[str
 		return nil, err
 	}
 
-	info := detectHostInfo()
 	userAgent := info.userAgent()
 	versionLabel := info.versionLabel()
 
 	b := &collectorConfig{
 		receivers: map[string]any{},
 		processors: map[string]any{
-			"resourcedetection/_global_0": gcpResourceDetectorProcessor(true),
-			"metric_start_time/otlp_grpc/otlp_metrics_metrics_1": map[string]any{
-				"strategy": "subtract_initial_point",
-			},
-			"batch/otlp_grpc/otlp_metrics_metrics_2": batchProcessor(),
+			"resourcedetection/_global_0":                        gcpResourceDetectorProcessor(true),
+			"metric_start_time/otlp_grpc/otlp_metrics_metrics_1": metricStartTimeProcessor(),
+			"batch/otlp_grpc/otlp_metrics_metrics_2":             batchProcessor(),
 		},
 		exporters: map[string]any{
 			"otlp_grpc/otlp_metrics": otlpExporter(userAgent),
@@ -113,7 +111,7 @@ func (c *Config) generateOtelConfig(_ context.Context, stateDir string) (map[str
 	}
 
 	b.addSelfMetrics(defaultMetricsPort, versionLabel, defaultMetricsProcessors)
-	b.addMetricsPipelines(metricsCfg, c.Combined, info.OS == "windows", defaultMetricsProcessors)
+	b.addMetricsPipelines(metricsCfg, c.Combined, isWindows, defaultMetricsProcessors)
 	b.addTracesPipelines(c.Traces, c.Combined, userAgent)
 
 	return map[string]any{

@@ -29,7 +29,8 @@ import (
 const schemeName = "opsagentconf"
 
 type provider struct {
-	logger *zap.Logger
+	logger   *zap.Logger
+	hostInfo hostInfo
 }
 
 // NewFactory returns a factory for the opsagentconf provider.
@@ -39,7 +40,8 @@ func NewFactory() confmap.ProviderFactory {
 
 func createProvider(set confmap.ProviderSettings) confmap.Provider {
 	return &provider{
-		logger: set.Logger,
+		logger:   set.Logger,
+		hostInfo: detectHostInfo(),
 	}
 }
 
@@ -67,7 +69,7 @@ func (p *provider) Retrieve(ctx context.Context, uri string, _ confmap.WatcherFu
 		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	otelConfig, err := cfg.generateOtelConfig(ctx, stateDir)
+	otelConfig, err := cfg.generateOtelConfig(ctx, stateDir, p.hostInfo)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate otel config: %w", err)
 	}

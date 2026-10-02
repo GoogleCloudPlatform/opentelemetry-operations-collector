@@ -420,3 +420,57 @@ func metricUnknownCounterProcessor() map[string]any {
 		`set(metric.name, Substring(metric.name, 0, Len(metric.name)-Len(":unknowncounter"))) where HasSuffix(metric.name, ":unknowncounter")`,
 	)
 }
+
+func logTransformIgnoreProcessor(statements ...string) map[string]any {
+	return map[string]any{
+		"error_mode": "ignore",
+		"log_statements": []any{
+			map[string]any{
+				"context":    "log",
+				"statements": statements,
+			},
+		},
+	}
+}
+
+// disableOtlpRoundTripProcessor prevents telemetry.googleapis.com from populating
+// the LogEntry.otlp field by setting the gcp.use_legacy_mapping resource attribute to true.
+func disableOtlpRoundTripProcessor() map[string]any {
+	return map[string]any{
+		"attributes": []map[string]any{
+			{
+				"key":    "gcp.use_legacy_mapping",
+				"value":  "true",
+				"action": "insert",
+			},
+		},
+	}
+}
+
+// preserveInstrumentationScopeProcessor preserves instrumentation scope name and version
+// in log record attributes when sending logs to telemetry.googleapis.com via OTLP.
+func preserveInstrumentationScopeProcessor() map[string]any {
+	return logTransformIgnoreProcessor(
+		`set(attributes["instrumentation_source"], instrumentation_scope.name) where instrumentation_scope.name != ""`,
+		`set(attributes["instrumentation_version"], instrumentation_scope.version) where instrumentation_scope.version != ""`,
+	)
+}
+
+// copyServiceResourceLabelsProcessor copies service.* resource attributes into log record attributes
+// when sending logs to telemetry.googleapis.com via OTLP.
+func copyServiceResourceLabelsProcessor() map[string]any {
+	return logTransformIgnoreProcessor(
+		`set(attributes["service.name"], resource.attributes["service.name"]) where resource.attributes["service.name"] != nil`,
+		`set(attributes["service.namespace"], resource.attributes["service.namespace"]) where resource.attributes["service.namespace"] != nil`,
+		`set(attributes["service.instance.id"], resource.attributes["service.instance.id"]) where resource.attributes["service.instance.id"] != nil`,
+	)
+}
+
+// setLogNameProcessor sets default gcp.log_name and compute.googleapis.com/resource_name
+// attributes on log records when not already populated.
+func setLogNameProcessor(logName, hostname string) map[string]any {
+	return logTransformIgnoreProcessor(
+		fmt.Sprintf(`set(attributes["compute.googleapis.com/resource_name"], %q) where attributes["compute.googleapis.com/resource_name"] == nil`, hostname),
+		fmt.Sprintf(`set(attributes["gcp.log_name"], %q) where attributes["gcp.log_name"] == nil`, logName),
+	)
+}

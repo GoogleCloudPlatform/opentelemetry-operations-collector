@@ -41,6 +41,7 @@ type hostInfo struct {
 	PlatformFamily  string
 	PlatformVersion string
 	DistroCodename  string
+	Hostname        string
 	HasNvidiaGPU    bool
 }
 
@@ -53,6 +54,7 @@ func detectHostInfo() hostInfo {
 		h.Platform = info.Platform
 		h.PlatformFamily = info.PlatformFamily
 		h.PlatformVersion = info.PlatformVersion
+		h.Hostname = info.Hostname
 	}
 	if h.OS != "windows" {
 		h.DistroCodename = readDistroCodename("/etc/os-release", "/usr/lib/os-release")

@@ -34,7 +34,9 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstarttimeprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourceprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/iisreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver"
@@ -65,6 +67,7 @@ func testFactories(t *testing.T) otelcol.Factories {
 
 	factories.Receivers, err = otelcol.MakeFactoryMap[receiver.Factory](
 		dcgmreceiver.NewFactory(),
+		filelogreceiver.NewFactory(),
 		hostmetricsreceiver.NewFactory(),
 		iisreceiver.NewFactory(),
 		nvmlreceiver.NewFactory(),
@@ -87,6 +90,7 @@ func testFactories(t *testing.T) otelcol.Factories {
 		metricstransformprocessor.NewFactory(),
 		normalizesumsprocessor.NewFactory(),
 		resourcedetectionprocessor.NewFactory(),
+		resourceprocessor.NewFactory(),
 		transformprocessor.NewFactory(),
 	)
 	require.NoError(t, err)
@@ -137,6 +141,7 @@ func TestRetrieveEmptyConfig(t *testing.T) {
 
 	assert.True(t, conf.IsSet("receivers::prometheus/agent_prometheus"))
 	assert.True(t, conf.IsSet("receivers::hostmetrics/hostmetrics"))
+	assert.True(t, conf.IsSet("receivers::file_log/logging_syslog"))
 	assert.True(t, conf.IsSet("processors::resourcedetection/_global_0"))
 	assert.True(t, conf.IsSet("exporters::otlp_grpc/otlp_metrics"))
 	assert.True(t, conf.IsSet("exporters::otlp_grpc/otlp_logs"))
@@ -145,6 +150,14 @@ func TestRetrieveEmptyConfig(t *testing.T) {
 	assert.Equal(t, expectedUserAgent, conf.Get("exporters::otlp_grpc/otlp_logs::user_agent"))
 	assert.Equal(t, filepath.Join(stateDir, "file_storage"), conf.Get("extensions::file_storage::directory"))
 	assert.True(t, conf.IsSet("service::telemetry::metrics"))
+
+	assert.Equal(t, []string{
+		"transform/logging_syslog_0",
+		"resourcedetection/_global_0",
+		"resource/otlp_grpc/otlp_logs_logs_1",
+		"transform/otlp_grpc/otlp_logs_logs_2",
+		"transform/otlp_grpc/otlp_logs_logs_3",
+	}, conf.Get("service::pipelines::logs/logs_default__pipeline_logging_syslog::processors"))
 
 	assert.Equal(t, []string{
 		"transform/agent_prometheus_0",
@@ -201,6 +214,7 @@ func TestRetrieveNonExistentConfigFile(t *testing.T) {
 
 	conf, err := retrieved.AsConf()
 	require.NoError(t, err)
+	assert.True(t, conf.IsSet("service::pipelines::logs/logs_default__pipeline_logging_syslog"))
 	assert.True(t, conf.IsSet("service::pipelines::metrics/otel"))
 	assert.True(t, conf.IsSet("service::pipelines::metrics/loggingmetrics"))
 	assert.True(t, conf.IsSet("service::pipelines::metrics/default__pipeline_hostmetrics"))
@@ -392,6 +406,25 @@ traces:
     pipelines:
       dcgm:
         receivers: [dcgm, dcgm_v2]
+`,
+		},
+		{
+			name: "custom_files_logging_pipeline",
+			config: `logging:
+  receivers:
+    app_logs:
+      type: files
+      include_paths:
+        - /var/log/app/*.log
+      exclude_paths:
+        - /var/log/app/debug.log
+      wildcard_refresh_interval: 30s
+      record_log_file_path: true
+  service:
+    log_level: trace
+    pipelines:
+      default_pipeline:
+        receivers: [syslog, app_logs]
 `,
 		},
 	}

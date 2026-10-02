@@ -38,9 +38,6 @@ type Config struct {
 	Traces   *Traces   `yaml:"traces,omitempty"`
 }
 
-// Logging represents logging pipelines, receivers, and processors in the Ops Agent configuration.
-type Logging struct{}
-
 type collectorConfig struct {
 	receivers  map[string]any
 	processors map[string]any
@@ -72,6 +69,10 @@ func readConfig(configPath string) (*Config, error) {
 
 func (c *Config) generateOtelConfig(_ context.Context, stateDir string, info hostInfo) (map[string]any, error) {
 	isWindows := info.OS == "windows"
+	loggingCfg := mergeLoggingConfig(c.Logging, isWindows)
+	if err := loggingCfg.validate(c.Combined); err != nil {
+		return nil, err
+	}
 	metricsCfg := mergeMetricsConfig(c.Metrics, isWindows)
 	if err := metricsCfg.validate(c.Combined, isWindows); err != nil {
 		return nil, err
@@ -111,8 +112,14 @@ func (c *Config) generateOtelConfig(_ context.Context, stateDir string, info hos
 	}
 
 	b.addSelfMetrics(defaultMetricsPort, versionLabel, defaultMetricsProcessors)
+	b.addLoggingPipelines(loggingCfg, info)
 	b.addMetricsPipelines(metricsCfg, c.Combined, info, defaultMetricsProcessors)
 	b.addTracesPipelines(c.Traces, c.Combined, userAgent)
+
+	logLevel := "info"
+	if metricsCfg.Service != nil && metricsCfg.Service.LogLevel != "" {
+		logLevel = metricsCfg.Service.LogLevel
+	}
 
 	return map[string]any{
 		"receivers":  b.receivers,
@@ -122,7 +129,7 @@ func (c *Config) generateOtelConfig(_ context.Context, stateDir string, info hos
 		"service": map[string]any{
 			"extensions": []string{fileStorageExtensionType, googleClientAuthExtensionType},
 			"pipelines":  b.pipelines,
-			"telemetry":  telemetryConfig(defaultMetricsPort, metricsCfg.Service.LogLevel),
+			"telemetry":  telemetryConfig(defaultMetricsPort, logLevel),
 		},
 	}, nil
 }

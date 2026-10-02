@@ -138,19 +138,23 @@ func mergeMetricsConfig(user *Metrics, isWindows bool) *Metrics {
 		if user.Service.LogLevel != "" && user.Service.LogLevel != "info" {
 			merged.Service.LogLevel = user.Service.LogLevel
 		}
-		for name, p := range user.Service.Pipelines {
-			if p == nil {
-				merged.Service.Pipelines[name] = &Pipeline{}
-				continue
-			}
-			merged.Service.Pipelines[name] = &Pipeline{
-				ReceiverIDs:  slices.Clone(p.ReceiverIDs),
-				ProcessorIDs: slices.Clone(p.ProcessorIDs),
-			}
-		}
+		mergePipelines(merged.Service.Pipelines, user.Service.Pipelines)
 	}
 
 	return merged
+}
+
+func mergePipelines(dst, src map[string]*Pipeline) {
+	for name, p := range src {
+		if p == nil {
+			dst[name] = &Pipeline{}
+			continue
+		}
+		dst[name] = &Pipeline{
+			ReceiverIDs:  slices.Clone(p.ReceiverIDs),
+			ProcessorIDs: slices.Clone(p.ProcessorIDs),
+		}
+	}
 }
 
 func validateComponentID(subagent, kind, id string) error {

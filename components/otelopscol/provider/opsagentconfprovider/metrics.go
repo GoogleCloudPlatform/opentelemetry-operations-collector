@@ -33,8 +33,9 @@ type Metrics struct {
 
 // MetricsReceiver represents a metrics receiver in the Ops Agent configuration.
 type MetricsReceiver struct {
-	Type               string `yaml:"type"`
-	CollectionInterval string `yaml:"collection_interval,omitempty"`
+	Type               string         `yaml:"type"`
+	CollectionInterval string         `yaml:"collection_interval,omitempty"`
+	Config             map[string]any `yaml:"config,omitempty"`
 }
 
 // MetricsProcessor represents a metrics processor in the Ops Agent configuration.
@@ -120,14 +121,26 @@ func (m *Metrics) validate(combined *Combined) error {
 			return err
 		}
 		r := m.Receivers[id]
-		if r.Type != "hostmetrics" {
-			return fmt.Errorf("metrics receiver %q with type %q is not supported", id, r.Type)
-		}
-		if r.CollectionInterval != "" {
-			d, err := time.ParseDuration(r.CollectionInterval)
-			if err != nil || d < minCollectionInterval {
-				return fmt.Errorf("metrics receiver %q has invalid collection_interval %q: must be a duration >= %s", id, r.CollectionInterval, minCollectionInterval)
+		switch r.Type {
+		case "hostmetrics":
+			if r.Config != nil {
+				return fmt.Errorf("metrics receiver %q with type %q does not support config", id, r.Type)
 			}
+			if r.CollectionInterval != "" {
+				d, err := time.ParseDuration(r.CollectionInterval)
+				if err != nil || d < minCollectionInterval {
+					return fmt.Errorf("metrics receiver %q has invalid collection_interval %q: must be a duration >= %s", id, r.CollectionInterval, minCollectionInterval)
+				}
+			}
+		case "prometheus":
+			if r.CollectionInterval != "" {
+				return fmt.Errorf("metrics receiver %q with type %q does not support collection_interval", id, r.Type)
+			}
+			if err := validatePrometheusConfig(r.Config); err != nil {
+				return fmt.Errorf("metrics receiver %q has invalid prometheus config: %w", id, err)
+			}
+		default:
+			return fmt.Errorf("metrics receiver %q with type %q is not supported", id, r.Type)
 		}
 	}
 
@@ -172,10 +185,15 @@ func (m *Metrics) validate(combined *Combined) error {
 		hostmetricsCount := 0
 		for _, rID := range p.ReceiverIDs {
 			if r, ok := m.Receivers[rID]; ok {
-				if r.Type == "hostmetrics" {
+				switch r.Type {
+				case "hostmetrics":
 					hostmetricsCount++
 					if hostmetricsCount > 1 {
 						return fmt.Errorf("at most one metrics receiver with type %q is allowed in pipeline %q", r.Type, pID)
+					}
+				case "prometheus":
+					if len(p.ProcessorIDs) > 0 {
+						return fmt.Errorf("%s receiver is incompatible with Ops Agent processors", rID)
 					}
 				}
 				continue
@@ -219,9 +237,17 @@ func (b *collectorConfig) addMetricsPipelines(m *Metrics, combined *Combined, is
 			pipelineExporterProcs := exporterProcessors
 
 			if r, ok := m.Receivers[rID]; ok {
-				receiverName = fmt.Sprintf("hostmetrics/%s", escapedRID)
-				b.receivers[receiverName] = hostmetricsReceiver(r.CollectionInterval, isWindows)
-				receiverProcIDs = registerProcessors(b.processors, hostmetricsProcessors(escapedRID, isWindows))
+				switch r.Type {
+				case "hostmetrics":
+					receiverName = fmt.Sprintf("hostmetrics/%s", escapedRID)
+					b.receivers[receiverName] = hostmetricsReceiver(r.CollectionInterval, isWindows)
+					receiverProcIDs = registerProcessors(b.processors, hostmetricsProcessors(escapedRID, isWindows))
+				case "prometheus":
+					receiverName = fmt.Sprintf("prometheus/%s", escapedRID)
+					b.receivers[receiverName] = prometheusReceiver(r.Config)
+					receiverProcIDs = registerProcessors(b.processors, gmpMetricsProcessors(escapedRID))
+					pipelineExporterProcs = exporterProcessors[1:]
+				}
 			} else if combined != nil {
 				if cr, ok := combined.Receivers[rID]; ok {
 					receiverName = fmt.Sprintf("otlp/%s", escapedRID)

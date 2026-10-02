@@ -303,6 +303,34 @@ traces:
     pipelines: {}
 `,
 		},
+		{
+			name: "prometheus_metrics_receiver",
+			config: `metrics:
+  receivers:
+    prometheus:
+      type: prometheus
+      config:
+        scrape_configs:
+          - job_name: node
+            scrape_interval: 10s
+            static_configs:
+              - targets: ['localhost:1234']
+            relabel_configs:
+              - source_labels: [__address__]
+                regex: '(.+)'
+                replacement: '${1}'
+                target_label: instance
+            metric_relabel_configs:
+              - source_labels: [source]
+                regex: '(.*)@(.*)'
+                replacement: '${2}/${1}'
+                target_label: destination
+  service:
+    pipelines:
+      prometheus_pipeline:
+        receivers: [prometheus]
+`,
+		},
 	}
 
 	for _, tc := range testCases {

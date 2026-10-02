@@ -35,4 +35,13 @@ message TelemetryCollector {
   // and the type names used for OpAMP custom messages
   // (https://opentelemetry.io/docs/specs/opamp/#custom-messages).
   repeated google.protobuf.Any policies = 1;
+
+  // Full resource name of the management plane PolicySet revision that
+  // `policies` were derived from, e.g.
+  // `projects/{project}/locations/{location}/policySets/{policy_set}/revisions/{revision}`.
+  //
+  // Unset when the control plane has no management-plane source for this
+  // manifest. This is NOT the xDS `DiscoveryResponse.version_info`, which
+  // versions the response snapshot and is owned by the control plane.
+  string policy_set_revision = 2;
 }

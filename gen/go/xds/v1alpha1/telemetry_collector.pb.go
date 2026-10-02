@@ -52,9 +52,17 @@ type TelemetryCollector struct {
 	// (https://github.com/open-telemetry/opentelemetry-specification/blob/main/oteps/4738-telemetry-policy.md)
 	// and the type names used for OpAMP custom messages
 	// (https://opentelemetry.io/docs/specs/opamp/#custom-messages).
-	Policies      []*anypb.Any `protobuf:"bytes,1,rep,name=policies,proto3" json:"policies,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Policies []*anypb.Any `protobuf:"bytes,1,rep,name=policies,proto3" json:"policies,omitempty"`
+	// Full resource name of the management plane PolicySet revision that
+	// `policies` were derived from, e.g.
+	// `projects/{project}/locations/{location}/policySets/{policy_set}/revisions/{revision}`.
+	//
+	// Unset when the control plane has no management-plane source for this
+	// manifest. This is NOT the xDS `DiscoveryResponse.version_info`, which
+	// versions the response snapshot and is owned by the control plane.
+	PolicySetRevision string `protobuf:"bytes,2,opt,name=policy_set_revision,json=policySetRevision,proto3" json:"policy_set_revision,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *TelemetryCollector) Reset() {
@@ -94,13 +102,21 @@ func (x *TelemetryCollector) GetPolicies() []*anypb.Any {
 	return nil
 }
 
+func (x *TelemetryCollector) GetPolicySetRevision() string {
+	if x != nil {
+		return x.PolicySetRevision
+	}
+	return ""
+}
+
 var File_xds_v1alpha1_telemetry_collector_proto protoreflect.FileDescriptor
 
 const file_xds_v1alpha1_telemetry_collector_proto_rawDesc = "" +
 	"\n" +
-	"&xds/v1alpha1/telemetry_collector.proto\x12\x1dgoogle.telemetry.xds.v1alpha1\x1a\x19google/protobuf/any.proto\"F\n" +
+	"&xds/v1alpha1/telemetry_collector.proto\x12\x1dgoogle.telemetry.xds.v1alpha1\x1a\x19google/protobuf/any.proto\"v\n" +
 	"\x12TelemetryCollector\x120\n" +
-	"\bpolicies\x18\x01 \x03(\v2\x14.google.protobuf.AnyR\bpoliciesB\xb6\x02\n" +
+	"\bpolicies\x18\x01 \x03(\v2\x14.google.protobuf.AnyR\bpolicies\x12.\n" +
+	"\x13policy_set_revision\x18\x02 \x01(\tR\x11policySetRevisionB\xb6\x02\n" +
 	"!com.google.telemetry.xds.v1alpha1B\x17TelemetryCollectorProtoP\x01Zagithub.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/xds/v1alpha1;xdsv1alpha1\xa2\x02\x03GTX\xaa\x02\x1dGoogle.Telemetry.Xds.V1alpha1\xca\x02\x1dGoogle\\Telemetry\\Xds\\V1alpha1\xe2\x02)Google\\Telemetry\\Xds\\V1alpha1\\GPBMetadata\xea\x02 Google::Telemetry::Xds::V1alpha1b\x06proto3"
 
 var (

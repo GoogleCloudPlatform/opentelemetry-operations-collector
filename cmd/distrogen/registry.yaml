@@ -280,6 +280,9 @@ receivers:
     windowsperfcounters:
         gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowsperfcountersreceiver
         docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/windowsperfcountersreceiver/README.md
+    saphana:
+        gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/saphanareceiver
+        docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/saphanareceiver/README.md
     zipkin:
         gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/zipkinreceiver
         docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/zipkinreceiver/README.md

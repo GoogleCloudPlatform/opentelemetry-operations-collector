@@ -8,7 +8,11 @@ dist:
   output_path: ./generated_collector
 
 receivers:
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/activedirectorydsreceiver v0.160.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/apachereceiver v0.160.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/couchdbreceiver v0.160.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/dockerstatsreceiver v0.160.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/elasticsearchreceiver v0.160.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver v0.160.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/fluentforwardreceiver v0.160.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/googlecloudmonitoringreceiver v0.160.0
@@ -22,12 +26,19 @@ receivers:
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/k8seventsreceiver v0.160.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/k8sobjectsreceiver v0.160.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/kubeletstatsreceiver v0.160.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/memcachedreceiver v0.160.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/mongodbreceiver v0.160.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/mysqlreceiver v0.160.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/nginxreceiver v0.160.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/otelarrowreceiver v0.160.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/otlpjsonfilereceiver v0.160.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/postgresqlreceiver v0.160.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver v0.160.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusremotewritereceiver v0.160.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/rabbitmqreceiver v0.160.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/receivercreator v0.160.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/redisreceiver v0.160.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/sqlserverreceiver v0.160.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/statsdreceiver v0.160.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/syslogreceiver v0.160.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/tcplogreceiver v0.160.0

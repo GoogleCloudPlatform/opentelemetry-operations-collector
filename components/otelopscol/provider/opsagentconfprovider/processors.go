@@ -433,6 +433,18 @@ func logTransformIgnoreProcessor(statements ...string) map[string]any {
 	}
 }
 
+func logFilterProcessor(expressions ...string) map[string]any {
+	if expressions == nil {
+		expressions = []string{}
+	}
+	return map[string]any{
+		"error_mode": "ignore",
+		"logs": map[string]any{
+			"log_record": expressions,
+		},
+	}
+}
+
 // disableOtlpRoundTripProcessor prevents telemetry.googleapis.com from populating
 // the LogEntry.otlp field by setting the gcp.use_legacy_mapping resource attribute to true.
 func disableOtlpRoundTripProcessor() map[string]any {

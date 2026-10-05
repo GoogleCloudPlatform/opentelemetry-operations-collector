@@ -21,21 +21,21 @@ import (
 	"testing"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/agentmetricsprocessor"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/filterprocessor"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/normalizesumsprocessor"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/transformprocessor"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/receiver/dcgmreceiver"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/receiver/nvmlreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/extension/googleclientauthextension"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/extension/storage/filestorage"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/cumulativetodeltaprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/deltatorateprocessor"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/groupbyattrsprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/intervalprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstarttimeprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/metricstransformprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourcedetectionprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourceprocessor"
-	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/fluentforwardreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver"
@@ -464,6 +464,59 @@ traces:
     pipelines:
       otlp_traces:
         receivers: [otlp]
+`,
+		},
+		{
+			name: "logging_processors_and_builtin_libs",
+			config: `logging:
+  processors:
+    json_proc:
+      type: parse_json
+      field: message
+      time_key: timestamp
+      time_format: "%Y-%m-%dT%H:%M:%S.%LZ"
+    regex_proc:
+      type: parse_regex
+      field: jsonPayload.message
+      regex: "^(?<time>[^ ]+) (?<severity>[^ ]+) (?<msg>.*)$"
+      time_key: time
+      time_format: "%Y-%m-%dT%H:%M:%SZ"
+    exclude_proc:
+      type: exclude_logs
+      match_any:
+        - severity = "DEBUG"
+        - jsonPayload.msg =~ "^(?<ignore>healthcheck)$"
+    modify_proc:
+      type: modify_fields
+      fields:
+        severity:
+          copy_from: jsonPayload.level
+          map_values:
+            err: ERROR
+            warn: WARNING
+          map_values_exclusive: true
+        jsonPayload.port:
+          move_from: jsonPayload.raw_port
+          type: integer
+          omit_if: jsonPayload.port = 0
+        labels.env:
+          static_value: prod
+  service:
+    pipelines:
+      default_pipeline:
+        receivers: [syslog]
+        processors:
+          - json_proc
+          - regex_proc
+          - exclude_proc
+          - modify_proc
+          - lib:apache
+          - lib:apache2
+          - lib:apache_error
+          - lib:mongodb
+          - lib:nginx
+          - lib:syslog-rfc3164
+          - lib:syslog-rfc5424
 `,
 		},
 	}

@@ -857,3 +857,561 @@ func TestJournaldTransformation(t *testing.T) {
 	assert.Equal(t, "ORIGINAL", out2.SeverityText())
 	assert.Equal(t, plog.SeverityNumberInfo, out2.SeverityNumber())
 }
+
+func TestLoggingProcessorsValidate(t *testing.T) {
+	staticVal := "val"
+	defaultVal := "def"
+	testCases := []struct {
+		name        string
+		processor   LoggingProcessor
+		expectedErr string
+	}{
+		{
+			name: "parse_json_with_regex",
+			processor: LoggingProcessor{
+				Type:  "parse_json",
+				Regex: "^.*$",
+			},
+			expectedErr: `logging processor "proc" with type "parse_json" does not support regex`,
+		},
+		{
+			name: "parse_json_with_match_any",
+			processor: LoggingProcessor{
+				Type:     "parse_json",
+				MatchAny: []string{`severity = "INFO"`},
+			},
+			expectedErr: `logging processor "proc" with type "parse_json" does not support match_any`,
+		},
+		{
+			name: "parse_json_with_fields",
+			processor: LoggingProcessor{
+				Type:   "parse_json",
+				Fields: map[string]*ModifyField{"severity": nil},
+			},
+			expectedErr: `logging processor "proc" with type "parse_json" does not support fields`,
+		},
+		{
+			name: "parse_json_time_key_without_time_format",
+			processor: LoggingProcessor{
+				Type:    "parse_json",
+				TimeKey: "timestamp",
+			},
+			expectedErr: `logging processor "proc" with type "parse_json" requires both time_key and time_format when either is set`,
+		},
+		{
+			name: "parse_json_time_format_without_time_key",
+			processor: LoggingProcessor{
+				Type:       "parse_json",
+				TimeFormat: "%Y-%m-%d",
+			},
+			expectedErr: `logging processor "proc" with type "parse_json" requires both time_key and time_format when either is set`,
+		},
+		{
+			name: "parse_json_invalid_time_key",
+			processor: LoggingProcessor{
+				Type:       "parse_json",
+				TimeKey:    `invalid"field`,
+				TimeFormat: "%Y-%m-%d",
+			},
+			expectedErr: `logging processor "proc" has invalid time_key`,
+		},
+		{
+			name: "parse_json_invalid_field",
+			processor: LoggingProcessor{
+				Type:  "parse_json",
+				Field: `invalid"field`,
+			},
+			expectedErr: `logging processor "proc" has invalid field`,
+		},
+		{
+			name: "parse_regex_missing_regex",
+			processor: LoggingProcessor{
+				Type: "parse_regex",
+			},
+			expectedErr: `logging processor "proc" with type "parse_regex" requires regex`,
+		},
+		{
+			name: "parse_regex_with_match_any",
+			processor: LoggingProcessor{
+				Type:     "parse_regex",
+				Regex:    "^.*$",
+				MatchAny: []string{`severity = "INFO"`},
+			},
+			expectedErr: `logging processor "proc" with type "parse_regex" does not support match_any`,
+		},
+		{
+			name: "exclude_logs_missing_match_any",
+			processor: LoggingProcessor{
+				Type: "exclude_logs",
+			},
+			expectedErr: `logging processor "proc" with type "exclude_logs" requires non-empty match_any`,
+		},
+		{
+			name: "exclude_logs_with_field",
+			processor: LoggingProcessor{
+				Type:     "exclude_logs",
+				Field:    "message",
+				MatchAny: []string{`severity = "INFO"`},
+			},
+			expectedErr: `logging processor "proc" with type "exclude_logs" does not support field`,
+		},
+		{
+			name: "exclude_logs_invalid_filter",
+			processor: LoggingProcessor{
+				Type:     "exclude_logs",
+				MatchAny: []string{`"missing operator"`},
+			},
+			expectedErr: `logging processor "proc" has invalid match_any filter`,
+		},
+		{
+			name: "modify_fields_with_time_key",
+			processor: LoggingProcessor{
+				Type:    "modify_fields",
+				TimeKey: "time",
+			},
+			expectedErr: `logging processor "proc" with type "modify_fields" does not support time_key`,
+		},
+		{
+			name: "modify_fields_invalid_dest_field",
+			processor: LoggingProcessor{
+				Type: "modify_fields",
+				Fields: map[string]*ModifyField{
+					"notAValidRoot.foo": {},
+				},
+			},
+			expectedErr: `logging processor "proc" has invalid field "notAValidRoot.foo"`,
+		},
+		{
+			name: "modify_fields_non_writable_instrumentation_source",
+			processor: LoggingProcessor{
+				Type: "modify_fields",
+				Fields: map[string]*ModifyField{
+					`labels."logging.googleapis.com/instrumentation_source"`: {
+						StaticValue: &staticVal,
+					},
+				},
+			},
+			expectedErr: `is not a writable field`,
+		},
+		{
+			name: "modify_fields_duplicate_distinct_field",
+			processor: LoggingProcessor{
+				Type: "modify_fields",
+				Fields: map[string]*ModifyField{
+					`jsonPayload.foo`:   {StaticValue: &staticVal},
+					`jsonPayload."foo"`: {StaticValue: &staticVal},
+				},
+			},
+			expectedErr: `is specified multiple times`,
+		},
+		{
+			name: "modify_fields_move_from_and_copy_from",
+			processor: LoggingProcessor{
+				Type: "modify_fields",
+				Fields: map[string]*ModifyField{
+					"jsonPayload.dest": {
+						MoveFrom: "jsonPayload.a",
+						CopyFrom: "jsonPayload.b",
+					},
+				},
+			},
+			expectedErr: `cannot set more than one of [move_from copy_from static_value]`,
+		},
+		{
+			name: "modify_fields_default_value_and_static_value",
+			processor: LoggingProcessor{
+				Type: "modify_fields",
+				Fields: map[string]*ModifyField{
+					"jsonPayload.dest": {
+						StaticValue:  &staticVal,
+						DefaultValue: &defaultVal,
+					},
+				},
+			},
+			expectedErr: `cannot set default_value when static_value is set`,
+		},
+		{
+			name: "modify_fields_invalid_move_from",
+			processor: LoggingProcessor{
+				Type: "modify_fields",
+				Fields: map[string]*ModifyField{
+					"jsonPayload.dest": {
+						MoveFrom: "unknownRoot.a",
+					},
+				},
+			},
+			expectedErr: `has invalid move_from "unknownRoot.a"`,
+		},
+		{
+			name: "modify_fields_invalid_copy_from",
+			processor: LoggingProcessor{
+				Type: "modify_fields",
+				Fields: map[string]*ModifyField{
+					"jsonPayload.dest": {
+						CopyFrom: "unknownRoot.a",
+					},
+				},
+			},
+			expectedErr: `has invalid copy_from "unknownRoot.a"`,
+		},
+		{
+			name: "modify_fields_invalid_type",
+			processor: LoggingProcessor{
+				Type: "modify_fields",
+				Fields: map[string]*ModifyField{
+					"jsonPayload.dest": {
+						Type: "YesNoBoolean",
+					},
+				},
+			},
+			expectedErr: `has invalid type "YesNoBoolean": must be one of [integer float]`,
+		},
+		{
+			name: "modify_fields_invalid_omit_if",
+			processor: LoggingProcessor{
+				Type: "modify_fields",
+				Fields: map[string]*ModifyField{
+					"jsonPayload.dest": {
+						OmitIf: "jsonPayload.dest =~ unquoted",
+					},
+				},
+			},
+			expectedErr: `has invalid omit_if`,
+		},
+		{
+			name: "modify_fields_map_values_exclusive_without_map_values",
+			processor: LoggingProcessor{
+				Type: "modify_fields",
+				Fields: map[string]*ModifyField{
+					"jsonPayload.dest": {
+						MapValuesExclusive: true,
+					},
+				},
+			},
+			expectedErr: `cannot set map_values_exclusive without map_values`,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			l := &Logging{
+				Processors: map[string]LoggingProcessor{
+					"proc": tc.processor,
+				},
+			}
+			err := l.validate(nil, false)
+			require.ErrorContains(t, err, tc.expectedErr)
+		})
+	}
+}
+
+func TestRetrieveLoggingProcessorsPipelines(t *testing.T) {
+	configYAML := `logging:
+  processors:
+    json_proc:
+      type: parse_json
+    exclude_proc:
+      type: exclude_logs
+      match_any:
+        - severity = "DEBUG"
+    empty_modify:
+      type: modify_fields
+    modify_proc:
+      type: modify_fields
+      fields:
+        labels.env:
+          static_value: staging
+  service:
+    pipelines:
+      default_pipeline:
+        receivers: [syslog]
+        processors: [json_proc, exclude_proc, empty_modify, modify_proc, lib:apache]
+`
+	configFile, _ := writeTestConfig(t, configYAML)
+
+	p := &provider{
+		logger:   zap.NewNop(),
+		hostInfo: hostInfo{OS: "linux", Platform: "debian", PlatformVersion: "12", Hostname: "test-vm"},
+	}
+	retrieved, err := p.Retrieve(context.Background(), "opsagentconf:"+configFile, nil)
+	require.NoError(t, err)
+
+	conf, err := retrieved.AsConf()
+	require.NoError(t, err)
+
+	// empty_modify is a no-op and should not emit a processor.
+	assert.Equal(t, []string{
+		"transform/logging_syslog_0",
+		"transform/logs_default__pipeline_logging_syslog_0",
+		"filter/logs_default__pipeline_logging_syslog_1",
+		"transform/logs_default__pipeline_logging_syslog_2",
+		"transform/logs_default__pipeline_logging_syslog_3",
+		"resourcedetection/_global_0",
+		"resource/otlp_grpc/otlp_logs_logs_1",
+		"transform/otlp_grpc/otlp_logs_logs_2",
+		"transform/otlp_grpc/otlp_logs_logs_3",
+	}, conf.Get("service::pipelines::logs/logs_default__pipeline_logging_syslog::processors"))
+}
+
+func TestParseJSONTransformation(t *testing.T) {
+	configYAML := `logging:
+  processors:
+    json_proc:
+      type: parse_json
+      time_key: timestamp
+      time_format: "%Y-%m-%dT%H:%M:%SZ"
+  service:
+    pipelines:
+      default_pipeline:
+        receivers: [syslog]
+        processors: [json_proc]
+`
+	info := hostInfo{OS: "linux", Platform: "debian", PlatformVersion: "12", Hostname: "json-vm"}
+	chain, sink := buildLogsProcessorChainForHost(t, configYAML, info, []string{
+		"transform/logging_syslog_0",
+		"transform/logs_default__pipeline_logging_syslog_0",
+	})
+
+	ld := plog.NewLogs()
+	sl := ld.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty()
+
+	// Record 1: valid JSON with timestamp and Cloud Logging special fields.
+	lr1 := sl.LogRecords().AppendEmpty()
+	lr1.Body().SetEmptyMap().PutStr(
+		"message",
+		`{"timestamp":"2026-10-05T14:30:00Z","custom_key":"custom_val","logging.googleapis.com/severity":"WARNING","logging.googleapis.com/logName":"override_log","logging.googleapis.com/trace":"projects/my-proj/traces/0123456789abcdef0123456789abcdef","logging.googleapis.com/spanId":"0123456789abcdef","logging.googleapis.com/labels":{"env":"prod"},"logging.googleapis.com/sourceLocation":{"file":"main.go","line":"100","function":"run"},"logging.googleapis.com/httpRequest":{"status":"200","requestMethod":"GET"}}`,
+	)
+
+	// Record 2: valid JSON with unparsable timestamp should preserve the timestamp field in body.
+	lr2 := sl.LogRecords().AppendEmpty()
+	lr2.Body().SetEmptyMap().PutStr(
+		"message",
+		`{"timestamp":"not-a-valid-time","msg":"kept"}`,
+	)
+
+	require.NoError(t, chain.ConsumeLogs(context.Background(), ld))
+
+	allLogs := sink.AllLogs()
+	require.Len(t, allLogs, 1)
+	outRecords := allLogs[0].ResourceLogs().At(0).ScopeLogs().At(0).LogRecords()
+	require.Equal(t, 2, outRecords.Len())
+
+	out1 := outRecords.At(0)
+	_, hasMessage := out1.Body().Map().Get("message")
+	assert.False(t, hasMessage, "source message field should be deleted after JSON parsing")
+	_, hasTimestamp := out1.Body().Map().Get("timestamp")
+	assert.False(t, hasTimestamp, "parsed time_key field should be deleted from body")
+	assertLogAttrStr(t, out1.Body().Map(), "custom_key", "custom_val")
+	assert.Equal(t, "WARNING", out1.SeverityText())
+	assert.Equal(t, plog.SeverityNumberUnspecified, out1.SeverityNumber())
+	assertLogAttrStr(t, out1.Attributes(), "gcp.log_name", "override_log")
+	assertLogAttrStr(t, out1.Attributes(), "env", "prod")
+	assert.Equal(t, "0123456789abcdef0123456789abcdef", out1.TraceID().String())
+	assert.Equal(t, "0123456789abcdef", out1.SpanID().String())
+
+	srcLoc, ok := out1.Attributes().Get("gcp.source_location")
+	require.True(t, ok)
+	assertLogAttrStr(t, srcLoc.Map(), "file", "main.go")
+	assertLogAttrStr(t, srcLoc.Map(), "func", "run")
+	_, hasOldFunc := srcLoc.Map().Get("function")
+	assert.False(t, hasOldFunc, "gcp.source_location.function should be renamed to func")
+	lineVal, ok := srcLoc.Map().Get("line")
+	require.True(t, ok)
+	assert.Equal(t, int64(100), lineVal.Int())
+
+	httpReq, ok := out1.Attributes().Get("gcp.http_request")
+	require.True(t, ok)
+	assertLogAttrStr(t, httpReq.Map(), "requestMethod", "GET")
+	statusVal, ok := httpReq.Map().Get("status")
+	require.True(t, ok)
+	assert.Equal(t, int64(200), statusVal.Int())
+
+	out2 := outRecords.At(1)
+	assertLogAttrStr(t, out2.Body().Map(), "timestamp", "not-a-valid-time")
+	assertLogAttrStr(t, out2.Body().Map(), "msg", "kept")
+}
+
+func TestParseRegexTransformation(t *testing.T) {
+	configYAML := `logging:
+  processors:
+    regex_proc:
+      type: parse_regex
+      regex: "^(?<time>[^ ]+) (?<severity>[^ ]+) (?<msg>.*?)(?: user=(?<user>[^ ]+))?$"
+      time_key: time
+      time_format: "%Y-%m-%dT%H:%M:%SZ"
+  service:
+    pipelines:
+      default_pipeline:
+        receivers: [syslog]
+        processors: [regex_proc]
+`
+	info := hostInfo{OS: "linux", Platform: "debian", PlatformVersion: "12", Hostname: "regex-vm"}
+	chain, sink := buildLogsProcessorChainForHost(t, configYAML, info, []string{
+		"transform/logging_syslog_0",
+		"transform/logs_default__pipeline_logging_syslog_0",
+	})
+
+	ld := plog.NewLogs()
+	sl := ld.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty()
+
+	lr1 := sl.LogRecords().AppendEmpty()
+	lr1.Body().SetEmptyMap().PutStr("message", "2026-10-05T15:00:00Z ERROR database timeout")
+
+	lr2 := sl.LogRecords().AppendEmpty()
+	lr2.Body().SetEmptyMap().PutStr("message", "unmatched line")
+
+	require.NoError(t, chain.ConsumeLogs(context.Background(), ld))
+
+	allLogs := sink.AllLogs()
+	require.Len(t, allLogs, 1)
+	outRecords := allLogs[0].ResourceLogs().At(0).ScopeLogs().At(0).LogRecords()
+	require.Equal(t, 2, outRecords.Len())
+
+	out1 := outRecords.At(0)
+	_, hasMessage := out1.Body().Map().Get("message")
+	assert.False(t, hasMessage)
+	assertLogAttrStr(t, out1.Body().Map(), "severity", "ERROR")
+	assertLogAttrStr(t, out1.Body().Map(), "msg", "database timeout")
+	_, hasEmptyUser := out1.Body().Map().Get("user")
+	assert.False(t, hasEmptyUser, "empty optional capture group should be omitted")
+
+	out2 := outRecords.At(1)
+	assertLogAttrStr(t, out2.Body().Map(), "message", "unmatched line")
+}
+
+func TestExcludeLogsTransformation(t *testing.T) {
+	configYAML := `logging:
+  processors:
+    exclude_proc:
+      type: exclude_logs
+      match_any:
+        - severity = "DEBUG"
+        - 'jsonPayload.message : "secret"'
+        - jsonPayload.service =~ "^(?<internal>health|ready)$"
+  service:
+    pipelines:
+      default_pipeline:
+        receivers: [syslog]
+        processors: [exclude_proc]
+`
+	info := hostInfo{OS: "linux", Platform: "debian", PlatformVersion: "12", Hostname: "filter-vm"}
+	chain, sink := buildLogsProcessorChainForHost(t, configYAML, info, []string{
+		"transform/logging_syslog_0",
+		"filter/logs_default__pipeline_logging_syslog_0",
+	})
+
+	ld := plog.NewLogs()
+	sl := ld.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty()
+
+	// Dropped by severity = "DEBUG" (case-insensitive)
+	lr1 := sl.LogRecords().AppendEmpty()
+	lr1.SetSeverityText("debug")
+	lr1.Body().SetEmptyMap().PutStr("message", "debug trace")
+
+	// Dropped by substring match jsonPayload.message : "secret"
+	lr2 := sl.LogRecords().AppendEmpty()
+	lr2.SetSeverityText("INFO")
+	lr2.Body().SetEmptyMap().PutStr("message", "my SECRET token")
+
+	// Dropped by Ruby regex match jsonPayload.service =~ "^(?<internal>health|ready)$"
+	lr3 := sl.LogRecords().AppendEmpty()
+	lr3.SetSeverityText("INFO")
+	body3 := lr3.Body().SetEmptyMap()
+	body3.PutStr("message", "ok")
+	body3.PutStr("service", "health")
+
+	// Kept
+	lr4 := sl.LogRecords().AppendEmpty()
+	lr4.SetSeverityText("ERROR")
+	body4 := lr4.Body().SetEmptyMap()
+	body4.PutStr("message", "request failed")
+	body4.PutStr("service", "checkout")
+
+	require.NoError(t, chain.ConsumeLogs(context.Background(), ld))
+
+	allLogs := sink.AllLogs()
+	require.Len(t, allLogs, 1)
+	outRecords := allLogs[0].ResourceLogs().At(0).ScopeLogs().At(0).LogRecords()
+	require.Equal(t, 1, outRecords.Len())
+	assertLogAttrStr(t, outRecords.At(0).Body().Map(), "message", "request failed")
+}
+
+func TestModifyFieldsTransformation(t *testing.T) {
+	configYAML := `logging:
+  processors:
+    modify_proc:
+      type: modify_fields
+      fields:
+        severity:
+          move_from: jsonPayload.level
+          map_values:
+            err: ERROR
+            warn: WARNING
+          map_values_exclusive: true
+        jsonPayload.status_code:
+          move_from: jsonPayload.raw_status
+          type: integer
+        jsonPayload.latency_sec:
+          copy_from: jsonPayload.raw_latency
+          type: float
+        jsonPayload.optional_note:
+          default_value: none
+          omit_if: jsonPayload.optional_note = "drop_me"
+        labels.env:
+          static_value: production
+  service:
+    pipelines:
+      default_pipeline:
+        receivers: [syslog]
+        processors: [modify_proc]
+`
+	info := hostInfo{OS: "linux", Platform: "debian", PlatformVersion: "12", Hostname: "modify-vm"}
+	chain, sink := buildLogsProcessorChainForHost(t, configYAML, info, []string{
+		"transform/logging_syslog_0",
+		"transform/logs_default__pipeline_logging_syslog_0",
+	})
+
+	ld := plog.NewLogs()
+	sl := ld.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty()
+
+	// Record 1: mapped level, integer status, float latency, default_value applied.
+	lr1 := sl.LogRecords().AppendEmpty()
+	body1 := lr1.Body().SetEmptyMap()
+	body1.PutStr("level", "err")
+	body1.PutStr("raw_status", "503")
+	body1.PutStr("raw_latency", "1.25")
+
+	// Record 2: unmapped level with map_values_exclusive=true, and omit_if triggered.
+	lr2 := sl.LogRecords().AppendEmpty()
+	body2 := lr2.Body().SetEmptyMap()
+	body2.PutStr("level", "unknown_level")
+	body2.PutStr("optional_note", "drop_me")
+
+	require.NoError(t, chain.ConsumeLogs(context.Background(), ld))
+
+	allLogs := sink.AllLogs()
+	require.Len(t, allLogs, 1)
+	outRecords := allLogs[0].ResourceLogs().At(0).ScopeLogs().At(0).LogRecords()
+	require.Equal(t, 2, outRecords.Len())
+
+	out1 := outRecords.At(0)
+	assert.Equal(t, "ERROR", out1.SeverityText())
+	_, hasLevel := out1.Body().Map().Get("level")
+	assert.False(t, hasLevel, "move_from source field should be deleted")
+	_, hasRawStatus := out1.Body().Map().Get("raw_status")
+	assert.False(t, hasRawStatus, "move_from raw_status should be deleted")
+	statusVal, ok := out1.Body().Map().Get("status_code")
+	require.True(t, ok)
+	assert.Equal(t, int64(503), statusVal.Int())
+	latencyVal, ok := out1.Body().Map().Get("latency_sec")
+	require.True(t, ok)
+	assert.InDelta(t, 1.25, latencyVal.Double(), 1e-6)
+	assertLogAttrStr(t, out1.Body().Map(), "raw_latency", "1.25")
+	assertLogAttrStr(t, out1.Body().Map(), "optional_note", "none")
+	assertLogAttrStr(t, out1.Attributes(), "env", "production")
+
+	out2 := outRecords.At(1)
+	assert.Equal(t, "", out2.SeverityText())
+	_, hasOptionalNote := out2.Body().Map().Get("optional_note")
+	assert.False(t, hasOptionalNote, "omit_if should delete optional_note when it matches drop_me")
+}

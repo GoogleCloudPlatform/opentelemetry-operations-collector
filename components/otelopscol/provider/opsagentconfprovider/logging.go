@@ -50,7 +50,13 @@ type LoggingReceiver struct {
 
 // LoggingProcessor represents a logging processor in the Ops Agent configuration.
 type LoggingProcessor struct {
-	Type string `yaml:"type"`
+	Type       string                  `yaml:"type"`
+	TimeKey    string                  `yaml:"time_key,omitempty"`
+	TimeFormat string                  `yaml:"time_format,omitempty"`
+	Field      string                  `yaml:"field,omitempty"`
+	Regex      string                  `yaml:"regex,omitempty"`
+	MatchAny   []string                `yaml:"match_any,omitempty"`
+	Fields     map[string]*ModifyField `yaml:"fields,omitempty"`
 }
 
 // LoggingService represents the logging service section in the Ops Agent configuration.
@@ -243,8 +249,9 @@ func (l *Logging) validate(combined *Combined, isWindows bool) error {
 		if err := validateComponentID("logging", "processor", id); err != nil {
 			return err
 		}
-		p := l.Processors[id]
-		return fmt.Errorf("logging processor %q with type %q is not supported", id, p.Type)
+		if err := l.Processors[id].validate(id); err != nil {
+			return err
+		}
 	}
 
 	if l.Service == nil {
@@ -290,7 +297,9 @@ func (l *Logging) validate(combined *Combined, isWindows bool) error {
 			}
 		}
 		for _, prID := range p.ProcessorIDs {
-			if _, ok := l.Processors[prID]; !ok {
+			_, inUser := l.Processors[prID]
+			_, inBuiltin := legacyBuiltinProcessors[prID]
+			if !inUser && !inBuiltin {
 				return fmt.Errorf("logging processor %q from pipeline %q is not defined", prID, pID)
 			}
 		}
@@ -364,6 +373,25 @@ func journaldReceiver() map[string]any {
 	}
 }
 
+func (l *Logging) resolvePipelineProcessorSpecs(processorIDs []string) []otelProcessorSpec {
+	var specs []otelProcessorSpec
+	for _, prID := range processorIDs {
+		proc, ok := l.Processors[prID]
+		if !ok {
+			proc, ok = legacyBuiltinProcessors[prID]
+		}
+		if !ok {
+			continue
+		}
+		built, err := proc.buildProcessors()
+		if err != nil {
+			continue
+		}
+		specs = append(specs, built...)
+	}
+	return specs
+}
+
 func (b *collectorConfig) addLoggingPipelines(l *Logging, combined *Combined, info hostInfo) {
 	if l == nil || l.Service == nil {
 		return
@@ -374,6 +402,7 @@ func (b *collectorConfig) addLoggingPipelines(l *Logging, combined *Combined, in
 			continue
 		}
 		escapedPID := escapeComponentID(pID)
+		pipelineProcessorSpecs := l.resolvePipelineProcessorSpecs(p.ProcessorIDs)
 		for _, rID := range p.ReceiverIDs {
 			escapedRID := escapeComponentID(rID)
 
@@ -388,6 +417,7 @@ func (b *collectorConfig) addLoggingPipelines(l *Logging, combined *Combined, in
 						prefix,
 						receiverName,
 						numberedTransformProcessors(receiverPipelineName, setLogNameProcessor(rID, info.Hostname)),
+						pipelineProcessorSpecs,
 						true,
 					)
 				case "syslog":
@@ -401,6 +431,7 @@ func (b *collectorConfig) addLoggingPipelines(l *Logging, combined *Combined, in
 							syslogTransformProcessor(),
 							setLogNameProcessor(rID, info.Hostname),
 						),
+						pipelineProcessorSpecs,
 						true,
 					)
 				case "fluent_forward":
@@ -415,6 +446,7 @@ func (b *collectorConfig) addLoggingPipelines(l *Logging, combined *Combined, in
 							setLogNameProcessor(rID, info.Hostname),
 							fluentForwardSetLogNameProcessor(),
 						),
+						pipelineProcessorSpecs,
 						true,
 					)
 				case "systemd_journald":
@@ -428,6 +460,7 @@ func (b *collectorConfig) addLoggingPipelines(l *Logging, combined *Combined, in
 							journaldTransformProcessor(),
 							setLogNameProcessor(rID, info.Hostname),
 						),
+						pipelineProcessorSpecs,
 						true,
 					)
 				}
@@ -444,6 +477,7 @@ func (b *collectorConfig) addLoggingPipelines(l *Logging, combined *Combined, in
 						prefix,
 						receiverName,
 						numberedTransformProcessors(receiverPipelineName, setLogNameProcessor(rID, info.Hostname)),
+						pipelineProcessorSpecs,
 						false,
 					)
 				}
@@ -463,7 +497,18 @@ func numberedTransformProcessors(receiverPipelineName string, configs ...map[str
 	return out
 }
 
-func (b *collectorConfig) registerLoggingPipeline(prefix, receiverName string, receiverProcessors []namedProcessor, overrideResource bool) {
+func numberedPipelineProcessors(prefix string, specs []otelProcessorSpec) []namedProcessor {
+	out := make([]namedProcessor, 0, len(specs))
+	for i, s := range specs {
+		out = append(out, namedProcessor{
+			id:     fmt.Sprintf("%s/%s_%d", s.componentType, prefix, i),
+			config: s.config,
+		})
+	}
+	return out
+}
+
+func (b *collectorConfig) registerLoggingPipeline(prefix, receiverName string, receiverProcessors []namedProcessor, pipelineProcessorSpecs []otelProcessorSpec, overrideResource bool) {
 	resourceDetectionID := "resourcedetection/_global_0"
 	if !overrideResource {
 		resourceDetectionID = "resourcedetection/_global_1"
@@ -475,6 +520,10 @@ func (b *collectorConfig) registerLoggingPipeline(prefix, receiverName string, r
 
 	processorNames := append(
 		registerProcessors(b.processors, receiverProcessors),
+		registerProcessors(b.processors, numberedPipelineProcessors(prefix, pipelineProcessorSpecs))...,
+	)
+	processorNames = append(
+		processorNames,
 		resourceDetectionID,
 		"resource/otlp_grpc/otlp_logs_logs_1",
 		"transform/otlp_grpc/otlp_logs_logs_2",

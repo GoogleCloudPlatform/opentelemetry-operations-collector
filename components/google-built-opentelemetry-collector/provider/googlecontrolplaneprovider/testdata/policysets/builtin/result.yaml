@@ -30,36 +30,42 @@ extensions:
     googlecontrolplane: {}
 processors:
     googlepolicy: {}
-    queuebatch/default_gcp_destination_batch_logs:
+    queue_batch/default_gcp_destination_batch_logs:
         batch:
             flush_timeout: 200ms
             max_size: 8192
             min_size: 8192
-            partition: {}
+            partition:
+                cache_size: 10000
+                idle_timeout: 1m30s
             sizer: {}
         block_on_overflow: true
         num_consumers: 1
         queue_size: 10
         sizer: {}
         wait_for_result: false
-    queuebatch/default_gcp_destination_batch_metrics:
+    queue_batch/default_gcp_destination_batch_metrics:
         batch:
             flush_timeout: 200ms
             max_size: 200
             min_size: 200
-            partition: {}
+            partition:
+                cache_size: 10000
+                idle_timeout: 1m30s
             sizer: {}
         block_on_overflow: true
         num_consumers: 1
         queue_size: 10
         sizer: {}
         wait_for_result: false
-    queuebatch/default_gcp_destination_batch_traces:
+    queue_batch/default_gcp_destination_batch_traces:
         batch:
             flush_timeout: 200ms
             max_size: 25000
             min_size: 25000
-            partition: {}
+            partition:
+                cache_size: 10000
+                idle_timeout: 1m30s
             sizer: {}
         block_on_overflow: true
         num_consumers: 1
@@ -102,7 +108,7 @@ service:
             processors:
                 - resourcedetection/default_self_metrics
                 - transform/default_self_metrics
-                - queuebatch/default_gcp_destination_batch_logs
+                - queue_batch/default_gcp_destination_batch_logs
             receivers:
                 - otlp/default_self_metrics
         metrics/default_self_metrics:
@@ -111,7 +117,7 @@ service:
             processors:
                 - resourcedetection/default_self_metrics
                 - transform/default_self_metrics
-                - queuebatch/default_gcp_destination_batch_metrics
+                - queue_batch/default_gcp_destination_batch_metrics
             receivers:
                 - otlp/default_self_metrics
     telemetry:

@@ -25,14 +25,15 @@ const instrumentationSourceLabel = `labels."logging.googleapis.com/instrumentati
 
 // ModifyField describes a field modification operation in the modify_fields logging processor.
 type ModifyField struct {
-	MoveFrom           string            `yaml:"move_from,omitempty"`
-	CopyFrom           string            `yaml:"copy_from,omitempty"`
-	StaticValue        *string           `yaml:"static_value,omitempty"`
-	DefaultValue       *string           `yaml:"default_value,omitempty"`
-	Type               string            `yaml:"type,omitempty"`
-	OmitIf             string            `yaml:"omit_if,omitempty"`
-	MapValues          map[string]string `yaml:"map_values,omitempty"`
-	MapValuesExclusive bool              `yaml:"map_values_exclusive,omitempty"`
+	MoveFrom           string                          `yaml:"move_from,omitempty"`
+	CopyFrom           string                          `yaml:"copy_from,omitempty"`
+	StaticValue        *string                         `yaml:"static_value,omitempty"`
+	DefaultValue       *string                         `yaml:"default_value,omitempty"`
+	Type               string                          `yaml:"type,omitempty"`
+	CustomConvertFunc  func(ottlLValue) ottlStatements `yaml:"-"`
+	OmitIf             string                          `yaml:"omit_if,omitempty"`
+	MapValues          map[string]string               `yaml:"map_values,omitempty"`
+	MapValuesExclusive bool                            `yaml:"map_values_exclusive,omitempty"`
 }
 
 var legacyBuiltinProcessors = map[string]LoggingProcessor{
@@ -470,6 +471,13 @@ func (p LoggingProcessor) modifyFieldsStatements() (ottlStatements, error) {
 		last = v
 	}
 
+	if p.EmptyBody {
+		statements = statements.Append(
+			ottlLValue{"cache", "body"}.Set(ottlLValue{"body"}),
+			ottlLValue{"body"}.KeepKeys(),
+		)
+	}
+
 	for _, dest := range dests {
 		field := p.Fields[dest]
 		outM, err := newLogMember(dest)
@@ -507,6 +515,10 @@ func (p LoggingProcessor) modifyFieldsStatements() (ottlStatements, error) {
 			statements = statements.Append(value.SetIf(ottlToInt(value), ottlAnd(value.IsPresent(), ottlIsNotNil(ottlToInt(value)))))
 		case "float":
 			statements = statements.Append(value.SetIf(ottlToFloat(value), ottlAnd(value.IsPresent(), ottlIsNotNil(ottlToFloat(value)))))
+		}
+
+		if field.CustomConvertFunc != nil {
+			statements = statements.Append(field.CustomConvertFunc(value))
 		}
 
 		ra, err := outM.OTTLAccessor()

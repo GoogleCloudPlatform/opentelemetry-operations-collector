@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"path"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -533,4 +534,160 @@ func journaldTransformProcessor() map[string]any {
 		`set(attributes["gcp.source_location"]["line"], body["CODE_LINE"]) where body["CODE_LINE"] != nil`,
 		`set(attributes["gcp.source_location"]["line"], Int(body["CODE_LINE"])) where body["CODE_LINE"] != nil and Int(body["CODE_LINE"]) != nil`,
 	)
+}
+
+func windowsEventLogParseXMLProcessor(deleteOriginalField bool) map[string]any {
+	logRecordOriginal := ottlLValue{"attributes", "log.record.original"}
+	bodyParsedXML := ottlLValue{"body", "parsed_xml"}
+	statements := newOTTLStatements(
+		bodyParsedXML.SetIf(ottlParseSimplifiedXML(logRecordOriginal), logRecordOriginal.IsPresent()),
+	)
+	if deleteOriginalField {
+		statements = statements.Append(logRecordOriginal.Delete())
+	}
+	return logTransformIgnoreProcessor(statements...)
+}
+
+func formatWindowsEventSystemTime(v ottlLValue) ottlStatements {
+	return v.Set(ottlConcat([]ottlValue{
+		ottlFormatTime(ottlToTime(v, "%Y-%m-%dT%T.%s%z"), "%Y-%m-%d %T.%s"),
+		ottlStringLiteral("+0000"),
+	}, " "))
+}
+
+func convertWindowsEventDataToStringInserts(v ottlLValue) ottlStatements {
+	eventData := append(slices.Clone(v), "data")
+	eventBinary := append(slices.Clone(v), "binary")
+	cacheEventData := ottlLValue{"cache", "__event_data"}
+	return newOTTLStatements(
+		cacheEventData.SetIf(ottlToValues(eventData), eventData.IsPresent()),
+		cacheEventData.AppendValuesIf(eventBinary, ottlAnd(cacheEventData.IsPresent(), eventBinary.IsPresent())),
+		v.SetIf(cacheEventData, cacheEventData.IsPresent()),
+		v.SetIf(ottlParseJSON(ottlStringLiteral("[]")), ottlNot(v.IsPresent())),
+	)
+}
+
+func mustModifyFieldsTransformProcessor(fields map[string]*ModifyField) map[string]any {
+	stmts, err := (LoggingProcessor{
+		Type:      "modify_fields",
+		EmptyBody: true,
+		Fields:    fields,
+	}).modifyFieldsStatements()
+	if err != nil {
+		panic(err)
+	}
+	return logTransformIgnoreProcessor(stmts...)
+}
+
+func windowsEventLogV1TransformProcessor() map[string]any {
+	var empty string
+	return mustModifyFieldsTransformProcessor(map[string]*ModifyField{
+		"jsonPayload.Channel":      {CopyFrom: "jsonPayload.channel"},
+		"jsonPayload.ComputerName": {CopyFrom: "jsonPayload.computer"},
+		"jsonPayload.Data": {
+			CopyFrom:     "jsonPayload.event_data.binary",
+			DefaultValue: &empty,
+			CustomConvertFunc: func(v ottlLValue) ottlStatements {
+				return v.Set(ottlConvertCase(v, "lower"))
+			},
+		},
+		"jsonPayload.EventCategory": {CopyFrom: "jsonPayload.parsed_xml.Event.System.Task", Type: "integer"},
+		"jsonPayload.EventID":       {CopyFrom: "jsonPayload.event_id.id"},
+		"jsonPayload.EventType": {
+			CopyFrom: "jsonPayload.level",
+			CustomConvertFunc: func(v ottlLValue) ottlStatements {
+				keywords := ottlLValue{"cache", "body", "keywords"}
+				return newOTTLStatements(
+					v.SetIf(ottlStringLiteral("SuccessAudit"), ottlContainsValue(keywords, "Audit Success")),
+					v.SetIf(ottlStringLiteral("FailureAudit"), ottlContainsValue(keywords, "Audit Failure")),
+				)
+			},
+		},
+		"jsonPayload.Message":      {CopyFrom: "jsonPayload.parsed_xml.Event.RenderingInfo.Message"},
+		"jsonPayload.Qualifiers":   {CopyFrom: "jsonPayload.event_id.qualifiers"},
+		"jsonPayload.RecordNumber": {CopyFrom: "jsonPayload.record_id"},
+		"jsonPayload.Sid": {
+			CopyFrom:     "jsonPayload.security.user_id",
+			DefaultValue: &empty,
+		},
+		"jsonPayload.SourceName": {
+			CopyFrom: "jsonPayload.provider.name",
+			CustomConvertFunc: func(v ottlLValue) ottlStatements {
+				// Prefer jsonPayload.provider.event_source if present and non-empty.
+				eventSource := ottlLValue{"cache", "body", "provider", "event_source"}
+				return v.SetIf(
+					eventSource,
+					ottlAnd(
+						eventSource.IsPresent(),
+						ottlNot(ottlEquals(eventSource, ottlStringLiteral(""))),
+					),
+				)
+			},
+		},
+		"jsonPayload.StringInserts": {
+			CopyFrom: "jsonPayload.event_data.data",
+			CustomConvertFunc: func(v ottlLValue) ottlStatements {
+				return newOTTLStatements(
+					v.SetIf(ottlToValues(v), v.IsPresent()),
+					v.SetIf(ottlParseJSON(ottlStringLiteral("[]")), ottlNot(v.IsPresent())),
+				)
+			},
+		},
+		"jsonPayload.TimeGenerated": {
+			CopyFrom:          "jsonPayload.system_time",
+			CustomConvertFunc: formatWindowsEventSystemTime,
+		},
+		"jsonPayload.TimeWritten": {
+			CopyFrom:          "jsonPayload.system_time",
+			CustomConvertFunc: formatWindowsEventSystemTime,
+		},
+	})
+}
+
+func windowsEventLogV2TransformProcessor() map[string]any {
+	var empty string
+	zero := "0"
+	return mustModifyFieldsTransformProcessor(map[string]*ModifyField{
+		"jsonPayload.Channel":       {CopyFrom: "jsonPayload.channel", DefaultValue: &empty},
+		"jsonPayload.Computer":      {CopyFrom: "jsonPayload.computer", DefaultValue: &empty},
+		"jsonPayload.EventID":       {CopyFrom: "jsonPayload.event_id.id", Type: "integer", DefaultValue: &zero},
+		"jsonPayload.EventRecordID": {CopyFrom: "jsonPayload.record_id", Type: "integer", DefaultValue: &zero},
+		"jsonPayload.Keywords":      {CopyFrom: "jsonPayload.parsed_xml.Event.System.Keywords"},
+		"jsonPayload.Level":         {CopyFrom: "jsonPayload.parsed_xml.Event.System.Level", Type: "integer", DefaultValue: &zero},
+		"jsonPayload.Message":       {CopyFrom: "jsonPayload.parsed_xml.Event.RenderingInfo.Message", DefaultValue: &empty},
+		"jsonPayload.Opcode":        {CopyFrom: "jsonPayload.parsed_xml.Event.System.Opcode", Type: "integer", DefaultValue: &zero},
+		"jsonPayload.ProcessID":     {CopyFrom: "jsonPayload.execution.process_id", Type: "integer", DefaultValue: &zero},
+		"jsonPayload.ProviderGuid":  {CopyFrom: "jsonPayload.provider.guid", DefaultValue: &empty},
+		"jsonPayload.ProviderName":  {CopyFrom: "jsonPayload.provider.name", DefaultValue: &empty},
+		"jsonPayload.Qualifiers":    {CopyFrom: "jsonPayload.event_id.qualifiers", Type: "integer", DefaultValue: &zero},
+		"jsonPayload.StringInserts": {
+			CopyFrom:          "jsonPayload.event_data",
+			CustomConvertFunc: convertWindowsEventDataToStringInserts,
+		},
+		"jsonPayload.Task":     {CopyFrom: "jsonPayload.parsed_xml.Event.System.Task", Type: "integer", DefaultValue: &zero},
+		"jsonPayload.ThreadId": {CopyFrom: "jsonPayload.execution.thread_id", Type: "integer", DefaultValue: &zero},
+		"jsonPayload.TimeCreated": {
+			CopyFrom:          "jsonPayload.system_time",
+			CustomConvertFunc: formatWindowsEventSystemTime,
+		},
+		"jsonPayload.UserId": {
+			CopyFrom:     "jsonPayload.security.user_id",
+			DefaultValue: &empty,
+		},
+		"jsonPayload.ActivityID":        {CopyFrom: "jsonPayload.correlation.activity_id", DefaultValue: &empty},
+		"jsonPayload.RelatedActivityID": {CopyFrom: "jsonPayload.correlation.related_activity_id", DefaultValue: &empty},
+		"jsonPayload.Version":           {CopyFrom: "jsonPayload.version", Type: "integer", DefaultValue: &zero},
+	})
+}
+
+func windowsEventLogRawXMLTransformProcessor() map[string]any {
+	var empty string
+	return mustModifyFieldsTransformProcessor(map[string]*ModifyField{
+		"jsonPayload.Message": {CopyFrom: "jsonPayload.parsed_xml.Event.RenderingInfo.Message", DefaultValue: &empty},
+		"jsonPayload.raw_xml": {MoveFrom: `labels."log.record.original"`},
+		"jsonPayload.StringInserts": {
+			CopyFrom:          "jsonPayload.event_data",
+			CustomConvertFunc: convertWindowsEventDataToStringInserts,
+		},
+	})
 }

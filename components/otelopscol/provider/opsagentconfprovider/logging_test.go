@@ -48,10 +48,17 @@ func TestMergeLoggingConfig(t *testing.T) {
 
 	t.Run("nil_user_config_returns_windows_defaults", func(t *testing.T) {
 		merged := mergeLoggingConfig(nil, true)
-		assert.Empty(t, merged.Receivers)
+		assert.Equal(t, map[string]LoggingReceiver{
+			"windows_event_log": {
+				Type:     "windows_event_log",
+				Channels: []string{"System", "Application", "Security"},
+			},
+		}, merged.Receivers)
 		assert.Empty(t, merged.Processors)
 		require.NotNil(t, merged.Service)
-		assert.Equal(t, &Pipeline{}, merged.Service.Pipelines["default_pipeline"])
+		assert.Equal(t, &Pipeline{
+			ReceiverIDs: []string{"windows_event_log"},
+		}, merged.Service.Pipelines["default_pipeline"])
 	})
 
 	t.Run("override_builtin_receiver_and_log_level", func(t *testing.T) {
@@ -298,6 +305,127 @@ func TestLoggingValidate(t *testing.T) {
 				},
 			},
 			expectedErr: `logging receiver "journald" with type "systemd_journald" does not support record_log_file_path`,
+		},
+		{
+			name: "files_with_windows_event_log_field",
+			logging: &Logging{
+				Receivers: map[string]LoggingReceiver{
+					"bad_files": {
+						Type:         "files",
+						IncludePaths: []string{"/var/log/syslog"},
+						Channels:     []string{"System"},
+					},
+				},
+			},
+			expectedErr: `logging receiver "bad_files" with type "files" does not support channels`,
+		},
+		{
+			name: "windows_event_log_on_linux",
+			logging: &Logging{
+				Receivers: map[string]LoggingReceiver{
+					"winlog": {
+						Type:     "windows_event_log",
+						Channels: []string{"System"},
+					},
+				},
+			},
+			expectedErr: `logging receiver "winlog" with type "windows_event_log" is not supported`,
+		},
+		{
+			name:      "windows_event_log_with_files_field",
+			isWindows: true,
+			logging: &Logging{
+				Receivers: map[string]LoggingReceiver{
+					"winlog": {
+						Type:         "windows_event_log",
+						Channels:     []string{"System"},
+						IncludePaths: []string{`C:\app.log`},
+					},
+				},
+			},
+			expectedErr: `logging receiver "winlog" with type "windows_event_log" does not support include_paths`,
+		},
+		{
+			name:      "windows_event_log_with_network_field",
+			isWindows: true,
+			logging: &Logging{
+				Receivers: map[string]LoggingReceiver{
+					"winlog": {
+						Type:       "windows_event_log",
+						Channels:   []string{"System"},
+						ListenPort: 5140,
+					},
+				},
+			},
+			expectedErr: `logging receiver "winlog" with type "windows_event_log" does not support listen_port`,
+		},
+		{
+			name:      "windows_event_log_invalid_receiver_version",
+			isWindows: true,
+			logging: &Logging{
+				Receivers: map[string]LoggingReceiver{
+					"winlog": {
+						Type:            "windows_event_log",
+						ReceiverVersion: "3",
+						Channels:        []string{"System"},
+					},
+				},
+			},
+			expectedErr: `logging receiver "winlog" with type "windows_event_log" has invalid receiver_version "3": must be one of [1 2]`,
+		},
+		{
+			name:      "windows_event_log_render_as_xml_on_v1",
+			isWindows: true,
+			logging: &Logging{
+				Receivers: map[string]LoggingReceiver{
+					"winlog": {
+						Type:        "windows_event_log",
+						RenderAsXML: true,
+						Channels:    []string{"System"},
+					},
+				},
+			},
+			expectedErr: `logging receiver "winlog" with type "windows_event_log" does not support render_as_xml for receiver_version 1; use receiver_version: 2`,
+		},
+		{
+			name:      "windows_event_log_missing_channels",
+			isWindows: true,
+			logging: &Logging{
+				Receivers: map[string]LoggingReceiver{
+					"winlog": {
+						Type: "windows_event_log",
+					},
+				},
+			},
+			expectedErr: `logging receiver "winlog" with type "windows_event_log" requires non-empty channels`,
+		},
+		{
+			name:      "windows_event_log_v2_channel_with_comma",
+			isWindows: true,
+			logging: &Logging{
+				Receivers: map[string]LoggingReceiver{
+					"winlog2": {
+						Type:            "windows_event_log",
+						ReceiverVersion: "2",
+						Channels:        []string{"System,Application"},
+					},
+				},
+			},
+			expectedErr: `logging receiver "winlog2" with type "windows_event_log" has invalid channels[0] (System,Application): cannot contain ','`,
+		},
+		{
+			name:      "windows_event_log_v2_duplicate_channel_case_insensitive",
+			isWindows: true,
+			logging: &Logging{
+				Receivers: map[string]LoggingReceiver{
+					"winlog2": {
+						Type:            "windows_event_log",
+						ReceiverVersion: "2",
+						Channels:        []string{"System", "system"},
+					},
+				},
+			},
+			expectedErr: `logging receiver "winlog2" with type "windows_event_log" has duplicate channel "system"`,
 		},
 		{
 			name: "duplicate_receiver_name_with_combined",
@@ -1414,4 +1542,378 @@ func TestModifyFieldsTransformation(t *testing.T) {
 	assert.Equal(t, "", out2.SeverityText())
 	_, hasOptionalNote := out2.Body().Map().Get("optional_note")
 	assert.False(t, hasOptionalNote, "omit_if should delete optional_note when it matches drop_me")
+}
+
+func TestRetrieveWindowsEventLogPipelines(t *testing.T) {
+	configYAML := `logging:
+  receivers:
+    winlog2:
+      type: windows_event_log
+      receiver_version: 2
+      channels:
+        - System
+        - Application
+    winlog2_xml:
+      type: windows_event_log
+      receiver_version: 2
+      render_as_xml: true
+      channels:
+        - Security
+  service:
+    pipelines:
+      winlog2_pipe:
+        receivers: [winlog2, winlog2_xml]
+`
+	configFile, _ := writeTestConfig(t, configYAML)
+
+	p := &provider{
+		logger:   zap.NewNop(),
+		hostInfo: hostInfo{OS: "windows", Platform: "Microsoft Windows Server 2022 Datacenter", PlatformVersion: "10.0.20348 Build 20348", Hostname: "win-vm"},
+	}
+	retrieved, err := p.Retrieve(context.Background(), "opsagentconf:"+configFile, nil)
+	require.NoError(t, err)
+
+	conf, err := retrieved.AsConf()
+	require.NoError(t, err)
+
+	expectedReceiverCfg := func(channel string) map[string]any {
+		return map[string]any{
+			"channel":                     channel,
+			"start_at":                    "beginning",
+			"event_data_format":           "array",
+			"poll_interval":               "1s",
+			"ignore_channel_errors":       true,
+			"storage":                     "file_storage",
+			"include_log_record_original": true,
+		}
+	}
+
+	assert.Equal(t, expectedReceiverCfg("System"), conf.Get("receivers::windowseventlog/logging_windows__event__log"))
+	assert.Equal(t, expectedReceiverCfg("Application"), conf.Get("receivers::windowseventlog/logging_windows__event__log_1"))
+	assert.Equal(t, expectedReceiverCfg("Security"), conf.Get("receivers::windowseventlog/logging_windows__event__log_2"))
+	assert.Equal(t, []string{
+		"transform/logging_windows__event__log_0",
+		"transform/logging_windows__event__log_1",
+		"transform/logging_windows__event__log_2",
+		"resourcedetection/_global_0",
+		"resource/otlp_grpc/otlp_logs_logs_1",
+		"transform/otlp_grpc/otlp_logs_logs_2",
+		"transform/otlp_grpc/otlp_logs_logs_3",
+	}, conf.Get("service::pipelines::logs/logs_default__pipeline_logging_windows__event__log::processors"))
+	assert.Equal(t, []string{
+		"transform/logging_windows__event__log_1_0",
+		"transform/logging_windows__event__log_1_1",
+		"transform/logging_windows__event__log_1_2",
+		"resourcedetection/_global_0",
+		"resource/otlp_grpc/otlp_logs_logs_1",
+		"transform/otlp_grpc/otlp_logs_logs_2",
+		"transform/otlp_grpc/otlp_logs_logs_3",
+	}, conf.Get("service::pipelines::logs/logs_default__pipeline_logging_windows__event__log_1::processors"))
+	assert.Equal(t, []string{
+		"transform/logging_windows__event__log_2_0",
+		"transform/logging_windows__event__log_2_1",
+		"transform/logging_windows__event__log_2_2",
+		"resourcedetection/_global_0",
+		"resource/otlp_grpc/otlp_logs_logs_1",
+		"transform/otlp_grpc/otlp_logs_logs_2",
+		"transform/otlp_grpc/otlp_logs_logs_3",
+	}, conf.Get("service::pipelines::logs/logs_default__pipeline_logging_windows__event__log_2::processors"))
+
+	assert.Equal(t, expectedReceiverCfg("System"), conf.Get("receivers::windowseventlog/logging_winlog2"))
+	assert.Equal(t, expectedReceiverCfg("Application"), conf.Get("receivers::windowseventlog/logging_winlog2_1"))
+	assert.Equal(t, []string{
+		"transform/logging_winlog2_0",
+		"transform/logging_winlog2_1",
+		"transform/logging_winlog2_2",
+		"resourcedetection/_global_0",
+		"resource/otlp_grpc/otlp_logs_logs_1",
+		"transform/otlp_grpc/otlp_logs_logs_2",
+		"transform/otlp_grpc/otlp_logs_logs_3",
+	}, conf.Get("service::pipelines::logs/logs_winlog2__pipe_logging_winlog2::processors"))
+	assert.Equal(t, []string{
+		"transform/logging_winlog2_1_0",
+		"transform/logging_winlog2_1_1",
+		"transform/logging_winlog2_1_2",
+		"resourcedetection/_global_0",
+		"resource/otlp_grpc/otlp_logs_logs_1",
+		"transform/otlp_grpc/otlp_logs_logs_2",
+		"transform/otlp_grpc/otlp_logs_logs_3",
+	}, conf.Get("service::pipelines::logs/logs_winlog2__pipe_logging_winlog2_1::processors"))
+
+	assert.Equal(t, expectedReceiverCfg("Security"), conf.Get("receivers::windowseventlog/logging_winlog2__xml"))
+	assert.Equal(t, []string{
+		"transform/logging_winlog2__xml_0",
+		"transform/logging_winlog2__xml_1",
+		"transform/logging_winlog2__xml_2",
+		"resourcedetection/_global_0",
+		"resource/otlp_grpc/otlp_logs_logs_1",
+		"transform/otlp_grpc/otlp_logs_logs_2",
+		"transform/otlp_grpc/otlp_logs_logs_3",
+	}, conf.Get("service::pipelines::logs/logs_winlog2__pipe_logging_winlog2__xml::processors"))
+}
+
+func assertLogAttrInt(t *testing.T, attrs pcommon.Map, key string, expected int64) {
+	t.Helper()
+	val, ok := attrs.Get(key)
+	require.True(t, ok, "expected field %q to exist", key)
+	assert.Equal(t, expected, val.Int())
+}
+
+func assertLogAttrStrSlice(t *testing.T, attrs pcommon.Map, key string, expected []string) {
+	t.Helper()
+	val, ok := attrs.Get(key)
+	require.True(t, ok, "expected field %q to exist", key)
+	require.Equal(t, pcommon.ValueTypeSlice, val.Type())
+	s := val.Slice()
+	actual := make([]string, 0, s.Len())
+	for i := 0; i < s.Len(); i++ {
+		actual = append(actual, s.At(i).Str())
+	}
+	assert.Equal(t, expected, actual)
+}
+
+func TestWindowsEventLogV1Transformation(t *testing.T) {
+	info := hostInfo{OS: "windows", Platform: "Microsoft Windows Server 2022 Datacenter", PlatformVersion: "10.0.20348 Build 20348", Hostname: "win-v1-host"}
+	chain, sink := buildLogsProcessorChainForHost(t, "", info, []string{
+		"transform/logging_windows__event__log_0",
+		"transform/logging_windows__event__log_1",
+		"transform/logging_windows__event__log_2",
+	})
+
+	ld := plog.NewLogs()
+	sl := ld.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty()
+
+	// Record 1: full v1 fields with Audit Success and non-empty provider.event_source.
+	lr1 := sl.LogRecords().AppendEmpty()
+	lr1.Attributes().PutStr("log.record.original", `<Event><System><Task>12</Task></System><RenderingInfo><Message>The service started.</Message></RenderingInfo></Event>`)
+	b1 := lr1.Body().SetEmptyMap()
+	b1.PutStr("channel", "System")
+	b1.PutStr("computer", "WIN-VM")
+	ed1 := b1.PutEmptyMap("event_data")
+	ed1.PutStr("binary", "DEADBEEF")
+	dataSlice1 := ed1.PutEmptySlice("data")
+	dataSlice1.AppendEmpty().SetEmptyMap().PutStr("param1", "first_insert")
+	dataSlice1.AppendEmpty().SetEmptyMap().PutStr("param2", "second_insert")
+	eid1 := b1.PutEmptyMap("event_id")
+	eid1.PutInt("id", 7036)
+	eid1.PutInt("qualifiers", 16384)
+	b1.PutStr("level", "Information")
+	kw1 := b1.PutEmptySlice("keywords")
+	kw1.AppendEmpty().SetStr("Audit Success")
+	b1.PutInt("record_id", 1001)
+	b1.PutEmptyMap("security").PutStr("user_id", "S-1-5-18")
+	prov1 := b1.PutEmptyMap("provider")
+	prov1.PutStr("name", "Service Control Manager")
+	prov1.PutStr("event_source", "SCM")
+	b1.PutStr("system_time", "2026-10-05T12:34:56.789000000Z")
+
+	// Record 2: Audit Failure, empty provider.event_source (falls back to provider.name), no event_data/security.
+	lr2 := sl.LogRecords().AppendEmpty()
+	lr2.Attributes().PutStr("log.record.original", `<Event><System><Task>0</Task></System><RenderingInfo><Message>Logon failed.</Message></RenderingInfo></Event>`)
+	b2 := lr2.Body().SetEmptyMap()
+	b2.PutStr("channel", "Security")
+	b2.PutStr("computer", "WIN-VM")
+	b2.PutStr("level", "Information")
+	kw2 := b2.PutEmptySlice("keywords")
+	kw2.AppendEmpty().SetStr("Audit Failure")
+	prov2 := b2.PutEmptyMap("provider")
+	prov2.PutStr("name", "Microsoft-Windows-Security-Auditing")
+	prov2.PutStr("event_source", "")
+	b2.PutStr("system_time", "2026-10-05T12:35:00.000000000Z")
+
+	require.NoError(t, chain.ConsumeLogs(context.Background(), ld))
+
+	allLogs := sink.AllLogs()
+	require.Len(t, allLogs, 1)
+	outRecords := allLogs[0].ResourceLogs().At(0).ScopeLogs().At(0).LogRecords()
+	require.Equal(t, 2, outRecords.Len())
+
+	out1 := outRecords.At(0)
+	_, hasOrig1 := out1.Attributes().Get("log.record.original")
+	assert.False(t, hasOrig1, "log.record.original should be deleted from attributes")
+	assertLogAttrStr(t, out1.Attributes(), "gcp.log_name", "windows_event_log")
+	assertLogAttrStr(t, out1.Attributes(), "compute.googleapis.com/resource_name", "win-v1-host")
+
+	m1 := out1.Body().Map()
+	assertLogAttrStr(t, m1, "Channel", "System")
+	assertLogAttrStr(t, m1, "ComputerName", "WIN-VM")
+	assertLogAttrStr(t, m1, "Data", "deadbeef")
+	assertLogAttrInt(t, m1, "EventCategory", 12)
+	assertLogAttrInt(t, m1, "EventID", 7036)
+	assertLogAttrStr(t, m1, "EventType", "SuccessAudit")
+	assertLogAttrStr(t, m1, "Message", "The service started.")
+	assertLogAttrInt(t, m1, "Qualifiers", 16384)
+	assertLogAttrInt(t, m1, "RecordNumber", 1001)
+	assertLogAttrStr(t, m1, "Sid", "S-1-5-18")
+	assertLogAttrStr(t, m1, "SourceName", "SCM")
+	assertLogAttrStrSlice(t, m1, "StringInserts", []string{"first_insert", "second_insert"})
+	assertLogAttrStr(t, m1, "TimeGenerated", "2026-10-05 12:34:56.789 +0000")
+	assertLogAttrStr(t, m1, "TimeWritten", "2026-10-05 12:34:56.789 +0000")
+
+	m2 := outRecords.At(1).Body().Map()
+	assertLogAttrStr(t, m2, "Data", "")
+	assertLogAttrStr(t, m2, "EventType", "FailureAudit")
+	assertLogAttrStr(t, m2, "Sid", "")
+	assertLogAttrStr(t, m2, "SourceName", "Microsoft-Windows-Security-Auditing")
+	assertLogAttrStrSlice(t, m2, "StringInserts", []string{})
+}
+
+func TestWindowsEventLogV2Transformation(t *testing.T) {
+	configYAML := `logging:
+  receivers:
+    winlog2:
+      type: windows_event_log
+      receiver_version: 2
+      channels:
+        - System
+  service:
+    pipelines:
+      winlog2:
+        receivers: [winlog2]
+`
+	info := hostInfo{OS: "windows", Platform: "Microsoft Windows Server 2022 Datacenter", PlatformVersion: "10.0.20348 Build 20348", Hostname: "win-v2-host"}
+	chain, sink := buildLogsProcessorChainForHost(t, configYAML, info, []string{
+		"transform/logging_winlog2_0",
+		"transform/logging_winlog2_1",
+		"transform/logging_winlog2_2",
+	})
+
+	ld := plog.NewLogs()
+	sl := ld.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty()
+
+	// Record 1: full v2 fields.
+	lr1 := sl.LogRecords().AppendEmpty()
+	lr1.Attributes().PutStr("log.record.original", `<Event><System><Keywords>0x8020000000000000</Keywords><Level>4</Level><Opcode>2</Opcode><Task>14</Task></System><RenderingInfo><Message>V2 event message.</Message></RenderingInfo></Event>`)
+	b1 := lr1.Body().SetEmptyMap()
+	corr1 := b1.PutEmptyMap("correlation")
+	corr1.PutStr("activity_id", "{1111-2222}")
+	corr1.PutStr("related_activity_id", "{3333-4444}")
+	b1.PutStr("channel", "System")
+	b1.PutStr("computer", "WIN-V2-VM")
+	eid1 := b1.PutEmptyMap("event_id")
+	eid1.PutInt("id", 4624)
+	eid1.PutInt("qualifiers", 0)
+	b1.PutInt("record_id", 2048)
+	exec1 := b1.PutEmptyMap("execution")
+	exec1.PutInt("process_id", 500)
+	exec1.PutInt("thread_id", 600)
+	prov1 := b1.PutEmptyMap("provider")
+	prov1.PutStr("guid", "{ABCD-EF01}")
+	prov1.PutStr("name", "Microsoft-Windows-Security-Auditing")
+	ed1 := b1.PutEmptyMap("event_data")
+	dataSlice1 := ed1.PutEmptySlice("data")
+	dataSlice1.AppendEmpty().SetEmptyMap().PutStr("SubjectUserName", "SYSTEM")
+	ed1.PutStr("binary", "CAFEBABE")
+	b1.PutStr("system_time", "2026-10-05T12:34:56.789000000Z")
+	b1.PutEmptyMap("security").PutStr("user_id", "S-1-5-18")
+	b1.PutInt("version", 2)
+
+	// Record 2: empty record to verify v2 default values.
+	lr2 := sl.LogRecords().AppendEmpty()
+	lr2.Body().SetEmptyMap().PutStr("system_time", "2026-10-05T12:34:56.789000000Z")
+
+	require.NoError(t, chain.ConsumeLogs(context.Background(), ld))
+
+	allLogs := sink.AllLogs()
+	require.Len(t, allLogs, 1)
+	outRecords := allLogs[0].ResourceLogs().At(0).ScopeLogs().At(0).LogRecords()
+	require.Equal(t, 2, outRecords.Len())
+
+	out1 := outRecords.At(0)
+	_, hasOrig1 := out1.Attributes().Get("log.record.original")
+	assert.False(t, hasOrig1, "log.record.original should be deleted from attributes")
+	assertLogAttrStr(t, out1.Attributes(), "gcp.log_name", "winlog2")
+	assertLogAttrStr(t, out1.Attributes(), "compute.googleapis.com/resource_name", "win-v2-host")
+
+	m1 := out1.Body().Map()
+	assertLogAttrStr(t, m1, "ActivityID", "{1111-2222}")
+	assertLogAttrStr(t, m1, "Channel", "System")
+	assertLogAttrStr(t, m1, "Computer", "WIN-V2-VM")
+	assertLogAttrInt(t, m1, "EventID", 4624)
+	assertLogAttrInt(t, m1, "EventRecordID", 2048)
+	assertLogAttrStr(t, m1, "Keywords", "0x8020000000000000")
+	assertLogAttrInt(t, m1, "Level", 4)
+	assertLogAttrStr(t, m1, "Message", "V2 event message.")
+	assertLogAttrInt(t, m1, "Opcode", 2)
+	assertLogAttrInt(t, m1, "ProcessID", 500)
+	assertLogAttrStr(t, m1, "ProviderGuid", "{ABCD-EF01}")
+	assertLogAttrStr(t, m1, "ProviderName", "Microsoft-Windows-Security-Auditing")
+	assertLogAttrInt(t, m1, "Qualifiers", 0)
+	assertLogAttrStr(t, m1, "RelatedActivityID", "{3333-4444}")
+	assertLogAttrStrSlice(t, m1, "StringInserts", []string{"SYSTEM", "CAFEBABE"})
+	assertLogAttrInt(t, m1, "Task", 14)
+	assertLogAttrInt(t, m1, "ThreadId", 600)
+	assertLogAttrStr(t, m1, "TimeCreated", "2026-10-05 12:34:56.789 +0000")
+	assertLogAttrStr(t, m1, "UserId", "S-1-5-18")
+	assertLogAttrInt(t, m1, "Version", 2)
+
+	m2 := outRecords.At(1).Body().Map()
+	assertLogAttrStr(t, m2, "ActivityID", "")
+	assertLogAttrStr(t, m2, "Channel", "")
+	assertLogAttrStr(t, m2, "Computer", "")
+	assertLogAttrInt(t, m2, "EventID", 0)
+	assertLogAttrInt(t, m2, "EventRecordID", 0)
+	assertLogAttrInt(t, m2, "Level", 0)
+	assertLogAttrStr(t, m2, "Message", "")
+	assertLogAttrInt(t, m2, "Opcode", 0)
+	assertLogAttrInt(t, m2, "ProcessID", 0)
+	assertLogAttrStr(t, m2, "ProviderGuid", "")
+	assertLogAttrStr(t, m2, "ProviderName", "")
+	assertLogAttrInt(t, m2, "Qualifiers", 0)
+	assertLogAttrStr(t, m2, "RelatedActivityID", "")
+	assertLogAttrStrSlice(t, m2, "StringInserts", []string{})
+	assertLogAttrInt(t, m2, "Task", 0)
+	assertLogAttrInt(t, m2, "ThreadId", 0)
+	assertLogAttrStr(t, m2, "UserId", "")
+	assertLogAttrInt(t, m2, "Version", 0)
+}
+
+func TestWindowsEventLogRawXMLTransformation(t *testing.T) {
+	configYAML := `logging:
+  receivers:
+    winlog2_xml:
+      type: windows_event_log
+      receiver_version: 2
+      render_as_xml: true
+      channels:
+        - Security
+  service:
+    pipelines:
+      winlog2_xml:
+        receivers: [winlog2_xml]
+`
+	info := hostInfo{OS: "windows", Platform: "Microsoft Windows Server 2022 Datacenter", PlatformVersion: "10.0.20348 Build 20348", Hostname: "win-xml-host"}
+	chain, sink := buildLogsProcessorChainForHost(t, configYAML, info, []string{
+		"transform/logging_winlog2__xml_0",
+		"transform/logging_winlog2__xml_1",
+		"transform/logging_winlog2__xml_2",
+	})
+
+	rawXML := `<Event><System><EventID>4624</EventID></System><RenderingInfo><Message>XML mode message.</Message></RenderingInfo></Event>`
+	ld := plog.NewLogs()
+	sl := ld.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty()
+	lr := sl.LogRecords().AppendEmpty()
+	lr.Attributes().PutStr("log.record.original", rawXML)
+	b := lr.Body().SetEmptyMap()
+	ed := b.PutEmptyMap("event_data")
+	dataSlice := ed.PutEmptySlice("data")
+	dataSlice.AppendEmpty().SetEmptyMap().PutStr("TargetUserName", "Administrator")
+	ed.PutStr("binary", "0102")
+
+	require.NoError(t, chain.ConsumeLogs(context.Background(), ld))
+
+	allLogs := sink.AllLogs()
+	require.Len(t, allLogs, 1)
+	outRec := allLogs[0].ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().At(0)
+
+	_, hasOrig := outRec.Attributes().Get("log.record.original")
+	assert.False(t, hasOrig, "log.record.original should be moved out of attributes")
+	assertLogAttrStr(t, outRec.Attributes(), "gcp.log_name", "winlog2_xml")
+	assertLogAttrStr(t, outRec.Attributes(), "compute.googleapis.com/resource_name", "win-xml-host")
+
+	m := outRec.Body().Map()
+	assert.Equal(t, 3, m.Len())
+	assertLogAttrStr(t, m, "Message", "XML mode message.")
+	assertLogAttrStrSlice(t, m, "StringInserts", []string{"Administrator", "0102"})
+	assertLogAttrStr(t, m, "raw_xml", rawXML)
 }

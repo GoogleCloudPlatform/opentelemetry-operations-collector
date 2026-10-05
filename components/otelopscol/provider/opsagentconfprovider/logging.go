@@ -46,6 +46,9 @@ type LoggingReceiver struct {
 	TransportProtocol       string   `yaml:"transport_protocol,omitempty"`
 	ListenHost              string   `yaml:"listen_host,omitempty"`
 	ListenPort              uint16   `yaml:"listen_port,omitempty"`
+	Channels                []string `yaml:"channels,omitempty"`
+	ReceiverVersion         string   `yaml:"receiver_version,omitempty"`
+	RenderAsXML             bool     `yaml:"render_as_xml,omitempty"`
 }
 
 // LoggingProcessor represents a logging processor in the Ops Agent configuration.
@@ -57,6 +60,7 @@ type LoggingProcessor struct {
 	Regex      string                  `yaml:"regex,omitempty"`
 	MatchAny   []string                `yaml:"match_any,omitempty"`
 	Fields     map[string]*ModifyField `yaml:"fields,omitempty"`
+	EmptyBody  bool                    `yaml:"-"`
 }
 
 // LoggingService represents the logging service section in the Ops Agent configuration.
@@ -68,11 +72,18 @@ type LoggingService struct {
 func defaultLoggingConfig(isWindows bool) *Logging {
 	if isWindows {
 		return &Logging{
-			Receivers:  map[string]LoggingReceiver{},
+			Receivers: map[string]LoggingReceiver{
+				"windows_event_log": {
+					Type:     "windows_event_log",
+					Channels: []string{"System", "Application", "Security"},
+				},
+			},
 			Processors: map[string]LoggingProcessor{},
 			Service: &LoggingService{
 				Pipelines: map[string]*Pipeline{
-					"default_pipeline": {},
+					"default_pipeline": {
+						ReceiverIDs: []string{"windows_event_log"},
+					},
 				},
 			},
 		}
@@ -154,6 +165,42 @@ func (r LoggingReceiver) validateNoNetworkFields(id string) error {
 	return nil
 }
 
+func (r LoggingReceiver) validateNoWindowsEventLogFields(id string) error {
+	if len(r.Channels) > 0 {
+		return fmt.Errorf("logging receiver %q with type %q does not support channels", id, r.Type)
+	}
+	if r.ReceiverVersion != "" {
+		return fmt.Errorf("logging receiver %q with type %q does not support receiver_version", id, r.Type)
+	}
+	if r.RenderAsXML {
+		return fmt.Errorf("logging receiver %q with type %q does not support render_as_xml", id, r.Type)
+	}
+	return nil
+}
+
+func (r LoggingReceiver) validateDisallowedFields(id string) error {
+	if r.Type != "files" {
+		if err := r.validateNoFilesFields(id); err != nil {
+			return err
+		}
+	}
+	if r.Type != "syslog" && r.Type != "fluent_forward" {
+		if err := r.validateNoNetworkFields(id); err != nil {
+			return err
+		}
+	}
+	if r.Type != "windows_event_log" {
+		if err := r.validateNoWindowsEventLogFields(id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r LoggingReceiver) isDefaultVersion() bool {
+	return r.ReceiverVersion == "" || r.ReceiverVersion == "1"
+}
+
 func (r LoggingReceiver) listenHost() string {
 	if r.ListenHost == "" {
 		return defaultFluentForwardHost
@@ -183,7 +230,7 @@ func (l *Logging) validate(combined *Combined, isWindows bool) error {
 		r := l.Receivers[id]
 		switch r.Type {
 		case "files":
-			if err := r.validateNoNetworkFields(id); err != nil {
+			if err := r.validateDisallowedFields(id); err != nil {
 				return err
 			}
 			if len(r.IncludePaths) == 0 {
@@ -198,7 +245,7 @@ func (l *Logging) validate(combined *Combined, isWindows bool) error {
 				return err
 			}
 		case "syslog":
-			if err := r.validateNoFilesFields(id); err != nil {
+			if err := r.validateDisallowedFields(id); err != nil {
 				return err
 			}
 			switch r.TransportProtocol {
@@ -213,7 +260,7 @@ func (l *Logging) validate(combined *Combined, isWindows bool) error {
 				return fmt.Errorf("logging receiver %q with type %q requires non-zero listen_port", id, r.Type)
 			}
 		case "fluent_forward":
-			if err := r.validateNoFilesFields(id); err != nil {
+			if err := r.validateDisallowedFields(id); err != nil {
 				return err
 			}
 			if r.TransportProtocol != "" {
@@ -226,11 +273,39 @@ func (l *Logging) validate(combined *Combined, isWindows bool) error {
 			if isWindows {
 				return fmt.Errorf("logging receiver %q with type %q is not supported", id, r.Type)
 			}
-			if err := r.validateNoFilesFields(id); err != nil {
+			if err := r.validateDisallowedFields(id); err != nil {
 				return err
 			}
-			if err := r.validateNoNetworkFields(id); err != nil {
+		case "windows_event_log":
+			if !isWindows {
+				return fmt.Errorf("logging receiver %q with type %q is not supported", id, r.Type)
+			}
+			if err := r.validateDisallowedFields(id); err != nil {
 				return err
+			}
+			switch r.ReceiverVersion {
+			case "", "1", "2":
+			default:
+				return fmt.Errorf("logging receiver %q with type %q has invalid receiver_version %q: must be one of [1 2]", id, r.Type, r.ReceiverVersion)
+			}
+			if r.RenderAsXML && r.isDefaultVersion() {
+				return fmt.Errorf("logging receiver %q with type %q does not support render_as_xml for receiver_version 1; use receiver_version: 2", id, r.Type)
+			}
+			if len(r.Channels) == 0 {
+				return fmt.Errorf("logging receiver %q with type %q requires non-empty channels", id, r.Type)
+			}
+			if !r.isDefaultVersion() {
+				seen := make(map[string]bool, len(r.Channels))
+				for i, ch := range r.Channels {
+					if strings.ContainsRune(ch, ',') {
+						return fmt.Errorf("logging receiver %q with type %q has invalid channels[%d] (%s): cannot contain ','", id, r.Type, i, ch)
+					}
+					lower := strings.ToLower(ch)
+					if seen[lower] {
+						return fmt.Errorf("logging receiver %q with type %q has duplicate channel %q", id, r.Type, ch)
+					}
+					seen[lower] = true
+				}
 			}
 		default:
 			return fmt.Errorf("logging receiver %q with type %q is not supported", id, r.Type)
@@ -373,6 +448,18 @@ func journaldReceiver() map[string]any {
 	}
 }
 
+func windowsEventLogReceiver(channel string) map[string]any {
+	return map[string]any{
+		"channel":                     channel,
+		"start_at":                    "beginning",
+		"event_data_format":           "array",
+		"poll_interval":               "1s",
+		"ignore_channel_errors":       true,
+		"storage":                     fileStorageExtensionType,
+		"include_log_record_original": true,
+	}
+}
+
 func (l *Logging) resolvePipelineProcessorSpecs(processorIDs []string) []otelProcessorSpec {
 	var specs []otelProcessorSpec
 	for _, prID := range processorIDs {
@@ -463,6 +550,37 @@ func (b *collectorConfig) addLoggingPipelines(l *Logging, combined *Combined, in
 						pipelineProcessorSpecs,
 						true,
 					)
+				case "windows_event_log":
+					for i, ch := range r.Channels {
+						channelPipelineName := receiverPipelineName
+						if i > 0 {
+							channelPipelineName = fmt.Sprintf("%s_%d", receiverPipelineName, i)
+						}
+						channelPrefix := fmt.Sprintf("logs_%s_%s", escapedPID, channelPipelineName)
+						receiverName := fmt.Sprintf("windowseventlog/%s", channelPipelineName)
+						b.receivers[receiverName] = windowsEventLogReceiver(ch)
+						var transformProc map[string]any
+						switch {
+						case r.isDefaultVersion():
+							transformProc = windowsEventLogV1TransformProcessor()
+						case r.RenderAsXML:
+							transformProc = windowsEventLogRawXMLTransformProcessor()
+						default:
+							transformProc = windowsEventLogV2TransformProcessor()
+						}
+						b.registerLoggingPipeline(
+							channelPrefix,
+							receiverName,
+							numberedTransformProcessors(
+								channelPipelineName,
+								windowsEventLogParseXMLProcessor(!r.RenderAsXML),
+								transformProc,
+								setLogNameProcessor(rID, info.Hostname),
+							),
+							pipelineProcessorSpecs,
+							true,
+						)
+					}
 				}
 				continue
 			}

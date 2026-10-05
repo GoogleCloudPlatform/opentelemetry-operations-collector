@@ -44,6 +44,7 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/sqlserverreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/syslogreceiver"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowseventlogreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowsperfcountersreceiver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -80,6 +81,7 @@ func testFactories(t *testing.T) otelcol.Factories {
 		prometheusreceiver.NewFactory(),
 		sqlserverreceiver.NewFactory(),
 		syslogreceiver.NewFactory(),
+		windowseventlogreceiver.NewFactory(),
 		windowsperfcountersreceiver.NewFactory(),
 	)
 	require.NoError(t, err)
@@ -517,6 +519,30 @@ traces:
           - lib:nginx
           - lib:syslog-rfc3164
           - lib:syslog-rfc5424
+`,
+		},
+		{
+			name:      "windows_event_log_v1_v2_and_xml",
+			isWindows: true,
+			config: `logging:
+  receivers:
+    winlog2:
+      type: windows_event_log
+      receiver_version: 2
+      channels:
+        - System
+        - Application
+        - Microsoft-Windows-Windows Defender/Operational
+    winlog2_xml:
+      type: windows_event_log
+      receiver_version: 2
+      render_as_xml: true
+      channels:
+        - Security
+  service:
+    pipelines:
+      winlog2:
+        receivers: [winlog2, winlog2_xml]
 `,
 		},
 	}

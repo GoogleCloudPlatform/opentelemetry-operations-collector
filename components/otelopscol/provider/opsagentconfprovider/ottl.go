@@ -131,6 +131,12 @@ func (a ottlLValue) SetIf(b, condition ottlValue) ottlStatements {
 	return statements
 }
 
+func (a ottlLValue) AppendValuesIf(b, condition ottlValue) ottlStatements {
+	return ottlStatements{
+		ottlStatementf(`append(%s, %s) where %s`, a, b, condition),
+	}
+}
+
 func (a ottlLValue) MergeMaps(source ottlValue, strategy string) ottlStatements {
 	return a.MergeMapsIf(source, strategy, ottlIsNotNil(source))
 }
@@ -174,8 +180,36 @@ func ottlParseJSON(a ottlValue) ottlValue {
 	return ottlValuef(`ParseJSON(%s)`, a)
 }
 
+func ottlParseSimplifiedXML(a ottlValue) ottlValue {
+	return ottlValuef(`ParseSimplifiedXML(%s)`, a)
+}
+
 func ottlExtractPatternsRubyRegex(a ottlValue, pattern string, omitEmptyValues bool) ottlValue {
 	return ottlValuef(`ExtractPatternsRubyRegex(%s, %q, %v)`, a, pattern, omitEmptyValues)
+}
+
+func ottlConcat(values []ottlValue, delimiter string) ottlValue {
+	stringValues := make([]string, 0, len(values))
+	for _, v := range values {
+		stringValues = append(stringValues, v.String())
+	}
+	return ottlValuef(`Concat([%s], "%s")`, strings.Join(stringValues, ","), delimiter)
+}
+
+func ottlConvertCase(a ottlValue, toCase string) ottlValue {
+	return ottlValuef(`ConvertCase(%s, %q)`, a, toCase)
+}
+
+func ottlContainsValue(a ottlValue, value string) ottlValue {
+	return ottlValuef(`ContainsValue(%s, %q)`, a, value)
+}
+
+func ottlFormatTime(a ottlValue, format string) ottlValue {
+	return ottlValuef(`FormatTime(%s, %q)`, a, format)
+}
+
+func ottlToValues(a ottlValue) ottlValue {
+	return ottlValuef(`ToValues(%s)`, a)
 }
 
 func ottlIsMatch(target ottlValue, pattern string) ottlValue {
@@ -230,6 +264,14 @@ func (a ottlLValue) DeleteIf(cond ottlValue) ottlStatements {
 	return ottlStatements{
 		ottlStatementf(`delete_key(%s, %q) where %s`, parent, child, ottlAnd(a.IsPresent(), cond)),
 	}
+}
+
+func (a ottlLValue) KeepKeys(keys ...string) ottlStatements {
+	quotedKeys := make([]string, 0, len(keys))
+	for _, k := range keys {
+		quotedKeys = append(quotedKeys, fmt.Sprintf("%q", k))
+	}
+	return ottlStatementsf(`keep_keys(%s, [%s])`, a, strings.Join(quotedKeys, ", "))
 }
 
 func newOTTLStatements(a ...ottlStatements) ottlStatements {

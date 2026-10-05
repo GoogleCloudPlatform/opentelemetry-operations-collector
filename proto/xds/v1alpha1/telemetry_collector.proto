@@ -17,6 +17,7 @@ syntax = "proto3";
 package google.telemetry.xds.v1alpha1;
 
 import "google/protobuf/any.proto";
+import "google/protobuf/timestamp.proto";
 
 option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/xds/v1alpha1;xdsv1alpha1";
 
@@ -44,4 +45,12 @@ message TelemetryCollector {
   // manifest. This is NOT the xDS `DiscoveryResponse.version_info`, which
   // versions the response snapshot and is owned by the control plane.
   string policy_set_revision = 2;
+
+  // Time the management plane created the PolicySet revision named by
+  // `policy_set_revision`. Revisions of a policy set are immutable and created
+  // in order, so this can be compared across collectors to measure how fresh
+  // each collector's policies are.
+  //
+  // Unset when `policy_set_revision` is unset.
+  google.protobuf.Timestamp policy_set_revision_create_time = 3;
 }

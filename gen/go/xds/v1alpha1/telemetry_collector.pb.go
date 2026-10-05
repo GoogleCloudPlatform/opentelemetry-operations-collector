@@ -24,6 +24,7 @@ import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	anypb "google.golang.org/protobuf/types/known/anypb"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -61,8 +62,15 @@ type TelemetryCollector struct {
 	// manifest. This is NOT the xDS `DiscoveryResponse.version_info`, which
 	// versions the response snapshot and is owned by the control plane.
 	PolicySetRevision string `protobuf:"bytes,2,opt,name=policy_set_revision,json=policySetRevision,proto3" json:"policy_set_revision,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// Time the management plane created the PolicySet revision named by
+	// `policy_set_revision`. Revisions of a policy set are immutable and created
+	// in order, so this can be compared across collectors to measure how fresh
+	// each collector's policies are.
+	//
+	// Unset when `policy_set_revision` is unset.
+	PolicySetRevisionCreateTime *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=policy_set_revision_create_time,json=policySetRevisionCreateTime,proto3" json:"policy_set_revision_create_time,omitempty"`
+	unknownFields               protoimpl.UnknownFields
+	sizeCache                   protoimpl.SizeCache
 }
 
 func (x *TelemetryCollector) Reset() {
@@ -109,14 +117,22 @@ func (x *TelemetryCollector) GetPolicySetRevision() string {
 	return ""
 }
 
+func (x *TelemetryCollector) GetPolicySetRevisionCreateTime() *timestamppb.Timestamp {
+	if x != nil {
+		return x.PolicySetRevisionCreateTime
+	}
+	return nil
+}
+
 var File_xds_v1alpha1_telemetry_collector_proto protoreflect.FileDescriptor
 
 const file_xds_v1alpha1_telemetry_collector_proto_rawDesc = "" +
 	"\n" +
-	"&xds/v1alpha1/telemetry_collector.proto\x12\x1dgoogle.telemetry.xds.v1alpha1\x1a\x19google/protobuf/any.proto\"v\n" +
+	"&xds/v1alpha1/telemetry_collector.proto\x12\x1dgoogle.telemetry.xds.v1alpha1\x1a\x19google/protobuf/any.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xd8\x01\n" +
 	"\x12TelemetryCollector\x120\n" +
 	"\bpolicies\x18\x01 \x03(\v2\x14.google.protobuf.AnyR\bpolicies\x12.\n" +
-	"\x13policy_set_revision\x18\x02 \x01(\tR\x11policySetRevisionB\xb6\x02\n" +
+	"\x13policy_set_revision\x18\x02 \x01(\tR\x11policySetRevision\x12`\n" +
+	"\x1fpolicy_set_revision_create_time\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x1bpolicySetRevisionCreateTimeB\xb6\x02\n" +
 	"!com.google.telemetry.xds.v1alpha1B\x17TelemetryCollectorProtoP\x01Zagithub.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/xds/v1alpha1;xdsv1alpha1\xa2\x02\x03GTX\xaa\x02\x1dGoogle.Telemetry.Xds.V1alpha1\xca\x02\x1dGoogle\\Telemetry\\Xds\\V1alpha1\xe2\x02)Google\\Telemetry\\Xds\\V1alpha1\\GPBMetadata\xea\x02 Google::Telemetry::Xds::V1alpha1b\x06proto3"
 
 var (
@@ -133,16 +149,18 @@ func file_xds_v1alpha1_telemetry_collector_proto_rawDescGZIP() []byte {
 
 var file_xds_v1alpha1_telemetry_collector_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
 var file_xds_v1alpha1_telemetry_collector_proto_goTypes = []any{
-	(*TelemetryCollector)(nil), // 0: google.telemetry.xds.v1alpha1.TelemetryCollector
-	(*anypb.Any)(nil),          // 1: google.protobuf.Any
+	(*TelemetryCollector)(nil),    // 0: google.telemetry.xds.v1alpha1.TelemetryCollector
+	(*anypb.Any)(nil),             // 1: google.protobuf.Any
+	(*timestamppb.Timestamp)(nil), // 2: google.protobuf.Timestamp
 }
 var file_xds_v1alpha1_telemetry_collector_proto_depIdxs = []int32{
 	1, // 0: google.telemetry.xds.v1alpha1.TelemetryCollector.policies:type_name -> google.protobuf.Any
-	1, // [1:1] is the sub-list for method output_type
-	1, // [1:1] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	2, // 1: google.telemetry.xds.v1alpha1.TelemetryCollector.policy_set_revision_create_time:type_name -> google.protobuf.Timestamp
+	2, // [2:2] is the sub-list for method output_type
+	2, // [2:2] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_xds_v1alpha1_telemetry_collector_proto_init() }

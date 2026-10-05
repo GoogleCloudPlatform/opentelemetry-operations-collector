@@ -183,7 +183,7 @@ func buildProcessorChainWithConfig(t *testing.T, configYAML string, procIDs []st
 	return buildProcessorChainForHost(t, configYAML, detectHostInfo(), procIDs)
 }
 
-func buildProcessorChainForHost(t *testing.T, configYAML string, info hostInfo, procIDs []string) (consumer.Metrics, *consumertest.MetricsSink) {
+func getTestCollectorConfig(t *testing.T, configYAML string, info hostInfo) (*otelcol.Config, otelcol.Factories) {
 	t.Helper()
 	ctx := context.Background()
 	configFile, _ := writeTestConfig(t, configYAML)
@@ -209,6 +209,13 @@ func buildProcessorChainForHost(t *testing.T, configYAML string, info hostInfo, 
 
 	cfg, err := configProvider.Get(ctx, factories)
 	require.NoError(t, err)
+	return cfg, factories
+}
+
+func buildProcessorChainForHost(t *testing.T, configYAML string, info hostInfo, procIDs []string) (consumer.Metrics, *consumertest.MetricsSink) {
+	t.Helper()
+	ctx := context.Background()
+	cfg, factories := getTestCollectorConfig(t, configYAML, info)
 
 	sink := new(consumertest.MetricsSink)
 	var next consumer.Metrics = sink

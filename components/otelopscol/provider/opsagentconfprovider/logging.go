@@ -17,9 +17,16 @@ package opsagentconfprovider
 import (
 	"fmt"
 	"maps"
+	"net"
 	"slices"
 	"strings"
 	"time"
+)
+
+const (
+	defaultFluentForwardHost     = "127.0.0.1"
+	defaultFluentForwardPort     = uint16(24224)
+	defaultSyslogProtocolRFC5424 = "rfc5424"
 )
 
 // Logging represents logging pipelines, receivers, and processors in the Ops Agent configuration.
@@ -36,6 +43,9 @@ type LoggingReceiver struct {
 	ExcludePaths            []string `yaml:"exclude_paths,omitempty"`
 	WildcardRefreshInterval string   `yaml:"wildcard_refresh_interval,omitempty"`
 	RecordLogFilePath       *bool    `yaml:"record_log_file_path,omitempty"`
+	TransportProtocol       string   `yaml:"transport_protocol,omitempty"`
+	ListenHost              string   `yaml:"listen_host,omitempty"`
+	ListenPort              uint16   `yaml:"listen_port,omitempty"`
 }
 
 // LoggingProcessor represents a logging processor in the Ops Agent configuration.
@@ -109,7 +119,57 @@ func validateWildcardRefreshInterval(id, interval string) error {
 	return nil
 }
 
-func (l *Logging) validate(combined *Combined) error {
+func (r LoggingReceiver) validateNoFilesFields(id string) error {
+	if len(r.IncludePaths) > 0 {
+		return fmt.Errorf("logging receiver %q with type %q does not support include_paths", id, r.Type)
+	}
+	if len(r.ExcludePaths) > 0 {
+		return fmt.Errorf("logging receiver %q with type %q does not support exclude_paths", id, r.Type)
+	}
+	if r.WildcardRefreshInterval != "" {
+		return fmt.Errorf("logging receiver %q with type %q does not support wildcard_refresh_interval", id, r.Type)
+	}
+	if r.RecordLogFilePath != nil {
+		return fmt.Errorf("logging receiver %q with type %q does not support record_log_file_path", id, r.Type)
+	}
+	return nil
+}
+
+func (r LoggingReceiver) validateNoNetworkFields(id string) error {
+	if r.TransportProtocol != "" {
+		return fmt.Errorf("logging receiver %q with type %q does not support transport_protocol", id, r.Type)
+	}
+	if r.ListenHost != "" {
+		return fmt.Errorf("logging receiver %q with type %q does not support listen_host", id, r.Type)
+	}
+	if r.ListenPort != 0 {
+		return fmt.Errorf("logging receiver %q with type %q does not support listen_port", id, r.Type)
+	}
+	return nil
+}
+
+func (r LoggingReceiver) listenHost() string {
+	if r.ListenHost == "" {
+		return defaultFluentForwardHost
+	}
+	return r.ListenHost
+}
+
+func (r LoggingReceiver) listenPort() (uint16, bool) {
+	switch r.Type {
+	case "syslog":
+		return r.ListenPort, true
+	case "fluent_forward":
+		if r.ListenPort == 0 {
+			return defaultFluentForwardPort, true
+		}
+		return r.ListenPort, true
+	default:
+		return 0, false
+	}
+}
+
+func (l *Logging) validate(combined *Combined, isWindows bool) error {
 	for _, id := range slices.Sorted(maps.Keys(l.Receivers)) {
 		if err := validateComponentID("logging", "receiver", id); err != nil {
 			return err
@@ -117,6 +177,9 @@ func (l *Logging) validate(combined *Combined) error {
 		r := l.Receivers[id]
 		switch r.Type {
 		case "files":
+			if err := r.validateNoNetworkFields(id); err != nil {
+				return err
+			}
 			if len(r.IncludePaths) == 0 {
 				return fmt.Errorf("logging receiver %q with type %q requires non-empty include_paths", id, r.Type)
 			}
@@ -126,6 +189,41 @@ func (l *Logging) validate(combined *Combined) error {
 				}
 			}
 			if err := validateWildcardRefreshInterval(id, r.WildcardRefreshInterval); err != nil {
+				return err
+			}
+		case "syslog":
+			if err := r.validateNoFilesFields(id); err != nil {
+				return err
+			}
+			switch r.TransportProtocol {
+			case "tcp", "udp":
+			default:
+				return fmt.Errorf("logging receiver %q with type %q has invalid transport_protocol %q: must be one of [tcp udp]", id, r.Type, r.TransportProtocol)
+			}
+			if r.ListenHost == "" || net.ParseIP(r.ListenHost) == nil {
+				return fmt.Errorf("logging receiver %q with type %q has invalid listen_host %q: must be a valid IP address", id, r.Type, r.ListenHost)
+			}
+			if r.ListenPort == 0 {
+				return fmt.Errorf("logging receiver %q with type %q requires non-zero listen_port", id, r.Type)
+			}
+		case "fluent_forward":
+			if err := r.validateNoFilesFields(id); err != nil {
+				return err
+			}
+			if r.TransportProtocol != "" {
+				return fmt.Errorf("logging receiver %q with type %q does not support transport_protocol", id, r.Type)
+			}
+			if r.ListenHost != "" && net.ParseIP(r.ListenHost) == nil {
+				return fmt.Errorf("logging receiver %q with type %q has invalid listen_host %q: must be a valid IP address", id, r.Type, r.ListenHost)
+			}
+		case "systemd_journald":
+			if isWindows {
+				return fmt.Errorf("logging receiver %q with type %q is not supported", id, r.Type)
+			}
+			if err := r.validateNoFilesFields(id); err != nil {
+				return err
+			}
+			if err := r.validateNoNetworkFields(id); err != nil {
 				return err
 			}
 		default:
@@ -161,6 +259,7 @@ func (l *Logging) validate(combined *Combined) error {
 		}
 	}
 
+	portTaken := map[uint16]string{}
 	for _, pID := range slices.Sorted(maps.Keys(l.Service.Pipelines)) {
 		if err := validateComponentID("logging", "pipeline", pID); err != nil {
 			return err
@@ -170,8 +269,24 @@ func (l *Logging) validate(combined *Combined) error {
 			continue
 		}
 		for _, rID := range p.ReceiverIDs {
-			if _, ok := l.Receivers[rID]; !ok {
+			r, inLogging := l.Receivers[rID]
+			inCombined := combined != nil && combined.Receivers != nil
+			if inCombined {
+				_, inCombined = combined.Receivers[rID]
+			}
+			if !inLogging && !inCombined {
 				return fmt.Errorf("logging receiver %q from pipeline %q is not defined", rID, pID)
+			}
+			if inLogging {
+				if port, ok := r.listenPort(); ok {
+					if prevRID, taken := portTaken[port]; taken {
+						if prevRID == rID {
+							return fmt.Errorf("logging receiver %q listening on port %d cannot be used in two pipelines", rID, port)
+						}
+						return fmt.Errorf("two logging receivers %q and %q cannot listen on the same port %d", prevRID, rID, port)
+					}
+					portTaken[port] = rID
+				}
 			}
 		}
 		for _, prID := range p.ProcessorIDs {
@@ -225,7 +340,31 @@ func (r LoggingReceiver) filesReceiver() map[string]any {
 	return cfg
 }
 
-func (b *collectorConfig) addLoggingPipelines(l *Logging, info hostInfo) {
+func (r LoggingReceiver) syslogReceiver() map[string]any {
+	return map[string]any{
+		r.TransportProtocol: map[string]any{
+			"listen_address": fmt.Sprintf("%s:%d", r.ListenHost, r.ListenPort),
+		},
+		"protocol": defaultSyslogProtocolRFC5424,
+	}
+}
+
+func (r LoggingReceiver) fluentForwardReceiver() map[string]any {
+	port, _ := r.listenPort()
+	return map[string]any{
+		"endpoint": fmt.Sprintf("%s:%d", r.listenHost(), port),
+	}
+}
+
+func journaldReceiver() map[string]any {
+	return map[string]any{
+		"start_at": "beginning",
+		"priority": "debug",
+		"storage":  fileStorageExtensionType,
+	}
+}
+
+func (b *collectorConfig) addLoggingPipelines(l *Logging, combined *Combined, info hostInfo) {
 	if l == nil || l.Service == nil {
 		return
 	}
@@ -245,27 +384,98 @@ func (b *collectorConfig) addLoggingPipelines(l *Logging, info hostInfo) {
 				case "files":
 					receiverName := fmt.Sprintf("file_log/%s", receiverPipelineName)
 					b.receivers[receiverName] = r.filesReceiver()
-					receiverProcessors := []namedProcessor{
-						{
-							id:     fmt.Sprintf("transform/%s_0", receiverPipelineName),
-							config: setLogNameProcessor(rID, info.Hostname),
-						},
-					}
-					b.registerLoggingPipeline(prefix, receiverName, receiverProcessors)
+					b.registerLoggingPipeline(
+						prefix,
+						receiverName,
+						numberedTransformProcessors(receiverPipelineName, setLogNameProcessor(rID, info.Hostname)),
+						true,
+					)
+				case "syslog":
+					receiverName := fmt.Sprintf("syslog/%s", receiverPipelineName)
+					b.receivers[receiverName] = r.syslogReceiver()
+					b.registerLoggingPipeline(
+						prefix,
+						receiverName,
+						numberedTransformProcessors(
+							receiverPipelineName,
+							syslogTransformProcessor(),
+							setLogNameProcessor(rID, info.Hostname),
+						),
+						true,
+					)
+				case "fluent_forward":
+					receiverName := fmt.Sprintf("fluentforward/%s", receiverPipelineName)
+					b.receivers[receiverName] = r.fluentForwardReceiver()
+					b.registerLoggingPipeline(
+						prefix,
+						receiverName,
+						numberedTransformProcessors(
+							receiverPipelineName,
+							fluentForwardTransformProcessor(),
+							setLogNameProcessor(rID, info.Hostname),
+							fluentForwardSetLogNameProcessor(),
+						),
+						true,
+					)
+				case "systemd_journald":
+					receiverName := fmt.Sprintf("journald/%s", receiverPipelineName)
+					b.receivers[receiverName] = journaldReceiver()
+					b.registerLoggingPipeline(
+						prefix,
+						receiverName,
+						numberedTransformProcessors(
+							receiverPipelineName,
+							journaldTransformProcessor(),
+							setLogNameProcessor(rID, info.Hostname),
+						),
+						true,
+					)
+				}
+				continue
+			}
+
+			if combined != nil {
+				if cr, ok := combined.Receivers[rID]; ok && cr.Type == "otlp" {
+					receiverPipelineName := escapedRID
+					prefix := fmt.Sprintf("logs_%s_%s", escapedPID, receiverPipelineName)
+					receiverName := fmt.Sprintf("otlp/%s", receiverPipelineName)
+					b.receivers[receiverName] = cr.otlpReceiver()
+					b.registerLoggingPipeline(
+						prefix,
+						receiverName,
+						numberedTransformProcessors(receiverPipelineName, setLogNameProcessor(rID, info.Hostname)),
+						false,
+					)
 				}
 			}
 		}
 	}
 }
 
-func (b *collectorConfig) registerLoggingPipeline(prefix, receiverName string, receiverProcessors []namedProcessor) {
+func numberedTransformProcessors(receiverPipelineName string, configs ...map[string]any) []namedProcessor {
+	out := make([]namedProcessor, 0, len(configs))
+	for i, cfg := range configs {
+		out = append(out, namedProcessor{
+			id:     fmt.Sprintf("transform/%s_%d", receiverPipelineName, i),
+			config: cfg,
+		})
+	}
+	return out
+}
+
+func (b *collectorConfig) registerLoggingPipeline(prefix, receiverName string, receiverProcessors []namedProcessor, overrideResource bool) {
+	resourceDetectionID := "resourcedetection/_global_0"
+	if !overrideResource {
+		resourceDetectionID = "resourcedetection/_global_1"
+		b.processors[resourceDetectionID] = gcpResourceDetectorProcessor(false)
+	}
 	b.processors["resource/otlp_grpc/otlp_logs_logs_1"] = disableOtlpRoundTripProcessor()
 	b.processors["transform/otlp_grpc/otlp_logs_logs_2"] = preserveInstrumentationScopeProcessor()
 	b.processors["transform/otlp_grpc/otlp_logs_logs_3"] = copyServiceResourceLabelsProcessor()
 
 	processorNames := append(
 		registerProcessors(b.processors, receiverProcessors),
-		"resourcedetection/_global_0",
+		resourceDetectionID,
 		"resource/otlp_grpc/otlp_logs_logs_1",
 		"transform/otlp_grpc/otlp_logs_logs_2",
 		"transform/otlp_grpc/otlp_logs_logs_3",

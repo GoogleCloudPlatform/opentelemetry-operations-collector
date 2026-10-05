@@ -37,10 +37,13 @@ import (
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourceprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/fluentforwardreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/iisreceiver"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/journaldreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/sqlserverreceiver"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/syslogreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowsperfcountersreceiver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -68,12 +71,15 @@ func testFactories(t *testing.T) otelcol.Factories {
 	factories.Receivers, err = otelcol.MakeFactoryMap[receiver.Factory](
 		dcgmreceiver.NewFactory(),
 		filelogreceiver.NewFactory(),
+		fluentforwardreceiver.NewFactory(),
 		hostmetricsreceiver.NewFactory(),
 		iisreceiver.NewFactory(),
+		journaldreceiver.NewFactory(),
 		nvmlreceiver.NewFactory(),
 		otlpreceiver.NewFactory(),
 		prometheusreceiver.NewFactory(),
 		sqlserverreceiver.NewFactory(),
+		syslogreceiver.NewFactory(),
 		windowsperfcountersreceiver.NewFactory(),
 	)
 	require.NoError(t, err)
@@ -425,6 +431,39 @@ traces:
     pipelines:
       default_pipeline:
         receivers: [syslog, app_logs]
+`,
+		},
+		{
+			name: "linux_network_and_journald_logging_and_otlp_logs",
+			config: `combined:
+  receivers:
+    otlp:
+      type: otlp
+logging:
+  receivers:
+    syslog_tcp:
+      type: syslog
+      transport_protocol: tcp
+      listen_host: 127.0.0.1
+      listen_port: 5140
+    syslog_udp:
+      type: syslog
+      transport_protocol: udp
+      listen_host: 0.0.0.0
+      listen_port: 5141
+    fluent_default:
+      type: fluent_forward
+    systemd_logs:
+      type: systemd_journald
+  service:
+    pipelines:
+      default_pipeline:
+        receivers: [syslog, syslog_tcp, syslog_udp, fluent_default, systemd_logs, otlp]
+traces:
+  service:
+    pipelines:
+      otlp_traces:
+        receivers: [otlp]
 `,
 		},
 	}

@@ -20,10 +20,13 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/processor/resourceprocessor v0.162.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor v0.162.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver v0.162.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/fluentforwardreceiver v0.162.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/hostmetricsreceiver v0.162.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/iisreceiver v0.162.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/journaldreceiver v0.162.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver v0.162.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/sqlserverreceiver v0.162.0
+	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/syslogreceiver v0.162.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowsperfcountersreceiver v0.162.0
 	github.com/prometheus/common v0.71.0
 	github.com/prometheus/prometheus v0.314.0
@@ -287,6 +290,7 @@ require (
 	github.com/pb33f/jsonpath v0.8.2 // indirect
 	github.com/pb33f/libopenapi v0.38.7 // indirect
 	github.com/pb33f/ordered-map/v2 v2.3.1 // indirect
+	github.com/philhofer/fwd v1.2.0 // indirect
 	github.com/pierrec/lz4/v4 v4.1.30 // indirect
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c // indirect
 	github.com/pkg/errors v0.9.1 // indirect
@@ -315,6 +319,7 @@ require (
 	github.com/stackitcloud/stackit-sdk-go/core v0.26.0 // indirect
 	github.com/stretchr/objx v0.5.3 // indirect
 	github.com/tilinna/clock v1.1.0 // indirect
+	github.com/tinylib/msgp v1.6.4 // indirect
 	github.com/tklauser/go-sysconf v0.4.0 // indirect
 	github.com/tklauser/numcpus v0.12.0 // indirect
 	github.com/twmb/murmur3 v1.2.0 // indirect

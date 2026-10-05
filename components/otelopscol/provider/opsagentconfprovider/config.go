@@ -70,7 +70,7 @@ func readConfig(configPath string) (*Config, error) {
 func (c *Config) generateOtelConfig(_ context.Context, stateDir string, info hostInfo) (map[string]any, error) {
 	isWindows := info.OS == "windows"
 	loggingCfg := mergeLoggingConfig(c.Logging, isWindows)
-	if err := loggingCfg.validate(c.Combined); err != nil {
+	if err := loggingCfg.validate(c.Combined, isWindows); err != nil {
 		return nil, err
 	}
 	metricsCfg := mergeMetricsConfig(c.Metrics, isWindows)
@@ -112,10 +112,14 @@ func (c *Config) generateOtelConfig(_ context.Context, stateDir string, info hos
 	}
 
 	b.addSelfMetrics(defaultMetricsPort, versionLabel, defaultMetricsProcessors)
-	b.addLoggingPipelines(loggingCfg, info)
+	b.addLoggingPipelines(loggingCfg, c.Combined, info)
 	b.addMetricsPipelines(metricsCfg, c.Combined, info, defaultMetricsProcessors)
 	b.addTracesPipelines(c.Traces, c.Combined, userAgent)
 
+	// In legacy Ops Agent, logging.service.log_level configured Fluent Bit while
+	// metrics.service.log_level configured the OTel Collector. We keep validating
+	// logging.service.log_level for backward compatibility and use metrics.service.log_level
+	// for the OTel Collector's internal telemetry log level.
 	logLevel := "info"
 	if metricsCfg.Service != nil && metricsCfg.Service.LogLevel != "" {
 		logLevel = metricsCfg.Service.LogLevel

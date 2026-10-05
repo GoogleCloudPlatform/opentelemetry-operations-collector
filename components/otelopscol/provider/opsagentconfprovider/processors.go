@@ -474,3 +474,51 @@ func setLogNameProcessor(logName, hostname string) map[string]any {
 		fmt.Sprintf(`set(attributes["gcp.log_name"], %q) where attributes["gcp.log_name"] == nil`, logName),
 	)
 }
+
+func syslogTransformProcessor() map[string]any {
+	return logTransformIgnoreProcessor(
+		`set(cache["__body_string"], body) where IsString(body)`,
+		`set(cache["__body_map"], body) where IsMap(body)`,
+		`set(body, {})`,
+		`merge_maps(body, cache["__body_map"], "upsert") where (cache != nil and cache["__body_map"] != nil)`,
+		`set(body["message"], cache["__body_string"]) where (cache != nil and cache["__body_string"] != nil)`,
+		`set(attributes, {})`,
+		`delete_key(cache, "__body_map") where (cache != nil and cache["__body_map"] != nil)`,
+		`delete_key(cache, "__body_string") where (cache != nil and cache["__body_string"] != nil)`,
+	)
+}
+
+func fluentForwardTransformProcessor() map[string]any {
+	return logTransformIgnoreProcessor(
+		`set(cache["body_string"], body) where IsString(body)`,
+		`set(body, {})`,
+		`set(body["message"], cache["body_string"]) where (cache != nil and cache["body_string"] != nil)`,
+		`merge_maps(body, attributes, "upsert") where attributes != nil`,
+		`set(attributes, {})`,
+	)
+}
+
+func fluentForwardSetLogNameProcessor() map[string]any {
+	return logTransformIgnoreProcessor(
+		`set(attributes["gcp.log_name"], Concat([attributes["gcp.log_name"], body["fluent.tag"]], ".")) where (attributes["gcp.log_name"] != nil and body["fluent.tag"] != nil)`,
+		`delete_key(body, "fluent.tag") where body["fluent.tag"] != nil`,
+	)
+}
+
+func journaldTransformProcessor() map[string]any {
+	return logTransformIgnoreProcessor(
+		`set(severity_text, "EMERGENCY") where body["PRIORITY"] == "0"`,
+		`set(severity_text, "ALERT") where body["PRIORITY"] == "1"`,
+		`set(severity_text, "CRITICAL") where body["PRIORITY"] == "2"`,
+		`set(severity_text, "ERROR") where body["PRIORITY"] == "3"`,
+		`set(severity_text, "WARNING") where body["PRIORITY"] == "4"`,
+		`set(severity_text, "NOTICE") where body["PRIORITY"] == "5"`,
+		`set(severity_text, "INFO") where body["PRIORITY"] == "6"`,
+		`set(severity_text, "DEBUG") where body["PRIORITY"] == "7"`,
+		`set(severity_number, 0) where IsMatch(body["PRIORITY"], "^[0-7]$")`,
+		`set(attributes["gcp.source_location"]["file"], body["CODE_FILE"]) where body["CODE_FILE"] != nil`,
+		`set(attributes["gcp.source_location"]["func"], body["CODE_FUNC"]) where body["CODE_FUNC"] != nil`,
+		`set(attributes["gcp.source_location"]["line"], body["CODE_LINE"]) where body["CODE_LINE"] != nil`,
+		`set(attributes["gcp.source_location"]["line"], Int(body["CODE_LINE"])) where body["CODE_LINE"] != nil and Int(body["CODE_LINE"]) != nil`,
+	)
+}

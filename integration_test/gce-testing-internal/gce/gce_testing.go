@@ -366,11 +366,19 @@ func OSKind(imageSpec string) string {
 
 // isRetriableLookupError returns whether the given error, returned from
 // lookup[Metric|Trace]() or WaitFor[Metric|Trace](), should be retried.
-func isRetriableLookupError(err error) bool {
+// ctx is the context the lookup ran with.
+func isRetriableLookupError(ctx context.Context, err error) bool {
 	if errors.Is(err, ErrInvalidIteratorLength) {
 		return true
 	}
 	myStatus, ok := status.FromError(err)
+	// The backend sometimes cancels a request on its side, failing with
+	// "rpc error: code = Canceled desc = CANCELLED". Retry that, unless our own
+	// context is done (cancelled or past its deadline), because then a retry
+	// can't succeed.
+	if ok && myStatus.Code() == codes.Canceled {
+		return ctx.Err() == nil
+	}
 	// workload.googleapis.com/* domain metrics are created on first write, and may not be immediately queryable.
 	// The error doesn't always look the same, hopefully looking for Code() == NotFound will catch all variations.
 	// The Internal case catches some transient errors returned by the monitoring API sometimes.
@@ -497,7 +505,7 @@ func WaitForMetricSeries(ctx context.Context, logger *log.Logger, vm *VM, metric
 			logger.Printf("Successfully found series=%v", tsList)
 			return tsList, nil
 		}
-		if err != nil && !isRetriableLookupError(err) {
+		if err != nil && !isRetriableLookupError(ctx, err) {
 			return nil, fmt.Errorf("WaitForMetric(metric=%q, extraFilters=%v): %v", metric, extraFilters, err)
 		}
 		// We can get here in two cases:
@@ -543,7 +551,7 @@ func WaitForTrace(ctx context.Context, logger *log.Logger, vm *VM, options WaitF
 		if trace != nil && err == nil {
 			return trace, nil
 		}
-		if err != nil && !isRetriableLookupError(err) {
+		if err != nil && !isRetriableLookupError(ctx, err) {
 			return nil, fmt.Errorf("WaitForTrace() failed: %v", err)
 		}
 		logger.Printf("firstTrace check(): empty, retrying (%d/%d)...",
@@ -578,7 +586,7 @@ func AssertMetricMissing(ctx context.Context, logger *log.Logger, vm *VM, metric
 			// Success
 			return nil
 		}
-		if !isRetriableLookupError(err) {
+		if !isRetriableLookupError(ctx, err) {
 			return fmt.Errorf("AssertMetricMissing(metric=%q): %v", metric, err)
 		}
 
@@ -1714,6 +1722,10 @@ func shouldRetryCreateVM(err error, options VMOptions) bool {
 		strings.Contains(err.Error(), "Internal error") ||
 		// Instance creation can also fail due to service unavailability.
 		strings.Contains(err.Error(), "currently unavailable") ||
+		// GCE sometimes responds with 502 or 503 errors, e.g. a raw HTML
+		// "Error 502 (Server Error)" page. Retry these (and other 50x errors for
+		// good measure), like handleDeleteError does.
+		strings.Contains(err.Error(), "Error 50") ||
 		// This error is a consequence of running gcloud concurrently, which is actually
 		// unsupported. In the absence of a better fix, just retry such errors.
 		strings.Contains(err.Error(), "database is locked") ||

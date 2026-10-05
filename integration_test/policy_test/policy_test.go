@@ -497,7 +497,7 @@ func testCollectorFactories() (otelcol.Factories, error) {
 		googlepolicyprocessor.NewFactory(),
 		newStubProcessorFactory("resourcedetection"),
 		newStubProcessorFactory("transform"),
-		newStubProcessorFactory("queuebatch"),
+		newStubProcessorFactory("queue_batch"),
 	)
 	if err != nil {
 		return otelcol.Factories{}, err

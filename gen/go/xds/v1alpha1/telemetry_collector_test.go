@@ -60,7 +60,7 @@ func TestTelemetryCollector_AnyPackaging(t *testing.T) {
 
 func TestTelemetryCollector_PolicySetRevisionRoundTrip(t *testing.T) {
 	const revision = "projects/p/locations/l/policySets/ps/revisions/9f3a0c1e"
-	createTime := timestamppb.New(time.Unix(1790000000, 0))
+	createTime := timestamppb.New(time.Unix(1790000000, 123456789))
 	collector := &xdsv1alpha1.TelemetryCollector{
 		PolicySetRevision:           revision,
 		PolicySetRevisionCreateTime: createTime,

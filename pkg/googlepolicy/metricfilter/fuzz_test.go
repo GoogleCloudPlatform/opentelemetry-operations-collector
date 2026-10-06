@@ -55,6 +55,31 @@ func fuzzMetricContexts() []googlepolicy.MetricContext {
 	}
 }
 
+func dynamicMetricContext(name, unit, attrKey, attrStr string, attrInt int64, attrFloat float64, isMonotonic bool) googlepolicy.MetricContext {
+	md := pmetric.NewMetrics()
+	rm := md.ResourceMetrics().AppendEmpty()
+	rm.Resource().Attributes().PutStr(attrKey, attrStr)
+
+	sm := rm.ScopeMetrics().AppendEmpty()
+	sm.Scope().SetName(attrStr)
+
+	m := sm.Metrics().AppendEmpty()
+	m.SetName(name)
+	m.SetUnit(unit)
+	sum := m.SetEmptySum()
+	sum.SetIsMonotonic(isMonotonic)
+	sum.SetAggregationTemporality(pmetric.AggregationTemporalityDelta)
+
+	dp := sum.DataPoints().AppendEmpty()
+	attrs := dp.Attributes()
+	attrs.PutStr(attrKey, attrStr)
+	attrs.PutInt("int_attr", attrInt)
+	attrs.PutDouble("float_attr", attrFloat)
+	attrs.PutBool("bool_attr", isMonotonic)
+
+	return metricContext(m, sm, rm)
+}
+
 func fuzzMetricSeedPolicies() []*policyv1alpha1.MetricFilterPolicy {
 	return []*policyv1alpha1.MetricFilterPolicy{
 		{
@@ -172,19 +197,29 @@ func verifyCompiledMetricPolicy(t *testing.T, p googlepolicy.Policy, contexts []
 }
 
 func FuzzMetricFilterPolicy(f *testing.F) {
-	f.Add([]byte{})
+	f.Add([]byte{}, "", "", "", "", int64(0), float64(0), false)
 	for _, seed := range fuzzMetricSeedPolicies() {
 		if wireBytes, err := proto.Marshal(seed); err == nil {
-			f.Add(wireBytes)
+			f.Add(wireBytes, "http.server.duration", "ms", "cloud.zone", "us-central1-a", int64(200), 1.25, true)
 		}
 		if jsonBytes, err := protojson.Marshal(seed); err == nil {
-			f.Add(jsonBytes)
+			f.Add(jsonBytes, "http.server.duration", "ms", "cloud.zone", "us-central1-a", int64(200), 1.25, true)
 		}
 	}
 
-	contexts := fuzzMetricContexts()
+	staticContexts := fuzzMetricContexts()
 
-	f.Fuzz(func(t *testing.T, data []byte) {
+	f.Fuzz(func(t *testing.T, data []byte, name, unit, attrKey, attrStr string, attrInt int64, attrFloat float64, isMonotonic bool) {
+		var contexts []googlepolicy.MetricContext
+		getContexts := func() []googlepolicy.MetricContext {
+			if contexts == nil {
+				contexts = make([]googlepolicy.MetricContext, 0, len(staticContexts)+1)
+				contexts = append(contexts, staticContexts...)
+				contexts = append(contexts, dynamicMetricContext(name, unit, attrKey, attrStr, attrInt, attrFloat, isMonotonic))
+			}
+			return contexts
+		}
+
 		pb := &policyv1alpha1.MetricFilterPolicy{}
 		if err := proto.Unmarshal(data, pb); err == nil {
 			ps, err := googlepolicy.MakePolicySetFromProtos("fuzz-rev", []proto.Message{pb})
@@ -192,8 +227,32 @@ func FuzzMetricFilterPolicy(f *testing.F) {
 				if len(ps.Policies) != 1 {
 					t.Fatalf("expected 1 compiled policy, got %d", len(ps.Policies))
 				}
+				ctxs := getContexts()
 				for _, entry := range ps.Policies {
-					verifyCompiledMetricPolicy(t, entry.PolicyObj, contexts)
+					verifyCompiledMetricPolicy(t, entry.PolicyObj, ctxs)
+
+					if rtBytes, err := protojson.Marshal(pb); err == nil {
+						var rtMap map[string]any
+						if err := json.Unmarshal(rtBytes, &rtMap); err == nil && rtMap != nil {
+							rtMap["type"] = PolicyType
+							rtPS, err := googlepolicy.MakePolicySet("fuzz-rev", []map[string]any{rtMap})
+							rtEntry, ok := rtPS.Policies[entry.PolicyObj.PolicyName()]
+							if err != nil || len(rtPS.Policies) != 1 || !ok {
+								t.Fatalf("protojson round-trip failed MakePolicySet: err=%v, len=%d, ok=%v", err, len(rtPS.Policies), ok)
+							}
+							verifyCompiledMetricPolicy(t, rtEntry.PolicyObj, ctxs)
+							protoEval := entry.PolicyObj.(googlepolicy.MetricPolicyEvaluator)
+							jsonEval := rtEntry.PolicyObj.(googlepolicy.MetricPolicyEvaluator)
+							if got, want := jsonEval.IsDatapointLevel(), protoEval.IsDatapointLevel(); got != want {
+								t.Fatalf("IsDatapointLevel mismatch between proto (%v) and JSON (%v)", want, got)
+							}
+							for i, ctx := range ctxs {
+								if got, want := jsonEval.EvaluateMetric(ctx), protoEval.EvaluateMetric(ctx); got != want {
+									t.Fatalf("context[%d] EvalResult mismatch between proto (%v) and JSON (%v)", i, want, got)
+								}
+							}
+						}
+					}
 				}
 			}
 		}
@@ -206,8 +265,9 @@ func FuzzMetricFilterPolicy(f *testing.F) {
 				if len(ps.Policies) != 1 {
 					t.Fatalf("expected 1 compiled policy, got %d", len(ps.Policies))
 				}
+				ctxs := getContexts()
 				for _, entry := range ps.Policies {
-					verifyCompiledMetricPolicy(t, entry.PolicyObj, contexts)
+					verifyCompiledMetricPolicy(t, entry.PolicyObj, ctxs)
 				}
 			}
 		}

@@ -50,6 +50,29 @@ func fuzzTraceContexts() []googlepolicy.TraceContext {
 	}
 }
 
+func dynamicTraceContext(name, statusMsg, attrKey, attrStr string, kind, statusCode int32, attrInt int64, attrFloat float64, attrBool bool) googlepolicy.TraceContext {
+	td := ptrace.NewTraces()
+	rs := td.ResourceSpans().AppendEmpty()
+	rs.Resource().Attributes().PutStr(attrKey, attrStr)
+
+	ss := rs.ScopeSpans().AppendEmpty()
+	ss.Scope().SetName(attrStr)
+
+	span := ss.Spans().AppendEmpty()
+	span.SetName(name)
+	span.SetKind(ptrace.SpanKind(kind))
+	span.Status().SetCode(ptrace.StatusCode(statusCode))
+	span.Status().SetMessage(statusMsg)
+
+	attrs := span.Attributes()
+	attrs.PutStr(attrKey, attrStr)
+	attrs.PutInt("int_attr", attrInt)
+	attrs.PutDouble("float_attr", attrFloat)
+	attrs.PutBool("bool_attr", attrBool)
+
+	return traceContext(span, ss, rs)
+}
+
 func fuzzTraceSeedPolicies() []*policyv1alpha1.TraceFilterPolicy {
 	return []*policyv1alpha1.TraceFilterPolicy{
 		{
@@ -161,19 +184,29 @@ func verifyCompiledTracePolicy(t *testing.T, p googlepolicy.Policy, contexts []g
 }
 
 func FuzzTraceFilterPolicy(f *testing.F) {
-	f.Add([]byte{})
+	f.Add([]byte{}, "", "", "", "", int32(0), int32(0), int64(0), float64(0), false)
 	for _, seed := range fuzzTraceSeedPolicies() {
 		if wireBytes, err := proto.Marshal(seed); err == nil {
-			f.Add(wireBytes)
+			f.Add(wireBytes, "healthcheck.ping", "upstream unavailable", "cloud.zone", "us-central1-a", int32(ptrace.SpanKindServer), int32(ptrace.StatusCodeError), int64(200), 1.25, true)
 		}
 		if jsonBytes, err := protojson.Marshal(seed); err == nil {
-			f.Add(jsonBytes)
+			f.Add(jsonBytes, "healthcheck.ping", "upstream unavailable", "cloud.zone", "us-central1-a", int32(ptrace.SpanKindServer), int32(ptrace.StatusCodeError), int64(200), 1.25, true)
 		}
 	}
 
-	contexts := fuzzTraceContexts()
+	staticContexts := fuzzTraceContexts()
 
-	f.Fuzz(func(t *testing.T, data []byte) {
+	f.Fuzz(func(t *testing.T, data []byte, name, statusMsg, attrKey, attrStr string, kind, statusCode int32, attrInt int64, attrFloat float64, attrBool bool) {
+		var contexts []googlepolicy.TraceContext
+		getContexts := func() []googlepolicy.TraceContext {
+			if contexts == nil {
+				contexts = make([]googlepolicy.TraceContext, 0, len(staticContexts)+1)
+				contexts = append(contexts, staticContexts...)
+				contexts = append(contexts, dynamicTraceContext(name, statusMsg, attrKey, attrStr, kind, statusCode, attrInt, attrFloat, attrBool))
+			}
+			return contexts
+		}
+
 		pb := &policyv1alpha1.TraceFilterPolicy{}
 		if err := proto.Unmarshal(data, pb); err == nil {
 			ps, err := googlepolicy.MakePolicySetFromProtos("fuzz-rev", []proto.Message{pb})
@@ -181,8 +214,29 @@ func FuzzTraceFilterPolicy(f *testing.F) {
 				if len(ps.Policies) != 1 {
 					t.Fatalf("expected 1 compiled policy, got %d", len(ps.Policies))
 				}
+				ctxs := getContexts()
 				for _, entry := range ps.Policies {
-					verifyCompiledTracePolicy(t, entry.PolicyObj, contexts)
+					verifyCompiledTracePolicy(t, entry.PolicyObj, ctxs)
+
+					if rtBytes, err := protojson.Marshal(pb); err == nil {
+						var rtMap map[string]any
+						if err := json.Unmarshal(rtBytes, &rtMap); err == nil && rtMap != nil {
+							rtMap["type"] = PolicyType
+							rtPS, err := googlepolicy.MakePolicySet("fuzz-rev", []map[string]any{rtMap})
+							rtEntry, ok := rtPS.Policies[entry.PolicyObj.PolicyName()]
+							if err != nil || len(rtPS.Policies) != 1 || !ok {
+								t.Fatalf("protojson round-trip failed MakePolicySet: err=%v, len=%d, ok=%v", err, len(rtPS.Policies), ok)
+							}
+							verifyCompiledTracePolicy(t, rtEntry.PolicyObj, ctxs)
+							protoEval := entry.PolicyObj.(googlepolicy.TracePolicyEvaluator)
+							jsonEval := rtEntry.PolicyObj.(googlepolicy.TracePolicyEvaluator)
+							for i, ctx := range ctxs {
+								if got, want := jsonEval.EvaluateTrace(ctx), protoEval.EvaluateTrace(ctx); got != want {
+									t.Fatalf("context[%d] EvalResult mismatch between proto (%v) and JSON (%v)", i, want, got)
+								}
+							}
+						}
+					}
 				}
 			}
 		}
@@ -195,8 +249,9 @@ func FuzzTraceFilterPolicy(f *testing.F) {
 				if len(ps.Policies) != 1 {
 					t.Fatalf("expected 1 compiled policy, got %d", len(ps.Policies))
 				}
+				ctxs := getContexts()
 				for _, entry := range ps.Policies {
-					verifyCompiledTracePolicy(t, entry.PolicyObj, contexts)
+					verifyCompiledTracePolicy(t, entry.PolicyObj, ctxs)
 				}
 			}
 		}

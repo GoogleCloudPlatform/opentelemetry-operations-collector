@@ -51,6 +51,28 @@ func fuzzLogContexts() []googlepolicy.LogContext {
 	}
 }
 
+func dynamicLogContext(body, severityText, attrKey, attrStr string, severityNum int32, attrInt int64, attrFloat float64, attrBool bool) googlepolicy.LogContext {
+	ld := plog.NewLogs()
+	rl := ld.ResourceLogs().AppendEmpty()
+	rl.Resource().Attributes().PutStr(attrKey, attrStr)
+
+	sl := rl.ScopeLogs().AppendEmpty()
+	sl.Scope().SetName(attrStr)
+
+	lr := sl.LogRecords().AppendEmpty()
+	lr.Body().SetStr(body)
+	lr.SetSeverityText(severityText)
+	lr.SetSeverityNumber(plog.SeverityNumber(severityNum))
+
+	attrs := lr.Attributes()
+	attrs.PutStr(attrKey, attrStr)
+	attrs.PutInt("int_attr", attrInt)
+	attrs.PutDouble("float_attr", attrFloat)
+	attrs.PutBool("bool_attr", attrBool)
+
+	return logContext(lr, sl, rl)
+}
+
 func fuzzLogSeedPolicies() []*policyv1alpha1.LogFilterPolicy {
 	return []*policyv1alpha1.LogFilterPolicy{
 		{
@@ -150,19 +172,29 @@ func verifyCompiledLogPolicy(t *testing.T, p googlepolicy.Policy, contexts []goo
 }
 
 func FuzzLogFilterPolicy(f *testing.F) {
-	f.Add([]byte{})
+	f.Add([]byte{}, "", "", "", "", int32(0), int64(0), float64(0), false)
 	for _, seed := range fuzzLogSeedPolicies() {
 		if wireBytes, err := proto.Marshal(seed); err == nil {
-			f.Add(wireBytes)
+			f.Add(wireBytes, "hello world", "INFO", "cloud.zone", "us-central1-a", int32(9), int64(200), 1.25, true)
 		}
 		if jsonBytes, err := protojson.Marshal(seed); err == nil {
-			f.Add(jsonBytes)
+			f.Add(jsonBytes, "hello world", "INFO", "cloud.zone", "us-central1-a", int32(9), int64(200), 1.25, true)
 		}
 	}
 
-	contexts := fuzzLogContexts()
+	staticContexts := fuzzLogContexts()
 
-	f.Fuzz(func(t *testing.T, data []byte) {
+	f.Fuzz(func(t *testing.T, data []byte, body, sevText, attrKey, attrStr string, sevNum int32, attrInt int64, attrFloat float64, attrBool bool) {
+		var contexts []googlepolicy.LogContext
+		getContexts := func() []googlepolicy.LogContext {
+			if contexts == nil {
+				contexts = make([]googlepolicy.LogContext, 0, len(staticContexts)+1)
+				contexts = append(contexts, staticContexts...)
+				contexts = append(contexts, dynamicLogContext(body, sevText, attrKey, attrStr, sevNum, attrInt, attrFloat, attrBool))
+			}
+			return contexts
+		}
+
 		pb := &policyv1alpha1.LogFilterPolicy{}
 		if err := proto.Unmarshal(data, pb); err == nil {
 			ps, err := googlepolicy.MakePolicySetFromProtos("fuzz-rev", []proto.Message{pb})
@@ -170,8 +202,29 @@ func FuzzLogFilterPolicy(f *testing.F) {
 				if len(ps.Policies) != 1 {
 					t.Fatalf("expected 1 compiled policy, got %d", len(ps.Policies))
 				}
+				ctxs := getContexts()
 				for _, entry := range ps.Policies {
-					verifyCompiledLogPolicy(t, entry.PolicyObj, contexts)
+					verifyCompiledLogPolicy(t, entry.PolicyObj, ctxs)
+
+					if rtBytes, err := protojson.Marshal(pb); err == nil {
+						var rtMap map[string]any
+						if err := json.Unmarshal(rtBytes, &rtMap); err == nil && rtMap != nil {
+							rtMap["type"] = PolicyType
+							rtPS, err := googlepolicy.MakePolicySet("fuzz-rev", []map[string]any{rtMap})
+							rtEntry, ok := rtPS.Policies[entry.PolicyObj.PolicyName()]
+							if err != nil || len(rtPS.Policies) != 1 || !ok {
+								t.Fatalf("protojson round-trip failed MakePolicySet: err=%v, len=%d, ok=%v", err, len(rtPS.Policies), ok)
+							}
+							verifyCompiledLogPolicy(t, rtEntry.PolicyObj, ctxs)
+							protoEval := entry.PolicyObj.(googlepolicy.LogPolicyEvaluator)
+							jsonEval := rtEntry.PolicyObj.(googlepolicy.LogPolicyEvaluator)
+							for i, ctx := range ctxs {
+								if got, want := jsonEval.EvaluateLog(ctx), protoEval.EvaluateLog(ctx); got != want {
+									t.Fatalf("context[%d] EvalResult mismatch between proto (%v) and JSON (%v)", i, want, got)
+								}
+							}
+						}
+					}
 				}
 			}
 		}
@@ -184,8 +237,9 @@ func FuzzLogFilterPolicy(f *testing.F) {
 				if len(ps.Policies) != 1 {
 					t.Fatalf("expected 1 compiled policy, got %d", len(ps.Policies))
 				}
+				ctxs := getContexts()
 				for _, entry := range ps.Policies {
-					verifyCompiledLogPolicy(t, entry.PolicyObj, contexts)
+					verifyCompiledLogPolicy(t, entry.PolicyObj, ctxs)
 				}
 			}
 		}

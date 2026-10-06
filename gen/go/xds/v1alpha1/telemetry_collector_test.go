@@ -16,11 +16,13 @@ package xdsv1alpha1_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
 	xdsv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/xds/v1alpha1"
@@ -54,4 +56,28 @@ func TestTelemetryCollector_AnyPackaging(t *testing.T) {
 	unpackedPolicy := &policyv1alpha1.LogFilterPolicy{}
 	require.NoError(t, unmarshaled.GetPolicies()[0].UnmarshalTo(unpackedPolicy))
 	assert.Equal(t, "default-log-filter", unpackedPolicy.GetId())
+}
+
+func TestTelemetryCollector_PolicySetRevisionRoundTrip(t *testing.T) {
+	const revision = "projects/p/locations/l/policySets/ps/revisions/9f3a0c1e"
+	createTime := timestamppb.New(time.Unix(1790000000, 123456789))
+	collector := &xdsv1alpha1.TelemetryCollector{
+		PolicySetRevision:           revision,
+		PolicySetRevisionCreateTime: createTime,
+	}
+
+	data, err := proto.Marshal(collector)
+	require.NoError(t, err)
+
+	unmarshaled := &xdsv1alpha1.TelemetryCollector{}
+	require.NoError(t, proto.Unmarshal(data, unmarshaled))
+	assert.Equal(t, revision, unmarshaled.GetPolicySetRevision())
+	assert.True(t, proto.Equal(createTime, unmarshaled.GetPolicySetRevisionCreateTime()))
+
+	// Manifests from control planes that predate these fields decode with an
+	// empty revision and no create time.
+	legacy := &xdsv1alpha1.TelemetryCollector{}
+	require.NoError(t, proto.Unmarshal(nil, legacy))
+	assert.Empty(t, legacy.GetPolicySetRevision())
+	assert.Nil(t, legacy.GetPolicySetRevisionCreateTime())
 }

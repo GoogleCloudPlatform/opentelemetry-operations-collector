@@ -225,7 +225,7 @@ distrogen-golden-update:
 
 ALL_DIRECTORIES = find . -type d  -print0
 EXCLUDE_TOOLS_DIRS = grep -z -v ".*\.tools.*"
-EXCLUDE_BUILD_DIRS = grep -z -v -e ".*_build.*" -e ".*dist.*"
+EXCLUDE_BUILD_DIRS = grep -z -v -e ".*_build.*" -e ".*dist.*" -e ".*worktrees.*"
 EXCLUDE_GENERATED_COLLECTOR_DIRS = grep -z -v ".*generated_collector.*"
 
 .PHONY: workspace
@@ -283,6 +283,7 @@ ADDLICENSE_IGNORES = -ignore "**/.tools/**/*" \
 					-ignore "**/google-built-opentelemetry-collector/*" \
 					-ignore "**/otelopscol/*" \
 					-ignore "**/spec.yaml" \
+					-ignore "**/worktrees/**/*" \
 					-ignore "**/third_party/**/*"
 .PHONY: addlicense
 addlicense: $(ADDLICENSE)

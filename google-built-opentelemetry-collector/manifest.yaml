@@ -37,6 +37,8 @@ receivers:
 - gomod: go.opentelemetry.io/collector/receiver/otlpreceiver v0.160.0
 
 processors:
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/agentmetricsprocessor v0.160.0
+  path: ../components/otelopscol/processor/agentmetricsprocessor
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/attributesprocessor v0.160.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/cumulativetodeltaprocessor v0.160.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/deltatocumulativeprocessor v0.160.0
@@ -80,6 +82,8 @@ exporters:
 extensions:
 - gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/healthagent v0.160.0
   path: ../components/google-built-opentelemetry-collector/extension/healthagent
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/opsagenthealthextension v0.160.0
+  path: ../components/google-built-opentelemetry-collector/extension/opsagenthealthextension
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/ackextension v0.160.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/basicauthextension v0.160.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/bearertokenauthextension v0.160.0
@@ -111,6 +115,8 @@ connectors:
 - gomod: go.opentelemetry.io/collector/connector/forwardconnector v0.160.0
 
 providers:
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/opsagentconfmapprovider v0.160.0
+  path: ../components/google-built-opentelemetry-collector/provider/opsagentconfmapprovider
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/confmap/provider/googlesecretmanagerprovider v0.160.0
 - gomod: go.opentelemetry.io/collector/confmap/provider/envprovider v1.66.0
 - gomod: go.opentelemetry.io/collector/confmap/provider/fileprovider v1.66.0
@@ -121,4 +127,6 @@ providers:
 replaces:
 # Force update buger/jsonparser to v1.1.2 to fix vulnerability
 - github.com/buger/jsonparser => github.com/buger/jsonparser v1.1.2
+# Use local ops-agent
+- github.com/GoogleCloudPlatform/ops-agent => /usr/local/google/home/fcovalente/Github/ops-agent
 

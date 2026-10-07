@@ -66,6 +66,7 @@ components:
     - windowsperfcounters
 
   processors:
+    - agentmetrics
     - batch
     - memorylimiter
     - attributes
@@ -106,6 +107,7 @@ components:
     - syslog
 
   extensions:
+    - opsagenthealth
     - zpages
     - ack
     - basicauth
@@ -137,6 +139,7 @@ components:
     - signaltometrics
 
   providers:
+    - opsagentconfmap
     - env
     - file
     - http
@@ -148,3 +151,6 @@ replaces:
   - from: github.com/buger/jsonparser
     to: github.com/buger/jsonparser v1.1.2
     reason: Force update buger/jsonparser to v1.1.2 to fix vulnerability
+  - from: github.com/GoogleCloudPlatform/ops-agent
+    to: /usr/local/google/home/fcovalente/Github/ops-agent
+    reason: Use local ops-agent

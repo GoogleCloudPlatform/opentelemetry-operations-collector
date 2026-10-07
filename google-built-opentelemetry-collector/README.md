@@ -41,6 +41,7 @@ The Google-Built OpenTelemetry Collector is an open-source, production-ready bui
 
 | Component Name | Documentation |
 | -------------- | ------------- |
+| agentmetrics | [docs](No docs linked for component) |
 | attributes | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/attributesprocessor/README.md) |
 | batch | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/processor/batchprocessor/README.md) |
 | cumulativetodelta | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/cumulativetodeltaprocessor/README.md) |
@@ -104,6 +105,7 @@ The Google-Built OpenTelemetry Collector is an open-source, production-ready bui
 | oauth2clientauth | [docs](No docs linked for component) |
 | oidcauth | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/oidcauthextension/README.md) |
 | opamp | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/opampextension/README.md) |
+| opsagenthealth | [docs](No docs linked for component) |
 | pprof | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/pprofextension/README.md) |
 | zpages | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/extension/zpagesextension/README.md) |
 
@@ -133,5 +135,6 @@ The Google-Built OpenTelemetry Collector is an open-source, production-ready bui
 | googlesecretmanager | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/confmap/provider/googlesecretmanagerprovider) |
 | http | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/confmap/provider/httpprovider) |
 | https | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/confmap/provider/httpsprovider) |
+| opsagentconfmap | [docs](No docs linked for component) |
 | yaml | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/confmap/provider/yamlprovider) |
 

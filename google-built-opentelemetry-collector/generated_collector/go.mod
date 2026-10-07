@@ -2,11 +2,14 @@
 
 module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/google-built-opentelemetry-collector
 
-go 1.26.0
+go 1.26.6
 
 require (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter v0.160.0
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/healthagent v0.160.0
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/opsagenthealthextension v0.160.0
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/opsagentconfmapprovider v0.160.0
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/agentmetricsprocessor v0.160.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/confmap/provider/googlesecretmanagerprovider v0.160.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/connector/countconnector v0.160.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/connector/exceptionsconnector v0.160.0
@@ -87,8 +90,8 @@ require (
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowseventlogreceiver v0.160.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowsperfcountersreceiver v0.160.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/zipkinreceiver v0.160.0
-	go.opentelemetry.io/collector/component v1.66.0
-	go.opentelemetry.io/collector/confmap v1.66.0
+	go.opentelemetry.io/collector/component v1.68.0
+	go.opentelemetry.io/collector/confmap v1.68.0
 	go.opentelemetry.io/collector/confmap/provider/envprovider v1.66.0
 	go.opentelemetry.io/collector/confmap/provider/fileprovider v1.66.0
 	go.opentelemetry.io/collector/confmap/provider/httpprovider v1.66.0
@@ -101,7 +104,7 @@ require (
 	go.opentelemetry.io/collector/exporter/nopexporter v0.160.0
 	go.opentelemetry.io/collector/exporter/otlpexporter v0.160.0
 	go.opentelemetry.io/collector/exporter/otlphttpexporter v0.160.0
-	go.opentelemetry.io/collector/extension v1.66.0
+	go.opentelemetry.io/collector/extension v1.68.0
 	go.opentelemetry.io/collector/extension/zpagesextension v0.160.0
 	go.opentelemetry.io/collector/otelcol v0.160.0
 	go.opentelemetry.io/collector/processor v1.66.0
@@ -110,7 +113,7 @@ require (
 	go.opentelemetry.io/collector/receiver v1.66.0
 	go.opentelemetry.io/collector/receiver/otlpreceiver v0.160.0
 	go.opentelemetry.io/collector/service v0.160.0
-	golang.org/x/sys v0.47.0
+	golang.org/x/sys v0.48.0
 )
 
 require (
@@ -145,6 +148,7 @@ require (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector/googlemanagedprometheus v0.60.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace v1.36.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.60.0 // indirect
+	github.com/GoogleCloudPlatform/ops-agent v0.0.0-00010101000000-000000000000 // indirect
 	github.com/HdrHistogram/hdrhistogram-go v1.2.0 // indirect
 	github.com/Masterminds/semver/v3 v3.5.0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
@@ -248,6 +252,9 @@ require (
 	github.com/go-openapi/swag/typeutils v0.28.0 // indirect
 	github.com/go-openapi/swag/yamlutils v0.28.0 // indirect
 	github.com/go-openapi/validate v0.25.2 // indirect
+	github.com/go-playground/locales v0.14.0 // indirect
+	github.com/go-playground/universal-translator v0.18.0 // indirect
+	github.com/go-playground/validator/v10 v10.11.1 // indirect
 	github.com/go-resty/resty/v2 v2.17.2 // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/go-zookeeper/zk v1.0.4 // indirect
@@ -302,6 +309,7 @@ require (
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/julienschmidt/httprouter v1.3.0 // indirect
 	github.com/kamstrup/intmap v0.5.2 // indirect
+	github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0 // indirect
 	github.com/klauspost/compress v1.19.2 // indirect
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/knadh/koanf/maps v0.1.3 // indirect
@@ -310,6 +318,7 @@ require (
 	github.com/kolo/xmlrpc v0.0.0-20220921171641-a4b6fa1dd06b // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/leodido/go-syslog/v4 v4.6.0 // indirect
+	github.com/leodido/go-urn v1.2.1 // indirect
 	github.com/leodido/ragel-machinery v0.0.0-20190525184631-5f46317e436b // indirect
 	github.com/lightstep/go-expohisto v1.0.0 // indirect
 	github.com/linode/go-metadata v0.3.0 // indirect
@@ -324,6 +333,7 @@ require (
 	github.com/miekg/dns v1.1.72 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
+	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
 	github.com/moby/moby/api v1.55.0 // indirect
@@ -395,7 +405,7 @@ require (
 	github.com/prometheus/client_golang v1.24.1 // indirect
 	github.com/prometheus/client_golang/exp v0.0.0-20260724065723-ecdb8254ba61 // indirect
 	github.com/prometheus/client_model v0.6.3 // indirect
-	github.com/prometheus/common v0.70.1 // indirect
+	github.com/prometheus/common v0.71.0 // indirect
 	github.com/prometheus/common/assets v0.2.0 // indirect
 	github.com/prometheus/exporter-toolkit v0.17.1 // indirect
 	github.com/prometheus/otlptranslator v1.0.0 // indirect
@@ -406,6 +416,7 @@ require (
 	github.com/redis/go-redis/v9 v9.22.0 // indirect
 	github.com/rs/cors v1.11.1 // indirect
 	github.com/scaleway/scaleway-sdk-go v1.0.0-beta.37 // indirect
+	github.com/shirou/gopsutil v3.21.11+incompatible // indirect
 	github.com/shirou/gopsutil/v4 v4.26.8 // indirect
 	github.com/shurcooL/httpfs v0.0.0-20230704072500-f1e31cf0ba5c // indirect
 	github.com/sony/gobreaker/v2 v2.4.0 // indirect
@@ -467,14 +478,14 @@ require (
 	go.opentelemetry.io/collector/extension/extensionmiddleware v0.160.0 // indirect
 	go.opentelemetry.io/collector/extension/extensiontest v0.160.0 // indirect
 	go.opentelemetry.io/collector/extension/xextension v0.160.0 // indirect
-	go.opentelemetry.io/collector/featuregate v1.66.0 // indirect
+	go.opentelemetry.io/collector/featuregate v1.68.0 // indirect
 	go.opentelemetry.io/collector/filter v0.160.0 // indirect
-	go.opentelemetry.io/collector/internal/componentalias v0.160.0 // indirect
+	go.opentelemetry.io/collector/internal/componentalias v0.162.0 // indirect
 	go.opentelemetry.io/collector/internal/fanoutconsumer v0.160.0 // indirect
 	go.opentelemetry.io/collector/internal/memorylimiter v0.160.0 // indirect
 	go.opentelemetry.io/collector/internal/sharedcomponent v0.160.0 // indirect
 	go.opentelemetry.io/collector/internal/telemetry v0.160.0 // indirect
-	go.opentelemetry.io/collector/pdata v1.66.0 // indirect
+	go.opentelemetry.io/collector/pdata v1.68.0 // indirect
 	go.opentelemetry.io/collector/pdata/pprofile v0.160.0 // indirect
 	go.opentelemetry.io/collector/pdata/testdata v0.160.0 // indirect
 	go.opentelemetry.io/collector/pdata/xpdata v0.160.0 // indirect
@@ -489,6 +500,7 @@ require (
 	go.opentelemetry.io/collector/receiver/xreceiver v0.160.0 // indirect
 	go.opentelemetry.io/collector/scraper v0.160.0 // indirect
 	go.opentelemetry.io/collector/scraper/scraperhelper v0.160.0 // indirect
+	go.opentelemetry.io/collector/semconv v0.126.0 // indirect
 	go.opentelemetry.io/collector/service/hostcapabilities v0.160.0 // indirect
 	go.opentelemetry.io/contrib/bridges/otelzap v0.20.0 // indirect
 	go.opentelemetry.io/contrib/detectors/aws/ecs v1.45.0 // indirect
@@ -538,14 +550,14 @@ require (
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	go.yaml.in/yaml/v4 v4.0.0-rc.6 // indirect
-	golang.org/x/crypto v0.55.0 // indirect
+	golang.org/x/crypto v0.57.0 // indirect
 	golang.org/x/exp v0.0.0-20260727155853-b88d891fe743 // indirect
-	golang.org/x/mod v0.39.0 // indirect
-	golang.org/x/net v0.58.0 // indirect
+	golang.org/x/mod v0.41.0 // indirect
+	golang.org/x/net v0.59.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
-	golang.org/x/sync v0.22.0 // indirect
-	golang.org/x/term v0.45.0 // indirect
-	golang.org/x/text v0.41.0 // indirect
+	golang.org/x/sync v0.23.0 // indirect
+	golang.org/x/term v0.46.0 // indirect
+	golang.org/x/text v0.42.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	golang.org/x/tools v0.49.0 // indirect
 	gonum.org/v1/gonum v0.17.0 // indirect
@@ -574,10 +586,18 @@ require (
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
 
+replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/opsagentconfmapprovider v0.160.0 => ../../components/google-built-opentelemetry-collector/provider/opsagentconfmapprovider
+
 replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/healthagent v0.160.0 => ../../components/google-built-opentelemetry-collector/extension/healthagent
+
+replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/opsagenthealthextension v0.160.0 => ../../components/google-built-opentelemetry-collector/extension/opsagenthealthextension
 
 replace github.com/open-telemetry/opentelemetry-collector-contrib/extension/oauth2clientauthextension v0.160.0 => ../../components/google-built-opentelemetry-collector/extension/oauth2clientauthextension
 
 replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter v0.160.0 => ../../components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter
 
+replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/agentmetricsprocessor v0.160.0 => ../../components/otelopscol/processor/agentmetricsprocessor
+
 replace github.com/buger/jsonparser => github.com/buger/jsonparser v1.1.2
+
+replace github.com/GoogleCloudPlatform/ops-agent => /usr/local/google/home/fcovalente/Github/ops-agent

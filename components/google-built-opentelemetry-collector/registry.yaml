@@ -18,11 +18,17 @@ exporters:
     path: "../components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter"
 
 processors:
+  agentmetrics:
+    gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/otelopscol/processor/agentmetricsprocessor v0.0.0
+    path: "../components/otelopscol/processor/agentmetricsprocessor"
   googlepolicy:
     gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor v0.0.0
     path: "../components/google-built-opentelemetry-collector/processor/googlepolicyprocessor"
 
 extensions:
+  opsagenthealth:
+    gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/opsagenthealthextension v0.0.0
+    path: "../components/google-built-opentelemetry-collector/extension/opsagenthealthextension"
   googlecontrolplane:
     gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/googlecontrolplaneextension v0.0.0
     path: "../components/google-built-opentelemetry-collector/extension/googlecontrolplaneextension"
@@ -37,3 +43,8 @@ providers:
   googlecontrolplane:
     gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider v0.0.0
     path: "../components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider"
+  opsagentconfmap:
+    gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/opsagentconfmapprovider v0.0.0
+    path: "../components/google-built-opentelemetry-collector/provider/opsagentconfmapprovider"
+
+receivers:

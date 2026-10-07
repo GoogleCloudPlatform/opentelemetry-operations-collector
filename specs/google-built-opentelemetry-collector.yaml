@@ -152,5 +152,5 @@ replaces:
     to: github.com/buger/jsonparser v1.1.2
     reason: Force update buger/jsonparser to v1.1.2 to fix vulnerability
   - from: github.com/GoogleCloudPlatform/ops-agent
-    to: /usr/local/google/home/fcovalente/Github/ops-agent
-    reason: Use local ops-agent
+    to: github.com/GoogleCloudPlatform/ops-agent v0.0.0-20261007202840-ba6e8f8e4585
+    reason: Use upstream ops-agent commit

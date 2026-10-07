@@ -21,7 +21,10 @@ func NewFactory() extension.Factory {
 }
 
 func createDefaultConfig() component.Config {
-	return &Config{}
+	return &Config{
+		ConfigPath: "/etc/google-cloud-ops-agent/config.yaml",
+		OutDir:     "/run/google-cloud-ops-agent",
+	}
 }
 
 func createExtension(ctx context.Context, set extension.Settings, cfg component.Config) (extension.Extension, error) {

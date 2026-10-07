@@ -127,6 +127,6 @@ providers:
 replaces:
 # Force update buger/jsonparser to v1.1.2 to fix vulnerability
 - github.com/buger/jsonparser => github.com/buger/jsonparser v1.1.2
-# Use local ops-agent
-- github.com/GoogleCloudPlatform/ops-agent => /usr/local/google/home/fcovalente/Github/ops-agent
+# Use upstream ops-agent commit
+- github.com/GoogleCloudPlatform/ops-agent => github.com/GoogleCloudPlatform/ops-agent v0.0.0-20261007202840-ba6e8f8e4585
 

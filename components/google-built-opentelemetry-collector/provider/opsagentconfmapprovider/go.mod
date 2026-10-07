@@ -2,10 +2,8 @@ module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/compone
 
 go 1.26.6
 
-replace github.com/GoogleCloudPlatform/ops-agent => /usr/local/google/home/fcovalente/Github/ops-agent
-
 require (
-	github.com/GoogleCloudPlatform/ops-agent v0.0.0-00010101000000-000000000000
+	github.com/GoogleCloudPlatform/ops-agent v0.0.0-20261007202840-ba6e8f8e4585
 	go.opentelemetry.io/collector/confmap v1.68.0
 	gopkg.in/yaml.v3 v3.0.1
 )

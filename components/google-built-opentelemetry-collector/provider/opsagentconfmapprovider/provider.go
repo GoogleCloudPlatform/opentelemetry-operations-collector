@@ -41,9 +41,9 @@ func (p *provider) Retrieve(ctx context.Context, uri string, watcher confmap.Wat
 
 	// Use the AgentDefaults requested.
 	defaults := confgenerator.AgentDefaults{
-		DisableOtlpjsonFileCollection: true,
 		DisableRubyRegex:              true,
 		EnableOtlpExporterByDefault:   true,
+		EnableOpsAgentHealthExtension: true,
 	}
 
 	uc, err := confgenerator.BuildUnifiedConfig(ctx, userConf, defaults)
@@ -51,10 +51,10 @@ func (p *provider) Retrieve(ctx context.Context, uri string, watcher confmap.Wat
 		return nil, fmt.Errorf("failed to build unified config: %w", err)
 	}
 
-	// Default ops-agent paths
-	outDir := "/var/run/google-cloud-ops-agent/opentelemetry-collector"
-	stateDir := "/var/lib/google-cloud-ops-agent/opentelemetry-collector"
-	logsDir := "/var/log/google-cloud-ops-agent/subagents"
+	// Default ops-agent paths (temporary for testing without sudo)
+	outDir := "/tmp/test-ops-agent/run/google-cloud-ops-agent/opentelemetry-collector"
+	stateDir := "/tmp/test-ops-agent/lib/google-cloud-ops-agent/opentelemetry-collector"
+	logsDir := "/tmp/test-ops-agent/log/google-cloud-ops-agent/subagents"
 
 	otelConfigStr, err := uc.GenerateOtelConfig(ctx, outDir, stateDir, logsDir)
 	if err != nil {
@@ -69,6 +69,25 @@ func (p *provider) Retrieve(ctx context.Context, uri string, watcher confmap.Wat
 	if err := yaml.Unmarshal([]byte(otelConfigStr), &otelConfigMap); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal generated otel config: %w", err)
 	}
+
+	// Inject opsagenthealth extension
+	exts, ok := otelConfigMap["extensions"].(map[string]interface{})
+	if !ok {
+		exts = map[string]interface{}{}
+		otelConfigMap["extensions"] = exts
+	}
+	exts["opsagenthealth"] = map[string]interface{}{
+		"config_path": filePath,
+		"out_dir": outDir,
+	}
+
+	svc, ok := otelConfigMap["service"].(map[string]interface{})
+	if !ok {
+		svc = map[string]interface{}{}
+		otelConfigMap["service"] = svc
+	}
+	svcExts, _ := svc["extensions"].([]interface{})
+	svc["extensions"] = append(svcExts, "opsagenthealth")
 
 	return confmap.NewRetrieved(otelConfigMap)
 }

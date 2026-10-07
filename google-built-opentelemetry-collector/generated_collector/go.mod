@@ -146,9 +146,10 @@ require (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.36.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector v0.60.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector/googlemanagedprometheus v0.60.0 // indirect
+	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.55.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace v1.36.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.60.0 // indirect
-	github.com/GoogleCloudPlatform/ops-agent v0.0.0-00010101000000-000000000000 // indirect
+	github.com/GoogleCloudPlatform/ops-agent v0.0.0-20261007202840-ba6e8f8e4585 // indirect
 	github.com/HdrHistogram/hdrhistogram-go v1.2.0 // indirect
 	github.com/Masterminds/semver/v3 v3.5.0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
@@ -600,4 +601,4 @@ replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/compon
 
 replace github.com/buger/jsonparser => github.com/buger/jsonparser v1.1.2
 
-replace github.com/GoogleCloudPlatform/ops-agent => /usr/local/google/home/fcovalente/Github/ops-agent
+replace github.com/GoogleCloudPlatform/ops-agent => github.com/GoogleCloudPlatform/ops-agent v0.0.0-20261007202840-ba6e8f8e4585

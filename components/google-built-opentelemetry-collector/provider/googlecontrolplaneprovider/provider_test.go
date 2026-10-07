@@ -473,15 +473,14 @@ func TestFilterPolicyDriversRegistered(t *testing.T) {
 	}
 }
 
-// TestMergeConfUnionsServiceExtensions pins the behaviour that makes it safe for
-// more than one policy to declare an extension.
+// TestMergeAppendUnionsServiceExtensions pins the behaviour that makes it safe
+// for more than one policy (or confmap provider) to declare an extension.
 //
-// confmap.Merge replaces slices, so a plain Merge would leave only the last
-// policy's extension in the list. The dropped extension stays visible under the
-// top level extensions key, so the config looks correct right up until the
-// collector refuses to start because an exporter references an authenticator
-// that was never instantiated.
-func TestMergeConfUnionsServiceExtensions(t *testing.T) {
+// Creating the provider enables the confmap.enableMergeAppendOption feature
+// gate so confmap.Merge appends and deduplicates service::extensions instead of
+// replacing the slice with only the last policy's extension.
+func TestMergeAppendUnionsServiceExtensions(t *testing.T) {
+	_ = createProvider()
 	conf := confmap.New()
 
 	destination := confmap.NewFromStringMap(map[string]any{
@@ -495,8 +494,8 @@ func TestMergeConfUnionsServiceExtensions(t *testing.T) {
 		},
 	})
 
-	require.NoError(t, mergeConf(conf, destination))
-	require.NoError(t, mergeConf(conf, selfMetrics))
+	require.NoError(t, conf.Merge(cleanConf(destination)))
+	require.NoError(t, conf.Merge(cleanConf(selfMetrics)))
 
 	assert.Equal(t, []any{
 		"googleclientauth/default_gcp_destination",
@@ -504,7 +503,8 @@ func TestMergeConfUnionsServiceExtensions(t *testing.T) {
 	}, conf.Get("service::extensions"))
 }
 
-func TestMergeConfDeduplicatesServiceExtensions(t *testing.T) {
+func TestMergeAppendDeduplicatesServiceExtensions(t *testing.T) {
+	_ = createProvider()
 	conf := confmap.New()
 	declare := func() *confmap.Conf {
 		return confmap.NewFromStringMap(map[string]any{
@@ -514,19 +514,20 @@ func TestMergeConfDeduplicatesServiceExtensions(t *testing.T) {
 		})
 	}
 
-	require.NoError(t, mergeConf(conf, declare()))
-	require.NoError(t, mergeConf(conf, declare()))
+	require.NoError(t, conf.Merge(cleanConf(declare())))
+	require.NoError(t, conf.Merge(cleanConf(declare())))
 
 	assert.Equal(t, []any{"googleclientauth/default_gcp_destination"}, conf.Get("service::extensions"))
 }
 
-// TestMergeConfWithoutServiceExtensions guards the common case: a policy that
+// TestMergeAppendWithoutServiceExtensions guards the common case: a policy that
 // declares no extensions must not introduce an empty service::extensions key.
-func TestMergeConfWithoutServiceExtensions(t *testing.T) {
+func TestMergeAppendWithoutServiceExtensions(t *testing.T) {
+	_ = createProvider()
 	conf := confmap.New()
-	require.NoError(t, mergeConf(conf, confmap.NewFromStringMap(map[string]any{
+	require.NoError(t, conf.Merge(cleanConf(confmap.NewFromStringMap(map[string]any{
 		"receivers": map[string]any{"otlp/x": map[string]any{}},
-	})))
+	}))))
 
 	assert.False(t, conf.IsSet("service::extensions"))
 }

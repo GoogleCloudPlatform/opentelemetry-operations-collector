@@ -1,0 +1,43 @@
+resourceLogs:
+  - resource:
+      attributes:
+        - key: env
+          value:
+            stringValue: prod
+    scopeLogs:
+      - scope:
+          name: auth.service
+        logRecords:
+          - timeUnixNano: "1700000000000000000"
+            severityNumber: 5
+            severityText: DEBUG
+            body:
+              stringValue: PROD_DEBUG_KEPT_AND_TRANSFORMED
+            attributes:
+              - key: existing_label
+                value:
+                  stringValue: original
+          - timeUnixNano: "1700000001000000000"
+            severityNumber: 9
+            severityText: INFO
+            body:
+              stringValue: PROD_INFO_TRANSFORMED
+  - resource:
+      attributes:
+        - key: env
+          value:
+            stringValue: staging
+    scopeLogs:
+      - scope:
+          name: auth.service
+        logRecords:
+          - timeUnixNano: "1700000002000000000"
+            severityNumber: 5
+            severityText: DEBUG
+            body:
+              stringValue: STAGING_DEBUG_DROPPED_BEFORE_TRANSFORM
+          - timeUnixNano: "1700000003000000000"
+            severityNumber: 17
+            severityText: ERROR
+            body:
+              stringValue: STAGING_ERROR_UNTOUCHED

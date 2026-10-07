@@ -1346,3 +1346,109 @@ func latestPolicySetActive(batches []pmetric.Metrics) (int64, map[string]string,
 	}
 	return value, attrs, found
 }
+
+// TestLogFilterKeepAndTransformSelfMetrics verifies end-to-end collector
+// self-observability metrics (otelcol_processor_googlepolicy_records and
+// otelcol_processor_googlepolicy_policy_records) when log_filter (KEEP + DROP)
+// and log_transform policies evaluate the same batch.
+func TestLogFilterKeepAndTransformSelfMetrics(t *testing.T) {
+	otelcolBin := resolveOtelcolBinary(t)
+	tempDir := t.TempDir()
+
+	policiesDir := filepath.Join(tempDir, "policies")
+	copyDir(t, filepath.Join("testdata", "log_transform_and_filter_ordering", "policies"), policiesDir)
+
+	h := startTestHarness(t, otelcolBin, tempDir, policiesDir)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	inputLogs := readInputLogs(t, filepath.Join("testdata", "log_transform_and_filter_ordering", "input_logs.yaml"))
+	client := plogotlp.NewGRPCClient(h.conn)
+	if _, err := client.Export(ctx, plogotlp.NewExportRequestFromLogs(inputLogs)); err != nil {
+		t.Fatalf("failed to export logs to collector: %v\nlogs:\n%s", err, h.col.logs())
+	}
+
+	// Wait for the periodic metric reader to flush processor_googlepolicy_* counters to selfMockSrv.
+	var recordsByResult map[string]int64
+	var policyRecords map[string]int64
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		recordsByResult, policyRecords = latestProcessorPolicyCounters(h.selfMockSrv.CollectedMetrics())
+		if recordsByResult["logs/transformed"] == 2 && recordsByResult["logs/dropped"] == 1 {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	h.col.shutdown(t)
+
+	// Input batch has 4 logs:
+	// 1. prod DEBUG: matched keep-prod-logs (kept) AND drop-debug-logs (overridden by KEEP), then transformed by route-prod-to-soc -> final outcome "transformed"
+	// 2. prod INFO: matched keep-prod-logs (kept), then transformed by route-prod-to-soc -> final outcome "transformed"
+	// 3. staging DEBUG: matched drop-debug-logs -> final outcome "dropped" (never reaches transform stage)
+	// 4. staging ERROR: matched no filter or transform policies -> final outcome "no_match"
+	wantRecords := map[string]int64{
+		"logs/transformed": 2,
+		"logs/dropped":     1,
+		"logs/no_match":    1,
+	}
+	if diff := cmp.Diff(wantRecords, recordsByResult); diff != "" {
+		t.Errorf("otelcol_processor_googlepolicy_records mismatch (-want +got):\n%s\ncollector logs:\n%s", diff, h.col.logs())
+	}
+
+	wantPolicyRecords := map[string]int64{
+		"keep-prod-logs/logs/kept":                 2,
+		"drop-debug-logs/logs/dropped":             1,
+		"drop-debug-logs/logs/no_match":            1, // prod DEBUG matched drop-debug-logs, but was exempted by keep-prod-logs
+		"route-prod-to-soc/logs/transformed":       2,
+		"preserve-existing-label/logs/transformed": 1, // only PROD_INFO_TRANSFORMED is modified; PROD_DEBUG already has existing_label (upsert=false)
+		"set-resource-tier/logs/transformed":       2,
+		"set-scope-pipeline/logs/transformed":      2,
+	}
+	if diff := cmp.Diff(wantPolicyRecords, policyRecords); diff != "" {
+		t.Errorf("otelcol_processor_googlepolicy_policy_records mismatch (-want +got):\n%s\ncollector logs:\n%s", diff, h.col.logs())
+	}
+}
+
+func latestProcessorPolicyCounters(batches []pmetric.Metrics) (map[string]int64, map[string]int64) {
+	recordsByResult := make(map[string]int64)
+	policyRecords := make(map[string]int64)
+
+	for _, md := range batches {
+		for i := 0; i < md.ResourceMetrics().Len(); i++ {
+			sms := md.ResourceMetrics().At(i).ScopeMetrics()
+			for j := 0; j < sms.Len(); j++ {
+				ms := sms.At(j).Metrics()
+				for k := 0; k < ms.Len(); k++ {
+					m := ms.At(k)
+					if m.Type() != pmetric.MetricTypeSum {
+						continue
+					}
+					switch m.Name() {
+					case "otelcol_processor_googlepolicy_records", "processor_googlepolicy_records":
+						dps := m.Sum().DataPoints()
+						for l := 0; l < dps.Len(); l++ {
+							dp := dps.At(l)
+							sig, _ := dp.Attributes().Get("telemetry_type")
+							res, _ := dp.Attributes().Get("result")
+							key := sig.AsString() + "/" + res.AsString()
+							recordsByResult[key] = dp.IntValue()
+						}
+					case "otelcol_processor_googlepolicy_policy_records", "processor_googlepolicy_policy_records":
+						dps := m.Sum().DataPoints()
+						for l := 0; l < dps.Len(); l++ {
+							dp := dps.At(l)
+							pid, _ := dp.Attributes().Get("policy_id")
+							sig, _ := dp.Attributes().Get("telemetry_type")
+							res, _ := dp.Attributes().Get("result")
+							key := pid.AsString() + "/" + sig.AsString() + "/" + res.AsString()
+							policyRecords[key] = dp.IntValue()
+						}
+					}
+				}
+			}
+		}
+	}
+	return recordsByResult, policyRecords
+}

@@ -20,6 +20,7 @@ import (
 	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/logfilter"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/logtransform"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/metricfilter"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/tracefilter"
 	"github.com/stretchr/testify/assert"
@@ -1005,17 +1006,385 @@ func TestEvaluator_TransformPrunesEmptyScopesAndResources(t *testing.T) {
 	})
 }
 
+func TestEvaluator_LogTransform(t *testing.T) {
+	eventID4625 := &policyv1alpha1.LogMatcher{
+		Target: &policyv1alpha1.LogFieldSelector{
+			Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
+				LogAttribute: &policyv1alpha1.AttributePath{Path: []string{"winlog", "event_id"}},
+			},
+		},
+		Predicate: &policyv1alpha1.LogMatcher_Equals{
+			Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_IntValue{IntValue: 4625}},
+		},
+	}
+
+	// Transform 1a: Add flat log attribute threat_tier when event_id == 4625
+	labelSOC := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id:      "01-label-soc-logs",
+		Matches: []*policyv1alpha1.LogMatcher{eventID4625},
+		Action: &policyv1alpha1.LogTransformPolicy_Add{
+			Add: &policyv1alpha1.LogAddAction{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
+						LogAttribute: &policyv1alpha1.AttributePath{Path: []string{"threat_tier"}},
+					},
+				},
+				Value:  &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "HOT_ACTIVE_SOC"}},
+				Upsert: true,
+			},
+		},
+	})
+
+	// Transform 1b: Add nested log attribute gcp.routing.priority when event_id == 4625
+	labelSOCPriority := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id:      "02-label-soc-priority",
+		Matches: []*policyv1alpha1.LogMatcher{eventID4625},
+		Action: &policyv1alpha1.LogTransformPolicy_Add{
+			Add: &policyv1alpha1.LogAddAction{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
+						LogAttribute: &policyv1alpha1.AttributePath{Path: []string{"gcp", "routing", "priority"}},
+					},
+				},
+				Value:  &policyv1alpha1.Value{Value: &policyv1alpha1.Value_IntValue{IntValue: 1}},
+				Upsert: false,
+			},
+		},
+	})
+
+	// Transform 2: Add default threat_tier = "DEFAULT_TIER" with upsert: false for all logs with winlog.event_id
+	defaultTier := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id: "03-default-tier",
+		Matches: []*policyv1alpha1.LogMatcher{
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
+						LogAttribute: &policyv1alpha1.AttributePath{Path: []string{"winlog", "event_id"}},
+					},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Exists{},
+			},
+		},
+		Action: &policyv1alpha1.LogTransformPolicy_Add{
+			Add: &policyv1alpha1.LogAddAction{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
+						LogAttribute: &policyv1alpha1.AttributePath{Path: []string{"threat_tier"}},
+					},
+				},
+				Value:  &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "DEFAULT_TIER"}},
+				Upsert: false,
+			},
+		},
+	})
+
+	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{labelSOC, labelSOCPriority, defaultTier})
+	require.NoError(t, err)
+
+	ld := plog.NewLogs()
+	sl := ld.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty()
+
+	// Record 0: event_id = 4625 -> matches labelSOC (sets threat_tier="HOT_ACTIVE_SOC") and labelSOCPriority (sets gcp.routing.priority=1);
+	// defaultTier also matches on event_id exists, but upsert=false does NOT overwrite threat_tier!
+	lr0 := sl.LogRecords().AppendEmpty()
+	lr0.Attributes().PutEmptyMap("winlog").PutInt("event_id", 4625)
+
+	// Record 1: event_id = 4624 -> does not match labelSOC; matches defaultTier -> sets threat_tier="DEFAULT_TIER"
+	lr1 := sl.LogRecords().AppendEmpty()
+	lr1.Attributes().PutEmptyMap("winlog").PutInt("event_id", 4624)
+
+	// Record 2: no winlog.event_id -> matches no transform policy -> NoMatch
+	lr2 := sl.LogRecords().AppendEmpty()
+	lr2.Body().SetStr("unrelated log")
+
+	stats := ev.TransformLogs(ld)
+	assert.Equal(t, int64(0), stats.Dropped)
+	assert.Equal(t, int64(0), stats.Kept)
+	assert.Equal(t, int64(2), stats.Transformed)
+	assert.Equal(t, int64(1), stats.NoMatch)
+	assert.Equal(t, int64(1), stats.PolicyRecords["01-label-soc-logs"][ResultTransformed])
+	assert.Equal(t, int64(1), stats.PolicyRecords["02-label-soc-priority"][ResultTransformed])
+	assert.Equal(t, int64(1), stats.PolicyRecords["03-default-tier"][ResultTransformed])
+
+	records := ld.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords()
+	require.Equal(t, 3, records.Len())
+
+	tier0, ok := records.At(0).Attributes().Get("threat_tier")
+	require.True(t, ok)
+	assert.Equal(t, "HOT_ACTIVE_SOC", tier0.Str())
+
+	gcpMap, ok := records.At(0).Attributes().Get("gcp")
+	require.True(t, ok)
+	routingMap, ok := gcpMap.Map().Get("routing")
+	require.True(t, ok)
+	prio, ok := routingMap.Map().Get("priority")
+	require.True(t, ok)
+	assert.Equal(t, int64(1), prio.Int())
+
+	tier1, ok := records.At(1).Attributes().Get("threat_tier")
+	require.True(t, ok)
+	assert.Equal(t, "DEFAULT_TIER", tier1.Str())
+
+	_, ok = records.At(2).Attributes().Get("threat_tier")
+	assert.False(t, ok)
+}
+
+func TestEvaluator_LogFilterBeforeTransformOrdering(t *testing.T) {
+	// Filter 1 (DROP): Drop DEBUG logs
+	dropDebug := mustPolicy(t, &policyv1alpha1.LogFilterPolicy{
+		Id:     "drop-debug",
+		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+		Matches: []*policyv1alpha1.LogMatcher{
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_RecordField{
+						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT,
+					},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Equals{
+					Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "DEBUG"}},
+				},
+			},
+		},
+	})
+
+	// Filter 2 (KEEP exemption): Keep logs with log_attribute exempt == true
+	keepExempt := mustPolicy(t, &policyv1alpha1.LogFilterPolicy{
+		Id:     "keep-exempt",
+		Action: policyv1alpha1.Action_ACTION_KEEP.Enum(),
+		Matches: []*policyv1alpha1.LogMatcher{
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
+						LogAttribute: &policyv1alpha1.AttributePath{Path: []string{"exempt"}},
+					},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Equals{
+					Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_BoolValue{BoolValue: true}},
+				},
+			},
+		},
+	})
+
+	// Transform: Add utr_route = "security_lakehouse" to all logs where event_id == 4625
+	addUTRRoute := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id: "add-utr-route",
+		Matches: []*policyv1alpha1.LogMatcher{
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
+						LogAttribute: &policyv1alpha1.AttributePath{Path: []string{"event_id"}},
+					},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Equals{
+					Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_IntValue{IntValue: 4625}},
+				},
+			},
+		},
+		Action: &policyv1alpha1.LogTransformPolicy_Add{
+			Add: &policyv1alpha1.LogAddAction{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
+						LogAttribute: &policyv1alpha1.AttributePath{Path: []string{"utr_route"}},
+					},
+				},
+				Value:  &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "security_lakehouse"}},
+				Upsert: true,
+			},
+		},
+	})
+
+	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{dropDebug, keepExempt, addUTRRoute})
+	require.NoError(t, err)
+
+	ld := plog.NewLogs()
+	sl := ld.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty()
+
+	// Record A: DEBUG + event_id=4625 (not exempt) -> DROPPED in Stage 1; must NOT be transformed in Stage 2!
+	lrDropped := sl.LogRecords().AppendEmpty()
+	lrDropped.SetSeverityText("DEBUG")
+	lrDropped.Attributes().PutInt("event_id", 4625)
+
+	// Record B: DEBUG + exempt=true + event_id=4625 -> KEPT in Stage 1 (keep-exempt overrides drop-debug)
+	// AND TRANSFORMED in Stage 2 by add-utr-route!
+	lrKeptAndTransformed := sl.LogRecords().AppendEmpty()
+	lrKeptAndTransformed.SetSeverityText("DEBUG")
+	lrKeptAndTransformed.Attributes().PutBool("exempt", true)
+	lrKeptAndTransformed.Attributes().PutInt("event_id", 4625)
+
+	// Record C: DEBUG + exempt=true + event_id=1000 -> KEPT in Stage 1, does not match transform in Stage 2
+	lrKeptOnly := sl.LogRecords().AppendEmpty()
+	lrKeptOnly.SetSeverityText("DEBUG")
+	lrKeptOnly.Attributes().PutBool("exempt", true)
+	lrKeptOnly.Attributes().PutInt("event_id", 1000)
+
+	// Record D: INFO + event_id=4625 -> No filter match in Stage 1 (default allow), TRANSFORMED in Stage 2
+	lrDefaultAndTransformed := sl.LogRecords().AppendEmpty()
+	lrDefaultAndTransformed.SetSeverityText("INFO")
+	lrDefaultAndTransformed.Attributes().PutInt("event_id", 4625)
+
+	stats := ev.TransformLogs(ld)
+
+	// Verify Tier 1 aggregate stats:
+	// - 1 dropped (Record A)
+	// - 2 transformed (Record B: kept+transformed -> transformed; Record D: default+transformed -> transformed)
+	// - 1 kept (Record C: kept only)
+	// - 0 no_match
+	assert.Equal(t, int64(1), stats.Dropped)
+	assert.Equal(t, int64(2), stats.Transformed)
+	assert.Equal(t, int64(1), stats.Kept)
+	assert.Equal(t, int64(0), stats.NoMatch)
+
+	// Verify Tier 2 per-policy stats:
+	// - drop-debug: 1 dropped (Record A) and 2 no_match (Records B & C overridden by keep-exempt)
+	// - keep-exempt: 2 kept (Records B & C)
+	// - add-utr-route: 2 transformed (Records B & D; Record A was dropped before Stage 2!)
+	assert.Equal(t, int64(1), stats.PolicyRecords["drop-debug"][ResultDropped])
+	assert.Equal(t, int64(2), stats.PolicyRecords["drop-debug"][ResultNoMatch])
+	assert.Equal(t, int64(2), stats.PolicyRecords["keep-exempt"][ResultKept])
+	assert.Equal(t, int64(2), stats.PolicyRecords["add-utr-route"][ResultTransformed])
+
+	// Verify surviving records and their attributes
+	surviving := ld.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords()
+	require.Equal(t, 3, surviving.Len())
+
+	routeB, ok := surviving.At(0).Attributes().Get("utr_route")
+	require.True(t, ok)
+	assert.Equal(t, "security_lakehouse", routeB.Str())
+
+	_, ok = surviving.At(1).Attributes().Get("utr_route")
+	assert.False(t, ok)
+
+	routeD, ok := surviving.At(2).Attributes().Get("utr_route")
+	require.True(t, ok)
+	assert.Equal(t, "security_lakehouse", routeD.Str())
+}
+
+func TestEvaluator_LogTransformResourceAndScopeAttributes(t *testing.T) {
+	adMatcher := []*policyv1alpha1.LogMatcher{
+		{
+			Target: &policyv1alpha1.LogFieldSelector{
+				Target: &policyv1alpha1.LogFieldSelector_ResourceAttribute{
+					ResourceAttribute: &policyv1alpha1.AttributePath{Path: []string{"service.name"}},
+				},
+			},
+			Predicate: &policyv1alpha1.LogMatcher_Equals{
+				Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "active-directory"}},
+			},
+		},
+	}
+
+	enrichResource := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id:      "01-enrich-resource",
+		Matches: adMatcher,
+		Action: &policyv1alpha1.LogTransformPolicy_Add{
+			Add: &policyv1alpha1.LogAddAction{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_ResourceAttribute{
+						ResourceAttribute: &policyv1alpha1.AttributePath{Path: []string{"gcp", "utr", "stream"}},
+					},
+				},
+				Value:  &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "secops-ad"}},
+				Upsert: true,
+			},
+		},
+	})
+
+	enrichScope := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id:      "02-enrich-scope",
+		Matches: adMatcher,
+		Action: &policyv1alpha1.LogTransformPolicy_Add{
+			Add: &policyv1alpha1.LogAddAction{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_ScopeAttribute{
+						ScopeAttribute: &policyv1alpha1.AttributePath{Path: []string{"collector.pipeline"}},
+					},
+				},
+				Value:  &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "tango-st2"}},
+				Upsert: true,
+			},
+		},
+	})
+
+	enrichLog := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id:      "03-enrich-log",
+		Matches: adMatcher,
+		Action: &policyv1alpha1.LogTransformPolicy_Add{
+			Add: &policyv1alpha1.LogAddAction{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
+						LogAttribute: &policyv1alpha1.AttributePath{Path: []string{"threat_tier"}},
+					},
+				},
+				Value:  &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "HOT_ACTIVE_SOC"}},
+				Upsert: true,
+			},
+		},
+	})
+
+	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{enrichResource, enrichScope, enrichLog})
+	require.NoError(t, err)
+
+	ld := plog.NewLogs()
+
+	// Resource 0: service.name = "active-directory" (matches)
+	rl0 := ld.ResourceLogs().AppendEmpty()
+	rl0.Resource().Attributes().PutStr("service.name", "active-directory")
+	sl0 := rl0.ScopeLogs().AppendEmpty()
+	sl0.Scope().SetName("winlog")
+	sl0.LogRecords().AppendEmpty().Body().SetStr("AD logon failure")
+
+	// Resource 1: service.name = "nginx" (does not match)
+	rl1 := ld.ResourceLogs().AppendEmpty()
+	rl1.Resource().Attributes().PutStr("service.name", "nginx")
+	sl1 := rl1.ScopeLogs().AppendEmpty()
+	sl1.LogRecords().AppendEmpty().Body().SetStr("GET /index.html")
+
+	stats := ev.TransformLogs(ld)
+	assert.Equal(t, int64(1), stats.Transformed)
+	assert.Equal(t, int64(1), stats.NoMatch)
+
+	// Verify Resource 0 has nested resource_attribute gcp.utr.stream = "secops-ad",
+	// scope_attribute collector.pipeline = "tango-st2", and log_attribute threat_tier = "HOT_ACTIVE_SOC"
+	gcpAttr, ok := ld.ResourceLogs().At(0).Resource().Attributes().Get("gcp")
+	require.True(t, ok)
+	utrAttr, ok := gcpAttr.Map().Get("utr")
+	require.True(t, ok)
+	streamAttr, ok := utrAttr.Map().Get("stream")
+	require.True(t, ok)
+	assert.Equal(t, "secops-ad", streamAttr.Str())
+
+	pipeAttr, ok := ld.ResourceLogs().At(0).ScopeLogs().At(0).Scope().Attributes().Get("collector.pipeline")
+	require.True(t, ok)
+	assert.Equal(t, "tango-st2", pipeAttr.Str())
+
+	tierAttr, ok := ld.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().At(0).Attributes().Get("threat_tier")
+	require.True(t, ok)
+	assert.Equal(t, "HOT_ACTIVE_SOC", tierAttr.Str())
+
+	// Verify Resource 1 was not modified
+	_, ok = ld.ResourceLogs().At(1).Resource().Attributes().Get("gcp")
+	assert.False(t, ok)
+	_, ok = ld.ResourceLogs().At(1).ScopeLogs().At(0).Scope().Attributes().Get("collector.pipeline")
+	assert.False(t, ok)
+}
+
 // --- policy helpers --------------------------------------------------------
 
-// mustPolicy compiles a filter policy proto with its owning filter package and
-// returns the resulting TransformationPolicy. This is exactly what the
-// googlepolicy registry hands NewEvaluator in production: an already-compiled
-// policy that implements the matching per-signal evaluator interface.
+// mustPolicy compiles a filter or transform policy proto with its owning
+// package and returns the resulting TransformationPolicy. This is exactly what
+// the googlepolicy registry hands NewEvaluator in production: an
+// already-compiled policy that implements the matching per-signal evaluator
+// interface.
 func mustPolicy(t *testing.T, pb proto.Message) googlepolicy.TransformationPolicy {
 	t.Helper()
 	switch p := pb.(type) {
 	case *policyv1alpha1.LogFilterPolicy:
 		pol, err := logfilter.NewPolicyFromProto(p)
+		require.NoError(t, err)
+		return pol
+	case *policyv1alpha1.LogTransformPolicy:
+		pol, err := logtransform.NewPolicyFromProto(p)
 		require.NoError(t, err)
 		return pol
 	case *policyv1alpha1.MetricFilterPolicy:

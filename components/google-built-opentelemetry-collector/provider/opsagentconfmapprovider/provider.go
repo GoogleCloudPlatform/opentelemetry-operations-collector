@@ -51,19 +51,16 @@ func (p *provider) Retrieve(ctx context.Context, uri string, watcher confmap.Wat
 		return nil, fmt.Errorf("failed to build unified config: %w", err)
 	}
 
-	// Default ops-agent paths (temporary for testing without sudo)
-	outDir := "/tmp/test-ops-agent/run/google-cloud-ops-agent/opentelemetry-collector"
-	stateDir := "/tmp/test-ops-agent/lib/google-cloud-ops-agent/opentelemetry-collector"
-	logsDir := "/tmp/test-ops-agent/log/google-cloud-ops-agent/subagents"
+	// Default ops-agent paths
+	outDir := "/var/run/google-cloud-ops-agent/opentelemetry-collector"
+	stateDir := "/var/lib/google-cloud-ops-agent/opentelemetry-collector"
+	logsDir := "/var/log/google-cloud-ops-agent/subagents"
 
 	otelConfigStr, err := uc.GenerateOtelConfig(ctx, outDir, stateDir, logsDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate otel config: %w", err)
 	}
 
-	// Dump the config for debugging
-	_ = os.WriteFile("/tmp/generated-otel-config.yaml", []byte(otelConfigStr), 0644)
-	fmt.Println("Generated OTel Config dumped to: /tmp/generated-otel-config.yaml")
 
 	var otelConfigMap map[string]interface{}
 	if err := yaml.Unmarshal([]byte(otelConfigStr), &otelConfigMap); err != nil {

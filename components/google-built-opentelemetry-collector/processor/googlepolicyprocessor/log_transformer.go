@@ -20,10 +20,12 @@ import (
 )
 
 // TransformLogs applies active transformation policies in-place across the Resource -> Scope -> Record hierarchy.
+// Filter policies are evaluated first (Stage 1); surviving log records are then evaluated against
+// transform policies (Stage 2) in deterministic policy ID order.
 // Dropped records are pruned, empty scopes/resources are removed, and batch transformation stats are returned.
 func (e *Evaluator) TransformLogs(ld plog.Logs) TransformStats {
 	stats := newTransformStats()
-	if len(e.logPolicies) == 0 {
+	if len(e.logPolicies) == 0 && len(e.logTransformPolicies) == 0 {
 		return stats
 	}
 
@@ -46,7 +48,9 @@ func (e *Evaluator) TransformLogs(ld plog.Logs) TransformStats {
 				res := e.evaluateLog(ctx)
 				if res.Drop {
 					stats.Dropped++
-				} else if len(res.Evaluations) > 0 {
+				} else if res.Transformed {
+					stats.Transformed++
+				} else if res.Kept {
 					stats.Kept++
 				} else {
 					stats.NoMatch++
@@ -68,6 +72,8 @@ func (e *Evaluator) TransformLogs(ld plog.Logs) TransformStats {
 
 type logEvalResult struct {
 	Drop        bool
+	Kept        bool
+	Transformed bool
 	Evaluations []PolicyEvaluation
 }
 
@@ -77,51 +83,64 @@ type matchedLogPolicy struct {
 }
 
 func (e *Evaluator) evaluateLog(ctx LogContext) logEvalResult {
-	if len(e.logPolicies) == 0 {
-		return logEvalResult{Drop: false}
-	}
-
-	var matchingPolicies []matchedLogPolicy
-	var hasKeep, hasDrop bool
-	for _, p := range e.logPolicies {
-		evalRes := p.EvaluateLog(ctx)
-		if evalRes != googlepolicy.EvalNoMatch {
-			matchingPolicies = append(matchingPolicies, matchedLogPolicy{
-				id:  p.PolicyName(),
-				res: evalRes,
-			})
-			if evalRes == googlepolicy.EvalKeep {
-				hasKeep = true
-			} else if evalRes == googlepolicy.EvalDrop {
-				hasDrop = true
-			}
-		}
-	}
-
 	var res logEvalResult
-	if hasKeep {
-		res.Drop = false
-		for _, p := range matchingPolicies {
-			if p.res == googlepolicy.EvalKeep {
-				res.Evaluations = append(res.Evaluations, PolicyEvaluation{PolicyID: p.id, Result: ResultKept})
-			} else {
-				res.Evaluations = append(res.Evaluations, PolicyEvaluation{PolicyID: p.id, Result: ResultNoMatch})
+
+	// Stage 1: Filter policies.
+	if len(e.logPolicies) > 0 {
+		var matchingPolicies []matchedLogPolicy
+		var hasKeep, hasDrop bool
+		for _, p := range e.logPolicies {
+			evalRes := p.EvaluateLog(ctx)
+			if evalRes != googlepolicy.EvalNoMatch {
+				matchingPolicies = append(matchingPolicies, matchedLogPolicy{
+					id:  p.PolicyName(),
+					res: evalRes,
+				})
+				if evalRes == googlepolicy.EvalKeep {
+					hasKeep = true
+				} else if evalRes == googlepolicy.EvalDrop {
+					hasDrop = true
+				}
 			}
 		}
-	} else if hasDrop {
-		res.Drop = true
-		for _, p := range matchingPolicies {
-			res.Evaluations = append(res.Evaluations, PolicyEvaluation{PolicyID: p.id, Result: ResultDropped})
+
+		if hasKeep {
+			res.Drop = false
+			res.Kept = true
+			for _, p := range matchingPolicies {
+				if p.res == googlepolicy.EvalKeep {
+					res.Evaluations = append(res.Evaluations, PolicyEvaluation{PolicyID: p.id, Result: ResultKept})
+				} else {
+					res.Evaluations = append(res.Evaluations, PolicyEvaluation{PolicyID: p.id, Result: ResultNoMatch})
+				}
+			}
+		} else if hasDrop {
+			res.Drop = true
+			for _, p := range matchingPolicies {
+				res.Evaluations = append(res.Evaluations, PolicyEvaluation{PolicyID: p.id, Result: ResultDropped})
+			}
+			// Dropped records never enter the transform stage.
+			return res
 		}
-	} else {
-		res.Drop = false
+	}
+
+	// Stage 2: Transform policies (only evaluated on surviving log records).
+	for _, tp := range e.logTransformPolicies {
+		if tp.TransformLog(ctx) == googlepolicy.TransformModified {
+			res.Transformed = true
+			res.Evaluations = append(res.Evaluations, PolicyEvaluation{
+				PolicyID: tp.PolicyName(),
+				Result:   ResultTransformed,
+			})
+		}
 	}
 
 	return res
 }
 
 // EvalLog returns true if the log record should be DROPPED, false if KEPT.
-// A matching ACTION_KEEP policy exempts the record outright.
+// A matching ACTION_KEEP policy exempts the record outright. Surviving records
+// also have any matching LogTransformPolicy rules applied in-place.
 func (e *Evaluator) EvalLog(ctx LogContext) bool {
 	return e.evaluateLog(ctx).Drop
 }

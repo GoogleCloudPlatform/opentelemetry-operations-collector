@@ -402,6 +402,170 @@ func TestProcessLogs_Telemetry(t *testing.T) {
 	assert.Equal(t, int64(1), policyCounts["keep-important-logs"]["kept"])
 }
 
+func TestProcessLogs_FilterKeepAndTransformTelemetry(t *testing.T) {
+	dropPolicy := mustPolicy(t, &policyv1alpha1.LogFilterPolicy{
+		Id:     "drop-debug-logs",
+		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+		Matches: []*policyv1alpha1.LogMatcher{
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_RecordField{
+						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT,
+					},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_StringValue{StringValue: "DEBUG"},
+					},
+				},
+			},
+		},
+	})
+	keepPolicy := mustPolicy(t, &policyv1alpha1.LogFilterPolicy{
+		Id:     "keep-exempt-logs",
+		Action: policyv1alpha1.Action_ACTION_KEEP.Enum(),
+		Matches: []*policyv1alpha1.LogMatcher{
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
+						LogAttribute: &policyv1alpha1.AttributePath{Path: []string{"exempt"}},
+					},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_BoolValue{BoolValue: true},
+					},
+				},
+			},
+		},
+	})
+	transformPolicy := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id: "add-utr-label",
+		Matches: []*policyv1alpha1.LogMatcher{
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
+						LogAttribute: &policyv1alpha1.AttributePath{Path: []string{"event_id"}},
+					},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_IntValue{IntValue: 4625},
+					},
+				},
+			},
+		},
+		Action: &policyv1alpha1.LogTransformPolicy_Add{
+			Add: &policyv1alpha1.LogAddAction{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
+						LogAttribute: &policyv1alpha1.AttributePath{Path: []string{"threat_tier"}},
+					},
+				},
+				Value: &policyv1alpha1.Value{
+					Value: &policyv1alpha1.Value_StringValue{StringValue: "HOT_ACTIVE_SOC"},
+				},
+				Upsert: true,
+			},
+		},
+	})
+
+	googlepolicy.SetActivePolicySet(&googlepolicy.PolicySet{
+		RevisionID: "rev-tel-keep-transform",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			"drop-debug-logs":  {PolicyObj: dropPolicy},
+			"keep-exempt-logs": {PolicyObj: keepPolicy},
+			"add-utr-label":    {PolicyObj: transformPolicy},
+		},
+	})
+	defer googlepolicy.SetActivePolicySet(nil)
+
+	testTel := componenttest.NewTelemetry()
+	defer func() { _ = testTel.Shutdown(context.Background()) }()
+
+	tb, err := metadata.NewTelemetryBuilder(testTel.NewTelemetrySettings())
+	require.NoError(t, err)
+	defer tb.Shutdown()
+
+	p := newGooglePolicyProcessor(&Config{}, zap.NewNop(), tb)
+	require.NoError(t, p.start(context.Background(), componenttest.NewNopHost()))
+	defer func() { _ = p.shutdown(context.Background()) }()
+
+	ld := plog.NewLogs()
+	sl := ld.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty()
+
+	// 1. DEBUG + event_id=4625 (not exempt) -> dropped in Stage 1, NOT transformed
+	lr1 := sl.LogRecords().AppendEmpty()
+	lr1.SetSeverityText("DEBUG")
+	lr1.Attributes().PutInt("event_id", 4625)
+
+	// 2. DEBUG + exempt=true + event_id=4625 -> kept in Stage 1 AND transformed in Stage 2
+	lr2 := sl.LogRecords().AppendEmpty()
+	lr2.SetSeverityText("DEBUG")
+	lr2.Attributes().PutBool("exempt", true)
+	lr2.Attributes().PutInt("event_id", 4625)
+
+	// 3. DEBUG + exempt=true + event_id=1000 -> kept in Stage 1, not transformed in Stage 2
+	lr3 := sl.LogRecords().AppendEmpty()
+	lr3.SetSeverityText("DEBUG")
+	lr3.Attributes().PutBool("exempt", true)
+	lr3.Attributes().PutInt("event_id", 1000)
+
+	// 4. INFO + event_id=4625 -> default allow in Stage 1, transformed in Stage 2
+	lr4 := sl.LogRecords().AppendEmpty()
+	lr4.SetSeverityText("INFO")
+	lr4.Attributes().PutInt("event_id", 4625)
+
+	// 5. INFO + event_id=9999 -> no_match in Stage 1 and Stage 2
+	lr5 := sl.LogRecords().AppendEmpty()
+	lr5.SetSeverityText("INFO")
+	lr5.Attributes().PutInt("event_id", 9999)
+
+	out, err := p.processLogs(context.Background(), ld)
+	require.NoError(t, err)
+	require.Equal(t, 4, out.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().Len())
+
+	// Tier 1: Aggregate processor_googlepolicy_records
+	m, err := testTel.GetMetric("otelcol_processor_googlepolicy_records")
+	require.NoError(t, err)
+	sum, ok := m.Data.(metricdata.Sum[int64])
+	require.True(t, ok)
+
+	counts := make(map[string]int64)
+	for _, dp := range sum.DataPoints {
+		res, _ := dp.Attributes.Value("result")
+		ttype, _ := dp.Attributes.Value("telemetry_type")
+		assert.Equal(t, "logs", ttype.AsString())
+		counts[res.AsString()] += dp.Value
+	}
+	assert.Equal(t, int64(1), counts["dropped"])
+	assert.Equal(t, int64(2), counts["transformed"])
+	assert.Equal(t, int64(1), counts["kept"])
+	assert.Equal(t, int64(1), counts["no_match"])
+
+	// Tier 2: Per-policy processor_googlepolicy_policy_records
+	pm, err := testTel.GetMetric("otelcol_processor_googlepolicy_policy_records")
+	require.NoError(t, err)
+	psum, ok := pm.Data.(metricdata.Sum[int64])
+	require.True(t, ok)
+
+	policyCounts := make(map[string]map[string]int64)
+	for _, dp := range psum.DataPoints {
+		pid, _ := dp.Attributes.Value("policy_id")
+		res, _ := dp.Attributes.Value("result")
+		ttype, _ := dp.Attributes.Value("telemetry_type")
+		assert.Equal(t, "logs", ttype.AsString())
+		if policyCounts[pid.AsString()] == nil {
+			policyCounts[pid.AsString()] = make(map[string]int64)
+		}
+		policyCounts[pid.AsString()][res.AsString()] += dp.Value
+	}
+	assert.Equal(t, int64(1), policyCounts["drop-debug-logs"]["dropped"])
+	assert.Equal(t, int64(2), policyCounts["drop-debug-logs"]["no_match"])
+	assert.Equal(t, int64(2), policyCounts["keep-exempt-logs"]["kept"])
+	assert.Equal(t, int64(2), policyCounts["add-utr-label"]["transformed"])
+}
+
 func TestProcessMetrics_Telemetry(t *testing.T) {
 	dropPolicy := mustPolicy(t, &policyv1alpha1.MetricFilterPolicy{
 		Id:     "drop-internal-metric",

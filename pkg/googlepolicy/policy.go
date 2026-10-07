@@ -100,6 +100,26 @@ type LogPolicyEvaluator interface {
 	EvaluateLog(ctx LogContext) EvalResult
 }
 
+// TransformResult represents the outcome of evaluating and applying a
+// transform policy against a telemetry item.
+type TransformResult uint8
+
+const (
+	// TransformNoMatch indicates the policy conditions did not match the item
+	// (or the operation yielded no modification).
+	TransformNoMatch TransformResult = iota
+	// TransformModified indicates the policy matched and modified the item in-place.
+	TransformModified
+)
+
+// LogTransformPolicyEvaluator is implemented by transformation policies that
+// modify surviving log records in-place (e.g., LogTransformPolicy in
+// pkg/googlepolicy/logtransform).
+type LogTransformPolicyEvaluator interface {
+	TransformationPolicy
+	TransformLog(ctx LogContext) TransformResult
+}
+
 // MetricContext holds the contextual information needed to evaluate a single
 // metric datapoint. DatapointAttributes is empty when the policy set is
 // evaluated at instrument level only.

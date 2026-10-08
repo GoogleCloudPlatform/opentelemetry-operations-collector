@@ -437,6 +437,86 @@ func CompilePathRemover(attrPath *policyv1alpha1.AttributePath, kind string) (fu
 	}, nil
 }
 
+// CompilePathLookup pre-compiles an AttributePath into a closure that returns
+// the existing pcommon.Value at the leaf key without mutating the map.
+func CompilePathLookup(attrPath *policyv1alpha1.AttributePath, kind string) (func(pcommon.Map) (pcommon.Value, bool), error) {
+	steps, err := CompilePath(attrPath, kind)
+	if err != nil {
+		return nil, err
+	}
+	leafKey := steps[len(steps)-1].Key
+	if len(steps) == 1 {
+		return func(attrs pcommon.Map) (pcommon.Value, bool) {
+			if attrs == (pcommon.Map{}) {
+				return pcommon.Value{}, false
+			}
+			return attrs.Get(leafKey)
+		}, nil
+	}
+	prefix := steps[:len(steps)-1]
+	return func(attrs pcommon.Map) (pcommon.Value, bool) {
+		parent, ok := findExistingParentMap(attrs, prefix)
+		if !ok {
+			return pcommon.Value{}, false
+		}
+		return parent.Get(leafKey)
+	}, nil
+}
+
+// CompilePathDynamicSetter pre-compiles an AttributePath into a pair of
+// closures: canSet checks whether the destination path is writable under
+// upsert without mutating the map, and set copies a runtime pcommon.Value into
+// the leaf key (creating missing intermediate maps when needed).
+func CompilePathDynamicSetter(attrPath *policyv1alpha1.AttributePath, kind string, upsert bool) (func(pcommon.Map) bool, func(pcommon.Map, pcommon.Value) bool, error) {
+	steps, err := CompilePath(attrPath, kind)
+	if err != nil {
+		return nil, nil, err
+	}
+	leafKey := steps[len(steps)-1].Key
+	if len(steps) == 1 {
+		canSet := func(attrs pcommon.Map) bool {
+			if attrs == (pcommon.Map{}) {
+				return false
+			}
+			if !upsert {
+				_, exists := attrs.Get(leafKey)
+				return !exists
+			}
+			return true
+		}
+		set := func(attrs pcommon.Map, val pcommon.Value) bool {
+			if attrs == (pcommon.Map{}) {
+				return false
+			}
+			val.CopyTo(attrs.PutEmpty(leafKey))
+			return true
+		}
+		return canSet, set, nil
+	}
+	prefix := steps[:len(steps)-1]
+	canSet := func(attrs pcommon.Map) bool {
+		if attrs == (pcommon.Map{}) {
+			return false
+		}
+		if upsert {
+			return true
+		}
+		return canSetNestedPath(attrs, prefix, leafKey)
+	}
+	set := func(attrs pcommon.Map, val pcommon.Value) bool {
+		if attrs == (pcommon.Map{}) {
+			return false
+		}
+		parent, ok := resolveParentMap(attrs, prefix, upsert)
+		if !ok {
+			return false
+		}
+		val.CopyTo(parent.PutEmpty(leafKey))
+		return true
+	}
+	return canSet, set, nil
+}
+
 func findExistingParentMap(attrs pcommon.Map, prefix []PathStep) (pcommon.Map, bool) {
 	if attrs == (pcommon.Map{}) {
 		return pcommon.Map{}, false
@@ -450,6 +530,23 @@ func findExistingParentMap(attrs pcommon.Map, prefix []PathStep) (pcommon.Map, b
 		curr = child.Map()
 	}
 	return curr, true
+}
+
+func canSetNestedPath(attrs pcommon.Map, prefix []PathStep, leafKey string) bool {
+	curr := attrs
+	for _, step := range prefix {
+		child, exists := curr.Get(step.Key)
+		if !exists {
+			// A missing ancestor map will be newly created, so leafKey cannot exist yet.
+			return true
+		}
+		if child.Type() != pcommon.ValueTypeMap {
+			return false
+		}
+		curr = child.Map()
+	}
+	_, exists := curr.Get(leafKey)
+	return !exists
 }
 
 // ValueToAny converts a pcommon.Value into the plain Go value that the

@@ -59,8 +59,6 @@ var (
 	ErrMissingTarget = errors.New("log transform action must specify a target field selector")
 	// ErrMissingValue is returned when an action does not specify a valid value.
 	ErrMissingValue = matcher.ErrMissingValue
-	// ErrUnsupportedAction is returned when an action is not supported in this release.
-	ErrUnsupportedAction = errors.New("log transform action is not supported in this release")
 )
 
 type compiledAction func(ctx googlepolicy.LogContext) bool
@@ -122,7 +120,14 @@ func NewPolicyFromProto(pb *policyv1alpha1.LogTransformPolicy) (*Policy, error) 
 			return nil, fmt.Errorf("rename: %w", err)
 		}
 	case *policyv1alpha1.LogTransformPolicy_Redact:
-		return nil, fmt.Errorf("redact: %w", ErrUnsupportedAction)
+		if a.Redact == nil {
+			return nil, ErrMissingAction
+		}
+		stage = googlepolicy.TransformStageRedact
+		action, err = compileRedact(a.Redact)
+		if err != nil {
+			return nil, fmt.Errorf("redact: %w", err)
+		}
 	default:
 		return nil, ErrMissingAction
 	}
@@ -891,6 +896,164 @@ func compileScopeFieldDynamicWriter(field policyv1alpha1.ScopeField, upsert bool
 
 	default:
 		return nil, nil, errors.New("scope field cannot be unspecified")
+	}
+}
+
+func compileRedact(a *policyv1alpha1.LogRedactAction) (compiledAction, error) {
+	target := a.GetTarget()
+	if target == nil || target.Target == nil {
+		return nil, ErrMissingTarget
+	}
+	redactStr, err := matcher.CompileStringRedactor(a.GetRegex(), a.GetReplacement())
+	if err != nil {
+		return nil, err
+	}
+
+	switch t := target.Target.(type) {
+	case *policyv1alpha1.LogFieldSelector_LogAttribute:
+		return compileAttributeRedact(t.LogAttribute, "log", logAttributes, redactStr)
+
+	case *policyv1alpha1.LogFieldSelector_ResourceAttribute:
+		return compileAttributeRedact(t.ResourceAttribute, "resource", resourceAttributes, redactStr)
+
+	case *policyv1alpha1.LogFieldSelector_ScopeAttribute:
+		return compileAttributeRedact(t.ScopeAttribute, "scope", scopeAttributes, redactStr)
+
+	case *policyv1alpha1.LogFieldSelector_RecordField:
+		return compileRecordFieldRedact(t.RecordField, redactStr)
+
+	case *policyv1alpha1.LogFieldSelector_ScopeField:
+		return compileScopeFieldRedact(t.ScopeField, redactStr)
+
+	default:
+		return nil, ErrMissingTarget
+	}
+}
+
+func logAttributes(ctx googlepolicy.LogContext) (pcommon.Map, bool) {
+	if ctx.Record == (plog.LogRecord{}) {
+		return pcommon.Map{}, false
+	}
+	return ctx.Record.Attributes(), true
+}
+
+func resourceAttributes(ctx googlepolicy.LogContext) (pcommon.Map, bool) {
+	if ctx.Resource == (pcommon.Resource{}) {
+		return pcommon.Map{}, false
+	}
+	return ctx.Resource.Attributes(), true
+}
+
+func scopeAttributes(ctx googlepolicy.LogContext) (pcommon.Map, bool) {
+	if ctx.Scope == (pcommon.InstrumentationScope{}) {
+		return pcommon.Map{}, false
+	}
+	return ctx.Scope.Attributes(), true
+}
+
+func compileAttributeRedact(
+	path *policyv1alpha1.AttributePath,
+	prefix string,
+	getAttrs func(googlepolicy.LogContext) (pcommon.Map, bool),
+	redactStr func(string) (string, bool),
+) (compiledAction, error) {
+	lookup, err := matcher.CompilePathLookup(path, prefix)
+	if err != nil {
+		return nil, err
+	}
+	return func(ctx googlepolicy.LogContext) bool {
+		attrs, ok := getAttrs(ctx)
+		if !ok {
+			return false
+		}
+		v, ok := lookup(attrs)
+		if !ok || v.Type() != pcommon.ValueTypeStr {
+			return false
+		}
+		redacted, modified := redactStr(v.Str())
+		if !modified {
+			return false
+		}
+		v.SetStr(redacted)
+		return true
+	}, nil
+}
+
+func compileRecordFieldRedact(field policyv1alpha1.LogRecordField, redactStr func(string) (string, bool)) (compiledAction, error) {
+	switch field {
+	case policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY:
+		return func(ctx googlepolicy.LogContext) bool {
+			if ctx.Record == (plog.LogRecord{}) {
+				return false
+			}
+			body := ctx.Record.Body()
+			if body.Type() != pcommon.ValueTypeStr || body.Str() == "" {
+				return false
+			}
+			redacted, modified := redactStr(body.Str())
+			if !modified {
+				return false
+			}
+			body.SetStr(redacted)
+			return true
+		}, nil
+
+	case policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT:
+		return func(ctx googlepolicy.LogContext) bool {
+			if ctx.Record == (plog.LogRecord{}) || ctx.Record.SeverityText() == "" {
+				return false
+			}
+			redacted, modified := redactStr(ctx.Record.SeverityText())
+			if !modified {
+				return false
+			}
+			ctx.Record.SetSeverityText(redacted)
+			return true
+		}, nil
+
+	case policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER,
+		policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID,
+		policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID:
+		return nil, fmt.Errorf("log record field %s is not supported as a redact target", field)
+
+	default:
+		return nil, errors.New("log record field cannot be unspecified")
+	}
+}
+
+func compileScopeFieldRedact(field policyv1alpha1.ScopeField, redactStr func(string) (string, bool)) (compiledAction, error) {
+	switch field {
+	case policyv1alpha1.ScopeField_SCOPE_FIELD_NAME:
+		return func(ctx googlepolicy.LogContext) bool {
+			if ctx.Scope == (pcommon.InstrumentationScope{}) || ctx.Scope.Name() == "" {
+				return false
+			}
+			redacted, modified := redactStr(ctx.Scope.Name())
+			if !modified {
+				return false
+			}
+			ctx.Scope.SetName(redacted)
+			return true
+		}, nil
+
+	case policyv1alpha1.ScopeField_SCOPE_FIELD_VERSION:
+		return func(ctx googlepolicy.LogContext) bool {
+			if ctx.Scope == (pcommon.InstrumentationScope{}) || ctx.Scope.Version() == "" {
+				return false
+			}
+			redacted, modified := redactStr(ctx.Scope.Version())
+			if !modified {
+				return false
+			}
+			ctx.Scope.SetVersion(redacted)
+			return true
+		}, nil
+
+	case policyv1alpha1.ScopeField_SCOPE_FIELD_SCHEMA_URL:
+		return nil, errors.New("scope field SCHEMA_URL is not supported as a transform target")
+
+	default:
+		return nil, errors.New("scope field cannot be unspecified")
 	}
 }
 

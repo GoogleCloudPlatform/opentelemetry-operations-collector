@@ -180,6 +180,16 @@ func fuzzLogTransformSeedPolicies() []*policyv1alpha1.LogTransformPolicy {
 				},
 			},
 		},
+		{
+			Id: "redact-body-regex",
+			Action: &policyv1alpha1.LogTransformPolicy_Redact{
+				Redact: &policyv1alpha1.LogRedactAction{
+					Target:      recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY),
+					Regex:       `(world)`,
+					Replacement: "[REDACTED:$1]",
+				},
+			},
+		},
 	}
 }
 

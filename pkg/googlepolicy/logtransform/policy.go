@@ -55,12 +55,12 @@ var (
 	ErrMissingID = errors.New("log transform policy id cannot be empty")
 	// ErrMissingAction is returned when the policy does not specify a transform action.
 	ErrMissingAction = errors.New("log transform policy must specify an action")
-	// ErrUnsupportedAction is returned when the policy specifies an action not yet supported.
-	ErrUnsupportedAction = errors.New("log transform policy action is not supported in this release")
 	// ErrMissingTarget is returned when an action does not specify a target field selector.
 	ErrMissingTarget = errors.New("log transform action must specify a target field selector")
 	// ErrMissingValue is returned when an action does not specify a valid value.
 	ErrMissingValue = matcher.ErrMissingValue
+	// ErrUnsupportedAction is returned when an action is not supported in this release.
+	ErrUnsupportedAction = errors.New("log transform action is not supported in this release")
 )
 
 type compiledAction func(ctx googlepolicy.LogContext) bool
@@ -113,7 +113,14 @@ func NewPolicyFromProto(pb *policyv1alpha1.LogTransformPolicy) (*Policy, error) 
 			return nil, fmt.Errorf("remove: %w", err)
 		}
 	case *policyv1alpha1.LogTransformPolicy_Rename:
-		return nil, fmt.Errorf("rename: %w", ErrUnsupportedAction)
+		if a.Rename == nil {
+			return nil, ErrMissingAction
+		}
+		stage = googlepolicy.TransformStageRename
+		action, err = compileRename(a.Rename)
+		if err != nil {
+			return nil, fmt.Errorf("rename: %w", err)
+		}
 	case *policyv1alpha1.LogTransformPolicy_Redact:
 		return nil, fmt.Errorf("redact: %w", ErrUnsupportedAction)
 	default:
@@ -525,6 +532,368 @@ func compileScopeFieldRemove(field policyv1alpha1.ScopeField) (compiledAction, e
 	}
 }
 
+func compileRename(a *policyv1alpha1.LogRenameAction) (compiledAction, error) {
+	readFrom, err := compileTargetValueReader(a.GetFrom())
+	if err != nil {
+		return nil, fmt.Errorf("from: %w", err)
+	}
+	removeFrom, err := compileTargetRemover(a.GetFrom())
+	if err != nil {
+		return nil, fmt.Errorf("from: %w", err)
+	}
+	canWriteTo, writeTo, err := compileTargetDynamicWriter(a.GetTo(), a.GetUpsert())
+	if err != nil {
+		return nil, fmt.Errorf("to: %w", err)
+	}
+
+	if proto.Equal(a.GetFrom(), a.GetTo()) {
+		if !a.GetUpsert() {
+			return func(_ googlepolicy.LogContext) bool {
+				return false
+			}, nil
+		}
+		return func(ctx googlepolicy.LogContext) bool {
+			srcVal, ok := readFrom(ctx)
+			if !ok {
+				return false
+			}
+			return canWriteTo(ctx, srcVal)
+		}, nil
+	}
+
+	return func(ctx googlepolicy.LogContext) bool {
+		srcVal, ok := readFrom(ctx)
+		if !ok {
+			return false
+		}
+		if !canWriteTo(ctx, srcVal) {
+			return false
+		}
+		cloned := pcommon.NewValueEmpty()
+		srcVal.CopyTo(cloned)
+		removeFrom(ctx)
+		return writeTo(ctx, cloned)
+	}, nil
+}
+
+func compileTargetValueReader(target *policyv1alpha1.LogFieldSelector) (func(googlepolicy.LogContext) (pcommon.Value, bool), error) {
+	if target == nil || target.Target == nil {
+		return nil, ErrMissingTarget
+	}
+
+	switch t := target.Target.(type) {
+	case *policyv1alpha1.LogFieldSelector_LogAttribute:
+		lookup, err := matcher.CompilePathLookup(t.LogAttribute, "log")
+		if err != nil {
+			return nil, err
+		}
+		return func(ctx googlepolicy.LogContext) (pcommon.Value, bool) {
+			if ctx.Record == (plog.LogRecord{}) {
+				return pcommon.Value{}, false
+			}
+			return lookup(ctx.Record.Attributes())
+		}, nil
+
+	case *policyv1alpha1.LogFieldSelector_ResourceAttribute:
+		lookup, err := matcher.CompilePathLookup(t.ResourceAttribute, "resource")
+		if err != nil {
+			return nil, err
+		}
+		return func(ctx googlepolicy.LogContext) (pcommon.Value, bool) {
+			if ctx.Resource == (pcommon.Resource{}) {
+				return pcommon.Value{}, false
+			}
+			return lookup(ctx.Resource.Attributes())
+		}, nil
+
+	case *policyv1alpha1.LogFieldSelector_ScopeAttribute:
+		lookup, err := matcher.CompilePathLookup(t.ScopeAttribute, "scope")
+		if err != nil {
+			return nil, err
+		}
+		return func(ctx googlepolicy.LogContext) (pcommon.Value, bool) {
+			if ctx.Scope == (pcommon.InstrumentationScope{}) {
+				return pcommon.Value{}, false
+			}
+			return lookup(ctx.Scope.Attributes())
+		}, nil
+
+	case *policyv1alpha1.LogFieldSelector_RecordField:
+		return compileRecordFieldValueReader(t.RecordField)
+
+	case *policyv1alpha1.LogFieldSelector_ScopeField:
+		return compileScopeFieldValueReader(t.ScopeField)
+
+	default:
+		return nil, ErrMissingTarget
+	}
+}
+
+func compileRecordFieldValueReader(field policyv1alpha1.LogRecordField) (func(googlepolicy.LogContext) (pcommon.Value, bool), error) {
+	switch field {
+	case policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY:
+		return func(ctx googlepolicy.LogContext) (pcommon.Value, bool) {
+			if ctx.Record == (plog.LogRecord{}) {
+				return pcommon.Value{}, false
+			}
+			body := ctx.Record.Body()
+			if !bodyExists(body) {
+				return pcommon.Value{}, false
+			}
+			return body, true
+		}, nil
+
+	case policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT:
+		return func(ctx googlepolicy.LogContext) (pcommon.Value, bool) {
+			if ctx.Record == (plog.LogRecord{}) || ctx.Record.SeverityText() == "" {
+				return pcommon.Value{}, false
+			}
+			return pcommon.NewValueStr(ctx.Record.SeverityText()), true
+		}, nil
+
+	case policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER:
+		return func(ctx googlepolicy.LogContext) (pcommon.Value, bool) {
+			if ctx.Record == (plog.LogRecord{}) || ctx.Record.SeverityNumber() == plog.SeverityNumberUnspecified {
+				return pcommon.Value{}, false
+			}
+			return pcommon.NewValueInt(int64(ctx.Record.SeverityNumber())), true
+		}, nil
+
+	case policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID:
+		return func(ctx googlepolicy.LogContext) (pcommon.Value, bool) {
+			if ctx.Record == (plog.LogRecord{}) || ctx.Record.TraceID().IsEmpty() {
+				return pcommon.Value{}, false
+			}
+			return pcommon.NewValueStr(ctx.Record.TraceID().String()), true
+		}, nil
+
+	case policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID:
+		return func(ctx googlepolicy.LogContext) (pcommon.Value, bool) {
+			if ctx.Record == (plog.LogRecord{}) || ctx.Record.SpanID().IsEmpty() {
+				return pcommon.Value{}, false
+			}
+			return pcommon.NewValueStr(ctx.Record.SpanID().String()), true
+		}, nil
+
+	default:
+		return nil, errors.New("log record field cannot be unspecified")
+	}
+}
+
+func compileScopeFieldValueReader(field policyv1alpha1.ScopeField) (func(googlepolicy.LogContext) (pcommon.Value, bool), error) {
+	switch field {
+	case policyv1alpha1.ScopeField_SCOPE_FIELD_NAME:
+		return func(ctx googlepolicy.LogContext) (pcommon.Value, bool) {
+			if ctx.Scope == (pcommon.InstrumentationScope{}) || ctx.Scope.Name() == "" {
+				return pcommon.Value{}, false
+			}
+			return pcommon.NewValueStr(ctx.Scope.Name()), true
+		}, nil
+
+	case policyv1alpha1.ScopeField_SCOPE_FIELD_VERSION:
+		return func(ctx googlepolicy.LogContext) (pcommon.Value, bool) {
+			if ctx.Scope == (pcommon.InstrumentationScope{}) || ctx.Scope.Version() == "" {
+				return pcommon.Value{}, false
+			}
+			return pcommon.NewValueStr(ctx.Scope.Version()), true
+		}, nil
+
+	case policyv1alpha1.ScopeField_SCOPE_FIELD_SCHEMA_URL:
+		return nil, errors.New("scope field SCHEMA_URL is not supported as a transform target")
+
+	default:
+		return nil, errors.New("scope field cannot be unspecified")
+	}
+}
+
+type targetValueCanWriter func(googlepolicy.LogContext, pcommon.Value) bool
+type targetValueWriter func(googlepolicy.LogContext, pcommon.Value) bool
+
+func compileTargetDynamicWriter(target *policyv1alpha1.LogFieldSelector, upsert bool) (targetValueCanWriter, targetValueWriter, error) {
+	if target == nil || target.Target == nil {
+		return nil, nil, ErrMissingTarget
+	}
+
+	switch t := target.Target.(type) {
+	case *policyv1alpha1.LogFieldSelector_LogAttribute:
+		canSet, set, err := matcher.CompilePathDynamicSetter(t.LogAttribute, "log", upsert)
+		if err != nil {
+			return nil, nil, err
+		}
+		return func(ctx googlepolicy.LogContext, _ pcommon.Value) bool {
+				if ctx.Record == (plog.LogRecord{}) {
+					return false
+				}
+				return canSet(ctx.Record.Attributes())
+			}, func(ctx googlepolicy.LogContext, val pcommon.Value) bool {
+				if ctx.Record == (plog.LogRecord{}) {
+					return false
+				}
+				return set(ctx.Record.Attributes(), val)
+			}, nil
+
+	case *policyv1alpha1.LogFieldSelector_ResourceAttribute:
+		canSet, set, err := matcher.CompilePathDynamicSetter(t.ResourceAttribute, "resource", upsert)
+		if err != nil {
+			return nil, nil, err
+		}
+		return func(ctx googlepolicy.LogContext, _ pcommon.Value) bool {
+				if ctx.Resource == (pcommon.Resource{}) {
+					return false
+				}
+				return canSet(ctx.Resource.Attributes())
+			}, func(ctx googlepolicy.LogContext, val pcommon.Value) bool {
+				if ctx.Resource == (pcommon.Resource{}) {
+					return false
+				}
+				return set(ctx.Resource.Attributes(), val)
+			}, nil
+
+	case *policyv1alpha1.LogFieldSelector_ScopeAttribute:
+		canSet, set, err := matcher.CompilePathDynamicSetter(t.ScopeAttribute, "scope", upsert)
+		if err != nil {
+			return nil, nil, err
+		}
+		return func(ctx googlepolicy.LogContext, _ pcommon.Value) bool {
+				if ctx.Scope == (pcommon.InstrumentationScope{}) {
+					return false
+				}
+				return canSet(ctx.Scope.Attributes())
+			}, func(ctx googlepolicy.LogContext, val pcommon.Value) bool {
+				if ctx.Scope == (pcommon.InstrumentationScope{}) {
+					return false
+				}
+				return set(ctx.Scope.Attributes(), val)
+			}, nil
+
+	case *policyv1alpha1.LogFieldSelector_RecordField:
+		return compileRecordFieldDynamicWriter(t.RecordField, upsert)
+
+	case *policyv1alpha1.LogFieldSelector_ScopeField:
+		return compileScopeFieldDynamicWriter(t.ScopeField, upsert)
+
+	default:
+		return nil, nil, ErrMissingTarget
+	}
+}
+
+func compileRecordFieldDynamicWriter(field policyv1alpha1.LogRecordField, upsert bool) (targetValueCanWriter, targetValueWriter, error) {
+	switch field {
+	case policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY:
+		return func(ctx googlepolicy.LogContext, _ pcommon.Value) bool {
+				if ctx.Record == (plog.LogRecord{}) {
+					return false
+				}
+				return upsert || !bodyExists(ctx.Record.Body())
+			}, func(ctx googlepolicy.LogContext, val pcommon.Value) bool {
+				val.CopyTo(ctx.Record.Body())
+				return true
+			}, nil
+
+	case policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT:
+		return func(ctx googlepolicy.LogContext, val pcommon.Value) bool {
+				if ctx.Record == (plog.LogRecord{}) || val.Type() != pcommon.ValueTypeStr {
+					return false
+				}
+				return upsert || ctx.Record.SeverityText() == ""
+			}, func(ctx googlepolicy.LogContext, val pcommon.Value) bool {
+				ctx.Record.SetSeverityText(val.Str())
+				return true
+			}, nil
+
+	case policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER:
+		return func(ctx googlepolicy.LogContext, val pcommon.Value) bool {
+				if ctx.Record == (plog.LogRecord{}) || val.Type() != pcommon.ValueTypeInt {
+					return false
+				}
+				if val.Int() < int64(plog.SeverityNumberTrace) || val.Int() > int64(plog.SeverityNumberFatal4) {
+					return false
+				}
+				return upsert || ctx.Record.SeverityNumber() == plog.SeverityNumberUnspecified
+			}, func(ctx googlepolicy.LogContext, val pcommon.Value) bool {
+				ctx.Record.SetSeverityNumber(plog.SeverityNumber(val.Int()))
+				return true
+			}, nil
+
+	case policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID:
+		return func(ctx googlepolicy.LogContext, val pcommon.Value) bool {
+				if ctx.Record == (plog.LogRecord{}) {
+					return false
+				}
+				if !upsert && !ctx.Record.TraceID().IsEmpty() {
+					return false
+				}
+				_, ok := parseFixedIDFromPData(val, 16)
+				return ok
+			}, func(ctx googlepolicy.LogContext, val pcommon.Value) bool {
+				raw, ok := parseFixedIDFromPData(val, 16)
+				if !ok {
+					return false
+				}
+				var tid pcommon.TraceID
+				copy(tid[:], raw)
+				ctx.Record.SetTraceID(tid)
+				return true
+			}, nil
+
+	case policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID:
+		return func(ctx googlepolicy.LogContext, val pcommon.Value) bool {
+				if ctx.Record == (plog.LogRecord{}) {
+					return false
+				}
+				if !upsert && !ctx.Record.SpanID().IsEmpty() {
+					return false
+				}
+				_, ok := parseFixedIDFromPData(val, 8)
+				return ok
+			}, func(ctx googlepolicy.LogContext, val pcommon.Value) bool {
+				raw, ok := parseFixedIDFromPData(val, 8)
+				if !ok {
+					return false
+				}
+				var sid pcommon.SpanID
+				copy(sid[:], raw)
+				ctx.Record.SetSpanID(sid)
+				return true
+			}, nil
+
+	default:
+		return nil, nil, errors.New("log record field cannot be unspecified")
+	}
+}
+
+func compileScopeFieldDynamicWriter(field policyv1alpha1.ScopeField, upsert bool) (targetValueCanWriter, targetValueWriter, error) {
+	switch field {
+	case policyv1alpha1.ScopeField_SCOPE_FIELD_NAME:
+		return func(ctx googlepolicy.LogContext, val pcommon.Value) bool {
+				if ctx.Scope == (pcommon.InstrumentationScope{}) || val.Type() != pcommon.ValueTypeStr {
+					return false
+				}
+				return upsert || ctx.Scope.Name() == ""
+			}, func(ctx googlepolicy.LogContext, val pcommon.Value) bool {
+				ctx.Scope.SetName(val.Str())
+				return true
+			}, nil
+
+	case policyv1alpha1.ScopeField_SCOPE_FIELD_VERSION:
+		return func(ctx googlepolicy.LogContext, val pcommon.Value) bool {
+				if ctx.Scope == (pcommon.InstrumentationScope{}) || val.Type() != pcommon.ValueTypeStr {
+					return false
+				}
+				return upsert || ctx.Scope.Version() == ""
+			}, func(ctx googlepolicy.LogContext, val pcommon.Value) bool {
+				ctx.Scope.SetVersion(val.Str())
+				return true
+			}, nil
+
+	case policyv1alpha1.ScopeField_SCOPE_FIELD_SCHEMA_URL:
+		return nil, nil, errors.New("scope field SCHEMA_URL is not supported as a transform target")
+
+	default:
+		return nil, nil, errors.New("scope field cannot be unspecified")
+	}
+}
+
 func bodyExists(v pcommon.Value) bool {
 	switch v.Type() {
 	case pcommon.ValueTypeEmpty:
@@ -599,5 +968,24 @@ func decodeFixedID(val *policyv1alpha1.Value, byteLen int, errMsg string) ([]byt
 		return v.BytesValue, nil
 	default:
 		return nil, errors.New(errMsg)
+	}
+}
+
+func parseFixedIDFromPData(val pcommon.Value, byteLen int) ([]byte, bool) {
+	switch val.Type() {
+	case pcommon.ValueTypeStr:
+		b, err := hex.DecodeString(val.Str())
+		if err != nil || len(b) != byteLen {
+			return nil, false
+		}
+		return b, true
+	case pcommon.ValueTypeBytes:
+		raw := val.Bytes().AsRaw()
+		if len(raw) != byteLen {
+			return nil, false
+		}
+		return raw, true
+	default:
+		return nil, false
 	}
 }

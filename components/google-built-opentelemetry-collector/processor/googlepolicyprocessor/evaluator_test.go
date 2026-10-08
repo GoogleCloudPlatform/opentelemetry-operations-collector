@@ -1369,7 +1369,7 @@ func TestEvaluator_LogTransformResourceAndScopeAttributes(t *testing.T) {
 	assert.False(t, ok)
 }
 
-func TestEvaluator_LogTransformStageOrdering(t *testing.T) {
+func TestEvaluator_LogTransformStageOrderingAndDoubleAppliedFiltering(t *testing.T) {
 	logAttr := func(path ...string) *policyv1alpha1.LogFieldSelector {
 		return &policyv1alpha1.LogFieldSelector{
 			Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
@@ -1378,10 +1378,10 @@ func TestEvaluator_LogTransformStageOrdering(t *testing.T) {
 		}
 	}
 
-	// Give the Stage 3 (remove) policy a lexicographically EARLIER ID ("b-remove-temp")
-	// than the Stage 2 (add) policies ("m-add-1", "m-add-2", "n-add-temp") to prove
-	// that stage ordering (add -> remove) takes precedence over ID order, while ID order
-	// breaks ties within the same stage ("m-add-1" before "m-add-2").
+	// Deliberately give earlier-stage policies lexicographically LATER IDs ("z-rename", "m-add")
+	// and later-stage policies lexicographically EARLIER IDs ("b-remove") to prove
+	// that stage ordering (rename -> add -> remove) takes precedence over ID order,
+	// while ID order breaks ties within the same stage ("m-add-1" before "m-add-2").
 	removeTemp := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
 		Id: "b-remove-temp",
 		Action: &policyv1alpha1.LogTransformPolicy_Remove{
@@ -1414,10 +1414,16 @@ func TestEvaluator_LogTransformStageOrdering(t *testing.T) {
 		},
 	})
 
-	// Add policy that sets "temp_flag" = "to-be-removed" in Stage 2, which is then
-	// removed in Stage 3 by "b-remove-temp" (even though "b-remove-temp" < "n-add-temp" lexicographically).
-	addTemp := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
-		Id: "n-add-temp",
+	// Add policy that only matches if "final_token" exists (which is only true AFTER z-rename runs!)
+	// and sets "temp_flag" = "to-be-removed" (which is then removed in Stage 3 by b-remove-temp!).
+	addAfterRename := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id: "n-add-after-rename",
+		Matches: []*policyv1alpha1.LogMatcher{
+			{
+				Target:    logAttr("final_token"),
+				Predicate: &policyv1alpha1.LogMatcher_Exists{},
+			},
+		},
 		Action: &policyv1alpha1.LogTransformPolicy_Add{
 			Add: &policyv1alpha1.LogAddAction{
 				Target: logAttr("temp_flag"),
@@ -1427,25 +1433,109 @@ func TestEvaluator_LogTransformStageOrdering(t *testing.T) {
 		},
 	})
 
+	// Rename policy with lexicographically last ID ("z-rename") that renames "raw_token" -> "final_token".
+	// Because Rename (Stage 1) runs before Add (Stage 2) and Remove (Stage 3):
+	// 1. z-rename moves "raw_token" -> "final_token"
+	// 2. m-add-1 sets "stage_winner"="first", m-add-2 is skipped (upsert=false), n-add-after-rename sees "final_token" and adds "temp_flag"
+	// 3. b-remove-temp removes "temp_flag"
+	renameToken := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id: "z-rename-token",
+		Action: &policyv1alpha1.LogTransformPolicy_Rename{
+			Rename: &policyv1alpha1.LogRenameAction{
+				From:   logAttr("raw_token"),
+				To:     logAttr("final_token"),
+				Upsert: true,
+			},
+		},
+	})
+
+	// Filter policy that drops any log record where "drop_after_rename" == "yes".
+	// A log record starting with "pre_drop" == "yes" that gets renamed to "drop_after_rename" == "yes"
+	// survives Pass 1 (pre-transform filter), gets renamed in Stage 2, and is DROPPED in Pass 2 (post-transform filter)!
+	renameToDrop := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id: "z-rename-to-drop",
+		Action: &policyv1alpha1.LogTransformPolicy_Rename{
+			Rename: &policyv1alpha1.LogRenameAction{
+				From:   logAttr("pre_drop"),
+				To:     logAttr("drop_after_rename"),
+				Upsert: true,
+			},
+		},
+	})
+	dropPostTransform := mustPolicy(t, &policyv1alpha1.LogFilterPolicy{
+		Id:     "filter-drop-post-transform",
+		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+		Matches: []*policyv1alpha1.LogMatcher{
+			{
+				Target: logAttr("drop_after_rename"),
+				Predicate: &policyv1alpha1.LogMatcher_Equals{
+					Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "yes"}},
+				},
+			},
+		},
+	})
+	keepPostTransform := mustPolicy(t, &policyv1alpha1.LogFilterPolicy{
+		Id:     "filter-keep-post-transform",
+		Action: policyv1alpha1.Action_ACTION_KEEP.Enum(),
+		Matches: []*policyv1alpha1.LogMatcher{
+			{
+				Target: logAttr("final_token"),
+				Predicate: &policyv1alpha1.LogMatcher_Contains{
+					Contains: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "secret-99"}},
+				},
+			},
+		},
+	})
+
 	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{
 		removeTemp,
 		addWinner2,
 		addWinner1,
-		addTemp,
+		addAfterRename,
+		renameToken,
+		renameToDrop,
+		dropPostTransform,
+		keepPostTransform,
 	})
 	require.NoError(t, err)
 
 	ld := plog.NewLogs()
 	sl := ld.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty()
+
+	// Record 0: Exercises rename -> add -> remove pipeline.
 	lr0 := sl.LogRecords().AppendEmpty()
-	lr0.Body().SetStr("hello")
+	lr0.Attributes().PutStr("raw_token", "Bearer secret-42")
+
+	// Record 1: Has pre_drop="yes" -> renamed to drop_after_rename="yes" -> dropped in Pass 2!
+	lr1 := sl.LogRecords().AppendEmpty()
+	lr1.Attributes().PutStr("pre_drop", "yes")
+
+	// Record 2: Has pre_drop="yes" AND raw_token="Bearer secret-99" -> renamed to final_token="Bearer secret-99",
+	// which matches filter-keep-post-transform in Pass 2, exempting it from filter-drop-post-transform!
+	lr2 := sl.LogRecords().AppendEmpty()
+	lr2.Attributes().PutStr("pre_drop", "yes")
+	lr2.Attributes().PutStr("raw_token", "Bearer secret-99")
 
 	stats := ev.TransformLogs(ld)
-	assert.Equal(t, int64(0), stats.Dropped)
-	assert.Equal(t, int64(1), stats.Transformed)
+	assert.Equal(t, int64(1), stats.Dropped)
+	assert.Equal(t, int64(2), stats.Transformed)
+
+	// Verify Pass 2 filter stats:
+	// - filter-drop-post-transform: 1 dropped (Record 1) and 1 no_match (Record 2 overridden by keep)
+	// - filter-keep-post-transform: 1 kept (Record 2)
+	assert.Equal(t, int64(1), stats.PolicyRecords["filter-drop-post-transform"][ResultDropped])
+	assert.Equal(t, int64(1), stats.PolicyRecords["filter-drop-post-transform"][ResultNoMatch])
+	assert.Equal(t, int64(1), stats.PolicyRecords["filter-keep-post-transform"][ResultKept])
 
 	records := ld.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords()
-	require.Equal(t, 1, records.Len())
+	require.Equal(t, 2, records.Len())
+
+	// Check Record 0:
+	_, ok := records.At(0).Attributes().Get("raw_token")
+	assert.False(t, ok, "raw_token should have been renamed")
+	tok0, ok := records.At(0).Attributes().Get("final_token")
+	require.True(t, ok)
+	assert.Equal(t, "Bearer secret-42", tok0.Str())
 
 	winner0, ok := records.At(0).Attributes().Get("stage_winner")
 	require.True(t, ok)
@@ -1453,8 +1543,8 @@ func TestEvaluator_LogTransformStageOrdering(t *testing.T) {
 
 	_, ok = records.At(0).Attributes().Get("temp_flag")
 	assert.False(t, ok, "temp_flag added in Stage 2 must be removed in Stage 3")
-	assert.Equal(t, int64(1), stats.PolicyRecords["n-add-temp"][ResultTransformed])
-	assert.Equal(t, int64(1), stats.PolicyRecords["b-remove-temp"][ResultTransformed])
+	assert.Equal(t, int64(2), stats.PolicyRecords["n-add-after-rename"][ResultTransformed])
+	assert.Equal(t, int64(2), stats.PolicyRecords["b-remove-temp"][ResultTransformed])
 }
 
 // --- policy helpers --------------------------------------------------------

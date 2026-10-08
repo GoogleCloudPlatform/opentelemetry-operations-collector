@@ -163,6 +163,16 @@ func fuzzLogTransformSeedPolicies() []*policyv1alpha1.LogTransformPolicy {
 			},
 		},
 		{
+			Id: "rename-attribute",
+			Action: &policyv1alpha1.LogTransformPolicy_Rename{
+				Rename: &policyv1alpha1.LogRenameAction{
+					From:   logAttrTarget("http.method"),
+					To:     logAttrTarget("http", "request", "method"),
+					Upsert: true,
+				},
+			},
+		},
+		{
 			Id: "remove-attribute",
 			Action: &policyv1alpha1.LogTransformPolicy_Remove{
 				Remove: &policyv1alpha1.LogRemoveAction{

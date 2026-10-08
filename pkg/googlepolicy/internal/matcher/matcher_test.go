@@ -560,8 +560,10 @@ func TestCompileValueSetter(t *testing.T) {
 	assert.Equal(t, []byte{1, 2, 3}, dest.Bytes().AsRaw())
 }
 
-func TestCompilePathRemover(t *testing.T) {
+func TestCompilePathRemoverAndLookup(t *testing.T) {
 	_, err := CompilePathRemover(nil, "log")
+	assert.Error(t, err)
+	_, err = CompilePathLookup(nil, "log")
 	assert.Error(t, err)
 
 	attrs := pcommon.NewMap()
@@ -570,19 +572,40 @@ func TestCompilePathRemover(t *testing.T) {
 	nested.PutInt("child", 42)
 	attrs.PutStr("scalar_parent", "not_a_map")
 
+	// Single-segment lookup and remove
+	lookupTop, err := CompilePathLookup(&policyv1alpha1.AttributePath{Path: []string{"top"}}, "log")
+	require.NoError(t, err)
+	_, ok := lookupTop(pcommon.Map{})
+	assert.False(t, ok)
+	v, ok := lookupTop(attrs)
+	require.True(t, ok)
+	assert.Equal(t, "val", v.Str())
+
 	rmTop, err := CompilePathRemover(&policyv1alpha1.AttributePath{Path: []string{"top"}}, "log")
 	require.NoError(t, err)
 	assert.False(t, rmTop(pcommon.Map{}))
 	assert.True(t, rmTop(attrs))
 	assert.False(t, rmTop(attrs))
+	_, ok = lookupTop(attrs)
+	assert.False(t, ok)
 
+	// Nested lookup and remove
 	nestedPath := &policyv1alpha1.AttributePath{Path: []string{"parent", "child"}}
+	lookupNested, err := CompilePathLookup(nestedPath, "log")
+	require.NoError(t, err)
+	_, ok = lookupNested(pcommon.Map{})
+	assert.False(t, ok)
+	v, ok = lookupNested(attrs)
+	require.True(t, ok)
+	assert.Equal(t, int64(42), v.Int())
+
 	rmNested, err := CompilePathRemover(nestedPath, "log")
 	require.NoError(t, err)
 	assert.False(t, rmNested(pcommon.Map{}))
 	assert.True(t, rmNested(attrs))
 	assert.False(t, rmNested(attrs))
 
+	// Non-existent or scalar ancestor returns false without creating intermediate maps
 	missingParentPath := &policyv1alpha1.AttributePath{Path: []string{"missing", "child"}}
 	rmMissing, err := CompilePathRemover(missingParentPath, "log")
 	require.NoError(t, err)
@@ -591,7 +614,56 @@ func TestCompilePathRemover(t *testing.T) {
 	assert.False(t, exists)
 
 	scalarAncestorPath := &policyv1alpha1.AttributePath{Path: []string{"scalar_parent", "child"}}
+	lookupScalar, err := CompilePathLookup(scalarAncestorPath, "log")
+	require.NoError(t, err)
+	_, ok = lookupScalar(attrs)
+	assert.False(t, ok)
 	rmScalar, err := CompilePathRemover(scalarAncestorPath, "log")
 	require.NoError(t, err)
 	assert.False(t, rmScalar(attrs))
+}
+
+func TestCompilePathDynamicSetter(t *testing.T) {
+	_, _, err := CompilePathDynamicSetter(nil, "log", false)
+	assert.Error(t, err)
+
+	attrs := pcommon.NewMap()
+	attrs.PutStr("existing", "keep")
+	attrs.PutStr("scalar_parent", "keep_scalar")
+
+	// Single segment
+	canSetNoUpsert, setNoUpsert, err := CompilePathDynamicSetter(&policyv1alpha1.AttributePath{Path: []string{"existing"}}, "log", false)
+	require.NoError(t, err)
+	assert.False(t, canSetNoUpsert(pcommon.Map{}))
+	assert.False(t, setNoUpsert(pcommon.Map{}, pcommon.NewValueStr("x")))
+	assert.False(t, canSetNoUpsert(attrs))
+
+	canSetUpsert, setUpsert, err := CompilePathDynamicSetter(&policyv1alpha1.AttributePath{Path: []string{"existing"}}, "log", true)
+	require.NoError(t, err)
+	assert.True(t, canSetUpsert(attrs))
+	assert.True(t, setUpsert(attrs, pcommon.NewValueStr("overwritten")))
+	v, _ := attrs.Get("existing")
+	assert.Equal(t, "overwritten", v.Str())
+
+	// Nested segment
+	nestedPath := &policyv1alpha1.AttributePath{Path: []string{"a", "b"}}
+	canSetNested, setNested, err := CompilePathDynamicSetter(nestedPath, "log", false)
+	require.NoError(t, err)
+	assert.False(t, canSetNested(pcommon.Map{}))
+	assert.False(t, setNested(pcommon.Map{}, pcommon.NewValueInt(1)))
+	assert.True(t, canSetNested(attrs))
+	assert.True(t, setNested(attrs, pcommon.NewValueInt(7)))
+	assert.False(t, canSetNested(attrs))
+
+	// Blocked by scalar parent when upsert=false, allowed when upsert=true
+	conflictPath := &policyv1alpha1.AttributePath{Path: []string{"scalar_parent", "child"}}
+	canSetConflictNoUpsert, setConflictNoUpsert, err := CompilePathDynamicSetter(conflictPath, "log", false)
+	require.NoError(t, err)
+	assert.False(t, canSetConflictNoUpsert(attrs))
+	assert.False(t, setConflictNoUpsert(attrs, pcommon.NewValueStr("x")))
+
+	canSetConflictUpsert, setConflictUpsert, err := CompilePathDynamicSetter(conflictPath, "log", true)
+	require.NoError(t, err)
+	assert.True(t, canSetConflictUpsert(attrs))
+	assert.True(t, setConflictUpsert(attrs, pcommon.NewValueStr("replaced")))
 }

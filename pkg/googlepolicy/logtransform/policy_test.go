@@ -225,9 +225,18 @@ func TestPolicyValidationErrors(t *testing.T) {
 			errExpect: ErrMissingAction,
 		},
 		{
+			name: "missing action (nil Rename inside LogTransformPolicy_Rename)",
+			proto: &policyv1alpha1.LogTransformPolicy{
+				Id:      "p-nil-rename-msg",
+				Matches: []*policyv1alpha1.LogMatcher{validMatcher},
+				Action:  &policyv1alpha1.LogTransformPolicy_Rename{Rename: nil},
+			},
+			errExpect: ErrMissingAction,
+		},
+		{
 			name: "remove missing target",
 			proto: &policyv1alpha1.LogTransformPolicy{
-				Id:     "p-remove-no-target",
+				Id:     "p-remove-nil-target",
 				Action: removeAction(nil),
 			},
 			errExpect: ErrMissingTarget,
@@ -241,12 +250,36 @@ func TestPolicyValidationErrors(t *testing.T) {
 			errSubstr: "scope field SCHEMA_URL is not supported as a transform target",
 		},
 		{
-			name: "unsupported action (rename)",
+			name: "rename missing from",
 			proto: &policyv1alpha1.LogTransformPolicy{
-				Id:     "p-rename",
-				Action: renameAction(logAttrTarget("src"), logAttrTarget("dst"), false),
+				Id:     "p-rename-nil-from",
+				Action: renameAction(nil, logAttrTarget("dst"), false),
 			},
-			errExpect: ErrUnsupportedAction,
+			errExpect: ErrMissingTarget,
+		},
+		{
+			name: "rename missing to",
+			proto: &policyv1alpha1.LogTransformPolicy{
+				Id:     "p-rename-nil-to",
+				Action: renameAction(logAttrTarget("src"), nil, false),
+			},
+			errExpect: ErrMissingTarget,
+		},
+		{
+			name: "rename from SCOPE_FIELD_SCHEMA_URL",
+			proto: &policyv1alpha1.LogTransformPolicy{
+				Id:     "p-rename-from-schema-url",
+				Action: renameAction(scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_SCHEMA_URL), logAttrTarget("dst"), false),
+			},
+			errSubstr: "scope field SCHEMA_URL is not supported as a transform target",
+		},
+		{
+			name: "rename to SCOPE_FIELD_SCHEMA_URL",
+			proto: &policyv1alpha1.LogTransformPolicy{
+				Id:     "p-rename-to-schema-url",
+				Action: renameAction(logAttrTarget("src"), scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_SCHEMA_URL), false),
+			},
+			errSubstr: "scope field SCHEMA_URL is not supported as a transform target",
 		},
 		{
 			name: "unsupported action (redact)",
@@ -1299,7 +1332,7 @@ func TestTransformLogZeroContextGuards(t *testing.T) {
 		})
 	}
 
-	// Zero-context guards for remove across all target types.
+	// Zero-context guards for remove, rename, and redact across all target types.
 	otherTargets := []*policyv1alpha1.LogFieldSelector{
 		logAttrTarget("k"),
 		resourceAttrTarget("k"),
@@ -1319,10 +1352,31 @@ func TestTransformLogZeroContextGuards(t *testing.T) {
 		})
 		require.NoError(t, err)
 		assert.Equal(t, googlepolicy.TransformNoMatch, polRem.TransformLog(googlepolicy.LogContext{}))
+
+		polRen, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "zero-ctx-ren",
+			Action: renameAction(tgt, logAttrTarget("dest"), true),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformNoMatch, polRen.TransformLog(googlepolicy.LogContext{}))
+
+		polRenTo, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "zero-ctx-ren-to",
+			Action: renameAction(logAttrTarget("src"), tgt, true),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformNoMatch, polRenTo.TransformLog(googlepolicy.LogContext{}))
 	}
 }
 
 func TestTransformStageAndEmptyMatches(t *testing.T) {
+	pRename, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		Id:     "stage-rename",
+		Action: renameAction(logAttrTarget("http.method"), logAttrTarget("method"), true),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, googlepolicy.TransformStageRename, pRename.TransformStage())
+
 	pAdd, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
 		Id:     "stage-add",
 		Action: addAction(logAttrTarget("tier"), strVal("soc"), true),
@@ -1403,5 +1457,219 @@ func TestTransformLogRemoveAction(t *testing.T) {
 		assert.True(t, lr.SpanID().IsEmpty())
 		assert.Empty(t, sl.Scope().Name())
 		assert.Empty(t, sl.Scope().Version())
+	})
+}
+
+func TestTransformLogRenameAction(t *testing.T) {
+	t.Run("rename across attributes, record fields, and scope fields with upsert false vs true", func(t *testing.T) {
+		lr, sl, rl := newTestLogBundle()
+		ctx := logContext(lr, sl, rl)
+
+		// 1. Same source and target: upsert=false returns TransformNoMatch; upsert=true preserves the value and returns TransformModified.
+		sameNoUpsertPol, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "ren-same-no-upsert",
+			Action: renameAction(logAttrTarget("http.method"), logAttrTarget("http.method"), false),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformNoMatch, sameNoUpsertPol.TransformLog(ctx))
+
+		samePol, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "ren-same",
+			Action: renameAction(logAttrTarget("http.method"), logAttrTarget("http.method"), true),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformModified, samePol.TransformLog(ctx))
+
+		// 2. Rename when target exists and upsert=false -> fails open without removing source.
+		noUpsertPol, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "ren-no-upsert",
+			Action: renameAction(logAttrTarget("http.method"), logAttrTarget("metadata", "env"), false),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformNoMatch, noUpsertPol.TransformLog(ctx))
+		v, ok := lr.Attributes().Get("http.method")
+		require.True(t, ok)
+		assert.Equal(t, "GET", v.Str())
+
+		// 3. Rename log_attribute -> nested resource_attribute (upsert=false, destination does not exist).
+		toResPol, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "ren-to-res",
+			Action: renameAction(logAttrTarget("http.method"), resourceAttrTarget("http", "method"), false),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformModified, toResPol.TransformLog(ctx))
+		_, ok = lr.Attributes().Get("http.method")
+		assert.False(t, ok)
+		httpMap, ok := rl.Resource().Attributes().Get("http")
+		require.True(t, ok)
+		methodVal, ok := httpMap.Map().Get("method")
+		require.True(t, ok)
+		assert.Equal(t, "GET", methodVal.Str())
+
+		// 4. Rename resource_attribute -> scope_attribute.
+		resToScopePol, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "ren-res-to-scope",
+			Action: renameAction(resourceAttrTarget("cloud.zone"), scopeAttrTarget("zone"), false),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformModified, resToScopePol.TransformLog(ctx))
+		_, ok = rl.Resource().Attributes().Get("cloud.zone")
+		assert.False(t, ok)
+		zoneVal, ok := sl.Scope().Attributes().Get("zone")
+		require.True(t, ok)
+		assert.Equal(t, "us-central1-a", zoneVal.Str())
+
+		// 5. Rename BODY <-> log_attribute.
+		bodyToAttr, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "ren-body-to-attr",
+			Action: renameAction(recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY), logAttrTarget("saved_body"), false),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformModified, bodyToAttr.TransformLog(ctx))
+		assert.Equal(t, pcommon.ValueTypeEmpty, lr.Body().Type())
+
+		attrToBody, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "ren-attr-to-body",
+			Action: renameAction(logAttrTarget("saved_body"), recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY), false),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformModified, attrToBody.TransformLog(ctx))
+		assert.Equal(t, "hello world from service", lr.Body().Str())
+	})
+
+	t.Run("rename typed record fields and scope fields with type validation and fail-open", func(t *testing.T) {
+		lr, sl, rl := newTestLogBundle()
+		ctx := logContext(lr, sl, rl)
+
+		// Move SEVERITY_TEXT -> log_attribute -> SEVERITY_TEXT
+		sevTextOut, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "sev-text-out",
+			Action: renameAction(recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT), logAttrTarget("sev_txt"), true),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformModified, sevTextOut.TransformLog(ctx))
+		assert.Empty(t, lr.SeverityText())
+
+		// Incompatible type (int http.status_code -> SEVERITY_TEXT) fails open without removing http.status_code.
+		badSevTextIn, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "bad-sev-text-in",
+			Action: renameAction(logAttrTarget("http.status_code"), recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT), true),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformNoMatch, badSevTextIn.TransformLog(ctx))
+
+		sevTextIn, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "sev-text-in",
+			Action: renameAction(logAttrTarget("sev_txt"), recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT), false),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformModified, sevTextIn.TransformLog(ctx))
+		assert.Equal(t, "INFO", lr.SeverityText())
+
+		// Move SEVERITY_NUMBER -> log_attribute -> SEVERITY_NUMBER (and test out-of-range int fail-open).
+		sevNumOut, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "sev-num-out",
+			Action: renameAction(recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER), logAttrTarget("sev_num"), true),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformModified, sevNumOut.TransformLog(ctx))
+		assert.Equal(t, plog.SeverityNumberUnspecified, lr.SeverityNumber())
+
+		badSevNumIn, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "bad-sev-num-in",
+			Action: renameAction(logAttrTarget("http.status_code"), recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER), true),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformNoMatch, badSevNumIn.TransformLog(ctx))
+
+		sevNumIn, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "sev-num-in",
+			Action: renameAction(logAttrTarget("sev_num"), recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER), false),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformModified, sevNumIn.TransformLog(ctx))
+		assert.Equal(t, plog.SeverityNumberInfo, lr.SeverityNumber())
+
+		// Move TRACE_ID and SPAN_ID -> log_attribute (bytes) and back; also test hex string -> TRACE_ID / SPAN_ID.
+		tidOut, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "tid-out",
+			Action: renameAction(recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID), logAttrTarget("tid_bytes"), true),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformModified, tidOut.TransformLog(ctx))
+		assert.True(t, lr.TraceID().IsEmpty())
+
+		tidIn, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "tid-in",
+			Action: renameAction(logAttrTarget("tid_bytes"), recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID), false),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformModified, tidIn.TransformLog(ctx))
+		assert.False(t, lr.TraceID().IsEmpty())
+
+		lr.Attributes().PutStr("tid_hex", "aabbccdd11223344556677889900abcd")
+		tidHexIn, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "tid-hex-in",
+			Action: renameAction(logAttrTarget("tid_hex"), recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID), true),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformModified, tidHexIn.TransformLog(ctx))
+
+		sidOut, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "sid-out",
+			Action: renameAction(recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID), logAttrTarget("sid_bytes"), true),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformModified, sidOut.TransformLog(ctx))
+		assert.True(t, lr.SpanID().IsEmpty())
+
+		sidIn, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "sid-in",
+			Action: renameAction(logAttrTarget("sid_bytes"), recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID), false),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformModified, sidIn.TransformLog(ctx))
+		assert.False(t, lr.SpanID().IsEmpty())
+
+		lr.Attributes().PutStr("sid_hex", "1122334455667788")
+		sidHexIn, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "sid-hex-in",
+			Action: renameAction(logAttrTarget("sid_hex"), recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID), true),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformModified, sidHexIn.TransformLog(ctx))
+
+		// Move SCOPE_FIELD_NAME and SCOPE_FIELD_VERSION -> scope_attribute and back.
+		scopeNameOut, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "scope-name-out",
+			Action: renameAction(scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_NAME), scopeAttrTarget("saved_name"), true),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformModified, scopeNameOut.TransformLog(ctx))
+		assert.Empty(t, sl.Scope().Name())
+
+		scopeNameIn, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "scope-name-in",
+			Action: renameAction(scopeAttrTarget("saved_name"), scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_NAME), false),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformModified, scopeNameIn.TransformLog(ctx))
+		assert.Equal(t, "my.library", sl.Scope().Name())
+
+		scopeVerOut, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "scope-ver-out",
+			Action: renameAction(scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_VERSION), scopeAttrTarget("saved_ver"), true),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformModified, scopeVerOut.TransformLog(ctx))
+		assert.Empty(t, sl.Scope().Version())
+
+		scopeVerIn, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "scope-ver-in",
+			Action: renameAction(scopeAttrTarget("saved_ver"), scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_VERSION), false),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformModified, scopeVerIn.TransformLog(ctx))
+		assert.Equal(t, "v1.2.3", sl.Scope().Version())
 	})
 }

@@ -32,6 +32,7 @@ type Evaluator struct {
 	instrumentMetricFilterPolicies   []googlepolicy.MetricFilterPolicyEvaluator
 	datapointMetricFilterPolicies    []googlepolicy.MetricFilterPolicyEvaluator
 	hasDatapointMetricFilterPolicies bool
+	metricTransformPolicies          []googlepolicy.MetricTransformPolicyEvaluator
 	traceFilterPolicies              []googlepolicy.TraceFilterPolicyEvaluator
 }
 
@@ -58,18 +59,26 @@ func NewEvaluator(policies []googlepolicy.TransformationPolicy) (*Evaluator, err
 			ev.addLogTransformPolicy(p)
 		case googlepolicy.MetricFilterPolicyEvaluator:
 			ev.addMetricFilterPolicy(p)
+		case googlepolicy.MetricTransformPolicyEvaluator:
+			ev.addMetricTransformPolicy(p)
 		case googlepolicy.TraceFilterPolicyEvaluator:
 			ev.addTraceFilterPolicy(p)
 		default:
 			return nil, fmt.Errorf(
 				"transformation policy %q (%T) implements none of googlepolicy.LogFilterPolicyEvaluator, "+
-					"googlepolicy.LogTransformPolicyEvaluator, googlepolicy.MetricFilterPolicyEvaluator "+
-					"or googlepolicy.TraceFilterPolicyEvaluator: "+
+					"googlepolicy.LogTransformPolicyEvaluator, googlepolicy.MetricFilterPolicyEvaluator, "+
+					"googlepolicy.MetricTransformPolicyEvaluator or googlepolicy.TraceFilterPolicyEvaluator: "+
 					"transformation policies must implement one of them",
 				tp.PolicyName(), tp)
 		}
 	}
 	slices.SortFunc(ev.logTransformPolicies, func(a, b googlepolicy.LogTransformPolicyEvaluator) int {
+		if c := cmp.Compare(a.TransformStage(), b.TransformStage()); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.PolicyName(), b.PolicyName())
+	})
+	slices.SortFunc(ev.metricTransformPolicies, func(a, b googlepolicy.MetricTransformPolicyEvaluator) int {
 		if c := cmp.Compare(a.TransformStage(), b.TransformStage()); c != 0 {
 			return c
 		}
@@ -94,6 +103,10 @@ func (e *Evaluator) addMetricFilterPolicy(p googlepolicy.MetricFilterPolicyEvalu
 	} else {
 		e.instrumentMetricFilterPolicies = append(e.instrumentMetricFilterPolicies, p)
 	}
+}
+
+func (e *Evaluator) addMetricTransformPolicy(p googlepolicy.MetricTransformPolicyEvaluator) {
+	e.metricTransformPolicies = append(e.metricTransformPolicies, p)
 }
 
 func (e *Evaluator) addTraceFilterPolicy(p googlepolicy.TraceFilterPolicyEvaluator) {

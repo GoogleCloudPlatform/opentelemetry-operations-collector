@@ -87,7 +87,10 @@ import (
 	"google.golang.org/api/iterator"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/protojson"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
+
+	computepb "cloud.google.com/go/compute/apiv1/computepb"
 )
 
 var (
@@ -1837,26 +1840,44 @@ func CreateManagedInstanceGroupVM(origCtx context.Context, logger *log.Logger, o
 
 // DescribeVMDisk queries the VM disk information.
 func DescribeVMDisk(ctx context.Context, logger *log.Logger, vm *VM) (CommandOutput, error) {
-	// RunGcloud will log the output of the command, so we don't need to.
-	return RunGcloud(ctx, logger, "", []string{
-		"compute", "disks", "describe", vm.Name,
-		"--project=" + vm.Project,
-		"--zone=" + vm.Zone,
-		"--format=json",
+	LogEquivalentGcloud(logger, "compute", "disks", "describe", vm.Name,
+		"--project="+vm.Project,
+		"--zone="+vm.Zone,
+		"--format=json")
+	disk, err := disksClient.Get(ctx, &computepb.GetDiskRequest{
+		Project: vm.Project,
+		Zone:    vm.Zone,
+		Disk:    vm.Name,
 	})
+	if err != nil {
+		return CommandOutput{}, err
+	}
+	data, err := protojson.Marshal(disk)
+	if err != nil {
+		return CommandOutput{}, fmt.Errorf("failed to marshal disk to JSON: %w", err)
+	}
+	logger.Print(string(data))
+	return CommandOutput{Stdout: string(data)}, nil
 }
 
 // RemoveExternalIP deletes the external ip for an instance.
 func RemoveExternalIP(ctx context.Context, logger *log.Logger, vm *VM) error {
-	_, err := RunGcloud(ctx, logger, "",
-		[]string{
-			"compute", "instances", "delete-access-config",
-			"--project=" + vm.Project,
-			"--zone=" + vm.Zone,
-			vm.Name,
-			"--access-config-name=external-nat",
-		})
-	return err
+	LogEquivalentGcloud(logger, "compute", "instances", "delete-access-config",
+		"--project="+vm.Project,
+		"--zone="+vm.Zone,
+		vm.Name,
+		"--access-config-name=external-nat")
+	op, err := instancesClient.DeleteAccessConfig(ctx, &computepb.DeleteAccessConfigInstanceRequest{
+		Project:          vm.Project,
+		Zone:             vm.Zone,
+		Instance:         vm.Name,
+		NetworkInterface: "nic0",
+		AccessConfig:     "external-nat",
+	})
+	if err != nil {
+		return err
+	}
+	return op.Wait(ctx)
 }
 
 // SetEnvironmentVariables sets the environment variables in the envVariables map on the given vm in a os-dependent way.
@@ -2348,22 +2369,25 @@ func extractID(stdout string) (int64, error) {
 
 // FetchMetadata retrieves the instance metadata for the given VM.
 func FetchMetadata(ctx context.Context, logger *log.Logger, vm *VM) (map[string]string, error) {
-	output, err := RunGcloud(ctx, logger, "", []string{
-		"compute", "instances", "describe", vm.Name,
-		"--project=" + vm.Project,
-		"--zone=" + vm.Zone,
-		"--format=json(metadata)",
+	LogEquivalentGcloud(logger, "compute", "instances", "describe", vm.Name,
+		"--project="+vm.Project,
+		"--zone="+vm.Zone,
+		"--format=json(metadata)")
+	inst, err := instancesClient.Get(ctx, &computepb.GetInstanceRequest{
+		Project:  vm.Project,
+		Zone:     vm.Zone,
+		Instance: vm.Name,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("error fetching metadata for VM %v: %w", vm.Name, err)
 	}
-	var inst instance
-	if err := json.Unmarshal([]byte(output.Stdout), &inst); err != nil {
-		return nil, fmt.Errorf("could not parse JSON from %q: %v", output.Stdout, err)
-	}
 	metadata := make(map[string]string)
-	for _, item := range inst.Metadata.Items {
-		metadata[item.Key] = item.Value
+	if inst.Metadata != nil {
+		for _, item := range inst.Metadata.Items {
+			if item.Key != nil {
+				metadata[item.GetKey()] = item.GetValue()
+			}
+		}
 	}
 	return metadata, nil
 }
@@ -2623,10 +2647,49 @@ func ArbitraryImageSpec() string {
 func areTagsValid(tags []string) (bool, error) {
 	for _, tag := range tags {
 		if strings.Contains(tag, ",") {
-			return false, fmt.Errorf("Tag %v cannot contain comma.", tag)
+			return false, fmt.Errorf("tag %q cannot contain comma", tag)
 		}
 	}
 	return true, nil
+}
+
+func updateVmTags(ctx context.Context, vm *VM, mutateFn func([]string) []string) error {
+	backoffPolicy := backoff.WithContext(backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 3), ctx)
+	return backoff.Retry(func() error {
+		inst, err := instancesClient.Get(ctx, &computepb.GetInstanceRequest{
+			Project:  vm.Project,
+			Zone:     vm.Zone,
+			Instance: vm.Name,
+		})
+		if err != nil {
+			return err
+		}
+
+		var current []string
+		if inst.Tags != nil {
+			current = inst.Tags.Items
+		}
+		updated := mutateFn(current)
+
+		fingerprint := ""
+		if inst.Tags != nil && inst.Tags.Fingerprint != nil {
+			fingerprint = *inst.Tags.Fingerprint
+		}
+
+		op, err := instancesClient.SetTags(ctx, &computepb.SetTagsInstanceRequest{
+			Project:  vm.Project,
+			Zone:     vm.Zone,
+			Instance: vm.Name,
+			TagsResource: &computepb.Tags{
+				Items:       updated,
+				Fingerprint: &fingerprint,
+			},
+		})
+		if err != nil {
+			return err
+		}
+		return op.Wait(ctx)
+	}, backoffPolicy)
 }
 
 func AddTagToVm(ctx context.Context, logger *log.Logger, vm *VM, tags []string) (CommandOutput, error) {
@@ -2635,13 +2698,28 @@ func AddTagToVm(ctx context.Context, logger *log.Logger, vm *VM, tags []string) 
 		logger.Printf("Unable to add tag to VM: %v", err)
 		return output, err
 	}
-	args := []string{
-		"compute", "instances", "add-tags", vm.Name,
-		"--zone=" + vm.Zone,
-		"--project=" + vm.Project,
-		"--tags=" + strings.Join(tags, ","),
-	}
-	output, err := RunGcloud(ctx, logger, "", args)
+	LogEquivalentGcloud(logger, "compute", "instances", "add-tags", vm.Name,
+		"--zone="+vm.Zone,
+		"--project="+vm.Project,
+		"--tags="+strings.Join(tags, ","))
+
+	err := updateVmTags(ctx, vm, func(current []string) []string {
+		seen := make(map[string]bool)
+		var combined []string
+		for _, t := range current {
+			if !seen[t] {
+				seen[t] = true
+				combined = append(combined, t)
+			}
+		}
+		for _, t := range tags {
+			if !seen[t] {
+				seen[t] = true
+				combined = append(combined, t)
+			}
+		}
+		return combined
+	})
 	if err != nil {
 		logger.Printf("Unable to add tag to VM: %v", err)
 		return output, err
@@ -2655,16 +2733,27 @@ func RemoveTagFromVm(ctx context.Context, logger *log.Logger, vm *VM, tags []str
 		logger.Printf("Unable to remove tag from VM: %v", err)
 		return output, err
 	}
-	args := []string{
-		"compute", "instances", "remove-tags", vm.Name,
-		"--zone=" + vm.Zone,
-		"--project=" + vm.Project,
-		"--tags=" + strings.Join(tags, ","),
+	LogEquivalentGcloud(logger, "compute", "instances", "remove-tags", vm.Name,
+		"--zone="+vm.Zone,
+		"--project="+vm.Project,
+		"--tags="+strings.Join(tags, ","))
+
+	tagsToRemove := make(map[string]bool)
+	for _, t := range tags {
+		tagsToRemove[t] = true
 	}
 
-	output, err := RunGcloud(ctx, logger, "", args)
+	err := updateVmTags(ctx, vm, func(current []string) []string {
+		var filtered []string
+		for _, t := range current {
+			if !tagsToRemove[t] {
+				filtered = append(filtered, t)
+			}
+		}
+		return filtered
+	})
 	if err != nil {
-		logger.Printf("Unable remove tag from VM: %v", err)
+		logger.Printf("Unable to remove tag from VM: %v", err)
 		return output, err
 	}
 	return output, nil

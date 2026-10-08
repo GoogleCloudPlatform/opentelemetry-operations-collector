@@ -1,0 +1,131 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package policyv1alpha1_test
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
+
+	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+)
+
+func TestMetricTransformPolicy_Serialization(t *testing.T) {
+	policy := &policyv1alpha1.MetricTransformPolicy{
+		Id: "add-metric-tier",
+		Matches: []*policyv1alpha1.MetricMatcher{
+			{
+				Target: &policyv1alpha1.MetricFieldSelector{
+					Target: &policyv1alpha1.MetricFieldSelector_DescriptorField{
+						DescriptorField: policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME,
+					},
+				},
+				Predicate: &policyv1alpha1.MetricMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_StringValue{
+							StringValue: "system.cpu.time",
+						},
+					},
+				},
+			},
+		},
+		Action: &policyv1alpha1.MetricTransformPolicy_Add{
+			Add: &policyv1alpha1.MetricAddAction{
+				Target: &policyv1alpha1.MetricFieldSelector{
+					Target: &policyv1alpha1.MetricFieldSelector_DatapointAttribute{
+						DatapointAttribute: &policyv1alpha1.AttributePath{
+							Path: []string{"tier"},
+						},
+					},
+				},
+				Value: &policyv1alpha1.Value{
+					Value: &policyv1alpha1.Value_StringValue{
+						StringValue: "core",
+					},
+				},
+			},
+		},
+	}
+
+	// Verify Any packaging.
+	anyPolicy, err := anypb.New(policy)
+	require.NoError(t, err)
+	assert.Equal(t, "type.googleapis.com/google.telemetry.policy.v1alpha1.MetricTransformPolicy", anyPolicy.GetTypeUrl())
+
+	// Round-trip binary serialization.
+	data, err := proto.Marshal(policy)
+	require.NoError(t, err)
+
+	unmarshaled := &policyv1alpha1.MetricTransformPolicy{}
+	require.NoError(t, proto.Unmarshal(data, unmarshaled))
+
+	assert.True(t, proto.Equal(policy, unmarshaled))
+	assert.Equal(t, "add-metric-tier", unmarshaled.GetId())
+	require.Len(t, unmarshaled.GetMatches(), 1)
+	require.NotNil(t, unmarshaled.GetAdd())
+}
+
+func TestMetricTransformPolicy_JSONSerialization(t *testing.T) {
+	policy := &policyv1alpha1.MetricTransformPolicy{
+		Id: "rename-metric-env",
+		Matches: []*policyv1alpha1.MetricMatcher{
+			{
+				Target: &policyv1alpha1.MetricFieldSelector{
+					Target: &policyv1alpha1.MetricFieldSelector_ResourceAttribute{
+						ResourceAttribute: &policyv1alpha1.AttributePath{
+							Path: []string{"service.name"},
+						},
+					},
+				},
+				Predicate: &policyv1alpha1.MetricMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_StringValue{
+							StringValue: "checkout",
+						},
+					},
+				},
+			},
+		},
+		Action: &policyv1alpha1.MetricTransformPolicy_Rename{
+			Rename: &policyv1alpha1.MetricRenameAction{
+				From: &policyv1alpha1.MetricFieldSelector{
+					Target: &policyv1alpha1.MetricFieldSelector_DatapointAttribute{
+						DatapointAttribute: &policyv1alpha1.AttributePath{
+							Path: []string{"legacy_env"},
+						},
+					},
+				},
+				To: &policyv1alpha1.MetricFieldSelector{
+					Target: &policyv1alpha1.MetricFieldSelector_DatapointAttribute{
+						DatapointAttribute: &policyv1alpha1.AttributePath{
+							Path: []string{"deployment.environment"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	jsonData, err := protojson.Marshal(policy)
+	require.NoError(t, err)
+
+	unmarshaled := &policyv1alpha1.MetricTransformPolicy{}
+	require.NoError(t, protojson.Unmarshal(jsonData, unmarshaled))
+	assert.True(t, proto.Equal(policy, unmarshaled))
+}

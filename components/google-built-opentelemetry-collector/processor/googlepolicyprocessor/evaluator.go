@@ -32,6 +32,7 @@ type Evaluator struct {
 	instrumentMetricPolicies   []googlepolicy.MetricPolicyEvaluator
 	datapointMetricPolicies    []googlepolicy.MetricPolicyEvaluator
 	hasDatapointMetricPolicies bool
+	metricTransformPolicies    []googlepolicy.MetricTransformPolicyEvaluator
 	tracePolicies              []googlepolicy.TracePolicyEvaluator
 }
 
@@ -55,18 +56,26 @@ func NewEvaluator(policies []googlepolicy.TransformationPolicy) (*Evaluator, err
 			ev.addLogTransformPolicy(p)
 		case googlepolicy.MetricPolicyEvaluator:
 			ev.addMetricPolicy(p)
+		case googlepolicy.MetricTransformPolicyEvaluator:
+			ev.addMetricTransformPolicy(p)
 		case googlepolicy.TracePolicyEvaluator:
 			ev.addTracePolicy(p)
 		default:
 			return nil, fmt.Errorf(
 				"transformation policy %q (%T) implements none of googlepolicy.LogPolicyEvaluator, "+
-					"googlepolicy.LogTransformPolicyEvaluator, googlepolicy.MetricPolicyEvaluator "+
-					"or googlepolicy.TracePolicyEvaluator: "+
+					"googlepolicy.LogTransformPolicyEvaluator, googlepolicy.MetricPolicyEvaluator, "+
+					"googlepolicy.MetricTransformPolicyEvaluator or googlepolicy.TracePolicyEvaluator: "+
 					"transformation policies must implement one of them",
 				tp.PolicyName(), tp)
 		}
 	}
 	slices.SortFunc(ev.logTransformPolicies, func(a, b googlepolicy.LogTransformPolicyEvaluator) int {
+		if c := cmp.Compare(a.TransformStage(), b.TransformStage()); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.PolicyName(), b.PolicyName())
+	})
+	slices.SortFunc(ev.metricTransformPolicies, func(a, b googlepolicy.MetricTransformPolicyEvaluator) int {
 		if c := cmp.Compare(a.TransformStage(), b.TransformStage()); c != 0 {
 			return c
 		}
@@ -91,6 +100,10 @@ func (e *Evaluator) addMetricPolicy(p googlepolicy.MetricPolicyEvaluator) {
 	} else {
 		e.instrumentMetricPolicies = append(e.instrumentMetricPolicies, p)
 	}
+}
+
+func (e *Evaluator) addMetricTransformPolicy(p googlepolicy.MetricTransformPolicyEvaluator) {
+	e.metricTransformPolicies = append(e.metricTransformPolicies, p)
 }
 
 func (e *Evaluator) addTracePolicy(p googlepolicy.TracePolicyEvaluator) {

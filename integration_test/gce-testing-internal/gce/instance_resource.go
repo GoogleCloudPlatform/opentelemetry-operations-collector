@@ -163,7 +163,24 @@ func parseExtraCreateArguments(args []string) (extraCreateArgs, error) {
 	return result, nil
 }
 
-func buildInstanceResource(options VMOptions, vm *VM) (*computepb.Instance, error) {
+type instanceConfigComponents struct {
+	bootDisk        *computepb.AttachedDisk
+	nic             *computepb.NetworkInterface
+	metadata        *computepb.Metadata
+	labels          map[string]string
+	serviceAccounts []*computepb.ServiceAccount
+	tags            *computepb.Tags
+	scheduling      *computepb.Scheduling
+}
+
+func cleanDiskType(dt string) string {
+	if idx := strings.LastIndex(dt, "/"); idx != -1 {
+		return dt[idx+1:]
+	}
+	return dt
+}
+
+func prepareInstanceConfigComponents(options VMOptions, vm *VM) (*instanceConfigComponents, error) {
 	sourceImage, err := sourceImageFromImageSpec(vm.ImageSpec, options.ImageFamilyScope)
 	if err != nil {
 		return nil, err
@@ -220,7 +237,7 @@ func buildInstanceResource(options VMOptions, vm *VM) (*computepb.Instance, erro
 	}
 	newMetadata, err := addFrameworkMetadata(vm.ImageSpec, combinedMetadata)
 	if err != nil {
-		return nil, fmt.Errorf("buildInstanceResource() could not construct valid metadata: %w", err)
+		return nil, fmt.Errorf("could not construct valid metadata: %w", err)
 	}
 	var metadataItems []*computepb.Items
 	for k, v := range newMetadata {
@@ -235,7 +252,7 @@ func buildInstanceResource(options VMOptions, vm *VM) (*computepb.Instance, erro
 
 	newLabels, err := addFrameworkLabels(options.Labels)
 	if err != nil {
-		return nil, fmt.Errorf("buildInstanceResource() could not construct valid labels: %w", err)
+		return nil, fmt.Errorf("could not construct valid labels: %w", err)
 	}
 
 	email := os.Getenv("SERVICE_EMAIL")
@@ -255,35 +272,27 @@ func buildInstanceResource(options VMOptions, vm *VM) (*computepb.Instance, erro
 		}
 	}
 
-	inst := &computepb.Instance{
-		Name:              proto.String(vm.Name),
-		MachineType:       proto.String(fmt.Sprintf("zones/%s/machineTypes/%s", vm.Zone, vm.MachineType)),
-		Disks:             []*computepb.AttachedDisk{bootDisk},
-		NetworkInterfaces: []*computepb.NetworkInterface{nic},
-		Metadata: &computepb.Metadata{
-			Items: metadataItems,
-		},
-		Labels: newLabels,
-		ServiceAccounts: []*computepb.ServiceAccount{
-			{
-				Email:  proto.String(email),
-				Scopes: resolvedScopes,
-			},
+	serviceAccounts := []*computepb.ServiceAccount{
+		{
+			Email:  proto.String(email),
+			Scopes: resolvedScopes,
 		},
 	}
 
+	var tags *computepb.Tags
 	if len(extraArgs.tags) > 0 {
-		inst.Tags = &computepb.Tags{
+		tags = &computepb.Tags{
 			Items: extraArgs.tags,
 		}
 	}
 
+	var scheduling *computepb.Scheduling
 	if options.TimeToLive != "" {
 		secs, err := parseDurationSeconds(options.TimeToLive)
 		if err != nil {
 			return nil, err
 		}
-		inst.Scheduling = &computepb.Scheduling{
+		scheduling = &computepb.Scheduling{
 			MaxRunDuration: &computepb.Duration{
 				Seconds: proto.Int64(secs),
 			},
@@ -292,7 +301,70 @@ func buildInstanceResource(options VMOptions, vm *VM) (*computepb.Instance, erro
 		}
 	}
 
-	return inst, nil
+	return &instanceConfigComponents{
+		bootDisk:        bootDisk,
+		nic:             nic,
+		metadata:        &computepb.Metadata{Items: metadataItems},
+		labels:          newLabels,
+		serviceAccounts: serviceAccounts,
+		tags:            tags,
+		scheduling:      scheduling,
+	}, nil
+}
+
+func buildInstanceResource(options VMOptions, vm *VM) (*computepb.Instance, error) {
+	c, err := prepareInstanceConfigComponents(options, vm)
+	if err != nil {
+		return nil, fmt.Errorf("building instance resource: %w", err)
+	}
+
+	return &computepb.Instance{
+		Name:              proto.String(vm.Name),
+		MachineType:       proto.String(fmt.Sprintf("zones/%s/machineTypes/%s", vm.Zone, vm.MachineType)),
+		Disks:             []*computepb.AttachedDisk{c.bootDisk},
+		NetworkInterfaces: []*computepb.NetworkInterface{c.nic},
+		Metadata:          c.metadata,
+		Labels:            c.labels,
+		ServiceAccounts:   c.serviceAccounts,
+		Tags:              c.tags,
+		Scheduling:        c.scheduling,
+	}, nil
+}
+
+func buildInstanceProperties(options VMOptions, vm *VM) (*computepb.InstanceProperties, error) {
+	c, err := prepareInstanceConfigComponents(options, vm)
+	if err != nil {
+		return nil, fmt.Errorf("building instance properties: %w", err)
+	}
+
+	// InstanceProperties AttachedDiskInitializeParams.DiskType must be the short name (e.g. "pd-ssd"),
+	// not a URL.
+	if c.bootDisk.InitializeParams != nil && c.bootDisk.InitializeParams.DiskType != nil {
+		c.bootDisk.InitializeParams.DiskType = proto.String(cleanDiskType(c.bootDisk.InitializeParams.GetDiskType()))
+	}
+
+	return &computepb.InstanceProperties{
+		MachineType:       proto.String(vm.MachineType),
+		Disks:             []*computepb.AttachedDisk{c.bootDisk},
+		NetworkInterfaces: []*computepb.NetworkInterface{c.nic},
+		Metadata:          c.metadata,
+		Labels:            c.labels,
+		ServiceAccounts:   c.serviceAccounts,
+		Tags:              c.tags,
+		Scheduling:        c.scheduling,
+	}, nil
+}
+
+func buildInstanceTemplate(templateName string, options VMOptions, vm *VM) (*computepb.InstanceTemplate, error) {
+	props, err := buildInstanceProperties(options, vm)
+	if err != nil {
+		return nil, fmt.Errorf("building instance template: %w", err)
+	}
+
+	return &computepb.InstanceTemplate{
+		Name:       proto.String(templateName),
+		Properties: props,
+	}, nil
 }
 
 func extractIPFromInstance(inst *computepb.Instance) (string, error) {

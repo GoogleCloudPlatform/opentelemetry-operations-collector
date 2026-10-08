@@ -559,3 +559,39 @@ func TestCompileValueSetter(t *testing.T) {
 	setBytes(dest)
 	assert.Equal(t, []byte{1, 2, 3}, dest.Bytes().AsRaw())
 }
+
+func TestCompilePathRemover(t *testing.T) {
+	_, err := CompilePathRemover(nil, "log")
+	assert.Error(t, err)
+
+	attrs := pcommon.NewMap()
+	attrs.PutStr("top", "val")
+	nested := attrs.PutEmptyMap("parent")
+	nested.PutInt("child", 42)
+	attrs.PutStr("scalar_parent", "not_a_map")
+
+	rmTop, err := CompilePathRemover(&policyv1alpha1.AttributePath{Path: []string{"top"}}, "log")
+	require.NoError(t, err)
+	assert.False(t, rmTop(pcommon.Map{}))
+	assert.True(t, rmTop(attrs))
+	assert.False(t, rmTop(attrs))
+
+	nestedPath := &policyv1alpha1.AttributePath{Path: []string{"parent", "child"}}
+	rmNested, err := CompilePathRemover(nestedPath, "log")
+	require.NoError(t, err)
+	assert.False(t, rmNested(pcommon.Map{}))
+	assert.True(t, rmNested(attrs))
+	assert.False(t, rmNested(attrs))
+
+	missingParentPath := &policyv1alpha1.AttributePath{Path: []string{"missing", "child"}}
+	rmMissing, err := CompilePathRemover(missingParentPath, "log")
+	require.NoError(t, err)
+	assert.False(t, rmMissing(attrs))
+	_, exists := attrs.Get("missing")
+	assert.False(t, exists)
+
+	scalarAncestorPath := &policyv1alpha1.AttributePath{Path: []string{"scalar_parent", "child"}}
+	rmScalar, err := CompilePathRemover(scalarAncestorPath, "log")
+	require.NoError(t, err)
+	assert.False(t, rmScalar(attrs))
+}

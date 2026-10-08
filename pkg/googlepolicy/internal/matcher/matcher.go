@@ -410,6 +410,48 @@ func CompileValueSetter(val *policyv1alpha1.Value) (func(pcommon.Value), error) 
 	}
 }
 
+// CompilePathRemover pre-compiles an AttributePath into a closure that deletes
+// the target key from a pcommon.Map without creating intermediate maps.
+// It returns true iff the target key existed and was removed.
+func CompilePathRemover(attrPath *policyv1alpha1.AttributePath, kind string) (func(pcommon.Map) bool, error) {
+	steps, err := CompilePath(attrPath, kind)
+	if err != nil {
+		return nil, err
+	}
+	leafKey := steps[len(steps)-1].Key
+	if len(steps) == 1 {
+		return func(attrs pcommon.Map) bool {
+			if attrs == (pcommon.Map{}) {
+				return false
+			}
+			return attrs.Remove(leafKey)
+		}, nil
+	}
+	prefix := steps[:len(steps)-1]
+	return func(attrs pcommon.Map) bool {
+		parent, ok := findExistingParentMap(attrs, prefix)
+		if !ok {
+			return false
+		}
+		return parent.Remove(leafKey)
+	}, nil
+}
+
+func findExistingParentMap(attrs pcommon.Map, prefix []PathStep) (pcommon.Map, bool) {
+	if attrs == (pcommon.Map{}) {
+		return pcommon.Map{}, false
+	}
+	curr := attrs
+	for _, step := range prefix {
+		child, exists := curr.Get(step.Key)
+		if !exists || child.Type() != pcommon.ValueTypeMap {
+			return pcommon.Map{}, false
+		}
+		curr = child.Map()
+	}
+	return curr, true
+}
+
 // ValueToAny converts a pcommon.Value into the plain Go value that the
 // predicates operate on. Returning plain values rather than pcommon.Value keeps
 // the hot path free of pdata allocations.

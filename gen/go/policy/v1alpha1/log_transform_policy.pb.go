@@ -43,8 +43,8 @@ const (
 //     order of their operation type: `rename` -> `add` -> `remove` -> `redact`.
 //   - Tie-Breaking: Within the same operation type, policies execute in
 //     lexicographical order of `id`.
-//   - Matching: All conditions in `matches` are ANDed together; at least one
-//     matcher is required.
+//   - Matching: All conditions in `matches` are ANDed together. If `matches` is
+//     empty, the action applies to all log records.
 //   - Fail-Open: If `action` is unset, or if an action cannot be applied to a
 //     record (e.g., `rename` when `from` does not exist, or `add`/`rename` with
 //     `upsert: false` when the target field already exists), the record passes
@@ -57,7 +57,7 @@ type LogTransformPolicy struct {
 	// Conditions evaluated against incoming log records.
 	// All matchers in this list are ANDed together: all conditions must evaluate
 	// to true for the transformation action to take effect.
-	// At least one matcher is required; a policy with no matchers is invalid.
+	// If empty, the action applies to all log records.
 	Matches []*LogMatcher `protobuf:"bytes,2,rep,name=matches,proto3" json:"matches,omitempty"`
 	// The single transformation action to perform when `matches` evaluates to
 	// true. Exactly one action must be set.
@@ -380,8 +380,8 @@ type LogRedactAction struct {
 	// RE2 regular expression matching substrings within the target string
 	// to redact. If unset or empty, the entire target value is replaced.
 	Regex string `protobuf:"bytes,2,opt,name=regex,proto3" json:"regex,omitempty"`
-	// String replacement to insert in place of the matched substring.
-	// Defaults to "[REDACTED]" if empty.
+	// Replacement string (e.g. "[REDACTED]"). Supports RE2 capture group
+	// references ($1, ${name}) when `regex` is set.
 	Replacement   string `protobuf:"bytes,3,opt,name=replacement,proto3" json:"replacement,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

@@ -112,11 +112,29 @@ const (
 	TransformModified
 )
 
+// TransformStage represents the concrete operation stage of a transform policy.
+// Active transform policies execute in ascending stage order:
+// TransformStageRename -> TransformStageAdd -> TransformStageRemove -> TransformStageRedact,
+// with lexicographical PolicyName() tie-breaking within each stage.
+type TransformStage uint8
+
+const (
+	// TransformStageRename executes first to standardize legacy attribute keys.
+	TransformStageRename TransformStage = iota + 1
+	// TransformStageAdd executes second to inject tags or fallback defaults.
+	TransformStageAdd
+	// TransformStageRemove executes third to delete unneeded attributes before regex scrubbing.
+	TransformStageRemove
+	// TransformStageRedact executes fourth to mask sensitive substrings across surviving fields.
+	TransformStageRedact
+)
+
 // LogTransformPolicyEvaluator is implemented by transformation policies that
 // modify surviving log records in-place (e.g., LogTransformPolicy in
 // pkg/googlepolicy/logtransform).
 type LogTransformPolicyEvaluator interface {
 	TransformationPolicy
+	TransformStage() TransformStage
 	TransformLog(ctx LogContext) TransformResult
 }
 

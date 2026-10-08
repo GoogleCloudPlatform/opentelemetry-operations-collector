@@ -1369,6 +1369,94 @@ func TestEvaluator_LogTransformResourceAndScopeAttributes(t *testing.T) {
 	assert.False(t, ok)
 }
 
+func TestEvaluator_LogTransformStageOrdering(t *testing.T) {
+	logAttr := func(path ...string) *policyv1alpha1.LogFieldSelector {
+		return &policyv1alpha1.LogFieldSelector{
+			Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
+				LogAttribute: &policyv1alpha1.AttributePath{Path: path},
+			},
+		}
+	}
+
+	// Give the Stage 3 (remove) policy a lexicographically EARLIER ID ("b-remove-temp")
+	// than the Stage 2 (add) policies ("m-add-1", "m-add-2", "n-add-temp") to prove
+	// that stage ordering (add -> remove) takes precedence over ID order, while ID order
+	// breaks ties within the same stage ("m-add-1" before "m-add-2").
+	removeTemp := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id: "b-remove-temp",
+		Action: &policyv1alpha1.LogTransformPolicy_Remove{
+			Remove: &policyv1alpha1.LogRemoveAction{
+				Target: logAttr("temp_flag"),
+			},
+		},
+	})
+
+	// Two add policies in the same stage: "m-add-1" runs before "m-add-2".
+	// Both have upsert=false on "stage_winner", so "m-add-1" must win.
+	addWinner1 := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id: "m-add-1",
+		Action: &policyv1alpha1.LogTransformPolicy_Add{
+			Add: &policyv1alpha1.LogAddAction{
+				Target: logAttr("stage_winner"),
+				Value:  &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "first"}},
+				Upsert: false,
+			},
+		},
+	})
+	addWinner2 := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id: "m-add-2",
+		Action: &policyv1alpha1.LogTransformPolicy_Add{
+			Add: &policyv1alpha1.LogAddAction{
+				Target: logAttr("stage_winner"),
+				Value:  &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "second"}},
+				Upsert: false,
+			},
+		},
+	})
+
+	// Add policy that sets "temp_flag" = "to-be-removed" in Stage 2, which is then
+	// removed in Stage 3 by "b-remove-temp" (even though "b-remove-temp" < "n-add-temp" lexicographically).
+	addTemp := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id: "n-add-temp",
+		Action: &policyv1alpha1.LogTransformPolicy_Add{
+			Add: &policyv1alpha1.LogAddAction{
+				Target: logAttr("temp_flag"),
+				Value:  &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "to-be-removed"}},
+				Upsert: true,
+			},
+		},
+	})
+
+	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{
+		removeTemp,
+		addWinner2,
+		addWinner1,
+		addTemp,
+	})
+	require.NoError(t, err)
+
+	ld := plog.NewLogs()
+	sl := ld.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty()
+	lr0 := sl.LogRecords().AppendEmpty()
+	lr0.Body().SetStr("hello")
+
+	stats := ev.TransformLogs(ld)
+	assert.Equal(t, int64(0), stats.Dropped)
+	assert.Equal(t, int64(1), stats.Transformed)
+
+	records := ld.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords()
+	require.Equal(t, 1, records.Len())
+
+	winner0, ok := records.At(0).Attributes().Get("stage_winner")
+	require.True(t, ok)
+	assert.Equal(t, "first", winner0.Str(), "m-add-1 must run before m-add-2")
+
+	_, ok = records.At(0).Attributes().Get("temp_flag")
+	assert.False(t, ok, "temp_flag added in Stage 2 must be removed in Stage 3")
+	assert.Equal(t, int64(1), stats.PolicyRecords["n-add-temp"][ResultTransformed])
+	assert.Equal(t, int64(1), stats.PolicyRecords["b-remove-temp"][ResultTransformed])
+}
+
 // --- policy helpers --------------------------------------------------------
 
 // mustPolicy compiles a filter or transform policy proto with its owning

@@ -1452,3 +1452,171 @@ func latestProcessorPolicyCounters(batches []pmetric.Metrics) (map[string]int64,
 	}
 	return recordsByResult, policyRecords
 }
+
+func TestLogTransformStagesAndPostTransformFilter(t *testing.T) {
+	otelcolBin := resolveOtelcolBinary(t)
+	tempDir := t.TempDir()
+
+	policiesDir := filepath.Join(tempDir, "policies")
+	if err := os.MkdirAll(policiesDir, 0755); err != nil {
+		t.Fatalf("failed to create policies directory: %v", err)
+	}
+
+	// Write policies with IDs deliberately inverse to stage order ("a-redact", "b-remove", "m-add", "z-rename")
+	// plus a post-transform DROP filter that matches an attribute produced by z-rename.
+	policies := map[string]string{
+		"01-a-redact.json": `{
+  "type": "log_transform",
+  "id": "a-redact-ssn",
+  "redact": {
+    "target": {
+      "record_field": "LOG_RECORD_FIELD_BODY"
+    },
+    "regex": "\\b\\d{3}-\\d{2}-\\d{4}\\b",
+    "replacement": "[REDACTED_SSN]"
+  }
+}`,
+		"02-b-remove.json": `{
+  "type": "log_transform",
+  "id": "b-remove-scriptpath",
+  "remove": {
+    "target": {
+      "log_attribute": {
+        "path": ["winlog", "event_data", "ScriptPath"]
+      }
+    }
+  }
+}`,
+		"03-m-add.json": `{
+  "type": "log_transform",
+  "id": "m-add-after-rename",
+  "matches": [
+    {
+      "target": {
+        "log_attribute": {
+          "path": ["http", "request", "method"]
+        }
+      },
+      "equals": {
+        "string_value": "POST"
+      }
+    }
+  ],
+  "add": {
+    "target": {
+      "log_attribute": {
+        "path": ["winlog", "event_data", "ScriptPath"]
+      }
+    },
+    "value": {
+      "string_value": "C:\\temp\\to-be-removed.ps1"
+    },
+    "upsert": true
+  }
+}`,
+		"04-z-rename.json": `{
+  "type": "log_transform",
+  "id": "z-rename-method",
+  "rename": {
+    "from": {
+      "log_attribute": {
+        "path": ["legacy_method"]
+      }
+    },
+    "to": {
+      "log_attribute": {
+        "path": ["http", "request", "method"]
+      }
+    },
+    "upsert": true
+  }
+}`,
+		"05-post-filter-drop.json": `{
+  "type": "log_filter",
+  "id": "drop-delete-requests",
+  "action": "ACTION_DROP",
+  "matches": [
+    {
+      "target": {
+        "log_attribute": {
+          "path": ["http", "request", "method"]
+        }
+      },
+      "equals": {
+        "string_value": "DELETE"
+      }
+    }
+  ]
+}`,
+	}
+
+	for name, content := range policies {
+		if err := os.WriteFile(filepath.Join(policiesDir, name), []byte(content), 0644); err != nil {
+			t.Fatalf("failed to write policy %s: %v", name, err)
+		}
+	}
+
+	h := startTestHarness(t, otelcolBin, tempDir, policiesDir)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	ld := plog.NewLogs()
+	sl := ld.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty()
+
+	// Record 1: legacy_method="POST" -> renamed to http.request.method="POST" (Stage 1) ->
+	// m-add-after-rename matches http.request.method=="POST" and adds winlog.event_data.ScriptPath (Stage 2) ->
+	// b-remove-scriptpath removes winlog.event_data.ScriptPath (Stage 3) ->
+	// a-redact-ssn redacts SSN in body (Stage 4) -> survives Pass 2 filter!
+	lr1 := sl.LogRecords().AppendEmpty()
+	lr1.Body().SetStr("User SSN 123-45-6789 logged in")
+	lr1.Attributes().PutStr("legacy_method", "POST")
+
+	// Record 2: legacy_method="DELETE" -> survives Pass 1 filter -> renamed to http.request.method="DELETE" (Stage 1) ->
+	// dropped in Pass 2 post-transform filter by drop-delete-requests!
+	lr2 := sl.LogRecords().AppendEmpty()
+	lr2.Body().SetStr("Delete user request")
+	lr2.Attributes().PutStr("legacy_method", "DELETE")
+
+	client := plogotlp.NewGRPCClient(h.conn)
+	if _, err := client.Export(ctx, plogotlp.NewExportRequestFromLogs(ld)); err != nil {
+		t.Fatalf("failed to export logs: %v\nlogs:\n%s", err, h.col.logs())
+	}
+
+	h.col.shutdown(t)
+
+	collected := h.mockSrv.CollectedLogs()
+	if len(collected) != 1 {
+		t.Fatalf("expected 1 exported log batch, got %d", len(collected))
+	}
+	records := collected[0].ResourceLogs().At(0).ScopeLogs().At(0).LogRecords()
+	if records.Len() != 1 {
+		t.Fatalf("expected 1 surviving log record after Pass 2 filter, got %d", records.Len())
+	}
+
+	got := records.At(0)
+	if got.Body().Str() != "User SSN [REDACTED_SSN] logged in" {
+		t.Errorf("body = %q, want %q", got.Body().Str(), "User SSN [REDACTED_SSN] logged in")
+	}
+	if _, ok := got.Attributes().Get("legacy_method"); ok {
+		t.Errorf("expected legacy_method to be removed by rename")
+	}
+	httpVal, ok := got.Attributes().Get("http")
+	if !ok {
+		t.Fatalf("expected nested http map after rename")
+	}
+	reqVal, ok := httpVal.Map().Get("request")
+	if !ok {
+		t.Fatalf("expected nested http.request map after rename")
+	}
+	methodVal, ok := reqVal.Map().Get("method")
+	if !ok || methodVal.Str() != "POST" {
+		t.Errorf("http.request.method = %v (ok=%v), want POST", methodVal, ok)
+	}
+	if winlogVal, ok := got.Attributes().Get("winlog"); ok {
+		if edVal, ok := winlogVal.Map().Get("event_data"); ok {
+			if _, ok := edVal.Map().Get("ScriptPath"); ok {
+				t.Errorf("expected winlog.event_data.ScriptPath added in Stage 2 to be removed in Stage 3")
+			}
+		}
+	}
+}

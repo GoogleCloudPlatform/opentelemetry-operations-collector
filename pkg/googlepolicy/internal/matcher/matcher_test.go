@@ -667,3 +667,22 @@ func TestCompilePathDynamicSetter(t *testing.T) {
 	assert.True(t, canSetConflictUpsert(attrs))
 	assert.True(t, setConflictUpsert(attrs, pcommon.NewValueStr("replaced")))
 }
+
+func TestCompileStringRedactor(t *testing.T) {
+	_, err := CompileStringRedactor("[invalid", "[REDACTED]")
+	assert.Error(t, err)
+
+	fullRedact, err := CompileStringRedactor("", "[REDACTED]")
+	require.NoError(t, err)
+	out, ok := fullRedact("anything")
+	assert.True(t, ok)
+	assert.Equal(t, "[REDACTED]", out)
+
+	ssnRedact, err := CompileStringRedactor(`\b(\d{3})-\d{2}-\d{4}\b`, "$1-XX-XXXX")
+	require.NoError(t, err)
+	_, ok = ssnRedact("no ssn here")
+	assert.False(t, ok)
+	out, ok = ssnRedact("user 123-45-6789 logged in")
+	assert.True(t, ok)
+	assert.Equal(t, "user 123-XX-XXXX logged in", out)
+}

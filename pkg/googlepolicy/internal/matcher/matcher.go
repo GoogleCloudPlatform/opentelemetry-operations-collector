@@ -549,6 +549,28 @@ func canSetNestedPath(attrs pcommon.Map, prefix []PathStep, leafKey string) bool
 	return !exists
 }
 
+// CompileStringRedactor compiles an optional RE2 regex pattern and replacement
+// string into a closure that returns (redacted, true) when a target string is
+// modified, or ("", false) when the regex does not match. When regexPattern is
+// empty, the entire input string is replaced with replacement.
+func CompileStringRedactor(regexPattern, replacement string) (func(string) (string, bool), error) {
+	if regexPattern == "" {
+		return func(_ string) (string, bool) {
+			return replacement, true
+		}, nil
+	}
+	re, err := regexp.Compile(regexPattern)
+	if err != nil {
+		return nil, fmt.Errorf("invalid redact regex %q: %w", regexPattern, err)
+	}
+	return func(s string) (string, bool) {
+		if !re.MatchString(s) {
+			return "", false
+		}
+		return re.ReplaceAllString(s, replacement), true
+	}, nil
+}
+
 // ValueToAny converts a pcommon.Value into the plain Go value that the
 // predicates operate on. Returning plain values rather than pcommon.Value keeps
 // the hot path free of pdata allocations.

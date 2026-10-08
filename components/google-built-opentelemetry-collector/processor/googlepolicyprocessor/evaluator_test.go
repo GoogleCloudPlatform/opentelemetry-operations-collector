@@ -1379,9 +1379,20 @@ func TestEvaluator_LogTransformStageOrderingAndDoubleAppliedFiltering(t *testing
 	}
 
 	// Deliberately give earlier-stage policies lexicographically LATER IDs ("z-rename", "m-add")
-	// and later-stage policies lexicographically EARLIER IDs ("b-remove") to prove
-	// that stage ordering (rename -> add -> remove) takes precedence over ID order,
+	// and later-stage policies lexicographically EARLIER IDs ("a-redact", "b-remove") to prove
+	// that stage ordering (rename -> add -> remove -> redact) takes precedence over ID order,
 	// while ID order breaks ties within the same stage ("m-add-1" before "m-add-2").
+	redactSecret := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id: "a-redact-token",
+		Action: &policyv1alpha1.LogTransformPolicy_Redact{
+			Redact: &policyv1alpha1.LogRedactAction{
+				Target:      logAttr("final_token"),
+				Regex:       `secret-(\d+)`,
+				Replacement: "[REDACTED-$1]",
+			},
+		},
+	})
+
 	removeTemp := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
 		Id: "b-remove-temp",
 		Action: &policyv1alpha1.LogTransformPolicy_Remove{
@@ -1415,7 +1426,7 @@ func TestEvaluator_LogTransformStageOrderingAndDoubleAppliedFiltering(t *testing
 	})
 
 	// Add policy that only matches if "final_token" exists (which is only true AFTER z-rename runs!)
-	// and sets "temp_flag" = "to-be-removed" (which is then removed in Stage 3 by b-remove-temp!).
+	// and sets "temp_flag" = "true" (which is then removed in Stage 3 by b-remove-temp!).
 	addAfterRename := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
 		Id: "n-add-after-rename",
 		Matches: []*policyv1alpha1.LogMatcher{
@@ -1434,10 +1445,11 @@ func TestEvaluator_LogTransformStageOrderingAndDoubleAppliedFiltering(t *testing
 	})
 
 	// Rename policy with lexicographically last ID ("z-rename") that renames "raw_token" -> "final_token".
-	// Because Rename (Stage 1) runs before Add (Stage 2) and Remove (Stage 3):
+	// Because Rename (Stage 1) runs before Add (Stage 2), Remove (Stage 3), and Redact (Stage 4):
 	// 1. z-rename moves "raw_token" -> "final_token"
 	// 2. m-add-1 sets "stage_winner"="first", m-add-2 is skipped (upsert=false), n-add-after-rename sees "final_token" and adds "temp_flag"
 	// 3. b-remove-temp removes "temp_flag"
+	// 4. a-redact-token redacts "final_token" from "Bearer secret-42" -> "Bearer [REDACTED-42]"
 	renameToken := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
 		Id: "z-rename-token",
 		Action: &policyv1alpha1.LogTransformPolicy_Rename{
@@ -1481,13 +1493,14 @@ func TestEvaluator_LogTransformStageOrderingAndDoubleAppliedFiltering(t *testing
 			{
 				Target: logAttr("final_token"),
 				Predicate: &policyv1alpha1.LogMatcher_Contains{
-					Contains: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "secret-99"}},
+					Contains: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "[REDACTED-99]"}},
 				},
 			},
 		},
 	})
 
 	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{
+		redactSecret,
 		removeTemp,
 		addWinner2,
 		addWinner1,
@@ -1502,7 +1515,7 @@ func TestEvaluator_LogTransformStageOrderingAndDoubleAppliedFiltering(t *testing
 	ld := plog.NewLogs()
 	sl := ld.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty()
 
-	// Record 0: Exercises rename -> add -> remove pipeline.
+	// Record 0: Exercises full rename -> add -> remove -> redact pipeline.
 	lr0 := sl.LogRecords().AppendEmpty()
 	lr0.Attributes().PutStr("raw_token", "Bearer secret-42")
 
@@ -1510,7 +1523,7 @@ func TestEvaluator_LogTransformStageOrderingAndDoubleAppliedFiltering(t *testing
 	lr1 := sl.LogRecords().AppendEmpty()
 	lr1.Attributes().PutStr("pre_drop", "yes")
 
-	// Record 2: Has pre_drop="yes" AND raw_token="Bearer secret-99" -> renamed to final_token="Bearer secret-99",
+	// Record 2: Has pre_drop="yes" AND raw_token="Bearer secret-99" -> renamed + redacted to "[REDACTED-99]",
 	// which matches filter-keep-post-transform in Pass 2, exempting it from filter-drop-post-transform!
 	lr2 := sl.LogRecords().AppendEmpty()
 	lr2.Attributes().PutStr("pre_drop", "yes")
@@ -1535,7 +1548,7 @@ func TestEvaluator_LogTransformStageOrderingAndDoubleAppliedFiltering(t *testing
 	assert.False(t, ok, "raw_token should have been renamed")
 	tok0, ok := records.At(0).Attributes().Get("final_token")
 	require.True(t, ok)
-	assert.Equal(t, "Bearer secret-42", tok0.Str())
+	assert.Equal(t, "Bearer [REDACTED-42]", tok0.Str())
 
 	winner0, ok := records.At(0).Attributes().Get("stage_winner")
 	require.True(t, ok)

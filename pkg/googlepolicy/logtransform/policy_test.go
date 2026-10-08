@@ -234,6 +234,15 @@ func TestPolicyValidationErrors(t *testing.T) {
 			errExpect: ErrMissingAction,
 		},
 		{
+			name: "missing action (nil Redact inside LogTransformPolicy_Redact)",
+			proto: &policyv1alpha1.LogTransformPolicy{
+				Id:      "p-nil-redact-msg",
+				Matches: []*policyv1alpha1.LogMatcher{validMatcher},
+				Action:  &policyv1alpha1.LogTransformPolicy_Redact{Redact: nil},
+			},
+			errExpect: ErrMissingAction,
+		},
+		{
 			name: "remove missing target",
 			proto: &policyv1alpha1.LogTransformPolicy{
 				Id:     "p-remove-nil-target",
@@ -282,12 +291,52 @@ func TestPolicyValidationErrors(t *testing.T) {
 			errSubstr: "scope field SCHEMA_URL is not supported as a transform target",
 		},
 		{
-			name: "unsupported action (redact)",
+			name: "redact missing target",
 			proto: &policyv1alpha1.LogTransformPolicy{
-				Id:     "p-redact",
-				Action: redactAction(recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY), "", "[REDACTED]"),
+				Id:     "p-redact-nil-target",
+				Action: redactAction(nil, "", "[REDACTED]"),
 			},
-			errExpect: ErrUnsupportedAction,
+			errExpect: ErrMissingTarget,
+		},
+		{
+			name: "redact invalid regex",
+			proto: &policyv1alpha1.LogTransformPolicy{
+				Id:     "p-redact-bad-regex",
+				Action: redactAction(recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY), "[unclosed", "[REDACTED]"),
+			},
+			errSubstr: "invalid redact regex",
+		},
+		{
+			name: "redact unsupported SEVERITY_NUMBER",
+			proto: &policyv1alpha1.LogTransformPolicy{
+				Id:     "p-redact-sev-num",
+				Action: redactAction(recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER), "", "[REDACTED]"),
+			},
+			errSubstr: "is not supported as a redact target",
+		},
+		{
+			name: "redact unsupported TRACE_ID",
+			proto: &policyv1alpha1.LogTransformPolicy{
+				Id:     "p-redact-trace-id",
+				Action: redactAction(recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID), "", "[REDACTED]"),
+			},
+			errSubstr: "is not supported as a redact target",
+		},
+		{
+			name: "redact unsupported SPAN_ID",
+			proto: &policyv1alpha1.LogTransformPolicy{
+				Id:     "p-redact-span-id",
+				Action: redactAction(recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID), "", "[REDACTED]"),
+			},
+			errSubstr: "is not supported as a redact target",
+		},
+		{
+			name: "redact unsupported SCOPE_FIELD_SCHEMA_URL",
+			proto: &policyv1alpha1.LogTransformPolicy{
+				Id:     "p-redact-schema-url",
+				Action: redactAction(scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_SCHEMA_URL), "", "[REDACTED]"),
+			},
+			errSubstr: "scope field SCHEMA_URL is not supported as a transform target",
 		},
 		{
 			name: "invalid matcher",
@@ -1367,6 +1416,24 @@ func TestTransformLogZeroContextGuards(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, googlepolicy.TransformNoMatch, polRenTo.TransformLog(googlepolicy.LogContext{}))
 	}
+
+	stringTargets := []*policyv1alpha1.LogFieldSelector{
+		logAttrTarget("k"),
+		resourceAttrTarget("k"),
+		scopeAttrTarget("k"),
+		recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY),
+		recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT),
+		scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_NAME),
+		scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_VERSION),
+	}
+	for _, tgt := range stringTargets {
+		polRed, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "zero-ctx-red",
+			Action: redactAction(tgt, ".*", "[REDACTED]"),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformNoMatch, polRed.TransformLog(googlepolicy.LogContext{}))
+	}
 }
 
 func TestTransformStageAndEmptyMatches(t *testing.T) {
@@ -1390,6 +1457,13 @@ func TestTransformStageAndEmptyMatches(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, googlepolicy.TransformStageRemove, pRemove.TransformStage())
+
+	pRedact, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		Id:     "stage-redact",
+		Action: redactAction(recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY), "world", "[REDACTED]"),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, googlepolicy.TransformStageRedact, pRedact.TransformStage())
 
 	// Empty matches applies to all log records.
 	lr, sl, rl := newTestLogBundle()
@@ -1671,5 +1745,71 @@ func TestTransformLogRenameAction(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, googlepolicy.TransformModified, scopeVerIn.TransformLog(ctx))
 		assert.Equal(t, "v1.2.3", sl.Scope().Version())
+	})
+}
+
+func TestTransformLogRedactAction(t *testing.T) {
+	t.Run("redact with regex and capture groups across attributes, record fields, and scope fields", func(t *testing.T) {
+		lr, sl, rl := newTestLogBundle()
+		lr.Body().SetStr("User SSN: 123-45-6789, token=secret123")
+		lr.Attributes().PutStr("auth", "Bearer secret-jwt")
+		ctx := logContext(lr, sl, rl)
+
+		// 1. Regex with capture groups on BODY.
+		redactBody, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "redact-body",
+			Action: redactAction(recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY), `\b\d{3}-\d{2}-\d{4}\b`, "[REDACTED_SSN]"),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformModified, redactBody.TransformLog(ctx))
+		assert.Equal(t, "User SSN: [REDACTED_SSN], token=secret123", lr.Body().Str())
+		// Re-running when pattern no longer matches returns TransformNoMatch.
+		assert.Equal(t, googlepolicy.TransformNoMatch, redactBody.TransformLog(ctx))
+
+		// 2. Capture group replacement ($1) on log_attribute.
+		redactAttr, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "redact-attr",
+			Action: redactAction(logAttrTarget("auth"), `^(Bearer )\S+$`, "${1}[REDACTED]"),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformModified, redactAttr.TransformLog(ctx))
+		v, _ := lr.Attributes().Get("auth")
+		assert.Equal(t, "Bearer [REDACTED]", v.Str())
+
+		// 3. Full-value redaction (empty regex) on nested log_attribute, resource_attribute, scope_attribute, SEVERITY_TEXT, SCOPE_FIELD_NAME, SCOPE_FIELD_VERSION.
+		fullTargets := []*policyv1alpha1.LogFieldSelector{
+			logAttrTarget("metadata", "env"),
+			resourceAttrTarget("cloud.zone"),
+			scopeAttrTarget("scope.tag"),
+			recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT),
+			scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_NAME),
+			scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_VERSION),
+		}
+		for _, tgt := range fullTargets {
+			pol, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+				Id:     "redact-full",
+				Action: redactAction(tgt, "", "[MASKED]"),
+			})
+			require.NoError(t, err)
+			assert.Equal(t, googlepolicy.TransformModified, pol.TransformLog(ctx))
+		}
+		metaVal, _ := lr.Attributes().Get("metadata")
+		envVal, _ := metaVal.Map().Get("env")
+		assert.Equal(t, "[MASKED]", envVal.Str())
+		zoneVal, _ := rl.Resource().Attributes().Get("cloud.zone")
+		assert.Equal(t, "[MASKED]", zoneVal.Str())
+		tagVal, _ := sl.Scope().Attributes().Get("scope.tag")
+		assert.Equal(t, "[MASKED]", tagVal.Str())
+		assert.Equal(t, "[MASKED]", lr.SeverityText())
+		assert.Equal(t, "[MASKED]", sl.Scope().Name())
+		assert.Equal(t, "[MASKED]", sl.Scope().Version())
+
+		// 4. Non-string attribute fails open (returns TransformNoMatch).
+		redactNonStr, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "redact-non-str",
+			Action: redactAction(logAttrTarget("http.status_code"), "", "[MASKED]"),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformNoMatch, redactNonStr.TransformLog(ctx))
 	})
 }

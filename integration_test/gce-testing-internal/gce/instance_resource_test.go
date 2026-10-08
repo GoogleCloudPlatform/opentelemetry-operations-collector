@@ -15,6 +15,8 @@
 package gce
 
 import (
+	"regexp"
+	"strings"
 	"testing"
 
 	computepb "cloud.google.com/go/compute/apiv1/computepb"
@@ -254,5 +256,179 @@ func TestExtractIPFromInstance(t *testing.T) {
 	emptyInst := &computepb.Instance{Name: proto.String("empty-vm")}
 	if _, err := extractIPFromInstance(emptyInst); err == nil {
 		t.Errorf("extractIPFromInstance(emptyInst) expected error, got nil")
+	}
+}
+
+func TestBuildInstanceProperties(t *testing.T) {
+	vm := &VM{
+		Name:        "test-mig-vm",
+		Project:     "test-project",
+		Zone:        "us-central1-a",
+		MachineType: "e2-standard-4",
+		Network:     "default",
+		ImageSpec:   "debian-cloud:debian-11",
+	}
+	options := VMOptions{
+		ImageSpec:  "debian-cloud:debian-11",
+		TimeToLive: "2h",
+		Metadata: map[string]string{
+			"custom-key": "custom-val",
+		},
+		Labels: map[string]string{
+			"env": "test",
+		},
+		ExtraCreateArguments: []string{
+			"--boot-disk-size=100GB",
+			"--boot-disk-type=zones/us-central1-a/diskTypes/pd-ssd",
+			"--tags=tag1,tag2",
+		},
+	}
+
+	props, err := buildInstanceProperties(options, vm)
+	if err != nil {
+		t.Fatalf("buildInstanceProperties() error = %v", err)
+	}
+
+	// InstanceProperties.MachineType must be the short name (e.g. "e2-standard-4"),
+	// NOT a full or partial zone URL, or GCE API will return INTERNAL_ERROR.
+	if props.GetMachineType() != "e2-standard-4" {
+		t.Errorf("props.GetMachineType() = %q, want e2-standard-4", props.GetMachineType())
+	}
+	if len(props.GetDisks()) != 1 {
+		t.Fatalf("len(props.GetDisks()) = %d, want 1", len(props.GetDisks()))
+	}
+	bootDisk := props.GetDisks()[0]
+	if !bootDisk.GetBoot() || !bootDisk.GetAutoDelete() {
+		t.Errorf("bootDisk boot/autoDelete not set properly: %#v", bootDisk)
+	}
+	if bootDisk.InitializeParams.GetDiskSizeGb() != 100 {
+		t.Errorf("bootDisk diskSizeGb = %d, want 100", bootDisk.InitializeParams.GetDiskSizeGb())
+	}
+	// InstanceProperties AttachedDiskInitializeParams.DiskType must be the short name (e.g. "pd-ssd"),
+	// not a URL.
+	if bootDisk.InitializeParams.GetDiskType() != "pd-ssd" {
+		t.Errorf("bootDisk diskType = %q, want pd-ssd", bootDisk.InitializeParams.GetDiskType())
+	}
+	if props.Scheduling == nil || props.Scheduling.MaxRunDuration == nil || props.Scheduling.MaxRunDuration.GetSeconds() != 7200 {
+		t.Errorf("props.Scheduling.MaxRunDuration = %v, want 7200s", props.Scheduling)
+	}
+	if props.Scheduling.GetInstanceTerminationAction() != "DELETE" {
+		t.Errorf("props.Scheduling.InstanceTerminationAction = %q, want DELETE", props.Scheduling.GetInstanceTerminationAction())
+	}
+	if props.Scheduling.GetProvisioningModel() != "STANDARD" {
+		t.Errorf("props.Scheduling.ProvisioningModel = %q, want STANDARD", props.Scheduling.GetProvisioningModel())
+	}
+	if len(props.NetworkInterfaces) != 1 {
+		t.Fatalf("len(props.NetworkInterfaces) = %d, want 1", len(props.NetworkInterfaces))
+	}
+	if props.Labels["env"] != "test" {
+		t.Errorf("props.Labels[env] = %q, want test", props.Labels["env"])
+	}
+	if len(props.Tags.GetItems()) != 2 {
+		t.Errorf("props.Tags = %v, want [tag1 tag2]", props.Tags.GetItems())
+	}
+}
+
+func TestBuildInstanceTemplate(t *testing.T) {
+	vm := &VM{
+		Name:        "test-mig-vm",
+		Project:     "test-project",
+		Zone:        "us-central1-a",
+		MachineType: "e2-standard-4",
+		Network:     "default",
+		ImageSpec:   "debian-cloud:debian-11",
+	}
+	options := VMOptions{
+		ImageSpec: "debian-cloud:debian-11",
+	}
+
+	tmpl, err := buildInstanceTemplate("test-tmpl-name", options, vm)
+	if err != nil {
+		t.Fatalf("buildInstanceTemplate() error = %v", err)
+	}
+	if tmpl.GetName() != "test-tmpl-name" {
+		t.Errorf("tmpl.GetName() = %q, want test-tmpl-name", tmpl.GetName())
+	}
+	if tmpl.GetProperties() == nil {
+		t.Fatalf("tmpl.GetProperties() is nil")
+	}
+	if tmpl.GetProperties().GetMachineType() != "e2-standard-4" {
+		t.Errorf("tmpl.GetProperties().GetMachineType() = %q, want e2-standard-4", tmpl.GetProperties().GetMachineType())
+	}
+}
+
+func TestCleanDiskType(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"pd-standard", "pd-standard"},
+		{"pd-ssd", "pd-ssd"},
+		{"zones/us-central1-a/diskTypes/pd-ssd", "pd-ssd"},
+		{"projects/p/zones/z/diskTypes/hyperdisk-balanced", "hyperdisk-balanced"},
+		{"", ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.input, func(t *testing.T) {
+			got := cleanDiskType(tc.input)
+			if got != tc.expected {
+				t.Errorf("cleanDiskType(%q) = %q, want %q", tc.input, got, tc.expected)
+			}
+		})
+	}
+}
+
+func TestDeducedBaseInstanceName(t *testing.T) {
+	testCases := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "short name",
+			input:    "my-mig",
+			expected: "my-mig",
+		},
+		{
+			name:     "exactly 54 chars",
+			input:    strings.Repeat("a", 54),
+			expected: strings.Repeat("a", 54),
+		},
+		{
+			name:     "over 54 chars truncated",
+			input:    strings.Repeat("a", 54) + "-extra",
+			expected: strings.Repeat("a", 54),
+		},
+		{
+			name:     "trailing hyphen stripped when truncated",
+			input:    strings.Repeat("a", 53) + "--extra",
+			expected: strings.Repeat("a", 53),
+		},
+		{
+			name:     "real world mig name truncated to 54 chars",
+			input:    "github-test-20261008-97629-dccf3c83-f95c-437d-9f75-625e28-mig",
+			expected: "github-test-20261008-97629-dccf3c83-f95c-437d-9f75-625",
+		},
+	}
+
+	apiRegex := regexp.MustCompile(`^[a-z](([-a-z0-9]{0,57})|([-a-z0-9]{0,54}-#{1,10}(\[[0-9]{1,10}\])?)|([-a-z0-9]{0,25}-UUID))$`)
+	rfc1035Regex := regexp.MustCompile(`^[a-z]([-a-z0-9]*[a-z0-9])?$`)
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := deducedBaseInstanceName(tc.input)
+			if actual != tc.expected {
+				t.Errorf("deducedBaseInstanceName(%q) = %q, expected %q", tc.input, actual, tc.expected)
+			}
+			if len(actual) > 54 {
+				t.Errorf("deducedBaseInstanceName(%q) length %d > 54", tc.input, len(actual))
+			}
+			if !apiRegex.MatchString(actual) {
+				t.Errorf("deducedBaseInstanceName(%q) = %q does not match GCE API regex", tc.input, actual)
+			}
+			if !rfc1035Regex.MatchString(actual) {
+				t.Errorf("deducedBaseInstanceName(%q) = %q does not match RFC1035 regex", tc.input, actual)
+			}
+		})
 	}
 }

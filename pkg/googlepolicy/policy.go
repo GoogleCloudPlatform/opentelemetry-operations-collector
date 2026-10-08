@@ -162,6 +162,18 @@ type MetricPolicyEvaluator interface {
 	IsDatapointLevel() bool
 }
 
+// MetricTransformPolicyEvaluator is implemented by transformation policies that
+// modify surviving metrics or metric datapoints in-place (e.g.,
+// MetricTransformPolicy in pkg/googlepolicy/metrictransform).
+type MetricTransformPolicyEvaluator interface {
+	TransformationPolicy
+	TransformStage() TransformStage
+	TransformMetric(ctx MetricContext) TransformResult
+	// IsDatapointLevel reports whether any matcher or action targets datapoint
+	// attributes.
+	IsDatapointLevel() bool
+}
+
 // TraceContext holds the contextual information needed to evaluate a single span.
 type TraceContext struct {
 	Span              ptrace.Span

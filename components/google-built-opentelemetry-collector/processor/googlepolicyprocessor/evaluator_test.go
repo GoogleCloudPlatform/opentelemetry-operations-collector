@@ -22,6 +22,7 @@ import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/logfilter"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/logtransform"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/metricfilter"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/metrictransform"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/tracefilter"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1560,6 +1561,116 @@ func TestEvaluator_LogTransformStageOrderingAndDoubleAppliedFiltering(t *testing
 	assert.Equal(t, int64(2), stats.PolicyRecords["b-remove-temp"][ResultTransformed])
 }
 
+func TestEvaluator_MetricFilterBeforeTransformAndSelfObservability(t *testing.T) {
+	dpAttr := func(path ...string) *policyv1alpha1.MetricFieldSelector {
+		return &policyv1alpha1.MetricFieldSelector{
+			Target: &policyv1alpha1.MetricFieldSelector_DatapointAttribute{
+				DatapointAttribute: &policyv1alpha1.AttributePath{Path: path},
+			},
+		}
+	}
+	descField := func(f policyv1alpha1.MetricDescriptorField) *policyv1alpha1.MetricFieldSelector {
+		return &policyv1alpha1.MetricFieldSelector{
+			Target: &policyv1alpha1.MetricFieldSelector_DescriptorField{DescriptorField: f},
+		}
+	}
+
+	dropDebug := mustPolicy(t, newDropDatapointAttrProto("drop-debug-dp", "env", "debug"))
+	keepExempt := mustPolicy(t, &policyv1alpha1.MetricFilterPolicy{
+		Id:     "keep-exempt-dp",
+		Action: policyv1alpha1.Action_ACTION_KEEP.Enum(),
+		Matches: []*policyv1alpha1.MetricMatcher{
+			{
+				Target: dpAttr("exempt"),
+				Predicate: &policyv1alpha1.MetricMatcher_Equals{
+					Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_BoolValue{BoolValue: true}},
+				},
+			},
+		},
+	})
+	addUnit := mustPolicy(t, &policyv1alpha1.MetricTransformPolicy{
+		Id: "01-add-unit",
+		Matches: []*policyv1alpha1.MetricMatcher{
+			{
+				Target: descField(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME),
+				Predicate: &policyv1alpha1.MetricMatcher_Equals{
+					Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "http.server.duration"}},
+				},
+			},
+		},
+		Action: &policyv1alpha1.MetricTransformPolicy_Add{
+			Add: &policyv1alpha1.MetricAddAction{
+				Target: descField(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_UNIT),
+				Value:  &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "ms"}},
+			},
+		},
+	})
+	addTier := mustPolicy(t, &policyv1alpha1.MetricTransformPolicy{
+		Id: "02-add-dp-tier",
+		Matches: []*policyv1alpha1.MetricMatcher{
+			{
+				Target: dpAttr("http.status_code"),
+				Predicate: &policyv1alpha1.MetricMatcher_Equals{
+					Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_IntValue{IntValue: 500}},
+				},
+			},
+		},
+		Action: &policyv1alpha1.MetricTransformPolicy_Add{
+			Add: &policyv1alpha1.MetricAddAction{
+				Target: dpAttr("alert_tier"),
+				Value:  &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "page"}},
+			},
+		},
+	})
+
+	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{dropDebug, keepExempt, addUnit, addTier})
+	require.NoError(t, err)
+
+	md := pmetric.NewMetrics()
+	sm := md.ResourceMetrics().AppendEmpty().ScopeMetrics().AppendEmpty()
+	m := sm.Metrics().AppendEmpty()
+	m.SetName("http.server.duration")
+	dps := m.SetEmptySum().DataPoints()
+
+	// DP 0: env=debug, status=500 (not exempt) -> DROPPED in Stage 1; must NOT be transformed in Stage 2!
+	dp0 := dps.AppendEmpty()
+	dp0.Attributes().PutStr("env", "debug")
+	dp0.Attributes().PutInt("http.status_code", 500)
+
+	// DP 1: env=debug, exempt=true, status=500 -> KEPT in Stage 1 AND TRANSFORMED by both 01-add-unit and 02-add-dp-tier!
+	dp1 := dps.AppendEmpty()
+	dp1.Attributes().PutStr("env", "debug")
+	dp1.Attributes().PutBool("exempt", true)
+	dp1.Attributes().PutInt("http.status_code", 500)
+
+	// DP 2: env=prod, status=200 -> Default allow in Stage 1, TRANSFORMED by instrument-level 01-add-unit!
+	dp2 := dps.AppendEmpty()
+	dp2.Attributes().PutStr("env", "prod")
+	dp2.Attributes().PutInt("http.status_code", 200)
+
+	stats := ev.TransformMetrics(md)
+	assert.Equal(t, int64(1), stats.Dropped)
+	assert.Equal(t, int64(2), stats.Transformed)
+	assert.Equal(t, int64(0), stats.Kept)
+	assert.Equal(t, int64(0), stats.NoMatch)
+
+	assert.Equal(t, int64(1), stats.PolicyRecords["drop-debug-dp"][ResultDropped])
+	assert.Equal(t, int64(1), stats.PolicyRecords["drop-debug-dp"][ResultNoMatch])
+	assert.Equal(t, int64(1), stats.PolicyRecords["keep-exempt-dp"][ResultKept])
+	assert.Equal(t, int64(2), stats.PolicyRecords["01-add-unit"][ResultTransformed])
+	assert.Equal(t, int64(1), stats.PolicyRecords["02-add-dp-tier"][ResultTransformed])
+
+	survivingMetric := md.ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics().At(0)
+	assert.Equal(t, "ms", survivingMetric.Unit())
+	require.Equal(t, 2, survivingMetric.Sum().DataPoints().Len())
+
+	tier1, ok := survivingMetric.Sum().DataPoints().At(0).Attributes().Get("alert_tier")
+	require.True(t, ok)
+	assert.Equal(t, "page", tier1.Str())
+	_, ok = survivingMetric.Sum().DataPoints().At(1).Attributes().Get("alert_tier")
+	assert.False(t, ok)
+}
+
 // --- policy helpers --------------------------------------------------------
 
 // mustPolicy compiles a filter or transform policy proto with its owning
@@ -1580,6 +1691,10 @@ func mustPolicy(t *testing.T, pb proto.Message) googlepolicy.TransformationPolic
 		return pol
 	case *policyv1alpha1.MetricFilterPolicy:
 		pol, err := metricfilter.NewPolicyFromProto(p)
+		require.NoError(t, err)
+		return pol
+	case *policyv1alpha1.MetricTransformPolicy:
+		pol, err := metrictransform.NewPolicyFromProto(p)
 		require.NoError(t, err)
 		return pol
 	case *policyv1alpha1.TraceFilterPolicy:

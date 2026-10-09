@@ -24,8 +24,6 @@ import (
 	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/matcher"
-	"go.opentelemetry.io/collector/pdata/pcommon"
-	"go.opentelemetry.io/collector/pdata/plog"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -59,7 +57,7 @@ var (
 	// ErrMissingMatchers is returned when the policy contains no matchers.
 	ErrMissingMatchers = errors.New("log filter policy must contain at least one matcher")
 	// ErrMissingTarget is returned when a matcher does not specify a target field selector.
-	ErrMissingTarget = errors.New("log matcher must specify a target field selector")
+	ErrMissingTarget = matcher.ErrMissingLogTarget
 	// ErrMissingPredicate is returned when a matcher does not specify a predicate.
 	ErrMissingPredicate = matcher.ErrMissingPredicate
 )
@@ -67,7 +65,7 @@ var (
 // Policy represents a compiled, validated LogFilterPolicy ready for hot-loop evaluation.
 type Policy struct {
 	proto    *policyv1alpha1.LogFilterPolicy
-	matchers []compiledMatcher
+	matchers []matcher.CompiledLogMatcher
 }
 
 var _ googlepolicy.TransformationPolicy = (*Policy)(nil)
@@ -92,9 +90,9 @@ func NewPolicyFromProto(pb *policyv1alpha1.LogFilterPolicy) (*Policy, error) {
 		return nil, ErrMissingMatchers
 	}
 
-	matchers := make([]compiledMatcher, 0, len(pb.GetMatches()))
+	matchers := make([]matcher.CompiledLogMatcher, 0, len(pb.GetMatches()))
 	for i, m := range pb.GetMatches() {
-		cm, err := compileMatcher(m)
+		cm, err := matcher.CompileLogMatcher(m)
 		if err != nil {
 			return nil, fmt.Errorf("matcher[%d]: %w", i, err)
 		}
@@ -165,198 +163,9 @@ func (p *Policy) EvaluateLog(ctx googlepolicy.LogContext) googlepolicy.EvalResul
 // LogContext. Matchers are AND-ed.
 func (p *Policy) matchesContext(ctx googlepolicy.LogContext) bool {
 	for i := range p.matchers {
-		if !p.matchers[i].eval(ctx) {
+		if !p.matchers[i].Eval(ctx) {
 			return false
 		}
 	}
 	return true
-}
-
-// targetExtractor pulls the value a matcher targets out of a LogContext.
-type targetExtractor func(ctx googlepolicy.LogContext) (val any, exists bool)
-
-type compiledMatcher struct {
-	extract   targetExtractor
-	predicate matcher.Predicate
-}
-
-func (cm *compiledMatcher) eval(ctx googlepolicy.LogContext) bool {
-	return cm.predicate(cm.extract(ctx))
-}
-
-func compileMatcher(m *policyv1alpha1.LogMatcher) (compiledMatcher, error) {
-	extract, err := compileExtractor(m.GetTarget())
-	if err != nil {
-		return compiledMatcher{}, err
-	}
-	predicate, err := matcher.CompilePredicate(m.GetPredicate(), m.GetNegate())
-	if err != nil {
-		return compiledMatcher{}, err
-	}
-	return compiledMatcher{extract: extract, predicate: predicate}, nil
-}
-
-func compileExtractor(target *policyv1alpha1.LogFieldSelector) (targetExtractor, error) {
-	if target == nil || target.Target == nil {
-		return nil, ErrMissingTarget
-	}
-
-	switch t := target.Target.(type) {
-	case *policyv1alpha1.LogFieldSelector_RecordField:
-		return compileRecordFieldExtractor(t.RecordField)
-
-	case *policyv1alpha1.LogFieldSelector_LogAttribute:
-		steps, err := matcher.CompilePath(t.LogAttribute, "log")
-		if err != nil {
-			return nil, err
-		}
-		return func(ctx googlepolicy.LogContext) (any, bool) {
-			if ctx.Record == (plog.LogRecord{}) {
-				return nil, false
-			}
-			return matcher.EvalPath(ctx.Record.Attributes(), steps)
-		}, nil
-
-	case *policyv1alpha1.LogFieldSelector_ResourceAttribute:
-		steps, err := matcher.CompilePath(t.ResourceAttribute, "resource")
-		if err != nil {
-			return nil, err
-		}
-		return func(ctx googlepolicy.LogContext) (any, bool) {
-			if ctx.Resource == (pcommon.Resource{}) {
-				return nil, false
-			}
-			return matcher.EvalPath(ctx.Resource.Attributes(), steps)
-		}, nil
-
-	case *policyv1alpha1.LogFieldSelector_ScopeAttribute:
-		steps, err := matcher.CompilePath(t.ScopeAttribute, "scope")
-		if err != nil {
-			return nil, err
-		}
-		return func(ctx googlepolicy.LogContext) (any, bool) {
-			if ctx.Scope == (pcommon.InstrumentationScope{}) {
-				return nil, false
-			}
-			return matcher.EvalPath(ctx.Scope.Attributes(), steps)
-		}, nil
-
-	case *policyv1alpha1.LogFieldSelector_ScopeField:
-		return compileScopeFieldExtractor(t.ScopeField)
-
-	default:
-		return nil, ErrMissingTarget
-	}
-}
-
-func compileRecordFieldExtractor(field policyv1alpha1.LogRecordField) (targetExtractor, error) {
-	switch field {
-	case policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY:
-		return func(ctx googlepolicy.LogContext) (any, bool) {
-			if ctx.Record == (plog.LogRecord{}) || ctx.Record.Body().Type() == pcommon.ValueTypeEmpty {
-				return nil, false
-			}
-			val := matcher.ValueToAny(ctx.Record.Body())
-			if s, ok := val.(string); ok {
-				if s == "" {
-					return nil, false
-				}
-				return s, true
-			}
-			return val, true
-		}, nil
-
-	case policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT:
-		return func(ctx googlepolicy.LogContext) (any, bool) {
-			if ctx.Record == (plog.LogRecord{}) {
-				return nil, false
-			}
-			s := ctx.Record.SeverityText()
-			if s == "" {
-				return nil, false
-			}
-			return s, true
-		}, nil
-
-	case policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER:
-		// An unspecified severity number (0) is truly absent rather than numeric
-		// zero: returning (nil, false) prevents range rules like `lt: 9` (drop
-		// debug/trace logs) from falsely dropping logs that have no severity set.
-		return func(ctx googlepolicy.LogContext) (any, bool) {
-			if ctx.Record == (plog.LogRecord{}) {
-				return nil, false
-			}
-			sev := ctx.Record.SeverityNumber()
-			if sev == plog.SeverityNumberUnspecified {
-				return nil, false
-			}
-			return int64(sev), true
-		}, nil
-
-	case policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID:
-		return func(ctx googlepolicy.LogContext) (any, bool) {
-			if ctx.Record == (plog.LogRecord{}) {
-				return nil, false
-			}
-			tid := ctx.Record.TraceID()
-			if tid.IsEmpty() {
-				return nil, false
-			}
-			return tid, true
-		}, nil
-
-	case policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID:
-		return func(ctx googlepolicy.LogContext) (any, bool) {
-			if ctx.Record == (plog.LogRecord{}) {
-				return nil, false
-			}
-			sid := ctx.Record.SpanID()
-			if sid.IsEmpty() {
-				return nil, false
-			}
-			return sid, true
-		}, nil
-
-	default:
-		return nil, errors.New("log record field cannot be unspecified")
-	}
-}
-
-func compileScopeFieldExtractor(field policyv1alpha1.ScopeField) (targetExtractor, error) {
-	switch field {
-	case policyv1alpha1.ScopeField_SCOPE_FIELD_NAME:
-		return func(ctx googlepolicy.LogContext) (any, bool) {
-			if ctx.Scope == (pcommon.InstrumentationScope{}) {
-				return nil, false
-			}
-			s := ctx.Scope.Name()
-			if s == "" {
-				return nil, false
-			}
-			return s, true
-		}, nil
-
-	case policyv1alpha1.ScopeField_SCOPE_FIELD_VERSION:
-		return func(ctx googlepolicy.LogContext) (any, bool) {
-			if ctx.Scope == (pcommon.InstrumentationScope{}) {
-				return nil, false
-			}
-			s := ctx.Scope.Version()
-			if s == "" {
-				return nil, false
-			}
-			return s, true
-		}, nil
-
-	case policyv1alpha1.ScopeField_SCOPE_FIELD_SCHEMA_URL:
-		return func(ctx googlepolicy.LogContext) (any, bool) {
-			if ctx.ScopeSchemaURL == "" {
-				return nil, false
-			}
-			return ctx.ScopeSchemaURL, true
-		}, nil
-
-	default:
-		return nil, errors.New("scope field cannot be unspecified")
-	}
 }

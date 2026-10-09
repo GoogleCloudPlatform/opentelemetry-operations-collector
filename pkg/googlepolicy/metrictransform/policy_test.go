@@ -164,18 +164,39 @@ func TestNewPolicyFromProto_Validation(t *testing.T) {
 			wantErr: ErrMissingAction,
 		},
 		{
-			name: "rename action unsupported",
+			name: "nil rename action struct",
 			pb: &policyv1alpha1.MetricTransformPolicy{
-				Id:      "unsupported-rename",
+				Id:      "nil-rename-struct",
+				Matches: []*policyv1alpha1.MetricMatcher{validMatcher},
+				Action:  &policyv1alpha1.MetricTransformPolicy_Rename{},
+			},
+			wantErr: ErrMissingAction,
+		},
+		{
+			name: "rename missing from",
+			pb: &policyv1alpha1.MetricTransformPolicy{
+				Id:      "rename-missing-from",
+				Matches: []*policyv1alpha1.MetricMatcher{validMatcher},
+				Action: &policyv1alpha1.MetricTransformPolicy_Rename{
+					Rename: &policyv1alpha1.MetricRenameAction{
+						To: dpAttrTarget("new"),
+					},
+				},
+			},
+			wantErr: ErrMissingTarget,
+		},
+		{
+			name: "rename missing to",
+			pb: &policyv1alpha1.MetricTransformPolicy{
+				Id:      "rename-missing-to",
 				Matches: []*policyv1alpha1.MetricMatcher{validMatcher},
 				Action: &policyv1alpha1.MetricTransformPolicy_Rename{
 					Rename: &policyv1alpha1.MetricRenameAction{
 						From: dpAttrTarget("old"),
-						To:   dpAttrTarget("new"),
 					},
 				},
 			},
-			wantErr: ErrUnsupportedAction,
+			wantErr: ErrMissingTarget,
 		},
 		{
 			name: "add missing target",
@@ -474,4 +495,160 @@ func TestPolicyMetadataAndDriver(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "from-map", loaded.PolicyName())
+}
+
+func TestMetricRenameAction_DatapointAttribute(t *testing.T) {
+	m, dp, sm, rm := newTestMetricBundle()
+	ctx := metricContext(m, dp, sm, rm)
+
+	// 1. Move http.method ("GET") -> rpc.method.
+	renameMethod, err := NewPolicyFromProto(&policyv1alpha1.MetricTransformPolicy{
+		Id: "rename-http-method",
+		Action: &policyv1alpha1.MetricTransformPolicy_Rename{
+			Rename: &policyv1alpha1.MetricRenameAction{
+				From: dpAttrTarget("http.method"),
+				To:   dpAttrTarget("rpc.method"),
+			},
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, googlepolicy.TransformStageRename, renameMethod.TransformStage())
+	assert.True(t, renameMethod.IsDatapointLevel())
+
+	assert.Equal(t, googlepolicy.TransformModified, renameMethod.TransformMetric(ctx))
+	_, oldExists := dp.Attributes().Get("http.method")
+	assert.False(t, oldExists, "old attribute key must be removed")
+	got, newExists := dp.Attributes().Get("rpc.method")
+	require.True(t, newExists)
+	assert.Equal(t, "GET", got.Str())
+
+	// 2. Re-running when source attribute is now absent returns TransformNoMatch.
+	assert.Equal(t, googlepolicy.TransformNoMatch, renameMethod.TransformMetric(ctx))
+
+	// 3. Collision safety: renaming http.status_code (200) -> rpc.method (already exists) is a no-op.
+	renameCollision, err := NewPolicyFromProto(&policyv1alpha1.MetricTransformPolicy{
+		Id: "rename-collision",
+		Action: &policyv1alpha1.MetricTransformPolicy_Rename{
+			Rename: &policyv1alpha1.MetricRenameAction{
+				From: dpAttrTarget("http.status_code"),
+				To:   dpAttrTarget("rpc.method"),
+			},
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, googlepolicy.TransformNoMatch, renameCollision.TransformMetric(ctx))
+	statusVal, statusExists := dp.Attributes().Get("http.status_code")
+	require.True(t, statusExists, "source attribute must not be removed when destination already exists")
+	assert.Equal(t, int64(200), statusVal.Int())
+
+	// 4. Self-rename (from == to) is a no-op returning TransformNoMatch.
+	selfRename, err := NewPolicyFromProto(&policyv1alpha1.MetricTransformPolicy{
+		Id: "self-rename",
+		Action: &policyv1alpha1.MetricTransformPolicy_Rename{
+			Rename: &policyv1alpha1.MetricRenameAction{
+				From: dpAttrTarget("rpc.method"),
+				To:   dpAttrTarget("rpc.method"),
+			},
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, googlepolicy.TransformNoMatch, selfRename.TransformMetric(ctx))
+}
+
+func TestMetricRenameAction_ResourceAndScopeAttributes(t *testing.T) {
+	m, dp, sm, rm := newTestMetricBundle()
+	ctx := metricContext(m, dp, sm, rm)
+
+	renameRes, err := NewPolicyFromProto(&policyv1alpha1.MetricTransformPolicy{
+		Id: "rename-res-zone",
+		Action: &policyv1alpha1.MetricTransformPolicy_Rename{
+			Rename: &policyv1alpha1.MetricRenameAction{
+				From: resourceAttrTarget("cloud.zone"),
+				To:   resourceAttrTarget("gcp", "zone"),
+			},
+		},
+	})
+	require.NoError(t, err)
+	assert.False(t, renameRes.IsDatapointLevel())
+	assert.Equal(t, googlepolicy.TransformModified, renameRes.TransformMetric(ctx))
+	_, oldZone := rm.Resource().Attributes().Get("cloud.zone")
+	assert.False(t, oldZone)
+	gcpMap, ok := rm.Resource().Attributes().Get("gcp")
+	require.True(t, ok)
+	newZone, ok := gcpMap.Map().Get("zone")
+	require.True(t, ok)
+	assert.Equal(t, "us-central1-a", newZone.Str())
+
+	renameScope, err := NewPolicyFromProto(&policyv1alpha1.MetricTransformPolicy{
+		Id: "rename-scope-lang",
+		Action: &policyv1alpha1.MetricTransformPolicy_Rename{
+			Rename: &policyv1alpha1.MetricRenameAction{
+				From: scopeAttrTarget("library.language"),
+				To:   scopeAttrTarget("otel.scope.lang"),
+			},
+		},
+	})
+	require.NoError(t, err)
+	assert.False(t, renameScope.IsDatapointLevel())
+	assert.Equal(t, googlepolicy.TransformModified, renameScope.TransformMetric(ctx))
+	_, oldLang := sm.Scope().Attributes().Get("library.language")
+	assert.False(t, oldLang)
+	newLang, ok := sm.Scope().Attributes().Get("otel.scope.lang")
+	require.True(t, ok)
+	assert.Equal(t, "go", newLang.Str())
+}
+
+func TestMetricRenameAction_InvalidTargets(t *testing.T) {
+	tests := []struct {
+		name    string
+		from    *policyv1alpha1.MetricFieldSelector
+		to      *policyv1alpha1.MetricFieldSelector
+		wantErr string
+	}{
+		{
+			name:    "cross-scope datapoint to resource",
+			from:    dpAttrTarget("a"),
+			to:      resourceAttrTarget("b"),
+			wantErr: "metric rename from datapoint_attribute must target datapoint_attribute",
+		},
+		{
+			name:    "cross-scope resource to scope",
+			from:    resourceAttrTarget("a"),
+			to:      scopeAttrTarget("b"),
+			wantErr: "metric rename from resource_attribute must target resource_attribute",
+		},
+		{
+			name:    "cross-scope scope to datapoint",
+			from:    scopeAttrTarget("a"),
+			to:      dpAttrTarget("b"),
+			wantErr: "metric rename from scope_attribute must target scope_attribute",
+		},
+		{
+			name:    "descriptor field not supported",
+			from:    descriptorFieldTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME),
+			to:      descriptorFieldTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_DESCRIPTION),
+			wantErr: "is not supported as a rename target",
+		},
+		{
+			name:    "scope field not supported",
+			from:    scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_NAME),
+			to:      scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_VERSION),
+			wantErr: "is not supported as a rename target",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := NewPolicyFromProto(&policyv1alpha1.MetricTransformPolicy{
+				Id: "bad-rename-" + tc.name,
+				Action: &policyv1alpha1.MetricTransformPolicy_Rename{
+					Rename: &policyv1alpha1.MetricRenameAction{
+						From: tc.from,
+						To:   tc.to,
+					},
+				},
+			})
+			require.ErrorContains(t, err, tc.wantErr)
+		})
+	}
 }

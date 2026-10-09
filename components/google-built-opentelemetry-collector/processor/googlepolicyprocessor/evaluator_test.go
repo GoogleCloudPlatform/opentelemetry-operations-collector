@@ -1671,6 +1671,81 @@ func TestEvaluator_MetricFilterBeforeTransformAndSelfObservability(t *testing.T)
 	assert.False(t, ok)
 }
 
+func TestEvaluator_MetricTransformStageOrderingAndDoubleAppliedFiltering(t *testing.T) {
+	dpAttr := func(path ...string) *policyv1alpha1.MetricFieldSelector {
+		return &policyv1alpha1.MetricFieldSelector{
+			Target: &policyv1alpha1.MetricFieldSelector_DatapointAttribute{
+				DatapointAttribute: &policyv1alpha1.AttributePath{Path: path},
+			},
+		}
+	}
+
+	// Stage 1 (Rename): Move "env" -> "legacy_env". Passed AFTER addEnv in the slice,
+	// but must execute BEFORE addEnv because TransformStageRename < TransformStageAdd.
+	renameEnv := mustPolicy(t, &policyv1alpha1.MetricTransformPolicy{
+		Id: "z-rename-env",
+		Action: &policyv1alpha1.MetricTransformPolicy_Rename{
+			Rename: &policyv1alpha1.MetricRenameAction{
+				From: dpAttr("env"),
+				To:   dpAttr("legacy_env"),
+			},
+		},
+	})
+
+	// Stage 2 (Add): Insert "env": "prod" (only succeeds because z-rename-env vacated "env" first!).
+	addEnv := mustPolicy(t, &policyv1alpha1.MetricTransformPolicy{
+		Id: "a-add-env",
+		Action: &policyv1alpha1.MetricTransformPolicy_Add{
+			Add: &policyv1alpha1.MetricAddAction{
+				Target: dpAttr("env"),
+				Value:  &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "prod"}},
+			},
+		},
+	})
+
+	// Pass 2 Filter: Drop any datapoint where legacy_env == "staging_canary" after rename.
+	dropPostRename := mustPolicy(t, newDropDatapointAttrProto("filter-drop-post-rename", "legacy_env", "staging_canary"))
+
+	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{
+		addEnv,
+		renameEnv,
+		dropPostRename,
+	})
+	require.NoError(t, err)
+
+	md := pmetric.NewMetrics()
+	sm := md.ResourceMetrics().AppendEmpty().ScopeMetrics().AppendEmpty()
+	m := sm.Metrics().AppendEmpty()
+	m.SetName("rpc.server.duration")
+	dps := m.SetEmptyGauge().DataPoints()
+
+	// DP 0: env="dev" -> renamed to legacy_env="dev", then env="prod" added -> survives Pass 2!
+	dp0 := dps.AppendEmpty()
+	dp0.Attributes().PutStr("env", "dev")
+
+	// DP 1: env="staging_canary" -> survives Pass 1, renamed to legacy_env="staging_canary", env="prod" added,
+	// then DROPPED in Pass 2 by filter-drop-post-rename!
+	dp1 := dps.AppendEmpty()
+	dp1.Attributes().PutStr("env", "staging_canary")
+
+	stats := ev.TransformMetrics(md)
+	assert.Equal(t, int64(1), stats.Dropped)
+	assert.Equal(t, int64(1), stats.Transformed)
+
+	assert.Equal(t, int64(2), stats.PolicyRecords["z-rename-env"][ResultTransformed])
+	assert.Equal(t, int64(2), stats.PolicyRecords["a-add-env"][ResultTransformed])
+	assert.Equal(t, int64(1), stats.PolicyRecords["filter-drop-post-rename"][ResultDropped])
+
+	survivingDPs := md.ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics().At(0).Gauge().DataPoints()
+	require.Equal(t, 1, survivingDPs.Len())
+	legacyEnv, ok := survivingDPs.At(0).Attributes().Get("legacy_env")
+	require.True(t, ok)
+	assert.Equal(t, "dev", legacyEnv.Str())
+	newEnv, ok := survivingDPs.At(0).Attributes().Get("env")
+	require.True(t, ok)
+	assert.Equal(t, "prod", newEnv.Str())
+}
+
 // --- policy helpers --------------------------------------------------------
 
 // mustPolicy compiles a filter or transform policy proto with its owning

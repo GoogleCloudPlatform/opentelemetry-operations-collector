@@ -17,6 +17,8 @@ package googlecontrolplaneprovider
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider/policies/selfmetrics"
@@ -192,6 +194,22 @@ func TestRetrieve_NoFleetID(t *testing.T) {
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
 
+// withFakeGCEMetadata points the GCE metadata library at a local server that
+// answers 404 to every lookup, so xDS project/locality resolution sees no
+// metadata, as it would off GCE.
+//
+// Without it, tests run on a GCE host (e.g. a cloudtop) reach the real metadata
+// server through the library's shared HTTP client, which keeps the connection
+// alive for a minute afterwards and trips goleak. The library offers no way to
+// close that connection, but closing the server on cleanup drops it from the
+// server side, so the client's connection goroutines exit.
+func withFakeGCEMetadata(t *testing.T) {
+	t.Helper()
+	srv := httptest.NewServer(http.NotFoundHandler())
+	t.Cleanup(srv.Close)
+	t.Setenv("GCE_METADATA_HOST", srv.Listener.Addr().String())
+}
+
 // TestRetrieve_XDSServerUnreachable asserts that a control plane that is down
 // does not stop the collector from starting: Start's initial-sync wait expires,
 // Retrieve still succeeds on the built-in policies, and the xDS connection keeps
@@ -200,6 +218,7 @@ func TestRetrieve_NoFleetID(t *testing.T) {
 // This is the degraded path that matters most in production -- the control plane
 // being unavailable must never be the reason a collector fails to come up.
 func TestRetrieve_XDSServerUnreachable(t *testing.T) {
+	withFakeGCEMetadata(t)
 	t.Setenv("FLEET_ID", "1234")
 	p := createProvider()
 
@@ -225,6 +244,7 @@ func TestRetrieve_XDSServerUnreachable(t *testing.T) {
 }
 
 func TestRetrieve_XDSNumericProjectDoesNotClobberProjectID(t *testing.T) {
+	withFakeGCEMetadata(t)
 	t.Setenv("FLEET_ID", "1234")
 	p := createProvider()
 
@@ -453,15 +473,14 @@ func TestFilterPolicyDriversRegistered(t *testing.T) {
 	}
 }
 
-// TestMergeConfUnionsServiceExtensions pins the behaviour that makes it safe for
-// more than one policy to declare an extension.
+// TestMergeAppendUnionsServiceExtensions pins the behaviour that makes it safe
+// for more than one policy (or confmap provider) to declare an extension.
 //
-// confmap.Merge replaces slices, so a plain Merge would leave only the last
-// policy's extension in the list. The dropped extension stays visible under the
-// top level extensions key, so the config looks correct right up until the
-// collector refuses to start because an exporter references an authenticator
-// that was never instantiated.
-func TestMergeConfUnionsServiceExtensions(t *testing.T) {
+// Creating the provider enables the confmap.enableMergeAppendOption feature
+// gate so confmap.Merge appends and deduplicates service::extensions instead of
+// replacing the slice with only the last policy's extension.
+func TestMergeAppendUnionsServiceExtensions(t *testing.T) {
+	_ = createProvider()
 	conf := confmap.New()
 
 	destination := confmap.NewFromStringMap(map[string]any{
@@ -475,8 +494,8 @@ func TestMergeConfUnionsServiceExtensions(t *testing.T) {
 		},
 	})
 
-	require.NoError(t, mergeConf(conf, destination))
-	require.NoError(t, mergeConf(conf, selfMetrics))
+	require.NoError(t, conf.Merge(cleanConf(destination)))
+	require.NoError(t, conf.Merge(cleanConf(selfMetrics)))
 
 	assert.Equal(t, []any{
 		"googleclientauth/default_gcp_destination",
@@ -484,7 +503,8 @@ func TestMergeConfUnionsServiceExtensions(t *testing.T) {
 	}, conf.Get("service::extensions"))
 }
 
-func TestMergeConfDeduplicatesServiceExtensions(t *testing.T) {
+func TestMergeAppendDeduplicatesServiceExtensions(t *testing.T) {
+	_ = createProvider()
 	conf := confmap.New()
 	declare := func() *confmap.Conf {
 		return confmap.NewFromStringMap(map[string]any{
@@ -494,19 +514,20 @@ func TestMergeConfDeduplicatesServiceExtensions(t *testing.T) {
 		})
 	}
 
-	require.NoError(t, mergeConf(conf, declare()))
-	require.NoError(t, mergeConf(conf, declare()))
+	require.NoError(t, conf.Merge(cleanConf(declare())))
+	require.NoError(t, conf.Merge(cleanConf(declare())))
 
 	assert.Equal(t, []any{"googleclientauth/default_gcp_destination"}, conf.Get("service::extensions"))
 }
 
-// TestMergeConfWithoutServiceExtensions guards the common case: a policy that
+// TestMergeAppendWithoutServiceExtensions guards the common case: a policy that
 // declares no extensions must not introduce an empty service::extensions key.
-func TestMergeConfWithoutServiceExtensions(t *testing.T) {
+func TestMergeAppendWithoutServiceExtensions(t *testing.T) {
+	_ = createProvider()
 	conf := confmap.New()
-	require.NoError(t, mergeConf(conf, confmap.NewFromStringMap(map[string]any{
+	require.NoError(t, conf.Merge(cleanConf(confmap.NewFromStringMap(map[string]any{
 		"receivers": map[string]any{"otlp/x": map[string]any{}},
-	})))
+	}))))
 
 	assert.False(t, conf.IsSet("service::extensions"))
 }

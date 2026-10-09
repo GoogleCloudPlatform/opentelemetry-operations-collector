@@ -72,6 +72,7 @@ import (
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/integration_test/gce-testing-internal/logging"
 
+	compute "cloud.google.com/go/compute/apiv1"
 	cloudlogging "cloud.google.com/go/logging"
 	"cloud.google.com/go/logging/logadmin"
 	monitoring "cloud.google.com/go/monitoring/apiv3"
@@ -86,7 +87,10 @@ import (
 	"google.golang.org/api/iterator"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/protojson"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
+
+	computepb "cloud.google.com/go/compute/apiv1/computepb"
 )
 
 var (
@@ -96,6 +100,11 @@ var (
 	monClient   *monitoring.MetricClient
 	logClients  *logClientFactory
 	traceClient *trace.Client
+
+	instancesClient             *compute.InstancesClient
+	disksClient                 *compute.DisksClient
+	instanceTemplatesClient     *compute.InstanceTemplatesClient
+	instanceGroupManagersClient *compute.InstanceGroupManagersClient
 
 	zonePicker *weightedRoundRobin
 
@@ -183,6 +192,23 @@ func init() {
 	traceClient, err = trace.NewClient(ctx)
 	if err != nil {
 		log.Fatalf("trace.NewClient() failed: %v", err)
+	}
+
+	instancesClient, err = compute.NewInstancesRESTClient(ctx)
+	if err != nil {
+		log.Fatalf("compute.NewInstancesRESTClient() failed: %v", err)
+	}
+	disksClient, err = compute.NewDisksRESTClient(ctx)
+	if err != nil {
+		log.Fatalf("compute.NewDisksRESTClient() failed: %v", err)
+	}
+	instanceTemplatesClient, err = compute.NewInstanceTemplatesRESTClient(ctx)
+	if err != nil {
+		log.Fatalf("compute.NewInstanceTemplatesRESTClient() failed: %v", err)
+	}
+	instanceGroupManagersClient, err = compute.NewInstanceGroupManagersRESTClient(ctx)
+	if err != nil {
+		log.Fatalf("compute.NewInstanceGroupManagersRESTClient() failed: %v", err)
 	}
 
 	zonePicker, err = newZonePicker(os.Getenv("ZONES"))
@@ -366,11 +392,19 @@ func OSKind(imageSpec string) string {
 
 // isRetriableLookupError returns whether the given error, returned from
 // lookup[Metric|Trace]() or WaitFor[Metric|Trace](), should be retried.
-func isRetriableLookupError(err error) bool {
+// ctx is the context the lookup ran with.
+func isRetriableLookupError(ctx context.Context, err error) bool {
 	if errors.Is(err, ErrInvalidIteratorLength) {
 		return true
 	}
 	myStatus, ok := status.FromError(err)
+	// The backend sometimes cancels a request on its side, failing with
+	// "rpc error: code = Canceled desc = CANCELLED". Retry that, unless our own
+	// context is done (cancelled or past its deadline), because then a retry
+	// can't succeed.
+	if ok && myStatus.Code() == codes.Canceled {
+		return ctx.Err() == nil
+	}
 	// workload.googleapis.com/* domain metrics are created on first write, and may not be immediately queryable.
 	// The error doesn't always look the same, hopefully looking for Code() == NotFound will catch all variations.
 	// The Internal case catches some transient errors returned by the monitoring API sometimes.
@@ -497,7 +531,7 @@ func WaitForMetricSeries(ctx context.Context, logger *log.Logger, vm *VM, metric
 			logger.Printf("Successfully found series=%v", tsList)
 			return tsList, nil
 		}
-		if err != nil && !isRetriableLookupError(err) {
+		if err != nil && !isRetriableLookupError(ctx, err) {
 			return nil, fmt.Errorf("WaitForMetric(metric=%q, extraFilters=%v): %v", metric, extraFilters, err)
 		}
 		// We can get here in two cases:
@@ -543,7 +577,7 @@ func WaitForTrace(ctx context.Context, logger *log.Logger, vm *VM, options WaitF
 		if trace != nil && err == nil {
 			return trace, nil
 		}
-		if err != nil && !isRetriableLookupError(err) {
+		if err != nil && !isRetriableLookupError(ctx, err) {
 			return nil, fmt.Errorf("WaitForTrace() failed: %v", err)
 		}
 		logger.Printf("firstTrace check(): empty, retrying (%d/%d)...",
@@ -578,7 +612,7 @@ func AssertMetricMissing(ctx context.Context, logger *log.Logger, vm *VM, metric
 			// Success
 			return nil
 		}
-		if !isRetriableLookupError(err) {
+		if !isRetriableLookupError(ctx, err) {
 			return fmt.Errorf("AssertMetricMissing(metric=%q): %v", metric, err)
 		}
 
@@ -1714,6 +1748,10 @@ func shouldRetryCreateVM(err error, options VMOptions) bool {
 		strings.Contains(err.Error(), "Internal error") ||
 		// Instance creation can also fail due to service unavailability.
 		strings.Contains(err.Error(), "currently unavailable") ||
+		// GCE sometimes responds with 502 or 503 errors, e.g. a raw HTML
+		// "Error 502 (Server Error)" page. Retry these (and other 50x errors for
+		// good measure), like handleDeleteError does.
+		strings.Contains(err.Error(), "Error 50") ||
 		// This error is a consequence of running gcloud concurrently, which is actually
 		// unsupported. In the absence of a better fix, just retry such errors.
 		strings.Contains(err.Error(), "database is locked") ||
@@ -1802,26 +1840,44 @@ func CreateManagedInstanceGroupVM(origCtx context.Context, logger *log.Logger, o
 
 // DescribeVMDisk queries the VM disk information.
 func DescribeVMDisk(ctx context.Context, logger *log.Logger, vm *VM) (CommandOutput, error) {
-	// RunGcloud will log the output of the command, so we don't need to.
-	return RunGcloud(ctx, logger, "", []string{
-		"compute", "disks", "describe", vm.Name,
-		"--project=" + vm.Project,
-		"--zone=" + vm.Zone,
-		"--format=json",
+	LogEquivalentGcloud(logger, "compute", "disks", "describe", vm.Name,
+		"--project="+vm.Project,
+		"--zone="+vm.Zone,
+		"--format=json")
+	disk, err := disksClient.Get(ctx, &computepb.GetDiskRequest{
+		Project: vm.Project,
+		Zone:    vm.Zone,
+		Disk:    vm.Name,
 	})
+	if err != nil {
+		return CommandOutput{}, err
+	}
+	data, err := protojson.Marshal(disk)
+	if err != nil {
+		return CommandOutput{}, fmt.Errorf("failed to marshal disk to JSON: %w", err)
+	}
+	logger.Print(string(data))
+	return CommandOutput{Stdout: string(data)}, nil
 }
 
 // RemoveExternalIP deletes the external ip for an instance.
 func RemoveExternalIP(ctx context.Context, logger *log.Logger, vm *VM) error {
-	_, err := RunGcloud(ctx, logger, "",
-		[]string{
-			"compute", "instances", "delete-access-config",
-			"--project=" + vm.Project,
-			"--zone=" + vm.Zone,
-			vm.Name,
-			"--access-config-name=external-nat",
-		})
-	return err
+	LogEquivalentGcloud(logger, "compute", "instances", "delete-access-config",
+		"--project="+vm.Project,
+		"--zone="+vm.Zone,
+		vm.Name,
+		"--access-config-name=external-nat")
+	op, err := instancesClient.DeleteAccessConfig(ctx, &computepb.DeleteAccessConfigInstanceRequest{
+		Project:          vm.Project,
+		Zone:             vm.Zone,
+		Instance:         vm.Name,
+		NetworkInterface: "nic0",
+		AccessConfig:     "external-nat",
+	})
+	if err != nil {
+		return err
+	}
+	return op.Wait(ctx)
 }
 
 // SetEnvironmentVariables sets the environment variables in the envVariables map on the given vm in a os-dependent way.
@@ -2313,22 +2369,25 @@ func extractID(stdout string) (int64, error) {
 
 // FetchMetadata retrieves the instance metadata for the given VM.
 func FetchMetadata(ctx context.Context, logger *log.Logger, vm *VM) (map[string]string, error) {
-	output, err := RunGcloud(ctx, logger, "", []string{
-		"compute", "instances", "describe", vm.Name,
-		"--project=" + vm.Project,
-		"--zone=" + vm.Zone,
-		"--format=json(metadata)",
+	LogEquivalentGcloud(logger, "compute", "instances", "describe", vm.Name,
+		"--project="+vm.Project,
+		"--zone="+vm.Zone,
+		"--format=json(metadata)")
+	inst, err := instancesClient.Get(ctx, &computepb.GetInstanceRequest{
+		Project:  vm.Project,
+		Zone:     vm.Zone,
+		Instance: vm.Name,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("error fetching metadata for VM %v: %w", vm.Name, err)
 	}
-	var inst instance
-	if err := json.Unmarshal([]byte(output.Stdout), &inst); err != nil {
-		return nil, fmt.Errorf("could not parse JSON from %q: %v", output.Stdout, err)
-	}
 	metadata := make(map[string]string)
-	for _, item := range inst.Metadata.Items {
-		metadata[item.Key] = item.Value
+	if inst.Metadata != nil {
+		for _, item := range inst.Metadata.Items {
+			if item.Key != nil {
+				metadata[item.GetKey()] = item.GetValue()
+			}
+		}
 	}
 	return metadata, nil
 }
@@ -2588,10 +2647,49 @@ func ArbitraryImageSpec() string {
 func areTagsValid(tags []string) (bool, error) {
 	for _, tag := range tags {
 		if strings.Contains(tag, ",") {
-			return false, fmt.Errorf("Tag %v cannot contain comma.", tag)
+			return false, fmt.Errorf("tag %q cannot contain comma", tag)
 		}
 	}
 	return true, nil
+}
+
+func updateVmTags(ctx context.Context, vm *VM, mutateFn func([]string) []string) error {
+	backoffPolicy := backoff.WithContext(backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 3), ctx)
+	return backoff.Retry(func() error {
+		inst, err := instancesClient.Get(ctx, &computepb.GetInstanceRequest{
+			Project:  vm.Project,
+			Zone:     vm.Zone,
+			Instance: vm.Name,
+		})
+		if err != nil {
+			return err
+		}
+
+		var current []string
+		if inst.Tags != nil {
+			current = inst.Tags.Items
+		}
+		updated := mutateFn(current)
+
+		fingerprint := ""
+		if inst.Tags != nil && inst.Tags.Fingerprint != nil {
+			fingerprint = *inst.Tags.Fingerprint
+		}
+
+		op, err := instancesClient.SetTags(ctx, &computepb.SetTagsInstanceRequest{
+			Project:  vm.Project,
+			Zone:     vm.Zone,
+			Instance: vm.Name,
+			TagsResource: &computepb.Tags{
+				Items:       updated,
+				Fingerprint: &fingerprint,
+			},
+		})
+		if err != nil {
+			return err
+		}
+		return op.Wait(ctx)
+	}, backoffPolicy)
 }
 
 func AddTagToVm(ctx context.Context, logger *log.Logger, vm *VM, tags []string) (CommandOutput, error) {
@@ -2600,13 +2698,28 @@ func AddTagToVm(ctx context.Context, logger *log.Logger, vm *VM, tags []string) 
 		logger.Printf("Unable to add tag to VM: %v", err)
 		return output, err
 	}
-	args := []string{
-		"compute", "instances", "add-tags", vm.Name,
-		"--zone=" + vm.Zone,
-		"--project=" + vm.Project,
-		"--tags=" + strings.Join(tags, ","),
-	}
-	output, err := RunGcloud(ctx, logger, "", args)
+	LogEquivalentGcloud(logger, "compute", "instances", "add-tags", vm.Name,
+		"--zone="+vm.Zone,
+		"--project="+vm.Project,
+		"--tags="+strings.Join(tags, ","))
+
+	err := updateVmTags(ctx, vm, func(current []string) []string {
+		seen := make(map[string]bool)
+		var combined []string
+		for _, t := range current {
+			if !seen[t] {
+				seen[t] = true
+				combined = append(combined, t)
+			}
+		}
+		for _, t := range tags {
+			if !seen[t] {
+				seen[t] = true
+				combined = append(combined, t)
+			}
+		}
+		return combined
+	})
 	if err != nil {
 		logger.Printf("Unable to add tag to VM: %v", err)
 		return output, err
@@ -2620,17 +2733,53 @@ func RemoveTagFromVm(ctx context.Context, logger *log.Logger, vm *VM, tags []str
 		logger.Printf("Unable to remove tag from VM: %v", err)
 		return output, err
 	}
-	args := []string{
-		"compute", "instances", "remove-tags", vm.Name,
-		"--zone=" + vm.Zone,
-		"--project=" + vm.Project,
-		"--tags=" + strings.Join(tags, ","),
+	LogEquivalentGcloud(logger, "compute", "instances", "remove-tags", vm.Name,
+		"--zone="+vm.Zone,
+		"--project="+vm.Project,
+		"--tags="+strings.Join(tags, ","))
+
+	tagsToRemove := make(map[string]bool)
+	for _, t := range tags {
+		tagsToRemove[t] = true
 	}
 
-	output, err := RunGcloud(ctx, logger, "", args)
+	err := updateVmTags(ctx, vm, func(current []string) []string {
+		var filtered []string
+		for _, t := range current {
+			if !tagsToRemove[t] {
+				filtered = append(filtered, t)
+			}
+		}
+		return filtered
+	})
 	if err != nil {
-		logger.Printf("Unable remove tag from VM: %v", err)
+		logger.Printf("Unable to remove tag from VM: %v", err)
 		return output, err
 	}
 	return output, nil
+}
+
+// FormatEquivalentGcloud formats a copy-pasteable gcloud CLI command string for logging,
+// preserving developer reproducibility for test failures without shelling out to gcloud.
+func FormatEquivalentGcloud(args ...string) string {
+	if len(args) == 0 {
+		return "gcloud"
+	}
+	var escaped []string
+	for _, arg := range args {
+		if arg == "" || strings.ContainsAny(arg, " \t\n\"'") {
+			escaped = append(escaped, fmt.Sprintf("%q", arg))
+		} else {
+			escaped = append(escaped, arg)
+		}
+	}
+	return fmt.Sprintf("gcloud %s", strings.Join(escaped, " "))
+}
+
+// LogEquivalentGcloud logs a copy-pasteable gcloud CLI command string to the given logger.
+func LogEquivalentGcloud(logger *log.Logger, args ...string) {
+	if logger == nil {
+		return
+	}
+	logger.Printf("Equivalent command: %s", FormatEquivalentGcloud(args...))
 }

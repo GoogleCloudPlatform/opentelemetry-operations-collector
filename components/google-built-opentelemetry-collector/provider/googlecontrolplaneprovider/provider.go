@@ -33,14 +33,15 @@ import (
 	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/tracefilter"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/confmap"
+	"go.opentelemetry.io/collector/featuregate"
 	"go.opentelemetry.io/collector/otelcol"
 	"go.uber.org/zap"
 )
 
 const (
-	schemeName = "googlecontrolplane"
-
-	defaultFleetID = "test-fleet-01"
+	schemeName               = "googlecontrolplane"
+	defaultFleetID           = "test-fleet-01"
+	mergeAppendFeatureGateID = "confmap.enableMergeAppendOption"
 )
 
 var (
@@ -90,6 +91,13 @@ func NewFactory() confmap.ProviderFactory {
 }
 
 func newProvider(set confmap.ProviderSettings) confmap.Provider {
+	// Enable confmap.enableMergeAppendOption so confmap.Merge appends and
+	// deduplicates service::extensions, service::**::receivers, and
+	// service::**::exporters slices across policies and across multiple
+	// confmap providers (e.g. file: + googlecontrolplane:).
+	if err := featuregate.GlobalRegistry().Set(mergeAppendFeatureGateID, true); err != nil && set.Logger != nil {
+		set.Logger.Warn("failed to enable confmap merge append feature gate", zap.Error(err))
+	}
 	return &provider{
 		logger: set.Logger,
 	}
@@ -310,7 +318,7 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 		if err != nil {
 			p.recordPolicyEvaluateError(ctx, destPolicies[0].PolicyName(), activePolicySet, err, event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassDestination))
 			destPolicy = nil
-		} else if err := mergeConf(conf, destConf); err != nil {
+		} else if err := conf.Merge(destConf); err != nil {
 			err = fmt.Errorf("failed to merge config for destination policy %q: %w", destPolicy.PolicyName(), err)
 			p.recordPolicyEvaluateError(ctx, destPolicy.PolicyName(), activePolicySet, err, event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassDestination))
 			destPolicy = nil
@@ -324,7 +332,7 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 			p.recordPolicyEvaluateError(ctx, BuiltInDestinationPolicy.PolicyName(), nil, err, event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassDestination))
 			return nil, true, err
 		}
-		if err := mergeConf(conf, destConf); err != nil {
+		if err := conf.Merge(destConf); err != nil {
 			err = fmt.Errorf("failed to merge config for destination policy %q: %w", BuiltInDestinationPolicy.PolicyName(), err)
 			p.recordPolicyEvaluateError(ctx, BuiltInDestinationPolicy.PolicyName(), nil, err, event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassDestination))
 			return nil, true, err
@@ -361,7 +369,7 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 			p.recordPolicyEvaluateError(ctx, sp.PolicyName(), activePolicySet, err, event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassSource))
 			continue
 		}
-		if err := mergeConf(conf, policyConf); err != nil {
+		if err := conf.Merge(policyConf); err != nil {
 			err = fmt.Errorf("failed to merge config for source policy %q: %w", sp.PolicyName(), err)
 			p.recordPolicyEvaluateError(ctx, sp.PolicyName(), activePolicySet, err, event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassSource))
 			continue
@@ -379,7 +387,7 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 			p.recordPolicyEvaluateError(ctx, BuiltInSelfMetricsPolicy.PolicyName(), nil, err, event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassSource))
 			return nil, true, err
 		}
-		if err := mergeConf(conf, policyConf); err != nil {
+		if err := conf.Merge(policyConf); err != nil {
 			err = fmt.Errorf("failed to merge config for source policy %q: %w", BuiltInSelfMetricsPolicy.PolicyName(), err)
 			p.recordPolicyEvaluateError(ctx, BuiltInSelfMetricsPolicy.PolicyName(), nil, err, event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassSource))
 			return nil, true, err
@@ -439,7 +447,7 @@ func (p *provider) evaluateSingleSourcePolicy(
 	}
 
 	policyConf := confmap.New()
-	if err := mergeConf(policyConf, sourceConf); err != nil {
+	if err := policyConf.Merge(cleanConf(sourceConf)); err != nil {
 		return nil, fmt.Errorf("failed to merge config for source policy %q: %w", sp.PolicyName(), err)
 	}
 
@@ -459,7 +467,7 @@ func (p *provider) evaluateSingleSourcePolicy(
 		return nil, fmt.Errorf("failed to load logs pipelines for source policy %q: %w", sp.PolicyName(), err)
 	}
 	if logsPipelines != nil {
-		if err := mergeConf(policyConf, logsPipelines); err != nil {
+		if err := policyConf.Merge(cleanConf(logsPipelines)); err != nil {
 			return nil, fmt.Errorf("failed to merge logs pipelines for source policy %q: %w", sp.PolicyName(), err)
 		}
 	}
@@ -469,7 +477,7 @@ func (p *provider) evaluateSingleSourcePolicy(
 		return nil, fmt.Errorf("failed to load metrics pipelines for source policy %q: %w", sp.PolicyName(), err)
 	}
 	if metricsPipelines != nil {
-		if err := mergeConf(policyConf, metricsPipelines); err != nil {
+		if err := policyConf.Merge(cleanConf(metricsPipelines)); err != nil {
 			return nil, fmt.Errorf("failed to merge metrics pipelines for source policy %q: %w", sp.PolicyName(), err)
 		}
 	}
@@ -479,74 +487,12 @@ func (p *provider) evaluateSingleSourcePolicy(
 		return nil, fmt.Errorf("failed to load traces pipelines for source policy %q: %w", sp.PolicyName(), err)
 	}
 	if tracesPipelines != nil {
-		if err := mergeConf(policyConf, tracesPipelines); err != nil {
+		if err := policyConf.Merge(cleanConf(tracesPipelines)); err != nil {
 			return nil, fmt.Errorf("failed to merge traces pipelines for source policy %q: %w", sp.PolicyName(), err)
 		}
 	}
 
 	return policyConf, nil
-}
-
-// mergeConf merges src into dst, preserving the union of service::extensions.
-//
-// confmap.Merge replaces slices rather than appending to them, so when a second
-// policy declares service::extensions it overwrites, rather than extends, the
-// list the first one set. That failure is silent and destructive: the
-// destination policy's authenticator disappears from the list, the collector
-// never instantiates it, and startup fails with "authenticator not found" while
-// the extension is still plainly visible under the top level extensions key.
-//
-// Maps do merge correctly, so only the service::extensions list needs this.
-func mergeConf(dst *confmap.Conf, src *confmap.Conf) error {
-	before := serviceExtensions(dst)
-	if err := dst.Merge(cleanConf(src)); err != nil {
-		return err
-	}
-
-	union := mergeStringsUnique(before, serviceExtensions(dst))
-	if len(union) == 0 {
-		return nil
-	}
-
-	// Merging again replaces the list a final time, now with the union.
-	return dst.Merge(confmap.NewFromStringMap(map[string]any{
-		"service": map[string]any{"extensions": union},
-	}))
-}
-
-// serviceExtensions reads service::extensions as a list of component ID
-// strings. The value arrives as []any after a round trip through
-// confmap.ToStringMap, but may still be []string when set directly.
-func serviceExtensions(c *confmap.Conf) []string {
-	switch list := c.Get("service::extensions").(type) {
-	case []string:
-		return list
-	case []any:
-		out := make([]string, 0, len(list))
-		for _, e := range list {
-			out = append(out, fmt.Sprint(e))
-		}
-		return out
-	default:
-		return nil
-	}
-}
-
-// mergeStringsUnique concatenates lists, dropping duplicates and preserving
-// first-seen order so the generated config stays stable across runs.
-func mergeStringsUnique(lists ...[]string) []any {
-	seen := map[string]struct{}{}
-	var out []any
-	for _, list := range lists {
-		for _, s := range list {
-			if _, dup := seen[s]; dup {
-				continue
-			}
-			seen[s] = struct{}{}
-			out = append(out, s)
-		}
-	}
-	return out
 }
 
 func cleanConf(c *confmap.Conf) *confmap.Conf {

@@ -1756,3 +1756,109 @@ func TestMetricTransformAddAndFilterOrdering(t *testing.T) {
 		t.Errorf("dp[1] tier = %v (ok=%v), want existing", v, ok)
 	}
 }
+
+func TestMetricTransformRenameAndPostTransformFilter(t *testing.T) {
+	otelcolBin := resolveOtelcolBinary(t)
+
+	tempDir := t.TempDir()
+	policiesDir := filepath.Join(tempDir, "policies")
+	if err := os.MkdirAll(policiesDir, 0755); err != nil {
+		t.Fatalf("failed to create policies directory: %v", err)
+	}
+
+	policies := map[string]string{
+		"01-add-env-after-rename.json": `{
+  "type": "metric_transform",
+  "id": "a-add-env",
+  "add": {
+    "target": {
+      "datapoint_attribute": {
+        "path": ["env"]
+      }
+    },
+    "value": {
+      "string_value": "prod"
+    }
+  }
+}`,
+		"02-rename-env.json": `{
+  "type": "metric_transform",
+  "id": "z-rename-env",
+  "rename": {
+    "from": {
+      "datapoint_attribute": {
+        "path": ["env"]
+      }
+    },
+    "to": {
+      "datapoint_attribute": {
+        "path": ["legacy_env"]
+      }
+    }
+  }
+}`,
+		"03-drop-post-rename-canary.json": `{
+  "type": "metric_filter",
+  "id": "drop-canary-after-rename",
+  "action": "ACTION_DROP",
+  "matches": [
+    {
+      "target": {
+        "datapoint_attribute": {
+          "path": ["legacy_env"]
+        }
+      },
+      "equals": {
+        "string_value": "canary"
+      }
+    }
+  ]
+}`,
+	}
+
+	for name, content := range policies {
+		if err := os.WriteFile(filepath.Join(policiesDir, name), []byte(content), 0644); err != nil {
+			t.Fatalf("failed to write policy %s: %v", name, err)
+		}
+	}
+
+	h := startTestHarness(t, otelcolBin, tempDir, policiesDir)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	md := pmetric.NewMetrics()
+	sm := md.ResourceMetrics().AppendEmpty().ScopeMetrics().AppendEmpty()
+	m := sm.Metrics().AppendEmpty()
+	m.SetName("rpc.server.duration")
+	dps := m.SetEmptyGauge().DataPoints()
+
+	// DP 0: env=dev -> renamed to legacy_env=dev, then env=prod added -> survives Pass 2
+	dp0 := dps.AppendEmpty()
+	dp0.Attributes().PutStr("env", "dev")
+
+	// DP 1: env=canary -> renamed to legacy_env=canary, then dropped in Pass 2 by drop-canary-after-rename
+	dp1 := dps.AppendEmpty()
+	dp1.Attributes().PutStr("env", "canary")
+
+	client := pmetricotlp.NewGRPCClient(h.conn)
+	if _, err := client.Export(ctx, pmetricotlp.NewExportRequestFromMetrics(md)); err != nil {
+		t.Fatalf("failed to export metrics: %v\nlogs:\n%s", err, h.col.logs())
+	}
+
+	h.col.shutdown(t)
+
+	collected := h.mockSrv.CollectedMetrics()
+	if len(collected) != 1 {
+		t.Fatalf("expected 1 exported metric batch, got %d", len(collected))
+	}
+	gotDPs := collected[0].ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics().At(0).Gauge().DataPoints()
+	if gotDPs.Len() != 1 {
+		t.Fatalf("expected 1 surviving datapoint after Pass 2 filter, got %d", gotDPs.Len())
+	}
+	if v, ok := gotDPs.At(0).Attributes().Get("legacy_env"); !ok || v.Str() != "dev" {
+		t.Errorf("dp[0] legacy_env = %v (ok=%v), want dev", v, ok)
+	}
+	if v, ok := gotDPs.At(0).Attributes().Get("env"); !ok || v.Str() != "prod" {
+		t.Errorf("dp[0] env = %v (ok=%v), want prod", v, ok)
+	}
+}

@@ -55,8 +55,6 @@ var (
 	ErrMissingID = errors.New("metric transform policy id cannot be empty")
 	// ErrMissingAction is returned when the policy does not specify a transform action.
 	ErrMissingAction = errors.New("metric transform policy must specify an action")
-	// ErrUnsupportedAction is returned when the policy specifies a transform action that is not yet implemented.
-	ErrUnsupportedAction = errors.New("metric transform policy action is not supported yet")
 	// ErrMissingTarget is returned when an action does not specify a target field selector.
 	ErrMissingTarget = errors.New("metric transform action must specify a target field selector")
 	// ErrMissingValue is returned when an action does not specify a valid value.
@@ -106,7 +104,14 @@ func NewPolicyFromProto(pb *policyv1alpha1.MetricTransformPolicy) (*Policy, erro
 			return nil, fmt.Errorf("add: %w", err)
 		}
 	case *policyv1alpha1.MetricTransformPolicy_Rename:
-		return nil, fmt.Errorf("rename: %w", ErrUnsupportedAction)
+		if a.Rename == nil {
+			return nil, ErrMissingAction
+		}
+		stage = googlepolicy.TransformStageRename
+		action, isDatapointLevel, err = compileRename(a.Rename)
+		if err != nil {
+			return nil, fmt.Errorf("rename: %w", err)
+		}
 	default:
 		return nil, ErrMissingAction
 	}
@@ -351,4 +356,99 @@ func requireStringValue(val *policyv1alpha1.Value, targetName string) (string, e
 		return "", fmt.Errorf("%s requires a non-empty string value", targetName)
 	}
 	return sv.StringValue, nil
+}
+
+func compileRename(a *policyv1alpha1.MetricRenameAction) (compiledAction, bool, error) {
+	from := a.GetFrom()
+	if from == nil || from.Target == nil {
+		return nil, false, ErrMissingTarget
+	}
+	to := a.GetTo()
+	if to == nil || to.Target == nil {
+		return nil, false, ErrMissingTarget
+	}
+
+	switch f := from.Target.(type) {
+	case *policyv1alpha1.MetricFieldSelector_DatapointAttribute:
+		t, ok := to.Target.(*policyv1alpha1.MetricFieldSelector_DatapointAttribute)
+		if !ok {
+			return nil, false, errors.New("metric rename from datapoint_attribute must target datapoint_attribute")
+		}
+		renameAttr, err := compileMapRename(f.DatapointAttribute, t.DatapointAttribute, "datapoint")
+		if err != nil {
+			return nil, false, err
+		}
+		return func(ctx googlepolicy.MetricContext) bool {
+			return renameAttr(ctx.DatapointAttributes)
+		}, true, nil
+
+	case *policyv1alpha1.MetricFieldSelector_ResourceAttribute:
+		t, ok := to.Target.(*policyv1alpha1.MetricFieldSelector_ResourceAttribute)
+		if !ok {
+			return nil, false, errors.New("metric rename from resource_attribute must target resource_attribute")
+		}
+		renameAttr, err := compileMapRename(f.ResourceAttribute, t.ResourceAttribute, "resource")
+		if err != nil {
+			return nil, false, err
+		}
+		return func(ctx googlepolicy.MetricContext) bool {
+			if ctx.Resource == (pcommon.Resource{}) {
+				return false
+			}
+			return renameAttr(ctx.Resource.Attributes())
+		}, false, nil
+
+	case *policyv1alpha1.MetricFieldSelector_ScopeAttribute:
+		t, ok := to.Target.(*policyv1alpha1.MetricFieldSelector_ScopeAttribute)
+		if !ok {
+			return nil, false, errors.New("metric rename from scope_attribute must target scope_attribute")
+		}
+		renameAttr, err := compileMapRename(f.ScopeAttribute, t.ScopeAttribute, "scope")
+		if err != nil {
+			return nil, false, err
+		}
+		return func(ctx googlepolicy.MetricContext) bool {
+			if ctx.Scope == (pcommon.InstrumentationScope{}) {
+				return false
+			}
+			return renameAttr(ctx.Scope.Attributes())
+		}, false, nil
+
+	case *policyv1alpha1.MetricFieldSelector_DescriptorField:
+		return nil, false, fmt.Errorf("metric descriptor field %s is not supported as a rename target", f.DescriptorField)
+
+	case *policyv1alpha1.MetricFieldSelector_ScopeField:
+		return nil, false, fmt.Errorf("scope field %s is not supported as a rename target", f.ScopeField)
+
+	default:
+		return nil, false, ErrMissingTarget
+	}
+}
+
+func compileMapRename(fromPath, toPath *policyv1alpha1.AttributePath, kind string) (func(pcommon.Map) bool, error) {
+	lookupFrom, err := matcher.CompilePathLookup(fromPath, kind)
+	if err != nil {
+		return nil, fmt.Errorf("from: %w", err)
+	}
+	removeFrom, err := matcher.CompilePathRemover(fromPath, kind)
+	if err != nil {
+		return nil, fmt.Errorf("from: %w", err)
+	}
+	canSetTo, setTo, err := matcher.CompilePathDynamicSetter(toPath, kind, false)
+	if err != nil {
+		return nil, fmt.Errorf("to: %w", err)
+	}
+	if proto.Equal(fromPath, toPath) {
+		return func(pcommon.Map) bool { return false }, nil
+	}
+	return func(attrs pcommon.Map) bool {
+		val, ok := lookupFrom(attrs)
+		if !ok || !canSetTo(attrs) {
+			return false
+		}
+		cloned := pcommon.NewValueEmpty()
+		val.CopyTo(cloned)
+		removeFrom(attrs)
+		return setTo(attrs, cloned)
+	}, nil
 }

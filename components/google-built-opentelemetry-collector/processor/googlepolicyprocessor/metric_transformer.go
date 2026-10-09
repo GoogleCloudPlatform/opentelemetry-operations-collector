@@ -21,8 +21,8 @@ import (
 )
 
 // TransformMetrics applies active transformation policies in-place across the Resource -> Scope -> Metric -> Datapoints hierarchy.
-// Filter policies are evaluated before transforms (Stage 1); surviving metrics and datapoints are evaluated against
-// transform policies (Stage 2) in deterministic stage order (rename -> add, tie-broken by ID).
+// Filter policies are evaluated before transforms (Pass 1) and after transforms (Pass 2, when any transform modified the metric/datapoint);
+// surviving metrics and datapoints are evaluated against transform policies in deterministic stage order (rename -> add, tie-broken by ID).
 // Dropped datapoints are pruned, empty metrics/scopes/resources are removed, and batch transformation stats are returned.
 func (e *Evaluator) TransformMetrics(md pmetric.Metrics) TransformStats {
 	stats := newTransformStats()
@@ -92,9 +92,18 @@ func (e *Evaluator) transformMetricDataPoints(stats *TransformStats, m pmetric.M
 		if instDrop && !instKeep {
 			return true
 		}
+		anyTransformed := false
 		for _, tp := range e.metricTransformPolicies {
 			if !tp.IsDatapointLevel() {
-				tp.TransformMetric(ctx)
+				if tp.TransformMetric(ctx) == googlepolicy.TransformModified {
+					anyTransformed = true
+				}
+			}
+		}
+		if anyTransformed && len(e.instrumentMetricPolicies) > 0 {
+			_, pass2InstKeep, pass2InstDrop := evaluateMetricSlice(e.instrumentMetricPolicies, ctx)
+			if pass2InstDrop && !pass2InstKeep {
+				return true
 			}
 		}
 		return false
@@ -264,9 +273,11 @@ func transformDatapoints[DP datapoint, S datapointSlice[DP]](
 	}
 
 	// Stage 2: Transform policies (ordered by rename -> add, tie-broken by policy ID).
+	anyTransformed := false
 	for _, tp := range e.metricTransformPolicies {
 		if !tp.IsDatapointLevel() {
 			if tp.TransformMetric(ctx) == googlepolicy.TransformModified {
+				anyTransformed = true
 				ev := PolicyEvaluation{PolicyID: tp.PolicyName(), Result: ResultTransformed}
 				for i := range states {
 					states[i].transformed = true
@@ -279,6 +290,7 @@ func transformDatapoints[DP datapoint, S datapointSlice[DP]](
 			dpCtx := ctx
 			dpCtx.DatapointAttributes = datapoints.At(i).Attributes()
 			if tp.TransformMetric(dpCtx) == googlepolicy.TransformModified {
+				anyTransformed = true
 				states[i].transformed = true
 				states[i].transformEvals = append(states[i].transformEvals, PolicyEvaluation{
 					PolicyID: tp.PolicyName(),
@@ -288,24 +300,81 @@ func transformDatapoints[DP datapoint, S datapointSlice[DP]](
 		}
 	}
 
-	for _, st := range states {
-		if st.transformed {
-			stats.Transformed++
-			for _, ev := range st.transformEvals {
-				stats.recordPolicy(ev.PolicyID, ev.Result)
-			}
-			if st.pass1Keep {
+	if !anyTransformed || len(e.metricPolicies) == 0 {
+		for _, st := range states {
+			if st.transformed {
+				stats.Transformed++
+				for _, ev := range st.transformEvals {
+					stats.recordPolicy(ev.PolicyID, ev.Result)
+				}
+				if st.pass1Keep {
+					recordKeepFilterMatches(stats, st.pass1Matches)
+				}
+			} else if st.pass1Keep {
+				stats.Kept++
 				recordKeepFilterMatches(stats, st.pass1Matches)
+			} else {
+				stats.NoMatch++
 			}
-		} else if st.pass1Keep {
-			stats.Kept++
-			recordKeepFilterMatches(stats, st.pass1Matches)
-		} else {
-			stats.NoMatch++
 		}
+		return false
 	}
 
-	return false
+	// Stage 3: Post-transform filter (Pass 2).
+	pass2InstMatches, pass2InstKeep, pass2InstDrop := evaluateMetricSlice(e.instrumentMetricPolicies, ctx)
+	idx := 0
+	datapoints.RemoveIf(func(dp DP) bool {
+		st := states[idx]
+		idx++
+		if !st.transformed {
+			if st.pass1Keep {
+				stats.Kept++
+				recordKeepFilterMatches(stats, st.pass1Matches)
+			} else {
+				stats.NoMatch++
+			}
+			return false
+		}
+
+		for _, ev := range st.transformEvals {
+			stats.recordPolicy(ev.PolicyID, ev.Result)
+		}
+
+		var (
+			pass2DpMatches []matchedMetricPolicy
+			pass2DpKeep    bool
+			pass2DpDrop    bool
+		)
+		if !pass2InstKeep && e.hasDatapointMetricPolicies {
+			dpCtx := ctx
+			dpCtx.DatapointAttributes = dp.Attributes()
+			pass2DpMatches, pass2DpKeep, pass2DpDrop = evaluateMetricSlice(e.datapointMetricPolicies, dpCtx)
+		}
+
+		hasKeep := pass2InstKeep || pass2DpKeep
+		hasDrop := pass2InstDrop || pass2DpDrop
+		if hasDrop && !hasKeep {
+			stats.Dropped++
+			for _, p := range pass2InstMatches {
+				stats.recordPolicy(p.id, ResultDropped)
+			}
+			for _, p := range pass2DpMatches {
+				stats.recordPolicy(p.id, ResultDropped)
+			}
+			return true
+		}
+
+		stats.Transformed++
+		if hasKeep {
+			recordKeepFilterMatches(stats, pass2InstMatches)
+			recordKeepFilterMatches(stats, pass2DpMatches)
+		} else if st.pass1Keep {
+			recordKeepFilterMatches(stats, st.pass1Matches)
+		}
+		return false
+	})
+
+	return datapoints.Len() == 0
 }
 
 // pruneDatapoints removes the datapoints that the active policies drop. The
@@ -389,14 +458,24 @@ func buildMetricEvalResult(instMatches, dpMatches []matchedMetricPolicy, hasKeep
 }
 
 // EvalMetric returns true if the datapoint should be DROPPED, false if KEPT.
-// Surviving datapoints also have any matching MetricTransformPolicy rules applied in-place.
+// Surviving datapoints also have any matching MetricTransformPolicy rules applied in-place,
+// followed by a post-transform filter check (Pass 2) if any transform modified the metric or datapoint.
 func (e *Evaluator) EvalMetric(ctx MetricContext) bool {
 	matches, hasKeep, hasDrop := evaluateMetricSlice(e.metricPolicies, ctx)
 	if buildMetricEvalResult(matches, nil, hasKeep, hasDrop).Drop {
 		return true
 	}
+	transformed := false
 	for _, tp := range e.metricTransformPolicies {
-		tp.TransformMetric(ctx)
+		if tp.TransformMetric(ctx) == googlepolicy.TransformModified {
+			transformed = true
+		}
+	}
+	if transformed && len(e.metricPolicies) > 0 {
+		matches2, hasKeep2, hasDrop2 := evaluateMetricSlice(e.metricPolicies, ctx)
+		if buildMetricEvalResult(matches2, nil, hasKeep2, hasDrop2).Drop {
+			return true
+		}
 	}
 	return false
 }

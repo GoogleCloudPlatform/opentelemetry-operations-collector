@@ -144,6 +144,21 @@ func fuzzMetricTransformSeedPolicies() []*policyv1alpha1.MetricTransformPolicy {
 				},
 			},
 		},
+		{
+			Id: "rename-datapoint-attribute",
+			Matches: []*policyv1alpha1.MetricMatcher{
+				{
+					Target:    dpAttrTarget("http.method"),
+					Predicate: &policyv1alpha1.MetricMatcher_Exists{Exists: &emptypb.Empty{}},
+				},
+			},
+			Action: &policyv1alpha1.MetricTransformPolicy_Rename{
+				Rename: &policyv1alpha1.MetricRenameAction{
+					From: dpAttrTarget("http.method"),
+					To:   dpAttrTarget("rpc.method"),
+				},
+			},
+		},
 	}
 }
 

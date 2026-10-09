@@ -72,7 +72,6 @@ import (
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/integration_test/gce-testing-internal/logging"
 
-	compute "cloud.google.com/go/compute/apiv1"
 	cloudlogging "cloud.google.com/go/logging"
 	"cloud.google.com/go/logging/logadmin"
 	monitoring "cloud.google.com/go/monitoring/apiv3"
@@ -89,8 +88,10 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 
+	compute "cloud.google.com/go/compute/apiv1"
 	computepb "cloud.google.com/go/compute/apiv1/computepb"
 )
 
@@ -1606,14 +1607,64 @@ func attemptCreateInstance(ctx context.Context, logger *log.Logger, options VMOp
 	return vm, nil
 }
 
+// ErrMIGTimeout is returned when a Managed Instance Group fails to reach stable state within the timeout.
+var ErrMIGTimeout = errors.New("timeout while waiting for group to become stable")
+
+func waitForMIGStable(ctx context.Context, project, zone, igmName string, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	ticker := time.NewTicker(3 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		if time.Now().After(deadline) {
+			return ErrMIGTimeout
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		igm, err := instanceGroupManagersClient.Get(ctx, &computepb.GetInstanceGroupManagerRequest{
+			Project:              project,
+			Zone:                 zone,
+			InstanceGroupManager: igmName,
+		})
+		if err != nil {
+			return err
+		}
+		if igm.GetStatus().GetIsStable() {
+			return nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+		}
+	}
+}
+
+// deducedBaseInstanceName derives a valid baseInstanceName from a resource name.
+// GCE requires baseInstanceName to be 1-58 characters matching `[a-z][-a-z0-9]{0,57}`.
+// gcloud deduces baseInstanceName by truncating to 54 characters and stripping trailing hyphens.
+func deducedBaseInstanceName(name string) string {
+	const maxLen = 54
+	if len(name) > maxLen {
+		name = name[:maxLen]
+	}
+	return strings.TrimRight(name, "-")
+}
+
 // attemptCreateManagedInstanceGroupVM creates an individual VM instance in a Managed Instance Group
 // and waits for it to be ready.
 // Returns a ManagedInstanceGroupVM object or an error (never both). The caller is responsible for
 // deleting the ManagedInstanceGroupVM if (and only if) the returned error is nil.
 func attemptCreateManagedInstanceGroupVM(ctx context.Context, logger *log.Logger, options VMOptions) (migVmToReturn *ManagedInstanceGroupVM, errToReturn error) {
 	// We need a shorter uuid here to add suffixes and not go over the 63 character limit
-	// for resource names.
-	options.Name = fmt.Sprintf("%s-%s", sandboxPrefix, uuid.NewString()[:30])
+	// for resource names. We use 20 chars so the UUID slice ends on an alphanumeric character
+	// (UUID hyphens are at indices 8, 13, 18, 23).
+	options.Name = fmt.Sprintf("%s-%s", sandboxPrefix, uuid.NewString()[:20])
 
 	migVM := &ManagedInstanceGroupVM{
 		VM: createVMFromVMOptions(options),
@@ -1633,8 +1684,17 @@ func attemptCreateManagedInstanceGroupVM(ctx context.Context, logger *log.Logger
 		return nil, err
 	}
 	createTemplateArgs = append(createTemplateArgs, additionalArgs...)
+	LogEquivalentGcloud(logger, createTemplateArgs...)
 
-	output, err := RunGcloud(ctx, logger, "", createTemplateArgs)
+	templateResource, err := buildInstanceTemplate(migVM.InstanceTemplateName(), options, migVM.VM)
+	if err != nil {
+		return nil, err
+	}
+
+	templateOp, err := instanceTemplatesClient.Insert(ctx, &computepb.InsertInstanceTemplateRequest{
+		Project:                  migVM.Project,
+		InstanceTemplateResource: templateResource,
+	})
 	if err != nil {
 		// Note: we don't try and delete the instance template or managed instance group
 		// in this case because there is nothing to delete.
@@ -1653,6 +1713,10 @@ func attemptCreateManagedInstanceGroupVM(ctx context.Context, logger *log.Logger
 		}
 	}()
 
+	if err := templateOp.Wait(ctx); err != nil {
+		return nil, err
+	}
+
 	// Step #2 : Create empty Managed Instance Group using template.
 	createMIGArgs := []string{
 		"compute", "instance-groups", "managed", "create", migVM.ManagedInstanceGroupName(),
@@ -1662,9 +1726,24 @@ func attemptCreateManagedInstanceGroupVM(ctx context.Context, logger *log.Logger
 		"--template=" + migVM.InstanceTemplateName(),
 		"--format=json",
 	}
+	LogEquivalentGcloud(logger, createMIGArgs...)
 
-	output, err = RunGcloud(ctx, logger, "", createMIGArgs)
+	igmResource := &computepb.InstanceGroupManager{
+		Name:             proto.String(migVM.ManagedInstanceGroupName()),
+		BaseInstanceName: proto.String(deducedBaseInstanceName(migVM.Name)),
+		TargetSize:       proto.Int32(0),
+		InstanceTemplate: proto.String(fmt.Sprintf("projects/%s/global/instanceTemplates/%s", migVM.Project, migVM.InstanceTemplateName())),
+	}
+
+	migOp, err := instanceGroupManagersClient.Insert(ctx, &computepb.InsertInstanceGroupManagerRequest{
+		Project:                      migVM.Project,
+		Zone:                         migVM.Zone,
+		InstanceGroupManagerResource: igmResource,
+	})
 	if err != nil {
+		return nil, err
+	}
+	if err := migOp.Wait(ctx); err != nil {
 		return nil, err
 	}
 
@@ -1676,11 +1755,27 @@ func attemptCreateManagedInstanceGroupVM(ctx context.Context, logger *log.Logger
 		"--zone=" + migVM.Zone,
 		"--format=json",
 	}
+	LogEquivalentGcloud(logger, createVMArgs...)
 
-	output, err = RunGcloud(ctx, logger, "", createVMArgs)
+	_, err = instanceGroupManagersClient.CreateInstances(ctx, &computepb.CreateInstancesInstanceGroupManagerRequest{
+		Project:              migVM.Project,
+		Zone:                 migVM.Zone,
+		InstanceGroupManager: migVM.ManagedInstanceGroupName(),
+		InstanceGroupManagersCreateInstancesRequestResource: &computepb.InstanceGroupManagersCreateInstancesRequest{
+			Instances: []*computepb.PerInstanceConfig{
+				{
+					Name: proto.String(migVM.Name),
+				},
+			},
+		},
+	})
 	if err != nil {
 		return nil, err
 	}
+	// We deliberately avoid waiting on createInstOp.Wait(ctx) because the Compute Engine
+	// operation object often takes much longer to transition to DONE than needed. Instead,
+	// we proceed out-of-band directly to Step #4, which waits for the Managed Instance
+	// Group to reach stable state via waitForMIGStable.
 
 	// Step #4 : Wait until Managed Instance Group is stable with a 300s timeout.
 	waitUntilStableArgs := []string{
@@ -1691,36 +1786,31 @@ func attemptCreateManagedInstanceGroupVM(ctx context.Context, logger *log.Logger
 		"--zone=" + migVM.Zone,
 		"--format=json",
 	}
+	LogEquivalentGcloud(logger, waitUntilStableArgs...)
 
-	output, err = RunGcloud(ctx, logger, "", waitUntilStableArgs)
-	if err != nil {
+	if err := waitForMIGStable(ctx, migVM.Project, migVM.Zone, migVM.ManagedInstanceGroupName(), 300*time.Second); err != nil {
 		return nil, err
 	}
 
 	// Step #5 : Query newly created VM metadata.
-	listVMArgs := []string{
-		"compute", "instances", "list",
-		"--filter=name=( '" + migVM.Name + "' ... )",
-		"--project=" + migVM.Project,
-		"--zones=" + migVM.Zone,
-		"--format=json",
-	}
+	LogEquivalentGcloud(logger, "compute", "instances", "describe", migVM.Name,
+		"--project="+migVM.Project,
+		"--zone="+migVM.Zone,
+		"--format=json")
 
-	output, err = RunGcloud(ctx, logger, "", listVMArgs)
+	inst, err := instancesClient.Get(ctx, &computepb.GetInstanceRequest{
+		Project:  migVM.Project,
+		Zone:     migVM.Zone,
+		Instance: migVM.Name,
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	// Pull the instance ID and external IP address out of the output.
-	id, err := extractID(output.Stdout)
-	if err != nil {
-		return nil, err
-	}
-	migVM.ID = id
-
+	migVM.ID = int64(inst.GetId())
 	logger.Printf("Instance Log: %v", instanceLogURL(migVM.VM))
 
-	ipAddress, err := extractIPAddress(output.Stdout)
+	ipAddress, err := extractIPFromInstance(inst)
 	if err != nil {
 		return nil, err
 	}
@@ -1833,8 +1923,12 @@ func shouldRetryCreateVM(err error, options VMOptions) bool {
 }
 
 func shouldRetryCreateManagedInstanceGroupVM(err error, options VMOptions) bool {
+	if err == nil {
+		return false
+	}
 	return shouldRetryCreateVM(err, options) ||
-		strings.Contains(err.Error(), "Timeout while waiting for group to become stable.")
+		errors.Is(err, ErrMIGTimeout) ||
+		strings.Contains(strings.ToLower(err.Error()), "timeout while waiting for group to become stable")
 }
 
 // CreateInstance launches a new VM instance based on the given options.
@@ -1990,11 +2084,11 @@ func handleDeleteError(err error, attempt int) error {
 	if err == nil {
 		return nil
 	}
+	if isNotFound(err) && attempt > 1 {
+		return nil
+	}
 	var gErr *googleapi.Error
 	if errors.As(err, &gErr) {
-		if gErr.Code == 404 && attempt > 1 {
-			return nil
-		}
 		if gErr.Code == 403 || gErr.Code == 429 {
 			return err
 		}
@@ -2003,9 +2097,6 @@ func handleDeleteError(err error, attempt int) error {
 		}
 	}
 	if s, ok := status.FromError(err); ok {
-		if s.Code() == codes.NotFound && attempt > 1 {
-			return nil
-		}
 		if s.Code() == codes.ResourceExhausted || s.Code() == codes.Unavailable || s.Code() == codes.Internal {
 			return err
 		}
@@ -2021,13 +2112,6 @@ func handleDeleteError(err error, attempt int) error {
 	if strings.Contains(err.Error(), "Error 50") || strings.Contains(err.Error(), "503") || strings.Contains(err.Error(), "502") {
 		return err
 	}
-	// "not found" can happen when a previous attempt actually did delete
-	// the VM but there was some communication problem along the way.
-	// Consider that a successful deletion. Only do this when there has
-	// been a previous attempt.
-	if (strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "notFound") || strings.Contains(err.Error(), "404")) && attempt > 1 {
-		return nil
-	}
 	// If the deletion command timed out and was killed, assume the command ran
 	// and let the 4-hour janitor job handle any lingering VMs (b/556836152).
 	if strings.Contains(err.Error(), "signal: killed") || strings.Contains(err.Error(), "deadline exceeded") || errors.Is(err, context.DeadlineExceeded) {
@@ -2035,6 +2119,22 @@ func handleDeleteError(err error, attempt int) error {
 	}
 	// Wrap other errors in backoff.Permanent() to avoid retrying those.
 	return backoff.Permanent(err)
+}
+
+func isNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+	var gErr *googleapi.Error
+	if errors.As(err, &gErr) && gErr.Code == 404 {
+		return true
+	}
+	if s, ok := status.FromError(err); ok && s.Code() == codes.NotFound {
+		return true
+	}
+	return strings.Contains(err.Error(), "notFound") ||
+		strings.Contains(err.Error(), "not found") ||
+		strings.Contains(err.Error(), "404")
 }
 
 // HandleDeleteErrorForTest exports handleDeleteError for unit testing.
@@ -2085,55 +2185,76 @@ func DeleteInstance(ctx context.Context, logger *log.Logger, vm *VM) error {
 	return err
 }
 
-// DeleteManagedInstanceGroupVM deletes the given Managed Instance Group VM instance synchronously.
+// DeleteManagedInstanceGroupVM deletes the given Managed Instance Group VM and its template synchronously.
 // Does nothing if the Managed Instance Group VM was already deleted.
-// Uses the passed-in context to extract the gcloud configuration directory,
-// but uses a separate background context with timeout for the actual deletion
+// Uses a separate background context with timeout for the actual deletion
 // to ensure it completes even if the test context is cancelled.
 func DeleteManagedInstanceGroupVM(ctx context.Context, logger *log.Logger, migVM *ManagedInstanceGroupVM) error {
 	if migVM.AlreadyDeleted {
 		logger.Printf("Managed Instance Group %v was already deleted, skipping delete.", migVM.Name)
 		return nil
 	}
-	configDir := ctx.Value(gcloudConfigDirKey)
 	deleteCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
-	if configDir != nil {
-		deleteCtx = WithGcloudConfigDir(deleteCtx, configDir.(string))
-	}
+
+	LogEquivalentGcloud(logger, "compute", "instance-groups", "managed", "delete", migVM.ManagedInstanceGroupName(),
+		"--project="+migVM.Project,
+		"--zone="+migVM.Zone,
+		"--quiet")
+
 	backoffPolicy := backoff.WithContext(backoff.WithMaxRetries(backoff.NewConstantBackOff(30*time.Second), 10), deleteCtx)
 	attempt := 0
 	tryDeleteMIG := func() error {
 		attempt++
-		_, err := RunGcloud(deleteCtx, logger, "",
-			[]string{
-				"compute", "instance-groups", "managed", "delete", migVM.ManagedInstanceGroupName(),
-				"--project=" + migVM.Project,
-				"--zone=" + migVM.Zone,
-				"--quiet",
-			})
-		if err == nil {
-			return nil
+		op, err := instanceGroupManagersClient.Delete(deleteCtx, &computepb.DeleteInstanceGroupManagerRequest{
+			Project:              migVM.Project,
+			Zone:                 migVM.Zone,
+			InstanceGroupManager: migVM.ManagedInstanceGroupName(),
+		})
+		if err != nil {
+			if isNotFound(err) {
+				return nil
+			}
+			return handleDeleteError(err, attempt)
 		}
-		return handleDeleteError(err, attempt)
+		if err := op.Wait(deleteCtx); err != nil {
+			if isNotFound(err) {
+				return nil
+			}
+			return handleDeleteError(err, attempt)
+		}
+		return nil
 	}
-	err := backoff.Retry(tryDeleteMIG, backoffPolicy)
-	if err != nil {
+	if err := backoff.Retry(tryDeleteMIG, backoffPolicy); err != nil {
 		return err
 	}
+
+	LogEquivalentGcloud(logger, "compute", "instance-templates", "delete", migVM.InstanceTemplateName(),
+		"--project="+migVM.Project,
+		"--quiet")
 
 	attempt = 0
 	tryDeleteTemplate := func() error {
 		attempt++
-		_, err = RunGcloud(deleteCtx, logger, "",
-			[]string{
-				"compute", "instance-templates", "delete", migVM.InstanceTemplateName(),
-				"--project=" + migVM.Project,
-				"--quiet",
-			})
-		return handleDeleteError(err, attempt)
+		op, err := instanceTemplatesClient.Delete(deleteCtx, &computepb.DeleteInstanceTemplateRequest{
+			Project:          migVM.Project,
+			InstanceTemplate: migVM.InstanceTemplateName(),
+		})
+		if err != nil {
+			if isNotFound(err) {
+				return nil
+			}
+			return handleDeleteError(err, attempt)
+		}
+		if err := op.Wait(deleteCtx); err != nil {
+			if isNotFound(err) {
+				return nil
+			}
+			return handleDeleteError(err, attempt)
+		}
+		return nil
 	}
-	err = backoff.Retry(tryDeleteTemplate, backoffPolicy)
+	err := backoff.Retry(tryDeleteTemplate, backoffPolicy)
 	if err == nil {
 		migVM.AlreadyDeleted = true
 	}

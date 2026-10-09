@@ -3,6 +3,7 @@ module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/integra
 go 1.26.0
 
 require (
+	cloud.google.com/go/compute v1.54.0
 	cloud.google.com/go/logging v1.13.1
 	cloud.google.com/go/monitoring v1.24.3
 	cloud.google.com/go/storage v1.56.0

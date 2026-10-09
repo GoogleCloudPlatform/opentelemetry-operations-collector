@@ -72,6 +72,7 @@ import (
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/integration_test/gce-testing-internal/logging"
 
+	compute "cloud.google.com/go/compute/apiv1"
 	cloudlogging "cloud.google.com/go/logging"
 	"cloud.google.com/go/logging/logadmin"
 	monitoring "cloud.google.com/go/monitoring/apiv3"
@@ -96,6 +97,11 @@ var (
 	monClient   *monitoring.MetricClient
 	logClients  *logClientFactory
 	traceClient *trace.Client
+
+	instancesClient             *compute.InstancesClient
+	disksClient                 *compute.DisksClient
+	instanceTemplatesClient     *compute.InstanceTemplatesClient
+	instanceGroupManagersClient *compute.InstanceGroupManagersClient
 
 	zonePicker *weightedRoundRobin
 
@@ -183,6 +189,23 @@ func init() {
 	traceClient, err = trace.NewClient(ctx)
 	if err != nil {
 		log.Fatalf("trace.NewClient() failed: %v", err)
+	}
+
+	instancesClient, err = compute.NewInstancesRESTClient(ctx)
+	if err != nil {
+		log.Fatalf("compute.NewInstancesRESTClient() failed: %v", err)
+	}
+	disksClient, err = compute.NewDisksRESTClient(ctx)
+	if err != nil {
+		log.Fatalf("compute.NewDisksRESTClient() failed: %v", err)
+	}
+	instanceTemplatesClient, err = compute.NewInstanceTemplatesRESTClient(ctx)
+	if err != nil {
+		log.Fatalf("compute.NewInstanceTemplatesRESTClient() failed: %v", err)
+	}
+	instanceGroupManagersClient, err = compute.NewInstanceGroupManagersRESTClient(ctx)
+	if err != nil {
+		log.Fatalf("compute.NewInstanceGroupManagersRESTClient() failed: %v", err)
 	}
 
 	zonePicker, err = newZonePicker(os.Getenv("ZONES"))
@@ -2645,4 +2668,29 @@ func RemoveTagFromVm(ctx context.Context, logger *log.Logger, vm *VM, tags []str
 		return output, err
 	}
 	return output, nil
+}
+
+// FormatEquivalentGcloud formats a copy-pasteable gcloud CLI command string for logging,
+// preserving developer reproducibility for test failures without shelling out to gcloud.
+func FormatEquivalentGcloud(args ...string) string {
+	if len(args) == 0 {
+		return "gcloud"
+	}
+	var escaped []string
+	for _, arg := range args {
+		if arg == "" || strings.ContainsAny(arg, " \t\n\"'") {
+			escaped = append(escaped, fmt.Sprintf("%q", arg))
+		} else {
+			escaped = append(escaped, arg)
+		}
+	}
+	return fmt.Sprintf("gcloud %s", strings.Join(escaped, " "))
+}
+
+// LogEquivalentGcloud logs a copy-pasteable gcloud CLI command string to the given logger.
+func LogEquivalentGcloud(logger *log.Logger, args ...string) {
+	if logger == nil {
+		return
+	}
+	logger.Printf("Equivalent command: %s", FormatEquivalentGcloud(args...))
 }

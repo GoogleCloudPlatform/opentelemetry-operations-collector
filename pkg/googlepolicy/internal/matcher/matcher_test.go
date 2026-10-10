@@ -398,3 +398,164 @@ func TestCompareNumericNaN(t *testing.T) {
 		})
 	}
 }
+
+func TestCompilePathSetter(t *testing.T) {
+	t.Run("validation errors", func(t *testing.T) {
+		_, err := CompilePathSetter(nil, "log", strValue("v"), true)
+		assert.ErrorContains(t, err, "log attribute path cannot be empty")
+
+		_, err = CompilePathSetter(&policyv1alpha1.AttributePath{Path: []string{"k"}}, "log", nil, true)
+		assert.ErrorIs(t, err, ErrMissingValue)
+
+		_, err = CompilePathSetter(&policyv1alpha1.AttributePath{Path: []string{"k"}}, "log", &policyv1alpha1.Value{}, true)
+		assert.ErrorIs(t, err, ErrMissingValue)
+	})
+
+	t.Run("all scalar value types flat and zero map guard", func(t *testing.T) {
+		attrs := pcommon.NewMap()
+
+		setStr, err := CompilePathSetter(&policyv1alpha1.AttributePath{Path: []string{"s"}}, "log", strValue("hello"), true)
+		require.NoError(t, err)
+		assert.False(t, setStr(pcommon.Map{}), "zero map must return false")
+		assert.True(t, setStr(attrs))
+
+		setInt, err := CompilePathSetter(&policyv1alpha1.AttributePath{Path: []string{"i"}}, "log", intValue(42), true)
+		require.NoError(t, err)
+		assert.True(t, setInt(attrs))
+
+		setDouble, err := CompilePathSetter(&policyv1alpha1.AttributePath{Path: []string{"d"}}, "log",
+			&policyv1alpha1.Value{Value: &policyv1alpha1.Value_DoubleValue{DoubleValue: 3.14}}, true)
+		require.NoError(t, err)
+		assert.True(t, setDouble(attrs))
+
+		setBool, err := CompilePathSetter(&policyv1alpha1.AttributePath{Path: []string{"b"}}, "log",
+			&policyv1alpha1.Value{Value: &policyv1alpha1.Value_BoolValue{BoolValue: true}}, true)
+		require.NoError(t, err)
+		assert.True(t, setBool(attrs))
+
+		raw := []byte{0xaa, 0xbb}
+		setBytes, err := CompilePathSetter(&policyv1alpha1.AttributePath{Path: []string{"by"}}, "log", bytesValue(raw), true)
+		require.NoError(t, err)
+		raw[0] = 0xff // mutating input slice after compile must not affect setter
+		assert.True(t, setBytes(attrs))
+
+		v, ok := attrs.Get("s")
+		require.True(t, ok)
+		assert.Equal(t, "hello", v.Str())
+
+		v, ok = attrs.Get("i")
+		require.True(t, ok)
+		assert.Equal(t, int64(42), v.Int())
+
+		v, ok = attrs.Get("d")
+		require.True(t, ok)
+		assert.Equal(t, 3.14, v.Double())
+
+		v, ok = attrs.Get("b")
+		require.True(t, ok)
+		assert.True(t, v.Bool())
+
+		v, ok = attrs.Get("by")
+		require.True(t, ok)
+		assert.Equal(t, []byte{0xaa, 0xbb}, v.Bytes().AsRaw())
+	})
+
+	t.Run("flat upsert false vs true", func(t *testing.T) {
+		attrs := pcommon.NewMap()
+		insertOnly, err := CompilePathSetter(&policyv1alpha1.AttributePath{Path: []string{"tier"}}, "log", strValue("initial"), false)
+		require.NoError(t, err)
+		assert.True(t, insertOnly(attrs))
+		assert.False(t, insertOnly(attrs), "second insert with upsert=false must be a no-op")
+
+		overwrite, err := CompilePathSetter(&policyv1alpha1.AttributePath{Path: []string{"tier"}}, "log", strValue("updated"), true)
+		require.NoError(t, err)
+		assert.True(t, overwrite(attrs))
+		v, _ := attrs.Get("tier")
+		assert.Equal(t, "updated", v.Str())
+	})
+
+	t.Run("nested path creates intermediate maps and respects upsert", func(t *testing.T) {
+		attrs := pcommon.NewMap()
+		nestedPath := &policyv1alpha1.AttributePath{Path: []string{"gcp", "routing", "tier"}}
+
+		setNestedInsert, err := CompilePathSetter(nestedPath, "log", strValue("HOT_ACTIVE_SOC"), false)
+		require.NoError(t, err)
+		assert.False(t, setNestedInsert(pcommon.Map{}))
+		assert.True(t, setNestedInsert(attrs))
+
+		steps, err := CompilePath(nestedPath, "log")
+		require.NoError(t, err)
+		got, ok := EvalPath(attrs, steps)
+		require.True(t, ok)
+		assert.Equal(t, "HOT_ACTIVE_SOC", got)
+
+		// upsert=false when leaf already exists -> returns false and preserves value
+		setNestedNoOverwrite, err := CompilePathSetter(nestedPath, "log", strValue("LAKEHOUSE_ARCHIVE"), false)
+		require.NoError(t, err)
+		assert.False(t, setNestedNoOverwrite(attrs))
+		got, _ = EvalPath(attrs, steps)
+		assert.Equal(t, "HOT_ACTIVE_SOC", got)
+
+		// upsert=true overwrites existing nested leaf
+		setNestedOverwrite, err := CompilePathSetter(nestedPath, "log", strValue("LAKEHOUSE_ARCHIVE"), true)
+		require.NoError(t, err)
+		assert.True(t, setNestedOverwrite(attrs))
+		got, _ = EvalPath(attrs, steps)
+		assert.Equal(t, "LAKEHOUSE_ARCHIVE", got)
+
+		// Intermediate key is a non-map scalar: upsert=false leaves scalar intact, upsert=true replaces with map
+		attrs.PutStr("scalar_parent", "keep_me")
+		conflictPath := &policyv1alpha1.AttributePath{Path: []string{"scalar_parent", "child"}}
+		noClobber, err := CompilePathSetter(conflictPath, "log", strValue("v"), false)
+		require.NoError(t, err)
+		assert.False(t, noClobber(attrs))
+		sp, _ := attrs.Get("scalar_parent")
+		assert.Equal(t, "keep_me", sp.Str())
+
+		clobber, err := CompilePathSetter(conflictPath, "log", strValue("v"), true)
+		require.NoError(t, err)
+		assert.True(t, clobber(attrs))
+		sp, _ = attrs.Get("scalar_parent")
+		require.Equal(t, pcommon.ValueTypeMap, sp.Type())
+		child, ok := sp.Map().Get("child")
+		require.True(t, ok)
+		assert.Equal(t, "v", child.Str())
+	})
+}
+
+func TestCompileValueSetter(t *testing.T) {
+	_, err := CompileValueSetter(nil)
+	assert.ErrorIs(t, err, ErrMissingValue)
+
+	_, err = CompileValueSetter(&policyv1alpha1.Value{})
+	assert.ErrorIs(t, err, ErrMissingValue)
+
+	dest := pcommon.NewValueEmpty()
+
+	setStr, err := CompileValueSetter(strValue("body-str"))
+	require.NoError(t, err)
+	setStr(dest)
+	assert.Equal(t, "body-str", dest.Str())
+
+	setInt, err := CompileValueSetter(intValue(99))
+	require.NoError(t, err)
+	setInt(dest)
+	assert.Equal(t, int64(99), dest.Int())
+
+	setDouble, err := CompileValueSetter(&policyv1alpha1.Value{Value: &policyv1alpha1.Value_DoubleValue{DoubleValue: 2.5}})
+	require.NoError(t, err)
+	setDouble(dest)
+	assert.Equal(t, 2.5, dest.Double())
+
+	setBool, err := CompileValueSetter(&policyv1alpha1.Value{Value: &policyv1alpha1.Value_BoolValue{BoolValue: true}})
+	require.NoError(t, err)
+	setBool(dest)
+	assert.True(t, dest.Bool())
+
+	raw := []byte{1, 2, 3}
+	setBytes, err := CompileValueSetter(bytesValue(raw))
+	require.NoError(t, err)
+	raw[0] = 9
+	setBytes(dest)
+	assert.Equal(t, []byte{1, 2, 3}, dest.Bytes().AsRaw())
+}

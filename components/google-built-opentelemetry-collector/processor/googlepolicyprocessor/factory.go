@@ -24,6 +24,7 @@ import (
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor/internal/metadata"
 	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/logfilter"
+	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/logtransform"
 	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/metricfilter"
 	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/tracefilter"
 )
@@ -51,7 +52,11 @@ func createTracesProcessor(
 	cfg component.Config,
 	nextConsumer consumer.Traces,
 ) (processor.Traces, error) {
-	proc := newGooglePolicyProcessor(cfg.(*Config), set.Logger)
+	telemetry, err := metadata.NewTelemetryBuilder(set.TelemetrySettings)
+	if err != nil {
+		return nil, err
+	}
+	proc := newGooglePolicyProcessor(cfg.(*Config), set.Logger, telemetry)
 	return processorhelper.NewTraces(
 		ctx,
 		set,
@@ -70,7 +75,11 @@ func createMetricsProcessor(
 	cfg component.Config,
 	nextConsumer consumer.Metrics,
 ) (processor.Metrics, error) {
-	proc := newGooglePolicyProcessor(cfg.(*Config), set.Logger)
+	telemetry, err := metadata.NewTelemetryBuilder(set.TelemetrySettings)
+	if err != nil {
+		return nil, err
+	}
+	proc := newGooglePolicyProcessor(cfg.(*Config), set.Logger, telemetry)
 	return processorhelper.NewMetrics(
 		ctx,
 		set,
@@ -89,7 +98,11 @@ func createLogsProcessor(
 	cfg component.Config,
 	nextConsumer consumer.Logs,
 ) (processor.Logs, error) {
-	proc := newGooglePolicyProcessor(cfg.(*Config), set.Logger)
+	telemetry, err := metadata.NewTelemetryBuilder(set.TelemetrySettings)
+	if err != nil {
+		return nil, err
+	}
+	proc := newGooglePolicyProcessor(cfg.(*Config), set.Logger, telemetry)
 	return processorhelper.NewLogs(
 		ctx,
 		set,

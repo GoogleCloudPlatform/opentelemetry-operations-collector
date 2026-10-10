@@ -1,0 +1,23 @@
+{
+  "type": "log_transform",
+  "id": "set-scope-pipeline",
+  "matches": [
+    {
+      "target": {
+        "resource_attribute": {
+          "path": ["env"]
+        }
+      },
+      "equals": { "string_value": "prod" }
+    }
+  ],
+  "add": {
+    "target": {
+      "scope_attribute": {
+        "path": ["scope.pipeline"]
+      }
+    },
+    "value": { "string_value": "utr-v2" },
+    "upsert": true
+  }
+}

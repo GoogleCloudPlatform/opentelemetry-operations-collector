@@ -17,6 +17,7 @@ package gce
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -192,6 +193,87 @@ func TestIsRetriableLookupError(t *testing.T) {
 			actual := isRetriableLookupError(ctx, tc.err)
 			if actual != tc.expected {
 				t.Errorf("isRetriableLookupError(ctx with Err() = %v, %v) = %v; want %v", ctx.Err(), tc.err, actual, tc.expected)
+			}
+		})
+	}
+}
+
+func TestShouldRetryCreateManagedInstanceGroupVM(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{
+			name:     "ErrMIGTimeout sentinel error",
+			err:      ErrMIGTimeout,
+			expected: true,
+		},
+		{
+			name:     "wrapped ErrMIGTimeout",
+			err:      fmt.Errorf("waitForMIGStable failed: %w", ErrMIGTimeout),
+			expected: true,
+		},
+		{
+			name:     "Timeout waiting for stable string",
+			err:      errors.New("Timeout while waiting for group to become stable."),
+			expected: true,
+		},
+		{
+			name:     "wrapped timeout waiting for stable",
+			err:      fmt.Errorf("step 4 failed: %w", errors.New("Timeout while waiting for group to become stable.")),
+			expected: true,
+		},
+		{
+			name:     "quota error",
+			err:      errors.New("Quota 'CPUS' exceeded. Limit: 24.0 in region us-central1."),
+			expected: true,
+		},
+		{
+			name:     "503 service unavailable",
+			err:      status.Error(codes.Unavailable, "service unavailable"),
+			expected: true,
+		},
+		{
+			name:     "400 bad request",
+			err:      status.Error(codes.InvalidArgument, "invalid argument"),
+			expected: false,
+		},
+	}
+
+	options := VMOptions{ImageSpec: "debian-cloud:debian-12"}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := shouldRetryCreateManagedInstanceGroupVM(tc.err, options)
+			if actual != tc.expected {
+				t.Errorf("shouldRetryCreateManagedInstanceGroupVM(%v) = %v; want %v", tc.err, actual, tc.expected)
+			}
+		})
+	}
+}
+
+func TestIsNotFound(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{"nil error", nil, false},
+		{"googleapi 404", &googleapi.Error{Code: 404, Message: "Not Found"}, true},
+		{"googleapi 500", &googleapi.Error{Code: 500, Message: "Internal Server Error"}, false},
+		{"grpc codes.NotFound", status.Error(codes.NotFound, "resource not found"), true},
+		{"grpc codes.Unavailable", status.Error(codes.Unavailable, "unavailable"), false},
+		{"string 404", errors.New("Error 404: Not Found"), true},
+		{"string not found", errors.New("the resource was not found"), true},
+		{"string notFound", errors.New("resource notFound on server"), true},
+		{"string other error", errors.New("connection reset by peer"), false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := isNotFound(tc.err)
+			if actual != tc.expected {
+				t.Errorf("isNotFound(%v) = %v, want %v", tc.err, actual, tc.expected)
 			}
 		})
 	}

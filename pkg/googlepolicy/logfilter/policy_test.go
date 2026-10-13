@@ -19,6 +19,7 @@ import (
 
 	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/matcher"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/pcommon"
@@ -1006,9 +1007,9 @@ func mustDropPolicy(t *testing.T, id string, target *policyv1alpha1.LogFieldSele
 
 // mustExtract compiles a selector into its target extractor, so tests can probe
 // the (value, exists) pair directly instead of inferring it from a predicate.
-func mustExtract(t *testing.T, target *policyv1alpha1.LogFieldSelector) targetExtractor {
+func mustExtract(t *testing.T, target *policyv1alpha1.LogFieldSelector) matcher.LogTargetExtractor {
 	t.Helper()
-	extract, err := compileExtractor(target)
+	extract, err := matcher.CompileLogExtractor(target)
 	require.NoError(t, err)
 	return extract
 }

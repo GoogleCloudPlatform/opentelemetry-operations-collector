@@ -739,6 +739,31 @@ func TestHandleDeleteError(t *testing.T) {
 			attempt:     1,
 			expectRetry: true,
 		},
+		{
+			name: "googleapi resourceNotReady is retriable",
+			err: &googleapi.Error{
+				Code:    400,
+				Message: "The resource 'projects/p/zones/z/instanceGroupManagers/mig' is not ready",
+				Errors:  []googleapi.ErrorItem{{Reason: "resourceNotReady"}},
+			},
+			attempt:     1,
+			expectRetry: true,
+		},
+		{
+			name: "googleapi 400 is not ready message without reason item is retriable",
+			err: &googleapi.Error{
+				Code:    400,
+				Message: "The resource 'projects/p/zones/z/instanceGroupManagers/mig' is not ready",
+			},
+			attempt:     1,
+			expectRetry: true,
+		},
+		{
+			name:        "gcloud resource not ready string is retriable",
+			err:         errors.New("Command failed: [gcloud compute instance-groups managed delete test-mig]\nexit status 1\nstdout+stderr: ERROR: (gcloud.compute.instance-groups.managed.delete) Could not fetch resource:\n - The resource 'projects/p/zones/z/instanceGroupManagers/test-mig' is not ready"),
+			attempt:     1,
+			expectRetry: true,
+		},
 	}
 
 	for _, tc := range testCases {

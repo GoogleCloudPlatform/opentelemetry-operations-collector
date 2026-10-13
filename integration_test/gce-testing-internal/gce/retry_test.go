@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"google.golang.org/api/googleapi"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -274,6 +275,124 @@ func TestIsNotFound(t *testing.T) {
 			actual := isNotFound(tc.err)
 			if actual != tc.expected {
 				t.Errorf("isNotFound(%v) = %v, want %v", tc.err, actual, tc.expected)
+			}
+		})
+	}
+}
+
+func TestIsResourceNotReady(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{"nil error", nil, false},
+		{
+			name: "googleapi 400 with resourceNotReady reason",
+			err: &googleapi.Error{
+				Code:    400,
+				Message: "The resource 'projects/p/zones/z/instanceGroupManagers/mig' is not ready",
+				Errors: []googleapi.ErrorItem{
+					{Reason: "resourceNotReady"},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "googleapi 409 with is not ready message",
+			err: &googleapi.Error{
+				Code:    409,
+				Message: "The resource 'projects/p/zones/z/instanceGroupManagers/mig' is not ready",
+			},
+			expected: true,
+		},
+		{
+			name:     "computepb operation error string",
+			err:      errors.New("operation failed: code RESOURCE_NOT_READY: The resource 'mig' is not ready"),
+			expected: true,
+		},
+		{
+			name:     "gcloud command error string",
+			err:      errors.New("Command failed: [gcloud compute instance-groups managed delete test-mig]: The resource 'projects/p/zones/z/instanceGroupManagers/test-mig' is not ready"),
+			expected: true,
+		},
+		{
+			name:     "unrelated 400 error",
+			err:      &googleapi.Error{Code: 400, Message: "Invalid value for field"},
+			expected: false,
+		},
+		{
+			name:     "generic unrelated error",
+			err:      errors.New("connection reset by peer"),
+			expected: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := isResourceNotReady(tc.err)
+			if actual != tc.expected {
+				t.Errorf("isResourceNotReady(%v) = %v, want %v", tc.err, actual, tc.expected)
+			}
+		})
+	}
+}
+
+func TestHandleDeleteError_ResourceNotReady(t *testing.T) {
+	tests := []struct {
+		name       string
+		err        error
+		expectPerm bool
+	}{
+		{
+			name: "googleapi 400 resourceNotReady reason",
+			err: &googleapi.Error{
+				Code:    400,
+				Message: "The resource 'projects/p/zones/z/instanceGroupManagers/mig' is not ready",
+				Errors: []googleapi.ErrorItem{
+					{Reason: "resourceNotReady"},
+				},
+			},
+			expectPerm: false,
+		},
+		{
+			name: "googleapi 400 is not ready message without reason item",
+			err: &googleapi.Error{
+				Code:    400,
+				Message: "The resource 'projects/p/zones/z/instanceGroupManagers/mig' is not ready",
+			},
+			expectPerm: false,
+		},
+		{
+			name:       "gcloud resource not ready string",
+			err:        errors.New("The resource 'projects/p/zones/z/instanceGroupManagers/test-mig' is not ready"),
+			expectPerm: false,
+		},
+		{
+			name: "unrelated 400 error is permanent",
+			err: &googleapi.Error{
+				Code:    400,
+				Message: "Invalid value for field",
+			},
+			expectPerm: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			res := handleDeleteError(tc.err, 1)
+			if tc.expectPerm {
+				if res == nil {
+					t.Errorf("handleDeleteError(%v, 1) = nil, want PermanentError", tc.err)
+				} else if _, isPerm := res.(*backoff.PermanentError); !isPerm {
+					t.Errorf("handleDeleteError(%v, 1) = %T (%v), want PermanentError", tc.err, res, res)
+				}
+			} else {
+				if res == nil {
+					t.Errorf("handleDeleteError(%v, 1) = nil, want retriable error", tc.err)
+				} else if _, isPerm := res.(*backoff.PermanentError); isPerm {
+					t.Errorf("handleDeleteError(%v, 1) returned PermanentError, want retriable error", tc.err)
+				}
 			}
 		})
 	}

@@ -64,6 +64,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -2112,6 +2113,13 @@ func handleDeleteError(err error, attempt int) error {
 	if strings.Contains(err.Error(), "Error 50") || strings.Contains(err.Error(), "503") || strings.Contains(err.Error(), "502") {
 		return err
 	}
+	// A Managed Instance Group or VM may still be transitioning (e.g. unlinking AppHub
+	// workloads, updating instances, or preparing for deletion), returning
+	// "The resource '...' is not ready" or reason "resourceNotReady".
+	// Retry these errors by returning them directly to backoff.Retry.
+	if isResourceNotReady(err) {
+		return err
+	}
 	// If the deletion command timed out and was killed, assume the command ran
 	// and let the 4-hour janitor job handle any lingering VMs (b/556836152).
 	if strings.Contains(err.Error(), "signal: killed") || strings.Contains(err.Error(), "deadline exceeded") || errors.Is(err, context.DeadlineExceeded) {
@@ -2135,6 +2143,36 @@ func isNotFound(err error) bool {
 	return strings.Contains(err.Error(), "notFound") ||
 		strings.Contains(err.Error(), "not found") ||
 		strings.Contains(err.Error(), "404")
+}
+
+const reasonResourceNotReady = "resourceNotReady"
+
+// notReadyMarkers are substrings that show up in "resource not ready" errors
+// across REST, gRPC, and wrapped/plain errors.
+var notReadyMarkers = []string{
+	"is not ready",
+	"resourceNotReady",
+	"RESOURCE_NOT_READY",
+}
+
+// isResourceNotReady reports whether err indicates the target resource
+// isn't ready yet (and the operation is likely safe to retry).
+func isResourceNotReady(err error) bool {
+	if err == nil {
+		return false
+	}
+	// Check the structured reason first: it's the most reliable signal.
+	var gErr *googleapi.Error
+	if errors.As(err, &gErr) && slices.ContainsFunc(gErr.Errors, func(e googleapi.ErrorItem) bool {
+		return e.Reason == reasonResourceNotReady
+	}) {
+		return true
+	}
+	// Fall back to matching the message text.
+	msg := err.Error()
+	return slices.ContainsFunc(notReadyMarkers, func(m string) bool {
+		return strings.Contains(msg, m)
+	})
 }
 
 // HandleDeleteErrorForTest exports handleDeleteError for unit testing.

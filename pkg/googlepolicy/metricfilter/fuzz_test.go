@@ -199,12 +199,19 @@ func verifyCompiledMetricPolicy(t *testing.T, p googlepolicy.Policy, contexts []
 func FuzzMetricFilterPolicy(f *testing.F) {
 	f.Add([]byte{}, "", "", "", "", int64(0), float64(0), false)
 	for _, seed := range fuzzMetricSeedPolicies() {
-		if wireBytes, err := proto.Marshal(seed); err == nil {
-			f.Add(wireBytes, "http.server.duration", "ms", "cloud.zone", "us-central1-a", int64(200), 1.25, true)
+		if _, err := NewPolicyFromProto(seed); err != nil {
+			f.Fatalf("invalid seed policy %q: %v", seed.GetId(), err)
 		}
-		if jsonBytes, err := protojson.Marshal(seed); err == nil {
-			f.Add(jsonBytes, "http.server.duration", "ms", "cloud.zone", "us-central1-a", int64(200), 1.25, true)
+		wireBytes, err := proto.Marshal(seed)
+		if err != nil {
+			f.Fatalf("proto.Marshal seed %q: %v", seed.GetId(), err)
 		}
+		f.Add(wireBytes, "http.server.duration", "ms", "cloud.zone", "us-central1-a", int64(200), 1.25, true)
+		jsonBytes, err := protojson.Marshal(seed)
+		if err != nil {
+			f.Fatalf("protojson.Marshal seed %q: %v", seed.GetId(), err)
+		}
+		f.Add(jsonBytes, "http.server.duration", "ms", "cloud.zone", "us-central1-a", int64(200), 1.25, true)
 	}
 
 	staticContexts := fuzzMetricContexts()

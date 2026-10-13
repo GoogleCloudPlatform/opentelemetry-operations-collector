@@ -19,6 +19,7 @@ import (
 
 	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/matcher"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/pcommon"
@@ -1519,7 +1520,7 @@ func TestUnsetSpanStringFieldsReportAbsent(t *testing.T) {
 	}
 
 	for _, target := range targets {
-		extract, err := compileExtractor(target)
+		extract, err := matcher.CompileTraceExtractor(target)
 		require.NoError(t, err)
 		val, exists := extract(ctx)
 		assert.False(t, exists, "target %v must report exists=false when unset", target)
@@ -1537,7 +1538,7 @@ func TestUnsetSpanStringFieldsReportAbsent(t *testing.T) {
 	}
 
 	// By contrast, root span ParentSpanID intentionally returns ("", false) per spec so equals: "" matches.
-	parentExtract, err := compileExtractor(recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID))
+	parentExtract, err := matcher.CompileTraceExtractor(recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID))
 	require.NoError(t, err)
 	val, exists := parentExtract(ctx)
 	assert.False(t, exists)

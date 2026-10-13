@@ -27,13 +27,15 @@ import (
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/pdata/ptrace"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	"go.uber.org/zap"
 
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor/internal/metadata"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/logfilter"
 )
 
 func TestProcessTraces_NilEngine(t *testing.T) {
-	p := newGooglePolicyProcessor(&Config{}, zap.NewNop())
+	p := newGooglePolicyProcessor(&Config{}, zap.NewNop(), nil)
 	td := ptrace.NewTraces()
 	rs := td.ResourceSpans().AppendEmpty()
 	rs.ScopeSpans().AppendEmpty().Spans().AppendEmpty()
@@ -44,7 +46,7 @@ func TestProcessTraces_NilEngine(t *testing.T) {
 }
 
 func TestProcessMetrics_NilEngine(t *testing.T) {
-	p := newGooglePolicyProcessor(&Config{}, zap.NewNop())
+	p := newGooglePolicyProcessor(&Config{}, zap.NewNop(), nil)
 	md := pmetric.NewMetrics()
 	rm := md.ResourceMetrics().AppendEmpty()
 	rm.ScopeMetrics().AppendEmpty().Metrics().AppendEmpty()
@@ -55,7 +57,7 @@ func TestProcessMetrics_NilEngine(t *testing.T) {
 }
 
 func TestProcessLogs_NilEngine(t *testing.T) {
-	p := newGooglePolicyProcessor(&Config{}, zap.NewNop())
+	p := newGooglePolicyProcessor(&Config{}, zap.NewNop(), nil)
 	ld := plog.NewLogs()
 	rl := ld.ResourceLogs().AppendEmpty()
 	rl.ScopeLogs().AppendEmpty().LogRecords().AppendEmpty()
@@ -96,7 +98,7 @@ func TestProcessLogs_WithActivePolicy(t *testing.T) {
 	googlepolicy.SetActivePolicySet(ps)
 	defer googlepolicy.SetActivePolicySet(nil)
 
-	p := newGooglePolicyProcessor(&Config{}, zap.NewNop())
+	p := newGooglePolicyProcessor(&Config{}, zap.NewNop(), nil)
 	require.NoError(t, p.start(context.Background(), componenttest.NewNopHost()))
 	defer func() { _ = p.shutdown(context.Background()) }()
 
@@ -151,7 +153,7 @@ func TestProcessMetrics_WithActivePolicy(t *testing.T) {
 	googlepolicy.SetActivePolicySet(ps)
 	defer googlepolicy.SetActivePolicySet(nil)
 
-	p := newGooglePolicyProcessor(&Config{}, zap.NewNop())
+	p := newGooglePolicyProcessor(&Config{}, zap.NewNop(), nil)
 	require.NoError(t, p.start(context.Background(), componenttest.NewNopHost()))
 	defer func() { _ = p.shutdown(context.Background()) }()
 
@@ -208,7 +210,7 @@ func TestProcessTraces_WithActivePolicy(t *testing.T) {
 	googlepolicy.SetActivePolicySet(ps)
 	defer googlepolicy.SetActivePolicySet(nil)
 
-	p := newGooglePolicyProcessor(&Config{}, zap.NewNop())
+	p := newGooglePolicyProcessor(&Config{}, zap.NewNop(), nil)
 	require.NoError(t, p.start(context.Background(), componenttest.NewNopHost()))
 	defer func() { _ = p.shutdown(context.Background()) }()
 
@@ -236,7 +238,7 @@ func TestProcessLogs_DynamicPolicyUpdate(t *testing.T) {
 	// Start processor with empty policy set
 	googlepolicy.SetActivePolicySet(nil)
 
-	p := newGooglePolicyProcessor(&Config{}, zap.NewNop())
+	p := newGooglePolicyProcessor(&Config{}, zap.NewNop(), nil)
 	require.NoError(t, p.start(context.Background(), componenttest.NewNopHost()))
 	defer func() { _ = p.shutdown(context.Background()) }()
 
@@ -291,8 +293,254 @@ func TestProcessLogs_DynamicPolicyUpdate(t *testing.T) {
 	}, 1*time.Second, 10*time.Millisecond)
 }
 
+func TestProcessLogs_Telemetry(t *testing.T) {
+	dropPolicy := mustPolicy(t, &policyv1alpha1.LogFilterPolicy{
+		Id:     "drop-secret-logs",
+		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+		Matches: []*policyv1alpha1.LogMatcher{
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_RecordField{
+						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
+					},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_StringValue{StringValue: "secret message"},
+					},
+				},
+			},
+		},
+	})
+	keepPolicy := mustPolicy(t, &policyv1alpha1.LogFilterPolicy{
+		Id:     "keep-important-logs",
+		Action: policyv1alpha1.Action_ACTION_KEEP.Enum(),
+		Matches: []*policyv1alpha1.LogMatcher{
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_RecordField{
+						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
+					},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_StringValue{StringValue: "important message"},
+					},
+				},
+			},
+		},
+	})
+
+	googlepolicy.SetActivePolicySet(&googlepolicy.PolicySet{
+		RevisionID: "rev-tel-logs",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			"drop-secret-logs":    {PolicyObj: dropPolicy},
+			"keep-important-logs": {PolicyObj: keepPolicy},
+		},
+	})
+	defer googlepolicy.SetActivePolicySet(nil)
+
+	testTel := componenttest.NewTelemetry()
+	defer func() { _ = testTel.Shutdown(context.Background()) }()
+
+	tb, err := metadata.NewTelemetryBuilder(testTel.NewTelemetrySettings())
+	require.NoError(t, err)
+	defer tb.Shutdown()
+
+	p := newGooglePolicyProcessor(&Config{}, zap.NewNop(), tb)
+	require.NoError(t, p.start(context.Background(), componenttest.NewNopHost()))
+	defer func() { _ = p.shutdown(context.Background()) }()
+
+	ld := plog.NewLogs()
+	rl := ld.ResourceLogs().AppendEmpty()
+	sl := rl.ScopeLogs().AppendEmpty()
+
+	// 2 dropped, 1 kept, 1 no_match
+	sl.LogRecords().AppendEmpty().Body().SetStr("secret message")
+	sl.LogRecords().AppendEmpty().Body().SetStr("secret message")
+	sl.LogRecords().AppendEmpty().Body().SetStr("important message")
+	sl.LogRecords().AppendEmpty().Body().SetStr("regular message")
+
+	_, err = p.processLogs(context.Background(), ld)
+	require.NoError(t, err)
+
+	// Check aggregate metrics
+	m, err := testTel.GetMetric("otelcol_processor_googlepolicy_records")
+	require.NoError(t, err)
+	sum, ok := m.Data.(metricdata.Sum[int64])
+	require.True(t, ok)
+
+	counts := make(map[string]int64)
+	for _, dp := range sum.DataPoints {
+		res, _ := dp.Attributes.Value("result")
+		ttype, _ := dp.Attributes.Value("telemetry_type")
+		assert.Equal(t, "logs", ttype.AsString())
+		counts[res.AsString()] += dp.Value
+	}
+	assert.Equal(t, int64(2), counts["dropped"])
+	assert.Equal(t, int64(1), counts["kept"])
+	assert.Equal(t, int64(1), counts["no_match"])
+
+	// Check per-policy metrics
+	pm, err := testTel.GetMetric("otelcol_processor_googlepolicy_policy_records")
+	require.NoError(t, err)
+	psum, ok := pm.Data.(metricdata.Sum[int64])
+	require.True(t, ok)
+
+	policyCounts := make(map[string]map[string]int64)
+	for _, dp := range psum.DataPoints {
+		pid, _ := dp.Attributes.Value("policy_id")
+		res, _ := dp.Attributes.Value("result")
+		ttype, _ := dp.Attributes.Value("telemetry_type")
+		assert.Equal(t, "logs", ttype.AsString())
+		if policyCounts[pid.AsString()] == nil {
+			policyCounts[pid.AsString()] = make(map[string]int64)
+		}
+		policyCounts[pid.AsString()][res.AsString()] += dp.Value
+	}
+	assert.Equal(t, int64(2), policyCounts["drop-secret-logs"]["dropped"])
+	assert.Equal(t, int64(1), policyCounts["keep-important-logs"]["kept"])
+}
+
+func TestProcessMetrics_Telemetry(t *testing.T) {
+	dropPolicy := mustPolicy(t, &policyv1alpha1.MetricFilterPolicy{
+		Id:     "drop-internal-metric",
+		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+		Matches: []*policyv1alpha1.MetricMatcher{
+			{
+				Target: &policyv1alpha1.MetricFieldSelector{
+					Target: &policyv1alpha1.MetricFieldSelector_DescriptorField{
+						DescriptorField: policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME,
+					},
+				},
+				Predicate: &policyv1alpha1.MetricMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_StringValue{StringValue: "internal.heartbeat"},
+					},
+				},
+			},
+		},
+	})
+
+	googlepolicy.SetActivePolicySet(&googlepolicy.PolicySet{
+		RevisionID: "rev-tel-metrics",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			"drop-internal-metric": {PolicyObj: dropPolicy},
+		},
+	})
+	defer googlepolicy.SetActivePolicySet(nil)
+
+	testTel := componenttest.NewTelemetry()
+	defer func() { _ = testTel.Shutdown(context.Background()) }()
+
+	tb, err := metadata.NewTelemetryBuilder(testTel.NewTelemetrySettings())
+	require.NoError(t, err)
+	defer tb.Shutdown()
+
+	p := newGooglePolicyProcessor(&Config{}, zap.NewNop(), tb)
+	require.NoError(t, p.start(context.Background(), componenttest.NewNopHost()))
+	defer func() { _ = p.shutdown(context.Background()) }()
+
+	md := pmetric.NewMetrics()
+	rm := md.ResourceMetrics().AppendEmpty()
+	sm := rm.ScopeMetrics().AppendEmpty()
+
+	// 1 kept/no_match, 1 dropped
+	m1 := sm.Metrics().AppendEmpty()
+	m1.SetName("user.requests")
+	m1.SetEmptyGauge().DataPoints().AppendEmpty()
+
+	m2 := sm.Metrics().AppendEmpty()
+	m2.SetName("internal.heartbeat")
+	m2.SetEmptyGauge().DataPoints().AppendEmpty()
+
+	_, err = p.processMetrics(context.Background(), md)
+	require.NoError(t, err)
+
+	m, err := testTel.GetMetric("otelcol_processor_googlepolicy_records")
+	require.NoError(t, err)
+	sum, ok := m.Data.(metricdata.Sum[int64])
+	require.True(t, ok)
+
+	counts := make(map[string]int64)
+	for _, dp := range sum.DataPoints {
+		res, _ := dp.Attributes.Value("result")
+		ttype, _ := dp.Attributes.Value("telemetry_type")
+		assert.Equal(t, "metrics", ttype.AsString())
+		counts[res.AsString()] += dp.Value
+	}
+	assert.Equal(t, int64(1), counts["dropped"])
+	assert.Equal(t, int64(1), counts["no_match"])
+}
+
+func TestProcessTraces_Telemetry(t *testing.T) {
+	dropPolicy := mustPolicy(t, &policyv1alpha1.TraceFilterPolicy{
+		Id:     "drop-healthcheck-span",
+		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+		Matches: []*policyv1alpha1.TraceMatcher{
+			{
+				Target: &policyv1alpha1.TraceFieldSelector{
+					Target: &policyv1alpha1.TraceFieldSelector_RecordField{
+						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME,
+					},
+				},
+				Predicate: &policyv1alpha1.TraceMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_StringValue{StringValue: "/healthz"},
+					},
+				},
+			},
+		},
+	})
+
+	googlepolicy.SetActivePolicySet(&googlepolicy.PolicySet{
+		RevisionID: "rev-tel-traces",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			"drop-healthcheck-span": {PolicyObj: dropPolicy},
+		},
+	})
+	defer googlepolicy.SetActivePolicySet(nil)
+
+	testTel := componenttest.NewTelemetry()
+	defer func() { _ = testTel.Shutdown(context.Background()) }()
+
+	tb, err := metadata.NewTelemetryBuilder(testTel.NewTelemetrySettings())
+	require.NoError(t, err)
+	defer tb.Shutdown()
+
+	p := newGooglePolicyProcessor(&Config{}, zap.NewNop(), tb)
+	require.NoError(t, p.start(context.Background(), componenttest.NewNopHost()))
+	defer func() { _ = p.shutdown(context.Background()) }()
+
+	td := ptrace.NewTraces()
+	rs := td.ResourceSpans().AppendEmpty()
+	ss := rs.ScopeSpans().AppendEmpty()
+
+	// 1 kept/no_match, 1 dropped
+	ss.Spans().AppendEmpty().SetName("/api/v1/checkout")
+	ss.Spans().AppendEmpty().SetName("/healthz")
+
+	_, err = p.processTraces(context.Background(), td)
+	require.NoError(t, err)
+
+	m, err := testTel.GetMetric("otelcol_processor_googlepolicy_records")
+	require.NoError(t, err)
+	sum, ok := m.Data.(metricdata.Sum[int64])
+	require.True(t, ok)
+
+	counts := make(map[string]int64)
+	for _, dp := range sum.DataPoints {
+		res, _ := dp.Attributes.Value("result")
+		ttype, _ := dp.Attributes.Value("telemetry_type")
+		assert.Equal(t, "traces", ttype.AsString())
+		counts[res.AsString()] += dp.Value
+	}
+	assert.Equal(t, int64(1), counts["dropped"])
+	assert.Equal(t, int64(1), counts["no_match"])
+}
+
 func TestProcessLogs_WithRealLogFilterPolicy(t *testing.T) {
-	p := newGooglePolicyProcessor(&Config{}, zap.NewNop())
+	p := newGooglePolicyProcessor(&Config{}, zap.NewNop(), nil)
 	require.NoError(t, p.start(context.Background(), componenttest.NewNopHost()))
 	defer func() { _ = p.shutdown(context.Background()) }()
 
@@ -353,7 +601,7 @@ func TestProcessLogs_WithRealLogFilterPolicy(t *testing.T) {
 }
 
 func TestProcessLogs_LoadFromRawJSONPolicySet(t *testing.T) {
-	p := newGooglePolicyProcessor(&Config{}, zap.NewNop())
+	p := newGooglePolicyProcessor(&Config{}, zap.NewNop(), nil)
 	require.NoError(t, p.start(context.Background(), componenttest.NewNopHost()))
 	defer func() { _ = p.shutdown(context.Background()) }()
 
@@ -419,7 +667,7 @@ func TestProcessor_DoubleShutdownAndReloadFailure(t *testing.T) {
 	})
 	defer googlepolicy.SetActivePolicySet(nil)
 
-	p := newGooglePolicyProcessor(&Config{}, zap.NewNop())
+	p := newGooglePolicyProcessor(&Config{}, zap.NewNop(), nil)
 	require.NoError(t, p.start(context.Background(), componenttest.NewNopHost()))
 
 	// Evaluator should remain nil due to compilation error
@@ -431,7 +679,7 @@ func TestProcessor_DoubleShutdownAndReloadFailure(t *testing.T) {
 }
 
 func TestProcessor_WatcherChannelClosed(t *testing.T) {
-	p := newGooglePolicyProcessor(&Config{}, zap.NewNop())
+	p := newGooglePolicyProcessor(&Config{}, zap.NewNop(), nil)
 	p.stopCh = make(chan struct{})
 	ch := make(chan struct{})
 	p.watcherCh = ch

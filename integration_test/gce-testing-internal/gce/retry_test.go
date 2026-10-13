@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"google.golang.org/api/googleapi"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -54,6 +55,11 @@ func TestShouldRetryCreateVM(t *testing.T) {
 			expected: true,
 		},
 		{
+			name:     "ip assignment timeout",
+			err:      errors.New("timed out waiting for instance \"test-vm\" to be assigned an IP address"),
+			expected: true,
+		},
+		{
 			name:     "400 error",
 			err:      errors.New("Error 400: Bad Request"),
 			expected: false,
@@ -61,6 +67,46 @@ func TestShouldRetryCreateVM(t *testing.T) {
 		{
 			name:     "404 error",
 			err:      errors.New("Error 404: The resource 'projects/p/zones/z/instances/test-vm' was not found"),
+			expected: false,
+		},
+		{
+			name:     "googleapi 403 quota error",
+			err:      &googleapi.Error{Code: 403, Message: "Quota exceeded"},
+			expected: true,
+		},
+		{
+			name:     "googleapi 429 rate limit error",
+			err:      &googleapi.Error{Code: 429, Message: "Rate limit exceeded"},
+			expected: true,
+		},
+		{
+			name:     "googleapi 503 service unavailable",
+			err:      &googleapi.Error{Code: 503, Message: "Backend unavailable"},
+			expected: true,
+		},
+		{
+			name:     "googleapi 504 gateway timeout",
+			err:      &googleapi.Error{Code: 504, Message: "Gateway timeout"},
+			expected: true,
+		},
+		{
+			name:     "googleapi 400 bad request",
+			err:      &googleapi.Error{Code: 400, Message: "Bad Request"},
+			expected: false,
+		},
+		{
+			name:     "grpc status unavailable",
+			err:      status.Error(codes.Unavailable, "service unavailable"),
+			expected: true,
+		},
+		{
+			name:     "grpc status resource exhausted",
+			err:      status.Error(codes.ResourceExhausted, "resource exhausted"),
+			expected: true,
+		},
+		{
+			name:     "grpc status invalid argument",
+			err:      status.Error(codes.InvalidArgument, "invalid argument"),
 			expected: false,
 		},
 	}

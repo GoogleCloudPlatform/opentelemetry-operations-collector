@@ -49,6 +49,9 @@ import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/integration_test/gce-testing-internal/gce"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/integration_test/gce-testing-internal/logging"
 	"github.com/cenkalti/backoff/v4"
+	"google.golang.org/api/googleapi"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // recommendedMachineType returns a reasonable setting for a VM's machine type
@@ -681,6 +684,60 @@ func TestHandleDeleteError(t *testing.T) {
 			err:        errors.New("Error 400: Bad Request"),
 			attempt:    1,
 			expectPerm: true,
+		},
+		{
+			name:       "googleapi 404 attempt 1 is permanent",
+			err:        &googleapi.Error{Code: 404, Message: "Not Found"},
+			attempt:    1,
+			expectPerm: true,
+		},
+		{
+			name:      "googleapi 404 attempt 2 is success (nil)",
+			err:       &googleapi.Error{Code: 404, Message: "Not Found"},
+			attempt:   2,
+			expectNil: true,
+		},
+		{
+			name:        "googleapi 503 is retriable",
+			err:         &googleapi.Error{Code: 503, Message: "Service Unavailable"},
+			attempt:     1,
+			expectRetry: true,
+		},
+		{
+			name:        "googleapi 403 quota is retriable",
+			err:         &googleapi.Error{Code: 403, Message: "Quota exceeded"},
+			attempt:     1,
+			expectRetry: true,
+		},
+		{
+			name:        "googleapi 429 rate limit is retriable",
+			err:         &googleapi.Error{Code: 429, Message: "Rate limit exceeded"},
+			attempt:     1,
+			expectRetry: true,
+		},
+		{
+			name:      "context.DeadlineExceeded is treated as success (nil)",
+			err:       context.DeadlineExceeded,
+			attempt:   1,
+			expectNil: true,
+		},
+		{
+			name:       "grpc status NotFound attempt 1 is permanent",
+			err:        status.Error(codes.NotFound, "not found"),
+			attempt:    1,
+			expectPerm: true,
+		},
+		{
+			name:      "grpc status NotFound attempt 2 is success (nil)",
+			err:       status.Error(codes.NotFound, "not found"),
+			attempt:   2,
+			expectNil: true,
+		},
+		{
+			name:        "grpc status Unavailable is retriable",
+			err:         status.Error(codes.Unavailable, "unavailable"),
+			attempt:     1,
+			expectRetry: true,
 		},
 	}
 

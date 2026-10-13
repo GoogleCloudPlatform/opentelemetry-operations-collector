@@ -84,6 +84,7 @@ import (
 	"github.com/google/uuid"
 	"go.uber.org/multierr"
 	"golang.org/x/text/encoding/unicode"
+	"google.golang.org/api/googleapi"
 	"google.golang.org/api/iterator"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -1481,6 +1482,45 @@ func additionalCreateInstanceArgs(options VMOptions, vm *VM) ([]string, error) {
 	return args, nil
 }
 
+// waitForInstanceIP polls instancesClient.Get until the instance exists and has an external IP assigned.
+// We avoid waiting on op.Wait() after instancesClient.Insert() because the Compute Engine operation
+// object often takes much longer to transition to DONE (sometimes over 10 minutes) than what is
+// needed before the VM is ready to use, even though the VM is typically provisioned and reachable
+// over SSH within 1-2 minutes.
+func waitForInstanceIP(ctx context.Context, project, zone, instanceName string, timeout time.Duration) (*computepb.Instance, string, error) {
+	deadline := time.Now().Add(timeout)
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		if time.Now().After(deadline) {
+			return nil, "", fmt.Errorf("timed out waiting for instance %q to be assigned an IP address", instanceName)
+		}
+		select {
+		case <-ctx.Done():
+			return nil, "", ctx.Err()
+		default:
+		}
+
+		inst, err := instancesClient.Get(ctx, &computepb.GetInstanceRequest{
+			Project:  project,
+			Zone:     zone,
+			Instance: instanceName,
+		})
+		if err == nil {
+			if ip, err := extractIPFromInstance(inst); err == nil && ip != "" {
+				return inst, ip, nil
+			}
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil, "", ctx.Err()
+		case <-ticker.C:
+		}
+	}
+}
+
 // attemptCreateInstance creates a VM instance and waits for it to be ready.
 // Returns a VM object or an error (never both). The caller is responsible for
 // deleting the VM if (and only if) the returned error is nil.
@@ -1509,8 +1549,18 @@ func attemptCreateInstance(ctx context.Context, logger *log.Logger, options VMOp
 		return nil, err
 	}
 	args = append(args, additionalArgs...)
+	LogEquivalentGcloud(logger, args...)
 
-	output, err := RunGcloud(ctx, logger, "", args)
+	instanceResource, err := buildInstanceResource(options, vm)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = instancesClient.Insert(ctx, &computepb.InsertInstanceRequest{
+		Project:          vm.Project,
+		Zone:             vm.Zone,
+		InstanceResource: instanceResource,
+	})
 	if err != nil {
 		// Note: we don't try and delete the VM in this case because there is
 		// nothing to delete.
@@ -1529,19 +1579,19 @@ func attemptCreateInstance(ctx context.Context, logger *log.Logger, options VMOp
 		}
 	}()
 
-	// Pull the instance ID and external IP address out of the output.
-	id, err := extractID(output.Stdout)
+	// We deliberately avoid waiting on op.Wait(ctx) because the Compute Engine
+	// operation object often takes much longer (sometimes over 10 minutes) to transition
+	// to DONE than needed, even though the VM is typically provisioned and ready to use
+	// within 1-2 minutes. Instead, we go out of band and poll GetInstance until the
+	// instance resource and its external IP address are available, after which
+	// verifyVMCreation waits for guest OS startup and SSH to become ready.
+	inst, ipAddress, err := waitForInstanceIP(ctx, vm.Project, vm.Zone, vm.Name, 300*time.Second)
 	if err != nil {
 		return nil, err
 	}
-	vm.ID = id
 
+	vm.ID = int64(inst.GetId())
 	logger.Printf("Instance Log: %v", instanceLogURL(vm))
-
-	ipAddress, err := extractIPAddress(output.Stdout)
-	if err != nil {
-		return nil, err
-	}
 	vm.IPAddress = ipAddress
 
 	// This is just informational, so it's ok if it fails. Just warn and proceed.
@@ -1741,13 +1791,30 @@ func IsOpsAgentUAPPlugin() bool {
 }
 
 func shouldRetryCreateVM(err error, options VMOptions) bool {
+	if err == nil {
+		return false
+	}
+	var gErr *googleapi.Error
+	if errors.As(err, &gErr) {
+		if gErr.Code == 403 || gErr.Code == 429 || (gErr.Code >= 500 && gErr.Code < 600) {
+			return true
+		}
+	}
+	if s, ok := status.FromError(err); ok {
+		if s.Code() == codes.ResourceExhausted || s.Code() == codes.Unavailable || s.Code() == codes.Internal {
+			return true
+		}
+	}
 	// VM creation can hit quota, especially when re-running presubmits,
-	// or when multple people are running tests.
+	// or when multiple people are running tests.
 	return strings.Contains(err.Error(), "Quota") ||
+		strings.Contains(err.Error(), "QUOTA") ||
 		// Rarely, instance creation fails due to internal errors in the compute API.
 		strings.Contains(err.Error(), "Internal error") ||
 		// Instance creation can also fail due to service unavailability.
 		strings.Contains(err.Error(), "currently unavailable") ||
+		strings.Contains(err.Error(), "ZONE_RESOURCE_POOL_EXHAUSTED") ||
+		strings.Contains(err.Error(), "RESOURCE_POOL_EXHAUSTED") ||
 		// GCE sometimes responds with 502 or 503 errors, e.g. a raw HTML
 		// "Error 502 (Server Error)" page. Retry these (and other 50x errors for
 		// good measure), like handleDeleteError does.
@@ -1760,6 +1827,8 @@ func shouldRetryCreateVM(err error, options VMOptions) bool {
 		(IsWindows(options.ImageSpec) && strings.Contains(err.Error(), windowsStartupFailedMessage)) ||
 		// SLES instances sometimes fail to be ssh-able: b/186426190
 		(IsSUSEImageSpec(options.ImageSpec) && strings.Contains(err.Error(), startupFailedMessage)) ||
+		// Timed out waiting for instance IP assignment during out-of-band polling.
+		strings.Contains(err.Error(), "timed out waiting for instance") ||
 		strings.Contains(err.Error(), prepareSLESMessage)
 }
 
@@ -1921,27 +1990,47 @@ func handleDeleteError(err error, attempt int) error {
 	if err == nil {
 		return nil
 	}
+	var gErr *googleapi.Error
+	if errors.As(err, &gErr) {
+		if gErr.Code == 404 && attempt > 1 {
+			return nil
+		}
+		if gErr.Code == 403 || gErr.Code == 429 {
+			return err
+		}
+		if gErr.Code >= 500 && gErr.Code < 600 {
+			return err
+		}
+	}
+	if s, ok := status.FromError(err); ok {
+		if s.Code() == codes.NotFound && attempt > 1 {
+			return nil
+		}
+		if s.Code() == codes.ResourceExhausted || s.Code() == codes.Unavailable || s.Code() == codes.Internal {
+			return err
+		}
+	}
 	// VM deletion can hit quota, especially when re-running presubmits,
 	// or when multple people are running tests. Retry errors by returning
 	// them directly.
-	if strings.Contains(err.Error(), "Quota") {
+	if strings.Contains(err.Error(), "Quota") || strings.Contains(err.Error(), "QUOTA") {
 		return err
 	}
 	// GCE sometimes responds with 502 or 503 errors. Retry these errors
 	// (and other 50x errors for good measure), by returning them directly.
-	if strings.Contains(err.Error(), "Error 50") {
+	if strings.Contains(err.Error(), "Error 50") || strings.Contains(err.Error(), "503") || strings.Contains(err.Error(), "502") {
 		return err
 	}
 	// "not found" can happen when a previous attempt actually did delete
 	// the VM but there was some communication problem along the way.
 	// Consider that a successful deletion. Only do this when there has
 	// been a previous attempt.
-	if strings.Contains(err.Error(), "not found") && attempt > 1 {
+	if (strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "notFound") || strings.Contains(err.Error(), "404")) && attempt > 1 {
 		return nil
 	}
 	// If the deletion command timed out and was killed, assume the command ran
 	// and let the 4-hour janitor job handle any lingering VMs (b/556836152).
-	if strings.Contains(err.Error(), "signal: killed") || strings.Contains(err.Error(), "deadline exceeded") {
+	if strings.Contains(err.Error(), "signal: killed") || strings.Contains(err.Error(), "deadline exceeded") || errors.Is(err, context.DeadlineExceeded) {
 		return nil
 	}
 	// Wrap other errors in backoff.Permanent() to avoid retrying those.
@@ -1963,25 +2052,31 @@ func DeleteInstance(ctx context.Context, logger *log.Logger, vm *VM) error {
 		logger.Printf("VM %v was already deleted, skipping delete.", vm.Name)
 		return nil
 	}
-	configDir := ctx.Value(gcloudConfigDirKey)
 	deleteCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
-	if configDir != nil {
-		deleteCtx = WithGcloudConfigDir(deleteCtx, configDir.(string))
-	}
+
+	LogEquivalentGcloud(logger, "compute", "instances", "delete",
+		"--project="+vm.Project,
+		"--zone="+vm.Zone,
+		vm.Name,
+		"--quiet")
+
 	backoffPolicy := backoff.WithContext(backoff.WithMaxRetries(backoff.NewConstantBackOff(30*time.Second), 10), deleteCtx)
 	attempt := 0
 	tryDelete := func() error {
 		attempt++
-		_, err := RunGcloud(deleteCtx, logger, "",
-			[]string{
-				"compute", "instances", "delete",
-				"--project=" + vm.Project,
-				"--zone=" + vm.Zone,
-				vm.Name,
-				"--quiet",
-			})
-		return handleDeleteError(err, attempt)
+		op, err := instancesClient.Delete(deleteCtx, &computepb.DeleteInstanceRequest{
+			Project:  vm.Project,
+			Zone:     vm.Zone,
+			Instance: vm.Name,
+		})
+		if err != nil {
+			return handleDeleteError(err, attempt)
+		}
+		if err := op.Wait(deleteCtx); err != nil {
+			return handleDeleteError(err, attempt)
+		}
+		return nil
 	}
 	err := backoff.Retry(tryDelete, backoffPolicy)
 	if err == nil {
@@ -2048,25 +2143,43 @@ func DeleteManagedInstanceGroupVM(ctx context.Context, logger *log.Logger, migVM
 
 // StopInstance shuts down a VM instance.
 func StopInstance(ctx context.Context, logger *log.Logger, vm *VM) error {
-	_, err := RunGcloud(ctx, logger, "",
-		[]string{
-			"compute", "instances", "stop",
-			"--project=" + vm.Project,
-			"--zone=" + vm.Zone,
-			vm.Name,
-		})
-	return err
+	LogEquivalentGcloud(logger, "compute", "instances", "stop",
+		"--project="+vm.Project,
+		"--zone="+vm.Zone,
+		vm.Name)
+	op, err := instancesClient.Stop(ctx, &computepb.StopInstanceRequest{
+		Project:  vm.Project,
+		Zone:     vm.Zone,
+		Instance: vm.Name,
+	})
+	if err != nil {
+		return err
+	}
+	return op.Wait(ctx)
 }
 
 func shouldRetryStartVM(err error) bool {
 	if err == nil {
 		return false
 	}
+	var gErr *googleapi.Error
+	if errors.As(err, &gErr) {
+		if gErr.Code == 403 || gErr.Code == 429 || (gErr.Code >= 500 && gErr.Code < 600) {
+			return true
+		}
+	}
+	if s, ok := status.FromError(err); ok {
+		if s.Code() == codes.ResourceExhausted || s.Code() == codes.Unavailable || s.Code() == codes.Internal {
+			return true
+		}
+	}
 	// Starting instances can hit CPU quota or IP address allocation errors.
 	return strings.Contains(err.Error(), "Quota") ||
+		strings.Contains(err.Error(), "QUOTA") ||
 		// Instance starting can fail due to temporary zone hardware stockout (ZONE_RESOURCE_POOL_EXHAUSTED).
 		strings.Contains(err.Error(), "currently unavailable") ||
 		strings.Contains(err.Error(), "ZONE_RESOURCE_POOL_EXHAUSTED") ||
+		strings.Contains(err.Error(), "RESOURCE_POOL_EXHAUSTED") ||
 		// Rarely, instance starting fails due to internal compute API errors.
 		strings.Contains(err.Error(), "Internal error") ||
 		// gcloud sqlite database lock contention under concurrency.
@@ -2079,31 +2192,47 @@ func StartInstance(ctx context.Context, logger *log.Logger, vm *VM) error {
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Minute)
 	defer cancel()
 
-	var output CommandOutput
+	LogEquivalentGcloud(logger, "compute", "instances", "start",
+		"--project="+vm.Project,
+		"--zone="+vm.Zone,
+		vm.Name,
+		"--format=json")
+
 	tryStart := func() error {
-		var err error
-		output, err = RunGcloud(ctx, logger, "",
-			[]string{
-				"compute", "instances", "start",
-				"--project=" + vm.Project,
-				"--zone=" + vm.Zone,
-				vm.Name,
-				"--format=json",
-			})
-		// Sometimes we see errors about running out of CPU quota, zone stockouts, or IP addresses.
-		// Back off and retry in these cases, just like CreateInstance().
-		if err != nil && !shouldRetryStartVM(err) {
-			err = backoff.Permanent(err)
+		op, err := instancesClient.Start(ctx, &computepb.StartInstanceRequest{
+			Project:  vm.Project,
+			Zone:     vm.Zone,
+			Instance: vm.Name,
+		})
+		if err != nil {
+			if !shouldRetryStartVM(err) {
+				return backoff.Permanent(err)
+			}
+			return err
 		}
-		// Returning a non-permanent error triggers retries.
-		return err
+		if err := op.Wait(ctx); err != nil {
+			if !shouldRetryStartVM(err) {
+				return backoff.Permanent(err)
+			}
+			return err
+		}
+		return nil
 	}
 	backoffPolicy := backoff.WithContext(backoff.NewConstantBackOff(time.Minute), ctx)
 	if err := backoff.Retry(tryStart, backoffPolicy); err != nil {
 		return err
 	}
 
-	ipAddress, err := extractIPAddress(output.Stdout)
+	inst, err := instancesClient.Get(ctx, &computepb.GetInstanceRequest{
+		Project:  vm.Project,
+		Zone:     vm.Zone,
+		Instance: vm.Name,
+	})
+	if err != nil {
+		return err
+	}
+
+	ipAddress, err := extractIPFromInstance(inst)
 	if err != nil {
 		return err
 	}

@@ -62,6 +62,16 @@ func TestShouldRetryCreateVM(t *testing.T) {
 			expected: true,
 		},
 		{
+			name:     "instance ready timeout",
+			err:      errors.New("timed out waiting for instance \"test-vm\" to be ready"),
+			expected: true,
+		},
+		{
+			name:     "zone resource pool exhausted stockout",
+			err:      errors.New("ZONE_RESOURCE_POOL_EXHAUSTED: A t2a-standard-2 VM instance is currently unavailable in the us-central1-b zone"),
+			expected: true,
+		},
+		{
 			name:     "400 error",
 			err:      errors.New("Error 400: Bad Request"),
 			expected: false,

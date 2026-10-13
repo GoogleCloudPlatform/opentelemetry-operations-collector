@@ -1484,41 +1484,61 @@ func additionalCreateInstanceArgs(options VMOptions, vm *VM) ([]string, error) {
 	return args, nil
 }
 
-// waitForInstanceIP polls instancesClient.Get until the instance exists and has an external IP assigned.
-// We avoid waiting on op.Wait() after instancesClient.Insert() because the Compute Engine operation
-// object often takes much longer to transition to DONE (sometimes over 10 minutes) than what is
-// needed before the VM is ready to use, even though the VM is typically provisioned and reachable
-// over SSH within 1-2 minutes.
-func waitForInstanceIP(ctx context.Context, project, zone, instanceName string, timeout time.Duration) (*computepb.Instance, string, error) {
+// waitForInstanceReady waits for an instance to become ready after an Insert call.
+// It monitors the creation operation concurrently with instance status polling:
+//   - If the insert operation fails (e.g. ZONE_RESOURCE_POOL_EXHAUSTED / stockout),
+//     the error is captured immediately (within ~10-15s), enabling fast retry across zones.
+//   - If the instance reaches "RUNNING" status and has an IP address assigned, it is returned
+//     without waiting for op.Wait() if the operation object takes longer to transition to DONE.
+func waitForInstanceReady(ctx context.Context, op *compute.Operation, project, zone, instanceName string, timeout time.Duration) (*computepb.Instance, string, error) {
 	deadline := time.Now().Add(timeout)
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 
-	for {
-		if time.Now().After(deadline) {
-			return nil, "", fmt.Errorf("timed out waiting for instance %q to be assigned an IP address", instanceName)
-		}
-		select {
-		case <-ctx.Done():
-			return nil, "", ctx.Err()
-		default:
-		}
+	waitCtx, waitCancel := context.WithCancel(ctx)
+	defer waitCancel()
 
+	opErrCh := make(chan error, 1)
+	go func() {
+		opErrCh <- op.Wait(waitCtx)
+	}()
+
+	checkInstance := func() (*computepb.Instance, string, bool) {
 		inst, err := instancesClient.Get(ctx, &computepb.GetInstanceRequest{
 			Project:  project,
 			Zone:     zone,
 			Instance: instanceName,
 		})
-		if err == nil {
+		if err == nil && inst.GetStatus() == "RUNNING" {
 			if ip, err := extractIPFromInstance(inst); err == nil && ip != "" {
-				return inst, ip, nil
+				return inst, ip, true
 			}
 		}
+		return nil, "", false
+	}
 
+	// Check immediately before waiting on ticker.
+	if inst, ip, ok := checkInstance(); ok {
+		return inst, ip, nil
+	}
+
+	for {
+		if time.Now().After(deadline) {
+			return nil, "", fmt.Errorf("timed out waiting for instance %q to be ready", instanceName)
+		}
 		select {
 		case <-ctx.Done():
 			return nil, "", ctx.Err()
+		case err := <-opErrCh:
+			if err != nil {
+				return nil, "", err
+			}
+			// Operation completed successfully; fall through to continue polling until RUNNING with IP.
 		case <-ticker.C:
+		}
+
+		if inst, ip, ok := checkInstance(); ok {
+			return inst, ip, nil
 		}
 	}
 }
@@ -1558,7 +1578,7 @@ func attemptCreateInstance(ctx context.Context, logger *log.Logger, options VMOp
 		return nil, err
 	}
 
-	_, err = instancesClient.Insert(ctx, &computepb.InsertInstanceRequest{
+	op, err := instancesClient.Insert(ctx, &computepb.InsertInstanceRequest{
 		Project:          vm.Project,
 		Zone:             vm.Zone,
 		InstanceResource: instanceResource,
@@ -1581,13 +1601,7 @@ func attemptCreateInstance(ctx context.Context, logger *log.Logger, options VMOp
 		}
 	}()
 
-	// We deliberately avoid waiting on op.Wait(ctx) because the Compute Engine
-	// operation object often takes much longer (sometimes over 10 minutes) to transition
-	// to DONE than needed, even though the VM is typically provisioned and ready to use
-	// within 1-2 minutes. Instead, we go out of band and poll GetInstance until the
-	// instance resource and its external IP address are available, after which
-	// verifyVMCreation waits for guest OS startup and SSH to become ready.
-	inst, ipAddress, err := waitForInstanceIP(ctx, vm.Project, vm.Zone, vm.Name, 300*time.Second)
+	inst, ipAddress, err := waitForInstanceReady(ctx, op, vm.Project, vm.Zone, vm.Name, 300*time.Second)
 	if err != nil {
 		return nil, err
 	}

@@ -72,13 +72,11 @@ func (m *Metrics) ObservePolicySetActive(
 	obs metric.Observer,
 	val int64,
 	policySetID string,
-	policySetRevisionID string,
 	attrs ...attribute.KeyValue,
 ) {
-	kvs := make([]attribute.KeyValue, 0, 2+len(attrs))
+	kvs := make([]attribute.KeyValue, 0, 1+len(attrs))
 	kvs = append(kvs,
 		attribute.String("gcp.policy.set.id", policySetID),
-		attribute.String("gcp.policy.set.revision.id", policySetRevisionID),
 	)
 	kvs = append(kvs, attrs...)
 	obs.ObserveInt64(m.PolicySetActive, val, metric.WithAttributes(kvs...))

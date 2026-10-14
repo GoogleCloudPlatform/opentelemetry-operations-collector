@@ -1298,13 +1298,13 @@ func TestPolicySetActiveSelfMetric(t *testing.T) {
 	if !found {
 		t.Fatalf("gcp.policy.set.active was not reported on the self metrics pipeline.\ncollector logs:\n%s", h.col.logs())
 	}
-	if value != 1 {
-		t.Errorf("gcp.policy.set.active = %d, want 1", value)
+	if value <= 0 {
+		t.Errorf("gcp.policy.set.active = %d, want positive integer revision (not -1 or 0)", value)
 	}
-	// File sourced policies carry a content hash revision but no policy set
-	// resource name, so the ID label is present but empty.
-	if attrs["gcp.policy.set.revision.id"] == "" {
-		t.Errorf("gcp.policy.set.revision.id is empty, want the file policy set revision; attributes: %v", attrs)
+	// The revision ID is reported as the integer value of the metric,
+	// not as an attribute label (to prevent time-series cardinality churn).
+	if rev, ok := attrs["gcp.policy.set.revision.id"]; ok {
+		t.Errorf("gcp.policy.set.revision.id attribute = %q, want attribute removed", rev)
 	}
 	if id, ok := attrs["gcp.policy.set.id"]; !ok || id != "" {
 		t.Errorf("gcp.policy.set.id = %q (present=%v), want present and empty; attributes: %v", id, ok, attrs)

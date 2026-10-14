@@ -17,6 +17,7 @@ package googlecontrolplaneextension
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/extension"
@@ -33,8 +34,9 @@ type controlPlaneExtension struct {
 	logger *zap.Logger
 	source PolicyStateSource
 
-	metrics      *telemetry.Metrics
-	registration metric.Registration
+	metrics            *telemetry.Metrics
+	registration       metric.Registration
+	lastWarnedRevision string
 }
 
 var _ extension.Extension = (*controlPlaneExtension)(nil)
@@ -91,13 +93,40 @@ func (e *controlPlaneExtension) observe(_ context.Context, obs metric.Observer) 
 	// control plane managed" indistinguishable from "this collector is not
 	// reporting at all".
 	state := e.source.ActivePolicySet()
-	active := int64(0)
-	if state.Revision != "" {
-		active = 1
+	val, ok := parseRevisionValue(state.Revision)
+	if !ok && state.Revision != e.lastWarnedRevision {
+		e.logger.Warn("Failed to parse policy set revision as integer for self metric, reporting -1", zap.String("revision", state.Revision))
+		e.lastWarnedRevision = state.Revision
 	}
-	e.metrics.ObservePolicySetActive(obs, active, state.ID, state.Revision)
+	e.metrics.ObservePolicySetActive(obs, val, state.ID)
 
 	return nil
+}
+
+// parseRevisionValue parses a policy set revision ID into an integer metric value.
+// CCFE 8-hex revision IDs (GENERATE_UUID_8) are parsed as unsigned 32-bit integers.
+// If the revision is empty or unparseable, it returns -1.
+func parseRevisionValue(rev string) (int64, bool) {
+	if rev == "" {
+		return -1, true
+	}
+	// CCFE 8-hex revision IDs (GENERATE_UUID_8): parse as unsigned 32-bit int.
+	if len(rev) == 8 {
+		if val, err := strconv.ParseUint(rev, 16, 32); err == nil {
+			return int64(val), true
+		}
+	}
+	// File-based policies with 64-char SHA256 hashes: parse first 8 hex characters.
+	if len(rev) == 64 {
+		if val, err := strconv.ParseUint(rev[:8], 16, 32); err == nil {
+			return int64(val), true
+		}
+	}
+	// Fall back to decimal integer (e.g. in test environments).
+	if val, err := strconv.ParseInt(rev, 10, 64); err == nil && val >= 0 {
+		return val, true
+	}
+	return -1, false
 }
 
 func (e *controlPlaneExtension) Shutdown(context.Context) error {

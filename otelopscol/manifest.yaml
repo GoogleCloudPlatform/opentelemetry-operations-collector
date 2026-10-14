@@ -98,6 +98,8 @@ replaces:
 - github.com/GoogleCloudPlatform/opentelemetry-operations-collector => ../../
 # Force update buger/jsonparser to v1.1.2 to fix vulnerability
 - github.com/buger/jsonparser => github.com/buger/jsonparser v1.1.2
+# Update collector exporter to add `gcp.operation` support.
+- github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector => github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector v0.62.0
 
 build:
   build_tags:

@@ -1,0 +1,38 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package google.telemetry.policy.v1alpha1;
+
+option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1;policyv1alpha1";
+
+// Enables Windows Event Log collection for the specified channels.
+//
+// Evaluation & Deduplication Semantics:
+// - At least one non-empty channel name is required; a policy with no channels
+//   is invalid and ignored (fail-open).
+// - Because Windows Event Log channel names are case-insensitive, multiple
+//   WindowsEventLogSourcePolicy instances merge via the case-insensitive set
+//   union of `channels`. Missing or non-existent channels on a host are
+//   ignored rather than failing policy evaluation.
+message WindowsEventLogSourcePolicy {
+  // Unique identifier for the policy within its configuration scope.
+  string id = 1;
+
+  // Windows Event Log channel names to subscribe to (e.g. "Security", "System",
+  // "Application", "Directory Service", "Microsoft-Windows-Sysmon/Operational").
+  // At least one channel is required.
+  repeated string channels = 2;
+}

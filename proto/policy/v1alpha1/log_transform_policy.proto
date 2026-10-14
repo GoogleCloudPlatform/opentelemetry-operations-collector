@@ -1,0 +1,108 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package google.telemetry.policy.v1alpha1;
+
+import "policy/v1alpha1/common_policy_types.proto";
+
+option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1;policyv1alpha1";
+
+// LogTransformPolicy defines a single conditional in-memory modification to
+// matching log records.
+//
+// Evaluation & Ordering Semantics:
+// - Operation Stage Order: Active LogTransformPolicy instances execute in the
+//   order of their operation type: `rename` -> `add` -> `remove` -> `redact`.
+// - Tie-Breaking: Within the same operation type, policies execute in
+//   lexicographical order of `id`.
+// - Matching: All conditions in `matches` are ANDed together. If `matches` is
+//   empty, the action applies to all log records.
+// - Fail-Open: If `action` is unset, or if an action cannot be applied to a
+//   record (e.g., `rename` when `source` does not exist, or `add`/`rename` with
+//   `upsert: false` when `target` already exists), the record passes through
+//   unmodified.
+message LogTransformPolicy {
+  // Unique identifier for the policy within its configuration scope
+  // (e.g. a UUID or namespaced URI like "io.opentelemetry.operator/{namespace}/policies/label-soc-logs").
+  string id = 1;
+
+  // Conditions that must all match for this transformation action to apply.
+  // If empty, the action applies to all log records.
+  repeated LogMatcher matches = 2;
+
+  // The single transformation action to perform when `matches` evaluates to
+  // true. Exactly one action must be set.
+  oneof action {
+    // Inserts or overwrites a field or attribute.
+    LogAddAction add = 3;
+
+    // Deletes an attribute or structured body_field.
+    LogRemoveAction remove = 4;
+
+    // Moves an existing attribute or structured body_field to a new destination.
+    LogRenameAction rename = 5;
+
+    // Masks sensitive substrings within a target string field, attribute, or body_field.
+    LogRedactAction redact = 6;
+  }
+}
+
+// LogAddAction inserts or overwrites one field or attribute on a log record.
+message LogAddAction {
+  // Target field or attribute to set.
+  LogFieldSelector target = 1;
+
+  // The value to assign to `target`.
+  Value value = 2;
+
+  // If true, overwrites `target` if it already exists. If false (default),
+  // preserves the existing value when `target` is already present.
+  optional bool upsert = 3;
+}
+
+// LogRemoveAction deletes an attribute or structured body_field from a log record.
+message LogRemoveAction {
+  // Target attribute or body_field to remove.
+  LogFieldSelector target = 1;
+}
+
+// LogRenameAction moves an existing attribute or structured body_field to a new destination.
+message LogRenameAction {
+  // Existing source attribute or body_field to rename.
+  LogFieldSelector source = 1;
+
+  // Destination attribute or body_field.
+  LogFieldSelector target = 2;
+
+  // If true, overwrites `target` if it already exists. If false (default), the
+  // rename is skipped if `target` already exists.
+  optional bool upsert = 3;
+}
+
+// LogRedactAction masks sensitive substrings within a target string.
+message LogRedactAction {
+  // Target string field, attribute, or body_field to redact.
+  LogFieldSelector target = 1;
+
+  // Optional RE2 regular expression matching substrings within the target
+  // string to redact. If unset or empty, the entire target value is replaced
+  // with `replacement`.
+  optional string regex = 2;
+
+  // Replacement string (e.g. "[REDACTED]"). Supports RE2 capture group
+  // references ($1, ${name}) when `regex` is set.
+  optional string replacement = 3;
+}

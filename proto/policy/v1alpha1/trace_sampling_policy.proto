@@ -1,0 +1,47 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package google.telemetry.policy.v1alpha1;
+
+option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1;policyv1alpha1";
+
+// Idempotent probabilistic trace sampling policy backed by the W3C
+// TraceState Consistent Probability Sampling specification (OTEP 235) in
+// `equalizing` mode.
+//
+// Evaluation & Precedence Semantics:
+// - Default Disposition & Fail-Open: Spans pass through unsampled by default
+//   (default allow) when no valid TraceSamplingPolicy is configured. A policy
+//   with an empty `id` or a `sampling_percentage` outside the valid range
+//   (0.0, 100.0] (including 0.0, negative values, > 100.0, NaN, or Inf) is
+//   invalid and ignored (fail-open).
+// - Stateless Span-Level Evaluation: Spans are evaluated independently without
+//   trace reassembly using the randomness value (`ot=rv`) in W3C `tracestate`
+//   (or the lower 56 bits of `trace_id` when `ot=rv` is absent), ensuring all
+//   spans in a trace receive the same deterministic sampling decision.
+// - Consistent Threshold Evaluation: Sampling percentage `p` in (0.0, 100.0]
+//   is evaluated in `equalizing` mode per the W3C TraceState Probability
+//   Sampling specification and updates `ot=th` in `tracestate`.
+// - Idempotent Multi-Policy & Multi-Hop Precedence: When multiple
+//   TraceSamplingPolicy instances apply (on the same collector or across
+//   multiple hops), the effective sampling rate is `min(p_i)`.
+message TraceSamplingPolicy {
+  // Unique identifier for the policy within its configuration scope.
+  string id = 1;
+
+  // Probabilistic sampling percentage in the range (0.0, 100.0]. Required.
+  double sampling_percentage = 2;
+}

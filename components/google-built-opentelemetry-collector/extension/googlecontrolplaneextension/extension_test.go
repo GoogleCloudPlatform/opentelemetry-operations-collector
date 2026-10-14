@@ -113,7 +113,7 @@ func TestExtension_ReportsActivePolicySet(t *testing.T) {
 
 	setActive := metrics[metricPolicySetActive]
 	require.Len(t, setActive, 1)
-	assert.Equal(t, int64(2999178361), setActive[0].Value)
+	assert.Equal(t, int64(0xb2c3d479), setActive[0].Value)
 	assert.Equal(t, map[string]string{
 		attrPolicySetID: testPolicySetID,
 	}, attrsOf(setActive[0]))

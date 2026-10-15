@@ -64,6 +64,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -1895,6 +1896,10 @@ func IsOpsAgentUAPPlugin() bool {
 	return ok && value != ""
 }
 
+// http502Or503Regex matches HTTP 502/503 status patterns in CLI output or error strings,
+// e.g. ": 503 ", ": 502\n", or trailing ": 503", avoiding false positives on instance IDs or IPs.
+var http502Or503Regex = regexp.MustCompile(`:\s*50[23]\b`)
+
 // isTransientError reports whether err indicates a transient API rate-limit,
 // quota exhaustion, 5xx server error, or database lock contention that is safe to retry.
 func isTransientError(err error) bool {
@@ -1919,8 +1924,7 @@ func isTransientError(err error) bool {
 		strings.Contains(lower, "internal error") ||
 		strings.Contains(lower, "database is locked") ||
 		strings.Contains(msg, "Error 50") ||
-		strings.Contains(msg, ": 503 ") || strings.Contains(msg, ": 503\n") || strings.HasSuffix(msg, ": 503") ||
-		strings.Contains(msg, ": 502 ") || strings.Contains(msg, ": 502\n") || strings.HasSuffix(msg, ": 502") ||
+		http502Or503Regex.MatchString(msg) ||
 		strings.Contains(msg, "503 Service Unavailable") ||
 		strings.Contains(msg, "502 Bad Gateway")
 }

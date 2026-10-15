@@ -19,6 +19,7 @@ import (
 
 	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/matcher"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/pmetric"
@@ -159,9 +160,9 @@ func stringValue(s string) *policyv1alpha1.Value {
 
 // mustExtract compiles a selector into its target extractor, so tests can probe
 // the (value, exists) pair directly instead of inferring it from a predicate.
-func mustExtract(t *testing.T, target *policyv1alpha1.MetricFieldSelector) targetExtractor {
+func mustExtract(t *testing.T, target *policyv1alpha1.MetricFieldSelector) matcher.MetricTargetExtractor {
 	t.Helper()
-	extract, err := compileExtractor(target)
+	extract, err := matcher.CompileMetricExtractor(target)
 	require.NoError(t, err)
 	return extract
 }

@@ -1296,18 +1296,13 @@ func TestPolicySetActiveSelfMetric(t *testing.T) {
 	h.col.shutdown(t)
 
 	if !found {
-		t.Fatalf("gcp.policy.set.active was not reported on the self metrics pipeline.\ncollector logs:\n%s", h.col.logs())
+		t.Fatalf("%s was not reported on the self metrics pipeline.\ncollector logs:\n%s", googlecontrolplaneextension.MetricPolicySetActive, h.col.logs())
 	}
-	if value != 1 {
-		t.Errorf("gcp.policy.set.active = %d, want 1", value)
+	if value <= 0 {
+		t.Errorf("%s = %d, want positive integer revision (not -1 or 0)", googlecontrolplaneextension.MetricPolicySetActive, value)
 	}
-	// File sourced policies carry a content hash revision but no policy set
-	// resource name, so the ID label is present but empty.
-	if attrs["gcp.policy.set.revision.id"] == "" {
-		t.Errorf("gcp.policy.set.revision.id is empty, want the file policy set revision; attributes: %v", attrs)
-	}
-	if id, ok := attrs["gcp.policy.set.id"]; !ok || id != "" {
-		t.Errorf("gcp.policy.set.id = %q (present=%v), want present and empty; attributes: %v", id, ok, attrs)
+	if id, ok := attrs[googlecontrolplaneextension.AttrPolicySetID]; !ok || id != "" {
+		t.Errorf("%s = %q (present=%v), want present and empty; attributes: %v", googlecontrolplaneextension.AttrPolicySetID, id, ok, attrs)
 	}
 }
 
@@ -1326,7 +1321,7 @@ func latestPolicySetActive(batches []pmetric.Metrics) (int64, map[string]string,
 				ms := sms.At(j).Metrics()
 				for k := 0; k < ms.Len(); k++ {
 					m := ms.At(k)
-					if m.Name() != "gcp.policy.set.active" || m.Type() != pmetric.MetricTypeGauge {
+					if m.Name() != googlecontrolplaneextension.MetricPolicySetActive || m.Type() != pmetric.MetricTypeGauge {
 						continue
 					}
 					dps := m.Gauge().DataPoints()

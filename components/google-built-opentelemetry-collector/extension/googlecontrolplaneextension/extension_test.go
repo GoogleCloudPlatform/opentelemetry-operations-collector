@@ -92,14 +92,13 @@ func attrsOf(dp metricdata.DataPoint[int64]) map[string]string {
 const (
 	metricPolicySetActive = "gcp.policy.set.active"
 	attrPolicySetID       = "gcp.policy.set.id"
-	attrPolicySetRevision = "gcp.policy.set.revision.id"
 )
 
 const testPolicySetID = "projects/my-project/locations/us-central1/policySets/demo-ps"
 
 func TestExtension_ReportsActivePolicySet(t *testing.T) {
 	ext, reader := newTestExtension(t, fakeSource{
-		revisionID:  "rev-123",
+		revisionID:  "b2c3d479",
 		policySetID: testPolicySetID,
 	})
 
@@ -114,16 +113,15 @@ func TestExtension_ReportsActivePolicySet(t *testing.T) {
 
 	setActive := metrics[metricPolicySetActive]
 	require.Len(t, setActive, 1)
-	assert.Equal(t, int64(1), setActive[0].Value)
+	assert.Equal(t, int64(0xb2c3d479), setActive[0].Value)
 	assert.Equal(t, map[string]string{
-		attrPolicySetID:       testPolicySetID,
-		attrPolicySetRevision: "rev-123",
+		attrPolicySetID: testPolicySetID,
 	}, attrsOf(setActive[0]))
 }
 
 // A collector with no active policy set must still emit a gcp.policy.set.active
-// series, otherwise joins against other collector metrics silently drop rows.
-func TestExtension_ReportsZeroWhenNoActivePolicySet(t *testing.T) {
+// series with value -1, otherwise joins against other collector metrics silently drop rows.
+func TestExtension_ReportsNegativeOneWhenNoActivePolicySet(t *testing.T) {
 	ext, reader := newTestExtension(t, fakeSource{})
 
 	require.NoError(t, ext.Start(context.Background(), componenttest.NewNopHost()))
@@ -133,13 +131,12 @@ func TestExtension_ReportsZeroWhenNoActivePolicySet(t *testing.T) {
 
 	setActive := metrics[metricPolicySetActive]
 	require.Len(t, setActive, 1)
-	assert.Equal(t, int64(0), setActive[0].Value)
+	assert.Equal(t, int64(-1), setActive[0].Value)
 	// Identity is derived from the active policies, so with none active there
-	// is nothing to report. Both labels are present but empty rather than
+	// is nothing to report. The label is present but empty rather than
 	// absent, so the series shape matches that of an active collector.
 	assert.Equal(t, map[string]string{
-		attrPolicySetID:       "",
-		attrPolicySetRevision: "",
+		attrPolicySetID: "",
 	}, attrsOf(setActive[0]))
 }
 
@@ -152,19 +149,97 @@ func TestExtension_PicksUpPolicySetChanges(t *testing.T) {
 	require.NoError(t, ext.Start(context.Background(), componenttest.NewNopHost()))
 	t.Cleanup(func() { assert.NoError(t, ext.Shutdown(context.Background())) })
 
-	assert.Equal(t, int64(0), collect(t, reader)[metricPolicySetActive][0].Value)
+	assert.Equal(t, int64(-1), collect(t, reader)[metricPolicySetActive][0].Value)
 
-	source.set("rev-456", testPolicySetID)
+	source.set("b2c3d479", testPolicySetID)
 
 	metrics := collect(t, reader)
 	setActive := metrics[metricPolicySetActive]
 	require.Len(t, setActive, 1)
-	assert.Equal(t, int64(1), setActive[0].Value)
+	assert.Equal(t, int64(0xb2c3d479), setActive[0].Value)
 	attrs := attrsOf(setActive[0])
-	assert.Equal(t, "rev-456", attrs[attrPolicySetRevision])
 	// Identity is read on every collection, so it tracks the policy set rather
 	// than being captured once at Start.
 	assert.Equal(t, testPolicySetID, attrs[attrPolicySetID])
+}
+
+func TestExtension_UnparseableRevisionReportsNegativeOne(t *testing.T) {
+	ext, reader := newTestExtension(t, fakeSource{
+		revisionID:  "unparseable-rev",
+		policySetID: testPolicySetID,
+	})
+
+	require.NoError(t, ext.Start(context.Background(), componenttest.NewNopHost()))
+	t.Cleanup(func() { assert.NoError(t, ext.Shutdown(context.Background())) })
+
+	metrics := collect(t, reader)
+	setActive := metrics[metricPolicySetActive]
+	require.Len(t, setActive, 1)
+	assert.Equal(t, int64(-1), setActive[0].Value)
+	assert.Equal(t, map[string]string{
+		attrPolicySetID: testPolicySetID,
+	}, attrsOf(setActive[0]))
+}
+
+func TestExtension_SHA256RevisionReportsFirst8HexChars(t *testing.T) {
+	ext, reader := newTestExtension(t, fakeSource{
+		revisionID:  "b2c3d4790123456789abcdef0123456789abcdef0123456789abcdef01234567",
+		policySetID: testPolicySetID,
+	})
+
+	require.NoError(t, ext.Start(context.Background(), componenttest.NewNopHost()))
+	t.Cleanup(func() { assert.NoError(t, ext.Shutdown(context.Background())) })
+
+	metrics := collect(t, reader)
+	setActive := metrics[metricPolicySetActive]
+	require.Len(t, setActive, 1)
+	assert.Equal(t, int64(0xb2c3d479), setActive[0].Value)
+	assert.Equal(t, map[string]string{
+		attrPolicySetID: testPolicySetID,
+	}, attrsOf(setActive[0]))
+}
+
+func TestExtension_DecimalRevision(t *testing.T) {
+	ext, reader := newTestExtension(t, fakeSource{
+		revisionID:  "42",
+		policySetID: testPolicySetID,
+	})
+
+	require.NoError(t, ext.Start(context.Background(), componenttest.NewNopHost()))
+	t.Cleanup(func() { assert.NoError(t, ext.Shutdown(context.Background())) })
+
+	metrics := collect(t, reader)
+	setActive := metrics[metricPolicySetActive]
+	require.Len(t, setActive, 1)
+	assert.Equal(t, int64(42), setActive[0].Value)
+	assert.Equal(t, map[string]string{
+		attrPolicySetID: testPolicySetID,
+	}, attrsOf(setActive[0]))
+}
+
+func TestParseRevisionValue(t *testing.T) {
+	tests := []struct {
+		name    string
+		rev     string
+		wantVal int64
+		wantOk  bool
+	}{
+		{name: "empty", rev: "", wantVal: -1, wantOk: true},
+		{name: "8-hex lowercase", rev: "b2c3d479", wantVal: 0xb2c3d479, wantOk: true},
+		{name: "8-hex uppercase", rev: "B2C3D479", wantVal: 0xb2c3d479, wantOk: true},
+		{name: "8-hex leading zeros", rev: "0000002a", wantVal: 42, wantOk: true},
+		{name: "64-hex sha256", rev: "b2c3d4790123456789abcdef0123456789abcdef0123456789abcdef01234567", wantVal: 0xb2c3d479, wantOk: true},
+		{name: "decimal", rev: "100", wantVal: 100, wantOk: true},
+		{name: "invalid non-hex", rev: "invalid!", wantVal: 0, wantOk: false},
+		{name: "invalid 8-char non-hex", rev: "zzzzzzzz", wantVal: 0, wantOk: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			val, ok := parseRevisionValue(tt.rev)
+			assert.Equal(t, tt.wantVal, val)
+			assert.Equal(t, tt.wantOk, ok)
+		})
+	}
 }
 
 // Shutdown must unregister the callback so the instruments stop being observed.
@@ -197,13 +272,14 @@ func TestExtension_NilMeterProviderIsNotFatal(t *testing.T) {
 // series a different attribute set than a control plane managed collector, so
 // a query written against one would not match the other.
 func TestExtension_UnderivablePolicySetIDIsEmptyNotAbsent(t *testing.T) {
-	ext, reader := newTestExtension(t, fakeSource{revisionID: "rev-123"})
+	ext, reader := newTestExtension(t, fakeSource{revisionID: "b2c3d479"})
 
 	require.NoError(t, ext.Start(context.Background(), componenttest.NewNopHost()))
 	t.Cleanup(func() { assert.NoError(t, ext.Shutdown(context.Background())) })
 
 	setActive := collect(t, reader)[metricPolicySetActive]
 	require.Len(t, setActive, 1)
+	assert.Equal(t, int64(0xb2c3d479), setActive[0].Value)
 
 	attrs := attrsOf(setActive[0])
 	require.Contains(t, attrs, attrPolicySetID)

@@ -49,6 +49,12 @@ var policySetNamePattern = regexp.MustCompile(`^projects/[^/]+/locations/[^/]+/p
 //	projects/{p}/locations/{l}/policySets/{ps}/policies/{policy}
 const policiesSegment = "/policies/"
 
+// revisionsSegment separates the PolicySet resource name from the revision ID
+// within a control plane PolicySet revision resource name:
+//
+//	projects/{p}/locations/{l}/policySets/{ps}/revisions/{revision}
+const revisionsSegment = "/revisions/"
+
 var (
 	ErrPolicyNotFound           = errors.New("policy not found")
 	ErrPolicyTypeFieldMissing   = errors.New("critical policy field 'type' was not found")
@@ -231,11 +237,12 @@ type FailedPolicy struct {
 // PolicySet is the translation of a set of policies received from a given source
 // into internal representations that the Collector can use to evaluate.
 type PolicySet struct {
-	Policies       map[string]*PolicySetEntry
-	FailedPolicies []FailedPolicy
-	PolicySetID    string
-	RevisionID     string
-	ReceivedAt     time.Time
+	Policies           map[string]*PolicySetEntry
+	FailedPolicies     []FailedPolicy
+	PolicySetID        string
+	RevisionID         string
+	RevisionCreateTime time.Time
+	ReceivedAt         time.Time
 }
 
 // PolicySetEntry contains the given policy object and a mark for whether it has
@@ -255,7 +262,8 @@ type PolicySetEntry struct {
 // len(ps.Policies) against the number of inputs to detect a partial set, and
 // reject the whole thing if that is not acceptable.
 func MakePolicySet(revisionID string, rawPolicyConfigs []map[string]any) (*PolicySet, error) {
-	return makePolicySet(
+	ps, err := makePolicySet(
+		"",
 		revisionID,
 		rawPolicyConfigs,
 		func(i int, rawPolicyConfig map[string]any) (Policy, error) {
@@ -284,16 +292,19 @@ func MakePolicySet(revisionID string, rawPolicyConfigs []map[string]any) (*Polic
 			return fmt.Sprintf("index_%d", i)
 		},
 	)
+	ps.PolicySetID = derivePolicySetID(ps)
+	return ps, err
 }
 
-// MakePolicySetFromProtos builds a PolicySet from decoded policy protos, on the
-// same best-effort terms as MakePolicySet: see its documentation for how to
-// read the returned set and error together.
+// MakePolicySetFromProtos builds a PolicySet from decoded policy protos, with its
+// PolicySetID and RevisionID explicitly provided from the control plane's
+// PolicySet revision resource name.
 //
 // Each policy is routed to a driver by its message type, so no "type" field is
 // read from -- or needed in -- the policy body.
-func MakePolicySetFromProtos(revisionID string, msgs []proto.Message) (*PolicySet, error) {
+func MakePolicySetFromProtos(policySetID, revisionID string, msgs []proto.Message) (*PolicySet, error) {
 	return makePolicySet(
+		policySetID,
 		revisionID,
 		msgs,
 		func(i int, msg proto.Message) (Policy, error) {
@@ -320,11 +331,12 @@ func MakePolicySetFromProtos(revisionID string, msgs []proto.Message) (*PolicySe
 // failures rather than stopping at the first one. It is the shared body of
 // MakePolicySet and MakePolicySetFromProtos, which differ only in how a single
 // input is turned into a Policy.
-func makePolicySet[T any](revisionID string, inputs []T, load func(int, T) (Policy, error), idOf func(int, T) string) (*PolicySet, error) {
+func makePolicySet[T any](policySetID, revisionID string, inputs []T, load func(int, T) (Policy, error), idOf func(int, T) string) (*PolicySet, error) {
 	ps := &PolicySet{
-		Policies:   make(map[string]*PolicySetEntry, len(inputs)),
-		RevisionID: revisionID,
-		ReceivedAt: time.Now(),
+		Policies:    make(map[string]*PolicySetEntry, len(inputs)),
+		PolicySetID: policySetID,
+		RevisionID:  revisionID,
+		ReceivedAt:  time.Now(),
 	}
 
 	errs := make([]error, 0, len(inputs))
@@ -342,8 +354,6 @@ func makePolicySet[T any](revisionID string, inputs []T, load func(int, T) (Poli
 
 		ps.Policies[p.PolicyName()] = &PolicySetEntry{PolicyObj: p}
 	}
-
-	ps.PolicySetID = derivePolicySetID(ps)
 
 	return ps, errors.Join(errs...)
 }
@@ -399,6 +409,29 @@ func policySetNameOf(policyName string) (string, bool) {
 		return "", false
 	}
 	return prefix, true
+}
+
+// ParsePolicySetRevision parses a fully-qualified PolicySet revision resource name:
+//
+//	projects/{project}/locations/{location}/policySets/{policy_set}/revisions/{revision}
+//
+// returning the policySetID (projects/{project}/locations/{location}/policySets/{policy_set})
+// and revisionID ({revision}).
+// It returns ok=false if the name does not match this format.
+func ParsePolicySetRevision(name string) (policySetID, revisionID string, ok bool) {
+	idx := strings.LastIndex(name, revisionsSegment)
+	if idx < 0 {
+		return "", "", false
+	}
+	suffix := name[idx+len(revisionsSegment):]
+	if suffix == "" || strings.Contains(suffix, "/") {
+		return "", "", false
+	}
+	prefix := name[:idx]
+	if !policySetNamePattern.MatchString(prefix) {
+		return "", "", false
+	}
+	return prefix, suffix, true
 }
 
 // ClassifyPolicyError returns a canonical OpenTelemetry error.type value
@@ -480,9 +513,10 @@ func (ps *PolicySet) Clone() *PolicySet {
 		return nil
 	}
 	clone := &PolicySet{
-		PolicySetID: ps.PolicySetID,
-		RevisionID:  ps.RevisionID,
-		ReceivedAt:  ps.ReceivedAt,
+		PolicySetID:        ps.PolicySetID,
+		RevisionID:         ps.RevisionID,
+		RevisionCreateTime: ps.RevisionCreateTime,
+		ReceivedAt:         ps.ReceivedAt,
 	}
 	if ps.Policies != nil {
 		clone.Policies = make(map[string]*PolicySetEntry, len(ps.Policies))

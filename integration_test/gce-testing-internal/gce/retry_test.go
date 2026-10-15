@@ -532,3 +532,75 @@ func TestRetryOp(t *testing.T) {
 		}
 	})
 }
+
+func TestShouldRetryInstanceOperation(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{"nil error", nil, false},
+		{"403 quota", &googleapi.Error{Code: 403, Message: "Quota exceeded"}, true},
+		{"429 rate limit", &googleapi.Error{Code: 429, Message: "Rate limit exceeded"}, true},
+		{"503 unavailable", &googleapi.Error{Code: 503, Message: "Service unavailable"}, true},
+		{"502 bad gateway", &googleapi.Error{Code: 502, Message: "Bad Gateway"}, true},
+		{"grpc codes.Unavailable", status.Error(codes.Unavailable, "unavailable"), true},
+		{"grpc codes.ResourceExhausted", status.Error(codes.ResourceExhausted, "resource exhausted"), true},
+		{"400 bad request", &googleapi.Error{Code: 400, Message: "Bad Request"}, false},
+		{"404 not found", &googleapi.Error{Code: 404, Message: "Not Found"}, false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := shouldRetryInstanceOperation(tc.err)
+			if actual != tc.expected {
+				t.Errorf("shouldRetryInstanceOperation(%v) = %v, want %v", tc.err, actual, tc.expected)
+			}
+		})
+	}
+}
+
+func TestShouldRetryTagUpdate(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{"nil error", nil, false},
+		{"googleapi 412 precondition failed", &googleapi.Error{Code: 412, Message: "Precondition Failed"}, true},
+		{"grpc codes.FailedPrecondition", status.Error(codes.FailedPrecondition, "failed precondition"), true},
+		{"string conditionNotMet", errors.New("conditionNotMet: tag fingerprint mismatch"), true},
+		{"string fingerprint", errors.New("provided fingerprint does not match current tags"), true},
+		{"googleapi 403 quota", &googleapi.Error{Code: 403, Message: "Quota exceeded for quota metric 'Read requests (legacy)'"}, true},
+		{"googleapi 429 rate limit", &googleapi.Error{Code: 429, Message: "Rate limit exceeded"}, true},
+		{"googleapi 503 service unavailable", &googleapi.Error{Code: 503, Message: "Service Unavailable"}, true},
+		{"grpc codes.ResourceExhausted", status.Error(codes.ResourceExhausted, "resource exhausted"), true},
+		{"googleapi 400 bad request", &googleapi.Error{Code: 400, Message: "Bad Request"}, false},
+		{"googleapi 404 not found", &googleapi.Error{Code: 404, Message: "Not Found"}, false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := shouldRetryTagUpdate(tc.err)
+			if actual != tc.expected {
+				t.Errorf("shouldRetryTagUpdate(%v) = %v, want %v", tc.err, actual, tc.expected)
+			}
+		})
+	}
+}
+
+func TestNewRateLimitBackOff(t *testing.T) {
+	bo := newRateLimitBackOff(2 * time.Minute)
+	if bo.InitialInterval != 1*time.Second {
+		t.Errorf("InitialInterval = %v, want 1s", bo.InitialInterval)
+	}
+	if bo.Multiplier != 1.5 {
+		t.Errorf("Multiplier = %v, want 1.5", bo.Multiplier)
+	}
+	if bo.MaxInterval != 15*time.Second {
+		t.Errorf("MaxInterval = %v, want 15s", bo.MaxInterval)
+	}
+	if bo.MaxElapsedTime != 2*time.Minute {
+		t.Errorf("MaxElapsedTime = %v, want 2m", bo.MaxElapsedTime)
+	}
+}

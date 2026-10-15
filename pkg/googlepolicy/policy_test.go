@@ -381,3 +381,89 @@ func TestFilePolicyManager(t *testing.T) {
 	require.NoError(t, mgr.Stop())
 	require.NoError(t, mgr.Stop()) // double stop safe
 }
+
+func TestParsePolicySetRevision(t *testing.T) {
+	testCases := []struct {
+		name          string
+		input         string
+		wantPolicySet string
+		wantRevision  string
+		wantOK        bool
+	}{
+		{
+			name:          "valid canonical name",
+			input:         "projects/my-project/locations/global/policySets/my-ps/revisions/r1",
+			wantPolicySet: "projects/my-project/locations/global/policySets/my-ps",
+			wantRevision:  "r1",
+			wantOK:        true,
+		},
+		{
+			name:          "valid with numeric project and regional location",
+			input:         "projects/507934445817/locations/us-central1/policySets/fleet-ps/revisions/rev-42",
+			wantPolicySet: "projects/507934445817/locations/us-central1/policySets/fleet-ps",
+			wantRevision:  "rev-42",
+			wantOK:        true,
+		},
+		{
+			name:   "missing revisions segment",
+			input:  "projects/my-project/locations/global/policySets/my-ps",
+			wantOK: false,
+		},
+		{
+			name:   "empty revision ID",
+			input:  "projects/my-project/locations/global/policySets/my-ps/revisions/",
+			wantOK: false,
+		},
+		{
+			name:   "revision ID contains slash",
+			input:  "projects/my-project/locations/global/policySets/my-ps/revisions/r1/extra",
+			wantOK: false,
+		},
+		{
+			name:   "malformed prefix before revisions",
+			input:  "invalid/prefix/policySets/my-ps/revisions/r1",
+			wantOK: false,
+		},
+		{
+			name:   "completely empty string",
+			input:  "",
+			wantOK: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			psID, revID, ok := ParsePolicySetRevision(tc.input)
+			assert.Equal(t, tc.wantOK, ok)
+			assert.Equal(t, tc.wantPolicySet, psID)
+			assert.Equal(t, tc.wantRevision, revID)
+		})
+	}
+}
+
+func TestPolicySet_CloneWithRevisionCreateTime(t *testing.T) {
+	now := time.Now()
+	createTime := now.Add(-10 * time.Minute)
+
+	ps := &PolicySet{
+		PolicySetID:        "projects/p/locations/l/policySets/ps",
+		RevisionID:         "rev-1",
+		RevisionCreateTime: createTime,
+		ReceivedAt:         now,
+		Policies: map[string]*PolicySetEntry{
+			"pol-1": {
+				PolicyObj: &mockOtherPolicy{name: "pol-1", class: PolicyClassDestination},
+				Processed: true,
+			},
+		},
+	}
+
+	clone := ps.Clone()
+	require.NotNil(t, clone)
+	assert.Equal(t, ps.PolicySetID, clone.PolicySetID)
+	assert.Equal(t, ps.RevisionID, clone.RevisionID)
+	assert.Equal(t, ps.RevisionCreateTime, clone.RevisionCreateTime)
+	assert.Equal(t, ps.ReceivedAt, clone.ReceivedAt)
+	require.Contains(t, clone.Policies, "pol-1")
+	assert.Equal(t, ps.Policies["pol-1"].PolicyObj.PolicyName(), clone.Policies["pol-1"].PolicyObj.PolicyName())
+}

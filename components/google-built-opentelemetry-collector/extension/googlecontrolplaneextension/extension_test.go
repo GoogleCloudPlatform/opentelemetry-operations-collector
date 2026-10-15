@@ -156,9 +156,8 @@ func TestExtension_PicksUpPolicySetChanges(t *testing.T) {
 	metrics := collect(t, reader)
 	setActive := metrics[metricPolicySetActive]
 	require.Len(t, setActive, 1)
-	assert.Equal(t, int64(2999178361), setActive[0].Value)
+	assert.Equal(t, int64(0xb2c3d479), setActive[0].Value)
 	attrs := attrsOf(setActive[0])
-	assert.NotContains(t, attrs, "gcp.policy.set.revision.id")
 	// Identity is read on every collection, so it tracks the policy set rather
 	// than being captured once at Start.
 	assert.Equal(t, testPolicySetID, attrs[attrPolicySetID])
@@ -194,7 +193,7 @@ func TestExtension_SHA256RevisionReportsFirst8HexChars(t *testing.T) {
 	metrics := collect(t, reader)
 	setActive := metrics[metricPolicySetActive]
 	require.Len(t, setActive, 1)
-	assert.Equal(t, int64(2999178361), setActive[0].Value)
+	assert.Equal(t, int64(0xb2c3d479), setActive[0].Value)
 	assert.Equal(t, map[string]string{
 		attrPolicySetID: testPolicySetID,
 	}, attrsOf(setActive[0]))
@@ -226,13 +225,13 @@ func TestParseRevisionValue(t *testing.T) {
 		wantOk  bool
 	}{
 		{name: "empty", rev: "", wantVal: -1, wantOk: true},
-		{name: "8-hex lowercase", rev: "b2c3d479", wantVal: 2999178361, wantOk: true},
-		{name: "8-hex uppercase", rev: "B2C3D479", wantVal: 2999178361, wantOk: true},
+		{name: "8-hex lowercase", rev: "b2c3d479", wantVal: 0xb2c3d479, wantOk: true},
+		{name: "8-hex uppercase", rev: "B2C3D479", wantVal: 0xb2c3d479, wantOk: true},
 		{name: "8-hex leading zeros", rev: "0000002a", wantVal: 42, wantOk: true},
-		{name: "64-hex sha256", rev: "b2c3d4790123456789abcdef0123456789abcdef0123456789abcdef01234567", wantVal: 2999178361, wantOk: true},
+		{name: "64-hex sha256", rev: "b2c3d4790123456789abcdef0123456789abcdef0123456789abcdef01234567", wantVal: 0xb2c3d479, wantOk: true},
 		{name: "decimal", rev: "100", wantVal: 100, wantOk: true},
-		{name: "invalid non-hex", rev: "invalid!", wantVal: -1, wantOk: false},
-		{name: "invalid 8-char non-hex", rev: "zzzzzzzz", wantVal: -1, wantOk: false},
+		{name: "invalid non-hex", rev: "invalid!", wantVal: 0, wantOk: false},
+		{name: "invalid 8-char non-hex", rev: "zzzzzzzz", wantVal: 0, wantOk: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -280,7 +279,7 @@ func TestExtension_UnderivablePolicySetIDIsEmptyNotAbsent(t *testing.T) {
 
 	setActive := collect(t, reader)[metricPolicySetActive]
 	require.Len(t, setActive, 1)
-	assert.Equal(t, int64(2999178361), setActive[0].Value)
+	assert.Equal(t, int64(0xb2c3d479), setActive[0].Value)
 
 	attrs := attrsOf(setActive[0])
 	require.Contains(t, attrs, attrPolicySetID)

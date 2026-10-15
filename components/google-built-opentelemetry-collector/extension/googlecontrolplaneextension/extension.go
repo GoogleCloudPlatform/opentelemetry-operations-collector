@@ -28,6 +28,12 @@ import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/googlecontrolplaneextension/internal/telemetry"
 )
 
+// MetricPolicySetActive is the name of the gcp.policy.set.active metric.
+const MetricPolicySetActive = telemetry.PolicySetActiveMetricName
+
+// AttrPolicySetID is the attribute key for the policy set resource name.
+const AttrPolicySetID = "gcp.policy.set.id"
+
 type controlPlaneExtension struct {
 	cfg    *Config
 	set    extension.Settings
@@ -94,9 +100,12 @@ func (e *controlPlaneExtension) observe(_ context.Context, obs metric.Observer) 
 	// reporting at all".
 	state := e.source.ActivePolicySet()
 	val, ok := parseRevisionValue(state.Revision)
-	if !ok && state.Revision != e.lastWarnedRevision {
-		e.logger.Warn("Failed to parse policy set revision as integer for self metric, reporting -1", zap.String("revision", state.Revision))
-		e.lastWarnedRevision = state.Revision
+	if !ok {
+		val = -1
+		if state.Revision != e.lastWarnedRevision {
+			e.logger.Warn("Failed to parse policy set revision as integer for self metric, reporting -1", zap.String("revision", state.Revision))
+			e.lastWarnedRevision = state.Revision
+		}
 	}
 	e.metrics.ObservePolicySetActive(obs, val, state.ID)
 
@@ -105,7 +114,8 @@ func (e *controlPlaneExtension) observe(_ context.Context, obs metric.Observer) 
 
 // parseRevisionValue parses a policy set revision ID into an integer metric value.
 // CCFE 8-hex revision IDs (GENERATE_UUID_8) are parsed as unsigned 32-bit integers.
-// If the revision is empty or unparseable, it returns -1.
+// If the revision is empty, it returns (-1, true).
+// If the revision cannot be parsed, it returns (0, false).
 func parseRevisionValue(rev string) (int64, bool) {
 	if rev == "" {
 		return -1, true
@@ -126,7 +136,7 @@ func parseRevisionValue(rev string) (int64, bool) {
 	if val, err := strconv.ParseInt(rev, 10, 64); err == nil && val >= 0 {
 		return val, true
 	}
-	return -1, false
+	return 0, false
 }
 
 func (e *controlPlaneExtension) Shutdown(context.Context) error {

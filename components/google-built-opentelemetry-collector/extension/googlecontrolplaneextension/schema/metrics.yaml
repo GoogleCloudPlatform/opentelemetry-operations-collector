@@ -24,7 +24,7 @@ metrics:
     unit: ""
     stability: development
     requirement_level: recommended
-    brief: Whether a control plane policy set is currently active, labeled with its identity.
+    brief: The active control plane policy set revision ID, or -1 if no policy set is active.
     note: |
       The gauge value is the unsigned 32-bit integer representation of the active
       policy set's revision ID (or -1 if no policy set is active or if the revision

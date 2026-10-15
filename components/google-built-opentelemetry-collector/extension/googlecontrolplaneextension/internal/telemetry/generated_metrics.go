@@ -31,7 +31,7 @@ const PolicySetActiveMetricName = "gcp.policy.set.active"
 
 // Metrics holds the instruments defined in the schema.
 type Metrics struct {
-	// PolicySetActive is the gcp.policy.set.active gauge: Whether a control plane policy set is currently active, labeled with its identity.
+	// PolicySetActive is the gcp.policy.set.active gauge: The active control plane policy set revision ID, or -1 if no policy set is active.
 	PolicySetActive metric.Int64ObservableGauge
 }
 
@@ -46,7 +46,7 @@ func NewMetrics(meter metric.Meter) (*Metrics, error) {
 	)
 	m.PolicySetActive, err = meter.Int64ObservableGauge(
 		PolicySetActiveMetricName,
-		metric.WithDescription("Whether a control plane policy set is currently active, labeled with its identity."),
+		metric.WithDescription("The active control plane policy set revision ID, or -1 if no policy set is active."),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create %s: %w", PolicySetActiveMetricName, err)

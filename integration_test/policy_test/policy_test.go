@@ -1296,18 +1296,13 @@ func TestPolicySetActiveSelfMetric(t *testing.T) {
 	h.col.shutdown(t)
 
 	if !found {
-		t.Fatalf("gcp.policy.set.active was not reported on the self metrics pipeline.\ncollector logs:\n%s", h.col.logs())
+		t.Fatalf("%s was not reported on the self metrics pipeline.\ncollector logs:\n%s", googlecontrolplaneextension.MetricPolicySetActive, h.col.logs())
 	}
 	if value <= 0 {
-		t.Errorf("gcp.policy.set.active = %d, want positive integer revision (not -1 or 0)", value)
+		t.Errorf("%s = %d, want positive integer revision (not -1 or 0)", googlecontrolplaneextension.MetricPolicySetActive, value)
 	}
-	// The revision ID is reported as the integer value of the metric,
-	// not as an attribute label (to prevent time-series cardinality churn).
-	if rev, ok := attrs["gcp.policy.set.revision.id"]; ok {
-		t.Errorf("gcp.policy.set.revision.id attribute = %q, want attribute removed", rev)
-	}
-	if id, ok := attrs["gcp.policy.set.id"]; !ok || id != "" {
-		t.Errorf("gcp.policy.set.id = %q (present=%v), want present and empty; attributes: %v", id, ok, attrs)
+	if id, ok := attrs[googlecontrolplaneextension.AttrPolicySetID]; !ok || id != "" {
+		t.Errorf("%s = %q (present=%v), want present and empty; attributes: %v", googlecontrolplaneextension.AttrPolicySetID, id, ok, attrs)
 	}
 }
 
@@ -1326,7 +1321,7 @@ func latestPolicySetActive(batches []pmetric.Metrics) (int64, map[string]string,
 				ms := sms.At(j).Metrics()
 				for k := 0; k < ms.Len(); k++ {
 					m := ms.At(k)
-					if m.Name() != "gcp.policy.set.active" || m.Type() != pmetric.MetricTypeGauge {
+					if m.Name() != googlecontrolplaneextension.MetricPolicySetActive || m.Type() != pmetric.MetricTypeGauge {
 						continue
 					}
 					dps := m.Gauge().DataPoints()

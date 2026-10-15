@@ -1,0 +1,139 @@
+# Copyright 2026 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+receivers:
+  # Ingress OTLP receiver protected by Mutual TLS (mTLS) authentication
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+        tls:
+          cert_file: {{.CertDir}}/server.crt
+          key_file: {{.CertDir}}/server.key
+          client_ca_file: {{.CertDir}}/ca.crt
+      http:
+        endpoint: 0.0.0.0:4318
+        tls:
+          cert_file: {{.CertDir}}/server.crt
+          key_file: {{.CertDir}}/server.key
+          client_ca_file: {{.CertDir}}/ca.crt
+
+  # Dedicated internal loopback receiver for Gateway self-observability telemetry
+  otlp/self:
+    protocols:
+      http:
+        endpoint: localhost:4320
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 75
+    spike_limit_percentage: 20
+  batch:
+    send_batch_size: 100
+    timeout: 2s
+
+  # Forwarded Telemetry Processor:
+  # resourcedetection with override: false ensures that upstream machine/pod resources are preserved.
+  resourcedetection/upstream:
+    detectors: [gcp]
+    override: false
+
+  # Tag forwarded telemetry with the test run ID and mTLS verified marker
+  transform/upstream:
+    error_mode: ignore
+    metric_statements:
+      - context: datapoint
+        statements:
+          - set(attributes["otelcol_google_e2e"], "{{.TestRunID}}")
+          - set(attributes["telemetry_source"], "forwarded_upstream")
+          - set(attributes["auth_mode"], "mtls_verified")
+    log_statements:
+      - context: log
+        statements:
+          - set(attributes["otelcol_google_e2e"], "{{.TestRunID}}")
+          - set(attributes["telemetry_source"], "forwarded_upstream")
+          - set(attributes["auth_mode"], "mtls_verified")
+    trace_statements:
+      - context: span
+        statements:
+          - set(attributes["otelcol_google_e2e"], "{{.TestRunID}}")
+          - set(attributes["telemetry_source"], "forwarded_upstream")
+          - set(attributes["auth_mode"], "mtls_verified")
+
+  # Gateway Self-Observability Processor:
+  # resourcedetection with override: true enforces the Gateway VM's own gce_instance metadata.
+  resourcedetection/self:
+    detectors: [gcp]
+    override: true
+
+  transform/self:
+    error_mode: ignore
+    metric_statements:
+      - context: datapoint
+        statements:
+          - set(attributes["otelcol_google_e2e"], "{{.TestRunID}}")
+          - set(attributes["telemetry_source"], "gateway_self")
+    log_statements:
+      - context: log
+        statements:
+          - set(attributes["otelcol_google_e2e"], "{{.TestRunID}}")
+          - set(attributes["telemetry_source"], "gateway_self")
+
+exporters:
+  googlecloud:
+    log:
+      default_log_name: "google-otelcol-gateway-test"
+
+service:
+  pipelines:
+    # 1. Authenticated Forwarded Upstream Pipelines
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, resourcedetection/upstream, transform/upstream, batch]
+      exporters: [googlecloud]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, resourcedetection/upstream, transform/upstream, batch]
+      exporters: [googlecloud]
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, resourcedetection/upstream, transform/upstream, batch]
+      exporters: [googlecloud]
+
+    # 2. Gateway Self-Observability Pipelines
+    metrics/self:
+      receivers: [otlp/self]
+      processors: [memory_limiter, resourcedetection/self, transform/self, batch]
+      exporters: [googlecloud]
+    logs/self:
+      receivers: [otlp/self]
+      processors: [memory_limiter, resourcedetection/self, transform/self, batch]
+      exporters: [googlecloud]
+
+  telemetry:
+    metrics:
+      readers:
+        - periodic:
+            exporter:
+              otlp:
+                protocol: http/protobuf
+                endpoint: http://localhost:4320
+    logs:
+      processors:
+        - batch:
+            exporter:
+              otlp:
+                protocol: http/protobuf
+                endpoint: http://localhost:4320

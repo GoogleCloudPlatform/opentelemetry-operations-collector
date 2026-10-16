@@ -179,6 +179,49 @@ func addAction(target *policyv1alpha1.LogTargetSelector, val *policyv1alpha1.Val
 	}
 }
 
+func logBodyFieldSelector(path ...string) *policyv1alpha1.LogAttributeSelector {
+	return &policyv1alpha1.LogAttributeSelector{
+		Target: &policyv1alpha1.LogAttributeSelector_BodyField{
+			BodyField: &policyv1alpha1.AttributePath{Path: path},
+		},
+	}
+}
+
+func removeAction(target *policyv1alpha1.LogAttributeSelector) *policyv1alpha1.LogTransformPolicy_Remove {
+	return &policyv1alpha1.LogTransformPolicy_Remove{
+		Remove: &policyv1alpha1.LogRemoveAction{
+			Target: target,
+		},
+	}
+}
+
+func renameAction(source, target *policyv1alpha1.LogAttributeSelector, upsert bool) *policyv1alpha1.LogTransformPolicy_Rename {
+	return &policyv1alpha1.LogTransformPolicy_Rename{
+		Rename: &policyv1alpha1.LogRenameAction{
+			Source: source,
+			Target: target,
+			Upsert: proto.Bool(upsert),
+		},
+	}
+}
+
+func redactAction(target *policyv1alpha1.LogTargetSelector, regex, replacement string) *policyv1alpha1.LogTransformPolicy_Redact {
+	var re, rep *string
+	if regex != "" {
+		re = proto.String(regex)
+	}
+	if replacement != "" {
+		rep = proto.String(replacement)
+	}
+	return &policyv1alpha1.LogTransformPolicy_Redact{
+		Redact: &policyv1alpha1.LogRedactAction{
+			Target:      target,
+			Regex:       re,
+			Replacement: rep,
+		},
+	}
+}
+
 func TestPolicyValidationErrors(t *testing.T) {
 	validMatcher := bodyExistsMatcher()
 	validAdd := addAction(logTargetAttr("tier"), strVal("soc"), false)
@@ -222,34 +265,48 @@ func TestPolicyValidationErrors(t *testing.T) {
 			errExpect: ErrMissingAction,
 		},
 		{
-			name: "unsupported action remove",
+			name: "missing action (nil Remove inside LogTransformPolicy_Remove)",
 			proto: &policyv1alpha1.LogTransformPolicy{
-				Id:      "p-remove",
+				Id:      "p-nil-remove-msg",
 				Matches: []*policyv1alpha1.LogMatcher{validMatcher},
-				Action: &policyv1alpha1.LogTransformPolicy_Remove{
-					Remove: &policyv1alpha1.LogRemoveAction{
-						Target: logAttrSelector("tier"),
-					},
-				},
+				Action:  &policyv1alpha1.LogTransformPolicy_Remove{Remove: nil},
+			},
+			errExpect: ErrMissingAction,
+		},
+		{
+			name: "remove missing target",
+			proto: &policyv1alpha1.LogTransformPolicy{
+				Id:     "p-remove-no-target",
+				Action: removeAction(nil),
+			},
+			errExpect: ErrMissingTarget,
+		},
+		{
+			name: "remove empty log_attribute path",
+			proto: &policyv1alpha1.LogTransformPolicy{
+				Id:     "p-remove-empty-attr",
+				Action: removeAction(logAttrSelector()),
+			},
+			errSubstr: "log attribute path cannot be empty",
+		},
+		{
+			name: "remove empty body_field path",
+			proto: &policyv1alpha1.LogTransformPolicy{
+				Id:     "p-remove-empty-body",
+				Action: removeAction(logBodyFieldSelector()),
+			},
+			errSubstr: "body attribute path cannot be empty",
+		},
+		{
+			name: "unsupported action (rename)",
+			proto: &policyv1alpha1.LogTransformPolicy{
+				Id:     "p-rename",
+				Action: renameAction(logAttrSelector("src"), logAttrSelector("dst"), false),
 			},
 			errExpect: ErrUnsupportedAction,
 		},
 		{
-			name: "unsupported action rename",
-			proto: &policyv1alpha1.LogTransformPolicy{
-				Id:      "p-rename",
-				Matches: []*policyv1alpha1.LogMatcher{validMatcher},
-				Action: &policyv1alpha1.LogTransformPolicy_Rename{
-					Rename: &policyv1alpha1.LogRenameAction{
-						Source: logAttrSelector("tier"),
-						Target: logAttrSelector("new_tier"),
-					},
-				},
-			},
-			errExpect: ErrUnsupportedAction,
-		},
-		{
-			name: "unsupported action redact",
+			name: "unsupported action (redact)",
 			proto: &policyv1alpha1.LogTransformPolicy{
 				Id:      "p-redact",
 				Matches: []*policyv1alpha1.LogMatcher{validMatcher},
@@ -1034,4 +1091,119 @@ func TestTransformLogZeroContextGuards(t *testing.T) {
 			assert.Equal(t, googlepolicy.TransformNoMatch, pol.TransformLog(googlepolicy.LogContext{}))
 		})
 	}
+
+	// Zero-context guards for remove across supported target types.
+	remTargets := []*policyv1alpha1.LogAttributeSelector{
+		logAttrSelector("k"),
+		logAttrSelector("nested", "k"),
+		logBodyFieldSelector("event_data"),
+		logBodyFieldSelector("event_data", "userId"),
+	}
+	for _, tgt := range remTargets {
+		polRem, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "zero-ctx-rem",
+			Action: removeAction(tgt),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformNoMatch, polRem.TransformLog(googlepolicy.LogContext{}))
+	}
+}
+
+func TestTransformStageAndEmptyMatches(t *testing.T) {
+	pAdd, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		Id:     "stage-add",
+		Action: addAction(logTargetAttr("tier"), strVal("soc"), true),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, googlepolicy.TransformStageAdd, pAdd.TransformStage())
+
+	pRemove, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		Id:     "stage-remove",
+		Action: removeAction(logAttrSelector("tier")),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, googlepolicy.TransformStageRemove, pRemove.TransformStage())
+
+	// Empty matches applies to all log records.
+	lr, sl, rl := newTestLogBundle()
+	ctx := logContext(lr, sl, rl)
+	assert.Equal(t, googlepolicy.TransformModified, pAdd.TransformLog(ctx))
+	v, ok := lr.Attributes().Get("tier")
+	require.True(t, ok)
+	assert.Equal(t, "soc", v.Str())
+}
+
+func TestTransformLogRemoveAction(t *testing.T) {
+	t.Run("remove log_attribute (flat and nested)", func(t *testing.T) {
+		lr, sl, rl := newTestLogBundle()
+		lr.Attributes().PutEmptyMap("nested").PutStr("key", "val")
+		ctx := logContext(lr, sl, rl)
+
+		cases := []*policyv1alpha1.LogAttributeSelector{
+			logAttrSelector("http.method"),
+			logAttrSelector("nested", "key"),
+		}
+		for _, tgt := range cases {
+			pol, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+				Id:     "rem",
+				Action: removeAction(tgt),
+			})
+			require.NoError(t, err)
+			assert.Equal(t, googlepolicy.TransformModified, pol.TransformLog(ctx))
+			// Removing again returns TransformNoMatch.
+			assert.Equal(t, googlepolicy.TransformNoMatch, pol.TransformLog(ctx))
+		}
+
+		_, ok := lr.Attributes().Get("http.method")
+		assert.False(t, ok)
+		nestedMap, ok := lr.Attributes().Get("nested")
+		require.True(t, ok)
+		_, ok = nestedMap.Map().Get("key")
+		assert.False(t, ok)
+	})
+
+	t.Run("remove body_field (flat and nested)", func(t *testing.T) {
+		lr := plog.NewLogRecord()
+		lr.Body().SetEmptyMap().PutStr("event_id", "evt-123")
+		lr.Body().Map().PutEmptyMap("event_data").PutStr("user", "alice")
+		ctx := googlepolicy.LogContext{Record: lr}
+
+		p1, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "rem-flat-body",
+			Action: removeAction(logBodyFieldSelector("event_id")),
+		})
+		require.NoError(t, err)
+
+		p2, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "rem-nested-body",
+			Action: removeAction(logBodyFieldSelector("event_data", "user")),
+		})
+		require.NoError(t, err)
+
+		assert.Equal(t, googlepolicy.TransformModified, p1.TransformLog(ctx))
+		assert.Equal(t, googlepolicy.TransformNoMatch, p1.TransformLog(ctx))
+		_, ok := lr.Body().Map().Get("event_id")
+		assert.False(t, ok)
+
+		assert.Equal(t, googlepolicy.TransformModified, p2.TransformLog(ctx))
+		assert.Equal(t, googlepolicy.TransformNoMatch, p2.TransformLog(ctx))
+		subMap, ok := lr.Body().Map().Get("event_data")
+		require.True(t, ok)
+		_, ok = subMap.Map().Get("user")
+		assert.False(t, ok)
+	})
+
+	t.Run("remove body_field on non-map body fails open", func(t *testing.T) {
+		lr := plog.NewLogRecord()
+		lr.Body().SetStr("plain string body")
+		ctx := googlepolicy.LogContext{Record: lr}
+
+		p, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "rem-str-body",
+			Action: removeAction(logBodyFieldSelector("event_id")),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformNoMatch, p.TransformLog(ctx))
+		assert.Equal(t, "plain string body", lr.Body().Str())
+	})
 }

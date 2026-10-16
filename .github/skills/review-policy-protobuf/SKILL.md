@@ -31,7 +31,7 @@ This skill guides the design and review of policy Protocol Buffers in `GoogleClo
 
 ### 2. Matcher Architecture & Orthogonality
 - **Separate Target from Predicate**: The target selector identifies *what* to inspect; the predicate defines *how* to evaluate it. Never embed expected values or enum variants inside the target selector.
-- **Universal Over Dedicated Predicates**: Evaluate typed targets against universal predicates (`exact`, `regex`) using canonical uppercase string representations rather than adding one-off enum variants to the predicate `oneof`. This avoids predicate bloat, prevents target/predicate mismatches, and allows multi-value matching (`regex: "A|B"`).
+- **Universal Over Dedicated Predicates**: Evaluate typed targets against universal predicates (`equals`, `glob`, `contains`) using canonical uppercase string representations rather than adding one-off enum variants to the predicate `oneof`. This avoids predicate bloat, prevents target/predicate mismatches, and allows wildcard matching (`glob: "GET *"`).
 
 ### 3. Schema Hygiene & Unrepresentable Invalid States
 - **Use `google.protobuf.Empty` for Presence**: In a `oneof`, use `google.protobuf.Empty` for existence checks instead of `bool exists`, and pair with an orthogonal `bool negate`. This prevents ambiguous boolean matrices (`exists: false, negate: true`).

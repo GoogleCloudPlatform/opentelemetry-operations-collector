@@ -88,8 +88,8 @@ func fuzzMetricSeedPolicies() []*policyv1alpha1.MetricFilterPolicy {
 			Matches: []*policyv1alpha1.MetricMatcher{
 				{
 					Target: descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME),
-					Predicate: &policyv1alpha1.MetricMatcher_Regex{
-						Regex: "^http\\.server\\..*",
+					Predicate: &policyv1alpha1.MetricMatcher_Glob{
+						Glob: "http.server.*",
 					},
 				},
 			},
@@ -113,9 +113,9 @@ func fuzzMetricSeedPolicies() []*policyv1alpha1.MetricFilterPolicy {
 					},
 				},
 				{
-					Target: datapointTarget("items", "0", "id"),
+					Target: datapointTarget("metadata", "env"),
 					Predicate: &policyv1alpha1.MetricMatcher_Equals{
-						Equals: stringValue("item-001"),
+						Equals: stringValue("prod"),
 					},
 				},
 				{

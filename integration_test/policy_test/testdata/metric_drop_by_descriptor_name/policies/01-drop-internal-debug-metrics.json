@@ -7,7 +7,7 @@
       "target": {
         "descriptor_field": "METRIC_DESCRIPTOR_FIELD_NAME"
       },
-      "regex": "^internal\\.debug\\..*"
+      "glob": "internal.debug.*"
     }
   ]
 }

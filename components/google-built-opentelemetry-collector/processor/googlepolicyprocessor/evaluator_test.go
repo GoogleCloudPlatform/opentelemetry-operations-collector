@@ -107,7 +107,7 @@ func (p *fakeLogPolicy) FilterLog(googlepolicy.LogContext) googlepolicy.FilterRe
 }
 
 func TestEvaluator_LogFiltering(t *testing.T) {
-	// Policy 1: Drop logs where severity_text regex matches "^DEBUG"
+	// Policy 1: Drop logs where severity_text glob matches "DEBUG*"
 	dropDebug := mustPolicy(t, &policyv1alpha1.LogFilterPolicy{
 		Id:     "drop-debug",
 		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
@@ -118,7 +118,7 @@ func TestEvaluator_LogFiltering(t *testing.T) {
 						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT,
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Regex{Regex: "^DEBUG"},
+				Predicate: &policyv1alpha1.LogMatcher_Glob{Glob: "DEBUG*"},
 			},
 		},
 	})
@@ -321,8 +321,7 @@ func TestEvaluator_MetricFiltering(t *testing.T) {
 func TestEvaluator_TraceFiltering(t *testing.T) {
 	// Drop internal spans with name starting with "healthcheck"
 	dropHealthcheck := mustPolicy(t, &policyv1alpha1.TraceFilterPolicy{
-		Id:     "drop-healthcheck",
-		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+		Id: "drop-healthcheck",
 		Matches: []*policyv1alpha1.TraceMatcher{
 			{
 				Target: &policyv1alpha1.TraceFieldSelector{
@@ -330,7 +329,7 @@ func TestEvaluator_TraceFiltering(t *testing.T) {
 						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Regex{Regex: "^healthcheck"},
+				Predicate: &policyv1alpha1.TraceMatcher_Glob{Glob: "healthcheck*"},
 			},
 			{
 				Target: &policyv1alpha1.TraceFieldSelector{
@@ -822,12 +821,12 @@ func TestEvaluator_MetricTwoTierEvaluation(t *testing.T) {
 	})
 }
 
-// TestEvaluator_TraceKeepOverridesDrop covers the KEEP-as-exemption rule on the
-// trace path, including the root-span (empty parent_span_id) case.
-func TestEvaluator_TraceKeepOverridesDrop(t *testing.T) {
-	dropRootSpans := mustPolicy(t, &policyv1alpha1.TraceFilterPolicy{
-		Id:     "drop-root",
-		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+// TestEvaluator_MultipleTracePoliciesDrop verifies that multiple TraceFilterPolicy
+// instances evaluate with OR-drop semantics and that root spans (empty parent_span_id)
+// can be exempted via a negated parent_span_id matcher.
+func TestEvaluator_MultipleTracePoliciesDrop(t *testing.T) {
+	dropNonRootInternal := mustPolicy(t, &policyv1alpha1.TraceFilterPolicy{
+		Id: "drop-non-root-internal",
 		Matches: []*policyv1alpha1.TraceMatcher{
 			{
 				Target: &policyv1alpha1.TraceFieldSelector{
@@ -835,63 +834,83 @@ func TestEvaluator_TraceKeepOverridesDrop(t *testing.T) {
 						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID,
 					},
 				},
+				Negate: true,
 				Predicate: &policyv1alpha1.TraceMatcher_Equals{
 					Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: ""}},
 				},
 			},
-		},
-	})
-
-	keepOkSpans := mustPolicy(t, &policyv1alpha1.TraceFilterPolicy{
-		Id:     "keep-ok",
-		Action: policyv1alpha1.Action_ACTION_KEEP.Enum(),
-		Matches: []*policyv1alpha1.TraceMatcher{
 			{
 				Target: &policyv1alpha1.TraceFieldSelector{
 					Target: &policyv1alpha1.TraceFieldSelector_RecordField{
-						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_STATUS_CODE,
+						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_KIND,
 					},
 				},
 				Predicate: &policyv1alpha1.TraceMatcher_Equals{
-					Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "OK"}},
+					Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "INTERNAL"}},
 				},
 			},
 		},
 	})
 
-	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{dropRootSpans, keepOkSpans})
+	dropHealthcheckRoot := mustPolicy(t, &policyv1alpha1.TraceFilterPolicy{
+		Id: "drop-healthcheck-root",
+		Matches: []*policyv1alpha1.TraceMatcher{
+			{
+				Target: &policyv1alpha1.TraceFieldSelector{
+					Target: &policyv1alpha1.TraceFieldSelector_RecordField{
+						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME,
+					},
+				},
+				Predicate: &policyv1alpha1.TraceMatcher_Glob{
+					Glob: "healthz.*",
+				},
+			},
+		},
+	})
+
+	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{dropNonRootInternal, dropHealthcheckRoot})
 	require.NoError(t, err)
 
-	// Root span with UNSET status -> DROPPED
-	rootSpan := ptrace.NewSpan()
-	rootSpan.SetName("root")
-	assert.True(t, ev.EvalTrace(TraceContext{Span: rootSpan}))
+	// Child span with INTERNAL kind -> DROPPED by first policy
+	childInternal := ptrace.NewSpan()
+	childInternal.SetName("cache.lookup")
+	childInternal.SetKind(ptrace.SpanKindInternal)
+	childInternal.SetParentSpanID([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+	assert.True(t, ev.EvalTrace(TraceContext{Span: childInternal}))
 
-	// Root span with OK status -> KEPT (KEEP overrides DROP)
-	rootSpanOk := ptrace.NewSpan()
-	rootSpanOk.SetName("root-ok")
-	rootSpanOk.Status().SetCode(ptrace.StatusCodeOk)
-	assert.False(t, ev.EvalTrace(TraceContext{Span: rootSpanOk}))
+	// Root span with INTERNAL kind -> KEPT (exempted by negated parent_span_id == "")
+	rootInternal := ptrace.NewSpan()
+	rootInternal.SetName("worker.loop")
+	rootInternal.SetKind(ptrace.SpanKindInternal)
+	assert.False(t, ev.EvalTrace(TraceContext{Span: rootInternal}))
 
-	// Child span with ParentSpanID set -> KEPT
-	childSpan := ptrace.NewSpan()
-	childSpan.SetName("child")
-	childSpan.SetParentSpanID([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
-	assert.False(t, ev.EvalTrace(TraceContext{Span: childSpan}))
+	// Root span matching healthz.* -> DROPPED by second policy
+	rootHealth := ptrace.NewSpan()
+	rootHealth.SetName("healthz.check")
+	rootHealth.SetKind(ptrace.SpanKindServer)
+	assert.True(t, ev.EvalTrace(TraceContext{Span: rootHealth}))
 
-	// Same three spans through the batch walk.
+	// Child span with SERVER kind -> KEPT
+	childServer := ptrace.NewSpan()
+	childServer.SetName("rpc.call")
+	childServer.SetKind(ptrace.SpanKindServer)
+	childServer.SetParentSpanID([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+	assert.False(t, ev.EvalTrace(TraceContext{Span: childServer}))
+
+	// Same spans through the batch walk.
 	td := ptrace.NewTraces()
 	ss := td.ResourceSpans().AppendEmpty().ScopeSpans().AppendEmpty()
-	rootSpan.CopyTo(ss.Spans().AppendEmpty())
-	rootSpanOk.CopyTo(ss.Spans().AppendEmpty())
-	childSpan.CopyTo(ss.Spans().AppendEmpty())
+	childInternal.CopyTo(ss.Spans().AppendEmpty())
+	rootInternal.CopyTo(ss.Spans().AppendEmpty())
+	rootHealth.CopyTo(ss.Spans().AppendEmpty())
+	childServer.CopyTo(ss.Spans().AppendEmpty())
 
 	ev.TransformTraces(td)
 	require.Equal(t, 1, td.ResourceSpans().Len())
 	spans := td.ResourceSpans().At(0).ScopeSpans().At(0).Spans()
 	require.Equal(t, 2, spans.Len())
-	assert.Equal(t, "root-ok", spans.At(0).Name())
-	assert.Equal(t, "child", spans.At(1).Name())
+	assert.Equal(t, "worker.loop", spans.At(0).Name())
+	assert.Equal(t, "rpc.call", spans.At(1).Name())
 }
 
 // TestEvaluator_TransformPrunesEmptyScopesAndResources asserts that each
@@ -1089,8 +1108,7 @@ func newDropDatapointAttrProto(id, key, value string) *policyv1alpha1.MetricFilt
 
 func newDropSpanNameProto(id, name string) *policyv1alpha1.TraceFilterPolicy {
 	return &policyv1alpha1.TraceFilterPolicy{
-		Id:     id,
-		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+		Id: id,
 		Matches: []*policyv1alpha1.TraceMatcher{
 			{
 				Target: &policyv1alpha1.TraceFieldSelector{

@@ -76,12 +76,12 @@ func dynamicLogContext(body, severityText, attrKey, attrStr string, severityNum 
 func fuzzLogSeedPolicies() []*policyv1alpha1.LogFilterPolicy {
 	return []*policyv1alpha1.LogFilterPolicy{
 		{
-			Id:     "projects/123/locations/us-central1/policySets/ps-1/policies/drop-body-regex",
+			Id:     "projects/123/locations/us-central1/policySets/ps-1/policies/drop-body-glob",
 			Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
 			Matches: []*policyv1alpha1.LogMatcher{
 				{
 					Target:    recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY),
-					Predicate: &policyv1alpha1.LogMatcher_Regex{Regex: "^hello.*"},
+					Predicate: &policyv1alpha1.LogMatcher_Glob{Glob: "hello*"},
 				},
 			},
 		},
@@ -90,8 +90,8 @@ func fuzzLogSeedPolicies() []*policyv1alpha1.LogFilterPolicy {
 			Action: policyv1alpha1.Action_ACTION_KEEP.Enum(),
 			Matches: []*policyv1alpha1.LogMatcher{
 				{
-					Target:    logAttrTarget("items", "0", "id"),
-					Predicate: equalsString("item-001"),
+					Target:    logAttrTarget("metadata", "env"),
+					Predicate: equalsString("prod"),
 				},
 				{
 					Target: recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER),

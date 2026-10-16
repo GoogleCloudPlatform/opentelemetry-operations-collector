@@ -267,6 +267,21 @@ func TestNewXDSPolicyManager_ProjectAndRegionResolution(t *testing.T) {
 	})
 }
 
+func wrapCollectorResource(t *testing.T, collector *xdsv1alpha1.TelemetryCollector) *anypb.Any {
+	t.Helper()
+
+	collectorAny, err := anypb.New(collector)
+	require.NoError(t, err)
+
+	wrappedAny, err := anypb.New(&discoveryv3.Resource{
+		Name:     testResourceName,
+		Version:  "v1",
+		Resource: collectorAny,
+	})
+	require.NoError(t, err)
+	return wrappedAny
+}
+
 func TestExtractPolicyProtos_TelemetryCollector(t *testing.T) {
 	policyPayload, err := structpb.NewStruct(map[string]any{
 		"name": "test-filter",
@@ -280,12 +295,9 @@ func TestExtractPolicyProtos_TelemetryCollector(t *testing.T) {
 		Policies: []*anypb.Any{policyAny},
 	}
 
-	collectorAny, err := anypb.New(collector)
-	require.NoError(t, err)
-
 	resp := &discoveryv3.DiscoveryResponse{
 		VersionInfo: "v1",
-		Resources:   []*anypb.Any{collectorAny},
+		Resources:   []*anypb.Any{wrapCollectorResource(t, collector)},
 	}
 
 	manifest, err := extractManifest(resp)
@@ -327,38 +339,32 @@ func TestExtractPolicyProtos_Errors(t *testing.T) {
 		},
 		{
 			name: "policy with empty Any",
-			resources: func() []*anypb.Any {
-				collectorAny, err := anypb.New(&xdsv1alpha1.TelemetryCollector{
+			resources: []*anypb.Any{
+				wrapCollectorResource(t, &xdsv1alpha1.TelemetryCollector{
 					Policies: []*anypb.Any{{}},
-				})
-				require.NoError(t, err)
-				return []*anypb.Any{collectorAny}
-			}(),
+				}),
+			},
 			wantErr: ErrXDSPolicyMissingBody,
 			// A bare Any carries no name, so the index is the only identifier.
 			wantErrText: "index 0",
 		},
 		{
 			name: "policy with unregistered type URL",
-			resources: func() []*anypb.Any {
-				collectorAny, err := anypb.New(&xdsv1alpha1.TelemetryCollector{
+			resources: []*anypb.Any{
+				wrapCollectorResource(t, &xdsv1alpha1.TelemetryCollector{
 					Policies: []*anypb.Any{unknownTypeAny},
-				})
-				require.NoError(t, err)
-				return []*anypb.Any{collectorAny}
-			}(),
+				}),
+			},
 			wantErr:     ErrXDSPolicyDecode,
 			wantErrText: "does.not.Exist",
 		},
 		{
 			name: "valid and invalid policies in one collector",
-			resources: func() []*anypb.Any {
-				collectorAny, err := anypb.New(&xdsv1alpha1.TelemetryCollector{
+			resources: []*anypb.Any{
+				wrapCollectorResource(t, &xdsv1alpha1.TelemetryCollector{
 					Policies: []*anypb.Any{validPayloadAny, unknownTypeAny},
-				})
-				require.NoError(t, err)
-				return []*anypb.Any{collectorAny}
-			}(),
+				}),
+			},
 			wantErr: ErrXDSPolicyDecode,
 			// The decodable policy is still returned alongside the error.
 			wantCount: 1,
@@ -366,7 +372,57 @@ func TestExtractPolicyProtos_Errors(t *testing.T) {
 		{
 			name:      "bare resource of an unknown type",
 			resources: []*anypb.Any{unknownTypeAny},
-			wantErr:   ErrXDSPolicyDecode,
+			wantErr:   ErrXDSResourceDecode,
+		},
+		{
+			name: "unwrapped TelemetryCollector resource is rejected",
+			resources: func() []*anypb.Any {
+				collectorAny, err := anypb.New(&xdsv1alpha1.TelemetryCollector{
+					Policies: []*anypb.Any{validPayloadAny},
+				})
+				require.NoError(t, err)
+				return []*anypb.Any{collectorAny}
+			}(),
+			wantErr:     ErrXDSResourceDecode,
+			wantErrText: "index 0",
+		},
+		{
+			name: "wrapped discoveryv3.Resource with malformed bytes",
+			resources: []*anypb.Any{
+				{
+					TypeUrl: "type.googleapis.com/envoy.service.discovery.v3.Resource",
+					Value:   []byte{0xff, 0xff, 0xff},
+				},
+			},
+			wantErr:     ErrXDSResourceDecode,
+			wantErrText: "index 0",
+		},
+		{
+			name: "wrapped discoveryv3.Resource with empty inner resource",
+			resources: func() []*anypb.Any {
+				wrappedAny, err := anypb.New(&discoveryv3.Resource{
+					Name:    testResourceName,
+					Version: "v1",
+				})
+				require.NoError(t, err)
+				return []*anypb.Any{wrappedAny}
+			}(),
+			wantErr:     ErrXDSResourceDecode,
+			wantErrText: "index 0",
+		},
+		{
+			name: "wrapped discoveryv3.Resource with non-TelemetryCollector inner resource",
+			resources: func() []*anypb.Any {
+				wrappedAny, err := anypb.New(&discoveryv3.Resource{
+					Name:     testResourceName,
+					Version:  "v1",
+					Resource: validPayloadAny,
+				})
+				require.NoError(t, err)
+				return []*anypb.Any{wrappedAny}
+			}(),
+			wantErr:     ErrXDSResourceDecode,
+			wantErrText: "index 0",
 		},
 	}
 
@@ -547,12 +603,9 @@ func TestXDSPolicyLifecycle_SetActivePolicySet(t *testing.T) {
 		Policies:          []*anypb.Any{policyAny},
 	}
 
-	collectorAny, err := anypb.New(collector)
-	require.NoError(t, err)
-
 	resp := &discoveryv3.DiscoveryResponse{
 		VersionInfo: "rev-xds-100",
-		Resources:   []*anypb.Any{collectorAny},
+		Resources:   []*anypb.Any{wrapCollectorResource(t, collector)},
 	}
 
 	manifest, err := extractManifest(resp)
@@ -597,12 +650,10 @@ func TestExtractManifest_TelemetryCollector(t *testing.T) {
 		PolicySetRevisionCreateTime: timestamppb.New(now),
 		Policies:                    []*anypb.Any{policyAny},
 	}
-	collectorAny, err := anypb.New(collector)
-	require.NoError(t, err)
 
 	resp := &discoveryv3.DiscoveryResponse{
 		VersionInfo: "v1",
-		Resources:   []*anypb.Any{collectorAny},
+		Resources:   []*anypb.Any{wrapCollectorResource(t, collector)},
 	}
 
 	manifest, err := extractManifest(resp)
@@ -610,6 +661,10 @@ func TestExtractManifest_TelemetryCollector(t *testing.T) {
 	assert.Equal(t, "projects/123456/locations/global/policySets/prod-ps/revisions/r1", manifest.policySetRevision)
 	assert.True(t, now.Equal(manifest.revisionCreateTime))
 	require.Len(t, manifest.policies, 1)
+
+	got, ok := manifest.policies[0].(*structpb.Struct)
+	require.True(t, ok)
+	assert.True(t, proto.Equal(policyPayload, got))
 }
 
 func TestXDSPolicyLifecycle_EmptyPolicySetWithRevision(t *testing.T) {
@@ -619,12 +674,10 @@ func TestXDSPolicyLifecycle_EmptyPolicySetWithRevision(t *testing.T) {
 		PolicySetRevisionCreateTime: timestamppb.New(createTime),
 		Policies:                    nil,
 	}
-	collectorAny, err := anypb.New(collector)
-	require.NoError(t, err)
 
 	resp := &discoveryv3.DiscoveryResponse{
 		VersionInfo: "xds-version-ignored",
-		Resources:   []*anypb.Any{collectorAny},
+		Resources:   []*anypb.Any{wrapCollectorResource(t, collector)},
 	}
 
 	manifest, err := extractManifest(resp)
@@ -660,12 +713,10 @@ func TestHandleResponse_MissingPolicySetRevisionRejects(t *testing.T) {
 	collector := &xdsv1alpha1.TelemetryCollector{
 		Policies: nil,
 	}
-	collectorAny, err := anypb.New(collector)
-	require.NoError(t, err)
 
 	resp := &discoveryv3.DiscoveryResponse{
 		VersionInfo: "v1",
-		Resources:   []*anypb.Any{collectorAny},
+		Resources:   []*anypb.Any{wrapCollectorResource(t, collector)},
 	}
 
 	m := &xdsPolicyManager{logger: zap.NewNop()}
@@ -678,12 +729,10 @@ func TestHandleResponse_MalformedPolicySetRevisionRejects(t *testing.T) {
 	collector := &xdsv1alpha1.TelemetryCollector{
 		PolicySetRevision: "not-canonical-format",
 	}
-	collectorAny, err := anypb.New(collector)
-	require.NoError(t, err)
 
 	resp := &discoveryv3.DiscoveryResponse{
 		VersionInfo: "v1",
-		Resources:   []*anypb.Any{collectorAny},
+		Resources:   []*anypb.Any{wrapCollectorResource(t, collector)},
 	}
 
 	m := &xdsPolicyManager{logger: zap.NewNop()}

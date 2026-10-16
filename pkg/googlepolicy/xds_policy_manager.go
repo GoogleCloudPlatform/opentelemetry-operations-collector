@@ -1166,38 +1166,37 @@ func extractManifest(resp *discoveryv3.DiscoveryResponse) (xdsManifest, error) {
 	)
 
 	for i, anyRes := range resp.GetResources() {
-		// The expected shape: a TelemetryCollector carrying a list of policies.
-		if anyRes.MessageIs(&xdsv1alpha1.TelemetryCollector{}) {
-			collector := &xdsv1alpha1.TelemetryCollector{}
-			if err := anyRes.UnmarshalTo(collector); err != nil {
-				errs = append(errs, fmt.Errorf("%w at index %d: %w", ErrXDSResourceDecode, i, err))
-				continue
-			}
-
-			if rev := collector.GetPolicySetRevision(); rev != "" {
-				manifest.policySetRevision = rev
-			}
-			if ct := collector.GetPolicySetRevisionCreateTime(); ct.IsValid() {
-				manifest.revisionCreateTime = ct.AsTime()
-			}
-
-			collectorPolicies, err := policiesFromCollector(collector)
-			if err != nil {
-				errs = append(errs, fmt.Errorf("resource at index %d: %w", i, err))
-			}
-			manifest.policies = append(manifest.policies, collectorPolicies...)
+		// Control plane responses wrap resources without an embedded name field
+		// inside envoy.service.discovery.v3.Resource. Unwrap the outer Resource
+		// envelope before decoding the inner TelemetryCollector payload.
+		var wrapped discoveryv3.Resource
+		if err := anyRes.UnmarshalTo(&wrapped); err != nil {
+			errs = append(errs, fmt.Errorf("%w at index %d: %w", ErrXDSResourceDecode, i, err))
+			continue
+		}
+		if wrapped.GetResource() == nil || wrapped.GetResource().GetTypeUrl() == "" {
+			errs = append(errs, fmt.Errorf("%w at index %d: wrapped resource is empty", ErrXDSResourceDecode, i))
 			continue
 		}
 
-		// Fallback: a resource that is a bare policy message rather than a
-		// TelemetryCollector wrapper. Routed the same way as a policy inside
-		// the wrapper.
-		msg, err := protoFromAny(anyRes)
+		collector := &xdsv1alpha1.TelemetryCollector{}
+		if err := wrapped.GetResource().UnmarshalTo(collector); err != nil {
+			errs = append(errs, fmt.Errorf("%w at index %d: %w", ErrXDSResourceDecode, i, err))
+			continue
+		}
+
+		if rev := collector.GetPolicySetRevision(); rev != "" {
+			manifest.policySetRevision = rev
+		}
+		if ct := collector.GetPolicySetRevisionCreateTime(); ct.IsValid() {
+			manifest.revisionCreateTime = ct.AsTime()
+		}
+
+		collectorPolicies, err := policiesFromCollector(collector)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("resource at index %d: %w", i, err))
-			continue
 		}
-		manifest.policies = append(manifest.policies, msg)
+		manifest.policies = append(manifest.policies, collectorPolicies...)
 	}
 
 	return manifest, errors.Join(errs...)

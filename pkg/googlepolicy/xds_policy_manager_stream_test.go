@@ -176,7 +176,14 @@ func policyResource(t *testing.T, name, rev string) *anypb.Any {
 	})
 	require.NoError(t, err)
 
-	return collectorAny
+	wrappedAny, err := anypb.New(&discoveryv3.Resource{
+		Name:     testResourceName,
+		Version:  rev,
+		Resource: collectorAny,
+	})
+	require.NoError(t, err)
+
+	return wrappedAny
 }
 
 // resetActivePolicySet clears the package-global policy state so tests that

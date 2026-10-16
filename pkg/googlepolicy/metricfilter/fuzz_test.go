@@ -229,7 +229,7 @@ func FuzzMetricFilterPolicy(f *testing.F) {
 
 		pb := &policyv1alpha1.MetricFilterPolicy{}
 		if err := proto.Unmarshal(data, pb); err == nil {
-			ps, err := googlepolicy.MakePolicySetFromProtos("fuzz-rev", []proto.Message{pb})
+			ps, err := googlepolicy.MakePolicySetFromProtos("projects/p/locations/l/policySets/ps", "fuzz-rev", []proto.Message{pb})
 			if err == nil {
 				if len(ps.Policies) != 1 {
 					t.Fatalf("expected 1 compiled policy, got %d", len(ps.Policies))

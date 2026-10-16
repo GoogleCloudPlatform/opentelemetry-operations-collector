@@ -31,7 +31,7 @@ const PolicySetActiveMetricName = "gcp.policy.set.active"
 
 // Metrics holds the instruments defined in the schema.
 type Metrics struct {
-	// PolicySetActive is the gcp.policy.set.active gauge: Whether a control plane policy set is currently active, labeled with its identity.
+	// PolicySetActive is the gcp.policy.set.active gauge: The active control plane policy set revision ID, or -1 if no policy set is active.
 	PolicySetActive metric.Int64ObservableGauge
 }
 
@@ -46,7 +46,7 @@ func NewMetrics(meter metric.Meter) (*Metrics, error) {
 	)
 	m.PolicySetActive, err = meter.Int64ObservableGauge(
 		PolicySetActiveMetricName,
-		metric.WithDescription("Whether a control plane policy set is currently active, labeled with its identity."),
+		metric.WithDescription("The active control plane policy set revision ID, or -1 if no policy set is active."),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create %s: %w", PolicySetActiveMetricName, err)
@@ -72,13 +72,11 @@ func (m *Metrics) ObservePolicySetActive(
 	obs metric.Observer,
 	val int64,
 	policySetID string,
-	policySetRevisionID string,
 	attrs ...attribute.KeyValue,
 ) {
-	kvs := make([]attribute.KeyValue, 0, 2+len(attrs))
+	kvs := make([]attribute.KeyValue, 0, 1+len(attrs))
 	kvs = append(kvs,
 		attribute.String("gcp.policy.set.id", policySetID),
-		attribute.String("gcp.policy.set.revision.id", policySetRevisionID),
 	)
 	kvs = append(kvs, attrs...)
 	obs.ObserveInt64(m.PolicySetActive, val, metric.WithAttributes(kvs...))

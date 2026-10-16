@@ -208,3 +208,107 @@ func TestAttributePath_Serialization(t *testing.T) {
 		})
 	}
 }
+
+func TestLogFieldSelector_Variants(t *testing.T) {
+	testCases := []struct {
+		name     string
+		selector *policyv1alpha1.LogFieldSelector
+		validate func(t *testing.T, s *policyv1alpha1.LogFieldSelector)
+	}{
+		{
+			name: "record_field",
+			selector: &policyv1alpha1.LogFieldSelector{
+				Target: &policyv1alpha1.LogFieldSelector_RecordField{
+					RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
+				},
+			},
+			validate: func(t *testing.T, s *policyv1alpha1.LogFieldSelector) {
+				assert.Equal(t, policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY, s.GetRecordField())
+			},
+		},
+		{
+			name: "log_attribute",
+			selector: &policyv1alpha1.LogFieldSelector{
+				Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
+					LogAttribute: &policyv1alpha1.AttributePath{
+						Path: []string{"http", "method"},
+					},
+				},
+			},
+			validate: func(t *testing.T, s *policyv1alpha1.LogFieldSelector) {
+				assert.Equal(t, []string{"http", "method"}, s.GetLogAttribute().GetPath())
+			},
+		},
+		{
+			name: "resource_attribute",
+			selector: &policyv1alpha1.LogFieldSelector{
+				Target: &policyv1alpha1.LogFieldSelector_ResourceAttribute{
+					ResourceAttribute: &policyv1alpha1.AttributePath{
+						Path: []string{"service.name"},
+					},
+				},
+			},
+			validate: func(t *testing.T, s *policyv1alpha1.LogFieldSelector) {
+				assert.Equal(t, []string{"service.name"}, s.GetResourceAttribute().GetPath())
+			},
+		},
+		{
+			name: "scope_attribute",
+			selector: &policyv1alpha1.LogFieldSelector{
+				Target: &policyv1alpha1.LogFieldSelector_ScopeAttribute{
+					ScopeAttribute: &policyv1alpha1.AttributePath{
+						Path: []string{"library.name"},
+					},
+				},
+			},
+			validate: func(t *testing.T, s *policyv1alpha1.LogFieldSelector) {
+				assert.Equal(t, []string{"library.name"}, s.GetScopeAttribute().GetPath())
+			},
+		},
+		{
+			name: "scope_field",
+			selector: &policyv1alpha1.LogFieldSelector{
+				Target: &policyv1alpha1.LogFieldSelector_ScopeField{
+					ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_NAME,
+				},
+			},
+			validate: func(t *testing.T, s *policyv1alpha1.LogFieldSelector) {
+				assert.Equal(t, policyv1alpha1.ScopeField_SCOPE_FIELD_NAME, s.GetScopeField())
+			},
+		},
+		{
+			name: "body_field_nested",
+			selector: &policyv1alpha1.LogFieldSelector{
+				Target: &policyv1alpha1.LogFieldSelector_BodyField{
+					BodyField: &policyv1alpha1.AttributePath{
+						Path: []string{"event_data", "TargetUserName"},
+					},
+				},
+			},
+			validate: func(t *testing.T, s *policyv1alpha1.LogFieldSelector) {
+				assert.Equal(t, []string{"event_data", "TargetUserName"}, s.GetBodyField().GetPath())
+				assert.IsType(t, &policyv1alpha1.LogFieldSelector_BodyField{}, s.GetTarget())
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			data, err := proto.Marshal(tc.selector)
+			require.NoError(t, err)
+
+			unmarshaled := &policyv1alpha1.LogFieldSelector{}
+			require.NoError(t, proto.Unmarshal(data, unmarshaled))
+			assert.True(t, proto.Equal(tc.selector, unmarshaled))
+			tc.validate(t, unmarshaled)
+
+			jsonData, err := protojson.Marshal(tc.selector)
+			require.NoError(t, err)
+
+			jsonUnmarshaled := &policyv1alpha1.LogFieldSelector{}
+			require.NoError(t, protojson.Unmarshal(jsonData, jsonUnmarshaled))
+			assert.True(t, proto.Equal(tc.selector, jsonUnmarshaled))
+			tc.validate(t, jsonUnmarshaled)
+		})
+	}
+}

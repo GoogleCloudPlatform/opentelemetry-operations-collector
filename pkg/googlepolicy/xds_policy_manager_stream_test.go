@@ -127,7 +127,7 @@ func startFakeADSServer(t *testing.T, srv *fakeADSServer) grpc.DialOption {
 // It is spelled out rather than derived with xdstpResourceName, so a manager
 // that stops setting the name, or builds it wrong, cannot pass by agreeing
 // with itself.
-const testResourceName = "xdstp://traffic-director-" + defaultRegion + ".xds.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector/projects/my-project/fleets/fleet-1"
+const testResourceName = "xdstp://traffic-director-" + defaultRegion + ".xds.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector/projects/my-project/fleets/fleet-1/collectors/default"
 
 // newTestManager builds a manager wired to the fake server, with a negligible
 // backoff so reconnect tests stay fast.
@@ -154,11 +154,12 @@ func newTestManager(t *testing.T, dialOpt grpc.DialOption) *xdsPolicyManager {
 
 }
 
-// policyResource builds a DiscoveryResponse resource carrying a single policy.
+// policyResource builds a DiscoveryResponse resource carrying a single policy
+// and a canonical PolicySet revision.
 //
 // The body is a bare Struct with no policy type in it: routing is by message
 // identity, and dummyPolicyDriver is the driver registered for that message.
-func policyResource(t *testing.T, name string) *anypb.Any {
+func policyResource(t *testing.T, name, rev string) *anypb.Any {
 	t.Helper()
 
 	payload, err := structpb.NewStruct(map[string]any{
@@ -170,7 +171,8 @@ func policyResource(t *testing.T, name string) *anypb.Any {
 	require.NoError(t, err)
 
 	collectorAny, err := anypb.New(&xdsv1alpha1.TelemetryCollector{
-		Policies: []*anypb.Any{payloadAny},
+		PolicySetRevision: "projects/my-project/locations/global/policySets/fleet-1/revisions/" + rev,
+		Policies:          []*anypb.Any{payloadAny},
 	})
 	require.NoError(t, err)
 
@@ -212,7 +214,7 @@ func TestXDSPolicyManager_ReconnectsWithBackoff(t *testing.T) {
 				VersionInfo: "rev-1",
 				Nonce:       "nonce-1",
 				TypeUrl:     xdsPolicyTypeURL,
-				Resources:   []*anypb.Any{policyResource(t, "log-filter")},
+				Resources:   []*anypb.Any{policyResource(t, "log-filter", "rev-1")},
 			}); err != nil {
 				return err
 			}
@@ -335,7 +337,7 @@ func TestXDSPolicyManager_PopulatesNodeLocalityAndMetadataFromGCEMetadata(t *tes
 	}
 
 	assert.Equal(t, []string{
-		"xdstp://traffic-director-us-central1.xds.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector/projects/123456789/fleets/fleet-1",
+		"xdstp://traffic-director-us-central1.xds.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector/projects/123456789/fleets/fleet-1/collectors/default",
 	}, req.GetResourceNames())
 	assert.Equal(t, "us-central1", req.GetNode().GetLocality().GetRegion())
 	assert.Equal(t, "us-central1-a", req.GetNode().GetLocality().GetZone())
@@ -423,7 +425,7 @@ func TestXDSPolicyManager_ACKsRevisionWithSomeUsablePolicies(t *testing.T) {
 				Nonce:       "nonce-partial",
 				TypeUrl:     xdsPolicyTypeURL,
 				Resources: []*anypb.Any{
-					policyResource(t, "log-filter"),
+					policyResource(t, "log-filter", "rev-partial"),
 					{
 						TypeUrl: "type.googleapis.com/does.not.Exist",
 						Value:   []byte("garbage"),
@@ -565,7 +567,7 @@ func TestXDSPolicyManager_IgnoresUnrelatedResourceType(t *testing.T) {
 			// Establish a policy we can watch for damage.
 			if err := stream.Send(&discoveryv3.DiscoveryResponse{
 				VersionInfo: "rev-1", Nonce: "n1", TypeUrl: xdsPolicyTypeURL,
-				Resources: []*anypb.Any{policyResource(t, "log-filter")},
+				Resources: []*anypb.Any{policyResource(t, "log-filter", "rev-1")},
 			}); err != nil {
 				return err
 			}
@@ -590,7 +592,7 @@ func TestXDSPolicyManager_IgnoresUnrelatedResourceType(t *testing.T) {
 			// arrival proves the unrelated response was handled (ignored) first.
 			if err := stream.Send(&discoveryv3.DiscoveryResponse{
 				VersionInfo: "rev-3", Nonce: "n3", TypeUrl: xdsPolicyTypeURL,
-				Resources: []*anypb.Any{policyResource(t, "trace-filter")},
+				Resources: []*anypb.Any{policyResource(t, "trace-filter", "rev-3")},
 			}); err != nil {
 				return err
 			}
@@ -642,7 +644,7 @@ func TestXDSPolicyManager_SkipsAlreadyAppliedRevision(t *testing.T) {
 			}
 			if err := stream.Send(&discoveryv3.DiscoveryResponse{
 				VersionInfo: "rev-1", Nonce: "n1", TypeUrl: xdsPolicyTypeURL,
-				Resources: []*anypb.Any{policyResource(t, "log-filter")},
+				Resources: []*anypb.Any{policyResource(t, "log-filter", "rev-1")},
 			}); err != nil {
 				return err
 			}
@@ -656,7 +658,7 @@ func TestXDSPolicyManager_SkipsAlreadyAppliedRevision(t *testing.T) {
 			// plane's identity for a revision, so this must not be applied.
 			if err := stream.Send(&discoveryv3.DiscoveryResponse{
 				VersionInfo: "rev-1", Nonce: "n2", TypeUrl: xdsPolicyTypeURL,
-				Resources: []*anypb.Any{policyResource(t, "different-policy")},
+				Resources: []*anypb.Any{policyResource(t, "different-policy", "rev-1")},
 			}); err != nil {
 				return err
 			}
@@ -705,7 +707,7 @@ func TestXDSPolicyManager_EmptyRevisionClearsPolicies(t *testing.T) {
 			}
 			if err := stream.Send(&discoveryv3.DiscoveryResponse{
 				VersionInfo: "rev-1", Nonce: "n1", TypeUrl: xdsPolicyTypeURL,
-				Resources: []*anypb.Any{policyResource(t, "log-filter")},
+				Resources: []*anypb.Any{policyResource(t, "log-filter", "rev-1")},
 			}); err != nil {
 				return err
 			}
@@ -765,7 +767,7 @@ func TestXDSPolicyManager_StartWaitsForInitialPolicySet(t *testing.T) {
 			time.Sleep(50 * time.Millisecond)
 			if err := stream.Send(&discoveryv3.DiscoveryResponse{
 				VersionInfo: "rev-1", Nonce: "n1", TypeUrl: xdsPolicyTypeURL,
-				Resources: []*anypb.Any{policyResource(t, "log-filter")},
+				Resources: []*anypb.Any{policyResource(t, "log-filter", "rev-1")},
 			}); err != nil {
 				return err
 			}
@@ -936,7 +938,7 @@ func TestXDSPolicyManager_AppliesRevisionAfterTimeout(t *testing.T) {
 			time.Sleep(300 * time.Millisecond)
 			if err := stream.Send(&discoveryv3.DiscoveryResponse{
 				VersionInfo: "rev-late", Nonce: "n1", TypeUrl: xdsPolicyTypeURL,
-				Resources: []*anypb.Any{policyResource(t, "late-filter")},
+				Resources: []*anypb.Any{policyResource(t, "late-filter", "rev-late")},
 			}); err != nil {
 				return err
 			}

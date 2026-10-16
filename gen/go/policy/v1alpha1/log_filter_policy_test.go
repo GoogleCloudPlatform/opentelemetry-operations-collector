@@ -241,6 +241,22 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 					},
 				},
 			},
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_BodyField{
+						BodyField: &policyv1alpha1.AttributePath{
+							Path: []string{"event_data", "TargetUserName"},
+						},
+					},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_StringValue{
+							StringValue: "SYSTEM",
+						},
+					},
+				},
+			},
 		},
 	}
 
@@ -260,7 +276,8 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 	assert.Equal(t, "drop-noisy-healthchecks", unmarshaled.GetId())
 	assert.NotNil(t, unmarshaled.Action)
 	assert.Equal(t, policyv1alpha1.Action_ACTION_DROP, unmarshaled.GetAction())
-	require.Len(t, unmarshaled.GetMatches(), 14)
+	require.Len(t, unmarshaled.GetMatches(), 15)
+	assert.Equal(t, []string{"event_data", "TargetUserName"}, unmarshaled.GetMatches()[14].GetTarget().GetBodyField().GetPath())
 }
 
 func TestLogFilterPolicy_JSONSerialization(t *testing.T) {
@@ -312,14 +329,29 @@ func TestLogFilterPolicy_JSONSerialization(t *testing.T) {
 				},
 				Negate: true,
 			},
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_BodyField{
+						BodyField: &policyv1alpha1.AttributePath{
+							Path: []string{"_SYSTEMD_UNIT"},
+						},
+					},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Equals{
+					Equals: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_StringValue{
+							StringValue: "sshd.service",
+						},
+					},
+				},
+			},
 		},
 	}
-
-
 
 	// ProtoJSON marshal and unmarshal round-trip.
 	jsonData, err := protojson.Marshal(policy)
 	require.NoError(t, err)
+	assert.Contains(t, string(jsonData), `"bodyField":{"path":["_SYSTEMD_UNIT"]}`)
 
 	unmarshaled := &policyv1alpha1.LogFilterPolicy{}
 	require.NoError(t, protojson.Unmarshal(jsonData, unmarshaled))

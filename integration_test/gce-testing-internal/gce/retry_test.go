@@ -407,3 +407,128 @@ func TestHandleDeleteError_ResourceNotReady(t *testing.T) {
 		})
 	}
 }
+
+func TestIsTransientError(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{"nil error", nil, false},
+		{"googleapi 403 quota", &googleapi.Error{Code: 403, Message: "Quota exceeded"}, true},
+		{"googleapi 429 rate limit", &googleapi.Error{Code: 429, Message: "Rate limit exceeded"}, true},
+		{"googleapi 500 internal server error", &googleapi.Error{Code: 500, Message: "Internal Server Error"}, true},
+		{"googleapi 502 bad gateway", &googleapi.Error{Code: 502, Message: "Bad Gateway"}, true},
+		{"googleapi 503 service unavailable", &googleapi.Error{Code: 503, Message: "Service Unavailable"}, true},
+		{"googleapi 504 gateway timeout", &googleapi.Error{Code: 504, Message: "Gateway Timeout"}, true},
+		{"grpc codes.ResourceExhausted", status.Error(codes.ResourceExhausted, "resource exhausted"), true},
+		{"grpc codes.Unavailable", status.Error(codes.Unavailable, "service unavailable"), true},
+		{"grpc codes.Internal", status.Error(codes.Internal, "internal server error"), true},
+		{"string Quota", errors.New("Quota 'CPUS' exceeded. Limit: 24.0 in region us-central1."), true},
+		{"string QUOTA", errors.New("QUOTA_EXCEEDED: Read requests per minute per region"), true},
+		{"string rate limit", errors.New("rate limit exceeded, please retry"), true},
+		{"string Rate limit", errors.New("Rate limit reached for API"), true},
+		{"string Internal error", errors.New("Internal error encountered while processing request"), true},
+		{"string Error 50", errors.New("Error 502 (Server Error)!!1"), true},
+		{"string with 503 status code", errors.New("HTTP response status: 503"), true},
+		{"string with : 503 followed by space", errors.New("server error: 503 upstream error"), true},
+		{"string with : 503 followed by newline", errors.New("error code: 503\ntrying again"), true},
+		{"string with trailing : 503", errors.New("request failed: 503"), true},
+		{"string with : 502 followed by space", errors.New("gateway: 502 connection dropped"), true},
+		{"string with : 502 followed by newline", errors.New("response: 502\nretrying"), true},
+		{"string with trailing : 502", errors.New("request failed: 502"), true},
+		{"string with 502 status code", errors.New("proxy error 502 Bad Gateway"), true},
+		{"string database is locked", errors.New("sqlite3: database is locked"), true},
+		{"negative substring collision vm-502 should not be transient", errors.New("instance vm-502 invalid"), false},
+		{"negative substring collision vm-503-disk should not be transient", errors.New("disk vm-503-disk not found"), false},
+		{"negative substring collision ip 10.0.50.3 should not be transient", errors.New("remote address 10.0.50.3 unreachable"), false},
+		{"negative substring collision port 5030 should not be transient", errors.New("connection refused on port 5030"), false},
+		{"negative substring collision port 5034 should not be transient", errors.New("dial tcp 10.0.0.1:5034: connection refused"), false},
+		{"negative substring collision status code: 5030 should not be transient", errors.New("status code: 5030"), false},
+		{"negative substring collision port: 5029 should not be transient", errors.New("port: 5029 in use"), false},
+		{"negative substring :503 without boundary before alphanumeric", errors.New("error:503a"), false},
+		{"googleapi 400 bad request", &googleapi.Error{Code: 400, Message: "Bad Request"}, false},
+		{"googleapi 404 not found", &googleapi.Error{Code: 404, Message: "Not Found"}, false},
+		{"grpc codes.InvalidArgument", status.Error(codes.InvalidArgument, "invalid argument"), false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := isTransientError(tc.err)
+			if actual != tc.expected {
+				t.Errorf("isTransientError(%v) = %v, want %v", tc.err, actual, tc.expected)
+			}
+		})
+	}
+}
+
+func TestIsStockoutError(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{"nil error", nil, false},
+		{"ZONE_RESOURCE_POOL_EXHAUSTED", errors.New("ZONE_RESOURCE_POOL_EXHAUSTED: A t2a-standard-2 VM instance is currently unavailable in the us-central1-b zone"), true},
+		{"RESOURCE_POOL_EXHAUSTED", errors.New("RESOURCE_POOL_EXHAUSTED"), true},
+		{"currently unavailable", errors.New("The service is currently unavailable in the requested zone."), true},
+		{"unrelated error", errors.New("instance not found"), false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := isStockoutError(tc.err)
+			if actual != tc.expected {
+				t.Errorf("isStockoutError(%v) = %v, want %v", tc.err, actual, tc.expected)
+			}
+		})
+	}
+}
+
+func TestRetryOp(t *testing.T) {
+	t.Run("succeeds on first attempt", func(t *testing.T) {
+		calls := 0
+		err := retryOp(context.Background(), backoff.NewConstantBackOff(time.Millisecond), isTransientError, func() error {
+			calls++
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if calls != 1 {
+			t.Errorf("calls = %d, want 1", calls)
+		}
+	})
+
+	t.Run("retries on transient error and succeeds", func(t *testing.T) {
+		calls := 0
+		err := retryOp(context.Background(), backoff.NewConstantBackOff(time.Millisecond), isTransientError, func() error {
+			calls++
+			if calls < 3 {
+				return &googleapi.Error{Code: 429, Message: "rate limit"}
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if calls != 3 {
+			t.Errorf("calls = %d, want 3", calls)
+		}
+	})
+
+	t.Run("aborts immediately on permanent non-retryable error", func(t *testing.T) {
+		calls := 0
+		permanentErr := &googleapi.Error{Code: 400, Message: "bad request"}
+		err := retryOp(context.Background(), backoff.NewConstantBackOff(time.Millisecond), isTransientError, func() error {
+			calls++
+			return permanentErr
+		})
+		if !errors.Is(err, permanentErr) {
+			t.Fatalf("expected permanentErr, got: %v", err)
+		}
+		if calls != 1 {
+			t.Errorf("calls = %d, want 1 (should not retry)", calls)
+		}
+	})
+}

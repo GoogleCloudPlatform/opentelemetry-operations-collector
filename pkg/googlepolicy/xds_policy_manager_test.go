@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net/url"
 	"testing"
+	"time"
 
 	discoveryv3 "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	"github.com/stretchr/testify/assert"
@@ -28,6 +29,7 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/structpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
 	xdsv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/xds/v1alpha1"
@@ -171,7 +173,7 @@ func TestNewXDSPolicyManager_Validation(t *testing.T) {
 // subscribes to nothing, and no error says so.
 func TestXDSTPResourceName(t *testing.T) {
 	assert.Equal(t,
-		"xdstp://traffic-director-us-central1.xds.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector/projects/my-project/fleets/my-fleet",
+		"xdstp://traffic-director-us-central1.xds.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector/projects/my-project/fleets/my-fleet/collectors/default",
 		xdstpResourceName("us-central1", "my-project", "my-fleet"),
 	)
 }
@@ -286,14 +288,14 @@ func TestExtractPolicyProtos_TelemetryCollector(t *testing.T) {
 		Resources:   []*anypb.Any{collectorAny},
 	}
 
-	policies, err := extractPolicyProtos(resp)
+	manifest, err := extractManifest(resp)
 	require.NoError(t, err)
-	require.Len(t, policies, 1)
+	require.Len(t, manifest.policies, 1)
 
 	// The policy comes back as the message it was packed as, not as a
 	// flattened copy of it: nothing between the wire and the driver needs a
 	// generic representation any more.
-	got, ok := policies[0].(*structpb.Struct)
+	got, ok := manifest.policies[0].(*structpb.Struct)
 	require.True(t, ok)
 	assert.True(t, proto.Equal(policyPayload, got))
 }
@@ -370,7 +372,7 @@ func TestExtractPolicyProtos_Errors(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			policies, err := extractPolicyProtos(&discoveryv3.DiscoveryResponse{
+			manifest, err := extractManifest(&discoveryv3.DiscoveryResponse{
 				VersionInfo: "v1",
 				Resources:   tc.resources,
 			})
@@ -383,7 +385,7 @@ func TestExtractPolicyProtos_Errors(t *testing.T) {
 					assert.Contains(t, err.Error(), tc.wantErrText)
 				}
 			}
-			assert.Len(t, policies, tc.wantCount)
+			assert.Len(t, manifest.policies, tc.wantCount)
 		})
 	}
 }
@@ -444,9 +446,10 @@ func TestMakePolicySetFromProtos_RoutesBareProtoToItsDriver(t *testing.T) {
 
 	policy := &policyv1alpha1.LogFilterPolicy{Id: "retain-errors"}
 
-	ps, err := MakePolicySetFromProtos("v1", []proto.Message{policy})
+	ps, err := MakePolicySetFromProtos("projects/p/locations/l/policySets/ps", "v1", []proto.Message{policy})
 	require.NoError(t, err)
 	require.Len(t, ps.Policies, 1)
+	assert.Equal(t, "projects/p/locations/l/policySets/ps", ps.PolicySetID)
 	assert.Contains(t, ps.Policies, "retain-errors")
 
 	// The driver is handed the very message that was decoded off the wire.
@@ -460,7 +463,7 @@ func TestMakePolicySetFromProtos_RoutesBareProtoToItsDriver(t *testing.T) {
 // that policy.
 func TestMakePolicySetFromProtos_UnclaimedProtoIsRejectedByName(t *testing.T) {
 	// Nothing registers MetricFilterPolicy in this test binary.
-	ps, err := MakePolicySetFromProtos("v1", []proto.Message{&policyv1alpha1.MetricFilterPolicy{}})
+	ps, err := MakePolicySetFromProtos("projects/p/locations/l/policySets/ps", "v1", []proto.Message{&policyv1alpha1.MetricFilterPolicy{}})
 
 	require.ErrorIs(t, err, ErrPolicyTypeNotFound)
 	assert.Contains(t, err.Error(), "google.telemetry.policy.v1alpha1.MetricFilterPolicy")
@@ -474,7 +477,7 @@ func TestMakePolicySetFromProtos_UnclaimedProtoIsRejectedByName(t *testing.T) {
 func TestMakePolicySetFromProtos_KeepsUsablePoliciesFromAMixedRevision(t *testing.T) {
 	registerProtoDriverForTest(t, "log_filter", &policyv1alpha1.LogFilterPolicy{})
 
-	ps, err := MakePolicySetFromProtos("v1", []proto.Message{
+	ps, err := MakePolicySetFromProtos("projects/p/locations/l/policySets/ps", "v1", []proto.Message{
 		&policyv1alpha1.TraceFilterPolicy{Id: "unclaimed"},
 		&policyv1alpha1.LogFilterPolicy{Id: "usable"},
 	})
@@ -540,7 +543,8 @@ func TestXDSPolicyLifecycle_SetActivePolicySet(t *testing.T) {
 	require.NoError(t, err)
 
 	collector := &xdsv1alpha1.TelemetryCollector{
-		Policies: []*anypb.Any{policyAny},
+		PolicySetRevision: "projects/123456/locations/global/policySets/prod-ps/revisions/rev-xds-100",
+		Policies:          []*anypb.Any{policyAny},
 	}
 
 	collectorAny, err := anypb.New(collector)
@@ -551,11 +555,14 @@ func TestXDSPolicyLifecycle_SetActivePolicySet(t *testing.T) {
 		Resources:   []*anypb.Any{collectorAny},
 	}
 
-	policies, err := extractPolicyProtos(resp)
+	manifest, err := extractManifest(resp)
 	require.NoError(t, err)
 
+	psID, revID, ok := ParsePolicySetRevision(manifest.policySetRevision)
+	require.True(t, ok)
+
 	// Step 1: MakePolicySetFromProtos
-	ps, err := MakePolicySetFromProtos(resp.GetVersionInfo(), policies)
+	ps, err := MakePolicySetFromProtos(psID, revID, manifest.policies)
 	require.NoError(t, err)
 	require.NotNil(t, ps)
 
@@ -570,6 +577,117 @@ func TestXDSPolicyLifecycle_SetActivePolicySet(t *testing.T) {
 	active := ActivePolicySet()
 	require.NotNil(t, active)
 	assert.Equal(t, "rev-xds-100", active.RevisionID)
+	assert.Equal(t, "projects/123456/locations/global/policySets/prod-ps", active.PolicySetID)
 	assert.Len(t, active.Policies, 1)
 	assert.Contains(t, active.Policies, "log-filter-policy")
+}
+
+func TestExtractManifest_TelemetryCollector(t *testing.T) {
+	now := time.Now().Truncate(time.Microsecond)
+	policyPayload, err := structpb.NewStruct(map[string]any{
+		"name": "log-filter-policy",
+	})
+	require.NoError(t, err)
+
+	policyAny, err := anypb.New(policyPayload)
+	require.NoError(t, err)
+
+	collector := &xdsv1alpha1.TelemetryCollector{
+		PolicySetRevision:           "projects/123456/locations/global/policySets/prod-ps/revisions/r1",
+		PolicySetRevisionCreateTime: timestamppb.New(now),
+		Policies:                    []*anypb.Any{policyAny},
+	}
+	collectorAny, err := anypb.New(collector)
+	require.NoError(t, err)
+
+	resp := &discoveryv3.DiscoveryResponse{
+		VersionInfo: "v1",
+		Resources:   []*anypb.Any{collectorAny},
+	}
+
+	manifest, err := extractManifest(resp)
+	require.NoError(t, err)
+	assert.Equal(t, "projects/123456/locations/global/policySets/prod-ps/revisions/r1", manifest.policySetRevision)
+	assert.True(t, now.Equal(manifest.revisionCreateTime))
+	require.Len(t, manifest.policies, 1)
+}
+
+func TestXDSPolicyLifecycle_EmptyPolicySetWithRevision(t *testing.T) {
+	createTime := time.Now().Truncate(time.Microsecond).Add(-5 * time.Minute)
+	collector := &xdsv1alpha1.TelemetryCollector{
+		PolicySetRevision:           "projects/123456/locations/global/policySets/empty-ps/revisions/rev-empty",
+		PolicySetRevisionCreateTime: timestamppb.New(createTime),
+		Policies:                    nil,
+	}
+	collectorAny, err := anypb.New(collector)
+	require.NoError(t, err)
+
+	resp := &discoveryv3.DiscoveryResponse{
+		VersionInfo: "xds-version-ignored",
+		Resources:   []*anypb.Any{collectorAny},
+	}
+
+	manifest, err := extractManifest(resp)
+	require.NoError(t, err)
+	require.Empty(t, manifest.policies)
+	assert.Equal(t, "projects/123456/locations/global/policySets/empty-ps/revisions/rev-empty", manifest.policySetRevision)
+
+	psID, revID, ok := ParsePolicySetRevision(manifest.policySetRevision)
+	require.True(t, ok)
+	assert.Equal(t, "projects/123456/locations/global/policySets/empty-ps", psID)
+	assert.Equal(t, "rev-empty", revID)
+
+	ps, err := MakePolicySetFromProtos(psID, revID, manifest.policies)
+	require.NoError(t, err)
+	ps.RevisionCreateTime = manifest.revisionCreateTime
+
+	SetActivePolicySet(ps)
+	t.Cleanup(func() {
+		for ActivePolicySet() != nil {
+			RollbackActivePolicySet()
+		}
+	})
+
+	active := ActivePolicySet()
+	require.NotNil(t, active)
+	assert.Equal(t, "rev-empty", active.RevisionID)
+	assert.Equal(t, "projects/123456/locations/global/policySets/empty-ps", active.PolicySetID)
+	assert.True(t, createTime.Equal(active.RevisionCreateTime))
+	assert.Empty(t, active.Policies)
+}
+
+func TestHandleResponse_MissingPolicySetRevisionRejects(t *testing.T) {
+	collector := &xdsv1alpha1.TelemetryCollector{
+		Policies: nil,
+	}
+	collectorAny, err := anypb.New(collector)
+	require.NoError(t, err)
+
+	resp := &discoveryv3.DiscoveryResponse{
+		VersionInfo: "v1",
+		Resources:   []*anypb.Any{collectorAny},
+	}
+
+	m := &xdsPolicyManager{logger: zap.NewNop()}
+	prevActive := ActivePolicySet()
+	m.handleResponse(nil, nil, resp)
+	assert.Equal(t, prevActive, ActivePolicySet())
+}
+
+func TestHandleResponse_MalformedPolicySetRevisionRejects(t *testing.T) {
+	collector := &xdsv1alpha1.TelemetryCollector{
+		PolicySetRevision: "not-canonical-format",
+	}
+	collectorAny, err := anypb.New(collector)
+	require.NoError(t, err)
+
+	resp := &discoveryv3.DiscoveryResponse{
+		VersionInfo: "v1",
+		Resources:   []*anypb.Any{collectorAny},
+	}
+
+	m := &xdsPolicyManager{logger: zap.NewNop()}
+	prevActive := ActivePolicySet()
+	m.handleResponse(nil, nil, resp)
+	assert.Equal(t, prevActive, ActivePolicySet())
 }

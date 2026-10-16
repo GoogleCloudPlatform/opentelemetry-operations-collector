@@ -162,6 +162,14 @@ func fuzzLogTransformSeedPolicies() []*policyv1alpha1.LogTransformPolicy {
 				},
 			},
 		},
+		{
+			Id: "remove-attribute",
+			Action: &policyv1alpha1.LogTransformPolicy_Remove{
+				Remove: &policyv1alpha1.LogRemoveAction{
+					Target: logAttrTarget("feature.enabled"),
+				},
+			},
+		},
 	}
 }
 

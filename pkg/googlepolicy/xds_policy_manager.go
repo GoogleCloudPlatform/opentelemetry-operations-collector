@@ -63,6 +63,13 @@ const (
 	// usefully interpreted.
 	xdsPolicyTypeURL = "type.googleapis.com/" + xdsResourceType
 
+	// defaultCollectorResource is the collector resource name suffix in the
+	// xdstp:// subscription URI. The control plane organizes collector
+	// configurations under /collectors/{name}. Currently all collectors
+	// subscribe to "default"; future versions may target specific collector
+	// profiles (e.g. OS or environment) or wildcard "*" discovery.
+	defaultCollectorResource = "default"
+
 	// FleetIDQueryParam is the query parameter carrying the fleet ID:
 	//
 	//	googlecontrolplane:xds://telemetrydirector.googleapis.com?gcp.fleet_id=FLEET&project=PROJECT
@@ -543,7 +550,7 @@ func regionFromZone(zone string) string {
 // xdstpResourceName returns the xdstp:// name of the TelemetryCollector
 // resource that holds a fleet's policies:
 //
-//	xdstp://traffic-director-REGION.xds.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector/projects/PROJECT/fleets/FLEET
+//	xdstp://traffic-director-REGION.xds.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector/projects/PROJECT/fleets/FLEET/collectors/default
 //
 // The control plane looks up the fleet's policies by this name, not by the
 // node's cluster. A request that names no resource is a wildcard subscription,
@@ -555,8 +562,8 @@ func regionFromZone(zone string) string {
 // request without the name would change the subscription rather than confirm
 // it.
 func xdstpResourceName(region, project, fleetID string) string {
-	return fmt.Sprintf("xdstp://traffic-director-%s.xds.googleapis.com/%s/projects/%s/fleets/%s",
-		region, xdsResourceType, project, fleetID)
+	return fmt.Sprintf("xdstp://traffic-director-%s.xds.googleapis.com/%s/projects/%s/fleets/%s/collectors/%s",
+		region, xdsResourceType, project, fleetID, defaultCollectorResource)
 }
 
 // Start launches the background stream loop and waits, briefly, for the control

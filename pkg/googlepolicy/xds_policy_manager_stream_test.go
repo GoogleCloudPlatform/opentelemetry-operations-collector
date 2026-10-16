@@ -127,7 +127,7 @@ func startFakeADSServer(t *testing.T, srv *fakeADSServer) grpc.DialOption {
 // It is spelled out rather than derived with xdstpResourceName, so a manager
 // that stops setting the name, or builds it wrong, cannot pass by agreeing
 // with itself.
-const testResourceName = "xdstp://traffic-director-" + defaultRegion + ".xds.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector/projects/my-project/fleets/fleet-1"
+const testResourceName = "xdstp://traffic-director-" + defaultRegion + ".xds.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector/projects/my-project/fleets/fleet-1/collectors/default"
 
 // newTestManager builds a manager wired to the fake server, with a negligible
 // backoff so reconnect tests stay fast.
@@ -337,7 +337,7 @@ func TestXDSPolicyManager_PopulatesNodeLocalityAndMetadataFromGCEMetadata(t *tes
 	}
 
 	assert.Equal(t, []string{
-		"xdstp://traffic-director-us-central1.xds.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector/projects/123456789/fleets/fleet-1",
+		"xdstp://traffic-director-us-central1.xds.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector/projects/123456789/fleets/fleet-1/collectors/default",
 	}, req.GetResourceNames())
 	assert.Equal(t, "us-central1", req.GetNode().GetLocality().GetRegion())
 	assert.Equal(t, "us-central1-a", req.GetNode().GetLocality().GetZone())

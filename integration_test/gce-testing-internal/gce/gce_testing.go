@@ -64,6 +64,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -1895,7 +1896,13 @@ func IsOpsAgentUAPPlugin() bool {
 	return ok && value != ""
 }
 
-func shouldRetryCreateVM(err error, options VMOptions) bool {
+// http502Or503Regex matches HTTP 502/503 status patterns in CLI output or error strings,
+// e.g. ": 503 ", ": 502\n", or trailing ": 503", avoiding false positives on instance IDs or IPs.
+var http502Or503Regex = regexp.MustCompile(`:\s*50[23]\b`)
+
+// isTransientError reports whether err indicates a transient API rate-limit,
+// quota exhaustion, 5xx server error, or database lock contention that is safe to retry.
+func isTransientError(err error) bool {
 	if err == nil {
 		return false
 	}
@@ -1910,31 +1917,55 @@ func shouldRetryCreateVM(err error, options VMOptions) bool {
 			return true
 		}
 	}
-	// VM creation can hit quota, especially when re-running presubmits,
-	// or when multiple people are running tests.
-	return strings.Contains(err.Error(), "Quota") ||
-		strings.Contains(err.Error(), "QUOTA") ||
-		// Rarely, instance creation fails due to internal errors in the compute API.
-		strings.Contains(err.Error(), "Internal error") ||
-		// Instance creation can also fail due to service unavailability.
-		strings.Contains(err.Error(), "currently unavailable") ||
-		strings.Contains(err.Error(), "ZONE_RESOURCE_POOL_EXHAUSTED") ||
-		strings.Contains(err.Error(), "RESOURCE_POOL_EXHAUSTED") ||
-		// GCE sometimes responds with 502 or 503 errors, e.g. a raw HTML
-		// "Error 502 (Server Error)" page. Retry these (and other 50x errors for
-		// good measure), like handleDeleteError does.
-		strings.Contains(err.Error(), "Error 50") ||
-		// This error is a consequence of running gcloud concurrently, which is actually
-		// unsupported. In the absence of a better fix, just retry such errors.
-		strings.Contains(err.Error(), "database is locked") ||
-		// Windows instances sometimes fail to be ssh-able when CorePlugin NetUserAdd
-		// hits error 2236 (NERR_UserInGroup) during sysprep specialize: b/305721001, b/567121343
-		(IsWindows(options.ImageSpec) && strings.Contains(err.Error(), windowsStartupFailedMessage)) ||
-		// SLES instances sometimes fail to be ssh-able: b/186426190
-		(IsSUSEImageSpec(options.ImageSpec) && strings.Contains(err.Error(), startupFailedMessage)) ||
-		// Timed out waiting for instance IP assignment during out-of-band polling.
-		strings.Contains(err.Error(), "timed out waiting for instance") ||
-		strings.Contains(err.Error(), prepareSLESMessage)
+	msg := err.Error()
+	lower := strings.ToLower(msg)
+	return strings.Contains(lower, "quota") ||
+		strings.Contains(lower, "rate limit") ||
+		strings.Contains(lower, "internal error") ||
+		strings.Contains(lower, "database is locked") ||
+		strings.Contains(msg, "Error 50") ||
+		http502Or503Regex.MatchString(msg) ||
+		strings.Contains(msg, "503 Service Unavailable") ||
+		strings.Contains(msg, "502 Bad Gateway")
+}
+
+// isStockoutError reports whether err indicates a temporary zone hardware stockout.
+func isStockoutError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "RESOURCE_POOL_EXHAUSTED") ||
+		strings.Contains(msg, "currently unavailable")
+}
+
+// retryOp executes fn with backoff, retrying while isRetryable(err) is true.
+// Any error where isRetryable(err) is false is wrapped in backoff.Permanent to abort immediately.
+func retryOp(ctx context.Context, bo backoff.BackOff, isRetryable func(error) bool, fn func() error) error {
+	return backoff.Retry(func() error {
+		err := fn()
+		if err != nil {
+			if !isRetryable(err) {
+				return backoff.Permanent(err)
+			}
+			return err
+		}
+		return nil
+	}, backoff.WithContext(bo, ctx))
+}
+
+func shouldRetryCreateVM(err error, options VMOptions) bool {
+	if err == nil {
+		return false
+	}
+	if isTransientError(err) || isStockoutError(err) {
+		return true
+	}
+	msg := err.Error()
+	return (IsWindows(options.ImageSpec) && strings.Contains(msg, windowsStartupFailedMessage)) ||
+		(IsSUSEImageSpec(options.ImageSpec) && strings.Contains(msg, startupFailedMessage)) ||
+		strings.Contains(msg, "timed out waiting for instance") ||
+		strings.Contains(msg, prepareSLESMessage)
 }
 
 func shouldRetryCreateManagedInstanceGroupVM(err error, options VMOptions) bool {
@@ -2099,39 +2130,12 @@ func handleDeleteError(err error, attempt int) error {
 	if err == nil {
 		return nil
 	}
+	// If the VM was already deleted on a retry, treat it as a success.
 	if isNotFound(err) && attempt > 1 {
 		return nil
 	}
-	var gErr *googleapi.Error
-	if errors.As(err, &gErr) {
-		if gErr.Code == 403 || gErr.Code == 429 {
-			return err
-		}
-		if gErr.Code >= 500 && gErr.Code < 600 {
-			return err
-		}
-	}
-	if s, ok := status.FromError(err); ok {
-		if s.Code() == codes.ResourceExhausted || s.Code() == codes.Unavailable || s.Code() == codes.Internal {
-			return err
-		}
-	}
-	// VM deletion can hit quota, especially when re-running presubmits,
-	// or when multple people are running tests. Retry errors by returning
-	// them directly.
-	if strings.Contains(err.Error(), "Quota") || strings.Contains(err.Error(), "QUOTA") {
-		return err
-	}
-	// GCE sometimes responds with 502 or 503 errors. Retry these errors
-	// (and other 50x errors for good measure), by returning them directly.
-	if strings.Contains(err.Error(), "Error 50") || strings.Contains(err.Error(), "503") || strings.Contains(err.Error(), "502") {
-		return err
-	}
-	// A Managed Instance Group or VM may still be transitioning (e.g. unlinking AppHub
-	// workloads, updating instances, or preparing for deletion), returning
-	// "The resource '...' is not ready" or reason "resourceNotReady".
-	// Retry these errors by returning them directly to backoff.Retry.
-	if isResourceNotReady(err) {
+	// Retry on transient API errors, rate limits, server 5xx, or resourceNotReady.
+	if isTransientError(err) || isResourceNotReady(err) {
 		return err
 	}
 	// If the deletion command timed out and was killed, assume the command ran
@@ -2332,31 +2336,7 @@ func StopInstance(ctx context.Context, logger *log.Logger, vm *VM) error {
 }
 
 func shouldRetryStartVM(err error) bool {
-	if err == nil {
-		return false
-	}
-	var gErr *googleapi.Error
-	if errors.As(err, &gErr) {
-		if gErr.Code == 403 || gErr.Code == 429 || (gErr.Code >= 500 && gErr.Code < 600) {
-			return true
-		}
-	}
-	if s, ok := status.FromError(err); ok {
-		if s.Code() == codes.ResourceExhausted || s.Code() == codes.Unavailable || s.Code() == codes.Internal {
-			return true
-		}
-	}
-	// Starting instances can hit CPU quota or IP address allocation errors.
-	return strings.Contains(err.Error(), "Quota") ||
-		strings.Contains(err.Error(), "QUOTA") ||
-		// Instance starting can fail due to temporary zone hardware stockout (ZONE_RESOURCE_POOL_EXHAUSTED).
-		strings.Contains(err.Error(), "currently unavailable") ||
-		strings.Contains(err.Error(), "ZONE_RESOURCE_POOL_EXHAUSTED") ||
-		strings.Contains(err.Error(), "RESOURCE_POOL_EXHAUSTED") ||
-		// Rarely, instance starting fails due to internal compute API errors.
-		strings.Contains(err.Error(), "Internal error") ||
-		// gcloud sqlite database lock contention under concurrency.
-		strings.Contains(err.Error(), "database is locked")
+	return isTransientError(err) || isStockoutError(err)
 }
 
 // StartInstance boots a previously-stopped VM instance.
@@ -2378,21 +2358,12 @@ func StartInstance(ctx context.Context, logger *log.Logger, vm *VM) error {
 			Instance: vm.Name,
 		})
 		if err != nil {
-			if !shouldRetryStartVM(err) {
-				return backoff.Permanent(err)
-			}
 			return err
 		}
-		if err := op.Wait(ctx); err != nil {
-			if !shouldRetryStartVM(err) {
-				return backoff.Permanent(err)
-			}
-			return err
-		}
-		return nil
+		return op.Wait(ctx)
 	}
-	backoffPolicy := backoff.WithContext(backoff.NewConstantBackOff(time.Minute), ctx)
-	if err := backoff.Retry(tryStart, backoffPolicy); err != nil {
+	backoffPolicy := backoff.NewConstantBackOff(time.Minute)
+	if err := retryOp(ctx, backoffPolicy, shouldRetryStartVM, tryStart); err != nil {
 		return err
 	}
 

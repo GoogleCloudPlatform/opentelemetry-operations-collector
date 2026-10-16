@@ -73,8 +73,8 @@ func logContext(log plog.LogRecord, scope plog.ScopeLogs, res plog.ResourceLogs)
 	}
 }
 
-func evalLog(pol *Policy, log plog.LogRecord, scope plog.ScopeLogs, res plog.ResourceLogs) googlepolicy.EvalResult {
-	return pol.EvaluateLog(logContext(log, scope, res))
+func evalLog(pol *Policy, log plog.LogRecord, scope plog.ScopeLogs, res plog.ResourceLogs) googlepolicy.FilterResult {
+	return pol.FilterLog(logContext(log, scope, res))
 }
 
 func matchesLog(pol *Policy, log plog.LogRecord, scope plog.ScopeLogs, res plog.ResourceLogs) bool {
@@ -363,7 +363,7 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 		assert.NoError(t, pol.Validate())
 
 		assert.True(t, matchesLog(pol, log, scope, res))
-		assert.Equal(t, googlepolicy.EvalDrop, evalLog(pol, log, scope, res))
+		assert.Equal(t, googlepolicy.FilterDrop, evalLog(pol, log, scope, res))
 	})
 
 	t.Run("Action DROP non-matching record", func(t *testing.T) {
@@ -392,7 +392,7 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.False(t, matchesLog(pol, log, scope, res))
-		assert.Equal(t, googlepolicy.EvalNoMatch, evalLog(pol, log, scope, res))
+		assert.Equal(t, googlepolicy.FilterNoMatch, evalLog(pol, log, scope, res))
 	})
 
 	t.Run("Action KEEP matching record", func(t *testing.T) {
@@ -421,8 +421,8 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.True(t, matchesLog(pol, log, scope, res))
-		// Matching KEEP policy evaluates to EvalKeep (exemption)
-		assert.Equal(t, googlepolicy.EvalKeep, evalLog(pol, log, scope, res))
+		// Matching KEEP policy evaluates to FilterKeep (exemption)
+		assert.Equal(t, googlepolicy.FilterKeep, evalLog(pol, log, scope, res))
 	})
 
 	t.Run("Action KEEP non-matching record", func(t *testing.T) {
@@ -451,8 +451,8 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.False(t, matchesLog(pol, log, scope, res))
-		// Non-matching KEEP policy evaluates to EvalNoMatch (does not prune non-matching records)
-		assert.Equal(t, googlepolicy.EvalNoMatch, evalLog(pol, log, scope, res))
+		// Non-matching KEEP policy evaluates to FilterNoMatch (does not prune non-matching records)
+		assert.Equal(t, googlepolicy.FilterNoMatch, evalLog(pol, log, scope, res))
 	})
 
 	t.Run("Multiple matchers AND semantics", func(t *testing.T) {
@@ -867,7 +867,7 @@ func TestDriverLoadPolicy(t *testing.T) {
 	assert.Equal(t, "loaded-via-driver", p.PolicyName())
 	assert.Equal(t, googlepolicy.PolicyClassTransformation, p.PolicyClass())
 
-	lrf, ok := p.(googlepolicy.LogPolicyEvaluator)
+	lrf, ok := p.(googlepolicy.LogFilterPolicyEvaluator)
 	require.True(t, ok)
 
 	log, scope, res := newTestLogBundle()
@@ -879,10 +879,10 @@ func TestDriverLoadPolicy(t *testing.T) {
 		ResourceSchemaURL: res.SchemaUrl(),
 		ScopeSchemaURL:    scope.SchemaUrl(),
 	}
-	assert.Equal(t, googlepolicy.EvalDrop, lrf.EvaluateLog(ctx))
+	assert.Equal(t, googlepolicy.FilterDrop, lrf.FilterLog(ctx))
 
 	log.Body().SetStr("keep this line")
-	assert.Equal(t, googlepolicy.EvalNoMatch, lrf.EvaluateLog(ctx))
+	assert.Equal(t, googlepolicy.FilterNoMatch, lrf.FilterLog(ctx))
 }
 
 // --- Helpers for the table-driven tests below, mirroring the conventions used
@@ -1069,12 +1069,12 @@ func TestValidateNilProto(t *testing.T) {
 	assert.ErrorIs(t, (&Policy{}).Validate(), ErrNilProto)
 }
 
-// TestEvaluateLogUnknownActionFailsClosed covers the defensive default arm of
-// EvaluateLog. NewPolicyFromProto rejects any action other than KEEP/DROP, so
+// TestFilterLogUnknownActionFailsClosed covers the defensive default arm of
+// FilterLog. NewPolicyFromProto rejects any action other than KEEP/DROP, so
 // the only way in is direct construction; the contract being pinned is that an
-// unrecognized action degrades to EvalNoMatch (telemetry passes through)
+// unrecognized action degrades to FilterNoMatch (telemetry passes through)
 // instead of silently dropping records.
-func TestEvaluateLogUnknownActionFailsClosed(t *testing.T) {
+func TestFilterLogUnknownActionFailsClosed(t *testing.T) {
 	pol := &Policy{
 		proto: &policyv1alpha1.LogFilterPolicy{
 			Id:     "unknown-action",
@@ -1085,7 +1085,7 @@ func TestEvaluateLogUnknownActionFailsClosed(t *testing.T) {
 	// the action switch.
 	log, scope, res := newTestLogBundle()
 	require.True(t, matchesLog(pol, log, scope, res))
-	assert.Equal(t, googlepolicy.EvalNoMatch, evalLog(pol, log, scope, res))
+	assert.Equal(t, googlepolicy.FilterNoMatch, evalLog(pol, log, scope, res))
 }
 
 // TestLogBodyValueTypes pins LOG_RECORD_FIELD_BODY across every pcommon value
@@ -1267,12 +1267,12 @@ func TestUnsetStringFieldsReportAbsent(t *testing.T) {
 			// exists is false ...
 			existsPol := mustDropPolicy(t, "exists-"+tt.name, target, &policyv1alpha1.LogMatcher_Exists{}, false)
 			assert.False(t, matchesLog(existsPol, lr, scope, res))
-			assert.Equal(t, googlepolicy.EvalNoMatch, evalLog(existsPol, lr, scope, res))
+			assert.Equal(t, googlepolicy.FilterNoMatch, evalLog(existsPol, lr, scope, res))
 
 			// ... which makes `exists` + negate the "field is unset" selector.
 			negatedPol := mustDropPolicy(t, "not-exists-"+tt.name, target, &policyv1alpha1.LogMatcher_Exists{}, true)
 			assert.True(t, matchesLog(negatedPol, lr, scope, res))
-			assert.Equal(t, googlepolicy.EvalDrop, evalLog(negatedPol, lr, scope, res))
+			assert.Equal(t, googlepolicy.FilterDrop, evalLog(negatedPol, lr, scope, res))
 
 			// Value predicates (equals "", regex ^$, negative character class ^[^E]*$, permissive .*) must NOT match.
 			for _, predCase := range []struct {
@@ -1286,7 +1286,7 @@ func TestUnsetStringFieldsReportAbsent(t *testing.T) {
 			} {
 				pol := mustDropPolicy(t, predCase.name+"-"+tt.name, target, predCase.pred, false)
 				assert.False(t, matchesLog(pol, lr, scope, res), "%s must not match unset %s", predCase.name, tt.name)
-				assert.Equal(t, googlepolicy.EvalNoMatch, evalLog(pol, lr, scope, res))
+				assert.Equal(t, googlepolicy.FilterNoMatch, evalLog(pol, lr, scope, res))
 			}
 		})
 	}
@@ -1306,30 +1306,30 @@ func TestUnsetSeverityNumberReportsAbsent(t *testing.T) {
 	// exists is false
 	existsPol := mustDropPolicy(t, "sev-exists", target, &policyv1alpha1.LogMatcher_Exists{}, false)
 	assert.False(t, matchesLog(existsPol, lr, scope, res))
-	assert.Equal(t, googlepolicy.EvalNoMatch, evalLog(existsPol, lr, scope, res))
+	assert.Equal(t, googlepolicy.FilterNoMatch, evalLog(existsPol, lr, scope, res))
 
 	// exists + negate is true (matches logs without severity set)
 	notExistsPol := mustDropPolicy(t, "sev-not-exists", target, &policyv1alpha1.LogMatcher_Exists{}, true)
 	assert.True(t, matchesLog(notExistsPol, lr, scope, res))
-	assert.Equal(t, googlepolicy.EvalDrop, evalLog(notExistsPol, lr, scope, res))
+	assert.Equal(t, googlepolicy.FilterDrop, evalLog(notExistsPol, lr, scope, res))
 
 	// equals: 0 does NOT match (value is nil/absent, not numeric 0)
 	equalsZeroPol := mustDropPolicy(t, "sev-equals-0", target, equalsInt(0), false)
 	assert.False(t, matchesLog(equalsZeroPol, lr, scope, res))
-	assert.Equal(t, googlepolicy.EvalNoMatch, evalLog(equalsZeroPol, lr, scope, res))
+	assert.Equal(t, googlepolicy.FilterNoMatch, evalLog(equalsZeroPol, lr, scope, res))
 
 	// Crucially: lt: 9 (drop debug/trace logs below INFO) does NOT drop logs that have no severity number set!
 	dropDebugPol := mustDropPolicy(t, "drop-below-info", target, &policyv1alpha1.LogMatcher_Lt{
 		Lt: &policyv1alpha1.NumericValue{Value: &policyv1alpha1.NumericValue_IntValue{IntValue: 9}},
 	}, false)
 	assert.False(t, matchesLog(dropDebugPol, lr, scope, res), "lt: 9 must not match unset severity")
-	assert.Equal(t, googlepolicy.EvalNoMatch, evalLog(dropDebugPol, lr, scope, res))
+	assert.Equal(t, googlepolicy.FilterNoMatch, evalLog(dropDebugPol, lr, scope, res))
 
 	// Whereas a log with SeverityNumberDebug (5) IS dropped by lt: 9
 	debugLog := plog.NewLogRecord()
 	debugLog.SetSeverityNumber(plog.SeverityNumberDebug)
 	assert.True(t, matchesLog(dropDebugPol, debugLog, scope, res), "lt: 9 must match SeverityNumberDebug (5)")
-	assert.Equal(t, googlepolicy.EvalDrop, evalLog(dropDebugPol, debugLog, scope, res))
+	assert.Equal(t, googlepolicy.FilterDrop, evalLog(dropDebugPol, debugLog, scope, res))
 }
 
 // TestIDFieldsMatchHexAndBytes pins the dual representation of the native
@@ -1455,13 +1455,13 @@ func TestZeroIDsReportAbsent(t *testing.T) {
 		t.Run(field.String()+" exists is false", func(t *testing.T) {
 			pol := mustDropPolicy(t, "exists-"+field.String(), target, &policyv1alpha1.LogMatcher_Exists{}, false)
 			assert.False(t, matchesLog(pol, lr, scope, res))
-			assert.Equal(t, googlepolicy.EvalNoMatch, evalLog(pol, lr, scope, res))
+			assert.Equal(t, googlepolicy.FilterNoMatch, evalLog(pol, lr, scope, res))
 		})
 
 		t.Run(field.String()+" exists negated is true", func(t *testing.T) {
 			pol := mustDropPolicy(t, "not-exists-"+field.String(), target, &policyv1alpha1.LogMatcher_Exists{}, true)
 			assert.True(t, matchesLog(pol, lr, scope, res))
-			assert.Equal(t, googlepolicy.EvalDrop, evalLog(pol, lr, scope, res))
+			assert.Equal(t, googlepolicy.FilterDrop, evalLog(pol, lr, scope, res))
 		})
 
 		t.Run(field.String()+" does not match empty string", func(t *testing.T) {
@@ -1506,7 +1506,7 @@ func TestEmptyContextFields(t *testing.T) {
 			assert.Nil(t, val)
 
 			pol := mustDropPolicy(t, "empty-ctx-"+tt.name, tt.target, &policyv1alpha1.LogMatcher_Exists{}, false)
-			assert.Equal(t, googlepolicy.EvalNoMatch, pol.EvaluateLog(googlepolicy.LogContext{}))
+			assert.Equal(t, googlepolicy.FilterNoMatch, pol.FilterLog(googlepolicy.LogContext{}))
 		})
 	}
 }
@@ -1712,11 +1712,11 @@ func TestDriverLoadPolicyIgnoresUnknownFields(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "future-compatible-policy", p.PolicyName())
 
-	logPol, ok := p.(googlepolicy.LogPolicyEvaluator)
+	logPol, ok := p.(googlepolicy.LogFilterPolicyEvaluator)
 	require.True(t, ok)
 
 	lr, sl, rl := newTestLogBundle()
-	assert.Equal(t, googlepolicy.EvalDrop, logPol.EvaluateLog(logContext(lr, sl, rl)))
+	assert.Equal(t, googlepolicy.FilterDrop, logPol.FilterLog(logContext(lr, sl, rl)))
 }
 
 // TestDriverRoutesItsProto pins the link between the proto a control plane puts

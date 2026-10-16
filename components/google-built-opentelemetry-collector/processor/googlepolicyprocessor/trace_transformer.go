@@ -22,7 +22,7 @@ import (
 // TransformTraces applies active transformation policies in-place across the Resource -> Scope -> Span hierarchy.
 // Dropped spans are pruned, and empty scopes/resources are removed.
 func (e *Evaluator) TransformTraces(td ptrace.Traces) {
-	if len(e.tracePolicies) == 0 {
+	if len(e.traceFilterPolicies) == 0 {
 		return
 	}
 
@@ -55,11 +55,11 @@ func (e *Evaluator) TransformTraces(td ptrace.Traces) {
 // A matching ACTION_KEEP policy exempts the span outright.
 func (e *Evaluator) EvalTrace(ctx TraceContext) bool {
 	var hasDrop bool
-	for _, p := range e.tracePolicies {
-		switch p.EvaluateTrace(ctx) {
-		case googlepolicy.EvalKeep:
+	for _, p := range e.traceFilterPolicies {
+		switch p.FilterTrace(ctx) {
+		case googlepolicy.FilterKeep:
 			return false
-		case googlepolicy.EvalDrop:
+		case googlepolicy.FilterDrop:
 			hasDrop = true
 		}
 	}

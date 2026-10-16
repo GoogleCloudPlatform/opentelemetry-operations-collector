@@ -90,8 +90,8 @@ func traceContext(span ptrace.Span, scope ptrace.ScopeSpans, res ptrace.Resource
 	}
 }
 
-func evalTrace(pol *Policy, span ptrace.Span, scope ptrace.ScopeSpans, res ptrace.ResourceSpans) googlepolicy.EvalResult {
-	return pol.EvaluateTrace(traceContext(span, scope, res))
+func evalTrace(pol *Policy, span ptrace.Span, scope ptrace.ScopeSpans, res ptrace.ResourceSpans) googlepolicy.FilterResult {
+	return pol.FilterTrace(traceContext(span, scope, res))
 }
 
 func matchesTrace(pol *Policy, span ptrace.Span, scope ptrace.ScopeSpans, res ptrace.ResourceSpans) bool {
@@ -388,7 +388,7 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 		assert.NoError(t, pol.Validate())
 
 		assert.True(t, matchesTrace(pol, span, scope, res))
-		assert.Equal(t, googlepolicy.EvalDrop, evalTrace(pol, span, scope, res))
+		assert.Equal(t, googlepolicy.FilterDrop, evalTrace(pol, span, scope, res))
 	})
 
 	t.Run("Action DROP non-matching span", func(t *testing.T) {
@@ -403,7 +403,7 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.False(t, matchesTrace(pol, span, scope, res))
-		assert.Equal(t, googlepolicy.EvalNoMatch, evalTrace(pol, span, scope, res))
+		assert.Equal(t, googlepolicy.FilterNoMatch, evalTrace(pol, span, scope, res))
 	})
 
 	t.Run("Action KEEP matching span", func(t *testing.T) {
@@ -419,8 +419,8 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.True(t, matchesTrace(pol, span, scope, res))
-		// Matching KEEP policy evaluates to EvalKeep (exemption)
-		assert.Equal(t, googlepolicy.EvalKeep, evalTrace(pol, span, scope, res))
+		// Matching KEEP policy evaluates to FilterKeep (exemption)
+		assert.Equal(t, googlepolicy.FilterKeep, evalTrace(pol, span, scope, res))
 	})
 
 	t.Run("Action KEEP non-matching span", func(t *testing.T) {
@@ -437,7 +437,7 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 
 		assert.False(t, matchesTrace(pol, span, scope, res))
 		// KEEP is an exemption: a non-matching KEEP policy never prunes the span.
-		assert.Equal(t, googlepolicy.EvalNoMatch, evalTrace(pol, span, scope, res))
+		assert.Equal(t, googlepolicy.FilterNoMatch, evalTrace(pol, span, scope, res))
 	})
 
 	t.Run("Multiple matchers AND semantics", func(t *testing.T) {
@@ -465,7 +465,7 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 		pol2, err := NewPolicyFromProto(pb)
 		require.NoError(t, err)
 		assert.False(t, matchesTrace(pol2, span, scope, res))
-		assert.Equal(t, googlepolicy.EvalNoMatch, evalTrace(pol2, span, scope, res))
+		assert.Equal(t, googlepolicy.FilterNoMatch, evalTrace(pol2, span, scope, res))
 	})
 
 	t.Run("Negate matcher", func(t *testing.T) {
@@ -479,7 +479,7 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 		pol, err := NewPolicyFromProto(pb)
 		require.NoError(t, err)
 		assert.True(t, matchesTrace(pol, span, scope, res))
-		assert.Equal(t, googlepolicy.EvalDrop, evalTrace(pol, span, scope, res))
+		assert.Equal(t, googlepolicy.FilterDrop, evalTrace(pol, span, scope, res))
 
 		// Un-negated, the same matcher does not match.
 		pb.Matches[0].Negate = false
@@ -854,7 +854,7 @@ func TestZeroIDsReportAbsent(t *testing.T) {
 			))
 			require.NoError(t, err)
 			assert.False(t, matchesTrace(pol, bareSpan, bareScope, bareRes))
-			assert.Equal(t, googlepolicy.EvalNoMatch, evalTrace(pol, bareSpan, bareScope, bareRes))
+			assert.Equal(t, googlepolicy.FilterNoMatch, evalTrace(pol, bareSpan, bareScope, bareRes))
 		})
 
 		t.Run(field.String()+" absent negated", func(t *testing.T) {
@@ -866,7 +866,7 @@ func TestZeroIDsReportAbsent(t *testing.T) {
 			))
 			require.NoError(t, err)
 			assert.True(t, matchesTrace(pol, bareSpan, bareScope, bareRes))
-			assert.Equal(t, googlepolicy.EvalDrop, evalTrace(pol, bareSpan, bareScope, bareRes))
+			assert.Equal(t, googlepolicy.FilterDrop, evalTrace(pol, bareSpan, bareScope, bareRes))
 		})
 	}
 
@@ -919,7 +919,7 @@ func TestRootSpanParentSpanIDEmptyString(t *testing.T) {
 		pol, err := NewPolicyFromProto(dropPolicy("drop-root-equals", parentIDTarget, equalsString(""), false))
 		require.NoError(t, err)
 		assert.True(t, matchesTrace(pol, rootSpan, scope, res))
-		assert.Equal(t, googlepolicy.EvalDrop, evalTrace(pol, rootSpan, scope, res))
+		assert.Equal(t, googlepolicy.FilterDrop, evalTrace(pol, rootSpan, scope, res))
 	})
 
 	t.Run("root span regex anchored empty matches", func(t *testing.T) {
@@ -931,7 +931,7 @@ func TestRootSpanParentSpanIDEmptyString(t *testing.T) {
 		))
 		require.NoError(t, err)
 		assert.True(t, matchesTrace(pol, rootSpan, scope, res))
-		assert.Equal(t, googlepolicy.EvalDrop, evalTrace(pol, rootSpan, scope, res))
+		assert.Equal(t, googlepolicy.FilterDrop, evalTrace(pol, rootSpan, scope, res))
 	})
 
 	t.Run("root span exists still reports absent", func(t *testing.T) {
@@ -943,7 +943,7 @@ func TestRootSpanParentSpanIDEmptyString(t *testing.T) {
 		))
 		require.NoError(t, err)
 		assert.False(t, matchesTrace(pol, rootSpan, scope, res))
-		assert.Equal(t, googlepolicy.EvalNoMatch, evalTrace(pol, rootSpan, scope, res))
+		assert.Equal(t, googlepolicy.FilterNoMatch, evalTrace(pol, rootSpan, scope, res))
 
 		// ... which is what makes `exists` + negate the root-span selector.
 		negated, err := NewPolicyFromProto(dropPolicy(
@@ -960,7 +960,7 @@ func TestRootSpanParentSpanIDEmptyString(t *testing.T) {
 		pol, err := NewPolicyFromProto(dropPolicy("drop-root-equals", parentIDTarget, equalsString(""), false))
 		require.NoError(t, err)
 		assert.False(t, matchesTrace(pol, childSpan, scope, res))
-		assert.Equal(t, googlepolicy.EvalNoMatch, evalTrace(pol, childSpan, scope, res))
+		assert.Equal(t, googlepolicy.FilterNoMatch, evalTrace(pol, childSpan, scope, res))
 
 		regexPol, err := NewPolicyFromProto(dropPolicy(
 			"drop-root-regex",
@@ -990,19 +990,19 @@ func TestRootSpanParentSpanIDEmptyString(t *testing.T) {
 		require.NoError(t, err)
 
 		// Root span, UNSET status: DROP matches, KEEP does not.
-		assert.Equal(t, googlepolicy.EvalDrop, evalTrace(dropRoot, rootSpan, scope, res))
-		assert.Equal(t, googlepolicy.EvalNoMatch, evalTrace(keepOk, rootSpan, scope, res))
+		assert.Equal(t, googlepolicy.FilterDrop, evalTrace(dropRoot, rootSpan, scope, res))
+		assert.Equal(t, googlepolicy.FilterNoMatch, evalTrace(keepOk, rootSpan, scope, res))
 
 		// Root span, OK status: both match, so the KEEP exemption applies.
 		rootSpanOk := ptrace.NewSpan()
 		rootSpanOk.SetName("root-ok")
 		rootSpanOk.Status().SetCode(ptrace.StatusCodeOk)
-		assert.Equal(t, googlepolicy.EvalDrop, evalTrace(dropRoot, rootSpanOk, scope, res))
-		assert.Equal(t, googlepolicy.EvalKeep, evalTrace(keepOk, rootSpanOk, scope, res))
+		assert.Equal(t, googlepolicy.FilterDrop, evalTrace(dropRoot, rootSpanOk, scope, res))
+		assert.Equal(t, googlepolicy.FilterKeep, evalTrace(keepOk, rootSpanOk, scope, res))
 
 		// Child span: neither policy matches.
-		assert.Equal(t, googlepolicy.EvalNoMatch, evalTrace(dropRoot, childSpan, scope, res))
-		assert.Equal(t, googlepolicy.EvalNoMatch, evalTrace(keepOk, childSpan, scope, res))
+		assert.Equal(t, googlepolicy.FilterNoMatch, evalTrace(dropRoot, childSpan, scope, res))
+		assert.Equal(t, googlepolicy.FilterNoMatch, evalTrace(keepOk, childSpan, scope, res))
 	})
 }
 
@@ -1028,7 +1028,7 @@ func TestZeroTraceAndSpanIDDoNotMatchEmptyString(t *testing.T) {
 			pol, err := NewPolicyFromProto(dropPolicy("zero-"+field.String(), recordFieldTarget(field), equalsString(""), false))
 			require.NoError(t, err)
 			assert.False(t, matchesTrace(pol, bareSpan, scope, res))
-			assert.Equal(t, googlepolicy.EvalNoMatch, evalTrace(pol, bareSpan, scope, res))
+			assert.Equal(t, googlepolicy.FilterNoMatch, evalTrace(pol, bareSpan, scope, res))
 		})
 
 		t.Run(field.String()+" regex anchored empty", func(t *testing.T) {
@@ -1087,7 +1087,7 @@ func TestEmptyContextFields(t *testing.T) {
 	for i, target := range targets {
 		pol, err := NewPolicyFromProto(dropPolicy("empty-ctx", target, &policyv1alpha1.TraceMatcher_Exists{}, false))
 		require.NoError(t, err, "target index %d", i)
-		assert.Equal(t, googlepolicy.EvalNoMatch, pol.EvaluateTrace(googlepolicy.TraceContext{}), "target index %d", i)
+		assert.Equal(t, googlepolicy.FilterNoMatch, pol.FilterTrace(googlepolicy.TraceContext{}), "target index %d", i)
 	}
 }
 
@@ -1303,16 +1303,16 @@ func TestDriverLoadPolicy(t *testing.T) {
 	assert.Equal(t, PolicyType, p.PolicyType())
 	assert.Equal(t, googlepolicy.PolicyClassTransformation, p.PolicyClass())
 
-	tpe, ok := p.(googlepolicy.TracePolicyEvaluator)
+	tpe, ok := p.(googlepolicy.TraceFilterPolicyEvaluator)
 	require.True(t, ok)
 
 	span, scope, res := newTestSpanBundle()
 	span.SetName("drop this span")
 	ctx := traceContext(span, scope, res)
-	assert.Equal(t, googlepolicy.EvalDrop, tpe.EvaluateTrace(ctx))
+	assert.Equal(t, googlepolicy.FilterDrop, tpe.FilterTrace(ctx))
 
 	span.SetName("keep this span")
-	assert.Equal(t, googlepolicy.EvalNoMatch, tpe.EvaluateTrace(ctx))
+	assert.Equal(t, googlepolicy.FilterNoMatch, tpe.FilterTrace(ctx))
 }
 
 // TestDriverLoadsFromProto covers the path a policy delivered over xDS takes:
@@ -1498,11 +1498,11 @@ func TestDriverLoadPolicyIgnoresUnknownFields(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "future-compatible-trace-policy", p.PolicyName())
 
-	tracePol, ok := p.(googlepolicy.TracePolicyEvaluator)
+	tracePol, ok := p.(googlepolicy.TraceFilterPolicyEvaluator)
 	require.True(t, ok)
 
 	span, scope, res := newTestSpanBundle()
-	assert.Equal(t, googlepolicy.EvalDrop, tracePol.EvaluateTrace(traceContext(span, scope, res)))
+	assert.Equal(t, googlepolicy.FilterDrop, tracePol.FilterTrace(traceContext(span, scope, res)))
 }
 
 func TestUnsetSpanStringFieldsReportAbsent(t *testing.T) {
@@ -1529,12 +1529,12 @@ func TestUnsetSpanStringFieldsReportAbsent(t *testing.T) {
 		// Negative regex must not match unset string fields.
 		negRegexPol, err := NewPolicyFromProto(dropPolicy("neg-regex", target, &policyv1alpha1.TraceMatcher_Regex{Regex: "^[^E]*$"}, false))
 		require.NoError(t, err)
-		assert.Equal(t, googlepolicy.EvalNoMatch, negRegexPol.EvaluateTrace(ctx))
+		assert.Equal(t, googlepolicy.FilterNoMatch, negRegexPol.FilterTrace(ctx))
 
 		// Equals empty string must not match unset string fields.
 		equalsEmptyPol, err := NewPolicyFromProto(dropPolicy("equals-empty", target, equalsString(""), false))
 		require.NoError(t, err)
-		assert.Equal(t, googlepolicy.EvalNoMatch, equalsEmptyPol.EvaluateTrace(ctx))
+		assert.Equal(t, googlepolicy.FilterNoMatch, equalsEmptyPol.FilterTrace(ctx))
 	}
 
 	// By contrast, root span ParentSpanID intentionally returns ("", false) per spec so equals: "" matches.

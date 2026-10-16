@@ -168,9 +168,9 @@ func verifyCompiledMetricPolicy(t *testing.T, p googlepolicy.Policy, contexts []
 		t.Fatalf("unexpected PolicyClass(): %q", p.PolicyClass())
 	}
 
-	eval, ok := p.(googlepolicy.MetricPolicyEvaluator)
+	eval, ok := p.(googlepolicy.MetricFilterPolicyEvaluator)
 	if !ok {
-		t.Fatalf("policy %T does not implement MetricPolicyEvaluator", p)
+		t.Fatalf("policy %T does not implement MetricFilterPolicyEvaluator", p)
 	}
 	_ = eval.IsDatapointLevel()
 	pol, ok := p.(*Policy)
@@ -179,19 +179,19 @@ func verifyCompiledMetricPolicy(t *testing.T, p googlepolicy.Policy, contexts []
 	}
 
 	for _, ctx := range contexts {
-		res := eval.EvaluateMetric(ctx)
+		res := eval.FilterMetric(ctx)
 		switch res {
-		case googlepolicy.EvalNoMatch:
-		case googlepolicy.EvalKeep:
+		case googlepolicy.FilterNoMatch:
+		case googlepolicy.FilterKeep:
 			if pol.Action() != policyv1alpha1.Action_ACTION_KEEP {
-				t.Fatalf("EvaluateMetric returned EvalKeep for action %v", pol.Action())
+				t.Fatalf("FilterMetric returned FilterKeep for action %v", pol.Action())
 			}
-		case googlepolicy.EvalDrop:
+		case googlepolicy.FilterDrop:
 			if pol.Action() != policyv1alpha1.Action_ACTION_DROP {
-				t.Fatalf("EvaluateMetric returned EvalDrop for action %v", pol.Action())
+				t.Fatalf("FilterMetric returned FilterDrop for action %v", pol.Action())
 			}
 		default:
-			t.Fatalf("EvaluateMetric returned unknown EvalResult %v", res)
+			t.Fatalf("FilterMetric returned unknown FilterResult %v", res)
 		}
 	}
 }
@@ -248,14 +248,14 @@ func FuzzMetricFilterPolicy(f *testing.F) {
 								t.Fatalf("protojson round-trip failed MakePolicySet: err=%v, len=%d, ok=%v", err, len(rtPS.Policies), ok)
 							}
 							verifyCompiledMetricPolicy(t, rtEntry.PolicyObj, ctxs)
-							protoEval := entry.PolicyObj.(googlepolicy.MetricPolicyEvaluator)
-							jsonEval := rtEntry.PolicyObj.(googlepolicy.MetricPolicyEvaluator)
+							protoEval := entry.PolicyObj.(googlepolicy.MetricFilterPolicyEvaluator)
+							jsonEval := rtEntry.PolicyObj.(googlepolicy.MetricFilterPolicyEvaluator)
 							if got, want := jsonEval.IsDatapointLevel(), protoEval.IsDatapointLevel(); got != want {
 								t.Fatalf("IsDatapointLevel mismatch between proto (%v) and JSON (%v)", want, got)
 							}
 							for i, ctx := range ctxs {
-								if got, want := jsonEval.EvaluateMetric(ctx), protoEval.EvaluateMetric(ctx); got != want {
-									t.Fatalf("context[%d] EvalResult mismatch between proto (%v) and JSON (%v)", i, want, got)
+								if got, want := jsonEval.FilterMetric(ctx), protoEval.FilterMetric(ctx); got != want {
+									t.Fatalf("context[%d] FilterResult mismatch between proto (%v) and JSON (%v)", i, want, got)
 								}
 							}
 						}

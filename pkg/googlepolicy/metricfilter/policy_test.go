@@ -108,8 +108,8 @@ func metricContext(m pmetric.Metric, scope pmetric.ScopeMetrics, res pmetric.Res
 	return ctx
 }
 
-func evalMetric(pol *Policy, m pmetric.Metric, scope pmetric.ScopeMetrics, res pmetric.ResourceMetrics) googlepolicy.EvalResult {
-	return pol.EvaluateMetric(metricContext(m, scope, res))
+func evalMetric(pol *Policy, m pmetric.Metric, scope pmetric.ScopeMetrics, res pmetric.ResourceMetrics) googlepolicy.FilterResult {
+	return pol.FilterMetric(metricContext(m, scope, res))
 }
 
 func matchesMetric(pol *Policy, m pmetric.Metric, scope pmetric.ScopeMetrics, res pmetric.ResourceMetrics) bool {
@@ -412,7 +412,7 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 		assert.NoError(t, pol.Validate())
 
 		assert.True(t, matchesMetric(pol, metric, scope, res))
-		assert.Equal(t, googlepolicy.EvalDrop, evalMetric(pol, metric, scope, res))
+		assert.Equal(t, googlepolicy.FilterDrop, evalMetric(pol, metric, scope, res))
 	})
 
 	t.Run("Action DROP non-matching metric", func(t *testing.T) {
@@ -433,7 +433,7 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.False(t, matchesMetric(pol, metric, scope, res))
-		assert.Equal(t, googlepolicy.EvalNoMatch, evalMetric(pol, metric, scope, res))
+		assert.Equal(t, googlepolicy.FilterNoMatch, evalMetric(pol, metric, scope, res))
 	})
 
 	t.Run("Action KEEP matching metric", func(t *testing.T) {
@@ -454,8 +454,8 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.True(t, matchesMetric(pol, metric, scope, res))
-		// Matching KEEP policy evaluates to EvalKeep (exemption)
-		assert.Equal(t, googlepolicy.EvalKeep, evalMetric(pol, metric, scope, res))
+		// Matching KEEP policy evaluates to FilterKeep (exemption)
+		assert.Equal(t, googlepolicy.FilterKeep, evalMetric(pol, metric, scope, res))
 	})
 
 	t.Run("Action KEEP non-matching metric", func(t *testing.T) {
@@ -476,9 +476,9 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.False(t, matchesMetric(pol, metric, scope, res))
-		// Non-matching KEEP policy evaluates to EvalNoMatch: KEEP is an
+		// Non-matching KEEP policy evaluates to FilterNoMatch: KEEP is an
 		// exemption and never prunes on its own.
-		assert.Equal(t, googlepolicy.EvalNoMatch, evalMetric(pol, metric, scope, res))
+		assert.Equal(t, googlepolicy.FilterNoMatch, evalMetric(pol, metric, scope, res))
 	})
 
 	t.Run("Multiple matchers AND semantics", func(t *testing.T) {
@@ -1123,16 +1123,16 @@ func TestDriverLoadPolicy(t *testing.T) {
 	assert.Equal(t, PolicyType, p.PolicyType())
 	assert.Equal(t, googlepolicy.PolicyClassTransformation, p.PolicyClass())
 
-	mpe, ok := p.(googlepolicy.MetricPolicyEvaluator)
+	mpe, ok := p.(googlepolicy.MetricFilterPolicyEvaluator)
 	require.True(t, ok)
 	assert.False(t, mpe.IsDatapointLevel())
 
 	metric, scope, res := newTestMetricBundle()
 	metric.SetName("drop.this.metric")
-	assert.Equal(t, googlepolicy.EvalDrop, mpe.EvaluateMetric(metricContext(metric, scope, res)))
+	assert.Equal(t, googlepolicy.FilterDrop, mpe.FilterMetric(metricContext(metric, scope, res)))
 
 	metric.SetName("keep.this.metric")
-	assert.Equal(t, googlepolicy.EvalNoMatch, mpe.EvaluateMetric(metricContext(metric, scope, res)))
+	assert.Equal(t, googlepolicy.FilterNoMatch, mpe.FilterMetric(metricContext(metric, scope, res)))
 }
 
 // TestDriverLoadPolicyErrors covers the failure paths of Driver.LoadPolicy.
@@ -1353,12 +1353,12 @@ func TestValidateNilProto(t *testing.T) {
 	assert.ErrorIs(t, (&Policy{}).Validate(), ErrNilProto)
 }
 
-// TestEvaluateMetricUnknownActionFailsClosed covers the defensive default arm
-// of EvaluateMetric. NewPolicyFromProto rejects any action other than
+// TestFilterMetricUnknownActionFailsClosed covers the defensive default arm
+// of FilterMetric. NewPolicyFromProto rejects any action other than
 // KEEP/DROP, so the only way in is direct construction; the contract being
-// pinned is that an unrecognized action degrades to EvalNoMatch (telemetry
+// pinned is that an unrecognized action degrades to FilterNoMatch (telemetry
 // passes through) instead of silently dropping datapoints.
-func TestEvaluateMetricUnknownActionFailsClosed(t *testing.T) {
+func TestFilterMetricUnknownActionFailsClosed(t *testing.T) {
 	pol := &Policy{
 		proto: &policyv1alpha1.MetricFilterPolicy{
 			Id:     "unknown-action",
@@ -1369,7 +1369,7 @@ func TestEvaluateMetricUnknownActionFailsClosed(t *testing.T) {
 	// the action switch.
 	metric, scope, res := newTestMetricBundle()
 	require.True(t, matchesMetric(pol, metric, scope, res))
-	assert.Equal(t, googlepolicy.EvalNoMatch, evalMetric(pol, metric, scope, res))
+	assert.Equal(t, googlepolicy.FilterNoMatch, evalMetric(pol, metric, scope, res))
 }
 
 // TestUnsetDescriptorStringFieldsReportAbsent verifies that unset first-class
@@ -1396,21 +1396,21 @@ func TestUnsetDescriptorStringFieldsReportAbsent(t *testing.T) {
 
 			// exists is false ...
 			existsPol := mustDropPolicy(t, "exists-"+field.String(), target, &policyv1alpha1.MetricMatcher_Exists{}, false)
-			assert.Equal(t, googlepolicy.EvalNoMatch, existsPol.EvaluateMetric(ctx))
+			assert.Equal(t, googlepolicy.FilterNoMatch, existsPol.FilterMetric(ctx))
 
 			// ... which makes `exists` + negate the "field is unset" selector.
 			negatedPol := mustDropPolicy(t, "not-exists-"+field.String(), target, &policyv1alpha1.MetricMatcher_Exists{}, true)
-			assert.Equal(t, googlepolicy.EvalDrop, negatedPol.EvaluateMetric(ctx))
+			assert.Equal(t, googlepolicy.FilterDrop, negatedPol.FilterMetric(ctx))
 
 			// Value predicates must NOT match an unset field.
 			equalsPol := mustDropPolicy(t, "equals-empty-"+field.String(), target, equalsString(""), false)
-			assert.Equal(t, googlepolicy.EvalNoMatch, equalsPol.EvaluateMetric(ctx))
+			assert.Equal(t, googlepolicy.FilterNoMatch, equalsPol.FilterMetric(ctx))
 
 			regexEmptyPol := mustDropPolicy(t, "regex-empty-"+field.String(), target, &policyv1alpha1.MetricMatcher_Regex{Regex: "^$"}, false)
-			assert.Equal(t, googlepolicy.EvalNoMatch, regexEmptyPol.EvaluateMetric(ctx))
+			assert.Equal(t, googlepolicy.FilterNoMatch, regexEmptyPol.FilterMetric(ctx))
 
 			regexNegPol := mustDropPolicy(t, "regex-neg-"+field.String(), target, &policyv1alpha1.MetricMatcher_Regex{Regex: "^[^E]*$"}, false)
-			assert.Equal(t, googlepolicy.EvalNoMatch, regexNegPol.EvaluateMetric(ctx))
+			assert.Equal(t, googlepolicy.FilterNoMatch, regexNegPol.FilterMetric(ctx))
 		})
 	}
 }
@@ -1442,24 +1442,24 @@ func TestMetricTypeAbsentOnUntypedInstrument(t *testing.T) {
 
 	t.Run("exists reports false", func(t *testing.T) {
 		pol := mustDropPolicy(t, "type-exists", target, &policyv1alpha1.MetricMatcher_Exists{}, false)
-		assert.Equal(t, googlepolicy.EvalNoMatch, pol.EvaluateMetric(untypedCtx))
+		assert.Equal(t, googlepolicy.FilterNoMatch, pol.FilterMetric(untypedCtx))
 		// A typed instrument does satisfy the same selector.
-		assert.Equal(t, googlepolicy.EvalDrop, pol.EvaluateMetric(typedCtx))
+		assert.Equal(t, googlepolicy.FilterDrop, pol.FilterMetric(typedCtx))
 	})
 
 	t.Run("equals UNSPECIFIED still matches", func(t *testing.T) {
 		pol := mustDropPolicy(t, "type-equals-unspecified", target, equalsString("UNSPECIFIED"), false)
-		assert.Equal(t, googlepolicy.EvalDrop, pol.EvaluateMetric(untypedCtx))
-		assert.Equal(t, googlepolicy.EvalNoMatch, pol.EvaluateMetric(typedCtx))
+		assert.Equal(t, googlepolicy.FilterDrop, pol.FilterMetric(untypedCtx))
+		assert.Equal(t, googlepolicy.FilterNoMatch, pol.FilterMetric(typedCtx))
 
 		containsPol := mustDropPolicy(t, "type-contains-unspecified", target, containsString("UNSPEC"), false)
-		assert.Equal(t, googlepolicy.EvalDrop, containsPol.EvaluateMetric(untypedCtx))
+		assert.Equal(t, googlepolicy.FilterDrop, containsPol.FilterMetric(untypedCtx))
 	})
 
 	t.Run("negated exists selects untyped instruments", func(t *testing.T) {
 		pol := mustDropPolicy(t, "type-not-exists", target, &policyv1alpha1.MetricMatcher_Exists{}, true)
-		assert.Equal(t, googlepolicy.EvalDrop, pol.EvaluateMetric(untypedCtx))
-		assert.Equal(t, googlepolicy.EvalNoMatch, pol.EvaluateMetric(typedCtx))
+		assert.Equal(t, googlepolicy.FilterDrop, pol.FilterMetric(untypedCtx))
+		assert.Equal(t, googlepolicy.FilterNoMatch, pol.FilterMetric(typedCtx))
 	})
 }
 
@@ -1489,8 +1489,8 @@ func TestAggregationTemporalityAbsentWhenUnspecified(t *testing.T) {
 
 	t.Run("exists reports false", func(t *testing.T) {
 		pol := mustDropPolicy(t, "temporality-exists", target, &policyv1alpha1.MetricMatcher_Exists{}, false)
-		assert.Equal(t, googlepolicy.EvalNoMatch, pol.EvaluateMetric(unspecifiedCtx))
-		assert.Equal(t, googlepolicy.EvalDrop, pol.EvaluateMetric(deltaCtx))
+		assert.Equal(t, googlepolicy.FilterNoMatch, pol.FilterMetric(unspecifiedCtx))
+		assert.Equal(t, googlepolicy.FilterDrop, pol.FilterMetric(deltaCtx))
 	})
 
 	t.Run("no value predicate matches the absent field", func(t *testing.T) {
@@ -1502,14 +1502,14 @@ func TestAggregationTemporalityAbsentWhenUnspecified(t *testing.T) {
 		}
 		for name, predicate := range predicates {
 			pol := mustDropPolicy(t, "temporality-"+name, target, predicate, false)
-			assert.Equal(t, googlepolicy.EvalNoMatch, pol.EvaluateMetric(unspecifiedCtx), name)
+			assert.Equal(t, googlepolicy.FilterNoMatch, pol.FilterMetric(unspecifiedCtx), name)
 		}
 	})
 
 	t.Run("negated exists selects instruments without a temporality", func(t *testing.T) {
 		pol := mustDropPolicy(t, "temporality-not-exists", target, &policyv1alpha1.MetricMatcher_Exists{}, true)
-		assert.Equal(t, googlepolicy.EvalDrop, pol.EvaluateMetric(unspecifiedCtx))
-		assert.Equal(t, googlepolicy.EvalNoMatch, pol.EvaluateMetric(deltaCtx))
+		assert.Equal(t, googlepolicy.FilterDrop, pol.FilterMetric(unspecifiedCtx))
+		assert.Equal(t, googlepolicy.FilterNoMatch, pol.FilterMetric(deltaCtx))
 	})
 }
 
@@ -1543,16 +1543,16 @@ func TestIsMonotonicAbsentForNonSumInstruments(t *testing.T) {
 			assert.Nil(t, val)
 
 			existsPol := mustDropPolicy(t, "monotonic-exists-"+tt.name, target, &policyv1alpha1.MetricMatcher_Exists{}, false)
-			assert.Equal(t, googlepolicy.EvalNoMatch, existsPol.EvaluateMetric(ctx))
+			assert.Equal(t, googlepolicy.FilterNoMatch, existsPol.FilterMetric(ctx))
 
 			// Absent means absent: neither `false` nor `true` matches.
 			for _, want := range []bool{true, false} {
 				pol := mustDropPolicy(t, "monotonic-equals-"+tt.name, target, equalsBool(want), false)
-				assert.Equal(t, googlepolicy.EvalNoMatch, pol.EvaluateMetric(ctx))
+				assert.Equal(t, googlepolicy.FilterNoMatch, pol.FilterMetric(ctx))
 			}
 
 			negatedPol := mustDropPolicy(t, "monotonic-not-exists-"+tt.name, target, &policyv1alpha1.MetricMatcher_Exists{}, true)
-			assert.Equal(t, googlepolicy.EvalDrop, negatedPol.EvaluateMetric(ctx))
+			assert.Equal(t, googlepolicy.FilterDrop, negatedPol.FilterMetric(ctx))
 		})
 	}
 
@@ -1568,7 +1568,7 @@ func TestIsMonotonicAbsentForNonSumInstruments(t *testing.T) {
 			assert.Equal(t, monotonic, val)
 
 			pol := mustDropPolicy(t, "sum-monotonic", target, equalsBool(monotonic), false)
-			assert.Equal(t, googlepolicy.EvalDrop, pol.EvaluateMetric(ctx))
+			assert.Equal(t, googlepolicy.FilterDrop, pol.FilterMetric(ctx))
 		}
 	})
 }
@@ -1614,7 +1614,7 @@ func TestEmptyContextFields(t *testing.T) {
 			assert.Equal(t, tt.wantValue, val)
 
 			pol := mustDropPolicy(t, "empty-ctx-"+tt.name, tt.target, &policyv1alpha1.MetricMatcher_Exists{}, false)
-			assert.Equal(t, googlepolicy.EvalNoMatch, pol.EvaluateMetric(googlepolicy.MetricContext{}))
+			assert.Equal(t, googlepolicy.FilterNoMatch, pol.FilterMetric(googlepolicy.MetricContext{}))
 		})
 	}
 }
@@ -1669,7 +1669,7 @@ func TestZeroValueMetricInPopulatedContext(t *testing.T) {
 			for _, p := range predicates {
 				pol := mustDropPolicy(t, "zero-metric-"+field.String()+"-"+p.name, target, p.predicate, false)
 				require.NotPanics(t, func() {
-					assert.Equal(t, googlepolicy.EvalNoMatch, pol.EvaluateMetric(ctx), p.name)
+					assert.Equal(t, googlepolicy.FilterNoMatch, pol.FilterMetric(ctx), p.name)
 				})
 			}
 		})
@@ -1700,11 +1700,11 @@ func TestDriverLoadPolicyIgnoresUnknownFields(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "future-compatible-metric-policy", p.PolicyName())
 
-	metricPol, ok := p.(googlepolicy.MetricPolicyEvaluator)
+	metricPol, ok := p.(googlepolicy.MetricFilterPolicyEvaluator)
 	require.True(t, ok)
 
 	m, sm, rm := newTestMetricBundle()
-	assert.Equal(t, googlepolicy.EvalDrop, metricPol.EvaluateMetric(metricContext(m, sm, rm)))
+	assert.Equal(t, googlepolicy.FilterDrop, metricPol.FilterMetric(metricContext(m, sm, rm)))
 }
 
 // TestDriverRoutesItsProto pins the link between the proto a control plane puts

@@ -36,7 +36,7 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// SpanRecordField identifies standard first-class fields of an OpenTelemetry Span.
+// SpanRecordField identifies standard creation-time fields of an OpenTelemetry Span.
 // When evaluated with `exists`, first-class fields evaluate to true when set
 // to a non-default (non-empty / non-zero) value.
 type SpanRecordField int32
@@ -47,39 +47,36 @@ const (
 	// The operation name of the span (e.g. "HTTP GET /users", "SELECT * FROM users").
 	SpanRecordField_SPAN_RECORD_FIELD_NAME SpanRecordField = 1
 	// The 16-byte trace identifier associated with the span.
-	// When evaluated against string predicates (`exact`, `regex`), this matches
-	// against the 32-character lowercase hexadecimal string representation
-	// per the OpenTelemetry / W3C Trace Context specification.
+	// When evaluated against string predicates (`equals` with `string_value`,
+	// `glob`, `contains` with `string_value`), this matches against the
+	// 32-character lowercase hexadecimal string representation per the
+	// OpenTelemetry / W3C Trace Context specification.
 	SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID SpanRecordField = 2
 	// The 8-byte span identifier.
-	// When evaluated against string predicates (`exact`, `regex`), this matches
-	// against the 16-character lowercase hexadecimal string representation
-	// per the OpenTelemetry / W3C Trace Context specification.
+	// When evaluated against string predicates (`equals` with `string_value`,
+	// `glob`, `contains` with `string_value`), this matches against the
+	// 16-character lowercase hexadecimal string representation per the
+	// OpenTelemetry / W3C Trace Context specification.
 	SpanRecordField_SPAN_RECORD_FIELD_SPAN_ID SpanRecordField = 3
 	// The 8-byte parent span identifier.
 	// Root spans have no parent span identifier (in OpenTelemetry data models,
 	// parent_span_id is empty or all zeroes).
 	// When evaluated with `exists`, this evaluates to false for root spans (and true
 	// with `negate: true`, allowing explicit targeting or exemption of root spans).
-	// When evaluated against string predicates (`exact`, `regex`), a root span matches
-	// against the empty string `""`. For child spans, this matches against the
-	// 16-character lowercase hexadecimal string representation per the OpenTelemetry /
-	// W3C Trace Context specification.
+	// When evaluated against string predicates (`equals` with `string_value`,
+	// `glob`, `contains` with `string_value`), a root span matches against the
+	// empty string `""`. For child spans, this matches against the 16-character
+	// lowercase hexadecimal string representation per the OpenTelemetry / W3C
+	// Trace Context specification.
 	SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID SpanRecordField = 4
-	// The status message describing an error.
-	SpanRecordField_SPAN_RECORD_FIELD_STATUS_MESSAGE SpanRecordField = 5
 	// The span kind (e.g. "INTERNAL", "SERVER", "CLIENT", "PRODUCER", "CONSUMER").
-	// When evaluated against string predicates (`exact`, `regex`), this matches
-	// against uppercase span kind string names without the "SPAN_KIND_" prefix
-	// (matching OpenTelemetry specification conventions). Per the OpenTelemetry
+	// When evaluated against string predicates (`equals` with `string_value`,
+	// `glob`, `contains` with `string_value`), this matches against uppercase
+	// span kind string names without the "SPAN_KIND_" prefix (matching
+	// OpenTelemetry specification conventions). Per the OpenTelemetry
 	// specification, if span kind is unset or SPAN_KIND_UNSPECIFIED,
 	// implementations treat it as "INTERNAL".
-	SpanRecordField_SPAN_RECORD_FIELD_KIND SpanRecordField = 6
-	// The span status code (e.g. "OK", "ERROR", "UNSET").
-	// When evaluated against string predicates (`exact`, `regex`), this matches
-	// against uppercase status code string names (without the "STATUS_CODE_"
-	// prefix, matching OpenTelemetry specification conventions).
-	SpanRecordField_SPAN_RECORD_FIELD_STATUS_CODE SpanRecordField = 7
+	SpanRecordField_SPAN_RECORD_FIELD_KIND SpanRecordField = 5
 )
 
 // Enum value maps for SpanRecordField.
@@ -90,9 +87,7 @@ var (
 		2: "SPAN_RECORD_FIELD_TRACE_ID",
 		3: "SPAN_RECORD_FIELD_SPAN_ID",
 		4: "SPAN_RECORD_FIELD_PARENT_SPAN_ID",
-		5: "SPAN_RECORD_FIELD_STATUS_MESSAGE",
-		6: "SPAN_RECORD_FIELD_KIND",
-		7: "SPAN_RECORD_FIELD_STATUS_CODE",
+		5: "SPAN_RECORD_FIELD_KIND",
 	}
 	SpanRecordField_value = map[string]int32{
 		"SPAN_RECORD_FIELD_UNSPECIFIED":    0,
@@ -100,9 +95,7 @@ var (
 		"SPAN_RECORD_FIELD_TRACE_ID":       2,
 		"SPAN_RECORD_FIELD_SPAN_ID":        3,
 		"SPAN_RECORD_FIELD_PARENT_SPAN_ID": 4,
-		"SPAN_RECORD_FIELD_STATUS_MESSAGE": 5,
-		"SPAN_RECORD_FIELD_KIND":           6,
-		"SPAN_RECORD_FIELD_STATUS_CODE":    7,
+		"SPAN_RECORD_FIELD_KIND":           5,
 	}
 )
 
@@ -133,35 +126,31 @@ func (SpanRecordField) EnumDescriptor() ([]byte, []int) {
 	return file_policy_v1alpha1_trace_filter_policy_proto_rawDescGZIP(), []int{0}
 }
 
-// TraceFilterPolicy defines an intent-based rule for retaining or dropping
-// spans based on structured field, attribute, and status matches.
+// TraceFilterPolicy defines an intent-based rule for dropping spans based on
+// structured creation-time field and attribute matches.
 //
 // Policies are declarative, atomic, and transport-agnostic.
 //
-// Evaluation Granularity & Action Precedence:
+// Evaluation Granularity & Semantics:
 //   - Span-Level Granularity: Spans are evaluated independently without trace
 //     reassembly. Filter policies remain fast, stateless, and evaluated per span.
 //   - Independent Decisions & Orphan Spans: Dropping a span does not drop its
 //     descendants. Dropping an intermediate span in a trace leaves child spans
 //     behind as orphans with a dangling parent_span_id.
-//   - Action Precedence & Exemptions: Telemetry passes through by default (default
-//     allow). When multiple policies match a span, ACTION_KEEP always overrides
-//     ACTION_DROP (keep always overrides drop). ACTION_KEEP acts as an explicit
-//     exemption retaining matching spans; it does not prune non-matching spans.
-//     To implement an allowlist that prunes non-matching spans, authors specify
-//     ACTION_DROP with negate: true on the matchers.
+//   - Drop Semantics: Telemetry passes through by default (default allow). When
+//     all matchers in `matches` evaluate to true for a span, the span is dropped.
+//     To implement an allowlist that drops non-matching spans, authors specify
+//     negate: true on the matchers.
 type TraceFilterPolicy struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Unique identifier for the policy within its configuration scope
-	// (e.g. a UUID or namespaced URI like "io.opentelemetry.operator/{namespace}/policies/retain-error-spans").
+	// (e.g. a UUID or namespaced URI like "io.opentelemetry.operator/{namespace}/policies/drop-healthcheck-spans").
 	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	// The filtering action to take when all `matches` conditions evaluate to true.
-	Action *Action `protobuf:"varint,2,opt,name=action,proto3,enum=google.telemetry.policy.v1alpha1.Action,oneof" json:"action,omitempty"`
 	// Conditions evaluated against incoming spans.
 	// All matchers in this list are ANDed together: all conditions must evaluate
-	// to true for the policy action to take effect.
+	// to true for the span to be dropped.
 	// At least one matcher is required; a policy with no matchers is invalid.
-	Matches       []*TraceMatcher `protobuf:"bytes,3,rep,name=matches,proto3" json:"matches,omitempty"`
+	Matches       []*TraceMatcher `protobuf:"bytes,2,rep,name=matches,proto3" json:"matches,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -203,13 +192,6 @@ func (x *TraceFilterPolicy) GetId() string {
 	return ""
 }
 
-func (x *TraceFilterPolicy) GetAction() Action {
-	if x != nil && x.Action != nil {
-		return *x.Action
-	}
-	return Action_ACTION_UNSPECIFIED
-}
-
 func (x *TraceFilterPolicy) GetMatches() []*TraceMatcher {
 	if x != nil {
 		return x.Matches
@@ -217,8 +199,8 @@ func (x *TraceFilterPolicy) GetMatches() []*TraceMatcher {
 	return nil
 }
 
-// TraceMatcher defines a single predicate evaluated against a specific span field,
-// attribute, or status.
+// TraceMatcher defines a single predicate evaluated against a specific span
+// creation-time field or attribute.
 type TraceMatcher struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The span field, attribute, or metadata to inspect. Exactly one must be set.
@@ -230,7 +212,7 @@ type TraceMatcher struct {
 	//
 	//	*TraceMatcher_Exists
 	//	*TraceMatcher_Equals
-	//	*TraceMatcher_Regex
+	//	*TraceMatcher_Glob
 	//	*TraceMatcher_Gt
 	//	*TraceMatcher_Gte
 	//	*TraceMatcher_Lt
@@ -305,10 +287,10 @@ func (x *TraceMatcher) GetEquals() *Value {
 	return nil
 }
 
-func (x *TraceMatcher) GetRegex() string {
+func (x *TraceMatcher) GetGlob() string {
 	if x != nil {
-		if x, ok := x.Predicate.(*TraceMatcher_Regex); ok {
-			return x.Regex
+		if x, ok := x.Predicate.(*TraceMatcher_Glob); ok {
+			return x.Glob
 		}
 	}
 	return ""
@@ -386,13 +368,12 @@ type TraceMatcher_Equals struct {
 	Equals *Value `protobuf:"bytes,11,opt,name=equals,proto3,oneof"`
 }
 
-type TraceMatcher_Regex struct {
-	// Regular expression match using RE2 syntax.
-	// Evaluates as an unanchored partial match (like Go regexp.MatchString and
-	// OpenTelemetry OTTL IsMatch). Callers requiring full string equality must
-	// provide explicit anchors ('^' and '$'). Applies strictly to string
-	// fields and string attribute values.
-	Regex string `protobuf:"bytes,12,opt,name=regex,proto3,oneof"`
+type TraceMatcher_Glob struct {
+	// Glob pattern match against the entire string value.
+	// Supports '*' (matches zero or more characters) and '?' (matches any
+	// single character). Matching is case-sensitive and anchored to the full
+	// string. Applies strictly to string fields and string attribute values.
+	Glob string `protobuf:"bytes,12,opt,name=glob,proto3,oneof"`
 }
 
 type TraceMatcher_Gt struct {
@@ -431,7 +412,7 @@ func (*TraceMatcher_Exists) isTraceMatcher_Predicate() {}
 
 func (*TraceMatcher_Equals) isTraceMatcher_Predicate() {}
 
-func (*TraceMatcher_Regex) isTraceMatcher_Predicate() {}
+func (*TraceMatcher_Glob) isTraceMatcher_Predicate() {}
 
 func (*TraceMatcher_Gt) isTraceMatcher_Predicate() {}
 
@@ -545,7 +526,7 @@ type isTraceFieldSelector_Target interface {
 }
 
 type TraceFieldSelector_RecordField struct {
-	// Standard first-class OpenTelemetry Span fields (e.g. name, status_code).
+	// Standard first-class OpenTelemetry Span creation-time fields (e.g. name, kind).
 	RecordField SpanRecordField `protobuf:"varint,1,opt,name=record_field,json=recordField,proto3,enum=google.telemetry.policy.v1alpha1.SpanRecordField,oneof"`
 }
 
@@ -583,18 +564,16 @@ var File_policy_v1alpha1_trace_filter_policy_proto protoreflect.FileDescriptor
 
 const file_policy_v1alpha1_trace_filter_policy_proto_rawDesc = "" +
 	"\n" +
-	")policy/v1alpha1/trace_filter_policy.proto\x12 google.telemetry.policy.v1alpha1\x1a\x1bgoogle/protobuf/empty.proto\x1a)policy/v1alpha1/common_policy_types.proto\"\xbf\x01\n" +
+	")policy/v1alpha1/trace_filter_policy.proto\x12 google.telemetry.policy.v1alpha1\x1a\x1bgoogle/protobuf/empty.proto\x1a)policy/v1alpha1/common_policy_types.proto\"m\n" +
 	"\x11TraceFilterPolicy\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12E\n" +
-	"\x06action\x18\x02 \x01(\x0e2(.google.telemetry.policy.v1alpha1.ActionH\x00R\x06action\x88\x01\x01\x12H\n" +
-	"\amatches\x18\x03 \x03(\v2..google.telemetry.policy.v1alpha1.TraceMatcherR\amatchesB\t\n" +
-	"\a_action\"\xe1\x04\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12H\n" +
+	"\amatches\x18\x02 \x03(\v2..google.telemetry.policy.v1alpha1.TraceMatcherR\amatches\"\xdf\x04\n" +
 	"\fTraceMatcher\x12L\n" +
 	"\x06target\x18\x01 \x01(\v24.google.telemetry.policy.v1alpha1.TraceFieldSelectorR\x06target\x120\n" +
 	"\x06exists\x18\n" +
 	" \x01(\v2\x16.google.protobuf.EmptyH\x00R\x06exists\x12A\n" +
-	"\x06equals\x18\v \x01(\v2'.google.telemetry.policy.v1alpha1.ValueH\x00R\x06equals\x12\x16\n" +
-	"\x05regex\x18\f \x01(\tH\x00R\x05regex\x12@\n" +
+	"\x06equals\x18\v \x01(\v2'.google.telemetry.policy.v1alpha1.ValueH\x00R\x06equals\x12\x14\n" +
+	"\x04glob\x18\f \x01(\tH\x00R\x04glob\x12@\n" +
 	"\x02gt\x18\r \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x02gt\x12B\n" +
 	"\x03gte\x18\x0e \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x03gte\x12@\n" +
 	"\x02lt\x18\x0f \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x02lt\x12B\n" +
@@ -609,16 +588,14 @@ const file_policy_v1alpha1_trace_filter_policy_proto_rawDesc = "" +
 	"\x0fscope_attribute\x18\x04 \x01(\v2/.google.telemetry.policy.v1alpha1.AttributePathH\x00R\x0escopeAttribute\x12O\n" +
 	"\vscope_field\x18\x05 \x01(\x0e2,.google.telemetry.policy.v1alpha1.ScopeFieldH\x00R\n" +
 	"scopeFieldB\b\n" +
-	"\x06target*\x9a\x02\n" +
+	"\x06target*\xd1\x01\n" +
 	"\x0fSpanRecordField\x12!\n" +
 	"\x1dSPAN_RECORD_FIELD_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16SPAN_RECORD_FIELD_NAME\x10\x01\x12\x1e\n" +
 	"\x1aSPAN_RECORD_FIELD_TRACE_ID\x10\x02\x12\x1d\n" +
 	"\x19SPAN_RECORD_FIELD_SPAN_ID\x10\x03\x12$\n" +
-	" SPAN_RECORD_FIELD_PARENT_SPAN_ID\x10\x04\x12$\n" +
-	" SPAN_RECORD_FIELD_STATUS_MESSAGE\x10\x05\x12\x1a\n" +
-	"\x16SPAN_RECORD_FIELD_KIND\x10\x06\x12!\n" +
-	"\x1dSPAN_RECORD_FIELD_STATUS_CODE\x10\aB\xca\x02\n" +
+	" SPAN_RECORD_FIELD_PARENT_SPAN_ID\x10\x04\x12\x1a\n" +
+	"\x16SPAN_RECORD_FIELD_KIND\x10\x05B\xca\x02\n" +
 	"$com.google.telemetry.policy.v1alpha1B\x16TraceFilterPolicyProtoP\x01Zggithub.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1;policyv1alpha1\xa2\x02\x03GTP\xaa\x02 Google.Telemetry.Policy.V1alpha1\xca\x02 Google\\Telemetry\\Policy\\V1alpha1\xe2\x02,Google\\Telemetry\\Policy\\V1alpha1\\GPBMetadata\xea\x02#Google::Telemetry::Policy::V1alpha1b\x06proto3"
 
 var (
@@ -640,34 +617,32 @@ var file_policy_v1alpha1_trace_filter_policy_proto_goTypes = []any{
 	(*TraceFilterPolicy)(nil),  // 1: google.telemetry.policy.v1alpha1.TraceFilterPolicy
 	(*TraceMatcher)(nil),       // 2: google.telemetry.policy.v1alpha1.TraceMatcher
 	(*TraceFieldSelector)(nil), // 3: google.telemetry.policy.v1alpha1.TraceFieldSelector
-	(Action)(0),                // 4: google.telemetry.policy.v1alpha1.Action
-	(*emptypb.Empty)(nil),      // 5: google.protobuf.Empty
-	(*Value)(nil),              // 6: google.telemetry.policy.v1alpha1.Value
-	(*NumericValue)(nil),       // 7: google.telemetry.policy.v1alpha1.NumericValue
-	(*AttributePath)(nil),      // 8: google.telemetry.policy.v1alpha1.AttributePath
-	(ScopeField)(0),            // 9: google.telemetry.policy.v1alpha1.ScopeField
+	(*emptypb.Empty)(nil),      // 4: google.protobuf.Empty
+	(*Value)(nil),              // 5: google.telemetry.policy.v1alpha1.Value
+	(*NumericValue)(nil),       // 6: google.telemetry.policy.v1alpha1.NumericValue
+	(*AttributePath)(nil),      // 7: google.telemetry.policy.v1alpha1.AttributePath
+	(ScopeField)(0),            // 8: google.telemetry.policy.v1alpha1.ScopeField
 }
 var file_policy_v1alpha1_trace_filter_policy_proto_depIdxs = []int32{
-	4,  // 0: google.telemetry.policy.v1alpha1.TraceFilterPolicy.action:type_name -> google.telemetry.policy.v1alpha1.Action
-	2,  // 1: google.telemetry.policy.v1alpha1.TraceFilterPolicy.matches:type_name -> google.telemetry.policy.v1alpha1.TraceMatcher
-	3,  // 2: google.telemetry.policy.v1alpha1.TraceMatcher.target:type_name -> google.telemetry.policy.v1alpha1.TraceFieldSelector
-	5,  // 3: google.telemetry.policy.v1alpha1.TraceMatcher.exists:type_name -> google.protobuf.Empty
-	6,  // 4: google.telemetry.policy.v1alpha1.TraceMatcher.equals:type_name -> google.telemetry.policy.v1alpha1.Value
-	7,  // 5: google.telemetry.policy.v1alpha1.TraceMatcher.gt:type_name -> google.telemetry.policy.v1alpha1.NumericValue
-	7,  // 6: google.telemetry.policy.v1alpha1.TraceMatcher.gte:type_name -> google.telemetry.policy.v1alpha1.NumericValue
-	7,  // 7: google.telemetry.policy.v1alpha1.TraceMatcher.lt:type_name -> google.telemetry.policy.v1alpha1.NumericValue
-	7,  // 8: google.telemetry.policy.v1alpha1.TraceMatcher.lte:type_name -> google.telemetry.policy.v1alpha1.NumericValue
-	6,  // 9: google.telemetry.policy.v1alpha1.TraceMatcher.contains:type_name -> google.telemetry.policy.v1alpha1.Value
-	0,  // 10: google.telemetry.policy.v1alpha1.TraceFieldSelector.record_field:type_name -> google.telemetry.policy.v1alpha1.SpanRecordField
-	8,  // 11: google.telemetry.policy.v1alpha1.TraceFieldSelector.span_attribute:type_name -> google.telemetry.policy.v1alpha1.AttributePath
-	8,  // 12: google.telemetry.policy.v1alpha1.TraceFieldSelector.resource_attribute:type_name -> google.telemetry.policy.v1alpha1.AttributePath
-	8,  // 13: google.telemetry.policy.v1alpha1.TraceFieldSelector.scope_attribute:type_name -> google.telemetry.policy.v1alpha1.AttributePath
-	9,  // 14: google.telemetry.policy.v1alpha1.TraceFieldSelector.scope_field:type_name -> google.telemetry.policy.v1alpha1.ScopeField
-	15, // [15:15] is the sub-list for method output_type
-	15, // [15:15] is the sub-list for method input_type
-	15, // [15:15] is the sub-list for extension type_name
-	15, // [15:15] is the sub-list for extension extendee
-	0,  // [0:15] is the sub-list for field type_name
+	2,  // 0: google.telemetry.policy.v1alpha1.TraceFilterPolicy.matches:type_name -> google.telemetry.policy.v1alpha1.TraceMatcher
+	3,  // 1: google.telemetry.policy.v1alpha1.TraceMatcher.target:type_name -> google.telemetry.policy.v1alpha1.TraceFieldSelector
+	4,  // 2: google.telemetry.policy.v1alpha1.TraceMatcher.exists:type_name -> google.protobuf.Empty
+	5,  // 3: google.telemetry.policy.v1alpha1.TraceMatcher.equals:type_name -> google.telemetry.policy.v1alpha1.Value
+	6,  // 4: google.telemetry.policy.v1alpha1.TraceMatcher.gt:type_name -> google.telemetry.policy.v1alpha1.NumericValue
+	6,  // 5: google.telemetry.policy.v1alpha1.TraceMatcher.gte:type_name -> google.telemetry.policy.v1alpha1.NumericValue
+	6,  // 6: google.telemetry.policy.v1alpha1.TraceMatcher.lt:type_name -> google.telemetry.policy.v1alpha1.NumericValue
+	6,  // 7: google.telemetry.policy.v1alpha1.TraceMatcher.lte:type_name -> google.telemetry.policy.v1alpha1.NumericValue
+	5,  // 8: google.telemetry.policy.v1alpha1.TraceMatcher.contains:type_name -> google.telemetry.policy.v1alpha1.Value
+	0,  // 9: google.telemetry.policy.v1alpha1.TraceFieldSelector.record_field:type_name -> google.telemetry.policy.v1alpha1.SpanRecordField
+	7,  // 10: google.telemetry.policy.v1alpha1.TraceFieldSelector.span_attribute:type_name -> google.telemetry.policy.v1alpha1.AttributePath
+	7,  // 11: google.telemetry.policy.v1alpha1.TraceFieldSelector.resource_attribute:type_name -> google.telemetry.policy.v1alpha1.AttributePath
+	7,  // 12: google.telemetry.policy.v1alpha1.TraceFieldSelector.scope_attribute:type_name -> google.telemetry.policy.v1alpha1.AttributePath
+	8,  // 13: google.telemetry.policy.v1alpha1.TraceFieldSelector.scope_field:type_name -> google.telemetry.policy.v1alpha1.ScopeField
+	14, // [14:14] is the sub-list for method output_type
+	14, // [14:14] is the sub-list for method input_type
+	14, // [14:14] is the sub-list for extension type_name
+	14, // [14:14] is the sub-list for extension extendee
+	0,  // [0:14] is the sub-list for field type_name
 }
 
 func init() { file_policy_v1alpha1_trace_filter_policy_proto_init() }
@@ -676,11 +651,10 @@ func file_policy_v1alpha1_trace_filter_policy_proto_init() {
 		return
 	}
 	file_policy_v1alpha1_common_policy_types_proto_init()
-	file_policy_v1alpha1_trace_filter_policy_proto_msgTypes[0].OneofWrappers = []any{}
 	file_policy_v1alpha1_trace_filter_policy_proto_msgTypes[1].OneofWrappers = []any{
 		(*TraceMatcher_Exists)(nil),
 		(*TraceMatcher_Equals)(nil),
-		(*TraceMatcher_Regex)(nil),
+		(*TraceMatcher_Glob)(nil),
 		(*TraceMatcher_Gt)(nil),
 		(*TraceMatcher_Gte)(nil),
 		(*TraceMatcher_Lt)(nil),

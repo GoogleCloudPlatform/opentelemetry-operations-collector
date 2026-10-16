@@ -29,14 +29,9 @@ import (
 )
 
 
-func actionPtr(a policyv1alpha1.Action) *policyv1alpha1.Action {
-	return &a
-}
-
 func TestTraceFilterPolicy_Serialization(t *testing.T) {
 	policy := &policyv1alpha1.TraceFilterPolicy{
-		Id:     "drop-healthcheck-spans",
-		Action: actionPtr(policyv1alpha1.Action_ACTION_DROP),
+		Id: "drop-healthcheck-spans",
 		Matches: []*policyv1alpha1.TraceMatcher{
 			{
 				Target: &policyv1alpha1.TraceFieldSelector{
@@ -44,8 +39,8 @@ func TestTraceFilterPolicy_Serialization(t *testing.T) {
 						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Regex{
-					Regex: "^/healthz.*",
+				Predicate: &policyv1alpha1.TraceMatcher_Glob{
+					Glob: "/healthz*",
 				},
 			},
 			{
@@ -128,21 +123,6 @@ func TestTraceFilterPolicy_Serialization(t *testing.T) {
 			},
 			{
 				Target: &policyv1alpha1.TraceFieldSelector{
-					Target: &policyv1alpha1.TraceFieldSelector_RecordField{
-						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_STATUS_CODE,
-					},
-				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equals{
-					Equals: &policyv1alpha1.Value{
-						Value: &policyv1alpha1.Value_StringValue{
-							StringValue: "ERROR",
-						},
-					},
-				},
-				Negate: true,
-			},
-			{
-				Target: &policyv1alpha1.TraceFieldSelector{
 					Target: &policyv1alpha1.TraceFieldSelector_ResourceAttribute{
 						ResourceAttribute: &policyv1alpha1.AttributePath{
 							Path: []string{"service.name"},
@@ -222,14 +202,12 @@ func TestTraceFilterPolicy_Serialization(t *testing.T) {
 
 	assert.True(t, proto.Equal(policy, unmarshaled))
 	assert.Equal(t, "drop-healthcheck-spans", unmarshaled.GetId())
-	assert.Equal(t, policyv1alpha1.Action_ACTION_DROP, unmarshaled.GetAction())
-	require.Len(t, unmarshaled.GetMatches(), 12)
+	require.Len(t, unmarshaled.GetMatches(), 11)
 }
 
 func TestTraceFilterPolicy_AnyPackaging(t *testing.T) {
 	policy := &policyv1alpha1.TraceFilterPolicy{
-		Id:     "retain-error-spans",
-		Action: actionPtr(policyv1alpha1.Action_ACTION_KEEP),
+		Id: "drop-healthcheck-spans",
 	}
 
 	anyPolicy, err := anypb.New(policy)
@@ -251,8 +229,7 @@ func TestTraceFilterPolicy_AnyPackaging(t *testing.T) {
 
 	unpackedPolicy := &policyv1alpha1.TraceFilterPolicy{}
 	require.NoError(t, unmarshaledCollector.GetPolicies()[0].UnmarshalTo(unpackedPolicy))
-	assert.Equal(t, "retain-error-spans", unpackedPolicy.GetId())
-	assert.Equal(t, policyv1alpha1.Action_ACTION_KEEP, unpackedPolicy.GetAction())
+	assert.Equal(t, "drop-healthcheck-spans", unpackedPolicy.GetId())
 }
 
 func TestTraceFilterPolicy_EnumValues(t *testing.T) {
@@ -265,24 +242,17 @@ func TestTraceFilterPolicy_EnumValues(t *testing.T) {
 	assert.Equal(t, policyv1alpha1.SpanRecordField(2), policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID)
 	assert.Equal(t, policyv1alpha1.SpanRecordField(3), policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_SPAN_ID)
 	assert.Equal(t, policyv1alpha1.SpanRecordField(4), policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID)
-	assert.Equal(t, policyv1alpha1.SpanRecordField(5), policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_STATUS_MESSAGE)
-	assert.Equal(t, policyv1alpha1.SpanRecordField(6), policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_KIND)
-	assert.Equal(t, policyv1alpha1.SpanRecordField(7), policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_STATUS_CODE)
-
-
+	assert.Equal(t, policyv1alpha1.SpanRecordField(5), policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_KIND)
 
 	assert.Equal(t, policyv1alpha1.ScopeField(0), policyv1alpha1.ScopeField_SCOPE_FIELD_UNSPECIFIED)
 	assert.Equal(t, policyv1alpha1.ScopeField(1), policyv1alpha1.ScopeField_SCOPE_FIELD_NAME)
 	assert.Equal(t, policyv1alpha1.ScopeField(2), policyv1alpha1.ScopeField_SCOPE_FIELD_VERSION)
 	assert.Equal(t, policyv1alpha1.ScopeField(3), policyv1alpha1.ScopeField_SCOPE_FIELD_SCHEMA_URL)
-
-
 }
 
 func TestTraceFilterPolicy_JSONSerialization(t *testing.T) {
 	policy := &policyv1alpha1.TraceFilterPolicy{
-		Id:     "drop-healthcheck-spans",
-		Action: actionPtr(policyv1alpha1.Action_ACTION_DROP),
+		Id: "drop-healthcheck-spans",
 		Matches: []*policyv1alpha1.TraceMatcher{
 			{
 				Target: &policyv1alpha1.TraceFieldSelector{
@@ -323,32 +293,12 @@ func TestTraceFilterPolicy_JSONSerialization(t *testing.T) {
 	unmarshaled := &policyv1alpha1.TraceFilterPolicy{}
 	require.NoError(t, protojson.Unmarshal(jsonData, unmarshaled))
 	assert.True(t, proto.Equal(policy, unmarshaled))
-
-	// Zero-value handling: ACTION_UNSPECIFIED explicit.
-	jsonWithUnspecified := []byte(`{"id": "unspecified-policy", "action": "ACTION_UNSPECIFIED"}`)
-	zeroPolicy := &policyv1alpha1.TraceFilterPolicy{}
-	require.NoError(t, protojson.Unmarshal(jsonWithUnspecified, zeroPolicy))
-	assert.Equal(t, "unspecified-policy", zeroPolicy.GetId())
-	assert.Equal(t, policyv1alpha1.Action_ACTION_UNSPECIFIED, zeroPolicy.GetAction())
-
-	// Action omitted in JSON defaults to ACTION_UNSPECIFIED.
-	jsonOmittedAction := []byte(`{"id": "omitted-action-policy"}`)
-	omittedPolicy := &policyv1alpha1.TraceFilterPolicy{}
-	require.NoError(t, protojson.Unmarshal(jsonOmittedAction, omittedPolicy))
-	assert.Equal(t, "omitted-action-policy", omittedPolicy.GetId())
-	assert.Equal(t, policyv1alpha1.Action_ACTION_UNSPECIFIED, omittedPolicy.GetAction())
-
-	// EmitUnpopulated includes ACTION_UNSPECIFIED in output.
-	marshaledUnpopulated, err := protojson.MarshalOptions{EmitUnpopulated: true}.Marshal(zeroPolicy)
-	require.NoError(t, err)
-	assert.Contains(t, string(marshaledUnpopulated), `"action":"ACTION_UNSPECIFIED"`)
 }
 
 func TestTraceFilterPolicy_ParentSpanIDAndKindMatchers(t *testing.T) {
-	// Policy targeting root spans (absent parent_span_id: exists with negate: true or exact: "")
+	// Policy targeting root spans (absent parent_span_id: exists with negate: true or equals: "")
 	rootSpanPolicy := &policyv1alpha1.TraceFilterPolicy{
-		Id:     "target-root-spans",
-		Action: actionPtr(policyv1alpha1.Action_ACTION_KEEP),
+		Id: "target-root-spans",
 		Matches: []*policyv1alpha1.TraceMatcher{
 			{
 				Target: &policyv1alpha1.TraceFieldSelector{
@@ -387,8 +337,7 @@ func TestTraceFilterPolicy_ParentSpanIDAndKindMatchers(t *testing.T) {
 
 	// Policy targeting child spans with explicit 16-char hex parent_span_id.
 	childSpanPolicy := &policyv1alpha1.TraceFilterPolicy{
-		Id:     "target-child-spans",
-		Action: actionPtr(policyv1alpha1.Action_ACTION_DROP),
+		Id: "target-child-spans",
 		Matches: []*policyv1alpha1.TraceMatcher{
 			{
 				Target: &policyv1alpha1.TraceFieldSelector{

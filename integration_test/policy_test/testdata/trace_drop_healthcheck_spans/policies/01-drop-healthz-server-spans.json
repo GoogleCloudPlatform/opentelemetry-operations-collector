@@ -1,7 +1,6 @@
 {
   "type": "trace_filter",
   "id": "drop-healthcheck-server-spans",
-  "action": "ACTION_DROP",
   "matches": [
     {
       "target": {
@@ -17,7 +16,7 @@
           "path": ["http.target"]
         }
       },
-      "regex": "^/(healthz|readyz)$"
+      "glob": "/healthz"
     }
   ]
 }

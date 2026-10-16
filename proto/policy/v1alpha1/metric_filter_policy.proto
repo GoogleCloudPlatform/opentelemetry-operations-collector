@@ -81,12 +81,11 @@ message MetricMatcher {
     // Typed scalar equality match (supporting string, int64, bool, double, bytes).
     Value equals = 11;
 
-    // Regular expression match using RE2 syntax.
-    // Evaluates as an unanchored partial match (like Go regexp.MatchString and
-    // OpenTelemetry OTTL IsMatch). Callers requiring full string equality must
-    // provide explicit anchors ('^' and '$'). Applies strictly to string
-    // fields and string attribute values.
-    string regex = 12;
+    // Glob pattern match against the entire string value.
+    // Supports '*' (matches zero or more characters) and '?' (matches any
+    // single character). Matching is case-sensitive and anchored to the full
+    // string. Applies strictly to string fields and string attribute values.
+    string glob = 12;
 
     // Matches if the target numeric value is strictly greater than this value.
     // Applies strictly to int64 and double fields and attribute values.
@@ -153,15 +152,17 @@ enum MetricDescriptorField {
 
   // The primary data type of the metric (e.g. "GAUGE", "SUM", "HISTOGRAM",
   // "EXPONENTIAL_HISTOGRAM", "SUMMARY"). When selected, string predicates
-  // (`equals` with string_value, `regex`) evaluate against uppercase type names.
+  // (`equals` with string_value, `glob`, `contains` with string_value) evaluate
+  // against uppercase type names.
   METRIC_DESCRIPTOR_FIELD_TYPE = 4;
 
   // The aggregation temporality of the metric (OTLP path: metric.*.aggregation_temporality,
   // e.g. for Sum, Histogram, ExponentialHistogram). When selected, string predicates
-  // (`equals` with string_value, `regex`) evaluate against uppercase names: "DELTA" or "CUMULATIVE".
+  // (`equals` with string_value, `glob`, `contains` with string_value) evaluate
+  // against uppercase names: "DELTA" or "CUMULATIVE".
   METRIC_DESCRIPTOR_FIELD_AGGREGATION_TEMPORALITY = 5;
 
   // Whether a Sum metric is monotonic (OTLP path: metric.sum.is_monotonic).
-  // Evaluates against typed `equals` (`bool_value`), or "true"/"false" for `regex`.
+  // Evaluates against typed `equals` (`bool_value`).
   METRIC_DESCRIPTOR_FIELD_IS_MONOTONIC = 6;
 }

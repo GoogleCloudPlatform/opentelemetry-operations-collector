@@ -168,18 +168,6 @@ func compileSpanRecordFieldExtractor(field policyv1alpha1.SpanRecordField) (Trac
 			return psid, true
 		}, nil
 
-	case policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_STATUS_MESSAGE:
-		return func(ctx googlepolicy.TraceContext) (any, bool) {
-			if ctx.Span == (ptrace.Span{}) {
-				return nil, false
-			}
-			s := ctx.Span.Status().Message()
-			if s == "" {
-				return nil, false
-			}
-			return s, true
-		}, nil
-
 	case policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_KIND:
 		// Unlike the other first-class fields, an unset kind is NOT reported as
 		// absent: trace_filter_policy.proto states "if span kind is unset or
@@ -190,15 +178,6 @@ func compileSpanRecordFieldExtractor(field policyv1alpha1.SpanRecordField) (Trac
 				return nil, false
 			}
 			return SpanKindString(ctx.Span.Kind()), true
-		}, nil
-
-	case policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_STATUS_CODE:
-		return func(ctx googlepolicy.TraceContext) (any, bool) {
-			if ctx.Span == (ptrace.Span{}) {
-				return nil, false
-			}
-			code := ctx.Span.Status().Code()
-			return SpanStatusString(code), code != ptrace.StatusCodeUnset
 		}, nil
 
 	default:
@@ -259,18 +238,5 @@ func SpanKindString(k ptrace.SpanKind) string {
 		return "CONSUMER"
 	default:
 		return "INTERNAL"
-	}
-}
-
-// SpanStatusString renders a span status code using the spelling that policies
-// match against.
-func SpanStatusString(c ptrace.StatusCode) string {
-	switch c {
-	case ptrace.StatusCodeOk:
-		return "OK"
-	case ptrace.StatusCodeError:
-		return "ERROR"
-	default:
-		return "UNSET"
 	}
 }

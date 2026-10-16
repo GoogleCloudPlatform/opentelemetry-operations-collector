@@ -23,9 +23,6 @@ option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-col
 // AttributePath specifies how to access an attribute value.
 // - A single-element array accesses a flat attribute (e.g. ["http.status_code"]).
 // - Multiple elements traverse nested maps (e.g. ["http", "request", "method"]).
-// - When traversing array/list values, string segments representing non-negative
-//   integers (e.g. "0", "100") are interpreted as zero-based array indices
-//   (e.g. ["items", "0", "id"]).
 message AttributePath {
   // Path segments for attribute traversal.
   repeated string path = 1;
@@ -87,12 +84,11 @@ message LogMatcher {
     // Typed scalar equality match (supporting string, int64, bool, double, bytes).
     Value equals = 11;
 
-    // Regular expression match using RE2 syntax.
-    // Evaluates as an unanchored partial match (like Go regexp.MatchString and
-    // OpenTelemetry OTTL IsMatch). Callers requiring full string equality must
-    // provide explicit anchors ('^' and '$'). Applies strictly to string
-    // fields and string attribute values.
-    string regex = 12;
+    // Glob pattern match against the entire string value.
+    // Supports '*' (matches zero or more characters) and '?' (matches any
+    // single character). Matching is case-sensitive and anchored to the full
+    // string. Applies strictly to string fields and string attribute values.
+    string glob = 12;
 
     // Matches if the target numeric value is strictly greater than this value.
     // Applies strictly to int64 and double fields and attribute values.
@@ -199,19 +195,21 @@ enum LogRecordField {
   LOG_RECORD_FIELD_SEVERITY_TEXT = 2;
 
   // The numerical severity of the log (1-24 per OpenTelemetry specification).
-  // Evaluates against typed `equals` (`int_value`), numeric range comparisons
-  // (`gt`, `gte`, `lt`, `lte`), or canonical base-10 string representations for `regex`.
+  // Evaluates against typed `equals` (`int_value`) and numeric range
+  // comparisons (`gt`, `gte`, `lt`, `lte`).
   LOG_RECORD_FIELD_SEVERITY_NUMBER = 3;
 
   // The 16-byte trace identifier associated with the log record.
-  // When evaluated against string predicates (`exact`, `regex`), this matches
-  // against the 32-character lowercase hexadecimal string representation
-  // per the OpenTelemetry / W3C Trace Context specification.
+  // When evaluated against string predicates (`equals` with `string_value`,
+  // `glob`, `contains` with `string_value`), this matches against the
+  // 32-character lowercase hexadecimal string representation per the
+  // OpenTelemetry / W3C Trace Context specification.
   LOG_RECORD_FIELD_TRACE_ID = 4;
 
   // The 8-byte span identifier associated with the log record.
-  // When evaluated against string predicates (`exact`, `regex`), this matches
-  // against the 16-character lowercase hexadecimal string representation
-  // per the OpenTelemetry / W3C Trace Context specification.
+  // When evaluated against string predicates (`equals` with `string_value`,
+  // `glob`, `contains` with `string_value`), this matches against the
+  // 16-character lowercase hexadecimal string representation per the
+  // OpenTelemetry / W3C Trace Context specification.
   LOG_RECORD_FIELD_SPAN_ID = 5;
 }

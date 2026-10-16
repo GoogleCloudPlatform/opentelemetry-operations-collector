@@ -63,7 +63,7 @@ message LogTransformPolicy {
 // LogAddAction inserts or overwrites one field or attribute on a log record.
 message LogAddAction {
   // Target field or attribute to set.
-  LogFieldSelector target = 1;
+  LogTargetSelector target = 1;
 
   // The value to assign to `target`.
   Value value = 2;
@@ -76,16 +76,16 @@ message LogAddAction {
 // LogRemoveAction deletes an attribute or structured body_field from a log record.
 message LogRemoveAction {
   // Target attribute or body_field to remove.
-  LogFieldSelector target = 1;
+  LogAttributeSelector target = 1;
 }
 
 // LogRenameAction moves an existing attribute or structured body_field to a new destination.
 message LogRenameAction {
   // Existing source attribute or body_field to rename.
-  LogFieldSelector source = 1;
+  LogAttributeSelector source = 1;
 
   // Destination attribute or body_field.
-  LogFieldSelector target = 2;
+  LogAttributeSelector target = 2;
 
   // If true, overwrites `target` if it already exists. If false (default), the
   // rename is skipped if `target` already exists.
@@ -95,7 +95,7 @@ message LogRenameAction {
 // LogRedactAction masks sensitive substrings within a target string.
 message LogRedactAction {
   // Target string field, attribute, or body_field to redact.
-  LogFieldSelector target = 1;
+  LogTargetSelector target = 1;
 
   // Optional RE2 regular expression matching substrings within the target
   // string to redact. If unset or empty, the entire target value is replaced
@@ -105,4 +105,37 @@ message LogRedactAction {
   // Replacement string (e.g. "[REDACTED]"). Supports RE2 capture group
   // references ($1, ${name}) when `regex` is set.
   optional string replacement = 3;
+}
+
+// LogTargetSelector designates a writable log field, log attribute, or
+// structured body field for add and redact actions.
+message LogTargetSelector {
+  // The writable log field, attribute, or structured body path to target.
+  // Exactly one must be set.
+  oneof target {
+    // Standard first-class OpenTelemetry LogRecord fields (e.g. body, severity_text).
+    LogRecordField record_field = 1;
+
+    // Log record attribute by key or path (e.g. ["http.route"] or ["http", "method"]).
+    AttributePath log_attribute = 2;
+
+    // Traverses nested fields inside a structured (kvlist_value / map)
+    // LogRecord.body (e.g. ["event_id"], ["event_data", "TargetUserName"]).
+    AttributePath body_field = 3;
+  }
+}
+
+// LogAttributeSelector designates a removable or renameable log attribute or
+// structured body field for remove and rename actions.
+message LogAttributeSelector {
+  // The log attribute or structured body path to target.
+  // Exactly one must be set.
+  oneof target {
+    // Log record attribute by key or path (e.g. ["http.route"] or ["http", "method"]).
+    AttributePath log_attribute = 1;
+
+    // Traverses nested fields inside a structured (kvlist_value / map)
+    // LogRecord.body (e.g. ["event_id"], ["event_data", "TargetUserName"]).
+    AttributePath body_field = 2;
+  }
 }

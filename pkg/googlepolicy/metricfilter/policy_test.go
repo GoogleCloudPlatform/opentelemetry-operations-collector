@@ -355,22 +355,6 @@ func TestPolicyValidationErrors(t *testing.T) {
 			},
 			errExpect: ErrMissingPredicate,
 		},
-		{
-			name: "matcher invalid regex",
-			proto: &policyv1alpha1.MetricFilterPolicy{
-				Id:     "p5",
-				Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-				Matches: []*policyv1alpha1.MetricMatcher{
-					{
-						Target: descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME),
-						Predicate: &policyv1alpha1.MetricMatcher_Regex{
-							Regex: "[invalid(regex",
-						},
-					},
-				},
-			},
-			errExpect: assert.AnError,
-		},
 	}
 
 	for _, tt := range tests {
@@ -394,8 +378,8 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 			Matches: []*policyv1alpha1.MetricMatcher{
 				{
 					Target: descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME),
-					Predicate: &policyv1alpha1.MetricMatcher_Regex{
-						Regex: "^http\\.server\\.",
+					Predicate: &policyv1alpha1.MetricMatcher_Glob{
+						Glob: "http.server.*",
 					},
 				},
 			},
@@ -1047,32 +1031,20 @@ func TestNestedAttributePathTraversal(t *testing.T) {
 			wantExists: false,
 		},
 		{
-			name:       "slice index",
+			name:       "slice traversal into scalar element is unsupported",
 			path:       []string{"user.roles", "1"},
-			wantValue:  "admin",
-			wantExists: true,
+			wantValue:  nil,
+			wantExists: false,
 		},
 		{
-			name:       "slice index into nested map",
+			name:       "slice traversal into nested map is unsupported",
 			path:       []string{"items", "0", "id"},
-			wantValue:  "item-001",
-			wantExists: true,
-		},
-		{
-			name:       "slice index out of range",
-			path:       []string{"user.roles", "99"},
 			wantValue:  nil,
 			wantExists: false,
 		},
 		{
-			name:       "non-numeric index into slice",
+			name:       "slice traversal with non-numeric segment is unsupported",
 			path:       []string{"user.roles", "not_an_int"},
-			wantValue:  nil,
-			wantExists: false,
-		},
-		{
-			name:       "negative index into slice",
-			path:       []string{"user.roles", "-1"},
 			wantValue:  nil,
 			wantExists: false,
 		},
@@ -1254,7 +1226,7 @@ func dropPolicy(id string, target *policyv1alpha1.MetricFieldSelector, predicate
 		m.Predicate = p
 	case *policyv1alpha1.MetricMatcher_Equals:
 		m.Predicate = p
-	case *policyv1alpha1.MetricMatcher_Regex:
+	case *policyv1alpha1.MetricMatcher_Glob:
 		m.Predicate = p
 	case *policyv1alpha1.MetricMatcher_Contains:
 		m.Predicate = p
@@ -1374,7 +1346,7 @@ func TestFilterMetricUnknownActionFailsClosed(t *testing.T) {
 
 // TestUnsetDescriptorStringFieldsReportAbsent verifies that unset first-class
 // descriptor string fields (Name, Description, Unit) report (nil, false) so they
-// do not falsely match value-comparing predicates (like negative regexes or
+// do not falsely match value-comparing predicates (like permissive globs or
 // `equals: ""`).
 func TestUnsetDescriptorStringFieldsReportAbsent(t *testing.T) {
 	fields := []policyv1alpha1.MetricDescriptorField{
@@ -1406,11 +1378,11 @@ func TestUnsetDescriptorStringFieldsReportAbsent(t *testing.T) {
 			equalsPol := mustDropPolicy(t, "equals-empty-"+field.String(), target, equalsString(""), false)
 			assert.Equal(t, googlepolicy.FilterNoMatch, equalsPol.FilterMetric(ctx))
 
-			regexEmptyPol := mustDropPolicy(t, "regex-empty-"+field.String(), target, &policyv1alpha1.MetricMatcher_Regex{Regex: "^$"}, false)
-			assert.Equal(t, googlepolicy.FilterNoMatch, regexEmptyPol.FilterMetric(ctx))
+			globEmptyPol := mustDropPolicy(t, "glob-empty-"+field.String(), target, &policyv1alpha1.MetricMatcher_Glob{Glob: ""}, false)
+			assert.Equal(t, googlepolicy.FilterNoMatch, globEmptyPol.FilterMetric(ctx))
 
-			regexNegPol := mustDropPolicy(t, "regex-neg-"+field.String(), target, &policyv1alpha1.MetricMatcher_Regex{Regex: "^[^E]*$"}, false)
-			assert.Equal(t, googlepolicy.FilterNoMatch, regexNegPol.FilterMetric(ctx))
+			globWildPol := mustDropPolicy(t, "glob-wild-"+field.String(), target, &policyv1alpha1.MetricMatcher_Glob{Glob: "*"}, false)
+			assert.Equal(t, googlepolicy.FilterNoMatch, globWildPol.FilterMetric(ctx))
 		})
 	}
 }
@@ -1497,7 +1469,7 @@ func TestAggregationTemporalityAbsentWhenUnspecified(t *testing.T) {
 		predicates := map[string]any{
 			"equals UNSPECIFIED": equalsString("UNSPECIFIED"),
 			"equals empty":       equalsString(""),
-			"regex anything":     &policyv1alpha1.MetricMatcher_Regex{Regex: ".*"},
+			"glob anything":      &policyv1alpha1.MetricMatcher_Glob{Glob: "*"},
 			"contains empty":     containsString(""),
 		}
 		for name, predicate := range predicates {
@@ -1650,7 +1622,7 @@ func TestZeroValueMetricInPopulatedContext(t *testing.T) {
 	}{
 		{name: "exists", predicate: &policyv1alpha1.MetricMatcher_Exists{}},
 		{name: "equals", predicate: equalsString("")},
-		{name: "regex", predicate: &policyv1alpha1.MetricMatcher_Regex{Regex: ".*"}},
+		{name: "glob", predicate: &policyv1alpha1.MetricMatcher_Glob{Glob: "*"}},
 		{name: "contains", predicate: containsString("")},
 		{name: "gte", predicate: &policyv1alpha1.MetricMatcher_Gte{Gte: &policyv1alpha1.NumericValue{Value: &policyv1alpha1.NumericValue_IntValue{IntValue: 0}}}},
 	}

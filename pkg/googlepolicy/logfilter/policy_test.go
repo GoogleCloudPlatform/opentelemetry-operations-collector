@@ -204,26 +204,6 @@ func TestPolicyValidationErrors(t *testing.T) {
 			errExpect: ErrMissingPredicate,
 		},
 		{
-			name: "matcher invalid regex",
-			proto: &policyv1alpha1.LogFilterPolicy{
-				Id:     "p5",
-				Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-				Matches: []*policyv1alpha1.LogMatcher{
-					{
-						Target: &policyv1alpha1.LogFieldSelector{
-							Target: &policyv1alpha1.LogFieldSelector_RecordField{
-								RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
-							},
-						},
-						Predicate: &policyv1alpha1.LogMatcher_Regex{
-							Regex: "[invalid(regex",
-						},
-					},
-				},
-			},
-			errExpect: assert.AnError,
-		},
-		{
 			name: "invalid action value",
 			proto: &policyv1alpha1.LogFilterPolicy{
 				Id:     "p6-invalid-action",
@@ -348,8 +328,8 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 							RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
 						},
 					},
-					Predicate: &policyv1alpha1.LogMatcher_Regex{
-						Regex: "hello.*service",
+					Predicate: &policyv1alpha1.LogMatcher_Glob{
+						Glob: "hello*service",
 					},
 				},
 			},
@@ -673,7 +653,7 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 	})
 
 	t.Run("Typed attribute matchers and AttributePath traversal", func(t *testing.T) {
-		// Test bool, double, bytes, nested map, and array index
+		// Test bool, double, bytes, and nested map traversal
 		pb := &policyv1alpha1.LogFilterPolicy{
 			Id:     "typed-test",
 			Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
@@ -716,16 +696,6 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 					},
 					Predicate: &policyv1alpha1.LogMatcher_Equals{
 						Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "prod"}},
-					},
-				},
-				{
-					Target: &policyv1alpha1.LogFieldSelector{
-						Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
-							LogAttribute: &policyv1alpha1.AttributePath{Path: []string{"items", "0", "id"}},
-						},
-					},
-					Predicate: &policyv1alpha1.LogMatcher_Equals{
-						Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "item-001"}},
 					},
 				},
 			},
@@ -977,7 +947,7 @@ func dropPolicy(id string, target *policyv1alpha1.LogFieldSelector, predicate an
 		m.Predicate = p
 	case *policyv1alpha1.LogMatcher_Equals:
 		m.Predicate = p
-	case *policyv1alpha1.LogMatcher_Regex:
+	case *policyv1alpha1.LogMatcher_Glob:
 		m.Predicate = p
 	case *policyv1alpha1.LogMatcher_Contains:
 		m.Predicate = p
@@ -1231,7 +1201,7 @@ func TestLogBodyValueTypes(t *testing.T) {
 
 // TestUnsetStringFieldsReportAbsent verifies that first-class string fields
 // lacking presence tracking report (nil, false) when empty/unset, ensuring that
-// negative/permissive regexes (e.g., `^[^E]*$` or `.*`) or `equals: ""` do not
+// permissive globs (e.g., `*`) or `equals: ""` do not
 // falsely match and drop log records with unset severity text or empty string bodies.
 func TestUnsetStringFieldsReportAbsent(t *testing.T) {
 	scope := plog.NewScopeLogs()
@@ -1274,15 +1244,14 @@ func TestUnsetStringFieldsReportAbsent(t *testing.T) {
 			assert.True(t, matchesLog(negatedPol, lr, scope, res))
 			assert.Equal(t, googlepolicy.FilterDrop, evalLog(negatedPol, lr, scope, res))
 
-			// Value predicates (equals "", regex ^$, negative character class ^[^E]*$, permissive .*) must NOT match.
+			// Value predicates (equals "", glob "", glob *) must NOT match.
 			for _, predCase := range []struct {
 				name string
 				pred any
 			}{
 				{"equals empty", equalsString("")},
-				{"regex empty", &policyv1alpha1.LogMatcher_Regex{Regex: "^$"}},
-				{"regex negative class", &policyv1alpha1.LogMatcher_Regex{Regex: "^[^E]*$"}},
-				{"regex permissive", &policyv1alpha1.LogMatcher_Regex{Regex: ".*"}},
+				{"glob empty", &policyv1alpha1.LogMatcher_Glob{Glob: ""}},
+				{"glob permissive", &policyv1alpha1.LogMatcher_Glob{Glob: "*"}},
 			} {
 				pol := mustDropPolicy(t, predCase.name+"-"+tt.name, target, predCase.pred, false)
 				assert.False(t, matchesLog(pol, lr, scope, res), "%s must not match unset %s", predCase.name, tt.name)
@@ -1359,9 +1328,9 @@ func TestIDFieldsMatchHexAndBytes(t *testing.T) {
 			want:      true,
 		},
 		{
-			name:      "trace id regex on hex string",
+			name:      "trace id glob on hex string",
 			field:     policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID,
-			predicate: &policyv1alpha1.LogMatcher_Regex{Regex: "^0102.*0f10$"},
+			predicate: &policyv1alpha1.LogMatcher_Glob{Glob: "0102*0f10"},
 			want:      true,
 		},
 		{
@@ -1395,9 +1364,9 @@ func TestIDFieldsMatchHexAndBytes(t *testing.T) {
 			want:      true,
 		},
 		{
-			name:      "span id regex on hex string",
+			name:      "span id glob on hex string",
 			field:     policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID,
-			predicate: &policyv1alpha1.LogMatcher_Regex{Regex: "^0102030405060708$"},
+			predicate: &policyv1alpha1.LogMatcher_Glob{Glob: "0102030405060708"},
 			want:      true,
 		},
 		{
@@ -1468,8 +1437,8 @@ func TestZeroIDsReportAbsent(t *testing.T) {
 			pol := mustDropPolicy(t, "zero-equals-"+field.String(), target, equalsString(""), false)
 			assert.False(t, matchesLog(pol, lr, scope, res))
 
-			regexPol := mustDropPolicy(t, "zero-regex-"+field.String(), target, &policyv1alpha1.LogMatcher_Regex{Regex: "^$"}, false)
-			assert.False(t, matchesLog(regexPol, lr, scope, res))
+			globPol := mustDropPolicy(t, "zero-glob-"+field.String(), target, &policyv1alpha1.LogMatcher_Glob{Glob: ""}, false)
+			assert.False(t, matchesLog(globPol, lr, scope, res))
 
 			containsPol := mustDropPolicy(t, "zero-contains-"+field.String(), target, containsString(""), false)
 			assert.False(t, matchesLog(containsPol, lr, scope, res))
@@ -1539,14 +1508,14 @@ func TestEmptyScopeFieldsReportAbsent(t *testing.T) {
 			equalsPol := mustDropPolicy(t, "scope-empty-"+field.String(), target, equalsString(""), false)
 			assert.False(t, matchesLog(equalsPol, lr, scope, res))
 
-			regexPol := mustDropPolicy(t, "scope-regex-"+field.String(), target, &policyv1alpha1.LogMatcher_Regex{Regex: ".*"}, false)
-			assert.False(t, matchesLog(regexPol, lr, scope, res))
+			globPol := mustDropPolicy(t, "scope-glob-"+field.String(), target, &policyv1alpha1.LogMatcher_Glob{Glob: "*"}, false)
+			assert.False(t, matchesLog(globPol, lr, scope, res))
 		})
 	}
 }
 
 // TestNestedAttributePaths exercises AttributePath traversal through maps and
-// slices, including every degenerate index form.
+// verifies that descending into slices or scalars reports absent.
 func TestNestedAttributePaths(t *testing.T) {
 	log, scope, res := newTestLogBundle()
 	ctx := logContext(log, scope, res)
@@ -1559,14 +1528,12 @@ func TestNestedAttributePaths(t *testing.T) {
 	}{
 		{name: "top-level scalar", path: []string{"http.method"}, wantValue: "GET", wantExists: true},
 		{name: "map descent", path: []string{"metadata", "env"}, wantValue: "prod", wantExists: true},
-		{name: "slice index scalar element", path: []string{"user.roles", "1"}, wantValue: "admin", wantExists: true},
-		{name: "slice index into nested map", path: []string{"items", "0", "id"}, wantValue: "item-001", wantExists: true},
+		{name: "slice traversal into scalar element is unsupported", path: []string{"user.roles", "1"}, wantValue: nil, wantExists: false},
+		{name: "slice traversal into nested map is unsupported", path: []string{"items", "0", "id"}, wantValue: nil, wantExists: false},
+		{name: "slice traversal with non-numeric segment is unsupported", path: []string{"user.roles", "not_an_int"}, wantValue: nil, wantExists: false},
 		{name: "whole slice value", path: []string{"user.roles"}, wantValue: []any{"viewer", "admin"}, wantExists: true},
 		{name: "missing top-level key", path: []string{"nope"}, wantValue: nil, wantExists: false},
 		{name: "missing nested key", path: []string{"metadata", "nope"}, wantValue: nil, wantExists: false},
-		{name: "slice index out of range", path: []string{"items", "5", "id"}, wantValue: nil, wantExists: false},
-		{name: "non-numeric index into slice", path: []string{"user.roles", "not_an_int"}, wantValue: nil, wantExists: false},
-		{name: "negative index into slice", path: []string{"user.roles", "-1"}, wantValue: nil, wantExists: false},
 		{name: "descend into scalar", path: []string{"http.method", "deeper"}, wantValue: nil, wantExists: false},
 		{name: "descend into bytes", path: []string{"binary.id", "0"}, wantValue: nil, wantExists: false},
 	}

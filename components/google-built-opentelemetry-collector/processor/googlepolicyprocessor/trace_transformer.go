@@ -52,16 +52,12 @@ func (e *Evaluator) TransformTraces(td ptrace.Traces) {
 }
 
 // EvalTrace returns true if the span should be DROPPED, false if KEPT.
-// A matching ACTION_KEEP policy exempts the span outright.
+// All matching trace filter policies drop the span.
 func (e *Evaluator) EvalTrace(ctx TraceContext) bool {
-	var hasDrop bool
 	for _, p := range e.traceFilterPolicies {
-		switch p.FilterTrace(ctx) {
-		case googlepolicy.FilterKeep:
-			return false
-		case googlepolicy.FilterDrop:
-			hasDrop = true
+		if p.FilterTrace(ctx) == googlepolicy.FilterDrop {
+			return true
 		}
 	}
-	return hasDrop
+	return false
 }

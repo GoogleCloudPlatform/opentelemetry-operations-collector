@@ -39,8 +39,8 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Regex{
-					Regex: "^healthcheck.*",
+				Predicate: &policyv1alpha1.LogMatcher_Glob{
+					Glob: "healthcheck*",
 				},
 				Negate: false,
 			},

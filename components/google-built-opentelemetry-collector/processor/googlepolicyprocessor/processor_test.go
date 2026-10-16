@@ -329,7 +329,7 @@ func TestProcessLogs_WithRealLogFilterPolicy(t *testing.T) {
 
 	assert.Eventually(t, func() bool {
 		ev := p.evaluator.Load()
-		return ev != nil && len(ev.logPolicies) > 0
+		return ev != nil && len(ev.logFilterPolicies) > 0
 	}, 1*time.Second, 10*time.Millisecond)
 
 	ld := plog.NewLogs()
@@ -380,7 +380,7 @@ func TestProcessLogs_LoadFromRawJSONPolicySet(t *testing.T) {
 
 	assert.Eventually(t, func() bool {
 		ev := p.evaluator.Load()
-		return ev != nil && len(ev.logPolicies) > 0
+		return ev != nil && len(ev.logFilterPolicies) > 0
 	}, 1*time.Second, 10*time.Millisecond)
 
 	ld := plog.NewLogs()

@@ -78,16 +78,16 @@ type Policy interface {
 	Validate() error
 }
 
-// EvalResult represents the outcome of evaluating a telemetry item against a policy.
-type EvalResult uint8
+// FilterResult represents the outcome of evaluating a telemetry item against a policy.
+type FilterResult uint8
 
 const (
-	// EvalNoMatch indicates the policy conditions did not match the item.
-	EvalNoMatch EvalResult = iota
-	// EvalKeep indicates the policy matched and explicitly keeps the item (ACTION_KEEP).
-	EvalKeep
-	// EvalDrop indicates the policy matched and drops the item (ACTION_DROP).
-	EvalDrop
+	// FilterNoMatch indicates the policy conditions did not match the item.
+	FilterNoMatch FilterResult = iota
+	// FilterKeep indicates the policy matched and explicitly keeps the item (ACTION_KEEP).
+	FilterKeep
+	// FilterDrop indicates the policy matched and drops the item (ACTION_DROP).
+	FilterDrop
 )
 
 // LogContext holds the contextual information needed to evaluate a single log record.
@@ -99,11 +99,11 @@ type LogContext struct {
 	ScopeSchemaURL    string
 }
 
-// LogPolicyEvaluator is implemented by transformation policies that evaluate
-// log records (e.g., LogFilterPolicy in pkg/googlepolicy/logfilter).
-type LogPolicyEvaluator interface {
+// LogFilterPolicyEvaluator is implemented by transformation policies that evaluate
+// log filter rules (e.g., LogFilterPolicy in pkg/googlepolicy/logfilter).
+type LogFilterPolicyEvaluator interface {
 	TransformationPolicy
-	EvaluateLog(ctx LogContext) EvalResult
+	FilterLog(ctx LogContext) FilterResult
 }
 
 // MetricContext holds the contextual information needed to evaluate a single
@@ -119,11 +119,11 @@ type MetricContext struct {
 	ScopeSchemaURL         string
 }
 
-// MetricPolicyEvaluator is implemented by transformation policies that evaluate
-// metric datapoints (e.g., MetricFilterPolicy in pkg/googlepolicy/metricfilter).
-type MetricPolicyEvaluator interface {
+// MetricFilterPolicyEvaluator is implemented by transformation policies that evaluate
+// metric filter rules (e.g., MetricFilterPolicy in pkg/googlepolicy/metricfilter).
+type MetricFilterPolicyEvaluator interface {
 	TransformationPolicy
-	EvaluateMetric(ctx MetricContext) EvalResult
+	FilterMetric(ctx MetricContext) FilterResult
 	// IsDatapointLevel reports whether any matcher inspects datapoint
 	// attributes. Policies that do not can be evaluated once per instrument
 	// instead of once per datapoint.
@@ -139,11 +139,11 @@ type TraceContext struct {
 	ScopeSchemaURL    string
 }
 
-// TracePolicyEvaluator is implemented by transformation policies that evaluate
-// spans (e.g., TraceFilterPolicy in pkg/googlepolicy/tracefilter).
-type TracePolicyEvaluator interface {
+// TraceFilterPolicyEvaluator is implemented by transformation policies that evaluate
+// span filter rules (e.g., TraceFilterPolicy in pkg/googlepolicy/tracefilter).
+type TraceFilterPolicyEvaluator interface {
 	TransformationPolicy
-	EvaluateTrace(ctx TraceContext) EvalResult
+	FilterTrace(ctx TraceContext) FilterResult
 }
 
 // ComponentPolicy is an extended interface that any policy that produces config

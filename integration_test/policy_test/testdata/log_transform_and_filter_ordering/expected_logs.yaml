@@ -1,0 +1,71 @@
+- resourceLogs:
+    - resource:
+        attributes:
+            - key: cloud.account.tier
+              value:
+                stringValue: enterprise
+            - key: env
+              value:
+                stringValue: prod
+      scopeLogs:
+        - logRecords:
+            - attributes:
+                - key: existing_label
+                  value:
+                    stringValue: original
+                - key: gcp
+                  value:
+                    kvlistValue:
+                        values:
+                            - key: routing
+                              value:
+                                kvlistValue:
+                                    values:
+                                        - key: tier
+                                          value:
+                                            stringValue: soc
+              body:
+                stringValue: PROD_DEBUG_KEPT_AND_TRANSFORMED
+              severityNumber: 5
+              severityText: DEBUG
+              timeUnixNano: "1700000000000000000"
+            - attributes:
+                - key: existing_label
+                  value:
+                    stringValue: overwritten
+                - key: gcp
+                  value:
+                    kvlistValue:
+                        values:
+                            - key: routing
+                              value:
+                                kvlistValue:
+                                    values:
+                                        - key: tier
+                                          value:
+                                            stringValue: soc
+              body:
+                stringValue: PROD_INFO_TRANSFORMED
+              severityNumber: 9
+              severityText: INFO
+              timeUnixNano: "1700000001000000000"
+          scope:
+            attributes:
+                - key: scope.pipeline
+                  value:
+                    stringValue: utr-v2
+            name: auth.service
+    - resource:
+        attributes:
+            - key: env
+              value:
+                stringValue: staging
+      scopeLogs:
+        - logRecords:
+            - body:
+                stringValue: STAGING_ERROR_UNTOUCHED
+              severityNumber: 17
+              severityText: ERROR
+              timeUnixNano: "1700000003000000000"
+          scope:
+            name: auth.service

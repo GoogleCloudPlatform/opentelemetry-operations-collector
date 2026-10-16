@@ -25,6 +25,7 @@ import (
 // only walks the pdata trees and applies the KEEP/DROP outcomes they return.
 type Evaluator struct {
 	logFilterPolicies                []googlepolicy.LogFilterPolicyEvaluator
+	logTransformPolicies             []googlepolicy.LogTransformPolicyEvaluator
 	metricFilterPolicies             []googlepolicy.MetricFilterPolicyEvaluator
 	instrumentMetricFilterPolicies   []googlepolicy.MetricFilterPolicyEvaluator
 	datapointMetricFilterPolicies    []googlepolicy.MetricFilterPolicyEvaluator
@@ -35,9 +36,9 @@ type Evaluator struct {
 // NewEvaluator compiles a slice of TransformationPolicy objects into an Evaluator.
 //
 // Policies loaded through the googlepolicy registry already arrive compiled by
-// their owning filter package and implement the per-signal evaluator interfaces
-// directly. A transformation policy that implements none of them cannot be
-// evaluated, so it is rejected here rather than silently ignored.
+// their owning filter/transform package and implement the per-signal evaluator
+// interfaces directly. A transformation policy that implements none of them
+// cannot be evaluated, so it is rejected here rather than silently ignored.
 func NewEvaluator(policies []googlepolicy.TransformationPolicy) (*Evaluator, error) {
 	ev := &Evaluator{}
 	for _, tp := range policies {
@@ -48,6 +49,8 @@ func NewEvaluator(policies []googlepolicy.TransformationPolicy) (*Evaluator, err
 		switch p := tp.(type) {
 		case googlepolicy.LogFilterPolicyEvaluator:
 			ev.addLogFilterPolicy(p)
+		case googlepolicy.LogTransformPolicyEvaluator:
+			ev.addLogTransformPolicy(p)
 		case googlepolicy.MetricFilterPolicyEvaluator:
 			ev.addMetricFilterPolicy(p)
 		case googlepolicy.TraceFilterPolicyEvaluator:
@@ -55,7 +58,8 @@ func NewEvaluator(policies []googlepolicy.TransformationPolicy) (*Evaluator, err
 		default:
 			return nil, fmt.Errorf(
 				"transformation policy %q (%T) implements none of googlepolicy.LogFilterPolicyEvaluator, "+
-					"googlepolicy.MetricFilterPolicyEvaluator or googlepolicy.TraceFilterPolicyEvaluator: "+
+					"googlepolicy.LogTransformPolicyEvaluator, googlepolicy.MetricFilterPolicyEvaluator "+
+					"or googlepolicy.TraceFilterPolicyEvaluator: "+
 					"transformation policies must implement one of them",
 				tp.PolicyName(), tp)
 		}
@@ -65,6 +69,10 @@ func NewEvaluator(policies []googlepolicy.TransformationPolicy) (*Evaluator, err
 
 func (e *Evaluator) addLogFilterPolicy(p googlepolicy.LogFilterPolicyEvaluator) {
 	e.logFilterPolicies = append(e.logFilterPolicies, p)
+}
+
+func (e *Evaluator) addLogTransformPolicy(p googlepolicy.LogTransformPolicyEvaluator) {
+	e.logTransformPolicies = append(e.logTransformPolicies, p)
 }
 
 func (e *Evaluator) addMetricFilterPolicy(p googlepolicy.MetricFilterPolicyEvaluator) {

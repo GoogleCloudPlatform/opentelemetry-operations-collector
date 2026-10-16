@@ -71,7 +71,7 @@ type Policy struct {
 }
 
 var _ googlepolicy.TransformationPolicy = (*Policy)(nil)
-var _ googlepolicy.TracePolicyEvaluator = (*Policy)(nil)
+var _ googlepolicy.TraceFilterPolicyEvaluator = (*Policy)(nil)
 
 // NewPolicyFromProto validates and compiles a TraceFilterPolicy protobuf into a Policy.
 func NewPolicyFromProto(pb *policyv1alpha1.TraceFilterPolicy) (*Policy, error) {
@@ -145,19 +145,19 @@ func (p *Policy) Proto() proto.Message {
 	return p.proto
 }
 
-// EvaluateTrace evaluates the policy against the given TraceContext and returns
-// EvalKeep, EvalDrop, or EvalNoMatch.
-func (p *Policy) EvaluateTrace(ctx googlepolicy.TraceContext) googlepolicy.EvalResult {
+// FilterTrace evaluates the policy against the given TraceContext and returns
+// FilterKeep, FilterDrop, or FilterNoMatch.
+func (p *Policy) FilterTrace(ctx googlepolicy.TraceContext) googlepolicy.FilterResult {
 	if !p.matchesContext(ctx) {
-		return googlepolicy.EvalNoMatch
+		return googlepolicy.FilterNoMatch
 	}
 	switch p.Action() {
 	case policyv1alpha1.Action_ACTION_KEEP:
-		return googlepolicy.EvalKeep
+		return googlepolicy.FilterKeep
 	case policyv1alpha1.Action_ACTION_DROP:
-		return googlepolicy.EvalDrop
+		return googlepolicy.FilterDrop
 	default:
-		return googlepolicy.EvalNoMatch
+		return googlepolicy.FilterNoMatch
 	}
 }
 

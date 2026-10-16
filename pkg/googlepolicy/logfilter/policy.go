@@ -69,7 +69,7 @@ type Policy struct {
 }
 
 var _ googlepolicy.TransformationPolicy = (*Policy)(nil)
-var _ googlepolicy.LogPolicyEvaluator = (*Policy)(nil)
+var _ googlepolicy.LogFilterPolicyEvaluator = (*Policy)(nil)
 
 // NewPolicyFromProto validates and compiles a LogFilterPolicy protobuf into a Policy.
 func NewPolicyFromProto(pb *policyv1alpha1.LogFilterPolicy) (*Policy, error) {
@@ -143,19 +143,19 @@ func (p *Policy) Proto() proto.Message {
 	return p.proto
 }
 
-// EvaluateLog evaluates the policy against the given LogContext and returns
-// EvalKeep, EvalDrop, or EvalNoMatch.
-func (p *Policy) EvaluateLog(ctx googlepolicy.LogContext) googlepolicy.EvalResult {
+// FilterLog evaluates the policy against the given LogContext and returns
+// FilterKeep, FilterDrop, or FilterNoMatch.
+func (p *Policy) FilterLog(ctx googlepolicy.LogContext) googlepolicy.FilterResult {
 	if !p.matchesContext(ctx) {
-		return googlepolicy.EvalNoMatch
+		return googlepolicy.FilterNoMatch
 	}
 	switch p.Action() {
 	case policyv1alpha1.Action_ACTION_KEEP:
-		return googlepolicy.EvalKeep
+		return googlepolicy.FilterKeep
 	case policyv1alpha1.Action_ACTION_DROP:
-		return googlepolicy.EvalDrop
+		return googlepolicy.FilterDrop
 	default:
-		return googlepolicy.EvalNoMatch
+		return googlepolicy.FilterNoMatch
 	}
 }
 

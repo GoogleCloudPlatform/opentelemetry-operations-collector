@@ -22,7 +22,7 @@ import (
 // TransformLogs applies active transformation policies in-place across the Resource -> Scope -> Record hierarchy.
 // Dropped records are pruned, and empty scopes/resources are removed.
 func (e *Evaluator) TransformLogs(ld plog.Logs) {
-	if len(e.logPolicies) == 0 {
+	if len(e.logFilterPolicies) == 0 {
 		return
 	}
 
@@ -56,11 +56,11 @@ func (e *Evaluator) TransformLogs(ld plog.Logs) {
 // A matching ACTION_KEEP policy exempts the record outright.
 func (e *Evaluator) EvalLog(ctx LogContext) bool {
 	var hasDrop bool
-	for _, p := range e.logPolicies {
-		switch p.EvaluateLog(ctx) {
-		case googlepolicy.EvalKeep:
+	for _, p := range e.logFilterPolicies {
+		switch p.FilterLog(ctx) {
+		case googlepolicy.FilterKeep:
 			return false
-		case googlepolicy.EvalDrop:
+		case googlepolicy.FilterDrop:
 			hasDrop = true
 		}
 	}

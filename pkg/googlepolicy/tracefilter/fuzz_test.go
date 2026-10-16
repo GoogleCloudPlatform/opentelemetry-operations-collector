@@ -156,9 +156,9 @@ func verifyCompiledTracePolicy(t *testing.T, p googlepolicy.Policy, contexts []g
 		t.Fatalf("unexpected PolicyClass(): %q", p.PolicyClass())
 	}
 
-	eval, ok := p.(googlepolicy.TracePolicyEvaluator)
+	eval, ok := p.(googlepolicy.TraceFilterPolicyEvaluator)
 	if !ok {
-		t.Fatalf("policy %T does not implement TracePolicyEvaluator", p)
+		t.Fatalf("policy %T does not implement TraceFilterPolicyEvaluator", p)
 	}
 	pol, ok := p.(*Policy)
 	if !ok {
@@ -166,19 +166,19 @@ func verifyCompiledTracePolicy(t *testing.T, p googlepolicy.Policy, contexts []g
 	}
 
 	for _, ctx := range contexts {
-		res := eval.EvaluateTrace(ctx)
+		res := eval.FilterTrace(ctx)
 		switch res {
-		case googlepolicy.EvalNoMatch:
-		case googlepolicy.EvalKeep:
+		case googlepolicy.FilterNoMatch:
+		case googlepolicy.FilterKeep:
 			if pol.Action() != policyv1alpha1.Action_ACTION_KEEP {
-				t.Fatalf("EvaluateTrace returned EvalKeep for action %v", pol.Action())
+				t.Fatalf("FilterTrace returned FilterKeep for action %v", pol.Action())
 			}
-		case googlepolicy.EvalDrop:
+		case googlepolicy.FilterDrop:
 			if pol.Action() != policyv1alpha1.Action_ACTION_DROP {
-				t.Fatalf("EvaluateTrace returned EvalDrop for action %v", pol.Action())
+				t.Fatalf("FilterTrace returned FilterDrop for action %v", pol.Action())
 			}
 		default:
-			t.Fatalf("EvaluateTrace returned unknown EvalResult %v", res)
+			t.Fatalf("FilterTrace returned unknown FilterResult %v", res)
 		}
 	}
 }
@@ -235,11 +235,11 @@ func FuzzTraceFilterPolicy(f *testing.F) {
 								t.Fatalf("protojson round-trip failed MakePolicySet: err=%v, len=%d, ok=%v", err, len(rtPS.Policies), ok)
 							}
 							verifyCompiledTracePolicy(t, rtEntry.PolicyObj, ctxs)
-							protoEval := entry.PolicyObj.(googlepolicy.TracePolicyEvaluator)
-							jsonEval := rtEntry.PolicyObj.(googlepolicy.TracePolicyEvaluator)
+							protoEval := entry.PolicyObj.(googlepolicy.TraceFilterPolicyEvaluator)
+							jsonEval := rtEntry.PolicyObj.(googlepolicy.TraceFilterPolicyEvaluator)
 							for i, ctx := range ctxs {
-								if got, want := jsonEval.EvaluateTrace(ctx), protoEval.EvaluateTrace(ctx); got != want {
-									t.Fatalf("context[%d] EvalResult mismatch between proto (%v) and JSON (%v)", i, want, got)
+								if got, want := jsonEval.FilterTrace(ctx), protoEval.FilterTrace(ctx); got != want {
+									t.Fatalf("context[%d] FilterResult mismatch between proto (%v) and JSON (%v)", i, want, got)
 								}
 							}
 						}

@@ -52,16 +52,16 @@ func (p *nonEvaluatorPolicy) PolicyClass() googlepolicy.PolicyClass {
 func (p *nonEvaluatorPolicy) Validate() error                      { return nil }
 func (p *nonEvaluatorPolicy) TargetSignals() []googlepolicy.Signal { return nil }
 
-// fakeMetricPolicy is a hand-written MetricPolicyEvaluator used to observe how
+// fakeMetricPolicy is a hand-written MetricFilterPolicyEvaluator used to observe how
 // often, and with which datapoint attributes, the Evaluator invokes a metric
 // policy. It is the only way to assert the two-tier instrument-vs-datapoint
 // optimisation from outside the package.
 type fakeMetricPolicy struct {
 	name           string
 	datapointLevel bool
-	result         googlepolicy.EvalResult
+	result         googlepolicy.FilterResult
 	// eval, when set, overrides result.
-	eval func(ctx googlepolicy.MetricContext) googlepolicy.EvalResult
+	eval func(ctx googlepolicy.MetricContext) googlepolicy.FilterResult
 
 	calls              int
 	seenDatapointAttrs []map[string]any
@@ -77,7 +77,7 @@ func (p *fakeMetricPolicy) TargetSignals() []googlepolicy.Signal {
 	return []googlepolicy.Signal{googlepolicy.SignalMetrics}
 }
 func (p *fakeMetricPolicy) IsDatapointLevel() bool { return p.datapointLevel }
-func (p *fakeMetricPolicy) EvaluateMetric(ctx googlepolicy.MetricContext) googlepolicy.EvalResult {
+func (p *fakeMetricPolicy) FilterMetric(ctx googlepolicy.MetricContext) googlepolicy.FilterResult {
 	p.calls++
 	p.seenDatapointAttrs = append(p.seenDatapointAttrs, ctx.DatapointAttributes.AsRaw())
 	if p.eval != nil {
@@ -86,11 +86,11 @@ func (p *fakeMetricPolicy) EvaluateMetric(ctx googlepolicy.MetricContext) google
 	return p.result
 }
 
-// fakeLogPolicy is a hand-written LogPolicyEvaluator that is not a
+// fakeLogPolicy is a hand-written LogFilterPolicyEvaluator that is not a
 // logfilter.Policy, pinning that NewEvaluator dispatches on the evaluator
 // interface rather than on a concrete filter-package type.
 type fakeLogPolicy struct {
-	result googlepolicy.EvalResult
+	result googlepolicy.FilterResult
 }
 
 func (p *fakeLogPolicy) PolicyName() string { return "fake-log" }
@@ -102,7 +102,7 @@ func (p *fakeLogPolicy) Validate() error { return nil }
 func (p *fakeLogPolicy) TargetSignals() []googlepolicy.Signal {
 	return []googlepolicy.Signal{googlepolicy.SignalLogs}
 }
-func (p *fakeLogPolicy) EvaluateLog(googlepolicy.LogContext) googlepolicy.EvalResult {
+func (p *fakeLogPolicy) FilterLog(googlepolicy.LogContext) googlepolicy.FilterResult {
 	return p.result
 }
 
@@ -396,9 +396,9 @@ func TestNewEvaluator_Dispatch(t *testing.T) {
 		ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{nil})
 		require.NoError(t, err)
 		require.NotNil(t, ev)
-		assert.Empty(t, ev.logPolicies)
-		assert.Empty(t, ev.metricPolicies)
-		assert.Empty(t, ev.tracePolicies)
+		assert.Empty(t, ev.logFilterPolicies)
+		assert.Empty(t, ev.metricFilterPolicies)
+		assert.Empty(t, ev.traceFilterPolicies)
 	})
 
 	t.Run("compiled policies are routed to their signal", func(t *testing.T) {
@@ -408,9 +408,9 @@ func TestNewEvaluator_Dispatch(t *testing.T) {
 			mustPolicy(t, newDropSpanNameProto("pre-trace", "drop.span")),
 		})
 		require.NoError(t, err)
-		require.Len(t, ev.logPolicies, 1)
-		require.Len(t, ev.metricPolicies, 1)
-		require.Len(t, ev.tracePolicies, 1)
+		require.Len(t, ev.logFilterPolicies, 1)
+		require.Len(t, ev.metricFilterPolicies, 1)
+		require.Len(t, ev.traceFilterPolicies, 1)
 
 		lr := plog.NewLogRecord()
 		lr.Body().SetStr("BAD")
@@ -428,12 +428,12 @@ func TestNewEvaluator_Dispatch(t *testing.T) {
 
 	t.Run("dispatch is by evaluator interface, not by concrete type", func(t *testing.T) {
 		// fakeLogPolicy is not a logfilter.Policy; implementing
-		// LogPolicyEvaluator is all it takes to land on the log path.
+		// LogFilterPolicyEvaluator is all it takes to land on the log path.
 		ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{
-			&fakeLogPolicy{result: googlepolicy.EvalDrop},
+			&fakeLogPolicy{result: googlepolicy.FilterDrop},
 		})
 		require.NoError(t, err)
-		require.Len(t, ev.logPolicies, 1)
+		require.Len(t, ev.logFilterPolicies, 1)
 		assert.True(t, ev.EvalLog(LogContext{Record: plog.NewLogRecord()}))
 	})
 
@@ -442,14 +442,14 @@ func TestNewEvaluator_Dispatch(t *testing.T) {
 			mustPolicy(t, newDropMetricNameProto("by-name", "drop.me")),
 		})
 		require.NoError(t, err)
-		assert.False(t, instrumentOnly.hasDatapointMetricPolicies)
+		assert.False(t, instrumentOnly.hasDatapointMetricFilterPolicies)
 
 		withDatapoint, err := NewEvaluator([]googlepolicy.TransformationPolicy{
 			mustPolicy(t, newDropMetricNameProto("by-name", "drop.me")),
 			mustPolicy(t, newDropDatapointAttrProto("by-attr", "drop_me", "true")),
 		})
 		require.NoError(t, err)
-		assert.True(t, withDatapoint.hasDatapointMetricPolicies)
+		assert.True(t, withDatapoint.hasDatapointMetricFilterPolicies)
 	})
 }
 
@@ -472,9 +472,9 @@ func TestNewEvaluator_RejectsPolicyWithoutEvaluator(t *testing.T) {
 	assert.Nil(t, ev, "a rejected policy must not yield a half-populated evaluator")
 	assert.ErrorContains(t, err, "not-an-evaluator")
 	assert.ErrorContains(t, err, "*googlepolicyprocessor.nonEvaluatorPolicy")
-	assert.ErrorContains(t, err, "googlepolicy.LogPolicyEvaluator")
-	assert.ErrorContains(t, err, "googlepolicy.MetricPolicyEvaluator")
-	assert.ErrorContains(t, err, "googlepolicy.TracePolicyEvaluator")
+	assert.ErrorContains(t, err, "googlepolicy.LogFilterPolicyEvaluator")
+	assert.ErrorContains(t, err, "googlepolicy.MetricFilterPolicyEvaluator")
+	assert.ErrorContains(t, err, "googlepolicy.TraceFilterPolicyEvaluator")
 }
 
 // TestEvaluator_NoPoliciesIsNoOp pins the fast paths taken when a signal has no
@@ -532,7 +532,7 @@ func TestEvaluator_MetricDatapointPruningAndEmptyMetrics(t *testing.T) {
 
 	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{dropDpPolicy, keepInstrumentPolicy})
 	require.NoError(t, err)
-	require.True(t, ev.hasDatapointMetricPolicies)
+	require.True(t, ev.hasDatapointMetricFilterPolicies)
 
 	md := pmetric.NewMetrics()
 	rm := md.ResourceMetrics().AppendEmpty()
@@ -634,7 +634,7 @@ func TestEvaluator_MetricInstrumentLevelDropByType(t *testing.T) {
 					policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE, tc.typeName)),
 			})
 			require.NoError(t, err)
-			require.False(t, ev.hasDatapointMetricPolicies)
+			require.False(t, ev.hasDatapointMetricFilterPolicies)
 
 			md := newAllMetricTypes()
 			ev.TransformMetrics(md)
@@ -701,10 +701,10 @@ func TestEvaluator_MetricTwoTierEvaluation(t *testing.T) {
 	}
 
 	t.Run("instrument-level policy is evaluated once per instrument", func(t *testing.T) {
-		fake := &fakeMetricPolicy{name: "instrument", result: googlepolicy.EvalDrop}
+		fake := &fakeMetricPolicy{name: "instrument", result: googlepolicy.FilterDrop}
 		ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{fake})
 		require.NoError(t, err)
-		require.False(t, ev.hasDatapointMetricPolicies)
+		require.False(t, ev.hasDatapointMetricFilterPolicies)
 
 		md := newSumWithDatapoints("a", "b", "c")
 		ev.TransformMetrics(md)
@@ -719,16 +719,16 @@ func TestEvaluator_MetricTwoTierEvaluation(t *testing.T) {
 		fake := &fakeMetricPolicy{
 			name:           "datapoint",
 			datapointLevel: true,
-			eval: func(ctx googlepolicy.MetricContext) googlepolicy.EvalResult {
+			eval: func(ctx googlepolicy.MetricContext) googlepolicy.FilterResult {
 				if v, ok := ctx.DatapointAttributes.Get("dp"); ok && v.Str() != "keep" {
-					return googlepolicy.EvalDrop
+					return googlepolicy.FilterDrop
 				}
-				return googlepolicy.EvalNoMatch
+				return googlepolicy.FilterNoMatch
 			},
 		}
 		ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{fake})
 		require.NoError(t, err)
-		require.True(t, ev.hasDatapointMetricPolicies)
+		require.True(t, ev.hasDatapointMetricFilterPolicies)
 
 		md := newSumWithDatapoints("a", "keep", "c")
 		ev.TransformMetrics(md)
@@ -743,8 +743,8 @@ func TestEvaluator_MetricTwoTierEvaluation(t *testing.T) {
 	})
 
 	t.Run("instrument-level KEEP short-circuits datapoint pruning", func(t *testing.T) {
-		keep := &fakeMetricPolicy{name: "keep", result: googlepolicy.EvalKeep}
-		drop := &fakeMetricPolicy{name: "drop", datapointLevel: true, result: googlepolicy.EvalDrop}
+		keep := &fakeMetricPolicy{name: "keep", result: googlepolicy.FilterKeep}
+		drop := &fakeMetricPolicy{name: "drop", datapointLevel: true, result: googlepolicy.FilterDrop}
 		ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{keep, drop})
 		require.NoError(t, err)
 
@@ -758,7 +758,7 @@ func TestEvaluator_MetricTwoTierEvaluation(t *testing.T) {
 	})
 
 	t.Run("datapoint-level policies are skipped for instruments with no datapoints", func(t *testing.T) {
-		drop := &fakeMetricPolicy{name: "drop", datapointLevel: true, result: googlepolicy.EvalDrop}
+		drop := &fakeMetricPolicy{name: "drop", datapointLevel: true, result: googlepolicy.FilterDrop}
 		ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{drop})
 		require.NoError(t, err)
 
@@ -776,20 +776,20 @@ func TestEvaluator_MetricTwoTierEvaluation(t *testing.T) {
 	})
 
 	t.Run("instrument-level policy is evaluated once even when datapoint-level policy is present", func(t *testing.T) {
-		instDrop := &fakeMetricPolicy{name: "inst-drop", result: googlepolicy.EvalDrop}
+		instDrop := &fakeMetricPolicy{name: "inst-drop", result: googlepolicy.FilterDrop}
 		dpKeep := &fakeMetricPolicy{
 			name:           "dp-keep",
 			datapointLevel: true,
-			eval: func(ctx googlepolicy.MetricContext) googlepolicy.EvalResult {
+			eval: func(ctx googlepolicy.MetricContext) googlepolicy.FilterResult {
 				if v, ok := ctx.DatapointAttributes.Get("dp"); ok && v.Str() == "exempt" {
-					return googlepolicy.EvalKeep
+					return googlepolicy.FilterKeep
 				}
-				return googlepolicy.EvalNoMatch
+				return googlepolicy.FilterNoMatch
 			},
 		}
 		ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{instDrop, dpKeep})
 		require.NoError(t, err)
-		require.True(t, ev.hasDatapointMetricPolicies)
+		require.True(t, ev.hasDatapointMetricFilterPolicies)
 
 		md := newSumWithDatapoints("a", "exempt", "c")
 		ev.TransformMetrics(md)
@@ -805,7 +805,7 @@ func TestEvaluator_MetricTwoTierEvaluation(t *testing.T) {
 	})
 
 	t.Run("untyped metric (MetricTypeEmpty) is evaluated and dropped by instrument policy", func(t *testing.T) {
-		instDrop := &fakeMetricPolicy{name: "inst-drop", result: googlepolicy.EvalDrop}
+		instDrop := &fakeMetricPolicy{name: "inst-drop", result: googlepolicy.FilterDrop}
 		ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{instDrop})
 		require.NoError(t, err)
 
@@ -818,7 +818,7 @@ func TestEvaluator_MetricTwoTierEvaluation(t *testing.T) {
 		ev.TransformMetrics(md)
 
 		assert.Equal(t, 1, instDrop.calls)
-		assert.Empty(t, metricNames(md), "untyped MetricTypeEmpty metric must be dropped when instrument policy returns EvalDrop")
+		assert.Empty(t, metricNames(md), "untyped MetricTypeEmpty metric must be dropped when instrument policy returns FilterDrop")
 	})
 }
 

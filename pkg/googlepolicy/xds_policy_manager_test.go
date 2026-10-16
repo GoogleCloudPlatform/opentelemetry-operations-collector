@@ -173,7 +173,7 @@ func TestNewXDSPolicyManager_Validation(t *testing.T) {
 // subscribes to nothing, and no error says so.
 func TestXDSTPResourceName(t *testing.T) {
 	assert.Equal(t,
-		"xdstp://traffic-director-us-central1.xds.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector/projects/my-project/fleets/my-fleet/collectors/default",
+		"xdstp://telemetry-director.us-central1.xds.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector/projects/my-project/fleets/my-fleet/collectors/default",
 		xdstpResourceName("us-central1", "my-project", "my-fleet"),
 	)
 }

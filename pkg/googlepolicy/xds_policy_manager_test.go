@@ -657,8 +657,15 @@ func TestXDSPolicyLifecycle_EmptyPolicySetWithRevision(t *testing.T) {
 }
 
 func TestHandleResponse_MissingPolicySetRevisionRejects(t *testing.T) {
+	policyPayload, err := structpb.NewStruct(map[string]any{
+		"name": "log-filter-policy",
+	})
+	require.NoError(t, err)
+	policyAny, err := anypb.New(policyPayload)
+	require.NoError(t, err)
+
 	collector := &xdsv1alpha1.TelemetryCollector{
-		Policies: nil,
+		Policies: []*anypb.Any{policyAny},
 	}
 	collectorAny, err := anypb.New(collector)
 	require.NoError(t, err)
@@ -672,6 +679,32 @@ func TestHandleResponse_MissingPolicySetRevisionRejects(t *testing.T) {
 	prevActive := ActivePolicySet()
 	m.handleResponse(nil, nil, resp)
 	assert.Equal(t, prevActive, ActivePolicySet())
+}
+
+func TestHandleResponse_EmptyTelemetryCollectorAppliesEmptyPolicySet(t *testing.T) {
+	collectorAny, err := anypb.New(&xdsv1alpha1.TelemetryCollector{})
+	require.NoError(t, err)
+
+	resp := &discoveryv3.DiscoveryResponse{
+		VersionInfo: "v1-empty",
+		Resources:   []*anypb.Any{collectorAny},
+	}
+
+	t.Cleanup(func() {
+		for ActivePolicySet() != nil {
+			RollbackActivePolicySet()
+		}
+	})
+
+	m := &xdsPolicyManager{logger: zap.NewNop(), ready: make(chan struct{})}
+	m.handleResponse(nil, nil, resp)
+
+	active := ActivePolicySet()
+	require.NotNil(t, active)
+	assert.Equal(t, "v1-empty", active.RevisionID)
+	assert.Empty(t, active.PolicySetID)
+	assert.Empty(t, active.Policies)
+	assert.Equal(t, "v1-empty", m.LastAppliedVersion())
 }
 
 func TestHandleResponse_MalformedPolicySetRevisionRejects(t *testing.T) {

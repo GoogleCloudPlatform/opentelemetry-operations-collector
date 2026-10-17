@@ -979,6 +979,26 @@ func (m *xdsPolicyManager) handleResponse(stream discoveryv3.AggregatedDiscovery
 		return
 	}
 
+	// A TelemetryCollector with no policy_set_revision and no policies is the
+	// control plane reporting that the fleet has no management-plane policy
+	// source (e.g. no active rollout). Like a 0-resource response, that is a
+	// legitimate, empty revision.
+	if manifest.policySetRevision == "" && len(manifest.policies) == 0 {
+		if active := ActivePolicySet(); active != nil && len(active.Policies) > 0 {
+			m.logger.Warn("xDS revision contains no policies, clearing the active policy set",
+				zap.String("version", resp.GetVersionInfo()),
+			)
+		}
+		SetActivePolicySet(&PolicySet{
+			Policies:   make(map[string]*PolicySetEntry),
+			RevisionID: resp.GetVersionInfo(),
+			ReceivedAt: time.Now(),
+		})
+		m.sendACK(stream, node, resp.GetVersionInfo(), resp.GetNonce())
+		m.markReady()
+		return
+	}
+
 	if manifest.policySetRevision == "" {
 		err := errors.New("xDS TelemetryCollector resource is missing required field policy_set_revision")
 		m.logger.Warn("Rejecting xDS revision", zap.String("version", resp.GetVersionInfo()), zap.Error(err))

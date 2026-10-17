@@ -21,6 +21,7 @@ on:
   pull_request:
     branches:
       - master
+      - gboc-experiment-policy
 
 env:
   # Default minimum version of Go to support.

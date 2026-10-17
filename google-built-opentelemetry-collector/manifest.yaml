@@ -10,6 +10,7 @@ dist:
 receivers:
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/dockerstatsreceiver v0.162.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver v0.162.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filestatsreceiver v0.162.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/fluentforwardreceiver v0.162.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/googlecloudmonitoringreceiver v0.162.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/googlecloudpubsubreceiver v0.162.0
@@ -22,6 +23,7 @@ receivers:
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/k8seventsreceiver v0.162.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/k8sobjectsreceiver v0.162.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/kubeletstatsreceiver v0.162.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/nginxreceiver v0.162.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/otelarrowreceiver v0.162.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/otlpjsonfilereceiver v0.162.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver v0.162.0
@@ -31,17 +33,21 @@ receivers:
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/statsdreceiver v0.162.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/syslogreceiver v0.162.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/tcplogreceiver v0.162.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/udplogreceiver v0.162.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowseventlogreceiver v0.162.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/windowsperfcountersreceiver v0.162.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/zipkinreceiver v0.162.0
 - gomod: go.opentelemetry.io/collector/receiver/otlpreceiver v0.162.0
 
 processors:
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor v0.162.0
+  path: ../components/google-built-opentelemetry-collector/processor/googlepolicyprocessor
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/attributesprocessor v0.162.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/cumulativetodeltaprocessor v0.162.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/deltatocumulativeprocessor v0.162.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/deltatorateprocessor v0.162.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.162.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/geoipprocessor v0.162.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/groupbyattrsprocessor v0.162.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/groupbytraceprocessor v0.162.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/intervalprocessor v0.162.0
@@ -59,6 +65,7 @@ processors:
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/transformprocessor v0.162.0
 - gomod: go.opentelemetry.io/collector/processor/batchprocessor v0.162.0
 - gomod: go.opentelemetry.io/collector/processor/memorylimiterprocessor v0.162.0
+- gomod: go.opentelemetry.io/collector/processor/queuebatchprocessor v0.162.0
 
 exporters:
 - gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter v0.162.0
@@ -67,6 +74,7 @@ exporters:
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter v0.162.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudpubsubexporter v0.162.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlemanagedprometheusexporter v0.162.0
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/kafkaexporter v0.162.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/loadbalancingexporter v0.162.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/otelarrowexporter v0.162.0
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/exporter/prometheusexporter v0.162.0
@@ -78,6 +86,8 @@ exporters:
 - gomod: go.opentelemetry.io/collector/exporter/otlphttpexporter v0.162.0
 
 extensions:
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/googlecontrolplaneextension v0.162.0
+  path: ../components/google-built-opentelemetry-collector/extension/googlecontrolplaneextension
 - gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/healthagent v0.162.0
   path: ../components/google-built-opentelemetry-collector/extension/healthagent
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/ackextension v0.162.0
@@ -111,6 +121,8 @@ connectors:
 - gomod: go.opentelemetry.io/collector/connector/forwardconnector v0.162.0
 
 providers:
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider v0.162.0
+  path: ../components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/confmap/provider/googlesecretmanagerprovider v0.162.0
 - gomod: go.opentelemetry.io/collector/confmap/provider/envprovider v1.68.0
 - gomod: go.opentelemetry.io/collector/confmap/provider/fileprovider v1.68.0
@@ -121,4 +133,10 @@ providers:
 replaces:
 # Force update buger/jsonparser to v1.1.2 to fix vulnerability
 - github.com/buger/jsonparser => github.com/buger/jsonparser v1.1.2
+# Local dependency for googlecontrolplaneprovider
+- github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy => ../../pkg/googlepolicy
+# Local dependency for googlepolicyprocessor and googlecontrolplaneprovider
+- github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/event => ../../pkg/event
+# Local root module so pkg/googlepolicy builds against in-tree gen/go protos
+- github.com/GoogleCloudPlatform/opentelemetry-operations-collector => ../..
 

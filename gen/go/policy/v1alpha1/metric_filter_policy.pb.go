@@ -52,14 +52,16 @@ const (
 	MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_UNIT MetricDescriptorField = 3
 	// The primary data type of the metric (e.g. "GAUGE", "SUM", "HISTOGRAM",
 	// "EXPONENTIAL_HISTOGRAM", "SUMMARY"). When selected, string predicates
-	// (`equals` with string_value, `regex`) evaluate against uppercase type names.
+	// (`equals` with string_value, `glob`, `contains` with string_value) evaluate
+	// against uppercase type names.
 	MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE MetricDescriptorField = 4
 	// The aggregation temporality of the metric (OTLP path: metric.*.aggregation_temporality,
 	// e.g. for Sum, Histogram, ExponentialHistogram). When selected, string predicates
-	// (`equals` with string_value, `regex`) evaluate against uppercase names: "DELTA" or "CUMULATIVE".
+	// (`equals` with string_value, `glob`, `contains` with string_value) evaluate
+	// against uppercase names: "DELTA" or "CUMULATIVE".
 	MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_AGGREGATION_TEMPORALITY MetricDescriptorField = 5
 	// Whether a Sum metric is monotonic (OTLP path: metric.sum.is_monotonic).
-	// Evaluates against typed `equals` (`bool_value`), or "true"/"false" for `regex`.
+	// Evaluates against typed `equals` (`bool_value`).
 	MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_IS_MONOTONIC MetricDescriptorField = 6
 )
 
@@ -217,7 +219,7 @@ type MetricMatcher struct {
 	//
 	//	*MetricMatcher_Exists
 	//	*MetricMatcher_Equals
-	//	*MetricMatcher_Regex
+	//	*MetricMatcher_Glob
 	//	*MetricMatcher_Gt
 	//	*MetricMatcher_Gte
 	//	*MetricMatcher_Lt
@@ -292,10 +294,10 @@ func (x *MetricMatcher) GetEquals() *Value {
 	return nil
 }
 
-func (x *MetricMatcher) GetRegex() string {
+func (x *MetricMatcher) GetGlob() string {
 	if x != nil {
-		if x, ok := x.Predicate.(*MetricMatcher_Regex); ok {
-			return x.Regex
+		if x, ok := x.Predicate.(*MetricMatcher_Glob); ok {
+			return x.Glob
 		}
 	}
 	return ""
@@ -372,13 +374,12 @@ type MetricMatcher_Equals struct {
 	Equals *Value `protobuf:"bytes,11,opt,name=equals,proto3,oneof"`
 }
 
-type MetricMatcher_Regex struct {
-	// Regular expression match using RE2 syntax.
-	// Evaluates as an unanchored partial match (like Go regexp.MatchString and
-	// OpenTelemetry OTTL IsMatch). Callers requiring full string equality must
-	// provide explicit anchors ('^' and '$'). Applies strictly to string
-	// fields and string attribute values.
-	Regex string `protobuf:"bytes,12,opt,name=regex,proto3,oneof"`
+type MetricMatcher_Glob struct {
+	// Glob pattern match against the entire string value.
+	// Supports '*' (matches zero or more characters) and '?' (matches any
+	// single character). Matching is case-sensitive and anchored to the full
+	// string. Applies strictly to string fields and string attribute values.
+	Glob string `protobuf:"bytes,12,opt,name=glob,proto3,oneof"`
 }
 
 type MetricMatcher_Gt struct {
@@ -417,7 +418,7 @@ func (*MetricMatcher_Exists) isMetricMatcher_Predicate() {}
 
 func (*MetricMatcher_Equals) isMetricMatcher_Predicate() {}
 
-func (*MetricMatcher_Regex) isMetricMatcher_Predicate() {}
+func (*MetricMatcher_Glob) isMetricMatcher_Predicate() {}
 
 func (*MetricMatcher_Gt) isMetricMatcher_Predicate() {}
 
@@ -574,13 +575,13 @@ const file_policy_v1alpha1_metric_filter_policy_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12E\n" +
 	"\x06action\x18\x02 \x01(\x0e2(.google.telemetry.policy.v1alpha1.ActionH\x00R\x06action\x88\x01\x01\x12I\n" +
 	"\amatches\x18\x03 \x03(\v2/.google.telemetry.policy.v1alpha1.MetricMatcherR\amatchesB\t\n" +
-	"\a_action\"\xe3\x04\n" +
+	"\a_action\"\xe1\x04\n" +
 	"\rMetricMatcher\x12M\n" +
 	"\x06target\x18\x01 \x01(\v25.google.telemetry.policy.v1alpha1.MetricFieldSelectorR\x06target\x120\n" +
 	"\x06exists\x18\n" +
 	" \x01(\v2\x16.google.protobuf.EmptyH\x00R\x06exists\x12A\n" +
-	"\x06equals\x18\v \x01(\v2'.google.telemetry.policy.v1alpha1.ValueH\x00R\x06equals\x12\x16\n" +
-	"\x05regex\x18\f \x01(\tH\x00R\x05regex\x12@\n" +
+	"\x06equals\x18\v \x01(\v2'.google.telemetry.policy.v1alpha1.ValueH\x00R\x06equals\x12\x14\n" +
+	"\x04glob\x18\f \x01(\tH\x00R\x04glob\x12@\n" +
 	"\x02gt\x18\r \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x02gt\x12B\n" +
 	"\x03gte\x18\x0e \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x03gte\x12@\n" +
 	"\x02lt\x18\x0f \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x02lt\x12B\n" +
@@ -665,7 +666,7 @@ func file_policy_v1alpha1_metric_filter_policy_proto_init() {
 	file_policy_v1alpha1_metric_filter_policy_proto_msgTypes[1].OneofWrappers = []any{
 		(*MetricMatcher_Exists)(nil),
 		(*MetricMatcher_Equals)(nil),
-		(*MetricMatcher_Regex)(nil),
+		(*MetricMatcher_Glob)(nil),
 		(*MetricMatcher_Gt)(nil),
 		(*MetricMatcher_Gte)(nil),
 		(*MetricMatcher_Lt)(nil),

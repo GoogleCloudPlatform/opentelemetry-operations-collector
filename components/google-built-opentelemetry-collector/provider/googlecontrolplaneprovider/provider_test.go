@@ -453,9 +453,8 @@ func TestFilterPolicyDriversRegistered(t *testing.T) {
 		{
 			policyType: "trace_filter",
 			raw: map[string]any{
-				"type":   "trace_filter",
-				"id":     "test-trace",
-				"action": "ACTION_DROP",
+				"type": "trace_filter",
+				"id":   "test-trace",
 				"matches": []any{
 					map[string]any{
 						"target": map[string]any{"record_field": "SPAN_RECORD_FIELD_NAME"},

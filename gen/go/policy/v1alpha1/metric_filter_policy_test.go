@@ -39,8 +39,8 @@ func TestMetricFilterPolicy_Serialization(t *testing.T) {
 						DescriptorField: policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME,
 					},
 				},
-				Predicate: &policyv1alpha1.MetricMatcher_Regex{
-					Regex: "^http\\.server\\..*",
+				Predicate: &policyv1alpha1.MetricMatcher_Glob{
+					Glob: "http.server.*",
 				},
 				Negate: false,
 			},
@@ -241,7 +241,7 @@ func TestMetricFilterPolicy_Serialization(t *testing.T) {
 	matcher0 := unmarshaled.GetMatches()[0]
 	descFieldName := matcher0.GetTarget().GetDescriptorField()
 	assert.Equal(t, policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME, descFieldName)
-	assert.Equal(t, "^http\\.server\\..*", matcher0.GetRegex())
+	assert.Equal(t, "http.server.*", matcher0.GetGlob())
 	assert.False(t, matcher0.GetNegate())
 
 	// Check descriptor field type matcher.

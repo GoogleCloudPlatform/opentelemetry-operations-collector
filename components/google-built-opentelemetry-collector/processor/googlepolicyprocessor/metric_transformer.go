@@ -23,7 +23,7 @@ import (
 // TransformMetrics applies active transformation policies in-place across the Resource -> Scope -> Metric -> Datapoints hierarchy.
 // Dropped datapoints are pruned, and empty metrics/scopes/resources are removed.
 func (e *Evaluator) TransformMetrics(md pmetric.Metrics) {
-	if len(e.metricPolicies) == 0 {
+	if len(e.metricFilterPolicies) == 0 {
 		return
 	}
 
@@ -81,18 +81,18 @@ func (e *Evaluator) transformMetricDataPoints(m pmetric.Metric, ctx MetricContex
 	// Evaluate instrument-level policies once per metric. An instrument-level
 	// KEEP exempts every datapoint below it, overriding any datapoint DROP.
 	var instrumentDrop bool
-	for _, p := range e.instrumentMetricPolicies {
-		switch p.EvaluateMetric(ctx) {
-		case googlepolicy.EvalKeep:
+	for _, p := range e.instrumentMetricFilterPolicies {
+		switch p.FilterMetric(ctx) {
+		case googlepolicy.FilterKeep:
 			return false
-		case googlepolicy.EvalDrop:
+		case googlepolicy.FilterDrop:
 			instrumentDrop = true
 		}
 	}
 
 	// With no datapoint-level policies (or no datapoints to inspect, such as
 	// untyped MetricTypeEmpty or empty series), the instrument verdict is final.
-	if datapointCount == 0 || !e.hasDatapointMetricPolicies {
+	if datapointCount == 0 || !e.hasDatapointMetricFilterPolicies {
 		return instrumentDrop
 	}
 
@@ -140,11 +140,11 @@ func pruneDatapoints[DP datapoint, S datapointSlice[DP]](e *Evaluator, datapoint
 
 func (e *Evaluator) evalDatapointMetricPolicies(ctx MetricContext, instrumentDrop bool) bool {
 	hasDrop := instrumentDrop
-	for _, p := range e.datapointMetricPolicies {
-		switch p.EvaluateMetric(ctx) {
-		case googlepolicy.EvalKeep:
+	for _, p := range e.datapointMetricFilterPolicies {
+		switch p.FilterMetric(ctx) {
+		case googlepolicy.FilterKeep:
 			return false
-		case googlepolicy.EvalDrop:
+		case googlepolicy.FilterDrop:
 			hasDrop = true
 		}
 	}
@@ -154,11 +154,11 @@ func (e *Evaluator) evalDatapointMetricPolicies(ctx MetricContext, instrumentDro
 // EvalMetric returns true if the datapoint should be DROPPED, false if KEPT.
 func (e *Evaluator) EvalMetric(ctx MetricContext) bool {
 	var hasDrop bool
-	for _, p := range e.metricPolicies {
-		switch p.EvaluateMetric(ctx) {
-		case googlepolicy.EvalKeep:
+	for _, p := range e.metricFilterPolicies {
+		switch p.FilterMetric(ctx) {
+		case googlepolicy.FilterKeep:
 			return false
-		case googlepolicy.EvalDrop:
+		case googlepolicy.FilterDrop:
 			hasDrop = true
 		}
 	}

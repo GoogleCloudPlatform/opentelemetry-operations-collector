@@ -13,7 +13,7 @@ resourceSpans:
             spanId: "0102030405060721"
             parentSpanId: "0102030405060723"
             name: db.query.failed
-            kind: 1
+            kind: 2
             startTimeUnixNano: "1700000000000000000"
             endTimeUnixNano: "1700000001000000000"
             status:

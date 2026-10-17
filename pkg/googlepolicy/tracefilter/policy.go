@@ -54,8 +54,6 @@ var (
 	ErrNilProto = errors.New("trace filter policy proto cannot be nil")
 	// ErrMissingID is returned when the policy ID is empty.
 	ErrMissingID = errors.New("trace filter policy id cannot be empty")
-	// ErrMissingAction is returned when the policy action is unspecified or invalid.
-	ErrMissingAction = errors.New("trace filter policy must specify a valid action (ACTION_KEEP or ACTION_DROP)")
 	// ErrMissingMatchers is returned when the policy contains no matchers.
 	ErrMissingMatchers = errors.New("trace filter policy must contain at least one matcher")
 	// ErrMissingTarget is returned when a matcher does not specify a target field selector.
@@ -71,7 +69,7 @@ type Policy struct {
 }
 
 var _ googlepolicy.TransformationPolicy = (*Policy)(nil)
-var _ googlepolicy.TracePolicyEvaluator = (*Policy)(nil)
+var _ googlepolicy.TraceFilterPolicyEvaluator = (*Policy)(nil)
 
 // NewPolicyFromProto validates and compiles a TraceFilterPolicy protobuf into a Policy.
 func NewPolicyFromProto(pb *policyv1alpha1.TraceFilterPolicy) (*Policy, error) {
@@ -80,12 +78,6 @@ func NewPolicyFromProto(pb *policyv1alpha1.TraceFilterPolicy) (*Policy, error) {
 	}
 	if pb.GetId() == "" {
 		return nil, ErrMissingID
-	}
-
-	switch pb.GetAction() {
-	case policyv1alpha1.Action_ACTION_KEEP, policyv1alpha1.Action_ACTION_DROP:
-	default:
-		return nil, ErrMissingAction
 	}
 
 	if len(pb.GetMatches()) == 0 {
@@ -135,30 +127,18 @@ func (p *Policy) Validate() error {
 	return nil
 }
 
-// Action returns the configured policyv1alpha1.Action (ACTION_KEEP or ACTION_DROP).
-func (p *Policy) Action() policyv1alpha1.Action {
-	return p.proto.GetAction()
-}
-
 // Proto returns the underlying protobuf message for this policy.
 func (p *Policy) Proto() proto.Message {
 	return p.proto
 }
 
-// EvaluateTrace evaluates the policy against the given TraceContext and returns
-// EvalKeep, EvalDrop, or EvalNoMatch.
-func (p *Policy) EvaluateTrace(ctx googlepolicy.TraceContext) googlepolicy.EvalResult {
+// FilterTrace evaluates the policy against the given TraceContext and returns
+// FilterDrop when all matchers match, or FilterNoMatch otherwise.
+func (p *Policy) FilterTrace(ctx googlepolicy.TraceContext) googlepolicy.FilterResult {
 	if !p.matchesContext(ctx) {
-		return googlepolicy.EvalNoMatch
+		return googlepolicy.FilterNoMatch
 	}
-	switch p.Action() {
-	case policyv1alpha1.Action_ACTION_KEEP:
-		return googlepolicy.EvalKeep
-	case policyv1alpha1.Action_ACTION_DROP:
-		return googlepolicy.EvalDrop
-	default:
-		return googlepolicy.EvalNoMatch
-	}
+	return googlepolicy.FilterDrop
 }
 
 // matchesContext reports whether every matcher in the policy matches the given
@@ -176,10 +156,4 @@ func (p *Policy) matchesContext(ctx googlepolicy.TraceContext) bool {
 // against. Unset kinds report as INTERNAL, matching the OTLP default.
 func SpanKindString(k ptrace.SpanKind) string {
 	return matcher.SpanKindString(k)
-}
-
-// SpanStatusString renders a span status code using the spelling that policies
-// match against.
-func SpanStatusString(c ptrace.StatusCode) string {
-	return matcher.SpanStatusString(c)
 }

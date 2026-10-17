@@ -550,7 +550,7 @@ func regionFromZone(zone string) string {
 // xdstpResourceName returns the xdstp:// name of the TelemetryCollector
 // resource that holds a fleet's policies:
 //
-//	xdstp://traffic-director-REGION.xds.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector/projects/PROJECT/fleets/FLEET/collectors/default
+//	xdstp://telemetry-director.REGION.xds.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector/projects/PROJECT/fleets/FLEET/collectors/default
 //
 // The control plane looks up the fleet's policies by this name, not by the
 // node's cluster. A request that names no resource is a wildcard subscription,
@@ -562,7 +562,7 @@ func regionFromZone(zone string) string {
 // request without the name would change the subscription rather than confirm
 // it.
 func xdstpResourceName(region, project, fleetID string) string {
-	return fmt.Sprintf("xdstp://traffic-director-%s.xds.googleapis.com/%s/projects/%s/fleets/%s/collectors/%s",
+	return fmt.Sprintf("xdstp://telemetry-director.%s.xds.googleapis.com/%s/projects/%s/fleets/%s/collectors/%s",
 		region, xdsResourceType, project, fleetID, defaultCollectorResource)
 }
 

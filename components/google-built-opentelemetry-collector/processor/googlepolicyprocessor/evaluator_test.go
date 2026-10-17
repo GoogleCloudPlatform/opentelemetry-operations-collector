@@ -52,16 +52,16 @@ func (p *nonEvaluatorPolicy) PolicyClass() googlepolicy.PolicyClass {
 func (p *nonEvaluatorPolicy) Validate() error                      { return nil }
 func (p *nonEvaluatorPolicy) TargetSignals() []googlepolicy.Signal { return nil }
 
-// fakeMetricPolicy is a hand-written MetricPolicyEvaluator used to observe how
+// fakeMetricPolicy is a hand-written MetricFilterPolicyEvaluator used to observe how
 // often, and with which datapoint attributes, the Evaluator invokes a metric
 // policy. It is the only way to assert the two-tier instrument-vs-datapoint
 // optimisation from outside the package.
 type fakeMetricPolicy struct {
 	name           string
 	datapointLevel bool
-	result         googlepolicy.EvalResult
+	result         googlepolicy.FilterResult
 	// eval, when set, overrides result.
-	eval func(ctx googlepolicy.MetricContext) googlepolicy.EvalResult
+	eval func(ctx googlepolicy.MetricContext) googlepolicy.FilterResult
 
 	calls              int
 	seenDatapointAttrs []map[string]any
@@ -77,7 +77,7 @@ func (p *fakeMetricPolicy) TargetSignals() []googlepolicy.Signal {
 	return []googlepolicy.Signal{googlepolicy.SignalMetrics}
 }
 func (p *fakeMetricPolicy) IsDatapointLevel() bool { return p.datapointLevel }
-func (p *fakeMetricPolicy) EvaluateMetric(ctx googlepolicy.MetricContext) googlepolicy.EvalResult {
+func (p *fakeMetricPolicy) FilterMetric(ctx googlepolicy.MetricContext) googlepolicy.FilterResult {
 	p.calls++
 	p.seenDatapointAttrs = append(p.seenDatapointAttrs, ctx.DatapointAttributes.AsRaw())
 	if p.eval != nil {
@@ -86,11 +86,11 @@ func (p *fakeMetricPolicy) EvaluateMetric(ctx googlepolicy.MetricContext) google
 	return p.result
 }
 
-// fakeLogPolicy is a hand-written LogPolicyEvaluator that is not a
+// fakeLogPolicy is a hand-written LogFilterPolicyEvaluator that is not a
 // logfilter.Policy, pinning that NewEvaluator dispatches on the evaluator
 // interface rather than on a concrete filter-package type.
 type fakeLogPolicy struct {
-	result googlepolicy.EvalResult
+	result googlepolicy.FilterResult
 }
 
 func (p *fakeLogPolicy) PolicyName() string { return "fake-log" }
@@ -102,12 +102,12 @@ func (p *fakeLogPolicy) Validate() error { return nil }
 func (p *fakeLogPolicy) TargetSignals() []googlepolicy.Signal {
 	return []googlepolicy.Signal{googlepolicy.SignalLogs}
 }
-func (p *fakeLogPolicy) EvaluateLog(googlepolicy.LogContext) googlepolicy.EvalResult {
+func (p *fakeLogPolicy) FilterLog(googlepolicy.LogContext) googlepolicy.FilterResult {
 	return p.result
 }
 
 func TestEvaluator_LogFiltering(t *testing.T) {
-	// Policy 1: Drop logs where severity_text regex matches "^DEBUG"
+	// Policy 1: Drop logs where severity_text glob matches "DEBUG*"
 	dropDebug := mustPolicy(t, &policyv1alpha1.LogFilterPolicy{
 		Id:     "drop-debug",
 		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
@@ -118,7 +118,7 @@ func TestEvaluator_LogFiltering(t *testing.T) {
 						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT,
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Regex{Regex: "^DEBUG"},
+				Predicate: &policyv1alpha1.LogMatcher_Glob{Glob: "DEBUG*"},
 			},
 		},
 	})
@@ -321,8 +321,7 @@ func TestEvaluator_MetricFiltering(t *testing.T) {
 func TestEvaluator_TraceFiltering(t *testing.T) {
 	// Drop internal spans with name starting with "healthcheck"
 	dropHealthcheck := mustPolicy(t, &policyv1alpha1.TraceFilterPolicy{
-		Id:     "drop-healthcheck",
-		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+		Id: "drop-healthcheck",
 		Matches: []*policyv1alpha1.TraceMatcher{
 			{
 				Target: &policyv1alpha1.TraceFieldSelector{
@@ -330,7 +329,7 @@ func TestEvaluator_TraceFiltering(t *testing.T) {
 						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Regex{Regex: "^healthcheck"},
+				Predicate: &policyv1alpha1.TraceMatcher_Glob{Glob: "healthcheck*"},
 			},
 			{
 				Target: &policyv1alpha1.TraceFieldSelector{
@@ -396,9 +395,9 @@ func TestNewEvaluator_Dispatch(t *testing.T) {
 		ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{nil})
 		require.NoError(t, err)
 		require.NotNil(t, ev)
-		assert.Empty(t, ev.logPolicies)
-		assert.Empty(t, ev.metricPolicies)
-		assert.Empty(t, ev.tracePolicies)
+		assert.Empty(t, ev.logFilterPolicies)
+		assert.Empty(t, ev.metricFilterPolicies)
+		assert.Empty(t, ev.traceFilterPolicies)
 	})
 
 	t.Run("compiled policies are routed to their signal", func(t *testing.T) {
@@ -408,9 +407,9 @@ func TestNewEvaluator_Dispatch(t *testing.T) {
 			mustPolicy(t, newDropSpanNameProto("pre-trace", "drop.span")),
 		})
 		require.NoError(t, err)
-		require.Len(t, ev.logPolicies, 1)
-		require.Len(t, ev.metricPolicies, 1)
-		require.Len(t, ev.tracePolicies, 1)
+		require.Len(t, ev.logFilterPolicies, 1)
+		require.Len(t, ev.metricFilterPolicies, 1)
+		require.Len(t, ev.traceFilterPolicies, 1)
 
 		lr := plog.NewLogRecord()
 		lr.Body().SetStr("BAD")
@@ -428,12 +427,12 @@ func TestNewEvaluator_Dispatch(t *testing.T) {
 
 	t.Run("dispatch is by evaluator interface, not by concrete type", func(t *testing.T) {
 		// fakeLogPolicy is not a logfilter.Policy; implementing
-		// LogPolicyEvaluator is all it takes to land on the log path.
+		// LogFilterPolicyEvaluator is all it takes to land on the log path.
 		ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{
-			&fakeLogPolicy{result: googlepolicy.EvalDrop},
+			&fakeLogPolicy{result: googlepolicy.FilterDrop},
 		})
 		require.NoError(t, err)
-		require.Len(t, ev.logPolicies, 1)
+		require.Len(t, ev.logFilterPolicies, 1)
 		assert.True(t, ev.EvalLog(LogContext{Record: plog.NewLogRecord()}))
 	})
 
@@ -442,14 +441,14 @@ func TestNewEvaluator_Dispatch(t *testing.T) {
 			mustPolicy(t, newDropMetricNameProto("by-name", "drop.me")),
 		})
 		require.NoError(t, err)
-		assert.False(t, instrumentOnly.hasDatapointMetricPolicies)
+		assert.False(t, instrumentOnly.hasDatapointMetricFilterPolicies)
 
 		withDatapoint, err := NewEvaluator([]googlepolicy.TransformationPolicy{
 			mustPolicy(t, newDropMetricNameProto("by-name", "drop.me")),
 			mustPolicy(t, newDropDatapointAttrProto("by-attr", "drop_me", "true")),
 		})
 		require.NoError(t, err)
-		assert.True(t, withDatapoint.hasDatapointMetricPolicies)
+		assert.True(t, withDatapoint.hasDatapointMetricFilterPolicies)
 	})
 }
 
@@ -472,9 +471,9 @@ func TestNewEvaluator_RejectsPolicyWithoutEvaluator(t *testing.T) {
 	assert.Nil(t, ev, "a rejected policy must not yield a half-populated evaluator")
 	assert.ErrorContains(t, err, "not-an-evaluator")
 	assert.ErrorContains(t, err, "*googlepolicyprocessor.nonEvaluatorPolicy")
-	assert.ErrorContains(t, err, "googlepolicy.LogPolicyEvaluator")
-	assert.ErrorContains(t, err, "googlepolicy.MetricPolicyEvaluator")
-	assert.ErrorContains(t, err, "googlepolicy.TracePolicyEvaluator")
+	assert.ErrorContains(t, err, "googlepolicy.LogFilterPolicyEvaluator")
+	assert.ErrorContains(t, err, "googlepolicy.MetricFilterPolicyEvaluator")
+	assert.ErrorContains(t, err, "googlepolicy.TraceFilterPolicyEvaluator")
 }
 
 // TestEvaluator_NoPoliciesIsNoOp pins the fast paths taken when a signal has no
@@ -532,7 +531,7 @@ func TestEvaluator_MetricDatapointPruningAndEmptyMetrics(t *testing.T) {
 
 	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{dropDpPolicy, keepInstrumentPolicy})
 	require.NoError(t, err)
-	require.True(t, ev.hasDatapointMetricPolicies)
+	require.True(t, ev.hasDatapointMetricFilterPolicies)
 
 	md := pmetric.NewMetrics()
 	rm := md.ResourceMetrics().AppendEmpty()
@@ -634,7 +633,7 @@ func TestEvaluator_MetricInstrumentLevelDropByType(t *testing.T) {
 					policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE, tc.typeName)),
 			})
 			require.NoError(t, err)
-			require.False(t, ev.hasDatapointMetricPolicies)
+			require.False(t, ev.hasDatapointMetricFilterPolicies)
 
 			md := newAllMetricTypes()
 			ev.TransformMetrics(md)
@@ -701,10 +700,10 @@ func TestEvaluator_MetricTwoTierEvaluation(t *testing.T) {
 	}
 
 	t.Run("instrument-level policy is evaluated once per instrument", func(t *testing.T) {
-		fake := &fakeMetricPolicy{name: "instrument", result: googlepolicy.EvalDrop}
+		fake := &fakeMetricPolicy{name: "instrument", result: googlepolicy.FilterDrop}
 		ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{fake})
 		require.NoError(t, err)
-		require.False(t, ev.hasDatapointMetricPolicies)
+		require.False(t, ev.hasDatapointMetricFilterPolicies)
 
 		md := newSumWithDatapoints("a", "b", "c")
 		ev.TransformMetrics(md)
@@ -719,16 +718,16 @@ func TestEvaluator_MetricTwoTierEvaluation(t *testing.T) {
 		fake := &fakeMetricPolicy{
 			name:           "datapoint",
 			datapointLevel: true,
-			eval: func(ctx googlepolicy.MetricContext) googlepolicy.EvalResult {
+			eval: func(ctx googlepolicy.MetricContext) googlepolicy.FilterResult {
 				if v, ok := ctx.DatapointAttributes.Get("dp"); ok && v.Str() != "keep" {
-					return googlepolicy.EvalDrop
+					return googlepolicy.FilterDrop
 				}
-				return googlepolicy.EvalNoMatch
+				return googlepolicy.FilterNoMatch
 			},
 		}
 		ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{fake})
 		require.NoError(t, err)
-		require.True(t, ev.hasDatapointMetricPolicies)
+		require.True(t, ev.hasDatapointMetricFilterPolicies)
 
 		md := newSumWithDatapoints("a", "keep", "c")
 		ev.TransformMetrics(md)
@@ -743,8 +742,8 @@ func TestEvaluator_MetricTwoTierEvaluation(t *testing.T) {
 	})
 
 	t.Run("instrument-level KEEP short-circuits datapoint pruning", func(t *testing.T) {
-		keep := &fakeMetricPolicy{name: "keep", result: googlepolicy.EvalKeep}
-		drop := &fakeMetricPolicy{name: "drop", datapointLevel: true, result: googlepolicy.EvalDrop}
+		keep := &fakeMetricPolicy{name: "keep", result: googlepolicy.FilterKeep}
+		drop := &fakeMetricPolicy{name: "drop", datapointLevel: true, result: googlepolicy.FilterDrop}
 		ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{keep, drop})
 		require.NoError(t, err)
 
@@ -758,7 +757,7 @@ func TestEvaluator_MetricTwoTierEvaluation(t *testing.T) {
 	})
 
 	t.Run("datapoint-level policies are skipped for instruments with no datapoints", func(t *testing.T) {
-		drop := &fakeMetricPolicy{name: "drop", datapointLevel: true, result: googlepolicy.EvalDrop}
+		drop := &fakeMetricPolicy{name: "drop", datapointLevel: true, result: googlepolicy.FilterDrop}
 		ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{drop})
 		require.NoError(t, err)
 
@@ -776,20 +775,20 @@ func TestEvaluator_MetricTwoTierEvaluation(t *testing.T) {
 	})
 
 	t.Run("instrument-level policy is evaluated once even when datapoint-level policy is present", func(t *testing.T) {
-		instDrop := &fakeMetricPolicy{name: "inst-drop", result: googlepolicy.EvalDrop}
+		instDrop := &fakeMetricPolicy{name: "inst-drop", result: googlepolicy.FilterDrop}
 		dpKeep := &fakeMetricPolicy{
 			name:           "dp-keep",
 			datapointLevel: true,
-			eval: func(ctx googlepolicy.MetricContext) googlepolicy.EvalResult {
+			eval: func(ctx googlepolicy.MetricContext) googlepolicy.FilterResult {
 				if v, ok := ctx.DatapointAttributes.Get("dp"); ok && v.Str() == "exempt" {
-					return googlepolicy.EvalKeep
+					return googlepolicy.FilterKeep
 				}
-				return googlepolicy.EvalNoMatch
+				return googlepolicy.FilterNoMatch
 			},
 		}
 		ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{instDrop, dpKeep})
 		require.NoError(t, err)
-		require.True(t, ev.hasDatapointMetricPolicies)
+		require.True(t, ev.hasDatapointMetricFilterPolicies)
 
 		md := newSumWithDatapoints("a", "exempt", "c")
 		ev.TransformMetrics(md)
@@ -805,7 +804,7 @@ func TestEvaluator_MetricTwoTierEvaluation(t *testing.T) {
 	})
 
 	t.Run("untyped metric (MetricTypeEmpty) is evaluated and dropped by instrument policy", func(t *testing.T) {
-		instDrop := &fakeMetricPolicy{name: "inst-drop", result: googlepolicy.EvalDrop}
+		instDrop := &fakeMetricPolicy{name: "inst-drop", result: googlepolicy.FilterDrop}
 		ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{instDrop})
 		require.NoError(t, err)
 
@@ -818,16 +817,16 @@ func TestEvaluator_MetricTwoTierEvaluation(t *testing.T) {
 		ev.TransformMetrics(md)
 
 		assert.Equal(t, 1, instDrop.calls)
-		assert.Empty(t, metricNames(md), "untyped MetricTypeEmpty metric must be dropped when instrument policy returns EvalDrop")
+		assert.Empty(t, metricNames(md), "untyped MetricTypeEmpty metric must be dropped when instrument policy returns FilterDrop")
 	})
 }
 
-// TestEvaluator_TraceKeepOverridesDrop covers the KEEP-as-exemption rule on the
-// trace path, including the root-span (empty parent_span_id) case.
-func TestEvaluator_TraceKeepOverridesDrop(t *testing.T) {
-	dropRootSpans := mustPolicy(t, &policyv1alpha1.TraceFilterPolicy{
-		Id:     "drop-root",
-		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+// TestEvaluator_MultipleTracePoliciesDrop verifies that multiple TraceFilterPolicy
+// instances evaluate with OR-drop semantics and that root spans (empty parent_span_id)
+// can be exempted via a negated parent_span_id matcher.
+func TestEvaluator_MultipleTracePoliciesDrop(t *testing.T) {
+	dropNonRootInternal := mustPolicy(t, &policyv1alpha1.TraceFilterPolicy{
+		Id: "drop-non-root-internal",
 		Matches: []*policyv1alpha1.TraceMatcher{
 			{
 				Target: &policyv1alpha1.TraceFieldSelector{
@@ -835,63 +834,83 @@ func TestEvaluator_TraceKeepOverridesDrop(t *testing.T) {
 						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID,
 					},
 				},
+				Negate: true,
 				Predicate: &policyv1alpha1.TraceMatcher_Equals{
 					Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: ""}},
 				},
 			},
-		},
-	})
-
-	keepOkSpans := mustPolicy(t, &policyv1alpha1.TraceFilterPolicy{
-		Id:     "keep-ok",
-		Action: policyv1alpha1.Action_ACTION_KEEP.Enum(),
-		Matches: []*policyv1alpha1.TraceMatcher{
 			{
 				Target: &policyv1alpha1.TraceFieldSelector{
 					Target: &policyv1alpha1.TraceFieldSelector_RecordField{
-						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_STATUS_CODE,
+						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_KIND,
 					},
 				},
 				Predicate: &policyv1alpha1.TraceMatcher_Equals{
-					Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "OK"}},
+					Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "INTERNAL"}},
 				},
 			},
 		},
 	})
 
-	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{dropRootSpans, keepOkSpans})
+	dropHealthcheckRoot := mustPolicy(t, &policyv1alpha1.TraceFilterPolicy{
+		Id: "drop-healthcheck-root",
+		Matches: []*policyv1alpha1.TraceMatcher{
+			{
+				Target: &policyv1alpha1.TraceFieldSelector{
+					Target: &policyv1alpha1.TraceFieldSelector_RecordField{
+						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME,
+					},
+				},
+				Predicate: &policyv1alpha1.TraceMatcher_Glob{
+					Glob: "healthz.*",
+				},
+			},
+		},
+	})
+
+	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{dropNonRootInternal, dropHealthcheckRoot})
 	require.NoError(t, err)
 
-	// Root span with UNSET status -> DROPPED
-	rootSpan := ptrace.NewSpan()
-	rootSpan.SetName("root")
-	assert.True(t, ev.EvalTrace(TraceContext{Span: rootSpan}))
+	// Child span with INTERNAL kind -> DROPPED by first policy
+	childInternal := ptrace.NewSpan()
+	childInternal.SetName("cache.lookup")
+	childInternal.SetKind(ptrace.SpanKindInternal)
+	childInternal.SetParentSpanID([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+	assert.True(t, ev.EvalTrace(TraceContext{Span: childInternal}))
 
-	// Root span with OK status -> KEPT (KEEP overrides DROP)
-	rootSpanOk := ptrace.NewSpan()
-	rootSpanOk.SetName("root-ok")
-	rootSpanOk.Status().SetCode(ptrace.StatusCodeOk)
-	assert.False(t, ev.EvalTrace(TraceContext{Span: rootSpanOk}))
+	// Root span with INTERNAL kind -> KEPT (exempted by negated parent_span_id == "")
+	rootInternal := ptrace.NewSpan()
+	rootInternal.SetName("worker.loop")
+	rootInternal.SetKind(ptrace.SpanKindInternal)
+	assert.False(t, ev.EvalTrace(TraceContext{Span: rootInternal}))
 
-	// Child span with ParentSpanID set -> KEPT
-	childSpan := ptrace.NewSpan()
-	childSpan.SetName("child")
-	childSpan.SetParentSpanID([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
-	assert.False(t, ev.EvalTrace(TraceContext{Span: childSpan}))
+	// Root span matching healthz.* -> DROPPED by second policy
+	rootHealth := ptrace.NewSpan()
+	rootHealth.SetName("healthz.check")
+	rootHealth.SetKind(ptrace.SpanKindServer)
+	assert.True(t, ev.EvalTrace(TraceContext{Span: rootHealth}))
 
-	// Same three spans through the batch walk.
+	// Child span with SERVER kind -> KEPT
+	childServer := ptrace.NewSpan()
+	childServer.SetName("rpc.call")
+	childServer.SetKind(ptrace.SpanKindServer)
+	childServer.SetParentSpanID([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+	assert.False(t, ev.EvalTrace(TraceContext{Span: childServer}))
+
+	// Same spans through the batch walk.
 	td := ptrace.NewTraces()
 	ss := td.ResourceSpans().AppendEmpty().ScopeSpans().AppendEmpty()
-	rootSpan.CopyTo(ss.Spans().AppendEmpty())
-	rootSpanOk.CopyTo(ss.Spans().AppendEmpty())
-	childSpan.CopyTo(ss.Spans().AppendEmpty())
+	childInternal.CopyTo(ss.Spans().AppendEmpty())
+	rootInternal.CopyTo(ss.Spans().AppendEmpty())
+	rootHealth.CopyTo(ss.Spans().AppendEmpty())
+	childServer.CopyTo(ss.Spans().AppendEmpty())
 
 	ev.TransformTraces(td)
 	require.Equal(t, 1, td.ResourceSpans().Len())
 	spans := td.ResourceSpans().At(0).ScopeSpans().At(0).Spans()
 	require.Equal(t, 2, spans.Len())
-	assert.Equal(t, "root-ok", spans.At(0).Name())
-	assert.Equal(t, "child", spans.At(1).Name())
+	assert.Equal(t, "worker.loop", spans.At(0).Name())
+	assert.Equal(t, "rpc.call", spans.At(1).Name())
 }
 
 // TestEvaluator_TransformPrunesEmptyScopesAndResources asserts that each
@@ -1089,8 +1108,7 @@ func newDropDatapointAttrProto(id, key, value string) *policyv1alpha1.MetricFilt
 
 func newDropSpanNameProto(id, name string) *policyv1alpha1.TraceFilterPolicy {
 	return &policyv1alpha1.TraceFilterPolicy{
-		Id:     id,
-		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+		Id: id,
 		Matches: []*policyv1alpha1.TraceMatcher{
 			{
 				Target: &policyv1alpha1.TraceFieldSelector{

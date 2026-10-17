@@ -179,8 +179,7 @@ func TestProcessMetrics_WithActivePolicy(t *testing.T) {
 
 func TestProcessTraces_WithActivePolicy(t *testing.T) {
 	dropPolicy := mustPolicy(t, &policyv1alpha1.TraceFilterPolicy{
-		Id:     "drop-healthcheck-span",
-		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+		Id: "drop-healthcheck-span",
 		Matches: []*policyv1alpha1.TraceMatcher{
 			{
 				Target: &policyv1alpha1.TraceFieldSelector{
@@ -329,7 +328,7 @@ func TestProcessLogs_WithRealLogFilterPolicy(t *testing.T) {
 
 	assert.Eventually(t, func() bool {
 		ev := p.evaluator.Load()
-		return ev != nil && len(ev.logPolicies) > 0
+		return ev != nil && len(ev.logFilterPolicies) > 0
 	}, 1*time.Second, 10*time.Millisecond)
 
 	ld := plog.NewLogs()
@@ -380,7 +379,7 @@ func TestProcessLogs_LoadFromRawJSONPolicySet(t *testing.T) {
 
 	assert.Eventually(t, func() bool {
 		ev := p.evaluator.Load()
-		return ev != nil && len(ev.logPolicies) > 0
+		return ev != nil && len(ev.logFilterPolicies) > 0
 	}, 1*time.Second, 10*time.Millisecond)
 
 	ld := plog.NewLogs()

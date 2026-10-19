@@ -747,6 +747,109 @@ func TestXDSPolicyManager_EmptyRevisionClearsPolicies(t *testing.T) {
 	assert.Empty(t, activePolicyNames(t), "an empty revision for our own type clears the policy set")
 }
 
+// TestXDSPolicyManager_EmptyTelemetryCollectorACKsAndReleasesStart asserts that
+// a TelemetryCollector with an unset policy_set_revision and no policies (which
+// the control plane sends when a fleet has no active rollout) is treated as a
+// valid empty revision: it is ACKed, clears any previously active policies, and
+// releases Start immediately.
+func TestXDSPolicyManager_EmptyTelemetryCollectorACKsAndReleasesStart(t *testing.T) {
+	registerDummyDriverForTest(t)
+	resetActivePolicySet(t)
+
+	emptyCollectorAny, err := anypb.New(&xdsv1alpha1.TelemetryCollector{})
+	require.NoError(t, err)
+
+	responded := make(chan *discoveryv3.DiscoveryRequest, 4)
+	firstAsserted := make(chan struct{})
+	secondAsserted := make(chan struct{})
+
+	srv := &fakeADSServer{streamOpened: make(chan struct{}, 8)}
+	srv.handlers = []func(discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error{
+		func(stream discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error {
+			if _, err := srv.recv(stream); err != nil {
+				return err
+			}
+			// Initial response is an empty TelemetryCollector (no rollout).
+			if err := stream.Send(&discoveryv3.DiscoveryResponse{
+				VersionInfo: "v1", Nonce: "n1", TypeUrl: xdsPolicyTypeURL,
+				Resources: []*anypb.Any{emptyCollectorAny},
+			}); err != nil {
+				return err
+			}
+			ack1, err := srv.recv(stream)
+			if err != nil {
+				return err
+			}
+			responded <- ack1
+			<-firstAsserted
+
+			// Next, a real policy rollout lands.
+			if err := stream.Send(&discoveryv3.DiscoveryResponse{
+				VersionInfo: "v2", Nonce: "n2", TypeUrl: xdsPolicyTypeURL,
+				Resources: []*anypb.Any{policyResource(t, "log-filter", "rev-2")},
+			}); err != nil {
+				return err
+			}
+			ack2, err := srv.recv(stream)
+			if err != nil {
+				return err
+			}
+			responded <- ack2
+			<-secondAsserted
+
+			// Finally, the fleet returns to an empty TelemetryCollector.
+			if err := stream.Send(&discoveryv3.DiscoveryResponse{
+				VersionInfo: "v3", Nonce: "n3", TypeUrl: xdsPolicyTypeURL,
+				Resources: []*anypb.Any{emptyCollectorAny},
+			}); err != nil {
+				return err
+			}
+			ack3, err := srv.recv(stream)
+			if err != nil {
+				return err
+			}
+			responded <- ack3
+
+			<-stream.Context().Done()
+			return stream.Context().Err()
+		},
+	}
+
+	m := newTestManager(t, startFakeADSServer(t, srv))
+	m.initialSyncTimeout = 5 * time.Second
+
+	start := time.Now()
+	require.NoError(t, m.Start())
+	elapsed := time.Since(start)
+	t.Cleanup(func() { require.NoError(t, m.Stop()) })
+
+	assert.Less(t, elapsed, m.initialSyncTimeout/2,
+		"Start must return as soon as the empty TelemetryCollector is ACKed")
+
+	ack1 := <-responded
+	assert.Equal(t, "v1", ack1.GetVersionInfo())
+	assert.Equal(t, "n1", ack1.GetResponseNonce())
+	assert.Nil(t, ack1.GetErrorDetail(), "an empty TelemetryCollector must be ACKed, not NACKed")
+	require.NotNil(t, ActivePolicySet())
+	assert.Equal(t, "v1", ActivePolicySet().RevisionID)
+	assert.Empty(t, activePolicyNames(t))
+	close(firstAsserted)
+
+	ack2 := <-responded
+	assert.Equal(t, "v2", ack2.GetVersionInfo())
+	assert.Nil(t, ack2.GetErrorDetail())
+	assert.Equal(t, []string{"log-filter"}, activePolicyNames(t))
+	close(secondAsserted)
+
+	ack3 := <-responded
+	assert.Equal(t, "v3", ack3.GetVersionInfo())
+	assert.Equal(t, "n3", ack3.GetResponseNonce())
+	assert.Nil(t, ack3.GetErrorDetail())
+	require.NotNil(t, ActivePolicySet())
+	assert.Equal(t, "v3", ActivePolicySet().RevisionID)
+	assert.Empty(t, activePolicyNames(t), "an empty TelemetryCollector must clear the active policy set")
+}
+
 // TestXDSPolicyManager_StartWaitsForInitialPolicySet asserts the contract the
 // provider depends on: by the time Start returns, the first revision the control
 // plane served is already active. The provider evaluates the active set

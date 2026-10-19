@@ -1,0 +1,225 @@
+receivers:
+  # Open two OTLP servers:
+  # - On port 4317, open an OTLP GRPC server
+  # - On port 4318, open an OTLP HTTP server
+  #
+  # Docs:
+  # https://github.com/open-telemetry/opentelemetry-collector/tree/main/receiver/otlpreceiver
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        cors:
+          # This effectively allows any origin
+          # to make requests to the HTTP server.
+          allowed_origins:
+          - http://*
+          - https://*
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # The memorylimiter will check the memory usage of the collector process.
+  #
+  # Docs:
+  # https://github.com/open-telemetry/opentelemetry-collector/tree/main/processor/memorylimiterprocessor
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 65
+    spike_limit_percentage: 20
+
+  # The resourcedetection processor is configured to detect host and cloud
+  # resources. Configure detectors matching your environment:
+  # - AWS: [env, ec2], [env, ecs], [env, eks], [env, lambda], or [env, eb]
+  # - Azure: [env, azure] or [env, aks]
+  # - On-premises / Linux or Windows host: [env, system]
+  #
+  # Docs:
+  # https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/resourcedetectionprocessor
+  resourcedetection:
+    detectors: [env, system]
+    timeout: 10s
+    system:
+      resource_attributes:
+        host.id:
+          enabled: true
+
+  # The resource/gcp_project_id processor explicitly sets the GCP project ID
+  # attribute on telemetry data exported via OTLP.
+  #
+  # Docs:
+  # https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/resourceprocessor
+  resource/gcp_project_id:
+    attributes:
+    - action: upsert
+      key: gcp.project_id
+      value: ${env:GOOGLE_CLOUD_PROJECT}
+
+  # The resource/gcp_location processor backs up external cloud location
+  # attributes (preserved on target_info) and sets cloud.availability_zone to a
+  # valid Google Cloud zone for metric ingestion.
+  #
+  # Docs:
+  # https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/resourceprocessor
+  resource/gcp_location:
+    attributes:
+    - action: upsert
+      from_attribute: cloud.region
+      key: orig.cloud.region
+    - action: upsert
+      from_attribute: cloud.availability_zone
+      key: orig.cloud.availability_zone
+    - action: delete
+      key: cloud.region
+    - action: upsert
+      key: cloud.availability_zone
+      value: ${env:GOOGLE_CLOUD_LOCATION}
+
+  # The metricstarttime processor sets start time on delta metrics for OTLP export.
+  #
+  # Docs:
+  # https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/metricstarttimeprocessor
+  metricstarttime:
+    strategy: subtract_initial_point
+
+  # Rename metric datapoint attributes that collide with prometheus_target
+  # monitored resource labels (location, cluster, namespace, job, instance, project_id).
+  #
+  # Docs:
+  # https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/transformprocessor
+  transform/collision:
+    metric_statements:
+    - context: datapoint
+      statements:
+      - set(attributes["exported_location"], attributes["location"])
+      - delete_key(attributes, "location")
+      - set(attributes["exported_cluster"], attributes["cluster"])
+      - delete_key(attributes, "cluster")
+      - set(attributes["exported_namespace"], attributes["namespace"])
+      - delete_key(attributes, "namespace")
+      - set(attributes["exported_job"], attributes["job"])
+      - delete_key(attributes, "job")
+      - set(attributes["exported_instance"], attributes["instance"])
+      - delete_key(attributes, "instance")
+      - set(attributes["exported_project_id"], attributes["project_id"])
+      - delete_key(attributes, "project_id")
+
+  # For each Prometheus unknown-typed metric, which is a gauge, create a counter that is an exact copy of this metric.
+  # The GCP OTLP endpoint will add appropriate suffixes for the counter and gauge.
+  transform/prometheus_unknown_types:
+    error_mode: ignore
+    metric_statements:
+    - context: metric
+      statements:
+      - copy_metric(Concat([metric.name, "unknowncounter"], ":")) where metric.metadata["prometheus.type"] == "unknown" and not HasSuffix(metric.name, ":unknowncounter")
+      - convert_gauge_to_sum("cumulative", true) where HasSuffix(metric.name, ":unknowncounter")
+      - set(metric.name, Substring(metric.name, 0, Len(metric.name)-Len(":unknowncounter"))) where HasSuffix(metric.name, ":unknowncounter")
+
+  transform/otlp_grpc/preserve_instrumentation_source_version:
+    error_mode: ignore
+    log_statements:
+    - context: log
+      statements:
+      - set(attributes["instrumentation_source"], instrumentation_scope.name) where instrumentation_scope.name != ""
+      - set(attributes["instrumentation_version"], instrumentation_scope.version) where instrumentation_scope.version != ""
+
+  transform/otlp_grpc/copy_service_resource_labels:
+    error_mode: ignore
+    log_statements:
+    - context: log
+      statements:
+      - set(attributes["service.name"], resource.attributes["service.name"]) where resource.attributes["service.name"] != nil
+      - set(attributes["service.namespace"], resource.attributes["service.namespace"]) where resource.attributes["service.namespace"] != nil
+      - set(attributes["service.instance.id"], resource.attributes["service.instance.id"]) where resource.attributes["service.instance.id"] != nil
+
+exporters:
+  # The otlp_grpc exporter is used to send telemetry (logs, metrics, traces) to GCP Telemetry API using OTLP gRPC.
+  # The sending_queue is configured to batch telemetry requests prior to export.
+  #
+  # Docs:
+  # https://github.com/open-telemetry/opentelemetry-collector/tree/main/exporter/otlpexporter
+  otlp_grpc:
+    endpoint: telemetry.googleapis.com:443
+    balancer_name: pick_first
+    auth:
+      authenticator: googleclientauth
+    sending_queue:
+      enabled: true
+      batch:
+        flush_timeout: 5s
+        min_size: 200
+        max_size: 200
+        sizer: items
+
+extensions:
+  # Opens an endpoint on 13133 that can be used to check the
+  # status of the collector. Since this does not configure the
+  # `path` config value, the endpoint will default to `/`.
+  #
+  # Docs:
+  # https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/healthcheckextension
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+  # Authenticates requests to Google Cloud APIs using Application Default
+  # Credentials (such as Workload Identity Federation credential files) and sets
+  # the destination project and quota project.
+  #
+  # Docs:
+  # https://github.com/GoogleCloudPlatform/opentelemetry-operations-go/tree/main/extension/googleclientauthextension
+  googleclientauth:
+    project: ${env:GOOGLE_CLOUD_PROJECT}
+    quota_project: ${env:GOOGLE_CLOUD_PROJECT}
+
+service:
+  extensions:
+  - health_check
+  - googleclientauth
+  pipelines:
+    logs:
+      receivers:
+      - otlp
+      processors:
+      - resourcedetection
+      - resource/gcp_project_id
+      - transform/otlp_grpc/preserve_instrumentation_source_version
+      - transform/otlp_grpc/copy_service_resource_labels
+      - memory_limiter
+      exporters:
+      - otlp_grpc
+    metrics/otlp:
+      receivers:
+      - otlp
+      processors:
+      - resourcedetection
+      - resource/gcp_project_id
+      - resource/gcp_location
+      - transform/collision
+      - transform/prometheus_unknown_types
+      - metricstarttime
+      - memory_limiter
+      exporters:
+      - otlp_grpc
+    traces:
+      receivers:
+      - otlp
+      processors:
+      - resourcedetection
+      - resource/gcp_project_id
+      - memory_limiter
+      exporters:
+      - otlp_grpc
+  # Internal telemetry for the collector supports both push and pull-based telemetry data transmission.
+  # Leveraging the pre-configured OTLP receiver eliminates the need for an additional port.
+  #
+  # Docs:
+  # https://opentelemetry.io/docs/collector/internal-telemetry/
+  telemetry:
+    metrics:
+      readers:
+        - periodic:
+            exporter:
+              otlp:
+                protocol: grpc
+                endpoint: http://localhost:4317
+                insecure: true

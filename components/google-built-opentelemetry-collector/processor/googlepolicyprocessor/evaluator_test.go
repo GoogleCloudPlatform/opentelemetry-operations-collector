@@ -1137,20 +1137,11 @@ func TestEvaluator_LogTransform(t *testing.T) {
 
 func TestEvaluator_LogTransformDeterministicOrdering(t *testing.T) {
 	// Two add policies: "z-policy" and "a-policy". Both set the same attribute with upsert=false.
+	// Both specify empty matchers (applying unconditionally to all records).
 	// Since "a-policy" has an alphabetically earlier ID, it must execute before "z-policy",
 	// winning the upsert: false race even when passed out of order to NewEvaluator.
-	existsMatcher := &policyv1alpha1.LogMatcher{
-		Target: &policyv1alpha1.LogFieldSelector{
-			Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
-				LogAttribute: &policyv1alpha1.AttributePath{Path: []string{"trigger"}},
-			},
-		},
-		Predicate: &policyv1alpha1.LogMatcher_Exists{},
-	}
-
 	policyZ := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
-		Id:      "z-policy",
-		Matches: []*policyv1alpha1.LogMatcher{existsMatcher},
+		Id: "z-policy",
 		Action: &policyv1alpha1.LogTransformPolicy_Add{
 			Add: &policyv1alpha1.LogAddAction{
 				Target: &policyv1alpha1.LogTargetSelector{
@@ -1165,8 +1156,7 @@ func TestEvaluator_LogTransformDeterministicOrdering(t *testing.T) {
 	})
 
 	policyA := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
-		Id:      "a-policy",
-		Matches: []*policyv1alpha1.LogMatcher{existsMatcher},
+		Id: "a-policy",
 		Action: &policyv1alpha1.LogTransformPolicy_Add{
 			Add: &policyv1alpha1.LogAddAction{
 				Target: &policyv1alpha1.LogTargetSelector{
@@ -1186,7 +1176,6 @@ func TestEvaluator_LogTransformDeterministicOrdering(t *testing.T) {
 
 	ld := plog.NewLogs()
 	lr := ld.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty().LogRecords().AppendEmpty()
-	lr.Attributes().PutBool("trigger", true)
 	lr.Body().SetStr("test ordering")
 
 	ev.TransformLogs(ld)

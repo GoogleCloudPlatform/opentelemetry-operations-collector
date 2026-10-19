@@ -53,8 +53,6 @@ var (
 	ErrNilProto = errors.New("log transform policy proto cannot be nil")
 	// ErrMissingID is returned when the policy ID is empty.
 	ErrMissingID = errors.New("log transform policy id cannot be empty")
-	// ErrMissingMatchers is returned when the policy contains no matchers.
-	ErrMissingMatchers = errors.New("log transform policy must contain at least one matcher")
 	// ErrMissingAction is returned when the policy does not specify a transform action.
 	ErrMissingAction = errors.New("log transform policy must specify an action")
 	// ErrUnsupportedAction is returned when the policy specifies a transform action not yet supported in preview.
@@ -84,9 +82,6 @@ func NewPolicyFromProto(pb *policyv1alpha1.LogTransformPolicy) (*Policy, error) 
 	}
 	if pb.GetId() == "" {
 		return nil, ErrMissingID
-	}
-	if len(pb.GetMatches()) == 0 {
-		return nil, ErrMissingMatchers
 	}
 	if pb.Action == nil {
 		return nil, ErrMissingAction
@@ -315,7 +310,6 @@ func compileRecordFieldAdd(field policyv1alpha1.LogRecordField, val *policyv1alp
 		return nil, errors.New("log record field cannot be unspecified")
 	}
 }
-
 
 func bodyExists(v pcommon.Value) bool {
 	switch v.Type() {

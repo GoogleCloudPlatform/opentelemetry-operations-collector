@@ -204,15 +204,6 @@ func TestPolicyValidationErrors(t *testing.T) {
 			errExpect: ErrMissingID,
 		},
 		{
-			name: "missing matchers",
-			proto: &policyv1alpha1.LogTransformPolicy{
-				Id:      "p-no-matchers",
-				Matches: nil,
-				Action:  validAdd,
-			},
-			errExpect: ErrMissingMatchers,
-		},
-		{
 			name: "missing action (nil Action)",
 			proto: &policyv1alpha1.LogTransformPolicy{
 				Id:      "p-no-action",
@@ -277,7 +268,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 				Id: "p-bad-matcher",
 				Matches: []*policyv1alpha1.LogMatcher{
 					{
-						Target: nil,
+						Target:    nil,
 						Predicate: &policyv1alpha1.LogMatcher_Exists{},
 					},
 				},
@@ -529,6 +520,28 @@ func TestPolicyMetadataAndValidate(t *testing.T) {
 	assert.Same(t, pb, got)
 
 	assert.ErrorIs(t, (&Policy{}).Validate(), ErrNilProto)
+}
+
+func TestPolicy_EmptyMatchesAppliesUnconditionally(t *testing.T) {
+	// A transform policy with empty/nil matches applies to all records unconditionally.
+	p, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		Id: "unconditional-add",
+		Action: &policyv1alpha1.LogTransformPolicy_Add{
+			Add: &policyv1alpha1.LogAddAction{
+				Target: logTargetAttr("injected"),
+				Value:  strVal("always"),
+				Upsert: proto.Bool(true),
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	lr, sl, rl := newTestLogBundle()
+	res := p.TransformLog(logContext(lr, sl, rl))
+	assert.Equal(t, googlepolicy.TransformModified, res)
+	val, ok := lr.Attributes().Get("injected")
+	require.True(t, ok)
+	assert.Equal(t, "always", val.Str())
 }
 
 func TestDriverLoadPolicyAndProto(t *testing.T) {

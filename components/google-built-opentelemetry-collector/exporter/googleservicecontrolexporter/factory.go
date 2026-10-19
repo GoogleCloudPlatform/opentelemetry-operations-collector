@@ -107,14 +107,7 @@ func createDefaultConfig() component.Config {
 		},
 		// QueueSettings are described in
 		// https://github.com/open-telemetry/opentelemetry-collector/blob/v0.54.0/exporter/exporterhelper/queued_retry_inmemory.go.
-		QueueConfig: configoptional.Some(exporterhelper.QueueBatchConfig{
-			NumConsumers: 10,
-			// Limit queue size to prevent memory growing in case of API outage.
-			// This queue grows only in case of retries.
-			QueueSize: 3000,
-			// SizerTypeRequests (RequestSizerTypeRequests) is the default in NewDefaultQueueConfig()
-			Sizer: exporterhelper.RequestSizerTypeRequests,
-		}),
+		QueueConfig: metadata.NewDefaultSendingQueueConfig(),
 		LogConfig: LogConfig{
 			OperationName: LogDefaultOperationName,
 			TimeoutConfig: exporterhelper.NewDefaultTimeoutConfig(),

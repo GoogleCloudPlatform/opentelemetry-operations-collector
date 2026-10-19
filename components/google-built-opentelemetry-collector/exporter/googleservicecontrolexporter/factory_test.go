@@ -75,11 +75,13 @@ func TestCreateExporterFromConfig(t *testing.T) {
 					MaxInterval:     10 * time.Second,
 					MaxElapsedTime:  200 * time.Second,
 				},
-				QueueConfig: configoptional.Some(exporterhelper.QueueBatchConfig{
-					NumConsumers: 5,
-					QueueSize:    1000,
-					Sizer:        exporterhelper.RequestSizerTypeRequests,
-				}),
+				QueueConfig: func() configoptional.Optional[exporterhelper.QueueBatchConfig] {
+					cfg := metadata.NewDefaultSendingQueueConfig()
+					c := cfg.GetOrInsertDefault()
+					c.NumConsumers = 5
+					c.QueueSize = 1000
+					return configoptional.Some(*c)
+				}(),
 				ServiceControlEndpoint:     "test.googleapis.com:443",
 				ConsumerProject:            "my-project-id",
 				ServiceName:                "test.service.name",

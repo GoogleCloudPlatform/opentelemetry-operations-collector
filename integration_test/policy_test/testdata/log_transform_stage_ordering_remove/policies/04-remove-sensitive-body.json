@@ -1,0 +1,11 @@
+{
+  "type": "log_transform",
+  "id": "04-remove-sensitive-body",
+  "remove": {
+    "target": {
+      "body_field": {
+        "path": ["auth", "session_token"]
+      }
+    }
+  }
+}

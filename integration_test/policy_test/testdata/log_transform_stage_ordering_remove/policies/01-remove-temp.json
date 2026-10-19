@@ -1,0 +1,11 @@
+{
+  "type": "log_transform",
+  "id": "01-remove-temp",
+  "remove": {
+    "target": {
+      "log_attribute": {
+        "path": ["temp_tag"]
+      }
+    }
+  }
+}

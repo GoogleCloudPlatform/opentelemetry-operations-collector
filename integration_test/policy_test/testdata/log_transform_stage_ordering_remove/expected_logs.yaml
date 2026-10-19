@@ -1,0 +1,45 @@
+- resourceLogs:
+    - resource:
+        attributes:
+            - key: service.name
+              value:
+                stringValue: auth.service
+      scopeLogs:
+        - logRecords:
+            - attributes:
+                - key: ip
+                  value:
+                    stringValue: 10.0.0.1
+                - key: retained_tag
+                  value:
+                    stringValue: keep-this
+              body:
+                kvlistValue:
+                    values:
+                        - key: auth
+                          value:
+                            kvlistValue:
+                                values:
+                                    - key: user
+                                      value:
+                                        stringValue: alice
+                        - key: event
+                          value:
+                            stringValue: user_login
+              severityNumber: 9
+              severityText: INFO
+              timeUnixNano: "1700000000000000000"
+            - attributes:
+                - key: ip
+                  value:
+                    stringValue: 10.0.0.2
+                - key: retained_tag
+                  value:
+                    stringValue: keep-this
+              body:
+                stringValue: plain string body without map
+              severityNumber: 17
+              severityText: ERROR
+              timeUnixNano: "1700000001000000000"
+          scope:
+            name: security.guard

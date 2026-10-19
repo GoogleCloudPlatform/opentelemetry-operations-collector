@@ -1573,8 +1573,9 @@ func TestNestedAttributePaths(t *testing.T) {
 // the driver decodes with DiscardUnknown: false.
 func TestDriverLoadPolicyErrors(t *testing.T) {
 	tests := []struct {
-		name string
-		raw  map[string]any
+		name    string
+		raw     map[string]any
+		wantErr error
 	}{
 		{
 			name: "empty id",
@@ -1589,6 +1590,7 @@ func TestDriverLoadPolicyErrors(t *testing.T) {
 					},
 				},
 			},
+			wantErr: googlepolicy.ErrPolicyFailedValidation,
 		},
 		{
 			name: "missing action due to typo'd top-level field",
@@ -1603,6 +1605,7 @@ func TestDriverLoadPolicyErrors(t *testing.T) {
 					},
 				},
 			},
+			wantErr: googlepolicy.ErrPolicyFailedValidation,
 		},
 		{
 			name: "missing target due to typo'd nested field",
@@ -1619,6 +1622,7 @@ func TestDriverLoadPolicyErrors(t *testing.T) {
 					},
 				},
 			},
+			wantErr: googlepolicy.ErrPolicyFailedValidation,
 		},
 		{
 			name: "invalid enum value",
@@ -1627,6 +1631,7 @@ func TestDriverLoadPolicyErrors(t *testing.T) {
 				"id":     "bad-enum",
 				"action": "ACTION_NOPE",
 			},
+			wantErr: googlepolicy.ErrPolicyFailedValidation,
 		},
 		{
 			name: "valid json but invalid policy",
@@ -1635,6 +1640,7 @@ func TestDriverLoadPolicyErrors(t *testing.T) {
 				"id":     "no-matchers",
 				"action": "ACTION_DROP",
 			},
+			wantErr: googlepolicy.ErrPolicyFailedValidation,
 		},
 		{
 			// A config value that cannot be JSON-encoded must surface as an
@@ -1644,6 +1650,7 @@ func TestDriverLoadPolicyErrors(t *testing.T) {
 				"type": "log_filter",
 				"id":   make(chan int),
 			},
+			wantErr: googlepolicy.ErrPolicyFailedToLoad,
 		},
 	}
 
@@ -1651,6 +1658,7 @@ func TestDriverLoadPolicyErrors(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := googlepolicy.LoadPolicy(PolicyType, tt.raw)
 			require.Error(t, err)
+			assert.ErrorIs(t, err, tt.wantErr)
 		})
 	}
 }

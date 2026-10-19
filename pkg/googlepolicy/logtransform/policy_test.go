@@ -298,12 +298,44 @@ func TestPolicyValidationErrors(t *testing.T) {
 			errSubstr: "body attribute path cannot be empty",
 		},
 		{
-			name: "unsupported action (rename)",
+			name: "rename missing source",
 			proto: &policyv1alpha1.LogTransformPolicy{
-				Id:     "p-rename",
-				Action: renameAction(logAttrSelector("src"), logAttrSelector("dst"), false),
+				Id:     "p-rename-no-src",
+				Action: renameAction(nil, logAttrSelector("dst"), false),
 			},
-			errExpect: ErrUnsupportedAction,
+			errExpect: ErrMissingSource,
+		},
+		{
+			name: "rename missing target",
+			proto: &policyv1alpha1.LogTransformPolicy{
+				Id:     "p-rename-no-tgt",
+				Action: renameAction(logAttrSelector("src"), nil, false),
+			},
+			errExpect: ErrMissingTarget,
+		},
+		{
+			name: "rename empty source path",
+			proto: &policyv1alpha1.LogTransformPolicy{
+				Id:     "p-rename-empty-src",
+				Action: renameAction(logAttrSelector(), logAttrSelector("dst"), false),
+			},
+			errSubstr: "attribute path cannot be empty",
+		},
+		{
+			name: "rename empty target path",
+			proto: &policyv1alpha1.LogTransformPolicy{
+				Id:     "p-rename-empty-tgt",
+				Action: renameAction(logAttrSelector("src"), logAttrSelector(), false),
+			},
+			errSubstr: "attribute path cannot be empty",
+		},
+		{
+			name: "rename source is ancestor of target",
+			proto: &policyv1alpha1.LogTransformPolicy{
+				Id:     "p-rename-ancestor",
+				Action: renameAction(logAttrSelector("user"), logAttrSelector("user", "name"), false),
+			},
+			errSubstr: "rename source cannot be an ancestor of target",
 		},
 		{
 			name: "unsupported action (redact)",
@@ -1205,5 +1237,212 @@ func TestTransformLogRemoveAction(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, googlepolicy.TransformNoMatch, p.TransformLog(ctx))
 		assert.Equal(t, "plain string body", lr.Body().Str())
+	})
+}
+
+func TestTransformLogRenameAction(t *testing.T) {
+	t.Run("stage check", func(t *testing.T) {
+		p, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "stage-rename",
+			Action: renameAction(logAttrSelector("old"), logAttrSelector("new"), false),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformStageRename, p.TransformStage())
+	})
+
+	t.Run("rename log_attribute to log_attribute (flat and nested)", func(t *testing.T) {
+		lr, sl, rl := newTestLogBundle()
+		lr.Attributes().PutStr("old_key", "old_val")
+		lr.Attributes().PutEmptyMap("nested").PutInt("count", 10)
+		ctx := logContext(lr, sl, rl)
+
+		// 1. Rename flat to flat with default upsert: false.
+		p1, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "rename-flat",
+			Action: renameAction(logAttrSelector("old_key"), logAttrSelector("renamed_key"), false),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformModified, p1.TransformLog(ctx))
+		assert.Equal(t, googlepolicy.TransformNoMatch, p1.TransformLog(ctx)) // already renamed
+
+		_, ok := lr.Attributes().Get("old_key")
+		assert.False(t, ok)
+		v, ok := lr.Attributes().Get("renamed_key")
+		require.True(t, ok)
+		assert.Equal(t, "old_val", v.Str())
+
+		// 2. Rename nested to nested with upsert: false.
+		p2, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "rename-nested",
+			Action: renameAction(logAttrSelector("nested", "count"), logAttrSelector("metrics", "total"), false),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformModified, p2.TransformLog(ctx))
+
+		nestedMap, ok := lr.Attributes().Get("nested")
+		require.True(t, ok)
+		_, ok = nestedMap.Map().Get("count")
+		assert.False(t, ok)
+
+		metricsMap, ok := lr.Attributes().Get("metrics")
+		require.True(t, ok)
+		totalVal, ok := metricsMap.Map().Get("total")
+		require.True(t, ok)
+		assert.Equal(t, int64(10), totalVal.Int())
+	})
+
+	t.Run("upsert semantics", func(t *testing.T) {
+		// upsert: false when target exists -> skips and preserves both
+		lr := plog.NewLogRecord()
+		lr.Attributes().PutStr("src", "from_source")
+		lr.Attributes().PutStr("dst", "already_there")
+		ctx := googlepolicy.LogContext{Record: lr}
+
+		pNoUpsert, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "rename-no-upsert",
+			Action: renameAction(logAttrSelector("src"), logAttrSelector("dst"), false),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformNoMatch, pNoUpsert.TransformLog(ctx))
+		vSrc, _ := lr.Attributes().Get("src")
+		assert.Equal(t, "from_source", vSrc.Str())
+		vDst, _ := lr.Attributes().Get("dst")
+		assert.Equal(t, "already_there", vDst.Str())
+
+		// upsert: true when target exists -> overwrites target and removes source
+		pUpsert, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "rename-upsert",
+			Action: renameAction(logAttrSelector("src"), logAttrSelector("dst"), true),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformModified, pUpsert.TransformLog(ctx))
+		_, ok := lr.Attributes().Get("src")
+		assert.False(t, ok)
+		vDst, ok = lr.Attributes().Get("dst")
+		require.True(t, ok)
+		assert.Equal(t, "from_source", vDst.Str())
+	})
+
+	t.Run("cross-boundary log_attribute to body_field", func(t *testing.T) {
+		lr := plog.NewLogRecord()
+		lr.Attributes().PutStr("user_id", "usr-456")
+		ctx := googlepolicy.LogContext{Record: lr}
+
+		p, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "attr-to-body",
+			Action: renameAction(logAttrSelector("user_id"), logBodyFieldSelector("auth", "uid"), false),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformModified, p.TransformLog(ctx))
+
+		_, ok := lr.Attributes().Get("user_id")
+		assert.False(t, ok)
+		require.Equal(t, pcommon.ValueTypeMap, lr.Body().Type())
+		authMap, ok := lr.Body().Map().Get("auth")
+		require.True(t, ok)
+		uidVal, ok := authMap.Map().Get("uid")
+		require.True(t, ok)
+		assert.Equal(t, "usr-456", uidVal.Str())
+	})
+
+	t.Run("cross-boundary body_field to log_attribute", func(t *testing.T) {
+		lr := plog.NewLogRecord()
+		lr.Body().SetEmptyMap().PutStr("trace_tag", "span-99")
+		ctx := googlepolicy.LogContext{Record: lr}
+
+		p, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "body-to-attr",
+			Action: renameAction(logBodyFieldSelector("trace_tag"), logAttrSelector("app.trace_tag"), false),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformModified, p.TransformLog(ctx))
+
+		_, ok := lr.Body().Map().Get("trace_tag")
+		assert.False(t, ok)
+		appMap, ok := lr.Attributes().Get("app.trace_tag")
+		require.True(t, ok)
+		assert.Equal(t, "span-99", appMap.Str())
+	})
+
+	t.Run("body_field to body_field", func(t *testing.T) {
+		lr := plog.NewLogRecord()
+		lr.Body().SetEmptyMap().PutStr("old_field", "data")
+		ctx := googlepolicy.LogContext{Record: lr}
+
+		p, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "body-to-body",
+			Action: renameAction(logBodyFieldSelector("old_field"), logBodyFieldSelector("new_field"), false),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformModified, p.TransformLog(ctx))
+
+		_, ok := lr.Body().Map().Get("old_field")
+		assert.False(t, ok)
+		newVal, ok := lr.Body().Map().Get("new_field")
+		require.True(t, ok)
+		assert.Equal(t, "data", newVal.Str())
+	})
+
+	t.Run("source identical to target is no-op", func(t *testing.T) {
+		lr := plog.NewLogRecord()
+		lr.Attributes().PutStr("key", "val")
+		ctx := googlepolicy.LogContext{Record: lr}
+
+		p, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "same-key",
+			Action: renameAction(logAttrSelector("key"), logAttrSelector("key"), false),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformNoMatch, p.TransformLog(ctx))
+		v, ok := lr.Attributes().Get("key")
+		require.True(t, ok)
+		assert.Equal(t, "val", v.Str())
+	})
+
+	t.Run("non-map body fail-open", func(t *testing.T) {
+		// String body when source is body_field
+		lrStr := plog.NewLogRecord()
+		lrStr.Body().SetStr("plain string")
+		ctxStr := googlepolicy.LogContext{Record: lrStr}
+
+		pSrcBody, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "src-body-str",
+			Action: renameAction(logBodyFieldSelector("f"), logAttrSelector("f"), false),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformNoMatch, pSrcBody.TransformLog(ctxStr))
+
+		// String body when target is body_field
+		lrStr2 := plog.NewLogRecord()
+		lrStr2.Body().SetStr("plain string")
+		lrStr2.Attributes().PutStr("f", "val")
+		ctxStr2 := googlepolicy.LogContext{Record: lrStr2}
+
+		pTgtBody, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "tgt-body-str",
+			Action: renameAction(logAttrSelector("f"), logBodyFieldSelector("f"), false),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformNoMatch, pTgtBody.TransformLog(ctxStr2))
+		v, ok := lrStr2.Attributes().Get("f")
+		require.True(t, ok)
+		assert.Equal(t, "val", v.Str())
+	})
+
+	t.Run("zero-context guards", func(t *testing.T) {
+		renSelectors := [][2]*policyv1alpha1.LogAttributeSelector{
+			{logAttrSelector("a"), logAttrSelector("b")},
+			{logAttrSelector("a"), logBodyFieldSelector("b")},
+			{logBodyFieldSelector("a"), logAttrSelector("b")},
+			{logBodyFieldSelector("a"), logBodyFieldSelector("b")},
+		}
+		for _, pair := range renSelectors {
+			p, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+				Id:     "zero-ctx-ren",
+				Action: renameAction(pair[0], pair[1], false),
+			})
+			require.NoError(t, err)
+			assert.Equal(t, googlepolicy.TransformNoMatch, p.TransformLog(googlepolicy.LogContext{}))
+		}
 	})
 }

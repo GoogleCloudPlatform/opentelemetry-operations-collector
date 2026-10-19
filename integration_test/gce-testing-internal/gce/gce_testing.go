@@ -2464,11 +2464,6 @@ func InstallGcloudIfNeeded(ctx context.Context, logger *log.Logger, vm *VM) erro
 	}
 	if err := verifyGcloudInstallation(ctx, logger, vm); err == nil {
 		// Success, no need to install gcloud.
-		// Install gcloud-crc32c to prevent 'gcloud storage cp' from prompting for installation
-		// on ARM64 images where it is missing, which otherwise hangs/fails the CI pipeline.
-		if IsARM(vm.ImageSpec) {
-			_, _ = RunRemotely(ctx, logger, vm, "sudo gcloud components install gcloud-crc32c --quiet || true")
-		}
 		return nil
 	} else if isSSHTransportError(err) {
 		return fmt.Errorf("failed to verify gcloud due to SSH connection error: %w", err)

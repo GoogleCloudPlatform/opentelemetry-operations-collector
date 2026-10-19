@@ -1,0 +1,11 @@
+{
+  "type": "log_transform",
+  "id": "b-remove-temp",
+  "remove": {
+    "target": {
+      "log_attribute": {
+        "path": ["temp_session_token"]
+      }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "type": "log_transform",
+  "id": "a-redact-account",
+  "redact": {
+    "target": {
+      "body_field": {
+        "path": ["account", "id"]
+      }
+    },
+    "regex": "\\d+",
+    "replacement": "XXXX"
+  }
+}

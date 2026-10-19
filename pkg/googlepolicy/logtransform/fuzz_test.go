@@ -190,6 +190,25 @@ func fuzzLogTransformSeedPolicies() []*policyv1alpha1.LogTransformPolicy {
 				},
 			},
 		},
+		{
+			Id: "redact-attribute",
+			Action: &policyv1alpha1.LogTransformPolicy_Redact{
+				Redact: &policyv1alpha1.LogRedactAction{
+					Target:      logTargetAttr("cloud.zone"),
+					Regex:       proto.String(`[a-z]+-[a-z0-9]+`),
+					Replacement: proto.String("[ZONE]"),
+				},
+			},
+		},
+		{
+			Id: "redact-body-field",
+			Action: &policyv1alpha1.LogTransformPolicy_Redact{
+				Redact: &policyv1alpha1.LogRedactAction{
+					Target:      logTargetBodyField("event_data", "userId"),
+					Replacement: proto.String("[REDACTED]"),
+				},
+			},
+		},
 	}
 }
 

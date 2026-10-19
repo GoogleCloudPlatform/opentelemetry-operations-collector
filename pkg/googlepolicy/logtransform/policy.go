@@ -125,7 +125,14 @@ func NewPolicyFromProto(pb *policyv1alpha1.LogTransformPolicy) (*Policy, error) 
 			return nil, fmt.Errorf("rename: %w", err)
 		}
 	case *policyv1alpha1.LogTransformPolicy_Redact:
-		return nil, fmt.Errorf("redact: %w", ErrUnsupportedAction)
+		if a.Redact == nil {
+			return nil, ErrMissingAction
+		}
+		stage = googlepolicy.TransformStageRedact
+		action, err = compileRedact(a.Redact)
+		if err != nil {
+			return nil, fmt.Errorf("redact: %w", err)
+		}
 	default:
 		return nil, ErrMissingAction
 	}
@@ -472,6 +479,117 @@ func compileRename(a *policyv1alpha1.LogRenameAction) (compiledAction, error) {
 		removeSource(srcMap)
 		return writeTarget(tgtMap, cloned)
 	}, nil
+}
+
+func compileRedact(a *policyv1alpha1.LogRedactAction) (compiledAction, error) {
+	if a == nil {
+		return nil, ErrMissingAction
+	}
+	target := a.GetTarget()
+	if target == nil || target.Target == nil {
+		return nil, ErrMissingTarget
+	}
+	redactStr, err := matcher.CompileStringRedactor(a.GetRegex(), a.GetReplacement())
+	if err != nil {
+		return nil, err
+	}
+
+	switch t := target.Target.(type) {
+	case *policyv1alpha1.LogTargetSelector_LogAttribute:
+		steps, err := matcher.CompilePath(t.LogAttribute, "log")
+		if err != nil {
+			return nil, err
+		}
+		return func(ctx googlepolicy.LogContext) bool {
+			if ctx.Record == (plog.LogRecord{}) {
+				return false
+			}
+			val, ok := matcher.EvalPathValue(ctx.Record.Attributes(), steps)
+			if !ok || val.Type() != pcommon.ValueTypeStr {
+				return false
+			}
+			redacted, modified := redactStr(val.Str())
+			if !modified {
+				return false
+			}
+			val.SetStr(redacted)
+			return true
+		}, nil
+
+	case *policyv1alpha1.LogTargetSelector_BodyField:
+		steps, err := matcher.CompilePath(t.BodyField, "body")
+		if err != nil {
+			return nil, err
+		}
+		return func(ctx googlepolicy.LogContext) bool {
+			if ctx.Record == (plog.LogRecord{}) {
+				return false
+			}
+			body := ctx.Record.Body()
+			if body.Type() != pcommon.ValueTypeMap {
+				return false
+			}
+			val, ok := matcher.EvalPathValue(body.Map(), steps)
+			if !ok || val.Type() != pcommon.ValueTypeStr {
+				return false
+			}
+			redacted, modified := redactStr(val.Str())
+			if !modified {
+				return false
+			}
+			val.SetStr(redacted)
+			return true
+		}, nil
+
+	case *policyv1alpha1.LogTargetSelector_RecordField:
+		return compileRecordFieldRedact(t.RecordField, redactStr)
+
+	default:
+		return nil, ErrMissingTarget
+	}
+}
+
+func compileRecordFieldRedact(field policyv1alpha1.LogRecordField, redactStr func(string) (string, bool)) (compiledAction, error) {
+	switch field {
+	case policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY:
+		return func(ctx googlepolicy.LogContext) bool {
+			if ctx.Record == (plog.LogRecord{}) {
+				return false
+			}
+			body := ctx.Record.Body()
+			if body.Type() != pcommon.ValueTypeStr {
+				return false
+			}
+			redacted, modified := redactStr(body.Str())
+			if !modified {
+				return false
+			}
+			body.SetStr(redacted)
+			return true
+		}, nil
+
+	case policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT:
+		return func(ctx googlepolicy.LogContext) bool {
+			if ctx.Record == (plog.LogRecord{}) {
+				return false
+			}
+			sev := ctx.Record.SeverityText()
+			redacted, modified := redactStr(sev)
+			if !modified {
+				return false
+			}
+			ctx.Record.SetSeverityText(redacted)
+			return true
+		}, nil
+
+	case policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER,
+		policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID,
+		policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID:
+		return nil, fmt.Errorf("log record field %s is not supported as a redact target", field)
+
+	default:
+		return nil, errors.New("log record field cannot be unspecified")
+	}
 }
 
 func isPathPrefix(prefix, full []string) bool {

@@ -33,6 +33,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 
@@ -772,4 +773,33 @@ func toInt64(val any) (int64, bool) {
 	default:
 		return 0, false
 	}
+}
+
+// CompileStringRedactor compiles an optional RE2 regex pattern and replacement
+// string into a closure that returns (redacted, true) when a target string is
+// modified, or ("", false) when the string is unchanged. When regexPattern is
+// empty, the entire input string is replaced with replacement.
+func CompileStringRedactor(regexPattern, replacement string) (func(string) (string, bool), error) {
+	if regexPattern == "" {
+		return func(s string) (string, bool) {
+			if s == replacement {
+				return "", false
+			}
+			return replacement, true
+		}, nil
+	}
+	re, err := regexp.Compile(regexPattern)
+	if err != nil {
+		return nil, fmt.Errorf("invalid redact regex %q: %w", regexPattern, err)
+	}
+	return func(s string) (string, bool) {
+		if !re.MatchString(s) {
+			return "", false
+		}
+		redacted := re.ReplaceAllString(s, replacement)
+		if redacted == s {
+			return "", false
+		}
+		return redacted, true
+	}, nil
 }

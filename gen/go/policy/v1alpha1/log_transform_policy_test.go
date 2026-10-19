@@ -247,3 +247,103 @@ func TestLogTransformPolicy_OptionalFieldsPresence(t *testing.T) {
 	require.NotNil(t, explicitZeroPolicy.GetAdd().Upsert)
 	assert.False(t, explicitZeroPolicy.GetAdd().GetUpsert())
 }
+
+func TestLogTransformPolicy_RecordFieldAndNestedPathTargets(t *testing.T) {
+	policies := []*policyv1alpha1.LogTransformPolicy{
+		{
+			Id: "add-record-field-body-fallback",
+			Action: &policyv1alpha1.LogTransformPolicy_Add{
+				Add: &policyv1alpha1.LogAddAction{
+					Target: &policyv1alpha1.LogTargetSelector{
+						Target: &policyv1alpha1.LogTargetSelector_RecordField{
+							RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
+						},
+					},
+					Value: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_StringValue{StringValue: "default-body"},
+					},
+					Upsert: proto.Bool(false),
+				},
+			},
+		},
+		{
+			Id: "add-record-field-severity-text",
+			Action: &policyv1alpha1.LogTransformPolicy_Add{
+				Add: &policyv1alpha1.LogAddAction{
+					Target: &policyv1alpha1.LogTargetSelector{
+						Target: &policyv1alpha1.LogTargetSelector_RecordField{
+							RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT,
+						},
+					},
+					Value: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_StringValue{StringValue: "WARN"},
+					},
+					Upsert: proto.Bool(true),
+				},
+			},
+		},
+		{
+			Id: "add-record-field-severity-number",
+			Action: &policyv1alpha1.LogTransformPolicy_Add{
+				Add: &policyv1alpha1.LogAddAction{
+					Target: &policyv1alpha1.LogTargetSelector{
+						Target: &policyv1alpha1.LogTargetSelector_RecordField{
+							RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER,
+						},
+					},
+					Value: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_IntValue{IntValue: 13},
+					},
+					Upsert: proto.Bool(true),
+				},
+			},
+		},
+		{
+			Id: "add-nested-body-field-upsert",
+			Action: &policyv1alpha1.LogTransformPolicy_Add{
+				Add: &policyv1alpha1.LogAddAction{
+					Target: &policyv1alpha1.LogTargetSelector{
+						Target: &policyv1alpha1.LogTargetSelector_BodyField{
+							BodyField: &policyv1alpha1.AttributePath{
+								Path: []string{"event_data", "security", "classification"},
+							},
+						},
+					},
+					Value: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_StringValue{StringValue: "restricted"},
+					},
+					Upsert: proto.Bool(true),
+				},
+			},
+		},
+		{
+			Id: "redact-record-field-severity-text",
+			Action: &policyv1alpha1.LogTransformPolicy_Redact{
+				Redact: &policyv1alpha1.LogRedactAction{
+					Target: &policyv1alpha1.LogTargetSelector{
+						Target: &policyv1alpha1.LogTargetSelector_RecordField{
+							RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT,
+						},
+					},
+					Replacement: proto.String("REDACTED"),
+				},
+			},
+		},
+	}
+
+	for _, p := range policies {
+		t.Run(p.GetId(), func(t *testing.T) {
+			data, err := proto.Marshal(p)
+			require.NoError(t, err)
+			out := &policyv1alpha1.LogTransformPolicy{}
+			require.NoError(t, proto.Unmarshal(data, out))
+			assert.True(t, proto.Equal(p, out))
+
+			jsonData, err := protojson.Marshal(p)
+			require.NoError(t, err)
+			jsonOut := &policyv1alpha1.LogTransformPolicy{}
+			require.NoError(t, protojson.Unmarshal(jsonData, jsonOut))
+			assert.True(t, proto.Equal(p, jsonOut))
+		})
+	}
+}

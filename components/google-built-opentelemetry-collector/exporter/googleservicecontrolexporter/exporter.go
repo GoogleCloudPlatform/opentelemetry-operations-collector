@@ -188,6 +188,16 @@ func shouldRetry(err error) bool {
 	return false
 }
 
+func isPermanentError(err error) bool {
+	if st, ok := status.FromError(err); ok {
+		switch st.Code() {
+		case codes.PermissionDenied, codes.Unauthenticated, codes.NotFound, codes.Unimplemented:
+			return true
+		}
+	}
+	return false
+}
+
 // ConsumeMetrics creates report requests from provided metrics and sends them to Service Control API.
 // This func is called by several goroutines concurrently.
 func (e *MetricsExporter) ConsumeMetrics(ctx context.Context, m pmetric.Metrics) error {
@@ -199,11 +209,20 @@ func (e *MetricsExporter) ConsumeMetrics(ctx context.Context, m pmetric.Metrics)
 	return e.pushReportRequest(ctx, req)
 }
 
-func (e *Exporter) reportStatus(ev *componentstatus.Event) {
+func (e *Exporter) reportStatus(st componentstatus.Status, err error) {
 	e.statusMu.Lock()
 	defer e.statusMu.Unlock()
-	if e.lastStatus != ev.Status() {
-		e.lastStatus = ev.Status()
+	if st == componentstatus.StatusOK || e.lastStatus != st {
+		e.lastStatus = st
+		var ev *componentstatus.Event
+		switch st {
+		case componentstatus.StatusPermanentError:
+			ev = componentstatus.NewPermanentErrorEvent(err)
+		case componentstatus.StatusRecoverableError:
+			ev = componentstatus.NewRecoverableErrorEvent(err)
+		default:
+			ev = componentstatus.NewEvent(st)
+		}
 		componentstatus.ReportStatus(e.host, ev)
 	}
 }
@@ -225,9 +244,15 @@ func (e *Exporter) pushReportRequest(ctx context.Context, req *scpb.ReportReques
 	if err != nil {
 		e.logFailedReportReq(req, err)
 
+		if isPermanentError(err) {
+			// ReportStatus tells health check that we had a permanent error (e.g. PermissionDenied).
+			e.reportStatus(componentstatus.StatusPermanentError, err)
+		} else {
+			// ReportStatus tells health check that we had a recoverable error.
+			e.reportStatus(componentstatus.StatusRecoverableError, err)
+		}
+
 		if shouldRetry(err) {
-			// ReportStatus tells health check that we had a retriable error.
-			e.reportStatus(componentstatus.NewRecoverableErrorEvent(err))
 			if e.enableDebugHeaders {
 				// Get retriable error and enable debug header: Add encrypted debug header for 3 min
 				e.debugHeaderMutex.Lock()
@@ -238,8 +263,6 @@ func (e *Exporter) pushReportRequest(ctx context.Context, req *scpb.ReportReques
 			}
 			return err
 		}
-		// ReportStatus tells health check that we had a permanent error (e.g. PermissionDenied).
-		e.reportStatus(componentstatus.NewPermanentErrorEvent(err))
 		// "Permanent" tells OTel retry machinery that request should not be retried.
 		return consumererror.NewPermanent(err)
 	}
@@ -249,7 +272,7 @@ func (e *Exporter) pushReportRequest(ctx context.Context, req *scpb.ReportReques
 	}
 
 	// ReportStatus tells health check that everything is OK.
-	e.reportStatus(componentstatus.NewEvent(componentstatus.StatusOK))
+	e.reportStatus(componentstatus.StatusOK, nil)
 
 	return nil
 }

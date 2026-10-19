@@ -1135,6 +1135,67 @@ func TestEvaluator_LogTransform(t *testing.T) {
 	assert.False(t, ok)
 }
 
+func TestEvaluator_LogTransformDeterministicOrdering(t *testing.T) {
+	// Two add policies: "z-policy" and "a-policy". Both set the same attribute with upsert=false.
+	// Since "a-policy" has an alphabetically earlier ID, it must execute before "z-policy",
+	// winning the upsert: false race even when passed out of order to NewEvaluator.
+	existsMatcher := &policyv1alpha1.LogMatcher{
+		Target: &policyv1alpha1.LogFieldSelector{
+			Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
+				LogAttribute: &policyv1alpha1.AttributePath{Path: []string{"trigger"}},
+			},
+		},
+		Predicate: &policyv1alpha1.LogMatcher_Exists{},
+	}
+
+	policyZ := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id:      "z-policy",
+		Matches: []*policyv1alpha1.LogMatcher{existsMatcher},
+		Action: &policyv1alpha1.LogTransformPolicy_Add{
+			Add: &policyv1alpha1.LogAddAction{
+				Target: &policyv1alpha1.LogTargetSelector{
+					Target: &policyv1alpha1.LogTargetSelector_LogAttribute{
+						LogAttribute: &policyv1alpha1.AttributePath{Path: []string{"winner"}},
+					},
+				},
+				Value:  &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "z"}},
+				Upsert: proto.Bool(false),
+			},
+		},
+	})
+
+	policyA := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id:      "a-policy",
+		Matches: []*policyv1alpha1.LogMatcher{existsMatcher},
+		Action: &policyv1alpha1.LogTransformPolicy_Add{
+			Add: &policyv1alpha1.LogAddAction{
+				Target: &policyv1alpha1.LogTargetSelector{
+					Target: &policyv1alpha1.LogTargetSelector_LogAttribute{
+						LogAttribute: &policyv1alpha1.AttributePath{Path: []string{"winner"}},
+					},
+				},
+				Value:  &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "a"}},
+				Upsert: proto.Bool(false),
+			},
+		},
+	})
+
+	// Pass out of order: policyZ before policyA
+	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{policyZ, policyA})
+	require.NoError(t, err)
+
+	ld := plog.NewLogs()
+	lr := ld.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty().LogRecords().AppendEmpty()
+	lr.Attributes().PutBool("trigger", true)
+	lr.Body().SetStr("test ordering")
+
+	ev.TransformLogs(ld)
+
+	val, ok := lr.Attributes().Get("winner")
+	require.True(t, ok)
+	assert.Equal(t, "a", val.Str(), "a-policy must execute before z-policy due to lexicographical id ordering")
+}
+
 func TestEvaluator_LogFilterBeforeTransformOrdering(t *testing.T) {
 	// Filter 1 (DROP): Drop DEBUG logs
 	dropDebug := mustPolicy(t, &policyv1alpha1.LogFilterPolicy{

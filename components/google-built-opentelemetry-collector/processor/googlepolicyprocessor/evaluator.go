@@ -16,6 +16,8 @@ package googlepolicyprocessor
 
 import (
 	"fmt"
+	"slices"
+	"strings"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 )
@@ -64,6 +66,9 @@ func NewEvaluator(policies []googlepolicy.TransformationPolicy) (*Evaluator, err
 				tp.PolicyName(), tp)
 		}
 	}
+	slices.SortFunc(ev.logTransformPolicies, func(a, b googlepolicy.LogTransformPolicyEvaluator) int {
+		return strings.Compare(a.PolicyName(), b.PolicyName())
+	})
 	return ev, nil
 }
 

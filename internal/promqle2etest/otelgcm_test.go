@@ -51,7 +51,7 @@ func TestPromOtelGCM_PrometheusCounter_NoCT(t *testing.T) {
 	// target --PromProto--> Prometheus GMP fork --GCM API--> GCM.
 	promForkGCM := PrometheusForkGCMBackend{
 		Name:  "prom-fork-gcm",
-		Image: "gke.gcr.io/prometheus-engine/prometheus:v2.45.3-gmp.10-gke.0",
+		Image: "gke.gcr.io/prometheus-engine/prometheus:v3.13.0-gmp.3-gke.0",
 		GCMSA: GCMServiceAccountOrFail(t),
 	}
 

@@ -134,7 +134,6 @@ processors:
 exporters:
   googlemanagedprometheus:
     project: "%s"
-    # TODO(bwplotka): Do we need to disable cumulative_normalization explicitly?
     metric:
       # TODO(bwplotka): Update docs? Change defaults? Those metrics are a bad idea to include (IMO).
       # We are working in Prometheus OSS to slowly promote more resource attr as labels (if not all one day).

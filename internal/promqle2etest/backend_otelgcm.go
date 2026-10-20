@@ -41,7 +41,8 @@ type OtelGCMBackend struct {
 	Name  string
 	GCMSA []byte
 
-	ExtraProcessors map[string]string
+	ExtraProcessors   map[string]string
+	ExtraFeatureGates []string
 }
 
 func (o OtelGCMBackend) Ref() string {
@@ -49,7 +50,7 @@ func (o OtelGCMBackend) Ref() string {
 }
 
 // newOtelCollector creates a new OpenTelemetry Collector runnable.
-func newOtelCollector(env e2e.Environment, name string, image string, scrapeTargetAddress string, cluster, location, project string, gcmSA []byte, extraProcessors map[string]string) *e2emon.InstrumentedRunnable {
+func newOtelCollector(env e2e.Environment, name string, image string, scrapeTargetAddress string, cluster, location, project string, gcmSA []byte, extraProcessors map[string]string, extraFeatureGates []string) *e2emon.InstrumentedRunnable {
 	ports := map[string]int{"http": 9090}
 
 	f := env.Runnable(name).WithPorts(ports).Future()
@@ -171,6 +172,9 @@ service:
 		"--feature-gates=receiver.prometheusreceiver.EnableNativeHistograms": "",
 		"--feature-gates=exporter.googlemanagedprometheus.intToDouble":       "",
 	}
+	for _, fg := range extraFeatureGates {
+		args["--feature-gates="+fg] = ""
+	}
 
 	return e2emon.AsInstrumented(f.Init(e2e.StartOptions{
 		Image:   image,
@@ -205,7 +209,7 @@ func (o OtelGCMBackend) StartAndWaitReady(t testing.TB, env e2e.Environment) pro
 
 	replayer := promqle2e.StartIngestByScrapeReplayer(t, env)
 
-	otelCollector := newOtelCollector(env, o.Name, o.Image, replayer.Endpoint(env), cluster, location, creds.ProjectID, o.GCMSA, o.ExtraProcessors)
+	otelCollector := newOtelCollector(env, o.Name, o.Image, replayer.Endpoint(env), cluster, location, creds.ProjectID, o.GCMSA, o.ExtraProcessors, o.ExtraFeatureGates)
 	if err := e2e.StartAndWaitReady(otelCollector); err != nil {
 		t.Fatal(err)
 	}

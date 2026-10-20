@@ -70,12 +70,14 @@ func TestPromOtelGCM_PrometheusCounter_NoCT(t *testing.T) {
 	// Similar to `otel-gcm` but we use a new metricstarttimeprocessor (MSTP) processor
 	// to adjust counter samples without CT.
 	otelMSTPGCM := OtelGCMBackend{
-		Name: "otel-mstp-gcm",
-		// TODO(bwplotka): Replace with upstream once https://github.com/open-telemetry/opentelemetry-collector-contrib/pull/38594 is merged.
-		Image: "us-east1-docker.pkg.dev/ridwanmsharif-dev/gboc/otelcol-google:0.122.1",
+		Name:  "otel-mstp-gcm",
+		Image: "otel/opentelemetry-collector-contrib:0.131.0",
 		ExtraProcessors: map[string]string{
 			"metricstarttime": `
     strategy: subtract_initial_point`,
+		},
+		ExtraFeatureGates: []string{
+			"receiver.prometheusreceiver.RemoveStartTimeAdjustment",
 		},
 		GCMSA: GCMServiceAccountOrFail(t),
 	}
@@ -124,9 +126,8 @@ func TestPromOtelGCM_PrometheusCounter_NoCT(t *testing.T) {
 	pt.RecordScrape(interval).
 		Expect(c, 0, prom).
 		Expect(c, 0, promForkGCM).
-		Expect(c, 0, otelGCM)
-	// NOTE(bwplotka): Here otelMSTPGCM misses the samples, which is not too bad,
-	// but I propose to fix it upstream (https://github.com/open-telemetry/opentelemetry-collector-contrib/pull/38594#discussion_r2044120953).
+		Expect(c, 0, otelGCM).
+		Expect(c, 0, otelMSTPGCM)
 
 	c.Add(150)
 	pt.RecordScrape(interval).

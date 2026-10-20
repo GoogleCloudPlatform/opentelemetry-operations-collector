@@ -1157,8 +1157,9 @@ func TestUnsetSpanKindReportsPresent(t *testing.T) {
 
 func TestDriverLoadPolicyErrors(t *testing.T) {
 	tests := []struct {
-		name string
-		raw  map[string]any
+		name    string
+		raw     map[string]any
+		wantErr error
 	}{
 		{
 			name: "empty id",
@@ -1172,6 +1173,7 @@ func TestDriverLoadPolicyErrors(t *testing.T) {
 					},
 				},
 			},
+			wantErr: googlepolicy.ErrPolicyFailedValidation,
 		},
 		{
 			name: "missing target due to typo'd nested field",
@@ -1187,6 +1189,7 @@ func TestDriverLoadPolicyErrors(t *testing.T) {
 					},
 				},
 			},
+			wantErr: googlepolicy.ErrPolicyFailedValidation,
 		},
 		{
 			name: "valid proto but no matchers",
@@ -1194,6 +1197,7 @@ func TestDriverLoadPolicyErrors(t *testing.T) {
 				"type": "trace_filter",
 				"id":   "no-matchers",
 			},
+			wantErr: googlepolicy.ErrPolicyFailedValidation,
 		},
 		{
 			name: "unmarshalable config value",
@@ -1202,6 +1206,7 @@ func TestDriverLoadPolicyErrors(t *testing.T) {
 				"id":      "bad-json",
 				"matches": make(chan int),
 			},
+			wantErr: googlepolicy.ErrPolicyFailedToLoad,
 		},
 	}
 
@@ -1209,6 +1214,7 @@ func TestDriverLoadPolicyErrors(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := googlepolicy.LoadPolicy(PolicyType, tt.raw)
 			require.Error(t, err)
+			assert.ErrorIs(t, err, tt.wantErr)
 		})
 	}
 }

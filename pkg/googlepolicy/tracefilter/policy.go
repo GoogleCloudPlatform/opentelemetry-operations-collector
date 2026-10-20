@@ -38,6 +38,7 @@ const PolicyType = "trace_filter"
 // Exposed to the package (rather than constructed inline in init) so tests
 // exercise the very value that is registered.
 var driver = googlepolicy.ProtoDriver[*policyv1alpha1.TraceFilterPolicy]{
+	Class: googlepolicy.PolicyClassTransformation,
 	New: func(pb *policyv1alpha1.TraceFilterPolicy) (googlepolicy.Policy, error) {
 		return NewPolicyFromProto(pb)
 	},

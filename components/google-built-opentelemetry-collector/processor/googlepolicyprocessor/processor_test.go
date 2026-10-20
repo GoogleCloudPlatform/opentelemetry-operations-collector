@@ -28,7 +28,10 @@ import (
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/event"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/logfilter"
 )
 
@@ -441,4 +444,52 @@ func TestProcessor_WatcherChannelClosed(t *testing.T) {
 	// Closing watcherCh directly should cause watchPolicies goroutine to exit cleanly
 	close(ch)
 	p.wg.Wait()
+}
+
+func TestReloadPolicies_RecordsPolicyEvaluateErrorEventForFailedPoliciesWithClass(t *testing.T) {
+	core, recorded := observer.New(zapcore.InfoLevel)
+	logger := zap.New(core)
+
+	ps, err := googlepolicy.MakePolicySet("rev-proc-failed", []map[string]any{
+		{
+			"type":   "log_filter",
+			"id":     "invalid-log-filter",
+			"action": "ACTION_DROP",
+			// missing matches -> ErrPolicyFailedValidation, class: transformation
+		},
+		{
+			"type": "unknown_policy_type",
+			"id":   "unknown-policy",
+		},
+	})
+	require.Error(t, err)
+	require.NotNil(t, ps)
+	ps.PolicySetID = "projects/my-project/locations/us-central1/policySets/my-policy-set"
+
+	googlepolicy.SetActivePolicySet(ps)
+	defer googlepolicy.SetActivePolicySet(nil)
+
+	p := newGooglePolicyProcessor(&Config{}, logger)
+	require.NoError(t, p.start(context.Background(), componenttest.NewNopHost()))
+	defer func() { _ = p.shutdown(context.Background()) }()
+
+	entries := recorded.FilterField(zap.String("event.name", event.PolicyEvaluateErrorEventName)).All()
+	require.Len(t, entries, 2)
+
+	assert.Equal(t, map[string]any{
+		"event.name":                 event.PolicyEvaluateErrorEventName,
+		"gcp.policy.id":              "invalid-log-filter",
+		"gcp.policy.set.id":          "projects/my-project/locations/us-central1/policySets/my-policy-set",
+		"gcp.policy.set.revision.id": "rev-proc-failed",
+		"error.type":                 "policy_failed_validation",
+		"gcp.policy.class":           "transformation",
+	}, entries[0].ContextMap())
+
+	assert.Equal(t, map[string]any{
+		"event.name":                 event.PolicyEvaluateErrorEventName,
+		"gcp.policy.id":              "unknown-policy",
+		"gcp.policy.set.id":          "projects/my-project/locations/us-central1/policySets/my-policy-set",
+		"gcp.policy.set.revision.id": "rev-proc-failed",
+		"error.type":                 "policy_type_not_found",
+	}, entries[1].ContextMap())
 }

@@ -38,6 +38,7 @@ const PolicyType = "metric_filter"
 // Exposed to the package (rather than constructed inline in init) so tests
 // exercise the very value that is registered.
 var driver = googlepolicy.ProtoDriver[*policyv1alpha1.MetricFilterPolicy]{
+	Class: googlepolicy.PolicyClassTransformation,
 	New: func(pb *policyv1alpha1.MetricFilterPolicy) (googlepolicy.Policy, error) {
 		return NewPolicyFromProto(pb)
 	},

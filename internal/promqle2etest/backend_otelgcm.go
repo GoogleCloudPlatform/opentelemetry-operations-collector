@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	gcm "cloud.google.com/go/monitoring/apiv3/v2"
@@ -54,7 +55,7 @@ func newOtelCollector(env e2e.Environment, name string, image string, scrapeTarg
 	f := env.Runnable(name).WithPorts(ports).Future()
 
 	var extraProcessorsConfigs, extraProcessorsEnable string
-	if extraProcessors != nil && len(extraProcessors) > 0 {
+	if len(extraProcessors) > 0 {
 		for proc, config := range extraProcessors {
 			extraProcessorsConfigs += fmt.Sprintf(`
   %s:%s
@@ -177,6 +178,7 @@ service:
 		Command: e2e.NewCommand("", e2e.BuildArgs(args)...),
 		// Readiness: e2e.NewHTTPReadinessProbe("http", "/-/ready", 200, 200), TODO(bwplotka): Configure health checks in otel?
 		EnvVars: map[string]string{"GOOGLE_APPLICATION_CREDENTIALS": filepath.Join(f.Dir(), "gcm-sa.json")},
+		User:    strconv.Itoa(os.Getuid()),
 	}), "http")
 }
 

@@ -35,11 +35,11 @@ import (
 var _ promqle2e.Backend = PrometheusForkGCMBackend{}
 
 // GCMServiceAccountOrFail gets the Google SA JSON content from GCM_SECRET
-// environment variable or fails.
+// environment variable or skips the test.
 func GCMServiceAccountOrFail(t testing.TB) []byte {
 	saJSON := []byte(os.Getenv("GCM_SECRET"))
 	if len(saJSON) == 0 {
-		t.Fatal("GCMServiceAccountOrFail: no GCM_SECRET env var provided, can't run the test")
+		t.Skip("GCMServiceAccountOrFail: no GCM_SECRET env var provided, skipping test")
 	}
 	return saJSON
 }

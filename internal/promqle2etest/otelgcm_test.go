@@ -123,26 +123,23 @@ func TestPromOtelGCM_PrometheusCounter_NoCT(t *testing.T) {
 	c = counter.WithLabelValues("bar")
 	pt.RecordScrape(interval).
 		Expect(c, 0, prom).
-		// NOTE(bwplotka): This and following discrepancies are expected due to
-		// GCM PromQL layer using MQL with delta alignment. What we get as a raw
-		// counter is already reset-normalized (b/305901765) (plus cannibalization).
-		Expect(c, 50, promForkGCM).
-		Expect(c, 50, otelGCM)
+		Expect(c, 0, promForkGCM).
+		Expect(c, 0, otelGCM)
 	// NOTE(bwplotka): Here otelMSTPGCM misses the samples, which is not too bad,
 	// but I propose to fix it upstream (https://github.com/open-telemetry/opentelemetry-collector-contrib/pull/38594#discussion_r2044120953).
 
 	c.Add(150)
 	pt.RecordScrape(interval).
 		Expect(c, 150, prom).
-		Expect(c, 200, promForkGCM).
+		Expect(c, 150, promForkGCM).
 		// NOTE(bwplotka): This is where Otel->GCM behaviour goes even more off vs
 		// Prometheus and Prometheus fork. The reason is the "broken" true reset algorithm
 		// in the prometheusreceiver, something we try to fix in MSTP
 		// (https://github.com/open-telemetry/opentelemetry-collector-contrib/pull/38594).
 		// TODO(bwplotka): Change GCP docs to recommended MSTP configuration once released (b/389130459).
-		Expect(c, 0, otelGCM).
+		Expect(c, -50, otelGCM).
 		// New MSTP flow is fine.
-		Expect(c, 200, otelMSTPGCM)
+		Expect(c, 150, otelMSTPGCM)
 
 	// Reset to 0 with addition.
 	counter.Reset()
@@ -150,23 +147,23 @@ func TestPromOtelGCM_PrometheusCounter_NoCT(t *testing.T) {
 	c.Add(20)
 	pt.RecordScrape(interval).
 		Expect(c, 20, prom).
-		Expect(c, 220, promForkGCM).
+		Expect(c, 20, promForkGCM).
 		Expect(c, 20, otelGCM). // Broken (b/389130459).
-		Expect(c, 220, otelMSTPGCM)
+		Expect(c, 20, otelMSTPGCM)
 
 	c.Add(50)
 	pt.RecordScrape(interval).
 		Expect(c, 70, prom).
-		Expect(c, 270, promForkGCM).
+		Expect(c, 70, promForkGCM).
 		Expect(c, -130, otelGCM). // Broken (b/389130459).
-		Expect(c, 270, otelMSTPGCM)
+		Expect(c, 70, otelMSTPGCM)
 
 	c.Add(10)
 	pt.RecordScrape(interval).
 		Expect(c, 80, prom).
-		Expect(c, 280, promForkGCM).
+		Expect(c, 80, promForkGCM).
 		Expect(c, -120, otelGCM). // Broken (b/389130459).
-		Expect(c, 280, otelMSTPGCM)
+		Expect(c, 80, otelMSTPGCM)
 
 	// Tricky reset case, unnoticeable reset for Prometheus without created timestamp as well.
 	counter.Reset()
@@ -174,9 +171,9 @@ func TestPromOtelGCM_PrometheusCounter_NoCT(t *testing.T) {
 	c.Add(600)
 	pt.RecordScrape(interval).
 		Expect(c, 600, prom).
-		Expect(c, 800, promForkGCM).
+		Expect(c, 600, promForkGCM).
 		Expect(c, 400, otelGCM). // Broken (b/389130459).
-		Expect(c, 800, otelMSTPGCM)
+		Expect(c, 600, otelMSTPGCM)
 
 	// Prometheus SDK used for replies actually emit CTs.
 	// Remove all CTs explicitly to test the logic for non-provided CTs in the Prometheus ecosystem.

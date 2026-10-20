@@ -59,9 +59,7 @@ func TestPromOtelGCM_PrometheusCounter_NoCT(t *testing.T) {
 	// For no-ct cases, this essentially uses GCM internal
 	// logic for "cannibalization" algorithm.
 	otelGCM := OtelGCMBackend{
-		Name: "otel-gcm",
-		// Current docs recommend otel/opentelemetry-collector-contrib:0.106.0
-		// Should we use this repo instead?
+		Name:  "otel-gcm",
 		Image: "otel/opentelemetry-collector-contrib:0.123.0",
 		GCMSA: GCMServiceAccountOrFail(t),
 	}

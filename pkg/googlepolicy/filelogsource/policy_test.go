@@ -34,6 +34,7 @@ func TestPolicyValidation_ValidLinuxPaths(t *testing.T) {
 		{"/opt/google/logs/*.log"},
 		{"/srv/web/logs/**/*.log"},
 		{"/var/log/syslog", "/opt/app/logs/server.log"},
+		{"/var/log/app.log", "/var/log/App.log"},
 	}
 
 	for _, paths := range validPaths {
@@ -184,6 +185,24 @@ func TestPolicyValidation_InvalidPaths(t *testing.T) {
 			id:          "test-policy",
 			include:     []string{`ProgramData\MyApp\logs\app.log`},
 			expectedErr: ErrRelativePath,
+		},
+		{
+			name:        "duplicate path linux",
+			id:          "test-policy",
+			include:     []string{"/var/log/app.log", "/var/log/app.log"},
+			expectedErr: ErrDuplicateIncludePattern,
+		},
+		{
+			name:        "duplicate path windows case-insensitive",
+			id:          "test-policy",
+			include:     []string{`C:\ProgramData\MyApp\logs\app.log`, `c:\programdata\myapp\logs\app.log`},
+			expectedErr: ErrDuplicateIncludePattern,
+		},
+		{
+			name:        "duplicate path windows separator normalized",
+			id:          "test-policy",
+			include:     []string{`C:\inetpub\logs\app.log`, `C:/inetpub/logs/app.log`},
+			expectedErr: ErrDuplicateIncludePattern,
 		},
 	}
 
@@ -391,6 +410,26 @@ func TestMerge_MultiplePolicies_DeduplicatedAndSorted(t *testing.T) {
 		"/var/log/nginx/*.log",
 		"/var/log/syslog",
 	}, sub.ToStringMap()["include"])
+}
+
+func TestMerge_MultiplePolicies_WindowsCaseInsensitiveDeduplication(t *testing.T) {
+	p1, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
+		Id:      "win-1",
+		Include: []string{`C:\ProgramData\App\logs\app.log`},
+	})
+	require.NoError(t, err)
+
+	p2, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
+		Id:      "win-2",
+		Include: []string{`c:/programdata/app/logs/app.log`},
+	})
+	require.NoError(t, err)
+
+	merged, err := Merge(p1, p2)
+	require.NoError(t, err)
+	require.NotNil(t, merged)
+	assert.Len(t, merged.Include(), 1)
+	assert.Equal(t, `C:\ProgramData\App\logs\app.log`, merged.Include()[0])
 }
 
 func TestMerge_FailsFastOnInvalidPolicy(t *testing.T) {

@@ -100,6 +100,8 @@ var (
 	ErrDisallowedLogRoot = errors.New("include pattern is outside permitted OS log roots")
 	// ErrRelativePath is returned when an include pattern is not an absolute path.
 	ErrRelativePath = errors.New("include pattern must be an absolute path")
+	// ErrDuplicateIncludePattern is returned when an include pattern appears more than once in a policy.
+	ErrDuplicateIncludePattern = errors.New("duplicate include pattern")
 )
 
 // Policy represents a compiled, validated FileLogSourcePolicy ready for evaluation into Collector configuration.
@@ -153,10 +155,16 @@ func (p *Policy) Validate() error {
 	if len(p.proto.GetInclude()) == 0 {
 		return ErrMissingInclude
 	}
+	seen := make(map[string]bool, len(p.proto.GetInclude()))
 	for i, pattern := range p.proto.GetInclude() {
 		if err := validateIncludePattern(pattern); err != nil {
 			return fmt.Errorf("include[%d]: %w", i, err)
 		}
+		key := pathDedupeKey(pattern)
+		if seen[key] {
+			return fmt.Errorf("include[%d]: %w: %q", i, ErrDuplicateIncludePattern, pattern)
+		}
+		seen[key] = true
 	}
 	return nil
 }
@@ -243,9 +251,10 @@ func Merge(policies ...*Policy) (*Policy, error) {
 		if err := pol.Validate(); err != nil {
 			return nil, err
 		}
-		for _, inc := range pol.Include() {
-			if !seen[inc] {
-				seen[inc] = true
+		for _, inc := range pol.proto.GetInclude() {
+			key := pathDedupeKey(inc)
+			if !seen[key] {
+				seen[key] = true
 				mergedIncludes = append(mergedIncludes, inc)
 			}
 		}
@@ -363,4 +372,15 @@ func isDrivePathPrefix(normalizedPath string, subDir string) bool {
 
 func isAlpha(c byte) bool {
 	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+}
+
+// pathDedupeKey returns a canonical key for path comparison and deduplication.
+// For Windows paths (e.g. drive letter or %ENV%), paths are case-insensitive and
+// directory separators are normalized to '/'. For Linux/Unix paths, case is preserved
+// because the underlying filesystem is case-sensitive.
+func pathDedupeKey(pattern string) string {
+	if isWindowsAbsolute(pattern) {
+		return strings.ToLower(strings.ReplaceAll(pattern, "\\", "/"))
+	}
+	return pattern
 }

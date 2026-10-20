@@ -66,8 +66,8 @@ func TestPromOtelGCM_PrometheusCounter_NoCT(t *testing.T) {
 	}
 
 	// target --PromProto--> OpenTelemetry Collector (+MSTP) --OTLP--> GCM.
-	otelMSTPOTLPGCM := OtelGCMBackend{
-		Name:    "otel-mstp-otlp-gcm",
+	otelOTLP := OtelGCMBackend{
+		Name:    "otel-otlp",
 		Image:   "otel/opentelemetry-collector-contrib:0.163.1",
 		UseOTLP: true,
 		ExtraProcessors: map[string]string{
@@ -106,14 +106,14 @@ func TestPromOtelGCM_PrometheusCounter_NoCT(t *testing.T) {
 		// algorithm mentioned above.
 		Expect(c, 10, promForkGCM).
 		Expect(c, 10, otelGCM).
-		Expect(c, 10, otelMSTPOTLPGCM)
+		Expect(c, 10, otelOTLP)
 
 	c.Add(40)
 	pt.RecordScrape(interval).
 		Expect(c, 250, prom).
 		Expect(c, 50, promForkGCM).
 		Expect(c, 50, otelGCM).
-		Expect(c, 50, otelMSTPOTLPGCM)
+		Expect(c, 50, otelOTLP)
 
 	// Reset to 0 (simulating instrumentation resetting metric or restarting target).
 	counter.Reset()
@@ -122,14 +122,14 @@ func TestPromOtelGCM_PrometheusCounter_NoCT(t *testing.T) {
 		Expect(c, 0, prom).
 		Expect(c, 0, promForkGCM).
 		Expect(c, 0, otelGCM).
-		Expect(c, 0, otelMSTPOTLPGCM)
+		Expect(c, 0, otelOTLP)
 
 	c.Add(150)
 	pt.RecordScrape(interval).
 		Expect(c, 150, prom).
 		Expect(c, 150, promForkGCM).
 		Expect(c, 150, otelGCM).
-		Expect(c, 150, otelMSTPOTLPGCM)
+		Expect(c, 150, otelOTLP)
 
 	// Reset to 0 with addition.
 	counter.Reset()
@@ -139,21 +139,21 @@ func TestPromOtelGCM_PrometheusCounter_NoCT(t *testing.T) {
 		Expect(c, 20, prom).
 		Expect(c, 20, promForkGCM).
 		Expect(c, 20, otelGCM).
-		Expect(c, 20, otelMSTPOTLPGCM)
+		Expect(c, 20, otelOTLP)
 
 	c.Add(50)
 	pt.RecordScrape(interval).
 		Expect(c, 70, prom).
 		Expect(c, 70, promForkGCM).
 		Expect(c, 70, otelGCM).
-		Expect(c, 70, otelMSTPOTLPGCM)
+		Expect(c, 70, otelOTLP)
 
 	c.Add(10)
 	pt.RecordScrape(interval).
 		Expect(c, 80, prom).
 		Expect(c, 80, promForkGCM).
 		Expect(c, 80, otelGCM).
-		Expect(c, 80, otelMSTPOTLPGCM)
+		Expect(c, 80, otelOTLP)
 
 	// Tricky reset case, unnoticeable reset for Prometheus without created timestamp as well.
 	counter.Reset()
@@ -163,7 +163,7 @@ func TestPromOtelGCM_PrometheusCounter_NoCT(t *testing.T) {
 		Expect(c, 600, prom).
 		Expect(c, 600, promForkGCM).
 		Expect(c, 600, otelGCM).
-		Expect(c, 600, otelMSTPOTLPGCM)
+		Expect(c, 600, otelOTLP)
 
 	// Prometheus SDK used for replies actually emit CTs.
 	// Remove all CTs explicitly to test the logic for non-provided CTs in the Prometheus ecosystem.

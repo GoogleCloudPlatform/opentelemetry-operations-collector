@@ -29,7 +29,6 @@ import (
 // with a known CT limitation across the following ingestion flows:
 // * target --PromProto--> Prometheus (referencing, ideal, OSS behaviour).
 // * target --PromProto--> Prometheus GMP fork --GCM API--> GCM.
-// * target --PromProto--> OpenTelemetry Collector --GCM API--> GCM.
 // * target --PromProto--> OpenTelemetry Collector (+MSTP) --GCM API--> GCM.
 // * target --PromProto--> OpenTelemetry Collector (+MSTP) --OTLP--> GCM.
 //
@@ -55,20 +54,9 @@ func TestPromOtelGCM_PrometheusCounter_NoCT(t *testing.T) {
 		GCMSA: GCMServiceAccountOrFail(t),
 	}
 
-	// target --PromProto?--> OpenTelemetry Collector --GCM API--> GCM.
-	// For no-ct cases, this essentially uses GCM internal
-	// logic for "cannibalization" algorithm.
+	// target --PromProto--> OpenTelemetry Collector (+MSTP) --GCM API--> GCM.
 	otelGCM := OtelGCMBackend{
 		Name:  "otel-gcm",
-		Image: "otel/opentelemetry-collector-contrib:0.163.1",
-		GCMSA: GCMServiceAccountOrFail(t),
-	}
-
-	// target --PromProto--> OpenTelemetry Collector (+MSTP) --GCM API--> GCM.
-	// Similar to `otel-gcm` but we use a new metricstarttimeprocessor (MSTP) processor
-	// to adjust counter samples without CT.
-	otelMSTPGCM := OtelGCMBackend{
-		Name:  "otel-mstp-gcm",
 		Image: "otel/opentelemetry-collector-contrib:0.163.1",
 		ExtraProcessors: map[string]string{
 			"metricstarttime": `
@@ -118,7 +106,6 @@ func TestPromOtelGCM_PrometheusCounter_NoCT(t *testing.T) {
 		// algorithm mentioned above.
 		Expect(c, 10, promForkGCM).
 		Expect(c, 10, otelGCM).
-		Expect(c, 10, otelMSTPGCM).
 		Expect(c, 10, otelMSTPOTLPGCM)
 
 	c.Add(40)
@@ -126,7 +113,6 @@ func TestPromOtelGCM_PrometheusCounter_NoCT(t *testing.T) {
 		Expect(c, 250, prom).
 		Expect(c, 50, promForkGCM).
 		Expect(c, 50, otelGCM).
-		Expect(c, 50, otelMSTPGCM).
 		Expect(c, 50, otelMSTPOTLPGCM)
 
 	// Reset to 0 (simulating instrumentation resetting metric or restarting target).
@@ -136,21 +122,13 @@ func TestPromOtelGCM_PrometheusCounter_NoCT(t *testing.T) {
 		Expect(c, 0, prom).
 		Expect(c, 0, promForkGCM).
 		Expect(c, 0, otelGCM).
-		Expect(c, 0, otelMSTPGCM).
 		Expect(c, 0, otelMSTPOTLPGCM)
 
 	c.Add(150)
 	pt.RecordScrape(interval).
 		Expect(c, 150, prom).
 		Expect(c, 150, promForkGCM).
-		// NOTE(bwplotka): This is where Otel->GCM behaviour goes even more off vs
-		// Prometheus and Prometheus fork. The reason is the "broken" true reset algorithm
-		// in the prometheusreceiver, something we try to fix in MSTP
-		// (https://github.com/open-telemetry/opentelemetry-collector-contrib/pull/38594).
-		// TODO(bwplotka): Change GCP docs to recommended MSTP configuration once released (b/389130459).
-		Expect(c, -50, otelGCM).
-		// New MSTP flow is fine.
-		Expect(c, 150, otelMSTPGCM).
+		Expect(c, 150, otelGCM).
 		Expect(c, 150, otelMSTPOTLPGCM)
 
 	// Reset to 0 with addition.
@@ -160,24 +138,21 @@ func TestPromOtelGCM_PrometheusCounter_NoCT(t *testing.T) {
 	pt.RecordScrape(interval).
 		Expect(c, 20, prom).
 		Expect(c, 20, promForkGCM).
-		Expect(c, 20, otelGCM). // Broken (b/389130459).
-		Expect(c, 20, otelMSTPGCM).
+		Expect(c, 20, otelGCM).
 		Expect(c, 20, otelMSTPOTLPGCM)
 
 	c.Add(50)
 	pt.RecordScrape(interval).
 		Expect(c, 70, prom).
 		Expect(c, 70, promForkGCM).
-		Expect(c, -130, otelGCM). // Broken (b/389130459).
-		Expect(c, 70, otelMSTPGCM).
+		Expect(c, 70, otelGCM).
 		Expect(c, 70, otelMSTPOTLPGCM)
 
 	c.Add(10)
 	pt.RecordScrape(interval).
 		Expect(c, 80, prom).
 		Expect(c, 80, promForkGCM).
-		Expect(c, -120, otelGCM). // Broken (b/389130459).
-		Expect(c, 80, otelMSTPGCM).
+		Expect(c, 80, otelGCM).
 		Expect(c, 80, otelMSTPOTLPGCM)
 
 	// Tricky reset case, unnoticeable reset for Prometheus without created timestamp as well.
@@ -187,8 +162,7 @@ func TestPromOtelGCM_PrometheusCounter_NoCT(t *testing.T) {
 	pt.RecordScrape(interval).
 		Expect(c, 600, prom).
 		Expect(c, 600, promForkGCM).
-		Expect(c, 400, otelGCM). // Broken (b/389130459).
-		Expect(c, 600, otelMSTPGCM).
+		Expect(c, 600, otelGCM).
 		Expect(c, 600, otelMSTPOTLPGCM)
 
 	// Prometheus SDK used for replies actually emit CTs.

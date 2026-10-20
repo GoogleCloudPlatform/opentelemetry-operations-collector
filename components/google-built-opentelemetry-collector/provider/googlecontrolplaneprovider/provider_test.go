@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider/policies/selfmetrics"
 	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
@@ -805,4 +806,141 @@ func TestRetrieve_FileLogSourcePolicy_WithInvalidPolicy_FaultIsolation(t *testin
 	assert.Equal(t, "source", (*invalidEntry).ContextMap()["gcp.policy.class"])
 
 	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestPolicyHotReload_SourcePolicyTriggersWatcher(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	p := createProvider()
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	changeEvents := make(chan *confmap.ChangeEvent, 5)
+	watcher := func(e *confmap.ChangeEvent) {
+		changeEvents <- e
+	}
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", watcher)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+	assert.False(t, conf.IsSet("receivers::filelog"))
+
+	// Update active policy set with a FileLogSourcePolicy.
+	sourcePolicy := &policyv1alpha1.FileLogSourcePolicy{
+		Id:      "app-source",
+		Include: []string{"/var/log/app.log"},
+	}
+	ps, err := googlepolicy.MakePolicySetFromProtos("test-set", "rev-source-1", []proto.Message{sourcePolicy})
+	require.NoError(t, err)
+
+	googlepolicy.SetActivePolicySet(ps)
+
+	select {
+	case e := <-changeEvents:
+		assert.NotNil(t, e)
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for confmap.WatcherFunc to be triggered on FileLogSourcePolicy update")
+	}
+
+	// Verify that calling Retrieve() after reload returns the updated config with receivers::filelog.
+	retUpdated, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", watcher)
+	require.NoError(t, err)
+	confUpdated, err := retUpdated.AsConf()
+	require.NoError(t, err)
+	assert.True(t, confUpdated.IsSet("receivers::filelog"))
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestPolicyHotReload_FilterPolicyDoesNotTriggerWatcher(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	p := createProvider()
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	changeEvents := make(chan *confmap.ChangeEvent, 5)
+	watcher := func(e *confmap.ChangeEvent) {
+		changeEvents <- e
+	}
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", watcher)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	// Update active policy set with only a LogFilterPolicy (transformation policy).
+	filterPolicy := &policyv1alpha1.LogFilterPolicy{
+		Id:     "drop-debug",
+		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+		Matches: []*policyv1alpha1.LogMatcher{
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_RecordField{
+						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
+					},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Glob{
+					Glob: "DEBUG*",
+				},
+			},
+		},
+	}
+	ps, err := googlepolicy.MakePolicySetFromProtos("test-set", "rev-filter-1", []proto.Message{filterPolicy})
+	require.NoError(t, err)
+
+	googlepolicy.SetActivePolicySet(ps)
+
+	// Confmap should be unchanged, so watcher should NOT be triggered.
+	select {
+	case e := <-changeEvents:
+		t.Fatalf("unexpected confmap.WatcherFunc triggered on filter-only update: %+v", e)
+	case <-time.After(200 * time.Millisecond):
+		// Expected: no event.
+	}
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestPolicyHotReload_ProviderShutdownCleansUpWatcher(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	p := createProvider()
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	changeEvents := make(chan *confmap.ChangeEvent, 5)
+	watcher := func(e *confmap.ChangeEvent) {
+		changeEvents <- e
+	}
+
+	_, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", watcher)
+	require.NoError(t, err)
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+
+	// Updating policy set after shutdown must not trigger events or panic.
+	sourcePolicy := &policyv1alpha1.FileLogSourcePolicy{
+		Id:      "post-shutdown-source",
+		Include: []string{"/var/log/post.log"},
+	}
+	ps, err := googlepolicy.MakePolicySetFromProtos("test-set", "rev-shutdown", []proto.Message{sourcePolicy})
+	require.NoError(t, err)
+
+	googlepolicy.SetActivePolicySet(ps)
+
+	select {
+	case e := <-changeEvents:
+		t.Fatalf("unexpected confmap.WatcherFunc triggered after provider shutdown: %+v", e)
+	case <-time.After(200 * time.Millisecond):
+		// Expected: no event.
+	}
 }

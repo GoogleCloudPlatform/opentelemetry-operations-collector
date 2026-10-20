@@ -19,7 +19,6 @@
 package logtransform
 
 import (
-	"encoding/hex"
 	"errors"
 	"fmt"
 
@@ -61,6 +60,8 @@ var (
 	ErrMissingTarget = errors.New("log add action must specify a target field selector")
 	// ErrMissingValue is returned when an action does not specify a valid value.
 	ErrMissingValue = matcher.ErrMissingValue
+	// ErrImmutableField is returned when an action targets a read-only field (such as trace_id or span_id).
+	ErrImmutableField = errors.New("cannot mutate read-only field")
 )
 
 type compiledAction func(ctx googlepolicy.LogContext) bool
@@ -207,7 +208,7 @@ func compileAdd(a *policyv1alpha1.LogAddAction) (compiledAction, error) {
 				return false
 			}
 			body := ctx.Record.Body()
-			if body.Type() == pcommon.ValueTypeEmpty {
+			if !bodyExists(body) {
 				body.SetEmptyMap()
 			} else if body.Type() != pcommon.ValueTypeMap {
 				return false
@@ -274,37 +275,9 @@ func compileRecordFieldAdd(field policyv1alpha1.LogRecordField, val *policyv1alp
 			return true
 		}, nil
 
-	case policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID:
-		tid, err := decodeTraceID(val)
-		if err != nil {
-			return nil, err
-		}
-		return func(ctx googlepolicy.LogContext) bool {
-			if ctx.Record == (plog.LogRecord{}) {
-				return false
-			}
-			if !upsert && !ctx.Record.TraceID().IsEmpty() {
-				return false
-			}
-			ctx.Record.SetTraceID(tid)
-			return true
-		}, nil
-
-	case policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID:
-		sid, err := decodeSpanID(val)
-		if err != nil {
-			return nil, err
-		}
-		return func(ctx googlepolicy.LogContext) bool {
-			if ctx.Record == (plog.LogRecord{}) {
-				return false
-			}
-			if !upsert && !ctx.Record.SpanID().IsEmpty() {
-				return false
-			}
-			ctx.Record.SetSpanID(sid)
-			return true
-		}, nil
+	case policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID,
+		policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID:
+		return nil, fmt.Errorf("%w: %s", ErrImmutableField, field)
 
 	default:
 		return nil, errors.New("log record field cannot be unspecified")
@@ -345,45 +318,4 @@ func requireSeverityNumber(val *policyv1alpha1.Value) (plog.SeverityNumber, erro
 		return plog.SeverityNumberUnspecified, fmt.Errorf("log record field SEVERITY_NUMBER must be in range [1, 24], got %d", iv.IntValue)
 	}
 	return plog.SeverityNumber(iv.IntValue), nil
-}
-
-func decodeTraceID(val *policyv1alpha1.Value) (pcommon.TraceID, error) {
-	raw, err := decodeFixedID(val, 16, "log record field TRACE_ID requires a 32-character hex string or 16-byte bytes value")
-	if err != nil {
-		return pcommon.TraceID{}, err
-	}
-	var tid pcommon.TraceID
-	copy(tid[:], raw)
-	return tid, nil
-}
-
-func decodeSpanID(val *policyv1alpha1.Value) (pcommon.SpanID, error) {
-	raw, err := decodeFixedID(val, 8, "log record field SPAN_ID requires a 16-character hex string or 8-byte bytes value")
-	if err != nil {
-		return pcommon.SpanID{}, err
-	}
-	var sid pcommon.SpanID
-	copy(sid[:], raw)
-	return sid, nil
-}
-
-func decodeFixedID(val *policyv1alpha1.Value, byteLen int, errMsg string) ([]byte, error) {
-	if val == nil || val.GetValue() == nil {
-		return nil, ErrMissingValue
-	}
-	switch v := val.GetValue().(type) {
-	case *policyv1alpha1.Value_StringValue:
-		b, err := hex.DecodeString(v.StringValue)
-		if err != nil || len(b) != byteLen {
-			return nil, errors.New(errMsg)
-		}
-		return b, nil
-	case *policyv1alpha1.Value_BytesValue:
-		if len(v.BytesValue) != byteLen {
-			return nil, errors.New(errMsg)
-		}
-		return v.BytesValue, nil
-	default:
-		return nil, errors.New(errMsg)
-	}
 }

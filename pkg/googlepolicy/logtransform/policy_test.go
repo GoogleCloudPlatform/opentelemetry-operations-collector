@@ -394,94 +394,22 @@ func TestPolicyValidationErrors(t *testing.T) {
 			errSubstr: "must be in range [1, 24], got 25",
 		},
 		{
-			name: "add TRACE_ID missing value",
+			name: "add TRACE_ID immutable field",
 			proto: &policyv1alpha1.LogTransformPolicy{
-				Id:      "p-traceid-nil",
+				Id:      "p-traceid-immutable",
 				Matches: []*policyv1alpha1.LogMatcher{validMatcher},
-				Action:  addAction(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID), nil, false),
+				Action:  addAction(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID), strVal("0102030405060708090a0b0c0d0e0f10"), false),
 			},
-			errExpect: ErrMissingValue,
+			errExpect: ErrImmutableField,
 		},
 		{
-			name: "add TRACE_ID invalid hex string",
+			name: "add SPAN_ID immutable field",
 			proto: &policyv1alpha1.LogTransformPolicy{
-				Id:      "p-traceid-bad-hex",
+				Id:      "p-spanid-immutable",
 				Matches: []*policyv1alpha1.LogMatcher{validMatcher},
-				Action:  addAction(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID), strVal("zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"), false),
+				Action:  addAction(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID), strVal("0102030405060708"), false),
 			},
-			errSubstr: "TRACE_ID requires a 32-character hex string or 16-byte bytes value",
-		},
-		{
-			name: "add TRACE_ID wrong length hex string",
-			proto: &policyv1alpha1.LogTransformPolicy{
-				Id:      "p-traceid-short-hex",
-				Matches: []*policyv1alpha1.LogMatcher{validMatcher},
-				Action:  addAction(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID), strVal("01020304"), false),
-			},
-			errSubstr: "TRACE_ID requires a 32-character hex string or 16-byte bytes value",
-		},
-		{
-			name: "add TRACE_ID wrong length bytes",
-			proto: &policyv1alpha1.LogTransformPolicy{
-				Id:      "p-traceid-short-bytes",
-				Matches: []*policyv1alpha1.LogMatcher{validMatcher},
-				Action:  addAction(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID), bytesVal([]byte{1, 2, 3}), false),
-			},
-			errSubstr: "TRACE_ID requires a 32-character hex string or 16-byte bytes value",
-		},
-		{
-			name: "add TRACE_ID wrong value type (int)",
-			proto: &policyv1alpha1.LogTransformPolicy{
-				Id:      "p-traceid-int",
-				Matches: []*policyv1alpha1.LogMatcher{validMatcher},
-				Action:  addAction(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID), intVal(123), false),
-			},
-			errSubstr: "TRACE_ID requires a 32-character hex string or 16-byte bytes value",
-		},
-		{
-			name: "add SPAN_ID missing value",
-			proto: &policyv1alpha1.LogTransformPolicy{
-				Id:      "p-spanid-nil",
-				Matches: []*policyv1alpha1.LogMatcher{validMatcher},
-				Action:  addAction(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID), nil, false),
-			},
-			errExpect: ErrMissingValue,
-		},
-		{
-			name: "add SPAN_ID invalid hex string",
-			proto: &policyv1alpha1.LogTransformPolicy{
-				Id:      "p-spanid-bad-hex",
-				Matches: []*policyv1alpha1.LogMatcher{validMatcher},
-				Action:  addAction(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID), strVal("zzzzzzzzzzzzzzzz"), false),
-			},
-			errSubstr: "SPAN_ID requires a 16-character hex string or 8-byte bytes value",
-		},
-		{
-			name: "add SPAN_ID wrong length hex string",
-			proto: &policyv1alpha1.LogTransformPolicy{
-				Id:      "p-spanid-short-hex",
-				Matches: []*policyv1alpha1.LogMatcher{validMatcher},
-				Action:  addAction(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID), strVal("0102"), false),
-			},
-			errSubstr: "SPAN_ID requires a 16-character hex string or 8-byte bytes value",
-		},
-		{
-			name: "add SPAN_ID wrong length bytes",
-			proto: &policyv1alpha1.LogTransformPolicy{
-				Id:      "p-spanid-short-bytes",
-				Matches: []*policyv1alpha1.LogMatcher{validMatcher},
-				Action:  addAction(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID), bytesVal([]byte{1, 2, 3}), false),
-			},
-			errSubstr: "SPAN_ID requires a 16-character hex string or 8-byte bytes value",
-		},
-		{
-			name: "add SPAN_ID wrong value type (int)",
-			proto: &policyv1alpha1.LogTransformPolicy{
-				Id:      "p-spanid-int",
-				Matches: []*policyv1alpha1.LogMatcher{validMatcher},
-				Action:  addAction(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID), intVal(123), false),
-			},
-			errSubstr: "SPAN_ID requires a 16-character hex string or 8-byte bytes value",
+			errExpect: ErrImmutableField,
 		},
 	}
 
@@ -855,6 +783,24 @@ func TestTransformLogAttributes(t *testing.T) {
 		assert.Equal(t, "evt-initial", val.Str())
 	})
 
+	t.Run("body_field on empty string body initializes map", func(t *testing.T) {
+		lr := plog.NewLogRecord()
+		lr.Body().SetStr("")
+		ctx := googlepolicy.LogContext{Record: lr}
+
+		p, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:      "body-field-empty-str",
+			Matches: []*policyv1alpha1.LogMatcher{alwaysTrueMatcher()},
+			Action:  addAction(logTargetBodyField("event_id"), strVal("evt-from-empty-str"), true),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformModified, p.TransformLog(ctx))
+		assert.Equal(t, pcommon.ValueTypeMap, lr.Body().Type())
+		val, ok := lr.Body().Map().Get("event_id")
+		require.True(t, ok)
+		assert.Equal(t, "evt-from-empty-str", val.Str())
+	})
+
 	t.Run("body_field on non-map body fails open", func(t *testing.T) {
 		lr := plog.NewLogRecord()
 		lr.Body().SetStr("plain text log")
@@ -982,76 +928,6 @@ func TestTransformLogRecordFields(t *testing.T) {
 		assert.Equal(t, googlepolicy.TransformModified, polUpsert.TransformLog(ctx))
 		assert.Equal(t, plog.SeverityNumberError, lr.SeverityNumber())
 	})
-
-	t.Run("LOG_RECORD_FIELD_TRACE_ID hex string and bytes with upsert false vs true", func(t *testing.T) {
-		_, sl, rl := newTestLogBundle()
-		tid1Bytes := [16]byte{0xaa, 0xbb, 0xcc, 0xdd, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0x00, 0xab, 0xcd}
-		tid2Bytes := [16]byte{16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1}
-
-		polHexNoUpsert, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
-			Id:      "trace-id-hex-no-upsert",
-			Matches: []*policyv1alpha1.LogMatcher{alwaysTrueMatcher()},
-			Action:  addAction(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID), strVal("aabbccdd11223344556677889900abcd"), false),
-		})
-		require.NoError(t, err)
-
-		polBytesUpsert, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
-			Id:      "trace-id-bytes-upsert",
-			Matches: []*policyv1alpha1.LogMatcher{alwaysTrueMatcher()},
-			Action:  addAction(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID), bytesVal(tid2Bytes[:]), true),
-		})
-		require.NoError(t, err)
-
-		lr := plog.NewLogRecord()
-		ctx := logContext(lr, sl, rl)
-
-		// Empty TraceID -> upsert: false sets it from 32-char hex string.
-		assert.Equal(t, googlepolicy.TransformModified, polHexNoUpsert.TransformLog(ctx))
-		assert.Equal(t, pcommon.TraceID(tid1Bytes), lr.TraceID())
-
-		// Non-empty TraceID -> upsert: false does not overwrite.
-		assert.Equal(t, googlepolicy.TransformNoMatch, polHexNoUpsert.TransformLog(ctx))
-		assert.Equal(t, pcommon.TraceID(tid1Bytes), lr.TraceID())
-
-		// Upsert: true overwrites with 16-byte bytes_value.
-		assert.Equal(t, googlepolicy.TransformModified, polBytesUpsert.TransformLog(ctx))
-		assert.Equal(t, pcommon.TraceID(tid2Bytes), lr.TraceID())
-	})
-
-	t.Run("LOG_RECORD_FIELD_SPAN_ID hex string and bytes with upsert false vs true", func(t *testing.T) {
-		_, sl, rl := newTestLogBundle()
-		sid1Bytes := [8]byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88}
-		sid2Bytes := [8]byte{8, 7, 6, 5, 4, 3, 2, 1}
-
-		polHexNoUpsert, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
-			Id:      "span-id-hex-no-upsert",
-			Matches: []*policyv1alpha1.LogMatcher{alwaysTrueMatcher()},
-			Action:  addAction(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID), strVal("1122334455667788"), false),
-		})
-		require.NoError(t, err)
-
-		polBytesUpsert, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
-			Id:      "span-id-bytes-upsert",
-			Matches: []*policyv1alpha1.LogMatcher{alwaysTrueMatcher()},
-			Action:  addAction(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID), bytesVal(sid2Bytes[:]), true),
-		})
-		require.NoError(t, err)
-
-		lr := plog.NewLogRecord()
-		ctx := logContext(lr, sl, rl)
-
-		// Empty SpanID -> upsert: false sets it from 16-char hex string.
-		assert.Equal(t, googlepolicy.TransformModified, polHexNoUpsert.TransformLog(ctx))
-		assert.Equal(t, pcommon.SpanID(sid1Bytes), lr.SpanID())
-
-		// Non-empty SpanID -> upsert: false does not overwrite.
-		assert.Equal(t, googlepolicy.TransformNoMatch, polHexNoUpsert.TransformLog(ctx))
-		assert.Equal(t, pcommon.SpanID(sid1Bytes), lr.SpanID())
-
-		// Upsert: true overwrites with 8-byte bytes_value.
-		assert.Equal(t, googlepolicy.TransformModified, polBytesUpsert.TransformLog(ctx))
-		assert.Equal(t, pcommon.SpanID(sid2Bytes), lr.SpanID())
-	})
 }
 
 func TestTransformLogMultipleMatchersAndSequentialPolicies(t *testing.T) {
@@ -1144,14 +1020,6 @@ func TestTransformLogZeroContextGuards(t *testing.T) {
 		{
 			name:   "record_field SEVERITY_NUMBER",
 			action: addAction(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER), intVal(9), true),
-		},
-		{
-			name:   "record_field TRACE_ID",
-			action: addAction(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID), strVal("0102030405060708090a0b0c0d0e0f10"), true),
-		},
-		{
-			name:   "record_field SPAN_ID",
-			action: addAction(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID), strVal("0102030405060708"), true),
 		},
 	}
 

@@ -86,14 +86,14 @@ func (e *Evaluator) EvalLog(ctx LogContext) bool {
 // evalLogFilters evaluates all active LogFilterPolicies against ctx.
 // Returns true if the record matches at least one ACTION_DROP policy and zero ACTION_KEEP policies.
 func (e *Evaluator) evalLogFilters(ctx LogContext) bool {
-	var hasDrop, hasKeep bool
+	var hasDrop bool
 	for _, p := range e.logFilterPolicies {
 		switch p.FilterLog(ctx) {
 		case googlepolicy.FilterKeep:
-			hasKeep = true
+			return false
 		case googlepolicy.FilterDrop:
 			hasDrop = true
 		}
 	}
-	return hasDrop && !hasKeep
+	return hasDrop
 }

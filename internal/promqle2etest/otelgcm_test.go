@@ -60,7 +60,7 @@ func TestPromOtelGCM_PrometheusCounter_NoCT(t *testing.T) {
 	// logic for "cannibalization" algorithm.
 	otelGCM := OtelGCMBackend{
 		Name:  "otel-gcm",
-		Image: "otel/opentelemetry-collector-contrib:0.123.0",
+		Image: "otel/opentelemetry-collector-contrib:0.163.1",
 		GCMSA: GCMServiceAccountOrFail(t),
 	}
 
@@ -69,13 +69,10 @@ func TestPromOtelGCM_PrometheusCounter_NoCT(t *testing.T) {
 	// to adjust counter samples without CT.
 	otelMSTPGCM := OtelGCMBackend{
 		Name:  "otel-mstp-gcm",
-		Image: "otel/opentelemetry-collector-contrib:0.131.0",
+		Image: "otel/opentelemetry-collector-contrib:0.163.1",
 		ExtraProcessors: map[string]string{
 			"metricstarttime": `
     strategy: subtract_initial_point`,
-		},
-		ExtraFeatureGates: []string{
-			"receiver.prometheusreceiver.RemoveStartTimeAdjustment",
 		},
 		GCMSA: GCMServiceAccountOrFail(t),
 	}
@@ -83,14 +80,11 @@ func TestPromOtelGCM_PrometheusCounter_NoCT(t *testing.T) {
 	// target --PromProto--> OpenTelemetry Collector (+MSTP) --OTLP--> GCM.
 	otelMSTPOTLPGCM := OtelGCMBackend{
 		Name:    "otel-mstp-otlp-gcm",
-		Image:   "otel/opentelemetry-collector-contrib:0.131.0",
+		Image:   "otel/opentelemetry-collector-contrib:0.163.1",
 		UseOTLP: true,
 		ExtraProcessors: map[string]string{
 			"metricstarttime": `
     strategy: subtract_initial_point`,
-		},
-		ExtraFeatureGates: []string{
-			"receiver.prometheusreceiver.RemoveStartTimeAdjustment",
 		},
 		GCMSA: GCMServiceAccountOrFail(t),
 	}

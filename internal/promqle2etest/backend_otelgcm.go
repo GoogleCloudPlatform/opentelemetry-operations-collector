@@ -99,14 +99,11 @@ exporters:
 
 	// NOTE(bwplotka): Starting from https://cloud.google.com/stackdriver/docs/managed-prometheus/setup-otel#run-off-gcp
 	// but with extra things to make this actually work (TODO: update the docs)
-	// * report_extra_scrape_metrics for compatibility.
 	// * Telemetry in Prometheus format.
 	// * GCM exporter: extra_metrics_config: enable_target_info: false and enable_scope_info: false
-	// * Also: feature gate for native histograms in flags
 	config := fmt.Sprintf(`
 receivers:
   prometheus:
-    report_extra_scrape_metrics: true
     config:
       scrape_configs:
       - job_name: 'test'
@@ -195,8 +192,7 @@ service:%s
 
 	args := map[string]string{
 		"--config": filepath.Join(f.Dir(), "config.yml"),
-		"--feature-gates=receiver.prometheusreceiver.EnableNativeHistograms": "",
-		"--feature-gates=exporter.googlemanagedprometheus.intToDouble":       "",
+		"--feature-gates=exporter.googlemanagedprometheus.intToDouble": "",
 	}
 	for _, fg := range extraFeatureGates {
 		args["--feature-gates="+fg] = ""
@@ -252,7 +248,7 @@ func (o OtelGCMBackend) StartAndWaitReady(t testing.TB, env e2e.Environment) pro
 	if o.UseOTLP {
 		// NOTE(bwplotka): OTLP ingestion in GCM attaches instrumentation scope attributes as metric labels by default.
 		externalLabels["otel_scope_name"] = "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver"
-		externalLabels["otel_scope_version"] = "0.131.0"
+		externalLabels["otel_scope_version"] = "0.163.1"
 	}
 	return promqle2e.NewRunningScrapeReplayBasedBackend(
 		replayer,

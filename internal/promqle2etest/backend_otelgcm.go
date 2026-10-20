@@ -37,9 +37,10 @@ var _ promqle2e.Backend = OtelGCMBackend{}
 // metrics and pushing to GCM API for consumption.
 // This follows https://cloud.google.com/stackdriver/docs/managed-prometheus/setup-otel.
 type OtelGCMBackend struct {
-	Image string
-	Name  string
-	GCMSA []byte
+	Image   string
+	Name    string
+	GCMSA   []byte
+	UseOTLP bool
 
 	ExtraProcessors   map[string]string
 	ExtraFeatureGates []string
@@ -50,7 +51,7 @@ func (o OtelGCMBackend) Ref() string {
 }
 
 // newOtelCollector creates a new OpenTelemetry Collector runnable.
-func newOtelCollector(env e2e.Environment, name string, image string, scrapeTargetAddress string, cluster, location, project string, gcmSA []byte, extraProcessors map[string]string, extraFeatureGates []string) *e2emon.InstrumentedRunnable {
+func newOtelCollector(env e2e.Environment, name string, image string, scrapeTargetAddress string, cluster, location, project string, gcmSA []byte, useOTLP bool, extraProcessors map[string]string, extraFeatureGates []string) *e2emon.InstrumentedRunnable {
 	ports := map[string]int{"http": 9090}
 
 	f := env.Runnable(name).WithPorts(ports).Future()
@@ -63,6 +64,37 @@ func newOtelCollector(env e2e.Environment, name string, image string, scrapeTarg
 `, proc, config)
 			extraProcessorsEnable += fmt.Sprintf(", %s", proc)
 		}
+	}
+
+	exporterName := "googlemanagedprometheus"
+	extensionsSection := ""
+	serviceExtensions := ""
+	exportersSection := fmt.Sprintf(`
+# Note that the googlemanagedprometheus exporter block is intentionally blank
+exporters:
+  googlemanagedprometheus:
+    project: "%s"
+    metric:
+      # TODO(bwplotka): Update docs? Change defaults? Those metrics are a bad idea to include (IMO).
+      # We are working in Prometheus OSS to slowly promote more resource attr as labels (if not all one day).
+      extra_metrics_config:
+        enable_target_info: false
+        enable_scope_info: false`, project)
+
+	if useOTLP {
+		exporterName = "otlp"
+		extensionsSection = `
+extensions:
+  googleclientauth:
+`
+		serviceExtensions = `
+  extensions: [googleclientauth]`
+		exportersSection = `
+exporters:
+  otlp:
+    endpoint: telemetry.googleapis.com:443
+    auth:
+      authenticator: googleclientauth`
 	}
 
 	// NOTE(bwplotka): Starting from https://cloud.google.com/stackdriver/docs/managed-prometheus/setup-otel#run-off-gcp
@@ -95,6 +127,9 @@ processors:
       value: "%s"
       action: upsert
     - key: "location"
+      value: "%s"
+      action: upsert
+    - key: "gcp.project_id"
       value: "%s"
       action: upsert
 
@@ -130,24 +165,15 @@ processors:
     limit_percentage: 65
     spike_limit_percentage: 20
   %s
+%s
+%s
 
-# Note that the googlemanagedprometheus exporter block is intentionally blank
-exporters:
-  googlemanagedprometheus:
-    project: "%s"
-    metric:
-      # TODO(bwplotka): Update docs? Change defaults? Those metrics are a bad idea to include (IMO).
-      # We are working in Prometheus OSS to slowly promote more resource attr as labels (if not all one day).
-      extra_metrics_config:
-        enable_target_info: false
-        enable_scope_info: false
-
-service:
+service:%s
   pipelines:
     metrics:
       receivers: [prometheus]
       processors: [batch, memory_limiter, resource, transform%s]
-      exporters: [googlemanagedprometheus]
+      exporters: [%s]
   telemetry:
     # Internal collector metrics for debugging.
     # https://opentelemetry.io/docs/collector/internal-telemetry/#configure-internal-metrics
@@ -158,7 +184,7 @@ service:
               prometheus:
                 host: '0.0.0.0'
                 port: 9090
-`, scrapeTargetAddress, name, cluster, location, extraProcessorsConfigs, project, extraProcessorsEnable)
+`, scrapeTargetAddress, name, cluster, location, project, extraProcessorsConfigs, extensionsSection, exportersSection, serviceExtensions, extraProcessorsEnable, exporterName)
 	if err := os.WriteFile(filepath.Join(f.Dir(), "config.yml"), []byte(config), 0600); err != nil {
 		return e2emon.AsInstrumented(e2e.NewFailedRunnable(name, fmt.Errorf("create otel config failed: %w", err)), "http")
 	}
@@ -209,22 +235,28 @@ func (o OtelGCMBackend) StartAndWaitReady(t testing.TB, env e2e.Environment) pro
 
 	replayer := promqle2e.StartIngestByScrapeReplayer(t, env)
 
-	otelCollector := newOtelCollector(env, o.Name, o.Image, replayer.Endpoint(env), cluster, location, creds.ProjectID, o.GCMSA, o.ExtraProcessors, o.ExtraFeatureGates)
+	otelCollector := newOtelCollector(env, o.Name, o.Image, replayer.Endpoint(env), cluster, location, creds.ProjectID, o.GCMSA, o.UseOTLP, o.ExtraProcessors, o.ExtraFeatureGates)
 	if err := e2e.StartAndWaitReady(otelCollector); err != nil {
 		t.Fatal(err)
 	}
+	externalLabels := map[string]string{
+		"cluster":    cluster,
+		"location":   location,
+		"project_id": creds.ProjectID,
+		"collector":  o.Name,
+		"job":        "test",
+		// TODO(bwplotka): Label drop this properly. Somehow metric relabel instance
+		// labeldrop is not enough. Something with service.instance.id?
+		"instance": replayer.Endpoint(env),
+	}
+	if o.UseOTLP {
+		// NOTE(bwplotka): OTLP ingestion in GCM attaches instrumentation scope attributes as metric labels by default.
+		externalLabels["otel_scope_name"] = "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver"
+		externalLabels["otel_scope_version"] = "0.131.0"
+	}
 	return promqle2e.NewRunningScrapeReplayBasedBackend(
 		replayer,
-		map[string]string{
-			"cluster":    cluster,
-			"location":   location,
-			"project_id": creds.ProjectID,
-			"collector":  o.Name,
-			"job":        "test",
-			// TODO(bwplotka): Label drop this properly. Somehow metric relabel instance
-			// labeldrop is not enough. Something with service.instance.id?
-			"instance": replayer.Endpoint(env),
-		},
+		externalLabels,
 		v1.NewAPI(cl),
 	)
 }

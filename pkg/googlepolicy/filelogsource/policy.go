@@ -32,7 +32,11 @@ import (
 )
 
 // PolicyType is the registered policy type identifier for file log source policies.
-const PolicyType = "file_log_source"
+const (
+	PolicyType        = "file_log_source"
+	DefaultReceiverID = "filelog"
+	DefaultPipelineID = "logs/filelog"
+)
 
 // defaultExcludePatterns contains the built-in exclude patterns for compressed binary archives.
 var defaultExcludePatterns = []string{
@@ -67,6 +71,7 @@ var forbiddenPrefixes = []string{
 // driver loads a FileLogSourcePolicy from either shape it can arrive in: the proto
 // a control plane sends, or the map an authored config decodes to.
 var driver = googlepolicy.ProtoDriver[*policyv1alpha1.FileLogSourcePolicy]{
+	Class: googlepolicy.PolicyClassSource,
 	New: func(pb *policyv1alpha1.FileLogSourcePolicy) (googlepolicy.Policy, error) {
 		return NewPolicyFromProto(pb)
 	},
@@ -102,7 +107,10 @@ type Policy struct {
 	proto *policyv1alpha1.FileLogSourcePolicy
 }
 
-var _ googlepolicy.SourcePolicy = (*Policy)(nil)
+var (
+	_ googlepolicy.SourcePolicy               = (*Policy)(nil)
+	_ googlepolicy.ConsolidatableSourcePolicy = (*Policy)(nil)
+)
 
 // NewPolicyFromProto validates and compiles a FileLogSourcePolicy protobuf into a Policy.
 func NewPolicyFromProto(pb *policyv1alpha1.FileLogSourcePolicy) (*Policy, error) {
@@ -159,10 +167,9 @@ func (p *Policy) Evaluate(_ context.Context) (*confmap.Conf, error) {
 		return nil, fmt.Errorf("policy %q failed validation: %w", p.PolicyName(), err)
 	}
 
-	receiverKey := fmt.Sprintf("filelog/%s", sanitizeID(p.PolicyName()))
 	cfg := map[string]any{
 		"receivers": map[string]any{
-			receiverKey: map[string]any{
+			DefaultReceiverID: map[string]any{
 				"include":           slices.Clone(p.proto.GetInclude()),
 				"exclude":           slices.Clone(defaultExcludePatterns),
 				"include_file_path": true,
@@ -175,9 +182,6 @@ func (p *Policy) Evaluate(_ context.Context) (*confmap.Conf, error) {
 // LogsPipelines constructs the logs pipeline connecting this policy's filelog receiver
 // through the specified processors to the exporters.
 func (p *Policy) LogsPipelines(preExportProcessors []component.ID, exporters []component.ID, _ []component.ID) (*confmap.Conf, error) {
-	pipeKey := fmt.Sprintf("logs/filelog_%s", sanitizeID(p.PolicyName()))
-	receiverID := fmt.Sprintf("filelog/%s", sanitizeID(p.PolicyName()))
-
 	procStrs := make([]string, 0, len(preExportProcessors))
 	for _, proc := range preExportProcessors {
 		procStrs = append(procStrs, proc.String())
@@ -191,8 +195,8 @@ func (p *Policy) LogsPipelines(preExportProcessors []component.ID, exporters []c
 	cfg := map[string]any{
 		"service": map[string]any{
 			"pipelines": map[string]any{
-				pipeKey: map[string]any{
-					"receivers":  []string{receiverID},
+				DefaultPipelineID: map[string]any{
+					"receivers":  []string{DefaultReceiverID},
 					"processors": procStrs,
 					"exporters":  expStrs,
 				},
@@ -210,6 +214,64 @@ func (p *Policy) MetricsPipelines([]component.ID, []component.ID, []component.ID
 // TracesPipelines returns nil because FileLogSourcePolicy only handles the logs signal.
 func (p *Policy) TracesPipelines([]component.ID, []component.ID, []component.ID) (*confmap.Conf, error) {
 	return nil, nil
+}
+
+// Merge consolidates multiple FileLogSourcePolicies into a single Policy whose
+// include paths are the deduplicated, sorted set union of all include paths.
+// If any policy is nil or fails validation, an error is returned.
+// If policies is empty, nil is returned.
+func Merge(policies ...*Policy) (*Policy, error) {
+	if len(policies) == 0 {
+		return nil, nil
+	}
+	if len(policies) == 1 {
+		if policies[0] == nil {
+			return nil, ErrNilProto
+		}
+		if err := policies[0].Validate(); err != nil {
+			return nil, err
+		}
+		return policies[0], nil
+	}
+
+	seen := make(map[string]bool)
+	var mergedIncludes []string
+	for _, pol := range policies {
+		if pol == nil {
+			return nil, ErrNilProto
+		}
+		if err := pol.Validate(); err != nil {
+			return nil, err
+		}
+		for _, inc := range pol.Include() {
+			if !seen[inc] {
+				seen[inc] = true
+				mergedIncludes = append(mergedIncludes, inc)
+			}
+		}
+	}
+	slices.Sort(mergedIncludes)
+
+	return NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
+		Id:      "filelog_consolidated",
+		Include: mergedIncludes,
+	})
+}
+
+// Consolidate implements googlepolicy.ConsolidatableSourcePolicy.
+func (p *Policy) Consolidate(policies []googlepolicy.SourcePolicy) (googlepolicy.SourcePolicy, error) {
+	if len(policies) == 0 {
+		return nil, nil
+	}
+	typedPolicies := make([]*Policy, 0, len(policies))
+	for _, sp := range policies {
+		pol, ok := sp.(*Policy)
+		if !ok {
+			return nil, fmt.Errorf("cannot consolidate policy of type %T with FileLogSourcePolicy", sp)
+		}
+		typedPolicies = append(typedPolicies, pol)
+	}
+	return Merge(typedPolicies...)
 }
 
 // Include returns a clone of the include patterns configured in the policy.
@@ -301,8 +363,4 @@ func isDrivePathPrefix(normalizedPath string, subDir string) bool {
 
 func isAlpha(c byte) bool {
 	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
-}
-
-func sanitizeID(id string) string {
-	return strings.ReplaceAll(id, "/", "_")
 }

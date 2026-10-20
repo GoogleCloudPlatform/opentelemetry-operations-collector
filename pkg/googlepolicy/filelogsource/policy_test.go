@@ -247,7 +247,7 @@ func TestPolicy_Evaluate(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, conf)
 
-	expectedKey := "receivers::filelog/projects_123_locations_global_policySets_ps1_policies_app-logs"
+	expectedKey := "receivers::filelog"
 	require.True(t, conf.IsSet(expectedKey))
 
 	sub, err := conf.Sub(expectedKey)
@@ -298,14 +298,14 @@ func TestPolicy_Pipelines(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, logsConf)
 
-	pipeKey := "service::pipelines::logs/filelog_nginx-logs"
+	pipeKey := "service::pipelines::logs/filelog"
 	require.True(t, logsConf.IsSet(pipeKey))
 
 	sub, err := logsConf.Sub(pipeKey)
 	require.NoError(t, err)
 	pipeMap := sub.ToStringMap()
 
-	assert.Equal(t, []string{"filelog/nginx-logs"}, pipeMap["receivers"])
+	assert.Equal(t, []string{"filelog"}, pipeMap["receivers"])
 	assert.Equal(t, []string{"googlepolicy", "queuebatch/batch_logs"}, pipeMap["processors"])
 	assert.Equal(t, []string{"otlp_grpc/default_gcp_destination"}, pipeMap["exporters"])
 
@@ -317,6 +317,134 @@ func TestPolicy_Pipelines(t *testing.T) {
 	tracesConf, err := policy.TracesPipelines(processors, exporters, nil)
 	assert.NoError(t, err)
 	assert.Nil(t, tracesConf)
+}
+
+func TestMerge_NilAndEmpty(t *testing.T) {
+	merged, err := Merge()
+	require.NoError(t, err)
+	assert.Nil(t, merged)
+
+	merged, err = Merge([]*Policy{}...)
+	require.NoError(t, err)
+	assert.Nil(t, merged)
+
+	merged, err = Merge(nil)
+	assert.ErrorIs(t, err, ErrNilProto)
+	assert.Nil(t, merged)
+}
+
+func TestMerge_SinglePolicy(t *testing.T) {
+	p, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
+		Id:      "single-policy",
+		Include: []string{"/var/log/single/*.log"},
+	})
+	require.NoError(t, err)
+
+	merged, err := Merge(p)
+	require.NoError(t, err)
+	assert.Equal(t, p, merged)
+	assert.Equal(t, "single-policy", merged.PolicyName())
+	assert.Equal(t, []string{"/var/log/single/*.log"}, merged.Include())
+}
+
+func TestMerge_MultiplePolicies_DeduplicatedAndSorted(t *testing.T) {
+	p1, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
+		Id:      "policy-1",
+		Include: []string{"/var/log/syslog", "/var/log/nginx/*.log"},
+	})
+	require.NoError(t, err)
+
+	p2, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
+		Id:      "policy-2",
+		Include: []string{"/var/log/nginx/*.log", "/var/log/auth.log"},
+	})
+	require.NoError(t, err)
+
+	p3, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
+		Id:      "policy-3",
+		Include: []string{"/opt/app/logs/*.log", "/var/log/syslog"},
+	})
+	require.NoError(t, err)
+
+	merged, err := Merge(p1, p2, p3)
+	require.NoError(t, err)
+	require.NotNil(t, merged)
+
+	assert.Equal(t, "filelog_consolidated", merged.PolicyName())
+	assert.Equal(t, []string{
+		"/opt/app/logs/*.log",
+		"/var/log/auth.log",
+		"/var/log/nginx/*.log",
+		"/var/log/syslog",
+	}, merged.Include())
+
+	// Verify merged policy evaluation uses DefaultReceiverID and DefaultPipelineID.
+	conf, err := merged.Evaluate(context.Background())
+	require.NoError(t, err)
+	assert.True(t, conf.IsSet("receivers::filelog"))
+
+	sub, err := conf.Sub("receivers::filelog")
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"/opt/app/logs/*.log",
+		"/var/log/auth.log",
+		"/var/log/nginx/*.log",
+		"/var/log/syslog",
+	}, sub.ToStringMap()["include"])
+}
+
+func TestMerge_FailsFastOnInvalidPolicy(t *testing.T) {
+	valid, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
+		Id:      "valid",
+		Include: []string{"/var/log/valid.log"},
+	})
+	require.NoError(t, err)
+
+	invalid := &Policy{
+		proto: &policyv1alpha1.FileLogSourcePolicy{
+			Id:      "invalid",
+			Include: []string{"/etc/shadow"},
+		},
+	}
+
+	merged, err := Merge(valid, invalid)
+	assert.ErrorIs(t, err, ErrSensitiveDirectory)
+	assert.Nil(t, merged)
+
+	merged, err = Merge(valid, nil)
+	assert.ErrorIs(t, err, ErrNilProto)
+	assert.Nil(t, merged)
+}
+
+func TestConsolidate(t *testing.T) {
+	p1, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
+		Id:      "p1",
+		Include: []string{"/var/log/a.log"},
+	})
+	require.NoError(t, err)
+
+	p2, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
+		Id:      "p2",
+		Include: []string{"/var/log/b.log"},
+	})
+	require.NoError(t, err)
+
+	// Consolidate empty
+	merged, err := p1.Consolidate(nil)
+	require.NoError(t, err)
+	assert.Nil(t, merged)
+
+	// Consolidate single
+	merged, err = p1.Consolidate([]googlepolicy.SourcePolicy{p1})
+	require.NoError(t, err)
+	assert.Equal(t, p1, merged)
+
+	// Consolidate multiple
+	merged, err = p1.Consolidate([]googlepolicy.SourcePolicy{p1, p2})
+	require.NoError(t, err)
+	require.NotNil(t, merged)
+	assert.Equal(t, "filelog_consolidated", merged.PolicyName())
+	assert.Equal(t, []string{"/var/log/a.log", "/var/log/b.log"}, merged.(interface{ Include() []string }).Include())
 }
 
 func TestDriver_WireProtoAndMapLoading(t *testing.T) {

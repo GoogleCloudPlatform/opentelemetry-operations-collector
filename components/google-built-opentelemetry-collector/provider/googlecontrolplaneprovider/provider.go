@@ -28,6 +28,7 @@ import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider/policies/selfmetrics"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/event"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
+	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/filelogsource"
 	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/logfilter"
 	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/metricfilter"
 	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/tracefilter"
@@ -363,7 +364,7 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 	preProcessTraceIDs := append([]component.ID{googlePolicyID}, destPolicy.PreProcessTraceIDs()...)
 
 	// Load all source policies from the active policy set.
-	sourcePolicies := activePolicySet.LoadPoliciesOfClass(googlepolicy.PolicyClassSource)
+	sourcePolicies := p.consolidateSourcePolicies(ctx, activePolicySet, activePolicySet.LoadPoliciesOfClass(googlepolicy.PolicyClassSource))
 
 	appliedSelfMetrics := false
 	for _, sp := range sourcePolicies {
@@ -496,6 +497,62 @@ func (p *provider) evaluateSingleSourcePolicy(
 	}
 
 	return policyConf, nil
+}
+
+// consolidateSourcePolicies groups source policies by policy type and consolidates
+// policies that implement ConsolidatableSourcePolicy into a single shared receiver policy.
+func (p *provider) consolidateSourcePolicies(ctx context.Context, activePolicySet *googlepolicy.PolicySet, policies []googlepolicy.Policy) []googlepolicy.Policy {
+	groups := make(map[string][]googlepolicy.SourcePolicy)
+	var typeOrder []string
+	for _, pol := range policies {
+		sp, ok := pol.(googlepolicy.SourcePolicy)
+		if !ok {
+			p.recordPolicyEvaluateError(ctx, pol.PolicyName(), activePolicySet, fmt.Errorf("policy %q does not implement SourcePolicy", pol.PolicyName()), event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassSource))
+			continue
+		}
+		t := sp.PolicyType()
+		if _, exists := groups[t]; !exists {
+			typeOrder = append(typeOrder, t)
+		}
+		groups[t] = append(groups[t], sp)
+	}
+
+	var consolidated []googlepolicy.Policy
+	for _, t := range typeOrder {
+		group := groups[t]
+		if len(group) == 0 {
+			continue
+		}
+		consolidatable, ok := group[0].(googlepolicy.ConsolidatableSourcePolicy)
+		if ok && len(group) > 1 {
+			var validPolicies []googlepolicy.SourcePolicy
+			for _, sp := range group {
+				if err := sp.Validate(); err != nil {
+					p.recordPolicyEvaluateError(ctx, sp.PolicyName(), activePolicySet, err, event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassSource))
+					continue
+				}
+				validPolicies = append(validPolicies, sp)
+			}
+			if len(validPolicies) == 0 {
+				continue
+			}
+			if len(validPolicies) == 1 {
+				consolidated = append(consolidated, validPolicies[0])
+				continue
+			}
+			merged, err := consolidatable.Consolidate(validPolicies)
+			if err != nil {
+				p.recordPolicyEvaluateError(ctx, t, activePolicySet, fmt.Errorf("failed to consolidate %s policies: %w", t, err), event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassSource))
+				continue
+			}
+			consolidated = append(consolidated, merged)
+		} else {
+			for _, sp := range group {
+				consolidated = append(consolidated, sp)
+			}
+		}
+	}
+	return consolidated
 }
 
 func cleanConf(c *confmap.Conf) *confmap.Conf {

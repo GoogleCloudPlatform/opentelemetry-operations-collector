@@ -170,18 +170,20 @@ const (
 	// The string severity of the log (e.g. "INFO", "ERROR", "DEBUG").
 	LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT LogRecordField = 2
 	// The numerical severity of the log (1-24 per OpenTelemetry specification).
-	// Evaluates against typed `equals` (`int_value`), numeric range comparisons
-	// (`gt`, `gte`, `lt`, `lte`), or canonical base-10 string representations for `regex`.
+	// Evaluates against typed `equals` (`int_value`) and numeric range
+	// comparisons (`gt`, `gte`, `lt`, `lte`).
 	LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER LogRecordField = 3
 	// The 16-byte trace identifier associated with the log record.
-	// When evaluated against string predicates (`exact`, `regex`), this matches
-	// against the 32-character lowercase hexadecimal string representation
-	// per the OpenTelemetry / W3C Trace Context specification.
+	// When evaluated against string predicates (`equals` with `string_value`,
+	// `glob`, `contains` with `string_value`), this matches against the
+	// 32-character lowercase hexadecimal string representation per the
+	// OpenTelemetry / W3C Trace Context specification.
 	LogRecordField_LOG_RECORD_FIELD_TRACE_ID LogRecordField = 4
 	// The 8-byte span identifier associated with the log record.
-	// When evaluated against string predicates (`exact`, `regex`), this matches
-	// against the 16-character lowercase hexadecimal string representation
-	// per the OpenTelemetry / W3C Trace Context specification.
+	// When evaluated against string predicates (`equals` with `string_value`,
+	// `glob`, `contains` with `string_value`), this matches against the
+	// 16-character lowercase hexadecimal string representation per the
+	// OpenTelemetry / W3C Trace Context specification.
 	LogRecordField_LOG_RECORD_FIELD_SPAN_ID LogRecordField = 5
 )
 
@@ -233,11 +235,8 @@ func (LogRecordField) EnumDescriptor() ([]byte, []int) {
 }
 
 // AttributePath specifies how to access an attribute value.
-//   - A single-element array accesses a flat attribute (e.g. ["http.status_code"]).
-//   - Multiple elements traverse nested maps (e.g. ["http", "request", "method"]).
-//   - When traversing array/list values, string segments representing non-negative
-//     integers (e.g. "0", "100") are interpreted as zero-based array indices
-//     (e.g. ["items", "0", "id"]).
+// - A single-element array accesses a flat attribute (e.g. ["http.status_code"]).
+// - Multiple elements traverse nested maps (e.g. ["http", "request", "method"]).
 type AttributePath struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Path segments for attribute traversal.
@@ -523,7 +522,7 @@ type LogMatcher struct {
 	//
 	//	*LogMatcher_Exists
 	//	*LogMatcher_Equals
-	//	*LogMatcher_Regex
+	//	*LogMatcher_Glob
 	//	*LogMatcher_Gt
 	//	*LogMatcher_Gte
 	//	*LogMatcher_Lt
@@ -598,10 +597,10 @@ func (x *LogMatcher) GetEquals() *Value {
 	return nil
 }
 
-func (x *LogMatcher) GetRegex() string {
+func (x *LogMatcher) GetGlob() string {
 	if x != nil {
-		if x, ok := x.Predicate.(*LogMatcher_Regex); ok {
-			return x.Regex
+		if x, ok := x.Predicate.(*LogMatcher_Glob); ok {
+			return x.Glob
 		}
 	}
 	return ""
@@ -679,13 +678,12 @@ type LogMatcher_Equals struct {
 	Equals *Value `protobuf:"bytes,11,opt,name=equals,proto3,oneof"`
 }
 
-type LogMatcher_Regex struct {
-	// Regular expression match using RE2 syntax.
-	// Evaluates as an unanchored partial match (like Go regexp.MatchString and
-	// OpenTelemetry OTTL IsMatch). Callers requiring full string equality must
-	// provide explicit anchors ('^' and '$'). Applies strictly to string
-	// fields and string attribute values.
-	Regex string `protobuf:"bytes,12,opt,name=regex,proto3,oneof"`
+type LogMatcher_Glob struct {
+	// Glob pattern match against the entire string value.
+	// Supports '*' (matches zero or more characters) and '?' (matches any
+	// single character). Matching is case-sensitive and anchored to the full
+	// string. Applies strictly to string fields and string attribute values.
+	Glob string `protobuf:"bytes,12,opt,name=glob,proto3,oneof"`
 }
 
 type LogMatcher_Gt struct {
@@ -724,7 +722,7 @@ func (*LogMatcher_Exists) isLogMatcher_Predicate() {}
 
 func (*LogMatcher_Equals) isLogMatcher_Predicate() {}
 
-func (*LogMatcher_Regex) isLogMatcher_Predicate() {}
+func (*LogMatcher_Glob) isLogMatcher_Predicate() {}
 
 func (*LogMatcher_Gt) isLogMatcher_Predicate() {}
 
@@ -911,14 +909,14 @@ const file_policy_v1alpha1_common_policy_types_proto_rawDesc = "" +
 	"\fNumericValue\x12\x1d\n" +
 	"\tint_value\x18\x01 \x01(\x03H\x00R\bintValue\x12#\n" +
 	"\fdouble_value\x18\x02 \x01(\x01H\x00R\vdoubleValueB\a\n" +
-	"\x05value\"\xdd\x04\n" +
+	"\x05value\"\xdb\x04\n" +
 	"\n" +
 	"LogMatcher\x12J\n" +
 	"\x06target\x18\x01 \x01(\v22.google.telemetry.policy.v1alpha1.LogFieldSelectorR\x06target\x120\n" +
 	"\x06exists\x18\n" +
 	" \x01(\v2\x16.google.protobuf.EmptyH\x00R\x06exists\x12A\n" +
-	"\x06equals\x18\v \x01(\v2'.google.telemetry.policy.v1alpha1.ValueH\x00R\x06equals\x12\x16\n" +
-	"\x05regex\x18\f \x01(\tH\x00R\x05regex\x12@\n" +
+	"\x06equals\x18\v \x01(\v2'.google.telemetry.policy.v1alpha1.ValueH\x00R\x06equals\x12\x14\n" +
+	"\x04glob\x18\f \x01(\tH\x00R\x04glob\x12@\n" +
 	"\x02gt\x18\r \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x02gt\x12B\n" +
 	"\x03gte\x18\x0e \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x03gte\x12@\n" +
 	"\x02lt\x18\x0f \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x02lt\x12B\n" +
@@ -1021,7 +1019,7 @@ func file_policy_v1alpha1_common_policy_types_proto_init() {
 	file_policy_v1alpha1_common_policy_types_proto_msgTypes[3].OneofWrappers = []any{
 		(*LogMatcher_Exists)(nil),
 		(*LogMatcher_Equals)(nil),
-		(*LogMatcher_Regex)(nil),
+		(*LogMatcher_Glob)(nil),
 		(*LogMatcher_Gt)(nil),
 		(*LogMatcher_Gte)(nil),
 		(*LogMatcher_Lt)(nil),

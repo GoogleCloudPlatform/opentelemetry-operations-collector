@@ -453,9 +453,8 @@ func TestFilterPolicyDriversRegistered(t *testing.T) {
 		{
 			policyType: "trace_filter",
 			raw: map[string]any{
-				"type":   "trace_filter",
-				"id":     "test-trace",
-				"action": "ACTION_DROP",
+				"type": "trace_filter",
+				"id":   "test-trace",
 				"matches": []any{
 					map[string]any{
 						"target": map[string]any{"record_field": "SPAN_RECORD_FIELD_NAME"},
@@ -631,6 +630,64 @@ func TestRetrieve_BuiltinPolicyErrorDoesNotRollbackActivePolicySet(t *testing.T)
 		"gcp.policy.class":           "source",
 		"context":                    "context.Background",
 	}, entries[0].ContextMap())
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestRetrieve_RecordsPolicyEvaluateErrorEventForFailedPoliciesWithClass(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	core, recorded := observer.New(zapcore.InfoLevel)
+	logger := zap.New(core)
+	p := createProviderWithLogger(logger)
+
+	ps, err := googlepolicy.MakePolicySet("rev-failed-class", []map[string]any{
+		{
+			"type":   "log_filter",
+			"id":     "invalid-log-filter",
+			"action": "ACTION_DROP",
+			// missing matches -> ErrPolicyFailedValidation, class: transformation
+		},
+		{
+			"type": "unknown_policy_type",
+			"id":   "unknown-policy",
+		},
+	})
+	require.Error(t, err)
+	require.NotNil(t, ps)
+	ps.PolicySetID = "projects/my-project/locations/us-central1/policySets/my-policy-set"
+
+	googlepolicy.SetActivePolicySet(ps)
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	entries := recorded.All()
+	require.Len(t, entries, 2)
+
+	assert.Equal(t, map[string]any{
+		"event.name":                 event.PolicyEvaluateErrorEventName,
+		"gcp.policy.id":              "invalid-log-filter",
+		"gcp.policy.set.id":          "projects/my-project/locations/us-central1/policySets/my-policy-set",
+		"gcp.policy.set.revision.id": "rev-failed-class",
+		"error.type":                 "policy_failed_validation",
+		"gcp.policy.class":           "transformation",
+		"context":                    "context.Background.WithValue(FLEET_ID, 1234)",
+	}, entries[0].ContextMap())
+
+	assert.Equal(t, map[string]any{
+		"event.name":                 event.PolicyEvaluateErrorEventName,
+		"gcp.policy.id":              "unknown-policy",
+		"gcp.policy.set.id":          "projects/my-project/locations/us-central1/policySets/my-policy-set",
+		"gcp.policy.set.revision.id": "rev-failed-class",
+		"error.type":                 "policy_type_not_found",
+		"context":                    "context.Background.WithValue(FLEET_ID, 1234)",
+	}, entries[1].ContextMap())
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }

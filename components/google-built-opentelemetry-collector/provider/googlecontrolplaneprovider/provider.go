@@ -294,7 +294,11 @@ func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrie
 
 func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fleetID string, activePolicySet *googlepolicy.PolicySet) (*confmap.Retrieved, bool, error) {
 	for _, fp := range activePolicySet.FailedPolicies {
-		p.recordPolicyEvaluateError(ctx, fp.ID, activePolicySet, fp.Err)
+		var extraOpts []event.PolicyEvaluateErrorEventOption
+		if fp.Class != "" {
+			extraOpts = append(extraOpts, event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClass(fp.Class)))
+		}
+		p.recordPolicyEvaluateError(ctx, fp.ID, activePolicySet, fp.Err, extraOpts...)
 	}
 
 	// Root conf object, each policy evaluation will merge into this confmap.

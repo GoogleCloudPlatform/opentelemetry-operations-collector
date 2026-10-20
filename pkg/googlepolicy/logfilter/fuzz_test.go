@@ -76,12 +76,12 @@ func dynamicLogContext(body, severityText, attrKey, attrStr string, severityNum 
 func fuzzLogSeedPolicies() []*policyv1alpha1.LogFilterPolicy {
 	return []*policyv1alpha1.LogFilterPolicy{
 		{
-			Id:     "projects/123/locations/us-central1/policySets/ps-1/policies/drop-body-regex",
+			Id:     "projects/123/locations/us-central1/policySets/ps-1/policies/drop-body-glob",
 			Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
 			Matches: []*policyv1alpha1.LogMatcher{
 				{
 					Target:    recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY),
-					Predicate: &policyv1alpha1.LogMatcher_Regex{Regex: "^hello.*"},
+					Predicate: &policyv1alpha1.LogMatcher_Glob{Glob: "hello*"},
 				},
 			},
 		},
@@ -90,8 +90,8 @@ func fuzzLogSeedPolicies() []*policyv1alpha1.LogFilterPolicy {
 			Action: policyv1alpha1.Action_ACTION_KEEP.Enum(),
 			Matches: []*policyv1alpha1.LogMatcher{
 				{
-					Target:    logAttrTarget("items", "0", "id"),
-					Predicate: equalsString("item-001"),
+					Target:    logAttrTarget("metadata", "env"),
+					Predicate: equalsString("prod"),
 				},
 				{
 					Target: recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER),
@@ -144,9 +144,9 @@ func verifyCompiledLogPolicy(t *testing.T, p googlepolicy.Policy, contexts []goo
 		t.Fatalf("unexpected PolicyClass(): %q", p.PolicyClass())
 	}
 
-	eval, ok := p.(googlepolicy.LogPolicyEvaluator)
+	eval, ok := p.(googlepolicy.LogFilterPolicyEvaluator)
 	if !ok {
-		t.Fatalf("policy %T does not implement LogPolicyEvaluator", p)
+		t.Fatalf("policy %T does not implement LogFilterPolicyEvaluator", p)
 	}
 	pol, ok := p.(*Policy)
 	if !ok {
@@ -154,19 +154,19 @@ func verifyCompiledLogPolicy(t *testing.T, p googlepolicy.Policy, contexts []goo
 	}
 
 	for _, ctx := range contexts {
-		res := eval.EvaluateLog(ctx)
+		res := eval.FilterLog(ctx)
 		switch res {
-		case googlepolicy.EvalNoMatch:
-		case googlepolicy.EvalKeep:
+		case googlepolicy.FilterNoMatch:
+		case googlepolicy.FilterKeep:
 			if pol.Action() != policyv1alpha1.Action_ACTION_KEEP {
-				t.Fatalf("EvaluateLog returned EvalKeep for action %v", pol.Action())
+				t.Fatalf("FilterLog returned FilterKeep for action %v", pol.Action())
 			}
-		case googlepolicy.EvalDrop:
+		case googlepolicy.FilterDrop:
 			if pol.Action() != policyv1alpha1.Action_ACTION_DROP {
-				t.Fatalf("EvaluateLog returned EvalDrop for action %v", pol.Action())
+				t.Fatalf("FilterLog returned FilterDrop for action %v", pol.Action())
 			}
 		default:
-			t.Fatalf("EvaluateLog returned unknown EvalResult %v", res)
+			t.Fatalf("FilterLog returned unknown FilterResult %v", res)
 		}
 	}
 }
@@ -223,11 +223,11 @@ func FuzzLogFilterPolicy(f *testing.F) {
 								t.Fatalf("protojson round-trip failed MakePolicySet: err=%v, len=%d, ok=%v", err, len(rtPS.Policies), ok)
 							}
 							verifyCompiledLogPolicy(t, rtEntry.PolicyObj, ctxs)
-							protoEval := entry.PolicyObj.(googlepolicy.LogPolicyEvaluator)
-							jsonEval := rtEntry.PolicyObj.(googlepolicy.LogPolicyEvaluator)
+							protoEval := entry.PolicyObj.(googlepolicy.LogFilterPolicyEvaluator)
+							jsonEval := rtEntry.PolicyObj.(googlepolicy.LogFilterPolicyEvaluator)
 							for i, ctx := range ctxs {
-								if got, want := jsonEval.EvaluateLog(ctx), protoEval.EvaluateLog(ctx); got != want {
-									t.Fatalf("context[%d] EvalResult mismatch between proto (%v) and JSON (%v)", i, want, got)
+								if got, want := jsonEval.FilterLog(ctx), protoEval.FilterLog(ctx); got != want {
+									t.Fatalf("context[%d] FilterResult mismatch between proto (%v) and JSON (%v)", i, want, got)
 								}
 							}
 						}

@@ -61,9 +61,6 @@ func TestCompilePredicateRejectsMalformed(t *testing.T) {
 	}{
 		{"nil predicate", nil},
 		{"unknown predicate type", struct{}{}},
-		{"invalid log regex", &policyv1alpha1.LogMatcher_Regex{Regex: "[invalid"}},
-		{"invalid metric regex", &policyv1alpha1.MetricMatcher_Regex{Regex: "[invalid"}},
-		{"invalid trace regex", &policyv1alpha1.TraceMatcher_Regex{Regex: "[invalid"}},
 		{"equals with nil value", &policyv1alpha1.MetricMatcher_Equals{}},
 		{"equals with unset value oneof", &policyv1alpha1.MetricMatcher_Equals{Equals: &policyv1alpha1.Value{}}},
 		{"contains with unset value oneof", &policyv1alpha1.TraceMatcher_Contains{Contains: &policyv1alpha1.Value{}}},
@@ -115,25 +112,36 @@ func TestPredicateNegate(t *testing.T) {
 	assert.True(t, pred("", false))
 }
 
-func TestPredicateRegex(t *testing.T) {
-	pred := mustCompile(t, &policyv1alpha1.MetricMatcher_Regex{Regex: "^(42|true|hello)$"})
-	assert.True(t, pred("hello", true))
-	assert.True(t, pred(int64(42), true))
-	assert.True(t, pred(42, true))
-	assert.True(t, pred(true, true))
-	assert.False(t, pred(false, true))
-	assert.False(t, pred(99, true))
+func TestPredicateGlob(t *testing.T) {
+	pred := mustCompile(t, &policyv1alpha1.MetricMatcher_Glob{Glob: "hello*?"})
+	assert.True(t, pred("hello_world!", true))
+	assert.True(t, pred("hello!", true))
+	assert.True(t, pred("hello🎉", true))
+	assert.False(t, pred("hello", true))
+	assert.False(t, pred("HELLO!", true))
+	assert.False(t, pred("prefix_hello!", true))
+	assert.False(t, pred(int64(42), true))
+	assert.False(t, pred(42, true))
+	assert.False(t, pred(true, true))
 	assert.False(t, pred(nil, false))
+
+	emptyPred := mustCompile(t, &policyv1alpha1.LogMatcher_Glob{Glob: ""})
+	assert.True(t, emptyPred("", true))
+	assert.False(t, emptyPred("a", true))
+
+	starOnlyPred := mustCompile(t, &policyv1alpha1.LogMatcher_Glob{Glob: "**"})
+	assert.True(t, starOnlyPred("", true))
+	assert.True(t, starOnlyPred("anything", true))
 }
 
-func TestPredicateRegexOnIDs(t *testing.T) {
+func TestPredicateGlobOnIDs(t *testing.T) {
 	traceID := pcommon.TraceID([16]byte{0xaa, 0xbb})
 	spanID := pcommon.SpanID([8]byte{0xcc, 0xdd})
 
-	pred := mustCompile(t, &policyv1alpha1.TraceMatcher_Regex{Regex: "^aabb"})
+	pred := mustCompile(t, &policyv1alpha1.TraceMatcher_Glob{Glob: "aabb*"})
 	assert.True(t, pred(traceID, true))
 
-	spanPred := mustCompile(t, &policyv1alpha1.TraceMatcher_Regex{Regex: "^ccdd"})
+	spanPred := mustCompile(t, &policyv1alpha1.TraceMatcher_Glob{Glob: "ccdd*"})
 	assert.True(t, spanPred(spanID, true))
 }
 
@@ -275,12 +283,7 @@ func TestEvalPath(t *testing.T) {
 		{"bytes", []string{"bytes"}, []byte{9, 8}, true},
 		{"nested map", []string{"nested", "inner"}, "found", true},
 		{"missing nested key", []string{"nested", "missing"}, nil, false},
-		{"slice index 0", []string{"items", "0"}, "zero", true},
-		{"slice index 1", []string{"items", "1"}, int64(10), true},
-		{"map inside slice", []string{"items", "2", "deep"}, "value", true},
-		{"slice index out of range", []string{"items", "99"}, nil, false},
-		{"negative slice index", []string{"items", "-1"}, nil, false},
-		{"non-integer slice index", []string{"items", "not_an_int"}, nil, false},
+		{"descend into slice is unsupported", []string{"items", "0"}, nil, false},
 		{"descend into scalar", []string{"str", "deeper"}, nil, false},
 	}
 
@@ -355,10 +358,10 @@ func TestNullAttributeBehavior(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, equalsEmptyPred(val, exists), "null attribute must not match equals \"\"")
 
-	// regex "^$" evaluates to false
-	regexEmptyPred, err := CompilePredicate(&policyv1alpha1.LogMatcher_Regex{Regex: "^$"}, false)
+	// glob "" evaluates to false
+	globEmptyPred, err := CompilePredicate(&policyv1alpha1.LogMatcher_Glob{Glob: ""}, false)
 	require.NoError(t, err)
-	assert.False(t, regexEmptyPred(val, exists), "null attribute must not match regex \"^$\"")
+	assert.False(t, globEmptyPred(val, exists), "null attribute must not match glob \"\"")
 }
 
 func TestCompareNumericNaN(t *testing.T) {

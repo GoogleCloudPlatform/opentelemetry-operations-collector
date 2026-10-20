@@ -1674,6 +1674,13 @@ func TestReportStatus_PermanentAndRecoverableErrors(t *testing.T) {
 			expectedStatus: componentstatus.StatusRecoverableError,
 		},
 		{
+			name: "recoverable error (internal)",
+			errFunc: func(context.Context) error {
+				return status.Error(codes.Internal, "internal error")
+			},
+			expectedStatus: componentstatus.StatusRecoverableError,
+		},
+		{
 			name: "permanent error (permission denied)",
 			errFunc: func(context.Context) error {
 				return status.Error(codes.PermissionDenied, "permission denied")

@@ -49,8 +49,8 @@ func TestLogTransformPolicy_Serialization(t *testing.T) {
 		},
 		Action: &policyv1alpha1.LogTransformPolicy_Add{
 			Add: &policyv1alpha1.LogAddAction{
-				Target: &policyv1alpha1.LogFieldSelector{
-					Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
+				Target: &policyv1alpha1.LogTargetSelector{
+					Target: &policyv1alpha1.LogTargetSelector_LogAttribute{
 						LogAttribute: &policyv1alpha1.AttributePath{
 							Path: []string{"threat_tier"},
 						},
@@ -114,15 +114,15 @@ func TestLogTransformPolicy_JSONSerialization(t *testing.T) {
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Regex{
-					Regex: `\$$`,
+				Predicate: &policyv1alpha1.LogMatcher_Glob{
+					Glob: "*$",
 				},
 			},
 		},
 		Action: &policyv1alpha1.LogTransformPolicy_Add{
 			Add: &policyv1alpha1.LogAddAction{
-				Target: &policyv1alpha1.LogFieldSelector{
-					Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
+				Target: &policyv1alpha1.LogTargetSelector{
+					Target: &policyv1alpha1.LogTargetSelector_LogAttribute{
 						LogAttribute: &policyv1alpha1.AttributePath{
 							Path: []string{"threat_tier"},
 						},
@@ -153,8 +153,8 @@ func TestLogTransformPolicy_AllActionVariantsAndUnconditionalMatches(t *testing.
 			Id: "remove-local-scriptpath",
 			Action: &policyv1alpha1.LogTransformPolicy_Remove{
 				Remove: &policyv1alpha1.LogRemoveAction{
-					Target: &policyv1alpha1.LogFieldSelector{
-						Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
+					Target: &policyv1alpha1.LogAttributeSelector{
+						Target: &policyv1alpha1.LogAttributeSelector_LogAttribute{
 							LogAttribute: &policyv1alpha1.AttributePath{Path: []string{"LOCAL_SCRIPTPATH_V1"}},
 						},
 					},
@@ -166,13 +166,13 @@ func TestLogTransformPolicy_AllActionVariantsAndUnconditionalMatches(t *testing.
 			Id: "rename-legacy-user-id",
 			Action: &policyv1alpha1.LogTransformPolicy_Rename{
 				Rename: &policyv1alpha1.LogRenameAction{
-					Source: &policyv1alpha1.LogFieldSelector{
-						Target: &policyv1alpha1.LogFieldSelector_BodyField{
+					Source: &policyv1alpha1.LogAttributeSelector{
+						Target: &policyv1alpha1.LogAttributeSelector_BodyField{
 							BodyField: &policyv1alpha1.AttributePath{Path: []string{"event_data", "userId"}},
 						},
 					},
-					Target: &policyv1alpha1.LogFieldSelector{
-						Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
+					Target: &policyv1alpha1.LogAttributeSelector{
+						Target: &policyv1alpha1.LogAttributeSelector_LogAttribute{
 							LogAttribute: &policyv1alpha1.AttributePath{Path: []string{"user.id"}},
 						},
 					},
@@ -185,8 +185,8 @@ func TestLogTransformPolicy_AllActionVariantsAndUnconditionalMatches(t *testing.
 			Id: "redact-ssn",
 			Action: &policyv1alpha1.LogTransformPolicy_Redact{
 				Redact: &policyv1alpha1.LogRedactAction{
-					Target: &policyv1alpha1.LogFieldSelector{
-						Target: &policyv1alpha1.LogFieldSelector_RecordField{
+					Target: &policyv1alpha1.LogTargetSelector{
+						Target: &policyv1alpha1.LogTargetSelector_RecordField{
 							RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
 						},
 					},

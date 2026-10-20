@@ -76,32 +76,26 @@ func dynamicTraceContext(name, statusMsg, attrKey, attrStr string, kind, statusC
 func fuzzTraceSeedPolicies() []*policyv1alpha1.TraceFilterPolicy {
 	return []*policyv1alpha1.TraceFilterPolicy{
 		{
-			Id:     "projects/123/locations/us-central1/policySets/ps-1/policies/drop-healthcheck-span",
-			Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+			Id: "projects/123/locations/us-central1/policySets/ps-1/policies/drop-healthcheck-span",
 			Matches: []*policyv1alpha1.TraceMatcher{
 				{
 					Target: recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME),
-					Predicate: &policyv1alpha1.TraceMatcher_Regex{
-						Regex: "^healthcheck\\..*",
+					Predicate: &policyv1alpha1.TraceMatcher_Glob{
+						Glob: "healthcheck.*",
 					},
 				},
 			},
 		},
 		{
-			Id:     "keep-error-server-spans",
-			Action: policyv1alpha1.Action_ACTION_KEEP.Enum(),
+			Id: "drop-server-spans",
 			Matches: []*policyv1alpha1.TraceMatcher{
 				{
 					Target:    recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_KIND),
 					Predicate: equalsString("SERVER"),
 				},
 				{
-					Target:    recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_STATUS_CODE),
-					Predicate: equalsString("ERROR"),
-				},
-				{
-					Target:    spanAttrTarget("items", "0", "id"),
-					Predicate: equalsString("item-001"),
+					Target:    spanAttrTarget("metadata", "env"),
+					Predicate: equalsString("prod"),
 				},
 				{
 					Target: spanAttrTarget("http.status_code"),
@@ -114,8 +108,7 @@ func fuzzTraceSeedPolicies() []*policyv1alpha1.TraceFilterPolicy {
 			},
 		},
 		{
-			Id:     "drop-root-spans-and-trace-id",
-			Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+			Id: "drop-root-spans-and-trace-id",
 			Matches: []*policyv1alpha1.TraceMatcher{
 				{
 					Target:    recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID),
@@ -156,29 +149,20 @@ func verifyCompiledTracePolicy(t *testing.T, p googlepolicy.Policy, contexts []g
 		t.Fatalf("unexpected PolicyClass(): %q", p.PolicyClass())
 	}
 
-	eval, ok := p.(googlepolicy.TracePolicyEvaluator)
+	eval, ok := p.(googlepolicy.TraceFilterPolicyEvaluator)
 	if !ok {
-		t.Fatalf("policy %T does not implement TracePolicyEvaluator", p)
+		t.Fatalf("policy %T does not implement TraceFilterPolicyEvaluator", p)
 	}
-	pol, ok := p.(*Policy)
-	if !ok {
+	if _, ok := p.(*Policy); !ok {
 		t.Fatalf("unexpected concrete policy type %T", p)
 	}
 
 	for _, ctx := range contexts {
-		res := eval.EvaluateTrace(ctx)
+		res := eval.FilterTrace(ctx)
 		switch res {
-		case googlepolicy.EvalNoMatch:
-		case googlepolicy.EvalKeep:
-			if pol.Action() != policyv1alpha1.Action_ACTION_KEEP {
-				t.Fatalf("EvaluateTrace returned EvalKeep for action %v", pol.Action())
-			}
-		case googlepolicy.EvalDrop:
-			if pol.Action() != policyv1alpha1.Action_ACTION_DROP {
-				t.Fatalf("EvaluateTrace returned EvalDrop for action %v", pol.Action())
-			}
+		case googlepolicy.FilterNoMatch, googlepolicy.FilterDrop:
 		default:
-			t.Fatalf("EvaluateTrace returned unknown EvalResult %v", res)
+			t.Fatalf("FilterTrace returned unexpected FilterResult %v", res)
 		}
 	}
 }
@@ -235,11 +219,11 @@ func FuzzTraceFilterPolicy(f *testing.F) {
 								t.Fatalf("protojson round-trip failed MakePolicySet: err=%v, len=%d, ok=%v", err, len(rtPS.Policies), ok)
 							}
 							verifyCompiledTracePolicy(t, rtEntry.PolicyObj, ctxs)
-							protoEval := entry.PolicyObj.(googlepolicy.TracePolicyEvaluator)
-							jsonEval := rtEntry.PolicyObj.(googlepolicy.TracePolicyEvaluator)
+							protoEval := entry.PolicyObj.(googlepolicy.TraceFilterPolicyEvaluator)
+							jsonEval := rtEntry.PolicyObj.(googlepolicy.TraceFilterPolicyEvaluator)
 							for i, ctx := range ctxs {
-								if got, want := jsonEval.EvaluateTrace(ctx), protoEval.EvaluateTrace(ctx); got != want {
-									t.Fatalf("context[%d] EvalResult mismatch between proto (%v) and JSON (%v)", i, want, got)
+								if got, want := jsonEval.FilterTrace(ctx), protoEval.FilterTrace(ctx); got != want {
+									t.Fatalf("context[%d] FilterResult mismatch between proto (%v) and JSON (%v)", i, want, got)
 								}
 							}
 						}

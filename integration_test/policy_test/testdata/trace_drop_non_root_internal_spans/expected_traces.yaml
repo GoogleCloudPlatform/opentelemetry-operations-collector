@@ -10,7 +10,7 @@
             version: 1.0.0
           spans:
             - endTimeUnixNano: "1700000001000000000"
-              kind: 1
+              kind: 2
               name: db.query.failed
               parentSpanId: "0102030405060723"
               spanId: "0102030405060721"

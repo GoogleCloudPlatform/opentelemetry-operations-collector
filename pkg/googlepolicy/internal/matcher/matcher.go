@@ -18,14 +18,14 @@
 // Policy evaluation is split in two: a per-signal target extractor pulls a
 // value out of the telemetry item, and a signal-agnostic Predicate tests that
 // value. Everything in this package belongs to the second half, so that the
-// three filter packages agree on what "equals", "regex", "contains", and the
+// three filter packages agree on what "equals", "glob", "contains", and the
 // numeric comparisons mean.
 //
 // All compilation happens once at policy load time, so the hot path never
-// compiles a regex, parses a path segment, or type-switches on a protobuf
-// oneof. Extracted values are carried as plain Go values in an `any` rather
-// than as pcommon.Value: boxing still costs an allocation for most types, but
-// it avoids pdata's heavier per-call AnyValue allocation.
+// parses a path segment or type-switches on a protobuf oneof. Extracted values
+// are carried as plain Go values in an `any` rather than as pcommon.Value:
+// boxing still costs an allocation for most types, but it avoids pdata's
+// heavier per-call AnyValue allocation.
 package matcher
 
 import (
@@ -33,9 +33,8 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"regexp"
-	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
 	"go.opentelemetry.io/collector/pdata/pcommon"
@@ -56,7 +55,7 @@ type kind int
 const (
 	kindExists kind = iota
 	kindEquals
-	kindRegex
+	kindGlob
 	kindGt
 	kindGte
 	kindLt
@@ -67,10 +66,10 @@ const (
 // spec is the signal-agnostic form of a matcher predicate, produced by
 // normalize from any of the three per-signal protobuf oneof families.
 type spec struct {
-	k     kind
-	val   *policyv1alpha1.Value
-	num   *policyv1alpha1.NumericValue
-	regex string
+	k    kind
+	val  *policyv1alpha1.Value
+	num  *policyv1alpha1.NumericValue
+	glob string
 }
 
 // CompilePredicate compiles a matcher predicate oneof wrapper (any of the
@@ -96,13 +95,10 @@ func CompilePredicate(predicate any, negate bool) (Predicate, error) {
 			return present(val, exists) && valueEquals(val, expected)
 		}
 
-	case kindRegex:
-		re, err := regexp.Compile(s.regex)
-		if err != nil {
-			return nil, fmt.Errorf("invalid regex %q: %w", s.regex, err)
-		}
+	case kindGlob:
+		pattern := s.glob
 		pred = func(val any, exists bool) bool {
-			return present(val, exists) && valueMatchesRegex(val, re)
+			return present(val, exists) && valueMatchesGlob(val, pattern)
 		}
 
 	case kindGt:
@@ -152,12 +148,12 @@ func normalize(predicate any) (spec, error) {
 	case *policyv1alpha1.TraceMatcher_Equals:
 		return spec{k: kindEquals, val: p.Equals}, nil
 
-	case *policyv1alpha1.LogMatcher_Regex:
-		return spec{k: kindRegex, regex: p.Regex}, nil
-	case *policyv1alpha1.MetricMatcher_Regex:
-		return spec{k: kindRegex, regex: p.Regex}, nil
-	case *policyv1alpha1.TraceMatcher_Regex:
-		return spec{k: kindRegex, regex: p.Regex}, nil
+	case *policyv1alpha1.LogMatcher_Glob:
+		return spec{k: kindGlob, glob: p.Glob}, nil
+	case *policyv1alpha1.MetricMatcher_Glob:
+		return spec{k: kindGlob, glob: p.Glob}, nil
+	case *policyv1alpha1.TraceMatcher_Glob:
+		return spec{k: kindGlob, glob: p.Glob}, nil
 
 	case *policyv1alpha1.LogMatcher_Gt:
 		return spec{k: kindGt, num: p.Gt}, nil
@@ -219,13 +215,9 @@ func present(val any, exists bool) bool {
 	return exists || val != nil
 }
 
-// PathStep is one pre-parsed segment of an AttributePath. Segments that parse
-// as non-negative integers double as slice indices, resolved at compile time so
-// the hot path never calls strconv.
+// PathStep is one segment of an AttributePath.
 type PathStep struct {
-	Key     string
-	Index   int
-	IsIndex bool
+	Key string
 }
 
 // CompilePath pre-parses an AttributePath into PathSteps. The kind label names
@@ -237,18 +229,13 @@ func CompilePath(attrPath *policyv1alpha1.AttributePath, kind string) ([]PathSte
 	segments := attrPath.GetPath()
 	steps := make([]PathStep, len(segments))
 	for i, seg := range segments {
-		if idx, err := strconv.Atoi(seg); err == nil && idx >= 0 {
-			steps[i] = PathStep{Key: seg, Index: idx, IsIndex: true}
-			continue
-		}
 		steps[i] = PathStep{Key: seg}
 	}
 	return steps, nil
 }
 
 // EvalPath walks the compiled path through an attribute map, descending into
-// nested maps and slices, and returns the leaf value converted to a plain Go
-// value.
+// nested maps, and returns the leaf value converted to a plain Go value.
 func EvalPath(attrs pcommon.Map, steps []PathStep) (any, bool) {
 	if len(steps) == 0 || attrs == (pcommon.Map{}) {
 		return nil, false
@@ -258,21 +245,14 @@ func EvalPath(attrs pcommon.Map, steps []PathStep) (any, bool) {
 		return nil, false
 	}
 	for _, step := range steps[1:] {
-		switch val.Type() {
-		case pcommon.ValueTypeMap:
-			child, found := val.Map().Get(step.Key)
-			if !found {
-				return nil, false
-			}
-			val = child
-		case pcommon.ValueTypeSlice:
-			if !step.IsIndex || step.Index >= val.Slice().Len() {
-				return nil, false
-			}
-			val = val.Slice().At(step.Index)
-		default:
+		if val.Type() != pcommon.ValueTypeMap {
 			return nil, false
 		}
+		child, found := val.Map().Get(step.Key)
+		if !found {
+			return nil, false
+		}
+		val = child
 	}
 	return ValueToAny(val), true
 }
@@ -335,22 +315,54 @@ func valueEquals(val any, expected *policyv1alpha1.Value) bool {
 	}
 }
 
-// Regex reports whether the extracted value matches re. Non-string values are
-// rendered with their canonical string form first.
-func valueMatchesRegex(val any, re *regexp.Regexp) bool {
-	if s, ok := asString(val); ok {
-		return re.MatchString(s)
-	}
-	switch v := val.(type) {
-	case int64:
-		return re.MatchString(strconv.FormatInt(v, 10))
-	case int:
-		return re.MatchString(strconv.Itoa(v))
-	case bool:
-		return re.MatchString(strconv.FormatBool(v))
-	default:
+// Glob reports whether the extracted value matches the shell-style glob
+// pattern (`*` matches zero or more characters, `?` matches any single
+// character). The match is anchored to the full string, is case-sensitive, and
+// applies strictly to string-like values.
+func valueMatchesGlob(val any, pattern string) bool {
+	s, ok := asString(val)
+	if !ok {
 		return false
 	}
+	return globMatch(pattern, s)
+}
+
+func globMatch(pattern, s string) bool {
+	pi, ti := 0, 0
+	starIdx := -1
+	matchIdx := 0
+
+	for ti < len(s) {
+		if pi < len(pattern) && pattern[pi] == '*' {
+			starIdx = pi
+			matchIdx = ti
+			pi++
+			continue
+		}
+		if pi < len(pattern) {
+			pr, pw := utf8.DecodeRuneInString(pattern[pi:])
+			_, tw := utf8.DecodeRuneInString(s[ti:])
+			if pr == '?' || pattern[pi:pi+pw] == s[ti:ti+tw] {
+				pi += pw
+				ti += tw
+				continue
+			}
+		}
+		if starIdx != -1 {
+			pi = starIdx + 1
+			_, tw := utf8.DecodeRuneInString(s[matchIdx:])
+			matchIdx += tw
+			ti = matchIdx
+			continue
+		}
+		return false
+	}
+
+	for pi < len(pattern) && pattern[pi] == '*' {
+		pi++
+	}
+
+	return pi == len(pattern)
 }
 
 // Contains reports containment: membership for slice values, substring for

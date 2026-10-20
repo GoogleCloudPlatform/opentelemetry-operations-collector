@@ -38,6 +38,7 @@ const PolicyType = "metric_filter"
 // Exposed to the package (rather than constructed inline in init) so tests
 // exercise the very value that is registered.
 var driver = googlepolicy.ProtoDriver[*policyv1alpha1.MetricFilterPolicy]{
+	Class: googlepolicy.PolicyClassTransformation,
 	New: func(pb *policyv1alpha1.MetricFilterPolicy) (googlepolicy.Policy, error) {
 		return NewPolicyFromProto(pb)
 	},
@@ -72,7 +73,7 @@ type Policy struct {
 }
 
 var _ googlepolicy.TransformationPolicy = (*Policy)(nil)
-var _ googlepolicy.MetricPolicyEvaluator = (*Policy)(nil)
+var _ googlepolicy.MetricFilterPolicyEvaluator = (*Policy)(nil)
 
 // NewPolicyFromProto validates and compiles a MetricFilterPolicy protobuf into a Policy.
 func NewPolicyFromProto(pb *policyv1alpha1.MetricFilterPolicy) (*Policy, error) {
@@ -156,19 +157,19 @@ func (p *Policy) IsDatapointLevel() bool {
 	return p.isDatapointLevel
 }
 
-// EvaluateMetric evaluates the policy against the given MetricContext and
-// returns EvalKeep, EvalDrop, or EvalNoMatch.
-func (p *Policy) EvaluateMetric(ctx googlepolicy.MetricContext) googlepolicy.EvalResult {
+// FilterMetric evaluates the policy against the given MetricContext and
+// returns FilterKeep, FilterDrop, or FilterNoMatch.
+func (p *Policy) FilterMetric(ctx googlepolicy.MetricContext) googlepolicy.FilterResult {
 	if !p.matchesContext(ctx) {
-		return googlepolicy.EvalNoMatch
+		return googlepolicy.FilterNoMatch
 	}
 	switch p.Action() {
 	case policyv1alpha1.Action_ACTION_KEEP:
-		return googlepolicy.EvalKeep
+		return googlepolicy.FilterKeep
 	case policyv1alpha1.Action_ACTION_DROP:
-		return googlepolicy.EvalDrop
+		return googlepolicy.FilterDrop
 	default:
-		return googlepolicy.EvalNoMatch
+		return googlepolicy.FilterNoMatch
 	}
 }
 

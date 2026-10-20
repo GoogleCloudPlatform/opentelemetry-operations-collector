@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"regexp"
 	"slices"
 	"strings"
@@ -78,16 +79,16 @@ type Policy interface {
 	Validate() error
 }
 
-// EvalResult represents the outcome of evaluating a telemetry item against a policy.
-type EvalResult uint8
+// FilterResult represents the outcome of evaluating a telemetry item against a policy.
+type FilterResult uint8
 
 const (
-	// EvalNoMatch indicates the policy conditions did not match the item.
-	EvalNoMatch EvalResult = iota
-	// EvalKeep indicates the policy matched and explicitly keeps the item (ACTION_KEEP).
-	EvalKeep
-	// EvalDrop indicates the policy matched and drops the item (ACTION_DROP).
-	EvalDrop
+	// FilterNoMatch indicates the policy conditions did not match the item.
+	FilterNoMatch FilterResult = iota
+	// FilterKeep indicates the policy matched and explicitly keeps the item (ACTION_KEEP).
+	FilterKeep
+	// FilterDrop indicates the policy matched and drops the item (ACTION_DROP).
+	FilterDrop
 )
 
 // LogContext holds the contextual information needed to evaluate a single log record.
@@ -99,11 +100,11 @@ type LogContext struct {
 	ScopeSchemaURL    string
 }
 
-// LogPolicyEvaluator is implemented by transformation policies that evaluate
-// log records (e.g., LogFilterPolicy in pkg/googlepolicy/logfilter).
-type LogPolicyEvaluator interface {
+// LogFilterPolicyEvaluator is implemented by transformation policies that evaluate
+// log filter rules (e.g., LogFilterPolicy in pkg/googlepolicy/logfilter).
+type LogFilterPolicyEvaluator interface {
 	TransformationPolicy
-	EvaluateLog(ctx LogContext) EvalResult
+	FilterLog(ctx LogContext) FilterResult
 }
 
 // MetricContext holds the contextual information needed to evaluate a single
@@ -119,11 +120,11 @@ type MetricContext struct {
 	ScopeSchemaURL         string
 }
 
-// MetricPolicyEvaluator is implemented by transformation policies that evaluate
-// metric datapoints (e.g., MetricFilterPolicy in pkg/googlepolicy/metricfilter).
-type MetricPolicyEvaluator interface {
+// MetricFilterPolicyEvaluator is implemented by transformation policies that evaluate
+// metric filter rules (e.g., MetricFilterPolicy in pkg/googlepolicy/metricfilter).
+type MetricFilterPolicyEvaluator interface {
 	TransformationPolicy
-	EvaluateMetric(ctx MetricContext) EvalResult
+	FilterMetric(ctx MetricContext) FilterResult
 	// IsDatapointLevel reports whether any matcher inspects datapoint
 	// attributes. Policies that do not can be evaluated once per instrument
 	// instead of once per datapoint.
@@ -139,11 +140,11 @@ type TraceContext struct {
 	ScopeSchemaURL    string
 }
 
-// TracePolicyEvaluator is implemented by transformation policies that evaluate
-// spans (e.g., TraceFilterPolicy in pkg/googlepolicy/tracefilter).
-type TracePolicyEvaluator interface {
+// TraceFilterPolicyEvaluator is implemented by transformation policies that evaluate
+// span filter rules (e.g., TraceFilterPolicy in pkg/googlepolicy/tracefilter).
+type TraceFilterPolicyEvaluator interface {
 	TransformationPolicy
-	EvaluateTrace(ctx TraceContext) EvalResult
+	FilterTrace(ctx TraceContext) FilterResult
 }
 
 // ComponentPolicy is an extended interface that any policy that produces config
@@ -230,8 +231,9 @@ type ProtoPolicyDriver interface {
 
 // FailedPolicy represents a policy configuration that failed to load or validate.
 type FailedPolicy struct {
-	ID  string
-	Err error
+	ID    string
+	Class PolicyClass
+	Err   error
 }
 
 // PolicySet is the translation of a set of policies received from a given source
@@ -266,7 +268,7 @@ func MakePolicySet(revisionID string, rawPolicyConfigs []map[string]any) (*Polic
 		"",
 		revisionID,
 		rawPolicyConfigs,
-		func(i int, rawPolicyConfig map[string]any) (Policy, error) {
+		func(i int, rawPolicyConfig map[string]any) (Policy, PolicyClass, error) {
 			// HARD CODED ASSUMPTION: for each entry the map contains a top-level
 			// field called `type` that contains the policy type. This will match up
 			// with the registered PolicyDriver.
@@ -277,13 +279,13 @@ func MakePolicySet(revisionID string, rawPolicyConfigs []map[string]any) (*Polic
 			// needs none of this.
 			policyTypeRaw, ok := rawPolicyConfig["type"]
 			if !ok {
-				return nil, fmt.Errorf("%w for policy at index %d", ErrPolicyTypeFieldMissing, i)
+				return nil, "", fmt.Errorf("%w for policy at index %d", ErrPolicyTypeFieldMissing, i)
 			}
 			policyType, ok := policyTypeRaw.(string)
 			if !ok {
-				return nil, fmt.Errorf("%w for policy at index %d", ErrPolicyTypeFieldWrongType, i)
+				return nil, "", fmt.Errorf("%w for policy at index %d", ErrPolicyTypeFieldWrongType, i)
 			}
-			return LoadPolicy(policyType, rawPolicyConfig)
+			return loadPolicyWithClass(policyType, rawPolicyConfig)
 		},
 		func(i int, rawPolicyConfig map[string]any) string {
 			if id, ok := rawPolicyConfig["id"].(string); ok && id != "" {
@@ -307,14 +309,14 @@ func MakePolicySetFromProtos(policySetID, revisionID string, msgs []proto.Messag
 		policySetID,
 		revisionID,
 		msgs,
-		func(i int, msg proto.Message) (Policy, error) {
-			p, err := LoadPolicyFromProto(msg)
+		func(i int, msg proto.Message) (Policy, PolicyClass, error) {
+			p, class, err := loadPolicyFromProtoWithClass(msg)
 			if err != nil {
 				// A bare proto has no name of its own to report, so the position in
 				// the revision is the only thing that identifies which one failed.
-				return nil, fmt.Errorf("policy at index %d: %w", i, err)
+				return nil, class, fmt.Errorf("policy at index %d: %w", i, err)
 			}
-			return p, nil
+			return p, class, nil
 		},
 		func(i int, msg proto.Message) string {
 			if idGetter, ok := msg.(interface{ GetId() string }); ok {
@@ -331,7 +333,7 @@ func MakePolicySetFromProtos(policySetID, revisionID string, msgs []proto.Messag
 // failures rather than stopping at the first one. It is the shared body of
 // MakePolicySet and MakePolicySetFromProtos, which differ only in how a single
 // input is turned into a Policy.
-func makePolicySet[T any](policySetID, revisionID string, inputs []T, load func(int, T) (Policy, error), idOf func(int, T) string) (*PolicySet, error) {
+func makePolicySet[T any](policySetID, revisionID string, inputs []T, load func(int, T) (Policy, PolicyClass, error), idOf func(int, T) string) (*PolicySet, error) {
 	ps := &PolicySet{
 		Policies:    make(map[string]*PolicySetEntry, len(inputs)),
 		PolicySetID: policySetID,
@@ -342,12 +344,13 @@ func makePolicySet[T any](policySetID, revisionID string, inputs []T, load func(
 	errs := make([]error, 0, len(inputs))
 
 	for i, in := range inputs {
-		p, err := load(i, in)
+		p, class, err := load(i, in)
 		if err != nil {
 			errs = append(errs, err)
 			ps.FailedPolicies = append(ps.FailedPolicies, FailedPolicy{
-				ID:  idOf(i, in),
-				Err: err,
+				ID:    idOf(i, in),
+				Class: class,
+				Err:   err,
 			})
 			continue
 		}
@@ -535,6 +538,16 @@ func (ps *PolicySet) Clone() *PolicySet {
 // is a simple mapstructure unmarshal.
 type GenericDriver[P Policy] struct{}
 
+// PolicyClass returns the PolicyClass of policies loaded by this driver.
+func (gd GenericDriver[P]) PolicyClass() PolicyClass {
+	var zero P
+	rv := reflect.ValueOf(&zero).Elem()
+	if rv.Kind() == reflect.Pointer && rv.IsNil() {
+		rv.Set(reflect.New(rv.Type().Elem()))
+	}
+	return zero.PolicyClass()
+}
+
 // LoadPolicy decodes the raw policy config into P. The "type" routing envelope
 // key has already been removed by LoadPolicy in the registry, so strict
 // mapstructure decoding succeeds.
@@ -560,6 +573,19 @@ type ProtoDriver[P proto.Message] struct {
 	// rather than a method because the constructor is package-specific and
 	// cannot be reached from the type parameter alone.
 	New func(P) (Policy, error)
+
+	// Class is the PolicyClass of policies loaded by this driver. When empty,
+	// PolicyClass defaults to PolicyClassTransformation.
+	Class PolicyClass
+}
+
+// PolicyClass returns the PolicyClass of policies loaded by this driver,
+// defaulting to PolicyClassTransformation when Class is unset.
+func (d ProtoDriver[P]) PolicyClass() PolicyClass {
+	if d.Class != "" {
+		return d.Class
+	}
+	return PolicyClassTransformation
 }
 
 // newP returns a fresh, empty P.
@@ -583,7 +609,11 @@ func (d ProtoDriver[P]) LoadPolicyProto(msg proto.Message) (Policy, error) {
 	if !ok {
 		return nil, fmt.Errorf("%w: expected %T, got %T", ErrPolicyProtoMismatch, d.newP(), msg)
 	}
-	return d.New(typed)
+	p, err := d.New(typed)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrPolicyFailedValidation, err)
+	}
+	return p, nil
 }
 
 // LoadPolicy decodes an authored config into P and loads it. Unknown fields are
@@ -600,5 +630,9 @@ func (d ProtoDriver[P]) LoadPolicy(raw map[string]any) (Policy, error) {
 		return nil, fmt.Errorf("failed to unmarshal into %T: %w", pb, err)
 	}
 
-	return d.New(pb)
+	p, err := d.New(pb)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrPolicyFailedValidation, err)
+	}
+	return p, nil
 }

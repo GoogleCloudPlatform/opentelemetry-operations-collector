@@ -90,34 +90,6 @@ func TestCompileTraceMatcher_AndExtractor(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "span status code ERROR",
-			matcher: &policyv1alpha1.TraceMatcher{
-				Target: &policyv1alpha1.TraceFieldSelector{
-					Target: &policyv1alpha1.TraceFieldSelector_RecordField{
-						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_STATUS_CODE,
-					},
-				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equals{
-					Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "ERROR"}},
-				},
-			},
-			want: true,
-		},
-		{
-			name: "span status message contains",
-			matcher: &policyv1alpha1.TraceMatcher{
-				Target: &policyv1alpha1.TraceFieldSelector{
-					Target: &policyv1alpha1.TraceFieldSelector_RecordField{
-						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_STATUS_MESSAGE,
-					},
-				},
-				Predicate: &policyv1alpha1.TraceMatcher_Contains{
-					Contains: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "deadline"}},
-				},
-			},
-			want: true,
-		},
-		{
 			name: "trace_id, span_id, parent_span_id exist",
 			matcher: &policyv1alpha1.TraceMatcher{
 				Target: &policyv1alpha1.TraceFieldSelector{

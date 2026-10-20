@@ -113,7 +113,7 @@ func updateStatus(st **componentstatus.Event, event *componentstatus.Event) {
 // - https://github.com/open-telemetry/opentelemetry-collector/blob/v0.92.0/component/status.go#L27-L42
 // - https://github.com/open-telemetry/opentelemetry-collector/pull/8169#issuecomment-1670048722
 func (hc *healthAgent) ComponentStatusChanged(source *componentstatus.InstanceID, event *componentstatus.Event) {
-	if event.Status() != componentstatus.StatusOK && event.Status() != componentstatus.StatusRecoverableError {
+	if event.Status() != componentstatus.StatusOK && event.Status() != componentstatus.StatusRecoverableError && event.Status() != componentstatus.StatusPermanentError {
 		return
 	}
 	hc.mu.Lock()

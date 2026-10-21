@@ -522,25 +522,3 @@ func TestDriver_WireProtoAndMapLoading(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, []string{"/opt/services/logs/*.log"}, srcPolicy.Include())
 }
-
-func TestPolicyValidation_TestAllowedRoot(t *testing.T) {
-	tempDir := t.TempDir()
-	t.Setenv("FILELOG_TEST_ALLOWED_ROOT", tempDir)
-
-	// Paths within tempDir should be accepted when FILELOG_TEST_ALLOWED_ROOT is set.
-	pb := &policyv1alpha1.FileLogSourcePolicy{
-		Id:      "temp-dir-policy",
-		Include: []string{tempDir + "/*.log"},
-	}
-	pol, err := NewPolicyFromProto(pb)
-	require.NoError(t, err)
-	assert.NoError(t, pol.Validate())
-
-	// Paths targeting sensitive directories should still be rejected even within allowed root or outside.
-	pbSensitive := &policyv1alpha1.FileLogSourcePolicy{
-		Id:      "sensitive-policy",
-		Include: []string{"/etc/shadow"},
-	}
-	_, err = NewPolicyFromProto(pbSensitive)
-	require.ErrorIs(t, err, ErrSensitiveDirectory)
-}

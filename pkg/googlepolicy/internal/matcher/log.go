@@ -106,6 +106,18 @@ func CompileLogExtractor(target *policyv1alpha1.LogFieldSelector) (LogTargetExtr
 	case *policyv1alpha1.LogFieldSelector_ScopeField:
 		return compileLogScopeFieldExtractor(t.ScopeField)
 
+	case *policyv1alpha1.LogFieldSelector_BodyField:
+		steps, err := CompilePath(t.BodyField, "body")
+		if err != nil {
+			return nil, err
+		}
+		return func(ctx googlepolicy.LogContext) (any, bool) {
+			if ctx.Record == (plog.LogRecord{}) || ctx.Record.Body().Type() != pcommon.ValueTypeMap {
+				return nil, false
+			}
+			return EvalPath(ctx.Record.Body().Map(), steps)
+		}, nil
+
 	default:
 		return nil, ErrMissingLogTarget
 	}

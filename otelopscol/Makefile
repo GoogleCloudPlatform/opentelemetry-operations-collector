@@ -3,7 +3,7 @@
 DISTRIBUTION_NAME = otelopscol
 
 # Variables filled in from distro specification
-VERSION = v0.162.0
+VERSION = v0.162.1
 OTEL_VERSION = 0.162.0
 OTEL_VERSION_TAG = v$(OTEL_VERSION)
 COLLECTOR_BINARY_NAME = otelopscol
@@ -23,7 +23,7 @@ TOOLS_DIR = $(PWD)/.tools
 
 OCB_BIN ?= $(TOOLS_DIR)/ocb
 
-GO_VERSION = 1.26.4
+GO_VERSION = 1.26.10
 GO_BIN_DIR ?= $(TOOLS_DIR)/go/bin
 GO_BIN ?= $(GO_BIN_DIR)/go
 SET_GO_BIN_PATH ?= PATH="$(GO_BIN_DIR):$$PATH"

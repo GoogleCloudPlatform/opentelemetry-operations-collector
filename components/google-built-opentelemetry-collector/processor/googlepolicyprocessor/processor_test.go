@@ -28,8 +28,13 @@ import (
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/event"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/logfilter"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/logtransform"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestProcessTraces_NilEngine(t *testing.T) {
@@ -401,6 +406,75 @@ func TestProcessLogs_LoadFromRawJSONPolicySet(t *testing.T) {
 	assert.Equal(t, "INFO", records.At(0).SeverityText())
 }
 
+func TestProcessLogs_WithRealLogTransformPolicy(t *testing.T) {
+	p := newGooglePolicyProcessor(&Config{}, zap.NewNop())
+	require.NoError(t, p.start(context.Background(), componenttest.NewNopHost()))
+	defer func() { _ = p.shutdown(context.Background()) }()
+
+	transformPolicy, err := logtransform.NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		Id: "add-soc-tier",
+		Matches: []*policyv1alpha1.LogMatcher{
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_RecordField{
+						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
+					},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Contains{
+					Contains: &policyv1alpha1.Value{
+						Value: &policyv1alpha1.Value_StringValue{StringValue: "security"},
+					},
+				},
+			},
+		},
+		Action: &policyv1alpha1.LogTransformPolicy_Add{
+			Add: &policyv1alpha1.LogAddAction{
+				Target: &policyv1alpha1.LogTargetSelector{
+					Target: &policyv1alpha1.LogTargetSelector_LogAttribute{
+						LogAttribute: &policyv1alpha1.AttributePath{Path: []string{"soc_tier"}},
+					},
+				},
+				Value: &policyv1alpha1.Value{
+					Value: &policyv1alpha1.Value_StringValue{StringValue: "HOT_ACTIVE_SOC"},
+				},
+				Upsert: proto.Bool(true),
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	ps := &googlepolicy.PolicySet{
+		RevisionID: "rev-real-transform",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			transformPolicy.PolicyName(): {PolicyObj: transformPolicy},
+		},
+	}
+	googlepolicy.SetActivePolicySet(ps)
+	defer googlepolicy.SetActivePolicySet(nil)
+
+	assert.Eventually(t, func() bool {
+		ev := p.evaluator.Load()
+		return ev != nil && len(ev.logTransformPolicies) > 0
+	}, 1*time.Second, 10*time.Millisecond)
+
+	ld := plog.NewLogs()
+	rl := ld.ResourceLogs().AppendEmpty()
+	sl := rl.ScopeLogs().AppendEmpty()
+
+	lr := sl.LogRecords().AppendEmpty()
+	lr.Body().SetStr("security audit line")
+
+	out, err := p.processLogs(context.Background(), ld)
+	require.NoError(t, err)
+
+	require.Equal(t, 1, out.ResourceLogs().Len())
+	records := out.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords()
+	require.Equal(t, 1, records.Len())
+	val, exists := records.At(0).Attributes().Get("soc_tier")
+	require.True(t, exists)
+	assert.Equal(t, "HOT_ACTIVE_SOC", val.AsString())
+}
+
 func TestProcessor_DoubleShutdownAndReloadFailure(t *testing.T) {
 	// Set a TransformationPolicy that implements none of the per-signal evaluator
 	// interfaces so NewEvaluator rejects it and reloadPolicies fails.
@@ -441,4 +515,52 @@ func TestProcessor_WatcherChannelClosed(t *testing.T) {
 	// Closing watcherCh directly should cause watchPolicies goroutine to exit cleanly
 	close(ch)
 	p.wg.Wait()
+}
+
+func TestReloadPolicies_RecordsPolicyEvaluateErrorEventForFailedPoliciesWithClass(t *testing.T) {
+	core, recorded := observer.New(zapcore.InfoLevel)
+	logger := zap.New(core)
+
+	ps, err := googlepolicy.MakePolicySet("rev-proc-failed", []map[string]any{
+		{
+			"type":   "log_filter",
+			"id":     "invalid-log-filter",
+			"action": "ACTION_DROP",
+			// missing matches -> ErrPolicyFailedValidation, class: transformation
+		},
+		{
+			"type": "unknown_policy_type",
+			"id":   "unknown-policy",
+		},
+	})
+	require.Error(t, err)
+	require.NotNil(t, ps)
+	ps.PolicySetID = "projects/my-project/locations/us-central1/policySets/my-policy-set"
+
+	googlepolicy.SetActivePolicySet(ps)
+	defer googlepolicy.SetActivePolicySet(nil)
+
+	p := newGooglePolicyProcessor(&Config{}, logger)
+	require.NoError(t, p.start(context.Background(), componenttest.NewNopHost()))
+	defer func() { _ = p.shutdown(context.Background()) }()
+
+	entries := recorded.FilterField(zap.String("event.name", event.PolicyEvaluateErrorEventName)).All()
+	require.Len(t, entries, 2)
+
+	assert.Equal(t, map[string]any{
+		"event.name":                 event.PolicyEvaluateErrorEventName,
+		"gcp.policy.id":              "invalid-log-filter",
+		"gcp.policy.set.id":          "projects/my-project/locations/us-central1/policySets/my-policy-set",
+		"gcp.policy.set.revision.id": "rev-proc-failed",
+		"error.type":                 "policy_failed_validation",
+		"gcp.policy.class":           "transformation",
+	}, entries[0].ContextMap())
+
+	assert.Equal(t, map[string]any{
+		"event.name":                 event.PolicyEvaluateErrorEventName,
+		"gcp.policy.id":              "unknown-policy",
+		"gcp.policy.set.id":          "projects/my-project/locations/us-central1/policySets/my-policy-set",
+		"gcp.policy.set.revision.id": "rev-proc-failed",
+		"error.type":                 "policy_type_not_found",
+	}, entries[1].ContextMap())
 }

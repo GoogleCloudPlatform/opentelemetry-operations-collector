@@ -23,3 +23,6 @@ go.work.sum
 
 # Package list files
 **/packages.txt
+
+# We all use the antigravity harness and it likes to make worktrees
+.worktrees

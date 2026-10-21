@@ -118,9 +118,9 @@ func (h *HeaderLoggingInterceptor) UnaryInterceptor(
 	opts = append(opts, grpc.Header(&respHeaders))
 	err := invoker(ctx, method, req, reply, cc, opts...)
 	if err != nil {
-		h.logger.Infof("Request failed for method %s, debug response headers:%v", method, respHeaders)
+		h.logger.Infof("Request failed for method %s, debug response headers:%v", method, map[string][]string(respHeaders))
 		return err
 	}
-	h.logger.Infof("Method: %s, Received response headers: %v", method, respHeaders)
+	h.logger.Infof("Method: %s, Received response headers: %v", method, map[string][]string(respHeaders))
 	return nil
 }

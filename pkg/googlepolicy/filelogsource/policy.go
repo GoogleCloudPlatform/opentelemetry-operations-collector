@@ -21,8 +21,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
+	"testing"
 
 	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
@@ -317,6 +320,11 @@ func validateIncludePattern(pattern string) error {
 			}
 		}
 
+		// In test environments, allow patterns within FILELOG_TEST_ALLOWED_ROOT when running under go test.
+		if matchesTestAllowedRoot(pattern, true, "") {
+			return nil
+		}
+
 		// Allowed Linux roots:
 		// 1. /var/log/**
 		// 2. /opt/**/logs/**
@@ -335,6 +343,11 @@ func validateIncludePattern(pattern string) error {
 	// Windows paths: normalize separators to '/' and lowercase for check.
 	winNorm := strings.ToLower(strings.ReplaceAll(pattern, "\\", "/"))
 
+	// In test environments, allow patterns within FILELOG_TEST_ALLOWED_ROOT when running under go test.
+	if matchesTestAllowedRoot(pattern, false, winNorm) {
+		return nil
+	}
+
 	// Allowed Windows roots:
 	// 1. %ProgramData%\**\logs\** or <Drive>:\ProgramData\**\logs\**
 	// 2. %SystemDrive%\inetpub\logs\** or <Drive>:\inetpub\logs\**
@@ -350,6 +363,28 @@ func validateIncludePattern(pattern string) error {
 	}
 
 	return fmt.Errorf("%w: %q", ErrDisallowedLogRoot, pattern)
+}
+
+// matchesTestAllowedRoot checks whether pattern falls within the directory specified
+// by FILELOG_TEST_ALLOWED_ROOT.
+//
+// Gated strictly behind testing.Testing(): in non-test (production) binaries,
+// testing.Testing() returns false, making this function a total no-op and ensuring
+// FILELOG_TEST_ALLOWED_ROOT cannot be used to bypass path validation in production.
+func matchesTestAllowedRoot(pattern string, isLinuxAbs bool, winNorm string) bool {
+	if !testing.Testing() {
+		return false
+	}
+	testRoot := os.Getenv("FILELOG_TEST_ALLOWED_ROOT")
+	if testRoot == "" {
+		return false
+	}
+	cleanTestRoot := filepath.Clean(testRoot)
+	if isLinuxAbs {
+		return pattern == cleanTestRoot || strings.HasPrefix(pattern, cleanTestRoot+"/")
+	}
+	normTestRoot := strings.ToLower(strings.ReplaceAll(cleanTestRoot, "\\", "/"))
+	return winNorm == normTestRoot || strings.HasPrefix(winNorm, normTestRoot+"/")
 }
 
 func isWindowsAbsolute(pattern string) bool {

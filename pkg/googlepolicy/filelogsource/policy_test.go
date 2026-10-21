@@ -522,3 +522,55 @@ func TestDriver_WireProtoAndMapLoading(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, []string{"/opt/services/logs/*.log"}, srcPolicy.Include())
 }
+
+func TestPolicyValidation_TestAllowedRoot(t *testing.T) {
+	// Verify that testing.Testing() returns true in this test execution context.
+	require.True(t, testing.Testing(), "testing.Testing() must return true under go test")
+
+	tempDir := t.TempDir()
+
+	// 1. Without FILELOG_TEST_ALLOWED_ROOT, paths in tempDir are rejected.
+	t.Setenv("FILELOG_TEST_ALLOWED_ROOT", "")
+	pbUnset := &policyv1alpha1.FileLogSourcePolicy{
+		Id:      "temp-dir-unset-policy",
+		Include: []string{tempDir + "/*.log"},
+	}
+	_, err := NewPolicyFromProto(pbUnset)
+	require.ErrorIs(t, err, ErrDisallowedLogRoot)
+
+	// 2. With FILELOG_TEST_ALLOWED_ROOT set, paths within tempDir are accepted.
+	t.Setenv("FILELOG_TEST_ALLOWED_ROOT", tempDir)
+	pbSet := &policyv1alpha1.FileLogSourcePolicy{
+		Id:      "temp-dir-policy",
+		Include: []string{tempDir + "/*.log"},
+	}
+	polSet, err := NewPolicyFromProto(pbSet)
+	require.NoError(t, err)
+	assert.NoError(t, polSet.Validate())
+
+	// 3. Sensitive directories are strictly rejected even when FILELOG_TEST_ALLOWED_ROOT is set.
+	pbSensitive := &policyv1alpha1.FileLogSourcePolicy{
+		Id:      "sensitive-policy",
+		Include: []string{"/etc/shadow"},
+	}
+	_, err = NewPolicyFromProto(pbSensitive)
+	require.ErrorIs(t, err, ErrSensitiveDirectory)
+
+	// 4. Path traversal escaping the root is strictly rejected.
+	pbTraversal := &policyv1alpha1.FileLogSourcePolicy{
+		Id:      "traversal-policy",
+		Include: []string{tempDir + "/../etc/shadow"},
+	}
+	_, err = NewPolicyFromProto(pbTraversal)
+	require.ErrorIs(t, err, ErrPathTraversal)
+
+	// 5. Windows path matching under FILELOG_TEST_ALLOWED_ROOT (case-insensitive and separator-normalized).
+	t.Setenv("FILELOG_TEST_ALLOWED_ROOT", "C:\\TestRoot\\logs")
+	pbWin := &policyv1alpha1.FileLogSourcePolicy{
+		Id:      "win-test-policy",
+		Include: []string{"c:/testroot/logs/app.log", "C:\\TestRoot\\logs\\sub\\*.log"},
+	}
+	polWin, err := NewPolicyFromProto(pbWin)
+	require.NoError(t, err)
+	assert.NoError(t, polWin.Validate())
+}

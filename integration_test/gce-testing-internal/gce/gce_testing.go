@@ -1632,9 +1632,11 @@ func waitForMIGStable(ctx context.Context, project, zone, igmName string, timeou
 	defer ticker.Stop()
 
 	for {
+		// Stop waiting if the overall operation timeout has expired.
 		if time.Now().After(deadline) {
 			return ErrMIGTimeout
 		}
+		// Fast-fail if the context has already been canceled before issuing an API call.
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -1648,6 +1650,8 @@ func waitForMIGStable(ctx context.Context, project, zone, igmName string, timeou
 		})
 		if err != nil {
 			if shouldRetryInstanceOperation(err) {
+				// Wait for the next ticker interval before retrying transient/rate-limited errors,
+				// while aborting immediately if context is canceled.
 				select {
 				case <-ctx.Done():
 					return ctx.Err()
@@ -1661,6 +1665,8 @@ func waitForMIGStable(ctx context.Context, project, zone, igmName string, timeou
 			return nil
 		}
 
+		// Wait for the next polling interval before re-checking MIG stability,
+		// while aborting immediately if context is canceled.
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -2341,32 +2347,63 @@ func shouldRetryInstanceOperation(err error) bool {
 }
 
 // shouldRetryTagUpdate reports whether updating instance tags should be retried.
+// GCE instance tag updates use optimistic concurrency control via a fingerprint (ETag).
+// If tags or metadata are modified concurrently, GCE returns an HTTP 412 Precondition Failed
+// (or codes.FailedPrecondition via gRPC), with error details or messages mentioning "conditionNotMet"
+// or "fingerprint".
 func shouldRetryTagUpdate(err error) bool {
 	if err == nil {
 		return false
 	}
+	// Check HTTP 412 status code from REST client.
 	var gErr *googleapi.Error
 	if errors.As(err, &gErr) && gErr.Code == 412 {
 		return true
 	}
+	// Check codes.FailedPrecondition status code from gRPC client.
 	if s, ok := status.FromError(err); ok && s.Code() == codes.FailedPrecondition {
 		return true
 	}
+	// Check error string fallback for wrapped or serialized API errors that mention precondition/fingerprint failure.
 	lower := strings.ToLower(err.Error())
 	if strings.Contains(lower, "conditionnotmet") || strings.Contains(lower, "fingerprint") {
 		return true
 	}
+	// Also retry on transient connection failures or quota rate limits.
 	return shouldRetryInstanceOperation(err)
 }
+
+const (
+	// defaultBackoffMultiplier is the backoff factor used across GCE API retry loops to de-synchronize concurrent retries.
+	defaultBackoffMultiplier = 1.5
+
+	// rateLimitInitialInterval is the initial backoff interval for rate-limited GCE API calls.
+	rateLimitInitialInterval = 1 * time.Second
+
+	// rateLimitMaxInterval caps the backoff interval so retries remain reasonably responsive once quota replenishes.
+	rateLimitMaxInterval = 15 * time.Second
+
+	// defaultRateLimitMaxElapsedTime allows rate-limited calls to wait out GCE's rolling 1-minute quota replenishment window.
+	defaultRateLimitMaxElapsedTime = 2 * time.Minute
+
+	// stopInstanceInitialInterval is the initial backoff interval when retrying instance shutdown.
+	stopInstanceInitialInterval = 5 * time.Second
+
+	// stopInstanceMaxInterval caps the backoff interval when retrying instance shutdown.
+	stopInstanceMaxInterval = 60 * time.Second
+
+	// stopInstanceMaxElapsedTime is the total timeout allowed for shutting down an instance.
+	stopInstanceMaxElapsedTime = 15 * time.Minute
+)
 
 // newRateLimitBackOff returns an ExponentialBackOff suitable for rate-limited GCE API calls.
 // It starts with a 1-second interval and backs off up to 15 seconds, allowing calls to wait out
 // 1-minute regional quota replenishment windows without excessive retry spam.
 func newRateLimitBackOff(maxElapsedTime time.Duration) *backoff.ExponentialBackOff {
 	bo := backoff.NewExponentialBackOff()
-	bo.InitialInterval = 1 * time.Second
-	bo.Multiplier = 1.5
-	bo.MaxInterval = 15 * time.Second
+	bo.InitialInterval = rateLimitInitialInterval
+	bo.Multiplier = defaultBackoffMultiplier
+	bo.MaxInterval = rateLimitMaxInterval
 	bo.MaxElapsedTime = maxElapsedTime
 	return bo
 }
@@ -2382,10 +2419,10 @@ func StopInstance(ctx context.Context, logger *log.Logger, vm *VM) error {
 		vm.Name)
 
 	expBackoff := backoff.NewExponentialBackOff()
-	expBackoff.InitialInterval = 5 * time.Second
-	expBackoff.Multiplier = 1.5
-	expBackoff.MaxInterval = 60 * time.Second
-	expBackoff.MaxElapsedTime = 15 * time.Minute
+	expBackoff.InitialInterval = stopInstanceInitialInterval
+	expBackoff.Multiplier = defaultBackoffMultiplier
+	expBackoff.MaxInterval = stopInstanceMaxInterval
+	expBackoff.MaxElapsedTime = stopInstanceMaxElapsedTime
 
 	tryStop := func() error {
 		op, err := instancesClient.Stop(ctx, &computepb.StopInstanceRequest{

@@ -1649,19 +1649,10 @@ func waitForMIGStable(ctx context.Context, project, zone, igmName string, timeou
 			InstanceGroupManager: igmName,
 		})
 		if err != nil {
-			if shouldRetryInstanceOperation(err) {
-				// Wait for the next ticker interval before retrying transient/rate-limited errors,
-				// while aborting immediately if context is canceled.
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				case <-ticker.C:
-				}
-				continue
+			if !isTransientError(err) {
+				return err
 			}
-			return err
-		}
-		if igm.GetStatus().GetIsStable() {
+		} else if igm.GetStatus().GetIsStable() {
 			return nil
 		}
 
@@ -1828,11 +1819,7 @@ func attemptCreateManagedInstanceGroupVM(ctx context.Context, logger *log.Logger
 		"--zone="+migVM.Zone,
 		"--format=json")
 
-	inst, err := instancesClient.Get(ctx, &computepb.GetInstanceRequest{
-		Project:  migVM.Project,
-		Zone:     migVM.Zone,
-		Instance: migVM.Name,
-	})
+	inst, err := getInstance(ctx, migVM.Project, migVM.Zone, migVM.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -2069,7 +2056,7 @@ func DescribeVMDisk(ctx context.Context, logger *log.Logger, vm *VM) (CommandOut
 		"--format=json")
 
 	var disk *computepb.Disk
-	err := retryOp(ctx, newRateLimitBackOff(2*time.Minute), shouldRetryInstanceOperation, func() error {
+	err := retryOp(ctx, newRateLimitBackOff(), isTransientError, func() error {
 		var err error
 		disk, err = disksClient.Get(ctx, &computepb.GetDiskRequest{
 			Project: vm.Project,
@@ -2089,6 +2076,18 @@ func DescribeVMDisk(ctx context.Context, logger *log.Logger, vm *VM) (CommandOut
 	return CommandOutput{Stdout: string(data)}, nil
 }
 
+func isAccessConfigNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+	if isNotFound(err) {
+		return true
+	}
+	lower := strings.ToLower(err.Error())
+	return strings.Contains(lower, "external-nat") ||
+		strings.Contains(lower, "does not have an access config named")
+}
+
 // RemoveExternalIP deletes the external ip for an instance.
 func RemoveExternalIP(ctx context.Context, logger *log.Logger, vm *VM) error {
 	LogEquivalentGcloud(logger, "compute", "instances", "delete-access-config",
@@ -2097,7 +2096,7 @@ func RemoveExternalIP(ctx context.Context, logger *log.Logger, vm *VM) error {
 		vm.Name,
 		"--access-config-name=external-nat")
 
-	return retryOp(ctx, newRateLimitBackOff(2*time.Minute), shouldRetryInstanceOperation, func() error {
+	return retryOp(ctx, newRateLimitBackOff(), isTransientError, func() error {
 		op, err := instancesClient.DeleteAccessConfig(ctx, &computepb.DeleteAccessConfigInstanceRequest{
 			Project:          vm.Project,
 			Zone:             vm.Zone,
@@ -2106,9 +2105,18 @@ func RemoveExternalIP(ctx context.Context, logger *log.Logger, vm *VM) error {
 			AccessConfig:     "external-nat",
 		})
 		if err != nil {
+			if isAccessConfigNotFound(err) {
+				return nil
+			}
 			return err
 		}
-		return op.Wait(ctx)
+		if err := op.Wait(ctx); err != nil {
+			if isAccessConfigNotFound(err) {
+				return nil
+			}
+			return err
+		}
+		return nil
 	})
 }
 
@@ -2370,7 +2378,7 @@ func shouldRetryTagUpdate(err error) bool {
 		return true
 	}
 	// Also retry on transient connection failures or quota rate limits.
-	return shouldRetryInstanceOperation(err)
+	return isTransientError(err)
 }
 
 const (
@@ -2385,27 +2393,33 @@ const (
 
 	// defaultRateLimitMaxElapsedTime allows rate-limited calls to wait out GCE's rolling 1-minute quota replenishment window.
 	defaultRateLimitMaxElapsedTime = 2 * time.Minute
-
-	// stopInstanceInitialInterval is the initial backoff interval when retrying instance shutdown.
-	stopInstanceInitialInterval = 5 * time.Second
-
-	// stopInstanceMaxInterval caps the backoff interval when retrying instance shutdown.
-	stopInstanceMaxInterval = 60 * time.Second
-
-	// stopInstanceMaxElapsedTime is the total timeout allowed for shutting down an instance.
-	stopInstanceMaxElapsedTime = 15 * time.Minute
 )
 
 // newRateLimitBackOff returns an ExponentialBackOff suitable for rate-limited GCE API calls.
 // It starts with a 1-second interval and backs off up to 15 seconds, allowing calls to wait out
 // 1-minute regional quota replenishment windows without excessive retry spam.
-func newRateLimitBackOff(maxElapsedTime time.Duration) *backoff.ExponentialBackOff {
+func newRateLimitBackOff() *backoff.ExponentialBackOff {
 	bo := backoff.NewExponentialBackOff()
 	bo.InitialInterval = rateLimitInitialInterval
 	bo.Multiplier = defaultBackoffMultiplier
 	bo.MaxInterval = rateLimitMaxInterval
-	bo.MaxElapsedTime = maxElapsedTime
+	bo.MaxElapsedTime = defaultRateLimitMaxElapsedTime
 	return bo
+}
+
+// getInstance retrieves an instance resource with rate-limit retries.
+func getInstance(ctx context.Context, project, zone, name string) (*computepb.Instance, error) {
+	var inst *computepb.Instance
+	err := retryOp(ctx, newRateLimitBackOff(), isTransientError, func() error {
+		var err error
+		inst, err = instancesClient.Get(ctx, &computepb.GetInstanceRequest{
+			Project:  project,
+			Zone:     zone,
+			Instance: name,
+		})
+		return err
+	})
+	return inst, err
 }
 
 // StopInstance shuts down a VM instance.
@@ -2418,48 +2432,17 @@ func StopInstance(ctx context.Context, logger *log.Logger, vm *VM) error {
 		"--zone="+vm.Zone,
 		vm.Name)
 
-	expBackoff := backoff.NewExponentialBackOff()
-	expBackoff.InitialInterval = stopInstanceInitialInterval
-	expBackoff.Multiplier = defaultBackoffMultiplier
-	expBackoff.MaxInterval = stopInstanceMaxInterval
-	expBackoff.MaxElapsedTime = stopInstanceMaxElapsedTime
-
-	tryStop := func() error {
+	return retryOp(ctx, newRateLimitBackOff(), isTransientError, func() error {
 		op, err := instancesClient.Stop(ctx, &computepb.StopInstanceRequest{
 			Project:  vm.Project,
 			Zone:     vm.Zone,
 			Instance: vm.Name,
 		})
 		if err != nil {
-			// If Stop failed, check if the VM is already TERMINATED (e.g. stopped out-of-band or earlier attempt succeeded).
-			inst, getErr := instancesClient.Get(ctx, &computepb.GetInstanceRequest{
-				Project:  vm.Project,
-				Zone:     vm.Zone,
-				Instance: vm.Name,
-			})
-			if getErr == nil && inst.GetStatus() == "TERMINATED" {
-				return nil
-			}
-			if getErr != nil && shouldRetryInstanceOperation(getErr) {
-				return getErr
-			}
 			return err
 		}
-		if err := op.Wait(ctx); err != nil {
-			// If op.Wait returned an error, verify whether the VM actually reached TERMINATED status.
-			if inst, getErr := instancesClient.Get(ctx, &computepb.GetInstanceRequest{
-				Project:  vm.Project,
-				Zone:     vm.Zone,
-				Instance: vm.Name,
-			}); getErr == nil && inst.GetStatus() == "TERMINATED" {
-				return nil
-			}
-			return err
-		}
-		return nil
-	}
-
-	return retryOp(ctx, expBackoff, shouldRetryInstanceOperation, tryStop)
+		return op.Wait(ctx)
+	})
 }
 
 func shouldRetryStartVM(err error) bool {
@@ -2494,11 +2477,7 @@ func StartInstance(ctx context.Context, logger *log.Logger, vm *VM) error {
 		return err
 	}
 
-	inst, err := instancesClient.Get(ctx, &computepb.GetInstanceRequest{
-		Project:  vm.Project,
-		Zone:     vm.Zone,
-		Instance: vm.Name,
-	})
+	inst, err := getInstance(ctx, vm.Project, vm.Zone, vm.Name)
 	if err != nil {
 		return err
 	}
@@ -2774,16 +2753,7 @@ func FetchMetadata(ctx context.Context, logger *log.Logger, vm *VM) (map[string]
 		"--zone="+vm.Zone,
 		"--format=json(metadata)")
 
-	var inst *computepb.Instance
-	err := retryOp(ctx, newRateLimitBackOff(2*time.Minute), shouldRetryInstanceOperation, func() error {
-		var err error
-		inst, err = instancesClient.Get(ctx, &computepb.GetInstanceRequest{
-			Project:  vm.Project,
-			Zone:     vm.Zone,
-			Instance: vm.Name,
-		})
-		return err
-	})
+	inst, err := getInstance(ctx, vm.Project, vm.Zone, vm.Name)
 	if err != nil {
 		return nil, fmt.Errorf("error fetching metadata for VM %v: %w", vm.Name, err)
 	}
@@ -3060,12 +3030,8 @@ func areTagsValid(tags []string) (bool, error) {
 }
 
 func updateVmTags(ctx context.Context, vm *VM, mutateFn func([]string) []string) error {
-	return retryOp(ctx, newRateLimitBackOff(2*time.Minute), shouldRetryTagUpdate, func() error {
-		inst, err := instancesClient.Get(ctx, &computepb.GetInstanceRequest{
-			Project:  vm.Project,
-			Zone:     vm.Zone,
-			Instance: vm.Name,
-		})
+	return retryOp(ctx, newRateLimitBackOff(), shouldRetryTagUpdate, func() error {
+		inst, err := getInstance(ctx, vm.Project, vm.Zone, vm.Name)
 		if err != nil {
 			return err
 		}

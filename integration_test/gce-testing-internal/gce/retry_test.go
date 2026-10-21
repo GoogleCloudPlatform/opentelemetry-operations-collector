@@ -533,28 +533,27 @@ func TestRetryOp(t *testing.T) {
 	})
 }
 
-func TestShouldRetryInstanceOperation(t *testing.T) {
+func TestIsAccessConfigNotFound(t *testing.T) {
 	tests := []struct {
 		name     string
 		err      error
 		expected bool
 	}{
 		{"nil error", nil, false},
-		{"403 quota", &googleapi.Error{Code: 403, Message: "Quota exceeded"}, true},
-		{"429 rate limit", &googleapi.Error{Code: 429, Message: "Rate limit exceeded"}, true},
-		{"503 unavailable", &googleapi.Error{Code: 503, Message: "Service unavailable"}, true},
-		{"502 bad gateway", &googleapi.Error{Code: 502, Message: "Bad Gateway"}, true},
-		{"grpc codes.Unavailable", status.Error(codes.Unavailable, "unavailable"), true},
-		{"grpc codes.ResourceExhausted", status.Error(codes.ResourceExhausted, "resource exhausted"), true},
-		{"400 bad request", &googleapi.Error{Code: 400, Message: "Bad Request"}, false},
-		{"404 not found", &googleapi.Error{Code: 404, Message: "Not Found"}, false},
+		{"404 not found", &googleapi.Error{Code: 404, Message: "Not Found"}, true},
+		{"grpc codes.NotFound", status.Error(codes.NotFound, "not found"), true},
+		{"string notFound", errors.New("notFound: resource missing"), true},
+		{"does not have an access config named", errors.New("Invalid request: Instance test-vm does not have an access config named 'external-nat'"), true},
+		{"googleapi 400 access config missing", &googleapi.Error{Code: 400, Message: "Instance test-vm does not have an access config named 'external-nat'"}, true},
+		{"unrelated error", errors.New("internal server error"), false},
+		{"403 quota", &googleapi.Error{Code: 403, Message: "Quota exceeded"}, false},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			actual := shouldRetryInstanceOperation(tc.err)
+			actual := isAccessConfigNotFound(tc.err)
 			if actual != tc.expected {
-				t.Errorf("shouldRetryInstanceOperation(%v) = %v, want %v", tc.err, actual, tc.expected)
+				t.Errorf("isAccessConfigNotFound(%v) = %v, want %v", tc.err, actual, tc.expected)
 			}
 		})
 	}
@@ -590,7 +589,7 @@ func TestShouldRetryTagUpdate(t *testing.T) {
 }
 
 func TestNewRateLimitBackOff(t *testing.T) {
-	bo := newRateLimitBackOff(defaultRateLimitMaxElapsedTime)
+	bo := newRateLimitBackOff()
 	if bo.InitialInterval != rateLimitInitialInterval {
 		t.Errorf("InitialInterval = %v, want %v", bo.InitialInterval, rateLimitInitialInterval)
 	}

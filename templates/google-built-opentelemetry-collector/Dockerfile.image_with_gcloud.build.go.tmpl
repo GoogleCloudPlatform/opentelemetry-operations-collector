@@ -37,6 +37,7 @@ RUN chmod 0644 /etc/{{ .BinaryName }}/config.yaml
 FROM --platform=${BUILDPLATFORM} ${CERT_CONTAINER} AS certs
 RUN rm -f /etc/apt/sources.list.d/* /etc/apt/sources.list
 RUN echo 'deb https://us-apt.pkg.dev/remote/artifact-foundry-prod/debian-3p-remote-bookworm bookworm main' | tee -a  /etc/apt/sources.list.d/artifact-registry.list
+RUN echo 'deb https://us-apt.pkg.dev/remote/artifact-foundry-prod/debian-3p-remote-bookworm-security bookworm-security main' | tee -a  /etc/apt/sources.list.d/artifact-registry.list
 RUN apt-get update && apt-get install -y ca-certificates
 
 FROM --platform=${BUILDPLATFORM} gcr.io/distroless/static

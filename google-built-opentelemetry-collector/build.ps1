@@ -19,7 +19,7 @@ if (-not (Test-Path $TarDir)) {
 }
 
 # Ensure the correct version of Go is installed
-$GoVersion = "1.26.7"
+$GoVersion = "1.26.10"
 $ToolsDir = Join-Path $PSScriptRoot ".tools"
 $GoDir = Join-Path $ToolsDir "go"
 $GoBinDir = Join-Path $GoDir "bin"

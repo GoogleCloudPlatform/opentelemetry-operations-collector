@@ -12,7 +12,7 @@ config build = common.build {
     {
       key = 'BUILD_CONTAINER'
       value =
-          'us-docker.pkg.dev/google.com/api-project-999119582588/go-boringcrypto-internal/golang@sha256:2f110d472e26e5c6b1c93f40a3ea6f88fe8954902cd4518d7ce99d836a158ceb'
+          'us-docker.pkg.dev/google.com/api-project-999119582588/go-boringcrypto-internal/golang@sha256:512fdac4a85972a5323695af8ebb41d2c7518b9fa1f230bd8066ee9b46d10a35'
     },
     {
       key = 'CERT_CONTAINER'

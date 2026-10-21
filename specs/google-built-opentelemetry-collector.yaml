@@ -15,7 +15,7 @@
 name: google-built-opentelemetry-collector
 module: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/google-built-opentelemetry-collector
 display_name: Google-Built OpenTelemetry Collector
-version: 0.163.0
+version: 0.163.1
 description: "OpenTelemetry Collector Built By Google"
 blurb: >-
   The Google-Built OpenTelemetry Collector is an open-source, production-ready build
@@ -24,7 +24,7 @@ blurb: >-
 opentelemetry_version: 0.163.0
 opentelemetry_contrib_version: 0.163.0
 binary_name: otelcol-google
-go_version: 1.26.7
+go_version: 1.26.10
 permanent_ocb_directory: true
 
 boringcrypto: true

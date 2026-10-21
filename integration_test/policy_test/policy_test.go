@@ -486,6 +486,27 @@ func (p *stubPassThroughProcessor) ConsumeTraces(ctx context.Context, td ptrace.
 	return nil
 }
 
+type stubReceiver struct{}
+
+func (s *stubReceiver) Start(context.Context, component.Host) error { return nil }
+func (s *stubReceiver) Shutdown(context.Context) error              { return nil }
+
+func newStubReceiverFactory(typeStr string) receiver.Factory {
+	return receiver.NewFactory(
+		component.MustNewType(typeStr),
+		func() component.Config { return &stubComponentConfig{} },
+		receiver.WithLogs(func(context.Context, receiver.Settings, component.Config, consumer.Logs) (receiver.Logs, error) {
+			return &stubReceiver{}, nil
+		}, component.StabilityLevelAlpha),
+		receiver.WithMetrics(func(context.Context, receiver.Settings, component.Config, consumer.Metrics) (receiver.Metrics, error) {
+			return &stubReceiver{}, nil
+		}, component.StabilityLevelAlpha),
+		receiver.WithTraces(func(context.Context, receiver.Settings, component.Config, consumer.Traces) (receiver.Traces, error) {
+			return &stubReceiver{}, nil
+		}, component.StabilityLevelAlpha),
+	)
+}
+
 func newStubExporterFactory(typeStr string) exporter.Factory {
 	return exporter.NewFactory(
 		component.MustNewType(typeStr),
@@ -525,6 +546,7 @@ func testCollectorFactories() (otelcol.Factories, error) {
 	factories.Receivers, err = otelcol.MakeFactoryMap[receiver.Factory](
 		otlpreceiver.NewFactory(),
 		filelogreceiver.NewFactory(),
+		newStubReceiverFactory("nop"),
 	)
 	if err != nil {
 		return otelcol.Factories{}, err

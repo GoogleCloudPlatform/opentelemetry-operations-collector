@@ -38,7 +38,6 @@ import (
 const (
 	PolicyType        = "file_log_source"
 	DefaultReceiverID = "filelog"
-	DefaultPipelineID = "logs/filelog"
 )
 
 // defaultExcludePatterns contains the built-in exclude patterns for compressed binary archives.
@@ -190,41 +189,19 @@ func (p *Policy) Evaluate(_ context.Context) (*confmap.Conf, error) {
 	return confmap.NewFromStringMap(cfg), nil
 }
 
-// LogsPipelines constructs the logs pipeline connecting this policy's filelog receiver
-// through the specified processors to the exporters.
-func (p *Policy) LogsPipelines(preExportProcessors []component.ID, exporters []component.ID, _ []component.ID) (*confmap.Conf, error) {
-	procStrs := make([]string, 0, len(preExportProcessors))
-	for _, proc := range preExportProcessors {
-		procStrs = append(procStrs, proc.String())
-	}
-
-	expStrs := make([]string, 0, len(exporters))
-	for _, exp := range exporters {
-		expStrs = append(expStrs, exp.String())
-	}
-
-	cfg := map[string]any{
-		"service": map[string]any{
-			"pipelines": map[string]any{
-				DefaultPipelineID: map[string]any{
-					"receivers":  []string{DefaultReceiverID},
-					"processors": procStrs,
-					"exporters":  expStrs,
-				},
-			},
-		},
-	}
-	return confmap.NewFromStringMap(cfg), nil
+// LogReceiverIDs returns the component IDs of log receivers synthesized by this policy.
+func (p *Policy) LogReceiverIDs() []component.ID {
+	return []component.ID{component.MustNewID(DefaultReceiverID)}
 }
 
-// MetricsPipelines returns nil because FileLogSourcePolicy only handles the logs signal.
-func (p *Policy) MetricsPipelines([]component.ID, []component.ID, []component.ID) (*confmap.Conf, error) {
-	return nil, nil
+// MetricReceiverIDs returns nil because FileLogSourcePolicy only handles the logs signal.
+func (p *Policy) MetricReceiverIDs() []component.ID {
+	return nil
 }
 
-// TracesPipelines returns nil because FileLogSourcePolicy only handles the logs signal.
-func (p *Policy) TracesPipelines([]component.ID, []component.ID, []component.ID) (*confmap.Conf, error) {
-	return nil, nil
+// TraceReceiverIDs returns nil because FileLogSourcePolicy only handles the logs signal.
+func (p *Policy) TraceReceiverIDs() []component.ID {
+	return nil
 }
 
 // Merge consolidates multiple FileLogSourcePolicies into a single Policy whose

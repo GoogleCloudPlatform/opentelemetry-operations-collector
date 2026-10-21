@@ -293,7 +293,7 @@ func TestPolicy_Evaluate(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestPolicy_Pipelines(t *testing.T) {
+func TestPolicy_ReceiverIDs(t *testing.T) {
 	pb := &policyv1alpha1.FileLogSourcePolicy{
 		Id:      "nginx-logs",
 		Include: []string{"/var/log/nginx/*.log"},
@@ -301,41 +301,9 @@ func TestPolicy_Pipelines(t *testing.T) {
 	policy, err := NewPolicyFromProto(pb)
 	require.NoError(t, err)
 
-	procID, _ := component.NewType("googlepolicy")
-	qbID, _ := component.NewType("queuebatch")
-	exporterID, _ := component.NewType("otlp_grpc")
-
-	processors := []component.ID{
-		component.NewID(procID),
-		component.NewIDWithName(qbID, "batch_logs"),
-	}
-	exporters := []component.ID{
-		component.NewIDWithName(exporterID, "default_gcp_destination"),
-	}
-
-	logsConf, err := policy.LogsPipelines(processors, exporters, nil)
-	require.NoError(t, err)
-	require.NotNil(t, logsConf)
-
-	pipeKey := "service::pipelines::logs/filelog"
-	require.True(t, logsConf.IsSet(pipeKey))
-
-	sub, err := logsConf.Sub(pipeKey)
-	require.NoError(t, err)
-	pipeMap := sub.ToStringMap()
-
-	assert.Equal(t, []string{"filelog"}, pipeMap["receivers"])
-	assert.Equal(t, []string{"googlepolicy", "queuebatch/batch_logs"}, pipeMap["processors"])
-	assert.Equal(t, []string{"otlp_grpc/default_gcp_destination"}, pipeMap["exporters"])
-
-	// Metrics and Traces pipelines are nil.
-	metricsConf, err := policy.MetricsPipelines(processors, exporters, nil)
-	assert.NoError(t, err)
-	assert.Nil(t, metricsConf)
-
-	tracesConf, err := policy.TracesPipelines(processors, exporters, nil)
-	assert.NoError(t, err)
-	assert.Nil(t, tracesConf)
+	assert.Equal(t, []component.ID{component.MustNewID(DefaultReceiverID)}, policy.LogReceiverIDs())
+	assert.Nil(t, policy.MetricReceiverIDs())
+	assert.Nil(t, policy.TraceReceiverIDs())
 }
 
 func TestMerge_NilAndEmpty(t *testing.T) {

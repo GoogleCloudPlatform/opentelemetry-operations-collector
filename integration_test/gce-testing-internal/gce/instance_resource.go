@@ -107,11 +107,50 @@ func sourceImageFromImageSpec(imageSpec string, imageFamilyScope string) (string
 }
 
 type extraCreateArgs struct {
-	diskSizeGb    *int64
-	diskType      *string
-	scopes        []string
-	tags          []string
-	extraMetadata map[string]string
+	diskSizeGb        *int64
+	diskType          *string
+	scopes            []string
+	tags              []string
+	extraMetadata     map[string]string
+	accelerators      []*computepb.AcceleratorConfig
+	maintenancePolicy *string
+	serviceAccount    *string
+}
+
+func parseAcceleratorArg(val string) (*computepb.AcceleratorConfig, error) {
+	count := int32(1)
+	var accelType string
+	for _, item := range strings.Split(val, ",") {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		parts := strings.SplitN(item, "=", 2)
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid --accelerator specification %q", val)
+		}
+		k := strings.TrimSpace(parts[0])
+		v := strings.TrimSpace(parts[1])
+		switch k {
+		case "type":
+			accelType = v
+		case "count":
+			c, err := strconv.ParseInt(v, 10, 32)
+			if err != nil || c <= 0 {
+				return nil, fmt.Errorf("invalid --accelerator count %q in %q", v, val)
+			}
+			count = int32(c)
+		default:
+			return nil, fmt.Errorf("unknown --accelerator key %q in %q", k, val)
+		}
+	}
+	if accelType == "" {
+		return nil, fmt.Errorf("--accelerator missing required type in %q", val)
+	}
+	return &computepb.AcceleratorConfig{
+		AcceleratorType:  proto.String(accelType),
+		AcceleratorCount: proto.Int32(count),
+	}, nil
 }
 
 func parseExtraCreateArguments(args []string) (extraCreateArgs, error) {
@@ -158,19 +197,40 @@ func parseExtraCreateArguments(args []string) (extraCreateArgs, error) {
 					result.extraMetadata[parts[0]] = parts[1]
 				}
 			}
+		} else if val, ok := getVal("--accelerator"); ok {
+			acc, err := parseAcceleratorArg(val)
+			if err != nil {
+				return result, err
+			}
+			result.accelerators = append(result.accelerators, acc)
+		} else if val, ok := getVal("--maintenance-policy"); ok {
+			policy := strings.ToUpper(strings.TrimSpace(val))
+			if policy == "" {
+				return result, fmt.Errorf("invalid empty --maintenance-policy")
+			}
+			result.maintenancePolicy = &policy
+		} else if val, ok := getVal("--service-account"); ok {
+			sa := strings.TrimSpace(val)
+			if sa == "" {
+				return result, fmt.Errorf("invalid empty --service-account")
+			}
+			result.serviceAccount = &sa
+		} else {
+			return result, fmt.Errorf("unsupported extra create argument: %q", arg)
 		}
 	}
 	return result, nil
 }
 
 type instanceConfigComponents struct {
-	bootDisk        *computepb.AttachedDisk
-	nic             *computepb.NetworkInterface
-	metadata        *computepb.Metadata
-	labels          map[string]string
-	serviceAccounts []*computepb.ServiceAccount
-	tags            *computepb.Tags
-	scheduling      *computepb.Scheduling
+	bootDisk          *computepb.AttachedDisk
+	nic               *computepb.NetworkInterface
+	metadata          *computepb.Metadata
+	labels            map[string]string
+	serviceAccounts   []*computepb.ServiceAccount
+	tags              *computepb.Tags
+	scheduling        *computepb.Scheduling
+	guestAccelerators []*computepb.AcceleratorConfig
 }
 
 func cleanDiskType(dt string) string {
@@ -259,6 +319,9 @@ func prepareInstanceConfigComponents(options VMOptions, vm *VM) (*instanceConfig
 	if email == "" {
 		email = "default"
 	}
+	if extraArgs.serviceAccount != nil {
+		email = *extraArgs.serviceAccount
+	}
 	var resolvedScopes []string
 	if len(extraArgs.scopes) == 0 {
 		resolvedScopes = defaultScopes
@@ -300,15 +363,34 @@ func prepareInstanceConfigComponents(options VMOptions, vm *VM) (*instanceConfig
 			ProvisioningModel:         proto.String("STANDARD"),
 		}
 	}
+	if extraArgs.maintenancePolicy != nil {
+		if scheduling == nil {
+			scheduling = &computepb.Scheduling{}
+		}
+		scheduling.OnHostMaintenance = extraArgs.maintenancePolicy
+	}
+
+	var guestAccelerators []*computepb.AcceleratorConfig
+	for _, acc := range extraArgs.accelerators {
+		accType := acc.GetAcceleratorType()
+		if !strings.Contains(accType, "/") {
+			accType = fmt.Sprintf("zones/%s/acceleratorTypes/%s", vm.Zone, accType)
+		}
+		guestAccelerators = append(guestAccelerators, &computepb.AcceleratorConfig{
+			AcceleratorType:  proto.String(accType),
+			AcceleratorCount: proto.Int32(acc.GetAcceleratorCount()),
+		})
+	}
 
 	return &instanceConfigComponents{
-		bootDisk:        bootDisk,
-		nic:             nic,
-		metadata:        &computepb.Metadata{Items: metadataItems},
-		labels:          newLabels,
-		serviceAccounts: serviceAccounts,
-		tags:            tags,
-		scheduling:      scheduling,
+		bootDisk:          bootDisk,
+		nic:               nic,
+		metadata:          &computepb.Metadata{Items: metadataItems},
+		labels:            newLabels,
+		serviceAccounts:   serviceAccounts,
+		tags:              tags,
+		scheduling:        scheduling,
+		guestAccelerators: guestAccelerators,
 	}, nil
 }
 
@@ -328,6 +410,7 @@ func buildInstanceResource(options VMOptions, vm *VM) (*computepb.Instance, erro
 		ServiceAccounts:   c.serviceAccounts,
 		Tags:              c.tags,
 		Scheduling:        c.scheduling,
+		GuestAccelerators: c.guestAccelerators,
 	}, nil
 }
 
@@ -343,6 +426,14 @@ func buildInstanceProperties(options VMOptions, vm *VM) (*computepb.InstanceProp
 		c.bootDisk.InitializeParams.DiskType = proto.String(cleanDiskType(c.bootDisk.InitializeParams.GetDiskType()))
 	}
 
+	// InstanceProperties GuestAccelerators[].AcceleratorType must be the short name
+	// (e.g. "nvidia-tesla-v100"), not a URL.
+	for _, acc := range c.guestAccelerators {
+		if acc.AcceleratorType != nil {
+			acc.AcceleratorType = proto.String(cleanDiskType(acc.GetAcceleratorType()))
+		}
+	}
+
 	return &computepb.InstanceProperties{
 		MachineType:       proto.String(vm.MachineType),
 		Disks:             []*computepb.AttachedDisk{c.bootDisk},
@@ -352,6 +443,7 @@ func buildInstanceProperties(options VMOptions, vm *VM) (*computepb.InstanceProp
 		ServiceAccounts:   c.serviceAccounts,
 		Tags:              c.tags,
 		Scheduling:        c.scheduling,
+		GuestAccelerators: c.guestAccelerators,
 	}, nil
 }
 

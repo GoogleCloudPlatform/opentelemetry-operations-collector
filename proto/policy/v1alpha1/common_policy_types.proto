@@ -153,6 +153,17 @@ message LogFieldSelector {
 //   an explicit exemption retaining matching records; it does not prune
 //   non-matching records. To implement an allowlist that prunes non-matching
 //   records, authors specify ACTION_DROP with negate: true on the matchers.
+// - Double-Applied Filtering (Pass 1 & Pass 2): When filter policies are
+//   evaluated around transformation stages (Pass 1 Pre-Transform and, if any
+//   transform policy modified the record, Pass 2 Post-Transform), both
+//   ACTION_KEEP and ACTION_DROP are re-evaluated statelessly in Pass 2 against
+//   the post-transform record (guaranteeing multi-hop consistency across SDK
+//   and Collector evaluation). Within each pass, ACTION_KEEP overrides
+//   ACTION_DROP; however, if a record survived Pass 1 only because an
+//   ACTION_KEEP rule matched an attribute that was subsequently overwritten,
+//   renamed, removed, or redacted during the transform stage such that
+//   ACTION_KEEP no longer matches in Pass 2 (while an ACTION_DROP rule still
+//   matches), the record is dropped in Pass 2.
 enum Action {
   // Default unspecified action. A policy with an unspecified action is invalid.
   ACTION_UNSPECIFIED = 0;
@@ -184,6 +195,12 @@ enum ScopeField {
 // LogRecordField identifies standard first-class fields of an OpenTelemetry LogRecord.
 // When evaluated with `exists`, first-class fields evaluate to true when set
 // to a non-default (non-empty / non-zero) value.
+//
+// `LOG_RECORD_FIELD_SEVERITY_NUMBER` and `LOG_RECORD_FIELD_SEVERITY_TEXT` are
+// independent OTLP fields (mutating one does not automatically derive or
+// overwrite the other). `LOG_RECORD_FIELD_TRACE_ID` and
+// `LOG_RECORD_FIELD_SPAN_ID` are valid only for read-only matching in
+// `LogFieldSelector` and are not valid mutation targets in `LogTargetSelector`.
 enum LogRecordField {
   // Default unspecified log record field.
   LOG_RECORD_FIELD_UNSPECIFIED = 0;

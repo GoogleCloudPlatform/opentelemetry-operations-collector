@@ -39,6 +39,18 @@ const (
 // matching log records.
 //
 // Evaluation & Ordering Semantics:
+//   - Double-Applied Filtering (Pass 1 & Pass 2): `LogFilterPolicy` rules run in
+//     Pass 1 (Pre-Transform) before `LogTransformPolicy` stages (`rename` ->
+//     `add` -> `remove` -> `redact`), and re-run in Pass 2 (Post-Transform) if
+//     any transform policy modified the record. Both `ACTION_KEEP` and
+//     `ACTION_DROP` are re-evaluated statelessly in Pass 2 against the
+//     post-transform record (guaranteeing multi-hop consistency across SDK and
+//     Collector evaluation). Within each pass, `ACTION_KEEP` overrides
+//     `ACTION_DROP`; however, if a record survived Pass 1 only because an
+//     `ACTION_KEEP` rule matched an attribute that was subsequently overwritten,
+//     renamed, removed, or redacted during the transform stage such that
+//     `ACTION_KEEP` no longer matches in Pass 2 (while an `ACTION_DROP` rule
+//     still matches), the record is dropped in Pass 2.
 //   - Operation Stage Order: Active LogTransformPolicy instances execute in the
 //     order of their operation type: `rename` -> `add` -> `remove` -> `redact`.
 //   - Tie-Breaking: Within the same operation type, policies execute in
@@ -191,6 +203,17 @@ func (*LogTransformPolicy_Rename) isLogTransformPolicy_Action() {}
 func (*LogTransformPolicy_Redact) isLogTransformPolicy_Action() {}
 
 // LogAddAction inserts or overwrites one field or attribute on a log record.
+//
+// When `target` is `record_field`, valid targets are:
+//   - `LOG_RECORD_FIELD_BODY`: accepts any scalar `Value`; treats unset
+//     `ValueTypeEmpty` and `""` as absent when `upsert: false`.
+//   - `LOG_RECORD_FIELD_SEVERITY_TEXT`: requires `string_value`.
+//   - `LOG_RECORD_FIELD_SEVERITY_NUMBER`: requires `int_value` in `[1, 24]`.
+//
+// `LOG_RECORD_FIELD_SEVERITY_NUMBER` and `LOG_RECORD_FIELD_SEVERITY_TEXT` are
+// independent OTLP fields (mutating one does not automatically derive or
+// overwrite the other). `LOG_RECORD_FIELD_TRACE_ID` and
+// `LOG_RECORD_FIELD_SPAN_ID` are not valid mutation targets.
 type LogAddAction struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Target field or attribute to set.
@@ -199,6 +222,12 @@ type LogAddAction struct {
 	Value *Value `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
 	// If true, overwrites `target` if it already exists. If false (default),
 	// preserves the existing value when `target` is already present.
+	//
+	// Missing intermediate map segments in a multi-element `AttributePath`
+	// (`log_attribute` or `body_field`) are created automatically. When an
+	// intermediate path segment already exists as a non-map value (scalar or
+	// array), `upsert: false` fails open (preserving the existing value) while
+	// `upsert: true` replaces the intermediate non-map value with a map.
 	Upsert        *bool `protobuf:"varint,3,opt,name=upsert,proto3,oneof" json:"upsert,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -310,6 +339,12 @@ type LogRenameAction struct {
 	Target *LogAttributeSelector `protobuf:"bytes,2,opt,name=target,proto3" json:"target,omitempty"`
 	// If true, overwrites `target` if it already exists. If false (default), the
 	// rename is skipped if `target` already exists.
+	//
+	// Missing intermediate map segments in a multi-element `AttributePath`
+	// (`log_attribute` or `body_field`) are created automatically. When an
+	// intermediate path segment already exists as a non-map value (scalar or
+	// array), `upsert: false` fails open (preserving the existing value) while
+	// `upsert: true` replaces the intermediate non-map value with a map.
 	Upsert        *bool `protobuf:"varint,3,opt,name=upsert,proto3,oneof" json:"upsert,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -367,6 +402,12 @@ func (x *LogRenameAction) GetUpsert() bool {
 }
 
 // LogRedactAction masks sensitive substrings within a target string.
+//
+// When `target` is `record_field`, valid targets are string-valued fields
+// (`LOG_RECORD_FIELD_BODY` when string-valued, and
+// `LOG_RECORD_FIELD_SEVERITY_TEXT`). `LOG_RECORD_FIELD_SEVERITY_NUMBER`,
+// `LOG_RECORD_FIELD_TRACE_ID`, and `LOG_RECORD_FIELD_SPAN_ID` are not valid
+// mutation targets.
 type LogRedactAction struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Target string field, attribute, or body_field to redact.
@@ -520,6 +561,22 @@ type isLogTargetSelector_Target interface {
 
 type LogTargetSelector_RecordField struct {
 	// Standard first-class OpenTelemetry LogRecord fields (e.g. body, severity_text).
+	//
+	// `LOG_RECORD_FIELD_TRACE_ID` and `LOG_RECORD_FIELD_SPAN_ID` are valid only
+	// for read-only matching in `LogFieldSelector` and are not valid mutation
+	// targets in `LogTargetSelector`.
+	//   - For `LogAddAction`, valid `record_field` targets are
+	//     `LOG_RECORD_FIELD_BODY` (any scalar `Value`; treats unset
+	//     `ValueTypeEmpty` and `""` as absent when `upsert: false`),
+	//     `LOG_RECORD_FIELD_SEVERITY_TEXT` (`string_value`), and
+	//     `LOG_RECORD_FIELD_SEVERITY_NUMBER` (`int_value` in `[1, 24]`).
+	//   - For `LogRedactAction`, valid `record_field` targets are string-valued
+	//     fields (`LOG_RECORD_FIELD_BODY` when string-valued, and
+	//     `LOG_RECORD_FIELD_SEVERITY_TEXT`).
+	//
+	// `LOG_RECORD_FIELD_SEVERITY_NUMBER` and `LOG_RECORD_FIELD_SEVERITY_TEXT`
+	// are independent OTLP fields (mutating one does not automatically derive
+	// or overwrite the other).
 	RecordField LogRecordField `protobuf:"varint,1,opt,name=record_field,json=recordField,proto3,enum=google.telemetry.policy.v1alpha1.LogRecordField,oneof"`
 }
 
@@ -531,6 +588,11 @@ type LogTargetSelector_LogAttribute struct {
 type LogTargetSelector_BodyField struct {
 	// Traverses nested fields inside a structured (kvlist_value / map)
 	// LogRecord.body (e.g. ["event_id"], ["event_data", "TargetUserName"]).
+	//
+	// For `LogAddAction`, if `LogRecord.body` is unset (`ValueTypeEmpty`) or an
+	// empty string (`""`), it is initialized to an empty structured map before
+	// setting the path; if `LogRecord.body` holds a non-empty scalar, array, or
+	// bytes value, the action fails open (no-op) regardless of `upsert`.
 	BodyField *AttributePath `protobuf:"bytes,3,opt,name=body_field,json=bodyField,proto3,oneof"`
 }
 

@@ -590,17 +590,41 @@ func TestShouldRetryTagUpdate(t *testing.T) {
 }
 
 func TestNewRateLimitBackOff(t *testing.T) {
-	bo := newRateLimitBackOff(2 * time.Minute)
-	if bo.InitialInterval != 1*time.Second {
-		t.Errorf("InitialInterval = %v, want 1s", bo.InitialInterval)
+	bo := newRateLimitBackOff(defaultRateLimitMaxElapsedTime)
+	if bo.InitialInterval != rateLimitInitialInterval {
+		t.Errorf("InitialInterval = %v, want %v", bo.InitialInterval, rateLimitInitialInterval)
 	}
-	if bo.Multiplier != 1.5 {
-		t.Errorf("Multiplier = %v, want 1.5", bo.Multiplier)
+	if bo.Multiplier != defaultBackoffMultiplier {
+		t.Errorf("Multiplier = %v, want %v", bo.Multiplier, defaultBackoffMultiplier)
 	}
-	if bo.MaxInterval != 15*time.Second {
-		t.Errorf("MaxInterval = %v, want 15s", bo.MaxInterval)
+	if bo.MaxInterval != rateLimitMaxInterval {
+		t.Errorf("MaxInterval = %v, want %v", bo.MaxInterval, rateLimitMaxInterval)
 	}
-	if bo.MaxElapsedTime != 2*time.Minute {
-		t.Errorf("MaxElapsedTime = %v, want 2m", bo.MaxElapsedTime)
+	if bo.MaxElapsedTime != defaultRateLimitMaxElapsedTime {
+		t.Errorf("MaxElapsedTime = %v, want %v", bo.MaxElapsedTime, defaultRateLimitMaxElapsedTime)
+	}
+
+	// Verify backoff interval progression and jitter boundaries.
+	// Initial backoff interval is jittered within [InitialInterval * (1-RandomizationFactor), InitialInterval * (1+RandomizationFactor)],
+	// which for the default 0.5 randomization factor is [0.5s, 1.5s].
+	first := bo.NextBackOff()
+	if first < 500*time.Millisecond || first > 1500*time.Millisecond {
+		t.Errorf("first backoff = %v, want within [0.5s, 1.5s]", first)
+	}
+
+	// Advance through subsequent retries to verify interval growth and capping at MaxInterval.
+	for i := 0; i < 10; i++ {
+		next := bo.NextBackOff()
+		// Max jittered upper bound is MaxInterval * (1 + RandomizationFactor) = 15s * 1.5 = 22.5s.
+		if next > 25*time.Second {
+			t.Errorf("backoff interval = %v exceeded expected cap (MaxInterval=%v)", next, rateLimitMaxInterval)
+		}
+	}
+
+	// Verify Reset restores backoff to initial state.
+	bo.Reset()
+	resetFirst := bo.NextBackOff()
+	if resetFirst < 500*time.Millisecond || resetFirst > 1500*time.Millisecond {
+		t.Errorf("reset first backoff = %v, want within [0.5s, 1.5s]", resetFirst)
 	}
 }

@@ -69,8 +69,8 @@ func CompileMetricExtractor(target *policyv1alpha1.MetricFieldSelector) (MetricT
 	case *policyv1alpha1.MetricFieldSelector_DescriptorField:
 		return compileMetricDescriptorFieldExtractor(t.DescriptorField)
 
-	case *policyv1alpha1.MetricFieldSelector_DatapointAttributePath:
-		steps, err := CompilePath(t.DatapointAttributePath, "datapoint")
+	case *policyv1alpha1.MetricFieldSelector_DataPointAttributePath:
+		steps, err := CompilePath(t.DataPointAttributePath, "datapoint")
 		if err != nil {
 			return nil, err
 		}

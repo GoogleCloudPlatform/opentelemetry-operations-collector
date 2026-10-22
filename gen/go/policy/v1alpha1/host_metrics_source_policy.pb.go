@@ -43,18 +43,18 @@ const (
 //   - Default Disposition: Host system metric collection is disabled unless at
 //     least one valid HostMetricsSourcePolicy is configured.
 //   - Validation & Fail-Open: `id` must be non-empty. When
-//     `collection_interval_seconds` is unset, it defaults to 60 seconds. When
-//     set, it must be >= 10; a policy with `collection_interval_seconds < 10` is
+//     `collection_duration_seconds` is unset, it defaults to 60 seconds. When
+//     set, it must be >= 10; a policy with `collection_duration_seconds < 10` is
 //     invalid and ignored (fail-open).
 //   - Deduplication Semantics: Multiple valid HostMetricsSourcePolicy instances
 //     merge into a single `hostmetrics` receiver using the minimum effective
-//     `collection_interval_seconds` (order-independent and commutative).
+//     `collection_duration_seconds` (order-independent and commutative).
 type HostMetricsSourcePolicy struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Unique identifier for the policy within its configuration scope.
 	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	// Scrape interval in seconds. Defaults to 60 if unset. Must be >= 10.
-	CollectionIntervalSeconds *int32 `protobuf:"varint,2,opt,name=collection_interval_seconds,json=collectionIntervalSeconds,proto3,oneof" json:"collection_interval_seconds,omitempty"`
+	CollectionDurationSeconds *int32 `protobuf:"varint,2,opt,name=collection_duration_seconds,json=collectionDurationSeconds,proto3,oneof" json:"collection_duration_seconds,omitempty"`
 	unknownFields             protoimpl.UnknownFields
 	sizeCache                 protoimpl.SizeCache
 }
@@ -96,9 +96,9 @@ func (x *HostMetricsSourcePolicy) GetId() string {
 	return ""
 }
 
-func (x *HostMetricsSourcePolicy) GetCollectionIntervalSeconds() int32 {
-	if x != nil && x.CollectionIntervalSeconds != nil {
-		return *x.CollectionIntervalSeconds
+func (x *HostMetricsSourcePolicy) GetCollectionDurationSeconds() int32 {
+	if x != nil && x.CollectionDurationSeconds != nil {
+		return *x.CollectionDurationSeconds
 	}
 	return 0
 }
@@ -110,8 +110,8 @@ const file_policy_v1alpha1_host_metrics_source_policy_proto_rawDesc = "" +
 	"0policy/v1alpha1/host_metrics_source_policy.proto\x12 google.telemetry.policy.v1alpha1\"\x8e\x01\n" +
 	"\x17HostMetricsSourcePolicy\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12C\n" +
-	"\x1bcollection_interval_seconds\x18\x02 \x01(\x05H\x00R\x19collectionIntervalSeconds\x88\x01\x01B\x1e\n" +
-	"\x1c_collection_interval_secondsB\xd0\x02\n" +
+	"\x1bcollection_duration_seconds\x18\x02 \x01(\x05H\x00R\x19collectionDurationSeconds\x88\x01\x01B\x1e\n" +
+	"\x1c_collection_duration_secondsB\xd0\x02\n" +
 	"$com.google.telemetry.policy.v1alpha1B\x1cHostMetricsSourcePolicyProtoP\x01Zggithub.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1;policyv1alpha1\xa2\x02\x03GTP\xaa\x02 Google.Telemetry.Policy.V1alpha1\xca\x02 Google\\Telemetry\\Policy\\V1alpha1\xe2\x02,Google\\Telemetry\\Policy\\V1alpha1\\GPBMetadata\xea\x02#Google::Telemetry::Policy::V1alpha1b\x06proto3"
 
 var (

@@ -35,8 +35,8 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// LogFilterPolicy defines an intent-based rule for retaining or dropping
-// log records based on structured field and attribute matches.
+// Defines an intent-based rule for retaining or dropping log records based on
+// structured field and attribute matches.
 //
 // Policies are declarative, atomic, and transport-agnostic.
 //

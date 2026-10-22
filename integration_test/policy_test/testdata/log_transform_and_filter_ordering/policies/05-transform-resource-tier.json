@@ -11,13 +11,13 @@
       "equality": { "string_value": "prod" }
     }
   ],
-  "add": {
+  "addition": {
     "target": {
       "log_attribute_path": {
         "segments": ["cloud.account.tier"]
       }
     },
     "value": { "string_value": "enterprise" },
-    "upsert": true
+    "upsert_enabled": true
   }
 }

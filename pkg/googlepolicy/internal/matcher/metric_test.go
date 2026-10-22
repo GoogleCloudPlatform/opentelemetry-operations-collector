@@ -48,7 +48,7 @@ func TestCompileMetricMatcherAndExtractor(t *testing.T) {
 		assert.ErrorContains(t, err, "scope field cannot be unspecified")
 
 		_, err = CompileMetricExtractor(&policyv1alpha1.MetricFieldSelector{
-			Target: &policyv1alpha1.MetricFieldSelector_DatapointAttributePath{},
+			Target: &policyv1alpha1.MetricFieldSelector_DataPointAttributePath{},
 		})
 		assert.ErrorContains(t, err, "datapoint attribute path cannot be empty")
 
@@ -173,8 +173,8 @@ func TestCompileMetricMatcherAndExtractor(t *testing.T) {
 			{
 				name: "datapoint_attribute",
 				target: &policyv1alpha1.MetricFieldSelector{
-					Target: &policyv1alpha1.MetricFieldSelector_DatapointAttributePath{
-						DatapointAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"dp.key"}},
+					Target: &policyv1alpha1.MetricFieldSelector_DataPointAttributePath{
+						DataPointAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"dp.key"}},
 					},
 				},
 				wantVal: "dp-val",

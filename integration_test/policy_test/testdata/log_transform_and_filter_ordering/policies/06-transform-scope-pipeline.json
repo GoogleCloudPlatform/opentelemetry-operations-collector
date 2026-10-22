@@ -11,13 +11,13 @@
       "equality": { "string_value": "prod" }
     }
   ],
-  "add": {
+  "addition": {
     "target": {
       "log_attribute_path": {
         "segments": ["pipeline"]
       }
     },
     "value": { "string_value": "utr-v2" },
-    "upsert": true
+    "upsert_enabled": true
   }
 }

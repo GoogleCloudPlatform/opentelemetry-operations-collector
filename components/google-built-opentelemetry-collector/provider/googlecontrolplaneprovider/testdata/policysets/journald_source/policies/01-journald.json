@@ -1,0 +1,4 @@
+{
+  "type": "journald_source",
+  "id": "system_journald"
+}

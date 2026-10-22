@@ -1,0 +1,23 @@
+{
+  "type": "log_transform",
+  "id": "preserve-existing-label",
+  "matchers": [
+    {
+      "target": {
+        "resource_attribute_path": {
+          "segments": ["env"]
+        }
+      },
+      "equality": { "string_value": "prod" }
+    }
+  ],
+  "add": {
+    "target": {
+      "log_attribute_path": {
+        "segments": ["existing_label"]
+      }
+    },
+    "value": { "string_value": "overwritten" },
+    "upsert": false
+  }
+}

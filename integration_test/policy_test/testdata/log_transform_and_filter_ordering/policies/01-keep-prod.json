@@ -1,0 +1,15 @@
+{
+  "type": "log_filter",
+  "id": "keep-prod-logs",
+  "action": "ACTION_KEEP",
+  "matchers": [
+    {
+      "target": {
+        "resource_attribute_path": {
+          "segments": ["env"]
+        }
+      },
+      "equality": { "string_value": "prod" }
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "type": "log_transform",
+  "id": "set-resource-tier",
+  "matchers": [
+    {
+      "target": {
+        "resource_attribute_path": {
+          "segments": ["env"]
+        }
+      },
+      "equality": { "string_value": "prod" }
+    }
+  ],
+  "add": {
+    "target": {
+      "log_attribute_path": {
+        "segments": ["cloud.account.tier"]
+      }
+    },
+    "value": { "string_value": "enterprise" },
+    "upsert": true
+  }
+}

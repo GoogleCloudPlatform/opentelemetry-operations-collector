@@ -2,14 +2,14 @@
   "type": "metric_filter",
   "id": "keep-critical-service-tier",
   "action": "ACTION_KEEP",
-  "matches": [
+  "matchers": [
     {
       "target": {
-        "datapoint_attribute": {
-          "path": ["service.tier"]
+        "datapoint_attribute_path": {
+          "segments": ["service.tier"]
         }
       },
-      "equals": {
+      "equality": {
         "string_value": "critical"
       }
     }

@@ -20,6 +20,7 @@ import (
 	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/logfilter"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/logtransform"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/metricfilter"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/tracefilter"
 	"github.com/stretchr/testify/assert"
@@ -111,7 +112,7 @@ func TestEvaluator_LogFiltering(t *testing.T) {
 	dropDebug := mustPolicy(t, &policyv1alpha1.LogFilterPolicy{
 		Id:     "drop-debug",
 		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-		Matches: []*policyv1alpha1.LogMatcher{
+		Matchers: []*policyv1alpha1.LogMatcher{
 			{
 				Target: &policyv1alpha1.LogFieldSelector{
 					Target: &policyv1alpha1.LogFieldSelector_RecordField{
@@ -127,16 +128,16 @@ func TestEvaluator_LogFiltering(t *testing.T) {
 	keepProd := mustPolicy(t, &policyv1alpha1.LogFilterPolicy{
 		Id:     "keep-prod",
 		Action: policyv1alpha1.Action_ACTION_KEEP.Enum(),
-		Matches: []*policyv1alpha1.LogMatcher{
+		Matchers: []*policyv1alpha1.LogMatcher{
 			{
 				Target: &policyv1alpha1.LogFieldSelector{
-					Target: &policyv1alpha1.LogFieldSelector_ResourceAttribute{
-						ResourceAttribute: &policyv1alpha1.AttributePath{Path: []string{"env"}},
+					Target: &policyv1alpha1.LogFieldSelector_ResourceAttributePath{
+						ResourceAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"env"}},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equals{
-					Equals: &policyv1alpha1.Value{
-						Value: &policyv1alpha1.Value_StringValue{StringValue: "production"},
+				Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Equality: &policyv1alpha1.Value{
+						Kind: &policyv1alpha1.Value_StringValue{StringValue: "production"},
 					},
 				},
 			},
@@ -188,19 +189,19 @@ func TestEvaluator_LogNestedAttributeAndNegate(t *testing.T) {
 	dropNonGet := mustPolicy(t, &policyv1alpha1.LogFilterPolicy{
 		Id:     "drop-non-get",
 		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-		Matches: []*policyv1alpha1.LogMatcher{
+		Matchers: []*policyv1alpha1.LogMatcher{
 			{
 				Target: &policyv1alpha1.LogFieldSelector{
-					Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
-						LogAttribute: &policyv1alpha1.AttributePath{Path: []string{"http", "method"}},
+					Target: &policyv1alpha1.LogFieldSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"http", "method"}},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equals{
-					Equals: &policyv1alpha1.Value{
-						Value: &policyv1alpha1.Value_StringValue{StringValue: "GET"},
+				Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Equality: &policyv1alpha1.Value{
+						Kind: &policyv1alpha1.Value_StringValue{StringValue: "GET"},
 					},
 				},
-				Negate: true,
+				Negated: true,
 			},
 		},
 	})
@@ -229,16 +230,16 @@ func TestEvaluator_MetricFiltering(t *testing.T) {
 	dropHist := mustPolicy(t, &policyv1alpha1.MetricFilterPolicy{
 		Id:     "drop-duration-histogram",
 		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-		Matches: []*policyv1alpha1.MetricMatcher{
+		Matchers: []*policyv1alpha1.MetricMatcher{
 			{
 				Target: &policyv1alpha1.MetricFieldSelector{
 					Target: &policyv1alpha1.MetricFieldSelector_DescriptorField{
 						DescriptorField: policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME,
 					},
 				},
-				Predicate: &policyv1alpha1.MetricMatcher_Equals{
-					Equals: &policyv1alpha1.Value{
-						Value: &policyv1alpha1.Value_StringValue{StringValue: "http.server.duration"},
+				Predicate: &policyv1alpha1.MetricMatcher_Equality{
+					Equality: &policyv1alpha1.Value{
+						Kind: &policyv1alpha1.Value_StringValue{StringValue: "http.server.duration"},
 					},
 				},
 			},
@@ -248,9 +249,9 @@ func TestEvaluator_MetricFiltering(t *testing.T) {
 						DescriptorField: policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE,
 					},
 				},
-				Predicate: &policyv1alpha1.MetricMatcher_Equals{
-					Equals: &policyv1alpha1.Value{
-						Value: &policyv1alpha1.Value_StringValue{StringValue: "HISTOGRAM"},
+				Predicate: &policyv1alpha1.MetricMatcher_Equality{
+					Equality: &policyv1alpha1.Value{
+						Kind: &policyv1alpha1.Value_StringValue{StringValue: "HISTOGRAM"},
 					},
 				},
 			},
@@ -322,7 +323,7 @@ func TestEvaluator_TraceFiltering(t *testing.T) {
 	// Drop internal spans with name starting with "healthcheck"
 	dropHealthcheck := mustPolicy(t, &policyv1alpha1.TraceFilterPolicy{
 		Id: "drop-healthcheck",
-		Matches: []*policyv1alpha1.TraceMatcher{
+		Matchers: []*policyv1alpha1.TraceMatcher{
 			{
 				Target: &policyv1alpha1.TraceFieldSelector{
 					Target: &policyv1alpha1.TraceFieldSelector_RecordField{
@@ -337,9 +338,9 @@ func TestEvaluator_TraceFiltering(t *testing.T) {
 						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_KIND,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equals{
-					Equals: &policyv1alpha1.Value{
-						Value: &policyv1alpha1.Value_StringValue{StringValue: "INTERNAL"},
+				Predicate: &policyv1alpha1.TraceMatcher_Equality{
+					Equality: &policyv1alpha1.Value{
+						Kind: &policyv1alpha1.Value_StringValue{StringValue: "INTERNAL"},
 					},
 				},
 			},
@@ -515,15 +516,15 @@ func TestEvaluator_MetricDatapointPruningAndEmptyMetrics(t *testing.T) {
 	keepInstrumentPolicy := mustPolicy(t, &policyv1alpha1.MetricFilterPolicy{
 		Id:     "keep-exempt",
 		Action: policyv1alpha1.Action_ACTION_KEEP.Enum(),
-		Matches: []*policyv1alpha1.MetricMatcher{
+		Matchers: []*policyv1alpha1.MetricMatcher{
 			{
 				Target: &policyv1alpha1.MetricFieldSelector{
 					Target: &policyv1alpha1.MetricFieldSelector_DescriptorField{
 						DescriptorField: policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME,
 					},
 				},
-				Predicate: &policyv1alpha1.MetricMatcher_Equals{
-					Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "exempt.metric"}},
+				Predicate: &policyv1alpha1.MetricMatcher_Equality{
+					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "exempt.metric"}},
 				},
 			},
 		},
@@ -827,16 +828,16 @@ func TestEvaluator_MetricTwoTierEvaluation(t *testing.T) {
 func TestEvaluator_MultipleTracePoliciesDrop(t *testing.T) {
 	dropNonRootInternal := mustPolicy(t, &policyv1alpha1.TraceFilterPolicy{
 		Id: "drop-non-root-internal",
-		Matches: []*policyv1alpha1.TraceMatcher{
+		Matchers: []*policyv1alpha1.TraceMatcher{
 			{
 				Target: &policyv1alpha1.TraceFieldSelector{
 					Target: &policyv1alpha1.TraceFieldSelector_RecordField{
 						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID,
 					},
 				},
-				Negate: true,
-				Predicate: &policyv1alpha1.TraceMatcher_Equals{
-					Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: ""}},
+				Negated: true,
+				Predicate: &policyv1alpha1.TraceMatcher_Equality{
+					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: ""}},
 				},
 			},
 			{
@@ -845,8 +846,8 @@ func TestEvaluator_MultipleTracePoliciesDrop(t *testing.T) {
 						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_KIND,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equals{
-					Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "INTERNAL"}},
+				Predicate: &policyv1alpha1.TraceMatcher_Equality{
+					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "INTERNAL"}},
 				},
 			},
 		},
@@ -854,7 +855,7 @@ func TestEvaluator_MultipleTracePoliciesDrop(t *testing.T) {
 
 	dropHealthcheckRoot := mustPolicy(t, &policyv1alpha1.TraceFilterPolicy{
 		Id: "drop-healthcheck-root",
-		Matches: []*policyv1alpha1.TraceMatcher{
+		Matchers: []*policyv1alpha1.TraceMatcher{
 			{
 				Target: &policyv1alpha1.TraceFieldSelector{
 					Target: &policyv1alpha1.TraceFieldSelector_RecordField{
@@ -1018,17 +1019,513 @@ func TestEvaluator_TransformPrunesEmptyScopesAndResources(t *testing.T) {
 	})
 }
 
+func TestEvaluator_LogTransform(t *testing.T) {
+	eventID4625 := &policyv1alpha1.LogMatcher{
+		Target: &policyv1alpha1.LogFieldSelector{
+			Target: &policyv1alpha1.LogFieldSelector_LogAttributePath{
+				LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"winlog", "event_id"}},
+			},
+		},
+		Predicate: &policyv1alpha1.LogMatcher_Equality{
+			Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_IntValue{IntValue: 4625}},
+		},
+	}
+
+	// Transform 1a: Add flat log attribute threat_tier when event_id == 4625
+	labelSOC := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id:      "01-label-soc-logs",
+		Matchers: []*policyv1alpha1.LogMatcher{eventID4625},
+		Action: &policyv1alpha1.LogTransformPolicy_Add{
+			Add: &policyv1alpha1.LogAddAction{
+				Target: &policyv1alpha1.LogTargetSelector{
+					Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"threat_tier"}},
+					},
+				},
+				Value:  &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "HOT_ACTIVE_SOC"}},
+				Upsert: proto.Bool(true),
+			},
+		},
+	})
+
+	// Transform 1b: Add nested log attribute gcp.routing.priority when event_id == 4625
+	labelSOCPriority := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id:      "02-label-soc-priority",
+		Matchers: []*policyv1alpha1.LogMatcher{eventID4625},
+		Action: &policyv1alpha1.LogTransformPolicy_Add{
+			Add: &policyv1alpha1.LogAddAction{
+				Target: &policyv1alpha1.LogTargetSelector{
+					Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"gcp", "routing", "priority"}},
+					},
+				},
+				Value:  &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_IntValue{IntValue: 1}},
+				Upsert: proto.Bool(false),
+			},
+		},
+	})
+
+	// Transform 2: Add default threat_tier = "DEFAULT_TIER" with upsert: false for all logs with winlog.event_id
+	defaultTier := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id: "03-default-tier",
+		Matchers: []*policyv1alpha1.LogMatcher{
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"winlog", "event_id"}},
+					},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Existence{},
+			},
+		},
+		Action: &policyv1alpha1.LogTransformPolicy_Add{
+			Add: &policyv1alpha1.LogAddAction{
+				Target: &policyv1alpha1.LogTargetSelector{
+					Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"threat_tier"}},
+					},
+				},
+				Value:  &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "DEFAULT_TIER"}},
+				Upsert: proto.Bool(false),
+			},
+		},
+	})
+
+	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{labelSOC, labelSOCPriority, defaultTier})
+	require.NoError(t, err)
+
+	ld := plog.NewLogs()
+	sl := ld.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty()
+
+	// Record 0: event_id = 4625 -> matches labelSOC (sets threat_tier="HOT_ACTIVE_SOC") and labelSOCPriority (sets gcp.routing.priority=1);
+	// defaultTier also matches on event_id exists, but upsert=false does NOT overwrite threat_tier!
+	lr0 := sl.LogRecords().AppendEmpty()
+	lr0.Attributes().PutEmptyMap("winlog").PutInt("event_id", 4625)
+
+	// Record 1: event_id = 4624 -> does not match labelSOC; matches defaultTier -> sets threat_tier="DEFAULT_TIER"
+	lr1 := sl.LogRecords().AppendEmpty()
+	lr1.Attributes().PutEmptyMap("winlog").PutInt("event_id", 4624)
+
+	// Record 2: no winlog.event_id -> matches no transform policy -> NoMatch
+	lr2 := sl.LogRecords().AppendEmpty()
+	lr2.Body().SetStr("unrelated log")
+
+	ev.TransformLogs(ld)
+
+	records := ld.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords()
+	require.Equal(t, 3, records.Len())
+
+	tier0, ok := records.At(0).Attributes().Get("threat_tier")
+	require.True(t, ok)
+	assert.Equal(t, "HOT_ACTIVE_SOC", tier0.Str())
+
+	gcpMap, ok := records.At(0).Attributes().Get("gcp")
+	require.True(t, ok)
+	routingMap, ok := gcpMap.Map().Get("routing")
+	require.True(t, ok)
+	prio, ok := routingMap.Map().Get("priority")
+	require.True(t, ok)
+	assert.Equal(t, int64(1), prio.Int())
+
+	tier1, ok := records.At(1).Attributes().Get("threat_tier")
+	require.True(t, ok)
+	assert.Equal(t, "DEFAULT_TIER", tier1.Str())
+
+	_, ok = records.At(2).Attributes().Get("threat_tier")
+	assert.False(t, ok)
+}
+
+func TestEvaluator_LogTransformDeterministicOrdering(t *testing.T) {
+	// Two add policies: "z-policy" and "a-policy". Both set the same attribute with upsert=false.
+	// Both specify empty matchers (applying unconditionally to all records).
+	// Since "a-policy" has an alphabetically earlier ID, it must execute before "z-policy",
+	// winning the upsert: false race even when passed out of order to NewEvaluator.
+	policyZ := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id: "z-policy",
+		Action: &policyv1alpha1.LogTransformPolicy_Add{
+			Add: &policyv1alpha1.LogAddAction{
+				Target: &policyv1alpha1.LogTargetSelector{
+					Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"winner"}},
+					},
+				},
+				Value:  &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "z"}},
+				Upsert: proto.Bool(false),
+			},
+		},
+	})
+
+	policyA := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id: "a-policy",
+		Action: &policyv1alpha1.LogTransformPolicy_Add{
+			Add: &policyv1alpha1.LogAddAction{
+				Target: &policyv1alpha1.LogTargetSelector{
+					Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"winner"}},
+					},
+				},
+				Value:  &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "a"}},
+				Upsert: proto.Bool(false),
+			},
+		},
+	})
+
+	// Pass out of order: policyZ before policyA
+	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{policyZ, policyA})
+	require.NoError(t, err)
+
+	ld := plog.NewLogs()
+	lr := ld.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty().LogRecords().AppendEmpty()
+	lr.Body().SetStr("test ordering")
+
+	ev.TransformLogs(ld)
+
+	val, ok := lr.Attributes().Get("winner")
+	require.True(t, ok)
+	assert.Equal(t, "a", val.Str(), "a-policy must execute before z-policy due to lexicographical id ordering")
+}
+
+func TestEvaluator_LogFilterBeforeTransformOrdering(t *testing.T) {
+	// Filter 1 (DROP): Drop DEBUG logs
+	dropDebug := mustPolicy(t, &policyv1alpha1.LogFilterPolicy{
+		Id:     "drop-debug",
+		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+		Matchers: []*policyv1alpha1.LogMatcher{
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_RecordField{
+						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT,
+					},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "DEBUG"}},
+				},
+			},
+		},
+	})
+
+	// Filter 2 (KEEP exemption): Keep logs with log_attribute exempt == true
+	keepExempt := mustPolicy(t, &policyv1alpha1.LogFilterPolicy{
+		Id:     "keep-exempt",
+		Action: policyv1alpha1.Action_ACTION_KEEP.Enum(),
+		Matchers: []*policyv1alpha1.LogMatcher{
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"exempt"}},
+					},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BoolValue{BoolValue: true}},
+				},
+			},
+		},
+	})
+
+	// Transform: Add utr_route = "security_lakehouse" to all logs where event_id == 4625
+	addUTRRoute := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id: "add-utr-route",
+		Matchers: []*policyv1alpha1.LogMatcher{
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"event_id"}},
+					},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_IntValue{IntValue: 4625}},
+				},
+			},
+		},
+		Action: &policyv1alpha1.LogTransformPolicy_Add{
+			Add: &policyv1alpha1.LogAddAction{
+				Target: &policyv1alpha1.LogTargetSelector{
+					Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"utr_route"}},
+					},
+				},
+				Value:  &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "security_lakehouse"}},
+				Upsert: proto.Bool(true),
+			},
+		},
+	})
+
+	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{dropDebug, keepExempt, addUTRRoute})
+	require.NoError(t, err)
+
+	ld := plog.NewLogs()
+	sl := ld.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty()
+
+	// Record A: DEBUG + event_id=4625 (not exempt) -> DROPPED in Stage 1; must NOT be transformed in Stage 2!
+	lrDropped := sl.LogRecords().AppendEmpty()
+	lrDropped.SetSeverityText("DEBUG")
+	lrDropped.Attributes().PutInt("event_id", 4625)
+
+	// Record B: DEBUG + exempt=true + event_id=4625 -> KEPT in Stage 1 (keep-exempt overrides drop-debug)
+	// AND TRANSFORMED in Stage 2 by add-utr-route!
+	lrKeptAndTransformed := sl.LogRecords().AppendEmpty()
+	lrKeptAndTransformed.SetSeverityText("DEBUG")
+	lrKeptAndTransformed.Attributes().PutBool("exempt", true)
+	lrKeptAndTransformed.Attributes().PutInt("event_id", 4625)
+
+	// Record C: DEBUG + exempt=true + event_id=1000 -> KEPT in Stage 1, does not match transform in Stage 2
+	lrKeptOnly := sl.LogRecords().AppendEmpty()
+	lrKeptOnly.SetSeverityText("DEBUG")
+	lrKeptOnly.Attributes().PutBool("exempt", true)
+	lrKeptOnly.Attributes().PutInt("event_id", 1000)
+
+	// Record D: INFO + event_id=4625 -> No filter match in Stage 1 (default allow), TRANSFORMED in Stage 2
+	lrDefaultAndTransformed := sl.LogRecords().AppendEmpty()
+	lrDefaultAndTransformed.SetSeverityText("INFO")
+	lrDefaultAndTransformed.Attributes().PutInt("event_id", 4625)
+
+	ev.TransformLogs(ld)
+
+	// Verify surviving records and their attributes
+	surviving := ld.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords()
+	require.Equal(t, 3, surviving.Len())
+
+	routeB, ok := surviving.At(0).Attributes().Get("utr_route")
+	require.True(t, ok)
+	assert.Equal(t, "security_lakehouse", routeB.Str())
+
+	_, ok = surviving.At(1).Attributes().Get("utr_route")
+	assert.False(t, ok)
+
+	routeD, ok := surviving.At(2).Attributes().Get("utr_route")
+	require.True(t, ok)
+	assert.Equal(t, "security_lakehouse", routeD.Str())
+}
+
+func TestEvaluator_LogTransformBodyFieldAndRecordFields(t *testing.T) {
+	adMatcher := []*policyv1alpha1.LogMatcher{
+		{
+			Target: &policyv1alpha1.LogFieldSelector{
+				Target: &policyv1alpha1.LogFieldSelector_ResourceAttributePath{
+					ResourceAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"service.name"}},
+				},
+			},
+			Predicate: &policyv1alpha1.LogMatcher_Equality{
+				Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "active-directory"}},
+			},
+		},
+	}
+
+	enrichBodyField := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id:      "01-enrich-body-field",
+		Matchers: adMatcher,
+		Action: &policyv1alpha1.LogTransformPolicy_Add{
+			Add: &policyv1alpha1.LogAddAction{
+				Target: &policyv1alpha1.LogTargetSelector{
+					Target: &policyv1alpha1.LogTargetSelector_BodyFieldPath{
+						BodyFieldPath: &policyv1alpha1.AttributePath{Segments: []string{"gcp", "utr", "stream"}},
+					},
+				},
+				Value:  &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "secops-ad"}},
+				Upsert: proto.Bool(true),
+			},
+		},
+	})
+
+	enrichSeverity := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id:      "02-enrich-severity",
+		Matchers: adMatcher,
+		Action: &policyv1alpha1.LogTransformPolicy_Add{
+			Add: &policyv1alpha1.LogAddAction{
+				Target: &policyv1alpha1.LogTargetSelector{
+					Target: &policyv1alpha1.LogTargetSelector_RecordField{
+						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT,
+					},
+				},
+				Value:  &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "WARN"}},
+				Upsert: proto.Bool(true),
+			},
+		},
+	})
+
+	enrichLog := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id:      "03-enrich-log",
+		Matchers: adMatcher,
+		Action: &policyv1alpha1.LogTransformPolicy_Add{
+			Add: &policyv1alpha1.LogAddAction{
+				Target: &policyv1alpha1.LogTargetSelector{
+					Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"threat_tier"}},
+					},
+				},
+				Value:  &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "HOT_ACTIVE_SOC"}},
+				Upsert: proto.Bool(true),
+			},
+		},
+	})
+
+	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{enrichBodyField, enrichSeverity, enrichLog})
+	require.NoError(t, err)
+
+	ld := plog.NewLogs()
+
+	// Resource 0: service.name = "active-directory" (matches)
+	rl0 := ld.ResourceLogs().AppendEmpty()
+	rl0.Resource().Attributes().PutStr("service.name", "active-directory")
+	sl0 := rl0.ScopeLogs().AppendEmpty()
+	sl0.Scope().SetName("winlog")
+	lr0 := sl0.LogRecords().AppendEmpty()
+	lr0.Body().SetEmptyMap()
+	lr0.Body().Map().PutStr("event_id", "4625")
+
+	// Resource 1: service.name = "nginx" (does not match)
+	rl1 := ld.ResourceLogs().AppendEmpty()
+	rl1.Resource().Attributes().PutStr("service.name", "nginx")
+	sl1 := rl1.ScopeLogs().AppendEmpty()
+	lr1 := sl1.LogRecords().AppendEmpty()
+	lr1.Body().SetStr("GET /index.html")
+
+	ev.TransformLogs(ld)
+
+	// Verify Resource 0 record has nested body_field gcp.utr.stream = "secops-ad",
+	// severity_text = "WARN", and log_attribute threat_tier = "HOT_ACTIVE_SOC"
+	bodyVal, ok := lr0.Body().Map().Get("gcp")
+	require.True(t, ok)
+	utrVal, ok := bodyVal.Map().Get("utr")
+	require.True(t, ok)
+	streamVal, ok := utrVal.Map().Get("stream")
+	require.True(t, ok)
+	assert.Equal(t, "secops-ad", streamVal.Str())
+
+	assert.Equal(t, "WARN", lr0.SeverityText())
+
+	tierAttr, ok := lr0.Attributes().Get("threat_tier")
+	require.True(t, ok)
+	assert.Equal(t, "HOT_ACTIVE_SOC", tierAttr.Str())
+
+	// Verify Resource 1 was not modified
+	assert.Equal(t, pcommon.ValueTypeStr, lr1.Body().Type())
+	assert.Equal(t, "GET /index.html", lr1.Body().Str())
+	assert.Equal(t, "", lr1.SeverityText())
+	assert.Equal(t, 0, lr1.Attributes().Len())
+}
+
+func TestEvaluator_LogTransformPostTransformFiltering(t *testing.T) {
+	// Filter policy that drops any log record where "threat_tier" == "DROP_ME".
+	dropFilter := mustPolicy(t, &policyv1alpha1.LogFilterPolicy{
+		Id:     "drop-noise-tier",
+		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+		Matchers: []*policyv1alpha1.LogMatcher{
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"threat_tier"}},
+					},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "DROP_ME"}},
+				},
+			},
+		},
+	})
+
+	// Transform policy that adds "threat_tier" = "DROP_ME" when "event_id" == 4634.
+	tagNoise := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id: "tag-noise-event",
+		Matchers: []*policyv1alpha1.LogMatcher{
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"event_id"}},
+					},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_IntValue{IntValue: 4634}},
+				},
+			},
+		},
+		Action: &policyv1alpha1.LogTransformPolicy_Add{
+			Add: &policyv1alpha1.LogAddAction{
+				Target: &policyv1alpha1.LogTargetSelector{
+					Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"threat_tier"}},
+					},
+				},
+				Value:  &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "DROP_ME"}},
+				Upsert: proto.Bool(true),
+			},
+		},
+	})
+
+	// Transform policy that adds "threat_tier" = "KEEP_ME" when "event_id" == 4625.
+	tagImportant := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id: "tag-important-event",
+		Matchers: []*policyv1alpha1.LogMatcher{
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"event_id"}},
+					},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_IntValue{IntValue: 4625}},
+				},
+			},
+		},
+		Action: &policyv1alpha1.LogTransformPolicy_Add{
+			Add: &policyv1alpha1.LogAddAction{
+				Target: &policyv1alpha1.LogTargetSelector{
+					Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"threat_tier"}},
+					},
+				},
+				Value:  &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "KEEP_ME"}},
+				Upsert: proto.Bool(true),
+			},
+		},
+	})
+
+	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{dropFilter, tagNoise, tagImportant})
+	require.NoError(t, err)
+
+	ld := plog.NewLogs()
+	sl := ld.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty()
+
+	// Record 0: event_id = 4634. Has no threat_tier initially, so survives Pass 1.
+	// In Stage 2, tagNoise adds threat_tier = "DROP_ME".
+	// In Pass 2, dropFilter evaluates against the mutated record and DROPS it.
+	lr0 := sl.LogRecords().AppendEmpty()
+	lr0.Attributes().PutInt("event_id", 4634)
+	lr0.Body().SetStr("logoff event")
+
+	// Record 1: event_id = 4625. Has no threat_tier initially, so survives Pass 1.
+	// In Stage 2, tagImportant adds threat_tier = "KEEP_ME".
+	// In Pass 2, dropFilter evaluates, does NOT match, and the record is KEPT.
+	lr1 := sl.LogRecords().AppendEmpty()
+	lr1.Attributes().PutInt("event_id", 4625)
+	lr1.Body().SetStr("failed logon event")
+
+	ev.TransformLogs(ld)
+
+	surviving := ld.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords()
+	require.Equal(t, 1, surviving.Len())
+	assert.Equal(t, "failed logon event", surviving.At(0).Body().Str())
+	tier, ok := surviving.At(0).Attributes().Get("threat_tier")
+	require.True(t, ok)
+	assert.Equal(t, "KEEP_ME", tier.Str())
+}
+
 // --- policy helpers --------------------------------------------------------
 
-// mustPolicy compiles a filter policy proto with its owning filter package and
-// returns the resulting TransformationPolicy. This is exactly what the
-// googlepolicy registry hands NewEvaluator in production: an already-compiled
-// policy that implements the matching per-signal evaluator interface.
+// mustPolicy compiles a filter or transform policy proto with its owning
+// package and returns the resulting TransformationPolicy. This is exactly what
+// the googlepolicy registry hands NewEvaluator in production: an
+// already-compiled policy that implements the matching per-signal evaluator
+// interface.
 func mustPolicy(t *testing.T, pb proto.Message) googlepolicy.TransformationPolicy {
 	t.Helper()
 	switch p := pb.(type) {
 	case *policyv1alpha1.LogFilterPolicy:
 		pol, err := logfilter.NewPolicyFromProto(p)
+		require.NoError(t, err)
+		return pol
+	case *policyv1alpha1.LogTransformPolicy:
+		pol, err := logtransform.NewPolicyFromProto(p)
 		require.NoError(t, err)
 		return pol
 	case *policyv1alpha1.MetricFilterPolicy:
@@ -1051,15 +1548,15 @@ func newDropLogBodyProto(id, body string) *policyv1alpha1.LogFilterPolicy {
 	return &policyv1alpha1.LogFilterPolicy{
 		Id:     id,
 		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-		Matches: []*policyv1alpha1.LogMatcher{
+		Matchers: []*policyv1alpha1.LogMatcher{
 			{
 				Target: &policyv1alpha1.LogFieldSelector{
 					Target: &policyv1alpha1.LogFieldSelector_RecordField{
 						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equals{
-					Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: body}},
+				Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: body}},
 				},
 			},
 		},
@@ -1070,13 +1567,13 @@ func newDropMetricDescriptorProto(id string, field policyv1alpha1.MetricDescript
 	return &policyv1alpha1.MetricFilterPolicy{
 		Id:     id,
 		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-		Matches: []*policyv1alpha1.MetricMatcher{
+		Matchers: []*policyv1alpha1.MetricMatcher{
 			{
 				Target: &policyv1alpha1.MetricFieldSelector{
 					Target: &policyv1alpha1.MetricFieldSelector_DescriptorField{DescriptorField: field},
 				},
-				Predicate: &policyv1alpha1.MetricMatcher_Equals{
-					Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: value}},
+				Predicate: &policyv1alpha1.MetricMatcher_Equality{
+					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: value}},
 				},
 			},
 		},
@@ -1091,15 +1588,15 @@ func newDropDatapointAttrProto(id, key, value string) *policyv1alpha1.MetricFilt
 	return &policyv1alpha1.MetricFilterPolicy{
 		Id:     id,
 		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-		Matches: []*policyv1alpha1.MetricMatcher{
+		Matchers: []*policyv1alpha1.MetricMatcher{
 			{
 				Target: &policyv1alpha1.MetricFieldSelector{
-					Target: &policyv1alpha1.MetricFieldSelector_DatapointAttribute{
-						DatapointAttribute: &policyv1alpha1.AttributePath{Path: []string{key}},
+					Target: &policyv1alpha1.MetricFieldSelector_DatapointAttributePath{
+						DatapointAttributePath: &policyv1alpha1.AttributePath{Segments: []string{key}},
 					},
 				},
-				Predicate: &policyv1alpha1.MetricMatcher_Equals{
-					Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: value}},
+				Predicate: &policyv1alpha1.MetricMatcher_Equality{
+					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: value}},
 				},
 			},
 		},
@@ -1109,15 +1606,15 @@ func newDropDatapointAttrProto(id, key, value string) *policyv1alpha1.MetricFilt
 func newDropSpanNameProto(id, name string) *policyv1alpha1.TraceFilterPolicy {
 	return &policyv1alpha1.TraceFilterPolicy{
 		Id: id,
-		Matches: []*policyv1alpha1.TraceMatcher{
+		Matchers: []*policyv1alpha1.TraceMatcher{
 			{
 				Target: &policyv1alpha1.TraceFieldSelector{
 					Target: &policyv1alpha1.TraceFieldSelector_RecordField{
 						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equals{
-					Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: name}},
+				Predicate: &policyv1alpha1.TraceMatcher_Equality{
+					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: name}},
 				},
 			},
 		},

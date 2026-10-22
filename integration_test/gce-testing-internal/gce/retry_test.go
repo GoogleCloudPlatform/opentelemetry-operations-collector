@@ -532,3 +532,98 @@ func TestRetryOp(t *testing.T) {
 		}
 	})
 }
+
+func TestIsAccessConfigNotFound(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{"nil error", nil, false},
+		{"404 not found", &googleapi.Error{Code: 404, Message: "Not Found"}, true},
+		{"grpc codes.NotFound", status.Error(codes.NotFound, "not found"), true},
+		{"string notFound", errors.New("notFound: resource missing"), true},
+		{"does not have an access config named", errors.New("Invalid request: Instance test-vm does not have an access config named 'external-nat'"), true},
+		{"googleapi 400 access config missing", &googleapi.Error{Code: 400, Message: "Instance test-vm does not have an access config named 'external-nat'"}, true},
+		{"unrelated error", errors.New("internal server error"), false},
+		{"403 quota", &googleapi.Error{Code: 403, Message: "Quota exceeded"}, false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := isAccessConfigNotFound(tc.err)
+			if actual != tc.expected {
+				t.Errorf("isAccessConfigNotFound(%v) = %v, want %v", tc.err, actual, tc.expected)
+			}
+		})
+	}
+}
+
+func TestShouldRetryTagUpdate(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{"nil error", nil, false},
+		{"googleapi 412 precondition failed", &googleapi.Error{Code: 412, Message: "Precondition Failed"}, true},
+		{"grpc codes.FailedPrecondition", status.Error(codes.FailedPrecondition, "failed precondition"), true},
+		{"string conditionNotMet", errors.New("conditionNotMet: tag fingerprint mismatch"), true},
+		{"string fingerprint", errors.New("provided fingerprint does not match current tags"), true},
+		{"googleapi 403 quota", &googleapi.Error{Code: 403, Message: "Quota exceeded for quota metric 'Read requests (legacy)'"}, true},
+		{"googleapi 429 rate limit", &googleapi.Error{Code: 429, Message: "Rate limit exceeded"}, true},
+		{"googleapi 503 service unavailable", &googleapi.Error{Code: 503, Message: "Service Unavailable"}, true},
+		{"grpc codes.ResourceExhausted", status.Error(codes.ResourceExhausted, "resource exhausted"), true},
+		{"googleapi 400 bad request", &googleapi.Error{Code: 400, Message: "Bad Request"}, false},
+		{"googleapi 404 not found", &googleapi.Error{Code: 404, Message: "Not Found"}, false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := shouldRetryTagUpdate(tc.err)
+			if actual != tc.expected {
+				t.Errorf("shouldRetryTagUpdate(%v) = %v, want %v", tc.err, actual, tc.expected)
+			}
+		})
+	}
+}
+
+func TestNewRateLimitBackOff(t *testing.T) {
+	bo := newRateLimitBackOff()
+	if bo.InitialInterval != rateLimitInitialInterval {
+		t.Errorf("InitialInterval = %v, want %v", bo.InitialInterval, rateLimitInitialInterval)
+	}
+	if bo.Multiplier != defaultBackoffMultiplier {
+		t.Errorf("Multiplier = %v, want %v", bo.Multiplier, defaultBackoffMultiplier)
+	}
+	if bo.MaxInterval != rateLimitMaxInterval {
+		t.Errorf("MaxInterval = %v, want %v", bo.MaxInterval, rateLimitMaxInterval)
+	}
+	if bo.MaxElapsedTime != defaultRateLimitMaxElapsedTime {
+		t.Errorf("MaxElapsedTime = %v, want %v", bo.MaxElapsedTime, defaultRateLimitMaxElapsedTime)
+	}
+
+	// Verify backoff interval progression and jitter boundaries.
+	// Initial backoff interval is jittered within [InitialInterval * (1-RandomizationFactor), InitialInterval * (1+RandomizationFactor)],
+	// which for the default 0.5 randomization factor is [0.5s, 1.5s].
+	first := bo.NextBackOff()
+	if first < 500*time.Millisecond || first > 1500*time.Millisecond {
+		t.Errorf("first backoff = %v, want within [0.5s, 1.5s]", first)
+	}
+
+	// Advance through subsequent retries to verify interval growth and capping at MaxInterval.
+	for i := 0; i < 10; i++ {
+		next := bo.NextBackOff()
+		// Max jittered upper bound is MaxInterval * (1 + RandomizationFactor) = 15s * 1.5 = 22.5s.
+		if next > 25*time.Second {
+			t.Errorf("backoff interval = %v exceeded expected cap (MaxInterval=%v)", next, rateLimitMaxInterval)
+		}
+	}
+
+	// Verify Reset restores backoff to initial state.
+	bo.Reset()
+	resetFirst := bo.NextBackOff()
+	if resetFirst < 500*time.Millisecond || resetFirst > 1500*time.Millisecond {
+		t.Errorf("reset first backoff = %v, want within [0.5s, 1.5s]", resetFirst)
+	}
+}

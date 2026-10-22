@@ -815,9 +815,9 @@ type LogMatcher_Glob struct {
 	// Glob pattern match against the entire string value.
 	// Supports `*` (matches zero or more characters) and `?` (matches any
 	// single character), for example `"http.*"` or `"err_?_code"`. Matching is
-	// case-sensitive, anchored to the full string, and characters may be
-	// escaped with `\`. Applies strictly to string fields and string attribute
-	// values (evaluates to `false` for non-string targets).
+	// case-sensitive and anchored to the full string. Applies strictly to
+	// string fields and string attribute values (evaluates to `false` for
+	// non-string targets).
 	Glob string `protobuf:"bytes,12,opt,name=glob,proto3,oneof"`
 }
 
@@ -1219,9 +1219,9 @@ type TraceMatcher_Glob struct {
 	// Glob pattern match against the entire string value.
 	// Supports `*` (matches zero or more characters) and `?` (matches any
 	// single character), for example `"http.*"` or `"err_?_code"`. Matching is
-	// case-sensitive, anchored to the full string, and characters may be
-	// escaped with `\`. Applies strictly to string fields and string attribute
-	// values (evaluates to `false` for non-string targets).
+	// case-sensitive and anchored to the full string. Applies strictly to
+	// string fields and string attribute values (evaluates to `false` for
+	// non-string targets).
 	Glob string `protobuf:"bytes,12,opt,name=glob,proto3,oneof"`
 }
 

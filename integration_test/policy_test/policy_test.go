@@ -463,6 +463,13 @@ func newStubProcessorFactory(typeStr string) processor.Factory {
 	)
 }
 
+func newStubReceiverFactory(typeStr string) receiver.Factory {
+	return receiver.NewFactory(
+		component.MustNewType(typeStr),
+		func() component.Config { return &stubComponentConfig{} },
+	)
+}
+
 func testCollectorFactories() (otelcol.Factories, error) {
 	var err error
 	factories := otelcol.Factories{
@@ -478,6 +485,7 @@ func testCollectorFactories() (otelcol.Factories, error) {
 
 	factories.Receivers, err = otelcol.MakeFactoryMap[receiver.Factory](
 		otlpreceiver.NewFactory(),
+		newStubReceiverFactory("nop"),
 	)
 	if err != nil {
 		return otelcol.Factories{}, err

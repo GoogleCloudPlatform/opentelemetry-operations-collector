@@ -90,20 +90,20 @@ func NewPolicyFromProto(pb *policyv1alpha1.MetricFilterPolicy) (*Policy, error) 
 		return nil, ErrMissingAction
 	}
 
-	if len(pb.GetMatches()) == 0 {
+	if len(pb.GetMatchers()) == 0 {
 		return nil, ErrMissingMatchers
 	}
 
 	p := &Policy{
 		proto:    pb,
-		matchers: make([]matcher.CompiledMetricMatcher, 0, len(pb.GetMatches())),
+		matchers: make([]matcher.CompiledMetricMatcher, 0, len(pb.GetMatchers())),
 	}
-	for i, m := range pb.GetMatches() {
+	for i, m := range pb.GetMatchers() {
 		cm, err := matcher.CompileMetricMatcher(m)
 		if err != nil {
 			return nil, fmt.Errorf("matcher[%d]: %w", i, err)
 		}
-		if _, ok := m.GetTarget().GetTarget().(*policyv1alpha1.MetricFieldSelector_DatapointAttribute); ok {
+		if _, ok := m.GetTarget().GetTarget().(*policyv1alpha1.MetricFieldSelector_DatapointAttributePath); ok {
 			p.isDatapointLevel = true
 		}
 		p.matchers = append(p.matchers, cm)

@@ -24,13 +24,13 @@ option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-col
 //   - Windows: %ProgramData%\**\logs\**, %SystemDrive%\inetpub\logs\**
 //
 // Evaluation, Deduplication & Security Guardrails:
-// - At least one `include` pattern is required; any `include` path outside the
-//   allowed OS log roots or targeting sensitive directories (/etc, /root,
-//   /proc, /sys, /var/run/secrets) is rejected (fail-open).
+// - At least one `include_paths` pattern is required; any `include_paths` path
+//   outside the allowed OS log roots or targeting sensitive directories (/etc,
+//   /root, /proc, /sys, /var/run/secrets) is rejected (fail-open).
 // - Multiple FileLogSourcePolicy instances merge into a single shared `filelog`
-//   receiver via the set union of `include` patterns (avoiding duplicate reads
-//   when globs overlap and preserving `file_storage` bookmarks across policy
-//   ID renames).
+//   receiver via the set union of `include_paths` patterns (avoiding duplicate
+//   reads when globs overlap and preserving `file_storage` bookmarks across
+//   policy ID renames).
 // - Built-in Guardrails: Automatically sets `include_file_path: true` (so
 //   `LogFilterPolicy` can match on `log.file.path` / `log.file.name`) and
 //   excludes compressed binary archives (`*.gz`, `*.bz2`, `*.xz`, `*.zst`,
@@ -42,5 +42,5 @@ message FileLogSourcePolicy {
 
   // File path glob patterns to tail (must fall within allowed OS log roots).
   // At least one pattern is required.
-  repeated string include = 2;
+  repeated string include_paths = 2;
 }

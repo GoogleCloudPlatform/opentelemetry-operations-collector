@@ -29,7 +29,7 @@ import (
 func TestFileLogSourcePolicy_Serialization(t *testing.T) {
 	policy := &policyv1alpha1.FileLogSourcePolicy{
 		Id: "tail-system-and-iis-logs",
-		Include: []string{
+		IncludePaths: []string{
 			"/var/log/syslog",
 			"/var/log/messages",
 			`C:\inetpub\logs\LogFiles\W3SVC*\u_ex*.log`,
@@ -58,13 +58,13 @@ func TestFileLogSourcePolicy_Serialization(t *testing.T) {
 		"/var/log/syslog",
 		"/var/log/messages",
 		`C:\inetpub\logs\LogFiles\W3SVC*\u_ex*.log`,
-	}, unmarshaled.GetInclude())
+	}, unmarshaled.GetIncludePaths())
 }
 
 func TestFileLogSourcePolicy_JSONSerialization(t *testing.T) {
 	policy := &policyv1alpha1.FileLogSourcePolicy{
 		Id: "tail-linux-logs",
-		Include: []string{
+		IncludePaths: []string{
 			"/var/log/syslog",
 			"/opt/app/logs/*.log",
 		},
@@ -78,24 +78,24 @@ func TestFileLogSourcePolicy_JSONSerialization(t *testing.T) {
 	require.NoError(t, protojson.Unmarshal(jsonData, unmarshaled))
 	assert.True(t, proto.Equal(policy, unmarshaled))
 	assert.Equal(t, "tail-linux-logs", unmarshaled.GetId())
-	assert.Equal(t, []string{"/var/log/syslog", "/opt/app/logs/*.log"}, unmarshaled.GetInclude())
+	assert.Equal(t, []string{"/var/log/syslog", "/opt/app/logs/*.log"}, unmarshaled.GetIncludePaths())
 
 	// Unmarshal from explicit JSON payload.
-	rawJSON := []byte(`{"id": "iis-access-logs", "include": ["C:\\inetpub\\logs\\LogFiles\\W3SVC*\\u_ex*.log"]}`)
+	rawJSON := []byte(`{"id": "iis-access-logs", "include_paths": ["C:\\inetpub\\logs\\LogFiles\\W3SVC*\\u_ex*.log"]}`)
 	fromRaw := &policyv1alpha1.FileLogSourcePolicy{}
 	require.NoError(t, protojson.Unmarshal(rawJSON, fromRaw))
 	assert.Equal(t, "iis-access-logs", fromRaw.GetId())
-	assert.Equal(t, []string{`C:\inetpub\logs\LogFiles\W3SVC*\u_ex*.log`}, fromRaw.GetInclude())
+	assert.Equal(t, []string{`C:\inetpub\logs\LogFiles\W3SVC*\u_ex*.log`}, fromRaw.GetIncludePaths())
 
-	// Omitted include in JSON defaults to empty/nil slice.
+	// Omitted include_paths in JSON defaults to empty/nil slice.
 	omittedJSON := []byte(`{"id": "empty-include-policy"}`)
 	omittedPolicy := &policyv1alpha1.FileLogSourcePolicy{}
 	require.NoError(t, protojson.Unmarshal(omittedJSON, omittedPolicy))
 	assert.Equal(t, "empty-include-policy", omittedPolicy.GetId())
-	assert.Empty(t, omittedPolicy.GetInclude())
+	assert.Empty(t, omittedPolicy.GetIncludePaths())
 
-	// EmitUnpopulated includes empty "include":[] array in output.
+	// EmitUnpopulated includes empty "includePaths":[] array in output.
 	marshaledUnpopulated, err := protojson.MarshalOptions{EmitUnpopulated: true}.Marshal(omittedPolicy)
 	require.NoError(t, err)
-	assert.Contains(t, string(marshaledUnpopulated), `"include":[]`)
+	assert.Contains(t, string(marshaledUnpopulated), `"includePaths":[]`)
 }

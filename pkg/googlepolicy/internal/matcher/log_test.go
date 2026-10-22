@@ -48,17 +48,17 @@ func TestCompileLogMatcherAndExtractor(t *testing.T) {
 		assert.ErrorContains(t, err, "scope field cannot be unspecified")
 
 		_, err = CompileLogExtractor(&policyv1alpha1.LogFieldSelector{
-			Target: &policyv1alpha1.LogFieldSelector_LogAttribute{},
+			Target: &policyv1alpha1.LogFieldSelector_LogAttributePath{},
 		})
 		assert.ErrorContains(t, err, "log attribute path cannot be empty")
 
 		_, err = CompileLogExtractor(&policyv1alpha1.LogFieldSelector{
-			Target: &policyv1alpha1.LogFieldSelector_ResourceAttribute{},
+			Target: &policyv1alpha1.LogFieldSelector_ResourceAttributePath{},
 		})
 		assert.ErrorContains(t, err, "resource attribute path cannot be empty")
 
 		_, err = CompileLogExtractor(&policyv1alpha1.LogFieldSelector{
-			Target: &policyv1alpha1.LogFieldSelector_ScopeAttribute{},
+			Target: &policyv1alpha1.LogFieldSelector_ScopeAttributePath{},
 		})
 		assert.ErrorContains(t, err, "scope attribute path cannot be empty")
 
@@ -164,8 +164,8 @@ func TestCompileLogMatcherAndExtractor(t *testing.T) {
 			{
 				name: "log_attribute",
 				target: &policyv1alpha1.LogFieldSelector{
-					Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
-						LogAttribute: &policyv1alpha1.AttributePath{Path: []string{"log.key"}},
+					Target: &policyv1alpha1.LogFieldSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"log.key"}},
 					},
 				},
 				wantVal: "log-val",
@@ -173,8 +173,8 @@ func TestCompileLogMatcherAndExtractor(t *testing.T) {
 			{
 				name: "resource_attribute",
 				target: &policyv1alpha1.LogFieldSelector{
-					Target: &policyv1alpha1.LogFieldSelector_ResourceAttribute{
-						ResourceAttribute: &policyv1alpha1.AttributePath{Path: []string{"res.key"}},
+					Target: &policyv1alpha1.LogFieldSelector_ResourceAttributePath{
+						ResourceAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"res.key"}},
 					},
 				},
 				wantVal: "res-val",
@@ -182,8 +182,8 @@ func TestCompileLogMatcherAndExtractor(t *testing.T) {
 			{
 				name: "scope_attribute",
 				target: &policyv1alpha1.LogFieldSelector{
-					Target: &policyv1alpha1.LogFieldSelector_ScopeAttribute{
-						ScopeAttribute: &policyv1alpha1.AttributePath{Path: []string{"scope.key"}},
+					Target: &policyv1alpha1.LogFieldSelector_ScopeAttributePath{
+						ScopeAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"scope.key"}},
 					},
 				},
 				wantVal: "scope-val",
@@ -221,7 +221,7 @@ func TestCompileLogMatcherAndExtractor(t *testing.T) {
 			t.Run(tc.name, func(t *testing.T) {
 				cm, err := CompileLogMatcher(&policyv1alpha1.LogMatcher{
 					Target:    tc.target,
-					Predicate: &policyv1alpha1.LogMatcher_Exists{},
+					Predicate: &policyv1alpha1.LogMatcher_Existence{},
 				})
 				require.NoError(t, err)
 

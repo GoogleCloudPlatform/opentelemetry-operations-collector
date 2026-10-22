@@ -32,7 +32,7 @@ import (
 func TestTraceFilterPolicy_Serialization(t *testing.T) {
 	policy := &policyv1alpha1.TraceFilterPolicy{
 		Id: "drop-healthcheck-spans",
-		Matches: []*policyv1alpha1.TraceMatcher{
+		Matchers: []*policyv1alpha1.TraceMatcher{
 			{
 				Target: &policyv1alpha1.TraceFieldSelector{
 					Target: &policyv1alpha1.TraceFieldSelector_RecordField{
@@ -45,15 +45,15 @@ func TestTraceFilterPolicy_Serialization(t *testing.T) {
 			},
 			{
 				Target: &policyv1alpha1.TraceFieldSelector{
-					Target: &policyv1alpha1.TraceFieldSelector_SpanAttribute{
-						SpanAttribute: &policyv1alpha1.AttributePath{
-							Path: []string{"http.route"},
+					Target: &policyv1alpha1.TraceFieldSelector_SpanAttributePath{
+						SpanAttributePath: &policyv1alpha1.AttributePath{
+							Segments: []string{"http.route"},
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equals{
-					Equals: &policyv1alpha1.Value{
-						Value: &policyv1alpha1.Value_StringValue{
+				Predicate: &policyv1alpha1.TraceMatcher_Equality{
+					Equality: &policyv1alpha1.Value{
+						Kind: &policyv1alpha1.Value_StringValue{
 							StringValue: "/ready",
 						},
 					},
@@ -61,15 +61,15 @@ func TestTraceFilterPolicy_Serialization(t *testing.T) {
 			},
 			{
 				Target: &policyv1alpha1.TraceFieldSelector{
-					Target: &policyv1alpha1.TraceFieldSelector_SpanAttribute{
-						SpanAttribute: &policyv1alpha1.AttributePath{
-							Path: []string{"http.status_code"},
+					Target: &policyv1alpha1.TraceFieldSelector_SpanAttributePath{
+						SpanAttributePath: &policyv1alpha1.AttributePath{
+							Segments: []string{"http.status_code"},
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equals{
-					Equals: &policyv1alpha1.Value{
-						Value: &policyv1alpha1.Value_IntValue{
+				Predicate: &policyv1alpha1.TraceMatcher_Equality{
+					Equality: &policyv1alpha1.Value{
+						Kind: &policyv1alpha1.Value_IntValue{
 							IntValue: 200,
 						},
 					},
@@ -77,15 +77,15 @@ func TestTraceFilterPolicy_Serialization(t *testing.T) {
 			},
 			{
 				Target: &policyv1alpha1.TraceFieldSelector{
-					Target: &policyv1alpha1.TraceFieldSelector_SpanAttribute{
-						SpanAttribute: &policyv1alpha1.AttributePath{
-							Path: []string{"http.status_code"},
+					Target: &policyv1alpha1.TraceFieldSelector_SpanAttributePath{
+						SpanAttributePath: &policyv1alpha1.AttributePath{
+							Segments: []string{"http.status_code"},
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Gte{
-					Gte: &policyv1alpha1.NumericValue{
-						Value: &policyv1alpha1.NumericValue_IntValue{
+				Predicate: &policyv1alpha1.TraceMatcher_InclusiveMinimum{
+					InclusiveMinimum: &policyv1alpha1.NumericValue{
+						Kind: &policyv1alpha1.NumericValue_IntValue{
 							IntValue: 400,
 						},
 					},
@@ -93,15 +93,15 @@ func TestTraceFilterPolicy_Serialization(t *testing.T) {
 			},
 			{
 				Target: &policyv1alpha1.TraceFieldSelector{
-					Target: &policyv1alpha1.TraceFieldSelector_SpanAttribute{
-						SpanAttribute: &policyv1alpha1.AttributePath{
-							Path: []string{"deployment", "tags"},
+					Target: &policyv1alpha1.TraceFieldSelector_SpanAttributePath{
+						SpanAttributePath: &policyv1alpha1.AttributePath{
+							Segments: []string{"deployment", "tags"},
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Contains{
-					Contains: &policyv1alpha1.Value{
-						Value: &policyv1alpha1.Value_StringValue{
+				Predicate: &policyv1alpha1.TraceMatcher_Containment{
+					Containment: &policyv1alpha1.Value{
+						Kind: &policyv1alpha1.Value_StringValue{
 							StringValue: "canary",
 						},
 					},
@@ -113,9 +113,9 @@ func TestTraceFilterPolicy_Serialization(t *testing.T) {
 						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_KIND,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equals{
-					Equals: &policyv1alpha1.Value{
-						Value: &policyv1alpha1.Value_StringValue{
+				Predicate: &policyv1alpha1.TraceMatcher_Equality{
+					Equality: &policyv1alpha1.Value{
+						Kind: &policyv1alpha1.Value_StringValue{
 							StringValue: "SERVER",
 						},
 					},
@@ -123,15 +123,15 @@ func TestTraceFilterPolicy_Serialization(t *testing.T) {
 			},
 			{
 				Target: &policyv1alpha1.TraceFieldSelector{
-					Target: &policyv1alpha1.TraceFieldSelector_ResourceAttribute{
-						ResourceAttribute: &policyv1alpha1.AttributePath{
-							Path: []string{"service.name"},
+					Target: &policyv1alpha1.TraceFieldSelector_ResourceAttributePath{
+						ResourceAttributePath: &policyv1alpha1.AttributePath{
+							Segments: []string{"service.name"},
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equals{
-					Equals: &policyv1alpha1.Value{
-						Value: &policyv1alpha1.Value_StringValue{
+				Predicate: &policyv1alpha1.TraceMatcher_Equality{
+					Equality: &policyv1alpha1.Value{
+						Kind: &policyv1alpha1.Value_StringValue{
 							StringValue: "frontend",
 						},
 					},
@@ -139,14 +139,14 @@ func TestTraceFilterPolicy_Serialization(t *testing.T) {
 			},
 			{
 				Target: &policyv1alpha1.TraceFieldSelector{
-					Target: &policyv1alpha1.TraceFieldSelector_ScopeAttribute{
-						ScopeAttribute: &policyv1alpha1.AttributePath{
-							Path: []string{"library.name"},
+					Target: &policyv1alpha1.TraceFieldSelector_ScopeAttributePath{
+						ScopeAttributePath: &policyv1alpha1.AttributePath{
+							Segments: []string{"library.name"},
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Exists{
-					Exists: &emptypb.Empty{},
+				Predicate: &policyv1alpha1.TraceMatcher_Existence{
+					Existence: &emptypb.Empty{},
 				},
 			},
 			{
@@ -155,9 +155,9 @@ func TestTraceFilterPolicy_Serialization(t *testing.T) {
 						ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_NAME,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equals{
-					Equals: &policyv1alpha1.Value{
-						Value: &policyv1alpha1.Value_StringValue{
+				Predicate: &policyv1alpha1.TraceMatcher_Equality{
+					Equality: &policyv1alpha1.Value{
+						Kind: &policyv1alpha1.Value_StringValue{
 							StringValue: "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp",
 						},
 					},
@@ -169,9 +169,9 @@ func TestTraceFilterPolicy_Serialization(t *testing.T) {
 						ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_VERSION,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equals{
-					Equals: &policyv1alpha1.Value{
-						Value: &policyv1alpha1.Value_StringValue{
+				Predicate: &policyv1alpha1.TraceMatcher_Equality{
+					Equality: &policyv1alpha1.Value{
+						Kind: &policyv1alpha1.Value_StringValue{
 							StringValue: "v0.45.0",
 						},
 					},
@@ -183,9 +183,9 @@ func TestTraceFilterPolicy_Serialization(t *testing.T) {
 						ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_SCHEMA_URL,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equals{
-					Equals: &policyv1alpha1.Value{
-						Value: &policyv1alpha1.Value_StringValue{
+				Predicate: &policyv1alpha1.TraceMatcher_Equality{
+					Equality: &policyv1alpha1.Value{
+						Kind: &policyv1alpha1.Value_StringValue{
 							StringValue: "https://opentelemetry.io/schemas/1.24.0",
 						},
 					},
@@ -202,7 +202,7 @@ func TestTraceFilterPolicy_Serialization(t *testing.T) {
 
 	assert.True(t, proto.Equal(policy, unmarshaled))
 	assert.Equal(t, "drop-healthcheck-spans", unmarshaled.GetId())
-	require.Len(t, unmarshaled.GetMatches(), 11)
+	require.Len(t, unmarshaled.GetMatchers(), 11)
 }
 
 func TestTraceFilterPolicy_AnyPackaging(t *testing.T) {
@@ -253,21 +253,21 @@ func TestTraceFilterPolicy_EnumValues(t *testing.T) {
 func TestTraceFilterPolicy_JSONSerialization(t *testing.T) {
 	policy := &policyv1alpha1.TraceFilterPolicy{
 		Id: "drop-healthcheck-spans",
-		Matches: []*policyv1alpha1.TraceMatcher{
+		Matchers: []*policyv1alpha1.TraceMatcher{
 			{
 				Target: &policyv1alpha1.TraceFieldSelector{
 					Target: &policyv1alpha1.TraceFieldSelector_RecordField{
 						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equals{
-					Equals: &policyv1alpha1.Value{
-						Value: &policyv1alpha1.Value_StringValue{
+				Predicate: &policyv1alpha1.TraceMatcher_Equality{
+					Equality: &policyv1alpha1.Value{
+						Kind: &policyv1alpha1.Value_StringValue{
 							StringValue: "/healthz",
 						},
 					},
 				},
-				Negate: false,
+				Negated: false,
 			},
 			{
 				Target: &policyv1alpha1.TraceFieldSelector{
@@ -275,9 +275,9 @@ func TestTraceFilterPolicy_JSONSerialization(t *testing.T) {
 						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_KIND,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equals{
-					Equals: &policyv1alpha1.Value{
-						Value: &policyv1alpha1.Value_StringValue{
+				Predicate: &policyv1alpha1.TraceMatcher_Equality{
+					Equality: &policyv1alpha1.Value{
+						Kind: &policyv1alpha1.Value_StringValue{
 							StringValue: "SERVER",
 						},
 					},
@@ -296,20 +296,20 @@ func TestTraceFilterPolicy_JSONSerialization(t *testing.T) {
 }
 
 func TestTraceFilterPolicy_ParentSpanIDAndKindMatchers(t *testing.T) {
-	// Policy targeting root spans (absent parent_span_id: exists with negate: true or equals: "")
+	// Policy targeting root spans (absent parent_span_id: existence with negated: true or equality: "")
 	rootSpanPolicy := &policyv1alpha1.TraceFilterPolicy{
 		Id: "target-root-spans",
-		Matches: []*policyv1alpha1.TraceMatcher{
+		Matchers: []*policyv1alpha1.TraceMatcher{
 			{
 				Target: &policyv1alpha1.TraceFieldSelector{
 					Target: &policyv1alpha1.TraceFieldSelector_RecordField{
 						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Exists{
-					Exists: &emptypb.Empty{},
+				Predicate: &policyv1alpha1.TraceMatcher_Existence{
+					Existence: &emptypb.Empty{},
 				},
-				Negate: true,
+				Negated: true,
 			},
 			{
 				Target: &policyv1alpha1.TraceFieldSelector{
@@ -317,9 +317,9 @@ func TestTraceFilterPolicy_ParentSpanIDAndKindMatchers(t *testing.T) {
 						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_KIND,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equals{
-					Equals: &policyv1alpha1.Value{
-						Value: &policyv1alpha1.Value_StringValue{
+				Predicate: &policyv1alpha1.TraceMatcher_Equality{
+					Equality: &policyv1alpha1.Value{
+						Kind: &policyv1alpha1.Value_StringValue{
 							StringValue: "INTERNAL",
 						},
 					},
@@ -338,16 +338,16 @@ func TestTraceFilterPolicy_ParentSpanIDAndKindMatchers(t *testing.T) {
 	// Policy targeting child spans with explicit 16-char hex parent_span_id.
 	childSpanPolicy := &policyv1alpha1.TraceFilterPolicy{
 		Id: "target-child-spans",
-		Matches: []*policyv1alpha1.TraceMatcher{
+		Matchers: []*policyv1alpha1.TraceMatcher{
 			{
 				Target: &policyv1alpha1.TraceFieldSelector{
 					Target: &policyv1alpha1.TraceFieldSelector_RecordField{
 						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equals{
-					Equals: &policyv1alpha1.Value{
-						Value: &policyv1alpha1.Value_StringValue{
+				Predicate: &policyv1alpha1.TraceMatcher_Equality{
+					Equality: &policyv1alpha1.Value{
+						Kind: &policyv1alpha1.Value_StringValue{
 							StringValue: "0123456789abcdef",
 						},
 					},

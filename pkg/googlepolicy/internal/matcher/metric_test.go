@@ -48,17 +48,17 @@ func TestCompileMetricMatcherAndExtractor(t *testing.T) {
 		assert.ErrorContains(t, err, "scope field cannot be unspecified")
 
 		_, err = CompileMetricExtractor(&policyv1alpha1.MetricFieldSelector{
-			Target: &policyv1alpha1.MetricFieldSelector_DatapointAttribute{},
+			Target: &policyv1alpha1.MetricFieldSelector_DatapointAttributePath{},
 		})
 		assert.ErrorContains(t, err, "datapoint attribute path cannot be empty")
 
 		_, err = CompileMetricExtractor(&policyv1alpha1.MetricFieldSelector{
-			Target: &policyv1alpha1.MetricFieldSelector_ResourceAttribute{},
+			Target: &policyv1alpha1.MetricFieldSelector_ResourceAttributePath{},
 		})
 		assert.ErrorContains(t, err, "resource attribute path cannot be empty")
 
 		_, err = CompileMetricExtractor(&policyv1alpha1.MetricFieldSelector{
-			Target: &policyv1alpha1.MetricFieldSelector_ScopeAttribute{},
+			Target: &policyv1alpha1.MetricFieldSelector_ScopeAttributePath{},
 		})
 		assert.ErrorContains(t, err, "scope attribute path cannot be empty")
 
@@ -173,8 +173,8 @@ func TestCompileMetricMatcherAndExtractor(t *testing.T) {
 			{
 				name: "datapoint_attribute",
 				target: &policyv1alpha1.MetricFieldSelector{
-					Target: &policyv1alpha1.MetricFieldSelector_DatapointAttribute{
-						DatapointAttribute: &policyv1alpha1.AttributePath{Path: []string{"dp.key"}},
+					Target: &policyv1alpha1.MetricFieldSelector_DatapointAttributePath{
+						DatapointAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"dp.key"}},
 					},
 				},
 				wantVal: "dp-val",
@@ -182,8 +182,8 @@ func TestCompileMetricMatcherAndExtractor(t *testing.T) {
 			{
 				name: "resource_attribute",
 				target: &policyv1alpha1.MetricFieldSelector{
-					Target: &policyv1alpha1.MetricFieldSelector_ResourceAttribute{
-						ResourceAttribute: &policyv1alpha1.AttributePath{Path: []string{"res.key"}},
+					Target: &policyv1alpha1.MetricFieldSelector_ResourceAttributePath{
+						ResourceAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"res.key"}},
 					},
 				},
 				wantVal: "res-val",
@@ -191,8 +191,8 @@ func TestCompileMetricMatcherAndExtractor(t *testing.T) {
 			{
 				name: "scope_attribute",
 				target: &policyv1alpha1.MetricFieldSelector{
-					Target: &policyv1alpha1.MetricFieldSelector_ScopeAttribute{
-						ScopeAttribute: &policyv1alpha1.AttributePath{Path: []string{"scope.key"}},
+					Target: &policyv1alpha1.MetricFieldSelector_ScopeAttributePath{
+						ScopeAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"scope.key"}},
 					},
 				},
 				wantVal: "scope-val",
@@ -230,7 +230,7 @@ func TestCompileMetricMatcherAndExtractor(t *testing.T) {
 			t.Run(tc.name, func(t *testing.T) {
 				cm, err := CompileMetricMatcher(&policyv1alpha1.MetricMatcher{
 					Target:    tc.target,
-					Predicate: &policyv1alpha1.MetricMatcher_Exists{},
+					Predicate: &policyv1alpha1.MetricMatcher_Existence{},
 				})
 				require.NoError(t, err)
 

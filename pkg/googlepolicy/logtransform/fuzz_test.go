@@ -99,7 +99,7 @@ func fuzzLogTransformSeedPolicies() []*policyv1alpha1.LogTransformPolicy {
 	return []*policyv1alpha1.LogTransformPolicy{
 		{
 			Id: "projects/123/locations/us-central1/policySets/ps-1/policies/enrich-attributes-and-nested",
-			Matches: []*policyv1alpha1.LogMatcher{
+			Matchers: []*policyv1alpha1.LogMatcher{
 				{
 					Target:    recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY),
 					Predicate: &policyv1alpha1.LogMatcher_Glob{Glob: "hello*"},
@@ -115,23 +115,23 @@ func fuzzLogTransformSeedPolicies() []*policyv1alpha1.LogTransformPolicy {
 		},
 		{
 			Id: "enrich-record-fields",
-			Matches: []*policyv1alpha1.LogMatcher{
+			Matchers: []*policyv1alpha1.LogMatcher{
 				{
 					Target:    logAttrTarget("metadata", "env"),
-					Predicate: &policyv1alpha1.LogMatcher_Equals{Equals: strVal("prod")},
+					Predicate: &policyv1alpha1.LogMatcher_Equality{Equality: strVal("prod")},
 				},
 				{
 					Target: recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER),
-					Predicate: &policyv1alpha1.LogMatcher_Gte{
-						Gte: &policyv1alpha1.NumericValue{
-							Value: &policyv1alpha1.NumericValue_IntValue{IntValue: 9},
+					Predicate: &policyv1alpha1.LogMatcher_InclusiveMinimum{
+						InclusiveMinimum: &policyv1alpha1.NumericValue{
+							Kind: &policyv1alpha1.NumericValue_IntValue{IntValue: 9},
 						},
 					},
 				},
 				{
 					Target:    logAttrTarget("user.roles"),
-					Predicate: &policyv1alpha1.LogMatcher_Contains{Contains: strVal("admin")},
-					Negate:    true,
+					Predicate: &policyv1alpha1.LogMatcher_Containment{Containment: strVal("admin")},
+					Negated:   true,
 				},
 			},
 			Action: &policyv1alpha1.LogTransformPolicy_Add{
@@ -144,14 +144,14 @@ func fuzzLogTransformSeedPolicies() []*policyv1alpha1.LogTransformPolicy {
 		},
 		{
 			Id: "enrich-body-fields",
-			Matches: []*policyv1alpha1.LogMatcher{
+			Matchers: []*policyv1alpha1.LogMatcher{
 				{
 					Target:    resourceAttrTarget("cloud.zone"),
-					Predicate: &policyv1alpha1.LogMatcher_Exists{Exists: &emptypb.Empty{}},
+					Predicate: &policyv1alpha1.LogMatcher_Existence{Existence: &emptypb.Empty{}},
 				},
 				{
 					Target:    scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_NAME),
-					Predicate: &policyv1alpha1.LogMatcher_Equals{Equals: strVal("my.library")},
+					Predicate: &policyv1alpha1.LogMatcher_Equality{Equality: strVal("my.library")},
 				},
 			},
 			Action: &policyv1alpha1.LogTransformPolicy_Add{

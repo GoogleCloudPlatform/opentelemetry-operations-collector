@@ -16,10 +16,12 @@ package googlepolicy
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net"
 	"net/url"
 	"sort"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -27,7 +29,10 @@ import (
 	discoveryv3 "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
+	"go.uber.org/zap/zaptest/observer"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -1168,3 +1173,152 @@ func TestXDSPolicyManager_RestartableAfterTerminalAuthError(t *testing.T) {
 
 	assert.NoError(t, m.Start(), "the manager must be startable after it gave up on remote policies")
 }
+
+// TestXDSPolicyManager_DebugProtoJSONAndAppliedPolicyLogging verifies that at
+// DEBUG level every outgoing DiscoveryRequest (initial, ACK, NACK), incoming
+// DiscoveryResponse, and decoded TelemetryCollector is logged as single-line
+// protojson, and that applying a policy set emits an INFO log entry.
+func TestXDSPolicyManager_DebugProtoJSONAndAppliedPolicyLogging(t *testing.T) {
+	registerDummyDriverForTest(t)
+	resetActivePolicySet(t)
+
+	nackReceived := make(chan *discoveryv3.DiscoveryRequest, 1)
+
+	srv := &fakeADSServer{streamOpened: make(chan struct{}, 8)}
+	srv.handlers = []func(discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error{
+		func(stream discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error {
+			// 1. Receive initial DiscoveryRequest.
+			if _, err := srv.recv(stream); err != nil {
+				return err
+			}
+			// 2. Send a valid DiscoveryResponse (rev-1) and receive ACK.
+			if err := stream.Send(&discoveryv3.DiscoveryResponse{
+				VersionInfo: "rev-1",
+				Nonce:       "nonce-1",
+				TypeUrl:     xdsPolicyTypeURL,
+				Resources:   []*anypb.Any{policyResource(t, "log-filter", "rev-1")},
+			}); err != nil {
+				return err
+			}
+			if _, err := srv.recv(stream); err != nil {
+				return err
+			}
+			// 3. Send a DiscoveryResponse with an undecodable Any (rev-bad) and receive NACK.
+			if err := stream.Send(&discoveryv3.DiscoveryResponse{
+				VersionInfo: "rev-bad",
+				Nonce:       "nonce-2",
+				TypeUrl:     xdsPolicyTypeURL,
+				Resources: []*anypb.Any{{
+					TypeUrl: "type.googleapis.com/does.not.Exist",
+					Value:   []byte("garbage"),
+				}},
+			}); err != nil {
+				return err
+			}
+			nack, err := srv.recv(stream)
+			if err != nil {
+				return err
+			}
+			nackReceived <- nack
+			<-stream.Context().Done()
+			return stream.Context().Err()
+		},
+	}
+
+	core, logs := observer.New(zapcore.DebugLevel)
+	m := newTestManager(t, startFakeADSServer(t, srv))
+	m.logger = zap.New(core)
+
+	require.NoError(t, m.Start())
+	t.Cleanup(func() { require.NoError(t, m.Stop()) })
+
+	select {
+	case nack := <-nackReceived:
+		require.NotNil(t, nack.GetErrorDetail())
+	case <-time.After(10 * time.Second):
+		t.Fatal("timed out waiting for NACK")
+	}
+	require.NoError(t, m.Stop())
+
+	reqLogs := logs.FilterMessage("xDS DiscoveryRequest sent").All()
+	require.Len(t, reqLogs, 3, "expected 3 outgoing DiscoveryRequest debug logs (initial, ack, nack)")
+
+	parseJSONMap := func(t *testing.T, raw string) map[string]any {
+		t.Helper()
+		assert.False(t, strings.Contains(raw, "\n"), "protojson log field must be single-line")
+		var m map[string]any
+		require.NoError(t, json.Unmarshal([]byte(raw), &m))
+		return m
+	}
+
+	// Initial request log.
+	assert.Equal(t, zapcore.DebugLevel, reqLogs[0].Level)
+	assert.Equal(t, "initial", reqLogs[0].ContextMap()["kind"])
+	assert.Equal(t, "", reqLogs[0].ContextMap()["version"])
+	initialJSON, _ := reqLogs[0].ContextMap()["discovery_request"].(string)
+	initialMap := parseJSONMap(t, initialJSON)
+	assert.Equal(t, "", initialMap["version_info"])
+	nodeMap, _ := initialMap["node"].(map[string]any)
+	assert.Equal(t, "collector-abc", nodeMap["id"])
+	assert.Equal(t, "fleet-1", nodeMap["cluster"])
+	metaMap, _ := nodeMap["metadata"].(map[string]any)
+	assert.Equal(t, "my-project", metaMap["gcp.project_id"])
+
+	// ACK request log.
+	assert.Equal(t, zapcore.DebugLevel, reqLogs[1].Level)
+	assert.Equal(t, "ack", reqLogs[1].ContextMap()["kind"])
+	assert.Equal(t, "rev-1", reqLogs[1].ContextMap()["version"])
+	assert.Equal(t, "nonce-1", reqLogs[1].ContextMap()["response_nonce"])
+	ackJSON, _ := reqLogs[1].ContextMap()["discovery_request"].(string)
+	ackMap := parseJSONMap(t, ackJSON)
+	assert.Equal(t, "rev-1", ackMap["version_info"])
+	assert.Equal(t, "nonce-1", ackMap["response_nonce"])
+
+	// NACK request log.
+	assert.Equal(t, zapcore.DebugLevel, reqLogs[2].Level)
+	assert.Equal(t, "nack", reqLogs[2].ContextMap()["kind"])
+	assert.Equal(t, "rev-1", reqLogs[2].ContextMap()["version"])
+	assert.Equal(t, "nonce-2", reqLogs[2].ContextMap()["response_nonce"])
+	nackJSON, _ := reqLogs[2].ContextMap()["discovery_request"].(string)
+	nackMap := parseJSONMap(t, nackJSON)
+	assert.Equal(t, "nonce-2", nackMap["response_nonce"])
+	errDetailMap, _ := nackMap["error_detail"].(map[string]any)
+	require.NotNil(t, errDetailMap)
+	assert.Contains(t, errDetailMap["message"], "does.not.Exist")
+
+	// Incoming DiscoveryResponse debug logs.
+	respLogs := logs.FilterMessage("xDS DiscoveryResponse received").All()
+	require.Len(t, respLogs, 2, "expected 2 incoming DiscoveryResponse debug logs")
+	for _, entry := range respLogs {
+		assert.Equal(t, zapcore.DebugLevel, entry.Level)
+	}
+	resp0JSON, _ := respLogs[0].ContextMap()["discovery_response"].(string)
+	resp0Map := parseJSONMap(t, resp0JSON)
+	assert.Equal(t, "rev-1", resp0Map["version_info"])
+	assert.Contains(t, resp0JSON, "projects/my-project/locations/global/policySets/fleet-1/revisions/rev-1")
+	assert.Contains(t, resp0JSON, "log-filter")
+
+	resp1JSON, _ := respLogs[1].ContextMap()["discovery_response"].(string)
+	resp1Map := parseJSONMap(t, resp1JSON)
+	assert.Equal(t, "rev-bad", resp1Map["version_info"])
+	assert.NotEmpty(t, resp1Map["marshal_error"])
+
+	// Decoded TelemetryCollector debug log.
+	decodedLogs := logs.FilterMessage("Decoded xDS TelemetryCollector").All()
+	require.Len(t, decodedLogs, 1)
+	assert.Equal(t, zapcore.DebugLevel, decodedLogs[0].Level)
+	assert.Equal(t, "rev-1", decodedLogs[0].ContextMap()["version"])
+	assert.Equal(t, "projects/my-project/locations/global/policySets/fleet-1/revisions/rev-1", decodedLogs[0].ContextMap()["policy_set_revision"])
+	assert.EqualValues(t, 1, decodedLogs[0].ContextMap()["policy_count"])
+	assert.Equal(t, []any{"log-filter"}, decodedLogs[0].ContextMap()["policy_ids"])
+
+	// Applied xDS policy set INFO log.
+	appliedLogs := logs.FilterMessage("Applied xDS policy set").All()
+	require.Len(t, appliedLogs, 1)
+	assert.Equal(t, zapcore.InfoLevel, appliedLogs[0].Level)
+	assert.Equal(t, "rev-1", appliedLogs[0].ContextMap()["version"])
+	assert.Equal(t, "projects/my-project/locations/global/policySets/fleet-1/revisions/rev-1", appliedLogs[0].ContextMap()["policy_set_revision"])
+	assert.EqualValues(t, 1, appliedLogs[0].ContextMap()["policies_loaded"])
+	assert.EqualValues(t, 0, appliedLogs[0].ContextMap()["policies_skipped"])
+}
+

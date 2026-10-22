@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider/policies/selfmetrics"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/event"
@@ -690,4 +691,143 @@ func TestRetrieve_RecordsPolicyEvaluateErrorEventForFailedPoliciesWithClass(t *t
 	}, entries[1].ContextMap())
 
 	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestPolicyHotReload_SourcePolicyTriggersWatcher(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	p := createProvider()
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	changeEvents := make(chan *confmap.ChangeEvent, 5)
+	watcher := func(e *confmap.ChangeEvent) {
+		changeEvents <- e
+	}
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", watcher)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+	assert.Equal(t, "localhost:18888", conf.Get("receivers::otlp/default_self_metrics::protocols::grpc::endpoint"))
+
+	// Update active policy set with a custom self_metrics policy configuring a different port.
+	ps, err := googlepolicy.MakePolicySet("rev-source-1", []map[string]any{
+		{
+			"type": "self_metrics",
+			"name": "custom_self_metrics",
+			"port": 19999,
+		},
+	})
+	require.NoError(t, err)
+
+	googlepolicy.SetActivePolicySet(ps)
+
+	select {
+	case e := <-changeEvents:
+		assert.NotNil(t, e)
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for confmap.WatcherFunc to be triggered on source policy update")
+	}
+
+	// Verify that calling Retrieve() after reload returns the updated config with port 19999.
+	retUpdated, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", watcher)
+	require.NoError(t, err)
+	confUpdated, err := retUpdated.AsConf()
+	require.NoError(t, err)
+	assert.Equal(t, "localhost:19999", confUpdated.Get("receivers::otlp/custom_self_metrics::protocols::grpc::endpoint"))
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestPolicyHotReload_FilterPolicyDoesNotTriggerWatcher(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	p := createProvider()
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	changeEvents := make(chan *confmap.ChangeEvent, 5)
+	watcher := func(e *confmap.ChangeEvent) {
+		changeEvents <- e
+	}
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", watcher)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	// Update active policy set with only a LogFilterPolicy (transformation policy).
+	ps, err := googlepolicy.MakePolicySet("rev-filter-1", []map[string]any{
+		{
+			"type":   "log_filter",
+			"id":     "drop-debug",
+			"action": "ACTION_DROP",
+			"matches": []map[string]any{
+				{
+					"target": map[string]any{
+						"record_field": "LOG_RECORD_FIELD_BODY",
+					},
+					"glob": "DEBUG*",
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	googlepolicy.SetActivePolicySet(ps)
+
+	// Confmap should be unchanged, so watcher should NOT be triggered.
+	select {
+	case e := <-changeEvents:
+		t.Fatalf("unexpected confmap.WatcherFunc triggered on filter-only update: %+v", e)
+	case <-time.After(200 * time.Millisecond):
+		// Expected: no event.
+	}
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestPolicyHotReload_ProviderShutdownCleansUpWatcher(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	p := createProvider()
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	changeEvents := make(chan *confmap.ChangeEvent, 5)
+	watcher := func(e *confmap.ChangeEvent) {
+		changeEvents <- e
+	}
+
+	_, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", watcher)
+	require.NoError(t, err)
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+
+	// Updating policy set after shutdown must not trigger events or panic.
+	ps, err := googlepolicy.MakePolicySet("rev-shutdown", []map[string]any{
+		{
+			"type": "self_metrics",
+			"name": "post_shutdown_metrics",
+			"port": 20000,
+		},
+	})
+	require.NoError(t, err)
+
+	googlepolicy.SetActivePolicySet(ps)
+
+	select {
+	case e := <-changeEvents:
+		t.Fatalf("unexpected confmap.WatcherFunc triggered after provider shutdown: %+v", e)
+	case <-time.After(200 * time.Millisecond):
+		// Expected: no event.
+	}
 }

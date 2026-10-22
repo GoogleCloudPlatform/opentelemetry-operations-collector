@@ -22,6 +22,7 @@ import (
 	"os"
 	"reflect"
 	"strings"
+	"sync"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider/policies/gcpdestination"
@@ -83,6 +84,15 @@ type provider struct {
 	logger *zap.Logger
 
 	manager googlepolicy.Manager
+
+	mu        sync.Mutex
+	stopped   bool
+	watcher   confmap.WatcherFunc
+	lastConf  map[string]any
+	watcherCh googlepolicy.WatcherChannel
+	stopCh    chan struct{}
+	stopOnce  sync.Once
+	wg        sync.WaitGroup
 }
 
 // NewFactory returns a new confmap.ProviderFactory that creates a Google Control Plane configuration provider.
@@ -182,6 +192,7 @@ func (p *provider) Retrieve(ctx context.Context, uri string, watcher confmap.Wat
 		if p.manager.URI().String() != target.String() {
 			return nil, fmt.Errorf("%q: %w: %s", uri, ErrManagerAlreadyConfigured, target)
 		} else {
+			p.setupWatcher(watcher)
 			return p.evaluateActivePolicySet(ctx)
 		}
 	}
@@ -213,7 +224,13 @@ func (p *provider) Retrieve(ctx context.Context, uri string, watcher confmap.Wat
 		return nil, fmt.Errorf("%q: %w: %s", uri, ErrURIInvalidInnerScheme, target.Scheme)
 	}
 
-	return p.evaluateActivePolicySet(ctx)
+	ret, err := p.evaluateActivePolicySet(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	p.setupWatcher(watcher)
+	return ret, nil
 }
 
 func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrieved, error) {
@@ -405,7 +422,12 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 		return nil, false, err
 	}
 
-	ret, err := confmap.NewRetrieved(conf.ToStringMap())
+	confMap := conf.ToStringMap()
+	p.mu.Lock()
+	p.lastConf = confMap
+	p.mu.Unlock()
+
+	ret, err := confmap.NewRetrieved(confMap)
 	return ret, false, err
 }
 
@@ -528,6 +550,84 @@ func cleanNilEntries(m map[string]any) {
 	}
 }
 
+func (p *provider) setupWatcher(watcher confmap.WatcherFunc) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.stopped {
+		return
+	}
+	p.watcher = watcher
+	if p.stopCh == nil && watcher != nil {
+		stopCh := make(chan struct{})
+		watcherCh := googlepolicy.RegisterWatcherChannel()
+		p.stopCh = stopCh
+		p.watcherCh = watcherCh
+		p.wg.Add(1)
+		go p.watchPolicies(stopCh, watcherCh)
+	}
+}
+
+func (p *provider) watchPolicies(stopCh <-chan struct{}, watcherCh googlepolicy.WatcherChannel) {
+	defer p.wg.Done()
+	for {
+		select {
+		case <-stopCh:
+			return
+		case _, ok := <-watcherCh:
+			if !ok {
+				return
+			}
+			select {
+			case <-stopCh:
+				return
+			default:
+			}
+			p.onPolicySetUpdated()
+		}
+	}
+}
+
+func (p *provider) onPolicySetUpdated() {
+	p.mu.Lock()
+	watcher := p.watcher
+	oldConf := p.lastConf
+	p.mu.Unlock()
+
+	if watcher == nil {
+		return
+	}
+
+	ret, err := p.evaluateActivePolicySet(context.Background())
+	if err != nil {
+		if p.logger != nil {
+			p.logger.Warn("failed to evaluate active policy set on update", zap.Error(err))
+		}
+		return
+	}
+
+	newConf, err := ret.AsConf()
+	if err != nil {
+		if p.logger != nil {
+			p.logger.Warn("failed to extract conf from retrieved config on update", zap.Error(err))
+		}
+		return
+	}
+	newConfMap := newConf.ToStringMap()
+
+	// Only trigger collector reload if the generated configuration actually changed.
+	// If only transformation policies (log_filter, log_transform, etc.) changed,
+	// the provider's confmap remains identical and googlepolicyprocessor handles
+	// the update in-memory without restarting collector pipelines.
+	if reflect.DeepEqual(oldConf, newConfMap) {
+		return
+	}
+
+	if p.logger != nil {
+		p.logger.Info("detected change in policy-generated collector configuration, triggering reload")
+	}
+	go watcher(&confmap.ChangeEvent{})
+}
+
 // Scheme returns the URI scheme supported by this provider.
 func (*provider) Scheme() string {
 	return schemeName
@@ -535,6 +635,20 @@ func (*provider) Scheme() string {
 
 // Shutdown shuts down the provider and releases any held resources.
 func (p *provider) Shutdown(context.Context) error {
+	p.stopOnce.Do(func() {
+		p.mu.Lock()
+		p.stopped = true
+		if p.stopCh != nil {
+			close(p.stopCh)
+			p.stopCh = nil
+		}
+		p.mu.Unlock()
+		p.wg.Wait()
+		if p.watcherCh != nil {
+			googlepolicy.UnregisterWatcherChannel(p.watcherCh)
+			p.watcherCh = nil
+		}
+	})
 	if p.manager != nil {
 		p.manager.Stop()
 	}

@@ -23,7 +23,6 @@ package policyv1alpha1
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	emptypb "google.golang.org/protobuf/types/known/emptypb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -36,96 +35,6 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// SpanRecordField identifies standard creation-time fields of an OpenTelemetry Span.
-// When evaluated with `exists`, first-class fields evaluate to true when set
-// to a non-default (non-empty / non-zero) value.
-type SpanRecordField int32
-
-const (
-	// Default unspecified span record field.
-	SpanRecordField_SPAN_RECORD_FIELD_UNSPECIFIED SpanRecordField = 0
-	// The operation name of the span (e.g. "HTTP GET /users", "SELECT * FROM users").
-	SpanRecordField_SPAN_RECORD_FIELD_NAME SpanRecordField = 1
-	// The 16-byte trace identifier associated with the span.
-	// When evaluated against string predicates (`equals` with `string_value`,
-	// `glob`, `contains` with `string_value`), this matches against the
-	// 32-character lowercase hexadecimal string representation per the
-	// OpenTelemetry / W3C Trace Context specification.
-	SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID SpanRecordField = 2
-	// The 8-byte span identifier.
-	// When evaluated against string predicates (`equals` with `string_value`,
-	// `glob`, `contains` with `string_value`), this matches against the
-	// 16-character lowercase hexadecimal string representation per the
-	// OpenTelemetry / W3C Trace Context specification.
-	SpanRecordField_SPAN_RECORD_FIELD_SPAN_ID SpanRecordField = 3
-	// The 8-byte parent span identifier.
-	// Root spans have no parent span identifier (in OpenTelemetry data models,
-	// parent_span_id is empty or all zeroes).
-	// When evaluated with `exists`, this evaluates to false for root spans (and true
-	// with `negate: true`, allowing explicit targeting or exemption of root spans).
-	// When evaluated against string predicates (`equals` with `string_value`,
-	// `glob`, `contains` with `string_value`), a root span matches against the
-	// empty string `""`. For child spans, this matches against the 16-character
-	// lowercase hexadecimal string representation per the OpenTelemetry / W3C
-	// Trace Context specification.
-	SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID SpanRecordField = 4
-	// The span kind (e.g. "INTERNAL", "SERVER", "CLIENT", "PRODUCER", "CONSUMER").
-	// When evaluated against string predicates (`equals` with `string_value`,
-	// `glob`, `contains` with `string_value`), this matches against uppercase
-	// span kind string names without the "SPAN_KIND_" prefix (matching
-	// OpenTelemetry specification conventions). Per the OpenTelemetry
-	// specification, if span kind is unset or SPAN_KIND_UNSPECIFIED,
-	// implementations treat it as "INTERNAL".
-	SpanRecordField_SPAN_RECORD_FIELD_KIND SpanRecordField = 5
-)
-
-// Enum value maps for SpanRecordField.
-var (
-	SpanRecordField_name = map[int32]string{
-		0: "SPAN_RECORD_FIELD_UNSPECIFIED",
-		1: "SPAN_RECORD_FIELD_NAME",
-		2: "SPAN_RECORD_FIELD_TRACE_ID",
-		3: "SPAN_RECORD_FIELD_SPAN_ID",
-		4: "SPAN_RECORD_FIELD_PARENT_SPAN_ID",
-		5: "SPAN_RECORD_FIELD_KIND",
-	}
-	SpanRecordField_value = map[string]int32{
-		"SPAN_RECORD_FIELD_UNSPECIFIED":    0,
-		"SPAN_RECORD_FIELD_NAME":           1,
-		"SPAN_RECORD_FIELD_TRACE_ID":       2,
-		"SPAN_RECORD_FIELD_SPAN_ID":        3,
-		"SPAN_RECORD_FIELD_PARENT_SPAN_ID": 4,
-		"SPAN_RECORD_FIELD_KIND":           5,
-	}
-)
-
-func (x SpanRecordField) Enum() *SpanRecordField {
-	p := new(SpanRecordField)
-	*p = x
-	return p
-}
-
-func (x SpanRecordField) String() string {
-	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
-}
-
-func (SpanRecordField) Descriptor() protoreflect.EnumDescriptor {
-	return file_policy_v1alpha1_trace_filter_policy_proto_enumTypes[0].Descriptor()
-}
-
-func (SpanRecordField) Type() protoreflect.EnumType {
-	return &file_policy_v1alpha1_trace_filter_policy_proto_enumTypes[0]
-}
-
-func (x SpanRecordField) Number() protoreflect.EnumNumber {
-	return protoreflect.EnumNumber(x)
-}
-
-// Deprecated: Use SpanRecordField.Descriptor instead.
-func (SpanRecordField) EnumDescriptor() ([]byte, []int) {
-	return file_policy_v1alpha1_trace_filter_policy_proto_rawDescGZIP(), []int{0}
-}
-
 // TraceFilterPolicy defines an intent-based rule for dropping spans based on
 // structured creation-time field and attribute matches.
 //
@@ -136,11 +45,11 @@ func (SpanRecordField) EnumDescriptor() ([]byte, []int) {
 //     reassembly. Filter policies remain fast, stateless, and evaluated per span.
 //   - Independent Decisions & Orphan Spans: Dropping a span does not drop its
 //     descendants. Dropping an intermediate span in a trace leaves child spans
-//     behind as orphans with a dangling parent_span_id.
+//     behind as orphans with a dangling `parent_span_id`.
 //   - Drop Semantics: Telemetry passes through by default (default allow). When
-//     all matchers in `matches` evaluate to true for a span, the span is dropped.
+//     all matchers in `matchers` evaluate to true for a span, the span is dropped.
 //     To implement an allowlist that drops non-matching spans, authors specify
-//     negate: true on the matchers.
+//     `negated: true` on the matchers.
 type TraceFilterPolicy struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Unique identifier for the policy within its configuration scope
@@ -150,7 +59,7 @@ type TraceFilterPolicy struct {
 	// All matchers in this list are ANDed together: all conditions must evaluate
 	// to true for the span to be dropped.
 	// At least one matcher is required; a policy with no matchers is invalid.
-	Matches       []*TraceMatcher `protobuf:"bytes,2,rep,name=matches,proto3" json:"matches,omitempty"`
+	Matchers      []*TraceMatcher `protobuf:"bytes,2,rep,name=matchers,proto3" json:"matchers,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -192,410 +101,21 @@ func (x *TraceFilterPolicy) GetId() string {
 	return ""
 }
 
-func (x *TraceFilterPolicy) GetMatches() []*TraceMatcher {
+func (x *TraceFilterPolicy) GetMatchers() []*TraceMatcher {
 	if x != nil {
-		return x.Matches
+		return x.Matchers
 	}
 	return nil
 }
-
-// TraceMatcher defines a single predicate evaluated against a specific span
-// creation-time field or attribute.
-type TraceMatcher struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// The span field, attribute, or metadata to inspect. Exactly one must be set.
-	Target *TraceFieldSelector `protobuf:"bytes,1,opt,name=target,proto3" json:"target,omitempty"`
-	// The comparison predicate to evaluate against the target value.
-	// Exactly one predicate must be set.
-	//
-	// Types that are valid to be assigned to Predicate:
-	//
-	//	*TraceMatcher_Exists
-	//	*TraceMatcher_Equals
-	//	*TraceMatcher_Glob
-	//	*TraceMatcher_Gt
-	//	*TraceMatcher_Gte
-	//	*TraceMatcher_Lt
-	//	*TraceMatcher_Lte
-	//	*TraceMatcher_Contains
-	Predicate isTraceMatcher_Predicate `protobuf_oneof:"predicate"`
-	// If true, inverts the result of the predicate (logical NOT).
-	Negate        bool `protobuf:"varint,2,opt,name=negate,proto3" json:"negate,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *TraceMatcher) Reset() {
-	*x = TraceMatcher{}
-	mi := &file_policy_v1alpha1_trace_filter_policy_proto_msgTypes[1]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *TraceMatcher) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*TraceMatcher) ProtoMessage() {}
-
-func (x *TraceMatcher) ProtoReflect() protoreflect.Message {
-	mi := &file_policy_v1alpha1_trace_filter_policy_proto_msgTypes[1]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use TraceMatcher.ProtoReflect.Descriptor instead.
-func (*TraceMatcher) Descriptor() ([]byte, []int) {
-	return file_policy_v1alpha1_trace_filter_policy_proto_rawDescGZIP(), []int{1}
-}
-
-func (x *TraceMatcher) GetTarget() *TraceFieldSelector {
-	if x != nil {
-		return x.Target
-	}
-	return nil
-}
-
-func (x *TraceMatcher) GetPredicate() isTraceMatcher_Predicate {
-	if x != nil {
-		return x.Predicate
-	}
-	return nil
-}
-
-func (x *TraceMatcher) GetExists() *emptypb.Empty {
-	if x != nil {
-		if x, ok := x.Predicate.(*TraceMatcher_Exists); ok {
-			return x.Exists
-		}
-	}
-	return nil
-}
-
-func (x *TraceMatcher) GetEquals() *Value {
-	if x != nil {
-		if x, ok := x.Predicate.(*TraceMatcher_Equals); ok {
-			return x.Equals
-		}
-	}
-	return nil
-}
-
-func (x *TraceMatcher) GetGlob() string {
-	if x != nil {
-		if x, ok := x.Predicate.(*TraceMatcher_Glob); ok {
-			return x.Glob
-		}
-	}
-	return ""
-}
-
-func (x *TraceMatcher) GetGt() *NumericValue {
-	if x != nil {
-		if x, ok := x.Predicate.(*TraceMatcher_Gt); ok {
-			return x.Gt
-		}
-	}
-	return nil
-}
-
-func (x *TraceMatcher) GetGte() *NumericValue {
-	if x != nil {
-		if x, ok := x.Predicate.(*TraceMatcher_Gte); ok {
-			return x.Gte
-		}
-	}
-	return nil
-}
-
-func (x *TraceMatcher) GetLt() *NumericValue {
-	if x != nil {
-		if x, ok := x.Predicate.(*TraceMatcher_Lt); ok {
-			return x.Lt
-		}
-	}
-	return nil
-}
-
-func (x *TraceMatcher) GetLte() *NumericValue {
-	if x != nil {
-		if x, ok := x.Predicate.(*TraceMatcher_Lte); ok {
-			return x.Lte
-		}
-	}
-	return nil
-}
-
-func (x *TraceMatcher) GetContains() *Value {
-	if x != nil {
-		if x, ok := x.Predicate.(*TraceMatcher_Contains); ok {
-			return x.Contains
-		}
-	}
-	return nil
-}
-
-func (x *TraceMatcher) GetNegate() bool {
-	if x != nil {
-		return x.Negate
-	}
-	return false
-}
-
-type isTraceMatcher_Predicate interface {
-	isTraceMatcher_Predicate()
-}
-
-type TraceMatcher_Exists struct {
-	// Matches if the selected field or attribute exists.
-	// For attributes, this evaluates to true if the attribute key exists.
-	// For first-class fields (record_field, scope_field) that lack explicit
-	// presence tracking in the OpenTelemetry data model, this evaluates to true
-	// when the field is set to a non-default (non-zero/non-empty) value, and
-	// false when absent or default (e.g. absent parent_span_id on a root span,
-	// or empty string/unset).
-	Exists *emptypb.Empty `protobuf:"bytes,10,opt,name=exists,proto3,oneof"`
-}
-
-type TraceMatcher_Equals struct {
-	// Typed scalar equality match (supporting string, int64, bool, double, bytes).
-	Equals *Value `protobuf:"bytes,11,opt,name=equals,proto3,oneof"`
-}
-
-type TraceMatcher_Glob struct {
-	// Glob pattern match against the entire string value.
-	// Supports '*' (matches zero or more characters) and '?' (matches any
-	// single character). Matching is case-sensitive and anchored to the full
-	// string. Applies strictly to string fields and string attribute values.
-	Glob string `protobuf:"bytes,12,opt,name=glob,proto3,oneof"`
-}
-
-type TraceMatcher_Gt struct {
-	// Matches if the target numeric value is strictly greater than this value.
-	// Applies strictly to int64 and double fields and attribute values.
-	Gt *NumericValue `protobuf:"bytes,13,opt,name=gt,proto3,oneof"`
-}
-
-type TraceMatcher_Gte struct {
-	// Matches if the target numeric value is greater than or equal to this value.
-	// Applies strictly to int64 and double fields and attribute values.
-	Gte *NumericValue `protobuf:"bytes,14,opt,name=gte,proto3,oneof"`
-}
-
-type TraceMatcher_Lt struct {
-	// Matches if the target numeric value is strictly less than this value.
-	// Applies strictly to int64 and double fields and attribute values.
-	Lt *NumericValue `protobuf:"bytes,15,opt,name=lt,proto3,oneof"`
-}
-
-type TraceMatcher_Lte struct {
-	// Matches if the target numeric value is less than or equal to this value.
-	// Applies strictly to int64 and double fields and attribute values.
-	Lte *NumericValue `protobuf:"bytes,16,opt,name=lte,proto3,oneof"`
-}
-
-type TraceMatcher_Contains struct {
-	// Value containment:
-	// - For list (ArrayValue) attributes: matches if any element in the list equals this value.
-	// - For string fields or attribute values: matches if the string contains this value's string_value as a substring.
-	// - For bytes fields or attribute values: matches if the bytes contain this value's bytes_value as a subsequence.
-	Contains *Value `protobuf:"bytes,17,opt,name=contains,proto3,oneof"`
-}
-
-func (*TraceMatcher_Exists) isTraceMatcher_Predicate() {}
-
-func (*TraceMatcher_Equals) isTraceMatcher_Predicate() {}
-
-func (*TraceMatcher_Glob) isTraceMatcher_Predicate() {}
-
-func (*TraceMatcher_Gt) isTraceMatcher_Predicate() {}
-
-func (*TraceMatcher_Gte) isTraceMatcher_Predicate() {}
-
-func (*TraceMatcher_Lt) isTraceMatcher_Predicate() {}
-
-func (*TraceMatcher_Lte) isTraceMatcher_Predicate() {}
-
-func (*TraceMatcher_Contains) isTraceMatcher_Predicate() {}
-
-// TraceFieldSelector designates a first-class OTel span field, attribute, or metadata.
-type TraceFieldSelector struct {
-	state protoimpl.MessageState `protogen:"open.v1"`
-	// Types that are valid to be assigned to Target:
-	//
-	//	*TraceFieldSelector_RecordField
-	//	*TraceFieldSelector_SpanAttribute
-	//	*TraceFieldSelector_ResourceAttribute
-	//	*TraceFieldSelector_ScopeAttribute
-	//	*TraceFieldSelector_ScopeField
-	Target        isTraceFieldSelector_Target `protobuf_oneof:"target"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *TraceFieldSelector) Reset() {
-	*x = TraceFieldSelector{}
-	mi := &file_policy_v1alpha1_trace_filter_policy_proto_msgTypes[2]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *TraceFieldSelector) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*TraceFieldSelector) ProtoMessage() {}
-
-func (x *TraceFieldSelector) ProtoReflect() protoreflect.Message {
-	mi := &file_policy_v1alpha1_trace_filter_policy_proto_msgTypes[2]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use TraceFieldSelector.ProtoReflect.Descriptor instead.
-func (*TraceFieldSelector) Descriptor() ([]byte, []int) {
-	return file_policy_v1alpha1_trace_filter_policy_proto_rawDescGZIP(), []int{2}
-}
-
-func (x *TraceFieldSelector) GetTarget() isTraceFieldSelector_Target {
-	if x != nil {
-		return x.Target
-	}
-	return nil
-}
-
-func (x *TraceFieldSelector) GetRecordField() SpanRecordField {
-	if x != nil {
-		if x, ok := x.Target.(*TraceFieldSelector_RecordField); ok {
-			return x.RecordField
-		}
-	}
-	return SpanRecordField_SPAN_RECORD_FIELD_UNSPECIFIED
-}
-
-func (x *TraceFieldSelector) GetSpanAttribute() *AttributePath {
-	if x != nil {
-		if x, ok := x.Target.(*TraceFieldSelector_SpanAttribute); ok {
-			return x.SpanAttribute
-		}
-	}
-	return nil
-}
-
-func (x *TraceFieldSelector) GetResourceAttribute() *AttributePath {
-	if x != nil {
-		if x, ok := x.Target.(*TraceFieldSelector_ResourceAttribute); ok {
-			return x.ResourceAttribute
-		}
-	}
-	return nil
-}
-
-func (x *TraceFieldSelector) GetScopeAttribute() *AttributePath {
-	if x != nil {
-		if x, ok := x.Target.(*TraceFieldSelector_ScopeAttribute); ok {
-			return x.ScopeAttribute
-		}
-	}
-	return nil
-}
-
-func (x *TraceFieldSelector) GetScopeField() ScopeField {
-	if x != nil {
-		if x, ok := x.Target.(*TraceFieldSelector_ScopeField); ok {
-			return x.ScopeField
-		}
-	}
-	return ScopeField_SCOPE_FIELD_UNSPECIFIED
-}
-
-type isTraceFieldSelector_Target interface {
-	isTraceFieldSelector_Target()
-}
-
-type TraceFieldSelector_RecordField struct {
-	// Standard first-class OpenTelemetry Span creation-time fields (e.g. name, kind).
-	RecordField SpanRecordField `protobuf:"varint,1,opt,name=record_field,json=recordField,proto3,enum=google.telemetry.policy.v1alpha1.SpanRecordField,oneof"`
-}
-
-type TraceFieldSelector_SpanAttribute struct {
-	// Span attribute by key or path (e.g. ["http.route"] or ["rpc", "service"]).
-	SpanAttribute *AttributePath `protobuf:"bytes,2,opt,name=span_attribute,json=spanAttribute,proto3,oneof"`
-}
-
-type TraceFieldSelector_ResourceAttribute struct {
-	// Resource attribute by key or path (e.g. ["service.name"] or ["host", "id"]).
-	ResourceAttribute *AttributePath `protobuf:"bytes,3,opt,name=resource_attribute,json=resourceAttribute,proto3,oneof"`
-}
-
-type TraceFieldSelector_ScopeAttribute struct {
-	// Instrumentation scope attribute by key or path (e.g. ["library.name"]).
-	ScopeAttribute *AttributePath `protobuf:"bytes,4,opt,name=scope_attribute,json=scopeAttribute,proto3,oneof"`
-}
-
-type TraceFieldSelector_ScopeField struct {
-	// Standard first-class OpenTelemetry InstrumentationScope fields (e.g. name, version).
-	ScopeField ScopeField `protobuf:"varint,5,opt,name=scope_field,json=scopeField,proto3,enum=google.telemetry.policy.v1alpha1.ScopeField,oneof"`
-}
-
-func (*TraceFieldSelector_RecordField) isTraceFieldSelector_Target() {}
-
-func (*TraceFieldSelector_SpanAttribute) isTraceFieldSelector_Target() {}
-
-func (*TraceFieldSelector_ResourceAttribute) isTraceFieldSelector_Target() {}
-
-func (*TraceFieldSelector_ScopeAttribute) isTraceFieldSelector_Target() {}
-
-func (*TraceFieldSelector_ScopeField) isTraceFieldSelector_Target() {}
 
 var File_policy_v1alpha1_trace_filter_policy_proto protoreflect.FileDescriptor
 
 const file_policy_v1alpha1_trace_filter_policy_proto_rawDesc = "" +
 	"\n" +
-	")policy/v1alpha1/trace_filter_policy.proto\x12 google.telemetry.policy.v1alpha1\x1a\x1bgoogle/protobuf/empty.proto\x1a)policy/v1alpha1/common_policy_types.proto\"m\n" +
+	")policy/v1alpha1/trace_filter_policy.proto\x12 google.telemetry.policy.v1alpha1\x1a)policy/v1alpha1/common_policy_types.proto\"o\n" +
 	"\x11TraceFilterPolicy\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12H\n" +
-	"\amatches\x18\x02 \x03(\v2..google.telemetry.policy.v1alpha1.TraceMatcherR\amatches\"\xdf\x04\n" +
-	"\fTraceMatcher\x12L\n" +
-	"\x06target\x18\x01 \x01(\v24.google.telemetry.policy.v1alpha1.TraceFieldSelectorR\x06target\x120\n" +
-	"\x06exists\x18\n" +
-	" \x01(\v2\x16.google.protobuf.EmptyH\x00R\x06exists\x12A\n" +
-	"\x06equals\x18\v \x01(\v2'.google.telemetry.policy.v1alpha1.ValueH\x00R\x06equals\x12\x14\n" +
-	"\x04glob\x18\f \x01(\tH\x00R\x04glob\x12@\n" +
-	"\x02gt\x18\r \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x02gt\x12B\n" +
-	"\x03gte\x18\x0e \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x03gte\x12@\n" +
-	"\x02lt\x18\x0f \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x02lt\x12B\n" +
-	"\x03lte\x18\x10 \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x03lte\x12E\n" +
-	"\bcontains\x18\x11 \x01(\v2'.google.telemetry.policy.v1alpha1.ValueH\x00R\bcontains\x12\x16\n" +
-	"\x06negate\x18\x02 \x01(\bR\x06negateB\v\n" +
-	"\tpredicate\"\xdf\x03\n" +
-	"\x12TraceFieldSelector\x12V\n" +
-	"\frecord_field\x18\x01 \x01(\x0e21.google.telemetry.policy.v1alpha1.SpanRecordFieldH\x00R\vrecordField\x12X\n" +
-	"\x0espan_attribute\x18\x02 \x01(\v2/.google.telemetry.policy.v1alpha1.AttributePathH\x00R\rspanAttribute\x12`\n" +
-	"\x12resource_attribute\x18\x03 \x01(\v2/.google.telemetry.policy.v1alpha1.AttributePathH\x00R\x11resourceAttribute\x12Z\n" +
-	"\x0fscope_attribute\x18\x04 \x01(\v2/.google.telemetry.policy.v1alpha1.AttributePathH\x00R\x0escopeAttribute\x12O\n" +
-	"\vscope_field\x18\x05 \x01(\x0e2,.google.telemetry.policy.v1alpha1.ScopeFieldH\x00R\n" +
-	"scopeFieldB\b\n" +
-	"\x06target*\xd1\x01\n" +
-	"\x0fSpanRecordField\x12!\n" +
-	"\x1dSPAN_RECORD_FIELD_UNSPECIFIED\x10\x00\x12\x1a\n" +
-	"\x16SPAN_RECORD_FIELD_NAME\x10\x01\x12\x1e\n" +
-	"\x1aSPAN_RECORD_FIELD_TRACE_ID\x10\x02\x12\x1d\n" +
-	"\x19SPAN_RECORD_FIELD_SPAN_ID\x10\x03\x12$\n" +
-	" SPAN_RECORD_FIELD_PARENT_SPAN_ID\x10\x04\x12\x1a\n" +
-	"\x16SPAN_RECORD_FIELD_KIND\x10\x05B\xca\x02\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12J\n" +
+	"\bmatchers\x18\x02 \x03(\v2..google.telemetry.policy.v1alpha1.TraceMatcherR\bmatchersB\xca\x02\n" +
 	"$com.google.telemetry.policy.v1alpha1B\x16TraceFilterPolicyProtoP\x01Zggithub.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1;policyv1alpha1\xa2\x02\x03GTP\xaa\x02 Google.Telemetry.Policy.V1alpha1\xca\x02 Google\\Telemetry\\Policy\\V1alpha1\xe2\x02,Google\\Telemetry\\Policy\\V1alpha1\\GPBMetadata\xea\x02#Google::Telemetry::Policy::V1alpha1b\x06proto3"
 
 var (
@@ -610,39 +130,18 @@ func file_policy_v1alpha1_trace_filter_policy_proto_rawDescGZIP() []byte {
 	return file_policy_v1alpha1_trace_filter_policy_proto_rawDescData
 }
 
-var file_policy_v1alpha1_trace_filter_policy_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_policy_v1alpha1_trace_filter_policy_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_policy_v1alpha1_trace_filter_policy_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
 var file_policy_v1alpha1_trace_filter_policy_proto_goTypes = []any{
-	(SpanRecordField)(0),       // 0: google.telemetry.policy.v1alpha1.SpanRecordField
-	(*TraceFilterPolicy)(nil),  // 1: google.telemetry.policy.v1alpha1.TraceFilterPolicy
-	(*TraceMatcher)(nil),       // 2: google.telemetry.policy.v1alpha1.TraceMatcher
-	(*TraceFieldSelector)(nil), // 3: google.telemetry.policy.v1alpha1.TraceFieldSelector
-	(*emptypb.Empty)(nil),      // 4: google.protobuf.Empty
-	(*Value)(nil),              // 5: google.telemetry.policy.v1alpha1.Value
-	(*NumericValue)(nil),       // 6: google.telemetry.policy.v1alpha1.NumericValue
-	(*AttributePath)(nil),      // 7: google.telemetry.policy.v1alpha1.AttributePath
-	(ScopeField)(0),            // 8: google.telemetry.policy.v1alpha1.ScopeField
+	(*TraceFilterPolicy)(nil), // 0: google.telemetry.policy.v1alpha1.TraceFilterPolicy
+	(*TraceMatcher)(nil),      // 1: google.telemetry.policy.v1alpha1.TraceMatcher
 }
 var file_policy_v1alpha1_trace_filter_policy_proto_depIdxs = []int32{
-	2,  // 0: google.telemetry.policy.v1alpha1.TraceFilterPolicy.matches:type_name -> google.telemetry.policy.v1alpha1.TraceMatcher
-	3,  // 1: google.telemetry.policy.v1alpha1.TraceMatcher.target:type_name -> google.telemetry.policy.v1alpha1.TraceFieldSelector
-	4,  // 2: google.telemetry.policy.v1alpha1.TraceMatcher.exists:type_name -> google.protobuf.Empty
-	5,  // 3: google.telemetry.policy.v1alpha1.TraceMatcher.equals:type_name -> google.telemetry.policy.v1alpha1.Value
-	6,  // 4: google.telemetry.policy.v1alpha1.TraceMatcher.gt:type_name -> google.telemetry.policy.v1alpha1.NumericValue
-	6,  // 5: google.telemetry.policy.v1alpha1.TraceMatcher.gte:type_name -> google.telemetry.policy.v1alpha1.NumericValue
-	6,  // 6: google.telemetry.policy.v1alpha1.TraceMatcher.lt:type_name -> google.telemetry.policy.v1alpha1.NumericValue
-	6,  // 7: google.telemetry.policy.v1alpha1.TraceMatcher.lte:type_name -> google.telemetry.policy.v1alpha1.NumericValue
-	5,  // 8: google.telemetry.policy.v1alpha1.TraceMatcher.contains:type_name -> google.telemetry.policy.v1alpha1.Value
-	0,  // 9: google.telemetry.policy.v1alpha1.TraceFieldSelector.record_field:type_name -> google.telemetry.policy.v1alpha1.SpanRecordField
-	7,  // 10: google.telemetry.policy.v1alpha1.TraceFieldSelector.span_attribute:type_name -> google.telemetry.policy.v1alpha1.AttributePath
-	7,  // 11: google.telemetry.policy.v1alpha1.TraceFieldSelector.resource_attribute:type_name -> google.telemetry.policy.v1alpha1.AttributePath
-	7,  // 12: google.telemetry.policy.v1alpha1.TraceFieldSelector.scope_attribute:type_name -> google.telemetry.policy.v1alpha1.AttributePath
-	8,  // 13: google.telemetry.policy.v1alpha1.TraceFieldSelector.scope_field:type_name -> google.telemetry.policy.v1alpha1.ScopeField
-	14, // [14:14] is the sub-list for method output_type
-	14, // [14:14] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	1, // 0: google.telemetry.policy.v1alpha1.TraceFilterPolicy.matchers:type_name -> google.telemetry.policy.v1alpha1.TraceMatcher
+	1, // [1:1] is the sub-list for method output_type
+	1, // [1:1] is the sub-list for method input_type
+	1, // [1:1] is the sub-list for extension type_name
+	1, // [1:1] is the sub-list for extension extendee
+	0, // [0:1] is the sub-list for field type_name
 }
 
 func init() { file_policy_v1alpha1_trace_filter_policy_proto_init() }
@@ -651,36 +150,18 @@ func file_policy_v1alpha1_trace_filter_policy_proto_init() {
 		return
 	}
 	file_policy_v1alpha1_common_policy_types_proto_init()
-	file_policy_v1alpha1_trace_filter_policy_proto_msgTypes[1].OneofWrappers = []any{
-		(*TraceMatcher_Exists)(nil),
-		(*TraceMatcher_Equals)(nil),
-		(*TraceMatcher_Glob)(nil),
-		(*TraceMatcher_Gt)(nil),
-		(*TraceMatcher_Gte)(nil),
-		(*TraceMatcher_Lt)(nil),
-		(*TraceMatcher_Lte)(nil),
-		(*TraceMatcher_Contains)(nil),
-	}
-	file_policy_v1alpha1_trace_filter_policy_proto_msgTypes[2].OneofWrappers = []any{
-		(*TraceFieldSelector_RecordField)(nil),
-		(*TraceFieldSelector_SpanAttribute)(nil),
-		(*TraceFieldSelector_ResourceAttribute)(nil),
-		(*TraceFieldSelector_ScopeAttribute)(nil),
-		(*TraceFieldSelector_ScopeField)(nil),
-	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_policy_v1alpha1_trace_filter_policy_proto_rawDesc), len(file_policy_v1alpha1_trace_filter_policy_proto_rawDesc)),
-			NumEnums:      1,
-			NumMessages:   3,
+			NumEnums:      0,
+			NumMessages:   1,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_policy_v1alpha1_trace_filter_policy_proto_goTypes,
 		DependencyIndexes: file_policy_v1alpha1_trace_filter_policy_proto_depIdxs,
-		EnumInfos:         file_policy_v1alpha1_trace_filter_policy_proto_enumTypes,
 		MessageInfos:      file_policy_v1alpha1_trace_filter_policy_proto_msgTypes,
 	}.Build()
 	File_policy_v1alpha1_trace_filter_policy_proto = out.File

@@ -908,12 +908,12 @@ func TestPolicyHotReload(t *testing.T) {
   "type": "log_filter",
   "id": "drop-initial-policy",
   "action": "ACTION_DROP",
-  "matches": [
+  "matchers": [
     {
       "target": {
         "record_field": "LOG_RECORD_FIELD_BODY"
       },
-      "equals": {
+      "equality": {
         "string_value": "drop-initial"
       }
     }
@@ -979,12 +979,12 @@ func TestPolicyHotReload(t *testing.T) {
   "type": "log_filter",
   "id": "drop-hot-reload-policy",
   "action": "ACTION_DROP",
-  "matches": [
+  "matchers": [
     {
       "target": {
         "record_field": "LOG_RECORD_FIELD_BODY"
       },
-      "equals": {
+      "equality": {
         "string_value": "drop-after-reload"
       }
     }
@@ -1040,12 +1040,12 @@ func TestUnsupportedPolicyEmitsErrorEvent(t *testing.T) {
   "type": "log_filter",
   "id": %q,
   "action": "ACTION_DROP",
-  "matches": [
+  "matchers": [
     {
       "target": {
         "record_field": "LOG_RECORD_FIELD_BODY"
       },
-      "equals": {
+      "equality": {
         "string_value": "drop-me"
       }
     }

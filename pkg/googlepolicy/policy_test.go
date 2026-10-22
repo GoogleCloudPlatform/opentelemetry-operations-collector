@@ -539,7 +539,7 @@ func TestProtoDriver_ValidationClassificationAndPolicyClass(t *testing.T) {
 		_, err := LoadPolicy("test_proto_log_filter", map[string]any{
 			"type":    "test_proto_log_filter",
 			"id":      "bad-type",
-			"matches": "not-an-array",
+			"matchers": "not-an-array",
 		})
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ErrPolicyFailedToLoad)
@@ -588,7 +588,7 @@ func TestProtoDriver_ValidationClassificationAndPolicyClass(t *testing.T) {
 	t.Run("MakePolicySet populates FailedPolicy.Class for ProtoDriver load and validation errors", func(t *testing.T) {
 		ps, err := MakePolicySet("rev-raw-1", []map[string]any{
 			{"type": "test_proto_log_filter", "id": "val-err"},
-			{"type": "test_proto_log_filter", "id": "load-err", "matches": "not-an-array"},
+			{"type": "test_proto_log_filter", "id": "load-err", "matchers": "not-an-array"},
 		})
 		require.Error(t, err)
 		require.NotNil(t, ps)

@@ -80,75 +80,75 @@ func scopeFieldTarget(f policyv1alpha1.ScopeField) *policyv1alpha1.LogFieldSelec
 
 func logAttrTarget(path ...string) *policyv1alpha1.LogFieldSelector {
 	return &policyv1alpha1.LogFieldSelector{
-		Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
-			LogAttribute: &policyv1alpha1.AttributePath{Path: path},
+		Target: &policyv1alpha1.LogFieldSelector_LogAttributePath{
+			LogAttributePath: &policyv1alpha1.AttributePath{Segments: path},
 		},
 	}
 }
 
 func resourceAttrTarget(path ...string) *policyv1alpha1.LogFieldSelector {
 	return &policyv1alpha1.LogFieldSelector{
-		Target: &policyv1alpha1.LogFieldSelector_ResourceAttribute{
-			ResourceAttribute: &policyv1alpha1.AttributePath{Path: path},
+		Target: &policyv1alpha1.LogFieldSelector_ResourceAttributePath{
+			ResourceAttributePath: &policyv1alpha1.AttributePath{Segments: path},
 		},
 	}
 }
 
 func scopeAttrTarget(path ...string) *policyv1alpha1.LogFieldSelector {
 	return &policyv1alpha1.LogFieldSelector{
-		Target: &policyv1alpha1.LogFieldSelector_ScopeAttribute{
-			ScopeAttribute: &policyv1alpha1.AttributePath{Path: path},
+		Target: &policyv1alpha1.LogFieldSelector_ScopeAttributePath{
+			ScopeAttributePath: &policyv1alpha1.AttributePath{Segments: path},
 		},
 	}
 }
 
 func strVal(s string) *policyv1alpha1.Value {
-	return &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: s}}
+	return &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: s}}
 }
 
 func intVal(n int64) *policyv1alpha1.Value {
-	return &policyv1alpha1.Value{Value: &policyv1alpha1.Value_IntValue{IntValue: n}}
+	return &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_IntValue{IntValue: n}}
 }
 
 func doubleVal(d float64) *policyv1alpha1.Value {
-	return &policyv1alpha1.Value{Value: &policyv1alpha1.Value_DoubleValue{DoubleValue: d}}
+	return &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_DoubleValue{DoubleValue: d}}
 }
 
 func boolVal(b bool) *policyv1alpha1.Value {
-	return &policyv1alpha1.Value{Value: &policyv1alpha1.Value_BoolValue{BoolValue: b}}
+	return &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BoolValue{BoolValue: b}}
 }
 
 func bytesVal(b []byte) *policyv1alpha1.Value {
-	return &policyv1alpha1.Value{Value: &policyv1alpha1.Value_BytesValue{BytesValue: b}}
+	return &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BytesValue{BytesValue: b}}
 }
 
 func bodyExistsMatcher() *policyv1alpha1.LogMatcher {
 	return &policyv1alpha1.LogMatcher{
 		Target:    recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY),
-		Predicate: &policyv1alpha1.LogMatcher_Exists{},
+		Predicate: &policyv1alpha1.LogMatcher_Existence{},
 	}
 }
 
 func alwaysTrueMatcher() *policyv1alpha1.LogMatcher {
 	return &policyv1alpha1.LogMatcher{
 		Target:    logAttrTarget("__never_present__"),
-		Predicate: &policyv1alpha1.LogMatcher_Exists{},
-		Negate:    true,
+		Predicate: &policyv1alpha1.LogMatcher_Existence{},
+		Negated:    true,
 	}
 }
 
 func logTargetAttr(path ...string) *policyv1alpha1.LogTargetSelector {
 	return &policyv1alpha1.LogTargetSelector{
-		Target: &policyv1alpha1.LogTargetSelector_LogAttribute{
-			LogAttribute: &policyv1alpha1.AttributePath{Path: path},
+		Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
+			LogAttributePath: &policyv1alpha1.AttributePath{Segments: path},
 		},
 	}
 }
 
 func logTargetBodyField(path ...string) *policyv1alpha1.LogTargetSelector {
 	return &policyv1alpha1.LogTargetSelector{
-		Target: &policyv1alpha1.LogTargetSelector_BodyField{
-			BodyField: &policyv1alpha1.AttributePath{Path: path},
+		Target: &policyv1alpha1.LogTargetSelector_BodyFieldPath{
+			BodyFieldPath: &policyv1alpha1.AttributePath{Segments: path},
 		},
 	}
 }
@@ -163,8 +163,8 @@ func logTargetRecordField(field policyv1alpha1.LogRecordField) *policyv1alpha1.L
 
 func logAttrSelector(path ...string) *policyv1alpha1.LogAttributeSelector {
 	return &policyv1alpha1.LogAttributeSelector{
-		Target: &policyv1alpha1.LogAttributeSelector_LogAttribute{
-			LogAttribute: &policyv1alpha1.AttributePath{Path: path},
+		Target: &policyv1alpha1.LogAttributeSelector_LogAttributePath{
+			LogAttributePath: &policyv1alpha1.AttributePath{Segments: path},
 		},
 	}
 }
@@ -198,7 +198,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 			name: "missing id",
 			proto: &policyv1alpha1.LogTransformPolicy{
 				Id:      "",
-				Matches: []*policyv1alpha1.LogMatcher{validMatcher},
+				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
 				Action:  validAdd,
 			},
 			errExpect: ErrMissingID,
@@ -207,7 +207,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 			name: "missing action (nil Action)",
 			proto: &policyv1alpha1.LogTransformPolicy{
 				Id:      "p-no-action",
-				Matches: []*policyv1alpha1.LogMatcher{validMatcher},
+				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
 				Action:  nil,
 			},
 			errExpect: ErrMissingAction,
@@ -216,7 +216,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 			name: "missing action (nil Add inside LogTransformPolicy_Add)",
 			proto: &policyv1alpha1.LogTransformPolicy{
 				Id:      "p-nil-add-msg",
-				Matches: []*policyv1alpha1.LogMatcher{validMatcher},
+				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
 				Action:  &policyv1alpha1.LogTransformPolicy_Add{Add: nil},
 			},
 			errExpect: ErrMissingAction,
@@ -225,7 +225,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 			name: "unsupported action remove",
 			proto: &policyv1alpha1.LogTransformPolicy{
 				Id:      "p-remove",
-				Matches: []*policyv1alpha1.LogMatcher{validMatcher},
+				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
 				Action: &policyv1alpha1.LogTransformPolicy_Remove{
 					Remove: &policyv1alpha1.LogRemoveAction{
 						Target: logAttrSelector("tier"),
@@ -238,7 +238,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 			name: "unsupported action rename",
 			proto: &policyv1alpha1.LogTransformPolicy{
 				Id:      "p-rename",
-				Matches: []*policyv1alpha1.LogMatcher{validMatcher},
+				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
 				Action: &policyv1alpha1.LogTransformPolicy_Rename{
 					Rename: &policyv1alpha1.LogRenameAction{
 						Source: logAttrSelector("tier"),
@@ -252,7 +252,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 			name: "unsupported action redact",
 			proto: &policyv1alpha1.LogTransformPolicy{
 				Id:      "p-redact",
-				Matches: []*policyv1alpha1.LogMatcher{validMatcher},
+				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
 				Action: &policyv1alpha1.LogTransformPolicy_Redact{
 					Redact: &policyv1alpha1.LogRedactAction{
 						Target:      logTargetAttr("tier"),
@@ -266,10 +266,10 @@ func TestPolicyValidationErrors(t *testing.T) {
 			name: "invalid matcher",
 			proto: &policyv1alpha1.LogTransformPolicy{
 				Id: "p-bad-matcher",
-				Matches: []*policyv1alpha1.LogMatcher{
+				Matchers: []*policyv1alpha1.LogMatcher{
 					{
 						Target:    nil,
-						Predicate: &policyv1alpha1.LogMatcher_Exists{},
+						Predicate: &policyv1alpha1.LogMatcher_Existence{},
 					},
 				},
 				Action: validAdd,
@@ -280,7 +280,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 			name: "add missing target (nil selector)",
 			proto: &policyv1alpha1.LogTransformPolicy{
 				Id:      "p-nil-target",
-				Matches: []*policyv1alpha1.LogMatcher{validMatcher},
+				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
 				Action:  addAction(nil, strVal("val"), false),
 			},
 			errExpect: ErrMissingTarget,
@@ -289,7 +289,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 			name: "add missing target (empty oneof)",
 			proto: &policyv1alpha1.LogTransformPolicy{
 				Id:      "p-empty-target-oneof",
-				Matches: []*policyv1alpha1.LogMatcher{validMatcher},
+				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
 				Action:  addAction(&policyv1alpha1.LogTargetSelector{}, strVal("val"), false),
 			},
 			errExpect: ErrMissingTarget,
@@ -298,7 +298,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 			name: "add empty log_attribute path",
 			proto: &policyv1alpha1.LogTransformPolicy{
 				Id:      "p-empty-log-attr",
-				Matches: []*policyv1alpha1.LogMatcher{validMatcher},
+				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
 				Action:  addAction(logTargetAttr(), strVal("val"), false),
 			},
 			errSubstr: "log attribute path cannot be empty",
@@ -307,7 +307,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 			name: "add empty body_field path",
 			proto: &policyv1alpha1.LogTransformPolicy{
 				Id:      "p-empty-body-field",
-				Matches: []*policyv1alpha1.LogMatcher{validMatcher},
+				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
 				Action:  addAction(logTargetBodyField(), strVal("val"), false),
 			},
 			errSubstr: "body attribute path cannot be empty",
@@ -316,7 +316,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 			name: "add log_attribute missing value",
 			proto: &policyv1alpha1.LogTransformPolicy{
 				Id:      "p-log-attr-no-val",
-				Matches: []*policyv1alpha1.LogMatcher{validMatcher},
+				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
 				Action:  addAction(logTargetAttr("k"), nil, false),
 			},
 			errExpect: ErrMissingValue,
@@ -325,7 +325,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 			name: "add unspecified record_field",
 			proto: &policyv1alpha1.LogTransformPolicy{
 				Id:      "p-unspec-record-field",
-				Matches: []*policyv1alpha1.LogMatcher{validMatcher},
+				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
 				Action:  addAction(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_UNSPECIFIED), strVal("val"), false),
 			},
 			errSubstr: "log record field cannot be unspecified",
@@ -334,7 +334,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 			name: "add BODY missing value",
 			proto: &policyv1alpha1.LogTransformPolicy{
 				Id:      "p-body-nil-val",
-				Matches: []*policyv1alpha1.LogMatcher{validMatcher},
+				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
 				Action:  addAction(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY), &policyv1alpha1.Value{}, false),
 			},
 			errExpect: ErrMissingValue,
@@ -343,7 +343,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 			name: "add SEVERITY_TEXT missing value",
 			proto: &policyv1alpha1.LogTransformPolicy{
 				Id:      "p-sevtext-nil-val",
-				Matches: []*policyv1alpha1.LogMatcher{validMatcher},
+				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
 				Action:  addAction(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT), nil, false),
 			},
 			errExpect: ErrMissingValue,
@@ -352,7 +352,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 			name: "add SEVERITY_TEXT non-string value",
 			proto: &policyv1alpha1.LogTransformPolicy{
 				Id:      "p-sevtext-int",
-				Matches: []*policyv1alpha1.LogMatcher{validMatcher},
+				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
 				Action:  addAction(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT), intVal(9), false),
 			},
 			errSubstr: "SEVERITY_TEXT requires a string value",
@@ -361,7 +361,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 			name: "add SEVERITY_NUMBER missing value",
 			proto: &policyv1alpha1.LogTransformPolicy{
 				Id:      "p-sevnum-nil-val",
-				Matches: []*policyv1alpha1.LogMatcher{validMatcher},
+				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
 				Action:  addAction(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER), nil, false),
 			},
 			errExpect: ErrMissingValue,
@@ -370,7 +370,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 			name: "add SEVERITY_NUMBER non-int value",
 			proto: &policyv1alpha1.LogTransformPolicy{
 				Id:      "p-sevnum-str",
-				Matches: []*policyv1alpha1.LogMatcher{validMatcher},
+				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
 				Action:  addAction(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER), strVal("INFO"), false),
 			},
 			errSubstr: "SEVERITY_NUMBER requires an int value",
@@ -379,7 +379,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 			name: "add SEVERITY_NUMBER out of range low (0)",
 			proto: &policyv1alpha1.LogTransformPolicy{
 				Id:      "p-sevnum-zero",
-				Matches: []*policyv1alpha1.LogMatcher{validMatcher},
+				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
 				Action:  addAction(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER), intVal(0), false),
 			},
 			errSubstr: "must be in range [1, 24], got 0",
@@ -388,7 +388,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 			name: "add SEVERITY_NUMBER out of range high (25)",
 			proto: &policyv1alpha1.LogTransformPolicy{
 				Id:      "p-sevnum-25",
-				Matches: []*policyv1alpha1.LogMatcher{validMatcher},
+				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
 				Action:  addAction(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER), intVal(25), false),
 			},
 			errSubstr: "must be in range [1, 24], got 25",
@@ -397,7 +397,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 			name: "add TRACE_ID immutable field",
 			proto: &policyv1alpha1.LogTransformPolicy{
 				Id:      "p-traceid-immutable",
-				Matches: []*policyv1alpha1.LogMatcher{validMatcher},
+				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
 				Action:  addAction(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID), strVal("0102030405060708090a0b0c0d0e0f10"), false),
 			},
 			errExpect: ErrImmutableField,
@@ -406,7 +406,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 			name: "add SPAN_ID immutable field",
 			proto: &policyv1alpha1.LogTransformPolicy{
 				Id:      "p-spanid-immutable",
-				Matches: []*policyv1alpha1.LogMatcher{validMatcher},
+				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
 				Action:  addAction(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID), strVal("0102030405060708"), false),
 			},
 			errExpect: ErrImmutableField,
@@ -430,7 +430,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 func TestPolicyMetadataAndValidate(t *testing.T) {
 	pb := &policyv1alpha1.LogTransformPolicy{
 		Id:      "metadata-transform-policy",
-		Matches: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
+		Matchers: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
 		Action:  addAction(logTargetAttr("tier"), strVal("soc"), false),
 	}
 
@@ -450,8 +450,8 @@ func TestPolicyMetadataAndValidate(t *testing.T) {
 	assert.ErrorIs(t, (&Policy{}).Validate(), ErrNilProto)
 }
 
-func TestPolicy_EmptyMatchesAppliesUnconditionally(t *testing.T) {
-	// A transform policy with empty/nil matches applies to all records unconditionally.
+func TestPolicy_EmptyMatchersAppliesUnconditionally(t *testing.T) {
+	// A transform policy with empty/nil matchers applies to all records unconditionally.
 	p, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
 		Id: "unconditional-add",
 		Action: &policyv1alpha1.LogTransformPolicy_Add{
@@ -477,18 +477,18 @@ func TestDriverLoadPolicyAndProto(t *testing.T) {
 		raw := map[string]any{
 			"type": "log_transform",
 			"id":   "loaded-via-driver",
-			"matches": []any{
+			"matchers": []any{
 				map[string]any{
 					"target": map[string]any{
 						"record_field": "LOG_RECORD_FIELD_BODY",
 					},
-					"exists": map[string]any{},
+					"existence": map[string]any{},
 				},
 			},
 			"add": map[string]any{
 				"target": map[string]any{
-					"log_attribute": map[string]any{
-						"path": []any{"gcp", "routing", "tier"},
+					"log_attribute_path": map[string]any{
+						"segments": []any{"gcp", "routing", "tier"},
 					},
 				},
 				"value": map[string]any{
@@ -521,7 +521,7 @@ func TestDriverLoadPolicyAndProto(t *testing.T) {
 	t.Run("LoadPolicyFromProto happy path", func(t *testing.T) {
 		pb := &policyv1alpha1.LogTransformPolicy{
 			Id:      "from-proto",
-			Matches: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
+			Matchers: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
 			Action:  addAction(logTargetAttr("env"), strVal("prod"), false),
 		}
 
@@ -556,7 +556,7 @@ func TestDriverLoadPolicyAndProto(t *testing.T) {
 				raw: map[string]any{
 					"type":    "log_transform",
 					"id":      "bad-json-type",
-					"matches": "not-an-array",
+					"matchers": "not-an-array",
 				},
 			},
 			{
@@ -564,10 +564,10 @@ func TestDriverLoadPolicyAndProto(t *testing.T) {
 				raw: map[string]any{
 					"type": "log_transform",
 					"id":   "missing-action",
-					"matches": []any{
+					"matchers": []any{
 						map[string]any{
 							"target": map[string]any{"record_field": "LOG_RECORD_FIELD_BODY"},
-							"exists": map[string]any{},
+							"existence": map[string]any{},
 						},
 					},
 				},
@@ -603,7 +603,7 @@ func TestTransformLogAttributes(t *testing.T) {
 		for _, tc := range actions {
 			pol, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
 				Id:      tc.id,
-				Matches: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
+				Matchers: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
 				Action:  tc.action,
 			})
 			require.NoError(t, err)
@@ -647,7 +647,7 @@ func TestTransformLogAttributes(t *testing.T) {
 		// http.method already exists ("GET") and metadata.env already exists ("prod").
 		noUpsertFlat, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
 			Id:      "log-attr-no-upsert-flat",
-			Matches: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
+			Matchers: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
 			Action:  addAction(logTargetAttr("http.method"), strVal("POST"), false),
 		})
 		require.NoError(t, err)
@@ -655,7 +655,7 @@ func TestTransformLogAttributes(t *testing.T) {
 
 		noUpsertNested, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
 			Id:      "log-attr-no-upsert-nested",
-			Matches: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
+			Matchers: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
 			Action:  addAction(logTargetAttr("metadata", "env"), strVal("staging"), false),
 		})
 		require.NoError(t, err)
@@ -669,7 +669,7 @@ func TestTransformLogAttributes(t *testing.T) {
 
 		upsertFlat, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
 			Id:      "log-attr-upsert-flat",
-			Matches: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
+			Matchers: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
 			Action:  addAction(logTargetAttr("http.method"), strVal("POST"), true),
 		})
 		require.NoError(t, err)
@@ -677,7 +677,7 @@ func TestTransformLogAttributes(t *testing.T) {
 
 		upsertNested, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
 			Id:      "log-attr-upsert-nested",
-			Matches: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
+			Matchers: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
 			Action:  addAction(logTargetAttr("metadata", "env"), strVal("staging"), true),
 		})
 		require.NoError(t, err)
@@ -698,7 +698,7 @@ func TestTransformLogAttributes(t *testing.T) {
 
 		insertFlat, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
 			Id:      "body-field-insert-flat",
-			Matches: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
+			Matchers: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
 			Action:  addAction(logTargetBodyField("status"), strVal("active"), false),
 		})
 		require.NoError(t, err)
@@ -706,7 +706,7 @@ func TestTransformLogAttributes(t *testing.T) {
 
 		insertNested, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
 			Id:      "body-field-insert-nested",
-			Matches: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
+			Matchers: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
 			Action:  addAction(logTargetBodyField("user", "tier"), strVal("gold"), false),
 		})
 		require.NoError(t, err)
@@ -725,7 +725,7 @@ func TestTransformLogAttributes(t *testing.T) {
 		// Upsert: false does not overwrite existing event_id ("evt-123") or user.tier ("gold").
 		noOverwriteFlat, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
 			Id:      "body-field-no-overwrite-flat",
-			Matches: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
+			Matchers: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
 			Action:  addAction(logTargetBodyField("event_id"), strVal("evt-999"), false),
 		})
 		require.NoError(t, err)
@@ -733,7 +733,7 @@ func TestTransformLogAttributes(t *testing.T) {
 
 		noOverwriteNested, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
 			Id:      "body-field-no-overwrite-nested",
-			Matches: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
+			Matchers: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
 			Action:  addAction(logTargetBodyField("user", "tier"), strVal("silver"), false),
 		})
 		require.NoError(t, err)
@@ -745,7 +745,7 @@ func TestTransformLogAttributes(t *testing.T) {
 		// Upsert: true overwrites both.
 		overwriteFlat, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
 			Id:      "body-field-overwrite-flat",
-			Matches: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
+			Matchers: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
 			Action:  addAction(logTargetBodyField("event_id"), strVal("evt-999"), true),
 		})
 		require.NoError(t, err)
@@ -753,7 +753,7 @@ func TestTransformLogAttributes(t *testing.T) {
 
 		overwriteNested, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
 			Id:      "body-field-overwrite-nested",
-			Matches: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
+			Matchers: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
 			Action:  addAction(logTargetBodyField("user", "tier"), strVal("silver"), true),
 		})
 		require.NoError(t, err)
@@ -772,7 +772,7 @@ func TestTransformLogAttributes(t *testing.T) {
 
 		p, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
 			Id:      "body-field-empty",
-			Matches: []*policyv1alpha1.LogMatcher{alwaysTrueMatcher()},
+			Matchers: []*policyv1alpha1.LogMatcher{alwaysTrueMatcher()},
 			Action:  addAction(logTargetBodyField("event_id"), strVal("evt-initial"), true),
 		})
 		require.NoError(t, err)
@@ -790,7 +790,7 @@ func TestTransformLogAttributes(t *testing.T) {
 
 		p, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
 			Id:      "body-field-empty-str",
-			Matches: []*policyv1alpha1.LogMatcher{alwaysTrueMatcher()},
+			Matchers: []*policyv1alpha1.LogMatcher{alwaysTrueMatcher()},
 			Action:  addAction(logTargetBodyField("event_id"), strVal("evt-from-empty-str"), true),
 		})
 		require.NoError(t, err)
@@ -808,7 +808,7 @@ func TestTransformLogAttributes(t *testing.T) {
 
 		p, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
 			Id:      "body-field-str-body",
-			Matches: []*policyv1alpha1.LogMatcher{alwaysTrueMatcher()},
+			Matchers: []*policyv1alpha1.LogMatcher{alwaysTrueMatcher()},
 			Action:  addAction(logTargetBodyField("event_id"), strVal("evt-123"), true),
 		})
 		require.NoError(t, err)
@@ -823,14 +823,14 @@ func TestTransformLogRecordFields(t *testing.T) {
 
 		polNoUpsert, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
 			Id:      "body-no-upsert",
-			Matches: []*policyv1alpha1.LogMatcher{alwaysTrueMatcher()},
+			Matchers: []*policyv1alpha1.LogMatcher{alwaysTrueMatcher()},
 			Action:  addAction(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY), strVal("default body"), false),
 		})
 		require.NoError(t, err)
 
 		polUpsert, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
 			Id:      "body-upsert",
-			Matches: []*policyv1alpha1.LogMatcher{alwaysTrueMatcher()},
+			Matchers: []*policyv1alpha1.LogMatcher{alwaysTrueMatcher()},
 			Action:  addAction(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY), strVal("overwritten body"), true),
 		})
 		require.NoError(t, err)
@@ -868,14 +868,14 @@ func TestTransformLogRecordFields(t *testing.T) {
 
 		polNoUpsert, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
 			Id:      "sev-text-no-upsert",
-			Matches: []*policyv1alpha1.LogMatcher{alwaysTrueMatcher()},
+			Matchers: []*policyv1alpha1.LogMatcher{alwaysTrueMatcher()},
 			Action:  addAction(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT), strVal("WARN"), false),
 		})
 		require.NoError(t, err)
 
 		polUpsert, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
 			Id:      "sev-text-upsert",
-			Matches: []*policyv1alpha1.LogMatcher{alwaysTrueMatcher()},
+			Matchers: []*policyv1alpha1.LogMatcher{alwaysTrueMatcher()},
 			Action:  addAction(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT), strVal("ERROR"), true),
 		})
 		require.NoError(t, err)
@@ -901,14 +901,14 @@ func TestTransformLogRecordFields(t *testing.T) {
 
 		polNoUpsert, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
 			Id:      "sev-num-no-upsert",
-			Matches: []*policyv1alpha1.LogMatcher{alwaysTrueMatcher()},
+			Matchers: []*policyv1alpha1.LogMatcher{alwaysTrueMatcher()},
 			Action:  addAction(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER), intVal(int64(plog.SeverityNumberWarn)), false),
 		})
 		require.NoError(t, err)
 
 		polUpsert, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
 			Id:      "sev-num-upsert",
-			Matches: []*policyv1alpha1.LogMatcher{alwaysTrueMatcher()},
+			Matchers: []*policyv1alpha1.LogMatcher{alwaysTrueMatcher()},
 			Action:  addAction(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER), intVal(int64(plog.SeverityNumberError)), true),
 		})
 		require.NoError(t, err)
@@ -934,17 +934,17 @@ func TestTransformLogMultipleMatchersAndSequentialPolicies(t *testing.T) {
 	t.Run("multiple matchers AND semantics - non-matching leaves record untouched", func(t *testing.T) {
 		pol, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
 			Id: "multi-matcher-policy",
-			Matches: []*policyv1alpha1.LogMatcher{
+			Matchers: []*policyv1alpha1.LogMatcher{
 				{
 					Target: logAttrTarget("http.method"),
-					Predicate: &policyv1alpha1.LogMatcher_Equals{
-						Equals: strVal("GET"),
+					Predicate: &policyv1alpha1.LogMatcher_Equality{
+						Equality: strVal("GET"),
 					},
 				},
 				{
 					Target: logAttrTarget("http.status_code"),
-					Predicate: &policyv1alpha1.LogMatcher_Equals{
-						Equals: intVal(500), // bundle has 200
+					Predicate: &policyv1alpha1.LogMatcher_Equality{
+						Equality: intVal(500), // bundle has 200
 					},
 				},
 			},
@@ -961,21 +961,21 @@ func TestTransformLogMultipleMatchersAndSequentialPolicies(t *testing.T) {
 	t.Run("multiple atomic policies executed in order and return value semantics", func(t *testing.T) {
 		p1, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
 			Id:      "01-skip-existing",
-			Matches: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
+			Matchers: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
 			Action:  addAction(logTargetAttr("http.method"), strVal("POST"), false),
 		})
 		require.NoError(t, err)
 
 		p2, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
 			Id:      "02-insert-stage-first",
-			Matches: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
+			Matchers: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
 			Action:  addAction(logTargetAttr("stage"), strVal("first"), false),
 		})
 		require.NoError(t, err)
 
 		p3, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
 			Id:      "03-overwrite-stage-second",
-			Matches: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
+			Matchers: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
 			Action:  addAction(logTargetAttr("stage"), strVal("second"), true),
 		})
 		require.NoError(t, err)
@@ -1027,7 +1027,7 @@ func TestTransformLogZeroContextGuards(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			pol, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
 				Id:      "zero-ctx-" + tt.name,
-				Matches: []*policyv1alpha1.LogMatcher{alwaysTrueMatcher()},
+				Matchers: []*policyv1alpha1.LogMatcher{alwaysTrueMatcher()},
 				Action:  tt.action,
 			})
 			require.NoError(t, err)

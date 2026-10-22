@@ -1,20 +1,20 @@
 {
   "type": "log_transform",
   "id": "route-prod-to-soc",
-  "matches": [
+  "matchers": [
     {
       "target": {
-        "resource_attribute": {
-          "path": ["env"]
+        "resource_attribute_path": {
+          "segments": ["env"]
         }
       },
-      "equals": { "string_value": "prod" }
+      "equality": { "string_value": "prod" }
     }
   ],
   "add": {
     "target": {
-      "log_attribute": {
-        "path": ["gcp", "routing", "tier"]
+      "log_attribute_path": {
+        "segments": ["gcp", "routing", "tier"]
       }
     },
     "value": { "string_value": "soc" },

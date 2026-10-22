@@ -28,22 +28,25 @@ option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-col
 // Evaluation Granularity & Action Precedence:
 // - Record-Level Granularity: Log records are evaluated individually.
 // - Action Precedence & Exemptions: Telemetry passes through by default (default
-//   allow). When multiple policies match a log record, ACTION_KEEP always
-//   overrides ACTION_DROP (keep always overrides drop). ACTION_KEEP acts as an
-//   explicit exemption retaining matching log records; it does not prune
-//   non-matching log records. To implement an allowlist that prunes non-matching
-//   log records, authors specify ACTION_DROP with negate: true on the matchers.
+//   allow). Policies are evaluated in an order-independent manner: when multiple
+//   policies match a log record, `ACTION_KEEP` always overrides `ACTION_DROP`
+//   (keep always overrides drop). `ACTION_KEEP` acts as an explicit exemption
+//   retaining matching log records; it does not implicitly prune non-matching
+//   log records. To implement an allowlist that prunes non-matching log
+//   records, authors specify `ACTION_DROP` with `negated: true` on the matchers
+//   (or pair a broad `ACTION_DROP` policy with a narrower `ACTION_KEEP`
+//   exemption policy).
 message LogFilterPolicy {
   // Unique identifier for the policy within its configuration scope
   // (e.g. a UUID or namespaced URI like "io.opentelemetry.operator/{namespace}/policies/retain-error-logs").
   string id = 1;
 
-  // The filtering action to take when all `matches` conditions evaluate to true.
+  // The filtering action to take when all `matchers` conditions evaluate to true.
   optional Action action = 2;
 
   // Conditions evaluated against incoming log records.
   // All matchers in this list are ANDed together: all conditions must evaluate
   // to true for the policy action to take effect.
   // At least one matcher is required; a policy with no matchers is invalid.
-  repeated LogMatcher matches = 3;
+  repeated LogMatcher matchers = 3;
 }

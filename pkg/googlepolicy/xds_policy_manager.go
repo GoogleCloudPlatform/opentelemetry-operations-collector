@@ -159,6 +159,9 @@ const (
 	// far worse than one that starts on its built-in policies and picks up the
 	// real ones moments later.
 	defaultInitialSyncTimeout = 5 * time.Second
+
+	cloudPlatformScope = "https://www.googleapis.com/auth/cloud-platform"
+	cloudRunHostSuffix = ".run.app"
 )
 
 var (
@@ -1312,21 +1315,37 @@ func (m *xdsPolicyManager) dial(ctx context.Context) (*grpc.ClientConn, error) {
 	return grpc.NewClient(m.serverAddr, dialOpts...)
 }
 
-// ResolveTokenSource returns a TokenSource providing Google OIDC ID tokens.
-// It supports:
-//  1. GCE / GKE / Service Accounts: Uses idtoken.NewTokenSource (queries VM metadata server or SA key).
-//  2. Cloudtop / Developer Workstations: idtoken fails on "authorized_user" credentials, so it
-//     falls back to ADC with OpenID scopes and extracts the ID token via GoogleIDTokenSource.
-//
-// TODO(b/563374717): pick the credential per endpoint. ID tokens are right for
-// the Cloud Run shim; telemetrydirector.googleapis.com wants an OAuth2 access token.
+// ResolveTokenSource returns an OIDC ID token source for Cloud Run endpoints
+// (*.run.app) and an OAuth2 access token source (cloud-platform scope) for all
+// other endpoints.
 func ResolveTokenSource(ctx context.Context, serverAddr string) (oauth2.TokenSource, error) {
 	host, _, err := net.SplitHostPort(serverAddr)
 	if err != nil {
 		host = serverAddr
 	}
-	audience := "https://" + host
 
+	if isCloudRunHost(host) {
+		return resolveIDTokenSource(ctx, "https://"+host)
+	}
+
+	ts, err := google.DefaultTokenSource(ctx, cloudPlatformScope)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve OAuth2 token source: %w", err)
+	}
+	return ts, nil
+}
+
+func isCloudRunHost(host string) bool {
+	normalized := strings.TrimSuffix(strings.ToLower(host), ".")
+	return strings.HasSuffix(normalized, cloudRunHostSuffix)
+}
+
+// resolveIDTokenSource returns a TokenSource providing Google OIDC ID tokens
+// for the given audience. It supports:
+//  1. GCE / GKE / Service Accounts: Uses idtoken.NewTokenSource (queries VM metadata server or SA key).
+//  2. Cloudtop / Developer Workstations: idtoken fails on "authorized_user" credentials, so it
+//     falls back to ADC with OpenID scopes and extracts the ID token via GoogleIDTokenSource.
+func resolveIDTokenSource(ctx context.Context, audience string) (oauth2.TokenSource, error) {
 	// 1. GCE / GKE / Service Accounts: metadata server or SA key
 	if idTS, err := idtoken.NewTokenSource(ctx, audience); err == nil {
 		return idTS, nil
@@ -1369,7 +1388,7 @@ func (s *GoogleIDTokenSource) Token() (*oauth2.Token, error) {
 }
 
 // TokenAuth adapts an oauth2.TokenSource to gRPC's credentials.PerRPCCredentials interface,
-// injecting the Authorization: Bearer <id_token> header into each outgoing gRPC request.
+// injecting the Authorization: Bearer <token> header into each outgoing gRPC request.
 type TokenAuth struct {
 	TS oauth2.TokenSource
 }

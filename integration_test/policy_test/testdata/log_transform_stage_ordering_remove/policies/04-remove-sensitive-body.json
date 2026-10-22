@@ -3,8 +3,8 @@
   "id": "04-remove-sensitive-body",
   "remove": {
     "target": {
-      "body_field": {
-        "path": ["auth", "session_token"]
+      "body_field_path": {
+        "segments": ["auth", "session_token"]
       }
     }
   }

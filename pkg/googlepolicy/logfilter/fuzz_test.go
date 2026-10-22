@@ -78,7 +78,7 @@ func fuzzLogSeedPolicies() []*policyv1alpha1.LogFilterPolicy {
 		{
 			Id:     "projects/123/locations/us-central1/policySets/ps-1/policies/drop-body-glob",
 			Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-			Matches: []*policyv1alpha1.LogMatcher{
+			Matchers: []*policyv1alpha1.LogMatcher{
 				{
 					Target:    recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY),
 					Predicate: &policyv1alpha1.LogMatcher_Glob{Glob: "hello*"},
@@ -88,33 +88,33 @@ func fuzzLogSeedPolicies() []*policyv1alpha1.LogFilterPolicy {
 		{
 			Id:     "keep-nested-attr-and-severity",
 			Action: policyv1alpha1.Action_ACTION_KEEP.Enum(),
-			Matches: []*policyv1alpha1.LogMatcher{
+			Matchers: []*policyv1alpha1.LogMatcher{
 				{
 					Target:    logAttrTarget("metadata", "env"),
 					Predicate: equalsString("prod"),
 				},
 				{
 					Target: recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER),
-					Predicate: &policyv1alpha1.LogMatcher_Gte{
-						Gte: &policyv1alpha1.NumericValue{
-							Value: &policyv1alpha1.NumericValue_IntValue{IntValue: 9},
+					Predicate: &policyv1alpha1.LogMatcher_InclusiveMinimum{
+						InclusiveMinimum: &policyv1alpha1.NumericValue{
+							Kind: &policyv1alpha1.NumericValue_IntValue{IntValue: 9},
 						},
 					},
 				},
 				{
 					Target:    logAttrTarget("user.roles"),
 					Predicate: containsString("admin"),
-					Negate:    true,
+					Negated:    true,
 				},
 			},
 		},
 		{
 			Id:     "drop-resource-and-scope",
 			Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-			Matches: []*policyv1alpha1.LogMatcher{
+			Matchers: []*policyv1alpha1.LogMatcher{
 				{
 					Target:    resourceAttrTarget("cloud.zone"),
-					Predicate: &policyv1alpha1.LogMatcher_Exists{Exists: &emptypb.Empty{}},
+					Predicate: &policyv1alpha1.LogMatcher_Existence{Existence: &emptypb.Empty{}},
 				},
 				{
 					Target:    scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_NAME),

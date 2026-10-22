@@ -102,29 +102,29 @@ func matchesTrace(pol *Policy, span ptrace.Span, scope ptrace.ScopeSpans, res pt
 func dropPolicy(id string, target *policyv1alpha1.TraceFieldSelector, predicate any, negate bool) *policyv1alpha1.TraceFilterPolicy {
 	m := &policyv1alpha1.TraceMatcher{
 		Target: target,
-		Negate: negate,
+		Negated: negate,
 	}
 	switch p := predicate.(type) {
-	case *policyv1alpha1.TraceMatcher_Exists:
+	case *policyv1alpha1.TraceMatcher_Existence:
 		m.Predicate = p
-	case *policyv1alpha1.TraceMatcher_Equals:
+	case *policyv1alpha1.TraceMatcher_Equality:
 		m.Predicate = p
 	case *policyv1alpha1.TraceMatcher_Glob:
 		m.Predicate = p
-	case *policyv1alpha1.TraceMatcher_Contains:
+	case *policyv1alpha1.TraceMatcher_Containment:
 		m.Predicate = p
-	case *policyv1alpha1.TraceMatcher_Gt:
+	case *policyv1alpha1.TraceMatcher_ExclusiveMinimum:
 		m.Predicate = p
-	case *policyv1alpha1.TraceMatcher_Gte:
+	case *policyv1alpha1.TraceMatcher_InclusiveMinimum:
 		m.Predicate = p
-	case *policyv1alpha1.TraceMatcher_Lt:
+	case *policyv1alpha1.TraceMatcher_ExclusiveMaximum:
 		m.Predicate = p
-	case *policyv1alpha1.TraceMatcher_Lte:
+	case *policyv1alpha1.TraceMatcher_InclusiveMaximum:
 		m.Predicate = p
 	}
 	return &policyv1alpha1.TraceFilterPolicy{
 		Id:      id,
-		Matches: []*policyv1alpha1.TraceMatcher{m},
+		Matchers: []*policyv1alpha1.TraceMatcher{m},
 	}
 }
 
@@ -142,15 +142,15 @@ func scopeFieldTarget(f policyv1alpha1.ScopeField) *policyv1alpha1.TraceFieldSel
 
 func spanAttrTarget(path ...string) *policyv1alpha1.TraceFieldSelector {
 	return &policyv1alpha1.TraceFieldSelector{
-		Target: &policyv1alpha1.TraceFieldSelector_SpanAttribute{
-			SpanAttribute: &policyv1alpha1.AttributePath{Path: path},
+		Target: &policyv1alpha1.TraceFieldSelector_SpanAttributePath{
+			SpanAttributePath: &policyv1alpha1.AttributePath{Segments: path},
 		},
 	}
 }
 
-func equalsString(s string) *policyv1alpha1.TraceMatcher_Equals {
-	return &policyv1alpha1.TraceMatcher_Equals{
-		Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: s}},
+func equalsString(s string) *policyv1alpha1.TraceMatcher_Equality {
+	return &policyv1alpha1.TraceMatcher_Equality{
+		Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: s}},
 	}
 }
 
@@ -169,10 +169,10 @@ func TestPolicyValidationErrors(t *testing.T) {
 			name: "missing id",
 			proto: &policyv1alpha1.TraceFilterPolicy{
 				Id: "",
-				Matches: []*policyv1alpha1.TraceMatcher{
+				Matchers: []*policyv1alpha1.TraceMatcher{
 					{
 						Target:    recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME),
-						Predicate: &policyv1alpha1.TraceMatcher_Exists{},
+						Predicate: &policyv1alpha1.TraceMatcher_Existence{},
 					},
 				},
 			},
@@ -182,7 +182,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 			name: "missing matchers",
 			proto: &policyv1alpha1.TraceFilterPolicy{
 				Id:      "p2",
-				Matches: []*policyv1alpha1.TraceMatcher{},
+				Matchers: []*policyv1alpha1.TraceMatcher{},
 			},
 			errExpect: ErrMissingMatchers,
 		},
@@ -190,9 +190,9 @@ func TestPolicyValidationErrors(t *testing.T) {
 			name: "matcher missing target",
 			proto: &policyv1alpha1.TraceFilterPolicy{
 				Id: "p3",
-				Matches: []*policyv1alpha1.TraceMatcher{
+				Matchers: []*policyv1alpha1.TraceMatcher{
 					{
-						Predicate: &policyv1alpha1.TraceMatcher_Exists{},
+						Predicate: &policyv1alpha1.TraceMatcher_Existence{},
 					},
 				},
 			},
@@ -202,10 +202,10 @@ func TestPolicyValidationErrors(t *testing.T) {
 			name: "matcher empty target oneof",
 			proto: &policyv1alpha1.TraceFilterPolicy{
 				Id: "p3-empty-oneof",
-				Matches: []*policyv1alpha1.TraceMatcher{
+				Matchers: []*policyv1alpha1.TraceMatcher{
 					{
 						Target:    &policyv1alpha1.TraceFieldSelector{},
-						Predicate: &policyv1alpha1.TraceMatcher_Exists{},
+						Predicate: &policyv1alpha1.TraceMatcher_Existence{},
 					},
 				},
 			},
@@ -215,10 +215,10 @@ func TestPolicyValidationErrors(t *testing.T) {
 			name: "matcher unspecified span record field",
 			proto: &policyv1alpha1.TraceFilterPolicy{
 				Id: "p3-unspecified-record",
-				Matches: []*policyv1alpha1.TraceMatcher{
+				Matchers: []*policyv1alpha1.TraceMatcher{
 					{
 						Target:    recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_UNSPECIFIED),
-						Predicate: &policyv1alpha1.TraceMatcher_Exists{},
+						Predicate: &policyv1alpha1.TraceMatcher_Existence{},
 					},
 				},
 			},
@@ -228,10 +228,10 @@ func TestPolicyValidationErrors(t *testing.T) {
 			name: "matcher unspecified scope field",
 			proto: &policyv1alpha1.TraceFilterPolicy{
 				Id: "p3-unspecified-scope",
-				Matches: []*policyv1alpha1.TraceMatcher{
+				Matchers: []*policyv1alpha1.TraceMatcher{
 					{
 						Target:    scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_UNSPECIFIED),
-						Predicate: &policyv1alpha1.TraceMatcher_Exists{},
+						Predicate: &policyv1alpha1.TraceMatcher_Existence{},
 					},
 				},
 			},
@@ -241,7 +241,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 			name: "matcher missing predicate",
 			proto: &policyv1alpha1.TraceFilterPolicy{
 				Id: "p4",
-				Matches: []*policyv1alpha1.TraceMatcher{
+				Matchers: []*policyv1alpha1.TraceMatcher{
 					{
 						Target: recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME),
 					},
@@ -253,14 +253,14 @@ func TestPolicyValidationErrors(t *testing.T) {
 			name: "matcher empty span attribute path",
 			proto: &policyv1alpha1.TraceFilterPolicy{
 				Id: "p6-span-attr",
-				Matches: []*policyv1alpha1.TraceMatcher{
+				Matchers: []*policyv1alpha1.TraceMatcher{
 					{
 						Target: &policyv1alpha1.TraceFieldSelector{
-							Target: &policyv1alpha1.TraceFieldSelector_SpanAttribute{
-								SpanAttribute: &policyv1alpha1.AttributePath{},
+							Target: &policyv1alpha1.TraceFieldSelector_SpanAttributePath{
+								SpanAttributePath: &policyv1alpha1.AttributePath{},
 							},
 						},
-						Predicate: &policyv1alpha1.TraceMatcher_Exists{},
+						Predicate: &policyv1alpha1.TraceMatcher_Existence{},
 					},
 				},
 			},
@@ -270,14 +270,14 @@ func TestPolicyValidationErrors(t *testing.T) {
 			name: "matcher empty resource attribute path",
 			proto: &policyv1alpha1.TraceFilterPolicy{
 				Id: "p6-res-attr",
-				Matches: []*policyv1alpha1.TraceMatcher{
+				Matchers: []*policyv1alpha1.TraceMatcher{
 					{
 						Target: &policyv1alpha1.TraceFieldSelector{
-							Target: &policyv1alpha1.TraceFieldSelector_ResourceAttribute{
-								ResourceAttribute: &policyv1alpha1.AttributePath{},
+							Target: &policyv1alpha1.TraceFieldSelector_ResourceAttributePath{
+								ResourceAttributePath: &policyv1alpha1.AttributePath{},
 							},
 						},
-						Predicate: &policyv1alpha1.TraceMatcher_Exists{},
+						Predicate: &policyv1alpha1.TraceMatcher_Existence{},
 					},
 				},
 			},
@@ -287,14 +287,14 @@ func TestPolicyValidationErrors(t *testing.T) {
 			name: "matcher empty scope attribute path",
 			proto: &policyv1alpha1.TraceFilterPolicy{
 				Id: "p6-scope-attr",
-				Matches: []*policyv1alpha1.TraceMatcher{
+				Matchers: []*policyv1alpha1.TraceMatcher{
 					{
 						Target: &policyv1alpha1.TraceFieldSelector{
-							Target: &policyv1alpha1.TraceFieldSelector_ScopeAttribute{
-								ScopeAttribute: &policyv1alpha1.AttributePath{},
+							Target: &policyv1alpha1.TraceFieldSelector_ScopeAttributePath{
+								ScopeAttributePath: &policyv1alpha1.AttributePath{},
 							},
 						},
-						Predicate: &policyv1alpha1.TraceMatcher_Exists{},
+						Predicate: &policyv1alpha1.TraceMatcher_Existence{},
 					},
 				},
 			},
@@ -355,7 +355,7 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 	t.Run("Multiple matchers AND semantics", func(t *testing.T) {
 		pb := &policyv1alpha1.TraceFilterPolicy{
 			Id: "and-matchers",
-			Matches: []*policyv1alpha1.TraceMatcher{
+			Matchers: []*policyv1alpha1.TraceMatcher{
 				{
 					Target:    recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME),
 					Predicate: equalsString("healthcheck.ping"),
@@ -372,7 +372,7 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 		assert.True(t, matchesTrace(pol, span, scope, res))
 
 		// If one matcher does not match, the entire policy should not match.
-		pb.Matches[1].Predicate = equalsString("CLIENT")
+		pb.Matchers[1].Predicate = equalsString("CLIENT")
 		pol2, err := NewPolicyFromProto(pb)
 		require.NoError(t, err)
 		assert.False(t, matchesTrace(pol2, span, scope, res))
@@ -393,7 +393,7 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 		assert.Equal(t, googlepolicy.FilterDrop, evalTrace(pol, span, scope, res))
 
 		// Un-negated, the same matcher does not match.
-		pb.Matches[0].Negate = false
+		pb.Matchers[0].Negated = false
 		pol2, err := NewPolicyFromProto(pb)
 		require.NoError(t, err)
 		assert.False(t, matchesTrace(pol2, span, scope, res))
@@ -402,23 +402,23 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 	t.Run("Span, resource and scope attribute selectors", func(t *testing.T) {
 		pb := &policyv1alpha1.TraceFilterPolicy{
 			Id: "attr-selectors",
-			Matches: []*policyv1alpha1.TraceMatcher{
+			Matchers: []*policyv1alpha1.TraceMatcher{
 				{
 					Target:    spanAttrTarget("http.method"),
 					Predicate: equalsString("GET"),
 				},
 				{
 					Target: &policyv1alpha1.TraceFieldSelector{
-						Target: &policyv1alpha1.TraceFieldSelector_ResourceAttribute{
-							ResourceAttribute: &policyv1alpha1.AttributePath{Path: []string{"cloud.zone"}},
+						Target: &policyv1alpha1.TraceFieldSelector_ResourceAttributePath{
+							ResourceAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"cloud.zone"}},
 						},
 					},
 					Predicate: equalsString("us-central1-a"),
 				},
 				{
 					Target: &policyv1alpha1.TraceFieldSelector{
-						Target: &policyv1alpha1.TraceFieldSelector_ScopeAttribute{
-							ScopeAttribute: &policyv1alpha1.AttributePath{Path: []string{"scope.tag"}},
+						Target: &policyv1alpha1.TraceFieldSelector_ScopeAttributePath{
+							ScopeAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"scope.tag"}},
 						},
 					},
 					Predicate: equalsString("backend"),
@@ -434,7 +434,7 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 	t.Run("Scope field selectors", func(t *testing.T) {
 		pb := &policyv1alpha1.TraceFilterPolicy{
 			Id: "scope-fields",
-			Matches: []*policyv1alpha1.TraceMatcher{
+			Matchers: []*policyv1alpha1.TraceMatcher{
 				{
 					Target:    scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_NAME),
 					Predicate: equalsString("my.library"),
@@ -458,7 +458,7 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 	t.Run("Record field selectors", func(t *testing.T) {
 		pb := &policyv1alpha1.TraceFilterPolicy{
 			Id: "record-fields",
-			Matches: []*policyv1alpha1.TraceMatcher{
+			Matchers: []*policyv1alpha1.TraceMatcher{
 				{
 					Target:    recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME),
 					Predicate: equalsString("healthcheck.ping"),
@@ -469,15 +469,15 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 				},
 				{
 					Target:    recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID),
-					Predicate: &policyv1alpha1.TraceMatcher_Exists{},
+					Predicate: &policyv1alpha1.TraceMatcher_Existence{},
 				},
 				{
 					Target:    recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_SPAN_ID),
-					Predicate: &policyv1alpha1.TraceMatcher_Exists{},
+					Predicate: &policyv1alpha1.TraceMatcher_Existence{},
 				},
 				{
 					Target:    recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID),
-					Predicate: &policyv1alpha1.TraceMatcher_Exists{},
+					Predicate: &policyv1alpha1.TraceMatcher_Existence{},
 				},
 			},
 		}
@@ -490,29 +490,29 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 	t.Run("Typed span attribute matchers", func(t *testing.T) {
 		pb := &policyv1alpha1.TraceFilterPolicy{
 			Id: "typed-test",
-			Matches: []*policyv1alpha1.TraceMatcher{
+			Matchers: []*policyv1alpha1.TraceMatcher{
 				{
 					Target: spanAttrTarget("feature.enabled"),
-					Predicate: &policyv1alpha1.TraceMatcher_Equals{
-						Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_BoolValue{BoolValue: true}},
+					Predicate: &policyv1alpha1.TraceMatcher_Equality{
+						Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BoolValue{BoolValue: true}},
 					},
 				},
 				{
 					Target: spanAttrTarget("latency_seconds"),
-					Predicate: &policyv1alpha1.TraceMatcher_Equals{
-						Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_DoubleValue{DoubleValue: 1.25}},
+					Predicate: &policyv1alpha1.TraceMatcher_Equality{
+						Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_DoubleValue{DoubleValue: 1.25}},
 					},
 				},
 				{
 					Target: spanAttrTarget("http.status_code"),
-					Predicate: &policyv1alpha1.TraceMatcher_Equals{
-						Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_IntValue{IntValue: 200}},
+					Predicate: &policyv1alpha1.TraceMatcher_Equality{
+						Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_IntValue{IntValue: 200}},
 					},
 				},
 				{
 					Target: spanAttrTarget("binary.id"),
-					Predicate: &policyv1alpha1.TraceMatcher_Equals{
-						Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_BytesValue{BytesValue: []byte{0x01, 0x02, 0x03}}},
+					Predicate: &policyv1alpha1.TraceMatcher_Equality{
+						Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BytesValue{BytesValue: []byte{0x01, 0x02, 0x03}}},
 					},
 				},
 			},
@@ -526,29 +526,29 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 	t.Run("Numeric comparisons (gt, gte, lt, lte)", func(t *testing.T) {
 		pb := &policyv1alpha1.TraceFilterPolicy{
 			Id: "numeric-test",
-			Matches: []*policyv1alpha1.TraceMatcher{
+			Matchers: []*policyv1alpha1.TraceMatcher{
 				{
 					Target: spanAttrTarget("http.status_code"),
-					Predicate: &policyv1alpha1.TraceMatcher_Gte{
-						Gte: &policyv1alpha1.NumericValue{Value: &policyv1alpha1.NumericValue_IntValue{IntValue: 200}},
+					Predicate: &policyv1alpha1.TraceMatcher_InclusiveMinimum{
+						InclusiveMinimum: &policyv1alpha1.NumericValue{Kind: &policyv1alpha1.NumericValue_IntValue{IntValue: 200}},
 					},
 				},
 				{
 					Target: spanAttrTarget("http.status_code"),
-					Predicate: &policyv1alpha1.TraceMatcher_Lt{
-						Lt: &policyv1alpha1.NumericValue{Value: &policyv1alpha1.NumericValue_IntValue{IntValue: 300}},
+					Predicate: &policyv1alpha1.TraceMatcher_ExclusiveMaximum{
+						ExclusiveMaximum: &policyv1alpha1.NumericValue{Kind: &policyv1alpha1.NumericValue_IntValue{IntValue: 300}},
 					},
 				},
 				{
 					Target: spanAttrTarget("latency_seconds"),
-					Predicate: &policyv1alpha1.TraceMatcher_Gt{
-						Gt: &policyv1alpha1.NumericValue{Value: &policyv1alpha1.NumericValue_DoubleValue{DoubleValue: 1.0}},
+					Predicate: &policyv1alpha1.TraceMatcher_ExclusiveMinimum{
+						ExclusiveMinimum: &policyv1alpha1.NumericValue{Kind: &policyv1alpha1.NumericValue_DoubleValue{DoubleValue: 1.0}},
 					},
 				},
 				{
 					Target: spanAttrTarget("latency_seconds"),
-					Predicate: &policyv1alpha1.TraceMatcher_Lte{
-						Lte: &policyv1alpha1.NumericValue{Value: &policyv1alpha1.NumericValue_DoubleValue{DoubleValue: 1.25}},
+					Predicate: &policyv1alpha1.TraceMatcher_InclusiveMaximum{
+						InclusiveMaximum: &policyv1alpha1.NumericValue{Kind: &policyv1alpha1.NumericValue_DoubleValue{DoubleValue: 1.25}},
 					},
 				},
 			},
@@ -562,26 +562,26 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 	t.Run("Contains predicate (list membership, string substring, bytes)", func(t *testing.T) {
 		pb := &policyv1alpha1.TraceFilterPolicy{
 			Id: "contains-test",
-			Matches: []*policyv1alpha1.TraceMatcher{
+			Matchers: []*policyv1alpha1.TraceMatcher{
 				// Array membership: user.roles contains "admin".
 				{
 					Target: spanAttrTarget("user.roles"),
-					Predicate: &policyv1alpha1.TraceMatcher_Contains{
-						Contains: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "admin"}},
+					Predicate: &policyv1alpha1.TraceMatcher_Containment{
+						Containment: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "admin"}},
 					},
 				},
 				// Substring: span name contains "check.p".
 				{
 					Target: recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME),
-					Predicate: &policyv1alpha1.TraceMatcher_Contains{
-						Contains: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "check.p"}},
+					Predicate: &policyv1alpha1.TraceMatcher_Containment{
+						Containment: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "check.p"}},
 					},
 				},
 				// Bytes subsequence: binary.id contains [0x02, 0x03].
 				{
 					Target: spanAttrTarget("binary.id"),
-					Predicate: &policyv1alpha1.TraceMatcher_Contains{
-						Contains: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_BytesValue{BytesValue: []byte{0x02, 0x03}}},
+					Predicate: &policyv1alpha1.TraceMatcher_Containment{
+						Containment: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BytesValue{BytesValue: []byte{0x02, 0x03}}},
 					},
 				},
 			},
@@ -592,8 +592,8 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 		assert.True(t, matchesTrace(pol, span, scope, res))
 
 		// Non-matching list item.
-		pb.Matches[0].Predicate = &policyv1alpha1.TraceMatcher_Contains{
-			Contains: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "superadmin"}},
+		pb.Matchers[0].Predicate = &policyv1alpha1.TraceMatcher_Containment{
+			Containment: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "superadmin"}},
 		}
 		pol2, err := NewPolicyFromProto(pb)
 		require.NoError(t, err)
@@ -625,22 +625,22 @@ func TestIDFieldsMatchHexAndBytes(t *testing.T) {
 		{
 			name:  "trace id contains hex substring",
 			field: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID,
-			predicate: &policyv1alpha1.TraceMatcher_Contains{
-				Contains: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "090a0b0c"}},
+			predicate: &policyv1alpha1.TraceMatcher_Containment{
+				Containment: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "090a0b0c"}},
 			},
 		},
 		{
 			name:  "trace id equals raw bytes",
 			field: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID,
-			predicate: &policyv1alpha1.TraceMatcher_Equals{
-				Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_BytesValue{BytesValue: testTraceIDBytes[:]}},
+			predicate: &policyv1alpha1.TraceMatcher_Equality{
+				Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BytesValue{BytesValue: testTraceIDBytes[:]}},
 			},
 		},
 		{
 			name:  "trace id contains raw byte subsequence",
 			field: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID,
-			predicate: &policyv1alpha1.TraceMatcher_Contains{
-				Contains: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_BytesValue{BytesValue: []byte{0x03, 0x04, 0x05}}},
+			predicate: &policyv1alpha1.TraceMatcher_Containment{
+				Containment: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BytesValue{BytesValue: []byte{0x03, 0x04, 0x05}}},
 			},
 		},
 		{
@@ -656,15 +656,15 @@ func TestIDFieldsMatchHexAndBytes(t *testing.T) {
 		{
 			name:  "span id equals raw bytes",
 			field: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_SPAN_ID,
-			predicate: &policyv1alpha1.TraceMatcher_Equals{
-				Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_BytesValue{BytesValue: testSpanIDBytes[:]}},
+			predicate: &policyv1alpha1.TraceMatcher_Equality{
+				Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BytesValue{BytesValue: testSpanIDBytes[:]}},
 			},
 		},
 		{
 			name:  "span id contains raw byte subsequence",
 			field: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_SPAN_ID,
-			predicate: &policyv1alpha1.TraceMatcher_Contains{
-				Contains: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_BytesValue{BytesValue: []byte{0x06, 0x07, 0x08}}},
+			predicate: &policyv1alpha1.TraceMatcher_Containment{
+				Containment: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BytesValue{BytesValue: []byte{0x06, 0x07, 0x08}}},
 			},
 		},
 		{
@@ -680,15 +680,15 @@ func TestIDFieldsMatchHexAndBytes(t *testing.T) {
 		{
 			name:  "parent span id equals raw bytes",
 			field: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID,
-			predicate: &policyv1alpha1.TraceMatcher_Equals{
-				Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_BytesValue{BytesValue: testParentSpanIDBytes[:]}},
+			predicate: &policyv1alpha1.TraceMatcher_Equality{
+				Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BytesValue{BytesValue: testParentSpanIDBytes[:]}},
 			},
 		},
 		{
 			name:  "parent span id contains raw byte subsequence",
 			field: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID,
-			predicate: &policyv1alpha1.TraceMatcher_Contains{
-				Contains: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_BytesValue{BytesValue: []byte{0x0f, 0x10, 0x11}}},
+			predicate: &policyv1alpha1.TraceMatcher_Containment{
+				Containment: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BytesValue{BytesValue: []byte{0x0f, 0x10, 0x11}}},
 			},
 		},
 	}
@@ -716,8 +716,8 @@ func TestIDFieldsMatchHexAndBytes(t *testing.T) {
 		pol, err := NewPolicyFromProto(dropPolicy(
 			"wrong-bytes",
 			recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_SPAN_ID),
-			&policyv1alpha1.TraceMatcher_Equals{
-				Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_BytesValue{BytesValue: []byte{0xff, 0xff}}},
+			&policyv1alpha1.TraceMatcher_Equality{
+				Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BytesValue{BytesValue: []byte{0xff, 0xff}}},
 			},
 			false,
 		))
@@ -746,7 +746,7 @@ func TestZeroIDsReportAbsent(t *testing.T) {
 			pol, err := NewPolicyFromProto(dropPolicy(
 				"exists-"+field.String(),
 				recordFieldTarget(field),
-				&policyv1alpha1.TraceMatcher_Exists{},
+				&policyv1alpha1.TraceMatcher_Existence{},
 				false,
 			))
 			require.NoError(t, err)
@@ -758,7 +758,7 @@ func TestZeroIDsReportAbsent(t *testing.T) {
 			pol, err := NewPolicyFromProto(dropPolicy(
 				"not-exists-"+field.String(),
 				recordFieldTarget(field),
-				&policyv1alpha1.TraceMatcher_Exists{},
+				&policyv1alpha1.TraceMatcher_Existence{},
 				true,
 			))
 			require.NoError(t, err)
@@ -774,7 +774,7 @@ func TestZeroIDsReportAbsent(t *testing.T) {
 		pol, err := NewPolicyFromProto(dropPolicy(
 			"child-has-parent",
 			recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID),
-			&policyv1alpha1.TraceMatcher_Exists{},
+			&policyv1alpha1.TraceMatcher_Existence{},
 			false,
 		))
 		require.NoError(t, err)
@@ -786,16 +786,16 @@ func TestZeroIDsReportAbsent(t *testing.T) {
 // SPAN_RECORD_FIELD_PARENT_SPAN_ID carries for root spans, per
 // proto/policy/v1alpha1/trace_filter_policy.proto:
 //
-//   - "When evaluated with `exists`, this evaluates to false for root spans
-//     (and true with `negate: true`, allowing explicit targeting or exemption
+//   - "When evaluated with `existence`, this evaluates to false for root spans
+//     (and true with `negated: true`, allowing explicit targeting or exemption
 //     of root spans)."
-//   - "When evaluated against string predicates (`equals`, `glob`, `contains`),
-//     a root span matches against the empty string `\"\"`."
+//   - "When evaluated against string predicates (`equality`, `glob`,
+//     `containment`), a root span matches against the empty string `\"\"`."
 //
 // Satisfying both at once is why the extractor returns a present-but-empty
 // ("", false) for a root span rather than the (nil, false) that TRACE_ID and
 // SPAN_ID use: matcher.present() keys off val != nil, so the string predicates
-// still run while `exists` stays false.
+// still run while `existence` stays false.
 //
 // This restores the coverage that was lost when
 // googlepolicyprocessor.TestEvaluator_TraceAllTargetsAndRootSpanParentID was
@@ -835,7 +835,7 @@ func TestRootSpanParentSpanIDEmptyString(t *testing.T) {
 		pol, err := NewPolicyFromProto(dropPolicy(
 			"root-exists",
 			parentIDTarget,
-			&policyv1alpha1.TraceMatcher_Exists{},
+			&policyv1alpha1.TraceMatcher_Existence{},
 			false,
 		))
 		require.NoError(t, err)
@@ -846,7 +846,7 @@ func TestRootSpanParentSpanIDEmptyString(t *testing.T) {
 		negated, err := NewPolicyFromProto(dropPolicy(
 			"root-not-exists",
 			parentIDTarget,
-			&policyv1alpha1.TraceMatcher_Exists{},
+			&policyv1alpha1.TraceMatcher_Existence{},
 			true,
 		))
 		require.NoError(t, err)
@@ -910,8 +910,8 @@ func TestZeroTraceAndSpanIDDoNotMatchEmptyString(t *testing.T) {
 			pol, err := NewPolicyFromProto(dropPolicy(
 				"zero-contains-"+field.String(),
 				recordFieldTarget(field),
-				&policyv1alpha1.TraceMatcher_Contains{
-					Contains: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: ""}},
+				&policyv1alpha1.TraceMatcher_Containment{
+					Containment: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: ""}},
 				},
 				false,
 			))
@@ -932,13 +932,13 @@ func TestEmptyContextFields(t *testing.T) {
 		recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_KIND),
 		spanAttrTarget("http.method"),
 		{
-			Target: &policyv1alpha1.TraceFieldSelector_ResourceAttribute{
-				ResourceAttribute: &policyv1alpha1.AttributePath{Path: []string{"cloud.zone"}},
+			Target: &policyv1alpha1.TraceFieldSelector_ResourceAttributePath{
+				ResourceAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"cloud.zone"}},
 			},
 		},
 		{
-			Target: &policyv1alpha1.TraceFieldSelector_ScopeAttribute{
-				ScopeAttribute: &policyv1alpha1.AttributePath{Path: []string{"scope.tag"}},
+			Target: &policyv1alpha1.TraceFieldSelector_ScopeAttributePath{
+				ScopeAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"scope.tag"}},
 			},
 		},
 		scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_NAME),
@@ -947,7 +947,7 @@ func TestEmptyContextFields(t *testing.T) {
 	}
 
 	for i, target := range targets {
-		pol, err := NewPolicyFromProto(dropPolicy("empty-ctx", target, &policyv1alpha1.TraceMatcher_Exists{}, false))
+		pol, err := NewPolicyFromProto(dropPolicy("empty-ctx", target, &policyv1alpha1.TraceMatcher_Existence{}, false))
 		require.NoError(t, err, "target index %d", i)
 		assert.Equal(t, googlepolicy.FilterNoMatch, pol.FilterTrace(googlepolicy.TraceContext{}), "target index %d", i)
 	}
@@ -991,7 +991,7 @@ func TestKindDefaults(t *testing.T) {
 	existsKind, err := NewPolicyFromProto(dropPolicy(
 		"exists-kind",
 		recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_KIND),
-		&policyv1alpha1.TraceMatcher_Exists{},
+		&policyv1alpha1.TraceMatcher_Existence{},
 		false,
 	))
 	require.NoError(t, err)
@@ -1001,7 +1001,7 @@ func TestKindDefaults(t *testing.T) {
 	existsName, err := NewPolicyFromProto(dropPolicy(
 		"exists-name",
 		recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME),
-		&policyv1alpha1.TraceMatcher_Exists{},
+		&policyv1alpha1.TraceMatcher_Existence{},
 		false,
 	))
 	require.NoError(t, err)
@@ -1025,7 +1025,7 @@ func TestEmptyScopeFieldsReportAbsent(t *testing.T) {
 			pol, err := NewPolicyFromProto(dropPolicy(
 				"scope-"+field.String(),
 				scopeFieldTarget(field),
-				&policyv1alpha1.TraceMatcher_Exists{},
+				&policyv1alpha1.TraceMatcher_Existence{},
 				false,
 			))
 			require.NoError(t, err)
@@ -1057,7 +1057,7 @@ func TestNestedAttributePaths(t *testing.T) {
 			pol, err := NewPolicyFromProto(dropPolicy(
 				"path-"+tt.name,
 				spanAttrTarget(tt.path...),
-				&policyv1alpha1.TraceMatcher_Exists{},
+				&policyv1alpha1.TraceMatcher_Existence{},
 				false,
 			))
 			require.NoError(t, err)
@@ -1068,7 +1068,7 @@ func TestNestedAttributePaths(t *testing.T) {
 	t.Run("nested leaf values", func(t *testing.T) {
 		pb := &policyv1alpha1.TraceFilterPolicy{
 			Id: "nested-values",
-			Matches: []*policyv1alpha1.TraceMatcher{
+			Matchers: []*policyv1alpha1.TraceMatcher{
 				{
 					Target:    spanAttrTarget("metadata", "env"),
 					Predicate: equalsString("prod"),
@@ -1085,12 +1085,12 @@ func TestDriverLoadPolicy(t *testing.T) {
 	raw := map[string]any{
 		"type": "trace_filter",
 		"id":   "loaded-via-driver",
-		"matches": []any{
+		"matchers": []any{
 			map[string]any{
 				"target": map[string]any{
 					"record_field": "SPAN_RECORD_FIELD_NAME",
 				},
-				"equals": map[string]any{
+				"equality": map[string]any{
 					"string_value": "drop this span",
 				},
 			},
@@ -1148,7 +1148,7 @@ func TestUnsetSpanKindReportsPresent(t *testing.T) {
 	notExistsKindPol, err := NewPolicyFromProto(dropPolicy(
 		"not-exists-kind",
 		recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_KIND),
-		&policyv1alpha1.TraceMatcher_Exists{},
+		&policyv1alpha1.TraceMatcher_Existence{},
 		true,
 	))
 	require.NoError(t, err)
@@ -1166,10 +1166,10 @@ func TestDriverLoadPolicyErrors(t *testing.T) {
 			raw: map[string]any{
 				"type": "trace_filter",
 				"id":   "",
-				"matches": []any{
+				"matchers": []any{
 					map[string]any{
 						"target": map[string]any{"record_field": "SPAN_RECORD_FIELD_NAME"},
-						"equals": map[string]any{"string_value": "x"},
+						"equality": map[string]any{"string_value": "x"},
 					},
 				},
 			},
@@ -1180,12 +1180,12 @@ func TestDriverLoadPolicyErrors(t *testing.T) {
 			raw: map[string]any{
 				"type": "trace_filter",
 				"id":   "typo-nested",
-				"matches": []any{
+				"matchers": []any{
 					map[string]any{
 						"target": map[string]any{
 							"recordfield": "SPAN_RECORD_FIELD_NAME", // unknown field discarded -> target unset -> validation error
 						},
-						"equals": map[string]any{"string_value": "x"},
+						"equality": map[string]any{"string_value": "x"},
 					},
 				},
 			},
@@ -1204,7 +1204,7 @@ func TestDriverLoadPolicyErrors(t *testing.T) {
 			raw: map[string]any{
 				"type":    "trace_filter",
 				"id":      "bad-json",
-				"matches": make(chan int),
+				"matchers": make(chan int),
 			},
 			wantErr: googlepolicy.ErrPolicyFailedToLoad,
 		},
@@ -1230,10 +1230,10 @@ func TestDriverLoadPolicyIgnoresUnknownFields(t *testing.T) {
 		"id":               "future-compatible-trace-policy",
 		"future_top_field": "ignored_server_metadata",
 		"future_priority":  42,
-		"matches": []any{
+		"matchers": []any{
 			map[string]any{
 				"target":              map[string]any{"record_field": "SPAN_RECORD_FIELD_NAME"},
-				"exists":              map[string]any{},
+				"existence":              map[string]any{},
 				"future_matcher_hint": true,
 			},
 		},

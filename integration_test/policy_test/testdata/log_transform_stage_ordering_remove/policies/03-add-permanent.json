@@ -3,8 +3,8 @@
   "id": "03-add-permanent",
   "add": {
     "target": {
-      "log_attribute": {
-        "path": ["retained_tag"]
+      "log_attribute_path": {
+        "segments": ["retained_tag"]
       }
     },
     "value": { "string_value": "keep-this" },

@@ -137,8 +137,8 @@ func NewPolicyFromProto(pb *policyv1alpha1.LogTransformPolicy) (*Policy, error) 
 		return nil, ErrMissingAction
 	}
 
-	matchers := make([]matcher.CompiledLogMatcher, 0, len(pb.GetMatches()))
-	for i, m := range pb.GetMatches() {
+	matchers := make([]matcher.CompiledLogMatcher, 0, len(pb.GetMatchers()))
+	for i, m := range pb.GetMatchers() {
 		cm, err := matcher.CompileLogMatcher(m)
 		if err != nil {
 			return nil, fmt.Errorf("matcher[%d]: %w", i, err)
@@ -223,8 +223,8 @@ func compileAdd(a *policyv1alpha1.LogAddAction) (compiledAction, error) {
 	}
 
 	switch t := target.Target.(type) {
-	case *policyv1alpha1.LogTargetSelector_LogAttribute:
-		setAttr, err := matcher.CompilePathSetter(t.LogAttribute, "log", a.GetValue(), a.GetUpsert())
+	case *policyv1alpha1.LogTargetSelector_LogAttributePath:
+		setAttr, err := matcher.CompilePathSetter(t.LogAttributePath, "log", a.GetValue(), a.GetUpsert())
 		if err != nil {
 			return nil, err
 		}
@@ -235,8 +235,8 @@ func compileAdd(a *policyv1alpha1.LogAddAction) (compiledAction, error) {
 			return setAttr(ctx.Record.Attributes())
 		}, nil
 
-	case *policyv1alpha1.LogTargetSelector_BodyField:
-		setBodyField, err := matcher.CompilePathSetter(t.BodyField, "body", a.GetValue(), a.GetUpsert())
+	case *policyv1alpha1.LogTargetSelector_BodyFieldPath:
+		setBodyField, err := matcher.CompilePathSetter(t.BodyFieldPath, "body", a.GetValue(), a.GetUpsert())
 		if err != nil {
 			return nil, err
 		}
@@ -327,8 +327,8 @@ func compileRemove(a *policyv1alpha1.LogRemoveAction) (compiledAction, error) {
 	}
 
 	switch t := a.Target.Target.(type) {
-	case *policyv1alpha1.LogAttributeSelector_LogAttribute:
-		rmAttr, err := matcher.CompilePathRemover(t.LogAttribute, "log")
+	case *policyv1alpha1.LogAttributeSelector_LogAttributePath:
+		rmAttr, err := matcher.CompilePathRemover(t.LogAttributePath, "log")
 		if err != nil {
 			return nil, err
 		}
@@ -339,8 +339,8 @@ func compileRemove(a *policyv1alpha1.LogRemoveAction) (compiledAction, error) {
 			return rmAttr(ctx.Record.Attributes())
 		}, nil
 
-	case *policyv1alpha1.LogAttributeSelector_BodyField:
-		rmBody, err := matcher.CompilePathRemover(t.BodyField, "body")
+	case *policyv1alpha1.LogAttributeSelector_BodyFieldPath:
+		rmBody, err := matcher.CompilePathRemover(t.BodyFieldPath, "body")
 		if err != nil {
 			return nil, err
 		}
@@ -383,11 +383,11 @@ func compileRename(a *policyv1alpha1.LogRenameAction) (compiledAction, error) {
 		srcInBody   bool
 	)
 	switch s := a.Source.Target.(type) {
-	case *policyv1alpha1.LogAttributeSelector_LogAttribute:
-		srcAttrPath = s.LogAttribute
+	case *policyv1alpha1.LogAttributeSelector_LogAttributePath:
+		srcAttrPath = s.LogAttributePath
 		srcKind = "log"
-	case *policyv1alpha1.LogAttributeSelector_BodyField:
-		srcAttrPath = s.BodyField
+	case *policyv1alpha1.LogAttributeSelector_BodyFieldPath:
+		srcAttrPath = s.BodyFieldPath
 		srcKind = "body"
 		srcInBody = true
 	default:
@@ -400,11 +400,11 @@ func compileRename(a *policyv1alpha1.LogRenameAction) (compiledAction, error) {
 		tgtInBody   bool
 	)
 	switch t := a.Target.Target.(type) {
-	case *policyv1alpha1.LogAttributeSelector_LogAttribute:
-		tgtAttrPath = t.LogAttribute
+	case *policyv1alpha1.LogAttributeSelector_LogAttributePath:
+		tgtAttrPath = t.LogAttributePath
 		tgtKind = "log"
-	case *policyv1alpha1.LogAttributeSelector_BodyField:
-		tgtAttrPath = t.BodyField
+	case *policyv1alpha1.LogAttributeSelector_BodyFieldPath:
+		tgtAttrPath = t.BodyFieldPath
 		tgtKind = "body"
 		tgtInBody = true
 	default:
@@ -420,7 +420,7 @@ func compileRename(a *policyv1alpha1.LogRenameAction) (compiledAction, error) {
 		return nil, err
 	}
 
-	if srcInBody == tgtInBody && isPathPrefix(srcAttrPath.GetPath(), tgtAttrPath.GetPath()) {
+	if srcInBody == tgtInBody && isPathPrefix(srcAttrPath.GetSegments(), tgtAttrPath.GetSegments()) {
 		return nil, errors.New("rename source cannot be an ancestor of target")
 	}
 
@@ -495,8 +495,8 @@ func compileRedact(a *policyv1alpha1.LogRedactAction) (compiledAction, error) {
 	}
 
 	switch t := target.Target.(type) {
-	case *policyv1alpha1.LogTargetSelector_LogAttribute:
-		steps, err := matcher.CompilePath(t.LogAttribute, "log")
+	case *policyv1alpha1.LogTargetSelector_LogAttributePath:
+		steps, err := matcher.CompilePath(t.LogAttributePath, "log")
 		if err != nil {
 			return nil, err
 		}
@@ -516,8 +516,8 @@ func compileRedact(a *policyv1alpha1.LogRedactAction) (compiledAction, error) {
 			return true
 		}, nil
 
-	case *policyv1alpha1.LogTargetSelector_BodyField:
-		steps, err := matcher.CompilePath(t.BodyField, "body")
+	case *policyv1alpha1.LogTargetSelector_BodyFieldPath:
+		steps, err := matcher.CompilePath(t.BodyFieldPath, "body")
 		if err != nil {
 			return nil, err
 		}
@@ -615,10 +615,10 @@ func bodyExists(v pcommon.Value) bool {
 }
 
 func requireStringValue(val *policyv1alpha1.Value, targetName string) (string, error) {
-	if val == nil || val.GetValue() == nil {
+	if val == nil || val.GetKind() == nil {
 		return "", ErrMissingValue
 	}
-	sv, ok := val.GetValue().(*policyv1alpha1.Value_StringValue)
+	sv, ok := val.GetKind().(*policyv1alpha1.Value_StringValue)
 	if !ok {
 		return "", fmt.Errorf("%s requires a string value", targetName)
 	}
@@ -626,10 +626,10 @@ func requireStringValue(val *policyv1alpha1.Value, targetName string) (string, e
 }
 
 func requireSeverityNumber(val *policyv1alpha1.Value) (plog.SeverityNumber, error) {
-	if val == nil || val.GetValue() == nil {
+	if val == nil || val.GetKind() == nil {
 		return plog.SeverityNumberUnspecified, ErrMissingValue
 	}
-	iv, ok := val.GetValue().(*policyv1alpha1.Value_IntValue)
+	iv, ok := val.GetKind().(*policyv1alpha1.Value_IntValue)
 	if !ok {
 		return plog.SeverityNumberUnspecified, errors.New("log record field SEVERITY_NUMBER requires an int value")
 	}

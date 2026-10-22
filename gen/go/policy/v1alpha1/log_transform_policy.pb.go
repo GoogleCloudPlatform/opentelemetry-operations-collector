@@ -39,11 +39,23 @@ const (
 // matching log records.
 //
 // Evaluation & Ordering Semantics:
+//   - Double-Applied Filtering (Pass 1 & Pass 2): `LogFilterPolicy` rules run in
+//     Pass 1 (Pre-Transform) before `LogTransformPolicy` stages (`rename` ->
+//     `add` -> `remove` -> `redact`), and re-run in Pass 2 (Post-Transform) if
+//     any transform policy modified the record. Both `ACTION_KEEP` and
+//     `ACTION_DROP` are re-evaluated statelessly in Pass 2 against the
+//     post-transform record (guaranteeing multi-hop consistency across SDK and
+//     Collector evaluation). Within each pass, `ACTION_KEEP` overrides
+//     `ACTION_DROP`; however, if a record survived Pass 1 only because an
+//     `ACTION_KEEP` rule matched an attribute that was subsequently overwritten,
+//     renamed, removed, or redacted during the transform stage such that
+//     `ACTION_KEEP` no longer matches in Pass 2 (while an `ACTION_DROP` rule
+//     still matches), the record is dropped in Pass 2.
 //   - Operation Stage Order: Active LogTransformPolicy instances execute in the
 //     order of their operation type: `rename` -> `add` -> `remove` -> `redact`.
 //   - Tie-Breaking: Within the same operation type, policies execute in
 //     lexicographical order of `id`.
-//   - Matching: All conditions in `matches` are ANDed together. If `matches` is
+//   - Matching: All conditions in `matchers` are ANDed together. If `matchers` is
 //     empty, the action applies to all log records.
 //   - Fail-Open: If `action` is unset, or if an action cannot be applied to a
 //     record (e.g., `rename` when `source` does not exist, or `add`/`rename` with
@@ -56,8 +68,8 @@ type LogTransformPolicy struct {
 	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	// Conditions that must all match for this transformation action to apply.
 	// If empty, the action applies to all log records.
-	Matches []*LogMatcher `protobuf:"bytes,2,rep,name=matches,proto3" json:"matches,omitempty"`
-	// The single transformation action to perform when `matches` evaluates to
+	Matchers []*LogMatcher `protobuf:"bytes,2,rep,name=matchers,proto3" json:"matchers,omitempty"`
+	// The single transformation action to perform when `matchers` evaluates to
 	// true. Exactly one action must be set.
 	//
 	// Types that are valid to be assigned to Action:
@@ -108,9 +120,9 @@ func (x *LogTransformPolicy) GetId() string {
 	return ""
 }
 
-func (x *LogTransformPolicy) GetMatches() []*LogMatcher {
+func (x *LogTransformPolicy) GetMatchers() []*LogMatcher {
 	if x != nil {
-		return x.Matches
+		return x.Matchers
 	}
 	return nil
 }
@@ -168,17 +180,17 @@ type LogTransformPolicy_Add struct {
 }
 
 type LogTransformPolicy_Remove struct {
-	// Deletes an attribute or structured body_field.
+	// Deletes an attribute or structured `body_field_path`.
 	Remove *LogRemoveAction `protobuf:"bytes,4,opt,name=remove,proto3,oneof"`
 }
 
 type LogTransformPolicy_Rename struct {
-	// Moves an existing attribute or structured body_field to a new destination.
+	// Moves an existing attribute or structured `body_field_path` to a new destination.
 	Rename *LogRenameAction `protobuf:"bytes,5,opt,name=rename,proto3,oneof"`
 }
 
 type LogTransformPolicy_Redact struct {
-	// Masks sensitive substrings within a target string field, attribute, or body_field.
+	// Masks sensitive substrings within a target string field, attribute, or `body_field_path`.
 	Redact *LogRedactAction `protobuf:"bytes,6,opt,name=redact,proto3,oneof"`
 }
 
@@ -191,6 +203,17 @@ func (*LogTransformPolicy_Rename) isLogTransformPolicy_Action() {}
 func (*LogTransformPolicy_Redact) isLogTransformPolicy_Action() {}
 
 // LogAddAction inserts or overwrites one field or attribute on a log record.
+//
+// When `target` is `record_field`, valid targets are:
+//   - `LOG_RECORD_FIELD_BODY`: accepts any scalar `Value`; treats unset
+//     `ValueTypeEmpty` and `""` as absent when `upsert: false`.
+//   - `LOG_RECORD_FIELD_SEVERITY_TEXT`: requires `string_value`.
+//   - `LOG_RECORD_FIELD_SEVERITY_NUMBER`: requires `int_value` in `[1, 24]`.
+//
+// `LOG_RECORD_FIELD_SEVERITY_NUMBER` and `LOG_RECORD_FIELD_SEVERITY_TEXT` are
+// independent OTLP fields (mutating one does not automatically derive or
+// overwrite the other). `LOG_RECORD_FIELD_TRACE_ID` and
+// `LOG_RECORD_FIELD_SPAN_ID` are not valid mutation targets.
 type LogAddAction struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Target field or attribute to set.
@@ -199,6 +222,12 @@ type LogAddAction struct {
 	Value *Value `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
 	// If true, overwrites `target` if it already exists. If false (default),
 	// preserves the existing value when `target` is already present.
+	//
+	// Missing intermediate map segments in a multi-element `AttributePath`
+	// (`log_attribute_path` or `body_field_path`) are created automatically. When
+	// an intermediate path segment already exists as a non-map value (scalar or
+	// array), `upsert: false` fails open (preserving the existing value) while
+	// `upsert: true` replaces the intermediate non-map value with a map.
 	Upsert        *bool `protobuf:"varint,3,opt,name=upsert,proto3,oneof" json:"upsert,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -255,10 +284,10 @@ func (x *LogAddAction) GetUpsert() bool {
 	return false
 }
 
-// LogRemoveAction deletes an attribute or structured body_field from a log record.
+// LogRemoveAction deletes an attribute or structured `body_field_path` from a log record.
 type LogRemoveAction struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Target attribute or body_field to remove.
+	// Target attribute or `body_field_path` to remove.
 	Target        *LogAttributeSelector `protobuf:"bytes,1,opt,name=target,proto3" json:"target,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -301,15 +330,21 @@ func (x *LogRemoveAction) GetTarget() *LogAttributeSelector {
 	return nil
 }
 
-// LogRenameAction moves an existing attribute or structured body_field to a new destination.
+// LogRenameAction moves an existing attribute or structured `body_field_path` to a new destination.
 type LogRenameAction struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Existing source attribute or body_field to rename.
+	// Existing source attribute or `body_field_path` to rename.
 	Source *LogAttributeSelector `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"`
-	// Destination attribute or body_field.
+	// Destination attribute or `body_field_path`.
 	Target *LogAttributeSelector `protobuf:"bytes,2,opt,name=target,proto3" json:"target,omitempty"`
 	// If true, overwrites `target` if it already exists. If false (default), the
 	// rename is skipped if `target` already exists.
+	//
+	// Missing intermediate map segments in a multi-element `AttributePath`
+	// (`log_attribute_path` or `body_field_path`) are created automatically. When
+	// an intermediate path segment already exists as a non-map value (scalar or
+	// array), `upsert: false` fails open (preserving the existing value) while
+	// `upsert: true` replaces the intermediate non-map value with a map.
 	Upsert        *bool `protobuf:"varint,3,opt,name=upsert,proto3,oneof" json:"upsert,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -367,9 +402,15 @@ func (x *LogRenameAction) GetUpsert() bool {
 }
 
 // LogRedactAction masks sensitive substrings within a target string.
+//
+// When `target` is `record_field`, valid targets are string-valued fields
+// (`LOG_RECORD_FIELD_BODY` when string-valued, and
+// `LOG_RECORD_FIELD_SEVERITY_TEXT`). `LOG_RECORD_FIELD_SEVERITY_NUMBER`,
+// `LOG_RECORD_FIELD_TRACE_ID`, and `LOG_RECORD_FIELD_SPAN_ID` are not valid
+// mutation targets.
 type LogRedactAction struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Target string field, attribute, or body_field to redact.
+	// Target string field, attribute, or `body_field_path` to redact.
 	Target *LogTargetSelector `protobuf:"bytes,1,opt,name=target,proto3" json:"target,omitempty"`
 	// Optional RE2 regular expression matching substrings within the target
 	// string to redact. If unset or empty, the entire target value is replaced
@@ -443,8 +484,8 @@ type LogTargetSelector struct {
 	// Types that are valid to be assigned to Target:
 	//
 	//	*LogTargetSelector_RecordField
-	//	*LogTargetSelector_LogAttribute
-	//	*LogTargetSelector_BodyField
+	//	*LogTargetSelector_LogAttributePath
+	//	*LogTargetSelector_BodyFieldPath
 	Target        isLogTargetSelector_Target `protobuf_oneof:"target"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -496,19 +537,19 @@ func (x *LogTargetSelector) GetRecordField() LogRecordField {
 	return LogRecordField_LOG_RECORD_FIELD_UNSPECIFIED
 }
 
-func (x *LogTargetSelector) GetLogAttribute() *AttributePath {
+func (x *LogTargetSelector) GetLogAttributePath() *AttributePath {
 	if x != nil {
-		if x, ok := x.Target.(*LogTargetSelector_LogAttribute); ok {
-			return x.LogAttribute
+		if x, ok := x.Target.(*LogTargetSelector_LogAttributePath); ok {
+			return x.LogAttributePath
 		}
 	}
 	return nil
 }
 
-func (x *LogTargetSelector) GetBodyField() *AttributePath {
+func (x *LogTargetSelector) GetBodyFieldPath() *AttributePath {
 	if x != nil {
-		if x, ok := x.Target.(*LogTargetSelector_BodyField); ok {
-			return x.BodyField
+		if x, ok := x.Target.(*LogTargetSelector_BodyFieldPath); ok {
+			return x.BodyFieldPath
 		}
 	}
 	return nil
@@ -520,25 +561,46 @@ type isLogTargetSelector_Target interface {
 
 type LogTargetSelector_RecordField struct {
 	// Standard first-class OpenTelemetry LogRecord fields (e.g. body, severity_text).
+	//
+	// `LOG_RECORD_FIELD_TRACE_ID` and `LOG_RECORD_FIELD_SPAN_ID` are valid only
+	// for read-only matching in `LogFieldSelector` and are not valid mutation
+	// targets in `LogTargetSelector`.
+	//   - For `LogAddAction`, valid `record_field` targets are
+	//     `LOG_RECORD_FIELD_BODY` (any scalar `Value`; treats unset
+	//     `ValueTypeEmpty` and `""` as absent when `upsert: false`),
+	//     `LOG_RECORD_FIELD_SEVERITY_TEXT` (`string_value`), and
+	//     `LOG_RECORD_FIELD_SEVERITY_NUMBER` (`int_value` in `[1, 24]`).
+	//   - For `LogRedactAction`, valid `record_field` targets are string-valued
+	//     fields (`LOG_RECORD_FIELD_BODY` when string-valued, and
+	//     `LOG_RECORD_FIELD_SEVERITY_TEXT`).
+	//
+	// `LOG_RECORD_FIELD_SEVERITY_NUMBER` and `LOG_RECORD_FIELD_SEVERITY_TEXT`
+	// are independent OTLP fields (mutating one does not automatically derive
+	// or overwrite the other).
 	RecordField LogRecordField `protobuf:"varint,1,opt,name=record_field,json=recordField,proto3,enum=google.telemetry.policy.v1alpha1.LogRecordField,oneof"`
 }
 
-type LogTargetSelector_LogAttribute struct {
-	// Log record attribute by key or path (e.g. ["http.route"] or ["http", "method"]).
-	LogAttribute *AttributePath `protobuf:"bytes,2,opt,name=log_attribute,json=logAttribute,proto3,oneof"`
+type LogTargetSelector_LogAttributePath struct {
+	// Log record attribute by key or path (e.g. `["http.route"]` or `["http", "method"]`).
+	LogAttributePath *AttributePath `protobuf:"bytes,2,opt,name=log_attribute_path,json=logAttributePath,proto3,oneof"`
 }
 
-type LogTargetSelector_BodyField struct {
-	// Traverses nested fields inside a structured (kvlist_value / map)
-	// LogRecord.body (e.g. ["event_id"], ["event_data", "TargetUserName"]).
-	BodyField *AttributePath `protobuf:"bytes,3,opt,name=body_field,json=bodyField,proto3,oneof"`
+type LogTargetSelector_BodyFieldPath struct {
+	// Traverses nested fields inside a structured (`kvlist_value` / map)
+	// `LogRecord.body` (e.g. `["event_id"]`, `["event_data", "TargetUserName"]`).
+	//
+	// For `LogAddAction`, if `LogRecord.body` is unset (`ValueTypeEmpty`) or an
+	// empty string (`""`), it is initialized to an empty structured map before
+	// setting the path; if `LogRecord.body` holds a non-empty scalar, array, or
+	// bytes value, the action fails open (no-op) regardless of `upsert`.
+	BodyFieldPath *AttributePath `protobuf:"bytes,3,opt,name=body_field_path,json=bodyFieldPath,proto3,oneof"`
 }
 
 func (*LogTargetSelector_RecordField) isLogTargetSelector_Target() {}
 
-func (*LogTargetSelector_LogAttribute) isLogTargetSelector_Target() {}
+func (*LogTargetSelector_LogAttributePath) isLogTargetSelector_Target() {}
 
-func (*LogTargetSelector_BodyField) isLogTargetSelector_Target() {}
+func (*LogTargetSelector_BodyFieldPath) isLogTargetSelector_Target() {}
 
 // LogAttributeSelector designates a removable or renameable log attribute or
 // structured body field for remove and rename actions.
@@ -549,8 +611,8 @@ type LogAttributeSelector struct {
 	//
 	// Types that are valid to be assigned to Target:
 	//
-	//	*LogAttributeSelector_LogAttribute
-	//	*LogAttributeSelector_BodyField
+	//	*LogAttributeSelector_LogAttributePath
+	//	*LogAttributeSelector_BodyFieldPath
 	Target        isLogAttributeSelector_Target `protobuf_oneof:"target"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -593,19 +655,19 @@ func (x *LogAttributeSelector) GetTarget() isLogAttributeSelector_Target {
 	return nil
 }
 
-func (x *LogAttributeSelector) GetLogAttribute() *AttributePath {
+func (x *LogAttributeSelector) GetLogAttributePath() *AttributePath {
 	if x != nil {
-		if x, ok := x.Target.(*LogAttributeSelector_LogAttribute); ok {
-			return x.LogAttribute
+		if x, ok := x.Target.(*LogAttributeSelector_LogAttributePath); ok {
+			return x.LogAttributePath
 		}
 	}
 	return nil
 }
 
-func (x *LogAttributeSelector) GetBodyField() *AttributePath {
+func (x *LogAttributeSelector) GetBodyFieldPath() *AttributePath {
 	if x != nil {
-		if x, ok := x.Target.(*LogAttributeSelector_BodyField); ok {
-			return x.BodyField
+		if x, ok := x.Target.(*LogAttributeSelector_BodyFieldPath); ok {
+			return x.BodyFieldPath
 		}
 	}
 	return nil
@@ -615,29 +677,29 @@ type isLogAttributeSelector_Target interface {
 	isLogAttributeSelector_Target()
 }
 
-type LogAttributeSelector_LogAttribute struct {
-	// Log record attribute by key or path (e.g. ["http.route"] or ["http", "method"]).
-	LogAttribute *AttributePath `protobuf:"bytes,1,opt,name=log_attribute,json=logAttribute,proto3,oneof"`
+type LogAttributeSelector_LogAttributePath struct {
+	// Log record attribute by key or path (e.g. `["http.route"]` or `["http", "method"]`).
+	LogAttributePath *AttributePath `protobuf:"bytes,1,opt,name=log_attribute_path,json=logAttributePath,proto3,oneof"`
 }
 
-type LogAttributeSelector_BodyField struct {
-	// Traverses nested fields inside a structured (kvlist_value / map)
-	// LogRecord.body (e.g. ["event_id"], ["event_data", "TargetUserName"]).
-	BodyField *AttributePath `protobuf:"bytes,2,opt,name=body_field,json=bodyField,proto3,oneof"`
+type LogAttributeSelector_BodyFieldPath struct {
+	// Traverses nested fields inside a structured (`kvlist_value` / map)
+	// `LogRecord.body` (e.g. `["event_id"]`, `["event_data", "TargetUserName"]`).
+	BodyFieldPath *AttributePath `protobuf:"bytes,2,opt,name=body_field_path,json=bodyFieldPath,proto3,oneof"`
 }
 
-func (*LogAttributeSelector_LogAttribute) isLogAttributeSelector_Target() {}
+func (*LogAttributeSelector_LogAttributePath) isLogAttributeSelector_Target() {}
 
-func (*LogAttributeSelector_BodyField) isLogAttributeSelector_Target() {}
+func (*LogAttributeSelector_BodyFieldPath) isLogAttributeSelector_Target() {}
 
 var File_policy_v1alpha1_log_transform_policy_proto protoreflect.FileDescriptor
 
 const file_policy_v1alpha1_log_transform_policy_proto_rawDesc = "" +
 	"\n" +
-	"*policy/v1alpha1/log_transform_policy.proto\x12 google.telemetry.policy.v1alpha1\x1a)policy/v1alpha1/common_policy_types.proto\"\xa1\x03\n" +
+	"*policy/v1alpha1/log_transform_policy.proto\x12 google.telemetry.policy.v1alpha1\x1a)policy/v1alpha1/common_policy_types.proto\"\xa3\x03\n" +
 	"\x12LogTransformPolicy\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12F\n" +
-	"\amatches\x18\x02 \x03(\v2,.google.telemetry.policy.v1alpha1.LogMatcherR\amatches\x12B\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12H\n" +
+	"\bmatchers\x18\x02 \x03(\v2,.google.telemetry.policy.v1alpha1.LogMatcherR\bmatchers\x12B\n" +
 	"\x03add\x18\x03 \x01(\v2..google.telemetry.policy.v1alpha1.LogAddActionH\x00R\x03add\x12K\n" +
 	"\x06remove\x18\x04 \x01(\v21.google.telemetry.policy.v1alpha1.LogRemoveActionH\x00R\x06remove\x12K\n" +
 	"\x06rename\x18\x05 \x01(\v21.google.telemetry.policy.v1alpha1.LogRenameActionH\x00R\x06rename\x12K\n" +
@@ -660,17 +722,15 @@ const file_policy_v1alpha1_log_transform_policy_proto_rawDesc = "" +
 	"\x05regex\x18\x02 \x01(\tH\x00R\x05regex\x88\x01\x01\x12%\n" +
 	"\vreplacement\x18\x03 \x01(\tH\x01R\vreplacement\x88\x01\x01B\b\n" +
 	"\x06_regexB\x0e\n" +
-	"\f_replacement\"\x9e\x02\n" +
+	"\f_replacement\"\xb0\x02\n" +
 	"\x11LogTargetSelector\x12U\n" +
-	"\frecord_field\x18\x01 \x01(\x0e20.google.telemetry.policy.v1alpha1.LogRecordFieldH\x00R\vrecordField\x12V\n" +
-	"\rlog_attribute\x18\x02 \x01(\v2/.google.telemetry.policy.v1alpha1.AttributePathH\x00R\flogAttribute\x12P\n" +
-	"\n" +
-	"body_field\x18\x03 \x01(\v2/.google.telemetry.policy.v1alpha1.AttributePathH\x00R\tbodyFieldB\b\n" +
-	"\x06target\"\xca\x01\n" +
-	"\x14LogAttributeSelector\x12V\n" +
-	"\rlog_attribute\x18\x01 \x01(\v2/.google.telemetry.policy.v1alpha1.AttributePathH\x00R\flogAttribute\x12P\n" +
-	"\n" +
-	"body_field\x18\x02 \x01(\v2/.google.telemetry.policy.v1alpha1.AttributePathH\x00R\tbodyFieldB\b\n" +
+	"\frecord_field\x18\x01 \x01(\x0e20.google.telemetry.policy.v1alpha1.LogRecordFieldH\x00R\vrecordField\x12_\n" +
+	"\x12log_attribute_path\x18\x02 \x01(\v2/.google.telemetry.policy.v1alpha1.AttributePathH\x00R\x10logAttributePath\x12Y\n" +
+	"\x0fbody_field_path\x18\x03 \x01(\v2/.google.telemetry.policy.v1alpha1.AttributePathH\x00R\rbodyFieldPathB\b\n" +
+	"\x06target\"\xdc\x01\n" +
+	"\x14LogAttributeSelector\x12_\n" +
+	"\x12log_attribute_path\x18\x01 \x01(\v2/.google.telemetry.policy.v1alpha1.AttributePathH\x00R\x10logAttributePath\x12Y\n" +
+	"\x0fbody_field_path\x18\x02 \x01(\v2/.google.telemetry.policy.v1alpha1.AttributePathH\x00R\rbodyFieldPathB\b\n" +
 	"\x06targetB\xcb\x02\n" +
 	"$com.google.telemetry.policy.v1alpha1B\x17LogTransformPolicyProtoP\x01Zggithub.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1;policyv1alpha1\xa2\x02\x03GTP\xaa\x02 Google.Telemetry.Policy.V1alpha1\xca\x02 Google\\Telemetry\\Policy\\V1alpha1\xe2\x02,Google\\Telemetry\\Policy\\V1alpha1\\GPBMetadata\xea\x02#Google::Telemetry::Policy::V1alpha1b\x06proto3"
 
@@ -701,7 +761,7 @@ var file_policy_v1alpha1_log_transform_policy_proto_goTypes = []any{
 	(*AttributePath)(nil),        // 10: google.telemetry.policy.v1alpha1.AttributePath
 }
 var file_policy_v1alpha1_log_transform_policy_proto_depIdxs = []int32{
-	7,  // 0: google.telemetry.policy.v1alpha1.LogTransformPolicy.matches:type_name -> google.telemetry.policy.v1alpha1.LogMatcher
+	7,  // 0: google.telemetry.policy.v1alpha1.LogTransformPolicy.matchers:type_name -> google.telemetry.policy.v1alpha1.LogMatcher
 	1,  // 1: google.telemetry.policy.v1alpha1.LogTransformPolicy.add:type_name -> google.telemetry.policy.v1alpha1.LogAddAction
 	2,  // 2: google.telemetry.policy.v1alpha1.LogTransformPolicy.remove:type_name -> google.telemetry.policy.v1alpha1.LogRemoveAction
 	3,  // 3: google.telemetry.policy.v1alpha1.LogTransformPolicy.rename:type_name -> google.telemetry.policy.v1alpha1.LogRenameAction
@@ -713,10 +773,10 @@ var file_policy_v1alpha1_log_transform_policy_proto_depIdxs = []int32{
 	6,  // 9: google.telemetry.policy.v1alpha1.LogRenameAction.target:type_name -> google.telemetry.policy.v1alpha1.LogAttributeSelector
 	5,  // 10: google.telemetry.policy.v1alpha1.LogRedactAction.target:type_name -> google.telemetry.policy.v1alpha1.LogTargetSelector
 	9,  // 11: google.telemetry.policy.v1alpha1.LogTargetSelector.record_field:type_name -> google.telemetry.policy.v1alpha1.LogRecordField
-	10, // 12: google.telemetry.policy.v1alpha1.LogTargetSelector.log_attribute:type_name -> google.telemetry.policy.v1alpha1.AttributePath
-	10, // 13: google.telemetry.policy.v1alpha1.LogTargetSelector.body_field:type_name -> google.telemetry.policy.v1alpha1.AttributePath
-	10, // 14: google.telemetry.policy.v1alpha1.LogAttributeSelector.log_attribute:type_name -> google.telemetry.policy.v1alpha1.AttributePath
-	10, // 15: google.telemetry.policy.v1alpha1.LogAttributeSelector.body_field:type_name -> google.telemetry.policy.v1alpha1.AttributePath
+	10, // 12: google.telemetry.policy.v1alpha1.LogTargetSelector.log_attribute_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
+	10, // 13: google.telemetry.policy.v1alpha1.LogTargetSelector.body_field_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
+	10, // 14: google.telemetry.policy.v1alpha1.LogAttributeSelector.log_attribute_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
+	10, // 15: google.telemetry.policy.v1alpha1.LogAttributeSelector.body_field_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
 	16, // [16:16] is the sub-list for method output_type
 	16, // [16:16] is the sub-list for method input_type
 	16, // [16:16] is the sub-list for extension type_name
@@ -741,12 +801,12 @@ func file_policy_v1alpha1_log_transform_policy_proto_init() {
 	file_policy_v1alpha1_log_transform_policy_proto_msgTypes[4].OneofWrappers = []any{}
 	file_policy_v1alpha1_log_transform_policy_proto_msgTypes[5].OneofWrappers = []any{
 		(*LogTargetSelector_RecordField)(nil),
-		(*LogTargetSelector_LogAttribute)(nil),
-		(*LogTargetSelector_BodyField)(nil),
+		(*LogTargetSelector_LogAttributePath)(nil),
+		(*LogTargetSelector_BodyFieldPath)(nil),
 	}
 	file_policy_v1alpha1_log_transform_policy_proto_msgTypes[6].OneofWrappers = []any{
-		(*LogAttributeSelector_LogAttribute)(nil),
-		(*LogAttributeSelector_BodyField)(nil),
+		(*LogAttributeSelector_LogAttributePath)(nil),
+		(*LogAttributeSelector_BodyFieldPath)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

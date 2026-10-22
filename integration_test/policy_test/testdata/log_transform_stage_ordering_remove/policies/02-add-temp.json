@@ -3,8 +3,8 @@
   "id": "02-add-temp",
   "add": {
     "target": {
-      "log_attribute": {
-        "path": ["temp_tag"]
+      "log_attribute_path": {
+        "segments": ["temp_tag"]
       }
     },
     "value": { "string_value": "to-be-removed" },

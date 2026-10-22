@@ -37,12 +37,12 @@ func TestIisSourcePolicy_Serialization(t *testing.T) {
 			name: "with_collection_interval",
 			policy: &policyv1alpha1.IisSourcePolicy{
 				Id:                        "enable-iis-metrics",
-				CollectionDurationSeconds: proto.Int32(30),
+				CollectionIntervalSeconds: proto.Int32(30),
 			},
 			validate: func(t *testing.T, p *policyv1alpha1.IisSourcePolicy) {
 				assert.Equal(t, "enable-iis-metrics", p.GetId())
-				require.NotNil(t, p.CollectionDurationSeconds)
-				assert.Equal(t, int32(30), p.GetCollectionDurationSeconds())
+				require.NotNil(t, p.CollectionIntervalSeconds)
+				assert.Equal(t, int32(30), p.GetCollectionIntervalSeconds())
 			},
 		},
 		{
@@ -52,8 +52,8 @@ func TestIisSourcePolicy_Serialization(t *testing.T) {
 			},
 			validate: func(t *testing.T, p *policyv1alpha1.IisSourcePolicy) {
 				assert.Equal(t, "enable-iis-default-interval", p.GetId())
-				assert.Nil(t, p.CollectionDurationSeconds)
-				assert.Equal(t, int32(0), p.GetCollectionDurationSeconds())
+				assert.Nil(t, p.CollectionIntervalSeconds)
+				assert.Equal(t, int32(0), p.GetCollectionIntervalSeconds())
 			},
 		},
 	}
@@ -75,7 +75,7 @@ func TestIisSourcePolicy_Serialization(t *testing.T) {
 func TestIisSourcePolicy_AnyPackaging(t *testing.T) {
 	policy := &policyv1alpha1.IisSourcePolicy{
 		Id:                        "iis-source-policy",
-		CollectionDurationSeconds: proto.Int32(60),
+		CollectionIntervalSeconds: proto.Int32(60),
 	}
 
 	anyPolicy, err := anypb.New(policy)
@@ -98,14 +98,14 @@ func TestIisSourcePolicy_AnyPackaging(t *testing.T) {
 	unpackedPolicy := &policyv1alpha1.IisSourcePolicy{}
 	require.NoError(t, unmarshaled.GetPolicies()[0].UnmarshalTo(unpackedPolicy))
 	assert.Equal(t, "iis-source-policy", unpackedPolicy.GetId())
-	require.NotNil(t, unpackedPolicy.CollectionDurationSeconds)
-	assert.Equal(t, int32(60), unpackedPolicy.GetCollectionDurationSeconds())
+	require.NotNil(t, unpackedPolicy.CollectionIntervalSeconds)
+	assert.Equal(t, int32(60), unpackedPolicy.GetCollectionIntervalSeconds())
 }
 
 func TestIisSourcePolicy_JSONSerialization(t *testing.T) {
 	policy := &policyv1alpha1.IisSourcePolicy{
 		Id:                        "enable-iis-metrics",
-		CollectionDurationSeconds: proto.Int32(30),
+		CollectionIntervalSeconds: proto.Int32(30),
 	}
 
 	// ProtoJSON marshal and unmarshal round-trip.
@@ -115,27 +115,27 @@ func TestIisSourcePolicy_JSONSerialization(t *testing.T) {
 	unmarshaled := &policyv1alpha1.IisSourcePolicy{}
 	require.NoError(t, protojson.Unmarshal(jsonData, unmarshaled))
 	assert.True(t, proto.Equal(policy, unmarshaled))
-	require.NotNil(t, unmarshaled.CollectionDurationSeconds)
-	assert.Equal(t, int32(30), unmarshaled.GetCollectionDurationSeconds())
+	require.NotNil(t, unmarshaled.CollectionIntervalSeconds)
+	assert.Equal(t, int32(30), unmarshaled.GetCollectionIntervalSeconds())
 
-	// Omitted collection_duration_seconds preserves nil pointer (distinguishing unset from explicit 0).
+	// Omitted collection_interval_seconds preserves nil pointer (distinguishing unset from explicit 0).
 	jsonOmittedInterval := []byte(`{"id": "omitted-interval-policy"}`)
 	omittedPolicy := &policyv1alpha1.IisSourcePolicy{}
 	require.NoError(t, protojson.Unmarshal(jsonOmittedInterval, omittedPolicy))
 	assert.Equal(t, "omitted-interval-policy", omittedPolicy.GetId())
-	assert.Nil(t, omittedPolicy.CollectionDurationSeconds)
-	assert.Equal(t, int32(0), omittedPolicy.GetCollectionDurationSeconds())
+	assert.Nil(t, omittedPolicy.CollectionIntervalSeconds)
+	assert.Equal(t, int32(0), omittedPolicy.GetCollectionIntervalSeconds())
 
-	// Explicit zero collection_duration_seconds preserves non-nil pointer so validators can reject < 10.
-	jsonZeroInterval := []byte(`{"id": "zero-interval-policy", "collectionDurationSeconds": 0}`)
+	// Explicit zero collection_interval_seconds preserves non-nil pointer so validators can reject < 10.
+	jsonZeroInterval := []byte(`{"id": "zero-interval-policy", "collectionIntervalSeconds": 0}`)
 	zeroPolicy := &policyv1alpha1.IisSourcePolicy{}
 	require.NoError(t, protojson.Unmarshal(jsonZeroInterval, zeroPolicy))
 	assert.Equal(t, "zero-interval-policy", zeroPolicy.GetId())
-	require.NotNil(t, zeroPolicy.CollectionDurationSeconds)
-	assert.Equal(t, int32(0), zeroPolicy.GetCollectionDurationSeconds())
+	require.NotNil(t, zeroPolicy.CollectionIntervalSeconds)
+	assert.Equal(t, int32(0), zeroPolicy.GetCollectionIntervalSeconds())
 
 	// EmitUnpopulated includes explicit 0 when set.
 	marshaledUnpopulated, err := protojson.MarshalOptions{EmitUnpopulated: true}.Marshal(zeroPolicy)
 	require.NoError(t, err)
-	assert.Contains(t, string(marshaledUnpopulated), `"collectionDurationSeconds":0`)
+	assert.Contains(t, string(marshaledUnpopulated), `"collectionIntervalSeconds":0`)
 }

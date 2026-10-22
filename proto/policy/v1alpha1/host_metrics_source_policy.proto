@@ -26,16 +26,16 @@ option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-col
 // - Default Disposition: Host system metric collection is disabled unless at
 //   least one valid HostMetricsSourcePolicy is configured.
 // - Validation & Fail-Open: `id` must be non-empty. When
-//   `collection_duration_seconds` is unset, it defaults to 60 seconds. When
-//   set, it must be >= 10; a policy with `collection_duration_seconds < 10` is
+//   `collection_interval_seconds` is unset, it defaults to 60 seconds. When
+//   set, it must be >= 10; a policy with `collection_interval_seconds < 10` is
 //   invalid and ignored (fail-open).
 // - Deduplication Semantics: Multiple valid HostMetricsSourcePolicy instances
 //   merge into a single `hostmetrics` receiver using the minimum effective
-//   `collection_duration_seconds` (order-independent and commutative).
+//   `collection_interval_seconds` (order-independent and commutative).
 message HostMetricsSourcePolicy {
   // Unique identifier for the policy within its configuration scope.
   string id = 1;
 
   // Scrape interval in seconds. Defaults to 60 if unset. Must be >= 10.
-  optional int32 collection_duration_seconds = 2;
+  optional int32 collection_interval_seconds = 2;
 }

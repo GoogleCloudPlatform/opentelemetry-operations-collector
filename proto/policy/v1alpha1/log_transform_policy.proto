@@ -40,7 +40,7 @@ option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-col
 //   order of their operation type: `rename` -> `add` -> `remove` -> `redact`.
 // - Tie-Breaking: Within the same operation type, policies execute in
 //   lexicographical order of `id`.
-// - Matching: All conditions in `matches` are ANDed together. If `matches` is
+// - Matching: All conditions in `matchers` are ANDed together. If `matchers` is
 //   empty, the action applies to all log records.
 // - Fail-Open: If `action` is unset, or if an action cannot be applied to a
 //   record (e.g., `rename` when `source` does not exist, or `add`/`rename` with
@@ -53,21 +53,21 @@ message LogTransformPolicy {
 
   // Conditions that must all match for this transformation action to apply.
   // If empty, the action applies to all log records.
-  repeated LogMatcher matches = 2;
+  repeated LogMatcher matchers = 2;
 
-  // The single transformation action to perform when `matches` evaluates to
+  // The single transformation action to perform when `matchers` evaluates to
   // true. Exactly one action must be set.
   oneof action {
     // Inserts or overwrites a field or attribute.
     LogAddAction add = 3;
 
-    // Deletes an attribute or structured body_field.
+    // Deletes an attribute or structured `body_field_path`.
     LogRemoveAction remove = 4;
 
-    // Moves an existing attribute or structured body_field to a new destination.
+    // Moves an existing attribute or structured `body_field_path` to a new destination.
     LogRenameAction rename = 5;
 
-    // Masks sensitive substrings within a target string field, attribute, or body_field.
+    // Masks sensitive substrings within a target string field, attribute, or `body_field_path`.
     LogRedactAction redact = 6;
   }
 }
@@ -94,33 +94,33 @@ message LogAddAction {
   // preserves the existing value when `target` is already present.
   //
   // Missing intermediate map segments in a multi-element `AttributePath`
-  // (`log_attribute` or `body_field`) are created automatically. When an
-  // intermediate path segment already exists as a non-map value (scalar or
+  // (`log_attribute_path` or `body_field_path`) are created automatically. When
+  // an intermediate path segment already exists as a non-map value (scalar or
   // array), `upsert: false` fails open (preserving the existing value) while
   // `upsert: true` replaces the intermediate non-map value with a map.
   optional bool upsert = 3;
 }
 
-// LogRemoveAction deletes an attribute or structured body_field from a log record.
+// LogRemoveAction deletes an attribute or structured `body_field_path` from a log record.
 message LogRemoveAction {
-  // Target attribute or body_field to remove.
+  // Target attribute or `body_field_path` to remove.
   LogAttributeSelector target = 1;
 }
 
-// LogRenameAction moves an existing attribute or structured body_field to a new destination.
+// LogRenameAction moves an existing attribute or structured `body_field_path` to a new destination.
 message LogRenameAction {
-  // Existing source attribute or body_field to rename.
+  // Existing source attribute or `body_field_path` to rename.
   LogAttributeSelector source = 1;
 
-  // Destination attribute or body_field.
+  // Destination attribute or `body_field_path`.
   LogAttributeSelector target = 2;
 
   // If true, overwrites `target` if it already exists. If false (default), the
   // rename is skipped if `target` already exists.
   //
   // Missing intermediate map segments in a multi-element `AttributePath`
-  // (`log_attribute` or `body_field`) are created automatically. When an
-  // intermediate path segment already exists as a non-map value (scalar or
+  // (`log_attribute_path` or `body_field_path`) are created automatically. When
+  // an intermediate path segment already exists as a non-map value (scalar or
   // array), `upsert: false` fails open (preserving the existing value) while
   // `upsert: true` replaces the intermediate non-map value with a map.
   optional bool upsert = 3;
@@ -134,7 +134,7 @@ message LogRenameAction {
 // `LOG_RECORD_FIELD_TRACE_ID`, and `LOG_RECORD_FIELD_SPAN_ID` are not valid
 // mutation targets.
 message LogRedactAction {
-  // Target string field, attribute, or body_field to redact.
+  // Target string field, attribute, or `body_field_path` to redact.
   LogTargetSelector target = 1;
 
   // Optional RE2 regular expression matching substrings within the target
@@ -171,17 +171,17 @@ message LogTargetSelector {
     // or overwrite the other).
     LogRecordField record_field = 1;
 
-    // Log record attribute by key or path (e.g. ["http.route"] or ["http", "method"]).
-    AttributePath log_attribute = 2;
+    // Log record attribute by key or path (e.g. `["http.route"]` or `["http", "method"]`).
+    AttributePath log_attribute_path = 2;
 
-    // Traverses nested fields inside a structured (kvlist_value / map)
-    // LogRecord.body (e.g. ["event_id"], ["event_data", "TargetUserName"]).
+    // Traverses nested fields inside a structured (`kvlist_value` / map)
+    // `LogRecord.body` (e.g. `["event_id"]`, `["event_data", "TargetUserName"]`).
     //
     // For `LogAddAction`, if `LogRecord.body` is unset (`ValueTypeEmpty`) or an
     // empty string (`""`), it is initialized to an empty structured map before
     // setting the path; if `LogRecord.body` holds a non-empty scalar, array, or
     // bytes value, the action fails open (no-op) regardless of `upsert`.
-    AttributePath body_field = 3;
+    AttributePath body_field_path = 3;
   }
 }
 
@@ -191,11 +191,11 @@ message LogAttributeSelector {
   // The log attribute or structured body path to target.
   // Exactly one must be set.
   oneof target {
-    // Log record attribute by key or path (e.g. ["http.route"] or ["http", "method"]).
-    AttributePath log_attribute = 1;
+    // Log record attribute by key or path (e.g. `["http.route"]` or `["http", "method"]`).
+    AttributePath log_attribute_path = 1;
 
-    // Traverses nested fields inside a structured (kvlist_value / map)
-    // LogRecord.body (e.g. ["event_id"], ["event_data", "TargetUserName"]).
-    AttributePath body_field = 2;
+    // Traverses nested fields inside a structured (`kvlist_value` / map)
+    // `LogRecord.body` (e.g. `["event_id"]`, `["event_data", "TargetUserName"]`).
+    AttributePath body_field_path = 2;
   }
 }

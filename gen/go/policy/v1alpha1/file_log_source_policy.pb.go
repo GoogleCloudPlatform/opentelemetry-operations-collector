@@ -41,13 +41,13 @@ const (
 //   - Windows: %ProgramData%\**\logs\**, %SystemDrive%\inetpub\logs\**
 //
 // Evaluation, Deduplication & Security Guardrails:
-//   - At least one `include` pattern is required; any `include` path outside the
-//     allowed OS log roots or targeting sensitive directories (/etc, /root,
-//     /proc, /sys, /var/run/secrets) is rejected (fail-open).
+//   - At least one `included_paths` pattern is required; any `included_paths`
+//     path outside the allowed OS log roots or targeting sensitive directories
+//     (/etc, /root, /proc, /sys, /var/run/secrets) is rejected (fail-open).
 //   - Multiple FileLogSourcePolicy instances merge into a single shared `filelog`
-//     receiver via the set union of `include` patterns (avoiding duplicate reads
-//     when globs overlap and preserving `file_storage` bookmarks across policy
-//     ID renames).
+//     receiver via the set union of `included_paths` patterns (avoiding duplicate
+//     reads when globs overlap and preserving `file_storage` bookmarks across
+//     policy ID renames).
 //   - Built-in Guardrails: Automatically sets `include_file_path: true` (so
 //     `LogFilterPolicy` can match on `log.file.path` / `log.file.name`) and
 //     excludes compressed binary archives (`*.gz`, `*.bz2`, `*.xz`, `*.zst`,
@@ -59,7 +59,7 @@ type FileLogSourcePolicy struct {
 	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	// File path glob patterns to tail (must fall within allowed OS log roots).
 	// At least one pattern is required.
-	Include       []string `protobuf:"bytes,2,rep,name=include,proto3" json:"include,omitempty"`
+	IncludedPaths []string `protobuf:"bytes,2,rep,name=included_paths,json=includedPaths,proto3" json:"included_paths,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -101,9 +101,9 @@ func (x *FileLogSourcePolicy) GetId() string {
 	return ""
 }
 
-func (x *FileLogSourcePolicy) GetInclude() []string {
+func (x *FileLogSourcePolicy) GetIncludedPaths() []string {
 	if x != nil {
-		return x.Include
+		return x.IncludedPaths
 	}
 	return nil
 }
@@ -112,10 +112,10 @@ var File_policy_v1alpha1_file_log_source_policy_proto protoreflect.FileDescripto
 
 const file_policy_v1alpha1_file_log_source_policy_proto_rawDesc = "" +
 	"\n" +
-	",policy/v1alpha1/file_log_source_policy.proto\x12 google.telemetry.policy.v1alpha1\"?\n" +
+	",policy/v1alpha1/file_log_source_policy.proto\x12 google.telemetry.policy.v1alpha1\"L\n" +
 	"\x13FileLogSourcePolicy\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12\x18\n" +
-	"\ainclude\x18\x02 \x03(\tR\aincludeB\xcc\x02\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12%\n" +
+	"\x0eincluded_paths\x18\x02 \x03(\tR\rincludedPathsB\xcc\x02\n" +
 	"$com.google.telemetry.policy.v1alpha1B\x18FileLogSourcePolicyProtoP\x01Zggithub.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1;policyv1alpha1\xa2\x02\x03GTP\xaa\x02 Google.Telemetry.Policy.V1alpha1\xca\x02 Google\\Telemetry\\Policy\\V1alpha1\xe2\x02,Google\\Telemetry\\Policy\\V1alpha1\\GPBMetadata\xea\x02#Google::Telemetry::Policy::V1alpha1b\x06proto3"
 
 var (

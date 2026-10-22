@@ -30,11 +30,11 @@ option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-col
 //   reassembly. Filter policies remain fast, stateless, and evaluated per span.
 // - Independent Decisions & Orphan Spans: Dropping a span does not drop its
 //   descendants. Dropping an intermediate span in a trace leaves child spans
-//   behind as orphans with a dangling parent_span_id.
+//   behind as orphans with a dangling `parent_span_id`.
 // - Drop Semantics: Telemetry passes through by default (default allow). When
-//   all matchers in `matches` evaluate to true for a span, the span is dropped.
+//   all matchers in `matchers` evaluate to true for a span, the span is dropped.
 //   To implement an allowlist that drops non-matching spans, authors specify
-//   negate: true on the matchers.
+//   `negated: true` on the matchers.
 message TraceFilterPolicy {
   // Unique identifier for the policy within its configuration scope
   // (e.g. a UUID or namespaced URI like "io.opentelemetry.operator/{namespace}/policies/drop-healthcheck-spans").
@@ -44,5 +44,5 @@ message TraceFilterPolicy {
   // All matchers in this list are ANDed together: all conditions must evaluate
   // to true for the span to be dropped.
   // At least one matcher is required; a policy with no matchers is invalid.
-  repeated TraceMatcher matches = 2;
+  repeated TraceMatcher matchers = 2;
 }

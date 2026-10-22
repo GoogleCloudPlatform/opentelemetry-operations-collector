@@ -1,19 +1,19 @@
 {
   "type": "trace_filter",
   "id": "drop-healthcheck-server-spans",
-  "matches": [
+  "matchers": [
     {
       "target": {
         "record_field": "SPAN_RECORD_FIELD_KIND"
       },
-      "equals": {
+      "equality": {
         "string_value": "SERVER"
       }
     },
     {
       "target": {
-        "span_attribute": {
-          "path": ["http.target"]
+        "span_attribute_path": {
+          "segments": ["http.target"]
         }
       },
       "glob": "/healthz"

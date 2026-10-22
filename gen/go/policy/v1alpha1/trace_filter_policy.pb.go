@@ -45,11 +45,11 @@ const (
 //     reassembly. Filter policies remain fast, stateless, and evaluated per span.
 //   - Independent Decisions & Orphan Spans: Dropping a span does not drop its
 //     descendants. Dropping an intermediate span in a trace leaves child spans
-//     behind as orphans with a dangling parent_span_id.
+//     behind as orphans with a dangling `parent_span_id`.
 //   - Drop Semantics: Telemetry passes through by default (default allow). When
-//     all matchers in `matches` evaluate to true for a span, the span is dropped.
+//     all matchers in `matchers` evaluate to true for a span, the span is dropped.
 //     To implement an allowlist that drops non-matching spans, authors specify
-//     negate: true on the matchers.
+//     `negated: true` on the matchers.
 type TraceFilterPolicy struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Unique identifier for the policy within its configuration scope
@@ -59,7 +59,7 @@ type TraceFilterPolicy struct {
 	// All matchers in this list are ANDed together: all conditions must evaluate
 	// to true for the span to be dropped.
 	// At least one matcher is required; a policy with no matchers is invalid.
-	Matches       []*TraceMatcher `protobuf:"bytes,2,rep,name=matches,proto3" json:"matches,omitempty"`
+	Matchers      []*TraceMatcher `protobuf:"bytes,2,rep,name=matchers,proto3" json:"matchers,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -101,9 +101,9 @@ func (x *TraceFilterPolicy) GetId() string {
 	return ""
 }
 
-func (x *TraceFilterPolicy) GetMatches() []*TraceMatcher {
+func (x *TraceFilterPolicy) GetMatchers() []*TraceMatcher {
 	if x != nil {
-		return x.Matches
+		return x.Matchers
 	}
 	return nil
 }
@@ -112,10 +112,10 @@ var File_policy_v1alpha1_trace_filter_policy_proto protoreflect.FileDescriptor
 
 const file_policy_v1alpha1_trace_filter_policy_proto_rawDesc = "" +
 	"\n" +
-	")policy/v1alpha1/trace_filter_policy.proto\x12 google.telemetry.policy.v1alpha1\x1a)policy/v1alpha1/common_policy_types.proto\"m\n" +
+	")policy/v1alpha1/trace_filter_policy.proto\x12 google.telemetry.policy.v1alpha1\x1a)policy/v1alpha1/common_policy_types.proto\"o\n" +
 	"\x11TraceFilterPolicy\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12H\n" +
-	"\amatches\x18\x02 \x03(\v2..google.telemetry.policy.v1alpha1.TraceMatcherR\amatchesB\xca\x02\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12J\n" +
+	"\bmatchers\x18\x02 \x03(\v2..google.telemetry.policy.v1alpha1.TraceMatcherR\bmatchersB\xca\x02\n" +
 	"$com.google.telemetry.policy.v1alpha1B\x16TraceFilterPolicyProtoP\x01Zggithub.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1;policyv1alpha1\xa2\x02\x03GTP\xaa\x02 Google.Telemetry.Policy.V1alpha1\xca\x02 Google\\Telemetry\\Policy\\V1alpha1\xe2\x02,Google\\Telemetry\\Policy\\V1alpha1\\GPBMetadata\xea\x02#Google::Telemetry::Policy::V1alpha1b\x06proto3"
 
 var (
@@ -136,7 +136,7 @@ var file_policy_v1alpha1_trace_filter_policy_proto_goTypes = []any{
 	(*TraceMatcher)(nil),      // 1: google.telemetry.policy.v1alpha1.TraceMatcher
 }
 var file_policy_v1alpha1_trace_filter_policy_proto_depIdxs = []int32{
-	1, // 0: google.telemetry.policy.v1alpha1.TraceFilterPolicy.matches:type_name -> google.telemetry.policy.v1alpha1.TraceMatcher
+	1, // 0: google.telemetry.policy.v1alpha1.TraceFilterPolicy.matchers:type_name -> google.telemetry.policy.v1alpha1.TraceMatcher
 	1, // [1:1] is the sub-list for method output_type
 	1, // [1:1] is the sub-list for method input_type
 	1, // [1:1] is the sub-list for extension type_name

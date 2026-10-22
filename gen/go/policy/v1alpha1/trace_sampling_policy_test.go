@@ -53,15 +53,15 @@ func TestTraceSamplingPolicy_WithMatchers(t *testing.T) {
 		Matchers: []*policyv1alpha1.TraceMatcher{
 			{
 				Target: &policyv1alpha1.TraceFieldSelector{
-					Target: &policyv1alpha1.TraceFieldSelector_ResourceAttribute{
-						ResourceAttribute: &policyv1alpha1.AttributePath{
-							Path: []string{"service.name"},
+					Target: &policyv1alpha1.TraceFieldSelector_ResourceAttributePath{
+						ResourceAttributePath: &policyv1alpha1.AttributePath{
+							Segments: []string{"service.name"},
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equals{
-					Equals: &policyv1alpha1.Value{
-						Value: &policyv1alpha1.Value_StringValue{
+				Predicate: &policyv1alpha1.TraceMatcher_Equality{
+					Equality: &policyv1alpha1.Value{
+						Kind: &policyv1alpha1.Value_StringValue{
 							StringValue: "checkout",
 						},
 					},
@@ -73,9 +73,9 @@ func TestTraceSamplingPolicy_WithMatchers(t *testing.T) {
 						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_KIND,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equals{
-					Equals: &policyv1alpha1.Value{
-						Value: &policyv1alpha1.Value_StringValue{
+				Predicate: &policyv1alpha1.TraceMatcher_Equality{
+					Equality: &policyv1alpha1.Value{
+						Kind: &policyv1alpha1.Value_StringValue{
 							StringValue: "CLIENT",
 						},
 					},
@@ -83,14 +83,14 @@ func TestTraceSamplingPolicy_WithMatchers(t *testing.T) {
 			},
 			{
 				Target: &policyv1alpha1.TraceFieldSelector{
-					Target: &policyv1alpha1.TraceFieldSelector_SpanAttribute{
-						SpanAttribute: &policyv1alpha1.AttributePath{
-							Path: []string{"db.system.name"},
+					Target: &policyv1alpha1.TraceFieldSelector_SpanAttributePath{
+						SpanAttributePath: &policyv1alpha1.AttributePath{
+							Segments: []string{"db.system.name"},
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Exists{
-					Exists: &emptypb.Empty{},
+				Predicate: &policyv1alpha1.TraceMatcher_Existence{
+					Existence: &emptypb.Empty{},
 				},
 			},
 			{

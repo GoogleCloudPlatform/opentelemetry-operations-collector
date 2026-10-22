@@ -21,18 +21,28 @@ import "google/protobuf/empty.proto";
 option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1;policyv1alpha1";
 
 // AttributePath specifies how to access an attribute value.
-// - A single-element array accesses a flat attribute (e.g. ["http.status_code"]).
-// - Multiple elements traverse nested maps (e.g. ["http", "request", "method"]).
+//
+// In OpenTelemetry, attribute keys at the top level frequently contain literal
+// dots (for example, `"service.name"` or `"http.request.method"`), while
+// attribute values can also be nested maps (`kvlist_value`). Using a list of
+// path segments rather than a single dot-separated string avoids ambiguity
+// between a flat key containing dots and a path through nested maps:
+// - A single-element list (e.g. `["http.request.method"]`) looks up a flat
+//   attribute whose literal key is `"http.request.method"`.
+// - A multi-element list (e.g. `["http", "request", "method"]`) traverses
+//   nested map (`kvlist_value`) levels in order: key `"http"`, then
+//   `"request"`, then `"method"`.
 message AttributePath {
-  // Path segments for attribute traversal.
-  repeated string path = 1;
+  // Ordered path segments to traverse. At least one segment is required
+  // (e.g. `["service.name"]` or `["http", "request", "method"]`).
+  repeated string segments = 1;
 }
 
 // Value carries a typed scalar for equality and containment comparisons.
 // Exactly one variant must be set.
 message Value {
   // The typed scalar value.
-  oneof value {
+  oneof kind {
     // String value.
     string string_value = 1;
 
@@ -50,11 +60,13 @@ message Value {
   }
 }
 
-// NumericValue carries a typed number for ordering comparisons (gt, gte, lt, lte).
+// NumericValue carries a typed number for ordering comparisons
+// (`exclusive_minimum`, `inclusive_minimum`, `exclusive_maximum`,
+// `inclusive_maximum`).
 // Exactly one variant must be set.
 message NumericValue {
   // The typed numeric value.
-  oneof value {
+  oneof kind {
     // 64-bit signed integer value.
     int64 int_value = 1;
 
@@ -71,75 +83,98 @@ message LogMatcher {
 
   // The comparison predicate to evaluate against the target value.
   // Exactly one predicate must be set.
+  //
+  // If the selected target field or attribute does not exist, or if its
+  // runtime value type is incompatible with the chosen predicate (for
+  // example, evaluating `glob` against a non-string value, or a numeric
+  // comparison against a string or boolean value), the predicate evaluates
+  // to `false` (prior to applying `negated`).
   oneof predicate {
     // Matches if the selected field or attribute exists.
-    // For attributes and structured log body fields (body_field), this
+    // For attributes and structured log body fields (`body_field_path`), this
     // evaluates to true if the attribute key or nested body path exists.
-    // For first-class fields (record_field, scope_field) that lack explicit
+    // For first-class fields (`record_field`, `scope_field`) that lack explicit
     // presence tracking in the OpenTelemetry data model, this evaluates to true
     // when the field is set to a non-default (non-zero/non-empty) value, and
-    // false when absent or default (e.g. empty string or 0).
-    google.protobuf.Empty exists = 10;
+    // false when absent or default (e.g. empty string or 0). Combine with
+    // `negated: true` to match when a field or attribute does NOT exist.
+    google.protobuf.Empty existence = 10;
 
     // Typed scalar equality match (supporting string, int64, bool, double, bytes).
-    Value equals = 11;
+    Value equality = 11;
 
     // Glob pattern match against the entire string value.
-    // Supports '*' (matches zero or more characters) and '?' (matches any
-    // single character). Matching is case-sensitive and anchored to the full
-    // string. Applies strictly to string fields and string attribute values.
+    // Supports `*` (matches zero or more characters) and `?` (matches any
+    // single character), for example `"http.*"` or `"err_?_code"`. Matching is
+    // case-sensitive and anchored to the full string. Applies strictly to
+    // string fields and string attribute values (evaluates to `false` for
+    // non-string targets).
     string glob = 12;
 
-    // Matches if the target numeric value is strictly greater than this value.
+    // Matches if the target numeric value is strictly greater than (>) this value.
     // Applies strictly to int64 and double fields and attribute values.
-    NumericValue gt = 13;
+    NumericValue exclusive_minimum = 13;
 
-    // Matches if the target numeric value is greater than or equal to this value.
+    // Matches if the target numeric value is greater than or equal to (>=) this value.
     // Applies strictly to int64 and double fields and attribute values.
-    NumericValue gte = 14;
+    NumericValue inclusive_minimum = 14;
 
-    // Matches if the target numeric value is strictly less than this value.
+    // Matches if the target numeric value is strictly less than (<) this value.
     // Applies strictly to int64 and double fields and attribute values.
-    NumericValue lt = 15;
+    NumericValue exclusive_maximum = 15;
 
-    // Matches if the target numeric value is less than or equal to this value.
+    // Matches if the target numeric value is less than or equal to (<=) this value.
     // Applies strictly to int64 and double fields and attribute values.
-    NumericValue lte = 16;
+    NumericValue inclusive_maximum = 16;
 
     // Value containment:
     // - For list (ArrayValue) attributes: matches if any element in the list equals this value.
-    // - For string fields or attribute values: matches if the string contains this value's string_value as a substring.
-    // - For bytes fields or attribute values: matches if the bytes contain this value's bytes_value as a subsequence.
-    Value contains = 17;
+    // - For string fields or attribute values: matches if the string contains this value's `string_value` as a substring.
+    // - For bytes fields or attribute values: matches if the bytes contain this value's `bytes_value` as a subsequence.
+    Value containment = 17;
   }
 
   // If true, inverts the result of the predicate (logical NOT).
-  bool negate = 2;
+  bool negated = 2;
 }
 
 // LogFieldSelector designates a first-class OTel log field, attribute, or metadata.
 message LogFieldSelector {
   oneof target {
-    // Standard first-class OpenTelemetry LogRecord fields (e.g. severity_number, body).
+    // A top-level field on the OTel LogRecord itself (for example,
+    // `LOG_RECORD_FIELD_BODY` or `LOG_RECORD_FIELD_SEVERITY_NUMBER`).
+    // First-class log record fields must be selected using `record_field` (or
+    // `body_field_path` for nested fields within a structured log body), not
+    // `log_attribute_path`.
     LogRecordField record_field = 1;
 
-    // Log record attribute by key or path (e.g. ["http.route"] or ["http", "method"]).
-    AttributePath log_attribute = 2;
+    // A key or nested path inside the LogRecord's `attributes` map (per-record
+    // attributes attached to the individual log entry, e.g. `["http.route"]` or
+    // `["http", "method"]`). This only inspects `LogRecord.attributes`;
+    // first-class log record fields (such as `body` or `severity_text`) must be
+    // selected via `record_field`.
+    AttributePath log_attribute_path = 2;
 
-    // Resource attribute by key or path (e.g. ["service.name"] or ["host", "id"]).
-    AttributePath resource_attribute = 3;
+    // A key or nested path inside the `Resource.attributes` map (attributes
+    // describing the entity producing the logs, e.g. `["service.name"]`,
+    // `["k8s.pod.name"]`, or `["host", "id"]`).
+    AttributePath resource_attribute_path = 3;
 
-    // Instrumentation scope attribute by key or path (e.g. ["library.name"]).
-    AttributePath scope_attribute = 4;
+    // A key or nested path inside the `InstrumentationScope.attributes` map
+    // (attributes attached to the logging library or instrumentation scope,
+    // e.g. `["library.name"]`). First-class scope fields (`name`, `version`,
+    // `schema_url`) must be selected via `scope_field`.
+    AttributePath scope_attribute_path = 4;
 
-    // Standard first-class OpenTelemetry InstrumentationScope fields (e.g. name, version).
+    // A top-level property of the `InstrumentationScope` (`SCOPE_FIELD_NAME`,
+    // `SCOPE_FIELD_VERSION`, or `SCOPE_FIELD_SCHEMA_URL`).
     ScopeField scope_field = 5;
 
-    // Traverses nested fields inside a structured (kvlist_value / map)
-    // LogRecord.body (e.g. ["event_id"], ["event_data", "TargetUserName"]).
-    // Evaluates to false (non-matching) if LogRecord.body is not a structured
+    // Traverses nested fields inside a structured (`kvlist_value` / map)
+    // `LogRecord.body` (e.g. `["event_id"]`, `["event_data", "TargetUserName"]`).
+    // Evaluates to false (non-matching) if `LogRecord.body` is not a structured
     // map or if the path does not exist.
-    AttributePath body_field = 6;
+    AttributePath body_field_path = 6;
   }
 }
 
@@ -151,68 +186,89 @@ message TraceMatcher {
 
   // The comparison predicate to evaluate against the target value.
   // Exactly one predicate must be set.
+  //
+  // If the selected target field or attribute does not exist, or if its
+  // runtime value type is incompatible with the chosen predicate (for
+  // example, evaluating `glob` against a non-string value, or a numeric
+  // comparison against a string or boolean value), the predicate evaluates
+  // to `false` (prior to applying `negated`).
   oneof predicate {
     // Matches if the selected field or attribute exists.
     // For attributes, this evaluates to true if the attribute key exists.
-    // For first-class fields (record_field, scope_field) that lack explicit
+    // For first-class fields (`record_field`, `scope_field`) that lack explicit
     // presence tracking in the OpenTelemetry data model, this evaluates to true
     // when the field is set to a non-default (non-zero/non-empty) value, and
-    // false when absent or default (e.g. absent parent_span_id on a root span,
-    // or empty string/unset).
-    google.protobuf.Empty exists = 10;
+    // false when absent or default (e.g. absent `parent_span_id` on a root span,
+    // or empty string/unset). Combine with `negated: true` to match when a field
+    // or attribute does NOT exist.
+    google.protobuf.Empty existence = 10;
 
     // Typed scalar equality match (supporting string, int64, bool, double, bytes).
-    Value equals = 11;
+    Value equality = 11;
 
     // Glob pattern match against the entire string value.
-    // Supports '*' (matches zero or more characters) and '?' (matches any
-    // single character). Matching is case-sensitive and anchored to the full
-    // string. Applies strictly to string fields and string attribute values.
+    // Supports `*` (matches zero or more characters) and `?` (matches any
+    // single character), for example `"http.*"` or `"err_?_code"`. Matching is
+    // case-sensitive and anchored to the full string. Applies strictly to
+    // string fields and string attribute values (evaluates to `false` for
+    // non-string targets).
     string glob = 12;
 
-    // Matches if the target numeric value is strictly greater than this value.
+    // Matches if the target numeric value is strictly greater than (>) this value.
     // Applies strictly to int64 and double fields and attribute values.
-    NumericValue gt = 13;
+    NumericValue exclusive_minimum = 13;
 
-    // Matches if the target numeric value is greater than or equal to this value.
+    // Matches if the target numeric value is greater than or equal to (>=) this value.
     // Applies strictly to int64 and double fields and attribute values.
-    NumericValue gte = 14;
+    NumericValue inclusive_minimum = 14;
 
-    // Matches if the target numeric value is strictly less than this value.
+    // Matches if the target numeric value is strictly less than (<) this value.
     // Applies strictly to int64 and double fields and attribute values.
-    NumericValue lt = 15;
+    NumericValue exclusive_maximum = 15;
 
-    // Matches if the target numeric value is less than or equal to this value.
+    // Matches if the target numeric value is less than or equal to (<=) this value.
     // Applies strictly to int64 and double fields and attribute values.
-    NumericValue lte = 16;
+    NumericValue inclusive_maximum = 16;
 
     // Value containment:
     // - For list (ArrayValue) attributes: matches if any element in the list equals this value.
-    // - For string fields or attribute values: matches if the string contains this value's string_value as a substring.
-    // - For bytes fields or attribute values: matches if the bytes contain this value's bytes_value as a subsequence.
-    Value contains = 17;
+    // - For string fields or attribute values: matches if the string contains this value's `string_value` as a substring.
+    // - For bytes fields or attribute values: matches if the bytes contain this value's `bytes_value` as a subsequence.
+    Value containment = 17;
   }
 
   // If true, inverts the result of the predicate (logical NOT).
-  bool negate = 2;
+  bool negated = 2;
 }
 
 // TraceFieldSelector designates a first-class OTel span field, attribute, or metadata.
 message TraceFieldSelector {
   oneof target {
-    // Standard first-class OpenTelemetry Span creation-time fields (e.g. name, kind).
+    // A top-level creation-time field on the OTel Span itself (for example,
+    // `SPAN_RECORD_FIELD_NAME` or `SPAN_RECORD_FIELD_KIND`). First-class span
+    // fields must be selected using `record_field`, not `span_attribute_path`.
     SpanRecordField record_field = 1;
 
-    // Span attribute by key or path (e.g. ["http.route"] or ["rpc", "service"]).
-    AttributePath span_attribute = 2;
+    // A key or nested path inside the Span's `attributes` map (per-span
+    // attributes attached to the individual span, e.g. `["http.route"]` or
+    // `["rpc", "service"]`). This only inspects `Span.attributes`; first-class
+    // span fields (such as span `name` or `kind`) must be selected via
+    // `record_field`.
+    AttributePath span_attribute_path = 2;
 
-    // Resource attribute by key or path (e.g. ["service.name"] or ["host", "id"]).
-    AttributePath resource_attribute = 3;
+    // A key or nested path inside the `Resource.attributes` map (attributes
+    // describing the entity producing the spans, e.g. `["service.name"]`,
+    // `["k8s.pod.name"]`, or `["host", "id"]`).
+    AttributePath resource_attribute_path = 3;
 
-    // Instrumentation scope attribute by key or path (e.g. ["library.name"]).
-    AttributePath scope_attribute = 4;
+    // A key or nested path inside the `InstrumentationScope.attributes` map
+    // (attributes attached to the tracer or instrumentation scope, e.g.
+    // `["library.name"]`). First-class scope fields (`name`, `version`,
+    // `schema_url`) must be selected via `scope_field`.
+    AttributePath scope_attribute_path = 4;
 
-    // Standard first-class OpenTelemetry InstrumentationScope fields (e.g. name, version).
+    // A top-level property of the `InstrumentationScope` (`SCOPE_FIELD_NAME`,
+    // `SCOPE_FIELD_VERSION`, or `SCOPE_FIELD_SCHEMA_URL`).
     ScopeField scope_field = 5;
   }
 }
@@ -222,35 +278,40 @@ message TraceFieldSelector {
 // Evaluation Semantics & Action Precedence:
 // - Default Allow: Telemetry records or streams pass through by default if no
 //   policy matches.
-// - Keep Overrides Drop: When multiple policies match a record, ACTION_KEEP
-//   always overrides ACTION_DROP (keep always overrides drop). ACTION_KEEP acts as
-//   an explicit exemption retaining matching records; it does not prune
-//   non-matching records. To implement an allowlist that prunes non-matching
-//   records, authors specify ACTION_DROP with negate: true on the matchers.
+// - Keep Overrides Drop (Order-Independent Exemption): Policies are evaluated
+//   in an order-independent manner. When multiple policies match a record,
+//   `ACTION_KEEP` always overrides `ACTION_DROP` (keep always overrides drop).
+//   `ACTION_KEEP` acts as an explicit exemption retaining matching records; it
+//   does not implicitly prune non-matching records. To implement an allowlist
+//   that prunes non-matching records, authors specify `ACTION_DROP` with
+//   `negated: true` on the matchers (or pair a broad `ACTION_DROP` policy with
+//   a narrower `ACTION_KEEP` exemption policy).
 // - Double-Applied Filtering (Pass 1 & Pass 2): When filter policies are
 //   evaluated around transformation stages (Pass 1 Pre-Transform and, if any
 //   transform policy modified the record, Pass 2 Post-Transform), both
-//   ACTION_KEEP and ACTION_DROP are re-evaluated statelessly in Pass 2 against
-//   the post-transform record (guaranteeing multi-hop consistency across SDK
-//   and Collector evaluation). Within each pass, ACTION_KEEP overrides
-//   ACTION_DROP; however, if a record survived Pass 1 only because an
-//   ACTION_KEEP rule matched an attribute that was subsequently overwritten,
-//   renamed, removed, or redacted during the transform stage such that
-//   ACTION_KEEP no longer matches in Pass 2 (while an ACTION_DROP rule still
-//   matches), the record is dropped in Pass 2.
+//   `ACTION_KEEP` and `ACTION_DROP` are re-evaluated statelessly in Pass 2
+//   against the post-transform record (guaranteeing multi-hop consistency
+//   across SDK and Collector evaluation). Within each pass, `ACTION_KEEP`
+//   overrides `ACTION_DROP`; however, if a record survived Pass 1 only because
+//   an `ACTION_KEEP` rule matched an attribute that was subsequently
+//   overwritten, renamed, removed, or redacted during the transform stage such
+//   that `ACTION_KEEP` no longer matches in Pass 2 (while an `ACTION_DROP` rule
+//   still matches), the record is dropped in Pass 2.
 enum Action {
   // Default unspecified action. A policy with an unspecified action is invalid.
   ACTION_UNSPECIFIED = 0;
 
-  // Keep the matching telemetry record and forward it to downstream pipelines.
+  // Exempt the matching telemetry record from `ACTION_DROP` policies and
+  // forward it to downstream pipelines.
   ACTION_KEEP = 1;
 
-  // Drop the matching telemetry record completely.
+  // Drop the matching telemetry record completely unless exempted by a matching
+  // `ACTION_KEEP` policy.
   ACTION_DROP = 2;
 }
 
 // ScopeField identifies standard first-class fields of an InstrumentationScope.
-// For presence checking with `exists`, these fields lack explicit presence
+// For presence checking with `existence`, these fields lack explicit presence
 // tracking in OpenTelemetry and evaluate to true when set to a non-empty string.
 enum ScopeField {
   // Default unspecified scope field.
@@ -267,7 +328,7 @@ enum ScopeField {
 }
 
 // LogRecordField identifies standard first-class fields of an OpenTelemetry LogRecord.
-// When evaluated with `exists`, first-class fields evaluate to true when set
+// When evaluated with `existence`, first-class fields evaluate to true when set
 // to a non-default (non-empty / non-zero) value.
 //
 // `LOG_RECORD_FIELD_SEVERITY_NUMBER` and `LOG_RECORD_FIELD_SEVERITY_TEXT` are
@@ -286,27 +347,28 @@ enum LogRecordField {
   LOG_RECORD_FIELD_SEVERITY_TEXT = 2;
 
   // The numerical severity of the log (1-24 per OpenTelemetry specification).
-  // Evaluates against typed `equals` (`int_value`) and numeric range
-  // comparisons (`gt`, `gte`, `lt`, `lte`).
+  // Evaluates against typed `equality` (`int_value`) and numeric range
+  // comparisons (`exclusive_minimum`, `inclusive_minimum`, `exclusive_maximum`,
+  // `inclusive_maximum`).
   LOG_RECORD_FIELD_SEVERITY_NUMBER = 3;
 
   // The 16-byte trace identifier associated with the log record.
-  // When evaluated against string predicates (`equals` with `string_value`,
-  // `glob`, `contains` with `string_value`), this matches against the
+  // When evaluated against string predicates (`equality` with `string_value`,
+  // `glob`, `containment` with `string_value`), this matches against the
   // 32-character lowercase hexadecimal string representation per the
   // OpenTelemetry / W3C Trace Context specification.
   LOG_RECORD_FIELD_TRACE_ID = 4;
 
   // The 8-byte span identifier associated with the log record.
-  // When evaluated against string predicates (`equals` with `string_value`,
-  // `glob`, `contains` with `string_value`), this matches against the
+  // When evaluated against string predicates (`equality` with `string_value`,
+  // `glob`, `containment` with `string_value`), this matches against the
   // 16-character lowercase hexadecimal string representation per the
   // OpenTelemetry / W3C Trace Context specification.
   LOG_RECORD_FIELD_SPAN_ID = 5;
 }
 
 // SpanRecordField identifies standard creation-time fields of an OpenTelemetry Span.
-// When evaluated with `exists`, first-class fields evaluate to true when set
+// When evaluated with `existence`, first-class fields evaluate to true when set
 // to a non-default (non-empty / non-zero) value.
 enum SpanRecordField {
   // Default unspecified span record field.
@@ -316,34 +378,35 @@ enum SpanRecordField {
   SPAN_RECORD_FIELD_NAME = 1;
 
   // The 16-byte trace identifier associated with the span.
-  // When evaluated against string predicates (`equals` with `string_value`,
-  // `glob`, `contains` with `string_value`), this matches against the
+  // When evaluated against string predicates (`equality` with `string_value`,
+  // `glob`, `containment` with `string_value`), this matches against the
   // 32-character lowercase hexadecimal string representation per the
   // OpenTelemetry / W3C Trace Context specification.
   SPAN_RECORD_FIELD_TRACE_ID = 2;
 
   // The 8-byte span identifier.
-  // When evaluated against string predicates (`equals` with `string_value`,
-  // `glob`, `contains` with `string_value`), this matches against the
+  // When evaluated against string predicates (`equality` with `string_value`,
+  // `glob`, `containment` with `string_value`), this matches against the
   // 16-character lowercase hexadecimal string representation per the
   // OpenTelemetry / W3C Trace Context specification.
   SPAN_RECORD_FIELD_SPAN_ID = 3;
 
   // The 8-byte parent span identifier.
   // Root spans have no parent span identifier (in OpenTelemetry data models,
-  // parent_span_id is empty or all zeroes).
-  // When evaluated with `exists`, this evaluates to false for root spans (and true
-  // with `negate: true`, allowing explicit targeting or exemption of root spans).
-  // When evaluated against string predicates (`equals` with `string_value`,
-  // `glob`, `contains` with `string_value`), a root span matches against the
+  // `parent_span_id` is empty or all zeroes).
+  // When evaluated with `existence`, this evaluates to false for root spans (and
+  // true with `negated: true`, allowing explicit targeting or exemption of root
+  // spans).
+  // When evaluated against string predicates (`equality` with `string_value`,
+  // `glob`, `containment` with `string_value`), a root span matches against the
   // empty string `""`. For child spans, this matches against the 16-character
   // lowercase hexadecimal string representation per the OpenTelemetry / W3C
   // Trace Context specification.
   SPAN_RECORD_FIELD_PARENT_SPAN_ID = 4;
 
   // The span kind (e.g. "INTERNAL", "SERVER", "CLIENT", "PRODUCER", "CONSUMER").
-  // When evaluated against string predicates (`equals` with `string_value`,
-  // `glob`, `contains` with `string_value`), this matches against uppercase
+  // When evaluated against string predicates (`equality` with `string_value`,
+  // `glob`, `containment` with `string_value`), this matches against uppercase
   // span kind string names without the "SPAN_KIND_" prefix (matching
   // OpenTelemetry specification conventions). Per the OpenTelemetry
   // specification, if span kind is unset or SPAN_KIND_UNSPECIFIED,

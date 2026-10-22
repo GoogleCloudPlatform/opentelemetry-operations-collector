@@ -34,61 +34,61 @@ func TestValue_Variants(t *testing.T) {
 		{
 			name: "string_value",
 			val: &policyv1alpha1.Value{
-				Value: &policyv1alpha1.Value_StringValue{
+				Kind: &policyv1alpha1.Value_StringValue{
 					StringValue: "production",
 				},
 			},
 			validate: func(t *testing.T, v *policyv1alpha1.Value) {
 				assert.Equal(t, "production", v.GetStringValue())
-				assert.IsType(t, &policyv1alpha1.Value_StringValue{}, v.GetValue())
+				assert.IsType(t, &policyv1alpha1.Value_StringValue{}, v.GetKind())
 			},
 		},
 		{
 			name: "int_value",
 			val: &policyv1alpha1.Value{
-				Value: &policyv1alpha1.Value_IntValue{
+				Kind: &policyv1alpha1.Value_IntValue{
 					IntValue: 200,
 				},
 			},
 			validate: func(t *testing.T, v *policyv1alpha1.Value) {
 				assert.Equal(t, int64(200), v.GetIntValue())
-				assert.IsType(t, &policyv1alpha1.Value_IntValue{}, v.GetValue())
+				assert.IsType(t, &policyv1alpha1.Value_IntValue{}, v.GetKind())
 			},
 		},
 		{
 			name: "bool_value",
 			val: &policyv1alpha1.Value{
-				Value: &policyv1alpha1.Value_BoolValue{
+				Kind: &policyv1alpha1.Value_BoolValue{
 					BoolValue: true,
 				},
 			},
 			validate: func(t *testing.T, v *policyv1alpha1.Value) {
 				assert.True(t, v.GetBoolValue())
-				assert.IsType(t, &policyv1alpha1.Value_BoolValue{}, v.GetValue())
+				assert.IsType(t, &policyv1alpha1.Value_BoolValue{}, v.GetKind())
 			},
 		},
 		{
 			name: "double_value",
 			val: &policyv1alpha1.Value{
-				Value: &policyv1alpha1.Value_DoubleValue{
+				Kind: &policyv1alpha1.Value_DoubleValue{
 					DoubleValue: 3.14159,
 				},
 			},
 			validate: func(t *testing.T, v *policyv1alpha1.Value) {
 				assert.InDelta(t, 3.14159, v.GetDoubleValue(), 0.00001)
-				assert.IsType(t, &policyv1alpha1.Value_DoubleValue{}, v.GetValue())
+				assert.IsType(t, &policyv1alpha1.Value_DoubleValue{}, v.GetKind())
 			},
 		},
 		{
 			name: "bytes_value",
 			val: &policyv1alpha1.Value{
-				Value: &policyv1alpha1.Value_BytesValue{
+				Kind: &policyv1alpha1.Value_BytesValue{
 					BytesValue: []byte{0x01, 0x02, 0x03, 0x04},
 				},
 			},
 			validate: func(t *testing.T, v *policyv1alpha1.Value) {
 				assert.Equal(t, []byte{0x01, 0x02, 0x03, 0x04}, v.GetBytesValue())
-				assert.IsType(t, &policyv1alpha1.Value_BytesValue{}, v.GetValue())
+				assert.IsType(t, &policyv1alpha1.Value_BytesValue{}, v.GetKind())
 			},
 		},
 	}
@@ -125,25 +125,25 @@ func TestNumericValue_Variants(t *testing.T) {
 		{
 			name: "int_value",
 			num: &policyv1alpha1.NumericValue{
-				Value: &policyv1alpha1.NumericValue_IntValue{
+				Kind: &policyv1alpha1.NumericValue_IntValue{
 					IntValue: 404,
 				},
 			},
 			validate: func(t *testing.T, n *policyv1alpha1.NumericValue) {
 				assert.Equal(t, int64(404), n.GetIntValue())
-				assert.IsType(t, &policyv1alpha1.NumericValue_IntValue{}, n.GetValue())
+				assert.IsType(t, &policyv1alpha1.NumericValue_IntValue{}, n.GetKind())
 			},
 		},
 		{
 			name: "double_value",
 			num: &policyv1alpha1.NumericValue{
-				Value: &policyv1alpha1.NumericValue_DoubleValue{
+				Kind: &policyv1alpha1.NumericValue_DoubleValue{
 					DoubleValue: 99.99,
 				},
 			},
 			validate: func(t *testing.T, n *policyv1alpha1.NumericValue) {
 				assert.InDelta(t, 99.99, n.GetDoubleValue(), 0.001)
-				assert.IsType(t, &policyv1alpha1.NumericValue_DoubleValue{}, n.GetValue())
+				assert.IsType(t, &policyv1alpha1.NumericValue_DoubleValue{}, n.GetKind())
 			},
 		},
 	}
@@ -177,13 +177,13 @@ func TestAttributePath_Serialization(t *testing.T) {
 		{
 			name: "single_segment_flat",
 			path: &policyv1alpha1.AttributePath{
-				Path: []string{"http.status_code"},
+				Segments: []string{"http.status_code"},
 			},
 		},
 		{
 			name: "multi_segment_nested",
 			path: &policyv1alpha1.AttributePath{
-				Path: []string{"http", "request", "headers", "authorization"},
+				Segments: []string{"http", "request", "headers", "authorization"},
 			},
 		},
 	}
@@ -196,7 +196,7 @@ func TestAttributePath_Serialization(t *testing.T) {
 			unmarshaled := &policyv1alpha1.AttributePath{}
 			require.NoError(t, proto.Unmarshal(data, unmarshaled))
 			assert.True(t, proto.Equal(tc.path, unmarshaled))
-			assert.Equal(t, tc.path.GetPath(), unmarshaled.GetPath())
+			assert.Equal(t, tc.path.GetSegments(), unmarshaled.GetSegments())
 
 			jsonData, err := protojson.Marshal(tc.path)
 			require.NoError(t, err)
@@ -204,7 +204,7 @@ func TestAttributePath_Serialization(t *testing.T) {
 			jsonUnmarshaled := &policyv1alpha1.AttributePath{}
 			require.NoError(t, protojson.Unmarshal(jsonData, jsonUnmarshaled))
 			assert.True(t, proto.Equal(tc.path, jsonUnmarshaled))
-			assert.Equal(t, tc.path.GetPath(), jsonUnmarshaled.GetPath())
+			assert.Equal(t, tc.path.GetSegments(), jsonUnmarshaled.GetSegments())
 		})
 	}
 }
@@ -229,40 +229,40 @@ func TestLogFieldSelector_Variants(t *testing.T) {
 		{
 			name: "log_attribute",
 			selector: &policyv1alpha1.LogFieldSelector{
-				Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
-					LogAttribute: &policyv1alpha1.AttributePath{
-						Path: []string{"http", "method"},
+				Target: &policyv1alpha1.LogFieldSelector_LogAttributePath{
+					LogAttributePath: &policyv1alpha1.AttributePath{
+						Segments: []string{"http", "method"},
 					},
 				},
 			},
 			validate: func(t *testing.T, s *policyv1alpha1.LogFieldSelector) {
-				assert.Equal(t, []string{"http", "method"}, s.GetLogAttribute().GetPath())
+				assert.Equal(t, []string{"http", "method"}, s.GetLogAttributePath().GetSegments())
 			},
 		},
 		{
 			name: "resource_attribute",
 			selector: &policyv1alpha1.LogFieldSelector{
-				Target: &policyv1alpha1.LogFieldSelector_ResourceAttribute{
-					ResourceAttribute: &policyv1alpha1.AttributePath{
-						Path: []string{"service.name"},
+				Target: &policyv1alpha1.LogFieldSelector_ResourceAttributePath{
+					ResourceAttributePath: &policyv1alpha1.AttributePath{
+						Segments: []string{"service.name"},
 					},
 				},
 			},
 			validate: func(t *testing.T, s *policyv1alpha1.LogFieldSelector) {
-				assert.Equal(t, []string{"service.name"}, s.GetResourceAttribute().GetPath())
+				assert.Equal(t, []string{"service.name"}, s.GetResourceAttributePath().GetSegments())
 			},
 		},
 		{
 			name: "scope_attribute",
 			selector: &policyv1alpha1.LogFieldSelector{
-				Target: &policyv1alpha1.LogFieldSelector_ScopeAttribute{
-					ScopeAttribute: &policyv1alpha1.AttributePath{
-						Path: []string{"library.name"},
+				Target: &policyv1alpha1.LogFieldSelector_ScopeAttributePath{
+					ScopeAttributePath: &policyv1alpha1.AttributePath{
+						Segments: []string{"library.name"},
 					},
 				},
 			},
 			validate: func(t *testing.T, s *policyv1alpha1.LogFieldSelector) {
-				assert.Equal(t, []string{"library.name"}, s.GetScopeAttribute().GetPath())
+				assert.Equal(t, []string{"library.name"}, s.GetScopeAttributePath().GetSegments())
 			},
 		},
 		{
@@ -279,15 +279,15 @@ func TestLogFieldSelector_Variants(t *testing.T) {
 		{
 			name: "body_field_nested",
 			selector: &policyv1alpha1.LogFieldSelector{
-				Target: &policyv1alpha1.LogFieldSelector_BodyField{
-					BodyField: &policyv1alpha1.AttributePath{
-						Path: []string{"event_data", "TargetUserName"},
+				Target: &policyv1alpha1.LogFieldSelector_BodyFieldPath{
+					BodyFieldPath: &policyv1alpha1.AttributePath{
+						Segments: []string{"event_data", "TargetUserName"},
 					},
 				},
 			},
 			validate: func(t *testing.T, s *policyv1alpha1.LogFieldSelector) {
-				assert.Equal(t, []string{"event_data", "TargetUserName"}, s.GetBodyField().GetPath())
-				assert.IsType(t, &policyv1alpha1.LogFieldSelector_BodyField{}, s.GetTarget())
+				assert.Equal(t, []string{"event_data", "TargetUserName"}, s.GetBodyFieldPath().GetSegments())
+				assert.IsType(t, &policyv1alpha1.LogFieldSelector_BodyFieldPath{}, s.GetTarget())
 			},
 		},
 	}

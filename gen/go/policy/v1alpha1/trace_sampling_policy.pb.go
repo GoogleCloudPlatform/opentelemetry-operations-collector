@@ -41,28 +41,50 @@ const (
 //
 // Evaluation & Precedence Semantics:
 //   - Default Disposition & Fail-Open: Spans pass through unsampled by default
-//     (default allow) when no valid TraceSamplingPolicy is configured. A policy
-//     with an empty `id` or a `sampling_percentage` outside the valid range
-//     (0.0, 100.0] (including 0.0, negative values, > 100.0, NaN, or Inf) is
-//     invalid and ignored (fail-open).
-//   - Stateless Span-Level Evaluation: Spans are evaluated independently without
-//     trace reassembly using the randomness value (`ot=rv`) in W3C `tracestate`
-//     (or the lower 56 bits of `trace_id` when `ot=rv` is absent), ensuring all
-//     spans in a trace receive the same deterministic sampling decision.
+//     (default allow) when no matching valid TraceSamplingPolicy is configured.
+//     A policy with an empty `id`, a `sampling_percentage` outside the valid
+//     range (0.0, 100.0] (including 0.0, negative values, > 100.0, NaN, or Inf),
+//     or any malformed `TraceMatcher` in `matchers` is invalid and ignored
+//     (fail-open).
+//   - Conditional & Unconditional Matching: If `matchers` is empty, the policy
+//     matches all spans unconditionally (setting a global baseline sampling
+//     rate). If `matchers` is non-empty, all matchers are ANDed together and the
+//     policy only applies to spans for which every matcher evaluates to true.
+//   - Stateless Span-Level Evaluation & Partial Traces: Spans are evaluated
+//     independently without trace reassembly using the randomness value (`ot=rv`)
+//     in W3C `tracestate` (or the lower 56 bits of `trace_id` when `ot=rv` is
+//     absent). When `matchers` is empty or only matches trace-constant fields
+//     (such as resource attributes when all spans in a trace share the same
+//     Resource, or `SPAN_RECORD_FIELD_TRACE_ID`), all spans in a trace receive
+//     the same deterministic sampling decision, keeping or dropping entire traces
+//     intact. When `matchers` targets span-level fields (`SPAN_RECORD_FIELD_NAME`,
+//     `SPAN_RECORD_FIELD_KIND`, `SPAN_RECORD_FIELD_SPAN_ID`,
+//     `SPAN_RECORD_FIELD_PARENT_SPAN_ID`, span attributes, or instrumentation
+//     scope fields/attributes when scopes vary across a trace), matching is
+//     evaluated per span and may sample only a subset of spans within a trace,
+//     producing partial traces with orphaned child spans whose `parent_span_id`
+//     references a dropped span.
 //   - Consistent Threshold Evaluation: Sampling percentage `p` in (0.0, 100.0]
 //     is evaluated in `equalizing` mode per the W3C TraceState Probability
 //     Sampling specification and updates `ot=th` in `tracestate`.
 //   - Idempotent Multi-Policy & Multi-Hop Precedence: When multiple
-//     TraceSamplingPolicy instances apply (on the same collector or across
-//     multiple hops), the effective sampling rate is `min(p_i)`.
+//     TraceSamplingPolicy instances match a span (on the same collector or across
+//     multiple hops), the effective sampling rate for that span is `min(p_i)`
+//     across all matching policies.
 type TraceSamplingPolicy struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Unique identifier for the policy within its configuration scope.
 	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	// Probabilistic sampling percentage in the range (0.0, 100.0]. Required.
 	SamplingPercentage float64 `protobuf:"fixed64,2,opt,name=sampling_percentage,json=samplingPercentage,proto3" json:"sampling_percentage,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// Optional conditions evaluated against incoming spans.
+	// When empty, this sampling policy applies unconditionally to all spans.
+	// When non-empty, all matchers in this list are ANDed together: all
+	// conditions must evaluate to true for this sampling policy to apply to the
+	// span.
+	Matchers      []*TraceMatcher `protobuf:"bytes,3,rep,name=matchers,proto3" json:"matchers,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *TraceSamplingPolicy) Reset() {
@@ -109,14 +131,22 @@ func (x *TraceSamplingPolicy) GetSamplingPercentage() float64 {
 	return 0
 }
 
+func (x *TraceSamplingPolicy) GetMatchers() []*TraceMatcher {
+	if x != nil {
+		return x.Matchers
+	}
+	return nil
+}
+
 var File_policy_v1alpha1_trace_sampling_policy_proto protoreflect.FileDescriptor
 
 const file_policy_v1alpha1_trace_sampling_policy_proto_rawDesc = "" +
 	"\n" +
-	"+policy/v1alpha1/trace_sampling_policy.proto\x12 google.telemetry.policy.v1alpha1\"V\n" +
+	"+policy/v1alpha1/trace_sampling_policy.proto\x12 google.telemetry.policy.v1alpha1\x1a)policy/v1alpha1/common_policy_types.proto\"\xa2\x01\n" +
 	"\x13TraceSamplingPolicy\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12/\n" +
-	"\x13sampling_percentage\x18\x02 \x01(\x01R\x12samplingPercentageB\xcc\x02\n" +
+	"\x13sampling_percentage\x18\x02 \x01(\x01R\x12samplingPercentage\x12J\n" +
+	"\bmatchers\x18\x03 \x03(\v2..google.telemetry.policy.v1alpha1.TraceMatcherR\bmatchersB\xcc\x02\n" +
 	"$com.google.telemetry.policy.v1alpha1B\x18TraceSamplingPolicyProtoP\x01Zggithub.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1;policyv1alpha1\xa2\x02\x03GTP\xaa\x02 Google.Telemetry.Policy.V1alpha1\xca\x02 Google\\Telemetry\\Policy\\V1alpha1\xe2\x02,Google\\Telemetry\\Policy\\V1alpha1\\GPBMetadata\xea\x02#Google::Telemetry::Policy::V1alpha1b\x06proto3"
 
 var (
@@ -134,13 +164,15 @@ func file_policy_v1alpha1_trace_sampling_policy_proto_rawDescGZIP() []byte {
 var file_policy_v1alpha1_trace_sampling_policy_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
 var file_policy_v1alpha1_trace_sampling_policy_proto_goTypes = []any{
 	(*TraceSamplingPolicy)(nil), // 0: google.telemetry.policy.v1alpha1.TraceSamplingPolicy
+	(*TraceMatcher)(nil),        // 1: google.telemetry.policy.v1alpha1.TraceMatcher
 }
 var file_policy_v1alpha1_trace_sampling_policy_proto_depIdxs = []int32{
-	0, // [0:0] is the sub-list for method output_type
-	0, // [0:0] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	1, // 0: google.telemetry.policy.v1alpha1.TraceSamplingPolicy.matchers:type_name -> google.telemetry.policy.v1alpha1.TraceMatcher
+	1, // [1:1] is the sub-list for method output_type
+	1, // [1:1] is the sub-list for method input_type
+	1, // [1:1] is the sub-list for extension type_name
+	1, // [1:1] is the sub-list for extension extendee
+	0, // [0:1] is the sub-list for field type_name
 }
 
 func init() { file_policy_v1alpha1_trace_sampling_policy_proto_init() }
@@ -148,6 +180,7 @@ func file_policy_v1alpha1_trace_sampling_policy_proto_init() {
 	if File_policy_v1alpha1_trace_sampling_policy_proto != nil {
 		return
 	}
+	file_policy_v1alpha1_common_policy_types_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

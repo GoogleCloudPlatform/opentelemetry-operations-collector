@@ -2,10 +2,10 @@
   "type": "log_filter",
   "id": "drop-debug-logs",
   "action": "ACTION_DROP",
-  "matches": [
+  "matchers": [
     {
       "target": { "record_field": "LOG_RECORD_FIELD_SEVERITY_NUMBER" },
-      "lt": { "int_value": 9 }
+      "exclusive_maximum": { "int_value": 9 }
     }
   ]
 }

@@ -184,6 +184,13 @@ type SourcePolicy interface {
 	TracesPipelines(preExportProcessors []component.ID, exporters []component.ID, extensions []component.ID) (*confmap.Conf, error)
 }
 
+// ConsolidatableSourcePolicy is an optional interface implemented by SourcePolicy types
+// where multiple policies of the same type merge into a single shared receiver instance.
+type ConsolidatableSourcePolicy interface {
+	SourcePolicy
+	Consolidate(policies []SourcePolicy) (SourcePolicy, error)
+}
+
 // DestinationPolicy is an extended interface that any Destination policy
 // will implement.
 type DestinationPolicy interface {

@@ -463,6 +463,13 @@ func TestFilterPolicyDriversRegistered(t *testing.T) {
 				},
 			},
 		},
+		{
+			policyType: "journald_source",
+			raw: map[string]any{
+				"type": "journald_source",
+				"id":   "test-journald",
+			},
+		},
 	} {
 		t.Run(tc.policyType, func(t *testing.T) {
 			pol, err := googlepolicy.LoadPolicy(tc.policyType, tc.raw)
@@ -688,6 +695,57 @@ func TestRetrieve_RecordsPolicyEvaluateErrorEventForFailedPoliciesWithClass(t *t
 		"error.type":                 "policy_type_not_found",
 		"context":                    "context.Background.WithValue(FLEET_ID, 1234)",
 	}, entries[1].ContextMap())
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestRetrieve_MultipleJournaldSourcePoliciesConsolidated(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	p := createProvider()
+
+	p1, err := googlepolicy.LoadPolicy("journald_source", map[string]any{
+		"type": "journald_source",
+		"id":   "host-journal-1",
+	})
+	require.NoError(t, err)
+
+	p2, err := googlepolicy.LoadPolicy("journald_source", map[string]any{
+		"type": "journald_source",
+		"id":   "host-journal-2",
+	})
+	require.NoError(t, err)
+
+	ps := &googlepolicy.PolicySet{
+		RevisionID: "rev-multi-journald",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			"policy-1": {PolicyObj: p1},
+			"policy-2": {PolicyObj: p2},
+		},
+	}
+	googlepolicy.SetActivePolicySet(ps)
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+
+	raw := conf.ToStringMap()
+	receivers, ok := raw["receivers"].(map[string]any)
+	require.True(t, ok)
+
+	// Exactly 1 journald receiver is present
+	require.Contains(t, receivers, "journald")
+
+	pipelines, ok := raw["service"].(map[string]any)["pipelines"].(map[string]any)
+	require.True(t, ok)
+	require.Contains(t, pipelines, "logs/journald")
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }

@@ -85,7 +85,7 @@ func fuzzMetricSeedPolicies() []*policyv1alpha1.MetricFilterPolicy {
 		{
 			Id:     "projects/123/locations/us-central1/policySets/ps-1/policies/drop-metric-name",
 			Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-			Matches: []*policyv1alpha1.MetricMatcher{
+			Matchers: []*policyv1alpha1.MetricMatcher{
 				{
 					Target: descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME),
 					Predicate: &policyv1alpha1.MetricMatcher_Glob{
@@ -97,32 +97,32 @@ func fuzzMetricSeedPolicies() []*policyv1alpha1.MetricFilterPolicy {
 		{
 			Id:     "keep-sum-datapoint-attr",
 			Action: policyv1alpha1.Action_ACTION_KEEP.Enum(),
-			Matches: []*policyv1alpha1.MetricMatcher{
+			Matchers: []*policyv1alpha1.MetricMatcher{
 				{
 					Target: descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE),
-					Predicate: &policyv1alpha1.MetricMatcher_Equals{
-						Equals: stringValue("SUM"),
+					Predicate: &policyv1alpha1.MetricMatcher_Equality{
+						Equality: stringValue("SUM"),
 					},
 				},
 				{
 					Target: descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_IS_MONOTONIC),
-					Predicate: &policyv1alpha1.MetricMatcher_Equals{
-						Equals: &policyv1alpha1.Value{
-							Value: &policyv1alpha1.Value_BoolValue{BoolValue: true},
+					Predicate: &policyv1alpha1.MetricMatcher_Equality{
+						Equality: &policyv1alpha1.Value{
+							Kind: &policyv1alpha1.Value_BoolValue{BoolValue: true},
 						},
 					},
 				},
 				{
 					Target: datapointTarget("metadata", "env"),
-					Predicate: &policyv1alpha1.MetricMatcher_Equals{
-						Equals: stringValue("prod"),
+					Predicate: &policyv1alpha1.MetricMatcher_Equality{
+						Equality: stringValue("prod"),
 					},
 				},
 				{
 					Target: datapointTarget("http.status_code"),
-					Predicate: &policyv1alpha1.MetricMatcher_Gte{
-						Gte: &policyv1alpha1.NumericValue{
-							Value: &policyv1alpha1.NumericValue_IntValue{IntValue: 200},
+					Predicate: &policyv1alpha1.MetricMatcher_InclusiveMinimum{
+						InclusiveMinimum: &policyv1alpha1.NumericValue{
+							Kind: &policyv1alpha1.NumericValue_IntValue{IntValue: 200},
 						},
 					},
 				},
@@ -131,21 +131,21 @@ func fuzzMetricSeedPolicies() []*policyv1alpha1.MetricFilterPolicy {
 		{
 			Id:     "drop-temporality-and-scope",
 			Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-			Matches: []*policyv1alpha1.MetricMatcher{
+			Matchers: []*policyv1alpha1.MetricMatcher{
 				{
 					Target: descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_AGGREGATION_TEMPORALITY),
-					Predicate: &policyv1alpha1.MetricMatcher_Equals{
-						Equals: stringValue("DELTA"),
+					Predicate: &policyv1alpha1.MetricMatcher_Equality{
+						Equality: stringValue("DELTA"),
 					},
 				},
 				{
 					Target:    resourceTarget("cloud.zone"),
-					Predicate: &policyv1alpha1.MetricMatcher_Exists{Exists: &emptypb.Empty{}},
+					Predicate: &policyv1alpha1.MetricMatcher_Existence{Existence: &emptypb.Empty{}},
 				},
 				{
 					Target: scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_NAME),
-					Predicate: &policyv1alpha1.MetricMatcher_Contains{
-						Contains: stringValue("library"),
+					Predicate: &policyv1alpha1.MetricMatcher_Containment{
+						Containment: stringValue("library"),
 					},
 				},
 			},

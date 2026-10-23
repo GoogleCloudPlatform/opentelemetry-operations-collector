@@ -485,6 +485,7 @@ func isPathPrefix(prefix, full []string) bool {
 	}
 	return true
 }
+
 func bodyExists(v pcommon.Value) bool {
 	switch v.Type() {
 	case pcommon.ValueTypeEmpty:

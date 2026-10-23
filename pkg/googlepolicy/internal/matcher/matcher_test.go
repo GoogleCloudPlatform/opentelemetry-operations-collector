@@ -686,3 +686,39 @@ func TestEvalPathValueAndPathExists(t *testing.T) {
 	_, ok = EvalPathValue(attrs, []PathStep{{Key: "top"}, {Key: "child"}})
 	assert.False(t, ok)
 }
+
+func TestCompileStringRedactor(t *testing.T) {
+	// Full replacement when regex is empty.
+	redactAll, err := CompileStringRedactor("", "[REDACTED]")
+	require.NoError(t, err)
+	res, mod := redactAll("secret token 12345")
+	assert.True(t, mod)
+	assert.Equal(t, "[REDACTED]", res)
+
+	// No-op if already equal to replacement.
+	_, mod = redactAll("[REDACTED]")
+	assert.False(t, mod)
+
+	// Regex pattern replacement.
+	redactSSN, err := CompileStringRedactor(`\d{3}-\d{2}-\d{4}`, "XXX-XX-XXXX")
+	require.NoError(t, err)
+
+	res, mod = redactSSN("User SSN is 123-45-6789.")
+	assert.True(t, mod)
+	assert.Equal(t, "User SSN is XXX-XX-XXXX.", res)
+
+	// No match returns false.
+	_, mod = redactSSN("No sensitive data here.")
+	assert.False(t, mod)
+
+	// Capture groups.
+	maskEmail, err := CompileStringRedactor(`([a-zA-Z0-9._%+-]+)@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})`, "$1@***")
+	require.NoError(t, err)
+	res, mod = maskEmail("Contact support at alice@example.com for help")
+	assert.True(t, mod)
+	assert.Equal(t, "Contact support at alice@*** for help", res)
+
+	// Invalid regex returns error.
+	_, err = CompileStringRedactor("[invalid", "val")
+	assert.Error(t, err)
+}

@@ -1,0 +1,17 @@
+{
+  "type": "log_transform",
+  "id": "z-rename-legacy",
+  "rename": {
+    "source": {
+      "log_attribute_path": {
+        "segments": ["legacy_account_id"]
+      }
+    },
+    "target": {
+      "body_field_path": {
+        "segments": ["account", "id"]
+      }
+    },
+    "upsert": false
+  }
+}

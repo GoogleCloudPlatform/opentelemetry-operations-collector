@@ -52,6 +52,9 @@ func NewEvaluator(policies []googlepolicy.TransformationPolicy) (*Evaluator, err
 		case googlepolicy.LogFilterPolicyEvaluator:
 			ev.addLogFilterPolicy(p)
 		case googlepolicy.LogTransformPolicyEvaluator:
+			if p.TransformStage() == googlepolicy.TransformStageUnspecified {
+				return nil, fmt.Errorf("transformation policy %q has unspecified transform stage", p.PolicyName())
+			}
 			ev.addLogTransformPolicy(p)
 		case googlepolicy.MetricFilterPolicyEvaluator:
 			ev.addMetricFilterPolicy(p)

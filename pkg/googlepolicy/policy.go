@@ -126,8 +126,10 @@ const (
 type TransformStage uint8
 
 const (
+	// TransformStageUnspecified indicates an uninitialized or unknown transform stage.
+	TransformStageUnspecified TransformStage = iota
 	// TransformStageRename executes first to standardize legacy attribute keys.
-	TransformStageRename TransformStage = iota + 1
+	TransformStageRename
 	// TransformStageAdd executes second to inject tags or fallback defaults.
 	TransformStageAdd
 	// TransformStageRemove executes third to delete unneeded attributes before regex scrubbing.

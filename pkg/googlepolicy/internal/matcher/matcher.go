@@ -512,6 +512,10 @@ func CompilePathRemover(attrPath *policyv1alpha1.AttributePath, kind string) (fu
 	}, nil
 }
 
+// findExistingParentMap walks attrs along the provided path prefix without
+// mutating or creating intermediate maps. It returns the leaf's parent map and
+// true if all prefix steps exist and resolve to maps, or (pcommon.Map{}, false)
+// if any ancestor is missing or not a map.
 func findExistingParentMap(attrs pcommon.Map, prefix []PathStep) (pcommon.Map, bool) {
 	if attrs == (pcommon.Map{}) {
 		return pcommon.Map{}, false

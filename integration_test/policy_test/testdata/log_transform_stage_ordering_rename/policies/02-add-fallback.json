@@ -3,8 +3,8 @@
   "id": "m-add-fallback",
   "add": {
     "target": {
-      "body_field": {
-        "path": ["account", "id"]
+      "body_field_path": {
+        "segments": ["account", "id"]
       }
     },
     "value": { "string_value": "guest" },

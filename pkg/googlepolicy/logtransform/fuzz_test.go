@@ -46,9 +46,17 @@ func buildFuzzLogContexts(body, severityText, attrKey, attrStr string, severityN
 	edgeAttrs.PutEmptySlice("empty_slice")
 	edgeAttrs.PutEmptyMap("empty_map")
 
+	mapBodyLogs := plog.NewLogs()
+	mapBodyRL := mapBodyLogs.ResourceLogs().AppendEmpty()
+	mapBodySL := mapBodyRL.ScopeLogs().AppendEmpty()
+	mapBodyLR := mapBodySL.LogRecords().AppendEmpty()
+	mapBodyLR.Body().SetEmptyMap().PutStr("event_id", "evt-fuzz")
+	mapBodyLR.Body().Map().PutEmptyMap("event_data").PutStr("userId", "user-42")
+
 	return []googlepolicy.LogContext{
 		logContext(lr, sl, rl),
 		logContext(edgeLR, edgeSL, edgeRL),
+		logContext(mapBodyLR, mapBodySL, mapBodyRL),
 		{},
 		dynamicLogContext(body, severityText, attrKey, attrStr, severityNum, attrInt, attrFloat, attrBool),
 	}
@@ -167,6 +175,14 @@ func fuzzLogTransformSeedPolicies() []*policyv1alpha1.LogTransformPolicy {
 			Action: &policyv1alpha1.LogTransformPolicy_Remove{
 				Remove: &policyv1alpha1.LogRemoveAction{
 					Target: logAttrSelector("feature.enabled"),
+				},
+			},
+		},
+		{
+			Id: "remove-nested-body-field",
+			Action: &policyv1alpha1.LogTransformPolicy_Remove{
+				Remove: &policyv1alpha1.LogRemoveAction{
+					Target: logBodyFieldSelector("event_data", "userId"),
 				},
 			},
 		},

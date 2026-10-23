@@ -172,9 +172,13 @@ func logAttrSelector(path ...string) *policyv1alpha1.LogAttributeSelector {
 func addAction(target *policyv1alpha1.LogTargetSelector, val *policyv1alpha1.Value, upsert bool) *policyv1alpha1.LogTransformPolicy_Addition {
 	return &policyv1alpha1.LogTransformPolicy_Addition{
 		Addition: &policyv1alpha1.LogAddAction{
-			Target:        target,
-			Value:         val,
-			UpsertEnabled: proto.Bool(upsert),
+			Additions: []*policyv1alpha1.LogAddition{
+				{
+					Target:        target,
+					Value:         val,
+					UpsertEnabled: proto.Bool(upsert),
+				},
+			},
 		},
 	}
 }
@@ -190,7 +194,11 @@ func logBodyFieldSelector(path ...string) *policyv1alpha1.LogAttributeSelector {
 func removeAction(target *policyv1alpha1.LogAttributeSelector) *policyv1alpha1.LogTransformPolicy_Removal {
 	return &policyv1alpha1.LogTransformPolicy_Removal{
 		Removal: &policyv1alpha1.LogRemoveAction{
-			Target: target,
+			Removals: []*policyv1alpha1.LogRemoval{
+				{
+					Target: target,
+				},
+			},
 		},
 	}
 }
@@ -198,9 +206,13 @@ func removeAction(target *policyv1alpha1.LogAttributeSelector) *policyv1alpha1.L
 func renameAction(source, target *policyv1alpha1.LogAttributeSelector, upsert bool) *policyv1alpha1.LogTransformPolicy_Renaming {
 	return &policyv1alpha1.LogTransformPolicy_Renaming{
 		Renaming: &policyv1alpha1.LogRenameAction{
-			Source:        source,
-			Target:        target,
-			UpsertEnabled: proto.Bool(upsert),
+			Renamings: []*policyv1alpha1.LogRenaming{
+				{
+					Source:        source,
+					Target:        target,
+					UpsertEnabled: proto.Bool(upsert),
+				},
+			},
 		},
 	}
 }
@@ -215,10 +227,14 @@ func redactAction(target *policyv1alpha1.LogTargetSelector, regex, replacement s
 	}
 	return &policyv1alpha1.LogTransformPolicy_Redaction{
 		Redaction: &policyv1alpha1.LogRedactAction{
-			Target:      target,
-			Regex:       re,
-			Replacement: rep,
+		Redactions: []*policyv1alpha1.LogRedaction{
+			{
+				Target:      target,
+				Regex:       re,
+				Replacement: rep,
+			},
 		},
+	},
 	}
 }
 
@@ -655,10 +671,14 @@ func TestPolicy_EmptyMatchersAppliesUnconditionally(t *testing.T) {
 		Id: "unconditional-add",
 		Action: &policyv1alpha1.LogTransformPolicy_Addition{
 			Addition: &policyv1alpha1.LogAddAction{
-				Target:        logTargetAttr("injected"),
-				Value:         strVal("always"),
+		Additions: []*policyv1alpha1.LogAddition{
+			{
+				Target: logTargetAttr("injected"),
+				Value: strVal("always"),
 				UpsertEnabled: proto.Bool(true),
 			},
+		},
+	},
 		},
 	})
 	require.NoError(t, err)
@@ -687,16 +707,20 @@ func TestDriverLoadPolicyAndProto(t *testing.T) {
 				},
 			},
 			"addition": map[string]any{
-				"target": map[string]any{
-					"log_attribute_path": map[string]any{
-						"segments": []any{"gcp", "routing", "tier"},
+					"additions": []any{
+						map[string]any{
+							"target": map[string]any{
+								"log_attribute_path": map[string]any{
+									"segments": []any{"gcp", "routing", "tier"},
+								},
+							},
+							"value": map[string]any{
+								"string_value": "soc",
+							},
+							"upsert_enabled": true,
+						},
 					},
 				},
-				"value": map[string]any{
-					"string_value": "soc",
-				},
-				"upsert_enabled": true,
-			},
 		}
 
 		p, err := googlepolicy.LoadPolicy(PolicyType, raw)

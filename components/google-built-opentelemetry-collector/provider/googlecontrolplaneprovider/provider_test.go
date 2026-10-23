@@ -17,8 +17,11 @@ package googlecontrolplaneprovider
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -429,10 +432,10 @@ func TestFilterPolicyDriversRegistered(t *testing.T) {
 				"type":   "log_filter",
 				"id":     "test-log",
 				"action": "ACTION_DROP",
-				"matches": []any{
+				"matchers": []any{
 					map[string]any{
-						"target": map[string]any{"record_field": "LOG_RECORD_FIELD_BODY"},
-						"exists": map[string]any{},
+						"target":    map[string]any{"record_field": "LOG_RECORD_FIELD_BODY"},
+						"existence": map[string]any{},
 					},
 				},
 			},
@@ -443,10 +446,10 @@ func TestFilterPolicyDriversRegistered(t *testing.T) {
 				"type":   "metric_filter",
 				"id":     "test-metric",
 				"action": "ACTION_DROP",
-				"matches": []any{
+				"matchers": []any{
 					map[string]any{
-						"target": map[string]any{"descriptor_field": "METRIC_DESCRIPTOR_FIELD_NAME"},
-						"exists": map[string]any{},
+						"target":    map[string]any{"descriptor_field": "METRIC_DESCRIPTOR_FIELD_NAME"},
+						"existence": map[string]any{},
 					},
 				},
 			},
@@ -456,10 +459,10 @@ func TestFilterPolicyDriversRegistered(t *testing.T) {
 			raw: map[string]any{
 				"type": "trace_filter",
 				"id":   "test-trace",
-				"matches": []any{
+				"matchers": []any{
 					map[string]any{
-						"target": map[string]any{"record_field": "SPAN_RECORD_FIELD_NAME"},
-						"exists": map[string]any{},
+						"target":    map[string]any{"record_field": "SPAN_RECORD_FIELD_NAME"},
+						"existence": map[string]any{},
 					},
 				},
 			},
@@ -646,7 +649,7 @@ func TestRetrieve_RecordsPolicyEvaluateErrorEventForFailedPoliciesWithClass(t *t
 			"type":   "log_filter",
 			"id":     "invalid-log-filter",
 			"action": "ACTION_DROP",
-			// missing matches -> ErrPolicyFailedValidation, class: transformation
+			// missing matchers -> ErrPolicyFailedValidation, class: transformation
 		},
 		{
 			"type": "unknown_policy_type",
@@ -768,7 +771,7 @@ func TestPolicyHotReload_FilterPolicyDoesNotTriggerWatcher(t *testing.T) {
 			"type":   "log_filter",
 			"id":     "drop-debug",
 			"action": "ACTION_DROP",
-			"matches": []map[string]any{
+			"matchers": []map[string]any{
 				{
 					"target": map[string]any{
 						"record_field": "LOG_RECORD_FIELD_BODY",
@@ -786,7 +789,7 @@ func TestPolicyHotReload_FilterPolicyDoesNotTriggerWatcher(t *testing.T) {
 	select {
 	case e := <-changeEvents:
 		t.Fatalf("unexpected confmap.WatcherFunc triggered on filter-only update: %+v", e)
-	case <-time.After(200 * time.Millisecond):
+	case <-time.After(100 * time.Millisecond):
 		// Expected: no event.
 	}
 
@@ -827,7 +830,140 @@ func TestPolicyHotReload_ProviderShutdownCleansUpWatcher(t *testing.T) {
 	select {
 	case e := <-changeEvents:
 		t.Fatalf("unexpected confmap.WatcherFunc triggered after provider shutdown: %+v", e)
-	case <-time.After(200 * time.Millisecond):
+	case <-time.After(100 * time.Millisecond):
 		// Expected: no event.
 	}
+}
+
+// Mimics confmap.Resolver: buffered(1) chan, blocking send in onChange,
+// provider Shutdown followed by close(chan).
+func TestReview_SendOnClosedChannelAfterShutdown(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	p := createProvider()
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+	ch := make(chan error, 1)
+	onChange := func(e *confmap.ChangeEvent) { ch <- e.Error }
+
+	_, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", onChange)
+	require.NoError(t, err)
+
+	for i, port := range []int{19991, 19992, 19993} {
+		ps, err := googlepolicy.MakePolicySet("rev-"+string(rune('a'+i)), []map[string]any{
+			{"type": "self_metrics", "name": "sm", "port": port},
+		})
+		require.NoError(t, err)
+		googlepolicy.SetActivePolicySet(ps)
+		time.Sleep(50 * time.Millisecond)
+	}
+	// Collector is shutting down; nobody drains ch.
+	require.NoError(t, p.Shutdown(context.Background()))
+	close(ch) // what Resolver.Shutdown does
+	time.Sleep(100 * time.Millisecond)
+}
+
+func TestPolicyHotReload_InvalidSourcePolicyDoesNotTriggerReload(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	p := createProvider()
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	changeEvents := make(chan *confmap.ChangeEvent, 5)
+	watcher := func(e *confmap.ChangeEvent) {
+		changeEvents <- e
+	}
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", watcher)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	// Set an active policy set with a source policy that fails Evaluate().
+	ps := &googlepolicy.PolicySet{
+		RevisionID: "rev-invalid-source",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			"bad_source": {
+				PolicyObj: &mockSourcePolicy{
+					name:    "bad_source",
+					evalErr: errors.New("evaluation failure in source policy"),
+				},
+			},
+		},
+	}
+	googlepolicy.SetActivePolicySet(ps)
+
+	// Watcher should NOT be triggered on failed evaluation.
+	select {
+	case e := <-changeEvents:
+		t.Fatalf("unexpected confmap.WatcherFunc triggered on invalid source policy: %+v", e)
+	case <-time.After(150 * time.Millisecond):
+		// Expected: no event.
+	}
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestPolicyHotReload_ConcurrentRetrieveAndPolicyUpdate(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	p := createProvider()
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	var eventCount atomic.Int32
+	watcher := func(e *confmap.ChangeEvent) {
+		eventCount.Add(1)
+	}
+
+	_, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", watcher)
+	require.NoError(t, err)
+
+	var wg sync.WaitGroup
+	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
+	defer cancel()
+
+	// Goroutines concurrently calling Retrieve (as happens during reloads).
+	for i := 0; i < 3; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for ctx.Err() == nil {
+				_, _ = p.Retrieve(ctx, "googlecontrolplane:component:my-config", watcher)
+				time.Sleep(10 * time.Millisecond)
+			}
+		}()
+	}
+
+	// Goroutines updating policy sets.
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func(workerID int) {
+			defer wg.Done()
+			iteration := 0
+			for ctx.Err() == nil {
+				iteration++
+				ps, err := googlepolicy.MakePolicySet(fmt.Sprintf("rev-%d-%d", workerID, iteration), []map[string]any{
+					{
+						"type": "self_metrics",
+						"name": "sm",
+						"port": 19000 + (iteration % 50),
+					},
+				})
+				if err == nil {
+					googlepolicy.SetActivePolicySet(ps)
+				}
+				time.Sleep(15 * time.Millisecond)
+			}
+		}(i)
+	}
+
+	wg.Wait()
+	assert.NoError(t, p.Shutdown(context.Background()))
 }

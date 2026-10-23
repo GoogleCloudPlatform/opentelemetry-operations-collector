@@ -77,7 +77,7 @@ func fuzzTraceSeedPolicies() []*policyv1alpha1.TraceFilterPolicy {
 	return []*policyv1alpha1.TraceFilterPolicy{
 		{
 			Id: "projects/123/locations/us-central1/policySets/ps-1/policies/drop-healthcheck-span",
-			Matches: []*policyv1alpha1.TraceMatcher{
+			Matchers: []*policyv1alpha1.TraceMatcher{
 				{
 					Target: recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME),
 					Predicate: &policyv1alpha1.TraceMatcher_Glob{
@@ -88,7 +88,7 @@ func fuzzTraceSeedPolicies() []*policyv1alpha1.TraceFilterPolicy {
 		},
 		{
 			Id: "drop-server-spans",
-			Matches: []*policyv1alpha1.TraceMatcher{
+			Matchers: []*policyv1alpha1.TraceMatcher{
 				{
 					Target:    recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_KIND),
 					Predicate: equalsString("SERVER"),
@@ -99,9 +99,9 @@ func fuzzTraceSeedPolicies() []*policyv1alpha1.TraceFilterPolicy {
 				},
 				{
 					Target: spanAttrTarget("http.status_code"),
-					Predicate: &policyv1alpha1.TraceMatcher_Gte{
-						Gte: &policyv1alpha1.NumericValue{
-							Value: &policyv1alpha1.NumericValue_IntValue{IntValue: 200},
+					Predicate: &policyv1alpha1.TraceMatcher_InclusiveMinimum{
+						InclusiveMinimum: &policyv1alpha1.NumericValue{
+							Kind: &policyv1alpha1.NumericValue_IntValue{IntValue: 200},
 						},
 					},
 				},
@@ -109,17 +109,17 @@ func fuzzTraceSeedPolicies() []*policyv1alpha1.TraceFilterPolicy {
 		},
 		{
 			Id: "drop-root-spans-and-trace-id",
-			Matches: []*policyv1alpha1.TraceMatcher{
+			Matchers: []*policyv1alpha1.TraceMatcher{
 				{
 					Target:    recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID),
-					Predicate: &policyv1alpha1.TraceMatcher_Exists{Exists: &emptypb.Empty{}},
-					Negate:    true,
+					Predicate: &policyv1alpha1.TraceMatcher_Existence{Existence: &emptypb.Empty{}},
+					Negated:    true,
 				},
 				{
 					Target: recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID),
-					Predicate: &policyv1alpha1.TraceMatcher_Equals{
-						Equals: &policyv1alpha1.Value{
-							Value: &policyv1alpha1.Value_BytesValue{
+					Predicate: &policyv1alpha1.TraceMatcher_Equality{
+						Equality: &policyv1alpha1.Value{
+							Kind: &policyv1alpha1.Value_BytesValue{
 								BytesValue: testTraceIDBytes[:],
 							},
 						},

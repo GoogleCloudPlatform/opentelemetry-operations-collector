@@ -30,7 +30,7 @@ func TestPolicyValidation_ValidLinuxPaths(t *testing.T) {
 	validPaths := [][]string{
 		{"/var/log/**/*.log"},
 		{"/var/log/messages"},
-		{"/var/log"},
+		{"/var/log/**"},
 		{"/opt/google/logs/*.log"},
 		{"/srv/web/logs/**/*.log"},
 		{"/var/log/syslog", "/opt/app/logs/server.log"},
@@ -40,8 +40,8 @@ func TestPolicyValidation_ValidLinuxPaths(t *testing.T) {
 	for _, paths := range validPaths {
 		t.Run(paths[0], func(t *testing.T) {
 			pb := &policyv1alpha1.FileLogSourcePolicy{
-				Id:      "valid-policy",
-				Include: paths,
+				Id:            "valid-policy",
+				IncludedPaths: paths,
 			}
 			policy, err := NewPolicyFromProto(pb)
 			require.NoError(t, err)
@@ -66,8 +66,8 @@ func TestPolicyValidation_ValidWindowsPaths(t *testing.T) {
 	for _, paths := range validPaths {
 		t.Run(paths[0], func(t *testing.T) {
 			pb := &policyv1alpha1.FileLogSourcePolicy{
-				Id:      "windows-policy",
-				Include: paths,
+				Id:            "windows-policy",
+				IncludedPaths: paths,
 			}
 			policy, err := NewPolicyFromProto(pb)
 			require.NoError(t, err)
@@ -204,13 +204,121 @@ func TestPolicyValidation_InvalidPaths(t *testing.T) {
 			include:     []string{`C:\inetpub\logs\app.log`, `C:/inetpub/logs/app.log`},
 			expectedErr: ErrDuplicateIncludePattern,
 		},
+		{
+			name:        "duplicate path windows env var expanded",
+			id:          "test-policy",
+			include:     []string{`%ProgramData%\MyApp\logs\app.log`, `C:\ProgramData\MyApp\logs\app.log`},
+			expectedErr: ErrDuplicateIncludePattern,
+		},
+		{
+			name:        "duplicate path windows systemdrive expanded",
+			id:          "test-policy",
+			include:     []string{`%SystemDrive%\inetpub\logs\*.log`, `C:\inetpub\logs\*.log`},
+			expectedErr: ErrDuplicateIncludePattern,
+		},
+		{
+			name:        "invalid glob unclosed bracket",
+			id:          "test-policy",
+			include:     []string{"/var/log/[a-z"},
+			expectedErr: ErrInvalidGlobPattern,
+		},
+		{
+			name:        "invalid glob unclosed brace",
+			id:          "test-policy",
+			include:     []string{"/var/log/{app,web"},
+			expectedErr: ErrInvalidGlobPattern,
+		},
+		{
+			name:        "invalid glob unmatched closing brace",
+			id:          "test-policy",
+			include:     []string{"/var/log/}app"},
+			expectedErr: ErrInvalidGlobPattern,
+		},
+		{
+			name:        "invalid glob windows unclosed bracket",
+			id:          "test-policy",
+			include:     []string{`C:\ProgramData\MyApp\logs\[a-z`},
+			expectedErr: ErrInvalidGlobPattern,
+		},
+		{
+			name:        "bare directory /var/log",
+			id:          "test-policy",
+			include:     []string{"/var/log"},
+			expectedErr: ErrBareDirectoryPath,
+		},
+		{
+			name:        "bare directory /var/log/",
+			id:          "test-policy",
+			include:     []string{"/var/log/"},
+			expectedErr: ErrBareDirectoryPath,
+		},
+		{
+			name:        "bare directory /opt/google/logs",
+			id:          "test-policy",
+			include:     []string{"/opt/google/logs"},
+			expectedErr: ErrBareDirectoryPath,
+		},
+		{
+			name:        "bare directory /opt/google/logs/",
+			id:          "test-policy",
+			include:     []string{"/opt/google/logs/"},
+			expectedErr: ErrBareDirectoryPath,
+		},
+		{
+			name:        "bare directory /srv/web/logs",
+			id:          "test-policy",
+			include:     []string{"/srv/web/logs"},
+			expectedErr: ErrBareDirectoryPath,
+		},
+		{
+			name:        "bare directory /srv/web/logs/",
+			id:          "test-policy",
+			include:     []string{"/srv/web/logs/"},
+			expectedErr: ErrBareDirectoryPath,
+		},
+		{
+			name:        "bare directory windows ProgramData logs",
+			id:          "test-policy",
+			include:     []string{`C:\ProgramData\MyApp\logs`},
+			expectedErr: ErrBareDirectoryPath,
+		},
+		{
+			name:        "bare directory windows ProgramData logs trailing backslash",
+			id:          "test-policy",
+			include:     []string{`C:\ProgramData\MyApp\logs\`},
+			expectedErr: ErrBareDirectoryPath,
+		},
+		{
+			name:        "bare directory windows env ProgramData logs",
+			id:          "test-policy",
+			include:     []string{`%ProgramData%\MyApp\logs`},
+			expectedErr: ErrBareDirectoryPath,
+		},
+		{
+			name:        "bare directory windows inetpub logs",
+			id:          "test-policy",
+			include:     []string{`C:\inetpub\logs`},
+			expectedErr: ErrBareDirectoryPath,
+		},
+		{
+			name:        "bare directory windows inetpub logs trailing slash",
+			id:          "test-policy",
+			include:     []string{`C:\inetpub\logs\`},
+			expectedErr: ErrBareDirectoryPath,
+		},
+		{
+			name:        "bare directory windows SystemDrive inetpub logs",
+			id:          "test-policy",
+			include:     []string{`%SystemDrive%\inetpub\logs`},
+			expectedErr: ErrBareDirectoryPath,
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			pb := &policyv1alpha1.FileLogSourcePolicy{
-				Id:      tc.id,
-				Include: tc.include,
+				Id:            tc.id,
+				IncludedPaths: tc.include,
 			}
 			policy, err := NewPolicyFromProto(pb)
 			require.Error(t, err)
@@ -222,8 +330,8 @@ func TestPolicyValidation_InvalidPaths(t *testing.T) {
 
 func TestPolicy_Metadata(t *testing.T) {
 	pb := &policyv1alpha1.FileLogSourcePolicy{
-		Id:      "test-log-source",
-		Include: []string{"/var/log/test.log"},
+		Id:            "test-log-source",
+		IncludedPaths: []string{"/var/log/test.log"},
 	}
 	p, err := NewPolicyFromProto(pb)
 	require.NoError(t, err)
@@ -256,8 +364,8 @@ func TestPolicy_Metadata(t *testing.T) {
 
 func TestPolicy_Evaluate(t *testing.T) {
 	pb := &policyv1alpha1.FileLogSourcePolicy{
-		Id:      "projects/123/locations/global/policySets/ps1/policies/app-logs",
-		Include: []string{"/var/log/app/*.log"},
+		Id:            "projects/123/locations/global/policySets/ps1/policies/app-logs",
+		IncludedPaths: []string{"/var/log/app/*.log"},
 	}
 	policy, err := NewPolicyFromProto(pb)
 	require.NoError(t, err)
@@ -293,10 +401,35 @@ func TestPolicy_Evaluate(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestPolicy_Evaluate_WindowsEnvExpansion(t *testing.T) {
+	pb := &policyv1alpha1.FileLogSourcePolicy{
+		Id: "win-env-logs",
+		IncludedPaths: []string{
+			`%ProgramData%\MyApp\logs\*.log`,
+			`%SystemDrive%\inetpub\logs\*.log`,
+		},
+	}
+	policy, err := NewPolicyFromProto(pb)
+	require.NoError(t, err)
+
+	conf, err := policy.Evaluate(context.Background())
+	require.NoError(t, err)
+	require.NotNil(t, conf)
+
+	sub, err := conf.Sub("receivers::filelog")
+	require.NoError(t, err)
+	cfgMap := sub.ToStringMap()
+
+	assert.Equal(t, []string{
+		`C:\ProgramData\MyApp\logs\*.log`,
+		`C:\inetpub\logs\*.log`,
+	}, cfgMap["include"])
+}
+
 func TestPolicy_ReceiverIDs(t *testing.T) {
 	pb := &policyv1alpha1.FileLogSourcePolicy{
-		Id:      "nginx-logs",
-		Include: []string{"/var/log/nginx/*.log"},
+		Id:            "nginx-logs",
+		IncludedPaths: []string{"/var/log/nginx/*.log"},
 	}
 	policy, err := NewPolicyFromProto(pb)
 	require.NoError(t, err)
@@ -322,8 +455,8 @@ func TestMerge_NilAndEmpty(t *testing.T) {
 
 func TestMerge_SinglePolicy(t *testing.T) {
 	p, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
-		Id:      "single-policy",
-		Include: []string{"/var/log/single/*.log"},
+		Id:            "single-policy",
+		IncludedPaths: []string{"/var/log/single/*.log"},
 	})
 	require.NoError(t, err)
 
@@ -336,20 +469,20 @@ func TestMerge_SinglePolicy(t *testing.T) {
 
 func TestMerge_MultiplePolicies_DeduplicatedAndSorted(t *testing.T) {
 	p1, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
-		Id:      "policy-1",
-		Include: []string{"/var/log/syslog", "/var/log/nginx/*.log"},
+		Id:            "policy-1",
+		IncludedPaths: []string{"/var/log/syslog", "/var/log/nginx/*.log"},
 	})
 	require.NoError(t, err)
 
 	p2, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
-		Id:      "policy-2",
-		Include: []string{"/var/log/nginx/*.log", "/var/log/auth.log"},
+		Id:            "policy-2",
+		IncludedPaths: []string{"/var/log/nginx/*.log", "/var/log/auth.log"},
 	})
 	require.NoError(t, err)
 
 	p3, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
-		Id:      "policy-3",
-		Include: []string{"/opt/app/logs/*.log", "/var/log/syslog"},
+		Id:            "policy-3",
+		IncludedPaths: []string{"/opt/app/logs/*.log", "/var/log/syslog"},
 	})
 	require.NoError(t, err)
 
@@ -365,7 +498,7 @@ func TestMerge_MultiplePolicies_DeduplicatedAndSorted(t *testing.T) {
 		"/var/log/syslog",
 	}, merged.Include())
 
-	// Verify merged policy evaluation uses DefaultReceiverID and DefaultPipelineID.
+	// Verify merged policy evaluation uses DefaultReceiverID.
 	conf, err := merged.Evaluate(context.Background())
 	require.NoError(t, err)
 	assert.True(t, conf.IsSet("receivers::filelog"))
@@ -382,14 +515,14 @@ func TestMerge_MultiplePolicies_DeduplicatedAndSorted(t *testing.T) {
 
 func TestMerge_MultiplePolicies_WindowsCaseInsensitiveDeduplication(t *testing.T) {
 	p1, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
-		Id:      "win-1",
-		Include: []string{`C:\ProgramData\App\logs\app.log`},
+		Id:            "win-1",
+		IncludedPaths: []string{`C:\ProgramData\App\logs\app.log`},
 	})
 	require.NoError(t, err)
 
 	p2, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
-		Id:      "win-2",
-		Include: []string{`c:/programdata/app/logs/app.log`},
+		Id:            "win-2",
+		IncludedPaths: []string{`c:/programdata/app/logs/app.log`},
 	})
 	require.NoError(t, err)
 
@@ -400,17 +533,43 @@ func TestMerge_MultiplePolicies_WindowsCaseInsensitiveDeduplication(t *testing.T
 	assert.Equal(t, `C:\ProgramData\App\logs\app.log`, merged.Include()[0])
 }
 
+func TestMerge_MultiplePolicies_WindowsEnvDeduplication(t *testing.T) {
+	p1, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
+		Id:            "win-env-1",
+		IncludedPaths: []string{`%ProgramData%\App\logs\app.log`},
+	})
+	require.NoError(t, err)
+
+	p2, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
+		Id:            "win-env-2",
+		IncludedPaths: []string{`C:\ProgramData\App\logs\app.log`},
+	})
+	require.NoError(t, err)
+
+	merged, err := Merge(p1, p2)
+	require.NoError(t, err)
+	require.NotNil(t, merged)
+	assert.Len(t, merged.Include(), 1)
+
+	// Evaluating the merged policy should produce expanded path.
+	conf, err := merged.Evaluate(context.Background())
+	require.NoError(t, err)
+	sub, err := conf.Sub("receivers::filelog")
+	require.NoError(t, err)
+	assert.Equal(t, []string{`C:\ProgramData\App\logs\app.log`}, sub.ToStringMap()["include"])
+}
+
 func TestMerge_FailsFastOnInvalidPolicy(t *testing.T) {
 	valid, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
-		Id:      "valid",
-		Include: []string{"/var/log/valid.log"},
+		Id:            "valid",
+		IncludedPaths: []string{"/var/log/valid.log"},
 	})
 	require.NoError(t, err)
 
 	invalid := &Policy{
 		proto: &policyv1alpha1.FileLogSourcePolicy{
-			Id:      "invalid",
-			Include: []string{"/etc/shadow"},
+			Id:            "invalid",
+			IncludedPaths: []string{"/etc/shadow"},
 		},
 	}
 
@@ -425,14 +584,20 @@ func TestMerge_FailsFastOnInvalidPolicy(t *testing.T) {
 
 func TestConsolidate(t *testing.T) {
 	p1, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
-		Id:      "p1",
-		Include: []string{"/var/log/a.log"},
+		Id:            "p1",
+		IncludedPaths: []string{"/var/log/a.log", "/var/log/shared.log"},
 	})
 	require.NoError(t, err)
 
 	p2, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
-		Id:      "p2",
-		Include: []string{"/var/log/b.log"},
+		Id:            "p2",
+		IncludedPaths: []string{"/var/log/b.log", "/var/log/shared.log"},
+	})
+	require.NoError(t, err)
+
+	p3, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
+		Id:            "p3",
+		IncludedPaths: []string{"/opt/app/logs/*.log"},
 	})
 	require.NoError(t, err)
 
@@ -446,18 +611,23 @@ func TestConsolidate(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, p1, merged)
 
-	// Consolidate multiple
-	merged, err = p1.Consolidate([]googlepolicy.SourcePolicy{p1, p2})
+	// Consolidate multiple with deduplication and set-union merging
+	merged, err = p1.Consolidate([]googlepolicy.SourcePolicy{p1, p2, p3})
 	require.NoError(t, err)
 	require.NotNil(t, merged)
 	assert.Equal(t, "filelog_consolidated", merged.PolicyName())
-	assert.Equal(t, []string{"/var/log/a.log", "/var/log/b.log"}, merged.(interface{ Include() []string }).Include())
+	assert.Equal(t, []string{
+		"/opt/app/logs/*.log",
+		"/var/log/a.log",
+		"/var/log/b.log",
+		"/var/log/shared.log",
+	}, merged.(interface{ Include() []string }).Include())
 }
 
 func TestDriver_WireProtoAndMapLoading(t *testing.T) {
 	pb := &policyv1alpha1.FileLogSourcePolicy{
-		Id:      "wire-log-source",
-		Include: []string{"/var/log/**/*.log"},
+		Id:            "wire-log-source",
+		IncludedPaths: []string{"/var/log/**/*.log"},
 	}
 
 	// 1. Loading via MakePolicySetFromProtos (wire proto delivery path).
@@ -500,8 +670,8 @@ func TestPolicyValidation_TestAllowedRoot(t *testing.T) {
 	// 1. Without FILELOG_TEST_ALLOWED_ROOT, paths in tempDir are rejected.
 	t.Setenv("FILELOG_TEST_ALLOWED_ROOT", "")
 	pbUnset := &policyv1alpha1.FileLogSourcePolicy{
-		Id:      "temp-dir-unset-policy",
-		Include: []string{tempDir + "/*.log"},
+		Id:            "temp-dir-unset-policy",
+		IncludedPaths: []string{tempDir + "/*.log"},
 	}
 	_, err := NewPolicyFromProto(pbUnset)
 	require.ErrorIs(t, err, ErrDisallowedLogRoot)
@@ -509,8 +679,8 @@ func TestPolicyValidation_TestAllowedRoot(t *testing.T) {
 	// 2. With FILELOG_TEST_ALLOWED_ROOT set, paths within tempDir are accepted.
 	t.Setenv("FILELOG_TEST_ALLOWED_ROOT", tempDir)
 	pbSet := &policyv1alpha1.FileLogSourcePolicy{
-		Id:      "temp-dir-policy",
-		Include: []string{tempDir + "/*.log"},
+		Id:            "temp-dir-policy",
+		IncludedPaths: []string{tempDir + "/*.log"},
 	}
 	polSet, err := NewPolicyFromProto(pbSet)
 	require.NoError(t, err)
@@ -518,16 +688,16 @@ func TestPolicyValidation_TestAllowedRoot(t *testing.T) {
 
 	// 3. Sensitive directories are strictly rejected even when FILELOG_TEST_ALLOWED_ROOT is set.
 	pbSensitive := &policyv1alpha1.FileLogSourcePolicy{
-		Id:      "sensitive-policy",
-		Include: []string{"/etc/shadow"},
+		Id:            "sensitive-policy",
+		IncludedPaths: []string{"/etc/shadow"},
 	}
 	_, err = NewPolicyFromProto(pbSensitive)
 	require.ErrorIs(t, err, ErrSensitiveDirectory)
 
 	// 4. Path traversal escaping the root is strictly rejected.
 	pbTraversal := &policyv1alpha1.FileLogSourcePolicy{
-		Id:      "traversal-policy",
-		Include: []string{tempDir + "/../etc/shadow"},
+		Id:            "traversal-policy",
+		IncludedPaths: []string{tempDir + "/../etc/shadow"},
 	}
 	_, err = NewPolicyFromProto(pbTraversal)
 	require.ErrorIs(t, err, ErrPathTraversal)
@@ -535,10 +705,45 @@ func TestPolicyValidation_TestAllowedRoot(t *testing.T) {
 	// 5. Windows path matching under FILELOG_TEST_ALLOWED_ROOT (case-insensitive and separator-normalized).
 	t.Setenv("FILELOG_TEST_ALLOWED_ROOT", "C:\\TestRoot\\logs")
 	pbWin := &policyv1alpha1.FileLogSourcePolicy{
-		Id:      "win-test-policy",
-		Include: []string{"c:/testroot/logs/app.log", "C:\\TestRoot\\logs\\sub\\*.log"},
+		Id:            "win-test-policy",
+		IncludedPaths: []string{"c:/testroot/logs/app.log", "C:\\TestRoot\\logs\\sub\\*.log"},
 	}
 	polWin, err := NewPolicyFromProto(pbWin)
 	require.NoError(t, err)
 	assert.NoError(t, polWin.Validate())
+}
+
+func FuzzPolicyValidation(f *testing.F) {
+	seeds := []string{
+		"/var/log/**/*.log",
+		"/var/log/syslog",
+		"/var/log",
+		"/etc/shadow",
+		"/tmp/test.log",
+		`C:\ProgramData\App\logs\*.log`,
+		`%ProgramData%\App\logs\*.log`,
+		`C:\inetpub\logs\*.log`,
+		`C:\inetpub\logs`,
+		`C:\Windows\System32\app.log`,
+		"/var/log/../etc/passwd",
+		"relative/path/test.log",
+		"/var/log/[a-z",
+		"/var/log/{a,b",
+	}
+	for _, seed := range seeds {
+		f.Add(seed)
+	}
+
+	f.Fuzz(func(t *testing.T, path string) {
+		pb := &policyv1alpha1.FileLogSourcePolicy{
+			Id:            "fuzz-policy",
+			IncludedPaths: []string{path},
+		}
+		// Validate should not panic on any input
+		policy, err := NewPolicyFromProto(pb)
+		if err == nil && policy != nil {
+			_ = policy.Validate()
+			_, _ = policy.Evaluate(context.Background())
+		}
+	})
 }

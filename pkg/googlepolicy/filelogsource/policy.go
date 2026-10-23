@@ -23,12 +23,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
 
 	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
+	"github.com/bmatcuk/doublestar/v4"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/confmap"
 	"google.golang.org/protobuf/proto"
@@ -70,12 +72,32 @@ var forbiddenPrefixes = []string{
 	"/usr/sbin",
 }
 
+type fileLogDriver struct {
+	googlepolicy.ProtoDriver[*policyv1alpha1.FileLogSourcePolicy]
+}
+
+func (d *fileLogDriver) LoadPolicy(raw map[string]any) (googlepolicy.Policy, error) {
+	// Support both "include" (legacy/shorthand) and "included_paths" (proto field name).
+	if inc, ok := raw["include"]; ok && raw["included_paths"] == nil {
+		rawCopy := make(map[string]any, len(raw))
+		for k, v := range raw {
+			rawCopy[k] = v
+		}
+		rawCopy["included_paths"] = inc
+		delete(rawCopy, "include")
+		raw = rawCopy
+	}
+	return d.ProtoDriver.LoadPolicy(raw)
+}
+
 // driver loads a FileLogSourcePolicy from either shape it can arrive in: the proto
 // a control plane sends, or the map an authored config decodes to.
-var driver = googlepolicy.ProtoDriver[*policyv1alpha1.FileLogSourcePolicy]{
-	Class: googlepolicy.PolicyClassSource,
-	New: func(pb *policyv1alpha1.FileLogSourcePolicy) (googlepolicy.Policy, error) {
-		return NewPolicyFromProto(pb)
+var driver = &fileLogDriver{
+	ProtoDriver: googlepolicy.ProtoDriver[*policyv1alpha1.FileLogSourcePolicy]{
+		Class: googlepolicy.PolicyClassSource,
+		New: func(pb *policyv1alpha1.FileLogSourcePolicy) (googlepolicy.Policy, error) {
+			return NewPolicyFromProto(pb)
+		},
 	},
 }
 
@@ -104,6 +126,10 @@ var (
 	ErrRelativePath = errors.New("include pattern must be an absolute path")
 	// ErrDuplicateIncludePattern is returned when an include pattern appears more than once in a policy.
 	ErrDuplicateIncludePattern = errors.New("duplicate include pattern")
+	// ErrInvalidGlobPattern is returned when an include pattern has invalid glob syntax.
+	ErrInvalidGlobPattern = errors.New("invalid glob pattern syntax")
+	// ErrBareDirectoryPath is returned when an include pattern specifies a bare directory rather than a file or glob.
+	ErrBareDirectoryPath = errors.New("include pattern cannot be a bare directory")
 )
 
 // Policy represents a compiled, validated FileLogSourcePolicy ready for evaluation into Collector configuration.
@@ -154,11 +180,11 @@ func (p *Policy) Validate() error {
 	if p.proto.GetId() == "" {
 		return ErrMissingID
 	}
-	if len(p.proto.GetInclude()) == 0 {
+	if len(p.proto.GetIncludedPaths()) == 0 {
 		return ErrMissingInclude
 	}
-	seen := make(map[string]bool, len(p.proto.GetInclude()))
-	for i, pattern := range p.proto.GetInclude() {
+	seen := make(map[string]bool, len(p.proto.GetIncludedPaths()))
+	for i, pattern := range p.proto.GetIncludedPaths() {
 		if err := validateIncludePattern(pattern); err != nil {
 			return fmt.Errorf("include[%d]: %w", i, err)
 		}
@@ -177,10 +203,19 @@ func (p *Policy) Evaluate(_ context.Context) (*confmap.Conf, error) {
 		return nil, fmt.Errorf("policy %q failed validation: %w", p.PolicyName(), err)
 	}
 
+	includes := make([]string, len(p.proto.GetIncludedPaths()))
+	for i, inc := range p.proto.GetIncludedPaths() {
+		if isWindowsAbsolute(inc) {
+			includes[i] = expandWindowsEnv(inc)
+		} else {
+			includes[i] = inc
+		}
+	}
+
 	cfg := map[string]any{
 		"receivers": map[string]any{
 			DefaultReceiverID: map[string]any{
-				"include":           slices.Clone(p.proto.GetInclude()),
+				"include":           includes,
 				"exclude":           slices.Clone(defaultExcludePatterns),
 				"include_file_path": true,
 			},
@@ -231,7 +266,7 @@ func Merge(policies ...*Policy) (*Policy, error) {
 		if err := pol.Validate(); err != nil {
 			return nil, err
 		}
-		for _, inc := range pol.proto.GetInclude() {
+		for _, inc := range pol.proto.GetIncludedPaths() {
 			key := pathDedupeKey(inc)
 			if !seen[key] {
 				seen[key] = true
@@ -242,8 +277,8 @@ func Merge(policies ...*Policy) (*Policy, error) {
 	slices.Sort(mergedIncludes)
 
 	return NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
-		Id:      "filelog_consolidated",
-		Include: mergedIncludes,
+		Id:            "filelog_consolidated",
+		IncludedPaths: mergedIncludes,
 	})
 }
 
@@ -263,12 +298,17 @@ func (p *Policy) Consolidate(policies []googlepolicy.SourcePolicy) (googlepolicy
 	return Merge(typedPolicies...)
 }
 
-// Include returns a clone of the include patterns configured in the policy.
-func (p *Policy) Include() []string {
+// IncludedPaths returns a clone of the include patterns configured in the policy.
+func (p *Policy) IncludedPaths() []string {
 	if p.proto == nil {
 		return nil
 	}
-	return slices.Clone(p.proto.GetInclude())
+	return slices.Clone(p.proto.GetIncludedPaths())
+}
+
+// Include returns a clone of the include patterns configured in the policy.
+func (p *Policy) Include() []string {
+	return p.IncludedPaths()
 }
 
 // validateIncludePattern validates that a single pattern adheres to path security guardrails.
@@ -289,6 +329,23 @@ func validateIncludePattern(pattern string) error {
 		return fmt.Errorf("%w: %q", ErrRelativePath, pattern)
 	}
 
+	// Validate glob pattern syntax.
+	// For Windows paths, normalize separators to '/' before validating glob syntax,
+	// so that '\' is not treated as an escaping character by doublestar.
+	patternForGlob := pattern
+	if isWindowsAbs {
+		patternForGlob = strings.ReplaceAll(pattern, "\\", "/")
+	}
+	if !doublestar.ValidatePattern(patternForGlob) {
+		return fmt.Errorf("%w: %q", ErrInvalidGlobPattern, pattern)
+	}
+
+	// Disallow bare directory paths.
+	winNorm := strings.ToLower(strings.ReplaceAll(pattern, "\\", "/"))
+	if isBareDirectory(pattern, winNorm) {
+		return fmt.Errorf("%w: %q (must specify filename or glob wildcard, e.g. /** or /*.log)", ErrBareDirectoryPath, pattern)
+	}
+
 	// Check forbidden sensitive directories on Linux/Unix.
 	if isLinuxAbs {
 		for _, f := range forbiddenPrefixes {
@@ -306,20 +363,18 @@ func validateIncludePattern(pattern string) error {
 		// 1. /var/log/**
 		// 2. /opt/**/logs/**
 		// 3. /srv/**/logs/**
-		if pattern == "/var/log" || strings.HasPrefix(pattern, "/var/log/") {
+		if strings.HasPrefix(pattern, "/var/log/") {
 			return nil
 		}
 		if (strings.HasPrefix(pattern, "/opt/") || strings.HasPrefix(pattern, "/srv/")) &&
-			(strings.Contains(pattern, "/logs/") || strings.HasSuffix(pattern, "/logs")) {
+			strings.Contains(pattern, "/logs/") {
 			return nil
 		}
 
 		return fmt.Errorf("%w: %q", ErrDisallowedLogRoot, pattern)
 	}
 
-	// Windows paths: normalize separators to '/' and lowercase for check.
-	winNorm := strings.ToLower(strings.ReplaceAll(pattern, "\\", "/"))
-
+	// Windows paths:
 	// In test environments, allow patterns within FILELOG_TEST_ALLOWED_ROOT when running under go test.
 	if matchesTestAllowedRoot(pattern, false, winNorm) {
 		return nil
@@ -329,7 +384,7 @@ func validateIncludePattern(pattern string) error {
 	// 1. %ProgramData%\**\logs\** or <Drive>:\ProgramData\**\logs\**
 	// 2. %SystemDrive%\inetpub\logs\** or <Drive>:\inetpub\logs\**
 	if (strings.HasPrefix(winNorm, "%programdata%/") || isDrivePathPrefix(winNorm, "programdata")) &&
-		(strings.Contains(winNorm, "/logs/") || strings.HasSuffix(winNorm, "/logs")) {
+		strings.Contains(winNorm, "/logs/") {
 		return nil
 	}
 
@@ -340,6 +395,56 @@ func validateIncludePattern(pattern string) error {
 	}
 
 	return fmt.Errorf("%w: %q", ErrDisallowedLogRoot, pattern)
+}
+
+func isBareDirectory(pattern string, winNorm string) bool {
+	if strings.HasSuffix(pattern, "/") || strings.HasSuffix(pattern, "\\") {
+		return true
+	}
+	if pattern == "/var/log" {
+		return true
+	}
+	if strings.HasSuffix(pattern, "/logs") || strings.HasSuffix(pattern, "\\logs") || strings.HasSuffix(winNorm, "/logs") {
+		return true
+	}
+	return false
+}
+
+var winEnvVarRegexp = regexp.MustCompile(`%([A-Za-z0-9_]+)%`)
+
+// expandWindowsEnv expands Windows %VAR% syntax (e.g. %ProgramData%, %SystemDrive%, %SystemRoot%).
+// It checks os.Getenv(varName) (case-insensitively). If unset, it falls back to standard Windows defaults:
+//   - %ProgramData% -> C:\ProgramData
+//   - %SystemDrive% -> C:
+//   - %SystemRoot%, %windir% -> C:\Windows
+func expandWindowsEnv(pattern string) string {
+	if !strings.Contains(pattern, "%") {
+		return pattern
+	}
+	return winEnvVarRegexp.ReplaceAllStringFunc(pattern, func(m string) string {
+		varName := m[1 : len(m)-1]
+		val := os.Getenv(varName)
+		if val == "" {
+			if v := os.Getenv(strings.ToUpper(varName)); v != "" {
+				val = v
+			} else if v := os.Getenv(strings.ToLower(varName)); v != "" {
+				val = v
+			}
+		}
+		if val == "" {
+			switch {
+			case strings.EqualFold(varName, "ProgramData"):
+				val = `C:\ProgramData`
+			case strings.EqualFold(varName, "SystemDrive"):
+				val = `C:`
+			case strings.EqualFold(varName, "SystemRoot"), strings.EqualFold(varName, "windir"):
+				val = `C:\Windows`
+			default:
+				return m
+			}
+		}
+		return strings.TrimRight(val, "/\\")
+	})
 }
 
 // matchesTestAllowedRoot checks whether pattern falls within the directory specified
@@ -387,12 +492,13 @@ func isAlpha(c byte) bool {
 }
 
 // pathDedupeKey returns a canonical key for path comparison and deduplication.
-// For Windows paths (e.g. drive letter or %ENV%), paths are case-insensitive and
-// directory separators are normalized to '/'. For Linux/Unix paths, case is preserved
-// because the underlying filesystem is case-sensitive.
+// For Windows paths (e.g. drive letter or %ENV%), Windows %VAR% syntax is expanded,
+// directory separators are normalized to '/', and paths are lowercased (case-insensitive).
+// For Linux/Unix paths, case is preserved because the underlying filesystem is case-sensitive.
 func pathDedupeKey(pattern string) string {
 	if isWindowsAbsolute(pattern) {
-		return strings.ToLower(strings.ReplaceAll(pattern, "\\", "/"))
+		expanded := expandWindowsEnv(pattern)
+		return strings.ToLower(strings.ReplaceAll(expanded, "\\", "/"))
 	}
 	return pattern
 }

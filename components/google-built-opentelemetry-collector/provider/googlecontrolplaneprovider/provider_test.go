@@ -740,12 +740,12 @@ func TestRetrieve_MultipleFileLogSourcePoliciesConsolidated(t *testing.T) {
 	p := createProvider()
 
 	p1 := &policyv1alpha1.FileLogSourcePolicy{
-		Id:      "app-logs-1",
-		Include: []string{"/var/log/syslog", "/var/log/nginx/*.log"},
+		Id:            "app-logs-1",
+		IncludedPaths: []string{"/var/log/syslog", "/var/log/nginx/*.log"},
 	}
 	p2 := &policyv1alpha1.FileLogSourcePolicy{
-		Id:      "app-logs-2",
-		Include: []string{"/var/log/nginx/*.log", "/var/log/auth.log"},
+		Id:            "app-logs-2",
+		IncludedPaths: []string{"/var/log/nginx/*.log", "/var/log/auth.log"},
 	}
 
 	ps, err := googlepolicy.MakePolicySetFromProtos("test-set", "rev-filelog", []proto.Message{p1, p2})
@@ -794,16 +794,20 @@ func TestRetrieve_FileLogSourcePolicy_WithInvalidPolicy_FaultIsolation(t *testin
 	logger := zap.New(core)
 	p := createProviderWithLogger(logger)
 
-	valid := &policyv1alpha1.FileLogSourcePolicy{
-		Id:      "valid-source",
-		Include: []string{"/var/log/valid.log"},
+	valid1 := &policyv1alpha1.FileLogSourcePolicy{
+		Id:            "valid-source-1",
+		IncludedPaths: []string{"/var/log/valid1.log"},
+	}
+	valid2 := &policyv1alpha1.FileLogSourcePolicy{
+		Id:            "valid-source-2",
+		IncludedPaths: []string{"/var/log/valid2.log"},
 	}
 	invalid := &policyv1alpha1.FileLogSourcePolicy{
-		Id:      "invalid-source",
-		Include: []string{"/etc/shadow"},
+		Id:            "invalid-source",
+		IncludedPaths: []string{"/etc/shadow"},
 	}
 
-	ps, err := googlepolicy.MakePolicySetFromProtos("test-set", "rev-fault-isolation", []proto.Message{valid, invalid})
+	ps, err := googlepolicy.MakePolicySetFromProtos("test-set", "rev-fault-isolation", []proto.Message{valid1, valid2, invalid})
 	require.Error(t, err)
 	require.NotNil(t, ps)
 
@@ -821,11 +825,11 @@ func TestRetrieve_FileLogSourcePolicy_WithInvalidPolicy_FaultIsolation(t *testin
 	conf, err := ret.AsConf()
 	require.NoError(t, err)
 
-	// Valid policy should survive and be evaluated into receivers::filelog.
+	// Valid policies should survive and be consolidated into receivers::filelog.
 	assert.True(t, conf.IsSet("receivers::filelog"))
 	sub, err := conf.Sub("receivers::filelog")
 	require.NoError(t, err)
-	assert.Equal(t, []string{"/var/log/valid.log"}, sub.ToStringMap()["include"])
+	assert.Equal(t, []string{"/var/log/valid1.log", "/var/log/valid2.log"}, sub.ToStringMap()["include"])
 
 	// Invalid policy should have recorded an evaluation error event with source class and failed validation type.
 	var invalidEntry *observer.LoggedEntry
@@ -866,8 +870,8 @@ func TestPolicyHotReload_SourcePolicyTriggersWatcher(t *testing.T) {
 
 	// Update active policy set with a FileLogSourcePolicy.
 	sourcePolicy := &policyv1alpha1.FileLogSourcePolicy{
-		Id:      "app-source",
-		Include: []string{"/var/log/app.log"},
+		Id:            "app-source",
+		IncludedPaths: []string{"/var/log/app.log"},
 	}
 	ps, err := googlepolicy.MakePolicySetFromProtos("test-set", "rev-source-1", []proto.Message{sourcePolicy})
 	require.NoError(t, err)
@@ -913,7 +917,7 @@ func TestPolicyHotReload_FilterPolicyDoesNotTriggerWatcher(t *testing.T) {
 	filterPolicy := &policyv1alpha1.LogFilterPolicy{
 		Id:     "drop-debug",
 		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-		Matches: []*policyv1alpha1.LogMatcher{
+		Matchers: []*policyv1alpha1.LogMatcher{
 			{
 				Target: &policyv1alpha1.LogFieldSelector{
 					Target: &policyv1alpha1.LogFieldSelector_RecordField{
@@ -963,8 +967,8 @@ func TestPolicyHotReload_ProviderShutdownCleansUpWatcher(t *testing.T) {
 
 	// Updating policy set after shutdown must not trigger events or panic.
 	sourcePolicy := &policyv1alpha1.FileLogSourcePolicy{
-		Id:      "post-shutdown-source",
-		Include: []string{"/var/log/post.log"},
+		Id:            "post-shutdown-source",
+		IncludedPaths: []string{"/var/log/post.log"},
 	}
 	ps, err := googlepolicy.MakePolicySetFromProtos("test-set", "rev-shutdown", []proto.Message{sourcePolicy})
 	require.NoError(t, err)

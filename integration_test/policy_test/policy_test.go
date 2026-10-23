@@ -1432,7 +1432,7 @@ func TestFileLogSourcePolicy_Integration(t *testing.T) {
 	policyContent := fmt.Sprintf(`{
   "type": "file_log_source",
   "id": "app-filelog-source",
-  "include": [%q]
+  "included_paths": [%q]
 }`, filepath.ToSlash(logFilePath))
 	if err := os.WriteFile(filepath.Join(policiesDir, "01-filelog.json"), []byte(policyContent), 0644); err != nil {
 		t.Fatalf("failed to write filelog source policy: %v", err)

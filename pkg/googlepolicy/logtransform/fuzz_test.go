@@ -179,7 +179,6 @@ func fuzzLogTransformSeedPolicies() []*policyv1alpha1.LogTransformPolicy {
 			},
 		},
 		{
-		{
 			Id: "remove-nested-body-field",
 			Action: &policyv1alpha1.LogTransformPolicy_Remove{
 				Remove: &policyv1alpha1.LogRemoveAction{
@@ -204,9 +203,6 @@ func fuzzLogTransformSeedPolicies() []*policyv1alpha1.LogTransformPolicy {
 					Source: logBodyFieldSelector("event_data", "userId"),
 					Target: logBodyFieldSelector("user", "id"),
 					Upsert: proto.Bool(true),
-				},
-			},
-		},
 				},
 			},
 		},

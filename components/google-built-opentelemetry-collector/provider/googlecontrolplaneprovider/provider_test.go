@@ -20,8 +20,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider/policies/selfmetrics"
+	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/event"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"github.com/stretchr/testify/assert"
@@ -32,6 +34,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
+	"google.golang.org/protobuf/proto"
 )
 
 func createProvider() confmap.Provider {
@@ -92,9 +95,13 @@ func TestRetrieve(t *testing.T) {
 	assert.True(t, conf.IsSet("extensions::googleclientauth/default_gcp_destination"))
 	assert.True(t, conf.IsSet("exporters::otlp_grpc/default_gcp_destination"))
 	assert.True(t, conf.IsSet("receivers::otlp/default_self_metrics"))
+	assert.True(t, conf.IsSet("receivers::nop/googlecontrolplane"))
 	assert.True(t, conf.IsSet("service::telemetry::resource::attributes"))
 	assert.True(t, conf.IsSet("service::pipelines::logs/default_self_metrics"))
 	assert.True(t, conf.IsSet("service::pipelines::metrics/default_self_metrics"))
+	assert.True(t, conf.IsSet("service::pipelines::logs/googlecontrolplane"))
+	assert.True(t, conf.IsSet("service::pipelines::metrics/googlecontrolplane"))
+	assert.True(t, conf.IsSet("service::pipelines::traces/googlecontrolplane"))
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
@@ -159,29 +166,12 @@ func (m *mockSourcePolicy) Evaluate(context.Context) (*confmap.Conf, error) {
 		},
 	}), nil
 }
-func (m *mockSourcePolicy) LogsPipelines(preExportProcessors []component.ID, exporters []component.ID, extensions []component.ID) (*confmap.Conf, error) {
-	procStrs := make([]any, 0, len(preExportProcessors))
-	for _, id := range preExportProcessors {
-		procStrs = append(procStrs, id.String())
-	}
-	return confmap.NewFromStringMap(map[string]any{
-		"service": map[string]any{
-			"pipelines": map[string]any{
-				"logs/" + m.name: map[string]any{
-					"receivers":  []any{"otlp/" + m.name},
-					"processors": procStrs,
-					"exporters":  []any{"otlp_grpc/default_gcp_destination"},
-				},
-			},
-		},
-	}), nil
+func (m *mockSourcePolicy) LogReceiverIDs() []component.ID {
+	otlpType, _ := component.NewType("otlp")
+	return []component.ID{component.NewIDWithName(otlpType, m.name)}
 }
-func (m *mockSourcePolicy) MetricsPipelines(preExportProcessors []component.ID, exporters []component.ID, extensions []component.ID) (*confmap.Conf, error) {
-	return nil, nil
-}
-func (m *mockSourcePolicy) TracesPipelines(preExportProcessors []component.ID, exporters []component.ID, extensions []component.ID) (*confmap.Conf, error) {
-	return nil, nil
-}
+func (m *mockSourcePolicy) MetricReceiverIDs() []component.ID { return nil }
+func (m *mockSourcePolicy) TraceReceiverIDs() []component.ID  { return nil }
 
 var _ googlepolicy.SourcePolicy = (*mockSourcePolicy)(nil)
 
@@ -375,8 +365,8 @@ func TestRetrieve_ActivePolicySetWithCustomSelfMetrics(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, conf.IsSet("receivers::otlp/custom_self_metrics"))
 	assert.False(t, conf.IsSet("receivers::otlp/default_self_metrics"))
-	assert.NotContains(t, conf.Get("service::pipelines::logs/custom_self_metrics::processors"), "googlepolicy")
-	assert.NotContains(t, conf.Get("service::pipelines::metrics/custom_self_metrics::processors"), "googlepolicy")
+	assert.Contains(t, conf.Get("service::pipelines::logs/custom_self_metrics::processors"), "googlepolicy")
+	assert.Contains(t, conf.Get("service::pipelines::metrics/custom_self_metrics::processors"), "googlepolicy")
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
@@ -405,12 +395,57 @@ func TestRetrieve_ActivePolicySetWithOtherSource(t *testing.T) {
 	conf, err := ret.AsConf()
 	require.NoError(t, err)
 	assert.True(t, conf.IsSet("receivers::otlp/other_source"))
-	// Customer source pipelines MUST include googlepolicy processor
-	assert.Contains(t, conf.Get("service::pipelines::logs/other_source::processors"), "googlepolicy")
-	// Built-in self metrics should also be added, but MUST bypass googlepolicy processor
+	// Customer sources are consolidated into canonical logs/googlecontrolplane pipeline with googlepolicy and resource detection
+	assert.Contains(t, conf.Get("service::pipelines::logs/googlecontrolplane::processors"), "resourcedetection/googlecontrolplane")
+	assert.Contains(t, conf.Get("service::pipelines::logs/googlecontrolplane::processors"), "transform/googlecontrolplane")
+	assert.Contains(t, conf.Get("service::pipelines::logs/googlecontrolplane::processors"), "googlepolicy")
+	assert.Contains(t, conf.Get("service::pipelines::logs/googlecontrolplane::receivers"), "otlp/other_source")
+	assert.Contains(t, conf.Get("service::pipelines::logs/googlecontrolplane::receivers"), "nop/googlecontrolplane")
+	// Built-in self metrics also includes googlepolicy processor
 	assert.True(t, conf.IsSet("receivers::otlp/default_self_metrics"))
-	assert.NotContains(t, conf.Get("service::pipelines::logs/default_self_metrics::processors"), "googlepolicy")
-	assert.NotContains(t, conf.Get("service::pipelines::metrics/default_self_metrics::processors"), "googlepolicy")
+	assert.Contains(t, conf.Get("service::pipelines::logs/default_self_metrics::processors"), "googlepolicy")
+	assert.Contains(t, conf.Get("service::pipelines::metrics/default_self_metrics::processors"), "googlepolicy")
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestRetrieve_ActivePolicySetWithMultipleSources_CanonicalConsolidation(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	p := createProvider()
+
+	ps := &googlepolicy.PolicySet{
+		RevisionID: "rev-multi-source",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			"source_1": {PolicyObj: &mockSourcePolicy{name: "source_1"}},
+			"source_2": {PolicyObj: &mockSourcePolicy{name: "source_2"}},
+		},
+	}
+	googlepolicy.SetActivePolicySet(ps)
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+
+	assert.True(t, conf.IsSet("receivers::otlp/source_1"))
+	assert.True(t, conf.IsSet("receivers::otlp/source_2"))
+
+	// Both sources must merge into the shared canonical logs/googlecontrolplane pipeline
+	receivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
+	assert.Contains(t, receivers, "nop/googlecontrolplane")
+	assert.Contains(t, receivers, "otlp/source_1")
+	assert.Contains(t, receivers, "otlp/source_2")
+
+	// Shared pipeline must contain googlepolicy and destination queue/batch processor
+	processors := conf.Get("service::pipelines::logs/googlecontrolplane::processors")
+	assert.Contains(t, processors, "googlepolicy")
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
@@ -461,6 +496,14 @@ func TestFilterPolicyDriversRegistered(t *testing.T) {
 						"existence": map[string]any{},
 					},
 				},
+			},
+		},
+		{
+			policyType: "file_log_source",
+			raw: map[string]any{
+				"type":           "file_log_source",
+				"id":             "test-filelog",
+				"included_paths": []any{"/var/log/**/*.log"},
 			},
 		},
 	} {
@@ -690,4 +733,252 @@ func TestRetrieve_RecordsPolicyEvaluateErrorEventForFailedPoliciesWithClass(t *t
 	}, entries[1].ContextMap())
 
 	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestRetrieve_MultipleFileLogSourcePoliciesConsolidated(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	p := createProvider()
+
+	p1 := &policyv1alpha1.FileLogSourcePolicy{
+		Id:            "app-logs-1",
+		IncludedPaths: []string{"/var/log/syslog", "/var/log/nginx/*.log"},
+	}
+	p2 := &policyv1alpha1.FileLogSourcePolicy{
+		Id:            "app-logs-2",
+		IncludedPaths: []string{"/var/log/nginx/*.log", "/var/log/auth.log"},
+	}
+
+	ps, err := googlepolicy.MakePolicySetFromProtos("test-set", "rev-filelog", []proto.Message{p1, p2})
+	require.NoError(t, err)
+
+	googlepolicy.SetActivePolicySet(ps)
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+
+	// A single consolidated filelog receiver must be present.
+	assert.True(t, conf.IsSet("receivers::filelog"))
+	sub, err := conf.Sub("receivers::filelog")
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"/var/log/auth.log",
+		"/var/log/nginx/*.log",
+		"/var/log/syslog",
+	}, sub.ToStringMap()["include"])
+	assert.Equal(t, true, sub.ToStringMap()["include_file_path"])
+
+	// The shared canonical logs/googlecontrolplane pipeline must connect to the consolidated filelog receiver and include googlepolicy.
+	assert.True(t, conf.IsSet("service::pipelines::logs/googlecontrolplane"))
+	pipeSub, err := conf.Sub("service::pipelines::logs/googlecontrolplane")
+	require.NoError(t, err)
+	receivers := pipeSub.ToStringMap()["receivers"]
+	assert.Contains(t, receivers, "nop/googlecontrolplane")
+	assert.Contains(t, receivers, "filelog")
+	assert.Contains(t, pipeSub.ToStringMap()["processors"], "googlepolicy")
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestRetrieve_FileLogSourcePolicy_WithInvalidPolicy_FaultIsolation(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	core, recorded := observer.New(zapcore.InfoLevel)
+	logger := zap.New(core)
+	p := createProviderWithLogger(logger)
+
+	valid1 := &policyv1alpha1.FileLogSourcePolicy{
+		Id:            "valid-source-1",
+		IncludedPaths: []string{"/var/log/valid1.log"},
+	}
+	valid2 := &policyv1alpha1.FileLogSourcePolicy{
+		Id:            "valid-source-2",
+		IncludedPaths: []string{"/var/log/valid2.log"},
+	}
+	invalid := &policyv1alpha1.FileLogSourcePolicy{
+		Id:            "invalid-source",
+		IncludedPaths: []string{"/etc/shadow"},
+	}
+
+	ps, err := googlepolicy.MakePolicySetFromProtos("test-set", "rev-fault-isolation", []proto.Message{valid1, valid2, invalid})
+	require.Error(t, err)
+	require.NotNil(t, ps)
+
+	googlepolicy.SetActivePolicySet(ps)
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+
+	// Valid policies should survive and be consolidated into receivers::filelog.
+	assert.True(t, conf.IsSet("receivers::filelog"))
+	sub, err := conf.Sub("receivers::filelog")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"/var/log/valid1.log", "/var/log/valid2.log"}, sub.ToStringMap()["include"])
+
+	// Invalid policy should have recorded an evaluation error event with source class and failed validation type.
+	var invalidEntry *observer.LoggedEntry
+	for _, entry := range recorded.All() {
+		if entry.ContextMap()["gcp.policy.id"] == "invalid-source" {
+			invalidEntry = &entry
+			break
+		}
+	}
+	require.NotNil(t, invalidEntry, "expected an error event recorded for invalid-source")
+	assert.Equal(t, "policy_failed_validation", (*invalidEntry).ContextMap()["error.type"])
+	assert.Equal(t, "source", (*invalidEntry).ContextMap()["gcp.policy.class"])
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestPolicyHotReload_SourcePolicyTriggersWatcher(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	p := createProvider()
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	changeEvents := make(chan *confmap.ChangeEvent, 5)
+	watcher := func(e *confmap.ChangeEvent) {
+		changeEvents <- e
+	}
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", watcher)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+	assert.False(t, conf.IsSet("receivers::filelog"))
+
+	// Update active policy set with a FileLogSourcePolicy.
+	sourcePolicy := &policyv1alpha1.FileLogSourcePolicy{
+		Id:            "app-source",
+		IncludedPaths: []string{"/var/log/app.log"},
+	}
+	ps, err := googlepolicy.MakePolicySetFromProtos("test-set", "rev-source-1", []proto.Message{sourcePolicy})
+	require.NoError(t, err)
+
+	googlepolicy.SetActivePolicySet(ps)
+
+	select {
+	case e := <-changeEvents:
+		assert.NotNil(t, e)
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for confmap.WatcherFunc to be triggered on FileLogSourcePolicy update")
+	}
+
+	// Verify that calling Retrieve() after reload returns the updated config with receivers::filelog.
+	retUpdated, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", watcher)
+	require.NoError(t, err)
+	confUpdated, err := retUpdated.AsConf()
+	require.NoError(t, err)
+	assert.True(t, confUpdated.IsSet("receivers::filelog"))
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestPolicyHotReload_FilterPolicyDoesNotTriggerWatcher(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	p := createProvider()
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	changeEvents := make(chan *confmap.ChangeEvent, 5)
+	watcher := func(e *confmap.ChangeEvent) {
+		changeEvents <- e
+	}
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", watcher)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	// Update active policy set with only a LogFilterPolicy (transformation policy).
+	filterPolicy := &policyv1alpha1.LogFilterPolicy{
+		Id:     "drop-debug",
+		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+		Matchers: []*policyv1alpha1.LogMatcher{
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_RecordField{
+						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
+					},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Glob{
+					Glob: "DEBUG*",
+				},
+			},
+		},
+	}
+	ps, err := googlepolicy.MakePolicySetFromProtos("test-set", "rev-filter-1", []proto.Message{filterPolicy})
+	require.NoError(t, err)
+
+	googlepolicy.SetActivePolicySet(ps)
+
+	// Confmap should be unchanged, so watcher should NOT be triggered.
+	select {
+	case e := <-changeEvents:
+		t.Fatalf("unexpected confmap.WatcherFunc triggered on filter-only update: %+v", e)
+	case <-time.After(200 * time.Millisecond):
+		// Expected: no event.
+	}
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestPolicyHotReload_ProviderShutdownCleansUpWatcher(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	p := createProvider()
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	changeEvents := make(chan *confmap.ChangeEvent, 5)
+	watcher := func(e *confmap.ChangeEvent) {
+		changeEvents <- e
+	}
+
+	_, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", watcher)
+	require.NoError(t, err)
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+
+	// Updating policy set after shutdown must not trigger events or panic.
+	sourcePolicy := &policyv1alpha1.FileLogSourcePolicy{
+		Id:            "post-shutdown-source",
+		IncludedPaths: []string{"/var/log/post.log"},
+	}
+	ps, err := googlepolicy.MakePolicySetFromProtos("test-set", "rev-shutdown", []proto.Message{sourcePolicy})
+	require.NoError(t, err)
+
+	googlepolicy.SetActivePolicySet(ps)
+
+	select {
+	case e := <-changeEvents:
+		t.Fatalf("unexpected confmap.WatcherFunc triggered after provider shutdown: %+v", e)
+	case <-time.After(200 * time.Millisecond):
+		// Expected: no event.
+	}
 }

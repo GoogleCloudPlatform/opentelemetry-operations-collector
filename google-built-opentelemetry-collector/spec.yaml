@@ -26,6 +26,7 @@ components:
         - k8sevents
         - k8sobjects
         - kubeletstats
+        - nop
         - otelarrow
         - prometheus
         - prometheusremotewrite

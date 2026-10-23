@@ -22,6 +22,7 @@ The Google-Built OpenTelemetry Collector is an open-source, production-ready bui
 | k8sevents | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/k8seventsreceiver/README.md) |
 | k8sobjects | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/k8sobjectsreceiver/README.md) |
 | kubeletstats | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/kubeletstatsreceiver/README.md) |
+| nop | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/receiver/nopreceiver/README.md) |
 | otelarrow | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/otelarrowreceiver/README.md) |
 | otlp | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/receiver/otlpreceiver/README.md) |
 | otlpjsonfile | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/otlpjsonfilereceiver/README.md) |

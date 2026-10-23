@@ -1,0 +1,13 @@
+{
+  "type": "log_transform",
+  "id": "02-add-temp",
+  "add": {
+    "target": {
+      "log_attribute_path": {
+        "segments": ["temp_tag"]
+      }
+    },
+    "value": { "string_value": "to-be-removed" },
+    "upsert": true
+  }
+}

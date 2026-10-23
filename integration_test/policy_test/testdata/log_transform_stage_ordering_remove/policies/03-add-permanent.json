@@ -1,0 +1,13 @@
+{
+  "type": "log_transform",
+  "id": "03-add-permanent",
+  "add": {
+    "target": {
+      "log_attribute_path": {
+        "segments": ["retained_tag"]
+      }
+    },
+    "value": { "string_value": "keep-this" },
+    "upsert": true
+  }
+}

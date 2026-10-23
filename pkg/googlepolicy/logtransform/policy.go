@@ -14,8 +14,8 @@
 
 // Package logtransform compiles and evaluates LogTransformPolicy configurations.
 // It is the single authoritative implementation for log record mutations: the
-// collector processor walks surviving log records after the filter stage and
-// delegates every transformation here.
+// collector processor walks surviving log records and delegates every
+// transformation here in deterministic stage order (rename -> add -> remove -> redact).
 package logtransform
 
 import (
@@ -54,10 +54,10 @@ var (
 	ErrMissingID = errors.New("log transform policy id cannot be empty")
 	// ErrMissingAction is returned when the policy does not specify a transform action.
 	ErrMissingAction = errors.New("log transform policy must specify an action")
-	// ErrUnsupportedAction is returned when the policy specifies a transform action not yet supported in preview.
-	ErrUnsupportedAction = errors.New("unsupported action type in preview")
+	// ErrUnsupportedAction is returned when the policy specifies an action not yet supported.
+	ErrUnsupportedAction = errors.New("log transform policy action is not supported in this release")
 	// ErrMissingTarget is returned when an action does not specify a target field selector.
-	ErrMissingTarget = errors.New("log add action must specify a target field selector")
+	ErrMissingTarget = errors.New("log transform action must specify a target field selector")
 	// ErrMissingValue is returned when an action does not specify a valid value.
 	ErrMissingValue = matcher.ErrMissingValue
 	// ErrImmutableField is returned when an action targets a read-only field (such as trace_id or span_id).
@@ -69,6 +69,7 @@ type compiledAction func(ctx googlepolicy.LogContext) bool
 // Policy represents a compiled, validated LogTransformPolicy ready for hot-loop evaluation.
 type Policy struct {
 	proto    *policyv1alpha1.LogTransformPolicy
+	stage    googlepolicy.TransformStage
 	matchers []matcher.CompiledLogMatcher
 	action   compiledAction
 }
@@ -88,21 +89,34 @@ func NewPolicyFromProto(pb *policyv1alpha1.LogTransformPolicy) (*Policy, error) 
 		return nil, ErrMissingAction
 	}
 
-	var action compiledAction
+	var (
+		stage  googlepolicy.TransformStage
+		action compiledAction
+		err    error
+	)
 	switch a := pb.Action.(type) {
 	case *policyv1alpha1.LogTransformPolicy_Add:
 		if a.Add == nil {
 			return nil, ErrMissingAction
 		}
-		ca, err := compileAdd(a.Add)
+		stage = googlepolicy.TransformStageAdd
+		action, err = compileAdd(a.Add)
 		if err != nil {
 			return nil, fmt.Errorf("add: %w", err)
 		}
-		action = ca
-	case *policyv1alpha1.LogTransformPolicy_Remove,
-		*policyv1alpha1.LogTransformPolicy_Rename,
-		*policyv1alpha1.LogTransformPolicy_Redact:
-		return nil, fmt.Errorf("%w: %T", ErrUnsupportedAction, a)
+	case *policyv1alpha1.LogTransformPolicy_Remove:
+		if a.Remove == nil {
+			return nil, ErrMissingAction
+		}
+		stage = googlepolicy.TransformStageRemove
+		action, err = compileRemove(a.Remove)
+		if err != nil {
+			return nil, fmt.Errorf("remove: %w", err)
+		}
+	case *policyv1alpha1.LogTransformPolicy_Rename:
+		return nil, fmt.Errorf("rename: %w", ErrUnsupportedAction)
+	case *policyv1alpha1.LogTransformPolicy_Redact:
+		return nil, fmt.Errorf("redact: %w", ErrUnsupportedAction)
 	default:
 		return nil, ErrMissingAction
 	}
@@ -118,6 +132,7 @@ func NewPolicyFromProto(pb *policyv1alpha1.LogTransformPolicy) (*Policy, error) 
 
 	return &Policy{
 		proto:    pb,
+		stage:    stage,
 		matchers: matchers,
 		action:   action,
 	}, nil
@@ -154,6 +169,12 @@ func (p *Policy) Validate() error {
 // Proto returns the underlying protobuf message for this policy.
 func (p *Policy) Proto() proto.Message {
 	return p.proto
+}
+
+// TransformStage returns the execution stage of this transform policy
+// (TransformStageRename -> TransformStageAdd -> TransformStageRemove -> TransformStageRedact).
+func (p *Policy) TransformStage() googlepolicy.TransformStage {
+	return p.stage
 }
 
 // TransformLog evaluates the policy against the given LogContext and, if all
@@ -281,6 +302,45 @@ func compileRecordFieldAdd(field policyv1alpha1.LogRecordField, val *policyv1alp
 
 	default:
 		return nil, errors.New("log record field cannot be unspecified")
+	}
+}
+
+func compileRemove(a *policyv1alpha1.LogRemoveAction) (compiledAction, error) {
+	if a == nil || a.Target == nil || a.Target.Target == nil {
+		return nil, ErrMissingTarget
+	}
+
+	switch t := a.Target.Target.(type) {
+	case *policyv1alpha1.LogAttributeSelector_LogAttributePath:
+		rmAttr, err := matcher.CompilePathRemover(t.LogAttributePath, "log")
+		if err != nil {
+			return nil, err
+		}
+		return func(ctx googlepolicy.LogContext) bool {
+			if ctx.Record == (plog.LogRecord{}) {
+				return false
+			}
+			return rmAttr(ctx.Record.Attributes())
+		}, nil
+
+	case *policyv1alpha1.LogAttributeSelector_BodyFieldPath:
+		rmBody, err := matcher.CompilePathRemover(t.BodyFieldPath, "body")
+		if err != nil {
+			return nil, err
+		}
+		return func(ctx googlepolicy.LogContext) bool {
+			if ctx.Record == (plog.LogRecord{}) {
+				return false
+			}
+			body := ctx.Record.Body()
+			if body.Type() != pcommon.ValueTypeMap {
+				return false
+			}
+			return rmBody(body.Map())
+		}, nil
+
+	default:
+		return nil, ErrMissingTarget
 	}
 }
 

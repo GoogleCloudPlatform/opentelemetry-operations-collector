@@ -756,8 +756,10 @@ func TestPolicyHotReload_FilterPolicyDoesNotTriggerWatcher(t *testing.T) {
 		}
 	})
 
+	var eventCount atomic.Int32
 	changeEvents := make(chan *confmap.ChangeEvent, 5)
 	watcher := func(e *confmap.ChangeEvent) {
+		eventCount.Add(1)
 		changeEvents <- e
 	}
 
@@ -766,7 +768,7 @@ func TestPolicyHotReload_FilterPolicyDoesNotTriggerWatcher(t *testing.T) {
 	require.NotNil(t, ret)
 
 	// Update active policy set with only a LogFilterPolicy (transformation policy).
-	ps, err := googlepolicy.MakePolicySet("rev-filter-1", []map[string]any{
+	psFilter, err := googlepolicy.MakePolicySet("rev-filter-1", []map[string]any{
 		{
 			"type":   "log_filter",
 			"id":     "drop-debug",
@@ -783,15 +785,28 @@ func TestPolicyHotReload_FilterPolicyDoesNotTriggerWatcher(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	googlepolicy.SetActivePolicySet(ps)
+	googlepolicy.SetActivePolicySet(psFilter)
 
-	// Confmap should be unchanged, so watcher should NOT be triggered.
+	// Establish a sync point: push a source policy change that is guaranteed to trigger a reload.
+	psSource, err := googlepolicy.MakePolicySet("rev-source-sync", []map[string]any{
+		{
+			"type": "self_metrics",
+			"name": "custom_self_metrics",
+			"port": 19999,
+		},
+	})
+	require.NoError(t, err)
+
+	googlepolicy.SetActivePolicySet(psSource)
+
 	select {
-	case e := <-changeEvents:
-		t.Fatalf("unexpected confmap.WatcherFunc triggered on filter-only update: %+v", e)
-	case <-time.After(100 * time.Millisecond):
-		// Expected: no event.
+	case <-changeEvents:
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for sync point watcher invocation")
 	}
+
+	// Strictly assert that watcher was called exactly once (for the source policy, never for the filter policy).
+	assert.Equal(t, int32(1), eventCount.Load(), "watcher should only have been invoked for the source policy, not the filter policy")
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
@@ -874,8 +889,10 @@ func TestPolicyHotReload_InvalidSourcePolicyDoesNotTriggerReload(t *testing.T) {
 		}
 	})
 
+	var eventCount atomic.Int32
 	changeEvents := make(chan *confmap.ChangeEvent, 5)
 	watcher := func(e *confmap.ChangeEvent) {
+		eventCount.Add(1)
 		changeEvents <- e
 	}
 
@@ -884,7 +901,7 @@ func TestPolicyHotReload_InvalidSourcePolicyDoesNotTriggerReload(t *testing.T) {
 	require.NotNil(t, ret)
 
 	// Set an active policy set with a source policy that fails Evaluate().
-	ps := &googlepolicy.PolicySet{
+	psInvalid := &googlepolicy.PolicySet{
 		RevisionID: "rev-invalid-source",
 		Policies: map[string]*googlepolicy.PolicySetEntry{
 			"bad_source": {
@@ -895,15 +912,27 @@ func TestPolicyHotReload_InvalidSourcePolicyDoesNotTriggerReload(t *testing.T) {
 			},
 		},
 	}
-	googlepolicy.SetActivePolicySet(ps)
+	googlepolicy.SetActivePolicySet(psInvalid)
 
-	// Watcher should NOT be triggered on failed evaluation.
+	// Establish a sync point: push a valid source policy change guaranteed to trigger a reload.
+	psSource, err := googlepolicy.MakePolicySet("rev-source-sync", []map[string]any{
+		{
+			"type": "self_metrics",
+			"name": "custom_self_metrics",
+			"port": 19999,
+		},
+	})
+	require.NoError(t, err)
+	googlepolicy.SetActivePolicySet(psSource)
+
 	select {
-	case e := <-changeEvents:
-		t.Fatalf("unexpected confmap.WatcherFunc triggered on invalid source policy: %+v", e)
-	case <-time.After(150 * time.Millisecond):
-		// Expected: no event.
+	case <-changeEvents:
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for sync point watcher invocation")
 	}
+
+	// Strictly assert that watcher was called exactly once (for the valid source policy, never for the invalid one).
+	assert.Equal(t, int32(1), eventCount.Load(), "watcher should only have been invoked for the valid source policy, not the failing one")
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }

@@ -81,12 +81,12 @@ func NewPolicyFromProto(pb *policyv1alpha1.TraceFilterPolicy) (*Policy, error) {
 		return nil, ErrMissingID
 	}
 
-	if len(pb.GetMatches()) == 0 {
+	if len(pb.GetMatchers()) == 0 {
 		return nil, ErrMissingMatchers
 	}
 
-	matchers := make([]matcher.CompiledTraceMatcher, 0, len(pb.GetMatches()))
-	for i, m := range pb.GetMatches() {
+	matchers := make([]matcher.CompiledTraceMatcher, 0, len(pb.GetMatchers()))
+	for i, m := range pb.GetMatchers() {
 		cm, err := matcher.CompileTraceMatcher(m)
 		if err != nil {
 			return nil, fmt.Errorf("matcher[%d]: %w", i, err)

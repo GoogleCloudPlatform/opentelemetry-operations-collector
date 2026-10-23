@@ -87,12 +87,12 @@ func NewPolicyFromProto(pb *policyv1alpha1.LogFilterPolicy) (*Policy, error) {
 		return nil, ErrMissingAction
 	}
 
-	if len(pb.GetMatches()) == 0 {
+	if len(pb.GetMatchers()) == 0 {
 		return nil, ErrMissingMatchers
 	}
 
-	matchers := make([]matcher.CompiledLogMatcher, 0, len(pb.GetMatches()))
-	for i, m := range pb.GetMatches() {
+	matchers := make([]matcher.CompiledLogMatcher, 0, len(pb.GetMatchers()))
+	for i, m := range pb.GetMatchers() {
 		cm, err := matcher.CompileLogMatcher(m)
 		if err != nil {
 			return nil, fmt.Errorf("matcher[%d]: %w", i, err)

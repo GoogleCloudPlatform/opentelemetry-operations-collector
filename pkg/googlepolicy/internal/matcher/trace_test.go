@@ -69,8 +69,8 @@ func TestCompileTraceMatcher_AndExtractor(t *testing.T) {
 						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equals{
-					Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "GET /checkout"}},
+				Predicate: &policyv1alpha1.TraceMatcher_Equality{
+					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "GET /checkout"}},
 				},
 			},
 			want: true,
@@ -83,8 +83,8 @@ func TestCompileTraceMatcher_AndExtractor(t *testing.T) {
 						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_KIND,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equals{
-					Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "SERVER"}},
+				Predicate: &policyv1alpha1.TraceMatcher_Equality{
+					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "SERVER"}},
 				},
 			},
 			want: true,
@@ -97,7 +97,7 @@ func TestCompileTraceMatcher_AndExtractor(t *testing.T) {
 						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Exists{Exists: &emptypb.Empty{}},
+				Predicate: &policyv1alpha1.TraceMatcher_Existence{Existence: &emptypb.Empty{}},
 			},
 			want: true,
 		},
@@ -105,12 +105,12 @@ func TestCompileTraceMatcher_AndExtractor(t *testing.T) {
 			name: "span attribute gte",
 			matcher: &policyv1alpha1.TraceMatcher{
 				Target: &policyv1alpha1.TraceFieldSelector{
-					Target: &policyv1alpha1.TraceFieldSelector_SpanAttribute{
-						SpanAttribute: &policyv1alpha1.AttributePath{Path: []string{"http.status_code"}},
+					Target: &policyv1alpha1.TraceFieldSelector_SpanAttributePath{
+						SpanAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"http.status_code"}},
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Gte{
-					Gte: &policyv1alpha1.NumericValue{Value: &policyv1alpha1.NumericValue_IntValue{IntValue: 500}},
+				Predicate: &policyv1alpha1.TraceMatcher_InclusiveMinimum{
+					InclusiveMinimum: &policyv1alpha1.NumericValue{Kind: &policyv1alpha1.NumericValue_IntValue{IntValue: 500}},
 				},
 			},
 			want: true,
@@ -119,12 +119,12 @@ func TestCompileTraceMatcher_AndExtractor(t *testing.T) {
 			name: "resource attribute equals",
 			matcher: &policyv1alpha1.TraceMatcher{
 				Target: &policyv1alpha1.TraceFieldSelector{
-					Target: &policyv1alpha1.TraceFieldSelector_ResourceAttribute{
-						ResourceAttribute: &policyv1alpha1.AttributePath{Path: []string{"service.name"}},
+					Target: &policyv1alpha1.TraceFieldSelector_ResourceAttributePath{
+						ResourceAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"service.name"}},
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equals{
-					Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "frontend"}},
+				Predicate: &policyv1alpha1.TraceMatcher_Equality{
+					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "frontend"}},
 				},
 			},
 			want: true,
@@ -137,8 +137,8 @@ func TestCompileTraceMatcher_AndExtractor(t *testing.T) {
 						ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_NAME,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equals{
-					Equals: &policyv1alpha1.Value{Value: &policyv1alpha1.Value_StringValue{StringValue: "tracer.lib"}},
+				Predicate: &policyv1alpha1.TraceMatcher_Equality{
+					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "tracer.lib"}},
 				},
 			},
 			want: true,
@@ -150,7 +150,7 @@ func TestCompileTraceMatcher_AndExtractor(t *testing.T) {
 			cm, err := CompileTraceMatcher(tc.matcher)
 			require.NoError(t, err)
 			assert.Equal(t, tc.want, cm.Eval(ctx))
-			assert.Equal(t, tc.matcher.GetNegate(), cm.Eval(googlepolicy.TraceContext{}))
+			assert.Equal(t, tc.matcher.GetNegated(), cm.Eval(googlepolicy.TraceContext{}))
 		})
 	}
 }

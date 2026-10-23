@@ -37,7 +37,7 @@ const (
 )
 
 // MetricDescriptorField identifies top-level descriptor fields of an OpenTelemetry Metric.
-// When evaluated with `exists`, first-class fields evaluate to true when set
+// When evaluated with `existence`, first-class fields evaluate to true when set
 // to a non-default (non-empty / non-zero) value.
 type MetricDescriptorField int32
 
@@ -52,16 +52,16 @@ const (
 	MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_UNIT MetricDescriptorField = 3
 	// The primary data type of the metric (e.g. "GAUGE", "SUM", "HISTOGRAM",
 	// "EXPONENTIAL_HISTOGRAM", "SUMMARY"). When selected, string predicates
-	// (`equals` with string_value, `glob`, `contains` with string_value) evaluate
-	// against uppercase type names.
+	// (`equality` with `string_value`, `glob`, `containment` with `string_value`)
+	// evaluate against uppercase type names.
 	MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE MetricDescriptorField = 4
 	// The aggregation temporality of the metric (OTLP path: metric.*.aggregation_temporality,
 	// e.g. for Sum, Histogram, ExponentialHistogram). When selected, string predicates
-	// (`equals` with string_value, `glob`, `contains` with string_value) evaluate
-	// against uppercase names: "DELTA" or "CUMULATIVE".
+	// (`equality` with `string_value`, `glob`, `containment` with `string_value`)
+	// evaluate against uppercase names: "DELTA" or "CUMULATIVE".
 	MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_AGGREGATION_TEMPORALITY MetricDescriptorField = 5
 	// Whether a Sum metric is monotonic (OTLP path: metric.sum.is_monotonic).
-	// Evaluates against typed `equals` (`bool_value`).
+	// Evaluates against typed `equality` (`bool_value`).
 	MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_IS_MONOTONIC MetricDescriptorField = 6
 )
 
@@ -121,36 +121,39 @@ func (MetricDescriptorField) EnumDescriptor() ([]byte, []int) {
 // Policies are declarative, atomic, and transport-agnostic.
 //
 // Evaluation Granularity & Action Precedence:
-//   - Instrument-level: If all matchers in `matches` target metric-level fields
-//     (descriptor_field, resource_attribute, scope_attribute, or scope_field),
-//     the action applies to the entire metric stream (e.g. ACTION_DROP drops
-//     the entire metric).
-//   - Data point-level: If any matcher in `matches` targets a
-//     `datapoint_attribute`, the action applies at the individual data point level
-//     (e.g. ACTION_DROP prunes matching data points while preserving non-matching
-//     data points in the metric stream).
-//   - Pruning Empty Metrics: If an ACTION_DROP policy prunes all data points of
+//   - Instrument-level: If all matchers in `matchers` target metric-level fields
+//     (`descriptor_field`, `resource_attribute_path`, `scope_attribute_path`, or
+//     `scope_field`), the action applies to the entire metric stream (e.g.
+//     `ACTION_DROP` drops the entire metric).
+//   - Data point-level: If any matcher in `matchers` targets a
+//     `datapoint_attribute_path`, the action applies at the individual data point
+//     level (e.g. `ACTION_DROP` prunes matching data points while preserving
+//     non-matching data points in the metric stream).
+//   - Pruning Empty Metrics: If an `ACTION_DROP` policy prunes all data points of
 //     a metric stream, the empty metric instrument itself is dropped completely,
 //     and any parent ScopeMetrics or ResourceMetrics that become empty as a result
 //     are pruned.
 //   - Action Precedence & Exemptions: Telemetry passes through by default (default
-//     allow). When multiple policies match a data point or metric stream, ACTION_KEEP
-//     always overrides ACTION_DROP (keep always overrides drop). ACTION_KEEP acts as
-//     an explicit exemption retaining matching data points; it does not prune
-//     non-matching data points. To implement an allowlist that prunes non-matching
-//     data points, authors specify ACTION_DROP with negate: true on the matchers.
+//     allow). Policies are evaluated in an order-independent manner: when multiple
+//     policies match a data point or metric stream, `ACTION_KEEP` always overrides
+//     `ACTION_DROP` (keep always overrides drop). `ACTION_KEEP` acts as an
+//     explicit exemption retaining matching data points; it does not implicitly
+//     prune non-matching data points. To implement an allowlist that prunes
+//     non-matching data points, authors specify `ACTION_DROP` with `negated: true`
+//     on the matchers (or pair a broad `ACTION_DROP` policy with a narrower
+//     `ACTION_KEEP` exemption policy).
 type MetricFilterPolicy struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Unique identifier for the policy within its configuration scope
 	// (e.g. a UUID or namespaced URI like "io.opentelemetry.operator/{namespace}/policies/drop-jvm-metrics").
 	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	// The filtering action to take when all `matches` conditions evaluate to true.
+	// The filtering action to take when all `matchers` conditions evaluate to true.
 	Action *Action `protobuf:"varint,2,opt,name=action,proto3,enum=google.telemetry.policy.v1alpha1.Action,oneof" json:"action,omitempty"`
 	// Conditions evaluated against incoming metrics or data points.
 	// All matchers in this list are ANDed together: all conditions must evaluate
 	// to true for the policy action to take effect.
 	// At least one matcher is required; a policy with no matchers is invalid.
-	Matches       []*MetricMatcher `protobuf:"bytes,3,rep,name=matches,proto3" json:"matches,omitempty"`
+	Matchers      []*MetricMatcher `protobuf:"bytes,3,rep,name=matchers,proto3" json:"matchers,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -199,9 +202,9 @@ func (x *MetricFilterPolicy) GetAction() Action {
 	return Action_ACTION_UNSPECIFIED
 }
 
-func (x *MetricFilterPolicy) GetMatches() []*MetricMatcher {
+func (x *MetricFilterPolicy) GetMatchers() []*MetricMatcher {
 	if x != nil {
-		return x.Matches
+		return x.Matchers
 	}
 	return nil
 }
@@ -215,19 +218,25 @@ type MetricMatcher struct {
 	// The comparison predicate to evaluate against the target value.
 	// Exactly one predicate must be set.
 	//
+	// If the selected target field or attribute does not exist, or if its
+	// runtime value type is incompatible with the chosen predicate (for
+	// example, evaluating `glob` against a non-string value, or a numeric
+	// comparison against a string or boolean value), the predicate evaluates
+	// to `false` (prior to applying `negated`).
+	//
 	// Types that are valid to be assigned to Predicate:
 	//
-	//	*MetricMatcher_Exists
-	//	*MetricMatcher_Equals
+	//	*MetricMatcher_Existence
+	//	*MetricMatcher_Equality
 	//	*MetricMatcher_Glob
-	//	*MetricMatcher_Gt
-	//	*MetricMatcher_Gte
-	//	*MetricMatcher_Lt
-	//	*MetricMatcher_Lte
-	//	*MetricMatcher_Contains
+	//	*MetricMatcher_ExclusiveMinimum
+	//	*MetricMatcher_InclusiveMinimum
+	//	*MetricMatcher_ExclusiveMaximum
+	//	*MetricMatcher_InclusiveMaximum
+	//	*MetricMatcher_Containment
 	Predicate isMetricMatcher_Predicate `protobuf_oneof:"predicate"`
 	// If true, inverts the result of the predicate (logical NOT).
-	Negate        bool `protobuf:"varint,2,opt,name=negate,proto3" json:"negate,omitempty"`
+	Negated       bool `protobuf:"varint,2,opt,name=negated,proto3" json:"negated,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -276,19 +285,19 @@ func (x *MetricMatcher) GetPredicate() isMetricMatcher_Predicate {
 	return nil
 }
 
-func (x *MetricMatcher) GetExists() *emptypb.Empty {
+func (x *MetricMatcher) GetExistence() *emptypb.Empty {
 	if x != nil {
-		if x, ok := x.Predicate.(*MetricMatcher_Exists); ok {
-			return x.Exists
+		if x, ok := x.Predicate.(*MetricMatcher_Existence); ok {
+			return x.Existence
 		}
 	}
 	return nil
 }
 
-func (x *MetricMatcher) GetEquals() *Value {
+func (x *MetricMatcher) GetEquality() *Value {
 	if x != nil {
-		if x, ok := x.Predicate.(*MetricMatcher_Equals); ok {
-			return x.Equals
+		if x, ok := x.Predicate.(*MetricMatcher_Equality); ok {
+			return x.Equality
 		}
 	}
 	return nil
@@ -303,54 +312,54 @@ func (x *MetricMatcher) GetGlob() string {
 	return ""
 }
 
-func (x *MetricMatcher) GetGt() *NumericValue {
+func (x *MetricMatcher) GetExclusiveMinimum() *NumericValue {
 	if x != nil {
-		if x, ok := x.Predicate.(*MetricMatcher_Gt); ok {
-			return x.Gt
+		if x, ok := x.Predicate.(*MetricMatcher_ExclusiveMinimum); ok {
+			return x.ExclusiveMinimum
 		}
 	}
 	return nil
 }
 
-func (x *MetricMatcher) GetGte() *NumericValue {
+func (x *MetricMatcher) GetInclusiveMinimum() *NumericValue {
 	if x != nil {
-		if x, ok := x.Predicate.(*MetricMatcher_Gte); ok {
-			return x.Gte
+		if x, ok := x.Predicate.(*MetricMatcher_InclusiveMinimum); ok {
+			return x.InclusiveMinimum
 		}
 	}
 	return nil
 }
 
-func (x *MetricMatcher) GetLt() *NumericValue {
+func (x *MetricMatcher) GetExclusiveMaximum() *NumericValue {
 	if x != nil {
-		if x, ok := x.Predicate.(*MetricMatcher_Lt); ok {
-			return x.Lt
+		if x, ok := x.Predicate.(*MetricMatcher_ExclusiveMaximum); ok {
+			return x.ExclusiveMaximum
 		}
 	}
 	return nil
 }
 
-func (x *MetricMatcher) GetLte() *NumericValue {
+func (x *MetricMatcher) GetInclusiveMaximum() *NumericValue {
 	if x != nil {
-		if x, ok := x.Predicate.(*MetricMatcher_Lte); ok {
-			return x.Lte
+		if x, ok := x.Predicate.(*MetricMatcher_InclusiveMaximum); ok {
+			return x.InclusiveMaximum
 		}
 	}
 	return nil
 }
 
-func (x *MetricMatcher) GetContains() *Value {
+func (x *MetricMatcher) GetContainment() *Value {
 	if x != nil {
-		if x, ok := x.Predicate.(*MetricMatcher_Contains); ok {
-			return x.Contains
+		if x, ok := x.Predicate.(*MetricMatcher_Containment); ok {
+			return x.Containment
 		}
 	}
 	return nil
 }
 
-func (x *MetricMatcher) GetNegate() bool {
+func (x *MetricMatcher) GetNegated() bool {
 	if x != nil {
-		return x.Negate
+		return x.Negated
 	}
 	return false
 }
@@ -359,76 +368,79 @@ type isMetricMatcher_Predicate interface {
 	isMetricMatcher_Predicate()
 }
 
-type MetricMatcher_Exists struct {
+type MetricMatcher_Existence struct {
 	// Matches if the selected field or attribute exists.
 	// For attributes, this evaluates to true if the attribute key exists.
-	// For first-class fields (descriptor_field, scope_field) that lack explicit
-	// presence tracking in the OpenTelemetry data model, this evaluates to true
-	// when the field is set to a non-default (non-zero/non-empty) value, and
-	// false when absent or default (e.g. empty string or 0).
-	Exists *emptypb.Empty `protobuf:"bytes,10,opt,name=exists,proto3,oneof"`
+	// For first-class fields (`descriptor_field`, `scope_field`) that lack
+	// explicit presence tracking in the OpenTelemetry data model, this evaluates
+	// to true when the field is set to a non-default (non-zero/non-empty) value,
+	// and false when absent or default (e.g. empty string or 0). Combine with
+	// `negated: true` to match when a field or attribute does NOT exist.
+	Existence *emptypb.Empty `protobuf:"bytes,10,opt,name=existence,proto3,oneof"`
 }
 
-type MetricMatcher_Equals struct {
+type MetricMatcher_Equality struct {
 	// Typed scalar equality match (supporting string, int64, bool, double, bytes).
-	Equals *Value `protobuf:"bytes,11,opt,name=equals,proto3,oneof"`
+	Equality *Value `protobuf:"bytes,11,opt,name=equality,proto3,oneof"`
 }
 
 type MetricMatcher_Glob struct {
 	// Glob pattern match against the entire string value.
-	// Supports '*' (matches zero or more characters) and '?' (matches any
-	// single character). Matching is case-sensitive and anchored to the full
-	// string. Applies strictly to string fields and string attribute values.
+	// Supports `*` (matches zero or more characters) and `?` (matches any
+	// single character), for example `"http.*"` or `"err_?_code"`. Matching is
+	// case-sensitive and anchored to the full string. Applies strictly to
+	// string fields and string attribute values (evaluates to `false` for
+	// non-string targets).
 	Glob string `protobuf:"bytes,12,opt,name=glob,proto3,oneof"`
 }
 
-type MetricMatcher_Gt struct {
-	// Matches if the target numeric value is strictly greater than this value.
+type MetricMatcher_ExclusiveMinimum struct {
+	// Matches if the target numeric value is strictly greater than (>) this value.
 	// Applies strictly to int64 and double fields and attribute values.
-	Gt *NumericValue `protobuf:"bytes,13,opt,name=gt,proto3,oneof"`
+	ExclusiveMinimum *NumericValue `protobuf:"bytes,13,opt,name=exclusive_minimum,json=exclusiveMinimum,proto3,oneof"`
 }
 
-type MetricMatcher_Gte struct {
-	// Matches if the target numeric value is greater than or equal to this value.
+type MetricMatcher_InclusiveMinimum struct {
+	// Matches if the target numeric value is greater than or equal to (>=) this value.
 	// Applies strictly to int64 and double fields and attribute values.
-	Gte *NumericValue `protobuf:"bytes,14,opt,name=gte,proto3,oneof"`
+	InclusiveMinimum *NumericValue `protobuf:"bytes,14,opt,name=inclusive_minimum,json=inclusiveMinimum,proto3,oneof"`
 }
 
-type MetricMatcher_Lt struct {
-	// Matches if the target numeric value is strictly less than this value.
+type MetricMatcher_ExclusiveMaximum struct {
+	// Matches if the target numeric value is strictly less than (<) this value.
 	// Applies strictly to int64 and double fields and attribute values.
-	Lt *NumericValue `protobuf:"bytes,15,opt,name=lt,proto3,oneof"`
+	ExclusiveMaximum *NumericValue `protobuf:"bytes,15,opt,name=exclusive_maximum,json=exclusiveMaximum,proto3,oneof"`
 }
 
-type MetricMatcher_Lte struct {
-	// Matches if the target numeric value is less than or equal to this value.
+type MetricMatcher_InclusiveMaximum struct {
+	// Matches if the target numeric value is less than or equal to (<=) this value.
 	// Applies strictly to int64 and double fields and attribute values.
-	Lte *NumericValue `protobuf:"bytes,16,opt,name=lte,proto3,oneof"`
+	InclusiveMaximum *NumericValue `protobuf:"bytes,16,opt,name=inclusive_maximum,json=inclusiveMaximum,proto3,oneof"`
 }
 
-type MetricMatcher_Contains struct {
+type MetricMatcher_Containment struct {
 	// Value containment:
 	// - For list (ArrayValue) attributes: matches if any element in the list equals this value.
-	// - For string fields or attribute values: matches if the string contains this value's string_value as a substring.
-	// - For bytes fields or attribute values: matches if the bytes contain this value's bytes_value as a subsequence.
-	Contains *Value `protobuf:"bytes,17,opt,name=contains,proto3,oneof"`
+	// - For string fields or attribute values: matches if the string contains this value's `string_value` as a substring.
+	// - For bytes fields or attribute values: matches if the bytes contain this value's `bytes_value` as a subsequence.
+	Containment *Value `protobuf:"bytes,17,opt,name=containment,proto3,oneof"`
 }
 
-func (*MetricMatcher_Exists) isMetricMatcher_Predicate() {}
+func (*MetricMatcher_Existence) isMetricMatcher_Predicate() {}
 
-func (*MetricMatcher_Equals) isMetricMatcher_Predicate() {}
+func (*MetricMatcher_Equality) isMetricMatcher_Predicate() {}
 
 func (*MetricMatcher_Glob) isMetricMatcher_Predicate() {}
 
-func (*MetricMatcher_Gt) isMetricMatcher_Predicate() {}
+func (*MetricMatcher_ExclusiveMinimum) isMetricMatcher_Predicate() {}
 
-func (*MetricMatcher_Gte) isMetricMatcher_Predicate() {}
+func (*MetricMatcher_InclusiveMinimum) isMetricMatcher_Predicate() {}
 
-func (*MetricMatcher_Lt) isMetricMatcher_Predicate() {}
+func (*MetricMatcher_ExclusiveMaximum) isMetricMatcher_Predicate() {}
 
-func (*MetricMatcher_Lte) isMetricMatcher_Predicate() {}
+func (*MetricMatcher_InclusiveMaximum) isMetricMatcher_Predicate() {}
 
-func (*MetricMatcher_Contains) isMetricMatcher_Predicate() {}
+func (*MetricMatcher_Containment) isMetricMatcher_Predicate() {}
 
 // MetricFieldSelector designates a first-class OTel metric field, attribute, or metadata.
 type MetricFieldSelector struct {
@@ -436,9 +448,9 @@ type MetricFieldSelector struct {
 	// Types that are valid to be assigned to Target:
 	//
 	//	*MetricFieldSelector_DescriptorField
-	//	*MetricFieldSelector_DatapointAttribute
-	//	*MetricFieldSelector_ResourceAttribute
-	//	*MetricFieldSelector_ScopeAttribute
+	//	*MetricFieldSelector_DatapointAttributePath
+	//	*MetricFieldSelector_ResourceAttributePath
+	//	*MetricFieldSelector_ScopeAttributePath
 	//	*MetricFieldSelector_ScopeField
 	Target        isMetricFieldSelector_Target `protobuf_oneof:"target"`
 	unknownFields protoimpl.UnknownFields
@@ -491,28 +503,28 @@ func (x *MetricFieldSelector) GetDescriptorField() MetricDescriptorField {
 	return MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_UNSPECIFIED
 }
 
-func (x *MetricFieldSelector) GetDatapointAttribute() *AttributePath {
+func (x *MetricFieldSelector) GetDatapointAttributePath() *AttributePath {
 	if x != nil {
-		if x, ok := x.Target.(*MetricFieldSelector_DatapointAttribute); ok {
-			return x.DatapointAttribute
+		if x, ok := x.Target.(*MetricFieldSelector_DatapointAttributePath); ok {
+			return x.DatapointAttributePath
 		}
 	}
 	return nil
 }
 
-func (x *MetricFieldSelector) GetResourceAttribute() *AttributePath {
+func (x *MetricFieldSelector) GetResourceAttributePath() *AttributePath {
 	if x != nil {
-		if x, ok := x.Target.(*MetricFieldSelector_ResourceAttribute); ok {
-			return x.ResourceAttribute
+		if x, ok := x.Target.(*MetricFieldSelector_ResourceAttributePath); ok {
+			return x.ResourceAttributePath
 		}
 	}
 	return nil
 }
 
-func (x *MetricFieldSelector) GetScopeAttribute() *AttributePath {
+func (x *MetricFieldSelector) GetScopeAttributePath() *AttributePath {
 	if x != nil {
-		if x, ok := x.Target.(*MetricFieldSelector_ScopeAttribute); ok {
-			return x.ScopeAttribute
+		if x, ok := x.Target.(*MetricFieldSelector_ScopeAttributePath); ok {
+			return x.ScopeAttributePath
 		}
 	}
 	return nil
@@ -532,37 +544,49 @@ type isMetricFieldSelector_Target interface {
 }
 
 type MetricFieldSelector_DescriptorField struct {
-	// Top-level metric descriptor fields (e.g. name, description, unit).
+	// Top-level metric descriptor fields on the OTel Metric itself (for example,
+	// `METRIC_DESCRIPTOR_FIELD_NAME` or `METRIC_DESCRIPTOR_FIELD_UNIT`).
+	// First-class metric descriptor fields must be selected using
+	// `descriptor_field`, not `datapoint_attribute_path`.
 	DescriptorField MetricDescriptorField `protobuf:"varint,1,opt,name=descriptor_field,json=descriptorField,proto3,enum=google.telemetry.policy.v1alpha1.MetricDescriptorField,oneof"`
 }
 
-type MetricFieldSelector_DatapointAttribute struct {
-	// Attribute on an individual metric data point by key or path (e.g. ["http.status_code"] or ["env"]).
-	DatapointAttribute *AttributePath `protobuf:"bytes,2,opt,name=datapoint_attribute,json=datapointAttribute,proto3,oneof"`
+type MetricFieldSelector_DatapointAttributePath struct {
+	// A key or nested path inside an individual metric data point's `attributes`
+	// map (e.g. `["http.status_code"]` or `["env"]`). This only inspects data
+	// point attributes; metric descriptor fields (such as metric `name`) must
+	// be selected via `descriptor_field`.
+	DatapointAttributePath *AttributePath `protobuf:"bytes,2,opt,name=datapoint_attribute_path,json=datapointAttributePath,proto3,oneof"`
 }
 
-type MetricFieldSelector_ResourceAttribute struct {
-	// Resource attribute by key or path (e.g. ["service.name"] or ["host", "id"]).
-	ResourceAttribute *AttributePath `protobuf:"bytes,3,opt,name=resource_attribute,json=resourceAttribute,proto3,oneof"`
+type MetricFieldSelector_ResourceAttributePath struct {
+	// A key or nested path inside the `Resource.attributes` map (attributes
+	// describing the entity producing the metrics, e.g. `["service.name"]`,
+	// `["k8s.pod.name"]`, or `["host", "id"]`).
+	ResourceAttributePath *AttributePath `protobuf:"bytes,3,opt,name=resource_attribute_path,json=resourceAttributePath,proto3,oneof"`
 }
 
-type MetricFieldSelector_ScopeAttribute struct {
-	// Instrumentation scope attribute by key or path (e.g. ["library.name"]).
-	ScopeAttribute *AttributePath `protobuf:"bytes,4,opt,name=scope_attribute,json=scopeAttribute,proto3,oneof"`
+type MetricFieldSelector_ScopeAttributePath struct {
+	// A key or nested path inside the `InstrumentationScope.attributes` map
+	// (attributes attached to the meter or instrumentation scope, e.g.
+	// `["library.name"]`). First-class scope fields (`name`, `version`,
+	// `schema_url`) must be selected via `scope_field`.
+	ScopeAttributePath *AttributePath `protobuf:"bytes,4,opt,name=scope_attribute_path,json=scopeAttributePath,proto3,oneof"`
 }
 
 type MetricFieldSelector_ScopeField struct {
-	// Standard first-class OpenTelemetry InstrumentationScope fields (e.g. name, version).
+	// A top-level property of the `InstrumentationScope` (`SCOPE_FIELD_NAME`,
+	// `SCOPE_FIELD_VERSION`, or `SCOPE_FIELD_SCHEMA_URL`).
 	ScopeField ScopeField `protobuf:"varint,5,opt,name=scope_field,json=scopeField,proto3,enum=google.telemetry.policy.v1alpha1.ScopeField,oneof"`
 }
 
 func (*MetricFieldSelector_DescriptorField) isMetricFieldSelector_Target() {}
 
-func (*MetricFieldSelector_DatapointAttribute) isMetricFieldSelector_Target() {}
+func (*MetricFieldSelector_DatapointAttributePath) isMetricFieldSelector_Target() {}
 
-func (*MetricFieldSelector_ResourceAttribute) isMetricFieldSelector_Target() {}
+func (*MetricFieldSelector_ResourceAttributePath) isMetricFieldSelector_Target() {}
 
-func (*MetricFieldSelector_ScopeAttribute) isMetricFieldSelector_Target() {}
+func (*MetricFieldSelector_ScopeAttributePath) isMetricFieldSelector_Target() {}
 
 func (*MetricFieldSelector_ScopeField) isMetricFieldSelector_Target() {}
 
@@ -570,30 +594,30 @@ var File_policy_v1alpha1_metric_filter_policy_proto protoreflect.FileDescriptor
 
 const file_policy_v1alpha1_metric_filter_policy_proto_rawDesc = "" +
 	"\n" +
-	"*policy/v1alpha1/metric_filter_policy.proto\x12 google.telemetry.policy.v1alpha1\x1a\x1bgoogle/protobuf/empty.proto\x1a)policy/v1alpha1/common_policy_types.proto\"\xc1\x01\n" +
+	"*policy/v1alpha1/metric_filter_policy.proto\x12 google.telemetry.policy.v1alpha1\x1a\x1bgoogle/protobuf/empty.proto\x1a)policy/v1alpha1/common_policy_types.proto\"\xc3\x01\n" +
 	"\x12MetricFilterPolicy\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12E\n" +
-	"\x06action\x18\x02 \x01(\x0e2(.google.telemetry.policy.v1alpha1.ActionH\x00R\x06action\x88\x01\x01\x12I\n" +
-	"\amatches\x18\x03 \x03(\v2/.google.telemetry.policy.v1alpha1.MetricMatcherR\amatchesB\t\n" +
-	"\a_action\"\xe1\x04\n" +
+	"\x06action\x18\x02 \x01(\x0e2(.google.telemetry.policy.v1alpha1.ActionH\x00R\x06action\x88\x01\x01\x12K\n" +
+	"\bmatchers\x18\x03 \x03(\v2/.google.telemetry.policy.v1alpha1.MetricMatcherR\bmatchersB\t\n" +
+	"\a_action\"\xe3\x05\n" +
 	"\rMetricMatcher\x12M\n" +
-	"\x06target\x18\x01 \x01(\v25.google.telemetry.policy.v1alpha1.MetricFieldSelectorR\x06target\x120\n" +
-	"\x06exists\x18\n" +
-	" \x01(\v2\x16.google.protobuf.EmptyH\x00R\x06exists\x12A\n" +
-	"\x06equals\x18\v \x01(\v2'.google.telemetry.policy.v1alpha1.ValueH\x00R\x06equals\x12\x14\n" +
-	"\x04glob\x18\f \x01(\tH\x00R\x04glob\x12@\n" +
-	"\x02gt\x18\r \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x02gt\x12B\n" +
-	"\x03gte\x18\x0e \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x03gte\x12@\n" +
-	"\x02lt\x18\x0f \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x02lt\x12B\n" +
-	"\x03lte\x18\x10 \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x03lte\x12E\n" +
-	"\bcontains\x18\x11 \x01(\v2'.google.telemetry.policy.v1alpha1.ValueH\x00R\bcontains\x12\x16\n" +
-	"\x06negate\x18\x02 \x01(\bR\x06negateB\v\n" +
-	"\tpredicate\"\xf8\x03\n" +
+	"\x06target\x18\x01 \x01(\v25.google.telemetry.policy.v1alpha1.MetricFieldSelectorR\x06target\x126\n" +
+	"\texistence\x18\n" +
+	" \x01(\v2\x16.google.protobuf.EmptyH\x00R\texistence\x12E\n" +
+	"\bequality\x18\v \x01(\v2'.google.telemetry.policy.v1alpha1.ValueH\x00R\bequality\x12\x14\n" +
+	"\x04glob\x18\f \x01(\tH\x00R\x04glob\x12]\n" +
+	"\x11exclusive_minimum\x18\r \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x10exclusiveMinimum\x12]\n" +
+	"\x11inclusive_minimum\x18\x0e \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x10inclusiveMinimum\x12]\n" +
+	"\x11exclusive_maximum\x18\x0f \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x10exclusiveMaximum\x12]\n" +
+	"\x11inclusive_maximum\x18\x10 \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x10inclusiveMaximum\x12K\n" +
+	"\vcontainment\x18\x11 \x01(\v2'.google.telemetry.policy.v1alpha1.ValueH\x00R\vcontainment\x12\x18\n" +
+	"\anegated\x18\x02 \x01(\bR\anegatedB\v\n" +
+	"\tpredicate\"\x93\x04\n" +
 	"\x13MetricFieldSelector\x12d\n" +
-	"\x10descriptor_field\x18\x01 \x01(\x0e27.google.telemetry.policy.v1alpha1.MetricDescriptorFieldH\x00R\x0fdescriptorField\x12b\n" +
-	"\x13datapoint_attribute\x18\x02 \x01(\v2/.google.telemetry.policy.v1alpha1.AttributePathH\x00R\x12datapointAttribute\x12`\n" +
-	"\x12resource_attribute\x18\x03 \x01(\v2/.google.telemetry.policy.v1alpha1.AttributePathH\x00R\x11resourceAttribute\x12Z\n" +
-	"\x0fscope_attribute\x18\x04 \x01(\v2/.google.telemetry.policy.v1alpha1.AttributePathH\x00R\x0escopeAttribute\x12O\n" +
+	"\x10descriptor_field\x18\x01 \x01(\x0e27.google.telemetry.policy.v1alpha1.MetricDescriptorFieldH\x00R\x0fdescriptorField\x12k\n" +
+	"\x18datapoint_attribute_path\x18\x02 \x01(\v2/.google.telemetry.policy.v1alpha1.AttributePathH\x00R\x16datapointAttributePath\x12i\n" +
+	"\x17resource_attribute_path\x18\x03 \x01(\v2/.google.telemetry.policy.v1alpha1.AttributePathH\x00R\x15resourceAttributePath\x12c\n" +
+	"\x14scope_attribute_path\x18\x04 \x01(\v2/.google.telemetry.policy.v1alpha1.AttributePathH\x00R\x12scopeAttributePath\x12O\n" +
 	"\vscope_field\x18\x05 \x01(\x0e2,.google.telemetry.policy.v1alpha1.ScopeFieldH\x00R\n" +
 	"scopeFieldB\b\n" +
 	"\x06target*\xae\x02\n" +
@@ -635,19 +659,19 @@ var file_policy_v1alpha1_metric_filter_policy_proto_goTypes = []any{
 }
 var file_policy_v1alpha1_metric_filter_policy_proto_depIdxs = []int32{
 	4,  // 0: google.telemetry.policy.v1alpha1.MetricFilterPolicy.action:type_name -> google.telemetry.policy.v1alpha1.Action
-	2,  // 1: google.telemetry.policy.v1alpha1.MetricFilterPolicy.matches:type_name -> google.telemetry.policy.v1alpha1.MetricMatcher
+	2,  // 1: google.telemetry.policy.v1alpha1.MetricFilterPolicy.matchers:type_name -> google.telemetry.policy.v1alpha1.MetricMatcher
 	3,  // 2: google.telemetry.policy.v1alpha1.MetricMatcher.target:type_name -> google.telemetry.policy.v1alpha1.MetricFieldSelector
-	5,  // 3: google.telemetry.policy.v1alpha1.MetricMatcher.exists:type_name -> google.protobuf.Empty
-	6,  // 4: google.telemetry.policy.v1alpha1.MetricMatcher.equals:type_name -> google.telemetry.policy.v1alpha1.Value
-	7,  // 5: google.telemetry.policy.v1alpha1.MetricMatcher.gt:type_name -> google.telemetry.policy.v1alpha1.NumericValue
-	7,  // 6: google.telemetry.policy.v1alpha1.MetricMatcher.gte:type_name -> google.telemetry.policy.v1alpha1.NumericValue
-	7,  // 7: google.telemetry.policy.v1alpha1.MetricMatcher.lt:type_name -> google.telemetry.policy.v1alpha1.NumericValue
-	7,  // 8: google.telemetry.policy.v1alpha1.MetricMatcher.lte:type_name -> google.telemetry.policy.v1alpha1.NumericValue
-	6,  // 9: google.telemetry.policy.v1alpha1.MetricMatcher.contains:type_name -> google.telemetry.policy.v1alpha1.Value
+	5,  // 3: google.telemetry.policy.v1alpha1.MetricMatcher.existence:type_name -> google.protobuf.Empty
+	6,  // 4: google.telemetry.policy.v1alpha1.MetricMatcher.equality:type_name -> google.telemetry.policy.v1alpha1.Value
+	7,  // 5: google.telemetry.policy.v1alpha1.MetricMatcher.exclusive_minimum:type_name -> google.telemetry.policy.v1alpha1.NumericValue
+	7,  // 6: google.telemetry.policy.v1alpha1.MetricMatcher.inclusive_minimum:type_name -> google.telemetry.policy.v1alpha1.NumericValue
+	7,  // 7: google.telemetry.policy.v1alpha1.MetricMatcher.exclusive_maximum:type_name -> google.telemetry.policy.v1alpha1.NumericValue
+	7,  // 8: google.telemetry.policy.v1alpha1.MetricMatcher.inclusive_maximum:type_name -> google.telemetry.policy.v1alpha1.NumericValue
+	6,  // 9: google.telemetry.policy.v1alpha1.MetricMatcher.containment:type_name -> google.telemetry.policy.v1alpha1.Value
 	0,  // 10: google.telemetry.policy.v1alpha1.MetricFieldSelector.descriptor_field:type_name -> google.telemetry.policy.v1alpha1.MetricDescriptorField
-	8,  // 11: google.telemetry.policy.v1alpha1.MetricFieldSelector.datapoint_attribute:type_name -> google.telemetry.policy.v1alpha1.AttributePath
-	8,  // 12: google.telemetry.policy.v1alpha1.MetricFieldSelector.resource_attribute:type_name -> google.telemetry.policy.v1alpha1.AttributePath
-	8,  // 13: google.telemetry.policy.v1alpha1.MetricFieldSelector.scope_attribute:type_name -> google.telemetry.policy.v1alpha1.AttributePath
+	8,  // 11: google.telemetry.policy.v1alpha1.MetricFieldSelector.datapoint_attribute_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
+	8,  // 12: google.telemetry.policy.v1alpha1.MetricFieldSelector.resource_attribute_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
+	8,  // 13: google.telemetry.policy.v1alpha1.MetricFieldSelector.scope_attribute_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
 	9,  // 14: google.telemetry.policy.v1alpha1.MetricFieldSelector.scope_field:type_name -> google.telemetry.policy.v1alpha1.ScopeField
 	15, // [15:15] is the sub-list for method output_type
 	15, // [15:15] is the sub-list for method input_type
@@ -664,20 +688,20 @@ func file_policy_v1alpha1_metric_filter_policy_proto_init() {
 	file_policy_v1alpha1_common_policy_types_proto_init()
 	file_policy_v1alpha1_metric_filter_policy_proto_msgTypes[0].OneofWrappers = []any{}
 	file_policy_v1alpha1_metric_filter_policy_proto_msgTypes[1].OneofWrappers = []any{
-		(*MetricMatcher_Exists)(nil),
-		(*MetricMatcher_Equals)(nil),
+		(*MetricMatcher_Existence)(nil),
+		(*MetricMatcher_Equality)(nil),
 		(*MetricMatcher_Glob)(nil),
-		(*MetricMatcher_Gt)(nil),
-		(*MetricMatcher_Gte)(nil),
-		(*MetricMatcher_Lt)(nil),
-		(*MetricMatcher_Lte)(nil),
-		(*MetricMatcher_Contains)(nil),
+		(*MetricMatcher_ExclusiveMinimum)(nil),
+		(*MetricMatcher_InclusiveMinimum)(nil),
+		(*MetricMatcher_ExclusiveMaximum)(nil),
+		(*MetricMatcher_InclusiveMaximum)(nil),
+		(*MetricMatcher_Containment)(nil),
 	}
 	file_policy_v1alpha1_metric_filter_policy_proto_msgTypes[2].OneofWrappers = []any{
 		(*MetricFieldSelector_DescriptorField)(nil),
-		(*MetricFieldSelector_DatapointAttribute)(nil),
-		(*MetricFieldSelector_ResourceAttribute)(nil),
-		(*MetricFieldSelector_ScopeAttribute)(nil),
+		(*MetricFieldSelector_DatapointAttributePath)(nil),
+		(*MetricFieldSelector_ResourceAttributePath)(nil),
+		(*MetricFieldSelector_ScopeAttributePath)(nil),
 		(*MetricFieldSelector_ScopeField)(nil),
 	}
 	type x struct{}

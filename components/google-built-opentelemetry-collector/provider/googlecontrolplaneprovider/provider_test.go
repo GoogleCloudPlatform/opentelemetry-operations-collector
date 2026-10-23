@@ -463,10 +463,10 @@ func TestFilterPolicyDriversRegistered(t *testing.T) {
 				"type":   "log_filter",
 				"id":     "test-log",
 				"action": "ACTION_DROP",
-				"matches": []any{
+				"matchers": []any{
 					map[string]any{
-						"target": map[string]any{"record_field": "LOG_RECORD_FIELD_BODY"},
-						"exists": map[string]any{},
+						"target":    map[string]any{"record_field": "LOG_RECORD_FIELD_BODY"},
+						"existence": map[string]any{},
 					},
 				},
 			},
@@ -477,10 +477,10 @@ func TestFilterPolicyDriversRegistered(t *testing.T) {
 				"type":   "metric_filter",
 				"id":     "test-metric",
 				"action": "ACTION_DROP",
-				"matches": []any{
+				"matchers": []any{
 					map[string]any{
-						"target": map[string]any{"descriptor_field": "METRIC_DESCRIPTOR_FIELD_NAME"},
-						"exists": map[string]any{},
+						"target":    map[string]any{"descriptor_field": "METRIC_DESCRIPTOR_FIELD_NAME"},
+						"existence": map[string]any{},
 					},
 				},
 			},
@@ -490,10 +490,10 @@ func TestFilterPolicyDriversRegistered(t *testing.T) {
 			raw: map[string]any{
 				"type": "trace_filter",
 				"id":   "test-trace",
-				"matches": []any{
+				"matchers": []any{
 					map[string]any{
-						"target": map[string]any{"record_field": "SPAN_RECORD_FIELD_NAME"},
-						"exists": map[string]any{},
+						"target":    map[string]any{"record_field": "SPAN_RECORD_FIELD_NAME"},
+						"existence": map[string]any{},
 					},
 				},
 			},
@@ -688,7 +688,7 @@ func TestRetrieve_RecordsPolicyEvaluateErrorEventForFailedPoliciesWithClass(t *t
 			"type":   "log_filter",
 			"id":     "invalid-log-filter",
 			"action": "ACTION_DROP",
-			// missing matches -> ErrPolicyFailedValidation, class: transformation
+			// missing matchers -> ErrPolicyFailedValidation, class: transformation
 		},
 		{
 			"type": "unknown_policy_type",

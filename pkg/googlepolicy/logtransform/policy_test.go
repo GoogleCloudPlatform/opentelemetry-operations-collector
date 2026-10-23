@@ -172,9 +172,13 @@ func logAttrSelector(path ...string) *policyv1alpha1.LogAttributeSelector {
 func addAction(target *policyv1alpha1.LogTargetSelector, val *policyv1alpha1.Value, upsert bool) *policyv1alpha1.LogTransformPolicy_Addition {
 	return &policyv1alpha1.LogTransformPolicy_Addition{
 		Addition: &policyv1alpha1.LogAddAction{
-			Target:        target,
-			Value:         val,
-			UpsertEnabled: proto.Bool(upsert),
+			Additions: []*policyv1alpha1.LogAddition{
+				{
+					Target:        target,
+					Value:         val,
+					UpsertEnabled: proto.Bool(upsert),
+				},
+			},
 		},
 	}
 }
@@ -222,13 +226,49 @@ func TestPolicyValidationErrors(t *testing.T) {
 			errExpect: ErrMissingAction,
 		},
 		{
+			name: "missing action (empty Additions slice inside LogAddAction)",
+			proto: &policyv1alpha1.LogTransformPolicy{
+				Id:      "p-empty-additions",
+				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
+				Action: &policyv1alpha1.LogTransformPolicy_Addition{
+					Addition: &policyv1alpha1.LogAddAction{},
+				},
+			},
+			errExpect: ErrMissingAction,
+		},
+		{
+			name: "invalid second element in Additions slice",
+			proto: &policyv1alpha1.LogTransformPolicy{
+				Id:      "p-invalid-second-addition",
+				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
+				Action: &policyv1alpha1.LogTransformPolicy_Addition{
+					Addition: &policyv1alpha1.LogAddAction{
+						Additions: []*policyv1alpha1.LogAddition{
+							{
+								Target: logTargetAttr("tier"),
+								Value:  strVal("soc"),
+							},
+							{
+								Target: nil,
+								Value:  strVal("missing-target"),
+							},
+						},
+					},
+				},
+			},
+			errExpect: ErrMissingTarget,
+			errSubstr: "addition.additions[1]:",
+		},
+		{
 			name: "unsupported action removal",
 			proto: &policyv1alpha1.LogTransformPolicy{
 				Id:      "p-remove",
 				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
 				Action: &policyv1alpha1.LogTransformPolicy_Removal{
 					Removal: &policyv1alpha1.LogRemoveAction{
-						Target: logAttrSelector("tier"),
+						Removals: []*policyv1alpha1.LogRemoval{
+							{Target: logAttrSelector("tier")},
+						},
 					},
 				},
 			},
@@ -241,8 +281,12 @@ func TestPolicyValidationErrors(t *testing.T) {
 				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
 				Action: &policyv1alpha1.LogTransformPolicy_Renaming{
 					Renaming: &policyv1alpha1.LogRenameAction{
-						Source: logAttrSelector("tier"),
-						Target: logAttrSelector("new_tier"),
+						Renamings: []*policyv1alpha1.LogRenaming{
+							{
+								Source: logAttrSelector("tier"),
+								Target: logAttrSelector("new_tier"),
+							},
+						},
 					},
 				},
 			},
@@ -255,8 +299,12 @@ func TestPolicyValidationErrors(t *testing.T) {
 				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
 				Action: &policyv1alpha1.LogTransformPolicy_Redaction{
 					Redaction: &policyv1alpha1.LogRedactAction{
-						Target:      logTargetAttr("tier"),
-						Replacement: proto.String("[REDACTED]"),
+						Redactions: []*policyv1alpha1.LogRedaction{
+							{
+								Target:      logTargetAttr("tier"),
+								Replacement: proto.String("[REDACTED]"),
+							},
+						},
 					},
 				},
 			},
@@ -456,9 +504,13 @@ func TestPolicy_EmptyMatchersAppliesUnconditionally(t *testing.T) {
 		Id: "unconditional-add",
 		Action: &policyv1alpha1.LogTransformPolicy_Addition{
 			Addition: &policyv1alpha1.LogAddAction{
-				Target:        logTargetAttr("injected"),
-				Value:         strVal("always"),
-				UpsertEnabled: proto.Bool(true),
+				Additions: []*policyv1alpha1.LogAddition{
+					{
+						Target:        logTargetAttr("injected"),
+						Value:         strVal("always"),
+						UpsertEnabled: proto.Bool(true),
+					},
+				},
 			},
 		},
 	})
@@ -486,15 +538,19 @@ func TestDriverLoadPolicyAndProto(t *testing.T) {
 				},
 			},
 			"addition": map[string]any{
-				"target": map[string]any{
-					"log_attribute_path": map[string]any{
-						"segments": []any{"gcp", "routing", "tier"},
+				"additions": []any{
+					map[string]any{
+						"target": map[string]any{
+							"log_attribute_path": map[string]any{
+								"segments": []any{"gcp", "routing", "tier"},
+							},
+						},
+						"value": map[string]any{
+							"string_value": "soc",
+						},
+						"upsert_enabled": true,
 					},
 				},
-				"value": map[string]any{
-					"string_value": "soc",
-				},
-				"upsert_enabled": true,
 			},
 		}
 
@@ -993,6 +1049,98 @@ func TestTransformLogMultipleMatchersAndSequentialPolicies(t *testing.T) {
 		stageVal, ok := lr.Attributes().Get("stage")
 		require.True(t, ok)
 		assert.Equal(t, "second", stageVal.Str())
+	})
+
+	t.Run("repeated additions within single policy execute in list order with single matcher pass and partial fail-open", func(t *testing.T) {
+		pol, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id: "multi-add-single-policy",
+			Matchers: []*policyv1alpha1.LogMatcher{
+				{
+					// Matcher requires http.method == "GET"; first addition mutates http.method to "POST",
+					// verifying matchers are evaluated once before operations run.
+					Target:    logAttrTarget("http.method"),
+					Predicate: &policyv1alpha1.LogMatcher_Equality{Equality: strVal("GET")},
+				},
+			},
+			Action: &policyv1alpha1.LogTransformPolicy_Addition{
+				Addition: &policyv1alpha1.LogAddAction{
+					Additions: []*policyv1alpha1.LogAddition{
+						{
+							// 1. Fails open (upsert_enabled: false on existing http.status_code).
+							Target:        logTargetAttr("http.status_code"),
+							Value:         intVal(500),
+							UpsertEnabled: proto.Bool(false),
+						},
+						{
+							// 2. Overwrites http.method (which the matcher checked).
+							Target:        logTargetAttr("http.method"),
+							Value:         strVal("POST"),
+							UpsertEnabled: proto.Bool(true),
+						},
+						{
+							// 3. Inserts stage="initial".
+							Target:        logTargetAttr("stage"),
+							Value:         strVal("initial"),
+							UpsertEnabled: proto.Bool(false),
+						},
+						{
+							// 4. Subsequent operation in same list sees stage="initial" and skips with upsert_enabled: false.
+							Target:        logTargetAttr("stage"),
+							Value:         strVal("skipped"),
+							UpsertEnabled: proto.Bool(false),
+						},
+						{
+							// 5. Subsequent operation in same list overwrites stage="final" with upsert_enabled: true.
+							Target:        logTargetAttr("stage"),
+							Value:         strVal("final"),
+							UpsertEnabled: proto.Bool(true),
+						},
+					},
+				},
+			},
+		})
+		require.NoError(t, err)
+
+		lr, sl, rl := newTestLogBundle()
+		ctx := logContext(lr, sl, rl)
+		assert.Equal(t, googlepolicy.TransformModified, pol.TransformLog(ctx))
+
+		statusVal, _ := lr.Attributes().Get("http.status_code")
+		assert.Equal(t, int64(200), statusVal.Int())
+
+		methodVal, _ := lr.Attributes().Get("http.method")
+		assert.Equal(t, "POST", methodVal.Str())
+
+		stageVal, ok := lr.Attributes().Get("stage")
+		require.True(t, ok)
+		assert.Equal(t, "final", stageVal.Str())
+	})
+
+	t.Run("repeated additions where all operations fail open returns TransformNoMatch", func(t *testing.T) {
+		pol, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:      "all-additions-noop",
+			Matchers: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
+			Action: &policyv1alpha1.LogTransformPolicy_Addition{
+				Addition: &policyv1alpha1.LogAddAction{
+					Additions: []*policyv1alpha1.LogAddition{
+						{
+							Target:        logTargetAttr("http.method"),
+							Value:         strVal("POST"),
+							UpsertEnabled: proto.Bool(false),
+						},
+						{
+							Target:        logTargetAttr("http.status_code"),
+							Value:         intVal(500),
+							UpsertEnabled: proto.Bool(false),
+						},
+					},
+				},
+			},
+		})
+		require.NoError(t, err)
+
+		lr, sl, rl := newTestLogBundle()
+		assert.Equal(t, googlepolicy.TransformNoMatch, pol.TransformLog(logContext(lr, sl, rl)))
 	})
 }
 

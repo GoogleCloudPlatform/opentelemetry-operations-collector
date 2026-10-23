@@ -1031,36 +1031,32 @@ func TestEvaluator_LogTransform(t *testing.T) {
 		},
 	}
 
-	// Transform 1a: Add flat log attribute threat_tier when event_id == 4625
+	// Transform 1: Add flat log attribute threat_tier and nested log attribute gcp.routing.priority when event_id == 4625
 	labelSOC := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
 		Id:      "01-label-soc-logs",
 		Matchers: []*policyv1alpha1.LogMatcher{eventID4625},
 		Action: &policyv1alpha1.LogTransformPolicy_Addition{
 			Addition: &policyv1alpha1.LogAddAction{
-				Target: &policyv1alpha1.LogTargetSelector{
-					Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
-						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"threat_tier"}},
+				Additions: []*policyv1alpha1.LogAddition{
+					{
+						Target: &policyv1alpha1.LogTargetSelector{
+							Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
+								LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"threat_tier"}},
+							},
+						},
+						Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "HOT_ACTIVE_SOC"}},
+						UpsertEnabled: proto.Bool(true),
+					},
+					{
+						Target: &policyv1alpha1.LogTargetSelector{
+							Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
+								LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"gcp", "routing", "priority"}},
+							},
+						},
+						Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_IntValue{IntValue: 1}},
+						UpsertEnabled: proto.Bool(false),
 					},
 				},
-				Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "HOT_ACTIVE_SOC"}},
-				UpsertEnabled: proto.Bool(true),
-			},
-		},
-	})
-
-	// Transform 1b: Add nested log attribute gcp.routing.priority when event_id == 4625
-	labelSOCPriority := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
-		Id:      "02-label-soc-priority",
-		Matchers: []*policyv1alpha1.LogMatcher{eventID4625},
-		Action: &policyv1alpha1.LogTransformPolicy_Addition{
-			Addition: &policyv1alpha1.LogAddAction{
-				Target: &policyv1alpha1.LogTargetSelector{
-					Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
-						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"gcp", "routing", "priority"}},
-					},
-				},
-				Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_IntValue{IntValue: 1}},
-				UpsertEnabled: proto.Bool(false),
 			},
 		},
 	})
@@ -1080,24 +1076,28 @@ func TestEvaluator_LogTransform(t *testing.T) {
 		},
 		Action: &policyv1alpha1.LogTransformPolicy_Addition{
 			Addition: &policyv1alpha1.LogAddAction{
-				Target: &policyv1alpha1.LogTargetSelector{
-					Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
-						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"threat_tier"}},
+				Additions: []*policyv1alpha1.LogAddition{
+					{
+						Target: &policyv1alpha1.LogTargetSelector{
+							Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
+								LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"threat_tier"}},
+							},
+						},
+						Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "DEFAULT_TIER"}},
+						UpsertEnabled: proto.Bool(false),
 					},
 				},
-				Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "DEFAULT_TIER"}},
-				UpsertEnabled: proto.Bool(false),
 			},
 		},
 	})
 
-	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{labelSOC, labelSOCPriority, defaultTier})
+	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{labelSOC, defaultTier})
 	require.NoError(t, err)
 
 	ld := plog.NewLogs()
 	sl := ld.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty()
 
-	// Record 0: event_id = 4625 -> matches labelSOC (sets threat_tier="HOT_ACTIVE_SOC") and labelSOCPriority (sets gcp.routing.priority=1);
+	// Record 0: event_id = 4625 -> matches labelSOC (sets threat_tier="HOT_ACTIVE_SOC" and gcp.routing.priority=1);
 	// defaultTier also matches on event_id exists, but upsert=false does NOT overwrite threat_tier!
 	lr0 := sl.LogRecords().AppendEmpty()
 	lr0.Attributes().PutEmptyMap("winlog").PutInt("event_id", 4625)
@@ -1144,13 +1144,17 @@ func TestEvaluator_LogTransformDeterministicOrdering(t *testing.T) {
 		Id: "z-policy",
 		Action: &policyv1alpha1.LogTransformPolicy_Addition{
 			Addition: &policyv1alpha1.LogAddAction{
-				Target: &policyv1alpha1.LogTargetSelector{
-					Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
-						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"winner"}},
+				Additions: []*policyv1alpha1.LogAddition{
+					{
+						Target: &policyv1alpha1.LogTargetSelector{
+							Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
+								LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"winner"}},
+							},
+						},
+						Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "z"}},
+						UpsertEnabled: proto.Bool(false),
 					},
 				},
-				Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "z"}},
-				UpsertEnabled: proto.Bool(false),
 			},
 		},
 	})
@@ -1159,13 +1163,17 @@ func TestEvaluator_LogTransformDeterministicOrdering(t *testing.T) {
 		Id: "a-policy",
 		Action: &policyv1alpha1.LogTransformPolicy_Addition{
 			Addition: &policyv1alpha1.LogAddAction{
-				Target: &policyv1alpha1.LogTargetSelector{
-					Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
-						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"winner"}},
+				Additions: []*policyv1alpha1.LogAddition{
+					{
+						Target: &policyv1alpha1.LogTargetSelector{
+							Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
+								LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"winner"}},
+							},
+						},
+						Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "a"}},
+						UpsertEnabled: proto.Bool(false),
 					},
 				},
-				Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "a"}},
-				UpsertEnabled: proto.Bool(false),
 			},
 		},
 	})
@@ -1239,13 +1247,17 @@ func TestEvaluator_LogFilterBeforeTransformOrdering(t *testing.T) {
 		},
 		Action: &policyv1alpha1.LogTransformPolicy_Addition{
 			Addition: &policyv1alpha1.LogAddAction{
-				Target: &policyv1alpha1.LogTargetSelector{
-					Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
-						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"utr_route"}},
+				Additions: []*policyv1alpha1.LogAddition{
+					{
+						Target: &policyv1alpha1.LogTargetSelector{
+							Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
+								LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"utr_route"}},
+							},
+						},
+						Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "security_lakehouse"}},
+						UpsertEnabled: proto.Bool(true),
 					},
 				},
-				Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "security_lakehouse"}},
-				UpsertEnabled: proto.Bool(true),
 			},
 		},
 	})
@@ -1316,13 +1328,17 @@ func TestEvaluator_LogTransformBodyFieldAndRecordFields(t *testing.T) {
 		Matchers: adMatcher,
 		Action: &policyv1alpha1.LogTransformPolicy_Addition{
 			Addition: &policyv1alpha1.LogAddAction{
-				Target: &policyv1alpha1.LogTargetSelector{
-					Target: &policyv1alpha1.LogTargetSelector_BodyFieldPath{
-						BodyFieldPath: &policyv1alpha1.AttributePath{Segments: []string{"gcp", "utr", "stream"}},
+				Additions: []*policyv1alpha1.LogAddition{
+					{
+						Target: &policyv1alpha1.LogTargetSelector{
+							Target: &policyv1alpha1.LogTargetSelector_BodyFieldPath{
+								BodyFieldPath: &policyv1alpha1.AttributePath{Segments: []string{"gcp", "utr", "stream"}},
+							},
+						},
+						Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "secops-ad"}},
+						UpsertEnabled: proto.Bool(true),
 					},
 				},
-				Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "secops-ad"}},
-				UpsertEnabled: proto.Bool(true),
 			},
 		},
 	})
@@ -1332,13 +1348,17 @@ func TestEvaluator_LogTransformBodyFieldAndRecordFields(t *testing.T) {
 		Matchers: adMatcher,
 		Action: &policyv1alpha1.LogTransformPolicy_Addition{
 			Addition: &policyv1alpha1.LogAddAction{
-				Target: &policyv1alpha1.LogTargetSelector{
-					Target: &policyv1alpha1.LogTargetSelector_RecordField{
-						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT,
+				Additions: []*policyv1alpha1.LogAddition{
+					{
+						Target: &policyv1alpha1.LogTargetSelector{
+							Target: &policyv1alpha1.LogTargetSelector_RecordField{
+								RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT,
+							},
+						},
+						Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "WARN"}},
+						UpsertEnabled: proto.Bool(true),
 					},
 				},
-				Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "WARN"}},
-				UpsertEnabled: proto.Bool(true),
 			},
 		},
 	})
@@ -1348,13 +1368,17 @@ func TestEvaluator_LogTransformBodyFieldAndRecordFields(t *testing.T) {
 		Matchers: adMatcher,
 		Action: &policyv1alpha1.LogTransformPolicy_Addition{
 			Addition: &policyv1alpha1.LogAddAction{
-				Target: &policyv1alpha1.LogTargetSelector{
-					Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
-						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"threat_tier"}},
+				Additions: []*policyv1alpha1.LogAddition{
+					{
+						Target: &policyv1alpha1.LogTargetSelector{
+							Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
+								LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"threat_tier"}},
+							},
+						},
+						Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "HOT_ACTIVE_SOC"}},
+						UpsertEnabled: proto.Bool(true),
 					},
 				},
-				Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "HOT_ACTIVE_SOC"}},
-				UpsertEnabled: proto.Bool(true),
 			},
 		},
 	})
@@ -1441,13 +1465,17 @@ func TestEvaluator_LogTransformPostTransformFiltering(t *testing.T) {
 		},
 		Action: &policyv1alpha1.LogTransformPolicy_Addition{
 			Addition: &policyv1alpha1.LogAddAction{
-				Target: &policyv1alpha1.LogTargetSelector{
-					Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
-						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"threat_tier"}},
+				Additions: []*policyv1alpha1.LogAddition{
+					{
+						Target: &policyv1alpha1.LogTargetSelector{
+							Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
+								LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"threat_tier"}},
+							},
+						},
+						Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "DROP_ME"}},
+						UpsertEnabled: proto.Bool(true),
 					},
 				},
-				Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "DROP_ME"}},
-				UpsertEnabled: proto.Bool(true),
 			},
 		},
 	})
@@ -1469,13 +1497,17 @@ func TestEvaluator_LogTransformPostTransformFiltering(t *testing.T) {
 		},
 		Action: &policyv1alpha1.LogTransformPolicy_Addition{
 			Addition: &policyv1alpha1.LogAddAction{
-				Target: &policyv1alpha1.LogTargetSelector{
-					Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
-						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"threat_tier"}},
+				Additions: []*policyv1alpha1.LogAddition{
+					{
+						Target: &policyv1alpha1.LogTargetSelector{
+							Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
+								LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"threat_tier"}},
+							},
+						},
+						Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "KEEP_ME"}},
+						UpsertEnabled: proto.Bool(true),
 					},
 				},
-				Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "KEEP_ME"}},
-				UpsertEnabled: proto.Bool(true),
 			},
 		},
 	})

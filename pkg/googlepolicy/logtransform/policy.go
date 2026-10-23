@@ -70,7 +70,7 @@ type compiledAction func(ctx googlepolicy.LogContext) bool
 type Policy struct {
 	proto    *policyv1alpha1.LogTransformPolicy
 	matchers []matcher.CompiledLogMatcher
-	action   compiledAction
+	actions  []compiledAction
 }
 
 var _ googlepolicy.TransformationPolicy = (*Policy)(nil)
@@ -88,17 +88,20 @@ func NewPolicyFromProto(pb *policyv1alpha1.LogTransformPolicy) (*Policy, error) 
 		return nil, ErrMissingAction
 	}
 
-	var action compiledAction
+	var actions []compiledAction
 	switch a := pb.Action.(type) {
 	case *policyv1alpha1.LogTransformPolicy_Addition:
-		if a.Addition == nil {
+		if a.Addition == nil || len(a.Addition.GetAdditions()) == 0 {
 			return nil, ErrMissingAction
 		}
-		ca, err := compileAdd(a.Addition)
-		if err != nil {
-			return nil, fmt.Errorf("addition: %w", err)
+		actions = make([]compiledAction, 0, len(a.Addition.GetAdditions()))
+		for i, op := range a.Addition.GetAdditions() {
+			ca, err := compileAdd(op)
+			if err != nil {
+				return nil, fmt.Errorf("addition.additions[%d]: %w", i, err)
+			}
+			actions = append(actions, ca)
 		}
-		action = ca
 	case *policyv1alpha1.LogTransformPolicy_Removal,
 		*policyv1alpha1.LogTransformPolicy_Renaming,
 		*policyv1alpha1.LogTransformPolicy_Redaction:
@@ -119,7 +122,7 @@ func NewPolicyFromProto(pb *policyv1alpha1.LogTransformPolicy) (*Policy, error) 
 	return &Policy{
 		proto:    pb,
 		matchers: matchers,
-		action:   action,
+		actions:  actions,
 	}, nil
 }
 
@@ -157,14 +160,20 @@ func (p *Policy) Proto() proto.Message {
 }
 
 // TransformLog evaluates the policy against the given LogContext and, if all
-// matchers evaluate to true, applies its configured action.
-// It returns TransformModified if the policy matched and modified the record,
-// or TransformNoMatch otherwise.
+// matchers evaluate to true, applies its configured action operations in list order.
+// It returns TransformModified if the policy matched and at least one operation
+// modified the record, or TransformNoMatch otherwise.
 func (p *Policy) TransformLog(ctx googlepolicy.LogContext) googlepolicy.TransformResult {
 	if !p.matchesContext(ctx) {
 		return googlepolicy.TransformNoMatch
 	}
-	if !p.action(ctx) {
+	var modified bool
+	for _, action := range p.actions {
+		if action(ctx) {
+			modified = true
+		}
+	}
+	if !modified {
 		return googlepolicy.TransformNoMatch
 	}
 	return googlepolicy.TransformModified
@@ -179,7 +188,7 @@ func (p *Policy) matchesContext(ctx googlepolicy.LogContext) bool {
 	return true
 }
 
-func compileAdd(a *policyv1alpha1.LogAddAction) (compiledAction, error) {
+func compileAdd(a *policyv1alpha1.LogAddition) (compiledAction, error) {
 	target := a.GetTarget()
 	if target == nil || target.Target == nil {
 		return nil, ErrMissingTarget

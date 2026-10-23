@@ -429,15 +429,19 @@ func TestProcessLogs_WithRealLogTransformPolicy(t *testing.T) {
 		},
 		Action: &policyv1alpha1.LogTransformPolicy_Addition{
 			Addition: &policyv1alpha1.LogAddAction{
-				Target: &policyv1alpha1.LogTargetSelector{
-					Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
-						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"soc_tier"}},
+				Additions: []*policyv1alpha1.LogAddition{
+					{
+						Target: &policyv1alpha1.LogTargetSelector{
+							Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
+								LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"soc_tier"}},
+							},
+						},
+						Value: &policyv1alpha1.Value{
+							Kind: &policyv1alpha1.Value_StringValue{StringValue: "HOT_ACTIVE_SOC"},
+						},
+						UpsertEnabled: proto.Bool(true),
 					},
 				},
-				Value: &policyv1alpha1.Value{
-					Kind: &policyv1alpha1.Value_StringValue{StringValue: "HOT_ACTIVE_SOC"},
-				},
-				UpsertEnabled: proto.Bool(true),
 			},
 		},
 	})

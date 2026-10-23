@@ -3,8 +3,8 @@
   "id": "a-redact-account",
   "redact": {
     "target": {
-      "body_field": {
-        "path": ["account", "id"]
+      "body_field_path": {
+        "segments": ["account", "id"]
       }
     },
     "regex": "\\d+",

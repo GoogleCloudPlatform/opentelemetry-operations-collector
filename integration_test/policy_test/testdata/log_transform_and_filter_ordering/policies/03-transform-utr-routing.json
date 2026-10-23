@@ -11,13 +11,13 @@
       "equality": { "string_value": "prod" }
     }
   ],
-  "add": {
+  "addition": {
     "target": {
       "log_attribute_path": {
         "segments": ["gcp", "routing", "tier"]
       }
     },
     "value": { "string_value": "soc" },
-    "upsert": false
+    "upsert_enabled": false
   }
 }

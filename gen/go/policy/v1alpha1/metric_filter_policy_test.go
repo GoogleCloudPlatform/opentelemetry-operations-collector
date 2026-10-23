@@ -60,8 +60,8 @@ func TestMetricFilterPolicy_Serialization(t *testing.T) {
 			},
 			{
 				Target: &policyv1alpha1.MetricFieldSelector{
-					Target: &policyv1alpha1.MetricFieldSelector_DatapointAttributePath{
-						DatapointAttributePath: &policyv1alpha1.AttributePath{
+					Target: &policyv1alpha1.MetricFieldSelector_DataPointAttributePath{
+						DataPointAttributePath: &policyv1alpha1.AttributePath{
 							Segments: []string{"http.status_code"},
 						},
 					},
@@ -76,8 +76,8 @@ func TestMetricFilterPolicy_Serialization(t *testing.T) {
 			},
 			{
 				Target: &policyv1alpha1.MetricFieldSelector{
-					Target: &policyv1alpha1.MetricFieldSelector_DatapointAttributePath{
-						DatapointAttributePath: &policyv1alpha1.AttributePath{
+					Target: &policyv1alpha1.MetricFieldSelector_DataPointAttributePath{
+						DataPointAttributePath: &policyv1alpha1.AttributePath{
 							Segments: []string{"http.status_code"},
 						},
 					},
@@ -92,8 +92,8 @@ func TestMetricFilterPolicy_Serialization(t *testing.T) {
 			},
 			{
 				Target: &policyv1alpha1.MetricFieldSelector{
-					Target: &policyv1alpha1.MetricFieldSelector_DatapointAttributePath{
-						DatapointAttributePath: &policyv1alpha1.AttributePath{
+					Target: &policyv1alpha1.MetricFieldSelector_DataPointAttributePath{
+						DataPointAttributePath: &policyv1alpha1.AttributePath{
 							Segments: []string{"pools", "active"},
 						},
 					},
@@ -108,8 +108,8 @@ func TestMetricFilterPolicy_Serialization(t *testing.T) {
 			},
 			{
 				Target: &policyv1alpha1.MetricFieldSelector{
-					Target: &policyv1alpha1.MetricFieldSelector_DatapointAttributePath{
-						DatapointAttributePath: &policyv1alpha1.AttributePath{
+					Target: &policyv1alpha1.MetricFieldSelector_DataPointAttributePath{
+						DataPointAttributePath: &policyv1alpha1.AttributePath{
 							Segments: []string{"http.status_code"},
 						},
 					},
@@ -252,22 +252,22 @@ func TestMetricFilterPolicy_Serialization(t *testing.T) {
 
 	// Check datapoint attribute equality matcher with int value.
 	matcher2 := unmarshaled.GetMatchers()[2]
-	assert.Equal(t, "http.status_code", matcher2.GetTarget().GetDatapointAttributePath().GetSegments()[0])
+	assert.Equal(t, "http.status_code", matcher2.GetTarget().GetDataPointAttributePath().GetSegments()[0])
 	assert.Equal(t, int64(200), matcher2.GetEquality().GetIntValue())
 
 	// Check datapoint attribute inclusive_minimum matcher with int value.
 	matcher3 := unmarshaled.GetMatchers()[3]
-	assert.Equal(t, "http.status_code", matcher3.GetTarget().GetDatapointAttributePath().GetSegments()[0])
+	assert.Equal(t, "http.status_code", matcher3.GetTarget().GetDataPointAttributePath().GetSegments()[0])
 	assert.Equal(t, int64(400), matcher3.GetInclusiveMinimum().GetIntValue())
 
 	// Check containment matcher.
 	matcher4 := unmarshaled.GetMatchers()[4]
-	assert.Equal(t, []string{"pools", "active"}, matcher4.GetTarget().GetDatapointAttributePath().GetSegments())
+	assert.Equal(t, []string{"pools", "active"}, matcher4.GetTarget().GetDataPointAttributePath().GetSegments())
 	assert.Equal(t, "worker", matcher4.GetContainment().GetStringValue())
 
 	// Check datapoint attribute existence matcher with negated.
 	matcher5 := unmarshaled.GetMatchers()[5]
-	assert.Equal(t, "http.status_code", matcher5.GetTarget().GetDatapointAttributePath().GetSegments()[0])
+	assert.Equal(t, "http.status_code", matcher5.GetTarget().GetDataPointAttributePath().GetSegments()[0])
 	assert.NotNil(t, matcher5.GetExistence())
 	assert.True(t, matcher5.GetNegated())
 
@@ -328,8 +328,8 @@ func TestMetricFilterPolicy_JSONSerialization(t *testing.T) {
 		Matchers: []*policyv1alpha1.MetricMatcher{
 			{
 				Target: &policyv1alpha1.MetricFieldSelector{
-					Target: &policyv1alpha1.MetricFieldSelector_DatapointAttributePath{
-						DatapointAttributePath: &policyv1alpha1.AttributePath{
+					Target: &policyv1alpha1.MetricFieldSelector_DataPointAttributePath{
+						DataPointAttributePath: &policyv1alpha1.AttributePath{
 							Segments: []string{"http.status_code"},
 						},
 					},

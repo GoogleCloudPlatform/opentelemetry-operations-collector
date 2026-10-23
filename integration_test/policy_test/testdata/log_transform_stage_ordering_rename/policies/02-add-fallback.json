@@ -1,0 +1,13 @@
+{
+  "type": "log_transform",
+  "id": "m-add-fallback",
+  "add": {
+    "target": {
+      "body_field_path": {
+        "segments": ["account", "id"]
+      }
+    },
+    "value": { "string_value": "guest" },
+    "upsert": false
+  }
+}

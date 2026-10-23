@@ -261,6 +261,52 @@ func EvalPath(attrs pcommon.Map, steps []PathStep) (any, bool) {
 	return ValueToAny(val), true
 }
 
+// EvalPathValue walks the compiled path through an attribute map, descending into
+// nested maps, and returns the raw pcommon.Value without boxing to any.
+func EvalPathValue(attrs pcommon.Map, steps []PathStep) (pcommon.Value, bool) {
+	if len(steps) == 0 || attrs == (pcommon.Map{}) {
+		return pcommon.Value{}, false
+	}
+	val, ok := attrs.Get(steps[0].Key)
+	if !ok {
+		return pcommon.Value{}, false
+	}
+	for _, step := range steps[1:] {
+		if val.Type() != pcommon.ValueTypeMap {
+			return pcommon.Value{}, false
+		}
+		child, found := val.Map().Get(step.Key)
+		if !found {
+			return pcommon.Value{}, false
+		}
+		val = child
+	}
+	return val, true
+}
+
+// PathExists reports whether the path exists in attrs (either as an existing leaf
+// or as an existing intermediate non-map that obstructs path creation).
+func PathExists(attrs pcommon.Map, steps []PathStep) bool {
+	if len(steps) == 0 || attrs == (pcommon.Map{}) {
+		return false
+	}
+	val, ok := attrs.Get(steps[0].Key)
+	if !ok {
+		return false
+	}
+	for _, step := range steps[1:] {
+		if val.Type() != pcommon.ValueTypeMap {
+			return true
+		}
+		child, found := val.Map().Get(step.Key)
+		if !found {
+			return false
+		}
+		val = child
+	}
+	return true
+}
+
 // CompilePathSetter pre-compiles an AttributePath and Value into a closure that
 // inserts or overwrites the target attribute in a pcommon.Map.
 //
@@ -308,6 +354,57 @@ func CompilePathSetter(attrPath *policyv1alpha1.AttributePath, kind string, val 
 			}
 		}
 		putLeaf(parent, leafKey)
+		return true
+	}, nil
+}
+
+// CompilePathValueSetter pre-compiles an AttributePath into a closure that
+// inserts or overwrites the target attribute with a given pcommon.Value.
+// Intermediate maps are created automatically when missing. When upsert is
+// false and the target already exists (as a leaf or intermediate non-map),
+// the returned closure leaves the map unmodified and returns false.
+func CompilePathValueSetter(attrPath *policyv1alpha1.AttributePath, kind string, upsert bool) (func(pcommon.Map, pcommon.Value) bool, error) {
+	steps, err := CompilePath(attrPath, kind)
+	if err != nil {
+		return nil, err
+	}
+
+	leafKey := steps[len(steps)-1].Key
+	if len(steps) == 1 {
+		return func(attrs pcommon.Map, srcVal pcommon.Value) bool {
+			if attrs == (pcommon.Map{}) {
+				return false
+			}
+			if !upsert {
+				if _, exists := attrs.Get(leafKey); exists {
+					return false
+				}
+			}
+			dest := attrs.PutEmpty(leafKey)
+			srcVal.CopyTo(dest)
+			return true
+		}, nil
+	}
+
+	prefix := steps[:len(steps)-1]
+	return func(attrs pcommon.Map, srcVal pcommon.Value) bool {
+		if attrs == (pcommon.Map{}) {
+			return false
+		}
+		if !upsert && PathExists(attrs, steps) {
+			return false
+		}
+		parent, ok := resolveParentMap(attrs, prefix, upsert)
+		if !ok {
+			return false
+		}
+		if !upsert {
+			if _, exists := parent.Get(leafKey); exists {
+				return false
+			}
+		}
+		dest := parent.PutEmpty(leafKey)
+		srcVal.CopyTo(dest)
 		return true
 	}, nil
 }

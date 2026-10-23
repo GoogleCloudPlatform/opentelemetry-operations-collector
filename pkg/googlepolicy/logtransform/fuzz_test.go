@@ -186,6 +186,26 @@ func fuzzLogTransformSeedPolicies() []*policyv1alpha1.LogTransformPolicy {
 				},
 			},
 		},
+		{
+			Id: "rename-attribute",
+			Action: &policyv1alpha1.LogTransformPolicy_Rename{
+				Rename: &policyv1alpha1.LogRenameAction{
+					Source: logAttrSelector("old.key"),
+					Target: logAttrSelector("new.key"),
+					Upsert: proto.Bool(false),
+				},
+			},
+		},
+		{
+			Id: "rename-body-field",
+			Action: &policyv1alpha1.LogTransformPolicy_Rename{
+				Rename: &policyv1alpha1.LogRenameAction{
+					Source: logBodyFieldSelector("event_data", "userId"),
+					Target: logBodyFieldSelector("user", "id"),
+					Upsert: proto.Bool(true),
+				},
+			},
+		},
 	}
 }
 

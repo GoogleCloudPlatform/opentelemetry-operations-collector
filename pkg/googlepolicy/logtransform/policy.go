@@ -58,6 +58,8 @@ var (
 	ErrUnsupportedAction = errors.New("log transform policy action is not supported in this release")
 	// ErrMissingTarget is returned when an action does not specify a target field selector.
 	ErrMissingTarget = errors.New("log transform action must specify a target field selector")
+	// ErrMissingSource is returned when a rename action does not specify a source field selector.
+	ErrMissingSource = errors.New("log transform rename action must specify a source field selector")
 	// ErrMissingValue is returned when an action does not specify a valid value.
 	ErrMissingValue = matcher.ErrMissingValue
 	// ErrImmutableField is returned when an action targets a read-only field (such as trace_id or span_id).
@@ -114,7 +116,14 @@ func NewPolicyFromProto(pb *policyv1alpha1.LogTransformPolicy) (*Policy, error) 
 			return nil, fmt.Errorf("remove: %w", err)
 		}
 	case *policyv1alpha1.LogTransformPolicy_Rename:
-		return nil, fmt.Errorf("rename: %w", ErrUnsupportedAction)
+		if a.Rename == nil {
+			return nil, ErrMissingAction
+		}
+		stage = googlepolicy.TransformStageRename
+		action, err = compileRename(a.Rename)
+		if err != nil {
+			return nil, fmt.Errorf("rename: %w", err)
+		}
 	case *policyv1alpha1.LogTransformPolicy_Redact:
 		return nil, fmt.Errorf("redact: %w", ErrUnsupportedAction)
 	default:
@@ -342,6 +351,139 @@ func compileRemove(a *policyv1alpha1.LogRemoveAction) (compiledAction, error) {
 	default:
 		return nil, ErrMissingTarget
 	}
+}
+
+func compileRename(a *policyv1alpha1.LogRenameAction) (compiledAction, error) {
+	if a == nil {
+		return nil, ErrMissingAction
+	}
+	if a.Source == nil || a.Source.Target == nil {
+		return nil, ErrMissingSource
+	}
+	if a.Target == nil || a.Target.Target == nil {
+		return nil, ErrMissingTarget
+	}
+
+	if proto.Equal(a.Source, a.Target) {
+		return func(_ googlepolicy.LogContext) bool {
+			return false
+		}, nil
+	}
+
+	var (
+		srcAttrPath *policyv1alpha1.AttributePath
+		srcKind     string
+		srcInBody   bool
+	)
+	switch s := a.Source.Target.(type) {
+	case *policyv1alpha1.LogAttributeSelector_LogAttributePath:
+		srcAttrPath = s.LogAttributePath
+		srcKind = "log"
+	case *policyv1alpha1.LogAttributeSelector_BodyFieldPath:
+		srcAttrPath = s.BodyFieldPath
+		srcKind = "body"
+		srcInBody = true
+	default:
+		return nil, ErrMissingSource
+	}
+
+	var (
+		tgtAttrPath *policyv1alpha1.AttributePath
+		tgtKind     string
+		tgtInBody   bool
+	)
+	switch t := a.Target.Target.(type) {
+	case *policyv1alpha1.LogAttributeSelector_LogAttributePath:
+		tgtAttrPath = t.LogAttributePath
+		tgtKind = "log"
+	case *policyv1alpha1.LogAttributeSelector_BodyFieldPath:
+		tgtAttrPath = t.BodyFieldPath
+		tgtKind = "body"
+		tgtInBody = true
+	default:
+		return nil, ErrMissingTarget
+	}
+
+	srcSteps, err := matcher.CompilePath(srcAttrPath, srcKind)
+	if err != nil {
+		return nil, err
+	}
+	tgtSteps, err := matcher.CompilePath(tgtAttrPath, tgtKind)
+	if err != nil {
+		return nil, err
+	}
+
+	if srcInBody == tgtInBody && isPathPrefix(srcAttrPath.GetSegments(), tgtAttrPath.GetSegments()) {
+		return nil, errors.New("rename source cannot be an ancestor of target")
+	}
+
+	removeSource, err := matcher.CompilePathRemover(srcAttrPath, srcKind)
+	if err != nil {
+		return nil, err
+	}
+
+	writeTarget, err := matcher.CompilePathValueSetter(tgtAttrPath, tgtKind, a.GetUpsert())
+	if err != nil {
+		return nil, err
+	}
+
+	upsert := a.GetUpsert()
+
+	return func(ctx googlepolicy.LogContext) bool {
+		if ctx.Record == (plog.LogRecord{}) {
+			return false
+		}
+
+		var srcMap pcommon.Map
+		if srcInBody {
+			body := ctx.Record.Body()
+			if body.Type() != pcommon.ValueTypeMap {
+				return false
+			}
+			srcMap = body.Map()
+		} else {
+			srcMap = ctx.Record.Attributes()
+		}
+
+		srcVal, ok := matcher.EvalPathValue(srcMap, srcSteps)
+		if !ok {
+			return false
+		}
+
+		var tgtMap pcommon.Map
+		if tgtInBody {
+			body := ctx.Record.Body()
+			if body.Type() == pcommon.ValueTypeEmpty {
+				body.SetEmptyMap()
+			} else if body.Type() != pcommon.ValueTypeMap {
+				return false
+			}
+			tgtMap = body.Map()
+		} else {
+			tgtMap = ctx.Record.Attributes()
+		}
+
+		if !upsert && matcher.PathExists(tgtMap, tgtSteps) {
+			return false
+		}
+
+		cloned := pcommon.NewValueEmpty()
+		srcVal.CopyTo(cloned)
+		removeSource(srcMap)
+		return writeTarget(tgtMap, cloned)
+	}, nil
+}
+
+func isPathPrefix(prefix, full []string) bool {
+	if len(prefix) >= len(full) {
+		return false
+	}
+	for i, seg := range prefix {
+		if seg != full[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func bodyExists(v pcommon.Value) bool {

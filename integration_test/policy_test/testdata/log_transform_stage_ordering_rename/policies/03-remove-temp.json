@@ -3,8 +3,8 @@
   "id": "a-remove-temp",
   "remove": {
     "target": {
-      "log_attribute": {
-        "path": ["temp_session_token"]
+      "log_attribute_path": {
+        "segments": ["temp_session_token"]
       }
     }
   }

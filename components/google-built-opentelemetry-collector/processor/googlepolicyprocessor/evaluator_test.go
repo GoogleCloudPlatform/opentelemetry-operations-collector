@@ -1510,6 +1510,150 @@ func TestEvaluator_LogTransformPostTransformFiltering(t *testing.T) {
 	assert.Equal(t, "KEEP_ME", tier.Str())
 }
 
+func TestEvaluator_LogTransformRejectUnspecifiedStage(t *testing.T) {
+	fake := &fakeUnspecifiedStageTransformPolicy{name: "unspecified-stage"}
+	_, err := NewEvaluator([]googlepolicy.TransformationPolicy{fake})
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "unspecified transform stage")
+}
+
+type fakeUnspecifiedStageTransformPolicy struct {
+	name string
+}
+
+func (f *fakeUnspecifiedStageTransformPolicy) PolicyName() string { return f.name }
+func (f *fakeUnspecifiedStageTransformPolicy) PolicyType() string { return "fake" }
+func (f *fakeUnspecifiedStageTransformPolicy) PolicyClass() googlepolicy.PolicyClass {
+	return googlepolicy.PolicyClassTransformation
+}
+func (f *fakeUnspecifiedStageTransformPolicy) TargetSignals() []googlepolicy.Signal {
+	return []googlepolicy.Signal{googlepolicy.SignalLogs}
+}
+func (f *fakeUnspecifiedStageTransformPolicy) Validate() error { return nil }
+func (f *fakeUnspecifiedStageTransformPolicy) TransformStage() googlepolicy.TransformStage {
+	return googlepolicy.TransformStageUnspecified
+}
+func (f *fakeUnspecifiedStageTransformPolicy) TransformLog(ctx LogContext) googlepolicy.TransformResult {
+	return googlepolicy.TransformNoMatch
+}
+
+func TestEvaluator_LogTransformPass2Interaction_KeptByAttributeThenRemovedAndDropped(t *testing.T) {
+	// ACTION_KEEP on "auth.exempt" == "true".
+	keepExempt := mustPolicy(t, &policyv1alpha1.LogFilterPolicy{
+		Id:     "keep-auth-exempt",
+		Action: policyv1alpha1.Action_ACTION_KEEP.Enum(),
+		Matchers: []*policyv1alpha1.LogMatcher{
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"auth.exempt"}},
+					},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "true"}},
+				},
+			},
+		},
+	})
+
+	// ACTION_DROP on "env" == "dev".
+	dropDev := mustPolicy(t, &policyv1alpha1.LogFilterPolicy{
+		Id:     "drop-dev-env",
+		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+		Matchers: []*policyv1alpha1.LogMatcher{
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"env"}},
+					},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "dev"}},
+				},
+			},
+		},
+	})
+
+	// LogRemoveAction removes "auth.exempt".
+	removeExempt := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id: "remove-exempt-attr",
+		Action: &policyv1alpha1.LogTransformPolicy_Remove{
+			Remove: &policyv1alpha1.LogRemoveAction{
+				Target: &policyv1alpha1.LogAttributeSelector{
+					Target: &policyv1alpha1.LogAttributeSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"auth.exempt"}},
+					},
+				},
+			},
+		},
+	})
+
+	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{keepExempt, dropDev, removeExempt})
+	require.NoError(t, err)
+
+	ld := plog.NewLogs()
+	sl := ld.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty()
+
+	// In Pass 1: Record has both auth.exempt = "true" and env = "dev".
+	// ACTION_KEEP wins over ACTION_DROP, so the record survives Pass 1.
+	// In Transform: removeExempt strips "auth.exempt", modifying the record.
+	// In Pass 2: Re-evaluation occurs without "auth.exempt". ACTION_KEEP no longer matches,
+	// so ACTION_DROP on env = "dev" drops the record.
+	lr := sl.LogRecords().AppendEmpty()
+	lr.Attributes().PutStr("auth.exempt", "true")
+	lr.Attributes().PutStr("env", "dev")
+	lr.Body().SetStr("sensitive transaction")
+
+	ev.TransformLogs(ld)
+
+	// Entire scope and resource logs should be pruned because all records were dropped.
+	assert.Equal(t, 0, ld.ResourceLogs().Len())
+}
+
+func TestEvaluator_LogTransformNonMatchingMatcherLeavesTargetIntact(t *testing.T) {
+	removeIfAdmin := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id: "remove-if-admin",
+		Matchers: []*policyv1alpha1.LogMatcher{
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"user.role"}},
+					},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "admin"}},
+				},
+			},
+		},
+		Action: &policyv1alpha1.LogTransformPolicy_Remove{
+			Remove: &policyv1alpha1.LogRemoveAction{
+				Target: &policyv1alpha1.LogAttributeSelector{
+					Target: &policyv1alpha1.LogAttributeSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"temp.secret"}},
+					},
+				},
+			},
+		},
+	})
+
+	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{removeIfAdmin})
+	require.NoError(t, err)
+
+	ld := plog.NewLogs()
+	sl := ld.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty()
+	lr := sl.LogRecords().AppendEmpty()
+	lr.Attributes().PutStr("user.role", "viewer")
+	lr.Attributes().PutStr("temp.secret", "supersecret")
+
+	ev.TransformLogs(ld)
+
+	require.Equal(t, 1, ld.ResourceLogs().Len())
+	surviving := ld.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().At(0)
+	val, ok := surviving.Attributes().Get("temp.secret")
+	require.True(t, ok)
+	assert.Equal(t, "supersecret", val.Str())
+}
+
 func TestEvaluator_LogTransformStageOrdering(t *testing.T) {
 	logTarget := func(path ...string) *policyv1alpha1.LogTargetSelector {
 		return &policyv1alpha1.LogTargetSelector{
@@ -1526,8 +1670,8 @@ func TestEvaluator_LogTransformStageOrdering(t *testing.T) {
 		}
 	}
 
-	// Give the Stage 3 (remove) policy a lexicographically EARLIER ID ("b-remove-temp")
-	// than the Stage 2 (add) policies ("m-add-1", "m-add-2", "n-add-temp") to prove
+	// Give the remove stage policy a lexicographically EARLIER ID ("b-remove-temp")
+	// than the add stage policies ("m-add-1", "m-add-2", "n-add-temp") to prove
 	// that stage ordering (add -> remove) takes precedence over ID order, while ID order
 	// breaks ties within the same stage ("m-add-1" before "m-add-2").
 	removeTemp := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{

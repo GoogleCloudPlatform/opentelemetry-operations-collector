@@ -343,6 +343,7 @@ func compileRemove(a *policyv1alpha1.LogRemoveAction) (compiledAction, error) {
 		return nil, ErrMissingTarget
 	}
 }
+
 func bodyExists(v pcommon.Value) bool {
 	switch v.Type() {
 	case pcommon.ValueTypeEmpty:

@@ -1,5 +1,5 @@
 - resourceLogs:
-    - resource:
+  - resource:
         attributes:
           - key: service.name
             value:

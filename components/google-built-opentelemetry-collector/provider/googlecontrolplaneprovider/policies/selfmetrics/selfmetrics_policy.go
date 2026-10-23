@@ -51,7 +51,25 @@ type SelfMetricsPolicy struct {
 	Port int    `mapstructure:"port"`
 }
 
-var _ googlepolicy.SourcePolicy = (*SelfMetricsPolicy)(nil)
+var (
+	_ googlepolicy.SourcePolicy                  = (*SelfMetricsPolicy)(nil)
+	_ googlepolicy.DedicatedPipelineSourcePolicy = (*SelfMetricsPolicy)(nil)
+)
+
+// LogReceiverIDs returns nil because SelfMetricsPolicy manages dedicated pipelines.
+func (p *SelfMetricsPolicy) LogReceiverIDs() []component.ID {
+	return nil
+}
+
+// MetricReceiverIDs returns nil because SelfMetricsPolicy manages dedicated pipelines.
+func (p *SelfMetricsPolicy) MetricReceiverIDs() []component.ID {
+	return nil
+}
+
+// TraceReceiverIDs returns nil because SelfMetricsPolicy manages dedicated pipelines.
+func (p *SelfMetricsPolicy) TraceReceiverIDs() []component.ID {
+	return nil
+}
 
 var (
 	ErrNoCollectorID = errors.New("no collector ID found")

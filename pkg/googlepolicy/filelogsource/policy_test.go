@@ -339,7 +339,7 @@ func TestPolicy_Metadata(t *testing.T) {
 	assert.Equal(t, "test-log-source", p.PolicyName())
 	assert.Equal(t, PolicyType, p.PolicyType())
 	assert.Equal(t, googlepolicy.PolicyClassSource, p.PolicyClass())
-	assert.Equal(t, []string{"/var/log/test.log"}, p.Include())
+	assert.Equal(t, []string{"/var/log/test.log"}, p.IncludedPaths())
 
 	// Exclude patterns and immutability check.
 	assert.Equal(t, []string{
@@ -356,7 +356,7 @@ func TestPolicy_Metadata(t *testing.T) {
 	// Defensive zero-value checks.
 	empty := &Policy{}
 	assert.Equal(t, "", empty.PolicyName())
-	assert.Nil(t, empty.Include())
+	assert.Nil(t, empty.IncludedPaths())
 	assert.ErrorIs(t, empty.Validate(), ErrNilProto)
 	_, err = NewPolicyFromProto(nil)
 	assert.ErrorIs(t, err, ErrNilProto)
@@ -464,7 +464,7 @@ func TestMerge_SinglePolicy(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, p, merged)
 	assert.Equal(t, "single-policy", merged.PolicyName())
-	assert.Equal(t, []string{"/var/log/single/*.log"}, merged.Include())
+	assert.Equal(t, []string{"/var/log/single/*.log"}, merged.IncludedPaths())
 }
 
 func TestMerge_MultiplePolicies_DeduplicatedAndSorted(t *testing.T) {
@@ -496,7 +496,7 @@ func TestMerge_MultiplePolicies_DeduplicatedAndSorted(t *testing.T) {
 		"/var/log/auth.log",
 		"/var/log/nginx/*.log",
 		"/var/log/syslog",
-	}, merged.Include())
+	}, merged.IncludedPaths())
 
 	// Verify merged policy evaluation uses DefaultReceiverID.
 	conf, err := merged.Evaluate(context.Background())
@@ -529,8 +529,8 @@ func TestMerge_MultiplePolicies_WindowsCaseInsensitiveDeduplication(t *testing.T
 	merged, err := Merge(p1, p2)
 	require.NoError(t, err)
 	require.NotNil(t, merged)
-	assert.Len(t, merged.Include(), 1)
-	assert.Equal(t, `C:\ProgramData\App\logs\app.log`, merged.Include()[0])
+	assert.Len(t, merged.IncludedPaths(), 1)
+	assert.Equal(t, `C:\ProgramData\App\logs\app.log`, merged.IncludedPaths()[0])
 }
 
 func TestMerge_MultiplePolicies_WindowsEnvDeduplication(t *testing.T) {
@@ -549,7 +549,7 @@ func TestMerge_MultiplePolicies_WindowsEnvDeduplication(t *testing.T) {
 	merged, err := Merge(p1, p2)
 	require.NoError(t, err)
 	require.NotNil(t, merged)
-	assert.Len(t, merged.Include(), 1)
+	assert.Len(t, merged.IncludedPaths(), 1)
 
 	// Evaluating the merged policy should produce expanded path.
 	conf, err := merged.Evaluate(context.Background())
@@ -621,7 +621,7 @@ func TestConsolidate(t *testing.T) {
 		"/var/log/a.log",
 		"/var/log/b.log",
 		"/var/log/shared.log",
-	}, merged.(interface{ Include() []string }).Include())
+	}, merged.(interface{ IncludedPaths() []string }).IncludedPaths())
 }
 
 func TestDriver_WireProtoAndMapLoading(t *testing.T) {
@@ -643,9 +643,9 @@ func TestDriver_WireProtoAndMapLoading(t *testing.T) {
 	// 2. Loading via MakePolicySet (authored map delivery path).
 	rawConfig := []map[string]any{
 		{
-			"type":    PolicyType,
-			"id":      "authored-log-source",
-			"include": []any{"/opt/services/logs/*.log"},
+			"type":           PolicyType,
+			"id":             "authored-log-source",
+			"included_paths": []any{"/opt/services/logs/*.log"},
 		},
 	}
 	psFromMap, err := googlepolicy.MakePolicySet("rev2", rawConfig)
@@ -658,7 +658,7 @@ func TestDriver_WireProtoAndMapLoading(t *testing.T) {
 	assert.Equal(t, googlepolicy.PolicyClassSource, mapEntry.PolicyObj.PolicyClass())
 	srcPolicy, ok := mapEntry.PolicyObj.(*Policy)
 	require.True(t, ok)
-	assert.Equal(t, []string{"/opt/services/logs/*.log"}, srcPolicy.Include())
+	assert.Equal(t, []string{"/opt/services/logs/*.log"}, srcPolicy.IncludedPaths())
 }
 
 func TestPolicyValidation_TestAllowedRoot(t *testing.T) {

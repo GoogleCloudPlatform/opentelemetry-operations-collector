@@ -72,32 +72,12 @@ var forbiddenPrefixes = []string{
 	"/usr/sbin",
 }
 
-type fileLogDriver struct {
-	googlepolicy.ProtoDriver[*policyv1alpha1.FileLogSourcePolicy]
-}
-
-func (d *fileLogDriver) LoadPolicy(raw map[string]any) (googlepolicy.Policy, error) {
-	// Support both "include" (legacy/shorthand) and "included_paths" (proto field name).
-	if inc, ok := raw["include"]; ok && raw["included_paths"] == nil {
-		rawCopy := make(map[string]any, len(raw))
-		for k, v := range raw {
-			rawCopy[k] = v
-		}
-		rawCopy["included_paths"] = inc
-		delete(rawCopy, "include")
-		raw = rawCopy
-	}
-	return d.ProtoDriver.LoadPolicy(raw)
-}
-
 // driver loads a FileLogSourcePolicy from either shape it can arrive in: the proto
 // a control plane sends, or the map an authored config decodes to.
-var driver = &fileLogDriver{
-	ProtoDriver: googlepolicy.ProtoDriver[*policyv1alpha1.FileLogSourcePolicy]{
-		Class: googlepolicy.PolicyClassSource,
-		New: func(pb *policyv1alpha1.FileLogSourcePolicy) (googlepolicy.Policy, error) {
-			return NewPolicyFromProto(pb)
-		},
+var driver = &googlepolicy.ProtoDriver[*policyv1alpha1.FileLogSourcePolicy]{
+	Class: googlepolicy.PolicyClassSource,
+	New: func(pb *policyv1alpha1.FileLogSourcePolicy) (googlepolicy.Policy, error) {
+		return NewPolicyFromProto(pb)
 	},
 }
 
@@ -186,11 +166,11 @@ func (p *Policy) Validate() error {
 	seen := make(map[string]bool, len(p.proto.GetIncludedPaths()))
 	for i, pattern := range p.proto.GetIncludedPaths() {
 		if err := validateIncludePattern(pattern); err != nil {
-			return fmt.Errorf("include[%d]: %w", i, err)
+			return fmt.Errorf("included_paths[%d]: %w", i, err)
 		}
 		key := pathDedupeKey(pattern)
 		if seen[key] {
-			return fmt.Errorf("include[%d]: %w: %q", i, ErrDuplicateIncludePattern, pattern)
+			return fmt.Errorf("included_paths[%d]: %w: %q", i, ErrDuplicateIncludePattern, pattern)
 		}
 		seen[key] = true
 	}
@@ -304,11 +284,6 @@ func (p *Policy) IncludedPaths() []string {
 		return nil
 	}
 	return slices.Clone(p.proto.GetIncludedPaths())
-}
-
-// Include returns a clone of the include patterns configured in the policy.
-func (p *Policy) Include() []string {
-	return p.IncludedPaths()
 }
 
 // validateIncludePattern validates that a single pattern adheres to path security guardrails.

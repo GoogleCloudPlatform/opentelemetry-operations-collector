@@ -501,9 +501,9 @@ func TestFilterPolicyDriversRegistered(t *testing.T) {
 		{
 			policyType: "file_log_source",
 			raw: map[string]any{
-				"type":    "file_log_source",
-				"id":      "test-filelog",
-				"include": []any{"/var/log/**/*.log"},
+				"type":           "file_log_source",
+				"id":             "test-filelog",
+				"included_paths": []any{"/var/log/**/*.log"},
 			},
 		},
 	} {

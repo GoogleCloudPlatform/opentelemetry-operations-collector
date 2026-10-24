@@ -12,12 +12,16 @@
     }
   ],
   "addition": {
-    "target": {
-      "log_attribute_path": {
-        "segments": ["gcp", "routing", "tier"]
+    "additions": [
+      {
+        "target": {
+          "log_attribute_path": {
+            "segments": ["gcp", "routing", "tier"]
+          }
+        },
+        "value": { "string_value": "soc" },
+        "upsert_enabled": false
       }
-    },
-    "value": { "string_value": "soc" },
-    "upsert_enabled": false
+    ]
   }
 }

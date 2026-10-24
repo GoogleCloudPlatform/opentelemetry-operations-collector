@@ -12,12 +12,16 @@
     }
   ],
   "addition": {
-    "target": {
-      "log_attribute_path": {
-        "segments": ["existing_label"]
+    "additions": [
+      {
+        "target": {
+          "log_attribute_path": {
+            "segments": ["existing_label"]
+          }
+        },
+        "value": { "string_value": "overwritten" },
+        "upsert_enabled": false
       }
-    },
-    "value": { "string_value": "overwritten" },
-    "upsert_enabled": false
+    ]
   }
 }

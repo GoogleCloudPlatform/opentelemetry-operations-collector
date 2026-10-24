@@ -12,12 +12,16 @@
     }
   ],
   "addition": {
-    "target": {
-      "log_attribute_path": {
-        "segments": ["pipeline"]
+    "additions": [
+      {
+        "target": {
+          "log_attribute_path": {
+            "segments": ["pipeline"]
+          }
+        },
+        "value": { "string_value": "utr-v2" },
+        "upsert_enabled": true
       }
-    },
-    "value": { "string_value": "utr-v2" },
-    "upsert_enabled": true
+    ]
   }
 }

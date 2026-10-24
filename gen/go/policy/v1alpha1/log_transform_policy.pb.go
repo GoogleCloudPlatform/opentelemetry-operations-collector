@@ -55,12 +55,16 @@ const (
 //     `redaction`.
 //   - Tie-Breaking: Within the same operation type, policies execute in
 //     lexicographical order of `id`.
+//   - Intra-Policy Operation Order: Operations within a single action execute in
+//     the order they appear in their repeated list (`renamings`, `additions`,
+//     `removals`, `redactions`).
 //   - Matching: All conditions in `matchers` are ANDed together. If `matchers` is
 //     empty, the action applies to all log records.
-//   - Fail-Open: If `action` is unset, or if an action cannot be applied to a
-//     record (e.g., `renaming` when `source` does not exist, or
-//     `addition`/`renaming` with `upsert_enabled: false` when `target` already
-//     exists), the record passes through unmodified.
+//   - Fail-Open: If `action` is unset or its operation list is empty, or if an
+//     individual operation cannot be applied to a record (e.g., `renaming` when
+//     `source` does not exist, or `addition`/`renaming` with
+//     `upsert_enabled: false` when `target` already exists), that operation is a
+//     no-op and remaining operations in the action still execute.
 type LogTransformPolicy struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Unique identifier for the policy within its configuration scope
@@ -175,22 +179,22 @@ type isLogTransformPolicy_Action interface {
 }
 
 type LogTransformPolicy_Addition struct {
-	// Inserts or overwrites a field or attribute.
+	// Inserts or overwrites one or more fields or attributes.
 	Addition *LogAddAction `protobuf:"bytes,3,opt,name=addition,proto3,oneof"`
 }
 
 type LogTransformPolicy_Removal struct {
-	// Deletes an attribute or structured `body_field_path`.
+	// Deletes one or more attributes or structured `body_field_path` fields.
 	Removal *LogRemoveAction `protobuf:"bytes,4,opt,name=removal,proto3,oneof"`
 }
 
 type LogTransformPolicy_Renaming struct {
-	// Moves an existing attribute or structured `body_field_path` to a new destination.
+	// Moves one or more existing attributes or structured `body_field_path` fields to new destinations.
 	Renaming *LogRenameAction `protobuf:"bytes,5,opt,name=renaming,proto3,oneof"`
 }
 
 type LogTransformPolicy_Redaction struct {
-	// Masks sensitive substrings within a target string field, attribute, or `body_field_path`.
+	// Masks sensitive substrings within one or more target string fields, attributes, or `body_field_path` fields.
 	Redaction *LogRedactAction `protobuf:"bytes,6,opt,name=redaction,proto3,oneof"`
 }
 
@@ -202,34 +206,11 @@ func (*LogTransformPolicy_Renaming) isLogTransformPolicy_Action() {}
 
 func (*LogTransformPolicy_Redaction) isLogTransformPolicy_Action() {}
 
-// Inserts or overwrites one field or attribute on a log record.
-//
-// When `target` is `record_field`, valid targets are:
-//   - `LOG_RECORD_FIELD_BODY`: accepts any scalar `Value`; treats unset
-//     `ValueTypeEmpty` and `""` as absent when `upsert_enabled: false`.
-//   - `LOG_RECORD_FIELD_SEVERITY_TEXT`: requires `string_value`.
-//   - `LOG_RECORD_FIELD_SEVERITY_NUMBER`: requires `int_value` in `[1, 24]`.
-//
-// `LOG_RECORD_FIELD_SEVERITY_NUMBER` and `LOG_RECORD_FIELD_SEVERITY_TEXT` are
-// independent OTLP fields (mutating one does not automatically derive or
-// overwrite the other). `LOG_RECORD_FIELD_TRACE_ID` and
-// `LOG_RECORD_FIELD_SPAN_ID` are not valid mutation targets.
+// Inserts or overwrites one or more fields or attributes on a log record.
 type LogAddAction struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Target field or attribute to set.
-	Target *LogTargetSelector `protobuf:"bytes,1,opt,name=target,proto3" json:"target,omitempty"`
-	// The value to assign to `target`.
-	Value *Value `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
-	// If true, overwrites `target` if it already exists. If false (default),
-	// preserves the existing value when `target` is already present.
-	//
-	// Missing intermediate map segments in a multi-element `AttributePath`
-	// (`log_attribute_path` or `body_field_path`) are created automatically. When
-	// an intermediate path segment already exists as a non-map value (scalar or
-	// array), `upsert_enabled: false` fails open (preserving the existing value)
-	// while `upsert_enabled: true` replaces the intermediate non-map value with a
-	// map.
-	UpsertEnabled *bool `protobuf:"varint,3,opt,name=upsert_enabled,json=upsertEnabled,proto3,oneof" json:"upsert_enabled,omitempty"`
+	// Field or attribute addition operations applied in list order.
+	Additions     []*LogAddition `protobuf:"bytes,1,rep,name=additions,proto3" json:"additions,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -264,39 +245,108 @@ func (*LogAddAction) Descriptor() ([]byte, []int) {
 	return file_policy_v1alpha1_log_transform_policy_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *LogAddAction) GetTarget() *LogTargetSelector {
+func (x *LogAddAction) GetAdditions() []*LogAddition {
+	if x != nil {
+		return x.Additions
+	}
+	return nil
+}
+
+// Inserts or overwrites one field or attribute on a log record.
+//
+// When `target` is `record_field`, valid targets are:
+//   - `LOG_RECORD_FIELD_BODY`: accepts any scalar `Value`; treats unset
+//     `ValueTypeEmpty` and `""` as absent when `upsert_enabled: false`.
+//   - `LOG_RECORD_FIELD_SEVERITY_TEXT`: requires `string_value`.
+//   - `LOG_RECORD_FIELD_SEVERITY_NUMBER`: requires `int_value` in `[1, 24]`.
+//
+// `LOG_RECORD_FIELD_SEVERITY_NUMBER` and `LOG_RECORD_FIELD_SEVERITY_TEXT` are
+// independent OTLP fields (mutating one does not automatically derive or
+// overwrite the other). `LOG_RECORD_FIELD_TRACE_ID` and
+// `LOG_RECORD_FIELD_SPAN_ID` are not valid mutation targets.
+type LogAddition struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Target field or attribute to set.
+	Target *LogTargetSelector `protobuf:"bytes,1,opt,name=target,proto3" json:"target,omitempty"`
+	// The value to assign to `target`.
+	Value *Value `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
+	// If true, overwrites `target` if it already exists. If false (default),
+	// preserves the existing value when `target` is already present.
+	//
+	// Missing intermediate map segments in a multi-element `AttributePath`
+	// (`log_attribute_path` or `body_field_path`) are created automatically. When
+	// an intermediate path segment already exists as a non-map value (scalar or
+	// array), `upsert_enabled: false` fails open (preserving the existing value)
+	// while `upsert_enabled: true` replaces the intermediate non-map value with a
+	// map.
+	UpsertEnabled *bool `protobuf:"varint,3,opt,name=upsert_enabled,json=upsertEnabled,proto3,oneof" json:"upsert_enabled,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LogAddition) Reset() {
+	*x = LogAddition{}
+	mi := &file_policy_v1alpha1_log_transform_policy_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogAddition) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogAddition) ProtoMessage() {}
+
+func (x *LogAddition) ProtoReflect() protoreflect.Message {
+	mi := &file_policy_v1alpha1_log_transform_policy_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogAddition.ProtoReflect.Descriptor instead.
+func (*LogAddition) Descriptor() ([]byte, []int) {
+	return file_policy_v1alpha1_log_transform_policy_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *LogAddition) GetTarget() *LogTargetSelector {
 	if x != nil {
 		return x.Target
 	}
 	return nil
 }
 
-func (x *LogAddAction) GetValue() *Value {
+func (x *LogAddition) GetValue() *Value {
 	if x != nil {
 		return x.Value
 	}
 	return nil
 }
 
-func (x *LogAddAction) GetUpsertEnabled() bool {
+func (x *LogAddition) GetUpsertEnabled() bool {
 	if x != nil && x.UpsertEnabled != nil {
 		return *x.UpsertEnabled
 	}
 	return false
 }
 
-// Deletes an attribute or structured `body_field_path` from a log record.
+// Deletes one or more attributes or structured `body_field_path` fields from a log record.
 type LogRemoveAction struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Target attribute or `body_field_path` to remove.
-	Target        *LogAttributeSelector `protobuf:"bytes,1,opt,name=target,proto3" json:"target,omitempty"`
+	// Attribute or `body_field_path` removal operations applied in list order.
+	Removals      []*LogRemoval `protobuf:"bytes,1,rep,name=removals,proto3" json:"removals,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *LogRemoveAction) Reset() {
 	*x = LogRemoveAction{}
-	mi := &file_policy_v1alpha1_log_transform_policy_proto_msgTypes[2]
+	mi := &file_policy_v1alpha1_log_transform_policy_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -308,7 +358,7 @@ func (x *LogRemoveAction) String() string {
 func (*LogRemoveAction) ProtoMessage() {}
 
 func (x *LogRemoveAction) ProtoReflect() protoreflect.Message {
-	mi := &file_policy_v1alpha1_log_transform_policy_proto_msgTypes[2]
+	mi := &file_policy_v1alpha1_log_transform_policy_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -321,18 +371,110 @@ func (x *LogRemoveAction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogRemoveAction.ProtoReflect.Descriptor instead.
 func (*LogRemoveAction) Descriptor() ([]byte, []int) {
-	return file_policy_v1alpha1_log_transform_policy_proto_rawDescGZIP(), []int{2}
+	return file_policy_v1alpha1_log_transform_policy_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *LogRemoveAction) GetTarget() *LogAttributeSelector {
+func (x *LogRemoveAction) GetRemovals() []*LogRemoval {
+	if x != nil {
+		return x.Removals
+	}
+	return nil
+}
+
+// Deletes an attribute or structured `body_field_path` from a log record.
+type LogRemoval struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Target attribute or `body_field_path` to remove.
+	Target        *LogAttributeSelector `protobuf:"bytes,1,opt,name=target,proto3" json:"target,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LogRemoval) Reset() {
+	*x = LogRemoval{}
+	mi := &file_policy_v1alpha1_log_transform_policy_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogRemoval) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogRemoval) ProtoMessage() {}
+
+func (x *LogRemoval) ProtoReflect() protoreflect.Message {
+	mi := &file_policy_v1alpha1_log_transform_policy_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogRemoval.ProtoReflect.Descriptor instead.
+func (*LogRemoval) Descriptor() ([]byte, []int) {
+	return file_policy_v1alpha1_log_transform_policy_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *LogRemoval) GetTarget() *LogAttributeSelector {
 	if x != nil {
 		return x.Target
 	}
 	return nil
 }
 
-// Moves an existing attribute or structured `body_field_path` to a new destination.
+// Moves one or more existing attributes or structured `body_field_path` fields to new destinations.
 type LogRenameAction struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Attribute or `body_field_path` rename operations applied in list order.
+	Renamings     []*LogRenaming `protobuf:"bytes,1,rep,name=renamings,proto3" json:"renamings,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LogRenameAction) Reset() {
+	*x = LogRenameAction{}
+	mi := &file_policy_v1alpha1_log_transform_policy_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogRenameAction) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogRenameAction) ProtoMessage() {}
+
+func (x *LogRenameAction) ProtoReflect() protoreflect.Message {
+	mi := &file_policy_v1alpha1_log_transform_policy_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogRenameAction.ProtoReflect.Descriptor instead.
+func (*LogRenameAction) Descriptor() ([]byte, []int) {
+	return file_policy_v1alpha1_log_transform_policy_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *LogRenameAction) GetRenamings() []*LogRenaming {
+	if x != nil {
+		return x.Renamings
+	}
+	return nil
+}
+
+// Moves an existing attribute or structured `body_field_path` to a new destination.
+type LogRenaming struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Existing source attribute or `body_field_path` to rename.
 	Source *LogAttributeSelector `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"`
@@ -352,21 +494,21 @@ type LogRenameAction struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *LogRenameAction) Reset() {
-	*x = LogRenameAction{}
-	mi := &file_policy_v1alpha1_log_transform_policy_proto_msgTypes[3]
+func (x *LogRenaming) Reset() {
+	*x = LogRenaming{}
+	mi := &file_policy_v1alpha1_log_transform_policy_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *LogRenameAction) String() string {
+func (x *LogRenaming) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*LogRenameAction) ProtoMessage() {}
+func (*LogRenaming) ProtoMessage() {}
 
-func (x *LogRenameAction) ProtoReflect() protoreflect.Message {
-	mi := &file_policy_v1alpha1_log_transform_policy_proto_msgTypes[3]
+func (x *LogRenaming) ProtoReflect() protoreflect.Message {
+	mi := &file_policy_v1alpha1_log_transform_policy_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -377,30 +519,76 @@ func (x *LogRenameAction) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use LogRenameAction.ProtoReflect.Descriptor instead.
-func (*LogRenameAction) Descriptor() ([]byte, []int) {
-	return file_policy_v1alpha1_log_transform_policy_proto_rawDescGZIP(), []int{3}
+// Deprecated: Use LogRenaming.ProtoReflect.Descriptor instead.
+func (*LogRenaming) Descriptor() ([]byte, []int) {
+	return file_policy_v1alpha1_log_transform_policy_proto_rawDescGZIP(), []int{6}
 }
 
-func (x *LogRenameAction) GetSource() *LogAttributeSelector {
+func (x *LogRenaming) GetSource() *LogAttributeSelector {
 	if x != nil {
 		return x.Source
 	}
 	return nil
 }
 
-func (x *LogRenameAction) GetTarget() *LogAttributeSelector {
+func (x *LogRenaming) GetTarget() *LogAttributeSelector {
 	if x != nil {
 		return x.Target
 	}
 	return nil
 }
 
-func (x *LogRenameAction) GetUpsertEnabled() bool {
+func (x *LogRenaming) GetUpsertEnabled() bool {
 	if x != nil && x.UpsertEnabled != nil {
 		return *x.UpsertEnabled
 	}
 	return false
+}
+
+// Masks sensitive substrings within one or more target strings.
+type LogRedactAction struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// String redaction operations applied in list order.
+	Redactions    []*LogRedaction `protobuf:"bytes,1,rep,name=redactions,proto3" json:"redactions,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LogRedactAction) Reset() {
+	*x = LogRedactAction{}
+	mi := &file_policy_v1alpha1_log_transform_policy_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogRedactAction) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogRedactAction) ProtoMessage() {}
+
+func (x *LogRedactAction) ProtoReflect() protoreflect.Message {
+	mi := &file_policy_v1alpha1_log_transform_policy_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogRedactAction.ProtoReflect.Descriptor instead.
+func (*LogRedactAction) Descriptor() ([]byte, []int) {
+	return file_policy_v1alpha1_log_transform_policy_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *LogRedactAction) GetRedactions() []*LogRedaction {
+	if x != nil {
+		return x.Redactions
+	}
+	return nil
 }
 
 // Masks sensitive substrings within a target string.
@@ -410,7 +598,7 @@ func (x *LogRenameAction) GetUpsertEnabled() bool {
 // `LOG_RECORD_FIELD_SEVERITY_TEXT`). `LOG_RECORD_FIELD_SEVERITY_NUMBER`,
 // `LOG_RECORD_FIELD_TRACE_ID`, and `LOG_RECORD_FIELD_SPAN_ID` are not valid
 // mutation targets.
-type LogRedactAction struct {
+type LogRedaction struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Target string field, attribute, or `body_field_path` to redact.
 	Target *LogTargetSelector `protobuf:"bytes,1,opt,name=target,proto3" json:"target,omitempty"`
@@ -425,21 +613,21 @@ type LogRedactAction struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *LogRedactAction) Reset() {
-	*x = LogRedactAction{}
-	mi := &file_policy_v1alpha1_log_transform_policy_proto_msgTypes[4]
+func (x *LogRedaction) Reset() {
+	*x = LogRedaction{}
+	mi := &file_policy_v1alpha1_log_transform_policy_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *LogRedactAction) String() string {
+func (x *LogRedaction) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*LogRedactAction) ProtoMessage() {}
+func (*LogRedaction) ProtoMessage() {}
 
-func (x *LogRedactAction) ProtoReflect() protoreflect.Message {
-	mi := &file_policy_v1alpha1_log_transform_policy_proto_msgTypes[4]
+func (x *LogRedaction) ProtoReflect() protoreflect.Message {
+	mi := &file_policy_v1alpha1_log_transform_policy_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -450,26 +638,26 @@ func (x *LogRedactAction) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use LogRedactAction.ProtoReflect.Descriptor instead.
-func (*LogRedactAction) Descriptor() ([]byte, []int) {
-	return file_policy_v1alpha1_log_transform_policy_proto_rawDescGZIP(), []int{4}
+// Deprecated: Use LogRedaction.ProtoReflect.Descriptor instead.
+func (*LogRedaction) Descriptor() ([]byte, []int) {
+	return file_policy_v1alpha1_log_transform_policy_proto_rawDescGZIP(), []int{8}
 }
 
-func (x *LogRedactAction) GetTarget() *LogTargetSelector {
+func (x *LogRedaction) GetTarget() *LogTargetSelector {
 	if x != nil {
 		return x.Target
 	}
 	return nil
 }
 
-func (x *LogRedactAction) GetRegex() string {
+func (x *LogRedaction) GetRegex() string {
 	if x != nil && x.Regex != nil {
 		return *x.Regex
 	}
 	return ""
 }
 
-func (x *LogRedactAction) GetReplacement() string {
+func (x *LogRedaction) GetReplacement() string {
 	if x != nil && x.Replacement != nil {
 		return *x.Replacement
 	}
@@ -495,7 +683,7 @@ type LogTargetSelector struct {
 
 func (x *LogTargetSelector) Reset() {
 	*x = LogTargetSelector{}
-	mi := &file_policy_v1alpha1_log_transform_policy_proto_msgTypes[5]
+	mi := &file_policy_v1alpha1_log_transform_policy_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -507,7 +695,7 @@ func (x *LogTargetSelector) String() string {
 func (*LogTargetSelector) ProtoMessage() {}
 
 func (x *LogTargetSelector) ProtoReflect() protoreflect.Message {
-	mi := &file_policy_v1alpha1_log_transform_policy_proto_msgTypes[5]
+	mi := &file_policy_v1alpha1_log_transform_policy_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -520,7 +708,7 @@ func (x *LogTargetSelector) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogTargetSelector.ProtoReflect.Descriptor instead.
 func (*LogTargetSelector) Descriptor() ([]byte, []int) {
-	return file_policy_v1alpha1_log_transform_policy_proto_rawDescGZIP(), []int{5}
+	return file_policy_v1alpha1_log_transform_policy_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *LogTargetSelector) GetTarget() isLogTargetSelector_Target {
@@ -622,7 +810,7 @@ type LogAttributeSelector struct {
 
 func (x *LogAttributeSelector) Reset() {
 	*x = LogAttributeSelector{}
-	mi := &file_policy_v1alpha1_log_transform_policy_proto_msgTypes[6]
+	mi := &file_policy_v1alpha1_log_transform_policy_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -634,7 +822,7 @@ func (x *LogAttributeSelector) String() string {
 func (*LogAttributeSelector) ProtoMessage() {}
 
 func (x *LogAttributeSelector) ProtoReflect() protoreflect.Message {
-	mi := &file_policy_v1alpha1_log_transform_policy_proto_msgTypes[6]
+	mi := &file_policy_v1alpha1_log_transform_policy_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -647,7 +835,7 @@ func (x *LogAttributeSelector) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogAttributeSelector.ProtoReflect.Descriptor instead.
 func (*LogAttributeSelector) Descriptor() ([]byte, []int) {
-	return file_policy_v1alpha1_log_transform_policy_proto_rawDescGZIP(), []int{6}
+	return file_policy_v1alpha1_log_transform_policy_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *LogAttributeSelector) GetTarget() isLogAttributeSelector_Target {
@@ -706,20 +894,31 @@ const file_policy_v1alpha1_log_transform_policy_proto_rawDesc = "" +
 	"\aremoval\x18\x04 \x01(\v21.google.telemetry.policy.v1alpha1.LogRemoveActionH\x00R\aremoval\x12O\n" +
 	"\brenaming\x18\x05 \x01(\v21.google.telemetry.policy.v1alpha1.LogRenameActionH\x00R\brenaming\x12Q\n" +
 	"\tredaction\x18\x06 \x01(\v21.google.telemetry.policy.v1alpha1.LogRedactActionH\x00R\tredactionB\b\n" +
-	"\x06action\"\xd9\x01\n" +
+	"\x06action\"[\n" +
 	"\fLogAddAction\x12K\n" +
+	"\tadditions\x18\x01 \x03(\v2-.google.telemetry.policy.v1alpha1.LogAdditionR\tadditions\"\xd8\x01\n" +
+	"\vLogAddition\x12K\n" +
 	"\x06target\x18\x01 \x01(\v23.google.telemetry.policy.v1alpha1.LogTargetSelectorR\x06target\x12=\n" +
 	"\x05value\x18\x02 \x01(\v2'.google.telemetry.policy.v1alpha1.ValueR\x05value\x12*\n" +
 	"\x0eupsert_enabled\x18\x03 \x01(\bH\x00R\rupsertEnabled\x88\x01\x01B\x11\n" +
-	"\x0f_upsert_enabled\"a\n" +
-	"\x0fLogRemoveAction\x12N\n" +
-	"\x06target\x18\x01 \x01(\v26.google.telemetry.policy.v1alpha1.LogAttributeSelectorR\x06target\"\xf0\x01\n" +
-	"\x0fLogRenameAction\x12N\n" +
+	"\x0f_upsert_enabled\"[\n" +
+	"\x0fLogRemoveAction\x12H\n" +
+	"\bremovals\x18\x01 \x03(\v2,.google.telemetry.policy.v1alpha1.LogRemovalR\bremovals\"\\\n" +
+	"\n" +
+	"LogRemoval\x12N\n" +
+	"\x06target\x18\x01 \x01(\v26.google.telemetry.policy.v1alpha1.LogAttributeSelectorR\x06target\"^\n" +
+	"\x0fLogRenameAction\x12K\n" +
+	"\trenamings\x18\x01 \x03(\v2-.google.telemetry.policy.v1alpha1.LogRenamingR\trenamings\"\xec\x01\n" +
+	"\vLogRenaming\x12N\n" +
 	"\x06source\x18\x01 \x01(\v26.google.telemetry.policy.v1alpha1.LogAttributeSelectorR\x06source\x12N\n" +
 	"\x06target\x18\x02 \x01(\v26.google.telemetry.policy.v1alpha1.LogAttributeSelectorR\x06target\x12*\n" +
 	"\x0eupsert_enabled\x18\x03 \x01(\bH\x00R\rupsertEnabled\x88\x01\x01B\x11\n" +
-	"\x0f_upsert_enabled\"\xba\x01\n" +
-	"\x0fLogRedactAction\x12K\n" +
+	"\x0f_upsert_enabled\"a\n" +
+	"\x0fLogRedactAction\x12N\n" +
+	"\n" +
+	"redactions\x18\x01 \x03(\v2..google.telemetry.policy.v1alpha1.LogRedactionR\n" +
+	"redactions\"\xb7\x01\n" +
+	"\fLogRedaction\x12K\n" +
 	"\x06target\x18\x01 \x01(\v23.google.telemetry.policy.v1alpha1.LogTargetSelectorR\x06target\x12\x19\n" +
 	"\x05regex\x18\x02 \x01(\tH\x00R\x05regex\x88\x01\x01\x12%\n" +
 	"\vreplacement\x18\x03 \x01(\tH\x01R\vreplacement\x88\x01\x01B\b\n" +
@@ -748,42 +947,50 @@ func file_policy_v1alpha1_log_transform_policy_proto_rawDescGZIP() []byte {
 	return file_policy_v1alpha1_log_transform_policy_proto_rawDescData
 }
 
-var file_policy_v1alpha1_log_transform_policy_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_policy_v1alpha1_log_transform_policy_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_policy_v1alpha1_log_transform_policy_proto_goTypes = []any{
 	(*LogTransformPolicy)(nil),   // 0: google.telemetry.policy.v1alpha1.LogTransformPolicy
 	(*LogAddAction)(nil),         // 1: google.telemetry.policy.v1alpha1.LogAddAction
-	(*LogRemoveAction)(nil),      // 2: google.telemetry.policy.v1alpha1.LogRemoveAction
-	(*LogRenameAction)(nil),      // 3: google.telemetry.policy.v1alpha1.LogRenameAction
-	(*LogRedactAction)(nil),      // 4: google.telemetry.policy.v1alpha1.LogRedactAction
-	(*LogTargetSelector)(nil),    // 5: google.telemetry.policy.v1alpha1.LogTargetSelector
-	(*LogAttributeSelector)(nil), // 6: google.telemetry.policy.v1alpha1.LogAttributeSelector
-	(*LogMatcher)(nil),           // 7: google.telemetry.policy.v1alpha1.LogMatcher
-	(*Value)(nil),                // 8: google.telemetry.policy.v1alpha1.Value
-	(LogRecordField)(0),          // 9: google.telemetry.policy.v1alpha1.LogRecordField
-	(*AttributePath)(nil),        // 10: google.telemetry.policy.v1alpha1.AttributePath
+	(*LogAddition)(nil),          // 2: google.telemetry.policy.v1alpha1.LogAddition
+	(*LogRemoveAction)(nil),      // 3: google.telemetry.policy.v1alpha1.LogRemoveAction
+	(*LogRemoval)(nil),           // 4: google.telemetry.policy.v1alpha1.LogRemoval
+	(*LogRenameAction)(nil),      // 5: google.telemetry.policy.v1alpha1.LogRenameAction
+	(*LogRenaming)(nil),          // 6: google.telemetry.policy.v1alpha1.LogRenaming
+	(*LogRedactAction)(nil),      // 7: google.telemetry.policy.v1alpha1.LogRedactAction
+	(*LogRedaction)(nil),         // 8: google.telemetry.policy.v1alpha1.LogRedaction
+	(*LogTargetSelector)(nil),    // 9: google.telemetry.policy.v1alpha1.LogTargetSelector
+	(*LogAttributeSelector)(nil), // 10: google.telemetry.policy.v1alpha1.LogAttributeSelector
+	(*LogMatcher)(nil),           // 11: google.telemetry.policy.v1alpha1.LogMatcher
+	(*Value)(nil),                // 12: google.telemetry.policy.v1alpha1.Value
+	(LogRecordField)(0),          // 13: google.telemetry.policy.v1alpha1.LogRecordField
+	(*AttributePath)(nil),        // 14: google.telemetry.policy.v1alpha1.AttributePath
 }
 var file_policy_v1alpha1_log_transform_policy_proto_depIdxs = []int32{
-	7,  // 0: google.telemetry.policy.v1alpha1.LogTransformPolicy.matchers:type_name -> google.telemetry.policy.v1alpha1.LogMatcher
+	11, // 0: google.telemetry.policy.v1alpha1.LogTransformPolicy.matchers:type_name -> google.telemetry.policy.v1alpha1.LogMatcher
 	1,  // 1: google.telemetry.policy.v1alpha1.LogTransformPolicy.addition:type_name -> google.telemetry.policy.v1alpha1.LogAddAction
-	2,  // 2: google.telemetry.policy.v1alpha1.LogTransformPolicy.removal:type_name -> google.telemetry.policy.v1alpha1.LogRemoveAction
-	3,  // 3: google.telemetry.policy.v1alpha1.LogTransformPolicy.renaming:type_name -> google.telemetry.policy.v1alpha1.LogRenameAction
-	4,  // 4: google.telemetry.policy.v1alpha1.LogTransformPolicy.redaction:type_name -> google.telemetry.policy.v1alpha1.LogRedactAction
-	5,  // 5: google.telemetry.policy.v1alpha1.LogAddAction.target:type_name -> google.telemetry.policy.v1alpha1.LogTargetSelector
-	8,  // 6: google.telemetry.policy.v1alpha1.LogAddAction.value:type_name -> google.telemetry.policy.v1alpha1.Value
-	6,  // 7: google.telemetry.policy.v1alpha1.LogRemoveAction.target:type_name -> google.telemetry.policy.v1alpha1.LogAttributeSelector
-	6,  // 8: google.telemetry.policy.v1alpha1.LogRenameAction.source:type_name -> google.telemetry.policy.v1alpha1.LogAttributeSelector
-	6,  // 9: google.telemetry.policy.v1alpha1.LogRenameAction.target:type_name -> google.telemetry.policy.v1alpha1.LogAttributeSelector
-	5,  // 10: google.telemetry.policy.v1alpha1.LogRedactAction.target:type_name -> google.telemetry.policy.v1alpha1.LogTargetSelector
-	9,  // 11: google.telemetry.policy.v1alpha1.LogTargetSelector.record_field:type_name -> google.telemetry.policy.v1alpha1.LogRecordField
-	10, // 12: google.telemetry.policy.v1alpha1.LogTargetSelector.log_attribute_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
-	10, // 13: google.telemetry.policy.v1alpha1.LogTargetSelector.body_field_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
-	10, // 14: google.telemetry.policy.v1alpha1.LogAttributeSelector.log_attribute_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
-	10, // 15: google.telemetry.policy.v1alpha1.LogAttributeSelector.body_field_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
-	16, // [16:16] is the sub-list for method output_type
-	16, // [16:16] is the sub-list for method input_type
-	16, // [16:16] is the sub-list for extension type_name
-	16, // [16:16] is the sub-list for extension extendee
-	0,  // [0:16] is the sub-list for field type_name
+	3,  // 2: google.telemetry.policy.v1alpha1.LogTransformPolicy.removal:type_name -> google.telemetry.policy.v1alpha1.LogRemoveAction
+	5,  // 3: google.telemetry.policy.v1alpha1.LogTransformPolicy.renaming:type_name -> google.telemetry.policy.v1alpha1.LogRenameAction
+	7,  // 4: google.telemetry.policy.v1alpha1.LogTransformPolicy.redaction:type_name -> google.telemetry.policy.v1alpha1.LogRedactAction
+	2,  // 5: google.telemetry.policy.v1alpha1.LogAddAction.additions:type_name -> google.telemetry.policy.v1alpha1.LogAddition
+	9,  // 6: google.telemetry.policy.v1alpha1.LogAddition.target:type_name -> google.telemetry.policy.v1alpha1.LogTargetSelector
+	12, // 7: google.telemetry.policy.v1alpha1.LogAddition.value:type_name -> google.telemetry.policy.v1alpha1.Value
+	4,  // 8: google.telemetry.policy.v1alpha1.LogRemoveAction.removals:type_name -> google.telemetry.policy.v1alpha1.LogRemoval
+	10, // 9: google.telemetry.policy.v1alpha1.LogRemoval.target:type_name -> google.telemetry.policy.v1alpha1.LogAttributeSelector
+	6,  // 10: google.telemetry.policy.v1alpha1.LogRenameAction.renamings:type_name -> google.telemetry.policy.v1alpha1.LogRenaming
+	10, // 11: google.telemetry.policy.v1alpha1.LogRenaming.source:type_name -> google.telemetry.policy.v1alpha1.LogAttributeSelector
+	10, // 12: google.telemetry.policy.v1alpha1.LogRenaming.target:type_name -> google.telemetry.policy.v1alpha1.LogAttributeSelector
+	8,  // 13: google.telemetry.policy.v1alpha1.LogRedactAction.redactions:type_name -> google.telemetry.policy.v1alpha1.LogRedaction
+	9,  // 14: google.telemetry.policy.v1alpha1.LogRedaction.target:type_name -> google.telemetry.policy.v1alpha1.LogTargetSelector
+	13, // 15: google.telemetry.policy.v1alpha1.LogTargetSelector.record_field:type_name -> google.telemetry.policy.v1alpha1.LogRecordField
+	14, // 16: google.telemetry.policy.v1alpha1.LogTargetSelector.log_attribute_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
+	14, // 17: google.telemetry.policy.v1alpha1.LogTargetSelector.body_field_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
+	14, // 18: google.telemetry.policy.v1alpha1.LogAttributeSelector.log_attribute_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
+	14, // 19: google.telemetry.policy.v1alpha1.LogAttributeSelector.body_field_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
+	20, // [20:20] is the sub-list for method output_type
+	20, // [20:20] is the sub-list for method input_type
+	20, // [20:20] is the sub-list for extension type_name
+	20, // [20:20] is the sub-list for extension extendee
+	0,  // [0:20] is the sub-list for field type_name
 }
 
 func init() { file_policy_v1alpha1_log_transform_policy_proto_init() }
@@ -798,15 +1005,15 @@ func file_policy_v1alpha1_log_transform_policy_proto_init() {
 		(*LogTransformPolicy_Renaming)(nil),
 		(*LogTransformPolicy_Redaction)(nil),
 	}
-	file_policy_v1alpha1_log_transform_policy_proto_msgTypes[1].OneofWrappers = []any{}
-	file_policy_v1alpha1_log_transform_policy_proto_msgTypes[3].OneofWrappers = []any{}
-	file_policy_v1alpha1_log_transform_policy_proto_msgTypes[4].OneofWrappers = []any{}
-	file_policy_v1alpha1_log_transform_policy_proto_msgTypes[5].OneofWrappers = []any{
+	file_policy_v1alpha1_log_transform_policy_proto_msgTypes[2].OneofWrappers = []any{}
+	file_policy_v1alpha1_log_transform_policy_proto_msgTypes[6].OneofWrappers = []any{}
+	file_policy_v1alpha1_log_transform_policy_proto_msgTypes[8].OneofWrappers = []any{}
+	file_policy_v1alpha1_log_transform_policy_proto_msgTypes[9].OneofWrappers = []any{
 		(*LogTargetSelector_RecordField)(nil),
 		(*LogTargetSelector_LogAttributePath)(nil),
 		(*LogTargetSelector_BodyFieldPath)(nil),
 	}
-	file_policy_v1alpha1_log_transform_policy_proto_msgTypes[6].OneofWrappers = []any{
+	file_policy_v1alpha1_log_transform_policy_proto_msgTypes[10].OneofWrappers = []any{
 		(*LogAttributeSelector_LogAttributePath)(nil),
 		(*LogAttributeSelector_BodyFieldPath)(nil),
 	}
@@ -816,7 +1023,7 @@ func file_policy_v1alpha1_log_transform_policy_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_policy_v1alpha1_log_transform_policy_proto_rawDesc), len(file_policy_v1alpha1_log_transform_policy_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   7,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

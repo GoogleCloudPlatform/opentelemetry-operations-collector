@@ -20,8 +20,8 @@ import "policy/v1alpha1/common_policy_types.proto";
 
 option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1;policyv1alpha1";
 
-// TraceFilterPolicy defines an intent-based rule for dropping spans based on
-// structured creation-time field and attribute matches.
+// Defines an intent-based rule for dropping spans based on structured
+// creation-time field and attribute matches.
 //
 // Policies are declarative, atomic, and transport-agnostic.
 //

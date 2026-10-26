@@ -42,14 +42,14 @@ const (
 //
 // Evaluation & Deduplication Semantics:
 //   - Default Disposition: Microsoft IIS metric collection is disabled unless at
-//     least one valid IISSourcePolicy is configured.
+//     least one valid IisSourcePolicy is configured.
 //   - Interval Validation (Fail-Open): If `collection_interval_seconds` is unset,
 //     it defaults to 60. When set, it must be >= 10; a policy with
 //     `collection_interval_seconds < 10` is invalid and ignored (fail-open).
-//   - Order-Independent Deduplication: Multiple valid IISSourcePolicy instances
+//   - Order-Independent Deduplication: Multiple valid IisSourcePolicy instances
 //     merge into a single `iis` receiver using the minimum effective
 //     `collection_interval_seconds`.
-type IISSourcePolicy struct {
+type IisSourcePolicy struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Unique identifier for the policy within its configuration scope.
 	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -59,20 +59,20 @@ type IISSourcePolicy struct {
 	sizeCache                 protoimpl.SizeCache
 }
 
-func (x *IISSourcePolicy) Reset() {
-	*x = IISSourcePolicy{}
+func (x *IisSourcePolicy) Reset() {
+	*x = IisSourcePolicy{}
 	mi := &file_policy_v1alpha1_iis_source_policy_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *IISSourcePolicy) String() string {
+func (x *IisSourcePolicy) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*IISSourcePolicy) ProtoMessage() {}
+func (*IisSourcePolicy) ProtoMessage() {}
 
-func (x *IISSourcePolicy) ProtoReflect() protoreflect.Message {
+func (x *IisSourcePolicy) ProtoReflect() protoreflect.Message {
 	mi := &file_policy_v1alpha1_iis_source_policy_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -84,19 +84,19 @@ func (x *IISSourcePolicy) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use IISSourcePolicy.ProtoReflect.Descriptor instead.
-func (*IISSourcePolicy) Descriptor() ([]byte, []int) {
+// Deprecated: Use IisSourcePolicy.ProtoReflect.Descriptor instead.
+func (*IisSourcePolicy) Descriptor() ([]byte, []int) {
 	return file_policy_v1alpha1_iis_source_policy_proto_rawDescGZIP(), []int{0}
 }
 
-func (x *IISSourcePolicy) GetId() string {
+func (x *IisSourcePolicy) GetId() string {
 	if x != nil {
 		return x.Id
 	}
 	return ""
 }
 
-func (x *IISSourcePolicy) GetCollectionIntervalSeconds() int32 {
+func (x *IisSourcePolicy) GetCollectionIntervalSeconds() int32 {
 	if x != nil && x.CollectionIntervalSeconds != nil {
 		return *x.CollectionIntervalSeconds
 	}
@@ -108,7 +108,7 @@ var File_policy_v1alpha1_iis_source_policy_proto protoreflect.FileDescriptor
 const file_policy_v1alpha1_iis_source_policy_proto_rawDesc = "" +
 	"\n" +
 	"'policy/v1alpha1/iis_source_policy.proto\x12 google.telemetry.policy.v1alpha1\"\x86\x01\n" +
-	"\x0fIISSourcePolicy\x12\x0e\n" +
+	"\x0fIisSourcePolicy\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12C\n" +
 	"\x1bcollection_interval_seconds\x18\x02 \x01(\x05H\x00R\x19collectionIntervalSeconds\x88\x01\x01B\x1e\n" +
 	"\x1c_collection_interval_secondsB\xc8\x02\n" +
@@ -128,7 +128,7 @@ func file_policy_v1alpha1_iis_source_policy_proto_rawDescGZIP() []byte {
 
 var file_policy_v1alpha1_iis_source_policy_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
 var file_policy_v1alpha1_iis_source_policy_proto_goTypes = []any{
-	(*IISSourcePolicy)(nil), // 0: google.telemetry.policy.v1alpha1.IISSourcePolicy
+	(*IisSourcePolicy)(nil), // 0: google.telemetry.policy.v1alpha1.IisSourcePolicy
 }
 var file_policy_v1alpha1_iis_source_policy_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type

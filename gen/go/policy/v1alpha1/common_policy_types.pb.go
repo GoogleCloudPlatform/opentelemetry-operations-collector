@@ -36,7 +36,7 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// Action specifies what to do with a telemetry record that matches all conditions.
+// Specifies what to do with a telemetry record that matches all conditions.
 //
 // Evaluation Semantics & Action Precedence:
 //   - Default Allow: Telemetry records or streams pass through by default if no
@@ -114,7 +114,7 @@ func (Action) EnumDescriptor() ([]byte, []int) {
 	return file_policy_v1alpha1_common_policy_types_proto_rawDescGZIP(), []int{0}
 }
 
-// ScopeField identifies standard first-class fields of an InstrumentationScope.
+// Identifies standard first-class fields of an InstrumentationScope.
 // For presence checking with `existence`, these fields lack explicit presence
 // tracking in OpenTelemetry and evaluate to true when set to a non-empty string.
 type ScopeField int32
@@ -173,7 +173,7 @@ func (ScopeField) EnumDescriptor() ([]byte, []int) {
 	return file_policy_v1alpha1_common_policy_types_proto_rawDescGZIP(), []int{1}
 }
 
-// LogRecordField identifies standard first-class fields of an OpenTelemetry LogRecord.
+// Identifies standard first-class fields of an OpenTelemetry LogRecord.
 // When evaluated with `existence`, first-class fields evaluate to true when set
 // to a non-default (non-empty / non-zero) value.
 //
@@ -257,7 +257,7 @@ func (LogRecordField) EnumDescriptor() ([]byte, []int) {
 	return file_policy_v1alpha1_common_policy_types_proto_rawDescGZIP(), []int{2}
 }
 
-// SpanRecordField identifies standard creation-time fields of an OpenTelemetry Span.
+// Identifies standard creation-time fields of an OpenTelemetry Span.
 // When evaluated with `existence`, first-class fields evaluate to true when set
 // to a non-default (non-empty / non-zero) value.
 type SpanRecordField int32
@@ -348,7 +348,7 @@ func (SpanRecordField) EnumDescriptor() ([]byte, []int) {
 	return file_policy_v1alpha1_common_policy_types_proto_rawDescGZIP(), []int{3}
 }
 
-// AttributePath specifies how to access an attribute value.
+// Specifies how to access an attribute value.
 //
 // In OpenTelemetry, attribute keys at the top level frequently contain literal
 // dots (for example, `"service.name"` or `"http.request.method"`), while
@@ -406,7 +406,7 @@ func (x *AttributePath) GetSegments() []string {
 	return nil
 }
 
-// Value carries a typed scalar for equality and containment comparisons.
+// Carries a typed scalar for equality and containment comparisons.
 // Exactly one variant must be set.
 type Value struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -545,7 +545,7 @@ func (*Value_DoubleValue) isValue_Kind() {}
 
 func (*Value_BytesValue) isValue_Kind() {}
 
-// NumericValue carries a typed number for ordering comparisons
+// Carries a typed number for ordering comparisons
 // (`exclusive_minimum`, `inclusive_minimum`, `exclusive_maximum`,
 // `inclusive_maximum`).
 // Exactly one variant must be set.
@@ -635,7 +635,7 @@ func (*NumericValue_IntValue) isNumericValue_Kind() {}
 
 func (*NumericValue_DoubleValue) isNumericValue_Kind() {}
 
-// LogMatcher defines a single predicate evaluated against a specific log field
+// Defines a single predicate evaluated against a specific log field
 // or attribute.
 type LogMatcher struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -869,7 +869,7 @@ func (*LogMatcher_InclusiveMaximum) isLogMatcher_Predicate() {}
 
 func (*LogMatcher_Containment) isLogMatcher_Predicate() {}
 
-// LogFieldSelector designates a first-class OTel log field, attribute, or metadata.
+// Designates a first-class OTel log field, attribute, or metadata.
 type LogFieldSelector struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Target:
@@ -1039,7 +1039,7 @@ func (*LogFieldSelector_ScopeField) isLogFieldSelector_Target() {}
 
 func (*LogFieldSelector_BodyFieldPath) isLogFieldSelector_Target() {}
 
-// TraceMatcher defines a single predicate evaluated against a specific span
+// Defines a single predicate evaluated against a specific span
 // creation-time field or attribute.
 type TraceMatcher struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -1273,7 +1273,7 @@ func (*TraceMatcher_InclusiveMaximum) isTraceMatcher_Predicate() {}
 
 func (*TraceMatcher_Containment) isTraceMatcher_Predicate() {}
 
-// TraceFieldSelector designates a first-class OTel span field, attribute, or metadata.
+// Designates a first-class OTel span field, attribute, or metadata.
 type TraceFieldSelector struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Target:

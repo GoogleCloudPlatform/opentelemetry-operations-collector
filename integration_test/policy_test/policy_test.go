@@ -514,18 +514,58 @@ func newStubExporterFactory(typeStr string) exporter.Factory {
 	)
 }
 
+type stubReceiver struct {
+	component.StartFunc
+	component.ShutdownFunc
+}
+
+func newStubReceiverFactory(typeStr string) receiver.Factory {
+	return receiver.NewFactory(
+		component.MustNewType(typeStr),
+		func() component.Config { return &stubComponentConfig{} },
+		receiver.WithTraces(func(context.Context, receiver.Settings, component.Config, consumer.Traces) (receiver.Traces, error) {
+			return &stubReceiver{}, nil
+		}, component.StabilityLevelAlpha),
+		receiver.WithMetrics(func(context.Context, receiver.Settings, component.Config, consumer.Metrics) (receiver.Metrics, error) {
+			return &stubReceiver{}, nil
+		}, component.StabilityLevelAlpha),
+		receiver.WithLogs(func(context.Context, receiver.Settings, component.Config, consumer.Logs) (receiver.Logs, error) {
+			return &stubReceiver{}, nil
+		}, component.StabilityLevelAlpha),
+	)
+}
+
+type stubTracesProcessor struct {
+	component.StartFunc
+	component.ShutdownFunc
+	consumer.Traces
+}
+
+type stubMetricsProcessor struct {
+	component.StartFunc
+	component.ShutdownFunc
+	consumer.Metrics
+}
+
+type stubLogsProcessor struct {
+	component.StartFunc
+	component.ShutdownFunc
+	consumer.Logs
+}
+
 func newStubProcessorFactory(typeStr string) processor.Factory {
 	return processor.NewFactory(
 		component.MustNewType(typeStr),
 		func() component.Config { return &stubComponentConfig{} },
-		processor.WithLogs(func(_ context.Context, _ processor.Settings, _ component.Config, next consumer.Logs) (processor.Logs, error) {
-			return &stubPassThroughProcessor{nextLogs: next}, nil
+		processor.WithTraces(func(_ context.Context, _ processor.Settings, _ component.Config, next consumer.Traces) (processor.Traces, error) {
+			return &stubTracesProcessor{Traces: next}, nil
 		}, component.StabilityLevelAlpha),
 		processor.WithMetrics(func(_ context.Context, _ processor.Settings, _ component.Config, next consumer.Metrics) (processor.Metrics, error) {
-			return &stubPassThroughProcessor{nextMetrics: next}, nil
+			return &stubMetricsProcessor{Metrics: next}, nil
 		}, component.StabilityLevelAlpha),
-		processor.WithTraces(func(_ context.Context, _ processor.Settings, _ component.Config, next consumer.Traces) (processor.Traces, error) {
-			return &stubPassThroughProcessor{nextTraces: next}, nil
+		processor.WithLogs(func(_ context.Context, _ processor.Settings, _ component.Config, next consumer.Logs) (processor.Logs, error) {
+			return &stubLogsProcessor{Logs: next}, nil
+		}, component.StabilityLevelAlpha),
 		}, component.StabilityLevelAlpha),
 	)
 }

@@ -1,0 +1,45 @@
+resourceLogs:
+  - resource:
+      attributes:
+        - key: service.name
+          value:
+            stringValue: auth.service
+    scopeLogs:
+      - scope:
+          name: security.guard
+        logRecords:
+          - timeUnixNano: "1700000000000000000"
+            severityNumber: 9
+            severityText: INFO
+            body:
+              kvlistValue:
+                values:
+                  - key: event
+                    value:
+                      stringValue: user_login
+                  - key: auth
+                    value:
+                      kvlistValue:
+                        values:
+                          - key: user
+                            value:
+                              stringValue: alice
+                          - key: session_token
+                            value:
+                              stringValue: secret-jwt-token-12345
+            attributes:
+              - key: ip
+                value:
+                  stringValue: 10.0.0.1
+          - timeUnixNano: "1700000001000000000"
+            severityNumber: 17
+            severityText: ERROR
+            body:
+              stringValue: plain string body without map
+            attributes:
+              - key: ip
+                value:
+                  stringValue: 10.0.0.2
+              - key: temp_tag
+                value:
+                  stringValue: pre-existing-temp

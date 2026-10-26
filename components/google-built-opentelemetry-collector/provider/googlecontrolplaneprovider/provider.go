@@ -22,7 +22,6 @@ import (
 	"os"
 	"reflect"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor"
@@ -412,6 +411,14 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 				},
 			},
 		},
+		"trace_statements": []map[string]any{
+			{
+				"context": "resource",
+				"statements": []string{
+					`set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil`,
+				},
+			},
+		},
 	}
 
 	workloadProcessorsConf := &otelcol.Config{
@@ -700,7 +707,6 @@ func (p *provider) consolidateSourcePolicies(ctx context.Context, activePolicySe
 	}
 	return consolidated
 }
-
 func cleanConf(c *confmap.Conf) *confmap.Conf {
 	if c == nil {
 		return confmap.New()

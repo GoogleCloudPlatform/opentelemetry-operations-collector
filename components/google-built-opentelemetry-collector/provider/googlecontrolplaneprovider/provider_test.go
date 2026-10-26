@@ -928,25 +928,41 @@ func TestPolicyHotReload_InvalidSourcePolicyDoesNotTriggerReload(t *testing.T) {
 		changeEvents <- e
 	}
 
+	// 1. Initial valid configuration with a non-default source policy (port 19998).
+	psInitial, err := googlepolicy.MakePolicySet("rev-initial", []map[string]any{
+		{
+			"type": "self_metrics",
+			"name": "custom_self_metrics",
+			"port": 19998,
+		},
+	})
+	require.NoError(t, err)
+	googlepolicy.SetActivePolicySet(psInitial)
+
 	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", watcher)
 	require.NoError(t, err)
 	require.NotNil(t, ret)
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+	assert.Equal(t, "localhost:19998", conf.Get("receivers::otlp/custom_self_metrics::protocols::grpc::endpoint"))
 
-	// Set an active policy set with a source policy that fails Evaluate().
+	// 2. Set an active policy set that fails whole-set validation (e.g. multiple destination policies),
+	// which must trigger RollbackActivePolicySet() in evaluateActivePolicySet.
 	psInvalid := &googlepolicy.PolicySet{
-		RevisionID: "rev-invalid-source",
+		RevisionID: "rev-invalid-multidest",
 		Policies: map[string]*googlepolicy.PolicySetEntry{
-			"bad_source": {
-				PolicyObj: &mockSourcePolicy{
-					name:    "bad_source",
-					evalErr: errors.New("evaluation failure in source policy"),
-				},
-			},
+			"dest1": {PolicyObj: &mockDestinationPolicy{name: "dest1"}},
+			"dest2": {PolicyObj: &mockDestinationPolicy{name: "dest2"}},
 		},
 	}
 	googlepolicy.SetActivePolicySet(psInvalid)
 
-	// Establish a sync point: push a valid source policy change guaranteed to trigger a reload.
+	// Verify that ActivePolicySet rolled back to the initial revision.
+	require.Eventually(t, func() bool {
+		return googlepolicy.ActivePolicySetRevisionID() == "rev-initial"
+	}, 2*time.Second, 10*time.Millisecond, "expected active policy set to roll back to rev-initial")
+
+	// 3. Establish a sync point: push a valid source policy change guaranteed to trigger a reload.
 	psSource, err := googlepolicy.MakePolicySet("rev-source-sync", []map[string]any{
 		{
 			"type": "self_metrics",
@@ -963,8 +979,72 @@ func TestPolicyHotReload_InvalidSourcePolicyDoesNotTriggerReload(t *testing.T) {
 		t.Fatal("timed out waiting for sync point watcher invocation")
 	}
 
-	// Strictly assert that watcher was called exactly once (for the valid source policy, never for the invalid one).
+	// Strictly assert that watcher was called exactly once (for the sync source policy, never for the invalid one).
 	assert.Equal(t, int32(1), eventCount.Load(), "watcher should only have been invoked for the valid source policy, not the failing one")
+	assert.Equal(t, "rev-source-sync", googlepolicy.ActivePolicySetRevisionID())
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestPolicyHotReload_RollbackToBuiltinFallbackDoesNotTriggerReload(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	p := createProvider()
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	var eventCount atomic.Int32
+	changeEvents := make(chan *confmap.ChangeEvent, 5)
+	watcher := func(e *confmap.ChangeEvent) {
+		eventCount.Add(1)
+		changeEvents <- e
+	}
+
+	// 1. Initial Retrieve with ActivePolicySet() == nil (runs on built-in self-metrics).
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", watcher)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+	assert.Equal(t, "localhost:18888", conf.Get("receivers::otlp/default_self_metrics::protocols::grpc::endpoint"))
+
+	// 2. Push an invalid policy set. Since history was empty, rollback returns to nil.
+	psInvalid := &googlepolicy.PolicySet{
+		RevisionID: "rev-invalid-multidest",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			"dest1": {PolicyObj: &mockDestinationPolicy{name: "dest1"}},
+			"dest2": {PolicyObj: &mockDestinationPolicy{name: "dest2"}},
+		},
+	}
+	googlepolicy.SetActivePolicySet(psInvalid)
+
+	// Verify that ActivePolicySet rolled back to nil (built-in fallback).
+	require.Eventually(t, func() bool {
+		return googlepolicy.ActivePolicySet() == nil
+	}, 2*time.Second, 10*time.Millisecond, "expected active policy set to roll back to nil")
+
+	// 3. Establish a sync point: push a valid custom source policy.
+	psSource, err := googlepolicy.MakePolicySet("rev-source-sync", []map[string]any{
+		{
+			"type": "self_metrics",
+			"name": "custom_self_metrics",
+			"port": 19999,
+		},
+	})
+	require.NoError(t, err)
+	googlepolicy.SetActivePolicySet(psSource)
+
+	select {
+	case <-changeEvents:
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for sync point watcher invocation")
+	}
+
+	// Watcher should only have been called once for the sync point, never for the rolled-back invalid set.
+	assert.Equal(t, int32(1), eventCount.Load(), "watcher should only have been invoked for the valid source policy, not the rolled-back one")
+	assert.Equal(t, "rev-source-sync", googlepolicy.ActivePolicySetRevisionID())
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
@@ -1026,5 +1106,111 @@ func TestPolicyHotReload_ConcurrentRetrieveAndPolicyUpdate(t *testing.T) {
 	}
 
 	wg.Wait()
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+type mockCountingSourcePolicy struct {
+	name      string
+	evalCount *atomic.Int32
+}
+
+func (m *mockCountingSourcePolicy) PolicyName() string { return m.name }
+func (m *mockCountingSourcePolicy) PolicyType() string { return "mock_counting_source" }
+func (m *mockCountingSourcePolicy) PolicyClass() googlepolicy.PolicyClass {
+	return googlepolicy.PolicyClassSource
+}
+func (m *mockCountingSourcePolicy) Validate() error { return nil }
+func (m *mockCountingSourcePolicy) Evaluate(context.Context) (*confmap.Conf, error) {
+	m.evalCount.Add(1)
+	return confmap.NewFromStringMap(map[string]any{
+		"receivers": map[string]any{
+			"otlp/" + m.name: map[string]any{
+				"protocols": map[string]any{
+					"grpc": map[string]any{"endpoint": "localhost:4317"},
+				},
+			},
+		},
+	}), nil
+}
+func (m *mockCountingSourcePolicy) LogReceiverIDs() []component.ID    { return nil }
+func (m *mockCountingSourcePolicy) MetricReceiverIDs() []component.ID { return nil }
+func (m *mockCountingSourcePolicy) TraceReceiverIDs() []component.ID  { return nil }
+func (m *mockCountingSourcePolicy) LogsPipelines(preExportProcessors []component.ID, exporters []component.ID, extensions []component.ID) (*confmap.Conf, error) {
+	return nil, nil
+}
+func (m *mockCountingSourcePolicy) MetricsPipelines(preExportProcessors []component.ID, exporters []component.ID, extensions []component.ID) (*confmap.Conf, error) {
+	return nil, nil
+}
+func (m *mockCountingSourcePolicy) TracesPipelines(preExportProcessors []component.ID, exporters []component.ID, extensions []component.ID) (*confmap.Conf, error) {
+	return nil, nil
+}
+
+var _ googlepolicy.DedicatedPipelineSourcePolicy = (*mockCountingSourcePolicy)(nil)
+
+func TestPolicyHotReload_NoDuplicateEvaluationOnUpdate(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	p := createProvider()
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	var evalCount atomic.Int32
+	ps1 := &googlepolicy.PolicySet{
+		RevisionID: "rev-eval-1",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			"src": {
+				PolicyObj: &mockCountingSourcePolicy{
+					name:      "src1",
+					evalCount: &evalCount,
+				},
+			},
+		},
+	}
+	googlepolicy.SetActivePolicySet(ps1)
+
+	changeEvents := make(chan *confmap.ChangeEvent, 5)
+	watcher := func(e *confmap.ChangeEvent) {
+		changeEvents <- e
+	}
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", watcher)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+	// Initial Retrieve evaluated once.
+	assert.Equal(t, int32(1), evalCount.Load())
+
+	// Update active policy set to a new revision with different config.
+	ps2 := &googlepolicy.PolicySet{
+		RevisionID: "rev-eval-2",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			"src": {
+				PolicyObj: &mockCountingSourcePolicy{
+					name:      "src2",
+					evalCount: &evalCount,
+				},
+			},
+		},
+	}
+	googlepolicy.SetActivePolicySet(ps2)
+
+	select {
+	case <-changeEvents:
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for watcher invocation")
+	}
+
+	// onPolicySetUpdated evaluated once (count is now 2).
+	assert.Equal(t, int32(2), evalCount.Load())
+
+	// Collector re-fetches config via Retrieve in response to the change event.
+	ret2, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", watcher)
+	require.NoError(t, err)
+	require.NotNil(t, ret2)
+
+	// Retrieve should return the cached evaluation without calling Evaluate() again.
+	assert.Equal(t, int32(2), evalCount.Load(), "Retrieve after hot reload should reuse precomputed confmap and not re-evaluate")
+
 	assert.NoError(t, p.Shutdown(context.Background()))
 }

@@ -89,17 +89,19 @@ type provider struct {
 
 	evalMu sync.Mutex
 
-	mu        sync.Mutex
-	stopped   bool
-	notified  bool
-	manager   googlepolicy.Manager
-	watcher   confmap.WatcherFunc
-	lastCtx   context.Context
-	lastConf  map[string]any
-	watcherCh googlepolicy.WatcherChannel
-	stopCh    chan struct{}
-	stopOnce  sync.Once
-	wg        sync.WaitGroup
+	mu          sync.Mutex
+	stopped     bool
+	notified    bool
+	cachedRet   *confmap.Retrieved
+	cachedRevID string
+	manager     googlepolicy.Manager
+	watcher     confmap.WatcherFunc
+	lastCtx     context.Context
+	lastConf    map[string]any
+	watcherCh   googlepolicy.WatcherChannel
+	stopCh      chan struct{}
+	stopOnce    sync.Once
+	wg          sync.WaitGroup
 }
 
 // NewFactory returns a new confmap.ProviderFactory that creates a Google Control Plane configuration provider.
@@ -203,7 +205,7 @@ func (p *provider) Retrieve(ctx context.Context, uri string, watcher confmap.Wat
 		if manager.URI().String() != target.String() {
 			return nil, fmt.Errorf("%q: %w: %s", uri, ErrManagerAlreadyConfigured, target)
 		}
-		ret, err := p.evaluateActivePolicySet(ctx)
+		ret, err := p.getOrEvaluateActivePolicySet(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -244,13 +246,29 @@ func (p *provider) Retrieve(ctx context.Context, uri string, watcher confmap.Wat
 		return nil, fmt.Errorf("%q: %w: %s", uri, ErrURIInvalidInnerScheme, target.Scheme)
 	}
 
-	ret, err := p.evaluateActivePolicySet(ctx)
+	ret, err := p.getOrEvaluateActivePolicySet(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	p.setupWatcher(watcher, ctx, ret)
 	return ret, nil
+}
+
+func (p *provider) getOrEvaluateActivePolicySet(ctx context.Context) (*confmap.Retrieved, error) {
+	p.mu.Lock()
+	if p.cachedRet != nil && p.cachedRevID == googlepolicy.ActivePolicySetRevisionID() {
+		ret := p.cachedRet
+		p.cachedRet = nil
+		p.cachedRevID = ""
+		p.mu.Unlock()
+		return ret, nil
+	}
+	p.cachedRet = nil
+	p.cachedRevID = ""
+	p.mu.Unlock()
+
+	return p.evaluateActivePolicySet(ctx)
 }
 
 func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrieved, error) {
@@ -791,6 +809,8 @@ func (p *provider) onPolicySetUpdated() {
 		return
 	}
 	p.notified = true
+	p.cachedRet = ret
+	p.cachedRevID = googlepolicy.ActivePolicySetRevisionID()
 	watcher := p.watcher
 	p.mu.Unlock()
 
@@ -812,6 +832,8 @@ func (p *provider) Shutdown(context.Context) error {
 	p.stopOnce.Do(func() {
 		p.mu.Lock()
 		p.stopped = true
+		p.cachedRet = nil
+		p.cachedRevID = ""
 		if p.stopCh != nil {
 			close(p.stopCh)
 			p.stopCh = nil

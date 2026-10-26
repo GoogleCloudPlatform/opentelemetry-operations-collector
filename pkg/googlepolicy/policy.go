@@ -195,10 +195,24 @@ type ComponentPolicy interface {
 }
 
 // SourcePolicy is an extended interface that any Source policy will implement.
-// It allows extra steps for producing individual pipelines out of the components
-// generated during `Evaluate`.
+// Workload source policies contribute receivers that are merged into canonical
+// shared pipelines (logs/googlecontrolplane, metrics/googlecontrolplane,
+// traces/googlecontrolplane).
 type SourcePolicy interface {
 	ComponentPolicy
+	// LogReceiverIDs returns the component IDs of log receivers synthesized by this policy.
+	LogReceiverIDs() []component.ID
+	// MetricReceiverIDs returns the component IDs of metric receivers synthesized by this policy.
+	MetricReceiverIDs() []component.ID
+	// TraceReceiverIDs returns the component IDs of trace receivers synthesized by this policy.
+	TraceReceiverIDs() []component.ID
+}
+
+// DedicatedPipelineSourcePolicy is an optional interface implemented by source policies
+// that require their own dedicated pipelines rather than merging into the shared
+// canonical pipelines (e.g. SelfMetricsPolicy).
+type DedicatedPipelineSourcePolicy interface {
+	SourcePolicy
 	LogsPipelines(preExportProcessors []component.ID, exporters []component.ID, extensions []component.ID) (*confmap.Conf, error)
 	MetricsPipelines(preExportProcessors []component.ID, exporters []component.ID, extensions []component.ID) (*confmap.Conf, error)
 	TracesPipelines(preExportProcessors []component.ID, exporters []component.ID, extensions []component.ID) (*confmap.Conf, error)

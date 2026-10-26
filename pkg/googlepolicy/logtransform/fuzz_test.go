@@ -113,11 +113,11 @@ func fuzzLogTransformSeedPolicies() []*policyv1alpha1.LogTransformPolicy {
 					Predicate: &policyv1alpha1.LogMatcher_Glob{Glob: "hello*"},
 				},
 			},
-			Action: &policyv1alpha1.LogTransformPolicy_Add{
-				Add: &policyv1alpha1.LogAddAction{
-					Target: logTargetAttr("tier"),
-					Value:  strVal("soc"),
-					Upsert: proto.Bool(true),
+			Action: &policyv1alpha1.LogTransformPolicy_Addition{
+				Addition: &policyv1alpha1.LogAddAction{
+					Target:        logTargetAttr("tier"),
+					Value:         strVal("soc"),
+					UpsertEnabled: proto.Bool(true),
 				},
 			},
 		},
@@ -142,11 +142,11 @@ func fuzzLogTransformSeedPolicies() []*policyv1alpha1.LogTransformPolicy {
 					Negated:   true,
 				},
 			},
-			Action: &policyv1alpha1.LogTransformPolicy_Add{
-				Add: &policyv1alpha1.LogAddAction{
-					Target: logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY),
-					Value:  strVal("redacted"),
-					Upsert: proto.Bool(true),
+			Action: &policyv1alpha1.LogTransformPolicy_Addition{
+				Addition: &policyv1alpha1.LogAddAction{
+					Target:        logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY),
+					Value:         strVal("redacted"),
+					UpsertEnabled: proto.Bool(true),
 				},
 			},
 		},
@@ -162,26 +162,26 @@ func fuzzLogTransformSeedPolicies() []*policyv1alpha1.LogTransformPolicy {
 					Predicate: &policyv1alpha1.LogMatcher_Equality{Equality: strVal("my.library")},
 				},
 			},
-			Action: &policyv1alpha1.LogTransformPolicy_Add{
-				Add: &policyv1alpha1.LogAddAction{
-					Target: logTargetBodyField("event_data", "userId"),
-					Value:  strVal("user-42"),
-					Upsert: proto.Bool(true),
+			Action: &policyv1alpha1.LogTransformPolicy_Addition{
+				Addition: &policyv1alpha1.LogAddAction{
+					Target:        logTargetBodyField("event_data", "userId"),
+					Value:         strVal("user-42"),
+					UpsertEnabled: proto.Bool(true),
 				},
 			},
 		},
 		{
 			Id: "remove-attribute",
-			Action: &policyv1alpha1.LogTransformPolicy_Remove{
-				Remove: &policyv1alpha1.LogRemoveAction{
+			Action: &policyv1alpha1.LogTransformPolicy_Removal{
+				Removal: &policyv1alpha1.LogRemoveAction{
 					Target: logAttrSelector("feature.enabled"),
 				},
 			},
 		},
 		{
 			Id: "remove-nested-body-field",
-			Action: &policyv1alpha1.LogTransformPolicy_Remove{
-				Remove: &policyv1alpha1.LogRemoveAction{
+			Action: &policyv1alpha1.LogTransformPolicy_Removal{
+				Removal: &policyv1alpha1.LogRemoveAction{
 					Target: logBodyFieldSelector("event_data", "userId"),
 				},
 			},

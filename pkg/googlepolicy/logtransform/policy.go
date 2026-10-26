@@ -92,31 +92,31 @@ func NewPolicyFromProto(pb *policyv1alpha1.LogTransformPolicy) (*Policy, error) 
 	var (
 		stage  googlepolicy.TransformStage
 		action compiledAction
-		err    error
 	)
 	switch a := pb.Action.(type) {
-	case *policyv1alpha1.LogTransformPolicy_Add:
-		if a.Add == nil {
+	case *policyv1alpha1.LogTransformPolicy_Addition:
+		if a.Addition == nil {
 			return nil, ErrMissingAction
+		}
+		ca, err := compileAdd(a.Addition)
+		if err != nil {
+			return nil, fmt.Errorf("addition: %w", err)
 		}
 		stage = googlepolicy.TransformStageAdd
-		action, err = compileAdd(a.Add)
-		if err != nil {
-			return nil, fmt.Errorf("add: %w", err)
-		}
-	case *policyv1alpha1.LogTransformPolicy_Remove:
-		if a.Remove == nil {
+		action = ca
+	case *policyv1alpha1.LogTransformPolicy_Removal:
+		if a.Removal == nil {
 			return nil, ErrMissingAction
 		}
-		stage = googlepolicy.TransformStageRemove
-		action, err = compileRemove(a.Remove)
+		cr, err := compileRemove(a.Removal)
 		if err != nil {
-			return nil, fmt.Errorf("remove: %w", err)
+			return nil, fmt.Errorf("removal: %w", err)
 		}
-	case *policyv1alpha1.LogTransformPolicy_Rename:
-		return nil, fmt.Errorf("rename: %w", ErrUnsupportedAction)
-	case *policyv1alpha1.LogTransformPolicy_Redact:
-		return nil, fmt.Errorf("redact: %w", ErrUnsupportedAction)
+		stage = googlepolicy.TransformStageRemove
+		action = cr
+	case *policyv1alpha1.LogTransformPolicy_Renaming,
+		*policyv1alpha1.LogTransformPolicy_Redaction:
+		return nil, fmt.Errorf("%w: %T", ErrUnsupportedAction, a)
 	default:
 		return nil, ErrMissingAction
 	}
@@ -208,7 +208,7 @@ func compileAdd(a *policyv1alpha1.LogAddAction) (compiledAction, error) {
 
 	switch t := target.Target.(type) {
 	case *policyv1alpha1.LogTargetSelector_LogAttributePath:
-		setAttr, err := matcher.CompilePathSetter(t.LogAttributePath, "log", a.GetValue(), a.GetUpsert())
+		setAttr, err := matcher.CompilePathSetter(t.LogAttributePath, "log", a.GetValue(), a.GetUpsertEnabled())
 		if err != nil {
 			return nil, err
 		}
@@ -220,7 +220,7 @@ func compileAdd(a *policyv1alpha1.LogAddAction) (compiledAction, error) {
 		}, nil
 
 	case *policyv1alpha1.LogTargetSelector_BodyFieldPath:
-		setBodyField, err := matcher.CompilePathSetter(t.BodyFieldPath, "body", a.GetValue(), a.GetUpsert())
+		setBodyField, err := matcher.CompilePathSetter(t.BodyFieldPath, "body", a.GetValue(), a.GetUpsertEnabled())
 		if err != nil {
 			return nil, err
 		}
@@ -238,7 +238,7 @@ func compileAdd(a *policyv1alpha1.LogAddAction) (compiledAction, error) {
 		}, nil
 
 	case *policyv1alpha1.LogTargetSelector_RecordField:
-		return compileRecordFieldAdd(t.RecordField, a.GetValue(), a.GetUpsert())
+		return compileRecordFieldAdd(t.RecordField, a.GetValue(), a.GetUpsertEnabled())
 
 	default:
 		return nil, ErrMissingTarget

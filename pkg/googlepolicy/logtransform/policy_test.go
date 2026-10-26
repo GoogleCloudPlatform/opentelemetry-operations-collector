@@ -169,12 +169,12 @@ func logAttrSelector(path ...string) *policyv1alpha1.LogAttributeSelector {
 	}
 }
 
-func addAction(target *policyv1alpha1.LogTargetSelector, val *policyv1alpha1.Value, upsert bool) *policyv1alpha1.LogTransformPolicy_Add {
-	return &policyv1alpha1.LogTransformPolicy_Add{
-		Add: &policyv1alpha1.LogAddAction{
-			Target: target,
-			Value:  val,
-			Upsert: proto.Bool(upsert),
+func addAction(target *policyv1alpha1.LogTargetSelector, val *policyv1alpha1.Value, upsert bool) *policyv1alpha1.LogTransformPolicy_Addition {
+	return &policyv1alpha1.LogTransformPolicy_Addition{
+		Addition: &policyv1alpha1.LogAddAction{
+			Target:        target,
+			Value:         val,
+			UpsertEnabled: proto.Bool(upsert),
 		},
 	}
 }
@@ -187,25 +187,25 @@ func logBodyFieldSelector(path ...string) *policyv1alpha1.LogAttributeSelector {
 	}
 }
 
-func removeAction(target *policyv1alpha1.LogAttributeSelector) *policyv1alpha1.LogTransformPolicy_Remove {
-	return &policyv1alpha1.LogTransformPolicy_Remove{
-		Remove: &policyv1alpha1.LogRemoveAction{
+func removeAction(target *policyv1alpha1.LogAttributeSelector) *policyv1alpha1.LogTransformPolicy_Removal {
+	return &policyv1alpha1.LogTransformPolicy_Removal{
+		Removal: &policyv1alpha1.LogRemoveAction{
 			Target: target,
 		},
 	}
 }
 
-func renameAction(source, target *policyv1alpha1.LogAttributeSelector, upsert bool) *policyv1alpha1.LogTransformPolicy_Rename {
-	return &policyv1alpha1.LogTransformPolicy_Rename{
-		Rename: &policyv1alpha1.LogRenameAction{
-			Source: source,
-			Target: target,
-			Upsert: proto.Bool(upsert),
+func renameAction(source, target *policyv1alpha1.LogAttributeSelector, upsert bool) *policyv1alpha1.LogTransformPolicy_Renaming {
+	return &policyv1alpha1.LogTransformPolicy_Renaming{
+		Renaming: &policyv1alpha1.LogRenameAction{
+			Source:        source,
+			Target:        target,
+			UpsertEnabled: proto.Bool(upsert),
 		},
 	}
 }
 
-func redactAction(target *policyv1alpha1.LogTargetSelector, regex, replacement string) *policyv1alpha1.LogTransformPolicy_Redact {
+func redactAction(target *policyv1alpha1.LogTargetSelector, regex, replacement string) *policyv1alpha1.LogTransformPolicy_Redaction {
 	var re, rep *string
 	if regex != "" {
 		re = proto.String(regex)
@@ -213,8 +213,8 @@ func redactAction(target *policyv1alpha1.LogTargetSelector, regex, replacement s
 	if replacement != "" {
 		rep = proto.String(replacement)
 	}
-	return &policyv1alpha1.LogTransformPolicy_Redact{
-		Redact: &policyv1alpha1.LogRedactAction{
+	return &policyv1alpha1.LogTransformPolicy_Redaction{
+		Redaction: &policyv1alpha1.LogRedactAction{
 			Target:      target,
 			Regex:       re,
 			Replacement: rep,
@@ -256,20 +256,20 @@ func TestPolicyValidationErrors(t *testing.T) {
 			errExpect: ErrMissingAction,
 		},
 		{
-			name: "missing action (nil Add inside LogTransformPolicy_Add)",
+			name: "missing action (nil Addition inside LogTransformPolicy_Addition)",
 			proto: &policyv1alpha1.LogTransformPolicy{
 				Id:       "p-nil-add-msg",
 				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
-				Action:   &policyv1alpha1.LogTransformPolicy_Add{Add: nil},
+				Action:   &policyv1alpha1.LogTransformPolicy_Addition{Addition: nil},
 			},
 			errExpect: ErrMissingAction,
 		},
 		{
-			name: "missing action (nil Remove inside LogTransformPolicy_Remove)",
+			name: "missing action (nil Removal inside LogTransformPolicy_Removal)",
 			proto: &policyv1alpha1.LogTransformPolicy{
 				Id:       "p-nil-remove-msg",
 				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
-				Action:   &policyv1alpha1.LogTransformPolicy_Remove{Remove: nil},
+				Action:   &policyv1alpha1.LogTransformPolicy_Removal{Removal: nil},
 			},
 			errExpect: ErrMissingAction,
 		},
@@ -298,12 +298,12 @@ func TestPolicyValidationErrors(t *testing.T) {
 			errSubstr: "body attribute path cannot be empty",
 		},
 		{
-			name: "unsupported action rename",
+			name: "unsupported action renaming",
 			proto: &policyv1alpha1.LogTransformPolicy{
 				Id:       "p-rename",
 				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
-				Action: &policyv1alpha1.LogTransformPolicy_Rename{
-					Rename: &policyv1alpha1.LogRenameAction{
+				Action: &policyv1alpha1.LogTransformPolicy_Renaming{
+					Renaming: &policyv1alpha1.LogRenameAction{
 						Source: logAttrSelector("tier"),
 						Target: logAttrSelector("new_tier"),
 					},
@@ -312,12 +312,12 @@ func TestPolicyValidationErrors(t *testing.T) {
 			errExpect: ErrUnsupportedAction,
 		},
 		{
-			name: "unsupported action redact",
+			name: "unsupported action redaction",
 			proto: &policyv1alpha1.LogTransformPolicy{
 				Id:       "p-redact",
 				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
-				Action: &policyv1alpha1.LogTransformPolicy_Redact{
-					Redact: &policyv1alpha1.LogRedactAction{
+				Action: &policyv1alpha1.LogTransformPolicy_Redaction{
+					Redaction: &policyv1alpha1.LogRedactAction{
 						Target:      logTargetAttr("tier"),
 						Replacement: proto.String("[REDACTED]"),
 					},
@@ -543,11 +543,11 @@ func TestPolicy_EmptyMatchersAppliesUnconditionally(t *testing.T) {
 	// A transform policy with empty/nil matchers applies to all records unconditionally.
 	p, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
 		Id: "unconditional-add",
-		Action: &policyv1alpha1.LogTransformPolicy_Add{
-			Add: &policyv1alpha1.LogAddAction{
-				Target: logTargetAttr("injected"),
-				Value:  strVal("always"),
-				Upsert: proto.Bool(true),
+		Action: &policyv1alpha1.LogTransformPolicy_Addition{
+			Addition: &policyv1alpha1.LogAddAction{
+				Target:        logTargetAttr("injected"),
+				Value:         strVal("always"),
+				UpsertEnabled: proto.Bool(true),
 			},
 		},
 	})
@@ -574,7 +574,7 @@ func TestDriverLoadPolicyAndProto(t *testing.T) {
 					"existence": map[string]any{},
 				},
 			},
-			"add": map[string]any{
+			"addition": map[string]any{
 				"target": map[string]any{
 					"log_attribute_path": map[string]any{
 						"segments": []any{"gcp", "routing", "tier"},
@@ -583,7 +583,7 @@ func TestDriverLoadPolicyAndProto(t *testing.T) {
 				"value": map[string]any{
 					"string_value": "soc",
 				},
-				"upsert": true,
+				"upsert_enabled": true,
 			},
 		}
 
@@ -679,7 +679,7 @@ func TestTransformLogAttributes(t *testing.T) {
 
 		actions := []struct {
 			id     string
-			action *policyv1alpha1.LogTransformPolicy_Add
+			action *policyv1alpha1.LogTransformPolicy_Addition
 		}{
 			{"add-str", addAction(logTargetAttr("str_key"), strVal("hello"), false)},
 			{"add-int", addAction(logTargetAttr("int_key"), intVal(42), false)},
@@ -1088,7 +1088,7 @@ func TestTransformLogMultipleMatchersAndSequentialPolicies(t *testing.T) {
 func TestTransformLogZeroContextGuards(t *testing.T) {
 	tests := []struct {
 		name   string
-		action *policyv1alpha1.LogTransformPolicy_Add
+		action *policyv1alpha1.LogTransformPolicy_Addition
 	}{
 		{
 			name:   "log_attribute",

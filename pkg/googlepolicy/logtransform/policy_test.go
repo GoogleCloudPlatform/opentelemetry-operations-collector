@@ -1732,6 +1732,12 @@ func TestTransformLogRedactAction(t *testing.T) {
 		lrMap.Body().SetEmptyMap().PutStr("key", "val")
 		ctxMap := googlepolicy.LogContext{Record: lrMap}
 		assert.Equal(t, googlepolicy.TransformNoMatch, pol.TransformLog(ctxMap))
+
+		// If body is empty string, record_field BODY redaction fails open
+		lrEmpty := plog.NewLogRecord()
+		lrEmpty.Body().SetStr("")
+		ctxEmpty := googlepolicy.LogContext{Record: lrEmpty}
+		assert.Equal(t, googlepolicy.TransformNoMatch, pol.TransformLog(ctxEmpty))
 	})
 
 	t.Run("record_field severity_text redaction", func(t *testing.T) {
@@ -1746,6 +1752,38 @@ func TestTransformLogRedactAction(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, googlepolicy.TransformModified, pol.TransformLog(ctx))
 		assert.Equal(t, "DEBUG", lr.SeverityText())
+
+		// Unset severity_text fails open / no-op
+		lrUnset := plog.NewLogRecord()
+		ctxUnset := googlepolicy.LogContext{Record: lrUnset}
+		assert.Equal(t, googlepolicy.TransformNoMatch, pol.TransformLog(ctxUnset))
+	})
+
+	t.Run("record_field full string replacement on unset or empty values fails open", func(t *testing.T) {
+		// Policy with regex: "" (full string replacement) targeting SEVERITY_TEXT
+		polSev, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "redact-full-sev-text",
+			Action: redactAction(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT), "", "[REDACTED]"),
+		})
+		require.NoError(t, err)
+
+		lrUnsetSev := plog.NewLogRecord()
+		ctxUnsetSev := googlepolicy.LogContext{Record: lrUnsetSev}
+		assert.Equal(t, googlepolicy.TransformNoMatch, polSev.TransformLog(ctxUnsetSev))
+		assert.Equal(t, "", lrUnsetSev.SeverityText())
+
+		// Policy with regex: "" (full string replacement) targeting BODY
+		polBody, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "redact-full-body",
+			Action: redactAction(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY), "", "[REDACTED]"),
+		})
+		require.NoError(t, err)
+
+		lrEmptyBody := plog.NewLogRecord()
+		lrEmptyBody.Body().SetStr("")
+		ctxEmptyBody := googlepolicy.LogContext{Record: lrEmptyBody}
+		assert.Equal(t, googlepolicy.TransformNoMatch, polBody.TransformLog(ctxEmptyBody))
+		assert.Equal(t, "", lrEmptyBody.Body().Str())
 	})
 
 	t.Run("non-string target attributes fail-open", func(t *testing.T) {

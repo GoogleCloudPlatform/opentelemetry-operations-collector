@@ -565,7 +565,7 @@ func compileRecordFieldRedact(field policyv1alpha1.LogRecordField, redactStr fun
 				return false
 			}
 			body := ctx.Record.Body()
-			if body.Type() != pcommon.ValueTypeStr {
+			if body.Type() != pcommon.ValueTypeStr || body.Str() == "" {
 				return false
 			}
 			redacted, modified := redactStr(body.Str())
@@ -582,6 +582,9 @@ func compileRecordFieldRedact(field policyv1alpha1.LogRecordField, redactStr fun
 				return false
 			}
 			sev := ctx.Record.SeverityText()
+			if sev == "" {
+				return false
+			}
 			redacted, modified := redactStr(sev)
 			if !modified {
 				return false

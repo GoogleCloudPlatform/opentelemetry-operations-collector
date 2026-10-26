@@ -794,9 +794,6 @@ func CompileStringRedactor(regexPattern, replacement string) (func(string) (stri
 		return nil, fmt.Errorf("invalid redact regex %q: %w", regexPattern, err)
 	}
 	return func(s string) (string, bool) {
-		if !re.MatchString(s) {
-			return "", false
-		}
 		redacted := re.ReplaceAllString(s, replacement)
 		if redacted == s {
 			return "", false

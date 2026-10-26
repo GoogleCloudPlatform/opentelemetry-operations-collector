@@ -1480,17 +1480,74 @@ func TestTransformLogRenameAction(t *testing.T) {
 	t.Run("source identical to target is no-op", func(t *testing.T) {
 		lr := plog.NewLogRecord()
 		lr.Attributes().PutStr("key", "val")
+		lr.Body().SetEmptyMap().PutStr("field", "val2")
 		ctx := googlepolicy.LogContext{Record: lr}
 
-		p, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
-			Id:     "same-key",
+		p1, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "same-attr-key",
 			Action: renameAction(logAttrSelector("key"), logAttrSelector("key"), false),
 		})
 		require.NoError(t, err)
-		assert.Equal(t, googlepolicy.TransformNoMatch, p.TransformLog(ctx))
+		assert.Equal(t, googlepolicy.TransformNoMatch, p1.TransformLog(ctx))
 		v, ok := lr.Attributes().Get("key")
 		require.True(t, ok)
 		assert.Equal(t, "val", v.Str())
+
+		p2, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "same-body-field",
+			Action: renameAction(logBodyFieldSelector("field"), logBodyFieldSelector("field"), false),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformNoMatch, p2.TransformLog(ctx))
+		v2, ok := lr.Body().Map().Get("field")
+		require.True(t, ok)
+		assert.Equal(t, "val2", v2.Str())
+	})
+
+	t.Run("cross-boundary body_field to nested log_attribute", func(t *testing.T) {
+		lr := plog.NewLogRecord()
+		lr.Body().SetEmptyMap().PutStr("trace_tag", "span-99")
+		ctx := googlepolicy.LogContext{Record: lr}
+
+		p, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "body-to-nested-attr",
+			Action: renameAction(logBodyFieldSelector("trace_tag"), logAttrSelector("meta", "nested", "tag"), false),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformModified, p.TransformLog(ctx))
+
+		_, ok := lr.Body().Map().Get("trace_tag")
+		assert.False(t, ok)
+		metaMap, ok := lr.Attributes().Get("meta")
+		require.True(t, ok)
+		nestedMap, ok := metaMap.Map().Get("nested")
+		require.True(t, ok)
+		tagVal, ok := nestedMap.Map().Get("tag")
+		require.True(t, ok)
+		assert.Equal(t, "span-99", tagVal.Str())
+	})
+
+	t.Run("upsert overwrites intermediate non-map scalar", func(t *testing.T) {
+		lr := plog.NewLogRecord()
+		lr.Attributes().PutStr("old", "val")
+		lr.Attributes().PutStr("a", "scalar_blocking")
+		ctx := googlepolicy.LogContext{Record: lr}
+
+		p, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:     "upsert-overwrite-scalar",
+			Action: renameAction(logAttrSelector("old"), logAttrSelector("a", "b"), true),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformModified, p.TransformLog(ctx))
+
+		_, ok := lr.Attributes().Get("old")
+		assert.False(t, ok)
+		aMap, ok := lr.Attributes().Get("a")
+		require.True(t, ok)
+		require.Equal(t, pcommon.ValueTypeMap, aMap.Type())
+		bVal, ok := aMap.Map().Get("b")
+		require.True(t, ok)
+		assert.Equal(t, "val", bVal.Str())
 	})
 
 	t.Run("non-map body fail-open", func(t *testing.T) {

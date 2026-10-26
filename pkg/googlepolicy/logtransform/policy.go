@@ -474,10 +474,11 @@ func compileRename(a *policyv1alpha1.LogRenameAction) (compiledAction, error) {
 			return false
 		}
 
-		cloned := pcommon.NewValueEmpty()
-		srcVal.CopyTo(cloned)
+		if !writeTarget(tgtMap, srcVal) {
+			return false
+		}
 		removeSource(srcMap)
-		return writeTarget(tgtMap, cloned)
+		return true
 	}, nil
 }
 

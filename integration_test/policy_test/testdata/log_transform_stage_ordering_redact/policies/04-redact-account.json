@@ -1,7 +1,7 @@
 {
   "type": "log_transform",
   "id": "a-redact-account",
-  "redact": {
+  "redaction": {
     "target": {
       "body_field_path": {
         "segments": ["account", "id"]

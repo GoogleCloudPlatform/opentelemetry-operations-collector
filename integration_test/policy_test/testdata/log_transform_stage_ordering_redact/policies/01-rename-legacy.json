@@ -1,7 +1,7 @@
 {
   "type": "log_transform",
   "id": "z-rename-legacy",
-  "rename": {
+  "renaming": {
     "source": {
       "log_attribute_path": {
         "segments": ["legacy_account_id"]
@@ -12,6 +12,6 @@
         "segments": ["account", "id"]
       }
     },
-    "upsert": false
+    "upsert_enabled": false
   }
 }

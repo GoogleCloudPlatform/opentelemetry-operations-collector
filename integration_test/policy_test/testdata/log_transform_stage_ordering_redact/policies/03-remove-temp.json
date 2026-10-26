@@ -1,7 +1,7 @@
 {
   "type": "log_transform",
   "id": "b-remove-temp",
-  "remove": {
+  "removal": {
     "target": {
       "log_attribute_path": {
         "segments": ["temp_session_token"]

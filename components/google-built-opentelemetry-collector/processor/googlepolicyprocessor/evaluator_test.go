@@ -1749,8 +1749,8 @@ func TestEvaluator_LogTransformStageOrdering(t *testing.T) {
 	// Stage 4 (redact) runs LAST after rename (Stage 1), add (Stage 2), and remove (Stage 3).
 	redactUser := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
 		Id: "a-redact-user",
-		Action: &policyv1alpha1.LogTransformPolicy_Redact{
-			Redact: &policyv1alpha1.LogRedactAction{
+		Action: &policyv1alpha1.LogTransformPolicy_Redaction{
+			Redaction: &policyv1alpha1.LogRedactAction{
 				Target:      logTarget("user_name"),
 				Replacement: proto.String("[REDACTED_USER]"),
 			},

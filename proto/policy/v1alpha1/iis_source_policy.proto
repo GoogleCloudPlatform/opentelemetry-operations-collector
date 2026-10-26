@@ -25,14 +25,14 @@ option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-col
 //
 // Evaluation & Deduplication Semantics:
 // - Default Disposition: Microsoft IIS metric collection is disabled unless at
-//   least one valid IISSourcePolicy is configured.
+//   least one valid IisSourcePolicy is configured.
 // - Interval Validation (Fail-Open): If `collection_interval_seconds` is unset,
 //   it defaults to 60. When set, it must be >= 10; a policy with
 //   `collection_interval_seconds < 10` is invalid and ignored (fail-open).
-// - Order-Independent Deduplication: Multiple valid IISSourcePolicy instances
+// - Order-Independent Deduplication: Multiple valid IisSourcePolicy instances
 //   merge into a single `iis` receiver using the minimum effective
 //   `collection_interval_seconds`.
-message IISSourcePolicy {
+message IisSourcePolicy {
   // Unique identifier for the policy within its configuration scope.
   string id = 1;
 

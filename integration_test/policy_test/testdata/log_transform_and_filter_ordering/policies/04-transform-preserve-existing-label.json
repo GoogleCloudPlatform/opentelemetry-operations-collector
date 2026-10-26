@@ -11,13 +11,13 @@
       "equality": { "string_value": "prod" }
     }
   ],
-  "add": {
+  "addition": {
     "target": {
       "log_attribute_path": {
         "segments": ["existing_label"]
       }
     },
     "value": { "string_value": "overwritten" },
-    "upsert": false
+    "upsert_enabled": false
   }
 }

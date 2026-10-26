@@ -15,9 +15,9 @@
 package googlepolicyprocessor
 
 import (
+	"cmp"
 	"fmt"
 	"slices"
-	"strings"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 )
@@ -52,6 +52,9 @@ func NewEvaluator(policies []googlepolicy.TransformationPolicy) (*Evaluator, err
 		case googlepolicy.LogFilterPolicyEvaluator:
 			ev.addLogFilterPolicy(p)
 		case googlepolicy.LogTransformPolicyEvaluator:
+			if p.TransformStage() == googlepolicy.TransformStageUnspecified {
+				return nil, fmt.Errorf("transformation policy %q has unspecified transform stage", p.PolicyName())
+			}
 			ev.addLogTransformPolicy(p)
 		case googlepolicy.MetricFilterPolicyEvaluator:
 			ev.addMetricFilterPolicy(p)
@@ -67,7 +70,10 @@ func NewEvaluator(policies []googlepolicy.TransformationPolicy) (*Evaluator, err
 		}
 	}
 	slices.SortFunc(ev.logTransformPolicies, func(a, b googlepolicy.LogTransformPolicyEvaluator) int {
-		return strings.Compare(a.PolicyName(), b.PolicyName())
+		if c := cmp.Compare(a.TransformStage(), b.TransformStage()); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.PolicyName(), b.PolicyName())
 	})
 	return ev, nil
 }

@@ -132,8 +132,8 @@ func scopeFieldTarget(f policyv1alpha1.ScopeField) *policyv1alpha1.MetricFieldSe
 
 func datapointTarget(path ...string) *policyv1alpha1.MetricFieldSelector {
 	return &policyv1alpha1.MetricFieldSelector{
-		Target: &policyv1alpha1.MetricFieldSelector_DatapointAttributePath{
-			DatapointAttributePath: &policyv1alpha1.AttributePath{Segments: path},
+		Target: &policyv1alpha1.MetricFieldSelector_DataPointAttributePath{
+			DataPointAttributePath: &policyv1alpha1.AttributePath{Segments: path},
 		},
 	}
 }
@@ -334,7 +334,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 				Matchers: []*policyv1alpha1.MetricMatcher{
 					{
 						Target: &policyv1alpha1.MetricFieldSelector{
-							Target: &policyv1alpha1.MetricFieldSelector_DatapointAttributePath{},
+							Target: &policyv1alpha1.MetricFieldSelector_DataPointAttributePath{},
 						},
 						Predicate: &policyv1alpha1.MetricMatcher_Existence{},
 					},

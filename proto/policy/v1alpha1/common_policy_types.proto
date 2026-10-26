@@ -20,7 +20,7 @@ import "google/protobuf/empty.proto";
 
 option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1;policyv1alpha1";
 
-// AttributePath specifies how to access an attribute value.
+// Specifies how to access an attribute value.
 //
 // In OpenTelemetry, attribute keys at the top level frequently contain literal
 // dots (for example, `"service.name"` or `"http.request.method"`), while
@@ -38,7 +38,7 @@ message AttributePath {
   repeated string segments = 1;
 }
 
-// Value carries a typed scalar for equality and containment comparisons.
+// Carries a typed scalar for equality and containment comparisons.
 // Exactly one variant must be set.
 message Value {
   // The typed scalar value.
@@ -60,7 +60,7 @@ message Value {
   }
 }
 
-// NumericValue carries a typed number for ordering comparisons
+// Carries a typed number for ordering comparisons
 // (`exclusive_minimum`, `inclusive_minimum`, `exclusive_maximum`,
 // `inclusive_maximum`).
 // Exactly one variant must be set.
@@ -75,7 +75,7 @@ message NumericValue {
   }
 }
 
-// LogMatcher defines a single predicate evaluated against a specific log field
+// Defines a single predicate evaluated against a specific log field
 // or attribute.
 message LogMatcher {
   // The field, attribute, or metadata to inspect. Exactly one must be set.
@@ -138,7 +138,7 @@ message LogMatcher {
   bool negated = 2;
 }
 
-// LogFieldSelector designates a first-class OTel log field, attribute, or metadata.
+// Designates a first-class OTel log field, attribute, or metadata.
 message LogFieldSelector {
   oneof target {
     // A top-level field on the OTel LogRecord itself (for example,
@@ -178,7 +178,7 @@ message LogFieldSelector {
   }
 }
 
-// TraceMatcher defines a single predicate evaluated against a specific span
+// Defines a single predicate evaluated against a specific span
 // creation-time field or attribute.
 message TraceMatcher {
   // The span field, attribute, or metadata to inspect. Exactly one must be set.
@@ -241,7 +241,7 @@ message TraceMatcher {
   bool negated = 2;
 }
 
-// TraceFieldSelector designates a first-class OTel span field, attribute, or metadata.
+// Designates a first-class OTel span field, attribute, or metadata.
 message TraceFieldSelector {
   oneof target {
     // A top-level creation-time field on the OTel Span itself (for example,
@@ -273,7 +273,7 @@ message TraceFieldSelector {
   }
 }
 
-// Action specifies what to do with a telemetry record that matches all conditions.
+// Specifies what to do with a telemetry record that matches all conditions.
 //
 // Evaluation Semantics & Action Precedence:
 // - Default Allow: Telemetry records or streams pass through by default if no
@@ -310,7 +310,7 @@ enum Action {
   ACTION_DROP = 2;
 }
 
-// ScopeField identifies standard first-class fields of an InstrumentationScope.
+// Identifies standard first-class fields of an InstrumentationScope.
 // For presence checking with `existence`, these fields lack explicit presence
 // tracking in OpenTelemetry and evaluate to true when set to a non-empty string.
 enum ScopeField {
@@ -327,7 +327,7 @@ enum ScopeField {
   SCOPE_FIELD_SCHEMA_URL = 3;
 }
 
-// LogRecordField identifies standard first-class fields of an OpenTelemetry LogRecord.
+// Identifies standard first-class fields of an OpenTelemetry LogRecord.
 // When evaluated with `existence`, first-class fields evaluate to true when set
 // to a non-default (non-empty / non-zero) value.
 //
@@ -367,7 +367,7 @@ enum LogRecordField {
   LOG_RECORD_FIELD_SPAN_ID = 5;
 }
 
-// SpanRecordField identifies standard creation-time fields of an OpenTelemetry Span.
+// Identifies standard creation-time fields of an OpenTelemetry Span.
 // When evaluated with `existence`, first-class fields evaluate to true when set
 // to a non-default (non-empty / non-zero) value.
 enum SpanRecordField {

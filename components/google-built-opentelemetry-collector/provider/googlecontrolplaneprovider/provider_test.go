@@ -96,9 +96,13 @@ func TestRetrieve(t *testing.T) {
 	assert.True(t, conf.IsSet("extensions::googleclientauth/default_gcp_destination"))
 	assert.True(t, conf.IsSet("exporters::otlp_grpc/default_gcp_destination"))
 	assert.True(t, conf.IsSet("receivers::otlp/default_self_metrics"))
+	assert.True(t, conf.IsSet("receivers::nop/googlecontrolplane"))
 	assert.True(t, conf.IsSet("service::telemetry::resource::attributes"))
 	assert.True(t, conf.IsSet("service::pipelines::logs/default_self_metrics"))
 	assert.True(t, conf.IsSet("service::pipelines::metrics/default_self_metrics"))
+	assert.True(t, conf.IsSet("service::pipelines::logs/googlecontrolplane"))
+	assert.True(t, conf.IsSet("service::pipelines::metrics/googlecontrolplane"))
+	assert.True(t, conf.IsSet("service::pipelines::traces/googlecontrolplane"))
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
@@ -163,29 +167,12 @@ func (m *mockSourcePolicy) Evaluate(context.Context) (*confmap.Conf, error) {
 		},
 	}), nil
 }
-func (m *mockSourcePolicy) LogsPipelines(preExportProcessors []component.ID, exporters []component.ID, extensions []component.ID) (*confmap.Conf, error) {
-	procStrs := make([]any, 0, len(preExportProcessors))
-	for _, id := range preExportProcessors {
-		procStrs = append(procStrs, id.String())
-	}
-	return confmap.NewFromStringMap(map[string]any{
-		"service": map[string]any{
-			"pipelines": map[string]any{
-				"logs/" + m.name: map[string]any{
-					"receivers":  []any{"otlp/" + m.name},
-					"processors": procStrs,
-					"exporters":  []any{"otlp_grpc/default_gcp_destination"},
-				},
-			},
-		},
-	}), nil
+func (m *mockSourcePolicy) LogReceiverIDs() []component.ID {
+	otlpType, _ := component.NewType("otlp")
+	return []component.ID{component.NewIDWithName(otlpType, m.name)}
 }
-func (m *mockSourcePolicy) MetricsPipelines(preExportProcessors []component.ID, exporters []component.ID, extensions []component.ID) (*confmap.Conf, error) {
-	return nil, nil
-}
-func (m *mockSourcePolicy) TracesPipelines(preExportProcessors []component.ID, exporters []component.ID, extensions []component.ID) (*confmap.Conf, error) {
-	return nil, nil
-}
+func (m *mockSourcePolicy) MetricReceiverIDs() []component.ID { return nil }
+func (m *mockSourcePolicy) TraceReceiverIDs() []component.ID  { return nil }
 
 var _ googlepolicy.SourcePolicy = (*mockSourcePolicy)(nil)
 
@@ -379,8 +366,8 @@ func TestRetrieve_ActivePolicySetWithCustomSelfMetrics(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, conf.IsSet("receivers::otlp/custom_self_metrics"))
 	assert.False(t, conf.IsSet("receivers::otlp/default_self_metrics"))
-	assert.NotContains(t, conf.Get("service::pipelines::logs/custom_self_metrics::processors"), "googlepolicy")
-	assert.NotContains(t, conf.Get("service::pipelines::metrics/custom_self_metrics::processors"), "googlepolicy")
+	assert.Contains(t, conf.Get("service::pipelines::logs/custom_self_metrics::processors"), "googlepolicy")
+	assert.Contains(t, conf.Get("service::pipelines::metrics/custom_self_metrics::processors"), "googlepolicy")
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
@@ -409,12 +396,57 @@ func TestRetrieve_ActivePolicySetWithOtherSource(t *testing.T) {
 	conf, err := ret.AsConf()
 	require.NoError(t, err)
 	assert.True(t, conf.IsSet("receivers::otlp/other_source"))
-	// Customer source pipelines MUST include googlepolicy processor
-	assert.Contains(t, conf.Get("service::pipelines::logs/other_source::processors"), "googlepolicy")
-	// Built-in self metrics should also be added, but MUST bypass googlepolicy processor
+	// Customer sources are consolidated into canonical logs/googlecontrolplane pipeline with googlepolicy and resource detection
+	assert.Contains(t, conf.Get("service::pipelines::logs/googlecontrolplane::processors"), "resourcedetection/googlecontrolplane")
+	assert.Contains(t, conf.Get("service::pipelines::logs/googlecontrolplane::processors"), "transform/googlecontrolplane")
+	assert.Contains(t, conf.Get("service::pipelines::logs/googlecontrolplane::processors"), "googlepolicy")
+	assert.Contains(t, conf.Get("service::pipelines::logs/googlecontrolplane::receivers"), "otlp/other_source")
+	assert.Contains(t, conf.Get("service::pipelines::logs/googlecontrolplane::receivers"), "nop/googlecontrolplane")
+	// Built-in self metrics also includes googlepolicy processor
 	assert.True(t, conf.IsSet("receivers::otlp/default_self_metrics"))
-	assert.NotContains(t, conf.Get("service::pipelines::logs/default_self_metrics::processors"), "googlepolicy")
-	assert.NotContains(t, conf.Get("service::pipelines::metrics/default_self_metrics::processors"), "googlepolicy")
+	assert.Contains(t, conf.Get("service::pipelines::logs/default_self_metrics::processors"), "googlepolicy")
+	assert.Contains(t, conf.Get("service::pipelines::metrics/default_self_metrics::processors"), "googlepolicy")
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestRetrieve_ActivePolicySetWithMultipleSources_CanonicalConsolidation(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	p := createProvider()
+
+	ps := &googlepolicy.PolicySet{
+		RevisionID: "rev-multi-source",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			"source_1": {PolicyObj: &mockSourcePolicy{name: "source_1"}},
+			"source_2": {PolicyObj: &mockSourcePolicy{name: "source_2"}},
+		},
+	}
+	googlepolicy.SetActivePolicySet(ps)
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+
+	assert.True(t, conf.IsSet("receivers::otlp/source_1"))
+	assert.True(t, conf.IsSet("receivers::otlp/source_2"))
+
+	// Both sources must merge into the shared canonical logs/googlecontrolplane pipeline
+	receivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
+	assert.Contains(t, receivers, "nop/googlecontrolplane")
+	assert.Contains(t, receivers, "otlp/source_1")
+	assert.Contains(t, receivers, "otlp/source_2")
+
+	// Shared pipeline must contain googlepolicy and destination queue/batch processor
+	processors := conf.Get("service::pipelines::logs/googlecontrolplane::processors")
+	assert.Contains(t, processors, "googlepolicy")
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }

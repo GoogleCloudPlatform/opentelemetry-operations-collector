@@ -23,6 +23,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider/policies/gcpdestination"
@@ -37,6 +38,9 @@ import (
 	"go.opentelemetry.io/collector/confmap"
 	"go.opentelemetry.io/collector/featuregate"
 	"go.opentelemetry.io/collector/otelcol"
+	"go.opentelemetry.io/collector/pipeline"
+	"go.opentelemetry.io/collector/service"
+	"go.opentelemetry.io/collector/service/pipelines"
 	"go.uber.org/zap"
 )
 
@@ -403,30 +407,125 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 	preProcessMetricIDs := append([]component.ID{googlePolicyID}, destPolicy.PreProcessMetricIDs()...)
 	preProcessTraceIDs := append([]component.ID{googlePolicyID}, destPolicy.PreProcessTraceIDs()...)
 
+	// Configure GCP resource detection and transform for canonical workload pipelines
+	rdType, _ := component.NewType("resourcedetection")
+	rdID := component.NewIDWithName(rdType, "googlecontrolplane")
+	rdCfg := map[string]any{
+		"detectors": []string{"gcp"},
+		"override":  false,
+		"timeout":   10 * time.Second,
+	}
+
+	transformType, _ := component.NewType("transform")
+	transformID := component.NewIDWithName(transformType, "googlecontrolplane")
+	transformCfg := map[string]any{
+		"error_mode": "ignore",
+		"log_statements": []map[string]any{
+			{
+				"context": "resource",
+				"statements": []string{
+					`set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil`,
+				},
+			},
+		},
+		"metric_statements": []map[string]any{
+			{
+				"context": "resource",
+				"statements": []string{
+					`set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil`,
+				},
+			},
+		},
+		"trace_statements": []map[string]any{
+			{
+				"context": "resource",
+				"statements": []string{
+					`set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil`,
+				},
+			},
+		},
+	}
+
+	workloadProcessorsConf := &otelcol.Config{
+		Processors: map[component.ID]component.Config{
+			rdID:        component.Config(rdCfg),
+			transformID: component.Config(transformCfg),
+		},
+	}
+	wpCm := confmap.New()
+	if err := wpCm.Marshal(workloadProcessorsConf); err != nil {
+		return nil, true, fmt.Errorf("failed to marshal workload resource processors config: %w", err)
+	}
+	if err := conf.Merge(cleanConf(wpCm)); err != nil {
+		return nil, true, fmt.Errorf("failed to merge workload resource processors config: %w", err)
+	}
+
+	// Fallback nop receiver for canonical pipelines, allowing local config.yaml to append receivers
+	nopType, _ := component.NewType("nop")
+	nopReceiverID := component.NewIDWithName(nopType, "googlecontrolplane")
+	nopConf := &otelcol.Config{
+		Receivers: map[component.ID]component.Config{
+			nopReceiverID: map[string]any{},
+		},
+	}
+	nopCm := confmap.New()
+	if err := nopCm.Marshal(nopConf); err != nil {
+		return nil, true, fmt.Errorf("failed to marshal nop receiver config: %w", err)
+	}
+	if err := conf.Merge(cleanConf(nopCm)); err != nil {
+		return nil, true, fmt.Errorf("failed to merge nop receiver config: %w", err)
+	}
+
+	activeLogReceivers := []component.ID{nopReceiverID}
+	activeMetricReceivers := []component.ID{nopReceiverID}
+	activeTraceReceivers := []component.ID{nopReceiverID}
+
 	// Load all source policies from the active policy set.
 	sourcePolicies := activePolicySet.LoadPoliciesOfClass(googlepolicy.PolicyClassSource)
 
 	appliedSelfMetrics := false
 	for _, sp := range sourcePolicies {
-		policyConf, err := p.evaluateSingleSourcePolicy(ctx, collectorID, fleetID, sp, destPolicy, preProcessLogIDs, preProcessMetricIDs, preProcessTraceIDs)
+		srcPolicy, ok := sp.(googlepolicy.SourcePolicy)
+		if !ok {
+			p.recordPolicyEvaluateError(ctx, sp.PolicyName(), activePolicySet, fmt.Errorf("source policy %q does not implement SourcePolicy", sp.PolicyName()), event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassSource))
+			continue
+		}
+
+		if dedicated, ok := srcPolicy.(googlepolicy.DedicatedPipelineSourcePolicy); ok {
+			policyConf, err := p.evaluateDedicatedSourcePolicy(ctx, collectorID, fleetID, dedicated, destPolicy, preProcessLogIDs, preProcessMetricIDs, preProcessTraceIDs)
+			if err != nil {
+				p.recordPolicyEvaluateError(ctx, sp.PolicyName(), activePolicySet, err, event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassSource))
+				continue
+			}
+			if err := conf.Merge(policyConf); err != nil {
+				p.recordPolicyEvaluateError(ctx, sp.PolicyName(), activePolicySet, fmt.Errorf("failed to merge config for source policy %q: %w", sp.PolicyName(), err), event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassSource))
+				continue
+			}
+			if sp.PolicyType() == selfmetrics.PolicyType {
+				appliedSelfMetrics = true
+			}
+			continue
+		}
+
+		policyConf, err := srcPolicy.Evaluate(ctx)
 		if err != nil {
-			p.recordPolicyEvaluateError(ctx, sp.PolicyName(), activePolicySet, err, event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassSource))
+			p.recordPolicyEvaluateError(ctx, sp.PolicyName(), activePolicySet, fmt.Errorf("failed to evaluate source policy %q: %w", sp.PolicyName(), err), event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassSource))
 			continue
 		}
-		if err := conf.Merge(policyConf); err != nil {
-			err = fmt.Errorf("failed to merge config for source policy %q: %w", sp.PolicyName(), err)
-			p.recordPolicyEvaluateError(ctx, sp.PolicyName(), activePolicySet, err, event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassSource))
+		if err := conf.Merge(cleanConf(policyConf)); err != nil {
+			p.recordPolicyEvaluateError(ctx, sp.PolicyName(), activePolicySet, fmt.Errorf("failed to merge config for source policy %q: %w", sp.PolicyName(), err), event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassSource))
 			continue
 		}
-		if sp.PolicyType() == selfmetrics.PolicyType {
-			appliedSelfMetrics = true
-		}
+
+		activeLogReceivers = append(activeLogReceivers, srcPolicy.LogReceiverIDs()...)
+		activeMetricReceivers = append(activeMetricReceivers, srcPolicy.MetricReceiverIDs()...)
+		activeTraceReceivers = append(activeTraceReceivers, srcPolicy.TraceReceiverIDs()...)
 	}
 
 	// If no custom self_metrics policy was present or if it failed evaluation,
 	// fall back to BuiltInSelfMetricsPolicy.
 	if !appliedSelfMetrics {
-		policyConf, err := p.evaluateSingleSourcePolicy(ctx, collectorID, fleetID, BuiltInSelfMetricsPolicy, destPolicy, preProcessLogIDs, preProcessMetricIDs, preProcessTraceIDs)
+		policyConf, err := p.evaluateDedicatedSourcePolicy(ctx, collectorID, fleetID, BuiltInSelfMetricsPolicy, destPolicy, preProcessLogIDs, preProcessMetricIDs, preProcessTraceIDs)
 		if err != nil {
 			p.recordPolicyEvaluateError(ctx, BuiltInSelfMetricsPolicy.PolicyName(), nil, err, event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassSource))
 			return nil, true, err
@@ -436,6 +535,44 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 			p.recordPolicyEvaluateError(ctx, BuiltInSelfMetricsPolicy.PolicyName(), nil, err, event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassSource))
 			return nil, true, err
 		}
+	}
+
+	// Synthesize canonical shared workload pipelines
+	canonicalLogsPipelineID := pipeline.NewIDWithName(pipeline.SignalLogs, "googlecontrolplane")
+	canonicalMetricsPipelineID := pipeline.NewIDWithName(pipeline.SignalMetrics, "googlecontrolplane")
+	canonicalTracesPipelineID := pipeline.NewIDWithName(pipeline.SignalTraces, "googlecontrolplane")
+
+	canonicalLogProcessors := append([]component.ID{rdID, transformID, googlePolicyID}, destPolicy.PreProcessLogIDs()...)
+	canonicalMetricProcessors := append([]component.ID{rdID, transformID, googlePolicyID}, destPolicy.PreProcessMetricIDs()...)
+	canonicalTraceProcessors := append([]component.ID{rdID, transformID, googlePolicyID}, destPolicy.PreProcessTraceIDs()...)
+
+	canonicalServiceConf := &otelcol.Config{
+		Service: service.Config{
+			Pipelines: pipelines.Config{
+				canonicalLogsPipelineID: &pipelines.PipelineConfig{
+					Receivers:  deduplicateComponentIDs(activeLogReceivers),
+					Processors: canonicalLogProcessors,
+					Exporters:  destPolicy.ExporterIDs(),
+				},
+				canonicalMetricsPipelineID: &pipelines.PipelineConfig{
+					Receivers:  deduplicateComponentIDs(activeMetricReceivers),
+					Processors: canonicalMetricProcessors,
+					Exporters:  destPolicy.ExporterIDs(),
+				},
+				canonicalTracesPipelineID: &pipelines.PipelineConfig{
+					Receivers:  deduplicateComponentIDs(activeTraceReceivers),
+					Processors: canonicalTraceProcessors,
+					Exporters:  destPolicy.ExporterIDs(),
+				},
+			},
+		},
+	}
+	canonicalCm := confmap.New()
+	if err := canonicalCm.Marshal(canonicalServiceConf); err != nil {
+		return nil, true, fmt.Errorf("failed to marshal canonical pipelines config: %w", err)
+	}
+	if err := conf.Merge(cleanConf(canonicalCm)); err != nil {
+		return nil, true, fmt.Errorf("failed to merge canonical pipelines config: %w", err)
 	}
 
 	// Validate the fully merged confmap.
@@ -462,21 +599,16 @@ func (p *provider) evaluateDestinationPolicy(ctx context.Context, dp googlepolic
 	return destPolicy, cleanConf(destConf), nil
 }
 
-func (p *provider) evaluateSingleSourcePolicy(
+func (p *provider) evaluateDedicatedSourcePolicy(
 	ctx context.Context,
 	collectorID string,
 	fleetID string,
-	sp googlepolicy.Policy,
+	srcPolicy googlepolicy.DedicatedPipelineSourcePolicy,
 	destPolicy googlepolicy.DestinationPolicy,
 	preProcessLogIDs []component.ID,
 	preProcessMetricIDs []component.ID,
 	preProcessTraceIDs []component.ID,
 ) (*confmap.Conf, error) {
-	srcPolicy, ok := sp.(googlepolicy.SourcePolicy)
-	if !ok {
-		return nil, fmt.Errorf("source policy %q does not implement SourcePolicy", sp.PolicyName())
-	}
-
 	var sourceConf *confmap.Conf
 	var err error
 
@@ -488,56 +620,57 @@ func (p *provider) evaluateSingleSourcePolicy(
 		sourceConf, err = srcPolicy.Evaluate(ctx)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to evaluate source policy %q: %w", sp.PolicyName(), err)
+		return nil, fmt.Errorf("failed to evaluate source policy %q: %w", srcPolicy.PolicyName(), err)
 	}
 
 	policyConf := confmap.New()
 	if err := policyConf.Merge(cleanConf(sourceConf)); err != nil {
-		return nil, fmt.Errorf("failed to merge config for source policy %q: %w", sp.PolicyName(), err)
+		return nil, fmt.Errorf("failed to merge config for source policy %q: %w", srcPolicy.PolicyName(), err)
 	}
 
-	var logProcIDs, metricProcIDs, traceProcIDs []component.ID
-	if sp.PolicyType() == selfmetrics.PolicyType {
-		logProcIDs = destPolicy.PreProcessLogIDs()
-		metricProcIDs = destPolicy.PreProcessMetricIDs()
-		traceProcIDs = destPolicy.PreProcessTraceIDs()
-	} else {
-		logProcIDs = preProcessLogIDs
-		metricProcIDs = preProcessMetricIDs
-		traceProcIDs = preProcessTraceIDs
-	}
-
-	logsPipelines, err := srcPolicy.LogsPipelines(logProcIDs, destPolicy.ExporterIDs(), destPolicy.ExtensionIDs())
+	logsPipelines, err := srcPolicy.LogsPipelines(preProcessLogIDs, destPolicy.ExporterIDs(), destPolicy.ExtensionIDs())
 	if err != nil {
-		return nil, fmt.Errorf("failed to load logs pipelines for source policy %q: %w", sp.PolicyName(), err)
+		return nil, fmt.Errorf("failed to load logs pipelines for source policy %q: %w", srcPolicy.PolicyName(), err)
 	}
 	if logsPipelines != nil {
 		if err := policyConf.Merge(cleanConf(logsPipelines)); err != nil {
-			return nil, fmt.Errorf("failed to merge logs pipelines for source policy %q: %w", sp.PolicyName(), err)
+			return nil, fmt.Errorf("failed to merge logs pipelines for source policy %q: %w", srcPolicy.PolicyName(), err)
 		}
 	}
 
-	metricsPipelines, err := srcPolicy.MetricsPipelines(metricProcIDs, destPolicy.ExporterIDs(), destPolicy.ExtensionIDs())
+	metricsPipelines, err := srcPolicy.MetricsPipelines(preProcessMetricIDs, destPolicy.ExporterIDs(), destPolicy.ExtensionIDs())
 	if err != nil {
-		return nil, fmt.Errorf("failed to load metrics pipelines for source policy %q: %w", sp.PolicyName(), err)
+		return nil, fmt.Errorf("failed to load metrics pipelines for source policy %q: %w", srcPolicy.PolicyName(), err)
 	}
 	if metricsPipelines != nil {
 		if err := policyConf.Merge(cleanConf(metricsPipelines)); err != nil {
-			return nil, fmt.Errorf("failed to merge metrics pipelines for source policy %q: %w", sp.PolicyName(), err)
+			return nil, fmt.Errorf("failed to merge metrics pipelines for source policy %q: %w", srcPolicy.PolicyName(), err)
 		}
 	}
 
-	tracesPipelines, err := srcPolicy.TracesPipelines(traceProcIDs, destPolicy.ExporterIDs(), destPolicy.ExtensionIDs())
+	tracesPipelines, err := srcPolicy.TracesPipelines(preProcessTraceIDs, destPolicy.ExporterIDs(), destPolicy.ExtensionIDs())
 	if err != nil {
-		return nil, fmt.Errorf("failed to load traces pipelines for source policy %q: %w", sp.PolicyName(), err)
+		return nil, fmt.Errorf("failed to load traces pipelines for source policy %q: %w", srcPolicy.PolicyName(), err)
 	}
 	if tracesPipelines != nil {
 		if err := policyConf.Merge(cleanConf(tracesPipelines)); err != nil {
-			return nil, fmt.Errorf("failed to merge traces pipelines for source policy %q: %w", sp.PolicyName(), err)
+			return nil, fmt.Errorf("failed to merge traces pipelines for source policy %q: %w", srcPolicy.PolicyName(), err)
 		}
 	}
 
 	return policyConf, nil
+}
+
+func deduplicateComponentIDs(ids []component.ID) []component.ID {
+	seen := make(map[component.ID]bool, len(ids))
+	result := make([]component.ID, 0, len(ids))
+	for _, id := range ids {
+		if !seen[id] {
+			seen[id] = true
+			result = append(result, id)
+		}
+	}
+	return result
 }
 
 func cleanConf(c *confmap.Conf) *confmap.Conf {

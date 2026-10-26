@@ -390,6 +390,49 @@ func CompileValueSetter(val *policyv1alpha1.Value) (func(pcommon.Value), error) 
 	}
 }
 
+// CompilePathRemover pre-compiles an AttributePath into a closure that deletes
+// the target key from a pcommon.Map without creating intermediate maps.
+// It removes all occurrences of the target key (handling duplicate keys) and
+// returns true iff the target key existed and was removed.
+func CompilePathRemover(attrPath *policyv1alpha1.AttributePath, kind string) (func(pcommon.Map) bool, error) {
+	steps, err := CompilePath(attrPath, kind)
+	if err != nil {
+		return nil, err
+	}
+	prefix, leafKey := steps[:len(steps)-1], steps[len(steps)-1].Key
+	isLeaf := func(k string, _ pcommon.Value) bool { return k == leafKey }
+	return func(attrs pcommon.Map) bool {
+		parent, ok := findExistingParentMap(attrs, prefix)
+		if !ok {
+			return false
+		}
+		if _, exists := parent.Get(leafKey); !exists {
+			return false
+		}
+		parent.RemoveIf(isLeaf)
+		return true
+	}, nil
+}
+
+// findExistingParentMap walks attrs along the provided path prefix without
+// mutating or creating intermediate maps. It returns the leaf's parent map and
+// true if all prefix steps exist and resolve to maps, or (pcommon.Map{}, false)
+// if any ancestor is missing or not a map.
+func findExistingParentMap(attrs pcommon.Map, prefix []PathStep) (pcommon.Map, bool) {
+	if attrs == (pcommon.Map{}) {
+		return pcommon.Map{}, false
+	}
+	curr := attrs
+	for _, step := range prefix {
+		child, exists := curr.Get(step.Key)
+		if !exists || child.Type() != pcommon.ValueTypeMap {
+			return pcommon.Map{}, false
+		}
+		curr = child.Map()
+	}
+	return curr, true
+}
+
 // ValueToAny converts a pcommon.Value into the plain Go value that the
 // predicates operate on. Returning plain values rather than pcommon.Value keeps
 // the hot path free of pdata allocations.

@@ -30,8 +30,8 @@ import (
 
 func TestTraceSamplingPolicy_Serialization(t *testing.T) {
 	policy := &policyv1alpha1.TraceSamplingPolicy{
-		Id:                 "sample-traces-10pct",
-		SamplingPercentage: 10.0,
+		Id:              "sample-traces-10pct",
+		SamplingPercent: 10.0,
 	}
 
 	data, err := proto.Marshal(policy)
@@ -42,14 +42,14 @@ func TestTraceSamplingPolicy_Serialization(t *testing.T) {
 
 	assert.True(t, proto.Equal(policy, unmarshaled))
 	assert.Equal(t, "sample-traces-10pct", unmarshaled.GetId())
-	assert.InDelta(t, 10.0, unmarshaled.GetSamplingPercentage(), 1e-9)
+	assert.InDelta(t, 10.0, unmarshaled.GetSamplingPercent(), 1e-9)
 	assert.Empty(t, unmarshaled.GetMatchers())
 }
 
 func TestTraceSamplingPolicy_WithMatchers(t *testing.T) {
 	policy := &policyv1alpha1.TraceSamplingPolicy{
-		Id:                 "sample-checkout-db-spans-5pct",
-		SamplingPercentage: 5.0,
+		Id:              "sample-checkout-db-spans-5pct",
+		SamplingPercent: 5.0,
 		Matchers: []*policyv1alpha1.TraceMatcher{
 			{
 				Target: &policyv1alpha1.TraceFieldSelector{
@@ -114,7 +114,7 @@ func TestTraceSamplingPolicy_WithMatchers(t *testing.T) {
 
 	assert.True(t, proto.Equal(policy, unmarshaled))
 	assert.Equal(t, "sample-checkout-db-spans-5pct", unmarshaled.GetId())
-	assert.InDelta(t, 5.0, unmarshaled.GetSamplingPercentage(), 1e-9)
+	assert.InDelta(t, 5.0, unmarshaled.GetSamplingPercent(), 1e-9)
 	require.Len(t, unmarshaled.GetMatchers(), 4)
 
 	jsonData, err := protojson.Marshal(policy)
@@ -128,8 +128,8 @@ func TestTraceSamplingPolicy_WithMatchers(t *testing.T) {
 
 func TestTraceSamplingPolicy_AnyPackaging(t *testing.T) {
 	policy := &policyv1alpha1.TraceSamplingPolicy{
-		Id:                 "sample-traces-25pct",
-		SamplingPercentage: 25.5,
+		Id:              "sample-traces-25pct",
+		SamplingPercent: 25.5,
 	}
 
 	anyPolicy, err := anypb.New(policy)
@@ -153,42 +153,42 @@ func TestTraceSamplingPolicy_AnyPackaging(t *testing.T) {
 	require.NoError(t, unmarshaledCollector.GetPolicies()[0].UnmarshalTo(unpackedPolicy))
 	assert.True(t, proto.Equal(policy, unpackedPolicy))
 	assert.Equal(t, "sample-traces-25pct", unpackedPolicy.GetId())
-	assert.InDelta(t, 25.5, unpackedPolicy.GetSamplingPercentage(), 1e-9)
+	assert.InDelta(t, 25.5, unpackedPolicy.GetSamplingPercent(), 1e-9)
 }
 
 func TestTraceSamplingPolicy_JSONSerialization(t *testing.T) {
 	policy := &policyv1alpha1.TraceSamplingPolicy{
-		Id:                 "sample-traces-fractional",
-		SamplingPercentage: 0.05,
+		Id:              "sample-traces-fractional",
+		SamplingPercent: 0.05,
 	}
 
 	// ProtoJSON marshal and unmarshal round-trip.
 	jsonData, err := protojson.Marshal(policy)
 	require.NoError(t, err)
-	assert.Contains(t, string(jsonData), `"samplingPercentage":0.05`)
+	assert.Contains(t, string(jsonData), `"samplingPercent":0.05`)
 
 	unmarshaled := &policyv1alpha1.TraceSamplingPolicy{}
 	require.NoError(t, protojson.Unmarshal(jsonData, unmarshaled))
 	assert.True(t, proto.Equal(policy, unmarshaled))
 	assert.Equal(t, "sample-traces-fractional", unmarshaled.GetId())
-	assert.InDelta(t, 0.05, unmarshaled.GetSamplingPercentage(), 1e-9)
+	assert.InDelta(t, 0.05, unmarshaled.GetSamplingPercent(), 1e-9)
 
 	// Snake_case field name in JSON is also accepted by protojson.
-	jsonSnakeCase := []byte(`{"id": "sample-traces-100pct", "sampling_percentage": 100.0}`)
+	jsonSnakeCase := []byte(`{"id": "sample-traces-100pct", "sampling_percent": 100.0}`)
 	snakePolicy := &policyv1alpha1.TraceSamplingPolicy{}
 	require.NoError(t, protojson.Unmarshal(jsonSnakeCase, snakePolicy))
 	assert.Equal(t, "sample-traces-100pct", snakePolicy.GetId())
-	assert.InDelta(t, 100.0, snakePolicy.GetSamplingPercentage(), 1e-9)
+	assert.InDelta(t, 100.0, snakePolicy.GetSamplingPercent(), 1e-9)
 
 	// Empty / default message round-trip.
 	emptyJSON := []byte(`{"id": "omitted-percentage-policy"}`)
 	emptyPolicy := &policyv1alpha1.TraceSamplingPolicy{}
 	require.NoError(t, protojson.Unmarshal(emptyJSON, emptyPolicy))
 	assert.Equal(t, "omitted-percentage-policy", emptyPolicy.GetId())
-	assert.Equal(t, 0.0, emptyPolicy.GetSamplingPercentage())
+	assert.Equal(t, 0.0, emptyPolicy.GetSamplingPercent())
 
-	// EmitUnpopulated includes zero-valued samplingPercentage in output.
+	// EmitUnpopulated includes zero-valued samplingPercent in output.
 	marshaledUnpopulated, err := protojson.MarshalOptions{EmitUnpopulated: true}.Marshal(emptyPolicy)
 	require.NoError(t, err)
-	assert.Contains(t, string(marshaledUnpopulated), `"samplingPercentage":0`)
+	assert.Contains(t, string(marshaledUnpopulated), `"samplingPercent":0`)
 }

@@ -970,8 +970,10 @@ func TestPolicyHotReload(t *testing.T) {
       "target": {
         "record_field": "LOG_RECORD_FIELD_BODY"
       },
-      "equality": {
-        "string_value": "drop-initial"
+      "predicate": {
+        "equality": {
+          "string_value": "drop-initial"
+        }
       }
     }
   ]
@@ -1041,8 +1043,10 @@ func TestPolicyHotReload(t *testing.T) {
       "target": {
         "record_field": "LOG_RECORD_FIELD_BODY"
       },
-      "equality": {
-        "string_value": "drop-after-reload"
+      "predicate": {
+        "equality": {
+          "string_value": "drop-after-reload"
+        }
       }
     }
   ]
@@ -1102,8 +1106,10 @@ func TestUnsupportedPolicyEmitsErrorEvent(t *testing.T) {
       "target": {
         "record_field": "LOG_RECORD_FIELD_BODY"
       },
-      "equality": {
-        "string_value": "drop-me"
+      "predicate": {
+        "equality": {
+          "string_value": "drop-me"
+        }
       }
     }
   ]

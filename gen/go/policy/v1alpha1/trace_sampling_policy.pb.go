@@ -42,9 +42,9 @@ const (
 // Evaluation & Precedence Semantics:
 //   - Default Disposition & Fail-Open: Spans pass through unsampled by default
 //     (default allow) when no matching valid TraceSamplingPolicy is configured.
-//     A policy with an empty `id`, a `sampling_percent` outside the valid
-//     range (0.0, 100.0] (including 0.0, negative values, > 100.0, NaN, or Inf),
-//     or any malformed `TraceMatcher` in `matchers` is invalid and ignored
+//     A policy with an empty `id`, an unset `sampling_percent` or one outside the
+//     valid range (0.0, 100.0] (including 0.0, negative values, > 100.0, NaN, or
+//     Inf), or any malformed `TraceMatcher` in `matchers` is invalid and ignored
 //     (fail-open).
 //   - Conditional & Unconditional Matching: If `matchers` is empty, the policy
 //     matches all spans unconditionally (setting a global baseline sampling
@@ -76,7 +76,7 @@ type TraceSamplingPolicy struct {
 	// Unique identifier for the policy within its configuration scope.
 	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	// Probabilistic sampling percentage in the range (0.0, 100.0]. Required.
-	SamplingPercent float64 `protobuf:"fixed64,2,opt,name=sampling_percent,json=samplingPercent,proto3" json:"sampling_percent,omitempty"`
+	SamplingPercent *float64 `protobuf:"fixed64,2,opt,name=sampling_percent,json=samplingPercent,proto3,oneof" json:"sampling_percent,omitempty"`
 	// Optional conditions evaluated against incoming spans.
 	// When empty, this sampling policy applies unconditionally to all spans.
 	// When non-empty, all matchers in this list are ANDed together: all
@@ -125,8 +125,8 @@ func (x *TraceSamplingPolicy) GetId() string {
 }
 
 func (x *TraceSamplingPolicy) GetSamplingPercent() float64 {
-	if x != nil {
-		return x.SamplingPercent
+	if x != nil && x.SamplingPercent != nil {
+		return *x.SamplingPercent
 	}
 	return 0
 }
@@ -142,11 +142,12 @@ var File_policy_v1alpha1_trace_sampling_policy_proto protoreflect.FileDescriptor
 
 const file_policy_v1alpha1_trace_sampling_policy_proto_rawDesc = "" +
 	"\n" +
-	"+policy/v1alpha1/trace_sampling_policy.proto\x12 google.telemetry.policy.v1alpha1\x1a)policy/v1alpha1/common_policy_types.proto\"\x9c\x01\n" +
+	"+policy/v1alpha1/trace_sampling_policy.proto\x12 google.telemetry.policy.v1alpha1\x1a)policy/v1alpha1/common_policy_types.proto\"\xb6\x01\n" +
 	"\x13TraceSamplingPolicy\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12)\n" +
-	"\x10sampling_percent\x18\x02 \x01(\x01R\x0fsamplingPercent\x12J\n" +
-	"\bmatchers\x18\x03 \x03(\v2..google.telemetry.policy.v1alpha1.TraceMatcherR\bmatchersB\xcc\x02\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12.\n" +
+	"\x10sampling_percent\x18\x02 \x01(\x01H\x00R\x0fsamplingPercent\x88\x01\x01\x12J\n" +
+	"\bmatchers\x18\x03 \x03(\v2..google.telemetry.policy.v1alpha1.TraceMatcherR\bmatchersB\x13\n" +
+	"\x11_sampling_percentB\xcc\x02\n" +
 	"$com.google.telemetry.policy.v1alpha1B\x18TraceSamplingPolicyProtoP\x01Zggithub.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1;policyv1alpha1\xa2\x02\x03GTP\xaa\x02 Google.Telemetry.Policy.V1alpha1\xca\x02 Google\\Telemetry\\Policy\\V1alpha1\xe2\x02,Google\\Telemetry\\Policy\\V1alpha1\\GPBMetadata\xea\x02#Google::Telemetry::Policy::V1alpha1b\x06proto3"
 
 var (
@@ -181,6 +182,7 @@ func file_policy_v1alpha1_trace_sampling_policy_proto_init() {
 		return
 	}
 	file_policy_v1alpha1_common_policy_types_proto_init()
+	file_policy_v1alpha1_trace_sampling_policy_proto_msgTypes[0].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

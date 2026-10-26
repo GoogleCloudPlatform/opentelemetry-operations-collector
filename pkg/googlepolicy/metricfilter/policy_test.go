@@ -186,7 +186,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 				Matchers: []*policyv1alpha1.MetricMatcher{
 					{
 						Target:    descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME),
-						Predicate: &policyv1alpha1.MetricMatcher_Existence{},
+						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -200,7 +200,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 				Matchers: []*policyv1alpha1.MetricMatcher{
 					{
 						Target:    descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME),
-						Predicate: &policyv1alpha1.MetricMatcher_Existence{},
+						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -214,7 +214,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 				Matchers: []*policyv1alpha1.MetricMatcher{
 					{
 						Target:    descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME),
-						Predicate: &policyv1alpha1.MetricMatcher_Existence{},
+						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -223,8 +223,8 @@ func TestPolicyValidationErrors(t *testing.T) {
 		{
 			name: "missing matchers",
 			proto: &policyv1alpha1.MetricFilterPolicy{
-				Id:      "p2",
-				Action:  policyv1alpha1.Action_ACTION_DROP.Enum(),
+				Id:       "p2",
+				Action:   policyv1alpha1.Action_ACTION_DROP.Enum(),
 				Matchers: []*policyv1alpha1.MetricMatcher{},
 			},
 			errExpect: ErrMissingMatchers,
@@ -236,7 +236,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 				Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
 				Matchers: []*policyv1alpha1.MetricMatcher{
 					{
-						Predicate: &policyv1alpha1.MetricMatcher_Existence{},
+						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -250,7 +250,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 				Matchers: []*policyv1alpha1.MetricMatcher{
 					{
 						Target:    &policyv1alpha1.MetricFieldSelector{},
-						Predicate: &policyv1alpha1.MetricMatcher_Existence{},
+						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -264,7 +264,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 				Matchers: []*policyv1alpha1.MetricMatcher{
 					{
 						Target:    descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_UNSPECIFIED),
-						Predicate: &policyv1alpha1.MetricMatcher_Existence{},
+						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -278,7 +278,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 				Matchers: []*policyv1alpha1.MetricMatcher{
 					{
 						Target:    scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_UNSPECIFIED),
-						Predicate: &policyv1alpha1.MetricMatcher_Existence{},
+						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -292,7 +292,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 				Matchers: []*policyv1alpha1.MetricMatcher{
 					{
 						Target:    datapointTarget(),
-						Predicate: &policyv1alpha1.MetricMatcher_Existence{},
+						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -306,7 +306,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 				Matchers: []*policyv1alpha1.MetricMatcher{
 					{
 						Target:    resourceTarget(),
-						Predicate: &policyv1alpha1.MetricMatcher_Existence{},
+						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -320,7 +320,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 				Matchers: []*policyv1alpha1.MetricMatcher{
 					{
 						Target:    scopeAttrTarget(),
-						Predicate: &policyv1alpha1.MetricMatcher_Existence{},
+						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -336,7 +336,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 						Target: &policyv1alpha1.MetricFieldSelector{
 							Target: &policyv1alpha1.MetricFieldSelector_DataPointAttributePath{},
 						},
-						Predicate: &policyv1alpha1.MetricMatcher_Existence{},
+						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -378,9 +378,9 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 			Matchers: []*policyv1alpha1.MetricMatcher{
 				{
 					Target: descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME),
-					Predicate: &policyv1alpha1.MetricMatcher_Glob{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Glob{
 						Glob: "http.server.*",
-					},
+					}},
 				},
 			},
 		}
@@ -406,9 +406,9 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 			Matchers: []*policyv1alpha1.MetricMatcher{
 				{
 					Target: descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME),
-					Predicate: &policyv1alpha1.MetricMatcher_Equality{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 						Equality: stringValue("system.cpu.load"),
-					},
+					}},
 				},
 			},
 		}
@@ -427,9 +427,9 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 			Matchers: []*policyv1alpha1.MetricMatcher{
 				{
 					Target: descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE),
-					Predicate: &policyv1alpha1.MetricMatcher_Equality{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 						Equality: stringValue("SUM"),
-					},
+					}},
 				},
 			},
 		}
@@ -449,9 +449,9 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 			Matchers: []*policyv1alpha1.MetricMatcher{
 				{
 					Target: descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE),
-					Predicate: &policyv1alpha1.MetricMatcher_Equality{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 						Equality: stringValue("HISTOGRAM"),
-					},
+					}},
 				},
 			},
 		}
@@ -472,15 +472,15 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 			Matchers: []*policyv1alpha1.MetricMatcher{
 				{
 					Target: descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME),
-					Predicate: &policyv1alpha1.MetricMatcher_Equality{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 						Equality: stringValue("http.server.duration"),
-					},
+					}},
 				},
 				{
 					Target: descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE),
-					Predicate: &policyv1alpha1.MetricMatcher_Equality{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 						Equality: stringValue("SUM"),
-					},
+					}},
 				},
 			},
 		}
@@ -490,9 +490,9 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 		assert.True(t, matchesMetric(pol, metric, scope, res))
 
 		// If one matcher does not match, the entire policy should not match
-		pb.Matchers[1].Predicate = &policyv1alpha1.MetricMatcher_Equality{
+		pb.Matchers[1].Predicate = &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 			Equality: stringValue("HISTOGRAM"),
-		}
+		}}
 		pol2, err := NewPolicyFromProto(pb)
 		require.NoError(t, err)
 		assert.False(t, matchesMetric(pol2, metric, scope, res))
@@ -505,9 +505,9 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 			Matchers: []*policyv1alpha1.MetricMatcher{
 				{
 					Target: datapointTarget("http.method"),
-					Predicate: &policyv1alpha1.MetricMatcher_Equality{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 						Equality: stringValue("POST"), // does not match GET
-					},
+					}},
 					Negated: true, // negated -> true
 				},
 			},
@@ -531,33 +531,33 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 			Matchers: []*policyv1alpha1.MetricMatcher{
 				{
 					Target: resourceTarget("cloud.zone"),
-					Predicate: &policyv1alpha1.MetricMatcher_Equality{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 						Equality: stringValue("us-central1-a"),
-					},
+					}},
 				},
 				{
 					Target: scopeAttrTarget("scope.tag"),
-					Predicate: &policyv1alpha1.MetricMatcher_Equality{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 						Equality: stringValue("backend"),
-					},
+					}},
 				},
 				{
 					Target: scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_NAME),
-					Predicate: &policyv1alpha1.MetricMatcher_Equality{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 						Equality: stringValue("my.library"),
-					},
+					}},
 				},
 				{
 					Target: scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_VERSION),
-					Predicate: &policyv1alpha1.MetricMatcher_Equality{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 						Equality: stringValue("v1.2.3"),
-					},
+					}},
 				},
 				{
 					Target: scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_SCHEMA_URL),
-					Predicate: &policyv1alpha1.MetricMatcher_Equality{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 						Equality: stringValue("https://opentelemetry.io/schemas/1.24.0"),
-					},
+					}},
 				},
 			},
 		}
@@ -574,55 +574,55 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 			Matchers: []*policyv1alpha1.MetricMatcher{
 				{
 					Target: datapointTarget("feature.enabled"),
-					Predicate: &policyv1alpha1.MetricMatcher_Equality{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 						Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BoolValue{BoolValue: true}},
-					},
+					}},
 				},
 				{
 					Target: datapointTarget("latency_seconds"),
-					Predicate: &policyv1alpha1.MetricMatcher_Equality{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 						Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_DoubleValue{DoubleValue: 1.25}},
-					},
+					}},
 				},
 				{
 					Target: datapointTarget("binary.id"),
-					Predicate: &policyv1alpha1.MetricMatcher_Equality{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 						Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BytesValue{BytesValue: []byte{0x01, 0x02, 0x03}}},
-					},
+					}},
 				},
 				{
 					Target: datapointTarget("http.status_code"),
-					Predicate: &policyv1alpha1.MetricMatcher_InclusiveMinimum{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_InclusiveMinimum{
 						InclusiveMinimum: &policyv1alpha1.NumericValue{Kind: &policyv1alpha1.NumericValue_IntValue{IntValue: 200}},
-					},
+					}},
 				},
 				{
 					Target: datapointTarget("http.status_code"),
-					Predicate: &policyv1alpha1.MetricMatcher_ExclusiveMaximum{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_ExclusiveMaximum{
 						ExclusiveMaximum: &policyv1alpha1.NumericValue{Kind: &policyv1alpha1.NumericValue_IntValue{IntValue: 300}},
-					},
+					}},
 				},
 				{
 					Target: datapointTarget("latency_seconds"),
-					Predicate: &policyv1alpha1.MetricMatcher_ExclusiveMinimum{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_ExclusiveMinimum{
 						ExclusiveMinimum: &policyv1alpha1.NumericValue{Kind: &policyv1alpha1.NumericValue_DoubleValue{DoubleValue: 1.0}},
-					},
+					}},
 				},
 				{
 					Target: datapointTarget("latency_seconds"),
-					Predicate: &policyv1alpha1.MetricMatcher_InclusiveMaximum{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_InclusiveMaximum{
 						InclusiveMaximum: &policyv1alpha1.NumericValue{Kind: &policyv1alpha1.NumericValue_DoubleValue{DoubleValue: 1.25}},
-					},
+					}},
 				},
 				{
 					Target: datapointTarget("user.roles"),
-					Predicate: &policyv1alpha1.MetricMatcher_Containment{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Containment{
 						Containment: stringValue("admin"),
-					},
+					}},
 				},
 				{
 					Target:    datapointTarget("metadata", "env"),
-					Predicate: &policyv1alpha1.MetricMatcher_Existence{},
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
 				},
 			},
 		}
@@ -997,7 +997,7 @@ func TestIsDatapointLevel(t *testing.T) {
 			for _, target := range tt.targets {
 				pb.Matchers = append(pb.Matchers, &policyv1alpha1.MetricMatcher{
 					Target:    target,
-					Predicate: &policyv1alpha1.MetricMatcher_Existence{},
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
 				})
 			}
 
@@ -1082,8 +1082,10 @@ func TestDriverLoadPolicy(t *testing.T) {
 				"target": map[string]any{
 					"descriptor_field": "METRIC_DESCRIPTOR_FIELD_NAME",
 				},
-				"equality": map[string]any{
-					"string_value": "drop.this.metric",
+				"predicate": map[string]any{
+					"equality": map[string]any{
+						"string_value": "drop.this.metric",
+					},
 				},
 			},
 		},
@@ -1127,7 +1129,7 @@ func TestDriverLoadPolicyErrors(t *testing.T) {
 						"target": map[string]any{
 							"descriptor_field": "METRIC_DESCRIPTOR_FIELD_NAME",
 						},
-						"existence": map[string]any{},
+						"predicate": map[string]any{"existence": map[string]any{}},
 					},
 				},
 			},
@@ -1144,7 +1146,7 @@ func TestDriverLoadPolicyErrors(t *testing.T) {
 						"target": map[string]any{
 							"descriptor_field": "METRIC_DESCRIPTOR_FIELD_NAME",
 						},
-						"existence": map[string]any{},
+						"predicate": map[string]any{"existence": map[string]any{}},
 					},
 				},
 			},
@@ -1161,7 +1163,7 @@ func TestDriverLoadPolicyErrors(t *testing.T) {
 						"target": map[string]any{
 							"descriptor_fields": "METRIC_DESCRIPTOR_FIELD_NAME", // unknown field discarded -> target unset -> validation error
 						},
-						"existence": map[string]any{},
+						"predicate": map[string]any{"existence": map[string]any{}},
 					},
 				},
 			},
@@ -1209,53 +1211,37 @@ func TestDriverLoadPolicyErrors(t *testing.T) {
 // --- Helpers for the table-driven tests below, mirroring the conventions used
 // by the logfilter and tracefilter test suites. ---
 
-func equalsString(s string) *policyv1alpha1.MetricMatcher_Equality {
-	return &policyv1alpha1.MetricMatcher_Equality{Equality: stringValue(s)}
+func equalsString(s string) *policyv1alpha1.Predicate {
+	return &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{Equality: stringValue(s)}}
 }
 
-func equalsBool(b bool) *policyv1alpha1.MetricMatcher_Equality {
-	return &policyv1alpha1.MetricMatcher_Equality{
+func equalsBool(b bool) *policyv1alpha1.Predicate {
+	return &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 		Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BoolValue{BoolValue: b}},
-	}
+	}}
 }
 
-func containsString(s string) *policyv1alpha1.MetricMatcher_Containment {
-	return &policyv1alpha1.MetricMatcher_Containment{Containment: stringValue(s)}
+func containsString(s string) *policyv1alpha1.Predicate {
+	return &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Containment{Containment: stringValue(s)}}
 }
 
 // dropPolicy builds a single-matcher ACTION_DROP policy around target/predicate.
-func dropPolicy(id string, target *policyv1alpha1.MetricFieldSelector, predicate any, negate bool) *policyv1alpha1.MetricFilterPolicy {
-	m := &policyv1alpha1.MetricMatcher{
-		Target: target,
-		Negated: negate,
-	}
-	switch p := predicate.(type) {
-	case *policyv1alpha1.MetricMatcher_Existence:
-		m.Predicate = p
-	case *policyv1alpha1.MetricMatcher_Equality:
-		m.Predicate = p
-	case *policyv1alpha1.MetricMatcher_Glob:
-		m.Predicate = p
-	case *policyv1alpha1.MetricMatcher_Containment:
-		m.Predicate = p
-	case *policyv1alpha1.MetricMatcher_ExclusiveMinimum:
-		m.Predicate = p
-	case *policyv1alpha1.MetricMatcher_InclusiveMinimum:
-		m.Predicate = p
-	case *policyv1alpha1.MetricMatcher_ExclusiveMaximum:
-		m.Predicate = p
-	case *policyv1alpha1.MetricMatcher_InclusiveMaximum:
-		m.Predicate = p
-	}
+func dropPolicy(id string, target *policyv1alpha1.MetricFieldSelector, predicate *policyv1alpha1.Predicate, negate bool) *policyv1alpha1.MetricFilterPolicy {
 	return &policyv1alpha1.MetricFilterPolicy{
-		Id:      id,
-		Action:  policyv1alpha1.Action_ACTION_DROP.Enum(),
-		Matchers: []*policyv1alpha1.MetricMatcher{m},
+		Id:     id,
+		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+		Matchers: []*policyv1alpha1.MetricMatcher{
+			{
+				Target:    target,
+				Predicate: predicate,
+				Negated:   negate,
+			},
+		},
 	}
 }
 
 // mustDropPolicy compiles a single-matcher ACTION_DROP policy or fails the test.
-func mustDropPolicy(t *testing.T, id string, target *policyv1alpha1.MetricFieldSelector, predicate any, negate bool) *Policy {
+func mustDropPolicy(t *testing.T, id string, target *policyv1alpha1.MetricFieldSelector, predicate *policyv1alpha1.Predicate, negate bool) *Policy {
 	t.Helper()
 	pol, err := NewPolicyFromProto(dropPolicy(id, target, predicate, negate))
 	require.NoError(t, err)
@@ -1282,7 +1268,7 @@ func TestPolicyMetadata(t *testing.T) {
 	pb := dropPolicy(
 		"metadata-policy",
 		descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME),
-		&policyv1alpha1.MetricMatcher_Existence{},
+		&policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
 		false,
 	)
 	pol, err := NewPolicyFromProto(pb)
@@ -1375,21 +1361,21 @@ func TestUnsetDescriptorStringFieldsReportAbsent(t *testing.T) {
 			assert.Nil(t, val, "unset value must return nil so value predicates do not match")
 
 			// exists is false ...
-			existsPol := mustDropPolicy(t, "exists-"+field.String(), target, &policyv1alpha1.MetricMatcher_Existence{}, false)
+			existsPol := mustDropPolicy(t, "exists-"+field.String(), target, &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}}, false)
 			assert.Equal(t, googlepolicy.FilterNoMatch, existsPol.FilterMetric(ctx))
 
 			// ... which makes `exists` + negate the "field is unset" selector.
-			negatedPol := mustDropPolicy(t, "not-exists-"+field.String(), target, &policyv1alpha1.MetricMatcher_Existence{}, true)
+			negatedPol := mustDropPolicy(t, "not-exists-"+field.String(), target, &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}}, true)
 			assert.Equal(t, googlepolicy.FilterDrop, negatedPol.FilterMetric(ctx))
 
 			// Value predicates must NOT match an unset field.
 			equalsPol := mustDropPolicy(t, "equals-empty-"+field.String(), target, equalsString(""), false)
 			assert.Equal(t, googlepolicy.FilterNoMatch, equalsPol.FilterMetric(ctx))
 
-			globEmptyPol := mustDropPolicy(t, "glob-empty-"+field.String(), target, &policyv1alpha1.MetricMatcher_Glob{Glob: ""}, false)
+			globEmptyPol := mustDropPolicy(t, "glob-empty-"+field.String(), target, &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Glob{Glob: ""}}, false)
 			assert.Equal(t, googlepolicy.FilterNoMatch, globEmptyPol.FilterMetric(ctx))
 
-			globWildPol := mustDropPolicy(t, "glob-wild-"+field.String(), target, &policyv1alpha1.MetricMatcher_Glob{Glob: "*"}, false)
+			globWildPol := mustDropPolicy(t, "glob-wild-"+field.String(), target, &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Glob{Glob: "*"}}, false)
 			assert.Equal(t, googlepolicy.FilterNoMatch, globWildPol.FilterMetric(ctx))
 		})
 	}
@@ -1421,7 +1407,7 @@ func TestMetricTypeAbsentOnUntypedInstrument(t *testing.T) {
 	})
 
 	t.Run("exists reports false", func(t *testing.T) {
-		pol := mustDropPolicy(t, "type-exists", target, &policyv1alpha1.MetricMatcher_Existence{}, false)
+		pol := mustDropPolicy(t, "type-exists", target, &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}}, false)
 		assert.Equal(t, googlepolicy.FilterNoMatch, pol.FilterMetric(untypedCtx))
 		// A typed instrument does satisfy the same selector.
 		assert.Equal(t, googlepolicy.FilterDrop, pol.FilterMetric(typedCtx))
@@ -1437,7 +1423,7 @@ func TestMetricTypeAbsentOnUntypedInstrument(t *testing.T) {
 	})
 
 	t.Run("negated exists selects untyped instruments", func(t *testing.T) {
-		pol := mustDropPolicy(t, "type-not-exists", target, &policyv1alpha1.MetricMatcher_Existence{}, true)
+		pol := mustDropPolicy(t, "type-not-exists", target, &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}}, true)
 		assert.Equal(t, googlepolicy.FilterDrop, pol.FilterMetric(untypedCtx))
 		assert.Equal(t, googlepolicy.FilterNoMatch, pol.FilterMetric(typedCtx))
 	})
@@ -1468,16 +1454,16 @@ func TestAggregationTemporalityAbsentWhenUnspecified(t *testing.T) {
 	})
 
 	t.Run("exists reports false", func(t *testing.T) {
-		pol := mustDropPolicy(t, "temporality-exists", target, &policyv1alpha1.MetricMatcher_Existence{}, false)
+		pol := mustDropPolicy(t, "temporality-exists", target, &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}}, false)
 		assert.Equal(t, googlepolicy.FilterNoMatch, pol.FilterMetric(unspecifiedCtx))
 		assert.Equal(t, googlepolicy.FilterDrop, pol.FilterMetric(deltaCtx))
 	})
 
 	t.Run("no value predicate matches the absent field", func(t *testing.T) {
-		predicates := map[string]any{
+		predicates := map[string]*policyv1alpha1.Predicate{
 			"equals UNSPECIFIED": equalsString("UNSPECIFIED"),
 			"equals empty":       equalsString(""),
-			"glob anything":      &policyv1alpha1.MetricMatcher_Glob{Glob: "*"},
+			"glob anything":      {Kind: &policyv1alpha1.Predicate_Glob{Glob: "*"}},
 			"contains empty":     containsString(""),
 		}
 		for name, predicate := range predicates {
@@ -1487,7 +1473,7 @@ func TestAggregationTemporalityAbsentWhenUnspecified(t *testing.T) {
 	})
 
 	t.Run("negated exists selects instruments without a temporality", func(t *testing.T) {
-		pol := mustDropPolicy(t, "temporality-not-exists", target, &policyv1alpha1.MetricMatcher_Existence{}, true)
+		pol := mustDropPolicy(t, "temporality-not-exists", target, &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}}, true)
 		assert.Equal(t, googlepolicy.FilterDrop, pol.FilterMetric(unspecifiedCtx))
 		assert.Equal(t, googlepolicy.FilterNoMatch, pol.FilterMetric(deltaCtx))
 	})
@@ -1522,7 +1508,7 @@ func TestIsMonotonicAbsentForNonSumInstruments(t *testing.T) {
 			assert.False(t, exists)
 			assert.Nil(t, val)
 
-			existsPol := mustDropPolicy(t, "monotonic-exists-"+tt.name, target, &policyv1alpha1.MetricMatcher_Existence{}, false)
+			existsPol := mustDropPolicy(t, "monotonic-exists-"+tt.name, target, &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}}, false)
 			assert.Equal(t, googlepolicy.FilterNoMatch, existsPol.FilterMetric(ctx))
 
 			// Absent means absent: neither `false` nor `true` matches.
@@ -1531,7 +1517,7 @@ func TestIsMonotonicAbsentForNonSumInstruments(t *testing.T) {
 				assert.Equal(t, googlepolicy.FilterNoMatch, pol.FilterMetric(ctx))
 			}
 
-			negatedPol := mustDropPolicy(t, "monotonic-not-exists-"+tt.name, target, &policyv1alpha1.MetricMatcher_Existence{}, true)
+			negatedPol := mustDropPolicy(t, "monotonic-not-exists-"+tt.name, target, &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}}, true)
 			assert.Equal(t, googlepolicy.FilterDrop, negatedPol.FilterMetric(ctx))
 		})
 	}
@@ -1593,7 +1579,7 @@ func TestEmptyContextFields(t *testing.T) {
 			assert.False(t, exists)
 			assert.Equal(t, tt.wantValue, val)
 
-			pol := mustDropPolicy(t, "empty-ctx-"+tt.name, tt.target, &policyv1alpha1.MetricMatcher_Existence{}, false)
+			pol := mustDropPolicy(t, "empty-ctx-"+tt.name, tt.target, &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}}, false)
 			assert.Equal(t, googlepolicy.FilterNoMatch, pol.FilterMetric(googlepolicy.MetricContext{}))
 		})
 	}
@@ -1626,13 +1612,13 @@ func TestZeroValueMetricInPopulatedContext(t *testing.T) {
 
 	predicates := []struct {
 		name      string
-		predicate any
+		predicate *policyv1alpha1.Predicate
 	}{
-		{name: "exists", predicate: &policyv1alpha1.MetricMatcher_Existence{}},
+		{name: "exists", predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}}},
 		{name: "equals", predicate: equalsString("")},
-		{name: "glob", predicate: &policyv1alpha1.MetricMatcher_Glob{Glob: "*"}},
+		{name: "glob", predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Glob{Glob: "*"}}},
 		{name: "contains", predicate: containsString("")},
-		{name: "gte", predicate: &policyv1alpha1.MetricMatcher_InclusiveMinimum{InclusiveMinimum: &policyv1alpha1.NumericValue{Kind: &policyv1alpha1.NumericValue_IntValue{IntValue: 0}}}},
+		{name: "gte", predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_InclusiveMinimum{InclusiveMinimum: &policyv1alpha1.NumericValue{Kind: &policyv1alpha1.NumericValue_IntValue{IntValue: 0}}}}},
 	}
 
 	for _, field := range descriptorFields {
@@ -1670,7 +1656,7 @@ func TestDriverLoadPolicyIgnoresUnknownFields(t *testing.T) {
 		"matchers": []any{
 			map[string]any{
 				"target":              map[string]any{"descriptor_field": "METRIC_DESCRIPTOR_FIELD_NAME"},
-				"existence":              map[string]any{},
+				"predicate":           map[string]any{"existence": map[string]any{}},
 				"future_matcher_hint": true,
 			},
 		},

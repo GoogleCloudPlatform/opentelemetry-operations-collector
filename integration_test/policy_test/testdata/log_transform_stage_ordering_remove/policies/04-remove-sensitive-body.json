@@ -1,7 +1,7 @@
 {
   "type": "log_transform",
   "id": "04-remove-sensitive-body",
-  "remove": {
+  "removal": {
     "target": {
       "body_field_path": {
         "segments": ["auth", "session_token"]

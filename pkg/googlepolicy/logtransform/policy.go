@@ -94,45 +94,48 @@ func NewPolicyFromProto(pb *policyv1alpha1.LogTransformPolicy) (*Policy, error) 
 	var (
 		stage  googlepolicy.TransformStage
 		action compiledAction
-		err    error
 	)
 	switch a := pb.Action.(type) {
-	case *policyv1alpha1.LogTransformPolicy_Add:
-		if a.Add == nil {
+	case *policyv1alpha1.LogTransformPolicy_Addition:
+		if a.Addition == nil {
 			return nil, ErrMissingAction
+		}
+		ca, err := compileAdd(a.Addition)
+		if err != nil {
+			return nil, fmt.Errorf("addition: %w", err)
 		}
 		stage = googlepolicy.TransformStageAdd
-		action, err = compileAdd(a.Add)
-		if err != nil {
-			return nil, fmt.Errorf("add: %w", err)
-		}
-	case *policyv1alpha1.LogTransformPolicy_Remove:
-		if a.Remove == nil {
+		action = ca
+	case *policyv1alpha1.LogTransformPolicy_Removal:
+		if a.Removal == nil {
 			return nil, ErrMissingAction
+		}
+		cr, err := compileRemove(a.Removal)
+		if err != nil {
+			return nil, fmt.Errorf("removal: %w", err)
 		}
 		stage = googlepolicy.TransformStageRemove
-		action, err = compileRemove(a.Remove)
-		if err != nil {
-			return nil, fmt.Errorf("remove: %w", err)
-		}
-	case *policyv1alpha1.LogTransformPolicy_Rename:
-		if a.Rename == nil {
+		action = cr
+	case *policyv1alpha1.LogTransformPolicy_Renaming:
+		if a.Renaming == nil {
 			return nil, ErrMissingAction
+		}
+		cr, err := compileRename(a.Renaming)
+		if err != nil {
+			return nil, fmt.Errorf("renaming: %w", err)
 		}
 		stage = googlepolicy.TransformStageRename
-		action, err = compileRename(a.Rename)
-		if err != nil {
-			return nil, fmt.Errorf("rename: %w", err)
-		}
-	case *policyv1alpha1.LogTransformPolicy_Redact:
-		if a.Redact == nil {
+		action = cr
+	case *policyv1alpha1.LogTransformPolicy_Redaction:
+		if a.Redaction == nil {
 			return nil, ErrMissingAction
 		}
-		stage = googlepolicy.TransformStageRedact
-		action, err = compileRedact(a.Redact)
+		crd, err := compileRedact(a.Redaction)
 		if err != nil {
-			return nil, fmt.Errorf("redact: %w", err)
+			return nil, fmt.Errorf("redaction: %w", err)
 		}
+		stage = googlepolicy.TransformStageRedact
+		action = crd
 	default:
 		return nil, ErrMissingAction
 	}
@@ -224,7 +227,7 @@ func compileAdd(a *policyv1alpha1.LogAddAction) (compiledAction, error) {
 
 	switch t := target.Target.(type) {
 	case *policyv1alpha1.LogTargetSelector_LogAttributePath:
-		setAttr, err := matcher.CompilePathSetter(t.LogAttributePath, "log", a.GetValue(), a.GetUpsert())
+		setAttr, err := matcher.CompilePathSetter(t.LogAttributePath, "log", a.GetValue(), a.GetUpsertEnabled())
 		if err != nil {
 			return nil, err
 		}
@@ -236,7 +239,7 @@ func compileAdd(a *policyv1alpha1.LogAddAction) (compiledAction, error) {
 		}, nil
 
 	case *policyv1alpha1.LogTargetSelector_BodyFieldPath:
-		setBodyField, err := matcher.CompilePathSetter(t.BodyFieldPath, "body", a.GetValue(), a.GetUpsert())
+		setBodyField, err := matcher.CompilePathSetter(t.BodyFieldPath, "body", a.GetValue(), a.GetUpsertEnabled())
 		if err != nil {
 			return nil, err
 		}
@@ -254,7 +257,7 @@ func compileAdd(a *policyv1alpha1.LogAddAction) (compiledAction, error) {
 		}, nil
 
 	case *policyv1alpha1.LogTargetSelector_RecordField:
-		return compileRecordFieldAdd(t.RecordField, a.GetValue(), a.GetUpsert())
+		return compileRecordFieldAdd(t.RecordField, a.GetValue(), a.GetUpsertEnabled())
 
 	default:
 		return nil, ErrMissingTarget
@@ -420,8 +423,13 @@ func compileRename(a *policyv1alpha1.LogRenameAction) (compiledAction, error) {
 		return nil, err
 	}
 
-	if srcInBody == tgtInBody && isPathPrefix(srcAttrPath.GetSegments(), tgtAttrPath.GetSegments()) {
-		return nil, errors.New("rename source cannot be an ancestor of target")
+	if srcInBody == tgtInBody {
+		if isPathPrefix(srcAttrPath.GetSegments(), tgtAttrPath.GetSegments()) {
+			return nil, errors.New("rename source cannot be an ancestor of target")
+		}
+		if isPathPrefix(tgtAttrPath.GetSegments(), srcAttrPath.GetSegments()) {
+			return nil, errors.New("rename target cannot be an ancestor of source")
+		}
 	}
 
 	removeSource, err := matcher.CompilePathRemover(srcAttrPath, srcKind)
@@ -429,12 +437,12 @@ func compileRename(a *policyv1alpha1.LogRenameAction) (compiledAction, error) {
 		return nil, err
 	}
 
-	writeTarget, err := matcher.CompilePathValueSetter(tgtAttrPath, tgtKind, a.GetUpsert())
+	writeTarget, err := matcher.CompilePathValueSetter(tgtAttrPath, tgtKind, a.GetUpsertEnabled())
 	if err != nil {
 		return nil, err
 	}
 
-	upsert := a.GetUpsert()
+	upsert := a.GetUpsertEnabled()
 
 	return func(ctx googlepolicy.LogContext) bool {
 		if ctx.Record == (plog.LogRecord{}) {
@@ -460,7 +468,7 @@ func compileRename(a *policyv1alpha1.LogRenameAction) (compiledAction, error) {
 		var tgtMap pcommon.Map
 		if tgtInBody {
 			body := ctx.Record.Body()
-			if body.Type() == pcommon.ValueTypeEmpty {
+			if !bodyExists(body) {
 				body.SetEmptyMap()
 			} else if body.Type() != pcommon.ValueTypeMap {
 				return false
@@ -603,7 +611,6 @@ func isPathPrefix(prefix, full []string) bool {
 	}
 	return true
 }
-
 func bodyExists(v pcommon.Value) bool {
 	switch v.Type() {
 	case pcommon.ValueTypeEmpty:

@@ -35,8 +35,8 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// TraceFilterPolicy defines an intent-based rule for dropping spans based on
-// structured creation-time field and attribute matches.
+// Defines an intent-based rule for dropping spans based on structured
+// creation-time field and attribute matches.
 //
 // Policies are declarative, atomic, and transport-agnostic.
 //

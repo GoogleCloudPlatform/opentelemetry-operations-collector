@@ -396,6 +396,14 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 				},
 			},
 		},
+		"trace_statements": []map[string]any{
+			{
+				"context": "resource",
+				"statements": []string{
+					`set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil`,
+				},
+			},
+		},
 	}
 
 	workloadProcessorsConf := &otelcol.Config{

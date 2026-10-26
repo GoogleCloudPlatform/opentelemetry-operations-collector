@@ -453,60 +453,6 @@ func newStubExtensionFactory(typeStr string) extension.Factory {
 	)
 }
 
-type stubPassThroughProcessor struct {
-	component.StartFunc
-	component.ShutdownFunc
-	nextLogs    consumer.Logs
-	nextMetrics consumer.Metrics
-	nextTraces  consumer.Traces
-}
-
-func (p *stubPassThroughProcessor) Capabilities() consumer.Capabilities {
-	return consumer.Capabilities{MutatesData: false}
-}
-
-func (p *stubPassThroughProcessor) ConsumeLogs(ctx context.Context, ld plog.Logs) error {
-	if p.nextLogs != nil {
-		return p.nextLogs.ConsumeLogs(ctx, ld)
-	}
-	return nil
-}
-
-func (p *stubPassThroughProcessor) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) error {
-	if p.nextMetrics != nil {
-		return p.nextMetrics.ConsumeMetrics(ctx, md)
-	}
-	return nil
-}
-
-func (p *stubPassThroughProcessor) ConsumeTraces(ctx context.Context, td ptrace.Traces) error {
-	if p.nextTraces != nil {
-		return p.nextTraces.ConsumeTraces(ctx, td)
-	}
-	return nil
-}
-
-type stubReceiver struct{}
-
-func (s *stubReceiver) Start(context.Context, component.Host) error { return nil }
-func (s *stubReceiver) Shutdown(context.Context) error              { return nil }
-
-func newStubReceiverFactory(typeStr string) receiver.Factory {
-	return receiver.NewFactory(
-		component.MustNewType(typeStr),
-		func() component.Config { return &stubComponentConfig{} },
-		receiver.WithLogs(func(context.Context, receiver.Settings, component.Config, consumer.Logs) (receiver.Logs, error) {
-			return &stubReceiver{}, nil
-		}, component.StabilityLevelAlpha),
-		receiver.WithMetrics(func(context.Context, receiver.Settings, component.Config, consumer.Metrics) (receiver.Metrics, error) {
-			return &stubReceiver{}, nil
-		}, component.StabilityLevelAlpha),
-		receiver.WithTraces(func(context.Context, receiver.Settings, component.Config, consumer.Traces) (receiver.Traces, error) {
-			return &stubReceiver{}, nil
-		}, component.StabilityLevelAlpha),
-	)
-}
-
 func newStubExporterFactory(typeStr string) exporter.Factory {
 	return exporter.NewFactory(
 		component.MustNewType(typeStr),
@@ -565,7 +511,6 @@ func newStubProcessorFactory(typeStr string) processor.Factory {
 		}, component.StabilityLevelAlpha),
 		processor.WithLogs(func(_ context.Context, _ processor.Settings, _ component.Config, next consumer.Logs) (processor.Logs, error) {
 			return &stubLogsProcessor{Logs: next}, nil
-		}, component.StabilityLevelAlpha),
 		}, component.StabilityLevelAlpha),
 	)
 }

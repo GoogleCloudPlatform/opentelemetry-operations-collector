@@ -46,9 +46,17 @@ func buildFuzzLogContexts(body, severityText, attrKey, attrStr string, severityN
 	edgeAttrs.PutEmptySlice("empty_slice")
 	edgeAttrs.PutEmptyMap("empty_map")
 
+	mapBodyLogs := plog.NewLogs()
+	mapBodyRL := mapBodyLogs.ResourceLogs().AppendEmpty()
+	mapBodySL := mapBodyRL.ScopeLogs().AppendEmpty()
+	mapBodyLR := mapBodySL.LogRecords().AppendEmpty()
+	mapBodyLR.Body().SetEmptyMap().PutStr("event_id", "evt-fuzz")
+	mapBodyLR.Body().Map().PutEmptyMap("event_data").PutStr("userId", "user-42")
+
 	return []googlepolicy.LogContext{
 		logContext(lr, sl, rl),
 		logContext(edgeLR, edgeSL, edgeRL),
+		logContext(mapBodyLR, mapBodySL, mapBodyRL),
 		{},
 		dynamicLogContext(body, severityText, attrKey, attrStr, severityNum, attrInt, attrFloat, attrBool),
 	}
@@ -131,7 +139,7 @@ func fuzzLogTransformSeedPolicies() []*policyv1alpha1.LogTransformPolicy {
 				{
 					Target:    logAttrTarget("user.roles"),
 					Predicate: &policyv1alpha1.LogMatcher_Containment{Containment: strVal("admin")},
-					Negated:    true,
+					Negated:   true,
 				},
 			},
 			Action: &policyv1alpha1.LogTransformPolicy_Addition{
@@ -159,6 +167,22 @@ func fuzzLogTransformSeedPolicies() []*policyv1alpha1.LogTransformPolicy {
 					Target:        logTargetBodyField("event_data", "userId"),
 					Value:         strVal("user-42"),
 					UpsertEnabled: proto.Bool(true),
+				},
+			},
+		},
+		{
+			Id: "remove-attribute",
+			Action: &policyv1alpha1.LogTransformPolicy_Removal{
+				Removal: &policyv1alpha1.LogRemoveAction{
+					Target: logAttrSelector("feature.enabled"),
+				},
+			},
+		},
+		{
+			Id: "remove-nested-body-field",
+			Action: &policyv1alpha1.LogTransformPolicy_Removal{
+				Removal: &policyv1alpha1.LogRemoveAction{
+					Target: logBodyFieldSelector("event_data", "userId"),
 				},
 			},
 		},

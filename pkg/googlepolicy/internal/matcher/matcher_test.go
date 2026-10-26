@@ -718,6 +718,13 @@ func TestCompileStringRedactor(t *testing.T) {
 	assert.True(t, mod)
 	assert.Equal(t, "Contact support at alice@*** for help", res)
 
+	// Multiple occurrences replaced.
+	redactMulti, err := CompileStringRedactor(`\d+`, "XXXX")
+	require.NoError(t, err)
+	res, mod = redactMulti("id: 1234, parent: 5678")
+	assert.True(t, mod)
+	assert.Equal(t, "id: XXXX, parent: XXXX", res)
+
 	// Invalid regex returns error.
 	_, err = CompileStringRedactor("[invalid", "val")
 	assert.Error(t, err)

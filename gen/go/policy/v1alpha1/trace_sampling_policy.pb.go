@@ -35,14 +35,14 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// Idempotent probabilistic trace sampling policy backed by the W3C
+// Describes a probabilistic trace sampling policy backed by the W3C
 // TraceState Consistent Probability Sampling specification (OTEP 235) in
 // `equalizing` mode.
 //
 // Evaluation & Precedence Semantics:
 //   - Default Disposition & Fail-Open: Spans pass through unsampled by default
 //     (default allow) when no matching valid TraceSamplingPolicy is configured.
-//     A policy with an empty `id`, a `sampling_percentage` outside the valid
+//     A policy with an empty `id`, a `sampling_percent` outside the valid
 //     range (0.0, 100.0] (including 0.0, negative values, > 100.0, NaN, or Inf),
 //     or any malformed `TraceMatcher` in `matchers` is invalid and ignored
 //     (fail-open).
@@ -76,7 +76,7 @@ type TraceSamplingPolicy struct {
 	// Unique identifier for the policy within its configuration scope.
 	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	// Probabilistic sampling percentage in the range (0.0, 100.0]. Required.
-	SamplingPercentage float64 `protobuf:"fixed64,2,opt,name=sampling_percentage,json=samplingPercentage,proto3" json:"sampling_percentage,omitempty"`
+	SamplingPercent float64 `protobuf:"fixed64,2,opt,name=sampling_percent,json=samplingPercent,proto3" json:"sampling_percent,omitempty"`
 	// Optional conditions evaluated against incoming spans.
 	// When empty, this sampling policy applies unconditionally to all spans.
 	// When non-empty, all matchers in this list are ANDed together: all
@@ -124,9 +124,9 @@ func (x *TraceSamplingPolicy) GetId() string {
 	return ""
 }
 
-func (x *TraceSamplingPolicy) GetSamplingPercentage() float64 {
+func (x *TraceSamplingPolicy) GetSamplingPercent() float64 {
 	if x != nil {
-		return x.SamplingPercentage
+		return x.SamplingPercent
 	}
 	return 0
 }
@@ -142,10 +142,10 @@ var File_policy_v1alpha1_trace_sampling_policy_proto protoreflect.FileDescriptor
 
 const file_policy_v1alpha1_trace_sampling_policy_proto_rawDesc = "" +
 	"\n" +
-	"+policy/v1alpha1/trace_sampling_policy.proto\x12 google.telemetry.policy.v1alpha1\x1a)policy/v1alpha1/common_policy_types.proto\"\xa2\x01\n" +
+	"+policy/v1alpha1/trace_sampling_policy.proto\x12 google.telemetry.policy.v1alpha1\x1a)policy/v1alpha1/common_policy_types.proto\"\x9c\x01\n" +
 	"\x13TraceSamplingPolicy\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12/\n" +
-	"\x13sampling_percentage\x18\x02 \x01(\x01R\x12samplingPercentage\x12J\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12)\n" +
+	"\x10sampling_percent\x18\x02 \x01(\x01R\x0fsamplingPercent\x12J\n" +
 	"\bmatchers\x18\x03 \x03(\v2..google.telemetry.policy.v1alpha1.TraceMatcherR\bmatchersB\xcc\x02\n" +
 	"$com.google.telemetry.policy.v1alpha1B\x18TraceSamplingPolicyProtoP\x01Zggithub.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1;policyv1alpha1\xa2\x02\x03GTP\xaa\x02 Google.Telemetry.Policy.V1alpha1\xca\x02 Google\\Telemetry\\Policy\\V1alpha1\xe2\x02,Google\\Telemetry\\Policy\\V1alpha1\\GPBMetadata\xea\x02#Google::Telemetry::Policy::V1alpha1b\x06proto3"
 

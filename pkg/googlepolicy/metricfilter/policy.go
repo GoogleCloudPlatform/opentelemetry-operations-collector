@@ -103,7 +103,7 @@ func NewPolicyFromProto(pb *policyv1alpha1.MetricFilterPolicy) (*Policy, error) 
 		if err != nil {
 			return nil, fmt.Errorf("matcher[%d]: %w", i, err)
 		}
-		if _, ok := m.GetTarget().GetTarget().(*policyv1alpha1.MetricFieldSelector_DatapointAttributePath); ok {
+		if _, ok := m.GetTarget().GetTarget().(*policyv1alpha1.MetricFieldSelector_DataPointAttributePath); ok {
 			p.isDatapointLevel = true
 		}
 		p.matchers = append(p.matchers, cm)

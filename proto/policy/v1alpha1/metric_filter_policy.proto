@@ -21,9 +21,8 @@ import "policy/v1alpha1/common_policy_types.proto";
 
 option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1;policyv1alpha1";
 
-// MetricFilterPolicy defines an intent-based rule for retaining or dropping
-// metrics or individual metric data points based on structured field, type,
-// and attribute matches.
+// Defines an intent-based rule for retaining or dropping metrics or individual
+// metric data points based on structured field, type, and attribute matches.
 //
 // Policies are declarative, atomic, and transport-agnostic.
 //
@@ -33,9 +32,9 @@ option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-col
 //   `scope_field`), the action applies to the entire metric stream (e.g.
 //   `ACTION_DROP` drops the entire metric).
 // - Data point-level: If any matcher in `matchers` targets a
-//   `datapoint_attribute_path`, the action applies at the individual data point
-//   level (e.g. `ACTION_DROP` prunes matching data points while preserving
-//   non-matching data points in the metric stream).
+//   `data_point_attribute_path`, the action applies at the individual data
+//   point level (e.g. `ACTION_DROP` prunes matching data points while
+//   preserving non-matching data points in the metric stream).
 // - Pruning Empty Metrics: If an `ACTION_DROP` policy prunes all data points of
 //   a metric stream, the empty metric instrument itself is dropped completely,
 //   and any parent ScopeMetrics or ResourceMetrics that become empty as a result
@@ -64,8 +63,8 @@ message MetricFilterPolicy {
   repeated MetricMatcher matchers = 3;
 }
 
-// MetricMatcher defines a single predicate evaluated against a specific metric
-// descriptor field or data point attribute.
+// Defines a single predicate evaluated against a specific metric descriptor
+// field or data point attribute.
 message MetricMatcher {
   // The metric field, attribute, or metadata to inspect. Exactly one must be set.
   MetricFieldSelector target = 1;
@@ -126,20 +125,20 @@ message MetricMatcher {
   bool negated = 2;
 }
 
-// MetricFieldSelector designates a first-class OTel metric field, attribute, or metadata.
+// Designates a first-class OTel metric field, attribute, or metadata.
 message MetricFieldSelector {
   oneof target {
     // Top-level metric descriptor fields on the OTel Metric itself (for example,
     // `METRIC_DESCRIPTOR_FIELD_NAME` or `METRIC_DESCRIPTOR_FIELD_UNIT`).
     // First-class metric descriptor fields must be selected using
-    // `descriptor_field`, not `datapoint_attribute_path`.
+    // `descriptor_field`, not `data_point_attribute_path`.
     MetricDescriptorField descriptor_field = 1;
 
     // A key or nested path inside an individual metric data point's `attributes`
     // map (e.g. `["http.status_code"]` or `["env"]`). This only inspects data
     // point attributes; metric descriptor fields (such as metric `name`) must
     // be selected via `descriptor_field`.
-    AttributePath datapoint_attribute_path = 2;
+    AttributePath data_point_attribute_path = 2;
 
     // A key or nested path inside the `Resource.attributes` map (attributes
     // describing the entity producing the metrics, e.g. `["service.name"]`,
@@ -158,7 +157,7 @@ message MetricFieldSelector {
   }
 }
 
-// MetricDescriptorField identifies top-level descriptor fields of an OpenTelemetry Metric.
+// Identifies top-level descriptor fields of an OpenTelemetry Metric.
 // When evaluated with `existence`, first-class fields evaluate to true when set
 // to a non-default (non-empty / non-zero) value.
 enum MetricDescriptorField {

@@ -16,7 +16,18 @@ package googlepolicy
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/json"
+	"encoding/pem"
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	discoveryv3 "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
@@ -27,6 +38,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/metadata"
 	grpcstatus "google.golang.org/grpc/status"
 )
 
@@ -138,4 +150,234 @@ func TestTokenAuth_LocalTokenFailureIsRetryableThroughGRPC(t *testing.T) {
 			assert.Equal(t, tc.wantTerminal, isTerminalAuthError(err), tc.wantTerminalBc)
 		})
 	}
+}
+
+func fakeIDToken(audience string) string {
+	hdr := base64.RawURLEncoding.EncodeToString([]byte(`{"alg":"RS256","typ":"JWT"}`))
+	bodyBytes, _ := json.Marshal(map[string]any{
+		"aud": audience,
+		"exp": 4102444800,
+	})
+	body := base64.RawURLEncoding.EncodeToString(bodyBytes)
+	return hdr + "." + body + ".sig"
+}
+
+// setupFakeGoogleOAuthServer starts an in-process OAuth2 token server and sets
+// GOOGLE_APPLICATION_CREDENTIALS to a temporary service_account key pointing its
+// token_uri at that server.
+func setupFakeGoogleOAuthServer(t *testing.T) {
+	t.Helper()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		assertion := r.FormValue("assertion")
+		parts := strings.Split(assertion, ".")
+		if len(parts) != 3 {
+			http.Error(w, "malformed JWT assertion", http.StatusBadRequest)
+			return
+		}
+		payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		var claims struct {
+			Scope          string `json:"scope"`
+			TargetAudience string `json:"target_audience"`
+		}
+		if err := json.Unmarshal(payload, &claims); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case claims.TargetAudience != "" && claims.Scope == "":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"id_token": fakeIDToken(claims.TargetAudience),
+			})
+		case claims.Scope != "" && claims.TargetAudience == "":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"access_token": "oauth2-access-token:scope=" + claims.Scope,
+				"token_type":   "Bearer",
+				"expires_in":   3600,
+			})
+		default:
+			http.Error(w, "expected exactly one of scope or target_audience in JWT assertion", http.StatusBadRequest)
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	privKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	pkcs8Bytes, err := x509.MarshalPKCS8PrivateKey(privKey)
+	require.NoError(t, err)
+	pemKey := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: pkcs8Bytes})
+
+	credJSON, err := json.Marshal(map[string]string{
+		"type":                        "service_account",
+		"project_id":                  "test-project",
+		"private_key_id":              "key-1",
+		"private_key":                 string(pemKey),
+		"client_email":                "collector@test-project.iam.gserviceaccount.com",
+		"client_id":                   "123456789",
+		"auth_uri":                    srv.URL + "/auth",
+		"token_uri":                   srv.URL + "/token",
+		"auth_provider_x509_cert_url": srv.URL + "/certs",
+		"client_x509_cert_url":        srv.URL + "/client_certs",
+	})
+	require.NoError(t, err)
+
+	credFile := filepath.Join(t.TempDir(), "sa.json")
+	require.NoError(t, os.WriteFile(credFile, credJSON, 0o600))
+	t.Setenv("GOOGLE_APPLICATION_CREDENTIALS", credFile)
+}
+
+func TestResolveTokenSource_SelectsCredentialByEndpoint(t *testing.T) {
+	setupFakeGoogleOAuthServer(t)
+
+	tests := []struct {
+		name       string
+		serverAddr string
+		wantToken  string
+	}{
+		{
+			name:       "Cloud Run host with port receives OIDC ID token",
+			serverAddr: "example-service.asia-east1.run.app:443",
+			wantToken:  fakeIDToken("https://example-service.asia-east1.run.app"),
+		},
+		{
+			name:       "Cloud Run host without port receives OIDC ID token",
+			serverAddr: "example-service.us-central1.run.app",
+			wantToken:  fakeIDToken("https://example-service.us-central1.run.app"),
+		},
+		{
+			name:       "Cloud Run host with uppercase and trailing dot FQDN receives OIDC ID token",
+			serverAddr: "EXAMPLE-SERVICE.A.RUN.APP.:443",
+			wantToken:  fakeIDToken("https://EXAMPLE-SERVICE.A.RUN.APP."),
+		},
+		{
+			name:       "global Telemetry Director receives OAuth2 access token",
+			serverAddr: "telemetrydirector.googleapis.com:443",
+			wantToken:  "oauth2-access-token:scope=https://www.googleapis.com/auth/cloud-platform",
+		},
+		{
+			name:       "portless Telemetry Director receives OAuth2 access token",
+			serverAddr: "telemetrydirector.googleapis.com",
+			wantToken:  "oauth2-access-token:scope=https://www.googleapis.com/auth/cloud-platform",
+		},
+		{
+			name:       "regional Telemetry Director receives OAuth2 access token",
+			serverAddr: "telemetrydirector.asia-east1.rep.googleapis.com:443",
+			wantToken:  "oauth2-access-token:scope=https://www.googleapis.com/auth/cloud-platform",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ts, err := ResolveTokenSource(context.Background(), tc.serverAddr)
+			require.NoError(t, err)
+
+			tok, err := ts.Token()
+			require.NoError(t, err)
+			assert.Equal(t, tc.wantToken, tok.AccessToken)
+		})
+	}
+}
+
+func TestResolveTokenSource_OAuth2AuthThroughGRPC(t *testing.T) {
+	setupFakeGoogleOAuthServer(t)
+
+	const targetAddr = "telemetrydirector.googleapis.com:443"
+	const expectedAuthHeader = "Bearer oauth2-access-token:scope=https://www.googleapis.com/auth/cloud-platform"
+
+	oauth2RequiredHandler := func(stream discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error {
+		md, _ := metadata.FromIncomingContext(stream.Context())
+		authHeaders := md.Get("authorization")
+		if len(authHeaders) == 0 || authHeaders[0] != expectedAuthHeader {
+			return grpcstatus.Error(
+				codes.Unauthenticated,
+				"Request had invalid authentication credentials. Expected OAuth 2 access token, login cookie or other valid authentication credential.",
+			)
+		}
+		_, err := stream.Recv()
+		return err
+	}
+	oauth2Server := &fakeADSServer{
+		handlers: []func(discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error{
+			oauth2RequiredHandler,
+			oauth2RequiredHandler,
+		},
+	}
+	dialOpt := startFakeADSServer(t, oauth2Server)
+
+	t.Run("ID token against googleapis.com is rejected with terminal Unauthenticated", func(t *testing.T) {
+		idTS, err := resolveIDTokenSource(context.Background(), "https://telemetrydirector.googleapis.com")
+		require.NoError(t, err)
+
+		conn, err := grpc.NewClient("passthrough:///bufnet",
+			dialOpt,
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithPerRPCCredentials(insecureTokenAuth{&TokenAuth{TS: idTS}}),
+		)
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = conn.Close() })
+
+		stream, err := discoveryv3.NewAggregatedDiscoveryServiceClient(conn).
+			StreamAggregatedResources(context.Background())
+		require.NoError(t, err)
+
+		_, err = stream.Recv()
+		require.Error(t, err)
+		assert.Equal(t, codes.Unauthenticated, grpcstatus.Code(err))
+		assert.True(t, isTerminalAuthError(err))
+	})
+
+	t.Run("ResolveTokenSource against googleapis.com sends OAuth2 access token", func(t *testing.T) {
+		ts, err := ResolveTokenSource(context.Background(), targetAddr)
+		require.NoError(t, err)
+
+		conn, err := grpc.NewClient("passthrough:///bufnet",
+			dialOpt,
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithPerRPCCredentials(insecureTokenAuth{&TokenAuth{TS: ts}}),
+		)
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = conn.Close() })
+
+		stream, err := discoveryv3.NewAggregatedDiscoveryServiceClient(conn).
+			StreamAggregatedResources(context.Background())
+		require.NoError(t, err)
+
+		require.NoError(t, stream.Send(&discoveryv3.DiscoveryRequest{}))
+		require.NoError(t, stream.CloseSend())
+
+		_, err = stream.Recv()
+		assert.False(t, isTerminalAuthError(err))
+	})
+}
+
+func TestGoogleIDTokenSource_ExtractsIDTokenFromADC(t *testing.T) {
+	t.Run("extracts id_token from OAuth2 token extras", func(t *testing.T) {
+		baseTok := (&oauth2.Token{AccessToken: "unused-oauth2-access-token"}).
+			WithExtra(map[string]any{"id_token": "eyJ.oidc-id-token.sig"})
+		src := &GoogleIDTokenSource{Src: oauth2.StaticTokenSource(baseTok)}
+
+		got, err := src.Token()
+		require.NoError(t, err)
+		assert.Equal(t, "eyJ.oidc-id-token.sig", got.AccessToken)
+		assert.Equal(t, "Bearer", got.TokenType)
+	})
+
+	t.Run("errors when id_token extra is missing", func(t *testing.T) {
+		baseTok := &oauth2.Token{AccessToken: "oauth2-access-token-only"}
+		src := &GoogleIDTokenSource{Src: oauth2.StaticTokenSource(baseTok)}
+
+		_, err := src.Token()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "no id_token found in ADC credentials")
+	})
 }

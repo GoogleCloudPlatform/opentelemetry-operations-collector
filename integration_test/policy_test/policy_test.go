@@ -29,6 +29,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -182,23 +183,25 @@ func startMockOTLPServer(t *testing.T) (*mockOTLPServer, string) {
 	return s, ln.Addr().String()
 }
 
+var (
+	ephemeralPortCounter int32 = 21000
+)
+
 func allocateEphemeralPorts(t *testing.T, count int) []int {
 	t.Helper()
-	listeners := make([]net.Listener, 0, count)
-	ports := make([]int, 0, count)
+	ports := make([]int, count)
 	for i := 0; i < count; i++ {
-		ln, err := net.Listen("tcp", "127.0.0.1:0")
-		if err != nil {
-			for _, l := range listeners {
-				_ = l.Close()
+		for {
+			cur := atomic.LoadInt32(&ephemeralPortCounter)
+			next := cur + 1
+			if next > 32000 {
+				next = 21001
 			}
-			t.Fatalf("failed to allocate ephemeral port: %v", err)
+			if atomic.CompareAndSwapInt32(&ephemeralPortCounter, cur, next) {
+				ports[i] = int(next)
+				break
+			}
 		}
-		listeners = append(listeners, ln)
-		ports = append(ports, ln.Addr().(*net.TCPAddr).Port)
-	}
-	for _, ln := range listeners {
-		_ = ln.Close()
 	}
 	return ports
 }
@@ -811,14 +814,6 @@ service:
       receivers: [otlp/test_in]
       processors: [googlepolicy]
       exporters: [otlp_grpc/test_out]
-    logs/default_self_metrics:
-      receivers: [otlp/default_self_metrics]
-      processors: []
-      exporters: [otlp_grpc/default_gcp_destination]
-    metrics/default_self_metrics:
-      receivers: [otlp/default_self_metrics]
-      processors: []
-      exporters: [otlp_grpc/default_gcp_destination]
 `, otlpReceiverAddr, selfReceiverAddr, mockExporterAddr, selfExporterAddr)
 }
 
@@ -1486,6 +1481,144 @@ service:
 	return independentCfgPath, plogotlp.NewGRPCClient(indConn), independentMockSrv
 }
 
+// TestFileConfigMerge_AppendReceiverToCanonicalPipeline verifies that an escape hatch
+// file config can append a custom receiver (e.g. otlp/custom_in) to the canonical shared
+// logs pipeline (logs/googlecontrolplane).
+//
+// Because googlecontrolplaneprovider enables confmap.enableMergeAppendOption, the
+// customer-provided receiver is appended to [nop/googlecontrolplane], so logs sent to
+// otlp/custom_in flow through the canonical pipeline: they are processed by
+// resourcedetection/googlecontrolplane, transform/googlecontrolplane, and googlepolicy,
+// before being exported to otlp_grpc/default_gcp_destination.
+func TestFileConfigMerge_AppendReceiverToCanonicalPipeline(t *testing.T) {
+	otelcolBin := resolveOtelcolBinary(t)
+	tempDir, policiesDir := stagePoliciesDir(t, "drop_by_body_equals")
+
+	ports := allocateEphemeralPorts(t, 1)
+	customReceiverAddr := fmt.Sprintf("127.0.0.1:%d", ports[0])
+
+	appendReceiverCfg := fmt.Sprintf(`receivers:
+  otlp/custom_in:
+    protocols:
+      grpc:
+        endpoint: %s
+service:
+  pipelines:
+    logs/googlecontrolplane:
+      receivers: [otlp/custom_in]
+`, customReceiverAddr)
+
+	appendCfgPath := filepath.Join(tempDir, "append_receiver_canonical.yaml")
+	if err := os.WriteFile(appendCfgPath, []byte(appendReceiverCfg), 0644); err != nil {
+		t.Fatalf("failed to write append_receiver_canonical.yaml: %v", err)
+	}
+
+	h := startTestHarness(t, otelcolBin, tempDir, policiesDir, appendCfgPath)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	conn, err := grpc.NewClient(customReceiverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("failed to connect to custom receiver %s: %v", customReceiverAddr, err)
+	}
+	t.Cleanup(func() {
+		_ = conn.Close()
+	})
+
+	customClient := plogotlp.NewGRPCClient(conn)
+	inputLogs := readInputLogs(t, filepath.Join("testdata", "drop_by_body_equals", "input_logs.yaml"))
+
+	if _, err := customClient.Export(ctx, plogotlp.NewExportRequestFromLogs(inputLogs)); err != nil {
+		t.Fatalf("failed to export logs to custom receiver on canonical pipeline: %v\nstderr:\n%s", err, h.col.logs())
+	}
+
+	h.col.shutdown(t)
+
+	// In testPipelineConfig, otlp_grpc/default_gcp_destination is rewired to selfMockSrv.
+	// Since logs/googlecontrolplane exports to default_gcp_destination, the filtered logs
+	// must arrive on selfMockSrv.
+	gotBodies := extractAllLogBodies(h.selfMockSrv.CollectedLogs())
+	if diff := cmp.Diff([]string{"KEEP_THIS_LOG_LINE"}, gotBodies); diff != "" {
+		t.Errorf("canonical pipeline bodies mismatch (-want +got):\n%s\nlogs:\n%s", diff, h.col.logs())
+	}
+}
+
+// TestFileConfigMerge_AppendExporterToCanonicalPipeline verifies that an escape hatch
+// file config can append a secondary exporter to the canonical shared logs pipeline
+// (logs/googlecontrolplane).
+//
+// Because googlecontrolplaneprovider enables confmap.enableMergeAppendOption, the
+// secondary exporter is appended to [otlp_grpc/default_gcp_destination], causing
+// logs processed by the canonical pipeline (including googlepolicy filtering) to fan
+// out to BOTH destinations.
+func TestFileConfigMerge_AppendExporterToCanonicalPipeline(t *testing.T) {
+	otelcolBin := resolveOtelcolBinary(t)
+	tempDir, policiesDir := stagePoliciesDir(t, "drop_by_body_equals")
+
+	secondaryMockSrv, secondaryExporterAddr := startMockOTLPServer(t)
+	ports := allocateEphemeralPorts(t, 1)
+	customReceiverAddr := fmt.Sprintf("127.0.0.1:%d", ports[0])
+
+	appendCfg := fmt.Sprintf(`receivers:
+  otlp/custom_in:
+    protocols:
+      grpc:
+        endpoint: %[1]s
+exporters:
+  otlp_grpc/secondary_out:
+    endpoint: %[2]s
+    sending_queue:
+      enabled: false
+    tls:
+      insecure: true
+service:
+  pipelines:
+    logs/googlecontrolplane:
+      receivers: [otlp/custom_in]
+      exporters: [otlp_grpc/secondary_out]
+`, customReceiverAddr, secondaryExporterAddr)
+
+	appendCfgPath := filepath.Join(tempDir, "append_canonical_pipeline.yaml")
+	if err := os.WriteFile(appendCfgPath, []byte(appendCfg), 0644); err != nil {
+		t.Fatalf("failed to write append_canonical_pipeline.yaml: %v", err)
+	}
+
+	h := startTestHarness(t, otelcolBin, tempDir, policiesDir, appendCfgPath)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	conn, err := grpc.NewClient(customReceiverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("failed to connect to custom receiver %s: %v", customReceiverAddr, err)
+	}
+	t.Cleanup(func() {
+		_ = conn.Close()
+	})
+
+	customClient := plogotlp.NewGRPCClient(conn)
+	inputLogs := readInputLogs(t, filepath.Join("testdata", "drop_by_body_equals", "input_logs.yaml"))
+
+	if _, err := customClient.Export(ctx, plogotlp.NewExportRequestFromLogs(inputLogs)); err != nil {
+		t.Fatalf("failed to export logs to custom receiver: %v\nstderr:\n%s", err, h.col.logs())
+	}
+
+	h.col.shutdown(t)
+
+	// Primary destination (selfMockSrv via otlp_grpc/default_gcp_destination) received filtered logs.
+	gotPrimaryBodies := extractAllLogBodies(h.selfMockSrv.CollectedLogs())
+	if diff := cmp.Diff([]string{"KEEP_THIS_LOG_LINE"}, gotPrimaryBodies); diff != "" {
+		t.Errorf("primary exporter bodies mismatch (-want +got):\n%s\nlogs:\n%s", diff, h.col.logs())
+	}
+
+	// Appended secondary destination (secondaryMockSrv via otlp_grpc/secondary_out) also received filtered logs.
+	gotSecondaryBodies := extractAllLogBodies(secondaryMockSrv.CollectedLogs())
+	if diff := cmp.Diff([]string{"KEEP_THIS_LOG_LINE"}, gotSecondaryBodies); diff != "" {
+		t.Errorf("secondary exporter bodies mismatch (-want +got):\n%s\nlogs:\n%s", diff, h.col.logs())
+	}
+}
+
 // TestFileConfigMerge_IndependentPipeline verifies that when the collector is
 // given an additional file config defining a pipeline completely independent of
 // policy work (no googlepolicy processor), confmap deep-merges the receivers,
@@ -1703,13 +1836,13 @@ service:
 			t.Fatalf("failed to export logs: %v\nstderr:\n%s", err, h.col.logs())
 		}
 
-		// Verify googlecontrolplane extension remained enabled and reported gcp.policy.set.active = 1.
+		// Verify googlecontrolplane extension remained enabled and reported positive gcp.policy.set.active revision.
 		value, _, found := waitForPolicySetActive(h.selfMockSrv, 10*time.Second)
 
 		h.col.shutdown(t)
 
-		if !found || value != 1 {
-			t.Errorf("expected googlecontrolplane extension to remain enabled under confmap.enableMergeAppendOption and report gcp.policy.set.active = 1, got found=%v value=%d\nlogs:\n%s", found, value, h.col.logs())
+		if !found || value <= 0 {
+			t.Errorf("expected googlecontrolplane extension to remain enabled under confmap.enableMergeAppendOption and report positive gcp.policy.set.active revision, got found=%v value=%d\nlogs:\n%s", found, value, h.col.logs())
 		}
 
 		// Verify logs/test fanned out filtered logs to BOTH otlp_grpc/test_out and otlp_grpc/secondary_out.
@@ -1784,7 +1917,7 @@ func TestFileConfigMerge_ProviderOrderPrecedence(t *testing.T) {
 	if diff := cmp.Diff([]string{"KEEP_THIS_LOG_LINE", "DROP_THIS_LOG_LINE"}, gotIndependentBodies); diff != "" {
 		t.Errorf("independent pipeline bodies mismatch (-want +got):\n%s\nlogs:\n%s", diff, col.logs())
 	}
-	if !found || value != 1 {
-		t.Errorf("expected googlecontrolplaneprovider to override earlier file config's level: None and report gcp.policy.set.active = 1, got found=%v value=%d\nlogs:\n%s", found, value, col.logs())
+	if !found || value <= 0 {
+		t.Errorf("expected googlecontrolplaneprovider to override earlier file config's level: None and report positive gcp.policy.set.active revision, got found=%v value=%d\nlogs:\n%s", found, value, col.logs())
 	}
 }

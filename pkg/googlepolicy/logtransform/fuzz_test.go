@@ -186,6 +186,45 @@ func fuzzLogTransformSeedPolicies() []*policyv1alpha1.LogTransformPolicy {
 				},
 			},
 		},
+		{
+			Id: "rename-attribute",
+			Action: &policyv1alpha1.LogTransformPolicy_Renaming{
+				Renaming: &policyv1alpha1.LogRenameAction{
+					Source:        logAttrSelector("old.key"),
+					Target:        logAttrSelector("new.key"),
+					UpsertEnabled: proto.Bool(false),
+				},
+			},
+		},
+		{
+			Id: "rename-body-field",
+			Action: &policyv1alpha1.LogTransformPolicy_Renaming{
+				Renaming: &policyv1alpha1.LogRenameAction{
+					Source:        logBodyFieldSelector("event_data", "userId"),
+					Target:        logBodyFieldSelector("user", "id"),
+					UpsertEnabled: proto.Bool(true),
+				},
+			},
+		},
+		{
+			Id: "redact-attribute",
+			Action: &policyv1alpha1.LogTransformPolicy_Redaction{
+				Redaction: &policyv1alpha1.LogRedactAction{
+					Target:      logTargetAttr("cloud.zone"),
+					Regex:       proto.String(`[a-z]+-[a-z0-9]+`),
+					Replacement: proto.String("[ZONE]"),
+				},
+			},
+		},
+		{
+			Id: "redact-body-field",
+			Action: &policyv1alpha1.LogTransformPolicy_Redaction{
+				Redaction: &policyv1alpha1.LogRedactAction{
+					Target:      logTargetBodyField("event_data", "userId"),
+					Replacement: proto.String("[REDACTED]"),
+				},
+			},
+		},
 	}
 }
 

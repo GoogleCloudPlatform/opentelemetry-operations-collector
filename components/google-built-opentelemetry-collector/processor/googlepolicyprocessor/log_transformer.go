@@ -21,8 +21,8 @@ import (
 
 // TransformLogs applies active transformation policies in-place across the Resource -> Scope -> Record hierarchy.
 // Filter policies are evaluated first (Pass 1); surviving log records are then evaluated against
-// transform policies (Stage 2). If any transform modifies a record, filter policies are re-evaluated (Pass 2).
-// Dropped records are pruned, and empty scopes/resources are removed.
+// transform policies in deterministic stage order (rename -> add -> remove -> redact). If any transform modifies a record,
+// filter policies are re-evaluated (Pass 2). Dropped records are pruned, and empty scopes/resources are removed.
 func (e *Evaluator) TransformLogs(ld plog.Logs) {
 	if len(e.logFilterPolicies) == 0 && len(e.logTransformPolicies) == 0 {
 		return
@@ -55,17 +55,17 @@ func (e *Evaluator) TransformLogs(ld plog.Logs) {
 }
 
 // EvalLog returns true if the log record should be DROPPED, false if KEPT.
-// Filter policies are evaluated first (Pass 1); dropped records never enter Stage 2.
-// Surviving records have active LogTransformPolicy rules applied in-place (Stage 2).
-// If any transform policy modified the record, filter policies are re-evaluated (Pass 2)
-// so that post-transform mutations can be filtered or dropped before egress.
+// Filter policies are evaluated first (Pass 1); dropped records never enter transformation.
+// Surviving records have active LogTransformPolicy rules applied in-place in stage order
+// (rename -> add -> remove -> redact). If any transform policy modified the record,
+// filter policies are re-evaluated (Pass 2) so that post-transform mutations can be filtered or dropped before egress.
 func (e *Evaluator) EvalLog(ctx LogContext) bool {
 	// Pass 1: Pre-transform filter policies.
 	if e.evalLogFilters(ctx) {
 		return true
 	}
 
-	// Stage 2: Transform policies (only evaluated on surviving log records).
+	// Transform policies (only evaluated on surviving log records in stage order).
 	var modified bool
 	for _, tp := range e.logTransformPolicies {
 		if tp.TransformLog(ctx) == googlepolicy.TransformModified {

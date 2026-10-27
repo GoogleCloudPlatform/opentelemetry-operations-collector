@@ -29,14 +29,15 @@ import (
 	"sync"
 	"time"
 
+	authcredentials "cloud.google.com/go/auth/credentials"
+	"cloud.google.com/go/auth/credentials/idtoken"
+	"cloud.google.com/go/auth/oauth2adapt"
 	"cloud.google.com/go/compute/metadata"
 	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	discoveryv3 "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/google"
-	"google.golang.org/api/idtoken"
 	"google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -1444,11 +1445,13 @@ func ResolveTokenSource(ctx context.Context, serverAddr string) (oauth2.TokenSou
 		return resolveIDTokenSource(ctx, "https://"+host)
 	}
 
-	ts, err := google.DefaultTokenSource(ctx, cloudPlatformScope)
+	creds, err := authcredentials.DetectDefault(&authcredentials.DetectOptions{
+		Scopes: []string{cloudPlatformScope},
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve OAuth2 token source: %w", err)
 	}
-	return ts, nil
+	return oauth2adapt.TokenSourceFromTokenProvider(creds), nil
 }
 
 func isCloudRunHost(host string) bool {
@@ -1458,22 +1461,27 @@ func isCloudRunHost(host string) bool {
 
 // resolveIDTokenSource returns a TokenSource providing Google OIDC ID tokens
 // for the given audience. It supports:
-//  1. GCE / GKE / Service Accounts: Uses idtoken.NewTokenSource (queries VM metadata server or SA key).
+//  1. GCE / GKE / Service Accounts / WIF: Uses idtoken.NewCredentials (queries VM metadata server, SA key, or impersonated WIF).
 //  2. Cloudtop / Developer Workstations: idtoken fails on "authorized_user" credentials, so it
 //     falls back to ADC with OpenID scopes and extracts the ID token via GoogleIDTokenSource.
-func resolveIDTokenSource(ctx context.Context, audience string) (oauth2.TokenSource, error) {
-	// 1. GCE / GKE / Service Accounts: metadata server or SA key
-	if idTS, err := idtoken.NewTokenSource(ctx, audience); err == nil {
-		return idTS, nil
+func resolveIDTokenSource(_ context.Context, audience string) (oauth2.TokenSource, error) {
+	// 1. GCE / GKE / Service Accounts / WIF: metadata server, SA key, or impersonated WIF
+	if idCreds, err := idtoken.NewCredentials(&idtoken.Options{Audience: audience}); err == nil {
+		idTS := oauth2adapt.TokenSourceFromTokenProvider(idCreds)
+		if initialTok, err := idTS.Token(); err == nil {
+			return oauth2.ReuseTokenSource(initialTok, idTS), nil
+		}
 	}
 
 	// 2. Cloudtop / Developer Workstation: ADC user credentials fallback
-	defTS, err := google.DefaultTokenSource(ctx, "openid", "email")
+	defCreds, err := authcredentials.DetectDefault(&authcredentials.DetectOptions{
+		Scopes: []string{"openid", "email"},
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve ADC: %w", err)
 	}
 
-	wrapped := &GoogleIDTokenSource{Src: defTS}
+	wrapped := &GoogleIDTokenSource{Src: oauth2adapt.TokenSourceFromTokenProvider(defCreds)}
 	initialTok, err := wrapped.Token()
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve initial ID token: %w", err)

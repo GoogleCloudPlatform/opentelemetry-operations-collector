@@ -3,6 +3,8 @@ module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/goo
 go 1.26.6
 
 require (
+	cloud.google.com/go/auth v0.23.2
+	cloud.google.com/go/auth/oauth2adapt v0.2.8
 	cloud.google.com/go/compute/metadata v0.9.0
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector v0.160.0
 	github.com/envoyproxy/go-control-plane/envoy v1.37.0
@@ -13,15 +15,12 @@ require (
 	go.opentelemetry.io/collector/pdata v1.67.0
 	go.uber.org/zap v1.28.0
 	golang.org/x/oauth2 v0.36.0
-	google.golang.org/api v0.297.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260819154853-08b0e4226688
 	google.golang.org/grpc v1.83.2
 	google.golang.org/protobuf v1.36.12
 )
 
 require (
-	cloud.google.com/go/auth v0.23.2 // indirect
-	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cncf/xds/go v0.0.0-20260202195803-dba9d589def2 // indirect
 	github.com/envoyproxy/protoc-gen-validate v1.3.3 // indirect
@@ -55,6 +54,7 @@ require (
 	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.41.0 // indirect
+	google.golang.org/api v0.297.0 // indirect
 )
 
 replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector => ../..

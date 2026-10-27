@@ -19,16 +19,19 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	discoveryv3 "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	"github.com/stretchr/testify/assert"
@@ -380,4 +383,66 @@ func TestGoogleIDTokenSource_ExtractsIDTokenFromADC(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "no id_token found in ADC credentials")
 	})
+}
+
+func TestResolveTokenSource_X509ExternalAccount(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	privKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "test-xds-workload"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+	}
+	certDER, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &privKey.PublicKey, privKey)
+	require.NoError(t, err)
+
+	certPath := filepath.Join(tmpDir, "leaf.pem")
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	require.NoError(t, os.WriteFile(certPath, certPEM, 0o600))
+
+	keyPath := filepath.Join(tmpDir, "leaf.key")
+	pkcs8Bytes, err := x509.MarshalPKCS8PrivateKey(privKey)
+	require.NoError(t, err)
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: pkcs8Bytes})
+	require.NoError(t, os.WriteFile(keyPath, keyPEM, 0o600))
+
+	certConfigPath := filepath.Join(tmpDir, "cert_config.json")
+	certConfig, err := json.Marshal(map[string]any{
+		"cert_configs": map[string]any{
+			"workload": map[string]string{
+				"cert_path": certPath,
+				"key_path":  keyPath,
+			},
+		},
+	})
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(certConfigPath, certConfig, 0o600))
+
+	credConfigPath := filepath.Join(tmpDir, "cred_config.json")
+	credConfig, err := json.Marshal(map[string]any{
+		"universe_domain":    "googleapis.com",
+		"type":               "external_account",
+		"audience":           "//iam.googleapis.com/projects/123456/locations/global/workloadIdentityPools/test-pool/providers/test-provider",
+		"subject_token_type": "urn:ietf:params:oauth:token-type:mtls",
+		"token_url":          "https://sts.mtls.googleapis.com/v1/token",
+		"credential_source": map[string]any{
+			"certificate": map[string]any{
+				"certificate_config_location": certConfigPath,
+			},
+		},
+	})
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(credConfigPath, credConfig, 0o600))
+
+	t.Setenv("GOOGLE_APPLICATION_CREDENTIALS", credConfigPath)
+
+	ts, err := ResolveTokenSource(context.Background(), "telemetrydirector.googleapis.com:443")
+	require.NoError(t, err)
+	require.NotNil(t, ts)
 }

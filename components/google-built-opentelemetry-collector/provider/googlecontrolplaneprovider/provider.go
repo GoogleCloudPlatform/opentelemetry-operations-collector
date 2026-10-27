@@ -88,15 +88,21 @@ var _ confmap.Provider = (*provider)(nil)
 type provider struct {
 	logger *zap.Logger
 
-	manager googlepolicy.Manager
+	evalMu sync.Mutex
 
-	mu        sync.Mutex
-	watcher   confmap.WatcherFunc
-	lastConf  map[string]any
-	watcherCh googlepolicy.WatcherChannel
-	stopCh    chan struct{}
-	stopOnce  sync.Once
-	wg        sync.WaitGroup
+	mu          sync.Mutex
+	stopped     bool
+	notified    bool
+	cachedRet   *confmap.Retrieved
+	cachedRevID string
+	manager     googlepolicy.Manager
+	watcher     confmap.WatcherFunc
+	lastCtx     context.Context
+	lastConf    map[string]any
+	watcherCh   googlepolicy.WatcherChannel
+	stopCh      chan struct{}
+	stopOnce    sync.Once
+	wg          sync.WaitGroup
 }
 
 // NewFactory returns a new confmap.ProviderFactory that creates a Google Control Plane configuration provider.
@@ -184,6 +190,10 @@ func (p *provider) Retrieve(ctx context.Context, uri string, watcher confmap.Wat
 		return nil, fmt.Errorf("%q: %w: %w", uri, ErrURIInvalidInnerURI, err)
 	}
 
+	p.mu.Lock()
+	manager := p.manager
+	p.mu.Unlock()
+
 	// If there is already a manager and a Retrieve is requested, it can be because:
 	//
 	// * some other provider has triggered a full confmap resolution (the URI will be the same)
@@ -192,51 +202,80 @@ func (p *provider) Retrieve(ctx context.Context, uri string, watcher confmap.Wat
 	// The user can configure as many `component://` URIs as they want, but if it's anything
 	// else we need to disambiguate between the two cases above, and fail if the user is trying
 	// to configure additional policy source URIs.
-	if target.Scheme != innerSchemeComponent && p.manager != nil {
-		if p.manager.URI().String() != target.String() {
+	if target.Scheme != innerSchemeComponent && manager != nil {
+		if manager.URI().String() != target.String() {
 			return nil, fmt.Errorf("%q: %w: %s", uri, ErrManagerAlreadyConfigured, target)
 		}
-		p.setupWatcher(watcher)
-		return p.evaluateActivePolicySet(ctx)
+		ret, err := p.getOrEvaluateActivePolicySet(ctx)
+		if err != nil {
+			return nil, err
+		}
+		p.setupWatcher(watcher, ctx, ret)
+		return ret, nil
 	}
 
 	switch target.Scheme {
 	case innerSchemeFile:
-		p.manager, err = googlepolicy.NewFilePolicyManager(p.logger, target)
+		mgr, err := googlepolicy.NewFilePolicyManager(p.logger, target)
 		if err != nil {
 			return nil, fmt.Errorf("%q: %w", uri, err)
 		}
-		if err := p.manager.Start(); err != nil {
+		if err := mgr.Start(); err != nil {
 			return nil, fmt.Errorf("%q: %w", uri, err)
 		}
+		p.mu.Lock()
+		p.manager = mgr
+		p.mu.Unlock()
 	case innerSchemeXDS:
 		// The manager derives everything else it needs -- control plane address,
 		// fleet ID and project -- from the URI itself.
-		p.manager, err = googlepolicy.NewXDSPolicyManager(p.logger, target, CollectorID)
+		mgr, err := googlepolicy.NewXDSPolicyManager(p.logger, target, CollectorID)
 		if err != nil {
 			return nil, fmt.Errorf("%q: %w", uri, err)
 		}
 		// Start does not block on the control plane being reachable; an
 		// unreachable one is retried in the background so the collector can
 		// still come up on its built-in policies.
-		if err := p.manager.Start(); err != nil {
+		if err := mgr.Start(); err != nil {
 			return nil, fmt.Errorf("%q: %w", uri, err)
 		}
+		p.mu.Lock()
+		p.manager = mgr
+		p.mu.Unlock()
 	case innerSchemeComponent:
 	default:
 		return nil, fmt.Errorf("%q: %w: %s", uri, ErrURIInvalidInnerScheme, target.Scheme)
 	}
 
-	ret, err := p.evaluateActivePolicySet(ctx)
+	ret, err := p.getOrEvaluateActivePolicySet(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	p.setupWatcher(watcher)
+	p.setupWatcher(watcher, ctx, ret)
 	return ret, nil
 }
 
+func (p *provider) getOrEvaluateActivePolicySet(ctx context.Context) (*confmap.Retrieved, error) {
+	p.mu.Lock()
+	if p.cachedRet != nil && p.cachedRevID == googlepolicy.ActivePolicySetRevisionID() {
+		ret := p.cachedRet
+		p.cachedRet = nil
+		p.cachedRevID = ""
+		p.mu.Unlock()
+		return ret, nil
+	}
+	p.cachedRet = nil
+	p.cachedRevID = ""
+	p.mu.Unlock()
+
+	return p.evaluateActivePolicySet(ctx)
+}
+
 func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrieved, error) {
+	p.evalMu.Lock()
+	defer p.evalMu.Unlock()
+
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -246,6 +285,10 @@ func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrie
 		collectorID = v
 	}
 
+	p.mu.Lock()
+	manager := p.manager
+	p.mu.Unlock()
+
 	// Environment, then context, then the URI. The manager resolves the fleet
 	// in the same order off the same query parameter, and must arrive at the
 	// same answer: its value selects which fleet's policies this collector
@@ -254,8 +297,8 @@ func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrie
 	if v, ok := ctx.Value("FLEET_ID").(string); ok && v != "" {
 		fleetID = v
 	}
-	if fleetID == "" && p.manager != nil {
-		fleetID = googlepolicy.FleetIDFromURI(p.manager.URI())
+	if fleetID == "" && manager != nil {
+		fleetID = googlepolicy.FleetIDFromURI(manager.URI())
 	}
 	if fleetID != "" {
 		ctx = context.WithValue(ctx, "FLEET_ID", fleetID)
@@ -265,12 +308,12 @@ func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrie
 	if v, ok := ctx.Value("PROJECT_ID").(string); ok && v != "" {
 		projectID = v
 	}
-	if projectID == "" && p.manager != nil && p.manager.URI() != nil {
+	if projectID == "" && manager != nil && manager.URI() != nil {
 		// A numeric value in ?project= is a GCP project number for the xdstp://
 		// resource subscription, not an alphanumeric project ID. Leave PROJECT_ID
 		// unset in that case so the self-metrics pipeline populates gcp.project_id
 		// from the GCE resource detector's cloud.account.id.
-		if candidate := p.manager.URI().Query().Get(googlepolicy.ProjectQueryParam); !googlepolicy.IsNumericProject(candidate) {
+		if candidate := manager.URI().Query().Get(googlepolicy.ProjectQueryParam); !googlepolicy.IsNumericProject(candidate) {
 			projectID = candidate
 		}
 	}
@@ -290,8 +333,8 @@ func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrie
 
 		ret, isBuiltinErr, err := p.evaluatePolicySet(ctx, collectorID, fleetID, activePolicySet)
 		if err == nil {
-			if !isBuiltinFallback && p.manager != nil {
-				p.manager.PolicyEvaluationResult(activePolicySet.RevisionID, nil)
+			if !isBuiltinFallback && manager != nil {
+				manager.PolicyEvaluationResult(activePolicySet.RevisionID, nil)
 			}
 			return ret, nil
 		}
@@ -300,8 +343,8 @@ func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrie
 			return nil, err
 		}
 
-		if !isBuiltinFallback && p.manager != nil {
-			p.manager.PolicyEvaluationResult(activePolicySet.RevisionID, err)
+		if !isBuiltinFallback && manager != nil {
+			manager.PolicyEvaluationResult(activePolicySet.RevisionID, err)
 		}
 
 		if isBuiltinFallback {
@@ -559,10 +602,6 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 	}
 
 	confMap := conf.ToStringMap()
-	p.mu.Lock()
-	p.lastConf = confMap
-	p.mu.Unlock()
-
 	ret, err := confmap.NewRetrieved(confMap)
 	return ret, false, err
 }
@@ -708,6 +747,7 @@ func (p *provider) consolidateSourcePolicies(ctx context.Context, activePolicySe
 	}
 	return consolidated
 }
+
 func cleanConf(c *confmap.Conf) *confmap.Conf {
 	if c == nil {
 		return confmap.New()
@@ -737,10 +777,20 @@ func cleanNilEntries(m map[string]any) {
 	}
 }
 
-func (p *provider) setupWatcher(watcher confmap.WatcherFunc) {
+func (p *provider) setupWatcher(watcher confmap.WatcherFunc, ctx context.Context, ret *confmap.Retrieved) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if p.stopped {
+		return
+	}
 	p.watcher = watcher
+	p.lastCtx = ctx
+	p.notified = false
+	if ret != nil {
+		if conf, err := ret.AsConf(); err == nil {
+			p.lastConf = conf.ToStringMap()
+		}
+	}
 	if p.stopCh == nil && watcher != nil {
 		stopCh := make(chan struct{})
 		watcherCh := googlepolicy.RegisterWatcherChannel()
@@ -761,6 +811,11 @@ func (p *provider) watchPolicies(stopCh <-chan struct{}, watcherCh googlepolicy.
 			if !ok {
 				return
 			}
+			select {
+			case <-stopCh:
+				return
+			default:
+			}
 			p.onPolicySetUpdated()
 		}
 	}
@@ -768,15 +823,19 @@ func (p *provider) watchPolicies(stopCh <-chan struct{}, watcherCh googlepolicy.
 
 func (p *provider) onPolicySetUpdated() {
 	p.mu.Lock()
-	watcher := p.watcher
-	oldConf := p.lastConf
-	p.mu.Unlock()
-
-	if watcher == nil {
+	if p.stopped || p.notified || p.watcher == nil {
+		p.mu.Unlock()
 		return
 	}
+	oldConf := p.lastConf
+	ctx := p.lastCtx
+	p.mu.Unlock()
 
-	ret, err := p.evaluateActivePolicySet(context.Background())
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	ret, err := p.evaluateActivePolicySet(ctx)
 	if err != nil {
 		if p.logger != nil {
 			p.logger.Warn("failed to evaluate active policy set on update", zap.Error(err))
@@ -801,10 +860,23 @@ func (p *provider) onPolicySetUpdated() {
 		return
 	}
 
+	p.mu.Lock()
+	if p.stopped || p.notified {
+		p.mu.Unlock()
+		return
+	}
+	p.notified = true
+	p.cachedRet = ret
+	p.cachedRevID = googlepolicy.ActivePolicySetRevisionID()
+	watcher := p.watcher
+	p.mu.Unlock()
+
 	if p.logger != nil {
 		p.logger.Info("detected change in policy-generated collector configuration, triggering reload")
 	}
-	watcher(&confmap.ChangeEvent{})
+	if watcher != nil {
+		watcher(&confmap.ChangeEvent{})
+	}
 }
 
 // Scheme returns the URI scheme supported by this provider.
@@ -816,20 +888,26 @@ func (*provider) Scheme() string {
 func (p *provider) Shutdown(context.Context) error {
 	p.stopOnce.Do(func() {
 		p.mu.Lock()
-		p.watcher = nil
+		p.stopped = true
+		p.cachedRet = nil
+		p.cachedRevID = ""
 		if p.stopCh != nil {
 			close(p.stopCh)
 			p.stopCh = nil
 		}
+		p.mu.Unlock()
+		p.wg.Wait()
 		if p.watcherCh != nil {
 			googlepolicy.UnregisterWatcherChannel(p.watcherCh)
 			p.watcherCh = nil
 		}
-		p.mu.Unlock()
 	})
-	p.wg.Wait()
-	if p.manager != nil {
-		p.manager.Stop()
+	p.mu.Lock()
+	manager := p.manager
+	p.manager = nil
+	p.mu.Unlock()
+	if manager != nil {
+		manager.Stop()
 	}
 	return nil
 }

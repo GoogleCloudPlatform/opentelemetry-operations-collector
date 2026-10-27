@@ -37,6 +37,7 @@ import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/googlecontrolplaneextension"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"github.com/google/go-cmp/cmp"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/confmap"
@@ -637,6 +638,7 @@ func startInProcessCollector(t *testing.T, configURIs ...string) *collectorHandl
 			case <-time.After(10 * time.Second):
 				t.Fatalf("timed out waiting for in-process collector shutdown.\nlogs:\n%s", logBuf.String())
 			}
+			googlepolicy.SetActivePolicySet(nil)
 		})
 	}
 	t.Cleanup(func() {
@@ -1122,16 +1124,21 @@ func TestUnsupportedPolicyEmitsErrorEvent(t *testing.T) {
 	}
 
 	mockSrv, mockExporterAddr := startMockOTLPServer(t)
-	ports := allocateEphemeralPorts(t, 1)
+	ports := allocateEphemeralPorts(t, 2)
 	otlpReceiverAddr := fmt.Sprintf("127.0.0.1:%d", ports[0])
+	selfReceiverAddr := fmt.Sprintf("127.0.0.1:%d", ports[1])
 
-	// Route logs/default_self_metrics from otlp/default_self_metrics (BuiltInSelfMetricsPolicy on localhost:18888)
+	// Route logs/default_self_metrics from otlp/default_self_metrics (BuiltInSelfMetricsPolicy on selfReceiverAddr)
 	// to otlp_grpc/default_gcp_destination (rewired to mockExporterAddr) with a fast 50ms BatchLogRecordProcessor schedule_delay.
 	pipelineCfg := fmt.Sprintf(`receivers:
   otlp/test_in:
     protocols:
       grpc:
         endpoint: %[1]s
+  otlp/default_self_metrics:
+    protocols:
+      grpc:
+        endpoint: %[3]s
 exporters:
   otlp_grpc/test_out:
     endpoint: %[2]s
@@ -1158,7 +1165,7 @@ service:
             exporter:
               otlp:
                 protocol: grpc
-                endpoint: http://127.0.0.1:18888
+                endpoint: http://%[3]s
                 insecure: true
                 timeout: 200
     metrics:
@@ -1185,7 +1192,7 @@ service:
       receivers: [otlp/default_self_metrics]
       processors: []
       exporters: [otlp_grpc/default_gcp_destination]
-`, otlpReceiverAddr, mockExporterAddr)
+`, otlpReceiverAddr, mockExporterAddr, selfReceiverAddr)
 
 	pipelineCfgPath := filepath.Join(tempDir, "test_pipeline.yaml")
 	if err := os.WriteFile(pipelineCfgPath, []byte(pipelineCfg), 0644); err != nil {

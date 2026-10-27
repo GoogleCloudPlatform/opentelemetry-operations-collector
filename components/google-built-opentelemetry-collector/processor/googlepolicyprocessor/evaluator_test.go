@@ -1671,14 +1671,39 @@ func TestEvaluator_LogTransformStageOrdering(t *testing.T) {
 	}
 
 	// Give the remove stage policy a lexicographically EARLIER ID ("b-remove-temp")
-	// than the add stage policies ("m-add-1", "m-add-2", "n-add-temp") to prove
-	// that stage ordering (add -> remove) takes precedence over ID order, while ID order
-	// breaks ties within the same stage ("m-add-1" before "m-add-2").
+	// than the add stage policies, and the rename stage policy a lexicographically
+	// LAST ID ("z-rename-legacy") to prove that stage ordering (rename -> add -> remove)
+	// takes precedence over ID order, while ID order breaks ties within the same stage.
+	renameLegacy := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id: "z-rename-legacy",
+		Action: &policyv1alpha1.LogTransformPolicy_Renaming{
+			Renaming: &policyv1alpha1.LogRenameAction{
+				Source:        logAttr("legacy_user"),
+				Target:        logAttr("user_name"),
+				UpsertEnabled: proto.Bool(false),
+			},
+		},
+	})
+
 	removeTemp := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
 		Id: "b-remove-temp",
 		Action: &policyv1alpha1.LogTransformPolicy_Removal{
 			Removal: &policyv1alpha1.LogRemoveAction{
 				Target: logAttr("temp_flag"),
+			},
+		},
+	})
+
+	// Add policy with fallback: adds "user_name" = "guest" if not present.
+	// Since "z-rename-legacy" runs in Stage 1 before add policies in Stage 2,
+	// "user_name" will already exist, so "m-add-fallback" will skip it.
+	addFallback := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id: "m-add-fallback",
+		Action: &policyv1alpha1.LogTransformPolicy_Addition{
+			Addition: &policyv1alpha1.LogAddAction{
+				Target:        logTarget("user_name"),
+				Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "guest"}},
+				UpsertEnabled: proto.Bool(false),
 			},
 		},
 	})
@@ -1719,11 +1744,27 @@ func TestEvaluator_LogTransformStageOrdering(t *testing.T) {
 		},
 	})
 
+	// Redact policy that masks "user_name" in Stage 4: replaces "alice" with "[REDACTED_USER]".
+	// It has the lexicographically FIRST ID ("a-redact-user") among all policies, proving that
+	// Stage 4 (redact) runs LAST after rename (Stage 1), add (Stage 2), and remove (Stage 3).
+	redactUser := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id: "a-redact-user",
+		Action: &policyv1alpha1.LogTransformPolicy_Redaction{
+			Redaction: &policyv1alpha1.LogRedactAction{
+				Target:      logTarget("user_name"),
+				Replacement: proto.String("[REDACTED_USER]"),
+			},
+		},
+	})
+
 	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{
 		removeTemp,
+		renameLegacy,
 		addWinner2,
 		addWinner1,
 		addTemp,
+		addFallback,
+		redactUser,
 	})
 	require.NoError(t, err)
 
@@ -1731,11 +1772,19 @@ func TestEvaluator_LogTransformStageOrdering(t *testing.T) {
 	sl := ld.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty()
 	lr0 := sl.LogRecords().AppendEmpty()
 	lr0.Body().SetStr("hello")
+	lr0.Attributes().PutStr("legacy_user", "alice")
 
 	ev.TransformLogs(ld)
 
 	records := ld.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords()
 	require.Equal(t, 1, records.Len())
+
+	_, ok := records.At(0).Attributes().Get("legacy_user")
+	assert.False(t, ok, "legacy_user must be renamed")
+
+	userName, ok := records.At(0).Attributes().Get("user_name")
+	require.True(t, ok)
+	assert.Equal(t, "[REDACTED_USER]", userName.Str(), "rename in Stage 1 moved value to user_name, which was then redacted in Stage 4")
 
 	winner0, ok := records.At(0).Attributes().Get("stage_winner")
 	require.True(t, ok)

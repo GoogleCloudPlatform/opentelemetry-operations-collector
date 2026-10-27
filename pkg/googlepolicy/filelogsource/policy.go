@@ -123,11 +123,20 @@ var (
 )
 
 // NewPolicyFromProto validates and compiles a FileLogSourcePolicy protobuf into a Policy.
+// Windows environment variable placeholders (e.g. %ProgramData%, %SystemDrive%)
+// in included_paths are expanded to concrete paths so that paths are canonical
+// and deterministic across evaluation and consolidation.
 func NewPolicyFromProto(pb *policyv1alpha1.FileLogSourcePolicy) (*Policy, error) {
 	if pb == nil {
 		return nil, ErrNilProto
 	}
-	p := &Policy{proto: proto.Clone(pb).(*policyv1alpha1.FileLogSourcePolicy)}
+	cloned := proto.Clone(pb).(*policyv1alpha1.FileLogSourcePolicy)
+	for i, inc := range cloned.GetIncludedPaths() {
+		if isWindowsAbsolute(inc) {
+			cloned.IncludedPaths[i] = expandWindowsEnv(inc)
+		}
+	}
+	p := &Policy{proto: cloned}
 	if err := p.Validate(); err != nil {
 		return nil, err
 	}
@@ -247,10 +256,14 @@ func Merge(policies ...*Policy) (*Policy, error) {
 			return nil, err
 		}
 		for _, inc := range pol.proto.GetIncludedPaths() {
-			key := pathDedupeKey(inc)
+			expanded := inc
+			if isWindowsAbsolute(inc) {
+				expanded = expandWindowsEnv(inc)
+			}
+			key := pathDedupeKey(expanded)
 			if !seen[key] {
 				seen[key] = true
-				mergedIncludes = append(mergedIncludes, inc)
+				mergedIncludes = append(mergedIncludes, expanded)
 			}
 		}
 	}
@@ -315,8 +328,16 @@ func validateIncludePattern(pattern string) error {
 		return fmt.Errorf("%w: %q", ErrInvalidGlobPattern, pattern)
 	}
 
+	// For Windows paths, expand Windows environment variables before computing winNorm.
+	winNorm := ""
+	if isWindowsAbs {
+		expanded := expandWindowsEnv(pattern)
+		winNorm = strings.ToLower(strings.ReplaceAll(expanded, "\\", "/"))
+	} else {
+		winNorm = strings.ToLower(strings.ReplaceAll(pattern, "\\", "/"))
+	}
+
 	// Disallow bare directory paths.
-	winNorm := strings.ToLower(strings.ReplaceAll(pattern, "\\", "/"))
 	if isBareDirectory(pattern, winNorm) {
 		return fmt.Errorf("%w: %q (must specify filename or glob wildcard, e.g. /** or /*.log)", ErrBareDirectoryPath, pattern)
 	}
@@ -356,16 +377,13 @@ func validateIncludePattern(pattern string) error {
 	}
 
 	// Allowed Windows roots:
-	// 1. %ProgramData%\**\logs\** or <Drive>:\ProgramData\**\logs\**
-	// 2. %SystemDrive%\inetpub\logs\** or <Drive>:\inetpub\logs\**
-	if (strings.HasPrefix(winNorm, "%programdata%/") || isDrivePathPrefix(winNorm, "programdata")) &&
-		strings.Contains(winNorm, "/logs/") {
+	// 1. <Drive>:\ProgramData\**\logs\** (including %ProgramData%\**\logs\**)
+	// 2. <Drive>:\inetpub\logs\** (including %SystemDrive%\inetpub\logs\**)
+	if isDrivePathPrefix(winNorm, "programdata") && strings.Contains(winNorm, "/logs/") {
 		return nil
 	}
 
-	if strings.HasPrefix(winNorm, "%systemdrive%/inetpub/logs/") ||
-		strings.HasPrefix(winNorm, "%systemroot%/inetpub/logs/") ||
-		isDrivePathPrefix(winNorm, "inetpub/logs") {
+	if isDrivePathPrefix(winNorm, "inetpub/logs") {
 		return nil
 	}
 
@@ -387,11 +405,10 @@ func isBareDirectory(pattern string, winNorm string) bool {
 
 var winEnvVarRegexp = regexp.MustCompile(`%([A-Za-z0-9_]+)%`)
 
-// expandWindowsEnv expands Windows %VAR% syntax (e.g. %ProgramData%, %SystemDrive%, %SystemRoot%).
+// expandWindowsEnv expands Windows %VAR% syntax (e.g. %ProgramData%, %SystemDrive%).
 // It checks os.Getenv(varName) (case-insensitively). If unset, it falls back to standard Windows defaults:
 //   - %ProgramData% -> C:\ProgramData
 //   - %SystemDrive% -> C:
-//   - %SystemRoot%, %windir% -> C:\Windows
 func expandWindowsEnv(pattern string) string {
 	if !strings.Contains(pattern, "%") {
 		return pattern
@@ -412,8 +429,6 @@ func expandWindowsEnv(pattern string) string {
 				val = `C:\ProgramData`
 			case strings.EqualFold(varName, "SystemDrive"):
 				val = `C:`
-			case strings.EqualFold(varName, "SystemRoot"), strings.EqualFold(varName, "windir"):
-				val = `C:\Windows`
 			default:
 				return m
 			}

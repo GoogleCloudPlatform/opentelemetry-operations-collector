@@ -60,7 +60,6 @@ func TestPolicyValidation_ValidWindowsPaths(t *testing.T) {
 		{`C:\inetpub\logs\LogFiles\**\*.log`},
 		{`C:/inetpub/logs/LogFiles/**/*.log`},
 		{`%SystemDrive%\inetpub\logs\*.log`},
-		{`%SystemRoot%\inetpub\logs\*.log`},
 	}
 
 	for _, paths := range validPaths {
@@ -172,6 +171,12 @@ func TestPolicyValidation_InvalidPaths(t *testing.T) {
 			name:        "disallowed windows system32",
 			id:          "test-policy",
 			include:     []string{`C:\Windows\System32\cmd.exe`},
+			expectedErr: ErrDisallowedLogRoot,
+		},
+		{
+			name:        "disallowed windows systemroot inetpub",
+			id:          "test-policy",
+			include:     []string{`%SystemRoot%\inetpub\logs\*.log`},
 			expectedErr: ErrDisallowedLogRoot,
 		},
 		{
@@ -550,6 +555,13 @@ func TestMerge_MultiplePolicies_WindowsEnvDeduplication(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, merged)
 	assert.Len(t, merged.IncludedPaths(), 1)
+	assert.Equal(t, `C:\ProgramData\App\logs\app.log`, merged.IncludedPaths()[0])
+
+	// Reverse merge order must produce the identical result.
+	mergedRev, err := Merge(p2, p1)
+	require.NoError(t, err)
+	require.NotNil(t, mergedRev)
+	assert.Equal(t, merged.IncludedPaths(), mergedRev.IncludedPaths())
 
 	// Evaluating the merged policy should produce expanded path.
 	conf, err := merged.Evaluate(context.Background())
@@ -557,6 +569,33 @@ func TestMerge_MultiplePolicies_WindowsEnvDeduplication(t *testing.T) {
 	sub, err := conf.Sub("receivers::filelog")
 	require.NoError(t, err)
 	assert.Equal(t, []string{`C:\ProgramData\App\logs\app.log`}, sub.ToStringMap()["include"])
+}
+
+func TestMerge_MultiplePolicies_WindowsEnvSortingDeterminism(t *testing.T) {
+	p1, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
+		Id:            "win-sort-1",
+		IncludedPaths: []string{`%ProgramData%\App\logs\z.log`},
+	})
+	require.NoError(t, err)
+
+	p2, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
+		Id:            "win-sort-2",
+		IncludedPaths: []string{`C:\ProgramData\App\logs\a.log`},
+	})
+	require.NoError(t, err)
+
+	expected := []string{
+		`C:\ProgramData\App\logs\a.log`,
+		`C:\ProgramData\App\logs\z.log`,
+	}
+
+	merged1, err := Merge(p1, p2)
+	require.NoError(t, err)
+	assert.Equal(t, expected, merged1.IncludedPaths())
+
+	merged2, err := Merge(p2, p1)
+	require.NoError(t, err)
+	assert.Equal(t, expected, merged2.IncludedPaths())
 }
 
 func TestMerge_FailsFastOnInvalidPolicy(t *testing.T) {

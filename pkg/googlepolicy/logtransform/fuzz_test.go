@@ -46,9 +46,17 @@ func buildFuzzLogContexts(body, severityText, attrKey, attrStr string, severityN
 	edgeAttrs.PutEmptySlice("empty_slice")
 	edgeAttrs.PutEmptyMap("empty_map")
 
+	mapBodyLogs := plog.NewLogs()
+	mapBodyRL := mapBodyLogs.ResourceLogs().AppendEmpty()
+	mapBodySL := mapBodyRL.ScopeLogs().AppendEmpty()
+	mapBodyLR := mapBodySL.LogRecords().AppendEmpty()
+	mapBodyLR.Body().SetEmptyMap().PutStr("event_id", "evt-fuzz")
+	mapBodyLR.Body().Map().PutEmptyMap("event_data").PutStr("userId", "user-42")
+
 	return []googlepolicy.LogContext{
 		logContext(lr, sl, rl),
 		logContext(edgeLR, edgeSL, edgeRL),
+		logContext(mapBodyLR, mapBodySL, mapBodyRL),
 		{},
 		dynamicLogContext(body, severityText, attrKey, attrStr, severityNum, attrInt, attrFloat, attrBool),
 	}
@@ -105,11 +113,11 @@ func fuzzLogTransformSeedPolicies() []*policyv1alpha1.LogTransformPolicy {
 					Predicate: &policyv1alpha1.LogMatcher_Glob{Glob: "hello*"},
 				},
 			},
-			Action: &policyv1alpha1.LogTransformPolicy_Add{
-				Add: &policyv1alpha1.LogAddAction{
-					Target: logTargetAttr("tier"),
-					Value:  strVal("soc"),
-					Upsert: proto.Bool(true),
+			Action: &policyv1alpha1.LogTransformPolicy_Addition{
+				Addition: &policyv1alpha1.LogAddAction{
+					Target:        logTargetAttr("tier"),
+					Value:         strVal("soc"),
+					UpsertEnabled: proto.Bool(true),
 				},
 			},
 		},
@@ -131,14 +139,14 @@ func fuzzLogTransformSeedPolicies() []*policyv1alpha1.LogTransformPolicy {
 				{
 					Target:    logAttrTarget("user.roles"),
 					Predicate: &policyv1alpha1.LogMatcher_Containment{Containment: strVal("admin")},
-					Negated:    true,
+					Negated:   true,
 				},
 			},
-			Action: &policyv1alpha1.LogTransformPolicy_Add{
-				Add: &policyv1alpha1.LogAddAction{
-					Target: logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY),
-					Value:  strVal("redacted"),
-					Upsert: proto.Bool(true),
+			Action: &policyv1alpha1.LogTransformPolicy_Addition{
+				Addition: &policyv1alpha1.LogAddAction{
+					Target:        logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY),
+					Value:         strVal("redacted"),
+					UpsertEnabled: proto.Bool(true),
 				},
 			},
 		},
@@ -154,11 +162,66 @@ func fuzzLogTransformSeedPolicies() []*policyv1alpha1.LogTransformPolicy {
 					Predicate: &policyv1alpha1.LogMatcher_Equality{Equality: strVal("my.library")},
 				},
 			},
-			Action: &policyv1alpha1.LogTransformPolicy_Add{
-				Add: &policyv1alpha1.LogAddAction{
-					Target: logTargetBodyField("event_data", "userId"),
-					Value:  strVal("user-42"),
-					Upsert: proto.Bool(true),
+			Action: &policyv1alpha1.LogTransformPolicy_Addition{
+				Addition: &policyv1alpha1.LogAddAction{
+					Target:        logTargetBodyField("event_data", "userId"),
+					Value:         strVal("user-42"),
+					UpsertEnabled: proto.Bool(true),
+				},
+			},
+		},
+		{
+			Id: "remove-attribute",
+			Action: &policyv1alpha1.LogTransformPolicy_Removal{
+				Removal: &policyv1alpha1.LogRemoveAction{
+					Target: logAttrSelector("feature.enabled"),
+				},
+			},
+		},
+		{
+			Id: "remove-nested-body-field",
+			Action: &policyv1alpha1.LogTransformPolicy_Removal{
+				Removal: &policyv1alpha1.LogRemoveAction{
+					Target: logBodyFieldSelector("event_data", "userId"),
+				},
+			},
+		},
+		{
+			Id: "rename-attribute",
+			Action: &policyv1alpha1.LogTransformPolicy_Renaming{
+				Renaming: &policyv1alpha1.LogRenameAction{
+					Source:        logAttrSelector("old.key"),
+					Target:        logAttrSelector("new.key"),
+					UpsertEnabled: proto.Bool(false),
+				},
+			},
+		},
+		{
+			Id: "rename-body-field",
+			Action: &policyv1alpha1.LogTransformPolicy_Renaming{
+				Renaming: &policyv1alpha1.LogRenameAction{
+					Source:        logBodyFieldSelector("event_data", "userId"),
+					Target:        logBodyFieldSelector("user", "id"),
+					UpsertEnabled: proto.Bool(true),
+				},
+			},
+		},
+		{
+			Id: "redact-attribute",
+			Action: &policyv1alpha1.LogTransformPolicy_Redaction{
+				Redaction: &policyv1alpha1.LogRedactAction{
+					Target:      logTargetAttr("cloud.zone"),
+					Regex:       proto.String(`[a-z]+-[a-z0-9]+`),
+					Replacement: proto.String("[ZONE]"),
+				},
+			},
+		},
+		{
+			Id: "redact-body-field",
+			Action: &policyv1alpha1.LogTransformPolicy_Redaction{
+				Redaction: &policyv1alpha1.LogRedactAction{
+					Target:      logTargetBodyField("event_data", "userId"),
+					Replacement: proto.String("[REDACTED]"),
 				},
 			},
 		},

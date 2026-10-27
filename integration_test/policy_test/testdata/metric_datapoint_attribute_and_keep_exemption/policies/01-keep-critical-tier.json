@@ -5,7 +5,7 @@
   "matchers": [
     {
       "target": {
-        "datapoint_attribute_path": {
+        "data_point_attribute_path": {
           "segments": ["service.tier"]
         }
       },

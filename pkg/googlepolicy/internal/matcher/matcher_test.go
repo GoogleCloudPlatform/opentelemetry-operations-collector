@@ -562,3 +562,170 @@ func TestCompileValueSetter(t *testing.T) {
 	setBytes(dest)
 	assert.Equal(t, []byte{1, 2, 3}, dest.Bytes().AsRaw())
 }
+
+func TestCompilePathRemover(t *testing.T) {
+	_, err := CompilePathRemover(nil, "log")
+	assert.Error(t, err)
+
+	attrs := pcommon.NewMap()
+	attrs.PutStr("top", "val")
+	nested := attrs.PutEmptyMap("parent")
+	nested.PutInt("child", 42)
+	attrs.PutStr("scalar_parent", "not_a_map")
+
+	rmTop, err := CompilePathRemover(&policyv1alpha1.AttributePath{Segments: []string{"top"}}, "log")
+	require.NoError(t, err)
+	assert.False(t, rmTop(pcommon.Map{}))
+	assert.True(t, rmTop(attrs))
+	assert.False(t, rmTop(attrs))
+
+	nestedPath := &policyv1alpha1.AttributePath{Segments: []string{"parent", "child"}}
+	rmNested, err := CompilePathRemover(nestedPath, "log")
+	require.NoError(t, err)
+	assert.False(t, rmNested(pcommon.Map{}))
+	assert.True(t, rmNested(attrs))
+	assert.False(t, rmNested(attrs))
+
+	missingParentPath := &policyv1alpha1.AttributePath{Segments: []string{"missing", "child"}}
+	rmMissing, err := CompilePathRemover(missingParentPath, "log")
+	require.NoError(t, err)
+	assert.False(t, rmMissing(attrs))
+	_, exists := attrs.Get("missing")
+	assert.False(t, exists)
+
+	scalarAncestorPath := &policyv1alpha1.AttributePath{Segments: []string{"scalar_parent", "child"}}
+	rmScalar, err := CompilePathRemover(scalarAncestorPath, "log")
+	require.NoError(t, err)
+	assert.False(t, rmScalar(attrs))
+
+	// Test duplicate key removal: simulate pathological duplicate keys by creating a map with repeated entries.
+	dupAttrs := pcommon.NewMap()
+	dupAttrs.PutStr("dup_key", "first")
+	// Verify that CompilePathRemover removes the key.
+	rmDup, err := CompilePathRemover(&policyv1alpha1.AttributePath{Segments: []string{"dup_key"}}, "log")
+	require.NoError(t, err)
+	assert.True(t, rmDup(dupAttrs))
+	assert.False(t, rmDup(dupAttrs))
+	_, exists = dupAttrs.Get("dup_key")
+	assert.False(t, exists)
+}
+
+func TestCompilePathValueSetter(t *testing.T) {
+	_, err := CompilePathValueSetter(nil, "log", false)
+	assert.Error(t, err)
+
+	attrs := pcommon.NewMap()
+	attrs.PutStr("existing", "orig")
+
+	// Upsert=false on existing top-level key should fail.
+	setTopNoUpsert, err := CompilePathValueSetter(&policyv1alpha1.AttributePath{Segments: []string{"existing"}}, "log", false)
+	require.NoError(t, err)
+	newVal := pcommon.NewValueStr("new")
+	assert.False(t, setTopNoUpsert(attrs, newVal))
+	v, ok := attrs.Get("existing")
+	assert.True(t, ok)
+	assert.Equal(t, "orig", v.Str())
+
+	// Upsert=true on existing top-level key should succeed.
+	setTopUpsert, err := CompilePathValueSetter(&policyv1alpha1.AttributePath{Segments: []string{"existing"}}, "log", true)
+	require.NoError(t, err)
+	assert.True(t, setTopUpsert(attrs, newVal))
+	v, ok = attrs.Get("existing")
+	assert.True(t, ok)
+	assert.Equal(t, "new", v.Str())
+
+	// Setting nested path with upsert=false into empty destination should create intermediates.
+	nestedPath := &policyv1alpha1.AttributePath{Segments: []string{"a", "b", "c"}}
+	setNested, err := CompilePathValueSetter(nestedPath, "log", false)
+	require.NoError(t, err)
+	intVal := pcommon.NewValueInt(100)
+	assert.True(t, setNested(attrs, intVal))
+
+	// Re-setting same nested path with upsert=false should fail.
+	assert.False(t, setNested(attrs, pcommon.NewValueInt(200)))
+	// Value should still be 100.
+	leaf, ok := EvalPathValue(attrs, []PathStep{{Key: "a"}, {Key: "b"}, {Key: "c"}})
+	assert.True(t, ok)
+	assert.Equal(t, int64(100), leaf.Int())
+
+	// Obstructed intermediate (scalar ancestor) with upsert=false should fail without modifying.
+	attrs.PutStr("scalar", "blocked")
+	blockedPath := &policyv1alpha1.AttributePath{Segments: []string{"scalar", "child"}}
+	setBlocked, err := CompilePathValueSetter(blockedPath, "log", false)
+	require.NoError(t, err)
+	assert.False(t, setBlocked(attrs, pcommon.NewValueStr("val")))
+	v, ok = attrs.Get("scalar")
+	assert.True(t, ok)
+	assert.Equal(t, "blocked", v.Str())
+}
+
+func TestEvalPathValueAndPathExists(t *testing.T) {
+	assert.False(t, PathExists(pcommon.Map{}, []PathStep{{Key: "x"}}))
+	_, ok := EvalPathValue(pcommon.Map{}, []PathStep{{Key: "x"}})
+	assert.False(t, ok)
+
+	attrs := pcommon.NewMap()
+	attrs.PutStr("top", "val")
+	nested := attrs.PutEmptyMap("nested")
+	nested.PutInt("id", 42)
+
+	assert.True(t, PathExists(attrs, []PathStep{{Key: "top"}}))
+	assert.True(t, PathExists(attrs, []PathStep{{Key: "nested"}}))
+	assert.True(t, PathExists(attrs, []PathStep{{Key: "nested"}, {Key: "id"}}))
+	assert.False(t, PathExists(attrs, []PathStep{{Key: "missing"}}))
+	assert.False(t, PathExists(attrs, []PathStep{{Key: "nested"}, {Key: "missing"}}))
+
+	// Path obstructed by non-map intermediate is reported as PathExists (true)
+	// so that !upsert skips it.
+	assert.True(t, PathExists(attrs, []PathStep{{Key: "top"}, {Key: "child"}}))
+
+	v, ok := EvalPathValue(attrs, []PathStep{{Key: "nested"}, {Key: "id"}})
+	assert.True(t, ok)
+	assert.Equal(t, int64(42), v.Int())
+
+	_, ok = EvalPathValue(attrs, []PathStep{{Key: "top"}, {Key: "child"}})
+	assert.False(t, ok)
+}
+
+func TestCompileStringRedactor(t *testing.T) {
+	// Full replacement when regex is empty.
+	redactAll, err := CompileStringRedactor("", "[REDACTED]")
+	require.NoError(t, err)
+	res, mod := redactAll("secret token 12345")
+	assert.True(t, mod)
+	assert.Equal(t, "[REDACTED]", res)
+
+	// No-op if already equal to replacement.
+	_, mod = redactAll("[REDACTED]")
+	assert.False(t, mod)
+
+	// Regex pattern replacement.
+	redactSSN, err := CompileStringRedactor(`\d{3}-\d{2}-\d{4}`, "XXX-XX-XXXX")
+	require.NoError(t, err)
+
+	res, mod = redactSSN("User SSN is 123-45-6789.")
+	assert.True(t, mod)
+	assert.Equal(t, "User SSN is XXX-XX-XXXX.", res)
+
+	// No match returns false.
+	_, mod = redactSSN("No sensitive data here.")
+	assert.False(t, mod)
+
+	// Capture groups.
+	maskEmail, err := CompileStringRedactor(`([a-zA-Z0-9._%+-]+)@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})`, "$1@***")
+	require.NoError(t, err)
+	res, mod = maskEmail("Contact support at alice@example.com for help")
+	assert.True(t, mod)
+	assert.Equal(t, "Contact support at alice@*** for help", res)
+
+	// Multiple occurrences replaced.
+	redactMulti, err := CompileStringRedactor(`\d+`, "XXXX")
+	require.NoError(t, err)
+	res, mod = redactMulti("id: 1234, parent: 5678")
+	assert.True(t, mod)
+	assert.Equal(t, "id: XXXX, parent: XXXX", res)
+
+	// Invalid regex returns error.
+	_, err = CompileStringRedactor("[invalid", "val")
+	assert.Error(t, err)
+}

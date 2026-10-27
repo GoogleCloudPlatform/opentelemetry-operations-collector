@@ -33,6 +33,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"regexp"
 	"strings"
 	"unicode/utf8"
 
@@ -261,6 +262,52 @@ func EvalPath(attrs pcommon.Map, steps []PathStep) (any, bool) {
 	return ValueToAny(val), true
 }
 
+// EvalPathValue walks the compiled path through an attribute map, descending into
+// nested maps, and returns the raw pcommon.Value without boxing to any.
+func EvalPathValue(attrs pcommon.Map, steps []PathStep) (pcommon.Value, bool) {
+	if len(steps) == 0 || attrs == (pcommon.Map{}) {
+		return pcommon.Value{}, false
+	}
+	val, ok := attrs.Get(steps[0].Key)
+	if !ok {
+		return pcommon.Value{}, false
+	}
+	for _, step := range steps[1:] {
+		if val.Type() != pcommon.ValueTypeMap {
+			return pcommon.Value{}, false
+		}
+		child, found := val.Map().Get(step.Key)
+		if !found {
+			return pcommon.Value{}, false
+		}
+		val = child
+	}
+	return val, true
+}
+
+// PathExists reports whether the path exists in attrs (either as an existing leaf
+// or as an existing intermediate non-map that obstructs path creation).
+func PathExists(attrs pcommon.Map, steps []PathStep) bool {
+	if len(steps) == 0 || attrs == (pcommon.Map{}) {
+		return false
+	}
+	val, ok := attrs.Get(steps[0].Key)
+	if !ok {
+		return false
+	}
+	for _, step := range steps[1:] {
+		if val.Type() != pcommon.ValueTypeMap {
+			return true
+		}
+		child, found := val.Map().Get(step.Key)
+		if !found {
+			return false
+		}
+		val = child
+	}
+	return true
+}
+
 // CompilePathSetter pre-compiles an AttributePath and Value into a closure that
 // inserts or overwrites the target attribute in a pcommon.Map.
 //
@@ -308,6 +355,57 @@ func CompilePathSetter(attrPath *policyv1alpha1.AttributePath, kind string, val 
 			}
 		}
 		putLeaf(parent, leafKey)
+		return true
+	}, nil
+}
+
+// CompilePathValueSetter pre-compiles an AttributePath into a closure that
+// inserts or overwrites the target attribute with a given pcommon.Value.
+// Intermediate maps are created automatically when missing. When upsert is
+// false and the target already exists (as a leaf or intermediate non-map),
+// the returned closure leaves the map unmodified and returns false.
+func CompilePathValueSetter(attrPath *policyv1alpha1.AttributePath, kind string, upsert bool) (func(pcommon.Map, pcommon.Value) bool, error) {
+	steps, err := CompilePath(attrPath, kind)
+	if err != nil {
+		return nil, err
+	}
+
+	leafKey := steps[len(steps)-1].Key
+	if len(steps) == 1 {
+		return func(attrs pcommon.Map, srcVal pcommon.Value) bool {
+			if attrs == (pcommon.Map{}) {
+				return false
+			}
+			if !upsert {
+				if _, exists := attrs.Get(leafKey); exists {
+					return false
+				}
+			}
+			dest := attrs.PutEmpty(leafKey)
+			srcVal.CopyTo(dest)
+			return true
+		}, nil
+	}
+
+	prefix := steps[:len(steps)-1]
+	return func(attrs pcommon.Map, srcVal pcommon.Value) bool {
+		if attrs == (pcommon.Map{}) {
+			return false
+		}
+		if !upsert && PathExists(attrs, steps) {
+			return false
+		}
+		parent, ok := resolveParentMap(attrs, prefix, upsert)
+		if !ok {
+			return false
+		}
+		if !upsert {
+			if _, exists := parent.Get(leafKey); exists {
+				return false
+			}
+		}
+		dest := parent.PutEmpty(leafKey)
+		srcVal.CopyTo(dest)
 		return true
 	}, nil
 }
@@ -388,6 +486,49 @@ func CompileValueSetter(val *policyv1alpha1.Value) (func(pcommon.Value), error) 
 	default:
 		return nil, ErrMissingValue
 	}
+}
+
+// CompilePathRemover pre-compiles an AttributePath into a closure that deletes
+// the target key from a pcommon.Map without creating intermediate maps.
+// It removes all occurrences of the target key (handling duplicate keys) and
+// returns true iff the target key existed and was removed.
+func CompilePathRemover(attrPath *policyv1alpha1.AttributePath, kind string) (func(pcommon.Map) bool, error) {
+	steps, err := CompilePath(attrPath, kind)
+	if err != nil {
+		return nil, err
+	}
+	prefix, leafKey := steps[:len(steps)-1], steps[len(steps)-1].Key
+	isLeaf := func(k string, _ pcommon.Value) bool { return k == leafKey }
+	return func(attrs pcommon.Map) bool {
+		parent, ok := findExistingParentMap(attrs, prefix)
+		if !ok {
+			return false
+		}
+		if _, exists := parent.Get(leafKey); !exists {
+			return false
+		}
+		parent.RemoveIf(isLeaf)
+		return true
+	}, nil
+}
+
+// findExistingParentMap walks attrs along the provided path prefix without
+// mutating or creating intermediate maps. It returns the leaf's parent map and
+// true if all prefix steps exist and resolve to maps, or (pcommon.Map{}, false)
+// if any ancestor is missing or not a map.
+func findExistingParentMap(attrs pcommon.Map, prefix []PathStep) (pcommon.Map, bool) {
+	if attrs == (pcommon.Map{}) {
+		return pcommon.Map{}, false
+	}
+	curr := attrs
+	for _, step := range prefix {
+		child, exists := curr.Get(step.Key)
+		if !exists || child.Type() != pcommon.ValueTypeMap {
+			return pcommon.Map{}, false
+		}
+		curr = child.Map()
+	}
+	return curr, true
 }
 
 // ValueToAny converts a pcommon.Value into the plain Go value that the
@@ -633,4 +774,30 @@ func toInt64(val any) (int64, bool) {
 	default:
 		return 0, false
 	}
+}
+
+// CompileStringRedactor compiles an optional RE2 regex pattern and replacement
+// string into a closure that returns (redacted, true) when a target string is
+// modified, or ("", false) when the string is unchanged. When regexPattern is
+// empty, the entire input string is replaced with replacement.
+func CompileStringRedactor(regexPattern, replacement string) (func(string) (string, bool), error) {
+	if regexPattern == "" {
+		return func(s string) (string, bool) {
+			if s == replacement {
+				return "", false
+			}
+			return replacement, true
+		}, nil
+	}
+	re, err := regexp.Compile(regexPattern)
+	if err != nil {
+		return nil, fmt.Errorf("invalid redact regex %q: %w", regexPattern, err)
+	}
+	return func(s string) (string, bool) {
+		redacted := re.ReplaceAllString(s, replacement)
+		if redacted == s {
+			return "", false
+		}
+		return redacted, true
+	}, nil
 }

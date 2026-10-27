@@ -20,14 +20,14 @@ import "policy/v1alpha1/common_policy_types.proto";
 
 option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1;policyv1alpha1";
 
-// Idempotent probabilistic trace sampling policy backed by the W3C
+// Describes a probabilistic trace sampling policy backed by the W3C
 // TraceState Consistent Probability Sampling specification (OTEP 235) in
 // `equalizing` mode.
 //
 // Evaluation & Precedence Semantics:
 // - Default Disposition & Fail-Open: Spans pass through unsampled by default
 //   (default allow) when no matching valid TraceSamplingPolicy is configured.
-//   A policy with an empty `id`, a `sampling_percentage` outside the valid
+//   A policy with an empty `id`, a `sampling_percent` outside the valid
 //   range (0.0, 100.0] (including 0.0, negative values, > 100.0, NaN, or Inf),
 //   or any malformed `TraceMatcher` in `matchers` is invalid and ignored
 //   (fail-open).
@@ -61,7 +61,7 @@ message TraceSamplingPolicy {
   string id = 1;
 
   // Probabilistic sampling percentage in the range (0.0, 100.0]. Required.
-  double sampling_percentage = 2;
+  double sampling_percent = 2;
 
   // Optional conditions evaluated against incoming spans.
   // When empty, this sampling policy applies unconditionally to all spans.

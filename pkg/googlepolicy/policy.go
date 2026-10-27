@@ -119,11 +119,31 @@ const (
 	TransformModified
 )
 
+// TransformStage represents the concrete operation stage of a transform policy.
+// Active transform policies execute in ascending stage order:
+// TransformStageRename -> TransformStageAdd -> TransformStageRemove -> TransformStageRedact,
+// with lexicographical PolicyName() tie-breaking within each stage.
+type TransformStage uint8
+
+const (
+	// TransformStageUnspecified indicates an uninitialized or unknown transform stage.
+	TransformStageUnspecified TransformStage = iota
+	// TransformStageRename executes first to standardize legacy attribute keys.
+	TransformStageRename
+	// TransformStageAdd executes second to inject tags or fallback defaults.
+	TransformStageAdd
+	// TransformStageRemove executes third to delete unneeded attributes before regex scrubbing.
+	TransformStageRemove
+	// TransformStageRedact executes fourth to mask sensitive substrings across surviving fields.
+	TransformStageRedact
+)
+
 // LogTransformPolicyEvaluator is implemented by transformation policies that
 // modify surviving log records in-place (e.g., LogTransformPolicy in
 // pkg/googlepolicy/logtransform).
 type LogTransformPolicyEvaluator interface {
 	TransformationPolicy
+	TransformStage() TransformStage
 	TransformLog(ctx LogContext) TransformResult
 }
 
@@ -175,10 +195,24 @@ type ComponentPolicy interface {
 }
 
 // SourcePolicy is an extended interface that any Source policy will implement.
-// It allows extra steps for producing individual pipelines out of the components
-// generated during `Evaluate`.
+// Workload source policies contribute receivers that are merged into canonical
+// shared pipelines (logs/googlecontrolplane, metrics/googlecontrolplane,
+// traces/googlecontrolplane).
 type SourcePolicy interface {
 	ComponentPolicy
+	// LogReceiverIDs returns the component IDs of log receivers synthesized by this policy.
+	LogReceiverIDs() []component.ID
+	// MetricReceiverIDs returns the component IDs of metric receivers synthesized by this policy.
+	MetricReceiverIDs() []component.ID
+	// TraceReceiverIDs returns the component IDs of trace receivers synthesized by this policy.
+	TraceReceiverIDs() []component.ID
+}
+
+// DedicatedPipelineSourcePolicy is an optional interface implemented by source policies
+// that require their own dedicated pipelines rather than merging into the shared
+// canonical pipelines (e.g. SelfMetricsPolicy).
+type DedicatedPipelineSourcePolicy interface {
+	SourcePolicy
 	LogsPipelines(preExportProcessors []component.ID, exporters []component.ID, extensions []component.ID) (*confmap.Conf, error)
 	MetricsPipelines(preExportProcessors []component.ID, exporters []component.ID, extensions []component.ID) (*confmap.Conf, error)
 	TracesPipelines(preExportProcessors []component.ID, exporters []component.ID, extensions []component.ID) (*confmap.Conf, error)

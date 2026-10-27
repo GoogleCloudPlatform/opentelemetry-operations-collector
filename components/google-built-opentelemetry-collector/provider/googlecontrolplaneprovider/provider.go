@@ -747,7 +747,6 @@ func (p *provider) consolidateSourcePolicies(ctx context.Context, activePolicySe
 	}
 	return consolidated
 }
-}
 
 func cleanConf(c *confmap.Conf) *confmap.Conf {
 	if c == nil {

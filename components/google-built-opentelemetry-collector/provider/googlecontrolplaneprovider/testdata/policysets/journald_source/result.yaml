@@ -77,6 +77,11 @@ processors:
             - gcp
         override: false
         timeout: 10s
+    resourcedetection/googlecontrolplane:
+        detectors:
+            - gcp
+        override: false
+        timeout: 10s
     transform/default_self_metrics:
         error_mode: ignore
         log_statements:
@@ -87,12 +92,27 @@ processors:
             - context: resource
               statements:
                 - set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil
+    transform/googlecontrolplane:
+        error_mode: ignore
+        log_statements:
+            - context: resource
+              statements:
+                - set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil
+        metric_statements:
+            - context: resource
+              statements:
+                - set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil
+        trace_statements:
+            - context: resource
+              statements:
+                - set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil
 receivers:
     journald:
         operators:
             - expr: (body._COMM != nil && body._COMM == "otelcol-google") || (body._SYSTEMD_UNIT != nil && body._SYSTEMD_UNIT == "otelcol-google.service") || (body.SYSLOG_IDENTIFIER != nil && body.SYSLOG_IDENTIFIER == "otelcol-google")
               id: exclude_collector_logs
               type: filter
+    nop/googlecontrolplane: {}
     otlp/default_self_metrics:
         protocols:
             grpc:
@@ -113,16 +133,20 @@ service:
             processors:
                 - resourcedetection/default_self_metrics
                 - transform/default_self_metrics
-                - queue_batch/default_gcp_destination_batch_logs
-            receivers:
-                - otlp/default_self_metrics
-        logs/journald:
-            exporters:
-                - otlp_grpc/default_gcp_destination
-            processors:
                 - googlepolicy
                 - queue_batch/default_gcp_destination_batch_logs
             receivers:
+                - otlp/default_self_metrics
+        logs/googlecontrolplane:
+            exporters:
+                - otlp_grpc/default_gcp_destination
+            processors:
+                - resourcedetection/googlecontrolplane
+                - transform/googlecontrolplane
+                - googlepolicy
+                - queue_batch/default_gcp_destination_batch_logs
+            receivers:
+                - nop/googlecontrolplane
                 - journald
         metrics/default_self_metrics:
             exporters:
@@ -130,9 +154,30 @@ service:
             processors:
                 - resourcedetection/default_self_metrics
                 - transform/default_self_metrics
+                - googlepolicy
                 - queue_batch/default_gcp_destination_batch_metrics
             receivers:
                 - otlp/default_self_metrics
+        metrics/googlecontrolplane:
+            exporters:
+                - otlp_grpc/default_gcp_destination
+            processors:
+                - resourcedetection/googlecontrolplane
+                - transform/googlecontrolplane
+                - googlepolicy
+                - queue_batch/default_gcp_destination_batch_metrics
+            receivers:
+                - nop/googlecontrolplane
+        traces/googlecontrolplane:
+            exporters:
+                - otlp_grpc/default_gcp_destination
+            processors:
+                - resourcedetection/googlecontrolplane
+                - transform/googlecontrolplane
+                - googlepolicy
+                - queue_batch/default_gcp_destination_batch_traces
+            receivers:
+                - nop/googlecontrolplane
     telemetry:
         logs:
             encoding: console

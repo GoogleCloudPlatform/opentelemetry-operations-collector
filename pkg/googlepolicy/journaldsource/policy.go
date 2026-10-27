@@ -174,38 +174,3 @@ func (p *Policy) MetricReceiverIDs() []component.ID {
 func (p *Policy) TraceReceiverIDs() []component.ID {
 	return nil
 }
-
-// LogsPipelines builds the logs pipeline for the journald receiver.
-func (p *Policy) LogsPipelines(preExportProcessors []component.ID, exporters []component.ID, _ []component.ID) (*confmap.Conf, error) {
-	procs := make([]any, len(preExportProcessors))
-	for i, id := range preExportProcessors {
-		procs[i] = id.String()
-	}
-	exps := make([]any, len(exporters))
-	for i, id := range exporters {
-		exps[i] = id.String()
-	}
-
-	cfg := map[string]any{
-		"service": map[string]any{
-			"pipelines": map[string]any{
-				"logs/journald": map[string]any{
-					"receivers":  []any{DefaultReceiverID},
-					"processors": procs,
-					"exporters":  exps,
-				},
-			},
-		},
-	}
-	return confmap.NewFromStringMap(cfg), nil
-}
-
-// MetricsPipelines returns nil, nil because JournaldSourcePolicy only handles the logs signal.
-func (p *Policy) MetricsPipelines([]component.ID, []component.ID, []component.ID) (*confmap.Conf, error) {
-	return nil, nil
-}
-
-// TracesPipelines returns nil, nil because JournaldSourcePolicy only handles the logs signal.
-func (p *Policy) TracesPipelines([]component.ID, []component.ID, []component.ID) (*confmap.Conf, error) {
-	return nil, nil
-}

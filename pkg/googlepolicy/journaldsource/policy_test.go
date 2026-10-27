@@ -86,26 +86,6 @@ func TestPolicy_ReceiverIDs(t *testing.T) {
 	assert.Equal(t, []component.ID{component.MustNewID(DefaultReceiverID)}, pol.LogReceiverIDs())
 	assert.Nil(t, pol.MetricReceiverIDs())
 	assert.Nil(t, pol.TraceReceiverIDs())
-
-	// Test pipeline synthesis
-	procID := component.MustNewID("googlepolicy")
-	expID := component.MustNewID("googlecloud")
-
-	logsConf, err := pol.LogsPipelines([]component.ID{procID}, []component.ID{expID}, nil)
-	require.NoError(t, err)
-	require.NotNil(t, logsConf)
-	raw := logsConf.ToStringMap()
-	pipelines, ok := raw["service"].(map[string]any)["pipelines"].(map[string]any)
-	require.True(t, ok)
-	require.Contains(t, pipelines, "logs/journald")
-
-	metricsConf, err := pol.MetricsPipelines([]component.ID{procID}, []component.ID{expID}, nil)
-	require.NoError(t, err)
-	assert.Nil(t, metricsConf)
-
-	tracesConf, err := pol.TracesPipelines([]component.ID{procID}, []component.ID{expID}, nil)
-	require.NoError(t, err)
-	assert.Nil(t, tracesConf)
 }
 
 func TestPolicy_Evaluate(t *testing.T) {

@@ -415,6 +415,15 @@ func expandWindowsEnv(pattern string) string {
 	}
 	return winEnvVarRegexp.ReplaceAllStringFunc(pattern, func(m string) string {
 		varName := m[1 : len(m)-1]
+		var defaultVal string
+		switch {
+		case strings.EqualFold(varName, "ProgramData"):
+			defaultVal = `C:\ProgramData`
+		case strings.EqualFold(varName, "SystemDrive"):
+			defaultVal = `C:`
+		default:
+			return m
+		}
 		val := os.Getenv(varName)
 		if val == "" {
 			if v := os.Getenv(strings.ToUpper(varName)); v != "" {
@@ -424,14 +433,7 @@ func expandWindowsEnv(pattern string) string {
 			}
 		}
 		if val == "" {
-			switch {
-			case strings.EqualFold(varName, "ProgramData"):
-				val = `C:\ProgramData`
-			case strings.EqualFold(varName, "SystemDrive"):
-				val = `C:`
-			default:
-				return m
-			}
+			val = defaultVal
 		}
 		return strings.TrimRight(val, "/\\")
 	})

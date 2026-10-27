@@ -1744,6 +1744,19 @@ func TestEvaluator_LogTransformStageOrdering(t *testing.T) {
 		},
 	})
 
+	// Redact policy that masks "user_name" in Stage 4: replaces "alice" with "[REDACTED_USER]".
+	// It has the lexicographically FIRST ID ("a-redact-user") among all policies, proving that
+	// Stage 4 (redact) runs LAST after rename (Stage 1), add (Stage 2), and remove (Stage 3).
+	redactUser := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id: "a-redact-user",
+		Action: &policyv1alpha1.LogTransformPolicy_Redaction{
+			Redaction: &policyv1alpha1.LogRedactAction{
+				Target:      logTarget("user_name"),
+				Replacement: proto.String("[REDACTED_USER]"),
+			},
+		},
+	})
+
 	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{
 		removeTemp,
 		renameLegacy,
@@ -1751,6 +1764,7 @@ func TestEvaluator_LogTransformStageOrdering(t *testing.T) {
 		addWinner1,
 		addTemp,
 		addFallback,
+		redactUser,
 	})
 	require.NoError(t, err)
 
@@ -1770,7 +1784,7 @@ func TestEvaluator_LogTransformStageOrdering(t *testing.T) {
 
 	userName, ok := records.At(0).Attributes().Get("user_name")
 	require.True(t, ok)
-	assert.Equal(t, "alice", userName.Str(), "rename in Stage 1 must beat add-fallback in Stage 2")
+	assert.Equal(t, "[REDACTED_USER]", userName.Str(), "rename in Stage 1 moved value to user_name, which was then redacted in Stage 4")
 
 	winner0, ok := records.At(0).Attributes().Get("stage_winner")
 	require.True(t, ok)

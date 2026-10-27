@@ -18,14 +18,14 @@
 // Policy evaluation is split in two: a per-signal target extractor pulls a
 // value out of the telemetry item, and a signal-agnostic Predicate tests that
 // value. Everything in this package belongs to the second half, so that the
-// three filter packages agree on what "equals", "regex", "contains", and the
-// numeric comparisons mean.
+// three filter packages agree on what "equality", "glob", "containment", and
+// the numeric comparisons mean.
 //
 // All compilation happens once at policy load time, so the hot path never
-// compiles a regex, parses a path segment, or type-switches on a protobuf
-// oneof. Extracted values are carried as plain Go values in an `any` rather
-// than as pcommon.Value: boxing still costs an allocation for most types, but
-// it avoids pdata's heavier per-call AnyValue allocation.
+// parses a path segment or type-switches on a protobuf oneof. Extracted values
+// are carried as plain Go values in an `any` rather than as pcommon.Value:
+// boxing still costs an allocation for most types, but it avoids pdata's
+// heavier per-call AnyValue allocation.
 package matcher
 
 import (
@@ -33,9 +33,8 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"regexp"
-	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
 	"go.opentelemetry.io/collector/pdata/pcommon"
@@ -44,6 +43,10 @@ import (
 // ErrMissingPredicate is returned when a matcher omits its predicate or sets it
 // to a nil value.
 var ErrMissingPredicate = errors.New("matcher must specify a valid predicate")
+
+// ErrMissingValue is returned when a mutation operation omits its Value or sets
+// it to a nil variant.
+var ErrMissingValue = errors.New("operation must specify a valid value")
 
 // Predicate tests an extracted target value. The exists flag reports whether
 // the extractor found the target at all, which lets predicates distinguish a
@@ -56,7 +59,7 @@ type kind int
 const (
 	kindExists kind = iota
 	kindEquals
-	kindRegex
+	kindGlob
 	kindGt
 	kindGte
 	kindLt
@@ -67,10 +70,10 @@ const (
 // spec is the signal-agnostic form of a matcher predicate, produced by
 // normalize from any of the three per-signal protobuf oneof families.
 type spec struct {
-	k     kind
-	val   *policyv1alpha1.Value
-	num   *policyv1alpha1.NumericValue
-	regex string
+	k    kind
+	val  *policyv1alpha1.Value
+	num  *policyv1alpha1.NumericValue
+	glob string
 }
 
 // CompilePredicate compiles a matcher predicate oneof wrapper (any of the
@@ -88,7 +91,7 @@ func CompilePredicate(predicate any, negate bool) (Predicate, error) {
 		pred = func(_ any, exists bool) bool { return exists }
 
 	case kindEquals:
-		if s.val.GetValue() == nil {
+		if s.val.GetKind() == nil {
 			return nil, ErrMissingPredicate
 		}
 		expected := s.val
@@ -96,13 +99,10 @@ func CompilePredicate(predicate any, negate bool) (Predicate, error) {
 			return present(val, exists) && valueEquals(val, expected)
 		}
 
-	case kindRegex:
-		re, err := regexp.Compile(s.regex)
-		if err != nil {
-			return nil, fmt.Errorf("invalid regex %q: %w", s.regex, err)
-		}
+	case kindGlob:
+		pattern := s.glob
 		pred = func(val any, exists bool) bool {
-			return present(val, exists) && valueMatchesRegex(val, re)
+			return present(val, exists) && valueMatchesGlob(val, pattern)
 		}
 
 	case kindGt:
@@ -118,7 +118,7 @@ func CompilePredicate(predicate any, negate bool) (Predicate, error) {
 		pred, err = numericPredicate(s.num, func(c int) bool { return c <= 0 })
 
 	case kindContains:
-		if s.val.GetValue() == nil {
+		if s.val.GetKind() == nil {
 			return nil, ErrMissingPredicate
 		}
 		expected := s.val
@@ -142,57 +142,57 @@ func CompilePredicate(predicate any, negate bool) (Predicate, error) {
 // Go types, so this switch is the one place that has to know about all three.
 func normalize(predicate any) (spec, error) {
 	switch p := predicate.(type) {
-	case *policyv1alpha1.LogMatcher_Exists, *policyv1alpha1.MetricMatcher_Exists, *policyv1alpha1.TraceMatcher_Exists:
+	case *policyv1alpha1.LogMatcher_Existence, *policyv1alpha1.MetricMatcher_Existence, *policyv1alpha1.TraceMatcher_Existence:
 		return spec{k: kindExists}, nil
 
-	case *policyv1alpha1.LogMatcher_Equals:
-		return spec{k: kindEquals, val: p.Equals}, nil
-	case *policyv1alpha1.MetricMatcher_Equals:
-		return spec{k: kindEquals, val: p.Equals}, nil
-	case *policyv1alpha1.TraceMatcher_Equals:
-		return spec{k: kindEquals, val: p.Equals}, nil
+	case *policyv1alpha1.LogMatcher_Equality:
+		return spec{k: kindEquals, val: p.Equality}, nil
+	case *policyv1alpha1.MetricMatcher_Equality:
+		return spec{k: kindEquals, val: p.Equality}, nil
+	case *policyv1alpha1.TraceMatcher_Equality:
+		return spec{k: kindEquals, val: p.Equality}, nil
 
-	case *policyv1alpha1.LogMatcher_Regex:
-		return spec{k: kindRegex, regex: p.Regex}, nil
-	case *policyv1alpha1.MetricMatcher_Regex:
-		return spec{k: kindRegex, regex: p.Regex}, nil
-	case *policyv1alpha1.TraceMatcher_Regex:
-		return spec{k: kindRegex, regex: p.Regex}, nil
+	case *policyv1alpha1.LogMatcher_Glob:
+		return spec{k: kindGlob, glob: p.Glob}, nil
+	case *policyv1alpha1.MetricMatcher_Glob:
+		return spec{k: kindGlob, glob: p.Glob}, nil
+	case *policyv1alpha1.TraceMatcher_Glob:
+		return spec{k: kindGlob, glob: p.Glob}, nil
 
-	case *policyv1alpha1.LogMatcher_Gt:
-		return spec{k: kindGt, num: p.Gt}, nil
-	case *policyv1alpha1.MetricMatcher_Gt:
-		return spec{k: kindGt, num: p.Gt}, nil
-	case *policyv1alpha1.TraceMatcher_Gt:
-		return spec{k: kindGt, num: p.Gt}, nil
+	case *policyv1alpha1.LogMatcher_ExclusiveMinimum:
+		return spec{k: kindGt, num: p.ExclusiveMinimum}, nil
+	case *policyv1alpha1.MetricMatcher_ExclusiveMinimum:
+		return spec{k: kindGt, num: p.ExclusiveMinimum}, nil
+	case *policyv1alpha1.TraceMatcher_ExclusiveMinimum:
+		return spec{k: kindGt, num: p.ExclusiveMinimum}, nil
 
-	case *policyv1alpha1.LogMatcher_Gte:
-		return spec{k: kindGte, num: p.Gte}, nil
-	case *policyv1alpha1.MetricMatcher_Gte:
-		return spec{k: kindGte, num: p.Gte}, nil
-	case *policyv1alpha1.TraceMatcher_Gte:
-		return spec{k: kindGte, num: p.Gte}, nil
+	case *policyv1alpha1.LogMatcher_InclusiveMinimum:
+		return spec{k: kindGte, num: p.InclusiveMinimum}, nil
+	case *policyv1alpha1.MetricMatcher_InclusiveMinimum:
+		return spec{k: kindGte, num: p.InclusiveMinimum}, nil
+	case *policyv1alpha1.TraceMatcher_InclusiveMinimum:
+		return spec{k: kindGte, num: p.InclusiveMinimum}, nil
 
-	case *policyv1alpha1.LogMatcher_Lt:
-		return spec{k: kindLt, num: p.Lt}, nil
-	case *policyv1alpha1.MetricMatcher_Lt:
-		return spec{k: kindLt, num: p.Lt}, nil
-	case *policyv1alpha1.TraceMatcher_Lt:
-		return spec{k: kindLt, num: p.Lt}, nil
+	case *policyv1alpha1.LogMatcher_ExclusiveMaximum:
+		return spec{k: kindLt, num: p.ExclusiveMaximum}, nil
+	case *policyv1alpha1.MetricMatcher_ExclusiveMaximum:
+		return spec{k: kindLt, num: p.ExclusiveMaximum}, nil
+	case *policyv1alpha1.TraceMatcher_ExclusiveMaximum:
+		return spec{k: kindLt, num: p.ExclusiveMaximum}, nil
 
-	case *policyv1alpha1.LogMatcher_Lte:
-		return spec{k: kindLte, num: p.Lte}, nil
-	case *policyv1alpha1.MetricMatcher_Lte:
-		return spec{k: kindLte, num: p.Lte}, nil
-	case *policyv1alpha1.TraceMatcher_Lte:
-		return spec{k: kindLte, num: p.Lte}, nil
+	case *policyv1alpha1.LogMatcher_InclusiveMaximum:
+		return spec{k: kindLte, num: p.InclusiveMaximum}, nil
+	case *policyv1alpha1.MetricMatcher_InclusiveMaximum:
+		return spec{k: kindLte, num: p.InclusiveMaximum}, nil
+	case *policyv1alpha1.TraceMatcher_InclusiveMaximum:
+		return spec{k: kindLte, num: p.InclusiveMaximum}, nil
 
-	case *policyv1alpha1.LogMatcher_Contains:
-		return spec{k: kindContains, val: p.Contains}, nil
-	case *policyv1alpha1.MetricMatcher_Contains:
-		return spec{k: kindContains, val: p.Contains}, nil
-	case *policyv1alpha1.TraceMatcher_Contains:
-		return spec{k: kindContains, val: p.Contains}, nil
+	case *policyv1alpha1.LogMatcher_Containment:
+		return spec{k: kindContains, val: p.Containment}, nil
+	case *policyv1alpha1.MetricMatcher_Containment:
+		return spec{k: kindContains, val: p.Containment}, nil
+	case *policyv1alpha1.TraceMatcher_Containment:
+		return spec{k: kindContains, val: p.Containment}, nil
 
 	default:
 		return spec{}, fmt.Errorf("%w: got %T", ErrMissingPredicate, predicate)
@@ -200,7 +200,7 @@ func normalize(predicate any) (spec, error) {
 }
 
 func numericPredicate(expected *policyv1alpha1.NumericValue, accept func(cmp int) bool) (Predicate, error) {
-	if expected.GetValue() == nil {
+	if expected.GetKind() == nil {
 		return nil, ErrMissingPredicate
 	}
 	return func(val any, exists bool) bool {
@@ -219,36 +219,27 @@ func present(val any, exists bool) bool {
 	return exists || val != nil
 }
 
-// PathStep is one pre-parsed segment of an AttributePath. Segments that parse
-// as non-negative integers double as slice indices, resolved at compile time so
-// the hot path never calls strconv.
+// PathStep is one segment of an AttributePath.
 type PathStep struct {
-	Key     string
-	Index   int
-	IsIndex bool
+	Key string
 }
 
 // CompilePath pre-parses an AttributePath into PathSteps. The kind label names
 // the attribute source (for example "log" or "datapoint") in error messages.
 func CompilePath(attrPath *policyv1alpha1.AttributePath, kind string) ([]PathStep, error) {
-	if attrPath == nil || len(attrPath.GetPath()) == 0 {
+	if attrPath == nil || len(attrPath.GetSegments()) == 0 {
 		return nil, fmt.Errorf("%s attribute path cannot be empty", kind)
 	}
-	segments := attrPath.GetPath()
+	segments := attrPath.GetSegments()
 	steps := make([]PathStep, len(segments))
 	for i, seg := range segments {
-		if idx, err := strconv.Atoi(seg); err == nil && idx >= 0 {
-			steps[i] = PathStep{Key: seg, Index: idx, IsIndex: true}
-			continue
-		}
 		steps[i] = PathStep{Key: seg}
 	}
 	return steps, nil
 }
 
 // EvalPath walks the compiled path through an attribute map, descending into
-// nested maps and slices, and returns the leaf value converted to a plain Go
-// value.
+// nested maps, and returns the leaf value converted to a plain Go value.
 func EvalPath(attrs pcommon.Map, steps []PathStep) (any, bool) {
 	if len(steps) == 0 || attrs == (pcommon.Map{}) {
 		return nil, false
@@ -258,23 +249,188 @@ func EvalPath(attrs pcommon.Map, steps []PathStep) (any, bool) {
 		return nil, false
 	}
 	for _, step := range steps[1:] {
-		switch val.Type() {
-		case pcommon.ValueTypeMap:
-			child, found := val.Map().Get(step.Key)
-			if !found {
-				return nil, false
-			}
-			val = child
-		case pcommon.ValueTypeSlice:
-			if !step.IsIndex || step.Index >= val.Slice().Len() {
-				return nil, false
-			}
-			val = val.Slice().At(step.Index)
-		default:
+		if val.Type() != pcommon.ValueTypeMap {
 			return nil, false
 		}
+		child, found := val.Map().Get(step.Key)
+		if !found {
+			return nil, false
+		}
+		val = child
 	}
 	return ValueToAny(val), true
+}
+
+// CompilePathSetter pre-compiles an AttributePath and Value into a closure that
+// inserts or overwrites the target attribute in a pcommon.Map.
+//
+// Intermediate maps are created automatically when missing. When upsert is
+// false and either the leaf key or an intermediate non-map key already exists,
+// the returned closure leaves the map unmodified and returns false.
+func CompilePathSetter(attrPath *policyv1alpha1.AttributePath, kind string, val *policyv1alpha1.Value, upsert bool) (func(pcommon.Map) bool, error) {
+	steps, err := CompilePath(attrPath, kind)
+	if err != nil {
+		return nil, err
+	}
+	putLeaf, err := compileMapValuePutter(val)
+	if err != nil {
+		return nil, err
+	}
+
+	leafKey := steps[len(steps)-1].Key
+	if len(steps) == 1 {
+		return func(attrs pcommon.Map) bool {
+			if attrs == (pcommon.Map{}) {
+				return false
+			}
+			if !upsert {
+				if _, exists := attrs.Get(leafKey); exists {
+					return false
+				}
+			}
+			putLeaf(attrs, leafKey)
+			return true
+		}, nil
+	}
+
+	prefix := steps[:len(steps)-1]
+	return func(attrs pcommon.Map) bool {
+		if attrs == (pcommon.Map{}) {
+			return false
+		}
+		parent, ok := resolveParentMap(attrs, prefix, upsert)
+		if !ok {
+			return false
+		}
+		if !upsert {
+			if _, exists := parent.Get(leafKey); exists {
+				return false
+			}
+		}
+		putLeaf(parent, leafKey)
+		return true
+	}, nil
+}
+
+// resolveParentMap walks prefix segments in attrs, creating missing
+// intermediate maps on the fly. Because an existing key (intermediate or leaf)
+// can only be reached if every ancestor map in prefix already existed, single-
+// pass map creation never leaves behind partial intermediate maps when !upsert
+// returns false.
+func resolveParentMap(attrs pcommon.Map, prefix []PathStep, upsert bool) (pcommon.Map, bool) {
+	curr := attrs
+	for _, step := range prefix {
+		child, exists := curr.Get(step.Key)
+		if !exists {
+			curr = curr.PutEmptyMap(step.Key)
+			continue
+		}
+		if child.Type() == pcommon.ValueTypeMap {
+			curr = child.Map()
+			continue
+		}
+		if !upsert {
+			return pcommon.Map{}, false
+		}
+		curr = curr.PutEmptyMap(step.Key)
+	}
+	return curr, true
+}
+
+func compileMapValuePutter(val *policyv1alpha1.Value) (func(pcommon.Map, string), error) {
+	if val == nil {
+		return nil, ErrMissingValue
+	}
+	switch v := val.GetKind().(type) {
+	case *policyv1alpha1.Value_StringValue:
+		s := v.StringValue
+		return func(m pcommon.Map, key string) { m.PutStr(key, s) }, nil
+	case *policyv1alpha1.Value_IntValue:
+		n := v.IntValue
+		return func(m pcommon.Map, key string) { m.PutInt(key, n) }, nil
+	case *policyv1alpha1.Value_DoubleValue:
+		d := v.DoubleValue
+		return func(m pcommon.Map, key string) { m.PutDouble(key, d) }, nil
+	case *policyv1alpha1.Value_BoolValue:
+		b := v.BoolValue
+		return func(m pcommon.Map, key string) { m.PutBool(key, b) }, nil
+	case *policyv1alpha1.Value_BytesValue:
+		raw := bytes.Clone(v.BytesValue)
+		return func(m pcommon.Map, key string) { m.PutEmptyBytes(key).FromRaw(raw) }, nil
+	default:
+		return nil, ErrMissingValue
+	}
+}
+
+// CompileValueSetter validates a Value proto and returns a closure that writes
+// the typed scalar into a destination pcommon.Value with zero hot-path type
+// switching.
+func CompileValueSetter(val *policyv1alpha1.Value) (func(pcommon.Value), error) {
+	if val == nil {
+		return nil, ErrMissingValue
+	}
+	switch v := val.GetKind().(type) {
+	case *policyv1alpha1.Value_StringValue:
+		s := v.StringValue
+		return func(dest pcommon.Value) { dest.SetStr(s) }, nil
+	case *policyv1alpha1.Value_IntValue:
+		n := v.IntValue
+		return func(dest pcommon.Value) { dest.SetInt(n) }, nil
+	case *policyv1alpha1.Value_DoubleValue:
+		d := v.DoubleValue
+		return func(dest pcommon.Value) { dest.SetDouble(d) }, nil
+	case *policyv1alpha1.Value_BoolValue:
+		b := v.BoolValue
+		return func(dest pcommon.Value) { dest.SetBool(b) }, nil
+	case *policyv1alpha1.Value_BytesValue:
+		raw := bytes.Clone(v.BytesValue)
+		return func(dest pcommon.Value) { dest.SetEmptyBytes().FromRaw(raw) }, nil
+	default:
+		return nil, ErrMissingValue
+	}
+}
+
+// CompilePathRemover pre-compiles an AttributePath into a closure that deletes
+// the target key from a pcommon.Map without creating intermediate maps.
+// It removes all occurrences of the target key (handling duplicate keys) and
+// returns true iff the target key existed and was removed.
+func CompilePathRemover(attrPath *policyv1alpha1.AttributePath, kind string) (func(pcommon.Map) bool, error) {
+	steps, err := CompilePath(attrPath, kind)
+	if err != nil {
+		return nil, err
+	}
+	prefix, leafKey := steps[:len(steps)-1], steps[len(steps)-1].Key
+	isLeaf := func(k string, _ pcommon.Value) bool { return k == leafKey }
+	return func(attrs pcommon.Map) bool {
+		parent, ok := findExistingParentMap(attrs, prefix)
+		if !ok {
+			return false
+		}
+		if _, exists := parent.Get(leafKey); !exists {
+			return false
+		}
+		parent.RemoveIf(isLeaf)
+		return true
+	}, nil
+}
+
+// findExistingParentMap walks attrs along the provided path prefix without
+// mutating or creating intermediate maps. It returns the leaf's parent map and
+// true if all prefix steps exist and resolve to maps, or (pcommon.Map{}, false)
+// if any ancestor is missing or not a map.
+func findExistingParentMap(attrs pcommon.Map, prefix []PathStep) (pcommon.Map, bool) {
+	if attrs == (pcommon.Map{}) {
+		return pcommon.Map{}, false
+	}
+	curr := attrs
+	for _, step := range prefix {
+		child, exists := curr.Get(step.Key)
+		if !exists || child.Type() != pcommon.ValueTypeMap {
+			return pcommon.Map{}, false
+		}
+		curr = child.Map()
+	}
+	return curr, true
 }
 
 // ValueToAny converts a pcommon.Value into the plain Go value that the
@@ -309,7 +465,7 @@ func ValueToAny(v pcommon.Value) any {
 // Equals reports whether the extracted value equals the policy's expected
 // Value, comparing within the type selected by the expected value's oneof.
 func valueEquals(val any, expected *policyv1alpha1.Value) bool {
-	switch exp := expected.GetValue().(type) {
+	switch exp := expected.GetKind().(type) {
 	case *policyv1alpha1.Value_StringValue:
 		s, ok := asString(val)
 		return ok && s == exp.StringValue
@@ -335,22 +491,54 @@ func valueEquals(val any, expected *policyv1alpha1.Value) bool {
 	}
 }
 
-// Regex reports whether the extracted value matches re. Non-string values are
-// rendered with their canonical string form first.
-func valueMatchesRegex(val any, re *regexp.Regexp) bool {
-	if s, ok := asString(val); ok {
-		return re.MatchString(s)
-	}
-	switch v := val.(type) {
-	case int64:
-		return re.MatchString(strconv.FormatInt(v, 10))
-	case int:
-		return re.MatchString(strconv.Itoa(v))
-	case bool:
-		return re.MatchString(strconv.FormatBool(v))
-	default:
+// Glob reports whether the extracted value matches the shell-style glob
+// pattern (`*` matches zero or more characters, `?` matches any single
+// character). The match is anchored to the full string, is case-sensitive, and
+// applies strictly to string-like values.
+func valueMatchesGlob(val any, pattern string) bool {
+	s, ok := asString(val)
+	if !ok {
 		return false
 	}
+	return globMatch(pattern, s)
+}
+
+func globMatch(pattern, s string) bool {
+	pi, ti := 0, 0
+	starIdx := -1
+	matchIdx := 0
+
+	for ti < len(s) {
+		if pi < len(pattern) && pattern[pi] == '*' {
+			starIdx = pi
+			matchIdx = ti
+			pi++
+			continue
+		}
+		if pi < len(pattern) {
+			pr, pw := utf8.DecodeRuneInString(pattern[pi:])
+			_, tw := utf8.DecodeRuneInString(s[ti:])
+			if pr == '?' || pattern[pi:pi+pw] == s[ti:ti+tw] {
+				pi += pw
+				ti += tw
+				continue
+			}
+		}
+		if starIdx != -1 {
+			pi = starIdx + 1
+			_, tw := utf8.DecodeRuneInString(s[matchIdx:])
+			matchIdx += tw
+			ti = matchIdx
+			continue
+		}
+		return false
+	}
+
+	for pi < len(pattern) && pattern[pi] == '*' {
+		pi++
+	}
+
+	return pi == len(pattern)
 }
 
 // Contains reports containment: membership for slice values, substring for
@@ -365,7 +553,7 @@ func valueContains(val any, expected *policyv1alpha1.Value) bool {
 		return false
 	}
 
-	switch exp := expected.GetValue().(type) {
+	switch exp := expected.GetKind().(type) {
 	case *policyv1alpha1.Value_StringValue:
 		s, ok := asString(val)
 		return ok && strings.Contains(s, exp.StringValue)
@@ -387,7 +575,7 @@ func compareNumeric(val any, expected *policyv1alpha1.NumericValue) (int, bool) 
 		return 0, false
 	}
 
-	switch exp := expected.GetValue().(type) {
+	switch exp := expected.GetKind().(type) {
 	case *policyv1alpha1.NumericValue_IntValue:
 		if isInt {
 			return compare(intVal, exp.IntValue), true

@@ -42,6 +42,7 @@ import (
 	"go.opentelemetry.io/collector/confmap/provider/envprovider"
 	"go.opentelemetry.io/collector/confmap/provider/fileprovider"
 	"go.opentelemetry.io/collector/confmap/provider/yamlprovider"
+	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/exporter"
 	"go.opentelemetry.io/collector/exporter/nopexporter"
 	"go.opentelemetry.io/collector/exporter/otlpexporter"
@@ -456,10 +457,58 @@ func newStubExporterFactory(typeStr string) exporter.Factory {
 	)
 }
 
+type stubReceiver struct {
+	component.StartFunc
+	component.ShutdownFunc
+}
+
+func newStubReceiverFactory(typeStr string) receiver.Factory {
+	return receiver.NewFactory(
+		component.MustNewType(typeStr),
+		func() component.Config { return &stubComponentConfig{} },
+		receiver.WithTraces(func(context.Context, receiver.Settings, component.Config, consumer.Traces) (receiver.Traces, error) {
+			return &stubReceiver{}, nil
+		}, component.StabilityLevelAlpha),
+		receiver.WithMetrics(func(context.Context, receiver.Settings, component.Config, consumer.Metrics) (receiver.Metrics, error) {
+			return &stubReceiver{}, nil
+		}, component.StabilityLevelAlpha),
+		receiver.WithLogs(func(context.Context, receiver.Settings, component.Config, consumer.Logs) (receiver.Logs, error) {
+			return &stubReceiver{}, nil
+		}, component.StabilityLevelAlpha),
+	)
+}
+
+type stubTracesProcessor struct {
+	component.StartFunc
+	component.ShutdownFunc
+	consumer.Traces
+}
+
+type stubMetricsProcessor struct {
+	component.StartFunc
+	component.ShutdownFunc
+	consumer.Metrics
+}
+
+type stubLogsProcessor struct {
+	component.StartFunc
+	component.ShutdownFunc
+	consumer.Logs
+}
+
 func newStubProcessorFactory(typeStr string) processor.Factory {
 	return processor.NewFactory(
 		component.MustNewType(typeStr),
 		func() component.Config { return &stubComponentConfig{} },
+		processor.WithTraces(func(_ context.Context, _ processor.Settings, _ component.Config, next consumer.Traces) (processor.Traces, error) {
+			return &stubTracesProcessor{Traces: next}, nil
+		}, component.StabilityLevelAlpha),
+		processor.WithMetrics(func(_ context.Context, _ processor.Settings, _ component.Config, next consumer.Metrics) (processor.Metrics, error) {
+			return &stubMetricsProcessor{Metrics: next}, nil
+		}, component.StabilityLevelAlpha),
+		processor.WithLogs(func(_ context.Context, _ processor.Settings, _ component.Config, next consumer.Logs) (processor.Logs, error) {
+			return &stubLogsProcessor{Logs: next}, nil
+		}, component.StabilityLevelAlpha),
 	)
 }
 
@@ -478,6 +527,7 @@ func testCollectorFactories() (otelcol.Factories, error) {
 
 	factories.Receivers, err = otelcol.MakeFactoryMap[receiver.Factory](
 		otlpreceiver.NewFactory(),
+		newStubReceiverFactory("nop"),
 	)
 	if err != nil {
 		return otelcol.Factories{}, err
@@ -922,12 +972,12 @@ func TestPolicyHotReload(t *testing.T) {
   "type": "log_filter",
   "id": "drop-initial-policy",
   "action": "ACTION_DROP",
-  "matches": [
+  "matchers": [
     {
       "target": {
         "record_field": "LOG_RECORD_FIELD_BODY"
       },
-      "equals": {
+      "equality": {
         "string_value": "drop-initial"
       }
     }
@@ -993,12 +1043,12 @@ func TestPolicyHotReload(t *testing.T) {
   "type": "log_filter",
   "id": "drop-hot-reload-policy",
   "action": "ACTION_DROP",
-  "matches": [
+  "matchers": [
     {
       "target": {
         "record_field": "LOG_RECORD_FIELD_BODY"
       },
-      "equals": {
+      "equality": {
         "string_value": "drop-after-reload"
       }
     }
@@ -1054,12 +1104,12 @@ func TestUnsupportedPolicyEmitsErrorEvent(t *testing.T) {
   "type": "log_filter",
   "id": %q,
   "action": "ACTION_DROP",
-  "matches": [
+  "matchers": [
     {
       "target": {
         "record_field": "LOG_RECORD_FIELD_BODY"
       },
-      "equals": {
+      "equality": {
         "string_value": "drop-me"
       }
     }
@@ -1297,18 +1347,13 @@ func TestPolicySetActiveSelfMetric(t *testing.T) {
 	h.col.shutdown(t)
 
 	if !found {
-		t.Fatalf("gcp.policy.set.active was not reported on the self metrics pipeline.\ncollector logs:\n%s", h.col.logs())
+		t.Fatalf("%s was not reported on the self metrics pipeline.\ncollector logs:\n%s", googlecontrolplaneextension.MetricPolicySetActive, h.col.logs())
 	}
-	if value != 1 {
-		t.Errorf("gcp.policy.set.active = %d, want 1", value)
+	if value <= 0 {
+		t.Errorf("%s = %d, want positive integer revision (not -1 or 0)", googlecontrolplaneextension.MetricPolicySetActive, value)
 	}
-	// File sourced policies carry a content hash revision but no policy set
-	// resource name, so the ID label is present but empty.
-	if attrs["gcp.policy.set.revision.id"] == "" {
-		t.Errorf("gcp.policy.set.revision.id is empty, want the file policy set revision; attributes: %v", attrs)
-	}
-	if id, ok := attrs["gcp.policy.set.id"]; !ok || id != "" {
-		t.Errorf("gcp.policy.set.id = %q (present=%v), want present and empty; attributes: %v", id, ok, attrs)
+	if id, ok := attrs[googlecontrolplaneextension.AttrPolicySetID]; !ok || id != "" {
+		t.Errorf("%s = %q (present=%v), want present and empty; attributes: %v", googlecontrolplaneextension.AttrPolicySetID, id, ok, attrs)
 	}
 }
 
@@ -1346,7 +1391,7 @@ func latestPolicySetActive(batches []pmetric.Metrics) (int64, map[string]string,
 				ms := sms.At(j).Metrics()
 				for k := 0; k < ms.Len(); k++ {
 					m := ms.At(k)
-					if m.Name() != "gcp.policy.set.active" || m.Type() != pmetric.MetricTypeGauge {
+					if m.Name() != googlecontrolplaneextension.MetricPolicySetActive || m.Type() != pmetric.MetricTypeGauge {
 						continue
 					}
 					dps := m.Gauge().DataPoints()

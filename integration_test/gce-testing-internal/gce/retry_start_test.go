@@ -17,6 +17,10 @@ package gce
 import (
 	"errors"
 	"testing"
+
+	"google.golang.org/api/googleapi"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestShouldRetryStartVM(t *testing.T) {
@@ -58,6 +62,46 @@ func TestShouldRetryStartVM(t *testing.T) {
 		{
 			name:     "non-retryable error",
 			err:      errors.New("instance test-vm not found in zone us-central1-a"),
+			expected: false,
+		},
+		{
+			name:     "googleapi 403 quota error",
+			err:      &googleapi.Error{Code: 403, Message: "Quota exceeded"},
+			expected: true,
+		},
+		{
+			name:     "googleapi 429 rate limit error",
+			err:      &googleapi.Error{Code: 429, Message: "Rate limit exceeded"},
+			expected: true,
+		},
+		{
+			name:     "googleapi 503 service unavailable",
+			err:      &googleapi.Error{Code: 503, Message: "Service unavailable"},
+			expected: true,
+		},
+		{
+			name:     "googleapi 504 gateway timeout",
+			err:      &googleapi.Error{Code: 504, Message: "Gateway timeout"},
+			expected: true,
+		},
+		{
+			name:     "googleapi 400 bad request",
+			err:      &googleapi.Error{Code: 400, Message: "Bad request"},
+			expected: false,
+		},
+		{
+			name:     "grpc status unavailable",
+			err:      status.Error(codes.Unavailable, "service unavailable"),
+			expected: true,
+		},
+		{
+			name:     "grpc status resource exhausted",
+			err:      status.Error(codes.ResourceExhausted, "resource exhausted"),
+			expected: true,
+		},
+		{
+			name:     "grpc status invalid argument",
+			err:      status.Error(codes.InvalidArgument, "invalid argument"),
 			expected: false,
 		},
 	}

@@ -2,14 +2,14 @@
   "type": "metric_filter",
   "id": "drop-ephemeral-env-datapoints",
   "action": "ACTION_DROP",
-  "matches": [
+  "matchers": [
     {
       "target": {
-        "datapoint_attribute": {
-          "path": ["env"]
+        "data_point_attribute_path": {
+          "segments": ["env"]
         }
       },
-      "equals": {
+      "equality": {
         "string_value": "ephemeral"
       }
     }

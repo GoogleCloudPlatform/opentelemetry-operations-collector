@@ -134,6 +134,20 @@ func PolicyTypeForProto(name protoreflect.FullName) (string, bool) {
 	return policyType, ok
 }
 
+// policyClassProvider is implemented by PolicyDrivers (such as GenericDriver
+// and ProtoDriver) that can report the PolicyClass of the policies they load
+// before a Policy instance has been constructed.
+type policyClassProvider interface {
+	PolicyClass() PolicyClass
+}
+
+func driverPolicyClass(driver PolicyDriver) PolicyClass {
+	if cp, ok := driver.(policyClassProvider); ok {
+		return cp.PolicyClass()
+	}
+	return ""
+}
+
 // LoadPolicy will attempt to load a policy given a policy type and raw policy config.
 // It checks the registry for a PolicyDriver for the given policyType and attempts to
 // load a Policy object using the raw policy config provided.
@@ -142,18 +156,30 @@ func PolicyTypeForProto(name protoreflect.FullName) (string, bool) {
 // it selects the driver in the registry and is stripped so component policies
 // (which use strict struct unmarshaling) do not reject it as an unmapped field.
 func LoadPolicy(policyType string, rawPolicy map[string]any) (Policy, error) {
+	p, _, err := loadPolicyWithClass(policyType, rawPolicy)
+	return p, err
+}
+
+func loadPolicyWithClass(policyType string, rawPolicy map[string]any) (Policy, PolicyClass, error) {
 	driver, ok := policyRegistry[policyType]
 	if !ok {
-		return nil, fmt.Errorf("%w: %s", ErrPolicyTypeNotFound, policyType)
+		return nil, "", fmt.Errorf("%w: %s", ErrPolicyTypeNotFound, policyType)
 	}
+	class := driverPolicyClass(driver)
 	p, err := driver.LoadPolicy(stripTypeKey(rawPolicy))
 	if err != nil {
-		return nil, fmt.Errorf("%w %s: %w", ErrPolicyFailedToLoad, policyType, err)
+		if errors.Is(err, ErrPolicyFailedValidation) {
+			return nil, class, fmt.Errorf("%s: %w", policyType, err)
+		}
+		return nil, class, fmt.Errorf("%w %s: %w", ErrPolicyFailedToLoad, policyType, err)
+	}
+	if p != nil && p.PolicyClass() != "" {
+		class = p.PolicyClass()
 	}
 	if err := p.Validate(); err != nil {
-		return nil, fmt.Errorf("%w for policy %s: %w", ErrPolicyFailedValidation, p.PolicyName(), err)
+		return nil, class, fmt.Errorf("%w for policy %s: %w", ErrPolicyFailedValidation, p.PolicyName(), err)
 	}
-	return p, nil
+	return p, class, nil
 }
 
 // LoadPolicyFromProto loads a policy that arrived as a proto, routing it to a
@@ -166,6 +192,14 @@ func LoadPolicy(policyType string, rawPolicy map[string]any) (Policy, error) {
 // proto is free to define a field named "type" without colliding with the
 // routing envelope that authored config relies on.
 func LoadPolicyFromProto(msg proto.Message) (Policy, error) {
+	p, _, err := loadPolicyFromProtoWithClass(msg)
+	return p, err
+}
+
+func loadPolicyFromProtoWithClass(msg proto.Message) (Policy, PolicyClass, error) {
+	if msg == nil {
+		return nil, "", fmt.Errorf("%w: nil proto message", ErrPolicyFailedToLoad)
+	}
 	protoName := msg.ProtoReflect().Descriptor().FullName()
 
 	policyType, ok := PolicyTypeForProto(protoName)
@@ -173,7 +207,7 @@ func LoadPolicyFromProto(msg proto.Message) (Policy, error) {
 		// Either the control plane sent a policy this collector was not built
 		// with, or a driver exists but never declared this proto. The message
 		// name is what tells those apart, so it is always reported.
-		return nil, fmt.Errorf("%w: no driver is registered for proto %q", ErrPolicyTypeNotFound, protoName)
+		return nil, "", fmt.Errorf("%w: no driver is registered for proto %q", ErrPolicyTypeNotFound, protoName)
 	}
 
 	// A type present in policyProtoRegistry was put there by
@@ -181,17 +215,24 @@ func LoadPolicyFromProto(msg proto.Message) (Policy, error) {
 	// fails if the two registries have drifted.
 	driver, ok := policyRegistry[policyType].(ProtoPolicyDriver)
 	if !ok {
-		return nil, fmt.Errorf("%w: %s is routed from proto %q but does not load from one", ErrPolicyTypeNotFound, policyType, protoName)
+		return nil, "", fmt.Errorf("%w: %s is routed from proto %q but does not load from one", ErrPolicyTypeNotFound, policyType, protoName)
 	}
 
+	class := driverPolicyClass(driver)
 	p, err := driver.LoadPolicyProto(msg)
 	if err != nil {
-		return nil, fmt.Errorf("%w %s: %w", ErrPolicyFailedToLoad, policyType, err)
+		if errors.Is(err, ErrPolicyFailedValidation) {
+			return nil, class, fmt.Errorf("%s: %w", policyType, err)
+		}
+		return nil, class, fmt.Errorf("%w %s: %w", ErrPolicyFailedToLoad, policyType, err)
+	}
+	if p != nil && p.PolicyClass() != "" {
+		class = p.PolicyClass()
 	}
 	if err := p.Validate(); err != nil {
-		return nil, fmt.Errorf("%w for policy %s: %w", ErrPolicyFailedValidation, p.PolicyName(), err)
+		return nil, class, fmt.Errorf("%w for policy %s: %w", ErrPolicyFailedValidation, p.PolicyName(), err)
 	}
-	return p, nil
+	return p, class, nil
 }
 
 // stripTypeKey returns a copy of raw without the "type" routing envelope key,

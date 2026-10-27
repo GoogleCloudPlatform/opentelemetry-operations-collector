@@ -1,0 +1,72 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package google.telemetry.policy.v1alpha1;
+
+import "policy/v1alpha1/common_policy_types.proto";
+
+option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1;policyv1alpha1";
+
+// Describes a probabilistic trace sampling policy backed by the W3C
+// TraceState Consistent Probability Sampling specification (OTEP 235) in
+// `equalizing` mode.
+//
+// Evaluation & Precedence Semantics:
+// - Default Disposition & Fail-Open: Spans pass through unsampled by default
+//   (default allow) when no matching valid TraceSamplingPolicy is configured.
+//   A policy with an empty `id`, a `sampling_percent` outside the valid
+//   range (0.0, 100.0] (including 0.0, negative values, > 100.0, NaN, or Inf),
+//   or any malformed `TraceMatcher` in `matchers` is invalid and ignored
+//   (fail-open).
+// - Conditional & Unconditional Matching: If `matchers` is empty, the policy
+//   matches all spans unconditionally (setting a global baseline sampling
+//   rate). If `matchers` is non-empty, all matchers are ANDed together and the
+//   policy only applies to spans for which every matcher evaluates to true.
+// - Stateless Span-Level Evaluation & Partial Traces: Spans are evaluated
+//   independently without trace reassembly using the randomness value (`ot=rv`)
+//   in W3C `tracestate` (or the lower 56 bits of `trace_id` when `ot=rv` is
+//   absent). When `matchers` is empty or only matches trace-constant fields
+//   (such as resource attributes when all spans in a trace share the same
+//   Resource, or `SPAN_RECORD_FIELD_TRACE_ID`), all spans in a trace receive
+//   the same deterministic sampling decision, keeping or dropping entire traces
+//   intact. When `matchers` targets span-level fields (`SPAN_RECORD_FIELD_NAME`,
+//   `SPAN_RECORD_FIELD_KIND`, `SPAN_RECORD_FIELD_SPAN_ID`,
+//   `SPAN_RECORD_FIELD_PARENT_SPAN_ID`, span attributes, or instrumentation
+//   scope fields/attributes when scopes vary across a trace), matching is
+//   evaluated per span and may sample only a subset of spans within a trace,
+//   producing partial traces with orphaned child spans whose `parent_span_id`
+//   references a dropped span.
+// - Consistent Threshold Evaluation: Sampling percentage `p` in (0.0, 100.0]
+//   is evaluated in `equalizing` mode per the W3C TraceState Probability
+//   Sampling specification and updates `ot=th` in `tracestate`.
+// - Idempotent Multi-Policy & Multi-Hop Precedence: When multiple
+//   TraceSamplingPolicy instances match a span (on the same collector or across
+//   multiple hops), the effective sampling rate for that span is `min(p_i)`
+//   across all matching policies.
+message TraceSamplingPolicy {
+  // Unique identifier for the policy within its configuration scope.
+  string id = 1;
+
+  // Probabilistic sampling percentage in the range (0.0, 100.0]. Required.
+  double sampling_percent = 2;
+
+  // Optional conditions evaluated against incoming spans.
+  // When empty, this sampling policy applies unconditionally to all spans.
+  // When non-empty, all matchers in this list are ANDed together: all
+  // conditions must evaluate to true for this sampling policy to apply to the
+  // span.
+  repeated TraceMatcher matchers = 3;
+}

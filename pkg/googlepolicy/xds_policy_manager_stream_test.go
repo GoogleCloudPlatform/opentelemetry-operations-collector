@@ -16,10 +16,12 @@ package googlepolicy
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net"
 	"net/url"
 	"sort"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -27,7 +29,10 @@ import (
 	discoveryv3 "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
+	"go.uber.org/zap/zaptest/observer"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -127,7 +132,7 @@ func startFakeADSServer(t *testing.T, srv *fakeADSServer) grpc.DialOption {
 // It is spelled out rather than derived with xdstpResourceName, so a manager
 // that stops setting the name, or builds it wrong, cannot pass by agreeing
 // with itself.
-const testResourceName = "xdstp://traffic-director-" + defaultRegion + ".xds.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector/projects/my-project/fleets/fleet-1"
+const testResourceName = "xdstp://telemetry-director." + defaultRegion + ".xds.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector/projects/my-project/fleets/fleet-1/collectors/default"
 
 // newTestManager builds a manager wired to the fake server, with a negligible
 // backoff so reconnect tests stay fast.
@@ -154,11 +159,12 @@ func newTestManager(t *testing.T, dialOpt grpc.DialOption) *xdsPolicyManager {
 
 }
 
-// policyResource builds a DiscoveryResponse resource carrying a single policy.
+// policyResource builds a DiscoveryResponse resource carrying a single policy
+// and a canonical PolicySet revision.
 //
 // The body is a bare Struct with no policy type in it: routing is by message
 // identity, and dummyPolicyDriver is the driver registered for that message.
-func policyResource(t *testing.T, name string) *anypb.Any {
+func policyResource(t *testing.T, name, rev string) *anypb.Any {
 	t.Helper()
 
 	payload, err := structpb.NewStruct(map[string]any{
@@ -170,7 +176,8 @@ func policyResource(t *testing.T, name string) *anypb.Any {
 	require.NoError(t, err)
 
 	collectorAny, err := anypb.New(&xdsv1alpha1.TelemetryCollector{
-		Policies: []*anypb.Any{payloadAny},
+		PolicySetRevision: "projects/my-project/locations/global/policySets/fleet-1/revisions/" + rev,
+		Policies:          []*anypb.Any{payloadAny},
 	})
 	require.NoError(t, err)
 
@@ -212,7 +219,7 @@ func TestXDSPolicyManager_ReconnectsWithBackoff(t *testing.T) {
 				VersionInfo: "rev-1",
 				Nonce:       "nonce-1",
 				TypeUrl:     xdsPolicyTypeURL,
-				Resources:   []*anypb.Any{policyResource(t, "log-filter")},
+				Resources:   []*anypb.Any{policyResource(t, "log-filter", "rev-1")},
 			}); err != nil {
 				return err
 			}
@@ -335,7 +342,7 @@ func TestXDSPolicyManager_PopulatesNodeLocalityAndMetadataFromGCEMetadata(t *tes
 	}
 
 	assert.Equal(t, []string{
-		"xdstp://traffic-director-us-central1.xds.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector/projects/123456789/fleets/fleet-1",
+		"xdstp://telemetry-director.us-central1.xds.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector/projects/123456789/fleets/fleet-1/collectors/default",
 	}, req.GetResourceNames())
 	assert.Equal(t, "us-central1", req.GetNode().GetLocality().GetRegion())
 	assert.Equal(t, "us-central1-a", req.GetNode().GetLocality().GetZone())
@@ -423,7 +430,7 @@ func TestXDSPolicyManager_ACKsRevisionWithSomeUsablePolicies(t *testing.T) {
 				Nonce:       "nonce-partial",
 				TypeUrl:     xdsPolicyTypeURL,
 				Resources: []*anypb.Any{
-					policyResource(t, "log-filter"),
+					policyResource(t, "log-filter", "rev-partial"),
 					{
 						TypeUrl: "type.googleapis.com/does.not.Exist",
 						Value:   []byte("garbage"),
@@ -565,7 +572,7 @@ func TestXDSPolicyManager_IgnoresUnrelatedResourceType(t *testing.T) {
 			// Establish a policy we can watch for damage.
 			if err := stream.Send(&discoveryv3.DiscoveryResponse{
 				VersionInfo: "rev-1", Nonce: "n1", TypeUrl: xdsPolicyTypeURL,
-				Resources: []*anypb.Any{policyResource(t, "log-filter")},
+				Resources: []*anypb.Any{policyResource(t, "log-filter", "rev-1")},
 			}); err != nil {
 				return err
 			}
@@ -590,7 +597,7 @@ func TestXDSPolicyManager_IgnoresUnrelatedResourceType(t *testing.T) {
 			// arrival proves the unrelated response was handled (ignored) first.
 			if err := stream.Send(&discoveryv3.DiscoveryResponse{
 				VersionInfo: "rev-3", Nonce: "n3", TypeUrl: xdsPolicyTypeURL,
-				Resources: []*anypb.Any{policyResource(t, "trace-filter")},
+				Resources: []*anypb.Any{policyResource(t, "trace-filter", "rev-3")},
 			}); err != nil {
 				return err
 			}
@@ -642,7 +649,7 @@ func TestXDSPolicyManager_SkipsAlreadyAppliedRevision(t *testing.T) {
 			}
 			if err := stream.Send(&discoveryv3.DiscoveryResponse{
 				VersionInfo: "rev-1", Nonce: "n1", TypeUrl: xdsPolicyTypeURL,
-				Resources: []*anypb.Any{policyResource(t, "log-filter")},
+				Resources: []*anypb.Any{policyResource(t, "log-filter", "rev-1")},
 			}); err != nil {
 				return err
 			}
@@ -656,7 +663,7 @@ func TestXDSPolicyManager_SkipsAlreadyAppliedRevision(t *testing.T) {
 			// plane's identity for a revision, so this must not be applied.
 			if err := stream.Send(&discoveryv3.DiscoveryResponse{
 				VersionInfo: "rev-1", Nonce: "n2", TypeUrl: xdsPolicyTypeURL,
-				Resources: []*anypb.Any{policyResource(t, "different-policy")},
+				Resources: []*anypb.Any{policyResource(t, "different-policy", "rev-1")},
 			}); err != nil {
 				return err
 			}
@@ -705,7 +712,7 @@ func TestXDSPolicyManager_EmptyRevisionClearsPolicies(t *testing.T) {
 			}
 			if err := stream.Send(&discoveryv3.DiscoveryResponse{
 				VersionInfo: "rev-1", Nonce: "n1", TypeUrl: xdsPolicyTypeURL,
-				Resources: []*anypb.Any{policyResource(t, "log-filter")},
+				Resources: []*anypb.Any{policyResource(t, "log-filter", "rev-1")},
 			}); err != nil {
 				return err
 			}
@@ -745,6 +752,109 @@ func TestXDSPolicyManager_EmptyRevisionClearsPolicies(t *testing.T) {
 	assert.Empty(t, activePolicyNames(t), "an empty revision for our own type clears the policy set")
 }
 
+// TestXDSPolicyManager_EmptyTelemetryCollectorACKsAndReleasesStart asserts that
+// a TelemetryCollector with an unset policy_set_revision and no policies (which
+// the control plane sends when a fleet has no active rollout) is treated as a
+// valid empty revision: it is ACKed, clears any previously active policies, and
+// releases Start immediately.
+func TestXDSPolicyManager_EmptyTelemetryCollectorACKsAndReleasesStart(t *testing.T) {
+	registerDummyDriverForTest(t)
+	resetActivePolicySet(t)
+
+	emptyCollectorAny, err := anypb.New(&xdsv1alpha1.TelemetryCollector{})
+	require.NoError(t, err)
+
+	responded := make(chan *discoveryv3.DiscoveryRequest, 4)
+	firstAsserted := make(chan struct{})
+	secondAsserted := make(chan struct{})
+
+	srv := &fakeADSServer{streamOpened: make(chan struct{}, 8)}
+	srv.handlers = []func(discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error{
+		func(stream discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error {
+			if _, err := srv.recv(stream); err != nil {
+				return err
+			}
+			// Initial response is an empty TelemetryCollector (no rollout).
+			if err := stream.Send(&discoveryv3.DiscoveryResponse{
+				VersionInfo: "v1", Nonce: "n1", TypeUrl: xdsPolicyTypeURL,
+				Resources: []*anypb.Any{emptyCollectorAny},
+			}); err != nil {
+				return err
+			}
+			ack1, err := srv.recv(stream)
+			if err != nil {
+				return err
+			}
+			responded <- ack1
+			<-firstAsserted
+
+			// Next, a real policy rollout lands.
+			if err := stream.Send(&discoveryv3.DiscoveryResponse{
+				VersionInfo: "v2", Nonce: "n2", TypeUrl: xdsPolicyTypeURL,
+				Resources: []*anypb.Any{policyResource(t, "log-filter", "rev-2")},
+			}); err != nil {
+				return err
+			}
+			ack2, err := srv.recv(stream)
+			if err != nil {
+				return err
+			}
+			responded <- ack2
+			<-secondAsserted
+
+			// Finally, the fleet returns to an empty TelemetryCollector.
+			if err := stream.Send(&discoveryv3.DiscoveryResponse{
+				VersionInfo: "v3", Nonce: "n3", TypeUrl: xdsPolicyTypeURL,
+				Resources: []*anypb.Any{emptyCollectorAny},
+			}); err != nil {
+				return err
+			}
+			ack3, err := srv.recv(stream)
+			if err != nil {
+				return err
+			}
+			responded <- ack3
+
+			<-stream.Context().Done()
+			return stream.Context().Err()
+		},
+	}
+
+	m := newTestManager(t, startFakeADSServer(t, srv))
+	m.initialSyncTimeout = 5 * time.Second
+
+	start := time.Now()
+	require.NoError(t, m.Start())
+	elapsed := time.Since(start)
+	t.Cleanup(func() { require.NoError(t, m.Stop()) })
+
+	assert.Less(t, elapsed, m.initialSyncTimeout/2,
+		"Start must return as soon as the empty TelemetryCollector is ACKed")
+
+	ack1 := <-responded
+	assert.Equal(t, "v1", ack1.GetVersionInfo())
+	assert.Equal(t, "n1", ack1.GetResponseNonce())
+	assert.Nil(t, ack1.GetErrorDetail(), "an empty TelemetryCollector must be ACKed, not NACKed")
+	require.NotNil(t, ActivePolicySet())
+	assert.Equal(t, "v1", ActivePolicySet().RevisionID)
+	assert.Empty(t, activePolicyNames(t))
+	close(firstAsserted)
+
+	ack2 := <-responded
+	assert.Equal(t, "v2", ack2.GetVersionInfo())
+	assert.Nil(t, ack2.GetErrorDetail())
+	assert.Equal(t, []string{"log-filter"}, activePolicyNames(t))
+	close(secondAsserted)
+
+	ack3 := <-responded
+	assert.Equal(t, "v3", ack3.GetVersionInfo())
+	assert.Equal(t, "n3", ack3.GetResponseNonce())
+	assert.Nil(t, ack3.GetErrorDetail())
+	require.NotNil(t, ActivePolicySet())
+	assert.Equal(t, "v3", ActivePolicySet().RevisionID)
+	assert.Empty(t, activePolicyNames(t), "an empty TelemetryCollector must clear the active policy set")
+}
+
 // TestXDSPolicyManager_StartWaitsForInitialPolicySet asserts the contract the
 // provider depends on: by the time Start returns, the first revision the control
 // plane served is already active. The provider evaluates the active set
@@ -765,7 +875,7 @@ func TestXDSPolicyManager_StartWaitsForInitialPolicySet(t *testing.T) {
 			time.Sleep(50 * time.Millisecond)
 			if err := stream.Send(&discoveryv3.DiscoveryResponse{
 				VersionInfo: "rev-1", Nonce: "n1", TypeUrl: xdsPolicyTypeURL,
-				Resources: []*anypb.Any{policyResource(t, "log-filter")},
+				Resources: []*anypb.Any{policyResource(t, "log-filter", "rev-1")},
 			}); err != nil {
 				return err
 			}
@@ -936,7 +1046,7 @@ func TestXDSPolicyManager_AppliesRevisionAfterTimeout(t *testing.T) {
 			time.Sleep(300 * time.Millisecond)
 			if err := stream.Send(&discoveryv3.DiscoveryResponse{
 				VersionInfo: "rev-late", Nonce: "n1", TypeUrl: xdsPolicyTypeURL,
-				Resources: []*anypb.Any{policyResource(t, "late-filter")},
+				Resources: []*anypb.Any{policyResource(t, "late-filter", "rev-late")},
 			}); err != nil {
 				return err
 			}
@@ -1063,3 +1173,152 @@ func TestXDSPolicyManager_RestartableAfterTerminalAuthError(t *testing.T) {
 
 	assert.NoError(t, m.Start(), "the manager must be startable after it gave up on remote policies")
 }
+
+// TestXDSPolicyManager_DebugProtoJSONAndAppliedPolicyLogging verifies that at
+// DEBUG level every outgoing DiscoveryRequest (initial, ACK, NACK), incoming
+// DiscoveryResponse, and decoded TelemetryCollector is logged as single-line
+// protojson, and that applying a policy set emits an INFO log entry.
+func TestXDSPolicyManager_DebugProtoJSONAndAppliedPolicyLogging(t *testing.T) {
+	registerDummyDriverForTest(t)
+	resetActivePolicySet(t)
+
+	nackReceived := make(chan *discoveryv3.DiscoveryRequest, 1)
+
+	srv := &fakeADSServer{streamOpened: make(chan struct{}, 8)}
+	srv.handlers = []func(discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error{
+		func(stream discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error {
+			// 1. Receive initial DiscoveryRequest.
+			if _, err := srv.recv(stream); err != nil {
+				return err
+			}
+			// 2. Send a valid DiscoveryResponse (rev-1) and receive ACK.
+			if err := stream.Send(&discoveryv3.DiscoveryResponse{
+				VersionInfo: "rev-1",
+				Nonce:       "nonce-1",
+				TypeUrl:     xdsPolicyTypeURL,
+				Resources:   []*anypb.Any{policyResource(t, "log-filter", "rev-1")},
+			}); err != nil {
+				return err
+			}
+			if _, err := srv.recv(stream); err != nil {
+				return err
+			}
+			// 3. Send a DiscoveryResponse with an undecodable Any (rev-bad) and receive NACK.
+			if err := stream.Send(&discoveryv3.DiscoveryResponse{
+				VersionInfo: "rev-bad",
+				Nonce:       "nonce-2",
+				TypeUrl:     xdsPolicyTypeURL,
+				Resources: []*anypb.Any{{
+					TypeUrl: "type.googleapis.com/does.not.Exist",
+					Value:   []byte("garbage"),
+				}},
+			}); err != nil {
+				return err
+			}
+			nack, err := srv.recv(stream)
+			if err != nil {
+				return err
+			}
+			nackReceived <- nack
+			<-stream.Context().Done()
+			return stream.Context().Err()
+		},
+	}
+
+	core, logs := observer.New(zapcore.DebugLevel)
+	m := newTestManager(t, startFakeADSServer(t, srv))
+	m.logger = zap.New(core)
+
+	require.NoError(t, m.Start())
+	t.Cleanup(func() { require.NoError(t, m.Stop()) })
+
+	select {
+	case nack := <-nackReceived:
+		require.NotNil(t, nack.GetErrorDetail())
+	case <-time.After(10 * time.Second):
+		t.Fatal("timed out waiting for NACK")
+	}
+	require.NoError(t, m.Stop())
+
+	reqLogs := logs.FilterMessage("xDS DiscoveryRequest sent").All()
+	require.Len(t, reqLogs, 3, "expected 3 outgoing DiscoveryRequest debug logs (initial, ack, nack)")
+
+	parseJSONMap := func(t *testing.T, raw string) map[string]any {
+		t.Helper()
+		assert.False(t, strings.Contains(raw, "\n"), "protojson log field must be single-line")
+		var m map[string]any
+		require.NoError(t, json.Unmarshal([]byte(raw), &m))
+		return m
+	}
+
+	// Initial request log.
+	assert.Equal(t, zapcore.DebugLevel, reqLogs[0].Level)
+	assert.Equal(t, "initial", reqLogs[0].ContextMap()["kind"])
+	assert.Equal(t, "", reqLogs[0].ContextMap()["version"])
+	initialJSON, _ := reqLogs[0].ContextMap()["discovery_request"].(string)
+	initialMap := parseJSONMap(t, initialJSON)
+	assert.Equal(t, "", initialMap["version_info"])
+	nodeMap, _ := initialMap["node"].(map[string]any)
+	assert.Equal(t, "collector-abc", nodeMap["id"])
+	assert.Equal(t, "fleet-1", nodeMap["cluster"])
+	metaMap, _ := nodeMap["metadata"].(map[string]any)
+	assert.Equal(t, "my-project", metaMap["gcp.project_id"])
+
+	// ACK request log.
+	assert.Equal(t, zapcore.DebugLevel, reqLogs[1].Level)
+	assert.Equal(t, "ack", reqLogs[1].ContextMap()["kind"])
+	assert.Equal(t, "rev-1", reqLogs[1].ContextMap()["version"])
+	assert.Equal(t, "nonce-1", reqLogs[1].ContextMap()["response_nonce"])
+	ackJSON, _ := reqLogs[1].ContextMap()["discovery_request"].(string)
+	ackMap := parseJSONMap(t, ackJSON)
+	assert.Equal(t, "rev-1", ackMap["version_info"])
+	assert.Equal(t, "nonce-1", ackMap["response_nonce"])
+
+	// NACK request log.
+	assert.Equal(t, zapcore.DebugLevel, reqLogs[2].Level)
+	assert.Equal(t, "nack", reqLogs[2].ContextMap()["kind"])
+	assert.Equal(t, "rev-1", reqLogs[2].ContextMap()["version"])
+	assert.Equal(t, "nonce-2", reqLogs[2].ContextMap()["response_nonce"])
+	nackJSON, _ := reqLogs[2].ContextMap()["discovery_request"].(string)
+	nackMap := parseJSONMap(t, nackJSON)
+	assert.Equal(t, "nonce-2", nackMap["response_nonce"])
+	errDetailMap, _ := nackMap["error_detail"].(map[string]any)
+	require.NotNil(t, errDetailMap)
+	assert.Contains(t, errDetailMap["message"], "does.not.Exist")
+
+	// Incoming DiscoveryResponse debug logs.
+	respLogs := logs.FilterMessage("xDS DiscoveryResponse received").All()
+	require.Len(t, respLogs, 2, "expected 2 incoming DiscoveryResponse debug logs")
+	for _, entry := range respLogs {
+		assert.Equal(t, zapcore.DebugLevel, entry.Level)
+	}
+	resp0JSON, _ := respLogs[0].ContextMap()["discovery_response"].(string)
+	resp0Map := parseJSONMap(t, resp0JSON)
+	assert.Equal(t, "rev-1", resp0Map["version_info"])
+	assert.Contains(t, resp0JSON, "projects/my-project/locations/global/policySets/fleet-1/revisions/rev-1")
+	assert.Contains(t, resp0JSON, "log-filter")
+
+	resp1JSON, _ := respLogs[1].ContextMap()["discovery_response"].(string)
+	resp1Map := parseJSONMap(t, resp1JSON)
+	assert.Equal(t, "rev-bad", resp1Map["version_info"])
+	assert.NotEmpty(t, resp1Map["marshal_error"])
+
+	// Decoded TelemetryCollector debug log.
+	decodedLogs := logs.FilterMessage("Decoded xDS TelemetryCollector").All()
+	require.Len(t, decodedLogs, 1)
+	assert.Equal(t, zapcore.DebugLevel, decodedLogs[0].Level)
+	assert.Equal(t, "rev-1", decodedLogs[0].ContextMap()["version"])
+	assert.Equal(t, "projects/my-project/locations/global/policySets/fleet-1/revisions/rev-1", decodedLogs[0].ContextMap()["policy_set_revision"])
+	assert.EqualValues(t, 1, decodedLogs[0].ContextMap()["policy_count"])
+	assert.Equal(t, []any{"log-filter"}, decodedLogs[0].ContextMap()["policy_ids"])
+
+	// Applied xDS policy set INFO log.
+	appliedLogs := logs.FilterMessage("Applied xDS policy set").All()
+	require.Len(t, appliedLogs, 1)
+	assert.Equal(t, zapcore.InfoLevel, appliedLogs[0].Level)
+	assert.Equal(t, "rev-1", appliedLogs[0].ContextMap()["version"])
+	assert.Equal(t, "projects/my-project/locations/global/policySets/fleet-1/revisions/rev-1", appliedLogs[0].ContextMap()["policy_set_revision"])
+	assert.EqualValues(t, 1, appliedLogs[0].ContextMap()["policies_loaded"])
+	assert.EqualValues(t, 0, appliedLogs[0].ContextMap()["policies_skipped"])
+}
+

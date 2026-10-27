@@ -1,0 +1,46 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package google.telemetry.policy.v1alpha1;
+
+option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1;policyv1alpha1";
+
+// Enables file tailing (`filelog` receiver) with upstream single-line
+// defaults within hardcoded in-daemon OS log root guardrails:
+//   - Linux: /var/log/**, /opt/**/logs/**, /srv/**/logs/**
+//   - Windows: %ProgramData%\**\logs\**, %SystemDrive%\inetpub\logs\**
+//
+// Evaluation, Deduplication & Security Guardrails:
+// - At least one `included_paths` pattern is required; any `included_paths`
+//   path outside the allowed OS log roots or targeting sensitive directories
+//   (/etc, /root, /proc, /sys, /var/run/secrets) is rejected (fail-open).
+// - Multiple FileLogSourcePolicy instances merge into a single shared `filelog`
+//   receiver via the set union of `included_paths` patterns (avoiding duplicate
+//   reads when globs overlap and preserving `file_storage` bookmarks across
+//   policy ID renames).
+// - Built-in Guardrails: Automatically sets `include_file_path: true` (so
+//   `LogFilterPolicy` can match on `log.file.path` / `log.file.name`) and
+//   excludes compressed binary archives (`*.gz`, `*.bz2`, `*.xz`, `*.zst`,
+//   `*.zip`). Symlinks are resolved prior to reading to prevent directory
+//   traversal.
+message FileLogSourcePolicy {
+  // Unique identifier for the policy within its configuration scope.
+  string id = 1;
+
+  // File path glob patterns to tail (must fall within allowed OS log roots).
+  // At least one pattern is required.
+  repeated string included_paths = 2;
+}

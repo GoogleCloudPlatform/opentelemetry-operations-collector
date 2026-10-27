@@ -25,7 +25,6 @@ import (
 	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/matcher"
-	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	"google.golang.org/protobuf/proto"
 )
@@ -39,6 +38,7 @@ const PolicyType = "trace_filter"
 // Exposed to the package (rather than constructed inline in init) so tests
 // exercise the very value that is registered.
 var driver = googlepolicy.ProtoDriver[*policyv1alpha1.TraceFilterPolicy]{
+	Class: googlepolicy.PolicyClassTransformation,
 	New: func(pb *policyv1alpha1.TraceFilterPolicy) (googlepolicy.Policy, error) {
 		return NewPolicyFromProto(pb)
 	},
@@ -55,12 +55,10 @@ var (
 	ErrNilProto = errors.New("trace filter policy proto cannot be nil")
 	// ErrMissingID is returned when the policy ID is empty.
 	ErrMissingID = errors.New("trace filter policy id cannot be empty")
-	// ErrMissingAction is returned when the policy action is unspecified or invalid.
-	ErrMissingAction = errors.New("trace filter policy must specify a valid action (ACTION_KEEP or ACTION_DROP)")
 	// ErrMissingMatchers is returned when the policy contains no matchers.
 	ErrMissingMatchers = errors.New("trace filter policy must contain at least one matcher")
 	// ErrMissingTarget is returned when a matcher does not specify a target field selector.
-	ErrMissingTarget = errors.New("trace matcher must specify a target field selector")
+	ErrMissingTarget = matcher.ErrMissingTraceTarget
 	// ErrMissingPredicate is returned when a matcher does not specify a predicate.
 	ErrMissingPredicate = matcher.ErrMissingPredicate
 )
@@ -68,11 +66,11 @@ var (
 // Policy represents a compiled, validated TraceFilterPolicy ready for hot-loop evaluation.
 type Policy struct {
 	proto    *policyv1alpha1.TraceFilterPolicy
-	matchers []compiledMatcher
+	matchers []matcher.CompiledTraceMatcher
 }
 
 var _ googlepolicy.TransformationPolicy = (*Policy)(nil)
-var _ googlepolicy.TracePolicyEvaluator = (*Policy)(nil)
+var _ googlepolicy.TraceFilterPolicyEvaluator = (*Policy)(nil)
 
 // NewPolicyFromProto validates and compiles a TraceFilterPolicy protobuf into a Policy.
 func NewPolicyFromProto(pb *policyv1alpha1.TraceFilterPolicy) (*Policy, error) {
@@ -83,19 +81,13 @@ func NewPolicyFromProto(pb *policyv1alpha1.TraceFilterPolicy) (*Policy, error) {
 		return nil, ErrMissingID
 	}
 
-	switch pb.GetAction() {
-	case policyv1alpha1.Action_ACTION_KEEP, policyv1alpha1.Action_ACTION_DROP:
-	default:
-		return nil, ErrMissingAction
-	}
-
-	if len(pb.GetMatches()) == 0 {
+	if len(pb.GetMatchers()) == 0 {
 		return nil, ErrMissingMatchers
 	}
 
-	matchers := make([]compiledMatcher, 0, len(pb.GetMatches()))
-	for i, m := range pb.GetMatches() {
-		cm, err := compileMatcher(m)
+	matchers := make([]matcher.CompiledTraceMatcher, 0, len(pb.GetMatchers()))
+	for i, m := range pb.GetMatchers() {
+		cm, err := matcher.CompileTraceMatcher(m)
 		if err != nil {
 			return nil, fmt.Errorf("matcher[%d]: %w", i, err)
 		}
@@ -136,278 +128,33 @@ func (p *Policy) Validate() error {
 	return nil
 }
 
-// Action returns the configured policyv1alpha1.Action (ACTION_KEEP or ACTION_DROP).
-func (p *Policy) Action() policyv1alpha1.Action {
-	return p.proto.GetAction()
-}
-
 // Proto returns the underlying protobuf message for this policy.
 func (p *Policy) Proto() proto.Message {
 	return p.proto
 }
 
-// EvaluateTrace evaluates the policy against the given TraceContext and returns
-// EvalKeep, EvalDrop, or EvalNoMatch.
-func (p *Policy) EvaluateTrace(ctx googlepolicy.TraceContext) googlepolicy.EvalResult {
+// FilterTrace evaluates the policy against the given TraceContext and returns
+// FilterDrop when all matchers match, or FilterNoMatch otherwise.
+func (p *Policy) FilterTrace(ctx googlepolicy.TraceContext) googlepolicy.FilterResult {
 	if !p.matchesContext(ctx) {
-		return googlepolicy.EvalNoMatch
+		return googlepolicy.FilterNoMatch
 	}
-	switch p.Action() {
-	case policyv1alpha1.Action_ACTION_KEEP:
-		return googlepolicy.EvalKeep
-	case policyv1alpha1.Action_ACTION_DROP:
-		return googlepolicy.EvalDrop
-	default:
-		return googlepolicy.EvalNoMatch
-	}
+	return googlepolicy.FilterDrop
 }
 
 // matchesContext reports whether every matcher in the policy matches the given
 // TraceContext. Matchers are AND-ed.
 func (p *Policy) matchesContext(ctx googlepolicy.TraceContext) bool {
 	for i := range p.matchers {
-		if !p.matchers[i].eval(ctx) {
+		if !p.matchers[i].Eval(ctx) {
 			return false
 		}
 	}
 	return true
 }
 
-// targetExtractor pulls the value a matcher targets out of a TraceContext.
-type targetExtractor func(ctx googlepolicy.TraceContext) (val any, exists bool)
-
-type compiledMatcher struct {
-	extract   targetExtractor
-	predicate matcher.Predicate
-}
-
-func (cm *compiledMatcher) eval(ctx googlepolicy.TraceContext) bool {
-	return cm.predicate(cm.extract(ctx))
-}
-
-func compileMatcher(m *policyv1alpha1.TraceMatcher) (compiledMatcher, error) {
-	extract, err := compileExtractor(m.GetTarget())
-	if err != nil {
-		return compiledMatcher{}, err
-	}
-	predicate, err := matcher.CompilePredicate(m.GetPredicate(), m.GetNegate())
-	if err != nil {
-		return compiledMatcher{}, err
-	}
-	return compiledMatcher{extract: extract, predicate: predicate}, nil
-}
-
-func compileExtractor(target *policyv1alpha1.TraceFieldSelector) (targetExtractor, error) {
-	if target == nil || target.Target == nil {
-		return nil, ErrMissingTarget
-	}
-
-	switch t := target.Target.(type) {
-	case *policyv1alpha1.TraceFieldSelector_RecordField:
-		return compileRecordFieldExtractor(t.RecordField)
-
-	case *policyv1alpha1.TraceFieldSelector_SpanAttribute:
-		steps, err := matcher.CompilePath(t.SpanAttribute, "span")
-		if err != nil {
-			return nil, err
-		}
-		return func(ctx googlepolicy.TraceContext) (any, bool) {
-			if ctx.Span == (ptrace.Span{}) {
-				return nil, false
-			}
-			return matcher.EvalPath(ctx.Span.Attributes(), steps)
-		}, nil
-
-	case *policyv1alpha1.TraceFieldSelector_ResourceAttribute:
-		steps, err := matcher.CompilePath(t.ResourceAttribute, "resource")
-		if err != nil {
-			return nil, err
-		}
-		return func(ctx googlepolicy.TraceContext) (any, bool) {
-			if ctx.Resource == (pcommon.Resource{}) {
-				return nil, false
-			}
-			return matcher.EvalPath(ctx.Resource.Attributes(), steps)
-		}, nil
-
-	case *policyv1alpha1.TraceFieldSelector_ScopeAttribute:
-		steps, err := matcher.CompilePath(t.ScopeAttribute, "scope")
-		if err != nil {
-			return nil, err
-		}
-		return func(ctx googlepolicy.TraceContext) (any, bool) {
-			if ctx.Scope == (pcommon.InstrumentationScope{}) {
-				return nil, false
-			}
-			return matcher.EvalPath(ctx.Scope.Attributes(), steps)
-		}, nil
-
-	case *policyv1alpha1.TraceFieldSelector_ScopeField:
-		return compileScopeFieldExtractor(t.ScopeField)
-
-	default:
-		return nil, ErrMissingTarget
-	}
-}
-
-func compileRecordFieldExtractor(field policyv1alpha1.SpanRecordField) (targetExtractor, error) {
-	switch field {
-	case policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME:
-		return func(ctx googlepolicy.TraceContext) (any, bool) {
-			if ctx.Span == (ptrace.Span{}) {
-				return nil, false
-			}
-			s := ctx.Span.Name()
-			if s == "" {
-				return nil, false
-			}
-			return s, true
-		}, nil
-
-	case policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID:
-		return func(ctx googlepolicy.TraceContext) (any, bool) {
-			if ctx.Span == (ptrace.Span{}) {
-				return nil, false
-			}
-			tid := ctx.Span.TraceID()
-			if tid.IsEmpty() {
-				return nil, false
-			}
-			return tid, true
-		}, nil
-
-	case policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_SPAN_ID:
-		return func(ctx googlepolicy.TraceContext) (any, bool) {
-			if ctx.Span == (ptrace.Span{}) {
-				return nil, false
-			}
-			sid := ctx.Span.SpanID()
-			if sid.IsEmpty() {
-				return nil, false
-			}
-			return sid, true
-		}, nil
-
-	case policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID:
-		return func(ctx googlepolicy.TraceContext) (any, bool) {
-			if ctx.Span == (ptrace.Span{}) {
-				return nil, false
-			}
-			psid := ctx.Span.ParentSpanID()
-			if psid.IsEmpty() {
-				// A root span has no parent. The proto requires `exists` to
-				// report false here, yet string predicates must still see the
-				// empty string, so return a present-but-empty value. The
-				// distinction is carried by the value being non-nil while
-				// exists is false.
-				return "", false
-			}
-			return psid, true
-		}, nil
-
-	case policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_STATUS_MESSAGE:
-		return func(ctx googlepolicy.TraceContext) (any, bool) {
-			if ctx.Span == (ptrace.Span{}) {
-				return nil, false
-			}
-			s := ctx.Span.Status().Message()
-			if s == "" {
-				return nil, false
-			}
-			return s, true
-		}, nil
-
-	case policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_KIND:
-		// Unlike the other first-class fields, an unset kind is NOT reported as
-		// absent: trace_filter_policy.proto states "if span kind is unset or
-		// SPAN_KIND_UNSPECIFIED, implementations treat it as INTERNAL", so
-		// INTERNAL is a real value rather than a default placeholder.
-		return func(ctx googlepolicy.TraceContext) (any, bool) {
-			if ctx.Span == (ptrace.Span{}) {
-				return nil, false
-			}
-			return SpanKindString(ctx.Span.Kind()), true
-		}, nil
-
-	case policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_STATUS_CODE:
-		return func(ctx googlepolicy.TraceContext) (any, bool) {
-			if ctx.Span == (ptrace.Span{}) {
-				return nil, false
-			}
-			code := ctx.Span.Status().Code()
-			return SpanStatusString(code), code != ptrace.StatusCodeUnset
-		}, nil
-
-	default:
-		return nil, errors.New("span record field cannot be unspecified")
-	}
-}
-
-func compileScopeFieldExtractor(field policyv1alpha1.ScopeField) (targetExtractor, error) {
-	switch field {
-	case policyv1alpha1.ScopeField_SCOPE_FIELD_NAME:
-		return func(ctx googlepolicy.TraceContext) (any, bool) {
-			if ctx.Scope == (pcommon.InstrumentationScope{}) {
-				return nil, false
-			}
-			s := ctx.Scope.Name()
-			if s == "" {
-				return nil, false
-			}
-			return s, true
-		}, nil
-
-	case policyv1alpha1.ScopeField_SCOPE_FIELD_VERSION:
-		return func(ctx googlepolicy.TraceContext) (any, bool) {
-			if ctx.Scope == (pcommon.InstrumentationScope{}) {
-				return nil, false
-			}
-			s := ctx.Scope.Version()
-			if s == "" {
-				return nil, false
-			}
-			return s, true
-		}, nil
-
-	case policyv1alpha1.ScopeField_SCOPE_FIELD_SCHEMA_URL:
-		return func(ctx googlepolicy.TraceContext) (any, bool) {
-			if ctx.ScopeSchemaURL == "" {
-				return nil, false
-			}
-			return ctx.ScopeSchemaURL, true
-		}, nil
-
-	default:
-		return nil, errors.New("scope field cannot be unspecified")
-	}
-}
-
 // SpanKindString renders a span kind using the spelling that policies match
 // against. Unset kinds report as INTERNAL, matching the OTLP default.
 func SpanKindString(k ptrace.SpanKind) string {
-	switch k {
-	case ptrace.SpanKindServer:
-		return "SERVER"
-	case ptrace.SpanKindClient:
-		return "CLIENT"
-	case ptrace.SpanKindProducer:
-		return "PRODUCER"
-	case ptrace.SpanKindConsumer:
-		return "CONSUMER"
-	default:
-		return "INTERNAL"
-	}
-}
-
-// SpanStatusString renders a span status code using the spelling that policies
-// match against.
-func SpanStatusString(c ptrace.StatusCode) string {
-	switch c {
-	case ptrace.StatusCodeOk:
-		return "OK"
-	case ptrace.StatusCodeError:
-		return "ERROR"
-	default:
-		return "UNSET"
-	}
+	return matcher.SpanKindString(k)
 }

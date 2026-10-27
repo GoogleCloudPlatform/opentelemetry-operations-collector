@@ -2,12 +2,12 @@
   "type": "metric_filter",
   "id": "drop-internal-debug-metrics",
   "action": "ACTION_DROP",
-  "matches": [
+  "matchers": [
     {
       "target": {
         "descriptor_field": "METRIC_DESCRIPTOR_FIELD_NAME"
       },
-      "regex": "^internal\\.debug\\..*"
+      "glob": "internal.debug.*"
     }
   ]
 }

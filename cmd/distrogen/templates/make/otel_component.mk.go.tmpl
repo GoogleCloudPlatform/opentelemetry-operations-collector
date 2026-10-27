@@ -3,10 +3,14 @@ DISTROGEN_BIN ?= distrogen
 OTEL_VERSION ?= latest
 OTEL_CONTRIB_VERSION ?= latest
 
-LIST_DIRECT_MODULES = go list -m -f '{{`{{if not (or .Indirect .Main)}}{{.Path}}{{end}}`}}' all
+# -mod=mod allows `go list -m` to succeed even when go.mod/go.sum needs updates
+# or a vendor/ directory is present. GOWORK=off is required because Go rejects
+# -mod=mod in workspace mode (e.g. when running `make update-components`
+# directly inside a component directory while a root go.work file exists).
+LIST_DIRECT_MODULES = GOWORK=off go list -mod=mod -m -f '{{`{{if not (or .Indirect .Main)}}{{.Path}}{{end}}`}}' all
 INCLUDE_COLLECTOR_CORE_COMPONENTS = grep "^go.opentelemetry.io" | grep -v "^go.opentelemetry.io/otel"
 INCLUDE_CONTRIB_COMPONENTS = grep "^github.com/open-telemetry/opentelemetry-collector-contrib"
-GO_GET_ALL = xargs --no-run-if-empty -t -I '{}' go get -tags=gpu {}
+GO_GET_ALL = xargs --no-run-if-empty -t go get -tags=gpu
 
 .PHONY: update-components
 update-components: core-components contrib-components

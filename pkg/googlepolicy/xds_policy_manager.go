@@ -33,6 +33,7 @@ import (
 	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	discoveryv3 "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/idtoken"
@@ -44,6 +45,7 @@ import (
 	"google.golang.org/grpc/keepalive"
 	grpcstatus "google.golang.org/grpc/status"
 
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -62,6 +64,13 @@ const (
 	// against that schema, so a different type could be subscribed to but not
 	// usefully interpreted.
 	xdsPolicyTypeURL = "type.googleapis.com/" + xdsResourceType
+
+	// defaultCollectorResource is the collector resource name suffix in the
+	// xdstp:// subscription URI. The control plane organizes collector
+	// configurations under /collectors/{name}. Currently all collectors
+	// subscribe to "default"; future versions may target specific collector
+	// profiles (e.g. OS or environment) or wildcard "*" discovery.
+	defaultCollectorResource = "default"
 
 	// FleetIDQueryParam is the query parameter carrying the fleet ID:
 	//
@@ -543,7 +552,7 @@ func regionFromZone(zone string) string {
 // xdstpResourceName returns the xdstp:// name of the TelemetryCollector
 // resource that holds a fleet's policies:
 //
-//	xdstp://traffic-director-REGION.xds.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector/projects/PROJECT/fleets/FLEET
+//	xdstp://telemetry-director.REGION.xds.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector/projects/PROJECT/fleets/FLEET/collectors/default
 //
 // The control plane looks up the fleet's policies by this name, not by the
 // node's cluster. A request that names no resource is a wildcard subscription,
@@ -555,8 +564,8 @@ func regionFromZone(zone string) string {
 // request without the name would change the subscription rather than confirm
 // it.
 func xdstpResourceName(region, project, fleetID string) string {
-	return fmt.Sprintf("xdstp://traffic-director-%s.xds.googleapis.com/%s/projects/%s/fleets/%s",
-		region, xdsResourceType, project, fleetID)
+	return fmt.Sprintf("xdstp://telemetry-director.%s.xds.googleapis.com/%s/projects/%s/fleets/%s/collectors/%s",
+		region, xdsResourceType, project, fleetID, defaultCollectorResource)
 }
 
 // Start launches the background stream loop and waits, briefly, for the control
@@ -860,12 +869,13 @@ func (m *xdsPolicyManager) streamPolicies(ctx context.Context, conn *grpc.Client
 	// hanging up gets processed instead of quietly discarded. An error the
 	// client produced itself already carries its own status and is returned
 	// directly, per the same contract.
-	if err := stream.Send(&discoveryv3.DiscoveryRequest{
+	initialReq := &discoveryv3.DiscoveryRequest{
 		Node:          node,
 		TypeUrl:       xdsPolicyTypeURL,
 		ResourceNames: []string{m.resourceName},
 		VersionInfo:   m.LastAppliedVersion(),
-	}); err != nil {
+	}
+	if err := stream.Send(initialReq); err != nil {
 		if !errors.Is(err, io.EOF) {
 			return false, fmt.Errorf("failed to send DiscoveryRequest to %s: %w", m.serverAddr, err)
 		}
@@ -881,6 +891,7 @@ func (m *xdsPolicyManager) streamPolicies(ctx context.Context, conn *grpc.Client
 			zap.String("resource_name", m.resourceName),
 			zap.String("type_url", xdsPolicyTypeURL),
 		)
+		m.logDiscoveryRequestSent("initial", initialReq)
 	}
 
 	progressed := false
@@ -919,6 +930,13 @@ func (m *xdsPolicyManager) handleResponse(stream discoveryv3.AggregatedDiscovery
 		zap.String("nonce", resp.GetNonce()),
 		zap.Int("resources", len(resp.GetResources())),
 	)
+	if m.logger.Core().Enabled(zapcore.DebugLevel) {
+		m.logger.Debug("xDS DiscoveryResponse received",
+			zap.String("version", resp.GetVersionInfo()),
+			zap.String("nonce", resp.GetNonce()),
+			zap.String("discovery_response", formatDiscoveryResponseJSON(resp)),
+		)
+	}
 
 	// Already running this revision. Re-applying it would be wasted work, but
 	// the control plane is still waiting on a response for this nonce.
@@ -931,12 +949,37 @@ func (m *xdsPolicyManager) handleResponse(stream discoveryv3.AggregatedDiscovery
 		return
 	}
 
+	// A response carrying no resources is the control plane telling us to
+	// drop everything: it acknowledges the request, but asserts there are no
+	// policies in the revision. That is a legitimate, empty revision.
+	if len(resp.GetResources()) == 0 {
+		if active := ActivePolicySet(); active != nil && len(active.Policies) > 0 {
+			m.logger.Warn("xDS response carries no resources, clearing active policy set",
+				zap.String("version", resp.GetVersionInfo()),
+			)
+		}
+		SetActivePolicySet(&PolicySet{
+			Policies:   make(map[string]*PolicySetEntry),
+			RevisionID: resp.GetVersionInfo(),
+			ReceivedAt: time.Now(),
+		})
+		m.logger.Info("Applied xDS policy set",
+			zap.String("version", resp.GetVersionInfo()),
+			zap.String("policy_set_revision", ""),
+			zap.Int("policies_loaded", 0),
+			zap.Int("policies_skipped", 0),
+		)
+		m.sendACK(stream, node, resp.GetVersionInfo(), resp.GetNonce())
+		m.markReady()
+		return
+	}
+
 	// Decoding and loading are both best-effort. A revision that carries a
 	// mix of usable and unusable policies is still worth applying: enforcing
 	// the policies we understood beats enforcing nothing while the control
 	// plane is corrected. Failures are collected and reported, and only a
 	// revision that yields nothing usable is rejected outright.
-	policyProtos, extractErr := extractPolicyProtos(resp)
+	manifest, extractErr := extractManifest(resp)
 	if extractErr != nil {
 		m.logger.Warn("Some xDS resources could not be decoded and will be skipped",
 			zap.String("version", resp.GetVersionInfo()),
@@ -944,8 +987,65 @@ func (m *xdsPolicyManager) handleResponse(stream discoveryv3.AggregatedDiscovery
 		)
 	}
 
+	if (manifest.decodedCollectors > 0 || len(manifest.policies) > 0) && m.logger.Core().Enabled(zapcore.DebugLevel) {
+		m.logger.Debug("Decoded xDS TelemetryCollector",
+			zap.String("version", resp.GetVersionInfo()),
+			zap.String("policy_set_revision", manifest.policySetRevision),
+			zap.Time("revision_create_time", manifest.revisionCreateTime),
+			zap.Int("policy_count", len(manifest.policies)),
+			zap.Strings("policy_ids", policyIDsFromProtos(manifest.policies)),
+		)
+	}
+
+	if extractErr != nil && manifest.policySetRevision == "" {
+		m.logger.Warn("xDS revision could not be decoded, sending NACK",
+			zap.String("version", resp.GetVersionInfo()),
+			zap.Error(extractErr),
+		)
+		m.sendNACK(stream, node, resp.GetNonce(), extractErr)
+		return
+	}
+
+	// A TelemetryCollector with no policy_set_revision and no policies is the
+	// control plane reporting that the fleet has no management-plane policy
+	// source (e.g. no active rollout). Like a 0-resource response, that is a
+	// legitimate, empty revision.
+	if manifest.policySetRevision == "" && len(manifest.policies) == 0 {
+		if active := ActivePolicySet(); active != nil && len(active.Policies) > 0 {
+			m.logger.Warn("xDS revision contains no policies, clearing the active policy set",
+				zap.String("version", resp.GetVersionInfo()),
+			)
+		}
+		SetActivePolicySet(&PolicySet{
+			Policies:   make(map[string]*PolicySetEntry),
+			RevisionID: resp.GetVersionInfo(),
+			ReceivedAt: time.Now(),
+		})
+		m.sendACK(stream, node, resp.GetVersionInfo(), resp.GetNonce())
+		m.markReady()
+		return
+	}
+
+	if manifest.policySetRevision == "" {
+		err := errors.New("xDS TelemetryCollector resource is missing required field policy_set_revision")
+		m.logger.Warn("Rejecting xDS revision", zap.String("version", resp.GetVersionInfo()), zap.Error(err))
+		m.sendNACK(stream, node, resp.GetNonce(), err)
+		return
+	}
+
+	policySetID, revisionID, ok := ParsePolicySetRevision(manifest.policySetRevision)
+	if !ok {
+		err := fmt.Errorf("xDS policy_set_revision %q is not in canonical format", manifest.policySetRevision)
+		m.logger.Warn("Rejecting xDS revision", zap.String("version", resp.GetVersionInfo()), zap.Error(err))
+		m.sendNACK(stream, node, resp.GetNonce(), err)
+		return
+	}
+
 	// 1. Validate & create policy set from DiscoveryResponse.
-	policySet, makeErr := MakePolicySetFromProtos(resp.GetVersionInfo(), policyProtos)
+	policySet, makeErr := MakePolicySetFromProtos(policySetID, revisionID, manifest.policies)
+	if !manifest.revisionCreateTime.IsZero() {
+		policySet.RevisionCreateTime = manifest.revisionCreateTime
+	}
 	if makeErr != nil {
 		m.logger.Warn("Some policies in the xDS revision could not be loaded and will be skipped",
 			zap.String("version", resp.GetVersionInfo()),
@@ -977,6 +1077,13 @@ func (m *xdsPolicyManager) handleResponse(stream discoveryv3.AggregatedDiscovery
 
 	// 2. Activate in memory (googlepolicyprocessor immediately picks this up).
 	SetActivePolicySet(policySet)
+
+	m.logger.Info("Applied xDS policy set",
+		zap.String("version", resp.GetVersionInfo()),
+		zap.String("policy_set_revision", manifest.policySetRevision),
+		zap.Int("policies_loaded", len(policySet.Policies)),
+		zap.Int("policies_skipped", manifest.skipped+len(policySet.FailedPolicies)),
+	)
 
 	// 3. Send xDS ACK.
 	m.sendACK(stream, node, resp.GetVersionInfo(), resp.GetNonce())
@@ -1044,19 +1151,25 @@ func (m *xdsPolicyManager) waitBeforeRetry(ctx context.Context, base time.Durati
 // the loop is about to read, dropping a revision to improve a log line.
 func (m *xdsPolicyManager) sendACK(stream discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesClient, node *corev3.Node, versionInfo, nonce string) {
 	m.setLastAppliedVersion(versionInfo)
+	if stream == nil {
+		return
+	}
 
-	if err := stream.Send(&discoveryv3.DiscoveryRequest{
+	req := &discoveryv3.DiscoveryRequest{
 		Node:          node,
 		TypeUrl:       xdsPolicyTypeURL,
 		ResourceNames: []string{m.resourceName},
 		VersionInfo:   versionInfo,
 		ResponseNonce: nonce,
-	}); err != nil {
+	}
+	if err := stream.Send(req); err != nil {
 		m.logger.Debug("Failed to send xDS ACK; the stream loop will report why",
 			zap.String("version", versionInfo),
 			zap.Error(err),
 		)
+		return
 	}
+	m.logDiscoveryRequestSent("ack", req)
 }
 
 // sendNACK rejects a response, reporting the version the collector is still
@@ -1064,7 +1177,11 @@ func (m *xdsPolicyManager) sendACK(stream discoveryv3.AggregatedDiscoveryService
 //
 // Send failures are handled the same way as in sendACK; see the note there.
 func (m *xdsPolicyManager) sendNACK(stream discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesClient, node *corev3.Node, nonce string, cause error) {
-	err := stream.Send(&discoveryv3.DiscoveryRequest{
+	if stream == nil {
+		return
+	}
+
+	req := &discoveryv3.DiscoveryRequest{
 		Node:          node,
 		TypeUrl:       xdsPolicyTypeURL,
 		ResourceNames: []string{m.resourceName},
@@ -1074,14 +1191,93 @@ func (m *xdsPolicyManager) sendNACK(stream discoveryv3.AggregatedDiscoveryServic
 			Code:    int32(codes.InvalidArgument),
 			Message: cause.Error(),
 		},
-	})
-	if err != nil {
+	}
+	if err := stream.Send(req); err != nil {
 		m.logger.Debug("Failed to send xDS NACK; the stream loop will report why", zap.Error(err))
+		return
+	}
+	m.logDiscoveryRequestSent("nack", req)
+}
+
+func (m *xdsPolicyManager) logDiscoveryRequestSent(kind string, req *discoveryv3.DiscoveryRequest) {
+	if m.logger.Core().Enabled(zapcore.DebugLevel) {
+		m.logger.Debug("xDS DiscoveryRequest sent",
+			zap.String("kind", kind),
+			zap.String("version", req.GetVersionInfo()),
+			zap.String("response_nonce", req.GetResponseNonce()),
+			zap.String("discovery_request", formatDiscoveryRequestJSON(req)),
+		)
 	}
 }
 
-// extractPolicyProtos decodes the resources of a DiscoveryResponse into the
-// policy protos they carry, ready for MakePolicySetFromProtos.
+func formatDiscoveryRequestJSON(req *discoveryv3.DiscoveryRequest) string {
+	if req == nil {
+		return "{}"
+	}
+	b, err := (protojson.MarshalOptions{
+		UseProtoNames:   true,
+		EmitUnpopulated: true,
+	}).Marshal(req)
+	if err != nil {
+		return fmt.Sprintf("{\"marshal_error\":%q}", err.Error())
+	}
+	return string(b)
+}
+
+func formatDiscoveryResponseJSON(resp *discoveryv3.DiscoveryResponse) string {
+	if resp == nil {
+		return "{}"
+	}
+	b, err := (protojson.MarshalOptions{
+		UseProtoNames: true,
+	}).Marshal(resp)
+	if err != nil {
+		return fmt.Sprintf("{\"version_info\":%q,\"type_url\":%q,\"nonce\":%q,\"resource_count\":%d,\"marshal_error\":%q}",
+			resp.GetVersionInfo(), resp.GetTypeUrl(), resp.GetNonce(), len(resp.GetResources()), err.Error())
+	}
+	return string(b)
+}
+
+func policyIDsFromProtos(msgs []proto.Message) []string {
+	ids := make([]string, 0, len(msgs))
+	for i, msg := range msgs {
+		ids = append(ids, policyIDFromProto(i, msg))
+	}
+	return ids
+}
+
+func policyIDFromProto(i int, msg proto.Message) string {
+	if msg == nil {
+		return fmt.Sprintf("index_%d", i)
+	}
+	if idGetter, ok := msg.(interface{ GetId() string }); ok {
+		if id := idGetter.GetId(); id != "" {
+			return id
+		}
+	}
+	if s, ok := msg.(*structpb.Struct); ok {
+		if id := s.GetFields()["id"].GetStringValue(); id != "" {
+			return id
+		}
+		if name := s.GetFields()["name"].GetStringValue(); name != "" {
+			return name
+		}
+	}
+	return fmt.Sprintf("index_%d", i)
+}
+
+// xdsManifest holds the decoded policies and management-plane PolicySet
+// revision metadata extracted from an xDS DiscoveryResponse.
+type xdsManifest struct {
+	policies           []proto.Message
+	policySetRevision  string
+	revisionCreateTime time.Time
+	skipped            int
+	decodedCollectors  int
+}
+
+// extractManifest decodes the resources of a DiscoveryResponse into its
+// policy protos and manifest-level revision metadata.
 //
 // Every resource that cannot be decoded is reported: a malformed or unknown
 // resource means the control plane sent something this collector cannot honor,
@@ -1091,9 +1287,9 @@ func (m *xdsPolicyManager) sendNACK(stream discoveryv3.AggregatedDiscoveryServic
 //
 // Decoding stops at the proto. Which driver a policy belongs to is settled
 // later, by message identity, in LoadPolicyFromProto.
-func extractPolicyProtos(resp *discoveryv3.DiscoveryResponse) ([]proto.Message, error) {
+func extractManifest(resp *discoveryv3.DiscoveryResponse) (xdsManifest, error) {
 	var (
-		policies []proto.Message
+		manifest xdsManifest
 		errs     []error
 	)
 
@@ -1102,15 +1298,25 @@ func extractPolicyProtos(resp *discoveryv3.DiscoveryResponse) ([]proto.Message, 
 		if anyRes.MessageIs(&xdsv1alpha1.TelemetryCollector{}) {
 			collector := &xdsv1alpha1.TelemetryCollector{}
 			if err := anyRes.UnmarshalTo(collector); err != nil {
+				manifest.skipped++
 				errs = append(errs, fmt.Errorf("%w at index %d: %w", ErrXDSResourceDecode, i, err))
 				continue
 			}
+			manifest.decodedCollectors++
 
-			collectorPolicies, err := policiesFromCollector(collector)
+			if rev := collector.GetPolicySetRevision(); rev != "" {
+				manifest.policySetRevision = rev
+			}
+			if ct := collector.GetPolicySetRevisionCreateTime(); ct.IsValid() {
+				manifest.revisionCreateTime = ct.AsTime()
+			}
+
+			collectorPolicies, skipped, err := policiesFromCollector(collector)
+			manifest.skipped += skipped
 			if err != nil {
 				errs = append(errs, fmt.Errorf("resource at index %d: %w", i, err))
 			}
-			policies = append(policies, collectorPolicies...)
+			manifest.policies = append(manifest.policies, collectorPolicies...)
 			continue
 		}
 
@@ -1119,25 +1325,29 @@ func extractPolicyProtos(resp *discoveryv3.DiscoveryResponse) ([]proto.Message, 
 		// the wrapper.
 		msg, err := protoFromAny(anyRes)
 		if err != nil {
+			manifest.skipped++
 			errs = append(errs, fmt.Errorf("resource at index %d: %w", i, err))
 			continue
 		}
-		policies = append(policies, msg)
+		manifest.policies = append(manifest.policies, msg)
 	}
 
-	return policies, errors.Join(errs...)
+	return manifest, errors.Join(errs...)
 }
 
 // policiesFromCollector decodes every policy carried by a TelemetryCollector,
-// returning those it could decode along with a joined error for those it could not.
-func policiesFromCollector(collector *xdsv1alpha1.TelemetryCollector) ([]proto.Message, error) {
+// returning those it could decode along with the skipped count and a joined
+// error for those it could not.
+func policiesFromCollector(collector *xdsv1alpha1.TelemetryCollector) ([]proto.Message, int, error) {
 	var (
 		policies []proto.Message
+		skipped  int
 		errs     []error
 	)
 
 	for i, policyAny := range collector.GetPolicies() {
 		if policyAny == nil || policyAny.GetTypeUrl() == "" {
+			skipped++
 			errs = append(errs, fmt.Errorf("%w: policy at index %d", ErrXDSPolicyMissingBody, i))
 			continue
 		}
@@ -1149,6 +1359,7 @@ func policiesFromCollector(collector *xdsv1alpha1.TelemetryCollector) ([]proto.M
 		// the body (the filter policies use their own "id" field).
 		msg, err := protoFromAny(policyAny)
 		if err != nil {
+			skipped++
 			errs = append(errs, fmt.Errorf("policy at index %d (%q): %w", i, policyAny.GetTypeUrl(), err))
 			continue
 		}
@@ -1156,7 +1367,7 @@ func policiesFromCollector(collector *xdsv1alpha1.TelemetryCollector) ([]proto.M
 		policies = append(policies, msg)
 	}
 
-	return policies, errors.Join(errs...)
+	return policies, skipped, errors.Join(errs...)
 }
 
 // protoFromAny unpacks a protobuf Any into the concrete message it holds.

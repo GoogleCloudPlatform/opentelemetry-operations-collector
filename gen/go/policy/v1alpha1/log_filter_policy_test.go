@@ -31,7 +31,7 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 	policy := &policyv1alpha1.LogFilterPolicy{
 		Id:     "drop-noisy-healthchecks",
 		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-		Matches: []*policyv1alpha1.LogMatcher{
+		Matchers: []*policyv1alpha1.LogMatcher{
 
 			{
 				Target: &policyv1alpha1.LogFieldSelector{
@@ -39,22 +39,22 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Regex{
-					Regex: "^healthcheck.*",
+				Predicate: &policyv1alpha1.LogMatcher_Glob{
+					Glob: "healthcheck*",
 				},
-				Negate: false,
+				Negated: false,
 			},
 			{
 				Target: &policyv1alpha1.LogFieldSelector{
-					Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
-						LogAttribute: &policyv1alpha1.AttributePath{
-							Path: []string{"http.route"},
+					Target: &policyv1alpha1.LogFieldSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{
+							Segments: []string{"http.route"},
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equals{
-					Equals: &policyv1alpha1.Value{
-						Value: &policyv1alpha1.Value_StringValue{
+				Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Equality: &policyv1alpha1.Value{
+						Kind: &policyv1alpha1.Value_StringValue{
 							StringValue: "/healthz",
 						},
 					},
@@ -62,15 +62,15 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 			},
 			{
 				Target: &policyv1alpha1.LogFieldSelector{
-					Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
-						LogAttribute: &policyv1alpha1.AttributePath{
-							Path: []string{"http.status_code"},
+					Target: &policyv1alpha1.LogFieldSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{
+							Segments: []string{"http.status_code"},
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equals{
-					Equals: &policyv1alpha1.Value{
-						Value: &policyv1alpha1.Value_IntValue{
+				Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Equality: &policyv1alpha1.Value{
+						Kind: &policyv1alpha1.Value_IntValue{
 							IntValue: 200,
 						},
 					},
@@ -78,15 +78,15 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 			},
 			{
 				Target: &policyv1alpha1.LogFieldSelector{
-					Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
-						LogAttribute: &policyv1alpha1.AttributePath{
-							Path: []string{"feature_flag.enabled"},
+					Target: &policyv1alpha1.LogFieldSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{
+							Segments: []string{"feature_flag.enabled"},
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equals{
-					Equals: &policyv1alpha1.Value{
-						Value: &policyv1alpha1.Value_BoolValue{
+				Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Equality: &policyv1alpha1.Value{
+						Kind: &policyv1alpha1.Value_BoolValue{
 							BoolValue: true,
 						},
 					},
@@ -94,15 +94,15 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 			},
 			{
 				Target: &policyv1alpha1.LogFieldSelector{
-					Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
-						LogAttribute: &policyv1alpha1.AttributePath{
-							Path: []string{"sampling.threshold"},
+					Target: &policyv1alpha1.LogFieldSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{
+							Segments: []string{"sampling.threshold"},
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equals{
-					Equals: &policyv1alpha1.Value{
-						Value: &policyv1alpha1.Value_DoubleValue{
+				Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Equality: &policyv1alpha1.Value{
+						Kind: &policyv1alpha1.Value_DoubleValue{
 							DoubleValue: 0.05,
 						},
 					},
@@ -110,15 +110,15 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 			},
 			{
 				Target: &policyv1alpha1.LogFieldSelector{
-					Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
-						LogAttribute: &policyv1alpha1.AttributePath{
-							Path: []string{"binary.signature"},
+					Target: &policyv1alpha1.LogFieldSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{
+							Segments: []string{"binary.signature"},
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equals{
-					Equals: &policyv1alpha1.Value{
-						Value: &policyv1alpha1.Value_BytesValue{
+				Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Equality: &policyv1alpha1.Value{
+						Kind: &policyv1alpha1.Value_BytesValue{
 							BytesValue: []byte{0xde, 0xad, 0xbe, 0xef},
 						},
 					},
@@ -126,15 +126,15 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 			},
 			{
 				Target: &policyv1alpha1.LogFieldSelector{
-					Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
-						LogAttribute: &policyv1alpha1.AttributePath{
-							Path: []string{"user", "roles"},
+					Target: &policyv1alpha1.LogFieldSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{
+							Segments: []string{"user", "roles"},
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Contains{
-					Contains: &policyv1alpha1.Value{
-						Value: &policyv1alpha1.Value_StringValue{
+				Predicate: &policyv1alpha1.LogMatcher_Containment{
+					Containment: &policyv1alpha1.Value{
+						Kind: &policyv1alpha1.Value_StringValue{
 							StringValue: "admin",
 						},
 					},
@@ -146,9 +146,9 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER,
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Gte{
-					Gte: &policyv1alpha1.NumericValue{
-						Value: &policyv1alpha1.NumericValue_IntValue{
+				Predicate: &policyv1alpha1.LogMatcher_InclusiveMinimum{
+					InclusiveMinimum: &policyv1alpha1.NumericValue{
+						Kind: &policyv1alpha1.NumericValue_IntValue{
 							IntValue: 17, // ERROR
 						},
 					},
@@ -156,15 +156,15 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 			},
 			{
 				Target: &policyv1alpha1.LogFieldSelector{
-					Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
-						LogAttribute: &policyv1alpha1.AttributePath{
-							Path: []string{"latency_seconds"},
+					Target: &policyv1alpha1.LogFieldSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{
+							Segments: []string{"latency_seconds"},
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Gt{
-					Gt: &policyv1alpha1.NumericValue{
-						Value: &policyv1alpha1.NumericValue_DoubleValue{
+				Predicate: &policyv1alpha1.LogMatcher_ExclusiveMinimum{
+					ExclusiveMinimum: &policyv1alpha1.NumericValue{
+						Kind: &policyv1alpha1.NumericValue_DoubleValue{
 							DoubleValue: 2.5,
 						},
 					},
@@ -172,28 +172,28 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 			},
 			{
 				Target: &policyv1alpha1.LogFieldSelector{
-					Target: &policyv1alpha1.LogFieldSelector_ResourceAttribute{
-						ResourceAttribute: &policyv1alpha1.AttributePath{
-							Path: []string{"service.name"},
+					Target: &policyv1alpha1.LogFieldSelector_ResourceAttributePath{
+						ResourceAttributePath: &policyv1alpha1.AttributePath{
+							Segments: []string{"service.name"},
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Exists{
-					Exists: &emptypb.Empty{},
+				Predicate: &policyv1alpha1.LogMatcher_Existence{
+					Existence: &emptypb.Empty{},
 				},
-				Negate: true,
+				Negated: true,
 			},
 			{
 				Target: &policyv1alpha1.LogFieldSelector{
-					Target: &policyv1alpha1.LogFieldSelector_ScopeAttribute{
-						ScopeAttribute: &policyv1alpha1.AttributePath{
-							Path: []string{"library.name"},
+					Target: &policyv1alpha1.LogFieldSelector_ScopeAttributePath{
+						ScopeAttributePath: &policyv1alpha1.AttributePath{
+							Segments: []string{"library.name"},
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equals{
-					Equals: &policyv1alpha1.Value{
-						Value: &policyv1alpha1.Value_StringValue{
+				Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Equality: &policyv1alpha1.Value{
+						Kind: &policyv1alpha1.Value_StringValue{
 							StringValue: "my-library",
 						},
 					},
@@ -205,9 +205,9 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 						ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_NAME,
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equals{
-					Equals: &policyv1alpha1.Value{
-						Value: &policyv1alpha1.Value_StringValue{
+				Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Equality: &policyv1alpha1.Value{
+						Kind: &policyv1alpha1.Value_StringValue{
 							StringValue: "my-scope",
 						},
 					},
@@ -219,9 +219,9 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 						ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_VERSION,
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equals{
-					Equals: &policyv1alpha1.Value{
-						Value: &policyv1alpha1.Value_StringValue{
+				Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Equality: &policyv1alpha1.Value{
+						Kind: &policyv1alpha1.Value_StringValue{
 							StringValue: "v1.2.3",
 						},
 					},
@@ -233,10 +233,26 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 						ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_SCHEMA_URL,
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equals{
-					Equals: &policyv1alpha1.Value{
-						Value: &policyv1alpha1.Value_StringValue{
+				Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Equality: &policyv1alpha1.Value{
+						Kind: &policyv1alpha1.Value_StringValue{
 							StringValue: "https://opentelemetry.io/schemas/1.24.0",
+						},
+					},
+				},
+			},
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_BodyFieldPath{
+						BodyFieldPath: &policyv1alpha1.AttributePath{
+							Segments: []string{"event_data", "TargetUserName"},
+						},
+					},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Equality: &policyv1alpha1.Value{
+						Kind: &policyv1alpha1.Value_StringValue{
+							StringValue: "SYSTEM",
 						},
 					},
 				},
@@ -260,42 +276,43 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 	assert.Equal(t, "drop-noisy-healthchecks", unmarshaled.GetId())
 	assert.NotNil(t, unmarshaled.Action)
 	assert.Equal(t, policyv1alpha1.Action_ACTION_DROP, unmarshaled.GetAction())
-	require.Len(t, unmarshaled.GetMatches(), 14)
+	require.Len(t, unmarshaled.GetMatchers(), 15)
+	assert.Equal(t, []string{"event_data", "TargetUserName"}, unmarshaled.GetMatchers()[14].GetTarget().GetBodyFieldPath().GetSegments())
 }
 
 func TestLogFilterPolicy_JSONSerialization(t *testing.T) {
 	policy := &policyv1alpha1.LogFilterPolicy{
 		Id:     "drop-noisy-healthchecks",
 		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-		Matches: []*policyv1alpha1.LogMatcher{
+		Matchers: []*policyv1alpha1.LogMatcher{
 			{
 				Target: &policyv1alpha1.LogFieldSelector{
-					Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
-						LogAttribute: &policyv1alpha1.AttributePath{
-							Path: []string{"http.route"},
+					Target: &policyv1alpha1.LogFieldSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{
+							Segments: []string{"http.route"},
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equals{
-					Equals: &policyv1alpha1.Value{
-						Value: &policyv1alpha1.Value_StringValue{
+				Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Equality: &policyv1alpha1.Value{
+						Kind: &policyv1alpha1.Value_StringValue{
 							StringValue: "/healthz",
 						},
 					},
 				},
-				Negate: false,
+				Negated: false,
 			},
 			{
 				Target: &policyv1alpha1.LogFieldSelector{
-					Target: &policyv1alpha1.LogFieldSelector_LogAttribute{
-						LogAttribute: &policyv1alpha1.AttributePath{
-							Path: []string{"http.status_code"},
+					Target: &policyv1alpha1.LogFieldSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{
+							Segments: []string{"http.status_code"},
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Gte{
-					Gte: &policyv1alpha1.NumericValue{
-						Value: &policyv1alpha1.NumericValue_IntValue{
+				Predicate: &policyv1alpha1.LogMatcher_InclusiveMinimum{
+					InclusiveMinimum: &policyv1alpha1.NumericValue{
+						Kind: &policyv1alpha1.NumericValue_IntValue{
 							IntValue: 400,
 						},
 					},
@@ -307,19 +324,34 @@ func TestLogFilterPolicy_JSONSerialization(t *testing.T) {
 						ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_SCHEMA_URL,
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Exists{
-					Exists: &emptypb.Empty{},
+				Predicate: &policyv1alpha1.LogMatcher_Existence{
+					Existence: &emptypb.Empty{},
 				},
-				Negate: true,
+				Negated: true,
+			},
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_BodyFieldPath{
+						BodyFieldPath: &policyv1alpha1.AttributePath{
+							Segments: []string{"_SYSTEMD_UNIT"},
+						},
+					},
+				},
+				Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Equality: &policyv1alpha1.Value{
+						Kind: &policyv1alpha1.Value_StringValue{
+							StringValue: "sshd.service",
+						},
+					},
+				},
 			},
 		},
 	}
 
-
-
 	// ProtoJSON marshal and unmarshal round-trip.
 	jsonData, err := protojson.Marshal(policy)
 	require.NoError(t, err)
+	assert.Contains(t, string(jsonData), `"bodyFieldPath":{"segments":["_SYSTEMD_UNIT"]}`)
 
 	unmarshaled := &policyv1alpha1.LogFilterPolicy{}
 	require.NoError(t, protojson.Unmarshal(jsonData, unmarshaled))

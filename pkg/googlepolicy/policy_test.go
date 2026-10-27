@@ -15,15 +15,18 @@
 package googlepolicy
 
 import (
+	"errors"
 	"net/url"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
+	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/proto"
 )
 
 type mockTransformationPolicy struct {
@@ -276,34 +279,51 @@ func TestMakePolicySetAndGenericDriver(t *testing.T) {
 	assert.Equal(t, "", ps.PolicySetID)
 
 	// Validation failure
-	_, err = MakePolicySet("rev-val-err", []map[string]any{
+	ps, err = MakePolicySet("rev-val-err", []map[string]any{
 		{"type": "driver_test_type", "name": "bad-pol", "fail_val": true},
 	})
 	assert.ErrorIs(t, err, ErrPolicyFailedValidation)
+	assert.NotErrorIs(t, err, ErrPolicyFailedToLoad)
+	assert.Equal(t, "policy_failed_validation", ClassifyPolicyError(err))
+	require.Len(t, ps.FailedPolicies, 1)
+	assert.Equal(t, "index_0", ps.FailedPolicies[0].ID)
+	assert.Equal(t, PolicyClassTransformation, ps.FailedPolicies[0].Class)
 
 	// Load failure
-	_, err = LoadPolicy("driver_test_type", map[string]any{
-		"name": []int{1, 2},
+	ps, err = MakePolicySet("rev-load-err", []map[string]any{
+		{"type": "driver_test_type", "id": "load-err-pol", "name": []int{1, 2}},
 	})
 	assert.ErrorIs(t, err, ErrPolicyFailedToLoad)
+	assert.NotErrorIs(t, err, ErrPolicyFailedValidation)
+	assert.Equal(t, "policy_failed_to_load", ClassifyPolicyError(err))
+	require.Len(t, ps.FailedPolicies, 1)
+	assert.Equal(t, "load-err-pol", ps.FailedPolicies[0].ID)
+	assert.Equal(t, PolicyClassTransformation, ps.FailedPolicies[0].Class)
 
 	// Missing type field
-	_, err = MakePolicySet("rev-err1", []map[string]any{
+	ps, err = MakePolicySet("rev-err1", []map[string]any{
 		{"name": "no-type"},
 	})
 	assert.ErrorIs(t, err, ErrPolicyTypeFieldMissing)
+	require.Len(t, ps.FailedPolicies, 1)
+	assert.Equal(t, PolicyClass(""), ps.FailedPolicies[0].Class)
 
 	// Wrong type field type
-	_, err = MakePolicySet("rev-err2", []map[string]any{
+	ps, err = MakePolicySet("rev-err2", []map[string]any{
 		{"type": 12345},
 	})
 	assert.ErrorIs(t, err, ErrPolicyTypeFieldWrongType)
+	require.Len(t, ps.FailedPolicies, 1)
+	assert.Equal(t, PolicyClass(""), ps.FailedPolicies[0].Class)
 
-	// Unknown policy type -> returns joined error
-	_, err = MakePolicySet("rev-err3", []map[string]any{
+	// Unknown policy type -> returns joined error with empty class
+	ps, err = MakePolicySet("rev-err3", []map[string]any{
 		{"type": "unknown_type_xyz", "name": "test"},
 	})
-	assert.Error(t, err)
+	assert.ErrorIs(t, err, ErrPolicyTypeNotFound)
+	assert.Equal(t, "policy_type_not_found", ClassifyPolicyError(err))
+	require.Len(t, ps.FailedPolicies, 1)
+	assert.Equal(t, PolicyClass(""), ps.FailedPolicies[0].Class)
 
 	// Partial success: the unusable entries are reported and skipped, but the
 	// policies that did load are still returned.
@@ -317,6 +337,9 @@ func TestMakePolicySetAndGenericDriver(t *testing.T) {
 	require.NotNil(t, ps)
 	assert.Contains(t, ps.Policies, "good-pol")
 	assert.Len(t, ps.Policies, 1, "only the usable policy is kept")
+	require.Len(t, ps.FailedPolicies, 2)
+	assert.Equal(t, PolicyClass(""), ps.FailedPolicies[0].Class)
+	assert.Equal(t, PolicyClassTransformation, ps.FailedPolicies[1].Class)
 
 	// GenericDriver unmarshal error
 	_, err = driver.LoadPolicy(map[string]any{
@@ -380,4 +403,203 @@ func TestFilePolicyManager(t *testing.T) {
 
 	require.NoError(t, mgr.Stop())
 	require.NoError(t, mgr.Stop()) // double stop safe
+}
+
+func TestParsePolicySetRevision(t *testing.T) {
+	testCases := []struct {
+		name          string
+		input         string
+		wantPolicySet string
+		wantRevision  string
+		wantOK        bool
+	}{
+		{
+			name:          "valid canonical name",
+			input:         "projects/my-project/locations/global/policySets/my-ps/revisions/r1",
+			wantPolicySet: "projects/my-project/locations/global/policySets/my-ps",
+			wantRevision:  "r1",
+			wantOK:        true,
+		},
+		{
+			name:          "valid with numeric project and regional location",
+			input:         "projects/507934445817/locations/us-central1/policySets/fleet-ps/revisions/rev-42",
+			wantPolicySet: "projects/507934445817/locations/us-central1/policySets/fleet-ps",
+			wantRevision:  "rev-42",
+			wantOK:        true,
+		},
+		{
+			name:   "missing revisions segment",
+			input:  "projects/my-project/locations/global/policySets/my-ps",
+			wantOK: false,
+		},
+		{
+			name:   "empty revision ID",
+			input:  "projects/my-project/locations/global/policySets/my-ps/revisions/",
+			wantOK: false,
+		},
+		{
+			name:   "revision ID contains slash",
+			input:  "projects/my-project/locations/global/policySets/my-ps/revisions/r1/extra",
+			wantOK: false,
+		},
+		{
+			name:   "malformed prefix before revisions",
+			input:  "invalid/prefix/policySets/my-ps/revisions/r1",
+			wantOK: false,
+		},
+		{
+			name:   "completely empty string",
+			input:  "",
+			wantOK: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			psID, revID, ok := ParsePolicySetRevision(tc.input)
+			assert.Equal(t, tc.wantOK, ok)
+			assert.Equal(t, tc.wantPolicySet, psID)
+			assert.Equal(t, tc.wantRevision, revID)
+		})
+	}
+}
+
+func TestPolicySet_CloneWithRevisionCreateTime(t *testing.T) {
+	now := time.Now()
+	createTime := now.Add(-10 * time.Minute)
+
+	ps := &PolicySet{
+		PolicySetID:        "projects/p/locations/l/policySets/ps",
+		RevisionID:         "rev-1",
+		RevisionCreateTime: createTime,
+		ReceivedAt:         now,
+		Policies: map[string]*PolicySetEntry{
+			"pol-1": {
+				PolicyObj: &mockOtherPolicy{name: "pol-1", class: PolicyClassDestination},
+				Processed: true,
+			},
+		},
+	}
+
+	clone := ps.Clone()
+	require.NotNil(t, clone)
+	assert.Equal(t, ps.PolicySetID, clone.PolicySetID)
+	assert.Equal(t, ps.RevisionID, clone.RevisionID)
+	assert.Equal(t, ps.RevisionCreateTime, clone.RevisionCreateTime)
+	assert.Equal(t, ps.ReceivedAt, clone.ReceivedAt)
+	require.Contains(t, clone.Policies, "pol-1")
+	assert.Equal(t, ps.Policies["pol-1"].PolicyObj.PolicyName(), clone.Policies["pol-1"].PolicyObj.PolicyName())
+}
+
+func TestProtoDriver_ValidationClassificationAndPolicyClass(t *testing.T) {
+	errMissingID := errors.New("id cannot be empty")
+	errMissingAction := errors.New("action must be specified")
+
+	d := ProtoDriver[*policyv1alpha1.LogFilterPolicy]{
+		New: func(pb *policyv1alpha1.LogFilterPolicy) (Policy, error) {
+			if pb == nil || pb.GetId() == "" {
+				return nil, errMissingID
+			}
+			if pb.GetAction() == policyv1alpha1.Action_ACTION_UNSPECIFIED {
+				return nil, errMissingAction
+			}
+			return &mockTransformationPolicy{name: pb.GetId(), signals: []Signal{SignalLogs}}, nil
+		},
+	}
+
+	protoName := (&policyv1alpha1.LogFilterPolicy{}).ProtoReflect().Descriptor().FullName()
+	unregisterForTest(t, "test_proto_log_filter", protoName)
+	require.NoError(t, RegisterPolicyDriver("test_proto_log_filter", d))
+
+	assert.Equal(t, PolicyClassTransformation, d.PolicyClass(), "ProtoDriver defaults to PolicyClassTransformation when Class is unset")
+	assert.Equal(t, PolicyClassSource, (ProtoDriver[*policyv1alpha1.LogFilterPolicy]{Class: PolicyClassSource}).PolicyClass())
+
+	t.Run("LoadPolicyFromProto semantic validation error wraps ErrPolicyFailedValidation", func(t *testing.T) {
+		_, err := LoadPolicyFromProto(&policyv1alpha1.LogFilterPolicy{Id: "bad-filter"})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrPolicyFailedValidation)
+		assert.ErrorIs(t, err, errMissingAction)
+		assert.NotErrorIs(t, err, ErrPolicyFailedToLoad)
+		assert.Equal(t, "policy_failed_validation", ClassifyPolicyError(err))
+	})
+
+	t.Run("LoadPolicy semantic validation error wraps ErrPolicyFailedValidation", func(t *testing.T) {
+		_, err := LoadPolicy("test_proto_log_filter", map[string]any{
+			"type": "test_proto_log_filter",
+			"id":   "bad-filter",
+		})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrPolicyFailedValidation)
+		assert.ErrorIs(t, err, errMissingAction)
+		assert.NotErrorIs(t, err, ErrPolicyFailedToLoad)
+		assert.Equal(t, "policy_failed_validation", ClassifyPolicyError(err))
+	})
+
+	t.Run("LoadPolicy protojson unmarshal error wraps ErrPolicyFailedToLoad", func(t *testing.T) {
+		_, err := LoadPolicy("test_proto_log_filter", map[string]any{
+			"type":    "test_proto_log_filter",
+			"id":      "bad-type",
+			"matchers": "not-an-array",
+		})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrPolicyFailedToLoad)
+		assert.NotErrorIs(t, err, ErrPolicyFailedValidation)
+		assert.Equal(t, "policy_failed_to_load", ClassifyPolicyError(err))
+	})
+
+	t.Run("LoadPolicyProto mismatched proto type wraps ErrPolicyProtoMismatch", func(t *testing.T) {
+		_, err := d.LoadPolicyProto(&policyv1alpha1.MetricFilterPolicy{Id: "wrong-proto"})
+		require.ErrorIs(t, err, ErrPolicyProtoMismatch)
+		assert.NotErrorIs(t, err, ErrPolicyFailedValidation)
+	})
+
+	t.Run("LoadPolicyFromProto nil message wraps ErrPolicyFailedToLoad", func(t *testing.T) {
+		_, err := LoadPolicyFromProto(nil)
+		require.ErrorIs(t, err, ErrPolicyFailedToLoad)
+		assert.Equal(t, "policy_failed_to_load", ClassifyPolicyError(err))
+	})
+
+	t.Run("MakePolicySetFromProtos populates FailedPolicy.Class and error classification", func(t *testing.T) {
+		ps, err := MakePolicySetFromProtos("projects/p/locations/l/policySets/ps", "rev-1", []proto.Message{
+			&policyv1alpha1.LogFilterPolicy{Id: "bad-filter"},
+			&policyv1alpha1.MetricFilterPolicy{Id: "unregistered-metric"},
+			&policyv1alpha1.LogFilterPolicy{
+				Id:     "good-filter",
+				Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+			},
+		})
+		require.Error(t, err)
+		require.NotNil(t, ps)
+		assert.Contains(t, ps.Policies, "good-filter")
+		require.Len(t, ps.FailedPolicies, 2)
+
+		assert.Equal(t, "bad-filter", ps.FailedPolicies[0].ID)
+		assert.Equal(t, PolicyClassTransformation, ps.FailedPolicies[0].Class)
+		assert.ErrorIs(t, ps.FailedPolicies[0].Err, ErrPolicyFailedValidation)
+		assert.NotErrorIs(t, ps.FailedPolicies[0].Err, ErrPolicyFailedToLoad)
+		assert.Equal(t, "policy_failed_validation", ClassifyPolicyError(ps.FailedPolicies[0].Err))
+
+		assert.Equal(t, "unregistered-metric", ps.FailedPolicies[1].ID)
+		assert.Equal(t, PolicyClass(""), ps.FailedPolicies[1].Class)
+		assert.ErrorIs(t, ps.FailedPolicies[1].Err, ErrPolicyTypeNotFound)
+		assert.Equal(t, "policy_type_not_found", ClassifyPolicyError(ps.FailedPolicies[1].Err))
+	})
+
+	t.Run("MakePolicySet populates FailedPolicy.Class for ProtoDriver load and validation errors", func(t *testing.T) {
+		ps, err := MakePolicySet("rev-raw-1", []map[string]any{
+			{"type": "test_proto_log_filter", "id": "val-err"},
+			{"type": "test_proto_log_filter", "id": "load-err", "matchers": "not-an-array"},
+		})
+		require.Error(t, err)
+		require.NotNil(t, ps)
+		require.Len(t, ps.FailedPolicies, 2)
+
+		assert.Equal(t, "val-err", ps.FailedPolicies[0].ID)
+		assert.Equal(t, PolicyClassTransformation, ps.FailedPolicies[0].Class)
+		assert.Equal(t, "policy_failed_validation", ClassifyPolicyError(ps.FailedPolicies[0].Err))
+
+		assert.Equal(t, "load-err", ps.FailedPolicies[1].ID)
+		assert.Equal(t, PolicyClassTransformation, ps.FailedPolicies[1].Class)
+		assert.Equal(t, "policy_failed_to_load", ClassifyPolicyError(ps.FailedPolicies[1].Err))
+	})
 }

@@ -1,0 +1,23 @@
+{
+  "type": "trace_filter",
+  "id": "drop-internal-kind-spans",
+  "matchers": [
+    {
+      "target": {
+        "record_field": "SPAN_RECORD_FIELD_KIND"
+      },
+      "equality": {
+        "string_value": "INTERNAL"
+      }
+    },
+    {
+      "target": {
+        "record_field": "SPAN_RECORD_FIELD_PARENT_SPAN_ID"
+      },
+      "negated": true,
+      "equality": {
+        "string_value": ""
+      }
+    }
+  ]
+}

@@ -703,6 +703,7 @@ func TestXDSPolicyManager_EmptyRevisionClearsPolicies(t *testing.T) {
 	resetActivePolicySet(t)
 
 	responded := make(chan *discoveryv3.DiscoveryRequest, 4)
+	firstAsserted := make(chan struct{})
 
 	srv := &fakeADSServer{streamOpened: make(chan struct{}, 8)}
 	srv.handlers = []func(discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error{
@@ -721,6 +722,7 @@ func TestXDSPolicyManager_EmptyRevisionClearsPolicies(t *testing.T) {
 				return err
 			}
 			responded <- ack
+			<-firstAsserted
 
 			if err := stream.Send(&discoveryv3.DiscoveryResponse{
 				VersionInfo: "rev-2", Nonce: "n2", TypeUrl: xdsPolicyTypeURL,
@@ -745,6 +747,7 @@ func TestXDSPolicyManager_EmptyRevisionClearsPolicies(t *testing.T) {
 
 	<-responded
 	require.Equal(t, []string{"log-filter"}, activePolicyNames(t))
+	close(firstAsserted)
 
 	cleared := <-responded
 	assert.Equal(t, "rev-2", cleared.GetVersionInfo())
@@ -1321,4 +1324,3 @@ func TestXDSPolicyManager_DebugProtoJSONAndAppliedPolicyLogging(t *testing.T) {
 	assert.EqualValues(t, 1, appliedLogs[0].ContextMap()["policies_loaded"])
 	assert.EqualValues(t, 0, appliedLogs[0].ContextMap()["policies_skipped"])
 }
-

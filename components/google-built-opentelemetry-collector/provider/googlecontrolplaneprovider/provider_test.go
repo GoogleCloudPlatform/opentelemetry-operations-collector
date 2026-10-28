@@ -499,6 +499,13 @@ func TestFilterPolicyDriversRegistered(t *testing.T) {
 				},
 			},
 		},
+		{
+			policyType: "journald_source",
+			raw: map[string]any{
+				"type": "journald_source",
+				"id":   "test-journald",
+			},
+		},
 	} {
 		t.Run(tc.policyType, func(t *testing.T) {
 			pol, err := googlepolicy.LoadPolicy(tc.policyType, tc.raw)
@@ -1211,6 +1218,201 @@ func TestPolicyHotReload_NoDuplicateEvaluationOnUpdate(t *testing.T) {
 
 	// Retrieve should return the cached evaluation without calling Evaluate() again.
 	assert.Equal(t, int32(2), evalCount.Load(), "Retrieve after hot reload should reuse precomputed confmap and not re-evaluate")
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestRetrieve_MultipleJournaldSourcePoliciesConsolidated(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	p := createProvider()
+
+	p1, err := googlepolicy.LoadPolicy("journald_source", map[string]any{
+		"type": "journald_source",
+		"id":   "host-journal-1",
+	})
+	require.NoError(t, err)
+
+	p2, err := googlepolicy.LoadPolicy("journald_source", map[string]any{
+		"type": "journald_source",
+		"id":   "host-journal-2",
+	})
+	require.NoError(t, err)
+
+	ps := &googlepolicy.PolicySet{
+		RevisionID: "rev-multi-journald",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			"policy-1": {PolicyObj: p1},
+			"policy-2": {PolicyObj: p2},
+		},
+	}
+	googlepolicy.SetActivePolicySet(ps)
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+
+	raw := conf.ToStringMap()
+	receivers, ok := raw["receivers"].(map[string]any)
+	require.True(t, ok)
+
+	// Exactly 1 journald receiver is present
+	require.Contains(t, receivers, "journald")
+
+	pipelines, ok := raw["service"].(map[string]any)["pipelines"].(map[string]any)
+	require.True(t, ok)
+	logsPipeline, ok := pipelines["logs/googlecontrolplane"].(map[string]any)
+	require.True(t, ok)
+	pipelineReceivers, ok := logsPipeline["receivers"].([]any)
+	require.True(t, ok)
+	require.Contains(t, pipelineReceivers, "journald")
+	require.Contains(t, pipelineReceivers, "nop/googlecontrolplane")
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+type invalidJournaldSourcePolicy struct {
+	name string
+}
+
+func (i *invalidJournaldSourcePolicy) PolicyName() string { return i.name }
+func (i *invalidJournaldSourcePolicy) PolicyType() string { return "journald_source" }
+func (i *invalidJournaldSourcePolicy) PolicyClass() googlepolicy.PolicyClass {
+	return googlepolicy.PolicyClassSource
+}
+func (i *invalidJournaldSourcePolicy) Validate() error { return errors.New("invalid journald policy") }
+func (i *invalidJournaldSourcePolicy) Evaluate(_ context.Context) (*confmap.Conf, error) {
+	return nil, errors.New("invalid journald policy")
+}
+func (i *invalidJournaldSourcePolicy) LogReceiverIDs() []component.ID {
+	return []component.ID{component.MustNewID("journald")}
+}
+func (i *invalidJournaldSourcePolicy) MetricReceiverIDs() []component.ID { return nil }
+func (i *invalidJournaldSourcePolicy) TraceReceiverIDs() []component.ID  { return nil }
+func (i *invalidJournaldSourcePolicy) Consolidate(policies []googlepolicy.SourcePolicy) (googlepolicy.SourcePolicy, error) {
+	return nil, errors.New("invalid policy cannot consolidate")
+}
+
+func TestRetrieve_MultipleJournaldSourcePolicies_FaultIsolation_FirstPolicyInvalid(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	p := createProvider()
+
+	badP0 := &invalidJournaldSourcePolicy{name: "bad-journald-0"}
+
+	p1, err := googlepolicy.LoadPolicy("journald_source", map[string]any{
+		"type": "journald_source",
+		"id":   "host-journal-1",
+	})
+	require.NoError(t, err)
+
+	p2, err := googlepolicy.LoadPolicy("journald_source", map[string]any{
+		"type": "journald_source",
+		"id":   "host-journal-2",
+	})
+	require.NoError(t, err)
+
+	ps := &googlepolicy.PolicySet{
+		RevisionID: "rev-fault-isolation",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			"policy-bad-0":  {PolicyObj: badP0},
+			"policy-good-1": {PolicyObj: p1},
+			"policy-good-2": {PolicyObj: p2},
+		},
+	}
+	googlepolicy.SetActivePolicySet(ps)
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+
+	raw := conf.ToStringMap()
+	receivers, ok := raw["receivers"].(map[string]any)
+	require.True(t, ok)
+
+	// Fault isolation: good-1 and good-2 consolidated successfully into journald despite bad-0
+	require.Contains(t, receivers, "journald")
+
+	pipelines, ok := raw["service"].(map[string]any)["pipelines"].(map[string]any)
+	require.True(t, ok)
+	logsPipeline, ok := pipelines["logs/googlecontrolplane"].(map[string]any)
+	require.True(t, ok)
+	pipelineReceivers, ok := logsPipeline["receivers"].([]any)
+	require.True(t, ok)
+	require.Contains(t, pipelineReceivers, "journald")
+	require.Contains(t, pipelineReceivers, "nop/googlecontrolplane")
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+type failConsolidateJournaldSourcePolicy struct {
+	name string
+}
+
+func (f *failConsolidateJournaldSourcePolicy) PolicyName() string { return f.name }
+func (f *failConsolidateJournaldSourcePolicy) PolicyType() string { return "journald_source" }
+func (f *failConsolidateJournaldSourcePolicy) PolicyClass() googlepolicy.PolicyClass {
+	return googlepolicy.PolicyClassSource
+}
+func (f *failConsolidateJournaldSourcePolicy) Validate() error { return nil }
+func (f *failConsolidateJournaldSourcePolicy) Evaluate(_ context.Context) (*confmap.Conf, error) {
+	return confmap.New(), nil
+}
+func (f *failConsolidateJournaldSourcePolicy) LogReceiverIDs() []component.ID {
+	return []component.ID{component.MustNewID("journald")}
+}
+func (f *failConsolidateJournaldSourcePolicy) MetricReceiverIDs() []component.ID { return nil }
+func (f *failConsolidateJournaldSourcePolicy) TraceReceiverIDs() []component.ID  { return nil }
+func (f *failConsolidateJournaldSourcePolicy) Consolidate(_ []googlepolicy.SourcePolicy) (googlepolicy.SourcePolicy, error) {
+	return nil, errors.New("consolidation failed deliberately")
+}
+
+func TestRetrieve_MultipleJournaldSourcePolicies_ConsolidationFailureAttributesAllPolicies(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	p := createProvider()
+
+	p1 := &failConsolidateJournaldSourcePolicy{name: "failing-policy-1"}
+	p2 := &failConsolidateJournaldSourcePolicy{name: "failing-policy-2"}
+
+	ps := &googlepolicy.PolicySet{
+		RevisionID: "rev-consolidation-fail",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			"failing-policy-1": {PolicyObj: p1},
+			"failing-policy-2": {PolicyObj: p2},
+		},
+	}
+	googlepolicy.SetActivePolicySet(ps)
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	// Since consolidation failed, no journald receiver is added
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+	raw := conf.ToStringMap()
+	receivers, ok := raw["receivers"].(map[string]any)
+	require.True(t, ok)
+	require.NotContains(t, receivers, "journald")
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }

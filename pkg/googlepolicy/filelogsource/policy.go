@@ -277,11 +277,20 @@ func Merge(policies ...*Policy) (*Policy, error) {
 
 // Consolidate implements googlepolicy.ConsolidatableSourcePolicy.
 func (p *Policy) Consolidate(policies []googlepolicy.SourcePolicy) (googlepolicy.SourcePolicy, error) {
+	if err := p.Validate(); err != nil {
+		return nil, err
+	}
 	if len(policies) == 0 {
-		return nil, nil
+		return p, nil
 	}
 	typedPolicies := make([]*Policy, 0, len(policies))
 	for _, sp := range policies {
+		if sp == nil {
+			return nil, ErrNilProto
+		}
+		if err := sp.Validate(); err != nil {
+			return nil, fmt.Errorf("cannot consolidate invalid policy %q: %w", sp.PolicyName(), err)
+		}
 		pol, ok := sp.(*Policy)
 		if !ok {
 			return nil, fmt.Errorf("cannot consolidate policy of type %T with FileLogSourcePolicy", sp)

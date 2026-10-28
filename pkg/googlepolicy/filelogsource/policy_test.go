@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
+	"go.opentelemetry.io/collector/confmap"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -640,10 +641,14 @@ func TestConsolidate(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Consolidate empty
+	// Consolidate empty slice returns receiver policy
 	merged, err := p1.Consolidate(nil)
 	require.NoError(t, err)
-	assert.Nil(t, merged)
+	assert.Same(t, p1, merged)
+
+	merged, err = p1.Consolidate([]googlepolicy.SourcePolicy{})
+	require.NoError(t, err)
+	assert.Same(t, p1, merged)
 
 	// Consolidate single
 	merged, err = p1.Consolidate([]googlepolicy.SourcePolicy{p1})
@@ -661,7 +666,39 @@ func TestConsolidate(t *testing.T) {
 		"/var/log/b.log",
 		"/var/log/shared.log",
 	}, merged.(interface{ IncludedPaths() []string }).IncludedPaths())
+
+	// Consolidate with invalid receiver returns validation error
+	badReceiver := &Policy{proto: &policyv1alpha1.FileLogSourcePolicy{Id: ""}}
+	_, err = badReceiver.Consolidate(nil)
+	require.ErrorIs(t, err, ErrMissingID)
+
+	// Consolidate with invalid policy in slice returns error
+	badPolicy := &Policy{proto: &policyv1alpha1.FileLogSourcePolicy{Id: ""}}
+	_, err = p1.Consolidate([]googlepolicy.SourcePolicy{badPolicy})
+	require.Error(t, err)
+
+	// Consolidate with foreign policy type returns error
+	mockForeign := &mockForeignSourcePolicy{name: "foreign"}
+	_, err = p1.Consolidate([]googlepolicy.SourcePolicy{mockForeign})
+	require.Error(t, err)
 }
+
+type mockForeignSourcePolicy struct {
+	name string
+}
+
+func (m *mockForeignSourcePolicy) PolicyName() string { return m.name }
+func (m *mockForeignSourcePolicy) PolicyType() string { return "mock_foreign" }
+func (m *mockForeignSourcePolicy) PolicyClass() googlepolicy.PolicyClass {
+	return googlepolicy.PolicyClassSource
+}
+func (m *mockForeignSourcePolicy) Validate() error { return nil }
+func (m *mockForeignSourcePolicy) Evaluate(_ context.Context) (*confmap.Conf, error) {
+	return confmap.New(), nil
+}
+func (m *mockForeignSourcePolicy) LogReceiverIDs() []component.ID    { return nil }
+func (m *mockForeignSourcePolicy) MetricReceiverIDs() []component.ID { return nil }
+func (m *mockForeignSourcePolicy) TraceReceiverIDs() []component.ID  { return nil }
 
 func TestDriver_WireProtoAndMapLoading(t *testing.T) {
 	pb := &policyv1alpha1.FileLogSourcePolicy{

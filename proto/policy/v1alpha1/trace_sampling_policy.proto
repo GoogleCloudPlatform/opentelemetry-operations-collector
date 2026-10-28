@@ -27,9 +27,9 @@ option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-col
 // Evaluation & Precedence Semantics:
 // - Default Disposition & Fail-Open: Spans pass through unsampled by default
 //   (default allow) when no matching valid TraceSamplingPolicy is configured.
-//   A policy with an empty `id`, an unset `sampling_percent` or one outside the
-//   valid range (0.0, 100.0] (including 0.0, negative values, > 100.0, NaN, or
-//   Inf), or any malformed `TraceMatcher` in `matchers` is invalid and ignored
+//   A policy with an empty `id`, a `sampling_percent` outside the valid
+//   range (0.0, 100.0] (including 0.0, negative values, > 100.0, NaN, or Inf),
+//   or any malformed `TraceMatcher` in `matchers` is invalid and ignored
 //   (fail-open).
 // - Conditional & Unconditional Matching: If `matchers` is empty, the policy
 //   matches all spans unconditionally (setting a global baseline sampling
@@ -61,7 +61,7 @@ message TraceSamplingPolicy {
   string id = 1;
 
   // Probabilistic sampling percentage in the range (0.0, 100.0]. Required.
-  optional double sampling_percent = 2;
+  double sampling_percent = 2;
 
   // Optional conditions evaluated against incoming spans.
   // When empty, this sampling policy applies unconditionally to all spans.

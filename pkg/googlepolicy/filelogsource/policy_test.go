@@ -655,6 +655,17 @@ func TestConsolidate(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, p1, merged)
 
+	// Consolidate with receiver self-inclusion: passing only p2 still includes receiver p1
+	merged, err = p1.Consolidate([]googlepolicy.SourcePolicy{p2})
+	require.NoError(t, err)
+	require.NotNil(t, merged)
+	assert.Equal(t, "filelog_consolidated", merged.PolicyName())
+	assert.Equal(t, []string{
+		"/var/log/a.log",
+		"/var/log/b.log",
+		"/var/log/shared.log",
+	}, merged.(interface{ IncludedPaths() []string }).IncludedPaths())
+
 	// Consolidate multiple with deduplication and set-union merging
 	merged, err = p1.Consolidate([]googlepolicy.SourcePolicy{p1, p2, p3})
 	require.NoError(t, err)
@@ -666,6 +677,18 @@ func TestConsolidate(t *testing.T) {
 		"/var/log/b.log",
 		"/var/log/shared.log",
 	}, merged.(interface{ IncludedPaths() []string }).IncludedPaths())
+
+	// Consolidate with nil receiver methods and typed-nil policy
+	var nilReceiver *Policy
+	assert.Equal(t, "", nilReceiver.PolicyName())
+	assert.ErrorIs(t, nilReceiver.Validate(), ErrNilProto)
+	assert.Nil(t, nilReceiver.IncludedPaths())
+	_, err = nilReceiver.Consolidate(nil)
+	require.ErrorIs(t, err, ErrNilProto)
+
+	var typedNilPolicy *Policy
+	_, err = p1.Consolidate([]googlepolicy.SourcePolicy{typedNilPolicy})
+	require.ErrorIs(t, err, ErrNilProto)
 
 	// Consolidate with invalid receiver returns validation error
 	badReceiver := &Policy{proto: &policyv1alpha1.FileLogSourcePolicy{Id: ""}}

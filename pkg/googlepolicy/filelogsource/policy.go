@@ -145,7 +145,7 @@ func NewPolicyFromProto(pb *policyv1alpha1.FileLogSourcePolicy) (*Policy, error)
 
 // PolicyName returns the policy ID.
 func (p *Policy) PolicyName() string {
-	if p.proto == nil {
+	if p == nil || p.proto == nil {
 		return ""
 	}
 	return p.proto.GetId()
@@ -163,7 +163,7 @@ func (p *Policy) PolicyClass() googlepolicy.PolicyClass {
 
 // Validate checks the fields of the policy and enforces path guardrails.
 func (p *Policy) Validate() error {
-	if p.proto == nil {
+	if p == nil || p.proto == nil {
 		return ErrNilProto
 	}
 	if p.proto.GetId() == "" {
@@ -277,13 +277,17 @@ func Merge(policies ...*Policy) (*Policy, error) {
 
 // Consolidate implements googlepolicy.ConsolidatableSourcePolicy.
 func (p *Policy) Consolidate(policies []googlepolicy.SourcePolicy) (googlepolicy.SourcePolicy, error) {
+	if p == nil || p.proto == nil {
+		return nil, ErrNilProto
+	}
 	if err := p.Validate(); err != nil {
 		return nil, err
 	}
 	if len(policies) == 0 {
 		return p, nil
 	}
-	typedPolicies := make([]*Policy, 0, len(policies))
+	hasSelf := false
+	typedPolicies := make([]*Policy, 0, len(policies)+1)
 	for _, sp := range policies {
 		if sp == nil {
 			return nil, ErrNilProto
@@ -295,14 +299,20 @@ func (p *Policy) Consolidate(policies []googlepolicy.SourcePolicy) (googlepolicy
 		if !ok {
 			return nil, fmt.Errorf("cannot consolidate policy of type %T with FileLogSourcePolicy", sp)
 		}
+		if pol == p {
+			hasSelf = true
+		}
 		typedPolicies = append(typedPolicies, pol)
+	}
+	if !hasSelf {
+		typedPolicies = append(typedPolicies, p)
 	}
 	return Merge(typedPolicies...)
 }
 
 // IncludedPaths returns a clone of the include patterns configured in the policy.
 func (p *Policy) IncludedPaths() []string {
-	if p.proto == nil {
+	if p == nil || p.proto == nil {
 		return nil
 	}
 	return slices.Clone(p.proto.GetIncludedPaths())

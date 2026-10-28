@@ -29,7 +29,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -185,24 +184,21 @@ func startMockOTLPServer(t *testing.T) (*mockOTLPServer, string) {
 }
 
 var (
-	ephemeralPortCounter int32 = 21000
+	ephemeralPortMu      sync.Mutex
+	ephemeralPortCounter int = 21000
 )
 
 func allocateEphemeralPorts(t *testing.T, count int) []int {
 	t.Helper()
+	ephemeralPortMu.Lock()
+	defer ephemeralPortMu.Unlock()
 	ports := make([]int, count)
 	for i := 0; i < count; i++ {
-		for {
-			cur := atomic.LoadInt32(&ephemeralPortCounter)
-			next := cur + 1
-			if next > 32000 {
-				next = 21001
-			}
-			if atomic.CompareAndSwapInt32(&ephemeralPortCounter, cur, next) {
-				ports[i] = int(next)
-				break
-			}
+		ephemeralPortCounter++
+		if ephemeralPortCounter > 32000 {
+			ephemeralPortCounter = 21001
 		}
+		ports[i] = ephemeralPortCounter
 	}
 	return ports
 }

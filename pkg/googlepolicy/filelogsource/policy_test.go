@@ -20,6 +20,7 @@ import (
 
 	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
+	"github.com/bmatcuk/doublestar/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
@@ -427,8 +428,8 @@ func TestPolicy_Evaluate_WindowsEnvExpansion(t *testing.T) {
 	cfgMap := sub.ToStringMap()
 
 	assert.Equal(t, []string{
-		`C:\ProgramData\MyApp\logs\*.log`,
-		`C:\inetpub\logs\*.log`,
+		`C:/programdata/myapp/logs/*.log`,
+		`C:/inetpub/logs/*.log`,
 	}, cfgMap["include"])
 }
 
@@ -536,7 +537,7 @@ func TestMerge_MultiplePolicies_WindowsCaseInsensitiveDeduplication(t *testing.T
 	require.NoError(t, err)
 	require.NotNil(t, merged)
 	assert.Len(t, merged.IncludedPaths(), 1)
-	assert.Equal(t, `C:\ProgramData\App\logs\app.log`, merged.IncludedPaths()[0])
+	assert.Equal(t, `C:/programdata/app/logs/app.log`, merged.IncludedPaths()[0])
 }
 
 func TestMerge_MultiplePolicies_WindowsEnvDeduplication(t *testing.T) {
@@ -556,7 +557,7 @@ func TestMerge_MultiplePolicies_WindowsEnvDeduplication(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, merged)
 	assert.Len(t, merged.IncludedPaths(), 1)
-	assert.Equal(t, `C:\ProgramData\App\logs\app.log`, merged.IncludedPaths()[0])
+	assert.Equal(t, `C:/programdata/app/logs/app.log`, merged.IncludedPaths()[0])
 
 	// Reverse merge order must produce the identical result.
 	mergedRev, err := Merge(p2, p1)
@@ -569,7 +570,7 @@ func TestMerge_MultiplePolicies_WindowsEnvDeduplication(t *testing.T) {
 	require.NoError(t, err)
 	sub, err := conf.Sub("receivers::filelog")
 	require.NoError(t, err)
-	assert.Equal(t, []string{`C:\ProgramData\App\logs\app.log`}, sub.ToStringMap()["include"])
+	assert.Equal(t, []string{`C:/programdata/app/logs/app.log`}, sub.ToStringMap()["include"])
 }
 
 func TestMerge_MultiplePolicies_WindowsEnvSortingDeterminism(t *testing.T) {
@@ -586,8 +587,8 @@ func TestMerge_MultiplePolicies_WindowsEnvSortingDeterminism(t *testing.T) {
 	require.NoError(t, err)
 
 	expected := []string{
-		`C:\ProgramData\App\logs\a.log`,
-		`C:\ProgramData\App\logs\z.log`,
+		`C:/programdata/app/logs/a.log`,
+		`C:/programdata/app/logs/z.log`,
 	}
 
 	merged1, err := Merge(p1, p2)
@@ -828,9 +829,29 @@ func FuzzPolicyValidation(f *testing.F) {
 		"relative/path/test.log",
 		"/var/log/[a-z",
 		"/var/log/{a,b",
+		"/var/log/{nginx,apache2}/*.log",
+		"/opt/{a/logs/x,secret/id_rsa}",
+		"/opt/app/{logs/*.log,conf/*.yaml}",
 	}
 	for _, seed := range seeds {
 		f.Add(seed)
+	}
+
+	canaries := []string{
+		"/etc/shadow",
+		"/etc/passwd",
+		"/root/.ssh/id_rsa",
+		"/proc/1/cmdline",
+		"/sys/kernel/debug",
+		"/tmp/secret.log",
+		"/home/user/app.log",
+		"/opt/secret/id_rsa",
+		"/opt/app/config/db.yaml",
+		"/srv/db/prod.sqlite",
+		"C:/windows/system32/cmd.exe",
+		"C:/windows/win.ini",
+		"C:/programdata/secret/key.pem",
+		"C:/programdata/app/config.yaml",
 	}
 
 	f.Fuzz(func(t *testing.T, path string) {
@@ -843,6 +864,21 @@ func FuzzPolicyValidation(f *testing.F) {
 		if err == nil && policy != nil {
 			_ = policy.Validate()
 			_, _ = policy.Evaluate(context.Background())
+
+			// Guardrail Invariant Check: If validation passes, no canary path outside allowed roots
+			// can ever match any pattern in the policy.
+			for _, pat := range policy.IncludedPaths() {
+				branches, err := expandBraces(pat)
+				if err != nil {
+					continue
+				}
+				for _, branch := range branches {
+					for _, canary := range canaries {
+						matched, _ := doublestar.Match(branch, canary)
+						require.False(t, matched, "Guardrail violation: fuzzed pattern %q (branch %q) matched forbidden canary %q", path, branch, canary)
+					}
+				}
+			}
 		}
 	})
 }

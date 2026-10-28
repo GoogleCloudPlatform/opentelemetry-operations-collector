@@ -21,16 +21,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
-	"regexp"
 	"slices"
-	"strings"
-	"testing"
 
 	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
-	"github.com/bmatcuk/doublestar/v4"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/confmap"
 	"google.golang.org/protobuf/proto"
@@ -56,22 +50,6 @@ func DefaultExcludePatterns() []string {
 	return slices.Clone(defaultExcludePatterns)
 }
 
-// forbiddenPrefixes contains forbidden sensitive system paths on Linux/Unix.
-var forbiddenPrefixes = []string{
-	"/etc",
-	"/root",
-	"/proc",
-	"/sys",
-	"/var/run",
-	"/run",
-	"/dev",
-	"/boot",
-	"/bin",
-	"/sbin",
-	"/usr/bin",
-	"/usr/sbin",
-}
-
 // driver loads a FileLogSourcePolicy from either shape it can arrive in: the proto
 // a control plane sends, or the map an authored config decodes to.
 var driver = &googlepolicy.ProtoDriver[*policyv1alpha1.FileLogSourcePolicy]{
@@ -94,22 +72,8 @@ var (
 	ErrMissingID = errors.New("file log source policy id cannot be empty")
 	// ErrMissingInclude is returned when the policy contains no include patterns.
 	ErrMissingInclude = errors.New("file log source policy must specify at least one include pattern")
-	// ErrEmptyIncludePattern is returned when an include pattern is empty.
-	ErrEmptyIncludePattern = errors.New("include pattern cannot be empty")
-	// ErrPathTraversal is returned when an include pattern contains prohibited path traversal ('..').
-	ErrPathTraversal = errors.New("include pattern contains prohibited path traversal ('..')")
-	// ErrSensitiveDirectory is returned when an include pattern targets a forbidden sensitive directory.
-	ErrSensitiveDirectory = errors.New("include pattern targets a forbidden sensitive directory")
-	// ErrDisallowedLogRoot is returned when an include pattern is outside permitted OS log roots.
-	ErrDisallowedLogRoot = errors.New("include pattern is outside permitted OS log roots")
-	// ErrRelativePath is returned when an include pattern is not an absolute path.
-	ErrRelativePath = errors.New("include pattern must be an absolute path")
 	// ErrDuplicateIncludePattern is returned when an include pattern appears more than once in a policy.
 	ErrDuplicateIncludePattern = errors.New("duplicate include pattern")
-	// ErrInvalidGlobPattern is returned when an include pattern has invalid glob syntax.
-	ErrInvalidGlobPattern = errors.New("invalid glob pattern syntax")
-	// ErrBareDirectoryPath is returned when an include pattern specifies a bare directory rather than a file or glob.
-	ErrBareDirectoryPath = errors.New("include pattern cannot be a bare directory")
 )
 
 // Policy represents a compiled, validated FileLogSourcePolicy ready for evaluation into Collector configuration.
@@ -124,7 +88,7 @@ var (
 
 // NewPolicyFromProto validates and compiles a FileLogSourcePolicy protobuf into a Policy.
 // Windows environment variable placeholders (e.g. %ProgramData%, %SystemDrive%)
-// in included_paths are expanded to concrete paths so that paths are canonical
+// in included_paths are expanded to concrete paths and normalized so that paths are canonical
 // and deterministic across evaluation and consolidation.
 func NewPolicyFromProto(pb *policyv1alpha1.FileLogSourcePolicy) (*Policy, error) {
 	if pb == nil {
@@ -132,9 +96,7 @@ func NewPolicyFromProto(pb *policyv1alpha1.FileLogSourcePolicy) (*Policy, error)
 	}
 	cloned := proto.Clone(pb).(*policyv1alpha1.FileLogSourcePolicy)
 	for i, inc := range cloned.GetIncludedPaths() {
-		if isWindowsAbsolute(inc) {
-			cloned.IncludedPaths[i] = expandWindowsEnv(inc)
-		}
+		cloned.IncludedPaths[i] = NormalizePattern(inc)
 	}
 	p := &Policy{proto: cloned}
 	if err := p.Validate(); err != nil {
@@ -174,7 +136,7 @@ func (p *Policy) Validate() error {
 	}
 	seen := make(map[string]bool, len(p.proto.GetIncludedPaths()))
 	for i, pattern := range p.proto.GetIncludedPaths() {
-		if err := validateIncludePattern(pattern); err != nil {
+		if err := ValidateIncludePattern(pattern); err != nil {
 			return fmt.Errorf("included_paths[%d]: %w", i, err)
 		}
 		key := pathDedupeKey(pattern)
@@ -194,11 +156,7 @@ func (p *Policy) Evaluate(_ context.Context) (*confmap.Conf, error) {
 
 	includes := make([]string, len(p.proto.GetIncludedPaths()))
 	for i, inc := range p.proto.GetIncludedPaths() {
-		if isWindowsAbsolute(inc) {
-			includes[i] = expandWindowsEnv(inc)
-		} else {
-			includes[i] = inc
-		}
+		includes[i] = NormalizePattern(inc)
 	}
 
 	cfg := map[string]any{
@@ -256,14 +214,10 @@ func Merge(policies ...*Policy) (*Policy, error) {
 			return nil, err
 		}
 		for _, inc := range pol.proto.GetIncludedPaths() {
-			expanded := inc
-			if isWindowsAbsolute(inc) {
-				expanded = expandWindowsEnv(inc)
-			}
-			key := pathDedupeKey(expanded)
-			if !seen[key] {
-				seen[key] = true
-				mergedIncludes = append(mergedIncludes, expanded)
+			canonical := NormalizePattern(inc)
+			if !seen[canonical] {
+				seen[canonical] = true
+				mergedIncludes = append(mergedIncludes, canonical)
 			}
 		}
 	}
@@ -318,198 +272,7 @@ func (p *Policy) IncludedPaths() []string {
 	return slices.Clone(p.proto.GetIncludedPaths())
 }
 
-// validateIncludePattern validates that a single pattern adheres to path security guardrails.
-func validateIncludePattern(pattern string) error {
-	if pattern == "" {
-		return ErrEmptyIncludePattern
-	}
-
-	// Reject any path traversal segments.
-	if strings.Contains(pattern, "..") {
-		return fmt.Errorf("%w: %q", ErrPathTraversal, pattern)
-	}
-
-	// Check for absolute path prefix (Linux '/' or Windows drive letter / env var).
-	isLinuxAbs := strings.HasPrefix(pattern, "/")
-	isWindowsAbs := isWindowsAbsolute(pattern)
-	if !isLinuxAbs && !isWindowsAbs {
-		return fmt.Errorf("%w: %q", ErrRelativePath, pattern)
-	}
-
-	// Validate glob pattern syntax.
-	// For Windows paths, normalize separators to '/' before validating glob syntax,
-	// so that '\' is not treated as an escaping character by doublestar.
-	patternForGlob := pattern
-	if isWindowsAbs {
-		patternForGlob = strings.ReplaceAll(pattern, "\\", "/")
-	}
-	if !doublestar.ValidatePattern(patternForGlob) {
-		return fmt.Errorf("%w: %q", ErrInvalidGlobPattern, pattern)
-	}
-
-	// For Windows paths, expand Windows environment variables before computing winNorm.
-	winNorm := ""
-	if isWindowsAbs {
-		expanded := expandWindowsEnv(pattern)
-		winNorm = strings.ToLower(strings.ReplaceAll(expanded, "\\", "/"))
-	} else {
-		winNorm = strings.ToLower(strings.ReplaceAll(pattern, "\\", "/"))
-	}
-
-	// Disallow bare directory paths.
-	if isBareDirectory(pattern, winNorm) {
-		return fmt.Errorf("%w: %q (must specify filename or glob wildcard, e.g. /** or /*.log)", ErrBareDirectoryPath, pattern)
-	}
-
-	// Check forbidden sensitive directories on Linux/Unix.
-	if isLinuxAbs {
-		for _, f := range forbiddenPrefixes {
-			if pattern == f || strings.HasPrefix(pattern, f+"/") || strings.HasPrefix(pattern, f+"\\") {
-				return fmt.Errorf("%w: %q", ErrSensitiveDirectory, pattern)
-			}
-		}
-
-		// In test environments, allow patterns within FILELOG_TEST_ALLOWED_ROOT when running under go test.
-		if matchesTestAllowedRoot(pattern, true, "") {
-			return nil
-		}
-
-		// Allowed Linux roots:
-		// 1. /var/log/**
-		// 2. /opt/**/logs/**
-		// 3. /srv/**/logs/**
-		if strings.HasPrefix(pattern, "/var/log/") {
-			return nil
-		}
-		if (strings.HasPrefix(pattern, "/opt/") || strings.HasPrefix(pattern, "/srv/")) &&
-			strings.Contains(pattern, "/logs/") {
-			return nil
-		}
-
-		return fmt.Errorf("%w: %q", ErrDisallowedLogRoot, pattern)
-	}
-
-	// Windows paths:
-	// In test environments, allow patterns within FILELOG_TEST_ALLOWED_ROOT when running under go test.
-	if matchesTestAllowedRoot(pattern, false, winNorm) {
-		return nil
-	}
-
-	// Allowed Windows roots:
-	// 1. <Drive>:\ProgramData\**\logs\** (including %ProgramData%\**\logs\**)
-	// 2. <Drive>:\inetpub\logs\** (including %SystemDrive%\inetpub\logs\**)
-	if isDrivePathPrefix(winNorm, "programdata") && strings.Contains(winNorm, "/logs/") {
-		return nil
-	}
-
-	if isDrivePathPrefix(winNorm, "inetpub/logs") {
-		return nil
-	}
-
-	return fmt.Errorf("%w: %q", ErrDisallowedLogRoot, pattern)
-}
-
-func isBareDirectory(pattern string, winNorm string) bool {
-	if strings.HasSuffix(pattern, "/") || strings.HasSuffix(pattern, "\\") {
-		return true
-	}
-	if pattern == "/var/log" {
-		return true
-	}
-	if strings.HasSuffix(pattern, "/logs") || strings.HasSuffix(pattern, "\\logs") || strings.HasSuffix(winNorm, "/logs") {
-		return true
-	}
-	return false
-}
-
-var winEnvVarRegexp = regexp.MustCompile(`%([A-Za-z0-9_]+)%`)
-
-// expandWindowsEnv expands Windows %VAR% syntax (e.g. %ProgramData%, %SystemDrive%).
-// It checks os.Getenv(varName) (case-insensitively). If unset, it falls back to standard Windows defaults:
-//   - %ProgramData% -> C:\ProgramData
-//   - %SystemDrive% -> C:
-func expandWindowsEnv(pattern string) string {
-	if !strings.Contains(pattern, "%") {
-		return pattern
-	}
-	return winEnvVarRegexp.ReplaceAllStringFunc(pattern, func(m string) string {
-		varName := m[1 : len(m)-1]
-		var defaultVal string
-		switch {
-		case strings.EqualFold(varName, "ProgramData"):
-			defaultVal = `C:\ProgramData`
-		case strings.EqualFold(varName, "SystemDrive"):
-			defaultVal = `C:`
-		default:
-			return m
-		}
-		val := os.Getenv(varName)
-		if val == "" {
-			if v := os.Getenv(strings.ToUpper(varName)); v != "" {
-				val = v
-			} else if v := os.Getenv(strings.ToLower(varName)); v != "" {
-				val = v
-			}
-		}
-		if val == "" {
-			val = defaultVal
-		}
-		return strings.TrimRight(val, "/\\")
-	})
-}
-
-// matchesTestAllowedRoot checks whether pattern falls within the directory specified
-// by FILELOG_TEST_ALLOWED_ROOT.
-//
-// Gated strictly behind testing.Testing(): in non-test (production) binaries,
-// testing.Testing() returns false, making this function a total no-op and ensuring
-// FILELOG_TEST_ALLOWED_ROOT cannot be used to bypass path validation in production.
-func matchesTestAllowedRoot(pattern string, isLinuxAbs bool, winNorm string) bool {
-	if !testing.Testing() {
-		return false
-	}
-	testRoot := os.Getenv("FILELOG_TEST_ALLOWED_ROOT")
-	if testRoot == "" {
-		return false
-	}
-	cleanTestRoot := filepath.Clean(testRoot)
-	if isLinuxAbs {
-		return pattern == cleanTestRoot || strings.HasPrefix(pattern, cleanTestRoot+"/")
-	}
-	normTestRoot := strings.ToLower(strings.ReplaceAll(cleanTestRoot, "\\", "/"))
-	return winNorm == normTestRoot || strings.HasPrefix(winNorm, normTestRoot+"/")
-}
-
-func isWindowsAbsolute(pattern string) bool {
-	if len(pattern) >= 3 && isAlpha(pattern[0]) && pattern[1] == ':' && (pattern[2] == '/' || pattern[2] == '\\') {
-		return true
-	}
-	if strings.HasPrefix(pattern, "%") {
-		return true
-	}
-	return false
-}
-
-func isDrivePathPrefix(normalizedPath string, subDir string) bool {
-	if len(normalizedPath) < 3 || !isAlpha(normalizedPath[0]) || normalizedPath[1] != ':' || normalizedPath[2] != '/' {
-		return false
-	}
-	rest := normalizedPath[3:]
-	return rest == subDir || strings.HasPrefix(rest, subDir+"/")
-}
-
-func isAlpha(c byte) bool {
-	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
-}
-
 // pathDedupeKey returns a canonical key for path comparison and deduplication.
-// For Windows paths (e.g. drive letter or %ENV%), Windows %VAR% syntax is expanded,
-// directory separators are normalized to '/', and paths are lowercased (case-insensitive).
-// For Linux/Unix paths, case is preserved because the underlying filesystem is case-sensitive.
 func pathDedupeKey(pattern string) string {
-	if isWindowsAbsolute(pattern) {
-		expanded := expandWindowsEnv(pattern)
-		return strings.ToLower(strings.ReplaceAll(expanded, "\\", "/"))
-	}
-	return pattern
+	return NormalizePattern(pattern)
 }

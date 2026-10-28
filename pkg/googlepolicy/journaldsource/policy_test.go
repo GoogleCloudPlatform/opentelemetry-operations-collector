@@ -109,13 +109,25 @@ func TestPolicy_Evaluate(t *testing.T) {
 
 	operators, ok := journaldCfg["operators"].([]any)
 	require.True(t, ok, "operators key must be a slice")
-	require.Len(t, operators, 1)
+	require.Len(t, operators, 2)
 
-	op, ok := operators[0].(map[string]any)
+	op0, ok := operators[0].(map[string]any)
 	require.True(t, ok)
-	assert.Equal(t, "filter", op["type"])
-	assert.Equal(t, "exclude_collector_logs", op["id"])
-	assert.Equal(t, collectorLogFilterExpr, op["expr"])
+	assert.Equal(t, "filter", op0["type"])
+	assert.Equal(t, "exclude_collector_logs", op0["id"])
+	assert.Equal(t, collectorLogFilterExpr, op0["expr"])
+
+	op1, ok := operators[1].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "severity_parser", op1["type"])
+	assert.Equal(t, "parse_journald_priority", op1["id"])
+	assert.Equal(t, "body.PRIORITY != nil", op1["if"])
+	assert.Equal(t, "body.PRIORITY", op1["parse_from"])
+	mapping, ok := op1["mapping"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "0", mapping["fatal"])
+	assert.Equal(t, "6", mapping["info"])
+	assert.Equal(t, "7", mapping["debug"])
 }
 
 func TestPolicy_Evaluate_InvalidPolicy(t *testing.T) {
@@ -192,6 +204,19 @@ func TestPolicy_Consolidate(t *testing.T) {
 		jp, ok := res.(*Policy)
 		require.True(t, ok)
 		assert.Equal(t, []component.ID{component.MustNewID(DefaultReceiverID)}, jp.LogReceiverIDs())
+	})
+
+	t.Run("invalid receiver returns error", func(t *testing.T) {
+		t.Parallel()
+		badReceiver := &Policy{proto: &policyv1alpha1.JournaldSourcePolicy{Id: ""}}
+		res, err := badReceiver.Consolidate(nil)
+		require.ErrorIs(t, err, ErrMissingID)
+		assert.Nil(t, res)
+
+		nilReceiver := &Policy{}
+		res, err = nilReceiver.Consolidate([]googlepolicy.SourcePolicy{p1})
+		require.ErrorIs(t, err, ErrNilProto)
+		assert.Nil(t, res)
 	})
 
 	t.Run("invalid policy in slice returns error", func(t *testing.T) {

@@ -120,6 +120,9 @@ func (p *Policy) Validate() error {
 // Since all journald policies collect from the host system journal with the same
 // self-logging filter guardrail, consolidating them produces a single shared journald receiver.
 func (p *Policy) Consolidate(policies []googlepolicy.SourcePolicy) (googlepolicy.SourcePolicy, error) {
+	if err := p.Validate(); err != nil {
+		return nil, err
+	}
 	if len(policies) == 0 {
 		return p, nil
 	}
@@ -138,7 +141,8 @@ func (p *Policy) Consolidate(policies []googlepolicy.SourcePolicy) (googlepolicy
 // Evaluate produces the confmap for the journald receiver.
 // It configures an inline Stanza filter operator to automatically drop the collector's
 // own log lines across both Linux VM systemd services and containerized environments,
-// preventing self-logging amplification loops.
+// preventing self-logging amplification loops, and parses systemd/syslog priority (body.PRIORITY)
+// into OpenTelemetry severity levels.
 func (p *Policy) Evaluate(_ context.Context) (*confmap.Conf, error) {
 	if err := p.Validate(); err != nil {
 		return nil, fmt.Errorf("policy %q failed validation: %w", p.PolicyName(), err)
@@ -152,6 +156,22 @@ func (p *Policy) Evaluate(_ context.Context) (*confmap.Conf, error) {
 						"type": "filter",
 						"id":   "exclude_collector_logs",
 						"expr": collectorLogFilterExpr,
+					},
+					map[string]any{
+						"type":       "severity_parser",
+						"id":         "parse_journald_priority",
+						"if":         "body.PRIORITY != nil",
+						"parse_from": "body.PRIORITY",
+						"mapping": map[string]any{
+							"fatal":  "0",
+							"error3": "1",
+							"error2": "2",
+							"error":  "3",
+							"warn":   "4",
+							"info2":  "5",
+							"info":   "6",
+							"debug":  "7",
+						},
 					},
 				},
 			},

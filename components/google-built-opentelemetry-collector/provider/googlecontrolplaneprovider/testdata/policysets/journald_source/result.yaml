@@ -112,6 +112,19 @@ receivers:
             - expr: (body._COMM != nil && body._COMM == "otelcol-google") || (body._SYSTEMD_UNIT != nil && body._SYSTEMD_UNIT == "otelcol-google.service") || (body.SYSLOG_IDENTIFIER != nil && body.SYSLOG_IDENTIFIER == "otelcol-google")
               id: exclude_collector_logs
               type: filter
+            - id: parse_journald_priority
+              if: body.PRIORITY != nil
+              mapping:
+                debug: "7"
+                error: "3"
+                error2: "2"
+                error3: "1"
+                fatal: "0"
+                info: "6"
+                info2: "5"
+                warn: "4"
+              parse_from: body.PRIORITY
+              type: severity_parser
     nop/googlecontrolplane: {}
     otlp/default_self_metrics:
         protocols:

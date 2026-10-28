@@ -716,8 +716,7 @@ func (p *provider) consolidateSourcePolicies(ctx context.Context, activePolicySe
 		if len(group) == 0 {
 			continue
 		}
-		consolidatable, ok := group[0].(googlepolicy.ConsolidatableSourcePolicy)
-		if ok && len(group) > 1 {
+		if _, ok := group[0].(googlepolicy.ConsolidatableSourcePolicy); ok && len(group) > 1 {
 			var validPolicies []googlepolicy.SourcePolicy
 			for _, sp := range group {
 				if err := sp.Validate(); err != nil {
@@ -733,9 +732,10 @@ func (p *provider) consolidateSourcePolicies(ctx context.Context, activePolicySe
 				consolidated = append(consolidated, validPolicies[0])
 				continue
 			}
+			consolidatable := validPolicies[0].(googlepolicy.ConsolidatableSourcePolicy)
 			merged, err := consolidatable.Consolidate(validPolicies)
 			if err != nil {
-				p.recordPolicyEvaluateError(ctx, t, activePolicySet, fmt.Errorf("failed to consolidate %s policies: %w", t, err), event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassSource))
+				p.recordPolicyEvaluateError(ctx, validPolicies[0].PolicyName(), activePolicySet, fmt.Errorf("failed to consolidate %s policies: %w", t, err), event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassSource))
 				continue
 			}
 			consolidated = append(consolidated, merged)

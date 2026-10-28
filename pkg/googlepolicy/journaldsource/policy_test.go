@@ -123,6 +123,7 @@ func TestPolicy_Evaluate(t *testing.T) {
 	assert.Equal(t, "parse_journald_priority", op1["id"])
 	assert.Equal(t, "body.PRIORITY != nil", op1["if"])
 	assert.Equal(t, "body.PRIORITY", op1["parse_from"])
+	assert.Equal(t, true, op1["overwrite_text"])
 	mapping, ok := op1["mapping"].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, "0", mapping["fatal"])

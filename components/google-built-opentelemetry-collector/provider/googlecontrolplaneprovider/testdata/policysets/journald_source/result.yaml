@@ -123,6 +123,7 @@ receivers:
                 info: "6"
                 info2: "5"
                 warn: "4"
+              overwrite_text: true
               parse_from: body.PRIORITY
               type: severity_parser
     nop/googlecontrolplane: {}

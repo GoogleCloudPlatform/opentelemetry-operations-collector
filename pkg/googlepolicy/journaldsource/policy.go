@@ -158,10 +158,11 @@ func (p *Policy) Evaluate(_ context.Context) (*confmap.Conf, error) {
 						"expr": collectorLogFilterExpr,
 					},
 					map[string]any{
-						"type":       "severity_parser",
-						"id":         "parse_journald_priority",
-						"if":         "body.PRIORITY != nil",
-						"parse_from": "body.PRIORITY",
+						"type":           "severity_parser",
+						"id":             "parse_journald_priority",
+						"if":             "body.PRIORITY != nil",
+						"parse_from":     "body.PRIORITY",
+						"overwrite_text": true,
 						"mapping": map[string]any{
 							"fatal":  "0",
 							"error3": "1",

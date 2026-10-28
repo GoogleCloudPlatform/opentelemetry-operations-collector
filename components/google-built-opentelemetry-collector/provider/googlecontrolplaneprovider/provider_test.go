@@ -1358,3 +1358,61 @@ func TestRetrieve_MultipleJournaldSourcePolicies_FaultIsolation_FirstPolicyInval
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
+
+type failConsolidateJournaldSourcePolicy struct {
+	name string
+}
+
+func (f *failConsolidateJournaldSourcePolicy) PolicyName() string { return f.name }
+func (f *failConsolidateJournaldSourcePolicy) PolicyType() string { return "journald_source" }
+func (f *failConsolidateJournaldSourcePolicy) PolicyClass() googlepolicy.PolicyClass {
+	return googlepolicy.PolicyClassSource
+}
+func (f *failConsolidateJournaldSourcePolicy) Validate() error { return nil }
+func (f *failConsolidateJournaldSourcePolicy) Evaluate(_ context.Context) (*confmap.Conf, error) {
+	return confmap.New(), nil
+}
+func (f *failConsolidateJournaldSourcePolicy) LogReceiverIDs() []component.ID {
+	return []component.ID{component.MustNewID("journald")}
+}
+func (f *failConsolidateJournaldSourcePolicy) MetricReceiverIDs() []component.ID { return nil }
+func (f *failConsolidateJournaldSourcePolicy) TraceReceiverIDs() []component.ID  { return nil }
+func (f *failConsolidateJournaldSourcePolicy) Consolidate(_ []googlepolicy.SourcePolicy) (googlepolicy.SourcePolicy, error) {
+	return nil, errors.New("consolidation failed deliberately")
+}
+
+func TestRetrieve_MultipleJournaldSourcePolicies_ConsolidationFailureAttributesAllPolicies(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	p := createProvider()
+
+	p1 := &failConsolidateJournaldSourcePolicy{name: "failing-policy-1"}
+	p2 := &failConsolidateJournaldSourcePolicy{name: "failing-policy-2"}
+
+	ps := &googlepolicy.PolicySet{
+		RevisionID: "rev-consolidation-fail",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			"failing-policy-1": {PolicyObj: p1},
+			"failing-policy-2": {PolicyObj: p2},
+		},
+	}
+	googlepolicy.SetActivePolicySet(ps)
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	// Since consolidation failed, no journald receiver is added
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+	raw := conf.ToStringMap()
+	receivers, ok := raw["receivers"].(map[string]any)
+	require.True(t, ok)
+	require.NotContains(t, receivers, "journald")
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}

@@ -36,6 +36,7 @@ import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/googlecontrolplaneextension"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"github.com/google/go-cmp/cmp"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/confmap"
@@ -182,23 +183,22 @@ func startMockOTLPServer(t *testing.T) (*mockOTLPServer, string) {
 	return s, ln.Addr().String()
 }
 
+var (
+	ephemeralPortMu      sync.Mutex
+	ephemeralPortCounter int = 21000
+)
+
 func allocateEphemeralPorts(t *testing.T, count int) []int {
 	t.Helper()
-	listeners := make([]net.Listener, 0, count)
-	ports := make([]int, 0, count)
+	ephemeralPortMu.Lock()
+	defer ephemeralPortMu.Unlock()
+	ports := make([]int, count)
 	for i := 0; i < count; i++ {
-		ln, err := net.Listen("tcp", "127.0.0.1:0")
-		if err != nil {
-			for _, l := range listeners {
-				_ = l.Close()
-			}
-			t.Fatalf("failed to allocate ephemeral port: %v", err)
+		ephemeralPortCounter++
+		if ephemeralPortCounter > 32000 {
+			ephemeralPortCounter = 21001
 		}
-		listeners = append(listeners, ln)
-		ports = append(ports, ln.Addr().(*net.TCPAddr).Port)
-	}
-	for _, ln := range listeners {
-		_ = ln.Close()
+		ports[i] = ephemeralPortCounter
 	}
 	return ports
 }
@@ -561,15 +561,25 @@ type collectorHandle struct {
 	logs     func() string
 }
 
-func startCollector(t *testing.T, otelcolBin, policiesDir, pipelineCfgPath string) *collectorHandle {
+func startCollector(t *testing.T, otelcolBin, policiesDir string, pipelineCfgPaths ...string) *collectorHandle {
 	t.Helper()
-	if otelcolBin == "" {
-		return startInProcessCollector(t, policiesDir, pipelineCfgPath)
+	uris := make([]string, 0, 1+len(pipelineCfgPaths))
+	uris = append(uris, fmt.Sprintf("googlecontrolplane:file:%s", filepath.ToSlash(policiesDir)))
+	for _, cfgPath := range pipelineCfgPaths {
+		uris = append(uris, fmt.Sprintf("file:%s", filepath.ToSlash(cfgPath)))
 	}
-	return startSubprocessCollector(t, otelcolBin, policiesDir, pipelineCfgPath)
+	return startCollectorWithURIs(t, otelcolBin, uris...)
 }
 
-func startInProcessCollector(t *testing.T, policiesDir, pipelineCfgPath string) *collectorHandle {
+func startCollectorWithURIs(t *testing.T, otelcolBin string, configURIs ...string) *collectorHandle {
+	t.Helper()
+	if otelcolBin == "" {
+		return startInProcessCollector(t, configURIs...)
+	}
+	return startSubprocessCollector(t, otelcolBin, configURIs...)
+}
+
+func startInProcessCollector(t *testing.T, configURIs ...string) *collectorHandle {
 	t.Helper()
 	t.Setenv("FLEET_ID", "test-fleet")
 
@@ -581,10 +591,7 @@ func startInProcessCollector(t *testing.T, policiesDir, pipelineCfgPath string) 
 		SkipSettingGRPCLogger:   true,
 		ConfigProviderSettings: otelcol.ConfigProviderSettings{
 			ResolverSettings: confmap.ResolverSettings{
-				URIs: []string{
-					fmt.Sprintf("googlecontrolplane:file:%s", filepath.ToSlash(policiesDir)),
-					fmt.Sprintf("file:%s", filepath.ToSlash(pipelineCfgPath)),
-				},
+				URIs: configURIs,
 				ProviderFactories: []confmap.ProviderFactory{
 					googlecontrolplaneprovider.NewFactory(),
 					fileprovider.NewFactory(),
@@ -627,6 +634,7 @@ func startInProcessCollector(t *testing.T, policiesDir, pipelineCfgPath string) 
 			case <-time.After(10 * time.Second):
 				t.Fatalf("timed out waiting for in-process collector shutdown.\nlogs:\n%s", logBuf.String())
 			}
+			googlepolicy.SetActivePolicySet(nil)
 		})
 	}
 	t.Cleanup(func() {
@@ -655,13 +663,13 @@ func startInProcessCollector(t *testing.T, policiesDir, pipelineCfgPath string) 
 	}
 }
 
-func startSubprocessCollector(t *testing.T, otelcolBin, policiesDir, pipelineCfgPath string) *collectorHandle {
+func startSubprocessCollector(t *testing.T, otelcolBin string, configURIs ...string) *collectorHandle {
 	t.Helper()
-	cmd := exec.Command(
-		otelcolBin,
-		fmt.Sprintf("--config=googlecontrolplane:file:%s", filepath.ToSlash(policiesDir)),
-		fmt.Sprintf("--config=file:%s", filepath.ToSlash(pipelineCfgPath)),
-	)
+	args := make([]string, 0, len(configURIs))
+	for _, uri := range configURIs {
+		args = append(args, fmt.Sprintf("--config=%s", uri))
+	}
+	cmd := exec.Command(otelcolBin, args...)
 	cmd.Env = append(os.Environ(), "FLEET_ID=test-fleet")
 
 	stderrPipe, err := cmd.StderrPipe()
@@ -804,14 +812,6 @@ service:
       receivers: [otlp/test_in]
       processors: [googlepolicy]
       exporters: [otlp_grpc/test_out]
-    logs/default_self_metrics:
-      receivers: [otlp/default_self_metrics]
-      processors: []
-      exporters: [otlp_grpc/default_gcp_destination]
-    metrics/default_self_metrics:
-      receivers: [otlp/default_self_metrics]
-      processors: []
-      exporters: [otlp_grpc/default_gcp_destination]
 `, otlpReceiverAddr, selfReceiverAddr, mockExporterAddr, selfExporterAddr)
 }
 
@@ -844,7 +844,7 @@ type testHarness struct {
 	conn        *grpc.ClientConn
 }
 
-func startTestHarness(t *testing.T, otelcolBin, tempDir, policiesDir string) *testHarness {
+func stageTestPipelineConfig(t *testing.T, tempDir string) (string, string, string, *mockOTLPServer, *mockOTLPServer) {
 	t.Helper()
 	mockSrv, mockExporterAddr := startMockOTLPServer(t)
 	selfMockSrv, selfExporterAddr := startMockOTLPServer(t)
@@ -857,8 +857,15 @@ func startTestHarness(t *testing.T, otelcolBin, tempDir, policiesDir string) *te
 	if err := os.WriteFile(pipelineCfgPath, []byte(pipelineCfg), 0644); err != nil {
 		t.Fatalf("failed to write test_pipeline.yaml: %v", err)
 	}
+	return pipelineCfgPath, otlpReceiverAddr, selfReceiverAddr, mockSrv, selfMockSrv
+}
 
-	col := startCollector(t, otelcolBin, policiesDir, pipelineCfgPath)
+func startTestHarness(t *testing.T, otelcolBin, tempDir, policiesDir string, extraCfgPaths ...string) *testHarness {
+	t.Helper()
+	pipelineCfgPath, otlpReceiverAddr, _, mockSrv, selfMockSrv := stageTestPipelineConfig(t, tempDir)
+
+	cfgPaths := append([]string{pipelineCfgPath}, extraCfgPaths...)
+	col := startCollector(t, otelcolBin, policiesDir, cfgPaths...)
 
 	conn, err := grpc.NewClient(otlpReceiverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -1113,16 +1120,21 @@ func TestUnsupportedPolicyEmitsErrorEvent(t *testing.T) {
 	}
 
 	mockSrv, mockExporterAddr := startMockOTLPServer(t)
-	ports := allocateEphemeralPorts(t, 1)
+	ports := allocateEphemeralPorts(t, 2)
 	otlpReceiverAddr := fmt.Sprintf("127.0.0.1:%d", ports[0])
+	selfReceiverAddr := fmt.Sprintf("127.0.0.1:%d", ports[1])
 
-	// Route logs/default_self_metrics from otlp/default_self_metrics (BuiltInSelfMetricsPolicy on localhost:18888)
+	// Route logs/default_self_metrics from otlp/default_self_metrics (BuiltInSelfMetricsPolicy on selfReceiverAddr)
 	// to otlp_grpc/default_gcp_destination (rewired to mockExporterAddr) with a fast 50ms BatchLogRecordProcessor schedule_delay.
 	pipelineCfg := fmt.Sprintf(`receivers:
   otlp/test_in:
     protocols:
       grpc:
         endpoint: %[1]s
+  otlp/default_self_metrics:
+    protocols:
+      grpc:
+        endpoint: %[3]s
 exporters:
   otlp_grpc/test_out:
     endpoint: %[2]s
@@ -1149,7 +1161,7 @@ service:
             exporter:
               otlp:
                 protocol: grpc
-                endpoint: http://127.0.0.1:18888
+                endpoint: http://%[3]s
                 insecure: true
                 timeout: 200
     metrics:
@@ -1176,7 +1188,7 @@ service:
       receivers: [otlp/default_self_metrics]
       processors: []
       exporters: [otlp_grpc/default_gcp_destination]
-`, otlpReceiverAddr, mockExporterAddr)
+`, otlpReceiverAddr, mockExporterAddr, selfReceiverAddr)
 
 	pipelineCfgPath := filepath.Join(tempDir, "test_pipeline.yaml")
 	if err := os.WriteFile(pipelineCfgPath, []byte(pipelineCfg), 0644); err != nil {
@@ -1324,24 +1336,11 @@ service:
 // reaches the self metrics pipeline through the collector's internal telemetry.
 func TestPolicySetActiveSelfMetric(t *testing.T) {
 	otelcolBin := resolveOtelcolBinary(t)
-	tempDir := t.TempDir()
-
-	policiesDir := filepath.Join(tempDir, "policies")
-	copyDir(t, filepath.Join("testdata", "drop_by_body_equals", "policies"), policiesDir)
+	tempDir, policiesDir := stagePoliciesDir(t, "drop_by_body_equals")
 
 	h := startTestHarness(t, otelcolBin, tempDir, policiesDir)
 
-	var value int64
-	var attrs map[string]string
-	found := false
-	deadline := time.Now().Add(10 * time.Second)
-	for time.Now().Before(deadline) {
-		value, attrs, found = latestPolicySetActive(h.selfMockSrv.CollectedMetrics())
-		if found {
-			break
-		}
-		time.Sleep(50 * time.Millisecond)
-	}
+	value, attrs, found := waitForPolicySetActive(h.selfMockSrv, 10*time.Second)
 
 	h.col.shutdown(t)
 
@@ -1354,6 +1353,25 @@ func TestPolicySetActiveSelfMetric(t *testing.T) {
 	if id, ok := attrs[googlecontrolplaneextension.AttrPolicySetID]; !ok || id != "" {
 		t.Errorf("%s = %q (present=%v), want present and empty; attributes: %v", googlecontrolplaneextension.AttrPolicySetID, id, ok, attrs)
 	}
+}
+
+func stagePoliciesDir(t *testing.T, caseName string) (string, string) {
+	t.Helper()
+	tempDir := t.TempDir()
+	policiesDir := filepath.Join(tempDir, "policies")
+	copyDir(t, filepath.Join("testdata", caseName, "policies"), policiesDir)
+	return tempDir, policiesDir
+}
+
+func waitForPolicySetActive(selfMockSrv *mockOTLPServer, timeout time.Duration) (int64, map[string]string, bool) {
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if value, attrs, found := latestPolicySetActive(selfMockSrv.CollectedMetrics()); found {
+			return value, attrs, true
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	return 0, nil, false
 }
 
 // latestPolicySetActive returns the most recent gcp.policy.set.active data
@@ -1390,4 +1408,519 @@ func latestPolicySetActive(batches []pmetric.Metrics) (int64, map[string]string,
 		}
 	}
 	return value, attrs, found
+}
+
+func extractAllLogBodies(batches []plog.Logs) []string {
+	var bodies []string
+	for _, ld := range batches {
+		for i := 0; i < ld.ResourceLogs().Len(); i++ {
+			rl := ld.ResourceLogs().At(i)
+			for j := 0; j < rl.ScopeLogs().Len(); j++ {
+				sl := rl.ScopeLogs().At(j)
+				for k := 0; k < sl.LogRecords().Len(); k++ {
+					bodies = append(bodies, sl.LogRecords().At(k).Body().Str())
+				}
+			}
+		}
+	}
+	return bodies
+}
+
+func collectMetricNames(batches []pmetric.Metrics) map[string]int {
+	counts := map[string]int{}
+	for _, md := range batches {
+		for i := 0; i < md.ResourceMetrics().Len(); i++ {
+			sms := md.ResourceMetrics().At(i).ScopeMetrics()
+			for j := 0; j < sms.Len(); j++ {
+				ms := sms.At(j).Metrics()
+				for k := 0; k < ms.Len(); k++ {
+					counts[ms.At(k).Name()]++
+				}
+			}
+		}
+	}
+	return counts
+}
+
+func writeIndependentLogsPipelineConfig(t *testing.T, tempDir string) (string, plogotlp.GRPCClient, *mockOTLPServer) {
+	t.Helper()
+	independentMockSrv, independentExporterAddr := startMockOTLPServer(t)
+	ports := allocateEphemeralPorts(t, 1)
+	independentReceiverAddr := fmt.Sprintf("127.0.0.1:%d", ports[0])
+
+	independentCfg := fmt.Sprintf(`receivers:
+  otlp/independent_in:
+    protocols:
+      grpc:
+        endpoint: %s
+exporters:
+  otlp_grpc/independent_out:
+    endpoint: %s
+    sending_queue:
+      enabled: false
+    tls:
+      insecure: true
+service:
+  pipelines:
+    logs/independent:
+      receivers: [otlp/independent_in]
+      processors: []
+      exporters: [otlp_grpc/independent_out]
+`, independentReceiverAddr, independentExporterAddr)
+
+	independentCfgPath := filepath.Join(tempDir, "independent_pipeline.yaml")
+	if err := os.WriteFile(independentCfgPath, []byte(independentCfg), 0644); err != nil {
+		t.Fatalf("failed to write independent_pipeline.yaml: %v", err)
+	}
+
+	indConn, err := grpc.NewClient(independentReceiverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("failed to create gRPC client to independent receiver %s: %v", independentReceiverAddr, err)
+	}
+	t.Cleanup(func() {
+		_ = indConn.Close()
+	})
+
+	return independentCfgPath, plogotlp.NewGRPCClient(indConn), independentMockSrv
+}
+
+// TestFileConfigMerge_AppendReceiverToCanonicalPipeline verifies that an escape hatch
+// file config can append a custom receiver (e.g. otlp/custom_in) to the canonical shared
+// logs pipeline (logs/googlecontrolplane).
+//
+// Because googlecontrolplaneprovider enables confmap.enableMergeAppendOption, the
+// customer-provided receiver is appended to [nop/googlecontrolplane], so logs sent to
+// otlp/custom_in flow through the canonical pipeline: they are processed by
+// resourcedetection/googlecontrolplane, transform/googlecontrolplane, and googlepolicy,
+// before being exported to otlp_grpc/default_gcp_destination.
+func TestFileConfigMerge_AppendReceiverToCanonicalPipeline(t *testing.T) {
+	otelcolBin := resolveOtelcolBinary(t)
+	tempDir, policiesDir := stagePoliciesDir(t, "drop_by_body_equals")
+
+	ports := allocateEphemeralPorts(t, 1)
+	customReceiverAddr := fmt.Sprintf("127.0.0.1:%d", ports[0])
+
+	appendReceiverCfg := fmt.Sprintf(`receivers:
+  otlp/custom_in:
+    protocols:
+      grpc:
+        endpoint: %s
+service:
+  pipelines:
+    logs/googlecontrolplane:
+      receivers: [otlp/custom_in]
+`, customReceiverAddr)
+
+	appendCfgPath := filepath.Join(tempDir, "append_receiver_canonical.yaml")
+	if err := os.WriteFile(appendCfgPath, []byte(appendReceiverCfg), 0644); err != nil {
+		t.Fatalf("failed to write append_receiver_canonical.yaml: %v", err)
+	}
+
+	h := startTestHarness(t, otelcolBin, tempDir, policiesDir, appendCfgPath)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	conn, err := grpc.NewClient(customReceiverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("failed to connect to custom receiver %s: %v", customReceiverAddr, err)
+	}
+	t.Cleanup(func() {
+		_ = conn.Close()
+	})
+
+	customClient := plogotlp.NewGRPCClient(conn)
+	inputLogs := readInputLogs(t, filepath.Join("testdata", "drop_by_body_equals", "input_logs.yaml"))
+
+	if _, err := customClient.Export(ctx, plogotlp.NewExportRequestFromLogs(inputLogs)); err != nil {
+		t.Fatalf("failed to export logs to custom receiver on canonical pipeline: %v\nstderr:\n%s", err, h.col.logs())
+	}
+
+	h.col.shutdown(t)
+
+	// In testPipelineConfig, otlp_grpc/default_gcp_destination is rewired to selfMockSrv.
+	// Since logs/googlecontrolplane exports to default_gcp_destination, the filtered logs
+	// must arrive on selfMockSrv.
+	gotBodies := extractAllLogBodies(h.selfMockSrv.CollectedLogs())
+	if diff := cmp.Diff([]string{"KEEP_THIS_LOG_LINE"}, gotBodies); diff != "" {
+		t.Errorf("canonical pipeline bodies mismatch (-want +got):\n%s\nlogs:\n%s", diff, h.col.logs())
+	}
+}
+
+// TestFileConfigMerge_AppendExporterToCanonicalPipeline verifies that an escape hatch
+// file config can append a secondary exporter to the canonical shared logs pipeline
+// (logs/googlecontrolplane).
+//
+// Because googlecontrolplaneprovider enables confmap.enableMergeAppendOption, the
+// secondary exporter is appended to [otlp_grpc/default_gcp_destination], causing
+// logs processed by the canonical pipeline (including googlepolicy filtering) to fan
+// out to BOTH destinations.
+func TestFileConfigMerge_AppendExporterToCanonicalPipeline(t *testing.T) {
+	otelcolBin := resolveOtelcolBinary(t)
+	tempDir, policiesDir := stagePoliciesDir(t, "drop_by_body_equals")
+
+	secondaryMockSrv, secondaryExporterAddr := startMockOTLPServer(t)
+	ports := allocateEphemeralPorts(t, 1)
+	customReceiverAddr := fmt.Sprintf("127.0.0.1:%d", ports[0])
+
+	appendCfg := fmt.Sprintf(`receivers:
+  otlp/custom_in:
+    protocols:
+      grpc:
+        endpoint: %[1]s
+exporters:
+  otlp_grpc/secondary_out:
+    endpoint: %[2]s
+    sending_queue:
+      enabled: false
+    tls:
+      insecure: true
+service:
+  pipelines:
+    logs/googlecontrolplane:
+      receivers: [otlp/custom_in]
+      exporters: [otlp_grpc/secondary_out]
+`, customReceiverAddr, secondaryExporterAddr)
+
+	appendCfgPath := filepath.Join(tempDir, "append_canonical_pipeline.yaml")
+	if err := os.WriteFile(appendCfgPath, []byte(appendCfg), 0644); err != nil {
+		t.Fatalf("failed to write append_canonical_pipeline.yaml: %v", err)
+	}
+
+	h := startTestHarness(t, otelcolBin, tempDir, policiesDir, appendCfgPath)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	conn, err := grpc.NewClient(customReceiverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("failed to connect to custom receiver %s: %v", customReceiverAddr, err)
+	}
+	t.Cleanup(func() {
+		_ = conn.Close()
+	})
+
+	customClient := plogotlp.NewGRPCClient(conn)
+	inputLogs := readInputLogs(t, filepath.Join("testdata", "drop_by_body_equals", "input_logs.yaml"))
+
+	if _, err := customClient.Export(ctx, plogotlp.NewExportRequestFromLogs(inputLogs)); err != nil {
+		t.Fatalf("failed to export logs to custom receiver: %v\nstderr:\n%s", err, h.col.logs())
+	}
+
+	h.col.shutdown(t)
+
+	// Primary destination (selfMockSrv via otlp_grpc/default_gcp_destination) received filtered logs.
+	gotPrimaryBodies := extractAllLogBodies(h.selfMockSrv.CollectedLogs())
+	if diff := cmp.Diff([]string{"KEEP_THIS_LOG_LINE"}, gotPrimaryBodies); diff != "" {
+		t.Errorf("primary exporter bodies mismatch (-want +got):\n%s\nlogs:\n%s", diff, h.col.logs())
+	}
+
+	// Appended secondary destination (secondaryMockSrv via otlp_grpc/secondary_out) also received filtered logs.
+	gotSecondaryBodies := extractAllLogBodies(secondaryMockSrv.CollectedLogs())
+	if diff := cmp.Diff([]string{"KEEP_THIS_LOG_LINE"}, gotSecondaryBodies); diff != "" {
+		t.Errorf("secondary exporter bodies mismatch (-want +got):\n%s\nlogs:\n%s", diff, h.col.logs())
+	}
+}
+
+// TestFileConfigMerge_IndependentPipeline verifies that when the collector is
+// given an additional file config defining a pipeline completely independent of
+// policy work (no googlepolicy processor), confmap deep-merges the receivers,
+// exporters, and service.pipelines maps so both pipelines run side-by-side:
+// the policy-managed pipeline filters out matching records, while the
+// independent pipeline exports all records untouched.
+func TestFileConfigMerge_IndependentPipeline(t *testing.T) {
+	otelcolBin := resolveOtelcolBinary(t)
+	tempDir, policiesDir := stagePoliciesDir(t, "drop_by_body_equals")
+
+	independentCfgPath, independentClient, independentMockSrv := writeIndependentLogsPipelineConfig(t, tempDir)
+
+	h := startTestHarness(t, otelcolBin, tempDir, policiesDir, independentCfgPath)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	inputLogs := readInputLogs(t, filepath.Join("testdata", "drop_by_body_equals", "input_logs.yaml"))
+
+	// Export the same log batch to both the policy-managed receiver and the independent receiver.
+	policyClient := plogotlp.NewGRPCClient(h.conn)
+	if _, err := policyClient.Export(ctx, plogotlp.NewExportRequestFromLogs(inputLogs)); err != nil {
+		t.Fatalf("failed to export logs to policy-managed pipeline: %v\nstderr:\n%s", err, h.col.logs())
+	}
+
+	if _, err := independentClient.Export(ctx, plogotlp.NewExportRequestFromLogs(inputLogs)); err != nil {
+		t.Fatalf("failed to export logs to independent pipeline: %v\nstderr:\n%s", err, h.col.logs())
+	}
+
+	h.col.shutdown(t)
+
+	// Policy-managed pipeline drops "DROP_THIS_LOG_LINE" and retains only "KEEP_THIS_LOG_LINE".
+	gotPolicyBodies := extractAllLogBodies(h.mockSrv.CollectedLogs())
+	if diff := cmp.Diff([]string{"KEEP_THIS_LOG_LINE"}, gotPolicyBodies); diff != "" {
+		t.Errorf("policy-managed pipeline bodies mismatch (-want +got):\n%s\nlogs:\n%s", diff, h.col.logs())
+	}
+
+	// Independent file-configured pipeline bypasses googlepolicy and retains both log records.
+	gotIndependentBodies := extractAllLogBodies(independentMockSrv.CollectedLogs())
+	if diff := cmp.Diff([]string{"KEEP_THIS_LOG_LINE", "DROP_THIS_LOG_LINE"}, gotIndependentBodies); diff != "" {
+		t.Errorf("independent pipeline bodies mismatch (-want +got):\n%s\nlogs:\n%s", diff, h.col.logs())
+	}
+}
+
+// TestFileConfigMerge_DisableSelfMetrics verifies that a subsequent file config
+// can intertwine with the config generated by googlecontrolplaneprovider and
+// disable self-metrics by overwriting service.telemetry.metrics (setting
+// level: None and readers: []), while leaving policy evaluation on customer
+// pipelines active.
+func TestFileConfigMerge_DisableSelfMetrics(t *testing.T) {
+	otelcolBin := resolveOtelcolBinary(t)
+	tempDir, policiesDir := stagePoliciesDir(t, "drop_by_body_equals")
+
+	disableSelfMetricsCfg := `service:
+  telemetry:
+    metrics:
+      level: None
+      readers: []
+`
+	disableCfgPath := filepath.Join(tempDir, "disable_self_metrics.yaml")
+	if err := os.WriteFile(disableCfgPath, []byte(disableSelfMetricsCfg), 0644); err != nil {
+		t.Fatalf("failed to write disable_self_metrics.yaml: %v", err)
+	}
+
+	h := startTestHarness(t, otelcolBin, tempDir, policiesDir, disableCfgPath)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Send logs through the policy-managed pipeline to verify googlepolicy still
+	// filters telemetry and that no internal processor/receiver metrics leak out.
+	inputLogs := readInputLogs(t, filepath.Join("testdata", "drop_by_body_equals", "input_logs.yaml"))
+	client := plogotlp.NewGRPCClient(h.conn)
+	if _, err := client.Export(ctx, plogotlp.NewExportRequestFromLogs(inputLogs)); err != nil {
+		t.Fatalf("failed to export logs to collector: %v\nstderr:\n%s", err, h.col.logs())
+	}
+
+	// Wait across multiple 100ms periodic reader intervals to ensure no self-metrics are pushed.
+	time.Sleep(300 * time.Millisecond)
+
+	h.col.shutdown(t)
+
+	gotBodies := extractAllLogBodies(h.mockSrv.CollectedLogs())
+	if diff := cmp.Diff([]string{"KEEP_THIS_LOG_LINE"}, gotBodies); diff != "" {
+		t.Errorf("policy-managed pipeline bodies mismatch (-want +got):\n%s\nlogs:\n%s", diff, h.col.logs())
+	}
+
+	if gotMetrics := collectMetricNames(h.selfMockSrv.CollectedMetrics()); len(gotMetrics) != 0 {
+		t.Errorf("expected 0 self-metrics when disabled by file config override, got: %v", gotMetrics)
+	}
+	if _, _, found := latestPolicySetActive(h.selfMockSrv.CollectedMetrics()); found {
+		t.Errorf("expected gcp.policy.set.active to not be reported when self-metrics are disabled")
+	}
+}
+
+// TestFileConfigMerge_SelectiveSelfMetricsAndExtensionOverrides verifies finer-grained
+// intertwining behaviors between googlecontrolplaneprovider and file configs:
+//  1. Disabling service.telemetry.metrics (level: None, readers: []) while
+//     keeping service.telemetry.logs enabled suppresses self-metrics while
+//     preserving logs/default_self_metrics (so Weaver error events like
+//     gcp.policy.evaluate.error still flow).
+//  2. Because googlecontrolplaneprovider enables confmap.enableMergeAppendOption,
+//     a subsequent file config that sets service.extensions or pipeline exporters
+//     appends to (rather than overwrites) the existing slices:
+//     - service.extensions retains [googleclientauth/default_gcp_destination, googlecontrolplane]
+//     even when a subsequent file config sets service.extensions: [], so
+//     gcp.policy.set.active = 1 continues to be reported.
+//     - service.pipelines.logs/test.exporters appends [otlp_grpc/secondary_out]
+//     to [otlp_grpc/test_out], fanning out filtered logs to both exporters.
+func TestFileConfigMerge_SelectiveSelfMetricsAndExtensionOverrides(t *testing.T) {
+	otelcolBin := resolveOtelcolBinary(t)
+
+	t.Run("disable_telemetry_metrics_keep_self_logs", func(t *testing.T) {
+		tempDir, policiesDir := stagePoliciesDir(t, "drop_by_body_equals")
+
+		unsupportedPolicy := `{
+  "type": "unsupported_policy_type",
+  "id": "projects/my-project/locations/us-central1/policySets/my-set/policies/bad-policy"
+}`
+		if err := os.WriteFile(filepath.Join(policiesDir, "02-unsupported.json"), []byte(unsupportedPolicy), 0644); err != nil {
+			t.Fatalf("failed to write unsupported policy: %v", err)
+		}
+
+		baseCfgPath, _, selfReceiverAddr, _, selfMockSrv := stageTestPipelineConfig(t, tempDir)
+
+		// Layer a second file config that re-enables the OTLP log processor to
+		// selfReceiverAddr while disabling service.telemetry.metrics.
+		overrideCfg := fmt.Sprintf(`service:
+  telemetry:
+    logs:
+      level: info
+      processors:
+        - batch:
+            schedule_delay: 50
+            export_timeout: 200
+            exporter:
+              otlp:
+                protocol: grpc
+                endpoint: http://%s
+                insecure: true
+                timeout: 200
+    metrics:
+      level: None
+      readers: []
+`, selfReceiverAddr)
+		overrideCfgPath := filepath.Join(tempDir, "override_self_metrics_pipeline.yaml")
+		if err := os.WriteFile(overrideCfgPath, []byte(overrideCfg), 0644); err != nil {
+			t.Fatalf("failed to write override_self_metrics_pipeline.yaml: %v", err)
+		}
+
+		col := startCollector(t, otelcolBin, policiesDir, baseCfgPath, overrideCfgPath)
+
+		// Wait for the startup gcp.policy.evaluate.error log event to arrive on selfMockSrv.
+		var sawErrorEvent bool
+		deadline := time.Now().Add(5 * time.Second)
+		for time.Now().Before(deadline) {
+			for _, body := range extractAllLogBodies(selfMockSrv.CollectedLogs()) {
+				if strings.Contains(body, "no driver found for policy type: unsupported_policy_type") {
+					sawErrorEvent = true
+					break
+				}
+			}
+			if sawErrorEvent {
+				break
+			}
+			time.Sleep(25 * time.Millisecond)
+		}
+
+		// Wait across multiple 100ms periodic reader intervals to verify metrics stay suppressed.
+		time.Sleep(250 * time.Millisecond)
+		col.shutdown(t)
+
+		if !sawErrorEvent {
+			t.Fatalf("expected gcp.policy.evaluate.error log event on selfMockSrv.\ncollector logs:\n%s", col.logs())
+		}
+		if gotMetrics := collectMetricNames(selfMockSrv.CollectedMetrics()); len(gotMetrics) != 0 {
+			t.Errorf("expected 0 metrics on selfMockSrv when service.telemetry.metrics is disabled, got: %v", gotMetrics)
+		}
+	})
+
+	t.Run("append_pipeline_exporters_and_preserve_service_extensions", func(t *testing.T) {
+		tempDir, policiesDir := stagePoliciesDir(t, "drop_by_body_equals")
+
+		secondaryMockSrv, secondaryExporterAddr := startMockOTLPServer(t)
+
+		// Because confmap.enableMergeAppendOption is enabled by googlecontrolplaneprovider,
+		// setting service.extensions: [] and logs/test.exporters: [otlp_grpc/secondary_out]
+		// appends to the existing slices rather than overwriting them.
+		appendSliceCfg := fmt.Sprintf(`exporters:
+  otlp_grpc/secondary_out:
+    endpoint: %s
+    sending_queue:
+      enabled: false
+    tls:
+      insecure: true
+service:
+  extensions: []
+  pipelines:
+    logs/test:
+      exporters: [otlp_grpc/secondary_out]
+`, secondaryExporterAddr)
+		appendSlicePath := filepath.Join(tempDir, "append_slice_override.yaml")
+		if err := os.WriteFile(appendSlicePath, []byte(appendSliceCfg), 0644); err != nil {
+			t.Fatalf("failed to write append_slice_override.yaml: %v", err)
+		}
+
+		h := startTestHarness(t, otelcolBin, tempDir, policiesDir, appendSlicePath)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		inputLogs := readInputLogs(t, filepath.Join("testdata", "drop_by_body_equals", "input_logs.yaml"))
+		client := plogotlp.NewGRPCClient(h.conn)
+		if _, err := client.Export(ctx, plogotlp.NewExportRequestFromLogs(inputLogs)); err != nil {
+			t.Fatalf("failed to export logs: %v\nstderr:\n%s", err, h.col.logs())
+		}
+
+		// Verify googlecontrolplane extension remained enabled and reported positive gcp.policy.set.active revision.
+		value, _, found := waitForPolicySetActive(h.selfMockSrv, 10*time.Second)
+
+		h.col.shutdown(t)
+
+		if !found || value <= 0 {
+			t.Errorf("expected googlecontrolplane extension to remain enabled under confmap.enableMergeAppendOption and report positive gcp.policy.set.active revision, got found=%v value=%d\nlogs:\n%s", found, value, h.col.logs())
+		}
+
+		// Verify logs/test fanned out filtered logs to BOTH otlp_grpc/test_out and otlp_grpc/secondary_out.
+		if diff := cmp.Diff([]string{"KEEP_THIS_LOG_LINE"}, extractAllLogBodies(h.mockSrv.CollectedLogs())); diff != "" {
+			t.Errorf("primary exporter bodies mismatch (-want +got):\n%s", diff)
+		}
+		if diff := cmp.Diff([]string{"KEEP_THIS_LOG_LINE"}, extractAllLogBodies(secondaryMockSrv.CollectedLogs())); diff != "" {
+			t.Errorf("secondary appended exporter bodies mismatch (-want +got):\n%s", diff)
+		}
+	})
+}
+
+// TestFileConfigMerge_ProviderOrderPrecedence verifies how URI ordering affects
+// merging when a file config is specified BEFORE googlecontrolplane:file:...
+//
+// Because confmap.Resolver merges providers left-to-right:
+//   - Non-conflicting map entries in the earlier file config (such as an
+//     independent pipeline) are preserved.
+//   - Conflicting keys in the earlier file config (such as attempting to set
+//     service.telemetry.metrics.level: None) are overwritten when
+//     googlecontrolplaneprovider subsequently merges BuiltInSelfMetricsPolicy
+//     (which sets service.telemetry.metrics.level: Normal).
+func TestFileConfigMerge_ProviderOrderPrecedence(t *testing.T) {
+	otelcolBin := resolveOtelcolBinary(t)
+	tempDir, policiesDir := stagePoliciesDir(t, "drop_by_body_equals")
+
+	independentCfgPath, indClient, independentMockSrv := writeIndependentLogsPipelineConfig(t, tempDir)
+
+	// Earlier file config (evaluated BEFORE googlecontrolplane): attempts to
+	// disable internal metrics via service.telemetry.metrics.level: None.
+	prePolicyDisableCfg := `service:
+  telemetry:
+    metrics:
+      level: None
+`
+	prePolicyCfgPath := filepath.Join(tempDir, "01_pre_policy_disable_metrics.yaml")
+	if err := os.WriteFile(prePolicyCfgPath, []byte(prePolicyDisableCfg), 0644); err != nil {
+		t.Fatalf("failed to write 01_pre_policy_disable_metrics.yaml: %v", err)
+	}
+
+	// Post-policy endpoint rewiring config: rewires endpoints for test servers
+	// without setting service.telemetry.metrics.level, so whatever level won
+	// between 01_pre_policy_disable_metrics.yaml and googlecontrolplaneprovider
+	// remains in effect.
+	rewireCfgPath, _, _, _, selfMockSrv := stageTestPipelineConfig(t, tempDir)
+
+	col := startCollectorWithURIs(
+		t,
+		otelcolBin,
+		fmt.Sprintf("file:%s", filepath.ToSlash(independentCfgPath)),
+		fmt.Sprintf("file:%s", filepath.ToSlash(prePolicyCfgPath)),
+		fmt.Sprintf("googlecontrolplane:file:%s", filepath.ToSlash(policiesDir)),
+		fmt.Sprintf("file:%s", filepath.ToSlash(rewireCfgPath)),
+	)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Verify the independent pipeline from the earlier file config survived the merge.
+	inputLogs := readInputLogs(t, filepath.Join("testdata", "drop_by_body_equals", "input_logs.yaml"))
+	if _, err := indClient.Export(ctx, plogotlp.NewExportRequestFromLogs(inputLogs)); err != nil {
+		t.Fatalf("failed to export logs to independent pipeline: %v\nstderr:\n%s", err, col.logs())
+	}
+
+	// Verify that googlecontrolplaneprovider (evaluated after 01_pre_policy_disable_metrics.yaml)
+	// overwrote metrics.level: None back to Normal, so gcp.policy.set.active is reported.
+	value, _, found := waitForPolicySetActive(selfMockSrv, 10*time.Second)
+
+	col.shutdown(t)
+
+	gotIndependentBodies := extractAllLogBodies(independentMockSrv.CollectedLogs())
+	if diff := cmp.Diff([]string{"KEEP_THIS_LOG_LINE", "DROP_THIS_LOG_LINE"}, gotIndependentBodies); diff != "" {
+		t.Errorf("independent pipeline bodies mismatch (-want +got):\n%s\nlogs:\n%s", diff, col.logs())
+	}
+	if !found || value <= 0 {
+		t.Errorf("expected googlecontrolplaneprovider to override earlier file config's level: None and report positive gcp.policy.set.active revision, got found=%v value=%d\nlogs:\n%s", found, value, col.logs())
+	}
 }

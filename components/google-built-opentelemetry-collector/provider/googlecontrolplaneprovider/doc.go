@@ -14,5 +14,5 @@
 
 //go:generate mdatagen metadata.yaml
 
-// Package googlecontrolplane implements an OpenTelemetry Collector configuration provider for Google Control Plane.
+// Package googlecontrolplaneprovider implements an OpenTelemetry Collector configuration provider for Google Control Plane.
 package googlecontrolplaneprovider // import "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider"

@@ -47,7 +47,6 @@ import (
 
 const (
 	schemeName               = "googlecontrolplane"
-	defaultFleetID           = "test-fleet-01"
 	mergeAppendFeatureGateID = "confmap.enableMergeAppendOption"
 )
 

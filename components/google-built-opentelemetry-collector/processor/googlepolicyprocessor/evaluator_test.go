@@ -1794,6 +1794,108 @@ func TestEvaluator_LogTransformStageOrdering(t *testing.T) {
 	assert.False(t, ok, "temp_flag added in Stage 2 must be removed in Stage 3")
 }
 
+func TestEvaluator_WindowsEventForwarding_RenderingInfoRemoval(t *testing.T) {
+	// Finding #79 / Tab 5: When Windows Event Forwarding (WEF) delivers structured events
+	// (ForwardedEvents channel, raw: false), pre-rendered <RenderingInfo> bloat is stored in
+	// body fields "rendering_info", "message", and "details".
+	//
+	// Applying LogRemoveAction on these three body fields strips the localized bloat (-79% bytes)
+	// while preserving event_id, provider, channel, and structured event_data.
+	removeRenderingInfo := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id: "strip-wef-rendering-info",
+		Action: &policyv1alpha1.LogTransformPolicy_Removal{
+			Removal: &policyv1alpha1.LogRemoveAction{
+				Target: &policyv1alpha1.LogAttributeSelector{
+					Target: &policyv1alpha1.LogAttributeSelector_BodyFieldPath{
+						BodyFieldPath: &policyv1alpha1.AttributePath{Segments: []string{"rendering_info"}},
+					},
+				},
+			},
+		},
+	})
+	removeMessage := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id: "strip-wef-message",
+		Action: &policyv1alpha1.LogTransformPolicy_Removal{
+			Removal: &policyv1alpha1.LogRemoveAction{
+				Target: &policyv1alpha1.LogAttributeSelector{
+					Target: &policyv1alpha1.LogAttributeSelector_BodyFieldPath{
+						BodyFieldPath: &policyv1alpha1.AttributePath{Segments: []string{"message"}},
+					},
+				},
+			},
+		},
+	})
+	removeDetails := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id: "strip-wef-details",
+		Action: &policyv1alpha1.LogTransformPolicy_Removal{
+			Removal: &policyv1alpha1.LogRemoveAction{
+				Target: &policyv1alpha1.LogAttributeSelector{
+					Target: &policyv1alpha1.LogAttributeSelector_BodyFieldPath{
+						BodyFieldPath: &policyv1alpha1.AttributePath{Segments: []string{"details"}},
+					},
+				},
+			},
+		},
+	})
+
+	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{removeRenderingInfo, removeMessage, removeDetails})
+	require.NoError(t, err)
+
+	ld := plog.NewLogs()
+	sl := ld.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty()
+	lr := sl.LogRecords().AppendEmpty()
+
+	body := lr.Body().SetEmptyMap()
+	body.PutInt("event_id", 4624)
+	body.PutStr("provider", "Microsoft-Windows-Security-Auditing")
+	body.PutStr("channel", "ForwardedEvents")
+	body.PutStr("computer", "dc01.corp.example.com")
+
+	eventData := body.PutEmptyMap("event_data")
+	eventData.PutStr("TargetUserName", "Alice")
+	eventData.PutStr("TargetDomainName", "CORP")
+	eventData.PutStr("LogonType", "3")
+
+	// Localized German pre-rendered descriptions causing WAN bloat (Finding #79)
+	renderingInfo := body.PutEmptyMap("rendering_info")
+	renderingInfo.PutStr("Culture", "de-DE")
+	renderingInfo.PutStr("Message", "Ein Konto wurde erfolgreich angemeldet.")
+	body.PutStr("message", "Ein Konto wurde erfolgreich angemeldet.")
+	details := body.PutEmptyMap("details")
+	details.PutStr("SubjectUserSid", "S-1-5-18")
+	details.PutStr("LogonProcessName", "User32")
+
+	ev.TransformLogs(ld)
+
+	resBody := lr.Body().Map()
+	// Pre-rendered bloat must be completely stripped
+	_, hasRenderingInfo := resBody.Get("rendering_info")
+	assert.False(t, hasRenderingInfo, "rendering_info must be stripped")
+	_, hasMessage := resBody.Get("message")
+	assert.False(t, hasMessage, "message must be stripped")
+	_, hasDetails := resBody.Get("details")
+	assert.False(t, hasDetails, "details must be stripped")
+
+	// Core telemetry data must remain intact
+	eventID, ok := resBody.Get("event_id")
+	require.True(t, ok)
+	assert.Equal(t, int64(4624), eventID.Int())
+
+	provider, ok := resBody.Get("provider")
+	require.True(t, ok)
+	assert.Equal(t, "Microsoft-Windows-Security-Auditing", provider.Str())
+
+	channel, ok := resBody.Get("channel")
+	require.True(t, ok)
+	assert.Equal(t, "ForwardedEvents", channel.Str())
+
+	ed, ok := resBody.Get("event_data")
+	require.True(t, ok)
+	user, ok := ed.Map().Get("TargetUserName")
+	require.True(t, ok)
+	assert.Equal(t, "Alice", user.Str())
+}
+
 // --- policy helpers --------------------------------------------------------
 
 // mustPolicy compiles a filter or transform policy proto with its owning

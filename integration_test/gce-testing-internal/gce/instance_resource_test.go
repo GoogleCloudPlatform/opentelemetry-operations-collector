@@ -84,6 +84,9 @@ func TestParseExtraCreateArguments(t *testing.T) {
 		"--scopes=https://www.googleapis.com/auth/cloud-platform",
 		"--tags=tag1,tag2",
 		"--metadata=key1=val1,key2=val2",
+		"--accelerator=count=1,type=nvidia-tesla-v100",
+		"--maintenance-policy=TERMINATE",
+		"--service-account=custom@test-project.iam.gserviceaccount.com",
 	}
 	extra, err := parseExtraCreateArguments(args)
 	if err != nil {
@@ -104,14 +107,26 @@ func TestParseExtraCreateArguments(t *testing.T) {
 	if extra.extraMetadata["key1"] != "val1" || extra.extraMetadata["key2"] != "val2" {
 		t.Errorf("parseExtraCreateArguments() metadata = %v, want key1=val1, key2=val2", extra.extraMetadata)
 	}
+	if len(extra.accelerators) != 1 || extra.accelerators[0].GetAcceleratorType() != "nvidia-tesla-v100" || extra.accelerators[0].GetAcceleratorCount() != 1 {
+		t.Errorf("parseExtraCreateArguments() accelerators = %v, want [nvidia-tesla-v100 count=1]", extra.accelerators)
+	}
+	if extra.maintenancePolicy == nil || *extra.maintenancePolicy != "TERMINATE" {
+		t.Errorf("parseExtraCreateArguments() maintenancePolicy = %v, want TERMINATE", extra.maintenancePolicy)
+	}
+	if extra.serviceAccount == nil || *extra.serviceAccount != "custom@test-project.iam.gserviceaccount.com" {
+		t.Errorf("parseExtraCreateArguments() serviceAccount = %v, want custom@test-project.iam.gserviceaccount.com", extra.serviceAccount)
+	}
 
-	// Test space-separated flags
+	// Test space-separated flags and default accelerator count
 	spaceArgs := []string{
 		"--boot-disk-size", "200G",
 		"--boot-disk-type", "hyperdisk-balanced",
 		"--scopes", "cloud-platform",
 		"--tags", "tag3",
 		"--metadata", "foo=bar",
+		"--accelerator", "type=nvidia-tesla-t4",
+		"--maintenance-policy", "terminate",
+		"--service-account", "sa@test-project.iam.gserviceaccount.com",
 	}
 	extra, err = parseExtraCreateArguments(spaceArgs)
 	if err != nil {
@@ -132,11 +147,32 @@ func TestParseExtraCreateArguments(t *testing.T) {
 	if extra.extraMetadata["foo"] != "bar" {
 		t.Errorf("parseExtraCreateArguments() spaceArgs metadata = %v, want foo=bar", extra.extraMetadata)
 	}
+	if len(extra.accelerators) != 1 || extra.accelerators[0].GetAcceleratorType() != "nvidia-tesla-t4" || extra.accelerators[0].GetAcceleratorCount() != 1 {
+		t.Errorf("parseExtraCreateArguments() spaceArgs accelerators = %v, want [nvidia-tesla-t4 count=1]", extra.accelerators)
+	}
+	if extra.maintenancePolicy == nil || *extra.maintenancePolicy != "TERMINATE" {
+		t.Errorf("parseExtraCreateArguments() spaceArgs maintenancePolicy = %v, want TERMINATE", extra.maintenancePolicy)
+	}
+	if extra.serviceAccount == nil || *extra.serviceAccount != "sa@test-project.iam.gserviceaccount.com" {
+		t.Errorf("parseExtraCreateArguments() spaceArgs serviceAccount = %v, want sa@test-project.iam.gserviceaccount.com", extra.serviceAccount)
+	}
 
-	// Test invalid disk size returns error
-	invalidArgs := []string{"--boot-disk-size=invalid"}
-	if _, err := parseExtraCreateArguments(invalidArgs); err == nil {
-		t.Errorf("parseExtraCreateArguments(invalidArgs) expected error, got nil")
+	// Test invalid arguments return error
+	errorCases := [][]string{
+		{"--boot-disk-size=invalid"},
+		{"--accelerator=count=1"},
+		{"--accelerator=count=0,type=nvidia-tesla-t4"},
+		{"--accelerator=count=abc,type=nvidia-tesla-t4"},
+		{"--accelerator=foo=bar,type=nvidia-tesla-t4"},
+		{"--accelerator=invalid"},
+		{"--maintenance-policy="},
+		{"--service-account="},
+		{"--unsupported-flag=val"},
+	}
+	for _, invalidArgs := range errorCases {
+		if _, err := parseExtraCreateArguments(invalidArgs); err == nil {
+			t.Errorf("parseExtraCreateArguments(%v) expected error, got nil", invalidArgs)
+		}
 	}
 }
 
@@ -162,6 +198,9 @@ func TestBuildInstanceResource(t *testing.T) {
 			"--boot-disk-size=100GB",
 			"--boot-disk-type=pd-ssd",
 			"--tags=tag1,tag2",
+			"--accelerator=count=1,type=nvidia-tesla-v100",
+			"--maintenance-policy=TERMINATE",
+			"--service-account=custom@test-project.iam.gserviceaccount.com",
 		},
 	}
 
@@ -200,6 +239,22 @@ func TestBuildInstanceResource(t *testing.T) {
 	}
 	if inst.Scheduling.GetProvisioningModel() != "STANDARD" {
 		t.Errorf("inst.Scheduling.ProvisioningModel = %q, want STANDARD", inst.Scheduling.GetProvisioningModel())
+	}
+	if inst.Scheduling.GetOnHostMaintenance() != "TERMINATE" {
+		t.Errorf("inst.Scheduling.OnHostMaintenance = %q, want TERMINATE", inst.Scheduling.GetOnHostMaintenance())
+	}
+	if len(inst.GetGuestAccelerators()) != 1 {
+		t.Fatalf("len(inst.GetGuestAccelerators()) = %d, want 1", len(inst.GetGuestAccelerators()))
+	}
+	acc := inst.GetGuestAccelerators()[0]
+	if acc.GetAcceleratorType() != "zones/us-central1-a/acceleratorTypes/nvidia-tesla-v100" {
+		t.Errorf("acc.GetAcceleratorType() = %q, want zones/us-central1-a/acceleratorTypes/nvidia-tesla-v100", acc.GetAcceleratorType())
+	}
+	if acc.GetAcceleratorCount() != 1 {
+		t.Errorf("acc.GetAcceleratorCount() = %d, want 1", acc.GetAcceleratorCount())
+	}
+	if len(inst.GetServiceAccounts()) != 1 || inst.GetServiceAccounts()[0].GetEmail() != "custom@test-project.iam.gserviceaccount.com" {
+		t.Errorf("inst.GetServiceAccounts() = %v, want custom@test-project.iam.gserviceaccount.com", inst.GetServiceAccounts())
 	}
 	if len(inst.NetworkInterfaces) != 1 {
 		t.Fatalf("len(inst.NetworkInterfaces) = %d, want 1", len(inst.NetworkInterfaces))
@@ -281,6 +336,8 @@ func TestBuildInstanceProperties(t *testing.T) {
 			"--boot-disk-size=100GB",
 			"--boot-disk-type=zones/us-central1-a/diskTypes/pd-ssd",
 			"--tags=tag1,tag2",
+			"--accelerator=count=1,type=nvidia-tesla-v100",
+			"--maintenance-policy=TERMINATE",
 		},
 	}
 
@@ -317,6 +374,21 @@ func TestBuildInstanceProperties(t *testing.T) {
 	}
 	if props.Scheduling.GetProvisioningModel() != "STANDARD" {
 		t.Errorf("props.Scheduling.ProvisioningModel = %q, want STANDARD", props.Scheduling.GetProvisioningModel())
+	}
+	if props.Scheduling.GetOnHostMaintenance() != "TERMINATE" {
+		t.Errorf("props.Scheduling.OnHostMaintenance = %q, want TERMINATE", props.Scheduling.GetOnHostMaintenance())
+	}
+	// InstanceProperties GuestAccelerators[].AcceleratorType must be the short name
+	// (e.g. "nvidia-tesla-v100"), not a URL.
+	if len(props.GetGuestAccelerators()) != 1 {
+		t.Fatalf("len(props.GetGuestAccelerators()) = %d, want 1", len(props.GetGuestAccelerators()))
+	}
+	acc := props.GetGuestAccelerators()[0]
+	if acc.GetAcceleratorType() != "nvidia-tesla-v100" {
+		t.Errorf("acc.GetAcceleratorType() = %q, want nvidia-tesla-v100", acc.GetAcceleratorType())
+	}
+	if acc.GetAcceleratorCount() != 1 {
+		t.Errorf("acc.GetAcceleratorCount() = %d, want 1", acc.GetAcceleratorCount())
 	}
 	if len(props.NetworkInterfaces) != 1 {
 		t.Fatalf("len(props.NetworkInterfaces) = %d, want 1", len(props.NetworkInterfaces))

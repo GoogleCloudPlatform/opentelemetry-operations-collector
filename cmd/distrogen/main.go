@@ -31,7 +31,7 @@ import (
 
 var (
 	logLevel            = new(slog.LevelVar)
-	logger              = slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: logLevel}))
+	logger              = slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: logLevel}))
 	unexpectErrExitCode = 2
 
 	errNoSpecFlag = errors.New("missing --spec flag")

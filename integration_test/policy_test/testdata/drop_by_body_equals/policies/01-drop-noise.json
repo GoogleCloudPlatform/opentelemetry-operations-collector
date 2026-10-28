@@ -2,10 +2,10 @@
   "type": "log_filter",
   "id": "drop-debug-noise",
   "action": "ACTION_DROP",
-  "matches": [
+  "matchers": [
     {
       "target": { "record_field": "LOG_RECORD_FIELD_BODY" },
-      "equals": { "string_value": "DROP_THIS_LOG_LINE" }
+      "equality": { "string_value": "DROP_THIS_LOG_LINE" }
     }
   ]
 }

@@ -51,7 +51,7 @@ func CompileMetricMatcher(m *policyv1alpha1.MetricMatcher) (CompiledMetricMatche
 	if err != nil {
 		return CompiledMetricMatcher{}, err
 	}
-	predicate, err := CompilePredicate(m.GetPredicate(), m.GetNegate())
+	predicate, err := CompilePredicate(m.GetPredicate(), m.GetNegated())
 	if err != nil {
 		return CompiledMetricMatcher{}, err
 	}
@@ -69,8 +69,8 @@ func CompileMetricExtractor(target *policyv1alpha1.MetricFieldSelector) (MetricT
 	case *policyv1alpha1.MetricFieldSelector_DescriptorField:
 		return compileMetricDescriptorFieldExtractor(t.DescriptorField)
 
-	case *policyv1alpha1.MetricFieldSelector_DatapointAttribute:
-		steps, err := CompilePath(t.DatapointAttribute, "datapoint")
+	case *policyv1alpha1.MetricFieldSelector_DataPointAttributePath:
+		steps, err := CompilePath(t.DataPointAttributePath, "datapoint")
 		if err != nil {
 			return nil, err
 		}
@@ -78,8 +78,8 @@ func CompileMetricExtractor(target *policyv1alpha1.MetricFieldSelector) (MetricT
 			return EvalPath(ctx.DatapointAttributes, steps)
 		}, nil
 
-	case *policyv1alpha1.MetricFieldSelector_ResourceAttribute:
-		steps, err := CompilePath(t.ResourceAttribute, "resource")
+	case *policyv1alpha1.MetricFieldSelector_ResourceAttributePath:
+		steps, err := CompilePath(t.ResourceAttributePath, "resource")
 		if err != nil {
 			return nil, err
 		}
@@ -90,8 +90,8 @@ func CompileMetricExtractor(target *policyv1alpha1.MetricFieldSelector) (MetricT
 			return EvalPath(ctx.Resource.Attributes(), steps)
 		}, nil
 
-	case *policyv1alpha1.MetricFieldSelector_ScopeAttribute:
-		steps, err := CompilePath(t.ScopeAttribute, "scope")
+	case *policyv1alpha1.MetricFieldSelector_ScopeAttributePath:
+		steps, err := CompilePath(t.ScopeAttributePath, "scope")
 		if err != nil {
 			return nil, err
 		}
@@ -113,7 +113,7 @@ func CompileMetricExtractor(target *policyv1alpha1.MetricFieldSelector) (MetricT
 // compileMetricDescriptorFieldExtractor builds an extractor for a first-class
 // metric descriptor field.
 //
-// Per metric_filter_policy.proto: "When evaluated with `exists`, first-class
+// Per metric_filter_policy.proto: "When evaluated with `existence`, first-class
 // fields evaluate to true when set to a non-default (non-empty / non-zero)
 // value." String fields (NAME, DESCRIPTION, UNIT) return (nil, false) when
 // empty; enum fields (TYPE) return their rendered string ("UNSPECIFIED") with
@@ -158,7 +158,7 @@ func compileMetricDescriptorFieldExtractor(field policyv1alpha1.MetricDescriptor
 
 	case policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE:
 		// Every instrument has a type, so an untyped one is present-but-default
-		// rather than absent: `exists` reports false, but string predicates can
+		// rather than absent: `existence` reports false, but string predicates can
 		// still select it by its "UNSPECIFIED" spelling.
 		return func(ctx googlepolicy.MetricContext) (any, bool) {
 			if ctx.Metric == (pmetric.Metric{}) {

@@ -51,7 +51,7 @@ func CompileTraceMatcher(m *policyv1alpha1.TraceMatcher) (CompiledTraceMatcher, 
 	if err != nil {
 		return CompiledTraceMatcher{}, err
 	}
-	predicate, err := CompilePredicate(m.GetPredicate(), m.GetNegate())
+	predicate, err := CompilePredicate(m.GetPredicate(), m.GetNegated())
 	if err != nil {
 		return CompiledTraceMatcher{}, err
 	}
@@ -69,8 +69,8 @@ func CompileTraceExtractor(target *policyv1alpha1.TraceFieldSelector) (TraceTarg
 	case *policyv1alpha1.TraceFieldSelector_RecordField:
 		return compileSpanRecordFieldExtractor(t.RecordField)
 
-	case *policyv1alpha1.TraceFieldSelector_SpanAttribute:
-		steps, err := CompilePath(t.SpanAttribute, "span")
+	case *policyv1alpha1.TraceFieldSelector_SpanAttributePath:
+		steps, err := CompilePath(t.SpanAttributePath, "span")
 		if err != nil {
 			return nil, err
 		}
@@ -81,8 +81,8 @@ func CompileTraceExtractor(target *policyv1alpha1.TraceFieldSelector) (TraceTarg
 			return EvalPath(ctx.Span.Attributes(), steps)
 		}, nil
 
-	case *policyv1alpha1.TraceFieldSelector_ResourceAttribute:
-		steps, err := CompilePath(t.ResourceAttribute, "resource")
+	case *policyv1alpha1.TraceFieldSelector_ResourceAttributePath:
+		steps, err := CompilePath(t.ResourceAttributePath, "resource")
 		if err != nil {
 			return nil, err
 		}
@@ -93,8 +93,8 @@ func CompileTraceExtractor(target *policyv1alpha1.TraceFieldSelector) (TraceTarg
 			return EvalPath(ctx.Resource.Attributes(), steps)
 		}, nil
 
-	case *policyv1alpha1.TraceFieldSelector_ScopeAttribute:
-		steps, err := CompilePath(t.ScopeAttribute, "scope")
+	case *policyv1alpha1.TraceFieldSelector_ScopeAttributePath:
+		steps, err := CompilePath(t.ScopeAttributePath, "scope")
 		if err != nil {
 			return nil, err
 		}
@@ -158,7 +158,7 @@ func compileSpanRecordFieldExtractor(field policyv1alpha1.SpanRecordField) (Trac
 			}
 			psid := ctx.Span.ParentSpanID()
 			if psid.IsEmpty() {
-				// A root span has no parent. The proto requires `exists` to
+				// A root span has no parent. The proto requires `existence` to
 				// report false here, yet string predicates must still see the
 				// empty string, so return a present-but-empty value. The
 				// distinction is carried by the value being non-nil while

@@ -16,13 +16,12 @@ syntax = "proto3";
 
 package google.telemetry.policy.v1alpha1;
 
-import "google/protobuf/empty.proto";
 import "policy/v1alpha1/common_policy_types.proto";
 
 option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1;policyv1alpha1";
 
-// TraceFilterPolicy defines an intent-based rule for dropping spans based on
-// structured creation-time field and attribute matches.
+// Defines an intent-based rule for dropping spans based on structured
+// creation-time field and attribute matches.
 //
 // Policies are declarative, atomic, and transport-agnostic.
 //
@@ -31,11 +30,11 @@ option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-col
 //   reassembly. Filter policies remain fast, stateless, and evaluated per span.
 // - Independent Decisions & Orphan Spans: Dropping a span does not drop its
 //   descendants. Dropping an intermediate span in a trace leaves child spans
-//   behind as orphans with a dangling parent_span_id.
+//   behind as orphans with a dangling `parent_span_id`.
 // - Drop Semantics: Telemetry passes through by default (default allow). When
-//   all matchers in `matches` evaluate to true for a span, the span is dropped.
+//   all matchers in `matchers` evaluate to true for a span, the span is dropped.
 //   To implement an allowlist that drops non-matching spans, authors specify
-//   negate: true on the matchers.
+//   `negated: true` on the matchers.
 message TraceFilterPolicy {
   // Unique identifier for the policy within its configuration scope
   // (e.g. a UUID or namespaced URI like "io.opentelemetry.operator/{namespace}/policies/drop-healthcheck-spans").
@@ -45,125 +44,5 @@ message TraceFilterPolicy {
   // All matchers in this list are ANDed together: all conditions must evaluate
   // to true for the span to be dropped.
   // At least one matcher is required; a policy with no matchers is invalid.
-  repeated TraceMatcher matches = 2;
-}
-
-// TraceMatcher defines a single predicate evaluated against a specific span
-// creation-time field or attribute.
-message TraceMatcher {
-  // The span field, attribute, or metadata to inspect. Exactly one must be set.
-  TraceFieldSelector target = 1;
-
-  // The comparison predicate to evaluate against the target value.
-  // Exactly one predicate must be set.
-  oneof predicate {
-    // Matches if the selected field or attribute exists.
-    // For attributes, this evaluates to true if the attribute key exists.
-    // For first-class fields (record_field, scope_field) that lack explicit
-    // presence tracking in the OpenTelemetry data model, this evaluates to true
-    // when the field is set to a non-default (non-zero/non-empty) value, and
-    // false when absent or default (e.g. absent parent_span_id on a root span,
-    // or empty string/unset).
-    google.protobuf.Empty exists = 10;
-
-    // Typed scalar equality match (supporting string, int64, bool, double, bytes).
-    Value equals = 11;
-
-    // Glob pattern match against the entire string value.
-    // Supports '*' (matches zero or more characters) and '?' (matches any
-    // single character). Matching is case-sensitive and anchored to the full
-    // string. Applies strictly to string fields and string attribute values.
-    string glob = 12;
-
-    // Matches if the target numeric value is strictly greater than this value.
-    // Applies strictly to int64 and double fields and attribute values.
-    NumericValue gt = 13;
-
-    // Matches if the target numeric value is greater than or equal to this value.
-    // Applies strictly to int64 and double fields and attribute values.
-    NumericValue gte = 14;
-
-    // Matches if the target numeric value is strictly less than this value.
-    // Applies strictly to int64 and double fields and attribute values.
-    NumericValue lt = 15;
-
-    // Matches if the target numeric value is less than or equal to this value.
-    // Applies strictly to int64 and double fields and attribute values.
-    NumericValue lte = 16;
-
-    // Value containment:
-    // - For list (ArrayValue) attributes: matches if any element in the list equals this value.
-    // - For string fields or attribute values: matches if the string contains this value's string_value as a substring.
-    // - For bytes fields or attribute values: matches if the bytes contain this value's bytes_value as a subsequence.
-    Value contains = 17;
-  }
-
-  // If true, inverts the result of the predicate (logical NOT).
-  bool negate = 2;
-}
-
-// TraceFieldSelector designates a first-class OTel span field, attribute, or metadata.
-message TraceFieldSelector {
-  oneof target {
-    // Standard first-class OpenTelemetry Span creation-time fields (e.g. name, kind).
-    SpanRecordField record_field = 1;
-
-    // Span attribute by key or path (e.g. ["http.route"] or ["rpc", "service"]).
-    AttributePath span_attribute = 2;
-
-    // Resource attribute by key or path (e.g. ["service.name"] or ["host", "id"]).
-    AttributePath resource_attribute = 3;
-
-    // Instrumentation scope attribute by key or path (e.g. ["library.name"]).
-    AttributePath scope_attribute = 4;
-
-    // Standard first-class OpenTelemetry InstrumentationScope fields (e.g. name, version).
-    ScopeField scope_field = 5;
-  }
-}
-
-// SpanRecordField identifies standard creation-time fields of an OpenTelemetry Span.
-// When evaluated with `exists`, first-class fields evaluate to true when set
-// to a non-default (non-empty / non-zero) value.
-enum SpanRecordField {
-  // Default unspecified span record field.
-  SPAN_RECORD_FIELD_UNSPECIFIED = 0;
-
-  // The operation name of the span (e.g. "HTTP GET /users", "SELECT * FROM users").
-  SPAN_RECORD_FIELD_NAME = 1;
-
-  // The 16-byte trace identifier associated with the span.
-  // When evaluated against string predicates (`equals` with `string_value`,
-  // `glob`, `contains` with `string_value`), this matches against the
-  // 32-character lowercase hexadecimal string representation per the
-  // OpenTelemetry / W3C Trace Context specification.
-  SPAN_RECORD_FIELD_TRACE_ID = 2;
-
-  // The 8-byte span identifier.
-  // When evaluated against string predicates (`equals` with `string_value`,
-  // `glob`, `contains` with `string_value`), this matches against the
-  // 16-character lowercase hexadecimal string representation per the
-  // OpenTelemetry / W3C Trace Context specification.
-  SPAN_RECORD_FIELD_SPAN_ID = 3;
-
-  // The 8-byte parent span identifier.
-  // Root spans have no parent span identifier (in OpenTelemetry data models,
-  // parent_span_id is empty or all zeroes).
-  // When evaluated with `exists`, this evaluates to false for root spans (and true
-  // with `negate: true`, allowing explicit targeting or exemption of root spans).
-  // When evaluated against string predicates (`equals` with `string_value`,
-  // `glob`, `contains` with `string_value`), a root span matches against the
-  // empty string `""`. For child spans, this matches against the 16-character
-  // lowercase hexadecimal string representation per the OpenTelemetry / W3C
-  // Trace Context specification.
-  SPAN_RECORD_FIELD_PARENT_SPAN_ID = 4;
-
-  // The span kind (e.g. "INTERNAL", "SERVER", "CLIENT", "PRODUCER", "CONSUMER").
-  // When evaluated against string predicates (`equals` with `string_value`,
-  // `glob`, `contains` with `string_value`), this matches against uppercase
-  // span kind string names without the "SPAN_KIND_" prefix (matching
-  // OpenTelemetry specification conventions). Per the OpenTelemetry
-  // specification, if span kind is unset or SPAN_KIND_UNSPECIFIED,
-  // implementations treat it as "INTERNAL".
-  SPAN_RECORD_FIELD_KIND = 5;
+  repeated TraceMatcher matchers = 2;
 }

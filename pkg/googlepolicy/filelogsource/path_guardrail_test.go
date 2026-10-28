@@ -162,6 +162,21 @@ func TestPathGuardrail_BraceExpansionSecurity(t *testing.T) {
 			pattern:     "/{var/log/app.log,etc/shadow}",
 			expectedErr: ErrSensitiveDirectory,
 		},
+		{
+			name:        "exponential brace expansion DoS attack is bounded and rejected",
+			pattern:     "/var/log/{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}{a,b}/*.log",
+			expectedErr: ErrTooManyBraceExpansions,
+		},
+		{
+			name:        "bare directory . leaf rejected",
+			pattern:     "/var/log/.",
+			expectedErr: ErrBareDirectoryPath,
+		},
+		{
+			name:        "bare directory ./ leaf rejected",
+			pattern:     "/var/log/./",
+			expectedErr: ErrBareDirectoryPath,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -178,4 +193,10 @@ func TestPathGuardrail_BraceExpansionSecurity(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestVerifyLogRoot_NilAnatomy(t *testing.T) {
+	err := VerifyLogRoot(nil, "/var/log/*.log")
+	require.Error(t, err)
+	assert.Equal(t, "path anatomy cannot be nil", err.Error())
 }

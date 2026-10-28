@@ -85,13 +85,14 @@ func ValidateIncludePattern(rawPattern string) error {
 		return err
 	}
 
-	// Expand any brace expansions to validate every branch individually
+	// Expand any brace expansions to validate every branch individually,
+	// eagerly bounding the expansion during recursion to prevent algorithmic DoS (CWE-400).
 	branches, err := expandBraces(rawPattern)
 	if err != nil {
+		if errors.Is(err, ErrTooManyBraceExpansions) {
+			return err
+		}
 		return fmt.Errorf("%w: %q: %v", ErrInvalidGlobPattern, rawPattern, err)
-	}
-	if len(branches) > maxBraceExpansions {
-		return fmt.Errorf("%w: %d > %d", ErrTooManyBraceExpansions, len(branches), maxBraceExpansions)
 	}
 
 	for _, branch := range branches {
@@ -216,6 +217,10 @@ func ParseAnatomy(raw string, canonical string) (*PathAnatomy, error) {
 
 // VerifyLogRoot verifies that the anatomy falls within permitted log roots (Stage 4).
 func VerifyLogRoot(anatomy *PathAnatomy, rawPattern string) error {
+	if anatomy == nil {
+		return errors.New("path anatomy cannot be nil")
+	}
+
 	// Check forbidden sensitive system directories on Linux/Unix.
 	if !anatomy.IsWindows {
 		for _, f := range forbiddenPrefixes {
@@ -264,6 +269,9 @@ func VerifyLogRoot(anatomy *PathAnatomy, rawPattern string) error {
 }
 
 func isBareDirectory(pattern string, canonical string) bool {
+	if pattern == "." || canonical == "." || strings.HasSuffix(pattern, "/.") || strings.HasSuffix(pattern, "\\.") || strings.HasSuffix(canonical, "/.") {
+		return true
+	}
 	if strings.HasSuffix(pattern, "/") || strings.HasSuffix(pattern, "\\") {
 		return true
 	}
@@ -356,8 +364,13 @@ func matchesTestAllowedRoot(pattern string, isLinuxAbs bool, winNorm string) boo
 }
 
 // expandBraces expands bash-style brace expressions like "{a,b}".
-// If no braces exist, it returns []string{pattern}.
+// It eagerly bounds the expansion count during recursion to prevent exponential DoS (CWE-400).
 func expandBraces(pattern string) ([]string, error) {
+	count := 0
+	return expandBracesBounded(pattern, &count, maxBraceExpansions)
+}
+
+func expandBracesBounded(pattern string, count *int, max int) ([]string, error) {
 	start := -1
 	depth := 0
 	for i := 0; i < len(pattern); i++ {
@@ -382,7 +395,7 @@ func expandBraces(pattern string) ([]string, error) {
 				parts := splitBraceBody(body)
 				var result []string
 				for _, part := range parts {
-					expanded, err := expandBraces(prefix + part + suffix)
+					expanded, err := expandBracesBounded(prefix+part+suffix, count, max)
 					if err != nil {
 						return nil, err
 					}
@@ -394,6 +407,10 @@ func expandBraces(pattern string) ([]string, error) {
 	}
 	if depth > 0 {
 		return nil, errors.New("unmatched '{' in pattern")
+	}
+	*count++
+	if *count > max {
+		return nil, fmt.Errorf("%w: exceeds limit of %d branches", ErrTooManyBraceExpansions, max)
 	}
 	return []string{pattern}, nil
 }

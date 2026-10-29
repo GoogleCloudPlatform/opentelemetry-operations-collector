@@ -1465,8 +1465,22 @@ func isCloudRunHost(host string) bool {
 //  2. Cloudtop / Developer Workstations: idtoken fails on "authorized_user" credentials, so it
 //     falls back to ADC with OpenID scopes and extracts the ID token via GoogleIDTokenSource.
 func resolveIDTokenSource(_ context.Context, audience string) (oauth2.TokenSource, error) {
-	// 1. GCE / GKE / Service Accounts / WIF: metadata server, SA key, or impersonated WIF
-	if idCreds, err := idtoken.NewCredentials(&idtoken.Options{Audience: audience}); err == nil {
+	// Detect ADC once and reuse it for both steps so the ID token identity
+	// matches what ADC selected.
+	creds, err := authcredentials.DetectDefault(&authcredentials.DetectOptions{
+		Scopes: []string{"openid", "email"},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve ADC: %w", err)
+	}
+
+	// 1. GCE / GKE / Service Accounts / WIF: metadata server, SA key, or impersonated WIF.
+	// Pass the ADC JSON explicitly: without it idtoken skips the gcloud
+	// well-known file and uses the metadata server identity on GCE.
+	if idCreds, err := idtoken.NewCredentials(&idtoken.Options{
+		Audience:        audience,
+		CredentialsJSON: creds.JSON(), //nolint:staticcheck // SA1019: JSON was already loaded by ADC (DetectDefault), not from an untrusted source.
+	}); err == nil {
 		idTS := oauth2adapt.TokenSourceFromTokenProvider(idCreds)
 		if initialTok, err := idTS.Token(); err == nil {
 			return oauth2.ReuseTokenSource(initialTok, idTS), nil
@@ -1474,14 +1488,7 @@ func resolveIDTokenSource(_ context.Context, audience string) (oauth2.TokenSourc
 	}
 
 	// 2. Cloudtop / Developer Workstation: ADC user credentials fallback
-	defCreds, err := authcredentials.DetectDefault(&authcredentials.DetectOptions{
-		Scopes: []string{"openid", "email"},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve ADC: %w", err)
-	}
-
-	wrapped := &GoogleIDTokenSource{Src: oauth2adapt.TokenSourceFromTokenProvider(defCreds)}
+	wrapped := &GoogleIDTokenSource{Src: oauth2adapt.TokenSourceFromTokenProvider(creds)}
 	initialTok, err := wrapped.Token()
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve initial ID token: %w", err)

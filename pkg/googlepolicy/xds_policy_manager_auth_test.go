@@ -30,6 +30,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -445,4 +446,42 @@ func TestResolveTokenSource_X509ExternalAccount(t *testing.T) {
 	ts, err := ResolveTokenSource(context.Background(), "telemetrydirector.googleapis.com:443")
 	require.NoError(t, err)
 	require.NotNil(t, ts)
+}
+
+// TestResolveIDTokenSource_GCEWithGcloudUserADC covers a GCE VM (e.g. a
+// Cloudtop) with gcloud user ADC at the well-known path and
+// GOOGLE_APPLICATION_CREDENTIALS unset. The user's credentials must be used:
+// step 1 must not silently switch to the VM service account's identity.
+func TestResolveIDTokenSource_GCEWithGcloudUserADC(t *testing.T) {
+	var vmIdentityRequests atomic.Int32
+	mds := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Metadata-Flavor", "Google")
+		if strings.HasSuffix(r.URL.Path, "/service-accounts/default/identity") {
+			vmIdentityRequests.Add(1)
+			_, _ = w.Write([]byte(fakeIDToken(r.URL.Query().Get("audience"))))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(mds.Close)
+	t.Setenv("GCE_METADATA_HOST", strings.TrimPrefix(mds.URL, "http://"))
+
+	home := t.TempDir()
+	adcJSON := []byte(`{"type":"authorized_user","client_id":"fake.apps.googleusercontent.com","client_secret":"fake","refresh_token":"fake"}`)
+	for _, dir := range []string{
+		filepath.Join(home, ".config", "gcloud"), // Linux / macOS
+		filepath.Join(home, "gcloud"),            // Windows (APPDATA)
+	} {
+		require.NoError(t, os.MkdirAll(dir, 0o700))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "application_default_credentials.json"), adcJSON, 0o600))
+	}
+	t.Setenv("HOME", home)
+	t.Setenv("APPDATA", home)
+	t.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "")
+
+	// Step 2 refreshes the fake user credentials, which fails; what matters is
+	// that step 1 did not mint a token for the VM service account.
+	_, err := resolveIDTokenSource(context.Background(), "https://example-service.a.run.app")
+	require.Error(t, err)
+	assert.Zero(t, vmIdentityRequests.Load(), "must not fetch an ID token for the VM service account")
 }

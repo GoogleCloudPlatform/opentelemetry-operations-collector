@@ -484,4 +484,5 @@ func TestResolveIDTokenSource_GCEWithGcloudUserADC(t *testing.T) {
 	_, err := resolveIDTokenSource(context.Background(), "https://example-service.a.run.app")
 	require.Error(t, err)
 	assert.Zero(t, vmIdentityRequests.Load(), "must not fetch an ID token for the VM service account")
+	assert.ErrorContains(t, err, "unsupported credentials type", "the step 1 error must be reported")
 }

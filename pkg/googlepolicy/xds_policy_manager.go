@@ -1477,10 +1477,11 @@ func resolveIDTokenSource(_ context.Context, audience string) (oauth2.TokenSourc
 	// 1. GCE / GKE / Service Accounts / WIF: metadata server, SA key, or impersonated WIF.
 	// Pass the ADC JSON explicitly: without it idtoken skips the gcloud
 	// well-known file and uses the metadata server identity on GCE.
-	if idCreds, err := idtoken.NewCredentials(&idtoken.Options{
+	idCreds, idErr := idtoken.NewCredentials(&idtoken.Options{
 		Audience:        audience,
 		CredentialsJSON: creds.JSON(), //nolint:staticcheck // SA1019: JSON was already loaded by ADC (DetectDefault), not from an untrusted source.
-	}); err == nil {
+	})
+	if idErr == nil {
 		// auth.Credentials caches and refreshes tokens early; an outer
 		// oauth2.ReuseTokenSource would defeat that.
 		return oauth2adapt.TokenSourceFromTokenProvider(idCreds), nil
@@ -1490,7 +1491,7 @@ func resolveIDTokenSource(_ context.Context, audience string) (oauth2.TokenSourc
 	wrapped := &GoogleIDTokenSource{Src: oauth2adapt.TokenSourceFromTokenProvider(creds)}
 	initialTok, err := wrapped.Token()
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve initial ID token: %w", err)
+		return nil, fmt.Errorf("failed to retrieve initial ID token: %w (idtoken: %v)", err, idErr)
 	}
 	return oauth2.ReuseTokenSource(initialTok, wrapped), nil
 }

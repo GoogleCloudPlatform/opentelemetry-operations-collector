@@ -5,7 +5,7 @@
   "matchers": [
     {
       "target": { "record_field": "LOG_RECORD_FIELD_BODY" },
-      "equality": { "string_value": "DROP_THIS_LOG_LINE" }
+      "predicate": { "equality": { "string_value": "DROP_THIS_LOG_LINE" } }
     }
   ]
 }

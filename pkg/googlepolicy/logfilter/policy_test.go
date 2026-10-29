@@ -104,7 +104,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 								RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
 							},
 						},
-						Predicate: &policyv1alpha1.LogMatcher_Existence{},
+						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -122,7 +122,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 								RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
 							},
 						},
-						Predicate: &policyv1alpha1.LogMatcher_Existence{},
+						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -131,8 +131,8 @@ func TestPolicyValidationErrors(t *testing.T) {
 		{
 			name: "missing matchers",
 			proto: &policyv1alpha1.LogFilterPolicy{
-				Id:      "p2",
-				Action:  policyv1alpha1.Action_ACTION_DROP.Enum(),
+				Id:       "p2",
+				Action:   policyv1alpha1.Action_ACTION_DROP.Enum(),
 				Matchers: []*policyv1alpha1.LogMatcher{},
 			},
 			errExpect: ErrMissingMatchers,
@@ -144,7 +144,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 				Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
 				Matchers: []*policyv1alpha1.LogMatcher{
 					{
-						Predicate: &policyv1alpha1.LogMatcher_Existence{},
+						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -162,7 +162,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 								RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_UNSPECIFIED,
 							},
 						},
-						Predicate: &policyv1alpha1.LogMatcher_Existence{},
+						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -180,7 +180,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 								ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_UNSPECIFIED,
 							},
 						},
-						Predicate: &policyv1alpha1.LogMatcher_Existence{},
+						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -211,7 +211,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 				Matchers: []*policyv1alpha1.LogMatcher{
 					{
 						Target:    recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY),
-						Predicate: &policyv1alpha1.LogMatcher_Existence{},
+						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -225,7 +225,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 				Matchers: []*policyv1alpha1.LogMatcher{
 					{
 						Target:    &policyv1alpha1.LogFieldSelector{},
-						Predicate: &policyv1alpha1.LogMatcher_Existence{},
+						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -243,7 +243,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 								LogAttributePath: &policyv1alpha1.AttributePath{},
 							},
 						},
-						Predicate: &policyv1alpha1.LogMatcher_Existence{},
+						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -261,7 +261,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 								ResourceAttributePath: &policyv1alpha1.AttributePath{},
 							},
 						},
-						Predicate: &policyv1alpha1.LogMatcher_Existence{},
+						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -279,7 +279,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 								ScopeAttributePath: &policyv1alpha1.AttributePath{},
 							},
 						},
-						Predicate: &policyv1alpha1.LogMatcher_Existence{},
+						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -295,7 +295,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 						Target: &policyv1alpha1.LogFieldSelector{
 							Target: &policyv1alpha1.LogFieldSelector_LogAttributePath{},
 						},
-						Predicate: &policyv1alpha1.LogMatcher_Existence{},
+						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
 					},
 				},
 			},
@@ -328,9 +328,9 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 							RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
 						},
 					},
-					Predicate: &policyv1alpha1.LogMatcher_Glob{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Glob{
 						Glob: "hello*service",
-					},
+					}},
 				},
 			},
 		}
@@ -357,13 +357,13 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 							RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
 						},
 					},
-					Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 						Equality: &policyv1alpha1.Value{
 							Kind: &policyv1alpha1.Value_StringValue{
 								StringValue: "not the body",
 							},
 						},
-					},
+					}},
 				},
 			},
 		}
@@ -386,13 +386,13 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 							RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT,
 						},
 					},
-					Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 						Equality: &policyv1alpha1.Value{
 							Kind: &policyv1alpha1.Value_StringValue{
 								StringValue: "INFO",
 							},
 						},
-					},
+					}},
 				},
 			},
 		}
@@ -416,13 +416,13 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 							RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT,
 						},
 					},
-					Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 						Equality: &policyv1alpha1.Value{
 							Kind: &policyv1alpha1.Value_StringValue{
 								StringValue: "ERROR",
 							},
 						},
-					},
+					}},
 				},
 			},
 		}
@@ -448,13 +448,13 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 							},
 						},
 					},
-					Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 						Equality: &policyv1alpha1.Value{
 							Kind: &policyv1alpha1.Value_StringValue{
 								StringValue: "GET",
 							},
 						},
-					},
+					}},
 				},
 				{
 					Target: &policyv1alpha1.LogFieldSelector{
@@ -464,13 +464,13 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 							},
 						},
 					},
-					Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 						Equality: &policyv1alpha1.Value{
 							Kind: &policyv1alpha1.Value_IntValue{
 								IntValue: 200,
 							},
 						},
-					},
+					}},
 				},
 			},
 		}
@@ -480,13 +480,13 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 		assert.True(t, matchesLog(pol, log, scope, res))
 
 		// If one matcher does not match, the entire policy should not match
-		pb.Matchers[1].Predicate = &policyv1alpha1.LogMatcher_Equality{
+		pb.Matchers[1].Predicate = &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 			Equality: &policyv1alpha1.Value{
 				Kind: &policyv1alpha1.Value_IntValue{
 					IntValue: 500,
 				},
 			},
-		}
+		}}
 		pol2, err := NewPolicyFromProto(pb)
 		require.NoError(t, err)
 		assert.False(t, matchesLog(pol2, log, scope, res))
@@ -505,13 +505,13 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 							},
 						},
 					},
-					Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 						Equality: &policyv1alpha1.Value{
 							Kind: &policyv1alpha1.Value_StringValue{
 								StringValue: "POST", // does not match GET
 							},
 						},
-					},
+					}},
 					Negated: true, // negated -> true
 				},
 			},
@@ -535,13 +535,13 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 							},
 						},
 					},
-					Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 						Equality: &policyv1alpha1.Value{
 							Kind: &policyv1alpha1.Value_StringValue{
 								StringValue: "us-central1-a",
 							},
 						},
-					},
+					}},
 				},
 				{
 					Target: &policyv1alpha1.LogFieldSelector{
@@ -551,13 +551,13 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 							},
 						},
 					},
-					Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 						Equality: &policyv1alpha1.Value{
 							Kind: &policyv1alpha1.Value_StringValue{
 								StringValue: "backend",
 							},
 						},
-					},
+					}},
 				},
 				{
 					Target: &policyv1alpha1.LogFieldSelector{
@@ -565,13 +565,13 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 							ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_NAME,
 						},
 					},
-					Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 						Equality: &policyv1alpha1.Value{
 							Kind: &policyv1alpha1.Value_StringValue{
 								StringValue: "my.library",
 							},
 						},
-					},
+					}},
 				},
 				{
 					Target: &policyv1alpha1.LogFieldSelector{
@@ -579,13 +579,13 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 							ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_VERSION,
 						},
 					},
-					Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 						Equality: &policyv1alpha1.Value{
 							Kind: &policyv1alpha1.Value_StringValue{
 								StringValue: "v1.2.3",
 							},
 						},
-					},
+					}},
 				},
 				{
 					Target: &policyv1alpha1.LogFieldSelector{
@@ -593,13 +593,13 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 							ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_SCHEMA_URL,
 						},
 					},
-					Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 						Equality: &policyv1alpha1.Value{
 							Kind: &policyv1alpha1.Value_StringValue{
 								StringValue: "https://opentelemetry.io/schemas/1.24.0",
 							},
 						},
-					},
+					}},
 				},
 			},
 		}
@@ -620,13 +620,13 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 							RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER,
 						},
 					},
-					Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 						Equality: &policyv1alpha1.Value{
 							Kind: &policyv1alpha1.Value_IntValue{
 								IntValue: 9, // SeverityNumberInfo = 9
 							},
 						},
-					},
+					}},
 				},
 				{
 					Target: &policyv1alpha1.LogFieldSelector{
@@ -634,7 +634,7 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 							RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID,
 						},
 					},
-					Predicate: &policyv1alpha1.LogMatcher_Existence{},
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
 				},
 				{
 					Target: &policyv1alpha1.LogFieldSelector{
@@ -642,7 +642,7 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 							RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID,
 						},
 					},
-					Predicate: &policyv1alpha1.LogMatcher_Existence{},
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
 				},
 			},
 		}
@@ -664,9 +664,9 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 							LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"feature.enabled"}},
 						},
 					},
-					Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 						Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BoolValue{BoolValue: true}},
-					},
+					}},
 				},
 				{
 					Target: &policyv1alpha1.LogFieldSelector{
@@ -674,9 +674,9 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 							LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"latency_seconds"}},
 						},
 					},
-					Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 						Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_DoubleValue{DoubleValue: 1.25}},
-					},
+					}},
 				},
 				{
 					Target: &policyv1alpha1.LogFieldSelector{
@@ -684,9 +684,9 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 							LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"binary.id"}},
 						},
 					},
-					Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 						Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BytesValue{BytesValue: []byte{0x01, 0x02, 0x03}}},
-					},
+					}},
 				},
 				{
 					Target: &policyv1alpha1.LogFieldSelector{
@@ -694,9 +694,9 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 							LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"metadata", "env"}},
 						},
 					},
-					Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 						Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "prod"}},
-					},
+					}},
 				},
 			},
 		}
@@ -718,9 +718,9 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 							LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"http.status_code"}},
 						},
 					},
-					Predicate: &policyv1alpha1.LogMatcher_InclusiveMinimum{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_InclusiveMinimum{
 						InclusiveMinimum: &policyv1alpha1.NumericValue{Kind: &policyv1alpha1.NumericValue_IntValue{IntValue: 200}},
-					},
+					}},
 				},
 				{
 					Target: &policyv1alpha1.LogFieldSelector{
@@ -728,9 +728,9 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 							LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"http.status_code"}},
 						},
 					},
-					Predicate: &policyv1alpha1.LogMatcher_ExclusiveMaximum{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_ExclusiveMaximum{
 						ExclusiveMaximum: &policyv1alpha1.NumericValue{Kind: &policyv1alpha1.NumericValue_IntValue{IntValue: 300}},
-					},
+					}},
 				},
 				{
 					Target: &policyv1alpha1.LogFieldSelector{
@@ -738,9 +738,9 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 							LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"latency_seconds"}},
 						},
 					},
-					Predicate: &policyv1alpha1.LogMatcher_ExclusiveMinimum{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_ExclusiveMinimum{
 						ExclusiveMinimum: &policyv1alpha1.NumericValue{Kind: &policyv1alpha1.NumericValue_DoubleValue{DoubleValue: 1.0}},
-					},
+					}},
 				},
 				{
 					Target: &policyv1alpha1.LogFieldSelector{
@@ -748,9 +748,9 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 							RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER,
 						},
 					},
-					Predicate: &policyv1alpha1.LogMatcher_InclusiveMaximum{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_InclusiveMaximum{
 						InclusiveMaximum: &policyv1alpha1.NumericValue{Kind: &policyv1alpha1.NumericValue_IntValue{IntValue: 9}},
-					},
+					}},
 				},
 			},
 		}
@@ -772,9 +772,9 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 							LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"user.roles"}},
 						},
 					},
-					Predicate: &policyv1alpha1.LogMatcher_Containment{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Containment{
 						Containment: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "admin"}},
-					},
+					}},
 				},
 				// Substring: body contains "world from"
 				{
@@ -783,9 +783,9 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 							RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
 						},
 					},
-					Predicate: &policyv1alpha1.LogMatcher_Containment{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Containment{
 						Containment: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "world from"}},
-					},
+					}},
 				},
 				// Bytes subsequence: binary.id contains [0x02, 0x03]
 				{
@@ -794,9 +794,9 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 							LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"binary.id"}},
 						},
 					},
-					Predicate: &policyv1alpha1.LogMatcher_Containment{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Containment{
 						Containment: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BytesValue{BytesValue: []byte{0x02, 0x03}}},
-					},
+					}},
 				},
 			},
 		}
@@ -806,9 +806,9 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 		assert.True(t, matchesLog(pol, log, scope, res))
 
 		// Non-matching list item
-		pb.Matchers[0].Predicate = &policyv1alpha1.LogMatcher_Containment{
+		pb.Matchers[0].Predicate = &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Containment{
 			Containment: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "superadmin"}},
-		}
+		}}
 		pol2, err := NewPolicyFromProto(pb)
 		require.NoError(t, err)
 		assert.False(t, matchesLog(pol2, log, scope, res))
@@ -825,8 +825,10 @@ func TestDriverLoadPolicy(t *testing.T) {
 				"target": map[string]any{
 					"record_field": "LOG_RECORD_FIELD_BODY",
 				},
-				"equality": map[string]any{
-					"string_value": "drop this line",
+				"predicate": map[string]any{
+					"equality": map[string]any{
+						"string_value": "drop this line",
+					},
 				},
 			},
 		},
@@ -894,81 +896,65 @@ func scopeAttrTarget(path ...string) *policyv1alpha1.LogFieldSelector {
 	}
 }
 
-func equalsString(s string) *policyv1alpha1.LogMatcher_Equality {
-	return &policyv1alpha1.LogMatcher_Equality{
+func equalsString(s string) *policyv1alpha1.Predicate {
+	return &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 		Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: s}},
-	}
+	}}
 }
 
-func equalsInt(n int64) *policyv1alpha1.LogMatcher_Equality {
-	return &policyv1alpha1.LogMatcher_Equality{
+func equalsInt(n int64) *policyv1alpha1.Predicate {
+	return &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 		Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_IntValue{IntValue: n}},
-	}
+	}}
 }
 
-func equalsDouble(f float64) *policyv1alpha1.LogMatcher_Equality {
-	return &policyv1alpha1.LogMatcher_Equality{
+func equalsDouble(f float64) *policyv1alpha1.Predicate {
+	return &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 		Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_DoubleValue{DoubleValue: f}},
-	}
+	}}
 }
 
-func equalsBool(b bool) *policyv1alpha1.LogMatcher_Equality {
-	return &policyv1alpha1.LogMatcher_Equality{
+func equalsBool(b bool) *policyv1alpha1.Predicate {
+	return &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 		Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BoolValue{BoolValue: b}},
-	}
+	}}
 }
 
-func equalsBytes(b []byte) *policyv1alpha1.LogMatcher_Equality {
-	return &policyv1alpha1.LogMatcher_Equality{
+func equalsBytes(b []byte) *policyv1alpha1.Predicate {
+	return &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 		Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BytesValue{BytesValue: b}},
-	}
+	}}
 }
 
-func containsString(s string) *policyv1alpha1.LogMatcher_Containment {
-	return &policyv1alpha1.LogMatcher_Containment{
+func containsString(s string) *policyv1alpha1.Predicate {
+	return &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Containment{
 		Containment: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: s}},
-	}
+	}}
 }
 
-func containsBytes(b []byte) *policyv1alpha1.LogMatcher_Containment {
-	return &policyv1alpha1.LogMatcher_Containment{
+func containsBytes(b []byte) *policyv1alpha1.Predicate {
+	return &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Containment{
 		Containment: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BytesValue{BytesValue: b}},
-	}
+	}}
 }
 
 // dropPolicy builds a single-matcher ACTION_DROP policy around target/predicate.
-func dropPolicy(id string, target *policyv1alpha1.LogFieldSelector, predicate any, negate bool) *policyv1alpha1.LogFilterPolicy {
-	m := &policyv1alpha1.LogMatcher{
-		Target: target,
-		Negated: negate,
-	}
-	switch p := predicate.(type) {
-	case *policyv1alpha1.LogMatcher_Existence:
-		m.Predicate = p
-	case *policyv1alpha1.LogMatcher_Equality:
-		m.Predicate = p
-	case *policyv1alpha1.LogMatcher_Glob:
-		m.Predicate = p
-	case *policyv1alpha1.LogMatcher_Containment:
-		m.Predicate = p
-	case *policyv1alpha1.LogMatcher_ExclusiveMinimum:
-		m.Predicate = p
-	case *policyv1alpha1.LogMatcher_InclusiveMinimum:
-		m.Predicate = p
-	case *policyv1alpha1.LogMatcher_ExclusiveMaximum:
-		m.Predicate = p
-	case *policyv1alpha1.LogMatcher_InclusiveMaximum:
-		m.Predicate = p
-	}
+func dropPolicy(id string, target *policyv1alpha1.LogFieldSelector, predicate *policyv1alpha1.Predicate, negate bool) *policyv1alpha1.LogFilterPolicy {
 	return &policyv1alpha1.LogFilterPolicy{
-		Id:      id,
-		Action:  policyv1alpha1.Action_ACTION_DROP.Enum(),
-		Matchers: []*policyv1alpha1.LogMatcher{m},
+		Id:     id,
+		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+		Matchers: []*policyv1alpha1.LogMatcher{
+			{
+				Target:    target,
+				Predicate: predicate,
+				Negated:   negate,
+			},
+		},
 	}
 }
 
 // mustDropPolicy compiles a single-matcher ACTION_DROP policy or fails the test.
-func mustDropPolicy(t *testing.T, id string, target *policyv1alpha1.LogFieldSelector, predicate any, negate bool) *Policy {
+func mustDropPolicy(t *testing.T, id string, target *policyv1alpha1.LogFieldSelector, predicate *policyv1alpha1.Predicate, negate bool) *Policy {
 	t.Helper()
 	pol, err := NewPolicyFromProto(dropPolicy(id, target, predicate, negate))
 	require.NoError(t, err)
@@ -988,7 +974,7 @@ func TestPolicyMetadata(t *testing.T) {
 	pb := dropPolicy(
 		"metadata-policy",
 		recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY),
-		&policyv1alpha1.LogMatcher_Existence{},
+		&policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
 		false,
 	)
 	pol, err := NewPolicyFromProto(pb)
@@ -1072,7 +1058,7 @@ func TestLogBodyValueTypes(t *testing.T) {
 		setBody    func(pcommon.Value)
 		wantValue  any
 		wantExists bool
-		predicate  any
+		predicate  *policyv1alpha1.Predicate
 		wantMatch  bool
 	}{
 		{
@@ -1163,7 +1149,7 @@ func TestLogBodyValueTypes(t *testing.T) {
 			setBody:    func(v pcommon.Value) { v.SetEmptySlice() },
 			wantValue:  []any{},
 			wantExists: true,
-			predicate:  &policyv1alpha1.LogMatcher_Existence{},
+			predicate:  &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
 			wantMatch:  true,
 		},
 		{
@@ -1171,7 +1157,7 @@ func TestLogBodyValueTypes(t *testing.T) {
 			setBody:    func(pcommon.Value) {},
 			wantValue:  nil,
 			wantExists: false,
-			predicate:  &policyv1alpha1.LogMatcher_Existence{},
+			predicate:  &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
 			wantMatch:  false,
 		},
 		{
@@ -1179,7 +1165,7 @@ func TestLogBodyValueTypes(t *testing.T) {
 			setBody:    func(v pcommon.Value) { v.SetStr("") },
 			wantValue:  nil,
 			wantExists: false,
-			predicate:  &policyv1alpha1.LogMatcher_Existence{},
+			predicate:  &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
 			wantMatch:  false,
 		},
 	}
@@ -1235,23 +1221,23 @@ func TestUnsetStringFieldsReportAbsent(t *testing.T) {
 			assert.Nil(t, val, "unset string field must report nil value so value predicates do not falsely match")
 
 			// exists is false ...
-			existsPol := mustDropPolicy(t, "exists-"+tt.name, target, &policyv1alpha1.LogMatcher_Existence{}, false)
+			existsPol := mustDropPolicy(t, "exists-"+tt.name, target, &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}}, false)
 			assert.False(t, matchesLog(existsPol, lr, scope, res))
 			assert.Equal(t, googlepolicy.FilterNoMatch, evalLog(existsPol, lr, scope, res))
 
 			// ... which makes `exists` + negate the "field is unset" selector.
-			negatedPol := mustDropPolicy(t, "not-exists-"+tt.name, target, &policyv1alpha1.LogMatcher_Existence{}, true)
+			negatedPol := mustDropPolicy(t, "not-exists-"+tt.name, target, &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}}, true)
 			assert.True(t, matchesLog(negatedPol, lr, scope, res))
 			assert.Equal(t, googlepolicy.FilterDrop, evalLog(negatedPol, lr, scope, res))
 
 			// Value predicates (equals "", glob "", glob *) must NOT match.
 			for _, predCase := range []struct {
 				name string
-				pred any
+				pred *policyv1alpha1.Predicate
 			}{
 				{"equals empty", equalsString("")},
-				{"glob empty", &policyv1alpha1.LogMatcher_Glob{Glob: ""}},
-				{"glob permissive", &policyv1alpha1.LogMatcher_Glob{Glob: "*"}},
+				{"glob empty", &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Glob{Glob: ""}}},
+				{"glob permissive", &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Glob{Glob: "*"}}},
 			} {
 				pol := mustDropPolicy(t, predCase.name+"-"+tt.name, target, predCase.pred, false)
 				assert.False(t, matchesLog(pol, lr, scope, res), "%s must not match unset %s", predCase.name, tt.name)
@@ -1273,12 +1259,12 @@ func TestUnsetSeverityNumberReportsAbsent(t *testing.T) {
 	assert.Nil(t, val, "unset severity number must report nil value so range predicates do not falsely match")
 
 	// exists is false
-	existsPol := mustDropPolicy(t, "sev-exists", target, &policyv1alpha1.LogMatcher_Existence{}, false)
+	existsPol := mustDropPolicy(t, "sev-exists", target, &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}}, false)
 	assert.False(t, matchesLog(existsPol, lr, scope, res))
 	assert.Equal(t, googlepolicy.FilterNoMatch, evalLog(existsPol, lr, scope, res))
 
 	// exists + negate is true (matches logs without severity set)
-	notExistsPol := mustDropPolicy(t, "sev-not-exists", target, &policyv1alpha1.LogMatcher_Existence{}, true)
+	notExistsPol := mustDropPolicy(t, "sev-not-exists", target, &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}}, true)
 	assert.True(t, matchesLog(notExistsPol, lr, scope, res))
 	assert.Equal(t, googlepolicy.FilterDrop, evalLog(notExistsPol, lr, scope, res))
 
@@ -1288,9 +1274,9 @@ func TestUnsetSeverityNumberReportsAbsent(t *testing.T) {
 	assert.Equal(t, googlepolicy.FilterNoMatch, evalLog(equalsZeroPol, lr, scope, res))
 
 	// Crucially: exclusive_maximum: 9 (drop debug/trace logs below INFO) does NOT drop logs that have no severity number set!
-	dropDebugPol := mustDropPolicy(t, "drop-below-info", target, &policyv1alpha1.LogMatcher_ExclusiveMaximum{
+	dropDebugPol := mustDropPolicy(t, "drop-below-info", target, &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_ExclusiveMaximum{
 		ExclusiveMaximum: &policyv1alpha1.NumericValue{Kind: &policyv1alpha1.NumericValue_IntValue{IntValue: 9}},
-	}, false)
+	}}, false)
 	assert.False(t, matchesLog(dropDebugPol, lr, scope, res), "exclusive_maximum: 9 must not match unset severity")
 	assert.Equal(t, googlepolicy.FilterNoMatch, evalLog(dropDebugPol, lr, scope, res))
 
@@ -1318,7 +1304,7 @@ func TestIDFieldsMatchHexAndBytes(t *testing.T) {
 	tests := []struct {
 		name      string
 		field     policyv1alpha1.LogRecordField
-		predicate any
+		predicate *policyv1alpha1.Predicate
 		want      bool
 	}{
 		{
@@ -1330,7 +1316,7 @@ func TestIDFieldsMatchHexAndBytes(t *testing.T) {
 		{
 			name:      "trace id glob on hex string",
 			field:     policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID,
-			predicate: &policyv1alpha1.LogMatcher_Glob{Glob: "0102*0f10"},
+			predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Glob{Glob: "0102*0f10"}},
 			want:      true,
 		},
 		{
@@ -1366,7 +1352,7 @@ func TestIDFieldsMatchHexAndBytes(t *testing.T) {
 		{
 			name:      "span id glob on hex string",
 			field:     policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID,
-			predicate: &policyv1alpha1.LogMatcher_Glob{Glob: "0102030405060708"},
+			predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Glob{Glob: "0102030405060708"}},
 			want:      true,
 		},
 		{
@@ -1422,13 +1408,13 @@ func TestZeroIDsReportAbsent(t *testing.T) {
 		})
 
 		t.Run(field.String()+" exists is false", func(t *testing.T) {
-			pol := mustDropPolicy(t, "exists-"+field.String(), target, &policyv1alpha1.LogMatcher_Existence{}, false)
+			pol := mustDropPolicy(t, "exists-"+field.String(), target, &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}}, false)
 			assert.False(t, matchesLog(pol, lr, scope, res))
 			assert.Equal(t, googlepolicy.FilterNoMatch, evalLog(pol, lr, scope, res))
 		})
 
 		t.Run(field.String()+" exists negated is true", func(t *testing.T) {
-			pol := mustDropPolicy(t, "not-exists-"+field.String(), target, &policyv1alpha1.LogMatcher_Existence{}, true)
+			pol := mustDropPolicy(t, "not-exists-"+field.String(), target, &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}}, true)
 			assert.True(t, matchesLog(pol, lr, scope, res))
 			assert.Equal(t, googlepolicy.FilterDrop, evalLog(pol, lr, scope, res))
 		})
@@ -1437,7 +1423,7 @@ func TestZeroIDsReportAbsent(t *testing.T) {
 			pol := mustDropPolicy(t, "zero-equals-"+field.String(), target, equalsString(""), false)
 			assert.False(t, matchesLog(pol, lr, scope, res))
 
-			globPol := mustDropPolicy(t, "zero-glob-"+field.String(), target, &policyv1alpha1.LogMatcher_Glob{Glob: ""}, false)
+			globPol := mustDropPolicy(t, "zero-glob-"+field.String(), target, &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Glob{Glob: ""}}, false)
 			assert.False(t, matchesLog(globPol, lr, scope, res))
 
 			containsPol := mustDropPolicy(t, "zero-contains-"+field.String(), target, containsString(""), false)
@@ -1474,7 +1460,7 @@ func TestEmptyContextFields(t *testing.T) {
 			assert.False(t, exists)
 			assert.Nil(t, val)
 
-			pol := mustDropPolicy(t, "empty-ctx-"+tt.name, tt.target, &policyv1alpha1.LogMatcher_Existence{}, false)
+			pol := mustDropPolicy(t, "empty-ctx-"+tt.name, tt.target, &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}}, false)
 			assert.Equal(t, googlepolicy.FilterNoMatch, pol.FilterLog(googlepolicy.LogContext{}))
 		})
 	}
@@ -1501,14 +1487,14 @@ func TestEmptyScopeFieldsReportAbsent(t *testing.T) {
 			assert.False(t, exists)
 			assert.Nil(t, val)
 
-			pol := mustDropPolicy(t, "scope-"+field.String(), target, &policyv1alpha1.LogMatcher_Existence{}, false)
+			pol := mustDropPolicy(t, "scope-"+field.String(), target, &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}}, false)
 			assert.False(t, matchesLog(pol, lr, scope, res))
 
 			// Value predicates do NOT match unset scope fields.
 			equalsPol := mustDropPolicy(t, "scope-empty-"+field.String(), target, equalsString(""), false)
 			assert.False(t, matchesLog(equalsPol, lr, scope, res))
 
-			globPol := mustDropPolicy(t, "scope-glob-"+field.String(), target, &policyv1alpha1.LogMatcher_Glob{Glob: "*"}, false)
+			globPol := mustDropPolicy(t, "scope-glob-"+field.String(), target, &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Glob{Glob: "*"}}, false)
 			assert.False(t, matchesLog(globPol, lr, scope, res))
 		})
 	}
@@ -1585,8 +1571,8 @@ func TestDriverLoadPolicyErrors(t *testing.T) {
 				"action": "ACTION_DROP",
 				"matchers": []any{
 					map[string]any{
-						"target": map[string]any{"record_field": "LOG_RECORD_FIELD_BODY"},
-						"existence": map[string]any{},
+						"target":    map[string]any{"record_field": "LOG_RECORD_FIELD_BODY"},
+						"predicate": map[string]any{"existence": map[string]any{}},
 					},
 				},
 			},
@@ -1600,8 +1586,8 @@ func TestDriverLoadPolicyErrors(t *testing.T) {
 				"actions": "ACTION_DROP", // unknown field discarded -> action left unspecified -> validation error
 				"matchers": []any{
 					map[string]any{
-						"target": map[string]any{"record_field": "LOG_RECORD_FIELD_BODY"},
-						"existence": map[string]any{},
+						"target":    map[string]any{"record_field": "LOG_RECORD_FIELD_BODY"},
+						"predicate": map[string]any{"existence": map[string]any{}},
 					},
 				},
 			},
@@ -1618,7 +1604,7 @@ func TestDriverLoadPolicyErrors(t *testing.T) {
 						"target": map[string]any{
 							"recordfield": "LOG_RECORD_FIELD_BODY", // unknown field discarded -> target unset -> validation error
 						},
-						"existence": map[string]any{},
+						"predicate": map[string]any{"existence": map[string]any{}},
 					},
 				},
 			},
@@ -1677,7 +1663,7 @@ func TestDriverLoadPolicyIgnoresUnknownFields(t *testing.T) {
 		"matchers": []any{
 			map[string]any{
 				"target":              map[string]any{"record_field": "LOG_RECORD_FIELD_BODY"},
-				"existence":              map[string]any{},
+				"predicate":           map[string]any{"existence": map[string]any{}},
 				"future_matcher_hint": true,
 			},
 		},

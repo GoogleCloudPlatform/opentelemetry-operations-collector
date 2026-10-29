@@ -6,8 +6,10 @@
       "target": {
         "record_field": "SPAN_RECORD_FIELD_KIND"
       },
-      "equality": {
-        "string_value": "SERVER"
+      "predicate": {
+        "equality": {
+          "string_value": "SERVER"
+        }
       }
     },
     {
@@ -16,7 +18,9 @@
           "segments": ["http.target"]
         }
       },
-      "glob": "/healthz"
+      "predicate": {
+        "glob": "/healthz"
+      }
     }
   ]
 }

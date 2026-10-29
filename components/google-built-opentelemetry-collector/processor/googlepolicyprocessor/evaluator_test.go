@@ -119,7 +119,7 @@ func TestEvaluator_LogFiltering(t *testing.T) {
 						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT,
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Glob{Glob: "DEBUG*"},
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Glob{Glob: "DEBUG*"}},
 			},
 		},
 	})
@@ -135,11 +135,11 @@ func TestEvaluator_LogFiltering(t *testing.T) {
 						ResourceAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"env"}},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{
 						Kind: &policyv1alpha1.Value_StringValue{StringValue: "production"},
 					},
-				},
+				}},
 			},
 		},
 	})
@@ -196,11 +196,11 @@ func TestEvaluator_LogNestedAttributeAndNegate(t *testing.T) {
 						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"http", "method"}},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{
 						Kind: &policyv1alpha1.Value_StringValue{StringValue: "GET"},
 					},
-				},
+				}},
 				Negated: true,
 			},
 		},
@@ -237,11 +237,11 @@ func TestEvaluator_MetricFiltering(t *testing.T) {
 						DescriptorField: policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME,
 					},
 				},
-				Predicate: &policyv1alpha1.MetricMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{
 						Kind: &policyv1alpha1.Value_StringValue{StringValue: "http.server.duration"},
 					},
-				},
+				}},
 			},
 			{
 				Target: &policyv1alpha1.MetricFieldSelector{
@@ -249,11 +249,11 @@ func TestEvaluator_MetricFiltering(t *testing.T) {
 						DescriptorField: policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE,
 					},
 				},
-				Predicate: &policyv1alpha1.MetricMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{
 						Kind: &policyv1alpha1.Value_StringValue{StringValue: "HISTOGRAM"},
 					},
-				},
+				}},
 			},
 		},
 	})
@@ -330,7 +330,7 @@ func TestEvaluator_TraceFiltering(t *testing.T) {
 						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Glob{Glob: "healthcheck*"},
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Glob{Glob: "healthcheck*"}},
 			},
 			{
 				Target: &policyv1alpha1.TraceFieldSelector{
@@ -338,11 +338,11 @@ func TestEvaluator_TraceFiltering(t *testing.T) {
 						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_KIND,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{
 						Kind: &policyv1alpha1.Value_StringValue{StringValue: "INTERNAL"},
 					},
-				},
+				}},
 			},
 		},
 	})
@@ -523,9 +523,9 @@ func TestEvaluator_MetricDatapointPruningAndEmptyMetrics(t *testing.T) {
 						DescriptorField: policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME,
 					},
 				},
-				Predicate: &policyv1alpha1.MetricMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "exempt.metric"}},
-				},
+				}},
 			},
 		},
 	})
@@ -836,9 +836,9 @@ func TestEvaluator_MultipleTracePoliciesDrop(t *testing.T) {
 					},
 				},
 				Negated: true,
-				Predicate: &policyv1alpha1.TraceMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: ""}},
-				},
+				}},
 			},
 			{
 				Target: &policyv1alpha1.TraceFieldSelector{
@@ -846,9 +846,9 @@ func TestEvaluator_MultipleTracePoliciesDrop(t *testing.T) {
 						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_KIND,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "INTERNAL"}},
-				},
+				}},
 			},
 		},
 	})
@@ -862,9 +862,9 @@ func TestEvaluator_MultipleTracePoliciesDrop(t *testing.T) {
 						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Glob{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Glob{
 					Glob: "healthz.*",
-				},
+				}},
 			},
 		},
 	})
@@ -1026,9 +1026,9 @@ func TestEvaluator_LogTransform(t *testing.T) {
 				LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"winlog", "event_id"}},
 			},
 		},
-		Predicate: &policyv1alpha1.LogMatcher_Equality{
+		Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 			Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_IntValue{IntValue: 4625}},
-		},
+		}},
 	}
 
 	// Transform 1a: Add flat log attribute threat_tier when event_id == 4625
@@ -1075,7 +1075,7 @@ func TestEvaluator_LogTransform(t *testing.T) {
 						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"winlog", "event_id"}},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Existence{},
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
 			},
 		},
 		Action: &policyv1alpha1.LogTransformPolicy_Addition{
@@ -1197,9 +1197,9 @@ func TestEvaluator_LogFilterBeforeTransformOrdering(t *testing.T) {
 						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT,
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "DEBUG"}},
-				},
+				}},
 			},
 		},
 	})
@@ -1215,9 +1215,9 @@ func TestEvaluator_LogFilterBeforeTransformOrdering(t *testing.T) {
 						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"exempt"}},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BoolValue{BoolValue: true}},
-				},
+				}},
 			},
 		},
 	})
@@ -1232,9 +1232,9 @@ func TestEvaluator_LogFilterBeforeTransformOrdering(t *testing.T) {
 						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"event_id"}},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_IntValue{IntValue: 4625}},
-				},
+				}},
 			},
 		},
 		Action: &policyv1alpha1.LogTransformPolicy_Addition{
@@ -1305,9 +1305,9 @@ func TestEvaluator_LogTransformBodyFieldAndRecordFields(t *testing.T) {
 					ResourceAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"service.name"}},
 				},
 			},
-			Predicate: &policyv1alpha1.LogMatcher_Equality{
+			Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 				Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "active-directory"}},
-			},
+			}},
 		},
 	}
 
@@ -1417,9 +1417,9 @@ func TestEvaluator_LogTransformPostTransformFiltering(t *testing.T) {
 						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"threat_tier"}},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "DROP_ME"}},
-				},
+				}},
 			},
 		},
 	})
@@ -1434,9 +1434,9 @@ func TestEvaluator_LogTransformPostTransformFiltering(t *testing.T) {
 						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"event_id"}},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_IntValue{IntValue: 4634}},
-				},
+				}},
 			},
 		},
 		Action: &policyv1alpha1.LogTransformPolicy_Addition{
@@ -1462,9 +1462,9 @@ func TestEvaluator_LogTransformPostTransformFiltering(t *testing.T) {
 						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"event_id"}},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_IntValue{IntValue: 4625}},
-				},
+				}},
 			},
 		},
 		Action: &policyv1alpha1.LogTransformPolicy_Addition{
@@ -1549,9 +1549,9 @@ func TestEvaluator_LogTransformPass2Interaction_KeptByAttributeThenRemovedAndDro
 						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"auth.exempt"}},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "true"}},
-				},
+				}},
 			},
 		},
 	})
@@ -1567,9 +1567,9 @@ func TestEvaluator_LogTransformPass2Interaction_KeptByAttributeThenRemovedAndDro
 						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"env"}},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "dev"}},
-				},
+				}},
 			},
 		},
 	})
@@ -1620,9 +1620,9 @@ func TestEvaluator_LogTransformNonMatchingMatcherLeavesTargetIntact(t *testing.T
 						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"user.role"}},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "admin"}},
-				},
+				}},
 			},
 		},
 		Action: &policyv1alpha1.LogTransformPolicy_Removal{
@@ -1839,9 +1839,9 @@ func newDropLogBodyProto(id, body string) *policyv1alpha1.LogFilterPolicy {
 						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: body}},
-				},
+				}},
 			},
 		},
 	}
@@ -1856,9 +1856,9 @@ func newDropMetricDescriptorProto(id string, field policyv1alpha1.MetricDescript
 				Target: &policyv1alpha1.MetricFieldSelector{
 					Target: &policyv1alpha1.MetricFieldSelector_DescriptorField{DescriptorField: field},
 				},
-				Predicate: &policyv1alpha1.MetricMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: value}},
-				},
+				}},
 			},
 		},
 	}
@@ -1879,9 +1879,9 @@ func newDropDatapointAttrProto(id, key, value string) *policyv1alpha1.MetricFilt
 						DataPointAttributePath: &policyv1alpha1.AttributePath{Segments: []string{key}},
 					},
 				},
-				Predicate: &policyv1alpha1.MetricMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: value}},
-				},
+				}},
 			},
 		},
 	}
@@ -1897,9 +1897,9 @@ func newDropSpanNameProto(id, name string) *policyv1alpha1.TraceFilterPolicy {
 						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: name}},
-				},
+				}},
 			},
 		},
 	}

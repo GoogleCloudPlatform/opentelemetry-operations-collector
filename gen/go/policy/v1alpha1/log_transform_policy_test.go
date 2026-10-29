@@ -38,10 +38,12 @@ func TestLogTransformPolicy_Serialization(t *testing.T) {
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
-					Equality: &policyv1alpha1.Value{
-						Kind: &policyv1alpha1.Value_IntValue{
-							IntValue: 4625,
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_Equality{
+						Equality: &policyv1alpha1.Value{
+							Kind: &policyv1alpha1.Value_IntValue{
+								IntValue: 4625,
+							},
 						},
 					},
 				},
@@ -98,10 +100,12 @@ func TestLogTransformPolicy_JSONSerialization(t *testing.T) {
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
-					Equality: &policyv1alpha1.Value{
-						Kind: &policyv1alpha1.Value_StringValue{
-							StringValue: "active-directory",
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_Equality{
+						Equality: &policyv1alpha1.Value{
+							Kind: &policyv1alpha1.Value_StringValue{
+								StringValue: "active-directory",
+							},
 						},
 					},
 				},
@@ -114,8 +118,10 @@ func TestLogTransformPolicy_JSONSerialization(t *testing.T) {
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Glob{
-					Glob: "*$",
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_Glob{
+						Glob: "*$",
+					},
 				},
 			},
 		},

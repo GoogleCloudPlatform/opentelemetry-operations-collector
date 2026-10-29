@@ -5,7 +5,7 @@
   "matchers": [
     {
       "target": { "record_field": "LOG_RECORD_FIELD_BODY" },
-      "existence": {}
+      "predicate": { "existence": {} }
     }
   ]
 }

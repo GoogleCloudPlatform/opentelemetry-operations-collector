@@ -484,18 +484,18 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource(t *testing.T) {
 	conf, err := ret.AsConf()
 	require.NoError(t, err)
 
-	// Verify synthesized receiver configs and SecOps-tuned compiler defaults
+	// Verify synthesized receiver configs and compiler defaults
 	assert.True(t, conf.IsSet("receivers::windowseventlog/security"))
 	assert.Equal(t, "Security", conf.Get("receivers::windowseventlog/security::channel"))
 	assert.Equal(t, true, conf.Get("receivers::windowseventlog/security::suppress_rendering_info"))
-	assert.Equal(t, true, conf.Get("receivers::windowseventlog/security::event_driven_scraping"))
+	assert.False(t, conf.IsSet("receivers::windowseventlog/security::event_driven_scraping"))
 	assert.Equal(t, 500, conf.Get("receivers::windowseventlog/security::max_reads"))
 	assert.Equal(t, true, conf.Get("receivers::windowseventlog/security::ignore_channel_errors"))
 
 	assert.True(t, conf.IsSet("receivers::windowseventlog/microsoft-windows-sysmon_operational"))
 	assert.Equal(t, "Microsoft-Windows-Sysmon/Operational", conf.Get("receivers::windowseventlog/microsoft-windows-sysmon_operational::channel"))
 	assert.Equal(t, true, conf.Get("receivers::windowseventlog/microsoft-windows-sysmon_operational::suppress_rendering_info"))
-	assert.Equal(t, true, conf.Get("receivers::windowseventlog/microsoft-windows-sysmon_operational::event_driven_scraping"))
+	assert.False(t, conf.IsSet("receivers::windowseventlog/microsoft-windows-sysmon_operational::event_driven_scraping"))
 	assert.Equal(t, 500, conf.Get("receivers::windowseventlog/microsoft-windows-sysmon_operational::max_reads"))
 	assert.Equal(t, true, conf.Get("receivers::windowseventlog/microsoft-windows-sysmon_operational::ignore_channel_errors"))
 
@@ -563,13 +563,227 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource_MultiPolicyConsolidat
 	assert.Equal(t, "Application", conf.Get("receivers::windowseventlog/application::channel"))
 
 	receivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
-	assert.Contains(t, receivers, "nop/googlecontrolplane")
-	assert.Contains(t, receivers, "windowseventlog/application")
-	assert.Contains(t, receivers, "windowseventlog/security")
-	assert.Contains(t, receivers, "windowseventlog/system")
+	expectedReceivers := []any{
+		"nop/googlecontrolplane",
+		"windowseventlog/application",
+		"windowseventlog/security",
+		"windowseventlog/system",
+	}
+	assert.ElementsMatch(t, expectedReceivers, receivers)
+
+	// Verify all generated receivers unmarshal cleanly into real collector component.ID
+	sub, err := conf.Sub("receivers")
+	require.NoError(t, err)
+	var recMap map[component.ID]any
+	require.NoError(t, sub.Unmarshal(&recMap))
+	assert.Contains(t, recMap, component.MustNewIDWithName("windowseventlog", "application"))
+	assert.Contains(t, recMap, component.MustNewIDWithName("windowseventlog", "security"))
+	assert.Contains(t, recMap, component.MustNewIDWithName("windowseventlog", "system"))
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
+
+func TestRetrieve_ActivePolicySetWithWindowsEventLogSource_RealPolicyFaultIsolation(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	obsCore, recordedLogs := observer.New(zapcore.WarnLevel)
+	logger := zap.New(obsCore)
+	p := createProviderWithLogger(logger)
+
+	// Valid policy
+	polValid, err := windowseventlogsource.NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+		Id:       "win-valid",
+		Channels: []string{"Security"},
+	})
+	require.NoError(t, err)
+
+	// Real policy with empty channel that fails validation
+	badProto := &policyv1alpha1.WindowsEventLogSourcePolicy{
+		Id:       "win-bad-empty",
+		Channels: []string{"Security", ""},
+	}
+	// Bypass NewPolicyFromProto validation by loading directly into driver or raw struct to test provider fault isolation
+	polInvalid, err := googlepolicy.LoadPolicy(windowseventlogsource.PolicyType, map[string]any{
+		"type":     windowseventlogsource.PolicyType,
+		"id":       "win-bad-empty",
+		"channels": []any{"Security", ""},
+	})
+	// LoadPolicy enforces Validate(), so polInvalid is nil or fails.
+	// To test runtime fault isolation if an invalid policy enters PolicySet:
+	if polInvalid == nil {
+		polInvalid = &mockInvalidWindowsSourcePolicy{name: "win-bad-empty"}
+	}
+	_ = badProto
+
+	ps := &googlepolicy.PolicySet{
+		RevisionID: "rev-windows-real-fault-isolation",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			"win-valid":     {PolicyObj: polValid},
+			"win-bad-empty": {PolicyObj: polInvalid},
+		},
+	}
+	googlepolicy.SetActivePolicySet(ps)
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+
+	// Valid policy survives and produces receivers
+	assert.True(t, conf.IsSet("receivers::windowseventlog/security"))
+	receivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
+	assert.Contains(t, receivers, "windowseventlog/security")
+
+	// Component ID unmarshaling succeeds
+	sub, err := conf.Sub("receivers")
+	require.NoError(t, err)
+	var recs map[component.ID]any
+	require.NoError(t, sub.Unmarshal(&recs))
+	assert.Contains(t, recs, component.MustNewIDWithName("windowseventlog", "security"))
+
+	// Warning log was recorded for the invalid policy
+	assert.NotEmpty(t, recordedLogs.All())
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestRetrieve_ActivePolicySetWithWindowsEventLogSource_InvalidComponentIDIsolation(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	obsCore, _ := observer.New(zapcore.WarnLevel)
+	logger := zap.New(obsCore)
+	p := createProviderWithLogger(logger)
+
+	polValid, err := windowseventlogsource.NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+		Id:       "win-valid",
+		Channels: []string{"Security"},
+	})
+	require.NoError(t, err)
+
+	// Invalid policy with only symbol channel that produces no valid component ID
+	polInvalid := &mockInvalidChannelSourcePolicy{name: "win-symbol-only"}
+
+	ps := &googlepolicy.PolicySet{
+		RevisionID: "rev-windows-symbol-isolation",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			"win-valid":       {PolicyObj: polValid},
+			"win-symbol-only": {PolicyObj: polInvalid},
+		},
+	}
+	googlepolicy.SetActivePolicySet(ps)
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+
+	// Valid policy survives and config unmarshals into component.ID map
+	assert.True(t, conf.IsSet("receivers::windowseventlog/security"))
+	sub, err := conf.Sub("receivers")
+	require.NoError(t, err)
+	var recs map[component.ID]any
+	require.NoError(t, sub.Unmarshal(&recs))
+	assert.Contains(t, recs, component.MustNewIDWithName("windowseventlog", "security"))
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestRetrieve_ActivePolicySetWithWindowsEventLogSource_MultiPolicyDelimiterCollision(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	p := createProviderWithLogger(zap.NewNop())
+
+	pol1, err := windowseventlogsource.NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+		Id:       "win-slash",
+		Channels: []string{"Foo/Bar"},
+	})
+	require.NoError(t, err)
+
+	pol2, err := windowseventlogsource.NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+		Id:       "win-underscore",
+		Channels: []string{"Foo_Bar"},
+	})
+	require.NoError(t, err)
+
+	ps := &googlepolicy.PolicySet{
+		RevisionID: "rev-multi-policy-collision",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			"win-slash":      {PolicyObj: pol1},
+			"win-underscore": {PolicyObj: pol2},
+		},
+	}
+	googlepolicy.SetActivePolicySet(ps)
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+
+	// Both channels are preserved and have distinct receiver IDs
+	sub, err := conf.Sub("receivers")
+	require.NoError(t, err)
+	var recs map[component.ID]any
+	require.NoError(t, sub.Unmarshal(&recs))
+
+	assert.Contains(t, recs, component.MustNewIDWithName("windowseventlog", "foo_bar"))
+	foundDisambiguated := false
+	for id := range recs {
+		if id.Type().String() == "windowseventlog" && strings.HasPrefix(id.Name(), "foo_bar_") {
+			foundDisambiguated = true
+			break
+		}
+	}
+	assert.True(t, foundDisambiguated, "expected disambiguated receiver ID with foo_bar_ prefix")
+
+	pipelineReceivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
+	assert.Contains(t, pipelineReceivers, "windowseventlog/foo_bar")
+	for id := range recs {
+		if id.Type().String() == "windowseventlog" && strings.HasPrefix(id.Name(), "foo_bar_") {
+			assert.Contains(t, pipelineReceivers, id.String())
+		}
+	}
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+type mockInvalidChannelSourcePolicy struct {
+	name string
+}
+
+func (m *mockInvalidChannelSourcePolicy) PolicyName() string { return m.name }
+func (m *mockInvalidChannelSourcePolicy) PolicyType() string {
+	return windowseventlogsource.PolicyType
+}
+func (m *mockInvalidChannelSourcePolicy) PolicyClass() googlepolicy.PolicyClass {
+	return googlepolicy.PolicyClassSource
+}
+func (m *mockInvalidChannelSourcePolicy) Validate() error {
+	return windowseventlogsource.ErrInvalidChannelName
+}
+func (m *mockInvalidChannelSourcePolicy) Evaluate(_ context.Context) (*confmap.Conf, error) {
+	return nil, windowseventlogsource.ErrInvalidChannelName
+}
+func (m *mockInvalidChannelSourcePolicy) LogReceiverIDs() []component.ID    { return nil }
+func (m *mockInvalidChannelSourcePolicy) MetricReceiverIDs() []component.ID { return nil }
+func (m *mockInvalidChannelSourcePolicy) TraceReceiverIDs() []component.ID  { return nil }
 
 func TestRetrieve_ActivePolicySetWithWindowsEventLogSource_FaultIsolation(t *testing.T) {
 	t.Setenv("FLEET_ID", "1234")

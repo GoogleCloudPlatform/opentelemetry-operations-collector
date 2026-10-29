@@ -16,6 +16,9 @@ package windowseventlogsource
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"strings"
 	"testing"
 
 	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
@@ -93,7 +96,23 @@ func TestPolicy_Validation(t *testing.T) {
 				Id:       "win-1",
 				Channels: []string{"Security", "///"},
 			},
-			wantErr: ErrEmptyChannelName,
+			wantErr: ErrInvalidChannelName,
+		},
+		{
+			name: "channel with colons only",
+			proto: &policyv1alpha1.WindowsEventLogSourcePolicy{
+				Id:       "win-1",
+				Channels: []string{"Security", ":::::"},
+			},
+			wantErr: ErrInvalidChannelName,
+		},
+		{
+			name: "channel with symbols only",
+			proto: &policyv1alpha1.WindowsEventLogSourcePolicy{
+				Id:       "win-1",
+				Channels: []string{"Security", "©"},
+			},
+			wantErr: ErrInvalidChannelName,
 		},
 		{
 			name: "valid policy",
@@ -142,6 +161,13 @@ func TestSanitizeChannelName(t *testing.T) {
 		{"Channel\nWith\nNewlines", "channel_with_newlines"},
 		{"Channel\tWith\tTabs", "channel_with_tabs"},
 		{"Channel\r\nWith\r\nCRLF", "channel_with_crlf"},
+		{"foo+bar|baz", "foo_bar_baz"},
+		{"a=b$c", "a_b_c"},
+		{"Sec\vurity", "sec_urity"},
+		{"Sec\u00a0urity", "sec_urity"},
+		{"Sec\u3000urity", "sec_urity"},
+		{"Sec\u200burity", "sec_urity"},
+		{"Security😀Log", "security_log"},
 	}
 
 	for _, tt := range tests {
@@ -150,6 +176,16 @@ func TestSanitizeChannelName(t *testing.T) {
 			assert.Equal(t, tt.expected, SanitizeChannelName(tt.input))
 		})
 	}
+
+	t.Run("capping at 1024 chars", func(t *testing.T) {
+		t.Parallel()
+		longName := strings.Repeat("a", 1100)
+		san := SanitizeChannelName(longName)
+		require.Len(t, san, 1024)
+		h := sha256.Sum256([]byte(longName))
+		expectedSuffix := "_" + hex.EncodeToString(h[:4])
+		assert.True(t, strings.HasSuffix(san, expectedSuffix))
+	})
 }
 
 func TestPolicy_Channels_Deduplication(t *testing.T) {
@@ -161,10 +197,27 @@ func TestPolicy_Channels_Deduplication(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Preserves first-seen casing ("Security", "SYSTEM", "Application", "Sysmon/Operational")
-	// and deduplicates delimiter collisions (Sysmon/Operational vs Sysmon_Operational).
-	expected := []string{"Security", "SYSTEM", "Application", "Sysmon/Operational"}
+	// Preserves first-seen casing ("Security", "SYSTEM", "Application", "Sysmon/Operational", "Sysmon_Operational")
+	// and preserves distinct channels even if they sanitize to the same base name (Sysmon/Operational vs Sysmon_Operational).
+	expected := []string{"Security", "SYSTEM", "Application", "Sysmon/Operational", "Sysmon_Operational"}
 	assert.Equal(t, expected, p.Channels())
+}
+
+func TestPolicy_ReceiverID_Disambiguation(t *testing.T) {
+	t.Parallel()
+
+	p, err := NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+		Id:       "win-disambiguate",
+		Channels: []string{"Sysmon/Operational", "Sysmon_Operational"},
+	})
+	require.NoError(t, err)
+
+	recIDs := p.LogReceiverIDs()
+	require.Len(t, recIDs, 2)
+	// Both channels are converted to valid component IDs
+	assert.Equal(t, "sysmon_operational", recIDs[0].Name())
+	assert.True(t, strings.HasPrefix(recIDs[1].Name(), "sysmon_operational_"))
+	assert.NotEqual(t, recIDs[0].Name(), recIDs[1].Name())
 }
 
 func TestPolicy_ReceiverIDs(t *testing.T) {
@@ -224,23 +277,23 @@ func TestPolicy_Evaluate(t *testing.T) {
 	require.True(t, ok)
 	require.Len(t, receivers, 2)
 
-	// Verify SecOps-tuned compiler defaults for Security channel
+	// Verify compiler defaults for Security channel
 	secCfg, ok := receivers["windowseventlog/security"].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, "Security", secCfg["channel"])
 	assert.Equal(t, true, secCfg["suppress_rendering_info"])
-	assert.Equal(t, true, secCfg["event_driven_scraping"])
 	assert.Equal(t, 500, secCfg["max_reads"])
 	assert.Equal(t, true, secCfg["ignore_channel_errors"])
+	assert.NotContains(t, secCfg, "event_driven_scraping")
 
-	// Verify SecOps-tuned compiler defaults for Sysmon channel
+	// Verify compiler defaults for Sysmon channel
 	sysmonCfg, ok := receivers["windowseventlog/microsoft-windows-sysmon_operational"].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, "Microsoft-Windows-Sysmon/Operational", sysmonCfg["channel"])
 	assert.Equal(t, true, sysmonCfg["suppress_rendering_info"])
-	assert.Equal(t, true, sysmonCfg["event_driven_scraping"])
 	assert.Equal(t, 500, sysmonCfg["max_reads"])
 	assert.Equal(t, true, sysmonCfg["ignore_channel_errors"])
+	assert.NotContains(t, sysmonCfg, "event_driven_scraping")
 }
 
 func TestPolicy_Evaluate_InvalidPolicy(t *testing.T) {

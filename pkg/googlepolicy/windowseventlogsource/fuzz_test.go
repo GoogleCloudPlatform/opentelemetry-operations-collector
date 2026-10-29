@@ -22,6 +22,7 @@ import (
 
 	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
+	"go.opentelemetry.io/collector/component"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
@@ -43,6 +44,18 @@ func fuzzSeedPolicies() []*policyv1alpha1.WindowsEventLogSourcePolicy {
 		{
 			Id:       "win-source-casing-and-whitespace",
 			Channels: []string{"  Security  ", "security", "SYSTEM", "System", "Channel\nWith\nNewlines"},
+		},
+		{
+			Id:       "win-source-symbols",
+			Channels: []string{"Foo+Bar", "a|b", "a=b$c"},
+		},
+		{
+			Id:       "win-source-unicode",
+			Channels: []string{"Sec\vurity", "Sec\u00a0urity", "Sec\u3000urity", "Sec\u200burity", "Security😀Log"},
+		},
+		{
+			Id:       "win-source-long",
+			Channels: []string{strings.Repeat("a", 1100)},
 		},
 	}
 }
@@ -83,6 +96,11 @@ func verifyCompiledPolicy(t *testing.T, pol googlepolicy.Policy) {
 		}
 		if strings.ContainsAny(id.Name(), "/\\ : \t\r\n") {
 			t.Fatalf("receiver ID name %q contains unsanitized delimiter or whitespace", id.Name())
+		}
+		// Assert that the generated receiver ID passes OpenTelemetry collector ID unmarshaling
+		var parsedID component.ID
+		if err := parsedID.UnmarshalText([]byte(id.String())); err != nil {
+			t.Fatalf("receiver ID %q failed component.ID unmarshaling: %v", id.String(), err)
 		}
 	}
 
@@ -129,6 +147,15 @@ func FuzzSanitizeChannelName(f *testing.F) {
 		`\\\\\\`,
 		"   ",
 		"",
+		"Foo+Bar",
+		"a|b",
+		"a=b$c",
+		"Sec\vurity",
+		"Sec\u00a0urity",
+		"Sec\u3000urity",
+		"Sec\u200burity",
+		"Security😀Log",
+		strings.Repeat("a", 1100),
 	}
 	for _, s := range seeds {
 		f.Add(s)
@@ -156,6 +183,14 @@ func FuzzSanitizeChannelName(f *testing.F) {
 		if san != "" {
 			if san2 := SanitizeChannelName(san); san2 != san {
 				t.Fatalf("SanitizeChannelName is not idempotent: san(%q) = %q, san(%q) = %q", channel, san, san, san2)
+			}
+		}
+
+		// Invariant 5: If non-empty, must form a valid component.ID
+		if san != "" {
+			var parsedID component.ID
+			if err := parsedID.UnmarshalText([]byte(ReceiverType + "/" + san)); err != nil {
+				t.Fatalf("SanitizeChannelName(%q) = %q fails component.ID unmarshaling: %v", channel, san, err)
 			}
 		}
 	})

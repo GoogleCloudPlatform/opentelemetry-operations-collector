@@ -14,16 +14,18 @@
 
 // Package windowseventlogsource compiles and evaluates WindowsEventLogSourcePolicy configurations.
 // It translates WindowsEventLogSourcePolicy definitions into OpenTelemetry Collector windowseventlog
-// receiver configurations tuned for Google Cloud Observability and Google SecOps workloads.
+// receiver configurations.
 package windowseventlogsource
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
-	"regexp"
 	"slices"
 	"strings"
+	"unicode"
 
 	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
@@ -37,14 +39,12 @@ const (
 	PolicyType   = "windows_event_log_source"
 	ReceiverType = "windowseventlog"
 
-	// Compiler defaults tuned for Enterprise SecOps workloads (Audit Findings #79 & #80):
-	// DefaultSuppressRenderingInfo avoids Win32 EvtFormatMessage CPU/lock bottleneck (45x speedup).
+	// DefaultSuppressRenderingInfo disables Win32 EvtFormatMessage rendering calls to avoid
+	// single-threaded IPC bottlenecks on high-volume channels (e.g. Domain Controllers, WEC).
 	DefaultSuppressRenderingInfo = true
-	// DefaultEventDrivenScraping uses Win32 WaitForMultipleObjects streaming (15.8x lower latency).
-	DefaultEventDrivenScraping = true
-	// DefaultMaxReads batches event retrieval to minimize EvtNext syscalls and bookmark transactions.
+	// DefaultMaxReads batches event retrieval to minimize Win32 EvtNext syscalls and bookmark transactions.
 	DefaultMaxReads = 500
-	// DefaultIgnoreChannelErrors fails open on missing host channels (preventing startup crashes).
+	// DefaultIgnoreChannelErrors fails open on missing or uninstalled host channels (preventing startup crashes).
 	DefaultIgnoreChannelErrors = true
 )
 
@@ -57,11 +57,9 @@ var (
 	ErrMissingChannels = errors.New("windows event log source policy must specify at least one channel")
 	// ErrEmptyChannelName is returned when a channel name is empty or consists only of whitespace.
 	ErrEmptyChannelName = errors.New("windows event log channel name cannot be empty")
+	// ErrInvalidChannelName is returned when a channel name cannot produce a valid OpenTelemetry component ID.
+	ErrInvalidChannelName = errors.New("windows event log channel name produces an invalid component ID")
 )
-
-// invalidChannelCharsRegex matches characters in channel names that must be sanitized for component IDs.
-// Slashes (/ and \), whitespace (spaces, tabs, newlines), colons, and punctuation become underscores.
-var invalidChannelCharsRegex = regexp.MustCompile(`[\s/\\:]+`)
 
 // driver loads a WindowsEventLogSourcePolicy from either shape it can arrive in: the proto
 // a control plane sends, or the map an authored config decodes to.
@@ -134,8 +132,17 @@ func (p *Policy) Validate() error {
 		return ErrMissingChannels
 	}
 	for _, ch := range channels {
-		if strings.TrimSpace(ch) == "" || SanitizeChannelName(ch) == "" {
+		trimmed := strings.TrimSpace(ch)
+		if trimmed == "" {
 			return ErrEmptyChannelName
+		}
+		san := SanitizeChannelName(trimmed)
+		if san == "" {
+			return fmt.Errorf("%w: %q contains no valid characters", ErrInvalidChannelName, ch)
+		}
+		var id component.ID
+		if err := id.UnmarshalText([]byte(ReceiverType + "/" + san)); err != nil {
+			return fmt.Errorf("%w: %q: %v", ErrInvalidChannelName, ch, err)
 		}
 	}
 	return nil
@@ -154,10 +161,7 @@ func (p *Policy) Channels() []string {
 		if trimmed == "" {
 			continue
 		}
-		key := SanitizeChannelName(trimmed)
-		if key == "" {
-			continue
-		}
+		key := strings.ToUpper(trimmed)
 		if !seen[key] {
 			seen[key] = true
 			result = append(result, trimmed)
@@ -166,27 +170,92 @@ func (p *Policy) Channels() []string {
 	return result
 }
 
-// SanitizeChannelName converts a Windows Event Log channel name into a valid, safe OpenTelemetry
-// component ID name suffix by lower-casing and replacing slashes, backslashes, spaces, and colons with underscores.
+// SanitizeChannelName converts a Windows Event Log channel name into a valid OpenTelemetry
+// component ID name suffix by lower-casing and replacing any characters not permitted in component names
+// (Unicode categories Z, C, S, slashes, backslashes, and colons) with underscores.
+// The sanitized string is capped at 1024 characters per OpenTelemetry component naming constraints.
 func SanitizeChannelName(channel string) string {
 	s := strings.TrimSpace(channel)
-	s = strings.ToLower(s)
-	s = invalidChannelCharsRegex.ReplaceAllString(s, "_")
-	s = strings.Trim(s, "_")
-	return s
+	if s == "" {
+		return ""
+	}
+
+	var sb strings.Builder
+	lastUnderscore := false
+
+	for _, r := range s {
+		if unicode.Is(unicode.Z, r) || unicode.Is(unicode.C, r) || unicode.Is(unicode.S, r) || r == '/' || r == '\\' || r == ':' || r == '_' {
+			if !lastUnderscore && sb.Len() > 0 {
+				sb.WriteRune('_')
+				lastUnderscore = true
+			}
+		} else {
+			sb.WriteRune(unicode.ToLower(r))
+			lastUnderscore = false
+		}
+	}
+
+	res := strings.Trim(sb.String(), "_")
+	if len(res) > 1024 {
+		h := sha256.Sum256([]byte(channel))
+		hashSuffix := "_" + hex.EncodeToString(h[:4]) // 9 characters
+		res = res[:1024-len(hashSuffix)] + hashSuffix
+	}
+	return res
 }
 
-// LogReceiverIDs returns the component IDs of log receivers synthesized by this policy.
-// In Win32, each channel subscription requires an isolated subscription handle.
-func (p *Policy) LogReceiverIDs() []component.ID {
+type channelReceiver struct {
+	channel string
+	id      component.ID
+}
+
+// channelReceivers returns a slice of channelReceiver mappings for this policy.
+// If multiple distinct channels sanitize to the same component name, subsequent channels
+// are disambiguated with a deterministic 8-character hex hash suffix.
+func (p *Policy) channelReceivers() []channelReceiver {
 	channels := p.Channels()
 	if len(channels) == 0 {
 		return nil
 	}
-	recIDs := make([]component.ID, 0, len(channels))
+	usedIDs := make(map[string]bool)
+	result := make([]channelReceiver, 0, len(channels))
 	for _, ch := range channels {
-		sanitized := SanitizeChannelName(ch)
-		recIDs = append(recIDs, component.MustNewIDWithName(ReceiverType, sanitized))
+		base := SanitizeChannelName(ch)
+		idName := base
+		if usedIDs[idName] {
+			for attempt := 0; usedIDs[idName]; attempt++ {
+				var h [32]byte
+				if attempt == 0 {
+					h = sha256.Sum256([]byte(ch))
+				} else {
+					h = sha256.Sum256([]byte(fmt.Sprintf("%s:%d", ch, attempt)))
+				}
+				hashSuffix := hex.EncodeToString(h[:4])
+				maxBase := 1024 - len(hashSuffix) - 1
+				curBase := base
+				if len(curBase) > maxBase {
+					curBase = curBase[:maxBase]
+				}
+				idName = fmt.Sprintf("%s_%s", curBase, hashSuffix)
+			}
+		}
+		usedIDs[idName] = true
+		id := component.MustNewIDWithName(ReceiverType, idName)
+		result = append(result, channelReceiver{channel: ch, id: id})
+	}
+	return result
+}
+
+// LogReceiverIDs returns the component IDs of log receivers synthesized by this policy.
+// Each distinct channel receives an isolated receiver instance.
+func (p *Policy) LogReceiverIDs() []component.ID {
+	recs := p.channelReceivers()
+	if len(recs) == 0 {
+		return nil
+	}
+	recIDs := make([]component.ID, 0, len(recs))
+	for _, r := range recs {
+		recIDs = append(recIDs, r.id)
 	}
 	// Sort receiver IDs deterministically by their component name
 	slices.SortFunc(recIDs, func(a, b component.ID) int {
@@ -217,12 +286,12 @@ func (p *Policy) Consolidate(policies []googlepolicy.SourcePolicy) (googlepolicy
 		return p, nil
 	}
 
-	seen := make(map[string]string) // key: sanitized channel key, value: first-seen casing
+	seen := make(map[string]string) // key: uppercase trimmed channel, value: first-seen casing
 	var orderedKeys []string
 
 	// Register receiver's own channels first
 	for _, ch := range p.Channels() {
-		key := SanitizeChannelName(ch)
+		key := strings.ToUpper(strings.TrimSpace(ch))
 		if _, exists := seen[key]; !exists {
 			seen[key] = ch
 			orderedKeys = append(orderedKeys, key)
@@ -233,6 +302,9 @@ func (p *Policy) Consolidate(policies []googlepolicy.SourcePolicy) (googlepolicy
 		if other == nil {
 			return nil, ErrNilProto
 		}
+		if other == p {
+			continue // skip self if present in slice
+		}
 		if err := other.Validate(); err != nil {
 			return nil, fmt.Errorf("cannot consolidate invalid policy %q: %w", other.PolicyName(), err)
 		}
@@ -241,7 +313,7 @@ func (p *Policy) Consolidate(policies []googlepolicy.SourcePolicy) (googlepolicy
 			return nil, fmt.Errorf("cannot consolidate policy of type %T into windows event log source policy", other)
 		}
 		for _, ch := range wp.Channels() {
-			key := SanitizeChannelName(ch)
+			key := strings.ToUpper(strings.TrimSpace(ch))
 			if _, exists := seen[key]; !exists {
 				seen[key] = ch
 				orderedKeys = append(orderedKeys, key)
@@ -249,7 +321,7 @@ func (p *Policy) Consolidate(policies []googlepolicy.SourcePolicy) (googlepolicy
 		}
 	}
 
-	// Sort channels deterministically by sanitized key
+	// Sort channels deterministically by uppercase key
 	slices.Sort(orderedKeys)
 	mergedChannels := make([]string, 0, len(orderedKeys))
 	for _, key := range orderedKeys {
@@ -262,26 +334,23 @@ func (p *Policy) Consolidate(policies []googlepolicy.SourcePolicy) (googlepolicy
 }
 
 // Evaluate produces the confmap for all synthesized windowseventlog receivers.
-// For each distinct channel, it synthesizes an isolated receiver instance with SecOps-tuned compiler defaults:
-// - suppress_rendering_info: true (avoids 45x Win32 EvtFormatMessage bottleneck)
-// - event_driven_scraping: true (WaitForMultipleObjects streaming, 15.8x lower latency)
-// - max_reads: 500 (reduces bookmark transactions and syscall overhead)
-// - ignore_channel_errors: true (fails open on missing host channels)
+// For each distinct channel, it synthesizes an isolated receiver instance.
 func (p *Policy) Evaluate(_ context.Context) (*confmap.Conf, error) {
 	if err := p.Validate(); err != nil {
 		return nil, fmt.Errorf("policy %q failed validation: %w", p.PolicyName(), err)
 	}
 
-	receivers := make(map[string]any)
-	for _, ch := range p.Channels() {
-		sanitized := SanitizeChannelName(ch)
-		recKey := fmt.Sprintf("%s/%s", ReceiverType, sanitized)
+	recs := p.channelReceivers()
+	receivers := make(map[string]any, len(recs))
+	for _, r := range recs {
+		recKey := fmt.Sprintf("%s/%s", ReceiverType, r.id.Name())
 		receivers[recKey] = map[string]any{
-			"channel":                 ch,
+			"channel":                 r.channel,
 			"suppress_rendering_info": DefaultSuppressRenderingInfo,
-			"event_driven_scraping":   DefaultEventDrivenScraping,
-			"max_reads":               DefaultMaxReads,
-			"ignore_channel_errors":   DefaultIgnoreChannelErrors,
+			// TODO: Enable event_driven_scraping: true once upstream
+			// open-telemetry/opentelemetry-collector-contrib#51962 is resolved and pinned.
+			"max_reads":             DefaultMaxReads,
+			"ignore_channel_errors": DefaultIgnoreChannelErrors,
 		}
 	}
 

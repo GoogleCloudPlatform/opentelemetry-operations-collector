@@ -119,19 +119,21 @@ receivers:
                 transport: tcp
     windowseventlog/application:
         channel: Application
-        event_driven_scraping: true
+        ignore_channel_errors: true
+        max_reads: 500
+        suppress_rendering_info: true
+    windowseventlog/microsoft-windows-sysmon_operational:
+        channel: Microsoft-Windows-Sysmon/Operational
         ignore_channel_errors: true
         max_reads: 500
         suppress_rendering_info: true
     windowseventlog/security:
         channel: Security
-        event_driven_scraping: true
         ignore_channel_errors: true
         max_reads: 500
         suppress_rendering_info: true
     windowseventlog/system:
         channel: System
-        event_driven_scraping: true
         ignore_channel_errors: true
         max_reads: 500
         suppress_rendering_info: true
@@ -161,6 +163,7 @@ service:
             receivers:
                 - nop/googlecontrolplane
                 - windowseventlog/application
+                - windowseventlog/microsoft-windows-sysmon_operational
                 - windowseventlog/security
                 - windowseventlog/system
         metrics/default_self_metrics:

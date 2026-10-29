@@ -28,7 +28,6 @@ import (
 	xdsv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/xds/v1alpha1"
 )
 
-
 func TestTraceFilterPolicy_Serialization(t *testing.T) {
 	policy := &policyv1alpha1.TraceFilterPolicy{
 		Id: "drop-healthcheck-spans",

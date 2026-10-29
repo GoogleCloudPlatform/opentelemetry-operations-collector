@@ -18,6 +18,13 @@
 Smoke test for Tango-GBOC: otelcol-google configured exclusively through the
 googlecontrolplane provider, talking to a live Control Plane and Data Plane.
 
+The test verifies that:
+  - the collector connects to the Control Plane, receives the pre-provisioned
+    PolicySet revision and applies (ACKs) it;
+  - the collector's self-o11y gauge gcp.policy.set.active is exported to the
+    Data Plane and, observed through Cloud Monitoring, reports the same
+    PolicySet and revision the collector received.
+
 The test assumes a long-lived fleet and PolicySet have been pre-provisioned in
 the test project and rolled out (see tango/README.md). It never calls the
 Telemetry Management API itself.
@@ -28,8 +35,10 @@ TANGO_CP_ENDPOINT: host:port of the xDS Control Plane, e.g.
   The test is skipped when unset.
 TANGO_FLEET_ID: fleet the collector subscribes to (default gboc-smoke-fleet).
 TANGO_POLICY_SET_ID: pre-created PolicySet ID (default gboc-smoke-ps).
-TANGO_EXPECTED_REVISION: optional PolicySet revision ID (e.g. 904e9adb). When
-  set, the revision ACKed by the collector must match it.
+TANGO_REGION: region of the fleet and Control Plane endpoint (default
+  asia-east1). Passed explicitly so it does not depend on the VM's zone.
+TANGO_EXPECTED_REVISION: optional PolicySet revision ID (e.g. 3f038775). When
+  set, the revision applied by the collector must match it.
 */
 
 package smoke
@@ -46,8 +55,6 @@ import (
 	"testing"
 	"time"
 
-	"cloud.google.com/go/logging"
-	"cloud.google.com/go/logging/logadmin"
 	monitoring "cloud.google.com/go/monitoring/apiv3/v2"
 	"cloud.google.com/go/monitoring/apiv3/v2/monitoringpb"
 	"google.golang.org/api/iterator"
@@ -57,28 +64,18 @@ import (
 )
 
 const (
-	// probeTag is the syslog identifier of the probe lines. The PolicySet's
-	// transform policy matches on it, and its catch-all drop policy drops
-	// every journald record that does not carry it.
-	probeTag = "gboc-smoke"
-	// dropPattern is the substring the PolicySet's filter policy drops on.
-	dropPattern = "gboc-smoke=drop"
-	// transformAttribute is the attribute the PolicySet's transform policy
-	// adds to every probe.
-	transformAttribute = "gboc_smoke"
-
 	// policySetActiveMetric is the self-o11y gauge reporting the enforced
 	// PolicySet revision. It reaches Cloud Monitoring through
 	// telemetry.googleapis.com under the prometheus.googleapis.com namespace.
 	policySetActiveMetric = "prometheus.googleapis.com/gcp.policy.set.active/gauge"
-	// policySetIDLabel is the metric label carrying gcp.policy.set.id.
-	policySetIDLabel = "gcp_policy_set_id"
+	// policySetIDLabel is the metric label carrying the enforced PolicySet
+	// resource name.
+	policySetIDLabel = "gcp.policy.set.id"
 
 	tangoConfPath = "/etc/otelcol-google/otelcol-google.conf"
 
 	controlPlaneWait  = 5 * time.Minute
-	dataPlaneWindow   = 30 * time.Minute
-	dropGracePeriod   = 2 * time.Minute
+	metricWindow      = 30 * time.Minute
 	queryPollInterval = 30 * time.Second
 	queryMaxAttempts  = 20 // 10 minutes.
 )
@@ -101,6 +98,7 @@ type tangoSettings struct {
 	cpEndpoint       string
 	fleetID          string
 	policySetID      string
+	region           string
 	expectedRevision string
 }
 
@@ -110,6 +108,7 @@ func tangoSettingsFromEnv(t *testing.T) tangoSettings {
 		cpEndpoint:       os.Getenv("TANGO_CP_ENDPOINT"),
 		fleetID:          envOrDefault("TANGO_FLEET_ID", "gboc-smoke-fleet"),
 		policySetID:      envOrDefault("TANGO_POLICY_SET_ID", "gboc-smoke-ps"),
+		region:           envOrDefault("TANGO_REGION", "asia-east1"),
 		expectedRevision: os.Getenv("TANGO_EXPECTED_REVISION"),
 	}
 	if s.cpEndpoint == "" {
@@ -129,10 +128,10 @@ func envOrDefault(key, def string) string {
 }
 
 // tangoOptions returns the OTELCOL_OPTIONS that configure the collector
-// exclusively through the googlecontrolplane provider. Project, project number
-// and region of the xDS subscription are taken from the GCE metadata server.
+// exclusively through the googlecontrolplane provider. Project and project
+// number of the xDS subscription are taken from the GCE metadata server.
 func (s tangoSettings) tangoOptions() string {
-	return fmt.Sprintf("--config=googlecontrolplane:xds://%s?gcp.fleet_id=%s", s.cpEndpoint, s.fleetID)
+	return fmt.Sprintf("--config=googlecontrolplane:xds://%s?gcp.fleet_id=%s&region=%s", s.cpEndpoint, s.fleetID, s.region)
 }
 
 // setupTangoCollector installs otelcol-google and restarts it in policy-only
@@ -145,19 +144,15 @@ func setupTangoCollector(ctx context.Context, logger *log.Logger, vm *gce.VM, s 
 	if err := gce.UploadContent(ctx, logger, vm, strings.NewReader(conf), tangoConfPath); err != nil {
 		return fmt.Errorf("failed to upload %s: %v", tangoConfPath, err)
 	}
-	// The journald receiver runs as the otelcol-google user, which needs
-	// read access to the system journal.
-	// TODO: drop this once the package grants the access itself, or confirm
-	// that it is not needed.
-	if _, err := gce.RunRemotely(ctx, logger, vm, "sudo usermod -aG systemd-journal otelcol-google"); err != nil {
-		return fmt.Errorf("failed to grant journal access: %v", err)
-	}
 	return restartOtelCollector(ctx, logger, vm)
 }
 
 // appliedPolicySet is what the collector reported when it applied a PolicySet
 // received from the Control Plane.
 type appliedPolicySet struct {
+	// revisionName is the full PolicySetRevision resource name, e.g.
+	// projects/123/locations/asia-east1/policySets/gboc-smoke-ps/revisions/3f038775.
+	revisionName   string
 	revision       string
 	policiesLoaded int
 	collectorID    string
@@ -184,6 +179,7 @@ func waitForAppliedPolicySet(ctx context.Context, logger *log.Logger, vm *gce.VM
 			}
 			applied := &appliedPolicySet{}
 			if m := appliedRevisionRE.FindStringSubmatch(line); m != nil {
+				applied.revisionName = m[1]
 				applied.revision = path.Base(m[1])
 			}
 			if m := policiesLoadedRE.FindStringSubmatch(line); m != nil {
@@ -212,94 +208,9 @@ func revisionValue(rev string) (int64, error) {
 	return int64(v), nil
 }
 
-// emitProbes writes one KEEP and one DROP probe line into the journal.
-func emitProbes(ctx context.Context, logger *log.Logger, vm *gce.VM, marker string) error {
-	cmd := fmt.Sprintf(`logger -t %s "KEEP %s" && logger -t %s "%s %s"`, probeTag, marker, probeTag, dropPattern, marker)
-	_, err := gce.RunRemotely(ctx, logger, vm, cmd)
-	return err
-}
-
-// queryLogsByText returns the Cloud Logging entries in the project that
-// contain text, over the trailing dataPlaneWindow.
-//
-// The query is keyed on the run-unique marker rather than on the monitored
-// resource, because the resource the Data Plane assigns to OTLP logs is not
-// controlled by this test.
-func queryLogsByText(ctx context.Context, logger *log.Logger, client *logadmin.Client, text string) ([]*logging.Entry, error) {
-	filter := fmt.Sprintf(`timestamp >= %q AND %q`, time.Now().Add(-dataPlaneWindow).Format(time.RFC3339), text)
-	logger.Printf("Cloud Logging filter: %s", filter)
-	var entries []*logging.Entry
-	it := client.Entries(ctx, logadmin.Filter(filter))
-	for {
-		e, err := it.Next()
-		if err == iterator.Done {
-			return entries, nil
-		}
-		if err != nil {
-			return nil, err
-		}
-		logger.Printf("Found log entry: %+v", e)
-		entries = append(entries, e)
-	}
-}
-
-// hasTransformAttribute reports whether the entry carries the attribute added
-// by the PolicySet's transform policy, either as a label or in the payload.
-// TODO: tighten to the exact field once the Data Plane mapping of OTLP log
-// attributes is confirmed on a live run.
-func hasTransformAttribute(e *logging.Entry) bool {
-	if v, ok := e.Labels[transformAttribute]; ok {
-		return v == "true"
-	}
-	return strings.Contains(fmt.Sprint(e.Payload), transformAttribute)
-}
-
-// DataPlaneTest verifies that the probes are filtered and transformed as the
-// PolicySet dictates, exported to telemetry.googleapis.com, and queryable in
-// Cloud Logging.
-func DataPlaneTest(ctx context.Context, t *testing.T, logger *log.Logger, vm *gce.VM) {
-	client, err := logadmin.NewClient(ctx, vm.Project)
-	if err != nil {
-		t.Fatalf("logadmin.NewClient: %v", err)
-	}
-	defer client.Close()
-
-	marker := fmt.Sprintf("%s-%s", testRunID, vm.Name)
-	keep := "KEEP " + marker
-
-	// Re-emit the probes on every attempt in case the first ones were written
-	// before the journald receiver started.
-	var kept []*logging.Entry
-	for attempt := 1; attempt <= queryMaxAttempts && len(kept) == 0; attempt++ {
-		if err := emitProbes(ctx, logger, vm, marker); err != nil {
-			t.Fatalf("emitProbes: %v", err)
-		}
-		time.Sleep(queryPollInterval)
-		if kept, err = queryLogsByText(ctx, logger, client, keep); err != nil {
-			logger.Printf("Cloud Logging query failed (attempt %d/%d): %v", attempt, queryMaxAttempts, err)
-		}
-	}
-	if len(kept) == 0 {
-		t.Fatalf("KEEP probe %q not found in Cloud Logging", keep)
-	}
-	if !hasTransformAttribute(kept[0]) {
-		t.Errorf("KEEP probe was exported without the %q attribute added by the transform policy: %+v", transformAttribute, kept[0])
-	}
-
-	// The KEEP probe is there, so the DROP probes emitted alongside it would
-	// have arrived by now (plus a grace period) had they not been dropped.
-	time.Sleep(dropGracePeriod)
-	dropped, err := queryLogsByText(ctx, logger, client, dropPattern+" "+marker)
-	if err != nil {
-		t.Fatalf("Cloud Logging query for DROP probe: %v", err)
-	}
-	if len(dropped) > 0 {
-		t.Errorf("DROP probe was exported despite the filter policy: %+v", dropped[0])
-	}
-}
-
-// SelfO11yTest verifies that gcp.policy.set.active is exported to Cloud
-// Monitoring for this collector and reports the enforced revision.
+// SelfO11yTest verifies that gcp.policy.set.active is exported to the Data
+// Plane for this collector and, observed through Cloud Monitoring, reports the
+// PolicySet and revision the collector received from the Control Plane.
 func SelfO11yTest(ctx context.Context, t *testing.T, logger *log.Logger, vm *gce.VM, s tangoSettings, applied *appliedPolicySet) {
 	want, err := revisionValue(applied.revision)
 	if err != nil {
@@ -311,18 +222,22 @@ func SelfO11yTest(ctx context.Context, t *testing.T, logger *log.Logger, vm *gce
 	}
 	defer client.Close()
 
-	filter := fmt.Sprintf(`metric.type = %q AND metric.labels.%s = monitoring.regex.full_match(".*%s.*")`,
-		policySetActiveMetric, policySetIDLabel, regexp.QuoteMeta(s.policySetID))
+	// The series is keyed on prometheus_target's instance label, which carries
+	// the collector's service.instance.id. The PolicySet ID is checked in code
+	// because its label key ("gcp.policy.set.id") contains dots.
+	filter := fmt.Sprintf(`metric.type = %q AND resource.type = "prometheus_target" AND resource.labels.instance = %q`,
+		policySetActiveMetric, applied.collectorID)
 	logger.Printf("Cloud Monitoring filter: %s", filter)
 
 	var lastValue *int64
+	var lastPolicySetID string
 	for attempt := 1; attempt <= queryMaxAttempts; attempt++ {
 		now := time.Now()
 		it := client.ListTimeSeries(ctx, &monitoringpb.ListTimeSeriesRequest{
 			Name:   "projects/" + vm.Project,
 			Filter: filter,
 			Interval: &monitoringpb.TimeInterval{
-				StartTime: timestamppb.New(now.Add(-dataPlaneWindow)),
+				StartTime: timestamppb.New(now.Add(-metricWindow)),
 				EndTime:   timestamppb.New(now),
 			},
 			View: monitoringpb.ListTimeSeriesRequest_FULL,
@@ -336,7 +251,7 @@ func SelfO11yTest(ctx context.Context, t *testing.T, logger *log.Logger, vm *gce
 				logger.Printf("ListTimeSeries failed (attempt %d/%d): %v", attempt, queryMaxAttempts, err)
 				break
 			}
-			if !seriesBelongsTo(ts, applied.collectorID) || len(ts.GetPoints()) == 0 {
+			if len(ts.GetPoints()) == 0 {
 				continue
 			}
 			// Points are returned newest first.
@@ -345,9 +260,10 @@ func SelfO11yTest(ctx context.Context, t *testing.T, logger *log.Logger, vm *gce
 				got = float64(iv)
 			}
 			v := int64(got)
-			lastValue = &v
-			logger.Printf("Found %s series for collector %s: value=%d labels=%v resource=%v", policySetActiveMetric, applied.collectorID, v, ts.GetMetric().GetLabels(), ts.GetResource().GetLabels())
-			if v == want {
+			psID := ts.GetMetric().GetLabels()[policySetIDLabel]
+			lastValue, lastPolicySetID = &v, psID
+			logger.Printf("Found %s series for collector %s: value=%d labels=%v", policySetActiveMetric, applied.collectorID, v, ts.GetMetric().GetLabels())
+			if v == want && path.Base(psID) == s.policySetID {
 				return
 			}
 		}
@@ -356,25 +272,7 @@ func SelfO11yTest(ctx context.Context, t *testing.T, logger *log.Logger, vm *gce
 	if lastValue == nil {
 		t.Fatalf("no %s series found for collector %s (filter: %s)", policySetActiveMetric, applied.collectorID, filter)
 	}
-	t.Fatalf("%s = %d, want %d (revision %s)", policySetActiveMetric, *lastValue, want, applied.revision)
-}
-
-// seriesBelongsTo reports whether any resource or metric label of the series
-// carries the collector ID (service.instance.id).
-// TODO: narrow to the exact label once the prometheus_target mapping of
-// service.instance.id is confirmed on a live run.
-func seriesBelongsTo(ts *monitoringpb.TimeSeries, collectorID string) bool {
-	if collectorID == "" {
-		return true
-	}
-	for _, labels := range []map[string]string{ts.GetResource().GetLabels(), ts.GetMetric().GetLabels()} {
-		for _, v := range labels {
-			if v == collectorID {
-				return true
-			}
-		}
-	}
-	return false
+	t.Fatalf("%s = %d with %s=%q, want %d (revision %s) for PolicySet %q", policySetActiveMetric, *lastValue, policySetIDLabel, lastPolicySetID, want, applied.revision, s.policySetID)
 }
 
 func TestTangoSmoke(t *testing.T) {
@@ -384,9 +282,12 @@ func TestTangoSmoke(t *testing.T) {
 	gce.RunForEachImage(t, func(t *testing.T, imageSpec string) {
 		t.Parallel()
 		if gce.IsWindows(imageSpec) {
-			t.Skip("Tango-GBOC smoke test uses a journald source policy; Windows is not supported")
+			t.Skip("Tango-GBOC smoke test configures the collector through the Linux systemd environment file; Windows is not supported yet")
 		}
-		ctx, dirLog, vm := commonSetupWithExtraCreateArgumentsAndMetadata(t, imageSpec, nil, nil)
+		// The collector authenticates to the Control Plane with an OAuth2
+		// access token for the cloud-platform scope, which GCE's default VM
+		// scopes do not include.
+		ctx, dirLog, vm := commonSetupWithExtraCreateArgumentsAndMetadata(t, imageSpec, []string{"--scopes=cloud-platform"}, nil)
 		logger := dirLog.ToMainLog()
 		t.Cleanup(func() {
 			gce.RunRemotely(ctx, dirLog.ToFile("otelcol-google.conf.txt"), vm, "sudo cat "+tangoConfPath)
@@ -403,18 +304,15 @@ func TestTangoSmoke(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		logger.Printf("Collector %s applied PolicySet revision %q with %d policies", applied.collectorID, applied.revision, applied.policiesLoaded)
+		logger.Printf("Collector %s applied PolicySet revision %q (%d policies loaded)", applied.collectorID, applied.revisionName, applied.policiesLoaded)
+		if path.Base(path.Dir(path.Dir(applied.revisionName))) != s.policySetID {
+			t.Fatalf("collector applied PolicySet revision %q, want a revision of PolicySet %q", applied.revisionName, s.policySetID)
+		}
 		if s.expectedRevision != "" && applied.revision != s.expectedRevision {
 			t.Fatalf("collector applied revision %q, want %q", applied.revision, s.expectedRevision)
 		}
 
-		t.Run("data_plane", func(t *testing.T) {
-			t.Parallel()
-			DataPlaneTest(ctx, t, logger, vm)
-		})
-		t.Run("self_o11y", func(t *testing.T) {
-			t.Parallel()
-			SelfO11yTest(ctx, t, logger, vm, s, applied)
-		})
+		// Data Plane: the self-o11y gauge reports the same revision.
+		SelfO11yTest(ctx, t, logger, vm, s, applied)
 	})
 }

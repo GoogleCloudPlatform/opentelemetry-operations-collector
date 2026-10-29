@@ -3,7 +3,6 @@ module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/integra
 go 1.26.0
 
 require (
-	cloud.google.com/go/logging v1.13.1
 	cloud.google.com/go/monitoring v1.24.3
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/integration_test/gce-testing-internal v0.0.0-00010101000000-000000000000
 	google.golang.org/api v0.264.0
@@ -18,6 +17,7 @@ require (
 	cloud.google.com/go/compute v1.54.0 // indirect
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
 	cloud.google.com/go/iam v1.5.3 // indirect
+	cloud.google.com/go/logging v1.13.1 // indirect
 	cloud.google.com/go/longrunning v0.8.0 // indirect
 	cloud.google.com/go/storage v1.56.0 // indirect
 	cloud.google.com/go/trace v1.11.7 // indirect

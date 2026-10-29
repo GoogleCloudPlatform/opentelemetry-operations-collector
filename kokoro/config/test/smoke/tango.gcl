@@ -4,16 +4,22 @@ import 'common.gcl' as common
 // Control Plane outage does not block releases. The package's other tests
 // (TestSmoke) also run under this config; TestTangoSmoke is skipped in every
 // config that does not set TANGO_CP_ENDPOINT.
+//
+// The fleet and PolicySet live in lujieduan-sandbox, so the VMs are created
+// there. The Kokoro service account needs access to that project.
 config build = common.smoke_test {
   params {
     environment {
       GOTESTSUM_RERUN_FAILS = '2'
 
+      PROJECT = 'lujieduan-sandbox'
+
       TANGO_CP_ENDPOINT =
           'staging-telemetrydirector.asia-east1.rep.sandbox.googleapis.com:443'
       TANGO_FLEET_ID = 'gboc-smoke-fleet'
       TANGO_POLICY_SET_ID = 'gboc-smoke-ps'
-      TANGO_EXPECTED_REVISION = '904e9adb'
+      TANGO_REGION = 'asia-east1'
+      TANGO_EXPECTED_REVISION = '3f038775'
     }
   }
 }

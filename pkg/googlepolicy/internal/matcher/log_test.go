@@ -221,7 +221,7 @@ func TestCompileLogMatcherAndExtractor(t *testing.T) {
 			t.Run(tc.name, func(t *testing.T) {
 				cm, err := CompileLogMatcher(&policyv1alpha1.LogMatcher{
 					Target:    tc.target,
-					Predicate: &policyv1alpha1.LogMatcher_Existence{},
+					Predicate: predExists(),
 				})
 				require.NoError(t, err)
 

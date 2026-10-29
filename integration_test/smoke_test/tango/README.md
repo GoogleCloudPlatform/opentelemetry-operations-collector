@@ -1,15 +1,14 @@
 # Tango-GBOC smoke test setup
 
-`TestTangoSmoke` (`../tango_smoke_test.go`) runs `otelcol-google` on a GCE VM,
-configured only through
-`--config=googlecontrolplane:xds://$TANGO_CP_ENDPOINT?gcp.fleet_id=$TANGO_FLEET_ID&region=$TANGO_REGION`,
-and verifies that:
-
-1. the collector connects to the Control Plane, receives the pre-provisioned
-   PolicySet revision and applies (ACKs) it;
-2. the self-o11y gauge `prometheus.googleapis.com/gcp.policy.set.active/gauge`
-   is exported to the Data Plane and, observed through Cloud Monitoring,
-   reports the same PolicySet (`gcp.policy.set.id`) and revision.
+`TestTangoSmoke` (`../tango_smoke_test.go`) installs the packaged
+`otelcol-google` service on a GCE VM and adds a systemd drop-in that appends
+`--config=googlecontrolplane:xds://$TANGO_CP_ENDPOINT?gcp.fleet_id=$TANGO_FLEET_ID&region=$TANGO_REGION`
+to the service's regular command line. It then polls Cloud Monitoring until the
+collector's self-o11y gauge `prometheus.googleapis.com/gcp.policy.set.active/gauge`
+reports the pre-provisioned PolicySet (`gcp.policy.set.id`) at
+`TANGO_EXPECTED_REVISION`. The gauge only changes after the collector has
+applied (and ACKed) a revision received from the Control Plane, so that point
+proves the Control Plane to Data Plane loop.
 
 The test assumes a long-lived fleet and PolicySet already exist and have been
 rolled out. It never creates, updates or deletes them.

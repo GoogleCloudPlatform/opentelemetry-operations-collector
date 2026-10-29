@@ -187,6 +187,16 @@ type TraceFilterPolicyEvaluator interface {
 	FilterTrace(ctx TraceContext) FilterResult
 }
 
+// TraceSamplingPolicyEvaluator is implemented by transformation policies that
+// evaluate trace sampling rules (e.g., TraceSamplingPolicy in
+// pkg/googlepolicy/tracesampling).
+type TraceSamplingPolicyEvaluator interface {
+	TransformationPolicy
+	MatchesTrace(ctx TraceContext) bool
+	Threshold() uint64
+	SamplingPercent() float64
+}
+
 // ComponentPolicy is an extended interface that any policy that produces config
 // will implement (currently Destination and Source policies).
 type ComponentPolicy interface {

@@ -16,13 +16,14 @@ package googlepolicyprocessor
 
 import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/tracesampling"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 
 // TransformTraces applies active transformation policies in-place across the Resource -> Scope -> Span hierarchy.
 // Dropped spans are pruned, and empty scopes/resources are removed.
 func (e *Evaluator) TransformTraces(td ptrace.Traces) {
-	if len(e.traceFilterPolicies) == 0 {
+	if len(e.traceFilterPolicies) == 0 && len(e.traceSamplingPolicies) == 0 {
 		return
 	}
 
@@ -35,13 +36,25 @@ func (e *Evaluator) TransformTraces(td ptrace.Traces) {
 			scopeSchemaURL := ss.SchemaUrl()
 
 			ss.Spans().RemoveIf(func(span ptrace.Span) bool {
-				return e.EvalTrace(TraceContext{
+				ctx := TraceContext{
 					Span:              span,
 					Resource:          resource,
 					Scope:             scope,
 					ResourceSchemaURL: resourceSchemaURL,
 					ScopeSchemaURL:    scopeSchemaURL,
-				})
+				}
+
+				// Stage 1: Deterministic filter evaluation (TraceFilterPolicy)
+				if e.EvalTrace(ctx) {
+					return true
+				}
+
+				// Stage 2: Probabilistic trace sampling evaluation (TraceSamplingPolicy)
+				if e.EvalTraceSampling(ctx) {
+					return true
+				}
+
+				return false
 			})
 
 			return ss.Spans().Len() == 0
@@ -60,4 +73,39 @@ func (e *Evaluator) EvalTrace(ctx TraceContext) bool {
 		}
 	}
 	return false
+}
+
+// EvalTraceSampling evaluates active TraceSamplingPolicy rules against a single trace span
+// in equalizing mode.
+// Returns true if the span should be DROPPED, false if KEPT.
+func (e *Evaluator) EvalTraceSampling(ctx TraceContext) bool {
+	if len(e.traceSamplingPolicies) == 0 {
+		return false
+	}
+
+	// Multi-policy composition: effective sampling rate is min(p_i),
+	// which corresponds to the maximum threshold max(T_i).
+	// Find the maximum threshold across matching policies in a single pass without heap allocation.
+	var matched bool
+	var maxThreshold uint64
+	for _, p := range e.traceSamplingPolicies {
+		if p.MatchesTrace(ctx) {
+			if !matched || p.Threshold() > maxThreshold {
+				maxThreshold = p.Threshold()
+			}
+			matched = true
+		}
+	}
+
+	// Default allow: if no policy matches, pass the span through unsampled.
+	if !matched {
+		return false
+	}
+
+	decision, _, err := tracesampling.EvaluateSampling(ctx.Span, maxThreshold)
+	if err != nil {
+		// Fail open on unexpected evaluation errors.
+		return false
+	}
+	return decision == tracesampling.DecisionDrop
 }

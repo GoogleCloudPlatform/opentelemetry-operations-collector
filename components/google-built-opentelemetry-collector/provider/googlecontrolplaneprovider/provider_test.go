@@ -500,6 +500,14 @@ func TestFilterPolicyDriversRegistered(t *testing.T) {
 			},
 		},
 		{
+			policyType: "trace_sampling",
+			raw: map[string]any{
+				"type":             "trace_sampling",
+				"id":               "test-sampling",
+				"sampling_percent": 50.0,
+			},
+		},
+		{
 			policyType: "journald_source",
 			raw: map[string]any{
 				"type": "journald_source",

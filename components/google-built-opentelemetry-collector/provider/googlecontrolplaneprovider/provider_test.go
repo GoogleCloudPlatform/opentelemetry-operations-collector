@@ -500,6 +500,13 @@ func TestFilterPolicyDriversRegistered(t *testing.T) {
 			},
 		},
 		{
+			policyType: "host_metrics_source",
+			raw: map[string]any{
+				"type": "host_metrics_source",
+				"id":   "test-hostmetrics",
+			},
+		},
+		{
 			policyType: "journald_source",
 			raw: map[string]any{
 				"type": "journald_source",
@@ -1415,6 +1422,219 @@ func TestRetrieve_MultipleJournaldSourcePolicies_ConsolidationFailureAttributesA
 	receivers, ok := raw["receivers"].(map[string]any)
 	require.True(t, ok)
 	require.NotContains(t, receivers, "journald")
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestRetrieve_ActivePolicySetWithHostMetricsSource(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	p := createProvider()
+
+	p1, err := googlepolicy.LoadPolicy("host_metrics_source", map[string]any{
+		"type": "host_metrics_source",
+		"id":   "system-host-metrics",
+	})
+	require.NoError(t, err)
+
+	ps := &googlepolicy.PolicySet{
+		RevisionID: "rev-hostmetrics",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			"policy-1": {PolicyObj: p1},
+		},
+	}
+	googlepolicy.SetActivePolicySet(ps)
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+
+	raw := conf.ToStringMap()
+	receivers, ok := raw["receivers"].(map[string]any)
+	require.True(t, ok)
+
+	require.Contains(t, receivers, "hostmetrics")
+	hmCfg, ok := receivers["hostmetrics"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "60s", hmCfg["collection_interval"])
+
+	pipelines, ok := raw["service"].(map[string]any)["pipelines"].(map[string]any)
+	require.True(t, ok)
+
+	metricsPipeline, ok := pipelines["metrics/googlecontrolplane"].(map[string]any)
+	require.True(t, ok)
+	metricReceivers, ok := metricsPipeline["receivers"].([]any)
+	require.True(t, ok)
+	require.Contains(t, metricReceivers, "hostmetrics")
+	require.Contains(t, metricReceivers, "nop/googlecontrolplane")
+
+	// Ensure logs and traces pipelines do not contain hostmetrics
+	logsPipeline, ok := pipelines["logs/googlecontrolplane"].(map[string]any)
+	require.True(t, ok)
+	logReceivers, ok := logsPipeline["receivers"].([]any)
+	require.True(t, ok)
+	require.NotContains(t, logReceivers, "hostmetrics")
+
+	tracesPipeline, ok := pipelines["traces/googlecontrolplane"].(map[string]any)
+	require.True(t, ok)
+	traceReceivers, ok := tracesPipeline["receivers"].([]any)
+	require.True(t, ok)
+	require.NotContains(t, traceReceivers, "hostmetrics")
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestRetrieve_MultipleHostMetricsSourcePoliciesConsolidated(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	p := createProvider()
+
+	p1, err := googlepolicy.LoadPolicy("host_metrics_source", map[string]any{
+		"type": "host_metrics_source",
+		"id":   "host-metrics-default",
+	})
+	require.NoError(t, err)
+
+	p2, err := googlepolicy.LoadPolicy("host_metrics_source", map[string]any{
+		"type":                        "host_metrics_source",
+		"id":                          "host-metrics-30s",
+		"collection_interval_seconds": 30,
+	})
+	require.NoError(t, err)
+
+	ps := &googlepolicy.PolicySet{
+		RevisionID: "rev-multi-hostmetrics",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			"policy-1": {PolicyObj: p1},
+			"policy-2": {PolicyObj: p2},
+		},
+	}
+	googlepolicy.SetActivePolicySet(ps)
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+
+	raw := conf.ToStringMap()
+	receivers, ok := raw["receivers"].(map[string]any)
+	require.True(t, ok)
+
+	// Exactly 1 hostmetrics receiver present, with minimum interval 30s
+	require.Contains(t, receivers, "hostmetrics")
+	hmCfg, ok := receivers["hostmetrics"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "30s", hmCfg["collection_interval"])
+
+	pipelines, ok := raw["service"].(map[string]any)["pipelines"].(map[string]any)
+	require.True(t, ok)
+	metricsPipeline, ok := pipelines["metrics/googlecontrolplane"].(map[string]any)
+	require.True(t, ok)
+	pipelineReceivers, ok := metricsPipeline["receivers"].([]any)
+	require.True(t, ok)
+	require.Contains(t, pipelineReceivers, "hostmetrics")
+	require.Contains(t, pipelineReceivers, "nop/googlecontrolplane")
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+type invalidHostMetricsSourcePolicy struct {
+	name string
+}
+
+func (i *invalidHostMetricsSourcePolicy) PolicyName() string { return i.name }
+func (i *invalidHostMetricsSourcePolicy) PolicyType() string { return "host_metrics_source" }
+func (i *invalidHostMetricsSourcePolicy) PolicyClass() googlepolicy.PolicyClass {
+	return googlepolicy.PolicyClassSource
+}
+func (i *invalidHostMetricsSourcePolicy) Validate() error {
+	return errors.New("invalid host metrics policy")
+}
+func (i *invalidHostMetricsSourcePolicy) Evaluate(_ context.Context) (*confmap.Conf, error) {
+	return nil, errors.New("invalid host metrics policy")
+}
+func (i *invalidHostMetricsSourcePolicy) LogReceiverIDs() []component.ID { return nil }
+func (i *invalidHostMetricsSourcePolicy) MetricReceiverIDs() []component.ID {
+	return []component.ID{component.MustNewID("hostmetrics")}
+}
+func (i *invalidHostMetricsSourcePolicy) TraceReceiverIDs() []component.ID { return nil }
+func (i *invalidHostMetricsSourcePolicy) Consolidate(policies []googlepolicy.SourcePolicy) (googlepolicy.SourcePolicy, error) {
+	return nil, errors.New("invalid policy cannot consolidate")
+}
+
+func TestRetrieve_MultipleHostMetricsSourcePolicies_FaultIsolation_FirstPolicyInvalid(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	p := createProvider()
+
+	badP0 := &invalidHostMetricsSourcePolicy{name: "bad-hostmetrics-0"}
+
+	p1, err := googlepolicy.LoadPolicy("host_metrics_source", map[string]any{
+		"type":                        "host_metrics_source",
+		"id":                          "host-metrics-1",
+		"collection_interval_seconds": 45,
+	})
+	require.NoError(t, err)
+
+	p2, err := googlepolicy.LoadPolicy("host_metrics_source", map[string]any{
+		"type":                        "host_metrics_source",
+		"id":                          "host-metrics-2",
+		"collection_interval_seconds": 25,
+	})
+	require.NoError(t, err)
+
+	ps := &googlepolicy.PolicySet{
+		RevisionID: "rev-hm-fault-isolation",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			"policy-bad-0":  {PolicyObj: badP0},
+			"policy-good-1": {PolicyObj: p1},
+			"policy-good-2": {PolicyObj: p2},
+		},
+	}
+	googlepolicy.SetActivePolicySet(ps)
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+
+	raw := conf.ToStringMap()
+	receivers, ok := raw["receivers"].(map[string]any)
+	require.True(t, ok)
+
+	// Fault isolation: good-1 and good-2 consolidated successfully into hostmetrics with min interval 25s despite bad-0
+	require.Contains(t, receivers, "hostmetrics")
+	hmCfg, ok := receivers["hostmetrics"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "25s", hmCfg["collection_interval"])
+
+	pipelines, ok := raw["service"].(map[string]any)["pipelines"].(map[string]any)
+	require.True(t, ok)
+	metricsPipeline, ok := pipelines["metrics/googlecontrolplane"].(map[string]any)
+	require.True(t, ok)
+	pipelineReceivers, ok := metricsPipeline["receivers"].([]any)
+	require.True(t, ok)
+	require.Contains(t, pipelineReceivers, "hostmetrics")
+	require.Contains(t, pipelineReceivers, "nop/googlecontrolplane")
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }

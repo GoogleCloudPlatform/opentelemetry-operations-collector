@@ -528,6 +528,7 @@ func testCollectorFactories() (otelcol.Factories, error) {
 	factories.Receivers, err = otelcol.MakeFactoryMap[receiver.Factory](
 		otlpreceiver.NewFactory(),
 		newStubReceiverFactory("nop"),
+		newStubReceiverFactory("hostmetrics"),
 	)
 	if err != nil {
 		return otelcol.Factories{}, err
@@ -1928,5 +1929,179 @@ func TestFileConfigMerge_ProviderOrderPrecedence(t *testing.T) {
 	}
 	if !found || value <= 0 {
 		t.Errorf("expected googlecontrolplaneprovider to override earlier file config's level: None and report positive gcp.policy.set.active revision, got found=%v value=%d\nlogs:\n%s", found, value, col.logs())
+	}
+}
+
+// TestPolicyHostMetricsSource verifies that HostMetricsSourcePolicy is loaded by
+// googlecontrolplaneprovider, consolidated into the hostmetrics receiver with the
+// minimum effective collection interval, and wired into the canonical workload
+// pipeline metrics/googlecontrolplane.
+func TestPolicyHostMetricsSource(t *testing.T) {
+	otelcolBin := resolveOtelcolBinary(t)
+	tempDir := t.TempDir()
+
+	policiesDir := filepath.Join(tempDir, "policies")
+	if err := os.MkdirAll(policiesDir, 0755); err != nil {
+		t.Fatalf("failed to create policies directory: %v", err)
+	}
+
+	// Two policies with different intervals: 30s and 15s.
+	// Minimum effective interval is 15s.
+	p1 := `{
+  "type": "host_metrics_source",
+  "id": "projects/my-project/locations/us-central1/policySets/ps-1/policies/hm-30s",
+  "collection_interval_seconds": 30
+}`
+	p2 := `{
+  "type": "host_metrics_source",
+  "id": "projects/my-project/locations/us-central1/policySets/ps-1/policies/hm-15s",
+  "collection_interval_seconds": 15
+}`
+	if err := os.WriteFile(filepath.Join(policiesDir, "01-hm-30s.json"), []byte(p1), 0644); err != nil {
+		t.Fatalf("failed to write 01-hm-30s.json: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(policiesDir, "02-hm-15s.json"), []byte(p2), 0644); err != nil {
+		t.Fatalf("failed to write 02-hm-15s.json: %v", err)
+	}
+
+	h := startTestHarness(t, otelcolBin, tempDir, policiesDir)
+
+	// Wait for googlecontrolplane extension to report positive gcp.policy.set.active revision.
+	value, _, found := waitForPolicySetActive(h.selfMockSrv, 10*time.Second)
+
+	h.col.shutdown(t)
+
+	if !found || value <= 0 {
+		t.Errorf("expected googlecontrolplane extension to report positive gcp.policy.set.active revision, got found=%v value=%d\nlogs:\n%s", found, value, h.col.logs())
+	}
+}
+
+// TestPolicyHostMetricsSource_FaultIsolation verifies that if an invalid HostMetricsSourcePolicy
+// (interval < 10) is deployed alongside a valid one, the invalid policy emits an evaluate error
+// event, while the valid policy successfully starts up and is wired into the canonical pipeline.
+func TestPolicyHostMetricsSource_FaultIsolation(t *testing.T) {
+	otelcolBin := resolveOtelcolBinary(t)
+	tempDir := t.TempDir()
+
+	policiesDir := filepath.Join(tempDir, "policies")
+	if err := os.MkdirAll(policiesDir, 0755); err != nil {
+		t.Fatalf("failed to create policies directory: %v", err)
+	}
+
+	const wantPolicySetID = "projects/my-project/locations/us-central1/policySets/my-policy-set"
+	const validPolicyID = wantPolicySetID + "/policies/valid-hm"
+	const invalidPolicyID = wantPolicySetID + "/policies/invalid-hm"
+
+	validPolicy := fmt.Sprintf(`{
+  "type": "host_metrics_source",
+  "id": %q,
+  "collection_interval_seconds": 25
+}`, validPolicyID)
+	invalidPolicy := fmt.Sprintf(`{
+  "type": "host_metrics_source",
+  "id": %q,
+  "collection_interval_seconds": 5
+}`, invalidPolicyID)
+
+	if err := os.WriteFile(filepath.Join(policiesDir, "01-invalid-hm.json"), []byte(invalidPolicy), 0644); err != nil {
+		t.Fatalf("failed to write invalid policy: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(policiesDir, "02-valid-hm.json"), []byte(validPolicy), 0644); err != nil {
+		t.Fatalf("failed to write valid policy: %v", err)
+	}
+
+	_, mockExporterAddr := startMockOTLPServer(t)
+	selfMockSrv, selfExporterAddr := startMockOTLPServer(t)
+	ports := allocateEphemeralPorts(t, 2)
+	otlpReceiverAddr := fmt.Sprintf("127.0.0.1:%d", ports[0])
+	selfReceiverAddr := fmt.Sprintf("127.0.0.1:%d", ports[1])
+
+	pipelineCfg := fmt.Sprintf(`receivers:
+  otlp/test_in:
+    protocols:
+      grpc:
+        endpoint: %[1]s
+  otlp/default_self_metrics:
+    protocols:
+      grpc:
+        endpoint: %[3]s
+exporters:
+  otlp_grpc/test_out:
+    endpoint: %[2]s
+    sending_queue:
+      enabled: false
+    tls:
+      insecure: true
+  otlp_grpc/default_gcp_destination:
+    endpoint: %[4]s
+    auth:
+      enabled: false
+    sending_queue:
+      enabled: false
+    tls:
+      insecure: true
+service:
+  telemetry:
+    logs:
+      processors:
+        - batch:
+            schedule_delay: 50
+            export_timeout: 200
+            exporter:
+              otlp:
+                endpoint: http://%[3]s
+                insecure: true
+                protocol: grpc
+                timeout: 200
+    metrics:
+      readers:
+        - periodic:
+            interval: 100
+            timeout: 200
+            exporter:
+              otlp:
+                protocol: grpc
+                endpoint: http://%[3]s
+                insecure: true
+`, otlpReceiverAddr, mockExporterAddr, selfReceiverAddr, selfExporterAddr)
+	pipelineCfgPath := filepath.Join(tempDir, "test_pipeline.yaml")
+	if err := os.WriteFile(pipelineCfgPath, []byte(pipelineCfg), 0644); err != nil {
+		t.Fatalf("failed to write test_pipeline.yaml: %v", err)
+	}
+
+	col := startCollector(t, otelcolBin, policiesDir, pipelineCfgPath)
+
+	var sawErrorEvent bool
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		for _, batch := range selfMockSrv.CollectedLogs() {
+			for i := 0; i < batch.ResourceLogs().Len(); i++ {
+				sl := batch.ResourceLogs().At(i).ScopeLogs()
+				for j := 0; j < sl.Len(); j++ {
+					lr := sl.At(j).LogRecords()
+					for k := 0; k < lr.Len(); k++ {
+						record := lr.At(k)
+						attrs := record.Attributes()
+						eventName, hasName := attrs.Get("event.name")
+						policyID, hasPolicyID := attrs.Get("gcp.policy.id")
+						if hasName && eventName.AsString() == "gcp.policy.evaluate.error" &&
+							hasPolicyID && policyID.AsString() == invalidPolicyID {
+							sawErrorEvent = true
+							break
+						}
+					}
+				}
+			}
+		}
+		if sawErrorEvent {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
+	col.shutdown(t)
+
+	if !sawErrorEvent {
+		t.Fatalf("expected gcp.policy.evaluate.error log event on selfMockSrv for invalid policy.\ncollector logs:\n%s", col.logs())
 	}
 }

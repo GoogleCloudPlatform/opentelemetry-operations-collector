@@ -883,7 +883,7 @@ func TestFilterPolicyDriversRegistered(t *testing.T) {
 				"matchers": []any{
 					map[string]any{
 						"target":    map[string]any{"record_field": "LOG_RECORD_FIELD_BODY"},
-						"existence": map[string]any{},
+						"predicate": map[string]any{"existence": map[string]any{}},
 					},
 				},
 			},
@@ -897,7 +897,7 @@ func TestFilterPolicyDriversRegistered(t *testing.T) {
 				"matchers": []any{
 					map[string]any{
 						"target":    map[string]any{"descriptor_field": "METRIC_DESCRIPTOR_FIELD_NAME"},
-						"existence": map[string]any{},
+						"predicate": map[string]any{"existence": map[string]any{}},
 					},
 				},
 			},
@@ -910,7 +910,7 @@ func TestFilterPolicyDriversRegistered(t *testing.T) {
 				"matchers": []any{
 					map[string]any{
 						"target":    map[string]any{"record_field": "SPAN_RECORD_FIELD_NAME"},
-						"existence": map[string]any{},
+						"predicate": map[string]any{"existence": map[string]any{}},
 					},
 				},
 			},
@@ -1241,7 +1241,9 @@ func TestPolicyHotReload_FilterPolicyDoesNotTriggerWatcher(t *testing.T) {
 					"target": map[string]any{
 						"record_field": "LOG_RECORD_FIELD_BODY",
 					},
-					"glob": "DEBUG*",
+					"predicate": map[string]any{
+						"glob": "DEBUG*",
+					},
 				},
 			},
 		},

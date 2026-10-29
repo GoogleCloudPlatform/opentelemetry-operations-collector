@@ -39,8 +39,10 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Glob{
-					Glob: "healthcheck*",
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_Glob{
+						Glob: "healthcheck*",
+					},
 				},
 				Negated: false,
 			},
@@ -52,10 +54,12 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
-					Equality: &policyv1alpha1.Value{
-						Kind: &policyv1alpha1.Value_StringValue{
-							StringValue: "/healthz",
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_Equality{
+						Equality: &policyv1alpha1.Value{
+							Kind: &policyv1alpha1.Value_StringValue{
+								StringValue: "/healthz",
+							},
 						},
 					},
 				},
@@ -68,10 +72,12 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
-					Equality: &policyv1alpha1.Value{
-						Kind: &policyv1alpha1.Value_IntValue{
-							IntValue: 200,
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_Equality{
+						Equality: &policyv1alpha1.Value{
+							Kind: &policyv1alpha1.Value_IntValue{
+								IntValue: 200,
+							},
 						},
 					},
 				},
@@ -84,10 +90,12 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
-					Equality: &policyv1alpha1.Value{
-						Kind: &policyv1alpha1.Value_BoolValue{
-							BoolValue: true,
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_Equality{
+						Equality: &policyv1alpha1.Value{
+							Kind: &policyv1alpha1.Value_BoolValue{
+								BoolValue: true,
+							},
 						},
 					},
 				},
@@ -100,10 +108,12 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
-					Equality: &policyv1alpha1.Value{
-						Kind: &policyv1alpha1.Value_DoubleValue{
-							DoubleValue: 0.05,
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_Equality{
+						Equality: &policyv1alpha1.Value{
+							Kind: &policyv1alpha1.Value_DoubleValue{
+								DoubleValue: 0.05,
+							},
 						},
 					},
 				},
@@ -116,10 +126,12 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
-					Equality: &policyv1alpha1.Value{
-						Kind: &policyv1alpha1.Value_BytesValue{
-							BytesValue: []byte{0xde, 0xad, 0xbe, 0xef},
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_Equality{
+						Equality: &policyv1alpha1.Value{
+							Kind: &policyv1alpha1.Value_BytesValue{
+								BytesValue: []byte{0xde, 0xad, 0xbe, 0xef},
+							},
 						},
 					},
 				},
@@ -132,10 +144,12 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Containment{
-					Containment: &policyv1alpha1.Value{
-						Kind: &policyv1alpha1.Value_StringValue{
-							StringValue: "admin",
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_Containment{
+						Containment: &policyv1alpha1.Value{
+							Kind: &policyv1alpha1.Value_StringValue{
+								StringValue: "admin",
+							},
 						},
 					},
 				},
@@ -146,10 +160,12 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER,
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_InclusiveMinimum{
-					InclusiveMinimum: &policyv1alpha1.NumericValue{
-						Kind: &policyv1alpha1.NumericValue_IntValue{
-							IntValue: 17, // ERROR
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_InclusiveMinimum{
+						InclusiveMinimum: &policyv1alpha1.NumericValue{
+							Kind: &policyv1alpha1.NumericValue_IntValue{
+								IntValue: 17, // ERROR
+							},
 						},
 					},
 				},
@@ -162,10 +178,12 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_ExclusiveMinimum{
-					ExclusiveMinimum: &policyv1alpha1.NumericValue{
-						Kind: &policyv1alpha1.NumericValue_DoubleValue{
-							DoubleValue: 2.5,
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_ExclusiveMinimum{
+						ExclusiveMinimum: &policyv1alpha1.NumericValue{
+							Kind: &policyv1alpha1.NumericValue_DoubleValue{
+								DoubleValue: 2.5,
+							},
 						},
 					},
 				},
@@ -178,8 +196,10 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Existence{
-					Existence: &emptypb.Empty{},
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_Existence{
+						Existence: &emptypb.Empty{},
+					},
 				},
 				Negated: true,
 			},
@@ -191,10 +211,12 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
-					Equality: &policyv1alpha1.Value{
-						Kind: &policyv1alpha1.Value_StringValue{
-							StringValue: "my-library",
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_Equality{
+						Equality: &policyv1alpha1.Value{
+							Kind: &policyv1alpha1.Value_StringValue{
+								StringValue: "my-library",
+							},
 						},
 					},
 				},
@@ -205,10 +227,12 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 						ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_NAME,
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
-					Equality: &policyv1alpha1.Value{
-						Kind: &policyv1alpha1.Value_StringValue{
-							StringValue: "my-scope",
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_Equality{
+						Equality: &policyv1alpha1.Value{
+							Kind: &policyv1alpha1.Value_StringValue{
+								StringValue: "my-scope",
+							},
 						},
 					},
 				},
@@ -219,10 +243,12 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 						ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_VERSION,
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
-					Equality: &policyv1alpha1.Value{
-						Kind: &policyv1alpha1.Value_StringValue{
-							StringValue: "v1.2.3",
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_Equality{
+						Equality: &policyv1alpha1.Value{
+							Kind: &policyv1alpha1.Value_StringValue{
+								StringValue: "v1.2.3",
+							},
 						},
 					},
 				},
@@ -233,10 +259,12 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 						ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_SCHEMA_URL,
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
-					Equality: &policyv1alpha1.Value{
-						Kind: &policyv1alpha1.Value_StringValue{
-							StringValue: "https://opentelemetry.io/schemas/1.24.0",
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_Equality{
+						Equality: &policyv1alpha1.Value{
+							Kind: &policyv1alpha1.Value_StringValue{
+								StringValue: "https://opentelemetry.io/schemas/1.24.0",
+							},
 						},
 					},
 				},
@@ -249,10 +277,12 @@ func TestLogFilterPolicy_Serialization(t *testing.T) {
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
-					Equality: &policyv1alpha1.Value{
-						Kind: &policyv1alpha1.Value_StringValue{
-							StringValue: "SYSTEM",
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_Equality{
+						Equality: &policyv1alpha1.Value{
+							Kind: &policyv1alpha1.Value_StringValue{
+								StringValue: "SYSTEM",
+							},
 						},
 					},
 				},
@@ -293,10 +323,12 @@ func TestLogFilterPolicy_JSONSerialization(t *testing.T) {
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
-					Equality: &policyv1alpha1.Value{
-						Kind: &policyv1alpha1.Value_StringValue{
-							StringValue: "/healthz",
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_Equality{
+						Equality: &policyv1alpha1.Value{
+							Kind: &policyv1alpha1.Value_StringValue{
+								StringValue: "/healthz",
+							},
 						},
 					},
 				},
@@ -310,10 +342,12 @@ func TestLogFilterPolicy_JSONSerialization(t *testing.T) {
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_InclusiveMinimum{
-					InclusiveMinimum: &policyv1alpha1.NumericValue{
-						Kind: &policyv1alpha1.NumericValue_IntValue{
-							IntValue: 400,
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_InclusiveMinimum{
+						InclusiveMinimum: &policyv1alpha1.NumericValue{
+							Kind: &policyv1alpha1.NumericValue_IntValue{
+								IntValue: 400,
+							},
 						},
 					},
 				},
@@ -324,8 +358,10 @@ func TestLogFilterPolicy_JSONSerialization(t *testing.T) {
 						ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_SCHEMA_URL,
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Existence{
-					Existence: &emptypb.Empty{},
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_Existence{
+						Existence: &emptypb.Empty{},
+					},
 				},
 				Negated: true,
 			},
@@ -337,10 +373,12 @@ func TestLogFilterPolicy_JSONSerialization(t *testing.T) {
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
-					Equality: &policyv1alpha1.Value{
-						Kind: &policyv1alpha1.Value_StringValue{
-							StringValue: "sshd.service",
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_Equality{
+						Equality: &policyv1alpha1.Value{
+							Kind: &policyv1alpha1.Value_StringValue{
+								StringValue: "sshd.service",
+							},
 						},
 					},
 				},

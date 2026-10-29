@@ -59,6 +59,8 @@ import (
 	"cloud.google.com/go/monitoring/apiv3/v2/monitoringpb"
 	"github.com/google/uuid"
 	"google.golang.org/api/iterator"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/integration_test/gce-testing-internal/gce"
@@ -81,9 +83,12 @@ const (
 	// command line and appends the googlecontrolplane config source to it.
 	tangoDropInPath = "/etc/systemd/system/otelcol-google.service.d/tango.conf"
 
-	metricWindow      = 30 * time.Minute
-	queryPollInterval = 30 * time.Second
-	queryMaxAttempts  = 20 // 10 minutes.
+	metricWindow = 30 * time.Minute
+	// queryBackoffDuration mirrors gce's backoff between Monitoring queries.
+	queryBackoffDuration = 10 * time.Second
+	// queryMaxAttempts bounds how long the test waits for a point with the
+	// expected revision once the series exists (about 3 minutes plus query time).
+	queryMaxAttempts = 20
 )
 
 // tangoSettings holds the Tango-specific environment for the test.
@@ -175,8 +180,78 @@ func revisionValue(rev string) (int64, error) {
 	return int64(v), nil
 }
 
-// waitForPolicySetActive polls Cloud Monitoring until the collector's
-// gcp.policy.set.active series reports the expected PolicySet and revision.
+// lookupCollectorMetric is gce.lookupMetric scoped to a collector instead of a
+// VM. The collector's self-o11y metrics are ingested over OTLP as
+// prometheus_target series whose instance label is the collector's
+// service.instance.id; they carry neither the instance_id nor the
+// "<vm.ID>/<vm.Name>" namespace that gce.lookupMetric filters on.
+func lookupCollectorMetric(ctx context.Context, client *monitoring.MetricClient, vm *gce.VM, metric, collector string, window time.Duration) *monitoring.TimeSeriesIterator {
+	now := time.Now()
+	filter := fmt.Sprintf(`metric.type = %q AND resource.type = "prometheus_target" AND resource.labels.instance = %q`, metric, collector)
+	return client.ListTimeSeries(ctx, &monitoringpb.ListTimeSeriesRequest{
+		Name:   "projects/" + vm.Project,
+		Filter: filter,
+		Interval: &monitoringpb.TimeInterval{
+			StartTime: timestamppb.New(now.Add(-window)),
+			EndTime:   timestamppb.New(now),
+		},
+		View: monitoringpb.ListTimeSeriesRequest_FULL,
+	})
+}
+
+// nonEmptySeries is gce.nonEmptySeriesList with a minimum of one series: it
+// returns the series that have points, or (nil, nil) if there are none.
+func nonEmptySeries(logger *log.Logger, it *monitoring.TimeSeriesIterator) ([]*monitoringpb.TimeSeries, error) {
+	var tsList []*monitoringpb.TimeSeries
+	for {
+		series, err := it.Next()
+		if err == iterator.Done {
+			return tsList, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		logger.Printf("nonEmptySeries() found series %v", series)
+		if len(series.GetPoints()) > 0 {
+			tsList = append(tsList, series)
+		}
+	}
+}
+
+// isRetriableLookupError mirrors gce.isRetriableLookupError.
+func isRetriableLookupError(ctx context.Context, err error) bool {
+	st, ok := status.FromError(err)
+	if !ok {
+		return false
+	}
+	if st.Code() == codes.Canceled {
+		return ctx.Err() == nil
+	}
+	return st.Code() == codes.NotFound || st.Code() == codes.Internal || st.Code() == codes.ResourceExhausted
+}
+
+// waitForCollectorMetricSeries is gce.WaitForMetricSeries using
+// lookupCollectorMetric. It retries "no data" and retriable errors up to
+// gce.QueryMaxAttempts times.
+func waitForCollectorMetricSeries(ctx context.Context, logger *log.Logger, client *monitoring.MetricClient, vm *gce.VM, metric, collector string, window time.Duration) ([]*monitoringpb.TimeSeries, error) {
+	for attempt := 1; attempt <= gce.QueryMaxAttempts; attempt++ {
+		tsList, err := nonEmptySeries(logger, lookupCollectorMetric(ctx, client, vm, metric, collector, window))
+		if len(tsList) > 0 && err == nil {
+			return tsList, nil
+		}
+		if err != nil && !isRetriableLookupError(ctx, err) {
+			return nil, fmt.Errorf("waitForCollectorMetricSeries(metric=%q, collector=%q): %v", metric, collector, err)
+		}
+		logger.Printf("waitForCollectorMetricSeries(metric=%q, collector=%q): request_error=%v, retrying (%d/%d)...", metric, collector, err, attempt, gce.QueryMaxAttempts)
+		time.Sleep(queryBackoffDuration)
+	}
+	return nil, fmt.Errorf("waitForCollectorMetricSeries(metric=%q, collector=%q) failed: exhausted retries", metric, collector)
+}
+
+// waitForPolicySetActive waits until the collector's gcp.policy.set.active
+// series reports the expected PolicySet and revision. The series may exist
+// before the PolicySet is applied (reporting -1), so this keeps polling until
+// a matching point shows up.
 func waitForPolicySetActive(ctx context.Context, logger *log.Logger, vm *gce.VM, s tangoSettings, collector string) error {
 	want, err := revisionValue(s.expectedRevision)
 	if err != nil {
@@ -188,34 +263,15 @@ func waitForPolicySetActive(ctx context.Context, logger *log.Logger, vm *gce.VM,
 	}
 	defer client.Close()
 
-	// The series is keyed on prometheus_target's instance label, which carries
-	// the collector's service.instance.id. The PolicySet ID is checked in code
-	// because its label key ("gcp.policy.set.id") contains dots.
-	filter := fmt.Sprintf(`metric.type = %q AND resource.type = "prometheus_target" AND resource.labels.instance = %q`,
-		policySetActiveMetric, collector)
-	logger.Printf("Cloud Monitoring filter: %s", filter)
-
-	last := "no series found"
+	last := "no matching point"
 	for attempt := 1; attempt <= queryMaxAttempts; attempt++ {
-		now := time.Now()
-		it := client.ListTimeSeries(ctx, &monitoringpb.ListTimeSeriesRequest{
-			Name:   "projects/" + vm.Project,
-			Filter: filter,
-			Interval: &monitoringpb.TimeInterval{
-				StartTime: timestamppb.New(now.Add(-metricWindow)),
-				EndTime:   timestamppb.New(now),
-			},
-			View: monitoringpb.ListTimeSeriesRequest_FULL,
-		})
-		for {
-			ts, err := it.Next()
-			if err == iterator.Done {
-				break
-			}
-			if err != nil {
-				logger.Printf("ListTimeSeries failed (attempt %d/%d): %v", attempt, queryMaxAttempts, err)
-				break
-			}
+		series, err := waitForCollectorMetricSeries(ctx, logger, client, vm, policySetActiveMetric, collector, metricWindow)
+		if err != nil {
+			return fmt.Errorf("%v; see journalctl_otelcol-google.txt", err)
+		}
+		for _, ts := range series {
+			// The label key contains dots, so it is matched here rather than
+			// in the Monitoring filter.
 			psID := ts.GetMetric().GetLabels()[policySetIDLabel]
 			for _, p := range ts.GetPoints() {
 				v := int64(p.GetValue().GetDoubleValue())
@@ -230,7 +286,7 @@ func waitForPolicySetActive(ctx context.Context, logger *log.Logger, vm *gce.VM,
 			}
 		}
 		logger.Printf("Expected point not found yet (attempt %d/%d), latest: %s", attempt, queryMaxAttempts, last)
-		time.Sleep(queryPollInterval)
+		time.Sleep(queryBackoffDuration)
 	}
 	return fmt.Errorf("no %s point for collector %s with PolicySet %q and value %d (revision %s); latest: %s; see journalctl_otelcol-google.txt",
 		policySetActiveMetric, collector, s.policySetID, want, s.expectedRevision, last)

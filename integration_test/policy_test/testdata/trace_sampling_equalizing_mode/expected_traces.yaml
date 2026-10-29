@@ -1,0 +1,36 @@
+- resourceSpans:
+    - resource:
+        attributes:
+            - key: service.name
+              value:
+                stringValue: checkout-service
+      scopeSpans:
+        - scope:
+            name: otelhttp
+            version: 0.50.0
+          spans:
+            - attributes:
+                - key: http.target
+                  value:
+                    stringValue: /healthz
+              endTimeUnixNano: "1700000001000000000"
+              kind: 2
+              name: GET /healthz
+              spanId: "0102030405060701"
+              startTimeUnixNano: "1700000000000000000"
+              status:
+                code: 1
+              traceId: "01020304050607080000000000000001"
+            - attributes:
+                - key: http.target
+                  value:
+                    stringValue: /checkout
+              endTimeUnixNano: "1700000005000000000"
+              kind: 2
+              name: POST /checkout
+              spanId: "0102030405060702"
+              startTimeUnixNano: "1700000002000000000"
+              status:
+                code: 1
+              traceId: "010203040506070800c0000000000000"
+              traceState: ot=th:8

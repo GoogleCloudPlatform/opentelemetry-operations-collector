@@ -1,0 +1,19 @@
+import 'common.gcl' as common
+
+// Tango-GBOC smoke test (TestTangoSmoke). Kept separate from release.gcl so a
+// Control Plane outage does not block releases. The package's other tests
+// (TestSmoke) also run under this config; TestTangoSmoke is skipped in every
+// config that does not set TANGO_CP_ENDPOINT.
+config build = common.smoke_test {
+  params {
+    environment {
+      GOTESTSUM_RERUN_FAILS = '2'
+
+      TANGO_CP_ENDPOINT =
+          'staging-telemetrydirector.asia-east1.rep.sandbox.googleapis.com:443'
+      TANGO_FLEET_ID = 'gboc-smoke-fleet'
+      TANGO_POLICY_SET_ID = 'gboc-smoke-ps'
+      TANGO_EXPECTED_REVISION = '904e9adb'
+    }
+  }
+}

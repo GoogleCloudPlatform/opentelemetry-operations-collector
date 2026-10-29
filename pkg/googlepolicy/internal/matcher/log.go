@@ -49,7 +49,7 @@ func CompileLogMatcher(m *policyv1alpha1.LogMatcher) (CompiledLogMatcher, error)
 	if err != nil {
 		return CompiledLogMatcher{}, err
 	}
-	predicate, err := CompilePredicate(m.GetPredicate(), m.GetNegate())
+	predicate, err := CompilePredicate(m.GetPredicate(), m.GetNegated())
 	if err != nil {
 		return CompiledLogMatcher{}, err
 	}
@@ -67,8 +67,8 @@ func CompileLogExtractor(target *policyv1alpha1.LogFieldSelector) (LogTargetExtr
 	case *policyv1alpha1.LogFieldSelector_RecordField:
 		return compileLogRecordFieldExtractor(t.RecordField)
 
-	case *policyv1alpha1.LogFieldSelector_LogAttribute:
-		steps, err := CompilePath(t.LogAttribute, "log")
+	case *policyv1alpha1.LogFieldSelector_LogAttributePath:
+		steps, err := CompilePath(t.LogAttributePath, "log")
 		if err != nil {
 			return nil, err
 		}
@@ -79,8 +79,8 @@ func CompileLogExtractor(target *policyv1alpha1.LogFieldSelector) (LogTargetExtr
 			return EvalPath(ctx.Record.Attributes(), steps)
 		}, nil
 
-	case *policyv1alpha1.LogFieldSelector_ResourceAttribute:
-		steps, err := CompilePath(t.ResourceAttribute, "resource")
+	case *policyv1alpha1.LogFieldSelector_ResourceAttributePath:
+		steps, err := CompilePath(t.ResourceAttributePath, "resource")
 		if err != nil {
 			return nil, err
 		}
@@ -91,8 +91,8 @@ func CompileLogExtractor(target *policyv1alpha1.LogFieldSelector) (LogTargetExtr
 			return EvalPath(ctx.Resource.Attributes(), steps)
 		}, nil
 
-	case *policyv1alpha1.LogFieldSelector_ScopeAttribute:
-		steps, err := CompilePath(t.ScopeAttribute, "scope")
+	case *policyv1alpha1.LogFieldSelector_ScopeAttributePath:
+		steps, err := CompilePath(t.ScopeAttributePath, "scope")
 		if err != nil {
 			return nil, err
 		}
@@ -105,6 +105,18 @@ func CompileLogExtractor(target *policyv1alpha1.LogFieldSelector) (LogTargetExtr
 
 	case *policyv1alpha1.LogFieldSelector_ScopeField:
 		return compileLogScopeFieldExtractor(t.ScopeField)
+
+	case *policyv1alpha1.LogFieldSelector_BodyFieldPath:
+		steps, err := CompilePath(t.BodyFieldPath, "body")
+		if err != nil {
+			return nil, err
+		}
+		return func(ctx googlepolicy.LogContext) (any, bool) {
+			if ctx.Record == (plog.LogRecord{}) || ctx.Record.Body().Type() != pcommon.ValueTypeMap {
+				return nil, false
+			}
+			return EvalPath(ctx.Record.Body().Map(), steps)
+		}, nil
 
 	default:
 		return nil, ErrMissingLogTarget
@@ -142,8 +154,8 @@ func compileLogRecordFieldExtractor(field policyv1alpha1.LogRecordField) (LogTar
 
 	case policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER:
 		// An unspecified severity number (0) is truly absent rather than numeric
-		// zero: returning (nil, false) prevents range rules like `lt: 9` (drop
-		// debug/trace logs) from falsely dropping logs that have no severity set.
+		// zero: returning (nil, false) prevents range rules like `exclusive_maximum: 9`
+		// (drop debug/trace logs) from falsely dropping logs that have no severity set.
 		return func(ctx googlepolicy.LogContext) (any, bool) {
 			if ctx.Record == (plog.LogRecord{}) {
 				return nil, false

@@ -1,0 +1,33 @@
+resourceLogs:
+  - resource:
+      attributes:
+        - key: service.name
+          value:
+            stringValue: auth-service
+    scopeLogs:
+      - scope:
+          name: auth-logger
+        logRecords:
+          - body:
+              kvlistValue:
+                values:
+                  - key: event
+                    value:
+                      stringValue: user_login
+            attributes:
+              - key: legacy_account_id
+                value:
+                  stringValue: "acct-1234"
+              - key: temp_session_token
+                value:
+                  stringValue: "secret-token-xyz"
+          - body:
+              kvlistValue:
+                values:
+                  - key: event
+                    value:
+                      stringValue: guest_access
+            attributes:
+              - key: temp_session_token
+                value:
+                  stringValue: "temp-guest-token"

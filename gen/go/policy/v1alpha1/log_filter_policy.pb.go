@@ -35,31 +35,34 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// LogFilterPolicy defines an intent-based rule for retaining or dropping
-// log records based on structured field and attribute matches.
+// Defines an intent-based rule for retaining or dropping log records based on
+// structured field and attribute matches.
 //
 // Policies are declarative, atomic, and transport-agnostic.
 //
 // Evaluation Granularity & Action Precedence:
 //   - Record-Level Granularity: Log records are evaluated individually.
 //   - Action Precedence & Exemptions: Telemetry passes through by default (default
-//     allow). When multiple policies match a log record, ACTION_KEEP always
-//     overrides ACTION_DROP (keep always overrides drop). ACTION_KEEP acts as an
-//     explicit exemption retaining matching log records; it does not prune
-//     non-matching log records. To implement an allowlist that prunes non-matching
-//     log records, authors specify ACTION_DROP with negate: true on the matchers.
+//     allow). Policies are evaluated in an order-independent manner: when multiple
+//     policies match a log record, `ACTION_KEEP` always overrides `ACTION_DROP`
+//     (keep always overrides drop). `ACTION_KEEP` acts as an explicit exemption
+//     retaining matching log records; it does not implicitly prune non-matching
+//     log records. To implement an allowlist that prunes non-matching log
+//     records, authors specify `ACTION_DROP` with `negated: true` on the matchers
+//     (or pair a broad `ACTION_DROP` policy with a narrower `ACTION_KEEP`
+//     exemption policy).
 type LogFilterPolicy struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Unique identifier for the policy within its configuration scope
 	// (e.g. a UUID or namespaced URI like "io.opentelemetry.operator/{namespace}/policies/retain-error-logs").
 	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	// The filtering action to take when all `matches` conditions evaluate to true.
+	// The filtering action to take when all `matchers` conditions evaluate to true.
 	Action *Action `protobuf:"varint,2,opt,name=action,proto3,enum=google.telemetry.policy.v1alpha1.Action,oneof" json:"action,omitempty"`
 	// Conditions evaluated against incoming log records.
 	// All matchers in this list are ANDed together: all conditions must evaluate
 	// to true for the policy action to take effect.
 	// At least one matcher is required; a policy with no matchers is invalid.
-	Matches       []*LogMatcher `protobuf:"bytes,3,rep,name=matches,proto3" json:"matches,omitempty"`
+	Matchers      []*LogMatcher `protobuf:"bytes,3,rep,name=matchers,proto3" json:"matchers,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -108,9 +111,9 @@ func (x *LogFilterPolicy) GetAction() Action {
 	return Action_ACTION_UNSPECIFIED
 }
 
-func (x *LogFilterPolicy) GetMatches() []*LogMatcher {
+func (x *LogFilterPolicy) GetMatchers() []*LogMatcher {
 	if x != nil {
-		return x.Matches
+		return x.Matchers
 	}
 	return nil
 }
@@ -119,11 +122,11 @@ var File_policy_v1alpha1_log_filter_policy_proto protoreflect.FileDescriptor
 
 const file_policy_v1alpha1_log_filter_policy_proto_rawDesc = "" +
 	"\n" +
-	"'policy/v1alpha1/log_filter_policy.proto\x12 google.telemetry.policy.v1alpha1\x1a)policy/v1alpha1/common_policy_types.proto\"\xbb\x01\n" +
+	"'policy/v1alpha1/log_filter_policy.proto\x12 google.telemetry.policy.v1alpha1\x1a)policy/v1alpha1/common_policy_types.proto\"\xbd\x01\n" +
 	"\x0fLogFilterPolicy\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12E\n" +
-	"\x06action\x18\x02 \x01(\x0e2(.google.telemetry.policy.v1alpha1.ActionH\x00R\x06action\x88\x01\x01\x12F\n" +
-	"\amatches\x18\x03 \x03(\v2,.google.telemetry.policy.v1alpha1.LogMatcherR\amatchesB\t\n" +
+	"\x06action\x18\x02 \x01(\x0e2(.google.telemetry.policy.v1alpha1.ActionH\x00R\x06action\x88\x01\x01\x12H\n" +
+	"\bmatchers\x18\x03 \x03(\v2,.google.telemetry.policy.v1alpha1.LogMatcherR\bmatchersB\t\n" +
 	"\a_actionB\xc8\x02\n" +
 	"$com.google.telemetry.policy.v1alpha1B\x14LogFilterPolicyProtoP\x01Zggithub.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1;policyv1alpha1\xa2\x02\x03GTP\xaa\x02 Google.Telemetry.Policy.V1alpha1\xca\x02 Google\\Telemetry\\Policy\\V1alpha1\xe2\x02,Google\\Telemetry\\Policy\\V1alpha1\\GPBMetadata\xea\x02#Google::Telemetry::Policy::V1alpha1b\x06proto3"
 
@@ -147,7 +150,7 @@ var file_policy_v1alpha1_log_filter_policy_proto_goTypes = []any{
 }
 var file_policy_v1alpha1_log_filter_policy_proto_depIdxs = []int32{
 	1, // 0: google.telemetry.policy.v1alpha1.LogFilterPolicy.action:type_name -> google.telemetry.policy.v1alpha1.Action
-	2, // 1: google.telemetry.policy.v1alpha1.LogFilterPolicy.matches:type_name -> google.telemetry.policy.v1alpha1.LogMatcher
+	2, // 1: google.telemetry.policy.v1alpha1.LogFilterPolicy.matchers:type_name -> google.telemetry.policy.v1alpha1.LogMatcher
 	2, // [2:2] is the sub-list for method output_type
 	2, // [2:2] is the sub-list for method input_type
 	2, // [2:2] is the sub-list for extension type_name

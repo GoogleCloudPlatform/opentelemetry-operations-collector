@@ -17,6 +17,9 @@ receivers:
     collection_interval: 60s
     scrapers:
       cpu:
+        metrics:
+          system.cpu.time:
+            attributes: [cpu, state]
   hostmetrics/ucp_internal_memory:
     collection_interval: 60s
     scrapers:

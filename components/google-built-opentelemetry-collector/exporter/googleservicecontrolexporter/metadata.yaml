@@ -21,3 +21,13 @@ status:
 
 tests: 
   skip_lifecycle: true #TODO(lujieduan): lifecycle test reports leaked goroutines 
+
+sending_queue:
+  support: has_overrides
+  overrides:
+    enabled: true
+    queue_size: 3000
+    num_consumers: 10
+    sizer: requests
+    batch:
+      enabled: false

@@ -35,9 +35,9 @@ import (
 	"go.opentelemetry.io/collector/pdata/plog"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/codes"
 	grpcmd "google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 
@@ -75,11 +75,13 @@ func TestCreateExporterFromConfig(t *testing.T) {
 					MaxInterval:     10 * time.Second,
 					MaxElapsedTime:  200 * time.Second,
 				},
-				QueueConfig: configoptional.Some(exporterhelper.QueueBatchConfig{
-					NumConsumers: 5,
-					QueueSize:    1000,
-					Sizer:        exporterhelper.RequestSizerTypeRequests,
-				}),
+				QueueConfig: func() configoptional.Optional[exporterhelper.QueueBatchConfig] {
+					cfg := metadata.NewDefaultSendingQueueConfig()
+					c := cfg.GetOrInsertDefault()
+					c.NumConsumers = 5
+					c.QueueSize = 1000
+					return configoptional.Some(*c)
+				}(),
 				ServiceControlEndpoint:     "test.googleapis.com:443",
 				ConsumerProject:            "my-project-id",
 				ServiceName:                "test.service.name",

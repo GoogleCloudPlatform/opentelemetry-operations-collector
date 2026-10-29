@@ -17,7 +17,7 @@ TMP_DIR=$(mktemp -d)
 
 cd $TMP_DIR
 go mod init tempmod
-go get -u go.opentelemetry.io/collector/cmd/mdatagen@$OTEL_VERSION
+go get go.opentelemetry.io/collector/cmd/mdatagen@$OTEL_VERSION
 go install go.opentelemetry.io/collector/cmd/mdatagen
 
 rm -rf $TMP_DIR

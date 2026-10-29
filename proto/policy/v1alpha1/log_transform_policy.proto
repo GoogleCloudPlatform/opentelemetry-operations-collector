@@ -20,20 +20,32 @@ import "policy/v1alpha1/common_policy_types.proto";
 
 option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1;policyv1alpha1";
 
-// LogTransformPolicy defines a single conditional in-memory modification to
-// matching log records.
+// Defines a single conditional in-memory modification to matching log records.
 //
 // Evaluation & Ordering Semantics:
+// - Double-Applied Filtering (Pass 1 & Pass 2): `LogFilterPolicy` rules run in
+//   Pass 1 (Pre-Transform) before `LogTransformPolicy` stages (`renaming` ->
+//   `addition` -> `removal` -> `redaction`), and re-run in Pass 2
+//   (Post-Transform) if any transform policy modified the record. Both
+//   `ACTION_KEEP` and `ACTION_DROP` are re-evaluated statelessly in Pass 2
+//   against the post-transform record (guaranteeing multi-hop consistency
+//   across SDK and Collector evaluation). Within each pass, `ACTION_KEEP`
+//   overrides `ACTION_DROP`; however, if a record survived Pass 1 only because
+//   an `ACTION_KEEP` rule matched an attribute that was subsequently
+//   overwritten, renamed, removed, or redacted during the transform stage such
+//   that `ACTION_KEEP` no longer matches in Pass 2 (while an `ACTION_DROP` rule
+//   still matches), the record is dropped in Pass 2.
 // - Operation Stage Order: Active LogTransformPolicy instances execute in the
-//   order of their operation type: `rename` -> `add` -> `remove` -> `redact`.
+//   order of their operation type: `renaming` -> `addition` -> `removal` ->
+//   `redaction`.
 // - Tie-Breaking: Within the same operation type, policies execute in
 //   lexicographical order of `id`.
-// - Matching: All conditions in `matches` are ANDed together. If `matches` is
+// - Matching: All conditions in `matchers` are ANDed together. If `matchers` is
 //   empty, the action applies to all log records.
 // - Fail-Open: If `action` is unset, or if an action cannot be applied to a
-//   record (e.g., `rename` when `source` does not exist, or `add`/`rename` with
-//   `upsert: false` when `target` already exists), the record passes through
-//   unmodified.
+//   record (e.g., `renaming` when `source` does not exist, or
+//   `addition`/`renaming` with `upsert_enabled: false` when `target` already
+//   exists), the record passes through unmodified.
 message LogTransformPolicy {
   // Unique identifier for the policy within its configuration scope
   // (e.g. a UUID or namespaced URI like "io.opentelemetry.operator/{namespace}/policies/label-soc-logs").
@@ -41,26 +53,36 @@ message LogTransformPolicy {
 
   // Conditions that must all match for this transformation action to apply.
   // If empty, the action applies to all log records.
-  repeated LogMatcher matches = 2;
+  repeated LogMatcher matchers = 2;
 
-  // The single transformation action to perform when `matches` evaluates to
+  // The single transformation action to perform when `matchers` evaluates to
   // true. Exactly one action must be set.
   oneof action {
     // Inserts or overwrites a field or attribute.
-    LogAddAction add = 3;
+    LogAddAction addition = 3;
 
-    // Deletes an attribute or structured body_field.
-    LogRemoveAction remove = 4;
+    // Deletes an attribute or structured `body_field_path`.
+    LogRemoveAction removal = 4;
 
-    // Moves an existing attribute or structured body_field to a new destination.
-    LogRenameAction rename = 5;
+    // Moves an existing attribute or structured `body_field_path` to a new destination.
+    LogRenameAction renaming = 5;
 
-    // Masks sensitive substrings within a target string field, attribute, or body_field.
-    LogRedactAction redact = 6;
+    // Masks sensitive substrings within a target string field, attribute, or `body_field_path`.
+    LogRedactAction redaction = 6;
   }
 }
 
-// LogAddAction inserts or overwrites one field or attribute on a log record.
+// Inserts or overwrites one field or attribute on a log record.
+//
+// When `target` is `record_field`, valid targets are:
+// - `LOG_RECORD_FIELD_BODY`: accepts any scalar `Value`; treats unset
+//   `ValueTypeEmpty` and `""` as absent when `upsert_enabled: false`.
+// - `LOG_RECORD_FIELD_SEVERITY_TEXT`: requires `string_value`.
+// - `LOG_RECORD_FIELD_SEVERITY_NUMBER`: requires `int_value` in `[1, 24]`.
+// `LOG_RECORD_FIELD_SEVERITY_NUMBER` and `LOG_RECORD_FIELD_SEVERITY_TEXT` are
+// independent OTLP fields (mutating one does not automatically derive or
+// overwrite the other). `LOG_RECORD_FIELD_TRACE_ID` and
+// `LOG_RECORD_FIELD_SPAN_ID` are not valid mutation targets.
 message LogAddAction {
   // Target field or attribute to set.
   LogTargetSelector target = 1;
@@ -70,31 +92,51 @@ message LogAddAction {
 
   // If true, overwrites `target` if it already exists. If false (default),
   // preserves the existing value when `target` is already present.
-  optional bool upsert = 3;
+  //
+  // Missing intermediate map segments in a multi-element `AttributePath`
+  // (`log_attribute_path` or `body_field_path`) are created automatically. When
+  // an intermediate path segment already exists as a non-map value (scalar or
+  // array), `upsert_enabled: false` fails open (preserving the existing value)
+  // while `upsert_enabled: true` replaces the intermediate non-map value with a
+  // map.
+  optional bool upsert_enabled = 3;
 }
 
-// LogRemoveAction deletes an attribute or structured body_field from a log record.
+// Deletes an attribute or structured `body_field_path` from a log record.
 message LogRemoveAction {
-  // Target attribute or body_field to remove.
+  // Target attribute or `body_field_path` to remove.
   LogAttributeSelector target = 1;
 }
 
-// LogRenameAction moves an existing attribute or structured body_field to a new destination.
+// Moves an existing attribute or structured `body_field_path` to a new destination.
 message LogRenameAction {
-  // Existing source attribute or body_field to rename.
+  // Existing source attribute or `body_field_path` to rename.
   LogAttributeSelector source = 1;
 
-  // Destination attribute or body_field.
+  // Destination attribute or `body_field_path`.
   LogAttributeSelector target = 2;
 
   // If true, overwrites `target` if it already exists. If false (default), the
   // rename is skipped if `target` already exists.
-  optional bool upsert = 3;
+  //
+  // Missing intermediate map segments in a multi-element `AttributePath`
+  // (`log_attribute_path` or `body_field_path`) are created automatically. When
+  // an intermediate path segment already exists as a non-map value (scalar or
+  // array), `upsert_enabled: false` fails open (preserving the existing value)
+  // while `upsert_enabled: true` replaces the intermediate non-map value with a
+  // map.
+  optional bool upsert_enabled = 3;
 }
 
-// LogRedactAction masks sensitive substrings within a target string.
+// Masks sensitive substrings within a target string.
+//
+// When `target` is `record_field`, valid targets are string-valued fields
+// (`LOG_RECORD_FIELD_BODY` when string-valued, and
+// `LOG_RECORD_FIELD_SEVERITY_TEXT`). `LOG_RECORD_FIELD_SEVERITY_NUMBER`,
+// `LOG_RECORD_FIELD_TRACE_ID`, and `LOG_RECORD_FIELD_SPAN_ID` are not valid
+// mutation targets.
 message LogRedactAction {
-  // Target string field, attribute, or body_field to redact.
+  // Target string field, attribute, or `body_field_path` to redact.
   LogTargetSelector target = 1;
 
   // Optional RE2 regular expression matching substrings within the target
@@ -107,35 +149,55 @@ message LogRedactAction {
   optional string replacement = 3;
 }
 
-// LogTargetSelector designates a writable log field, log attribute, or
-// structured body field for add and redact actions.
+// Designates a writable log field, log attribute, or structured body field for
+// addition and redaction actions.
 message LogTargetSelector {
   // The writable log field, attribute, or structured body path to target.
   // Exactly one must be set.
   oneof target {
     // Standard first-class OpenTelemetry LogRecord fields (e.g. body, severity_text).
+    //
+    // `LOG_RECORD_FIELD_TRACE_ID` and `LOG_RECORD_FIELD_SPAN_ID` are valid only
+    // for read-only matching in `LogFieldSelector` and are not valid mutation
+    // targets in `LogTargetSelector`.
+    // - For `LogAddAction`, valid `record_field` targets are
+    //   `LOG_RECORD_FIELD_BODY` (any scalar `Value`; treats unset
+    //   `ValueTypeEmpty` and `""` as absent when `upsert_enabled: false`),
+    //   `LOG_RECORD_FIELD_SEVERITY_TEXT` (`string_value`), and
+    //   `LOG_RECORD_FIELD_SEVERITY_NUMBER` (`int_value` in `[1, 24]`).
+    // - For `LogRedactAction`, valid `record_field` targets are string-valued
+    //   fields (`LOG_RECORD_FIELD_BODY` when string-valued, and
+    //   `LOG_RECORD_FIELD_SEVERITY_TEXT`).
+    // `LOG_RECORD_FIELD_SEVERITY_NUMBER` and `LOG_RECORD_FIELD_SEVERITY_TEXT`
+    // are independent OTLP fields (mutating one does not automatically derive
+    // or overwrite the other).
     LogRecordField record_field = 1;
 
-    // Log record attribute by key or path (e.g. ["http.route"] or ["http", "method"]).
-    AttributePath log_attribute = 2;
+    // Log record attribute by key or path (e.g. `["http.route"]` or `["http", "method"]`).
+    AttributePath log_attribute_path = 2;
 
-    // Traverses nested fields inside a structured (kvlist_value / map)
-    // LogRecord.body (e.g. ["event_id"], ["event_data", "TargetUserName"]).
-    AttributePath body_field = 3;
+    // Traverses nested fields inside a structured (`kvlist_value` / map)
+    // `LogRecord.body` (e.g. `["event_id"]`, `["event_data", "TargetUserName"]`).
+    //
+    // For `LogAddAction`, if `LogRecord.body` is unset (`ValueTypeEmpty`) or an
+    // empty string (`""`), it is initialized to an empty structured map before
+    // setting the path; if `LogRecord.body` holds a non-empty scalar, array, or
+    // bytes value, the action fails open (no-op) regardless of `upsert_enabled`.
+    AttributePath body_field_path = 3;
   }
 }
 
-// LogAttributeSelector designates a removable or renameable log attribute or
-// structured body field for remove and rename actions.
+// Designates a removable or renameable log attribute or structured body field
+// for removal and renaming actions.
 message LogAttributeSelector {
   // The log attribute or structured body path to target.
   // Exactly one must be set.
   oneof target {
-    // Log record attribute by key or path (e.g. ["http.route"] or ["http", "method"]).
-    AttributePath log_attribute = 1;
+    // Log record attribute by key or path (e.g. `["http.route"]` or `["http", "method"]`).
+    AttributePath log_attribute_path = 1;
 
-    // Traverses nested fields inside a structured (kvlist_value / map)
-    // LogRecord.body (e.g. ["event_id"], ["event_data", "TargetUserName"]).
-    AttributePath body_field = 2;
+    // Traverses nested fields inside a structured (`kvlist_value` / map)
+    // `LogRecord.body` (e.g. `["event_id"]`, `["event_data", "TargetUserName"]`).
+    AttributePath body_field_path = 2;
   }
 }

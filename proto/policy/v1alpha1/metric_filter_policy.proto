@@ -21,121 +21,144 @@ import "policy/v1alpha1/common_policy_types.proto";
 
 option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1;policyv1alpha1";
 
-// MetricFilterPolicy defines an intent-based rule for retaining or dropping
-// metrics or individual metric data points based on structured field, type,
-// and attribute matches.
+// Defines an intent-based rule for retaining or dropping metrics or individual
+// metric data points based on structured field, type, and attribute matches.
 //
 // Policies are declarative, atomic, and transport-agnostic.
 //
 // Evaluation Granularity & Action Precedence:
-// - Instrument-level: If all matchers in `matches` target metric-level fields
-//   (descriptor_field, resource_attribute, scope_attribute, or scope_field),
-//   the action applies to the entire metric stream (e.g. ACTION_DROP drops
-//   the entire metric).
-// - Data point-level: If any matcher in `matches` targets a
-//   `datapoint_attribute`, the action applies at the individual data point level
-//   (e.g. ACTION_DROP prunes matching data points while preserving non-matching
-//   data points in the metric stream).
-// - Pruning Empty Metrics: If an ACTION_DROP policy prunes all data points of
+// - Instrument-level: If all matchers in `matchers` target metric-level fields
+//   (`descriptor_field`, `resource_attribute_path`, `scope_attribute_path`, or
+//   `scope_field`), the action applies to the entire metric stream (e.g.
+//   `ACTION_DROP` drops the entire metric).
+// - Data point-level: If any matcher in `matchers` targets a
+//   `data_point_attribute_path`, the action applies at the individual data
+//   point level (e.g. `ACTION_DROP` prunes matching data points while
+//   preserving non-matching data points in the metric stream).
+// - Pruning Empty Metrics: If an `ACTION_DROP` policy prunes all data points of
 //   a metric stream, the empty metric instrument itself is dropped completely,
 //   and any parent ScopeMetrics or ResourceMetrics that become empty as a result
 //   are pruned.
 // - Action Precedence & Exemptions: Telemetry passes through by default (default
-//   allow). When multiple policies match a data point or metric stream, ACTION_KEEP
-//   always overrides ACTION_DROP (keep always overrides drop). ACTION_KEEP acts as
-//   an explicit exemption retaining matching data points; it does not prune
-//   non-matching data points. To implement an allowlist that prunes non-matching
-//   data points, authors specify ACTION_DROP with negate: true on the matchers.
+//   allow). Policies are evaluated in an order-independent manner: when multiple
+//   policies match a data point or metric stream, `ACTION_KEEP` always overrides
+//   `ACTION_DROP` (keep always overrides drop). `ACTION_KEEP` acts as an
+//   explicit exemption retaining matching data points; it does not implicitly
+//   prune non-matching data points. To implement an allowlist that prunes
+//   non-matching data points, authors specify `ACTION_DROP` with `negated: true`
+//   on the matchers (or pair a broad `ACTION_DROP` policy with a narrower
+//   `ACTION_KEEP` exemption policy).
 message MetricFilterPolicy {
   // Unique identifier for the policy within its configuration scope
   // (e.g. a UUID or namespaced URI like "io.opentelemetry.operator/{namespace}/policies/drop-jvm-metrics").
   string id = 1;
 
-  // The filtering action to take when all `matches` conditions evaluate to true.
+  // The filtering action to take when all `matchers` conditions evaluate to true.
   optional Action action = 2;
 
   // Conditions evaluated against incoming metrics or data points.
   // All matchers in this list are ANDed together: all conditions must evaluate
   // to true for the policy action to take effect.
   // At least one matcher is required; a policy with no matchers is invalid.
-  repeated MetricMatcher matches = 3;
+  repeated MetricMatcher matchers = 3;
 }
 
-// MetricMatcher defines a single predicate evaluated against a specific metric
-// descriptor field or data point attribute.
+// Defines a single predicate evaluated against a specific metric descriptor
+// field or data point attribute.
 message MetricMatcher {
   // The metric field, attribute, or metadata to inspect. Exactly one must be set.
   MetricFieldSelector target = 1;
 
   // The comparison predicate to evaluate against the target value.
   // Exactly one predicate must be set.
+  //
+  // If the selected target field or attribute does not exist, or if its
+  // runtime value type is incompatible with the chosen predicate (for
+  // example, evaluating `glob` against a non-string value, or a numeric
+  // comparison against a string or boolean value), the predicate evaluates
+  // to `false` (prior to applying `negated`).
   oneof predicate {
     // Matches if the selected field or attribute exists.
     // For attributes, this evaluates to true if the attribute key exists.
-    // For first-class fields (descriptor_field, scope_field) that lack explicit
-    // presence tracking in the OpenTelemetry data model, this evaluates to true
-    // when the field is set to a non-default (non-zero/non-empty) value, and
-    // false when absent or default (e.g. empty string or 0).
-    google.protobuf.Empty exists = 10;
+    // For first-class fields (`descriptor_field`, `scope_field`) that lack
+    // explicit presence tracking in the OpenTelemetry data model, this evaluates
+    // to true when the field is set to a non-default (non-zero/non-empty) value,
+    // and false when absent or default (e.g. empty string or 0). Combine with
+    // `negated: true` to match when a field or attribute does NOT exist.
+    google.protobuf.Empty existence = 10;
 
     // Typed scalar equality match (supporting string, int64, bool, double, bytes).
-    Value equals = 11;
+    Value equality = 11;
 
     // Glob pattern match against the entire string value.
-    // Supports '*' (matches zero or more characters) and '?' (matches any
-    // single character). Matching is case-sensitive and anchored to the full
-    // string. Applies strictly to string fields and string attribute values.
+    // Supports `*` (matches zero or more characters) and `?` (matches any
+    // single character), for example `"http.*"` or `"err_?_code"`. Matching is
+    // case-sensitive and anchored to the full string. Applies strictly to
+    // string fields and string attribute values (evaluates to `false` for
+    // non-string targets).
     string glob = 12;
 
-    // Matches if the target numeric value is strictly greater than this value.
+    // Matches if the target numeric value is strictly greater than (>) this value.
     // Applies strictly to int64 and double fields and attribute values.
-    NumericValue gt = 13;
+    NumericValue exclusive_minimum = 13;
 
-    // Matches if the target numeric value is greater than or equal to this value.
+    // Matches if the target numeric value is greater than or equal to (>=) this value.
     // Applies strictly to int64 and double fields and attribute values.
-    NumericValue gte = 14;
+    NumericValue inclusive_minimum = 14;
 
-    // Matches if the target numeric value is strictly less than this value.
+    // Matches if the target numeric value is strictly less than (<) this value.
     // Applies strictly to int64 and double fields and attribute values.
-    NumericValue lt = 15;
+    NumericValue exclusive_maximum = 15;
 
-    // Matches if the target numeric value is less than or equal to this value.
+    // Matches if the target numeric value is less than or equal to (<=) this value.
     // Applies strictly to int64 and double fields and attribute values.
-    NumericValue lte = 16;
+    NumericValue inclusive_maximum = 16;
 
     // Value containment:
     // - For list (ArrayValue) attributes: matches if any element in the list equals this value.
-    // - For string fields or attribute values: matches if the string contains this value's string_value as a substring.
-    // - For bytes fields or attribute values: matches if the bytes contain this value's bytes_value as a subsequence.
-    Value contains = 17;
+    // - For string fields or attribute values: matches if the string contains this value's `string_value` as a substring.
+    // - For bytes fields or attribute values: matches if the bytes contain this value's `bytes_value` as a subsequence.
+    Value containment = 17;
   }
 
   // If true, inverts the result of the predicate (logical NOT).
-  bool negate = 2;
+  bool negated = 2;
 }
 
-// MetricFieldSelector designates a first-class OTel metric field, attribute, or metadata.
+// Designates a first-class OTel metric field, attribute, or metadata.
 message MetricFieldSelector {
   oneof target {
-    // Top-level metric descriptor fields (e.g. name, description, unit).
+    // Top-level metric descriptor fields on the OTel Metric itself (for example,
+    // `METRIC_DESCRIPTOR_FIELD_NAME` or `METRIC_DESCRIPTOR_FIELD_UNIT`).
+    // First-class metric descriptor fields must be selected using
+    // `descriptor_field`, not `data_point_attribute_path`.
     MetricDescriptorField descriptor_field = 1;
 
-    // Attribute on an individual metric data point by key or path (e.g. ["http.status_code"] or ["env"]).
-    AttributePath datapoint_attribute = 2;
+    // A key or nested path inside an individual metric data point's `attributes`
+    // map (e.g. `["http.status_code"]` or `["env"]`). This only inspects data
+    // point attributes; metric descriptor fields (such as metric `name`) must
+    // be selected via `descriptor_field`.
+    AttributePath data_point_attribute_path = 2;
 
-    // Resource attribute by key or path (e.g. ["service.name"] or ["host", "id"]).
-    AttributePath resource_attribute = 3;
+    // A key or nested path inside the `Resource.attributes` map (attributes
+    // describing the entity producing the metrics, e.g. `["service.name"]`,
+    // `["k8s.pod.name"]`, or `["host", "id"]`).
+    AttributePath resource_attribute_path = 3;
 
-    // Instrumentation scope attribute by key or path (e.g. ["library.name"]).
-    AttributePath scope_attribute = 4;
+    // A key or nested path inside the `InstrumentationScope.attributes` map
+    // (attributes attached to the meter or instrumentation scope, e.g.
+    // `["library.name"]`). First-class scope fields (`name`, `version`,
+    // `schema_url`) must be selected via `scope_field`.
+    AttributePath scope_attribute_path = 4;
 
-    // Standard first-class OpenTelemetry InstrumentationScope fields (e.g. name, version).
+    // A top-level property of the `InstrumentationScope` (`SCOPE_FIELD_NAME`,
+    // `SCOPE_FIELD_VERSION`, or `SCOPE_FIELD_SCHEMA_URL`).
     ScopeField scope_field = 5;
   }
 }
 
-// MetricDescriptorField identifies top-level descriptor fields of an OpenTelemetry Metric.
-// When evaluated with `exists`, first-class fields evaluate to true when set
+// Identifies top-level descriptor fields of an OpenTelemetry Metric.
+// When evaluated with `existence`, first-class fields evaluate to true when set
 // to a non-default (non-empty / non-zero) value.
 enum MetricDescriptorField {
   // Default unspecified metric descriptor field.
@@ -152,17 +175,17 @@ enum MetricDescriptorField {
 
   // The primary data type of the metric (e.g. "GAUGE", "SUM", "HISTOGRAM",
   // "EXPONENTIAL_HISTOGRAM", "SUMMARY"). When selected, string predicates
-  // (`equals` with string_value, `glob`, `contains` with string_value) evaluate
-  // against uppercase type names.
+  // (`equality` with `string_value`, `glob`, `containment` with `string_value`)
+  // evaluate against uppercase type names.
   METRIC_DESCRIPTOR_FIELD_TYPE = 4;
 
   // The aggregation temporality of the metric (OTLP path: metric.*.aggregation_temporality,
   // e.g. for Sum, Histogram, ExponentialHistogram). When selected, string predicates
-  // (`equals` with string_value, `glob`, `contains` with string_value) evaluate
-  // against uppercase names: "DELTA" or "CUMULATIVE".
+  // (`equality` with `string_value`, `glob`, `containment` with `string_value`)
+  // evaluate against uppercase names: "DELTA" or "CUMULATIVE".
   METRIC_DESCRIPTOR_FIELD_AGGREGATION_TEMPORALITY = 5;
 
   // Whether a Sum metric is monotonic (OTLP path: metric.sum.is_monotonic).
-  // Evaluates against typed `equals` (`bool_value`).
+  // Evaluates against typed `equality` (`bool_value`).
   METRIC_DESCRIPTOR_FIELD_IS_MONOTONIC = 6;
 }

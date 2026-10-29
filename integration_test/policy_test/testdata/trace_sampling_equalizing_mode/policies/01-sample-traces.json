@@ -1,0 +1,19 @@
+{
+  "type": "trace_sampling",
+  "id": "sample-checkout-traces",
+  "sampling_percent": 50.0,
+  "matchers": [
+    {
+      "target": {
+        "span_attribute_path": {
+          "segments": ["http.target"]
+        }
+      },
+      "predicate": {
+        "equality": {
+          "string_value": "/checkout"
+        }
+      }
+    }
+  ]
+}

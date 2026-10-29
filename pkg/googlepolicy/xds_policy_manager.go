@@ -1461,7 +1461,8 @@ func isCloudRunHost(host string) bool {
 
 // resolveIDTokenSource returns a TokenSource providing Google OIDC ID tokens
 // for the given audience. It supports:
-//  1. GCE / GKE / Service Accounts / WIF: Uses idtoken.NewCredentials (queries VM metadata server, SA key, or impersonated WIF).
+//  1. GCE / GKE / Service Accounts / WIF with service account impersonation: Uses idtoken.NewCredentials
+//     (queries VM metadata server, SA key, or impersonates the WIF service account).
 //  2. Cloudtop / Developer Workstations: idtoken fails on "authorized_user" credentials, so it
 //     falls back to ADC with OpenID scopes and extracts the ID token via GoogleIDTokenSource.
 func resolveIDTokenSource(_ context.Context, audience string) (oauth2.TokenSource, error) {
@@ -1474,7 +1475,7 @@ func resolveIDTokenSource(_ context.Context, audience string) (oauth2.TokenSourc
 		return nil, fmt.Errorf("failed to resolve ADC: %w", err)
 	}
 
-	// 1. GCE / GKE / Service Accounts / WIF: metadata server, SA key, or impersonated WIF.
+	// 1. GCE / GKE / Service Accounts / WIF with service account impersonation.
 	// Pass the ADC JSON explicitly: without it idtoken skips the gcloud
 	// well-known file and uses the metadata server identity on GCE.
 	idCreds, idErr := idtoken.NewCredentials(&idtoken.Options{

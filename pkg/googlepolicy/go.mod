@@ -3,8 +3,8 @@ module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/goo
 go 1.26.6
 
 require (
-	cloud.google.com/go/auth v0.23.2
-	cloud.google.com/go/auth/oauth2adapt v0.2.8
+	cloud.google.com/go/auth v0.24.1
+	cloud.google.com/go/auth/oauth2adapt v0.3.0
 	cloud.google.com/go/compute/metadata v0.9.0
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector v0.160.0
 	github.com/envoyproxy/go-control-plane/envoy v1.37.0
@@ -31,7 +31,7 @@ require (
 	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.20 // indirect
-	github.com/googleapis/gax-go/v2 v2.24.0 // indirect
+	github.com/googleapis/gax-go/v2 v2.26.2 // indirect
 	github.com/hashicorp/go-version v1.9.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/knadh/koanf/maps v0.1.3 // indirect

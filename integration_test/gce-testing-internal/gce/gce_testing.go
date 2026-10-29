@@ -1632,9 +1632,11 @@ func waitForMIGStable(ctx context.Context, project, zone, igmName string, timeou
 	defer ticker.Stop()
 
 	for {
+		// Stop waiting if the overall operation timeout has expired.
 		if time.Now().After(deadline) {
 			return ErrMIGTimeout
 		}
+		// Fast-fail if the context has already been canceled before issuing an API call.
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -1647,12 +1649,15 @@ func waitForMIGStable(ctx context.Context, project, zone, igmName string, timeou
 			InstanceGroupManager: igmName,
 		})
 		if err != nil {
-			return err
-		}
-		if igm.GetStatus().GetIsStable() {
+			if !isTransientError(err) {
+				return err
+			}
+		} else if igm.GetStatus().GetIsStable() {
 			return nil
 		}
 
+		// Wait for the next polling interval before re-checking MIG stability,
+		// while aborting immediately if context is canceled.
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
@@ -1814,11 +1819,7 @@ func attemptCreateManagedInstanceGroupVM(ctx context.Context, logger *log.Logger
 		"--zone="+migVM.Zone,
 		"--format=json")
 
-	inst, err := instancesClient.Get(ctx, &computepb.GetInstanceRequest{
-		Project:  migVM.Project,
-		Zone:     migVM.Zone,
-		Instance: migVM.Name,
-	})
+	inst, err := getInstance(ctx, migVM.Project, migVM.Zone, migVM.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -2053,10 +2054,16 @@ func DescribeVMDisk(ctx context.Context, logger *log.Logger, vm *VM) (CommandOut
 		"--project="+vm.Project,
 		"--zone="+vm.Zone,
 		"--format=json")
-	disk, err := disksClient.Get(ctx, &computepb.GetDiskRequest{
-		Project: vm.Project,
-		Zone:    vm.Zone,
-		Disk:    vm.Name,
+
+	var disk *computepb.Disk
+	err := retryOp(ctx, newRateLimitBackOff(), isTransientError, func() error {
+		var err error
+		disk, err = disksClient.Get(ctx, &computepb.GetDiskRequest{
+			Project: vm.Project,
+			Zone:    vm.Zone,
+			Disk:    vm.Name,
+		})
+		return err
 	})
 	if err != nil {
 		return CommandOutput{}, err
@@ -2069,6 +2076,18 @@ func DescribeVMDisk(ctx context.Context, logger *log.Logger, vm *VM) (CommandOut
 	return CommandOutput{Stdout: string(data)}, nil
 }
 
+func isAccessConfigNotFound(err error) bool {
+	if err == nil {
+		return false
+	}
+	if isNotFound(err) {
+		return true
+	}
+	lower := strings.ToLower(err.Error())
+	return strings.Contains(lower, "external-nat") ||
+		strings.Contains(lower, "does not have an access config named")
+}
+
 // RemoveExternalIP deletes the external ip for an instance.
 func RemoveExternalIP(ctx context.Context, logger *log.Logger, vm *VM) error {
 	LogEquivalentGcloud(logger, "compute", "instances", "delete-access-config",
@@ -2076,17 +2095,29 @@ func RemoveExternalIP(ctx context.Context, logger *log.Logger, vm *VM) error {
 		"--zone="+vm.Zone,
 		vm.Name,
 		"--access-config-name=external-nat")
-	op, err := instancesClient.DeleteAccessConfig(ctx, &computepb.DeleteAccessConfigInstanceRequest{
-		Project:          vm.Project,
-		Zone:             vm.Zone,
-		Instance:         vm.Name,
-		NetworkInterface: "nic0",
-		AccessConfig:     "external-nat",
+
+	return retryOp(ctx, newRateLimitBackOff(), isTransientError, func() error {
+		op, err := instancesClient.DeleteAccessConfig(ctx, &computepb.DeleteAccessConfigInstanceRequest{
+			Project:          vm.Project,
+			Zone:             vm.Zone,
+			Instance:         vm.Name,
+			NetworkInterface: "nic0",
+			AccessConfig:     "external-nat",
+		})
+		if err != nil {
+			if isAccessConfigNotFound(err) {
+				return nil
+			}
+			return err
+		}
+		if err := op.Wait(ctx); err != nil {
+			if isAccessConfigNotFound(err) {
+				return nil
+			}
+			return err
+		}
+		return nil
 	})
-	if err != nil {
-		return err
-	}
-	return op.Wait(ctx)
 }
 
 // SetEnvironmentVariables sets the environment variables in the envVariables map on the given vm in a os-dependent way.
@@ -2318,21 +2349,101 @@ func DeleteManagedInstanceGroupVM(ctx context.Context, logger *log.Logger, migVM
 	return err
 }
 
+// shouldRetryInstanceOperation reports whether an instance lifecycle or metadata operation error should be retried.
+func shouldRetryInstanceOperation(err error) bool {
+	return isTransientError(err)
+}
+
+// shouldRetryTagUpdate reports whether updating instance tags should be retried.
+// GCE instance tag updates use optimistic concurrency control via a fingerprint (ETag).
+// If tags or metadata are modified concurrently, GCE returns an HTTP 412 Precondition Failed
+// (or codes.FailedPrecondition via gRPC), with error details or messages mentioning "conditionNotMet"
+// or "fingerprint".
+func shouldRetryTagUpdate(err error) bool {
+	if err == nil {
+		return false
+	}
+	// Check HTTP 412 status code from REST client.
+	var gErr *googleapi.Error
+	if errors.As(err, &gErr) && gErr.Code == 412 {
+		return true
+	}
+	// Check codes.FailedPrecondition status code from gRPC client.
+	if s, ok := status.FromError(err); ok && s.Code() == codes.FailedPrecondition {
+		return true
+	}
+	// Check error string fallback for wrapped or serialized API errors that mention precondition/fingerprint failure.
+	lower := strings.ToLower(err.Error())
+	if strings.Contains(lower, "conditionnotmet") || strings.Contains(lower, "fingerprint") {
+		return true
+	}
+	// Also retry on transient connection failures or quota rate limits.
+	return isTransientError(err)
+}
+
+const (
+	// defaultBackoffMultiplier is the backoff factor used across GCE API retry loops to de-synchronize concurrent retries.
+	defaultBackoffMultiplier = 1.5
+
+	// rateLimitInitialInterval is the initial backoff interval for rate-limited GCE API calls.
+	rateLimitInitialInterval = 1 * time.Second
+
+	// rateLimitMaxInterval caps the backoff interval so retries remain reasonably responsive once quota replenishes.
+	rateLimitMaxInterval = 15 * time.Second
+
+	// defaultRateLimitMaxElapsedTime allows rate-limited calls to wait out GCE's rolling 1-minute quota replenishment window.
+	defaultRateLimitMaxElapsedTime = 2 * time.Minute
+)
+
+// newRateLimitBackOff returns an ExponentialBackOff suitable for rate-limited GCE API calls.
+// It starts with a 1-second interval and backs off up to 15 seconds, allowing calls to wait out
+// 1-minute regional quota replenishment windows without excessive retry spam.
+func newRateLimitBackOff() *backoff.ExponentialBackOff {
+	bo := backoff.NewExponentialBackOff()
+	bo.InitialInterval = rateLimitInitialInterval
+	bo.Multiplier = defaultBackoffMultiplier
+	bo.MaxInterval = rateLimitMaxInterval
+	bo.MaxElapsedTime = defaultRateLimitMaxElapsedTime
+	bo.Reset()
+	return bo
+}
+
+// getInstance retrieves an instance resource with rate-limit retries.
+func getInstance(ctx context.Context, project, zone, name string) (*computepb.Instance, error) {
+	var inst *computepb.Instance
+	err := retryOp(ctx, newRateLimitBackOff(), isTransientError, func() error {
+		var err error
+		inst, err = instancesClient.Get(ctx, &computepb.GetInstanceRequest{
+			Project:  project,
+			Zone:     zone,
+			Instance: name,
+		})
+		return err
+	})
+	return inst, err
+}
+
 // StopInstance shuts down a VM instance.
 func StopInstance(ctx context.Context, logger *log.Logger, vm *VM) error {
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Minute)
+	defer cancel()
+
 	LogEquivalentGcloud(logger, "compute", "instances", "stop",
 		"--project="+vm.Project,
 		"--zone="+vm.Zone,
 		vm.Name)
-	op, err := instancesClient.Stop(ctx, &computepb.StopInstanceRequest{
-		Project:  vm.Project,
-		Zone:     vm.Zone,
-		Instance: vm.Name,
+
+	return retryOp(ctx, newRateLimitBackOff(), isTransientError, func() error {
+		op, err := instancesClient.Stop(ctx, &computepb.StopInstanceRequest{
+			Project:  vm.Project,
+			Zone:     vm.Zone,
+			Instance: vm.Name,
+		})
+		if err != nil {
+			return err
+		}
+		return op.Wait(ctx)
 	})
-	if err != nil {
-		return err
-	}
-	return op.Wait(ctx)
 }
 
 func shouldRetryStartVM(err error) bool {
@@ -2367,11 +2478,7 @@ func StartInstance(ctx context.Context, logger *log.Logger, vm *VM) error {
 		return err
 	}
 
-	inst, err := instancesClient.Get(ctx, &computepb.GetInstanceRequest{
-		Project:  vm.Project,
-		Zone:     vm.Zone,
-		Instance: vm.Name,
-	})
+	inst, err := getInstance(ctx, vm.Project, vm.Zone, vm.Name)
 	if err != nil {
 		return err
 	}
@@ -2646,11 +2753,8 @@ func FetchMetadata(ctx context.Context, logger *log.Logger, vm *VM) (map[string]
 		"--project="+vm.Project,
 		"--zone="+vm.Zone,
 		"--format=json(metadata)")
-	inst, err := instancesClient.Get(ctx, &computepb.GetInstanceRequest{
-		Project:  vm.Project,
-		Zone:     vm.Zone,
-		Instance: vm.Name,
-	})
+
+	inst, err := getInstance(ctx, vm.Project, vm.Zone, vm.Name)
 	if err != nil {
 		return nil, fmt.Errorf("error fetching metadata for VM %v: %w", vm.Name, err)
 	}
@@ -2927,13 +3031,8 @@ func areTagsValid(tags []string) (bool, error) {
 }
 
 func updateVmTags(ctx context.Context, vm *VM, mutateFn func([]string) []string) error {
-	backoffPolicy := backoff.WithContext(backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 3), ctx)
-	return backoff.Retry(func() error {
-		inst, err := instancesClient.Get(ctx, &computepb.GetInstanceRequest{
-			Project:  vm.Project,
-			Zone:     vm.Zone,
-			Instance: vm.Name,
-		})
+	return retryOp(ctx, newRateLimitBackOff(), shouldRetryTagUpdate, func() error {
+		inst, err := getInstance(ctx, vm.Project, vm.Zone, vm.Name)
 		if err != nil {
 			return err
 		}
@@ -2962,7 +3061,7 @@ func updateVmTags(ctx context.Context, vm *VM, mutateFn func([]string) []string)
 			return err
 		}
 		return op.Wait(ctx)
-	}, backoffPolicy)
+	})
 }
 
 func AddTagToVm(ctx context.Context, logger *log.Logger, vm *VM, tags []string) (CommandOutput, error) {

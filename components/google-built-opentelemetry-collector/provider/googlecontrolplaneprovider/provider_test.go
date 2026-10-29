@@ -506,6 +506,13 @@ func TestFilterPolicyDriversRegistered(t *testing.T) {
 				"id":   "test-journald",
 			},
 		},
+		{
+			policyType: "iis_source",
+			raw: map[string]any{
+				"type": "iis_source",
+				"id":   "test-iis",
+			},
+		},
 	} {
 		t.Run(tc.policyType, func(t *testing.T) {
 			pol, err := googlepolicy.LoadPolicy(tc.policyType, tc.raw)
@@ -1417,4 +1424,203 @@ func TestRetrieve_MultipleJournaldSourcePolicies_ConsolidationFailureAttributesA
 	require.NotContains(t, receivers, "journald")
 
 	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestRetrieve_ActivePolicySetWithIISSource_SynthesizesIISReceiver(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	p := createProvider()
+
+	pol, err := googlepolicy.LoadPolicy("iis_source", map[string]any{
+		"type":                        "iis_source",
+		"id":                          "enable-iis",
+		"collection_interval_seconds": 30,
+	})
+	require.NoError(t, err)
+
+	ps := &googlepolicy.PolicySet{
+		RevisionID: "rev-iis-active",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			"policy-iis": {PolicyObj: pol},
+		},
+	}
+	googlepolicy.SetActivePolicySet(ps)
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+
+	raw := conf.ToStringMap()
+	receivers, ok := raw["receivers"].(map[string]any)
+	require.True(t, ok)
+
+	iisCfg, ok := receivers["iis"].(map[string]any)
+	require.True(t, ok, "iis receiver must be configured")
+	assert.Equal(t, "30s", iisCfg["collection_interval"])
+
+	pipelines, ok := raw["service"].(map[string]any)["pipelines"].(map[string]any)
+	require.True(t, ok)
+	metricsPipeline, ok := pipelines["metrics/googlecontrolplane"].(map[string]any)
+	require.True(t, ok)
+	pipelineReceivers, ok := metricsPipeline["receivers"].([]any)
+	require.True(t, ok)
+	assert.Contains(t, pipelineReceivers, "iis")
+	assert.Contains(t, pipelineReceivers, "nop/googlecontrolplane")
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestRetrieve_MultipleIISSourcePolicies_ConsolidatesMinInterval(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	p := createProvider()
+
+	pol1, err := googlepolicy.LoadPolicy("iis_source", map[string]any{
+		"type":                        "iis_source",
+		"id":                          "enable-iis-45s",
+		"collection_interval_seconds": 45,
+	})
+	require.NoError(t, err)
+
+	pol2, err := googlepolicy.LoadPolicy("iis_source", map[string]any{
+		"type":                        "iis_source",
+		"id":                          "enable-iis-15s",
+		"collection_interval_seconds": 15,
+	})
+	require.NoError(t, err)
+
+	ps := &googlepolicy.PolicySet{
+		RevisionID: "rev-iis-multi",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			"policy-iis-1": {PolicyObj: pol1},
+			"policy-iis-2": {PolicyObj: pol2},
+		},
+	}
+	googlepolicy.SetActivePolicySet(ps)
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+
+	raw := conf.ToStringMap()
+	receivers, ok := raw["receivers"].(map[string]any)
+	require.True(t, ok)
+
+	iisCfg, ok := receivers["iis"].(map[string]any)
+	require.True(t, ok, "iis receiver must be configured")
+	assert.Equal(t, "15s", iisCfg["collection_interval"], "consolidation must choose minimum interval")
+
+	pipelines, ok := raw["service"].(map[string]any)["pipelines"].(map[string]any)
+	require.True(t, ok)
+	metricsPipeline, ok := pipelines["metrics/googlecontrolplane"].(map[string]any)
+	require.True(t, ok)
+	pipelineReceivers, ok := metricsPipeline["receivers"].([]any)
+	require.True(t, ok)
+	assert.Contains(t, pipelineReceivers, "iis")
+	assert.Contains(t, pipelineReceivers, "nop/googlecontrolplane")
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestRetrieve_MultipleIISSourcePolicies_FaultIsolation_InvalidPolicyIgnored(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	p := createProvider()
+
+	// badPolicy has collection_interval_seconds < 10 (invalid, fail-open)
+	badPolicy, err := googlepolicy.LoadPolicy("iis_source", map[string]any{
+		"type":                        "iis_source",
+		"id":                          "bad-iis-interval",
+		"collection_interval_seconds": 5,
+	})
+	// Driver validation rejects < 10 at load time
+	require.Error(t, err)
+	require.Nil(t, badPolicy)
+
+	// Construct typed invalid policy directly to verify provider fault isolation
+	badPolicyObj := &invalidIISSourcePolicy{name: "bad-iis-interval-obj"}
+
+	goodPolicy, err := googlepolicy.LoadPolicy("iis_source", map[string]any{
+		"type":                        "iis_source",
+		"id":                          "good-iis-policy",
+		"collection_interval_seconds": 20,
+	})
+	require.NoError(t, err)
+
+	ps := &googlepolicy.PolicySet{
+		RevisionID: "rev-iis-fault-isolation",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			"bad-policy":  {PolicyObj: badPolicyObj},
+			"good-policy": {PolicyObj: goodPolicy},
+		},
+	}
+	googlepolicy.SetActivePolicySet(ps)
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+
+	raw := conf.ToStringMap()
+	receivers, ok := raw["receivers"].(map[string]any)
+	require.True(t, ok)
+
+	// Fault isolation: goodPolicy survived and was evaluated despite badPolicy
+	iisCfg, ok := receivers["iis"].(map[string]any)
+	require.True(t, ok, "iis receiver must be configured from valid sibling policy")
+	assert.Equal(t, "20s", iisCfg["collection_interval"])
+
+	pipelines, ok := raw["service"].(map[string]any)["pipelines"].(map[string]any)
+	require.True(t, ok)
+	metricsPipeline, ok := pipelines["metrics/googlecontrolplane"].(map[string]any)
+	require.True(t, ok)
+	pipelineReceivers, ok := metricsPipeline["receivers"].([]any)
+	require.True(t, ok)
+	assert.Contains(t, pipelineReceivers, "iis")
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+type invalidIISSourcePolicy struct {
+	name string
+}
+
+func (i *invalidIISSourcePolicy) PolicyName() string { return i.name }
+func (i *invalidIISSourcePolicy) PolicyType() string { return "iis_source" }
+func (i *invalidIISSourcePolicy) PolicyClass() googlepolicy.PolicyClass {
+	return googlepolicy.PolicyClassSource
+}
+func (i *invalidIISSourcePolicy) Validate() error {
+	return errors.New("collection_interval_seconds must be >= 10")
+}
+func (i *invalidIISSourcePolicy) Evaluate(_ context.Context) (*confmap.Conf, error) {
+	return confmap.New(), nil
+}
+func (i *invalidIISSourcePolicy) MetricReceiverIDs() []component.ID {
+	return []component.ID{component.MustNewID("iis")}
+}
+func (i *invalidIISSourcePolicy) LogReceiverIDs() []component.ID   { return nil }
+func (i *invalidIISSourcePolicy) TraceReceiverIDs() []component.ID { return nil }
+func (i *invalidIISSourcePolicy) Consolidate(_ []googlepolicy.SourcePolicy) (googlepolicy.SourcePolicy, error) {
+	return nil, errors.New("invalid policy cannot consolidate")
 }

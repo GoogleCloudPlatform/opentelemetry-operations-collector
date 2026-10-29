@@ -528,6 +528,7 @@ func testCollectorFactories() (otelcol.Factories, error) {
 	factories.Receivers, err = otelcol.MakeFactoryMap[receiver.Factory](
 		otlpreceiver.NewFactory(),
 		newStubReceiverFactory("nop"),
+		newStubReceiverFactory("iis"),
 	)
 	if err != nil {
 		return otelcol.Factories{}, err
@@ -1928,5 +1929,35 @@ func TestFileConfigMerge_ProviderOrderPrecedence(t *testing.T) {
 	}
 	if !found || value <= 0 {
 		t.Errorf("expected googlecontrolplaneprovider to override earlier file config's level: None and report positive gcp.policy.set.active revision, got found=%v value=%d\nlogs:\n%s", found, value, col.logs())
+	}
+}
+
+func TestPolicyIntegration_IISSourcePolicy(t *testing.T) {
+	otelcolBin := resolveOtelcolBinary(t)
+	tempDir := t.TempDir()
+
+	policiesDir := filepath.Join(tempDir, "policies")
+	if err := os.MkdirAll(policiesDir, 0755); err != nil {
+		t.Fatalf("failed to create policies directory: %v", err)
+	}
+
+	iisPolicy := `{
+  "type": "iis_source",
+  "id": "enable-iis-metrics",
+  "collection_interval_seconds": 30
+}`
+	if err := os.WriteFile(filepath.Join(policiesDir, "01-iis.json"), []byte(iisPolicy), 0644); err != nil {
+		t.Fatalf("failed to write iis policy: %v", err)
+	}
+
+	pipelineCfgPath, _, _, _, selfMockSrv := stageTestPipelineConfig(t, tempDir)
+
+	col := startCollector(t, otelcolBin, policiesDir, pipelineCfgPath)
+	defer col.shutdown(t)
+
+	// Wait for policy set active self metric to verify collector booted and applied policy set
+	value, _, found := waitForPolicySetActive(selfMockSrv, 10*time.Second)
+	if !found || value <= 0 {
+		t.Errorf("expected collector to report positive gcp.policy.set.active revision, got found=%v value=%d\nlogs:\n%s", found, value, col.logs())
 	}
 }

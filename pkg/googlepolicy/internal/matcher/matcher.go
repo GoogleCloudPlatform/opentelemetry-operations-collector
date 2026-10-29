@@ -54,78 +54,59 @@ var ErrMissingValue = errors.New("operation must specify a valid value")
 // missing field from a zero-valued one.
 type Predicate func(val any, exists bool) bool
 
-// kind enumerates the predicate operations supported by the policy protos.
-type kind int
-
-const (
-	kindExists kind = iota
-	kindEquals
-	kindGlob
-	kindGt
-	kindGte
-	kindLt
-	kindLte
-	kindContains
-)
-
-// spec is the signal-agnostic form of a matcher predicate, produced by
-// normalize from any of the three per-signal protobuf oneof families.
-type spec struct {
-	k    kind
-	val  *policyv1alpha1.Value
-	num  *policyv1alpha1.NumericValue
-	glob string
-}
-
-// CompilePredicate compiles a matcher predicate oneof wrapper (any of the
-// LogMatcher_*, MetricMatcher_*, or TraceMatcher_* variants) into a Predicate.
-// The negate flag inverts the compiled result.
-func CompilePredicate(predicate any, negate bool) (Predicate, error) {
-	s, err := normalize(predicate)
-	if err != nil {
-		return nil, err
+// CompilePredicate compiles a shared Predicate protobuf message into a
+// Predicate closure. The negate flag inverts the compiled result.
+func CompilePredicate(predicate *policyv1alpha1.Predicate, negate bool) (Predicate, error) {
+	if predicate == nil {
+		return nil, ErrMissingPredicate
 	}
 
-	var pred Predicate
-	switch s.k {
-	case kindExists:
+	var (
+		pred Predicate
+		err  error
+	)
+	switch p := predicate.GetKind().(type) {
+	case *policyv1alpha1.Predicate_Existence:
 		pred = func(_ any, exists bool) bool { return exists }
 
-	case kindEquals:
-		if s.val.GetKind() == nil {
+	case *policyv1alpha1.Predicate_Equality:
+		if p.Equality.GetKind() == nil {
 			return nil, ErrMissingPredicate
 		}
-		expected := s.val
+		expected := p.Equality
 		pred = func(val any, exists bool) bool {
 			return present(val, exists) && valueEquals(val, expected)
 		}
 
-	case kindGlob:
-		pattern := s.glob
+	case *policyv1alpha1.Predicate_Glob:
+		pattern := p.Glob
 		pred = func(val any, exists bool) bool {
 			return present(val, exists) && valueMatchesGlob(val, pattern)
 		}
 
-	case kindGt:
-		pred, err = numericPredicate(s.num, func(c int) bool { return c > 0 })
+	case *policyv1alpha1.Predicate_ExclusiveMinimum:
+		pred, err = numericPredicate(p.ExclusiveMinimum, func(c int) bool { return c > 0 })
 
-	case kindGte:
-		pred, err = numericPredicate(s.num, func(c int) bool { return c >= 0 })
+	case *policyv1alpha1.Predicate_InclusiveMinimum:
+		pred, err = numericPredicate(p.InclusiveMinimum, func(c int) bool { return c >= 0 })
 
-	case kindLt:
-		pred, err = numericPredicate(s.num, func(c int) bool { return c < 0 })
+	case *policyv1alpha1.Predicate_ExclusiveMaximum:
+		pred, err = numericPredicate(p.ExclusiveMaximum, func(c int) bool { return c < 0 })
 
-	case kindLte:
-		pred, err = numericPredicate(s.num, func(c int) bool { return c <= 0 })
+	case *policyv1alpha1.Predicate_InclusiveMaximum:
+		pred, err = numericPredicate(p.InclusiveMaximum, func(c int) bool { return c <= 0 })
 
-	case kindContains:
-		if s.val.GetKind() == nil {
+	case *policyv1alpha1.Predicate_Containment:
+		if p.Containment.GetKind() == nil {
 			return nil, ErrMissingPredicate
 		}
-		expected := s.val
+		expected := p.Containment
 		pred = func(val any, exists bool) bool {
 			return present(val, exists) && valueContains(val, expected)
 		}
+
+	default:
+		return nil, fmt.Errorf("%w: got %T", ErrMissingPredicate, predicate.GetKind())
 	}
 	if err != nil {
 		return nil, err
@@ -136,68 +117,6 @@ func CompilePredicate(predicate any, negate bool) (Predicate, error) {
 		return func(val any, exists bool) bool { return !inner(val, exists) }, nil
 	}
 	return pred, nil
-}
-
-// normalize collapses the three per-signal predicate oneof families into a
-// single spec. The families are structurally identical but generate distinct
-// Go types, so this switch is the one place that has to know about all three.
-func normalize(predicate any) (spec, error) {
-	switch p := predicate.(type) {
-	case *policyv1alpha1.LogMatcher_Existence, *policyv1alpha1.MetricMatcher_Existence, *policyv1alpha1.TraceMatcher_Existence:
-		return spec{k: kindExists}, nil
-
-	case *policyv1alpha1.LogMatcher_Equality:
-		return spec{k: kindEquals, val: p.Equality}, nil
-	case *policyv1alpha1.MetricMatcher_Equality:
-		return spec{k: kindEquals, val: p.Equality}, nil
-	case *policyv1alpha1.TraceMatcher_Equality:
-		return spec{k: kindEquals, val: p.Equality}, nil
-
-	case *policyv1alpha1.LogMatcher_Glob:
-		return spec{k: kindGlob, glob: p.Glob}, nil
-	case *policyv1alpha1.MetricMatcher_Glob:
-		return spec{k: kindGlob, glob: p.Glob}, nil
-	case *policyv1alpha1.TraceMatcher_Glob:
-		return spec{k: kindGlob, glob: p.Glob}, nil
-
-	case *policyv1alpha1.LogMatcher_ExclusiveMinimum:
-		return spec{k: kindGt, num: p.ExclusiveMinimum}, nil
-	case *policyv1alpha1.MetricMatcher_ExclusiveMinimum:
-		return spec{k: kindGt, num: p.ExclusiveMinimum}, nil
-	case *policyv1alpha1.TraceMatcher_ExclusiveMinimum:
-		return spec{k: kindGt, num: p.ExclusiveMinimum}, nil
-
-	case *policyv1alpha1.LogMatcher_InclusiveMinimum:
-		return spec{k: kindGte, num: p.InclusiveMinimum}, nil
-	case *policyv1alpha1.MetricMatcher_InclusiveMinimum:
-		return spec{k: kindGte, num: p.InclusiveMinimum}, nil
-	case *policyv1alpha1.TraceMatcher_InclusiveMinimum:
-		return spec{k: kindGte, num: p.InclusiveMinimum}, nil
-
-	case *policyv1alpha1.LogMatcher_ExclusiveMaximum:
-		return spec{k: kindLt, num: p.ExclusiveMaximum}, nil
-	case *policyv1alpha1.MetricMatcher_ExclusiveMaximum:
-		return spec{k: kindLt, num: p.ExclusiveMaximum}, nil
-	case *policyv1alpha1.TraceMatcher_ExclusiveMaximum:
-		return spec{k: kindLt, num: p.ExclusiveMaximum}, nil
-
-	case *policyv1alpha1.LogMatcher_InclusiveMaximum:
-		return spec{k: kindLte, num: p.InclusiveMaximum}, nil
-	case *policyv1alpha1.MetricMatcher_InclusiveMaximum:
-		return spec{k: kindLte, num: p.InclusiveMaximum}, nil
-	case *policyv1alpha1.TraceMatcher_InclusiveMaximum:
-		return spec{k: kindLte, num: p.InclusiveMaximum}, nil
-
-	case *policyv1alpha1.LogMatcher_Containment:
-		return spec{k: kindContains, val: p.Containment}, nil
-	case *policyv1alpha1.MetricMatcher_Containment:
-		return spec{k: kindContains, val: p.Containment}, nil
-	case *policyv1alpha1.TraceMatcher_Containment:
-		return spec{k: kindContains, val: p.Containment}, nil
-
-	default:
-		return spec{}, fmt.Errorf("%w: got %T", ErrMissingPredicate, predicate)
-	}
 }
 
 func numericPredicate(expected *policyv1alpha1.NumericValue, accept func(cmp int) bool) (Predicate, error) {

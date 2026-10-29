@@ -8,7 +8,7 @@
           "segments": ["env"]
         }
       },
-      "equality": { "string_value": "prod" }
+      "predicate": { "equality": { "string_value": "prod" } }
     }
   ],
   "addition": {

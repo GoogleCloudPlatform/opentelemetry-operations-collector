@@ -21,6 +21,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/emptypb"
 
 	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
 )
@@ -308,6 +309,155 @@ func TestLogFieldSelector_Variants(t *testing.T) {
 			jsonUnmarshaled := &policyv1alpha1.LogFieldSelector{}
 			require.NoError(t, protojson.Unmarshal(jsonData, jsonUnmarshaled))
 			assert.True(t, proto.Equal(tc.selector, jsonUnmarshaled))
+			tc.validate(t, jsonUnmarshaled)
+		})
+	}
+}
+
+func TestPredicate_Variants(t *testing.T) {
+	testCases := []struct {
+		name     string
+		pred     *policyv1alpha1.Predicate
+		validate func(t *testing.T, p *policyv1alpha1.Predicate)
+	}{
+		{
+			name: "existence",
+			pred: &policyv1alpha1.Predicate{
+				Kind: &policyv1alpha1.Predicate_Existence{
+					Existence: &emptypb.Empty{},
+				},
+			},
+			validate: func(t *testing.T, p *policyv1alpha1.Predicate) {
+				assert.NotNil(t, p.GetExistence())
+				assert.IsType(t, &policyv1alpha1.Predicate_Existence{}, p.GetKind())
+			},
+		},
+		{
+			name: "equality",
+			pred: &policyv1alpha1.Predicate{
+				Kind: &policyv1alpha1.Predicate_Equality{
+					Equality: &policyv1alpha1.Value{
+						Kind: &policyv1alpha1.Value_StringValue{
+							StringValue: "production",
+						},
+					},
+				},
+			},
+			validate: func(t *testing.T, p *policyv1alpha1.Predicate) {
+				assert.Equal(t, "production", p.GetEquality().GetStringValue())
+				assert.IsType(t, &policyv1alpha1.Predicate_Equality{}, p.GetKind())
+			},
+		},
+		{
+			name: "glob",
+			pred: &policyv1alpha1.Predicate{
+				Kind: &policyv1alpha1.Predicate_Glob{
+					Glob: "http.server.*",
+				},
+			},
+			validate: func(t *testing.T, p *policyv1alpha1.Predicate) {
+				assert.Equal(t, "http.server.*", p.GetGlob())
+				assert.IsType(t, &policyv1alpha1.Predicate_Glob{}, p.GetKind())
+			},
+		},
+		{
+			name: "exclusive_minimum",
+			pred: &policyv1alpha1.Predicate{
+				Kind: &policyv1alpha1.Predicate_ExclusiveMinimum{
+					ExclusiveMinimum: &policyv1alpha1.NumericValue{
+						Kind: &policyv1alpha1.NumericValue_DoubleValue{
+							DoubleValue: 1.5,
+						},
+					},
+				},
+			},
+			validate: func(t *testing.T, p *policyv1alpha1.Predicate) {
+				assert.InDelta(t, 1.5, p.GetExclusiveMinimum().GetDoubleValue(), 1e-9)
+				assert.IsType(t, &policyv1alpha1.Predicate_ExclusiveMinimum{}, p.GetKind())
+			},
+		},
+		{
+			name: "inclusive_minimum",
+			pred: &policyv1alpha1.Predicate{
+				Kind: &policyv1alpha1.Predicate_InclusiveMinimum{
+					InclusiveMinimum: &policyv1alpha1.NumericValue{
+						Kind: &policyv1alpha1.NumericValue_IntValue{
+							IntValue: 400,
+						},
+					},
+				},
+			},
+			validate: func(t *testing.T, p *policyv1alpha1.Predicate) {
+				assert.Equal(t, int64(400), p.GetInclusiveMinimum().GetIntValue())
+				assert.IsType(t, &policyv1alpha1.Predicate_InclusiveMinimum{}, p.GetKind())
+			},
+		},
+		{
+			name: "exclusive_maximum",
+			pred: &policyv1alpha1.Predicate{
+				Kind: &policyv1alpha1.Predicate_ExclusiveMaximum{
+					ExclusiveMaximum: &policyv1alpha1.NumericValue{
+						Kind: &policyv1alpha1.NumericValue_IntValue{
+							IntValue: 500,
+						},
+					},
+				},
+			},
+			validate: func(t *testing.T, p *policyv1alpha1.Predicate) {
+				assert.Equal(t, int64(500), p.GetExclusiveMaximum().GetIntValue())
+				assert.IsType(t, &policyv1alpha1.Predicate_ExclusiveMaximum{}, p.GetKind())
+			},
+		},
+		{
+			name: "inclusive_maximum",
+			pred: &policyv1alpha1.Predicate{
+				Kind: &policyv1alpha1.Predicate_InclusiveMaximum{
+					InclusiveMaximum: &policyv1alpha1.NumericValue{
+						Kind: &policyv1alpha1.NumericValue_DoubleValue{
+							DoubleValue: 99.9,
+						},
+					},
+				},
+			},
+			validate: func(t *testing.T, p *policyv1alpha1.Predicate) {
+				assert.InDelta(t, 99.9, p.GetInclusiveMaximum().GetDoubleValue(), 1e-9)
+				assert.IsType(t, &policyv1alpha1.Predicate_InclusiveMaximum{}, p.GetKind())
+			},
+		},
+		{
+			name: "containment",
+			pred: &policyv1alpha1.Predicate{
+				Kind: &policyv1alpha1.Predicate_Containment{
+					Containment: &policyv1alpha1.Value{
+						Kind: &policyv1alpha1.Value_StringValue{
+							StringValue: "admin",
+						},
+					},
+				},
+			},
+			validate: func(t *testing.T, p *policyv1alpha1.Predicate) {
+				assert.Equal(t, "admin", p.GetContainment().GetStringValue())
+				assert.IsType(t, &policyv1alpha1.Predicate_Containment{}, p.GetKind())
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			data, err := proto.Marshal(tc.pred)
+			require.NoError(t, err)
+
+			unmarshaled := &policyv1alpha1.Predicate{}
+			require.NoError(t, proto.Unmarshal(data, unmarshaled))
+			assert.True(t, proto.Equal(tc.pred, unmarshaled))
+			tc.validate(t, unmarshaled)
+
+			jsonData, err := protojson.Marshal(tc.pred)
+			require.NoError(t, err)
+
+			jsonUnmarshaled := &policyv1alpha1.Predicate{}
+			require.NoError(t, protojson.Unmarshal(jsonData, jsonUnmarshaled))
+			assert.True(t, proto.Equal(tc.pred, jsonUnmarshaled))
 			tc.validate(t, jsonUnmarshaled)
 		})
 	}

@@ -22,8 +22,8 @@ require (
 )
 
 require (
-	cloud.google.com/go/auth v0.23.2 // indirect
-	cloud.google.com/go/auth/oauth2adapt v0.2.8 // indirect
+	cloud.google.com/go/auth v0.24.1 // indirect
+	cloud.google.com/go/auth/oauth2adapt v0.3.0 // indirect
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cncf/xds/go v0.0.0-20260202195803-dba9d589def2 // indirect
@@ -38,7 +38,7 @@ require (
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.20 // indirect
-	github.com/googleapis/gax-go/v2 v2.24.0 // indirect
+	github.com/googleapis/gax-go/v2 v2.26.2 // indirect
 	github.com/hashicorp/go-version v1.9.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/knadh/koanf/maps v0.1.3 // indirect

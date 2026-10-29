@@ -88,9 +88,9 @@ func fuzzMetricSeedPolicies() []*policyv1alpha1.MetricFilterPolicy {
 			Matchers: []*policyv1alpha1.MetricMatcher{
 				{
 					Target: descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME),
-					Predicate: &policyv1alpha1.MetricMatcher_Glob{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Glob{
 						Glob: "http.server.*",
-					},
+					}},
 				},
 			},
 		},
@@ -100,31 +100,31 @@ func fuzzMetricSeedPolicies() []*policyv1alpha1.MetricFilterPolicy {
 			Matchers: []*policyv1alpha1.MetricMatcher{
 				{
 					Target: descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE),
-					Predicate: &policyv1alpha1.MetricMatcher_Equality{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 						Equality: stringValue("SUM"),
-					},
+					}},
 				},
 				{
 					Target: descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_IS_MONOTONIC),
-					Predicate: &policyv1alpha1.MetricMatcher_Equality{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 						Equality: &policyv1alpha1.Value{
 							Kind: &policyv1alpha1.Value_BoolValue{BoolValue: true},
 						},
-					},
+					}},
 				},
 				{
 					Target: datapointTarget("metadata", "env"),
-					Predicate: &policyv1alpha1.MetricMatcher_Equality{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 						Equality: stringValue("prod"),
-					},
+					}},
 				},
 				{
 					Target: datapointTarget("http.status_code"),
-					Predicate: &policyv1alpha1.MetricMatcher_InclusiveMinimum{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_InclusiveMinimum{
 						InclusiveMinimum: &policyv1alpha1.NumericValue{
 							Kind: &policyv1alpha1.NumericValue_IntValue{IntValue: 200},
 						},
-					},
+					}},
 				},
 			},
 		},
@@ -134,19 +134,19 @@ func fuzzMetricSeedPolicies() []*policyv1alpha1.MetricFilterPolicy {
 			Matchers: []*policyv1alpha1.MetricMatcher{
 				{
 					Target: descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_AGGREGATION_TEMPORALITY),
-					Predicate: &policyv1alpha1.MetricMatcher_Equality{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 						Equality: stringValue("DELTA"),
-					},
+					}},
 				},
 				{
 					Target:    resourceTarget("cloud.zone"),
-					Predicate: &policyv1alpha1.MetricMatcher_Existence{Existence: &emptypb.Empty{}},
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{Existence: &emptypb.Empty{}}},
 				},
 				{
 					Target: scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_NAME),
-					Predicate: &policyv1alpha1.MetricMatcher_Containment{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Containment{
 						Containment: stringValue("library"),
-					},
+					}},
 				},
 			},
 		},

@@ -110,7 +110,7 @@ func fuzzLogTransformSeedPolicies() []*policyv1alpha1.LogTransformPolicy {
 			Matchers: []*policyv1alpha1.LogMatcher{
 				{
 					Target:    recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY),
-					Predicate: &policyv1alpha1.LogMatcher_Glob{Glob: "hello*"},
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Glob{Glob: "hello*"}},
 				},
 			},
 			Action: &policyv1alpha1.LogTransformPolicy_Addition{
@@ -126,19 +126,19 @@ func fuzzLogTransformSeedPolicies() []*policyv1alpha1.LogTransformPolicy {
 			Matchers: []*policyv1alpha1.LogMatcher{
 				{
 					Target:    logAttrTarget("metadata", "env"),
-					Predicate: &policyv1alpha1.LogMatcher_Equality{Equality: strVal("prod")},
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{Equality: strVal("prod")}},
 				},
 				{
 					Target: recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER),
-					Predicate: &policyv1alpha1.LogMatcher_InclusiveMinimum{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_InclusiveMinimum{
 						InclusiveMinimum: &policyv1alpha1.NumericValue{
 							Kind: &policyv1alpha1.NumericValue_IntValue{IntValue: 9},
 						},
-					},
+					}},
 				},
 				{
 					Target:    logAttrTarget("user.roles"),
-					Predicate: &policyv1alpha1.LogMatcher_Containment{Containment: strVal("admin")},
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Containment{Containment: strVal("admin")}},
 					Negated:   true,
 				},
 			},
@@ -155,11 +155,11 @@ func fuzzLogTransformSeedPolicies() []*policyv1alpha1.LogTransformPolicy {
 			Matchers: []*policyv1alpha1.LogMatcher{
 				{
 					Target:    resourceAttrTarget("cloud.zone"),
-					Predicate: &policyv1alpha1.LogMatcher_Existence{Existence: &emptypb.Empty{}},
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{Existence: &emptypb.Empty{}}},
 				},
 				{
 					Target:    scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_NAME),
-					Predicate: &policyv1alpha1.LogMatcher_Equality{Equality: strVal("my.library")},
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{Equality: strVal("my.library")}},
 				},
 			},
 			Action: &policyv1alpha1.LogTransformPolicy_Addition{

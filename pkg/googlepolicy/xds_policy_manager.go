@@ -1481,10 +1481,9 @@ func resolveIDTokenSource(_ context.Context, audience string) (oauth2.TokenSourc
 		Audience:        audience,
 		CredentialsJSON: creds.JSON(), //nolint:staticcheck // SA1019: JSON was already loaded by ADC (DetectDefault), not from an untrusted source.
 	}); err == nil {
-		idTS := oauth2adapt.TokenSourceFromTokenProvider(idCreds)
-		if initialTok, err := idTS.Token(); err == nil {
-			return oauth2.ReuseTokenSource(initialTok, idTS), nil
-		}
+		// auth.Credentials caches and refreshes tokens early; an outer
+		// oauth2.ReuseTokenSource would defeat that.
+		return oauth2adapt.TokenSourceFromTokenProvider(idCreds), nil
 	}
 
 	// 2. Cloudtop / Developer Workstation: ADC user credentials fallback

@@ -76,4 +76,4 @@ api POST "${BASE}/fleets/${FLEET_ID}/rollouts?rolloutId=${ROLLOUT_ID}" \
 api GET "${BASE}/fleets/${FLEET_ID}/rollouts/${ROLLOUT_ID}"
 
 echo
-echo "Set TANGO_EXPECTED_REVISION=${REVISION##*/} in the Kokoro config to pin the test to this revision."
+echo "Set TANGO_EXPECTED_REVISION=${REVISION##*/} when running the test (see README.md) and update the revision in README.md."

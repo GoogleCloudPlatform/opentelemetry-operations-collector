@@ -1,0 +1,4 @@
+{
+  "type": "host_metrics_source",
+  "id": "system_host_metrics"
+}

@@ -230,7 +230,7 @@ func TestCompileMetricMatcherAndExtractor(t *testing.T) {
 			t.Run(tc.name, func(t *testing.T) {
 				cm, err := CompileMetricMatcher(&policyv1alpha1.MetricMatcher{
 					Target:    tc.target,
-					Predicate: &policyv1alpha1.MetricMatcher_Existence{},
+					Predicate: predExists(),
 				})
 				require.NoError(t, err)
 

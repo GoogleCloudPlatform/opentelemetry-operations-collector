@@ -6,12 +6,14 @@ require (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/googlecontrolplaneextension v0.0.0-00010101000000-000000000000
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor v0.163.0
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider v0.0.0-00010101000000-000000000000
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy v0.163.0
 	github.com/google/go-cmp v0.7.0
 	go.opentelemetry.io/collector/component v1.69.0
 	go.opentelemetry.io/collector/confmap v1.69.0
 	go.opentelemetry.io/collector/confmap/provider/envprovider v1.66.0
 	go.opentelemetry.io/collector/confmap/provider/fileprovider v1.69.0
 	go.opentelemetry.io/collector/confmap/provider/yamlprovider v1.66.0
+	go.opentelemetry.io/collector/consumer v1.69.0
 	go.opentelemetry.io/collector/exporter v1.69.0
 	go.opentelemetry.io/collector/exporter/nopexporter v0.160.0
 	go.opentelemetry.io/collector/exporter/otlpexporter v0.163.0
@@ -28,12 +30,11 @@ require (
 )
 
 require (
-	cloud.google.com/go/auth v0.24.1-0.20261001053825-dbc26066f70a // indirect
+	cloud.google.com/go/auth v0.24.1 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.3.0 // indirect
 	cloud.google.com/go/compute/metadata v0.10.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector v0.163.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/event v0.163.0 // indirect
-	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy v0.163.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.36.0 // indirect
 	github.com/Microsoft/go-winio v0.6.3 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
@@ -128,7 +129,6 @@ require (
 	go.opentelemetry.io/collector/connector v0.163.0 // indirect
 	go.opentelemetry.io/collector/connector/connectortest v0.163.0 // indirect
 	go.opentelemetry.io/collector/connector/xconnector v0.163.0 // indirect
-	go.opentelemetry.io/collector/consumer v1.69.0 // indirect
 	go.opentelemetry.io/collector/consumer/consumererror v0.163.0 // indirect
 	go.opentelemetry.io/collector/consumer/consumererror/xconsumererror v0.163.0 // indirect
 	go.opentelemetry.io/collector/consumer/consumertest v0.163.0 // indirect

@@ -1,5 +1,5 @@
-cloud.google.com/go/auth v0.24.1-0.20261001053825-dbc26066f70a h1:jW1ZLFy9oa5ai8LOI40z6s+DL1cO/L1KSm9hVGnibn8=
-cloud.google.com/go/auth v0.24.1-0.20261001053825-dbc26066f70a/go.mod h1:1dmBXa9xfBvBr39ZnDUDkaaA91ccq9CcqENDgJA4d7c=
+cloud.google.com/go/auth v0.24.1 h1:NTmd2iJb4DsGIav0KiqFMYI88nMshA2wnFMBatRmoCs=
+cloud.google.com/go/auth v0.24.1/go.mod h1:1dmBXa9xfBvBr39ZnDUDkaaA91ccq9CcqENDgJA4d7c=
 cloud.google.com/go/auth/oauth2adapt v0.3.0 h1:FY8oSZpCYoUNv6QxVODuMjQz4IlSOVeiQtZ08vLPz88=
 cloud.google.com/go/auth/oauth2adapt v0.3.0/go.mod h1:7+2uCm7++XFO+/lN06c2HXpDXb/NMNn2/UwyBPbTnkk=
 cloud.google.com/go/compute/metadata v0.10.0 h1:pyKMUQSwchgkIBBJGdILqQbs/BNJXqwSA7Ej6LAvvtY=
@@ -187,8 +187,6 @@ github.com/yusufpapurcu/wmi v1.2.4 h1:zFUKzehAFReQwLys1b/iSMl+JQGSCSjtVqQn9bBrPo
 github.com/yusufpapurcu/wmi v1.2.4/go.mod h1:SBZ9tNy3G9/m5Oi98Zks0QjeHVDvuK0qfxQmPyzfmi0=
 go.opentelemetry.io/auto/sdk v1.2.1 h1:jXsnJ4Lmnqd11kwkBV2LgLoFMZKizbCi5fNZ/ipaZ64=
 go.opentelemetry.io/auto/sdk v1.2.1/go.mod h1:KRTj+aOaElaLi+wW1kO/DZRXwkF4C5xPbEe3ZiIhN7Y=
-go.opentelemetry.io/collector v0.162.0 h1:dJZqd0ma/BW7lgJkMGuBGeEg72WjLfCPv9YKS8Uye2s=
-go.opentelemetry.io/collector v0.162.0/go.mod h1:mgavHnQvFpRWacnJ0wo7JTJK8xz1ubGVx6NEEToc8GE=
 go.opentelemetry.io/collector/client v1.69.0 h1:JaWIacYOkEq2aajAuNltTy7elsIpSPdNMe/I3+b28bY=
 go.opentelemetry.io/collector/client v1.69.0/go.mod h1:D3eMugzcsQlJyPJ0WXp2b7+yS72Uswi0e+WMQyNLzHo=
 go.opentelemetry.io/collector/component v1.69.0 h1:ZbVd2N+sCv39wUWQ4qtFG7wuTaok1EHaThbtdE/6Rn4=
@@ -279,6 +277,8 @@ go.opentelemetry.io/collector/internal/fanoutconsumer v0.163.0 h1:4f9lOm/cwUSqdR
 go.opentelemetry.io/collector/internal/fanoutconsumer v0.163.0/go.mod h1:3ZjLZkTzsX+YaA5mlQopYT0+ae5ngtMrVoFI/hMiLPk=
 go.opentelemetry.io/collector/internal/sharedcomponent v0.163.0 h1:/+mURJyT01hBkveLdwGw5Tfp4jvwK9bmG0GdZR1e7GA=
 go.opentelemetry.io/collector/internal/sharedcomponent v0.163.0/go.mod h1:WVp2LS0rKtXraGNTocky/yVgzpaBnrr5UVFaYYvOE0Q=
+go.opentelemetry.io/collector/internal/statusutil v0.163.0 h1:IV1fo04jU5zWiFxPoSVEvEyjyRO8rrsUoY1ED1iQgto=
+go.opentelemetry.io/collector/internal/statusutil v0.163.0/go.mod h1:ZXwHY6Q3YyH5fgkK7VDk9+UEumPIcMbqlsAObX8VOT0=
 go.opentelemetry.io/collector/internal/telemetry v0.163.0 h1:d94W1rXLPJ7gtbL/bSPnuPyr1IEK/C6yVjF1k3EPc2k=
 go.opentelemetry.io/collector/internal/telemetry v0.163.0/go.mod h1:2HfaPqG31qSrrfQTaLt8gTIjzTeU8kXqDwv2gHyskys=
 go.opentelemetry.io/collector/internal/testutil v0.163.0 h1:JR65ZHtuOP1E5cJZKl4ub/UFHQ7xo3KN/Iryhtc0P5E=

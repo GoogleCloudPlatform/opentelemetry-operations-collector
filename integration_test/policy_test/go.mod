@@ -4,9 +4,9 @@ go 1.26.6
 
 require (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/googlecontrolplaneextension v0.0.0-00010101000000-000000000000
-	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor v0.164.1
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor v0.164.0
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider v0.0.0-00010101000000-000000000000
-	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy v0.164.1
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy v0.164.0
 	github.com/google/go-cmp v0.7.0
 	go.opentelemetry.io/collector/component v1.70.0
 	go.opentelemetry.io/collector/confmap v1.70.0
@@ -33,8 +33,8 @@ require (
 	cloud.google.com/go/auth v0.24.1 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.3.0 // indirect
 	cloud.google.com/go/compute/metadata v0.10.0 // indirect
-	github.com/GoogleCloudPlatform/opentelemetry-operations-collector v0.164.1 // indirect
-	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/event v0.164.1 // indirect
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector v0.164.0 // indirect
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/event v0.164.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.36.0 // indirect
 	github.com/Microsoft/go-winio v0.6.4 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect

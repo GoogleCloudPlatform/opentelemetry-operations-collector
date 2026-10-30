@@ -17,9 +17,9 @@ module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/compone
 go 1.26.6
 
 require (
-	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor v0.164.1
-	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/event v0.164.1
-	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy v0.164.1
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor v0.164.0
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/event v0.164.0
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy v0.164.0
 	github.com/google/uuid v1.6.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/extension/googleclientauthextension v0.164.1
 	github.com/stretchr/testify v1.12.1
@@ -54,7 +54,7 @@ require (
 	cloud.google.com/go/auth v0.24.1 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.3.0 // indirect
 	cloud.google.com/go/compute/metadata v0.10.0 // indirect
-	github.com/GoogleCloudPlatform/opentelemetry-operations-collector v0.164.1 // indirect
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector v0.164.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.36.0 // indirect
 	github.com/Microsoft/go-winio v0.6.4 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect

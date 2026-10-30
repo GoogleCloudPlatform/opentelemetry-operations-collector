@@ -3,9 +3,9 @@ module github.com/GoogleCloudPlatform/opentelemetry-operations-collector/compone
 go 1.26.6
 
 require (
-	github.com/GoogleCloudPlatform/opentelemetry-operations-collector v0.164.1
-	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/event v0.164.1
-	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy v0.164.1
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector v0.164.0
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/event v0.164.0
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy v0.164.0
 	github.com/stretchr/testify v1.12.1
 	go.opentelemetry.io/collector/component v1.70.0
 	go.opentelemetry.io/collector/component/componenttest v0.164.0

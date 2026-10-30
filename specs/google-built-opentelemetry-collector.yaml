@@ -15,14 +15,14 @@
 name: google-built-opentelemetry-collector
 module: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/google-built-opentelemetry-collector
 display_name: Google-Built OpenTelemetry Collector
-version: 0.163.1
+version: 0.164.0
 description: "OpenTelemetry Collector Built By Google"
 blurb: >-
   The Google-Built OpenTelemetry Collector is an open-source, production-ready build
   of the upstream OpenTelemetry Collector that is built with upstream OpenTelemetry
   components.
-opentelemetry_version: 0.163.0
-opentelemetry_contrib_version: 0.163.0
+opentelemetry_version: 0.164.0
+opentelemetry_contrib_version: 0.164.1
 binary_name: otelcol-google
 go_version: 1.26.10
 permanent_ocb_directory: true
@@ -149,3 +149,6 @@ replaces:
   - from: github.com/buger/jsonparser
     to: github.com/buger/jsonparser v1.1.2
     reason: Force update buger/jsonparser to v1.1.2 to fix vulnerability
+  - from: github.com/go-jose/go-jose/v4
+    to: github.com/go-jose/go-jose/v4 v4.1.6
+    reason: Force update go-jose/v4 to v4.1.6 to fix CVE-2026-116587

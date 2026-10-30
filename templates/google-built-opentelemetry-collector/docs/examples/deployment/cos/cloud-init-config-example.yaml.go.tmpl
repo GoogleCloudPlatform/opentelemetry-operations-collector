@@ -24,16 +24,6 @@ write_files:
             endpoint: localhost:4318
 
     processors:
-      # The batch processor is in place to regulate both the number of requests
-      # being made and the size of those requests.
-      #
-      # Docs:
-      # https://github.com/open-telemetry/opentelemetry-collector/tree/main/processor/batchprocessor
-      batch:
-        send_batch_max_size: 200
-        send_batch_size: 200
-        timeout: 5s
-
       # The memorylimiter will check the memory usage of the collector process.
       #
       # Docs:
@@ -118,15 +108,68 @@ write_files:
           - set(attributes["service.instance.id"], resource.attributes["service.instance.id"]) where resource.attributes["service.instance.id"] != nil
 
     exporters:
-      # The otlp_grpc exporter is used to send telemetry (logs, metrics, traces) to GCP Telemetry API using OTLP gRPC.
+      # Dedicated OTLP gRPC exporters are configured per signal (logs, metrics, traces)
+      # so each sending queue and batch size matches the Cloud Telemetry API quotas:
+      # https://docs.cloud.google.com/stackdriver/quotas
+      #
+      # Note: In addition to per-request item limits (8,192 for logs/traces, 200 for
+      # metrics), the API enforces a 5 MiB request size limit. An 8,192-item batch
+      # stays under 5 MiB only when the average log or span is under ~640 bytes. If
+      # your payloads are larger, reduce `max_size` or additionally configure a
+      # queuebatch processor to batch by byte size.
       #
       # Docs:
       # https://github.com/open-telemetry/opentelemetry-collector/tree/main/exporter/otlpexporter
-      otlp_grpc:
+      otlp_grpc/logs:
         endpoint: telemetry.googleapis.com:443
         balancer_name: pick_first
         auth:
           authenticator: googleclientauth
+        sending_queue:
+          enabled: true
+          sizer: bytes
+          queue_size: 104857600 # 100 MiB queue bound
+          block_on_overflow: true
+          num_consumers: 25
+          batch:
+            sizer: items
+            min_size: 8192
+            max_size: 8192
+            flush_timeout: 1s
+
+      otlp_grpc/metrics:
+        endpoint: telemetry.googleapis.com:443
+        balancer_name: pick_first
+        auth:
+          authenticator: googleclientauth
+        sending_queue:
+          enabled: true
+          sizer: bytes
+          queue_size: 52428800 # 50 MiB queue bound
+          block_on_overflow: true
+          num_consumers: 25
+          batch:
+            sizer: items
+            min_size: 200
+            max_size: 200
+            flush_timeout: 1s
+
+      otlp_grpc/traces:
+        endpoint: telemetry.googleapis.com:443
+        balancer_name: pick_first
+        auth:
+          authenticator: googleclientauth
+        sending_queue:
+          enabled: true
+          sizer: bytes
+          queue_size: 104857600 # 100 MiB queue bound
+          block_on_overflow: true
+          num_consumers: 25
+          batch:
+            sizer: items
+            min_size: 8192
+            max_size: 8192
+            flush_timeout: 1s
 
     extensions:
       googleclientauth:
@@ -144,9 +187,8 @@ write_files:
           - transform/otlp_grpc/preserve_instrumentation_source_version
           - transform/otlp_grpc/copy_service_resource_labels
           - memory_limiter
-          - batch
           exporters:
-          - otlp_grpc
+          - otlp_grpc/logs
         metrics/otlp:
           receivers:
           - otlp
@@ -157,9 +199,8 @@ write_files:
           - transform/prometheus_unknown_types
           - metricstarttime
           - memory_limiter
-          - batch
           exporters:
-          - otlp_grpc
+          - otlp_grpc/metrics
         traces:
           receivers:
           - otlp
@@ -167,9 +208,8 @@ write_files:
           - resourcedetection
           - resource/gcp_project_id
           - memory_limiter
-          - batch
           exporters:
-          - otlp_grpc
+          - otlp_grpc/traces
       # Internal telemetry for the collector supports both push and pull-based telemetry data transmission.
       # Leveraging the pre-configured OTLP receiver eliminates the need for an additional port.
       #

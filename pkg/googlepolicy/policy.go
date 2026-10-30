@@ -219,7 +219,8 @@ type DedicatedPipelineSourcePolicy interface {
 }
 
 // ConsolidatableSourcePolicy is an optional interface implemented by SourcePolicy types
-// where multiple policies of the same type merge into a single shared receiver instance.
+// where multiple policies of the same type merge into a single shared receiver instance
+// (e.g. multiple FileLogSourcePolicy instances merging their include paths via set union).
 type ConsolidatableSourcePolicy interface {
 	SourcePolicy
 	Consolidate(policies []SourcePolicy) (SourcePolicy, error)

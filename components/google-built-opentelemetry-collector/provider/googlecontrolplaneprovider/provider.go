@@ -30,6 +30,7 @@ import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider/policies/selfmetrics"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/event"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
+	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/filelogsource"
 	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/journaldsource"
 	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/logfilter"
 	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/logtransform"
@@ -762,7 +763,65 @@ func cleanConf(c *confmap.Conf) *confmap.Conf {
 	}
 	m := c.ToStringMap()
 	cleanNilEntries(m)
+	escapeDollarSigns(m)
 	return confmap.NewFromStringMap(m)
+}
+
+func escapeDollarSigns(m map[string]any) {
+	for k, v := range m {
+		if v == nil {
+			continue
+		}
+		switch val := v.(type) {
+		case string:
+			m[k] = escapeDollarString(val)
+		case map[string]any:
+			escapeDollarSigns(val)
+		case []any:
+			escapeDollarSignsSlice(val)
+		case []string:
+			for i, s := range val {
+				val[i] = escapeDollarString(s)
+			}
+		}
+	}
+}
+
+func escapeDollarSignsSlice(slice []any) {
+	for i, item := range slice {
+		if item == nil {
+			continue
+		}
+		switch elem := item.(type) {
+		case string:
+			slice[i] = escapeDollarString(elem)
+		case map[string]any:
+			escapeDollarSigns(elem)
+		case []any:
+			escapeDollarSignsSlice(elem)
+		case []string:
+			for j, s := range elem {
+				elem[j] = escapeDollarString(s)
+			}
+		}
+	}
+}
+
+// escapeDollarString escapes unescaped '$' to '$$' to prevent confmap variable expansion injection.
+// Consecutive '$$' are already escaped and left as-is, ensuring idempotency across multiple cleanConf passes.
+func escapeDollarString(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] == '$' {
+			b.WriteString("$$")
+			if i+1 < len(s) && s[i+1] == '$' {
+				i++ // skip already-escaped second '$'
+			}
+		} else {
+			b.WriteByte(s[i])
+		}
+	}
+	return b.String()
 }
 
 func cleanNilEntries(m map[string]any) {

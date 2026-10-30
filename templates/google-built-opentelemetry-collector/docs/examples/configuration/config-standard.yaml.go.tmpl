@@ -125,12 +125,12 @@ exporters:
       sizer: bytes
       queue_size: 104857600 # 100 MiB queue bound
       block_on_overflow: true
-      num_consumers: 10
+      num_consumers: 25
       batch:
         sizer: items
         min_size: 8192
         max_size: 8192
-        flush_timeout: 5s
+        flush_timeout: 1s
 
   otlp_grpc/metrics:
     endpoint: telemetry.googleapis.com:443
@@ -147,7 +147,7 @@ exporters:
         sizer: items
         min_size: 200
         max_size: 200
-        flush_timeout: 5s
+        flush_timeout: 1s
 
   otlp_grpc/traces:
     endpoint: telemetry.googleapis.com:443
@@ -164,7 +164,7 @@ exporters:
         sizer: items
         min_size: 8192
         max_size: 8192
-        flush_timeout: 5s
+        flush_timeout: 1s
 
 extensions:
   # Opens an endpoint on 13133 that can be used to check the

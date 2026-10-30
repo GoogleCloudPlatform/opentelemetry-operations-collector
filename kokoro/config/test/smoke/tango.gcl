@@ -19,7 +19,7 @@ config build = common.smoke_test {
       TANGO_FLEET_ID = 'gboc-smoke-fleet'
       TANGO_POLICY_SET_ID = 'gboc-smoke-ps'
       TANGO_REGION = 'asia-east1'
-      TANGO_EXPECTED_REVISION = '3f038775'
+      TANGO_EXPECTED_REVISION = '562b758d'
     }
   }
 }

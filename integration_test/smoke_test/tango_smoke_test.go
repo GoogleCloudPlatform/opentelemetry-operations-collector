@@ -42,7 +42,7 @@ TANGO_CP_ENDPOINT: host:port of the xDS Control Plane, e.g.
   staging-telemetrydirector.asia-east1.rep.sandbox.googleapis.com:443.
   The test is skipped when unset.
 TANGO_EXPECTED_REVISION: revision ID of the pre-provisioned PolicySet that is
-  rolled out to the fleet (e.g. 3f038775). Required.
+  rolled out to the fleet (e.g. 562b758d). Required.
 TANGO_FLEET_ID: fleet the collector subscribes to (default gboc-smoke-fleet).
 TANGO_POLICY_SET_ID: pre-created PolicySet ID (default gboc-smoke-ps).
 TANGO_REGION: region of the fleet and Control Plane endpoint (default
@@ -97,32 +97,35 @@ const (
 	// expected revision once the series exists (about 3 minutes plus query time).
 	queryMaxAttempts = 20
 
-	// tangoLogPath is the file tailed by the filelog receiver declared in
-	// tangoCollectorConfig. The test writes it only after the PolicySet is
-	// active.
+	// tangoLogPath is the file the test uploads the sample logs to, only after
+	// the PolicySet is active. It matches tangoLogGlob.
 	tangoLogPath = "/var/log/gboc-smoke/test.log"
-	// sampleLogsFile holds the JSON lines uploaded to tangoLogPath.
-	sampleLogsFile = "tango/sample_logs.jsonl"
-	// keptMessage is the MESSAGE of the sample log that the PolicySet keeps.
+	// tangoLogGlob is the path tailed by the filelog receiver declared in
+	// tangoCollectorConfig. It equals the PolicySet's fileLogSourcePolicy
+	// includedPaths (see tango/policyset.json).
+	tangoLogGlob = "/var/log/gboc-smoke/*.log"
+	// sampleLogsFile holds the plain-text lines uploaded to tangoLogPath.
+	sampleLogsFile = "tango/sample_logs.log"
+	// keptMessage is the sample log that the PolicySet keeps.
 	keptMessage = "gboc-smoke=keep"
 	logWindow   = 30 * time.Minute
 )
 
-// droppedMessages are the MESSAGEs of the sample logs that the PolicySet drops.
+// droppedMessages are the sample logs that the PolicySet drops.
 var droppedMessages = []string{
-	// Dropped by the MESSAGE contains "gboc-smoke=drop" filter.
+	// Dropped by the body contains "gboc-smoke=drop" filter.
 	"gboc-smoke=drop",
-	// Dropped by the SYSLOG_IDENTIFIER != "gboc-smoke" filter.
-	"gboc-smoke=other",
+	// Dropped by the body does not contain "gboc-smoke" filter.
+	"smoke-test=other",
 }
 
 // tangoCollectorConfig replaces the packaged config.yaml. It is merged with the
 // config from the googlecontrolplane config source.
 //
 // The Control Plane does not yet translate source policies into collector
-// config, so the log source is declared here: a filelog receiver that parses
-// each JSON line into a map body. The PolicySet's log filter policies match on
-// body fields (SYSLOG_IDENTIFIER, MESSAGE), which only match map bodies.
+// config, so the PolicySet's fileLogSourcePolicy is mirrored here: a filelog
+// receiver on the same path without parsing, so each line is a string body
+// that the PolicySet's body log filter policies match on.
 //
 // googlepolicy enforces the PolicySet activated by the googlecontrolplane
 // config source, whichever config declares the processor. The other processors
@@ -131,11 +134,8 @@ var droppedMessages = []string{
 // telemetry.googleapis.com.
 const tangoCollectorConfig = `receivers:
   filelog/tango_smoke:
-    include: [` + tangoLogPath + `]
+    include: [` + tangoLogGlob + `]
     start_at: beginning
-    operators:
-      - type: json_parser
-        parse_to: body
 processors:
   googlepolicy:
 service:
@@ -371,10 +371,10 @@ func uploadSampleLogs(ctx context.Context, logger *log.Logger, vm *gce.VM) error
 	return err
 }
 
-// messageQuery is a Cloud Logging filter for the log with the given MESSAGE.
-// The map body is ingested as jsonPayload.
+// messageQuery is a Cloud Logging filter for the log with the given body.
+// A string body is ingested as textPayload.
 func messageQuery(message string) string {
-	return fmt.Sprintf("jsonPayload.MESSAGE=%q", message)
+	return fmt.Sprintf("textPayload=%q", message)
 }
 
 // verifyFilteredLogs checks that the kept sample log reached Cloud Logging and

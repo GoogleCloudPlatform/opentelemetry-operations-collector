@@ -583,6 +583,4 @@ replace github.com/open-telemetry/opentelemetry-collector-contrib/extension/oaut
 
 replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter v0.164.0 => ../../components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter
 
-replace github.com/buger/jsonparser => github.com/buger/jsonparser v1.1.2
-
 replace github.com/go-jose/go-jose/v4 => github.com/go-jose/go-jose/v4 v4.1.6

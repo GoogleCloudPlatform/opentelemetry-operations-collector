@@ -146,9 +146,6 @@ components:
     - googlesecretmanager
 
 replaces:
-  - from: github.com/buger/jsonparser
-    to: github.com/buger/jsonparser v1.1.2
-    reason: Force update buger/jsonparser to v1.1.2 to fix vulnerability
   - from: github.com/go-jose/go-jose/v4
     to: github.com/go-jose/go-jose/v4 v4.1.6
     reason: Force update go-jose/v4 to v4.1.6 to fix CVE-2026-116587

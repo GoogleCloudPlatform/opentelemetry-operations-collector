@@ -29,6 +29,10 @@ import (
 )
 
 func TestPolicyValidation_ValidLinuxPaths(t *testing.T) {
+	prevOS := currentOS
+	currentOS = "linux"
+	defer func() { currentOS = prevOS }()
+
 	validPaths := [][]string{
 		{"/var/log/**/*.log"},
 		{"/var/log/messages"},
@@ -54,6 +58,10 @@ func TestPolicyValidation_ValidLinuxPaths(t *testing.T) {
 }
 
 func TestPolicyValidation_ValidWindowsPaths(t *testing.T) {
+	prevOS := currentOS
+	currentOS = "windows"
+	defer func() { currentOS = prevOS }()
+
 	validPaths := [][]string{
 		{`C:\ProgramData\MyApp\logs\app.log`},
 		{`C:/ProgramData/MyApp/logs/app.log`},
@@ -82,6 +90,7 @@ func TestPolicyValidation_InvalidPaths(t *testing.T) {
 	testCases := []struct {
 		name        string
 		id          string
+		os          string
 		include     []string
 		expectedErr error
 	}{
@@ -112,6 +121,7 @@ func TestPolicyValidation_InvalidPaths(t *testing.T) {
 		{
 			name:        "path traversal windows",
 			id:          "test-policy",
+			os:          "windows",
 			include:     []string{`C:\ProgramData\logs\..\..\Windows\System32`},
 			expectedErr: ErrPathTraversal,
 		},
@@ -172,12 +182,14 @@ func TestPolicyValidation_InvalidPaths(t *testing.T) {
 		{
 			name:        "disallowed windows system32",
 			id:          "test-policy",
+			os:          "windows",
 			include:     []string{`C:\Windows\System32\cmd.exe`},
 			expectedErr: ErrDisallowedLogRoot,
 		},
 		{
 			name:        "disallowed windows systemroot inetpub",
 			id:          "test-policy",
+			os:          "windows",
 			include:     []string{`%SystemRoot%\inetpub\logs\*.log`},
 			expectedErr: ErrDisallowedLogRoot,
 		},
@@ -190,6 +202,7 @@ func TestPolicyValidation_InvalidPaths(t *testing.T) {
 		{
 			name:        "relative path windows",
 			id:          "test-policy",
+			os:          "windows",
 			include:     []string{`ProgramData\MyApp\logs\app.log`},
 			expectedErr: ErrRelativePath,
 		},
@@ -202,26 +215,51 @@ func TestPolicyValidation_InvalidPaths(t *testing.T) {
 		{
 			name:        "duplicate path windows case-insensitive",
 			id:          "test-policy",
+			os:          "windows",
 			include:     []string{`C:\ProgramData\MyApp\logs\app.log`, `c:\programdata\myapp\logs\app.log`},
 			expectedErr: ErrDuplicateIncludePattern,
 		},
 		{
 			name:        "duplicate path windows separator normalized",
 			id:          "test-policy",
+			os:          "windows",
 			include:     []string{`C:\inetpub\logs\app.log`, `C:/inetpub/logs/app.log`},
 			expectedErr: ErrDuplicateIncludePattern,
 		},
 		{
 			name:        "duplicate path windows env var expanded",
 			id:          "test-policy",
+			os:          "windows",
 			include:     []string{`%ProgramData%\MyApp\logs\app.log`, `C:\ProgramData\MyApp\logs\app.log`},
 			expectedErr: ErrDuplicateIncludePattern,
 		},
 		{
 			name:        "duplicate path windows systemdrive expanded",
 			id:          "test-policy",
+			os:          "windows",
 			include:     []string{`%SystemDrive%\inetpub\logs\*.log`, `C:\inetpub\logs\*.log`},
 			expectedErr: ErrDuplicateIncludePattern,
+		},
+		{
+			name:        "confmap dollar expansion linux",
+			id:          "test-policy",
+			os:          "linux",
+			include:     []string{"/var/log/${file:/etc/shadow}"},
+			expectedErr: ErrDollarNotAllowed,
+		},
+		{
+			name:        "confmap dollar expansion windows",
+			id:          "test-policy",
+			os:          "windows",
+			include:     []string{`C:\ProgramData\logs\${env:FOO}\app.log`},
+			expectedErr: ErrDollarNotAllowed,
+		},
+		{
+			name:        "confmap bare dollar linux",
+			id:          "test-policy",
+			os:          "linux",
+			include:     []string{"/var/log/app$log.txt"},
+			expectedErr: ErrDollarNotAllowed,
 		},
 		{
 			name:        "invalid glob unclosed bracket",
@@ -244,6 +282,7 @@ func TestPolicyValidation_InvalidPaths(t *testing.T) {
 		{
 			name:        "invalid glob windows unclosed bracket",
 			id:          "test-policy",
+			os:          "windows",
 			include:     []string{`C:\ProgramData\MyApp\logs\[a-z`},
 			expectedErr: ErrInvalidGlobPattern,
 		},
@@ -286,36 +325,42 @@ func TestPolicyValidation_InvalidPaths(t *testing.T) {
 		{
 			name:        "bare directory windows ProgramData logs",
 			id:          "test-policy",
+			os:          "windows",
 			include:     []string{`C:\ProgramData\MyApp\logs`},
 			expectedErr: ErrBareDirectoryPath,
 		},
 		{
 			name:        "bare directory windows ProgramData logs trailing backslash",
 			id:          "test-policy",
+			os:          "windows",
 			include:     []string{`C:\ProgramData\MyApp\logs\`},
 			expectedErr: ErrBareDirectoryPath,
 		},
 		{
 			name:        "bare directory windows env ProgramData logs",
 			id:          "test-policy",
+			os:          "windows",
 			include:     []string{`%ProgramData%\MyApp\logs`},
 			expectedErr: ErrBareDirectoryPath,
 		},
 		{
 			name:        "bare directory windows inetpub logs",
 			id:          "test-policy",
+			os:          "windows",
 			include:     []string{`C:\inetpub\logs`},
 			expectedErr: ErrBareDirectoryPath,
 		},
 		{
 			name:        "bare directory windows inetpub logs trailing slash",
 			id:          "test-policy",
+			os:          "windows",
 			include:     []string{`C:\inetpub\logs\`},
 			expectedErr: ErrBareDirectoryPath,
 		},
 		{
 			name:        "bare directory windows SystemDrive inetpub logs",
 			id:          "test-policy",
+			os:          "windows",
 			include:     []string{`%SystemDrive%\inetpub\logs`},
 			expectedErr: ErrBareDirectoryPath,
 		},
@@ -323,6 +368,14 @@ func TestPolicyValidation_InvalidPaths(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			targetOS := tc.os
+			if targetOS == "" {
+				targetOS = "linux"
+			}
+			prevOS := currentOS
+			currentOS = targetOS
+			defer func() { currentOS = prevOS }()
+
 			pb := &policyv1alpha1.FileLogSourcePolicy{
 				Id:            tc.id,
 				IncludedPaths: tc.include,
@@ -409,6 +462,10 @@ func TestPolicy_Evaluate(t *testing.T) {
 }
 
 func TestPolicy_Evaluate_WindowsEnvExpansion(t *testing.T) {
+	prevOS := currentOS
+	currentOS = "windows"
+	defer func() { currentOS = prevOS }()
+
 	pb := &policyv1alpha1.FileLogSourcePolicy{
 		Id: "win-env-logs",
 		IncludedPaths: []string{
@@ -521,6 +578,10 @@ func TestMerge_MultiplePolicies_DeduplicatedAndSorted(t *testing.T) {
 }
 
 func TestMerge_MultiplePolicies_WindowsCaseInsensitiveDeduplication(t *testing.T) {
+	prevOS := currentOS
+	currentOS = "windows"
+	defer func() { currentOS = prevOS }()
+
 	p1, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
 		Id:            "win-1",
 		IncludedPaths: []string{`C:\ProgramData\App\logs\app.log`},
@@ -541,6 +602,10 @@ func TestMerge_MultiplePolicies_WindowsCaseInsensitiveDeduplication(t *testing.T
 }
 
 func TestMerge_MultiplePolicies_WindowsEnvDeduplication(t *testing.T) {
+	prevOS := currentOS
+	currentOS = "windows"
+	defer func() { currentOS = prevOS }()
+
 	p1, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
 		Id:            "win-env-1",
 		IncludedPaths: []string{`%ProgramData%\App\logs\app.log`},
@@ -574,6 +639,10 @@ func TestMerge_MultiplePolicies_WindowsEnvDeduplication(t *testing.T) {
 }
 
 func TestMerge_MultiplePolicies_WindowsEnvSortingDeterminism(t *testing.T) {
+	prevOS := currentOS
+	currentOS = "windows"
+	defer func() { currentOS = prevOS }()
+
 	p1, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
 		Id:            "win-sort-1",
 		IncludedPaths: []string{`%ProgramData%\App\logs\z.log`},
@@ -803,6 +872,9 @@ func TestPolicyValidation_TestAllowedRoot(t *testing.T) {
 	require.ErrorIs(t, err, ErrPathTraversal)
 
 	// 5. Windows path matching under FILELOG_TEST_ALLOWED_ROOT (case-insensitive and separator-normalized).
+	prevOS := currentOS
+	currentOS = "windows"
+	defer func() { currentOS = prevOS }()
 	t.Setenv("FILELOG_TEST_ALLOWED_ROOT", "C:\\TestRoot\\logs")
 	pbWin := &policyv1alpha1.FileLogSourcePolicy{
 		Id:            "win-test-policy",
@@ -832,6 +904,8 @@ func FuzzPolicyValidation(f *testing.F) {
 		"/var/log/{nginx,apache2}/*.log",
 		"/opt/{a/logs/x,secret/id_rsa}",
 		"/opt/app/{logs/*.log,conf/*.yaml}",
+		"/var/log/${file:/etc/shadow}",
+		"/var/log/app..log",
 	}
 	for _, seed := range seeds {
 		f.Add(seed)
@@ -855,30 +929,37 @@ func FuzzPolicyValidation(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, path string) {
-		pb := &policyv1alpha1.FileLogSourcePolicy{
-			Id:            "fuzz-policy",
-			IncludedPaths: []string{path},
-		}
-		// Validate should not panic on any input
-		policy, err := NewPolicyFromProto(pb)
-		if err == nil && policy != nil {
-			_ = policy.Validate()
-			_, _ = policy.Evaluate(context.Background())
+		for _, targetOS := range []string{"linux", "windows"} {
+			prevOS := currentOS
+			currentOS = targetOS
 
-			// Guardrail Invariant Check: If validation passes, no canary path outside allowed roots
-			// can ever match any pattern in the policy.
-			for _, pat := range policy.IncludedPaths() {
-				branches, err := expandBraces(pat)
-				if err != nil {
-					continue
-				}
-				for _, branch := range branches {
-					for _, canary := range canaries {
-						matched, _ := doublestar.Match(branch, canary)
-						require.False(t, matched, "Guardrail violation: fuzzed pattern %q (branch %q) matched forbidden canary %q", path, branch, canary)
+			pb := &policyv1alpha1.FileLogSourcePolicy{
+				Id:            "fuzz-policy",
+				IncludedPaths: []string{path},
+			}
+			// Validate should not panic on any input
+			policy, err := NewPolicyFromProto(pb)
+			if err == nil && policy != nil {
+				_ = policy.Validate()
+				_, _ = policy.Evaluate(context.Background())
+
+				// Guardrail Invariant Check: If validation passes, no canary path outside allowed roots
+				// can ever match any pattern in the policy.
+				for _, pat := range policy.IncludedPaths() {
+					branches, err := expandBraces(pat)
+					if err != nil {
+						continue
+					}
+					for _, branch := range branches {
+						for _, canary := range canaries {
+							matched, _ := doublestar.Match(branch, canary)
+							require.False(t, matched, "Guardrail violation: fuzzed pattern %q (branch %q) matched forbidden canary %q", path, branch, canary)
+						}
 					}
 				}
 			}
+
+			currentOS = prevOS
 		}
 	})
 }

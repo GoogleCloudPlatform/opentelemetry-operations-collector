@@ -15,6 +15,7 @@
 package filelogsource
 
 import (
+	"strings"
 	"testing"
 
 	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
@@ -28,7 +29,11 @@ func TestPathGuardrail_PipelineStages(t *testing.T) {
 		assert.ErrorIs(t, SanitizePattern("/var/log/../etc/passwd"), ErrPathTraversal)
 		assert.ErrorIs(t, SanitizePattern(`C:\ProgramData\..\Windows\System32`), ErrPathTraversal)
 		assert.ErrorIs(t, SanitizePattern("/var/log/[a-z"), ErrInvalidGlobPattern)
+		assert.ErrorIs(t, SanitizePattern("/var/log/${file:/etc/shadow}"), ErrDollarNotAllowed)
+		assert.ErrorIs(t, SanitizePattern("/var/log/app$log.txt"), ErrDollarNotAllowed)
 		assert.NoError(t, SanitizePattern("/var/log/*.log"))
+		assert.NoError(t, SanitizePattern("/var/log/app..log"))
+		assert.NoError(t, SanitizePattern("/var/log/*..*"))
 		assert.NoError(t, SanitizePattern(`C:\ProgramData\App\logs\*.log`))
 	})
 
@@ -74,6 +79,10 @@ func TestPathGuardrail_PipelineStages(t *testing.T) {
 	})
 
 	t.Run("Stage 3 - ParseAnatomy", func(t *testing.T) {
+		prevOS := currentOS
+		currentOS = "linux"
+		defer func() { currentOS = prevOS }()
+
 		// Relative path rejected
 		_, err := ParseAnatomy("var/log/*.log", "var/log/*.log")
 		require.ErrorIs(t, err, ErrRelativePath)
@@ -93,7 +102,8 @@ func TestPathGuardrail_PipelineStages(t *testing.T) {
 		assert.Equal(t, []string{"my-service", "sub", "logs", "prod"}, anatomy.Segments)
 		assert.Equal(t, "*.log", anatomy.Leaf)
 
-		// Windows anatomy structural parsing
+		// Windows anatomy structural parsing (under windows OS setting)
+		currentOS = "windows"
 		anatomyWin, err := ParseAnatomy(`C:\ProgramData\App\logs\*.log`, "C:/programdata/app/logs/*.log")
 		require.NoError(t, err)
 		assert.True(t, anatomyWin.IsWindows)
@@ -199,4 +209,55 @@ func TestVerifyLogRoot_NilAnatomy(t *testing.T) {
 	err := VerifyLogRoot(nil, "/var/log/*.log")
 	require.Error(t, err)
 	assert.Equal(t, "path anatomy cannot be nil", err.Error())
+}
+
+func TestPathGuardrail_CrossOSGating(t *testing.T) {
+	t.Run("rejects Windows paths on Linux", func(t *testing.T) {
+		prevOS := currentOS
+		currentOS = "linux"
+		defer func() { currentOS = prevOS }()
+
+		err := ValidateIncludePattern(`C:\ProgramData\MyApp\logs\*.log`)
+		require.ErrorIs(t, err, ErrDisallowedLogRoot)
+		assert.Contains(t, err.Error(), "Windows paths not allowed on non-Windows platforms")
+
+		err = ValidateIncludePattern(`%ProgramData%\MyApp\logs\*.log`)
+		require.ErrorIs(t, err, ErrDisallowedLogRoot)
+	})
+
+	t.Run("rejects POSIX paths on Windows", func(t *testing.T) {
+		prevOS := currentOS
+		currentOS = "windows"
+		defer func() { currentOS = prevOS }()
+
+		err := ValidateIncludePattern("/var/log/*.log")
+		require.ErrorIs(t, err, ErrDisallowedLogRoot)
+		assert.Contains(t, err.Error(), "POSIX paths not allowed on Windows")
+	})
+}
+
+func TestPathGuardrail_PathTraversalPrecision(t *testing.T) {
+	prevOS := currentOS
+	currentOS = "linux"
+	defer func() { currentOS = prevOS }()
+
+	// Legitimate files with double dots should pass
+	assert.NoError(t, ValidateIncludePattern("/var/log/app..log"))
+	assert.NoError(t, ValidateIncludePattern("/var/log/*..*"))
+	assert.NoError(t, ValidateIncludePattern("/var/log/my..service..log"))
+
+	// Actual traversal attempts must be rejected
+	assert.ErrorIs(t, ValidateIncludePattern("/var/log/../etc/shadow"), ErrPathTraversal)
+	assert.ErrorIs(t, ValidateIncludePattern("/var/log/sub/../../etc/passwd"), ErrPathTraversal)
+	assert.ErrorIs(t, ValidateIncludePattern("/var/log/{app,../etc}/log"), ErrPathTraversal)
+}
+
+func TestPathGuardrail_AnchoredEnvExpansion(t *testing.T) {
+	// Leading %ProgramData% expands
+	expanded := expandWindowsEnv(`%ProgramData%\MyApp\logs\*.log`)
+	assert.True(t, strings.HasPrefix(expanded, `C:\ProgramData\`))
+
+	// Middle of path %ProgramData% does NOT expand
+	middle := `C:\logs\%ProgramData%\app.log`
+	assert.Equal(t, middle, expandWindowsEnv(middle))
 }

@@ -1667,3 +1667,26 @@ func TestRetrieve_MultipleJournaldSourcePolicies_ConsolidationFailureAttributesA
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
+
+func TestCleanConf_EscapesDollarSigns(t *testing.T) {
+	input := map[string]any{
+		"single_dollar": "${file:/etc/shadow}",
+		"nested_map": map[string]any{
+			"env_var": "${env:SECRET}",
+			"plain":   "hello",
+		},
+		"slice_strings": []any{"${http://example.com}", "normal"},
+		"typed_slice":   []string{"$var", "ok"},
+		"nil_key":       nil,
+	}
+	cm := confmap.NewFromStringMap(input)
+	cleaned := cleanConf(cm)
+	m := cleaned.ToStringMap()
+
+	assert.Equal(t, "$${file:/etc/shadow}", m["single_dollar"])
+	assert.Equal(t, "$${env:SECRET}", m["nested_map"].(map[string]any)["env_var"])
+	assert.Equal(t, "hello", m["nested_map"].(map[string]any)["plain"])
+	assert.Equal(t, []any{"$${http://example.com}", "normal"}, m["slice_strings"])
+	assert.Equal(t, []string{"$$var", "ok"}, m["typed_slice"])
+	assert.NotContains(t, m, "nil_key")
+}

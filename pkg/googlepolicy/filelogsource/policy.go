@@ -154,10 +154,7 @@ func (p *Policy) Evaluate(_ context.Context) (*confmap.Conf, error) {
 		return nil, fmt.Errorf("policy %q failed validation: %w", p.PolicyName(), err)
 	}
 
-	includes := make([]string, len(p.proto.GetIncludedPaths()))
-	for i, inc := range p.proto.GetIncludedPaths() {
-		includes[i] = NormalizePattern(inc)
-	}
+	includes := slices.Clone(p.proto.GetIncludedPaths())
 
 	cfg := map[string]any{
 		"receivers": map[string]any{

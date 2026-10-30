@@ -763,7 +763,34 @@ func cleanConf(c *confmap.Conf) *confmap.Conf {
 	}
 	m := c.ToStringMap()
 	cleanNilEntries(m)
+	escapeDollarSigns(m)
 	return confmap.NewFromStringMap(m)
+}
+
+func escapeDollarSigns(m map[string]any) {
+	for k, v := range m {
+		if v == nil {
+			continue
+		}
+		switch val := v.(type) {
+		case string:
+			m[k] = strings.ReplaceAll(val, "$", "$$")
+		case map[string]any:
+			escapeDollarSigns(val)
+		case []any:
+			for i, item := range val {
+				if s, ok := item.(string); ok {
+					val[i] = strings.ReplaceAll(s, "$", "$$")
+				} else if subMap, ok := item.(map[string]any); ok {
+					escapeDollarSigns(subMap)
+				}
+			}
+		case []string:
+			for i, s := range val {
+				val[i] = strings.ReplaceAll(s, "$", "$$")
+			}
+		}
+	}
 }
 
 func cleanNilEntries(m map[string]any) {

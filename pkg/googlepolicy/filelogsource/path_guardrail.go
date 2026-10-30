@@ -20,6 +20,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -32,6 +33,8 @@ var (
 	ErrEmptyIncludePattern = errors.New("include pattern cannot be empty")
 	// ErrPathTraversal is returned when an include pattern contains prohibited path traversal ('..').
 	ErrPathTraversal = errors.New("include pattern contains prohibited path traversal ('..')")
+	// ErrDollarNotAllowed is returned when an include pattern contains '$', preventing confmap variable expansion injection.
+	ErrDollarNotAllowed = errors.New("include pattern cannot contain '$' (confmap variable expansion not allowed)")
 	// ErrSensitiveDirectory is returned when an include pattern targets a forbidden sensitive directory.
 	ErrSensitiveDirectory = errors.New("include pattern targets a forbidden sensitive directory")
 	// ErrDisallowedLogRoot is returned when an include pattern is outside permitted OS log roots.
@@ -64,8 +67,12 @@ var forbiddenPrefixes = []string{
 	"/usr/sbin",
 }
 
-// winEnvVarRegexp matches Windows %VAR% syntax.
-var winEnvVarRegexp = regexp.MustCompile(`%([A-Za-z0-9_]+)%`)
+// winEnvVarRegexp matches Windows %VAR% syntax anchored at the start of a pattern.
+var winEnvVarRegexp = regexp.MustCompile(`^%([A-Za-z0-9_]+)%`)
+
+// currentOS tracks the host operating system for path guardrail gating.
+// Gated on runtime.GOOS by default, and can be overridden within package tests.
+var currentOS = runtime.GOOS
 
 // PathAnatomy breaks down an absolute canonical pattern into its structural components.
 type PathAnatomy struct {
@@ -124,8 +131,14 @@ func SanitizePattern(pattern string) error {
 		return ErrEmptyIncludePattern
 	}
 
-	// Reject any path traversal segments.
-	if strings.Contains(pattern, "..") {
+	// Reject '$' to prevent confmap variable expansion injection (e.g. ${file:...}, ${env:...}).
+	if strings.Contains(pattern, "$") {
+		return fmt.Errorf("%w: %q", ErrDollarNotAllowed, pattern)
+	}
+
+	// Reject any path traversal segments ('..').
+	// Legitimate filenames like 'app..log' or '*..*' are permitted.
+	if hasPathTraversal(pattern) {
 		return fmt.Errorf("%w: %q", ErrPathTraversal, pattern)
 	}
 
@@ -141,6 +154,34 @@ func SanitizePattern(pattern string) error {
 	}
 
 	return nil
+}
+
+// hasPathTraversal checks whether pattern contains any path traversal segment ('..')
+// across all expanded branches. Legitimate filenames like 'app..log' or '*..*' are permitted.
+func hasPathTraversal(pattern string) bool {
+	norm := strings.ReplaceAll(pattern, "\\", "/")
+	if !strings.Contains(norm, "..") {
+		return false
+	}
+	branches, err := expandBraces(norm)
+	if err != nil {
+		for _, part := range strings.FieldsFunc(norm, func(r rune) bool {
+			return r == '/' || r == '{' || r == '}' || r == ','
+		}) {
+			if part == ".." {
+				return true
+			}
+		}
+		return false
+	}
+	for _, b := range branches {
+		for _, part := range strings.Split(b, "/") {
+			if part == ".." {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // NormalizePattern converts an include pattern into its canonical form (Stage 2).
@@ -165,8 +206,26 @@ func NormalizePattern(pattern string) string {
 func ParseAnatomy(raw string, canonical string) (*PathAnatomy, error) {
 	isLinuxAbs := strings.HasPrefix(canonical, "/")
 	isWindowsAbs := isWindowsAbsolute(canonical) || isWindowsAbsolute(raw)
-	if !isLinuxAbs && !isWindowsAbs {
-		return nil, fmt.Errorf("%w: %q", ErrRelativePath, raw)
+
+	// Cross-OS path guardrails:
+	// - On Windows, include patterns must target Windows absolute paths (with drive letter or %VAR%).
+	//   Linux-style paths like "/var/log/**" resolve to C:\var\log\** where non-admin users could create files.
+	// - On non-Windows OSes (Linux, Darwin), include patterns must target absolute paths starting with '/'.
+	//   Windows drive letters (e.g. C:\...) or %VAR% are invalid or relative on POSIX systems.
+	if currentOS == "windows" {
+		if !isWindowsAbs {
+			if isLinuxAbs {
+				return nil, fmt.Errorf("%w: %q (POSIX paths not allowed on Windows)", ErrDisallowedLogRoot, raw)
+			}
+			return nil, fmt.Errorf("%w: %q", ErrRelativePath, raw)
+		}
+	} else {
+		if isWindowsAbs {
+			return nil, fmt.Errorf("%w: %q (Windows paths not allowed on non-Windows platforms)", ErrDisallowedLogRoot, raw)
+		}
+		if !isLinuxAbs {
+			return nil, fmt.Errorf("%w: %q", ErrRelativePath, raw)
+		}
 	}
 
 	if isBareDirectory(raw, canonical) {
@@ -307,38 +366,48 @@ func isAlpha(c byte) bool {
 	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 }
 
-// expandWindowsEnv expands Windows %VAR% syntax (e.g. %ProgramData%, %SystemDrive%).
+// Note on Symlinks and NTFS Junctions:
+// Path guardrail validation validates the declared include patterns against
+// authorized OS directories and prevents lexical traversal. Symlink following and NTFS junction
+// traversal protections during active directory scanning and log tailing are handled upstream
+// by the OpenTelemetry Collector's filelogreceiver.
+
+// expandWindowsEnv expands Windows %VAR% syntax (e.g. %ProgramData%, %SystemDrive%)
+// anchored at the beginning of the pattern.
 // It checks os.Getenv(varName) (case-insensitively). If unset, it falls back to standard Windows defaults:
 //   - %ProgramData% -> C:\ProgramData
 //   - %SystemDrive% -> C:
 func expandWindowsEnv(pattern string) string {
-	if !strings.Contains(pattern, "%") {
+	if !strings.HasPrefix(pattern, "%") {
 		return pattern
 	}
-	return winEnvVarRegexp.ReplaceAllStringFunc(pattern, func(m string) string {
-		varName := m[1 : len(m)-1]
-		var defaultVal string
-		switch {
-		case strings.EqualFold(varName, "ProgramData"):
-			defaultVal = `C:\ProgramData`
-		case strings.EqualFold(varName, "SystemDrive"):
-			defaultVal = `C:`
-		default:
-			return m
+	loc := winEnvVarRegexp.FindStringSubmatchIndex(pattern)
+	if loc == nil {
+		return pattern
+	}
+	varName := pattern[loc[2]:loc[3]]
+	var defaultVal string
+	switch {
+	case strings.EqualFold(varName, "ProgramData"):
+		defaultVal = `C:\ProgramData`
+	case strings.EqualFold(varName, "SystemDrive"):
+		defaultVal = `C:`
+	default:
+		return pattern
+	}
+	val := os.Getenv(varName)
+	if val == "" {
+		if v := os.Getenv(strings.ToUpper(varName)); v != "" {
+			val = v
+		} else if v := os.Getenv(strings.ToLower(varName)); v != "" {
+			val = v
 		}
-		val := os.Getenv(varName)
-		if val == "" {
-			if v := os.Getenv(strings.ToUpper(varName)); v != "" {
-				val = v
-			} else if v := os.Getenv(strings.ToLower(varName)); v != "" {
-				val = v
-			}
-		}
-		if val == "" {
-			val = defaultVal
-		}
-		return strings.TrimRight(val, "/\\")
-	})
+	}
+	if val == "" {
+		val = defaultVal
+	}
+	rest := pattern[loc[1]:]
+	return strings.TrimRight(val, "/\\") + rest
 }
 
 // matchesTestAllowedRoot checks whether pattern falls within the directory specified

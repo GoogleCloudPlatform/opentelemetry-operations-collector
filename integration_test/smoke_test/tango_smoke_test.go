@@ -26,6 +26,13 @@ Cloud Monitoring. The gauge is only updated once the collector has applied (and
 ACKed) a revision, so a point carrying the expected PolicySet and revision
 proves the whole loop.
 
+Once the PolicySet is active, the test writes JSON log lines to a file tailed
+by a filelog receiver declared in the collector's config.yaml, and checks in
+Cloud Logging that the PolicySet's log filter policies, enforced by the
+googlepolicy processor, kept and dropped the expected lines. The receiver is
+declared locally because the Control Plane does not yet translate source
+policies into collector config.
+
 The test assumes a long-lived fleet and PolicySet have been pre-provisioned in
 the test project and rolled out (see tango/README.md). It never calls the
 Telemetry Management API itself.
@@ -46,6 +53,7 @@ package smoke
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -89,7 +97,50 @@ const (
 	// queryMaxAttempts bounds how long the test waits for a point with the
 	// expected revision once the series exists (about 3 minutes plus query time).
 	queryMaxAttempts = 20
+
+	// tangoLogPath is the file tailed by the filelog receiver declared in
+	// tangoCollectorConfig. The test writes it only after the PolicySet is
+	// active.
+	tangoLogPath = "/var/log/gboc-smoke/test.log"
+	// tangoSyslogIdentifier is the SYSLOG_IDENTIFIER that the PolicySet keeps;
+	// the PolicySet drops every log with a different one.
+	tangoSyslogIdentifier = "gboc-smoke"
+	logWindow             = 30 * time.Minute
 )
+
+// tangoCollectorConfig replaces the packaged config.yaml. It is merged with the
+// config from the googlecontrolplane config source.
+//
+// The Control Plane does not yet translate source policies into collector
+// config, so the log source is declared here: a filelog receiver that parses
+// each JSON line into a map body. The PolicySet's log filter policies match on
+// body fields (SYSLOG_IDENTIFIER, MESSAGE), which only match map bodies.
+//
+// googlepolicy enforces the PolicySet activated by the googlecontrolplane
+// config source, whichever config declares the processor. The other processors
+// and the exporter are the fixed-name components that the googlecontrolplane
+// config source always generates; the exporter sends to
+// telemetry.googleapis.com.
+const tangoCollectorConfig = `receivers:
+  filelog/tango_smoke:
+    include: [` + tangoLogPath + `]
+    start_at: beginning
+    operators:
+      - type: json_parser
+        parse_to: body
+processors:
+  googlepolicy:
+service:
+  pipelines:
+    logs/tango_smoke:
+      receivers: [filelog/tango_smoke]
+      processors:
+        - resourcedetection/googlecontrolplane
+        - transform/googlecontrolplane
+        - googlepolicy
+        - queue_batch/default_gcp_destination_batch_logs
+      exporters: [otlp_grpc/default_gcp_destination]
+`
 
 // tangoSettings holds the Tango-specific environment for the test.
 type tangoSettings struct {
@@ -142,13 +193,17 @@ func (s tangoSettings) dropIn() string {
 	return fmt.Sprintf("[Service]\nExecStart=\nExecStart=/usr/bin/otelcol-google $OTELCOL_OPTIONS %s\n", s.controlPlaneConfig())
 }
 
-// setupTangoCollector installs otelcol-google and restarts it with the
-// googlecontrolplane config source added.
+// setupTangoCollector installs otelcol-google with tangoCollectorConfig and
+// restarts it with the googlecontrolplane config source added.
 func setupTangoCollector(ctx context.Context, logger *log.Logger, vm *gce.VM, s tangoSettings) error {
 	if err := installOtelCollector(ctx, logger, vm, locationFromEnvVars()); err != nil {
 		return err
 	}
-	if _, err := gce.RunRemotely(ctx, logger, vm, "sudo mkdir -p "+path.Dir(tangoDropInPath)); err != nil {
+	configPath := collectorConfigPath(vm.ImageSpec)
+	if err := gce.UploadContent(ctx, logger, vm, strings.NewReader(tangoCollectorConfig), configPath); err != nil {
+		return fmt.Errorf("failed to upload %s: %v", configPath, err)
+	}
+	if _, err := gce.RunRemotely(ctx, logger, vm, fmt.Sprintf("sudo mkdir -p %s %s", path.Dir(tangoDropInPath), path.Dir(tangoLogPath))); err != nil {
 		return err
 	}
 	if err := gce.UploadContent(ctx, logger, vm, strings.NewReader(s.dropIn()), tangoDropInPath); err != nil {
@@ -292,6 +347,76 @@ func waitForPolicySetActive(ctx context.Context, logger *log.Logger, vm *gce.VM,
 		policySetActiveMetric, collector, s.policySetID, want, s.expectedRevision, last)
 }
 
+// tangoLogLine is one JSON line written to tangoLogPath. The filelog receiver
+// parses it into a map body with the same keys as a journald record.
+type tangoLogLine struct {
+	SyslogIdentifier string `json:"SYSLOG_IDENTIFIER"`
+	Message          string `json:"MESSAGE"`
+}
+
+// tangoLogs holds the lines the test writes, each tagged with a unique marker,
+// split by what the PolicySet's log filter policies should do with them.
+type tangoLogs struct {
+	kept    tangoLogLine
+	dropped []tangoLogLine
+}
+
+func newTangoLogs() tangoLogs {
+	marker := uuid.NewString()
+	return tangoLogs{
+		kept: tangoLogLine{SyslogIdentifier: tangoSyslogIdentifier, Message: "gboc-smoke=keep " + marker},
+		dropped: []tangoLogLine{
+			// Dropped by the MESSAGE contains "gboc-smoke=drop" filter.
+			{SyslogIdentifier: tangoSyslogIdentifier, Message: "gboc-smoke=drop " + marker},
+			// Dropped by the SYSLOG_IDENTIFIER != "gboc-smoke" filter.
+			{SyslogIdentifier: tangoSyslogIdentifier + "-other", Message: "gboc-smoke=other " + marker},
+		},
+	}
+}
+
+// writeTangoLogs writes all lines to tangoLogPath, which the filelog receiver
+// picks up on its next poll.
+func writeTangoLogs(ctx context.Context, logger *log.Logger, vm *gce.VM, logs tangoLogs) error {
+	var b strings.Builder
+	for _, l := range append([]tangoLogLine{logs.kept}, logs.dropped...) {
+		line, err := json.Marshal(l)
+		if err != nil {
+			return err
+		}
+		b.Write(line)
+		b.WriteByte('\n')
+	}
+	logger.Printf("Writing %s:\n%s", tangoLogPath, b.String())
+	if err := gce.UploadContent(ctx, logger, vm, strings.NewReader(b.String()), tangoLogPath); err != nil {
+		return fmt.Errorf("failed to upload %s: %v", tangoLogPath, err)
+	}
+	// The collector does not run as root.
+	_, err := gce.RunRemotely(ctx, logger, vm, "sudo chmod 0644 "+tangoLogPath)
+	return err
+}
+
+// messageQuery is a Cloud Logging filter for the log with the given MESSAGE.
+// The map body is ingested as jsonPayload.
+func messageQuery(l tangoLogLine) string {
+	return fmt.Sprintf("jsonPayload.MESSAGE=%q", l.Message)
+}
+
+// verifyFilteredLogs checks that the kept line reached Cloud Logging and the
+// dropped lines did not. The lines were written together, so once the kept
+// line is found the dropped ones would have arrived too.
+func verifyFilteredLogs(ctx context.Context, logger *log.Logger, vm *gce.VM, logs tangoLogs) error {
+	// The log name is chosen by telemetry.googleapis.com, so match any.
+	if err := gce.WaitForLog(ctx, logger, vm, ".*", logWindow, messageQuery(logs.kept)); err != nil {
+		return fmt.Errorf("log %q, which the PolicySet keeps, not found in Cloud Logging: %v", logs.kept.Message, err)
+	}
+	for _, l := range logs.dropped {
+		if err := gce.AssertLogMissing(ctx, logger, vm, ".*", logWindow, messageQuery(l)); err != nil {
+			return fmt.Errorf("log %q should have been dropped by the PolicySet: %v", l.Message, err)
+		}
+	}
+	return nil
+}
+
 func TestTangoSmoke(t *testing.T) {
 	t.Parallel()
 	s := tangoSettingsFromEnv(t)
@@ -319,6 +444,15 @@ func TestTangoSmoke(t *testing.T) {
 			t.Fatal(err)
 		}
 		if err := waitForPolicySetActive(ctx, logger, vm, s, collector); err != nil {
+			t.Fatal(err)
+		}
+		// Logs written before the PolicySet is active pass through
+		// unfiltered, so they are only written now.
+		logs := newTangoLogs()
+		if err := writeTangoLogs(ctx, logger, vm, logs); err != nil {
+			t.Fatal(err)
+		}
+		if err := verifyFilteredLogs(ctx, logger, vm, logs); err != nil {
 			t.Fatal(err)
 		}
 	})

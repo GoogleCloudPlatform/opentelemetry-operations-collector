@@ -29,9 +29,7 @@ import (
 )
 
 func TestPolicyValidation_ValidLinuxPaths(t *testing.T) {
-	prevOS := currentOS
-	currentOS = "linux"
-	t.Cleanup(func() { currentOS = prevOS })
+	t.Cleanup(setOSForTest("linux"))
 
 	validPaths := [][]string{
 		{"/var/log/**/*.log"},
@@ -58,9 +56,7 @@ func TestPolicyValidation_ValidLinuxPaths(t *testing.T) {
 }
 
 func TestPolicyValidation_ValidWindowsPaths(t *testing.T) {
-	prevOS := currentOS
-	currentOS = "windows"
-	t.Cleanup(func() { currentOS = prevOS })
+	t.Cleanup(setOSForTest("windows"))
 
 	validPaths := [][]string{
 		{`C:\ProgramData\MyApp\logs\app.log`},
@@ -372,9 +368,7 @@ func TestPolicyValidation_InvalidPaths(t *testing.T) {
 			if targetOS == "" {
 				targetOS = "linux"
 			}
-			prevOS := currentOS
-			currentOS = targetOS
-			t.Cleanup(func() { currentOS = prevOS })
+			t.Cleanup(setOSForTest(targetOS))
 
 			pb := &policyv1alpha1.FileLogSourcePolicy{
 				Id:            tc.id,
@@ -462,9 +456,7 @@ func TestPolicy_Evaluate(t *testing.T) {
 }
 
 func TestPolicy_Evaluate_WindowsEnvExpansion(t *testing.T) {
-	prevOS := currentOS
-	currentOS = "windows"
-	t.Cleanup(func() { currentOS = prevOS })
+	t.Cleanup(setOSForTest("windows"))
 
 	pb := &policyv1alpha1.FileLogSourcePolicy{
 		Id: "win-env-logs",
@@ -578,9 +570,7 @@ func TestMerge_MultiplePolicies_DeduplicatedAndSorted(t *testing.T) {
 }
 
 func TestMerge_MultiplePolicies_WindowsCaseInsensitiveDeduplication(t *testing.T) {
-	prevOS := currentOS
-	currentOS = "windows"
-	t.Cleanup(func() { currentOS = prevOS })
+	t.Cleanup(setOSForTest("windows"))
 
 	p1, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
 		Id:            "win-1",
@@ -602,9 +592,7 @@ func TestMerge_MultiplePolicies_WindowsCaseInsensitiveDeduplication(t *testing.T
 }
 
 func TestMerge_MultiplePolicies_WindowsEnvDeduplication(t *testing.T) {
-	prevOS := currentOS
-	currentOS = "windows"
-	t.Cleanup(func() { currentOS = prevOS })
+	t.Cleanup(setOSForTest("windows"))
 
 	p1, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
 		Id:            "win-env-1",
@@ -639,9 +627,7 @@ func TestMerge_MultiplePolicies_WindowsEnvDeduplication(t *testing.T) {
 }
 
 func TestMerge_MultiplePolicies_WindowsEnvSortingDeterminism(t *testing.T) {
-	prevOS := currentOS
-	currentOS = "windows"
-	t.Cleanup(func() { currentOS = prevOS })
+	t.Cleanup(setOSForTest("windows"))
 
 	p1, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
 		Id:            "win-sort-1",
@@ -872,9 +858,7 @@ func TestPolicyValidation_TestAllowedRoot(t *testing.T) {
 	require.ErrorIs(t, err, ErrPathTraversal)
 
 	// 5. Windows path matching under FILELOG_TEST_ALLOWED_ROOT (case-insensitive and separator-normalized).
-	prevOS := currentOS
-	currentOS = "windows"
-	t.Cleanup(func() { currentOS = prevOS })
+	t.Cleanup(setOSForTest("windows"))
 	t.Setenv("FILELOG_TEST_ALLOWED_ROOT", "C:\\TestRoot\\logs")
 	pbWin := &policyv1alpha1.FileLogSourcePolicy{
 		Id:            "win-test-policy",
@@ -906,6 +890,9 @@ func FuzzPolicyValidation(f *testing.F) {
 		"/opt/app/{logs/*.log,conf/*.yaml}",
 		"/var/log/${file:/etc/shadow}",
 		"/var/log/app..log",
+		"/var/log/.[.]/etc/passwd",
+		"/var/log/[.][.]/etc/passwd",
+		"/var/log/.{.,}./etc/passwd",
 	}
 	for _, seed := range seeds {
 		f.Add(seed)
@@ -930,8 +917,7 @@ func FuzzPolicyValidation(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, path string) {
 		for _, targetOS := range []string{"linux", "windows"} {
-			prevOS := currentOS
-			currentOS = targetOS
+			restore := setOSForTest(targetOS)
 
 			pb := &policyv1alpha1.FileLogSourcePolicy{
 				Id:            "fuzz-policy",
@@ -959,7 +945,7 @@ func FuzzPolicyValidation(f *testing.F) {
 				}
 			}
 
-			currentOS = prevOS
+			restore()
 		}
 	})
 }

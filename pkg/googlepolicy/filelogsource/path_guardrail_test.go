@@ -79,9 +79,7 @@ func TestPathGuardrail_PipelineStages(t *testing.T) {
 	})
 
 	t.Run("Stage 3 - ParseAnatomy", func(t *testing.T) {
-		prevOS := currentOS
-		currentOS = "linux"
-		t.Cleanup(func() { currentOS = prevOS })
+		t.Cleanup(setOSForTest("linux"))
 
 		// Relative path rejected
 		_, err := ParseAnatomy("var/log/*.log", "var/log/*.log")
@@ -103,7 +101,7 @@ func TestPathGuardrail_PipelineStages(t *testing.T) {
 		assert.Equal(t, "*.log", anatomy.Leaf)
 
 		// Windows anatomy structural parsing (under windows OS setting)
-		currentOS = "windows"
+		t.Cleanup(setOSForTest("windows"))
 		anatomyWin, err := ParseAnatomy(`C:\ProgramData\App\logs\*.log`, "C:/programdata/app/logs/*.log")
 		require.NoError(t, err)
 		assert.True(t, anatomyWin.IsWindows)
@@ -213,9 +211,7 @@ func TestVerifyLogRoot_NilAnatomy(t *testing.T) {
 
 func TestPathGuardrail_CrossOSGating(t *testing.T) {
 	t.Run("rejects Windows paths on Linux", func(t *testing.T) {
-		prevOS := currentOS
-		currentOS = "linux"
-		t.Cleanup(func() { currentOS = prevOS })
+		t.Cleanup(setOSForTest("linux"))
 
 		err := ValidateIncludePattern(`C:\ProgramData\MyApp\logs\*.log`)
 		require.ErrorIs(t, err, ErrDisallowedLogRoot)
@@ -226,9 +222,7 @@ func TestPathGuardrail_CrossOSGating(t *testing.T) {
 	})
 
 	t.Run("rejects POSIX paths on Windows", func(t *testing.T) {
-		prevOS := currentOS
-		currentOS = "windows"
-		t.Cleanup(func() { currentOS = prevOS })
+		t.Cleanup(setOSForTest("windows"))
 
 		err := ValidateIncludePattern("/var/log/*.log")
 		require.ErrorIs(t, err, ErrDisallowedLogRoot)
@@ -237,19 +231,27 @@ func TestPathGuardrail_CrossOSGating(t *testing.T) {
 }
 
 func TestPathGuardrail_PathTraversalPrecision(t *testing.T) {
-	prevOS := currentOS
-	currentOS = "linux"
-	t.Cleanup(func() { currentOS = prevOS })
+	t.Cleanup(setOSForTest("linux"))
 
 	// Legitimate files with double dots should pass
 	assert.NoError(t, ValidateIncludePattern("/var/log/app..log"))
-	assert.NoError(t, ValidateIncludePattern("/var/log/*..*"))
 	assert.NoError(t, ValidateIncludePattern("/var/log/my..service..log"))
 
 	// Actual traversal attempts must be rejected
 	assert.ErrorIs(t, ValidateIncludePattern("/var/log/../etc/shadow"), ErrPathTraversal)
 	assert.ErrorIs(t, ValidateIncludePattern("/var/log/sub/../../etc/passwd"), ErrPathTraversal)
 	assert.ErrorIs(t, ValidateIncludePattern("/var/log/{app,../etc}/log"), ErrPathTraversal)
+	assert.ErrorIs(t, ValidateIncludePattern("/opt/app/logs/../../etc/shadow"), ErrPathTraversal)
+
+	// Adversarial evasion vectors: character classes matching '..'
+	assert.ErrorIs(t, ValidateIncludePattern("/var/log/.[.]/etc/passwd"), ErrPathTraversal)
+	assert.ErrorIs(t, ValidateIncludePattern("/var/log/[.][.]/etc/passwd"), ErrPathTraversal)
+	assert.ErrorIs(t, ValidateIncludePattern("/var/log/[.]/etc/passwd"), ErrPathTraversal)
+	assert.ErrorIs(t, ValidateIncludePattern("/var/log/*..*/app.log"), ErrPathTraversal)
+
+	// Adversarial evasion vectors: brace expansion constructing '..'
+	assert.ErrorIs(t, ValidateIncludePattern("/var/log/.{.,}./etc/passwd"), ErrPathTraversal)
+	assert.ErrorIs(t, ValidateIncludePattern("/opt/app/logs/.{.,}./etc/shadow"), ErrPathTraversal)
 }
 
 func TestPathGuardrail_AnchoredEnvExpansion(t *testing.T) {

@@ -1691,4 +1691,11 @@ func TestCleanConf_EscapesDollarSigns(t *testing.T) {
 	assert.Equal(t, []string{"$$var", "ok"}, m["typed_slice"])
 	assert.Equal(t, []any{[]any{"$$nested", "normal"}}, m["nested_slice"])
 	assert.NotContains(t, m, "nil_key")
+
+	// Idempotency: Multiple cleanConf passes must NOT double-escape ('$$' -> '$$$$').
+	secondClean := cleanConf(cleaned)
+	m2 := secondClean.ToStringMap()
+	assert.Equal(t, "$${file:/etc/shadow}", m2["single_dollar"])
+	assert.Equal(t, "$${env:SECRET}", m2["nested_map"].(map[string]any)["env_var"])
+	assert.Equal(t, []any{[]any{"$$nested", "normal"}}, m2["nested_slice"])
 }

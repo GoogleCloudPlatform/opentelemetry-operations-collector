@@ -18,11 +18,13 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/bmatcuk/doublestar/v4"
@@ -70,9 +72,65 @@ var forbiddenPrefixes = []string{
 // winEnvVarRegexp matches Windows %VAR% syntax anchored at the start of a pattern.
 var winEnvVarRegexp = regexp.MustCompile(`^%([A-Za-z0-9_]+)%`)
 
-// currentOS tracks the host operating system for path guardrail gating.
-// Gated on runtime.GOOS by default, and can be overridden within package tests.
-var currentOS = runtime.GOOS
+var (
+	osMu      sync.RWMutex
+	currentOS = runtime.GOOS
+)
+
+func getOS() string {
+	osMu.RLock()
+	defer osMu.RUnlock()
+	return currentOS
+}
+
+func setOSForTest(osName string) func() {
+	osMu.Lock()
+	prev := currentOS
+	currentOS = osName
+	osMu.Unlock()
+	return func() {
+		osMu.Lock()
+		currentOS = prev
+		osMu.Unlock()
+	}
+}
+
+// isTraversalSegment checks whether a leaf segment represents a traversal component ('..')
+// either literally or via glob character classes (e.g. '.[.]', '[.][.]').
+func isTraversalSegment(seg string) bool {
+	if seg == ".." {
+		return true
+	}
+	if strings.Contains(seg, ".") {
+		clean := strings.ReplaceAll(strings.ReplaceAll(seg, "[", ""), "]", "")
+		if clean == ".." {
+			return true
+		}
+	}
+	return false
+}
+
+// isTraversalDirectorySegment checks whether an intermediate directory segment represents
+// a traversal component ('..' or '.') either literally, via glob character classes (e.g. '.[.]', '[.][.]', '[.]'),
+// or via wildcards that match parent directory entries (e.g. '*..*').
+func isTraversalDirectorySegment(seg string) bool {
+	if seg == ".." || seg == "." {
+		return true
+	}
+	if strings.Contains(seg, ".") {
+		clean := strings.ReplaceAll(strings.ReplaceAll(seg, "[", ""), "]", "")
+		if clean == ".." || clean == "." {
+			return true
+		}
+		if matched, _ := doublestar.Match(seg, ".."); matched {
+			return true
+		}
+		if matched, _ := doublestar.Match(seg, "."); matched {
+			return true
+		}
+	}
+	return false
+}
 
 // PathAnatomy breaks down an absolute canonical pattern into its structural components.
 type PathAnatomy struct {
@@ -112,8 +170,15 @@ func ValidateIncludePattern(rawPattern string) error {
 
 // validateSingleBranch executes Stages 2, 3, and 4 on a single concrete branch.
 func validateSingleBranch(pattern string) error {
+	if hasPathTraversal(pattern) {
+		return fmt.Errorf("%w: %q", ErrPathTraversal, pattern)
+	}
+
 	// Stage 2: Canonical Normalization
 	canonical := NormalizePattern(pattern)
+	if hasPathTraversal(canonical) {
+		return fmt.Errorf("%w: %q", ErrPathTraversal, pattern)
+	}
 
 	// Stage 3: Structural Anatomy & Segment Parsing
 	anatomy, err := ParseAnatomy(pattern, canonical)
@@ -121,8 +186,34 @@ func validateSingleBranch(pattern string) error {
 		return err
 	}
 
+	for _, seg := range anatomy.Segments {
+		if isTraversalDirectorySegment(seg) {
+			return fmt.Errorf("%w: %q", ErrPathTraversal, pattern)
+		}
+	}
+	if isTraversalSegment(anatomy.Leaf) {
+		return fmt.Errorf("%w: %q", ErrPathTraversal, pattern)
+	}
+
 	// Stage 4: Allowed Root Verification
 	return VerifyLogRoot(anatomy, pattern)
+}
+
+func isBareDirectory(pattern string, canonical string) bool {
+	if pattern == "." || canonical == "." || strings.HasSuffix(pattern, "/.") || strings.HasSuffix(pattern, "\\.") || strings.HasSuffix(canonical, "/.") || strings.HasSuffix(pattern, "/./") || strings.HasSuffix(pattern, "\\.\\") {
+		return true
+	}
+	if strings.HasSuffix(pattern, "/") || strings.HasSuffix(pattern, "\\") {
+		return true
+	}
+	if pattern == "/var/log" || canonical == "/var/log" {
+		return true
+	}
+	normLower := strings.ToLower(canonical)
+	if strings.HasSuffix(pattern, "/logs") || strings.HasSuffix(pattern, "\\logs") || strings.HasSuffix(normLower, "/logs") {
+		return true
+	}
+	return false
 }
 
 // SanitizePattern enforces basic lexical integrity and glob syntax on rawPattern (Stage 1).
@@ -134,6 +225,11 @@ func SanitizePattern(pattern string) error {
 	// Reject '$' to prevent confmap variable expansion injection (e.g. ${file:...}, ${env:...}).
 	if strings.Contains(pattern, "$") {
 		return fmt.Errorf("%w: %q", ErrDollarNotAllowed, pattern)
+	}
+
+	// Reject bare directory patterns.
+	if isBareDirectory(pattern, pattern) {
+		return fmt.Errorf("%w: %q (must specify filename or glob wildcard, e.g. /** or /*.log)", ErrBareDirectoryPath, pattern)
 	}
 
 	// Reject any path traversal segments ('..').
@@ -156,28 +252,34 @@ func SanitizePattern(pattern string) error {
 	return nil
 }
 
-// hasPathTraversal checks whether pattern contains any path traversal segment ('..')
-// across all expanded branches. Legitimate filenames like 'app..log' or '*..*' are permitted.
+// hasPathTraversal checks whether pattern contains any path traversal segment ('..' or '.')
+// across all expanded branches, including glob character classes (e.g. '.[.]', '[.][.]', '[.]')
+// and brace expansions (e.g. '.{.,}.'). Legitimate filenames like 'app..log' or '*..*' as leaf are permitted.
 func hasPathTraversal(pattern string) bool {
-	norm := strings.ReplaceAll(pattern, "\\", "/")
-	if !strings.Contains(norm, "..") {
-		return false
-	}
-	branches, err := expandBraces(norm)
+	// Expand braces to check every concrete branch.
+	branches, err := expandBraces(pattern)
 	if err != nil {
-		for _, part := range strings.FieldsFunc(norm, func(r rune) bool {
-			return r == '/' || r == '{' || r == '}' || r == ','
+		for _, part := range strings.FieldsFunc(pattern, func(r rune) bool {
+			return r == '/' || r == '\\' || r == '{' || r == '}' || r == ','
 		}) {
-			if part == ".." {
+			if isTraversalSegment(part) {
 				return true
 			}
 		}
 		return false
 	}
 	for _, b := range branches {
-		for _, part := range strings.Split(b, "/") {
-			if part == ".." {
-				return true
+		norm := strings.ReplaceAll(b, "\\", "/")
+		parts := strings.Split(norm, "/")
+		for i, part := range parts {
+			if i < len(parts)-1 {
+				if isTraversalDirectorySegment(part) {
+					return true
+				}
+			} else {
+				if isTraversalSegment(part) {
+					return true
+				}
 			}
 		}
 	}
@@ -212,7 +314,7 @@ func ParseAnatomy(raw string, canonical string) (*PathAnatomy, error) {
 	//   Linux-style paths like "/var/log/**" resolve to C:\var\log\** where non-admin users could create files.
 	// - On non-Windows OSes (Linux, Darwin), include patterns must target absolute paths starting with '/'.
 	//   Windows drive letters (e.g. C:\...) or %VAR% are invalid or relative on POSIX systems.
-	if currentOS == "windows" {
+	if getOS() == "windows" {
 		if !isWindowsAbs {
 			if isLinuxAbs {
 				return nil, fmt.Errorf("%w: %q (POSIX paths not allowed on Windows)", ErrDisallowedLogRoot, raw)
@@ -280,6 +382,13 @@ func VerifyLogRoot(anatomy *PathAnatomy, rawPattern string) error {
 		return errors.New("path anatomy cannot be nil")
 	}
 
+	// Canonical path clean invariant:
+	// Path cleaning must not alter the canonical path (which indicates traversal or redundant dot segments were collapsed).
+	cleanPath := path.Clean(anatomy.Canonical)
+	if cleanPath != anatomy.Canonical {
+		return fmt.Errorf("%w: %q (path cleaning collapsed segments: %q)", ErrPathTraversal, rawPattern, cleanPath)
+	}
+
 	// Check forbidden sensitive system directories on Linux/Unix.
 	if !anatomy.IsWindows {
 		for _, f := range forbiddenPrefixes {
@@ -325,23 +434,6 @@ func VerifyLogRoot(anatomy *PathAnatomy, rawPattern string) error {
 	}
 
 	return fmt.Errorf("%w: %q", ErrDisallowedLogRoot, rawPattern)
-}
-
-func isBareDirectory(pattern string, canonical string) bool {
-	if pattern == "." || canonical == "." || strings.HasSuffix(pattern, "/.") || strings.HasSuffix(pattern, "\\.") || strings.HasSuffix(canonical, "/.") {
-		return true
-	}
-	if strings.HasSuffix(pattern, "/") || strings.HasSuffix(pattern, "\\") {
-		return true
-	}
-	if pattern == "/var/log" || canonical == "/var/log" {
-		return true
-	}
-	normLower := strings.ToLower(canonical)
-	if strings.HasSuffix(pattern, "/logs") || strings.HasSuffix(pattern, "\\logs") || strings.HasSuffix(normLower, "/logs") {
-		return true
-	}
-	return false
 }
 
 // splitWindowsDrive splits a canonical Windows path (e.g. "C:/programdata/...") into drive and rest.

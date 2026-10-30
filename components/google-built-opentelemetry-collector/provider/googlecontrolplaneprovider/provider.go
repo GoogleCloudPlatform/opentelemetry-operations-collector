@@ -774,14 +774,14 @@ func escapeDollarSigns(m map[string]any) {
 		}
 		switch val := v.(type) {
 		case string:
-			m[k] = strings.ReplaceAll(val, "$", "$$")
+			m[k] = escapeDollarString(val)
 		case map[string]any:
 			escapeDollarSigns(val)
 		case []any:
 			escapeDollarSignsSlice(val)
 		case []string:
 			for i, s := range val {
-				val[i] = strings.ReplaceAll(s, "$", "$$")
+				val[i] = escapeDollarString(s)
 			}
 		}
 	}
@@ -794,17 +794,34 @@ func escapeDollarSignsSlice(slice []any) {
 		}
 		switch elem := item.(type) {
 		case string:
-			slice[i] = strings.ReplaceAll(elem, "$", "$$")
+			slice[i] = escapeDollarString(elem)
 		case map[string]any:
 			escapeDollarSigns(elem)
 		case []any:
 			escapeDollarSignsSlice(elem)
 		case []string:
 			for j, s := range elem {
-				elem[j] = strings.ReplaceAll(s, "$", "$$")
+				elem[j] = escapeDollarString(s)
 			}
 		}
 	}
+}
+
+// escapeDollarString escapes unescaped '$' to '$$' to prevent confmap variable expansion injection.
+// Consecutive '$$' are already escaped and left as-is, ensuring idempotency across multiple cleanConf passes.
+func escapeDollarString(s string) string {
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] == '$' {
+			b.WriteString("$$")
+			if i+1 < len(s) && s[i+1] == '$' {
+				i++ // skip already-escaped second '$'
+			}
+		} else {
+			b.WriteByte(s[i])
+		}
+	}
+	return b.String()
 }
 
 func cleanNilEntries(m map[string]any) {

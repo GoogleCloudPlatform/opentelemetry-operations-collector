@@ -22,7 +22,6 @@ import (
 
 	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
-	"go.opentelemetry.io/collector/component"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
@@ -95,9 +94,9 @@ func verifyCompiledHostMetricsPolicy(t *testing.T, pol googlepolicy.Policy) {
 	if !ok {
 		t.Fatal("receivers key missing or not a map")
 	}
-	hmCfg, ok := receivers[DefaultReceiverID].(map[string]any)
+	hmCfg, ok := receivers[receiverID.String()].(map[string]any)
 	if !ok {
-		t.Fatalf("receiver %q missing from evaluated config", DefaultReceiverID)
+		t.Fatalf("receiver %q missing from evaluated config", receiverID.String())
 	}
 
 	expectedIntervalStr := fmt.Sprintf("%ds", effectiveInterval)
@@ -122,8 +121,8 @@ func verifyCompiledHostMetricsPolicy(t *testing.T, pol googlepolicy.Policy) {
 		t.Fatalf("TraceReceiverIDs() must be nil, got %v", hp.TraceReceiverIDs())
 	}
 	metricIDs := hp.MetricReceiverIDs()
-	if len(metricIDs) != 1 || metricIDs[0] != component.MustNewID(DefaultReceiverID) {
-		t.Fatalf("MetricReceiverIDs() mismatch: got %v, want [%s]", metricIDs, DefaultReceiverID)
+	if len(metricIDs) != 1 || metricIDs[0] != receiverID {
+		t.Fatalf("MetricReceiverIDs() mismatch: got %v, want [%s]", metricIDs, receiverID)
 	}
 }
 

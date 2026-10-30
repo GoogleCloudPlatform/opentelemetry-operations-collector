@@ -32,12 +32,13 @@ import (
 
 // PolicyType is the registered policy type identifier for host metrics source policies.
 const (
-	PolicyType        = "host_metrics_source"
-	DefaultReceiverID = "hostmetrics"
+	PolicyType = "host_metrics_source"
 
 	DefaultCollectionIntervalSeconds int32 = 60
 	MinCollectionIntervalSeconds     int32 = 10
 )
+
+var receiverID = component.MustNewIDWithName("hostmetrics", "googlecontrolplane")
 
 var (
 	// ErrNilProto is returned when a nil HostMetricsSourcePolicy protobuf is provided.
@@ -160,8 +161,6 @@ func (p *Policy) Consolidate(policies []googlepolicy.SourcePolicy) (googlepolicy
 	}
 
 	minEffectiveInterval := p.EffectiveCollectionIntervalSeconds()
-	hasExplicit := p.proto.CollectionIntervalSeconds != nil
-
 	for _, sp := range policies {
 		if sp == nil {
 			return nil, ErrNilProto
@@ -173,20 +172,13 @@ func (p *Policy) Consolidate(policies []googlepolicy.SourcePolicy) (googlepolicy
 		if !ok {
 			return nil, fmt.Errorf("cannot consolidate policy of type %T into host metrics source policy", sp)
 		}
-		if hp.proto.CollectionIntervalSeconds != nil {
-			hasExplicit = true
-		}
 		if otherInterval := hp.EffectiveCollectionIntervalSeconds(); otherInterval < minEffectiveInterval {
 			minEffectiveInterval = otherInterval
 		}
 	}
 
 	cloned := proto.Clone(p.proto).(*policyv1alpha1.HostMetricsSourcePolicy)
-	if hasExplicit || minEffectiveInterval != DefaultCollectionIntervalSeconds {
-		cloned.CollectionIntervalSeconds = &minEffectiveInterval
-	} else {
-		cloned.CollectionIntervalSeconds = nil
-	}
+	cloned.CollectionIntervalSeconds = &minEffectiveInterval
 	return NewPolicyFromProto(cloned)
 }
 
@@ -203,7 +195,7 @@ func (p *Policy) Evaluate(_ context.Context) (*confmap.Conf, error) {
 
 	cfg := map[string]any{
 		"receivers": map[string]any{
-			DefaultReceiverID: map[string]any{
+			receiverID.String(): map[string]any{
 				"collection_interval": fmt.Sprintf("%ds", p.EffectiveCollectionIntervalSeconds()),
 				"scrapers":            scrapers,
 			},
@@ -219,7 +211,7 @@ func (p *Policy) LogReceiverIDs() []component.ID {
 
 // MetricReceiverIDs returns the component IDs of metric receivers synthesized by this policy.
 func (p *Policy) MetricReceiverIDs() []component.ID {
-	return []component.ID{component.MustNewID(DefaultReceiverID)}
+	return []component.ID{receiverID}
 }
 
 // TraceReceiverIDs returns nil because HostMetricsSourcePolicy only handles the metrics signal.

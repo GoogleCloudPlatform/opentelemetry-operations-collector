@@ -135,7 +135,7 @@ func TestPolicy_ReceiverIDs(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Nil(t, pol.LogReceiverIDs())
-	assert.Equal(t, []component.ID{component.MustNewID(DefaultReceiverID)}, pol.MetricReceiverIDs())
+	assert.Equal(t, []component.ID{receiverID}, pol.MetricReceiverIDs())
 	assert.Nil(t, pol.TraceReceiverIDs())
 }
 
@@ -157,8 +157,8 @@ func TestPolicy_Evaluate(t *testing.T) {
 		receivers, ok := raw["receivers"].(map[string]any)
 		require.True(t, ok, "receivers key must be a map")
 
-		hmCfg, ok := receivers[DefaultReceiverID].(map[string]any)
-		require.True(t, ok, "hostmetrics receiver must be present")
+		hmCfg, ok := receivers[receiverID.String()].(map[string]any)
+		require.True(t, ok, "hostmetrics/googlecontrolplane receiver must be present")
 
 		assert.Equal(t, "60s", hmCfg["collection_interval"])
 
@@ -186,7 +186,7 @@ func TestPolicy_Evaluate(t *testing.T) {
 
 		raw := conf.ToStringMap()
 		receivers := raw["receivers"].(map[string]any)
-		hmCfg := receivers[DefaultReceiverID].(map[string]any)
+		hmCfg := receivers[receiverID.String()].(map[string]any)
 		assert.Equal(t, "15s", hmCfg["collection_interval"])
 	})
 }
@@ -297,7 +297,7 @@ func TestPolicy_Consolidate(t *testing.T) {
 		hp, ok := res.(*Policy)
 		require.True(t, ok)
 		assert.Equal(t, int32(30), hp.EffectiveCollectionIntervalSeconds())
-		assert.Equal(t, []component.ID{component.MustNewID(DefaultReceiverID)}, hp.MetricReceiverIDs())
+		assert.Equal(t, []component.ID{receiverID}, hp.MetricReceiverIDs())
 	})
 
 	t.Run("multiple valid policies consolidate into minimum interval (30s and 10s -> 10s)", func(t *testing.T) {

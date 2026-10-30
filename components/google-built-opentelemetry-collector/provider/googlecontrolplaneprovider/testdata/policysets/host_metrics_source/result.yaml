@@ -107,7 +107,7 @@ processors:
               statements:
                 - set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil
 receivers:
-    hostmetrics:
+    hostmetrics/googlecontrolplane:
         collection_interval: 60s
         scrapers:
             cpu: {}
@@ -173,7 +173,7 @@ service:
                 - queue_batch/default_gcp_destination_batch_metrics
             receivers:
                 - nop/googlecontrolplane
-                - hostmetrics
+                - hostmetrics/googlecontrolplane
         traces/googlecontrolplane:
             exporters:
                 - otlp_grpc/default_gcp_destination

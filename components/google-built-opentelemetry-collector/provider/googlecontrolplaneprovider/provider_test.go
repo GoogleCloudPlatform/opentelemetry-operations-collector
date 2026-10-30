@@ -507,9 +507,9 @@ func TestFilterPolicyDriversRegistered(t *testing.T) {
 				"type":           "file_log_source",
 				"id":             "test-filelog",
 				"included_paths": []any{"/var/log/**/*.log"},
-      },
-    },
-    {
+			},
+		},
+		{
 			policyType: "journald_source",
 			raw: map[string]any{
 				"type": "journald_source",
@@ -1677,6 +1677,7 @@ func TestCleanConf_EscapesDollarSigns(t *testing.T) {
 		},
 		"slice_strings": []any{"${http://example.com}", "normal"},
 		"typed_slice":   []string{"$var", "ok"},
+		"nested_slice":  []any{[]any{"$nested", "normal"}},
 		"nil_key":       nil,
 	}
 	cm := confmap.NewFromStringMap(input)
@@ -1688,5 +1689,6 @@ func TestCleanConf_EscapesDollarSigns(t *testing.T) {
 	assert.Equal(t, "hello", m["nested_map"].(map[string]any)["plain"])
 	assert.Equal(t, []any{"$${http://example.com}", "normal"}, m["slice_strings"])
 	assert.Equal(t, []string{"$$var", "ok"}, m["typed_slice"])
+	assert.Equal(t, []any{[]any{"$$nested", "normal"}}, m["nested_slice"])
 	assert.NotContains(t, m, "nil_key")
 }

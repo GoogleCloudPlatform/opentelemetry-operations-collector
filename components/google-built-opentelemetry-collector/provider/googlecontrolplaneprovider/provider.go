@@ -778,16 +778,30 @@ func escapeDollarSigns(m map[string]any) {
 		case map[string]any:
 			escapeDollarSigns(val)
 		case []any:
-			for i, item := range val {
-				if s, ok := item.(string); ok {
-					val[i] = strings.ReplaceAll(s, "$", "$$")
-				} else if subMap, ok := item.(map[string]any); ok {
-					escapeDollarSigns(subMap)
-				}
-			}
+			escapeDollarSignsSlice(val)
 		case []string:
 			for i, s := range val {
 				val[i] = strings.ReplaceAll(s, "$", "$$")
+			}
+		}
+	}
+}
+
+func escapeDollarSignsSlice(slice []any) {
+	for i, item := range slice {
+		if item == nil {
+			continue
+		}
+		switch elem := item.(type) {
+		case string:
+			slice[i] = strings.ReplaceAll(elem, "$", "$$")
+		case map[string]any:
+			escapeDollarSigns(elem)
+		case []any:
+			escapeDollarSignsSlice(elem)
+		case []string:
+			for j, s := range elem {
+				elem[j] = strings.ReplaceAll(s, "$", "$$")
 			}
 		}
 	}

@@ -81,7 +81,7 @@ func TestPathGuardrail_PipelineStages(t *testing.T) {
 	t.Run("Stage 3 - ParseAnatomy", func(t *testing.T) {
 		prevOS := currentOS
 		currentOS = "linux"
-		defer func() { currentOS = prevOS }()
+		t.Cleanup(func() { currentOS = prevOS })
 
 		// Relative path rejected
 		_, err := ParseAnatomy("var/log/*.log", "var/log/*.log")
@@ -215,7 +215,7 @@ func TestPathGuardrail_CrossOSGating(t *testing.T) {
 	t.Run("rejects Windows paths on Linux", func(t *testing.T) {
 		prevOS := currentOS
 		currentOS = "linux"
-		defer func() { currentOS = prevOS }()
+		t.Cleanup(func() { currentOS = prevOS })
 
 		err := ValidateIncludePattern(`C:\ProgramData\MyApp\logs\*.log`)
 		require.ErrorIs(t, err, ErrDisallowedLogRoot)
@@ -228,7 +228,7 @@ func TestPathGuardrail_CrossOSGating(t *testing.T) {
 	t.Run("rejects POSIX paths on Windows", func(t *testing.T) {
 		prevOS := currentOS
 		currentOS = "windows"
-		defer func() { currentOS = prevOS }()
+		t.Cleanup(func() { currentOS = prevOS })
 
 		err := ValidateIncludePattern("/var/log/*.log")
 		require.ErrorIs(t, err, ErrDisallowedLogRoot)
@@ -239,7 +239,7 @@ func TestPathGuardrail_CrossOSGating(t *testing.T) {
 func TestPathGuardrail_PathTraversalPrecision(t *testing.T) {
 	prevOS := currentOS
 	currentOS = "linux"
-	defer func() { currentOS = prevOS }()
+	t.Cleanup(func() { currentOS = prevOS })
 
 	// Legitimate files with double dots should pass
 	assert.NoError(t, ValidateIncludePattern("/var/log/app..log"))

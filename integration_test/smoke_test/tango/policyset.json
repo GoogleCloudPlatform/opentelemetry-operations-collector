@@ -1,0 +1,48 @@
+{
+  "description": "Tango-GBOC smoke test policy set (owner: xuechun). Used by integration_test/smoke_test TestTangoSmoke.",
+  "receiverPolicies": [
+    { "fileLogSourcePolicy": { "includedPaths": ["/var/log/gboc-smoke/*.log"] } }
+  ],
+  "componentPolicies": [
+    {
+      "logTransformPolicy": {
+        "matchers": [
+          {
+            "target": { "recordField": "LOG_RECORD_FIELD_BODY" },
+            "containment": { "stringValue": "gboc-smoke" }
+          }
+        ],
+        "addition": {
+          "target": { "logAttributePath": { "segments": ["gboc_smoke"] } },
+          "value": { "stringValue": "true" },
+          "upsertEnabled": true
+        }
+      }
+    }
+  ],
+  "universalPolicies": [
+    {
+      "logFilterPolicy": {
+        "action": "ACTION_DROP",
+        "matchers": [
+          {
+            "target": { "recordField": "LOG_RECORD_FIELD_BODY" },
+            "containment": { "stringValue": "gboc-smoke=drop" }
+          }
+        ]
+      }
+    },
+    {
+      "logFilterPolicy": {
+        "action": "ACTION_DROP",
+        "matchers": [
+          {
+            "target": { "recordField": "LOG_RECORD_FIELD_BODY" },
+            "containment": { "stringValue": "gboc-smoke" },
+            "negated": true
+          }
+        ]
+      }
+    }
+  ]
+}

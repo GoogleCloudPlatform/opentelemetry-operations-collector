@@ -1460,8 +1460,8 @@ func TestRetrieve_ActivePolicySetWithHostMetricsSource(t *testing.T) {
 	receivers, ok := raw["receivers"].(map[string]any)
 	require.True(t, ok)
 
-	require.Contains(t, receivers, "hostmetrics")
-	hmCfg, ok := receivers["hostmetrics"].(map[string]any)
+	require.Contains(t, receivers, "hostmetrics/googlecontrolplane")
+	hmCfg, ok := receivers["hostmetrics/googlecontrolplane"].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, "60s", hmCfg["collection_interval"])
 
@@ -1472,7 +1472,7 @@ func TestRetrieve_ActivePolicySetWithHostMetricsSource(t *testing.T) {
 	require.True(t, ok)
 	metricReceivers, ok := metricsPipeline["receivers"].([]any)
 	require.True(t, ok)
-	require.Contains(t, metricReceivers, "hostmetrics")
+	require.Contains(t, metricReceivers, "hostmetrics/googlecontrolplane")
 	require.Contains(t, metricReceivers, "nop/googlecontrolplane")
 
 	// Ensure logs and traces pipelines do not contain hostmetrics
@@ -1480,13 +1480,13 @@ func TestRetrieve_ActivePolicySetWithHostMetricsSource(t *testing.T) {
 	require.True(t, ok)
 	logReceivers, ok := logsPipeline["receivers"].([]any)
 	require.True(t, ok)
-	require.NotContains(t, logReceivers, "hostmetrics")
+	require.NotContains(t, logReceivers, "hostmetrics/googlecontrolplane")
 
 	tracesPipeline, ok := pipelines["traces/googlecontrolplane"].(map[string]any)
 	require.True(t, ok)
 	traceReceivers, ok := tracesPipeline["receivers"].([]any)
 	require.True(t, ok)
-	require.NotContains(t, traceReceivers, "hostmetrics")
+	require.NotContains(t, traceReceivers, "hostmetrics/googlecontrolplane")
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
@@ -1534,8 +1534,8 @@ func TestRetrieve_MultipleHostMetricsSourcePoliciesConsolidated(t *testing.T) {
 	require.True(t, ok)
 
 	// Exactly 1 hostmetrics receiver present, with minimum interval 30s
-	require.Contains(t, receivers, "hostmetrics")
-	hmCfg, ok := receivers["hostmetrics"].(map[string]any)
+	require.Contains(t, receivers, "hostmetrics/googlecontrolplane")
+	hmCfg, ok := receivers["hostmetrics/googlecontrolplane"].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, "30s", hmCfg["collection_interval"])
 
@@ -1545,7 +1545,7 @@ func TestRetrieve_MultipleHostMetricsSourcePoliciesConsolidated(t *testing.T) {
 	require.True(t, ok)
 	pipelineReceivers, ok := metricsPipeline["receivers"].([]any)
 	require.True(t, ok)
-	require.Contains(t, pipelineReceivers, "hostmetrics")
+	require.Contains(t, pipelineReceivers, "hostmetrics/googlecontrolplane")
 	require.Contains(t, pipelineReceivers, "nop/googlecontrolplane")
 
 	assert.NoError(t, p.Shutdown(context.Background()))
@@ -1568,7 +1568,7 @@ func (i *invalidHostMetricsSourcePolicy) Evaluate(_ context.Context) (*confmap.C
 }
 func (i *invalidHostMetricsSourcePolicy) LogReceiverIDs() []component.ID { return nil }
 func (i *invalidHostMetricsSourcePolicy) MetricReceiverIDs() []component.ID {
-	return []component.ID{component.MustNewID("hostmetrics")}
+	return []component.ID{component.MustNewIDWithName("hostmetrics", "googlecontrolplane")}
 }
 func (i *invalidHostMetricsSourcePolicy) TraceReceiverIDs() []component.ID { return nil }
 func (i *invalidHostMetricsSourcePolicy) Consolidate(policies []googlepolicy.SourcePolicy) (googlepolicy.SourcePolicy, error) {
@@ -1622,8 +1622,8 @@ func TestRetrieve_MultipleHostMetricsSourcePolicies_FaultIsolation_FirstPolicyIn
 	require.True(t, ok)
 
 	// Fault isolation: good-1 and good-2 consolidated successfully into hostmetrics with min interval 25s despite bad-0
-	require.Contains(t, receivers, "hostmetrics")
-	hmCfg, ok := receivers["hostmetrics"].(map[string]any)
+	require.Contains(t, receivers, "hostmetrics/googlecontrolplane")
+	hmCfg, ok := receivers["hostmetrics/googlecontrolplane"].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, "25s", hmCfg["collection_interval"])
 
@@ -1633,7 +1633,7 @@ func TestRetrieve_MultipleHostMetricsSourcePolicies_FaultIsolation_FirstPolicyIn
 	require.True(t, ok)
 	pipelineReceivers, ok := metricsPipeline["receivers"].([]any)
 	require.True(t, ok)
-	require.Contains(t, pipelineReceivers, "hostmetrics")
+	require.Contains(t, pipelineReceivers, "hostmetrics/googlecontrolplane")
 	require.Contains(t, pipelineReceivers, "nop/googlecontrolplane")
 
 	assert.NoError(t, p.Shutdown(context.Background()))

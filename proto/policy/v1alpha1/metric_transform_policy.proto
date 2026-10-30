@@ -1,0 +1,80 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package google.telemetry.policy.v1alpha1;
+
+import "policy/v1alpha1/common_policy_types.proto";
+import "policy/v1alpha1/metric_filter_policy.proto";
+
+option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1;policyv1alpha1";
+
+// MetricTransformPolicy defines a safe, cardinality-preserving modification to
+// matching metric streams.
+//
+// Evaluation & Ordering Semantics:
+// - Operation Stage Order: `rename` -> `add`, with lexicographical `id`
+//   tie-breaking within each stage.
+// - Matching: All conditions in `matches` are ANDed together. If `matches` is
+//   empty, the action applies to all metrics.
+// - Collision Safety: Neither `add` nor `rename` overwrites an existing
+//   attribute or field; if the target/destination key already exists, the
+//   operation is skipped. `remove` and `redact` are omitted to prevent
+//   collapsing distinct time series into duplicate data points.
+message MetricTransformPolicy {
+  // Unique identifier for the policy within its configuration scope
+  // (e.g. a UUID or namespaced URI like "projects/p/locations/l/policySets/ps/policies/add-metric-env").
+  string id = 1;
+
+  // Conditions that must all match for this policy to apply. If empty, applies
+  // to all metrics.
+  repeated MetricMatcher matches = 2;
+
+  // The single transformation action to perform when `matches` evaluates to
+  // true. Exactly one action must be set.
+  oneof action {
+    // Inserts a field or attribute if not already present.
+    MetricAddAction add = 3;
+
+    // Moves an existing attribute to a new destination key if not already present.
+    MetricRenameAction rename = 4;
+  }
+}
+
+// MetricAddAction attaches a static scalar value to a target attribute or
+// descriptor field when not already present.
+message MetricAddAction {
+  // Target attribute (`resource_attribute`, `scope_attribute`, or
+  // `datapoint_attribute`) or `descriptor_field` to set if not already present.
+  MetricFieldSelector target = 1;
+
+  // Static scalar value to attach.
+  Value value = 2;
+}
+
+// MetricRenameAction moves an existing attribute to a new destination key when
+// the destination key does not already exist.
+message MetricRenameAction {
+  // Existing source attribute (`resource_attribute`, `scope_attribute`, or
+  // `datapoint_attribute`) to rename.
+  // (-- api-linter: core::0140::reserved-words=disabled
+  //     api-linter: core::0140::prepositions=disabled --)
+  MetricFieldSelector from = 1;
+
+  // Destination attribute. If `to` already exists, the rename is skipped to
+  // prevent overwriting differentiating time-series dimensions.
+  // (-- api-linter: core::0140::prepositions=disabled --)
+  MetricFieldSelector to = 2;
+}

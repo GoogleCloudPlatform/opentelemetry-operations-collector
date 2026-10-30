@@ -1930,3 +1930,145 @@ func TestFileConfigMerge_ProviderOrderPrecedence(t *testing.T) {
 		t.Errorf("expected googlecontrolplaneprovider to override earlier file config's level: None and report positive gcp.policy.set.active revision, got found=%v value=%d\nlogs:\n%s", found, value, col.logs())
 	}
 }
+
+func TestMetricTransformAddAndFilterOrdering(t *testing.T) {
+	otelcolBin := resolveOtelcolBinary(t)
+	tempDir := t.TempDir()
+
+	policiesDir := filepath.Join(tempDir, "policies")
+	if err := os.MkdirAll(policiesDir, 0755); err != nil {
+		t.Fatalf("failed to create policies directory: %v", err)
+	}
+
+	policies := map[string]string{
+		"01-drop-debug-dp.json": `{
+  "type": "metric_filter",
+  "id": "drop-debug-dp",
+  "action": "ACTION_DROP",
+  "matchers": [
+    {
+      "target": {
+        "data_point_attribute_path": {
+          "segments": ["env"]
+        }
+      },
+      "predicate": {
+        "equality": {
+          "string_value": "debug"
+        }
+      }
+    }
+  ]
+}`,
+		"02-add-unit.json": `{
+  "type": "metric_transform",
+  "id": "add-cpu-unit",
+  "matches": [
+    {
+      "target": {
+        "descriptor_field": "METRIC_DESCRIPTOR_FIELD_NAME"
+      },
+      "predicate": {
+        "equality": {
+          "string_value": "system.cpu.time"
+        }
+      }
+    }
+  ],
+  "add": {
+    "target": {
+      "descriptor_field": "METRIC_DESCRIPTOR_FIELD_UNIT"
+    },
+    "value": {
+      "string_value": "s"
+    }
+  }
+}`,
+		"03-add-dp-tier.json": `{
+  "type": "metric_transform",
+  "id": "add-dp-tier",
+  "matches": [
+    {
+      "target": {
+        "data_point_attribute_path": {
+          "segments": ["state"]
+        }
+      },
+      "predicate": {
+        "equality": {
+          "string_value": "user"
+        }
+      }
+    }
+  ],
+  "add": {
+    "target": {
+      "data_point_attribute_path": {
+        "segments": ["tier"]
+      }
+    },
+    "value": {
+      "string_value": "core"
+    }
+  }
+}`,
+	}
+
+	for name, content := range policies {
+		if err := os.WriteFile(filepath.Join(policiesDir, name), []byte(content), 0644); err != nil {
+			t.Fatalf("failed to write policy %s: %v", name, err)
+		}
+	}
+
+	h := startTestHarness(t, otelcolBin, tempDir, policiesDir)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	md := pmetric.NewMetrics()
+	sm := md.ResourceMetrics().AppendEmpty().ScopeMetrics().AppendEmpty()
+	m := sm.Metrics().AppendEmpty()
+	m.SetName("system.cpu.time")
+	dps := m.SetEmptySum().DataPoints()
+
+	// DP 0: env=debug, state=user -> dropped by drop-debug-dp in Stage 1
+	dp0 := dps.AppendEmpty()
+	dp0.Attributes().PutStr("env", "debug")
+	dp0.Attributes().PutStr("state", "user")
+
+	// DP 1: env=prod, state=user -> survives Stage 1; gets unit="s" and tier="core"
+	dp1 := dps.AppendEmpty()
+	dp1.Attributes().PutStr("env", "prod")
+	dp1.Attributes().PutStr("state", "user")
+
+	// DP 2: env=prod, state=idle, tier=existing -> survives Stage 1; preserves existing tier (collision-safe)
+	dp2 := dps.AppendEmpty()
+	dp2.Attributes().PutStr("env", "prod")
+	dp2.Attributes().PutStr("state", "idle")
+	dp2.Attributes().PutStr("tier", "existing")
+
+	client := pmetricotlp.NewGRPCClient(h.conn)
+	if _, err := client.Export(ctx, pmetricotlp.NewExportRequestFromMetrics(md)); err != nil {
+		t.Fatalf("failed to export metrics: %v\nlogs:\n%s", err, h.col.logs())
+	}
+
+	h.col.shutdown(t)
+
+	collected := h.mockSrv.CollectedMetrics()
+	if len(collected) != 1 {
+		t.Fatalf("expected 1 exported metric batch, got %d", len(collected))
+	}
+	gotMetric := collected[0].ResourceMetrics().At(0).ScopeMetrics().At(0).Metrics().At(0)
+	if gotMetric.Unit() != "s" {
+		t.Errorf("metric unit = %q, want %q", gotMetric.Unit(), "s")
+	}
+	gotDPs := gotMetric.Sum().DataPoints()
+	if gotDPs.Len() != 2 {
+		t.Fatalf("expected 2 surviving datapoints, got %d", gotDPs.Len())
+	}
+	if v, ok := gotDPs.At(0).Attributes().Get("tier"); !ok || v.Str() != "core" {
+		t.Errorf("dp[0] tier = %v (ok=%v), want core", v, ok)
+	}
+	if v, ok := gotDPs.At(1).Attributes().Get("tier"); !ok || v.Str() != "existing" {
+		t.Errorf("dp[1] tier = %v (ok=%v), want existing", v, ok)
+	}
+}

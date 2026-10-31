@@ -29,7 +29,7 @@ $(DISTROGEN_BIN):
 # If the versions differ, it will reinstall the version of distrogen that the spec wants.
 # The version check can be skipped if the env var FORCE_DISTROGEN_VERSION is set. This allows you
 # to use a specific distrogen binary if you've built it yourself.
-.phony: distrogen
+.PHONY: distrogen
 distrogen: $(DISTROGEN_BIN)
 	@export INSTALLED_DISTROGEN_VERSION=$$($(DISTROGEN_BIN) version) && \
 	export DISTROGEN_VERSION=$$($(DISTROGEN_QUERY) distrogen_version) && \
@@ -40,9 +40,9 @@ distrogen: $(DISTROGEN_BIN)
 	fi
 
 .PHONY: mdatagen
-mdatagen:
+mdatagen: distrogen
 	@$(MAKE) tools-dir
-	@export OTEL_VERSION=v$(shell $(DISTROGEN_QUERY) opentelemetry_version) && \
+	@export OTEL_VERSION=v$$($(DISTROGEN_QUERY) opentelemetry_version) && \
 	GOBIN=$(TOOLS_DIR) bash ./scripts/download_mdatagen.sh $${OTEL_VERSION}
 
 # This is a PHONY target cause if you make it as a normal recipe
@@ -68,8 +68,8 @@ COMPONENT_DIR = components
 
 .PHONY: update-otel-components
 update-otel-components: distrogen mdatagen workspace-update
-	export OTEL_VERSION=v$(shell $(DISTROGEN_QUERY) opentelemetry_version) && \
-	export OTEL_CONTRIB_VERSION=v$(shell $(DISTROGEN_QUERY) opentelemetry_contrib_version) && \
+	export OTEL_VERSION=v$$($(DISTROGEN_QUERY) opentelemetry_version) && \
+	export OTEL_CONTRIB_VERSION=v$$($(DISTROGEN_QUERY) opentelemetry_contrib_version) && \
 	export PATH="$(TOOLS_DIR):${PATH}" && \
 	cd components && \
 	$(MAKE) update-components

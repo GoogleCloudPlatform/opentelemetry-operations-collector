@@ -4,6 +4,7 @@ MDATAGEN_BIN = $(TOOLS_DIR)/mdatagen
 .PHONY: update-otel-components
 update-components: export OTEL_VERSION := $(OTEL_VERSION)
 update-components: export OTEL_CONTRIB_VERSION := $(OTEL_CONTRIB_VERSION)
+update-components: export OPERATIONS_COLLECTOR_VERSION := $(OPERATIONS_COLLECTOR_VERSION)
 update-components: update-deps tidy-components update-mdatagen generate-components
 
 .PHONY: update-mdatagen

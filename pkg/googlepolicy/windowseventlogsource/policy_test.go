@@ -421,7 +421,7 @@ func TestPolicy_Evaluate(t *testing.T) {
 		require.Len(t, receivers, 2)
 
 		// Verify compiler defaults for Security channel
-		secCfg, ok := receivers["windowseventlog/security"].(map[string]any)
+		secCfg, ok := receivers[fmt.Sprintf("%s/%s", ReceiverType, SanitizeChannelName("Security"))].(map[string]any)
 		require.True(t, ok)
 		assert.Equal(t, "Security", secCfg["channel"])
 		assert.Equal(t, true, secCfg["suppress_rendering_info"])
@@ -431,7 +431,7 @@ func TestPolicy_Evaluate(t *testing.T) {
 		assert.NotContains(t, secCfg, "event_driven_scraping")
 
 		// Verify compiler defaults for Sysmon channel
-		sysmonCfg, ok := receivers["windowseventlog/microsoft-windows-sysmon_operational"].(map[string]any)
+		sysmonCfg, ok := receivers[fmt.Sprintf("%s/%s", ReceiverType, SanitizeChannelName("Microsoft-Windows-Sysmon/Operational"))].(map[string]any)
 		require.True(t, ok)
 		assert.Equal(t, "Microsoft-Windows-Sysmon/Operational", sysmonCfg["channel"])
 		assert.Equal(t, true, sysmonCfg["suppress_rendering_info"])
@@ -552,11 +552,15 @@ func TestPolicy_Consolidate(t *testing.T) {
 
 		// Verify synthesized receiver IDs
 		expectedIDs := []component.ID{
-			component.MustNewIDWithName(ReceiverType, "application"),
-			component.MustNewIDWithName(ReceiverType, "microsoft-windows-sysmon_operational"),
-			component.MustNewIDWithName(ReceiverType, "security"),
-			component.MustNewIDWithName(ReceiverType, "system"),
+			component.MustNewIDWithName(ReceiverType, SanitizeChannelName("Application")),
+			component.MustNewIDWithName(ReceiverType, SanitizeChannelName("Microsoft-Windows-Sysmon/Operational")),
+			component.MustNewIDWithName(ReceiverType, SanitizeChannelName("Security")),
+			component.MustNewIDWithName(ReceiverType, SanitizeChannelName("System")),
 		}
+		// Sort deterministically to match LogReceiverIDs
+		slices.SortFunc(expectedIDs, func(a, b component.ID) int {
+			return strings.Compare(a.Name(), b.Name())
+		})
 		if isWindows {
 			assert.Equal(t, expectedIDs, wp.LogReceiverIDs())
 		} else {

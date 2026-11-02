@@ -233,8 +233,14 @@ func collectorID(ctx context.Context, logger *log.Logger, vm *gce.VM) (string, e
 	return uuid.NewSHA1(uuid.MustParse(collectorUUIDNamespace), []byte(strings.TrimSpace(out.Stdout))).String(), nil
 }
 
-// revisionValue mirrors googlecontrolplaneextension's parsing of an 8-hex
-// CCFE revision ID into the gcp.policy.set.active gauge value.
+// revisionValue converts an 8-hex CCFE revision ID into the
+// gcp.policy.set.active gauge value. It mirrors the 8-hex case of
+// parseRevisionValue in
+// components/google-built-opentelemetry-collector/extension/googlecontrolplaneextension/extension.go;
+// keep the two in sync. The extension lives in a separate Go module, and
+// importing it would pull the collector's dependency tree into this test
+// module, so the logic is copied rather than shared. Only the 8-hex form is
+// accepted because the test always pins a CCFE revision.
 func revisionValue(rev string) (int64, error) {
 	v, err := strconv.ParseUint(rev, 16, 32)
 	if err != nil || len(rev) != 8 {

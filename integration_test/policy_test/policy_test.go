@@ -1426,6 +1426,7 @@ func stagePoliciesDir(t *testing.T, caseName string) (string, string) {
 // waitCondition reports whether fn eventually returned true,
 // checking immediately and then every checkEvery amount,
 // until waitFor has elapsed, at which point it returns false.
+// Adapted from https://github.com/golang/net/blob/v0.49.0/http2/http2_test.go#L115-L127.
 func waitCondition(waitFor, checkEvery time.Duration, fn func() bool) bool {
 	deadline := time.Now().Add(waitFor)
 	for time.Now().Before(deadline) {

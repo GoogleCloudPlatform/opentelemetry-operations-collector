@@ -1411,7 +1411,7 @@ service:
 		t.Fatalf("waitForMetrics() = empty, want standard internal collector metrics\ncollector logs:\n%s", col.logs())
 	}
 	if count, found := gotMetrics[googlecontrolplaneextension.MetricPolicySetActive]; found {
-		t.Errorf("gotMetrics[%q] = %d, want not found (gotMetrics: %v)\ncollector logs:\n%s", googlecontrolplaneextension.MetricPolicySetActive, count, gotMetrics, col.logs())
+		t.Errorf("got %d occurrences of %q, want 0 (gotMetrics: %v)\ncollector logs:\n%s", count, googlecontrolplaneextension.MetricPolicySetActive, gotMetrics, col.logs())
 	}
 }
 

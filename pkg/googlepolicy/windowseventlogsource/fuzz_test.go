@@ -254,15 +254,24 @@ func FuzzSanitizeChannelName(f *testing.F) {
 			t.Fatalf("SanitizeChannelName(%q) = %q contains forbidden character", channel, san)
 		}
 
-		// Invariant 4: Idempotent
+		// Invariant 4: Deterministic and casing invariant
 		if san != "" {
-			if san2 := SanitizeChannelName(san); san2 != san {
-				t.Fatalf("SanitizeChannelName is not idempotent: san(%q) = %q, san(%q) = %q", channel, san, san, san2)
+			if san2 := SanitizeChannelName(channel); san2 != san {
+				t.Fatalf("SanitizeChannelName is not deterministic: san(%q) = %q, san(%q) = %q", channel, san, channel, san2)
+			}
+			if sanLower := SanitizeChannelName(strings.ToLower(channel)); sanLower != san {
+				t.Fatalf("SanitizeChannelName is not casing invariant with lowercase: san(%q) = %q vs san(ToLower) = %q", channel, san, sanLower)
+			}
+			if sanUpper := SanitizeChannelName(strings.ToUpper(channel)); sanUpper != san {
+				t.Fatalf("SanitizeChannelName is not casing invariant with uppercase: san(%q) = %q vs san(ToUpper) = %q", channel, san, sanUpper)
 			}
 		}
 
-		// Invariant 5: If non-empty, must form a valid component.ID
+		// Invariant 5: If non-empty, must form a valid component.ID and length <= 81
 		if san != "" {
+			if len(san) > 81 {
+				t.Fatalf("SanitizeChannelName(%q) = %q exceeds maximum expected length (81 bytes)", channel, san)
+			}
 			var parsedID component.ID
 			if err := parsedID.UnmarshalText([]byte(ReceiverType + "/" + san)); err != nil {
 				t.Fatalf("SanitizeChannelName(%q) = %q fails component.ID unmarshaling: %v", channel, san, err)
@@ -390,6 +399,47 @@ func FuzzPolicy_Consolidate(f *testing.F) {
 		for i := 1; i < len(recIDs); i++ {
 			if strings.Compare(recIDs[i-1].Name(), recIDs[i].Name()) >= 0 {
 				t.Fatalf("receiver IDs not strictly sorted: %v before %v", recIDs[i-1], recIDs[i])
+			}
+		}
+	})
+}
+
+// FuzzPolicy_ReceiverID_SetIndependence asserts that a channel's receiver ID is completely
+// independent of the presence, order, or casing of other channels or policies in a policy set.
+func FuzzPolicy_ReceiverID_SetIndependence(f *testing.F) {
+	seeds := fuzzSeedPolicies()
+	for _, seed := range seeds {
+		b, err := proto.Marshal(seed)
+		if err == nil {
+			f.Add(b)
+		}
+	}
+
+	f.Fuzz(func(t *testing.T, protoBytes []byte) {
+		var polProto policyv1alpha1.WindowsEventLogSourcePolicy
+		if err := proto.Unmarshal(protoBytes, &polProto); err != nil {
+			return
+		}
+
+		p, err := NewPolicyFromProto(&polProto)
+		if err != nil {
+			return
+		}
+
+		// Invariant: For every channel in this multi-channel policy, its synthesized receiver ID
+		// must be 100% identical when evaluated alone in an isolated single-channel policy.
+		for _, ch := range p.Channels() {
+			standalone, err := NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+				Id:       "standalone-policy",
+				Channels: []string{ch},
+			})
+			if err != nil {
+				t.Fatalf("standalone policy for channel %q failed validation: %v", ch, err)
+			}
+			standaloneID := standalone.channelReceivers()[0].id.Name()
+			expectedID := SanitizeChannelName(ch)
+			if standaloneID != expectedID {
+				t.Fatalf("standalone ID mismatch for %q: got %q, want %q", ch, standaloneID, expectedID)
 			}
 		}
 	})

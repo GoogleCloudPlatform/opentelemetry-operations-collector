@@ -18,6 +18,8 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -147,8 +149,8 @@ func TestSanitizeChannelName(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		input    string
-		expected string
+		input          string
+		expectedPrefix string
 	}{
 		{"Security", "security"},
 		{"System", "system"},
@@ -174,28 +176,51 @@ func TestSanitizeChannelName(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
 			t.Parallel()
-			assert.Equal(t, tt.expected, SanitizeChannelName(tt.input))
+			san := SanitizeChannelName(tt.input)
+			assert.True(t, strings.HasPrefix(san, tt.expectedPrefix+"_"))
+			h := sha256.Sum256([]byte(canonicalChannel(tt.input)))
+			expectedSuffix := "_" + hex.EncodeToString(h[:8])
+			assert.True(t, strings.HasSuffix(san, expectedSuffix))
+			var id component.ID
+			require.NoError(t, id.UnmarshalText([]byte(ReceiverType+"/"+san)))
 		})
 	}
 
-	t.Run("capping at 1024 chars", func(t *testing.T) {
+	t.Run("casing invariance", func(t *testing.T) {
+		t.Parallel()
+		secLower := SanitizeChannelName("security")
+		secUpper := SanitizeChannelName("SECURITY")
+		secMixed := SanitizeChannelName("Security")
+		assert.Equal(t, secLower, secUpper)
+		assert.Equal(t, secLower, secMixed)
+
+		longA := strings.Repeat("A", 1100)
+		longa := strings.Repeat("a", 1100)
+		assert.Equal(t, SanitizeChannelName(longA), SanitizeChannelName(longa))
+	})
+
+	t.Run("capping prefix at 64 bytes", func(t *testing.T) {
 		t.Parallel()
 		longName := strings.Repeat("a", 1100)
 		san := SanitizeChannelName(longName)
-		require.Len(t, san, 1024)
-		h := sha256.Sum256([]byte(longName))
-		expectedSuffix := "_" + hex.EncodeToString(h[:4])
+		assert.Len(t, san, 64+1+16) // 64 prefix + 1 underscore + 16 hex hash = 81
+		assert.True(t, strings.HasPrefix(san, strings.Repeat("a", 64)+"_"))
+		h := sha256.Sum256([]byte(canonicalChannel(longName)))
+		expectedSuffix := "_" + hex.EncodeToString(h[:8])
 		assert.True(t, strings.HasSuffix(san, expectedSuffix))
 	})
 
 	t.Run("capping multi-byte utf8 boundary", func(t *testing.T) {
 		t.Parallel()
-		name := strings.Repeat("é", 600) // 1200 bytes
+		name := strings.Repeat("é", 100) // 200 bytes
 		san := SanitizeChannelName(name)
-		require.LessOrEqual(t, len(san), 1024)
 		require.True(t, utf8.ValidString(san))
 		var id component.ID
 		require.NoError(t, id.UnmarshalText([]byte(ReceiverType+"/"+san)))
+		parts := strings.Split(san, "_")
+		require.Len(t, parts, 2)
+		assert.LessOrEqual(t, len(parts[0]), 64)
+		assert.Len(t, parts[1], 16)
 	})
 }
 
@@ -214,9 +239,10 @@ func TestPolicy_Channels_Deduplication(t *testing.T) {
 	assert.Equal(t, expected, p.Channels())
 }
 
-func TestPolicy_ReceiverID_Disambiguation(t *testing.T) {
+func TestPolicy_ReceiverID_DisambiguationAndDeterminism(t *testing.T) {
 	t.Parallel()
 
+	// 1. Two distinct channels receive distinct, deterministic IDs
 	p, err := NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
 		Id:       "win-disambiguate",
 		Channels: []string{"Sysmon/Operational", "Sysmon_Operational"},
@@ -225,10 +251,44 @@ func TestPolicy_ReceiverID_Disambiguation(t *testing.T) {
 
 	recs := p.channelReceivers()
 	require.Len(t, recs, 2)
-	// Both channels are converted to valid component IDs
-	assert.Equal(t, "sysmon_operational", recs[0].id.Name())
-	assert.True(t, strings.HasPrefix(recs[1].id.Name(), "sysmon_operational_"))
+	assert.Equal(t, SanitizeChannelName("Sysmon/Operational"), recs[0].id.Name())
+	assert.Equal(t, SanitizeChannelName("Sysmon_Operational"), recs[1].id.Name())
 	assert.NotEqual(t, recs[0].id.Name(), recs[1].id.Name())
+
+	// 2. A channel's ID is identical regardless of input order, other channels, first-seen casing, or policy names
+	secID := SanitizeChannelName("Security")
+	assert.Equal(t, secID, SanitizeChannelName("security"))
+	assert.Equal(t, secID, SanitizeChannelName("SECURITY"))
+
+	p1, err := NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+		Id:       "policy-alpha",
+		Channels: []string{"Security"},
+	})
+	require.NoError(t, err)
+
+	p2, err := NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+		Id:       "policy-beta",
+		Channels: []string{"System", "security", "Sysmon/Operational"},
+	})
+	require.NoError(t, err)
+
+	// In p1 and p2, Security has identical ID
+	assert.Equal(t, secID, p1.channelReceivers()[0].id.Name())
+	for _, r := range p2.channelReceivers() {
+		if strings.EqualFold(r.channel, "Security") {
+			assert.Equal(t, secID, r.id.Name())
+		}
+	}
+
+	// In consolidated policy, Security has identical ID
+	cons, err := p1.Consolidate([]googlepolicy.SourcePolicy{p2})
+	require.NoError(t, err)
+	wpCons := cons.(*Policy)
+	for _, r := range wpCons.channelReceivers() {
+		if strings.EqualFold(r.channel, "Security") {
+			assert.Equal(t, secID, r.id.Name())
+		}
+	}
 
 	if isWindows {
 		recIDs := p.LogReceiverIDs()
@@ -252,6 +312,7 @@ func TestPolicy_ReceiverID_CollidingLongUTF8(t *testing.T) {
 	require.Len(t, recs, 2)
 	require.True(t, utf8.ValidString(recs[0].id.Name()))
 	require.True(t, utf8.ValidString(recs[1].id.Name()))
+	assert.NotEqual(t, recs[0].id.Name(), recs[1].id.Name())
 	var id component.ID
 	require.NoError(t, id.UnmarshalText([]byte(ReceiverType+"/"+recs[1].id.Name())))
 }
@@ -267,10 +328,14 @@ func TestPolicy_ReceiverIDs(t *testing.T) {
 
 	if isWindows {
 		expected := []component.ID{
-			component.MustNewIDWithName(ReceiverType, "microsoft-windows-sysmon_operational"),
-			component.MustNewIDWithName(ReceiverType, "security"),
-			component.MustNewIDWithName(ReceiverType, "system"),
+			component.MustNewIDWithName(ReceiverType, SanitizeChannelName("Microsoft-Windows-Sysmon/Operational")),
+			component.MustNewIDWithName(ReceiverType, SanitizeChannelName("Security")),
+			component.MustNewIDWithName(ReceiverType, SanitizeChannelName("System")),
 		}
+		// Deterministic sort by component name
+		slices.SortFunc(expected, func(a, b component.ID) int {
+			return strings.Compare(a.Name(), b.Name())
+		})
 		assert.Equal(t, expected, p.LogReceiverIDs())
 	} else {
 		assert.Nil(t, p.LogReceiverIDs())
@@ -313,7 +378,8 @@ func TestPolicy_ReceiverConfigs(t *testing.T) {
 	require.True(t, ok)
 	require.Len(t, receivers, 2)
 
-	secCfg, ok := receivers["windowseventlog/security"].(map[string]any)
+	secKey := fmt.Sprintf("%s/%s", ReceiverType, SanitizeChannelName("Security"))
+	secCfg, ok := receivers[secKey].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, "Security", secCfg["channel"])
 	assert.Equal(t, true, secCfg["suppress_rendering_info"])
@@ -322,7 +388,8 @@ func TestPolicy_ReceiverConfigs(t *testing.T) {
 	assert.Equal(t, []string{DefaultExcludeProvider}, secCfg["exclude_providers"])
 	assert.NotContains(t, secCfg, "event_driven_scraping")
 
-	sysmonCfg, ok := receivers["windowseventlog/microsoft-windows-sysmon_operational"].(map[string]any)
+	sysmonKey := fmt.Sprintf("%s/%s", ReceiverType, SanitizeChannelName("Microsoft-Windows-Sysmon/Operational"))
+	sysmonCfg, ok := receivers[sysmonKey].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, "Microsoft-Windows-Sysmon/Operational", sysmonCfg["channel"])
 	assert.Equal(t, true, sysmonCfg["suppress_rendering_info"])

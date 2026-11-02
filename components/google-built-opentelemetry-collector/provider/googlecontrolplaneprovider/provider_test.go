@@ -485,36 +485,39 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource(t *testing.T) {
 	conf, err := ret.AsConf()
 	require.NoError(t, err)
 
+	secRecID := "windowseventlog/" + windowseventlogsource.SanitizeChannelName("Security")
+	sysmonRecID := "windowseventlog/" + windowseventlogsource.SanitizeChannelName("Microsoft-Windows-Sysmon/Operational")
+
 	if runtime.GOOS == "windows" {
 		// Verify synthesized receiver configs and compiler defaults
-		assert.True(t, conf.IsSet("receivers::windowseventlog/security"))
-		assert.Equal(t, "Security", conf.Get("receivers::windowseventlog/security::channel"))
-		assert.Equal(t, true, conf.Get("receivers::windowseventlog/security::suppress_rendering_info"))
-		assert.False(t, conf.IsSet("receivers::windowseventlog/security::event_driven_scraping"))
-		assert.Equal(t, 500, conf.Get("receivers::windowseventlog/security::max_reads"))
-		assert.Equal(t, true, conf.Get("receivers::windowseventlog/security::ignore_channel_errors"))
-		assert.Equal(t, []any{"otelcol-google"}, conf.Get("receivers::windowseventlog/security::exclude_providers"))
+		assert.True(t, conf.IsSet("receivers::"+secRecID))
+		assert.Equal(t, "Security", conf.Get("receivers::"+secRecID+"::channel"))
+		assert.Equal(t, true, conf.Get("receivers::"+secRecID+"::suppress_rendering_info"))
+		assert.False(t, conf.IsSet("receivers::"+secRecID+"::event_driven_scraping"))
+		assert.Equal(t, 500, conf.Get("receivers::"+secRecID+"::max_reads"))
+		assert.Equal(t, true, conf.Get("receivers::"+secRecID+"::ignore_channel_errors"))
+		assert.Equal(t, []any{"otelcol-google"}, conf.Get("receivers::"+secRecID+"::exclude_providers"))
 
-		assert.True(t, conf.IsSet("receivers::windowseventlog/microsoft-windows-sysmon_operational"))
-		assert.Equal(t, "Microsoft-Windows-Sysmon/Operational", conf.Get("receivers::windowseventlog/microsoft-windows-sysmon_operational::channel"))
-		assert.Equal(t, true, conf.Get("receivers::windowseventlog/microsoft-windows-sysmon_operational::suppress_rendering_info"))
-		assert.False(t, conf.IsSet("receivers::windowseventlog/microsoft-windows-sysmon_operational::event_driven_scraping"))
-		assert.Equal(t, 500, conf.Get("receivers::windowseventlog/microsoft-windows-sysmon_operational::max_reads"))
-		assert.Equal(t, true, conf.Get("receivers::windowseventlog/microsoft-windows-sysmon_operational::ignore_channel_errors"))
-		assert.Equal(t, []any{"otelcol-google"}, conf.Get("receivers::windowseventlog/microsoft-windows-sysmon_operational::exclude_providers"))
+		assert.True(t, conf.IsSet("receivers::"+sysmonRecID))
+		assert.Equal(t, "Microsoft-Windows-Sysmon/Operational", conf.Get("receivers::"+sysmonRecID+"::channel"))
+		assert.Equal(t, true, conf.Get("receivers::"+sysmonRecID+"::suppress_rendering_info"))
+		assert.False(t, conf.IsSet("receivers::"+sysmonRecID+"::event_driven_scraping"))
+		assert.Equal(t, 500, conf.Get("receivers::"+sysmonRecID+"::max_reads"))
+		assert.Equal(t, true, conf.Get("receivers::"+sysmonRecID+"::ignore_channel_errors"))
+		assert.Equal(t, []any{"otelcol-google"}, conf.Get("receivers::"+sysmonRecID+"::exclude_providers"))
 
 		// Receivers must attach to canonical shared logs/googlecontrolplane pipeline
 		receivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
 		assert.Contains(t, receivers, "nop/googlecontrolplane")
-		assert.Contains(t, receivers, "windowseventlog/security")
-		assert.Contains(t, receivers, "windowseventlog/microsoft-windows-sysmon_operational")
+		assert.Contains(t, receivers, secRecID)
+		assert.Contains(t, receivers, sysmonRecID)
 	} else {
-		assert.False(t, conf.IsSet("receivers::windowseventlog/security"))
-		assert.False(t, conf.IsSet("receivers::windowseventlog/microsoft-windows-sysmon_operational"))
+		assert.False(t, conf.IsSet("receivers::"+secRecID))
+		assert.False(t, conf.IsSet("receivers::"+sysmonRecID))
 		receivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
 		assert.Contains(t, receivers, "nop/googlecontrolplane")
-		assert.NotContains(t, receivers, "windowseventlog/security")
-		assert.NotContains(t, receivers, "windowseventlog/microsoft-windows-sysmon_operational")
+		assert.NotContains(t, receivers, secRecID)
+		assert.NotContains(t, receivers, sysmonRecID)
 	}
 
 	// Canonical pipeline must contain standard processor chain
@@ -564,23 +567,27 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource_MultiPolicyConsolidat
 	conf, err := ret.AsConf()
 	require.NoError(t, err)
 
+	appRecID := "windowseventlog/" + windowseventlogsource.SanitizeChannelName("Application")
+	secRecID := "windowseventlog/" + windowseventlogsource.SanitizeChannelName("Security")
+	sysRecID := "windowseventlog/" + windowseventlogsource.SanitizeChannelName("System")
+
 	if runtime.GOOS == "windows" {
 		// Deduplicated channels: application, security, system
-		assert.True(t, conf.IsSet("receivers::windowseventlog/application"))
-		assert.True(t, conf.IsSet("receivers::windowseventlog/security"))
-		assert.True(t, conf.IsSet("receivers::windowseventlog/system"))
+		assert.True(t, conf.IsSet("receivers::"+appRecID))
+		assert.True(t, conf.IsSet("receivers::"+secRecID))
+		assert.True(t, conf.IsSet("receivers::"+sysRecID))
 
 		// First-seen casing preserved
-		assert.Equal(t, "Security", conf.Get("receivers::windowseventlog/security::channel"))
-		assert.Equal(t, "System", conf.Get("receivers::windowseventlog/system::channel"))
-		assert.Equal(t, "Application", conf.Get("receivers::windowseventlog/application::channel"))
+		assert.Equal(t, "Security", conf.Get("receivers::"+secRecID+"::channel"))
+		assert.Equal(t, "System", conf.Get("receivers::"+sysRecID+"::channel"))
+		assert.Equal(t, "Application", conf.Get("receivers::"+appRecID+"::channel"))
 
 		receivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
 		expectedReceivers := []any{
 			"nop/googlecontrolplane",
-			"windowseventlog/application",
-			"windowseventlog/security",
-			"windowseventlog/system",
+			appRecID,
+			secRecID,
+			sysRecID,
 		}
 		assert.ElementsMatch(t, expectedReceivers, receivers)
 
@@ -589,13 +596,13 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource_MultiPolicyConsolidat
 		require.NoError(t, err)
 		var recMap map[component.ID]any
 		require.NoError(t, sub.Unmarshal(&recMap))
-		assert.Contains(t, recMap, component.MustNewIDWithName("windowseventlog", "application"))
-		assert.Contains(t, recMap, component.MustNewIDWithName("windowseventlog", "security"))
-		assert.Contains(t, recMap, component.MustNewIDWithName("windowseventlog", "system"))
+		assert.Contains(t, recMap, component.MustNewIDWithName("windowseventlog", windowseventlogsource.SanitizeChannelName("Application")))
+		assert.Contains(t, recMap, component.MustNewIDWithName("windowseventlog", windowseventlogsource.SanitizeChannelName("Security")))
+		assert.Contains(t, recMap, component.MustNewIDWithName("windowseventlog", windowseventlogsource.SanitizeChannelName("System")))
 	} else {
-		assert.False(t, conf.IsSet("receivers::windowseventlog/application"))
-		assert.False(t, conf.IsSet("receivers::windowseventlog/security"))
-		assert.False(t, conf.IsSet("receivers::windowseventlog/system"))
+		assert.False(t, conf.IsSet("receivers::"+appRecID))
+		assert.False(t, conf.IsSet("receivers::"+secRecID))
+		assert.False(t, conf.IsSet("receivers::"+sysRecID))
 		receivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
 		assert.Equal(t, []any{"nop/googlecontrolplane"}, receivers)
 	}
@@ -655,22 +662,23 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource_RealPolicyFaultIsolat
 	conf, err := ret.AsConf()
 	require.NoError(t, err)
 
+	secRecID := "windowseventlog/" + windowseventlogsource.SanitizeChannelName("Security")
 	if runtime.GOOS == "windows" {
 		// Valid policy survives and produces receivers
-		assert.True(t, conf.IsSet("receivers::windowseventlog/security"))
+		assert.True(t, conf.IsSet("receivers::"+secRecID))
 		receivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
-		assert.Contains(t, receivers, "windowseventlog/security")
+		assert.Contains(t, receivers, secRecID)
 
 		// Component ID unmarshaling succeeds
 		sub, err := conf.Sub("receivers")
 		require.NoError(t, err)
 		var recs map[component.ID]any
 		require.NoError(t, sub.Unmarshal(&recs))
-		assert.Contains(t, recs, component.MustNewIDWithName("windowseventlog", "security"))
+		assert.Contains(t, recs, component.MustNewIDWithName("windowseventlog", windowseventlogsource.SanitizeChannelName("Security")))
 	} else {
-		assert.False(t, conf.IsSet("receivers::windowseventlog/security"))
+		assert.False(t, conf.IsSet("receivers::"+secRecID))
 		receivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
-		assert.NotContains(t, receivers, "windowseventlog/security")
+		assert.NotContains(t, receivers, secRecID)
 	}
 
 	// Warning log was recorded for the invalid policy
@@ -715,16 +723,17 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource_InvalidComponentIDIso
 	conf, err := ret.AsConf()
 	require.NoError(t, err)
 
+	secRecID := "windowseventlog/" + windowseventlogsource.SanitizeChannelName("Security")
 	if runtime.GOOS == "windows" {
 		// Valid policy survives and config unmarshals into component.ID map
-		assert.True(t, conf.IsSet("receivers::windowseventlog/security"))
+		assert.True(t, conf.IsSet("receivers::"+secRecID))
 		sub, err := conf.Sub("receivers")
 		require.NoError(t, err)
 		var recs map[component.ID]any
 		require.NoError(t, sub.Unmarshal(&recs))
-		assert.Contains(t, recs, component.MustNewIDWithName("windowseventlog", "security"))
+		assert.Contains(t, recs, component.MustNewIDWithName("windowseventlog", windowseventlogsource.SanitizeChannelName("Security")))
 	} else {
-		assert.False(t, conf.IsSet("receivers::windowseventlog/security"))
+		assert.False(t, conf.IsSet("receivers::"+secRecID))
 	}
 
 	assert.NoError(t, p.Shutdown(context.Background()))
@@ -767,32 +776,26 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource_MultiPolicyDelimiterC
 	conf, err := ret.AsConf()
 	require.NoError(t, err)
 
+	slashRecID := "windowseventlog/" + windowseventlogsource.SanitizeChannelName("Foo/Bar")
+	underscoreRecID := "windowseventlog/" + windowseventlogsource.SanitizeChannelName("Foo_Bar")
+
 	if runtime.GOOS == "windows" {
 		// Both channels are preserved and have distinct receiver IDs
+		assert.NotEqual(t, slashRecID, underscoreRecID)
 		sub, err := conf.Sub("receivers")
 		require.NoError(t, err)
 		var recs map[component.ID]any
 		require.NoError(t, sub.Unmarshal(&recs))
 
-		assert.Contains(t, recs, component.MustNewIDWithName("windowseventlog", "foo_bar"))
-		foundDisambiguated := false
-		for id := range recs {
-			if id.Type().String() == "windowseventlog" && strings.HasPrefix(id.Name(), "foo_bar_") {
-				foundDisambiguated = true
-				break
-			}
-		}
-		assert.True(t, foundDisambiguated, "expected disambiguated receiver ID with foo_bar_ prefix")
+		assert.Contains(t, recs, component.MustNewIDWithName("windowseventlog", windowseventlogsource.SanitizeChannelName("Foo/Bar")))
+		assert.Contains(t, recs, component.MustNewIDWithName("windowseventlog", windowseventlogsource.SanitizeChannelName("Foo_Bar")))
 
 		pipelineReceivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
-		assert.Contains(t, pipelineReceivers, "windowseventlog/foo_bar")
-		for id := range recs {
-			if id.Type().String() == "windowseventlog" && strings.HasPrefix(id.Name(), "foo_bar_") {
-				assert.Contains(t, pipelineReceivers, id.String())
-			}
-		}
+		assert.Contains(t, pipelineReceivers, slashRecID)
+		assert.Contains(t, pipelineReceivers, underscoreRecID)
 	} else {
-		assert.False(t, conf.IsSet("receivers::windowseventlog/foo_bar"))
+		assert.False(t, conf.IsSet("receivers::"+slashRecID))
+		assert.False(t, conf.IsSet("receivers::"+underscoreRecID))
 		pipelineReceivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
 		assert.Equal(t, []any{"nop/googlecontrolplane"}, pipelineReceivers)
 	}
@@ -857,15 +860,16 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource_FaultIsolation(t *tes
 	conf, err := ret.AsConf()
 	require.NoError(t, err)
 
+	secRecID := "windowseventlog/" + windowseventlogsource.SanitizeChannelName("Security")
 	if runtime.GOOS == "windows" {
 		// Valid policy survives and produces receivers
-		assert.True(t, conf.IsSet("receivers::windowseventlog/security"))
+		assert.True(t, conf.IsSet("receivers::"+secRecID))
 		receivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
-		assert.Contains(t, receivers, "windowseventlog/security")
+		assert.Contains(t, receivers, secRecID)
 	} else {
-		assert.False(t, conf.IsSet("receivers::windowseventlog/security"))
+		assert.False(t, conf.IsSet("receivers::"+secRecID))
 		receivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
-		assert.NotContains(t, receivers, "windowseventlog/security")
+		assert.NotContains(t, receivers, secRecID)
 	}
 
 	// Invalid policy was rejected and logged
@@ -916,8 +920,8 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource_SilentNoOpOnNonWindow
 	conf, err := ret.AsConf()
 	require.NoError(t, err)
 
-	assert.False(t, conf.IsSet("receivers::windowseventlog/security"))
-	assert.False(t, conf.IsSet("receivers::windowseventlog/application"))
+	assert.False(t, conf.IsSet("receivers::windowseventlog/"+windowseventlogsource.SanitizeChannelName("Security")))
+	assert.False(t, conf.IsSet("receivers::windowseventlog/"+windowseventlogsource.SanitizeChannelName("Application")))
 
 	receivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
 	assert.Equal(t, []any{"nop/googlecontrolplane"}, receivers)

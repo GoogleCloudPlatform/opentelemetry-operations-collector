@@ -123,6 +123,13 @@ func (p *Policy) PolicyClass() googlepolicy.PolicyClass {
 	return googlepolicy.PolicyClassSource
 }
 
+// canonicalChannel returns the trimmed, case-folded form of a Windows Event Log channel name.
+// Case folding follows Windows invariant ordinal uppercase rules so that deduplication,
+// consolidation, and receiver ID hash derivation use the exact same canonical representation.
+func canonicalChannel(channel string) string {
+	return caseFoldChannel(strings.TrimSpace(channel))
+}
+
 // Validate checks whether the policy definition meets all semantic requirements.
 func (p *Policy) Validate() error {
 	if p == nil || p.proto == nil {
@@ -135,6 +142,7 @@ func (p *Policy) Validate() error {
 	if len(channels) == 0 {
 		return ErrMissingChannels
 	}
+	seenIDs := make(map[string]string)
 	for _, ch := range channels {
 		trimmed := strings.TrimSpace(ch)
 		if trimmed == "" {
@@ -148,12 +156,12 @@ func (p *Policy) Validate() error {
 		if err := id.UnmarshalText([]byte(ReceiverType + "/" + san)); err != nil {
 			return fmt.Errorf("%w: %q: %v", ErrInvalidChannelName, ch, err)
 		}
-	}
-	for _, rec := range p.channelReceivers() {
-		var id component.ID
-		if err := id.UnmarshalText([]byte(ReceiverType + "/" + rec.id.Name())); err != nil {
-			return fmt.Errorf("%w: disambiguated receiver id for channel %q: %v", ErrInvalidChannelName, rec.channel, err)
+		// Guard against hash collisions across distinct channels
+		key := canonicalChannel(trimmed)
+		if prevChan, exists := seenIDs[san]; exists && canonicalChannel(prevChan) != key {
+			return fmt.Errorf("%w: receiver ID collision between %q and %q", ErrInvalidChannelName, prevChan, ch)
 		}
+		seenIDs[san] = ch
 	}
 	return nil
 }
@@ -171,7 +179,7 @@ func (p *Policy) Channels() []string {
 		if trimmed == "" {
 			continue
 		}
-		key := strings.ToUpper(trimmed)
+		key := canonicalChannel(trimmed)
 		if !seen[key] {
 			seen[key] = true
 			result = append(result, trimmed)
@@ -180,20 +188,32 @@ func (p *Policy) Channels() []string {
 	return result
 }
 
-// SanitizeChannelName converts a Windows Event Log channel name into a valid OpenTelemetry
-// component ID name suffix by lower-casing and replacing any characters not permitted in component names
-// (Unicode categories Z, C, S, slashes, backslashes, and colons) with underscores.
-// The sanitized string is capped at 1024 characters per OpenTelemetry component naming constraints.
+const (
+	// maxPrefixBytes is the maximum byte length for the readable prefix of a synthesized receiver ID.
+	maxPrefixBytes = 64
+)
+
+// SanitizeChannelName converts a Windows Event Log channel name into a deterministic, unique
+// OpenTelemetry component ID name suffix.
+// The resulting ID has the format: <safe_prefix>_<16_hex_hash>
+// - safe_prefix: lowercased, disallowed characters replaced by '_', capped at 64 bytes on a rune boundary.
+// - 16_hex_hash: 64-bit truncated SHA-256 hash of the canonical (case-folded, trimmed) channel name.
+// This guarantees that receiver IDs are a pure function of the channel, ensuring stable IDs
+// across policy set revisions for persistent bookmark storage.
 func SanitizeChannelName(channel string) string {
-	s := strings.TrimSpace(channel)
-	if s == "" {
+	trimmed := strings.TrimSpace(channel)
+	if trimmed == "" {
 		return ""
 	}
+
+	canonical := canonicalChannel(trimmed)
+	h := sha256.Sum256([]byte(canonical))
+	hashSuffix := hex.EncodeToString(h[:8]) // 16 hex characters = 64 bits of entropy
 
 	var sb strings.Builder
 	lastUnderscore := false
 
-	for _, r := range s {
+	for _, r := range trimmed {
 		if unicode.Is(unicode.Z, r) || unicode.Is(unicode.C, r) || unicode.Is(unicode.S, r) || r == '/' || r == '\\' || r == ':' || r == '_' {
 			if !lastUnderscore && sb.Len() > 0 {
 				sb.WriteRune('_')
@@ -205,17 +225,19 @@ func SanitizeChannelName(channel string) string {
 		}
 	}
 
-	res := strings.Trim(sb.String(), "_")
-	if len(res) > 1024 {
-		h := sha256.Sum256([]byte(channel))
-		hashSuffix := "_" + hex.EncodeToString(h[:4]) // 9 characters
-		maxBase := 1024 - len(hashSuffix)
-		for maxBase > 0 && !utf8.RuneStart(res[maxBase]) {
+	prefix := strings.Trim(sb.String(), "_")
+	if prefix == "" {
+		return ""
+	}
+	if len(prefix) > maxPrefixBytes {
+		maxBase := maxPrefixBytes
+		for maxBase > 0 && !utf8.RuneStart(prefix[maxBase]) {
 			maxBase--
 		}
-		res = strings.TrimRight(res[:maxBase], "_") + hashSuffix
+		prefix = strings.TrimRight(prefix[:maxBase], "_")
 	}
-	return res
+
+	return fmt.Sprintf("%s_%s", prefix, hashSuffix)
 }
 
 type channelReceiver struct {
@@ -224,39 +246,16 @@ type channelReceiver struct {
 }
 
 // channelReceivers returns a slice of channelReceiver mappings for this policy.
-// If multiple distinct channels sanitize to the same component name, subsequent channels
-// are disambiguated with a deterministic 8-character hex hash suffix.
+// Because SanitizeChannelName is a pure, 1-to-1 function of each channel (via its canonical hash),
+// each distinct channel produces a deterministic receiver ID.
 func (p *Policy) channelReceivers() []channelReceiver {
 	channels := p.Channels()
 	if len(channels) == 0 {
 		return nil
 	}
-	usedIDs := make(map[string]bool)
 	result := make([]channelReceiver, 0, len(channels))
 	for _, ch := range channels {
-		base := SanitizeChannelName(ch)
-		idName := base
-		if usedIDs[idName] {
-			for attempt := 0; usedIDs[idName]; attempt++ {
-				var h [32]byte
-				if attempt == 0 {
-					h = sha256.Sum256([]byte(ch))
-				} else {
-					h = sha256.Sum256([]byte(fmt.Sprintf("%s:%d", ch, attempt)))
-				}
-				hashSuffix := hex.EncodeToString(h[:4])
-				maxBase := 1024 - len(hashSuffix) - 1
-				curBase := base
-				if len(curBase) > maxBase {
-					for maxBase > 0 && !utf8.RuneStart(curBase[maxBase]) {
-						maxBase--
-					}
-					curBase = strings.TrimRight(curBase[:maxBase], "_")
-				}
-				idName = fmt.Sprintf("%s_%s", curBase, hashSuffix)
-			}
-		}
-		usedIDs[idName] = true
+		idName := SanitizeChannelName(ch)
 		id := component.MustNewIDWithName(ReceiverType, idName)
 		result = append(result, channelReceiver{channel: ch, id: id})
 	}
@@ -307,12 +306,12 @@ func (p *Policy) Consolidate(policies []googlepolicy.SourcePolicy) (googlepolicy
 		return p, nil
 	}
 
-	seen := make(map[string]string) // key: uppercase trimmed channel, value: first-seen casing
+	seen := make(map[string]string) // key: canonical channel, value: first-seen casing
 	var orderedKeys []string
 
 	// Register receiver's own channels first
 	for _, ch := range p.Channels() {
-		key := strings.ToUpper(strings.TrimSpace(ch))
+		key := canonicalChannel(ch)
 		if _, exists := seen[key]; !exists {
 			seen[key] = ch
 			orderedKeys = append(orderedKeys, key)
@@ -334,7 +333,7 @@ func (p *Policy) Consolidate(policies []googlepolicy.SourcePolicy) (googlepolicy
 			return nil, fmt.Errorf("cannot consolidate policy of type %T into windows event log source policy", other)
 		}
 		for _, ch := range wp.Channels() {
-			key := strings.ToUpper(strings.TrimSpace(ch))
+			key := canonicalChannel(ch)
 			if _, exists := seen[key]; !exists {
 				seen[key] = ch
 				orderedKeys = append(orderedKeys, key)

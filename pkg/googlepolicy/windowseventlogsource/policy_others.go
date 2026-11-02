@@ -16,4 +16,12 @@
 
 package windowseventlogsource
 
+import "strings"
+
 const isWindows = false
+
+// caseFoldChannel is the non-Windows fallback for case-folding channel names.
+// On non-Windows platforms, strings.ToUpper is used as a documented fallback.
+func caseFoldChannel(s string) string {
+	return strings.ToUpper(s)
+}

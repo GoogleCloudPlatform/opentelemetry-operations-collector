@@ -138,6 +138,10 @@ github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 h1:C3w9PqII01/Oq
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822/go.mod h1:+n7T8mK8HuQTcFwEeznm/DIxMOiR9yIdICNftLE1DvQ=
 github.com/open-telemetry/opentelemetry-collector-contrib/extension/googleclientauthextension v0.164.1 h1:0E3YdQhrd3M/hPlU8SebAoBb/sqIstwHtLE+3wjceeg=
 github.com/open-telemetry/opentelemetry-collector-contrib/extension/googleclientauthextension v0.164.1/go.mod h1:wqHRpPlLiyKXqJ+iZBUFn16QX8cpVPQI8uTNUwW8eR0=
+github.com/open-telemetry/opentelemetry-collector-contrib/pkg/winperfcounters v0.164.0 h1:sS3ppTQ042c2QJVGC9wVMKbTBYYI9ARuC//A4R8bgwU=
+github.com/open-telemetry/opentelemetry-collector-contrib/pkg/winperfcounters v0.164.0/go.mod h1:ErIOx7+FECmUPgYEBb1JD69thg2B/EO5vATdkPOyeuE=
+github.com/open-telemetry/opentelemetry-collector-contrib/receiver/iisreceiver v0.164.0 h1:ET8EsE+p+98IS1B9JP0xhK9ZmRWx3Xt2NTusRfx14Jo=
+github.com/open-telemetry/opentelemetry-collector-contrib/receiver/iisreceiver v0.164.0/go.mod h1:i/1dcMLVWys/4/s1CSfwz9YT/U+grmJB6tYvBqScN9Q=
 github.com/pierrec/lz4/v4 v4.1.33 h1:GjG1TJ1V4IzKP8L96muuuDNpTwd7D+l2ccXrjAbe014=
 github.com/pierrec/lz4/v4 v4.1.33/go.mod h1:7SE9MC2STkNtL4PIwGhjmyVwvILaGI9/COYQNBhKM/c=
 github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 h1:GFCKgmp0tecUJ0sJuv4pzYCqS9+RGSn52M3FUwPs+uo=
@@ -278,6 +282,8 @@ go.opentelemetry.io/collector/extension/zpagesextension v0.164.0 h1:qYFaoP/B9JR7
 go.opentelemetry.io/collector/extension/zpagesextension v0.164.0/go.mod h1:ko+ssSLYwXKMTvhn8wDplZSzQnYRttO+7nDAqxZyYbw=
 go.opentelemetry.io/collector/featuregate v1.70.0 h1:yXJP5pi2xq+bVRG+8d4/ue13/GSoCmozp2Cb5ExE+Zs=
 go.opentelemetry.io/collector/featuregate v1.70.0/go.mod h1:dRYifiJa2vQ6LWpPwHny4mL82mnGWsWEVeVWw+DhYJw=
+go.opentelemetry.io/collector/filter v0.164.0 h1:slnqrQkyE7fZY97zBRgDXRWowjKzk2lcFBymajjwieo=
+go.opentelemetry.io/collector/filter v0.164.0/go.mod h1:hjfZiMYMtA4f9gjUIlMyaRlismsd4rLXH2UwzFlyGnI=
 go.opentelemetry.io/collector/internal/componentalias v0.164.0 h1:FQdN4acymj+cRiLDDYvEzEyovx4e/pY9S/9gyBjQVF4=
 go.opentelemetry.io/collector/internal/componentalias v0.164.0/go.mod h1:C5Z/7FUEHPi791IhkGyKtoTZ4VS9XocZfBBGW3KG5Oo=
 go.opentelemetry.io/collector/internal/fanoutconsumer v0.164.0 h1:/TU1OvFXEi0QpTkezUTXnKnWFey9DesGQqZJcOfSSdg=
@@ -322,6 +328,10 @@ go.opentelemetry.io/collector/receiver/receivertest v0.164.0 h1:4ehKgtHDal2sMgDX
 go.opentelemetry.io/collector/receiver/receivertest v0.164.0/go.mod h1:5zh7Zh3lR5L8chpy6F5kFNEnvqgp8r0iq+roDMFuFEM=
 go.opentelemetry.io/collector/receiver/xreceiver v0.164.0 h1:I44nT+Z2l79Fb7DcG7KXYbECNT1+6YEg0B5IUJfJsrA=
 go.opentelemetry.io/collector/receiver/xreceiver v0.164.0/go.mod h1:rLsMQA83jKqDbxP3SsOpSrkLxpDQLHM3K7fFFh2Bh8E=
+go.opentelemetry.io/collector/scraper v0.164.0 h1:PrKJy3I4AC0w/OqBMqFt7Mi6Wx+igSDo8H0vgFcipHE=
+go.opentelemetry.io/collector/scraper v0.164.0/go.mod h1:kFMYY9KVEY/Q4rrEQGkWbYA7kxqSvB3y6vqEPiTvHGs=
+go.opentelemetry.io/collector/scraper/scraperhelper v0.164.0 h1:7bBAozXPKGMwqYhCcXCvq3h27JDaDxvpKoZIoSDoLqc=
+go.opentelemetry.io/collector/scraper/scraperhelper v0.164.0/go.mod h1:3kLVTMnmLCBZjWR+t4XtrSSIJq7JvSlXR0ughmk0G/E=
 go.opentelemetry.io/collector/service v0.164.0 h1:8raIqnhzuZwxxcbGtq8O0wZGlbkW3mo/cEfB+hQVjTM=
 go.opentelemetry.io/collector/service v0.164.0/go.mod h1:1tYQda9M8PHEZO/qmP7jpFX9xdD8xOpsr5QFfv4XG+I=
 go.opentelemetry.io/collector/service/hostcapabilities v0.164.0 h1:EoqtizvasiJOkVIHPPSADDjzE6l/mH9isQOMrmSCEmE=

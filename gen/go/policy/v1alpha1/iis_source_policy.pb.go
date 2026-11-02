@@ -44,8 +44,9 @@ const (
 //   - Default Disposition: Microsoft IIS metric collection is disabled unless at
 //     least one valid IisSourcePolicy is configured.
 //   - Interval Validation (Fail-Open): If `collection_interval_seconds` is unset,
-//     it defaults to 60. When set, it must be >= 10; a policy with
-//     `collection_interval_seconds < 10` is invalid and ignored (fail-open).
+//     it defaults to 60. When set, it must be >= 10 and <= 86400; a policy with
+//     `collection_interval_seconds < 10` or `collection_interval_seconds > 86400`
+//     is invalid and ignored (fail-open).
 //   - Order-Independent Deduplication: Multiple valid IisSourcePolicy instances
 //     merge into a single `iis` receiver using the minimum effective
 //     `collection_interval_seconds`.
@@ -53,7 +54,7 @@ type IisSourcePolicy struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Unique identifier for the policy within its configuration scope.
 	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	// Scrape interval in seconds. Defaults to 60 if unset. Must be >= 10.
+	// Scrape interval in seconds. Defaults to 60 if unset. Must be >= 10 and <= 86400.
 	CollectionIntervalSeconds *int32 `protobuf:"varint,2,opt,name=collection_interval_seconds,json=collectionIntervalSeconds,proto3,oneof" json:"collection_interval_seconds,omitempty"`
 	unknownFields             protoimpl.UnknownFields
 	sizeCache                 protoimpl.SizeCache

@@ -38,6 +38,7 @@ import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"github.com/google/go-cmp/cmp"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/iisreceiver"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/confmap"
 	"go.opentelemetry.io/collector/confmap/provider/envprovider"
@@ -529,6 +530,7 @@ func testCollectorFactories() (otelcol.Factories, error) {
 		otlpreceiver.NewFactory(),
 		newStubReceiverFactory("nop"),
 		newStubReceiverFactory("hostmetrics"),
+		iisreceiver.NewFactory(),
 	)
 	if err != nil {
 		return otelcol.Factories{}, err
@@ -2136,5 +2138,54 @@ service:
 	}
 	if sawErrorEventForValid {
 		t.Fatalf("unexpected gcp.policy.evaluate.error log event on selfMockSrv for valid policy %q", validPolicyID)
+	}
+}
+
+func TestPolicyIntegration_IISSourcePolicy(t *testing.T) {
+	otelcolBin := resolveOtelcolBinary(t)
+	tempDir := t.TempDir()
+
+	policiesDir := filepath.Join(tempDir, "policies")
+	if err := os.MkdirAll(policiesDir, 0755); err != nil {
+		t.Fatalf("failed to create policies directory: %v", err)
+	}
+
+	iisPolicy := `{
+  "type": "iis_source",
+  "id": "enable-iis-metrics",
+  "collection_interval_seconds": 30
+}`
+	if err := os.WriteFile(filepath.Join(policiesDir, "01-iis.json"), []byte(iisPolicy), 0644); err != nil {
+		t.Fatalf("failed to write iis policy: %v", err)
+	}
+
+	pipelineCfgPath, _, _, _, selfMockSrv := stageTestPipelineConfig(t, tempDir)
+
+	col := startCollector(t, otelcolBin, policiesDir, pipelineCfgPath)
+	defer col.shutdown(t)
+
+	// Wait for policy set active self metric to verify collector booted and applied policy set
+	value, _, found := waitForPolicySetActive(selfMockSrv, 10*time.Second)
+	if !found || value <= 0 {
+		t.Errorf("expected collector to report positive gcp.policy.set.active revision, got found=%v value=%d\nlogs:\n%s", found, value, col.logs())
+	}
+
+	// Verify no gcp.policy.evaluate.error was emitted for the policy
+	for _, batch := range selfMockSrv.CollectedLogs() {
+		for i := 0; i < batch.ResourceLogs().Len(); i++ {
+			sl := batch.ResourceLogs().At(i).ScopeLogs()
+			for j := 0; j < sl.Len(); j++ {
+				lr := sl.At(j).LogRecords()
+				for k := 0; k < lr.Len(); k++ {
+					record := lr.At(k)
+					attrs := record.Attributes()
+					eventName, hasName := attrs.Get("event.name")
+					if hasName && eventName.AsString() == "gcp.policy.evaluate.error" {
+						policyID, _ := attrs.Get("gcp.policy.id")
+						t.Errorf("unexpected gcp.policy.evaluate.error event for policy %s\nlogs:\n%s", policyID.AsString(), col.logs())
+					}
+				}
+			}
+		}
 	}
 }

@@ -66,8 +66,6 @@ import (
 	"cloud.google.com/go/monitoring/apiv3/v2/monitoringpb"
 	"github.com/google/uuid"
 	"google.golang.org/api/iterator"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/integration_test/gce-testing-internal/gce"
@@ -287,18 +285,6 @@ func nonEmptySeries(logger *log.Logger, it *monitoring.TimeSeriesIterator) ([]*m
 	}
 }
 
-// isRetriableLookupError mirrors gce.isRetriableLookupError.
-func isRetriableLookupError(ctx context.Context, err error) bool {
-	st, ok := status.FromError(err)
-	if !ok {
-		return false
-	}
-	if st.Code() == codes.Canceled {
-		return ctx.Err() == nil
-	}
-	return st.Code() == codes.NotFound || st.Code() == codes.Internal || st.Code() == codes.ResourceExhausted
-}
-
 // waitForCollectorMetricSeries is gce.WaitForMetricSeries using
 // lookupCollectorMetric. It retries "no data" and retriable errors up to
 // gce.QueryMaxAttempts times.
@@ -308,7 +294,7 @@ func waitForCollectorMetricSeries(ctx context.Context, logger *log.Logger, clien
 		if len(tsList) > 0 && err == nil {
 			return tsList, nil
 		}
-		if err != nil && !isRetriableLookupError(ctx, err) {
+		if err != nil && !gce.IsRetriableLookupError(ctx, err) {
 			return nil, fmt.Errorf("waitForCollectorMetricSeries(metric=%q, collector=%q): %v", metric, collector, err)
 		}
 		logger.Printf("waitForCollectorMetricSeries(metric=%q, collector=%q): request_error=%v, retrying (%d/%d)...", metric, collector, err, attempt, gce.QueryMaxAttempts)

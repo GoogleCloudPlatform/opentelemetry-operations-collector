@@ -201,9 +201,9 @@ func TestIsRetriableLookupError(t *testing.T) {
 			if ctx == nil {
 				ctx = context.Background()
 			}
-			actual := isRetriableLookupError(ctx, tc.err)
+			actual := IsRetriableLookupError(ctx, tc.err)
 			if actual != tc.expected {
-				t.Errorf("isRetriableLookupError(ctx with Err() = %v, %v) = %v; want %v", ctx.Err(), tc.err, actual, tc.expected)
+				t.Errorf("IsRetriableLookupError(ctx with Err() = %v, %v) = %v; want %v", ctx.Err(), tc.err, actual, tc.expected)
 			}
 		})
 	}

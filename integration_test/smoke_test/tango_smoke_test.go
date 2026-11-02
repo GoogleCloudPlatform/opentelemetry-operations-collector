@@ -42,7 +42,7 @@ TANGO_CP_ENDPOINT: host:port of the xDS Control Plane, e.g.
   staging-telemetrydirector.asia-east1.rep.sandbox.googleapis.com:443.
   The test is skipped when unset.
 TANGO_EXPECTED_REVISION: revision ID of the pre-provisioned PolicySet that is
-  rolled out to the fleet (e.g. 562b758d). Required.
+  rolled out to the fleet (e.g. 75cbca3b). Required.
 TANGO_FLEET_ID: fleet the collector subscribes to (default gboc-smoke-fleet).
 TANGO_POLICY_SET_ID: pre-created PolicySet ID (default gboc-smoke-ps).
 TANGO_REGION: region of the fleet and Control Plane endpoint (default

@@ -24,15 +24,15 @@ reaches Cloud Logging.
 The test assumes a long-lived fleet and PolicySet already exist and have been
 rolled out. It never creates, updates or deletes them.
 
-Current resources (project `lujieduan-sandbox`, number `648321971081`,
+Current resources (project `stackdriver-test-143416`, number `228437877067`,
 location `asia-east1`, staging Telemetry Management API, staging Telemetry
 Director `staging-telemetrydirector.asia-east1.rep.sandbox.googleapis.com:443`):
 
 | Resource | Name |
 |---|---|
-| Fleet | `projects/lujieduan-sandbox/locations/asia-east1/fleets/gboc-smoke-fleet` |
-| PolicySet | `projects/648321971081/locations/asia-east1/policySets/gboc-smoke-ps` |
-| Revision | `projects/648321971081/locations/asia-east1/policySets/gboc-smoke-ps/revisions/562b758d` |
+| Fleet | `projects/stackdriver-test-143416/locations/asia-east1/fleets/gboc-smoke-fleet` |
+| PolicySet | `projects/228437877067/locations/asia-east1/policySets/gboc-smoke-ps` |
+| Revision | `projects/228437877067/locations/asia-east1/policySets/gboc-smoke-ps/revisions/75cbca3b` |
 
 The PolicySet body is in [`policyset.json`](policyset.json). It contains a
 filelog source policy for `/var/log/gboc-smoke/*.log`, a log transform policy
@@ -48,7 +48,7 @@ and creates (or updates) the fleet and PolicySet, then rolls the latest revision
 out to the fleet. It is not run by CI.
 
 ```
-./setup_policyset.sh lujieduan-sandbox
+./setup_policyset.sh stackdriver-test-143416
 ```
 
 A newly created fleet can take several minutes to become visible to Telemetry
@@ -58,13 +58,13 @@ Director. Until then the collector logs
 ## Inspecting the resources
 
 ```
-P=lujieduan-sandbox
+P=stackdriver-test-143416
 BASE=https://staging-telemetrymanagement.sandbox.googleapis.com/v1alpha/projects/$P/locations/asia-east1
 HDRS=(-H "Authorization: Bearer $(gcloud auth print-access-token)" -H "X-Goog-User-Project: $P" -H "X-Goog-Visibilities: TRUSTED_TESTER_COLLECTORS")
 
 curl -sS "${HDRS[@]}" "$BASE/fleets/gboc-smoke-fleet"
 curl -sS "${HDRS[@]}" "$BASE/policySets/gboc-smoke-ps"
-curl -sS "${HDRS[@]}" "$BASE/policySets/gboc-smoke-ps/revisions/562b758d"
+curl -sS "${HDRS[@]}" "$BASE/policySets/gboc-smoke-ps/revisions/75cbca3b"
 curl -sS "${HDRS[@]}" "$BASE/fleets/gboc-smoke-fleet/rollouts"
 ```
 
@@ -74,15 +74,16 @@ The `X-Goog-Visibilities` header is required. Without it the API answers
 ## Running locally
 
 The test needs a `.deb`/`.rpm` package of the collector in GCS. Use a build
-that predates #768: until the Control Plane's copy of the policy protos is
-updated, newer collectors NACK the filter policies it sends.
+that includes #768: the Control Plane now sends the shared `Predicate` matcher
+proto, and older collectors NACK the filter policies with
+`matcher must specify a valid predicate`.
 
 ```
 cd integration_test/smoke_test
-env PROJECT=lujieduan-sandbox ZONES=asia-east1-a IMAGE_SPECS=debian-cloud:debian-12 \
+env PROJECT=stackdriver-test-143416 ZONES=asia-east1-a IMAGE_SPECS=debian-cloud:debian-12 \
   KOKORO_BUILD_ID=local-$(date +%s) TRANSFERS_BUCKET=<bucket> \
   _BUILD_ARTIFACTS_PACKAGE_GCS=gs://<bucket>/<package-dir> \
   TANGO_CP_ENDPOINT=staging-telemetrydirector.asia-east1.rep.sandbox.googleapis.com:443 \
-  TANGO_EXPECTED_REVISION=562b758d \
+  TANGO_EXPECTED_REVISION=75cbca3b \
   go test -tags integration_test -run TestTangoSmoke -v -timeout 60m ./...
 ```

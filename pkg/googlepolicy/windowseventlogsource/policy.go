@@ -26,6 +26,7 @@ import (
 	"slices"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
@@ -46,6 +47,9 @@ const (
 	DefaultMaxReads = 500
 	// DefaultIgnoreChannelErrors fails open on missing or uninstalled host channels (preventing startup crashes).
 	DefaultIgnoreChannelErrors = true
+	// DefaultExcludeProvider specifies the collector's own Windows Event Log provider name
+	// to prevent self-amplifying feedback loops when the collector logs to the Application channel.
+	DefaultExcludeProvider = "otelcol-google"
 )
 
 var (
@@ -145,6 +149,12 @@ func (p *Policy) Validate() error {
 			return fmt.Errorf("%w: %q: %v", ErrInvalidChannelName, ch, err)
 		}
 	}
+	for _, rec := range p.channelReceivers() {
+		var id component.ID
+		if err := id.UnmarshalText([]byte(ReceiverType + "/" + rec.id.Name())); err != nil {
+			return fmt.Errorf("%w: disambiguated receiver id for channel %q: %v", ErrInvalidChannelName, rec.channel, err)
+		}
+	}
 	return nil
 }
 
@@ -199,7 +209,11 @@ func SanitizeChannelName(channel string) string {
 	if len(res) > 1024 {
 		h := sha256.Sum256([]byte(channel))
 		hashSuffix := "_" + hex.EncodeToString(h[:4]) // 9 characters
-		res = res[:1024-len(hashSuffix)] + hashSuffix
+		maxBase := 1024 - len(hashSuffix)
+		for maxBase > 0 && !utf8.RuneStart(res[maxBase]) {
+			maxBase--
+		}
+		res = strings.TrimRight(res[:maxBase], "_") + hashSuffix
 	}
 	return res
 }
@@ -234,7 +248,10 @@ func (p *Policy) channelReceivers() []channelReceiver {
 				maxBase := 1024 - len(hashSuffix) - 1
 				curBase := base
 				if len(curBase) > maxBase {
-					curBase = curBase[:maxBase]
+					for maxBase > 0 && !utf8.RuneStart(curBase[maxBase]) {
+						maxBase--
+					}
+					curBase = strings.TrimRight(curBase[:maxBase], "_")
 				}
 				idName = fmt.Sprintf("%s_%s", curBase, hashSuffix)
 			}
@@ -248,7 +265,11 @@ func (p *Policy) channelReceivers() []channelReceiver {
 
 // LogReceiverIDs returns the component IDs of log receivers synthesized by this policy.
 // Each distinct channel receives an isolated receiver instance.
+// On non-Windows platforms, it returns nil because Windows Event Log is Windows-only.
 func (p *Policy) LogReceiverIDs() []component.ID {
+	if !isWindows {
+		return nil
+	}
 	recs := p.channelReceivers()
 	if len(recs) == 0 {
 		return nil
@@ -333,13 +354,9 @@ func (p *Policy) Consolidate(policies []googlepolicy.SourcePolicy) (googlepolicy
 	return NewPolicyFromProto(cloned)
 }
 
-// Evaluate produces the confmap for all synthesized windowseventlog receivers.
-// For each distinct channel, it synthesizes an isolated receiver instance.
-func (p *Policy) Evaluate(_ context.Context) (*confmap.Conf, error) {
-	if err := p.Validate(); err != nil {
-		return nil, fmt.Errorf("policy %q failed validation: %w", p.PolicyName(), err)
-	}
-
+// receiverConfigs returns the map representation of synthesized windowseventlog receiver configurations.
+// It is unexported and has no OS dependency so that configuration generation can be fully tested on all platforms.
+func (p *Policy) receiverConfigs() map[string]any {
 	recs := p.channelReceivers()
 	receivers := make(map[string]any, len(recs))
 	for _, r := range recs {
@@ -351,10 +368,25 @@ func (p *Policy) Evaluate(_ context.Context) (*confmap.Conf, error) {
 			// open-telemetry/opentelemetry-collector-contrib#51962 is resolved and pinned.
 			"max_reads":             DefaultMaxReads,
 			"ignore_channel_errors": DefaultIgnoreChannelErrors,
+			"exclude_providers":     []string{DefaultExcludeProvider},
 		}
 	}
-
-	return confmap.NewFromStringMap(map[string]any{
+	return map[string]any{
 		"receivers": receivers,
-	}), nil
+	}
+}
+
+// Evaluate produces the confmap for all synthesized windowseventlog receivers.
+// For each distinct channel, it synthesizes an isolated receiver instance.
+// On non-Windows platforms, it returns an empty configuration because Windows Event Log is Windows-only.
+func (p *Policy) Evaluate(_ context.Context) (*confmap.Conf, error) {
+	if err := p.Validate(); err != nil {
+		return nil, fmt.Errorf("policy %q failed validation: %w", p.PolicyName(), err)
+	}
+
+	if !isWindows {
+		return confmap.New(), nil
+	}
+
+	return confmap.NewFromStringMap(p.receiverConfigs()), nil
 }

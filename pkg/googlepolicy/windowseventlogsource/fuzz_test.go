@@ -57,6 +57,13 @@ func fuzzSeedPolicies() []*policyv1alpha1.WindowsEventLogSourcePolicy {
 			Id:       "win-source-long",
 			Channels: []string{strings.Repeat("a", 1100)},
 		},
+		{
+			Id: "win-source-colliding-long-utf8",
+			Channels: []string{
+				"a" + strings.Repeat("é", 255) + "/" + strings.Repeat("é", 255),
+				"a" + strings.Repeat("é", 255) + " " + strings.Repeat("é", 255),
+			},
+		},
 	}
 }
 
@@ -78,29 +85,61 @@ func verifyCompiledPolicy(t *testing.T, pol googlepolicy.Policy) {
 		t.Fatalf("compiled policy failed Validate(): %v", err)
 	}
 
+	winPol, ok := pol.(*Policy)
+	if !ok {
+		t.Fatalf("compiled policy is not *Policy: %T", pol)
+	}
+
+	// Always verify receiver ID invariants across all platforms via channelReceivers()
+	channelRecs := winPol.channelReceivers()
+	if len(channelRecs) == 0 {
+		t.Fatal("expected at least 1 channelReceiver mapping")
+	}
+	for _, rec := range channelRecs {
+		if rec.id.Type().String() != ReceiverType {
+			t.Fatalf("expected receiver type %q, got %q", ReceiverType, rec.id.Type().String())
+		}
+		if rec.id.Name() == "" {
+			t.Fatal("receiver ID name cannot be empty")
+		}
+		if strings.ContainsAny(rec.id.Name(), "/\\ : \t\r\n") {
+			t.Fatalf("receiver ID name %q contains unsanitized delimiter or whitespace", rec.id.Name())
+		}
+		var parsedID component.ID
+		if err := parsedID.UnmarshalText([]byte(rec.id.String())); err != nil {
+			t.Fatalf("receiver ID %q failed component.ID unmarshaling: %v", rec.id.String(), err)
+		}
+	}
+
 	srcPol, ok := pol.(googlepolicy.SourcePolicy)
 	if !ok {
 		t.Fatalf("compiled policy does not implement SourcePolicy: %T", pol)
 	}
 
-	recIDs := srcPol.LogReceiverIDs()
-	if len(recIDs) == 0 {
-		t.Fatal("expected at least 1 log receiver ID")
-	}
-	for _, id := range recIDs {
-		if id.Type().String() != ReceiverType {
-			t.Fatalf("expected receiver type %q, got %q", ReceiverType, id.Type().String())
+	if isWindows {
+		recIDs := srcPol.LogReceiverIDs()
+		if len(recIDs) == 0 {
+			t.Fatal("expected at least 1 log receiver ID on Windows")
 		}
-		if id.Name() == "" {
-			t.Fatal("receiver ID name cannot be empty")
+		for _, id := range recIDs {
+			if id.Type().String() != ReceiverType {
+				t.Fatalf("expected receiver type %q, got %q", ReceiverType, id.Type().String())
+			}
+			if id.Name() == "" {
+				t.Fatal("receiver ID name cannot be empty")
+			}
+			if strings.ContainsAny(id.Name(), "/\\ : \t\r\n") {
+				t.Fatalf("receiver ID name %q contains unsanitized delimiter or whitespace", id.Name())
+			}
+			var parsedID component.ID
+			if err := parsedID.UnmarshalText([]byte(id.String())); err != nil {
+				t.Fatalf("receiver ID %q failed component.ID unmarshaling: %v", id.String(), err)
+			}
 		}
-		if strings.ContainsAny(id.Name(), "/\\ : \t\r\n") {
-			t.Fatalf("receiver ID name %q contains unsanitized delimiter or whitespace", id.Name())
-		}
-		// Assert that the generated receiver ID passes OpenTelemetry collector ID unmarshaling
-		var parsedID component.ID
-		if err := parsedID.UnmarshalText([]byte(id.String())); err != nil {
-			t.Fatalf("receiver ID %q failed component.ID unmarshaling: %v", id.String(), err)
+	} else {
+		recIDs := srcPol.LogReceiverIDs()
+		if len(recIDs) != 0 {
+			t.Fatalf("expected 0 log receiver IDs on non-Windows, got %d", len(recIDs))
 		}
 	}
 
@@ -111,6 +150,36 @@ func verifyCompiledPolicy(t *testing.T, pol googlepolicy.Policy) {
 		t.Fatal("TraceReceiverIDs must be nil")
 	}
 
+	// Always verify receiverConfigs() unconditionally across all platforms
+	rawCfg := winPol.receiverConfigs()
+	receivers, ok := rawCfg["receivers"].(map[string]any)
+	if !ok || len(receivers) != len(channelRecs) {
+		t.Fatalf("expected %d receivers in receiverConfigs(), got %v", len(channelRecs), rawCfg["receivers"])
+	}
+	for _, rec := range channelRecs {
+		recKey := ReceiverType + "/" + rec.id.Name()
+		rCfg, ok := receivers[recKey].(map[string]any)
+		if !ok {
+			t.Fatalf("receiver %q missing from receiverConfigs()", recKey)
+		}
+		if rCfg["channel"] != rec.channel {
+			t.Fatalf("receiver %q channel mismatch: expected %q, got %v", recKey, rec.channel, rCfg["channel"])
+		}
+		if rCfg["suppress_rendering_info"] != DefaultSuppressRenderingInfo {
+			t.Fatalf("receiver %q suppress_rendering_info mismatch: expected %v, got %v", recKey, DefaultSuppressRenderingInfo, rCfg["suppress_rendering_info"])
+		}
+		if rCfg["max_reads"] != DefaultMaxReads {
+			t.Fatalf("receiver %q max_reads mismatch: expected %d, got %v", recKey, DefaultMaxReads, rCfg["max_reads"])
+		}
+		if rCfg["ignore_channel_errors"] != DefaultIgnoreChannelErrors {
+			t.Fatalf("receiver %q ignore_channel_errors mismatch: expected %v, got %v", recKey, DefaultIgnoreChannelErrors, rCfg["ignore_channel_errors"])
+		}
+		exProviders, ok := rCfg["exclude_providers"].([]string)
+		if !ok || len(exProviders) != 1 || exProviders[0] != DefaultExcludeProvider {
+			t.Fatalf("receiver %q exclude_providers mismatch: expected [%s], got %v", recKey, DefaultExcludeProvider, rCfg["exclude_providers"])
+		}
+	}
+
 	conf, err := srcPol.Evaluate(context.Background())
 	if err != nil {
 		t.Fatalf("Evaluate() returned error: %v", err)
@@ -119,9 +188,15 @@ func verifyCompiledPolicy(t *testing.T, pol googlepolicy.Policy) {
 		t.Fatal("Evaluate() returned nil conf")
 	}
 	m := conf.ToStringMap()
-	receivers, ok := m["receivers"].(map[string]any)
-	if !ok || len(receivers) != len(recIDs) {
-		t.Fatalf("expected %d receivers in confmap, got %v", len(recIDs), m["receivers"])
+	if isWindows {
+		evalRecs, ok := m["receivers"].(map[string]any)
+		if !ok || len(evalRecs) != len(channelRecs) {
+			t.Fatalf("expected %d receivers in confmap, got %v", len(channelRecs), m["receivers"])
+		}
+	} else {
+		if len(m) != 0 {
+			t.Fatalf("expected empty confmap on non-Windows, got %v", m)
+		}
 	}
 }
 

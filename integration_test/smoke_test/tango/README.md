@@ -43,15 +43,69 @@ The Control Plane currently translates only `universalPolicies[].logFilterPolicy
 into the xDS `TelemetryCollector` resource, so the collector reports
 `policies_loaded: 2`. The test relies on both filter policies.
 
+## Off-GCP X.509 Workload Identity Federation (WIF) setup
+
+To test the off-GCP authentication path (X.509 certificate + WIF + mTLS STS token
+exchange with no attached VM service account and `GCE_METADATA_HOST=127.0.0.1:1`),
+a separate project outside the `google.com` organization (`gboc-tango-testing`,
+number `406580743452`) is used for the Workload Identity Pool and off-GCP test
+VMs (`google.com` organization policies restrict external WIF pools/principals).
+
+**The WIF pool and provider below are already created.** They do not need to be
+recreated to run the test; see [Recreating the resources](#recreating-the-resources)
+only if they are deleted or a new project is used.
+
+| Resource | Name |
+|---|---|
+| Project | `gboc-tango-testing` (number `406580743452`) |
+| Workload Identity Pool | `projects/406580743452/locations/global/workloadIdentityPools/gboc-x509-pool` |
+| X.509 Provider | `projects/406580743452/locations/global/workloadIdentityPools/gboc-x509-pool/providers/gboc-x509-prov` |
+| Principal | `principal://iam.googleapis.com/projects/406580743452/locations/global/workloadIdentityPools/gboc-x509-pool/subject/gboc-smoke-workload` |
+
+The principal has `roles/logging.logWriter`, `roles/monitoring.metricWriter`,
+`roles/trafficdirector.client` and `roles/viewer` on `gboc-tango-testing`.
+
 ## Recreating the resources
 
-[`setup_policyset.sh`](setup_policyset.sh) performs the one-time project opt-in
-and creates (or updates) the fleet and PolicySet, then rolls the latest revision
-out to the fleet. It is not run by CI.
+All resources above are pre-created. [`setup_policyset.sh`](setup_policyset.sh)
+recreates them if needed. It is idempotent and not run by CI.
+
+```
+./setup_policyset.sh PROJECT_ID [LOCATION] [WIF_PROJECT_ID] [WIF_OUT_DIR]
+```
+
+| Argument | Example | What it sets up |
+|---|---|---|
+| `PROJECT_ID` (required) | `stackdriver-test-143416` | Opts the project into the staging Telemetry Management API, creates or updates the fleet and PolicySet, and rolls the latest revision out to the fleet. |
+| `LOCATION` | `asia-east1` (default) | Location of the fleet and PolicySet. |
+| `WIF_PROJECT_ID` (optional) | `gboc-tango-testing` | Creates or updates the X.509 WIF pool and provider, generates the CA and workload certificates and credential config, and grants the IAM roles above. Skipped when omitted. |
+| `WIF_OUT_DIR` | `/tmp/gboc-tango-wif` (default) | Where the certificates, `trust_store.json`, `cert_config.json` and `cred_config.json` are written. Existing certificates are reused. |
+
+With the current values, the script creates or updates:
+
+| Resource | Name |
+|---|---|
+| Fleet | `projects/stackdriver-test-143416/locations/asia-east1/fleets/gboc-smoke-fleet` |
+| PolicySet | `projects/228437877067/locations/asia-east1/policySets/gboc-smoke-ps` |
+| Revision | `projects/228437877067/locations/asia-east1/policySets/gboc-smoke-ps/revisions/<new revision>` (printed by the script) |
+| Rollout | `projects/228437877067/locations/asia-east1/fleets/gboc-smoke-fleet/rollouts/r-<timestamp>` |
+| Workload Identity Pool | `projects/406580743452/locations/global/workloadIdentityPools/gboc-x509-pool` |
+| X.509 Provider | `projects/406580743452/locations/global/workloadIdentityPools/gboc-x509-pool/providers/gboc-x509-prov` |
+
+To recreate only the fleet and PolicySet:
 
 ```
 ./setup_policyset.sh stackdriver-test-143416
 ```
+
+To also recreate the WIF pool:
+
+```
+./setup_policyset.sh stackdriver-test-143416 asia-east1 gboc-tango-testing
+```
+
+Any PolicySet update creates a new revision. Update `TANGO_EXPECTED_REVISION`
+and the revision in the table above to match.
 
 A newly created fleet can take several minutes to become visible to Telemetry
 Director. Until then the collector logs

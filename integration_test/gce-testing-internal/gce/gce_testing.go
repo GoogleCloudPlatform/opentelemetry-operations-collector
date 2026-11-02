@@ -1467,7 +1467,14 @@ func additionalCreateInstanceArgs(options VMOptions, vm *VM) ([]string, error) {
 	if len(newLabels) > 0 {
 		args = append(args, "--labels="+MapToCommaSeparatedList(newLabels))
 	}
-	if email := os.Getenv("SERVICE_EMAIL"); email != "" {
+	hasNoServiceAccount := false
+	for _, arg := range options.ExtraCreateArguments {
+		if arg == "--no-service-account" {
+			hasNoServiceAccount = true
+			break
+		}
+	}
+	if email := os.Getenv("SERVICE_EMAIL"); email != "" && !hasNoServiceAccount {
 		args = append(args, "--service-account="+email)
 	}
 	if internalIP := os.Getenv("USE_INTERNAL_IP"); internalIP == "true" {

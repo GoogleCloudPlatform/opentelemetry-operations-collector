@@ -69,6 +69,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/integration_test/gce-testing-internal/gce"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/integration_test/gce-testing-internal/logging"
 )
 
 const (
@@ -181,21 +182,28 @@ service:
 
 // tangoSettings holds the Tango-specific environment for the test.
 type tangoSettings struct {
-	cpEndpoint       string
-	expectedRevision string
-	fleetID          string
-	policySetID      string
-	region           string
+	cpEndpoint        string
+	expectedRevision  string
+	fleetID           string
+	policySetID       string
+	region            string
+	offGCP            bool
+	project           string
+	projectNumber     string
+	wifCredConfigPath string
 }
 
 func tangoSettingsFromEnv(t *testing.T) tangoSettings {
 	t.Helper()
 	s := tangoSettings{
-		cpEndpoint:       os.Getenv("TANGO_CP_ENDPOINT"),
-		expectedRevision: os.Getenv("TANGO_EXPECTED_REVISION"),
-		fleetID:          envOrDefault("TANGO_FLEET_ID", "gboc-smoke-fleet"),
-		policySetID:      envOrDefault("TANGO_POLICY_SET_ID", "gboc-smoke-ps"),
-		region:           envOrDefault("TANGO_REGION", "asia-east1"),
+		cpEndpoint:        os.Getenv("TANGO_CP_ENDPOINT"),
+		expectedRevision:  os.Getenv("TANGO_EXPECTED_REVISION"),
+		fleetID:           envOrDefault("TANGO_FLEET_ID", "gboc-smoke-fleet"),
+		policySetID:       envOrDefault("TANGO_POLICY_SET_ID", "gboc-smoke-ps"),
+		region:            envOrDefault("TANGO_REGION", "asia-east1"),
+		project:           os.Getenv("TANGO_PROJECT"),
+		projectNumber:     os.Getenv("TANGO_PROJECT_NUMBER"),
+		wifCredConfigPath: os.Getenv("TANGO_WIF_CRED_CONFIG"),
 	}
 	if s.cpEndpoint == "" {
 		t.Skip("TANGO_CP_ENDPOINT is not set; skipping Tango-GBOC smoke test")
@@ -218,16 +226,34 @@ func envOrDefault(key, def string) string {
 
 // controlPlaneConfig returns the additional --config flag that loads policies
 // from the Control Plane. Project and project number of the xDS subscription
-// are taken from the GCE metadata server.
+// are taken from the GCE metadata server unless explicitly configured (for
+// off-GCP environments where the metadata server is disabled).
 func (s tangoSettings) controlPlaneConfig() string {
-	return fmt.Sprintf("--config=googlecontrolplane:xds://%s?gcp.fleet_id=%s&region=%s", s.cpEndpoint, s.fleetID, s.region)
+	uri := fmt.Sprintf("--config=googlecontrolplane:xds://%s?gcp.fleet_id=%s&region=%s", s.cpEndpoint, s.fleetID, s.region)
+	if s.project != "" {
+		uri += "&project=" + s.project
+	}
+	if s.projectNumber != "" {
+		uri += "&project_number=" + s.projectNumber
+	}
+	return uri
 }
 
 // dropIn returns a systemd drop-in that reruns the packaged service's own
 // command line (the regular file config from OTELCOL_OPTIONS) with the
 // googlecontrolplane config source appended. Later sources win on conflicts.
+// When offGCP is set, it also disables the GCE metadata server for the
+// collector process and points GOOGLE_APPLICATION_CREDENTIALS at the WIF
+// credential config.
 func (s tangoSettings) dropIn() string {
-	return fmt.Sprintf("[Service]\nExecStart=\nExecStart=/usr/bin/otelcol-google $OTELCOL_OPTIONS %s\n", s.controlPlaneConfig())
+	var envLines string
+	if s.offGCP {
+		envLines += "Environment=GCE_METADATA_HOST=127.0.0.1:1\n"
+		if s.wifCredConfigPath != "" {
+			envLines += fmt.Sprintf("Environment=GOOGLE_APPLICATION_CREDENTIALS=%s\n", s.wifCredConfigPath)
+		}
+	}
+	return fmt.Sprintf("[Service]\n%sExecStart=\nExecStart=/usr/bin/otelcol-google $OTELCOL_OPTIONS %s\n", envLines, s.controlPlaneConfig())
 }
 
 // windowsImagePathScript returns a PowerShell script that appends the
@@ -236,11 +262,19 @@ func (s tangoSettings) dropIn() string {
 // sources win on conflicts. It is the Windows counterpart of dropIn; the new
 // command line takes effect on the next service start.
 func (s tangoSettings) windowsImagePathScript() string {
+	var envSetup string
+	if s.offGCP {
+		envEntries := []string{"'GCE_METADATA_HOST=127.0.0.1:1'"}
+		if s.wifCredConfigPath != "" {
+			envEntries = append(envEntries, fmt.Sprintf("'GOOGLE_APPLICATION_CREDENTIALS=%s'", s.wifCredConfigPath))
+		}
+		envSetup = fmt.Sprintf("\nSet-ItemProperty -Path $key -Name Environment -Type MultiString -Value @(%s)", strings.Join(envEntries, ", "))
+	}
 	return fmt.Sprintf(`$ErrorActionPreference = 'Stop'
 $key = '%s'
 $imagePath = (Get-ItemProperty -Path $key).ImagePath + ' %s'
-Set-ItemProperty -Path $key -Name ImagePath -Value $imagePath
-(Get-ItemProperty -Path $key).ImagePath`, tangoServiceRegistryKey, s.controlPlaneConfig())
+Set-ItemProperty -Path $key -Name ImagePath -Value $imagePath%s
+(Get-ItemProperty -Path $key).ImagePath`, tangoServiceRegistryKey, s.controlPlaneConfig(), envSetup)
 }
 
 // setupTangoCollector installs otelcol-google with tangoCollectorConfig and
@@ -457,16 +491,32 @@ func verifyFilteredLogs(ctx context.Context, logger *log.Logger, vm *gce.VM) err
 	return nil
 }
 
+// setupTangoVM sets up a GCE VM with the cloud-platform scope, which GCE's
+// default VM scopes do not include, so the collector can authenticate to the
+// Control Plane with an OAuth2 access token from the GCE metadata server.
+func setupTangoVM(t *testing.T, imageSpec string) (context.Context, *logging.DirectoryLogger, *gce.VM) {
+	t.Helper()
+	return commonSetupWithExtraCreateArgumentsAndMetadata(t, imageSpec, []string{"--scopes=cloud-platform"}, nil)
+}
+
+// setupOffGCPTangoVM sets up a GCE VM with no attached service account and no
+// OAuth scopes (--no-service-account, --no-scopes) to simulate an off-GCP host
+// where the collector must authenticate using X.509 Workload Identity
+// Federation (WIF) credentials instead of the GCE metadata server.
+//
+//nolint:unused // Used by the off-GCP Tango smoke test once googleclientauthextension is updated.
+func setupOffGCPTangoVM(t *testing.T, imageSpec string) (context.Context, *logging.DirectoryLogger, *gce.VM) {
+	t.Helper()
+	return commonSetupWithExtraCreateArgumentsAndMetadata(t, imageSpec, []string{"--no-service-account", "--no-scopes"}, nil)
+}
+
 func TestTangoSmoke(t *testing.T) {
 	t.Parallel()
 	s := tangoSettingsFromEnv(t)
 
 	gce.RunForEachImage(t, func(t *testing.T, imageSpec string) {
 		t.Parallel()
-		// The collector authenticates to the Control Plane with an OAuth2
-		// access token for the cloud-platform scope, which GCE's default VM
-		// scopes do not include.
-		ctx, dirLog, vm := commonSetupWithExtraCreateArgumentsAndMetadata(t, imageSpec, []string{"--scopes=cloud-platform"}, nil)
+		ctx, dirLog, vm := setupTangoVM(t, imageSpec)
 		logger := dirLog.ToMainLog()
 
 		logger.Printf("Installing otelcol-google with the extra config source %s", s.controlPlaneConfig())

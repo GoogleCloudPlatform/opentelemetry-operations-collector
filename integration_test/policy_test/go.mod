@@ -79,6 +79,8 @@ require (
 	github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/extension/googleclientauthextension v0.164.1 // indirect
+	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/winperfcounters v0.164.0 // indirect
+	github.com/open-telemetry/opentelemetry-collector-contrib/receiver/iisreceiver v0.164.0 // indirect
 	github.com/pierrec/lz4/v4 v4.1.33 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
 	github.com/power-devops/perfstat v0.0.0-20260805114148-88456608a4f6 // indirect
@@ -130,6 +132,7 @@ require (
 	go.opentelemetry.io/collector/extension/extensiontest v0.164.0 // indirect
 	go.opentelemetry.io/collector/extension/xextension v0.164.0 // indirect
 	go.opentelemetry.io/collector/featuregate v1.70.0 // indirect
+	go.opentelemetry.io/collector/filter v0.164.0 // indirect
 	go.opentelemetry.io/collector/internal/componentalias v0.164.0 // indirect
 	go.opentelemetry.io/collector/internal/fanoutconsumer v0.164.0 // indirect
 	go.opentelemetry.io/collector/internal/sharedcomponent v0.164.0 // indirect
@@ -146,6 +149,8 @@ require (
 	go.opentelemetry.io/collector/receiver/receiverhelper v0.164.0 // indirect
 	go.opentelemetry.io/collector/receiver/receivertest v0.164.0 // indirect
 	go.opentelemetry.io/collector/receiver/xreceiver v0.164.0 // indirect
+	go.opentelemetry.io/collector/scraper v0.164.0 // indirect
+	go.opentelemetry.io/collector/scraper/scraperhelper v0.164.0 // indirect
 	go.opentelemetry.io/collector/service/hostcapabilities v0.164.0 // indirect
 	go.opentelemetry.io/contrib/bridges/otelzap v0.20.0 // indirect
 	go.opentelemetry.io/contrib/detectors/aws/ecs v1.45.0 // indirect

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -28,7 +29,6 @@ import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider/policies/selfmetrics"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/event"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/iissource"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
@@ -1648,9 +1648,6 @@ func TestRetrieve_MultipleHostMetricsSourcePolicies_FaultIsolation_FirstPolicyIn
 }
 
 func TestRetrieve_ActivePolicySetWithIISSource_SynthesizesIISReceiver(t *testing.T) {
-	restore := iissource.SetTargetGOOSForTesting("windows")
-	defer restore()
-
 	t.Setenv("FLEET_ID", "1234")
 	p := createProvider()
 
@@ -1685,26 +1682,29 @@ func TestRetrieve_ActivePolicySetWithIISSource_SynthesizesIISReceiver(t *testing
 	receivers, ok := raw["receivers"].(map[string]any)
 	require.True(t, ok)
 
-	iisCfg, ok := receivers["iis"].(map[string]any)
-	require.True(t, ok, "iis receiver must be configured")
-	assert.Equal(t, "30s", iisCfg["collection_interval"])
-
 	pipelines, ok := raw["service"].(map[string]any)["pipelines"].(map[string]any)
 	require.True(t, ok)
 	metricsPipeline, ok := pipelines["metrics/googlecontrolplane"].(map[string]any)
 	require.True(t, ok)
 	pipelineReceivers, ok := metricsPipeline["receivers"].([]any)
 	require.True(t, ok)
-	assert.Contains(t, pipelineReceivers, "iis")
+
+	if runtime.GOOS == "windows" {
+		iisCfg, ok := receivers["iis"].(map[string]any)
+		require.True(t, ok, "iis receiver must be configured")
+		assert.Equal(t, "30s", iisCfg["collection_interval"])
+		assert.Contains(t, pipelineReceivers, "iis")
+	} else {
+		_, ok := receivers["iis"]
+		assert.False(t, ok, "iis receiver must not be configured on non-Windows")
+		assert.NotContains(t, pipelineReceivers, "iis")
+	}
 	assert.Contains(t, pipelineReceivers, "nop/googlecontrolplane")
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
 
 func TestRetrieve_MultipleIISSourcePolicies_ConsolidatesMinInterval(t *testing.T) {
-	restore := iissource.SetTargetGOOSForTesting("windows")
-	defer restore()
-
 	t.Setenv("FLEET_ID", "1234")
 	p := createProvider()
 
@@ -1747,26 +1747,29 @@ func TestRetrieve_MultipleIISSourcePolicies_ConsolidatesMinInterval(t *testing.T
 	receivers, ok := raw["receivers"].(map[string]any)
 	require.True(t, ok)
 
-	iisCfg, ok := receivers["iis"].(map[string]any)
-	require.True(t, ok, "iis receiver must be configured")
-	assert.Equal(t, "15s", iisCfg["collection_interval"], "consolidation must choose minimum interval")
-
 	pipelines, ok := raw["service"].(map[string]any)["pipelines"].(map[string]any)
 	require.True(t, ok)
 	metricsPipeline, ok := pipelines["metrics/googlecontrolplane"].(map[string]any)
 	require.True(t, ok)
 	pipelineReceivers, ok := metricsPipeline["receivers"].([]any)
 	require.True(t, ok)
-	assert.Contains(t, pipelineReceivers, "iis")
+
+	if runtime.GOOS == "windows" {
+		iisCfg, ok := receivers["iis"].(map[string]any)
+		require.True(t, ok, "iis receiver must be configured")
+		assert.Equal(t, "15s", iisCfg["collection_interval"], "consolidation must choose minimum interval")
+		assert.Contains(t, pipelineReceivers, "iis")
+	} else {
+		_, ok := receivers["iis"]
+		assert.False(t, ok, "iis receiver must not be configured on non-Windows")
+		assert.NotContains(t, pipelineReceivers, "iis")
+	}
 	assert.Contains(t, pipelineReceivers, "nop/googlecontrolplane")
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
 
 func TestRetrieve_MultipleIISSourcePolicies_FaultIsolation_InvalidPolicyIgnored(t *testing.T) {
-	restore := iissource.SetTargetGOOSForTesting("windows")
-	defer restore()
-
 	t.Setenv("FLEET_ID", "1234")
 	p := createProvider()
 
@@ -1815,25 +1818,32 @@ func TestRetrieve_MultipleIISSourcePolicies_FaultIsolation_InvalidPolicyIgnored(
 	receivers, ok := raw["receivers"].(map[string]any)
 	require.True(t, ok)
 
-	// Fault isolation: goodPolicy survived and was evaluated despite badPolicy
-	iisCfg, ok := receivers["iis"].(map[string]any)
-	require.True(t, ok, "iis receiver must be configured from valid sibling policy")
-	assert.Equal(t, "20s", iisCfg["collection_interval"])
-
 	pipelines, ok := raw["service"].(map[string]any)["pipelines"].(map[string]any)
 	require.True(t, ok)
 	metricsPipeline, ok := pipelines["metrics/googlecontrolplane"].(map[string]any)
 	require.True(t, ok)
 	pipelineReceivers, ok := metricsPipeline["receivers"].([]any)
 	require.True(t, ok)
-	assert.Contains(t, pipelineReceivers, "iis")
+
+	if runtime.GOOS == "windows" {
+		iisCfg, ok := receivers["iis"].(map[string]any)
+		require.True(t, ok, "iis receiver must be configured from valid sibling policy")
+		assert.Equal(t, "20s", iisCfg["collection_interval"])
+		assert.Contains(t, pipelineReceivers, "iis")
+	} else {
+		_, ok := receivers["iis"]
+		assert.False(t, ok, "iis receiver must not be configured on non-Windows")
+		assert.NotContains(t, pipelineReceivers, "iis")
+	}
+	assert.Contains(t, pipelineReceivers, "nop/googlecontrolplane")
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
 
 func TestRetrieve_ActivePolicySetWithIISSource_SilentNoOpOnNonWindows(t *testing.T) {
-	restore := iissource.SetTargetGOOSForTesting("linux")
-	defer restore()
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping non-Windows test on Windows")
+	}
 
 	t.Setenv("FLEET_ID", "1234")
 	p := createProvider()

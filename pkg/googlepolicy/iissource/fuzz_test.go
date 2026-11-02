@@ -73,6 +73,21 @@ func verifyCompiledIISPolicy(t *testing.T, p googlepolicy.Policy) {
 		t.Fatalf("EffectiveCollectionIntervalSeconds() = %d, want >= %d", effInterval, MinCollectionIntervalSeconds)
 	}
 
+	// Always verify receiverConfig() on all platforms to ensure full coverage of the Windows config in Linux CI.
+	cfg := ip.receiverConfig()
+	receivers, ok := cfg["receivers"].(map[string]any)
+	if !ok {
+		t.Fatalf("receiverConfig() receivers not a map: %T", cfg["receivers"])
+	}
+	iisCfg, ok := receivers[DefaultReceiverID].(map[string]any)
+	if !ok {
+		t.Fatalf("receiverConfig() receivers.%s not a map: %T", DefaultReceiverID, receivers[DefaultReceiverID])
+	}
+	expectedIntervalStr := fmt.Sprintf("%ds", effInterval)
+	if got := iisCfg["collection_interval"]; got != expectedIntervalStr {
+		t.Fatalf("collection_interval = %v, want %q", got, expectedIntervalStr)
+	}
+
 	metricIDs := ip.MetricReceiverIDs()
 	if ip.LogReceiverIDs() != nil {
 		t.Fatalf("LogReceiverIDs() = %v, want nil", ip.LogReceiverIDs())
@@ -89,7 +104,7 @@ func verifyCompiledIISPolicy(t *testing.T, p googlepolicy.Policy) {
 		t.Fatal("Evaluate() returned nil confmap")
 	}
 
-	if !isWindows() {
+	if !isWindows {
 		if metricIDs != nil {
 			t.Fatalf("MetricReceiverIDs() on non-Windows = %v, want nil", metricIDs)
 		}
@@ -104,15 +119,14 @@ func verifyCompiledIISPolicy(t *testing.T, p googlepolicy.Policy) {
 	}
 
 	raw := conf.ToStringMap()
-	receivers, ok := raw["receivers"].(map[string]any)
+	receivers, ok = raw["receivers"].(map[string]any)
 	if !ok {
 		t.Fatalf("receivers not a map: %T", raw["receivers"])
 	}
-	iisCfg, ok := receivers[DefaultReceiverID].(map[string]any)
+	iisCfg, ok = receivers[DefaultReceiverID].(map[string]any)
 	if !ok {
 		t.Fatalf("receivers.%s not a map: %T", DefaultReceiverID, receivers[DefaultReceiverID])
 	}
-	expectedIntervalStr := fmt.Sprintf("%ds", effInterval)
 	if got := iisCfg["collection_interval"]; got != expectedIntervalStr {
 		t.Fatalf("collection_interval = %v, want %q", got, expectedIntervalStr)
 	}

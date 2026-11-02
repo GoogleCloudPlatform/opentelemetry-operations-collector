@@ -116,30 +116,19 @@ func TestPolicy_Validation(t *testing.T) {
 	}
 }
 
-func withTargetGOOS(t *testing.T, goos string) {
-	t.Helper()
-	prev := targetGOOS
-	targetGOOS = goos
-	t.Cleanup(func() {
-		targetGOOS = prev
-	})
-}
-
 func TestPolicy_ReceiverIDs(t *testing.T) {
+	t.Parallel()
+
 	pol, err := NewPolicyFromProto(&policyv1alpha1.IisSourcePolicy{
 		Id: "iis-test",
 	})
 	require.NoError(t, err)
 
-	t.Run("on windows returns iis receiver", func(t *testing.T) {
-		withTargetGOOS(t, "windows")
+	if isWindows {
 		assert.Equal(t, []component.ID{component.MustNewID(DefaultReceiverID)}, pol.MetricReceiverIDs())
-	})
-
-	t.Run("on non-windows returns nil", func(t *testing.T) {
-		withTargetGOOS(t, "linux")
+	} else {
 		assert.Nil(t, pol.MetricReceiverIDs())
-	})
+	}
 
 	assert.Nil(t, pol.LogReceiverIDs())
 	assert.Nil(t, pol.TraceReceiverIDs())
@@ -168,19 +157,17 @@ func TestPolicy_EffectiveCollectionIntervalSeconds(t *testing.T) {
 	})
 }
 
-func TestPolicy_Evaluate(t *testing.T) {
-	t.Run("windows default interval evaluation", func(t *testing.T) {
-		withTargetGOOS(t, "windows")
+func TestPolicy_ReceiverConfig(t *testing.T) {
+	t.Parallel()
+
+	t.Run("default interval", func(t *testing.T) {
+		t.Parallel()
 		pol, err := NewPolicyFromProto(&policyv1alpha1.IisSourcePolicy{
 			Id: "iis-default",
 		})
 		require.NoError(t, err)
 
-		conf, err := pol.Evaluate(context.Background())
-		require.NoError(t, err)
-		require.NotNil(t, conf)
-
-		raw := conf.ToStringMap()
+		raw := pol.receiverConfig()
 		receivers, ok := raw["receivers"].(map[string]any)
 		require.True(t, ok, "receivers key must be a map")
 
@@ -189,19 +176,15 @@ func TestPolicy_Evaluate(t *testing.T) {
 		assert.Equal(t, "60s", iisCfg["collection_interval"])
 	})
 
-	t.Run("windows custom interval evaluation", func(t *testing.T) {
-		withTargetGOOS(t, "windows")
+	t.Run("custom interval", func(t *testing.T) {
+		t.Parallel()
 		pol, err := NewPolicyFromProto(&policyv1alpha1.IisSourcePolicy{
 			Id:                        "iis-custom",
 			CollectionIntervalSeconds: proto.Int32(15),
 		})
 		require.NoError(t, err)
 
-		conf, err := pol.Evaluate(context.Background())
-		require.NoError(t, err)
-		require.NotNil(t, conf)
-
-		raw := conf.ToStringMap()
+		raw := pol.receiverConfig()
 		receivers, ok := raw["receivers"].(map[string]any)
 		require.True(t, ok)
 
@@ -209,20 +192,31 @@ func TestPolicy_Evaluate(t *testing.T) {
 		require.True(t, ok)
 		assert.Equal(t, "15s", iisCfg["collection_interval"])
 	})
+}
 
-	t.Run("non-windows silent no-op evaluation", func(t *testing.T) {
-		withTargetGOOS(t, "linux")
-		pol, err := NewPolicyFromProto(&policyv1alpha1.IisSourcePolicy{
-			Id:                        "iis-linux",
-			CollectionIntervalSeconds: proto.Int32(15),
-		})
-		require.NoError(t, err)
+func TestPolicy_Evaluate(t *testing.T) {
+	t.Parallel()
 
-		conf, err := pol.Evaluate(context.Background())
-		require.NoError(t, err)
-		require.NotNil(t, conf)
-		assert.Empty(t, conf.ToStringMap())
+	pol, err := NewPolicyFromProto(&policyv1alpha1.IisSourcePolicy{
+		Id:                        "iis-test",
+		CollectionIntervalSeconds: proto.Int32(15),
 	})
+	require.NoError(t, err)
+
+	conf, err := pol.Evaluate(context.Background())
+	require.NoError(t, err)
+	require.NotNil(t, conf)
+
+	if isWindows {
+		raw := conf.ToStringMap()
+		receivers, ok := raw["receivers"].(map[string]any)
+		require.True(t, ok)
+		iisCfg, ok := receivers[DefaultReceiverID].(map[string]any)
+		require.True(t, ok)
+		assert.Equal(t, "15s", iisCfg["collection_interval"])
+	} else {
+		assert.Empty(t, conf.ToStringMap())
+	}
 }
 
 func TestPolicy_Evaluate_InvalidPolicy(t *testing.T) {
@@ -343,9 +337,15 @@ func TestPolicy_Consolidate(t *testing.T) {
 		require.True(t, ok)
 		assert.Equal(t, int32(15), ip.EffectiveCollectionIntervalSeconds())
 
+		// Always verify receiverConfig() on all platforms to ensure Windows config is checked in Linux CI
+		cfg := ip.receiverConfig()
+		receivers := cfg["receivers"].(map[string]any)
+		iisCfg := receivers[DefaultReceiverID].(map[string]any)
+		assert.Equal(t, "15s", iisCfg["collection_interval"])
+
 		conf, err := res.(googlepolicy.ComponentPolicy).Evaluate(context.Background())
 		require.NoError(t, err)
-		if isWindows() {
+		if isWindows {
 			raw := conf.ToStringMap()
 			iisCfg := raw["receivers"].(map[string]any)[DefaultReceiverID].(map[string]any)
 			assert.Equal(t, "15s", iisCfg["collection_interval"])

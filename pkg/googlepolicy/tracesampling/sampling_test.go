@@ -144,7 +144,7 @@ func TestExtractThreshold(t *testing.T) {
 	assert.Equal(t, uint64(1)<<55, th)
 
 	// 5. Valid th subkey among multiple vendors
-	span.TraceState().FromRaw("congo=val,ot=p:1;th:8;rv:123,rojo=val2")
+	span.TraceState().FromRaw("congo=val,ot=p:1;th:8;rv:00112233445566,rojo=val2")
 	th, ok = ExtractThreshold(span)
 	assert.True(t, ok)
 	assert.Equal(t, uint64(1)<<55, th)
@@ -168,10 +168,10 @@ func TestUpdateTraceStateThreshold(t *testing.T) {
 	assert.Contains(t, ts, "p:4")
 
 	// 3. Existing other vendors are preserved and ot is moved to leftmost
-	span.TraceState().FromRaw("congo=xyz,rojo=abc,ot=th:4;rv:123")
+	span.TraceState().FromRaw("congo=xyz,rojo=abc,ot=th:4;rv:00112233445566")
 	UpdateTraceStateThreshold(span, 1<<55)
 	ts = span.TraceState().AsRaw()
-	assert.True(t, ts == "ot=th:8;rv:123,congo=xyz,rojo=abc" || ts == "ot=th:8;rv:123,rojo=abc,congo=xyz")
+	assert.Equal(t, "ot=rv:00112233445566;th:8,congo=xyz,rojo=abc", ts)
 }
 
 func TestEvaluateSampling_EqualizingMode(t *testing.T) {
@@ -181,15 +181,26 @@ func TestEvaluateSampling_EqualizingMode(t *testing.T) {
 
 	// Case 1: Incoming span has T_in >= targetThreshold (already sampled at least as strictly upstream)
 	// Example: upstream sampled at 25% (T_in = 0.75 * 2^56 > 0.5 * 2^56).
-	// In equalizing mode, it must be kept without modifying tracestate.
+	// With consistent randomness R >= T_in, it must be kept without modifying tracestate.
 	spanStrict := ptrace.NewSpan()
 	tInStrict := uint64(3) << 54 // 75% threshold
-	spanStrict.TraceState().FromRaw("ot=th:" + ThresholdToTValue(tInStrict) + ";rv:00000000000000")
+	// Consistent randomness: R >= tInStrict (e0000000000000 > c0000000000000)
+	spanStrict.TraceState().FromRaw("ot=th:" + ThresholdToTValue(tInStrict) + ";rv:e0000000000000")
 	decision, updated, err := EvaluateSampling(spanStrict, targetThreshold)
 	require.NoError(t, err)
 	assert.Equal(t, DecisionSample, decision)
 	assert.False(t, updated)
 	assert.Contains(t, spanStrict.TraceState().AsRaw(), ThresholdToTValue(tInStrict))
+
+	// Case 1b: Incoming span claims T_in >= targetThreshold, but has INCONSISTENT randomness R < T_in.
+	// Per spec, the inconsistent T_in is untrusted/cleared, and the span is evaluated against targetThreshold.
+	// If R < targetThreshold, it is dropped.
+	spanInconsistent := ptrace.NewSpan()
+	spanInconsistent.TraceState().FromRaw("ot=th:" + ThresholdToTValue(tInStrict) + ";rv:00000000000000")
+	decision, updated, err = EvaluateSampling(spanInconsistent, targetThreshold)
+	require.NoError(t, err)
+	assert.Equal(t, DecisionDrop, decision)
+	assert.False(t, updated)
 
 	// Case 2: Incoming span has no T_in (or less strict T_in), and R < targetThreshold -> DROP
 	spanDrop := ptrace.NewSpan()
@@ -211,4 +222,11 @@ func TestEvaluateSampling_EqualizingMode(t *testing.T) {
 	assert.Equal(t, DecisionSample, decision)
 	assert.True(t, updated)
 	assert.Contains(t, spanSample.TraceState().AsRaw(), "ot=th:8")
+
+	// Case 4: Missing randomness (empty TraceID and no ot=rv) returns ErrMissingRandomness
+	spanEmpty := ptrace.NewSpan()
+	decision, updated, err = EvaluateSampling(spanEmpty, targetThreshold)
+	assert.ErrorIs(t, err, ErrMissingRandomness)
+	assert.Equal(t, DecisionDrop, decision)
+	assert.False(t, updated)
 }

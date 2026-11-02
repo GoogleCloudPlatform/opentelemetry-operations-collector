@@ -176,6 +176,11 @@ func verifyCompiledSamplingPolicy(t *testing.T, p googlepolicy.Policy, contexts 
 
 	for _, ctx := range contexts {
 		_ = evaluator.MatchesTrace(ctx)
+		if ctx.Span != (ptrace.Span{}) {
+			cloneSpan := ptrace.NewSpan()
+			ctx.Span.CopyTo(cloneSpan)
+			_, _, _ = EvaluateSampling(cloneSpan, evaluator.Threshold())
+		}
 	}
 }
 
@@ -204,10 +209,11 @@ func FuzzTraceSamplingPolicy(f *testing.F) {
 
 		var pb policyv1alpha1.TraceSamplingPolicy
 		if err := proto.Unmarshal(data, &pb); err == nil {
-			ps, _ := googlepolicy.MakePolicySetFromProtos("fuzz-set", "rev-1", []proto.Message{&pb})
-			trans := ps.TransformationPolicies()
-			if len(trans) > 0 {
-				verifyCompiledSamplingPolicy(t, trans[0], contexts)
+			ps, err := googlepolicy.MakePolicySetFromProtos("projects/p/locations/l/policySets/ps", "fuzz-rev", []proto.Message{&pb})
+			if err == nil {
+				if len(ps.Policies) != 1 {
+					t.Fatalf("expected 1 compiled policy, got %d", len(ps.Policies))
+				}
 
 				var traceID [16]byte
 				if len(data) >= 16 {
@@ -216,18 +222,52 @@ func FuzzTraceSamplingPolicy(f *testing.F) {
 					binary.BigEndian.PutUint64(traceID[8:], 0x12345678)
 				}
 				dynCtx := dynamicSamplingTraceContext(pb.GetId(), "svc", "GET", 0, traceID, "")
-				verifyCompiledSamplingPolicy(t, trans[0], []googlepolicy.TraceContext{dynCtx})
+				allContexts := make([]googlepolicy.TraceContext, 0, len(contexts)+1)
+				allContexts = append(allContexts, contexts...)
+				allContexts = append(allContexts, dynCtx)
+
+				for _, entry := range ps.Policies {
+					verifyCompiledSamplingPolicy(t, entry.PolicyObj, allContexts)
+
+					if rtBytes, err := protojson.Marshal(&pb); err == nil {
+						var rtMap map[string]any
+						if err := json.Unmarshal(rtBytes, &rtMap); err == nil && rtMap != nil {
+							rtMap["type"] = PolicyType
+							rtPS, err := googlepolicy.MakePolicySet("fuzz-rev", []map[string]any{rtMap})
+							rtEntry, ok := rtPS.Policies[entry.PolicyObj.PolicyName()]
+							if err != nil || len(rtPS.Policies) != 1 || !ok {
+								t.Fatalf("protojson round-trip failed MakePolicySet: err=%v, len=%d, ok=%v", err, len(rtPS.Policies), ok)
+							}
+							verifyCompiledSamplingPolicy(t, rtEntry.PolicyObj, allContexts)
+							protoEval := entry.PolicyObj.(googlepolicy.TraceSamplingPolicyEvaluator)
+							jsonEval := rtEntry.PolicyObj.(googlepolicy.TraceSamplingPolicyEvaluator)
+							if got, want := jsonEval.Threshold(), protoEval.Threshold(); got != want {
+								t.Fatalf("Threshold mismatch between proto (%v) and JSON (%v)", want, got)
+							}
+							if got, want := jsonEval.SamplingPercent(), protoEval.SamplingPercent(); got != want {
+								t.Fatalf("SamplingPercent mismatch between proto (%v) and JSON (%v)", want, got)
+							}
+							for i, ctx := range allContexts {
+								if got, want := jsonEval.MatchesTrace(ctx), protoEval.MatchesTrace(ctx); got != want {
+									t.Fatalf("context[%d] MatchesTrace mismatch between proto (%v) and JSON (%v)", i, want, got)
+								}
+							}
+						}
+					}
+				}
 			}
 		}
 
 		var raw map[string]any
-		if err := json.Unmarshal(data, &raw); err == nil {
+		if err := json.Unmarshal(data, &raw); err == nil && raw != nil {
 			raw["type"] = PolicyType
-			ps, err := googlepolicy.MakePolicySet("rev-1", []map[string]any{raw})
+			ps, err := googlepolicy.MakePolicySet("fuzz-rev", []map[string]any{raw})
 			if err == nil {
-				trans := ps.TransformationPolicies()
-				if len(trans) > 0 {
-					verifyCompiledSamplingPolicy(t, trans[0], contexts)
+				if len(ps.Policies) != 1 {
+					t.Fatalf("expected 1 compiled policy, got %d", len(ps.Policies))
+				}
+				for _, entry := range ps.Policies {
+					verifyCompiledSamplingPolicy(t, entry.PolicyObj, contexts)
 				}
 			}
 		}
@@ -236,13 +276,15 @@ func FuzzTraceSamplingPolicy(f *testing.F) {
 			jsonBytes, err := protojson.Marshal(&pb)
 			if err == nil {
 				var jsonMap map[string]any
-				if err := json.Unmarshal(jsonBytes, &jsonMap); err == nil {
+				if err := json.Unmarshal(jsonBytes, &jsonMap); err == nil && jsonMap != nil {
 					jsonMap["type"] = PolicyType
-					ps, err := googlepolicy.MakePolicySet("rev-1", []map[string]any{jsonMap})
+					ps, err := googlepolicy.MakePolicySet("fuzz-rev", []map[string]any{jsonMap})
 					if err == nil {
-						trans := ps.TransformationPolicies()
-						if len(trans) > 0 {
-							verifyCompiledSamplingPolicy(t, trans[0], contexts)
+						if len(ps.Policies) != 1 {
+							t.Fatalf("expected 1 compiled policy, got %d", len(ps.Policies))
+						}
+						for _, entry := range ps.Policies {
+							verifyCompiledSamplingPolicy(t, entry.PolicyObj, contexts)
 						}
 					}
 				}

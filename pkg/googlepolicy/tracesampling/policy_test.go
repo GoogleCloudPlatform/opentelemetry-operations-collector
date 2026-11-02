@@ -27,24 +27,6 @@ import (
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 
-func equalsString(s string) *policyv1alpha1.Predicate {
-	return &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
-		Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: s}},
-	}}
-}
-
-func equalsInt(v int64) *policyv1alpha1.Predicate {
-	return &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
-		Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_IntValue{IntValue: v}},
-	}}
-}
-
-func equalsBool(b bool) *policyv1alpha1.Predicate {
-	return &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
-		Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BoolValue{BoolValue: b}},
-	}}
-}
-
 func TestNewPolicyFromProto_Validation(t *testing.T) {
 	t.Parallel()
 

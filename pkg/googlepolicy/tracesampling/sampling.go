@@ -15,29 +15,19 @@
 package tracesampling
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
-	"strconv"
 	"strings"
 
+	"github.com/open-telemetry/opentelemetry-collector-contrib/pkg/sampling"
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 
 // W3C Consistent Probability Sampling Constants (OTEP 235).
 const (
 	// MaxAdjustedCount is 2^56, the maximum value for consistent sampling math.
-	MaxAdjustedCount uint64 = 1 << 56
-
-	// OTVendorKey is the OpenTelemetry vendor key in W3C tracestate.
-	OTVendorKey = "ot"
-
-	// ThresholdSubkey is the subkey for the sampling threshold in the 'ot' tracestate entry.
-	ThresholdSubkey = "th"
-
-	// RandomnessSubkey is the subkey for the random value in the 'ot' tracestate entry.
-	RandomnessSubkey = "rv"
+	MaxAdjustedCount uint64 = sampling.MaxAdjustedCount
 )
 
 var (
@@ -45,6 +35,8 @@ var (
 	ErrInvalidProbability = errors.New("sampling percent must be in (0.0, 100.0]")
 	// ErrInvalidTValue is returned when a W3C T-value hex string is malformed or out of range.
 	ErrInvalidTValue = errors.New("invalid W3C T-value hex string")
+	// ErrMissingRandomness is returned when a span has no ot=rv in tracestate and an empty TraceID.
+	ErrMissingRandomness = errors.New("missing randomness: tracestate has no ot=rv and TraceID is empty")
 )
 
 // SamplingDecision represents the result of evaluating sampling on a span.
@@ -56,11 +48,7 @@ const (
 )
 
 // ProbabilityToThreshold converts a sampling percentage p in (0.0, 100.0] into a 56-bit
-// threshold T according to W3C Consistent Probability Sampling:
-//
-//	T = 2^56 - round(p% * 2^56)
-//
-// A sampling percentage of 100% yields a threshold of 0 (all spans sampled).
+// threshold T according to W3C Consistent Probability Sampling.
 func ProbabilityToThreshold(p float64) (uint64, error) {
 	if math.IsNaN(p) || math.IsInf(p, 0) || p <= 0.0 || p > 100.0 {
 		return 0, ErrInvalidProbability
@@ -69,98 +57,78 @@ func ProbabilityToThreshold(p float64) (uint64, error) {
 		return 0, nil
 	}
 	ratio := p / 100.0
-	count := uint64(math.Round(ratio * float64(MaxAdjustedCount)))
-	if count >= MaxAdjustedCount {
-		return 0, nil
+	th, err := sampling.ProbabilityToThreshold(ratio)
+	if err != nil {
+		return 0, ErrInvalidProbability
 	}
-	if count == 0 {
-		count = 1
-	}
-	return MaxAdjustedCount - count, nil
+	return th.Unsigned(), nil
 }
 
 // ThresholdToTValue converts a 56-bit threshold uint64 into a W3C T-value hex string.
-// The value is formatted as up to 14 hex digits with trailing zeros omitted.
-// A threshold of 0 is formatted as "0".
 func ThresholdToTValue(t uint64) string {
-	if t == 0 {
-		return "0"
+	th, err := sampling.UnsignedToThreshold(t)
+	if err != nil {
+		return ""
 	}
-	hexStr := fmt.Sprintf("%014x", t)
-	trimmed := strings.TrimRight(hexStr, "0")
-	if trimmed == "" {
-		return "0"
-	}
-	return trimmed
+	return th.TValue()
 }
 
 // TValueToThreshold parses a W3C T-value hex string into a 56-bit threshold uint64.
-// It pads right with zeros up to 14 hex digits and parses the result.
 func TValueToThreshold(tval string) (uint64, error) {
-	if tval == "" || len(tval) > 14 {
-		return 0, ErrInvalidTValue
-	}
-	// Pad right with zeros up to 14 characters.
-	padded := tval + strings.Repeat("0", 14-len(tval))
-	val, err := strconv.ParseUint(padded, 16, 64)
+	th, err := sampling.TValueToThreshold(tval)
 	if err != nil {
 		return 0, fmt.Errorf("%w: %v", ErrInvalidTValue, err)
 	}
-	if val >= MaxAdjustedCount {
-		return 0, ErrInvalidTValue
-	}
-	return val, nil
+	return th.Unsigned(), nil
 }
 
 // ExtractRandomness extracts the 56-bit random value R for a span.
 // Per OTEP 235:
 // 1. If tracestate contains 'ot=rv:<hex>', extract R from the 14-hex-digit rv subkey.
 // 2. Otherwise, fall back to the lower 56 bits of bytes 8-15 of the TraceID.
+// If both ot=rv and TraceID are missing/empty, returns ErrMissingRandomness to fail open.
 func ExtractRandomness(span ptrace.Span) (uint64, error) {
-	tsRaw := span.TraceState().AsRaw()
-	if tsRaw != "" {
-		if rvHex, ok := getOTSubkey(tsRaw, RandomnessSubkey); ok {
-			if len(rvHex) == 14 {
-				val, err := strconv.ParseUint(rvHex, 16, 64)
-				if err == nil && val < MaxAdjustedCount {
-					return val, nil
-				}
-			}
+	w3c, err := sampling.NewW3CTraceState(span.TraceState().AsRaw())
+	if err == nil {
+		if rnd, ok := w3c.OTelValue().RValueRandomness(); ok {
+			return rnd.Unsigned(), nil
 		}
 	}
 
-	// Fallback: lower 56 bits of bytes 8-15 of TraceID
 	traceID := span.TraceID()
-	b8_15 := traceID[8:]
-	u64 := binary.BigEndian.Uint64(b8_15)
-	return u64 & 0x00ffffffffffffff, nil
+	if traceID.IsEmpty() {
+		return 0, ErrMissingRandomness
+	}
+	rnd := sampling.TraceIDToRandomness(traceID)
+	return rnd.Unsigned(), nil
 }
 
-// ExtractThreshold extracts any existing 56-bit threshold T_in from the span's tracestate 'ot=th:<tval>'.
-// Returns the threshold and true if present and valid; otherwise returns 0 and false.
+// ExtractThreshold extracts any existing 56-bit threshold T_in from the span's tracestate.
 func ExtractThreshold(span ptrace.Span) (uint64, bool) {
-	tsRaw := span.TraceState().AsRaw()
-	if tsRaw == "" {
-		return 0, false
-	}
-	thVal, ok := getOTSubkey(tsRaw, ThresholdSubkey)
-	if !ok {
-		return 0, false
-	}
-	thresh, err := TValueToThreshold(thVal)
+	w3c, err := sampling.NewW3CTraceState(span.TraceState().AsRaw())
 	if err != nil {
 		return 0, false
 	}
-	return thresh, true
+	th, ok := w3c.OTelValue().TValueThreshold()
+	if !ok {
+		return 0, false
+	}
+	return th.Unsigned(), true
 }
 
 // UpdateTraceStateThreshold updates or adds 'ot=th:<tval>' to the span's tracestate.
 // Per W3C Trace Context spec, modified entries must be positioned as the leftmost member.
 func UpdateTraceStateThreshold(span ptrace.Span, threshold uint64) {
-	tval := ThresholdToTValue(threshold)
-	tsRaw := span.TraceState().AsRaw()
-	newTS := putOTSubkey(tsRaw, ThresholdSubkey, tval)
-	span.TraceState().FromRaw(newTS)
+	th, err := sampling.UnsignedToThreshold(threshold)
+	if err != nil {
+		return
+	}
+	w3c, _ := sampling.NewW3CTraceState(span.TraceState().AsRaw())
+	_ = w3c.OTelValue().UpdateTValueWithSampling(th)
+	var sb strings.Builder
+	if err := w3c.Serialize(&sb); err == nil {
+		span.TraceState().FromRaw(sb.String())
+	}
 }
 
 // EvaluateSampling evaluates probabilistic trace sampling for a span in equalizing mode.
@@ -169,85 +137,49 @@ func UpdateTraceStateThreshold(span ptrace.Span, threshold uint64) {
 //   - updated: true if the span's tracestate was modified
 //   - error: any unexpected extraction error
 func EvaluateSampling(span ptrace.Span, effectiveThreshold uint64) (SamplingDecision, bool, error) {
-	// Equalizing mode:
-	// If incoming span has threshold T_in >= effectiveThreshold, it was already sampled
-	// at least as strictly upstream. Keep it without modification.
-	tIn, hasTIn := ExtractThreshold(span)
-	if hasTIn && tIn >= effectiveThreshold {
-		return DecisionSample, false, nil
-	}
-
-	// Compare randomness R against effectiveThreshold.
-	r, err := ExtractRandomness(span)
+	effTh, err := sampling.UnsignedToThreshold(effectiveThreshold)
 	if err != nil {
 		return DecisionDrop, false, err
 	}
 
-	// If R < effectiveThreshold, the span is dropped.
-	if r < effectiveThreshold {
+	w3c, _ := sampling.NewW3CTraceState(span.TraceState().AsRaw())
+
+	// 1. Extract randomness R
+	var rnd sampling.Randomness
+	if r, ok := w3c.OTelValue().RValueRandomness(); ok {
+		rnd = r
+	} else {
+		traceID := span.TraceID()
+		if traceID.IsEmpty() {
+			return DecisionDrop, false, ErrMissingRandomness
+		}
+		rnd = sampling.TraceIDToRandomness(traceID)
+	}
+
+	// 2. Check incoming threshold T_in consistency
+	if tIn, hasTIn := w3c.OTelValue().TValueThreshold(); hasTIn {
+		if tIn.ShouldSample(rnd) {
+			// Consistent: upstream sampled at least as strictly (T_in >= T_eff), keep unmodified.
+			if !sampling.ThresholdLessThan(tIn, effTh) {
+				return DecisionSample, false, nil
+			}
+		} else {
+			// Inconsistent: incoming threshold claims span was sampled, but R < T_in.
+			// Clear the invalid incoming threshold so it can be replaced.
+			w3c.OTelValue().ClearTValue()
+		}
+	}
+
+	// 3. Make sampling decision (R >= T_eff)
+	if !effTh.ShouldSample(rnd) {
 		return DecisionDrop, false, nil
 	}
 
-	// If R >= effectiveThreshold, the span is sampled. Update tracestate with effectiveThreshold.
-	UpdateTraceStateThreshold(span, effectiveThreshold)
+	// 4. Update tracestate with effectiveThreshold
+	_ = w3c.OTelValue().UpdateTValueWithSampling(effTh)
+	var sb strings.Builder
+	if err := w3c.Serialize(&sb); err == nil {
+		span.TraceState().FromRaw(sb.String())
+	}
 	return DecisionSample, true, nil
-}
-
-// Helper functions for parsing and modifying W3C tracestate and OpenTelemetry 'ot' subkeys.
-
-func getOTSubkey(tsRaw string, subkey string) (string, bool) {
-	entries := strings.Split(tsRaw, ",")
-	for _, entry := range entries {
-		entry = strings.TrimSpace(entry)
-		if strings.HasPrefix(entry, OTVendorKey+"=") {
-			otVal := strings.TrimPrefix(entry, OTVendorKey+"=")
-			return findSubkey(otVal, subkey)
-		}
-	}
-	return "", false
-}
-
-func findSubkey(otVal string, subkey string) (string, bool) {
-	parts := strings.Split(otVal, ";")
-	prefix := subkey + ":"
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if strings.HasPrefix(p, prefix) {
-			return strings.TrimPrefix(p, prefix), true
-		}
-	}
-	return "", false
-}
-
-func putOTSubkey(tsRaw string, subkey string, value string) string {
-	var otherVendors []string
-	var existingOTParts []string
-
-	if tsRaw != "" {
-		for _, entry := range strings.Split(tsRaw, ",") {
-			entry = strings.TrimSpace(entry)
-			if entry == "" {
-				continue
-			}
-			if strings.HasPrefix(entry, OTVendorKey+"=") {
-				otVal := strings.TrimPrefix(entry, OTVendorKey+"=")
-				for _, p := range strings.Split(otVal, ";") {
-					p = strings.TrimSpace(p)
-					if p != "" && !strings.HasPrefix(p, subkey+":") {
-						existingOTParts = append(existingOTParts, p)
-					}
-				}
-			} else {
-				otherVendors = append(otherVendors, entry)
-			}
-		}
-	}
-
-	// Build new 'ot' entry with the updated subkey
-	allOTParts := append([]string{subkey + ":" + value}, existingOTParts...)
-	newOTEntry := OTVendorKey + "=" + strings.Join(allOTParts, ";")
-
-	// Per W3C spec, 'ot' must be the leftmost member.
-	allEntries := append([]string{newOTEntry}, otherVendors...)
-	return strings.Join(allEntries, ",")
 }

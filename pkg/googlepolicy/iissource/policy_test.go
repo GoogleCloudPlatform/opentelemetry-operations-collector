@@ -116,15 +116,31 @@ func TestPolicy_Validation(t *testing.T) {
 	}
 }
 
-func TestPolicy_ReceiverIDs(t *testing.T) {
-	t.Parallel()
+func withTargetGOOS(t *testing.T, goos string) {
+	t.Helper()
+	prev := targetGOOS
+	targetGOOS = goos
+	t.Cleanup(func() {
+		targetGOOS = prev
+	})
+}
 
+func TestPolicy_ReceiverIDs(t *testing.T) {
 	pol, err := NewPolicyFromProto(&policyv1alpha1.IisSourcePolicy{
 		Id: "iis-test",
 	})
 	require.NoError(t, err)
 
-	assert.Equal(t, []component.ID{component.MustNewID(DefaultReceiverID)}, pol.MetricReceiverIDs())
+	t.Run("on windows returns iis receiver", func(t *testing.T) {
+		withTargetGOOS(t, "windows")
+		assert.Equal(t, []component.ID{component.MustNewID(DefaultReceiverID)}, pol.MetricReceiverIDs())
+	})
+
+	t.Run("on non-windows returns nil", func(t *testing.T) {
+		withTargetGOOS(t, "linux")
+		assert.Nil(t, pol.MetricReceiverIDs())
+	})
+
 	assert.Nil(t, pol.LogReceiverIDs())
 	assert.Nil(t, pol.TraceReceiverIDs())
 }
@@ -153,10 +169,8 @@ func TestPolicy_EffectiveCollectionIntervalSeconds(t *testing.T) {
 }
 
 func TestPolicy_Evaluate(t *testing.T) {
-	t.Parallel()
-
-	t.Run("default interval evaluation", func(t *testing.T) {
-		t.Parallel()
+	t.Run("windows default interval evaluation", func(t *testing.T) {
+		withTargetGOOS(t, "windows")
 		pol, err := NewPolicyFromProto(&policyv1alpha1.IisSourcePolicy{
 			Id: "iis-default",
 		})
@@ -175,8 +189,8 @@ func TestPolicy_Evaluate(t *testing.T) {
 		assert.Equal(t, "60s", iisCfg["collection_interval"])
 	})
 
-	t.Run("custom interval evaluation", func(t *testing.T) {
-		t.Parallel()
+	t.Run("windows custom interval evaluation", func(t *testing.T) {
+		withTargetGOOS(t, "windows")
 		pol, err := NewPolicyFromProto(&policyv1alpha1.IisSourcePolicy{
 			Id:                        "iis-custom",
 			CollectionIntervalSeconds: proto.Int32(15),
@@ -194,6 +208,20 @@ func TestPolicy_Evaluate(t *testing.T) {
 		iisCfg, ok := receivers[DefaultReceiverID].(map[string]any)
 		require.True(t, ok)
 		assert.Equal(t, "15s", iisCfg["collection_interval"])
+	})
+
+	t.Run("non-windows silent no-op evaluation", func(t *testing.T) {
+		withTargetGOOS(t, "linux")
+		pol, err := NewPolicyFromProto(&policyv1alpha1.IisSourcePolicy{
+			Id:                        "iis-linux",
+			CollectionIntervalSeconds: proto.Int32(15),
+		})
+		require.NoError(t, err)
+
+		conf, err := pol.Evaluate(context.Background())
+		require.NoError(t, err)
+		require.NotNil(t, conf)
+		assert.Empty(t, conf.ToStringMap())
 	})
 }
 
@@ -317,9 +345,13 @@ func TestPolicy_Consolidate(t *testing.T) {
 
 		conf, err := res.(googlepolicy.ComponentPolicy).Evaluate(context.Background())
 		require.NoError(t, err)
-		raw := conf.ToStringMap()
-		iisCfg := raw["receivers"].(map[string]any)[DefaultReceiverID].(map[string]any)
-		assert.Equal(t, "15s", iisCfg["collection_interval"])
+		if isWindows() {
+			raw := conf.ToStringMap()
+			iisCfg := raw["receivers"].(map[string]any)[DefaultReceiverID].(map[string]any)
+			assert.Equal(t, "15s", iisCfg["collection_interval"])
+		} else {
+			assert.Empty(t, conf.ToStringMap())
+		}
 	})
 
 	t.Run("unset interval (60s) with larger interval (120s) chooses 60s", func(t *testing.T) {

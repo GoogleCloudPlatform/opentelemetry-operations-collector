@@ -38,6 +38,7 @@ import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"github.com/google/go-cmp/cmp"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/iisreceiver"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/confmap"
 	"go.opentelemetry.io/collector/confmap/provider/envprovider"
@@ -529,7 +530,7 @@ func testCollectorFactories() (otelcol.Factories, error) {
 		otlpreceiver.NewFactory(),
 		newStubReceiverFactory("nop"),
 		newStubReceiverFactory("hostmetrics"),
-		newStubReceiverFactory("iis"),
+		iisreceiver.NewFactory(),
 	)
 	if err != nil {
 		return otelcol.Factories{}, err
@@ -2167,5 +2168,24 @@ func TestPolicyIntegration_IISSourcePolicy(t *testing.T) {
 	value, _, found := waitForPolicySetActive(selfMockSrv, 10*time.Second)
 	if !found || value <= 0 {
 		t.Errorf("expected collector to report positive gcp.policy.set.active revision, got found=%v value=%d\nlogs:\n%s", found, value, col.logs())
+	}
+
+	// Verify no gcp.policy.evaluate.error was emitted for the policy
+	for _, batch := range selfMockSrv.CollectedLogs() {
+		for i := 0; i < batch.ResourceLogs().Len(); i++ {
+			sl := batch.ResourceLogs().At(i).ScopeLogs()
+			for j := 0; j < sl.Len(); j++ {
+				lr := sl.At(j).LogRecords()
+				for k := 0; k < lr.Len(); k++ {
+					record := lr.At(k)
+					attrs := record.Attributes()
+					eventName, hasName := attrs.Get("event.name")
+					if hasName && eventName.AsString() == "gcp.policy.evaluate.error" {
+						policyID, _ := attrs.Get("gcp.policy.id")
+						t.Errorf("unexpected gcp.policy.evaluate.error event for policy %s\nlogs:\n%s", policyID.AsString(), col.logs())
+					}
+				}
+			}
+		}
 	}
 }

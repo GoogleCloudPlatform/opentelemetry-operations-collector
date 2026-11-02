@@ -74,9 +74,6 @@ func verifyCompiledIISPolicy(t *testing.T, p googlepolicy.Policy) {
 	}
 
 	metricIDs := ip.MetricReceiverIDs()
-	if len(metricIDs) != 1 || metricIDs[0] != component.MustNewID(DefaultReceiverID) {
-		t.Fatalf("MetricReceiverIDs() = %v, want [%s]", metricIDs, DefaultReceiverID)
-	}
 	if ip.LogReceiverIDs() != nil {
 		t.Fatalf("LogReceiverIDs() = %v, want nil", ip.LogReceiverIDs())
 	}
@@ -90,6 +87,20 @@ func verifyCompiledIISPolicy(t *testing.T, p googlepolicy.Policy) {
 	}
 	if conf == nil {
 		t.Fatal("Evaluate() returned nil confmap")
+	}
+
+	if !isWindows() {
+		if metricIDs != nil {
+			t.Fatalf("MetricReceiverIDs() on non-Windows = %v, want nil", metricIDs)
+		}
+		if len(conf.ToStringMap()) != 0 {
+			t.Fatalf("Evaluate() on non-Windows produced non-empty conf: %v", conf.ToStringMap())
+		}
+		return
+	}
+
+	if len(metricIDs) != 1 || metricIDs[0] != component.MustNewID(DefaultReceiverID) {
+		t.Fatalf("MetricReceiverIDs() = %v, want [%s]", metricIDs, DefaultReceiverID)
 	}
 
 	raw := conf.ToStringMap()

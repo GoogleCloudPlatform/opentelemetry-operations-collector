@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime"
 
 	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
@@ -41,6 +42,9 @@ const (
 )
 
 var (
+	// targetGOOS allows overriding the target OS for testing. Defaults to runtime.GOOS.
+	targetGOOS = runtime.GOOS
+
 	// ErrNilProto is returned when a nil IisSourcePolicy protobuf is provided.
 	ErrNilProto = errors.New("iis source policy proto cannot be nil")
 	// ErrMissingID is returned when the policy ID is empty.
@@ -48,6 +52,19 @@ var (
 	// ErrInvalidCollectionInterval is returned when collection_interval_seconds is set to less than 10.
 	ErrInvalidCollectionInterval = fmt.Errorf("collection_interval_seconds must be >= %d", MinCollectionIntervalSeconds)
 )
+
+func isWindows() bool {
+	return targetGOOS == "windows"
+}
+
+// SetTargetGOOSForTesting allows tests in other packages to simulate different operating systems.
+func SetTargetGOOSForTesting(goos string) func() {
+	prev := targetGOOS
+	targetGOOS = goos
+	return func() {
+		targetGOOS = prev
+	}
+}
 
 // driver loads an IisSourcePolicy from either shape it can arrive in: the proto
 // a control plane sends, or the map an authored config decodes to.
@@ -173,9 +190,14 @@ func (p *Policy) Consolidate(policies []googlepolicy.SourcePolicy) (googlepolicy
 
 // Evaluate produces the confmap for the iis receiver.
 // It configures the collection_interval using the effective collection interval in seconds.
+// On non-Windows platforms, it returns an empty configuration because Microsoft IIS is Windows-only.
 func (p *Policy) Evaluate(_ context.Context) (*confmap.Conf, error) {
 	if err := p.Validate(); err != nil {
 		return nil, fmt.Errorf("policy %q failed validation: %w", p.PolicyName(), err)
+	}
+
+	if !isWindows() {
+		return confmap.New(), nil
 	}
 
 	cfg := map[string]any{
@@ -189,7 +211,11 @@ func (p *Policy) Evaluate(_ context.Context) (*confmap.Conf, error) {
 }
 
 // MetricReceiverIDs returns the component IDs of metric receivers synthesized by this policy.
+// On non-Windows platforms, it returns nil because Microsoft IIS is Windows-only.
 func (p *Policy) MetricReceiverIDs() []component.ID {
+	if !isWindows() {
+		return nil
+	}
 	return []component.ID{component.MustNewID(DefaultReceiverID)}
 }
 

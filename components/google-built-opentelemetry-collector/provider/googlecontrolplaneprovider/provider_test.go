@@ -28,6 +28,7 @@ import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider/policies/selfmetrics"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/event"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/iissource"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
@@ -1647,6 +1648,9 @@ func TestRetrieve_MultipleHostMetricsSourcePolicies_FaultIsolation_FirstPolicyIn
 }
 
 func TestRetrieve_ActivePolicySetWithIISSource_SynthesizesIISReceiver(t *testing.T) {
+	restore := iissource.SetTargetGOOSForTesting("windows")
+	defer restore()
+
 	t.Setenv("FLEET_ID", "1234")
 	p := createProvider()
 
@@ -1698,6 +1702,9 @@ func TestRetrieve_ActivePolicySetWithIISSource_SynthesizesIISReceiver(t *testing
 }
 
 func TestRetrieve_MultipleIISSourcePolicies_ConsolidatesMinInterval(t *testing.T) {
+	restore := iissource.SetTargetGOOSForTesting("windows")
+	defer restore()
+
 	t.Setenv("FLEET_ID", "1234")
 	p := createProvider()
 
@@ -1757,6 +1764,9 @@ func TestRetrieve_MultipleIISSourcePolicies_ConsolidatesMinInterval(t *testing.T
 }
 
 func TestRetrieve_MultipleIISSourcePolicies_FaultIsolation_InvalidPolicyIgnored(t *testing.T) {
+	restore := iissource.SetTargetGOOSForTesting("windows")
+	defer restore()
+
 	t.Setenv("FLEET_ID", "1234")
 	p := createProvider()
 
@@ -1817,6 +1827,56 @@ func TestRetrieve_MultipleIISSourcePolicies_FaultIsolation_InvalidPolicyIgnored(
 	pipelineReceivers, ok := metricsPipeline["receivers"].([]any)
 	require.True(t, ok)
 	assert.Contains(t, pipelineReceivers, "iis")
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestRetrieve_ActivePolicySetWithIISSource_SilentNoOpOnNonWindows(t *testing.T) {
+	restore := iissource.SetTargetGOOSForTesting("linux")
+	defer restore()
+
+	t.Setenv("FLEET_ID", "1234")
+	p := createProvider()
+
+	pol, err := googlepolicy.LoadPolicy("iis_source", map[string]any{
+		"type":                        "iis_source",
+		"id":                          "enable-iis",
+		"collection_interval_seconds": 30,
+	})
+	require.NoError(t, err)
+
+	ps := &googlepolicy.PolicySet{
+		RevisionID: "rev-iis-linux",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			"policy-iis": {PolicyObj: pol},
+		},
+	}
+	googlepolicy.SetActivePolicySet(ps)
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+
+	raw := conf.ToStringMap()
+	receivers, ok := raw["receivers"].(map[string]any)
+	require.True(t, ok)
+	assert.NotContains(t, receivers, "iis", "iis receiver must not be synthesized on non-Windows")
+
+	pipelines, ok := raw["service"].(map[string]any)["pipelines"].(map[string]any)
+	require.True(t, ok)
+	metricsPipeline, ok := pipelines["metrics/googlecontrolplane"].(map[string]any)
+	require.True(t, ok)
+	pipelineReceivers, ok := metricsPipeline["receivers"].([]any)
+	require.True(t, ok)
+	assert.NotContains(t, pipelineReceivers, "iis", "iis must not be in pipeline on non-Windows")
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }

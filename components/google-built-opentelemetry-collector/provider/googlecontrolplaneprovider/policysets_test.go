@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/iissource"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.yaml.in/yaml/v4"
@@ -41,6 +42,10 @@ func TestPolicySets(t *testing.T) {
 		}
 
 		t.Run(entry.Name(), func(t *testing.T) {
+			if entry.Name() == "iis_source" {
+				restore := iissource.SetTargetGOOSForTesting("windows")
+				defer restore()
+			}
 			resetGlobals()
 			CollectorID = "76728b45-8fcf-4cc8-a09e-c67283bfa79c"
 			t.Cleanup(func() {

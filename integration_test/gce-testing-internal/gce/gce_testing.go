@@ -2359,6 +2359,16 @@ func shouldRetryInstanceOperation(err error) bool {
 // If tags or metadata are modified concurrently, GCE returns an HTTP 412 Precondition Failed
 // (or codes.FailedPrecondition via gRPC), with error details or messages mentioning "conditionNotMet"
 // or "fingerprint".
+//
+// Sample error strings from GCE:
+//   - REST googleapi.Error (HTTP 412):
+//     "googleapi: Error 412: Invalid fingerprint for instance 'instance-1'., conditionNotMet"
+//   - gRPC Status (codes.FailedPrecondition):
+//     "rpc error: code = FailedPrecondition desc = Fingerprint mismatch for instance 'instance-1'"
+//   - Wrapped string error fallback:
+//     "googleapi: Error 412: The condition was not met., conditionNotMet"
+//     "ConditionNotMet: The fingerprint provided does not match the current fingerprint."
+//     "provided fingerprint does not match current tags"
 func shouldRetryTagUpdate(err error) bool {
 	if err == nil {
 		return false
@@ -2373,8 +2383,11 @@ func shouldRetryTagUpdate(err error) bool {
 		return true
 	}
 	// Check error string fallback for wrapped or serialized API errors that mention precondition/fingerprint failure.
+	// In GCE API JSON responses, the error reason field is camelCase "conditionNotMet" (e.g.
+	// reason: "conditionNotMet"), so strings.ToLower produces "conditionnotmet" without spaces.
+	// We check for "conditionnotmet", "condition not met", and "fingerprint".
 	lower := strings.ToLower(err.Error())
-	if strings.Contains(lower, "conditionnotmet") || strings.Contains(lower, "fingerprint") {
+	if strings.Contains(lower, "conditionnotmet") || strings.Contains(lower, "condition not met") || strings.Contains(lower, "fingerprint") {
 		return true
 	}
 	// Also retry on transient connection failures or quota rate limits.

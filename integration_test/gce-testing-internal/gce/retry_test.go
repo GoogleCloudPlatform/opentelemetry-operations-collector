@@ -569,6 +569,7 @@ func TestShouldRetryTagUpdate(t *testing.T) {
 		{"googleapi 412 precondition failed", &googleapi.Error{Code: 412, Message: "Precondition Failed"}, true},
 		{"grpc codes.FailedPrecondition", status.Error(codes.FailedPrecondition, "failed precondition"), true},
 		{"string conditionNotMet", errors.New("conditionNotMet: tag fingerprint mismatch"), true},
+		{"string condition was not met", errors.New("condition was not met: tag fingerprint mismatch"), true},
 		{"string fingerprint", errors.New("provided fingerprint does not match current tags"), true},
 		{"googleapi 403 quota", &googleapi.Error{Code: 403, Message: "Quota exceeded for quota metric 'Read requests (legacy)'"}, true},
 		{"googleapi 429 rate limit", &googleapi.Error{Code: 429, Message: "Rate limit exceeded"}, true},
@@ -612,11 +613,15 @@ func TestNewRateLimitBackOff(t *testing.T) {
 	}
 
 	// Advance through subsequent retries to verify interval growth and capping at MaxInterval.
+	// In cenkalti/backoff/v4, RandomizationFactor (default 0.5) applies jitter to desynchronize
+	// concurrent workers (preventing thundering herd problems against rate-limited APIs) by
+	// selecting a uniform random value in:
+	//   [current_interval * (1 - RandomizationFactor), current_interval * (1 + RandomizationFactor)]
+	// At the cap (MaxInterval = 15s), the maximum jittered interval is 15s * (1 + 0.5) = 22.5s.
 	for i := 0; i < 10; i++ {
 		next := bo.NextBackOff()
-		// Max jittered upper bound is MaxInterval * (1 + RandomizationFactor) = 15s * 1.5 = 22.5s.
 		if next > 25*time.Second {
-			t.Errorf("backoff interval = %v exceeded expected cap (MaxInterval=%v)", next, rateLimitMaxInterval)
+			t.Errorf("backoff interval = %v exceeded expected cap (MaxInterval=%v with jitter)", next, rateLimitMaxInterval)
 		}
 	}
 

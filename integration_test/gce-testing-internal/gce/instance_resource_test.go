@@ -157,6 +157,19 @@ func TestParseExtraCreateArguments(t *testing.T) {
 		t.Errorf("parseExtraCreateArguments() spaceArgs serviceAccount = %v, want sa@test-project.iam.gserviceaccount.com", extra.serviceAccount)
 	}
 
+	// Test --no-service-account and --no-scopes
+	noSAArgs := []string{"--no-service-account", "--no-scopes"}
+	extra, err = parseExtraCreateArguments(noSAArgs)
+	if err != nil {
+		t.Fatalf("parseExtraCreateArguments(noSAArgs) error = %v", err)
+	}
+	if !extra.noServiceAccount {
+		t.Errorf("parseExtraCreateArguments(noSAArgs) noServiceAccount = false, want true")
+	}
+	if !extra.noScopes {
+		t.Errorf("parseExtraCreateArguments(noSAArgs) noScopes = false, want true")
+	}
+
 	// Test invalid arguments return error
 	errorCases := [][]string{
 		{"--boot-disk-size=invalid"},
@@ -167,6 +180,8 @@ func TestParseExtraCreateArguments(t *testing.T) {
 		{"--accelerator=invalid"},
 		{"--maintenance-policy="},
 		{"--service-account="},
+		{"--service-account=sa@test-project.iam.gserviceaccount.com", "--no-service-account"},
+		{"--scopes=cloud-platform", "--no-scopes"},
 		{"--unsupported-flag=val"},
 	}
 	for _, invalidArgs := range errorCases {
@@ -271,6 +286,19 @@ func TestBuildInstanceResource(t *testing.T) {
 	}
 	if len(inst.Tags.GetItems()) != 2 {
 		t.Errorf("inst.Tags = %v, want [tag1 tag2]", inst.Tags.GetItems())
+	}
+
+	// Verify --no-service-account and --no-scopes omit ServiceAccounts
+	noSAOptions := VMOptions{
+		ImageSpec:            "debian-cloud:debian-11",
+		ExtraCreateArguments: []string{"--no-service-account", "--no-scopes"},
+	}
+	noSAInst, err := buildInstanceResource(noSAOptions, vm)
+	if err != nil {
+		t.Fatalf("buildInstanceResource(noSAOptions) error = %v", err)
+	}
+	if len(noSAInst.GetServiceAccounts()) != 0 {
+		t.Errorf("noSAInst.GetServiceAccounts() = %v, want empty", noSAInst.GetServiceAccounts())
 	}
 }
 

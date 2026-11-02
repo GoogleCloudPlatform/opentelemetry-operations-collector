@@ -110,11 +110,13 @@ type extraCreateArgs struct {
 	diskSizeGb        *int64
 	diskType          *string
 	scopes            []string
+	noScopes          bool
 	tags              []string
 	extraMetadata     map[string]string
 	accelerators      []*computepb.AcceleratorConfig
 	maintenancePolicy *string
 	serviceAccount    *string
+	noServiceAccount  bool
 }
 
 func parseAcceleratorArg(val string) (*computepb.AcceleratorConfig, error) {
@@ -215,9 +217,19 @@ func parseExtraCreateArguments(args []string) (extraCreateArgs, error) {
 				return result, fmt.Errorf("invalid empty --service-account")
 			}
 			result.serviceAccount = &sa
+		} else if arg == "--no-service-account" {
+			result.noServiceAccount = true
+		} else if arg == "--no-scopes" {
+			result.noScopes = true
 		} else {
 			return result, fmt.Errorf("unsupported extra create argument: %q", arg)
 		}
+	}
+	if result.noServiceAccount && result.serviceAccount != nil {
+		return result, fmt.Errorf("cannot specify both --service-account and --no-service-account")
+	}
+	if result.noScopes && len(result.scopes) > 0 {
+		return result, fmt.Errorf("cannot specify both --scopes and --no-scopes")
 	}
 	return result, nil
 }
@@ -315,31 +327,36 @@ func prepareInstanceConfigComponents(options VMOptions, vm *VM) (*instanceConfig
 		return nil, fmt.Errorf("could not construct valid labels: %w", err)
 	}
 
-	email := os.Getenv("SERVICE_EMAIL")
-	if email == "" {
-		email = "default"
-	}
-	if extraArgs.serviceAccount != nil {
-		email = *extraArgs.serviceAccount
-	}
-	var resolvedScopes []string
-	if len(extraArgs.scopes) == 0 {
-		resolvedScopes = defaultScopes
-	} else {
-		for _, sc := range extraArgs.scopes {
-			if sc == "default" || sc == "https://www.googleapis.com/auth/default" {
-				resolvedScopes = append(resolvedScopes, defaultScopes...)
+	var serviceAccounts []*computepb.ServiceAccount
+	if !extraArgs.noServiceAccount {
+		email := os.Getenv("SERVICE_EMAIL")
+		if email == "" {
+			email = "default"
+		}
+		if extraArgs.serviceAccount != nil {
+			email = *extraArgs.serviceAccount
+		}
+		var resolvedScopes []string
+		if !extraArgs.noScopes {
+			if len(extraArgs.scopes) == 0 {
+				resolvedScopes = defaultScopes
 			} else {
-				resolvedScopes = append(resolvedScopes, sc)
+				for _, sc := range extraArgs.scopes {
+					if sc == "default" || sc == "https://www.googleapis.com/auth/default" {
+						resolvedScopes = append(resolvedScopes, defaultScopes...)
+					} else {
+						resolvedScopes = append(resolvedScopes, sc)
+					}
+				}
 			}
 		}
-	}
 
-	serviceAccounts := []*computepb.ServiceAccount{
-		{
-			Email:  proto.String(email),
-			Scopes: resolvedScopes,
-		},
+		serviceAccounts = []*computepb.ServiceAccount{
+			{
+				Email:  proto.String(email),
+				Scopes: resolvedScopes,
+			},
+		}
 	}
 
 	var tags *computepb.Tags

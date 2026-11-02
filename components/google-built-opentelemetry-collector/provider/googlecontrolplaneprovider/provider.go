@@ -291,33 +291,39 @@ func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrie
 	manager := p.manager
 	p.mu.Unlock()
 
-	// Environment, then context, then the URI. The manager resolves the fleet
-	// in the same order off the same query parameter, and must arrive at the
-	// same answer: its value selects which fleet's policies this collector
-	// receives, while this one attributes the collector's own telemetry.
+	// When the active policy manager implements FleetMetadataProvider (such as
+	// xdsPolicyManager), its resolved FleetID() and ProjectID() are authoritative
+	// so the xDS node identity and the collector's self-telemetry attribution
+	// never diverge. For non-xDS sources (such as file: or component: URIs),
+	// ResolveFleetAndProject applies the same normalization from environment,
+	// context, and URI parameters.
 	fleetID := os.Getenv("FLEET_ID")
 	if v, ok := ctx.Value("FLEET_ID").(string); ok && v != "" {
 		fleetID = v
-	}
-	if fleetID == "" && manager != nil {
-		fleetID = googlepolicy.FleetIDFromURI(manager.URI())
-	}
-	if fleetID != "" {
-		ctx = context.WithValue(ctx, "FLEET_ID", fleetID)
 	}
 
 	var projectID string
 	if v, ok := ctx.Value("PROJECT_ID").(string); ok && v != "" {
 		projectID = v
 	}
-	if projectID == "" && manager != nil && manager.URI() != nil {
-		// A numeric value in ?project= is a GCP project number for the xdstp://
-		// resource subscription, not an alphanumeric project ID. Leave PROJECT_ID
-		// unset in that case so the self-metrics pipeline populates gcp.project_id
-		// from the GCE resource detector's cloud.account.id.
-		if candidate := manager.URI().Query().Get(googlepolicy.ProjectQueryParam); !googlepolicy.IsNumericProject(candidate) {
-			projectID = candidate
+
+	if fleetMgr, ok := manager.(googlepolicy.FleetMetadataProvider); ok {
+		if fleetMgr.FleetID() != "" {
+			fleetID = fleetMgr.FleetID()
 		}
+		if projectID == "" {
+			projectID = fleetMgr.ProjectID()
+		}
+	} else {
+		var managerURI *url.URL
+		if manager != nil {
+			managerURI = manager.URI()
+		}
+		fleetID, projectID = googlepolicy.ResolveFleetAndProject(fleetID, projectID, managerURI)
+	}
+
+	if fleetID != "" {
+		ctx = context.WithValue(ctx, "FLEET_ID", fleetID)
 	}
 	if projectID != "" {
 		ctx = context.WithValue(ctx, "PROJECT_ID", projectID)

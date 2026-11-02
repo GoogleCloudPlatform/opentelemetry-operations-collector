@@ -172,6 +172,7 @@ var (
 	ErrXDSMissingServerAddr   = errors.New("xDS server address cannot be empty in URI")
 	ErrXDSMissingCollectorID  = errors.New("a collector ID is required for the xDS policy manager")
 	ErrXDSMissingFleetID      = errors.New("a fleet ID is required for the xDS policy manager: set the FLEET_ID environment variable or the 'gcp.fleet_id' URI query parameter")
+	ErrXDSInvalidFleetID      = errors.New("invalid fleet ID: expected a short fleet ID or a full resource name 'projects/{project}/locations/{location}/fleets/{fleet_id}'")
 	ErrXDSMissingProject      = errors.New("a project is required for the xDS policy manager: set the 'project_number' or 'project' URI query parameter, GOOGLE_CLOUD_PROJECT_NUMBER / GOOGLE_CLOUD_PROJECT environment variable, or run on GCE")
 	ErrXDSInvalidInsecureFlag = errors.New("invalid 'insecure' URI query parameter, expected a boolean")
 
@@ -214,7 +215,10 @@ func (realGCEMetadata) Zone(ctx context.Context) (string, error) {
 // Tests replace it to stub or disable GCE metadata detection.
 var defaultGCEMetadata gceMetadata = realGCEMetadata{}
 
-var _ Manager = (*xdsPolicyManager)(nil)
+var (
+	_ Manager               = (*xdsPolicyManager)(nil)
+	_ FleetMetadataProvider = (*xdsPolicyManager)(nil)
+)
 
 // xdsPolicyManager connects to an xDS control plane, parses received policies,
 // updates ActivePolicySet, and sends ACKs/NACKs over the ADS stream.
@@ -300,11 +304,12 @@ type xdsPolicyManager struct {
 //
 // In full, as written in the collector's config:
 //
-//	googlecontrolplane:xds://HOST[:PORT]?gcp.fleet_id=FLEET&project=PROJECT[&insecure=BOOL]
+//	googlecontrolplane:xds://HOST[:PORT]?gcp.fleet_id=FLEET[&project=PROJECT][&insecure=BOOL]
 //
 // for example:
 //
 //	googlecontrolplane:xds://telemetrydirector.googleapis.com:443?gcp.fleet_id=my-fleet&project=my-project
+//	googlecontrolplane:xds://telemetrydirector.googleapis.com:443?gcp.fleet_id=projects/my-project/locations/us-central1/fleets/my-fleet
 //	googlecontrolplane:xds://127.0.0.1:18000?gcp.fleet_id=my-fleet&project=my-project&insecure=true
 //
 // The `googlecontrolplane:` prefix selects the confmap provider and is stripped
@@ -315,22 +320,28 @@ type xdsPolicyManager struct {
 //
 //	HOST[:PORT]    - required. Address of the xDS control plane.
 //	gcp.fleet_id   - required, unless $FLEET_ID is set; the environment wins over
-//	                 the URI, matching how the provider resolves it. Names the
-//	                 fleet in the subscribed resource (see xdstpResourceName), is
-//	                 sent as this node's xDS cluster, and is read back off URI()
-//	                 by the provider to attribute the collector's own telemetry.
+//	                 the URI, matching how the provider resolves it. Accepts either
+//	                 a short fleet ID ("my-fleet") or a full Fleet resource name
+//	                 ("projects/{project}/locations/{location}/fleets/{fleet_id}").
+//	                 The short fleet ID names the fleet in the subscribed resource
+//	                 (see xdstpResourceName), while the resolved full Fleet resource
+//	                 name is sent as this node's xDS cluster and node.metadata["gcp.fleet_id"],
+//	                 and is exposed via FleetID() for the provider to attribute the
+//	                 collector's own telemetry.
 //	project_number - optional. Numeric project number for the xdstp:// resource
 //	                 subscription. Can also be supplied via
 //	                 $GOOGLE_CLOUD_PROJECT_NUMBER or $PROJECT_NUMBER, a numeric
 //	                 `project` parameter, or GCE metadata detection.
-//	project        - optional when `project_number` or GCE metadata is available.
+//	project        - optional when `project_number`, a full `gcp.fleet_id`
+//	                 resource name, or GCE metadata is available.
 //	                 Alphanumeric project ID (used by the provider to stamp
 //	                 gcp.project_id on self metrics, and as fallback for the
 //	                 xdstp:// subscription in non-GCE / test environments) or
 //	                 numeric project number.
 //	region         - optional. GCP region for the xdstp:// authority and node
 //	                 locality; falls back to $CLOUD_REGION / $GOOGLE_CLOUD_REGION,
-//	                 the GCE instance zone, and finally defaultRegion.
+//	                 the location in a full `gcp.fleet_id` resource name, the GCE
+//	                 instance zone, and finally defaultRegion.
 //	insecure       - optional bool, default false. False connects with TLS 1.2+ and
 //	                 an ADC-derived ID token per RPC; true connects in plaintext with
 //	                 no credentials, which is intended for local control planes.
@@ -367,12 +378,23 @@ func NewXDSPolicyManager(logger *zap.Logger, uri *url.URL, collectorID string) (
 	// arrive, while the provider's becomes the gcp.fleet_id attribute on this
 	// collector's own telemetry. Resolving them differently would let a
 	// collector enforce one fleet's policies while reporting itself as another.
-	fleetID := os.Getenv(fleetIDEnvVar)
-	if fleetID == "" {
-		fleetID = FleetIDFromURI(uri)
+	rawFleet := os.Getenv(fleetIDEnvVar)
+	if rawFleet == "" {
+		rawFleet = FleetIDFromURI(uri)
 	}
-	if fleetID == "" {
+	if rawFleet == "" {
 		return nil, ErrXDSMissingFleetID
+	}
+
+	var fleetProject, fleetLocation, shortFleetID string
+	if p, l, f, ok := ParseFleetResourceName(rawFleet); ok {
+		fleetProject = p
+		fleetLocation = l
+		shortFleetID = f
+	} else if strings.Contains(rawFleet, "/") {
+		return nil, fmt.Errorf("%w: %q", ErrXDSInvalidFleetID, rawFleet)
+	} else {
+		shortFleetID = rawFleet
 	}
 
 	var isInsecure bool
@@ -384,10 +406,26 @@ func NewXDSPolicyManager(logger *zap.Logger, uri *url.URL, collectorID string) (
 		isInsecure = parsed
 	}
 
-	projectNumber, projectID, region, zone, err := resolveProjectAndLocality(query)
+	projectNumber, projectID, region, zone, err := resolveProjectAndLocality(query, fleetProject, fleetLocation)
 	if err != nil {
 		return nil, err
 	}
+
+	// Prefer the alphanumeric project ID over the numeric project number when
+	// formatting the full Fleet resource name for gcp.fleet_id. Management Plane
+	// fleet identity and Cloud Monitoring self-metric queries key on the
+	// canonical project ID form ("projects/{project_id}/locations/{location}/fleets/{fleet_id}"),
+	// whereas the xdstp:// control-plane resource subscription below uses
+	// projectNumber.
+	projectForFleet := projectID
+	if projectForFleet == "" {
+		projectForFleet = projectNumber
+	}
+	locationForFleet := fleetLocation
+	if locationForFleet == "" {
+		locationForFleet = region
+	}
+	fullFleetID := FormatFleetResourceName(projectForFleet, locationForFleet, shortFleetID)
 
 	if logger == nil {
 		logger = zap.NewNop()
@@ -398,18 +436,39 @@ func NewXDSPolicyManager(logger *zap.Logger, uri *url.URL, collectorID string) (
 		uri:                uri,
 		serverAddr:         serverAddr,
 		collectorID:        collectorID,
-		fleetID:            fleetID,
+		fleetID:            fullFleetID,
 		projectID:          projectID,
 		projectNumber:      projectNumber,
 		region:             region,
 		zone:               zone,
 		insecure:           isInsecure,
-		resourceName:       xdstpResourceName(region, projectNumber, fleetID),
+		resourceName:       xdstpResourceName(region, projectNumber, shortFleetID),
 		backoffInitial:     defaultBackoffInitial,
 		backoffMax:         defaultBackoffMax,
 		timeAfter:          time.After,
 		initialSyncTimeout: defaultInitialSyncTimeout,
 	}, nil
+}
+
+// ParseFleetResourceName parses a full Management Plane Fleet resource name of
+// the form "projects/{project}/locations/{location}/fleets/{fleet_id}".
+// It returns ok == false if s is not in that exact 6-segment format or if any
+// segment is empty.
+func ParseFleetResourceName(s string) (project, location, fleetID string, ok bool) {
+	parts := strings.Split(s, "/")
+	if len(parts) != 6 || parts[0] != "projects" || parts[2] != "locations" || parts[4] != "fleets" {
+		return "", "", "", false
+	}
+	if parts[1] == "" || parts[3] == "" || parts[5] == "" {
+		return "", "", "", false
+	}
+	return parts[1], parts[3], parts[5], true
+}
+
+// FormatFleetResourceName formats a full Management Plane Fleet resource name
+// "projects/{project}/locations/{location}/fleets/{fleet_id}".
+func FormatFleetResourceName(project, location, fleetID string) string {
+	return fmt.Sprintf("projects/%s/locations/%s/fleets/%s", project, location, fleetID)
 }
 
 // serverAddrFromURI pulls the host[:port] out of an xDS URI. It may arrive as an
@@ -430,13 +489,13 @@ func serverAddrFromURI(uri *url.URL) string {
 	return ""
 }
 
-// FleetIDFromURI returns the fleet ID carried by an xDS URI, or "" if it carries
-// none.
+// FleetIDFromURI returns the raw `gcp.fleet_id` query parameter carried by a
+// URI (either a short fleet ID or a full Fleet resource name), or "" if it
+// carries none.
 //
-// It reads the same `gcp.fleet_id` parameter that the googlecontrolplane
-// provider reads when resolving the fleet for the self metrics policy, so one
-// URI drives both the xDS subscription and the collector's own telemetry
-// attribution.
+// For xDS URIs, NewXDSPolicyManager normalizes this value into a full Fleet
+// resource name exposed via FleetID(). Non-xDS policy managers use
+// ResolveFleetAndProject to apply the same normalization.
 func FleetIDFromURI(uri *url.URL) string {
 	if uri == nil {
 		return ""
@@ -444,11 +503,72 @@ func FleetIDFromURI(uri *url.URL) string {
 	return uri.Query().Get(FleetIDQueryParam)
 }
 
+// ResolveFleetAndProject resolves the fleet ID and alphanumeric project ID for
+// non-xDS policy sources (such as file: or component: URIs) when no
+// FleetMetadataProvider manager is active. When a short fleet ID is supplied
+// alongside a project (from rawProjectID, $GOOGLE_CLOUD_PROJECT, or ?project=),
+// it formats fleetID as a full Fleet resource name using the resolved region.
+func ResolveFleetAndProject(rawFleet, rawProjectID string, uri *url.URL) (fleetID, projectID string) {
+	fleetID = rawFleet
+	projectID = rawProjectID
+
+	if uri != nil {
+		if fleetID == "" {
+			fleetID = FleetIDFromURI(uri)
+		}
+		if projectID == "" {
+			// A numeric value in ?project= is a GCP project number for the xdstp://
+			// resource subscription, not an alphanumeric project ID. Leave projectID
+			// unset in that case so the self-metrics pipeline populates gcp.project_id
+			// from the GCE resource detector's cloud.account.id.
+			if candidate := uri.Query().Get(ProjectQueryParam); !IsNumericProject(candidate) {
+				projectID = candidate
+			}
+		}
+	}
+
+	if fleetProj, _, _, ok := ParseFleetResourceName(fleetID); ok {
+		if projectID == "" && !IsNumericProject(fleetProj) {
+			projectID = fleetProj
+		}
+		return fleetID, projectID
+	}
+
+	if fleetID == "" {
+		return "", projectID
+	}
+
+	projectForFleet := projectID
+	if projectForFleet == "" {
+		if envProj := os.Getenv(googleCloudProjectEnvVar); envProj != "" {
+			projectForFleet = envProj
+			if !IsNumericProject(envProj) {
+				projectID = envProj
+			}
+		}
+	}
+	if projectForFleet == "" && uri != nil {
+		projectForFleet = uri.Query().Get(ProjectQueryParam)
+	}
+	if projectForFleet != "" {
+		region := firstNonEmptyEnv(cloudRegionEnvVar, googleCloudRegionEnvVar)
+		if region == "" && uri != nil {
+			region = uri.Query().Get(RegionQueryParam)
+		}
+		if region == "" {
+			region = defaultRegion
+		}
+		fleetID = FormatFleetResourceName(projectForFleet, region, fleetID)
+	}
+	return fleetID, projectID
+}
+
 // resolveProjectAndLocality resolves the numeric project number (for the
 // xdstp:// subscription), the alphanumeric project ID (for telemetry
 // attribution), and the collector's region and zone from URI query parameters,
-// environment variables, and GCE metadata.
-func resolveProjectAndLocality(query url.Values) (projectNumber, projectID, region, zone string, err error) {
+// environment variables, a full Fleet resource name (if provided), and GCE
+// metadata.
+func resolveProjectAndLocality(query url.Values, fleetProject, fleetLocation string) (projectNumber, projectID, region, zone string, err error) {
 	rawProjectNum := query.Get(ProjectNumberQueryParam)
 	if rawProjectNum == "" {
 		rawProjectNum = firstNonEmptyEnv(googleCloudProjectNumberEnvVar, projectNumberEnvVar)
@@ -462,19 +582,40 @@ func resolveProjectAndLocality(query url.Values) (projectNumber, projectID, regi
 	if rawProjectNum != "" {
 		projectNumber = rawProjectNum
 	}
-	if rawProject != "" {
-		if IsNumericProject(rawProject) {
+	// Evaluate fleetProject before rawProject so that an explicit full Fleet
+	// resource name ("projects/{project}/locations/{location}/fleets/{fleet_id}")
+	// is not silently rewritten by a separate ?project= parameter or
+	// $GOOGLE_CLOUD_PROJECT environment variable.
+	for _, candidate := range []string{fleetProject, rawProject} {
+		if candidate == "" {
+			continue
+		}
+		if IsNumericProject(candidate) {
 			if projectNumber == "" {
-				projectNumber = rawProject
+				projectNumber = candidate
 			}
-		} else {
-			projectID = rawProject
+		} else if projectID == "" {
+			projectID = candidate
 		}
 	}
 
+	// Region precedence:
+	//  1. Environment ($CLOUD_REGION, $GOOGLE_CLOUD_REGION)
+	//  2. URI query parameter (?region=)
+	//  3. Location embedded in a full Fleet resource name
+	//  4. GCE instance metadata zone
+	//  5. defaultRegion ("asia-east1")
+	//
+	// Placing fleetLocation ahead of GCE metadata ensures that when a user
+	// supplies a full Fleet resource name without an explicit region override,
+	// the xdstp:// authority region and node locality agree with the fleet's
+	// location rather than diverging to the VM's zone.
 	region = firstNonEmptyEnv(cloudRegionEnvVar, googleCloudRegionEnvVar)
 	if region == "" {
 		region = query.Get(RegionQueryParam)
+	}
+	if region == "" {
+		region = fleetLocation
 	}
 
 	if defaultGCEMetadata != nil && defaultGCEMetadata.OnGCE() {
@@ -490,13 +631,12 @@ func resolveProjectAndLocality(query url.Values) (projectNumber, projectID, regi
 
 		if projectID == "" || projectNumber == "" {
 			metaProjID, _ := defaultGCEMetadata.ProjectID(ctx)
-			if projectID == "" && metaProjID != "" {
+			metaProjNum, _ := defaultGCEMetadata.NumericProjectID(ctx)
+			if projectID == "" && metaProjID != "" && (projectNumber == "" || projectNumber == metaProjNum) {
 				projectID = metaProjID
 			}
-			if projectNumber == "" && (rawProject == "" || rawProject == metaProjID) {
-				if metaProjNum, nErr := defaultGCEMetadata.NumericProjectID(ctx); nErr == nil && metaProjNum != "" {
-					projectNumber = metaProjNum
-				}
+			if projectNumber == "" && metaProjNum != "" && (projectID == "" || projectID == metaProjID) {
+				projectNumber = metaProjNum
 			}
 		}
 	}
@@ -700,6 +840,18 @@ func (m *xdsPolicyManager) Stop() error {
 // URI returns the configured URI.
 func (m *xdsPolicyManager) URI() *url.URL {
 	return m.uri
+}
+
+// FleetID returns the resolved full Fleet resource name
+// ("projects/{project}/locations/{location}/fleets/{fleet_id}").
+func (m *xdsPolicyManager) FleetID() string {
+	return m.fleetID
+}
+
+// ProjectID returns the resolved alphanumeric GCP project ID, or "" if only a
+// numeric project number was available.
+func (m *xdsPolicyManager) ProjectID() string {
+	return m.projectID
 }
 
 // PolicyEvaluationResult satisfies the Manager interface.

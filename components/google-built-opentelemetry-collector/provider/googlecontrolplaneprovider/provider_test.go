@@ -250,11 +250,81 @@ func TestRetrieve_XDSNumericProjectDoesNotClobberProjectID(t *testing.T) {
 	rawAttrs := conf.Get("service::telemetry::resource::attributes")
 	attrs, ok := rawAttrs.([]any)
 	require.True(t, ok)
+	var gotFleetID string
 	for _, entry := range attrs {
 		if m, ok := entry.(map[string]any); ok {
 			assert.NotEqual(t, "gcp.project_id", m["name"], "numeric project number in ?project= must not be stamped as gcp.project_id")
+			if m["name"] == "gcp.fleet_id" {
+				gotFleetID, _ = m["value"].(string)
+			}
 		}
 	}
+	assert.Equal(t, "projects/123456789012/locations/asia-east1/fleets/1234", gotFleetID)
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestRetrieve_XDSFullFleetResourceURI(t *testing.T) {
+	withFakeGCEMetadata(t)
+	t.Setenv("FLEET_ID", "")
+	p := createProvider()
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:xds://127.0.0.1:1?gcp.fleet_id=projects/my-project/locations/us-central1/fleets/my-fleet&insecure=true", nil)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+
+	rawAttrs := conf.Get("service::telemetry::resource::attributes")
+	attrs, ok := rawAttrs.([]any)
+	require.True(t, ok)
+	attrMap := map[string]any{}
+	for _, entry := range attrs {
+		if m, ok := entry.(map[string]any); ok {
+			if name, ok := m["name"].(string); ok {
+				attrMap[name] = m["value"]
+			}
+		}
+	}
+	assert.Equal(t, "projects/my-project/locations/us-central1/fleets/my-fleet", attrMap["gcp.fleet_id"])
+	assert.Equal(t, "my-project", attrMap["gcp.project_id"])
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestRetrieve_NonXDSFormatsFullFleetResourceName(t *testing.T) {
+	t.Setenv("FLEET_ID", "my-fleet")
+	t.Setenv("GOOGLE_CLOUD_PROJECT", "my-project")
+	t.Setenv("CLOUD_REGION", "us-east1")
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+	p := createProvider()
+
+	dir := t.TempDir()
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:file:"+dir, nil)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+
+	rawAttrs := conf.Get("service::telemetry::resource::attributes")
+	attrs, ok := rawAttrs.([]any)
+	require.True(t, ok)
+	attrMap := map[string]any{}
+	for _, entry := range attrs {
+		if m, ok := entry.(map[string]any); ok {
+			if name, ok := m["name"].(string); ok {
+				attrMap[name] = m["value"]
+			}
+		}
+	}
+	assert.Equal(t, "projects/my-project/locations/us-east1/fleets/my-fleet", attrMap["gcp.fleet_id"])
+	assert.Equal(t, "my-project", attrMap["gcp.project_id"])
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }

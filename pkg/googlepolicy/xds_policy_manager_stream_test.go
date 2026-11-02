@@ -273,12 +273,12 @@ func TestXDSPolicyManager_ReconnectsWithBackoff(t *testing.T) {
 	initial := requests[0]
 	assert.Empty(t, initial.GetVersionInfo(), "first request has nothing applied yet")
 	assert.Equal(t, "collector-abc", initial.GetNode().GetId())
-	assert.Equal(t, "fleet-1", initial.GetNode().GetCluster())
+	assert.Equal(t, FormatFleetResourceName("my-project", defaultRegion, "fleet-1"), initial.GetNode().GetCluster())
 	assert.Equal(t, defaultRegion, initial.GetNode().GetLocality().GetRegion())
 	assert.Empty(t, initial.GetNode().GetLocality().GetZone())
 	assert.Equal(t, map[string]any{
 		"service.instance.id": "collector-abc",
-		"gcp.fleet_id":        "fleet-1",
+		"gcp.fleet_id":        FormatFleetResourceName("my-project", defaultRegion, "fleet-1"),
 		"gcp.project_id":      "my-project",
 		"cloud.region":        defaultRegion,
 	}, initial.GetNode().GetMetadata().AsMap())
@@ -348,7 +348,7 @@ func TestXDSPolicyManager_PopulatesNodeLocalityAndMetadataFromGCEMetadata(t *tes
 	assert.Equal(t, "us-central1-a", req.GetNode().GetLocality().GetZone())
 	assert.Equal(t, map[string]any{
 		"service.instance.id":     "collector-abc",
-		"gcp.fleet_id":            "fleet-1",
+		"gcp.fleet_id":            "projects/my-project/locations/us-central1/fleets/fleet-1",
 		"gcp.project_id":          "my-project",
 		"cloud.region":            "us-central1",
 		"cloud.availability_zone": "us-central1-a",
@@ -1263,7 +1263,7 @@ func TestXDSPolicyManager_DebugProtoJSONAndAppliedPolicyLogging(t *testing.T) {
 	assert.Equal(t, "", initialMap["version_info"])
 	nodeMap, _ := initialMap["node"].(map[string]any)
 	assert.Equal(t, "collector-abc", nodeMap["id"])
-	assert.Equal(t, "fleet-1", nodeMap["cluster"])
+	assert.Equal(t, FormatFleetResourceName("my-project", defaultRegion, "fleet-1"), nodeMap["cluster"])
 	metaMap, _ := nodeMap["metadata"].(map[string]any)
 	assert.Equal(t, "my-project", metaMap["gcp.project_id"])
 

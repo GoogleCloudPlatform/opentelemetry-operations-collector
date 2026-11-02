@@ -36,6 +36,7 @@ const (
 
 	DefaultCollectionIntervalSeconds int32 = 60
 	MinCollectionIntervalSeconds     int32 = 10
+	MaxCollectionIntervalSeconds     int32 = 86400
 )
 
 var receiverID = component.MustNewIDWithName("hostmetrics", "googlecontrolplane")
@@ -45,8 +46,8 @@ var (
 	ErrNilProto = errors.New("host metrics source policy proto cannot be nil")
 	// ErrMissingID is returned when the policy ID is empty.
 	ErrMissingID = errors.New("host metrics source policy id cannot be empty")
-	// ErrInvalidCollectionInterval is returned when collection_interval_seconds is less than 10.
-	ErrInvalidCollectionInterval = errors.New("collection_interval_seconds must be at least 10")
+	// ErrInvalidCollectionInterval is returned when collection_interval_seconds is less than 10 or greater than 86400.
+	ErrInvalidCollectionInterval = errors.New("collection_interval_seconds must be between 10 and 86400")
 )
 
 // defaultScrapers lists the upstream default scrapers enabled by HostMetricsSourcePolicy.
@@ -126,8 +127,11 @@ func (p *Policy) Validate() error {
 	if p.proto.GetId() == "" {
 		return ErrMissingID
 	}
-	if p.proto.CollectionIntervalSeconds != nil && *p.proto.CollectionIntervalSeconds < MinCollectionIntervalSeconds {
-		return fmt.Errorf("%w: got %d", ErrInvalidCollectionInterval, *p.proto.CollectionIntervalSeconds)
+	if p.proto.CollectionIntervalSeconds != nil {
+		interval := *p.proto.CollectionIntervalSeconds
+		if interval < MinCollectionIntervalSeconds || interval > MaxCollectionIntervalSeconds {
+			return fmt.Errorf("%w: got %d", ErrInvalidCollectionInterval, interval)
+		}
 	}
 	return nil
 }

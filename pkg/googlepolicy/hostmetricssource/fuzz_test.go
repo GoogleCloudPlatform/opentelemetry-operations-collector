@@ -31,6 +31,7 @@ func fuzzHostMetricsSeedPolicies() []*policyv1alpha1.HostMetricsSourcePolicy {
 	int30 := int32(30)
 	int60 := int32(60)
 	int300 := int32(300)
+	int86400 := int32(86400)
 
 	return []*policyv1alpha1.HostMetricsSourcePolicy{
 		{
@@ -51,6 +52,10 @@ func fuzzHostMetricsSeedPolicies() []*policyv1alpha1.HostMetricsSourcePolicy {
 		{
 			Id:                        "seed-300s-interval",
 			CollectionIntervalSeconds: &int300,
+		},
+		{
+			Id:                        "seed-86400s-max-interval",
+			CollectionIntervalSeconds: &int86400,
 		},
 	}
 }
@@ -79,6 +84,9 @@ func verifyCompiledHostMetricsPolicy(t *testing.T, pol googlepolicy.Policy) {
 	effectiveInterval := hp.EffectiveCollectionIntervalSeconds()
 	if effectiveInterval < MinCollectionIntervalSeconds {
 		t.Fatalf("effective interval %d < min %d", effectiveInterval, MinCollectionIntervalSeconds)
+	}
+	if effectiveInterval > MaxCollectionIntervalSeconds {
+		t.Fatalf("effective interval %d > max %d", effectiveInterval, MaxCollectionIntervalSeconds)
 	}
 
 	conf, err := hp.Evaluate(context.Background())

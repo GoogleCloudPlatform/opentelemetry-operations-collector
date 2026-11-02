@@ -79,6 +79,23 @@ func TestPolicy_Validation(t *testing.T) {
 			wantInterval: 30,
 		},
 		{
+			name: "valid policy with explicit 86400s interval (maximum allowed)",
+			proto: &policyv1alpha1.HostMetricsSourcePolicy{
+				Id:                        "system-host-metrics",
+				CollectionIntervalSeconds: int32Ptr(86400),
+			},
+			wantErr:      nil,
+			wantInterval: 86400,
+		},
+		{
+			name: "invalid policy with interval 86401s (above maximum 86400s)",
+			proto: &policyv1alpha1.HostMetricsSourcePolicy{
+				Id:                        "system-host-metrics",
+				CollectionIntervalSeconds: int32Ptr(86401),
+			},
+			wantErr: ErrInvalidCollectionInterval,
+		},
+		{
 			name: "invalid policy with interval 9s (below minimum 10s)",
 			proto: &policyv1alpha1.HostMetricsSourcePolicy{
 				Id:                        "system-host-metrics",

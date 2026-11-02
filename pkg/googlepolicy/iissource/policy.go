@@ -38,6 +38,8 @@ const (
 	DefaultCollectionIntervalSeconds int32 = 60
 	// MinCollectionIntervalSeconds is the minimum allowed scrape interval.
 	MinCollectionIntervalSeconds int32 = 10
+	// MaxCollectionIntervalSeconds is the maximum allowed scrape interval (24 hours).
+	MaxCollectionIntervalSeconds int32 = 86400
 )
 
 var (
@@ -45,8 +47,8 @@ var (
 	ErrNilProto = errors.New("iis source policy proto cannot be nil")
 	// ErrMissingID is returned when the policy ID is empty.
 	ErrMissingID = errors.New("iis source policy id cannot be empty")
-	// ErrInvalidCollectionInterval is returned when collection_interval_seconds is set to less than 10.
-	ErrInvalidCollectionInterval = fmt.Errorf("collection_interval_seconds must be >= %d", MinCollectionIntervalSeconds)
+	// ErrInvalidCollectionInterval is returned when collection_interval_seconds is set to less than 10 or greater than 86400.
+	ErrInvalidCollectionInterval = fmt.Errorf("collection_interval_seconds must be between %d and %d", MinCollectionIntervalSeconds, MaxCollectionIntervalSeconds)
 )
 
 // driver loads an IisSourcePolicy from either shape it can arrive in: the proto
@@ -119,7 +121,7 @@ func (p *Policy) EffectiveCollectionIntervalSeconds() int32 {
 // Validate checks the fields of the policy.
 // An IisSourcePolicy is valid if:
 // 1. proto and ID are non-empty.
-// 2. collection_interval_seconds, if set, is >= MinCollectionIntervalSeconds (10).
+// 2. collection_interval_seconds, if set, is between MinCollectionIntervalSeconds (10) and MaxCollectionIntervalSeconds (86400).
 func (p *Policy) Validate() error {
 	if p == nil || p.proto == nil {
 		return ErrNilProto
@@ -127,7 +129,7 @@ func (p *Policy) Validate() error {
 	if p.proto.GetId() == "" {
 		return ErrMissingID
 	}
-	if p.proto.CollectionIntervalSeconds != nil && *p.proto.CollectionIntervalSeconds < MinCollectionIntervalSeconds {
+	if p.proto.CollectionIntervalSeconds != nil && (*p.proto.CollectionIntervalSeconds < MinCollectionIntervalSeconds || *p.proto.CollectionIntervalSeconds > MaxCollectionIntervalSeconds) {
 		return ErrInvalidCollectionInterval
 	}
 	return nil

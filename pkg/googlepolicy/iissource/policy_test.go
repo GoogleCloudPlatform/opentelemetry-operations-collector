@@ -80,6 +80,30 @@ func TestPolicy_Validation(t *testing.T) {
 			wantErr: nil,
 		},
 		{
+			name: "interval at maximum boundary (86400s)",
+			proto: &policyv1alpha1.IisSourcePolicy{
+				Id:                        "iis-maximum-boundary",
+				CollectionIntervalSeconds: proto.Int32(86400),
+			},
+			wantErr: nil,
+		},
+		{
+			name: "interval above maximum (86401s)",
+			proto: &policyv1alpha1.IisSourcePolicy{
+				Id:                        "iis-too-slow-86401",
+				CollectionIntervalSeconds: proto.Int32(86401),
+			},
+			wantErr: ErrInvalidCollectionInterval,
+		},
+		{
+			name: "interval above maximum (100000s)",
+			proto: &policyv1alpha1.IisSourcePolicy{
+				Id:                        "iis-too-slow-100000",
+				CollectionIntervalSeconds: proto.Int32(100000),
+			},
+			wantErr: ErrInvalidCollectionInterval,
+		},
+		{
 			name: "valid policy with custom interval (30s)",
 			proto: &policyv1alpha1.IisSourcePolicy{
 				Id:                        "iis-valid-custom",
@@ -267,6 +291,16 @@ func TestDriver_LoadPolicy(t *testing.T) {
 		p, err := driver.LoadPolicy(map[string]any{
 			"id":                          "my-iis-invalid",
 			"collection_interval_seconds": 5,
+		})
+		require.Error(t, err)
+		assert.Nil(t, p)
+	})
+
+	t.Run("load from map with invalid interval (>86400)", func(t *testing.T) {
+		t.Parallel()
+		p, err := driver.LoadPolicy(map[string]any{
+			"id":                          "my-iis-invalid-large",
+			"collection_interval_seconds": 86401,
 		})
 		require.Error(t, err)
 		assert.Nil(t, p)

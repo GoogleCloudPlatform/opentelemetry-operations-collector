@@ -45,6 +45,10 @@ func fuzzIISSeedPolicies() []*policyv1alpha1.IisSourcePolicy {
 			Id:                        "iis-slow-scrape-120",
 			CollectionIntervalSeconds: proto.Int32(120),
 		},
+		{
+			Id:                        "iis-max-boundary-86400",
+			CollectionIntervalSeconds: proto.Int32(86400),
+		},
 	}
 }
 
@@ -69,8 +73,8 @@ func verifyCompiledIISPolicy(t *testing.T, p googlepolicy.Policy) {
 	}
 
 	effInterval := ip.EffectiveCollectionIntervalSeconds()
-	if effInterval < MinCollectionIntervalSeconds {
-		t.Fatalf("EffectiveCollectionIntervalSeconds() = %d, want >= %d", effInterval, MinCollectionIntervalSeconds)
+	if effInterval < MinCollectionIntervalSeconds || effInterval > MaxCollectionIntervalSeconds {
+		t.Fatalf("EffectiveCollectionIntervalSeconds() = %d, want between %d and %d", effInterval, MinCollectionIntervalSeconds, MaxCollectionIntervalSeconds)
 	}
 
 	// Always verify receiverConfig() on all platforms to ensure full coverage of the Windows config in Linux CI.

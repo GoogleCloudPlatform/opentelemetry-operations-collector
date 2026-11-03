@@ -26,7 +26,7 @@ Cloud Monitoring. The gauge is only updated once the collector has applied (and
 ACKed) a revision, so a point carrying the expected PolicySet and revision
 proves the whole loop.
 
-Once the PolicySet is active, the test writes JSON log lines to a file tailed
+Once the PolicySet is active, the test writes plain-text log lines to a file tailed
 by a filelog receiver declared in the collector's config.yaml, and checks in
 Cloud Logging that the PolicySet's log filter policies, enforced by the
 googlepolicy processor, kept and dropped the expected lines. The receiver is

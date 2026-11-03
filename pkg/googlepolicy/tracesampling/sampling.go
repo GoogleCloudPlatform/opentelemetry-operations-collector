@@ -16,7 +16,6 @@ package tracesampling
 
 import (
 	"errors"
-	"fmt"
 	"math"
 	"strings"
 
@@ -24,17 +23,9 @@ import (
 	"go.opentelemetry.io/collector/pdata/ptrace"
 )
 
-// W3C Consistent Probability Sampling Constants (OTEP 235).
-const (
-	// MaxAdjustedCount is 2^56, the maximum value for consistent sampling math.
-	MaxAdjustedCount uint64 = sampling.MaxAdjustedCount
-)
-
 var (
 	// ErrInvalidProbability is returned when a sampling percentage is outside (0.0, 100.0] or non-finite.
 	ErrInvalidProbability = errors.New("sampling percent must be in (0.0, 100.0]")
-	// ErrInvalidTValue is returned when a W3C T-value hex string is malformed or out of range.
-	ErrInvalidTValue = errors.New("invalid W3C T-value hex string")
 	// ErrMissingRandomness is returned when a span has no ot=rv in tracestate and an empty TraceID.
 	ErrMissingRandomness = errors.New("missing randomness: tracestate has no ot=rv and TraceID is empty")
 )
@@ -62,73 +53,6 @@ func ProbabilityToThreshold(p float64) (uint64, error) {
 		return 0, ErrInvalidProbability
 	}
 	return th.Unsigned(), nil
-}
-
-// ThresholdToTValue converts a 56-bit threshold uint64 into a W3C T-value hex string.
-func ThresholdToTValue(t uint64) string {
-	th, err := sampling.UnsignedToThreshold(t)
-	if err != nil {
-		return ""
-	}
-	return th.TValue()
-}
-
-// TValueToThreshold parses a W3C T-value hex string into a 56-bit threshold uint64.
-func TValueToThreshold(tval string) (uint64, error) {
-	th, err := sampling.TValueToThreshold(tval)
-	if err != nil {
-		return 0, fmt.Errorf("%w: %v", ErrInvalidTValue, err)
-	}
-	return th.Unsigned(), nil
-}
-
-// ExtractRandomness extracts the 56-bit random value R for a span.
-// Per OTEP 235:
-// 1. If tracestate contains 'ot=rv:<hex>', extract R from the 14-hex-digit rv subkey.
-// 2. Otherwise, fall back to the lower 56 bits of bytes 8-15 of the TraceID.
-// If both ot=rv and TraceID are missing/empty, returns ErrMissingRandomness to fail open.
-func ExtractRandomness(span ptrace.Span) (uint64, error) {
-	w3c, err := sampling.NewW3CTraceState(span.TraceState().AsRaw())
-	if err == nil {
-		if rnd, ok := w3c.OTelValue().RValueRandomness(); ok {
-			return rnd.Unsigned(), nil
-		}
-	}
-
-	traceID := span.TraceID()
-	if traceID.IsEmpty() {
-		return 0, ErrMissingRandomness
-	}
-	rnd := sampling.TraceIDToRandomness(traceID)
-	return rnd.Unsigned(), nil
-}
-
-// ExtractThreshold extracts any existing 56-bit threshold T_in from the span's tracestate.
-func ExtractThreshold(span ptrace.Span) (uint64, bool) {
-	w3c, err := sampling.NewW3CTraceState(span.TraceState().AsRaw())
-	if err != nil {
-		return 0, false
-	}
-	th, ok := w3c.OTelValue().TValueThreshold()
-	if !ok {
-		return 0, false
-	}
-	return th.Unsigned(), true
-}
-
-// UpdateTraceStateThreshold updates or adds 'ot=th:<tval>' to the span's tracestate.
-// Per W3C Trace Context spec, modified entries must be positioned as the leftmost member.
-func UpdateTraceStateThreshold(span ptrace.Span, threshold uint64) {
-	th, err := sampling.UnsignedToThreshold(threshold)
-	if err != nil {
-		return
-	}
-	w3c, _ := sampling.NewW3CTraceState(span.TraceState().AsRaw())
-	_ = w3c.OTelValue().UpdateTValueWithSampling(th)
-	var sb strings.Builder
-	if err := w3c.Serialize(&sb); err == nil {
-		span.TraceState().FromRaw(sb.String())
-	}
 }
 
 // EvaluateSampling evaluates probabilistic trace sampling for a span in equalizing mode.

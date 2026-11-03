@@ -52,151 +52,27 @@ func TestProbabilityToThreshold(t *testing.T) {
 	}
 }
 
-func TestThresholdToTValue_And_Back(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		threshold uint64
-		tval      string
-	}{
-		{threshold: 0, tval: "0"},
-		{threshold: 1 << 55, tval: "8"}, // 0x80000000000000 -> "8"
-		{threshold: (1 << 55) | (1 << 51), tval: "88"},
-		{threshold: 0x1234567890abcd, tval: "1234567890abcd"},
-	}
-
-	for _, tc := range tests {
-		encoded := ThresholdToTValue(tc.threshold)
-		assert.Equal(t, tc.tval, encoded)
-
-		decoded, err := TValueToThreshold(tc.tval)
-		require.NoError(t, err)
-		assert.Equal(t, tc.threshold, decoded)
-	}
-
-	// Invalid T-values
-	_, err := TValueToThreshold("")
-	assert.ErrorIs(t, err, ErrInvalidTValue)
-
-	_, err = TValueToThreshold("1234567890abcdef") // > 14 hex chars
-	assert.ErrorIs(t, err, ErrInvalidTValue)
-
-	_, err = TValueToThreshold("not-hex")
-	assert.ErrorIs(t, err, ErrInvalidTValue)
-}
-
-func TestExtractRandomness(t *testing.T) {
-	t.Parallel()
-
-	span := ptrace.NewSpan()
-	var traceIDBytes [16]byte
-	// Set bytes 8-15 to 0x001234567890abcd
-	binary.BigEndian.PutUint64(traceIDBytes[8:], 0x001234567890abcd)
-	span.SetTraceID(pcommon.TraceID(traceIDBytes))
-
-	// 1. Without tracestate: fallback to lower 56 bits of bytes 8-15 of TraceID
-	r, err := ExtractRandomness(span)
-	require.NoError(t, err)
-	assert.Equal(t, uint64(0x001234567890abcd), r)
-
-	// 2. With tracestate containing ot=rv:<14-hex>
-	span.TraceState().FromRaw("ot=rv:00fedcba987654")
-	r, err = ExtractRandomness(span)
-	require.NoError(t, err)
-	assert.Equal(t, uint64(0x00fedcba987654), r)
-
-	// 3. With multiple vendors in tracestate
-	span.TraceState().FromRaw("congo=t61rcWkgMzE,ot=p:4;rv:00112233445566,rojo=something")
-	r, err = ExtractRandomness(span)
-	require.NoError(t, err)
-	assert.Equal(t, uint64(0x00112233445566), r)
-
-	// 4. Invalid rv hex length falls back to TraceID
-	span.TraceState().FromRaw("ot=rv:short")
-	r, err = ExtractRandomness(span)
-	require.NoError(t, err)
-	assert.Equal(t, uint64(0x001234567890abcd), r)
-}
-
-func TestExtractThreshold(t *testing.T) {
-	t.Parallel()
-
-	span := ptrace.NewSpan()
-
-	// 1. Empty tracestate
-	_, ok := ExtractThreshold(span)
-	assert.False(t, ok)
-
-	// 2. No ot entry
-	span.TraceState().FromRaw("vendor=xyz")
-	_, ok = ExtractThreshold(span)
-	assert.False(t, ok)
-
-	// 3. ot entry without th subkey
-	span.TraceState().FromRaw("ot=rv:00112233445566")
-	_, ok = ExtractThreshold(span)
-	assert.False(t, ok)
-
-	// 4. Valid th subkey (50% sampling -> "8" -> 2^55)
-	span.TraceState().FromRaw("ot=th:8;rv:00112233445566")
-	th, ok := ExtractThreshold(span)
-	assert.True(t, ok)
-	assert.Equal(t, uint64(1)<<55, th)
-
-	// 5. Valid th subkey among multiple vendors
-	span.TraceState().FromRaw("congo=val,ot=p:1;th:8;rv:00112233445566,rojo=val2")
-	th, ok = ExtractThreshold(span)
-	assert.True(t, ok)
-	assert.Equal(t, uint64(1)<<55, th)
-}
-
-func TestUpdateTraceStateThreshold(t *testing.T) {
-	t.Parallel()
-
-	span := ptrace.NewSpan()
-
-	// 1. Empty tracestate -> creates ot=th:<tval>
-	UpdateTraceStateThreshold(span, 1<<55)
-	assert.Equal(t, "ot=th:8", span.TraceState().AsRaw())
-
-	// 2. Existing ot subkeys are preserved, th is updated
-	span.TraceState().FromRaw("ot=rv:00112233445566;p:4")
-	UpdateTraceStateThreshold(span, 1<<55)
-	ts := span.TraceState().AsRaw()
-	assert.Contains(t, ts, "th:8")
-	assert.Contains(t, ts, "rv:00112233445566")
-	assert.Contains(t, ts, "p:4")
-
-	// 3. Existing other vendors are preserved and ot is moved to leftmost
-	span.TraceState().FromRaw("congo=xyz,rojo=abc,ot=th:4;rv:00112233445566")
-	UpdateTraceStateThreshold(span, 1<<55)
-	ts = span.TraceState().AsRaw()
-	assert.Equal(t, "ot=rv:00112233445566;th:8,congo=xyz,rojo=abc", ts)
-}
-
 func TestEvaluateSampling_EqualizingMode(t *testing.T) {
 	t.Parallel()
 
-	targetThreshold := uint64(1) << 55 // 50%
+	targetThreshold := uint64(1) << 55 // 50% -> threshold "8"
 
-	// Case 1: Incoming span has T_in >= targetThreshold (already sampled at least as strictly upstream)
-	// Example: upstream sampled at 25% (T_in = 0.75 * 2^56 > 0.5 * 2^56).
-	// With consistent randomness R >= T_in, it must be kept without modifying tracestate.
+	// Case 1: Incoming span has T_in >= targetThreshold (already sampled at least as strictly upstream).
+	// Example: upstream sampled at 25% (T_in = 0.75 * 2^56 = 0xc0000000000000 -> "c").
+	// With consistent randomness R >= T_in (0xe0000000000000 > 0xc0000000000000), it must be kept without modifying tracestate.
 	spanStrict := ptrace.NewSpan()
-	tInStrict := uint64(3) << 54 // 75% threshold
-	// Consistent randomness: R >= tInStrict (e0000000000000 > c0000000000000)
-	spanStrict.TraceState().FromRaw("ot=th:" + ThresholdToTValue(tInStrict) + ";rv:e0000000000000")
+	spanStrict.TraceState().FromRaw("ot=th:c;rv:e0000000000000")
 	decision, updated, err := EvaluateSampling(spanStrict, targetThreshold)
 	require.NoError(t, err)
 	assert.Equal(t, DecisionSample, decision)
 	assert.False(t, updated)
-	assert.Contains(t, spanStrict.TraceState().AsRaw(), ThresholdToTValue(tInStrict))
+	assert.Contains(t, spanStrict.TraceState().AsRaw(), "th:c")
 
 	// Case 1b: Incoming span claims T_in >= targetThreshold, but has INCONSISTENT randomness R < T_in.
 	// Per spec, the inconsistent T_in is untrusted/cleared, and the span is evaluated against targetThreshold.
 	// If R < targetThreshold, it is dropped.
 	spanInconsistent := ptrace.NewSpan()
-	spanInconsistent.TraceState().FromRaw("ot=th:" + ThresholdToTValue(tInStrict) + ";rv:00000000000000")
+	spanInconsistent.TraceState().FromRaw("ot=th:c;rv:00000000000000")
 	decision, updated, err = EvaluateSampling(spanInconsistent, targetThreshold)
 	require.NoError(t, err)
 	assert.Equal(t, DecisionDrop, decision)
@@ -227,6 +103,51 @@ func TestEvaluateSampling_EqualizingMode(t *testing.T) {
 	spanEmpty := ptrace.NewSpan()
 	decision, updated, err = EvaluateSampling(spanEmpty, targetThreshold)
 	assert.ErrorIs(t, err, ErrMissingRandomness)
+	assert.Equal(t, DecisionDrop, decision)
+	assert.False(t, updated)
+
+	// Case 5: Preserving other vendor entries and positioning ot leftmost
+	spanVendors := ptrace.NewSpan()
+	var traceIDVendors [16]byte
+	binary.BigEndian.PutUint64(traceIDVendors[8:], (uint64(1)<<55)+1)
+	spanVendors.SetTraceID(pcommon.TraceID(traceIDVendors))
+	spanVendors.TraceState().FromRaw("congo=xyz,rojo=abc")
+	decision, updated, err = EvaluateSampling(spanVendors, targetThreshold)
+	require.NoError(t, err)
+	assert.Equal(t, DecisionSample, decision)
+	assert.True(t, updated)
+	assert.Equal(t, "ot=th:8,congo=xyz,rojo=abc", spanVendors.TraceState().AsRaw())
+
+	// Case 6: Preserving existing ot subkeys when updating th
+	spanOtSubkeys := ptrace.NewSpan()
+	spanOtSubkeys.TraceState().FromRaw("congo=xyz,rojo=abc,ot=p:4;rv:e0000000000000")
+	decision, updated, err = EvaluateSampling(spanOtSubkeys, targetThreshold)
+	require.NoError(t, err)
+	assert.Equal(t, DecisionSample, decision)
+	assert.True(t, updated)
+	ts := spanOtSubkeys.TraceState().AsRaw()
+	assert.Equal(t, "ot=rv:e0000000000000;th:8;p:4,congo=xyz,rojo=abc", ts)
+
+	// Case 7: Malformed ot=rv falls back to TraceID randomness
+	spanMalformedRv := ptrace.NewSpan()
+	var traceIDFallback [16]byte
+	binary.BigEndian.PutUint64(traceIDFallback[8:], (uint64(1)<<55)+1) // R >= 2^55 in TraceID
+	spanMalformedRv.SetTraceID(pcommon.TraceID(traceIDFallback))
+	spanMalformedRv.TraceState().FromRaw("ot=rv:short") // invalid rv length, falls back to TraceID
+	decision, updated, err = EvaluateSampling(spanMalformedRv, targetThreshold)
+	require.NoError(t, err)
+	assert.Equal(t, DecisionSample, decision)
+	assert.True(t, updated)
+	assert.Contains(t, spanMalformedRv.TraceState().AsRaw(), "th:8")
+
+	// Case 8: Malformed ot=rv with low TraceID randomness drops
+	spanMalformedRvDrop := ptrace.NewSpan()
+	var traceIDFallbackDrop [16]byte
+	binary.BigEndian.PutUint64(traceIDFallbackDrop[8:], (uint64(1)<<55)-1) // R < 2^55 in TraceID
+	spanMalformedRvDrop.SetTraceID(pcommon.TraceID(traceIDFallbackDrop))
+	spanMalformedRvDrop.TraceState().FromRaw("ot=rv:short")
+	decision, updated, err = EvaluateSampling(spanMalformedRvDrop, targetThreshold)
+	require.NoError(t, err)
 	assert.Equal(t, DecisionDrop, decision)
 	assert.False(t, updated)
 }

@@ -227,14 +227,14 @@ func redactAction(target *policyv1alpha1.LogTargetSelector, regex, replacement s
 	}
 	return &policyv1alpha1.LogTransformPolicy_Redaction{
 		Redaction: &policyv1alpha1.LogRedactAction{
-		Redactions: []*policyv1alpha1.LogRedaction{
-			{
-				Target:      target,
-				Regex:       re,
-				Replacement: rep,
+			Redactions: []*policyv1alpha1.LogRedaction{
+				{
+					Target:      target,
+					Regex:       re,
+					Replacement: rep,
+				},
 			},
 		},
-	},
 	}
 }
 
@@ -671,14 +671,14 @@ func TestPolicy_EmptyMatchersAppliesUnconditionally(t *testing.T) {
 		Id: "unconditional-add",
 		Action: &policyv1alpha1.LogTransformPolicy_Addition{
 			Addition: &policyv1alpha1.LogAddAction{
-		Additions: []*policyv1alpha1.LogAddition{
-			{
-				Target: logTargetAttr("injected"),
-				Value: strVal("always"),
-				UpsertEnabled: proto.Bool(true),
+				Additions: []*policyv1alpha1.LogAddition{
+					{
+						Target:        logTargetAttr("injected"),
+						Value:         strVal("always"),
+						UpsertEnabled: proto.Bool(true),
+					},
+				},
 			},
-		},
-	},
 		},
 	})
 	require.NoError(t, err)
@@ -707,20 +707,20 @@ func TestDriverLoadPolicyAndProto(t *testing.T) {
 				},
 			},
 			"addition": map[string]any{
-					"additions": []any{
-						map[string]any{
-							"target": map[string]any{
-								"log_attribute_path": map[string]any{
-									"segments": []any{"gcp", "routing", "tier"},
-								},
+				"additions": []any{
+					map[string]any{
+						"target": map[string]any{
+							"log_attribute_path": map[string]any{
+								"segments": []any{"gcp", "routing", "tier"},
 							},
-							"value": map[string]any{
-								"string_value": "soc",
-							},
-							"upsert_enabled": true,
 						},
+						"value": map[string]any{
+							"string_value": "soc",
+						},
+						"upsert_enabled": true,
 					},
 				},
+			},
 		}
 
 		p, err := googlepolicy.LoadPolicy(PolicyType, raw)
@@ -1954,4 +1954,42 @@ func TestTransformLogRedactAction(t *testing.T) {
 			assert.Equal(t, googlepolicy.TransformNoMatch, p.TransformLog(googlepolicy.LogContext{}))
 		}
 	})
+}
+
+func TestTransformLogPartialFailure(t *testing.T) {
+	p, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		Id:       "partial-failure-add",
+		Matchers: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
+		Action: &policyv1alpha1.LogTransformPolicy_Addition{
+			Addition: &policyv1alpha1.LogAddAction{
+				Additions: []*policyv1alpha1.LogAddition{
+					{
+						Target:        logTargetAttr("existing_key"),
+						Value:         strVal("new_value"),
+						UpsertEnabled: proto.Bool(false), // This will fail because "existing_key" exists
+					},
+					{
+						Target:        logTargetAttr("new_key"),
+						Value:         strVal("success_value"),
+						UpsertEnabled: proto.Bool(false), // This will succeed
+					},
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	lr, sl, rl := newTestLogBundle()
+	lr.Attributes().PutStr("existing_key", "old_value")
+
+	res := p.TransformLog(logContext(lr, sl, rl))
+	assert.Equal(t, googlepolicy.TransformModified, res)
+
+	val1, ok := lr.Attributes().Get("existing_key")
+	require.True(t, ok)
+	assert.Equal(t, "old_value", val1.Str()) // Unchanged
+
+	val2, ok := lr.Attributes().Get("new_key")
+	require.True(t, ok)
+	assert.Equal(t, "success_value", val2.Str()) // Added
 }

@@ -1,0 +1,601 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//go:build integration_test
+
+/*
+Smoke test for Tango-GBOC: the packaged otelcol-google service with an
+additional googlecontrolplane config source, talking to a live Control Plane
+and Data Plane.
+
+The test verifies that the collector receives the pre-provisioned PolicySet
+revision from the Control Plane and reports it through its self-o11y gauge
+gcp.policy.set.active, which is exported to the Data Plane and observed through
+Cloud Monitoring. The gauge is only updated once the collector has applied (and
+ACKed) a revision, so a point carrying the expected PolicySet and revision
+proves the whole loop.
+
+Once the PolicySet is active, the test writes plain-text log lines to a file tailed
+by a filelog receiver declared in the collector's config.yaml, and checks in
+Cloud Logging that the PolicySet's log filter policies, enforced by the
+googlepolicy processor, kept and dropped the expected lines. The receiver is
+declared locally because the Control Plane does not yet translate source
+policies into collector config.
+
+The test assumes a long-lived fleet and PolicySet have been pre-provisioned in
+the test project and rolled out (see tango/README.md). It never calls the
+Telemetry Management API itself.
+
+Environment variables (in addition to those required by TestSmoke):
+TANGO_CP_ENDPOINT: host:port of the xDS Control Plane, e.g.
+  staging-telemetrydirector.asia-east1.rep.sandbox.googleapis.com:443.
+  The test is skipped when unset.
+TANGO_EXPECTED_REVISION: revision ID of the pre-provisioned PolicySet that is
+  rolled out to the fleet (e.g. 75cbca3b). Required.
+TANGO_FLEET_ID: fleet the collector subscribes to (default gboc-smoke-fleet).
+TANGO_POLICY_SET_ID: pre-created PolicySet ID (default gboc-smoke-ps).
+TANGO_REGION: region of the fleet and Control Plane endpoint (default
+  asia-east1). Passed explicitly so it does not depend on the VM's zone.
+
+Off-GCP mode (see tango_smoke_offgcp_test.go and tango/README.md):
+TANGO_OFF_GCP: set to "true" to run the collector on a VM with no service
+  account or OAuth scopes, with the GCE metadata server disabled for the
+  collector, authenticating with X.509 Workload Identity Federation.
+TANGO_PROJECT_NUMBER: project number of the fleet, used for the xDS
+  subscription. Required off-GCP, where it cannot be read from the metadata
+  server.
+TANGO_PROJECT: project ID the collector's telemetry goes to, which must grant
+  the WIF principal the writer roles. Required off-GCP. It may differ from the
+  fleet's project: the staging Telemetry Management API cannot be enabled
+  outside the google.com organization, and google.com projects cannot grant
+  roles to an external WIF principal. The test queries Cloud Monitoring and
+  Cloud Logging in TANGO_PROJECT instead of in PROJECT.
+TANGO_WIF_DIR: local directory holding the workload certificate (leaf.pem) and
+  key (leaf.key) trusted by the X.509 WIF provider. Required off-GCP.
+TANGO_WIF_AUDIENCE: audience of the X.509 WIF provider (default: the
+  gboc-tango-testing provider in tango/README.md).
+*/
+
+package smoke
+
+import (
+	"bytes"
+	"context"
+	"fmt"
+	"log"
+	"os"
+	"path"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
+	monitoring "cloud.google.com/go/monitoring/apiv3/v2"
+	"cloud.google.com/go/monitoring/apiv3/v2/monitoringpb"
+	"github.com/google/uuid"
+	"google.golang.org/api/iterator"
+	"google.golang.org/protobuf/types/known/timestamppb"
+
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/integration_test/gce-testing-internal/gce"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/integration_test/gce-testing-internal/logging"
+)
+
+const (
+	// policySetActiveMetric is the self-o11y gauge reporting the enforced
+	// PolicySet revision. It reaches Cloud Monitoring through
+	// telemetry.googleapis.com under the prometheus.googleapis.com namespace.
+	policySetActiveMetric = "prometheus.googleapis.com/gcp.policy.set.active/gauge"
+	// policySetIDLabel is the metric label carrying the enforced PolicySet
+	// resource name.
+	policySetIDLabel = "gcp.policy.set.id"
+
+	// collectorUUIDNamespace is googlecontrolplaneprovider's namespace for
+	// deriving the collector ID (service.instance.id) from the hostname.
+	collectorUUIDNamespace = "5AFFCE1A-3D0A-4220-8EA1-7D64A842BEB4"
+
+	// tangoDropInPath is a systemd drop-in that keeps the packaged service's
+	// command line and appends the googlecontrolplane config source to it.
+	tangoDropInPath = "/etc/systemd/system/otelcol-google.service.d/tango.conf"
+
+	metricWindow = 30 * time.Minute
+	// queryBackoffDuration mirrors gce's backoff between Monitoring queries.
+	queryBackoffDuration = 10 * time.Second
+	// queryMaxAttempts bounds how long the test waits for a point with the
+	// expected revision once the series exists (about 3 minutes plus query time).
+	queryMaxAttempts = 20
+
+	// tangoServiceRegistryKey holds the Windows service's command line
+	// (ImagePath), which the test extends with the googlecontrolplane config
+	// source, like tangoDropInPath does on Linux.
+	tangoServiceRegistryKey = `HKLM:\SYSTEM\CurrentControlSet\Services\otelcol-google`
+
+	// tangoLogDirLinux and tangoLogDirWindows hold the file the test uploads
+	// the sample logs to (see tangoLogPath), which the filelog receiver
+	// declared in tangoCollectorConfig tails (see tangoLogGlob). On Linux the
+	// glob equals the PolicySet's fileLogSourcePolicy includedPaths (see
+	// tango/policyset.json).
+	tangoLogDirLinux   = "/var/log/gboc-smoke"
+	tangoLogDirWindows = `C:\gboc-smoke`
+	// sampleLogsFile holds the plain-text lines uploaded to tangoLogPath.
+	sampleLogsFile = "tango/sample_logs.log"
+	// keptMessage is the sample log that the PolicySet keeps.
+	keptMessage = "gboc-smoke=keep"
+	logWindow   = 30 * time.Minute
+)
+
+// droppedMessages are the sample logs that the PolicySet drops.
+var droppedMessages = []string{
+	// Dropped by the body contains "gboc-smoke=drop" filter.
+	"gboc-smoke=drop",
+	// Dropped by the body does not contain "gboc-smoke" filter.
+	"smoke-test=other",
+}
+
+// tangoLogDir returns the directory holding the sample log file on imageSpec.
+func tangoLogDir(imageSpec string) string {
+	if gce.IsWindows(imageSpec) {
+		return tangoLogDirWindows
+	}
+	return tangoLogDirLinux
+}
+
+// tangoLogPath returns the file the test uploads the sample logs to, only after
+// the PolicySet is active. It matches tangoLogGlob.
+func tangoLogPath(imageSpec string) string {
+	if gce.IsWindows(imageSpec) {
+		return tangoLogDirWindows + `\test.log`
+	}
+	return tangoLogDirLinux + "/test.log"
+}
+
+// tangoLogGlob returns the path tailed by the filelog receiver declared in
+// tangoCollectorConfig. Forward slashes also work on Windows and need no
+// escaping in YAML.
+func tangoLogGlob(imageSpec string) string {
+	return strings.ReplaceAll(tangoLogDir(imageSpec), `\`, "/") + "/*.log"
+}
+
+// tangoCollectorConfig returns the config.yaml that replaces the packaged one.
+// It is merged with the config from the googlecontrolplane config source.
+//
+// The Control Plane does not yet translate source policies into collector
+// config, so the PolicySet's fileLogSourcePolicy is mirrored here: a filelog
+// receiver on the same path (on Linux) without parsing, so each line is a
+// string body that the PolicySet's body log filter policies match on.
+//
+// googlepolicy enforces the PolicySet activated by the googlecontrolplane
+// config source, whichever config declares the processor. The other processors
+// and the exporter are the fixed-name components that the googlecontrolplane
+// config source always generates; the exporter sends to
+// telemetry.googleapis.com.
+//
+// resourceProject, when set (off GCP), is stamped as the gcp.project_id
+// resource attribute that telemetry.googleapis.com requires. On GCP,
+// transform/googlecontrolplane derives it from the GCE resource detector.
+func tangoCollectorConfig(imageSpec, resourceProject string) string {
+	var resource string
+	if resourceProject != "" {
+		resource = "    resource:\n      gcp.project_id: '" + resourceProject + "'\n"
+	}
+	return `receivers:
+  filelog/tango_smoke:
+    include: ['` + tangoLogGlob(imageSpec) + `']
+    start_at: beginning
+` + resource + `processors:
+  googlepolicy:
+service:
+  pipelines:
+    logs/tango_smoke:
+      receivers: [filelog/tango_smoke]
+      processors:
+        - resourcedetection/googlecontrolplane
+        - transform/googlecontrolplane
+        - googlepolicy
+        - queue_batch/default_gcp_destination_batch_logs
+      exporters: [otlp_grpc/default_gcp_destination]
+`
+}
+
+// tangoSettings holds the Tango-specific environment for the test.
+type tangoSettings struct {
+	cpEndpoint       string
+	expectedRevision string
+	fleetID          string
+	policySetID      string
+	region           string
+
+	// Off-GCP mode only (see tango_smoke_offgcp_test.go).
+	offGCP        bool
+	project       string
+	projectNumber string
+	wifDir        string
+	wifAudience   string
+}
+
+func tangoSettingsFromEnv(t *testing.T) tangoSettings {
+	t.Helper()
+	s := tangoSettings{
+		cpEndpoint:       os.Getenv("TANGO_CP_ENDPOINT"),
+		expectedRevision: os.Getenv("TANGO_EXPECTED_REVISION"),
+		fleetID:          envOrDefault("TANGO_FLEET_ID", "gboc-smoke-fleet"),
+		policySetID:      envOrDefault("TANGO_POLICY_SET_ID", "gboc-smoke-ps"),
+		region:           envOrDefault("TANGO_REGION", "asia-east1"),
+		offGCP:           os.Getenv("TANGO_OFF_GCP") == "true",
+		project:          os.Getenv("TANGO_PROJECT"),
+		projectNumber:    os.Getenv("TANGO_PROJECT_NUMBER"),
+		wifDir:           os.Getenv("TANGO_WIF_DIR"),
+		wifAudience:      envOrDefault("TANGO_WIF_AUDIENCE", defaultWIFAudience),
+	}
+	if s.cpEndpoint == "" {
+		t.Skip("TANGO_CP_ENDPOINT is not set; skipping Tango-GBOC smoke test")
+	}
+	if s.expectedRevision == "" {
+		t.Fatal("TANGO_EXPECTED_REVISION must be set to the revision rolled out to the fleet")
+	}
+	if testRunID == "" {
+		t.Fatal("This test does not support being run outside of Kokoro.")
+	}
+	if s.offGCP && (s.project == "" || s.projectNumber == "" || s.wifDir == "") {
+		t.Fatal("TANGO_OFF_GCP=true requires TANGO_PROJECT, TANGO_PROJECT_NUMBER and TANGO_WIF_DIR")
+	}
+	return s
+}
+
+// telemetryProject returns the project the collector on vm sends its
+// telemetry to: TANGO_PROJECT when set, otherwise the VM's own project.
+func (s tangoSettings) telemetryProject(vm *gce.VM) string {
+	if s.project != "" {
+		return s.project
+	}
+	return vm.Project
+}
+
+func envOrDefault(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}
+
+// controlPlaneConfig returns the additional --config flag that loads policies
+// from the Control Plane. On GCP, the project of the xDS subscription is taken
+// from the GCE metadata server. Off GCP, project_number names the fleet's
+// project for the subscription, and the alphanumeric project only sets the
+// collector's telemetry project (gcp.project_id), so the two can differ.
+func (s tangoSettings) controlPlaneConfig() string {
+	uri := fmt.Sprintf("--config=googlecontrolplane:xds://%s?gcp.fleet_id=%s&region=%s", s.cpEndpoint, s.fleetID, s.region)
+	if s.project != "" {
+		uri += "&project=" + s.project
+	}
+	if s.projectNumber != "" {
+		uri += "&project_number=" + s.projectNumber
+	}
+	return uri
+}
+
+// dropIn returns a systemd drop-in that reruns the packaged service's own
+// command line (the regular file config from OTELCOL_OPTIONS) with the
+// googlecontrolplane config source appended. Later sources win on conflicts.
+// When offGCP is set, it also disables the GCE metadata server for the
+// collector process and points GOOGLE_APPLICATION_CREDENTIALS at the WIF
+// credential config uploaded by uploadWIFCredentials.
+func (s tangoSettings) dropIn() string {
+	var envLines string
+	if s.offGCP {
+		envLines = fmt.Sprintf("Environment=GCE_METADATA_HOST=%s\nEnvironment=GOOGLE_APPLICATION_CREDENTIALS=%s\nEnvironment=GOOGLE_CLOUD_PROJECT=%s\n",
+			disabledMetadataHost, wifCredConfigPath(false), s.project)
+	}
+	return fmt.Sprintf("[Service]\n%sExecStart=\nExecStart=/usr/bin/otelcol-google $OTELCOL_OPTIONS %s\n", envLines, s.controlPlaneConfig())
+}
+
+// windowsImagePathScript returns a PowerShell script that appends the
+// googlecontrolplane config source to the Windows service's command line,
+// keeping the packaged --config flag for the regular file config. Later
+// sources win on conflicts. It is the Windows counterpart of dropIn; the new
+// command line takes effect on the next service start.
+func (s tangoSettings) windowsImagePathScript() string {
+	var envSetup string
+	if s.offGCP {
+		envSetup = fmt.Sprintf("\nSet-ItemProperty -Path $key -Name Environment -Type MultiString -Value @('GCE_METADATA_HOST=%s', 'GOOGLE_APPLICATION_CREDENTIALS=%s', 'GOOGLE_CLOUD_PROJECT=%s')",
+			disabledMetadataHost, wifCredConfigPath(true), s.project)
+	}
+	return fmt.Sprintf(`$ErrorActionPreference = 'Stop'
+$key = '%s'
+$imagePath = (Get-ItemProperty -Path $key).ImagePath + ' %s'
+Set-ItemProperty -Path $key -Name ImagePath -Value $imagePath%s
+(Get-ItemProperty -Path $key).ImagePath`, tangoServiceRegistryKey, s.controlPlaneConfig(), envSetup)
+}
+
+// setupTangoCollector installs otelcol-google with tangoCollectorConfig and
+// restarts it with the googlecontrolplane config source added.
+func setupTangoCollector(ctx context.Context, logger *log.Logger, vm *gce.VM, s tangoSettings) error {
+	if s.offGCP {
+		// The VM has no credentials to fetch the package from GCS itself.
+		if err := installOtelCollectorOffGCP(ctx, logger, vm, locationFromEnvVars()); err != nil {
+			return err
+		}
+		if err := uploadWIFCredentials(ctx, logger, vm, s); err != nil {
+			return err
+		}
+	} else if err := installOtelCollector(ctx, logger, vm, locationFromEnvVars()); err != nil {
+		return err
+	}
+	if gce.IsWindows(vm.ImageSpec) {
+		// Give the collector time to start up, as setupOtelCollectorFrom does.
+		time.Sleep(10 * time.Second)
+	}
+	configPath := collectorConfigPath(vm.ImageSpec)
+	if err := s.uploadContent(ctx, logger, vm, strings.NewReader(tangoCollectorConfig(vm.ImageSpec, s.project)), configPath); err != nil {
+		return fmt.Errorf("failed to upload %s: %v", configPath, err)
+	}
+	if gce.IsWindows(vm.ImageSpec) {
+		if _, err := gce.RunRemotely(ctx, logger, vm, fmt.Sprintf("New-Item -ItemType Directory -Force -Path '%s'", tangoLogDirWindows)); err != nil {
+			return err
+		}
+		if _, err := gce.RunScriptRemotely(ctx, logger, vm, s.windowsImagePathScript(), nil, nil); err != nil {
+			return fmt.Errorf("failed to add the googlecontrolplane config source to the service command line: %v", err)
+		}
+		return restartOtelCollector(ctx, logger, vm)
+	}
+	if _, err := gce.RunRemotely(ctx, logger, vm, fmt.Sprintf("sudo mkdir -p %s %s", path.Dir(tangoDropInPath), tangoLogDirLinux)); err != nil {
+		return err
+	}
+	if err := s.uploadContent(ctx, logger, vm, strings.NewReader(s.dropIn()), tangoDropInPath); err != nil {
+		return fmt.Errorf("failed to upload %s: %v", tangoDropInPath, err)
+	}
+	if _, err := gce.RunRemotely(ctx, logger, vm, "sudo systemctl daemon-reload"); err != nil {
+		return err
+	}
+	return restartOtelCollector(ctx, logger, vm)
+}
+
+// collectorID returns the service.instance.id the collector on vm reports,
+// which googlecontrolplaneprovider derives from the hostname.
+func collectorID(ctx context.Context, logger *log.Logger, vm *gce.VM) (string, error) {
+	out, err := gce.RunRemotely(ctx, logger, vm, "hostname")
+	if err != nil {
+		return "", err
+	}
+	return uuid.NewSHA1(uuid.MustParse(collectorUUIDNamespace), []byte(strings.TrimSpace(out.Stdout))).String(), nil
+}
+
+// revisionValue converts an 8-hex CCFE revision ID into the
+// gcp.policy.set.active gauge value. It mirrors the 8-hex case of
+// parseRevisionValue in
+// components/google-built-opentelemetry-collector/extension/googlecontrolplaneextension/extension.go;
+// keep the two in sync. The extension lives in a separate Go module, and
+// importing it would pull the collector's dependency tree into this test
+// module, so the logic is copied rather than shared. Only the 8-hex form is
+// accepted because the test always pins a CCFE revision.
+func revisionValue(rev string) (int64, error) {
+	v, err := strconv.ParseUint(rev, 16, 32)
+	if err != nil || len(rev) != 8 {
+		return 0, fmt.Errorf("revision %q is not an 8-hex revision ID", rev)
+	}
+	return int64(v), nil
+}
+
+// lookupCollectorMetric is gce.lookupMetric scoped to a collector instead of a
+// VM. The collector's self-o11y metrics are ingested over OTLP as
+// prometheus_target series whose instance label is the collector's
+// service.instance.id; they carry neither the instance_id nor the
+// "<vm.ID>/<vm.Name>" namespace that gce.lookupMetric filters on.
+func lookupCollectorMetric(ctx context.Context, client *monitoring.MetricClient, project, metric, collector string, window time.Duration) *monitoring.TimeSeriesIterator {
+	now := time.Now()
+	filter := fmt.Sprintf(`metric.type = %q AND resource.type = "prometheus_target" AND resource.labels.instance = %q`, metric, collector)
+	return client.ListTimeSeries(ctx, &monitoringpb.ListTimeSeriesRequest{
+		Name:   "projects/" + project,
+		Filter: filter,
+		Interval: &monitoringpb.TimeInterval{
+			StartTime: timestamppb.New(now.Add(-window)),
+			EndTime:   timestamppb.New(now),
+		},
+		View: monitoringpb.ListTimeSeriesRequest_FULL,
+	})
+}
+
+// nonEmptySeries is gce.nonEmptySeriesList with a minimum of one series: it
+// returns the series that have points, or (nil, nil) if there are none.
+func nonEmptySeries(logger *log.Logger, it *monitoring.TimeSeriesIterator) ([]*monitoringpb.TimeSeries, error) {
+	var tsList []*monitoringpb.TimeSeries
+	for {
+		series, err := it.Next()
+		if err == iterator.Done {
+			return tsList, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		logger.Printf("nonEmptySeries() found series %v", series)
+		if len(series.GetPoints()) > 0 {
+			tsList = append(tsList, series)
+		}
+	}
+}
+
+// waitForCollectorMetricSeries is gce.WaitForMetricSeries using
+// lookupCollectorMetric. It retries "no data" and retriable errors up to
+// gce.QueryMaxAttempts times.
+func waitForCollectorMetricSeries(ctx context.Context, logger *log.Logger, client *monitoring.MetricClient, project, metric, collector string, window time.Duration) ([]*monitoringpb.TimeSeries, error) {
+	for attempt := 1; attempt <= gce.QueryMaxAttempts; attempt++ {
+		tsList, err := nonEmptySeries(logger, lookupCollectorMetric(ctx, client, project, metric, collector, window))
+		if len(tsList) > 0 && err == nil {
+			return tsList, nil
+		}
+		if err != nil && !gce.IsRetriableLookupError(ctx, err) {
+			return nil, fmt.Errorf("waitForCollectorMetricSeries(metric=%q, collector=%q): %v", metric, collector, err)
+		}
+		logger.Printf("waitForCollectorMetricSeries(metric=%q, collector=%q): request_error=%v, retrying (%d/%d)...", metric, collector, err, attempt, gce.QueryMaxAttempts)
+		time.Sleep(queryBackoffDuration)
+	}
+	return nil, fmt.Errorf("waitForCollectorMetricSeries(metric=%q, collector=%q) failed: exhausted retries", metric, collector)
+}
+
+// waitForPolicySetActive waits until the collector's gcp.policy.set.active
+// series reports the expected PolicySet and revision. The series may exist
+// before the PolicySet is applied (reporting -1), so this keeps polling until
+// a matching point shows up.
+func waitForPolicySetActive(ctx context.Context, logger *log.Logger, vm *gce.VM, s tangoSettings, collector string) error {
+	want, err := revisionValue(s.expectedRevision)
+	if err != nil {
+		return err
+	}
+	client, err := monitoring.NewMetricClient(ctx)
+	if err != nil {
+		return fmt.Errorf("monitoring.NewMetricClient: %v", err)
+	}
+	defer client.Close()
+
+	last := "no matching point"
+	for attempt := 1; attempt <= queryMaxAttempts; attempt++ {
+		series, err := waitForCollectorMetricSeries(ctx, logger, client, s.telemetryProject(vm), policySetActiveMetric, collector, metricWindow)
+		if err != nil {
+			return fmt.Errorf("%v; see %s", err, collectorLogsFile(vm.ImageSpec))
+		}
+		for _, ts := range series {
+			// The label key contains dots, so it is matched here rather than
+			// in the Monitoring filter.
+			psID := ts.GetMetric().GetLabels()[policySetIDLabel]
+			for _, p := range ts.GetPoints() {
+				v := int64(p.GetValue().GetDoubleValue())
+				if iv := p.GetValue().GetInt64Value(); iv != 0 {
+					v = iv
+				}
+				if v == want && path.Base(psID) == s.policySetID {
+					logger.Printf("Found %s point for collector %s: %s=%q value=%d (revision %s)", policySetActiveMetric, collector, policySetIDLabel, psID, v, s.expectedRevision)
+					return nil
+				}
+				last = fmt.Sprintf("%s=%q value=%d", policySetIDLabel, psID, v)
+			}
+		}
+		logger.Printf("Expected point not found yet (attempt %d/%d), latest: %s", attempt, queryMaxAttempts, last)
+		time.Sleep(queryBackoffDuration)
+	}
+	return fmt.Errorf("no %s point for collector %s with PolicySet %q and value %d (revision %s); latest: %s; see %s",
+		policySetActiveMetric, collector, s.policySetID, want, s.expectedRevision, last, collectorLogsFile(vm.ImageSpec))
+}
+
+// uploadSampleLogs uploads sampleLogsFile to tangoLogPath, which the filelog
+// receiver picks up on its next poll. Off-GCP, each line is tagged with
+// sampleLogTag (see offGCPLogLine).
+func uploadSampleLogs(ctx context.Context, logger *log.Logger, vm *gce.VM, s tangoSettings) error {
+	content, err := os.ReadFile(sampleLogsFile)
+	if err != nil {
+		return err
+	}
+	if s.offGCP {
+		content = tagSampleLogs(content, vm)
+	}
+	logPath := tangoLogPath(vm.ImageSpec)
+	if err := s.uploadContent(ctx, logger, vm, bytes.NewReader(content), logPath); err != nil {
+		return fmt.Errorf("failed to upload %s to %s: %v", sampleLogsFile, logPath, err)
+	}
+	if gce.IsWindows(vm.ImageSpec) {
+		// The Windows service runs as LocalSystem and can read the file.
+		return nil
+	}
+	// The collector does not run as root.
+	_, err = gce.RunRemotely(ctx, logger, vm, "sudo chmod 0644 "+logPath)
+	return err
+}
+
+// collectorLogsFile names the diagnostics file holding the collector's own
+// logs (see runDiagnostics).
+func collectorLogsFile(imageSpec string) string {
+	if gce.IsWindows(imageSpec) {
+		return "otelcol-google-logs.txt"
+	}
+	return "journalctl_otelcol-google.txt"
+}
+
+// messageQuery is a Cloud Logging filter for the log with the given body.
+// A string body is ingested as textPayload.
+func messageQuery(message string) string {
+	return fmt.Sprintf("textPayload=%q", message)
+}
+
+// verifyFilteredLogs checks that the kept sample log reached Cloud Logging and
+// the dropped ones did not. The logs were written together, so once the kept
+// log is found the dropped ones would have arrived too. Queries are scoped to
+// the VM, so the fixed messages are unambiguous.
+func verifyFilteredLogs(ctx context.Context, logger *log.Logger, vm *gce.VM, s tangoSettings) error {
+	if s.offGCP {
+		return verifyFilteredLogsOffGCP(ctx, logger, vm, s)
+	}
+	// The log name is chosen by telemetry.googleapis.com, so match any.
+	if err := gce.WaitForLog(ctx, logger, vm, ".*", logWindow, messageQuery(keptMessage)); err != nil {
+		return fmt.Errorf("log %q, which the PolicySet keeps, not found in Cloud Logging: %v", keptMessage, err)
+	}
+	for _, m := range droppedMessages {
+		if err := gce.AssertLogMissing(ctx, logger, vm, ".*", logWindow, messageQuery(m)); err != nil {
+			return fmt.Errorf("log %q should have been dropped by the PolicySet: %v", m, err)
+		}
+	}
+	return nil
+}
+
+// setupTangoVM sets up a GCE VM with the cloud-platform scope, which GCE's
+// default VM scopes do not include, so the collector can authenticate to the
+// Control Plane with an OAuth2 access token from the GCE metadata server.
+func setupTangoVM(t *testing.T, imageSpec string) (context.Context, *logging.DirectoryLogger, *gce.VM) {
+	t.Helper()
+	return commonSetupWithExtraCreateArgumentsAndMetadata(t, imageSpec, []string{"--scopes=cloud-platform"}, nil)
+}
+
+// setupOffGCPTangoVM sets up a GCE VM with no attached service account and no
+// OAuth scopes (--no-service-account, --no-scopes) to simulate an off-GCP host
+// where the collector must authenticate using X.509 Workload Identity
+// Federation (WIF) credentials instead of the GCE metadata server.
+func setupOffGCPTangoVM(t *testing.T, imageSpec string) (context.Context, *logging.DirectoryLogger, *gce.VM) {
+	t.Helper()
+	return commonSetupWithExtraCreateArgumentsAndMetadata(t, imageSpec, []string{"--no-service-account", "--no-scopes"}, nil)
+}
+
+func TestTangoSmoke(t *testing.T) {
+	t.Parallel()
+	s := tangoSettingsFromEnv(t)
+
+	gce.RunForEachImage(t, func(t *testing.T, imageSpec string) {
+		t.Parallel()
+		if s.offGCP && gce.IsWindows(imageSpec) {
+			t.Skip("Off-GCP mode does not support Windows yet")
+		}
+		setup := setupTangoVM
+		if s.offGCP {
+			setup = setupOffGCPTangoVM
+		}
+		ctx, dirLog, vm := setup(t, imageSpec)
+		logger := dirLog.ToMainLog()
+
+		logger.Printf("Installing otelcol-google with the extra config source %s", s.controlPlaneConfig())
+		if err := setupTangoCollector(ctx, logger, vm, s); err != nil {
+			t.Fatal(err)
+		}
+		collector, err := collectorID(ctx, logger, vm)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := waitForPolicySetActive(ctx, logger, vm, s, collector); err != nil {
+			t.Fatal(err)
+		}
+		// Logs written before the PolicySet is active pass through
+		// unfiltered, so they are only written now.
+		if err := uploadSampleLogs(ctx, logger, vm, s); err != nil {
+			t.Fatal(err)
+		}
+		if err := verifyFilteredLogs(ctx, logger, vm, s); err != nil {
+			t.Fatal(err)
+		}
+	})
+}

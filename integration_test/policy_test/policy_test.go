@@ -1364,6 +1364,57 @@ func TestPolicySetActiveSelfMetric(t *testing.T) {
 	}
 }
 
+// TestPolicySetActiveSelfMetric_NotEmittedWithoutProvider verifies
+// that when the collector is started with a file config only (without
+// googlecontrolplaneprovider), Tango self-o11y metrics (gcp.policy.set.active)
+// are not emitted even when internal collector telemetry metrics are enabled.
+func TestPolicySetActiveSelfMetric_NotEmittedWithoutProvider(t *testing.T) {
+	otelcolBin := resolveOtelcolBinary(t)
+	tempDir := t.TempDir()
+	selfMockSrv, selfExporterAddr := startMockOTLPServer(t)
+
+	cfg := fmt.Sprintf(`receivers:
+  nop/in:
+exporters:
+  nop/out:
+service:
+  telemetry:
+    logs:
+      processors: []
+    metrics:
+      readers:
+        - periodic:
+            interval: 100
+            timeout: 200
+            exporter:
+              otlp:
+                protocol: grpc
+                endpoint: http://%s
+                insecure: true
+  pipelines:
+    logs:
+      receivers: [nop/in]
+      exporters: [nop/out]
+`, selfExporterAddr)
+	cfgPath := filepath.Join(tempDir, "config.yaml")
+	if err := os.WriteFile(cfgPath, []byte(cfg), 0644); err != nil {
+		t.Fatalf("failed to write config.yaml: %v", err)
+	}
+
+	col := startCollectorWithURIs(t, otelcolBin, fmt.Sprintf("file:%s", filepath.ToSlash(cfgPath)))
+
+	gotMetrics := waitForMetrics(selfMockSrv, 5*time.Second)
+
+	col.shutdown(t)
+
+	if len(gotMetrics) == 0 {
+		t.Fatalf("waitForMetrics() = empty, want standard internal collector metrics\ncollector logs:\n%s", col.logs())
+	}
+	if count, found := gotMetrics[googlecontrolplaneextension.MetricPolicySetActive]; found {
+		t.Errorf("got %d occurrences of %q, want 0 (gotMetrics: %v)\ncollector logs:\n%s", count, googlecontrolplaneextension.MetricPolicySetActive, gotMetrics, col.logs())
+	}
+}
+
 func stagePoliciesDir(t *testing.T, caseName string) (string, string) {
 	t.Helper()
 	tempDir := t.TempDir()
@@ -1372,15 +1423,41 @@ func stagePoliciesDir(t *testing.T, caseName string) (string, string) {
 	return tempDir, policiesDir
 }
 
-func waitForPolicySetActive(selfMockSrv *mockOTLPServer, timeout time.Duration) (int64, map[string]string, bool) {
-	deadline := time.Now().Add(timeout)
+// waitCondition reports whether fn eventually returned true,
+// checking immediately and then every checkEvery amount,
+// until waitFor has elapsed, at which point it returns false.
+// Adapted from https://github.com/golang/net/blob/v0.49.0/http2/http2_test.go#L115-L127.
+func waitCondition(waitFor, checkEvery time.Duration, fn func() bool) bool {
+	deadline := time.Now().Add(waitFor)
 	for time.Now().Before(deadline) {
-		if value, attrs, found := latestPolicySetActive(selfMockSrv.CollectedMetrics()); found {
-			return value, attrs, true
+		if fn() {
+			return true
 		}
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(checkEvery)
 	}
-	return 0, nil, false
+	return false
+}
+
+func waitForMetrics(srv *mockOTLPServer, timeout time.Duration) map[string]int {
+	var got map[string]int
+	waitCondition(timeout, 50*time.Millisecond, func() bool {
+		got = collectMetricNames(srv.CollectedMetrics())
+		return len(got) > 0
+	})
+	return got
+}
+
+func waitForPolicySetActive(selfMockSrv *mockOTLPServer, timeout time.Duration) (int64, map[string]string, bool) {
+	var (
+		value int64
+		attrs map[string]string
+		found bool
+	)
+	waitCondition(timeout, 50*time.Millisecond, func() bool {
+		value, attrs, found = latestPolicySetActive(selfMockSrv.CollectedMetrics())
+		return found
+	})
+	return value, attrs, found
 }
 
 // latestPolicySetActive returns the most recent gcp.policy.set.active data

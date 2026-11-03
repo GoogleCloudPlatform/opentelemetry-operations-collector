@@ -262,6 +262,22 @@ func (p *SelfMetricsPolicy) Evaluate(ctx context.Context) (*confmap.Conf, error)
 					`set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil`,
 				},
 			},
+			// Cloud Monitoring's OTLP ingestion (telemetry.googleapis.com) maps
+			// metrics onto the prometheus_target Monitored Resource using only
+			// standard target keys (instance, job, location, cluster, namespace)
+			// and drops other OTLP resource attributes from individual metric
+			// time series (retaining them only on target_info/gauge). Promoting
+			// gcp.fleet_id, service.instance.id, and service.version onto each
+			// datapoint preserves them as directly queryable metric labels on
+			// gcp.policy.set.active/gauge and all other collector self-metrics.
+			{
+				"context": "datapoint",
+				"statements": []string{
+					`set(attributes["gcp.fleet_id"], resource.attributes["gcp.fleet_id"]) where resource.attributes["gcp.fleet_id"] != nil`,
+					`set(attributes["service.instance.id"], resource.attributes["service.instance.id"]) where resource.attributes["service.instance.id"] != nil`,
+					`set(attributes["service.version"], resource.attributes["service.version"]) where resource.attributes["service.version"] != nil`,
+				},
+			},
 		},
 	}
 

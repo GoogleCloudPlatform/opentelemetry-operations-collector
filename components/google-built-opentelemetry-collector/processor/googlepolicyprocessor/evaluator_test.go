@@ -1613,10 +1613,10 @@ func TestEvaluator_LogTransformPass2Interaction_KeptByAttributeThenRemovedAndDro
 			Removal: &policyv1alpha1.LogRemoveAction{
 				Removals: []*policyv1alpha1.LogRemoval{
 					{Target: &policyv1alpha1.LogAttributeSelector{
-					Target: &policyv1alpha1.LogAttributeSelector_LogAttributePath{
-						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"auth.exempt"}}},
-				},
-			},
+						Target: &policyv1alpha1.LogAttributeSelector_LogAttributePath{
+							LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"auth.exempt"}}},
+					},
+					},
 				},
 			},
 		},
@@ -1663,10 +1663,10 @@ func TestEvaluator_LogTransformNonMatchingMatcherLeavesTargetIntact(t *testing.T
 			Removal: &policyv1alpha1.LogRemoveAction{
 				Removals: []*policyv1alpha1.LogRemoval{
 					{Target: &policyv1alpha1.LogAttributeSelector{
-					Target: &policyv1alpha1.LogAttributeSelector_LogAttributePath{
-						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"temp.secret"}}},
-				},
-			},
+						Target: &policyv1alpha1.LogAttributeSelector_LogAttributePath{
+							LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"temp.secret"}}},
+					},
+					},
 				},
 			},
 		},
@@ -1716,8 +1716,8 @@ func TestEvaluator_LogTransformStageOrdering(t *testing.T) {
 			Renaming: &policyv1alpha1.LogRenameAction{
 				Renamings: []*policyv1alpha1.LogRenaming{
 					{
-						Source: logAttr("legacy_user"),
-						Target: logAttr("user_name"),
+						Source:        logAttr("legacy_user"),
+						Target:        logAttr("user_name"),
 						UpsertEnabled: proto.Bool(false),
 					},
 				},
@@ -1745,8 +1745,8 @@ func TestEvaluator_LogTransformStageOrdering(t *testing.T) {
 			Addition: &policyv1alpha1.LogAddAction{
 				Additions: []*policyv1alpha1.LogAddition{
 					{
-						Target: logTarget("user_name"),
-						Value: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "guest"}},
+						Target:        logTarget("user_name"),
+						Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "guest"}},
 						UpsertEnabled: proto.Bool(false),
 					},
 				},
@@ -1762,8 +1762,8 @@ func TestEvaluator_LogTransformStageOrdering(t *testing.T) {
 			Addition: &policyv1alpha1.LogAddAction{
 				Additions: []*policyv1alpha1.LogAddition{
 					{
-						Target: logTarget("stage_winner"),
-						Value: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "first"}},
+						Target:        logTarget("stage_winner"),
+						Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "first"}},
 						UpsertEnabled: proto.Bool(false),
 					},
 				},
@@ -1776,8 +1776,8 @@ func TestEvaluator_LogTransformStageOrdering(t *testing.T) {
 			Addition: &policyv1alpha1.LogAddAction{
 				Additions: []*policyv1alpha1.LogAddition{
 					{
-						Target: logTarget("stage_winner"),
-						Value: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "second"}},
+						Target:        logTarget("stage_winner"),
+						Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "second"}},
 						UpsertEnabled: proto.Bool(false),
 					},
 				},
@@ -1793,8 +1793,8 @@ func TestEvaluator_LogTransformStageOrdering(t *testing.T) {
 			Addition: &policyv1alpha1.LogAddAction{
 				Additions: []*policyv1alpha1.LogAddition{
 					{
-						Target: logTarget("temp_flag"),
-						Value: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "to-be-removed"}},
+						Target:        logTarget("temp_flag"),
+						Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "to-be-removed"}},
 						UpsertEnabled: proto.Bool(true),
 					},
 				},
@@ -1811,7 +1811,7 @@ func TestEvaluator_LogTransformStageOrdering(t *testing.T) {
 			Redaction: &policyv1alpha1.LogRedactAction{
 				Redactions: []*policyv1alpha1.LogRedaction{
 					{
-						Target: logTarget("user_name"),
+						Target:      logTarget("user_name"),
 						Replacement: proto.String("[REDACTED_USER]"),
 					},
 				},

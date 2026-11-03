@@ -270,6 +270,15 @@ func (p *SelfMetricsPolicy) Evaluate(ctx context.Context) (*confmap.Conf, error)
 			// gcp.fleet_id, service.instance.id, and service.version onto each
 			// datapoint preserves them as directly queryable metric labels on
 			// gcp.policy.set.active/gauge and all other collector self-metrics.
+			// Note that service.instance.id is promoted even though ingestion
+			// also maps it to prometheus_target.instance, because the Management
+			// Plane keys on the service_instance_id metric label as the collector
+			// ID.
+			//
+			// The `where ... != nil` guards are load-bearing: on ottl >= v0.162.0,
+			// set() writes an empty value (ValueTypeEmpty) when the source resolves
+			// to nil rather than skipping, which would stamp e.g. service.version=""
+			// on every datapoint when the resource attribute is absent.
 			{
 				"context": "datapoint",
 				"statements": []string{

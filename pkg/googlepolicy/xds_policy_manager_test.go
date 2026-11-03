@@ -292,10 +292,11 @@ func TestNewXDSPolicyManager_ProjectAndRegionResolution(t *testing.T) {
 	})
 
 	t.Run("full fleet resource URI with numeric project prefers alphanumeric projectID when available", func(t *testing.T) {
-		// Management Plane self-metric verification and Cloud Monitoring queries
-		// expect the canonical alphanumeric project ID in gcp.fleet_id
-		// ("projects/{project_id}/locations/{location}/fleets/{fleet_id}"), while
-		// the xdstp:// subscription continues to use the numeric project number.
+		// Cloud Monitoring self-metric queries and Management Plane rollup queries
+		// key on the alphanumeric project ID in gcp.fleet_id
+		// ("projects/{project_id}/locations/{location}/fleets/{fleet_id}") for
+		// query ergonomics, while the xdstp:// subscription continues to use the
+		// numeric project number.
 		clearXDSResolutionEnv(t)
 		withGCEMetadata(t, fakeGCEMetadata{
 			onGCE:            true,
@@ -361,6 +362,40 @@ func TestParseFleetResourceName(t *testing.T) {
 		_, _, _, ok := ParseFleetResourceName(invalid)
 		assert.False(t, ok, "expected %q to fail ParseFleetResourceName", invalid)
 	}
+}
+
+func TestResolveFleetAndProject(t *testing.T) {
+	mustParse := func(rawURI string) *url.URL {
+		t.Helper()
+		u, err := url.Parse(rawURI)
+		require.NoError(t, err)
+		return u
+	}
+
+	t.Run("short fleet ID formatted with project and region", func(t *testing.T) {
+		clearXDSResolutionEnv(t)
+		t.Setenv("CLOUD_REGION", "us-east1")
+		fleetID, projectID := ResolveFleetAndProject("my-fleet", "my-project", nil)
+		assert.Equal(t, "projects/my-project/locations/us-east1/fleets/my-fleet", fleetID)
+		assert.Equal(t, "my-project", projectID)
+	})
+
+	t.Run("malformed slash-delimited fleet name is not wrapped into full resource name", func(t *testing.T) {
+		clearXDSResolutionEnv(t)
+		uri := mustParse("file:///tmp/policies?project=my-project")
+		fleetID, projectID := ResolveFleetAndProject("projects/only-two-parts", "", uri)
+		assert.Equal(t, "projects/only-two-parts", fleetID)
+		assert.Equal(t, "my-project", projectID)
+	})
+
+	t.Run("GOOGLE_CLOUD_PROJECT preferred over numeric project query param for fleet name", func(t *testing.T) {
+		clearXDSResolutionEnv(t)
+		t.Setenv("GOOGLE_CLOUD_PROJECT", "env-project")
+		uri := mustParse("file:///tmp/policies?project=123456789")
+		fleetID, projectID := ResolveFleetAndProject("my-fleet", "", uri)
+		assert.Equal(t, "projects/env-project/locations/asia-east1/fleets/my-fleet", fleetID)
+		assert.Equal(t, "env-project", projectID)
+	})
 }
 
 func TestExtractPolicyProtos_TelemetryCollector(t *testing.T) {

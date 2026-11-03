@@ -412,11 +412,12 @@ func NewXDSPolicyManager(logger *zap.Logger, uri *url.URL, collectorID string) (
 	}
 
 	// Prefer the alphanumeric project ID over the numeric project number when
-	// formatting the full Fleet resource name for gcp.fleet_id. Management Plane
-	// fleet identity and Cloud Monitoring self-metric queries key on the
-	// canonical project ID form ("projects/{project_id}/locations/{location}/fleets/{fleet_id}"),
-	// whereas the xdstp:// control-plane resource subscription below uses
-	// projectNumber.
+	// formatting the full Fleet resource name for gcp.fleet_id. While the
+	// v1main Fleet proto and the xdstp:// control-plane resource subscription
+	// below use projectNumber, Cloud Monitoring self-metric queries and
+	// Management Plane rollup queries key on the project-ID form
+	// ("projects/{project_id}/locations/{location}/fleets/{fleet_id}") for
+	// query ergonomics and dashboard readability.
 	projectForFleet := projectID
 	if projectForFleet == "" {
 		projectForFleet = projectNumber
@@ -534,10 +535,19 @@ func ResolveFleetAndProject(rawFleet, rawProjectID string, uri *url.URL) (fleetI
 		return fleetID, projectID
 	}
 
-	if fleetID == "" {
-		return "", projectID
+	// If fleetID is empty or already contains a "/" (meaning it is a malformed
+	// resource name that failed ParseFleetResourceName above), return it
+	// unchanged rather than wrapping a slash-delimited string inside
+	// FormatFleetResourceName.
+	if fleetID == "" || strings.Contains(fleetID, "/") {
+		return fleetID, projectID
 	}
 
+	// Precedence for the project segment of the formatted Fleet resource name:
+	// 1. Alphanumeric project ID from rawProjectID or non-numeric ?project=
+	// 2. $GOOGLE_CLOUD_PROJECT (which also populates projectID when non-numeric)
+	// 3. Numeric ?project= (used for the fleet resource name when no alphanumeric
+	//    project ID is available, while keeping projectID unset).
 	projectForFleet := projectID
 	if projectForFleet == "" {
 		if envProj := os.Getenv(googleCloudProjectEnvVar); envProj != "" {

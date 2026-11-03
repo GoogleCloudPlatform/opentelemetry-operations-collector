@@ -65,6 +65,18 @@ only if they are deleted or a new project is used.
 The principal has `roles/logging.logWriter`, `roles/monitoring.metricWriter`,
 `roles/trafficdirector.client` and `roles/viewer` on `gboc-tango-testing`.
 
+The CA in the provider's trust store (`CN=gboc-tango-x509-ca`) and the workload
+certificate it signed (`CN=gboc-smoke-workload`, `leaf.pem` and `leaf.key`) are
+not checked in. Ask the test owner for them. `setup_policyset.sh` refuses to
+generate a new CA while the provider exists, because that would replace the
+trust store and invalidate the existing workload certificate.
+
+The fleet and PolicySet stay in `stackdriver-test-143416`: the staging Telemetry
+Management API cannot be shared outside the `google.com` organization, so it
+cannot be enabled in `gboc-tango-testing`. The off-GCP collector subscribes to
+the fleet by project number and sends its telemetry to `gboc-tango-testing`,
+where the principal can write.
+
 ## Recreating the resources
 
 All resources above are pre-created. [`setup_policyset.sh`](setup_policyset.sh)
@@ -143,3 +155,31 @@ env PROJECT=stackdriver-test-143416 ZONES=asia-east1-a IMAGE_SPECS=debian-cloud:
   TANGO_EXPECTED_REVISION=75cbca3b \
   go test -tags integration_test -run TestTangoSmoke -v -timeout 60m ./...
 ```
+
+### Off-GCP mode
+
+With `TANGO_OFF_GCP=true`, the test creates the VM with no service account and
+no OAuth scopes, disables the GCE metadata server for the collector, and
+authenticates with the X.509 WIF credentials above. The VM has no credentials
+to read GCS, so the test downloads the package itself and streams it and all
+other files to the VM over SSH. Off-GCP mode is Linux only for now.
+
+```
+cd integration_test/smoke_test
+env PROJECT=gboc-tango-testing ZONES=asia-east1-a IMAGE_SPECS=debian-cloud:debian-12 \
+  KOKORO_BUILD_ID=local-$(date +%s) TRANSFERS_BUCKET=gboc-tango-testing-smoke \
+  _BUILD_ARTIFACTS_PACKAGE_GCS=gs://gboc-tango-testing-smoke/<package-dir> \
+  TANGO_CP_ENDPOINT=staging-telemetrydirector.asia-east1.rep.sandbox.googleapis.com:443 \
+  TANGO_EXPECTED_REVISION=75cbca3b \
+  TANGO_OFF_GCP=true TANGO_PROJECT=gboc-tango-testing TANGO_PROJECT_NUMBER=228437877067 \
+  TANGO_WIF_DIR=<directory holding leaf.pem and leaf.key> \
+  go test -tags integration_test -run TestTangoSmoke -v -timeout 60m ./...
+```
+
+The package must also include `open-telemetry/opentelemetry-collector-contrib#52488`
+(X.509 WIF support in `googleclientauthextension`). As of this change, the
+test only passes off GCP with two more collector fixes that are not merged yet:
+the xDS node ID must name the fleet's project (Telemetry Director otherwise
+authorizes federated credentials against the bare collector ID), and the
+collector's self metrics need a `cloud.region` when GCE resource detection is
+unavailable.

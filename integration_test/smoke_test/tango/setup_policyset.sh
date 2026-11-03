@@ -105,6 +105,14 @@ if [[ -n "${WIF_PROJECT_ID}" ]]; then
     --project="${WIF_PROJECT_ID}"
 
   mkdir -p "${WIF_OUT_DIR}"
+  if [[ ! -f "${WIF_OUT_DIR}/ca.pem" ]] && gcloud iam workload-identity-pools providers describe "${WIF_PROVIDER_ID}" \
+    --workload-identity-pool="${WIF_POOL_ID}" --project="${WIF_PROJECT_ID}" --location=global >/dev/null 2>&1; then
+    # Generating a new CA here would replace the provider's trust store below
+    # and invalidate every workload certificate issued by the existing CA.
+    echo "ERROR: ${WIF_PROVIDER_ID} already exists but ${WIF_OUT_DIR}/ca.pem does not." >&2
+    echo "Point WIF_OUT_DIR at the directory holding the existing CA (see README.md), or delete the provider first." >&2
+    exit 1
+  fi
   if [[ ! -f "${WIF_OUT_DIR}/ca.pem" ]]; then
     echo "==> Generating X.509 CA and workload leaf certificate in ${WIF_OUT_DIR}"
     openssl req -x509 -newkey rsa:2048 -nodes \

@@ -452,8 +452,10 @@ func TestRetrieve_ActivePolicySetWithCustomSelfMetrics(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, conf.IsSet("receivers::otlp/custom_self_metrics"))
 	assert.False(t, conf.IsSet("receivers::otlp/default_self_metrics"))
-	assert.Contains(t, conf.Get("service::pipelines::logs/custom_self_metrics::processors"), "googlepolicy")
-	assert.Contains(t, conf.Get("service::pipelines::metrics/custom_self_metrics::processors"), "googlepolicy")
+	assert.NotContains(t, conf.Get("service::pipelines::logs/custom_self_metrics::processors"), "googlepolicy")
+	assert.NotContains(t, conf.Get("service::pipelines::metrics/custom_self_metrics::processors"), "googlepolicy")
+	assert.Contains(t, conf.Get("service::pipelines::logs/custom_self_metrics::processors"), "queue_batch/default_gcp_destination_batch_logs")
+	assert.Contains(t, conf.Get("service::pipelines::metrics/custom_self_metrics::processors"), "queue_batch/default_gcp_destination_batch_metrics")
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
@@ -488,10 +490,12 @@ func TestRetrieve_ActivePolicySetWithOtherSource(t *testing.T) {
 	assert.Contains(t, conf.Get("service::pipelines::logs/googlecontrolplane::processors"), "googlepolicy")
 	assert.Contains(t, conf.Get("service::pipelines::logs/googlecontrolplane::receivers"), "otlp/other_source")
 	assert.Contains(t, conf.Get("service::pipelines::logs/googlecontrolplane::receivers"), "nop/googlecontrolplane")
-	// Built-in self metrics also includes googlepolicy processor
+	// Built-in self metrics must bypass googlepolicy processor
 	assert.True(t, conf.IsSet("receivers::otlp/default_self_metrics"))
-	assert.Contains(t, conf.Get("service::pipelines::logs/default_self_metrics::processors"), "googlepolicy")
-	assert.Contains(t, conf.Get("service::pipelines::metrics/default_self_metrics::processors"), "googlepolicy")
+	assert.NotContains(t, conf.Get("service::pipelines::logs/default_self_metrics::processors"), "googlepolicy")
+	assert.NotContains(t, conf.Get("service::pipelines::metrics/default_self_metrics::processors"), "googlepolicy")
+	assert.Contains(t, conf.Get("service::pipelines::logs/default_self_metrics::processors"), "queue_batch/default_gcp_destination_batch_logs")
+	assert.Contains(t, conf.Get("service::pipelines::metrics/default_self_metrics::processors"), "queue_batch/default_gcp_destination_batch_metrics")
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }

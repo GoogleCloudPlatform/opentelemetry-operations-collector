@@ -169,7 +169,45 @@ func (p *GCPDestinationPolicy) Evaluate(_ context.Context) (*confmap.Conf, error
 		return nil, fmt.Errorf("policy implementation failure for %s: disabling exporter sending queue got error '%w'", p.PolicyName(), err)
 	}
 
+	// confmap marshals the queue and batch sizers as empty maps: SizerType
+	// implements TextMarshaler on a pointer receiver and the marshaled structs
+	// are not addressable, so the collector would fall back to the factory
+	// default sizer on load. Write the sizer names explicitly.
+	for id, cfg := range map[component.ID]*queuebatchprocessor.Config{
+		queueBatchLogsID:    queueBatchLog,
+		queueBatchMetricsID: queueBatchMetric,
+		queueBatchTracesID:  queueBatchTrace,
+	} {
+		sizers, err := queueBatchSizers(cfg)
+		if err != nil {
+			return nil, fmt.Errorf("policy implementation failure for %s: marshaling sizers of %s got error '%w'", p.PolicyName(), id, err)
+		}
+		if err := cm.Merge(confmap.NewFromStringMap(map[string]any{
+			"processors": map[string]any{id.String(): sizers},
+		})); err != nil {
+			return nil, fmt.Errorf("policy implementation failure for %s: setting sizers of %s got error '%w'", p.PolicyName(), id, err)
+		}
+	}
+
 	return cm, nil
+}
+
+// queueBatchSizers returns the queue and batch sizer names of cfg in the shape
+// of the generated processor config.
+func queueBatchSizers(cfg *queuebatchprocessor.Config) (map[string]any, error) {
+	queueSizer, err := cfg.Sizer.MarshalText()
+	if err != nil {
+		return nil, err
+	}
+	sizers := map[string]any{"sizer": string(queueSizer)}
+	if cfg.Batch.HasValue() {
+		batchSizer, err := cfg.Batch.Get().Sizer.MarshalText()
+		if err != nil {
+			return nil, err
+		}
+		sizers["batch"] = map[string]any{"sizer": string(batchSizer)}
+	}
+	return sizers, nil
 }
 
 func (p *GCPDestinationPolicy) Validate() error {

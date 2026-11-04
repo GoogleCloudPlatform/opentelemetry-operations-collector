@@ -874,7 +874,7 @@ func stageEnableSelfLogsConfig(t *testing.T, tempDir, selfReceiverAddr string) s
       level: info
       processors:
         - batch:
-            schedule_delay: 50
+            schedule_delay: 250
             export_timeout: 200
             exporter:
               otlp:

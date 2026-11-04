@@ -233,10 +233,15 @@ type xdsPolicyManager struct {
 	// Connection settings, resolved once in the constructor and never written
 	// again. Being immutable, they are read from the stream goroutine without
 	// holding mu.
-	uri           *url.URL
-	serverAddr    string
-	collectorID   string
-	fleetID       string
+	uri         *url.URL
+	serverAddr  string
+	collectorID string
+	fleetID     string
+	// fleetName is the full Fleet resource name
+	// ("projects/{project}/locations/{location}/fleets/{fleet_id}") the
+	// collector reports itself under on its own telemetry. The xDS node keeps
+	// using the short fleetID.
+	fleetName     string
 	projectID     string
 	projectNumber string
 	region        string
@@ -324,8 +329,8 @@ type xdsPolicyManager struct {
 //	                 short fleet ID ("my-fleet") or a full Fleet resource name
 //	                 ("projects/{project}/locations/{location}/fleets/{fleet_id}").
 //	                 The short ID names the fleet in the subscribed resource (see
-//	                 xdstpResourceName). The full name is sent as this node's xDS
-//	                 cluster and exposed via FleetID() for the provider to
+//	                 xdstpResourceName) and is sent as this node's xDS cluster.
+//	                 The full name is exposed via FleetID() for the provider to
 //	                 attribute the collector's own telemetry: a full name is used
 //	                 verbatim, and its project and location take precedence over
 //	                 the `project`, `project_number` and `region` parameters and
@@ -427,8 +432,9 @@ func NewXDSPolicyManager(logger *zap.Logger, uri *url.URL, collectorID string) (
 	// written. The number rather than the ID because it is the one project
 	// field always resolved here; the readable ID is still reported as
 	// gcp.project_id.
+	fleetName := fleetID
 	if !fullName {
-		fleetID = FormatFleetResourceName(projectNumber, region, shortFleetID)
+		fleetName = FormatFleetResourceName(projectNumber, region, shortFleetID)
 	}
 
 	if logger == nil {
@@ -440,7 +446,8 @@ func NewXDSPolicyManager(logger *zap.Logger, uri *url.URL, collectorID string) (
 		uri:                uri,
 		serverAddr:         serverAddr,
 		collectorID:        collectorID,
-		fleetID:            fleetID,
+		fleetID:            shortFleetID,
+		fleetName:          fleetName,
 		projectID:          projectID,
 		projectNumber:      projectNumber,
 		region:             region,
@@ -775,7 +782,7 @@ func (m *xdsPolicyManager) URI() *url.URL {
 // ("projects/{project}/locations/{location}/fleets/{fleet_id}") this
 // collector reports itself under.
 func (m *xdsPolicyManager) FleetID() string {
-	return m.fleetID
+	return m.fleetName
 }
 
 // ProjectID returns the resolved alphanumeric GCP project ID, or "" if only a

@@ -27,6 +27,7 @@ import (
 	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/logtransform"
 	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/metricfilter"
 	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/tracefilter"
+	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/tracesampling"
 )
 
 var defaultCapabilities = consumer.Capabilities{MutatesData: true}

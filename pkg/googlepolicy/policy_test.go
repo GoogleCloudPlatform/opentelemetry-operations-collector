@@ -537,8 +537,8 @@ func TestProtoDriver_ValidationClassificationAndPolicyClass(t *testing.T) {
 
 	t.Run("LoadPolicy protojson unmarshal error wraps ErrPolicyFailedToLoad", func(t *testing.T) {
 		_, err := LoadPolicy("test_proto_log_filter", map[string]any{
-			"type":    "test_proto_log_filter",
-			"id":      "bad-type",
+			"type":     "test_proto_log_filter",
+			"id":       "bad-type",
 			"matchers": "not-an-array",
 		})
 		require.Error(t, err)

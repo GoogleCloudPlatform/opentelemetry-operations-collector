@@ -15,7 +15,7 @@
 //go:build integration_test
 
 /*
-Smoke test for Tango-GBOC: the packaged otelcol-google service with an
+Smoke test for GBOC Control Plane: the packaged otelcol-google service with an
 additional googlecontrolplane config source, talking to a live Control Plane
 and Data Plane.
 
@@ -34,18 +34,18 @@ declared locally because the Control Plane does not yet translate source
 policies into collector config.
 
 The test assumes a long-lived fleet and PolicySet have been pre-provisioned in
-the test project and rolled out (see tango/README.md). It never calls the
+the test project and rolled out (see controlplane/README.md). It never calls the
 Telemetry Management API itself.
 
 Environment variables (in addition to those required by TestSmoke):
-TANGO_CP_ENDPOINT: host:port of the xDS Control Plane, e.g.
+CONTROL_PLANE_ENDPOINT (or TANGO_CP_ENDPOINT): host:port of the xDS Control Plane, e.g.
   staging-telemetrydirector.asia-east1.rep.sandbox.googleapis.com:443.
   The test is skipped when unset.
-TANGO_EXPECTED_REVISION: revision ID of the pre-provisioned PolicySet that is
+CONTROL_PLANE_EXPECTED_REVISION (or TANGO_EXPECTED_REVISION): revision ID of the pre-provisioned PolicySet that is
   rolled out to the fleet (e.g. 75cbca3b). Required.
-TANGO_FLEET_ID: fleet the collector subscribes to (default gboc-smoke-fleet).
-TANGO_POLICY_SET_ID: pre-created PolicySet ID (default gboc-smoke-ps).
-TANGO_REGION: region of the fleet and Control Plane endpoint (default
+CONTROL_PLANE_FLEET_ID (or TANGO_FLEET_ID): fleet the collector subscribes to (default gboc-smoke-fleet).
+CONTROL_PLANE_POLICY_SET_ID (or TANGO_POLICY_SET_ID): pre-created PolicySet ID (default gboc-smoke-ps).
+CONTROL_PLANE_REGION (or TANGO_REGION): region of the fleet and Control Plane endpoint (default
   asia-east1). Passed explicitly so it does not depend on the VM's zone.
 */
 
@@ -84,9 +84,9 @@ const (
 	// deriving the collector ID (service.instance.id) from the hostname.
 	collectorUUIDNamespace = "5AFFCE1A-3D0A-4220-8EA1-7D64A842BEB4"
 
-	// tangoDropInPath is a systemd drop-in that keeps the packaged service's
+	// controlPlaneDropInPath is a systemd drop-in that keeps the packaged service's
 	// command line and appends the googlecontrolplane config source to it.
-	tangoDropInPath = "/etc/systemd/system/otelcol-google.service.d/tango.conf"
+	controlPlaneDropInPath = "/etc/systemd/system/otelcol-google.service.d/controlplane.conf"
 
 	metricWindow = 30 * time.Minute
 	// queryBackoffDuration mirrors gce's backoff between Monitoring queries.
@@ -95,20 +95,20 @@ const (
 	// expected revision once the series exists (about 3 minutes plus query time).
 	queryMaxAttempts = 20
 
-	// tangoServiceRegistryKey holds the Windows service's command line
+	// controlPlaneServiceRegistryKey holds the Windows service's command line
 	// (ImagePath), which the test extends with the googlecontrolplane config
-	// source, like tangoDropInPath does on Linux.
-	tangoServiceRegistryKey = `HKLM:\SYSTEM\CurrentControlSet\Services\otelcol-google`
+	// source, like controlPlaneDropInPath does on Linux.
+	controlPlaneServiceRegistryKey = `HKLM:\SYSTEM\CurrentControlSet\Services\otelcol-google`
 
-	// tangoLogDirLinux and tangoLogDirWindows hold the file the test uploads
-	// the sample logs to (see tangoLogPath), which the filelog receiver
-	// declared in tangoCollectorConfig tails (see tangoLogGlob). On Linux the
+	// smokeLogDirLinux and smokeLogDirWindows hold the file the test uploads
+	// the sample logs to (see smokeLogPath), which the filelog receiver
+	// declared in controlPlaneCollectorConfig tails (see smokeLogGlob). On Linux the
 	// glob equals the PolicySet's fileLogSourcePolicy includedPaths (see
-	// tango/policyset.json).
-	tangoLogDirLinux   = "/var/log/gboc-smoke"
-	tangoLogDirWindows = `C:\gboc-smoke`
-	// sampleLogsFile holds the plain-text lines uploaded to tangoLogPath.
-	sampleLogsFile = "tango/sample_logs.log"
+	// controlplane/policyset.json).
+	smokeLogDirLinux   = "/var/log/gboc-smoke"
+	smokeLogDirWindows = `C:\gboc-smoke`
+	// sampleLogsFile holds the plain-text lines uploaded to smokeLogPath.
+	sampleLogsFile = "controlplane/sample_logs.log"
 	// keptMessage is the sample log that the PolicySet keeps.
 	keptMessage = "gboc-smoke=keep"
 	logWindow   = 30 * time.Minute
@@ -122,31 +122,31 @@ var droppedMessages = []string{
 	"smoke-test=other",
 }
 
-// tangoLogDir returns the directory holding the sample log file on imageSpec.
-func tangoLogDir(imageSpec string) string {
+// smokeLogDir returns the directory holding the sample log file on imageSpec.
+func smokeLogDir(imageSpec string) string {
 	if gce.IsWindows(imageSpec) {
-		return tangoLogDirWindows
+		return smokeLogDirWindows
 	}
-	return tangoLogDirLinux
+	return smokeLogDirLinux
 }
 
-// tangoLogPath returns the file the test uploads the sample logs to, only after
-// the PolicySet is active. It matches tangoLogGlob.
-func tangoLogPath(imageSpec string) string {
+// smokeLogPath returns the file the test uploads the sample logs to, only after
+// the PolicySet is active. It matches smokeLogGlob.
+func smokeLogPath(imageSpec string) string {
 	if gce.IsWindows(imageSpec) {
-		return tangoLogDirWindows + `\test.log`
+		return smokeLogDirWindows + `\test.log`
 	}
-	return tangoLogDirLinux + "/test.log"
+	return smokeLogDirLinux + "/test.log"
 }
 
-// tangoLogGlob returns the path tailed by the filelog receiver declared in
-// tangoCollectorConfig. Forward slashes also work on Windows and need no
+// smokeLogGlob returns the path tailed by the filelog receiver declared in
+// controlPlaneCollectorConfig. Forward slashes also work on Windows and need no
 // escaping in YAML.
-func tangoLogGlob(imageSpec string) string {
-	return strings.ReplaceAll(tangoLogDir(imageSpec), `\`, "/") + "/*.log"
+func smokeLogGlob(imageSpec string) string {
+	return strings.ReplaceAll(smokeLogDir(imageSpec), `\`, "/") + "/*.log"
 }
 
-// tangoCollectorConfig returns the config.yaml that replaces the packaged one.
+// controlPlaneCollectorConfig returns the config.yaml that replaces the packaged one.
 // It is merged with the config from the googlecontrolplane config source.
 //
 // The Control Plane does not yet translate source policies into collector
@@ -159,17 +159,17 @@ func tangoLogGlob(imageSpec string) string {
 // and the exporter are the fixed-name components that the googlecontrolplane
 // config source always generates; the exporter sends to
 // telemetry.googleapis.com.
-func tangoCollectorConfig(imageSpec string) string {
+func controlPlaneCollectorConfig(imageSpec string) string {
 	return `receivers:
-  filelog/tango_smoke:
-    include: ['` + tangoLogGlob(imageSpec) + `']
+  filelog/controlplane_smoke:
+    include: ['` + smokeLogGlob(imageSpec) + `']
     start_at: beginning
 processors:
   googlepolicy:
 service:
   pipelines:
-    logs/tango_smoke:
-      receivers: [filelog/tango_smoke]
+    logs/controlplane_smoke:
+      receivers: [filelog/controlplane_smoke]
       processors:
         - resourcedetection/googlecontrolplane
         - transform/googlecontrolplane
@@ -179,8 +179,8 @@ service:
 `
 }
 
-// tangoSettings holds the Tango-specific environment for the test.
-type tangoSettings struct {
+// controlPlaneSettings holds the Control Plane specific environment for the test.
+type controlPlaneSettings struct {
 	cpEndpoint       string
 	expectedRevision string
 	fleetID          string
@@ -188,20 +188,20 @@ type tangoSettings struct {
 	region           string
 }
 
-func tangoSettingsFromEnv(t *testing.T) tangoSettings {
+func controlPlaneSettingsFromEnv(t *testing.T) controlPlaneSettings {
 	t.Helper()
-	s := tangoSettings{
-		cpEndpoint:       os.Getenv("TANGO_CP_ENDPOINT"),
-		expectedRevision: os.Getenv("TANGO_EXPECTED_REVISION"),
-		fleetID:          envOrDefault("TANGO_FLEET_ID", "gboc-smoke-fleet"),
-		policySetID:      envOrDefault("TANGO_POLICY_SET_ID", "gboc-smoke-ps"),
-		region:           envOrDefault("TANGO_REGION", "asia-east1"),
+	s := controlPlaneSettings{
+		cpEndpoint:       envOrDefault("CONTROL_PLANE_ENDPOINT", os.Getenv("TANGO_CP_ENDPOINT")),
+		expectedRevision: envOrDefault("CONTROL_PLANE_EXPECTED_REVISION", os.Getenv("TANGO_EXPECTED_REVISION")),
+		fleetID:          envOrDefault("CONTROL_PLANE_FLEET_ID", envOrDefault("TANGO_FLEET_ID", "gboc-smoke-fleet")),
+		policySetID:      envOrDefault("CONTROL_PLANE_POLICY_SET_ID", envOrDefault("TANGO_POLICY_SET_ID", "gboc-smoke-ps")),
+		region:           envOrDefault("CONTROL_PLANE_REGION", envOrDefault("TANGO_REGION", "asia-east1")),
 	}
 	if s.cpEndpoint == "" {
-		t.Skip("TANGO_CP_ENDPOINT is not set; skipping Tango-GBOC smoke test")
+		t.Skip("CONTROL_PLANE_ENDPOINT (or TANGO_CP_ENDPOINT) is not set; skipping Control Plane smoke test")
 	}
 	if s.expectedRevision == "" {
-		t.Fatal("TANGO_EXPECTED_REVISION must be set to the revision rolled out to the fleet")
+		t.Fatal("CONTROL_PLANE_EXPECTED_REVISION (or TANGO_EXPECTED_REVISION) must be set to the revision rolled out to the fleet")
 	}
 	if testRunID == "" {
 		t.Fatal("This test does not support being run outside of Kokoro.")
@@ -219,14 +219,14 @@ func envOrDefault(key, def string) string {
 // controlPlaneConfig returns the additional --config flag that loads policies
 // from the Control Plane. Project and project number of the xDS subscription
 // are taken from the GCE metadata server.
-func (s tangoSettings) controlPlaneConfig() string {
+func (s controlPlaneSettings) controlPlaneConfig() string {
 	return fmt.Sprintf("--config=googlecontrolplane:xds://%s?gcp.fleet_id=%s&region=%s", s.cpEndpoint, s.fleetID, s.region)
 }
 
 // dropIn returns a systemd drop-in that reruns the packaged service's own
 // command line (the regular file config from OTELCOL_OPTIONS) with the
 // googlecontrolplane config source appended. Later sources win on conflicts.
-func (s tangoSettings) dropIn() string {
+func (s controlPlaneSettings) dropIn() string {
 	return fmt.Sprintf("[Service]\nExecStart=\nExecStart=/usr/bin/otelcol-google $OTELCOL_OPTIONS %s\n", s.controlPlaneConfig())
 }
 
@@ -235,17 +235,17 @@ func (s tangoSettings) dropIn() string {
 // keeping the packaged --config flag for the regular file config. Later
 // sources win on conflicts. It is the Windows counterpart of dropIn; the new
 // command line takes effect on the next service start.
-func (s tangoSettings) windowsImagePathScript() string {
+func (s controlPlaneSettings) windowsImagePathScript() string {
 	return fmt.Sprintf(`$ErrorActionPreference = 'Stop'
 $key = '%s'
 $imagePath = (Get-ItemProperty -Path $key).ImagePath + ' %s'
 Set-ItemProperty -Path $key -Name ImagePath -Value $imagePath
-(Get-ItemProperty -Path $key).ImagePath`, tangoServiceRegistryKey, s.controlPlaneConfig())
+(Get-ItemProperty -Path $key).ImagePath`, controlPlaneServiceRegistryKey, s.controlPlaneConfig())
 }
 
-// setupTangoCollector installs otelcol-google with tangoCollectorConfig and
+// setupControlPlaneCollector installs otelcol-google with controlPlaneCollectorConfig and
 // restarts it with the googlecontrolplane config source added.
-func setupTangoCollector(ctx context.Context, logger *log.Logger, vm *gce.VM, s tangoSettings) error {
+func setupControlPlaneCollector(ctx context.Context, logger *log.Logger, vm *gce.VM, s controlPlaneSettings) error {
 	if err := installOtelCollector(ctx, logger, vm, locationFromEnvVars()); err != nil {
 		return err
 	}
@@ -254,11 +254,11 @@ func setupTangoCollector(ctx context.Context, logger *log.Logger, vm *gce.VM, s 
 		time.Sleep(10 * time.Second)
 	}
 	configPath := collectorConfigPath(vm.ImageSpec)
-	if err := gce.UploadContent(ctx, logger, vm, strings.NewReader(tangoCollectorConfig(vm.ImageSpec)), configPath); err != nil {
+	if err := gce.UploadContent(ctx, logger, vm, strings.NewReader(controlPlaneCollectorConfig(vm.ImageSpec)), configPath); err != nil {
 		return fmt.Errorf("failed to upload %s: %v", configPath, err)
 	}
 	if gce.IsWindows(vm.ImageSpec) {
-		if _, err := gce.RunRemotely(ctx, logger, vm, fmt.Sprintf("New-Item -ItemType Directory -Force -Path '%s'", tangoLogDirWindows)); err != nil {
+		if _, err := gce.RunRemotely(ctx, logger, vm, fmt.Sprintf("New-Item -ItemType Directory -Force -Path '%s'", smokeLogDirWindows)); err != nil {
 			return err
 		}
 		if _, err := gce.RunScriptRemotely(ctx, logger, vm, s.windowsImagePathScript(), nil, nil); err != nil {
@@ -266,11 +266,11 @@ func setupTangoCollector(ctx context.Context, logger *log.Logger, vm *gce.VM, s 
 		}
 		return restartOtelCollector(ctx, logger, vm)
 	}
-	if _, err := gce.RunRemotely(ctx, logger, vm, fmt.Sprintf("sudo mkdir -p %s %s", path.Dir(tangoDropInPath), tangoLogDirLinux)); err != nil {
+	if _, err := gce.RunRemotely(ctx, logger, vm, fmt.Sprintf("sudo mkdir -p %s %s", path.Dir(controlPlaneDropInPath), smokeLogDirLinux)); err != nil {
 		return err
 	}
-	if err := gce.UploadContent(ctx, logger, vm, strings.NewReader(s.dropIn()), tangoDropInPath); err != nil {
-		return fmt.Errorf("failed to upload %s: %v", tangoDropInPath, err)
+	if err := gce.UploadContent(ctx, logger, vm, strings.NewReader(s.dropIn()), controlPlaneDropInPath); err != nil {
+		return fmt.Errorf("failed to upload %s: %v", controlPlaneDropInPath, err)
 	}
 	if _, err := gce.RunRemotely(ctx, logger, vm, "sudo systemctl daemon-reload"); err != nil {
 		return err
@@ -364,7 +364,7 @@ func waitForCollectorMetricSeries(ctx context.Context, logger *log.Logger, clien
 // series reports the expected PolicySet and revision. The series may exist
 // before the PolicySet is applied (reporting -1), so this keeps polling until
 // a matching point shows up.
-func waitForPolicySetActive(ctx context.Context, logger *log.Logger, vm *gce.VM, s tangoSettings, collector string) error {
+func waitForPolicySetActive(ctx context.Context, logger *log.Logger, vm *gce.VM, s controlPlaneSettings, collector string) error {
 	want, err := revisionValue(s.expectedRevision)
 	if err != nil {
 		return err
@@ -404,7 +404,7 @@ func waitForPolicySetActive(ctx context.Context, logger *log.Logger, vm *gce.VM,
 		policySetActiveMetric, collector, s.policySetID, want, s.expectedRevision, last, collectorLogsFile(vm.ImageSpec))
 }
 
-// uploadSampleLogs uploads sampleLogsFile to tangoLogPath, which the filelog
+// uploadSampleLogs uploads sampleLogsFile to smokeLogPath, which the filelog
 // receiver picks up on its next poll.
 func uploadSampleLogs(ctx context.Context, logger *log.Logger, vm *gce.VM) error {
 	f, err := os.Open(sampleLogsFile)
@@ -412,7 +412,7 @@ func uploadSampleLogs(ctx context.Context, logger *log.Logger, vm *gce.VM) error
 		return err
 	}
 	defer f.Close()
-	logPath := tangoLogPath(vm.ImageSpec)
+	logPath := smokeLogPath(vm.ImageSpec)
 	if err := gce.UploadContent(ctx, logger, vm, f, logPath); err != nil {
 		return fmt.Errorf("failed to upload %s to %s: %v", sampleLogsFile, logPath, err)
 	}
@@ -457,9 +457,9 @@ func verifyFilteredLogs(ctx context.Context, logger *log.Logger, vm *gce.VM) err
 	return nil
 }
 
-func TestTangoSmoke(t *testing.T) {
+func TestControlPlaneSmoke(t *testing.T) {
 	t.Parallel()
-	s := tangoSettingsFromEnv(t)
+	s := controlPlaneSettingsFromEnv(t)
 
 	gce.RunForEachImage(t, func(t *testing.T, imageSpec string) {
 		t.Parallel()
@@ -470,7 +470,7 @@ func TestTangoSmoke(t *testing.T) {
 		logger := dirLog.ToMainLog()
 
 		logger.Printf("Installing otelcol-google with the extra config source %s", s.controlPlaneConfig())
-		if err := setupTangoCollector(ctx, logger, vm, s); err != nil {
+		if err := setupControlPlaneCollector(ctx, logger, vm, s); err != nil {
 			t.Fatal(err)
 		}
 		collector, err := collectorID(ctx, logger, vm)

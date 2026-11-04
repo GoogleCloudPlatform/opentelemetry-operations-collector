@@ -340,7 +340,7 @@ type xdsPolicyManager struct {
 //
 // # Arguments
 //
-// collectorID identifies this collector to the control plane as the xDS node ID.
+// collectorID identifies this collector instance in node.metadata["service.instance.id"].
 // It is passed in rather than read from the environment because the confmap
 // provider derives it, and that package already depends on this one.
 //
@@ -710,6 +710,10 @@ func (m *xdsPolicyManager) URI() *url.URL {
 func (m *xdsPolicyManager) PolicyEvaluationResult(string, error) {}
 
 // buildNode constructs the xDS Node descriptor sent on every DiscoveryRequest.
+//
+// Id carries the full Fleet resource name
+// ("projects/{project}/locations/{location}/fleets/{fleet}") required by the
+// API. The collector instance ID is carried in Metadata["service.instance.id"].
 // Locality carries the resolved region and zone, and Metadata carries the
 // OpenTelemetry resource attributes describing this collector instance.
 func (m *xdsPolicyManager) buildNode() *corev3.Node {
@@ -725,8 +729,17 @@ func (m *xdsPolicyManager) buildNode() *corev3.Node {
 		metaFields["cloud.availability_zone"] = structpb.NewStringValue(m.zone)
 	}
 
+	nodeID := m.fleetID
+	if !strings.HasPrefix(nodeID, "projects/") {
+		project := m.projectID
+		if project == "" {
+			project = m.projectNumber
+		}
+		nodeID = fmt.Sprintf("projects/%s/locations/%s/fleets/%s", project, m.region, m.fleetID)
+	}
+
 	return &corev3.Node{
-		Id:      m.collectorID,
+		Id:      nodeID,
 		Cluster: m.fleetID,
 		Locality: &corev3.Locality{
 			Region: m.region,

@@ -843,11 +843,11 @@ func TestPolicyIntegration(t *testing.T) {
 type testHarness struct {
 	mockSrv          *mockOTLPServer
 	selfMockSrv      *mockOTLPServer
+	col              *collectorHandle
+	conn             *grpc.ClientConn
 	otlpReceiverAddr string
 	selfReceiverAddr string
 	pipelineCfgPath  string
-	col              *collectorHandle
-	conn             *grpc.ClientConn
 }
 
 func stageTestPipelineConfig(t *testing.T, tempDir string) (string, string, string, *mockOTLPServer, *mockOTLPServer) {

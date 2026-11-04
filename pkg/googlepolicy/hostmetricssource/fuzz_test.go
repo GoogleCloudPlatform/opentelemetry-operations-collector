@@ -212,6 +212,7 @@ func FuzzHostMetricsSourcePolicy_ConsolidationInvariants(f *testing.F) {
 	f.Add("p1", int32(0), false, "p2", int32(15), true)
 	f.Add("p1", int32(0), false, "p2", int32(0), false)
 	f.Add("p1", int32(45), true, "p2", int32(45), true)
+	f.Add("p1", int32(86400), true, "p2", int32(86401), true)
 
 	f.Fuzz(func(t *testing.T, id1 string, interval1 int32, set1 bool, id2 string, interval2 int32, set2 bool) {
 		pb1 := &policyv1alpha1.HostMetricsSourcePolicy{Id: id1}

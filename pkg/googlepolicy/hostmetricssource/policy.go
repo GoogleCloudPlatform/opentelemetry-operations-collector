@@ -46,8 +46,8 @@ var (
 	ErrNilProto = errors.New("host metrics source policy proto cannot be nil")
 	// ErrMissingID is returned when the policy ID is empty.
 	ErrMissingID = errors.New("host metrics source policy id cannot be empty")
-	// ErrInvalidCollectionInterval is returned when collection_interval_seconds is less than 10 or greater than 86400.
-	ErrInvalidCollectionInterval = errors.New("collection_interval_seconds must be between 10 and 86400")
+	// ErrInvalidCollectionInterval is returned when collection_interval_seconds is set to less than 10 or greater than 86400.
+	ErrInvalidCollectionInterval = fmt.Errorf("collection_interval_seconds must be between %d and %d", MinCollectionIntervalSeconds, MaxCollectionIntervalSeconds)
 )
 
 // defaultScrapers lists the upstream default scrapers enabled by HostMetricsSourcePolicy.

@@ -79,6 +79,23 @@ func TestPolicy_Validation(t *testing.T) {
 			wantInterval: 30,
 		},
 		{
+			name: "valid policy with explicit 86400s interval (maximum allowed)",
+			proto: &policyv1alpha1.HostMetricsSourcePolicy{
+				Id:                        "system-host-metrics",
+				CollectionIntervalSeconds: int32Ptr(86400),
+			},
+			wantErr:      nil,
+			wantInterval: 86400,
+		},
+		{
+			name: "invalid policy with interval 86401s (above maximum 86400s)",
+			proto: &policyv1alpha1.HostMetricsSourcePolicy{
+				Id:                        "system-host-metrics",
+				CollectionIntervalSeconds: int32Ptr(86401),
+			},
+			wantErr: ErrInvalidCollectionInterval,
+		},
+		{
 			name: "invalid policy with interval 9s (below minimum 10s)",
 			proto: &policyv1alpha1.HostMetricsSourcePolicy{
 				Id:                        "system-host-metrics",
@@ -361,6 +378,8 @@ func FuzzPolicy_LoadAndValidate(f *testing.F) {
 	f.Add("hostmetrics-2", int32(10), true)
 	f.Add("hostmetrics-3", int32(9), true)
 	f.Add("hostmetrics-4", int32(0), false) // interval unset
+	f.Add("hostmetrics-5", int32(86400), true)
+	f.Add("hostmetrics-6", int32(86401), true)
 
 	f.Fuzz(func(t *testing.T, id string, interval int32, setInterval bool) {
 		pb := &policyv1alpha1.HostMetricsSourcePolicy{Id: id}
@@ -371,7 +390,7 @@ func FuzzPolicy_LoadAndValidate(f *testing.F) {
 		if id == "" {
 			require.ErrorIs(t, err, ErrMissingID)
 			assert.Nil(t, pol)
-		} else if setInterval && interval < MinCollectionIntervalSeconds {
+		} else if setInterval && (interval < MinCollectionIntervalSeconds || interval > MaxCollectionIntervalSeconds) {
 			require.ErrorIs(t, err, ErrInvalidCollectionInterval)
 			assert.Nil(t, pol)
 		} else {

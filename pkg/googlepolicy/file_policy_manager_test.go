@@ -16,7 +16,9 @@ package googlepolicy
 
 import (
 	"net/url"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -24,30 +26,148 @@ import (
 	"go.uber.org/zap"
 )
 
-func TestNewFilePolicyManager_PathParsing(t *testing.T) {
+func TestParsePolicyDir(t *testing.T) {
+	tests := []struct {
+		name     string
+		rawURI   string
+		expected string
+	}{
+		{
+			name:     "unix 3 slashes",
+			rawURI:   "file:///etc/otel/policies",
+			expected: "/etc/otel/policies",
+		},
+		{
+			name:     "unix localhost host",
+			rawURI:   "file://localhost/etc/otel/policies",
+			expected: "/etc/otel/policies",
+		},
+		{
+			name:     "windows 2 slashes uppercase drive (the exact runner bug: Host=C:, Path=/...)",
+			rawURI:   "file://C:/Users/runneradmin/work/policies",
+			expected: "C:/Users/runneradmin/work/policies",
+		},
+		{
+			name:     "windows 3 slashes uppercase drive (Host='', Path=/C:/...)",
+			rawURI:   "file:///C:/Users/runneradmin/work/policies",
+			expected: "C:/Users/runneradmin/work/policies",
+		},
+		{
+			name:     "windows 2 slashes lowercase drive (Host=d:, Path=/...)",
+			rawURI:   "file://d:/otel/policies",
+			expected: "d:/otel/policies",
+		},
+		{
+			name:     "windows 3 slashes lowercase drive (Host='', Path=/d:/...)",
+			rawURI:   "file:///d:/otel/policies",
+			expected: "d:/otel/policies",
+		},
+		{
+			name:     "windows path with url-encoded spaces",
+			rawURI:   "file:///C:/Program%20Files/otel/policies",
+			expected: "C:/Program Files/otel/policies",
+		},
+		{
+			name:     "windows trailing slash",
+			rawURI:   "file:///C:/otel/policies/",
+			expected: "C:/otel/policies/",
+		},
+		{
+			name:     "unix path with url-encoded spaces",
+			rawURI:   "file:///opt/my%20app/policies",
+			expected: "/opt/my app/policies",
+		},
+		{
+			name:     "windows drive root 3 slashes",
+			rawURI:   "file:///C:/",
+			expected: "C:/",
+		},
+		{
+			name:     "windows drive root 2 slashes",
+			rawURI:   "file://C:/",
+			expected: "C:/",
+		},
+		{
+			name:     "unix root",
+			rawURI:   "file:///",
+			expected: "/",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			u, err := url.Parse(tt.rawURI)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, parsePolicyDir(u))
+		})
+	}
+}
+
+func TestNewFilePolicyManager(t *testing.T) {
 	tempDir := t.TempDir()
 	require.DirExists(t, tempDir)
 
 	logger := zap.NewNop()
 
-	// 1. Standard file URL with 3 slashes (file:///abs/path)
-	slashPath := filepath.ToSlash(tempDir)
-	u1, err := url.Parse("file://" + slashPath)
-	if slashPath[0] != '/' {
-		u1, err = url.Parse("file:///" + slashPath)
-	}
-	require.NoError(t, err)
+	t.Run("valid existing directory 3 slashes (file:///...)", func(t *testing.T) {
+		slashPath := filepath.ToSlash(tempDir)
+		if !strings.HasPrefix(slashPath, "/") {
+			slashPath = "/" + slashPath
+		}
+		u, err := url.Parse("file://" + slashPath)
+		require.NoError(t, err)
 
-	mgr1, err := NewFilePolicyManager(logger, u1)
-	require.NoError(t, err)
-	require.NotNil(t, mgr1)
-	assert.NoError(t, mgr1.Stop())
+		mgr, err := NewFilePolicyManager(logger, u)
+		require.NoError(t, err)
+		require.NotNil(t, mgr)
+		assert.NoError(t, mgr.Stop())
+	})
 
-	// 2. Windows drive letter in Host (file://C:/abs/path)
-	// Even if on Linux, verify that a non-existent directory triggers directory does not exist
-	uWin, err := url.Parse("file://C:/non/existent/dir")
-	require.NoError(t, err)
-	_, err = NewFilePolicyManager(logger, uWin)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "policy directory does not exist")
+	t.Run("valid existing directory 2 slashes (file://...)", func(t *testing.T) {
+		slashPath := filepath.ToSlash(tempDir)
+		// On Windows tempDir starts with C:/ so file://C:/... has Host="C:"
+		// On Unix tempDir starts with /tmp/... so file:///tmp/...
+		u, err := url.Parse("file://" + slashPath)
+		require.NoError(t, err)
+
+		mgr, err := NewFilePolicyManager(logger, u)
+		require.NoError(t, err)
+		require.NotNil(t, mgr)
+		assert.NoError(t, mgr.Stop())
+	})
+
+	t.Run("non-existent directory preserves parsed path in error", func(t *testing.T) {
+		u, err := url.Parse("file://C:/non/existent/policy/dir")
+		require.NoError(t, err)
+
+		mgr, err := NewFilePolicyManager(logger, u)
+		require.Error(t, err)
+		assert.Nil(t, mgr)
+		assert.Contains(t, err.Error(), "policy directory does not exist")
+		assert.Contains(t, err.Error(), "C:/non/existent/policy/dir")
+	})
+
+	t.Run("file instead of directory", func(t *testing.T) {
+		filePath := filepath.Join(tempDir, "policy.json")
+		require.NoError(t, os.WriteFile(filePath, []byte("{}"), 0644))
+
+		slashPath := filepath.ToSlash(filePath)
+		if !strings.HasPrefix(slashPath, "/") {
+			slashPath = "/" + slashPath
+		}
+		u, err := url.Parse("file://" + slashPath)
+		require.NoError(t, err)
+
+		mgr, err := NewFilePolicyManager(logger, u)
+		require.Error(t, err)
+		assert.Nil(t, mgr)
+		assert.Contains(t, err.Error(), "is not a directory")
+	})
+
+	t.Run("nil uri", func(t *testing.T) {
+		mgr, err := NewFilePolicyManager(logger, nil)
+		require.Error(t, err)
+		assert.Nil(t, mgr)
+		assert.Contains(t, err.Error(), "policy URI cannot be nil")
+	})
 }

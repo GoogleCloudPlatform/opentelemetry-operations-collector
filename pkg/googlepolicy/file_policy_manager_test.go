@@ -38,6 +38,11 @@ func TestParsePolicyDir(t *testing.T) {
 			expected: "C:/Users/runneradmin/work/policies",
 		},
 		{
+			name:     "windows opaque URI with percent-encoded spaces (file:C:/Program%20Files/...)",
+			rawURI:   "file:C:/Program%20Files/otel/policies",
+			expected: "C:/Program Files/otel/policies",
+		},
+		{
 			name:     "unix 3 slashes",
 			rawURI:   "file:///etc/otel/policies",
 			expected: "/etc/otel/policies",

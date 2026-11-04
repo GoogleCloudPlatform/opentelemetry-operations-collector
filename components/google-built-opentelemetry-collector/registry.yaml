@@ -45,6 +45,5 @@ providers:
 
 telemetry:
   inprocess:
-    gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/receiver/selftelemetryreceiver v0.0.0
-    import: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/receiver/selftelemetryreceiver/inprocesstelemetry
-    path: "../components/google-built-opentelemetry-collector/receiver/selftelemetryreceiver"
+    gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/telemetry/inprocesstelemetry v0.0.0
+    path: "../components/google-built-opentelemetry-collector/telemetry/inprocesstelemetry"

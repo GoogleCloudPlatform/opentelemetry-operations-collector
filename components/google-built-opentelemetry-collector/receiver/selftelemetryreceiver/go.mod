@@ -8,7 +8,6 @@ require (
 	github.com/stretchr/testify v1.12.1
 	go.opentelemetry.io/collector/component v1.70.0
 	go.opentelemetry.io/collector/component/componenttest v0.164.0
-	go.opentelemetry.io/collector/config/configtelemetry v0.164.0
 	go.opentelemetry.io/collector/confmap v1.70.0
 	go.opentelemetry.io/collector/confmap/provider/yamlprovider v1.70.0
 	go.opentelemetry.io/collector/consumer v1.70.0
@@ -18,8 +17,6 @@ require (
 	go.opentelemetry.io/collector/receiver v1.70.0
 	go.opentelemetry.io/collector/scraper v0.164.0
 	go.opentelemetry.io/collector/scraper/scraperhelper v0.164.0
-	go.opentelemetry.io/collector/service v0.164.0
-	go.opentelemetry.io/contrib/otelconf v0.27.0
 	go.opentelemetry.io/otel v1.47.0
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp v1.47.0
 	go.opentelemetry.io/otel/metric v1.47.0
@@ -29,7 +26,14 @@ require (
 )
 
 require (
+	go.opentelemetry.io/collector/config/configtelemetry v0.164.0 // indirect
+	go.opentelemetry.io/collector/service v0.164.0 // indirect
+	go.opentelemetry.io/contrib/otelconf v0.27.0 // indirect
+)
+
+require (
 	cloud.google.com/go/compute/metadata v0.10.0 // indirect
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/telemetry/inprocesstelemetry v0.164.0
 	github.com/aws/aws-sdk-go-v2 v1.47.1 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.33.6 // indirect
 	github.com/aws/aws-sdk-go-v2/credentials v1.20.6 // indirect
@@ -163,3 +167,5 @@ require (
 	sigs.k8s.io/structured-merge-diff/v6 v6.4.2 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
+
+replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/telemetry/inprocesstelemetry => ../../telemetry/inprocesstelemetry

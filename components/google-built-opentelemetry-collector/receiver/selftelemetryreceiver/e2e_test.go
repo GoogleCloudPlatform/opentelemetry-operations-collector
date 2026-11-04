@@ -42,7 +42,7 @@ import (
 	"go.opentelemetry.io/collector/receiver"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/receiver/selftelemetryreceiver"
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/receiver/selftelemetryreceiver/inprocesstelemetry"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/telemetry/inprocesstelemetry"
 )
 
 // TestEndToEndMatchesPrometheusEndpoint runs a full Collector built with the

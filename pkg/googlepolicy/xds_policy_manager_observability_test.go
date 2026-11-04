@@ -433,3 +433,61 @@ func TestXDSPolicyManager_CSDSDumpResources(t *testing.T) {
 	require.NoError(t, cfg.GetXdsConfig().UnmarshalTo(&dumpedCollector))
 	assert.Len(t, dumpedCollector.GetPolicies(), 2)
 }
+
+func TestXDSPolicyManager_SetXDSMeterProviderLateBinding(t *testing.T) {
+	registerDummyDriverForTest(t)
+	resetActivePolicySet(t)
+	t.Cleanup(func() { SetXDSMeterProvider(nil) })
+
+	ackCh := make(chan *discoveryv3.DiscoveryRequest, 1)
+	srv := &fakeADSServer{streamOpened: make(chan struct{}, 8)}
+	srv.handlers = []func(discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error{
+		func(stream discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error {
+			if _, err := srv.recv(stream); err != nil {
+				return err
+			}
+			if err := stream.Send(validRevisionResponse(t, "rev-1", "nonce-1", "log-filter")); err != nil {
+				return err
+			}
+			ack, err := srv.recv(stream)
+			if err != nil {
+				return err
+			}
+			ackCh <- ack
+			<-stream.Context().Done()
+			return stream.Context().Err()
+		},
+	}
+
+	// Start the manager WITHOUT WithMeterProvider (simulating googlecontrolplaneprovider.Retrieve()).
+	m := newTestManager(t, startFakeADSServer(t, srv))
+	require.NoError(t, m.Start())
+	t.Cleanup(func() { require.NoError(t, m.Stop()) })
+
+	select {
+	case <-ackCh:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for initial ACK")
+	}
+
+	// Now bind the MeterProvider AFTER the initial sync completed (simulating googlecontrolplaneextension.Start()).
+	reader := sdkmetric.NewManualReader()
+	mp := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+	t.Cleanup(func() { _ = mp.Shutdown(context.Background()) })
+
+	SetXDSMeterProvider(mp)
+
+	var rm metricdata.ResourceMetrics
+	require.NoError(t, reader.Collect(context.Background(), &rm))
+
+	validPts := findInt64SumPoints(rm, "grpc.xds_client.resource_updates_valid")
+	require.Len(t, validPts, 1, "expected pre-Start valid resource update counter to be replayed onto late-bound MeterProvider")
+	assert.Equal(t, int64(1), validPts[0].Value)
+
+	connectedPts := findInt64GaugePoints(rm, "grpc.xds_client.connected")
+	require.Len(t, connectedPts, 1, "expected connected gauge to be observed on late-bound MeterProvider")
+	assert.Equal(t, int64(1), connectedPts[0].Value)
+
+	resourcePts := findInt64GaugePoints(rm, "grpc.xds_client.resources")
+	require.NotEmpty(t, resourcePts, "expected resources gauge to be observed on late-bound MeterProvider")
+}

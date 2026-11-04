@@ -28,26 +28,101 @@ import (
 
 const xdsMeterName = "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 
+var (
+	xdsMetricsMu       sync.Mutex
+	activeXDSReporters = make(map[*otelMetricsReporter]struct{})
+	defaultXDSMeter    metric.MeterProvider
+)
+
+// SetXDSMeterProvider registers the OpenTelemetry MeterProvider used by active
+// and future xDS policy managers that were not constructed with an explicit
+// WithMeterProvider option. Calling SetXDSMeterProvider(nil) unregisters the
+// provider (for example on extension shutdown).
+func SetXDSMeterProvider(mp metric.MeterProvider) {
+	xdsMetricsMu.Lock()
+	defaultXDSMeter = mp
+	reporters := make([]*otelMetricsReporter, 0, len(activeXDSReporters))
+	for r := range activeXDSReporters {
+		reporters = append(reporters, r)
+	}
+	xdsMetricsMu.Unlock()
+
+	for _, r := range reporters {
+		r.setFallbackMeterProvider(mp)
+	}
+}
+
+type counterKey struct {
+	serverURI    string
+	resourceType string
+}
+
 // otelMetricsReporter implements clients.MetricsReporter using OpenTelemetry
 // metric instruments per gRFC A78.
 type otelMetricsReporter struct {
-	target string
-	meter  metric.Meter
+	target     string
+	explicitMP metric.MeterProvider
 
+	mu                     sync.Mutex
+	meter                  metric.Meter
 	resourceUpdatesValid   metric.Int64Counter
 	resourceUpdatesInvalid metric.Int64Counter
 	serverFailure          metric.Int64Counter
 	connectedGauge         metric.Int64ObservableGauge
 	resourcesGauge         metric.Int64ObservableGauge
+	reg                    metric.Registration
 
-	mu             sync.Mutex
+	validCounts    map[counterKey]int64
+	invalidCounts  map[counterKey]int64
+	failureCounts  map[string]int64
 	asyncReporters map[clients.AsyncReporter]struct{}
-	reg            metric.Registration
+	closed         bool
 }
 
 var _ clients.MetricsReporter = (*otelMetricsReporter)(nil)
 
 func newOTelMetricsReporter(mp metric.MeterProvider, target string) *otelMetricsReporter {
+	r := &otelMetricsReporter{
+		target:         target,
+		explicitMP:     mp,
+		validCounts:    make(map[counterKey]int64),
+		invalidCounts:  make(map[counterKey]int64),
+		failureCounts:  make(map[string]int64),
+		asyncReporters: make(map[clients.AsyncReporter]struct{}),
+	}
+
+	xdsMetricsMu.Lock()
+	activeXDSReporters[r] = struct{}{}
+	fallbackMP := defaultXDSMeter
+	xdsMetricsMu.Unlock()
+
+	effectiveMP := mp
+	if effectiveMP == nil {
+		effectiveMP = fallbackMP
+	}
+	r.bindMeterProvider(effectiveMP)
+	return r
+}
+
+func (r *otelMetricsReporter) setFallbackMeterProvider(mp metric.MeterProvider) {
+	if r.explicitMP != nil {
+		return
+	}
+	r.bindMeterProvider(mp)
+}
+
+func (r *otelMetricsReporter) bindMeterProvider(mp metric.MeterProvider) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.closed {
+		return
+	}
+	if r.reg != nil {
+		_ = r.reg.Unregister()
+		r.reg = nil
+	}
+
 	if mp == nil {
 		mp = otel.GetMeterProvider()
 	}
@@ -79,44 +154,79 @@ func newOTelMetricsReporter(mp metric.MeterProvider, target string) *otelMetrics
 		metric.WithUnit("{resource}"),
 	)
 
-	r := &otelMetricsReporter{
-		target:                 target,
-		meter:                  meter,
-		resourceUpdatesValid:   validCounter,
-		resourceUpdatesInvalid: invalidCounter,
-		serverFailure:          serverFailureCounter,
-		connectedGauge:         connectedGauge,
-		resourcesGauge:         resourcesGauge,
-		asyncReporters:         make(map[clients.AsyncReporter]struct{}),
-	}
+	r.meter = meter
+	r.resourceUpdatesValid = validCounter
+	r.resourceUpdatesInvalid = invalidCounter
+	r.serverFailure = serverFailureCounter
+	r.connectedGauge = connectedGauge
+	r.resourcesGauge = resourcesGauge
 
 	reg, err := meter.RegisterCallback(r.observeAsyncMetrics, connectedGauge, resourcesGauge)
 	if err == nil {
 		r.reg = reg
 	}
-	return r
+
+	ctx := context.Background()
+	for k, count := range r.validCounts {
+		if count > 0 && r.resourceUpdatesValid != nil {
+			r.resourceUpdatesValid.Add(ctx, count, metric.WithAttributes(
+				attribute.String("grpc.target", r.target),
+				attribute.String("grpc.xds.server", k.serverURI),
+				attribute.String("grpc.xds.resource_type", k.resourceType),
+			))
+		}
+	}
+	for k, count := range r.invalidCounts {
+		if count > 0 && r.resourceUpdatesInvalid != nil {
+			r.resourceUpdatesInvalid.Add(ctx, count, metric.WithAttributes(
+				attribute.String("grpc.target", r.target),
+				attribute.String("grpc.xds.server", k.serverURI),
+				attribute.String("grpc.xds.resource_type", k.resourceType),
+			))
+		}
+	}
+	for serverURI, count := range r.failureCounts {
+		if count > 0 && r.serverFailure != nil {
+			r.serverFailure.Add(ctx, count, metric.WithAttributes(
+				attribute.String("grpc.target", r.target),
+				attribute.String("grpc.xds.server", serverURI),
+			))
+		}
+	}
 }
 
 func (r *otelMetricsReporter) ReportMetric(m any) {
 	ctx := context.Background()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	switch v := m.(type) {
 	case *metrics.ResourceUpdateValid:
-		r.resourceUpdatesValid.Add(ctx, 1, metric.WithAttributes(
-			attribute.String("grpc.target", r.target),
-			attribute.String("grpc.xds.server", v.ServerURI),
-			attribute.String("grpc.xds.resource_type", v.ResourceType),
-		))
+		r.validCounts[counterKey{serverURI: v.ServerURI, resourceType: v.ResourceType}]++
+		if r.resourceUpdatesValid != nil {
+			r.resourceUpdatesValid.Add(ctx, 1, metric.WithAttributes(
+				attribute.String("grpc.target", r.target),
+				attribute.String("grpc.xds.server", v.ServerURI),
+				attribute.String("grpc.xds.resource_type", v.ResourceType),
+			))
+		}
 	case *metrics.ResourceUpdateInvalid:
-		r.resourceUpdatesInvalid.Add(ctx, 1, metric.WithAttributes(
-			attribute.String("grpc.target", r.target),
-			attribute.String("grpc.xds.server", v.ServerURI),
-			attribute.String("grpc.xds.resource_type", v.ResourceType),
-		))
+		r.invalidCounts[counterKey{serverURI: v.ServerURI, resourceType: v.ResourceType}]++
+		if r.resourceUpdatesInvalid != nil {
+			r.resourceUpdatesInvalid.Add(ctx, 1, metric.WithAttributes(
+				attribute.String("grpc.target", r.target),
+				attribute.String("grpc.xds.server", v.ServerURI),
+				attribute.String("grpc.xds.resource_type", v.ResourceType),
+			))
+		}
 	case *metrics.ServerFailure:
-		r.serverFailure.Add(ctx, 1, metric.WithAttributes(
-			attribute.String("grpc.target", r.target),
-			attribute.String("grpc.xds.server", v.ServerURI),
-		))
+		r.failureCounts[v.ServerURI]++
+		if r.serverFailure != nil {
+			r.serverFailure.Add(ctx, 1, metric.WithAttributes(
+				attribute.String("grpc.target", r.target),
+				attribute.String("grpc.xds.server", v.ServerURI),
+			))
+		}
 	}
 }
 
@@ -138,13 +248,15 @@ func (r *otelMetricsReporter) observeAsyncMetrics(_ context.Context, o metric.Ob
 	for rep := range r.asyncReporters {
 		reporters = append(reporters, rep)
 	}
+	connectedGauge := r.connectedGauge
+	resourcesGauge := r.resourcesGauge
 	r.mu.Unlock()
 
 	rec := &otelAsyncRecorder{
 		target:         r.target,
 		observer:       o,
-		connectedGauge: r.connectedGauge,
-		resourcesGauge: r.resourcesGauge,
+		connectedGauge: connectedGauge,
+		resourcesGauge: resourcesGauge,
 	}
 	for _, rep := range reporters {
 		_ = rep.Report(rec)
@@ -153,7 +265,12 @@ func (r *otelMetricsReporter) observeAsyncMetrics(_ context.Context, o metric.Ob
 }
 
 func (r *otelMetricsReporter) close() {
+	xdsMetricsMu.Lock()
+	delete(activeXDSReporters, r)
+	xdsMetricsMu.Unlock()
+
 	r.mu.Lock()
+	r.closed = true
 	reg := r.reg
 	r.reg = nil
 	r.mu.Unlock()

@@ -841,10 +841,13 @@ func TestPolicyIntegration(t *testing.T) {
 }
 
 type testHarness struct {
-	mockSrv     *mockOTLPServer
-	selfMockSrv *mockOTLPServer
-	col         *collectorHandle
-	conn        *grpc.ClientConn
+	mockSrv          *mockOTLPServer
+	selfMockSrv      *mockOTLPServer
+	otlpReceiverAddr string
+	selfReceiverAddr string
+	pipelineCfgPath  string
+	col              *collectorHandle
+	conn             *grpc.ClientConn
 }
 
 func stageTestPipelineConfig(t *testing.T, tempDir string) (string, string, string, *mockOTLPServer, *mockOTLPServer) {
@@ -863,27 +866,71 @@ func stageTestPipelineConfig(t *testing.T, tempDir string) (string, string, stri
 	return pipelineCfgPath, otlpReceiverAddr, selfReceiverAddr, mockSrv, selfMockSrv
 }
 
-func startTestHarness(t *testing.T, otelcolBin, tempDir, policiesDir string, extraCfgPaths ...string) *testHarness {
+func stageEnableSelfLogsConfig(t *testing.T, tempDir, selfReceiverAddr string) string {
 	t.Helper()
-	pipelineCfgPath, otlpReceiverAddr, _, mockSrv, selfMockSrv := stageTestPipelineConfig(t, tempDir)
+	enableSelfLogsCfg := fmt.Sprintf(`service:
+  telemetry:
+    logs:
+      level: info
+      processors:
+        - batch:
+            schedule_delay: 50
+            export_timeout: 200
+            exporter:
+              otlp:
+                protocol: grpc
+                endpoint: http://%s
+                insecure: true
+                timeout: 200
+`, selfReceiverAddr)
+	enableSelfLogsPath := filepath.Join(tempDir, "enable_self_logs.yaml")
+	if err := os.WriteFile(enableSelfLogsPath, []byte(enableSelfLogsCfg), 0644); err != nil {
+		t.Fatalf("failed to write enable_self_logs.yaml: %v", err)
+	}
+	return enableSelfLogsPath
+}
 
-	cfgPaths := append([]string{pipelineCfgPath}, extraCfgPaths...)
-	col := startCollector(t, otelcolBin, policiesDir, cfgPaths...)
+func newTestHarness(t *testing.T, tempDir string) *testHarness {
+	t.Helper()
+	pipelineCfgPath, otlpReceiverAddr, selfReceiverAddr, mockSrv, selfMockSrv := stageTestPipelineConfig(t, tempDir)
+	return &testHarness{
+		mockSrv:          mockSrv,
+		selfMockSrv:      selfMockSrv,
+		otlpReceiverAddr: otlpReceiverAddr,
+		selfReceiverAddr: selfReceiverAddr,
+		pipelineCfgPath:  pipelineCfgPath,
+	}
+}
 
-	conn, err := grpc.NewClient(otlpReceiverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+func (h *testHarness) start(t *testing.T, otelcolBin, policiesDir string, extraCfgPaths ...string) {
+	t.Helper()
+	cfgPaths := append([]string{h.pipelineCfgPath}, extraCfgPaths...)
+	h.col = startCollector(t, otelcolBin, policiesDir, cfgPaths...)
+
+	conn, err := grpc.NewClient(h.otlpReceiverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		t.Fatalf("failed to create gRPC client to %s: %v", otlpReceiverAddr, err)
+		h.col.shutdown(t)
+		t.Fatalf("failed to create gRPC client to %s: %v", h.otlpReceiverAddr, err)
 	}
 	t.Cleanup(func() {
 		_ = conn.Close()
 	})
+	h.conn = conn
+}
 
-	return &testHarness{
-		mockSrv:     mockSrv,
-		selfMockSrv: selfMockSrv,
-		col:         col,
-		conn:        conn,
-	}
+func startTestHarness(t *testing.T, otelcolBin, tempDir, policiesDir string, extraCfgPaths ...string) *testHarness {
+	t.Helper()
+	h := newTestHarness(t, tempDir)
+	h.start(t, otelcolBin, policiesDir, extraCfgPaths...)
+	return h
+}
+
+func startTestHarnessWithSelfLogs(t *testing.T, otelcolBin, tempDir, policiesDir string, extraCfgPaths ...string) *testHarness {
+	t.Helper()
+	h := newTestHarness(t, tempDir)
+	selfLogsCfgPath := stageEnableSelfLogsConfig(t, tempDir, h.selfReceiverAddr)
+	h.start(t, otelcolBin, policiesDir, append([]string{selfLogsCfgPath}, extraCfgPaths...)...)
+	return h
 }
 
 func runPolicyTestCase(t *testing.T, otelcolBin, caseName string) {
@@ -1437,6 +1484,17 @@ func waitForMetrics(srv *mockOTLPServer, timeout time.Duration) map[string]int {
 		return len(got) > 0
 	})
 	return got
+}
+
+func waitForLog(srv *mockOTLPServer, timeout time.Duration, substr string) bool {
+	return waitCondition(timeout, 50*time.Millisecond, func() bool {
+		for _, body := range extractAllLogBodies(srv.CollectedLogs()) {
+			if strings.Contains(body, substr) {
+				return true
+			}
+		}
+		return false
+	})
 }
 
 func waitForPolicySetActive(selfMockSrv *mockOTLPServer, timeout time.Duration) (int64, map[string]string, bool) {
@@ -2268,92 +2326,40 @@ func TestSelfObservabilityBypassesTelemetryPolicies(t *testing.T) {
 	otelcolBin := resolveOtelcolBinary(t)
 	tempDir, policiesDir := stagePoliciesDir(t, "drop_all_logs")
 	copyDir(t, filepath.Join("testdata", "drop_all_metrics", "policies"), policiesDir)
+	copyDir(t, filepath.Join("testdata", "unsupported_policy", "policies"), policiesDir)
 
-	unsupportedPolicy := `{
-  "type": "unsupported_policy_type",
-  "id": "projects/my-project/locations/us-central1/policySets/my-set/policies/bad-policy"
-}`
-	if err := os.WriteFile(filepath.Join(policiesDir, "02-unsupported.json"), []byte(unsupportedPolicy), 0644); err != nil {
-		t.Fatalf("failed to write unsupported policy: %v", err)
-	}
-
-	baseCfgPath, otlpReceiverAddr, selfReceiverAddr, workloadMockSrv, selfMockSrv := stageTestPipelineConfig(t, tempDir)
-
-	enableSelfLogsCfg := fmt.Sprintf(`service:
-  telemetry:
-    logs:
-      level: info
-      processors:
-        - batch:
-            schedule_delay: 50
-            export_timeout: 200
-            exporter:
-              otlp:
-                protocol: grpc
-                endpoint: http://%s
-                insecure: true
-                timeout: 200
-`, selfReceiverAddr)
-	enableSelfLogsPath := filepath.Join(tempDir, "enable_self_logs.yaml")
-	if err := os.WriteFile(enableSelfLogsPath, []byte(enableSelfLogsCfg), 0644); err != nil {
-		t.Fatalf("failed to write enable_self_logs.yaml: %v", err)
-	}
-
-	col := startCollector(t, otelcolBin, policiesDir, baseCfgPath, enableSelfLogsPath)
-
-	conn, err := grpc.NewClient(otlpReceiverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err != nil {
-		col.shutdown(t)
-		t.Fatalf("failed to create gRPC client to %s: %v", otlpReceiverAddr, err)
-	}
-	t.Cleanup(func() {
-		_ = conn.Close()
-	})
+	h := startTestHarnessWithSelfLogs(t, otelcolBin, tempDir, policiesDir)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	inputLogs := readInputLogs(t, filepath.Join("testdata", "drop_all_logs", "input_logs.yaml"))
-	if _, err := plogotlp.NewGRPCClient(conn).Export(ctx, plogotlp.NewExportRequestFromLogs(inputLogs)); err != nil {
-		col.shutdown(t)
-		t.Fatalf("failed to export workload logs: %v\nstderr:\n%s", err, col.logs())
+	if _, err := plogotlp.NewGRPCClient(h.conn).Export(ctx, plogotlp.NewExportRequestFromLogs(inputLogs)); err != nil {
+		h.col.shutdown(t)
+		t.Fatalf("failed to export workload logs: %v\nstderr:\n%s", err, h.col.logs())
 	}
 
 	inputMetrics := readInputMetrics(t, filepath.Join("testdata", "drop_all_metrics", "input_metrics.yaml"))
-	if _, err := pmetricotlp.NewGRPCClient(conn).Export(ctx, pmetricotlp.NewExportRequestFromMetrics(inputMetrics)); err != nil {
-		col.shutdown(t)
-		t.Fatalf("failed to export workload metrics: %v\nstderr:\n%s", err, col.logs())
+	if _, err := pmetricotlp.NewGRPCClient(h.conn).Export(ctx, pmetricotlp.NewExportRequestFromMetrics(inputMetrics)); err != nil {
+		h.col.shutdown(t)
+		t.Fatalf("failed to export workload metrics: %v\nstderr:\n%s", err, h.col.logs())
 	}
 
-	value, _, foundMetric := waitForPolicySetActive(selfMockSrv, 10*time.Second)
+	value, _, foundMetric := waitForPolicySetActive(h.selfMockSrv, 10*time.Second)
+	foundErrorEvent := waitForLog(h.selfMockSrv, 5*time.Second, "no driver found for policy type: unsupported_policy_type")
 
-	var foundErrorEvent bool
-	deadline := time.Now().Add(5 * time.Second)
-	for time.Now().Before(deadline) {
-		for _, body := range extractAllLogBodies(selfMockSrv.CollectedLogs()) {
-			if strings.Contains(body, "no driver found for policy type: unsupported_policy_type") {
-				foundErrorEvent = true
-				break
-			}
-		}
-		if foundErrorEvent {
-			break
-		}
-		time.Sleep(25 * time.Millisecond)
-	}
-
-	col.shutdown(t)
+	h.col.shutdown(t)
 
 	if !foundMetric || value <= 0 {
-		t.Errorf("expected gcp.policy.set.active self-metric with positive revision on selfMockSrv, got found=%v value=%d\nlogs:\n%s", foundMetric, value, col.logs())
+		t.Errorf("expected gcp.policy.set.active self-metric with positive revision on selfMockSrv, got found=%v value=%d\nlogs:\n%s", foundMetric, value, h.col.logs())
 	}
 	if !foundErrorEvent {
-		t.Errorf("expected gcp.policy.evaluate.error self-log event on selfMockSrv, but it was not received\nlogs:\n%s", col.logs())
+		t.Errorf("expected gcp.policy.evaluate.error self-log event on selfMockSrv, but it was not received\nlogs:\n%s", h.col.logs())
 	}
-	if gotWorkloadLogs := extractAllLogBodies(workloadMockSrv.CollectedLogs()); len(gotWorkloadLogs) != 0 {
+	if gotWorkloadLogs := extractAllLogBodies(h.mockSrv.CollectedLogs()); len(gotWorkloadLogs) != 0 {
 		t.Errorf("expected catch-all log_filter policy to drop workload logs, got: %v", gotWorkloadLogs)
 	}
-	if gotWorkloadMetrics := collectMetricNames(workloadMockSrv.CollectedMetrics()); len(gotWorkloadMetrics) != 0 {
+	if gotWorkloadMetrics := collectMetricNames(h.mockSrv.CollectedMetrics()); len(gotWorkloadMetrics) != 0 {
 		t.Errorf("expected catch-all metric_filter policy to drop workload metrics, got: %v", gotWorkloadMetrics)
 	}
 }

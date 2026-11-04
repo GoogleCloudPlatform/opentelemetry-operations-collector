@@ -1,0 +1,486 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package windowseventlogsource
+
+import (
+	"context"
+	"encoding/json"
+	"strings"
+	"testing"
+
+	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
+	"go.opentelemetry.io/collector/component"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
+)
+
+func fuzzSeedPolicies() []*policyv1alpha1.WindowsEventLogSourcePolicy {
+	return []*policyv1alpha1.WindowsEventLogSourcePolicy{
+		{
+			Id:       "win-source-standard",
+			Channels: []string{"Security", "System", "Application"},
+		},
+		{
+			Id:       "win-source-sysmon",
+			Channels: []string{"Microsoft-Windows-Sysmon/Operational"},
+		},
+		{
+			Id:       "win-source-delimiters",
+			Channels: []string{`Microsoft-Windows-DNS-Client\Operational`, "Active Directory Web Services", "Channel:Name/With Spaces"},
+		},
+		{
+			Id:       "win-source-casing-and-whitespace",
+			Channels: []string{"  Security  ", "security", "SYSTEM", "System", "Channel\nWith\nNewlines"},
+		},
+		{
+			Id:       "win-source-symbols",
+			Channels: []string{"Foo+Bar", "a|b", "a=b$c"},
+		},
+		{
+			Id:       "win-source-unicode",
+			Channels: []string{"Sec\vurity", "Sec\u00a0urity", "Sec\u3000urity", "Sec\u200burity", "Security😀Log"},
+		},
+		{
+			Id:       "win-source-long",
+			Channels: []string{strings.Repeat("a", 1100)},
+		},
+		{
+			Id: "win-source-colliding-long-utf8",
+			Channels: []string{
+				"a" + strings.Repeat("é", 255) + "/" + strings.Repeat("é", 255),
+				"a" + strings.Repeat("é", 255) + " " + strings.Repeat("é", 255),
+			},
+		},
+	}
+}
+
+func verifyCompiledPolicy(t *testing.T, pol googlepolicy.Policy) {
+	t.Helper()
+	if pol == nil {
+		t.Fatal("compiled policy is nil")
+	}
+	if pol.PolicyName() == "" {
+		t.Fatal("compiled policy has empty PolicyName")
+	}
+	if pol.PolicyType() != PolicyType {
+		t.Fatalf("expected PolicyType %q, got %q", PolicyType, pol.PolicyType())
+	}
+	if pol.PolicyClass() != googlepolicy.PolicyClassSource {
+		t.Fatalf("expected PolicyClassSource, got %v", pol.PolicyClass())
+	}
+	if err := pol.Validate(); err != nil {
+		t.Fatalf("compiled policy failed Validate(): %v", err)
+	}
+
+	winPol, ok := pol.(*Policy)
+	if !ok {
+		t.Fatalf("compiled policy is not *Policy: %T", pol)
+	}
+
+	// Always verify receiver ID invariants across all platforms via channelReceivers()
+	channelRecs := winPol.channelReceivers()
+	if len(channelRecs) == 0 {
+		t.Fatal("expected at least 1 channelReceiver mapping")
+	}
+	for _, rec := range channelRecs {
+		if rec.id.Type().String() != ReceiverType {
+			t.Fatalf("expected receiver type %q, got %q", ReceiverType, rec.id.Type().String())
+		}
+		if rec.id.Name() == "" {
+			t.Fatal("receiver ID name cannot be empty")
+		}
+		if strings.ContainsAny(rec.id.Name(), "/\\ : \t\r\n") {
+			t.Fatalf("receiver ID name %q contains unsanitized delimiter or whitespace", rec.id.Name())
+		}
+		var parsedID component.ID
+		if err := parsedID.UnmarshalText([]byte(rec.id.String())); err != nil {
+			t.Fatalf("receiver ID %q failed component.ID unmarshaling: %v", rec.id.String(), err)
+		}
+	}
+
+	srcPol, ok := pol.(googlepolicy.SourcePolicy)
+	if !ok {
+		t.Fatalf("compiled policy does not implement SourcePolicy: %T", pol)
+	}
+
+	if isWindows {
+		recIDs := srcPol.LogReceiverIDs()
+		if len(recIDs) == 0 {
+			t.Fatal("expected at least 1 log receiver ID on Windows")
+		}
+		for _, id := range recIDs {
+			if id.Type().String() != ReceiverType {
+				t.Fatalf("expected receiver type %q, got %q", ReceiverType, id.Type().String())
+			}
+			if id.Name() == "" {
+				t.Fatal("receiver ID name cannot be empty")
+			}
+			if strings.ContainsAny(id.Name(), "/\\ : \t\r\n") {
+				t.Fatalf("receiver ID name %q contains unsanitized delimiter or whitespace", id.Name())
+			}
+			var parsedID component.ID
+			if err := parsedID.UnmarshalText([]byte(id.String())); err != nil {
+				t.Fatalf("receiver ID %q failed component.ID unmarshaling: %v", id.String(), err)
+			}
+		}
+	} else {
+		recIDs := srcPol.LogReceiverIDs()
+		if len(recIDs) != 0 {
+			t.Fatalf("expected 0 log receiver IDs on non-Windows, got %d", len(recIDs))
+		}
+	}
+
+	if srcPol.MetricReceiverIDs() != nil {
+		t.Fatal("MetricReceiverIDs must be nil")
+	}
+	if srcPol.TraceReceiverIDs() != nil {
+		t.Fatal("TraceReceiverIDs must be nil")
+	}
+
+	// Always verify receiverConfigs() unconditionally across all platforms
+	rawCfg := winPol.receiverConfigs()
+	receivers, ok := rawCfg["receivers"].(map[string]any)
+	if !ok || len(receivers) != len(channelRecs) {
+		t.Fatalf("expected %d receivers in receiverConfigs(), got %v", len(channelRecs), rawCfg["receivers"])
+	}
+	for _, rec := range channelRecs {
+		recKey := ReceiverType + "/" + rec.id.Name()
+		rCfg, ok := receivers[recKey].(map[string]any)
+		if !ok {
+			t.Fatalf("receiver %q missing from receiverConfigs()", recKey)
+		}
+		if rCfg["channel"] != rec.channel {
+			t.Fatalf("receiver %q channel mismatch: expected %q, got %v", recKey, rec.channel, rCfg["channel"])
+		}
+		if rCfg["suppress_rendering_info"] != DefaultSuppressRenderingInfo {
+			t.Fatalf("receiver %q suppress_rendering_info mismatch: expected %v, got %v", recKey, DefaultSuppressRenderingInfo, rCfg["suppress_rendering_info"])
+		}
+		if rCfg["max_reads"] != DefaultMaxReads {
+			t.Fatalf("receiver %q max_reads mismatch: expected %d, got %v", recKey, DefaultMaxReads, rCfg["max_reads"])
+		}
+		if rCfg["ignore_channel_errors"] != DefaultIgnoreChannelErrors {
+			t.Fatalf("receiver %q ignore_channel_errors mismatch: expected %v, got %v", recKey, DefaultIgnoreChannelErrors, rCfg["ignore_channel_errors"])
+		}
+		exProviders, ok := rCfg["exclude_providers"].([]string)
+		if !ok || len(exProviders) != 1 || exProviders[0] != DefaultExcludeProvider {
+			t.Fatalf("receiver %q exclude_providers mismatch: expected [%s], got %v", recKey, DefaultExcludeProvider, rCfg["exclude_providers"])
+		}
+	}
+
+	conf, err := srcPol.Evaluate(context.Background())
+	if err != nil {
+		t.Fatalf("Evaluate() returned error: %v", err)
+	}
+	if conf == nil {
+		t.Fatal("Evaluate() returned nil conf")
+	}
+	m := conf.ToStringMap()
+	if isWindows {
+		evalRecs, ok := m["receivers"].(map[string]any)
+		if !ok || len(evalRecs) != len(channelRecs) {
+			t.Fatalf("expected %d receivers in confmap, got %v", len(channelRecs), m["receivers"])
+		}
+	} else {
+		if len(m) != 0 {
+			t.Fatalf("expected empty confmap on non-Windows, got %v", m)
+		}
+	}
+}
+
+func FuzzSanitizeChannelName(f *testing.F) {
+	seeds := []string{
+		"Security",
+		"System",
+		"Application",
+		"Microsoft-Windows-Sysmon/Operational",
+		`Microsoft-Windows-DNS-Client\Operational`,
+		"Active Directory Web Services",
+		"Channel:Name/With Spaces",
+		"   Trimmed Channel   ",
+		"Multiple///Slashes\\\\Together",
+		"Channel\nWith\nNewlines",
+		"Channel\tWith\tTabs",
+		"Channel\r\nWith\r\nCRLF",
+		"COM1",
+		"../../../",
+		".._.._..",
+		"::::::",
+		"//////",
+		`\\\\\\`,
+		"   ",
+		"",
+		"Foo+Bar",
+		"a|b",
+		"a=b$c",
+		"Sec\vurity",
+		"Sec\u00a0urity",
+		"Sec\u3000urity",
+		"Sec\u200burity",
+		"Security😀Log",
+		strings.Repeat("a", 1100),
+	}
+	for _, s := range seeds {
+		f.Add(s)
+	}
+
+	f.Fuzz(func(t *testing.T, channel string) {
+		san := SanitizeChannelName(channel)
+
+		// Invariant 1: Sanitized name must be lowercase
+		if san != strings.ToLower(san) {
+			t.Fatalf("SanitizeChannelName(%q) = %q is not lowercase", channel, san)
+		}
+
+		// Invariant 2: No leading or trailing underscores
+		if strings.HasPrefix(san, "_") || strings.HasSuffix(san, "_") {
+			t.Fatalf("SanitizeChannelName(%q) = %q has leading/trailing underscores", channel, san)
+		}
+
+		// Invariant 3: No slashes, backslashes, colons, or whitespace characters
+		if strings.ContainsAny(san, "/\\ : \t\r\n") {
+			t.Fatalf("SanitizeChannelName(%q) = %q contains forbidden character", channel, san)
+		}
+
+		// Invariant 4: Deterministic and canonical casing invariant:
+		// Any two strings that share the same canonical channel name must produce identical receiver IDs.
+		if san != "" {
+			if san2 := SanitizeChannelName(channel); san2 != san {
+				t.Fatalf("SanitizeChannelName is not deterministic: san(%q) = %q, san(%q) = %q", channel, san, channel, san2)
+			}
+			canon := canonicalChannel(strings.TrimSpace(channel))
+			if sanCanon := SanitizeChannelName(canon); sanCanon != san {
+				t.Fatalf("SanitizeChannelName is not invariant with canonical: san(%q) = %q vs san(canon %q) = %q", channel, san, canon, sanCanon)
+			}
+		}
+
+		// Invariant 5: If non-empty, must form a valid component.ID and length <= 81
+		if san != "" {
+			if len(san) > 81 {
+				t.Fatalf("SanitizeChannelName(%q) = %q exceeds maximum expected length (81 bytes)", channel, san)
+			}
+			var parsedID component.ID
+			if err := parsedID.UnmarshalText([]byte(ReceiverType + "/" + san)); err != nil {
+				t.Fatalf("SanitizeChannelName(%q) = %q fails component.ID unmarshaling: %v", channel, san, err)
+			}
+		}
+	})
+}
+
+func FuzzPolicy_ProtoAndJSON(f *testing.F) {
+	f.Add([]byte{})
+	for _, seed := range fuzzSeedPolicies() {
+		wireBytes, err := proto.Marshal(seed)
+		if err != nil {
+			f.Fatalf("proto.Marshal seed %q: %v", seed.GetId(), err)
+		}
+		f.Add(wireBytes)
+
+		jsonBytes, err := protojson.Marshal(seed)
+		if err != nil {
+			f.Fatalf("protojson.Marshal seed %q: %v", seed.GetId(), err)
+		}
+		f.Add(jsonBytes)
+	}
+
+	f.Fuzz(func(t *testing.T, data []byte) {
+		pb := &policyv1alpha1.WindowsEventLogSourcePolicy{}
+		if err := proto.Unmarshal(data, pb); err == nil {
+			ps, err := googlepolicy.MakePolicySetFromProtos("projects/p/locations/l/policySets/ps", "fuzz-rev", []proto.Message{pb})
+			if err == nil {
+				if len(ps.Policies) != 1 {
+					t.Fatalf("expected 1 compiled policy, got %d", len(ps.Policies))
+				}
+				for _, entry := range ps.Policies {
+					verifyCompiledPolicy(t, entry.PolicyObj)
+
+					// ProtoJSON round-trip verification
+					if rtBytes, err := protojson.Marshal(pb); err == nil {
+						var rtMap map[string]any
+						if err := json.Unmarshal(rtBytes, &rtMap); err == nil && rtMap != nil {
+							rtMap["type"] = PolicyType
+							rtPS, err := googlepolicy.MakePolicySet("fuzz-rev", []map[string]any{rtMap})
+							rtEntry, ok := rtPS.Policies[entry.PolicyObj.PolicyName()]
+							if err != nil || len(rtPS.Policies) != 1 || !ok {
+								t.Fatalf("protojson round-trip failed MakePolicySet: err=%v, len=%d, ok=%v", err, len(rtPS.Policies), ok)
+							}
+							verifyCompiledPolicy(t, rtEntry.PolicyObj)
+
+							// Both proto and JSON representations must produce identical receiver IDs
+							pRecIDs := entry.PolicyObj.(googlepolicy.SourcePolicy).LogReceiverIDs()
+							jRecIDs := rtEntry.PolicyObj.(googlepolicy.SourcePolicy).LogReceiverIDs()
+							if len(pRecIDs) != len(jRecIDs) {
+								t.Fatalf("receiver ID count mismatch between proto (%d) and JSON (%d)", len(pRecIDs), len(jRecIDs))
+							}
+							for i := range pRecIDs {
+								if pRecIDs[i] != jRecIDs[i] {
+									t.Fatalf("receiver ID[%d] mismatch: proto=%v json=%v", i, pRecIDs[i], jRecIDs[i])
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+
+		var rawMap map[string]any
+		if err := json.Unmarshal(data, &rawMap); err == nil && rawMap != nil {
+			rawMap["type"] = PolicyType
+			ps, err := googlepolicy.MakePolicySet("fuzz-rev", []map[string]any{rawMap})
+			if err == nil {
+				if len(ps.Policies) != 1 {
+					t.Fatalf("expected 1 compiled policy, got %d", len(ps.Policies))
+				}
+				for _, entry := range ps.Policies {
+					verifyCompiledPolicy(t, entry.PolicyObj)
+				}
+			}
+		}
+	})
+}
+
+func FuzzPolicy_Consolidate(f *testing.F) {
+	seeds := [][]string{
+		{"Security", "System"},
+		{"Application", "Sysmon"},
+		{"security", "system", "SYSTEM"},
+		{`Microsoft-Windows-DNS-Client\Operational`, "Active Directory Web Services"},
+	}
+	for _, s := range seeds {
+		b, _ := json.Marshal(s)
+		f.Add(b)
+	}
+
+	f.Fuzz(func(t *testing.T, channelData []byte) {
+		var channels []string
+		if err := json.Unmarshal(channelData, &channels); err != nil {
+			return
+		}
+
+		p1, err := NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+			Id:       "p1",
+			Channels: []string{"Security", "System"},
+		})
+		if err != nil {
+			return
+		}
+
+		p2, err := NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+			Id:       "p2",
+			Channels: channels,
+		})
+		if err != nil {
+			// If channels was invalid, NewPolicyFromProto correctly returns an error
+			return
+		}
+
+		merged, err := p1.Consolidate([]googlepolicy.SourcePolicy{p2})
+		if err != nil {
+			t.Fatalf("unexpected error consolidating valid policies: %v", err)
+		}
+
+		verifyCompiledPolicy(t, merged)
+
+		// Consolidated receiver IDs must always be deterministically sorted
+		recIDs := merged.LogReceiverIDs()
+		for i := 1; i < len(recIDs); i++ {
+			if strings.Compare(recIDs[i-1].Name(), recIDs[i].Name()) >= 0 {
+				t.Fatalf("receiver IDs not strictly sorted: %v before %v", recIDs[i-1], recIDs[i])
+			}
+		}
+	})
+}
+
+// FuzzPolicy_ReceiverID_SetIndependence asserts that a channel's receiver ID is completely
+// independent of the presence, order, or casing of other channels or policies in a policy set.
+func FuzzPolicy_ReceiverID_SetIndependence(f *testing.F) {
+	seeds := fuzzSeedPolicies()
+	for _, seed := range seeds {
+		b, err := proto.Marshal(seed)
+		if err == nil {
+			f.Add(b)
+		}
+	}
+
+	f.Fuzz(func(t *testing.T, protoBytes []byte) {
+		var polProto policyv1alpha1.WindowsEventLogSourcePolicy
+		if err := proto.Unmarshal(protoBytes, &polProto); err != nil {
+			return
+		}
+
+		p, err := NewPolicyFromProto(&polProto)
+		if err != nil {
+			return
+		}
+
+		// For every channel in this multi-channel policy, verify that:
+		// 1. Its synthesized receiver ID is 100% identical when evaluated alone (standalone).
+		// 2. Its receiver ID is identical when evaluated with alternative casing variants (canonical).
+		// 3. Merging with a second policy containing alternative casing variants preserves the exact same receiver ID.
+		for _, ch := range p.Channels() {
+			canonical := canonicalChannel(ch)
+			expectedID := SanitizeChannelName(canonical)
+
+			// Standalone policy with raw channel
+			standaloneRaw, err := NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+				Id:       "standalone-raw",
+				Channels: []string{ch},
+			})
+			if err != nil {
+				t.Fatalf("standalone raw policy for %q failed: %v", ch, err)
+			}
+			if id := standaloneRaw.channelReceivers()[0].id.Name(); id != expectedID {
+				t.Fatalf("standalone raw ID mismatch for %q: got %q, want %q", ch, id, expectedID)
+			}
+
+			// Standalone policy with uppercase/canonical channel
+			standaloneCanon, err := NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+				Id:       "standalone-canon",
+				Channels: []string{canonical},
+			})
+			if err != nil {
+				t.Fatalf("standalone canon policy for %q failed: %v", canonical, err)
+			}
+			if id := standaloneCanon.channelReceivers()[0].id.Name(); id != expectedID {
+				t.Fatalf("standalone canon ID mismatch for %q: got %q, want %q", canonical, id, expectedID)
+			}
+
+			// Consolidate with a sibling policy that supplies the alternative casing variant
+			siblingPolicy, err := NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+				Id:       "sibling-policy",
+				Channels: []string{canonical},
+			})
+			if err != nil {
+				t.Fatalf("sibling policy failed: %v", err)
+			}
+			consolidated, err := p.Consolidate([]googlepolicy.SourcePolicy{siblingPolicy})
+			if err != nil {
+				t.Fatalf("consolidation failed: %v", err)
+			}
+			found := false
+			for _, rec := range consolidated.(*Policy).channelReceivers() {
+				if canonicalChannel(rec.channel) == canonical {
+					found = true
+					if rec.id.Name() != expectedID {
+						t.Fatalf("consolidated ID mismatch for %q: got %q, want %q", ch, rec.id.Name(), expectedID)
+					}
+				}
+			}
+			if !found {
+				t.Fatalf("channel %q not found in consolidated policy", ch)
+			}
+		}
+	})
+}

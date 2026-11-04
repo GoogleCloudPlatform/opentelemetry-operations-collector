@@ -89,7 +89,8 @@ jobs:
       - name: Validate Samples
         run: make validate-samples
 
-  test-windows:
+  test-windows-policy-provider:
+    name: Test Windows Policy & Provider
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@0717577d45739eb3c851188b29f50ed6c0b2194e # v2
@@ -107,5 +108,4 @@ jobs:
           (cd pkg/googlepolicy && go test -v ./...)
           (cd components/google-built-opentelemetry-collector/processor/googlepolicyprocessor && go test -v ./...)
           (cd components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider && go test -v ./...)
-
 

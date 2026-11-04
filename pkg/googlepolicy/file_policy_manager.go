@@ -53,6 +53,9 @@ func NewFilePolicyManager(logger *zap.Logger, uri *url.URL) (Manager, error) {
 	// 1. Determine the directory we're looking at.
 	// The file scheme expects a path to a directory on the current host.
 	policyDir := uri.Path
+	if uri.Host != "" && len(uri.Host) == 2 && uri.Host[1] == ':' {
+		policyDir = uri.Host + uri.Path
+	}
 
 	// EDGE CASE: When parsed out of a URL, Windows paths come with a leading `/`
 	// i.e. "/C:/dir/on/my/machine".

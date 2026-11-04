@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
@@ -63,7 +64,11 @@ func TestPolicySets(t *testing.T) {
 				}
 			})
 
-			uri := fmt.Sprintf("%s:%s://%s", schemeName, innerSchemeFile, filepath.ToSlash(absPoliciesDir))
+			slashPath := filepath.ToSlash(absPoliciesDir)
+			if !strings.HasPrefix(slashPath, "/") {
+				slashPath = "/" + slashPath
+			}
+			uri := fmt.Sprintf("%s:%s://%s", schemeName, innerSchemeFile, slashPath)
 			ret, err := p.Retrieve(context.Background(), uri, nil)
 			require.NoError(t, err)
 			require.NotNil(t, ret)

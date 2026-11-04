@@ -95,7 +95,7 @@ func TestPolicySets(t *testing.T) {
 				expectedYAML = actualYAML
 			}
 
-			assert.Equal(t, string(expectedYAML), string(actualYAML))
+			assert.YAMLEq(t, string(expectedYAML), string(actualYAML))
 		})
 	}
 }

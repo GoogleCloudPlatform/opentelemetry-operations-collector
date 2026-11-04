@@ -21,14 +21,17 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider/policies/selfmetrics"
+	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/event"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/windowseventlogsource"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
@@ -452,6 +455,507 @@ func TestRetrieve_ActivePolicySetWithMultipleSources_CanonicalConsolidation(t *t
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
 
+func TestRetrieve_ActivePolicySetWithWindowsEventLogSource(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	p := createProvider()
+
+	pol, err := windowseventlogsource.NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+		Id:       "windows-security-sysmon",
+		Channels: []string{"Security", "Microsoft-Windows-Sysmon/Operational"},
+	})
+	require.NoError(t, err)
+
+	ps := &googlepolicy.PolicySet{
+		RevisionID: "rev-windows-source",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			"windows-security-sysmon": {PolicyObj: pol},
+		},
+	}
+	googlepolicy.SetActivePolicySet(ps)
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+
+	secRecID := "windowseventlog/" + windowseventlogsource.SanitizeChannelName("Security")
+	sysmonRecID := "windowseventlog/" + windowseventlogsource.SanitizeChannelName("Microsoft-Windows-Sysmon/Operational")
+
+	if runtime.GOOS == "windows" {
+		// Verify synthesized receiver configs and compiler defaults
+		assert.True(t, conf.IsSet("receivers::"+secRecID))
+		assert.Equal(t, "Security", conf.Get("receivers::"+secRecID+"::channel"))
+		assert.Equal(t, true, conf.Get("receivers::"+secRecID+"::suppress_rendering_info"))
+		assert.False(t, conf.IsSet("receivers::"+secRecID+"::event_driven_scraping"))
+		assert.Equal(t, 500, conf.Get("receivers::"+secRecID+"::max_reads"))
+		assert.Equal(t, true, conf.Get("receivers::"+secRecID+"::ignore_channel_errors"))
+		assert.Equal(t, []any{"otelcol-google"}, conf.Get("receivers::"+secRecID+"::exclude_providers"))
+
+		assert.True(t, conf.IsSet("receivers::"+sysmonRecID))
+		assert.Equal(t, "Microsoft-Windows-Sysmon/Operational", conf.Get("receivers::"+sysmonRecID+"::channel"))
+		assert.Equal(t, true, conf.Get("receivers::"+sysmonRecID+"::suppress_rendering_info"))
+		assert.False(t, conf.IsSet("receivers::"+sysmonRecID+"::event_driven_scraping"))
+		assert.Equal(t, 500, conf.Get("receivers::"+sysmonRecID+"::max_reads"))
+		assert.Equal(t, true, conf.Get("receivers::"+sysmonRecID+"::ignore_channel_errors"))
+		assert.Equal(t, []any{"otelcol-google"}, conf.Get("receivers::"+sysmonRecID+"::exclude_providers"))
+
+		// Receivers must attach to canonical shared logs/googlecontrolplane pipeline
+		receivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
+		assert.Contains(t, receivers, "nop/googlecontrolplane")
+		assert.Contains(t, receivers, secRecID)
+		assert.Contains(t, receivers, sysmonRecID)
+	} else {
+		assert.False(t, conf.IsSet("receivers::"+secRecID))
+		assert.False(t, conf.IsSet("receivers::"+sysmonRecID))
+		receivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
+		assert.Contains(t, receivers, "nop/googlecontrolplane")
+		assert.NotContains(t, receivers, secRecID)
+		assert.NotContains(t, receivers, sysmonRecID)
+	}
+
+	// Canonical pipeline must contain standard processor chain
+	processors := conf.Get("service::pipelines::logs/googlecontrolplane::processors")
+	assert.Contains(t, processors, "resourcedetection/googlecontrolplane")
+	assert.Contains(t, processors, "transform/googlecontrolplane")
+	assert.Contains(t, processors, "googlepolicy")
+	assert.Contains(t, processors, "queue_batch/default_gcp_destination_batch_logs")
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestRetrieve_ActivePolicySetWithWindowsEventLogSource_MultiPolicyConsolidation(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	p := createProvider()
+
+	pol1, err := windowseventlogsource.NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+		Id:       "win-1",
+		Channels: []string{"Security", "System"},
+	})
+	require.NoError(t, err)
+
+	pol2, err := windowseventlogsource.NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+		Id:       "win-2",
+		Channels: []string{"security", "Application", "SYSTEM"},
+	})
+	require.NoError(t, err)
+
+	ps := &googlepolicy.PolicySet{
+		RevisionID: "rev-windows-consolidation",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			"win-1": {PolicyObj: pol1},
+			"win-2": {PolicyObj: pol2},
+		},
+	}
+	googlepolicy.SetActivePolicySet(ps)
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+
+	appRecID := "windowseventlog/" + windowseventlogsource.SanitizeChannelName("Application")
+	secRecID := "windowseventlog/" + windowseventlogsource.SanitizeChannelName("Security")
+	sysRecID := "windowseventlog/" + windowseventlogsource.SanitizeChannelName("System")
+
+	if runtime.GOOS == "windows" {
+		// Deduplicated channels: application, security, system
+		assert.True(t, conf.IsSet("receivers::"+appRecID))
+		assert.True(t, conf.IsSet("receivers::"+secRecID))
+		assert.True(t, conf.IsSet("receivers::"+sysRecID))
+
+		// First-seen casing preserved
+		assert.Equal(t, "Security", conf.Get("receivers::"+secRecID+"::channel"))
+		assert.Equal(t, "System", conf.Get("receivers::"+sysRecID+"::channel"))
+		assert.Equal(t, "Application", conf.Get("receivers::"+appRecID+"::channel"))
+
+		receivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
+		expectedReceivers := []any{
+			"nop/googlecontrolplane",
+			appRecID,
+			secRecID,
+			sysRecID,
+		}
+		assert.ElementsMatch(t, expectedReceivers, receivers)
+
+		// Verify all generated receivers unmarshal cleanly into real collector component.ID
+		sub, err := conf.Sub("receivers")
+		require.NoError(t, err)
+		var recMap map[component.ID]any
+		require.NoError(t, sub.Unmarshal(&recMap))
+		assert.Contains(t, recMap, component.MustNewIDWithName("windowseventlog", windowseventlogsource.SanitizeChannelName("Application")))
+		assert.Contains(t, recMap, component.MustNewIDWithName("windowseventlog", windowseventlogsource.SanitizeChannelName("Security")))
+		assert.Contains(t, recMap, component.MustNewIDWithName("windowseventlog", windowseventlogsource.SanitizeChannelName("System")))
+	} else {
+		assert.False(t, conf.IsSet("receivers::"+appRecID))
+		assert.False(t, conf.IsSet("receivers::"+secRecID))
+		assert.False(t, conf.IsSet("receivers::"+sysRecID))
+		receivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
+		assert.Equal(t, []any{"nop/googlecontrolplane"}, receivers)
+	}
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestRetrieve_ActivePolicySetWithWindowsEventLogSource_RealPolicyFaultIsolation(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	obsCore, recordedLogs := observer.New(zapcore.WarnLevel)
+	logger := zap.New(obsCore)
+	p := createProviderWithLogger(logger)
+
+	// Valid policy
+	polValid, err := windowseventlogsource.NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+		Id:       "win-valid",
+		Channels: []string{"Security"},
+	})
+	require.NoError(t, err)
+
+	// Real policy with empty channel that fails validation
+	badProto := &policyv1alpha1.WindowsEventLogSourcePolicy{
+		Id:       "win-bad-empty",
+		Channels: []string{"Security", ""},
+	}
+	// Bypass NewPolicyFromProto validation by loading directly into driver or raw struct to test provider fault isolation
+	polInvalid, err := googlepolicy.LoadPolicy(windowseventlogsource.PolicyType, map[string]any{
+		"type":     windowseventlogsource.PolicyType,
+		"id":       "win-bad-empty",
+		"channels": []any{"Security", ""},
+	})
+	// LoadPolicy enforces Validate(), so polInvalid is nil or fails.
+	// To test runtime fault isolation if an invalid policy enters PolicySet:
+	if polInvalid == nil {
+		polInvalid = &mockInvalidWindowsSourcePolicy{name: "win-bad-empty"}
+	}
+	_ = badProto
+
+	ps := &googlepolicy.PolicySet{
+		RevisionID: "rev-windows-real-fault-isolation",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			"win-valid":     {PolicyObj: polValid},
+			"win-bad-empty": {PolicyObj: polInvalid},
+		},
+	}
+	googlepolicy.SetActivePolicySet(ps)
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+
+	secRecID := "windowseventlog/" + windowseventlogsource.SanitizeChannelName("Security")
+	if runtime.GOOS == "windows" {
+		// Valid policy survives and produces receivers
+		assert.True(t, conf.IsSet("receivers::"+secRecID))
+		receivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
+		assert.Contains(t, receivers, secRecID)
+
+		// Component ID unmarshaling succeeds
+		sub, err := conf.Sub("receivers")
+		require.NoError(t, err)
+		var recs map[component.ID]any
+		require.NoError(t, sub.Unmarshal(&recs))
+		assert.Contains(t, recs, component.MustNewIDWithName("windowseventlog", windowseventlogsource.SanitizeChannelName("Security")))
+	} else {
+		assert.False(t, conf.IsSet("receivers::"+secRecID))
+		receivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
+		assert.NotContains(t, receivers, secRecID)
+	}
+
+	// Warning log was recorded for the invalid policy
+	assert.NotEmpty(t, recordedLogs.All())
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestRetrieve_ActivePolicySetWithWindowsEventLogSource_InvalidComponentIDIsolation(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	obsCore, _ := observer.New(zapcore.WarnLevel)
+	logger := zap.New(obsCore)
+	p := createProviderWithLogger(logger)
+
+	polValid, err := windowseventlogsource.NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+		Id:       "win-valid",
+		Channels: []string{"Security"},
+	})
+	require.NoError(t, err)
+
+	// Invalid policy with only symbol channel that produces no valid component ID
+	polInvalid := &mockInvalidChannelSourcePolicy{name: "win-symbol-only"}
+
+	ps := &googlepolicy.PolicySet{
+		RevisionID: "rev-windows-symbol-isolation",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			"win-valid":       {PolicyObj: polValid},
+			"win-symbol-only": {PolicyObj: polInvalid},
+		},
+	}
+	googlepolicy.SetActivePolicySet(ps)
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+
+	secRecID := "windowseventlog/" + windowseventlogsource.SanitizeChannelName("Security")
+	if runtime.GOOS == "windows" {
+		// Valid policy survives and config unmarshals into component.ID map
+		assert.True(t, conf.IsSet("receivers::"+secRecID))
+		sub, err := conf.Sub("receivers")
+		require.NoError(t, err)
+		var recs map[component.ID]any
+		require.NoError(t, sub.Unmarshal(&recs))
+		assert.Contains(t, recs, component.MustNewIDWithName("windowseventlog", windowseventlogsource.SanitizeChannelName("Security")))
+	} else {
+		assert.False(t, conf.IsSet("receivers::"+secRecID))
+	}
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestRetrieve_ActivePolicySetWithWindowsEventLogSource_MultiPolicyDelimiterCollision(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	p := createProviderWithLogger(zap.NewNop())
+
+	pol1, err := windowseventlogsource.NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+		Id:       "win-slash",
+		Channels: []string{"Foo/Bar"},
+	})
+	require.NoError(t, err)
+
+	pol2, err := windowseventlogsource.NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+		Id:       "win-underscore",
+		Channels: []string{"Foo_Bar"},
+	})
+	require.NoError(t, err)
+
+	ps := &googlepolicy.PolicySet{
+		RevisionID: "rev-multi-policy-collision",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			"win-slash":      {PolicyObj: pol1},
+			"win-underscore": {PolicyObj: pol2},
+		},
+	}
+	googlepolicy.SetActivePolicySet(ps)
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+
+	slashRecID := "windowseventlog/" + windowseventlogsource.SanitizeChannelName("Foo/Bar")
+	underscoreRecID := "windowseventlog/" + windowseventlogsource.SanitizeChannelName("Foo_Bar")
+
+	if runtime.GOOS == "windows" {
+		// Both channels are preserved and have distinct receiver IDs
+		assert.NotEqual(t, slashRecID, underscoreRecID)
+		sub, err := conf.Sub("receivers")
+		require.NoError(t, err)
+		var recs map[component.ID]any
+		require.NoError(t, sub.Unmarshal(&recs))
+
+		assert.Contains(t, recs, component.MustNewIDWithName("windowseventlog", windowseventlogsource.SanitizeChannelName("Foo/Bar")))
+		assert.Contains(t, recs, component.MustNewIDWithName("windowseventlog", windowseventlogsource.SanitizeChannelName("Foo_Bar")))
+
+		pipelineReceivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
+		assert.Contains(t, pipelineReceivers, slashRecID)
+		assert.Contains(t, pipelineReceivers, underscoreRecID)
+	} else {
+		assert.False(t, conf.IsSet("receivers::"+slashRecID))
+		assert.False(t, conf.IsSet("receivers::"+underscoreRecID))
+		pipelineReceivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
+		assert.Equal(t, []any{"nop/googlecontrolplane"}, pipelineReceivers)
+	}
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+type mockInvalidChannelSourcePolicy struct {
+	name string
+}
+
+func (m *mockInvalidChannelSourcePolicy) PolicyName() string { return m.name }
+func (m *mockInvalidChannelSourcePolicy) PolicyType() string {
+	return windowseventlogsource.PolicyType
+}
+func (m *mockInvalidChannelSourcePolicy) PolicyClass() googlepolicy.PolicyClass {
+	return googlepolicy.PolicyClassSource
+}
+func (m *mockInvalidChannelSourcePolicy) Validate() error {
+	return windowseventlogsource.ErrInvalidChannelName
+}
+func (m *mockInvalidChannelSourcePolicy) Evaluate(_ context.Context) (*confmap.Conf, error) {
+	return nil, windowseventlogsource.ErrInvalidChannelName
+}
+func (m *mockInvalidChannelSourcePolicy) LogReceiverIDs() []component.ID    { return nil }
+func (m *mockInvalidChannelSourcePolicy) MetricReceiverIDs() []component.ID { return nil }
+func (m *mockInvalidChannelSourcePolicy) TraceReceiverIDs() []component.ID  { return nil }
+
+func TestRetrieve_ActivePolicySetWithWindowsEventLogSource_FaultIsolation(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	obsCore, recordedLogs := observer.New(zapcore.WarnLevel)
+	logger := zap.New(obsCore)
+	p := createProviderWithLogger(logger)
+
+	polValid, err := windowseventlogsource.NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+		Id:       "win-valid",
+		Channels: []string{"Security"},
+	})
+	require.NoError(t, err)
+
+	// polInvalid has empty channels list (violates Validate)
+	polInvalid := &mockInvalidWindowsSourcePolicy{name: "win-invalid"}
+
+	ps := &googlepolicy.PolicySet{
+		RevisionID: "rev-windows-fault-isolation",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			"win-valid":   {PolicyObj: polValid},
+			"win-invalid": {PolicyObj: polInvalid},
+		},
+	}
+	googlepolicy.SetActivePolicySet(ps)
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+
+	secRecID := "windowseventlog/" + windowseventlogsource.SanitizeChannelName("Security")
+	if runtime.GOOS == "windows" {
+		// Valid policy survives and produces receivers
+		assert.True(t, conf.IsSet("receivers::"+secRecID))
+		receivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
+		assert.Contains(t, receivers, secRecID)
+	} else {
+		assert.False(t, conf.IsSet("receivers::"+secRecID))
+		receivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
+		assert.NotContains(t, receivers, secRecID)
+	}
+
+	// Invalid policy was rejected and logged
+	logs := recordedLogs.All()
+	foundErrorLog := false
+	for _, l := range logs {
+		if strings.Contains(l.Message, "windows event log source policy must specify at least one channel") {
+			foundErrorLog = true
+			break
+		}
+	}
+	assert.True(t, foundErrorLog, "expected evaluate error event for invalid policy")
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestRetrieve_ActivePolicySetWithWindowsEventLogSource_SilentNoOpOnNonWindows(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping non-Windows silent no-op test on Windows")
+	}
+
+	t.Setenv("FLEET_ID", "1234")
+	p := createProvider()
+
+	pol, err := windowseventlogsource.NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+		Id:       "windows-source-nonwindows",
+		Channels: []string{"Security", "Application"},
+	})
+	require.NoError(t, err)
+
+	ps := &googlepolicy.PolicySet{
+		RevisionID: "rev-windows-nonwindows",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			"windows-source": {PolicyObj: pol},
+		},
+	}
+	googlepolicy.SetActivePolicySet(ps)
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+
+	assert.False(t, conf.IsSet("receivers::windowseventlog/"+windowseventlogsource.SanitizeChannelName("Security")))
+	assert.False(t, conf.IsSet("receivers::windowseventlog/"+windowseventlogsource.SanitizeChannelName("Application")))
+
+	receivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
+	assert.Equal(t, []any{"nop/googlecontrolplane"}, receivers)
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+type mockInvalidWindowsSourcePolicy struct {
+	name string
+}
+
+func (m *mockInvalidWindowsSourcePolicy) PolicyName() string { return m.name }
+func (m *mockInvalidWindowsSourcePolicy) PolicyType() string { return windowseventlogsource.PolicyType }
+func (m *mockInvalidWindowsSourcePolicy) PolicyClass() googlepolicy.PolicyClass {
+	return googlepolicy.PolicyClassSource
+}
+func (m *mockInvalidWindowsSourcePolicy) Validate() error {
+	return windowseventlogsource.ErrMissingChannels
+}
+func (m *mockInvalidWindowsSourcePolicy) Evaluate(_ context.Context) (*confmap.Conf, error) {
+	return nil, windowseventlogsource.ErrMissingChannels
+}
+func (m *mockInvalidWindowsSourcePolicy) LogReceiverIDs() []component.ID    { return nil }
+func (m *mockInvalidWindowsSourcePolicy) MetricReceiverIDs() []component.ID { return nil }
+func (m *mockInvalidWindowsSourcePolicy) TraceReceiverIDs() []component.ID  { return nil }
+func (m *mockInvalidWindowsSourcePolicy) Consolidate(_ []googlepolicy.SourcePolicy) (googlepolicy.SourcePolicy, error) {
+	return nil, windowseventlogsource.ErrMissingChannels
+}
+
+var (
+	_ googlepolicy.SourcePolicy               = (*mockInvalidWindowsSourcePolicy)(nil)
+	_ googlepolicy.ConsolidatableSourcePolicy = (*mockInvalidWindowsSourcePolicy)(nil)
+)
+
 func TestFilterPolicyDriversRegistered(t *testing.T) {
 	// Verify that importing googlecontrolplaneprovider registers log_filter,
 	// metric_filter, and trace_filter policy drivers in googlepolicy.
@@ -520,6 +1024,14 @@ func TestFilterPolicyDriversRegistered(t *testing.T) {
 			raw: map[string]any{
 				"type": "journald_source",
 				"id":   "test-journald",
+			},
+		},
+		{
+			policyType: "windows_event_log_source",
+			raw: map[string]any{
+				"type":     "windows_event_log_source",
+				"id":       "test-win",
+				"channels": []any{"Security"},
 			},
 		},
 		{

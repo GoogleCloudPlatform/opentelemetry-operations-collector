@@ -193,6 +193,45 @@ func TestXDSTPResourceName(t *testing.T) {
 	)
 }
 
+func TestBuildNode_NodeID(t *testing.T) {
+	t.Run("formats short fleet ID with projectID", func(t *testing.T) {
+		m := &xdsPolicyManager{
+			collectorID:   "collector-abc",
+			fleetID:       "fleet-1",
+			projectID:     "my-project",
+			projectNumber: "123456789",
+			region:        "us-central1",
+		}
+		node := m.buildNode()
+		assert.Equal(t, "projects/my-project/locations/us-central1/fleets/fleet-1", node.GetId())
+		assert.Equal(t, "fleet-1", node.GetCluster())
+		assert.Equal(t, "collector-abc", node.GetMetadata().GetFields()["service.instance.id"].GetStringValue())
+	})
+
+	t.Run("falls back to projectNumber when projectID is empty", func(t *testing.T) {
+		m := &xdsPolicyManager{
+			collectorID:   "collector-abc",
+			fleetID:       "fleet-1",
+			projectNumber: "123456789",
+			region:        "us-central1",
+		}
+		node := m.buildNode()
+		assert.Equal(t, "projects/123456789/locations/us-central1/fleets/fleet-1", node.GetId())
+	})
+
+	t.Run("preserves full fleet resource name without double wrapping", func(t *testing.T) {
+		m := &xdsPolicyManager{
+			collectorID: "collector-abc",
+			fleetID:     "projects/my-project/locations/us-central1/fleets/fleet-1",
+			projectID:   "my-project",
+			region:      "us-central1",
+		}
+		node := m.buildNode()
+		assert.Equal(t, "projects/my-project/locations/us-central1/fleets/fleet-1", node.GetId())
+		assert.Equal(t, "projects/my-project/locations/us-central1/fleets/fleet-1", node.GetCluster())
+	})
+}
+
 func TestNewXDSPolicyManager_ProjectAndRegionResolution(t *testing.T) {
 	logger := zap.NewNop()
 

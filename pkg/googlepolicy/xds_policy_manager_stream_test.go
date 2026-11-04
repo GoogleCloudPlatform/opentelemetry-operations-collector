@@ -344,7 +344,9 @@ func TestXDSPolicyManager_PopulatesNodeLocalityAndMetadataFromGCEMetadata(t *tes
 	assert.Equal(t, []string{
 		"xdstp://telemetry-director.us-central1.xds.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector/projects/123456789/fleets/fleet-1/collectors/default",
 	}, req.GetResourceNames())
-	assert.Equal(t, "projects/my-project/locations/us-central1/fleets/fleet-1", req.GetNode().GetId())
+	// Node.Id is the same project-number-based Fleet name as the subscription
+	// and the reported gcp.fleet_id, not the readable project ID.
+	assert.Equal(t, "projects/123456789/locations/us-central1/fleets/fleet-1", req.GetNode().GetId())
 	assert.Equal(t, "us-central1", req.GetNode().GetLocality().GetRegion())
 	assert.Equal(t, "us-central1-a", req.GetNode().GetLocality().GetZone())
 	assert.Equal(t, map[string]any{

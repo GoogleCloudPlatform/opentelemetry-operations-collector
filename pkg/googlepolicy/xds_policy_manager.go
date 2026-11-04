@@ -239,8 +239,9 @@ type xdsPolicyManager struct {
 	fleetID     string
 	// fleetName is the full Fleet resource name
 	// ("projects/{project}/locations/{location}/fleets/{fleet_id}") the
-	// collector reports itself under on its own telemetry. The xDS node keeps
-	// using the short fleetID.
+	// collector identifies itself with: it is sent as the xDS node ID and
+	// reported as gcp.fleet_id on the collector's own telemetry. The xDS node
+	// cluster and metadata keep using the short fleetID.
 	fleetName     string
 	projectID     string
 	projectNumber string
@@ -330,11 +331,12 @@ type xdsPolicyManager struct {
 //	                 ("projects/{project}/locations/{location}/fleets/{fleet_id}").
 //	                 The short ID names the fleet in the subscribed resource (see
 //	                 xdstpResourceName) and is sent as this node's xDS cluster.
-//	                 The full name is exposed via FleetID() for the provider to
-//	                 attribute the collector's own telemetry: a full name is used
-//	                 verbatim, and its project and location take precedence over
-//	                 the `project`, `project_number` and `region` parameters and
-//	                 their environment variables; a short ID is completed to
+//	                 The full name is sent as this node's xDS ID and exposed via
+//	                 FleetID() for the provider to attribute the collector's own
+//	                 telemetry: a full name is used verbatim, and its project and
+//	                 location take precedence over the `project`, `project_number`
+//	                 and `region` parameters and their environment variables; a
+//	                 short ID is completed to
 //	                 "projects/{project_number}/locations/{region}/fleets/{id}"
 //	                 from the same project number and region as the subscription.
 //	project_number - optional. Numeric project number for the xdstp:// resource
@@ -802,9 +804,13 @@ func (m *xdsPolicyManager) PolicyEvaluationResult(string, error) {}
 //
 // Id carries the full Fleet resource name
 // ("projects/{project}/locations/{location}/fleets/{fleet}") required by the
-// API. The collector instance ID is carried in Metadata["service.instance.id"].
-// Locality carries the resolved region and zone, and Metadata carries the
-// OpenTelemetry resource attributes describing this collector instance.
+// API. It is the same fleetName the collector reports as gcp.fleet_id on its
+// own telemetry, so the control plane and the telemetry backends see one
+// identity for the fleet. Cluster and Metadata["gcp.fleet_id"] keep the short
+// fleet ID for backwards compatibility. The collector instance ID is carried
+// in Metadata["service.instance.id"]. Locality carries the resolved region and
+// zone, and Metadata carries the OpenTelemetry resource attributes describing
+// this collector instance.
 func (m *xdsPolicyManager) buildNode() *corev3.Node {
 	metaFields := map[string]*structpb.Value{
 		"service.instance.id": structpb.NewStringValue(m.collectorID),
@@ -818,17 +824,8 @@ func (m *xdsPolicyManager) buildNode() *corev3.Node {
 		metaFields["cloud.availability_zone"] = structpb.NewStringValue(m.zone)
 	}
 
-	nodeID := m.fleetID
-	if !strings.HasPrefix(nodeID, "projects/") {
-		project := m.projectID
-		if project == "" {
-			project = m.projectNumber
-		}
-		nodeID = fmt.Sprintf("projects/%s/locations/%s/fleets/%s", project, m.region, m.fleetID)
-	}
-
 	return &corev3.Node{
-		Id:      nodeID,
+		Id:      m.fleetName,
 		Cluster: m.fleetID,
 		Locality: &corev3.Locality{
 			Region: m.region,

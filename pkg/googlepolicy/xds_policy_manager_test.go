@@ -194,41 +194,75 @@ func TestXDSTPResourceName(t *testing.T) {
 }
 
 func TestBuildNode_NodeID(t *testing.T) {
-	t.Run("formats short fleet ID with projectID", func(t *testing.T) {
-		m := &xdsPolicyManager{
-			collectorID:   "collector-abc",
-			fleetID:       "fleet-1",
-			projectID:     "my-project",
-			projectNumber: "123456789",
-			region:        "us-central1",
-		}
+	logger := zap.NewNop()
+
+	mustParse := func(rawURI string) *url.URL {
+		t.Helper()
+		u, err := url.Parse(rawURI)
+		require.NoError(t, err)
+		return u
+	}
+
+	// Node.Id must always be the same full Fleet resource name the collector
+	// reports as gcp.fleet_id (FleetID()), so the control plane and the
+	// telemetry backends agree on the fleet's identity.
+	t.Run("short fleet ID is completed with the project number used by the subscription", func(t *testing.T) {
+		clearXDSResolutionEnv(t)
+		withGCEMetadata(t, fakeGCEMetadata{
+			onGCE:            true,
+			projectID:        "my-project",
+			numericProjectID: "123456789",
+			zone:             "us-central1-a",
+		})
+
+		mgr, err := NewXDSPolicyManager(logger, mustParse("xds://127.0.0.1:8080?gcp.fleet_id=fleet-1"), "collector-abc")
+		require.NoError(t, err)
+		m := mgr.(*xdsPolicyManager)
 		node := m.buildNode()
-		assert.Equal(t, "projects/my-project/locations/us-central1/fleets/fleet-1", node.GetId())
+		assert.Equal(t, "projects/123456789/locations/us-central1/fleets/fleet-1", node.GetId())
+		assert.Equal(t, m.FleetID(), node.GetId())
 		assert.Equal(t, "fleet-1", node.GetCluster())
+		assert.Equal(t, "fleet-1", node.GetMetadata().GetFields()["gcp.fleet_id"].GetStringValue())
+		assert.Equal(t, "my-project", node.GetMetadata().GetFields()["gcp.project_id"].GetStringValue())
 		assert.Equal(t, "collector-abc", node.GetMetadata().GetFields()["service.instance.id"].GetStringValue())
 	})
 
-	t.Run("falls back to projectNumber when projectID is empty", func(t *testing.T) {
-		m := &xdsPolicyManager{
-			collectorID:   "collector-abc",
-			fleetID:       "fleet-1",
-			projectNumber: "123456789",
-			region:        "us-central1",
-		}
-		node := m.buildNode()
-		assert.Equal(t, "projects/123456789/locations/us-central1/fleets/fleet-1", node.GetId())
-	})
+	t.Run("falls back to the project ID when no project number is available", func(t *testing.T) {
+		clearXDSResolutionEnv(t)
+		withGCEMetadata(t, fakeGCEMetadata{})
 
-	t.Run("preserves full fleet resource name without double wrapping", func(t *testing.T) {
-		m := &xdsPolicyManager{
-			collectorID: "collector-abc",
-			fleetID:     "projects/my-project/locations/us-central1/fleets/fleet-1",
-			projectID:   "my-project",
-			region:      "us-central1",
-		}
+		mgr, err := NewXDSPolicyManager(logger, mustParse("xds://127.0.0.1:8080?gcp.fleet_id=fleet-1&project=my-project&region=us-central1"), "collector-abc")
+		require.NoError(t, err)
+		m := mgr.(*xdsPolicyManager)
 		node := m.buildNode()
 		assert.Equal(t, "projects/my-project/locations/us-central1/fleets/fleet-1", node.GetId())
-		assert.Equal(t, "projects/my-project/locations/us-central1/fleets/fleet-1", node.GetCluster())
+		assert.Equal(t, m.FleetID(), node.GetId())
+	})
+
+	t.Run("full fleet resource name is sent as written", func(t *testing.T) {
+		clearXDSResolutionEnv(t)
+		withGCEMetadata(t, fakeGCEMetadata{
+			onGCE:            true,
+			projectID:        "my-project",
+			numericProjectID: "123456789",
+			zone:             "us-central1-a",
+		})
+
+		for _, name := range []string{
+			"projects/my-project/locations/us-east1/fleets/fleet-1",
+			"projects/123456789/locations/us-east1/fleets/fleet-1",
+		} {
+			mgr, err := NewXDSPolicyManager(logger, mustParse("xds://127.0.0.1:8080?gcp.fleet_id="+name), "collector-abc")
+			require.NoError(t, err)
+			m := mgr.(*xdsPolicyManager)
+			node := m.buildNode()
+			assert.Equal(t, name, node.GetId())
+			assert.Equal(t, m.FleetID(), node.GetId())
+			// The subscription, cluster and metadata keep the short ID.
+			assert.Equal(t, "fleet-1", node.GetCluster())
+			assert.Equal(t, "fleet-1", node.GetMetadata().GetFields()["gcp.fleet_id"].GetStringValue())
+			assert.Equal(t, "us-east1", node.GetLocality().GetRegion())
+		}
 	})
 }
 

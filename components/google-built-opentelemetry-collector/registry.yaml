@@ -12,6 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+receivers:
+  selftelemetry:
+    gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/receiver/selftelemetryreceiver v0.0.0
+    path: "../components/google-built-opentelemetry-collector/receiver/selftelemetryreceiver"
+
 exporters:
   googleservicecontrol:
     gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter v0.0.0
@@ -37,3 +42,9 @@ providers:
   googlecontrolplane:
     gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider v0.0.0
     path: "../components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider"
+
+telemetry:
+  inprocess:
+    gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/receiver/selftelemetryreceiver v0.0.0
+    import: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/receiver/selftelemetryreceiver/inprocesstelemetry
+    path: "../components/google-built-opentelemetry-collector/receiver/selftelemetryreceiver"

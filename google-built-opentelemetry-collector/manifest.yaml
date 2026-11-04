@@ -8,6 +8,8 @@ dist:
   output_path: ./generated_collector
 
 receivers:
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/receiver/selftelemetryreceiver v0.165.0
+  path: ../components/google-built-opentelemetry-collector/receiver/selftelemetryreceiver
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/dockerstatsreceiver v0.165.1
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver v0.165.1
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/fluentforwardreceiver v0.165.1
@@ -120,10 +122,17 @@ providers:
 - gomod: go.opentelemetry.io/collector/confmap/provider/httpsprovider v1.71.0
 - gomod: go.opentelemetry.io/collector/confmap/provider/yamlprovider v1.71.0
 
+telemetry:
+  gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/receiver/selftelemetryreceiver v0.165.0
+  import: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/receiver/selftelemetryreceiver/inprocesstelemetry
+  path: ../components/google-built-opentelemetry-collector/receiver/selftelemetryreceiver
+
 replaces:
+- github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/receiver/selftelemetryreceiver => ../../components/google-built-opentelemetry-collector/receiver/selftelemetryreceiver
 - github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter => ../../components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter
 - github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/healthagent => ../../components/google-built-opentelemetry-collector/extension/healthagent
 - github.com/open-telemetry/opentelemetry-collector-contrib/extension/oauth2clientauthextension => ../../components/google-built-opentelemetry-collector/extension/oauth2clientauthextension
+- github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/receiver/selftelemetryreceiver => ../../components/google-built-opentelemetry-collector/receiver/selftelemetryreceiver
 # Force update go-jose/v4 to v4.1.6 to fix CVE-2026-116587
 - github.com/go-jose/go-jose/v4 => github.com/go-jose/go-jose/v4 v4.1.6
 

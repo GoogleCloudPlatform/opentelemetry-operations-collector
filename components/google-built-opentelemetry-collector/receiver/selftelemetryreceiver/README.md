@@ -1,0 +1,70 @@
+# Self-telemetry receiver (in-process)
+
+| Status    |                                         |
+| --------- | --------------------------------------- |
+| Stability | development: metrics                    |
+| Distros   | google-built-opentelemetry-collector    |
+
+The `selftelemetry` receiver emits the Collector's own internal metrics
+(`otelcol_*`) into a regular metrics pipeline **without exposing any host
+endpoint**. There is no TCP port, Unix socket, named pipe or file involved:
+the metrics are handed over in memory inside the Collector process.
+
+This is an alternative to the common pattern of having the Collector expose
+its internal metrics on a Prometheus endpoint (e.g. `localhost:8888`) and
+scraping that endpoint with a `prometheus` receiver.
+
+## How it works
+
+This module contains two pieces that must be used together:
+
+1. `inprocesstelemetry.NewFactory()` - a `telemetry.Factory` for the Collector
+   binary (set via the `telemetry:` stanza of an OCB manifest). It behaves
+   exactly like upstream `otelconftelemetry` (all `service::telemetry` config
+   is unchanged), but additionally registers an in-memory
+   `sdkmetric.ManualReader` on the internal-telemetry `MeterProvider`.
+2. The `selftelemetry` receiver, which on every `collection_interval`
+   collects from that reader and converts the result to `pmetric.Metrics`.
+   The conversion reuses the OTel Go SDK's OTLP/HTTP exporter with an
+   in-memory `http.RoundTripper`, so no request ever leaves the process.
+
+If the binary was not built with `inprocesstelemetry`, or if
+`service::telemetry::metrics::level` is `none`, the receiver logs a warning
+once and emits nothing.
+
+## Configuration
+
+| Field                 | Default | Description                        |
+| --------------------- | ------- | ---------------------------------- |
+| `collection_interval` | `1m`    | How often internal metrics are read |
+| `initial_delay`       | `1s`    | Delay before the first collection   |
+| `timeout`             | `0`     | Per-collection timeout (0 = none)   |
+
+```yaml
+receivers:
+  selftelemetry:
+    collection_interval: 60s
+
+exporters:
+  googlecloud:
+
+service:
+  telemetry:
+    metrics:
+      # Optional: drop the Prometheus pull endpoint entirely.
+      readers: []
+  pipelines:
+    metrics/self:
+      receivers: [selftelemetry]
+      exporters: [googlecloud]
+```
+
+## Differences from scraping the Prometheus endpoint
+
+* The resource is the Collector's telemetry resource (`service.name`,
+  `service.instance.id`, `service.version`, ...) rather than the
+  scrape-target-derived resource produced by the `prometheus` receiver.
+* Metric names are the original instrument names, histograms keep their
+  native OTLP form, and there are no `scrape_*` / `up` metrics and no
+  `promhttp_*` handler metrics.
+* Instrumentation scope name/version is preserved.

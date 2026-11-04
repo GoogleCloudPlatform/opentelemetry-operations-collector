@@ -52,7 +52,10 @@ type Registry struct {
 	Connectors RegistryComponents `yaml:"connectors"`
 	Extensions RegistryComponents `yaml:"extensions"`
 	Providers  RegistryComponents `yaml:"providers"`
-	Path       string             `yaml:"-"`
+	// Telemetry contains telemetry.Factory modules (the Collector's internal
+	// telemetry provider). A distribution may select at most one.
+	Telemetry RegistryComponents `yaml:"telemetry,omitempty"`
+	Path      string             `yaml:"-"`
 
 	// moduleVersions is the released version of every module published by the
 	// core and contrib repositories. It is empty until ResolveOTelModuleVersions
@@ -71,6 +74,7 @@ func NewRegistry() *Registry {
 		Connectors: RegistryComponents{},
 		Extensions: RegistryComponents{},
 		Providers:  RegistryComponents{},
+		Telemetry:  RegistryComponents{},
 	}
 }
 
@@ -102,6 +106,10 @@ func (r *Registry) Merge(r2 *Registry) {
 	mapMerge(r.Connectors, r2.Connectors)
 	mapMerge(r.Extensions, r2.Extensions)
 	mapMerge(r.Providers, r2.Providers)
+	if r.Telemetry == nil {
+		r.Telemetry = RegistryComponents{}
+	}
+	mapMerge(r.Telemetry, r2.Telemetry)
 }
 
 func (r *Registry) Add(componentType ComponentType, component *RegistryComponent) {
@@ -254,6 +262,22 @@ func (c *RegistryComponent) GetOCBComponent() OCBManifestComponent {
 		Name:   c.Name,
 		Path:   c.Path,
 	}
+}
+
+// RenderOCBModule renders this component as a single OCB manifest module
+// (a YAML mapping rather than a list entry), indented to sit under a
+// top-level manifest key such as `telemetry:`.
+func (c *RegistryComponent) RenderOCBModule() string {
+	out := renderYaml(OCBManifestComponent{
+		GoMod:  c.GoMod,
+		Import: c.Import,
+		Path:   c.Path,
+	})
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	for i, l := range lines {
+		lines[i] = "  " + l
+	}
+	return strings.Join(lines, "\n") + "\n"
 }
 
 // RegistryComponentRelease is a particular tag of a component that declares

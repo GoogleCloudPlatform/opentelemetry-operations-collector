@@ -148,6 +148,9 @@ func (p *Policy) Validate() error {
 		if trimmed == "" {
 			return ErrEmptyChannelName
 		}
+		if strings.ContainsRune(trimmed, '\x00') {
+			return fmt.Errorf("%w: %q contains NUL character", ErrInvalidChannelName, ch)
+		}
 		san := SanitizeChannelName(trimmed)
 		if san == "" {
 			return fmt.Errorf("%w: %q contains no valid characters", ErrInvalidChannelName, ch)
@@ -202,7 +205,7 @@ const (
 // across policy set revisions for persistent bookmark storage.
 func SanitizeChannelName(channel string) string {
 	trimmed := strings.TrimSpace(channel)
-	if trimmed == "" {
+	if trimmed == "" || strings.ContainsRune(trimmed, '\x00') {
 		return ""
 	}
 
@@ -213,7 +216,8 @@ func SanitizeChannelName(channel string) string {
 	var sb strings.Builder
 	lastUnderscore := false
 
-	for _, r := range trimmed {
+	// Build prefix from canonical to guarantee prefix is 100% invariant to input casing variants
+	for _, r := range canonical {
 		if unicode.Is(unicode.Z, r) || unicode.Is(unicode.C, r) || unicode.Is(unicode.S, r) || r == '/' || r == '\\' || r == ':' || r == '_' {
 			if !lastUnderscore && sb.Len() > 0 {
 				sb.WriteRune('_')

@@ -254,16 +254,15 @@ func FuzzSanitizeChannelName(f *testing.F) {
 			t.Fatalf("SanitizeChannelName(%q) = %q contains forbidden character", channel, san)
 		}
 
-		// Invariant 4: Deterministic and casing invariant
+		// Invariant 4: Deterministic and canonical casing invariant:
+		// Any two strings that share the same canonical channel name must produce identical receiver IDs.
 		if san != "" {
 			if san2 := SanitizeChannelName(channel); san2 != san {
 				t.Fatalf("SanitizeChannelName is not deterministic: san(%q) = %q, san(%q) = %q", channel, san, channel, san2)
 			}
-			if sanLower := SanitizeChannelName(strings.ToLower(channel)); sanLower != san {
-				t.Fatalf("SanitizeChannelName is not casing invariant with lowercase: san(%q) = %q vs san(ToLower) = %q", channel, san, sanLower)
-			}
-			if sanUpper := SanitizeChannelName(strings.ToUpper(channel)); sanUpper != san {
-				t.Fatalf("SanitizeChannelName is not casing invariant with uppercase: san(%q) = %q vs san(ToUpper) = %q", channel, san, sanUpper)
+			canon := canonicalChannel(strings.TrimSpace(channel))
+			if sanCanon := SanitizeChannelName(canon); sanCanon != san {
+				t.Fatalf("SanitizeChannelName is not invariant with canonical: san(%q) = %q vs san(canon %q) = %q", channel, san, canon, sanCanon)
 			}
 		}
 
@@ -426,20 +425,61 @@ func FuzzPolicy_ReceiverID_SetIndependence(f *testing.F) {
 			return
 		}
 
-		// Invariant: For every channel in this multi-channel policy, its synthesized receiver ID
-		// must be 100% identical when evaluated alone in an isolated single-channel policy.
+		// For every channel in this multi-channel policy, verify that:
+		// 1. Its synthesized receiver ID is 100% identical when evaluated alone (standalone).
+		// 2. Its receiver ID is identical when evaluated with alternative casing variants (canonical).
+		// 3. Merging with a second policy containing alternative casing variants preserves the exact same receiver ID.
 		for _, ch := range p.Channels() {
-			standalone, err := NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
-				Id:       "standalone-policy",
+			canonical := canonicalChannel(ch)
+			expectedID := SanitizeChannelName(canonical)
+
+			// Standalone policy with raw channel
+			standaloneRaw, err := NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+				Id:       "standalone-raw",
 				Channels: []string{ch},
 			})
 			if err != nil {
-				t.Fatalf("standalone policy for channel %q failed validation: %v", ch, err)
+				t.Fatalf("standalone raw policy for %q failed: %v", ch, err)
 			}
-			standaloneID := standalone.channelReceivers()[0].id.Name()
-			expectedID := SanitizeChannelName(ch)
-			if standaloneID != expectedID {
-				t.Fatalf("standalone ID mismatch for %q: got %q, want %q", ch, standaloneID, expectedID)
+			if id := standaloneRaw.channelReceivers()[0].id.Name(); id != expectedID {
+				t.Fatalf("standalone raw ID mismatch for %q: got %q, want %q", ch, id, expectedID)
+			}
+
+			// Standalone policy with uppercase/canonical channel
+			standaloneCanon, err := NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+				Id:       "standalone-canon",
+				Channels: []string{canonical},
+			})
+			if err != nil {
+				t.Fatalf("standalone canon policy for %q failed: %v", canonical, err)
+			}
+			if id := standaloneCanon.channelReceivers()[0].id.Name(); id != expectedID {
+				t.Fatalf("standalone canon ID mismatch for %q: got %q, want %q", canonical, id, expectedID)
+			}
+
+			// Consolidate with a sibling policy that supplies the alternative casing variant
+			siblingPolicy, err := NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+				Id:       "sibling-policy",
+				Channels: []string{canonical},
+			})
+			if err != nil {
+				t.Fatalf("sibling policy failed: %v", err)
+			}
+			consolidated, err := p.Consolidate([]googlepolicy.SourcePolicy{siblingPolicy})
+			if err != nil {
+				t.Fatalf("consolidation failed: %v", err)
+			}
+			found := false
+			for _, rec := range consolidated.(*Policy).channelReceivers() {
+				if canonicalChannel(rec.channel) == canonical {
+					found = true
+					if rec.id.Name() != expectedID {
+						t.Fatalf("consolidated ID mismatch for %q: got %q, want %q", ch, rec.id.Name(), expectedID)
+					}
+				}
+			}
+			if !found {
+				t.Fatalf("channel %q not found in consolidated policy", ch)
 			}
 		}
 	})

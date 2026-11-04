@@ -118,6 +118,14 @@ func TestPolicy_Validation(t *testing.T) {
 			wantErr: ErrInvalidChannelName,
 		},
 		{
+			name: "channel with embedded NUL character",
+			proto: &policyv1alpha1.WindowsEventLogSourcePolicy{
+				Id:       "win-1",
+				Channels: []string{"Security", "Sec\x00urity"},
+			},
+			wantErr: ErrInvalidChannelName,
+		},
+		{
 			name: "valid policy",
 			proto: &policyv1alpha1.WindowsEventLogSourcePolicy{
 				Id:       "win-1",
@@ -259,6 +267,9 @@ func TestPolicy_ReceiverID_DisambiguationAndDeterminism(t *testing.T) {
 	secID := SanitizeChannelName("Security")
 	assert.Equal(t, secID, SanitizeChannelName("security"))
 	assert.Equal(t, secID, SanitizeChannelName("SECURITY"))
+	assert.Equal(t, secID, SanitizeChannelName("ſecurity"))
+	assert.Equal(t, SanitizeChannelName("id"), SanitizeChannelName("ıd"))
+	assert.Equal(t, SanitizeChannelName("ΟΔΟΣ"), SanitizeChannelName("ΟΔΟς"))
 
 	p1, err := NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
 		Id:       "policy-alpha",

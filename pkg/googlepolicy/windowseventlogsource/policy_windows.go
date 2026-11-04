@@ -17,6 +17,7 @@
 package windowseventlogsource
 
 import (
+	"fmt"
 	"syscall"
 	"unsafe"
 )
@@ -26,6 +27,7 @@ const isWindows = true
 var (
 	kernel32          = syscall.NewLazyDLL("kernel32.dll")
 	procLCMapStringEx = kernel32.NewProc("LCMapStringEx")
+	localeInvariant   = []uint16{0} // L"" null-terminated UTF-16 string representing LOCALE_NAME_INVARIANT
 )
 
 const (
@@ -39,13 +41,16 @@ func caseFoldChannel(s string) string {
 		return ""
 	}
 	src, err := syscall.UTF16FromString(s)
-	if err != nil || len(src) == 0 {
+	if err != nil {
+		panic(fmt.Sprintf("windowseventlogsource: invalid UTF-16 channel string %q: %v", s, err))
+	}
+	if len(src) == 0 {
 		return s
 	}
 
 	// Query required buffer length (including terminating null).
-	r1, _, _ := procLCMapStringEx.Call(
-		0, // LOCALE_NAME_INVARIANT
+	r1, _, err1 := procLCMapStringEx.Call(
+		uintptr(unsafe.Pointer(&localeInvariant[0])),
 		uintptr(lcmapUppercase),
 		uintptr(unsafe.Pointer(&src[0])),
 		uintptr(len(src)),
@@ -56,12 +61,12 @@ func caseFoldChannel(s string) string {
 		0,
 	)
 	if r1 == 0 {
-		return s
+		panic(fmt.Sprintf("windowseventlogsource: LCMapStringEx buffer query failed for %q: %v", s, err1))
 	}
 
 	dst := make([]uint16, r1)
-	r2, _, _ := procLCMapStringEx.Call(
-		0, // LOCALE_NAME_INVARIANT
+	r2, _, err2 := procLCMapStringEx.Call(
+		uintptr(unsafe.Pointer(&localeInvariant[0])),
 		uintptr(lcmapUppercase),
 		uintptr(unsafe.Pointer(&src[0])),
 		uintptr(len(src)),
@@ -72,7 +77,7 @@ func caseFoldChannel(s string) string {
 		0,
 	)
 	if r2 == 0 {
-		return s
+		panic(fmt.Sprintf("windowseventlogsource: LCMapStringEx mapping failed for %q: %v", s, err2))
 	}
 	return syscall.UTF16ToString(dst)
 }

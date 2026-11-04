@@ -20,8 +20,11 @@ import "strings"
 
 const isWindows = false
 
-// caseFoldChannel is the non-Windows fallback for case-folding channel names.
-// On non-Windows platforms, strings.ToUpper is used as a documented fallback.
+// caseFoldChannel is the non-Windows fallback for case-folding channel names using strings.ToUpper.
+// This fallback exists solely so the package compiles and unit/fuzz tests can run on
+// non-Windows developer workstations and CI runners.
+// Its output is never used to build or configure production receivers, because
+// LogReceiverIDs() and ReceiverConfigs() are strictly gated off on non-Windows platforms (!isWindows).
 func caseFoldChannel(s string) string {
 	return strings.ToUpper(s)
 }

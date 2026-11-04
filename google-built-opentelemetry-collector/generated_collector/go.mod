@@ -8,6 +8,7 @@ require (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter v0.164.0
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/healthagent v0.164.0
 	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/receiver/selftelemetryreceiver v0.164.0
+	github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/telemetry/inprocesstelemetry v0.164.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/confmap/provider/googlesecretmanagerprovider v0.164.1
 	github.com/open-telemetry/opentelemetry-collector-contrib/connector/countconnector v0.164.1
 	github.com/open-telemetry/opentelemetry-collector-contrib/connector/exceptionsconnector v0.164.1
@@ -583,8 +584,10 @@ replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/compon
 
 replace github.com/open-telemetry/opentelemetry-collector-contrib/extension/oauth2clientauthextension v0.164.1 => ../../components/google-built-opentelemetry-collector/extension/oauth2clientauthextension
 
+replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/receiver/selftelemetryreceiver v0.164.0 => ../../components/google-built-opentelemetry-collector/receiver/selftelemetryreceiver
+
 replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter v0.164.0 => ../../components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter
 
-replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/receiver/selftelemetryreceiver v0.164.0 => ../../components/google-built-opentelemetry-collector/receiver/selftelemetryreceiver
+replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/telemetry/inprocesstelemetry v0.164.0 => ../../components/google-built-opentelemetry-collector/telemetry/inprocesstelemetry
 
 replace github.com/go-jose/go-jose/v4 => github.com/go-jose/go-jose/v4 v4.1.6

@@ -16,17 +16,17 @@ scraping that endpoint with a `prometheus` receiver.
 
 ## How it works
 
-This module contains two pieces that must be used together:
+The receiver requires the Collector binary to be built with the
+[`inprocesstelemetry`](../../telemetry/inprocesstelemetry/README.md) telemetry
+factory. That factory behaves exactly like upstream `otelconftelemetry` (all
+`service::telemetry` config is unchanged), but additionally attaches an
+in-memory `sdkmetric.ManualReader` to the internal-telemetry `MeterProvider`
+and exposes it via `inprocesstelemetry.Reader()`.
 
-1. `inprocesstelemetry.NewFactory()` - a `telemetry.Factory` for the Collector
-   binary (set via the `telemetry:` stanza of an OCB manifest). It behaves
-   exactly like upstream `otelconftelemetry` (all `service::telemetry` config
-   is unchanged), but additionally registers an in-memory
-   `sdkmetric.ManualReader` on the internal-telemetry `MeterProvider`.
-2. The `selftelemetry` receiver, which on every `collection_interval`
-   collects from that reader and converts the result to `pmetric.Metrics`.
-   The conversion reuses the OTel Go SDK's OTLP/HTTP exporter with an
-   in-memory `http.RoundTripper`, so no request ever leaves the process.
+On every `collection_interval` the receiver collects from that reader and
+converts the result to `pmetric.Metrics`. The conversion reuses the OTel Go
+SDK's OTLP/HTTP exporter with an in-memory `http.RoundTripper`, so no request
+ever leaves the process.
 
 If the binary was not built with `inprocesstelemetry`, or if
 `service::telemetry::metrics::level` is `none`, the receiver logs a warning

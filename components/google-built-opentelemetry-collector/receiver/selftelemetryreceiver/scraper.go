@@ -33,7 +33,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	"go.uber.org/zap"
 
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/receiver/selftelemetryreceiver/internal/inprocess"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/telemetry/inprocesstelemetry"
 )
 
 // selfScraper pulls the Collector's internal metrics from the in-process
@@ -58,7 +58,7 @@ type selfScraper struct {
 func newSelfScraper(logger *zap.Logger) *selfScraper {
 	return &selfScraper{
 		logger:    logger,
-		readerFn:  inprocess.Reader,
+		readerFn:  inprocesstelemetry.Reader,
 		transport: &inMemoryTransport{},
 	}
 }

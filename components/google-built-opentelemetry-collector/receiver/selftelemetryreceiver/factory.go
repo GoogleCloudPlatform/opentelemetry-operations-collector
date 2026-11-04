@@ -16,8 +16,9 @@
 // Collector's own internal metrics into a pipeline entirely in-process.
 //
 // It requires the Collector binary to be built with the
-// inprocesstelemetry.NewFactory() telemetry factory, which attaches an
-// in-memory reader to the internal telemetry MeterProvider. No host port,
+// inprocesstelemetry.NewFactory() telemetry factory
+// (components/google-built-opentelemetry-collector/telemetry/inprocesstelemetry),
+// which attaches an in-memory reader to the internal telemetry MeterProvider. No host port,
 // socket, named pipe or file is used.
 package selftelemetryreceiver // import "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/receiver/selftelemetryreceiver"
 

@@ -15,10 +15,10 @@
 // Package inprocesstelemetry provides a Collector telemetry.Factory that
 // behaves exactly like the upstream otelconftelemetry factory, but
 // additionally attaches an in-memory metric reader to the internal telemetry
-// MeterProvider. The selftelemetry receiver reads from that reader, which lets
-// the Collector feed its own metrics into a regular pipeline without exposing
-// any port, socket or file to the host.
-package inprocesstelemetry // import "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/receiver/selftelemetryreceiver/inprocesstelemetry"
+// MeterProvider, exposed via Reader(). The selftelemetry receiver reads from
+// that reader, which lets the Collector feed its own metrics into a regular
+// pipeline without exposing any port, socket or file to the host.
+package inprocesstelemetry // import "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/telemetry/inprocesstelemetry"
 
 import (
 	"context"
@@ -34,8 +34,6 @@ import (
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/service/telemetry"
 	"go.opentelemetry.io/collector/service/telemetry/otelconftelemetry"
-
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/receiver/selftelemetryreceiver/internal/inprocess"
 )
 
 var errMissingCollectorResource = errors.New("collector resource is required to create the meter provider")
@@ -118,7 +116,7 @@ func createMeterProvider(
 		return nil, err
 	}
 
-	reader := inprocess.NewReader()
+	reader := newReader()
 	mpConfig := cfg.Metrics.MeterProvider
 	sdk, err := otelconf.NewSDK(
 		otelconf.WithContext(ctx),
@@ -129,7 +127,7 @@ func createMeterProvider(
 		otelconf.WithMeterProviderOptions(sdkmetric.WithReader(reader)),
 	)
 	if err != nil {
-		inprocess.Release(reader)
+		releaseReader(reader)
 		return nil, err
 	}
 	return &meterProvider{
@@ -145,7 +143,7 @@ type meterProvider struct {
 }
 
 func (mp *meterProvider) Shutdown(ctx context.Context) error {
-	inprocess.Release(mp.reader)
+	releaseReader(mp.reader)
 	return mp.MeterProvider.Shutdown(ctx)
 }
 

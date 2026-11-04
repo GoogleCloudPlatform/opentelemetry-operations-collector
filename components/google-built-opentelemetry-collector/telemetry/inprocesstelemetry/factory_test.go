@@ -30,8 +30,6 @@ import (
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/service/telemetry"
 	"go.opentelemetry.io/collector/service/telemetry/otelconftelemetry"
-
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/receiver/selftelemetryreceiver/internal/inprocess"
 )
 
 func meterSettings() telemetry.MeterSettings {
@@ -101,7 +99,7 @@ func TestMeterProviderPublishesInProcessReader(t *testing.T) {
 	mp, err := f.CreateMeterProvider(ctx, meterSettings(), noReaders(t, f))
 	require.NoError(t, err)
 
-	r := inprocess.Reader()
+	r := Reader()
 	require.NotNil(t, r)
 
 	c, err := mp.Meter("test").Int64Counter("otelcol_test_counter")
@@ -119,7 +117,7 @@ func TestMeterProviderPublishesInProcessReader(t *testing.T) {
 	assert.Equal(t, "otelcol-test", v.AsString())
 
 	require.NoError(t, mp.Shutdown(ctx))
-	assert.Nil(t, inprocess.Reader(), "reader must be released on shutdown")
+	assert.Nil(t, Reader(), "reader must be released on shutdown")
 }
 
 func TestNewestMeterProviderWins(t *testing.T) {
@@ -128,19 +126,19 @@ func TestNewestMeterProviderWins(t *testing.T) {
 
 	mp1, err := f.CreateMeterProvider(ctx, meterSettings(), noReaders(t, f))
 	require.NoError(t, err)
-	r1 := inprocess.Reader()
+	r1 := Reader()
 
 	mp2, err := f.CreateMeterProvider(ctx, meterSettings(), noReaders(t, f))
 	require.NoError(t, err)
-	r2 := inprocess.Reader()
+	r2 := Reader()
 	require.NotSame(t, r1, r2)
 
 	// Shutting down the old provider (as happens after a reload) must not
 	// unpublish the new provider's reader.
 	require.NoError(t, mp1.Shutdown(ctx))
-	assert.Same(t, r2, inprocess.Reader())
+	assert.Same(t, r2, Reader())
 	require.NoError(t, mp2.Shutdown(ctx))
-	assert.Nil(t, inprocess.Reader())
+	assert.Nil(t, Reader())
 }
 
 func TestLevelNoneHasNoReader(t *testing.T) {
@@ -151,6 +149,6 @@ func TestLevelNoneHasNoReader(t *testing.T) {
 
 	mp, err := f.CreateMeterProvider(ctx, meterSettings(), cfg)
 	require.NoError(t, err)
-	assert.Nil(t, inprocess.Reader())
+	assert.Nil(t, Reader())
 	require.NoError(t, mp.Shutdown(ctx))
 }

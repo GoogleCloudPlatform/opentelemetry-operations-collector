@@ -19,6 +19,10 @@ connectors:
 {{ .Connectors.RenderOCBComponents }}
 providers:
 {{ .Providers.RenderOCBComponents }}
+{{- if .Telemetry }}
+telemetry:
+{{ .Telemetry.RenderOCBModule }}
+{{- end }}
 replaces:
 {{ .Replaces.Render }}
 {{- if .BuildTagsList }}

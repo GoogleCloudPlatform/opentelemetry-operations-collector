@@ -38,6 +38,7 @@ import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"github.com/google/go-cmp/cmp"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/iisreceiver"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/confmap"
 	"go.opentelemetry.io/collector/confmap/provider/envprovider"
@@ -529,6 +530,7 @@ func testCollectorFactories() (otelcol.Factories, error) {
 		otlpreceiver.NewFactory(),
 		newStubReceiverFactory("nop"),
 		newStubReceiverFactory("hostmetrics"),
+		iisreceiver.NewFactory(),
 	)
 	if err != nil {
 		return otelcol.Factories{}, err
@@ -1362,6 +1364,57 @@ func TestPolicySetActiveSelfMetric(t *testing.T) {
 	}
 }
 
+// TestPolicySetActiveSelfMetric_NotEmittedWithoutProvider verifies
+// that when the collector is started with a file config only (without
+// googlecontrolplaneprovider), Tango self-o11y metrics (gcp.policy.set.active)
+// are not emitted even when internal collector telemetry metrics are enabled.
+func TestPolicySetActiveSelfMetric_NotEmittedWithoutProvider(t *testing.T) {
+	otelcolBin := resolveOtelcolBinary(t)
+	tempDir := t.TempDir()
+	selfMockSrv, selfExporterAddr := startMockOTLPServer(t)
+
+	cfg := fmt.Sprintf(`receivers:
+  nop/in:
+exporters:
+  nop/out:
+service:
+  telemetry:
+    logs:
+      processors: []
+    metrics:
+      readers:
+        - periodic:
+            interval: 100
+            timeout: 200
+            exporter:
+              otlp:
+                protocol: grpc
+                endpoint: http://%s
+                insecure: true
+  pipelines:
+    logs:
+      receivers: [nop/in]
+      exporters: [nop/out]
+`, selfExporterAddr)
+	cfgPath := filepath.Join(tempDir, "config.yaml")
+	if err := os.WriteFile(cfgPath, []byte(cfg), 0644); err != nil {
+		t.Fatalf("failed to write config.yaml: %v", err)
+	}
+
+	col := startCollectorWithURIs(t, otelcolBin, fmt.Sprintf("file:%s", filepath.ToSlash(cfgPath)))
+
+	gotMetrics := waitForMetrics(selfMockSrv, 5*time.Second)
+
+	col.shutdown(t)
+
+	if len(gotMetrics) == 0 {
+		t.Fatalf("waitForMetrics() = empty, want standard internal collector metrics\ncollector logs:\n%s", col.logs())
+	}
+	if count, found := gotMetrics[googlecontrolplaneextension.MetricPolicySetActive]; found {
+		t.Errorf("got %d occurrences of %q, want 0 (gotMetrics: %v)\ncollector logs:\n%s", count, googlecontrolplaneextension.MetricPolicySetActive, gotMetrics, col.logs())
+	}
+}
+
 func stagePoliciesDir(t *testing.T, caseName string) (string, string) {
 	t.Helper()
 	tempDir := t.TempDir()
@@ -1370,15 +1423,41 @@ func stagePoliciesDir(t *testing.T, caseName string) (string, string) {
 	return tempDir, policiesDir
 }
 
-func waitForPolicySetActive(selfMockSrv *mockOTLPServer, timeout time.Duration) (int64, map[string]string, bool) {
-	deadline := time.Now().Add(timeout)
+// waitCondition reports whether fn eventually returned true,
+// checking immediately and then every checkEvery amount,
+// until waitFor has elapsed, at which point it returns false.
+// Adapted from https://github.com/golang/net/blob/v0.49.0/http2/http2_test.go#L115-L127.
+func waitCondition(waitFor, checkEvery time.Duration, fn func() bool) bool {
+	deadline := time.Now().Add(waitFor)
 	for time.Now().Before(deadline) {
-		if value, attrs, found := latestPolicySetActive(selfMockSrv.CollectedMetrics()); found {
-			return value, attrs, true
+		if fn() {
+			return true
 		}
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(checkEvery)
 	}
-	return 0, nil, false
+	return false
+}
+
+func waitForMetrics(srv *mockOTLPServer, timeout time.Duration) map[string]int {
+	var got map[string]int
+	waitCondition(timeout, 50*time.Millisecond, func() bool {
+		got = collectMetricNames(srv.CollectedMetrics())
+		return len(got) > 0
+	})
+	return got
+}
+
+func waitForPolicySetActive(selfMockSrv *mockOTLPServer, timeout time.Duration) (int64, map[string]string, bool) {
+	var (
+		value int64
+		attrs map[string]string
+		found bool
+	)
+	waitCondition(timeout, 50*time.Millisecond, func() bool {
+		value, attrs, found = latestPolicySetActive(selfMockSrv.CollectedMetrics())
+		return found
+	})
+	return value, attrs, found
 }
 
 // latestPolicySetActive returns the most recent gcp.policy.set.active data
@@ -2136,5 +2215,54 @@ service:
 	}
 	if sawErrorEventForValid {
 		t.Fatalf("unexpected gcp.policy.evaluate.error log event on selfMockSrv for valid policy %q", validPolicyID)
+	}
+}
+
+func TestPolicyIntegration_IISSourcePolicy(t *testing.T) {
+	otelcolBin := resolveOtelcolBinary(t)
+	tempDir := t.TempDir()
+
+	policiesDir := filepath.Join(tempDir, "policies")
+	if err := os.MkdirAll(policiesDir, 0755); err != nil {
+		t.Fatalf("failed to create policies directory: %v", err)
+	}
+
+	iisPolicy := `{
+  "type": "iis_source",
+  "id": "enable-iis-metrics",
+  "collection_interval_seconds": 30
+}`
+	if err := os.WriteFile(filepath.Join(policiesDir, "01-iis.json"), []byte(iisPolicy), 0644); err != nil {
+		t.Fatalf("failed to write iis policy: %v", err)
+	}
+
+	pipelineCfgPath, _, _, _, selfMockSrv := stageTestPipelineConfig(t, tempDir)
+
+	col := startCollector(t, otelcolBin, policiesDir, pipelineCfgPath)
+	defer col.shutdown(t)
+
+	// Wait for policy set active self metric to verify collector booted and applied policy set
+	value, _, found := waitForPolicySetActive(selfMockSrv, 10*time.Second)
+	if !found || value <= 0 {
+		t.Errorf("expected collector to report positive gcp.policy.set.active revision, got found=%v value=%d\nlogs:\n%s", found, value, col.logs())
+	}
+
+	// Verify no gcp.policy.evaluate.error was emitted for the policy
+	for _, batch := range selfMockSrv.CollectedLogs() {
+		for i := 0; i < batch.ResourceLogs().Len(); i++ {
+			sl := batch.ResourceLogs().At(i).ScopeLogs()
+			for j := 0; j < sl.Len(); j++ {
+				lr := sl.At(j).LogRecords()
+				for k := 0; k < lr.Len(); k++ {
+					record := lr.At(k)
+					attrs := record.Attributes()
+					eventName, hasName := attrs.Get("event.name")
+					if hasName && eventName.AsString() == "gcp.policy.evaluate.error" {
+						policyID, _ := attrs.Get("gcp.policy.id")
+						t.Errorf("unexpected gcp.policy.evaluate.error event for policy %s\nlogs:\n%s", policyID.AsString(), col.logs())
+					}
+				}
+			}
+		}
 	}
 }

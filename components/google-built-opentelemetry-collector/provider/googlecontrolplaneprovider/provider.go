@@ -652,6 +652,11 @@ func (p *provider) evaluateDedicatedSourcePolicy(
 	case *selfmetrics.SelfMetricsPolicy:
 		evalCtx := pol.ContextSetup(ctx, collectorID, fleetID)
 		sourceConf, err = pol.Evaluate(evalCtx)
+		// Self-observability pipelines must bypass user telemetry policies (googlepolicy)
+		// so that collector health metrics and policy error events cannot be dropped or mutated.
+		preProcessLogIDs = destPolicy.PreProcessLogIDs()
+		preProcessMetricIDs = destPolicy.PreProcessMetricIDs()
+		preProcessTraceIDs = destPolicy.PreProcessTraceIDs()
 	default:
 		sourceConf, err = srcPolicy.Evaluate(ctx)
 	}

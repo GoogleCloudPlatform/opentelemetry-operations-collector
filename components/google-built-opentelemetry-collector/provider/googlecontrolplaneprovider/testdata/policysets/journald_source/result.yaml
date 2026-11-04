@@ -152,7 +152,6 @@ service:
             processors:
                 - resourcedetection/default_self_metrics
                 - transform/default_self_metrics
-                - googlepolicy
                 - queue_batch/default_gcp_destination_batch_logs
             receivers:
                 - otlp/default_self_metrics
@@ -173,7 +172,6 @@ service:
             processors:
                 - resourcedetection/default_self_metrics
                 - transform/default_self_metrics
-                - googlepolicy
                 - queue_batch/default_gcp_destination_batch_metrics
             receivers:
                 - otlp/default_self_metrics

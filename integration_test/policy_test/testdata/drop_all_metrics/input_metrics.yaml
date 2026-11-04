@@ -1,0 +1,28 @@
+resourceMetrics:
+  - resource:
+      attributes:
+        - key: service.name
+          value:
+            stringValue: noisy-service
+    scopeMetrics:
+      - scope:
+          name: noisy.meter
+        metrics:
+          - name: first.dropped.metric
+            description: First metric that should be dropped
+            unit: "1"
+            gauge:
+              dataPoints:
+                - startTimeUnixNano: "1700000000000000000"
+                  timeUnixNano: "1700000010000000000"
+                  asInt: "10"
+          - name: second.dropped.metric
+            description: Second metric that should be dropped
+            unit: ms
+            sum:
+              aggregationTemporality: 2
+              isMonotonic: true
+              dataPoints:
+                - startTimeUnixNano: "1700000000000000000"
+                  timeUnixNano: "1700000010000000000"
+                  asDouble: 42.5

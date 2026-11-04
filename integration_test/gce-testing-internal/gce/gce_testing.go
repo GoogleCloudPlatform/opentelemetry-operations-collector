@@ -394,10 +394,10 @@ func OSKind(imageSpec string) string {
 	return "linux"
 }
 
-// isRetriableLookupError returns whether the given error, returned from
+// IsRetriableLookupError returns whether the given error, returned from
 // lookup[Metric|Trace]() or WaitFor[Metric|Trace](), should be retried.
 // ctx is the context the lookup ran with.
-func isRetriableLookupError(ctx context.Context, err error) bool {
+func IsRetriableLookupError(ctx context.Context, err error) bool {
 	if errors.Is(err, ErrInvalidIteratorLength) {
 		return true
 	}
@@ -535,7 +535,7 @@ func WaitForMetricSeries(ctx context.Context, logger *log.Logger, vm *VM, metric
 			logger.Printf("Successfully found series=%v", tsList)
 			return tsList, nil
 		}
-		if err != nil && !isRetriableLookupError(ctx, err) {
+		if err != nil && !IsRetriableLookupError(ctx, err) {
 			return nil, fmt.Errorf("WaitForMetric(metric=%q, extraFilters=%v): %v", metric, extraFilters, err)
 		}
 		// We can get here in two cases:
@@ -581,7 +581,7 @@ func WaitForTrace(ctx context.Context, logger *log.Logger, vm *VM, options WaitF
 		if trace != nil && err == nil {
 			return trace, nil
 		}
-		if err != nil && !isRetriableLookupError(ctx, err) {
+		if err != nil && !IsRetriableLookupError(ctx, err) {
 			return nil, fmt.Errorf("WaitForTrace() failed: %v", err)
 		}
 		logger.Printf("firstTrace check(): empty, retrying (%d/%d)...",
@@ -616,7 +616,7 @@ func AssertMetricMissing(ctx context.Context, logger *log.Logger, vm *VM, metric
 			// Success
 			return nil
 		}
-		if !isRetriableLookupError(ctx, err) {
+		if !IsRetriableLookupError(ctx, err) {
 			return fmt.Errorf("AssertMetricMissing(metric=%q): %v", metric, err)
 		}
 

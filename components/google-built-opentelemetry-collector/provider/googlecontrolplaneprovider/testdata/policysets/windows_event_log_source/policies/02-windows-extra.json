@@ -1,0 +1,9 @@
+{
+  "type": "windows_event_log_source",
+  "id": "windows_event_logs_extra",
+  "channels": [
+    "security",
+    "Application",
+    "Microsoft-Windows-Sysmon/Operational"
+  ]
+}

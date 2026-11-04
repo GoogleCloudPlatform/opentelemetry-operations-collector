@@ -1,5 +1,5 @@
 {
-  "description": "Tango-GBOC smoke test policy set (owner: xuechun). Used by integration_test/smoke_test TestTangoSmoke.",
+  "description": "GBOC Control Plane smoke test policy set. Used by integration_test/smoke_test TestControlPlaneSmoke.",
   "receiverPolicies": [
     { "fileLogSourcePolicy": { "includedPaths": ["/var/log/gboc-smoke/*.log"] } }
   ],

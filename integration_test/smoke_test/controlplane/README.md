@@ -1,13 +1,13 @@
-# Tango-GBOC smoke test setup
+# Control Plane smoke test setup
 
-`TestTangoSmoke` (`../tango_smoke_test.go`) installs the packaged
+`TestControlPlaneSmoke` (`../controlplane_smoke_test.go`) installs the packaged
 `otelcol-google` service on a GCE VM and appends
-`--config=googlecontrolplane:xds://$TANGO_CP_ENDPOINT?gcp.fleet_id=$TANGO_FLEET_ID&region=$TANGO_REGION`
+`--config=googlecontrolplane:xds://$CONTROL_PLANE_ENDPOINT?gcp.fleet_id=$CONTROL_PLANE_FLEET_ID&region=$CONTROL_PLANE_REGION`
 to the service's regular command line: through a systemd drop-in on Linux, and
 by editing the service's `ImagePath` registry value on Windows. It then polls Cloud Monitoring until the
 collector's self-o11y gauge `prometheus.googleapis.com/gcp.policy.set.active/gauge`
 reports the pre-provisioned PolicySet (`gcp.policy.set.id`) at
-`TANGO_EXPECTED_REVISION`. The gauge only changes after the collector has
+`CONTROL_PLANE_EXPECTED_REVISION`. The gauge only changes after the collector has
 applied (and ACKed) a revision received from the Control Plane, so that point
 proves the Control Plane to Data Plane loop.
 
@@ -85,7 +85,7 @@ cd integration_test/smoke_test
 env PROJECT=stackdriver-test-143416 ZONES=asia-east1-a IMAGE_SPECS=debian-cloud:debian-12,windows-cloud:windows-2022 \
   KOKORO_BUILD_ID=local-$(date +%s) TRANSFERS_BUCKET=<bucket> \
   _BUILD_ARTIFACTS_PACKAGE_GCS=gs://<bucket>/<package-dir> \
-  TANGO_CP_ENDPOINT=staging-telemetrydirector.asia-east1.rep.sandbox.googleapis.com:443 \
-  TANGO_EXPECTED_REVISION=75cbca3b \
-  go test -tags integration_test -run TestTangoSmoke -v -timeout 60m ./...
+  CONTROL_PLANE_ENDPOINT=staging-telemetrydirector.asia-east1.rep.sandbox.googleapis.com:443 \
+  CONTROL_PLANE_EXPECTED_REVISION=75cbca3b \
+  go test -tags integration_test -run TestControlPlaneSmoke -v -timeout 60m ./...
 ```

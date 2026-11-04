@@ -348,7 +348,7 @@ func TestXDSPolicyManager_PopulatesNodeLocalityAndMetadataFromGCEMetadata(t *tes
 	assert.Equal(t, "us-central1-a", req.GetNode().GetLocality().GetZone())
 	assert.Equal(t, map[string]any{
 		"service.instance.id":     "collector-abc",
-		"gcp.fleet_id":            "projects/my-project/locations/us-central1/fleets/fleet-1",
+		"gcp.fleet_id":            "projects/123456789/locations/us-central1/fleets/fleet-1",
 		"gcp.project_id":          "my-project",
 		"cloud.region":            "us-central1",
 		"cloud.availability_zone": "us-central1-a",

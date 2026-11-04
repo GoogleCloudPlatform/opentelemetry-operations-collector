@@ -294,9 +294,9 @@ func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrie
 	// When the active policy manager implements FleetMetadataProvider (such as
 	// xdsPolicyManager), its resolved FleetID() and ProjectID() are authoritative
 	// so the xDS node identity and the collector's self-telemetry attribution
-	// never diverge. For non-xDS sources (such as file: or component: URIs),
-	// ResolveFleetAndProject applies the same normalization from environment,
-	// context, and URI parameters.
+	// never diverge. Non-xDS sources (such as file: or component: URIs) have no
+	// control plane to agree with, so the fleet ID is reported as given:
+	// environment, then context, then the URI.
 	fleetID := os.Getenv("FLEET_ID")
 	if v, ok := ctx.Value("FLEET_ID").(string); ok && v != "" {
 		fleetID = v
@@ -314,12 +314,19 @@ func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrie
 		if projectID == "" {
 			projectID = fleetMgr.ProjectID()
 		}
-	} else {
-		var managerURI *url.URL
-		if manager != nil {
-			managerURI = manager.URI()
+	} else if manager != nil && manager.URI() != nil {
+		if fleetID == "" {
+			fleetID = googlepolicy.FleetIDFromURI(manager.URI())
 		}
-		fleetID, projectID = googlepolicy.ResolveFleetAndProject(fleetID, projectID, managerURI)
+		if projectID == "" {
+			// A numeric value in ?project= is a GCP project number for the xdstp://
+			// resource subscription, not an alphanumeric project ID. Leave PROJECT_ID
+			// unset in that case so the self-metrics pipeline populates gcp.project_id
+			// from the GCE resource detector's cloud.account.id.
+			if candidate := manager.URI().Query().Get(googlepolicy.ProjectQueryParam); !googlepolicy.IsNumericProject(candidate) {
+				projectID = candidate
+			}
+		}
 	}
 
 	if fleetID != "" {

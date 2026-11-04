@@ -293,8 +293,12 @@ func TestRetrieve_XDSFullFleetResourceURI(t *testing.T) {
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
 
-func TestRetrieve_NonXDSFormatsFullFleetResourceName(t *testing.T) {
-	t.Setenv("FLEET_ID", "my-fleet")
+// TestRetrieve_NonXDSReportsFleetIDAsGiven asserts that a non-xDS source does
+// not dress a short fleet ID up as a resource name: there is no control plane
+// whose view of the fleet must be matched, and formatting it would mean
+// inventing a project and location. A full resource name is passed through
+// untouched as well.
+func TestRetrieve_NonXDSReportsFleetIDAsGiven(t *testing.T) {
 	t.Setenv("GOOGLE_CLOUD_PROJECT", "my-project")
 	t.Setenv("CLOUD_REGION", "us-east1")
 	t.Cleanup(func() {
@@ -302,31 +306,39 @@ func TestRetrieve_NonXDSFormatsFullFleetResourceName(t *testing.T) {
 			googlepolicy.RollbackActivePolicySet()
 		}
 	})
-	p := createProvider()
 
-	dir := t.TempDir()
-	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:file:"+dir, nil)
-	require.NoError(t, err)
-	require.NotNil(t, ret)
+	for _, fleetID := range []string{
+		"my-fleet",
+		"projects/my-project/locations/us-east1/fleets/my-fleet",
+	} {
+		t.Run(fleetID, func(t *testing.T) {
+			t.Setenv("FLEET_ID", fleetID)
+			p := createProvider()
 
-	conf, err := ret.AsConf()
-	require.NoError(t, err)
+			dir := t.TempDir()
+			ret, err := p.Retrieve(context.Background(), "googlecontrolplane:file:"+dir, nil)
+			require.NoError(t, err)
+			require.NotNil(t, ret)
 
-	rawAttrs := conf.Get("service::telemetry::resource::attributes")
-	attrs, ok := rawAttrs.([]any)
-	require.True(t, ok)
-	attrMap := map[string]any{}
-	for _, entry := range attrs {
-		if m, ok := entry.(map[string]any); ok {
-			if name, ok := m["name"].(string); ok {
-				attrMap[name] = m["value"]
+			conf, err := ret.AsConf()
+			require.NoError(t, err)
+
+			rawAttrs := conf.Get("service::telemetry::resource::attributes")
+			attrs, ok := rawAttrs.([]any)
+			require.True(t, ok)
+			attrMap := map[string]any{}
+			for _, entry := range attrs {
+				if m, ok := entry.(map[string]any); ok {
+					if name, ok := m["name"].(string); ok {
+						attrMap[name] = m["value"]
+					}
+				}
 			}
-		}
-	}
-	assert.Equal(t, "projects/my-project/locations/us-east1/fleets/my-fleet", attrMap["gcp.fleet_id"])
-	assert.Equal(t, "my-project", attrMap["gcp.project_id"])
+			assert.Equal(t, fleetID, attrMap["gcp.fleet_id"])
 
-	assert.NoError(t, p.Shutdown(context.Background()))
+			assert.NoError(t, p.Shutdown(context.Background()))
+		})
+	}
 }
 
 func TestRetrieve_MultipleDestinationPolicies(t *testing.T) {

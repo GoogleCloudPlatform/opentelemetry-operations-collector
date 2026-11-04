@@ -33,6 +33,11 @@ func TestParsePolicyDir(t *testing.T) {
 		expected string
 	}{
 		{
+			name:     "windows opaque URI single colon (file:C:/...)",
+			rawURI:   "file:C:/Users/runneradmin/work/policies",
+			expected: "C:/Users/runneradmin/work/policies",
+		},
+		{
 			name:     "unix 3 slashes",
 			rawURI:   "file:///etc/otel/policies",
 			expected: "/etc/otel/policies",

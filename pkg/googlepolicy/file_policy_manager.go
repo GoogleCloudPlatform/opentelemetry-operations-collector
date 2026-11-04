@@ -54,6 +54,9 @@ func parsePolicyDir(uri *url.URL) string {
 		return ""
 	}
 	policyDir := uri.Path
+	if policyDir == "" && uri.Opaque != "" {
+		policyDir = uri.Opaque
+	}
 	if uri.Host != "" && len(uri.Host) == 2 && uri.Host[1] == ':' {
 		policyDir = uri.Host + uri.Path
 	}

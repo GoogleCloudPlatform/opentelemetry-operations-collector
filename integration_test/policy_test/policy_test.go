@@ -1189,14 +1189,6 @@ service:
       receivers: [otlp/test_in]
       processors: [googlepolicy]
       exporters: [otlp_grpc/test_out]
-    logs/default_self_metrics:
-      receivers: [otlp/default_self_metrics]
-      processors: []
-      exporters: [otlp_grpc/default_gcp_destination]
-    metrics/default_self_metrics:
-      receivers: [otlp/default_self_metrics]
-      processors: []
-      exporters: [otlp_grpc/default_gcp_destination]
 `, otlpReceiverAddr, mockExporterAddr, selfReceiverAddr)
 
 	pipelineCfgPath := filepath.Join(tempDir, "test_pipeline.yaml")
@@ -2264,5 +2256,104 @@ func TestPolicyIntegration_IISSourcePolicy(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// TestSelfObservabilityBypassesTelemetryPolicies verifies that customer log_filter
+// and metric_filter policies (even catch-all ACTION_DROP rules) do not drop collector
+// self-observability logs (e.g. gcp.policy.evaluate.error) or metrics (e.g.
+// gcp.policy.set.active and otelcol_* metrics) on logs/default_self_metrics and
+// metrics/default_self_metrics.
+func TestSelfObservabilityBypassesTelemetryPolicies(t *testing.T) {
+	otelcolBin := resolveOtelcolBinary(t)
+	tempDir, policiesDir := stagePoliciesDir(t, "drop_all_logs")
+	copyDir(t, filepath.Join("testdata", "drop_all_metrics", "policies"), policiesDir)
+
+	unsupportedPolicy := `{
+  "type": "unsupported_policy_type",
+  "id": "projects/my-project/locations/us-central1/policySets/my-set/policies/bad-policy"
+}`
+	if err := os.WriteFile(filepath.Join(policiesDir, "02-unsupported.json"), []byte(unsupportedPolicy), 0644); err != nil {
+		t.Fatalf("failed to write unsupported policy: %v", err)
+	}
+
+	baseCfgPath, otlpReceiverAddr, selfReceiverAddr, workloadMockSrv, selfMockSrv := stageTestPipelineConfig(t, tempDir)
+
+	enableSelfLogsCfg := fmt.Sprintf(`service:
+  telemetry:
+    logs:
+      level: info
+      processors:
+        - batch:
+            schedule_delay: 50
+            export_timeout: 200
+            exporter:
+              otlp:
+                protocol: grpc
+                endpoint: http://%s
+                insecure: true
+                timeout: 200
+`, selfReceiverAddr)
+	enableSelfLogsPath := filepath.Join(tempDir, "enable_self_logs.yaml")
+	if err := os.WriteFile(enableSelfLogsPath, []byte(enableSelfLogsCfg), 0644); err != nil {
+		t.Fatalf("failed to write enable_self_logs.yaml: %v", err)
+	}
+
+	col := startCollector(t, otelcolBin, policiesDir, baseCfgPath, enableSelfLogsPath)
+
+	conn, err := grpc.NewClient(otlpReceiverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		col.shutdown(t)
+		t.Fatalf("failed to create gRPC client to %s: %v", otlpReceiverAddr, err)
+	}
+	t.Cleanup(func() {
+		_ = conn.Close()
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	inputLogs := readInputLogs(t, filepath.Join("testdata", "drop_all_logs", "input_logs.yaml"))
+	if _, err := plogotlp.NewGRPCClient(conn).Export(ctx, plogotlp.NewExportRequestFromLogs(inputLogs)); err != nil {
+		col.shutdown(t)
+		t.Fatalf("failed to export workload logs: %v\nstderr:\n%s", err, col.logs())
+	}
+
+	inputMetrics := readInputMetrics(t, filepath.Join("testdata", "drop_all_metrics", "input_metrics.yaml"))
+	if _, err := pmetricotlp.NewGRPCClient(conn).Export(ctx, pmetricotlp.NewExportRequestFromMetrics(inputMetrics)); err != nil {
+		col.shutdown(t)
+		t.Fatalf("failed to export workload metrics: %v\nstderr:\n%s", err, col.logs())
+	}
+
+	value, _, foundMetric := waitForPolicySetActive(selfMockSrv, 10*time.Second)
+
+	var foundErrorEvent bool
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		for _, body := range extractAllLogBodies(selfMockSrv.CollectedLogs()) {
+			if strings.Contains(body, "no driver found for policy type: unsupported_policy_type") {
+				foundErrorEvent = true
+				break
+			}
+		}
+		if foundErrorEvent {
+			break
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+
+	col.shutdown(t)
+
+	if !foundMetric || value <= 0 {
+		t.Errorf("expected gcp.policy.set.active self-metric with positive revision on selfMockSrv, got found=%v value=%d\nlogs:\n%s", foundMetric, value, col.logs())
+	}
+	if !foundErrorEvent {
+		t.Errorf("expected gcp.policy.evaluate.error self-log event on selfMockSrv, but it was not received\nlogs:\n%s", col.logs())
+	}
+	if gotWorkloadLogs := extractAllLogBodies(workloadMockSrv.CollectedLogs()); len(gotWorkloadLogs) != 0 {
+		t.Errorf("expected catch-all log_filter policy to drop workload logs, got: %v", gotWorkloadLogs)
+	}
+	if gotWorkloadMetrics := collectMetricNames(workloadMockSrv.CollectedMetrics()); len(gotWorkloadMetrics) != 0 {
+		t.Errorf("expected catch-all metric_filter policy to drop workload metrics, got: %v", gotWorkloadMetrics)
 	}
 }

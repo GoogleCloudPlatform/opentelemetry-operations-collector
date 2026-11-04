@@ -272,7 +272,7 @@ func TestXDSPolicyManager_ReconnectsWithBackoff(t *testing.T) {
 	require.GreaterOrEqual(t, len(requests), 3)
 	initial := requests[0]
 	assert.Empty(t, initial.GetVersionInfo(), "first request has nothing applied yet")
-	assert.Equal(t, "collector-abc", initial.GetNode().GetId())
+	assert.Equal(t, "projects/my-project/locations/"+defaultRegion+"/fleets/fleet-1", initial.GetNode().GetId())
 	assert.Equal(t, "fleet-1", initial.GetNode().GetCluster())
 	assert.Equal(t, defaultRegion, initial.GetNode().GetLocality().GetRegion())
 	assert.Empty(t, initial.GetNode().GetLocality().GetZone())
@@ -344,6 +344,9 @@ func TestXDSPolicyManager_PopulatesNodeLocalityAndMetadataFromGCEMetadata(t *tes
 	assert.Equal(t, []string{
 		"xdstp://telemetry-director.us-central1.xds.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector/projects/123456789/fleets/fleet-1/collectors/default",
 	}, req.GetResourceNames())
+	// Node.Id is the same project-number-based Fleet name as the subscription
+	// and the reported gcp.fleet_id, not the readable project ID.
+	assert.Equal(t, "projects/123456789/locations/us-central1/fleets/fleet-1", req.GetNode().GetId())
 	assert.Equal(t, "us-central1", req.GetNode().GetLocality().GetRegion())
 	assert.Equal(t, "us-central1-a", req.GetNode().GetLocality().GetZone())
 	assert.Equal(t, map[string]any{
@@ -1262,7 +1265,7 @@ func TestXDSPolicyManager_DebugProtoJSONAndAppliedPolicyLogging(t *testing.T) {
 	initialMap := parseJSONMap(t, initialJSON)
 	assert.Equal(t, "", initialMap["version_info"])
 	nodeMap, _ := initialMap["node"].(map[string]any)
-	assert.Equal(t, "collector-abc", nodeMap["id"])
+	assert.Equal(t, "projects/my-project/locations/"+defaultRegion+"/fleets/fleet-1", nodeMap["id"])
 	assert.Equal(t, "fleet-1", nodeMap["cluster"])
 	metaMap, _ := nodeMap["metadata"].(map[string]any)
 	assert.Equal(t, "my-project", metaMap["gcp.project_id"])

@@ -24,7 +24,7 @@ service:
                 - name: service.instance.id
                   value: "76728b45-8fcf-4cc8-a09e-c67283bfa79c" # The collector ID generated on startup
                 - name: gcp.fleet_id
-                  value: "1234"
+                  value: "projects/my-project/locations/us-central1/fleets/1234"
         logs:
             level: info
             processors:

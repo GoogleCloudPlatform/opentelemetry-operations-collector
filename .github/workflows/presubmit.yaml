@@ -102,13 +102,10 @@ jobs:
         with:
           go-version: ${{ env.DEFAULT_GO_VERSION }}
           cache: true
-      - name: Test pkg/googlepolicy (Windows)
+      - name: Run Windows Policy & Provider Tests
         shell: bash
-        run: cd pkg/googlepolicy && go test -v ./...
-      - name: Test googlepolicyprocessor (Windows)
-        shell: bash
-        run: cd components/google-built-opentelemetry-collector/processor/googlepolicyprocessor && go test -v ./...
-      - name: Test googlecontrolplaneprovider (Windows)
-        shell: bash
-        run: cd components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider && go test -v ./...
+        run: |
+          (cd pkg/googlepolicy && go test -v ./...)
+          (cd components/google-built-opentelemetry-collector/processor/googlepolicyprocessor && go test -v ./...)
+          (cd components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider && go test -v ./...)
 

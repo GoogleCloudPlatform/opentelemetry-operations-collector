@@ -89,6 +89,9 @@ replaces:
     - from: github.com/buger/jsonparser
       to: github.com/buger/jsonparser v1.1.2
       reason: Force update buger/jsonparser to v1.1.2 to fix vulnerability
+    - from: golang.org/x/net
+      to: golang.org/x/net v0.60.0
+      reason: Force update golang.org/x/net to v0.60.0 to fix vulnerability CVE-2026-78663
 collector_cgo: true
 component_module_base: ""
 distrogen_version: ""

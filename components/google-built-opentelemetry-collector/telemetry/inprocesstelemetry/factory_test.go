@@ -141,6 +141,32 @@ func TestNewestMeterProviderWins(t *testing.T) {
 	assert.Nil(t, Reader())
 }
 
+func TestPublishedReaderIsAlwaysRegistered(t *testing.T) {
+	ctx := context.Background()
+	f := NewFactory()
+
+	mp, err := f.CreateMeterProvider(ctx, meterSettings(), noReaders(t, f))
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, mp.Shutdown(ctx)) })
+
+	// Collect on an unregistered ManualReader returns ErrReaderNotRegistered;
+	// the published reader must never be in that state.
+	var rm metricdata.ResourceMetrics
+	require.NoError(t, Reader().Collect(ctx, &rm))
+}
+
+func TestFailedMeterProviderDoesNotPublish(t *testing.T) {
+	ctx := context.Background()
+	f := NewFactory()
+
+	// A nil collector resource makes CreateMeterProvider fail.
+	set := meterSettings()
+	set.Resource = nil
+	_, err := f.CreateMeterProvider(ctx, set, noReaders(t, f))
+	require.Error(t, err)
+	assert.Nil(t, Reader())
+}
+
 func TestLevelNoneHasNoReader(t *testing.T) {
 	ctx := context.Background()
 	f := NewFactory()

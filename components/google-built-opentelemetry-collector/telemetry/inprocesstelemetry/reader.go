@@ -44,14 +44,13 @@ func Reader() *sdkmetric.ManualReader {
 	return reader
 }
 
-// newReader creates a new ManualReader and publishes it as the current
-// in-process reader. The most recently created reader always wins.
-func newReader() *sdkmetric.ManualReader {
-	r := sdkmetric.NewManualReader()
+// publishReader publishes r as the current in-process reader. It must only be
+// called once r is registered with a MeterProvider. The most recently
+// published reader always wins.
+func publishReader(r *sdkmetric.ManualReader) {
 	readerMu.Lock()
 	reader = r
 	readerMu.Unlock()
-	return r
 }
 
 // releaseReader unpublishes r if it is still the current reader. It is called

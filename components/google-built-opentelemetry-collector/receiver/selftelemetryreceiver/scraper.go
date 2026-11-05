@@ -55,12 +55,23 @@ type selfScraper struct {
 	warnOnce  sync.Once
 }
 
+// defaultReaderFn is the reader lookup used by new scrapers; overridable in
+// tests.
+var defaultReaderFn = inprocesstelemetry.Reader
+
 func newSelfScraper(logger *zap.Logger) *selfScraper {
 	return &selfScraper{
 		logger:    logger,
-		readerFn:  inprocesstelemetry.Reader,
+		readerFn:  defaultReaderFn,
 		transport: &inMemoryTransport{},
 	}
+}
+
+// started reports whether start has been called and shutdown has not.
+func (s *selfScraper) started() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.exporter != nil
 }
 
 func (s *selfScraper) start(ctx context.Context, _ component.Host) error {

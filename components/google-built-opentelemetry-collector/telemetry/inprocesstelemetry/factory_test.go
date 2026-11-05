@@ -27,6 +27,7 @@ import (
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/configtelemetry"
 	"go.opentelemetry.io/collector/confmap"
+	"go.opentelemetry.io/collector/featuregate"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/service/telemetry"
 	"go.opentelemetry.io/collector/service/telemetry/otelconftelemetry"
@@ -176,5 +177,42 @@ func TestLevelNoneHasNoReader(t *testing.T) {
 	mp, err := f.CreateMeterProvider(ctx, meterSettings(), cfg)
 	require.NoError(t, err)
 	assert.Nil(t, Reader())
+	require.NoError(t, mp.Shutdown(ctx))
+}
+
+func disableGate(t *testing.T) {
+	t.Helper()
+	require.NoError(t, featuregate.GlobalRegistry().Set(InProcessReaderFeatureGateID, false))
+	t.Cleanup(func() {
+		require.NoError(t, featuregate.GlobalRegistry().Set(InProcessReaderFeatureGateID, true))
+	})
+}
+
+func TestFeatureGateEnabledByDefault(t *testing.T) {
+	assert.True(t, inProcessReaderGate.IsEnabled())
+}
+
+// TestFeatureGateDisabledBehavesLikeUpstream checks that with the gate off the
+// factory is indistinguishable from upstream otelconftelemetry.
+func TestFeatureGateDisabledBehavesLikeUpstream(t *testing.T) {
+	disableGate(t)
+	ctx := context.Background()
+	f := NewFactory()
+
+	// Upstream validation applies: no readers is rejected again, with the
+	// same error as upstream.
+	cfg := noReaders(t, f)
+	upstreamErr := confmap.Validate(cfg.Upstream())
+	require.Error(t, upstreamErr)
+	assert.EqualError(t, confmap.Validate(cfg), upstreamErr.Error())
+
+	// No in-process reader is created or published.
+	cfg = f.CreateDefaultConfig().(*Config)
+	cfg.Upstream().Metrics.Readers = nil
+	mp, err := f.CreateMeterProvider(ctx, meterSettings(), cfg)
+	require.NoError(t, err)
+	assert.Nil(t, Reader())
+	_, isOurs := mp.(*meterProvider)
+	assert.False(t, isOurs, "expected the upstream MeterProvider, not the in-process wrapper")
 	require.NoError(t, mp.Shutdown(ctx))
 }

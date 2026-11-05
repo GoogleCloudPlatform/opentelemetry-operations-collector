@@ -27,6 +27,23 @@ the [`selftelemetry` receiver](../../receiver/selftelemetryreceiver/README.md).
   i.e. the default `localhost:8888` Prometheus endpoint can be removed
   entirely.
 
+## Turning it off
+
+The in-process reader is controlled by the `telemetry.inProcessReader`
+feature gate (beta, enabled by default). To get exactly the upstream
+behaviour, start the Collector with:
+
+```sh
+otelcol-google --feature-gates=-telemetry.inProcessReader --config ...
+```
+
+With the gate disabled, the factory delegates meter provider creation to
+upstream `otelconftelemetry` unchanged: no in-process reader is created,
+`Reader()` returns nil, and upstream validation applies again (at least one
+metric reader is required when metrics are enabled). Combine this with the
+previous self-telemetry configuration (e.g. a `periodic` OTLP reader or a
+`pull` Prometheus reader) to self-observe exactly as before.
+
 ## API
 
 ```go

@@ -28,7 +28,8 @@ converts the result to `pmetric.Metrics`. The conversion reuses the OTel Go
 SDK's OTLP/HTTP exporter with an in-memory `http.RoundTripper`, so no request
 ever leaves the process.
 
-If the binary was not built with `inprocesstelemetry`, or if
+If the binary was not built with `inprocesstelemetry`, if the
+`telemetry.inProcessReader` feature gate is disabled, or if
 `service::telemetry::metrics::level` is `none`, the receiver logs a warning
 once and emits nothing.
 

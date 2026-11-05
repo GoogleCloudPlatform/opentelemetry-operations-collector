@@ -31,9 +31,30 @@ import (
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/config/configtelemetry"
+	"go.opentelemetry.io/collector/featuregate"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/service/telemetry"
 	"go.opentelemetry.io/collector/service/telemetry/otelconftelemetry"
+)
+
+// InProcessReaderFeatureGateID is the ID of the feature gate controlling the
+// in-process reader.
+const InProcessReaderFeatureGateID = "telemetry.inProcessReader"
+
+// inProcessReaderGate controls whether the in-process reader is attached.
+//
+// It is enabled by default. Disabling it
+// (`--feature-gates=-telemetry.inProcessReader`) makes this factory behave
+// exactly like upstream otelconftelemetry: no in-process reader is created,
+// Reader() returns nil, and upstream validation (at least one metric reader
+// when metrics are enabled) applies unchanged.
+var inProcessReaderGate = featuregate.GlobalRegistry().MustRegister(
+	InProcessReaderFeatureGateID,
+	featuregate.StageBeta,
+	featuregate.WithRegisterDescription("Attach an in-memory reader to the Collector's internal telemetry "+
+		"MeterProvider so the selftelemetry receiver can consume internal metrics without a host endpoint. "+
+		"When disabled, internal telemetry behaves exactly as upstream otelconftelemetry."),
+	featuregate.WithRegisterFromVersion("v0.164.0"),
 )
 
 var errMissingCollectorResource = errors.New("collector resource is required to create the meter provider")
@@ -51,8 +72,12 @@ type Config otelconftelemetry.Config
 
 // Validate mirrors otelconftelemetry.Config.Validate minus the "a reader must
 // exist" rule. Nested fields (e.g. the resource config) are still validated
-// by confmap's recursive validation.
+// by confmap's recursive validation. When the in-process reader feature gate
+// is disabled, upstream validation applies unchanged.
 func (c *Config) Validate() error {
+	if !inProcessReaderGate.IsEnabled() {
+		return c.Upstream().Validate()
+	}
 	if c.Metrics.Views != nil && c.Metrics.Level != configtelemetry.LevelDetailed {
 		return errors.New("service::telemetry::metrics::views can only be set when service::telemetry::metrics::level is detailed")
 	}
@@ -81,6 +106,9 @@ func NewFactory() telemetry.Factory {
 			return base.CreateLogger(ctx, set, unwrap(cfg))
 		}),
 		telemetry.WithCreateMeterProvider(func(ctx context.Context, set telemetry.MeterSettings, cfg component.Config) (telemetry.MeterProvider, error) {
+			if !inProcessReaderGate.IsEnabled() {
+				return base.CreateMeterProvider(ctx, set, unwrap(cfg))
+			}
 			return createMeterProvider(ctx, set, unwrap(cfg))
 		}),
 		telemetry.WithCreateTracerProvider(func(ctx context.Context, set telemetry.TracerSettings, cfg component.Config) (telemetry.TracerProvider, error) {

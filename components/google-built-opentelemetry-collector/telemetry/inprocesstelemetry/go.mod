@@ -7,6 +7,7 @@ require (
 	go.opentelemetry.io/collector/component v1.70.0
 	go.opentelemetry.io/collector/config/configtelemetry v0.164.0
 	go.opentelemetry.io/collector/confmap v1.70.0
+	go.opentelemetry.io/collector/featuregate v1.70.0
 	go.opentelemetry.io/collector/pdata v1.70.0
 	go.opentelemetry.io/collector/service v0.164.0
 	go.opentelemetry.io/contrib/otelconf v0.27.0
@@ -60,7 +61,6 @@ require (
 	github.com/prometheus/procfs v0.22.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
-	go.opentelemetry.io/collector/featuregate v1.70.0 // indirect
 	go.opentelemetry.io/collector/internal/telemetry v0.164.0 // indirect
 	go.opentelemetry.io/contrib/bridges/otelzap v0.20.0 // indirect
 	go.opentelemetry.io/contrib/detectors/aws/ec2/v2 v2.6.0 // indirect

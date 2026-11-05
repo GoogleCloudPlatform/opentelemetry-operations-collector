@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
@@ -45,6 +46,7 @@ import (
 	"go.opentelemetry.io/collector/otelcol"
 	"go.opentelemetry.io/collector/pipeline"
 	"go.opentelemetry.io/collector/service"
+	"go.opentelemetry.io/collector/service/extensions"
 	"go.opentelemetry.io/collector/service/pipelines"
 	"go.uber.org/zap"
 )
@@ -582,8 +584,41 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 	canonicalMetricProcessors := append([]component.ID{rdID, transformID, googlePolicyID}, destPolicy.PreProcessMetricIDs()...)
 	canonicalTraceProcessors := append([]component.ID{rdID, transformID, googlePolicyID}, destPolicy.PreProcessTraceIDs()...)
 
+	var canonicalExtensions extensions.Config
+	needsStorage := false
+	for _, sp := range sourcePolicies {
+		if psp, ok := sp.(googlepolicy.PersistentStorageSourcePolicy); ok && psp.RequiresStorage() {
+			needsStorage = true
+			break
+		}
+	}
+	if needsStorage {
+		storageExtType, _ := component.NewType(googlepolicy.DefaultStorageExtensionType)
+		storageExtID := component.NewIDWithName(storageExtType, googlepolicy.DefaultStorageExtensionName)
+		storageCfg := map[string]any{
+			"create_directory": true,
+		}
+		if dir := strings.TrimSpace(os.Getenv("GOOGLECONTROLPLANE_STORAGE_DIR")); dir != "" {
+			storageCfg["directory"] = filepath.Clean(dir)
+		}
+		storageExtConf := &otelcol.Config{
+			Extensions: map[component.ID]component.Config{
+				storageExtID: component.Config(storageCfg),
+			},
+		}
+		storageCm := confmap.New()
+		if err := storageCm.Marshal(storageExtConf); err != nil {
+			return nil, true, fmt.Errorf("failed to marshal file_storage extension config: %w", err)
+		}
+		if err := conf.Merge(cleanConf(storageCm)); err != nil {
+			return nil, true, fmt.Errorf("failed to merge file_storage extension config: %w", err)
+		}
+		canonicalExtensions = append(canonicalExtensions, storageExtID)
+	}
+
 	canonicalServiceConf := &otelcol.Config{
 		Service: service.Config{
+			Extensions: canonicalExtensions,
 			Pipelines: pipelines.Config{
 				canonicalLogsPipelineID: &pipelines.PipelineConfig{
 					Receivers:  deduplicateComponentIDs(activeLogReceivers),

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -586,6 +587,7 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource(t *testing.T) {
 		assert.False(t, conf.IsSet("receivers::"+secRecID+"::event_driven_scraping"))
 		assert.Equal(t, 500, conf.Get("receivers::"+secRecID+"::max_reads"))
 		assert.Equal(t, true, conf.Get("receivers::"+secRecID+"::ignore_channel_errors"))
+		assert.Equal(t, "file_storage/default", conf.Get("receivers::"+secRecID+"::storage"))
 		assert.ElementsMatch(t, []string{"otelcol-google"}, conf.Get("receivers::"+secRecID+"::exclude_providers"))
 
 		assert.True(t, conf.IsSet("receivers::"+sysmonRecID))
@@ -594,7 +596,14 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource(t *testing.T) {
 		assert.False(t, conf.IsSet("receivers::"+sysmonRecID+"::event_driven_scraping"))
 		assert.Equal(t, 500, conf.Get("receivers::"+sysmonRecID+"::max_reads"))
 		assert.Equal(t, true, conf.Get("receivers::"+sysmonRecID+"::ignore_channel_errors"))
+		assert.Equal(t, "file_storage/default", conf.Get("receivers::"+sysmonRecID+"::storage"))
 		assert.ElementsMatch(t, []string{"otelcol-google"}, conf.Get("receivers::"+sysmonRecID+"::exclude_providers"))
+
+		// Persistent storage extension must be synthesized on Windows
+		assert.True(t, conf.IsSet("extensions::file_storage/default"))
+		assert.Equal(t, true, conf.Get("extensions::file_storage/default::create_directory"))
+		exts := conf.Get("service::extensions")
+		assert.Contains(t, exts, "file_storage/default")
 
 		// Receivers must attach to canonical shared logs/googlecontrolplane pipeline
 		receivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
@@ -604,6 +613,7 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource(t *testing.T) {
 	} else {
 		assert.False(t, conf.IsSet("receivers::"+secRecID))
 		assert.False(t, conf.IsSet("receivers::"+sysmonRecID))
+		assert.False(t, conf.IsSet("extensions::file_storage/default"))
 		receivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
 		assert.Contains(t, receivers, "nop/googlecontrolplane")
 		assert.NotContains(t, receivers, secRecID)
@@ -2523,4 +2533,178 @@ func (i *invalidIISSourcePolicy) LogReceiverIDs() []component.ID   { return nil 
 func (i *invalidIISSourcePolicy) TraceReceiverIDs() []component.ID { return nil }
 func (i *invalidIISSourcePolicy) Consolidate(_ []googlepolicy.SourcePolicy) (googlepolicy.SourcePolicy, error) {
 	return nil, errors.New("invalid policy cannot consolidate")
+}
+
+type mockStoragePolicy struct {
+	id              string
+	requiresStorage bool
+	recs            []component.ID
+}
+
+func (m *mockStoragePolicy) PolicyName() string { return m.id }
+func (m *mockStoragePolicy) PolicyType() string { return "mock_storage_source" }
+func (m *mockStoragePolicy) PolicyClass() googlepolicy.PolicyClass {
+	return googlepolicy.PolicyClassSource
+}
+func (m *mockStoragePolicy) Validate() error { return nil }
+func (m *mockStoragePolicy) Evaluate(context.Context) (*confmap.Conf, error) {
+	receivers := make(map[string]any, len(m.recs))
+	for _, r := range m.recs {
+		receivers[r.String()] = map[string]any{"storage": "file_storage/default"}
+	}
+	return confmap.NewFromStringMap(map[string]any{"receivers": receivers}), nil
+}
+func (m *mockStoragePolicy) LogReceiverIDs() []component.ID    { return m.recs }
+func (m *mockStoragePolicy) MetricReceiverIDs() []component.ID { return nil }
+func (m *mockStoragePolicy) TraceReceiverIDs() []component.ID  { return nil }
+func (m *mockStoragePolicy) RequiresStorage() bool             { return m.requiresStorage }
+
+func TestRetrieve_PersistentStorageSynthesis(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	recID := component.MustNewIDWithName("filelog", "mock")
+
+	t.Run("source policy requiring storage synthesizes file_storage extension", func(t *testing.T) {
+		p := createProvider()
+
+		pol := &mockStoragePolicy{
+			id:              "storage-enabled-policy",
+			requiresStorage: true,
+			recs:            []component.ID{recID},
+		}
+
+		ps := &googlepolicy.PolicySet{
+			RevisionID: "rev-storage-enabled",
+			Policies: map[string]*googlepolicy.PolicySetEntry{
+				"storage-enabled-policy": {PolicyObj: pol},
+			},
+		}
+		googlepolicy.SetActivePolicySet(ps)
+		t.Cleanup(func() {
+			for googlepolicy.ActivePolicySet() != nil {
+				googlepolicy.RollbackActivePolicySet()
+			}
+		})
+
+		ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:test-storage-on", nil)
+		require.NoError(t, err)
+		require.NotNil(t, ret)
+
+		conf, err := ret.AsConf()
+		require.NoError(t, err)
+
+		assert.True(t, conf.IsSet("extensions::file_storage/default"))
+		assert.Equal(t, true, conf.Get("extensions::file_storage/default::create_directory"))
+		exts := conf.Get("service::extensions")
+		assert.Contains(t, exts, "file_storage/default")
+		assert.NoError(t, p.Shutdown(context.Background()))
+	})
+
+	t.Run("GOOGLECONTROLPLANE_STORAGE_DIR overrides default directory", func(t *testing.T) {
+		customDir := filepath.Join(os.TempDir(), "custom-otel-storage")
+		t.Setenv("GOOGLECONTROLPLANE_STORAGE_DIR", customDir)
+
+		p := createProvider()
+
+		pol := &mockStoragePolicy{
+			id:              "storage-custom-dir-policy",
+			requiresStorage: true,
+			recs:            []component.ID{recID},
+		}
+
+		ps := &googlepolicy.PolicySet{
+			RevisionID: "rev-storage-custom-dir",
+			Policies: map[string]*googlepolicy.PolicySetEntry{
+				"storage-custom-dir-policy": {PolicyObj: pol},
+			},
+		}
+		googlepolicy.SetActivePolicySet(ps)
+		t.Cleanup(func() {
+			for googlepolicy.ActivePolicySet() != nil {
+				googlepolicy.RollbackActivePolicySet()
+			}
+		})
+
+		ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:test-storage-custom-dir", nil)
+		require.NoError(t, err)
+		require.NotNil(t, ret)
+
+		conf, err := ret.AsConf()
+		require.NoError(t, err)
+
+		assert.True(t, conf.IsSet("extensions::file_storage/default"))
+		assert.Equal(t, customDir, conf.Get("extensions::file_storage/default::directory"))
+		assert.NoError(t, p.Shutdown(context.Background()))
+	})
+
+	t.Run("GOOGLECONTROLPLANE_STORAGE_DIR with whitespace and trailing slash is cleaned", func(t *testing.T) {
+		customDir := filepath.Join(os.TempDir(), "custom-otel-storage-dirty")
+		t.Setenv("GOOGLECONTROLPLANE_STORAGE_DIR", "  "+customDir+string(filepath.Separator)+"  ")
+
+		p := createProvider()
+
+		pol := &mockStoragePolicy{
+			id:              "storage-custom-dir-dirty-policy",
+			requiresStorage: true,
+			recs:            []component.ID{recID},
+		}
+
+		ps := &googlepolicy.PolicySet{
+			RevisionID: "rev-storage-custom-dir-dirty",
+			Policies: map[string]*googlepolicy.PolicySetEntry{
+				"storage-custom-dir-dirty-policy": {PolicyObj: pol},
+			},
+		}
+		googlepolicy.SetActivePolicySet(ps)
+		t.Cleanup(func() {
+			for googlepolicy.ActivePolicySet() != nil {
+				googlepolicy.RollbackActivePolicySet()
+			}
+		})
+
+		ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:test-storage-custom-dir-dirty", nil)
+		require.NoError(t, err)
+		require.NotNil(t, ret)
+
+		conf, err := ret.AsConf()
+		require.NoError(t, err)
+
+		assert.True(t, conf.IsSet("extensions::file_storage/default"))
+		assert.Equal(t, customDir, conf.Get("extensions::file_storage/default::directory"))
+		assert.NoError(t, p.Shutdown(context.Background()))
+	})
+
+	t.Run("source policy not requiring storage omits file_storage extension", func(t *testing.T) {
+		p := createProvider()
+
+		pol := &mockStoragePolicy{
+			id:              "storage-disabled-policy",
+			requiresStorage: false,
+			recs:            []component.ID{recID},
+		}
+
+		ps := &googlepolicy.PolicySet{
+			RevisionID: "rev-storage-disabled",
+			Policies: map[string]*googlepolicy.PolicySetEntry{
+				"storage-disabled-policy": {PolicyObj: pol},
+			},
+		}
+		googlepolicy.SetActivePolicySet(ps)
+		t.Cleanup(func() {
+			for googlepolicy.ActivePolicySet() != nil {
+				googlepolicy.RollbackActivePolicySet()
+			}
+		})
+
+		ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:test-storage-off", nil)
+		require.NoError(t, err)
+		require.NotNil(t, ret)
+
+		conf, err := ret.AsConf()
+		require.NoError(t, err)
+
+		assert.False(t, conf.IsSet("extensions::file_storage/default"))
+		exts := conf.Get("service::extensions")
+		assert.NotContains(t, exts, "file_storage/default")
+		assert.NoError(t, p.Shutdown(context.Background()))
+	})
 }

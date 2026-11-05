@@ -86,10 +86,11 @@ type Policy struct {
 }
 
 var (
-	_ googlepolicy.Policy                     = (*Policy)(nil)
-	_ googlepolicy.ComponentPolicy            = (*Policy)(nil)
-	_ googlepolicy.SourcePolicy               = (*Policy)(nil)
-	_ googlepolicy.ConsolidatableSourcePolicy = (*Policy)(nil)
+	_ googlepolicy.Policy                        = (*Policy)(nil)
+	_ googlepolicy.ComponentPolicy               = (*Policy)(nil)
+	_ googlepolicy.SourcePolicy                  = (*Policy)(nil)
+	_ googlepolicy.ConsolidatableSourcePolicy    = (*Policy)(nil)
+	_ googlepolicy.PersistentStorageSourcePolicy = (*Policy)(nil)
 )
 
 // NewPolicyFromProto validates and compiles a WindowsEventLogSourcePolicy protobuf into a Policy.
@@ -298,6 +299,12 @@ func (p *Policy) TraceReceiverIDs() []component.ID {
 	return nil
 }
 
+// RequiresStorage returns true on Windows where windowseventlog receivers require persistent bookmark storage.
+// On non-Windows platforms, it returns false because Windows Event Log is Windows-only.
+func (p *Policy) RequiresStorage() bool {
+	return isWindows
+}
+
 // Consolidate merges multiple WindowsEventLogSourcePolicy instances into a single consolidated Policy.
 // Windows Event Log channel names are case-insensitive (e.g. "Security" == "security").
 // Multiple policies merge via the case-insensitive set union of their channels, preserving the
@@ -372,6 +379,7 @@ func (p *Policy) receiverConfigs() map[string]any {
 			"max_reads":             DefaultMaxReads,
 			"ignore_channel_errors": DefaultIgnoreChannelErrors,
 			"exclude_providers":     []string{DefaultExcludeProvider},
+			"storage":               googlepolicy.DefaultStorageExtensionID,
 		}
 	}
 	return map[string]any{

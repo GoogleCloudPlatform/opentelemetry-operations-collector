@@ -17,6 +17,8 @@ exporters:
         timeout: 5s
         write_buffer_size: 524288
 extensions:
+    file_storage/default:
+        create_directory: true
     googleclientauth/default_gcp_destination:
         project: ""
         quota_project: ""
@@ -128,6 +130,7 @@ receivers:
             - otelcol-google
         ignore_channel_errors: true
         max_reads: 500
+        storage: file_storage/default
         suppress_rendering_info: true
     windowseventlog/microsoft-windows-sysmon_operational_6ebeeb3b09fcec02:
         channel: Microsoft-Windows-Sysmon/Operational
@@ -135,6 +138,7 @@ receivers:
             - otelcol-google
         ignore_channel_errors: true
         max_reads: 500
+        storage: file_storage/default
         suppress_rendering_info: true
     windowseventlog/security_c3a409ae6f7ebfb4:
         channel: Security
@@ -142,6 +146,7 @@ receivers:
             - otelcol-google
         ignore_channel_errors: true
         max_reads: 500
+        storage: file_storage/default
         suppress_rendering_info: true
     windowseventlog/system_d621c1a7169f2ca5:
         channel: System
@@ -149,11 +154,13 @@ receivers:
             - otelcol-google
         ignore_channel_errors: true
         max_reads: 500
+        storage: file_storage/default
         suppress_rendering_info: true
 service:
     extensions:
         - googleclientauth/default_gcp_destination
         - googlecontrolplane
+        - file_storage/default
     pipelines:
         logs/default_self_metrics:
             exporters:

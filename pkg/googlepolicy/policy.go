@@ -235,6 +235,22 @@ type ConsolidatableSourcePolicy interface {
 	Consolidate(policies []SourcePolicy) (SourcePolicy, error)
 }
 
+// PersistentStorageSourcePolicy is an optional interface implemented by SourcePolicy types
+// whose synthesized receivers require persistent state or checkpoint storage (e.g. file_storage).
+type PersistentStorageSourcePolicy interface {
+	SourcePolicy
+	RequiresStorage() bool
+}
+
+const (
+	// DefaultStorageExtensionType is the component type for the persistent file storage extension.
+	DefaultStorageExtensionType = "file_storage"
+	// DefaultStorageExtensionName is the component name for the shared file storage extension.
+	DefaultStorageExtensionName = "default"
+	// DefaultStorageExtensionID is the full component ID string for the shared file storage extension.
+	DefaultStorageExtensionID = DefaultStorageExtensionType + "/" + DefaultStorageExtensionName
+)
+
 // DestinationPolicy is an extended interface that any Destination policy
 // will implement.
 type DestinationPolicy interface {

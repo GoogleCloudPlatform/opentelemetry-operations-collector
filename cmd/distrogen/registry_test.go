@@ -501,23 +501,11 @@ func TestComponentsRegistryGenerator_PreservesExistingRegistry(t *testing.T) {
 	assert.Equal(t, loadedRegistry.Receivers["customreceiver"].GoMod.URL, "github.com/custom/receiver")
 }
 
-func TestRegistryComponent_RenderOCBModule(t *testing.T) {
-	c := &RegistryComponent{
-		Name:   "inprocess",
-		GoMod:  &GoModuleID{URL: "github.com/example/telemetry", Tag: "v1.2.3"},
-		Import: "github.com/example/telemetry/factory",
-		Path:   "../telemetry",
-	}
-	expected := "  gomod: github.com/example/telemetry v1.2.3\n" +
-		"  import: github.com/example/telemetry/factory\n" +
-		"  path: ../telemetry\n"
-	assert.Equal(t, c.RenderOCBModule(), expected)
-}
-
 func TestNewTemplateContextFromSpec_Telemetry(t *testing.T) {
 	registry := NewRegistry()
+	// Name is left empty, as it is for entries loaded from a registry file
+	// (RegistryComponent.Name is `yaml:"-"`).
 	registry.Telemetry["inprocess"] = &RegistryComponent{
-		Name:  "inprocess",
 		GoMod: &GoModuleID{URL: "github.com/example/telemetry"},
 	}
 	spec := &DistributionSpec{
@@ -530,6 +518,19 @@ func TestNewTemplateContextFromSpec_Telemetry(t *testing.T) {
 	assert.NilError(t, err)
 	assert.Assert(t, ctx.Telemetry != nil)
 	assert.Equal(t, ctx.Telemetry.GoMod.String(), "github.com/example/telemetry v0.164.0")
+	assert.Equal(t, ctx.RenderOCBTelemetry(),
+		"telemetry:\n"+
+			"    gomod: github.com/example/telemetry v0.164.0\n")
+
+	registry.Telemetry["inprocess"].Import = "github.com/example/telemetry/factory"
+	registry.Telemetry["inprocess"].Path = "../telemetry"
+	ctx, err = NewTemplateContextFromSpec(spec, registry)
+	assert.NilError(t, err)
+	assert.Equal(t, ctx.RenderOCBTelemetry(),
+		"telemetry:\n"+
+			"    gomod: github.com/example/telemetry v0.164.0\n"+
+			"    import: github.com/example/telemetry/factory\n"+
+			"    path: ../telemetry\n")
 
 	spec.Components.Telemetry = "missing"
 	_, err = NewTemplateContextFromSpec(spec, registry)
@@ -539,4 +540,5 @@ func TestNewTemplateContextFromSpec_Telemetry(t *testing.T) {
 	ctx, err = NewTemplateContextFromSpec(spec, registry)
 	assert.NilError(t, err)
 	assert.Assert(t, ctx.Telemetry == nil)
+	assert.Equal(t, ctx.RenderOCBTelemetry(), "")
 }

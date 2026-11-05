@@ -520,6 +520,7 @@ func testCollectorFactories() (otelcol.Factories, error) {
 	}
 	factories.Extensions, err = otelcol.MakeFactoryMap[extension.Factory](
 		newStubExtensionFactory("googleclientauth"),
+		newStubExtensionFactory("file_storage"),
 		googlecontrolplaneextension.NewFactory(),
 	)
 	if err != nil {

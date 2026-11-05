@@ -241,7 +241,7 @@ func (c *RegistryComponent) ApplyOTelVersion(otelVersion otelComponentVersion) {
 type OCBManifestComponent struct {
 	GoMod  *GoModuleID `yaml:"gomod"`
 	Import string      `yaml:"import,omitempty"`
-	Name   string      `yaml:"string,omitempty"`
+	Name   string      `yaml:"name,omitempty"`
 	Path   string      `yaml:"path,omitempty"`
 }
 

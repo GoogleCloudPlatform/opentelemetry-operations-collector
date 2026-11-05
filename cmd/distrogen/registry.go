@@ -264,22 +264,6 @@ func (c *RegistryComponent) GetOCBComponent() OCBManifestComponent {
 	}
 }
 
-// RenderOCBModule renders this component as a single OCB manifest module
-// (a YAML mapping rather than a list entry), indented to sit under a
-// top-level manifest key such as `telemetry:`.
-func (c *RegistryComponent) RenderOCBModule() string {
-	out := renderYaml(OCBManifestComponent{
-		GoMod:  c.GoMod,
-		Import: c.Import,
-		Path:   c.Path,
-	})
-	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
-	for i, l := range lines {
-		lines[i] = "  " + l
-	}
-	return strings.Join(lines, "\n") + "\n"
-}
-
 // RegistryComponentRelease is a particular tag of a component that declares
 // the Collector library version it supports.
 type RegistryComponentRelease struct {

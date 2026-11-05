@@ -609,6 +609,18 @@ func NewTemplateContextFromSpec(spec *DistributionSpec, registry *Registry) (*Te
 	return &context, nil
 }
 
+// RenderOCBTelemetry renders the optional top-level `telemetry:` stanza of
+// the OCB manifest, or an empty string if the distribution uses OCB's default
+// telemetry factory.
+func (c *TemplateContext) RenderOCBTelemetry() string {
+	if c.Telemetry == nil {
+		return ""
+	}
+	return renderYaml(struct {
+		Telemetry OCBManifestComponent `yaml:"telemetry"`
+	}{c.Telemetry.GetOCBComponent()})
+}
+
 // FeatureGates is a list of feature gate names to enable in a
 // collector.
 type FeatureGates []string

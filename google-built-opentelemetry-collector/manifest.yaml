@@ -123,8 +123,8 @@ providers:
 - gomod: go.opentelemetry.io/collector/confmap/provider/yamlprovider v1.71.0
 
 telemetry:
-  gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/telemetry/inprocesstelemetry v0.165.0
-  path: ../components/google-built-opentelemetry-collector/telemetry/inprocesstelemetry
+    gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/telemetry/inprocesstelemetry v0.165.0
+    path: ../components/google-built-opentelemetry-collector/telemetry/inprocesstelemetry
 
 replaces:
 - github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/receiver/selftelemetryreceiver => ../../components/google-built-opentelemetry-collector/receiver/selftelemetryreceiver

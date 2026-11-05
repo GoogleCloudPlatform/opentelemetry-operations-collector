@@ -26,9 +26,8 @@ connectors:
 {{ .Connectors.RenderOCBComponents }}
 providers:
 {{ .Providers.RenderOCBComponents }}
-{{- if .Telemetry }}
-telemetry:
-{{ .Telemetry.RenderOCBModule }}
+{{- with .RenderOCBTelemetry }}
+{{ . }}
 {{- end }}
 replaces:
 {{ template "localReplaces" .Receivers }}{{ template "localReplaces" .Processors }}{{ template "localReplaces" .Exporters }}{{ template "localReplaces" .Extensions }}{{ template "localReplaces" .Connectors }}{{ template "localReplaces" .Providers }}{{ with .Telemetry }}{{ if .Path }}- {{ .GoMod.URL }} => ../{{ .Path }}

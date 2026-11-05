@@ -34,11 +34,17 @@ once and emits nothing.
 
 ## Configuration
 
-| Field                 | Default | Description                        |
-| --------------------- | ------- | ---------------------------------- |
-| `collection_interval` | `1m`    | How often internal metrics are read |
-| `initial_delay`       | `1s`    | Delay before the first collection   |
-| `timeout`             | `0`     | Per-collection timeout (0 = none)   |
+| Field                 | Default | Description                                                     |
+| --------------------- | ------- | --------------------------------------------------------------- |
+| `collection_interval` | `1m`    | How often internal metrics are read and delivered               |
+| `initial_delay`       | `1s`    | Delay before the first collection                               |
+| `timeout`             | `30s`   | Bound on each collection, including delivery downstream (0 = none) |
+
+On shutdown the receiver performs one final collection and delivers it before
+the downstream processors and exporters are shut down, so values recorded
+since the last periodic collection are not lost. Only values recorded while
+downstream components drain (after this receiver has stopped) cannot be
+delivered in-process.
 
 ```yaml
 receivers:

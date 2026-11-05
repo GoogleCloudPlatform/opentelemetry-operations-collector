@@ -116,7 +116,7 @@ func createMeterProvider(
 		return nil, err
 	}
 
-	reader := newReader()
+	reader := sdkmetric.NewManualReader()
 	mpConfig := cfg.Metrics.MeterProvider
 	sdk, err := otelconf.NewSDK(
 		otelconf.WithContext(ctx),
@@ -127,9 +127,12 @@ func createMeterProvider(
 		otelconf.WithMeterProviderOptions(sdkmetric.WithReader(reader)),
 	)
 	if err != nil {
-		releaseReader(reader)
 		return nil, err
 	}
+	// Publish only once the reader is registered with the MeterProvider, so
+	// Reader() never hands out a reader whose Collect would fail with
+	// ErrReaderNotRegistered.
+	publishReader(reader)
 	return &meterProvider{
 		MeterProvider: sdk.MeterProvider().(telemetry.MeterProvider),
 		reader:        reader,

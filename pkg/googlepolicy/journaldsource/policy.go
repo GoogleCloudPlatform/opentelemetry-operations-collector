@@ -32,7 +32,7 @@ import (
 // PolicyType is the registered policy type identifier for journald source policies.
 const (
 	PolicyType        = "journald_source"
-	DefaultReceiverID = "journald"
+	DefaultReceiverID = "journald/googlecontrolplane"
 
 	// collectorLogFilterExpr drops the collector's own log records across both Linux VM systemd
 	// services and containerized environments (Kubernetes DaemonSet / Docker) to prevent self-logging loops.
@@ -40,6 +40,8 @@ const (
 		`(body._SYSTEMD_UNIT != nil && body._SYSTEMD_UNIT == "otelcol-google.service") || ` +
 		`(body.SYSLOG_IDENTIFIER != nil && body.SYSLOG_IDENTIFIER == "otelcol-google")`
 )
+
+var receiverID = component.MustNewIDWithName("journald", "googlecontrolplane")
 
 var (
 	// ErrNilProto is returned when a nil JournaldSourcePolicy protobuf is provided.
@@ -183,7 +185,7 @@ func (p *Policy) Evaluate(_ context.Context) (*confmap.Conf, error) {
 
 // LogReceiverIDs returns the component IDs of log receivers synthesized by this policy.
 func (p *Policy) LogReceiverIDs() []component.ID {
-	return []component.ID{component.MustNewID(DefaultReceiverID)}
+	return []component.ID{receiverID}
 }
 
 // MetricReceiverIDs returns nil because JournaldSourcePolicy only handles the logs signal.

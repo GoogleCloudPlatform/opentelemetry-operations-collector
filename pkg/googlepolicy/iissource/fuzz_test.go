@@ -22,7 +22,6 @@ import (
 
 	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
-	"go.opentelemetry.io/collector/component"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
@@ -118,8 +117,8 @@ func verifyCompiledIISPolicy(t *testing.T, p googlepolicy.Policy) {
 		return
 	}
 
-	if len(metricIDs) != 1 || metricIDs[0] != component.MustNewID(DefaultReceiverID) {
-		t.Fatalf("MetricReceiverIDs() = %v, want [%s]", metricIDs, DefaultReceiverID)
+	if len(metricIDs) != 1 || metricIDs[0] != receiverID {
+		t.Fatalf("MetricReceiverIDs() = %v, want [%s]", metricIDs, receiverID)
 	}
 
 	raw := conf.ToStringMap()

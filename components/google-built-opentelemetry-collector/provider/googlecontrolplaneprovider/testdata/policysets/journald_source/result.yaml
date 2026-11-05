@@ -112,7 +112,7 @@ processors:
               statements:
                 - set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil
 receivers:
-    journald:
+    journald/googlecontrolplane:
         operators:
             - expr: (body._COMM != nil && body._COMM == "otelcol-google") || (body._SYSTEMD_UNIT != nil && body._SYSTEMD_UNIT == "otelcol-google.service") || (body.SYSLOG_IDENTIFIER != nil && body.SYSLOG_IDENTIFIER == "otelcol-google")
               id: exclude_collector_logs
@@ -165,7 +165,7 @@ service:
                 - queue_batch/default_gcp_destination_batch_logs
             receivers:
                 - nop/googlecontrolplane
-                - journald
+                - journald/googlecontrolplane
         metrics/default_self_metrics:
             exporters:
                 - otlp_grpc/default_gcp_destination

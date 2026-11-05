@@ -149,7 +149,7 @@ func TestPolicy_ReceiverIDs(t *testing.T) {
 	require.NoError(t, err)
 
 	if isWindows {
-		assert.Equal(t, []component.ID{component.MustNewID(DefaultReceiverID)}, pol.MetricReceiverIDs())
+		assert.Equal(t, []component.ID{receiverID}, pol.MetricReceiverIDs())
 	} else {
 		assert.Nil(t, pol.MetricReceiverIDs())
 	}

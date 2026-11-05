@@ -1891,7 +1891,7 @@ func TestRetrieve_MultipleJournaldSourcePoliciesConsolidated(t *testing.T) {
 	require.True(t, ok)
 
 	// Exactly 1 journald receiver is present
-	require.Contains(t, receivers, "journald")
+	require.Contains(t, receivers, "journald/googlecontrolplane")
 
 	pipelines, ok := raw["service"].(map[string]any)["pipelines"].(map[string]any)
 	require.True(t, ok)
@@ -1899,7 +1899,7 @@ func TestRetrieve_MultipleJournaldSourcePoliciesConsolidated(t *testing.T) {
 	require.True(t, ok)
 	pipelineReceivers, ok := logsPipeline["receivers"].([]any)
 	require.True(t, ok)
-	require.Contains(t, pipelineReceivers, "journald")
+	require.Contains(t, pipelineReceivers, "journald/googlecontrolplane")
 	require.Contains(t, pipelineReceivers, "nop/googlecontrolplane")
 
 	assert.NoError(t, p.Shutdown(context.Background()))
@@ -1919,7 +1919,7 @@ func (i *invalidJournaldSourcePolicy) Evaluate(_ context.Context) (*confmap.Conf
 	return nil, errors.New("invalid journald policy")
 }
 func (i *invalidJournaldSourcePolicy) LogReceiverIDs() []component.ID {
-	return []component.ID{component.MustNewID("journald")}
+	return []component.ID{component.MustNewIDWithName("journald", "googlecontrolplane")}
 }
 func (i *invalidJournaldSourcePolicy) MetricReceiverIDs() []component.ID { return nil }
 func (i *invalidJournaldSourcePolicy) TraceReceiverIDs() []component.ID  { return nil }
@@ -1972,7 +1972,7 @@ func TestRetrieve_MultipleJournaldSourcePolicies_FaultIsolation_FirstPolicyInval
 	require.True(t, ok)
 
 	// Fault isolation: good-1 and good-2 consolidated successfully into journald despite bad-0
-	require.Contains(t, receivers, "journald")
+	require.Contains(t, receivers, "journald/googlecontrolplane")
 
 	pipelines, ok := raw["service"].(map[string]any)["pipelines"].(map[string]any)
 	require.True(t, ok)
@@ -1980,7 +1980,7 @@ func TestRetrieve_MultipleJournaldSourcePolicies_FaultIsolation_FirstPolicyInval
 	require.True(t, ok)
 	pipelineReceivers, ok := logsPipeline["receivers"].([]any)
 	require.True(t, ok)
-	require.Contains(t, pipelineReceivers, "journald")
+	require.Contains(t, pipelineReceivers, "journald/googlecontrolplane")
 	require.Contains(t, pipelineReceivers, "nop/googlecontrolplane")
 
 	assert.NoError(t, p.Shutdown(context.Background()))
@@ -2000,7 +2000,7 @@ func (f *failConsolidateJournaldSourcePolicy) Evaluate(_ context.Context) (*conf
 	return confmap.New(), nil
 }
 func (f *failConsolidateJournaldSourcePolicy) LogReceiverIDs() []component.ID {
-	return []component.ID{component.MustNewID("journald")}
+	return []component.ID{component.MustNewIDWithName("journald", "googlecontrolplane")}
 }
 func (f *failConsolidateJournaldSourcePolicy) MetricReceiverIDs() []component.ID { return nil }
 func (f *failConsolidateJournaldSourcePolicy) TraceReceiverIDs() []component.ID  { return nil }
@@ -2039,7 +2039,7 @@ func TestRetrieve_MultipleJournaldSourcePolicies_ConsolidationFailureAttributesA
 	raw := conf.ToStringMap()
 	receivers, ok := raw["receivers"].(map[string]any)
 	require.True(t, ok)
-	require.NotContains(t, receivers, "journald")
+	require.NotContains(t, receivers, "journald/googlecontrolplane")
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
@@ -2300,14 +2300,14 @@ func TestRetrieve_ActivePolicySetWithIISSource_SynthesizesIISReceiver(t *testing
 	require.True(t, ok)
 
 	if runtime.GOOS == "windows" {
-		iisCfg, ok := receivers["iis"].(map[string]any)
+		iisCfg, ok := receivers["iis/googlecontrolplane"].(map[string]any)
 		require.True(t, ok, "iis receiver must be configured")
 		assert.Equal(t, "30s", iisCfg["collection_interval"])
-		assert.Contains(t, pipelineReceivers, "iis")
+		assert.Contains(t, pipelineReceivers, "iis/googlecontrolplane")
 	} else {
-		_, ok := receivers["iis"]
+		_, ok := receivers["iis/googlecontrolplane"]
 		assert.False(t, ok, "iis receiver must not be configured on non-Windows")
-		assert.NotContains(t, pipelineReceivers, "iis")
+		assert.NotContains(t, pipelineReceivers, "iis/googlecontrolplane")
 	}
 	assert.Contains(t, pipelineReceivers, "nop/googlecontrolplane")
 
@@ -2365,14 +2365,14 @@ func TestRetrieve_MultipleIISSourcePolicies_ConsolidatesMinInterval(t *testing.T
 	require.True(t, ok)
 
 	if runtime.GOOS == "windows" {
-		iisCfg, ok := receivers["iis"].(map[string]any)
+		iisCfg, ok := receivers["iis/googlecontrolplane"].(map[string]any)
 		require.True(t, ok, "iis receiver must be configured")
 		assert.Equal(t, "15s", iisCfg["collection_interval"], "consolidation must choose minimum interval")
-		assert.Contains(t, pipelineReceivers, "iis")
+		assert.Contains(t, pipelineReceivers, "iis/googlecontrolplane")
 	} else {
-		_, ok := receivers["iis"]
+		_, ok := receivers["iis/googlecontrolplane"]
 		assert.False(t, ok, "iis receiver must not be configured on non-Windows")
-		assert.NotContains(t, pipelineReceivers, "iis")
+		assert.NotContains(t, pipelineReceivers, "iis/googlecontrolplane")
 	}
 	assert.Contains(t, pipelineReceivers, "nop/googlecontrolplane")
 
@@ -2436,14 +2436,14 @@ func TestRetrieve_MultipleIISSourcePolicies_FaultIsolation_InvalidPolicyIgnored(
 	require.True(t, ok)
 
 	if runtime.GOOS == "windows" {
-		iisCfg, ok := receivers["iis"].(map[string]any)
+		iisCfg, ok := receivers["iis/googlecontrolplane"].(map[string]any)
 		require.True(t, ok, "iis receiver must be configured from valid sibling policy")
 		assert.Equal(t, "20s", iisCfg["collection_interval"])
-		assert.Contains(t, pipelineReceivers, "iis")
+		assert.Contains(t, pipelineReceivers, "iis/googlecontrolplane")
 	} else {
-		_, ok := receivers["iis"]
+		_, ok := receivers["iis/googlecontrolplane"]
 		assert.False(t, ok, "iis receiver must not be configured on non-Windows")
-		assert.NotContains(t, pipelineReceivers, "iis")
+		assert.NotContains(t, pipelineReceivers, "iis/googlecontrolplane")
 	}
 	assert.Contains(t, pipelineReceivers, "nop/googlecontrolplane")
 
@@ -2488,7 +2488,7 @@ func TestRetrieve_ActivePolicySetWithIISSource_SilentNoOpOnNonWindows(t *testing
 	raw := conf.ToStringMap()
 	receivers, ok := raw["receivers"].(map[string]any)
 	require.True(t, ok)
-	assert.NotContains(t, receivers, "iis", "iis receiver must not be synthesized on non-Windows")
+	assert.NotContains(t, receivers, "iis/googlecontrolplane", "iis receiver must not be synthesized on non-Windows")
 
 	pipelines, ok := raw["service"].(map[string]any)["pipelines"].(map[string]any)
 	require.True(t, ok)
@@ -2496,7 +2496,7 @@ func TestRetrieve_ActivePolicySetWithIISSource_SilentNoOpOnNonWindows(t *testing
 	require.True(t, ok)
 	pipelineReceivers, ok := metricsPipeline["receivers"].([]any)
 	require.True(t, ok)
-	assert.NotContains(t, pipelineReceivers, "iis", "iis must not be in pipeline on non-Windows")
+	assert.NotContains(t, pipelineReceivers, "iis/googlecontrolplane", "iis must not be in pipeline on non-Windows")
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
@@ -2517,7 +2517,7 @@ func (i *invalidIISSourcePolicy) Evaluate(_ context.Context) (*confmap.Conf, err
 	return confmap.New(), nil
 }
 func (i *invalidIISSourcePolicy) MetricReceiverIDs() []component.ID {
-	return []component.ID{component.MustNewID("iis")}
+	return []component.ID{component.MustNewIDWithName("iis", "googlecontrolplane")}
 }
 func (i *invalidIISSourcePolicy) LogReceiverIDs() []component.ID   { return nil }
 func (i *invalidIISSourcePolicy) TraceReceiverIDs() []component.ID { return nil }

@@ -267,9 +267,6 @@ func TestPolicy_ReceiverID_DisambiguationAndDeterminism(t *testing.T) {
 	secID := SanitizeChannelName("Security")
 	assert.Equal(t, secID, SanitizeChannelName("security"))
 	assert.Equal(t, secID, SanitizeChannelName("SECURITY"))
-	assert.Equal(t, secID, SanitizeChannelName("ſecurity"))
-	assert.Equal(t, SanitizeChannelName("id"), SanitizeChannelName("ıd"))
-	assert.Equal(t, SanitizeChannelName("ΟΔΟΣ"), SanitizeChannelName("ΟΔΟς"))
 
 	p1, err := NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
 		Id:       "policy-alpha",

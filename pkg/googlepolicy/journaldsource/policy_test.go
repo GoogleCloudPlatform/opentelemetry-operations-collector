@@ -83,7 +83,7 @@ func TestPolicy_ReceiverIDs(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	assert.Equal(t, []component.ID{component.MustNewID(DefaultReceiverID)}, pol.LogReceiverIDs())
+	assert.Equal(t, []component.ID{receiverID}, pol.LogReceiverIDs())
 	assert.Nil(t, pol.MetricReceiverIDs())
 	assert.Nil(t, pol.TraceReceiverIDs())
 }
@@ -104,8 +104,8 @@ func TestPolicy_Evaluate(t *testing.T) {
 	receivers, ok := raw["receivers"].(map[string]any)
 	require.True(t, ok, "receivers key must be a map")
 
-	journaldCfg, ok := receivers[DefaultReceiverID].(map[string]any)
-	require.True(t, ok, "journald receiver must be present")
+	journaldCfg, ok := receivers[receiverID.String()].(map[string]any)
+	require.True(t, ok, "journald/googlecontrolplane receiver must be present")
 
 	operators, ok := journaldCfg["operators"].([]any)
 	require.True(t, ok, "operators key must be a slice")
@@ -204,7 +204,7 @@ func TestPolicy_Consolidate(t *testing.T) {
 		assert.Equal(t, "journald-1", res.PolicyName())
 		jp, ok := res.(*Policy)
 		require.True(t, ok)
-		assert.Equal(t, []component.ID{component.MustNewID(DefaultReceiverID)}, jp.LogReceiverIDs())
+		assert.Equal(t, []component.ID{receiverID}, jp.LogReceiverIDs())
 	})
 
 	t.Run("invalid receiver returns error", func(t *testing.T) {

@@ -61,8 +61,8 @@ processors:
     queue_batch/default_gcp_destination_batch_traces:
         batch:
             flush_timeout: 200ms
-            max_size: 25000
-            min_size: 25000
+            max_size: 8192
+            min_size: 8192
             partition:
                 cache_size: 10000
                 idle_timeout: 1m30s

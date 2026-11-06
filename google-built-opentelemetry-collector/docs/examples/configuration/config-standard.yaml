@@ -110,8 +110,7 @@ exporters:
   # Note: In addition to per-request item limits (8,192 for logs/traces, 200 for
   # metrics), the API enforces a 5 MiB request size limit. An 8,192-item batch
   # stays under 5 MiB only when the average log or span is under ~640 bytes. If
-  # your payloads are larger, reduce `max_size` or additionally configure a
-  # queuebatch processor to batch by byte size.
+  # your payloads are larger, reduce `max_size` or set `sending_queue.batch.sizer: bytes`.
   #
   # Docs:
   # https://github.com/open-telemetry/opentelemetry-collector/tree/main/exporter/otlpexporter
@@ -123,7 +122,7 @@ exporters:
     sending_queue:
       enabled: true
       sizer: bytes
-      queue_size: 104857600 # 100 MiB queue bound
+      queue_size: 20971520 # 20 MiB queue bound
       block_on_overflow: true
       num_consumers: 25
       batch:
@@ -140,7 +139,7 @@ exporters:
     sending_queue:
       enabled: true
       sizer: bytes
-      queue_size: 52428800 # 50 MiB queue bound
+      queue_size: 20971520 # 20 MiB queue bound
       block_on_overflow: true
       num_consumers: 25
       batch:
@@ -157,7 +156,7 @@ exporters:
     sending_queue:
       enabled: true
       sizer: bytes
-      queue_size: 104857600 # 100 MiB queue bound
+      queue_size: 20971520 # 20 MiB queue bound
       block_on_overflow: true
       num_consumers: 25
       batch:

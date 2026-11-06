@@ -81,11 +81,11 @@ func TestProcessLogs_WithActivePolicy(t *testing.T) {
 						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{
 						Kind: &policyv1alpha1.Value_StringValue{StringValue: "secret message"},
 					},
-				},
+				}},
 			},
 		},
 	})
@@ -136,11 +136,11 @@ func TestProcessMetrics_WithActivePolicy(t *testing.T) {
 						DescriptorField: policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME,
 					},
 				},
-				Predicate: &policyv1alpha1.MetricMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{
 						Kind: &policyv1alpha1.Value_StringValue{StringValue: "internal.heartbeat"},
 					},
-				},
+				}},
 			},
 		},
 	})
@@ -192,11 +192,11 @@ func TestProcessTraces_WithActivePolicy(t *testing.T) {
 						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{
 						Kind: &policyv1alpha1.Value_StringValue{StringValue: "/healthz"},
 					},
-				},
+				}},
 			},
 		},
 	})
@@ -269,11 +269,11 @@ func TestProcessLogs_DynamicPolicyUpdate(t *testing.T) {
 						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{
 						Kind: &policyv1alpha1.Value_StringValue{StringValue: "test log"},
 					},
-				},
+				}},
 			},
 		},
 	})
@@ -310,13 +310,13 @@ func TestProcessLogs_WithRealLogFilterPolicy(t *testing.T) {
 						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{
 						Kind: &policyv1alpha1.Value_StringValue{
 							StringValue: "DROP_THIS_LINE",
 						},
 					},
-				},
+				}},
 			},
 		},
 	})
@@ -370,8 +370,10 @@ func TestProcessLogs_LoadFromRawJSONPolicySet(t *testing.T) {
 				"target": map[string]any{
 					"record_field": "LOG_RECORD_FIELD_SEVERITY_TEXT",
 				},
-				"equality": map[string]any{
-					"string_value": "WARN",
+				"predicate": map[string]any{
+					"equality": map[string]any{
+						"string_value": "WARN",
+					},
 				},
 			},
 		},
@@ -420,11 +422,11 @@ func TestProcessLogs_WithRealLogTransformPolicy(t *testing.T) {
 						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Containment{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Containment{
 					Containment: &policyv1alpha1.Value{
 						Kind: &policyv1alpha1.Value_StringValue{StringValue: "security"},
 					},
-				},
+				}},
 			},
 		},
 		Action: &policyv1alpha1.LogTransformPolicy_Addition{

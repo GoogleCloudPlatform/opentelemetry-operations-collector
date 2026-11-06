@@ -19,16 +19,20 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	discoveryv3 "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	"github.com/stretchr/testify/assert"
@@ -380,4 +384,105 @@ func TestGoogleIDTokenSource_ExtractsIDTokenFromADC(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "no id_token found in ADC credentials")
 	})
+}
+
+func TestResolveTokenSource_X509ExternalAccount(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	privKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		Subject:      pkix.Name{CommonName: "test-xds-workload"},
+		NotBefore:    time.Now().Add(-time.Hour),
+		NotAfter:     time.Now().Add(time.Hour),
+		KeyUsage:     x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+	}
+	certDER, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &privKey.PublicKey, privKey)
+	require.NoError(t, err)
+
+	certPath := filepath.Join(tmpDir, "leaf.pem")
+	certPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certDER})
+	require.NoError(t, os.WriteFile(certPath, certPEM, 0o600))
+
+	keyPath := filepath.Join(tmpDir, "leaf.key")
+	pkcs8Bytes, err := x509.MarshalPKCS8PrivateKey(privKey)
+	require.NoError(t, err)
+	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: pkcs8Bytes})
+	require.NoError(t, os.WriteFile(keyPath, keyPEM, 0o600))
+
+	certConfigPath := filepath.Join(tmpDir, "cert_config.json")
+	certConfig, err := json.Marshal(map[string]any{
+		"cert_configs": map[string]any{
+			"workload": map[string]string{
+				"cert_path": certPath,
+				"key_path":  keyPath,
+			},
+		},
+	})
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(certConfigPath, certConfig, 0o600))
+
+	credConfigPath := filepath.Join(tmpDir, "cred_config.json")
+	credConfig, err := json.Marshal(map[string]any{
+		"universe_domain":    "googleapis.com",
+		"type":               "external_account",
+		"audience":           "//iam.googleapis.com/projects/123456/locations/global/workloadIdentityPools/test-pool/providers/test-provider",
+		"subject_token_type": "urn:ietf:params:oauth:token-type:mtls",
+		"token_url":          "https://sts.mtls.googleapis.com/v1/token",
+		"credential_source": map[string]any{
+			"certificate": map[string]any{
+				"certificate_config_location": certConfigPath,
+			},
+		},
+	})
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(credConfigPath, credConfig, 0o600))
+
+	t.Setenv("GOOGLE_APPLICATION_CREDENTIALS", credConfigPath)
+
+	ts, err := ResolveTokenSource(context.Background(), "telemetrydirector.googleapis.com:443")
+	require.NoError(t, err)
+	require.NotNil(t, ts)
+}
+
+// TestResolveIDTokenSource_GCEWithGcloudUserADC covers a GCE VM (e.g. a
+// Cloudtop) with gcloud user ADC at the well-known path and
+// GOOGLE_APPLICATION_CREDENTIALS unset. The user's credentials must be used:
+// step 1 must not silently switch to the VM service account's identity.
+func TestResolveIDTokenSource_GCEWithGcloudUserADC(t *testing.T) {
+	var vmIdentityRequests atomic.Int32
+	mds := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Metadata-Flavor", "Google")
+		if strings.HasSuffix(r.URL.Path, "/service-accounts/default/identity") {
+			vmIdentityRequests.Add(1)
+			_, _ = w.Write([]byte(fakeIDToken(r.URL.Query().Get("audience"))))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(mds.Close)
+	t.Setenv("GCE_METADATA_HOST", strings.TrimPrefix(mds.URL, "http://"))
+
+	home := t.TempDir()
+	adcJSON := []byte(`{"type":"authorized_user","client_id":"fake.apps.googleusercontent.com","client_secret":"fake","refresh_token":"fake"}`)
+	for _, dir := range []string{
+		filepath.Join(home, ".config", "gcloud"), // Linux / macOS
+		filepath.Join(home, "gcloud"),            // Windows (APPDATA)
+	} {
+		require.NoError(t, os.MkdirAll(dir, 0o700))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "application_default_credentials.json"), adcJSON, 0o600))
+	}
+	t.Setenv("HOME", home)
+	t.Setenv("APPDATA", home)
+	t.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "")
+
+	// Step 2 refreshes the fake user credentials, which fails; what matters is
+	// that step 1 did not mint a token for the VM service account.
+	_, err := resolveIDTokenSource(context.Background(), "https://example-service.a.run.app")
+	require.Error(t, err)
+	assert.Zero(t, vmIdentityRequests.Load(), "must not fetch an ID token for the VM service account")
+	assert.ErrorContains(t, err, "unsupported credentials type", "the step 1 error must be reported")
 }

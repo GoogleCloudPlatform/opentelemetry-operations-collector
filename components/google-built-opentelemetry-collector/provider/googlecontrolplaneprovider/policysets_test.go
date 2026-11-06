@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
@@ -62,7 +64,11 @@ func TestPolicySets(t *testing.T) {
 				}
 			})
 
-			uri := fmt.Sprintf("%s:%s://%s", schemeName, innerSchemeFile, filepath.ToSlash(absPoliciesDir))
+			slashPath := filepath.ToSlash(absPoliciesDir)
+			if !strings.HasPrefix(slashPath, "/") {
+				slashPath = "/" + slashPath
+			}
+			uri := fmt.Sprintf("%s:%s://%s", schemeName, innerSchemeFile, slashPath)
 			ret, err := p.Retrieve(context.Background(), uri, nil)
 			require.NoError(t, err)
 			require.NotNil(t, ret)
@@ -73,7 +79,10 @@ func TestPolicySets(t *testing.T) {
 			actualYAML, err := yaml.Marshal(conf.ToStringMap())
 			require.NoError(t, err)
 
-			resultPath := filepath.Join(testdataDir, entry.Name(), "result.yaml")
+			resultPath := filepath.Join(testdataDir, entry.Name(), fmt.Sprintf("result_%s.yaml", runtime.GOOS))
+			if _, err := os.Stat(resultPath); err != nil {
+				resultPath = filepath.Join(testdataDir, entry.Name(), "result.yaml")
+			}
 
 			if *update || os.Getenv("UPDATE_GOLDEN") == "true" {
 				require.NoError(t, os.WriteFile(resultPath, actualYAML, 0644))
@@ -86,7 +95,7 @@ func TestPolicySets(t *testing.T) {
 				expectedYAML = actualYAML
 			}
 
-			assert.Equal(t, string(expectedYAML), string(actualYAML))
+			assert.YAMLEq(t, string(expectedYAML), string(actualYAML))
 		})
 	}
 }

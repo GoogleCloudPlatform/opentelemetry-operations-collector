@@ -125,14 +125,14 @@ func bytesVal(b []byte) *policyv1alpha1.Value {
 func bodyExistsMatcher() *policyv1alpha1.LogMatcher {
 	return &policyv1alpha1.LogMatcher{
 		Target:    recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY),
-		Predicate: &policyv1alpha1.LogMatcher_Existence{},
+		Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
 	}
 }
 
 func alwaysTrueMatcher() *policyv1alpha1.LogMatcher {
 	return &policyv1alpha1.LogMatcher{
 		Target:    logAttrTarget("__never_present__"),
-		Predicate: &policyv1alpha1.LogMatcher_Existence{},
+		Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
 		Negated:   true,
 	}
 }
@@ -442,7 +442,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 				Matchers: []*policyv1alpha1.LogMatcher{
 					{
 						Target:    nil,
-						Predicate: &policyv1alpha1.LogMatcher_Existence{},
+						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
 					},
 				},
 				Action: validAdd,
@@ -681,7 +681,9 @@ func TestDriverLoadPolicyAndProto(t *testing.T) {
 					"target": map[string]any{
 						"record_field": "LOG_RECORD_FIELD_BODY",
 					},
-					"existence": map[string]any{},
+					"predicate": map[string]any{
+						"existence": map[string]any{},
+					},
 				},
 			},
 			"addition": map[string]any{
@@ -766,7 +768,7 @@ func TestDriverLoadPolicyAndProto(t *testing.T) {
 					"matchers": []any{
 						map[string]any{
 							"target":    map[string]any{"record_field": "LOG_RECORD_FIELD_BODY"},
-							"existence": map[string]any{},
+							"predicate": map[string]any{"existence": map[string]any{}},
 						},
 					},
 				},
@@ -1136,15 +1138,15 @@ func TestTransformLogMultipleMatchersAndSequentialPolicies(t *testing.T) {
 			Matchers: []*policyv1alpha1.LogMatcher{
 				{
 					Target: logAttrTarget("http.method"),
-					Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 						Equality: strVal("GET"),
-					},
+					}},
 				},
 				{
 					Target: logAttrTarget("http.status_code"),
-					Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 						Equality: intVal(500), // bundle has 200
-					},
+					}},
 				},
 			},
 			Action: addAction(logTargetAttr("alert"), boolVal(true), true),
@@ -1340,9 +1342,9 @@ func TestTransformLogRemoveAction(t *testing.T) {
 							LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"http.method"}},
 						},
 					},
-					Predicate: &policyv1alpha1.LogMatcher_Equality{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 						Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "POST"}},
-					},
+					}},
 				},
 			},
 			Action: removeAction(logAttrSelector("target_key")),

@@ -75,33 +75,32 @@ message NumericValue {
   }
 }
 
-// Defines a single predicate evaluated against a specific log field
-// or attribute.
-message LogMatcher {
-  // The field, attribute, or metadata to inspect. Exactly one must be set.
-  LogFieldSelector target = 1;
-
-  // The comparison predicate to evaluate against the target value.
-  // Exactly one predicate must be set.
-  //
-  // If the selected target field or attribute does not exist, or if its
-  // runtime value type is incompatible with the chosen predicate (for
-  // example, evaluating `glob` against a non-string value, or a numeric
-  // comparison against a string or boolean value), the predicate evaluates
-  // to `false` (prior to applying `negated`).
-  oneof predicate {
+// Defines the comparison operator and operand evaluated against a selected
+// telemetry field or attribute.
+//
+// If the selected target field or attribute does not exist, or if its runtime
+// value type is incompatible with the chosen operator (for example, evaluating
+// `glob` against a non-string value, or a numeric comparison against a string
+// or boolean value), the predicate evaluates to `false` (prior to applying
+// `negated` on the enclosing matcher).
+message Predicate {
+  // The comparison operator to evaluate. Required; if unset or unrecognized,
+  // the enclosing policy is invalid.
+  oneof kind {
     // Matches if the selected field or attribute exists.
     // For attributes and structured log body fields (`body_field_path`), this
     // evaluates to true if the attribute key or nested body path exists.
-    // For first-class fields (`record_field`, `scope_field`) that lack explicit
-    // presence tracking in the OpenTelemetry data model, this evaluates to true
-    // when the field is set to a non-default (non-zero/non-empty) value, and
-    // false when absent or default (e.g. empty string or 0). Combine with
-    // `negated: true` to match when a field or attribute does NOT exist.
-    google.protobuf.Empty existence = 10;
+    // For first-class fields (`record_field`, `descriptor_field`,
+    // `scope_field`) that lack explicit presence tracking in the OpenTelemetry
+    // data model, this evaluates to true when the field is set to a
+    // non-default (non-zero/non-empty) value, and false when absent or default
+    // (e.g. empty string, 0, or absent `parent_span_id` on a root span).
+    // Combine with `negated: true` on the enclosing matcher to match when a
+    // field or attribute does NOT exist.
+    google.protobuf.Empty existence = 1;
 
     // Typed scalar equality match (supporting string, int64, bool, double, bytes).
-    Value equality = 11;
+    Value equality = 2;
 
     // Glob pattern match against the entire string value.
     // Supports `*` (matches zero or more characters) and `?` (matches any
@@ -109,33 +108,43 @@ message LogMatcher {
     // case-sensitive and anchored to the full string. Applies strictly to
     // string fields and string attribute values (evaluates to `false` for
     // non-string targets).
-    string glob = 12;
+    string glob = 3;
 
     // Matches if the target numeric value is strictly greater than (>) this value.
     // Applies strictly to int64 and double fields and attribute values.
-    NumericValue exclusive_minimum = 13;
+    NumericValue exclusive_minimum = 4;
 
     // Matches if the target numeric value is greater than or equal to (>=) this value.
     // Applies strictly to int64 and double fields and attribute values.
-    NumericValue inclusive_minimum = 14;
+    NumericValue inclusive_minimum = 5;
 
     // Matches if the target numeric value is strictly less than (<) this value.
     // Applies strictly to int64 and double fields and attribute values.
-    NumericValue exclusive_maximum = 15;
+    NumericValue exclusive_maximum = 6;
 
     // Matches if the target numeric value is less than or equal to (<=) this value.
     // Applies strictly to int64 and double fields and attribute values.
-    NumericValue inclusive_maximum = 16;
+    NumericValue inclusive_maximum = 7;
 
     // Value containment:
     // - For list (ArrayValue) attributes: matches if any element in the list equals this value.
     // - For string fields or attribute values: matches if the string contains this value's `string_value` as a substring.
     // - For bytes fields or attribute values: matches if the bytes contain this value's `bytes_value` as a subsequence.
-    Value containment = 17;
+    Value containment = 8;
   }
+}
+
+// Defines a single predicate evaluated against a specific log field
+// or attribute.
+message LogMatcher {
+  // The field, attribute, or metadata to inspect. Exactly one must be set.
+  LogFieldSelector target = 1;
+
+  // The comparison predicate to evaluate against the target value. Required.
+  Predicate predicate = 2;
 
   // If true, inverts the result of the predicate (logical NOT).
-  bool negated = 2;
+  bool negated = 3;
 }
 
 // Designates a first-class OTel log field, attribute, or metadata.
@@ -184,61 +193,11 @@ message TraceMatcher {
   // The span field, attribute, or metadata to inspect. Exactly one must be set.
   TraceFieldSelector target = 1;
 
-  // The comparison predicate to evaluate against the target value.
-  // Exactly one predicate must be set.
-  //
-  // If the selected target field or attribute does not exist, or if its
-  // runtime value type is incompatible with the chosen predicate (for
-  // example, evaluating `glob` against a non-string value, or a numeric
-  // comparison against a string or boolean value), the predicate evaluates
-  // to `false` (prior to applying `negated`).
-  oneof predicate {
-    // Matches if the selected field or attribute exists.
-    // For attributes, this evaluates to true if the attribute key exists.
-    // For first-class fields (`record_field`, `scope_field`) that lack explicit
-    // presence tracking in the OpenTelemetry data model, this evaluates to true
-    // when the field is set to a non-default (non-zero/non-empty) value, and
-    // false when absent or default (e.g. absent `parent_span_id` on a root span,
-    // or empty string/unset). Combine with `negated: true` to match when a field
-    // or attribute does NOT exist.
-    google.protobuf.Empty existence = 10;
-
-    // Typed scalar equality match (supporting string, int64, bool, double, bytes).
-    Value equality = 11;
-
-    // Glob pattern match against the entire string value.
-    // Supports `*` (matches zero or more characters) and `?` (matches any
-    // single character), for example `"http.*"` or `"err_?_code"`. Matching is
-    // case-sensitive and anchored to the full string. Applies strictly to
-    // string fields and string attribute values (evaluates to `false` for
-    // non-string targets).
-    string glob = 12;
-
-    // Matches if the target numeric value is strictly greater than (>) this value.
-    // Applies strictly to int64 and double fields and attribute values.
-    NumericValue exclusive_minimum = 13;
-
-    // Matches if the target numeric value is greater than or equal to (>=) this value.
-    // Applies strictly to int64 and double fields and attribute values.
-    NumericValue inclusive_minimum = 14;
-
-    // Matches if the target numeric value is strictly less than (<) this value.
-    // Applies strictly to int64 and double fields and attribute values.
-    NumericValue exclusive_maximum = 15;
-
-    // Matches if the target numeric value is less than or equal to (<=) this value.
-    // Applies strictly to int64 and double fields and attribute values.
-    NumericValue inclusive_maximum = 16;
-
-    // Value containment:
-    // - For list (ArrayValue) attributes: matches if any element in the list equals this value.
-    // - For string fields or attribute values: matches if the string contains this value's `string_value` as a substring.
-    // - For bytes fields or attribute values: matches if the bytes contain this value's `bytes_value` as a subsequence.
-    Value containment = 17;
-  }
+  // The comparison predicate to evaluate against the target value. Required.
+  Predicate predicate = 2;
 
   // If true, inverts the result of the predicate (logical NOT).
-  bool negated = 2;
+  bool negated = 3;
 }
 
 // Designates a first-class OTel span field, attribute, or metadata.

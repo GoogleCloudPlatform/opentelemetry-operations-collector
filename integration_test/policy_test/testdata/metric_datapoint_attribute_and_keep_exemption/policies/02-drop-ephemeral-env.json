@@ -9,8 +9,10 @@
           "segments": ["env"]
         }
       },
-      "equality": {
-        "string_value": "ephemeral"
+      "predicate": {
+        "equality": {
+          "string_value": "ephemeral"
+        }
       }
     }
   ]

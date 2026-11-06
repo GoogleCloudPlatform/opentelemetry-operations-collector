@@ -15,6 +15,7 @@
 package googlepolicyprocessor
 
 import (
+	"encoding/binary"
 	"testing"
 
 	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
@@ -23,6 +24,7 @@ import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/logtransform"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/metricfilter"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/tracefilter"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/tracesampling"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/pcommon"
@@ -119,7 +121,7 @@ func TestEvaluator_LogFiltering(t *testing.T) {
 						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT,
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Glob{Glob: "DEBUG*"},
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Glob{Glob: "DEBUG*"}},
 			},
 		},
 	})
@@ -135,11 +137,11 @@ func TestEvaluator_LogFiltering(t *testing.T) {
 						ResourceAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"env"}},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{
 						Kind: &policyv1alpha1.Value_StringValue{StringValue: "production"},
 					},
-				},
+				}},
 			},
 		},
 	})
@@ -196,11 +198,11 @@ func TestEvaluator_LogNestedAttributeAndNegate(t *testing.T) {
 						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"http", "method"}},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{
 						Kind: &policyv1alpha1.Value_StringValue{StringValue: "GET"},
 					},
-				},
+				}},
 				Negated: true,
 			},
 		},
@@ -237,11 +239,11 @@ func TestEvaluator_MetricFiltering(t *testing.T) {
 						DescriptorField: policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME,
 					},
 				},
-				Predicate: &policyv1alpha1.MetricMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{
 						Kind: &policyv1alpha1.Value_StringValue{StringValue: "http.server.duration"},
 					},
-				},
+				}},
 			},
 			{
 				Target: &policyv1alpha1.MetricFieldSelector{
@@ -249,11 +251,11 @@ func TestEvaluator_MetricFiltering(t *testing.T) {
 						DescriptorField: policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE,
 					},
 				},
-				Predicate: &policyv1alpha1.MetricMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{
 						Kind: &policyv1alpha1.Value_StringValue{StringValue: "HISTOGRAM"},
 					},
-				},
+				}},
 			},
 		},
 	})
@@ -330,7 +332,7 @@ func TestEvaluator_TraceFiltering(t *testing.T) {
 						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Glob{Glob: "healthcheck*"},
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Glob{Glob: "healthcheck*"}},
 			},
 			{
 				Target: &policyv1alpha1.TraceFieldSelector{
@@ -338,11 +340,11 @@ func TestEvaluator_TraceFiltering(t *testing.T) {
 						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_KIND,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{
 						Kind: &policyv1alpha1.Value_StringValue{StringValue: "INTERNAL"},
 					},
-				},
+				}},
 			},
 		},
 	})
@@ -387,6 +389,120 @@ func TestEvaluator_TraceFiltering(t *testing.T) {
 	require.Equal(t, 1, td.ResourceSpans().At(0).ScopeSpans().Len())
 	require.Equal(t, 1, td.ResourceSpans().At(0).ScopeSpans().At(0).Spans().Len())
 	assert.Equal(t, "get_user", td.ResourceSpans().At(0).ScopeSpans().At(0).Spans().At(0).Name())
+}
+
+func TestEvaluator_TraceSampling(t *testing.T) {
+	// 50% sampling policy (threshold is 2^55)
+	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{
+		mustPolicy(t, &policyv1alpha1.TraceSamplingPolicy{
+			Id:              "sample-50",
+			SamplingPercent: 50.0,
+		}),
+	})
+	require.NoError(t, err)
+
+	td := ptrace.NewTraces()
+	rs := td.ResourceSpans().AppendEmpty()
+	ss := rs.ScopeSpans().AppendEmpty()
+
+	// Span 1: R < 2^55 (dropped)
+	span1 := ss.Spans().AppendEmpty()
+	span1.SetName("span_dropped")
+	var traceIDDrop [16]byte
+	binary.BigEndian.PutUint64(traceIDDrop[8:], (uint64(1)<<55)-1)
+	span1.SetTraceID(pcommon.TraceID(traceIDDrop))
+
+	// Span 2: R >= 2^55 (kept, tracestate updated with ot=th:8)
+	span2 := ss.Spans().AppendEmpty()
+	span2.SetName("span_kept")
+	var traceIDKept [16]byte
+	binary.BigEndian.PutUint64(traceIDKept[8:], (uint64(1)<<55)+1)
+	span2.SetTraceID(pcommon.TraceID(traceIDKept))
+
+	ev.TransformTraces(td)
+
+	require.Equal(t, 1, td.ResourceSpans().Len())
+	require.Equal(t, 1, td.ResourceSpans().At(0).ScopeSpans().Len())
+	require.Equal(t, 1, td.ResourceSpans().At(0).ScopeSpans().At(0).Spans().Len())
+
+	survivingSpan := td.ResourceSpans().At(0).ScopeSpans().At(0).Spans().At(0)
+	assert.Equal(t, "span_kept", survivingSpan.Name())
+	assert.Contains(t, survivingSpan.TraceState().AsRaw(), "ot=th:8")
+}
+
+func TestEvaluator_TraceSampling_MultiPolicyComposition(t *testing.T) {
+	// Policy 1: 50% sampling (threshold 2^55)
+	// Policy 2: 25% sampling (threshold 3 * 2^54)
+	// Effective rate is min(50%, 25%) = 25% (threshold 3 * 2^54).
+	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{
+		mustPolicy(t, &policyv1alpha1.TraceSamplingPolicy{
+			Id:              "p1-sample-50",
+			SamplingPercent: 50.0,
+		}),
+		mustPolicy(t, &policyv1alpha1.TraceSamplingPolicy{
+			Id:              "p2-sample-25",
+			SamplingPercent: 25.0,
+		}),
+	})
+	require.NoError(t, err)
+
+	td := ptrace.NewTraces()
+	rs := td.ResourceSpans().AppendEmpty()
+	ss := rs.ScopeSpans().AppendEmpty()
+
+	// Span 1: R satisfies 50% but fails 25% -> dropped
+	span1 := ss.Spans().AppendEmpty()
+	span1.SetName("span_passes_50_fails_25")
+	var traceID1 [16]byte
+	binary.BigEndian.PutUint64(traceID1[8:], (uint64(1)<<55)+10)
+	span1.SetTraceID(pcommon.TraceID(traceID1))
+
+	// Span 2: R satisfies 25% -> kept
+	span2 := ss.Spans().AppendEmpty()
+	span2.SetName("span_passes_both")
+	var traceID2 [16]byte
+	binary.BigEndian.PutUint64(traceID2[8:], (uint64(3)<<54)+10)
+	span2.SetTraceID(pcommon.TraceID(traceID2))
+
+	ev.TransformTraces(td)
+
+	require.Equal(t, 1, td.ResourceSpans().Len())
+	require.Equal(t, 1, td.ResourceSpans().At(0).ScopeSpans().Len())
+	require.Equal(t, 1, td.ResourceSpans().At(0).ScopeSpans().At(0).Spans().Len())
+
+	surviving := td.ResourceSpans().At(0).ScopeSpans().At(0).Spans().At(0)
+	assert.Equal(t, "span_passes_both", surviving.Name())
+	assert.Contains(t, surviving.TraceState().AsRaw(), "ot=th:c")
+}
+
+func TestEvaluator_TraceFilterBeforeSampling(t *testing.T) {
+	// Stage 1 filter drops "healthcheck"
+	// Stage 2 sampling keeps 100%
+	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{
+		mustPolicy(t, newDropSpanNameProto("drop-health", "healthcheck")),
+		mustPolicy(t, &policyv1alpha1.TraceSamplingPolicy{
+			Id:              "sample-all",
+			SamplingPercent: 100.0,
+		}),
+	})
+	require.NoError(t, err)
+
+	td := ptrace.NewTraces()
+	rs := td.ResourceSpans().AppendEmpty()
+	ss := rs.ScopeSpans().AppendEmpty()
+
+	span1 := ss.Spans().AppendEmpty()
+	span1.SetName("healthcheck")
+
+	span2 := ss.Spans().AppendEmpty()
+	span2.SetName("real_work")
+
+	ev.TransformTraces(td)
+
+	require.Equal(t, 1, td.ResourceSpans().Len())
+	require.Equal(t, 1, td.ResourceSpans().At(0).ScopeSpans().Len())
+	require.Equal(t, 1, td.ResourceSpans().At(0).ScopeSpans().At(0).Spans().Len())
+	assert.Equal(t, "real_work", td.ResourceSpans().At(0).ScopeSpans().At(0).Spans().At(0).Name())
 }
 
 // TestNewEvaluator_Dispatch covers how NewEvaluator routes each kind of
@@ -523,9 +639,9 @@ func TestEvaluator_MetricDatapointPruningAndEmptyMetrics(t *testing.T) {
 						DescriptorField: policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME,
 					},
 				},
-				Predicate: &policyv1alpha1.MetricMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "exempt.metric"}},
-				},
+				}},
 			},
 		},
 	})
@@ -836,9 +952,9 @@ func TestEvaluator_MultipleTracePoliciesDrop(t *testing.T) {
 					},
 				},
 				Negated: true,
-				Predicate: &policyv1alpha1.TraceMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: ""}},
-				},
+				}},
 			},
 			{
 				Target: &policyv1alpha1.TraceFieldSelector{
@@ -846,9 +962,9 @@ func TestEvaluator_MultipleTracePoliciesDrop(t *testing.T) {
 						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_KIND,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "INTERNAL"}},
-				},
+				}},
 			},
 		},
 	})
@@ -862,9 +978,9 @@ func TestEvaluator_MultipleTracePoliciesDrop(t *testing.T) {
 						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Glob{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Glob{
 					Glob: "healthz.*",
-				},
+				}},
 			},
 		},
 	})
@@ -1026,9 +1142,9 @@ func TestEvaluator_LogTransform(t *testing.T) {
 				LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"winlog", "event_id"}},
 			},
 		},
-		Predicate: &policyv1alpha1.LogMatcher_Equality{
+		Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 			Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_IntValue{IntValue: 4625}},
-		},
+		}},
 	}
 
 	// Transform 1a: Add flat log attribute threat_tier when event_id == 4625
@@ -1075,7 +1191,7 @@ func TestEvaluator_LogTransform(t *testing.T) {
 						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"winlog", "event_id"}},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Existence{},
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
 			},
 		},
 		Action: &policyv1alpha1.LogTransformPolicy_Addition{
@@ -1197,9 +1313,9 @@ func TestEvaluator_LogFilterBeforeTransformOrdering(t *testing.T) {
 						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT,
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "DEBUG"}},
-				},
+				}},
 			},
 		},
 	})
@@ -1215,9 +1331,9 @@ func TestEvaluator_LogFilterBeforeTransformOrdering(t *testing.T) {
 						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"exempt"}},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BoolValue{BoolValue: true}},
-				},
+				}},
 			},
 		},
 	})
@@ -1232,9 +1348,9 @@ func TestEvaluator_LogFilterBeforeTransformOrdering(t *testing.T) {
 						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"event_id"}},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_IntValue{IntValue: 4625}},
-				},
+				}},
 			},
 		},
 		Action: &policyv1alpha1.LogTransformPolicy_Addition{
@@ -1305,9 +1421,9 @@ func TestEvaluator_LogTransformBodyFieldAndRecordFields(t *testing.T) {
 					ResourceAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"service.name"}},
 				},
 			},
-			Predicate: &policyv1alpha1.LogMatcher_Equality{
+			Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 				Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "active-directory"}},
-			},
+			}},
 		},
 	}
 
@@ -1417,9 +1533,9 @@ func TestEvaluator_LogTransformPostTransformFiltering(t *testing.T) {
 						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"threat_tier"}},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "DROP_ME"}},
-				},
+				}},
 			},
 		},
 	})
@@ -1434,9 +1550,9 @@ func TestEvaluator_LogTransformPostTransformFiltering(t *testing.T) {
 						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"event_id"}},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_IntValue{IntValue: 4634}},
-				},
+				}},
 			},
 		},
 		Action: &policyv1alpha1.LogTransformPolicy_Addition{
@@ -1462,9 +1578,9 @@ func TestEvaluator_LogTransformPostTransformFiltering(t *testing.T) {
 						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"event_id"}},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_IntValue{IntValue: 4625}},
-				},
+				}},
 			},
 		},
 		Action: &policyv1alpha1.LogTransformPolicy_Addition{
@@ -1549,9 +1665,9 @@ func TestEvaluator_LogTransformPass2Interaction_KeptByAttributeThenRemovedAndDro
 						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"auth.exempt"}},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "true"}},
-				},
+				}},
 			},
 		},
 	})
@@ -1567,9 +1683,9 @@ func TestEvaluator_LogTransformPass2Interaction_KeptByAttributeThenRemovedAndDro
 						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"env"}},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "dev"}},
-				},
+				}},
 			},
 		},
 	})
@@ -1620,9 +1736,9 @@ func TestEvaluator_LogTransformNonMatchingMatcherLeavesTargetIntact(t *testing.T
 						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"user.role"}},
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "admin"}},
-				},
+				}},
 			},
 		},
 		Action: &policyv1alpha1.LogTransformPolicy_Removal{
@@ -1820,6 +1936,10 @@ func mustPolicy(t *testing.T, pb proto.Message) googlepolicy.TransformationPolic
 		pol, err := tracefilter.NewPolicyFromProto(p)
 		require.NoError(t, err)
 		return pol
+	case *policyv1alpha1.TraceSamplingPolicy:
+		pol, err := tracesampling.NewPolicyFromProto(p)
+		require.NoError(t, err)
+		return pol
 	default:
 		t.Fatalf("mustPolicy: unsupported policy proto %T", pb)
 		return nil
@@ -1839,9 +1959,9 @@ func newDropLogBodyProto(id, body string) *policyv1alpha1.LogFilterPolicy {
 						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
 					},
 				},
-				Predicate: &policyv1alpha1.LogMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: body}},
-				},
+				}},
 			},
 		},
 	}
@@ -1856,9 +1976,9 @@ func newDropMetricDescriptorProto(id string, field policyv1alpha1.MetricDescript
 				Target: &policyv1alpha1.MetricFieldSelector{
 					Target: &policyv1alpha1.MetricFieldSelector_DescriptorField{DescriptorField: field},
 				},
-				Predicate: &policyv1alpha1.MetricMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: value}},
-				},
+				}},
 			},
 		},
 	}
@@ -1879,9 +1999,9 @@ func newDropDatapointAttrProto(id, key, value string) *policyv1alpha1.MetricFilt
 						DataPointAttributePath: &policyv1alpha1.AttributePath{Segments: []string{key}},
 					},
 				},
-				Predicate: &policyv1alpha1.MetricMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: value}},
-				},
+				}},
 			},
 		},
 	}
@@ -1897,9 +2017,9 @@ func newDropSpanNameProto(id, name string) *policyv1alpha1.TraceFilterPolicy {
 						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equality{
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: name}},
-				},
+				}},
 			},
 		},
 	}

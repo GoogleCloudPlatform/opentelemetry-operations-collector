@@ -80,9 +80,9 @@ func fuzzTraceSeedPolicies() []*policyv1alpha1.TraceFilterPolicy {
 			Matchers: []*policyv1alpha1.TraceMatcher{
 				{
 					Target: recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME),
-					Predicate: &policyv1alpha1.TraceMatcher_Glob{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Glob{
 						Glob: "healthcheck.*",
-					},
+					}},
 				},
 			},
 		},
@@ -99,11 +99,11 @@ func fuzzTraceSeedPolicies() []*policyv1alpha1.TraceFilterPolicy {
 				},
 				{
 					Target: spanAttrTarget("http.status_code"),
-					Predicate: &policyv1alpha1.TraceMatcher_InclusiveMinimum{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_InclusiveMinimum{
 						InclusiveMinimum: &policyv1alpha1.NumericValue{
 							Kind: &policyv1alpha1.NumericValue_IntValue{IntValue: 200},
 						},
-					},
+					}},
 				},
 			},
 		},
@@ -112,18 +112,18 @@ func fuzzTraceSeedPolicies() []*policyv1alpha1.TraceFilterPolicy {
 			Matchers: []*policyv1alpha1.TraceMatcher{
 				{
 					Target:    recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID),
-					Predicate: &policyv1alpha1.TraceMatcher_Existence{Existence: &emptypb.Empty{}},
-					Negated:    true,
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{Existence: &emptypb.Empty{}}},
+					Negated:   true,
 				},
 				{
 					Target: recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID),
-					Predicate: &policyv1alpha1.TraceMatcher_Equality{
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
 						Equality: &policyv1alpha1.Value{
 							Kind: &policyv1alpha1.Value_BytesValue{
 								BytesValue: testTraceIDBytes[:],
 							},
 						},
-					},
+					}},
 				},
 				{
 					Target:    scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_NAME),

@@ -33,6 +33,7 @@ type Evaluator struct {
 	datapointMetricFilterPolicies    []googlepolicy.MetricFilterPolicyEvaluator
 	hasDatapointMetricFilterPolicies bool
 	traceFilterPolicies              []googlepolicy.TraceFilterPolicyEvaluator
+	traceSamplingPolicies            []googlepolicy.TraceSamplingPolicyEvaluator
 }
 
 // NewEvaluator compiles a slice of TransformationPolicy objects into an Evaluator.
@@ -60,11 +61,13 @@ func NewEvaluator(policies []googlepolicy.TransformationPolicy) (*Evaluator, err
 			ev.addMetricFilterPolicy(p)
 		case googlepolicy.TraceFilterPolicyEvaluator:
 			ev.addTraceFilterPolicy(p)
+		case googlepolicy.TraceSamplingPolicyEvaluator:
+			ev.addTraceSamplingPolicy(p)
 		default:
 			return nil, fmt.Errorf(
 				"transformation policy %q (%T) implements none of googlepolicy.LogFilterPolicyEvaluator, "+
-					"googlepolicy.LogTransformPolicyEvaluator, googlepolicy.MetricFilterPolicyEvaluator "+
-					"or googlepolicy.TraceFilterPolicyEvaluator: "+
+					"googlepolicy.LogTransformPolicyEvaluator, googlepolicy.MetricFilterPolicyEvaluator, "+
+					"googlepolicy.TraceFilterPolicyEvaluator or googlepolicy.TraceSamplingPolicyEvaluator: "+
 					"transformation policies must implement one of them",
 				tp.PolicyName(), tp)
 		}
@@ -98,4 +101,8 @@ func (e *Evaluator) addMetricFilterPolicy(p googlepolicy.MetricFilterPolicyEvalu
 
 func (e *Evaluator) addTraceFilterPolicy(p googlepolicy.TraceFilterPolicyEvaluator) {
 	e.traceFilterPolicies = append(e.traceFilterPolicies, p)
+}
+
+func (e *Evaluator) addTraceSamplingPolicy(p googlepolicy.TraceSamplingPolicyEvaluator) {
+	e.traceSamplingPolicies = append(e.traceSamplingPolicies, p)
 }

@@ -59,10 +59,12 @@ func TestTraceSamplingPolicy_WithMatchers(t *testing.T) {
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equality{
-					Equality: &policyv1alpha1.Value{
-						Kind: &policyv1alpha1.Value_StringValue{
-							StringValue: "checkout",
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_Equality{
+						Equality: &policyv1alpha1.Value{
+							Kind: &policyv1alpha1.Value_StringValue{
+								StringValue: "checkout",
+							},
 						},
 					},
 				},
@@ -73,10 +75,12 @@ func TestTraceSamplingPolicy_WithMatchers(t *testing.T) {
 						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_KIND,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equality{
-					Equality: &policyv1alpha1.Value{
-						Kind: &policyv1alpha1.Value_StringValue{
-							StringValue: "CLIENT",
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_Equality{
+						Equality: &policyv1alpha1.Value{
+							Kind: &policyv1alpha1.Value_StringValue{
+								StringValue: "CLIENT",
+							},
 						},
 					},
 				},
@@ -89,8 +93,10 @@ func TestTraceSamplingPolicy_WithMatchers(t *testing.T) {
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Existence{
-					Existence: &emptypb.Empty{},
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_Existence{
+						Existence: &emptypb.Empty{},
+					},
 				},
 			},
 			{
@@ -99,8 +105,10 @@ func TestTraceSamplingPolicy_WithMatchers(t *testing.T) {
 						ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_NAME,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Glob{
-					Glob: "go.opentelemetry.io/contrib/instrumentation/*",
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_Glob{
+						Glob: "go.opentelemetry.io/contrib/instrumentation/*",
+					},
 				},
 			},
 		},

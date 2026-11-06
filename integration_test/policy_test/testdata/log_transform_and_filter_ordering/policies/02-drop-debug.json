@@ -5,7 +5,7 @@
   "matchers": [
     {
       "target": { "record_field": "LOG_RECORD_FIELD_SEVERITY_NUMBER" },
-      "exclusive_maximum": { "int_value": 9 }
+      "predicate": { "exclusive_maximum": { "int_value": 9 } }
     }
   ]
 }

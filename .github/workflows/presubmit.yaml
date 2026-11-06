@@ -89,3 +89,23 @@ jobs:
       - name: Validate Samples
         run: make validate-samples
 
+  test-windows-policy-provider:
+    name: Test Windows Policy & Provider
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@0717577d45739eb3c851188b29f50ed6c0b2194e # v2
+        with:
+          submodules: true
+          fetch-depth: 0
+          lfs: true
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: ${{ env.DEFAULT_GO_VERSION }}
+          cache: true
+      - name: Run Windows Policy & Provider Tests
+        shell: bash
+        run: |
+          (cd pkg/googlepolicy && go test -v ./...)
+          (cd components/google-built-opentelemetry-collector/processor/googlepolicyprocessor && go test -v ./...)
+          (cd components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider && go test -v ./...)
+

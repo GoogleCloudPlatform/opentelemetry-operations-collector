@@ -49,10 +49,21 @@ type filePolicyManager struct {
 	wg          sync.WaitGroup
 }
 
-func NewFilePolicyManager(logger *zap.Logger, uri *url.URL) (Manager, error) {
-	// 1. Determine the directory we're looking at.
-	// The file scheme expects a path to a directory on the current host.
+func parsePolicyDir(uri *url.URL) string {
+	if uri == nil {
+		return ""
+	}
 	policyDir := uri.Path
+	if policyDir == "" && uri.Opaque != "" {
+		if unescaped, err := url.PathUnescape(uri.Opaque); err == nil {
+			policyDir = unescaped
+		} else {
+			policyDir = uri.Opaque
+		}
+	}
+	if uri.Host != "" && len(uri.Host) == 2 && uri.Host[1] == ':' {
+		policyDir = uri.Host + uri.Path
+	}
 
 	// EDGE CASE: When parsed out of a URL, Windows paths come with a leading `/`
 	// i.e. "/C:/dir/on/my/machine".
@@ -60,6 +71,17 @@ func NewFilePolicyManager(logger *zap.Logger, uri *url.URL) (Manager, error) {
 	if len(policyDir) >= 3 && policyDir[0] == '/' && policyDir[2] == ':' {
 		policyDir = policyDir[1:] // "C:/dir/on/machine"
 	}
+	return policyDir
+}
+
+func NewFilePolicyManager(logger *zap.Logger, uri *url.URL) (Manager, error) {
+	if uri == nil {
+		return nil, errors.New("policy URI cannot be nil")
+	}
+
+	// 1. Determine the directory we're looking at.
+	// The file scheme expects a path to a directory on the current host.
+	policyDir := parsePolicyDir(uri)
 
 	// 2. Ensure the directory exists.
 	fi, err := os.Stat(policyDir)

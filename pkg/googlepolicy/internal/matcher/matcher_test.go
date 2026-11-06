@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/pcommon"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 func intValue(v int64) *policyv1alpha1.Value {
@@ -44,7 +45,39 @@ func doubleNumeric(v float64) *policyv1alpha1.NumericValue {
 	return &policyv1alpha1.NumericValue{Kind: &policyv1alpha1.NumericValue_DoubleValue{DoubleValue: v}}
 }
 
-func mustCompile(t *testing.T, predicate any) Predicate {
+func predExists() *policyv1alpha1.Predicate {
+	return &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{Existence: &emptypb.Empty{}}}
+}
+
+func predEquals(v *policyv1alpha1.Value) *policyv1alpha1.Predicate {
+	return &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{Equality: v}}
+}
+
+func predGlob(pattern string) *policyv1alpha1.Predicate {
+	return &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Glob{Glob: pattern}}
+}
+
+func predGt(n *policyv1alpha1.NumericValue) *policyv1alpha1.Predicate {
+	return &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_ExclusiveMinimum{ExclusiveMinimum: n}}
+}
+
+func predGte(n *policyv1alpha1.NumericValue) *policyv1alpha1.Predicate {
+	return &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_InclusiveMinimum{InclusiveMinimum: n}}
+}
+
+func predLt(n *policyv1alpha1.NumericValue) *policyv1alpha1.Predicate {
+	return &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_ExclusiveMaximum{ExclusiveMaximum: n}}
+}
+
+func predLte(n *policyv1alpha1.NumericValue) *policyv1alpha1.Predicate {
+	return &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_InclusiveMaximum{InclusiveMaximum: n}}
+}
+
+func predContains(v *policyv1alpha1.Value) *policyv1alpha1.Predicate {
+	return &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Containment{Containment: v}}
+}
+
+func mustCompile(t *testing.T, predicate *policyv1alpha1.Predicate) Predicate {
 	t.Helper()
 	p, err := CompilePredicate(predicate, false)
 	require.NoError(t, err)
@@ -57,63 +90,42 @@ func mustCompile(t *testing.T, predicate any) Predicate {
 func TestCompilePredicateRejectsMalformed(t *testing.T) {
 	tests := []struct {
 		name      string
-		predicate any
+		predicate *policyv1alpha1.Predicate
+		wantErr   error
 	}{
-		{"nil predicate", nil},
-		{"unknown predicate type", struct{}{}},
-		{"equals with nil value", &policyv1alpha1.MetricMatcher_Equality{}},
-		{"equals with unset value oneof", &policyv1alpha1.MetricMatcher_Equality{Equality: &policyv1alpha1.Value{}}},
-		{"contains with unset value oneof", &policyv1alpha1.TraceMatcher_Containment{Containment: &policyv1alpha1.Value{}}},
-		{"gt with nil numeric", &policyv1alpha1.MetricMatcher_ExclusiveMinimum{}},
-		{"gt with unset numeric oneof", &policyv1alpha1.TraceMatcher_ExclusiveMinimum{ExclusiveMinimum: &policyv1alpha1.NumericValue{}}},
-		{"lte with unset numeric oneof", &policyv1alpha1.LogMatcher_InclusiveMaximum{InclusiveMaximum: &policyv1alpha1.NumericValue{}}},
+		{"nil predicate", nil, ErrMissingPredicate},
+		{"unset predicate oneof", &policyv1alpha1.Predicate{}, ErrMissingPredicate},
+		{"equals with nil value", predEquals(nil), ErrMissingPredicate},
+		{"equals with unset value oneof", predEquals(&policyv1alpha1.Value{}), ErrMissingPredicate},
+		{"contains with unset value oneof", predContains(&policyv1alpha1.Value{}), ErrMissingPredicate},
+		{"gt with nil numeric", predGt(nil), ErrMissingPredicate},
+		{"gt with unset numeric oneof", predGt(&policyv1alpha1.NumericValue{}), ErrMissingPredicate},
+		{"lte with unset numeric oneof", predLte(&policyv1alpha1.NumericValue{}), ErrMissingPredicate},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := CompilePredicate(tt.predicate, false)
-			assert.Error(t, err)
-		})
-	}
-}
-
-// TestCompilePredicateAcceptsAllSignalFamilies asserts the three structurally
-// identical protobuf oneof families compile to the same behaviour.
-func TestCompilePredicateAcceptsAllSignalFamilies(t *testing.T) {
-	families := []struct {
-		name string
-		gt   any
-	}{
-		{"log", &policyv1alpha1.LogMatcher_ExclusiveMinimum{ExclusiveMinimum: intNumeric(10)}},
-		{"metric", &policyv1alpha1.MetricMatcher_ExclusiveMinimum{ExclusiveMinimum: intNumeric(10)}},
-		{"trace", &policyv1alpha1.TraceMatcher_ExclusiveMinimum{ExclusiveMinimum: intNumeric(10)}},
-	}
-
-	for _, f := range families {
-		t.Run(f.name, func(t *testing.T) {
-			pred := mustCompile(t, f.gt)
-			assert.True(t, pred(int64(11), true))
-			assert.False(t, pred(int64(10), true))
-			assert.False(t, pred(nil, false))
+			require.ErrorIs(t, err, tt.wantErr)
 		})
 	}
 }
 
 func TestPredicateExists(t *testing.T) {
-	pred := mustCompile(t, &policyv1alpha1.MetricMatcher_Existence{})
+	pred := mustCompile(t, predExists())
 	assert.True(t, pred("val", true))
 	assert.False(t, pred("", false))
 }
 
 func TestPredicateNegate(t *testing.T) {
-	pred, err := CompilePredicate(&policyv1alpha1.LogMatcher_Existence{}, true)
+	pred, err := CompilePredicate(predExists(), true)
 	require.NoError(t, err)
 	assert.False(t, pred("val", true))
 	assert.True(t, pred("", false))
 }
 
 func TestPredicateGlob(t *testing.T) {
-	pred := mustCompile(t, &policyv1alpha1.MetricMatcher_Glob{Glob: "hello*?"})
+	pred := mustCompile(t, predGlob("hello*?"))
 	assert.True(t, pred("hello_world!", true))
 	assert.True(t, pred("hello!", true))
 	assert.True(t, pred("hello🎉", true))
@@ -125,11 +137,11 @@ func TestPredicateGlob(t *testing.T) {
 	assert.False(t, pred(true, true))
 	assert.False(t, pred(nil, false))
 
-	emptyPred := mustCompile(t, &policyv1alpha1.LogMatcher_Glob{Glob: ""})
+	emptyPred := mustCompile(t, predGlob(""))
 	assert.True(t, emptyPred("", true))
 	assert.False(t, emptyPred("a", true))
 
-	starOnlyPred := mustCompile(t, &policyv1alpha1.LogMatcher_Glob{Glob: "**"})
+	starOnlyPred := mustCompile(t, predGlob("**"))
 	assert.True(t, starOnlyPred("", true))
 	assert.True(t, starOnlyPred("anything", true))
 }
@@ -138,16 +150,16 @@ func TestPredicateGlobOnIDs(t *testing.T) {
 	traceID := pcommon.TraceID([16]byte{0xaa, 0xbb})
 	spanID := pcommon.SpanID([8]byte{0xcc, 0xdd})
 
-	pred := mustCompile(t, &policyv1alpha1.TraceMatcher_Glob{Glob: "aabb*"})
+	pred := mustCompile(t, predGlob("aabb*"))
 	assert.True(t, pred(traceID, true))
 
-	spanPred := mustCompile(t, &policyv1alpha1.TraceMatcher_Glob{Glob: "ccdd*"})
+	spanPred := mustCompile(t, predGlob("ccdd*"))
 	assert.True(t, spanPred(spanID, true))
 }
 
 func TestPredicateEquals(t *testing.T) {
 	t.Run("int widens across Go integer types", func(t *testing.T) {
-		pred := mustCompile(t, &policyv1alpha1.MetricMatcher_Equality{Equality: intValue(100)})
+		pred := mustCompile(t, predEquals(intValue(100)))
 		assert.True(t, pred(int64(100), true))
 		assert.True(t, pred(100, true))
 		assert.True(t, pred(int32(100), true))
@@ -157,24 +169,20 @@ func TestPredicateEquals(t *testing.T) {
 	})
 
 	t.Run("double widens across Go float types", func(t *testing.T) {
-		pred := mustCompile(t, &policyv1alpha1.MetricMatcher_Equality{
-			Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_DoubleValue{DoubleValue: 3.5}},
-		})
+		pred := mustCompile(t, predEquals(&policyv1alpha1.Value{Kind: &policyv1alpha1.Value_DoubleValue{DoubleValue: 3.5}}))
 		assert.True(t, pred(3.5, true))
 		assert.True(t, pred(float32(3.5), true))
 		assert.False(t, pred("str", true))
 	})
 
 	t.Run("bool", func(t *testing.T) {
-		pred := mustCompile(t, &policyv1alpha1.TraceMatcher_Equality{
-			Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BoolValue{BoolValue: true}},
-		})
+		pred := mustCompile(t, predEquals(&policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BoolValue{BoolValue: true}}))
 		assert.True(t, pred(true, true))
 		assert.False(t, pred(false, true))
 	})
 
 	t.Run("bytes", func(t *testing.T) {
-		pred := mustCompile(t, &policyv1alpha1.MetricMatcher_Equality{Equality: bytesValue([]byte{1, 2, 3})})
+		pred := mustCompile(t, predEquals(bytesValue([]byte{1, 2, 3})))
 		assert.True(t, pred([]byte{1, 2, 3}, true))
 		assert.False(t, pred([]byte{4, 5}, true))
 	})
@@ -183,16 +191,16 @@ func TestPredicateEquals(t *testing.T) {
 		traceID := pcommon.TraceID([16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16})
 		spanID := pcommon.SpanID([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
 
-		asString := mustCompile(t, &policyv1alpha1.LogMatcher_Equality{Equality: strValue(traceID.String())})
+		asString := mustCompile(t, predEquals(strValue(traceID.String())))
 		assert.True(t, asString(traceID, true))
 
-		asBytes := mustCompile(t, &policyv1alpha1.LogMatcher_Equality{Equality: bytesValue(traceID[:])})
+		asBytes := mustCompile(t, predEquals(bytesValue(traceID[:])))
 		assert.True(t, asBytes(traceID, true))
 
-		spanAsString := mustCompile(t, &policyv1alpha1.LogMatcher_Equality{Equality: strValue(spanID.String())})
+		spanAsString := mustCompile(t, predEquals(strValue(spanID.String())))
 		assert.True(t, spanAsString(spanID, true))
 
-		spanAsBytes := mustCompile(t, &policyv1alpha1.LogMatcher_Equality{Equality: bytesValue(spanID[:])})
+		spanAsBytes := mustCompile(t, predEquals(bytesValue(spanID[:])))
 		assert.True(t, spanAsBytes(spanID, true))
 	})
 }
@@ -200,22 +208,22 @@ func TestPredicateEquals(t *testing.T) {
 func TestPredicateNumericComparisons(t *testing.T) {
 	tests := []struct {
 		name      string
-		predicate any
+		predicate *policyv1alpha1.Predicate
 		val       any
 		want      bool
 	}{
-		{"gt int true", &policyv1alpha1.MetricMatcher_ExclusiveMinimum{ExclusiveMinimum: intNumeric(10)}, int64(11), true},
-		{"gt int equal is false", &policyv1alpha1.MetricMatcher_ExclusiveMinimum{ExclusiveMinimum: intNumeric(10)}, int64(10), false},
-		{"gt double", &policyv1alpha1.MetricMatcher_ExclusiveMinimum{ExclusiveMinimum: doubleNumeric(5.5)}, 6.0, true},
-		{"gte int32", &policyv1alpha1.MetricMatcher_InclusiveMinimum{InclusiveMinimum: intNumeric(10)}, int32(10), true},
-		{"gte uint64", &policyv1alpha1.MetricMatcher_InclusiveMinimum{InclusiveMinimum: intNumeric(10)}, uint64(10), true},
-		{"gte uint32", &policyv1alpha1.TraceMatcher_InclusiveMinimum{InclusiveMinimum: intNumeric(10)}, uint32(10), true},
-		{"lt float32", &policyv1alpha1.MetricMatcher_ExclusiveMaximum{ExclusiveMaximum: doubleNumeric(5.0)}, float32(4.0), true},
-		{"lt int", &policyv1alpha1.MetricMatcher_ExclusiveMaximum{ExclusiveMaximum: intNumeric(5)}, int64(4), true},
-		{"lte int equal", &policyv1alpha1.MetricMatcher_InclusiveMaximum{InclusiveMaximum: intNumeric(5)}, int64(5), true},
-		{"lte int above", &policyv1alpha1.TraceMatcher_InclusiveMaximum{InclusiveMaximum: intNumeric(5)}, int64(6), false},
-		{"double value against int target", &policyv1alpha1.MetricMatcher_ExclusiveMinimum{ExclusiveMinimum: intNumeric(5)}, 5.5, true},
-		{"non-numeric value never matches", &policyv1alpha1.MetricMatcher_ExclusiveMinimum{ExclusiveMinimum: intNumeric(5)}, "ten", false},
+		{"gt int true", predGt(intNumeric(10)), int64(11), true},
+		{"gt int equal is false", predGt(intNumeric(10)), int64(10), false},
+		{"gt double", predGt(doubleNumeric(5.5)), 6.0, true},
+		{"gte int32", predGte(intNumeric(10)), int32(10), true},
+		{"gte uint64", predGte(intNumeric(10)), uint64(10), true},
+		{"gte uint32", predGte(intNumeric(10)), uint32(10), true},
+		{"lt float32", predLt(doubleNumeric(5.0)), float32(4.0), true},
+		{"lt int", predLt(intNumeric(5)), int64(4), true},
+		{"lte int equal", predLte(intNumeric(5)), int64(5), true},
+		{"lte int above", predLte(intNumeric(5)), int64(6), false},
+		{"double value against int target", predGt(intNumeric(5)), 5.5, true},
+		{"non-numeric value never matches", predGt(intNumeric(5)), "ten", false},
 	}
 
 	for _, tt := range tests {
@@ -228,7 +236,7 @@ func TestPredicateNumericComparisons(t *testing.T) {
 
 func TestPredicateContains(t *testing.T) {
 	t.Run("string substring and slice membership", func(t *testing.T) {
-		pred := mustCompile(t, &policyv1alpha1.MetricMatcher_Containment{Containment: strValue("sub")})
+		pred := mustCompile(t, predContains(strValue("sub")))
 		assert.True(t, pred("my_substring", true))
 		assert.True(t, pred([]any{"a", "sub", "b"}, true))
 		assert.False(t, pred([]any{"a", "b"}, true))
@@ -236,13 +244,13 @@ func TestPredicateContains(t *testing.T) {
 	})
 
 	t.Run("bytes subslice", func(t *testing.T) {
-		pred := mustCompile(t, &policyv1alpha1.MetricMatcher_Containment{Containment: bytesValue([]byte{2, 3})})
+		pred := mustCompile(t, predContains(bytesValue([]byte{2, 3})))
 		assert.True(t, pred([]byte{1, 2, 3, 4}, true))
 		assert.False(t, pred([]byte{1, 4}, true))
 	})
 
 	t.Run("slice of ints", func(t *testing.T) {
-		pred := mustCompile(t, &policyv1alpha1.TraceMatcher_Containment{Containment: intValue(42)})
+		pred := mustCompile(t, predContains(intValue(42)))
 		assert.True(t, pred([]any{int64(10), int64(42)}, true))
 		assert.False(t, pred([]any{int64(10)}, true))
 	})
@@ -347,19 +355,17 @@ func TestNullAttributeBehavior(t *testing.T) {
 	assert.Nil(t, val, "null attribute value must be nil, not empty string")
 
 	// exists predicate evaluates to true
-	existsPred, err := CompilePredicate(&policyv1alpha1.LogMatcher_Existence{}, false)
+	existsPred, err := CompilePredicate(predExists(), false)
 	require.NoError(t, err)
 	assert.True(t, existsPred(val, exists))
 
 	// equals "" evaluates to false
-	equalsEmptyPred, err := CompilePredicate(&policyv1alpha1.LogMatcher_Equality{
-		Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: ""}},
-	}, false)
+	equalsEmptyPred, err := CompilePredicate(predEquals(&policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: ""}}), false)
 	require.NoError(t, err)
 	assert.False(t, equalsEmptyPred(val, exists), "null attribute must not match equals \"\"")
 
 	// glob "" evaluates to false
-	globEmptyPred, err := CompilePredicate(&policyv1alpha1.LogMatcher_Glob{Glob: ""}, false)
+	globEmptyPred, err := CompilePredicate(predGlob(""), false)
 	require.NoError(t, err)
 	assert.False(t, globEmptyPred(val, exists), "null attribute must not match glob \"\"")
 }
@@ -376,17 +382,15 @@ func TestCompareNumericNaN(t *testing.T) {
 
 	predicates := []struct {
 		name string
-		pred any
+		pred *policyv1alpha1.Predicate
 	}{
-		{"gt", &policyv1alpha1.LogMatcher_ExclusiveMinimum{ExclusiveMinimum: expected100}},
-		{"gte", &policyv1alpha1.LogMatcher_InclusiveMinimum{InclusiveMinimum: expected100}},
-		{"lt", &policyv1alpha1.LogMatcher_ExclusiveMaximum{ExclusiveMaximum: expected100}},
-		{"lte", &policyv1alpha1.LogMatcher_InclusiveMaximum{InclusiveMaximum: expected100}},
-		{"equals", &policyv1alpha1.LogMatcher_Equality{
-			Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_DoubleValue{DoubleValue: 100.0}},
-		}},
-		{"gte with expected NaN", &policyv1alpha1.LogMatcher_InclusiveMinimum{InclusiveMinimum: expectedNaN}},
-		{"lte with expected NaN", &policyv1alpha1.LogMatcher_InclusiveMaximum{InclusiveMaximum: expectedNaN}},
+		{"gt", predGt(expected100)},
+		{"gte", predGte(expected100)},
+		{"lt", predLt(expected100)},
+		{"lte", predLte(expected100)},
+		{"equals", predEquals(&policyv1alpha1.Value{Kind: &policyv1alpha1.Value_DoubleValue{DoubleValue: 100.0}})},
+		{"gte with expected NaN", predGte(expectedNaN)},
+		{"lte with expected NaN", predLte(expectedNaN)},
 	}
 
 	for _, tc := range predicates {

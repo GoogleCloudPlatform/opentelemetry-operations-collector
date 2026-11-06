@@ -635,41 +635,241 @@ func (*NumericValue_IntValue) isNumericValue_Kind() {}
 
 func (*NumericValue_DoubleValue) isNumericValue_Kind() {}
 
+// Defines the comparison operator and operand evaluated against a selected
+// telemetry field or attribute.
+//
+// If the selected target field or attribute does not exist, or if its runtime
+// value type is incompatible with the chosen operator (for example, evaluating
+// `glob` against a non-string value, or a numeric comparison against a string
+// or boolean value), the predicate evaluates to `false` (prior to applying
+// `negated` on the enclosing matcher).
+type Predicate struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The comparison operator to evaluate. Required; if unset or unrecognized,
+	// the enclosing policy is invalid.
+	//
+	// Types that are valid to be assigned to Kind:
+	//
+	//	*Predicate_Existence
+	//	*Predicate_Equality
+	//	*Predicate_Glob
+	//	*Predicate_ExclusiveMinimum
+	//	*Predicate_InclusiveMinimum
+	//	*Predicate_ExclusiveMaximum
+	//	*Predicate_InclusiveMaximum
+	//	*Predicate_Containment
+	Kind          isPredicate_Kind `protobuf_oneof:"kind"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Predicate) Reset() {
+	*x = Predicate{}
+	mi := &file_policy_v1alpha1_common_policy_types_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Predicate) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Predicate) ProtoMessage() {}
+
+func (x *Predicate) ProtoReflect() protoreflect.Message {
+	mi := &file_policy_v1alpha1_common_policy_types_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Predicate.ProtoReflect.Descriptor instead.
+func (*Predicate) Descriptor() ([]byte, []int) {
+	return file_policy_v1alpha1_common_policy_types_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *Predicate) GetKind() isPredicate_Kind {
+	if x != nil {
+		return x.Kind
+	}
+	return nil
+}
+
+func (x *Predicate) GetExistence() *emptypb.Empty {
+	if x != nil {
+		if x, ok := x.Kind.(*Predicate_Existence); ok {
+			return x.Existence
+		}
+	}
+	return nil
+}
+
+func (x *Predicate) GetEquality() *Value {
+	if x != nil {
+		if x, ok := x.Kind.(*Predicate_Equality); ok {
+			return x.Equality
+		}
+	}
+	return nil
+}
+
+func (x *Predicate) GetGlob() string {
+	if x != nil {
+		if x, ok := x.Kind.(*Predicate_Glob); ok {
+			return x.Glob
+		}
+	}
+	return ""
+}
+
+func (x *Predicate) GetExclusiveMinimum() *NumericValue {
+	if x != nil {
+		if x, ok := x.Kind.(*Predicate_ExclusiveMinimum); ok {
+			return x.ExclusiveMinimum
+		}
+	}
+	return nil
+}
+
+func (x *Predicate) GetInclusiveMinimum() *NumericValue {
+	if x != nil {
+		if x, ok := x.Kind.(*Predicate_InclusiveMinimum); ok {
+			return x.InclusiveMinimum
+		}
+	}
+	return nil
+}
+
+func (x *Predicate) GetExclusiveMaximum() *NumericValue {
+	if x != nil {
+		if x, ok := x.Kind.(*Predicate_ExclusiveMaximum); ok {
+			return x.ExclusiveMaximum
+		}
+	}
+	return nil
+}
+
+func (x *Predicate) GetInclusiveMaximum() *NumericValue {
+	if x != nil {
+		if x, ok := x.Kind.(*Predicate_InclusiveMaximum); ok {
+			return x.InclusiveMaximum
+		}
+	}
+	return nil
+}
+
+func (x *Predicate) GetContainment() *Value {
+	if x != nil {
+		if x, ok := x.Kind.(*Predicate_Containment); ok {
+			return x.Containment
+		}
+	}
+	return nil
+}
+
+type isPredicate_Kind interface {
+	isPredicate_Kind()
+}
+
+type Predicate_Existence struct {
+	// Matches if the selected field or attribute exists.
+	// For attributes and structured log body fields (`body_field_path`), this
+	// evaluates to true if the attribute key or nested body path exists.
+	// For first-class fields (`record_field`, `descriptor_field`,
+	// `scope_field`) that lack explicit presence tracking in the OpenTelemetry
+	// data model, this evaluates to true when the field is set to a
+	// non-default (non-zero/non-empty) value, and false when absent or default
+	// (e.g. empty string, 0, or absent `parent_span_id` on a root span).
+	// Combine with `negated: true` on the enclosing matcher to match when a
+	// field or attribute does NOT exist.
+	Existence *emptypb.Empty `protobuf:"bytes,1,opt,name=existence,proto3,oneof"`
+}
+
+type Predicate_Equality struct {
+	// Typed scalar equality match (supporting string, int64, bool, double, bytes).
+	Equality *Value `protobuf:"bytes,2,opt,name=equality,proto3,oneof"`
+}
+
+type Predicate_Glob struct {
+	// Glob pattern match against the entire string value.
+	// Supports `*` (matches zero or more characters) and `?` (matches any
+	// single character), for example `"http.*"` or `"err_?_code"`. Matching is
+	// case-sensitive and anchored to the full string. Applies strictly to
+	// string fields and string attribute values (evaluates to `false` for
+	// non-string targets).
+	Glob string `protobuf:"bytes,3,opt,name=glob,proto3,oneof"`
+}
+
+type Predicate_ExclusiveMinimum struct {
+	// Matches if the target numeric value is strictly greater than (>) this value.
+	// Applies strictly to int64 and double fields and attribute values.
+	ExclusiveMinimum *NumericValue `protobuf:"bytes,4,opt,name=exclusive_minimum,json=exclusiveMinimum,proto3,oneof"`
+}
+
+type Predicate_InclusiveMinimum struct {
+	// Matches if the target numeric value is greater than or equal to (>=) this value.
+	// Applies strictly to int64 and double fields and attribute values.
+	InclusiveMinimum *NumericValue `protobuf:"bytes,5,opt,name=inclusive_minimum,json=inclusiveMinimum,proto3,oneof"`
+}
+
+type Predicate_ExclusiveMaximum struct {
+	// Matches if the target numeric value is strictly less than (<) this value.
+	// Applies strictly to int64 and double fields and attribute values.
+	ExclusiveMaximum *NumericValue `protobuf:"bytes,6,opt,name=exclusive_maximum,json=exclusiveMaximum,proto3,oneof"`
+}
+
+type Predicate_InclusiveMaximum struct {
+	// Matches if the target numeric value is less than or equal to (<=) this value.
+	// Applies strictly to int64 and double fields and attribute values.
+	InclusiveMaximum *NumericValue `protobuf:"bytes,7,opt,name=inclusive_maximum,json=inclusiveMaximum,proto3,oneof"`
+}
+
+type Predicate_Containment struct {
+	// Value containment:
+	// - For list (ArrayValue) attributes: matches if any element in the list equals this value.
+	// - For string fields or attribute values: matches if the string contains this value's `string_value` as a substring.
+	// - For bytes fields or attribute values: matches if the bytes contain this value's `bytes_value` as a subsequence.
+	Containment *Value `protobuf:"bytes,8,opt,name=containment,proto3,oneof"`
+}
+
+func (*Predicate_Existence) isPredicate_Kind() {}
+
+func (*Predicate_Equality) isPredicate_Kind() {}
+
+func (*Predicate_Glob) isPredicate_Kind() {}
+
+func (*Predicate_ExclusiveMinimum) isPredicate_Kind() {}
+
+func (*Predicate_InclusiveMinimum) isPredicate_Kind() {}
+
+func (*Predicate_ExclusiveMaximum) isPredicate_Kind() {}
+
+func (*Predicate_InclusiveMaximum) isPredicate_Kind() {}
+
+func (*Predicate_Containment) isPredicate_Kind() {}
+
 // Defines a single predicate evaluated against a specific log field
 // or attribute.
 type LogMatcher struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The field, attribute, or metadata to inspect. Exactly one must be set.
 	Target *LogFieldSelector `protobuf:"bytes,1,opt,name=target,proto3" json:"target,omitempty"`
-	// The comparison predicate to evaluate against the target value.
-	// Exactly one predicate must be set.
-	//
-	// If the selected target field or attribute does not exist, or if its
-	// runtime value type is incompatible with the chosen predicate (for
-	// example, evaluating `glob` against a non-string value, or a numeric
-	// comparison against a string or boolean value), the predicate evaluates
-	// to `false` (prior to applying `negated`).
-	//
-	// Types that are valid to be assigned to Predicate:
-	//
-	//	*LogMatcher_Existence
-	//	*LogMatcher_Equality
-	//	*LogMatcher_Glob
-	//	*LogMatcher_ExclusiveMinimum
-	//	*LogMatcher_InclusiveMinimum
-	//	*LogMatcher_ExclusiveMaximum
-	//	*LogMatcher_InclusiveMaximum
-	//	*LogMatcher_Containment
-	Predicate isLogMatcher_Predicate `protobuf_oneof:"predicate"`
+	// The comparison predicate to evaluate against the target value. Required.
+	Predicate *Predicate `protobuf:"bytes,2,opt,name=predicate,proto3" json:"predicate,omitempty"`
 	// If true, inverts the result of the predicate (logical NOT).
-	Negated       bool `protobuf:"varint,2,opt,name=negated,proto3" json:"negated,omitempty"`
+	Negated       bool `protobuf:"varint,3,opt,name=negated,proto3" json:"negated,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *LogMatcher) Reset() {
 	*x = LogMatcher{}
-	mi := &file_policy_v1alpha1_common_policy_types_proto_msgTypes[3]
+	mi := &file_policy_v1alpha1_common_policy_types_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -681,7 +881,7 @@ func (x *LogMatcher) String() string {
 func (*LogMatcher) ProtoMessage() {}
 
 func (x *LogMatcher) ProtoReflect() protoreflect.Message {
-	mi := &file_policy_v1alpha1_common_policy_types_proto_msgTypes[3]
+	mi := &file_policy_v1alpha1_common_policy_types_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -694,7 +894,7 @@ func (x *LogMatcher) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogMatcher.ProtoReflect.Descriptor instead.
 func (*LogMatcher) Descriptor() ([]byte, []int) {
-	return file_policy_v1alpha1_common_policy_types_proto_rawDescGZIP(), []int{3}
+	return file_policy_v1alpha1_common_policy_types_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *LogMatcher) GetTarget() *LogFieldSelector {
@@ -704,81 +904,9 @@ func (x *LogMatcher) GetTarget() *LogFieldSelector {
 	return nil
 }
 
-func (x *LogMatcher) GetPredicate() isLogMatcher_Predicate {
+func (x *LogMatcher) GetPredicate() *Predicate {
 	if x != nil {
 		return x.Predicate
-	}
-	return nil
-}
-
-func (x *LogMatcher) GetExistence() *emptypb.Empty {
-	if x != nil {
-		if x, ok := x.Predicate.(*LogMatcher_Existence); ok {
-			return x.Existence
-		}
-	}
-	return nil
-}
-
-func (x *LogMatcher) GetEquality() *Value {
-	if x != nil {
-		if x, ok := x.Predicate.(*LogMatcher_Equality); ok {
-			return x.Equality
-		}
-	}
-	return nil
-}
-
-func (x *LogMatcher) GetGlob() string {
-	if x != nil {
-		if x, ok := x.Predicate.(*LogMatcher_Glob); ok {
-			return x.Glob
-		}
-	}
-	return ""
-}
-
-func (x *LogMatcher) GetExclusiveMinimum() *NumericValue {
-	if x != nil {
-		if x, ok := x.Predicate.(*LogMatcher_ExclusiveMinimum); ok {
-			return x.ExclusiveMinimum
-		}
-	}
-	return nil
-}
-
-func (x *LogMatcher) GetInclusiveMinimum() *NumericValue {
-	if x != nil {
-		if x, ok := x.Predicate.(*LogMatcher_InclusiveMinimum); ok {
-			return x.InclusiveMinimum
-		}
-	}
-	return nil
-}
-
-func (x *LogMatcher) GetExclusiveMaximum() *NumericValue {
-	if x != nil {
-		if x, ok := x.Predicate.(*LogMatcher_ExclusiveMaximum); ok {
-			return x.ExclusiveMaximum
-		}
-	}
-	return nil
-}
-
-func (x *LogMatcher) GetInclusiveMaximum() *NumericValue {
-	if x != nil {
-		if x, ok := x.Predicate.(*LogMatcher_InclusiveMaximum); ok {
-			return x.InclusiveMaximum
-		}
-	}
-	return nil
-}
-
-func (x *LogMatcher) GetContainment() *Value {
-	if x != nil {
-		if x, ok := x.Predicate.(*LogMatcher_Containment); ok {
-			return x.Containment
-		}
 	}
 	return nil
 }
@@ -789,85 +917,6 @@ func (x *LogMatcher) GetNegated() bool {
 	}
 	return false
 }
-
-type isLogMatcher_Predicate interface {
-	isLogMatcher_Predicate()
-}
-
-type LogMatcher_Existence struct {
-	// Matches if the selected field or attribute exists.
-	// For attributes and structured log body fields (`body_field_path`), this
-	// evaluates to true if the attribute key or nested body path exists.
-	// For first-class fields (`record_field`, `scope_field`) that lack explicit
-	// presence tracking in the OpenTelemetry data model, this evaluates to true
-	// when the field is set to a non-default (non-zero/non-empty) value, and
-	// false when absent or default (e.g. empty string or 0). Combine with
-	// `negated: true` to match when a field or attribute does NOT exist.
-	Existence *emptypb.Empty `protobuf:"bytes,10,opt,name=existence,proto3,oneof"`
-}
-
-type LogMatcher_Equality struct {
-	// Typed scalar equality match (supporting string, int64, bool, double, bytes).
-	Equality *Value `protobuf:"bytes,11,opt,name=equality,proto3,oneof"`
-}
-
-type LogMatcher_Glob struct {
-	// Glob pattern match against the entire string value.
-	// Supports `*` (matches zero or more characters) and `?` (matches any
-	// single character), for example `"http.*"` or `"err_?_code"`. Matching is
-	// case-sensitive and anchored to the full string. Applies strictly to
-	// string fields and string attribute values (evaluates to `false` for
-	// non-string targets).
-	Glob string `protobuf:"bytes,12,opt,name=glob,proto3,oneof"`
-}
-
-type LogMatcher_ExclusiveMinimum struct {
-	// Matches if the target numeric value is strictly greater than (>) this value.
-	// Applies strictly to int64 and double fields and attribute values.
-	ExclusiveMinimum *NumericValue `protobuf:"bytes,13,opt,name=exclusive_minimum,json=exclusiveMinimum,proto3,oneof"`
-}
-
-type LogMatcher_InclusiveMinimum struct {
-	// Matches if the target numeric value is greater than or equal to (>=) this value.
-	// Applies strictly to int64 and double fields and attribute values.
-	InclusiveMinimum *NumericValue `protobuf:"bytes,14,opt,name=inclusive_minimum,json=inclusiveMinimum,proto3,oneof"`
-}
-
-type LogMatcher_ExclusiveMaximum struct {
-	// Matches if the target numeric value is strictly less than (<) this value.
-	// Applies strictly to int64 and double fields and attribute values.
-	ExclusiveMaximum *NumericValue `protobuf:"bytes,15,opt,name=exclusive_maximum,json=exclusiveMaximum,proto3,oneof"`
-}
-
-type LogMatcher_InclusiveMaximum struct {
-	// Matches if the target numeric value is less than or equal to (<=) this value.
-	// Applies strictly to int64 and double fields and attribute values.
-	InclusiveMaximum *NumericValue `protobuf:"bytes,16,opt,name=inclusive_maximum,json=inclusiveMaximum,proto3,oneof"`
-}
-
-type LogMatcher_Containment struct {
-	// Value containment:
-	// - For list (ArrayValue) attributes: matches if any element in the list equals this value.
-	// - For string fields or attribute values: matches if the string contains this value's `string_value` as a substring.
-	// - For bytes fields or attribute values: matches if the bytes contain this value's `bytes_value` as a subsequence.
-	Containment *Value `protobuf:"bytes,17,opt,name=containment,proto3,oneof"`
-}
-
-func (*LogMatcher_Existence) isLogMatcher_Predicate() {}
-
-func (*LogMatcher_Equality) isLogMatcher_Predicate() {}
-
-func (*LogMatcher_Glob) isLogMatcher_Predicate() {}
-
-func (*LogMatcher_ExclusiveMinimum) isLogMatcher_Predicate() {}
-
-func (*LogMatcher_InclusiveMinimum) isLogMatcher_Predicate() {}
-
-func (*LogMatcher_ExclusiveMaximum) isLogMatcher_Predicate() {}
-
-func (*LogMatcher_InclusiveMaximum) isLogMatcher_Predicate() {}
-
-func (*LogMatcher_Containment) isLogMatcher_Predicate() {}
 
 // Designates a first-class OTel log field, attribute, or metadata.
 type LogFieldSelector struct {
@@ -887,7 +936,7 @@ type LogFieldSelector struct {
 
 func (x *LogFieldSelector) Reset() {
 	*x = LogFieldSelector{}
-	mi := &file_policy_v1alpha1_common_policy_types_proto_msgTypes[4]
+	mi := &file_policy_v1alpha1_common_policy_types_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -899,7 +948,7 @@ func (x *LogFieldSelector) String() string {
 func (*LogFieldSelector) ProtoMessage() {}
 
 func (x *LogFieldSelector) ProtoReflect() protoreflect.Message {
-	mi := &file_policy_v1alpha1_common_policy_types_proto_msgTypes[4]
+	mi := &file_policy_v1alpha1_common_policy_types_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -912,7 +961,7 @@ func (x *LogFieldSelector) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogFieldSelector.ProtoReflect.Descriptor instead.
 func (*LogFieldSelector) Descriptor() ([]byte, []int) {
-	return file_policy_v1alpha1_common_policy_types_proto_rawDescGZIP(), []int{4}
+	return file_policy_v1alpha1_common_policy_types_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *LogFieldSelector) GetTarget() isLogFieldSelector_Target {
@@ -1045,35 +1094,17 @@ type TraceMatcher struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// The span field, attribute, or metadata to inspect. Exactly one must be set.
 	Target *TraceFieldSelector `protobuf:"bytes,1,opt,name=target,proto3" json:"target,omitempty"`
-	// The comparison predicate to evaluate against the target value.
-	// Exactly one predicate must be set.
-	//
-	// If the selected target field or attribute does not exist, or if its
-	// runtime value type is incompatible with the chosen predicate (for
-	// example, evaluating `glob` against a non-string value, or a numeric
-	// comparison against a string or boolean value), the predicate evaluates
-	// to `false` (prior to applying `negated`).
-	//
-	// Types that are valid to be assigned to Predicate:
-	//
-	//	*TraceMatcher_Existence
-	//	*TraceMatcher_Equality
-	//	*TraceMatcher_Glob
-	//	*TraceMatcher_ExclusiveMinimum
-	//	*TraceMatcher_InclusiveMinimum
-	//	*TraceMatcher_ExclusiveMaximum
-	//	*TraceMatcher_InclusiveMaximum
-	//	*TraceMatcher_Containment
-	Predicate isTraceMatcher_Predicate `protobuf_oneof:"predicate"`
+	// The comparison predicate to evaluate against the target value. Required.
+	Predicate *Predicate `protobuf:"bytes,2,opt,name=predicate,proto3" json:"predicate,omitempty"`
 	// If true, inverts the result of the predicate (logical NOT).
-	Negated       bool `protobuf:"varint,2,opt,name=negated,proto3" json:"negated,omitempty"`
+	Negated       bool `protobuf:"varint,3,opt,name=negated,proto3" json:"negated,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *TraceMatcher) Reset() {
 	*x = TraceMatcher{}
-	mi := &file_policy_v1alpha1_common_policy_types_proto_msgTypes[5]
+	mi := &file_policy_v1alpha1_common_policy_types_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1085,7 +1116,7 @@ func (x *TraceMatcher) String() string {
 func (*TraceMatcher) ProtoMessage() {}
 
 func (x *TraceMatcher) ProtoReflect() protoreflect.Message {
-	mi := &file_policy_v1alpha1_common_policy_types_proto_msgTypes[5]
+	mi := &file_policy_v1alpha1_common_policy_types_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1098,7 +1129,7 @@ func (x *TraceMatcher) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TraceMatcher.ProtoReflect.Descriptor instead.
 func (*TraceMatcher) Descriptor() ([]byte, []int) {
-	return file_policy_v1alpha1_common_policy_types_proto_rawDescGZIP(), []int{5}
+	return file_policy_v1alpha1_common_policy_types_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *TraceMatcher) GetTarget() *TraceFieldSelector {
@@ -1108,81 +1139,9 @@ func (x *TraceMatcher) GetTarget() *TraceFieldSelector {
 	return nil
 }
 
-func (x *TraceMatcher) GetPredicate() isTraceMatcher_Predicate {
+func (x *TraceMatcher) GetPredicate() *Predicate {
 	if x != nil {
 		return x.Predicate
-	}
-	return nil
-}
-
-func (x *TraceMatcher) GetExistence() *emptypb.Empty {
-	if x != nil {
-		if x, ok := x.Predicate.(*TraceMatcher_Existence); ok {
-			return x.Existence
-		}
-	}
-	return nil
-}
-
-func (x *TraceMatcher) GetEquality() *Value {
-	if x != nil {
-		if x, ok := x.Predicate.(*TraceMatcher_Equality); ok {
-			return x.Equality
-		}
-	}
-	return nil
-}
-
-func (x *TraceMatcher) GetGlob() string {
-	if x != nil {
-		if x, ok := x.Predicate.(*TraceMatcher_Glob); ok {
-			return x.Glob
-		}
-	}
-	return ""
-}
-
-func (x *TraceMatcher) GetExclusiveMinimum() *NumericValue {
-	if x != nil {
-		if x, ok := x.Predicate.(*TraceMatcher_ExclusiveMinimum); ok {
-			return x.ExclusiveMinimum
-		}
-	}
-	return nil
-}
-
-func (x *TraceMatcher) GetInclusiveMinimum() *NumericValue {
-	if x != nil {
-		if x, ok := x.Predicate.(*TraceMatcher_InclusiveMinimum); ok {
-			return x.InclusiveMinimum
-		}
-	}
-	return nil
-}
-
-func (x *TraceMatcher) GetExclusiveMaximum() *NumericValue {
-	if x != nil {
-		if x, ok := x.Predicate.(*TraceMatcher_ExclusiveMaximum); ok {
-			return x.ExclusiveMaximum
-		}
-	}
-	return nil
-}
-
-func (x *TraceMatcher) GetInclusiveMaximum() *NumericValue {
-	if x != nil {
-		if x, ok := x.Predicate.(*TraceMatcher_InclusiveMaximum); ok {
-			return x.InclusiveMaximum
-		}
-	}
-	return nil
-}
-
-func (x *TraceMatcher) GetContainment() *Value {
-	if x != nil {
-		if x, ok := x.Predicate.(*TraceMatcher_Containment); ok {
-			return x.Containment
-		}
 	}
 	return nil
 }
@@ -1193,85 +1152,6 @@ func (x *TraceMatcher) GetNegated() bool {
 	}
 	return false
 }
-
-type isTraceMatcher_Predicate interface {
-	isTraceMatcher_Predicate()
-}
-
-type TraceMatcher_Existence struct {
-	// Matches if the selected field or attribute exists.
-	// For attributes, this evaluates to true if the attribute key exists.
-	// For first-class fields (`record_field`, `scope_field`) that lack explicit
-	// presence tracking in the OpenTelemetry data model, this evaluates to true
-	// when the field is set to a non-default (non-zero/non-empty) value, and
-	// false when absent or default (e.g. absent `parent_span_id` on a root span,
-	// or empty string/unset). Combine with `negated: true` to match when a field
-	// or attribute does NOT exist.
-	Existence *emptypb.Empty `protobuf:"bytes,10,opt,name=existence,proto3,oneof"`
-}
-
-type TraceMatcher_Equality struct {
-	// Typed scalar equality match (supporting string, int64, bool, double, bytes).
-	Equality *Value `protobuf:"bytes,11,opt,name=equality,proto3,oneof"`
-}
-
-type TraceMatcher_Glob struct {
-	// Glob pattern match against the entire string value.
-	// Supports `*` (matches zero or more characters) and `?` (matches any
-	// single character), for example `"http.*"` or `"err_?_code"`. Matching is
-	// case-sensitive and anchored to the full string. Applies strictly to
-	// string fields and string attribute values (evaluates to `false` for
-	// non-string targets).
-	Glob string `protobuf:"bytes,12,opt,name=glob,proto3,oneof"`
-}
-
-type TraceMatcher_ExclusiveMinimum struct {
-	// Matches if the target numeric value is strictly greater than (>) this value.
-	// Applies strictly to int64 and double fields and attribute values.
-	ExclusiveMinimum *NumericValue `protobuf:"bytes,13,opt,name=exclusive_minimum,json=exclusiveMinimum,proto3,oneof"`
-}
-
-type TraceMatcher_InclusiveMinimum struct {
-	// Matches if the target numeric value is greater than or equal to (>=) this value.
-	// Applies strictly to int64 and double fields and attribute values.
-	InclusiveMinimum *NumericValue `protobuf:"bytes,14,opt,name=inclusive_minimum,json=inclusiveMinimum,proto3,oneof"`
-}
-
-type TraceMatcher_ExclusiveMaximum struct {
-	// Matches if the target numeric value is strictly less than (<) this value.
-	// Applies strictly to int64 and double fields and attribute values.
-	ExclusiveMaximum *NumericValue `protobuf:"bytes,15,opt,name=exclusive_maximum,json=exclusiveMaximum,proto3,oneof"`
-}
-
-type TraceMatcher_InclusiveMaximum struct {
-	// Matches if the target numeric value is less than or equal to (<=) this value.
-	// Applies strictly to int64 and double fields and attribute values.
-	InclusiveMaximum *NumericValue `protobuf:"bytes,16,opt,name=inclusive_maximum,json=inclusiveMaximum,proto3,oneof"`
-}
-
-type TraceMatcher_Containment struct {
-	// Value containment:
-	// - For list (ArrayValue) attributes: matches if any element in the list equals this value.
-	// - For string fields or attribute values: matches if the string contains this value's `string_value` as a substring.
-	// - For bytes fields or attribute values: matches if the bytes contain this value's `bytes_value` as a subsequence.
-	Containment *Value `protobuf:"bytes,17,opt,name=containment,proto3,oneof"`
-}
-
-func (*TraceMatcher_Existence) isTraceMatcher_Predicate() {}
-
-func (*TraceMatcher_Equality) isTraceMatcher_Predicate() {}
-
-func (*TraceMatcher_Glob) isTraceMatcher_Predicate() {}
-
-func (*TraceMatcher_ExclusiveMinimum) isTraceMatcher_Predicate() {}
-
-func (*TraceMatcher_InclusiveMinimum) isTraceMatcher_Predicate() {}
-
-func (*TraceMatcher_ExclusiveMaximum) isTraceMatcher_Predicate() {}
-
-func (*TraceMatcher_InclusiveMaximum) isTraceMatcher_Predicate() {}
-
-func (*TraceMatcher_Containment) isTraceMatcher_Predicate() {}
 
 // Designates a first-class OTel span field, attribute, or metadata.
 type TraceFieldSelector struct {
@@ -1290,7 +1170,7 @@ type TraceFieldSelector struct {
 
 func (x *TraceFieldSelector) Reset() {
 	*x = TraceFieldSelector{}
-	mi := &file_policy_v1alpha1_common_policy_types_proto_msgTypes[6]
+	mi := &file_policy_v1alpha1_common_policy_types_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1302,7 +1182,7 @@ func (x *TraceFieldSelector) String() string {
 func (*TraceFieldSelector) ProtoMessage() {}
 
 func (x *TraceFieldSelector) ProtoReflect() protoreflect.Message {
-	mi := &file_policy_v1alpha1_common_policy_types_proto_msgTypes[6]
+	mi := &file_policy_v1alpha1_common_policy_types_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1315,7 +1195,7 @@ func (x *TraceFieldSelector) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TraceFieldSelector.ProtoReflect.Descriptor instead.
 func (*TraceFieldSelector) Descriptor() ([]byte, []int) {
-	return file_policy_v1alpha1_common_policy_types_proto_rawDescGZIP(), []int{6}
+	return file_policy_v1alpha1_common_policy_types_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *TraceFieldSelector) GetTarget() isTraceFieldSelector_Target {
@@ -1440,21 +1320,22 @@ const file_policy_v1alpha1_common_policy_types_proto_rawDesc = "" +
 	"\fNumericValue\x12\x1d\n" +
 	"\tint_value\x18\x01 \x01(\x03H\x00R\bintValue\x12#\n" +
 	"\fdouble_value\x18\x02 \x01(\x01H\x00R\vdoubleValueB\x06\n" +
-	"\x04kind\"\xdd\x05\n" +
+	"\x04kind\"\xf1\x04\n" +
+	"\tPredicate\x126\n" +
+	"\texistence\x18\x01 \x01(\v2\x16.google.protobuf.EmptyH\x00R\texistence\x12E\n" +
+	"\bequality\x18\x02 \x01(\v2'.google.telemetry.policy.v1alpha1.ValueH\x00R\bequality\x12\x14\n" +
+	"\x04glob\x18\x03 \x01(\tH\x00R\x04glob\x12]\n" +
+	"\x11exclusive_minimum\x18\x04 \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x10exclusiveMinimum\x12]\n" +
+	"\x11inclusive_minimum\x18\x05 \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x10inclusiveMinimum\x12]\n" +
+	"\x11exclusive_maximum\x18\x06 \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x10exclusiveMaximum\x12]\n" +
+	"\x11inclusive_maximum\x18\a \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x10inclusiveMaximum\x12K\n" +
+	"\vcontainment\x18\b \x01(\v2'.google.telemetry.policy.v1alpha1.ValueH\x00R\vcontainmentB\x06\n" +
+	"\x04kind\"\xbd\x01\n" +
 	"\n" +
 	"LogMatcher\x12J\n" +
-	"\x06target\x18\x01 \x01(\v22.google.telemetry.policy.v1alpha1.LogFieldSelectorR\x06target\x126\n" +
-	"\texistence\x18\n" +
-	" \x01(\v2\x16.google.protobuf.EmptyH\x00R\texistence\x12E\n" +
-	"\bequality\x18\v \x01(\v2'.google.telemetry.policy.v1alpha1.ValueH\x00R\bequality\x12\x14\n" +
-	"\x04glob\x18\f \x01(\tH\x00R\x04glob\x12]\n" +
-	"\x11exclusive_minimum\x18\r \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x10exclusiveMinimum\x12]\n" +
-	"\x11inclusive_minimum\x18\x0e \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x10inclusiveMinimum\x12]\n" +
-	"\x11exclusive_maximum\x18\x0f \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x10exclusiveMaximum\x12]\n" +
-	"\x11inclusive_maximum\x18\x10 \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x10inclusiveMaximum\x12K\n" +
-	"\vcontainment\x18\x11 \x01(\v2'.google.telemetry.policy.v1alpha1.ValueH\x00R\vcontainment\x12\x18\n" +
-	"\anegated\x18\x02 \x01(\bR\anegatedB\v\n" +
-	"\tpredicate\"\xd0\x04\n" +
+	"\x06target\x18\x01 \x01(\v22.google.telemetry.policy.v1alpha1.LogFieldSelectorR\x06target\x12I\n" +
+	"\tpredicate\x18\x02 \x01(\v2+.google.telemetry.policy.v1alpha1.PredicateR\tpredicate\x12\x18\n" +
+	"\anegated\x18\x03 \x01(\bR\anegated\"\xd0\x04\n" +
 	"\x10LogFieldSelector\x12U\n" +
 	"\frecord_field\x18\x01 \x01(\x0e20.google.telemetry.policy.v1alpha1.LogRecordFieldH\x00R\vrecordField\x12_\n" +
 	"\x12log_attribute_path\x18\x02 \x01(\v2/.google.telemetry.policy.v1alpha1.AttributePathH\x00R\x10logAttributePath\x12i\n" +
@@ -1463,20 +1344,11 @@ const file_policy_v1alpha1_common_policy_types_proto_rawDesc = "" +
 	"\vscope_field\x18\x05 \x01(\x0e2,.google.telemetry.policy.v1alpha1.ScopeFieldH\x00R\n" +
 	"scopeField\x12Y\n" +
 	"\x0fbody_field_path\x18\x06 \x01(\v2/.google.telemetry.policy.v1alpha1.AttributePathH\x00R\rbodyFieldPathB\b\n" +
-	"\x06target\"\xe1\x05\n" +
+	"\x06target\"\xc1\x01\n" +
 	"\fTraceMatcher\x12L\n" +
-	"\x06target\x18\x01 \x01(\v24.google.telemetry.policy.v1alpha1.TraceFieldSelectorR\x06target\x126\n" +
-	"\texistence\x18\n" +
-	" \x01(\v2\x16.google.protobuf.EmptyH\x00R\texistence\x12E\n" +
-	"\bequality\x18\v \x01(\v2'.google.telemetry.policy.v1alpha1.ValueH\x00R\bequality\x12\x14\n" +
-	"\x04glob\x18\f \x01(\tH\x00R\x04glob\x12]\n" +
-	"\x11exclusive_minimum\x18\r \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x10exclusiveMinimum\x12]\n" +
-	"\x11inclusive_minimum\x18\x0e \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x10inclusiveMinimum\x12]\n" +
-	"\x11exclusive_maximum\x18\x0f \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x10exclusiveMaximum\x12]\n" +
-	"\x11inclusive_maximum\x18\x10 \x01(\v2..google.telemetry.policy.v1alpha1.NumericValueH\x00R\x10inclusiveMaximum\x12K\n" +
-	"\vcontainment\x18\x11 \x01(\v2'.google.telemetry.policy.v1alpha1.ValueH\x00R\vcontainment\x12\x18\n" +
-	"\anegated\x18\x02 \x01(\bR\anegatedB\v\n" +
-	"\tpredicate\"\xfa\x03\n" +
+	"\x06target\x18\x01 \x01(\v24.google.telemetry.policy.v1alpha1.TraceFieldSelectorR\x06target\x12I\n" +
+	"\tpredicate\x18\x02 \x01(\v2+.google.telemetry.policy.v1alpha1.PredicateR\tpredicate\x12\x18\n" +
+	"\anegated\x18\x03 \x01(\bR\anegated\"\xfa\x03\n" +
 	"\x12TraceFieldSelector\x12V\n" +
 	"\frecord_field\x18\x01 \x01(\x0e21.google.telemetry.policy.v1alpha1.SpanRecordFieldH\x00R\vrecordField\x12a\n" +
 	"\x13span_attribute_path\x18\x02 \x01(\v2/.google.telemetry.policy.v1alpha1.AttributePathH\x00R\x11spanAttributePath\x12i\n" +
@@ -1524,7 +1396,7 @@ func file_policy_v1alpha1_common_policy_types_proto_rawDescGZIP() []byte {
 }
 
 var file_policy_v1alpha1_common_policy_types_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_policy_v1alpha1_common_policy_types_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_policy_v1alpha1_common_policy_types_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_policy_v1alpha1_common_policy_types_proto_goTypes = []any{
 	(Action)(0),                // 0: google.telemetry.policy.v1alpha1.Action
 	(ScopeField)(0),            // 1: google.telemetry.policy.v1alpha1.ScopeField
@@ -1533,45 +1405,41 @@ var file_policy_v1alpha1_common_policy_types_proto_goTypes = []any{
 	(*AttributePath)(nil),      // 4: google.telemetry.policy.v1alpha1.AttributePath
 	(*Value)(nil),              // 5: google.telemetry.policy.v1alpha1.Value
 	(*NumericValue)(nil),       // 6: google.telemetry.policy.v1alpha1.NumericValue
-	(*LogMatcher)(nil),         // 7: google.telemetry.policy.v1alpha1.LogMatcher
-	(*LogFieldSelector)(nil),   // 8: google.telemetry.policy.v1alpha1.LogFieldSelector
-	(*TraceMatcher)(nil),       // 9: google.telemetry.policy.v1alpha1.TraceMatcher
-	(*TraceFieldSelector)(nil), // 10: google.telemetry.policy.v1alpha1.TraceFieldSelector
-	(*emptypb.Empty)(nil),      // 11: google.protobuf.Empty
+	(*Predicate)(nil),          // 7: google.telemetry.policy.v1alpha1.Predicate
+	(*LogMatcher)(nil),         // 8: google.telemetry.policy.v1alpha1.LogMatcher
+	(*LogFieldSelector)(nil),   // 9: google.telemetry.policy.v1alpha1.LogFieldSelector
+	(*TraceMatcher)(nil),       // 10: google.telemetry.policy.v1alpha1.TraceMatcher
+	(*TraceFieldSelector)(nil), // 11: google.telemetry.policy.v1alpha1.TraceFieldSelector
+	(*emptypb.Empty)(nil),      // 12: google.protobuf.Empty
 }
 var file_policy_v1alpha1_common_policy_types_proto_depIdxs = []int32{
-	8,  // 0: google.telemetry.policy.v1alpha1.LogMatcher.target:type_name -> google.telemetry.policy.v1alpha1.LogFieldSelector
-	11, // 1: google.telemetry.policy.v1alpha1.LogMatcher.existence:type_name -> google.protobuf.Empty
-	5,  // 2: google.telemetry.policy.v1alpha1.LogMatcher.equality:type_name -> google.telemetry.policy.v1alpha1.Value
-	6,  // 3: google.telemetry.policy.v1alpha1.LogMatcher.exclusive_minimum:type_name -> google.telemetry.policy.v1alpha1.NumericValue
-	6,  // 4: google.telemetry.policy.v1alpha1.LogMatcher.inclusive_minimum:type_name -> google.telemetry.policy.v1alpha1.NumericValue
-	6,  // 5: google.telemetry.policy.v1alpha1.LogMatcher.exclusive_maximum:type_name -> google.telemetry.policy.v1alpha1.NumericValue
-	6,  // 6: google.telemetry.policy.v1alpha1.LogMatcher.inclusive_maximum:type_name -> google.telemetry.policy.v1alpha1.NumericValue
-	5,  // 7: google.telemetry.policy.v1alpha1.LogMatcher.containment:type_name -> google.telemetry.policy.v1alpha1.Value
-	2,  // 8: google.telemetry.policy.v1alpha1.LogFieldSelector.record_field:type_name -> google.telemetry.policy.v1alpha1.LogRecordField
-	4,  // 9: google.telemetry.policy.v1alpha1.LogFieldSelector.log_attribute_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
-	4,  // 10: google.telemetry.policy.v1alpha1.LogFieldSelector.resource_attribute_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
-	4,  // 11: google.telemetry.policy.v1alpha1.LogFieldSelector.scope_attribute_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
-	1,  // 12: google.telemetry.policy.v1alpha1.LogFieldSelector.scope_field:type_name -> google.telemetry.policy.v1alpha1.ScopeField
-	4,  // 13: google.telemetry.policy.v1alpha1.LogFieldSelector.body_field_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
-	10, // 14: google.telemetry.policy.v1alpha1.TraceMatcher.target:type_name -> google.telemetry.policy.v1alpha1.TraceFieldSelector
-	11, // 15: google.telemetry.policy.v1alpha1.TraceMatcher.existence:type_name -> google.protobuf.Empty
-	5,  // 16: google.telemetry.policy.v1alpha1.TraceMatcher.equality:type_name -> google.telemetry.policy.v1alpha1.Value
-	6,  // 17: google.telemetry.policy.v1alpha1.TraceMatcher.exclusive_minimum:type_name -> google.telemetry.policy.v1alpha1.NumericValue
-	6,  // 18: google.telemetry.policy.v1alpha1.TraceMatcher.inclusive_minimum:type_name -> google.telemetry.policy.v1alpha1.NumericValue
-	6,  // 19: google.telemetry.policy.v1alpha1.TraceMatcher.exclusive_maximum:type_name -> google.telemetry.policy.v1alpha1.NumericValue
-	6,  // 20: google.telemetry.policy.v1alpha1.TraceMatcher.inclusive_maximum:type_name -> google.telemetry.policy.v1alpha1.NumericValue
-	5,  // 21: google.telemetry.policy.v1alpha1.TraceMatcher.containment:type_name -> google.telemetry.policy.v1alpha1.Value
-	3,  // 22: google.telemetry.policy.v1alpha1.TraceFieldSelector.record_field:type_name -> google.telemetry.policy.v1alpha1.SpanRecordField
-	4,  // 23: google.telemetry.policy.v1alpha1.TraceFieldSelector.span_attribute_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
-	4,  // 24: google.telemetry.policy.v1alpha1.TraceFieldSelector.resource_attribute_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
-	4,  // 25: google.telemetry.policy.v1alpha1.TraceFieldSelector.scope_attribute_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
-	1,  // 26: google.telemetry.policy.v1alpha1.TraceFieldSelector.scope_field:type_name -> google.telemetry.policy.v1alpha1.ScopeField
-	27, // [27:27] is the sub-list for method output_type
-	27, // [27:27] is the sub-list for method input_type
-	27, // [27:27] is the sub-list for extension type_name
-	27, // [27:27] is the sub-list for extension extendee
-	0,  // [0:27] is the sub-list for field type_name
+	12, // 0: google.telemetry.policy.v1alpha1.Predicate.existence:type_name -> google.protobuf.Empty
+	5,  // 1: google.telemetry.policy.v1alpha1.Predicate.equality:type_name -> google.telemetry.policy.v1alpha1.Value
+	6,  // 2: google.telemetry.policy.v1alpha1.Predicate.exclusive_minimum:type_name -> google.telemetry.policy.v1alpha1.NumericValue
+	6,  // 3: google.telemetry.policy.v1alpha1.Predicate.inclusive_minimum:type_name -> google.telemetry.policy.v1alpha1.NumericValue
+	6,  // 4: google.telemetry.policy.v1alpha1.Predicate.exclusive_maximum:type_name -> google.telemetry.policy.v1alpha1.NumericValue
+	6,  // 5: google.telemetry.policy.v1alpha1.Predicate.inclusive_maximum:type_name -> google.telemetry.policy.v1alpha1.NumericValue
+	5,  // 6: google.telemetry.policy.v1alpha1.Predicate.containment:type_name -> google.telemetry.policy.v1alpha1.Value
+	9,  // 7: google.telemetry.policy.v1alpha1.LogMatcher.target:type_name -> google.telemetry.policy.v1alpha1.LogFieldSelector
+	7,  // 8: google.telemetry.policy.v1alpha1.LogMatcher.predicate:type_name -> google.telemetry.policy.v1alpha1.Predicate
+	2,  // 9: google.telemetry.policy.v1alpha1.LogFieldSelector.record_field:type_name -> google.telemetry.policy.v1alpha1.LogRecordField
+	4,  // 10: google.telemetry.policy.v1alpha1.LogFieldSelector.log_attribute_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
+	4,  // 11: google.telemetry.policy.v1alpha1.LogFieldSelector.resource_attribute_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
+	4,  // 12: google.telemetry.policy.v1alpha1.LogFieldSelector.scope_attribute_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
+	1,  // 13: google.telemetry.policy.v1alpha1.LogFieldSelector.scope_field:type_name -> google.telemetry.policy.v1alpha1.ScopeField
+	4,  // 14: google.telemetry.policy.v1alpha1.LogFieldSelector.body_field_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
+	11, // 15: google.telemetry.policy.v1alpha1.TraceMatcher.target:type_name -> google.telemetry.policy.v1alpha1.TraceFieldSelector
+	7,  // 16: google.telemetry.policy.v1alpha1.TraceMatcher.predicate:type_name -> google.telemetry.policy.v1alpha1.Predicate
+	3,  // 17: google.telemetry.policy.v1alpha1.TraceFieldSelector.record_field:type_name -> google.telemetry.policy.v1alpha1.SpanRecordField
+	4,  // 18: google.telemetry.policy.v1alpha1.TraceFieldSelector.span_attribute_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
+	4,  // 19: google.telemetry.policy.v1alpha1.TraceFieldSelector.resource_attribute_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
+	4,  // 20: google.telemetry.policy.v1alpha1.TraceFieldSelector.scope_attribute_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
+	1,  // 21: google.telemetry.policy.v1alpha1.TraceFieldSelector.scope_field:type_name -> google.telemetry.policy.v1alpha1.ScopeField
+	22, // [22:22] is the sub-list for method output_type
+	22, // [22:22] is the sub-list for method input_type
+	22, // [22:22] is the sub-list for extension type_name
+	22, // [22:22] is the sub-list for extension extendee
+	0,  // [0:22] is the sub-list for field type_name
 }
 
 func init() { file_policy_v1alpha1_common_policy_types_proto_init() }
@@ -1591,16 +1459,16 @@ func file_policy_v1alpha1_common_policy_types_proto_init() {
 		(*NumericValue_DoubleValue)(nil),
 	}
 	file_policy_v1alpha1_common_policy_types_proto_msgTypes[3].OneofWrappers = []any{
-		(*LogMatcher_Existence)(nil),
-		(*LogMatcher_Equality)(nil),
-		(*LogMatcher_Glob)(nil),
-		(*LogMatcher_ExclusiveMinimum)(nil),
-		(*LogMatcher_InclusiveMinimum)(nil),
-		(*LogMatcher_ExclusiveMaximum)(nil),
-		(*LogMatcher_InclusiveMaximum)(nil),
-		(*LogMatcher_Containment)(nil),
+		(*Predicate_Existence)(nil),
+		(*Predicate_Equality)(nil),
+		(*Predicate_Glob)(nil),
+		(*Predicate_ExclusiveMinimum)(nil),
+		(*Predicate_InclusiveMinimum)(nil),
+		(*Predicate_ExclusiveMaximum)(nil),
+		(*Predicate_InclusiveMaximum)(nil),
+		(*Predicate_Containment)(nil),
 	}
-	file_policy_v1alpha1_common_policy_types_proto_msgTypes[4].OneofWrappers = []any{
+	file_policy_v1alpha1_common_policy_types_proto_msgTypes[5].OneofWrappers = []any{
 		(*LogFieldSelector_RecordField)(nil),
 		(*LogFieldSelector_LogAttributePath)(nil),
 		(*LogFieldSelector_ResourceAttributePath)(nil),
@@ -1608,17 +1476,7 @@ func file_policy_v1alpha1_common_policy_types_proto_init() {
 		(*LogFieldSelector_ScopeField)(nil),
 		(*LogFieldSelector_BodyFieldPath)(nil),
 	}
-	file_policy_v1alpha1_common_policy_types_proto_msgTypes[5].OneofWrappers = []any{
-		(*TraceMatcher_Existence)(nil),
-		(*TraceMatcher_Equality)(nil),
-		(*TraceMatcher_Glob)(nil),
-		(*TraceMatcher_ExclusiveMinimum)(nil),
-		(*TraceMatcher_InclusiveMinimum)(nil),
-		(*TraceMatcher_ExclusiveMaximum)(nil),
-		(*TraceMatcher_InclusiveMaximum)(nil),
-		(*TraceMatcher_Containment)(nil),
-	}
-	file_policy_v1alpha1_common_policy_types_proto_msgTypes[6].OneofWrappers = []any{
+	file_policy_v1alpha1_common_policy_types_proto_msgTypes[7].OneofWrappers = []any{
 		(*TraceFieldSelector_RecordField)(nil),
 		(*TraceFieldSelector_SpanAttributePath)(nil),
 		(*TraceFieldSelector_ResourceAttributePath)(nil),
@@ -1631,7 +1489,7 @@ func file_policy_v1alpha1_common_policy_types_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_policy_v1alpha1_common_policy_types_proto_rawDesc), len(file_policy_v1alpha1_common_policy_types_proto_rawDesc)),
 			NumEnums:      4,
-			NumMessages:   7,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

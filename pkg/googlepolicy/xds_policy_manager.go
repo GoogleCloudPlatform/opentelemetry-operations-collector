@@ -29,14 +29,15 @@ import (
 	"sync"
 	"time"
 
+	authcredentials "cloud.google.com/go/auth/credentials"
+	"cloud.google.com/go/auth/credentials/idtoken"
+	"cloud.google.com/go/auth/oauth2adapt"
 	"cloud.google.com/go/compute/metadata"
 	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	discoveryv3 "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/google"
-	"google.golang.org/api/idtoken"
 	"google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -171,6 +172,7 @@ var (
 	ErrXDSMissingServerAddr   = errors.New("xDS server address cannot be empty in URI")
 	ErrXDSMissingCollectorID  = errors.New("a collector ID is required for the xDS policy manager")
 	ErrXDSMissingFleetID      = errors.New("a fleet ID is required for the xDS policy manager: set the FLEET_ID environment variable or the 'gcp.fleet_id' URI query parameter")
+	ErrXDSInvalidFleetID      = errors.New("invalid fleet ID: expected a short fleet ID or a full resource name 'projects/{project}/locations/{location}/fleets/{fleet_id}'")
 	ErrXDSMissingProject      = errors.New("a project is required for the xDS policy manager: set the 'project_number' or 'project' URI query parameter, GOOGLE_CLOUD_PROJECT_NUMBER / GOOGLE_CLOUD_PROJECT environment variable, or run on GCE")
 	ErrXDSInvalidInsecureFlag = errors.New("invalid 'insecure' URI query parameter, expected a boolean")
 
@@ -213,7 +215,10 @@ func (realGCEMetadata) Zone(ctx context.Context) (string, error) {
 // Tests replace it to stub or disable GCE metadata detection.
 var defaultGCEMetadata gceMetadata = realGCEMetadata{}
 
-var _ Manager = (*xdsPolicyManager)(nil)
+var (
+	_ Manager               = (*xdsPolicyManager)(nil)
+	_ FleetMetadataProvider = (*xdsPolicyManager)(nil)
+)
 
 // xdsPolicyManager connects to an xDS control plane, parses received policies,
 // updates ActivePolicySet, and sends ACKs/NACKs over the ADS stream.
@@ -228,10 +233,16 @@ type xdsPolicyManager struct {
 	// Connection settings, resolved once in the constructor and never written
 	// again. Being immutable, they are read from the stream goroutine without
 	// holding mu.
-	uri           *url.URL
-	serverAddr    string
-	collectorID   string
-	fleetID       string
+	uri         *url.URL
+	serverAddr  string
+	collectorID string
+	fleetID     string
+	// fleetName is the full Fleet resource name
+	// ("projects/{project}/locations/{location}/fleets/{fleet_id}") the
+	// collector identifies itself with: it is sent as the xDS node ID and
+	// reported as gcp.fleet_id on the collector's own telemetry. The xDS node
+	// cluster and metadata keep using the short fleetID.
+	fleetName     string
 	projectID     string
 	projectNumber string
 	region        string
@@ -304,6 +315,7 @@ type xdsPolicyManager struct {
 // for example:
 //
 //	googlecontrolplane:xds://telemetrydirector.googleapis.com:443?gcp.fleet_id=my-fleet&project=my-project
+//	googlecontrolplane:xds://telemetrydirector.googleapis.com:443?gcp.fleet_id=projects/my-project/locations/us-central1/fleets/my-fleet
 //	googlecontrolplane:xds://127.0.0.1:18000?gcp.fleet_id=my-fleet&project=my-project&insecure=true
 //
 // The `googlecontrolplane:` prefix selects the confmap provider and is stripped
@@ -314,10 +326,19 @@ type xdsPolicyManager struct {
 //
 //	HOST[:PORT]    - required. Address of the xDS control plane.
 //	gcp.fleet_id   - required, unless $FLEET_ID is set; the environment wins over
-//	                 the URI, matching how the provider resolves it. Names the
-//	                 fleet in the subscribed resource (see xdstpResourceName), is
-//	                 sent as this node's xDS cluster, and is read back off URI()
-//	                 by the provider to attribute the collector's own telemetry.
+//	                 the URI, matching how the provider resolves it. Either a
+//	                 short fleet ID ("my-fleet") or a full Fleet resource name
+//	                 ("projects/{project}/locations/{location}/fleets/{fleet_id}").
+//	                 The short ID names the fleet in the subscribed resource (see
+//	                 xdstpResourceName) and is sent as this node's xDS cluster.
+//	                 The full name is sent as this node's xDS ID and exposed via
+//	                 FleetID() for the provider to attribute the collector's own
+//	                 telemetry: a full name is used verbatim, and its project and
+//	                 location take precedence over the `project`, `project_number`
+//	                 and `region` parameters and their environment variables; a
+//	                 short ID is completed to
+//	                 "projects/{project_number}/locations/{region}/fleets/{id}"
+//	                 from the same project number and region as the subscription.
 //	project_number - optional. Numeric project number for the xdstp:// resource
 //	                 subscription. Can also be supplied via
 //	                 $GOOGLE_CLOUD_PROJECT_NUMBER or $PROJECT_NUMBER, a numeric
@@ -339,7 +360,7 @@ type xdsPolicyManager struct {
 //
 // # Arguments
 //
-// collectorID identifies this collector to the control plane as the xDS node ID.
+// collectorID identifies this collector instance in node.metadata["service.instance.id"].
 // It is passed in rather than read from the environment because the confmap
 // provider derives it, and that package already depends on this one.
 //
@@ -374,6 +395,25 @@ func NewXDSPolicyManager(logger *zap.Logger, uri *url.URL, collectorID string) (
 		return nil, ErrXDSMissingFleetID
 	}
 
+	// A full resource name supplies the short ID for the subscription and the
+	// project and location for everything else. They are written into the
+	// query so that resolveProjectAndLocality sees them in the slot they fit
+	// and ahead of the environment, which is what makes the subscription, the
+	// node locality and the reported name agree with the name as written.
+	shortFleetID := fleetID
+	var fleetLocation string
+	fullName := false
+	if p, l, f, ok := ParseFleetResourceName(fleetID); ok {
+		shortFleetID, fleetLocation, fullName = f, l, true
+		if IsNumericProject(p) {
+			query.Set(ProjectNumberQueryParam, p)
+		} else {
+			query.Set(ProjectQueryParam, p)
+		}
+	} else if strings.Contains(fleetID, "/") {
+		return nil, fmt.Errorf("%w: %q", ErrXDSInvalidFleetID, fleetID)
+	}
+
 	var isInsecure bool
 	if raw := query.Get("insecure"); raw != "" {
 		parsed, err := strconv.ParseBool(raw)
@@ -383,9 +423,20 @@ func NewXDSPolicyManager(logger *zap.Logger, uri *url.URL, collectorID string) (
 		isInsecure = parsed
 	}
 
-	projectNumber, projectID, region, zone, err := resolveProjectAndLocality(query)
+	projectNumber, projectID, region, zone, err := resolveProjectAndLocality(query, fleetLocation)
 	if err != nil {
 		return nil, err
+	}
+
+	// A short ID is completed from the same project number and region that
+	// name the subscribed resource, so every collector in a fleet reports the
+	// same name however it learned its project. A full name is kept as
+	// written. The number rather than the ID because it is the one project
+	// field always resolved here; the readable ID is still reported as
+	// gcp.project_id.
+	fleetName := fleetID
+	if !fullName {
+		fleetName = FormatFleetResourceName(projectNumber, region, shortFleetID)
 	}
 
 	if logger == nil {
@@ -397,18 +448,39 @@ func NewXDSPolicyManager(logger *zap.Logger, uri *url.URL, collectorID string) (
 		uri:                uri,
 		serverAddr:         serverAddr,
 		collectorID:        collectorID,
-		fleetID:            fleetID,
+		fleetID:            shortFleetID,
+		fleetName:          fleetName,
 		projectID:          projectID,
 		projectNumber:      projectNumber,
 		region:             region,
 		zone:               zone,
 		insecure:           isInsecure,
-		resourceName:       xdstpResourceName(region, projectNumber, fleetID),
+		resourceName:       xdstpResourceName(region, projectNumber, shortFleetID),
 		backoffInitial:     defaultBackoffInitial,
 		backoffMax:         defaultBackoffMax,
 		timeAfter:          time.After,
 		initialSyncTimeout: defaultInitialSyncTimeout,
 	}, nil
+}
+
+// ParseFleetResourceName parses a full Fleet resource name of the form
+// "projects/{project}/locations/{location}/fleets/{fleet_id}". It returns
+// ok == false if s is not in exactly that form or any segment is empty.
+func ParseFleetResourceName(s string) (project, location, fleetID string, ok bool) {
+	parts := strings.Split(s, "/")
+	if len(parts) != 6 || parts[0] != "projects" || parts[2] != "locations" || parts[4] != "fleets" {
+		return "", "", "", false
+	}
+	if parts[1] == "" || parts[3] == "" || parts[5] == "" {
+		return "", "", "", false
+	}
+	return parts[1], parts[3], parts[5], true
+}
+
+// FormatFleetResourceName formats a full Fleet resource name
+// "projects/{project}/locations/{location}/fleets/{fleet_id}".
+func FormatFleetResourceName(project, location, fleetID string) string {
+	return fmt.Sprintf("projects/%s/locations/%s/fleets/%s", project, location, fleetID)
 }
 
 // serverAddrFromURI pulls the host[:port] out of an xDS URI. It may arrive as an
@@ -447,7 +519,11 @@ func FleetIDFromURI(uri *url.URL) string {
 // xdstp:// subscription), the alphanumeric project ID (for telemetry
 // attribution), and the collector's region and zone from URI query parameters,
 // environment variables, and GCE metadata.
-func resolveProjectAndLocality(query url.Values) (projectNumber, projectID, region, zone string, err error) {
+//
+// fleetLocation, when non-empty, is the location from a full Fleet resource
+// name and is the region, ahead of everything else: the subscription must be
+// made in the region the fleet lives in, not the one the VM happens to be in.
+func resolveProjectAndLocality(query url.Values, fleetLocation string) (projectNumber, projectID, region, zone string, err error) {
 	rawProjectNum := query.Get(ProjectNumberQueryParam)
 	if rawProjectNum == "" {
 		rawProjectNum = firstNonEmptyEnv(googleCloudProjectNumberEnvVar, projectNumberEnvVar)
@@ -471,7 +547,10 @@ func resolveProjectAndLocality(query url.Values) (projectNumber, projectID, regi
 		}
 	}
 
-	region = firstNonEmptyEnv(cloudRegionEnvVar, googleCloudRegionEnvVar)
+	region = fleetLocation
+	if region == "" {
+		region = firstNonEmptyEnv(cloudRegionEnvVar, googleCloudRegionEnvVar)
+	}
 	if region == "" {
 		region = query.Get(RegionQueryParam)
 	}
@@ -701,6 +780,19 @@ func (m *xdsPolicyManager) URI() *url.URL {
 	return m.uri
 }
 
+// FleetID returns the full Fleet resource name
+// ("projects/{project}/locations/{location}/fleets/{fleet_id}") this
+// collector reports itself under.
+func (m *xdsPolicyManager) FleetID() string {
+	return m.fleetName
+}
+
+// ProjectID returns the resolved alphanumeric GCP project ID, or "" if only a
+// numeric project number was available.
+func (m *xdsPolicyManager) ProjectID() string {
+	return m.projectID
+}
+
 // PolicyEvaluationResult satisfies the Manager interface.
 //
 // TODO: Defer the ACK until the policy set has actually been evaluated, and NACK
@@ -709,8 +801,16 @@ func (m *xdsPolicyManager) URI() *url.URL {
 func (m *xdsPolicyManager) PolicyEvaluationResult(string, error) {}
 
 // buildNode constructs the xDS Node descriptor sent on every DiscoveryRequest.
-// Locality carries the resolved region and zone, and Metadata carries the
-// OpenTelemetry resource attributes describing this collector instance.
+//
+// Id carries the full Fleet resource name
+// ("projects/{project}/locations/{location}/fleets/{fleet}") required by the
+// API. It is the same fleetName the collector reports as gcp.fleet_id on its
+// own telemetry, so the control plane and the telemetry backends see one
+// identity for the fleet. Cluster and Metadata["gcp.fleet_id"] keep the short
+// fleet ID for backwards compatibility. The collector instance ID is carried
+// in Metadata["service.instance.id"]. Locality carries the resolved region and
+// zone, and Metadata carries the OpenTelemetry resource attributes describing
+// this collector instance.
 func (m *xdsPolicyManager) buildNode() *corev3.Node {
 	metaFields := map[string]*structpb.Value{
 		"service.instance.id": structpb.NewStringValue(m.collectorID),
@@ -725,7 +825,7 @@ func (m *xdsPolicyManager) buildNode() *corev3.Node {
 	}
 
 	return &corev3.Node{
-		Id:      m.collectorID,
+		Id:      m.fleetName,
 		Cluster: m.fleetID,
 		Locality: &corev3.Locality{
 			Region: m.region,
@@ -1444,11 +1544,13 @@ func ResolveTokenSource(ctx context.Context, serverAddr string) (oauth2.TokenSou
 		return resolveIDTokenSource(ctx, "https://"+host)
 	}
 
-	ts, err := google.DefaultTokenSource(ctx, cloudPlatformScope)
+	creds, err := authcredentials.DetectDefault(&authcredentials.DetectOptions{
+		Scopes: []string{cloudPlatformScope},
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve OAuth2 token source: %w", err)
 	}
-	return ts, nil
+	return oauth2adapt.TokenSourceFromTokenProvider(creds), nil
 }
 
 func isCloudRunHost(host string) bool {
@@ -1458,25 +1560,38 @@ func isCloudRunHost(host string) bool {
 
 // resolveIDTokenSource returns a TokenSource providing Google OIDC ID tokens
 // for the given audience. It supports:
-//  1. GCE / GKE / Service Accounts: Uses idtoken.NewTokenSource (queries VM metadata server or SA key).
+//  1. GCE / GKE / Service Accounts / WIF with service account impersonation: Uses idtoken.NewCredentials
+//     (queries VM metadata server, SA key, or impersonates the WIF service account).
 //  2. Cloudtop / Developer Workstations: idtoken fails on "authorized_user" credentials, so it
 //     falls back to ADC with OpenID scopes and extracts the ID token via GoogleIDTokenSource.
-func resolveIDTokenSource(ctx context.Context, audience string) (oauth2.TokenSource, error) {
-	// 1. GCE / GKE / Service Accounts: metadata server or SA key
-	if idTS, err := idtoken.NewTokenSource(ctx, audience); err == nil {
-		return idTS, nil
-	}
-
-	// 2. Cloudtop / Developer Workstation: ADC user credentials fallback
-	defTS, err := google.DefaultTokenSource(ctx, "openid", "email")
+func resolveIDTokenSource(_ context.Context, audience string) (oauth2.TokenSource, error) {
+	// Detect ADC once and reuse it for both steps so the ID token identity
+	// matches what ADC selected.
+	creds, err := authcredentials.DetectDefault(&authcredentials.DetectOptions{
+		Scopes: []string{"openid", "email"},
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve ADC: %w", err)
 	}
 
-	wrapped := &GoogleIDTokenSource{Src: defTS}
+	// 1. GCE / GKE / Service Accounts / WIF with service account impersonation.
+	// Pass the ADC JSON explicitly: without it idtoken skips the gcloud
+	// well-known file and uses the metadata server identity on GCE.
+	idCreds, idErr := idtoken.NewCredentials(&idtoken.Options{
+		Audience:        audience,
+		CredentialsJSON: creds.JSON(), //nolint:staticcheck // SA1019: JSON was already loaded by ADC (DetectDefault), not from an untrusted source.
+	})
+	if idErr == nil {
+		// auth.Credentials caches and refreshes tokens early; an outer
+		// oauth2.ReuseTokenSource would defeat that.
+		return oauth2adapt.TokenSourceFromTokenProvider(idCreds), nil
+	}
+
+	// 2. Cloudtop / Developer Workstation: ADC user credentials fallback
+	wrapped := &GoogleIDTokenSource{Src: oauth2adapt.TokenSourceFromTokenProvider(creds)}
 	initialTok, err := wrapped.Token()
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve initial ID token: %w", err)
+		return nil, fmt.Errorf("failed to retrieve initial ID token: %w (idtoken: %v)", err, idErr)
 	}
 	return oauth2.ReuseTokenSource(initialTok, wrapped), nil
 }

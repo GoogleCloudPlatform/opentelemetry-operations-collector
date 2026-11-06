@@ -9,8 +9,10 @@
           "segments": ["service.tier"]
         }
       },
-      "equality": {
-        "string_value": "critical"
+      "predicate": {
+        "equality": {
+          "string_value": "critical"
+        }
       }
     }
   ]

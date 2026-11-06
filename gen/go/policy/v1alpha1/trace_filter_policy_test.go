@@ -28,7 +28,6 @@ import (
 	xdsv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/xds/v1alpha1"
 )
 
-
 func TestTraceFilterPolicy_Serialization(t *testing.T) {
 	policy := &policyv1alpha1.TraceFilterPolicy{
 		Id: "drop-healthcheck-spans",
@@ -39,8 +38,10 @@ func TestTraceFilterPolicy_Serialization(t *testing.T) {
 						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Glob{
-					Glob: "/healthz*",
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_Glob{
+						Glob: "/healthz*",
+					},
 				},
 			},
 			{
@@ -51,10 +52,12 @@ func TestTraceFilterPolicy_Serialization(t *testing.T) {
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equality{
-					Equality: &policyv1alpha1.Value{
-						Kind: &policyv1alpha1.Value_StringValue{
-							StringValue: "/ready",
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_Equality{
+						Equality: &policyv1alpha1.Value{
+							Kind: &policyv1alpha1.Value_StringValue{
+								StringValue: "/ready",
+							},
 						},
 					},
 				},
@@ -67,10 +70,12 @@ func TestTraceFilterPolicy_Serialization(t *testing.T) {
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equality{
-					Equality: &policyv1alpha1.Value{
-						Kind: &policyv1alpha1.Value_IntValue{
-							IntValue: 200,
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_Equality{
+						Equality: &policyv1alpha1.Value{
+							Kind: &policyv1alpha1.Value_IntValue{
+								IntValue: 200,
+							},
 						},
 					},
 				},
@@ -83,10 +88,12 @@ func TestTraceFilterPolicy_Serialization(t *testing.T) {
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_InclusiveMinimum{
-					InclusiveMinimum: &policyv1alpha1.NumericValue{
-						Kind: &policyv1alpha1.NumericValue_IntValue{
-							IntValue: 400,
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_InclusiveMinimum{
+						InclusiveMinimum: &policyv1alpha1.NumericValue{
+							Kind: &policyv1alpha1.NumericValue_IntValue{
+								IntValue: 400,
+							},
 						},
 					},
 				},
@@ -99,10 +106,12 @@ func TestTraceFilterPolicy_Serialization(t *testing.T) {
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Containment{
-					Containment: &policyv1alpha1.Value{
-						Kind: &policyv1alpha1.Value_StringValue{
-							StringValue: "canary",
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_Containment{
+						Containment: &policyv1alpha1.Value{
+							Kind: &policyv1alpha1.Value_StringValue{
+								StringValue: "canary",
+							},
 						},
 					},
 				},
@@ -113,10 +122,12 @@ func TestTraceFilterPolicy_Serialization(t *testing.T) {
 						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_KIND,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equality{
-					Equality: &policyv1alpha1.Value{
-						Kind: &policyv1alpha1.Value_StringValue{
-							StringValue: "SERVER",
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_Equality{
+						Equality: &policyv1alpha1.Value{
+							Kind: &policyv1alpha1.Value_StringValue{
+								StringValue: "SERVER",
+							},
 						},
 					},
 				},
@@ -129,10 +140,12 @@ func TestTraceFilterPolicy_Serialization(t *testing.T) {
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equality{
-					Equality: &policyv1alpha1.Value{
-						Kind: &policyv1alpha1.Value_StringValue{
-							StringValue: "frontend",
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_Equality{
+						Equality: &policyv1alpha1.Value{
+							Kind: &policyv1alpha1.Value_StringValue{
+								StringValue: "frontend",
+							},
 						},
 					},
 				},
@@ -145,8 +158,10 @@ func TestTraceFilterPolicy_Serialization(t *testing.T) {
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Existence{
-					Existence: &emptypb.Empty{},
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_Existence{
+						Existence: &emptypb.Empty{},
+					},
 				},
 			},
 			{
@@ -155,10 +170,12 @@ func TestTraceFilterPolicy_Serialization(t *testing.T) {
 						ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_NAME,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equality{
-					Equality: &policyv1alpha1.Value{
-						Kind: &policyv1alpha1.Value_StringValue{
-							StringValue: "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp",
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_Equality{
+						Equality: &policyv1alpha1.Value{
+							Kind: &policyv1alpha1.Value_StringValue{
+								StringValue: "go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp",
+							},
 						},
 					},
 				},
@@ -169,10 +186,12 @@ func TestTraceFilterPolicy_Serialization(t *testing.T) {
 						ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_VERSION,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equality{
-					Equality: &policyv1alpha1.Value{
-						Kind: &policyv1alpha1.Value_StringValue{
-							StringValue: "v0.45.0",
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_Equality{
+						Equality: &policyv1alpha1.Value{
+							Kind: &policyv1alpha1.Value_StringValue{
+								StringValue: "v0.45.0",
+							},
 						},
 					},
 				},
@@ -183,10 +202,12 @@ func TestTraceFilterPolicy_Serialization(t *testing.T) {
 						ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_SCHEMA_URL,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equality{
-					Equality: &policyv1alpha1.Value{
-						Kind: &policyv1alpha1.Value_StringValue{
-							StringValue: "https://opentelemetry.io/schemas/1.24.0",
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_Equality{
+						Equality: &policyv1alpha1.Value{
+							Kind: &policyv1alpha1.Value_StringValue{
+								StringValue: "https://opentelemetry.io/schemas/1.24.0",
+							},
 						},
 					},
 				},
@@ -260,10 +281,12 @@ func TestTraceFilterPolicy_JSONSerialization(t *testing.T) {
 						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equality{
-					Equality: &policyv1alpha1.Value{
-						Kind: &policyv1alpha1.Value_StringValue{
-							StringValue: "/healthz",
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_Equality{
+						Equality: &policyv1alpha1.Value{
+							Kind: &policyv1alpha1.Value_StringValue{
+								StringValue: "/healthz",
+							},
 						},
 					},
 				},
@@ -275,10 +298,12 @@ func TestTraceFilterPolicy_JSONSerialization(t *testing.T) {
 						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_KIND,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equality{
-					Equality: &policyv1alpha1.Value{
-						Kind: &policyv1alpha1.Value_StringValue{
-							StringValue: "SERVER",
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_Equality{
+						Equality: &policyv1alpha1.Value{
+							Kind: &policyv1alpha1.Value_StringValue{
+								StringValue: "SERVER",
+							},
 						},
 					},
 				},
@@ -306,8 +331,10 @@ func TestTraceFilterPolicy_ParentSpanIDAndKindMatchers(t *testing.T) {
 						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Existence{
-					Existence: &emptypb.Empty{},
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_Existence{
+						Existence: &emptypb.Empty{},
+					},
 				},
 				Negated: true,
 			},
@@ -317,10 +344,12 @@ func TestTraceFilterPolicy_ParentSpanIDAndKindMatchers(t *testing.T) {
 						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_KIND,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equality{
-					Equality: &policyv1alpha1.Value{
-						Kind: &policyv1alpha1.Value_StringValue{
-							StringValue: "INTERNAL",
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_Equality{
+						Equality: &policyv1alpha1.Value{
+							Kind: &policyv1alpha1.Value_StringValue{
+								StringValue: "INTERNAL",
+							},
 						},
 					},
 				},
@@ -345,10 +374,12 @@ func TestTraceFilterPolicy_ParentSpanIDAndKindMatchers(t *testing.T) {
 						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID,
 					},
 				},
-				Predicate: &policyv1alpha1.TraceMatcher_Equality{
-					Equality: &policyv1alpha1.Value{
-						Kind: &policyv1alpha1.Value_StringValue{
-							StringValue: "0123456789abcdef",
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_Equality{
+						Equality: &policyv1alpha1.Value{
+							Kind: &policyv1alpha1.Value_StringValue{
+								StringValue: "0123456789abcdef",
+							},
 						},
 					},
 				},

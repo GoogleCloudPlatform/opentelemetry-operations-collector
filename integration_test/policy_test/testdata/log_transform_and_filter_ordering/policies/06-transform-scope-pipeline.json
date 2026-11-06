@@ -5,19 +5,31 @@
     {
       "target": {
         "resource_attribute_path": {
-          "segments": ["env"]
+          "segments": [
+            "env"
+          ]
         }
       },
-      "predicate": { "equality": { "string_value": "prod" } }
+      "predicate": {
+        "equality": {
+          "string_value": "prod"
+        }
+      }
     }
   ],
-  "addition": {
-    "target": {
-      "log_attribute_path": {
-        "segments": ["pipeline"]
-      }
-    },
-    "value": { "string_value": "utr-v2" },
-    "upsert_enabled": true
-  }
+  "additions": [
+    {
+      "target": {
+        "log_attribute_path": {
+          "segments": [
+            "pipeline"
+          ]
+        }
+      },
+      "value": {
+        "string_value": "utr-v2"
+      },
+      "upsert_enabled": true
+    }
+  ]
 }

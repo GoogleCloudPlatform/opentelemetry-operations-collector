@@ -73,7 +73,7 @@ type Policy struct {
 	proto    *policyv1alpha1.LogTransformPolicy
 	stage    googlepolicy.TransformStage
 	matchers []matcher.CompiledLogMatcher
-	action   compiledAction
+	actions  []compiledAction
 }
 
 var _ googlepolicy.TransformationPolicy = (*Policy)(nil)
@@ -92,50 +92,62 @@ func NewPolicyFromProto(pb *policyv1alpha1.LogTransformPolicy) (*Policy, error) 
 	}
 
 	var (
-		stage  googlepolicy.TransformStage
-		action compiledAction
+		stage   googlepolicy.TransformStage
+		actions []compiledAction
 	)
 	switch a := pb.Action.(type) {
 	case *policyv1alpha1.LogTransformPolicy_Addition:
-		if a.Addition == nil {
+		if a.Addition == nil || len(a.Addition.GetAdditions()) == 0 {
 			return nil, ErrMissingAction
 		}
-		ca, err := compileAdd(a.Addition)
-		if err != nil {
-			return nil, fmt.Errorf("addition: %w", err)
+		actions = make([]compiledAction, 0, len(a.Addition.GetAdditions()))
+		for i, op := range a.Addition.GetAdditions() {
+			ca, err := compileAdd(op)
+			if err != nil {
+				return nil, fmt.Errorf("addition.additions[%d]: %w", i, err)
+			}
+			actions = append(actions, ca)
 		}
 		stage = googlepolicy.TransformStageAdd
-		action = ca
 	case *policyv1alpha1.LogTransformPolicy_Removal:
-		if a.Removal == nil {
+		if a.Removal == nil || len(a.Removal.GetRemovals()) == 0 {
 			return nil, ErrMissingAction
 		}
-		cr, err := compileRemove(a.Removal)
-		if err != nil {
-			return nil, fmt.Errorf("removal: %w", err)
+		actions = make([]compiledAction, 0, len(a.Removal.GetRemovals()))
+		for i, op := range a.Removal.GetRemovals() {
+			cr, err := compileRemove(op)
+			if err != nil {
+				return nil, fmt.Errorf("removal.removals[%d]: %w", i, err)
+			}
+			actions = append(actions, cr)
 		}
 		stage = googlepolicy.TransformStageRemove
-		action = cr
 	case *policyv1alpha1.LogTransformPolicy_Renaming:
-		if a.Renaming == nil {
+		if a.Renaming == nil || len(a.Renaming.GetRenamings()) == 0 {
 			return nil, ErrMissingAction
 		}
-		cr, err := compileRename(a.Renaming)
-		if err != nil {
-			return nil, fmt.Errorf("renaming: %w", err)
+		actions = make([]compiledAction, 0, len(a.Renaming.GetRenamings()))
+		for i, op := range a.Renaming.GetRenamings() {
+			cr, err := compileRename(op)
+			if err != nil {
+				return nil, fmt.Errorf("renaming.renamings[%d]: %w", i, err)
+			}
+			actions = append(actions, cr)
 		}
 		stage = googlepolicy.TransformStageRename
-		action = cr
 	case *policyv1alpha1.LogTransformPolicy_Redaction:
-		if a.Redaction == nil {
+		if a.Redaction == nil || len(a.Redaction.GetRedactions()) == 0 {
 			return nil, ErrMissingAction
 		}
-		crd, err := compileRedact(a.Redaction)
-		if err != nil {
-			return nil, fmt.Errorf("redaction: %w", err)
+		actions = make([]compiledAction, 0, len(a.Redaction.GetRedactions()))
+		for i, op := range a.Redaction.GetRedactions() {
+			crd, err := compileRedact(op)
+			if err != nil {
+				return nil, fmt.Errorf("redaction.redactions[%d]: %w", i, err)
+			}
+			actions = append(actions, crd)
 		}
 		stage = googlepolicy.TransformStageRedact
-		action = crd
 	default:
 		return nil, ErrMissingAction
 	}
@@ -153,11 +165,9 @@ func NewPolicyFromProto(pb *policyv1alpha1.LogTransformPolicy) (*Policy, error) 
 		proto:    pb,
 		stage:    stage,
 		matchers: matchers,
-		action:   action,
+		actions:  actions,
 	}, nil
 }
-
-// PolicyName returns the unique identifier of this policy instance.
 func (p *Policy) PolicyName() string {
 	return p.proto.GetId()
 }
@@ -200,11 +210,21 @@ func (p *Policy) TransformStage() googlepolicy.TransformStage {
 // matchers evaluate to true, applies its configured action.
 // It returns TransformModified if the policy matched and modified the record,
 // or TransformNoMatch otherwise.
+// TransformLog evaluates the policy against the given LogContext and, if all
+// matchers evaluate to true, applies its configured action operations in list order.
+// It returns TransformModified if the policy matched and at least one operation
+// modified the record, or TransformNoMatch otherwise.
 func (p *Policy) TransformLog(ctx googlepolicy.LogContext) googlepolicy.TransformResult {
 	if !p.matchesContext(ctx) {
 		return googlepolicy.TransformNoMatch
 	}
-	if !p.action(ctx) {
+	var modified bool
+	for _, action := range p.actions {
+		if action(ctx) {
+			modified = true
+		}
+	}
+	if !modified {
 		return googlepolicy.TransformNoMatch
 	}
 	return googlepolicy.TransformModified
@@ -219,7 +239,7 @@ func (p *Policy) matchesContext(ctx googlepolicy.LogContext) bool {
 	return true
 }
 
-func compileAdd(a *policyv1alpha1.LogAddAction) (compiledAction, error) {
+func compileAdd(a *policyv1alpha1.LogAddition) (compiledAction, error) {
 	target := a.GetTarget()
 	if target == nil || target.Target == nil {
 		return nil, ErrMissingTarget
@@ -324,7 +344,7 @@ func compileRecordFieldAdd(field policyv1alpha1.LogRecordField, val *policyv1alp
 	}
 }
 
-func compileRemove(a *policyv1alpha1.LogRemoveAction) (compiledAction, error) {
+func compileRemove(a *policyv1alpha1.LogRemoval) (compiledAction, error) {
 	if a == nil || a.Target == nil || a.Target.Target == nil {
 		return nil, ErrMissingTarget
 	}
@@ -363,7 +383,7 @@ func compileRemove(a *policyv1alpha1.LogRemoveAction) (compiledAction, error) {
 	}
 }
 
-func compileRename(a *policyv1alpha1.LogRenameAction) (compiledAction, error) {
+func compileRename(a *policyv1alpha1.LogRenaming) (compiledAction, error) {
 	if a == nil {
 		return nil, ErrMissingAction
 	}
@@ -490,7 +510,7 @@ func compileRename(a *policyv1alpha1.LogRenameAction) (compiledAction, error) {
 	}, nil
 }
 
-func compileRedact(a *policyv1alpha1.LogRedactAction) (compiledAction, error) {
+func compileRedact(a *policyv1alpha1.LogRedaction) (compiledAction, error) {
 	if a == nil {
 		return nil, ErrMissingAction
 	}

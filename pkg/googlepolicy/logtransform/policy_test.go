@@ -172,9 +172,13 @@ func logAttrSelector(path ...string) *policyv1alpha1.LogAttributeSelector {
 func addAction(target *policyv1alpha1.LogTargetSelector, val *policyv1alpha1.Value, upsert bool) *policyv1alpha1.LogTransformPolicy_Addition {
 	return &policyv1alpha1.LogTransformPolicy_Addition{
 		Addition: &policyv1alpha1.LogAddAction{
-			Target:        target,
-			Value:         val,
-			UpsertEnabled: proto.Bool(upsert),
+			Additions: []*policyv1alpha1.LogAddition{
+				{
+					Target:        target,
+					Value:         val,
+					UpsertEnabled: proto.Bool(upsert),
+				},
+			},
 		},
 	}
 }
@@ -190,7 +194,11 @@ func logBodyFieldSelector(path ...string) *policyv1alpha1.LogAttributeSelector {
 func removeAction(target *policyv1alpha1.LogAttributeSelector) *policyv1alpha1.LogTransformPolicy_Removal {
 	return &policyv1alpha1.LogTransformPolicy_Removal{
 		Removal: &policyv1alpha1.LogRemoveAction{
-			Target: target,
+			Removals: []*policyv1alpha1.LogRemoval{
+				{
+					Target: target,
+				},
+			},
 		},
 	}
 }
@@ -198,9 +206,13 @@ func removeAction(target *policyv1alpha1.LogAttributeSelector) *policyv1alpha1.L
 func renameAction(source, target *policyv1alpha1.LogAttributeSelector, upsert bool) *policyv1alpha1.LogTransformPolicy_Renaming {
 	return &policyv1alpha1.LogTransformPolicy_Renaming{
 		Renaming: &policyv1alpha1.LogRenameAction{
-			Source:        source,
-			Target:        target,
-			UpsertEnabled: proto.Bool(upsert),
+			Renamings: []*policyv1alpha1.LogRenaming{
+				{
+					Source:        source,
+					Target:        target,
+					UpsertEnabled: proto.Bool(upsert),
+				},
+			},
 		},
 	}
 }
@@ -215,9 +227,13 @@ func redactAction(target *policyv1alpha1.LogTargetSelector, regex, replacement s
 	}
 	return &policyv1alpha1.LogTransformPolicy_Redaction{
 		Redaction: &policyv1alpha1.LogRedactAction{
-			Target:      target,
-			Regex:       re,
-			Replacement: rep,
+			Redactions: []*policyv1alpha1.LogRedaction{
+				{
+					Target:      target,
+					Regex:       re,
+					Replacement: rep,
+				},
+			},
 		},
 	}
 }
@@ -655,9 +671,13 @@ func TestPolicy_EmptyMatchersAppliesUnconditionally(t *testing.T) {
 		Id: "unconditional-add",
 		Action: &policyv1alpha1.LogTransformPolicy_Addition{
 			Addition: &policyv1alpha1.LogAddAction{
-				Target:        logTargetAttr("injected"),
-				Value:         strVal("always"),
-				UpsertEnabled: proto.Bool(true),
+				Additions: []*policyv1alpha1.LogAddition{
+					{
+						Target:        logTargetAttr("injected"),
+						Value:         strVal("always"),
+						UpsertEnabled: proto.Bool(true),
+					},
+				},
 			},
 		},
 	})
@@ -687,15 +707,19 @@ func TestDriverLoadPolicyAndProto(t *testing.T) {
 				},
 			},
 			"addition": map[string]any{
-				"target": map[string]any{
-					"log_attribute_path": map[string]any{
-						"segments": []any{"gcp", "routing", "tier"},
+				"additions": []any{
+					map[string]any{
+						"target": map[string]any{
+							"log_attribute_path": map[string]any{
+								"segments": []any{"gcp", "routing", "tier"},
+							},
+						},
+						"value": map[string]any{
+							"string_value": "soc",
+						},
+						"upsert_enabled": true,
 					},
 				},
-				"value": map[string]any{
-					"string_value": "soc",
-				},
-				"upsert_enabled": true,
 			},
 		}
 
@@ -1930,4 +1954,42 @@ func TestTransformLogRedactAction(t *testing.T) {
 			assert.Equal(t, googlepolicy.TransformNoMatch, p.TransformLog(googlepolicy.LogContext{}))
 		}
 	})
+}
+
+func TestTransformLogPartialFailure(t *testing.T) {
+	p, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		Id:       "partial-failure-add",
+		Matchers: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
+		Action: &policyv1alpha1.LogTransformPolicy_Addition{
+			Addition: &policyv1alpha1.LogAddAction{
+				Additions: []*policyv1alpha1.LogAddition{
+					{
+						Target:        logTargetAttr("existing_key"),
+						Value:         strVal("new_value"),
+						UpsertEnabled: proto.Bool(false), // This will fail because "existing_key" exists
+					},
+					{
+						Target:        logTargetAttr("new_key"),
+						Value:         strVal("success_value"),
+						UpsertEnabled: proto.Bool(false), // This will succeed
+					},
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	lr, sl, rl := newTestLogBundle()
+	lr.Attributes().PutStr("existing_key", "old_value")
+
+	res := p.TransformLog(logContext(lr, sl, rl))
+	assert.Equal(t, googlepolicy.TransformModified, res)
+
+	val1, ok := lr.Attributes().Get("existing_key")
+	require.True(t, ok)
+	assert.Equal(t, "old_value", val1.Str()) // Unchanged
+
+	val2, ok := lr.Attributes().Get("new_key")
+	require.True(t, ok)
+	assert.Equal(t, "success_value", val2.Str()) // Added
 }

@@ -40,12 +40,16 @@ option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-col
 //   `redaction`.
 // - Tie-Breaking: Within the same operation type, policies execute in
 //   lexicographical order of `id`.
+// - Intra-Policy Operation Order: Operations within a single action execute in
+//   the order they appear in their repeated list (`renamings`, `additions`,
+//   `removals`, `redactions`).
 // - Matching: All conditions in `matchers` are ANDed together. If `matchers` is
 //   empty, the action applies to all log records.
-// - Fail-Open: If `action` is unset, or if an action cannot be applied to a
-//   record (e.g., `renaming` when `source` does not exist, or
-//   `addition`/`renaming` with `upsert_enabled: false` when `target` already
-//   exists), the record passes through unmodified.
+// - Fail-Open: If `action` is unset or its operation list is empty, or if an
+//   individual operation cannot be applied to a record (e.g., `renaming` when
+//   `source` does not exist, or `addition`/`renaming` with
+//   `upsert_enabled: false` when `target` already exists), that operation is a
+//   no-op and remaining operations in the action still execute.
 message LogTransformPolicy {
   // Unique identifier for the policy within its configuration scope
   // (e.g. a UUID or namespaced URI like "io.opentelemetry.operator/{namespace}/policies/label-soc-logs").
@@ -58,18 +62,24 @@ message LogTransformPolicy {
   // The single transformation action to perform when `matchers` evaluates to
   // true. Exactly one action must be set.
   oneof action {
-    // Inserts or overwrites a field or attribute.
+    // Inserts or overwrites one or more fields or attributes.
     LogAddAction addition = 3;
 
-    // Deletes an attribute or structured `body_field_path`.
+    // Deletes one or more attributes or structured `body_field_path` fields.
     LogRemoveAction removal = 4;
 
-    // Moves an existing attribute or structured `body_field_path` to a new destination.
+    // Moves one or more existing attributes or structured `body_field_path` fields to new destinations.
     LogRenameAction renaming = 5;
 
-    // Masks sensitive substrings within a target string field, attribute, or `body_field_path`.
+    // Masks sensitive substrings within one or more target string fields, attributes, or `body_field_path` fields.
     LogRedactAction redaction = 6;
   }
+}
+
+// Inserts or overwrites one or more fields or attributes on a log record.
+message LogAddAction {
+  // Field or attribute addition operations applied in list order.
+  repeated LogAddition additions = 1;
 }
 
 // Inserts or overwrites one field or attribute on a log record.
@@ -83,7 +93,7 @@ message LogTransformPolicy {
 // independent OTLP fields (mutating one does not automatically derive or
 // overwrite the other). `LOG_RECORD_FIELD_TRACE_ID` and
 // `LOG_RECORD_FIELD_SPAN_ID` are not valid mutation targets.
-message LogAddAction {
+message LogAddition {
   // Target field or attribute to set.
   LogTargetSelector target = 1;
 
@@ -102,14 +112,26 @@ message LogAddAction {
   optional bool upsert_enabled = 3;
 }
 
-// Deletes an attribute or structured `body_field_path` from a log record.
+// Deletes one or more attributes or structured `body_field_path` fields from a log record.
 message LogRemoveAction {
+  // Attribute or `body_field_path` removal operations applied in list order.
+  repeated LogRemoval removals = 1;
+}
+
+// Deletes an attribute or structured `body_field_path` from a log record.
+message LogRemoval {
   // Target attribute or `body_field_path` to remove.
   LogAttributeSelector target = 1;
 }
 
-// Moves an existing attribute or structured `body_field_path` to a new destination.
+// Moves one or more existing attributes or structured `body_field_path` fields to new destinations.
 message LogRenameAction {
+  // Attribute or `body_field_path` rename operations applied in list order.
+  repeated LogRenaming renamings = 1;
+}
+
+// Moves an existing attribute or structured `body_field_path` to a new destination.
+message LogRenaming {
   // Existing source attribute or `body_field_path` to rename.
   LogAttributeSelector source = 1;
 
@@ -128,6 +150,12 @@ message LogRenameAction {
   optional bool upsert_enabled = 3;
 }
 
+// Masks sensitive substrings within one or more target strings.
+message LogRedactAction {
+  // String redaction operations applied in list order.
+  repeated LogRedaction redactions = 1;
+}
+
 // Masks sensitive substrings within a target string.
 //
 // When `target` is `record_field`, valid targets are string-valued fields
@@ -135,7 +163,7 @@ message LogRenameAction {
 // `LOG_RECORD_FIELD_SEVERITY_TEXT`). `LOG_RECORD_FIELD_SEVERITY_NUMBER`,
 // `LOG_RECORD_FIELD_TRACE_ID`, and `LOG_RECORD_FIELD_SPAN_ID` are not valid
 // mutation targets.
-message LogRedactAction {
+message LogRedaction {
   // Target string field, attribute, or `body_field_path` to redact.
   LogTargetSelector target = 1;
 

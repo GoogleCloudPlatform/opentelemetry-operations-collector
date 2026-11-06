@@ -82,9 +82,9 @@ func verifyCompiledIISPolicy(t *testing.T, p googlepolicy.Policy) {
 	if !ok {
 		t.Fatalf("receiverConfig() receivers not a map: %T", cfg["receivers"])
 	}
-	iisCfg, ok := receivers[DefaultReceiverID].(map[string]any)
+	iisCfg, ok := receivers[receiverID.String()].(map[string]any)
 	if !ok {
-		t.Fatalf("receiverConfig() receivers.%s not a map: %T", DefaultReceiverID, receivers[DefaultReceiverID])
+		t.Fatalf("receiverConfig() receivers.%s not a map: %T", receiverID.String(), receivers[receiverID.String()])
 	}
 	expectedIntervalStr := fmt.Sprintf("%ds", effInterval)
 	if got := iisCfg["collection_interval"]; got != expectedIntervalStr {
@@ -126,9 +126,9 @@ func verifyCompiledIISPolicy(t *testing.T, p googlepolicy.Policy) {
 	if !ok {
 		t.Fatalf("receivers not a map: %T", raw["receivers"])
 	}
-	iisCfg, ok = receivers[DefaultReceiverID].(map[string]any)
+	iisCfg, ok = receivers[receiverID.String()].(map[string]any)
 	if !ok {
-		t.Fatalf("receivers.%s not a map: %T", DefaultReceiverID, receivers[DefaultReceiverID])
+		t.Fatalf("receivers.%s not a map: %T", receiverID.String(), receivers[receiverID.String()])
 	}
 	if got := iisCfg["collection_interval"]; got != expectedIntervalStr {
 		t.Fatalf("collection_interval = %v, want %q", got, expectedIntervalStr)

@@ -31,8 +31,7 @@ import (
 
 // PolicyType is the registered policy type identifier for journald source policies.
 const (
-	PolicyType        = "journald_source"
-	DefaultReceiverID = "journald/googlecontrolplane"
+	PolicyType = "journald_source"
 
 	// collectorLogFilterExpr drops the collector's own log records across both Linux VM systemd
 	// services and containerized environments (Kubernetes DaemonSet / Docker) to prevent self-logging loops.
@@ -152,7 +151,7 @@ func (p *Policy) Evaluate(_ context.Context) (*confmap.Conf, error) {
 
 	cfg := map[string]any{
 		"receivers": map[string]any{
-			DefaultReceiverID: map[string]any{
+			receiverID.String(): map[string]any{
 				"operators": []any{
 					map[string]any{
 						"type": "filter",

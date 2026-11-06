@@ -195,7 +195,7 @@ func TestPolicy_ReceiverConfig(t *testing.T) {
 		receivers, ok := raw["receivers"].(map[string]any)
 		require.True(t, ok, "receivers key must be a map")
 
-		iisCfg, ok := receivers[DefaultReceiverID].(map[string]any)
+		iisCfg, ok := receivers[receiverID.String()].(map[string]any)
 		require.True(t, ok, "iis receiver must be present")
 		assert.Equal(t, "60s", iisCfg["collection_interval"])
 	})
@@ -212,7 +212,7 @@ func TestPolicy_ReceiverConfig(t *testing.T) {
 		receivers, ok := raw["receivers"].(map[string]any)
 		require.True(t, ok)
 
-		iisCfg, ok := receivers[DefaultReceiverID].(map[string]any)
+		iisCfg, ok := receivers[receiverID.String()].(map[string]any)
 		require.True(t, ok)
 		assert.Equal(t, "15s", iisCfg["collection_interval"])
 	})
@@ -235,7 +235,7 @@ func TestPolicy_Evaluate(t *testing.T) {
 		raw := conf.ToStringMap()
 		receivers, ok := raw["receivers"].(map[string]any)
 		require.True(t, ok)
-		iisCfg, ok := receivers[DefaultReceiverID].(map[string]any)
+		iisCfg, ok := receivers[receiverID.String()].(map[string]any)
 		require.True(t, ok)
 		assert.Equal(t, "15s", iisCfg["collection_interval"])
 	} else {
@@ -374,14 +374,14 @@ func TestPolicy_Consolidate(t *testing.T) {
 		// Always verify receiverConfig() on all platforms to ensure Windows config is checked in Linux CI
 		cfg := ip.receiverConfig()
 		receivers := cfg["receivers"].(map[string]any)
-		iisCfg := receivers[DefaultReceiverID].(map[string]any)
+		iisCfg := receivers[receiverID.String()].(map[string]any)
 		assert.Equal(t, "15s", iisCfg["collection_interval"])
 
 		conf, err := res.(googlepolicy.ComponentPolicy).Evaluate(context.Background())
 		require.NoError(t, err)
 		if isWindows {
 			raw := conf.ToStringMap()
-			iisCfg := raw["receivers"].(map[string]any)[DefaultReceiverID].(map[string]any)
+			iisCfg := raw["receivers"].(map[string]any)[receiverID.String()].(map[string]any)
 			assert.Equal(t, "15s", iisCfg["collection_interval"])
 		} else {
 			assert.Empty(t, conf.ToStringMap())

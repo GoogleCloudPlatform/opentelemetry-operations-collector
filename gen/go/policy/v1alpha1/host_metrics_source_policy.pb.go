@@ -44,8 +44,9 @@ const (
 //     least one valid HostMetricsSourcePolicy is configured.
 //   - Validation & Fail-Open: `id` must be non-empty. When
 //     `collection_interval_seconds` is unset, it defaults to 60 seconds. When
-//     set, it must be >= 10; a policy with `collection_interval_seconds < 10` is
-//     invalid and ignored (fail-open).
+//     set, it must be >= 10 and <= 86400; a policy with
+//     `collection_interval_seconds < 10` or `> 86400` is invalid and ignored
+//     (fail-open).
 //   - Deduplication Semantics: Multiple valid HostMetricsSourcePolicy instances
 //     merge into a single `hostmetrics` receiver using the minimum effective
 //     `collection_interval_seconds` (order-independent and commutative).
@@ -53,7 +54,7 @@ type HostMetricsSourcePolicy struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Unique identifier for the policy within its configuration scope.
 	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	// Scrape interval in seconds. Defaults to 60 if unset. Must be >= 10.
+	// Scrape interval in seconds. Defaults to 60 if unset. Must be >= 10 and <= 86400.
 	CollectionIntervalSeconds *int32 `protobuf:"varint,2,opt,name=collection_interval_seconds,json=collectionIntervalSeconds,proto3,oneof" json:"collection_interval_seconds,omitempty"`
 	unknownFields             protoimpl.UnknownFields
 	sizeCache                 protoimpl.SizeCache

@@ -2,7 +2,7 @@ exporters:
     otlp_grpc/default_gcp_destination:
         auth:
             authenticator: googleclientauth/default_gcp_destination
-        balancer_name: round_robin
+        balancer_name: pick_first
         compression: gzip
         endpoint: telemetry.googleapis.com:443
         retry_on_failure:
@@ -207,7 +207,7 @@ service:
                             endpoint: http://localhost:18888
                             insecure: true
                             protocol: grpc
-                    interval: 5000
+                    interval: 60000
                     timeout: 30000
         resource:
             attributes:

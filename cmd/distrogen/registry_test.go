@@ -386,6 +386,20 @@ func TestRegistryComponent_GetOCBComponent(t *testing.T) {
 	assert.Equal(t, ocb.Path, c.Path)
 }
 
+func TestOCBManifestComponent_MarshalYAML(t *testing.T) {
+	ocb := OCBManifestComponent{
+		GoMod:  &GoModuleID{URL: "github.com/test/module", Tag: "v1.2.3"},
+		Import: "github.com/test/module/test",
+		Name:   "test",
+		Path:   "test/path",
+	}
+	expected := "gomod: github.com/test/module v1.2.3\n" +
+		"import: github.com/test/module/test\n" +
+		"name: test\n" +
+		"path: test/path\n"
+	assert.Equal(t, renderYaml(ocb), expected)
+}
+
 func TestRegistryComponents_LoadAllComponents(t *testing.T) {
 	otelVersion := otelComponentVersion{core: "1.2.3", contrib: "0.5.0"}
 	rl := RegistryComponents{

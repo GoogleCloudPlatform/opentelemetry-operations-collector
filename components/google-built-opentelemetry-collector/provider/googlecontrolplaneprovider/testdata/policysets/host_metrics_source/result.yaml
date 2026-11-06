@@ -92,6 +92,11 @@ processors:
             - context: resource
               statements:
                 - set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil
+            - context: datapoint
+              statements:
+                - set(attributes["gcp.fleet_id"], resource.attributes["gcp.fleet_id"]) where resource.attributes["gcp.fleet_id"] != nil
+                - set(attributes["service.instance.id"], resource.attributes["service.instance.id"]) where resource.attributes["service.instance.id"] != nil
+                - set(attributes["service.version"], resource.attributes["service.version"]) where resource.attributes["service.version"] != nil
     transform/googlecontrolplane:
         error_mode: ignore
         log_statements:
@@ -139,7 +144,6 @@ service:
             processors:
                 - resourcedetection/default_self_metrics
                 - transform/default_self_metrics
-                - googlepolicy
                 - queue_batch/default_gcp_destination_batch_logs
             receivers:
                 - otlp/default_self_metrics
@@ -159,7 +163,6 @@ service:
             processors:
                 - resourcedetection/default_self_metrics
                 - transform/default_self_metrics
-                - googlepolicy
                 - queue_batch/default_gcp_destination_batch_metrics
             receivers:
                 - otlp/default_self_metrics

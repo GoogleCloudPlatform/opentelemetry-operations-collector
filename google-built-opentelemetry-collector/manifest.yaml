@@ -8,6 +8,8 @@ dist:
   output_path: ./generated_collector
 
 receivers:
+- gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/receiver/selftelemetryreceiver v0.164.0
+  path: ../components/google-built-opentelemetry-collector/receiver/selftelemetryreceiver
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/dockerstatsreceiver v0.164.1
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver v0.164.1
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/fluentforwardreceiver v0.164.1
@@ -118,6 +120,10 @@ providers:
 - gomod: go.opentelemetry.io/collector/confmap/provider/httpprovider v1.70.0
 - gomod: go.opentelemetry.io/collector/confmap/provider/httpsprovider v1.70.0
 - gomod: go.opentelemetry.io/collector/confmap/provider/yamlprovider v1.70.0
+
+telemetry:
+    gomod: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/telemetry/inprocesstelemetry v0.164.0
+    path: ../components/google-built-opentelemetry-collector/telemetry/inprocesstelemetry
 
 replaces:
 # Force update go-jose/v4 to v4.1.6 to fix CVE-2026-116587

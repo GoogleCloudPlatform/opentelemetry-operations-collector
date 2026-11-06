@@ -35,7 +35,6 @@ import (
 	"go.uber.org/zap/zaptest/observer"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
 	grpcstatus "google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -151,20 +150,11 @@ func newTestManager(t *testing.T, dialOpt grpc.DialOption) *xdsPolicyManager {
 	// Several tests drive servers that never answer; without this Start would
 	// sit out the full production timeout in each of them.
 	m.initialSyncTimeout = 10 * time.Millisecond
-	m.extraDialOpts = []grpc.DialOption{
-		dialOpt,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	}
+	m.extraDialOpts = []grpc.DialOption{dialOpt}
 	return m
-
 }
 
-// policyResource builds a DiscoveryResponse resource carrying a single policy
-// and a canonical PolicySet revision.
-//
-// The body is a bare Struct with no policy type in it: routing is by message
-// identity, and dummyPolicyDriver is the driver registered for that message.
-func policyResource(t *testing.T, name, rev string) *anypb.Any {
+func policyPayloadAny(t *testing.T, name string) *anypb.Any {
 	t.Helper()
 
 	payload, err := structpb.NewStruct(map[string]any{
@@ -175,13 +165,29 @@ func policyResource(t *testing.T, name, rev string) *anypb.Any {
 	payloadAny, err := anypb.New(payload)
 	require.NoError(t, err)
 
+	return payloadAny
+}
+
+func collectorResource(t *testing.T, rev string, policies ...*anypb.Any) *anypb.Any {
+	t.Helper()
+
 	collectorAny, err := anypb.New(&xdsv1alpha1.TelemetryCollector{
 		PolicySetRevision: "projects/my-project/locations/global/policySets/fleet-1/revisions/" + rev,
-		Policies:          []*anypb.Any{payloadAny},
+		Policies:          policies,
 	})
 	require.NoError(t, err)
 
 	return collectorAny
+}
+
+// policyResource builds a DiscoveryResponse resource carrying a single policy
+// and a canonical PolicySet revision.
+//
+// The body is a bare Struct with no policy type in it: routing is by message
+// identity, and dummyPolicyDriver is the driver registered for that message.
+func policyResource(t *testing.T, name, rev string) *anypb.Any {
+	t.Helper()
+	return collectorResource(t, rev, policyPayloadAny(t, name))
 }
 
 // resetActivePolicySet clears the package-global policy state so tests that
@@ -326,10 +332,7 @@ func TestXDSPolicyManager_PopulatesNodeLocalityAndMetadataFromGCEMetadata(t *tes
 	require.NoError(t, err)
 	m := mgr.(*xdsPolicyManager)
 	m.initialSyncTimeout = 10 * time.Millisecond
-	m.extraDialOpts = []grpc.DialOption{
-		dialOpt,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	}
+	m.extraDialOpts = []grpc.DialOption{dialOpt}
 
 	require.NoError(t, m.Start())
 	t.Cleanup(func() { require.NoError(t, m.Stop()) })
@@ -427,17 +430,19 @@ func TestXDSPolicyManager_ACKsRevisionWithSomeUsablePolicies(t *testing.T) {
 			if _, err := srv.recv(stream); err != nil {
 				return err
 			}
-			// One resource the collector understands, one it does not.
+			// One policy the collector understands, one it does not.
 			if err := stream.Send(&discoveryv3.DiscoveryResponse{
 				VersionInfo: "rev-partial",
 				Nonce:       "nonce-partial",
 				TypeUrl:     xdsPolicyTypeURL,
 				Resources: []*anypb.Any{
-					policyResource(t, "log-filter", "rev-partial"),
-					{
-						TypeUrl: "type.googleapis.com/does.not.Exist",
-						Value:   []byte("garbage"),
-					},
+					collectorResource(t, "rev-partial",
+						policyPayloadAny(t, "log-filter"),
+						&anypb.Any{
+							TypeUrl: "type.googleapis.com/does.not.Exist",
+							Value:   []byte("garbage"),
+						},
+					),
 				},
 			}); err != nil {
 				return err
@@ -468,8 +473,10 @@ func TestXDSPolicyManager_ACKsRevisionWithSomeUsablePolicies(t *testing.T) {
 	assert.Equal(t, "nonce-partial", ack.GetResponseNonce())
 
 	// The policy that loaded is applied; the undecodable resource is dropped.
+	require.Eventually(t, func() bool {
+		return ActivePolicySet() != nil
+	}, 5*time.Second, time.Millisecond)
 	active := ActivePolicySet()
-	require.NotNil(t, active)
 	assert.Equal(t, "rev-partial", active.RevisionID)
 	assert.Contains(t, active.Policies, "log-filter")
 	assert.Len(t, active.Policies, 1, "only the usable policy is applied")
@@ -621,7 +628,9 @@ func TestXDSPolicyManager_IgnoresUnrelatedResourceType(t *testing.T) {
 
 	first := <-responded
 	require.Equal(t, "rev-1", first.GetVersionInfo())
-	require.Equal(t, []string{"log-filter"}, activePolicyNames(t))
+	require.Eventually(t, func() bool {
+		return assert.ObjectsAreEqual([]string{"log-filter"}, activePolicyNames(t))
+	}, 5*time.Second, time.Millisecond)
 	close(firstAsserted)
 
 	<-unrelatedSent
@@ -632,7 +641,9 @@ func TestXDSPolicyManager_IgnoresUnrelatedResourceType(t *testing.T) {
 	assert.Equal(t, "rev-3", third.GetVersionInfo(), "the unrelated response must not be ACKed")
 
 	// rev-2 never touched the policy set; rev-3 replaced it as normal.
-	assert.Equal(t, []string{"trace-filter"}, activePolicyNames(t))
+	require.Eventually(t, func() bool {
+		return assert.ObjectsAreEqual([]string{"trace-filter"}, activePolicyNames(t))
+	}, 5*time.Second, time.Millisecond)
 	assert.Equal(t, "rev-3", ActivePolicySet().RevisionID)
 }
 
@@ -686,7 +697,9 @@ func TestXDSPolicyManager_SkipsAlreadyAppliedRevision(t *testing.T) {
 	t.Cleanup(func() { require.NoError(t, m.Stop()) })
 
 	<-responded
-	require.Equal(t, []string{"log-filter"}, activePolicyNames(t))
+	require.Eventually(t, func() bool {
+		return assert.ObjectsAreEqual([]string{"log-filter"}, activePolicyNames(t))
+	}, 5*time.Second, time.Millisecond)
 
 	// The repeat is still answered, so the control plane is not left waiting.
 	repeat := <-responded
@@ -725,7 +738,11 @@ func TestXDSPolicyManager_EmptyRevisionClearsPolicies(t *testing.T) {
 				return err
 			}
 			responded <- ack
-			<-firstAsserted
+			select {
+			case <-firstAsserted:
+			case <-stream.Context().Done():
+				return stream.Context().Err()
+			}
 
 			if err := stream.Send(&discoveryv3.DiscoveryResponse{
 				VersionInfo: "rev-2", Nonce: "n2", TypeUrl: xdsPolicyTypeURL,
@@ -749,13 +766,17 @@ func TestXDSPolicyManager_EmptyRevisionClearsPolicies(t *testing.T) {
 	t.Cleanup(func() { require.NoError(t, m.Stop()) })
 
 	<-responded
-	require.Equal(t, []string{"log-filter"}, activePolicyNames(t))
+	require.Eventually(t, func() bool {
+		return assert.ObjectsAreEqual([]string{"log-filter"}, activePolicyNames(t))
+	}, 5*time.Second, time.Millisecond)
 	close(firstAsserted)
 
 	cleared := <-responded
 	assert.Equal(t, "rev-2", cleared.GetVersionInfo())
 	assert.Nil(t, cleared.GetErrorDetail())
-	assert.Empty(t, activePolicyNames(t), "an empty revision for our own type clears the policy set")
+	require.Eventually(t, func() bool {
+		return len(activePolicyNames(t)) == 0
+	}, 5*time.Second, time.Millisecond, "an empty revision for our own type clears the policy set")
 }
 
 // TestXDSPolicyManager_EmptyTelemetryCollectorACKsAndReleasesStart asserts that
@@ -841,23 +862,27 @@ func TestXDSPolicyManager_EmptyTelemetryCollectorACKsAndReleasesStart(t *testing
 	assert.Equal(t, "v1", ack1.GetVersionInfo())
 	assert.Equal(t, "n1", ack1.GetResponseNonce())
 	assert.Nil(t, ack1.GetErrorDetail(), "an empty TelemetryCollector must be ACKed, not NACKed")
-	require.NotNil(t, ActivePolicySet())
-	assert.Equal(t, "v1", ActivePolicySet().RevisionID)
+	require.Eventually(t, func() bool {
+		return ActivePolicySet() != nil && ActivePolicySet().RevisionID == "v1"
+	}, 5*time.Second, time.Millisecond)
 	assert.Empty(t, activePolicyNames(t))
 	close(firstAsserted)
 
 	ack2 := <-responded
 	assert.Equal(t, "v2", ack2.GetVersionInfo())
 	assert.Nil(t, ack2.GetErrorDetail())
-	assert.Equal(t, []string{"log-filter"}, activePolicyNames(t))
+	require.Eventually(t, func() bool {
+		return assert.ObjectsAreEqual([]string{"log-filter"}, activePolicyNames(t))
+	}, 5*time.Second, time.Millisecond)
 	close(secondAsserted)
 
 	ack3 := <-responded
 	assert.Equal(t, "v3", ack3.GetVersionInfo())
 	assert.Equal(t, "n3", ack3.GetResponseNonce())
 	assert.Nil(t, ack3.GetErrorDetail())
-	require.NotNil(t, ActivePolicySet())
-	assert.Equal(t, "v3", ActivePolicySet().RevisionID)
+	require.Eventually(t, func() bool {
+		return ActivePolicySet() != nil && ActivePolicySet().RevisionID == "v3"
+	}, 5*time.Second, time.Millisecond)
 	assert.Empty(t, activePolicyNames(t), "an empty TelemetryCollector must clear the active policy set")
 }
 
@@ -929,19 +954,10 @@ func TestXDSPolicyManager_StartGivesUpAfterTimeout(t *testing.T) {
 	assert.Nil(t, ActivePolicySet(), "nothing was served, so nothing should be active")
 }
 
-// TestXDSPolicyManager_StopsOnTerminalAuthError asserts that a credential
-// rejection ends the loop instead of being retried forever. Unauthenticated and
-// PermissionDenied are verdicts on this collector's identity, so reconnecting
-// only spams the control plane with a request that cannot start succeeding.
-//
-// The two cases differ only in whether the server reads the collector's request
-// before rejecting it, which decides where gRPC surfaces the status. A server
-// that reads first fails the client's Recv with PermissionDenied. A server that
-// rejects outright -- what authorization in an interceptor looks like, and so
-// the more realistic of the two -- has already torn the stream down by the time
-// the client sends, and gRPC reports that to Send as a bare io.EOF with the
-// status available only from Recv. Both must reach isTerminalAuthError; the
-// second did not before the Send path learned to fall through.
+// TestXDSPolicyManager_StopsOnTerminalAuthError asserts that when the control
+// plane rejects the initial stream with PermissionDenied, Start() unblocks
+// immediately via ResourceError rather than waiting out initialSyncTimeout,
+// while xdsclient continues retrying in the background with exponential backoff.
 func TestXDSPolicyManager_StopsOnTerminalAuthError(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
@@ -966,38 +982,21 @@ func TestXDSPolicyManager_StopsOnTerminalAuthError(t *testing.T) {
 			}
 
 			m := newTestManager(t, startFakeADSServer(t, srv))
-			// Long enough that a Start returning early proves the loop gave up
-			// rather than that the wait simply expired.
+			// Long enough that a Start returning early proves the initial error
+			// released the wait rather than that the timeout simply expired.
 			m.initialSyncTimeout = 10 * time.Second
 
+			start := time.Now()
 			require.NoError(t, m.Start())
+			elapsed := time.Since(start)
 			t.Cleanup(func() { require.NoError(t, m.Stop()) })
 
-			// Backoff here is ~1ms, so any retry would have happened many times over.
-			time.Sleep(100 * time.Millisecond)
-			assert.Equal(t, 1, srv.attemptCount(), "a rejected collector must not reconnect")
+			assert.Less(t, elapsed, m.initialSyncTimeout/2,
+				"Start must unblock immediately when the initial stream attempt fails")
+			require.Eventually(t, func() bool {
+				return srv.attemptCount() >= 2
+			}, 10*time.Second, 10*time.Millisecond, "xdsclient must continue retrying in the background")
 			assert.Nil(t, ActivePolicySet())
-		})
-	}
-}
-
-func TestIsTerminalAuthError(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		err  error
-		want bool
-	}{
-		{name: "nil", err: nil, want: false},
-		{name: "unauthenticated", err: grpcstatus.Error(codes.Unauthenticated, "no token"), want: true},
-		{name: "permission denied", err: grpcstatus.Error(codes.PermissionDenied, "not allowed"), want: true},
-		{name: "unavailable is retryable", err: grpcstatus.Error(codes.Unavailable, "down"), want: false},
-		{name: "cancelled is retryable", err: grpcstatus.Error(codes.Canceled, "stopped"), want: false},
-		// A non-gRPC error maps to codes.Unknown, which must stay retryable:
-		// local failures such as a metadata server blip are transient.
-		{name: "plain error", err: errors.New("dial failed"), want: false},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			assert.Equal(t, tc.want, isTerminalAuthError(tc.err))
 		})
 	}
 }
@@ -1085,7 +1084,9 @@ func TestXDSPolicyManager_AppliesRevisionAfterTimeout(t *testing.T) {
 	case <-time.After(10 * time.Second):
 		t.Fatal("timed out waiting for the late revision to be applied")
 	}
-	assert.Equal(t, []string{"late-filter"}, activePolicyNames(t))
+	require.Eventually(t, func() bool {
+		return assert.ObjectsAreEqual([]string{"late-filter"}, activePolicyNames(t))
+	}, 5*time.Second, time.Millisecond)
 }
 
 // TestXDSPolicyManager_StopDoesNotHangWhenStartRaces pins the fix for a
@@ -1140,24 +1141,16 @@ func TestXDSPolicyManager_StopDoesNotHangWhenStartRaces(t *testing.T) {
 	}
 }
 
-// TestXDSPolicyManager_RestartableAfterTerminalAuthError asserts that giving up
-// on remote policies leaves a manager that can still be started again.
-//
-// The loop returns on a terminal auth error without anyone calling Stop, so
-// unless it clears its own run state the manager is left advertising a stream
-// loop that no longer exists: every later Start is rejected with
-// ErrXDSAlreadyStarted and the collector can never pick up new credentials
-// without a process restart.
+// TestXDSPolicyManager_RestartableAfterTerminalAuthError asserts that when the
+// initial stream fails with PermissionDenied, Start() unblocks immediately while
+// xdsclient continues retrying in the background, and the manager can be
+// cleanly stopped and started again.
 func TestXDSPolicyManager_RestartableAfterTerminalAuthError(t *testing.T) {
 	resetActivePolicySet(t)
 
 	srv := &fakeADSServer{streamOpened: make(chan struct{}, 8)}
 	srv.handlers = []func(discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error{
 		func(stream discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error {
-			// The request is read before rejecting so the status comes back to
-			// the client through Recv. A server that rejects without reading
-			// races the client's initial Send into io.EOF instead, which is a
-			// separate gap and not what this test is about.
 			if _, err := srv.recv(stream); err != nil {
 				return err
 			}
@@ -1166,18 +1159,23 @@ func TestXDSPolicyManager_RestartableAfterTerminalAuthError(t *testing.T) {
 	}
 
 	m := newTestManager(t, startFakeADSServer(t, srv))
+	m.initialSyncTimeout = 10 * time.Second
+
+	start := time.Now()
 	require.NoError(t, m.Start())
+	elapsed := time.Since(start)
 	t.Cleanup(func() { require.NoError(t, m.Stop()) })
 
-	// Start returns as soon as the loop gives up, so by here it has exited.
-	require.Eventually(t, func() bool {
-		m.mu.Lock()
-		defer m.mu.Unlock()
-		return m.cancel == nil && m.done == nil
-	}, 10*time.Second, 10*time.Millisecond,
-		"a loop that gave up must clear its run state")
+	assert.Less(t, elapsed, m.initialSyncTimeout/2,
+		"Start must unblock immediately when the initial stream attempt fails")
 
-	assert.NoError(t, m.Start(), "the manager must be startable after it gave up on remote policies")
+	require.Eventually(t, func() bool {
+		return srv.attemptCount() >= 2
+	}, 10*time.Second, 10*time.Millisecond,
+		"xdsclient must continue retrying in the background")
+
+	require.NoError(t, m.Stop())
+	assert.NoError(t, m.Start(), "the manager must be startable after Stop following a terminal auth error")
 }
 
 // TestXDSPolicyManager_DebugProtoJSONAndAppliedPolicyLogging verifies that at

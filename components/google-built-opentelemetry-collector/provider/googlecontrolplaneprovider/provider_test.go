@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -318,8 +319,11 @@ func TestRetrieve_NonXDSReportsFleetIDAsGiven(t *testing.T) {
 			t.Setenv("FLEET_ID", fleetID)
 			p := createProvider()
 
-			dir := t.TempDir()
-			ret, err := p.Retrieve(context.Background(), "googlecontrolplane:file:"+dir, nil)
+			dir := filepath.ToSlash(t.TempDir())
+			if !strings.HasPrefix(dir, "/") {
+				dir = "/" + dir
+			}
+			ret, err := p.Retrieve(context.Background(), "googlecontrolplane:file://"+dir, nil)
 			require.NoError(t, err)
 			require.NotNil(t, ret)
 
@@ -452,8 +456,10 @@ func TestRetrieve_ActivePolicySetWithCustomSelfMetrics(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, conf.IsSet("receivers::otlp/custom_self_metrics"))
 	assert.False(t, conf.IsSet("receivers::otlp/default_self_metrics"))
-	assert.Contains(t, conf.Get("service::pipelines::logs/custom_self_metrics::processors"), "googlepolicy")
-	assert.Contains(t, conf.Get("service::pipelines::metrics/custom_self_metrics::processors"), "googlepolicy")
+	assert.NotContains(t, conf.Get("service::pipelines::logs/custom_self_metrics::processors"), "googlepolicy")
+	assert.NotContains(t, conf.Get("service::pipelines::metrics/custom_self_metrics::processors"), "googlepolicy")
+	assert.Contains(t, conf.Get("service::pipelines::logs/custom_self_metrics::processors"), "queue_batch/default_gcp_destination_batch_logs")
+	assert.Contains(t, conf.Get("service::pipelines::metrics/custom_self_metrics::processors"), "queue_batch/default_gcp_destination_batch_metrics")
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
@@ -488,10 +494,12 @@ func TestRetrieve_ActivePolicySetWithOtherSource(t *testing.T) {
 	assert.Contains(t, conf.Get("service::pipelines::logs/googlecontrolplane::processors"), "googlepolicy")
 	assert.Contains(t, conf.Get("service::pipelines::logs/googlecontrolplane::receivers"), "otlp/other_source")
 	assert.Contains(t, conf.Get("service::pipelines::logs/googlecontrolplane::receivers"), "nop/googlecontrolplane")
-	// Built-in self metrics also includes googlepolicy processor
+	// Built-in self metrics must bypass googlepolicy processor
 	assert.True(t, conf.IsSet("receivers::otlp/default_self_metrics"))
-	assert.Contains(t, conf.Get("service::pipelines::logs/default_self_metrics::processors"), "googlepolicy")
-	assert.Contains(t, conf.Get("service::pipelines::metrics/default_self_metrics::processors"), "googlepolicy")
+	assert.NotContains(t, conf.Get("service::pipelines::logs/default_self_metrics::processors"), "googlepolicy")
+	assert.NotContains(t, conf.Get("service::pipelines::metrics/default_self_metrics::processors"), "googlepolicy")
+	assert.Contains(t, conf.Get("service::pipelines::logs/default_self_metrics::processors"), "queue_batch/default_gcp_destination_batch_logs")
+	assert.Contains(t, conf.Get("service::pipelines::metrics/default_self_metrics::processors"), "queue_batch/default_gcp_destination_batch_metrics")
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
@@ -578,7 +586,7 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource(t *testing.T) {
 		assert.False(t, conf.IsSet("receivers::"+secRecID+"::event_driven_scraping"))
 		assert.Equal(t, 500, conf.Get("receivers::"+secRecID+"::max_reads"))
 		assert.Equal(t, true, conf.Get("receivers::"+secRecID+"::ignore_channel_errors"))
-		assert.Equal(t, []any{"otelcol-google"}, conf.Get("receivers::"+secRecID+"::exclude_providers"))
+		assert.ElementsMatch(t, []string{"otelcol-google"}, conf.Get("receivers::"+secRecID+"::exclude_providers"))
 
 		assert.True(t, conf.IsSet("receivers::"+sysmonRecID))
 		assert.Equal(t, "Microsoft-Windows-Sysmon/Operational", conf.Get("receivers::"+sysmonRecID+"::channel"))
@@ -586,7 +594,7 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource(t *testing.T) {
 		assert.False(t, conf.IsSet("receivers::"+sysmonRecID+"::event_driven_scraping"))
 		assert.Equal(t, 500, conf.Get("receivers::"+sysmonRecID+"::max_reads"))
 		assert.Equal(t, true, conf.Get("receivers::"+sysmonRecID+"::ignore_channel_errors"))
-		assert.Equal(t, []any{"otelcol-google"}, conf.Get("receivers::"+sysmonRecID+"::exclude_providers"))
+		assert.ElementsMatch(t, []string{"otelcol-google"}, conf.Get("receivers::"+sysmonRecID+"::exclude_providers"))
 
 		// Receivers must attach to canonical shared logs/googlecontrolplane pipeline
 		receivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")

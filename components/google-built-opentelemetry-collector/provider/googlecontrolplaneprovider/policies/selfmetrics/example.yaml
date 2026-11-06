@@ -38,7 +38,7 @@ service:
             level: normal
             readers:
             - periodic:
-                interval: 5000
+                interval: 60000
                 timeout: 30000
                 exporter:
                     otlp:

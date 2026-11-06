@@ -2,7 +2,7 @@ exporters:
     otlp_grpc/default_gcp_destination:
         auth:
             authenticator: googleclientauth/default_gcp_destination
-        balancer_name: round_robin
+        balancer_name: pick_first
         compression: gzip
         endpoint: telemetry.googleapis.com:443
         retry_on_failure:
@@ -161,7 +161,6 @@ service:
             processors:
                 - resourcedetection/default_self_metrics
                 - transform/default_self_metrics
-                - googlepolicy
                 - queue_batch/default_gcp_destination_batch_logs
             receivers:
                 - otlp/default_self_metrics
@@ -175,17 +174,16 @@ service:
                 - queue_batch/default_gcp_destination_batch_logs
             receivers:
                 - nop/googlecontrolplane
-                - windowseventlog/security_c3a409ae6f7ebfb4
-                - windowseventlog/system_d621c1a7169f2ca5
                 - windowseventlog/application_9ce1051c5d63c61f
                 - windowseventlog/microsoft-windows-sysmon_operational_6ebeeb3b09fcec02
+                - windowseventlog/security_c3a409ae6f7ebfb4
+                - windowseventlog/system_d621c1a7169f2ca5
         metrics/default_self_metrics:
             exporters:
                 - otlp_grpc/default_gcp_destination
             processors:
                 - resourcedetection/default_self_metrics
                 - transform/default_self_metrics
-                - googlepolicy
                 - queue_batch/default_gcp_destination_batch_metrics
             receivers:
                 - otlp/default_self_metrics
@@ -238,7 +236,7 @@ service:
                             endpoint: http://localhost:18888
                             insecure: true
                             protocol: grpc
-                    interval: 5000
+                    interval: 60000
                     timeout: 30000
         resource:
             attributes:

@@ -138,7 +138,9 @@ func (p *SelfMetricsPolicy) Evaluate(ctx context.Context) (*confmap.Conf, error)
 	endpoint := fmt.Sprintf("http://localhost:%d", p.Port)
 	protocol := "grpc"
 	insecure := true
-	interval := 5000
+	// Export self metrics once a minute. Every collector in a fleet reports
+	// these, so the interval sets the volume stored and queried per collector.
+	interval := 60000
 	timeout := 30000
 	// Start from the telemetry factory's default config and override only what
 	// this policy actually cares about. Building otelconftelemetry.Config as a

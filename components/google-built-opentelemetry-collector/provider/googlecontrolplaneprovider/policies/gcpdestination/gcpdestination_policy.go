@@ -93,6 +93,12 @@ func (p *GCPDestinationPolicy) Evaluate(_ context.Context) (*confmap.Conf, error
 		AuthenticatorID: authID,
 	})
 
+	// The endpoint is a single service behind Google's front ends, so the
+	// default round_robin balancer buys nothing and, on IPv4-only hosts,
+	// keeps retrying the AAAA record and logging a gRPC warning on every
+	// attempt. pick_first sticks to the one address that works.
+	otlpExporter.ClientConfig.BalancerName = "pick_first"
+
 	// Every pipeline feeding this exporter goes through a queuebatch processor
 	// below, which already provides the queue and the batching. Leaving the
 	// exporter's own sending queue enabled would stack a second, redundant

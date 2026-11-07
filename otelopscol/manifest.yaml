@@ -98,6 +98,8 @@ replaces:
 - github.com/GoogleCloudPlatform/opentelemetry-operations-collector => ../../
 # Force update buger/jsonparser to v1.1.2 to fix vulnerability
 - github.com/buger/jsonparser => github.com/buger/jsonparser v1.1.2
+# Force update golang.org/x/net to v0.60.0 to fix vulnerability CVE-2026-78663
+- golang.org/x/net => golang.org/x/net v0.60.0
 
 build:
   build_tags:

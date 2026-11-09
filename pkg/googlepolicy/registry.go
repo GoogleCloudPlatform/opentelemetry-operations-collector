@@ -29,6 +29,7 @@ var (
 	ErrPolicyProtoAlreadyRegistered = errors.New("policy proto already registered")
 	ErrPolicyProtoInvalid           = errors.New("policy driver returned an invalid proto")
 	ErrPolicyProtoMismatch          = errors.New("policy proto does not match the driver's message type")
+	ErrPolicyUnknownFields          = errors.New("policy proto contains unknown fields")
 	ErrPolicyTypeNotFound           = errors.New("no driver found for policy type")
 	ErrPolicyFailedToLoad           = errors.New("failed to load policy")
 	ErrPolicyFailedValidation       = errors.New("policy validation failed")

@@ -59,27 +59,28 @@ func FuzzPolicyValidation(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, pathStr string) {
 		for _, targetOS := range []string{"linux", "windows"} {
-			restore := setOSForTest(targetOS)
+			func() {
+				restore := setOSForTest(targetOS)
+				defer restore()
 
-			pb := &policyv1alpha1.FileLogSourcePolicy{
-				Id:            "fuzz-policy",
-				IncludedPaths: []string{pathStr},
-			}
-			// Validate should not panic on any input
-			policy, err := NewPolicyFromProto(pb)
-			if err == nil && policy != nil {
-				_ = policy.Validate()
-				_, _ = policy.Evaluate(context.Background())
-
-				// Invariant Checks: If validation passed, verify security properties
-				for _, pat := range policy.IncludedPaths() {
-					require.False(t, strings.Contains(pat, "$"), "Pattern %q must not contain $", pat)
-					require.False(t, hasPathTraversal(pat), "Pattern %q must not contain path traversal", pat)
-					require.False(t, isBareDirectory(pat, pat), "Pattern %q must not be a bare directory", pat)
+				pb := &policyv1alpha1.FileLogSourcePolicy{
+					Id:            "fuzz-policy",
+					IncludedPaths: []string{pathStr},
 				}
-			}
+				// Validate should not panic on any input
+				policy, err := NewPolicyFromProto(pb)
+				if err == nil && policy != nil {
+					_ = policy.Validate()
+					_, _ = policy.Evaluate(context.Background())
 
-			restore()
+					// Invariant Checks: If validation passed, verify security properties
+					for _, pat := range policy.IncludedPaths() {
+						require.False(t, strings.Contains(pat, "$"), "Pattern %q must not contain $", pat)
+						require.False(t, hasPathTraversal(pat), "Pattern %q must not contain path traversal", pat)
+						require.False(t, isBareDirectory(pat, pat), "Pattern %q must not be a bare directory", pat)
+					}
+				}
+			}()
 		}
 	})
 }

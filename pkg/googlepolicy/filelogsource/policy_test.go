@@ -281,6 +281,8 @@ func TestPolicyValidation_InvalidPaths(t *testing.T) {
 }
 
 func TestPolicy_Metadata(t *testing.T) {
+	t.Cleanup(setOSForTest("linux"))
+
 	pb := &policyv1alpha1.FileLogSourcePolicy{
 		Id:            "test-log-source",
 		IncludedPaths: []string{"/var/log/test.log"},
@@ -315,6 +317,8 @@ func TestPolicy_Metadata(t *testing.T) {
 }
 
 func TestPolicy_Evaluate(t *testing.T) {
+	t.Cleanup(setOSForTest("linux"))
+
 	pb := &policyv1alpha1.FileLogSourcePolicy{
 		Id:            "projects/123/locations/global/policySets/ps1/policies/app-logs",
 		IncludedPaths: []string{"/var/log/app/*.log"},
@@ -381,6 +385,8 @@ func TestPolicy_Evaluate_WindowsEnvExpansion(t *testing.T) {
 }
 
 func TestPolicy_ReceiverIDs(t *testing.T) {
+	t.Cleanup(setOSForTest("linux"))
+
 	pb := &policyv1alpha1.FileLogSourcePolicy{
 		Id:            "nginx-logs",
 		IncludedPaths: []string{"/var/log/nginx/*.log"},
@@ -408,6 +414,8 @@ func TestMerge_NilAndEmpty(t *testing.T) {
 }
 
 func TestMerge_SinglePolicy(t *testing.T) {
+	t.Cleanup(setOSForTest("linux"))
+
 	p, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
 		Id:            "single-policy",
 		IncludedPaths: []string{"/var/log/single/*.log"},
@@ -422,6 +430,8 @@ func TestMerge_SinglePolicy(t *testing.T) {
 }
 
 func TestMerge_MultiplePolicies_DeduplicatedAndSorted(t *testing.T) {
+	t.Cleanup(setOSForTest("linux"))
+
 	p1, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
 		Id:            "policy-1",
 		IncludedPaths: []string{"/var/log/syslog", "/var/log/nginx/*.log"},
@@ -554,6 +564,8 @@ func TestMerge_MultiplePolicies_WindowsEnvSortingDeterminism(t *testing.T) {
 }
 
 func TestMerge_FailsFastOnInvalidPolicy(t *testing.T) {
+	t.Cleanup(setOSForTest("linux"))
+
 	valid, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
 		Id:            "valid",
 		IncludedPaths: []string{"/var/log/valid.log"},
@@ -577,6 +589,8 @@ func TestMerge_FailsFastOnInvalidPolicy(t *testing.T) {
 }
 
 func TestConsolidate(t *testing.T) {
+	t.Cleanup(setOSForTest("linux"))
+
 	p1, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
 		Id:            "p1",
 		IncludedPaths: []string{"/var/log/a.log", "/var/log/shared.log"},
@@ -678,6 +692,8 @@ func (m *mockForeignSourcePolicy) MetricReceiverIDs() []component.ID { return ni
 func (m *mockForeignSourcePolicy) TraceReceiverIDs() []component.ID  { return nil }
 
 func TestDriver_WireProtoAndMapLoading(t *testing.T) {
+	t.Cleanup(setOSForTest("linux"))
+
 	pb := &policyv1alpha1.FileLogSourcePolicy{
 		Id:            "wire-log-source",
 		IncludedPaths: []string{"/var/log/**/*.log"},

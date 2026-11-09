@@ -1373,13 +1373,32 @@ func TestRetrieve_MultipleFileLogSourcePoliciesConsolidated(t *testing.T) {
 	t.Setenv("FLEET_ID", "1234")
 	p := createProvider()
 
+	var p1Paths, p2Paths, expectedPaths []string
+	if runtime.GOOS == "windows" {
+		p1Paths = []string{`C:\logs\syslog`, `C:\logs\nginx\*.log`}
+		p2Paths = []string{`C:\logs\nginx\*.log`, `C:\logs\auth.log`}
+		expectedPaths = []string{
+			`c:\logs\auth.log`,
+			`c:\logs\nginx\*.log`,
+			`c:\logs\syslog`,
+		}
+	} else {
+		p1Paths = []string{"/var/log/syslog", "/var/log/nginx/*.log"}
+		p2Paths = []string{"/var/log/nginx/*.log", "/var/log/auth.log"}
+		expectedPaths = []string{
+			"/var/log/auth.log",
+			"/var/log/nginx/*.log",
+			"/var/log/syslog",
+		}
+	}
+
 	p1 := &policyv1alpha1.FileLogSourcePolicy{
 		Id:            "app-logs-1",
-		IncludedPaths: []string{"/var/log/syslog", "/var/log/nginx/*.log"},
+		IncludedPaths: p1Paths,
 	}
 	p2 := &policyv1alpha1.FileLogSourcePolicy{
 		Id:            "app-logs-2",
-		IncludedPaths: []string{"/var/log/nginx/*.log", "/var/log/auth.log"},
+		IncludedPaths: p2Paths,
 	}
 
 	ps, err := googlepolicy.MakePolicySetFromProtos("test-set", "rev-filelog", []proto.Message{p1, p2})
@@ -1403,11 +1422,7 @@ func TestRetrieve_MultipleFileLogSourcePoliciesConsolidated(t *testing.T) {
 	assert.True(t, conf.IsSet("receivers::filelog"))
 	sub, err := conf.Sub("receivers::filelog")
 	require.NoError(t, err)
-	assert.Equal(t, []string{
-		"/var/log/auth.log",
-		"/var/log/nginx/*.log",
-		"/var/log/syslog",
-	}, sub.ToStringMap()["include"])
+	assert.Equal(t, expectedPaths, sub.ToStringMap()["include"])
 	assert.Equal(t, true, sub.ToStringMap()["include_file_path"])
 
 	// The shared canonical logs/googlecontrolplane pipeline must connect to the consolidated filelog receiver and include googlepolicy.
@@ -1428,17 +1443,31 @@ func TestRetrieve_FileLogSourcePolicy_WithInvalidPolicy_FaultIsolation(t *testin
 	logger := zap.New(core)
 	p := createProviderWithLogger(logger)
 
+	var valid1Path, valid2Path, invalidPath string
+	var expectedValid []string
+	if runtime.GOOS == "windows" {
+		valid1Path = `C:\logs\valid1.log`
+		valid2Path = `C:\logs\valid2.log`
+		invalidPath = `C:\logs\..\Windows\System32\cmd.exe`
+		expectedValid = []string{`c:\logs\valid1.log`, `c:\logs\valid2.log`}
+	} else {
+		valid1Path = "/var/log/valid1.log"
+		valid2Path = "/var/log/valid2.log"
+		invalidPath = "/var/log/../etc/shadow"
+		expectedValid = []string{"/var/log/valid1.log", "/var/log/valid2.log"}
+	}
+
 	valid1 := &policyv1alpha1.FileLogSourcePolicy{
 		Id:            "valid-source-1",
-		IncludedPaths: []string{"/var/log/valid1.log"},
+		IncludedPaths: []string{valid1Path},
 	}
 	valid2 := &policyv1alpha1.FileLogSourcePolicy{
 		Id:            "valid-source-2",
-		IncludedPaths: []string{"/var/log/valid2.log"},
+		IncludedPaths: []string{valid2Path},
 	}
 	invalid := &policyv1alpha1.FileLogSourcePolicy{
 		Id:            "invalid-source",
-		IncludedPaths: []string{"/var/log/../etc/shadow"},
+		IncludedPaths: []string{invalidPath},
 	}
 
 	ps, err := googlepolicy.MakePolicySetFromProtos("test-set", "rev-fault-isolation", []proto.Message{valid1, valid2, invalid})
@@ -1463,7 +1492,7 @@ func TestRetrieve_FileLogSourcePolicy_WithInvalidPolicy_FaultIsolation(t *testin
 	assert.True(t, conf.IsSet("receivers::filelog"))
 	sub, err := conf.Sub("receivers::filelog")
 	require.NoError(t, err)
-	assert.Equal(t, []string{"/var/log/valid1.log", "/var/log/valid2.log"}, sub.ToStringMap()["include"])
+	assert.Equal(t, expectedValid, sub.ToStringMap()["include"])
 
 	// Invalid policy should have recorded an evaluation error event with source class and failed validation type.
 	var invalidEntry *observer.LoggedEntry
@@ -1486,18 +1515,32 @@ func TestRetrieve_FileLogSourcePolicy_PoisonedBatchHead_FaultIsolation(t *testin
 	logger := zap.New(core)
 	p := createProviderWithLogger(logger)
 
+	var valid1Path, valid2Path, invalidPath string
+	var expectedValid []string
+	if runtime.GOOS == "windows" {
+		valid1Path = `C:\logs\valid1.log`
+		valid2Path = `C:\logs\valid2.log`
+		invalidPath = `C:\logs\..\Windows\System32\cmd.exe`
+		expectedValid = []string{`c:\logs\valid1.log`, `c:\logs\valid2.log`}
+	} else {
+		valid1Path = "/var/log/valid1.log"
+		valid2Path = "/var/log/valid2.log"
+		invalidPath = "/var/log/../etc/shadow"
+		expectedValid = []string{"/var/log/valid1.log", "/var/log/valid2.log"}
+	}
+
 	// Invariant INV-1: Malformed element 0 must not poison or drop valid peers.
 	invalid := &policyv1alpha1.FileLogSourcePolicy{
 		Id:            "invalid-source-at-head",
-		IncludedPaths: []string{"/var/log/../etc/shadow"},
+		IncludedPaths: []string{invalidPath},
 	}
 	valid1 := &policyv1alpha1.FileLogSourcePolicy{
 		Id:            "valid-source-1",
-		IncludedPaths: []string{"/var/log/valid1.log"},
+		IncludedPaths: []string{valid1Path},
 	}
 	valid2 := &policyv1alpha1.FileLogSourcePolicy{
 		Id:            "valid-source-2",
-		IncludedPaths: []string{"/var/log/valid2.log"},
+		IncludedPaths: []string{valid2Path},
 	}
 
 	ps, err := googlepolicy.MakePolicySetFromProtos("test-set", "rev-poisoned-head", []proto.Message{invalid, valid1, valid2})
@@ -1522,7 +1565,7 @@ func TestRetrieve_FileLogSourcePolicy_PoisonedBatchHead_FaultIsolation(t *testin
 	assert.True(t, conf.IsSet("receivers::filelog"))
 	sub, err := conf.Sub("receivers::filelog")
 	require.NoError(t, err)
-	assert.Equal(t, []string{"/var/log/valid1.log", "/var/log/valid2.log"}, sub.ToStringMap()["include"])
+	assert.Equal(t, expectedValid, sub.ToStringMap()["include"])
 
 	// Invalid policy at index 0 must have an error event recorded.
 	var invalidEntry *observer.LoggedEntry

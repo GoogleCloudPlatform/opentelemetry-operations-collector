@@ -1378,9 +1378,9 @@ func TestRetrieve_MultipleFileLogSourcePoliciesConsolidated(t *testing.T) {
 		p1Paths = []string{`C:\logs\syslog`, `C:\logs\nginx\*.log`}
 		p2Paths = []string{`C:\logs\nginx\*.log`, `C:\logs\auth.log`}
 		expectedPaths = []string{
-			`c:\logs\auth.log`,
-			`c:\logs\nginx\*.log`,
-			`c:\logs\syslog`,
+			"C:/logs/auth.log",
+			"C:/logs/nginx/*.log",
+			"C:/logs/syslog",
 		}
 	} else {
 		p1Paths = []string{"/var/log/syslog", "/var/log/nginx/*.log"}
@@ -1449,7 +1449,7 @@ func TestRetrieve_FileLogSourcePolicy_WithInvalidPolicy_FaultIsolation(t *testin
 		valid1Path = `C:\logs\valid1.log`
 		valid2Path = `C:\logs\valid2.log`
 		invalidPath = `C:\logs\..\Windows\System32\cmd.exe`
-		expectedValid = []string{`c:\logs\valid1.log`, `c:\logs\valid2.log`}
+		expectedValid = []string{"C:/logs/valid1.log", "C:/logs/valid2.log"}
 	} else {
 		valid1Path = "/var/log/valid1.log"
 		valid2Path = "/var/log/valid2.log"
@@ -1521,7 +1521,7 @@ func TestRetrieve_FileLogSourcePolicy_PoisonedBatchHead_FaultIsolation(t *testin
 		valid1Path = `C:\logs\valid1.log`
 		valid2Path = `C:\logs\valid2.log`
 		invalidPath = `C:\logs\..\Windows\System32\cmd.exe`
-		expectedValid = []string{`c:\logs\valid1.log`, `c:\logs\valid2.log`}
+		expectedValid = []string{"C:/logs/valid1.log", "C:/logs/valid2.log"}
 	} else {
 		valid1Path = "/var/log/valid1.log"
 		valid2Path = "/var/log/valid2.log"

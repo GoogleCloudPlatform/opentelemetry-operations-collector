@@ -138,8 +138,8 @@ func (p *GCPDestinationPolicy) Evaluate(_ context.Context) (*confmap.Conf, error
 
 	queueBatchTrace := queuebatchprocessor.NewFactory().CreateDefaultConfig().(*queuebatchprocessor.Config)
 	batchSubconfig = queueBatchTrace.Batch.GetOrInsertDefault()
-	batchSubconfig.MaxSize = 25000
-	batchSubconfig.MinSize = 25000
+	batchSubconfig.MaxSize = 8192
+	batchSubconfig.MinSize = 8192
 	queueBatchTracesID := component.NewIDWithName(queueBatchType, fmt.Sprintf("%s_batch_traces", p.Name))
 
 	conf.Processors = map[component.ID]component.Config{

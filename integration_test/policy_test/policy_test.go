@@ -49,6 +49,7 @@ import (
 	"go.opentelemetry.io/collector/exporter/nopexporter"
 	"go.opentelemetry.io/collector/exporter/otlpexporter"
 	"go.opentelemetry.io/collector/extension"
+	"go.opentelemetry.io/collector/extension/xextension/storage"
 	"go.opentelemetry.io/collector/otelcol"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
@@ -434,11 +435,19 @@ func (*stubComponentConfig) Unmarshal(*confmap.Conf) error {
 
 // stubExtension is a no-op extension. The factory must return a real value
 // rather than nil, because the provider's service::extensions list is started
-// as is, and starting a nil extension would crash the collector.
+// as is, and starting a nil extension would crash the collector. It implements
+// storage.Extension so that storage-backed receivers (e.g. filelog, windowseventlog)
+// can retrieve a storage client in in-process integration tests.
 type stubExtension struct {
 	component.StartFunc
 	component.ShutdownFunc
 }
+
+func (*stubExtension) GetClient(context.Context, component.Kind, component.ID, string) (storage.Client, error) {
+	return storage.NewNopClient(), nil
+}
+
+var _ storage.Extension = (*stubExtension)(nil)
 
 func newStubExtensionFactory(typeStr string) extension.Factory {
 	return extension.NewFactory(

@@ -521,6 +521,7 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 	sourcePolicies := p.consolidateSourcePolicies(ctx, activePolicySet, activePolicySet.LoadPoliciesOfClass(googlepolicy.PolicyClassSource))
 
 	appliedSelfMetrics := false
+	needsStorage := false
 	for _, sp := range sourcePolicies {
 		srcPolicy, ok := sp.(googlepolicy.SourcePolicy)
 		if !ok {
@@ -538,6 +539,9 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 				p.recordPolicyEvaluateError(ctx, sp.PolicyName(), activePolicySet, fmt.Errorf("failed to merge config for source policy %q: %w", sp.PolicyName(), err), event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassSource))
 				continue
 			}
+			if psp, ok := srcPolicy.(googlepolicy.PersistentStorageSourcePolicy); ok && psp.RequiresStorage() {
+				needsStorage = true
+			}
 			if sp.PolicyType() == selfmetrics.PolicyType {
 				appliedSelfMetrics = true
 			}
@@ -552,6 +556,10 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 		if err := conf.Merge(cleanConf(policyConf)); err != nil {
 			p.recordPolicyEvaluateError(ctx, sp.PolicyName(), activePolicySet, fmt.Errorf("failed to merge config for source policy %q: %w", sp.PolicyName(), err), event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassSource))
 			continue
+		}
+
+		if psp, ok := srcPolicy.(googlepolicy.PersistentStorageSourcePolicy); ok && psp.RequiresStorage() {
+			needsStorage = true
 		}
 
 		activeLogReceivers = append(activeLogReceivers, srcPolicy.LogReceiverIDs()...)
@@ -584,13 +592,6 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 	canonicalTraceProcessors := append([]component.ID{rdID, transformID, googlePolicyID}, destPolicy.PreProcessTraceIDs()...)
 
 	var canonicalExtensions extensions.Config
-	needsStorage := false
-	for _, sp := range sourcePolicies {
-		if psp, ok := sp.(googlepolicy.PersistentStorageSourcePolicy); ok && psp.RequiresStorage() {
-			needsStorage = true
-			break
-		}
-	}
 	if needsStorage {
 		storageExtID := googlepolicy.StorageExtensionID
 		storageCfg := map[string]any{

@@ -2538,6 +2538,7 @@ type mockStoragePolicy struct {
 	id              string
 	requiresStorage bool
 	recs            []component.ID
+	evalErr         error
 }
 
 func (m *mockStoragePolicy) PolicyName() string { return m.id }
@@ -2547,6 +2548,9 @@ func (m *mockStoragePolicy) PolicyClass() googlepolicy.PolicyClass {
 }
 func (m *mockStoragePolicy) Validate() error { return nil }
 func (m *mockStoragePolicy) Evaluate(context.Context) (*confmap.Conf, error) {
+	if m.evalErr != nil {
+		return nil, m.evalErr
+	}
 	receivers := make(map[string]any, len(m.recs))
 	for _, r := range m.recs {
 		receivers[r.String()] = map[string]any{"storage": "file_storage/googlecontrolplane"}
@@ -2621,6 +2625,42 @@ func TestRetrieve_PersistentStorageSynthesis(t *testing.T) {
 		})
 
 		ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:test-storage-off", nil)
+		require.NoError(t, err)
+		require.NotNil(t, ret)
+
+		conf, err := ret.AsConf()
+		require.NoError(t, err)
+
+		assert.False(t, conf.IsSet("extensions::file_storage/googlecontrolplane"))
+		exts := conf.Get("service::extensions")
+		assert.NotContains(t, exts, "file_storage/googlecontrolplane")
+		assert.NoError(t, p.Shutdown(context.Background()))
+	})
+
+	t.Run("source policy requiring storage that fails evaluate does not synthesize file_storage extension", func(t *testing.T) {
+		p := createProvider()
+
+		pol := &mockStoragePolicy{
+			id:              "storage-failed-eval-policy",
+			requiresStorage: true,
+			recs:            []component.ID{recID},
+			evalErr:         errors.New("simulated evaluation failure"),
+		}
+
+		ps := &googlepolicy.PolicySet{
+			RevisionID: "rev-storage-eval-fail",
+			Policies: map[string]*googlepolicy.PolicySetEntry{
+				"storage-failed-eval-policy": {PolicyObj: pol},
+			},
+		}
+		googlepolicy.SetActivePolicySet(ps)
+		t.Cleanup(func() {
+			for googlepolicy.ActivePolicySet() != nil {
+				googlepolicy.RollbackActivePolicySet()
+			}
+		})
+
+		ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:test-storage-eval-fail", nil)
 		require.NoError(t, err)
 		require.NotNil(t, ret)
 

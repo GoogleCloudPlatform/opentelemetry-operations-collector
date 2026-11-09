@@ -2599,9 +2599,9 @@ func TestRetrieve_PersistentStorageSynthesis(t *testing.T) {
 		assert.NoError(t, p.Shutdown(context.Background()))
 	})
 
-	t.Run("GOOGLECONTROLPLANE_STORAGE_DIR overrides default directory", func(t *testing.T) {
+	t.Run("GOOGLECONTROLPLANE_TEST_STORAGE_DIR overrides default directory in tests", func(t *testing.T) {
 		customDir := filepath.Join(os.TempDir(), "custom-otel-storage")
-		t.Setenv("GOOGLECONTROLPLANE_STORAGE_DIR", customDir)
+		t.Setenv("GOOGLECONTROLPLANE_TEST_STORAGE_DIR", customDir)
 
 		p := createProvider()
 
@@ -2636,9 +2636,9 @@ func TestRetrieve_PersistentStorageSynthesis(t *testing.T) {
 		assert.NoError(t, p.Shutdown(context.Background()))
 	})
 
-	t.Run("GOOGLECONTROLPLANE_STORAGE_DIR with whitespace and trailing slash is cleaned", func(t *testing.T) {
+	t.Run("GOOGLECONTROLPLANE_TEST_STORAGE_DIR with whitespace and trailing slash is cleaned", func(t *testing.T) {
 		customDir := filepath.Join(os.TempDir(), "custom-otel-storage-dirty")
-		t.Setenv("GOOGLECONTROLPLANE_STORAGE_DIR", "  "+customDir+string(filepath.Separator)+"  ")
+		t.Setenv("GOOGLECONTROLPLANE_TEST_STORAGE_DIR", "  "+customDir+string(filepath.Separator)+"  ")
 
 		p := createProvider()
 

@@ -202,13 +202,6 @@ func isBareDirectory(pattern string, canonical string) bool {
 		strings.HasSuffix(cleanPat, "/./") || strings.HasSuffix(cleanPat, "\\.\\") {
 		return true
 	}
-	if pattern == "/var/log" || canonical == "/var/log" {
-		return true
-	}
-	normLower := strings.ToLower(canonical)
-	if strings.HasSuffix(pattern, "/logs") || strings.HasSuffix(pattern, "\\logs") || strings.HasSuffix(normLower, "/logs") {
-		return true
-	}
 	// Bare root directory: "/" or "C:\" or "C:/" or "C:"
 	if canonical == "/" || (len(canonical) >= 2 && isAlpha(canonical[0]) && canonical[1] == ':' && (len(canonical) == 2 || canonical[2:] == "/")) {
 		return true

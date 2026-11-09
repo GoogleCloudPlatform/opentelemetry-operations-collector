@@ -214,21 +214,9 @@ func TestPolicyValidation_InvalidPaths(t *testing.T) {
 			expectedErr: ErrInvalidGlobPattern,
 		},
 		{
-			name:        "bare directory /var/log",
-			id:          "test-policy",
-			include:     []string{"/var/log"},
-			expectedErr: ErrBareDirectoryPath,
-		},
-		{
 			name:        "bare directory /var/log/",
 			id:          "test-policy",
 			include:     []string{"/var/log/"},
-			expectedErr: ErrBareDirectoryPath,
-		},
-		{
-			name:        "bare directory /opt/google/logs",
-			id:          "test-policy",
-			include:     []string{"/opt/google/logs"},
 			expectedErr: ErrBareDirectoryPath,
 		},
 		{
@@ -238,22 +226,15 @@ func TestPolicyValidation_InvalidPaths(t *testing.T) {
 			expectedErr: ErrBareDirectoryPath,
 		},
 		{
-			name:        "bare directory /srv/web/logs",
-			id:          "test-policy",
-			include:     []string{"/srv/web/logs"},
-			expectedErr: ErrBareDirectoryPath,
-		},
-		{
 			name:        "bare directory /srv/web/logs/",
 			id:          "test-policy",
 			include:     []string{"/srv/web/logs/"},
 			expectedErr: ErrBareDirectoryPath,
 		},
 		{
-			name:        "bare directory windows ProgramData logs",
+			name:        "bare directory root slash",
 			id:          "test-policy",
-			os:          "windows",
-			include:     []string{`C:\ProgramData\MyApp\logs`},
+			include:     []string{"/"},
 			expectedErr: ErrBareDirectoryPath,
 		},
 		{
@@ -264,31 +245,17 @@ func TestPolicyValidation_InvalidPaths(t *testing.T) {
 			expectedErr: ErrBareDirectoryPath,
 		},
 		{
-			name:        "bare directory windows env ProgramData logs",
-			id:          "test-policy",
-			os:          "windows",
-			include:     []string{`%ProgramData%\MyApp\logs`},
-			expectedErr: ErrBareDirectoryPath,
-		},
-		{
-			name:        "bare directory windows inetpub logs",
-			id:          "test-policy",
-			os:          "windows",
-			include:     []string{`C:\inetpub\logs`},
-			expectedErr: ErrBareDirectoryPath,
-		},
-		{
 			name:        "bare directory windows inetpub logs trailing slash",
 			id:          "test-policy",
 			os:          "windows",
-			include:     []string{`C:\inetpub\logs\`},
+			include:     []string{`C:/inetpub/logs/`},
 			expectedErr: ErrBareDirectoryPath,
 		},
 		{
-			name:        "bare directory windows SystemDrive inetpub logs",
+			name:        "bare directory windows drive root",
 			id:          "test-policy",
 			os:          "windows",
-			include:     []string{`%SystemDrive%\inetpub\logs`},
+			include:     []string{`C:\`},
 			expectedErr: ErrBareDirectoryPath,
 		},
 	}

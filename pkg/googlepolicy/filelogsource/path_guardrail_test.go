@@ -88,23 +88,19 @@ func TestPathGuardrail_PipelineStages(t *testing.T) {
 		err = validateIncludePattern("./app.log")
 		require.ErrorIs(t, err, ErrPathTraversal)
 
-		// Bare directories rejected
-		err = validateIncludePattern("/var/log")
-		require.ErrorIs(t, err, ErrBareDirectoryPath)
-
+		// Bare directories rejected (structural trailing slashes or roots)
 		err = validateIncludePattern("/var/log/")
 		require.ErrorIs(t, err, ErrBareDirectoryPath)
 
 		err = validateIncludePattern("/opt/app/logs/")
 		require.ErrorIs(t, err, ErrBareDirectoryPath)
 
-		err = validateIncludePattern("/opt/app/logs")
-		require.ErrorIs(t, err, ErrBareDirectoryPath)
-
 		err = validateIncludePattern("/")
 		require.ErrorIs(t, err, ErrBareDirectoryPath)
 
 		// Valid custom application paths permitted (no hardcoded OS log root restrictions)
+		assert.NoError(t, validateIncludePattern("/var/log"))
+		assert.NoError(t, validateIncludePattern("/opt/app/logs"))
 		assert.NoError(t, validateIncludePattern("/tmp/app.log"))
 		assert.NoError(t, validateIncludePattern("/app/logs/*.log"))
 		assert.NoError(t, validateIncludePattern("/srv/custom/output.log"))
@@ -205,7 +201,7 @@ func TestPathGuardrail_CrossOSGating(t *testing.T) {
 		// Bare Windows directories rejected
 		assert.ErrorIs(t, validateIncludePattern(`C:\`), ErrBareDirectoryPath)
 		assert.ErrorIs(t, validateIncludePattern(`C:\logs\`), ErrBareDirectoryPath)
-		assert.ErrorIs(t, validateIncludePattern(`C:\logs`), ErrBareDirectoryPath)
+		assert.NoError(t, validateIncludePattern(`C:\logs`))
 	})
 }
 

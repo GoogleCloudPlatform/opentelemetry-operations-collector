@@ -1939,8 +1939,6 @@ func TestFileLogSourcePolicy_Integration(t *testing.T) {
 	otelcolBin := resolveOtelcolBinary(t)
 	tempDir := t.TempDir()
 
-	t.Setenv("FILELOG_TEST_ALLOWED_ROOT", tempDir)
-
 	logsDir := filepath.Join(tempDir, "logs")
 	if err := os.MkdirAll(logsDir, 0755); err != nil {
 		t.Fatalf("failed to create logs directory: %v", err)

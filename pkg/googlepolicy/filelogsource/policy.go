@@ -14,7 +14,7 @@
 
 // Package filelogsource compiles and evaluates FileLogSourcePolicy configurations.
 // It translates FileLogSourcePolicy definitions into OpenTelemetry Collector filelog
-// receiver configurations and logs pipelines with strict OS log root guardrails.
+// receiver configurations and logs pipelines with path and glob guardrails.
 package filelogsource
 
 import (
@@ -96,7 +96,7 @@ func NewPolicyFromProto(pb *policyv1alpha1.FileLogSourcePolicy) (*Policy, error)
 	}
 	cloned := proto.Clone(pb).(*policyv1alpha1.FileLogSourcePolicy)
 	for i, inc := range cloned.GetIncludedPaths() {
-		cloned.IncludedPaths[i] = NormalizePattern(inc)
+		cloned.IncludedPaths[i] = normalizePattern(inc)
 	}
 	p := &Policy{proto: cloned}
 	if err := p.Validate(); err != nil {
@@ -136,7 +136,7 @@ func (p *Policy) Validate() error {
 	}
 	seen := make(map[string]bool, len(p.proto.GetIncludedPaths()))
 	for i, pattern := range p.proto.GetIncludedPaths() {
-		if err := ValidateIncludePattern(pattern); err != nil {
+		if err := validateIncludePattern(pattern); err != nil {
 			return fmt.Errorf("included_paths[%d]: %w", i, err)
 		}
 		key := pathDedupeKey(pattern)
@@ -211,7 +211,7 @@ func Merge(policies ...*Policy) (*Policy, error) {
 			return nil, err
 		}
 		for _, inc := range pol.proto.GetIncludedPaths() {
-			canonical := NormalizePattern(inc)
+			canonical := normalizePattern(inc)
 			if !seen[canonical] {
 				seen[canonical] = true
 				mergedIncludes = append(mergedIncludes, canonical)
@@ -271,5 +271,5 @@ func (p *Policy) IncludedPaths() []string {
 
 // pathDedupeKey returns a canonical key for path comparison and deduplication.
 func pathDedupeKey(pattern string) string {
-	return NormalizePattern(pattern)
+	return normalizePattern(pattern)
 }

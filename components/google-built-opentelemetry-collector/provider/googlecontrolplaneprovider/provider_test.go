@@ -814,7 +814,7 @@ func TestRetrieve_FileLogSourcePolicy_WithInvalidPolicy_FaultIsolation(t *testin
 	}
 	invalid := &policyv1alpha1.FileLogSourcePolicy{
 		Id:            "invalid-source",
-		IncludedPaths: []string{"/etc/shadow"},
+		IncludedPaths: []string{"/var/log/../etc/shadow"},
 	}
 
 	ps, err := googlepolicy.MakePolicySetFromProtos("test-set", "rev-fault-isolation", []proto.Message{valid1, valid2, invalid})
@@ -865,7 +865,7 @@ func TestRetrieve_FileLogSourcePolicy_PoisonedBatchHead_FaultIsolation(t *testin
 	// Invariant INV-1: Malformed element 0 must not poison or drop valid peers.
 	invalid := &policyv1alpha1.FileLogSourcePolicy{
 		Id:            "invalid-source-at-head",
-		IncludedPaths: []string{"/etc/shadow"},
+		IncludedPaths: []string{"/var/log/../etc/shadow"},
 	}
 	valid1 := &policyv1alpha1.FileLogSourcePolicy{
 		Id:            "valid-source-1",

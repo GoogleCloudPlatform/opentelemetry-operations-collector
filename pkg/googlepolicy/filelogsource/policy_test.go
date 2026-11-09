@@ -20,7 +20,6 @@ import (
 
 	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
-	"github.com/bmatcuk/doublestar/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
@@ -120,74 +119,6 @@ func TestPolicyValidation_InvalidPaths(t *testing.T) {
 			os:          "windows",
 			include:     []string{`C:\ProgramData\logs\..\..\Windows\System32`},
 			expectedErr: ErrPathTraversal,
-		},
-		{
-			name:        "sensitive etc",
-			id:          "test-policy",
-			include:     []string{"/etc/shadow"},
-			expectedErr: ErrSensitiveDirectory,
-		},
-		{
-			name:        "sensitive root",
-			id:          "test-policy",
-			include:     []string{"/root/.ssh/id_rsa"},
-			expectedErr: ErrSensitiveDirectory,
-		},
-		{
-			name:        "sensitive proc",
-			id:          "test-policy",
-			include:     []string{"/proc/cpuinfo"},
-			expectedErr: ErrSensitiveDirectory,
-		},
-		{
-			name:        "sensitive sys",
-			id:          "test-policy",
-			include:     []string{"/sys/class/net"},
-			expectedErr: ErrSensitiveDirectory,
-		},
-		{
-			name:        "sensitive var run",
-			id:          "test-policy",
-			include:     []string{"/var/run/secrets/kubernetes.io/serviceaccount/token"},
-			expectedErr: ErrSensitiveDirectory,
-		},
-		{
-			name:        "sensitive dev",
-			id:          "test-policy",
-			include:     []string{"/dev/null"},
-			expectedErr: ErrSensitiveDirectory,
-		},
-		{
-			name:        "sensitive bin",
-			id:          "test-policy",
-			include:     []string{"/bin/sh"},
-			expectedErr: ErrSensitiveDirectory,
-		},
-		{
-			name:        "disallowed home directory",
-			id:          "test-policy",
-			include:     []string{"/home/user/app.log"},
-			expectedErr: ErrDisallowedLogRoot,
-		},
-		{
-			name:        "disallowed tmp directory",
-			id:          "test-policy",
-			include:     []string{"/tmp/app.log"},
-			expectedErr: ErrDisallowedLogRoot,
-		},
-		{
-			name:        "disallowed windows system32",
-			id:          "test-policy",
-			os:          "windows",
-			include:     []string{`C:\Windows\System32\cmd.exe`},
-			expectedErr: ErrDisallowedLogRoot,
-		},
-		{
-			name:        "disallowed windows systemroot inetpub",
-			id:          "test-policy",
-			os:          "windows",
-			include:     []string{`%SystemRoot%\inetpub\logs\*.log`},
-			expectedErr: ErrDisallowedLogRoot,
 		},
 		{
 			name:        "relative path linux",
@@ -665,12 +596,12 @@ func TestMerge_FailsFastOnInvalidPolicy(t *testing.T) {
 	invalid := &Policy{
 		proto: &policyv1alpha1.FileLogSourcePolicy{
 			Id:            "invalid",
-			IncludedPaths: []string{"/etc/shadow"},
+			IncludedPaths: []string{"/var/log/../etc/shadow"},
 		},
 	}
 
 	merged, err := Merge(valid, invalid)
-	assert.ErrorIs(t, err, ErrSensitiveDirectory)
+	assert.ErrorIs(t, err, ErrPathTraversal)
 	assert.Nil(t, merged)
 
 	merged, err = Merge(valid, nil)
@@ -816,136 +747,52 @@ func TestDriver_WireProtoAndMapLoading(t *testing.T) {
 	assert.Equal(t, []string{"/opt/services/logs/*.log"}, srcPolicy.IncludedPaths())
 }
 
-func TestPolicyValidation_TestAllowedRoot(t *testing.T) {
-	// Verify that testing.Testing() returns true in this test execution context.
-	require.True(t, testing.Testing(), "testing.Testing() must return true under go test")
+func TestPolicyValidation_CustomApplicationPaths(t *testing.T) {
+	t.Cleanup(setOSForTest("linux"))
 
 	tempDir := t.TempDir()
-
-	// 1. Without FILELOG_TEST_ALLOWED_ROOT, paths in tempDir are rejected.
-	t.Setenv("FILELOG_TEST_ALLOWED_ROOT", "")
-	pbUnset := &policyv1alpha1.FileLogSourcePolicy{
-		Id:            "temp-dir-unset-policy",
-		IncludedPaths: []string{tempDir + "/*.log"},
+	customLinuxPaths := []string{
+		tempDir + "/*.log",
+		"/tmp/app.log",
+		"/home/user/app.log",
+		"/opt/my-app/data/*.log",
+		"/srv/custom/service.log",
+		"/etc/app.log",
 	}
-	_, err := NewPolicyFromProto(pbUnset)
-	require.ErrorIs(t, err, ErrDisallowedLogRoot)
-
-	// 2. With FILELOG_TEST_ALLOWED_ROOT set, paths within tempDir are accepted.
-	t.Setenv("FILELOG_TEST_ALLOWED_ROOT", tempDir)
-	pbSet := &policyv1alpha1.FileLogSourcePolicy{
-		Id:            "temp-dir-policy",
-		IncludedPaths: []string{tempDir + "/*.log"},
+	for _, p := range customLinuxPaths {
+		pb := &policyv1alpha1.FileLogSourcePolicy{
+			Id:            "custom-app-policy",
+			IncludedPaths: []string{p},
+		}
+		pol, err := NewPolicyFromProto(pb)
+		require.NoError(t, err, "path %q should be accepted", p)
+		assert.NoError(t, pol.Validate())
 	}
-	polSet, err := NewPolicyFromProto(pbSet)
-	require.NoError(t, err)
-	assert.NoError(t, polSet.Validate())
 
-	// 3. Sensitive directories are strictly rejected even when FILELOG_TEST_ALLOWED_ROOT is set.
-	pbSensitive := &policyv1alpha1.FileLogSourcePolicy{
-		Id:            "sensitive-policy",
-		IncludedPaths: []string{"/etc/shadow"},
-	}
-	_, err = NewPolicyFromProto(pbSensitive)
-	require.ErrorIs(t, err, ErrSensitiveDirectory)
-
-	// 4. Path traversal escaping the root is strictly rejected.
+	// Path traversal is still strictly rejected
 	pbTraversal := &policyv1alpha1.FileLogSourcePolicy{
 		Id:            "traversal-policy",
 		IncludedPaths: []string{tempDir + "/../etc/shadow"},
 	}
-	_, err = NewPolicyFromProto(pbTraversal)
+	_, err := NewPolicyFromProto(pbTraversal)
 	require.ErrorIs(t, err, ErrPathTraversal)
 
-	// 5. Windows path matching under FILELOG_TEST_ALLOWED_ROOT (case-insensitive and separator-normalized).
+	// Windows custom application paths
 	t.Cleanup(setOSForTest("windows"))
-	t.Setenv("FILELOG_TEST_ALLOWED_ROOT", "C:\\TestRoot\\logs")
-	pbWin := &policyv1alpha1.FileLogSourcePolicy{
-		Id:            "win-test-policy",
-		IncludedPaths: []string{"c:/testroot/logs/app.log", "C:\\TestRoot\\logs\\sub\\*.log"},
+	customWindowsPaths := []string{
+		`C:\custom\app\logs\*.log`,
+		`D:\Data\logs\app.log`,
+		`C:\Program Files\App\logs\*.log`,
+		`%ProgramData%\custom\logs\*.log`,
+		`%SystemDrive%\custom\logs\*.log`,
 	}
-	polWin, err := NewPolicyFromProto(pbWin)
-	require.NoError(t, err)
-	assert.NoError(t, polWin.Validate())
-}
-
-func FuzzPolicyValidation(f *testing.F) {
-	seeds := []string{
-		"/var/log/**/*.log",
-		"/var/log/syslog",
-		"/var/log",
-		"/etc/shadow",
-		"/tmp/test.log",
-		`C:\ProgramData\App\logs\*.log`,
-		`%ProgramData%\App\logs\*.log`,
-		`C:\inetpub\logs\*.log`,
-		`C:\inetpub\logs`,
-		`C:\Windows\System32\app.log`,
-		"/var/log/../etc/passwd",
-		"relative/path/test.log",
-		"/var/log/[a-z",
-		"/var/log/{a,b",
-		"/var/log/{nginx,apache2}/*.log",
-		"/opt/{a/logs/x,secret/id_rsa}",
-		"/opt/app/{logs/*.log,conf/*.yaml}",
-		"/var/log/${file:/etc/shadow}",
-		"/var/log/app..log",
-		"/var/log/.[.]/etc/passwd",
-		"/var/log/[.][.]/etc/passwd",
-		"/var/log/.{.,}./etc/passwd",
-	}
-	for _, seed := range seeds {
-		f.Add(seed)
-	}
-
-	canaries := []string{
-		"/etc/shadow",
-		"/etc/passwd",
-		"/root/.ssh/id_rsa",
-		"/proc/1/cmdline",
-		"/sys/kernel/debug",
-		"/tmp/secret.log",
-		"/home/user/app.log",
-		"/opt/secret/id_rsa",
-		"/opt/app/config/db.yaml",
-		"/srv/db/prod.sqlite",
-		"C:/windows/system32/cmd.exe",
-		"C:/windows/win.ini",
-		"C:/programdata/secret/key.pem",
-		"C:/programdata/app/config.yaml",
-	}
-
-	f.Fuzz(func(t *testing.T, path string) {
-		for _, targetOS := range []string{"linux", "windows"} {
-			restore := setOSForTest(targetOS)
-
-			pb := &policyv1alpha1.FileLogSourcePolicy{
-				Id:            "fuzz-policy",
-				IncludedPaths: []string{path},
-			}
-			// Validate should not panic on any input
-			policy, err := NewPolicyFromProto(pb)
-			if err == nil && policy != nil {
-				_ = policy.Validate()
-				_, _ = policy.Evaluate(context.Background())
-
-				// Guardrail Invariant Check: If validation passes, no canary path outside allowed roots
-				// can ever match any pattern in the policy.
-				for _, pat := range policy.IncludedPaths() {
-					branches, err := expandBraces(pat)
-					if err != nil {
-						continue
-					}
-					for _, branch := range branches {
-						for _, canary := range canaries {
-							matched, _ := doublestar.Match(branch, canary)
-							require.False(t, matched, "Guardrail violation: fuzzed pattern %q (branch %q) matched forbidden canary %q", path, branch, canary)
-						}
-					}
-				}
-			}
-
-			restore()
+	for _, p := range customWindowsPaths {
+		pb := &policyv1alpha1.FileLogSourcePolicy{
+			Id:            "custom-win-policy",
+			IncludedPaths: []string{p},
 		}
-	})
+		pol, err := NewPolicyFromProto(pb)
+		require.NoError(t, err, "path %q should be accepted", p)
+		assert.NoError(t, pol.Validate())
+	}
 }

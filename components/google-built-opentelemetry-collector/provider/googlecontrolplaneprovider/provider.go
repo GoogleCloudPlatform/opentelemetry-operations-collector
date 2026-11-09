@@ -20,11 +20,9 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
-	"testing"
 	"time"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor"
@@ -597,15 +595,6 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 		storageExtID := googlepolicy.StorageExtensionID
 		storageCfg := map[string]any{
 			"create_directory": true,
-		}
-		// Test-only override: In test binaries (go test), allow redirecting the storage
-		// directory via GOOGLECONTROLPLANE_TEST_STORAGE_DIR to prevent permission errors
-		// on default system directories (/var/lib/otelcol) and disk contention in parallel tests.
-		// In production binaries, testing.Testing() is false, ensuring this is a complete no-op.
-		if testing.Testing() {
-			if dir := strings.TrimSpace(os.Getenv("GOOGLECONTROLPLANE_TEST_STORAGE_DIR")); dir != "" {
-				storageCfg["directory"] = filepath.Clean(dir)
-			}
 		}
 		storageExtConf := &otelcol.Config{
 			Extensions: map[component.ID]component.Config{

@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -2596,80 +2595,6 @@ func TestRetrieve_PersistentStorageSynthesis(t *testing.T) {
 		assert.Equal(t, true, conf.Get("extensions::file_storage/googlecontrolplane::create_directory"))
 		exts := conf.Get("service::extensions")
 		assert.Contains(t, exts, "file_storage/googlecontrolplane")
-		assert.NoError(t, p.Shutdown(context.Background()))
-	})
-
-	t.Run("GOOGLECONTROLPLANE_TEST_STORAGE_DIR overrides default directory in tests", func(t *testing.T) {
-		customDir := filepath.Join(os.TempDir(), "custom-otel-storage")
-		t.Setenv("GOOGLECONTROLPLANE_TEST_STORAGE_DIR", customDir)
-
-		p := createProvider()
-
-		pol := &mockStoragePolicy{
-			id:              "storage-custom-dir-policy",
-			requiresStorage: true,
-			recs:            []component.ID{recID},
-		}
-
-		ps := &googlepolicy.PolicySet{
-			RevisionID: "rev-storage-custom-dir",
-			Policies: map[string]*googlepolicy.PolicySetEntry{
-				"storage-custom-dir-policy": {PolicyObj: pol},
-			},
-		}
-		googlepolicy.SetActivePolicySet(ps)
-		t.Cleanup(func() {
-			for googlepolicy.ActivePolicySet() != nil {
-				googlepolicy.RollbackActivePolicySet()
-			}
-		})
-
-		ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:test-storage-custom-dir", nil)
-		require.NoError(t, err)
-		require.NotNil(t, ret)
-
-		conf, err := ret.AsConf()
-		require.NoError(t, err)
-
-		assert.True(t, conf.IsSet("extensions::file_storage/googlecontrolplane"))
-		assert.Equal(t, customDir, conf.Get("extensions::file_storage/googlecontrolplane::directory"))
-		assert.NoError(t, p.Shutdown(context.Background()))
-	})
-
-	t.Run("GOOGLECONTROLPLANE_TEST_STORAGE_DIR with whitespace and trailing slash is cleaned", func(t *testing.T) {
-		customDir := filepath.Join(os.TempDir(), "custom-otel-storage-dirty")
-		t.Setenv("GOOGLECONTROLPLANE_TEST_STORAGE_DIR", "  "+customDir+string(filepath.Separator)+"  ")
-
-		p := createProvider()
-
-		pol := &mockStoragePolicy{
-			id:              "storage-custom-dir-dirty-policy",
-			requiresStorage: true,
-			recs:            []component.ID{recID},
-		}
-
-		ps := &googlepolicy.PolicySet{
-			RevisionID: "rev-storage-custom-dir-dirty",
-			Policies: map[string]*googlepolicy.PolicySetEntry{
-				"storage-custom-dir-dirty-policy": {PolicyObj: pol},
-			},
-		}
-		googlepolicy.SetActivePolicySet(ps)
-		t.Cleanup(func() {
-			for googlepolicy.ActivePolicySet() != nil {
-				googlepolicy.RollbackActivePolicySet()
-			}
-		})
-
-		ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:test-storage-custom-dir-dirty", nil)
-		require.NoError(t, err)
-		require.NotNil(t, ret)
-
-		conf, err := ret.AsConf()
-		require.NoError(t, err)
-
-		assert.True(t, conf.IsSet("extensions::file_storage/googlecontrolplane"))
-		assert.Equal(t, customDir, conf.Get("extensions::file_storage/googlecontrolplane::directory"))
 		assert.NoError(t, p.Shutdown(context.Background()))
 	})
 

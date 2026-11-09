@@ -4,9 +4,9 @@ display_name: Google-Built OpenTelemetry Collector
 description: OpenTelemetry Collector Built By Google
 blurb: The Google-Built OpenTelemetry Collector is an open-source, production-ready build of the upstream OpenTelemetry Collector that is built with upstream OpenTelemetry components.
 build_container: debian
-version: 0.163.1
-opentelemetry_version: 0.163.0
-opentelemetry_contrib_version: 0.163.0
+version: 0.164.0
+opentelemetry_version: 0.164.0
+opentelemetry_contrib_version: 0.164.1
 go_version: 1.26.10
 binary_name: otelcol-google
 build_tags: ""
@@ -117,9 +117,9 @@ components:
         - yaml
         - googlesecretmanager
 replaces:
-    - from: github.com/buger/jsonparser
-      to: github.com/buger/jsonparser v1.1.2
-      reason: Force update buger/jsonparser to v1.1.2 to fix vulnerability
+    - from: github.com/go-jose/go-jose/v4
+      to: github.com/go-jose/go-jose/v4 v4.1.6
+      reason: Force update go-jose/v4 to v4.1.6 to fix CVE-2026-116587
 feature_gates:
     - exporter.googlemanagedprometheus.intToDouble
     - exporter.googlecloud.CustomMonitoredResources

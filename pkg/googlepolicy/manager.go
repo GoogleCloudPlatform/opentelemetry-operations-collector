@@ -22,3 +22,11 @@ type Manager interface {
 	URI() *url.URL
 	PolicyEvaluationResult(revisionID string, err error)
 }
+
+// FleetMetadataProvider is an optional interface implemented by Manager
+// implementations (such as xdsPolicyManager) that resolve canonical fleet and
+// project identifiers for the collector.
+type FleetMetadataProvider interface {
+	FleetID() string
+	ProjectID() string
+}

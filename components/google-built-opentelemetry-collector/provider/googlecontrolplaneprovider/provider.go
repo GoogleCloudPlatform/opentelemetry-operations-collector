@@ -31,11 +31,15 @@ import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/event"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/filelogsource"
+	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/hostmetricssource"
+	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/iissource"
 	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/journaldsource"
 	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/logfilter"
 	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/logtransform"
 	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/metricfilter"
 	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/tracefilter"
+	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/tracesampling"
+	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/windowseventlogsource"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/confmap"
 	"go.opentelemetry.io/collector/featuregate"
@@ -290,33 +294,46 @@ func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrie
 	manager := p.manager
 	p.mu.Unlock()
 
-	// Environment, then context, then the URI. The manager resolves the fleet
-	// in the same order off the same query parameter, and must arrive at the
-	// same answer: its value selects which fleet's policies this collector
-	// receives, while this one attributes the collector's own telemetry.
+	// When the active policy manager implements FleetMetadataProvider (such as
+	// xdsPolicyManager), its resolved FleetID() and ProjectID() are authoritative
+	// so the xDS node identity and the collector's self-telemetry attribution
+	// never diverge. Non-xDS sources (such as file: or component: URIs) have no
+	// control plane to agree with, so the fleet ID is reported as given:
+	// environment, then context, then the URI.
 	fleetID := os.Getenv("FLEET_ID")
 	if v, ok := ctx.Value("FLEET_ID").(string); ok && v != "" {
 		fleetID = v
-	}
-	if fleetID == "" && manager != nil {
-		fleetID = googlepolicy.FleetIDFromURI(manager.URI())
-	}
-	if fleetID != "" {
-		ctx = context.WithValue(ctx, "FLEET_ID", fleetID)
 	}
 
 	var projectID string
 	if v, ok := ctx.Value("PROJECT_ID").(string); ok && v != "" {
 		projectID = v
 	}
-	if projectID == "" && manager != nil && manager.URI() != nil {
-		// A numeric value in ?project= is a GCP project number for the xdstp://
-		// resource subscription, not an alphanumeric project ID. Leave PROJECT_ID
-		// unset in that case so the self-metrics pipeline populates gcp.project_id
-		// from the GCE resource detector's cloud.account.id.
-		if candidate := manager.URI().Query().Get(googlepolicy.ProjectQueryParam); !googlepolicy.IsNumericProject(candidate) {
-			projectID = candidate
+
+	if fleetMgr, ok := manager.(googlepolicy.FleetMetadataProvider); ok {
+		if fleetMgr.FleetID() != "" {
+			fleetID = fleetMgr.FleetID()
 		}
+		if projectID == "" {
+			projectID = fleetMgr.ProjectID()
+		}
+	} else if manager != nil && manager.URI() != nil {
+		if fleetID == "" {
+			fleetID = googlepolicy.FleetIDFromURI(manager.URI())
+		}
+		if projectID == "" {
+			// A numeric value in ?project= is a GCP project number for the xdstp://
+			// resource subscription, not an alphanumeric project ID. Leave PROJECT_ID
+			// unset in that case so the self-metrics pipeline populates gcp.project_id
+			// from the GCE resource detector's cloud.account.id.
+			if candidate := manager.URI().Query().Get(googlepolicy.ProjectQueryParam); !googlepolicy.IsNumericProject(candidate) {
+				projectID = candidate
+			}
+		}
+	}
+
+	if fleetID != "" {
+		ctx = context.WithValue(ctx, "FLEET_ID", fleetID)
 	}
 	if projectID != "" {
 		ctx = context.WithValue(ctx, "PROJECT_ID", projectID)
@@ -636,6 +653,11 @@ func (p *provider) evaluateDedicatedSourcePolicy(
 	case *selfmetrics.SelfMetricsPolicy:
 		evalCtx := pol.ContextSetup(ctx, collectorID, fleetID)
 		sourceConf, err = pol.Evaluate(evalCtx)
+		// Self-observability pipelines must bypass user telemetry policies (googlepolicy)
+		// so that collector health metrics and policy error events cannot be dropped or mutated.
+		preProcessLogIDs = destPolicy.PreProcessLogIDs()
+		preProcessMetricIDs = destPolicy.PreProcessMetricIDs()
+		preProcessTraceIDs = destPolicy.PreProcessTraceIDs()
 	default:
 		sourceConf, err = srcPolicy.Evaluate(ctx)
 	}

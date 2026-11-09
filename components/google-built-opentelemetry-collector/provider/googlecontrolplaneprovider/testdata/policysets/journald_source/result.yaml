@@ -2,7 +2,7 @@ exporters:
     otlp_grpc/default_gcp_destination:
         auth:
             authenticator: googleclientauth/default_gcp_destination
-        balancer_name: round_robin
+        balancer_name: pick_first
         compression: gzip
         endpoint: telemetry.googleapis.com:443
         retry_on_failure:
@@ -92,6 +92,11 @@ processors:
             - context: resource
               statements:
                 - set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil
+            - context: datapoint
+              statements:
+                - set(attributes["gcp.fleet_id"], resource.attributes["gcp.fleet_id"]) where resource.attributes["gcp.fleet_id"] != nil
+                - set(attributes["service.instance.id"], resource.attributes["service.instance.id"]) where resource.attributes["service.instance.id"] != nil
+                - set(attributes["service.version"], resource.attributes["service.version"]) where resource.attributes["service.version"] != nil
     transform/googlecontrolplane:
         error_mode: ignore
         log_statements:
@@ -107,7 +112,7 @@ processors:
               statements:
                 - set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil
 receivers:
-    journald:
+    journald/googlecontrolplane:
         operators:
             - expr: (body._COMM != nil && body._COMM == "otelcol-google") || (body._SYSTEMD_UNIT != nil && body._SYSTEMD_UNIT == "otelcol-google.service") || (body.SYSLOG_IDENTIFIER != nil && body.SYSLOG_IDENTIFIER == "otelcol-google")
               id: exclude_collector_logs
@@ -147,7 +152,6 @@ service:
             processors:
                 - resourcedetection/default_self_metrics
                 - transform/default_self_metrics
-                - googlepolicy
                 - queue_batch/default_gcp_destination_batch_logs
             receivers:
                 - otlp/default_self_metrics
@@ -161,14 +165,13 @@ service:
                 - queue_batch/default_gcp_destination_batch_logs
             receivers:
                 - nop/googlecontrolplane
-                - journald
+                - journald/googlecontrolplane
         metrics/default_self_metrics:
             exporters:
                 - otlp_grpc/default_gcp_destination
             processors:
                 - resourcedetection/default_self_metrics
                 - transform/default_self_metrics
-                - googlepolicy
                 - queue_batch/default_gcp_destination_batch_metrics
             receivers:
                 - otlp/default_self_metrics
@@ -221,7 +224,7 @@ service:
                             endpoint: http://localhost:18888
                             insecure: true
                             protocol: grpc
-                    interval: 5000
+                    interval: 60000
                     timeout: 30000
         resource:
             attributes:

@@ -82,7 +82,7 @@ func TestSelfMetricsPolicy_Evaluate(t *testing.T) {
 	assert.Equal(t, []any{
 		map[string]any{
 			"periodic": map[string]any{
-				"interval": 5000,
+				"interval": 60000,
 				"timeout":  30000,
 				"exporter": map[string]any{
 					"otlp": map[string]any{
@@ -103,7 +103,22 @@ func TestSelfMetricsPolicy_Evaluate(t *testing.T) {
 	// Verify transform processor
 	assert.Equal(t, "ignore", conf.Get("processors::transform/custom_self_obs::error_mode"))
 	assert.NotNil(t, conf.Get("processors::transform/custom_self_obs::log_statements"))
-	assert.NotNil(t, conf.Get("processors::transform/custom_self_obs::metric_statements"))
+	assert.Equal(t, []any{
+		map[string]any{
+			"context": "resource",
+			"statements": []any{
+				`set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil`,
+			},
+		},
+		map[string]any{
+			"context": "datapoint",
+			"statements": []any{
+				`set(attributes["gcp.fleet_id"], resource.attributes["gcp.fleet_id"]) where resource.attributes["gcp.fleet_id"] != nil`,
+				`set(attributes["service.instance.id"], resource.attributes["service.instance.id"]) where resource.attributes["service.instance.id"] != nil`,
+				`set(attributes["service.version"], resource.attributes["service.version"]) where resource.attributes["service.version"] != nil`,
+			},
+		},
+	}, conf.Get("processors::transform/custom_self_obs::metric_statements"))
 }
 
 func TestSelfMetricsPolicy_Evaluate_ExampleYamlMatch(t *testing.T) {
@@ -145,7 +160,7 @@ func TestSelfMetricsPolicy_Evaluate_ExampleYamlMatch(t *testing.T) {
 	require.Len(t, readers, 1)
 	assert.Equal(t, map[string]any{
 		"periodic": map[string]any{
-			"interval": 5000,
+			"interval": 60000,
 			"timeout":  30000,
 			"exporter": map[string]any{
 				"otlp": map[string]any{

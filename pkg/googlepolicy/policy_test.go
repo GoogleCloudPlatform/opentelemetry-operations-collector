@@ -19,6 +19,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -351,24 +352,33 @@ func TestMakePolicySetAndGenericDriver(t *testing.T) {
 func TestFilePolicyManager(t *testing.T) {
 	RegisterPolicyDriver("driver_test_type", &GenericDriver[*driverTestPolicy]{})
 
+	fileURI := func(path string) *url.URL {
+		slashPath := filepath.ToSlash(path)
+		if !strings.HasPrefix(slashPath, "/") {
+			slashPath = "/" + slashPath
+		}
+		parsed, err := url.Parse("file://" + slashPath)
+		require.NoError(t, err)
+		return parsed
+	}
+
 	tmpDir := t.TempDir()
-	u, err := url.Parse("file://" + tmpDir)
-	require.NoError(t, err)
+	u := fileURI(tmpDir)
 
 	// Windows path edge case check (/C:/...)
 	winURL := &url.URL{Scheme: "file", Path: "/C:/nonexistent_dir_12345"}
-	_, err = NewFilePolicyManager(zap.NewNop(), winURL)
+	_, err := NewFilePolicyManager(zap.NewNop(), winURL)
 	assert.Error(t, err)
 
 	// Non-existent dir
-	badURL, _ := url.Parse("file://" + filepath.Join(tmpDir, "does-not-exist"))
+	badURL := fileURI(filepath.Join(tmpDir, "does-not-exist"))
 	_, err = NewFilePolicyManager(zap.NewNop(), badURL)
 	assert.Error(t, err)
 
 	// File instead of dir
 	tmpFile := filepath.Join(tmpDir, "not-a-dir.txt")
 	require.NoError(t, os.WriteFile(tmpFile, []byte("hello"), 0600))
-	fileURL, _ := url.Parse("file://" + tmpFile)
+	fileURL := fileURI(tmpFile)
 	_, err = NewFilePolicyManager(zap.NewNop(), fileURL)
 	assert.Error(t, err)
 
@@ -537,8 +547,8 @@ func TestProtoDriver_ValidationClassificationAndPolicyClass(t *testing.T) {
 
 	t.Run("LoadPolicy protojson unmarshal error wraps ErrPolicyFailedToLoad", func(t *testing.T) {
 		_, err := LoadPolicy("test_proto_log_filter", map[string]any{
-			"type":    "test_proto_log_filter",
-			"id":      "bad-type",
+			"type":     "test_proto_log_filter",
+			"id":       "bad-type",
 			"matchers": "not-an-array",
 		})
 		require.Error(t, err)

@@ -2,6 +2,7 @@ DISTROGEN_BIN ?= distrogen
 
 OTEL_VERSION ?= latest
 OTEL_CONTRIB_VERSION ?= latest
+OPERATIONS_COLLECTOR_VERSION ?= latest
 
 LIST_DIRECT_MODULES = go list -m -f '{{if not (or .Indirect .Main)}}{{.Path}}{{end}}' all
 INCLUDE_COLLECTOR_CORE_COMPONENTS = grep "^go.opentelemetry.io" | grep -v "^go.opentelemetry.io/otel"
@@ -31,9 +32,9 @@ contrib-components:
 		$(GO_GET_ALL)
 
 # This repository's own components are not published by contrib, so they are
-# pinned directly to the contrib version they are released alongside.
+# pinned directly to the distribution version they are released alongside.
 .PHONY: operations-collector-components
 operations-collector-components:
 	$(LIST_DIRECT_MODULES) | \
 		$(INCLUDE_OPERATIONS_COLLECTOR_COMPONENTS) | \
-		$(GO_GET_ALL)@$(OTEL_CONTRIB_VERSION)
+		$(GO_GET_ALL)@$(OPERATIONS_COLLECTOR_VERSION)

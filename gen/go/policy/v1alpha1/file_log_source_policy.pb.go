@@ -36,29 +36,32 @@ const (
 )
 
 // Enables file tailing (`filelog` receiver) with upstream single-line
-// defaults within hardcoded in-daemon OS log root guardrails:
-//   - Linux: /var/log/**, /opt/**/logs/**, /srv/**/logs/**
-//   - Windows: %ProgramData%\**\logs\**, %SystemDrive%\inetpub\logs\**
+// defaults.
 //
 // Evaluation, Deduplication & Security Guardrails:
-//   - At least one `included_paths` pattern is required; any `included_paths`
-//     path outside the allowed OS log roots or targeting sensitive directories
-//     (/etc, /root, /proc, /sys, /var/run/secrets) is rejected (fail-open).
+//   - At least one `included_paths` pattern is required. Each pattern must be an
+//     absolute file path or glob targeting files (not a bare directory), must
+//     not contain `..` traversal segments or `$` confmap expansion characters,
+//     and must contain valid glob syntax; invalid patterns are rejected
+//     (fail-open).
+//   - Host filesystem access boundaries are enforced by the collector's
+//     install-time OS and container sandbox (for example, Linux systemd mount
+//     namespace directives and non-root service user permissions, Windows
+//     service SID ACLs, or container volume mounts) rather than a hardcoded
+//     in-daemon OS log root allowlist.
 //   - Multiple FileLogSourcePolicy instances merge into a single shared `filelog`
 //     receiver via the set union of `included_paths` patterns (avoiding duplicate
 //     reads when globs overlap and preserving `file_storage` bookmarks across
 //     policy ID renames).
 //   - Built-in Guardrails: Automatically sets `include_file_path: true` (so
 //     `LogFilterPolicy` can match on `log.file.path` / `log.file.name`) and
-//     excludes compressed binary archives (`*.gz`, `*.bz2`, `*.xz`, `*.zst`,
-//     `*.zip`). Symlinks are resolved prior to reading to prevent directory
-//     traversal.
+//     excludes compressed binary archives (`**/*.gz`, `**/*.bz2`, `**/*.xz`,
+//     `**/*.zst`, `**/*.zip`).
 type FileLogSourcePolicy struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Unique identifier for the policy within its configuration scope.
 	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	// File path glob patterns to tail (must fall within allowed OS log roots).
-	// At least one pattern is required.
+	// Absolute file path glob patterns to tail. At least one pattern is required.
 	IncludedPaths []string `protobuf:"bytes,2,rep,name=included_paths,json=includedPaths,proto3" json:"included_paths,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

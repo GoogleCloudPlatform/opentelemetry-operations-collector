@@ -1,13 +1,18 @@
 {
   "type": "log_transform",
   "id": "a-redact-account",
-  "redaction": {
-    "target": {
-      "body_field_path": {
-        "segments": ["account", "id"]
-      }
-    },
-    "regex": "\\d+",
-    "replacement": "XXXX"
-  }
+  "redactions": [
+    {
+      "target": {
+        "body_field_path": {
+          "segments": [
+            "account",
+            "id"
+          ]
+        }
+      },
+      "regex": "\\d+",
+      "replacement": "XXXX"
+    }
+  ]
 }

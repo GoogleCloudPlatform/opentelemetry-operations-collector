@@ -52,17 +52,17 @@ var (
 	ErrNilProto = errors.New("log transform policy proto cannot be nil")
 	// ErrMissingID is returned when the policy ID is empty.
 	ErrMissingID = errors.New("log transform policy id cannot be empty")
-	// ErrMissingAction is returned when the policy does not specify a transform action.
-	ErrMissingAction = errors.New("log transform policy must specify an action")
-	// ErrUnsupportedAction is returned when the policy specifies an action not yet supported.
-	ErrUnsupportedAction = errors.New("log transform policy action is not supported in this release")
-	// ErrMissingTarget is returned when an action does not specify a target field selector.
-	ErrMissingTarget = errors.New("log transform action must specify a target field selector")
-	// ErrMissingSource is returned when a rename action does not specify a source field selector.
-	ErrMissingSource = errors.New("log transform rename action must specify a source field selector")
-	// ErrMissingValue is returned when an action does not specify a valid value.
+	// ErrMissingAction is returned when the policy does not specify at least one transform operation.
+	ErrMissingAction = errors.New("log transform policy must specify at least one operation")
+	// ErrUnsupportedAction is returned when the policy specifies an operation variant not yet supported.
+	ErrUnsupportedAction = errors.New("log transform policy operation is not supported in this release")
+	// ErrMissingTarget is returned when an operation does not specify a target field selector.
+	ErrMissingTarget = errors.New("log transform operation must specify a target field selector")
+	// ErrMissingSource is returned when a rename operation does not specify a source field selector.
+	ErrMissingSource = errors.New("log transform rename operation must specify a source field selector")
+	// ErrMissingValue is returned when an addition operation does not specify a valid value.
 	ErrMissingValue = matcher.ErrMissingValue
-	// ErrImmutableField is returned when an action targets a read-only field (such as trace_id or span_id).
+	// ErrImmutableField is returned when an operation targets a read-only field (such as trace_id or span_id).
 	ErrImmutableField = errors.New("cannot mutate read-only field")
 )
 
@@ -70,10 +70,12 @@ type compiledAction func(ctx googlepolicy.LogContext) bool
 
 // Policy represents a compiled, validated LogTransformPolicy ready for hot-loop evaluation.
 type Policy struct {
-	proto    *policyv1alpha1.LogTransformPolicy
-	stage    googlepolicy.TransformStage
-	matchers []matcher.CompiledLogMatcher
-	action   compiledAction
+	proto      *policyv1alpha1.LogTransformPolicy
+	matchers   []matcher.CompiledLogMatcher
+	renamings  []compiledAction
+	additions  []compiledAction
+	removals   []compiledAction
+	redactions []compiledAction
 }
 
 var _ googlepolicy.TransformationPolicy = (*Policy)(nil)
@@ -87,57 +89,62 @@ func NewPolicyFromProto(pb *policyv1alpha1.LogTransformPolicy) (*Policy, error) 
 	if pb.GetId() == "" {
 		return nil, ErrMissingID
 	}
-	if pb.Action == nil {
+	if len(pb.ProtoReflect().GetUnknown()) > 0 {
+		return nil, ErrUnsupportedAction
+	}
+	if len(pb.GetRenamings()) == 0 &&
+		len(pb.GetAdditions()) == 0 &&
+		len(pb.GetRemovals()) == 0 &&
+		len(pb.GetRedactions()) == 0 {
 		return nil, ErrMissingAction
 	}
 
-	var (
-		stage  googlepolicy.TransformStage
-		action compiledAction
-	)
-	switch a := pb.Action.(type) {
-	case *policyv1alpha1.LogTransformPolicy_Addition:
-		if a.Addition == nil {
-			return nil, ErrMissingAction
+	var renamings []compiledAction
+	if len(pb.GetRenamings()) > 0 {
+		renamings = make([]compiledAction, 0, len(pb.GetRenamings()))
+		for i, op := range pb.GetRenamings() {
+			cr, err := compileRename(op)
+			if err != nil {
+				return nil, fmt.Errorf("renamings[%d]: %w", i, err)
+			}
+			renamings = append(renamings, cr)
 		}
-		ca, err := compileAdd(a.Addition)
-		if err != nil {
-			return nil, fmt.Errorf("addition: %w", err)
+	}
+
+	var additions []compiledAction
+	if len(pb.GetAdditions()) > 0 {
+		additions = make([]compiledAction, 0, len(pb.GetAdditions()))
+		for i, op := range pb.GetAdditions() {
+			ca, err := compileAdd(op)
+			if err != nil {
+				return nil, fmt.Errorf("additions[%d]: %w", i, err)
+			}
+			additions = append(additions, ca)
 		}
-		stage = googlepolicy.TransformStageAdd
-		action = ca
-	case *policyv1alpha1.LogTransformPolicy_Removal:
-		if a.Removal == nil {
-			return nil, ErrMissingAction
+	}
+
+	var removals []compiledAction
+	if len(pb.GetRemovals()) > 0 {
+		removals = make([]compiledAction, 0, len(pb.GetRemovals()))
+		for i, op := range pb.GetRemovals() {
+			cr, err := compileRemove(op)
+			if err != nil {
+				return nil, fmt.Errorf("removals[%d]: %w", i, err)
+			}
+			removals = append(removals, cr)
 		}
-		cr, err := compileRemove(a.Removal)
-		if err != nil {
-			return nil, fmt.Errorf("removal: %w", err)
+	}
+
+	var redactions []compiledAction
+	if len(pb.GetRedactions()) > 0 {
+		redactions = make([]compiledAction, 0, len(pb.GetRedactions()))
+		for i, op := range pb.GetRedactions() {
+			crd, err := compileRedact(op)
+			if err != nil {
+				return nil, fmt.Errorf("redactions[%d]: %w", i, err)
+			}
+			redactions = append(redactions, crd)
 		}
-		stage = googlepolicy.TransformStageRemove
-		action = cr
-	case *policyv1alpha1.LogTransformPolicy_Renaming:
-		if a.Renaming == nil {
-			return nil, ErrMissingAction
-		}
-		cr, err := compileRename(a.Renaming)
-		if err != nil {
-			return nil, fmt.Errorf("renaming: %w", err)
-		}
-		stage = googlepolicy.TransformStageRename
-		action = cr
-	case *policyv1alpha1.LogTransformPolicy_Redaction:
-		if a.Redaction == nil {
-			return nil, ErrMissingAction
-		}
-		crd, err := compileRedact(a.Redaction)
-		if err != nil {
-			return nil, fmt.Errorf("redaction: %w", err)
-		}
-		stage = googlepolicy.TransformStageRedact
-		action = crd
-	default:
-		return nil, ErrMissingAction
 	}
 
 	matchers := make([]matcher.CompiledLogMatcher, 0, len(pb.GetMatchers()))
@@ -150,10 +157,12 @@ func NewPolicyFromProto(pb *policyv1alpha1.LogTransformPolicy) (*Policy, error) 
 	}
 
 	return &Policy{
-		proto:    pb,
-		stage:    stage,
-		matchers: matchers,
-		action:   action,
+		proto:      pb,
+		matchers:   matchers,
+		renamings:  renamings,
+		additions:  additions,
+		removals:   removals,
+		redactions: redactions,
 	}, nil
 }
 
@@ -182,6 +191,9 @@ func (p *Policy) Validate() error {
 	if p.proto == nil {
 		return ErrNilProto
 	}
+	if len(p.renamings) == 0 && len(p.additions) == 0 && len(p.removals) == 0 && len(p.redactions) == 0 {
+		return ErrMissingAction
+	}
 	return nil
 }
 
@@ -190,27 +202,9 @@ func (p *Policy) Proto() proto.Message {
 	return p.proto
 }
 
-// TransformStage returns the execution stage of this transform policy
-// (TransformStageRename -> TransformStageAdd -> TransformStageRemove -> TransformStageRedact).
-func (p *Policy) TransformStage() googlepolicy.TransformStage {
-	return p.stage
-}
-
-// TransformLog evaluates the policy against the given LogContext and, if all
-// matchers evaluate to true, applies its configured action.
-// It returns TransformModified if the policy matched and modified the record,
-// or TransformNoMatch otherwise.
-func (p *Policy) TransformLog(ctx googlepolicy.LogContext) googlepolicy.TransformResult {
-	if !p.matchesContext(ctx) {
-		return googlepolicy.TransformNoMatch
-	}
-	if !p.action(ctx) {
-		return googlepolicy.TransformNoMatch
-	}
-	return googlepolicy.TransformModified
-}
-
-func (p *Policy) matchesContext(ctx googlepolicy.LogContext) bool {
+// MatchesLog reports whether every matcher in the policy matches the given
+// LogContext (or true when matchers is empty).
+func (p *Policy) MatchesLog(ctx googlepolicy.LogContext) bool {
 	for i := range p.matchers {
 		if !p.matchers[i].Eval(ctx) {
 			return false
@@ -219,15 +213,99 @@ func (p *Policy) matchesContext(ctx googlepolicy.LogContext) bool {
 	return true
 }
 
-func compileAdd(a *policyv1alpha1.LogAddAction) (compiledAction, error) {
+// TransformLogStage executes this policy's compiled operations for the given
+// stage in slice order without re-evaluating matchers. It returns
+// TransformModified if at least one operation in the stage modified ctx, or
+// TransformNoMatch otherwise.
+func (p *Policy) TransformLogStage(stage googlepolicy.TransformStage, ctx googlepolicy.LogContext) googlepolicy.TransformResult {
+	var ops []compiledAction
+	switch stage {
+	case googlepolicy.TransformStageRename:
+		ops = p.renamings
+	case googlepolicy.TransformStageAdd:
+		ops = p.additions
+	case googlepolicy.TransformStageRemove:
+		ops = p.removals
+	case googlepolicy.TransformStageRedact:
+		ops = p.redactions
+	default:
+		return googlepolicy.TransformNoMatch
+	}
+	var modified bool
+	for _, op := range ops {
+		if op(ctx) {
+			modified = true
+		}
+	}
+	if !modified {
+		return googlepolicy.TransformNoMatch
+	}
+	return googlepolicy.TransformModified
+}
+
+// TransformLog evaluates MatchesLog once against the pre-transform LogContext
+// and, if all matchers evaluate to true, executes this policy's configured
+// operations in global stage order (Rename -> Add -> Remove -> Redact).
+// It returns TransformModified if the policy matched and at least one operation
+// modified the record, or TransformNoMatch otherwise.
+func (p *Policy) TransformLog(ctx googlepolicy.LogContext) googlepolicy.TransformResult {
+	if !p.MatchesLog(ctx) {
+		return googlepolicy.TransformNoMatch
+	}
+	var modified bool
+	for _, stage := range [...]googlepolicy.TransformStage{
+		googlepolicy.TransformStageRename,
+		googlepolicy.TransformStageAdd,
+		googlepolicy.TransformStageRemove,
+		googlepolicy.TransformStageRedact,
+	} {
+		if p.TransformLogStage(stage, ctx) == googlepolicy.TransformModified {
+			modified = true
+		}
+	}
+	if !modified {
+		return googlepolicy.TransformNoMatch
+	}
+	return googlepolicy.TransformModified
+}
+
+func compileAdd(a *policyv1alpha1.LogAddition) (compiledAction, error) {
+	if a == nil {
+		return nil, ErrMissingAction
+	}
+	if len(a.ProtoReflect().GetUnknown()) > 0 {
+		return nil, ErrUnsupportedAction
+	}
 	target := a.GetTarget()
-	if target == nil || target.Target == nil {
+	if target == nil {
 		return nil, ErrMissingTarget
+	}
+	if len(target.ProtoReflect().GetUnknown()) > 0 {
+		return nil, ErrUnsupportedAction
+	}
+	if target.Target == nil {
+		return nil, ErrMissingTarget
+	}
+
+	var val *policyv1alpha1.Value
+	switch s := a.GetSource().(type) {
+	case *policyv1alpha1.LogAddition_Value:
+		if s == nil || s.Value == nil {
+			return nil, ErrMissingValue
+		}
+		val = s.Value
+	case nil:
+		return nil, ErrMissingValue
+	default:
+		return nil, fmt.Errorf("%w: %T", ErrUnsupportedAction, s)
 	}
 
 	switch t := target.Target.(type) {
 	case *policyv1alpha1.LogTargetSelector_LogAttributePath:
-		setAttr, err := matcher.CompilePathSetter(t.LogAttributePath, "log", a.GetValue(), a.GetUpsertEnabled())
+		if t == nil {
+			return nil, ErrMissingTarget
+		}
+		setAttr, err := matcher.CompilePathSetter(t.LogAttributePath, "log", val, a.GetUpsertEnabled())
 		if err != nil {
 			return nil, err
 		}
@@ -239,7 +317,10 @@ func compileAdd(a *policyv1alpha1.LogAddAction) (compiledAction, error) {
 		}, nil
 
 	case *policyv1alpha1.LogTargetSelector_BodyFieldPath:
-		setBodyField, err := matcher.CompilePathSetter(t.BodyFieldPath, "body", a.GetValue(), a.GetUpsertEnabled())
+		if t == nil {
+			return nil, ErrMissingTarget
+		}
+		setBodyField, err := matcher.CompilePathSetter(t.BodyFieldPath, "body", val, a.GetUpsertEnabled())
 		if err != nil {
 			return nil, err
 		}
@@ -257,7 +338,10 @@ func compileAdd(a *policyv1alpha1.LogAddAction) (compiledAction, error) {
 		}, nil
 
 	case *policyv1alpha1.LogTargetSelector_RecordField:
-		return compileRecordFieldAdd(t.RecordField, a.GetValue(), a.GetUpsertEnabled())
+		if t == nil {
+			return nil, ErrMissingTarget
+		}
+		return compileRecordFieldAdd(t.RecordField, val, a.GetUpsertEnabled())
 
 	default:
 		return nil, ErrMissingTarget
@@ -324,13 +408,28 @@ func compileRecordFieldAdd(field policyv1alpha1.LogRecordField, val *policyv1alp
 	}
 }
 
-func compileRemove(a *policyv1alpha1.LogRemoveAction) (compiledAction, error) {
-	if a == nil || a.Target == nil || a.Target.Target == nil {
+func compileRemove(a *policyv1alpha1.LogRemoval) (compiledAction, error) {
+	if a == nil {
+		return nil, ErrMissingTarget
+	}
+	if len(a.ProtoReflect().GetUnknown()) > 0 {
+		return nil, ErrUnsupportedAction
+	}
+	if a.Target == nil {
+		return nil, ErrMissingTarget
+	}
+	if len(a.Target.ProtoReflect().GetUnknown()) > 0 {
+		return nil, ErrUnsupportedAction
+	}
+	if a.Target.Target == nil {
 		return nil, ErrMissingTarget
 	}
 
 	switch t := a.Target.Target.(type) {
 	case *policyv1alpha1.LogAttributeSelector_LogAttributePath:
+		if t == nil {
+			return nil, ErrMissingTarget
+		}
 		rmAttr, err := matcher.CompilePathRemover(t.LogAttributePath, "log")
 		if err != nil {
 			return nil, err
@@ -343,6 +442,9 @@ func compileRemove(a *policyv1alpha1.LogRemoveAction) (compiledAction, error) {
 		}, nil
 
 	case *policyv1alpha1.LogAttributeSelector_BodyFieldPath:
+		if t == nil {
+			return nil, ErrMissingTarget
+		}
 		rmBody, err := matcher.CompilePathRemover(t.BodyFieldPath, "body")
 		if err != nil {
 			return nil, err
@@ -363,21 +465,30 @@ func compileRemove(a *policyv1alpha1.LogRemoveAction) (compiledAction, error) {
 	}
 }
 
-func compileRename(a *policyv1alpha1.LogRenameAction) (compiledAction, error) {
+func compileRename(a *policyv1alpha1.LogRenaming) (compiledAction, error) {
 	if a == nil {
 		return nil, ErrMissingAction
 	}
-	if a.Source == nil || a.Source.Target == nil {
+	if len(a.ProtoReflect().GetUnknown()) > 0 {
+		return nil, ErrUnsupportedAction
+	}
+	if a.Source == nil {
 		return nil, ErrMissingSource
 	}
-	if a.Target == nil || a.Target.Target == nil {
+	if len(a.Source.ProtoReflect().GetUnknown()) > 0 {
+		return nil, ErrUnsupportedAction
+	}
+	if a.Source.Target == nil {
+		return nil, ErrMissingSource
+	}
+	if a.Target == nil {
 		return nil, ErrMissingTarget
 	}
-
-	if proto.Equal(a.Source, a.Target) {
-		return func(_ googlepolicy.LogContext) bool {
-			return false
-		}, nil
+	if len(a.Target.ProtoReflect().GetUnknown()) > 0 {
+		return nil, ErrUnsupportedAction
+	}
+	if a.Target.Target == nil {
+		return nil, ErrMissingTarget
 	}
 
 	var (
@@ -387,9 +498,15 @@ func compileRename(a *policyv1alpha1.LogRenameAction) (compiledAction, error) {
 	)
 	switch s := a.Source.Target.(type) {
 	case *policyv1alpha1.LogAttributeSelector_LogAttributePath:
+		if s == nil {
+			return nil, ErrMissingSource
+		}
 		srcAttrPath = s.LogAttributePath
 		srcKind = "log"
 	case *policyv1alpha1.LogAttributeSelector_BodyFieldPath:
+		if s == nil {
+			return nil, ErrMissingSource
+		}
 		srcAttrPath = s.BodyFieldPath
 		srcKind = "body"
 		srcInBody = true
@@ -404,9 +521,15 @@ func compileRename(a *policyv1alpha1.LogRenameAction) (compiledAction, error) {
 	)
 	switch t := a.Target.Target.(type) {
 	case *policyv1alpha1.LogAttributeSelector_LogAttributePath:
+		if t == nil {
+			return nil, ErrMissingTarget
+		}
 		tgtAttrPath = t.LogAttributePath
 		tgtKind = "log"
 	case *policyv1alpha1.LogAttributeSelector_BodyFieldPath:
+		if t == nil {
+			return nil, ErrMissingTarget
+		}
 		tgtAttrPath = t.BodyFieldPath
 		tgtKind = "body"
 		tgtInBody = true
@@ -421,6 +544,12 @@ func compileRename(a *policyv1alpha1.LogRenameAction) (compiledAction, error) {
 	tgtSteps, err := matcher.CompilePath(tgtAttrPath, tgtKind)
 	if err != nil {
 		return nil, err
+	}
+
+	if proto.Equal(a.Source, a.Target) {
+		return func(_ googlepolicy.LogContext) bool {
+			return false
+		}, nil
 	}
 
 	if srcInBody == tgtInBody {
@@ -490,21 +619,53 @@ func compileRename(a *policyv1alpha1.LogRenameAction) (compiledAction, error) {
 	}, nil
 }
 
-func compileRedact(a *policyv1alpha1.LogRedactAction) (compiledAction, error) {
+func compileRedact(a *policyv1alpha1.LogRedaction) (compiledAction, error) {
 	if a == nil {
 		return nil, ErrMissingAction
 	}
+	if len(a.ProtoReflect().GetUnknown()) > 0 {
+		return nil, ErrUnsupportedAction
+	}
 	target := a.GetTarget()
-	if target == nil || target.Target == nil {
+	if target == nil {
 		return nil, ErrMissingTarget
 	}
-	redactStr, err := matcher.CompileStringRedactor(a.GetRegex(), a.GetReplacement())
+	if len(target.ProtoReflect().GetUnknown()) > 0 {
+		return nil, ErrUnsupportedAction
+	}
+	if target.Target == nil {
+		return nil, ErrMissingTarget
+	}
+	var regex string
+	switch p := a.GetPattern().(type) {
+	case nil:
+	case *policyv1alpha1.LogRedaction_Regex:
+		if p != nil {
+			regex = p.Regex
+		}
+	default:
+		return nil, fmt.Errorf("%w: %T", ErrUnsupportedAction, p)
+	}
+	var replacement string
+	switch m := a.GetMask().(type) {
+	case nil:
+	case *policyv1alpha1.LogRedaction_Replacement:
+		if m != nil {
+			replacement = m.Replacement
+		}
+	default:
+		return nil, fmt.Errorf("%w: %T", ErrUnsupportedAction, m)
+	}
+	redactStr, err := matcher.CompileStringRedactor(regex, replacement)
 	if err != nil {
 		return nil, err
 	}
 
 	switch t := target.Target.(type) {
 	case *policyv1alpha1.LogTargetSelector_LogAttributePath:
+		if t == nil {
+			return nil, ErrMissingTarget
+		}
 		steps, err := matcher.CompilePath(t.LogAttributePath, "log")
 		if err != nil {
 			return nil, err
@@ -526,6 +687,9 @@ func compileRedact(a *policyv1alpha1.LogRedactAction) (compiledAction, error) {
 		}, nil
 
 	case *policyv1alpha1.LogTargetSelector_BodyFieldPath:
+		if t == nil {
+			return nil, ErrMissingTarget
+		}
 		steps, err := matcher.CompilePath(t.BodyFieldPath, "body")
 		if err != nil {
 			return nil, err
@@ -551,6 +715,9 @@ func compileRedact(a *policyv1alpha1.LogRedactAction) (compiledAction, error) {
 		}, nil
 
 	case *policyv1alpha1.LogTargetSelector_RecordField:
+		if t == nil {
+			return nil, ErrMissingTarget
+		}
 		return compileRecordFieldRedact(t.RecordField, redactStr)
 
 	default:
@@ -634,6 +801,9 @@ func requireStringValue(val *policyv1alpha1.Value, targetName string) (string, e
 	if !ok {
 		return "", fmt.Errorf("%s requires a string value", targetName)
 	}
+	if sv == nil {
+		return "", ErrMissingValue
+	}
 	return sv.StringValue, nil
 }
 
@@ -644,6 +814,9 @@ func requireSeverityNumber(val *policyv1alpha1.Value) (plog.SeverityNumber, erro
 	iv, ok := val.GetKind().(*policyv1alpha1.Value_IntValue)
 	if !ok {
 		return plog.SeverityNumberUnspecified, errors.New("log record field SEVERITY_NUMBER requires an int value")
+	}
+	if iv == nil {
+		return plog.SeverityNumberUnspecified, ErrMissingValue
 	}
 	if iv.IntValue < int64(plog.SeverityNumberTrace) || iv.IntValue > int64(plog.SeverityNumberFatal4) {
 		return plog.SeverityNumberUnspecified, fmt.Errorf("log record field SEVERITY_NUMBER must be in range [1, 24], got %d", iv.IntValue)

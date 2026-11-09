@@ -49,8 +49,27 @@ func TestLogTransformPolicy_Serialization(t *testing.T) {
 				},
 			},
 		},
-		Action: &policyv1alpha1.LogTransformPolicy_Addition{
-			Addition: &policyv1alpha1.LogAddAction{
+		Renamings: []*policyv1alpha1.LogRenaming{
+			{
+				Source: &policyv1alpha1.LogAttributeSelector{
+					Target: &policyv1alpha1.LogAttributeSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{
+							Segments: []string{"legacy_user"},
+						},
+					},
+				},
+				Target: &policyv1alpha1.LogAttributeSelector{
+					Target: &policyv1alpha1.LogAttributeSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{
+							Segments: []string{"user.name"},
+						},
+					},
+				},
+				UpsertEnabled: proto.Bool(false),
+			},
+		},
+		Additions: []*policyv1alpha1.LogAddition{
+			{
 				Target: &policyv1alpha1.LogTargetSelector{
 					Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
 						LogAttributePath: &policyv1alpha1.AttributePath{
@@ -58,12 +77,59 @@ func TestLogTransformPolicy_Serialization(t *testing.T) {
 						},
 					},
 				},
-				Value: &policyv1alpha1.Value{
-					Kind: &policyv1alpha1.Value_StringValue{
-						StringValue: "HOT_ACTIVE_SOC",
+				Source: &policyv1alpha1.LogAddition_Value{
+					Value: &policyv1alpha1.Value{
+						Kind: &policyv1alpha1.Value_StringValue{
+							StringValue: "HOT_ACTIVE_SOC",
+						},
 					},
 				},
 				UpsertEnabled: proto.Bool(true),
+			},
+			{
+				Target: &policyv1alpha1.LogTargetSelector{
+					Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{
+							Segments: []string{"soc_owner"},
+						},
+					},
+				},
+				Source: &policyv1alpha1.LogAddition_Value{
+					Value: &policyv1alpha1.Value{
+						Kind: &policyv1alpha1.Value_StringValue{
+							StringValue: "secops",
+						},
+					},
+				},
+				UpsertEnabled: proto.Bool(false),
+			},
+		},
+		Removals: []*policyv1alpha1.LogRemoval{
+			{
+				Target: &policyv1alpha1.LogAttributeSelector{
+					Target: &policyv1alpha1.LogAttributeSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{
+							Segments: []string{"debug_scratch"},
+						},
+					},
+				},
+			},
+		},
+		Redactions: []*policyv1alpha1.LogRedaction{
+			{
+				Target: &policyv1alpha1.LogTargetSelector{
+					Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{
+							Segments: []string{"user.name"},
+						},
+					},
+				},
+				Pattern: &policyv1alpha1.LogRedaction_Regex{
+					Regex: `@.+`,
+				},
+				Mask: &policyv1alpha1.LogRedaction_Replacement{
+					Replacement: "@[REDACTED]",
+				},
 			},
 		},
 	}
@@ -83,9 +149,14 @@ func TestLogTransformPolicy_Serialization(t *testing.T) {
 	assert.True(t, proto.Equal(policy, unmarshaled))
 	assert.Equal(t, "label-soc-logs", unmarshaled.GetId())
 	require.Len(t, unmarshaled.GetMatchers(), 1)
-	require.NotNil(t, unmarshaled.GetAddition())
-	require.NotNil(t, unmarshaled.GetAddition().UpsertEnabled)
-	assert.True(t, unmarshaled.GetAddition().GetUpsertEnabled())
+	require.Len(t, unmarshaled.GetRenamings(), 1)
+	require.Len(t, unmarshaled.GetAdditions(), 2)
+	require.Len(t, unmarshaled.GetRemovals(), 1)
+	require.Len(t, unmarshaled.GetRedactions(), 1)
+	require.NotNil(t, unmarshaled.GetAdditions()[0].UpsertEnabled)
+	assert.True(t, unmarshaled.GetAdditions()[0].GetUpsertEnabled())
+	require.NotNil(t, unmarshaled.GetAdditions()[1].UpsertEnabled)
+	assert.False(t, unmarshaled.GetAdditions()[1].GetUpsertEnabled())
 }
 
 func TestLogTransformPolicy_JSONSerialization(t *testing.T) {
@@ -125,8 +196,8 @@ func TestLogTransformPolicy_JSONSerialization(t *testing.T) {
 				},
 			},
 		},
-		Action: &policyv1alpha1.LogTransformPolicy_Addition{
-			Addition: &policyv1alpha1.LogAddAction{
+		Additions: []*policyv1alpha1.LogAddition{
+			{
 				Target: &policyv1alpha1.LogTargetSelector{
 					Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
 						LogAttributePath: &policyv1alpha1.AttributePath{
@@ -134,9 +205,11 @@ func TestLogTransformPolicy_JSONSerialization(t *testing.T) {
 						},
 					},
 				},
-				Value: &policyv1alpha1.Value{
-					Kind: &policyv1alpha1.Value_StringValue{
-						StringValue: "LAKEHOUSE_ARCHIVE",
+				Source: &policyv1alpha1.LogAddition_Value{
+					Value: &policyv1alpha1.Value{
+						Kind: &policyv1alpha1.Value_StringValue{
+							StringValue: "LAKEHOUSE_ARCHIVE",
+						},
 					},
 				},
 				UpsertEnabled: proto.Bool(true),
@@ -152,13 +225,13 @@ func TestLogTransformPolicy_JSONSerialization(t *testing.T) {
 	assert.True(t, proto.Equal(policy, unmarshaled))
 }
 
-func TestLogTransformPolicy_AllActionVariantsAndUnconditionalMatchers(t *testing.T) {
+func TestLogTransformPolicy_AllStageListsAndUnconditionalMatchers(t *testing.T) {
 	variants := []*policyv1alpha1.LogTransformPolicy{
 		{
-			// ST2 Step 4: Unconditional removal action (empty matchers).
+			// Unconditional removal operation (empty matchers).
 			Id: "remove-local-scriptpath",
-			Action: &policyv1alpha1.LogTransformPolicy_Removal{
-				Removal: &policyv1alpha1.LogRemoveAction{
+			Removals: []*policyv1alpha1.LogRemoval{
+				{
 					Target: &policyv1alpha1.LogAttributeSelector{
 						Target: &policyv1alpha1.LogAttributeSelector_LogAttributePath{
 							LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"LOCAL_SCRIPTPATH_V1"}},
@@ -168,10 +241,10 @@ func TestLogTransformPolicy_AllActionVariantsAndUnconditionalMatchers(t *testing
 			},
 		},
 		{
-			// Renaming action from body_field_path to log_attribute_path.
+			// Renaming operation from body_field_path to log_attribute_path.
 			Id: "rename-legacy-user-id",
-			Action: &policyv1alpha1.LogTransformPolicy_Renaming{
-				Renaming: &policyv1alpha1.LogRenameAction{
+			Renamings: []*policyv1alpha1.LogRenaming{
+				{
 					Source: &policyv1alpha1.LogAttributeSelector{
 						Target: &policyv1alpha1.LogAttributeSelector_BodyFieldPath{
 							BodyFieldPath: &policyv1alpha1.AttributePath{Segments: []string{"event_data", "userId"}},
@@ -187,17 +260,21 @@ func TestLogTransformPolicy_AllActionVariantsAndUnconditionalMatchers(t *testing
 			},
 		},
 		{
-			// ST1: Unconditional redaction action (empty matchers).
+			// Unconditional redaction operation (empty matchers).
 			Id: "redact-ssn",
-			Action: &policyv1alpha1.LogTransformPolicy_Redaction{
-				Redaction: &policyv1alpha1.LogRedactAction{
+			Redactions: []*policyv1alpha1.LogRedaction{
+				{
 					Target: &policyv1alpha1.LogTargetSelector{
 						Target: &policyv1alpha1.LogTargetSelector_RecordField{
 							RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
 						},
 					},
-					Regex:       proto.String(`\b\d{3}-\d{2}-\d{4}\b`),
-					Replacement: proto.String("[REDACTED_SSN]"),
+					Pattern: &policyv1alpha1.LogRedaction_Regex{
+						Regex: `\b\d{3}-\d{2}-\d{4}\b`,
+					},
+					Mask: &policyv1alpha1.LogRedaction_Replacement{
+						Replacement: "[REDACTED_SSN]",
+					},
 				},
 			},
 		},
@@ -220,53 +297,69 @@ func TestLogTransformPolicy_AllActionVariantsAndUnconditionalMatchers(t *testing
 	}
 }
 
-func TestLogTransformPolicy_OptionalFieldsPresence(t *testing.T) {
-	// 1. Omitted optional fields remain nil while getters return default zero values.
+func TestLogTransformPolicy_OptionalAndOneofFieldsPresence(t *testing.T) {
+	// 1. Omitted pattern/mask oneof fields remain nil while getters return default zero values.
 	omittedJSON := []byte(`{
 		"id": "redact-entire-attribute",
-		"redaction": {
-			"target": {
-				"logAttributePath": {"segments": ["secret_token"]}
+		"redactions": [
+			{
+				"target": {
+					"logAttributePath": {"segments": ["secret_token"]}
+				}
 			}
-		}
+		]
 	}`)
 	omittedPolicy := &policyv1alpha1.LogTransformPolicy{}
 	require.NoError(t, protojson.Unmarshal(omittedJSON, omittedPolicy))
-	require.NotNil(t, omittedPolicy.GetRedaction())
-	assert.Nil(t, omittedPolicy.GetRedaction().Regex)
-	assert.Equal(t, "", omittedPolicy.GetRedaction().GetRegex())
-	assert.Nil(t, omittedPolicy.GetRedaction().Replacement)
-	assert.Equal(t, "", omittedPolicy.GetRedaction().GetReplacement())
+	require.Len(t, omittedPolicy.GetRedactions(), 1)
+	assert.Nil(t, omittedPolicy.GetRedactions()[0].GetPattern())
+	assert.Equal(t, "", omittedPolicy.GetRedactions()[0].GetRegex())
+	assert.Nil(t, omittedPolicy.GetRedactions()[0].GetMask())
+	assert.Equal(t, "", omittedPolicy.GetRedactions()[0].GetReplacement())
 
-	// 2. Explicit zero values (upsertEnabled: false, replacement: "") preserve presence.
+	// 2. Explicit zero values (upsertEnabled: false, regex: "", replacement: "") preserve presence.
 	explicitZeroJSON := []byte(`{
-		"id": "add-no-upsert",
-		"addition": {
-			"target": {"logAttributePath": {"segments": ["tier"]}},
-			"value": {"stringValue": "default"},
-			"upsertEnabled": false
-		}
+		"id": "add-and-redact-explicit-zero",
+		"additions": [
+			{
+				"target": {"logAttributePath": {"segments": ["tier"]}},
+				"value": {"stringValue": "default"},
+				"upsertEnabled": false
+			}
+		],
+		"redactions": [
+			{
+				"target": {"logAttributePath": {"segments": ["secret"]}},
+				"regex": "",
+				"replacement": ""
+			}
+		]
 	}`)
 	explicitZeroPolicy := &policyv1alpha1.LogTransformPolicy{}
 	require.NoError(t, protojson.Unmarshal(explicitZeroJSON, explicitZeroPolicy))
-	require.NotNil(t, explicitZeroPolicy.GetAddition())
-	require.NotNil(t, explicitZeroPolicy.GetAddition().UpsertEnabled)
-	assert.False(t, explicitZeroPolicy.GetAddition().GetUpsertEnabled())
+	require.Len(t, explicitZeroPolicy.GetAdditions(), 1)
+	require.NotNil(t, explicitZeroPolicy.GetAdditions()[0].UpsertEnabled)
+	assert.False(t, explicitZeroPolicy.GetAdditions()[0].GetUpsertEnabled())
+	require.Len(t, explicitZeroPolicy.GetRedactions(), 1)
+	require.IsType(t, &policyv1alpha1.LogRedaction_Regex{}, explicitZeroPolicy.GetRedactions()[0].GetPattern())
+	require.IsType(t, &policyv1alpha1.LogRedaction_Replacement{}, explicitZeroPolicy.GetRedactions()[0].GetMask())
 }
 
 func TestLogTransformPolicy_RecordFieldAndNestedPathTargets(t *testing.T) {
 	policies := []*policyv1alpha1.LogTransformPolicy{
 		{
 			Id: "add-record-field-body-fallback",
-			Action: &policyv1alpha1.LogTransformPolicy_Addition{
-				Addition: &policyv1alpha1.LogAddAction{
+			Additions: []*policyv1alpha1.LogAddition{
+				{
 					Target: &policyv1alpha1.LogTargetSelector{
 						Target: &policyv1alpha1.LogTargetSelector_RecordField{
 							RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
 						},
 					},
-					Value: &policyv1alpha1.Value{
-						Kind: &policyv1alpha1.Value_StringValue{StringValue: "default-body"},
+					Source: &policyv1alpha1.LogAddition_Value{
+						Value: &policyv1alpha1.Value{
+							Kind: &policyv1alpha1.Value_StringValue{StringValue: "default-body"},
+						},
 					},
 					UpsertEnabled: proto.Bool(false),
 				},
@@ -274,15 +367,17 @@ func TestLogTransformPolicy_RecordFieldAndNestedPathTargets(t *testing.T) {
 		},
 		{
 			Id: "add-record-field-severity-text",
-			Action: &policyv1alpha1.LogTransformPolicy_Addition{
-				Addition: &policyv1alpha1.LogAddAction{
+			Additions: []*policyv1alpha1.LogAddition{
+				{
 					Target: &policyv1alpha1.LogTargetSelector{
 						Target: &policyv1alpha1.LogTargetSelector_RecordField{
 							RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT,
 						},
 					},
-					Value: &policyv1alpha1.Value{
-						Kind: &policyv1alpha1.Value_StringValue{StringValue: "WARN"},
+					Source: &policyv1alpha1.LogAddition_Value{
+						Value: &policyv1alpha1.Value{
+							Kind: &policyv1alpha1.Value_StringValue{StringValue: "WARN"},
+						},
 					},
 					UpsertEnabled: proto.Bool(true),
 				},
@@ -290,15 +385,17 @@ func TestLogTransformPolicy_RecordFieldAndNestedPathTargets(t *testing.T) {
 		},
 		{
 			Id: "add-record-field-severity-number",
-			Action: &policyv1alpha1.LogTransformPolicy_Addition{
-				Addition: &policyv1alpha1.LogAddAction{
+			Additions: []*policyv1alpha1.LogAddition{
+				{
 					Target: &policyv1alpha1.LogTargetSelector{
 						Target: &policyv1alpha1.LogTargetSelector_RecordField{
 							RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER,
 						},
 					},
-					Value: &policyv1alpha1.Value{
-						Kind: &policyv1alpha1.Value_IntValue{IntValue: 13},
+					Source: &policyv1alpha1.LogAddition_Value{
+						Value: &policyv1alpha1.Value{
+							Kind: &policyv1alpha1.Value_IntValue{IntValue: 13},
+						},
 					},
 					UpsertEnabled: proto.Bool(true),
 				},
@@ -306,8 +403,8 @@ func TestLogTransformPolicy_RecordFieldAndNestedPathTargets(t *testing.T) {
 		},
 		{
 			Id: "add-nested-body-field-upsert",
-			Action: &policyv1alpha1.LogTransformPolicy_Addition{
-				Addition: &policyv1alpha1.LogAddAction{
+			Additions: []*policyv1alpha1.LogAddition{
+				{
 					Target: &policyv1alpha1.LogTargetSelector{
 						Target: &policyv1alpha1.LogTargetSelector_BodyFieldPath{
 							BodyFieldPath: &policyv1alpha1.AttributePath{
@@ -315,8 +412,10 @@ func TestLogTransformPolicy_RecordFieldAndNestedPathTargets(t *testing.T) {
 							},
 						},
 					},
-					Value: &policyv1alpha1.Value{
-						Kind: &policyv1alpha1.Value_StringValue{StringValue: "restricted"},
+					Source: &policyv1alpha1.LogAddition_Value{
+						Value: &policyv1alpha1.Value{
+							Kind: &policyv1alpha1.Value_StringValue{StringValue: "restricted"},
+						},
 					},
 					UpsertEnabled: proto.Bool(true),
 				},
@@ -324,14 +423,16 @@ func TestLogTransformPolicy_RecordFieldAndNestedPathTargets(t *testing.T) {
 		},
 		{
 			Id: "redact-record-field-severity-text",
-			Action: &policyv1alpha1.LogTransformPolicy_Redaction{
-				Redaction: &policyv1alpha1.LogRedactAction{
+			Redactions: []*policyv1alpha1.LogRedaction{
+				{
 					Target: &policyv1alpha1.LogTargetSelector{
 						Target: &policyv1alpha1.LogTargetSelector_RecordField{
 							RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT,
 						},
 					},
-					Replacement: proto.String("REDACTED"),
+					Mask: &policyv1alpha1.LogRedaction_Replacement{
+						Replacement: "REDACTED",
+					},
 				},
 			},
 		},

@@ -1,13 +1,20 @@
 {
   "type": "log_transform",
   "id": "m-add-fallback",
-  "addition": {
-    "target": {
-      "body_field_path": {
-        "segments": ["account", "id"]
-      }
-    },
-    "value": { "string_value": "guest-0000" },
-    "upsert_enabled": false
-  }
+  "additions": [
+    {
+      "target": {
+        "body_field_path": {
+          "segments": [
+            "account",
+            "id"
+          ]
+        }
+      },
+      "value": {
+        "string_value": "guest-0000"
+      },
+      "upsert_enabled": false
+    }
+  ]
 }

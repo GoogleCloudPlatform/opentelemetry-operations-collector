@@ -593,8 +593,7 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 		}
 	}
 	if needsStorage {
-		storageExtType, _ := component.NewType(googlepolicy.DefaultStorageExtensionType)
-		storageExtID := component.NewIDWithName(storageExtType, googlepolicy.DefaultStorageExtensionName)
+		storageExtID := googlepolicy.StorageExtensionID
 		storageCfg := map[string]any{
 			"create_directory": true,
 		}

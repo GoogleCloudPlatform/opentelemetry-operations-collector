@@ -379,7 +379,7 @@ func (p *Policy) receiverConfigs() map[string]any {
 			"max_reads":             DefaultMaxReads,
 			"ignore_channel_errors": DefaultIgnoreChannelErrors,
 			"exclude_providers":     []string{DefaultExcludeProvider},
-			"storage":               googlepolicy.DefaultStorageExtensionID,
+			"storage":               googlepolicy.StorageExtensionID.String(),
 		}
 	}
 	return map[string]any{

@@ -242,14 +242,8 @@ type PersistentStorageSourcePolicy interface {
 	RequiresStorage() bool
 }
 
-const (
-	// DefaultStorageExtensionType is the component type for the persistent file storage extension.
-	DefaultStorageExtensionType = "file_storage"
-	// DefaultStorageExtensionName is the component name for the shared file storage extension.
-	DefaultStorageExtensionName = "googlecontrolplane"
-	// DefaultStorageExtensionID is the full component ID string for the shared file storage extension.
-	DefaultStorageExtensionID = DefaultStorageExtensionType + "/" + DefaultStorageExtensionName
-)
+// StorageExtensionID is the component ID for the persistent file storage extension.
+var StorageExtensionID = component.MustNewIDWithName("file_storage", "googlecontrolplane")
 
 // DestinationPolicy is an extended interface that any Destination policy
 // will implement.

@@ -587,7 +587,7 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource(t *testing.T) {
 		assert.False(t, conf.IsSet("receivers::"+secRecID+"::event_driven_scraping"))
 		assert.Equal(t, 500, conf.Get("receivers::"+secRecID+"::max_reads"))
 		assert.Equal(t, true, conf.Get("receivers::"+secRecID+"::ignore_channel_errors"))
-		assert.Equal(t, "file_storage/default", conf.Get("receivers::"+secRecID+"::storage"))
+		assert.Equal(t, "file_storage/googlecontrolplane", conf.Get("receivers::"+secRecID+"::storage"))
 		assert.ElementsMatch(t, []string{"otelcol-google"}, conf.Get("receivers::"+secRecID+"::exclude_providers"))
 
 		assert.True(t, conf.IsSet("receivers::"+sysmonRecID))
@@ -596,14 +596,14 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource(t *testing.T) {
 		assert.False(t, conf.IsSet("receivers::"+sysmonRecID+"::event_driven_scraping"))
 		assert.Equal(t, 500, conf.Get("receivers::"+sysmonRecID+"::max_reads"))
 		assert.Equal(t, true, conf.Get("receivers::"+sysmonRecID+"::ignore_channel_errors"))
-		assert.Equal(t, "file_storage/default", conf.Get("receivers::"+sysmonRecID+"::storage"))
+		assert.Equal(t, "file_storage/googlecontrolplane", conf.Get("receivers::"+sysmonRecID+"::storage"))
 		assert.ElementsMatch(t, []string{"otelcol-google"}, conf.Get("receivers::"+sysmonRecID+"::exclude_providers"))
 
 		// Persistent storage extension must be synthesized on Windows
-		assert.True(t, conf.IsSet("extensions::file_storage/default"))
-		assert.Equal(t, true, conf.Get("extensions::file_storage/default::create_directory"))
+		assert.True(t, conf.IsSet("extensions::file_storage/googlecontrolplane"))
+		assert.Equal(t, true, conf.Get("extensions::file_storage/googlecontrolplane::create_directory"))
 		exts := conf.Get("service::extensions")
-		assert.Contains(t, exts, "file_storage/default")
+		assert.Contains(t, exts, "file_storage/googlecontrolplane")
 
 		// Receivers must attach to canonical shared logs/googlecontrolplane pipeline
 		receivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
@@ -613,7 +613,7 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource(t *testing.T) {
 	} else {
 		assert.False(t, conf.IsSet("receivers::"+secRecID))
 		assert.False(t, conf.IsSet("receivers::"+sysmonRecID))
-		assert.False(t, conf.IsSet("extensions::file_storage/default"))
+		assert.False(t, conf.IsSet("extensions::file_storage/googlecontrolplane"))
 		receivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
 		assert.Contains(t, receivers, "nop/googlecontrolplane")
 		assert.NotContains(t, receivers, secRecID)
@@ -2550,7 +2550,7 @@ func (m *mockStoragePolicy) Validate() error { return nil }
 func (m *mockStoragePolicy) Evaluate(context.Context) (*confmap.Conf, error) {
 	receivers := make(map[string]any, len(m.recs))
 	for _, r := range m.recs {
-		receivers[r.String()] = map[string]any{"storage": "file_storage/default"}
+		receivers[r.String()] = map[string]any{"storage": "file_storage/googlecontrolplane"}
 	}
 	return confmap.NewFromStringMap(map[string]any{"receivers": receivers}), nil
 }
@@ -2592,10 +2592,10 @@ func TestRetrieve_PersistentStorageSynthesis(t *testing.T) {
 		conf, err := ret.AsConf()
 		require.NoError(t, err)
 
-		assert.True(t, conf.IsSet("extensions::file_storage/default"))
-		assert.Equal(t, true, conf.Get("extensions::file_storage/default::create_directory"))
+		assert.True(t, conf.IsSet("extensions::file_storage/googlecontrolplane"))
+		assert.Equal(t, true, conf.Get("extensions::file_storage/googlecontrolplane::create_directory"))
 		exts := conf.Get("service::extensions")
-		assert.Contains(t, exts, "file_storage/default")
+		assert.Contains(t, exts, "file_storage/googlecontrolplane")
 		assert.NoError(t, p.Shutdown(context.Background()))
 	})
 
@@ -2631,8 +2631,8 @@ func TestRetrieve_PersistentStorageSynthesis(t *testing.T) {
 		conf, err := ret.AsConf()
 		require.NoError(t, err)
 
-		assert.True(t, conf.IsSet("extensions::file_storage/default"))
-		assert.Equal(t, customDir, conf.Get("extensions::file_storage/default::directory"))
+		assert.True(t, conf.IsSet("extensions::file_storage/googlecontrolplane"))
+		assert.Equal(t, customDir, conf.Get("extensions::file_storage/googlecontrolplane::directory"))
 		assert.NoError(t, p.Shutdown(context.Background()))
 	})
 
@@ -2668,8 +2668,8 @@ func TestRetrieve_PersistentStorageSynthesis(t *testing.T) {
 		conf, err := ret.AsConf()
 		require.NoError(t, err)
 
-		assert.True(t, conf.IsSet("extensions::file_storage/default"))
-		assert.Equal(t, customDir, conf.Get("extensions::file_storage/default::directory"))
+		assert.True(t, conf.IsSet("extensions::file_storage/googlecontrolplane"))
+		assert.Equal(t, customDir, conf.Get("extensions::file_storage/googlecontrolplane::directory"))
 		assert.NoError(t, p.Shutdown(context.Background()))
 	})
 
@@ -2702,9 +2702,9 @@ func TestRetrieve_PersistentStorageSynthesis(t *testing.T) {
 		conf, err := ret.AsConf()
 		require.NoError(t, err)
 
-		assert.False(t, conf.IsSet("extensions::file_storage/default"))
+		assert.False(t, conf.IsSet("extensions::file_storage/googlecontrolplane"))
 		exts := conf.Get("service::extensions")
-		assert.NotContains(t, exts, "file_storage/default")
+		assert.NotContains(t, exts, "file_storage/googlecontrolplane")
 		assert.NoError(t, p.Shutdown(context.Background()))
 	})
 }

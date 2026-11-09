@@ -246,7 +246,7 @@ const (
 	// DefaultStorageExtensionType is the component type for the persistent file storage extension.
 	DefaultStorageExtensionType = "file_storage"
 	// DefaultStorageExtensionName is the component name for the shared file storage extension.
-	DefaultStorageExtensionName = "default"
+	DefaultStorageExtensionName = "googlecontrolplane"
 	// DefaultStorageExtensionID is the full component ID string for the shared file storage extension.
 	DefaultStorageExtensionID = DefaultStorageExtensionType + "/" + DefaultStorageExtensionName
 )

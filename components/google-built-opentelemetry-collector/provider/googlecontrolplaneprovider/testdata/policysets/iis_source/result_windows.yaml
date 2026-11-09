@@ -38,11 +38,11 @@ processors:
             partition:
                 cache_size: 10000
                 idle_timeout: 1m30s
-            sizer: {}
+            sizer: items
         block_on_overflow: true
         num_consumers: 1
         queue_size: 10
-        sizer: {}
+        sizer: requests
         wait_for_result: false
     queue_batch/default_gcp_destination_batch_metrics:
         batch:
@@ -52,11 +52,11 @@ processors:
             partition:
                 cache_size: 10000
                 idle_timeout: 1m30s
-            sizer: {}
+            sizer: items
         block_on_overflow: true
         num_consumers: 1
         queue_size: 10
-        sizer: {}
+        sizer: requests
         wait_for_result: false
     queue_batch/default_gcp_destination_batch_traces:
         batch:
@@ -66,11 +66,11 @@ processors:
             partition:
                 cache_size: 10000
                 idle_timeout: 1m30s
-            sizer: {}
+            sizer: items
         block_on_overflow: true
         num_consumers: 1
         queue_size: 10
-        sizer: {}
+        sizer: requests
         wait_for_result: false
     resourcedetection/default_self_metrics:
         detectors:
@@ -112,7 +112,7 @@ processors:
               statements:
                 - set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil
 receivers:
-    iis:
+    iis/googlecontrolplane:
         collection_interval: 60s
     nop/googlecontrolplane: {}
     otlp/default_self_metrics:
@@ -167,7 +167,7 @@ service:
                 - queue_batch/default_gcp_destination_batch_metrics
             receivers:
                 - nop/googlecontrolplane
-                - iis
+                - iis/googlecontrolplane
         traces/googlecontrolplane:
             exporters:
                 - otlp_grpc/default_gcp_destination

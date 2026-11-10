@@ -1420,18 +1420,41 @@ func TestPolicySetActiveSelfMetric(t *testing.T) {
 // TestPolicySetActiveSelfMetric_NotEmittedWithoutProvider verifies
 // that when the collector is started with a file config only (without
 // googlecontrolplaneprovider), Tango self-o11y metrics (gcp.policy.set.active)
-// are not emitted even when internal collector telemetry metrics are enabled.
+// are not emitted even when internal collector telemetry metrics are enabled,
+// both when googlecontrolplaneextension is omitted and when it is configured
+// independently.
 func TestPolicySetActiveSelfMetric_NotEmittedWithoutProvider(t *testing.T) {
 	otelcolBin := resolveOtelcolBinary(t)
-	tempDir := t.TempDir()
-	selfMockSrv, selfExporterAddr := startMockOTLPServer(t)
 
-	cfg := fmt.Sprintf(`receivers:
+	tests := []struct {
+		name              string
+		extensionsBlock   string
+		serviceExtensions string
+	}{
+		{
+			name: "without_extension",
+		},
+		{
+			name: "with_extension_configured_independently",
+			extensionsBlock: `extensions:
+  googlecontrolplane:
+`,
+			serviceExtensions: `  extensions: [googlecontrolplane]
+`,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+			selfMockSrv, selfExporterAddr := startMockOTLPServer(t)
+
+			cfg := fmt.Sprintf(`%sreceivers:
   nop/in:
 exporters:
   nop/out:
 service:
-  telemetry:
+%s  telemetry:
     logs:
       processors: []
     metrics:
@@ -1448,23 +1471,25 @@ service:
     logs:
       receivers: [nop/in]
       exporters: [nop/out]
-`, selfExporterAddr)
-	cfgPath := filepath.Join(tempDir, "config.yaml")
-	if err := os.WriteFile(cfgPath, []byte(cfg), 0644); err != nil {
-		t.Fatalf("failed to write config.yaml: %v", err)
-	}
+`, tc.extensionsBlock, tc.serviceExtensions, selfExporterAddr)
+			cfgPath := filepath.Join(tempDir, "config.yaml")
+			if err := os.WriteFile(cfgPath, []byte(cfg), 0644); err != nil {
+				t.Fatalf("failed to write config.yaml: %v", err)
+			}
 
-	col := startCollectorWithURIs(t, otelcolBin, fmt.Sprintf("file:%s", filepath.ToSlash(cfgPath)))
+			col := startCollectorWithURIs(t, otelcolBin, fmt.Sprintf("file:%s", filepath.ToSlash(cfgPath)))
 
-	gotMetrics := waitForMetrics(selfMockSrv, 5*time.Second)
+			gotMetrics := waitForMetrics(selfMockSrv, 5*time.Second)
 
-	col.shutdown(t)
+			col.shutdown(t)
 
-	if len(gotMetrics) == 0 {
-		t.Fatalf("waitForMetrics() = empty, want standard internal collector metrics\ncollector logs:\n%s", col.logs())
-	}
-	if count, found := gotMetrics[googlecontrolplaneextension.MetricPolicySetActive]; found {
-		t.Errorf("got %d occurrences of %q, want 0 (gotMetrics: %v)\ncollector logs:\n%s", count, googlecontrolplaneextension.MetricPolicySetActive, gotMetrics, col.logs())
+			if len(gotMetrics) == 0 {
+				t.Fatalf("waitForMetrics() = empty, want standard internal collector metrics\ncollector logs:\n%s", col.logs())
+			}
+			if count, found := gotMetrics[googlecontrolplaneextension.MetricPolicySetActive]; found {
+				t.Errorf("got %d occurrences of %q, want 0 (gotMetrics: %v)\ncollector logs:\n%s", count, googlecontrolplaneextension.MetricPolicySetActive, gotMetrics, col.logs())
+			}
+		})
 	}
 }
 

@@ -46,6 +46,18 @@ func setActivePolicySet(t *testing.T, ps *googlepolicy.PolicySet) {
 	})
 }
 
+func TestRegistrySource_IsControlPlaneActive(t *testing.T) {
+	assert.False(t, registrySource{}.IsControlPlaneActive())
+
+	ch := googlepolicy.RegisterWatcherChannel()
+	assert.True(t, registrySource{}.IsControlPlaneActive())
+	googlepolicy.UnregisterWatcherChannel(ch)
+	assert.False(t, registrySource{}.IsControlPlaneActive())
+
+	setActivePolicySet(t, &googlepolicy.PolicySet{RevisionID: "rev-1"})
+	assert.True(t, registrySource{}.IsControlPlaneActive())
+}
+
 func TestRegistrySource_NoActivePolicySet(t *testing.T) {
 	assert.Equal(t, PolicySetState{}, registrySource{}.ActivePolicySet())
 }

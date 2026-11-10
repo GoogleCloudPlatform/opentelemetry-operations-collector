@@ -116,6 +116,7 @@ components:
         - https
         - yaml
         - googlesecretmanager
+        - secretsmanager
 replaces:
     - from: github.com/go-jose/go-jose/v4
       to: github.com/go-jose/go-jose/v4 v4.1.6

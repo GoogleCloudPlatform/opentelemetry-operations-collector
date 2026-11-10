@@ -113,6 +113,7 @@ connectors:
 
 providers:
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/confmap/provider/googlesecretmanagerprovider v0.164.1
+- gomod: github.com/open-telemetry/opentelemetry-collector-contrib/confmap/provider/secretsmanagerprovider v0.164.1
 - gomod: go.opentelemetry.io/collector/confmap/provider/envprovider v1.70.0
 - gomod: go.opentelemetry.io/collector/confmap/provider/fileprovider v1.70.0
 - gomod: go.opentelemetry.io/collector/confmap/provider/httpprovider v1.70.0

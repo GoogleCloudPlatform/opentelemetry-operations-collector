@@ -232,6 +232,51 @@ message TraceFieldSelector {
   }
 }
 
+// Defines a single predicate evaluated against a specific metric descriptor
+// field or data point attribute.
+message MetricMatcher {
+  // The metric field, attribute, or metadata to inspect. Exactly one must be set.
+  MetricFieldSelector target = 1;
+
+  // The comparison predicate to evaluate against the target value. Required.
+  Predicate predicate = 2;
+
+  // If true, inverts the result of the predicate (logical NOT).
+  bool negated = 3;
+}
+
+// Designates a first-class OTel metric field, attribute, or metadata.
+message MetricFieldSelector {
+  oneof target {
+    // Top-level metric descriptor fields on the OTel Metric itself (for example,
+    // `METRIC_DESCRIPTOR_FIELD_NAME` or `METRIC_DESCRIPTOR_FIELD_UNIT`).
+    // First-class metric descriptor fields must be selected using
+    // `descriptor_field`, not `data_point_attribute_path`.
+    MetricDescriptorField descriptor_field = 1;
+
+    // A key or nested path inside an individual metric data point's `attributes`
+    // map (e.g. `["http.status_code"]` or `["env"]`). This only inspects data
+    // point attributes; metric descriptor fields (such as metric `name`) must
+    // be selected via `descriptor_field`.
+    AttributePath data_point_attribute_path = 2;
+
+    // A key or nested path inside the `Resource.attributes` map (attributes
+    // describing the entity producing the metrics, e.g. `["service.name"]`,
+    // `["k8s.pod.name"]`, or `["host", "id"]`).
+    AttributePath resource_attribute_path = 3;
+
+    // A key or nested path inside the `InstrumentationScope.attributes` map
+    // (attributes attached to the meter or instrumentation scope, e.g.
+    // `["library.name"]`). First-class scope fields (`name`, `version`,
+    // `schema_url`) must be selected via `scope_field`.
+    AttributePath scope_attribute_path = 4;
+
+    // A top-level property of the `InstrumentationScope` (`SCOPE_FIELD_NAME`,
+    // `SCOPE_FIELD_VERSION`, or `SCOPE_FIELD_SCHEMA_URL`).
+    ScopeField scope_field = 5;
+  }
+}
+
 // Specifies what to do with a telemetry record that matches all conditions.
 //
 // Evaluation Semantics & Action Precedence:
@@ -371,4 +416,43 @@ enum SpanRecordField {
   // specification, if span kind is unset or SPAN_KIND_UNSPECIFIED,
   // implementations treat it as "INTERNAL".
   SPAN_RECORD_FIELD_KIND = 5;
+}
+
+// Identifies top-level descriptor fields of an OpenTelemetry Metric.
+// When evaluated with `existence`, first-class fields evaluate to true when set
+// to a non-default (non-empty / non-zero) value.
+//
+// `METRIC_DESCRIPTOR_FIELD_TYPE`,
+// `METRIC_DESCRIPTOR_FIELD_AGGREGATION_TEMPORALITY`, and
+// `METRIC_DESCRIPTOR_FIELD_IS_MONOTONIC` are valid only for read-only matching
+// in `MetricFieldSelector` and are not valid mutation targets in
+// `MetricTransformPolicy`.
+enum MetricDescriptorField {
+  // Default unspecified metric descriptor field.
+  METRIC_DESCRIPTOR_FIELD_UNSPECIFIED = 0;
+
+  // The name of the metric (OTLP path: metric.name, e.g. "http.server.duration", "system.cpu.load").
+  METRIC_DESCRIPTOR_FIELD_NAME = 1;
+
+  // The descriptive text explaining the metric (OTLP path: metric.description).
+  METRIC_DESCRIPTOR_FIELD_DESCRIPTION = 2;
+
+  // The unit of measure (OTLP path: metric.unit, e.g. "ms", "By", "1").
+  METRIC_DESCRIPTOR_FIELD_UNIT = 3;
+
+  // The primary data type of the metric (e.g. "GAUGE", "SUM", "HISTOGRAM",
+  // "EXPONENTIAL_HISTOGRAM", "SUMMARY"). When selected, string predicates
+  // (`equality` with `string_value`, `glob`, `containment` with `string_value`)
+  // evaluate against uppercase type names.
+  METRIC_DESCRIPTOR_FIELD_TYPE = 4;
+
+  // The aggregation temporality of the metric (OTLP path: metric.*.aggregation_temporality,
+  // e.g. for Sum, Histogram, ExponentialHistogram). When selected, string predicates
+  // (`equality` with `string_value`, `glob`, `containment` with `string_value`)
+  // evaluate against uppercase names: "DELTA" or "CUMULATIVE".
+  METRIC_DESCRIPTOR_FIELD_AGGREGATION_TEMPORALITY = 5;
+
+  // Whether a Sum metric is monotonic (OTLP path: metric.sum.is_monotonic).
+  // Evaluates against typed `equality` (`bool_value`).
+  METRIC_DESCRIPTOR_FIELD_IS_MONOTONIC = 6;
 }

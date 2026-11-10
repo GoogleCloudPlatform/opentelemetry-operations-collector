@@ -348,6 +348,90 @@ func (SpanRecordField) EnumDescriptor() ([]byte, []int) {
 	return file_policy_v1alpha1_common_policy_types_proto_rawDescGZIP(), []int{3}
 }
 
+// Identifies top-level descriptor fields of an OpenTelemetry Metric.
+// When evaluated with `existence`, first-class fields evaluate to true when set
+// to a non-default (non-empty / non-zero) value.
+//
+// `METRIC_DESCRIPTOR_FIELD_TYPE`,
+// `METRIC_DESCRIPTOR_FIELD_AGGREGATION_TEMPORALITY`, and
+// `METRIC_DESCRIPTOR_FIELD_IS_MONOTONIC` are valid only for read-only matching
+// in `MetricFieldSelector` and are not valid mutation targets in
+// `MetricTransformPolicy`.
+type MetricDescriptorField int32
+
+const (
+	// Default unspecified metric descriptor field.
+	MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_UNSPECIFIED MetricDescriptorField = 0
+	// The name of the metric (OTLP path: metric.name, e.g. "http.server.duration", "system.cpu.load").
+	MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME MetricDescriptorField = 1
+	// The descriptive text explaining the metric (OTLP path: metric.description).
+	MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_DESCRIPTION MetricDescriptorField = 2
+	// The unit of measure (OTLP path: metric.unit, e.g. "ms", "By", "1").
+	MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_UNIT MetricDescriptorField = 3
+	// The primary data type of the metric (e.g. "GAUGE", "SUM", "HISTOGRAM",
+	// "EXPONENTIAL_HISTOGRAM", "SUMMARY"). When selected, string predicates
+	// (`equality` with `string_value`, `glob`, `containment` with `string_value`)
+	// evaluate against uppercase type names.
+	MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE MetricDescriptorField = 4
+	// The aggregation temporality of the metric (OTLP path: metric.*.aggregation_temporality,
+	// e.g. for Sum, Histogram, ExponentialHistogram). When selected, string predicates
+	// (`equality` with `string_value`, `glob`, `containment` with `string_value`)
+	// evaluate against uppercase names: "DELTA" or "CUMULATIVE".
+	MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_AGGREGATION_TEMPORALITY MetricDescriptorField = 5
+	// Whether a Sum metric is monotonic (OTLP path: metric.sum.is_monotonic).
+	// Evaluates against typed `equality` (`bool_value`).
+	MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_IS_MONOTONIC MetricDescriptorField = 6
+)
+
+// Enum value maps for MetricDescriptorField.
+var (
+	MetricDescriptorField_name = map[int32]string{
+		0: "METRIC_DESCRIPTOR_FIELD_UNSPECIFIED",
+		1: "METRIC_DESCRIPTOR_FIELD_NAME",
+		2: "METRIC_DESCRIPTOR_FIELD_DESCRIPTION",
+		3: "METRIC_DESCRIPTOR_FIELD_UNIT",
+		4: "METRIC_DESCRIPTOR_FIELD_TYPE",
+		5: "METRIC_DESCRIPTOR_FIELD_AGGREGATION_TEMPORALITY",
+		6: "METRIC_DESCRIPTOR_FIELD_IS_MONOTONIC",
+	}
+	MetricDescriptorField_value = map[string]int32{
+		"METRIC_DESCRIPTOR_FIELD_UNSPECIFIED":             0,
+		"METRIC_DESCRIPTOR_FIELD_NAME":                    1,
+		"METRIC_DESCRIPTOR_FIELD_DESCRIPTION":             2,
+		"METRIC_DESCRIPTOR_FIELD_UNIT":                    3,
+		"METRIC_DESCRIPTOR_FIELD_TYPE":                    4,
+		"METRIC_DESCRIPTOR_FIELD_AGGREGATION_TEMPORALITY": 5,
+		"METRIC_DESCRIPTOR_FIELD_IS_MONOTONIC":            6,
+	}
+)
+
+func (x MetricDescriptorField) Enum() *MetricDescriptorField {
+	p := new(MetricDescriptorField)
+	*p = x
+	return p
+}
+
+func (x MetricDescriptorField) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (MetricDescriptorField) Descriptor() protoreflect.EnumDescriptor {
+	return file_policy_v1alpha1_common_policy_types_proto_enumTypes[4].Descriptor()
+}
+
+func (MetricDescriptorField) Type() protoreflect.EnumType {
+	return &file_policy_v1alpha1_common_policy_types_proto_enumTypes[4]
+}
+
+func (x MetricDescriptorField) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use MetricDescriptorField.Descriptor instead.
+func (MetricDescriptorField) EnumDescriptor() ([]byte, []int) {
+	return file_policy_v1alpha1_common_policy_types_proto_rawDescGZIP(), []int{4}
+}
+
 // Specifies how to access an attribute value.
 //
 // In OpenTelemetry, attribute keys at the top level frequently contain literal
@@ -1301,6 +1385,219 @@ func (*TraceFieldSelector_ScopeAttributePath) isTraceFieldSelector_Target() {}
 
 func (*TraceFieldSelector_ScopeField) isTraceFieldSelector_Target() {}
 
+// Defines a single predicate evaluated against a specific metric descriptor
+// field or data point attribute.
+type MetricMatcher struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The metric field, attribute, or metadata to inspect. Exactly one must be set.
+	Target *MetricFieldSelector `protobuf:"bytes,1,opt,name=target,proto3" json:"target,omitempty"`
+	// The comparison predicate to evaluate against the target value. Required.
+	Predicate *Predicate `protobuf:"bytes,2,opt,name=predicate,proto3" json:"predicate,omitempty"`
+	// If true, inverts the result of the predicate (logical NOT).
+	Negated       bool `protobuf:"varint,3,opt,name=negated,proto3" json:"negated,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MetricMatcher) Reset() {
+	*x = MetricMatcher{}
+	mi := &file_policy_v1alpha1_common_policy_types_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MetricMatcher) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MetricMatcher) ProtoMessage() {}
+
+func (x *MetricMatcher) ProtoReflect() protoreflect.Message {
+	mi := &file_policy_v1alpha1_common_policy_types_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MetricMatcher.ProtoReflect.Descriptor instead.
+func (*MetricMatcher) Descriptor() ([]byte, []int) {
+	return file_policy_v1alpha1_common_policy_types_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *MetricMatcher) GetTarget() *MetricFieldSelector {
+	if x != nil {
+		return x.Target
+	}
+	return nil
+}
+
+func (x *MetricMatcher) GetPredicate() *Predicate {
+	if x != nil {
+		return x.Predicate
+	}
+	return nil
+}
+
+func (x *MetricMatcher) GetNegated() bool {
+	if x != nil {
+		return x.Negated
+	}
+	return false
+}
+
+// Designates a first-class OTel metric field, attribute, or metadata.
+type MetricFieldSelector struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Target:
+	//
+	//	*MetricFieldSelector_DescriptorField
+	//	*MetricFieldSelector_DataPointAttributePath
+	//	*MetricFieldSelector_ResourceAttributePath
+	//	*MetricFieldSelector_ScopeAttributePath
+	//	*MetricFieldSelector_ScopeField
+	Target        isMetricFieldSelector_Target `protobuf_oneof:"target"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MetricFieldSelector) Reset() {
+	*x = MetricFieldSelector{}
+	mi := &file_policy_v1alpha1_common_policy_types_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MetricFieldSelector) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MetricFieldSelector) ProtoMessage() {}
+
+func (x *MetricFieldSelector) ProtoReflect() protoreflect.Message {
+	mi := &file_policy_v1alpha1_common_policy_types_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MetricFieldSelector.ProtoReflect.Descriptor instead.
+func (*MetricFieldSelector) Descriptor() ([]byte, []int) {
+	return file_policy_v1alpha1_common_policy_types_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *MetricFieldSelector) GetTarget() isMetricFieldSelector_Target {
+	if x != nil {
+		return x.Target
+	}
+	return nil
+}
+
+func (x *MetricFieldSelector) GetDescriptorField() MetricDescriptorField {
+	if x != nil {
+		if x, ok := x.Target.(*MetricFieldSelector_DescriptorField); ok {
+			return x.DescriptorField
+		}
+	}
+	return MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_UNSPECIFIED
+}
+
+func (x *MetricFieldSelector) GetDataPointAttributePath() *AttributePath {
+	if x != nil {
+		if x, ok := x.Target.(*MetricFieldSelector_DataPointAttributePath); ok {
+			return x.DataPointAttributePath
+		}
+	}
+	return nil
+}
+
+func (x *MetricFieldSelector) GetResourceAttributePath() *AttributePath {
+	if x != nil {
+		if x, ok := x.Target.(*MetricFieldSelector_ResourceAttributePath); ok {
+			return x.ResourceAttributePath
+		}
+	}
+	return nil
+}
+
+func (x *MetricFieldSelector) GetScopeAttributePath() *AttributePath {
+	if x != nil {
+		if x, ok := x.Target.(*MetricFieldSelector_ScopeAttributePath); ok {
+			return x.ScopeAttributePath
+		}
+	}
+	return nil
+}
+
+func (x *MetricFieldSelector) GetScopeField() ScopeField {
+	if x != nil {
+		if x, ok := x.Target.(*MetricFieldSelector_ScopeField); ok {
+			return x.ScopeField
+		}
+	}
+	return ScopeField_SCOPE_FIELD_UNSPECIFIED
+}
+
+type isMetricFieldSelector_Target interface {
+	isMetricFieldSelector_Target()
+}
+
+type MetricFieldSelector_DescriptorField struct {
+	// Top-level metric descriptor fields on the OTel Metric itself (for example,
+	// `METRIC_DESCRIPTOR_FIELD_NAME` or `METRIC_DESCRIPTOR_FIELD_UNIT`).
+	// First-class metric descriptor fields must be selected using
+	// `descriptor_field`, not `data_point_attribute_path`.
+	DescriptorField MetricDescriptorField `protobuf:"varint,1,opt,name=descriptor_field,json=descriptorField,proto3,enum=google.telemetry.policy.v1alpha1.MetricDescriptorField,oneof"`
+}
+
+type MetricFieldSelector_DataPointAttributePath struct {
+	// A key or nested path inside an individual metric data point's `attributes`
+	// map (e.g. `["http.status_code"]` or `["env"]`). This only inspects data
+	// point attributes; metric descriptor fields (such as metric `name`) must
+	// be selected via `descriptor_field`.
+	DataPointAttributePath *AttributePath `protobuf:"bytes,2,opt,name=data_point_attribute_path,json=dataPointAttributePath,proto3,oneof"`
+}
+
+type MetricFieldSelector_ResourceAttributePath struct {
+	// A key or nested path inside the `Resource.attributes` map (attributes
+	// describing the entity producing the metrics, e.g. `["service.name"]`,
+	// `["k8s.pod.name"]`, or `["host", "id"]`).
+	ResourceAttributePath *AttributePath `protobuf:"bytes,3,opt,name=resource_attribute_path,json=resourceAttributePath,proto3,oneof"`
+}
+
+type MetricFieldSelector_ScopeAttributePath struct {
+	// A key or nested path inside the `InstrumentationScope.attributes` map
+	// (attributes attached to the meter or instrumentation scope, e.g.
+	// `["library.name"]`). First-class scope fields (`name`, `version`,
+	// `schema_url`) must be selected via `scope_field`.
+	ScopeAttributePath *AttributePath `protobuf:"bytes,4,opt,name=scope_attribute_path,json=scopeAttributePath,proto3,oneof"`
+}
+
+type MetricFieldSelector_ScopeField struct {
+	// A top-level property of the `InstrumentationScope` (`SCOPE_FIELD_NAME`,
+	// `SCOPE_FIELD_VERSION`, or `SCOPE_FIELD_SCHEMA_URL`).
+	ScopeField ScopeField `protobuf:"varint,5,opt,name=scope_field,json=scopeField,proto3,enum=google.telemetry.policy.v1alpha1.ScopeField,oneof"`
+}
+
+func (*MetricFieldSelector_DescriptorField) isMetricFieldSelector_Target() {}
+
+func (*MetricFieldSelector_DataPointAttributePath) isMetricFieldSelector_Target() {}
+
+func (*MetricFieldSelector_ResourceAttributePath) isMetricFieldSelector_Target() {}
+
+func (*MetricFieldSelector_ScopeAttributePath) isMetricFieldSelector_Target() {}
+
+func (*MetricFieldSelector_ScopeField) isMetricFieldSelector_Target() {}
+
 var File_policy_v1alpha1_common_policy_types_proto protoreflect.FileDescriptor
 
 const file_policy_v1alpha1_common_policy_types_proto_rawDesc = "" +
@@ -1356,6 +1653,18 @@ const file_policy_v1alpha1_common_policy_types_proto_rawDesc = "" +
 	"\x14scope_attribute_path\x18\x04 \x01(\v2/.google.telemetry.policy.v1alpha1.AttributePathH\x00R\x12scopeAttributePath\x12O\n" +
 	"\vscope_field\x18\x05 \x01(\x0e2,.google.telemetry.policy.v1alpha1.ScopeFieldH\x00R\n" +
 	"scopeFieldB\b\n" +
+	"\x06target\"\xc3\x01\n" +
+	"\rMetricMatcher\x12M\n" +
+	"\x06target\x18\x01 \x01(\v25.google.telemetry.policy.v1alpha1.MetricFieldSelectorR\x06target\x12I\n" +
+	"\tpredicate\x18\x02 \x01(\v2+.google.telemetry.policy.v1alpha1.PredicateR\tpredicate\x12\x18\n" +
+	"\anegated\x18\x03 \x01(\bR\anegated\"\x94\x04\n" +
+	"\x13MetricFieldSelector\x12d\n" +
+	"\x10descriptor_field\x18\x01 \x01(\x0e27.google.telemetry.policy.v1alpha1.MetricDescriptorFieldH\x00R\x0fdescriptorField\x12l\n" +
+	"\x19data_point_attribute_path\x18\x02 \x01(\v2/.google.telemetry.policy.v1alpha1.AttributePathH\x00R\x16dataPointAttributePath\x12i\n" +
+	"\x17resource_attribute_path\x18\x03 \x01(\v2/.google.telemetry.policy.v1alpha1.AttributePathH\x00R\x15resourceAttributePath\x12c\n" +
+	"\x14scope_attribute_path\x18\x04 \x01(\v2/.google.telemetry.policy.v1alpha1.AttributePathH\x00R\x12scopeAttributePath\x12O\n" +
+	"\vscope_field\x18\x05 \x01(\x0e2,.google.telemetry.policy.v1alpha1.ScopeFieldH\x00R\n" +
+	"scopeFieldB\b\n" +
 	"\x06target*B\n" +
 	"\x06Action\x12\x16\n" +
 	"\x12ACTION_UNSPECIFIED\x10\x00\x12\x0f\n" +
@@ -1380,7 +1689,15 @@ const file_policy_v1alpha1_common_policy_types_proto_rawDesc = "" +
 	"\x1aSPAN_RECORD_FIELD_TRACE_ID\x10\x02\x12\x1d\n" +
 	"\x19SPAN_RECORD_FIELD_SPAN_ID\x10\x03\x12$\n" +
 	" SPAN_RECORD_FIELD_PARENT_SPAN_ID\x10\x04\x12\x1a\n" +
-	"\x16SPAN_RECORD_FIELD_KIND\x10\x05B\xca\x02\n" +
+	"\x16SPAN_RECORD_FIELD_KIND\x10\x05*\xae\x02\n" +
+	"\x15MetricDescriptorField\x12'\n" +
+	"#METRIC_DESCRIPTOR_FIELD_UNSPECIFIED\x10\x00\x12 \n" +
+	"\x1cMETRIC_DESCRIPTOR_FIELD_NAME\x10\x01\x12'\n" +
+	"#METRIC_DESCRIPTOR_FIELD_DESCRIPTION\x10\x02\x12 \n" +
+	"\x1cMETRIC_DESCRIPTOR_FIELD_UNIT\x10\x03\x12 \n" +
+	"\x1cMETRIC_DESCRIPTOR_FIELD_TYPE\x10\x04\x123\n" +
+	"/METRIC_DESCRIPTOR_FIELD_AGGREGATION_TEMPORALITY\x10\x05\x12(\n" +
+	"$METRIC_DESCRIPTOR_FIELD_IS_MONOTONIC\x10\x06B\xca\x02\n" +
 	"$com.google.telemetry.policy.v1alpha1B\x16CommonPolicyTypesProtoP\x01Zggithub.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1;policyv1alpha1\xa2\x02\x03GTP\xaa\x02 Google.Telemetry.Policy.V1alpha1\xca\x02 Google\\Telemetry\\Policy\\V1alpha1\xe2\x02,Google\\Telemetry\\Policy\\V1alpha1\\GPBMetadata\xea\x02#Google::Telemetry::Policy::V1alpha1b\x06proto3"
 
 var (
@@ -1395,51 +1712,61 @@ func file_policy_v1alpha1_common_policy_types_proto_rawDescGZIP() []byte {
 	return file_policy_v1alpha1_common_policy_types_proto_rawDescData
 }
 
-var file_policy_v1alpha1_common_policy_types_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_policy_v1alpha1_common_policy_types_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_policy_v1alpha1_common_policy_types_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
+var file_policy_v1alpha1_common_policy_types_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_policy_v1alpha1_common_policy_types_proto_goTypes = []any{
-	(Action)(0),                // 0: google.telemetry.policy.v1alpha1.Action
-	(ScopeField)(0),            // 1: google.telemetry.policy.v1alpha1.ScopeField
-	(LogRecordField)(0),        // 2: google.telemetry.policy.v1alpha1.LogRecordField
-	(SpanRecordField)(0),       // 3: google.telemetry.policy.v1alpha1.SpanRecordField
-	(*AttributePath)(nil),      // 4: google.telemetry.policy.v1alpha1.AttributePath
-	(*Value)(nil),              // 5: google.telemetry.policy.v1alpha1.Value
-	(*NumericValue)(nil),       // 6: google.telemetry.policy.v1alpha1.NumericValue
-	(*Predicate)(nil),          // 7: google.telemetry.policy.v1alpha1.Predicate
-	(*LogMatcher)(nil),         // 8: google.telemetry.policy.v1alpha1.LogMatcher
-	(*LogFieldSelector)(nil),   // 9: google.telemetry.policy.v1alpha1.LogFieldSelector
-	(*TraceMatcher)(nil),       // 10: google.telemetry.policy.v1alpha1.TraceMatcher
-	(*TraceFieldSelector)(nil), // 11: google.telemetry.policy.v1alpha1.TraceFieldSelector
-	(*emptypb.Empty)(nil),      // 12: google.protobuf.Empty
+	(Action)(0),                 // 0: google.telemetry.policy.v1alpha1.Action
+	(ScopeField)(0),             // 1: google.telemetry.policy.v1alpha1.ScopeField
+	(LogRecordField)(0),         // 2: google.telemetry.policy.v1alpha1.LogRecordField
+	(SpanRecordField)(0),        // 3: google.telemetry.policy.v1alpha1.SpanRecordField
+	(MetricDescriptorField)(0),  // 4: google.telemetry.policy.v1alpha1.MetricDescriptorField
+	(*AttributePath)(nil),       // 5: google.telemetry.policy.v1alpha1.AttributePath
+	(*Value)(nil),               // 6: google.telemetry.policy.v1alpha1.Value
+	(*NumericValue)(nil),        // 7: google.telemetry.policy.v1alpha1.NumericValue
+	(*Predicate)(nil),           // 8: google.telemetry.policy.v1alpha1.Predicate
+	(*LogMatcher)(nil),          // 9: google.telemetry.policy.v1alpha1.LogMatcher
+	(*LogFieldSelector)(nil),    // 10: google.telemetry.policy.v1alpha1.LogFieldSelector
+	(*TraceMatcher)(nil),        // 11: google.telemetry.policy.v1alpha1.TraceMatcher
+	(*TraceFieldSelector)(nil),  // 12: google.telemetry.policy.v1alpha1.TraceFieldSelector
+	(*MetricMatcher)(nil),       // 13: google.telemetry.policy.v1alpha1.MetricMatcher
+	(*MetricFieldSelector)(nil), // 14: google.telemetry.policy.v1alpha1.MetricFieldSelector
+	(*emptypb.Empty)(nil),       // 15: google.protobuf.Empty
 }
 var file_policy_v1alpha1_common_policy_types_proto_depIdxs = []int32{
-	12, // 0: google.telemetry.policy.v1alpha1.Predicate.existence:type_name -> google.protobuf.Empty
-	5,  // 1: google.telemetry.policy.v1alpha1.Predicate.equality:type_name -> google.telemetry.policy.v1alpha1.Value
-	6,  // 2: google.telemetry.policy.v1alpha1.Predicate.exclusive_minimum:type_name -> google.telemetry.policy.v1alpha1.NumericValue
-	6,  // 3: google.telemetry.policy.v1alpha1.Predicate.inclusive_minimum:type_name -> google.telemetry.policy.v1alpha1.NumericValue
-	6,  // 4: google.telemetry.policy.v1alpha1.Predicate.exclusive_maximum:type_name -> google.telemetry.policy.v1alpha1.NumericValue
-	6,  // 5: google.telemetry.policy.v1alpha1.Predicate.inclusive_maximum:type_name -> google.telemetry.policy.v1alpha1.NumericValue
-	5,  // 6: google.telemetry.policy.v1alpha1.Predicate.containment:type_name -> google.telemetry.policy.v1alpha1.Value
-	9,  // 7: google.telemetry.policy.v1alpha1.LogMatcher.target:type_name -> google.telemetry.policy.v1alpha1.LogFieldSelector
-	7,  // 8: google.telemetry.policy.v1alpha1.LogMatcher.predicate:type_name -> google.telemetry.policy.v1alpha1.Predicate
+	15, // 0: google.telemetry.policy.v1alpha1.Predicate.existence:type_name -> google.protobuf.Empty
+	6,  // 1: google.telemetry.policy.v1alpha1.Predicate.equality:type_name -> google.telemetry.policy.v1alpha1.Value
+	7,  // 2: google.telemetry.policy.v1alpha1.Predicate.exclusive_minimum:type_name -> google.telemetry.policy.v1alpha1.NumericValue
+	7,  // 3: google.telemetry.policy.v1alpha1.Predicate.inclusive_minimum:type_name -> google.telemetry.policy.v1alpha1.NumericValue
+	7,  // 4: google.telemetry.policy.v1alpha1.Predicate.exclusive_maximum:type_name -> google.telemetry.policy.v1alpha1.NumericValue
+	7,  // 5: google.telemetry.policy.v1alpha1.Predicate.inclusive_maximum:type_name -> google.telemetry.policy.v1alpha1.NumericValue
+	6,  // 6: google.telemetry.policy.v1alpha1.Predicate.containment:type_name -> google.telemetry.policy.v1alpha1.Value
+	10, // 7: google.telemetry.policy.v1alpha1.LogMatcher.target:type_name -> google.telemetry.policy.v1alpha1.LogFieldSelector
+	8,  // 8: google.telemetry.policy.v1alpha1.LogMatcher.predicate:type_name -> google.telemetry.policy.v1alpha1.Predicate
 	2,  // 9: google.telemetry.policy.v1alpha1.LogFieldSelector.record_field:type_name -> google.telemetry.policy.v1alpha1.LogRecordField
-	4,  // 10: google.telemetry.policy.v1alpha1.LogFieldSelector.log_attribute_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
-	4,  // 11: google.telemetry.policy.v1alpha1.LogFieldSelector.resource_attribute_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
-	4,  // 12: google.telemetry.policy.v1alpha1.LogFieldSelector.scope_attribute_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
+	5,  // 10: google.telemetry.policy.v1alpha1.LogFieldSelector.log_attribute_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
+	5,  // 11: google.telemetry.policy.v1alpha1.LogFieldSelector.resource_attribute_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
+	5,  // 12: google.telemetry.policy.v1alpha1.LogFieldSelector.scope_attribute_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
 	1,  // 13: google.telemetry.policy.v1alpha1.LogFieldSelector.scope_field:type_name -> google.telemetry.policy.v1alpha1.ScopeField
-	4,  // 14: google.telemetry.policy.v1alpha1.LogFieldSelector.body_field_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
-	11, // 15: google.telemetry.policy.v1alpha1.TraceMatcher.target:type_name -> google.telemetry.policy.v1alpha1.TraceFieldSelector
-	7,  // 16: google.telemetry.policy.v1alpha1.TraceMatcher.predicate:type_name -> google.telemetry.policy.v1alpha1.Predicate
+	5,  // 14: google.telemetry.policy.v1alpha1.LogFieldSelector.body_field_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
+	12, // 15: google.telemetry.policy.v1alpha1.TraceMatcher.target:type_name -> google.telemetry.policy.v1alpha1.TraceFieldSelector
+	8,  // 16: google.telemetry.policy.v1alpha1.TraceMatcher.predicate:type_name -> google.telemetry.policy.v1alpha1.Predicate
 	3,  // 17: google.telemetry.policy.v1alpha1.TraceFieldSelector.record_field:type_name -> google.telemetry.policy.v1alpha1.SpanRecordField
-	4,  // 18: google.telemetry.policy.v1alpha1.TraceFieldSelector.span_attribute_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
-	4,  // 19: google.telemetry.policy.v1alpha1.TraceFieldSelector.resource_attribute_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
-	4,  // 20: google.telemetry.policy.v1alpha1.TraceFieldSelector.scope_attribute_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
+	5,  // 18: google.telemetry.policy.v1alpha1.TraceFieldSelector.span_attribute_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
+	5,  // 19: google.telemetry.policy.v1alpha1.TraceFieldSelector.resource_attribute_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
+	5,  // 20: google.telemetry.policy.v1alpha1.TraceFieldSelector.scope_attribute_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
 	1,  // 21: google.telemetry.policy.v1alpha1.TraceFieldSelector.scope_field:type_name -> google.telemetry.policy.v1alpha1.ScopeField
-	22, // [22:22] is the sub-list for method output_type
-	22, // [22:22] is the sub-list for method input_type
-	22, // [22:22] is the sub-list for extension type_name
-	22, // [22:22] is the sub-list for extension extendee
-	0,  // [0:22] is the sub-list for field type_name
+	14, // 22: google.telemetry.policy.v1alpha1.MetricMatcher.target:type_name -> google.telemetry.policy.v1alpha1.MetricFieldSelector
+	8,  // 23: google.telemetry.policy.v1alpha1.MetricMatcher.predicate:type_name -> google.telemetry.policy.v1alpha1.Predicate
+	4,  // 24: google.telemetry.policy.v1alpha1.MetricFieldSelector.descriptor_field:type_name -> google.telemetry.policy.v1alpha1.MetricDescriptorField
+	5,  // 25: google.telemetry.policy.v1alpha1.MetricFieldSelector.data_point_attribute_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
+	5,  // 26: google.telemetry.policy.v1alpha1.MetricFieldSelector.resource_attribute_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
+	5,  // 27: google.telemetry.policy.v1alpha1.MetricFieldSelector.scope_attribute_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
+	1,  // 28: google.telemetry.policy.v1alpha1.MetricFieldSelector.scope_field:type_name -> google.telemetry.policy.v1alpha1.ScopeField
+	29, // [29:29] is the sub-list for method output_type
+	29, // [29:29] is the sub-list for method input_type
+	29, // [29:29] is the sub-list for extension type_name
+	29, // [29:29] is the sub-list for extension extendee
+	0,  // [0:29] is the sub-list for field type_name
 }
 
 func init() { file_policy_v1alpha1_common_policy_types_proto_init() }
@@ -1483,13 +1810,20 @@ func file_policy_v1alpha1_common_policy_types_proto_init() {
 		(*TraceFieldSelector_ScopeAttributePath)(nil),
 		(*TraceFieldSelector_ScopeField)(nil),
 	}
+	file_policy_v1alpha1_common_policy_types_proto_msgTypes[9].OneofWrappers = []any{
+		(*MetricFieldSelector_DescriptorField)(nil),
+		(*MetricFieldSelector_DataPointAttributePath)(nil),
+		(*MetricFieldSelector_ResourceAttributePath)(nil),
+		(*MetricFieldSelector_ScopeAttributePath)(nil),
+		(*MetricFieldSelector_ScopeField)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_policy_v1alpha1_common_policy_types_proto_rawDesc), len(file_policy_v1alpha1_common_policy_types_proto_rawDesc)),
-			NumEnums:      4,
-			NumMessages:   8,
+			NumEnums:      5,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

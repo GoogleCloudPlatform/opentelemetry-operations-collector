@@ -19,6 +19,7 @@ exporters:
 extensions:
     file_storage/googlecontrolplane:
         create_directory: true
+        directory: C:\ProgramData\Google\OpenTelemetry Collector\storage
     googleclientauth/default_gcp_destination:
         project: ""
         quota_project: ""

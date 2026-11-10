@@ -2535,10 +2535,10 @@ func (i *invalidIISSourcePolicy) Consolidate(_ []googlepolicy.SourcePolicy) (goo
 }
 
 type mockStoragePolicy struct {
-	id              string
-	requiresStorage bool
-	recs            []component.ID
-	evalErr         error
+	id      string
+	storage string
+	recs    []component.ID
+	evalErr error
 }
 
 func (m *mockStoragePolicy) PolicyName() string { return m.id }
@@ -2553,26 +2553,29 @@ func (m *mockStoragePolicy) Evaluate(context.Context) (*confmap.Conf, error) {
 	}
 	receivers := make(map[string]any, len(m.recs))
 	for _, r := range m.recs {
-		receivers[r.String()] = map[string]any{"storage": "file_storage/googlecontrolplane"}
+		recCfg := map[string]any{}
+		if m.storage != "" {
+			recCfg["storage"] = m.storage
+		}
+		receivers[r.String()] = recCfg
 	}
 	return confmap.NewFromStringMap(map[string]any{"receivers": receivers}), nil
 }
 func (m *mockStoragePolicy) LogReceiverIDs() []component.ID    { return m.recs }
 func (m *mockStoragePolicy) MetricReceiverIDs() []component.ID { return nil }
 func (m *mockStoragePolicy) TraceReceiverIDs() []component.ID  { return nil }
-func (m *mockStoragePolicy) RequiresStorage() bool             { return m.requiresStorage }
 
 func TestRetrieve_PersistentStorageSynthesis(t *testing.T) {
 	t.Setenv("FLEET_ID", "1234")
 	recID := component.MustNewIDWithName("filelog", "mock")
 
-	t.Run("source policy requiring storage synthesizes file_storage extension", func(t *testing.T) {
+	t.Run("source policy configuring storage synthesizes file_storage extension", func(t *testing.T) {
 		p := createProvider()
 
 		pol := &mockStoragePolicy{
-			id:              "storage-enabled-policy",
-			requiresStorage: true,
-			recs:            []component.ID{recID},
+			id:      "storage-enabled-policy",
+			storage: "file_storage/googlecontrolplane",
+			recs:    []component.ID{recID},
 		}
 
 		ps := &googlepolicy.PolicySet{
@@ -2597,18 +2600,18 @@ func TestRetrieve_PersistentStorageSynthesis(t *testing.T) {
 
 		assert.True(t, conf.IsSet("extensions::file_storage/googlecontrolplane"))
 		assert.Equal(t, true, conf.Get("extensions::file_storage/googlecontrolplane::create_directory"))
+		assert.Equal(t, defaultStorageDir(), conf.Get("extensions::file_storage/googlecontrolplane::directory"))
 		exts := conf.Get("service::extensions")
 		assert.Contains(t, exts, "file_storage/googlecontrolplane")
 		assert.NoError(t, p.Shutdown(context.Background()))
 	})
 
-	t.Run("source policy not requiring storage omits file_storage extension", func(t *testing.T) {
+	t.Run("source policy not configuring storage omits file_storage extension", func(t *testing.T) {
 		p := createProvider()
 
 		pol := &mockStoragePolicy{
-			id:              "storage-disabled-policy",
-			requiresStorage: false,
-			recs:            []component.ID{recID},
+			id:   "storage-disabled-policy",
+			recs: []component.ID{recID},
 		}
 
 		ps := &googlepolicy.PolicySet{
@@ -2637,14 +2640,14 @@ func TestRetrieve_PersistentStorageSynthesis(t *testing.T) {
 		assert.NoError(t, p.Shutdown(context.Background()))
 	})
 
-	t.Run("source policy requiring storage that fails evaluate does not synthesize file_storage extension", func(t *testing.T) {
+	t.Run("source policy configuring storage that fails evaluate does not synthesize file_storage extension", func(t *testing.T) {
 		p := createProvider()
 
 		pol := &mockStoragePolicy{
-			id:              "storage-failed-eval-policy",
-			requiresStorage: true,
-			recs:            []component.ID{recID},
-			evalErr:         errors.New("simulated evaluation failure"),
+			id:      "storage-failed-eval-policy",
+			storage: "file_storage/googlecontrolplane",
+			recs:    []component.ID{recID},
+			evalErr: errors.New("simulated evaluation failure"),
 		}
 
 		ps := &googlepolicy.PolicySet{

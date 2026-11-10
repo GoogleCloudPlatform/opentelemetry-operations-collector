@@ -243,13 +243,6 @@ type ConsolidatableSourcePolicy interface {
 	Consolidate(policies []SourcePolicy) (SourcePolicy, error)
 }
 
-// PersistentStorageSourcePolicy is an optional interface implemented by SourcePolicy types
-// whose synthesized receivers require persistent state or checkpoint storage (e.g. file_storage).
-type PersistentStorageSourcePolicy interface {
-	SourcePolicy
-	RequiresStorage() bool
-}
-
 // StorageExtensionID is the component ID for the persistent file storage extension.
 var StorageExtensionID = component.MustNewIDWithName("file_storage", "googlecontrolplane")
 

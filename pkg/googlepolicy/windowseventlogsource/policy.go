@@ -86,11 +86,10 @@ type Policy struct {
 }
 
 var (
-	_ googlepolicy.Policy                        = (*Policy)(nil)
-	_ googlepolicy.ComponentPolicy               = (*Policy)(nil)
-	_ googlepolicy.SourcePolicy                  = (*Policy)(nil)
-	_ googlepolicy.ConsolidatableSourcePolicy    = (*Policy)(nil)
-	_ googlepolicy.PersistentStorageSourcePolicy = (*Policy)(nil)
+	_ googlepolicy.Policy                     = (*Policy)(nil)
+	_ googlepolicy.ComponentPolicy            = (*Policy)(nil)
+	_ googlepolicy.SourcePolicy               = (*Policy)(nil)
+	_ googlepolicy.ConsolidatableSourcePolicy = (*Policy)(nil)
 )
 
 // NewPolicyFromProto validates and compiles a WindowsEventLogSourcePolicy protobuf into a Policy.
@@ -297,12 +296,6 @@ func (p *Policy) MetricReceiverIDs() []component.ID {
 // TraceReceiverIDs returns nil as WindowsEventLogSourcePolicy only produces log receivers.
 func (p *Policy) TraceReceiverIDs() []component.ID {
 	return nil
-}
-
-// RequiresStorage returns true on Windows where windowseventlog receivers require persistent bookmark storage.
-// On non-Windows platforms, it returns false because Windows Event Log is Windows-only.
-func (p *Policy) RequiresStorage() bool {
-	return isWindows
 }
 
 // Consolidate merges multiple WindowsEventLogSourcePolicy instances into a single consolidated Policy.

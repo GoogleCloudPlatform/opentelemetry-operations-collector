@@ -20,7 +20,9 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -521,7 +523,6 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 	sourcePolicies := p.consolidateSourcePolicies(ctx, activePolicySet, activePolicySet.LoadPoliciesOfClass(googlepolicy.PolicyClassSource))
 
 	appliedSelfMetrics := false
-	needsStorage := false
 	for _, sp := range sourcePolicies {
 		srcPolicy, ok := sp.(googlepolicy.SourcePolicy)
 		if !ok {
@@ -539,9 +540,6 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 				p.recordPolicyEvaluateError(ctx, sp.PolicyName(), activePolicySet, fmt.Errorf("failed to merge config for source policy %q: %w", sp.PolicyName(), err), event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassSource))
 				continue
 			}
-			if psp, ok := srcPolicy.(googlepolicy.PersistentStorageSourcePolicy); ok && psp.RequiresStorage() {
-				needsStorage = true
-			}
 			if sp.PolicyType() == selfmetrics.PolicyType {
 				appliedSelfMetrics = true
 			}
@@ -556,10 +554,6 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 		if err := conf.Merge(cleanConf(policyConf)); err != nil {
 			p.recordPolicyEvaluateError(ctx, sp.PolicyName(), activePolicySet, fmt.Errorf("failed to merge config for source policy %q: %w", sp.PolicyName(), err), event.WithPolicyEvaluateErrorEventPolicyClass(event.PolicyClassSource))
 			continue
-		}
-
-		if psp, ok := srcPolicy.(googlepolicy.PersistentStorageSourcePolicy); ok && psp.RequiresStorage() {
-			needsStorage = true
 		}
 
 		activeLogReceivers = append(activeLogReceivers, srcPolicy.LogReceiverIDs()...)
@@ -592,10 +586,11 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 	canonicalTraceProcessors := append([]component.ID{rdID, transformID, googlePolicyID}, destPolicy.PreProcessTraceIDs()...)
 
 	var canonicalExtensions extensions.Config
-	if needsStorage {
+	if confReferencesStorageExtension(conf, googlepolicy.StorageExtensionID) {
 		storageExtID := googlepolicy.StorageExtensionID
 		storageCfg := map[string]any{
 			"create_directory": true,
+			"directory":        defaultStorageDir(),
 		}
 		storageExtConf := &otelcol.Config{
 			Extensions: map[component.ID]component.Config{
@@ -1035,4 +1030,37 @@ func (p *provider) Shutdown(context.Context) error {
 		manager.Stop()
 	}
 	return nil
+}
+
+// defaultStorageDir returns the GBOC-owned storage directory path for the host OS.
+func defaultStorageDir() string {
+	if runtime.GOOS == "windows" {
+		progData := os.Getenv("ProgramData")
+		if progData == "" {
+			progData = `C:\ProgramData`
+		}
+		return filepath.Join(progData, "Google", "OpenTelemetry Collector", "storage")
+	}
+	return "/var/lib/otelcol-google/storage"
+}
+
+// confReferencesStorageExtension inspects the receivers configured in conf and returns
+// true if any receiver specifies storage: <storageExtID.String()>.
+func confReferencesStorageExtension(conf *confmap.Conf, storageExtID component.ID) bool {
+	rawReceivers := conf.Get("receivers")
+	receiversMap, ok := rawReceivers.(map[string]any)
+	if !ok {
+		return false
+	}
+	target := storageExtID.String()
+	for _, rec := range receiversMap {
+		recCfg, ok := rec.(map[string]any)
+		if !ok {
+			continue
+		}
+		if s, ok := recCfg["storage"].(string); ok && s == target {
+			return true
+		}
+	}
+	return false
 }

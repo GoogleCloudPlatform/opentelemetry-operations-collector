@@ -454,17 +454,6 @@ func TestPolicy_Evaluate(t *testing.T) {
 	}
 }
 
-func TestPolicy_RequiresStorage(t *testing.T) {
-	t.Parallel()
-
-	p, err := NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
-		Id:       "win-storage",
-		Channels: []string{"Security"},
-	})
-	require.NoError(t, err)
-	assert.Equal(t, isWindows, p.RequiresStorage())
-}
-
 func TestPolicy_Evaluate_InvalidPolicy(t *testing.T) {
 	t.Parallel()
 

@@ -2673,3 +2673,267 @@ func TestRetrieve_PersistentStorageSynthesis(t *testing.T) {
 		assert.NoError(t, p.Shutdown(context.Background()))
 	})
 }
+
+func TestEscapeDollarSigns(t *testing.T) {
+	origStringSlice := []string{"$var", "${env:SECRET}", "pa$$word", "plain"}
+	origMapSlice := []map[string]any{
+		{"expr": `body matches "^\$\{1\}$$"`, "count": 42},
+	}
+	origStringMap := map[string]string{
+		"authorization": "Bearer pa$$word-${env:TOKEN}",
+	}
+
+	input := map[string]any{
+		"plain":          "hello",
+		"single_dollar":  "$1@***",
+		"env_uri":        "${env:SECRET}",
+		"implicit_uri":   "${SECRET}",
+		"invalid_env":    "${1}",
+		"double_dollar":  "pa$$word",
+		"escaped_uri":    "$${env:SECRET}",
+		"triple_dollar":  "$$${env:SECRET}",
+		"int_val":        123,
+		"bool_val":       true,
+		"any_slice":      []any{"${file:/etc/shadow}", "pa$$word", []any{"$nested"}},
+		"string_slice":   origStringSlice,
+		"map_slice":      origMapSlice,
+		"string_map":     origStringMap,
+		"nil_any_slice":  []any(nil),
+		"nil_str_slice":  []string(nil),
+		"nil_map_slice":  []map[string]any(nil),
+		"nil_any_map":    map[string]any(nil),
+		"nil_str_map":    map[string]string(nil),
+		"nested_any_map": map[string]any{"query": "SELECT * FROM t WHERE x = '$val' AND y = '${env:Y}'"},
+	}
+
+	escaped, ok := escapeDollarSigns(input).(map[string]any)
+	require.True(t, ok)
+
+	assert.Equal(t, "hello", escaped["plain"])
+	assert.Equal(t, "$$1@***", escaped["single_dollar"])
+	assert.Equal(t, "$${env:SECRET}", escaped["env_uri"])
+	assert.Equal(t, "$${SECRET}", escaped["implicit_uri"])
+	assert.Equal(t, "$${1}", escaped["invalid_env"])
+	assert.Equal(t, "pa$$$$word", escaped["double_dollar"])
+	assert.Equal(t, "$$$${env:SECRET}", escaped["escaped_uri"])
+	assert.Equal(t, "$$$$$${env:SECRET}", escaped["triple_dollar"])
+	assert.Equal(t, 123, escaped["int_val"])
+	assert.Equal(t, true, escaped["bool_val"])
+	assert.Equal(t, []any{"$${file:/etc/shadow}", "pa$$$$word", []any{"$$nested"}}, escaped["any_slice"])
+	assert.Equal(t, []any{"$$var", "$${env:SECRET}", "pa$$$$word", "plain"}, escaped["string_slice"])
+	assert.Equal(t, []any{
+		map[string]any{"expr": `body matches "^\$$\{1\}$$$$"`, "count": 42},
+	}, escaped["map_slice"])
+	assert.Equal(t, map[string]any{
+		"authorization": "Bearer pa$$$$word-$${env:TOKEN}",
+	}, escaped["string_map"])
+	assert.Nil(t, escaped["nil_any_slice"])
+	assert.Nil(t, escaped["nil_str_slice"])
+	assert.Nil(t, escaped["nil_map_slice"])
+	assert.Nil(t, escaped["nil_any_map"])
+	assert.Nil(t, escaped["nil_str_map"])
+	assert.Equal(t, map[string]any{
+		"query": "SELECT * FROM t WHERE x = '$$val' AND y = '$${env:Y}'",
+	}, escaped["nested_any_map"])
+
+	// Verify caller-owned slices and maps were not mutated in place.
+	assert.Equal(t, []string{"$var", "${env:SECRET}", "pa$$word", "plain"}, origStringSlice)
+	assert.Equal(t, `body matches "^\$\{1\}$$"`, origMapSlice[0]["expr"])
+	assert.Equal(t, "Bearer pa$$word-${env:TOKEN}", origStringMap["authorization"])
+}
+
+type dollarSignTestSourcePolicy struct {
+	name    string
+	version string
+}
+
+func (d *dollarSignTestSourcePolicy) PolicyName() string { return d.name }
+func (d *dollarSignTestSourcePolicy) PolicyType() string { return "dollar_sign_test_source" }
+func (d *dollarSignTestSourcePolicy) PolicyClass() googlepolicy.PolicyClass {
+	return googlepolicy.PolicyClassSource
+}
+func (d *dollarSignTestSourcePolicy) Validate() error { return nil }
+func (d *dollarSignTestSourcePolicy) Evaluate(context.Context) (*confmap.Conf, error) {
+	return confmap.NewFromStringMap(map[string]any{
+		"receivers": map[string]any{
+			"otlp/" + d.name: map[string]any{
+				"endpoint_env":     "${env:SECRET_ENDPOINT}",
+				"implicit_env":     "${SECRET_ENDPOINT}",
+				"file_uri":         "${file:/etc/shadow}",
+				"invalid_env_name": "${1}",
+				"regex_replace":    "$1@***",
+				"password":         "pa$$word",
+				"already_doubled":  "$${env:SECRET_ENDPOINT}",
+				"triple_dollar":    "$$${env:SECRET_ENDPOINT}",
+				"version":          d.version,
+				"include_paths": []string{
+					"/var/log/${file:/etc/shadow}",
+					"/var/log/${env:SECRET_PATH}.log",
+					"/var/log/pa$$word.log",
+					"/var/log/${1}.log",
+				},
+				"operators": []map[string]any{
+					{
+						"type": "filter",
+						"expr": `body matches "^\\$\\{1\\}$$" && attributes["secret"] == "${env:SECRET}"`,
+					},
+				},
+				"headers": map[string]string{
+					"Authorization": "Bearer pa$$word-${env:SECRET_TOKEN}",
+				},
+			},
+		},
+	}), nil
+}
+func (d *dollarSignTestSourcePolicy) LogReceiverIDs() []component.ID {
+	return []component.ID{component.MustNewIDWithName("otlp", d.name)}
+}
+func (d *dollarSignTestSourcePolicy) MetricReceiverIDs() []component.ID { return nil }
+func (d *dollarSignTestSourcePolicy) TraceReceiverIDs() []component.ID  { return nil }
+
+type forbidExpansionProvider struct {
+	scheme string
+	called *atomic.Int32
+}
+
+func (f *forbidExpansionProvider) Retrieve(_ context.Context, uri string, _ confmap.WatcherFunc) (*confmap.Retrieved, error) {
+	f.called.Add(1)
+	return nil, fmt.Errorf("unexpected provider expansion for %q", uri)
+}
+
+func (f *forbidExpansionProvider) Scheme() string {
+	return f.scheme
+}
+
+func (f *forbidExpansionProvider) Shutdown(context.Context) error {
+	return nil
+}
+
+func TestRetrieve_EscapesDollarSignsForConfmapResolver(t *testing.T) {
+	t.Setenv("FLEET_ID", "fleet-pa$$word-${env:SECRET_FLEET}-${1}")
+
+	ps1 := &googlepolicy.PolicySet{
+		RevisionID: "rev-dollar-1",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			"dollar_src": {PolicyObj: &dollarSignTestSourcePolicy{name: "dollar_src", version: "v1-$${env:VER}"}},
+		},
+	}
+	googlepolicy.SetActivePolicySet(ps1)
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	// 1. Direct Retrieve verification: all '$' characters are doubled to '$$' in Retrieved.
+	directProvider := createProvider()
+	ret, err := directProvider.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	rawConf, err := ret.AsConf()
+	require.NoError(t, err)
+	assert.Equal(t, "$${env:SECRET_ENDPOINT}", rawConf.Get("receivers::otlp/dollar_src::endpoint_env"))
+	assert.Equal(t, "$${SECRET_ENDPOINT}", rawConf.Get("receivers::otlp/dollar_src::implicit_env"))
+	assert.Equal(t, "$${file:/etc/shadow}", rawConf.Get("receivers::otlp/dollar_src::file_uri"))
+	assert.Equal(t, "$${1}", rawConf.Get("receivers::otlp/dollar_src::invalid_env_name"))
+	assert.Equal(t, "$$1@***", rawConf.Get("receivers::otlp/dollar_src::regex_replace"))
+	assert.Equal(t, "pa$$$$word", rawConf.Get("receivers::otlp/dollar_src::password"))
+	assert.Equal(t, "$$$${env:SECRET_ENDPOINT}", rawConf.Get("receivers::otlp/dollar_src::already_doubled"))
+	assert.Equal(t, "$$$$$${env:SECRET_ENDPOINT}", rawConf.Get("receivers::otlp/dollar_src::triple_dollar"))
+	assert.Equal(t, []any{
+		"/var/log/$${file:/etc/shadow}",
+		"/var/log/$${env:SECRET_PATH}.log",
+		"/var/log/pa$$$$word.log",
+		"/var/log/$${1}.log",
+	}, rawConf.Get("receivers::otlp/dollar_src::include_paths"))
+	require.NoError(t, directProvider.Shutdown(context.Background()))
+
+	// 2. End-to-end confmap.Resolver verification:
+	// Register mock 'env' and 'file' providers with DefaultScheme: "env".
+	// Neither provider may be called when resolving policy-synthesized strings,
+	// and all literal '$' sequences must round-trip to their exact original values.
+	var envCalls, fileCalls atomic.Int32
+	envFactory := confmap.NewProviderFactory(func(confmap.ProviderSettings) confmap.Provider {
+		return &forbidExpansionProvider{scheme: "env", called: &envCalls}
+	})
+	fileFactory := confmap.NewProviderFactory(func(confmap.ProviderSettings) confmap.Provider {
+		return &forbidExpansionProvider{scheme: "file", called: &fileCalls}
+	})
+
+	resolver, err := confmap.NewResolver(confmap.ResolverSettings{
+		URIs:              []string{"googlecontrolplane:component:my-config"},
+		ProviderFactories: []confmap.ProviderFactory{NewFactory(), envFactory, fileFactory},
+		DefaultScheme:     "env",
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		assert.NoError(t, resolver.Shutdown(context.Background()))
+	})
+
+	resolvedConf, err := resolver.Resolve(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, int32(0), envCalls.Load(), "env provider must never be invoked for policy strings")
+	assert.Equal(t, int32(0), fileCalls.Load(), "file provider must never be invoked for policy strings")
+
+	assert.Equal(t, "${env:SECRET_ENDPOINT}", resolvedConf.Get("receivers::otlp/dollar_src::endpoint_env"))
+	assert.Equal(t, "${SECRET_ENDPOINT}", resolvedConf.Get("receivers::otlp/dollar_src::implicit_env"))
+	assert.Equal(t, "${file:/etc/shadow}", resolvedConf.Get("receivers::otlp/dollar_src::file_uri"))
+	assert.Equal(t, "${1}", resolvedConf.Get("receivers::otlp/dollar_src::invalid_env_name"))
+	assert.Equal(t, "$1@***", resolvedConf.Get("receivers::otlp/dollar_src::regex_replace"))
+	assert.Equal(t, "pa$$word", resolvedConf.Get("receivers::otlp/dollar_src::password"))
+	assert.Equal(t, "$${env:SECRET_ENDPOINT}", resolvedConf.Get("receivers::otlp/dollar_src::already_doubled"))
+	assert.Equal(t, "$$${env:SECRET_ENDPOINT}", resolvedConf.Get("receivers::otlp/dollar_src::triple_dollar"))
+	assert.Equal(t, "v1-$${env:VER}", resolvedConf.Get("receivers::otlp/dollar_src::version"))
+	assert.Equal(t, []any{
+		"/var/log/${file:/etc/shadow}",
+		"/var/log/${env:SECRET_PATH}.log",
+		"/var/log/pa$$word.log",
+		"/var/log/${1}.log",
+	}, resolvedConf.Get("receivers::otlp/dollar_src::include_paths"))
+	assert.Equal(t, []any{
+		map[string]any{
+			"type": "filter",
+			"expr": `body matches "^\\$\\{1\\}$$" && attributes["secret"] == "${env:SECRET}"`,
+		},
+	}, resolvedConf.Get("receivers::otlp/dollar_src::operators"))
+	assert.Equal(t, map[string]any{
+		"Authorization": "Bearer pa$$word-${env:SECRET_TOKEN}",
+	}, resolvedConf.Get("receivers::otlp/dollar_src::headers"))
+
+	// Verify resource attributes synthesized by BuiltInSelfMetricsPolicy also preserve literal '$'.
+	rawAttrs, ok := resolvedConf.Get("service::telemetry::resource::attributes").([]any)
+	require.True(t, ok)
+	attrMap := map[string]any{}
+	for _, entry := range rawAttrs {
+		if m, ok := entry.(map[string]any); ok {
+			if name, ok := m["name"].(string); ok {
+				attrMap[name] = m["value"]
+			}
+		}
+	}
+	assert.Equal(t, "fleet-pa$$word-${env:SECRET_FLEET}-${1}", attrMap["gcp.fleet_id"])
+
+	// 3. Hot-reload verification: updating the active policy set caches the evaluated
+	// Retrieved in onPolicySetUpdated; resolving again must not double-escape cachedRet.
+	ps2 := &googlepolicy.PolicySet{
+		RevisionID: "rev-dollar-2",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			"dollar_src": {PolicyObj: &dollarSignTestSourcePolicy{name: "dollar_src", version: "v2-pa$$word-${env:VER2}"}},
+		},
+	}
+	googlepolicy.SetActivePolicySet(ps2)
+
+	select {
+	case watchErr := <-resolver.Watch():
+		require.NoError(t, watchErr)
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for resolver watcher notification")
+	}
+
+	resolvedConf2, err := resolver.Resolve(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, int32(0), envCalls.Load())
+	assert.Equal(t, int32(0), fileCalls.Load())
+	assert.Equal(t, "v2-pa$$word-${env:VER2}", resolvedConf2.Get("receivers::otlp/dollar_src::version"))
+	assert.Equal(t, "pa$$word", resolvedConf2.Get("receivers::otlp/dollar_src::password"))
+	assert.Equal(t, "${env:SECRET_ENDPOINT}", resolvedConf2.Get("receivers::otlp/dollar_src::endpoint_env"))
+}

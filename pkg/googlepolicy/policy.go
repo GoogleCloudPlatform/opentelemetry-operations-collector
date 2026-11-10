@@ -142,9 +142,16 @@ const (
 // LogTransformPolicyEvaluator is implemented by transformation policies that
 // modify surviving log records in-place (e.g., LogTransformPolicy in
 // pkg/googlepolicy/logtransform).
+//
+// Across a PolicySet, MatchesLog is evaluated once per policy against the
+// pre-transform log record before any stage mutates it, and TransformLogStage
+// is then invoked across matching policies in global stage order
+// (TransformStageRename -> TransformStageAdd -> TransformStageRemove ->
+// TransformStageRedact) with ascending PolicyName() tie-breaking.
 type LogTransformPolicyEvaluator interface {
 	TransformationPolicy
-	TransformStage() TransformStage
+	MatchesLog(ctx LogContext) bool
+	TransformLogStage(stage TransformStage, ctx LogContext) TransformResult
 	TransformLog(ctx LogContext) TransformResult
 }
 

@@ -649,7 +649,7 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 		return nil, false, err
 	}
 
-	confMap := conf.ToStringMap()
+	confMap, _ := escapeDollarSigns(conf.ToStringMap()).(map[string]any)
 	ret, err := confmap.NewRetrieved(confMap)
 	return ret, false, err
 }
@@ -835,6 +835,70 @@ func cleanNilEntries(m map[string]any) {
 		if subMap, ok := v.(map[string]any); ok {
 			cleanNilEntries(subMap)
 		}
+	}
+}
+
+// escapeDollarSigns recursively replaces every literal "$" with "$$" across all
+// strings in val (and normalizes typed string/map slices and maps to []any and
+// map[string]any so upstream confmap.Resolver traverses them).
+//
+// Upstream confmap.Resolver.Resolve runs expandValueRecursively followed by its
+// own escapeDollarSigns pass ("$$" -> "$") on the merged configuration. Doubling
+// every "$" ensures that any sequence of k >= 1 dollar signs preceding "{...}"
+// becomes 2k dollar signs (so 2k-1, an odd number, precedes "${...}"), which
+// confmap treats as an escaped literal rather than a provider URI reference, and
+// confmap's unescaping pass then restores the exact original string.
+func escapeDollarSigns(val any) any {
+	switch v := val.(type) {
+	case string:
+		return strings.ReplaceAll(v, "$", "$$")
+	case []any:
+		if v == nil {
+			return nil
+		}
+		nslice := make([]any, len(v))
+		for i, x := range v {
+			nslice[i] = escapeDollarSigns(x)
+		}
+		return nslice
+	case []string:
+		if v == nil {
+			return nil
+		}
+		nslice := make([]any, len(v))
+		for i, x := range v {
+			nslice[i] = strings.ReplaceAll(x, "$", "$$")
+		}
+		return nslice
+	case []map[string]any:
+		if v == nil {
+			return nil
+		}
+		nslice := make([]any, len(v))
+		for i, x := range v {
+			nslice[i] = escapeDollarSigns(x)
+		}
+		return nslice
+	case map[string]any:
+		if v == nil {
+			return nil
+		}
+		nmap := make(map[string]any, len(v))
+		for k, x := range v {
+			nmap[k] = escapeDollarSigns(x)
+		}
+		return nmap
+	case map[string]string:
+		if v == nil {
+			return nil
+		}
+		nmap := make(map[string]any, len(v))
+		for k, x := range v {
+			nmap[k] = strings.ReplaceAll(x, "$", "$$")
+		}
+		return nmap
+	default:
+		return val
 	}
 }
 

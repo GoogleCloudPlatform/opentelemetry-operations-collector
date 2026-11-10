@@ -1427,20 +1427,16 @@ func TestPolicySetActiveSelfMetric_NotEmittedWithoutProvider(t *testing.T) {
 	otelcolBin := resolveOtelcolBinary(t)
 
 	tests := []struct {
-		name              string
-		extensionsBlock   string
-		serviceExtensions string
+		name          string
+		withExtension bool
 	}{
 		{
-			name: "without_extension",
+			name:          "without_extension",
+			withExtension: false,
 		},
 		{
-			name: "with_extension_configured_independently",
-			extensionsBlock: `extensions:
-  googlecontrolplane:
-`,
-			serviceExtensions: `  extensions: [googlecontrolplane]
-`,
+			name:          "with_extension_configured_independently",
+			withExtension: true,
 		},
 	}
 
@@ -1449,12 +1445,17 @@ func TestPolicySetActiveSelfMetric_NotEmittedWithoutProvider(t *testing.T) {
 			tempDir := t.TempDir()
 			selfMockSrv, selfExporterAddr := startMockOTLPServer(t)
 
-			cfg := fmt.Sprintf(`%sreceivers:
+			serviceHeader := "service:"
+			if tc.withExtension {
+				serviceHeader = "extensions:\n  googlecontrolplane:\nservice:\n  extensions: [googlecontrolplane]"
+			}
+
+			cfg := fmt.Sprintf(`receivers:
   nop/in:
 exporters:
   nop/out:
-service:
-%s  telemetry:
+%s
+  telemetry:
     logs:
       processors: []
     metrics:
@@ -1471,7 +1472,7 @@ service:
     logs:
       receivers: [nop/in]
       exporters: [nop/out]
-`, tc.extensionsBlock, tc.serviceExtensions, selfExporterAddr)
+`, serviceHeader, selfExporterAddr)
 			cfgPath := filepath.Join(tempDir, "config.yaml")
 			if err := os.WriteFile(cfgPath, []byte(cfg), 0644); err != nil {
 				t.Fatalf("failed to write config.yaml: %v", err)

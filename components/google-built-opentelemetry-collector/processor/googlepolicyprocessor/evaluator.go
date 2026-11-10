@@ -53,8 +53,8 @@ func NewEvaluator(policies []googlepolicy.TransformationPolicy) (*Evaluator, err
 		case googlepolicy.LogFilterPolicyEvaluator:
 			ev.addLogFilterPolicy(p)
 		case googlepolicy.LogTransformPolicyEvaluator:
-			if p.TransformStage() == googlepolicy.TransformStageUnspecified {
-				return nil, fmt.Errorf("transformation policy %q has unspecified transform stage", p.PolicyName())
+			if err := p.Validate(); err != nil {
+				return nil, fmt.Errorf("transformation policy %q failed validation: %w", p.PolicyName(), err)
 			}
 			ev.addLogTransformPolicy(p)
 		case googlepolicy.MetricFilterPolicyEvaluator:
@@ -73,9 +73,6 @@ func NewEvaluator(policies []googlepolicy.TransformationPolicy) (*Evaluator, err
 		}
 	}
 	slices.SortFunc(ev.logTransformPolicies, func(a, b googlepolicy.LogTransformPolicyEvaluator) int {
-		if c := cmp.Compare(a.TransformStage(), b.TransformStage()); c != 0 {
-			return c
-		}
 		return cmp.Compare(a.PolicyName(), b.PolicyName())
 	})
 	return ev, nil

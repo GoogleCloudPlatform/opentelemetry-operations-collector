@@ -1045,21 +1045,42 @@ func defaultStorageDir() string {
 }
 
 // confReferencesStorageExtension inspects the receivers configured in conf and returns
-// true if any receiver specifies storage: <storageExtID.String()>.
+// true if any receiver references the given storage extension ID anywhere in its configuration.
 func confReferencesStorageExtension(conf *confmap.Conf, storageExtID component.ID) bool {
 	rawReceivers := conf.Get("receivers")
-	receiversMap, ok := rawReceivers.(map[string]any)
-	if !ok {
+	if rawReceivers == nil {
 		return false
 	}
-	target := storageExtID.String()
-	for _, rec := range receiversMap {
-		recCfg, ok := rec.(map[string]any)
-		if !ok {
-			continue
+	return containsStringValue(rawReceivers, storageExtID.String())
+}
+
+func containsStringValue(val any, target string) bool {
+	switch v := val.(type) {
+	case string:
+		return v == target
+	case map[string]any:
+		for _, sub := range v {
+			if containsStringValue(sub, target) {
+				return true
+			}
 		}
-		if s, ok := recCfg["storage"].(string); ok && s == target {
-			return true
+	case map[any]any:
+		for _, sub := range v {
+			if containsStringValue(sub, target) {
+				return true
+			}
+		}
+	case []any:
+		for _, item := range v {
+			if containsStringValue(item, target) {
+				return true
+			}
+		}
+	case []string:
+		for _, s := range v {
+			if s == target {
+				return true
+			}
 		}
 	}
 	return false

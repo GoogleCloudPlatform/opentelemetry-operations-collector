@@ -1,0 +1,137 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package google.telemetry.policy.v1alpha1;
+
+import "policy/v1alpha1/common_policy_types.proto";
+
+option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1;policyv1alpha1";
+
+// Defines conditional in-memory modifications to matching metrics or metric
+// data points across up to two transformation stages (`renamings` and
+// `additions`).
+//
+// Policies are declarative, atomic, and transport-agnostic.
+//
+// Evaluation & Ordering Semantics:
+// - Double-Applied Filtering (Pass 1 & Pass 2): `MetricFilterPolicy` rules run
+//   in Pass 1 (Pre-Transform) before `MetricTransformPolicy` stages
+//   (`renamings` -> `additions`), and re-run in Pass 2 (Post-Transform) if any
+//   transform policy modified the metric or data point. Both `ACTION_KEEP` and
+//   `ACTION_DROP` are re-evaluated statelessly in Pass 2 against the
+//   post-transform metric or data point (guaranteeing multi-hop consistency
+//   across SDK and Collector evaluation). Within each pass, `ACTION_KEEP`
+//   overrides `ACTION_DROP`; however, if a metric or data point survived Pass 1
+//   only because an `ACTION_KEEP` rule matched a field or attribute that was
+//   subsequently renamed in Stage 1 such that `ACTION_KEEP` no longer matches
+//   in Pass 2 (while an `ACTION_DROP` rule still matches), it is dropped in
+//   Pass 2.
+// - Pre-Transform Matcher Evaluation: All conditions in `matchers` are ANDed
+//   together (an empty `matchers` list matches all surviving metrics and data
+//   points). After Pass 1 `MetricFilterPolicy` evaluation, `matchers` is
+//   evaluated once per active `MetricTransformPolicy` against the pre-transform
+//   metric or data point before any transform stage executes. Every matching
+//   policy contributes all of its configured stage lists to the transform pass;
+//   mutations performed in Stage 1 (`renamings`) do not re-trigger or
+//   invalidate any transform policy's `matchers`.
+// - Global Stage Execution & Tie-Breaking: Across all matching
+//   `MetricTransformPolicy` instances, operations execute in global stage
+//   order: `renamings` -> `additions`. Within each stage, matching policies
+//   execute in ascending lexicographical order of `id`, and operations within a
+//   single policy's stage list execute in list order.
+// - Compile-Time Validation: At least one operation must be configured across
+//   `renamings` and `additions`, and every matcher and operation must pass
+//   validation (otherwise the entire policy is rejected atomically at load
+//   time).
+// - Collision Handling & Fail-Open Runtime Execution: Metric transform
+//   operations never overwrite existing target fields or attributes (to prevent
+//   accidental time-series identity collisions when collapsing dimensions). If
+//   an individual operation cannot be applied at runtime (e.g., `renamings`
+//   when `source` does not exist or `target` already exists, or `additions`
+//   when `target` is already populated), that operation is a no-op and
+//   remaining operations still execute.
+message MetricTransformPolicy {
+  // Unique identifier for the policy within its configuration scope
+  // (e.g. a UUID or namespaced URI like "io.opentelemetry.operator/{namespace}/policies/add-metric-tier").
+  string id = 1;
+
+  // Conditions evaluated against the pre-transform metric or data point that
+  // must all match for this policy's operations to apply.
+  // If empty, this policy applies to all surviving metrics.
+  repeated MetricMatcher matchers = 2;
+
+  // Stage 1: Attribute rename operations (`data_point_attribute_path`,
+  // `resource_attribute_path`, or `scope_attribute_path`), applied in list
+  // order before `additions`.
+  repeated MetricRenaming renamings = 3;
+
+  // Stage 2: Field or attribute addition operations, applied in list order
+  // after all matching policies' `renamings`.
+  repeated MetricAddition additions = 4;
+}
+
+// Moves an existing metric, resource, or scope attribute to a new destination.
+//
+// Both `source` and `target` must select an attribute path
+// (`data_point_attribute_path`, `resource_attribute_path`, or
+// `scope_attribute_path`). First-class `descriptor_field` and `scope_field`
+// selectors are not valid rename sources or targets and are rejected at policy
+// load time.
+//
+// Collision Handling: If `target` already exists, the rename is a no-op and
+// both `source` and `target` are preserved unchanged. Missing intermediate map
+// segments in a multi-element `AttributePath` are created automatically unless
+// an intermediate segment already exists as a non-map value (in which case the
+// rename fails open without mutating `source` or `target`).
+message MetricRenaming {
+  // Existing source attribute to rename. Required.
+  MetricFieldSelector source = 1;
+
+  // Destination attribute to write. Required.
+  MetricFieldSelector target = 2;
+}
+
+// Inserts a new field or attribute on a metric or metric data point if not
+// already present.
+//
+// Collision Handling: If `target` is already present (or, for first-class
+// string fields, set to a non-empty string), the addition is skipped and the
+// existing value is preserved unchanged.
+//
+// Valid `target` variants:
+// - `data_point_attribute_path`, `resource_attribute_path`,
+//   `scope_attribute_path`: accepts any scalar `Value`. Missing intermediate
+//   map segments in a multi-element `AttributePath` are created automatically
+//   unless an intermediate segment already exists as a non-map value (in which
+//   case the operation fails open).
+// - `descriptor_field`: valid targets are `METRIC_DESCRIPTOR_FIELD_NAME`,
+//   `METRIC_DESCRIPTOR_FIELD_DESCRIPTION`, and `METRIC_DESCRIPTOR_FIELD_UNIT`
+//   (each requiring a non-empty `string_value`). `METRIC_DESCRIPTOR_FIELD_TYPE`,
+//   `METRIC_DESCRIPTOR_FIELD_AGGREGATION_TEMPORALITY`, and
+//   `METRIC_DESCRIPTOR_FIELD_IS_MONOTONIC` are not valid mutation targets.
+// - `scope_field`: valid targets are `SCOPE_FIELD_NAME` and
+//   `SCOPE_FIELD_VERSION` (each requiring a non-empty `string_value`).
+//   `SCOPE_FIELD_SCHEMA_URL` is not a valid mutation target.
+message MetricAddition {
+  // Target field or attribute to set. Required.
+  MetricFieldSelector target = 1;
+
+  // Source of the value to assign to `target`. Exactly one must be set.
+  oneof source {
+    // Literal scalar value to assign to `target`.
+    Value value = 2;
+  }
+}

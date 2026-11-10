@@ -250,13 +250,11 @@ func stripTypeKey(raw map[string]any) map[string]any {
 }
 
 // IsControlPlaneActive reports whether the control plane policy engine is
-// active in this process (either an active policy set is loaded or a component
-// such as googlecontrolplaneprovider / googlepolicyprocessor is watching for
-// policy updates).
+// active in this process (an active policy set is loaded in the registry).
 func IsControlPlaneActive() bool {
 	policySetMu.RLock()
 	defer policySetMu.RUnlock()
-	return activePolicySet != nil || len(watcherChannels) > 0
+	return activePolicySet != nil
 }
 
 // ActivePolicySet returns a copy of the currently active policy set, or nil if none is set.

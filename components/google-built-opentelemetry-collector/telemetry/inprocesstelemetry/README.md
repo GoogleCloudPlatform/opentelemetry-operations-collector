@@ -17,32 +17,35 @@ the [`selftelemetry` receiver](../../receiver/selftelemetryreceiver/README.md).
   [`otelconftelemetry`](https://github.com/open-telemetry/opentelemetry-collector/tree/main/service/telemetry/otelconftelemetry).
   Logs, traces, resource and default config are delegated to upstream
   unchanged.
-* **One extra metric reader.** The internal-telemetry `MeterProvider` is
-  built the same way upstream builds it, plus an
+* **One extra metric reader (opt-in).** When the `telemetry.inProcessReader`
+  feature gate is enabled, the internal-telemetry `MeterProvider` is built the
+  same way upstream builds it, plus an
   `sdkmetric.ManualReader`. That reader is exposed via `Reader()`; it is only
   collected when a consumer (the `selftelemetry` receiver) asks for it.
-* **Relaxed validation.** Upstream requires at least one metric reader when
+* **Relaxed validation (opt-in).** With the feature gate enabled: upstream requires at least one metric reader when
   `service::telemetry::metrics::level` is not `none`. Because the in-process
   reader always exists, `service::telemetry::metrics::readers: []` is valid,
   i.e. the default `localhost:8888` Prometheus endpoint can be removed
   entirely.
 
-## Turning it off
+## Opting in
 
 The in-process reader is controlled by the `telemetry.inProcessReader`
-feature gate (beta, enabled by default). To get exactly the upstream
-behaviour, start the Collector with:
+feature gate, which is **alpha, i.e. disabled by default**. A Collector built
+with this factory therefore behaves exactly like one built with upstream
+`otelconftelemetry` unless the user explicitly opts in:
 
 ```sh
-otelcol-google --feature-gates=-telemetry.inProcessReader --config ...
+otelcol-google --feature-gates=+telemetry.inProcessReader --config ...
 ```
 
-With the gate disabled, the factory delegates meter provider creation to
-upstream `otelconftelemetry` unchanged: no in-process reader is created,
-`Reader()` returns nil, and upstream validation applies again (at least one
-metric reader is required when metrics are enabled). Combine this with the
-previous self-telemetry configuration (e.g. a `periodic` OTLP reader or a
-`pull` Prometheus reader) to self-observe exactly as before.
+With the gate disabled (the default), the factory delegates meter provider
+creation and config validation to upstream unchanged: no in-process reader is
+created, `Reader()` returns nil, and upstream validation applies (at least one
+metric reader is required when metrics are enabled).
+
+With the gate enabled, the in-process reader is attached and
+`service::telemetry::metrics::readers: []` becomes a valid configuration.
 
 ## API
 

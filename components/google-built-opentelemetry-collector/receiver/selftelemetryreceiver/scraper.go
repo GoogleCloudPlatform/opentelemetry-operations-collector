@@ -109,7 +109,8 @@ func (s *selfScraper) scrape(ctx context.Context) (pmetric.Metrics, error) {
 	if reader == nil {
 		s.warnOnce.Do(func() {
 			s.logger.Warn("No in-process telemetry reader is available; internal metrics are disabled " +
-				"(service::telemetry::metrics::level: none), the telemetry.inProcessReader feature gate is disabled, " +
+				"(service::telemetry::metrics::level: none), the telemetry.inProcessReader feature gate is not enabled " +
+				"(--feature-gates=+telemetry.inProcessReader), " +
 				"or this binary was not built with the inprocesstelemetry factory")
 		})
 		return pmetric.NewMetrics(), nil

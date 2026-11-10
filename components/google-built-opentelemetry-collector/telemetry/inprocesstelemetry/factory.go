@@ -43,17 +43,17 @@ const InProcessReaderFeatureGateID = "telemetry.inProcessReader"
 
 // inProcessReaderGate controls whether the in-process reader is attached.
 //
-// It is enabled by default. Disabling it
-// (`--feature-gates=-telemetry.inProcessReader`) makes this factory behave
-// exactly like upstream otelconftelemetry: no in-process reader is created,
-// Reader() returns nil, and upstream validation (at least one metric reader
-// when metrics are enabled) applies unchanged.
+// It is an alpha gate, i.e. disabled by default: unless a user explicitly
+// starts the Collector with `--feature-gates=+telemetry.inProcessReader`, this
+// factory behaves exactly like upstream otelconftelemetry (meter provider
+// creation and validation are delegated to upstream unchanged, no in-process
+// reader is created, and Reader() returns nil).
 var inProcessReaderGate = featuregate.GlobalRegistry().MustRegister(
 	InProcessReaderFeatureGateID,
-	featuregate.StageBeta,
+	featuregate.StageAlpha,
 	featuregate.WithRegisterDescription("Attach an in-memory reader to the Collector's internal telemetry "+
 		"MeterProvider so the selftelemetry receiver can consume internal metrics without a host endpoint. "+
-		"When disabled, internal telemetry behaves exactly as upstream otelconftelemetry."),
+		"When disabled (the default), internal telemetry behaves exactly as upstream otelconftelemetry."),
 )
 
 var errMissingCollectorResource = errors.New("collector resource is required to create the meter provider")

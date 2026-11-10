@@ -16,6 +16,7 @@ package inprocesstelemetry
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -32,6 +33,16 @@ import (
 	"go.opentelemetry.io/collector/service/telemetry"
 	"go.opentelemetry.io/collector/service/telemetry/otelconftelemetry"
 )
+
+// TestMain opts the whole package into the in-process reader (the gate is
+// disabled by default); tests that check the default behaviour disable it
+// explicitly via defaultGate.
+func TestMain(m *testing.M) {
+	if err := featuregate.GlobalRegistry().Set(InProcessReaderFeatureGateID, true); err != nil {
+		panic(err)
+	}
+	os.Exit(m.Run())
+}
 
 func meterSettings() telemetry.MeterSettings {
 	res := pcommon.NewResource()
@@ -180,7 +191,9 @@ func TestLevelNoneHasNoReader(t *testing.T) {
 	require.NoError(t, mp.Shutdown(ctx))
 }
 
-func disableGate(t *testing.T) {
+// defaultGate restores the gate's registered default (disabled) for the
+// duration of a test.
+func defaultGate(t *testing.T) {
 	t.Helper()
 	require.NoError(t, featuregate.GlobalRegistry().Set(InProcessReaderFeatureGateID, false))
 	t.Cleanup(func() {
@@ -188,14 +201,22 @@ func disableGate(t *testing.T) {
 	})
 }
 
-func TestFeatureGateEnabledByDefault(t *testing.T) {
-	assert.True(t, inProcessReaderGate.IsEnabled())
+func TestFeatureGateDisabledByDefault(t *testing.T) {
+	var g *featuregate.Gate
+	featuregate.GlobalRegistry().VisitAll(func(fg *featuregate.Gate) {
+		if fg.ID() == InProcessReaderFeatureGateID {
+			g = fg
+		}
+	})
+	require.NotNil(t, g)
+	assert.Equal(t, featuregate.StageAlpha, g.Stage(), "must be opt-in (alpha) so existing users are unaffected")
 }
 
-// TestFeatureGateDisabledBehavesLikeUpstream checks that with the gate off the
-// factory is indistinguishable from upstream otelconftelemetry.
+// TestFeatureGateDisabledBehavesLikeUpstream checks that with the gate in its
+// default (disabled) state the factory is indistinguishable from upstream
+// otelconftelemetry.
 func TestFeatureGateDisabledBehavesLikeUpstream(t *testing.T) {
-	disableGate(t)
+	defaultGate(t)
 	ctx := context.Background()
 	f := NewFactory()
 

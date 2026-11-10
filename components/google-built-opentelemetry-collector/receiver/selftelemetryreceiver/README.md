@@ -18,7 +18,9 @@ scraping that endpoint with a `prometheus` receiver.
 
 The receiver requires the Collector binary to be built with the
 [`inprocesstelemetry`](../../telemetry/inprocesstelemetry/README.md) telemetry
-factory. That factory behaves exactly like upstream `otelconftelemetry` (all
+factory, **and** the Collector to be started with the (alpha, disabled by
+default) `telemetry.inProcessReader` feature gate enabled:
+`--feature-gates=+telemetry.inProcessReader`. That factory behaves exactly like upstream `otelconftelemetry` (all
 `service::telemetry` config is unchanged), but additionally attaches an
 in-memory `sdkmetric.ManualReader` to the internal-telemetry `MeterProvider`
 and exposes it via `inprocesstelemetry.Reader()`.
@@ -29,7 +31,7 @@ SDK's OTLP/HTTP exporter with an in-memory `http.RoundTripper`, so no request
 ever leaves the process.
 
 If the binary was not built with `inprocesstelemetry`, if the
-`telemetry.inProcessReader` feature gate is disabled, or if
+`telemetry.inProcessReader` feature gate is not enabled, or if
 `service::telemetry::metrics::level` is `none`, the receiver logs a warning
 once and emits nothing.
 

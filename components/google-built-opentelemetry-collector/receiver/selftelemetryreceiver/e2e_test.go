@@ -36,6 +36,7 @@ import (
 	"go.opentelemetry.io/collector/confmap/provider/yamlprovider"
 	"go.opentelemetry.io/collector/consumer"
 	"go.opentelemetry.io/collector/exporter"
+	"go.opentelemetry.io/collector/featuregate"
 	"go.opentelemetry.io/collector/otelcol"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
@@ -54,6 +55,7 @@ import (
 // It then checks that the two paths expose the same metrics, with the same
 // attribute sets, and consistent values.
 func TestEndToEndMatchesPrometheusEndpoint(t *testing.T) {
+	enableInProcessReader(t)
 	port := freePort(t)
 	sink := &sinkExporter{}
 
@@ -119,6 +121,7 @@ service:
 // Collector exposes no internal-telemetry endpoint at all
 // (`readers: []`), which upstream otelconftelemetry rejects.
 func TestEndToEndNoHostEndpoint(t *testing.T) {
+	enableInProcessReader(t)
 	sink := &sinkExporter{}
 	startCollector(t, `
 receivers:
@@ -154,9 +157,8 @@ service:
 	}, 30*time.Second, 100*time.Millisecond, "internal metrics did not flow without a reader endpoint")
 }
 
-func startCollector(t *testing.T, cfgYAML string, sink *sinkExporter) {
-	t.Helper()
-	col, err := otelcol.NewCollector(otelcol.CollectorSettings{
+func collectorSettings(cfgYAML string, sink *sinkExporter) otelcol.CollectorSettings {
+	return otelcol.CollectorSettings{
 		BuildInfo: component.NewDefaultBuildInfo(),
 		Factories: func() (otelcol.Factories, error) {
 			recv, err := otelcol.MakeFactoryMap[receiver.Factory](selftelemetryreceiver.NewFactory())
@@ -179,7 +181,12 @@ func startCollector(t *testing.T, cfgYAML string, sink *sinkExporter) {
 				ProviderFactories: []confmap.ProviderFactory{yamlprovider.NewFactory()},
 			},
 		},
-	})
+	}
+}
+
+func startCollector(t *testing.T, cfgYAML string, sink *sinkExporter) {
+	t.Helper()
+	col, err := otelcol.NewCollector(collectorSettings(cfgYAML, sink))
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -190,6 +197,89 @@ func startCollector(t *testing.T, cfgYAML string, sink *sinkExporter) {
 		cancel()
 		require.NoError(t, <-runErr)
 	})
+}
+
+// enableInProcessReader opts in to the in-process reader for one test; the
+// telemetry.inProcessReader feature gate is disabled by default.
+func enableInProcessReader(t *testing.T) {
+	t.Helper()
+	require.NoError(t, featuregate.GlobalRegistry().Set(inprocesstelemetry.InProcessReaderFeatureGateID, true))
+	t.Cleanup(func() {
+		require.NoError(t, featuregate.GlobalRegistry().Set(inprocesstelemetry.InProcessReaderFeatureGateID, false))
+	})
+}
+
+// TestEndToEndDefaultIsUpstream checks that, without opting in to the
+// feature gate, a Collector built with the inprocesstelemetry factory behaves
+// like one built with upstream otelconftelemetry.
+func TestEndToEndDefaultIsUpstream(t *testing.T) {
+	// No test in this package leaves the gate enabled (enableInProcessReader
+	// resets it), so this observes the registered default.
+	featuregate.GlobalRegistry().VisitAll(func(g *featuregate.Gate) {
+		if g.ID() == inprocesstelemetry.InProcessReaderFeatureGateID {
+			require.False(t, g.IsEnabled(), "telemetry.inProcessReader must be disabled by default")
+		}
+	})
+
+	// Upstream validation: a config with no metric readers is rejected.
+	col, err := otelcol.NewCollector(collectorSettings(`
+receivers:
+  selftelemetry: {}
+exporters:
+  sink: {}
+service:
+  telemetry:
+    metrics:
+      readers: []
+  pipelines:
+    metrics:
+      receivers: [selftelemetry]
+      exporters: [sink]
+`, &sinkExporter{}))
+	require.NoError(t, err)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	require.ErrorContains(t, col.Run(ctx), "collector telemetry metrics reader should exist when metric level is not none")
+
+	// With a classic Prometheus reader, the endpoint works as before and the
+	// selftelemetry receiver (if configured anyway) delivers nothing.
+	port := freePort(t)
+	sink := &sinkExporter{}
+	startCollector(t, fmt.Sprintf(`
+receivers:
+  selftelemetry:
+    collection_interval: 100ms
+    initial_delay: 0s
+exporters:
+  sink: {}
+service:
+  telemetry:
+    metrics:
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: localhost
+                port: %d
+  pipelines:
+    metrics:
+      receivers: [selftelemetry]
+      exporters: [sink]
+`, port), sink)
+	require.Eventually(t, func() bool {
+		resp, err := http.Get(fmt.Sprintf("http://localhost:%d/metrics", port))
+		if err != nil {
+			return false
+		}
+		defer resp.Body.Close()
+		return resp.StatusCode == http.StatusOK
+	}, 30*time.Second, 50*time.Millisecond)
+	require.Eventually(t, func() bool { return sink.batches() >= 3 }, 30*time.Second, 50*time.Millisecond)
+	sink.mu.Lock()
+	defer sink.mu.Unlock()
+	for _, md := range sink.got {
+		require.Zero(t, md.DataPointCount(), "selftelemetry must not deliver data without opting in")
+	}
 }
 
 func assertResource(t *testing.T, md pmetric.Metrics) {

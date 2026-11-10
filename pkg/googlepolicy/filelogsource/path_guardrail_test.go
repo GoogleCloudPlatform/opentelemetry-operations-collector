@@ -111,6 +111,8 @@ func TestPathGuardrail_PipelineStages(t *testing.T) {
 }
 
 func TestPathGuardrail_BraceExpansionSecurity(t *testing.T) {
+	t.Cleanup(setOSForTest("linux"))
+
 	testCases := []struct {
 		name        string
 		pattern     string

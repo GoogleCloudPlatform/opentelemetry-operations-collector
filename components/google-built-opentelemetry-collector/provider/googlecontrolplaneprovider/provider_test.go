@@ -1050,6 +1050,11 @@ var (
 func TestFilterPolicyDriversRegistered(t *testing.T) {
 	// Verify that importing googlecontrolplaneprovider registers log_filter,
 	// metric_filter, and trace_filter policy drivers in googlepolicy.
+	fileLogPaths := []any{"/var/log/**/*.log"}
+	if runtime.GOOS == "windows" {
+		fileLogPaths = []any{`C:\logs\**\*.log`}
+	}
+
 	for _, tc := range []struct {
 		policyType string
 		raw        map[string]any
@@ -1100,7 +1105,7 @@ func TestFilterPolicyDriversRegistered(t *testing.T) {
 			raw: map[string]any{
 				"type":           "file_log_source",
 				"id":             "test-filelog",
-				"included_paths": []any{"/var/log/**/*.log"},
+				"included_paths": fileLogPaths,
 			},
 		},
 		{
@@ -2335,7 +2340,6 @@ func TestRetrieve_MultipleJournaldSourcePolicies_ConsolidationFailureAttributesA
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
-
 
 func TestRetrieve_ActivePolicySetWithHostMetricsSource(t *testing.T) {
 	t.Setenv("FLEET_ID", "1234")

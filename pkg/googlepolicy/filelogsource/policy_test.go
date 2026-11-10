@@ -731,51 +731,62 @@ func TestDriver_WireProtoAndMapLoading(t *testing.T) {
 }
 
 func TestPolicyValidation_CustomApplicationPaths(t *testing.T) {
-	t.Cleanup(setOSForTest("linux"))
+	t.Run("linux custom application paths", func(t *testing.T) {
+		t.Cleanup(setOSForTest("linux"))
 
-	tempDir := t.TempDir()
-	customLinuxPaths := []string{
-		tempDir + "/*.log",
-		"/tmp/app.log",
-		"/home/user/app.log",
-		"/opt/my-app/data/*.log",
-		"/srv/custom/service.log",
-		"/etc/app.log",
-	}
-	for _, p := range customLinuxPaths {
-		pb := &policyv1alpha1.FileLogSourcePolicy{
-			Id:            "custom-app-policy",
-			IncludedPaths: []string{p},
+		customLinuxPaths := []string{
+			"/var/tmp/app/*.log",
+			"/tmp/app.log",
+			"/home/user/app.log",
+			"/opt/my-app/data/*.log",
+			"/srv/custom/service.log",
+			"/etc/app.log",
 		}
-		pol, err := NewPolicyFromProto(pb)
-		require.NoError(t, err, "path %q should be accepted", p)
-		assert.NoError(t, pol.Validate())
-	}
-
-	// Path traversal is still strictly rejected
-	pbTraversal := &policyv1alpha1.FileLogSourcePolicy{
-		Id:            "traversal-policy",
-		IncludedPaths: []string{tempDir + "/../etc/shadow"},
-	}
-	_, err := NewPolicyFromProto(pbTraversal)
-	require.ErrorIs(t, err, ErrPathTraversal)
-
-	// Windows custom application paths
-	t.Cleanup(setOSForTest("windows"))
-	customWindowsPaths := []string{
-		`C:\custom\app\logs\*.log`,
-		`D:\Data\logs\app.log`,
-		`C:\Program Files\App\logs\*.log`,
-		`%ProgramData%\custom\logs\*.log`,
-		`%SystemDrive%\custom\logs\*.log`,
-	}
-	for _, p := range customWindowsPaths {
-		pb := &policyv1alpha1.FileLogSourcePolicy{
-			Id:            "custom-win-policy",
-			IncludedPaths: []string{p},
+		for _, p := range customLinuxPaths {
+			pb := &policyv1alpha1.FileLogSourcePolicy{
+				Id:            "custom-app-policy",
+				IncludedPaths: []string{p},
+			}
+			pol, err := NewPolicyFromProto(pb)
+			require.NoError(t, err, "path %q should be accepted", p)
+			assert.NoError(t, pol.Validate())
 		}
-		pol, err := NewPolicyFromProto(pb)
-		require.NoError(t, err, "path %q should be accepted", p)
-		assert.NoError(t, pol.Validate())
-	}
+
+		// Path traversal is still strictly rejected
+		pbTraversal := &policyv1alpha1.FileLogSourcePolicy{
+			Id:            "traversal-policy",
+			IncludedPaths: []string{"/var/tmp/../etc/shadow"},
+		}
+		_, err := NewPolicyFromProto(pbTraversal)
+		require.ErrorIs(t, err, ErrPathTraversal)
+	})
+
+	t.Run("windows custom application paths", func(t *testing.T) {
+		t.Cleanup(setOSForTest("windows"))
+
+		customWindowsPaths := []string{
+			`C:\custom\app\logs\*.log`,
+			`D:\Data\logs\app.log`,
+			`C:\Program Files\App\logs\*.log`,
+			`%ProgramData%\custom\logs\*.log`,
+			`%SystemDrive%\custom\logs\*.log`,
+		}
+		for _, p := range customWindowsPaths {
+			pb := &policyv1alpha1.FileLogSourcePolicy{
+				Id:            "custom-win-policy",
+				IncludedPaths: []string{p},
+			}
+			pol, err := NewPolicyFromProto(pb)
+			require.NoError(t, err, "path %q should be accepted", p)
+			assert.NoError(t, pol.Validate())
+		}
+
+		// Path traversal is still strictly rejected
+		pbTraversal := &policyv1alpha1.FileLogSourcePolicy{
+			Id:            "traversal-policy-win",
+			IncludedPaths: []string{`C:\custom\app\..\..\Windows\System32\app.log`},
+		}
+		_, err := NewPolicyFromProto(pbTraversal)
+		require.ErrorIs(t, err, ErrPathTraversal)
+	})
 }

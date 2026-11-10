@@ -134,5 +134,6 @@ The Google-Built OpenTelemetry Collector is an open-source, production-ready bui
 | googlesecretmanager | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/confmap/provider/googlesecretmanagerprovider) |
 | http | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/confmap/provider/httpprovider) |
 | https | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/confmap/provider/httpsprovider) |
+| secretsmanager | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/confmap/provider/secretsmanagerprovider) |
 | yaml | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/confmap/provider/yamlprovider) |
 

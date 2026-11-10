@@ -585,31 +585,27 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 	canonicalMetricProcessors := append([]component.ID{rdID, transformID, googlePolicyID}, destPolicy.PreProcessMetricIDs()...)
 	canonicalTraceProcessors := append([]component.ID{rdID, transformID, googlePolicyID}, destPolicy.PreProcessTraceIDs()...)
 
-	var canonicalExtensions extensions.Config
-	if confReferencesStorageExtension(conf, googlepolicy.StorageExtensionID) {
-		storageExtID := googlepolicy.StorageExtensionID
-		storageCfg := map[string]any{
-			"create_directory": true,
-			"directory":        defaultStorageDir(),
-		}
-		storageExtConf := &otelcol.Config{
-			Extensions: map[component.ID]component.Config{
-				storageExtID: component.Config(storageCfg),
-			},
-		}
-		storageCm := confmap.New()
-		if err := storageCm.Marshal(storageExtConf); err != nil {
-			return nil, true, fmt.Errorf("failed to marshal file_storage extension config: %w", err)
-		}
-		if err := conf.Merge(cleanConf(storageCm)); err != nil {
-			return nil, true, fmt.Errorf("failed to merge file_storage extension config: %w", err)
-		}
-		canonicalExtensions = append(canonicalExtensions, storageExtID)
+	storageExtID := googlepolicy.StorageExtensionID
+	storageCfg := map[string]any{
+		"create_directory": true,
+		"directory":        defaultStorageDir(),
+	}
+	storageExtConf := &otelcol.Config{
+		Extensions: map[component.ID]component.Config{
+			storageExtID: component.Config(storageCfg),
+		},
+	}
+	storageCm := confmap.New()
+	if err := storageCm.Marshal(storageExtConf); err != nil {
+		return nil, true, fmt.Errorf("failed to marshal file_storage extension config: %w", err)
+	}
+	if err := conf.Merge(cleanConf(storageCm)); err != nil {
+		return nil, true, fmt.Errorf("failed to merge file_storage extension config: %w", err)
 	}
 
 	canonicalServiceConf := &otelcol.Config{
 		Service: service.Config{
-			Extensions: canonicalExtensions,
+			Extensions: extensions.Config{storageExtID},
 			Pipelines: pipelines.Config{
 				canonicalLogsPipelineID: &pipelines.PipelineConfig{
 					Receivers:  deduplicateComponentIDs(activeLogReceivers),
@@ -1042,46 +1038,4 @@ func defaultStorageDir() string {
 		return filepath.Join(progData, "Google", "OpenTelemetry Collector", "storage")
 	}
 	return "/var/lib/otelcol-google/storage"
-}
-
-// confReferencesStorageExtension inspects the receivers configured in conf and returns
-// true if any receiver references the given storage extension ID anywhere in its configuration.
-func confReferencesStorageExtension(conf *confmap.Conf, storageExtID component.ID) bool {
-	rawReceivers := conf.Get("receivers")
-	if rawReceivers == nil {
-		return false
-	}
-	return containsStringValue(rawReceivers, storageExtID.String())
-}
-
-func containsStringValue(val any, target string) bool {
-	switch v := val.(type) {
-	case string:
-		return v == target
-	case map[string]any:
-		for _, sub := range v {
-			if containsStringValue(sub, target) {
-				return true
-			}
-		}
-	case map[any]any:
-		for _, sub := range v {
-			if containsStringValue(sub, target) {
-				return true
-			}
-		}
-	case []any:
-		for _, item := range v {
-			if containsStringValue(item, target) {
-				return true
-			}
-		}
-	case []string:
-		for _, s := range v {
-			if s == target {
-				return true
-			}
-		}
-	}
-	return false
 }

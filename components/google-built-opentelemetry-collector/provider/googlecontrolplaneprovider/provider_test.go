@@ -612,7 +612,8 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource(t *testing.T) {
 	} else {
 		assert.False(t, conf.IsSet("receivers::"+secRecID))
 		assert.False(t, conf.IsSet("receivers::"+sysmonRecID))
-		assert.False(t, conf.IsSet("extensions::file_storage/googlecontrolplane"))
+		assert.True(t, conf.IsSet("extensions::file_storage/googlecontrolplane"))
+		assert.Equal(t, defaultStorageDir(), conf.Get("extensions::file_storage/googlecontrolplane::directory"))
 		receivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
 		assert.Contains(t, receivers, "nop/googlecontrolplane")
 		assert.NotContains(t, receivers, secRecID)
@@ -2534,68 +2535,13 @@ func (i *invalidIISSourcePolicy) Consolidate(_ []googlepolicy.SourcePolicy) (goo
 	return nil, errors.New("invalid policy cannot consolidate")
 }
 
-type mockStoragePolicy struct {
-	id                string
-	storage           string
-	customReceiverCfg map[string]any
-	recs              []component.ID
-	evalErr           error
-}
-
-func (m *mockStoragePolicy) PolicyName() string { return m.id }
-func (m *mockStoragePolicy) PolicyType() string { return "mock_storage_source" }
-func (m *mockStoragePolicy) PolicyClass() googlepolicy.PolicyClass {
-	return googlepolicy.PolicyClassSource
-}
-func (m *mockStoragePolicy) Validate() error { return nil }
-func (m *mockStoragePolicy) Evaluate(context.Context) (*confmap.Conf, error) {
-	if m.evalErr != nil {
-		return nil, m.evalErr
-	}
-	if m.customReceiverCfg != nil {
-		return confmap.NewFromStringMap(map[string]any{"receivers": m.customReceiverCfg}), nil
-	}
-	receivers := make(map[string]any, len(m.recs))
-	for _, r := range m.recs {
-		recCfg := map[string]any{}
-		if m.storage != "" {
-			recCfg["storage"] = m.storage
-		}
-		receivers[r.String()] = recCfg
-	}
-	return confmap.NewFromStringMap(map[string]any{"receivers": receivers}), nil
-}
-func (m *mockStoragePolicy) LogReceiverIDs() []component.ID    { return m.recs }
-func (m *mockStoragePolicy) MetricReceiverIDs() []component.ID { return nil }
-func (m *mockStoragePolicy) TraceReceiverIDs() []component.ID  { return nil }
-
 func TestRetrieve_PersistentStorageSynthesis(t *testing.T) {
 	t.Setenv("FLEET_ID", "1234")
-	recID := component.MustNewIDWithName("filelog", "mock")
 
-	t.Run("source policy configuring storage synthesizes file_storage extension", func(t *testing.T) {
+	t.Run("synthesizes file_storage extension with platform default directory", func(t *testing.T) {
 		p := createProvider()
 
-		pol := &mockStoragePolicy{
-			id:      "storage-enabled-policy",
-			storage: "file_storage/googlecontrolplane",
-			recs:    []component.ID{recID},
-		}
-
-		ps := &googlepolicy.PolicySet{
-			RevisionID: "rev-storage-enabled",
-			Policies: map[string]*googlepolicy.PolicySetEntry{
-				"storage-enabled-policy": {PolicyObj: pol},
-			},
-		}
-		googlepolicy.SetActivePolicySet(ps)
-		t.Cleanup(func() {
-			for googlepolicy.ActivePolicySet() != nil {
-				googlepolicy.RollbackActivePolicySet()
-			}
-		})
-
-		ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:test-storage-on", nil)
+		ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:test-storage", nil)
 		require.NoError(t, err)
 		require.NotNil(t, ret)
 
@@ -2605,124 +2551,19 @@ func TestRetrieve_PersistentStorageSynthesis(t *testing.T) {
 		assert.True(t, conf.IsSet("extensions::file_storage/googlecontrolplane"))
 		assert.Equal(t, true, conf.Get("extensions::file_storage/googlecontrolplane::create_directory"))
 		assert.Equal(t, defaultStorageDir(), conf.Get("extensions::file_storage/googlecontrolplane::directory"))
+
 		exts := conf.Get("service::extensions")
 		assert.Contains(t, exts, "file_storage/googlecontrolplane")
 		assert.NoError(t, p.Shutdown(context.Background()))
 	})
 
-	t.Run("source policy not configuring storage omits file_storage extension", func(t *testing.T) {
-		p := createProvider()
-
-		pol := &mockStoragePolicy{
-			id:   "storage-disabled-policy",
-			recs: []component.ID{recID},
+	t.Run("resolves correct storage directory per OS", func(t *testing.T) {
+		dir := defaultStorageDir()
+		if runtime.GOOS == "windows" {
+			assert.Contains(t, dir, `Google\OpenTelemetry Collector\storage`)
+		} else {
+			assert.Equal(t, "/var/lib/otelcol-google/storage", dir)
 		}
-
-		ps := &googlepolicy.PolicySet{
-			RevisionID: "rev-storage-disabled",
-			Policies: map[string]*googlepolicy.PolicySetEntry{
-				"storage-disabled-policy": {PolicyObj: pol},
-			},
-		}
-		googlepolicy.SetActivePolicySet(ps)
-		t.Cleanup(func() {
-			for googlepolicy.ActivePolicySet() != nil {
-				googlepolicy.RollbackActivePolicySet()
-			}
-		})
-
-		ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:test-storage-off", nil)
-		require.NoError(t, err)
-		require.NotNil(t, ret)
-
-		conf, err := ret.AsConf()
-		require.NoError(t, err)
-
-		assert.False(t, conf.IsSet("extensions::file_storage/googlecontrolplane"))
-		exts := conf.Get("service::extensions")
-		assert.NotContains(t, exts, "file_storage/googlecontrolplane")
-		assert.NoError(t, p.Shutdown(context.Background()))
-	})
-
-	t.Run("source policy configuring storage that fails evaluate does not synthesize file_storage extension", func(t *testing.T) {
-		p := createProvider()
-
-		pol := &mockStoragePolicy{
-			id:      "storage-failed-eval-policy",
-			storage: "file_storage/googlecontrolplane",
-			recs:    []component.ID{recID},
-			evalErr: errors.New("simulated evaluation failure"),
-		}
-
-		ps := &googlepolicy.PolicySet{
-			RevisionID: "rev-storage-eval-fail",
-			Policies: map[string]*googlepolicy.PolicySetEntry{
-				"storage-failed-eval-policy": {PolicyObj: pol},
-			},
-		}
-		googlepolicy.SetActivePolicySet(ps)
-		t.Cleanup(func() {
-			for googlepolicy.ActivePolicySet() != nil {
-				googlepolicy.RollbackActivePolicySet()
-			}
-		})
-
-		ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:test-storage-eval-fail", nil)
-		require.NoError(t, err)
-		require.NotNil(t, ret)
-
-		conf, err := ret.AsConf()
-		require.NoError(t, err)
-
-		assert.False(t, conf.IsSet("extensions::file_storage/googlecontrolplane"))
-		exts := conf.Get("service::extensions")
-		assert.NotContains(t, exts, "file_storage/googlecontrolplane")
-		assert.NoError(t, p.Shutdown(context.Background()))
-	})
-
-	t.Run("source policy with nested storage reference synthesizes file_storage extension", func(t *testing.T) {
-		p := createProvider()
-
-		nestedPol := &mockStoragePolicy{
-			id: "storage-nested-policy",
-			customReceiverCfg: map[string]any{
-				"receiver_creator/custom": map[string]any{
-					"receivers": map[string]any{
-						"filelog": map[string]any{
-							"storage": "file_storage/googlecontrolplane",
-						},
-					},
-				},
-			},
-			recs: []component.ID{component.MustNewIDWithName("receiver_creator", "custom")},
-		}
-
-		ps := &googlepolicy.PolicySet{
-			RevisionID: "rev-storage-nested",
-			Policies: map[string]*googlepolicy.PolicySetEntry{
-				"storage-nested-policy": {PolicyObj: nestedPol},
-			},
-		}
-		googlepolicy.SetActivePolicySet(ps)
-		t.Cleanup(func() {
-			for googlepolicy.ActivePolicySet() != nil {
-				googlepolicy.RollbackActivePolicySet()
-			}
-		})
-
-		ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:test-storage-nested", nil)
-		require.NoError(t, err)
-		require.NotNil(t, ret)
-
-		conf, err := ret.AsConf()
-		require.NoError(t, err)
-
-		assert.True(t, conf.IsSet("extensions::file_storage/googlecontrolplane"))
-		assert.Equal(t, true, conf.Get("extensions::file_storage/googlecontrolplane::create_directory"))
-		assert.Equal(t, defaultStorageDir(), conf.Get("extensions::file_storage/googlecontrolplane::directory"))
-		exts := conf.Get("service::extensions")
-		assert.Contains(t, exts, "file_storage/googlecontrolplane")
-		assert.NoError(t, p.Shutdown(context.Background()))
 	})
 }
 

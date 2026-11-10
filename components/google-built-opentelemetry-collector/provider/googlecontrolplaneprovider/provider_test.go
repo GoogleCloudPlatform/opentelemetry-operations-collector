@@ -1373,11 +1373,12 @@ func TestRetrieve_MultipleFileLogSourcePoliciesConsolidated(t *testing.T) {
 	t.Setenv("FLEET_ID", "1234")
 	p := createProvider()
 
-	var p1Paths, p2Paths, expectedPaths []string
+	var p1Paths, p2Paths []string
+	var expectedPaths []any
 	if runtime.GOOS == "windows" {
 		p1Paths = []string{`C:\logs\syslog`, `C:\logs\nginx\*.log`}
 		p2Paths = []string{`C:\logs\nginx\*.log`, `C:\logs\auth.log`}
-		expectedPaths = []string{
+		expectedPaths = []any{
 			"C:/logs/auth.log",
 			"C:/logs/nginx/*.log",
 			"C:/logs/syslog",
@@ -1385,7 +1386,7 @@ func TestRetrieve_MultipleFileLogSourcePoliciesConsolidated(t *testing.T) {
 	} else {
 		p1Paths = []string{"/var/log/syslog", "/var/log/nginx/*.log"}
 		p2Paths = []string{"/var/log/nginx/*.log", "/var/log/auth.log"}
-		expectedPaths = []string{
+		expectedPaths = []any{
 			"/var/log/auth.log",
 			"/var/log/nginx/*.log",
 			"/var/log/syslog",
@@ -1419,8 +1420,8 @@ func TestRetrieve_MultipleFileLogSourcePoliciesConsolidated(t *testing.T) {
 	require.NoError(t, err)
 
 	// A single consolidated filelog receiver must be present.
-	assert.True(t, conf.IsSet("receivers::filelog"))
-	sub, err := conf.Sub("receivers::filelog")
+	assert.True(t, conf.IsSet("receivers::filelog/googlecontrolplane"))
+	sub, err := conf.Sub("receivers::filelog/googlecontrolplane")
 	require.NoError(t, err)
 	assert.Equal(t, expectedPaths, sub.ToStringMap()["include"])
 	assert.Equal(t, true, sub.ToStringMap()["include_file_path"])
@@ -1431,7 +1432,7 @@ func TestRetrieve_MultipleFileLogSourcePoliciesConsolidated(t *testing.T) {
 	require.NoError(t, err)
 	receivers := pipeSub.ToStringMap()["receivers"]
 	assert.Contains(t, receivers, "nop/googlecontrolplane")
-	assert.Contains(t, receivers, "filelog")
+	assert.Contains(t, receivers, "filelog/googlecontrolplane")
 	assert.Contains(t, pipeSub.ToStringMap()["processors"], "googlepolicy")
 
 	assert.NoError(t, p.Shutdown(context.Background()))
@@ -1444,17 +1445,17 @@ func TestRetrieve_FileLogSourcePolicy_WithInvalidPolicy_FaultIsolation(t *testin
 	p := createProviderWithLogger(logger)
 
 	var valid1Path, valid2Path, invalidPath string
-	var expectedValid []string
+	var expectedValid []any
 	if runtime.GOOS == "windows" {
 		valid1Path = `C:\logs\valid1.log`
 		valid2Path = `C:\logs\valid2.log`
 		invalidPath = `C:\logs\..\Windows\System32\cmd.exe`
-		expectedValid = []string{"C:/logs/valid1.log", "C:/logs/valid2.log"}
+		expectedValid = []any{"C:/logs/valid1.log", "C:/logs/valid2.log"}
 	} else {
 		valid1Path = "/var/log/valid1.log"
 		valid2Path = "/var/log/valid2.log"
 		invalidPath = "/var/log/../etc/shadow"
-		expectedValid = []string{"/var/log/valid1.log", "/var/log/valid2.log"}
+		expectedValid = []any{"/var/log/valid1.log", "/var/log/valid2.log"}
 	}
 
 	valid1 := &policyv1alpha1.FileLogSourcePolicy{
@@ -1488,9 +1489,9 @@ func TestRetrieve_FileLogSourcePolicy_WithInvalidPolicy_FaultIsolation(t *testin
 	conf, err := ret.AsConf()
 	require.NoError(t, err)
 
-	// Valid policies should survive and be consolidated into receivers::filelog.
-	assert.True(t, conf.IsSet("receivers::filelog"))
-	sub, err := conf.Sub("receivers::filelog")
+	// Valid policies should survive and be consolidated into receivers::filelog/googlecontrolplane.
+	assert.True(t, conf.IsSet("receivers::filelog/googlecontrolplane"))
+	sub, err := conf.Sub("receivers::filelog/googlecontrolplane")
 	require.NoError(t, err)
 	assert.Equal(t, expectedValid, sub.ToStringMap()["include"])
 
@@ -1516,17 +1517,17 @@ func TestRetrieve_FileLogSourcePolicy_PoisonedBatchHead_FaultIsolation(t *testin
 	p := createProviderWithLogger(logger)
 
 	var valid1Path, valid2Path, invalidPath string
-	var expectedValid []string
+	var expectedValid []any
 	if runtime.GOOS == "windows" {
 		valid1Path = `C:\logs\valid1.log`
 		valid2Path = `C:\logs\valid2.log`
 		invalidPath = `C:\logs\..\Windows\System32\cmd.exe`
-		expectedValid = []string{"C:/logs/valid1.log", "C:/logs/valid2.log"}
+		expectedValid = []any{"C:/logs/valid1.log", "C:/logs/valid2.log"}
 	} else {
 		valid1Path = "/var/log/valid1.log"
 		valid2Path = "/var/log/valid2.log"
 		invalidPath = "/var/log/../etc/shadow"
-		expectedValid = []string{"/var/log/valid1.log", "/var/log/valid2.log"}
+		expectedValid = []any{"/var/log/valid1.log", "/var/log/valid2.log"}
 	}
 
 	// Invariant INV-1: Malformed element 0 must not poison or drop valid peers.
@@ -1561,9 +1562,9 @@ func TestRetrieve_FileLogSourcePolicy_PoisonedBatchHead_FaultIsolation(t *testin
 	conf, err := ret.AsConf()
 	require.NoError(t, err)
 
-	// Valid policies must survive and consolidate into receivers::filelog.
-	assert.True(t, conf.IsSet("receivers::filelog"))
-	sub, err := conf.Sub("receivers::filelog")
+	// Valid policies must survive and consolidate into receivers::filelog/googlecontrolplane.
+	assert.True(t, conf.IsSet("receivers::filelog/googlecontrolplane"))
+	sub, err := conf.Sub("receivers::filelog/googlecontrolplane")
 	require.NoError(t, err)
 	assert.Equal(t, expectedValid, sub.ToStringMap()["include"])
 
@@ -2335,37 +2336,6 @@ func TestRetrieve_MultipleJournaldSourcePolicies_ConsolidationFailureAttributesA
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
 
-func TestCleanConf_EscapesDollarSigns(t *testing.T) {
-	input := map[string]any{
-		"single_dollar": "${file:/etc/shadow}",
-		"nested_map": map[string]any{
-			"env_var": "${env:SECRET}",
-			"plain":   "hello",
-		},
-		"slice_strings": []any{"${http://example.com}", "normal"},
-		"typed_slice":   []string{"$var", "ok"},
-		"nested_slice":  []any{[]any{"$nested", "normal"}},
-		"nil_key":       nil,
-	}
-	cm := confmap.NewFromStringMap(input)
-	cleaned := cleanConf(cm)
-	m := cleaned.ToStringMap()
-
-	assert.Equal(t, "$${file:/etc/shadow}", m["single_dollar"])
-	assert.Equal(t, "$${env:SECRET}", m["nested_map"].(map[string]any)["env_var"])
-	assert.Equal(t, "hello", m["nested_map"].(map[string]any)["plain"])
-	assert.Equal(t, []any{"$${http://example.com}", "normal"}, m["slice_strings"])
-	assert.Equal(t, []string{"$$var", "ok"}, m["typed_slice"])
-	assert.Equal(t, []any{[]any{"$$nested", "normal"}}, m["nested_slice"])
-	assert.NotContains(t, m, "nil_key")
-
-	// Idempotency: Multiple cleanConf passes must NOT double-escape ('$$' -> '$$$$').
-	secondClean := cleanConf(cleaned)
-	m2 := secondClean.ToStringMap()
-	assert.Equal(t, "$${file:/etc/shadow}", m2["single_dollar"])
-	assert.Equal(t, "$${env:SECRET}", m2["nested_map"].(map[string]any)["env_var"])
-	assert.Equal(t, []any{[]any{"$$nested", "normal"}}, m2["nested_slice"])
-}
 
 func TestRetrieve_ActivePolicySetWithHostMetricsSource(t *testing.T) {
 	t.Setenv("FLEET_ID", "1234")

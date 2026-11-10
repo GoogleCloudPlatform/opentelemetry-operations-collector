@@ -330,7 +330,7 @@ func TestPolicy_Evaluate(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, conf)
 
-	expectedKey := "receivers::filelog"
+	expectedKey := "receivers::filelog/googlecontrolplane"
 	require.True(t, conf.IsSet(expectedKey))
 
 	sub, err := conf.Sub(expectedKey)
@@ -374,7 +374,7 @@ func TestPolicy_Evaluate_WindowsEnvExpansion(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, conf)
 
-	sub, err := conf.Sub("receivers::filelog")
+	sub, err := conf.Sub("receivers::filelog/googlecontrolplane")
 	require.NoError(t, err)
 	cfgMap := sub.ToStringMap()
 
@@ -394,7 +394,7 @@ func TestPolicy_ReceiverIDs(t *testing.T) {
 	policy, err := NewPolicyFromProto(pb)
 	require.NoError(t, err)
 
-	assert.Equal(t, []component.ID{component.MustNewID(DefaultReceiverID)}, policy.LogReceiverIDs())
+	assert.Equal(t, []component.ID{component.MustNewIDWithName("filelog", "googlecontrolplane")}, policy.LogReceiverIDs())
 	assert.Nil(t, policy.MetricReceiverIDs())
 	assert.Nil(t, policy.TraceReceiverIDs())
 }
@@ -462,12 +462,12 @@ func TestMerge_MultiplePolicies_DeduplicatedAndSorted(t *testing.T) {
 		"/var/log/syslog",
 	}, merged.IncludedPaths())
 
-	// Verify merged policy evaluation uses DefaultReceiverID.
+	// Verify merged policy evaluation uses namespaced receiverID.
 	conf, err := merged.Evaluate(context.Background())
 	require.NoError(t, err)
-	assert.True(t, conf.IsSet("receivers::filelog"))
+	assert.True(t, conf.IsSet("receivers::filelog/googlecontrolplane"))
 
-	sub, err := conf.Sub("receivers::filelog")
+	sub, err := conf.Sub("receivers::filelog/googlecontrolplane")
 	require.NoError(t, err)
 	assert.Equal(t, []string{
 		"/opt/app/logs/*.log",
@@ -529,7 +529,7 @@ func TestMerge_MultiplePolicies_WindowsEnvDeduplication(t *testing.T) {
 	// Evaluating the merged policy should produce expanded path.
 	conf, err := merged.Evaluate(context.Background())
 	require.NoError(t, err)
-	sub, err := conf.Sub("receivers::filelog")
+	sub, err := conf.Sub("receivers::filelog/googlecontrolplane")
 	require.NoError(t, err)
 	assert.Equal(t, []string{`C:/programdata/app/logs/app.log`}, sub.ToStringMap()["include"])
 }

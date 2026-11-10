@@ -32,9 +32,10 @@ import (
 
 // PolicyType is the registered policy type identifier for file log source policies.
 const (
-	PolicyType        = "file_log_source"
-	DefaultReceiverID = "filelog"
+	PolicyType = "file_log_source"
 )
+
+var receiverID = component.MustNewIDWithName("filelog", "googlecontrolplane")
 
 // defaultExcludePatterns contains the built-in exclude patterns for compressed binary archives.
 var defaultExcludePatterns = []string{
@@ -158,7 +159,7 @@ func (p *Policy) Evaluate(_ context.Context) (*confmap.Conf, error) {
 
 	cfg := map[string]any{
 		"receivers": map[string]any{
-			DefaultReceiverID: map[string]any{
+			receiverID.String(): map[string]any{
 				"include":           includes,
 				"exclude":           slices.Clone(defaultExcludePatterns),
 				"include_file_path": true,
@@ -170,7 +171,7 @@ func (p *Policy) Evaluate(_ context.Context) (*confmap.Conf, error) {
 
 // LogReceiverIDs returns the component IDs of log receivers synthesized by this policy.
 func (p *Policy) LogReceiverIDs() []component.ID {
-	return []component.ID{component.MustNewID(DefaultReceiverID)}
+	return []component.ID{receiverID}
 }
 
 // MetricReceiverIDs returns nil because FileLogSourcePolicy only handles the logs signal.

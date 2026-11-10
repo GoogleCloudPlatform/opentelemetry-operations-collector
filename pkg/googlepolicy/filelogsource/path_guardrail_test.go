@@ -68,9 +68,11 @@ func TestPathGuardrail_PipelineStages(t *testing.T) {
 	})
 
 	t.Run("Stage 2 - normalizePattern", func(t *testing.T) {
-		// Linux path preserves case and converts separators
+		// Linux path preserves case and does not replace backslash escape sequences
 		assert.Equal(t, "/var/log/App.log", normalizePattern("/var/log/App.log"))
 		assert.Equal(t, "/opt/MyService/logs/*.log", normalizePattern("/opt/MyService/logs/*.log"))
+		assert.Equal(t, `/var/log/app\[1\].log`, normalizePattern(`/var/log/app\[1\].log`))
+		assert.Equal(t, `/var/log/\{special\}.log`, normalizePattern(`/var/log/\{special\}.log`))
 
 		// Windows path normalizes drive to uppercase, rest to lowercase, separators to '/'
 		assert.Equal(t, "C:/programdata/myapp/logs/*.log", normalizePattern(`C:\ProgramData\MyApp\logs\*.log`))

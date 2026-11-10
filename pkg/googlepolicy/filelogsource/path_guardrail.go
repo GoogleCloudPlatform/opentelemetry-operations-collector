@@ -230,7 +230,7 @@ func splitSegmentsAndLeaf(canonical string) ([]string, string) {
 // normalizePattern converts an include pattern into its canonical form.
 // For Windows paths, environment variables are expanded, separators become '/',
 // and the path is normalized (drive letter uppercase, path lowercased).
-// For Linux/Unix paths, separators become '/' and casing is preserved.
+// For Linux/Unix paths, escaping and casing are preserved.
 func normalizePattern(pattern string) string {
 	if isWindowsAbsolute(pattern) {
 		expanded := expandWindowsEnv(pattern)
@@ -242,7 +242,7 @@ func normalizePattern(pattern string) string {
 		}
 		return strings.ToLower(normalized)
 	}
-	return strings.ReplaceAll(pattern, "\\", "/")
+	return pattern
 }
 
 // isTraversalSegment checks whether a leaf segment represents a traversal component ('..')

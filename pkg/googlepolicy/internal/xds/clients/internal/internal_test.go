@@ -21,11 +21,11 @@ package internal
 import (
 	"testing"
 
+	structpb "google.golang.org/protobuf/types/known/structpb"
 	"github.com/google/go-cmp/cmp"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/internal/grpctest"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients"
 	"google.golang.org/protobuf/testing/protocmp"
-	"google.golang.org/protobuf/types/known/structpb"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 )
@@ -160,7 +160,7 @@ func (s) TestNodeProto(t *testing.T) {
 					Zone:    "zone",
 					SubZone: "sub_zone",
 				},
-				Metadata:         newStructProtoFromMap(t, map[string]any{"k1": "v1", "k2": 101, "k3": 280.0}),
+				Metadata:         map[string]any{"k1": "v1", "k2": 101, "k3": 280.0},
 				UserAgentName:    "user agent",
 				UserAgentVersion: "version",
 			},

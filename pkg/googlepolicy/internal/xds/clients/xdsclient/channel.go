@@ -24,11 +24,10 @@ import (
 	"strings"
 	"time"
 
-	"google.golang.org/grpc/grpclog"
 	igrpclog "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/internal/grpclog"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients"
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/internal"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/internal/backoff"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/internal"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/internal/syncutil"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/xdsclient/internal/xdsresource"
 )
@@ -36,6 +35,7 @@ import (
 const (
 	clientFeatureNoOverprovisioning = "envoy.lb.does_not_support_overprovisioning"
 	clientFeatureResourceWrapper    = "xds.config.resource-in-sotw"
+	recoverPanicInResourceParsing   = true
 )
 
 // xdsChannelEventHandler wraps callbacks used to notify the xDS client about
@@ -63,13 +63,14 @@ type xdsChannelEventHandler interface {
 
 // xdsChannelOpts holds the options for creating a new xdsChannel.
 type xdsChannelOpts struct {
-	transport          clients.Transport       // Takes ownership of this transport.
-	serverConfig       *ServerConfig           // Configuration of the server to connect to.
-	clientConfig       *Config                 // Complete xDS client configuration, used to decode resources.
-	eventHandler       xdsChannelEventHandler  // Callbacks for ADS stream events.
-	backoff            func(int) time.Duration // Backoff function to use for stream retries. Defaults to exponential backoff, if unset.
-	watchExpiryTimeout time.Duration           // Timeout for ADS resource watch expiry.
-	logPrefix          string                  // Prefix to use for logging.
+	transport          clients.Transport                    // Takes ownership of this transport.
+	serverConfig       *ServerConfig                        // Configuration of the server to connect to.
+	clientConfig       *Config                              // Complete xDS client configuration, used to decode resources.
+	eventHandler       xdsChannelEventHandler               // Callbacks for ADS stream events.
+	backoff            func(int) time.Duration              // Backoff function to use for stream retries. Defaults to exponential backoff, if unset.
+	timeAfter          func(time.Duration) <-chan time.Time // Optional sleep function for backoff retries.
+	watchExpiryTimeout time.Duration                        // Timeout for ADS resource watch expiry.
+	logPrefix          string                               // Prefix to use for logging.
 }
 
 // newXDSChannel creates a new xdsChannel instance with the provided options.
@@ -95,9 +96,8 @@ func newXDSChannel(opts xdsChannelOpts) (*xdsChannel, error) {
 		closed:       syncutil.NewEvent(),
 	}
 
-	l := grpclog.Component("xds")
 	logPrefix := opts.logPrefix + fmt.Sprintf("[xds-channel %p] ", xc)
-	xc.logger = igrpclog.NewPrefixLogger(l, logPrefix)
+	xc.logger = prefixLoggerWithParent(opts.clientConfig.Logger, logPrefix)
 
 	if opts.backoff == nil {
 		opts.backoff = backoff.DefaultExponential.Backoff
@@ -108,9 +108,11 @@ func newXDSChannel(opts xdsChannelOpts) (*xdsChannel, error) {
 		transport:          opts.transport,
 		eventHandler:       xc,
 		backoff:            opts.backoff,
+		timeAfter:          opts.timeAfter,
 		nodeProto:          np,
 		watchExpiryTimeout: opts.watchExpiryTimeout,
 		logPrefix:          logPrefix,
+		logger:             opts.clientConfig.Logger,
 	})
 	if xc.logger.V(2) {
 		xc.logger.Infof("xdsChannel is created for ServerConfig %v", opts.serverConfig)
@@ -224,19 +226,6 @@ func (xc *xdsChannel) onResponse(resp response, onDone func()) ([]string, error)
 }
 
 // decodeResponse decodes the resources in the given ADS response.
-//
-// The opts parameter provides configuration options for decoding the resources.
-// The rType parameter specifies the resource type parser to use for decoding
-// the resources.
-//
-// The returned map contains a key for each resource in the response, with the
-// value being either the decoded resource data or an error if decoding failed.
-// The returned metadata includes the version of the response, the timestamp of
-// the update, and the status of the update (ACKed or NACKed).
-//
-// If there are any errors decoding the resources, the metadata will indicate
-// that the update was NACKed, and the returned error will contain information
-// about all errors encountered by this function.
 func (xc *xdsChannel) decodeResponse(rType *ResourceType, resp response) (map[string]dataAndErrTuple, xdsresource.UpdateMetadata, error) {
 	timestamp := time.Now()
 	md := xdsresource.UpdateMetadata{
@@ -246,21 +235,26 @@ func (xc *xdsChannel) decodeResponse(rType *ResourceType, resp response) (map[st
 	opts := &DecodeOptions{
 		Config:       xc.clientConfig,
 		ServerConfig: xc.serverConfig,
+		Version:      resp.version,
 	}
 
 	topLevelErrors := make([]error, 0)          // Tracks deserialization errors, where we don't have a resource name.
 	perResourceErrors := make(map[string]error) // Tracks resource validation errors, where we have a resource name.
 	ret := make(map[string]dataAndErrTuple)     // Return result, a map from resource name to either resource data or error.
+
 	for _, r := range resp.resources {
 		result, err := func() (res *DecodeResult, err error) {
 			defer func() {
-				if true {
+				if recoverPanicInResourceParsing {
 					if p := recover(); p != nil {
 						err = fmt.Errorf("recovered from panic during resource parsing, resource: %v, panic: %v", r, p)
 					}
 				}
 			}()
-			return rType.Decoder.Decode(NewAnyProto(r), *opts)
+			return rType.Decoder.Decode(&AnyProto{
+				TypeURL: r.GetTypeUrl(),
+				Value:   r.GetValue(),
+			}, *opts)
 		}()
 
 		// Name field of the result is left unpopulated only when resource
@@ -277,7 +271,7 @@ func (xc *xdsChannel) decodeResponse(rType *ResourceType, resp response) (map[st
 			ret[name] = dataAndErrTuple{Resource: result.Resource}
 			continue
 		}
-		if name == "" {
+		if result == nil {
 			topLevelErrors = append(topLevelErrors, err)
 			continue
 		}

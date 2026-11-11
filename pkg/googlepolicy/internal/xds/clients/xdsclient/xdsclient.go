@@ -40,8 +40,8 @@ import (
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/internal/grpclog"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients"
-	clientsinternal "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/internal"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/internal/backoff"
+	clientsinternal "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/internal"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/internal/syncutil"
 	xdsclientinternal "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/xdsclient/internal"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/xdsclient/internal/xdsresource"
@@ -65,10 +65,10 @@ func init() {
 	xdsclientinternal.ResourceWatchStateForTesting = resourceWatchStateForTesting
 }
 
-// XDSClient is a client which queries a set of discovery APIs (collectively
+// Client is a client which queries a set of discovery APIs (collectively
 // termed as xDS) on a remote management server, to discover
 // various dynamic resources.
-type XDSClient struct {
+type Client struct {
 	// The following fields are initialized at creation time and are read-only
 	// after that, and therefore can be accessed without a mutex.
 	done               *syncutil.Event              // Fired when the client is closed.
@@ -77,6 +77,7 @@ type XDSClient struct {
 	config             *Config                      // Complete xDS client configuration.
 	watchExpiryTimeout time.Duration                // Expiry timeout for ADS watch.
 	backoff            func(int) time.Duration      // Backoff for ADS and LRS stream failures.
+	timeAfter          func(time.Duration) <-chan time.Time
 	transportBuilder   clients.TransportBuilder     // Builder to create transports to xDS server.
 	resourceTypes      map[string]ResourceType      // Registry of resource types, for parsing incoming ADS responses.
 	serializer         *syncutil.CallbackSerializer // Serializer for invoking resource watcher callbacks.
@@ -85,10 +86,10 @@ type XDSClient struct {
 	target             string
 	metricsReporter    clients.MetricsReporter
 
-	// The XDSClient owns a bunch of channels to individual xDS servers
+	// The Client owns a bunch of channels to individual xDS servers
 	// specified in the xDS client configuration. Authorities acquire references
 	// to these channels based on server configs within the authority config.
-	// The XDSClient maintains a list of interested authorities for each of
+	// The Client maintains a list of interested authorities for each of
 	// these channels, and forwards updates from the channels to each of these
 	// authorities.
 	//
@@ -100,7 +101,7 @@ type XDSClient struct {
 }
 
 // New returns a new xDS Client configured with the provided config.
-func New(config Config) (*XDSClient, error) {
+func New(config Config) (*Client, error) {
 	switch {
 	case config.ResourceTypes == nil:
 		return nil, errors.New("xdsclient: resource types map is nil")
@@ -112,7 +113,11 @@ func New(config Config) (*XDSClient, error) {
 	if config.WatchExpiryTimeout == 0 {
 		config.WatchExpiryTimeout = defaultWatchExpiryTimeout
 	}
-	client, err := newClient(&config, name)
+	target := name
+	if config.Target != "" {
+		target = config.Target
+	}
+	client, err := newClient(&config, target)
 	if err != nil {
 		return nil, err
 	}
@@ -124,16 +129,21 @@ func New(config Config) (*XDSClient, error) {
 	return client, nil
 }
 
-// newClient returns a new XDSClient with the given config.
-func newClient(config *Config, target string) (*XDSClient, error) {
+// newClient returns a new Client with the given config.
+func newClient(config *Config, target string) (*Client, error) {
 	ctx, cancel := context.WithCancel(context.Background())
-	c := &XDSClient{
+	bo := xdsclientinternal.StreamBackoff
+	if config.Backoff != nil {
+		bo = config.Backoff
+	}
+	c := &Client{
 		target:             target,
 		done:               syncutil.NewEvent(),
 		authorities:        make(map[string]*authority),
 		config:             config,
 		watchExpiryTimeout: config.WatchExpiryTimeout,
-		backoff:            xdsclientinternal.StreamBackoff,
+		backoff:            bo,
+		timeAfter:          config.TimeAfter,
 		serializer:         syncutil.NewCallbackSerializer(ctx),
 		serializerClose:    cancel,
 		transportBuilder:   config.TransportBuilder,
@@ -154,9 +164,11 @@ func newClient(config *Config, target string) (*XDSClient, error) {
 			name:             name,
 			serializer:       c.serializer,
 			getChannelForADS: c.getChannelForADS,
+			resourceTypes:    c.resourceTypes,
 			logPrefix:        clientPrefix(c),
 			target:           target,
 			metricsReporter:  c.metricsReporter,
+			logger:           config.Logger,
 		})
 	}
 	c.topLevelAuthority = newAuthority(authorityBuildOptions{
@@ -164,9 +176,11 @@ func newClient(config *Config, target string) (*XDSClient, error) {
 		name:             "",
 		serializer:       c.serializer,
 		getChannelForADS: c.getChannelForADS,
+		resourceTypes:    c.resourceTypes,
 		logPrefix:        clientPrefix(c),
 		target:           target,
 		metricsReporter:  c.metricsReporter,
+		logger:           config.Logger,
 	})
 	c.logger = prefixLogger(c)
 
@@ -174,7 +188,7 @@ func newClient(config *Config, target string) (*XDSClient, error) {
 }
 
 // Close closes the xDS client and releases all resources.
-func (c *XDSClient) Close() {
+func (c *Client) Close() {
 	if c.done.HasFired() {
 		return
 	}
@@ -190,7 +204,7 @@ func (c *XDSClient) Close() {
 
 	// Channel close cannot be invoked with the lock held, because it can race
 	// with stream failure happening at the same time. The latter will callback
-	// into the XDSClient and will attempt to grab the lock. This will result
+	// into the Client and will attempt to grab the lock. This will result
 	// in a deadlock. So instead, we release the lock and wait for all active
 	// channels to be closed.
 	var channelsToClose []*xdsChannel
@@ -221,7 +235,7 @@ func (c *XDSClient) Close() {
 // no longer interested in this channel.
 //
 // A non-nil error is returned if an xdsChannel was not created.
-func (c *XDSClient) getChannelForADS(serverConfig *ServerConfig, callingAuthority *authority) (*xdsChannel, func(), error) {
+func (c *Client) getChannelForADS(serverConfig *ServerConfig, callingAuthority *authority) (*xdsChannel, func(), error) {
 	if c.done.HasFired() {
 		return nil, nil, errors.New("xds: the xDS client is closed")
 	}
@@ -263,7 +277,7 @@ func (c *XDSClient) getChannelForADS(serverConfig *ServerConfig, callingAuthorit
 // Returns the xdsChannel and a cleanup function to be invoked when the channel
 // is no longer required. A non-nil error is returned if an xdsChannel was not
 // created.
-func (c *XDSClient) getOrCreateChannel(serverConfig *ServerConfig, initLocked, deInitLocked func(*channelState)) (*xdsChannel, func(), error) {
+func (c *Client) getOrCreateChannel(serverConfig *ServerConfig, initLocked, deInitLocked func(*channelState)) (*xdsChannel, func(), error) {
 	c.channelsMu.Lock()
 	defer c.channelsMu.Unlock()
 
@@ -301,6 +315,7 @@ func (c *XDSClient) getOrCreateChannel(serverConfig *ServerConfig, initLocked, d
 		clientConfig:       c.config,
 		eventHandler:       state,
 		backoff:            c.backoff,
+		timeAfter:          c.timeAfter,
 		watchExpiryTimeout: c.watchExpiryTimeout,
 		logPrefix:          clientPrefix(c),
 	})
@@ -324,7 +339,7 @@ func (c *XDSClient) getOrCreateChannel(serverConfig *ServerConfig, initLocked, d
 // The function returns another function that can be called to release the
 // reference to the xdsChannel. This returned function is idempotent, meaning
 // it can be called multiple times without any additional effect.
-func (c *XDSClient) releaseChannel(serverConfig *ServerConfig, state *channelState, deInitLocked func(*channelState)) func() {
+func (c *Client) releaseChannel(serverConfig *ServerConfig, state *channelState, deInitLocked func(*channelState)) func() {
 	return sync.OnceFunc(func() {
 		c.channelsMu.Lock()
 
@@ -355,7 +370,7 @@ func (c *XDSClient) releaseChannel(serverConfig *ServerConfig, state *channelSta
 
 // DumpResources returns the status and contents of all xDS resources being
 // watched by the xDS client.
-func (c *XDSClient) DumpResources() ([]byte, error) {
+func (c *Client) DumpResources() ([]byte, error) {
 	retCfg := c.topLevelAuthority.dumpResources()
 	for _, a := range c.authorities {
 		retCfg = append(retCfg, a.dumpResources()...)
@@ -378,7 +393,7 @@ func (c *XDSClient) DumpResources() ([]byte, error) {
 // It receives callbacks for events on the underlying ADS stream and invokes
 // corresponding callbacks on interested authorities.
 type channelState struct {
-	parent       *XDSClient
+	parent       *Client
 	serverConfig *ServerConfig
 
 	// Access to the following fields should be protected by the parent's
@@ -442,7 +457,7 @@ func (cs *channelState) adsResourceDoesNotExist(typ ResourceType, resourceName s
 	}
 }
 
-func resourceWatchStateForTesting(c *XDSClient, rType ResourceType, resourceName string) (xdsresource.ResourceWatchState, error) {
+func resourceWatchStateForTesting(c *Client, rType ResourceType, resourceName string) (xdsresource.ResourceWatchState, error) {
 	n := xdsresource.ParseName(resourceName)
 	a := c.getAuthorityForResource(n)
 	if a == nil {
@@ -452,14 +467,14 @@ func resourceWatchStateForTesting(c *XDSClient, rType ResourceType, resourceName
 
 }
 
-// xdsClientMetricReporter is a wrapper around XDSClient used solely for
+// xdsClientMetricReporter is a wrapper around Client used solely for
 // reporting metrics. We create this separate type to implement the
 // clients.AsyncReporter interface, preventing its Report method from
-// becoming part of the public XDSClient API. This is especially important
+// becoming part of the public Client API. This is especially important
 // because the AsyncReporter interface is experimental, and we want to
-// avoid coupling experimental changes to the stable XDSClient API.
+// avoid coupling experimental changes to the stable Client API.
 type xdsClientMetricReporter struct {
-	c *XDSClient
+	c *Client
 }
 
 // Report implements clients.AsyncReporter.
@@ -471,7 +486,7 @@ func (r *xdsClientMetricReporter) Report(rec clients.AsyncMetricsRecorder) error
 }
 
 // reportConnectedState handles the "grpc.xds_client.connected" metric.
-func (c *XDSClient) reportConnectedState(rec clients.AsyncMetricsRecorder) {
+func (c *Client) reportConnectedState(rec clients.AsyncMetricsRecorder) {
 	c.channelsMu.Lock()
 	defer c.channelsMu.Unlock()
 
@@ -489,7 +504,7 @@ func (c *XDSClient) reportConnectedState(rec clients.AsyncMetricsRecorder) {
 }
 
 // reportResourceStats handles the "grpc.xds_client.resources" metric.
-func (c *XDSClient) reportResourceStats(rec clients.AsyncMetricsRecorder) {
+func (c *Client) reportResourceStats(rec clients.AsyncMetricsRecorder) {
 	reportForAuthority := func(a *authority) {
 		stats := a.resourceStats()
 		for resourceType, stateCounts := range stats {

@@ -41,6 +41,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
+	"google.golang.org/protobuf/proto"
 )
 
 func createProvider() confmap.Provider {
@@ -1049,6 +1050,11 @@ var (
 func TestFilterPolicyDriversRegistered(t *testing.T) {
 	// Verify that importing googlecontrolplaneprovider registers log_filter,
 	// metric_filter, and trace_filter policy drivers in googlepolicy.
+	fileLogPaths := []any{"/var/log/**/*.log"}
+	if runtime.GOOS == "windows" {
+		fileLogPaths = []any{`C:\logs\**\*.log`}
+	}
+
 	for _, tc := range []struct {
 		policyType string
 		raw        map[string]any
@@ -1092,6 +1098,14 @@ func TestFilterPolicyDriversRegistered(t *testing.T) {
 						"predicate": map[string]any{"existence": map[string]any{}},
 					},
 				},
+			},
+		},
+		{
+			policyType: "file_log_source",
+			raw: map[string]any{
+				"type":           "file_log_source",
+				"id":             "test-filelog",
+				"included_paths": fileLogPaths,
 			},
 		},
 		{
@@ -1359,6 +1373,289 @@ func TestRetrieve_RecordsPolicyEvaluateErrorEventForFailedPoliciesWithClass(t *t
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
+
+func TestRetrieve_MultipleFileLogSourcePoliciesConsolidated(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	p := createProvider()
+
+	var p1Paths, p2Paths []string
+	var expectedPaths []any
+	if runtime.GOOS == "windows" {
+		p1Paths = []string{`C:\logs\syslog`, `C:\logs\nginx\*.log`}
+		p2Paths = []string{`C:\logs\nginx\*.log`, `C:\logs\auth.log`}
+		expectedPaths = []any{
+			"C:/logs/auth.log",
+			"C:/logs/nginx/*.log",
+			"C:/logs/syslog",
+		}
+	} else {
+		p1Paths = []string{"/var/log/syslog", "/var/log/nginx/*.log"}
+		p2Paths = []string{"/var/log/nginx/*.log", "/var/log/auth.log"}
+		expectedPaths = []any{
+			"/var/log/auth.log",
+			"/var/log/nginx/*.log",
+			"/var/log/syslog",
+		}
+	}
+
+	p1 := &policyv1alpha1.FileLogSourcePolicy{
+		Id:            "app-logs-1",
+		IncludedPaths: p1Paths,
+	}
+	p2 := &policyv1alpha1.FileLogSourcePolicy{
+		Id:            "app-logs-2",
+		IncludedPaths: p2Paths,
+	}
+
+	ps, err := googlepolicy.MakePolicySetFromProtos("test-set", "rev-filelog", []proto.Message{p1, p2})
+	require.NoError(t, err)
+
+	googlepolicy.SetActivePolicySet(ps)
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+
+	// A single consolidated filelog receiver must be present.
+	assert.True(t, conf.IsSet("receivers::filelog/googlecontrolplane"))
+	sub, err := conf.Sub("receivers::filelog/googlecontrolplane")
+	require.NoError(t, err)
+	assert.Equal(t, expectedPaths, sub.ToStringMap()["include"])
+	assert.Equal(t, true, sub.ToStringMap()["include_file_path"])
+
+	// The shared canonical logs/googlecontrolplane pipeline must connect to the consolidated filelog receiver and include googlepolicy.
+	assert.True(t, conf.IsSet("service::pipelines::logs/googlecontrolplane"))
+	pipeSub, err := conf.Sub("service::pipelines::logs/googlecontrolplane")
+	require.NoError(t, err)
+	receivers := pipeSub.ToStringMap()["receivers"]
+	assert.Contains(t, receivers, "nop/googlecontrolplane")
+	assert.Contains(t, receivers, "filelog/googlecontrolplane")
+	assert.Contains(t, pipeSub.ToStringMap()["processors"], "googlepolicy")
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestRetrieve_FileLogSourcePolicy_WithInvalidPolicy_FaultIsolation(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	core, recorded := observer.New(zapcore.InfoLevel)
+	logger := zap.New(core)
+	p := createProviderWithLogger(logger)
+
+	var valid1Path, valid2Path, invalidPath string
+	var expectedValid []any
+	if runtime.GOOS == "windows" {
+		valid1Path = `C:\logs\valid1.log`
+		valid2Path = `C:\logs\valid2.log`
+		invalidPath = `C:\logs\..\Windows\System32\cmd.exe`
+		expectedValid = []any{"C:/logs/valid1.log", "C:/logs/valid2.log"}
+	} else {
+		valid1Path = "/var/log/valid1.log"
+		valid2Path = "/var/log/valid2.log"
+		invalidPath = "/var/log/../etc/shadow"
+		expectedValid = []any{"/var/log/valid1.log", "/var/log/valid2.log"}
+	}
+
+	valid1 := &policyv1alpha1.FileLogSourcePolicy{
+		Id:            "valid-source-1",
+		IncludedPaths: []string{valid1Path},
+	}
+	valid2 := &policyv1alpha1.FileLogSourcePolicy{
+		Id:            "valid-source-2",
+		IncludedPaths: []string{valid2Path},
+	}
+	invalid := &policyv1alpha1.FileLogSourcePolicy{
+		Id:            "invalid-source",
+		IncludedPaths: []string{invalidPath},
+	}
+
+	ps, err := googlepolicy.MakePolicySetFromProtos("test-set", "rev-fault-isolation", []proto.Message{valid1, valid2, invalid})
+	require.Error(t, err)
+	require.NotNil(t, ps)
+
+	googlepolicy.SetActivePolicySet(ps)
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+
+	// Valid policies should survive and be consolidated into receivers::filelog/googlecontrolplane.
+	assert.True(t, conf.IsSet("receivers::filelog/googlecontrolplane"))
+	sub, err := conf.Sub("receivers::filelog/googlecontrolplane")
+	require.NoError(t, err)
+	assert.Equal(t, expectedValid, sub.ToStringMap()["include"])
+
+	// Invalid policy should have recorded an evaluation error event with source class and failed validation type.
+	var invalidEntry *observer.LoggedEntry
+	for _, entry := range recorded.All() {
+		if entry.ContextMap()["gcp.policy.id"] == "invalid-source" {
+			invalidEntry = &entry
+			break
+		}
+	}
+	require.NotNil(t, invalidEntry, "expected an error event recorded for invalid-source")
+	assert.Equal(t, "policy_failed_validation", (*invalidEntry).ContextMap()["error.type"])
+	assert.Equal(t, "source", (*invalidEntry).ContextMap()["gcp.policy.class"])
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestRetrieve_FileLogSourcePolicy_PoisonedBatchHead_FaultIsolation(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	core, recorded := observer.New(zapcore.InfoLevel)
+	logger := zap.New(core)
+	p := createProviderWithLogger(logger)
+
+	var valid1Path, valid2Path, invalidPath string
+	var expectedValid []any
+	if runtime.GOOS == "windows" {
+		valid1Path = `C:\logs\valid1.log`
+		valid2Path = `C:\logs\valid2.log`
+		invalidPath = `C:\logs\..\Windows\System32\cmd.exe`
+		expectedValid = []any{"C:/logs/valid1.log", "C:/logs/valid2.log"}
+	} else {
+		valid1Path = "/var/log/valid1.log"
+		valid2Path = "/var/log/valid2.log"
+		invalidPath = "/var/log/../etc/shadow"
+		expectedValid = []any{"/var/log/valid1.log", "/var/log/valid2.log"}
+	}
+
+	// Invariant INV-1: Malformed element 0 must not poison or drop valid peers.
+	invalid := &policyv1alpha1.FileLogSourcePolicy{
+		Id:            "invalid-source-at-head",
+		IncludedPaths: []string{invalidPath},
+	}
+	valid1 := &policyv1alpha1.FileLogSourcePolicy{
+		Id:            "valid-source-1",
+		IncludedPaths: []string{valid1Path},
+	}
+	valid2 := &policyv1alpha1.FileLogSourcePolicy{
+		Id:            "valid-source-2",
+		IncludedPaths: []string{valid2Path},
+	}
+
+	ps, err := googlepolicy.MakePolicySetFromProtos("test-set", "rev-poisoned-head", []proto.Message{invalid, valid1, valid2})
+	require.Error(t, err)
+	require.NotNil(t, ps)
+
+	googlepolicy.SetActivePolicySet(ps)
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+
+	// Valid policies must survive and consolidate into receivers::filelog/googlecontrolplane.
+	assert.True(t, conf.IsSet("receivers::filelog/googlecontrolplane"))
+	sub, err := conf.Sub("receivers::filelog/googlecontrolplane")
+	require.NoError(t, err)
+	assert.Equal(t, expectedValid, sub.ToStringMap()["include"])
+
+	// Invalid policy at index 0 must have an error event recorded.
+	var invalidEntry *observer.LoggedEntry
+	for _, entry := range recorded.All() {
+		if entry.ContextMap()["gcp.policy.id"] == "invalid-source-at-head" {
+			invalidEntry = &entry
+			break
+		}
+	}
+	require.NotNil(t, invalidEntry, "expected an error event recorded for invalid-source-at-head")
+	assert.Equal(t, "policy_failed_validation", (*invalidEntry).ContextMap()["error.type"])
+	assert.Equal(t, "source", (*invalidEntry).ContextMap()["gcp.policy.class"])
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestRetrieve_ConsolidationFailure_ErrorAttribution(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	core, recorded := observer.New(zapcore.InfoLevel)
+	logger := zap.New(core)
+	p := createProviderWithLogger(logger)
+
+	// Invariant INV-5: Consolidation errors must be attributed across all candidate policy IDs.
+	m1 := &mockFailingConsolidatableSourcePolicy{name: "failing-policy-1"}
+	m2 := &mockFailingConsolidatableSourcePolicy{name: "failing-policy-2"}
+
+	ps := &googlepolicy.PolicySet{
+		RevisionID: "rev-consolidation-failure",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			"failing-policy-1": {PolicyObj: m1},
+			"failing-policy-2": {PolicyObj: m2},
+		},
+	}
+	googlepolicy.SetActivePolicySet(ps)
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	// Both policies must have recorded an evaluate error event.
+	seenPolicies := make(map[string]bool)
+	for _, entry := range recorded.All() {
+		id, ok := entry.ContextMap()["gcp.policy.id"].(string)
+		if ok && (id == "failing-policy-1" || id == "failing-policy-2") {
+			seenPolicies[id] = true
+			assert.Equal(t, "source", entry.ContextMap()["gcp.policy.class"])
+			assert.Equal(t, "policy_evaluation_failed", entry.ContextMap()["error.type"])
+		}
+	}
+	assert.True(t, seenPolicies["failing-policy-1"], "expected error event for failing-policy-1")
+	assert.True(t, seenPolicies["failing-policy-2"], "expected error event for failing-policy-2")
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+type mockFailingConsolidatableSourcePolicy struct {
+	name string
+}
+
+func (m *mockFailingConsolidatableSourcePolicy) PolicyName() string { return m.name }
+func (m *mockFailingConsolidatableSourcePolicy) PolicyType() string { return "failing_consolidatable" }
+func (m *mockFailingConsolidatableSourcePolicy) PolicyClass() googlepolicy.PolicyClass {
+	return googlepolicy.PolicyClassSource
+}
+func (m *mockFailingConsolidatableSourcePolicy) Validate() error { return nil }
+func (m *mockFailingConsolidatableSourcePolicy) Evaluate(_ context.Context) (*confmap.Conf, error) {
+	return confmap.New(), nil
+}
+func (m *mockFailingConsolidatableSourcePolicy) LogReceiverIDs() []component.ID    { return nil }
+func (m *mockFailingConsolidatableSourcePolicy) MetricReceiverIDs() []component.ID { return nil }
+func (m *mockFailingConsolidatableSourcePolicy) TraceReceiverIDs() []component.ID  { return nil }
+func (m *mockFailingConsolidatableSourcePolicy) Consolidate(_ []googlepolicy.SourcePolicy) (googlepolicy.SourcePolicy, error) {
+	return nil, errors.New("simulated consolidation engine failure")
+}
+
+var (
+	_ googlepolicy.SourcePolicy               = (*mockFailingConsolidatableSourcePolicy)(nil)
+	_ googlepolicy.ConsolidatableSourcePolicy = (*mockFailingConsolidatableSourcePolicy)(nil)
+)
 
 func TestPolicyHotReload_SourcePolicyTriggersWatcher(t *testing.T) {
 	t.Setenv("FLEET_ID", "1234")

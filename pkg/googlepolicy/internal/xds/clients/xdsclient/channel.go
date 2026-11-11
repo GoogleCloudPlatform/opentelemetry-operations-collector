@@ -271,7 +271,7 @@ func (xc *xdsChannel) decodeResponse(rType *ResourceType, resp response) (map[st
 			ret[name] = dataAndErrTuple{Resource: result.Resource}
 			continue
 		}
-		if result == nil {
+		if result == nil || name == "" {
 			topLevelErrors = append(topLevelErrors, err)
 			continue
 		}

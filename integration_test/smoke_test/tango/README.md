@@ -89,3 +89,121 @@ env PROJECT=stackdriver-test-143416 ZONES=asia-east1-a IMAGE_SPECS=debian-cloud:
   TANGO_EXPECTED_REVISION=75cbca3b \
   go test -tags integration_test -run TestTangoSmoke -v -timeout 60m ./...
 ```
+
+## Running on a VM without the guest environment
+
+`TestTangoSmokeOffPrem` (also in `../tango_smoke_test.go`) runs the same checks
+on a VM that resembles a machine outside GCE. It is skipped unless
+`OFFPREM_MODE` is set. For each image spec it:
+
+1. creates a VM of its own, with the same scopes as `TestTangoSmoke`;
+2. downloads the collector package from `_BUILD_ARTIFACTS_PACKAGE_GCS` to the
+   VM, while the VM still has `gcloud`;
+3. changes the VM as `OFFPREM_MODE` says (`gce.SimulateOffPrem`), and writes
+   what it did to `simulate_off_prem.txt` in the log directory of the test;
+4. installs the collector from the downloaded package and configures it like
+   `TestTangoSmoke` does, with the files uploaded over ssh;
+5. waits for the PolicySet-active gauge, uploads the sample logs over ssh and
+   checks which lines reach Cloud Logging.
+
+### Variables
+
+`OFFPREM_MODE` selects what is changed on the VM. `guest-env` is the only mode;
+any other value fails the test.
+
+Once `OFFPREM_MODE` is set, the test needs `_BUILD_ARTIFACTS_PACKAGE_GCS`,
+`KOKORO_BUILD_ID`, `TANGO_CP_ENDPOINT`, `TANGO_EXPECTED_REVISION`, `PROJECT`
+and `IMAGE_SPECS`. If any of them are missing, the test fails before it creates
+a VM, and one message names all the missing ones. `ZONES` is needed as for
+every test of this package. If it is missing, the `gce` library says so and
+exits when the test binary starts, before any test runs. `TANGO_FLEET_ID`,
+`TANGO_POLICY_SET_ID` and `TANGO_REGION` have the same defaults as for
+`TestTangoSmoke`. `TRANSFERS_BUCKET` is not used: after the package download,
+nothing goes through GCS.
+
+### What `guest-env` does and does not prove
+
+Before the collector is installed, `guest-env` removes the Google guest
+environment from the VM: it stops and masks the `google*` systemd units, and
+removes every installed `google-*` and `gce-*` package (the guest agent, OS
+Login, the OS Config agent, the GCE configuration and disk expansion packages,
+the Google Cloud CLI) along with the package repositories they come from. The
+metadata server stays reachable and the VM keeps its service account.
+
+A passing test therefore shows that:
+
+- the package installs, and the service starts, on a host that has neither the
+  guest environment nor `gcloud`;
+- on such a host the collector receives the PolicySet from the Control Plane,
+  reports it, and enforces its log filters on the way to the Data Plane;
+- the test needs nothing of the guest environment once it is removed: from
+  then on it reaches the VM over ssh only.
+
+It does not show:
+
+- how the collector behaves without a metadata server. The collector still
+  authenticates as the VM's service account, resource detection still finds a
+  GCE instance (which is why the log queries can be scoped to the instance),
+  and the project of the xDS subscription still comes from the metadata server;
+- that any other kind of credentials works;
+- how the package gets onto a host without `gcloud`: the file is downloaded
+  before `gcloud` is removed.
+
+### Supported hosts and projects
+
+Only Debian 12 (`debian-cloud:debian-12`) has been verified. Not supported:
+
+- RPM-based Linux and Windows: removing the guest environment is not
+  implemented for them yet. The test says so with the "not supported yet"
+  error of `gce.SimulateOffPrem`, but only once the VM exists and its package
+  is downloaded. If the GCS directory has no package for the image, the test
+  fails at the download instead.
+- Ubuntu: it takes the same path as Debian and has not been tried. The removal
+  covers dpkg packages only, not snaps, which is how some Ubuntu images ship
+  `gcloud`.
+- Projects that enforce OS Login. This holds for every test of this package:
+  the tests log in with an SSH key that they put into the instance metadata,
+  and they turn OS Login off for the VM, which such a project does not allow.
+
+### Testing a local build
+
+1. Build the package. At the root of the repository:
+
+   ```
+   make package-linux-amd64
+   ```
+
+   This builds the working tree for linux/amd64 only, and leaves an unsigned
+   snapshot `.deb` and `.rpm` in `google-built-opentelemetry-collector/dist/`.
+   The first run also downloads Go and builds goreleaser, as the Makefile of
+   the distribution does. `DISTRIBUTION=<directory>` selects another
+   distribution.
+
+   The target first generates the collector sources from
+   `google-built-opentelemetry-collector/manifest.yaml`, as the
+   `goreleaser-release` target of the distribution does. This rewrites the
+   sources that are checked in under `generated_collector/`, so those files
+   change if they differ from what is generated. The manifest has to contain
+   the Tango components: it has to list `googlecontrolplaneprovider` under
+   `providers`. A collector built without them stops with
+   `unsupported scheme on URI "googlecontrolplane:..."`.
+
+2. Copy the package to a GCS directory that you own and that the service
+   account of the test VMs can read. The test installs every package for the
+   VM's architecture that it finds there, so keep one build per directory:
+
+   ```
+   gcloud storage cp google-built-opentelemetry-collector/dist/*.deb gs://<bucket>/<package-dir>/
+   ```
+
+3. Run the test. `-run TestTangoSmoke` selects both tests, hence the anchors:
+
+   ```
+   cd integration_test/smoke_test
+   env PROJECT=stackdriver-test-143416 ZONES=us-central1-a IMAGE_SPECS=debian-cloud:debian-12 \
+     KOKORO_BUILD_ID=local-$(date +%s) OFFPREM_MODE=guest-env \
+     _BUILD_ARTIFACTS_PACKAGE_GCS=gs://<bucket>/<package-dir> \
+     TANGO_CP_ENDPOINT=staging-telemetrydirector.asia-east1.rep.sandbox.googleapis.com:443 \
+     TANGO_EXPECTED_REVISION=75cbca3b \
+     go test -tags integration_test -run '^TestTangoSmokeOffPrem$' -v -timeout 60m ./...
+   ```

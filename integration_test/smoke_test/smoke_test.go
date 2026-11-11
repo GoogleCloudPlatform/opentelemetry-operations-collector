@@ -174,26 +174,36 @@ func isRPMBased(imageSpec string) bool {
 		strings.Contains(imageSpec, "sles-")
 }
 
-// Installs the collector package from GCS (see packagesInGCS) onto the given Windows VM.
-func installWindowsPackageFromGCS(ctx context.Context, logger *log.Logger, vm *gce.VM, gcsPath string) error {
+// downloadWindowsPackageFromGCS downloads the collector package from GCS (see
+// packagesInGCS) into C:\collectorUpload on the given Windows VM.
+func downloadWindowsPackageFromGCS(ctx context.Context, logger *log.Logger, vm *gce.VM, gcsPath string) error {
 	if _, err := gce.RunRemotely(ctx, logger, vm, "New-Item -ItemType directory -Path C:\\collectorUpload"); err != nil {
 		return err
 	}
 	if _, err := gce.RunRemotely(ctx, logger, vm, fmt.Sprintf("gcloud storage cp -r %s/*.goo C:\\collectorUpload", gcsPath)); err != nil {
 		return fmt.Errorf("error copying down collector package from GCS: %v", err)
 	}
+	return nil
+}
+
+// installDownloadedWindowsPackage installs the collector package that
+// downloadWindowsPackageFromGCS left on the given Windows VM.
+func installDownloadedWindowsPackage(ctx context.Context, logger *log.Logger, vm *gce.VM) error {
 	if _, err := gce.RunRemotely(ctx, logger, vm, "googet -noconfirm -verbose install -reinstall (Get-ChildItem C:\\collectorUpload\\*.goo | Select-Object -Expand FullName)"); err != nil {
 		return fmt.Errorf("error installing collector from .goo file: %v", err)
 	}
 	return nil
 }
 
-// installPackageFromGCS installs the collector package from GCS onto the given Linux VM.
+// downloadPackageFromGCS downloads the collector package for the given VM
+// from GCS into /tmp/collectorUpload on the VM (C:\collectorUpload on
+// Windows), where installDownloadedPackage finds it. The VM runs the
+// download, so it needs gcloud.
 //
 // gcsPath must point to a GCS Path that contains .deb/.rpm/.goo files to install on the testing VMs.
-func installPackageFromGCS(ctx context.Context, logger *log.Logger, vm *gce.VM, gcsPath string) error {
+func downloadPackageFromGCS(ctx context.Context, logger *log.Logger, vm *gce.VM, gcsPath string) error {
 	if gce.IsWindows(vm.ImageSpec) {
-		return installWindowsPackageFromGCS(ctx, logger, vm, gcsPath)
+		return downloadWindowsPackageFromGCS(ctx, logger, vm, gcsPath)
 	}
 	if _, err := gce.RunRemotely(ctx, logger, vm, "mkdir -p /tmp/collectorUpload"); err != nil {
 		return err
@@ -228,6 +238,16 @@ func installPackageFromGCS(ctx context.Context, logger *log.Logger, vm *gce.VM, 
 	if _, err := gce.RunRemotely(ctx, logger, vm, "ls /tmp/collectorUpload"); err != nil {
 		return err
 	}
+	return nil
+}
+
+// installDownloadedPackage installs the collector on the given VM from the
+// package that downloadPackageFromGCS left on it. It does not need gcloud on
+// the VM.
+func installDownloadedPackage(ctx context.Context, logger *log.Logger, vm *gce.VM) error {
+	if gce.IsWindows(vm.ImageSpec) {
+		return installDownloadedWindowsPackage(ctx, logger, vm)
+	}
 	if isRPMBased(vm.ImageSpec) {
 		if _, err := gce.RunRemotely(ctx, logger, vm, "sudo rpm --upgrade -v --force /tmp/collectorUpload/*"); err != nil {
 			return fmt.Errorf("error installing collector from .rpm file: %v", err)
@@ -243,6 +263,16 @@ func installPackageFromGCS(ctx context.Context, logger *log.Logger, vm *gce.VM, 
 		return fmt.Errorf("error installing collector from .deb file: %v", err)
 	}
 	return nil
+}
+
+// installPackageFromGCS installs the collector package from GCS onto the given VM.
+//
+// gcsPath must point to a GCS Path that contains .deb/.rpm/.goo files to install on the testing VMs.
+func installPackageFromGCS(ctx context.Context, logger *log.Logger, vm *gce.VM, gcsPath string) error {
+	if err := downloadPackageFromGCS(ctx, logger, vm, gcsPath); err != nil {
+		return err
+	}
+	return installDownloadedPackage(ctx, logger, vm)
 }
 
 // installOtelCollector installs the Otel collector on the given VM. Consults the given

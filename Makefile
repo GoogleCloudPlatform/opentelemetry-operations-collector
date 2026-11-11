@@ -196,6 +196,45 @@ regen-otelopscol-v:
 compare-otelopscol:
 	@$(GEN_OTELOPSCOL) --force --compare
 
+################
+# Local Packages
+################
+
+# The distribution to package, by the name of its directory.
+DISTRIBUTION ?= google-built-opentelemetry-collector
+
+# Builds the linux/amd64 .deb and .rpm of a distribution from the working
+# tree, and no other target, into the dist directory of the distribution. The
+# packages are a snapshot and are not signed. This is the quick way to get a
+# package onto a test VM: see integration_test/smoke_test/tango/README.md.
+#
+# "goreleaser release", which makes the packages, builds every target in the
+# distribution's configuration, and the open-source goreleaser has no option
+# that limits it to one. So it is given a copy of the configuration that
+# internal/cmd/goreleasertarget has cut down to linux/amd64.
+#
+# The collector sources are generated from the distribution's manifest first,
+# as its own goreleaser-release target does. Where they are checked in, in a
+# generated_collector directory, this rewrites them, so tracked files change
+# if they differ from what is generated.
+.PHONY: package-linux-amd64
+
+# The tools of the distribution's Makefile, where it installs them unless
+# these variables tell it otherwise. goreleasertarget runs with that Go too,
+# and with GOWORK=off: it needs no workspace, and a go.work that is out of
+# date would stop it.
+package-linux-amd64: GORELEASER_BIN ?= $(abspath $(DISTRIBUTION))/.tools/goreleaser
+package-linux-amd64: GO_BIN_DIR ?= $(abspath $(DISTRIBUTION))/.tools/go/bin
+
+package-linux-amd64:
+	cd $(DISTRIBUTION) && $(MAKE) goreleaser ocb-generate
+	export PATH="$(GO_BIN_DIR):$$PATH" && \
+		config="$$(mktemp)" && trap 'rm -f "$$config"' EXIT && \
+		GOWORK=off go run ./internal/cmd/goreleasertarget -goos=linux -goarch=amd64 \
+			< $(DISTRIBUTION)/.goreleaser.yaml > "$$config" && \
+		cd $(DISTRIBUTION) && \
+		$(GORELEASER_BIN) release --config "$$config" --snapshot --clean --skip=sign,publish
+
 #########
 # Testing
 #########

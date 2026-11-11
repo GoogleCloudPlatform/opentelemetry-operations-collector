@@ -22,7 +22,7 @@ import (
 	"errors"
 	"fmt"
 
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/matcher"
 	"go.opentelemetry.io/collector/pdata/pcommon"
@@ -35,8 +35,8 @@ const PolicyType = "log_transform"
 
 // driver loads a LogTransformPolicy from either shape it can arrive in: the
 // proto a control plane sends, or the map an authored config decodes to.
-var driver = googlepolicy.ProtoDriver[*policyv1alpha1.LogTransformPolicy]{
-	New: func(pb *policyv1alpha1.LogTransformPolicy) (googlepolicy.Policy, error) {
+var driver = googlepolicy.ProtoDriver[*policyv1.LogTransformPolicy]{
+	New: func(pb *policyv1.LogTransformPolicy) (googlepolicy.Policy, error) {
 		return NewPolicyFromProto(pb)
 	},
 }
@@ -70,7 +70,7 @@ type compiledAction func(ctx googlepolicy.LogContext) bool
 
 // Policy represents a compiled, validated LogTransformPolicy ready for hot-loop evaluation.
 type Policy struct {
-	proto      *policyv1alpha1.LogTransformPolicy
+	proto      *policyv1.LogTransformPolicy
 	matchers   []matcher.CompiledLogMatcher
 	renamings  []compiledAction
 	additions  []compiledAction
@@ -82,7 +82,7 @@ var _ googlepolicy.TransformationPolicy = (*Policy)(nil)
 var _ googlepolicy.LogTransformPolicyEvaluator = (*Policy)(nil)
 
 // NewPolicyFromProto validates and compiles a LogTransformPolicy protobuf into a Policy.
-func NewPolicyFromProto(pb *policyv1alpha1.LogTransformPolicy) (*Policy, error) {
+func NewPolicyFromProto(pb *policyv1.LogTransformPolicy) (*Policy, error) {
 	if pb == nil {
 		return nil, ErrNilProto
 	}
@@ -269,7 +269,7 @@ func (p *Policy) TransformLog(ctx googlepolicy.LogContext) googlepolicy.Transfor
 	return googlepolicy.TransformModified
 }
 
-func compileAdd(a *policyv1alpha1.LogAddition) (compiledAction, error) {
+func compileAdd(a *policyv1.LogAddition) (compiledAction, error) {
 	if a == nil {
 		return nil, ErrMissingAction
 	}
@@ -287,9 +287,9 @@ func compileAdd(a *policyv1alpha1.LogAddition) (compiledAction, error) {
 		return nil, ErrMissingTarget
 	}
 
-	var val *policyv1alpha1.Value
+	var val *policyv1.Value
 	switch s := a.GetSource().(type) {
-	case *policyv1alpha1.LogAddition_Value:
+	case *policyv1.LogAddition_Value:
 		if s == nil || s.Value == nil {
 			return nil, ErrMissingValue
 		}
@@ -301,7 +301,7 @@ func compileAdd(a *policyv1alpha1.LogAddition) (compiledAction, error) {
 	}
 
 	switch t := target.Target.(type) {
-	case *policyv1alpha1.LogTargetSelector_LogAttributePath:
+	case *policyv1.LogTargetSelector_LogAttributePath:
 		if t == nil {
 			return nil, ErrMissingTarget
 		}
@@ -316,7 +316,7 @@ func compileAdd(a *policyv1alpha1.LogAddition) (compiledAction, error) {
 			return setAttr(ctx.Record.Attributes())
 		}, nil
 
-	case *policyv1alpha1.LogTargetSelector_BodyFieldPath:
+	case *policyv1.LogTargetSelector_BodyFieldPath:
 		if t == nil {
 			return nil, ErrMissingTarget
 		}
@@ -337,7 +337,7 @@ func compileAdd(a *policyv1alpha1.LogAddition) (compiledAction, error) {
 			return setBodyField(body.Map())
 		}, nil
 
-	case *policyv1alpha1.LogTargetSelector_RecordField:
+	case *policyv1.LogTargetSelector_RecordField:
 		if t == nil {
 			return nil, ErrMissingTarget
 		}
@@ -348,9 +348,9 @@ func compileAdd(a *policyv1alpha1.LogAddition) (compiledAction, error) {
 	}
 }
 
-func compileRecordFieldAdd(field policyv1alpha1.LogRecordField, val *policyv1alpha1.Value, upsert bool) (compiledAction, error) {
+func compileRecordFieldAdd(field policyv1.LogRecordField, val *policyv1.Value, upsert bool) (compiledAction, error) {
 	switch field {
-	case policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY:
+	case policyv1.LogRecordField_LOG_RECORD_FIELD_BODY:
 		setBody, err := matcher.CompileValueSetter(val)
 		if err != nil {
 			return nil, err
@@ -367,7 +367,7 @@ func compileRecordFieldAdd(field policyv1alpha1.LogRecordField, val *policyv1alp
 			return true
 		}, nil
 
-	case policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT:
+	case policyv1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT:
 		s, err := requireStringValue(val, "log record field SEVERITY_TEXT")
 		if err != nil {
 			return nil, err
@@ -383,7 +383,7 @@ func compileRecordFieldAdd(field policyv1alpha1.LogRecordField, val *policyv1alp
 			return true
 		}, nil
 
-	case policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER:
+	case policyv1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER:
 		sev, err := requireSeverityNumber(val)
 		if err != nil {
 			return nil, err
@@ -399,8 +399,8 @@ func compileRecordFieldAdd(field policyv1alpha1.LogRecordField, val *policyv1alp
 			return true
 		}, nil
 
-	case policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID,
-		policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID:
+	case policyv1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID,
+		policyv1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID:
 		return nil, fmt.Errorf("%w: %s", ErrImmutableField, field)
 
 	default:
@@ -408,7 +408,7 @@ func compileRecordFieldAdd(field policyv1alpha1.LogRecordField, val *policyv1alp
 	}
 }
 
-func compileRemove(a *policyv1alpha1.LogRemoval) (compiledAction, error) {
+func compileRemove(a *policyv1.LogRemoval) (compiledAction, error) {
 	if a == nil {
 		return nil, ErrMissingTarget
 	}
@@ -426,7 +426,7 @@ func compileRemove(a *policyv1alpha1.LogRemoval) (compiledAction, error) {
 	}
 
 	switch t := a.Target.Target.(type) {
-	case *policyv1alpha1.LogAttributeSelector_LogAttributePath:
+	case *policyv1.LogAttributeSelector_LogAttributePath:
 		if t == nil {
 			return nil, ErrMissingTarget
 		}
@@ -441,7 +441,7 @@ func compileRemove(a *policyv1alpha1.LogRemoval) (compiledAction, error) {
 			return rmAttr(ctx.Record.Attributes())
 		}, nil
 
-	case *policyv1alpha1.LogAttributeSelector_BodyFieldPath:
+	case *policyv1.LogAttributeSelector_BodyFieldPath:
 		if t == nil {
 			return nil, ErrMissingTarget
 		}
@@ -465,7 +465,7 @@ func compileRemove(a *policyv1alpha1.LogRemoval) (compiledAction, error) {
 	}
 }
 
-func compileRename(a *policyv1alpha1.LogRenaming) (compiledAction, error) {
+func compileRename(a *policyv1.LogRenaming) (compiledAction, error) {
 	if a == nil {
 		return nil, ErrMissingAction
 	}
@@ -492,18 +492,18 @@ func compileRename(a *policyv1alpha1.LogRenaming) (compiledAction, error) {
 	}
 
 	var (
-		srcAttrPath *policyv1alpha1.AttributePath
+		srcAttrPath *policyv1.AttributePath
 		srcKind     string
 		srcInBody   bool
 	)
 	switch s := a.Source.Target.(type) {
-	case *policyv1alpha1.LogAttributeSelector_LogAttributePath:
+	case *policyv1.LogAttributeSelector_LogAttributePath:
 		if s == nil {
 			return nil, ErrMissingSource
 		}
 		srcAttrPath = s.LogAttributePath
 		srcKind = "log"
-	case *policyv1alpha1.LogAttributeSelector_BodyFieldPath:
+	case *policyv1.LogAttributeSelector_BodyFieldPath:
 		if s == nil {
 			return nil, ErrMissingSource
 		}
@@ -515,18 +515,18 @@ func compileRename(a *policyv1alpha1.LogRenaming) (compiledAction, error) {
 	}
 
 	var (
-		tgtAttrPath *policyv1alpha1.AttributePath
+		tgtAttrPath *policyv1.AttributePath
 		tgtKind     string
 		tgtInBody   bool
 	)
 	switch t := a.Target.Target.(type) {
-	case *policyv1alpha1.LogAttributeSelector_LogAttributePath:
+	case *policyv1.LogAttributeSelector_LogAttributePath:
 		if t == nil {
 			return nil, ErrMissingTarget
 		}
 		tgtAttrPath = t.LogAttributePath
 		tgtKind = "log"
-	case *policyv1alpha1.LogAttributeSelector_BodyFieldPath:
+	case *policyv1.LogAttributeSelector_BodyFieldPath:
 		if t == nil {
 			return nil, ErrMissingTarget
 		}
@@ -619,7 +619,7 @@ func compileRename(a *policyv1alpha1.LogRenaming) (compiledAction, error) {
 	}, nil
 }
 
-func compileRedact(a *policyv1alpha1.LogRedaction) (compiledAction, error) {
+func compileRedact(a *policyv1.LogRedaction) (compiledAction, error) {
 	if a == nil {
 		return nil, ErrMissingAction
 	}
@@ -639,7 +639,7 @@ func compileRedact(a *policyv1alpha1.LogRedaction) (compiledAction, error) {
 	var regex string
 	switch p := a.GetPattern().(type) {
 	case nil:
-	case *policyv1alpha1.LogRedaction_Regex:
+	case *policyv1.LogRedaction_Regex:
 		if p != nil {
 			regex = p.Regex
 		}
@@ -649,7 +649,7 @@ func compileRedact(a *policyv1alpha1.LogRedaction) (compiledAction, error) {
 	var replacement string
 	switch m := a.GetMask().(type) {
 	case nil:
-	case *policyv1alpha1.LogRedaction_Replacement:
+	case *policyv1.LogRedaction_Replacement:
 		if m != nil {
 			replacement = m.Replacement
 		}
@@ -662,7 +662,7 @@ func compileRedact(a *policyv1alpha1.LogRedaction) (compiledAction, error) {
 	}
 
 	switch t := target.Target.(type) {
-	case *policyv1alpha1.LogTargetSelector_LogAttributePath:
+	case *policyv1.LogTargetSelector_LogAttributePath:
 		if t == nil {
 			return nil, ErrMissingTarget
 		}
@@ -686,7 +686,7 @@ func compileRedact(a *policyv1alpha1.LogRedaction) (compiledAction, error) {
 			return true
 		}, nil
 
-	case *policyv1alpha1.LogTargetSelector_BodyFieldPath:
+	case *policyv1.LogTargetSelector_BodyFieldPath:
 		if t == nil {
 			return nil, ErrMissingTarget
 		}
@@ -714,7 +714,7 @@ func compileRedact(a *policyv1alpha1.LogRedaction) (compiledAction, error) {
 			return true
 		}, nil
 
-	case *policyv1alpha1.LogTargetSelector_RecordField:
+	case *policyv1.LogTargetSelector_RecordField:
 		if t == nil {
 			return nil, ErrMissingTarget
 		}
@@ -725,9 +725,9 @@ func compileRedact(a *policyv1alpha1.LogRedaction) (compiledAction, error) {
 	}
 }
 
-func compileRecordFieldRedact(field policyv1alpha1.LogRecordField, redactStr func(string) (string, bool)) (compiledAction, error) {
+func compileRecordFieldRedact(field policyv1.LogRecordField, redactStr func(string) (string, bool)) (compiledAction, error) {
 	switch field {
-	case policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY:
+	case policyv1.LogRecordField_LOG_RECORD_FIELD_BODY:
 		return func(ctx googlepolicy.LogContext) bool {
 			if ctx.Record == (plog.LogRecord{}) {
 				return false
@@ -744,7 +744,7 @@ func compileRecordFieldRedact(field policyv1alpha1.LogRecordField, redactStr fun
 			return true
 		}, nil
 
-	case policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT:
+	case policyv1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT:
 		return func(ctx googlepolicy.LogContext) bool {
 			if ctx.Record == (plog.LogRecord{}) {
 				return false
@@ -761,9 +761,9 @@ func compileRecordFieldRedact(field policyv1alpha1.LogRecordField, redactStr fun
 			return true
 		}, nil
 
-	case policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER,
-		policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID,
-		policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID:
+	case policyv1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER,
+		policyv1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID,
+		policyv1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID:
 		return nil, fmt.Errorf("log record field %s is not supported as a redact target", field)
 
 	default:
@@ -793,11 +793,11 @@ func bodyExists(v pcommon.Value) bool {
 	}
 }
 
-func requireStringValue(val *policyv1alpha1.Value, targetName string) (string, error) {
+func requireStringValue(val *policyv1.Value, targetName string) (string, error) {
 	if val == nil || val.GetKind() == nil {
 		return "", ErrMissingValue
 	}
-	sv, ok := val.GetKind().(*policyv1alpha1.Value_StringValue)
+	sv, ok := val.GetKind().(*policyv1.Value_StringValue)
 	if !ok {
 		return "", fmt.Errorf("%s requires a string value", targetName)
 	}
@@ -807,11 +807,11 @@ func requireStringValue(val *policyv1alpha1.Value, targetName string) (string, e
 	return sv.StringValue, nil
 }
 
-func requireSeverityNumber(val *policyv1alpha1.Value) (plog.SeverityNumber, error) {
+func requireSeverityNumber(val *policyv1.Value) (plog.SeverityNumber, error) {
 	if val == nil || val.GetKind() == nil {
 		return plog.SeverityNumberUnspecified, ErrMissingValue
 	}
-	iv, ok := val.GetKind().(*policyv1alpha1.Value_IntValue)
+	iv, ok := val.GetKind().(*policyv1.Value_IntValue)
 	if !ok {
 		return plog.SeverityNumberUnspecified, errors.New("log record field SEVERITY_NUMBER requires an int value")
 	}

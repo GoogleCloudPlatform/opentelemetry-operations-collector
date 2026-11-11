@@ -17,7 +17,7 @@ package matcher
 import (
 	"errors"
 
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
@@ -44,7 +44,7 @@ func (cm *CompiledLogMatcher) Eval(ctx googlepolicy.LogContext) bool {
 
 // CompileLogMatcher validates and compiles a LogMatcher protobuf into a
 // CompiledLogMatcher.
-func CompileLogMatcher(m *policyv1alpha1.LogMatcher) (CompiledLogMatcher, error) {
+func CompileLogMatcher(m *policyv1.LogMatcher) (CompiledLogMatcher, error) {
 	extract, err := CompileLogExtractor(m.GetTarget())
 	if err != nil {
 		return CompiledLogMatcher{}, err
@@ -58,16 +58,16 @@ func CompileLogMatcher(m *policyv1alpha1.LogMatcher) (CompiledLogMatcher, error)
 
 // CompileLogExtractor validates and compiles a LogFieldSelector into a
 // LogTargetExtractor.
-func CompileLogExtractor(target *policyv1alpha1.LogFieldSelector) (LogTargetExtractor, error) {
+func CompileLogExtractor(target *policyv1.LogFieldSelector) (LogTargetExtractor, error) {
 	if target == nil || target.Target == nil {
 		return nil, ErrMissingLogTarget
 	}
 
 	switch t := target.Target.(type) {
-	case *policyv1alpha1.LogFieldSelector_RecordField:
+	case *policyv1.LogFieldSelector_RecordField:
 		return compileLogRecordFieldExtractor(t.RecordField)
 
-	case *policyv1alpha1.LogFieldSelector_LogAttributePath:
+	case *policyv1.LogFieldSelector_LogAttributePath:
 		steps, err := CompilePath(t.LogAttributePath, "log")
 		if err != nil {
 			return nil, err
@@ -79,7 +79,7 @@ func CompileLogExtractor(target *policyv1alpha1.LogFieldSelector) (LogTargetExtr
 			return EvalPath(ctx.Record.Attributes(), steps)
 		}, nil
 
-	case *policyv1alpha1.LogFieldSelector_ResourceAttributePath:
+	case *policyv1.LogFieldSelector_ResourceAttributePath:
 		steps, err := CompilePath(t.ResourceAttributePath, "resource")
 		if err != nil {
 			return nil, err
@@ -91,7 +91,7 @@ func CompileLogExtractor(target *policyv1alpha1.LogFieldSelector) (LogTargetExtr
 			return EvalPath(ctx.Resource.Attributes(), steps)
 		}, nil
 
-	case *policyv1alpha1.LogFieldSelector_ScopeAttributePath:
+	case *policyv1.LogFieldSelector_ScopeAttributePath:
 		steps, err := CompilePath(t.ScopeAttributePath, "scope")
 		if err != nil {
 			return nil, err
@@ -103,10 +103,10 @@ func CompileLogExtractor(target *policyv1alpha1.LogFieldSelector) (LogTargetExtr
 			return EvalPath(ctx.Scope.Attributes(), steps)
 		}, nil
 
-	case *policyv1alpha1.LogFieldSelector_ScopeField:
+	case *policyv1.LogFieldSelector_ScopeField:
 		return compileLogScopeFieldExtractor(t.ScopeField)
 
-	case *policyv1alpha1.LogFieldSelector_BodyFieldPath:
+	case *policyv1.LogFieldSelector_BodyFieldPath:
 		steps, err := CompilePath(t.BodyFieldPath, "body")
 		if err != nil {
 			return nil, err
@@ -123,9 +123,9 @@ func CompileLogExtractor(target *policyv1alpha1.LogFieldSelector) (LogTargetExtr
 	}
 }
 
-func compileLogRecordFieldExtractor(field policyv1alpha1.LogRecordField) (LogTargetExtractor, error) {
+func compileLogRecordFieldExtractor(field policyv1.LogRecordField) (LogTargetExtractor, error) {
 	switch field {
-	case policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY:
+	case policyv1.LogRecordField_LOG_RECORD_FIELD_BODY:
 		return func(ctx googlepolicy.LogContext) (any, bool) {
 			if ctx.Record == (plog.LogRecord{}) || ctx.Record.Body().Type() == pcommon.ValueTypeEmpty {
 				return nil, false
@@ -140,7 +140,7 @@ func compileLogRecordFieldExtractor(field policyv1alpha1.LogRecordField) (LogTar
 			return val, true
 		}, nil
 
-	case policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT:
+	case policyv1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT:
 		return func(ctx googlepolicy.LogContext) (any, bool) {
 			if ctx.Record == (plog.LogRecord{}) {
 				return nil, false
@@ -152,7 +152,7 @@ func compileLogRecordFieldExtractor(field policyv1alpha1.LogRecordField) (LogTar
 			return s, true
 		}, nil
 
-	case policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER:
+	case policyv1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER:
 		// An unspecified severity number (0) is truly absent rather than numeric
 		// zero: returning (nil, false) prevents range rules like `exclusive_maximum: 9`
 		// (drop debug/trace logs) from falsely dropping logs that have no severity set.
@@ -167,7 +167,7 @@ func compileLogRecordFieldExtractor(field policyv1alpha1.LogRecordField) (LogTar
 			return int64(sev), true
 		}, nil
 
-	case policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID:
+	case policyv1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID:
 		return func(ctx googlepolicy.LogContext) (any, bool) {
 			if ctx.Record == (plog.LogRecord{}) {
 				return nil, false
@@ -179,7 +179,7 @@ func compileLogRecordFieldExtractor(field policyv1alpha1.LogRecordField) (LogTar
 			return tid, true
 		}, nil
 
-	case policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID:
+	case policyv1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID:
 		return func(ctx googlepolicy.LogContext) (any, bool) {
 			if ctx.Record == (plog.LogRecord{}) {
 				return nil, false
@@ -196,9 +196,9 @@ func compileLogRecordFieldExtractor(field policyv1alpha1.LogRecordField) (LogTar
 	}
 }
 
-func compileLogScopeFieldExtractor(field policyv1alpha1.ScopeField) (LogTargetExtractor, error) {
+func compileLogScopeFieldExtractor(field policyv1.ScopeField) (LogTargetExtractor, error) {
 	switch field {
-	case policyv1alpha1.ScopeField_SCOPE_FIELD_NAME:
+	case policyv1.ScopeField_SCOPE_FIELD_NAME:
 		return func(ctx googlepolicy.LogContext) (any, bool) {
 			if ctx.Scope == (pcommon.InstrumentationScope{}) {
 				return nil, false
@@ -210,7 +210,7 @@ func compileLogScopeFieldExtractor(field policyv1alpha1.ScopeField) (LogTargetEx
 			return s, true
 		}, nil
 
-	case policyv1alpha1.ScopeField_SCOPE_FIELD_VERSION:
+	case policyv1.ScopeField_SCOPE_FIELD_VERSION:
 		return func(ctx googlepolicy.LogContext) (any, bool) {
 			if ctx.Scope == (pcommon.InstrumentationScope{}) {
 				return nil, false
@@ -222,7 +222,7 @@ func compileLogScopeFieldExtractor(field policyv1alpha1.ScopeField) (LogTargetEx
 			return s, true
 		}, nil
 
-	case policyv1alpha1.ScopeField_SCOPE_FIELD_SCHEMA_URL:
+	case policyv1.ScopeField_SCOPE_FIELD_SCHEMA_URL:
 		return func(ctx googlepolicy.LogContext) (any, bool) {
 			if ctx.ScopeSchemaURL == "" {
 				return nil, false

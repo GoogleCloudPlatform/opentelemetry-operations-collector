@@ -19,7 +19,7 @@ import (
 	"math"
 	"testing"
 
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -80,15 +80,15 @@ func dynamicMetricContext(name, unit, attrKey, attrStr string, attrInt int64, at
 	return metricContext(m, sm, rm)
 }
 
-func fuzzMetricSeedPolicies() []*policyv1alpha1.MetricFilterPolicy {
-	return []*policyv1alpha1.MetricFilterPolicy{
+func fuzzMetricSeedPolicies() []*policyv1.MetricFilterPolicy {
+	return []*policyv1.MetricFilterPolicy{
 		{
 			Id:     "projects/123/locations/us-central1/policySets/ps-1/policies/drop-metric-name",
-			Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-			Matchers: []*policyv1alpha1.MetricMatcher{
+			Action: policyv1.Action_ACTION_DROP.Enum(),
+			Matchers: []*policyv1.MetricMatcher{
 				{
-					Target: descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Glob{
+					Target: descriptorTarget(policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME),
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Glob{
 						Glob: "http.server.*",
 					}},
 				},
@@ -96,33 +96,33 @@ func fuzzMetricSeedPolicies() []*policyv1alpha1.MetricFilterPolicy {
 		},
 		{
 			Id:     "keep-sum-datapoint-attr",
-			Action: policyv1alpha1.Action_ACTION_KEEP.Enum(),
-			Matchers: []*policyv1alpha1.MetricMatcher{
+			Action: policyv1.Action_ACTION_KEEP.Enum(),
+			Matchers: []*policyv1.MetricMatcher{
 				{
-					Target: descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
+					Target: descriptorTarget(policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE),
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
 						Equality: stringValue("SUM"),
 					}},
 				},
 				{
-					Target: descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_IS_MONOTONIC),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
-						Equality: &policyv1alpha1.Value{
-							Kind: &policyv1alpha1.Value_BoolValue{BoolValue: true},
+					Target: descriptorTarget(policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_IS_MONOTONIC),
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
+						Equality: &policyv1.Value{
+							Kind: &policyv1.Value_BoolValue{BoolValue: true},
 						},
 					}},
 				},
 				{
 					Target: datapointTarget("metadata", "env"),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
 						Equality: stringValue("prod"),
 					}},
 				},
 				{
 					Target: datapointTarget("http.status_code"),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_InclusiveMinimum{
-						InclusiveMinimum: &policyv1alpha1.NumericValue{
-							Kind: &policyv1alpha1.NumericValue_IntValue{IntValue: 200},
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_InclusiveMinimum{
+						InclusiveMinimum: &policyv1.NumericValue{
+							Kind: &policyv1.NumericValue_IntValue{IntValue: 200},
 						},
 					}},
 				},
@@ -130,21 +130,21 @@ func fuzzMetricSeedPolicies() []*policyv1alpha1.MetricFilterPolicy {
 		},
 		{
 			Id:     "drop-temporality-and-scope",
-			Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-			Matchers: []*policyv1alpha1.MetricMatcher{
+			Action: policyv1.Action_ACTION_DROP.Enum(),
+			Matchers: []*policyv1.MetricMatcher{
 				{
-					Target: descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_AGGREGATION_TEMPORALITY),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
+					Target: descriptorTarget(policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_AGGREGATION_TEMPORALITY),
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
 						Equality: stringValue("DELTA"),
 					}},
 				},
 				{
 					Target:    resourceTarget("cloud.zone"),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{Existence: &emptypb.Empty{}}},
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{Existence: &emptypb.Empty{}}},
 				},
 				{
-					Target: scopeFieldTarget(policyv1alpha1.ScopeField_SCOPE_FIELD_NAME),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Containment{
+					Target: scopeFieldTarget(policyv1.ScopeField_SCOPE_FIELD_NAME),
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Containment{
 						Containment: stringValue("library"),
 					}},
 				},
@@ -183,11 +183,11 @@ func verifyCompiledMetricPolicy(t *testing.T, p googlepolicy.Policy, contexts []
 		switch res {
 		case googlepolicy.FilterNoMatch:
 		case googlepolicy.FilterKeep:
-			if pol.Action() != policyv1alpha1.Action_ACTION_KEEP {
+			if pol.Action() != policyv1.Action_ACTION_KEEP {
 				t.Fatalf("FilterMetric returned FilterKeep for action %v", pol.Action())
 			}
 		case googlepolicy.FilterDrop:
-			if pol.Action() != policyv1alpha1.Action_ACTION_DROP {
+			if pol.Action() != policyv1.Action_ACTION_DROP {
 				t.Fatalf("FilterMetric returned FilterDrop for action %v", pol.Action())
 			}
 		default:
@@ -227,7 +227,7 @@ func FuzzMetricFilterPolicy(f *testing.F) {
 			return contexts
 		}
 
-		pb := &policyv1alpha1.MetricFilterPolicy{}
+		pb := &policyv1.MetricFilterPolicy{}
 		if err := proto.Unmarshal(data, pb); err == nil {
 			ps, err := googlepolicy.MakePolicySetFromProtos("projects/p/locations/l/policySets/ps", "fuzz-rev", []proto.Message{pb})
 			if err == nil {

@@ -19,7 +19,7 @@ import (
 	"errors"
 	"testing"
 
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,7 +31,7 @@ func TestPolicy_Validation(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		proto   *policyv1alpha1.JournaldSourcePolicy
+		proto   *policyv1.JournaldSourcePolicy
 		wantErr error
 	}{
 		{
@@ -41,14 +41,14 @@ func TestPolicy_Validation(t *testing.T) {
 		},
 		{
 			name: "empty id",
-			proto: &policyv1alpha1.JournaldSourcePolicy{
+			proto: &policyv1.JournaldSourcePolicy{
 				Id: "",
 			},
 			wantErr: ErrMissingID,
 		},
 		{
 			name: "valid policy",
-			proto: &policyv1alpha1.JournaldSourcePolicy{
+			proto: &policyv1.JournaldSourcePolicy{
 				Id: "system-journal",
 			},
 			wantErr: nil,
@@ -78,7 +78,7 @@ func TestPolicy_Validation(t *testing.T) {
 func TestPolicy_ReceiverIDs(t *testing.T) {
 	t.Parallel()
 
-	pol, err := NewPolicyFromProto(&policyv1alpha1.JournaldSourcePolicy{
+	pol, err := NewPolicyFromProto(&policyv1.JournaldSourcePolicy{
 		Id: "journald-test",
 	})
 	require.NoError(t, err)
@@ -91,7 +91,7 @@ func TestPolicy_ReceiverIDs(t *testing.T) {
 func TestPolicy_Evaluate(t *testing.T) {
 	t.Parallel()
 
-	pol, err := NewPolicyFromProto(&policyv1alpha1.JournaldSourcePolicy{
+	pol, err := NewPolicyFromProto(&policyv1.JournaldSourcePolicy{
 		Id: "journald-sys",
 	})
 	require.NoError(t, err)
@@ -135,7 +135,7 @@ func TestPolicy_Evaluate_InvalidPolicy(t *testing.T) {
 	t.Parallel()
 
 	pol := &Policy{
-		proto: &policyv1alpha1.JournaldSourcePolicy{
+		proto: &policyv1.JournaldSourcePolicy{
 			Id: "",
 		},
 	}
@@ -176,10 +176,10 @@ func TestDriver_LoadPolicy(t *testing.T) {
 func TestPolicy_Consolidate(t *testing.T) {
 	t.Parallel()
 
-	p1, err := NewPolicyFromProto(&policyv1alpha1.JournaldSourcePolicy{Id: "journald-1"})
+	p1, err := NewPolicyFromProto(&policyv1.JournaldSourcePolicy{Id: "journald-1"})
 	require.NoError(t, err)
 
-	p2, err := NewPolicyFromProto(&policyv1alpha1.JournaldSourcePolicy{Id: "journald-2"})
+	p2, err := NewPolicyFromProto(&policyv1.JournaldSourcePolicy{Id: "journald-2"})
 	require.NoError(t, err)
 
 	t.Run("empty slice returns receiver policy", func(t *testing.T) {
@@ -209,7 +209,7 @@ func TestPolicy_Consolidate(t *testing.T) {
 
 	t.Run("invalid receiver returns error", func(t *testing.T) {
 		t.Parallel()
-		badReceiver := &Policy{proto: &policyv1alpha1.JournaldSourcePolicy{Id: ""}}
+		badReceiver := &Policy{proto: &policyv1.JournaldSourcePolicy{Id: ""}}
 		res, err := badReceiver.Consolidate(nil)
 		require.ErrorIs(t, err, ErrMissingID)
 		assert.Nil(t, res)
@@ -222,7 +222,7 @@ func TestPolicy_Consolidate(t *testing.T) {
 
 	t.Run("invalid policy in slice returns error", func(t *testing.T) {
 		t.Parallel()
-		bad := &Policy{proto: &policyv1alpha1.JournaldSourcePolicy{Id: ""}}
+		bad := &Policy{proto: &policyv1.JournaldSourcePolicy{Id: ""}}
 		res, err := p1.Consolidate([]googlepolicy.SourcePolicy{p1, bad})
 		require.ErrorIs(t, err, ErrMissingID)
 		assert.Nil(t, res)
@@ -242,7 +242,7 @@ func FuzzPolicy_LoadAndValidate(f *testing.F) {
 	f.Add("special/id@chars!")
 
 	f.Fuzz(func(t *testing.T, id string) {
-		pb := &policyv1alpha1.JournaldSourcePolicy{Id: id}
+		pb := &policyv1.JournaldSourcePolicy{Id: id}
 		pol, err := NewPolicyFromProto(pb)
 		if id == "" {
 			require.ErrorIs(t, err, ErrMissingID)

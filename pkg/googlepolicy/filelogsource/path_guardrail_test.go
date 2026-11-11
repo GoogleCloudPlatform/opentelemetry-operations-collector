@@ -18,7 +18,7 @@ import (
 	"strings"
 	"testing"
 
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -162,7 +162,7 @@ func TestPathGuardrail_BraceExpansionSecurity(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			pb := &policyv1alpha1.FileLogSourcePolicy{
+			pb := &policyv1.FileLogSourcePolicy{
 				Id:            "brace-test",
 				IncludedPaths: []string{tc.pattern},
 			}

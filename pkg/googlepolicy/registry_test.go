@@ -25,7 +25,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
 )
 
 func resetState(t *testing.T) {
@@ -404,10 +404,10 @@ func unregisterForTest(t *testing.T, policyType string, protoName protoreflect.F
 }
 
 func TestRegisterPolicyDriver_IndexesDeclaredProto(t *testing.T) {
-	protoName := (&policyv1alpha1.LogFilterPolicy{}).ProtoReflect().Descriptor().FullName()
+	protoName := (&policyv1.LogFilterPolicy{}).ProtoReflect().Descriptor().FullName()
 	unregisterForTest(t, "proto_indexed", protoName)
 
-	require.NoError(t, RegisterPolicyDriver("proto_indexed", &fakeProtoDriver{msg: &policyv1alpha1.LogFilterPolicy{}}))
+	require.NoError(t, RegisterPolicyDriver("proto_indexed", &fakeProtoDriver{msg: &policyv1.LogFilterPolicy{}}))
 
 	got, ok := PolicyTypeForProto(protoName)
 	require.True(t, ok)
@@ -432,13 +432,13 @@ func TestRegisterPolicyDriver_DriverWithoutProtoIsNotIndexed(t *testing.T) {
 // against ambiguity: two drivers claiming one proto would make the destination
 // of an incoming policy depend on package initialisation order.
 func TestRegisterPolicyDriver_RejectsDuplicateProto(t *testing.T) {
-	protoName := (&policyv1alpha1.TraceFilterPolicy{}).ProtoReflect().Descriptor().FullName()
+	protoName := (&policyv1.TraceFilterPolicy{}).ProtoReflect().Descriptor().FullName()
 	unregisterForTest(t, "first_claim", protoName)
 	unregisterForTest(t, "second_claim", "")
 
-	require.NoError(t, RegisterPolicyDriver("first_claim", &fakeProtoDriver{msg: &policyv1alpha1.TraceFilterPolicy{}}))
+	require.NoError(t, RegisterPolicyDriver("first_claim", &fakeProtoDriver{msg: &policyv1.TraceFilterPolicy{}}))
 
-	err := RegisterPolicyDriver("second_claim", &fakeProtoDriver{msg: &policyv1alpha1.TraceFilterPolicy{}})
+	err := RegisterPolicyDriver("second_claim", &fakeProtoDriver{msg: &policyv1.TraceFilterPolicy{}})
 	require.ErrorIs(t, err, ErrPolicyProtoAlreadyRegistered)
 	assert.Contains(t, err.Error(), "first_claim")
 

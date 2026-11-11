@@ -18,7 +18,7 @@ import (
 	"context"
 	"testing"
 
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -42,7 +42,7 @@ func TestPolicyValidation_ValidLinuxPaths(t *testing.T) {
 
 	for _, paths := range validPaths {
 		t.Run(paths[0], func(t *testing.T) {
-			pb := &policyv1alpha1.FileLogSourcePolicy{
+			pb := &policyv1.FileLogSourcePolicy{
 				Id:            "valid-policy",
 				IncludedPaths: paths,
 			}
@@ -69,7 +69,7 @@ func TestPolicyValidation_ValidWindowsPaths(t *testing.T) {
 
 	for _, paths := range validPaths {
 		t.Run(paths[0], func(t *testing.T) {
-			pb := &policyv1alpha1.FileLogSourcePolicy{
+			pb := &policyv1.FileLogSourcePolicy{
 				Id:            "windows-policy",
 				IncludedPaths: paths,
 			}
@@ -268,7 +268,7 @@ func TestPolicyValidation_InvalidPaths(t *testing.T) {
 			}
 			t.Cleanup(setOSForTest(targetOS))
 
-			pb := &policyv1alpha1.FileLogSourcePolicy{
+			pb := &policyv1.FileLogSourcePolicy{
 				Id:            tc.id,
 				IncludedPaths: tc.include,
 			}
@@ -283,7 +283,7 @@ func TestPolicyValidation_InvalidPaths(t *testing.T) {
 func TestPolicy_Metadata(t *testing.T) {
 	t.Cleanup(setOSForTest("linux"))
 
-	pb := &policyv1alpha1.FileLogSourcePolicy{
+	pb := &policyv1.FileLogSourcePolicy{
 		Id:            "test-log-source",
 		IncludedPaths: []string{"/var/log/test.log"},
 	}
@@ -319,7 +319,7 @@ func TestPolicy_Metadata(t *testing.T) {
 func TestPolicy_Evaluate(t *testing.T) {
 	t.Cleanup(setOSForTest("linux"))
 
-	pb := &policyv1alpha1.FileLogSourcePolicy{
+	pb := &policyv1.FileLogSourcePolicy{
 		Id:            "projects/123/locations/global/policySets/ps1/policies/app-logs",
 		IncludedPaths: []string{"/var/log/app/*.log"},
 	}
@@ -350,7 +350,7 @@ func TestPolicy_Evaluate(t *testing.T) {
 
 	// Validate error on invalid internal proto.
 	invalidPolicy := &Policy{
-		proto: &policyv1alpha1.FileLogSourcePolicy{
+		proto: &policyv1.FileLogSourcePolicy{
 			Id: "",
 		},
 	}
@@ -361,7 +361,7 @@ func TestPolicy_Evaluate(t *testing.T) {
 func TestPolicy_Evaluate_WindowsEnvExpansion(t *testing.T) {
 	t.Cleanup(setOSForTest("windows"))
 
-	pb := &policyv1alpha1.FileLogSourcePolicy{
+	pb := &policyv1.FileLogSourcePolicy{
 		Id: "win-env-logs",
 		IncludedPaths: []string{
 			`%ProgramData%\MyApp\logs\*.log`,
@@ -389,7 +389,7 @@ func TestPolicy_Evaluate_WindowsEnvExpansion(t *testing.T) {
 func TestPolicy_ReceiverIDs(t *testing.T) {
 	t.Cleanup(setOSForTest("linux"))
 
-	pb := &policyv1alpha1.FileLogSourcePolicy{
+	pb := &policyv1.FileLogSourcePolicy{
 		Id:            "nginx-logs",
 		IncludedPaths: []string{"/var/log/nginx/*.log"},
 	}
@@ -418,7 +418,7 @@ func TestMerge_NilAndEmpty(t *testing.T) {
 func TestMerge_SinglePolicy(t *testing.T) {
 	t.Cleanup(setOSForTest("linux"))
 
-	p, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
+	p, err := NewPolicyFromProto(&policyv1.FileLogSourcePolicy{
 		Id:            "single-policy",
 		IncludedPaths: []string{"/var/log/single/*.log"},
 	})
@@ -434,19 +434,19 @@ func TestMerge_SinglePolicy(t *testing.T) {
 func TestMerge_MultiplePolicies_DeduplicatedAndSorted(t *testing.T) {
 	t.Cleanup(setOSForTest("linux"))
 
-	p1, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
+	p1, err := NewPolicyFromProto(&policyv1.FileLogSourcePolicy{
 		Id:            "policy-1",
 		IncludedPaths: []string{"/var/log/syslog", "/var/log/nginx/*.log"},
 	})
 	require.NoError(t, err)
 
-	p2, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
+	p2, err := NewPolicyFromProto(&policyv1.FileLogSourcePolicy{
 		Id:            "policy-2",
 		IncludedPaths: []string{"/var/log/nginx/*.log", "/var/log/auth.log"},
 	})
 	require.NoError(t, err)
 
-	p3, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
+	p3, err := NewPolicyFromProto(&policyv1.FileLogSourcePolicy{
 		Id:            "policy-3",
 		IncludedPaths: []string{"/opt/app/logs/*.log", "/var/log/syslog"},
 	})
@@ -482,13 +482,13 @@ func TestMerge_MultiplePolicies_DeduplicatedAndSorted(t *testing.T) {
 func TestMerge_MultiplePolicies_WindowsCaseInsensitiveDeduplication(t *testing.T) {
 	t.Cleanup(setOSForTest("windows"))
 
-	p1, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
+	p1, err := NewPolicyFromProto(&policyv1.FileLogSourcePolicy{
 		Id:            "win-1",
 		IncludedPaths: []string{`C:\ProgramData\App\logs\app.log`},
 	})
 	require.NoError(t, err)
 
-	p2, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
+	p2, err := NewPolicyFromProto(&policyv1.FileLogSourcePolicy{
 		Id:            "win-2",
 		IncludedPaths: []string{`c:/programdata/app/logs/app.log`},
 	})
@@ -504,13 +504,13 @@ func TestMerge_MultiplePolicies_WindowsCaseInsensitiveDeduplication(t *testing.T
 func TestMerge_MultiplePolicies_WindowsEnvDeduplication(t *testing.T) {
 	t.Cleanup(setOSForTest("windows"))
 
-	p1, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
+	p1, err := NewPolicyFromProto(&policyv1.FileLogSourcePolicy{
 		Id:            "win-env-1",
 		IncludedPaths: []string{`%ProgramData%\App\logs\app.log`},
 	})
 	require.NoError(t, err)
 
-	p2, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
+	p2, err := NewPolicyFromProto(&policyv1.FileLogSourcePolicy{
 		Id:            "win-env-2",
 		IncludedPaths: []string{`C:\ProgramData\App\logs\app.log`},
 	})
@@ -540,13 +540,13 @@ func TestMerge_MultiplePolicies_WindowsEnvDeduplication(t *testing.T) {
 func TestMerge_MultiplePolicies_WindowsEnvSortingDeterminism(t *testing.T) {
 	t.Cleanup(setOSForTest("windows"))
 
-	p1, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
+	p1, err := NewPolicyFromProto(&policyv1.FileLogSourcePolicy{
 		Id:            "win-sort-1",
 		IncludedPaths: []string{`%ProgramData%\App\logs\z.log`},
 	})
 	require.NoError(t, err)
 
-	p2, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
+	p2, err := NewPolicyFromProto(&policyv1.FileLogSourcePolicy{
 		Id:            "win-sort-2",
 		IncludedPaths: []string{`C:\ProgramData\App\logs\a.log`},
 	})
@@ -569,14 +569,14 @@ func TestMerge_MultiplePolicies_WindowsEnvSortingDeterminism(t *testing.T) {
 func TestMerge_FailsFastOnInvalidPolicy(t *testing.T) {
 	t.Cleanup(setOSForTest("linux"))
 
-	valid, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
+	valid, err := NewPolicyFromProto(&policyv1.FileLogSourcePolicy{
 		Id:            "valid",
 		IncludedPaths: []string{"/var/log/valid.log"},
 	})
 	require.NoError(t, err)
 
 	invalid := &Policy{
-		proto: &policyv1alpha1.FileLogSourcePolicy{
+		proto: &policyv1.FileLogSourcePolicy{
 			Id:            "invalid",
 			IncludedPaths: []string{"/var/log/../etc/shadow"},
 		},
@@ -594,19 +594,19 @@ func TestMerge_FailsFastOnInvalidPolicy(t *testing.T) {
 func TestConsolidate(t *testing.T) {
 	t.Cleanup(setOSForTest("linux"))
 
-	p1, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
+	p1, err := NewPolicyFromProto(&policyv1.FileLogSourcePolicy{
 		Id:            "p1",
 		IncludedPaths: []string{"/var/log/a.log", "/var/log/shared.log"},
 	})
 	require.NoError(t, err)
 
-	p2, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
+	p2, err := NewPolicyFromProto(&policyv1.FileLogSourcePolicy{
 		Id:            "p2",
 		IncludedPaths: []string{"/var/log/b.log", "/var/log/shared.log"},
 	})
 	require.NoError(t, err)
 
-	p3, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
+	p3, err := NewPolicyFromProto(&policyv1.FileLogSourcePolicy{
 		Id:            "p3",
 		IncludedPaths: []string{"/opt/app/logs/*.log"},
 	})
@@ -662,12 +662,12 @@ func TestConsolidate(t *testing.T) {
 	require.ErrorIs(t, err, ErrNilProto)
 
 	// Consolidate with invalid receiver returns validation error
-	badReceiver := &Policy{proto: &policyv1alpha1.FileLogSourcePolicy{Id: ""}}
+	badReceiver := &Policy{proto: &policyv1.FileLogSourcePolicy{Id: ""}}
 	_, err = badReceiver.Consolidate(nil)
 	require.ErrorIs(t, err, ErrMissingID)
 
 	// Consolidate with invalid policy in slice returns error
-	badPolicy := &Policy{proto: &policyv1alpha1.FileLogSourcePolicy{Id: ""}}
+	badPolicy := &Policy{proto: &policyv1.FileLogSourcePolicy{Id: ""}}
 	_, err = p1.Consolidate([]googlepolicy.SourcePolicy{badPolicy})
 	require.Error(t, err)
 
@@ -697,7 +697,7 @@ func (m *mockForeignSourcePolicy) TraceReceiverIDs() []component.ID  { return ni
 func TestDriver_WireProtoAndMapLoading(t *testing.T) {
 	t.Cleanup(setOSForTest("linux"))
 
-	pb := &policyv1alpha1.FileLogSourcePolicy{
+	pb := &policyv1.FileLogSourcePolicy{
 		Id:            "wire-log-source",
 		IncludedPaths: []string{"/var/log/**/*.log"},
 	}
@@ -746,7 +746,7 @@ func TestPolicyValidation_CustomApplicationPaths(t *testing.T) {
 			"/etc/app.log",
 		}
 		for _, p := range customLinuxPaths {
-			pb := &policyv1alpha1.FileLogSourcePolicy{
+			pb := &policyv1.FileLogSourcePolicy{
 				Id:            "custom-app-policy",
 				IncludedPaths: []string{p},
 			}
@@ -756,7 +756,7 @@ func TestPolicyValidation_CustomApplicationPaths(t *testing.T) {
 		}
 
 		// Path traversal is still strictly rejected
-		pbTraversal := &policyv1alpha1.FileLogSourcePolicy{
+		pbTraversal := &policyv1.FileLogSourcePolicy{
 			Id:            "traversal-policy",
 			IncludedPaths: []string{"/var/tmp/../etc/shadow"},
 		}
@@ -775,7 +775,7 @@ func TestPolicyValidation_CustomApplicationPaths(t *testing.T) {
 			`%SystemDrive%\custom\logs\*.log`,
 		}
 		for _, p := range customWindowsPaths {
-			pb := &policyv1alpha1.FileLogSourcePolicy{
+			pb := &policyv1.FileLogSourcePolicy{
 				Id:            "custom-win-policy",
 				IncludedPaths: []string{p},
 			}
@@ -785,7 +785,7 @@ func TestPolicyValidation_CustomApplicationPaths(t *testing.T) {
 		}
 
 		// Path traversal is still strictly rejected
-		pbTraversal := &policyv1alpha1.FileLogSourcePolicy{
+		pbTraversal := &policyv1.FileLogSourcePolicy{
 			Id:            "traversal-policy-win",
 			IncludedPaths: []string{`C:\custom\app\..\..\Windows\System32\app.log`},
 		}

@@ -21,7 +21,7 @@ import (
 	"errors"
 	"fmt"
 
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/matcher"
 	"google.golang.org/protobuf/proto"
@@ -39,9 +39,9 @@ var (
 	ErrMissingID = errors.New("trace sampling policy must specify a non-empty id")
 )
 
-var driver = googlepolicy.ProtoDriver[*policyv1alpha1.TraceSamplingPolicy]{
+var driver = googlepolicy.ProtoDriver[*policyv1.TraceSamplingPolicy]{
 	Class: googlepolicy.PolicyClassTransformation,
-	New: func(pb *policyv1alpha1.TraceSamplingPolicy) (googlepolicy.Policy, error) {
+	New: func(pb *policyv1.TraceSamplingPolicy) (googlepolicy.Policy, error) {
 		return NewPolicyFromProto(pb)
 	},
 }
@@ -55,14 +55,14 @@ func init() {
 // Policy is the compiled in-memory representation of a TraceSamplingPolicy.
 // It implements googlepolicy.TraceSamplingPolicyEvaluator.
 type Policy struct {
-	proto           *policyv1alpha1.TraceSamplingPolicy
+	proto           *policyv1.TraceSamplingPolicy
 	threshold       uint64
 	samplingPercent float64
 	matchers        []matcher.CompiledTraceMatcher
 }
 
 // NewPolicyFromProto compiles and validates a TraceSamplingPolicy from its protobuf representation.
-func NewPolicyFromProto(pb *policyv1alpha1.TraceSamplingPolicy) (*Policy, error) {
+func NewPolicyFromProto(pb *policyv1.TraceSamplingPolicy) (*Policy, error) {
 	if pb == nil {
 		return nil, ErrNilProto
 	}

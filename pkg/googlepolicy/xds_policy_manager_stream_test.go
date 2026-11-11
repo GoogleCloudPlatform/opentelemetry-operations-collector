@@ -41,7 +41,7 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/structpb"
 
-	xdsv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/xds/v1alpha1"
+	xdsv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/xds/v1"
 )
 
 // fakeADSServer is an in-memory AggregatedDiscoveryService. Each time a client
@@ -132,7 +132,7 @@ func startFakeADSServer(t *testing.T, srv *fakeADSServer) grpc.DialOption {
 // It is spelled out rather than derived with xdstpResourceName, so a manager
 // that stops setting the name, or builds it wrong, cannot pass by agreeing
 // with itself.
-const testResourceName = "xdstp://telemetry-director." + defaultRegion + ".xds.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector/projects/my-project/fleets/fleet-1/collectors/default"
+const testResourceName = "xdstp://telemetry-director." + defaultRegion + ".xds.googleapis.com/google.telemetry.xds.v1.TelemetryCollector/projects/my-project/fleets/fleet-1/collectors/default"
 
 // newTestManager builds a manager wired to the fake server, with a negligible
 // backoff so reconnect tests stay fast.
@@ -175,7 +175,7 @@ func policyResource(t *testing.T, name, rev string) *anypb.Any {
 	payloadAny, err := anypb.New(payload)
 	require.NoError(t, err)
 
-	collectorAny, err := anypb.New(&xdsv1alpha1.TelemetryCollector{
+	collectorAny, err := anypb.New(&xdsv1.TelemetryCollector{
 		PolicySetRevision: "projects/my-project/locations/global/policySets/fleet-1/revisions/" + rev,
 		Policies:          []*anypb.Any{payloadAny},
 	})
@@ -342,7 +342,7 @@ func TestXDSPolicyManager_PopulatesNodeLocalityAndMetadataFromGCEMetadata(t *tes
 	}
 
 	assert.Equal(t, []string{
-		"xdstp://telemetry-director.us-central1.xds.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector/projects/123456789/fleets/fleet-1/collectors/default",
+		"xdstp://telemetry-director.us-central1.xds.googleapis.com/google.telemetry.xds.v1.TelemetryCollector/projects/123456789/fleets/fleet-1/collectors/default",
 	}, req.GetResourceNames())
 	// Node.Id is the same project-number-based Fleet name as the subscription
 	// and the reported gcp.fleet_id, not the readable project ID.
@@ -767,7 +767,7 @@ func TestXDSPolicyManager_EmptyTelemetryCollectorACKsAndReleasesStart(t *testing
 	registerDummyDriverForTest(t)
 	resetActivePolicySet(t)
 
-	emptyCollectorAny, err := anypb.New(&xdsv1alpha1.TelemetryCollector{})
+	emptyCollectorAny, err := anypb.New(&xdsv1.TelemetryCollector{})
 	require.NoError(t, err)
 
 	responded := make(chan *discoveryv3.DiscoveryRequest, 4)
@@ -1326,4 +1326,87 @@ func TestXDSPolicyManager_DebugProtoJSONAndAppliedPolicyLogging(t *testing.T) {
 	assert.Equal(t, "projects/my-project/locations/global/policySets/fleet-1/revisions/rev-1", appliedLogs[0].ContextMap()["policy_set_revision"])
 	assert.EqualValues(t, 1, appliedLogs[0].ContextMap()["policies_loaded"])
 	assert.EqualValues(t, 0, appliedLogs[0].ContextMap()["policies_skipped"])
+}
+
+func TestXDSPolicyManager_FallsBackToLegacyV1Alpha1OnInvalidArgument(t *testing.T) {
+	registerDummyDriverForTest(t)
+	resetActivePolicySet(t)
+
+	const legacyTestResourceName = "xdstp://telemetry-director." + defaultRegion + ".xds.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector/projects/my-project/fleets/fleet-1/collectors/default"
+
+	ackReceived := make(chan *discoveryv3.DiscoveryRequest, 1)
+
+	srv := &fakeADSServer{streamOpened: make(chan struct{}, 8)}
+	srv.handlers = []func(discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error{
+		// Attempt 1: server rejects the v1 subscription with InvalidArgument
+		// (matching Traffic Director's response when it only recognizes
+		// google.telemetry.xds.v1alpha1.TelemetryCollector).
+		func(stream discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error {
+			req, err := srv.recv(stream)
+			if err != nil {
+				return err
+			}
+			assert.Equal(t, xdsPolicyTypeURL, req.GetTypeUrl())
+			assert.Equal(t, []string{testResourceName}, req.GetResourceNames())
+			return grpcstatus.Error(codes.InvalidArgument, "Unsupported resource type in Telemetry Director resource name")
+		},
+		// Attempt 2: client immediately reconnects using legacy v1alpha1
+		// type_url and resource_name, receives a v1alpha1 response, and ACKs it.
+		func(stream discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error {
+			req, err := srv.recv(stream)
+			if err != nil {
+				return err
+			}
+			assert.Equal(t, legacyXDSPolicyTypeURL, req.GetTypeUrl())
+			assert.Equal(t, []string{legacyTestResourceName}, req.GetResourceNames())
+
+			legacyRes := policyResource(t, "legacy-log-filter", "rev-legacy-1")
+			legacyRes.TypeUrl = legacyXDSPolicyTypeURL
+
+			if err := stream.Send(&discoveryv3.DiscoveryResponse{
+				VersionInfo: "rev-legacy-1",
+				Nonce:       "nonce-legacy-1",
+				TypeUrl:     legacyXDSPolicyTypeURL,
+				Resources:   []*anypb.Any{legacyRes},
+			}); err != nil {
+				return err
+			}
+			ack, err := srv.recv(stream)
+			if err != nil {
+				return err
+			}
+			ackReceived <- ack
+			<-stream.Context().Done()
+			return stream.Context().Err()
+		},
+	}
+
+	m := newTestManager(t, startFakeADSServer(t, srv))
+	m.initialSyncTimeout = 5 * time.Second
+
+	start := time.Now()
+	require.NoError(t, m.Start())
+	elapsed := time.Since(start)
+	t.Cleanup(func() { require.NoError(t, m.Stop()) })
+
+	assert.Less(t, elapsed, m.initialSyncTimeout/2,
+		"v1 -> v1alpha1 fallback must complete initial sync before Start times out")
+
+	var ack *discoveryv3.DiscoveryRequest
+	select {
+	case ack = <-ackReceived:
+	case <-time.After(10 * time.Second):
+		t.Fatal("timed out waiting for legacy v1alpha1 ACK")
+	}
+
+	assert.Equal(t, legacyXDSPolicyTypeURL, ack.GetTypeUrl())
+	assert.Equal(t, []string{legacyTestResourceName}, ack.GetResourceNames())
+	assert.Equal(t, "rev-legacy-1", ack.GetVersionInfo())
+	assert.Equal(t, "nonce-legacy-1", ack.GetResponseNonce())
+	assert.Nil(t, ack.GetErrorDetail())
+
+	active := ActivePolicySet()
+	require.NotNil(t, active)
+	assert.Equal(t, "rev-legacy-1", active.RevisionID)
+	assert.Contains(t, active.Policies, "legacy-log-filter")
 }

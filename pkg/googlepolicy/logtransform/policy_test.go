@@ -20,7 +20,7 @@ import (
 	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -67,138 +67,138 @@ func logContext(log plog.LogRecord, scope plog.ScopeLogs, res plog.ResourceLogs)
 	}
 }
 
-func recordFieldTarget(f policyv1alpha1.LogRecordField) *policyv1alpha1.LogFieldSelector {
-	return &policyv1alpha1.LogFieldSelector{
-		Target: &policyv1alpha1.LogFieldSelector_RecordField{RecordField: f},
+func recordFieldTarget(f policyv1.LogRecordField) *policyv1.LogFieldSelector {
+	return &policyv1.LogFieldSelector{
+		Target: &policyv1.LogFieldSelector_RecordField{RecordField: f},
 	}
 }
 
-func scopeFieldTarget(f policyv1alpha1.ScopeField) *policyv1alpha1.LogFieldSelector {
-	return &policyv1alpha1.LogFieldSelector{
-		Target: &policyv1alpha1.LogFieldSelector_ScopeField{ScopeField: f},
+func scopeFieldTarget(f policyv1.ScopeField) *policyv1.LogFieldSelector {
+	return &policyv1.LogFieldSelector{
+		Target: &policyv1.LogFieldSelector_ScopeField{ScopeField: f},
 	}
 }
 
-func logAttrTarget(path ...string) *policyv1alpha1.LogFieldSelector {
-	return &policyv1alpha1.LogFieldSelector{
-		Target: &policyv1alpha1.LogFieldSelector_LogAttributePath{
-			LogAttributePath: &policyv1alpha1.AttributePath{Segments: path},
+func logAttrTarget(path ...string) *policyv1.LogFieldSelector {
+	return &policyv1.LogFieldSelector{
+		Target: &policyv1.LogFieldSelector_LogAttributePath{
+			LogAttributePath: &policyv1.AttributePath{Segments: path},
 		},
 	}
 }
 
-func resourceAttrTarget(path ...string) *policyv1alpha1.LogFieldSelector {
-	return &policyv1alpha1.LogFieldSelector{
-		Target: &policyv1alpha1.LogFieldSelector_ResourceAttributePath{
-			ResourceAttributePath: &policyv1alpha1.AttributePath{Segments: path},
+func resourceAttrTarget(path ...string) *policyv1.LogFieldSelector {
+	return &policyv1.LogFieldSelector{
+		Target: &policyv1.LogFieldSelector_ResourceAttributePath{
+			ResourceAttributePath: &policyv1.AttributePath{Segments: path},
 		},
 	}
 }
 
-func scopeAttrTarget(path ...string) *policyv1alpha1.LogFieldSelector {
-	return &policyv1alpha1.LogFieldSelector{
-		Target: &policyv1alpha1.LogFieldSelector_ScopeAttributePath{
-			ScopeAttributePath: &policyv1alpha1.AttributePath{Segments: path},
+func scopeAttrTarget(path ...string) *policyv1.LogFieldSelector {
+	return &policyv1.LogFieldSelector{
+		Target: &policyv1.LogFieldSelector_ScopeAttributePath{
+			ScopeAttributePath: &policyv1.AttributePath{Segments: path},
 		},
 	}
 }
 
-func strVal(s string) *policyv1alpha1.Value {
-	return &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: s}}
+func strVal(s string) *policyv1.Value {
+	return &policyv1.Value{Kind: &policyv1.Value_StringValue{StringValue: s}}
 }
 
-func intVal(n int64) *policyv1alpha1.Value {
-	return &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_IntValue{IntValue: n}}
+func intVal(n int64) *policyv1.Value {
+	return &policyv1.Value{Kind: &policyv1.Value_IntValue{IntValue: n}}
 }
 
-func doubleVal(d float64) *policyv1alpha1.Value {
-	return &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_DoubleValue{DoubleValue: d}}
+func doubleVal(d float64) *policyv1.Value {
+	return &policyv1.Value{Kind: &policyv1.Value_DoubleValue{DoubleValue: d}}
 }
 
-func boolVal(b bool) *policyv1alpha1.Value {
-	return &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BoolValue{BoolValue: b}}
+func boolVal(b bool) *policyv1.Value {
+	return &policyv1.Value{Kind: &policyv1.Value_BoolValue{BoolValue: b}}
 }
 
-func bytesVal(b []byte) *policyv1alpha1.Value {
-	return &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BytesValue{BytesValue: b}}
+func bytesVal(b []byte) *policyv1.Value {
+	return &policyv1.Value{Kind: &policyv1.Value_BytesValue{BytesValue: b}}
 }
 
-func bodyExistsMatcher() *policyv1alpha1.LogMatcher {
-	return &policyv1alpha1.LogMatcher{
-		Target:    recordFieldTarget(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY),
-		Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+func bodyExistsMatcher() *policyv1.LogMatcher {
+	return &policyv1.LogMatcher{
+		Target:    recordFieldTarget(policyv1.LogRecordField_LOG_RECORD_FIELD_BODY),
+		Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
 	}
 }
 
-func alwaysTrueMatcher() *policyv1alpha1.LogMatcher {
-	return &policyv1alpha1.LogMatcher{
+func alwaysTrueMatcher() *policyv1.LogMatcher {
+	return &policyv1.LogMatcher{
 		Target:    logAttrTarget("__never_present__"),
-		Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+		Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
 		Negated:   true,
 	}
 }
 
-func logTargetAttr(path ...string) *policyv1alpha1.LogTargetSelector {
-	return &policyv1alpha1.LogTargetSelector{
-		Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
-			LogAttributePath: &policyv1alpha1.AttributePath{Segments: path},
+func logTargetAttr(path ...string) *policyv1.LogTargetSelector {
+	return &policyv1.LogTargetSelector{
+		Target: &policyv1.LogTargetSelector_LogAttributePath{
+			LogAttributePath: &policyv1.AttributePath{Segments: path},
 		},
 	}
 }
 
-func logTargetBodyField(path ...string) *policyv1alpha1.LogTargetSelector {
-	return &policyv1alpha1.LogTargetSelector{
-		Target: &policyv1alpha1.LogTargetSelector_BodyFieldPath{
-			BodyFieldPath: &policyv1alpha1.AttributePath{Segments: path},
+func logTargetBodyField(path ...string) *policyv1.LogTargetSelector {
+	return &policyv1.LogTargetSelector{
+		Target: &policyv1.LogTargetSelector_BodyFieldPath{
+			BodyFieldPath: &policyv1.AttributePath{Segments: path},
 		},
 	}
 }
 
-func logTargetRecordField(field policyv1alpha1.LogRecordField) *policyv1alpha1.LogTargetSelector {
-	return &policyv1alpha1.LogTargetSelector{
-		Target: &policyv1alpha1.LogTargetSelector_RecordField{
+func logTargetRecordField(field policyv1.LogRecordField) *policyv1.LogTargetSelector {
+	return &policyv1.LogTargetSelector{
+		Target: &policyv1.LogTargetSelector_RecordField{
 			RecordField: field,
 		},
 	}
 }
 
-func logAttrSelector(path ...string) *policyv1alpha1.LogAttributeSelector {
-	return &policyv1alpha1.LogAttributeSelector{
-		Target: &policyv1alpha1.LogAttributeSelector_LogAttributePath{
-			LogAttributePath: &policyv1alpha1.AttributePath{Segments: path},
+func logAttrSelector(path ...string) *policyv1.LogAttributeSelector {
+	return &policyv1.LogAttributeSelector{
+		Target: &policyv1.LogAttributeSelector_LogAttributePath{
+			LogAttributePath: &policyv1.AttributePath{Segments: path},
 		},
 	}
 }
 
-func addOps(target *policyv1alpha1.LogTargetSelector, val *policyv1alpha1.Value, upsert bool) []*policyv1alpha1.LogAddition {
-	op := &policyv1alpha1.LogAddition{
+func addOps(target *policyv1.LogTargetSelector, val *policyv1.Value, upsert bool) []*policyv1.LogAddition {
+	op := &policyv1.LogAddition{
 		Target:        target,
 		UpsertEnabled: proto.Bool(upsert),
 	}
 	if val != nil {
-		op.Source = &policyv1alpha1.LogAddition_Value{Value: val}
+		op.Source = &policyv1.LogAddition_Value{Value: val}
 	}
-	return []*policyv1alpha1.LogAddition{op}
+	return []*policyv1.LogAddition{op}
 }
 
-func logBodyFieldSelector(path ...string) *policyv1alpha1.LogAttributeSelector {
-	return &policyv1alpha1.LogAttributeSelector{
-		Target: &policyv1alpha1.LogAttributeSelector_BodyFieldPath{
-			BodyFieldPath: &policyv1alpha1.AttributePath{Segments: path},
+func logBodyFieldSelector(path ...string) *policyv1.LogAttributeSelector {
+	return &policyv1.LogAttributeSelector{
+		Target: &policyv1.LogAttributeSelector_BodyFieldPath{
+			BodyFieldPath: &policyv1.AttributePath{Segments: path},
 		},
 	}
 }
 
-func removeOps(target *policyv1alpha1.LogAttributeSelector) []*policyv1alpha1.LogRemoval {
-	return []*policyv1alpha1.LogRemoval{
+func removeOps(target *policyv1.LogAttributeSelector) []*policyv1.LogRemoval {
+	return []*policyv1.LogRemoval{
 		{
 			Target: target,
 		},
 	}
 }
 
-func renameOps(source, target *policyv1alpha1.LogAttributeSelector, upsert bool) []*policyv1alpha1.LogRenaming {
-	return []*policyv1alpha1.LogRenaming{
+func renameOps(source, target *policyv1.LogAttributeSelector, upsert bool) []*policyv1.LogRenaming {
+	return []*policyv1.LogRenaming{
 		{
 			Source:        source,
 			Target:        target,
@@ -207,17 +207,17 @@ func renameOps(source, target *policyv1alpha1.LogAttributeSelector, upsert bool)
 	}
 }
 
-func redactOps(target *policyv1alpha1.LogTargetSelector, regex, replacement string) []*policyv1alpha1.LogRedaction {
-	op := &policyv1alpha1.LogRedaction{
+func redactOps(target *policyv1.LogTargetSelector, regex, replacement string) []*policyv1.LogRedaction {
+	op := &policyv1.LogRedaction{
 		Target: target,
 	}
 	if regex != "" {
-		op.Pattern = &policyv1alpha1.LogRedaction_Regex{Regex: regex}
+		op.Pattern = &policyv1.LogRedaction_Regex{Regex: regex}
 	}
 	if replacement != "" {
-		op.Mask = &policyv1alpha1.LogRedaction_Replacement{Replacement: replacement}
+		op.Mask = &policyv1.LogRedaction_Replacement{Replacement: replacement}
 	}
-	return []*policyv1alpha1.LogRedaction{op}
+	return []*policyv1.LogRedaction{op}
 }
 
 func TestPolicyValidationErrors(t *testing.T) {
@@ -226,7 +226,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 
 	tests := []struct {
 		name      string
-		proto     *policyv1alpha1.LogTransformPolicy
+		proto     *policyv1.LogTransformPolicy
 		errExpect error
 		errSubstr string
 	}{
@@ -237,64 +237,64 @@ func TestPolicyValidationErrors(t *testing.T) {
 		},
 		{
 			name: "missing id",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:        "",
-				Matchers:  []*policyv1alpha1.LogMatcher{validMatcher},
+				Matchers:  []*policyv1.LogMatcher{validMatcher},
 				Additions: validAdd,
 			},
 			errExpect: ErrMissingID,
 		},
 		{
 			name: "missing operations (all four stage lists empty)",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:       "p-no-ops",
-				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
+				Matchers: []*policyv1.LogMatcher{validMatcher},
 			},
 			errExpect: ErrMissingAction,
 		},
 		{
 			name: "nil element in additions",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:        "p-nil-add-elem",
-				Matchers:  []*policyv1alpha1.LogMatcher{validMatcher},
-				Additions: []*policyv1alpha1.LogAddition{nil},
+				Matchers:  []*policyv1.LogMatcher{validMatcher},
+				Additions: []*policyv1.LogAddition{nil},
 			},
 			errExpect: ErrMissingAction,
 			errSubstr: "additions[0]:",
 		},
 		{
 			name: "nil element in removals",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:       "p-nil-remove-elem",
-				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
-				Removals: []*policyv1alpha1.LogRemoval{nil},
+				Matchers: []*policyv1.LogMatcher{validMatcher},
+				Removals: []*policyv1.LogRemoval{nil},
 			},
 			errExpect: ErrMissingTarget,
 			errSubstr: "removals[0]:",
 		},
 		{
 			name: "nil element in renamings",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:        "p-nil-rename-elem",
-				Matchers:  []*policyv1alpha1.LogMatcher{validMatcher},
-				Renamings: []*policyv1alpha1.LogRenaming{nil},
+				Matchers:  []*policyv1.LogMatcher{validMatcher},
+				Renamings: []*policyv1.LogRenaming{nil},
 			},
 			errExpect: ErrMissingAction,
 			errSubstr: "renamings[0]:",
 		},
 		{
 			name: "nil element in redactions",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:         "p-nil-redact-elem",
-				Matchers:   []*policyv1alpha1.LogMatcher{validMatcher},
-				Redactions: []*policyv1alpha1.LogRedaction{nil},
+				Matchers:   []*policyv1.LogMatcher{validMatcher},
+				Redactions: []*policyv1.LogRedaction{nil},
 			},
 			errExpect: ErrMissingAction,
 			errSubstr: "redactions[0]:",
 		},
 		{
 			name: "remove missing target",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:     "p-remove-no-target",
 				Removals: removeOps(nil),
 			},
@@ -302,7 +302,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 		},
 		{
 			name: "remove empty log_attribute path",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:     "p-remove-empty-attr",
 				Removals: removeOps(logAttrSelector()),
 			},
@@ -310,7 +310,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 		},
 		{
 			name: "remove empty body_field path",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:     "p-remove-empty-body",
 				Removals: removeOps(logBodyFieldSelector()),
 			},
@@ -318,7 +318,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 		},
 		{
 			name: "rename missing source",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:     "p-rename-no-src",
 				Renamings: renameOps(nil, logAttrSelector("dst"), false),
 			},
@@ -326,7 +326,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 		},
 		{
 			name: "rename missing target",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:     "p-rename-no-tgt",
 				Renamings: renameOps(logAttrSelector("src"), nil, false),
 			},
@@ -334,7 +334,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 		},
 		{
 			name: "rename empty source path",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:     "p-rename-empty-src",
 				Renamings: renameOps(logAttrSelector(), logAttrSelector("dst"), false),
 			},
@@ -342,7 +342,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 		},
 		{
 			name: "rename empty target path",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:     "p-rename-empty-tgt",
 				Renamings: renameOps(logAttrSelector("src"), logAttrSelector(), false),
 			},
@@ -350,7 +350,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 		},
 		{
 			name: "rename source is ancestor of target",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:     "p-rename-ancestor",
 				Renamings: renameOps(logAttrSelector("user"), logAttrSelector("user", "name"), false),
 			},
@@ -358,7 +358,7 @@ func TestPolicyValidationErrors(t *testing.T) {
 		},
 		{
 			name: "rename target is ancestor of source",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:     "p-rename-tgt-ancestor",
 				Renamings: renameOps(logAttrSelector("user", "name"), logAttrSelector("user"), false),
 			},
@@ -366,93 +366,93 @@ func TestPolicyValidationErrors(t *testing.T) {
 		},
 		{
 			name: "redact missing target (nil selector)",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:       "p-redact-nil-target",
-				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
+				Matchers: []*policyv1.LogMatcher{validMatcher},
 				Redactions: redactOps(nil, `\d+`, "[REDACTED]"),
 			},
 			errExpect: ErrMissingTarget,
 		},
 		{
 			name: "redact missing target (empty oneof)",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:       "p-redact-empty-target",
-				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
-				Redactions: redactOps(&policyv1alpha1.LogTargetSelector{}, `\d+`, "[REDACTED]"),
+				Matchers: []*policyv1.LogMatcher{validMatcher},
+				Redactions: redactOps(&policyv1.LogTargetSelector{}, `\d+`, "[REDACTED]"),
 			},
 			errExpect: ErrMissingTarget,
 		},
 		{
 			name: "redact empty log_attribute path",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:       "p-redact-empty-attr",
-				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
+				Matchers: []*policyv1.LogMatcher{validMatcher},
 				Redactions: redactOps(logTargetAttr(), `\d+`, "[REDACTED]"),
 			},
 			errSubstr: "log attribute path cannot be empty",
 		},
 		{
 			name: "redact empty body_field path",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:       "p-redact-empty-body",
-				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
+				Matchers: []*policyv1.LogMatcher{validMatcher},
 				Redactions: redactOps(logTargetBodyField(), `\d+`, "[REDACTED]"),
 			},
 			errSubstr: "body attribute path cannot be empty",
 		},
 		{
 			name: "redact unspecified record_field",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:       "p-redact-unspec-field",
-				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
-				Redactions: redactOps(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_UNSPECIFIED), `\d+`, "[REDACTED]"),
+				Matchers: []*policyv1.LogMatcher{validMatcher},
+				Redactions: redactOps(logTargetRecordField(policyv1.LogRecordField_LOG_RECORD_FIELD_UNSPECIFIED), `\d+`, "[REDACTED]"),
 			},
 			errSubstr: "log record field cannot be unspecified",
 		},
 		{
 			name: "redact unsupported record field (SEVERITY_NUMBER)",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:       "p-redact-sev-num",
-				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
-				Redactions: redactOps(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER), `\d+`, "[REDACTED]"),
+				Matchers: []*policyv1.LogMatcher{validMatcher},
+				Redactions: redactOps(logTargetRecordField(policyv1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER), `\d+`, "[REDACTED]"),
 			},
 			errSubstr: "is not supported as a redact target",
 		},
 		{
 			name: "redact unsupported record field (TRACE_ID)",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:       "p-redact-trace-id",
-				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
-				Redactions: redactOps(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID), `[0-9a-f]+`, "[REDACTED]"),
+				Matchers: []*policyv1.LogMatcher{validMatcher},
+				Redactions: redactOps(logTargetRecordField(policyv1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID), `[0-9a-f]+`, "[REDACTED]"),
 			},
 			errSubstr: "is not supported as a redact target",
 		},
 		{
 			name: "redact unsupported record field (SPAN_ID)",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:       "p-redact-span-id",
-				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
-				Redactions: redactOps(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID), `[0-9a-f]+`, "[REDACTED]"),
+				Matchers: []*policyv1.LogMatcher{validMatcher},
+				Redactions: redactOps(logTargetRecordField(policyv1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID), `[0-9a-f]+`, "[REDACTED]"),
 			},
 			errSubstr: "is not supported as a redact target",
 		},
 		{
 			name: "redact invalid regex",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:       "p-redact-bad-re",
-				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
+				Matchers: []*policyv1.LogMatcher{validMatcher},
 				Redactions: redactOps(logTargetAttr("user"), "[a-z", "[REDACTED]"),
 			},
 			errSubstr: "invalid redact regex",
 		},
 		{
 			name: "invalid matcher",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id: "p-bad-matcher",
-				Matchers: []*policyv1alpha1.LogMatcher{
+				Matchers: []*policyv1.LogMatcher{
 					{
 						Target:    nil,
-						Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+						Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{}},
 					},
 				},
 				Additions: validAdd,
@@ -461,76 +461,76 @@ func TestPolicyValidationErrors(t *testing.T) {
 		},
 		{
 			name: "add missing target (nil selector)",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:       "p-nil-target",
-				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
+				Matchers: []*policyv1.LogMatcher{validMatcher},
 				Additions: addOps(nil, strVal("val"), false),
 			},
 			errExpect: ErrMissingTarget,
 		},
 		{
 			name: "add missing target (empty oneof)",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:       "p-empty-target-oneof",
-				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
-				Additions: addOps(&policyv1alpha1.LogTargetSelector{}, strVal("val"), false),
+				Matchers: []*policyv1.LogMatcher{validMatcher},
+				Additions: addOps(&policyv1.LogTargetSelector{}, strVal("val"), false),
 			},
 			errExpect: ErrMissingTarget,
 		},
 		{
 			name: "remove missing target (nil selector)",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:       "p-rem-nil-target",
-				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
+				Matchers: []*policyv1.LogMatcher{validMatcher},
 				Removals: removeOps(nil),
 			},
 			errExpect: ErrMissingTarget,
 		},
 		{
 			name: "remove missing target (empty oneof)",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:       "p-rem-empty-target-oneof",
-				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
-				Removals: removeOps(&policyv1alpha1.LogAttributeSelector{}),
+				Matchers: []*policyv1.LogMatcher{validMatcher},
+				Removals: removeOps(&policyv1.LogAttributeSelector{}),
 			},
 			errExpect: ErrMissingTarget,
 		},
 		{
 			name: "add empty log_attribute path",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:       "p-empty-log-attr",
-				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
+				Matchers: []*policyv1.LogMatcher{validMatcher},
 				Additions: addOps(logTargetAttr(), strVal("val"), false),
 			},
 			errSubstr: "log attribute path cannot be empty",
 		},
 		{
 			name: "add empty body_field path",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:       "p-empty-body-field",
-				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
+				Matchers: []*policyv1.LogMatcher{validMatcher},
 				Additions: addOps(logTargetBodyField(), strVal("val"), false),
 			},
 			errSubstr: "body attribute path cannot be empty",
 		},
 		{
 			name: "add log_attribute missing value",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:        "p-log-attr-no-val",
-				Matchers:  []*policyv1alpha1.LogMatcher{validMatcher},
+				Matchers:  []*policyv1.LogMatcher{validMatcher},
 				Additions: addOps(logTargetAttr("k"), nil, false),
 			},
 			errExpect: ErrMissingValue,
 		},
 		{
 			name: "add log_attribute typed-nil source oneof",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:       "p-log-attr-typed-nil-src",
-				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
-				Additions: []*policyv1alpha1.LogAddition{
+				Matchers: []*policyv1.LogMatcher{validMatcher},
+				Additions: []*policyv1.LogAddition{
 					{
 						Target: logTargetAttr("k"),
-						Source: (*policyv1alpha1.LogAddition_Value)(nil),
+						Source: (*policyv1.LogAddition_Value)(nil),
 					},
 				},
 			},
@@ -538,14 +538,14 @@ func TestPolicyValidationErrors(t *testing.T) {
 		},
 		{
 			name: "redact typed-nil pattern and mask oneofs",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:       "p-redact-typed-nil-oneof",
-				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
-				Redactions: []*policyv1alpha1.LogRedaction{
+				Matchers: []*policyv1.LogMatcher{validMatcher},
+				Redactions: []*policyv1.LogRedaction{
 					{
-						Target:  &policyv1alpha1.LogTargetSelector{Target: (*policyv1alpha1.LogTargetSelector_LogAttributePath)(nil)},
-						Pattern: (*policyv1alpha1.LogRedaction_Regex)(nil),
-						Mask:    (*policyv1alpha1.LogRedaction_Replacement)(nil),
+						Target:  &policyv1.LogTargetSelector{Target: (*policyv1.LogTargetSelector_LogAttributePath)(nil)},
+						Pattern: (*policyv1.LogRedaction_Regex)(nil),
+						Mask:    (*policyv1.LogRedaction_Replacement)(nil),
 					},
 				},
 			},
@@ -553,91 +553,91 @@ func TestPolicyValidationErrors(t *testing.T) {
 		},
 		{
 			name: "add unspecified record_field",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:       "p-unspec-record-field",
-				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
-				Additions: addOps(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_UNSPECIFIED), strVal("val"), false),
+				Matchers: []*policyv1.LogMatcher{validMatcher},
+				Additions: addOps(logTargetRecordField(policyv1.LogRecordField_LOG_RECORD_FIELD_UNSPECIFIED), strVal("val"), false),
 			},
 			errSubstr: "log record field cannot be unspecified",
 		},
 		{
 			name: "add BODY missing value",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:       "p-body-nil-val",
-				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
-				Additions: addOps(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY), &policyv1alpha1.Value{}, false),
+				Matchers: []*policyv1.LogMatcher{validMatcher},
+				Additions: addOps(logTargetRecordField(policyv1.LogRecordField_LOG_RECORD_FIELD_BODY), &policyv1.Value{}, false),
 			},
 			errExpect: ErrMissingValue,
 		},
 		{
 			name: "add SEVERITY_TEXT missing value",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:       "p-sevtext-nil-val",
-				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
-				Additions: addOps(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT), nil, false),
+				Matchers: []*policyv1.LogMatcher{validMatcher},
+				Additions: addOps(logTargetRecordField(policyv1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT), nil, false),
 			},
 			errExpect: ErrMissingValue,
 		},
 		{
 			name: "add SEVERITY_TEXT non-string value",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:       "p-sevtext-int",
-				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
-				Additions: addOps(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT), intVal(9), false),
+				Matchers: []*policyv1.LogMatcher{validMatcher},
+				Additions: addOps(logTargetRecordField(policyv1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT), intVal(9), false),
 			},
 			errSubstr: "SEVERITY_TEXT requires a string value",
 		},
 		{
 			name: "add SEVERITY_NUMBER missing value",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:       "p-sevnum-nil-val",
-				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
-				Additions: addOps(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER), nil, false),
+				Matchers: []*policyv1.LogMatcher{validMatcher},
+				Additions: addOps(logTargetRecordField(policyv1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER), nil, false),
 			},
 			errExpect: ErrMissingValue,
 		},
 		{
 			name: "add SEVERITY_NUMBER non-int value",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:       "p-sevnum-str",
-				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
-				Additions: addOps(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER), strVal("INFO"), false),
+				Matchers: []*policyv1.LogMatcher{validMatcher},
+				Additions: addOps(logTargetRecordField(policyv1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER), strVal("INFO"), false),
 			},
 			errSubstr: "SEVERITY_NUMBER requires an int value",
 		},
 		{
 			name: "add SEVERITY_NUMBER out of range low (0)",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:       "p-sevnum-zero",
-				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
-				Additions: addOps(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER), intVal(0), false),
+				Matchers: []*policyv1.LogMatcher{validMatcher},
+				Additions: addOps(logTargetRecordField(policyv1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER), intVal(0), false),
 			},
 			errSubstr: "must be in range [1, 24], got 0",
 		},
 		{
 			name: "add SEVERITY_NUMBER out of range high (25)",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:       "p-sevnum-25",
-				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
-				Additions: addOps(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER), intVal(25), false),
+				Matchers: []*policyv1.LogMatcher{validMatcher},
+				Additions: addOps(logTargetRecordField(policyv1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER), intVal(25), false),
 			},
 			errSubstr: "must be in range [1, 24], got 25",
 		},
 		{
 			name: "add TRACE_ID immutable field",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:       "p-traceid-immutable",
-				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
-				Additions: addOps(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID), strVal("0102030405060708090a0b0c0d0e0f10"), false),
+				Matchers: []*policyv1.LogMatcher{validMatcher},
+				Additions: addOps(logTargetRecordField(policyv1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID), strVal("0102030405060708090a0b0c0d0e0f10"), false),
 			},
 			errExpect: ErrImmutableField,
 		},
 		{
 			name: "add SPAN_ID immutable field",
-			proto: &policyv1alpha1.LogTransformPolicy{
+			proto: &policyv1.LogTransformPolicy{
 				Id:       "p-spanid-immutable",
-				Matchers: []*policyv1alpha1.LogMatcher{validMatcher},
-				Additions: addOps(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID), strVal("0102030405060708"), false),
+				Matchers: []*policyv1.LogMatcher{validMatcher},
+				Additions: addOps(logTargetRecordField(policyv1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID), strVal("0102030405060708"), false),
 			},
 			errExpect: ErrImmutableField,
 		},
@@ -658,9 +658,9 @@ func TestPolicyValidationErrors(t *testing.T) {
 }
 
 func TestPolicyMetadataAndValidate(t *testing.T) {
-	pb := &policyv1alpha1.LogTransformPolicy{
+	pb := &policyv1.LogTransformPolicy{
 		Id:        "metadata-transform-policy",
-		Matchers:  []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
+		Matchers:  []*policyv1.LogMatcher{bodyExistsMatcher()},
 		Additions: addOps(logTargetAttr("tier"), strVal("soc"), false),
 	}
 
@@ -673,17 +673,17 @@ func TestPolicyMetadataAndValidate(t *testing.T) {
 	assert.Equal(t, []googlepolicy.Signal{googlepolicy.SignalLogs}, pol.TargetSignals())
 	assert.NoError(t, pol.Validate())
 
-	got, ok := pol.Proto().(*policyv1alpha1.LogTransformPolicy)
+	got, ok := pol.Proto().(*policyv1.LogTransformPolicy)
 	require.True(t, ok)
 	assert.Same(t, pb, got)
 
 	assert.ErrorIs(t, (&Policy{}).Validate(), ErrNilProto)
-	assert.ErrorIs(t, (&Policy{proto: &policyv1alpha1.LogTransformPolicy{Id: "empty"}}).Validate(), ErrMissingAction)
+	assert.ErrorIs(t, (&Policy{proto: &policyv1.LogTransformPolicy{Id: "empty"}}).Validate(), ErrMissingAction)
 }
 
 func TestPolicy_EmptyMatchersAppliesUnconditionally(t *testing.T) {
 	// A transform policy with empty/nil matchers applies to all records unconditionally.
-	p, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+	p, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 		Id:        "unconditional-add",
 		Additions: addOps(logTargetAttr("injected"), strVal("always"), true),
 	})
@@ -748,9 +748,9 @@ func TestDriverLoadPolicyAndProto(t *testing.T) {
 	})
 
 	t.Run("LoadPolicyFromProto happy path", func(t *testing.T) {
-		pb := &policyv1alpha1.LogTransformPolicy{
+		pb := &policyv1.LogTransformPolicy{
 			Id:       "from-proto",
-			Matchers: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
+			Matchers: []*policyv1.LogMatcher{bodyExistsMatcher()},
 			Additions: addOps(logTargetAttr("env"), strVal("prod"), false),
 		}
 
@@ -764,7 +764,7 @@ func TestDriverLoadPolicyAndProto(t *testing.T) {
 	})
 
 	t.Run("LoadPolicyProto rejects foreign proto", func(t *testing.T) {
-		_, err := driver.LoadPolicyProto(&policyv1alpha1.LogFilterPolicy{Id: "wrong-type"})
+		_, err := driver.LoadPolicyProto(&policyv1.LogFilterPolicy{Id: "wrong-type"})
 		require.ErrorIs(t, err, googlepolicy.ErrPolicyProtoMismatch)
 	})
 
@@ -819,7 +819,7 @@ func TestTransformLogAttributes(t *testing.T) {
 
 		actions := []struct {
 			id  string
-			ops []*policyv1alpha1.LogAddition
+			ops []*policyv1.LogAddition
 		}{
 			{"add-str", addOps(logTargetAttr("str_key"), strVal("hello"), false)},
 			{"add-int", addOps(logTargetAttr("int_key"), intVal(42), false)},
@@ -830,9 +830,9 @@ func TestTransformLogAttributes(t *testing.T) {
 		}
 
 		for _, tc := range actions {
-			pol, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			pol, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 				Id:        tc.id,
-				Matchers:  []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
+				Matchers:  []*policyv1.LogMatcher{bodyExistsMatcher()},
 				Additions: tc.ops,
 			})
 			require.NoError(t, err)
@@ -874,17 +874,17 @@ func TestTransformLogAttributes(t *testing.T) {
 		ctx := logContext(lr, sl, rl)
 
 		// http.method already exists ("GET") and metadata.env already exists ("prod").
-		noUpsertFlat, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		noUpsertFlat, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:       "log-attr-no-upsert-flat",
-			Matchers: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
+			Matchers: []*policyv1.LogMatcher{bodyExistsMatcher()},
 			Additions: addOps(logTargetAttr("http.method"), strVal("POST"), false),
 		})
 		require.NoError(t, err)
 		assert.Equal(t, googlepolicy.TransformNoMatch, noUpsertFlat.TransformLog(ctx))
 
-		noUpsertNested, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		noUpsertNested, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:       "log-attr-no-upsert-nested",
-			Matchers: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
+			Matchers: []*policyv1.LogMatcher{bodyExistsMatcher()},
 			Additions: addOps(logTargetAttr("metadata", "env"), strVal("staging"), false),
 		})
 		require.NoError(t, err)
@@ -896,17 +896,17 @@ func TestTransformLogAttributes(t *testing.T) {
 		envVal, _ := metaVal.Map().Get("env")
 		assert.Equal(t, "prod", envVal.Str())
 
-		upsertFlat, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		upsertFlat, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:       "log-attr-upsert-flat",
-			Matchers: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
+			Matchers: []*policyv1.LogMatcher{bodyExistsMatcher()},
 			Additions: addOps(logTargetAttr("http.method"), strVal("POST"), true),
 		})
 		require.NoError(t, err)
 		assert.Equal(t, googlepolicy.TransformModified, upsertFlat.TransformLog(ctx))
 
-		upsertNested, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		upsertNested, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:       "log-attr-upsert-nested",
-			Matchers: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
+			Matchers: []*policyv1.LogMatcher{bodyExistsMatcher()},
 			Additions: addOps(logTargetAttr("metadata", "env"), strVal("staging"), true),
 		})
 		require.NoError(t, err)
@@ -925,17 +925,17 @@ func TestTransformLogAttributes(t *testing.T) {
 		lr.Body().Map().PutStr("event_id", "evt-123")
 		ctx := logContext(lr, sl, rl)
 
-		insertFlat, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		insertFlat, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:       "body-field-insert-flat",
-			Matchers: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
+			Matchers: []*policyv1.LogMatcher{bodyExistsMatcher()},
 			Additions: addOps(logTargetBodyField("status"), strVal("active"), false),
 		})
 		require.NoError(t, err)
 		assert.Equal(t, googlepolicy.TransformModified, insertFlat.TransformLog(ctx))
 
-		insertNested, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		insertNested, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:       "body-field-insert-nested",
-			Matchers: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
+			Matchers: []*policyv1.LogMatcher{bodyExistsMatcher()},
 			Additions: addOps(logTargetBodyField("user", "tier"), strVal("gold"), false),
 		})
 		require.NoError(t, err)
@@ -952,17 +952,17 @@ func TestTransformLogAttributes(t *testing.T) {
 		assert.Equal(t, "gold", tierVal.Str())
 
 		// Upsert: false does not overwrite existing event_id ("evt-123") or user.tier ("gold").
-		noOverwriteFlat, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		noOverwriteFlat, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:       "body-field-no-overwrite-flat",
-			Matchers: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
+			Matchers: []*policyv1.LogMatcher{bodyExistsMatcher()},
 			Additions: addOps(logTargetBodyField("event_id"), strVal("evt-999"), false),
 		})
 		require.NoError(t, err)
 		assert.Equal(t, googlepolicy.TransformNoMatch, noOverwriteFlat.TransformLog(ctx))
 
-		noOverwriteNested, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		noOverwriteNested, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:       "body-field-no-overwrite-nested",
-			Matchers: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
+			Matchers: []*policyv1.LogMatcher{bodyExistsMatcher()},
 			Additions: addOps(logTargetBodyField("user", "tier"), strVal("silver"), false),
 		})
 		require.NoError(t, err)
@@ -972,17 +972,17 @@ func TestTransformLogAttributes(t *testing.T) {
 		assert.Equal(t, "evt-123", evtVal.Str())
 
 		// Upsert: true overwrites both.
-		overwriteFlat, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		overwriteFlat, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:       "body-field-overwrite-flat",
-			Matchers: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
+			Matchers: []*policyv1.LogMatcher{bodyExistsMatcher()},
 			Additions: addOps(logTargetBodyField("event_id"), strVal("evt-999"), true),
 		})
 		require.NoError(t, err)
 		assert.Equal(t, googlepolicy.TransformModified, overwriteFlat.TransformLog(ctx))
 
-		overwriteNested, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		overwriteNested, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:       "body-field-overwrite-nested",
-			Matchers: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
+			Matchers: []*policyv1.LogMatcher{bodyExistsMatcher()},
 			Additions: addOps(logTargetBodyField("user", "tier"), strVal("silver"), true),
 		})
 		require.NoError(t, err)
@@ -999,9 +999,9 @@ func TestTransformLogAttributes(t *testing.T) {
 		lr := plog.NewLogRecord()
 		ctx := googlepolicy.LogContext{Record: lr}
 
-		p, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		p, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:       "body-field-empty",
-			Matchers: []*policyv1alpha1.LogMatcher{alwaysTrueMatcher()},
+			Matchers: []*policyv1.LogMatcher{alwaysTrueMatcher()},
 			Additions: addOps(logTargetBodyField("event_id"), strVal("evt-initial"), true),
 		})
 		require.NoError(t, err)
@@ -1017,9 +1017,9 @@ func TestTransformLogAttributes(t *testing.T) {
 		lr.Body().SetStr("")
 		ctx := googlepolicy.LogContext{Record: lr}
 
-		p, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		p, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:       "body-field-empty-str",
-			Matchers: []*policyv1alpha1.LogMatcher{alwaysTrueMatcher()},
+			Matchers: []*policyv1.LogMatcher{alwaysTrueMatcher()},
 			Additions: addOps(logTargetBodyField("event_id"), strVal("evt-from-empty-str"), true),
 		})
 		require.NoError(t, err)
@@ -1035,9 +1035,9 @@ func TestTransformLogAttributes(t *testing.T) {
 		lr.Body().SetStr("plain text log")
 		ctx := googlepolicy.LogContext{Record: lr}
 
-		p, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		p, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:       "body-field-str-body",
-			Matchers: []*policyv1alpha1.LogMatcher{alwaysTrueMatcher()},
+			Matchers: []*policyv1.LogMatcher{alwaysTrueMatcher()},
 			Additions: addOps(logTargetBodyField("event_id"), strVal("evt-123"), true),
 		})
 		require.NoError(t, err)
@@ -1050,17 +1050,17 @@ func TestTransformLogRecordFields(t *testing.T) {
 	t.Run("LOG_RECORD_FIELD_BODY empty, empty-string, non-empty string, and non-string bodies", func(t *testing.T) {
 		_, sl, rl := newTestLogBundle()
 
-		polNoUpsert, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		polNoUpsert, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:       "body-no-upsert",
-			Matchers: []*policyv1alpha1.LogMatcher{alwaysTrueMatcher()},
-			Additions: addOps(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY), strVal("default body"), false),
+			Matchers: []*policyv1.LogMatcher{alwaysTrueMatcher()},
+			Additions: addOps(logTargetRecordField(policyv1.LogRecordField_LOG_RECORD_FIELD_BODY), strVal("default body"), false),
 		})
 		require.NoError(t, err)
 
-		polUpsert, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		polUpsert, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:       "body-upsert",
-			Matchers: []*policyv1alpha1.LogMatcher{alwaysTrueMatcher()},
-			Additions: addOps(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY), strVal("overwritten body"), true),
+			Matchers: []*policyv1.LogMatcher{alwaysTrueMatcher()},
+			Additions: addOps(logTargetRecordField(policyv1.LogRecordField_LOG_RECORD_FIELD_BODY), strVal("overwritten body"), true),
 		})
 		require.NoError(t, err)
 
@@ -1095,17 +1095,17 @@ func TestTransformLogRecordFields(t *testing.T) {
 	t.Run("LOG_RECORD_FIELD_SEVERITY_TEXT unset vs set with upsert false vs true", func(t *testing.T) {
 		_, sl, rl := newTestLogBundle()
 
-		polNoUpsert, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		polNoUpsert, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:       "sev-text-no-upsert",
-			Matchers: []*policyv1alpha1.LogMatcher{alwaysTrueMatcher()},
-			Additions: addOps(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT), strVal("WARN"), false),
+			Matchers: []*policyv1.LogMatcher{alwaysTrueMatcher()},
+			Additions: addOps(logTargetRecordField(policyv1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT), strVal("WARN"), false),
 		})
 		require.NoError(t, err)
 
-		polUpsert, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		polUpsert, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:       "sev-text-upsert",
-			Matchers: []*policyv1alpha1.LogMatcher{alwaysTrueMatcher()},
-			Additions: addOps(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT), strVal("ERROR"), true),
+			Matchers: []*policyv1.LogMatcher{alwaysTrueMatcher()},
+			Additions: addOps(logTargetRecordField(policyv1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT), strVal("ERROR"), true),
 		})
 		require.NoError(t, err)
 
@@ -1128,17 +1128,17 @@ func TestTransformLogRecordFields(t *testing.T) {
 	t.Run("LOG_RECORD_FIELD_SEVERITY_NUMBER unset vs set with upsert false vs true", func(t *testing.T) {
 		_, sl, rl := newTestLogBundle()
 
-		polNoUpsert, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		polNoUpsert, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:       "sev-num-no-upsert",
-			Matchers: []*policyv1alpha1.LogMatcher{alwaysTrueMatcher()},
-			Additions: addOps(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER), intVal(int64(plog.SeverityNumberWarn)), false),
+			Matchers: []*policyv1.LogMatcher{alwaysTrueMatcher()},
+			Additions: addOps(logTargetRecordField(policyv1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER), intVal(int64(plog.SeverityNumberWarn)), false),
 		})
 		require.NoError(t, err)
 
-		polUpsert, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		polUpsert, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:       "sev-num-upsert",
-			Matchers: []*policyv1alpha1.LogMatcher{alwaysTrueMatcher()},
-			Additions: addOps(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER), intVal(int64(plog.SeverityNumberError)), true),
+			Matchers: []*policyv1.LogMatcher{alwaysTrueMatcher()},
+			Additions: addOps(logTargetRecordField(policyv1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER), intVal(int64(plog.SeverityNumberError)), true),
 		})
 		require.NoError(t, err)
 
@@ -1161,18 +1161,18 @@ func TestTransformLogRecordFields(t *testing.T) {
 
 func TestTransformLogMultipleMatchersAndSequentialPolicies(t *testing.T) {
 	t.Run("multiple matchers AND semantics - non-matching leaves record untouched", func(t *testing.T) {
-		pol, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		pol, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id: "multi-matcher-policy",
-			Matchers: []*policyv1alpha1.LogMatcher{
+			Matchers: []*policyv1.LogMatcher{
 				{
 					Target: logAttrTarget("http.method"),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
 						Equality: strVal("GET"),
 					}},
 				},
 				{
 					Target: logAttrTarget("http.status_code"),
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
 						Equality: intVal(500), // bundle has 200
 					}},
 				},
@@ -1188,23 +1188,23 @@ func TestTransformLogMultipleMatchersAndSequentialPolicies(t *testing.T) {
 	})
 
 	t.Run("multiple atomic policies executed in order and return value semantics", func(t *testing.T) {
-		p1, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		p1, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:       "01-skip-existing",
-			Matchers: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
+			Matchers: []*policyv1.LogMatcher{bodyExistsMatcher()},
 			Additions: addOps(logTargetAttr("http.method"), strVal("POST"), false),
 		})
 		require.NoError(t, err)
 
-		p2, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		p2, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:       "02-insert-stage-first",
-			Matchers: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
+			Matchers: []*policyv1.LogMatcher{bodyExistsMatcher()},
 			Additions: addOps(logTargetAttr("stage"), strVal("first"), false),
 		})
 		require.NoError(t, err)
 
-		p3, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		p3, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:       "03-overwrite-stage-second",
-			Matchers: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
+			Matchers: []*policyv1.LogMatcher{bodyExistsMatcher()},
 			Additions: addOps(logTargetAttr("stage"), strVal("second"), true),
 		})
 		require.NoError(t, err)
@@ -1228,7 +1228,7 @@ func TestTransformLogMultipleMatchersAndSequentialPolicies(t *testing.T) {
 func TestTransformLogZeroContextGuards(t *testing.T) {
 	tests := []struct {
 		name string
-		ops  []*policyv1alpha1.LogAddition
+		ops  []*policyv1.LogAddition
 	}{
 		{
 			name: "log_attribute",
@@ -1240,23 +1240,23 @@ func TestTransformLogZeroContextGuards(t *testing.T) {
 		},
 		{
 			name: "record_field BODY",
-			ops:  addOps(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY), strVal("v"), true),
+			ops:  addOps(logTargetRecordField(policyv1.LogRecordField_LOG_RECORD_FIELD_BODY), strVal("v"), true),
 		},
 		{
 			name: "record_field SEVERITY_TEXT",
-			ops:  addOps(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT), strVal("INFO"), true),
+			ops:  addOps(logTargetRecordField(policyv1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT), strVal("INFO"), true),
 		},
 		{
 			name: "record_field SEVERITY_NUMBER",
-			ops:  addOps(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER), intVal(9), true),
+			ops:  addOps(logTargetRecordField(policyv1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER), intVal(9), true),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pol, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			pol, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 				Id:        "zero-ctx-" + tt.name,
-				Matchers:  []*policyv1alpha1.LogMatcher{alwaysTrueMatcher()},
+				Matchers:  []*policyv1.LogMatcher{alwaysTrueMatcher()},
 				Additions: tt.ops,
 			})
 			require.NoError(t, err)
@@ -1267,7 +1267,7 @@ func TestTransformLogZeroContextGuards(t *testing.T) {
 	// Zero-context guards for remove across supported target types.
 	remTargets := []struct {
 		name string
-		sel  *policyv1alpha1.LogAttributeSelector
+		sel  *policyv1.LogAttributeSelector
 	}{
 		{name: "flat_attr", sel: logAttrSelector("k")},
 		{name: "nested_attr", sel: logAttrSelector("nested", "k")},
@@ -1276,7 +1276,7 @@ func TestTransformLogZeroContextGuards(t *testing.T) {
 	}
 	for _, tc := range remTargets {
 		t.Run("zero_ctx_"+tc.name, func(t *testing.T) {
-			polRem, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			polRem, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 				Id:     "zero-ctx-rem-" + tc.name,
 				Removals: removeOps(tc.sel),
 			})
@@ -1294,14 +1294,14 @@ func TestTransformLogRemoveAction(t *testing.T) {
 
 		cases := []struct {
 			name string
-			sel  *policyv1alpha1.LogAttributeSelector
+			sel  *policyv1.LogAttributeSelector
 		}{
 			{name: "flat_method", sel: logAttrSelector("http.method")},
 			{name: "nested_key", sel: logAttrSelector("nested", "key")},
 		}
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
-				pol, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+				pol, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 					Id:     "rem-" + tc.name,
 					Removals: removeOps(tc.sel),
 				})
@@ -1340,7 +1340,7 @@ func TestTransformLogRemoveAction(t *testing.T) {
 		lr := logs.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().At(0)
 		require.Equal(t, 3, lr.Attributes().Len())
 
-		pol, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		pol, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:     "rem-dup",
 			Removals: removeOps(logAttrSelector("dup_key")),
 		})
@@ -1361,17 +1361,17 @@ func TestTransformLogRemoveAction(t *testing.T) {
 		lr.Attributes().PutStr("target_key", "target_val")
 		ctx := logContext(lr, sl, rl)
 
-		pol, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		pol, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id: "rem-non-matching",
-			Matchers: []*policyv1alpha1.LogMatcher{
+			Matchers: []*policyv1.LogMatcher{
 				{
-					Target: &policyv1alpha1.LogFieldSelector{
-						Target: &policyv1alpha1.LogFieldSelector_LogAttributePath{
-							LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"http.method"}},
+					Target: &policyv1.LogFieldSelector{
+						Target: &policyv1.LogFieldSelector_LogAttributePath{
+							LogAttributePath: &policyv1.AttributePath{Segments: []string{"http.method"}},
 						},
 					},
-					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
-						Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "POST"}},
+					Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
+						Equality: &policyv1.Value{Kind: &policyv1.Value_StringValue{StringValue: "POST"}},
 					}},
 				},
 			},
@@ -1391,13 +1391,13 @@ func TestTransformLogRemoveAction(t *testing.T) {
 		lr.Body().Map().PutEmptyMap("event_data").PutStr("user", "alice")
 		ctx := googlepolicy.LogContext{Record: lr}
 
-		p1, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		p1, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:     "rem-flat-body",
 			Removals: removeOps(logBodyFieldSelector("event_id")),
 		})
 		require.NoError(t, err)
 
-		p2, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		p2, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:     "rem-nested-body",
 			Removals: removeOps(logBodyFieldSelector("event_data", "user")),
 		})
@@ -1421,7 +1421,7 @@ func TestTransformLogRemoveAction(t *testing.T) {
 		lr.Body().SetStr("plain string body")
 		ctx := googlepolicy.LogContext{Record: lr}
 
-		p, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		p, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:     "rem-str-body",
 			Removals: removeOps(logBodyFieldSelector("event_id")),
 		})
@@ -1433,7 +1433,7 @@ func TestTransformLogRemoveAction(t *testing.T) {
 
 func TestTransformLogRenameAction(t *testing.T) {
 	t.Run("stage execution dispatch", func(t *testing.T) {
-		p, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		p, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:        "stage-rename",
 			Renamings: renameOps(logAttrSelector("old"), logAttrSelector("new"), false),
 		})
@@ -1453,7 +1453,7 @@ func TestTransformLogRenameAction(t *testing.T) {
 		ctx := logContext(lr, sl, rl)
 
 		// 1. Rename flat to flat with default upsert: false.
-		p1, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		p1, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:     "rename-flat",
 			Renamings: renameOps(logAttrSelector("old_key"), logAttrSelector("renamed_key"), false),
 		})
@@ -1468,7 +1468,7 @@ func TestTransformLogRenameAction(t *testing.T) {
 		assert.Equal(t, "old_val", v.Str())
 
 		// 2. Rename nested to nested with upsert: false.
-		p2, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		p2, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:     "rename-nested",
 			Renamings: renameOps(logAttrSelector("nested", "count"), logAttrSelector("metrics", "total"), false),
 		})
@@ -1494,7 +1494,7 @@ func TestTransformLogRenameAction(t *testing.T) {
 		lr.Attributes().PutStr("dst", "already_there")
 		ctx := googlepolicy.LogContext{Record: lr}
 
-		pNoUpsert, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		pNoUpsert, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:     "rename-no-upsert",
 			Renamings: renameOps(logAttrSelector("src"), logAttrSelector("dst"), false),
 		})
@@ -1506,7 +1506,7 @@ func TestTransformLogRenameAction(t *testing.T) {
 		assert.Equal(t, "already_there", vDst.Str())
 
 		// upsert: true when target exists -> overwrites target and removes source
-		pUpsert, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		pUpsert, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:     "rename-upsert",
 			Renamings: renameOps(logAttrSelector("src"), logAttrSelector("dst"), true),
 		})
@@ -1524,7 +1524,7 @@ func TestTransformLogRenameAction(t *testing.T) {
 		lr.Attributes().PutStr("user_id", "usr-456")
 		ctx := googlepolicy.LogContext{Record: lr}
 
-		p, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		p, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:     "attr-to-body",
 			Renamings: renameOps(logAttrSelector("user_id"), logBodyFieldSelector("auth", "uid"), false),
 		})
@@ -1546,7 +1546,7 @@ func TestTransformLogRenameAction(t *testing.T) {
 		lr.Body().SetEmptyMap().PutStr("trace_tag", "span-99")
 		ctx := googlepolicy.LogContext{Record: lr}
 
-		p, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		p, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:     "body-to-attr",
 			Renamings: renameOps(logBodyFieldSelector("trace_tag"), logAttrSelector("app.trace_tag"), false),
 		})
@@ -1565,7 +1565,7 @@ func TestTransformLogRenameAction(t *testing.T) {
 		lr.Body().SetEmptyMap().PutStr("old_field", "data")
 		ctx := googlepolicy.LogContext{Record: lr}
 
-		p, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		p, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:     "body-to-body",
 			Renamings: renameOps(logBodyFieldSelector("old_field"), logBodyFieldSelector("new_field"), false),
 		})
@@ -1585,7 +1585,7 @@ func TestTransformLogRenameAction(t *testing.T) {
 		lr.Body().SetEmptyMap().PutStr("field", "val2")
 		ctx := googlepolicy.LogContext{Record: lr}
 
-		p1, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		p1, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:     "same-attr-key",
 			Renamings: renameOps(logAttrSelector("key"), logAttrSelector("key"), false),
 		})
@@ -1595,7 +1595,7 @@ func TestTransformLogRenameAction(t *testing.T) {
 		require.True(t, ok)
 		assert.Equal(t, "val", v.Str())
 
-		p2, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		p2, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:     "same-body-field",
 			Renamings: renameOps(logBodyFieldSelector("field"), logBodyFieldSelector("field"), false),
 		})
@@ -1611,7 +1611,7 @@ func TestTransformLogRenameAction(t *testing.T) {
 		lr.Body().SetEmptyMap().PutStr("trace_tag", "span-99")
 		ctx := googlepolicy.LogContext{Record: lr}
 
-		p, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		p, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:     "body-to-nested-attr",
 			Renamings: renameOps(logBodyFieldSelector("trace_tag"), logAttrSelector("meta", "nested", "tag"), false),
 		})
@@ -1635,7 +1635,7 @@ func TestTransformLogRenameAction(t *testing.T) {
 		lr.Attributes().PutStr("a", "scalar_blocking")
 		ctx := googlepolicy.LogContext{Record: lr}
 
-		p, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		p, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:     "upsert-overwrite-scalar",
 			Renamings: renameOps(logAttrSelector("old"), logAttrSelector("a", "b"), true),
 		})
@@ -1658,7 +1658,7 @@ func TestTransformLogRenameAction(t *testing.T) {
 		lrStr.Body().SetStr("plain string")
 		ctxStr := googlepolicy.LogContext{Record: lrStr}
 
-		pSrcBody, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		pSrcBody, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:     "src-body-str",
 			Renamings: renameOps(logBodyFieldSelector("f"), logAttrSelector("f"), false),
 		})
@@ -1671,7 +1671,7 @@ func TestTransformLogRenameAction(t *testing.T) {
 		lrStr2.Attributes().PutStr("f", "val")
 		ctxStr2 := googlepolicy.LogContext{Record: lrStr2}
 
-		pTgtBody, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		pTgtBody, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:     "tgt-body-str",
 			Renamings: renameOps(logAttrSelector("f"), logBodyFieldSelector("f"), false),
 		})
@@ -1688,7 +1688,7 @@ func TestTransformLogRenameAction(t *testing.T) {
 		lr.Attributes().PutStr("user_id", "usr-123")
 		ctx := googlepolicy.LogContext{Record: lr}
 
-		p, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		p, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:     "attr-to-empty-str-body",
 			Renamings: renameOps(logAttrSelector("user_id"), logBodyFieldSelector("auth", "uid"), false),
 		})
@@ -1706,14 +1706,14 @@ func TestTransformLogRenameAction(t *testing.T) {
 	})
 
 	t.Run("zero-context guards", func(t *testing.T) {
-		renSelectors := [][2]*policyv1alpha1.LogAttributeSelector{
+		renSelectors := [][2]*policyv1.LogAttributeSelector{
 			{logAttrSelector("a"), logAttrSelector("b")},
 			{logAttrSelector("a"), logBodyFieldSelector("b")},
 			{logBodyFieldSelector("a"), logAttrSelector("b")},
 			{logBodyFieldSelector("a"), logBodyFieldSelector("b")},
 		}
 		for _, pair := range renSelectors {
-			p, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			p, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 				Id:     "zero-ctx-ren",
 				Renamings: renameOps(pair[0], pair[1], false),
 			})
@@ -1729,7 +1729,7 @@ func TestTransformLogRedactAction(t *testing.T) {
 		lr.Attributes().PutStr("api_token", "secret-12345")
 		ctx := logContext(lr, sl, rl)
 
-		pol, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		pol, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:     "redact-token-all",
 			Redactions: redactOps(logTargetAttr("api_token"), "", "[REDACTED]"),
 		})
@@ -1748,7 +1748,7 @@ func TestTransformLogRedactAction(t *testing.T) {
 		lr.Attributes().PutStr("user.email", "alice.smith@example.com")
 		ctx := logContext(lr, sl, rl)
 
-		pol, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		pol, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:     "mask-email",
 			Redactions: redactOps(logTargetAttr("user.email"), `([a-zA-Z0-9._%+-]+)@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})`, "$1@***"),
 		})
@@ -1768,7 +1768,7 @@ func TestTransformLogRedactAction(t *testing.T) {
 		authMap.PutStr("bearer", "Bearer secret-xyz-token")
 		ctx := logContext(lr, sl, rl)
 
-		pol, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		pol, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:     "redact-nested-bearer",
 			Redactions: redactOps(logTargetAttr("auth", "bearer"), `Bearer .*`, "Bearer [REDACTED]"),
 		})
@@ -1789,7 +1789,7 @@ func TestTransformLogRedactAction(t *testing.T) {
 		userMap.PutStr("ssn", "123-45-6789")
 		ctx := googlepolicy.LogContext{Record: lr}
 
-		pol, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		pol, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:     "redact-ssn-body",
 			Redactions: redactOps(logTargetBodyField("user", "ssn"), `\d{3}-\d{2}-\d{4}`, "XXX-XX-XXXX"),
 		})
@@ -1809,7 +1809,7 @@ func TestTransformLogRedactAction(t *testing.T) {
 		lrStr.Body().SetStr("plain string body")
 		ctxStr := googlepolicy.LogContext{Record: lrStr}
 
-		pol, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		pol, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:     "redact-body-field-failopen",
 			Redactions: redactOps(logTargetBodyField("user", "ssn"), `.*`, "[REDACTED]"),
 		})
@@ -1829,9 +1829,9 @@ func TestTransformLogRedactAction(t *testing.T) {
 		lr.Body().SetStr("Access granted with password=supersecret for user alice")
 		ctx := googlepolicy.LogContext{Record: lr}
 
-		pol, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		pol, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:     "redact-record-body",
-			Redactions: redactOps(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY), `password=\S+`, "password=[REDACTED]"),
+			Redactions: redactOps(logTargetRecordField(policyv1.LogRecordField_LOG_RECORD_FIELD_BODY), `password=\S+`, "password=[REDACTED]"),
 		})
 		require.NoError(t, err)
 		assert.Equal(t, googlepolicy.TransformModified, pol.TransformLog(ctx))
@@ -1855,9 +1855,9 @@ func TestTransformLogRedactAction(t *testing.T) {
 		lr.SetSeverityText("DEBUG_VERBOSE")
 		ctx := googlepolicy.LogContext{Record: lr}
 
-		pol, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		pol, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:     "redact-sev-text",
-			Redactions: redactOps(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT), `_VERBOSE`, ""),
+			Redactions: redactOps(logTargetRecordField(policyv1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT), `_VERBOSE`, ""),
 		})
 		require.NoError(t, err)
 		assert.Equal(t, googlepolicy.TransformModified, pol.TransformLog(ctx))
@@ -1871,9 +1871,9 @@ func TestTransformLogRedactAction(t *testing.T) {
 
 	t.Run("record_field full string replacement on unset or empty values fails open", func(t *testing.T) {
 		// Policy with regex: "" (full string replacement) targeting SEVERITY_TEXT
-		polSev, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		polSev, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:     "redact-full-sev-text",
-			Redactions: redactOps(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT), "", "[REDACTED]"),
+			Redactions: redactOps(logTargetRecordField(policyv1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT), "", "[REDACTED]"),
 		})
 		require.NoError(t, err)
 
@@ -1883,9 +1883,9 @@ func TestTransformLogRedactAction(t *testing.T) {
 		assert.Equal(t, "", lrUnsetSev.SeverityText())
 
 		// Policy with regex: "" (full string replacement) targeting BODY
-		polBody, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		polBody, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:     "redact-full-body",
-			Redactions: redactOps(logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY), "", "[REDACTED]"),
+			Redactions: redactOps(logTargetRecordField(policyv1.LogRecordField_LOG_RECORD_FIELD_BODY), "", "[REDACTED]"),
 		})
 		require.NoError(t, err)
 
@@ -1901,7 +1901,7 @@ func TestTransformLogRedactAction(t *testing.T) {
 		lr.Attributes().PutInt("status_code", 200)
 		ctx := logContext(lr, sl, rl)
 
-		pol, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		pol, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:     "redact-int-attr",
 			Redactions: redactOps(logTargetAttr("status_code"), `\d+`, "[REDACTED]"),
 		})
@@ -1917,7 +1917,7 @@ func TestTransformLogRedactAction(t *testing.T) {
 		lr.Body().SetEmptyMap().PutInt("status_code", 404)
 		ctx := googlepolicy.LogContext{Record: lr}
 
-		pol, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		pol, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:     "redact-int-body-field",
 			Redactions: redactOps(logTargetBodyField("status_code"), `\d+`, "[REDACTED]"),
 		})
@@ -1933,7 +1933,7 @@ func TestTransformLogRedactAction(t *testing.T) {
 		lr.Body().SetEmptyMap().PutStr("token", "secret123")
 		ctx := googlepolicy.LogContext{Record: lr}
 
-		pol, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		pol, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:     "redact-full-body-field",
 			Redactions: redactOps(logTargetBodyField("token"), "", "[REDACTED]"),
 		})
@@ -1948,14 +1948,14 @@ func TestTransformLogRedactAction(t *testing.T) {
 	})
 
 	t.Run("zero-context guards", func(t *testing.T) {
-		targets := []*policyv1alpha1.LogTargetSelector{
+		targets := []*policyv1.LogTargetSelector{
 			logTargetAttr("a"),
 			logTargetBodyField("b"),
-			logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY),
-			logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT),
+			logTargetRecordField(policyv1.LogRecordField_LOG_RECORD_FIELD_BODY),
+			logTargetRecordField(policyv1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT),
 		}
 		for _, tgt := range targets {
-			p, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			p, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 				Id:     "zero-ctx-redact",
 				Redactions: redactOps(tgt, `\d+`, "[REDACTED]"),
 			})
@@ -1966,18 +1966,18 @@ func TestTransformLogRedactAction(t *testing.T) {
 }
 
 func TestTransformLogPartialFailure(t *testing.T) {
-	p, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+	p, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 		Id:       "partial-failure-add",
-		Matchers: []*policyv1alpha1.LogMatcher{bodyExistsMatcher()},
-		Additions: []*policyv1alpha1.LogAddition{
+		Matchers: []*policyv1.LogMatcher{bodyExistsMatcher()},
+		Additions: []*policyv1.LogAddition{
 			{
 				Target:        logTargetAttr("existing_key"),
-				Source:        &policyv1alpha1.LogAddition_Value{Value: strVal("new_value")},
+				Source:        &policyv1.LogAddition_Value{Value: strVal("new_value")},
 				UpsertEnabled: proto.Bool(false), // This will fail because "existing_key" exists
 			},
 			{
 				Target:        logTargetAttr("new_key"),
-				Source:        &policyv1alpha1.LogAddition_Value{Value: strVal("success_value")},
+				Source:        &policyv1.LogAddition_Value{Value: strVal("success_value")},
 				UpsertEnabled: proto.Bool(false), // This will succeed
 			},
 		},
@@ -2004,23 +2004,23 @@ func TestTransformLogCombinedMultiStageSinglePolicy(t *testing.T) {
 	// Single combined policy matching program == "haproxy", renaming program -> service.name
 	// and legacy_user -> user.name in Stage 1, adding fallback user.name = "guest" (upsert: false)
 	// and tier = "edge" in Stage 2, removing scratch_token in Stage 3, and redacting user.name in Stage 4.
-	pol, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+	pol, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 		Id: "haproxy-normalize-and-scrub",
-		Matchers: []*policyv1alpha1.LogMatcher{
+		Matchers: []*policyv1.LogMatcher{
 			{
 				Target: logAttrTarget("program"),
-				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
+				Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
 					Equality: strVal("haproxy"),
 				}},
 			},
 			{
 				Target: scopeAttrTarget("scope.tag"),
-				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
+				Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
 					Equality: strVal("edge-proxy"),
 				}},
 			},
 		},
-		Renamings: []*policyv1alpha1.LogRenaming{
+		Renamings: []*policyv1.LogRenaming{
 			{
 				Source:        logAttrSelector("program"),
 				Target:        logAttrSelector("service.name"),
@@ -2032,26 +2032,26 @@ func TestTransformLogCombinedMultiStageSinglePolicy(t *testing.T) {
 				UpsertEnabled: proto.Bool(false),
 			},
 		},
-		Additions: []*policyv1alpha1.LogAddition{
+		Additions: []*policyv1.LogAddition{
 			{
 				Target:        logTargetAttr("user.name"),
-				Source:        &policyv1alpha1.LogAddition_Value{Value: strVal("guest@example.com")},
+				Source:        &policyv1.LogAddition_Value{Value: strVal("guest@example.com")},
 				UpsertEnabled: proto.Bool(false),
 			},
 			{
 				Target:        logTargetAttr("tier"),
-				Source:        &policyv1alpha1.LogAddition_Value{Value: strVal("edge")},
+				Source:        &policyv1.LogAddition_Value{Value: strVal("edge")},
 				UpsertEnabled: proto.Bool(true),
 			},
 		},
-		Removals: []*policyv1alpha1.LogRemoval{
+		Removals: []*policyv1.LogRemoval{
 			{Target: logAttrSelector("scratch_token")},
 		},
-		Redactions: []*policyv1alpha1.LogRedaction{
+		Redactions: []*policyv1.LogRedaction{
 			{
 				Target:  logTargetAttr("user.name"),
-				Pattern: &policyv1alpha1.LogRedaction_Regex{Regex: `@.+`},
-				Mask:    &policyv1alpha1.LogRedaction_Replacement{Replacement: "@[REDACTED]"},
+				Pattern: &policyv1.LogRedaction_Regex{Regex: `@.+`},
+				Mask:    &policyv1.LogRedaction_Replacement{Replacement: "@[REDACTED]"},
 			},
 		},
 	})
@@ -2104,21 +2104,21 @@ func TestTransformLogCombinedMultiStageSinglePolicy(t *testing.T) {
 
 func TestPolicyValidationAtomicMultiStageAndUnknownRedactionWireField(t *testing.T) {
 	t.Run("atomic rejection when one redaction in combined policy has invalid regex", func(t *testing.T) {
-		_, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		_, err := NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:        "atomic-reject-combined",
 			Renamings: renameOps(logAttrSelector("a"), logAttrSelector("b"), false),
 			Additions: addOps(logTargetAttr("tier"), strVal("soc"), true),
 			Removals:  removeOps(logAttrSelector("tmp")),
-			Redactions: []*policyv1alpha1.LogRedaction{
+			Redactions: []*policyv1.LogRedaction{
 				{
 					Target:  logTargetAttr("b"),
-					Pattern: &policyv1alpha1.LogRedaction_Regex{Regex: `\d+`},
-					Mask:    &policyv1alpha1.LogRedaction_Replacement{Replacement: "X"},
+					Pattern: &policyv1.LogRedaction_Regex{Regex: `\d+`},
+					Mask:    &policyv1.LogRedaction_Replacement{Replacement: "X"},
 				},
 				{
 					Target:  logTargetAttr("b"),
-					Pattern: &policyv1alpha1.LogRedaction_Regex{Regex: "[unclosed"},
-					Mask:    &policyv1alpha1.LogRedaction_Replacement{Replacement: "X"},
+					Pattern: &policyv1.LogRedaction_Regex{Regex: "[unclosed"},
+					Mask:    &policyv1.LogRedaction_Replacement{Replacement: "X"},
 				},
 			},
 		})
@@ -2128,9 +2128,9 @@ func TestPolicyValidationAtomicMultiStageAndUnknownRedactionWireField(t *testing
 	})
 
 	t.Run("rejects unknown wire field on LogRedaction (xDS version skew protection)", func(t *testing.T) {
-		red := &policyv1alpha1.LogRedaction{
+		red := &policyv1.LogRedaction{
 			Target: logTargetAttr("secret"),
-			Mask:   &policyv1alpha1.LogRedaction_Replacement{Replacement: "[REDACTED]"},
+			Mask:   &policyv1.LogRedaction_Replacement{Replacement: "[REDACTED]"},
 		}
 		raw, err := proto.Marshal(red)
 		require.NoError(t, err)
@@ -2138,20 +2138,20 @@ func TestPolicyValidationAtomicMultiStageAndUnknownRedactionWireField(t *testing
 		raw = protowire.AppendTag(raw, 4, protowire.BytesType)
 		raw = protowire.AppendString(raw, "future-builtin-classifier")
 
-		skewedRed := &policyv1alpha1.LogRedaction{}
+		skewedRed := &policyv1.LogRedaction{}
 		require.NoError(t, proto.Unmarshal(raw, skewedRed))
 		require.Nil(t, skewedRed.GetPattern())
 
-		_, err = NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		_, err = NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:         "skewed-redaction-policy",
-			Redactions: []*policyv1alpha1.LogRedaction{skewedRed},
+			Redactions: []*policyv1.LogRedaction{skewedRed},
 		})
 		require.ErrorIs(t, err, ErrUnsupportedAction)
 		assert.ErrorContains(t, err, "redactions[0]:")
 	})
 
 	t.Run("rejects unknown stage wire field on LogTransformPolicy even when known stage is present", func(t *testing.T) {
-		base := &policyv1alpha1.LogTransformPolicy{
+		base := &policyv1.LogTransformPolicy{
 			Id:       "skewed-combined-policy",
 			Removals: removeOps(logAttrSelector("raw_payload")),
 		}
@@ -2161,7 +2161,7 @@ func TestPolicyValidationAtomicMultiStageAndUnknownRedactionWireField(t *testing
 		raw = protowire.AppendTag(raw, 7, protowire.BytesType)
 		raw = protowire.AppendString(raw, "future-stage-op")
 
-		skewed := &policyv1alpha1.LogTransformPolicy{}
+		skewed := &policyv1.LogTransformPolicy{}
 		require.NoError(t, proto.Unmarshal(raw, skewed))
 		require.Len(t, skewed.GetRemovals(), 1)
 
@@ -2170,13 +2170,13 @@ func TestPolicyValidationAtomicMultiStageAndUnknownRedactionWireField(t *testing
 	})
 
 	t.Run("rejects unknown stage wire field on LogTransformPolicy when only future stage is set", func(t *testing.T) {
-		base := &policyv1alpha1.LogTransformPolicy{Id: "skewed-only-future-stage"}
+		base := &policyv1.LogTransformPolicy{Id: "skewed-only-future-stage"}
 		raw, err := proto.Marshal(base)
 		require.NoError(t, err)
 		raw = protowire.AppendTag(raw, 7, protowire.BytesType)
 		raw = protowire.AppendString(raw, "future-stage-op")
 
-		skewed := &policyv1alpha1.LogTransformPolicy{}
+		skewed := &policyv1.LogTransformPolicy{}
 		require.NoError(t, proto.Unmarshal(raw, skewed))
 
 		_, err = NewPolicyFromProto(skewed)
@@ -2184,20 +2184,20 @@ func TestPolicyValidationAtomicMultiStageAndUnknownRedactionWireField(t *testing
 	})
 
 	t.Run("rejects unknown source wire field on LogAddition and unknown target selector wire field", func(t *testing.T) {
-		add := &policyv1alpha1.LogAddition{Target: logTargetAttr("tier")}
+		add := &policyv1.LogAddition{Target: logTargetAttr("tier")}
 		rawAdd, err := proto.Marshal(add)
 		require.NoError(t, err)
 		// Append an unknown source oneof tag 4 (e.g. copy_from_resource).
 		rawAdd = protowire.AppendTag(rawAdd, 4, protowire.BytesType)
 		rawAdd = protowire.AppendString(rawAdd, "service.name")
 
-		skewedAdd := &policyv1alpha1.LogAddition{}
+		skewedAdd := &policyv1.LogAddition{}
 		require.NoError(t, proto.Unmarshal(rawAdd, skewedAdd))
 		require.Nil(t, skewedAdd.GetSource())
 
-		_, err = NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		_, err = NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:        "skewed-addition-source",
-			Additions: []*policyv1alpha1.LogAddition{skewedAdd},
+			Additions: []*policyv1.LogAddition{skewedAdd},
 		})
 		require.ErrorIs(t, err, ErrUnsupportedAction)
 		assert.ErrorContains(t, err, "additions[0]:")
@@ -2206,10 +2206,10 @@ func TestPolicyValidationAtomicMultiStageAndUnknownRedactionWireField(t *testing
 		var rawSel []byte
 		rawSel = protowire.AppendTag(rawSel, 4, protowire.BytesType)
 		rawSel = protowire.AppendString(rawSel, "future-selector")
-		skewedSel := &policyv1alpha1.LogAttributeSelector{}
+		skewedSel := &policyv1.LogAttributeSelector{}
 		require.NoError(t, proto.Unmarshal(rawSel, skewedSel))
 
-		_, err = NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+		_, err = NewPolicyFromProto(&policyv1.LogTransformPolicy{
 			Id:       "skewed-removal-selector",
 			Removals: removeOps(skewedSel),
 		})

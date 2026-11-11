@@ -51,20 +51,29 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/structpb"
 
-	xdsv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/xds/v1alpha1"
+	xdsv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/xds/v1"
 )
 
 const (
 	// xdsResourceType is the fully qualified name of the TelemetryCollector
 	// message: the resource type as it appears in an xdstp:// resource name.
-	xdsResourceType = "google.telemetry.xds.v1alpha1.TelemetryCollector"
+	xdsResourceType = "google.telemetry.xds.v1.TelemetryCollector"
 
-	// xdsPolicyTypeURL is the one resource type this manager subscribes to. It
-	// is fixed rather than configurable: the control plane only ever serves
+	// xdsPolicyTypeURL is the primary resource type this manager subscribes to.
+	// It is fixed rather than configurable: the control plane only ever serves
 	// TelemetryCollector resources, and the decoding path below is written
 	// against that schema, so a different type could be subscribed to but not
 	// usefully interpreted.
 	xdsPolicyTypeURL = "type.googleapis.com/" + xdsResourceType
+
+	// legacyXDSResourceType and legacyXDSPolicyTypeURL are the pre-graduation
+	// v1alpha1 resource type and type URL. When a control plane has not yet been
+	// updated to serve google.telemetry.xds.v1.TelemetryCollector and rejects the
+	// initial v1 subscription with InvalidArgument, the manager transparently
+	// falls back to subscribing with v1alpha1 and decodes wire-compatible
+	// v1alpha1 TelemetryCollector payloads into xdsv1.TelemetryCollector.
+	legacyXDSResourceType  = "google.telemetry.xds.v1alpha1.TelemetryCollector"
+	legacyXDSPolicyTypeURL = "type.googleapis.com/" + legacyXDSResourceType
 
 	// defaultCollectorResource is the collector resource name suffix in the
 	// xdstp:// subscription URI. The control plane organizes collector
@@ -302,6 +311,12 @@ type xdsPolicyManager struct {
 	// lastAppliedVersion is written by the stream goroutine and read by Stop's
 	// callers, so it takes mu as well.
 	lastAppliedVersion string
+
+	// useLegacyV1Alpha1 is set when the control plane rejects the v1
+	// TelemetryCollector subscription with InvalidArgument, causing subsequent
+	// stream attempts to subscribe using legacyXDSResourceType /
+	// legacyXDSPolicyTypeURL. Guarded by mu.
+	useLegacyV1Alpha1 bool
 }
 
 // NewXDSPolicyManager creates a manager for the given `xds://` URI.
@@ -634,7 +649,7 @@ func regionFromZone(zone string) string {
 // xdstpResourceName returns the xdstp:// name of the TelemetryCollector
 // resource that holds a fleet's policies:
 //
-//	xdstp://telemetry-director.REGION.xds.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector/projects/PROJECT/fleets/FLEET/collectors/default
+//	xdstp://telemetry-director.REGION.xds.googleapis.com/google.telemetry.xds.v1.TelemetryCollector/projects/PROJECT/fleets/FLEET/collectors/default
 //
 // The control plane looks up the fleet's policies by this name, not by the
 // node's cluster. A request that names no resource is a wildcard subscription,
@@ -648,6 +663,32 @@ func regionFromZone(zone string) string {
 func xdstpResourceName(region, project, fleetID string) string {
 	return fmt.Sprintf("xdstp://telemetry-director.%s.xds.googleapis.com/%s/projects/%s/fleets/%s/collectors/%s",
 		region, xdsResourceType, project, fleetID, defaultCollectorResource)
+}
+
+func (m *xdsPolicyManager) useLegacyXDS() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.useLegacyV1Alpha1
+}
+
+func (m *xdsPolicyManager) setUseLegacyXDS(v bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.useLegacyV1Alpha1 = v
+}
+
+func (m *xdsPolicyManager) activeTypeURL() string {
+	if m.useLegacyXDS() {
+		return legacyXDSPolicyTypeURL
+	}
+	return xdsPolicyTypeURL
+}
+
+func (m *xdsPolicyManager) activeResourceName() string {
+	if m.useLegacyXDS() {
+		return strings.Replace(m.resourceName, "/"+xdsResourceType+"/", "/"+legacyXDSResourceType+"/", 1)
+	}
+	return m.resourceName
 }
 
 // Start launches the background stream loop and waits, briefly, for the control
@@ -687,8 +728,8 @@ func (m *xdsPolicyManager) Start() error {
 		zap.String("server", m.serverAddr),
 		zap.String("fleet", m.fleetID),
 		zap.String("collector_id", m.collectorID),
-		zap.String("resource_name", m.resourceName),
-		zap.String("type_url", xdsPolicyTypeURL),
+		zap.String("resource_name", m.activeResourceName()),
+		zap.String("type_url", m.activeTypeURL()),
 	)
 
 	go func() {
@@ -894,6 +935,22 @@ func (m *xdsPolicyManager) run(ctx context.Context) {
 			backoff = 0
 		}
 
+		// If the control plane rejected our initial v1 subscription with
+		// InvalidArgument before sending any response, it likely only
+		// recognizes the legacy v1alpha1 TelemetryCollector resource type.
+		// Fall back to v1alpha1 and reconnect immediately without backoff.
+		if !progressed && !m.useLegacyXDS() && grpcstatus.Code(err) == codes.InvalidArgument {
+			m.setUseLegacyXDS(true)
+			backoff = 0
+			m.logger.Info("xDS control plane rejected v1 TelemetryCollector subscription with InvalidArgument; falling back to legacy v1alpha1 resource type",
+				zap.String("server", m.serverAddr),
+				zap.String("legacy_type_url", legacyXDSPolicyTypeURL),
+				zap.String("legacy_resource_name", m.activeResourceName()),
+				zap.Error(err),
+			)
+			continue
+		}
+
 		// Being told we are not allowed to subscribe is a configuration or
 		// provisioning problem, not a transient one: retrying cannot fix it and
 		// would only spam the control plane. Give up on the stream for good and
@@ -972,10 +1029,12 @@ func (m *xdsPolicyManager) streamPolicies(ctx context.Context, conn *grpc.Client
 	// hanging up gets processed instead of quietly discarded. An error the
 	// client produced itself already carries its own status and is returned
 	// directly, per the same contract.
+	typeURL := m.activeTypeURL()
+	resourceName := m.activeResourceName()
 	initialReq := &discoveryv3.DiscoveryRequest{
 		Node:          node,
-		TypeUrl:       xdsPolicyTypeURL,
-		ResourceNames: []string{m.resourceName},
+		TypeUrl:       typeURL,
+		ResourceNames: []string{resourceName},
 		VersionInfo:   m.LastAppliedVersion(),
 	}
 	if err := stream.Send(initialReq); err != nil {
@@ -991,8 +1050,8 @@ func (m *xdsPolicyManager) streamPolicies(ctx context.Context, conn *grpc.Client
 		m.logger.Info("Connected to xDS server and sent DiscoveryRequest",
 			zap.String("server", m.serverAddr),
 			zap.String("fleet", m.fleetID),
-			zap.String("resource_name", m.resourceName),
-			zap.String("type_url", xdsPolicyTypeURL),
+			zap.String("resource_name", resourceName),
+			zap.String("type_url", typeURL),
 		)
 		m.logDiscoveryRequestSent("initial", initialReq)
 	}
@@ -1020,10 +1079,10 @@ func (m *xdsPolicyManager) handleResponse(stream discoveryv3.AggregatedDiscovery
 	//
 	// An empty type URL is treated as our own, since a server that only serves
 	// one resource type may omit it.
-	if respTypeURL := resp.GetTypeUrl(); respTypeURL != "" && respTypeURL != xdsPolicyTypeURL {
+	if respTypeURL := resp.GetTypeUrl(); respTypeURL != "" && respTypeURL != xdsPolicyTypeURL && respTypeURL != legacyXDSPolicyTypeURL {
 		m.logger.Debug("Ignoring xDS response for an unrelated resource type",
 			zap.String("type_url", respTypeURL),
-			zap.String("subscribed_type_url", xdsPolicyTypeURL),
+			zap.String("subscribed_type_url", m.activeTypeURL()),
 		)
 		return
 	}
@@ -1260,8 +1319,8 @@ func (m *xdsPolicyManager) sendACK(stream discoveryv3.AggregatedDiscoveryService
 
 	req := &discoveryv3.DiscoveryRequest{
 		Node:          node,
-		TypeUrl:       xdsPolicyTypeURL,
-		ResourceNames: []string{m.resourceName},
+		TypeUrl:       m.activeTypeURL(),
+		ResourceNames: []string{m.activeResourceName()},
 		VersionInfo:   versionInfo,
 		ResponseNonce: nonce,
 	}
@@ -1286,8 +1345,8 @@ func (m *xdsPolicyManager) sendNACK(stream discoveryv3.AggregatedDiscoveryServic
 
 	req := &discoveryv3.DiscoveryRequest{
 		Node:          node,
-		TypeUrl:       xdsPolicyTypeURL,
-		ResourceNames: []string{m.resourceName},
+		TypeUrl:       m.activeTypeURL(),
+		ResourceNames: []string{m.activeResourceName()},
 		VersionInfo:   m.LastAppliedVersion(),
 		ResponseNonce: nonce,
 		ErrorDetail: &status.Status{
@@ -1398,9 +1457,12 @@ func extractManifest(resp *discoveryv3.DiscoveryResponse) (xdsManifest, error) {
 
 	for i, anyRes := range resp.GetResources() {
 		// The expected shape: a TelemetryCollector carrying a list of policies.
-		if anyRes.MessageIs(&xdsv1alpha1.TelemetryCollector{}) {
-			collector := &xdsv1alpha1.TelemetryCollector{}
-			if err := anyRes.UnmarshalTo(collector); err != nil {
+		// Accept both the v1 type URL and the legacy v1alpha1 type URL so the
+		// collector can decode responses from a control plane that has not yet
+		// migrated to google.telemetry.xds.v1.TelemetryCollector.
+		if anyRes.MessageIs(&xdsv1.TelemetryCollector{}) || anyRes.GetTypeUrl() == legacyXDSPolicyTypeURL {
+			collector := &xdsv1.TelemetryCollector{}
+			if err := proto.Unmarshal(anyRes.GetValue(), collector); err != nil {
 				manifest.skipped++
 				errs = append(errs, fmt.Errorf("%w at index %d: %w", ErrXDSResourceDecode, i, err))
 				continue
@@ -1441,7 +1503,7 @@ func extractManifest(resp *discoveryv3.DiscoveryResponse) (xdsManifest, error) {
 // policiesFromCollector decodes every policy carried by a TelemetryCollector,
 // returning those it could decode along with the skipped count and a joined
 // error for those it could not.
-func policiesFromCollector(collector *xdsv1alpha1.TelemetryCollector) ([]proto.Message, int, error) {
+func policiesFromCollector(collector *xdsv1.TelemetryCollector) ([]proto.Message, int, error) {
 	var (
 		policies []proto.Message
 		skipped  int

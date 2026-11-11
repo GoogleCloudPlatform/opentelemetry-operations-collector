@@ -20,15 +20,15 @@ import (
 	"strings"
 	"testing"
 
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"go.opentelemetry.io/collector/component"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
-func fuzzSeedPolicies() []*policyv1alpha1.WindowsEventLogSourcePolicy {
-	return []*policyv1alpha1.WindowsEventLogSourcePolicy{
+func fuzzSeedPolicies() []*policyv1.WindowsEventLogSourcePolicy {
+	return []*policyv1.WindowsEventLogSourcePolicy{
 		{
 			Id:       "win-source-standard",
 			Channels: []string{"Security", "System", "Application"},
@@ -296,7 +296,7 @@ func FuzzPolicy_ProtoAndJSON(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, data []byte) {
-		pb := &policyv1alpha1.WindowsEventLogSourcePolicy{}
+		pb := &policyv1.WindowsEventLogSourcePolicy{}
 		if err := proto.Unmarshal(data, pb); err == nil {
 			ps, err := googlepolicy.MakePolicySetFromProtos("projects/p/locations/l/policySets/ps", "fuzz-rev", []proto.Message{pb})
 			if err == nil {
@@ -369,7 +369,7 @@ func FuzzPolicy_Consolidate(f *testing.F) {
 			return
 		}
 
-		p1, err := NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+		p1, err := NewPolicyFromProto(&policyv1.WindowsEventLogSourcePolicy{
 			Id:       "p1",
 			Channels: []string{"Security", "System"},
 		})
@@ -377,7 +377,7 @@ func FuzzPolicy_Consolidate(f *testing.F) {
 			return
 		}
 
-		p2, err := NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+		p2, err := NewPolicyFromProto(&policyv1.WindowsEventLogSourcePolicy{
 			Id:       "p2",
 			Channels: channels,
 		})
@@ -415,7 +415,7 @@ func FuzzPolicy_ReceiverID_SetIndependence(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, protoBytes []byte) {
-		var polProto policyv1alpha1.WindowsEventLogSourcePolicy
+		var polProto policyv1.WindowsEventLogSourcePolicy
 		if err := proto.Unmarshal(protoBytes, &polProto); err != nil {
 			return
 		}
@@ -434,7 +434,7 @@ func FuzzPolicy_ReceiverID_SetIndependence(f *testing.F) {
 			expectedID := SanitizeChannelName(canonical)
 
 			// Standalone policy with raw channel
-			standaloneRaw, err := NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+			standaloneRaw, err := NewPolicyFromProto(&policyv1.WindowsEventLogSourcePolicy{
 				Id:       "standalone-raw",
 				Channels: []string{ch},
 			})
@@ -446,7 +446,7 @@ func FuzzPolicy_ReceiverID_SetIndependence(f *testing.F) {
 			}
 
 			// Standalone policy with uppercase/canonical channel
-			standaloneCanon, err := NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+			standaloneCanon, err := NewPolicyFromProto(&policyv1.WindowsEventLogSourcePolicy{
 				Id:       "standalone-canon",
 				Channels: []string{canonical},
 			})
@@ -458,7 +458,7 @@ func FuzzPolicy_ReceiverID_SetIndependence(f *testing.F) {
 			}
 
 			// Consolidate with a sibling policy that supplies the alternative casing variant
-			siblingPolicy, err := NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+			siblingPolicy, err := NewPolicyFromProto(&policyv1.WindowsEventLogSourcePolicy{
 				Id:       "sibling-policy",
 				Channels: []string{canonical},
 			})

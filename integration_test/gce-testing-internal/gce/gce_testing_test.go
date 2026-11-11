@@ -490,6 +490,51 @@ func TestUploadContent(t *testing.T) {
 	})
 }
 
+func TestUploadContentSSH(t *testing.T) {
+	t.Parallel()
+	gce.RunForEachImage(t, func(t *testing.T, platform string) {
+		t.Parallel()
+		if gce.IsWindows(platform) {
+			t.Skip("UploadContentSSH() does not support Windows VMs yet")
+		}
+
+		ctx, logger, vm := SetupLoggerAndVM(t, platform)
+
+		cases := [][]byte{
+			[]byte("hello"),
+			[]byte("goodbye\n"),
+			[]byte(""),
+			eachByte(),
+			randomBytes(t, 100_000_000),
+		}
+		// Requires sudo, in a directory that does not exist yet.
+		path := "/test_upload_content_ssh/file"
+
+		for _, data := range cases {
+			if err := gce.UploadContentSSH(ctx, logger.ToMainLog(), vm, bytes.NewReader(data), path); err != nil {
+				t.Fatalf("Uploading %v bytes failed: %v", len(data), err)
+			}
+
+			expectedMD5 := fmt.Sprintf("%x", md5.Sum(data))
+			actualMD5, err := calculateRemoteMD5(ctx, logger.ToMainLog(), vm, path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if expectedMD5 != actualMD5 {
+				t.Errorf("got MD5 %q for file %v (size %v), want %q", actualMD5, path, len(data), expectedMD5)
+			}
+
+			output, err := gce.RunRemotely(ctx, logger.ToMainLog(), vm, fmt.Sprintf("stat --format='%%U:%%G %%a' '%s'", path))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got, want := strings.TrimSpace(output.Stdout), "root:root 644"; got != want {
+				t.Errorf("got owner and mode %q for file %v (size %v), want %q", got, path, len(data), want)
+			}
+		}
+	})
+}
+
 func TestRunCommandEnvMerging(t *testing.T) {
 	// Set a unique environment variable
 	testKey := "TEST_ENV_VAR_FOR_GCE_TESTING"

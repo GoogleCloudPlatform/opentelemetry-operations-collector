@@ -53,7 +53,9 @@ this library.
 package gce
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -964,7 +966,19 @@ func SSHOptionsForTest() []string {
 
 // RunRemotelyStdin is just like RunRemotely but it accepts an io.Reader
 // for what data to pass in over standard input to the command.
+//
+// The reader is used for every attempt to run the command. An attempt that
+// fails with an SSH transport error can read from it, in which case the
+// attempt after it does not get all of the data.
 func RunRemotelyStdin(ctx context.Context, logger *log.Logger, vm *VM, stdin io.Reader, command string) (output CommandOutput, err error) {
+	return runRemotelyStdinFunc(ctx, logger, vm, func() io.Reader { return stdin }, command)
+}
+
+// runRemotelyStdinFunc is RunRemotelyStdin with the standard input given as a
+// function, which is called for every attempt to run the command. A caller
+// that needs every attempt to get all of the data returns a new reader each
+// time.
+func runRemotelyStdinFunc(ctx context.Context, logger *log.Logger, vm *VM, newStdin func() io.Reader, command string) (output CommandOutput, err error) {
 	logger.Printf("Running command remotely: %v", command)
 	defer func() {
 		if err != nil {
@@ -1004,7 +1018,7 @@ func RunRemotelyStdin(ctx context.Context, logger *log.Logger, vm *VM, stdin io.
 	var runErr error
 	err = backoff.Retry(func() error {
 		attempt++
-		output, runErr = runCommand(ctx, logger, stdin, args, nil)
+		output, runErr = runCommand(ctx, logger, newStdin(), args, nil)
 		if runErr != nil {
 			if isSSHTransportError(runErr) {
 				logger.Printf("SSH transport attempt %d to VM %s (%s) failed (%v), retrying...", attempt, vm.Name, vm.IPAddress, runErr)
@@ -1083,6 +1097,58 @@ func UploadContent(ctx context.Context, logger *log.Logger, vm *VM, content io.R
 		return runErr
 	}, downloadBackoff)
 	return err
+}
+
+// UploadContentSSH takes an io.Reader and uploads its contents as a file to a
+// given path on the given Linux VM. It does what UploadContent does, but
+// sends the contents over ssh instead of through a GCS bucket, so the VM
+// needs neither gcloud nor access to the bucket. That makes it the way to
+// upload to a VM that SimulateOffPrem has removed gcloud from.
+//
+// The file ends up owned by root with mode 0644, and missing parent
+// directories of remotePath are created. The contents first land in a
+// temporary file, which only replaces remotePath if all of it arrived.
+//
+// This uses the same key, ssh options and retries on SSH transport errors as
+// RunRemotely. The contents are held in memory so that a retry can send them
+// again.
+func UploadContentSSH(ctx context.Context, logger *log.Logger, vm *VM, content io.Reader, remotePath string) error {
+	if IsWindows(vm.ImageSpec) {
+		return fmt.Errorf("UploadContentSSH() does not support Windows VMs yet (image spec %q)", vm.ImageSpec)
+	}
+	data, err := io.ReadAll(content)
+	if err != nil {
+		return fmt.Errorf("UploadContentSSH() could not read the content to upload: %w", err)
+	}
+	// To the cat on the VM, a dropped connection looks like the end of the
+	// contents, so compare checksums before installing what arrived.
+	command := fmt.Sprintf(`set -e
+tmp="$(mktemp)"
+trap 'rm -f "$tmp"' EXIT
+cat > "$tmp"
+echo "%x  $tmp" | sha256sum --check --quiet
+sudo install -D --owner=root --group=root --mode=0644 "$tmp" %s`, sha256.Sum256(data), shellQuote(remotePath))
+	newStdin := func() io.Reader { return bytes.NewReader(data) }
+	if _, err := runRemotelyStdinFunc(ctx, logger, vm, newStdin, command); err != nil {
+		return fmt.Errorf("UploadContentSSH() could not upload to %s: %w", remotePath, err)
+	}
+	return nil
+}
+
+// shellQuote quotes s so that a POSIX shell reads it as a single word with
+// nothing special in it.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// shellQuoteAll returns words as separate shell words, each quoted with
+// shellQuote.
+func shellQuoteAll(words []string) string {
+	quoted := make([]string, len(words))
+	for i, word := range words {
+		quoted[i] = shellQuote(word)
+	}
+	return strings.Join(quoted, " ")
 }
 
 // RetrieveContent retrieves the file content from the the given file path from

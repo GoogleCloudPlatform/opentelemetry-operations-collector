@@ -35,6 +35,7 @@ func resetState(t *testing.T) {
 	activePolicySet = nil
 	previousPolicySets = []*PolicySet{}
 	watcherChannels = []chan struct{}{}
+	activeProviders.Store(0)
 	// Restored here as well as by the tests that shrink it, so a test that
 	// forgets cannot quietly change the outcome of everything that runs after.
 	maxPreviousPolicySets = defaultMaxPreviousPolicySets
@@ -45,6 +46,19 @@ func TestActivePolicySet_InitialState(t *testing.T) {
 
 	assert.Nil(t, ActivePolicySet())
 	assert.Empty(t, PreviousPolicySets())
+	assert.False(t, IsControlPlaneActive())
+}
+
+func TestRegisterUnregisterProvider(t *testing.T) {
+	resetState(t)
+
+	assert.False(t, IsControlPlaneActive())
+
+	RegisterProvider()
+	assert.True(t, IsControlPlaneActive())
+
+	UnregisterProvider()
+	assert.False(t, IsControlPlaneActive())
 }
 
 func TestSetActivePolicySet_NilHandling(t *testing.T) {

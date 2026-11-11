@@ -28,7 +28,9 @@ metrics:
     note: |
       The gauge value is the unsigned 32-bit integer representation of the active
       policy set's revision ID (or -1 if no policy set is active or if the revision
-      ID cannot be parsed as an integer). Exactly one series is reported per collector.
+      ID cannot be parsed as an integer). Exactly one series is reported per
+      control-plane-managed collector; no series is reported when the control plane
+      provider is not configured.
     annotations:
       code_generation:
         metric_value_type: int

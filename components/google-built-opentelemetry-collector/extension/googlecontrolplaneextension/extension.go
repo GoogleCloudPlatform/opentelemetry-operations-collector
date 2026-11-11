@@ -96,11 +96,15 @@ func (e *controlPlaneExtension) Start(_ context.Context, _ component.Host) error
 // pulling on collection is simpler than maintaining push state, and cannot
 // drift from the registry.
 func (e *controlPlaneExtension) observe(_ context.Context, obs metric.Observer) error {
-	// Exactly one series, always. Emitting nothing when no policy set is active
-	// would make the series disappear, which breaks joins against other
-	// collector metrics such as target_info, and makes "this collector is not
-	// control plane managed" indistinguishable from "this collector is not
-	// reporting at all".
+	// Emit nothing when the extension is configured independently without the
+	// control plane provider.
+	if !e.source.IsControlPlaneActive() {
+		return nil
+	}
+
+	// When the control plane is active, always emit
+	// one series (-1 if no policy set is active) so the series does not
+	// disappear and break joins against other collector metrics.
 	state := e.source.ActivePolicySet()
 	val, ok := parseRevisionValue(state.Revision)
 	if !ok {

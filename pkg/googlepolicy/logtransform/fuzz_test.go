@@ -113,11 +113,49 @@ func fuzzLogTransformSeedPolicies() []*policyv1alpha1.LogTransformPolicy {
 					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Glob{Glob: "hello*"}},
 				},
 			},
-			Action: &policyv1alpha1.LogTransformPolicy_Addition{
-				Addition: &policyv1alpha1.LogAddAction{
+			Additions: []*policyv1alpha1.LogAddition{
+				{
 					Target:        logTargetAttr("tier"),
-					Value:         strVal("soc"),
+					Source:        &policyv1alpha1.LogAddition_Value{Value: strVal("soc")},
 					UpsertEnabled: proto.Bool(true),
+				},
+				{
+					Target:        logTargetAttr("gcp", "routing", "destination"),
+					Source:        &policyv1alpha1.LogAddition_Value{Value: strVal("lakehouse")},
+					UpsertEnabled: proto.Bool(false),
+				},
+			},
+		},
+		{
+			Id: "combined-multistage-normalize-and-scrub",
+			Matchers: []*policyv1alpha1.LogMatcher{
+				{
+					Target:    logAttrTarget("http.method"),
+					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{Existence: &emptypb.Empty{}}},
+				},
+			},
+			Renamings: []*policyv1alpha1.LogRenaming{
+				{
+					Source:        logAttrSelector("http.method"),
+					Target:        logAttrSelector("http.request.method"),
+					UpsertEnabled: proto.Bool(false),
+				},
+			},
+			Additions: []*policyv1alpha1.LogAddition{
+				{
+					Target:        logTargetAttr("http.request.method"),
+					Source:        &policyv1alpha1.LogAddition_Value{Value: strVal("UNKNOWN")},
+					UpsertEnabled: proto.Bool(false),
+				},
+			},
+			Removals: []*policyv1alpha1.LogRemoval{
+				{Target: logAttrSelector("feature.enabled")},
+			},
+			Redactions: []*policyv1alpha1.LogRedaction{
+				{
+					Target:  logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY),
+					Pattern: &policyv1alpha1.LogRedaction_Regex{Regex: `world`},
+					Mask:    &policyv1alpha1.LogRedaction_Replacement{Replacement: "[REDACTED]"},
 				},
 			},
 		},
@@ -142,10 +180,10 @@ func fuzzLogTransformSeedPolicies() []*policyv1alpha1.LogTransformPolicy {
 					Negated:   true,
 				},
 			},
-			Action: &policyv1alpha1.LogTransformPolicy_Addition{
-				Addition: &policyv1alpha1.LogAddAction{
+			Additions: []*policyv1alpha1.LogAddition{
+				{
 					Target:        logTargetRecordField(policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY),
-					Value:         strVal("redacted"),
+					Source:        &policyv1alpha1.LogAddition_Value{Value: strVal("redacted")},
 					UpsertEnabled: proto.Bool(true),
 				},
 			},
@@ -162,34 +200,30 @@ func fuzzLogTransformSeedPolicies() []*policyv1alpha1.LogTransformPolicy {
 					Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{Equality: strVal("my.library")}},
 				},
 			},
-			Action: &policyv1alpha1.LogTransformPolicy_Addition{
-				Addition: &policyv1alpha1.LogAddAction{
+			Additions: []*policyv1alpha1.LogAddition{
+				{
 					Target:        logTargetBodyField("event_data", "userId"),
-					Value:         strVal("user-42"),
+					Source:        &policyv1alpha1.LogAddition_Value{Value: strVal("user-42")},
 					UpsertEnabled: proto.Bool(true),
 				},
 			},
 		},
 		{
 			Id: "remove-attribute",
-			Action: &policyv1alpha1.LogTransformPolicy_Removal{
-				Removal: &policyv1alpha1.LogRemoveAction{
-					Target: logAttrSelector("feature.enabled"),
-				},
+			Removals: []*policyv1alpha1.LogRemoval{
+				{Target: logAttrSelector("feature.enabled")},
 			},
 		},
 		{
 			Id: "remove-nested-body-field",
-			Action: &policyv1alpha1.LogTransformPolicy_Removal{
-				Removal: &policyv1alpha1.LogRemoveAction{
-					Target: logBodyFieldSelector("event_data", "userId"),
-				},
+			Removals: []*policyv1alpha1.LogRemoval{
+				{Target: logBodyFieldSelector("event_data", "userId")},
 			},
 		},
 		{
 			Id: "rename-attribute",
-			Action: &policyv1alpha1.LogTransformPolicy_Renaming{
-				Renaming: &policyv1alpha1.LogRenameAction{
+			Renamings: []*policyv1alpha1.LogRenaming{
+				{
 					Source:        logAttrSelector("old.key"),
 					Target:        logAttrSelector("new.key"),
 					UpsertEnabled: proto.Bool(false),
@@ -198,8 +232,8 @@ func fuzzLogTransformSeedPolicies() []*policyv1alpha1.LogTransformPolicy {
 		},
 		{
 			Id: "rename-body-field",
-			Action: &policyv1alpha1.LogTransformPolicy_Renaming{
-				Renaming: &policyv1alpha1.LogRenameAction{
+			Renamings: []*policyv1alpha1.LogRenaming{
+				{
 					Source:        logBodyFieldSelector("event_data", "userId"),
 					Target:        logBodyFieldSelector("user", "id"),
 					UpsertEnabled: proto.Bool(true),
@@ -208,20 +242,20 @@ func fuzzLogTransformSeedPolicies() []*policyv1alpha1.LogTransformPolicy {
 		},
 		{
 			Id: "redact-attribute",
-			Action: &policyv1alpha1.LogTransformPolicy_Redaction{
-				Redaction: &policyv1alpha1.LogRedactAction{
-					Target:      logTargetAttr("cloud.zone"),
-					Regex:       proto.String(`[a-z]+-[a-z0-9]+`),
-					Replacement: proto.String("[ZONE]"),
+			Redactions: []*policyv1alpha1.LogRedaction{
+				{
+					Target:  logTargetAttr("cloud.zone"),
+					Pattern: &policyv1alpha1.LogRedaction_Regex{Regex: `[a-z]+-[a-z0-9]+`},
+					Mask:    &policyv1alpha1.LogRedaction_Replacement{Replacement: "[ZONE]"},
 				},
 			},
 		},
 		{
 			Id: "redact-body-field",
-			Action: &policyv1alpha1.LogTransformPolicy_Redaction{
-				Redaction: &policyv1alpha1.LogRedactAction{
-					Target:      logTargetBodyField("event_data", "userId"),
-					Replacement: proto.String("[REDACTED]"),
+			Redactions: []*policyv1alpha1.LogRedaction{
+				{
+					Target: logTargetBodyField("event_data", "userId"),
+					Mask:   &policyv1alpha1.LogRedaction_Replacement{Replacement: "[REDACTED]"},
 				},
 			},
 		},

@@ -27,7 +27,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 type mockTransformationPolicy struct {
@@ -611,5 +614,353 @@ func TestProtoDriver_ValidationClassificationAndPolicyClass(t *testing.T) {
 		assert.Equal(t, "load-err", ps.FailedPolicies[1].ID)
 		assert.Equal(t, PolicyClassTransformation, ps.FailedPolicies[1].Class)
 		assert.Equal(t, "policy_failed_to_load", ClassifyPolicyError(ps.FailedPolicies[1].Err))
+	})
+}
+
+func TestProtoDriver_AtomicFailOpenOnUnknownFieldsEnumsAndOneofs(t *testing.T) {
+	errMissingID := errors.New("id cannot be empty")
+	errInvalidAction := errors.New("action must be KEEP or DROP")
+	errEmptyMatchers := errors.New("at least one matcher is required")
+	errUnsetTargetOneof := errors.New("matcher target oneof is required")
+	errInvalidRecordField := errors.New("unrecognized log record field enum")
+	errUnsetPredicateOneof := errors.New("matcher predicate oneof is required")
+
+	d := ProtoDriver[*policyv1alpha1.LogFilterPolicy]{
+		New: func(pb *policyv1alpha1.LogFilterPolicy) (Policy, error) {
+			if pb == nil || pb.GetId() == "" {
+				return nil, errMissingID
+			}
+			switch pb.GetAction() {
+			case policyv1alpha1.Action_ACTION_KEEP, policyv1alpha1.Action_ACTION_DROP:
+			default:
+				return nil, errInvalidAction
+			}
+			if len(pb.GetMatchers()) == 0 {
+				return nil, errEmptyMatchers
+			}
+			for _, m := range pb.GetMatchers() {
+				if m == nil || m.GetTarget() == nil || m.GetTarget().GetTarget() == nil {
+					return nil, errUnsetTargetOneof
+				}
+				if rf, ok := m.GetTarget().GetTarget().(*policyv1alpha1.LogFieldSelector_RecordField); ok {
+					switch rf.RecordField {
+					case policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
+						policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT,
+						policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER,
+						policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID,
+						policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID:
+					default:
+						return nil, errInvalidRecordField
+					}
+				}
+				if m.GetPredicate() == nil || m.GetPredicate().GetKind() == nil {
+					return nil, errUnsetPredicateOneof
+				}
+			}
+			return &mockTransformationPolicy{name: pb.GetId(), signals: []Signal{SignalLogs}}, nil
+		},
+	}
+
+	protoName := (&policyv1alpha1.LogFilterPolicy{}).ProtoReflect().Descriptor().FullName()
+	unregisterForTest(t, "test_atomic_log_filter", protoName)
+	require.NoError(t, RegisterPolicyDriver("test_atomic_log_filter", d))
+
+	unknownTagBytes := protowire.AppendTag(nil, 99, protowire.VarintType)
+	unknownTagBytes = protowire.AppendVarint(unknownTagBytes, 1)
+
+	t.Run("LoadPolicy rejects top-level and nested unknown JSON fields", func(t *testing.T) {
+		// Top-level unknown field
+		_, err := LoadPolicy("test_atomic_log_filter", map[string]any{
+			"type":         "test_atomic_log_filter",
+			"id":           "top-unknown",
+			"action":       "ACTION_DROP",
+			"future_field": "unexpected",
+			"matchers": []any{
+				map[string]any{
+					"target":    map[string]any{"record_field": "LOG_RECORD_FIELD_BODY"},
+					"predicate": map[string]any{"existence": map[string]any{}},
+				},
+			},
+		})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrPolicyFailedToLoad)
+
+		// Nested unknown field in second matcher rejects entire policy rather than dropping matcher
+		_, err = LoadPolicy("test_atomic_log_filter", map[string]any{
+			"type":   "test_atomic_log_filter",
+			"id":     "nested-unknown",
+			"action": "ACTION_DROP",
+			"matchers": []any{
+				map[string]any{
+					"target":    map[string]any{"record_field": "LOG_RECORD_FIELD_BODY"},
+					"predicate": map[string]any{"existence": map[string]any{}},
+				},
+				map[string]any{
+					"target":              map[string]any{"record_field": "LOG_RECORD_FIELD_SEVERITY_TEXT"},
+					"predicate":           map[string]any{"existence": map[string]any{}},
+					"future_matcher_flag": true,
+				},
+			},
+		})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrPolicyFailedToLoad)
+	})
+
+	t.Run("LoadPolicy rejects unrecognized enum values and oneof branches in JSON", func(t *testing.T) {
+		// Unrecognized string enum value
+		_, err := LoadPolicy("test_atomic_log_filter", map[string]any{
+			"type":   "test_atomic_log_filter",
+			"id":     "unknown-enum-str",
+			"action": "ACTION_FUTURE_SAMPLING",
+			"matchers": []any{
+				map[string]any{
+					"target":    map[string]any{"record_field": "LOG_RECORD_FIELD_BODY"},
+					"predicate": map[string]any{"existence": map[string]any{}},
+				},
+			},
+		})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrPolicyFailedToLoad)
+
+		// Unrecognized numeric enum value
+		_, err = LoadPolicy("test_atomic_log_filter", map[string]any{
+			"type":   "test_atomic_log_filter",
+			"id":     "unknown-enum-num",
+			"action": 999,
+			"matchers": []any{
+				map[string]any{
+					"target":    map[string]any{"record_field": "LOG_RECORD_FIELD_BODY"},
+					"predicate": map[string]any{"existence": map[string]any{}},
+				},
+			},
+		})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrPolicyFailedValidation)
+		assert.ErrorIs(t, err, errInvalidAction)
+
+		// Unrecognized oneof branch in target
+		_, err = LoadPolicy("test_atomic_log_filter", map[string]any{
+			"type":   "test_atomic_log_filter",
+			"id":     "unknown-target-oneof",
+			"action": "ACTION_DROP",
+			"matchers": []any{
+				map[string]any{
+					"target":    map[string]any{"future_selector": "foo"},
+					"predicate": map[string]any{"existence": map[string]any{}},
+				},
+			},
+		})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrPolicyFailedToLoad)
+
+		// Unrecognized oneof branch in predicate
+		_, err = LoadPolicy("test_atomic_log_filter", map[string]any{
+			"type":   "test_atomic_log_filter",
+			"id":     "unknown-predicate-oneof",
+			"action": "ACTION_DROP",
+			"matchers": []any{
+				map[string]any{
+					"target":    map[string]any{"record_field": "LOG_RECORD_FIELD_BODY"},
+					"predicate": map[string]any{"future_regex": ".*"},
+				},
+			},
+		})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrPolicyFailedToLoad)
+	})
+
+	t.Run("LoadPolicyFromProto rejects top-level and nested unknown wire fields", func(t *testing.T) {
+		validMatcher := func() *policyv1alpha1.LogMatcher {
+			return &policyv1alpha1.LogMatcher{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_RecordField{
+						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
+					},
+				},
+				Predicate: &policyv1alpha1.Predicate{
+					Kind: &policyv1alpha1.Predicate_Existence{Existence: &emptypb.Empty{}},
+				},
+			}
+		}
+
+		// 1. Top-level unknown wire field
+		topUnknown := &policyv1alpha1.LogFilterPolicy{
+			Id:       "wire-top-unknown",
+			Action:   policyv1alpha1.Action_ACTION_DROP.Enum(),
+			Matchers: []*policyv1alpha1.LogMatcher{validMatcher()},
+		}
+		topUnknown.ProtoReflect().SetUnknown(unknownTagBytes)
+		_, err := LoadPolicyFromProto(topUnknown)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrPolicyFailedValidation)
+		assert.ErrorIs(t, err, ErrPolicyUnknownFields)
+
+		// 2. Unknown wire field on second matcher in repeated list
+		matcherUnknown := &policyv1alpha1.LogFilterPolicy{
+			Id:       "wire-matcher-unknown",
+			Action:   policyv1alpha1.Action_ACTION_DROP.Enum(),
+			Matchers: []*policyv1alpha1.LogMatcher{validMatcher(), validMatcher()},
+		}
+		matcherUnknown.Matchers[1].ProtoReflect().SetUnknown(unknownTagBytes)
+		_, err = LoadPolicyFromProto(matcherUnknown)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrPolicyFailedValidation)
+		assert.ErrorIs(t, err, ErrPolicyUnknownFields)
+
+		// 3. Unknown wire field (e.g. unrecognized future oneof branch) inside nested Target sub-message
+		targetUnknown := &policyv1alpha1.LogFilterPolicy{
+			Id:       "wire-target-unknown",
+			Action:   policyv1alpha1.Action_ACTION_DROP.Enum(),
+			Matchers: []*policyv1alpha1.LogMatcher{validMatcher()},
+		}
+		targetUnknown.Matchers[0].Target = &policyv1alpha1.LogFieldSelector{}
+		targetUnknown.Matchers[0].Target.ProtoReflect().SetUnknown(unknownTagBytes)
+		_, err = LoadPolicyFromProto(targetUnknown)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrPolicyFailedValidation)
+		assert.ErrorIs(t, err, ErrPolicyUnknownFields)
+
+		// 4. Unknown wire field inside nested oneof message (Predicate.Existence)
+		predOneofMsgUnknown := &policyv1alpha1.LogFilterPolicy{
+			Id:       "wire-pred-oneof-unknown",
+			Action:   policyv1alpha1.Action_ACTION_DROP.Enum(),
+			Matchers: []*policyv1alpha1.LogMatcher{validMatcher()},
+		}
+		emptyWithUnknown := &emptypb.Empty{}
+		emptyWithUnknown.ProtoReflect().SetUnknown(unknownTagBytes)
+		predOneofMsgUnknown.Matchers[0].Predicate = &policyv1alpha1.Predicate{
+			Kind: &policyv1alpha1.Predicate_Existence{Existence: emptyWithUnknown},
+		}
+		_, err = LoadPolicyFromProto(predOneofMsgUnknown)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrPolicyFailedValidation)
+		assert.ErrorIs(t, err, ErrPolicyUnknownFields)
+
+		// 5. Typed nil proto delegates to New and wraps ErrPolicyFailedValidation
+		var typedNil *policyv1alpha1.LogFilterPolicy
+		_, err = d.LoadPolicyProto(typedNil)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrPolicyFailedValidation)
+		assert.ErrorIs(t, err, errMissingID)
+	})
+
+	t.Run("MakePolicySet and MakePolicySetFromProtos enforce policy-level atomic fail-open", func(t *testing.T) {
+		// JSON PolicySet: policy with unknown field in one matcher fails open atomically while valid sibling loads
+		psJSON, err := MakePolicySet("rev-atomic-json", []map[string]any{
+			{
+				"type":   "test_atomic_log_filter",
+				"id":     "bad-unknown-matcher-policy",
+				"action": "ACTION_DROP",
+				"matchers": []any{
+					map[string]any{
+						"target":    map[string]any{"record_field": "LOG_RECORD_FIELD_BODY"},
+						"predicate": map[string]any{"existence": map[string]any{}},
+					},
+					map[string]any{
+						"target":         map[string]any{"record_field": "LOG_RECORD_FIELD_SPAN_ID"},
+						"predicate":      map[string]any{"existence": map[string]any{}},
+						"unknown_option": "must-reject-whole-policy",
+					},
+				},
+			},
+			{
+				"type":   "test_atomic_log_filter",
+				"id":     "valid-sibling-policy",
+				"action": "ACTION_KEEP",
+				"matchers": []any{
+					map[string]any{
+						"target":    map[string]any{"record_field": "LOG_RECORD_FIELD_BODY"},
+						"predicate": map[string]any{"existence": map[string]any{}},
+					},
+				},
+			},
+		})
+		require.Error(t, err)
+		require.NotNil(t, psJSON)
+		assert.NotContains(t, psJSON.Policies, "bad-unknown-matcher-policy")
+		assert.Contains(t, psJSON.Policies, "valid-sibling-policy")
+		require.Len(t, psJSON.FailedPolicies, 1)
+		assert.Equal(t, "bad-unknown-matcher-policy", psJSON.FailedPolicies[0].ID)
+		assert.Equal(t, PolicyClassTransformation, psJSON.FailedPolicies[0].Class)
+
+		// Proto PolicySet: policy with unknown wire field or unknown enum fails open atomically while valid sibling loads
+		badWirePolicy := &policyv1alpha1.LogFilterPolicy{
+			Id:     "bad-wire-policy",
+			Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+			Matchers: []*policyv1alpha1.LogMatcher{
+				{
+					Target: &policyv1alpha1.LogFieldSelector{
+						Target: &policyv1alpha1.LogFieldSelector_RecordField{
+							RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
+						},
+					},
+					Predicate: &policyv1alpha1.Predicate{
+						Kind: &policyv1alpha1.Predicate_Existence{Existence: &emptypb.Empty{}},
+					},
+				},
+			},
+		}
+		badWirePolicy.Matchers[0].ProtoReflect().SetUnknown(unknownTagBytes)
+
+		badEnumPolicy := &policyv1alpha1.LogFilterPolicy{
+			Id:     "bad-enum-policy",
+			Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+			Matchers: []*policyv1alpha1.LogMatcher{
+				{
+					Target: &policyv1alpha1.LogFieldSelector{
+						Target: &policyv1alpha1.LogFieldSelector_RecordField{
+							RecordField: policyv1alpha1.LogRecordField(999),
+						},
+					},
+					Predicate: &policyv1alpha1.Predicate{
+						Kind: &policyv1alpha1.Predicate_Existence{Existence: &emptypb.Empty{}},
+					},
+				},
+			},
+		}
+
+		goodProtoPolicy := &policyv1alpha1.LogFilterPolicy{
+			Id:     "good-proto-policy",
+			Action: policyv1alpha1.Action_ACTION_KEEP.Enum(),
+			Matchers: []*policyv1alpha1.LogMatcher{
+				{
+					Target: &policyv1alpha1.LogFieldSelector{
+						Target: &policyv1alpha1.LogFieldSelector_RecordField{
+							RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
+						},
+					},
+					Predicate: &policyv1alpha1.Predicate{
+						Kind: &policyv1alpha1.Predicate_Existence{Existence: &emptypb.Empty{}},
+					},
+				},
+			},
+		}
+
+		psProto, err := MakePolicySetFromProtos("projects/p/locations/l/policySets/ps", "rev-atomic-proto", []proto.Message{
+			badWirePolicy,
+			badEnumPolicy,
+			goodProtoPolicy,
+		})
+		require.Error(t, err)
+		require.NotNil(t, psProto)
+		assert.NotContains(t, psProto.Policies, "bad-wire-policy")
+		assert.NotContains(t, psProto.Policies, "bad-enum-policy")
+		assert.Contains(t, psProto.Policies, "good-proto-policy")
+		require.Len(t, psProto.FailedPolicies, 2)
+		assert.Equal(t, "bad-wire-policy", psProto.FailedPolicies[0].ID)
+		assert.ErrorIs(t, psProto.FailedPolicies[0].Err, ErrPolicyUnknownFields)
+		assert.Equal(t, "bad-enum-policy", psProto.FailedPolicies[1].ID)
+		assert.ErrorIs(t, psProto.FailedPolicies[1].Err, ErrPolicyFailedValidation)
+	})
+
+	t.Run("checkNoUnknownFields inspects map message values", func(t *testing.T) {
+		st, err := structpb.NewStruct(map[string]any{"k": "v"})
+		require.NoError(t, err)
+		require.NoError(t, checkNoUnknownFields(st.ProtoReflect()))
+
+		st.Fields["k"].ProtoReflect().SetUnknown(unknownTagBytes)
+		err = checkNoUnknownFields(st.ProtoReflect())
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrPolicyUnknownFields)
 	})
 }

@@ -1,0 +1,36 @@
+- resourceLogs:
+    - resource:
+        attributes:
+            - key: service.name
+              value:
+                stringValue: auth-service
+      scopeLogs:
+        - logRecords:
+            - body:
+                kvlistValue:
+                    values:
+                        - key: account
+                          value:
+                            kvlistValue:
+                                values:
+                                    - key: id
+                                      value:
+                                        stringValue: acct-XXXX
+                        - key: event
+                          value:
+                            stringValue: user_login
+            - body:
+                kvlistValue:
+                    values:
+                        - key: account
+                          value:
+                            kvlistValue:
+                                values:
+                                    - key: id
+                                      value:
+                                        stringValue: guest-XXXX
+                        - key: event
+                          value:
+                            stringValue: guest_access
+          scope:
+            name: auth-logger

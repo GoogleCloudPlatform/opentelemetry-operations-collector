@@ -22,7 +22,6 @@ import (
 
 	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
-	"go.opentelemetry.io/collector/component"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
@@ -83,9 +82,9 @@ func verifyCompiledIISPolicy(t *testing.T, p googlepolicy.Policy) {
 	if !ok {
 		t.Fatalf("receiverConfig() receivers not a map: %T", cfg["receivers"])
 	}
-	iisCfg, ok := receivers[DefaultReceiverID].(map[string]any)
+	iisCfg, ok := receivers[receiverID.String()].(map[string]any)
 	if !ok {
-		t.Fatalf("receiverConfig() receivers.%s not a map: %T", DefaultReceiverID, receivers[DefaultReceiverID])
+		t.Fatalf("receiverConfig() receivers.%s not a map: %T", receiverID.String(), receivers[receiverID.String()])
 	}
 	expectedIntervalStr := fmt.Sprintf("%ds", effInterval)
 	if got := iisCfg["collection_interval"]; got != expectedIntervalStr {
@@ -118,8 +117,8 @@ func verifyCompiledIISPolicy(t *testing.T, p googlepolicy.Policy) {
 		return
 	}
 
-	if len(metricIDs) != 1 || metricIDs[0] != component.MustNewID(DefaultReceiverID) {
-		t.Fatalf("MetricReceiverIDs() = %v, want [%s]", metricIDs, DefaultReceiverID)
+	if len(metricIDs) != 1 || metricIDs[0] != receiverID {
+		t.Fatalf("MetricReceiverIDs() = %v, want [%s]", metricIDs, receiverID)
 	}
 
 	raw := conf.ToStringMap()
@@ -127,9 +126,9 @@ func verifyCompiledIISPolicy(t *testing.T, p googlepolicy.Policy) {
 	if !ok {
 		t.Fatalf("receivers not a map: %T", raw["receivers"])
 	}
-	iisCfg, ok = receivers[DefaultReceiverID].(map[string]any)
+	iisCfg, ok = receivers[receiverID.String()].(map[string]any)
 	if !ok {
-		t.Fatalf("receivers.%s not a map: %T", DefaultReceiverID, receivers[DefaultReceiverID])
+		t.Fatalf("receivers.%s not a map: %T", receiverID.String(), receivers[receiverID.String()])
 	}
 	if got := iisCfg["collection_interval"]; got != expectedIntervalStr {
 		t.Fatalf("collection_interval = %v, want %q", got, expectedIntervalStr)

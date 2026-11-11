@@ -17,6 +17,9 @@ exporters:
         timeout: 5s
         write_buffer_size: 524288
 extensions:
+    file_storage/googlecontrolplane:
+        create_directory: true
+        directory: C:\ProgramData\Google\OpenTelemetry Collector\storage
     googleclientauth/default_gcp_destination:
         project: ""
         quota_project: ""
@@ -38,11 +41,11 @@ processors:
             partition:
                 cache_size: 10000
                 idle_timeout: 1m30s
-            sizer: {}
+            sizer: items
         block_on_overflow: true
         num_consumers: 1
         queue_size: 10
-        sizer: {}
+        sizer: requests
         wait_for_result: false
     queue_batch/default_gcp_destination_batch_metrics:
         batch:
@@ -52,25 +55,25 @@ processors:
             partition:
                 cache_size: 10000
                 idle_timeout: 1m30s
-            sizer: {}
+            sizer: items
         block_on_overflow: true
         num_consumers: 1
         queue_size: 10
-        sizer: {}
+        sizer: requests
         wait_for_result: false
     queue_batch/default_gcp_destination_batch_traces:
         batch:
             flush_timeout: 200ms
-            max_size: 25000
-            min_size: 25000
+            max_size: 8192
+            min_size: 8192
             partition:
                 cache_size: 10000
                 idle_timeout: 1m30s
-            sizer: {}
+            sizer: items
         block_on_overflow: true
         num_consumers: 1
         queue_size: 10
-        sizer: {}
+        sizer: requests
         wait_for_result: false
     resourcedetection/default_self_metrics:
         detectors:
@@ -128,6 +131,7 @@ receivers:
             - otelcol-google
         ignore_channel_errors: true
         max_reads: 500
+        storage: file_storage/googlecontrolplane
         suppress_rendering_info: true
     windowseventlog/microsoft-windows-sysmon_operational_6ebeeb3b09fcec02:
         channel: Microsoft-Windows-Sysmon/Operational
@@ -135,6 +139,7 @@ receivers:
             - otelcol-google
         ignore_channel_errors: true
         max_reads: 500
+        storage: file_storage/googlecontrolplane
         suppress_rendering_info: true
     windowseventlog/security_c3a409ae6f7ebfb4:
         channel: Security
@@ -142,6 +147,7 @@ receivers:
             - otelcol-google
         ignore_channel_errors: true
         max_reads: 500
+        storage: file_storage/googlecontrolplane
         suppress_rendering_info: true
     windowseventlog/system_d621c1a7169f2ca5:
         channel: System
@@ -149,11 +155,13 @@ receivers:
             - otelcol-google
         ignore_channel_errors: true
         max_reads: 500
+        storage: file_storage/googlecontrolplane
         suppress_rendering_info: true
 service:
     extensions:
         - googleclientauth/default_gcp_destination
         - googlecontrolplane
+        - file_storage/googlecontrolplane
     pipelines:
         logs/default_self_metrics:
             exporters:

@@ -188,16 +188,16 @@ func TestDriver_LoadPolicy(t *testing.T) {
 	assert.Equal(t, PolicyType, p.PolicyType())
 	assert.Equal(t, googlepolicy.PolicyClassTransformation, p.PolicyClass())
 
-	// 2. Map with unknown fields (forward compatibility)
+	// 2. Map with unknown fields is rejected (atomic fail-open)
 	rawWithUnknown := map[string]any{
 		"type":             PolicyType,
 		"id":               "test-future-policy",
 		"sampling_percent": 10.0,
 		"future_field":     "unknown_val",
 	}
-	p, err = googlepolicy.LoadPolicy(PolicyType, rawWithUnknown)
-	require.NoError(t, err)
-	assert.Equal(t, "test-future-policy", p.PolicyName())
+	_, err = googlepolicy.LoadPolicy(PolicyType, rawWithUnknown)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, googlepolicy.ErrPolicyFailedToLoad)
 
 	// 3. Invalid map configuration (missing ID)
 	rawInvalid := map[string]any{

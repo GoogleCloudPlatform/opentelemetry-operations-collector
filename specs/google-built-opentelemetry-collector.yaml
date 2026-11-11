@@ -15,14 +15,14 @@
 name: google-built-opentelemetry-collector
 module: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/google-built-opentelemetry-collector
 display_name: Google-Built OpenTelemetry Collector
-version: 0.164.0
+version: 0.165.1
 description: "OpenTelemetry Collector Built By Google"
 blurb: >-
   The Google-Built OpenTelemetry Collector is an open-source, production-ready build
   of the upstream OpenTelemetry Collector that is built with upstream OpenTelemetry
   components.
-opentelemetry_version: 0.164.0
-opentelemetry_contrib_version: 0.164.1
+opentelemetry_version: 0.165.0
+opentelemetry_contrib_version: 0.165.1
 binary_name: otelcol-google
 go_version: 1.26.10
 permanent_ocb_directory: true
@@ -152,6 +152,7 @@ components:
     - https
     - yaml
     - googlesecretmanager
+    - secretsmanager
     - googlecontrolplane
 
 replaces:
@@ -161,6 +162,9 @@ replaces:
   - from: github.com/buger/jsonparser
     to: github.com/buger/jsonparser v1.1.2
     reason: Force update buger/jsonparser to v1.1.2 to fix vulnerability
+  - from: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor
+    to: ../../components/google-built-opentelemetry-collector/processor/googlepolicyprocessor
+    reason: Local dependency for googlecontrolplaneprovider
   - from: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy
     to: ../../pkg/googlepolicy
     reason: Local dependency for googlecontrolplaneprovider

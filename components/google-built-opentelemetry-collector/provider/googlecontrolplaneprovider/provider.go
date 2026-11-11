@@ -20,7 +20,9 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -30,6 +32,7 @@ import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider/policies/selfmetrics"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/event"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
+	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/filelogsource"
 	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/hostmetricssource"
 	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/iissource"
 	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/journaldsource"
@@ -45,6 +48,7 @@ import (
 	"go.opentelemetry.io/collector/otelcol"
 	"go.opentelemetry.io/collector/pipeline"
 	"go.opentelemetry.io/collector/service"
+	"go.opentelemetry.io/collector/service/extensions"
 	"go.opentelemetry.io/collector/service/pipelines"
 	"go.uber.org/zap"
 )
@@ -582,8 +586,27 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 	canonicalMetricProcessors := append([]component.ID{rdID, transformID, googlePolicyID}, destPolicy.PreProcessMetricIDs()...)
 	canonicalTraceProcessors := append([]component.ID{rdID, transformID, googlePolicyID}, destPolicy.PreProcessTraceIDs()...)
 
+	storageExtID := googlepolicy.StorageExtensionID
+	storageCfg := map[string]any{
+		"create_directory": true,
+		"directory":        defaultStorageDir(),
+	}
+	storageExtConf := &otelcol.Config{
+		Extensions: map[component.ID]component.Config{
+			storageExtID: component.Config(storageCfg),
+		},
+	}
+	storageCm := confmap.New()
+	if err := storageCm.Marshal(storageExtConf); err != nil {
+		return nil, true, fmt.Errorf("failed to marshal file_storage extension config: %w", err)
+	}
+	if err := conf.Merge(cleanConf(storageCm)); err != nil {
+		return nil, true, fmt.Errorf("failed to merge file_storage extension config: %w", err)
+	}
+
 	canonicalServiceConf := &otelcol.Config{
 		Service: service.Config{
+			Extensions: extensions.Config{storageExtID},
 			Pipelines: pipelines.Config{
 				canonicalLogsPipelineID: &pipelines.PipelineConfig{
 					Receivers:  deduplicateComponentIDs(activeLogReceivers),
@@ -618,7 +641,7 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 		return nil, false, err
 	}
 
-	confMap := conf.ToStringMap()
+	confMap, _ := escapeDollarSigns(conf.ToStringMap()).(map[string]any)
 	ret, err := confmap.NewRetrieved(confMap)
 	return ret, false, err
 }
@@ -807,6 +830,70 @@ func cleanNilEntries(m map[string]any) {
 	}
 }
 
+// escapeDollarSigns recursively replaces every literal "$" with "$$" across all
+// strings in val (and normalizes typed string/map slices and maps to []any and
+// map[string]any so upstream confmap.Resolver traverses them).
+//
+// Upstream confmap.Resolver.Resolve runs expandValueRecursively followed by its
+// own escapeDollarSigns pass ("$$" -> "$") on the merged configuration. Doubling
+// every "$" ensures that any sequence of k >= 1 dollar signs preceding "{...}"
+// becomes 2k dollar signs (so 2k-1, an odd number, precedes "${...}"), which
+// confmap treats as an escaped literal rather than a provider URI reference, and
+// confmap's unescaping pass then restores the exact original string.
+func escapeDollarSigns(val any) any {
+	switch v := val.(type) {
+	case string:
+		return strings.ReplaceAll(v, "$", "$$")
+	case []any:
+		if v == nil {
+			return nil
+		}
+		nslice := make([]any, len(v))
+		for i, x := range v {
+			nslice[i] = escapeDollarSigns(x)
+		}
+		return nslice
+	case []string:
+		if v == nil {
+			return nil
+		}
+		nslice := make([]any, len(v))
+		for i, x := range v {
+			nslice[i] = strings.ReplaceAll(x, "$", "$$")
+		}
+		return nslice
+	case []map[string]any:
+		if v == nil {
+			return nil
+		}
+		nslice := make([]any, len(v))
+		for i, x := range v {
+			nslice[i] = escapeDollarSigns(x)
+		}
+		return nslice
+	case map[string]any:
+		if v == nil {
+			return nil
+		}
+		nmap := make(map[string]any, len(v))
+		for k, x := range v {
+			nmap[k] = escapeDollarSigns(x)
+		}
+		return nmap
+	case map[string]string:
+		if v == nil {
+			return nil
+		}
+		nmap := make(map[string]any, len(v))
+		for k, x := range v {
+			nmap[k] = strings.ReplaceAll(x, "$", "$$")
+		}
+		return nmap
+	default:
+		return val
+	}
+}
+
 func (p *provider) setupWatcher(watcher confmap.WatcherFunc, ctx context.Context, ret *confmap.Retrieved) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -940,4 +1027,16 @@ func (p *provider) Shutdown(context.Context) error {
 		manager.Stop()
 	}
 	return nil
+}
+
+// defaultStorageDir returns the GBOC-owned storage directory path for the host OS.
+func defaultStorageDir() string {
+	if runtime.GOOS == "windows" {
+		progData := os.Getenv("ProgramData")
+		if progData == "" {
+			progData = `C:\ProgramData`
+		}
+		return filepath.Join(progData, "Google", "OpenTelemetry Collector", "storage")
+	}
+	return "/var/lib/otelcol-google/storage"
 }

@@ -720,6 +720,7 @@ func TestXDSPolicyManager_EmptyRevisionClearsPolicies(t *testing.T) {
 
 	responded := make(chan *discoveryv3.DiscoveryRequest, 4)
 	firstAsserted := make(chan struct{})
+	secondAsserted := make(chan struct{})
 
 	srv := &fakeADSServer{streamOpened: make(chan struct{}, 8)}
 	srv.handlers = []func(discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error{
@@ -755,6 +756,24 @@ func TestXDSPolicyManager_EmptyRevisionClearsPolicies(t *testing.T) {
 				return err
 			}
 			responded <- ack2
+			select {
+			case <-secondAsserted:
+			case <-stream.Context().Done():
+				return stream.Context().Err()
+			}
+
+			// Rolling back to rev-1 after a 0-resource removal must re-apply rev-1.
+			if err := stream.Send(&discoveryv3.DiscoveryResponse{
+				VersionInfo: "rev-1", Nonce: "n3", TypeUrl: xdsPolicyTypeURL,
+				Resources: []*anypb.Any{policyResource(t, "log-filter", "rev-1")},
+			}); err != nil {
+				return err
+			}
+			ack3, err := srv.recv(stream)
+			if err != nil {
+				return err
+			}
+			responded <- ack3
 
 			<-stream.Context().Done()
 			return stream.Context().Err()
@@ -777,6 +796,14 @@ func TestXDSPolicyManager_EmptyRevisionClearsPolicies(t *testing.T) {
 	require.Eventually(t, func() bool {
 		return len(activePolicyNames(t)) == 0
 	}, 5*time.Second, time.Millisecond, "an empty revision for our own type clears the policy set")
+	close(secondAsserted)
+
+	restored := <-responded
+	assert.Equal(t, "rev-1", restored.GetVersionInfo())
+	assert.Nil(t, restored.GetErrorDetail())
+	require.Eventually(t, func() bool {
+		return assert.ObjectsAreEqual([]string{"log-filter"}, activePolicyNames(t))
+	}, 5*time.Second, time.Millisecond, "rolling back to rev-1 after a 0-resource response must re-apply rev-1")
 }
 
 // TestXDSPolicyManager_EmptyTelemetryCollectorACKsAndReleasesStart asserts that

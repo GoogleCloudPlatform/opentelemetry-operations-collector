@@ -76,6 +76,7 @@ var (
 	activePolicySet    *PolicySet
 	previousPolicySets = []*PolicySet{}
 	watcherChannels    = []chan struct{}{}
+	activeProviders    int
 )
 
 // WatcherChannel is a receive-only channel that receives a signal when activePolicySet changes.
@@ -249,12 +250,28 @@ func stripTypeKey(raw map[string]any) map[string]any {
 	return stripped
 }
 
-// IsControlPlaneActive reports whether the control plane policy engine is
-// active in this process (an active policy set is loaded in the registry).
+// RegisterProvider marks a control plane provider as active in this process.
+func RegisterProvider() {
+	policySetMu.Lock()
+	defer policySetMu.Unlock()
+	activeProviders++
+}
+
+// UnregisterProvider unmarks a previously registered control plane provider.
+func UnregisterProvider() {
+	policySetMu.Lock()
+	defer policySetMu.Unlock()
+	if activeProviders > 0 {
+		activeProviders--
+	}
+}
+
+// IsControlPlaneActive reports whether a control plane provider is active in
+// this process.
 func IsControlPlaneActive() bool {
 	policySetMu.RLock()
 	defer policySetMu.RUnlock()
-	return activePolicySet != nil
+	return activeProviders > 0
 }
 
 // ActivePolicySet returns a copy of the currently active policy set, or nil if none is set.

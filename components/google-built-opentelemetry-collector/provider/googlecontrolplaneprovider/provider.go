@@ -98,10 +98,11 @@ type provider struct {
 
 	evalMu sync.Mutex
 
-	mu          sync.Mutex
-	stopped     bool
-	notified    bool
-	cachedRet   *confmap.Retrieved
+	mu                 sync.Mutex
+	stopped            bool
+	notified           bool
+	providerRegistered bool
+	cachedRet          *confmap.Retrieved
 	cachedRevID string
 	manager     googlepolicy.Manager
 	watcher     confmap.WatcherFunc
@@ -900,6 +901,10 @@ func (p *provider) setupWatcher(watcher confmap.WatcherFunc, ctx context.Context
 	if p.stopped {
 		return
 	}
+	if !p.providerRegistered {
+		googlepolicy.RegisterProvider()
+		p.providerRegistered = true
+	}
 	p.watcher = watcher
 	p.lastCtx = ctx
 	p.notified = false
@@ -1017,6 +1022,10 @@ func (p *provider) Shutdown(context.Context) error {
 		if p.watcherCh != nil {
 			googlepolicy.UnregisterWatcherChannel(p.watcherCh)
 			p.watcherCh = nil
+		}
+		if p.providerRegistered {
+			googlepolicy.UnregisterProvider()
+			p.providerRegistered = false
 		}
 	})
 	p.mu.Lock()

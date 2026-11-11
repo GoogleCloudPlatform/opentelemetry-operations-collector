@@ -49,7 +49,8 @@ func setActivePolicySet(t *testing.T, ps *googlepolicy.PolicySet) {
 func TestRegistrySource_IsControlPlaneActive(t *testing.T) {
 	assert.False(t, registrySource{}.IsControlPlaneActive())
 
-	setActivePolicySet(t, &googlepolicy.PolicySet{RevisionID: "rev-1"})
+	googlepolicy.RegisterProvider()
+	t.Cleanup(googlepolicy.UnregisterProvider)
 	assert.True(t, registrySource{}.IsControlPlaneActive())
 }
 

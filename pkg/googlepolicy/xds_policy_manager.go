@@ -915,13 +915,16 @@ func (w *policyResourceWatcher) ResourceChanged(data xdsclient.ResourceData, don
 func (w *policyResourceWatcher) ResourceError(err error, done func()) {
 	defer done()
 	if err != nil && strings.Contains(err.Error(), "has been removed") {
-		if active := ActivePolicySet(); active != nil && len(active.Policies) > 0 {
-			w.m.logger.Warn("xDS revision contains no policies, clearing the active policy set")
+		if active := ActivePolicySet(); active != nil {
+			if len(active.Policies) > 0 {
+				w.m.logger.Warn("xDS revision contains no policies, clearing the active policy set")
+			}
+			SetActivePolicySet(&PolicySet{
+				Policies:   map[string]*PolicySetEntry{},
+				ReceivedAt: time.Now(),
+			})
 		}
-		SetActivePolicySet(&PolicySet{
-			Policies:   map[string]*PolicySetEntry{},
-			ReceivedAt: time.Now(),
-		})
+		w.m.setLastAppliedState("", nil)
 	}
 	w.m.markReady()
 }

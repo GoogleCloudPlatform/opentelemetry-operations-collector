@@ -154,7 +154,6 @@ service:
                 - transform/default_self_metrics
                 - queue_batch/default_gcp_destination_batch_logs
                 - queue_batch/default_gcp_destination_split_logs
-                - queue_batch/default_gcp_destination_split_logs
             receivers:
                 - otlp/default_self_metrics
         logs/googlecontrolplane:
@@ -165,7 +164,6 @@ service:
                 - transform/googlecontrolplane
                 - googlepolicy
                 - queue_batch/default_gcp_destination_batch_logs
-                - queue_batch/default_gcp_destination_split_logs
                 - queue_batch/default_gcp_destination_split_logs
             receivers:
                 - nop/googlecontrolplane

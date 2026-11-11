@@ -35,7 +35,7 @@ func resetState(t *testing.T) {
 	activePolicySet = nil
 	previousPolicySets = []*PolicySet{}
 	watcherChannels = []chan struct{}{}
-	activeProviders = 0
+	activeProviders.Store(0)
 	// Restored here as well as by the tests that shrink it, so a test that
 	// forgets cannot quietly change the outcome of everything that runs after.
 	maxPreviousPolicySets = defaultMaxPreviousPolicySets

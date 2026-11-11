@@ -64,56 +64,112 @@ func TestGCPDestinationPolicy_Evaluate_QueueBatchConfig(t *testing.T) {
 
 	assert.Equal(t, googlepolicy.StorageExtensionID.String(), logMap["storage"])
 	assert.Equal(t, "bytes", logMap["sizer"])
-	assert.Equal(t, int64(20000000), logMap["queue_size"])
+	assert.Equal(t, int64(33554432), logMap["queue_size"])
 	assert.Equal(t, 10, logMap["num_consumers"])
 	assert.Equal(t, true, logMap["block_on_overflow"])
 
 	batchMap, ok := logMap["batch"].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, "bytes", batchMap["sizer"])
-	assert.Equal(t, int64(1000000), batchMap["min_size"])
-	assert.Equal(t, int64(4000000), batchMap["max_size"])
+	assert.Equal(t, int64(3670016), batchMap["min_size"])
+	assert.Equal(t, int64(4194304), batchMap["max_size"])
 	assert.Equal(t, 200*time.Millisecond, batchMap["flush_timeout"])
 
 	// Stage 2 log queue_batch: in-memory item splitter for UTR dual limits (kMaxLogCountPerBatch = 8,192)
-	splitKey := "processors::queue_batch/default_gcp_destination_split_logs"
-	require.True(t, conf.IsSet(splitKey))
-	splitSub, err := conf.Sub(splitKey)
+	splitLogKey := "processors::queue_batch/default_gcp_destination_split_logs"
+	require.True(t, conf.IsSet(splitLogKey))
+	splitLogSub, err := conf.Sub(splitLogKey)
 	require.NoError(t, err)
-	splitMap := splitSub.ToStringMap()
+	splitLogMap := splitLogSub.ToStringMap()
 
-	assert.Nil(t, splitMap["storage"])
-	assert.Equal(t, "requests", splitMap["sizer"])
-	assert.Equal(t, int64(10), splitMap["queue_size"])
+	assert.Nil(t, splitLogMap["storage"])
+	assert.Equal(t, "requests", splitLogMap["sizer"])
+	assert.Equal(t, int64(10), splitLogMap["queue_size"])
 
-	splitBatchMap, ok := splitMap["batch"].(map[string]any)
+	splitLogBatchMap, ok := splitLogMap["batch"].(map[string]any)
 	require.True(t, ok)
-	assert.Equal(t, "items", splitBatchMap["sizer"])
-	assert.Equal(t, int64(0), splitBatchMap["min_size"])
-	assert.Equal(t, int64(8192), splitBatchMap["max_size"])
-	assert.Equal(t, 200*time.Millisecond, splitBatchMap["flush_timeout"])
+	assert.Equal(t, "items", splitLogBatchMap["sizer"])
+	assert.Equal(t, int64(0), splitLogBatchMap["min_size"])
+	assert.Equal(t, int64(8192), splitLogBatchMap["max_size"])
+	assert.Equal(t, 200*time.Millisecond, splitLogBatchMap["flush_timeout"])
 
-	// Pipeline preprocessor IDs should contain both stages in order
+	// PreProcessLogIDs should contain both stages in order
 	preLogIDs := policy.PreProcessLogIDs()
 	require.Len(t, preLogIDs, 2)
 	assert.Equal(t, "queue_batch/default_gcp_destination_batch_logs", preLogIDs[0].String())
 	assert.Equal(t, "queue_batch/default_gcp_destination_split_logs", preLogIDs[1].String())
 
-	// Metric queue_batch: in-memory only (no storage)
+	// Stage 1 metric queue_batch: in-memory bytes batcher
 	metricKey := "processors::queue_batch/default_gcp_destination_batch_metrics"
 	require.True(t, conf.IsSet(metricKey))
 	metricSub, err := conf.Sub(metricKey)
 	require.NoError(t, err)
 	metricMap := metricSub.ToStringMap()
 	assert.Nil(t, metricMap["storage"])
-	assert.Equal(t, "requests", metricMap["sizer"])
+	assert.Equal(t, "bytes", metricMap["sizer"])
+	assert.Equal(t, int64(33554432), metricMap["queue_size"])
 
-	// Trace queue_batch: in-memory only (no storage)
+	metricBatchMap, ok := metricMap["batch"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "bytes", metricBatchMap["sizer"])
+	assert.Equal(t, int64(3670016), metricBatchMap["min_size"])
+	assert.Equal(t, int64(4194304), metricBatchMap["max_size"])
+
+	// Stage 2 metric queue_batch: in-memory item splitter (kMaxPointsPerRequest = 200)
+	splitMetricKey := "processors::queue_batch/default_gcp_destination_split_metrics"
+	require.True(t, conf.IsSet(splitMetricKey))
+	splitMetricSub, err := conf.Sub(splitMetricKey)
+	require.NoError(t, err)
+	splitMetricMap := splitMetricSub.ToStringMap()
+	assert.Nil(t, splitMetricMap["storage"])
+	assert.Equal(t, "requests", splitMetricMap["sizer"])
+
+	splitMetricBatchMap, ok := splitMetricMap["batch"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "items", splitMetricBatchMap["sizer"])
+	assert.Equal(t, int64(0), splitMetricBatchMap["min_size"])
+	assert.Equal(t, int64(200), splitMetricBatchMap["max_size"])
+
+	// PreProcessMetricIDs should contain both stages in order
+	preMetricIDs := policy.PreProcessMetricIDs()
+	require.Len(t, preMetricIDs, 2)
+	assert.Equal(t, "queue_batch/default_gcp_destination_batch_metrics", preMetricIDs[0].String())
+	assert.Equal(t, "queue_batch/default_gcp_destination_split_metrics", preMetricIDs[1].String())
+
+	// Stage 1 trace queue_batch: in-memory bytes batcher
 	traceKey := "processors::queue_batch/default_gcp_destination_batch_traces"
 	require.True(t, conf.IsSet(traceKey))
 	traceSub, err := conf.Sub(traceKey)
 	require.NoError(t, err)
 	traceMap := traceSub.ToStringMap()
 	assert.Nil(t, traceMap["storage"])
-	assert.Equal(t, "requests", traceMap["sizer"])
+	assert.Equal(t, "bytes", traceMap["sizer"])
+	assert.Equal(t, int64(33554432), traceMap["queue_size"])
+
+	traceBatchMap, ok := traceMap["batch"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "bytes", traceBatchMap["sizer"])
+	assert.Equal(t, int64(3670016), traceBatchMap["min_size"])
+	assert.Equal(t, int64(4194304), traceBatchMap["max_size"])
+
+	// Stage 2 trace queue_batch: in-memory item splitter (kMaxSpanCountPerBatch = 8,192)
+	splitTraceKey := "processors::queue_batch/default_gcp_destination_split_traces"
+	require.True(t, conf.IsSet(splitTraceKey))
+	splitTraceSub, err := conf.Sub(splitTraceKey)
+	require.NoError(t, err)
+	splitTraceMap := splitTraceSub.ToStringMap()
+	assert.Nil(t, splitTraceMap["storage"])
+	assert.Equal(t, "requests", splitTraceMap["sizer"])
+
+	splitTraceBatchMap, ok := splitTraceMap["batch"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "items", splitTraceBatchMap["sizer"])
+	assert.Equal(t, int64(0), splitTraceBatchMap["min_size"])
+	assert.Equal(t, int64(8192), splitTraceBatchMap["max_size"])
+
+	// PreProcessTraceIDs should contain both stages in order
+	preTraceIDs := policy.PreProcessTraceIDs()
+	require.Len(t, preTraceIDs, 2)
+	assert.Equal(t, "queue_batch/default_gcp_destination_batch_traces", preTraceIDs[0].String())
+	assert.Equal(t, "queue_batch/default_gcp_destination_split_traces", preTraceIDs[1].String())
 }

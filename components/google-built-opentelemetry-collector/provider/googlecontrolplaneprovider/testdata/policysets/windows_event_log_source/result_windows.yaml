@@ -36,37 +36,51 @@ processors:
     queue_batch/default_gcp_destination_batch_logs:
         batch:
             flush_timeout: 200ms
-            max_size: 4000000
-            min_size: 1000000
+            max_size: 4194304
+            min_size: 3670016
             partition:
                 cache_size: 10000
                 idle_timeout: 1m30s
             sizer: bytes
         block_on_overflow: true
         num_consumers: 10
-        queue_size: 20000000
+        queue_size: 33554432
         sizer: bytes
         storage: file_storage/googlecontrolplane
         wait_for_result: false
     queue_batch/default_gcp_destination_batch_metrics:
         batch:
             flush_timeout: 200ms
-            max_size: 200
-            min_size: 200
+            max_size: 4194304
+            min_size: 3670016
             partition:
                 cache_size: 10000
                 idle_timeout: 1m30s
-            sizer: items
+            sizer: bytes
         block_on_overflow: true
         num_consumers: 1
-        queue_size: 10
-        sizer: requests
+        queue_size: 33554432
+        sizer: bytes
         wait_for_result: false
     queue_batch/default_gcp_destination_batch_traces:
         batch:
             flush_timeout: 200ms
+            max_size: 4194304
+            min_size: 3670016
+            partition:
+                cache_size: 10000
+                idle_timeout: 1m30s
+            sizer: bytes
+        block_on_overflow: true
+        num_consumers: 1
+        queue_size: 33554432
+        sizer: bytes
+        wait_for_result: false
+    queue_batch/default_gcp_destination_split_logs:
+        batch:
+            flush_timeout: 200ms
             max_size: 8192
-            min_size: 8192
+            min_size: 0
             partition:
                 cache_size: 10000
                 idle_timeout: 1m30s
@@ -76,7 +90,21 @@ processors:
         queue_size: 10
         sizer: requests
         wait_for_result: false
-    queue_batch/default_gcp_destination_split_logs:
+    queue_batch/default_gcp_destination_split_metrics:
+        batch:
+            flush_timeout: 200ms
+            max_size: 200
+            min_size: 0
+            partition:
+                cache_size: 10000
+                idle_timeout: 1m30s
+            sizer: items
+        block_on_overflow: true
+        num_consumers: 1
+        queue_size: 10
+        sizer: requests
+        wait_for_result: false
+    queue_batch/default_gcp_destination_split_traces:
         batch:
             flush_timeout: 200ms
             max_size: 8192
@@ -210,6 +238,7 @@ service:
                 - resourcedetection/default_self_metrics
                 - transform/default_self_metrics
                 - queue_batch/default_gcp_destination_batch_metrics
+                - queue_batch/default_gcp_destination_split_metrics
             receivers:
                 - otlp/default_self_metrics
         metrics/googlecontrolplane:
@@ -220,6 +249,7 @@ service:
                 - transform/googlecontrolplane
                 - googlepolicy
                 - queue_batch/default_gcp_destination_batch_metrics
+                - queue_batch/default_gcp_destination_split_metrics
             receivers:
                 - nop/googlecontrolplane
         traces/googlecontrolplane:
@@ -230,6 +260,7 @@ service:
                 - transform/googlecontrolplane
                 - googlepolicy
                 - queue_batch/default_gcp_destination_batch_traces
+                - queue_batch/default_gcp_destination_split_traces
             receivers:
                 - nop/googlecontrolplane
     telemetry:

@@ -124,53 +124,72 @@ func (p *GCPDestinationPolicy) Evaluate(_ context.Context) (*confmap.Conf, error
 	// unmarshal once the component settled on "queuebatch".
 	queueBatchType := queuebatchprocessor.NewFactory().Type()
 
-	queueBatchLog := queuebatchprocessor.NewFactory().CreateDefaultConfig().(*queuebatchprocessor.Config)
-	queueBatchLog.StorageID = &googlepolicy.StorageExtensionID
-	queueBatchLog.Sizer = exporterhelper.RequestSizerTypeBytes
-	queueBatchLog.QueueSize = 20000000
-	queueBatchLog.NumConsumers = 10
-	queueBatchLog.BlockOnOverflow = true
-	batchSubconfig := queueBatchLog.Batch.GetOrInsertDefault()
-	batchSubconfig.Sizer = exporterhelper.RequestSizerTypeBytes
-	batchSubconfig.MinSize = 1000000
-	batchSubconfig.MaxSize = 4000000
-	queueBatchLogsID := component.NewIDWithName(queueBatchType, fmt.Sprintf("%s_batch_logs", p.Name))
+	const (
+		stage1QueueSizeBytes = 32 * 1024 * 1024    // 32 MiB (33,554,432 B)
+		stage1MinBatchBytes  = 7 * 1024 * 1024 / 2 // 3.5 MiB (3,670,016 B)
+		stage1MaxBatchBytes  = 4 * 1024 * 1024     // 4 MiB (4,194,304 B), leaving 1 MiB headroom below UTR's 5 MiB limit
+		utrMaxLogItems       = 8192                // UTR kMaxLogCountPerBatch
+		utrMaxMetricItems    = 200                 // UTR kMaxPointsPerRequest
+		utrMaxTraceItems     = 8192                // UTR kMaxSpanCountPerBatch (#710)
+	)
 
-	// Stage 2 zero-delay item splitter: ensures batches from Stage 1 do not exceed
-	// UTR's kMaxLogCountPerBatch (8,192 records) limit on high-rate compact log streams.
-	queueSplitLog := queuebatchprocessor.NewFactory().CreateDefaultConfig().(*queuebatchprocessor.Config)
-	queueSplitLog.Sizer = exporterhelper.RequestSizerTypeRequests
-	queueSplitLog.QueueSize = 10
-	splitBatchSubconfig := queueSplitLog.Batch.GetOrInsertDefault()
-	splitBatchSubconfig.Sizer = exporterhelper.RequestSizerTypeItems
-	splitBatchSubconfig.MinSize = 0
-	splitBatchSubconfig.MaxSize = 8192
+	newStage1ByteBatchConfig := func() *queuebatchprocessor.Config {
+		cfg := queuebatchprocessor.NewFactory().CreateDefaultConfig().(*queuebatchprocessor.Config)
+		cfg.Sizer = exporterhelper.RequestSizerTypeBytes
+		cfg.QueueSize = stage1QueueSizeBytes
+		batchCfg := cfg.Batch.GetOrInsertDefault()
+		batchCfg.Sizer = exporterhelper.RequestSizerTypeBytes
+		batchCfg.MinSize = stage1MinBatchBytes
+		batchCfg.MaxSize = stage1MaxBatchBytes
+		return cfg
+	}
+
+	newStage2ItemSplitConfig := func(maxItems int64) *queuebatchprocessor.Config {
+		cfg := queuebatchprocessor.NewFactory().CreateDefaultConfig().(*queuebatchprocessor.Config)
+		cfg.Sizer = exporterhelper.RequestSizerTypeRequests
+		cfg.QueueSize = 10
+		batchCfg := cfg.Batch.GetOrInsertDefault()
+		batchCfg.Sizer = exporterhelper.RequestSizerTypeItems
+		batchCfg.MinSize = 0
+		batchCfg.MaxSize = maxItems
+		return cfg
+	}
+
+	queueBatchLogsID := component.NewIDWithName(queueBatchType, fmt.Sprintf("%s_batch_logs", p.Name))
 	queueSplitLogsID := component.NewIDWithName(queueBatchType, fmt.Sprintf("%s_split_logs", p.Name))
 
-	queueBatchMetric := queuebatchprocessor.NewFactory().CreateDefaultConfig().(*queuebatchprocessor.Config)
-	batchSubconfig = queueBatchMetric.Batch.GetOrInsertDefault()
-	batchSubconfig.MaxSize = 200
-	batchSubconfig.MinSize = 200
 	queueBatchMetricsID := component.NewIDWithName(queueBatchType, fmt.Sprintf("%s_batch_metrics", p.Name))
+	queueSplitMetricsID := component.NewIDWithName(queueBatchType, fmt.Sprintf("%s_split_metrics", p.Name))
 
-	queueBatchTrace := queuebatchprocessor.NewFactory().CreateDefaultConfig().(*queuebatchprocessor.Config)
-	batchSubconfig = queueBatchTrace.Batch.GetOrInsertDefault()
-	batchSubconfig.MaxSize = 8192
-	batchSubconfig.MinSize = 8192
 	queueBatchTracesID := component.NewIDWithName(queueBatchType, fmt.Sprintf("%s_batch_traces", p.Name))
+	queueSplitTracesID := component.NewIDWithName(queueBatchType, fmt.Sprintf("%s_split_traces", p.Name))
+
+	queueBatchLog := newStage1ByteBatchConfig()
+	queueBatchLog.StorageID = &googlepolicy.StorageExtensionID
+	queueBatchLog.NumConsumers = 10
+	queueBatchLog.BlockOnOverflow = true
+
+	queueBatchMetric := newStage1ByteBatchConfig()
+	queueBatchTrace := newStage1ByteBatchConfig()
+
+	queueSplitLog := newStage2ItemSplitConfig(utrMaxLogItems)
+	queueSplitMetric := newStage2ItemSplitConfig(utrMaxMetricItems)
+	queueSplitTrace := newStage2ItemSplitConfig(utrMaxTraceItems)
 
 	conf.Processors = map[component.ID]component.Config{
 		queueBatchLogsID:    component.Config(queueBatchLog),
 		queueSplitLogsID:    component.Config(queueSplitLog),
 		queueBatchMetricsID: component.Config(queueBatchMetric),
+		queueSplitMetricsID: component.Config(queueSplitMetric),
 		queueBatchTracesID:  component.Config(queueBatchTrace),
+		queueSplitTracesID:  component.Config(queueSplitTrace),
 	}
 
 	p.extensionIDs = []component.ID{authID}
 	p.exporterIDs = []component.ID{otlpExporterID}
 	p.preprocessorLogIDs = []component.ID{queueBatchLogsID, queueSplitLogsID}
-	p.preprocessorMetricIDs = []component.ID{queueBatchMetricsID}
-	p.preprocessorTraceIDs = []component.ID{queueBatchTracesID}
+	p.preprocessorMetricIDs = []component.ID{queueBatchMetricsID, queueSplitMetricsID}
+	p.preprocessorTraceIDs = []component.ID{queueBatchTracesID, queueSplitTracesID}
 
 	cm := confmap.New()
 	if err := cm.Marshal(conf); err != nil {
@@ -201,7 +220,9 @@ func (p *GCPDestinationPolicy) Evaluate(_ context.Context) (*confmap.Conf, error
 		queueBatchLogsID:    queueBatchLog,
 		queueSplitLogsID:    queueSplitLog,
 		queueBatchMetricsID: queueBatchMetric,
+		queueSplitMetricsID: queueSplitMetric,
 		queueBatchTracesID:  queueBatchTrace,
+		queueSplitTracesID:  queueSplitTrace,
 	} {
 		sizers, err := queueBatchSizers(cfg)
 		if err != nil {

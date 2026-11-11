@@ -1440,6 +1440,7 @@ func TestRetrieve_MultipleFileLogSourcePoliciesConsolidated(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, expectedPaths, sub.ToStringMap()["include"])
 	assert.Equal(t, true, sub.ToStringMap()["include_file_path"])
+	assert.Equal(t, "file_storage/googlecontrolplane", sub.ToStringMap()["storage"])
 
 	// The shared canonical logs/googlecontrolplane pipeline must connect to the consolidated filelog receiver and include googlepolicy.
 	assert.True(t, conf.IsSet("service::pipelines::logs/googlecontrolplane"))

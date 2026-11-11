@@ -90,9 +90,11 @@ func TestEmptyTarget(t *testing.T) {
 func TestRetrieve(t *testing.T) {
 	t.Setenv("FLEET_ID", "1234")
 	p := createProvider()
+	assert.False(t, googlepolicy.IsControlPlaneActive())
 	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
 	require.NoError(t, err)
 	require.NotNil(t, ret)
+	assert.True(t, googlepolicy.IsControlPlaneActive())
 
 	conf, err := ret.AsConf()
 	require.NoError(t, err)
@@ -111,6 +113,7 @@ func TestRetrieve(t *testing.T) {
 	assert.True(t, conf.IsSet("service::pipelines::traces/googlecontrolplane"))
 
 	assert.NoError(t, p.Shutdown(context.Background()))
+	assert.False(t, googlepolicy.IsControlPlaneActive())
 }
 
 func TestShutdown(t *testing.T) {

@@ -148,6 +148,8 @@ github.com/aws/aws-sdk-go-v2/service/lightsail v1.64.0 h1:b9XJhCPBgr39pobi+nYLpr
 github.com/aws/aws-sdk-go-v2/service/lightsail v1.64.0/go.mod h1:KgoVDjK6UfFu/YzH686vZ9FPv5H0w4G8tuqmQyZ8/hU=
 github.com/aws/aws-sdk-go-v2/service/rds v1.128.0 h1:keaCViwAriS0OADwo19JlyYj69E89dVdBHUovcVYmXk=
 github.com/aws/aws-sdk-go-v2/service/rds v1.128.0/go.mod h1:UjDrUggtVvjoG/JmU9SvzE+eKjnCKvn7JDsETFe4R4M=
+github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.50.1 h1:xYoGDAZtoSXI5wOfjv1jzG1AUOdXZthz4YL9DFvunrQ=
+github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.50.1/go.mod h1:dgXxccOMNsXm/eOkrQbBfxm4a6H8IiRphA7z69RG8hM=
 github.com/aws/aws-sdk-go-v2/service/servicediscovery v1.49.1 h1:BsWXW8V/C80xRAqH2P319XPKnGUw8uZGQItwCWfqOjc=
 github.com/aws/aws-sdk-go-v2/service/servicediscovery v1.49.1/go.mod h1:TIdmJZDfC5Yf04cBGvPHEtXoUk2rEWr9zYtWyNEy/lk=
 github.com/aws/aws-sdk-go-v2/service/signin v1.10.1 h1:DzCCWLzcIRQ77F3DEUljud7bEjTgFOIKXP52NmVRyhU=
@@ -637,6 +639,8 @@ github.com/open-telemetry/opamp-go v0.25.0 h1:UXXSQBtXWxa1ClY85caMrsdiry9dnCZn+L
 github.com/open-telemetry/opamp-go v0.25.0/go.mod h1:xgYySBY286Bei9/0gFH0X+l6h51fQnvZcLvglDQf9DI=
 github.com/open-telemetry/opentelemetry-collector-contrib/confmap/provider/googlesecretmanagerprovider v0.164.1 h1:louD2N5ZKkMkEBFErVBFpX1Vrv2tZmwx+XjGZAEoMNE=
 github.com/open-telemetry/opentelemetry-collector-contrib/confmap/provider/googlesecretmanagerprovider v0.164.1/go.mod h1:oO+ZygxU5ieEVCnK30w3qzaaIUaYQEwn8HW5Su5SbCI=
+github.com/open-telemetry/opentelemetry-collector-contrib/confmap/provider/secretsmanagerprovider v0.164.1 h1:2PM5s7SdM/ZyMw+APCGrJ3ezpskbatz/pdxR4k7MbIU=
+github.com/open-telemetry/opentelemetry-collector-contrib/confmap/provider/secretsmanagerprovider v0.164.1/go.mod h1:Nc06fQcNixk58gcn86mgJc0sRsX4wHFECCBxvhYWvc4=
 github.com/open-telemetry/opentelemetry-collector-contrib/connector/countconnector v0.164.1 h1:ctJU9tHR2IZvEwUu1TOB86SQ0+q1R8O6ekb+1lGkHPM=
 github.com/open-telemetry/opentelemetry-collector-contrib/connector/countconnector v0.164.1/go.mod h1:gXTb7CE89Y82kpIGfbhQRgIACndtGQ00vdB9nc5yVZc=
 github.com/open-telemetry/opentelemetry-collector-contrib/connector/exceptionsconnector v0.164.1 h1:u9taz55NRmcS8KL+B83IjFVt4bEbz9sgWo/O9+U+04A=

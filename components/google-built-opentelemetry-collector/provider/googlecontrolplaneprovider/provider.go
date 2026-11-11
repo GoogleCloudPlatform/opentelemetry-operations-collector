@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -461,30 +462,25 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 
 	transformType, _ := component.NewType("transform")
 	transformID := component.NewIDWithName(transformType, "googlecontrolplane")
+	projectIDStatements := workloadProjectIDStatements(projectIDFromContext(ctx))
 	transformCfg := map[string]any{
 		"error_mode": "ignore",
 		"log_statements": []map[string]any{
 			{
-				"context": "resource",
-				"statements": []string{
-					`set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil`,
-				},
+				"context":    "resource",
+				"statements": projectIDStatements,
 			},
 		},
 		"metric_statements": []map[string]any{
 			{
-				"context": "resource",
-				"statements": []string{
-					`set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil`,
-				},
+				"context":    "resource",
+				"statements": projectIDStatements,
 			},
 		},
 		"trace_statements": []map[string]any{
 			{
-				"context": "resource",
-				"statements": []string{
-					`set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil`,
-				},
+				"context":    "resource",
+				"statements": projectIDStatements,
 			},
 		},
 	}
@@ -802,6 +798,42 @@ func (p *provider) consolidateSourcePolicies(ctx context.Context, activePolicySe
 		}
 	}
 	return consolidated
+}
+
+// workloadProjectIDStatementFromAccount stamps gcp.project_id on workload
+// telemetry from the cloud.account.id that the gcp resource detector reports.
+const workloadProjectIDStatementFromAccount = `set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil`
+
+// projectIDFromContext returns the alphanumeric project ID resolved by
+// evaluateActivePolicySet (from $PROJECT_ID context, the policy manager, or the
+// ?project= URI parameter), or "" if none was resolved.
+func projectIDFromContext(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+	v, _ := ctx.Value("PROJECT_ID").(string)
+	return v
+}
+
+// workloadProjectIDStatements returns the OTTL resource statements that set
+// gcp.project_id, which telemetry.googleapis.com requires, on workload
+// telemetry in the canonical googlecontrolplane pipelines.
+//
+// The gcp resource detector's cloud.account.id always wins, so behavior on
+// Google Cloud is unchanged. When it is absent (for example, off Google Cloud,
+// where the detector reports nothing) and the collector resolved a project ID
+// for itself (the same one stamped on its own self-metrics), that project ID is
+// used as a fallback. An explicit gcp.project_id set by the workload or an
+// earlier processor is never overwritten.
+func workloadProjectIDStatements(projectID string) []string {
+	statements := []string{workloadProjectIDStatementFromAccount}
+	if projectID != "" {
+		statements = append(statements, fmt.Sprintf(
+			`set(attributes["gcp.project_id"], %s) where attributes["gcp.project_id"] == nil`,
+			strconv.Quote(projectID),
+		))
+	}
+	return statements
 }
 
 func cleanConf(c *confmap.Conf) *confmap.Conf {

@@ -301,6 +301,100 @@ func TestRetrieve_XDSFullFleetResourceURI(t *testing.T) {
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
 
+// workloadTransformStatements returns the log, metric and trace resource
+// statements of the canonical transform/googlecontrolplane processor.
+func workloadTransformStatements(t *testing.T, conf *confmap.Conf) map[string][]string {
+	t.Helper()
+	got := map[string][]string{}
+	for _, key := range []string{"log_statements", "metric_statements", "trace_statements"} {
+		raw := conf.Get("processors::transform/googlecontrolplane::" + key)
+		groups, ok := raw.([]any)
+		require.True(t, ok, "%s: unexpected type %T", key, raw)
+		require.Len(t, groups, 1, key)
+		group, ok := groups[0].(map[string]any)
+		require.True(t, ok, key)
+		assert.Equal(t, "resource", group["context"], key)
+		stmts, ok := group["statements"].([]any)
+		require.True(t, ok, key)
+		for _, s := range stmts {
+			str, ok := s.(string)
+			require.True(t, ok, key)
+			got[key] = append(got[key], str)
+		}
+	}
+	return got
+}
+
+// TestRetrieve_WorkloadProjectIDFallback asserts that the project ID the
+// collector resolves for itself is also used as a fallback gcp.project_id on
+// workload telemetry, after cloud.account.id from the gcp resource detector.
+// Off Google Cloud the detector reports nothing, and telemetry.googleapis.com
+// rejects data without gcp.project_id.
+func TestRetrieve_WorkloadProjectIDFallback(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		uri  string
+		want []string
+	}{
+		{
+			name: "project query parameter",
+			uri:  "googlecontrolplane:xds://127.0.0.1:1?project=my-project&insecure=true",
+			want: []string{
+				workloadProjectIDStatementFromAccount,
+				`set(attributes["gcp.project_id"], "my-project") where attributes["gcp.project_id"] == nil`,
+			},
+		},
+		{
+			name: "full fleet resource name",
+			uri:  "googlecontrolplane:xds://127.0.0.1:1?gcp.fleet_id=projects/fleet-project/locations/us-central1/fleets/my-fleet&insecure=true",
+			want: []string{
+				workloadProjectIDStatementFromAccount,
+				`set(attributes["gcp.project_id"], "fleet-project") where attributes["gcp.project_id"] == nil`,
+			},
+		},
+		{
+			name: "numeric project only",
+			uri:  "googlecontrolplane:xds://127.0.0.1:1?project=123456789012&insecure=true",
+			want: []string{workloadProjectIDStatementFromAccount},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			withFakeGCEMetadata(t)
+			if strings.Contains(tc.uri, "gcp.fleet_id=") {
+				t.Setenv("FLEET_ID", "")
+			} else {
+				t.Setenv("FLEET_ID", "1234")
+			}
+			t.Setenv("GOOGLE_CLOUD_PROJECT", "")
+			p := createProvider()
+
+			ret, err := p.Retrieve(context.Background(), tc.uri, nil)
+			require.NoError(t, err)
+			require.NotNil(t, ret)
+			conf, err := ret.AsConf()
+			require.NoError(t, err)
+
+			for key, got := range workloadTransformStatements(t, conf) {
+				assert.Equal(t, tc.want, got, key)
+			}
+
+			assert.NoError(t, p.Shutdown(context.Background()))
+		})
+	}
+}
+
+func TestWorkloadProjectIDStatements(t *testing.T) {
+	assert.Equal(t, []string{workloadProjectIDStatementFromAccount}, workloadProjectIDStatements(""))
+	assert.Equal(t, []string{
+		workloadProjectIDStatementFromAccount,
+		`set(attributes["gcp.project_id"], "example.com:my-project") where attributes["gcp.project_id"] == nil`,
+	}, workloadProjectIDStatements("example.com:my-project"))
+	// Quotes and backslashes are escaped so the value stays a single OTTL string literal.
+	assert.Equal(t,
+		`set(attributes["gcp.project_id"], "a\"b\\c") where attributes["gcp.project_id"] == nil`,
+		workloadProjectIDStatements(`a"b\c`)[1])
+}
+
 // TestRetrieve_NonXDSReportsFleetIDAsGiven asserts that a non-xDS source does
 // not dress a short fleet ID up as a resource name: there is no control plane
 // whose view of the fleet must be matched, and formatting it would mean

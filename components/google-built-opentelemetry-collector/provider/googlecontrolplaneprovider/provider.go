@@ -98,11 +98,11 @@ type provider struct {
 
 	evalMu sync.Mutex
 
-	mu                 sync.Mutex
-	stopped            bool
-	notified           bool
-	providerRegistered bool
-	cachedRet          *confmap.Retrieved
+	mu          sync.Mutex
+	stopped     bool
+	notified    bool
+	registered  bool
+	cachedRet   *confmap.Retrieved
 	cachedRevID string
 	manager     googlepolicy.Manager
 	watcher     confmap.WatcherFunc
@@ -219,6 +219,7 @@ func (p *provider) Retrieve(ctx context.Context, uri string, watcher confmap.Wat
 		if err != nil {
 			return nil, err
 		}
+		p.register()
 		p.setupWatcher(watcher, ctx, ret)
 		return ret, nil
 	}
@@ -261,6 +262,7 @@ func (p *provider) Retrieve(ctx context.Context, uri string, watcher confmap.Wat
 		return nil, err
 	}
 
+	p.register()
 	p.setupWatcher(watcher, ctx, ret)
 	return ret, nil
 }
@@ -895,15 +897,29 @@ func escapeDollarSigns(val any) any {
 	}
 }
 
+func (p *provider) register() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if !p.stopped && !p.registered {
+		googlepolicy.RegisterProvider()
+		p.registered = true
+	}
+}
+
+func (p *provider) unregister() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.registered {
+		googlepolicy.UnregisterProvider()
+		p.registered = false
+	}
+}
+
 func (p *provider) setupWatcher(watcher confmap.WatcherFunc, ctx context.Context, ret *confmap.Retrieved) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.stopped {
 		return
-	}
-	if !p.providerRegistered {
-		googlepolicy.RegisterProvider()
-		p.providerRegistered = true
 	}
 	p.watcher = watcher
 	p.lastCtx = ctx
@@ -1023,10 +1039,7 @@ func (p *provider) Shutdown(context.Context) error {
 			googlepolicy.UnregisterWatcherChannel(p.watcherCh)
 			p.watcherCh = nil
 		}
-		if p.providerRegistered {
-			googlepolicy.UnregisterProvider()
-			p.providerRegistered = false
-		}
+		p.unregister()
 	})
 	p.mu.Lock()
 	manager := p.manager

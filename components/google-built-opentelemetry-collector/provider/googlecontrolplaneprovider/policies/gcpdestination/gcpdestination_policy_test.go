@@ -55,7 +55,7 @@ func TestGCPDestinationPolicy_Evaluate_QueueBatchConfig(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, conf)
 
-	// Log queue_batch: persistent queue on disk matching Ops Agent otlpExporterForLogs
+	// Stage 1 log queue_batch: persistent queue on disk with byte sizing
 	logKey := "processors::queue_batch/default_gcp_destination_batch_logs"
 	require.True(t, conf.IsSet(logKey))
 	logSub, err := conf.Sub(logKey)
@@ -72,8 +72,32 @@ func TestGCPDestinationPolicy_Evaluate_QueueBatchConfig(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, "bytes", batchMap["sizer"])
 	assert.Equal(t, int64(1000000), batchMap["min_size"])
-	assert.Equal(t, int64(5000000), batchMap["max_size"])
+	assert.Equal(t, int64(4000000), batchMap["max_size"])
 	assert.Equal(t, 200*time.Millisecond, batchMap["flush_timeout"])
+
+	// Stage 2 log queue_batch: in-memory item splitter for UTR dual limits (kMaxLogCountPerBatch = 8,192)
+	splitKey := "processors::queue_batch/default_gcp_destination_split_logs"
+	require.True(t, conf.IsSet(splitKey))
+	splitSub, err := conf.Sub(splitKey)
+	require.NoError(t, err)
+	splitMap := splitSub.ToStringMap()
+
+	assert.Nil(t, splitMap["storage"])
+	assert.Equal(t, "requests", splitMap["sizer"])
+	assert.Equal(t, int64(10), splitMap["queue_size"])
+
+	splitBatchMap, ok := splitMap["batch"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "items", splitBatchMap["sizer"])
+	assert.Equal(t, int64(0), splitBatchMap["min_size"])
+	assert.Equal(t, int64(8192), splitBatchMap["max_size"])
+	assert.Equal(t, 200*time.Millisecond, splitBatchMap["flush_timeout"])
+
+	// Pipeline preprocessor IDs should contain both stages in order
+	preLogIDs := policy.PreProcessLogIDs()
+	require.Len(t, preLogIDs, 2)
+	assert.Equal(t, "queue_batch/default_gcp_destination_batch_logs", preLogIDs[0].String())
+	assert.Equal(t, "queue_batch/default_gcp_destination_split_logs", preLogIDs[1].String())
 
 	// Metric queue_batch: in-memory only (no storage)
 	metricKey := "processors::queue_batch/default_gcp_destination_batch_metrics"

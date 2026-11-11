@@ -133,8 +133,19 @@ func (p *GCPDestinationPolicy) Evaluate(_ context.Context) (*confmap.Conf, error
 	batchSubconfig := queueBatchLog.Batch.GetOrInsertDefault()
 	batchSubconfig.Sizer = exporterhelper.RequestSizerTypeBytes
 	batchSubconfig.MinSize = 1000000
-	batchSubconfig.MaxSize = 5000000
+	batchSubconfig.MaxSize = 4000000
 	queueBatchLogsID := component.NewIDWithName(queueBatchType, fmt.Sprintf("%s_batch_logs", p.Name))
+
+	// Stage 2 zero-delay item splitter: ensures batches from Stage 1 do not exceed
+	// UTR's kMaxLogCountPerBatch (8,192 records) limit on high-rate compact log streams.
+	queueSplitLog := queuebatchprocessor.NewFactory().CreateDefaultConfig().(*queuebatchprocessor.Config)
+	queueSplitLog.Sizer = exporterhelper.RequestSizerTypeRequests
+	queueSplitLog.QueueSize = 10
+	splitBatchSubconfig := queueSplitLog.Batch.GetOrInsertDefault()
+	splitBatchSubconfig.Sizer = exporterhelper.RequestSizerTypeItems
+	splitBatchSubconfig.MinSize = 0
+	splitBatchSubconfig.MaxSize = 8192
+	queueSplitLogsID := component.NewIDWithName(queueBatchType, fmt.Sprintf("%s_split_logs", p.Name))
 
 	queueBatchMetric := queuebatchprocessor.NewFactory().CreateDefaultConfig().(*queuebatchprocessor.Config)
 	batchSubconfig = queueBatchMetric.Batch.GetOrInsertDefault()
@@ -150,13 +161,14 @@ func (p *GCPDestinationPolicy) Evaluate(_ context.Context) (*confmap.Conf, error
 
 	conf.Processors = map[component.ID]component.Config{
 		queueBatchLogsID:    component.Config(queueBatchLog),
+		queueSplitLogsID:    component.Config(queueSplitLog),
 		queueBatchMetricsID: component.Config(queueBatchMetric),
 		queueBatchTracesID:  component.Config(queueBatchTrace),
 	}
 
 	p.extensionIDs = []component.ID{authID}
 	p.exporterIDs = []component.ID{otlpExporterID}
-	p.preprocessorLogIDs = []component.ID{queueBatchLogsID}
+	p.preprocessorLogIDs = []component.ID{queueBatchLogsID, queueSplitLogsID}
 	p.preprocessorMetricIDs = []component.ID{queueBatchMetricsID}
 	p.preprocessorTraceIDs = []component.ID{queueBatchTracesID}
 
@@ -187,6 +199,7 @@ func (p *GCPDestinationPolicy) Evaluate(_ context.Context) (*confmap.Conf, error
 	// default sizer on load. Write the sizer names explicitly.
 	for id, cfg := range map[component.ID]*queuebatchprocessor.Config{
 		queueBatchLogsID:    queueBatchLog,
+		queueSplitLogsID:    queueSplitLog,
 		queueBatchMetricsID: queueBatchMetric,
 		queueBatchTracesID:  queueBatchTrace,
 	} {

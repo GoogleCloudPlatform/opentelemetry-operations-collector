@@ -949,7 +949,19 @@ func (w *policyResourceWatcher) ResourceError(err error, done func()) {
 		}
 		w.m.setLastAppliedState("", nil)
 	}
-	w.m.markReady()
+	if err != nil && (strings.Contains(err.Error(), "has been removed") || isAuthRejectionError(err)) {
+		w.m.markReady()
+	}
+}
+
+func isAuthRejectionError(err error) bool {
+	switch grpcstatus.Code(err) {
+	case codes.Unauthenticated, codes.PermissionDenied:
+		return true
+	}
+	msg := err.Error()
+	return strings.Contains(msg, codes.Unauthenticated.String()) ||
+		strings.Contains(msg, codes.PermissionDenied.String())
 }
 
 func (*policyResourceWatcher) AmbientError(_ error, done func()) {

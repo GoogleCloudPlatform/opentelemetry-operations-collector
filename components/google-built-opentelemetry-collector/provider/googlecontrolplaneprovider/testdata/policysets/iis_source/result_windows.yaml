@@ -36,16 +36,17 @@ processors:
     queue_batch/default_gcp_destination_batch_logs:
         batch:
             flush_timeout: 200ms
-            max_size: 8192
-            min_size: 8192
+            max_size: 5000000
+            min_size: 1000000
             partition:
                 cache_size: 10000
                 idle_timeout: 1m30s
-            sizer: items
+            sizer: bytes
         block_on_overflow: true
-        num_consumers: 1
-        queue_size: 10
-        sizer: requests
+        num_consumers: 10
+        queue_size: 20000000
+        sizer: bytes
+        storage: file_storage/googlecontrolplane
         wait_for_result: false
     queue_batch/default_gcp_destination_batch_metrics:
         batch:

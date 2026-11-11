@@ -125,9 +125,15 @@ func (p *GCPDestinationPolicy) Evaluate(_ context.Context) (*confmap.Conf, error
 	queueBatchType := queuebatchprocessor.NewFactory().Type()
 
 	queueBatchLog := queuebatchprocessor.NewFactory().CreateDefaultConfig().(*queuebatchprocessor.Config)
+	queueBatchLog.StorageID = &googlepolicy.StorageExtensionID
+	queueBatchLog.Sizer = exporterhelper.RequestSizerTypeBytes
+	queueBatchLog.QueueSize = 20000000
+	queueBatchLog.NumConsumers = 10
+	queueBatchLog.BlockOnOverflow = true
 	batchSubconfig := queueBatchLog.Batch.GetOrInsertDefault()
-	batchSubconfig.MaxSize = 8192
-	batchSubconfig.MinSize = 8192
+	batchSubconfig.Sizer = exporterhelper.RequestSizerTypeBytes
+	batchSubconfig.MinSize = 1000000
+	batchSubconfig.MaxSize = 5000000
 	queueBatchLogsID := component.NewIDWithName(queueBatchType, fmt.Sprintf("%s_batch_logs", p.Name))
 
 	queueBatchMetric := queuebatchprocessor.NewFactory().CreateDefaultConfig().(*queuebatchprocessor.Config)

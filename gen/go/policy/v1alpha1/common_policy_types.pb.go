@@ -362,8 +362,9 @@ func (SpanRecordField) EnumDescriptor() ([]byte, []int) {
 //     `"request"`, then `"method"`.
 type AttributePath struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Ordered path segments to traverse. At least one segment is required
-	// (e.g. `["service.name"]` or `["http", "request", "method"]`).
+	// Ordered path segments to traverse. At least one segment is required, and
+	// each segment must be non-empty (e.g. `["service.name"]` or
+	// `["http", "request", "method"]`).
 	Segments      []string `protobuf:"bytes,1,rep,name=segments,proto3" json:"segments,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -526,7 +527,7 @@ type Value_BoolValue struct {
 }
 
 type Value_DoubleValue struct {
-	// 64-bit floating point value.
+	// 64-bit floating point value. Must be finite (not `NaN` or `Infinity`).
 	DoubleValue float64 `protobuf:"fixed64,4,opt,name=double_value,json=doubleValue,proto3,oneof"`
 }
 
@@ -627,7 +628,7 @@ type NumericValue_IntValue struct {
 }
 
 type NumericValue_DoubleValue struct {
-	// 64-bit floating point value.
+	// 64-bit floating point value. Must be finite (not `NaN` or `Infinity`).
 	DoubleValue float64 `protobuf:"fixed64,2,opt,name=double_value,json=doubleValue,proto3,oneof"`
 }
 

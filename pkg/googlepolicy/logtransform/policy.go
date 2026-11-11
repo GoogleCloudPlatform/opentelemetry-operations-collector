@@ -36,6 +36,7 @@ const PolicyType = "log_transform"
 // driver loads a LogTransformPolicy from either shape it can arrive in: the
 // proto a control plane sends, or the map an authored config decodes to.
 var driver = googlepolicy.ProtoDriver[*policyv1alpha1.LogTransformPolicy]{
+	Class: googlepolicy.PolicyClassTransformation,
 	New: func(pb *policyv1alpha1.LogTransformPolicy) (googlepolicy.Policy, error) {
 		return NewPolicyFromProto(pb)
 	},

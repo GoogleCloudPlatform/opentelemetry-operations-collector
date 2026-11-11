@@ -1468,12 +1468,12 @@ func TestRetrieve_FileLogSourcePolicy_WithInvalidPolicy_FaultIsolation(t *testin
 	if runtime.GOOS == "windows" {
 		valid1Path = `C:\logs\valid1.log`
 		valid2Path = `C:\logs\valid2.log`
-		invalidPath = `C:\logs\..\Windows\System32\cmd.exe`
+		invalidPath = `C:\logs\[unclosed`
 		expectedValid = []any{"C:/logs/valid1.log", "C:/logs/valid2.log"}
 	} else {
 		valid1Path = "/var/log/valid1.log"
 		valid2Path = "/var/log/valid2.log"
-		invalidPath = "/var/log/../etc/shadow"
+		invalidPath = "/var/log/[unclosed"
 		expectedValid = []any{"/var/log/valid1.log", "/var/log/valid2.log"}
 	}
 
@@ -1540,12 +1540,12 @@ func TestRetrieve_FileLogSourcePolicy_PoisonedBatchHead_FaultIsolation(t *testin
 	if runtime.GOOS == "windows" {
 		valid1Path = `C:\logs\valid1.log`
 		valid2Path = `C:\logs\valid2.log`
-		invalidPath = `C:\logs\..\Windows\System32\cmd.exe`
+		invalidPath = `C:\logs\[unclosed`
 		expectedValid = []any{"C:/logs/valid1.log", "C:/logs/valid2.log"}
 	} else {
 		valid1Path = "/var/log/valid1.log"
 		valid2Path = "/var/log/valid2.log"
-		invalidPath = "/var/log/../etc/shadow"
+		invalidPath = "/var/log/[unclosed"
 		expectedValid = []any{"/var/log/valid1.log", "/var/log/valid2.log"}
 	}
 

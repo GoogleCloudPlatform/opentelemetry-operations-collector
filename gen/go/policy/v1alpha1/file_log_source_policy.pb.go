@@ -39,11 +39,8 @@ const (
 // defaults.
 //
 // Evaluation, Deduplication & Security Guardrails:
-//   - At least one `included_paths` pattern is required. Each pattern must be an
-//     absolute file path or glob targeting files (not a bare directory), must
-//     not contain `..` traversal segments or `$` confmap expansion characters,
-//     and must contain valid glob syntax; invalid patterns are rejected
-//     (fail-open).
+//   - At least one non-empty, non-whitespace `included_paths` pattern with valid
+//     glob syntax is required; invalid patterns are rejected (fail-open).
 //   - Host filesystem access boundaries are enforced by the collector's
 //     install-time OS and container sandbox (for example, Linux systemd mount
 //     namespace directives and non-root service user permissions, Windows
@@ -61,7 +58,17 @@ type FileLogSourcePolicy struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Unique identifier for the policy within its configuration scope.
 	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	// Absolute file path glob patterns to tail. At least one pattern is required.
+	// File path glob patterns to tail.
+	//
+	// Supported glob syntax:
+	//   - `*` matches zero or more non-separator characters.
+	//   - `**` matches zero or more directories or path segments recursively across
+	//     path separators.
+	//   - `?` matches any single non-separator character.
+	//
+	// At least one pattern is required, and each pattern must be a non-empty,
+	// non-whitespace string without `[...]` character classes, `{a,b}` brace
+	// alternation, or `\` glob escapes.
 	IncludedPaths []string `protobuf:"bytes,2,rep,name=included_paths,json=includedPaths,proto3" json:"included_paths,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

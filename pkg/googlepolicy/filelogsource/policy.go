@@ -73,8 +73,6 @@ var (
 	ErrMissingID = errors.New("file log source policy id cannot be empty")
 	// ErrMissingInclude is returned when the policy contains no include patterns.
 	ErrMissingInclude = errors.New("file log source policy must specify at least one include pattern")
-	// ErrDuplicateIncludePattern is returned when an include pattern appears more than once in a policy.
-	ErrDuplicateIncludePattern = errors.New("duplicate include pattern")
 )
 
 // Policy represents a compiled, validated FileLogSourcePolicy ready for evaluation into Collector configuration.
@@ -88,21 +86,17 @@ var (
 )
 
 // NewPolicyFromProto validates and compiles a FileLogSourcePolicy protobuf into a Policy.
-// Windows environment variable placeholders (e.g. %ProgramData%, %SystemDrive%)
-// in included_paths are expanded to concrete paths and normalized so that paths are canonical
-// and deterministic across evaluation and consolidation.
+// Patterns in included_paths are normalized and deduplicated (preserving first-seen order).
 func NewPolicyFromProto(pb *policyv1alpha1.FileLogSourcePolicy) (*Policy, error) {
 	if pb == nil {
 		return nil, ErrNilProto
 	}
 	cloned := proto.Clone(pb).(*policyv1alpha1.FileLogSourcePolicy)
-	for i, inc := range cloned.GetIncludedPaths() {
-		cloned.IncludedPaths[i] = normalizePattern(inc)
-	}
 	p := &Policy{proto: cloned}
 	if err := p.Validate(); err != nil {
 		return nil, err
 	}
+	cloned.IncludedPaths = deduplicatePatterns(cloned.GetIncludedPaths())
 	return p, nil
 }
 
@@ -135,16 +129,10 @@ func (p *Policy) Validate() error {
 	if len(p.proto.GetIncludedPaths()) == 0 {
 		return ErrMissingInclude
 	}
-	seen := make(map[string]bool, len(p.proto.GetIncludedPaths()))
 	for i, pattern := range p.proto.GetIncludedPaths() {
 		if err := validateIncludePattern(pattern); err != nil {
 			return fmt.Errorf("included_paths[%d]: %w", i, err)
 		}
-		key := pathDedupeKey(pattern)
-		if seen[key] {
-			return fmt.Errorf("included_paths[%d]: %w: %q", i, ErrDuplicateIncludePattern, pattern)
-		}
-		seen[key] = true
 	}
 	return nil
 }
@@ -155,7 +143,7 @@ func (p *Policy) Evaluate(_ context.Context) (*confmap.Conf, error) {
 		return nil, fmt.Errorf("policy %q failed validation: %w", p.PolicyName(), err)
 	}
 
-	includes := slices.Clone(p.proto.GetIncludedPaths())
+	includes := p.IncludedPaths()
 
 	cfg := map[string]any{
 		"receivers": map[string]any{
@@ -263,15 +251,24 @@ func (p *Policy) Consolidate(policies []googlepolicy.SourcePolicy) (googlepolicy
 	return Merge(typedPolicies...)
 }
 
-// IncludedPaths returns a clone of the include patterns configured in the policy.
+// IncludedPaths returns a deduplicated clone of the include patterns configured in the policy,
+// preserving first-seen order.
 func (p *Policy) IncludedPaths() []string {
 	if p == nil || p.proto == nil {
 		return nil
 	}
-	return slices.Clone(p.proto.GetIncludedPaths())
+	return deduplicatePatterns(p.proto.GetIncludedPaths())
 }
 
-// pathDedupeKey returns a canonical key for path comparison and deduplication.
-func pathDedupeKey(pattern string) string {
-	return normalizePattern(pattern)
+func deduplicatePatterns(patterns []string) []string {
+	seen := make(map[string]bool, len(patterns))
+	result := make([]string, 0, len(patterns))
+	for _, pat := range patterns {
+		canonical := normalizePattern(pat)
+		if !seen[canonical] {
+			seen[canonical] = true
+			result = append(result, canonical)
+		}
+	}
+	return result
 }

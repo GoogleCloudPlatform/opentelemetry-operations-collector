@@ -2216,4 +2216,15 @@ func TestPolicyValidationAtomicMultiStageAndUnknownRedactionWireField(t *testing
 		require.ErrorIs(t, err, ErrUnsupportedAction)
 		assert.ErrorContains(t, err, "removals[0]:")
 	})
+
+	t.Run("driver sets PolicyClassTransformation on FailedPolicy", func(t *testing.T) {
+		ps, err := googlepolicy.MakePolicySetFromProtos("test-ps", "rev1", []proto.Message{
+			&policyv1alpha1.LogTransformPolicy{Id: "invalid-empty-transform"},
+		})
+		require.Error(t, err)
+		require.NotNil(t, ps)
+		require.Len(t, ps.FailedPolicies, 1)
+		assert.Equal(t, "invalid-empty-transform", ps.FailedPolicies[0].ID)
+		assert.Equal(t, googlepolicy.PolicyClassTransformation, ps.FailedPolicies[0].Class)
+	})
 }

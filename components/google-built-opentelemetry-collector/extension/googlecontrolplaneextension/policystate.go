@@ -51,6 +51,8 @@ import (
 type PolicyStateSource interface {
 	// ActivePolicySet returns the identity of the active policy set.
 	ActivePolicySet() PolicySetState
+	// IsControlPlaneActive reports whether the control plane is active.
+	IsControlPlaneActive() bool
 }
 
 // PolicySetState identifies the active policy set.
@@ -89,4 +91,12 @@ func (registrySource) ActivePolicySet() PolicySetState {
 		ID:       ps.PolicySetID,
 		Revision: ps.RevisionID,
 	}
+}
+
+// IsControlPlaneActive reports whether the control plane policy engine is
+// active in this process. When the extension is configured independently
+// without the control plane provider, this returns false so no control plane
+// metrics are emitted.
+func (registrySource) IsControlPlaneActive() bool {
+	return googlepolicy.IsControlPlaneActive()
 }

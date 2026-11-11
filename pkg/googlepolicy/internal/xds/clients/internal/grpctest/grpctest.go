@@ -23,6 +23,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"go.uber.org/goleak"
 )
 
 // Tester is an implementation of the x interface parameter to
@@ -37,6 +39,7 @@ func (Tester) Setup(t *testing.T) {
 
 // Teardown performs a leak check.
 func (Tester) Teardown(t *testing.T) {
+	goleak.VerifyNone(t)
 }
 
 // Interface defines Tester's methods for use in this package.

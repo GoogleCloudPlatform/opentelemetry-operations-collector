@@ -17,6 +17,7 @@ require (
 	go.opentelemetry.io/collector/component v1.67.0
 	go.opentelemetry.io/collector/confmap v1.66.0
 	go.opentelemetry.io/collector/pdata v1.70.0
+	go.uber.org/goleak v1.3.0
 	go.uber.org/zap v1.28.0
 	golang.org/x/oauth2 v0.36.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260819154853-08b0e4226688

@@ -20,14 +20,14 @@ import (
 	"fmt"
 	"testing"
 
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
-func fuzzIISSeedPolicies() []*policyv1alpha1.IisSourcePolicy {
-	return []*policyv1alpha1.IisSourcePolicy{
+func fuzzIISSeedPolicies() []*policyv1.IisSourcePolicy {
+	return []*policyv1.IisSourcePolicy{
 		{
 			Id:                        "projects/123/locations/us-central1/policySets/ps-1/policies/enable-iis-default",
 			CollectionIntervalSeconds: nil,
@@ -150,7 +150,7 @@ func FuzzIISSourcePolicy(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, data []byte) {
-		pb := &policyv1alpha1.IisSourcePolicy{}
+		pb := &policyv1.IisSourcePolicy{}
 		if err := proto.Unmarshal(data, pb); err == nil {
 			ps, err := googlepolicy.MakePolicySetFromProtos("projects/p/locations/l/policySets/ps", "fuzz-rev", []proto.Message{pb})
 			if err == nil {
@@ -213,13 +213,13 @@ func FuzzIISSourcePolicy_Consolidation(f *testing.F) {
 	f.Add("iis-slow", int32(120), true, "iis-unset", int32(0), false)
 
 	f.Fuzz(func(t *testing.T, id1 string, interval1 int32, hasInterval1 bool, id2 string, interval2 int32, hasInterval2 bool) {
-		pb1 := &policyv1alpha1.IisSourcePolicy{Id: id1}
+		pb1 := &policyv1.IisSourcePolicy{Id: id1}
 		if hasInterval1 {
 			pb1.CollectionIntervalSeconds = proto.Int32(interval1)
 		}
 		p1, err1 := NewPolicyFromProto(pb1)
 
-		pb2 := &policyv1alpha1.IisSourcePolicy{Id: id2}
+		pb2 := &policyv1.IisSourcePolicy{Id: id2}
 		if hasInterval2 {
 			pb2.CollectionIntervalSeconds = proto.Int32(interval2)
 		}

@@ -17,7 +17,7 @@ package matcher
 import (
 	"testing"
 
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -30,45 +30,45 @@ func TestCompileLogMatcherAndExtractor(t *testing.T) {
 		_, err := CompileLogExtractor(nil)
 		assert.ErrorIs(t, err, ErrMissingLogTarget)
 
-		_, err = CompileLogExtractor(&policyv1alpha1.LogFieldSelector{})
+		_, err = CompileLogExtractor(&policyv1.LogFieldSelector{})
 		assert.ErrorIs(t, err, ErrMissingLogTarget)
 
-		_, err = CompileLogExtractor(&policyv1alpha1.LogFieldSelector{
-			Target: &policyv1alpha1.LogFieldSelector_RecordField{
-				RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_UNSPECIFIED,
+		_, err = CompileLogExtractor(&policyv1.LogFieldSelector{
+			Target: &policyv1.LogFieldSelector_RecordField{
+				RecordField: policyv1.LogRecordField_LOG_RECORD_FIELD_UNSPECIFIED,
 			},
 		})
 		assert.ErrorContains(t, err, "log record field cannot be unspecified")
 
-		_, err = CompileLogExtractor(&policyv1alpha1.LogFieldSelector{
-			Target: &policyv1alpha1.LogFieldSelector_ScopeField{
-				ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_UNSPECIFIED,
+		_, err = CompileLogExtractor(&policyv1.LogFieldSelector{
+			Target: &policyv1.LogFieldSelector_ScopeField{
+				ScopeField: policyv1.ScopeField_SCOPE_FIELD_UNSPECIFIED,
 			},
 		})
 		assert.ErrorContains(t, err, "scope field cannot be unspecified")
 
-		_, err = CompileLogExtractor(&policyv1alpha1.LogFieldSelector{
-			Target: &policyv1alpha1.LogFieldSelector_LogAttributePath{},
+		_, err = CompileLogExtractor(&policyv1.LogFieldSelector{
+			Target: &policyv1.LogFieldSelector_LogAttributePath{},
 		})
 		assert.ErrorContains(t, err, "log attribute path cannot be empty")
 
-		_, err = CompileLogExtractor(&policyv1alpha1.LogFieldSelector{
-			Target: &policyv1alpha1.LogFieldSelector_ResourceAttributePath{},
+		_, err = CompileLogExtractor(&policyv1.LogFieldSelector{
+			Target: &policyv1.LogFieldSelector_ResourceAttributePath{},
 		})
 		assert.ErrorContains(t, err, "resource attribute path cannot be empty")
 
-		_, err = CompileLogExtractor(&policyv1alpha1.LogFieldSelector{
-			Target: &policyv1alpha1.LogFieldSelector_ScopeAttributePath{},
+		_, err = CompileLogExtractor(&policyv1.LogFieldSelector{
+			Target: &policyv1.LogFieldSelector_ScopeAttributePath{},
 		})
 		assert.ErrorContains(t, err, "scope attribute path cannot be empty")
 
-		_, err = CompileLogMatcher(&policyv1alpha1.LogMatcher{})
+		_, err = CompileLogMatcher(&policyv1.LogMatcher{})
 		assert.ErrorIs(t, err, ErrMissingLogTarget)
 
-		_, err = CompileLogMatcher(&policyv1alpha1.LogMatcher{
-			Target: &policyv1alpha1.LogFieldSelector{
-				Target: &policyv1alpha1.LogFieldSelector_RecordField{
-					RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
+		_, err = CompileLogMatcher(&policyv1.LogMatcher{
+			Target: &policyv1.LogFieldSelector{
+				Target: &policyv1.LogFieldSelector_RecordField{
+					RecordField: policyv1.LogRecordField_LOG_RECORD_FIELD_BODY,
 				},
 			},
 		})
@@ -113,104 +113,104 @@ func TestCompileLogMatcherAndExtractor(t *testing.T) {
 
 		selectors := []struct {
 			name    string
-			target  *policyv1alpha1.LogFieldSelector
+			target  *policyv1.LogFieldSelector
 			wantVal any
 		}{
 			{
 				name: "record_field BODY",
-				target: &policyv1alpha1.LogFieldSelector{
-					Target: &policyv1alpha1.LogFieldSelector_RecordField{
-						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
+				target: &policyv1.LogFieldSelector{
+					Target: &policyv1.LogFieldSelector_RecordField{
+						RecordField: policyv1.LogRecordField_LOG_RECORD_FIELD_BODY,
 					},
 				},
 				wantVal: "hello",
 			},
 			{
 				name: "record_field SEVERITY_TEXT",
-				target: &policyv1alpha1.LogFieldSelector{
-					Target: &policyv1alpha1.LogFieldSelector_RecordField{
-						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT,
+				target: &policyv1.LogFieldSelector{
+					Target: &policyv1.LogFieldSelector_RecordField{
+						RecordField: policyv1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT,
 					},
 				},
 				wantVal: "INFO",
 			},
 			{
 				name: "record_field SEVERITY_NUMBER",
-				target: &policyv1alpha1.LogFieldSelector{
-					Target: &policyv1alpha1.LogFieldSelector_RecordField{
-						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER,
+				target: &policyv1.LogFieldSelector{
+					Target: &policyv1.LogFieldSelector_RecordField{
+						RecordField: policyv1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER,
 					},
 				},
 				wantVal: int64(plog.SeverityNumberInfo),
 			},
 			{
 				name: "record_field TRACE_ID",
-				target: &policyv1alpha1.LogFieldSelector{
-					Target: &policyv1alpha1.LogFieldSelector_RecordField{
-						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID,
+				target: &policyv1.LogFieldSelector{
+					Target: &policyv1.LogFieldSelector_RecordField{
+						RecordField: policyv1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID,
 					},
 				},
 				wantVal: tid,
 			},
 			{
 				name: "record_field SPAN_ID",
-				target: &policyv1alpha1.LogFieldSelector{
-					Target: &policyv1alpha1.LogFieldSelector_RecordField{
-						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID,
+				target: &policyv1.LogFieldSelector{
+					Target: &policyv1.LogFieldSelector_RecordField{
+						RecordField: policyv1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID,
 					},
 				},
 				wantVal: sid,
 			},
 			{
 				name: "log_attribute",
-				target: &policyv1alpha1.LogFieldSelector{
-					Target: &policyv1alpha1.LogFieldSelector_LogAttributePath{
-						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"log.key"}},
+				target: &policyv1.LogFieldSelector{
+					Target: &policyv1.LogFieldSelector_LogAttributePath{
+						LogAttributePath: &policyv1.AttributePath{Segments: []string{"log.key"}},
 					},
 				},
 				wantVal: "log-val",
 			},
 			{
 				name: "resource_attribute",
-				target: &policyv1alpha1.LogFieldSelector{
-					Target: &policyv1alpha1.LogFieldSelector_ResourceAttributePath{
-						ResourceAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"res.key"}},
+				target: &policyv1.LogFieldSelector{
+					Target: &policyv1.LogFieldSelector_ResourceAttributePath{
+						ResourceAttributePath: &policyv1.AttributePath{Segments: []string{"res.key"}},
 					},
 				},
 				wantVal: "res-val",
 			},
 			{
 				name: "scope_attribute",
-				target: &policyv1alpha1.LogFieldSelector{
-					Target: &policyv1alpha1.LogFieldSelector_ScopeAttributePath{
-						ScopeAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"scope.key"}},
+				target: &policyv1.LogFieldSelector{
+					Target: &policyv1.LogFieldSelector_ScopeAttributePath{
+						ScopeAttributePath: &policyv1.AttributePath{Segments: []string{"scope.key"}},
 					},
 				},
 				wantVal: "scope-val",
 			},
 			{
 				name: "scope_field NAME",
-				target: &policyv1alpha1.LogFieldSelector{
-					Target: &policyv1alpha1.LogFieldSelector_ScopeField{
-						ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_NAME,
+				target: &policyv1.LogFieldSelector{
+					Target: &policyv1.LogFieldSelector_ScopeField{
+						ScopeField: policyv1.ScopeField_SCOPE_FIELD_NAME,
 					},
 				},
 				wantVal: "my-scope",
 			},
 			{
 				name: "scope_field VERSION",
-				target: &policyv1alpha1.LogFieldSelector{
-					Target: &policyv1alpha1.LogFieldSelector_ScopeField{
-						ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_VERSION,
+				target: &policyv1.LogFieldSelector{
+					Target: &policyv1.LogFieldSelector_ScopeField{
+						ScopeField: policyv1.ScopeField_SCOPE_FIELD_VERSION,
 					},
 				},
 				wantVal: "v1",
 			},
 			{
 				name: "scope_field SCHEMA_URL",
-				target: &policyv1alpha1.LogFieldSelector{
-					Target: &policyv1alpha1.LogFieldSelector_ScopeField{
-						ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_SCHEMA_URL,
+				target: &policyv1.LogFieldSelector{
+					Target: &policyv1.LogFieldSelector_ScopeField{
+						ScopeField: policyv1.ScopeField_SCOPE_FIELD_SCHEMA_URL,
 					},
 				},
 				wantVal: "https://schema.example/v1",
@@ -219,7 +219,7 @@ func TestCompileLogMatcherAndExtractor(t *testing.T) {
 
 		for _, tc := range selectors {
 			t.Run(tc.name, func(t *testing.T) {
-				cm, err := CompileLogMatcher(&policyv1alpha1.LogMatcher{
+				cm, err := CompileLogMatcher(&policyv1.LogMatcher{
 					Target:    tc.target,
 					Predicate: predExists(),
 				})
@@ -238,9 +238,9 @@ func TestCompileLogMatcherAndExtractor(t *testing.T) {
 		}
 
 		// Also verify non-string body (e.g. int) and empty-string body on BODY extractor.
-		bodyExt, err := CompileLogExtractor(&policyv1alpha1.LogFieldSelector{
-			Target: &policyv1alpha1.LogFieldSelector_RecordField{
-				RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
+		bodyExt, err := CompileLogExtractor(&policyv1.LogFieldSelector{
+			Target: &policyv1.LogFieldSelector_RecordField{
+				RecordField: policyv1.LogRecordField_LOG_RECORD_FIELD_BODY,
 			},
 		})
 		require.NoError(t, err)

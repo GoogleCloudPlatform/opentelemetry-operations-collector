@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -71,19 +71,19 @@ func TestProcessLogs_NilEngine(t *testing.T) {
 }
 
 func TestProcessLogs_WithActivePolicy(t *testing.T) {
-	dropPolicy := mustPolicy(t, &policyv1alpha1.LogFilterPolicy{
+	dropPolicy := mustPolicy(t, &policyv1.LogFilterPolicy{
 		Id:     "drop-secret-logs",
-		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-		Matchers: []*policyv1alpha1.LogMatcher{
+		Action: policyv1.Action_ACTION_DROP.Enum(),
+		Matchers: []*policyv1.LogMatcher{
 			{
-				Target: &policyv1alpha1.LogFieldSelector{
-					Target: &policyv1alpha1.LogFieldSelector_RecordField{
-						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
+				Target: &policyv1.LogFieldSelector{
+					Target: &policyv1.LogFieldSelector_RecordField{
+						RecordField: policyv1.LogRecordField_LOG_RECORD_FIELD_BODY,
 					},
 				},
-				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
-					Equality: &policyv1alpha1.Value{
-						Kind: &policyv1alpha1.Value_StringValue{StringValue: "secret message"},
+				Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
+					Equality: &policyv1.Value{
+						Kind: &policyv1.Value_StringValue{StringValue: "secret message"},
 					},
 				}},
 			},
@@ -126,19 +126,19 @@ func TestProcessLogs_WithActivePolicy(t *testing.T) {
 }
 
 func TestProcessMetrics_WithActivePolicy(t *testing.T) {
-	dropPolicy := mustPolicy(t, &policyv1alpha1.MetricFilterPolicy{
+	dropPolicy := mustPolicy(t, &policyv1.MetricFilterPolicy{
 		Id:     "drop-internal-metric",
-		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-		Matchers: []*policyv1alpha1.MetricMatcher{
+		Action: policyv1.Action_ACTION_DROP.Enum(),
+		Matchers: []*policyv1.MetricMatcher{
 			{
-				Target: &policyv1alpha1.MetricFieldSelector{
-					Target: &policyv1alpha1.MetricFieldSelector_DescriptorField{
-						DescriptorField: policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME,
+				Target: &policyv1.MetricFieldSelector{
+					Target: &policyv1.MetricFieldSelector_DescriptorField{
+						DescriptorField: policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME,
 					},
 				},
-				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
-					Equality: &policyv1alpha1.Value{
-						Kind: &policyv1alpha1.Value_StringValue{StringValue: "internal.heartbeat"},
+				Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
+					Equality: &policyv1.Value{
+						Kind: &policyv1.Value_StringValue{StringValue: "internal.heartbeat"},
 					},
 				}},
 			},
@@ -183,18 +183,18 @@ func TestProcessMetrics_WithActivePolicy(t *testing.T) {
 }
 
 func TestProcessTraces_WithActivePolicy(t *testing.T) {
-	dropPolicy := mustPolicy(t, &policyv1alpha1.TraceFilterPolicy{
+	dropPolicy := mustPolicy(t, &policyv1.TraceFilterPolicy{
 		Id: "drop-healthcheck-span",
-		Matchers: []*policyv1alpha1.TraceMatcher{
+		Matchers: []*policyv1.TraceMatcher{
 			{
-				Target: &policyv1alpha1.TraceFieldSelector{
-					Target: &policyv1alpha1.TraceFieldSelector_RecordField{
-						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME,
+				Target: &policyv1.TraceFieldSelector{
+					Target: &policyv1.TraceFieldSelector_RecordField{
+						RecordField: policyv1.SpanRecordField_SPAN_RECORD_FIELD_NAME,
 					},
 				},
-				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
-					Equality: &policyv1alpha1.Value{
-						Kind: &policyv1alpha1.Value_StringValue{StringValue: "/healthz"},
+				Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
+					Equality: &policyv1.Value{
+						Kind: &policyv1.Value_StringValue{StringValue: "/healthz"},
 					},
 				}},
 			},
@@ -259,19 +259,19 @@ func TestProcessLogs_DynamicPolicyUpdate(t *testing.T) {
 	assert.Equal(t, 1, out1.ResourceLogs().Len())
 
 	// 2. Set new policy set that drops "test log"
-	dropPolicy := mustPolicy(t, &policyv1alpha1.LogFilterPolicy{
+	dropPolicy := mustPolicy(t, &policyv1.LogFilterPolicy{
 		Id:     "drop-test-log",
-		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-		Matchers: []*policyv1alpha1.LogMatcher{
+		Action: policyv1.Action_ACTION_DROP.Enum(),
+		Matchers: []*policyv1.LogMatcher{
 			{
-				Target: &policyv1alpha1.LogFieldSelector{
-					Target: &policyv1alpha1.LogFieldSelector_RecordField{
-						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
+				Target: &policyv1.LogFieldSelector{
+					Target: &policyv1.LogFieldSelector_RecordField{
+						RecordField: policyv1.LogRecordField_LOG_RECORD_FIELD_BODY,
 					},
 				},
-				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
-					Equality: &policyv1alpha1.Value{
-						Kind: &policyv1alpha1.Value_StringValue{StringValue: "test log"},
+				Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
+					Equality: &policyv1.Value{
+						Kind: &policyv1.Value_StringValue{StringValue: "test log"},
 					},
 				}},
 			},
@@ -300,19 +300,19 @@ func TestProcessLogs_WithRealLogFilterPolicy(t *testing.T) {
 	require.NoError(t, p.start(context.Background(), componenttest.NewNopHost()))
 	defer func() { _ = p.shutdown(context.Background()) }()
 
-	dropPolicy, err := logfilter.NewPolicyFromProto(&policyv1alpha1.LogFilterPolicy{
+	dropPolicy, err := logfilter.NewPolicyFromProto(&policyv1.LogFilterPolicy{
 		Id:     "drop-debug-logs",
-		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
-		Matchers: []*policyv1alpha1.LogMatcher{
+		Action: policyv1.Action_ACTION_DROP.Enum(),
+		Matchers: []*policyv1.LogMatcher{
 			{
-				Target: &policyv1alpha1.LogFieldSelector{
-					Target: &policyv1alpha1.LogFieldSelector_RecordField{
-						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
+				Target: &policyv1.LogFieldSelector{
+					Target: &policyv1.LogFieldSelector_RecordField{
+						RecordField: policyv1.LogRecordField_LOG_RECORD_FIELD_BODY,
 					},
 				},
-				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
-					Equality: &policyv1alpha1.Value{
-						Kind: &policyv1alpha1.Value_StringValue{
+				Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
+					Equality: &policyv1.Value{
+						Kind: &policyv1.Value_StringValue{
 							StringValue: "DROP_THIS_LINE",
 						},
 					},
@@ -413,70 +413,70 @@ func TestProcessLogs_WithRealLogTransformPolicy(t *testing.T) {
 	require.NoError(t, p.start(context.Background(), componenttest.NewNopHost()))
 	defer func() { _ = p.shutdown(context.Background()) }()
 
-	transformPolicy, err := logtransform.NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+	transformPolicy, err := logtransform.NewPolicyFromProto(&policyv1.LogTransformPolicy{
 		Id: "normalize-and-add-soc-tier",
-		Matchers: []*policyv1alpha1.LogMatcher{
+		Matchers: []*policyv1.LogMatcher{
 			{
-				Target: &policyv1alpha1.LogFieldSelector{
-					Target: &policyv1alpha1.LogFieldSelector_RecordField{
-						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
+				Target: &policyv1.LogFieldSelector{
+					Target: &policyv1.LogFieldSelector_RecordField{
+						RecordField: policyv1.LogRecordField_LOG_RECORD_FIELD_BODY,
 					},
 				},
-				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Containment{
-					Containment: &policyv1alpha1.Value{
-						Kind: &policyv1alpha1.Value_StringValue{StringValue: "security"},
+				Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Containment{
+					Containment: &policyv1.Value{
+						Kind: &policyv1.Value_StringValue{StringValue: "security"},
 					},
 				}},
 			},
 		},
-		Renamings: []*policyv1alpha1.LogRenaming{
+		Renamings: []*policyv1.LogRenaming{
 			{
-				Source: &policyv1alpha1.LogAttributeSelector{
-					Target: &policyv1alpha1.LogAttributeSelector_LogAttributePath{
-						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"legacy_actor"}},
+				Source: &policyv1.LogAttributeSelector{
+					Target: &policyv1.LogAttributeSelector_LogAttributePath{
+						LogAttributePath: &policyv1.AttributePath{Segments: []string{"legacy_actor"}},
 					},
 				},
-				Target: &policyv1alpha1.LogAttributeSelector{
-					Target: &policyv1alpha1.LogAttributeSelector_LogAttributePath{
-						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"user.name"}},
+				Target: &policyv1.LogAttributeSelector{
+					Target: &policyv1.LogAttributeSelector_LogAttributePath{
+						LogAttributePath: &policyv1.AttributePath{Segments: []string{"user.name"}},
 					},
 				},
 				UpsertEnabled: proto.Bool(false),
 			},
 		},
-		Additions: []*policyv1alpha1.LogAddition{
+		Additions: []*policyv1.LogAddition{
 			{
-				Target: &policyv1alpha1.LogTargetSelector{
-					Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
-						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"soc_tier"}},
+				Target: &policyv1.LogTargetSelector{
+					Target: &policyv1.LogTargetSelector_LogAttributePath{
+						LogAttributePath: &policyv1.AttributePath{Segments: []string{"soc_tier"}},
 					},
 				},
-				Source: &policyv1alpha1.LogAddition_Value{
-					Value: &policyv1alpha1.Value{
-						Kind: &policyv1alpha1.Value_StringValue{StringValue: "HOT_ACTIVE_SOC"},
+				Source: &policyv1.LogAddition_Value{
+					Value: &policyv1.Value{
+						Kind: &policyv1.Value_StringValue{StringValue: "HOT_ACTIVE_SOC"},
 					},
 				},
 				UpsertEnabled: proto.Bool(true),
 			},
 		},
-		Removals: []*policyv1alpha1.LogRemoval{
+		Removals: []*policyv1.LogRemoval{
 			{
-				Target: &policyv1alpha1.LogAttributeSelector{
-					Target: &policyv1alpha1.LogAttributeSelector_LogAttributePath{
-						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"temp_token"}},
+				Target: &policyv1.LogAttributeSelector{
+					Target: &policyv1.LogAttributeSelector_LogAttributePath{
+						LogAttributePath: &policyv1.AttributePath{Segments: []string{"temp_token"}},
 					},
 				},
 			},
 		},
-		Redactions: []*policyv1alpha1.LogRedaction{
+		Redactions: []*policyv1.LogRedaction{
 			{
-				Target: &policyv1alpha1.LogTargetSelector{
-					Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
-						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"user.name"}},
+				Target: &policyv1.LogTargetSelector{
+					Target: &policyv1.LogTargetSelector_LogAttributePath{
+						LogAttributePath: &policyv1.AttributePath{Segments: []string{"user.name"}},
 					},
 				},
-				Pattern: &policyv1alpha1.LogRedaction_Regex{Regex: `@.+`},
-				Mask:    &policyv1alpha1.LogRedaction_Replacement{Replacement: "@[REDACTED]"},
+				Pattern: &policyv1.LogRedaction_Regex{Regex: `@.+`},
+				Mask:    &policyv1.LogRedaction_Replacement{Replacement: "@[REDACTED]"},
 			},
 		},
 	})

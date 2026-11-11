@@ -27,6 +27,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	authcredentials "cloud.google.com/go/auth/credentials"
@@ -51,7 +52,7 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/structpb"
 
-	xdsv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/xds/v1alpha1"
+	xdsv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/xds/v1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/grpctransport"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/xdsclient"
@@ -60,14 +61,23 @@ import (
 const (
 	// xdsResourceType is the fully qualified name of the TelemetryCollector
 	// message: the resource type as it appears in an xdstp:// resource name.
-	xdsResourceType = "google.telemetry.xds.v1alpha1.TelemetryCollector"
+	xdsResourceType = "google.telemetry.xds.v1.TelemetryCollector"
 
-	// xdsPolicyTypeURL is the one resource type this manager subscribes to. It
-	// is fixed rather than configurable: the control plane only ever serves
+	// xdsPolicyTypeURL is the primary resource type this manager subscribes to.
+	// It is fixed rather than configurable: the control plane only ever serves
 	// TelemetryCollector resources, and the decoding path below is written
 	// against that schema, so a different type could be subscribed to but not
 	// usefully interpreted.
 	xdsPolicyTypeURL = "type.googleapis.com/" + xdsResourceType
+
+	// legacyXDSResourceType and legacyXDSPolicyTypeURL are the pre-graduation
+	// v1alpha1 resource type and type URL. When a control plane has not yet been
+	// updated to serve google.telemetry.xds.v1.TelemetryCollector and rejects the
+	// initial v1 subscription with InvalidArgument, the manager transparently
+	// falls back to subscribing with v1alpha1 and decodes wire-compatible
+	// v1alpha1 TelemetryCollector payloads into xdsv1.TelemetryCollector.
+	legacyXDSResourceType  = "google.telemetry.xds.v1alpha1.TelemetryCollector"
+	legacyXDSPolicyTypeURL = "type.googleapis.com/" + legacyXDSResourceType
 
 	// defaultCollectorResource is the collector resource name suffix in the
 	// xdstp:// subscription URI. The control plane organizes collector
@@ -267,6 +277,12 @@ type xdsPolicyManager struct {
 	lastAppliedVersion  string
 	lastAppliedRawBytes []byte
 	activeClient        *xdsclient.XDSClient
+
+	// useLegacyV1Alpha1 is set when the control plane rejects the initial v1
+	// TelemetryCollector subscription with InvalidArgument, causing subsequent
+	// stream attempts to subscribe using legacyXDSResourceType /
+	// legacyXDSPolicyTypeURL. Guarded by mu.
+	useLegacyV1Alpha1 bool
 }
 
 // NewXDSPolicyManager creates a manager for the given `xds://` URI.
@@ -594,10 +610,36 @@ func regionFromZone(zone string) string {
 // xdstpResourceName returns the xdstp:// name of the TelemetryCollector
 // resource that holds a fleet's policies:
 //
-//	xdstp://telemetry-director.REGION.xds.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector/projects/PROJECT/fleets/FLEET/collectors/default
+//	xdstp://telemetry-director.REGION.xds.googleapis.com/google.telemetry.xds.v1.TelemetryCollector/projects/PROJECT/fleets/FLEET/collectors/default
 func xdstpResourceName(region, project, fleetID string) string {
 	return fmt.Sprintf("xdstp://telemetry-director.%s.xds.googleapis.com/%s/projects/%s/fleets/%s/collectors/%s",
 		region, xdsResourceType, project, fleetID, defaultCollectorResource)
+}
+
+func (m *xdsPolicyManager) useLegacyXDS() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.useLegacyV1Alpha1
+}
+
+func (m *xdsPolicyManager) setUseLegacyXDS(v bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.useLegacyV1Alpha1 = v
+}
+
+func (m *xdsPolicyManager) activeTypeURL() string {
+	if m.useLegacyXDS() {
+		return legacyXDSPolicyTypeURL
+	}
+	return xdsPolicyTypeURL
+}
+
+func (m *xdsPolicyManager) activeResourceName() string {
+	if m.useLegacyXDS() {
+		return strings.Replace(m.resourceName, "/"+xdsResourceType+"/", "/"+legacyXDSResourceType+"/", 1)
+	}
+	return m.resourceName
 }
 
 // Start launches the background xdsclient stream and waits, briefly, for the
@@ -623,8 +665,8 @@ func (m *xdsPolicyManager) Start() error {
 		zap.String("server", m.serverAddr),
 		zap.String("fleet", m.fleetID),
 		zap.String("collector_id", m.collectorID),
-		zap.String("resource_name", m.resourceName),
-		zap.String("type_url", xdsPolicyTypeURL),
+		zap.String("resource_name", m.activeResourceName()),
+		zap.String("type_url", m.activeTypeURL()),
 	)
 
 	go func() {
@@ -833,6 +875,43 @@ func (m *xdsPolicyManager) run(ctx context.Context) {
 	metricsReporter := newOTelMetricsReporter(m.meterProvider, m.serverAddr, m.logger)
 	defer metricsReporter.close()
 
+	for {
+		fallbackErr := m.runClient(ctx, metricsReporter)
+		if fallbackErr == nil || ctx.Err() != nil {
+			return
+		}
+		// The control plane rejected our initial v1 subscription with
+		// InvalidArgument before sending any response, so it likely only
+		// recognizes the legacy v1alpha1 TelemetryCollector resource type.
+		// Fall back to v1alpha1 and reconnect immediately without backoff.
+		m.setUseLegacyXDS(true)
+		m.logger.Info("xDS control plane rejected v1 TelemetryCollector subscription with InvalidArgument; falling back to legacy v1alpha1 resource type",
+			zap.String("server", m.serverAddr),
+			zap.String("legacy_type_url", legacyXDSPolicyTypeURL),
+			zap.String("legacy_resource_name", m.activeResourceName()),
+			zap.Error(fallbackErr),
+		)
+	}
+}
+
+func (m *xdsPolicyManager) runClient(ctx context.Context, metricsReporter clients.MetricsReporter) error {
+	legacyMode := m.useLegacyXDS()
+	activeTypeURL := m.activeTypeURL()
+	activeResourceName := m.activeResourceName()
+
+	fallbackCh := make(chan error, 1)
+	var (
+		fallbackOnce      sync.Once
+		fallbackTriggered atomic.Bool
+		gotResponse       atomic.Bool
+	)
+	triggerFallback := func(err error) {
+		fallbackOnce.Do(func() {
+			fallbackTriggered.Store(true)
+			fallbackCh <- err
+		})
+	}
+
 	var credsBundle credentials.Bundle
 	if m.insecure {
 		credsBundle = insecure.NewBundle()
@@ -841,6 +920,31 @@ func (m *xdsPolicyManager) run(ctx context.Context) {
 			transportCreds: credentials.NewTLS(&tls.Config{MinVersion: tls.VersionTLS12}),
 			perRPCCreds:    &TokenAuth{serverAddr: m.serverAddr},
 		}
+	}
+
+	streamInterceptor := func(sctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+		if !legacyMode && fallbackTriggered.Load() {
+			return nil, context.Canceled
+		}
+		cs, err := streamer(sctx, desc, cc, method, opts...)
+		if err != nil {
+			if !legacyMode && !gotResponse.Load() && grpcstatus.Code(err) == codes.InvalidArgument {
+				triggerFallback(err)
+			}
+			return nil, err
+		}
+		return &wireLogClientStream{
+			ClientStream: cs,
+			m:            m,
+			onResponse: func() {
+				gotResponse.Store(true)
+			},
+			onRecvErr: func(recvErr error) {
+				if !legacyMode && !gotResponse.Load() && grpcstatus.Code(recvErr) == codes.InvalidArgument {
+					triggerFallback(recvErr)
+				}
+			},
+		}, nil
 	}
 
 	tb := grpctransport.NewBuilder(map[string]grpctransport.Config{
@@ -853,7 +957,7 @@ func (m *xdsPolicyManager) run(ctx context.Context) {
 						Timeout:             keepaliveTimeout,
 						PermitWithoutStream: false,
 					}),
-					grpc.WithStreamInterceptor(m.wireLogStreamInterceptor),
+					grpc.WithStreamInterceptor(streamInterceptor),
 				)
 				opts = append(opts, m.extraDialOpts...)
 				return grpc.NewClient(target, opts...)
@@ -870,10 +974,10 @@ func (m *xdsPolicyManager) run(ctx context.Context) {
 	authorityName := fmt.Sprintf("telemetry-director.%s.xds.googleapis.com", m.region)
 
 	rType := xdsclient.ResourceType{
-		TypeURL:                    xdsPolicyTypeURL,
+		TypeURL:                    activeTypeURL,
 		TypeName:                   "TelemetryCollector",
 		AllResourcesRequiredInSotW: true,
-		Decoder:                    &telemetryCollectorDecoder{m: m},
+		Decoder:                    &telemetryCollectorDecoder{m: m, resourceName: activeResourceName},
 	}
 
 	cfg := xdsclient.Config{
@@ -886,7 +990,7 @@ func (m *xdsPolicyManager) run(ctx context.Context) {
 		Node:             m.buildClientNode(),
 		TransportBuilder: tb,
 		ResourceTypes: map[string]xdsclient.ResourceType{
-			xdsPolicyTypeURL: rType,
+			activeTypeURL: rType,
 		},
 		MetricsReporter: metricsReporter,
 		Logger:          newZapDepthLogger(m.logger),
@@ -897,26 +1001,39 @@ func (m *xdsPolicyManager) run(ctx context.Context) {
 	client, err := xdsclient.New(cfg)
 	if err != nil {
 		m.logger.Error("Failed to initialize xDS client", zap.Error(err))
-		return
+		return nil
 	}
 	m.setClient(client)
-	cancelWatch := client.WatchResource(xdsPolicyTypeURL, m.resourceName, &policyResourceWatcher{m: m})
+	watcher := &policyResourceWatcher{
+		m:          m,
+		isFallback: fallbackTriggered.Load,
+	}
+	cancelWatch := client.WatchResource(activeTypeURL, activeResourceName, watcher)
 	defer func() {
 		m.setClient(nil)
 		client.Close()
 		cancelWatch()
 	}()
 
-	<-ctx.Done()
+	select {
+	case <-ctx.Done():
+		return nil
+	case err := <-fallbackCh:
+		return err
+	}
 }
 
 // policyResourceWatcher implements xdsclient.ResourceWatcher.
 type policyResourceWatcher struct {
-	m *xdsPolicyManager
+	m          *xdsPolicyManager
+	isFallback func() bool
 }
 
 func (w *policyResourceWatcher) ResourceChanged(data xdsclient.ResourceData, done func()) {
 	defer done()
+	if w.isFallback != nil && w.isFallback() {
+		return
+	}
 	d, ok := data.(*policyResourceData)
 	if !ok || d == nil {
 		return
@@ -943,6 +1060,9 @@ func (w *policyResourceWatcher) ResourceChanged(data xdsclient.ResourceData, don
 func (w *policyResourceWatcher) ResourceError(err error, done func()) {
 	defer done()
 	if err == nil {
+		return
+	}
+	if w.isFallback != nil && w.isFallback() {
 		return
 	}
 	// Keep Start() blocked across transient non-auth connection errors so the
@@ -983,6 +1103,9 @@ func isAuthRejectionError(err error) bool {
 
 func (w *policyResourceWatcher) AmbientError(err error, done func()) {
 	defer done()
+	if w.isFallback != nil && w.isFallback() {
+		return
+	}
 	if err != nil {
 		w.m.logger.Warn("xDS ambient error; retaining cached policy set", zap.Error(err))
 	}
@@ -1010,13 +1133,22 @@ func (p *policyResourceData) Bytes() []byte {
 
 // telemetryCollectorDecoder implements xdsclient.Decoder.
 type telemetryCollectorDecoder struct {
-	m *xdsPolicyManager
+	m            *xdsPolicyManager
+	resourceName string
 }
 
 var _ xdsclient.Decoder = (*telemetryCollectorDecoder)(nil)
 
+func (d *telemetryCollectorDecoder) expectedResourceName() string {
+	if d.resourceName != "" {
+		return d.resourceName
+	}
+	return d.m.activeResourceName()
+}
+
 func (d *telemetryCollectorDecoder) Decode(resource *xdsclient.AnyProto, options xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
-	resourceName := d.m.resourceName
+	expectedName := d.expectedResourceName()
+	resourceName := expectedName
 	version := options.Version
 	rawAny := resource.ToAny()
 	if rawAny.GetTypeUrl() == "type.googleapis.com/envoy.service.discovery.v3.Resource" {
@@ -1040,7 +1172,7 @@ func (d *telemetryCollectorDecoder) Decode(resource *xdsclient.AnyProto, options
 		zap.String("type_url", rawAny.GetTypeUrl()),
 	)
 
-	if version != "" && resourceName == d.m.resourceName && version == d.m.LastAppliedVersion() {
+	if version != "" && resourceName == expectedName && version == d.m.LastAppliedVersion() {
 		d.m.logger.Debug("Re-ACKing an already applied xDS revision", zap.String("version", version))
 		return &xdsclient.DecodeResult{
 			Name: resourceName,
@@ -1148,7 +1280,7 @@ func marshalCollectorBytes(policySetRevision string, policyProtos []proto.Messag
 			policies = append(policies, a)
 		}
 	}
-	rawBytes, _ := proto.Marshal(&xdsv1alpha1.TelemetryCollector{
+	rawBytes, _ := proto.Marshal(&xdsv1.TelemetryCollector{
 		PolicySetRevision: policySetRevision,
 		Policies:          policies,
 	})
@@ -1157,7 +1289,9 @@ func marshalCollectorBytes(policySetRevision string, policyProtos []proto.Messag
 
 type wireLogClientStream struct {
 	grpc.ClientStream
-	m *xdsPolicyManager
+	m          *xdsPolicyManager
+	onResponse func()
+	onRecvErr  func(error)
 }
 
 func (s *wireLogClientStream) SendMsg(msg any) error {
@@ -1175,7 +1309,16 @@ func (s *wireLogClientStream) SendMsg(msg any) error {
 
 func (s *wireLogClientStream) RecvMsg(msg any) error {
 	err := s.ClientStream.RecvMsg(msg)
-	if err == nil && s.m.logger != nil && s.m.logger.Core().Enabled(zapcore.DebugLevel) {
+	if err != nil {
+		if s.onRecvErr != nil {
+			s.onRecvErr(err)
+		}
+		return err
+	}
+	if s.onResponse != nil {
+		s.onResponse()
+	}
+	if s.m.logger != nil && s.m.logger.Core().Enabled(zapcore.DebugLevel) {
 		if bp, ok := msg.(*[]byte); ok {
 			var resp discoveryv3.DiscoveryResponse
 			if uErr := proto.Unmarshal(*bp, &resp); uErr == nil {
@@ -1183,15 +1326,7 @@ func (s *wireLogClientStream) RecvMsg(msg any) error {
 			}
 		}
 	}
-	return err
-}
-
-func (m *xdsPolicyManager) wireLogStreamInterceptor(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
-	cs, err := streamer(ctx, desc, cc, method, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return &wireLogClientStream{ClientStream: cs, m: m}, nil
+	return nil
 }
 
 func (m *xdsPolicyManager) logDiscoveryRequest(req *discoveryv3.DiscoveryRequest) {
@@ -1300,9 +1435,12 @@ func extractManifest(resp *discoveryv3.DiscoveryResponse) (xdsManifest, error) {
 	)
 
 	for i, anyRes := range resp.GetResources() {
-		if anyRes.MessageIs(&xdsv1alpha1.TelemetryCollector{}) {
-			collector := &xdsv1alpha1.TelemetryCollector{}
-			if err := anyRes.UnmarshalTo(collector); err != nil {
+		// Accept both the v1 type URL and the legacy v1alpha1 type URL so the
+		// collector can decode responses from a control plane that has not yet
+		// migrated to google.telemetry.xds.v1.TelemetryCollector.
+		if anyRes.MessageIs(&xdsv1.TelemetryCollector{}) || anyRes.GetTypeUrl() == legacyXDSPolicyTypeURL {
+			collector := &xdsv1.TelemetryCollector{}
+			if err := proto.Unmarshal(anyRes.GetValue(), collector); err != nil {
 				errs = append(errs, fmt.Errorf("%w at index %d: %w", ErrXDSResourceDecode, i, err))
 				continue
 			}
@@ -1334,7 +1472,7 @@ func extractManifest(resp *discoveryv3.DiscoveryResponse) (xdsManifest, error) {
 	return manifest, errors.Join(errs...)
 }
 
-func policiesFromCollector(collector *xdsv1alpha1.TelemetryCollector) ([]proto.Message, error) {
+func policiesFromCollector(collector *xdsv1.TelemetryCollector) ([]proto.Message, error) {
 	var (
 		policies []proto.Message
 		errs     []error

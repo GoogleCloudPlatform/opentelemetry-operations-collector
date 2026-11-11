@@ -28,7 +28,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/confmap"
@@ -67,9 +67,9 @@ var (
 
 // driver loads a WindowsEventLogSourcePolicy from either shape it can arrive in: the proto
 // a control plane sends, or the map an authored config decodes to.
-var driver = &googlepolicy.ProtoDriver[*policyv1alpha1.WindowsEventLogSourcePolicy]{
+var driver = &googlepolicy.ProtoDriver[*policyv1.WindowsEventLogSourcePolicy]{
 	Class: googlepolicy.PolicyClassSource,
-	New: func(pb *policyv1alpha1.WindowsEventLogSourcePolicy) (googlepolicy.Policy, error) {
+	New: func(pb *policyv1.WindowsEventLogSourcePolicy) (googlepolicy.Policy, error) {
 		return NewPolicyFromProto(pb)
 	},
 }
@@ -82,7 +82,7 @@ func init() {
 
 // Policy represents a compiled, validated WindowsEventLogSourcePolicy ready for evaluation into Collector configuration.
 type Policy struct {
-	proto *policyv1alpha1.WindowsEventLogSourcePolicy
+	proto *policyv1.WindowsEventLogSourcePolicy
 }
 
 var (
@@ -94,11 +94,11 @@ var (
 
 // NewPolicyFromProto validates and compiles a WindowsEventLogSourcePolicy protobuf into a Policy.
 // It defensively clones the input proto to prevent concurrent mutation by callers.
-func NewPolicyFromProto(pb *policyv1alpha1.WindowsEventLogSourcePolicy) (*Policy, error) {
+func NewPolicyFromProto(pb *policyv1.WindowsEventLogSourcePolicy) (*Policy, error) {
 	if pb == nil {
 		return nil, ErrNilProto
 	}
-	p := &Policy{proto: proto.Clone(pb).(*policyv1alpha1.WindowsEventLogSourcePolicy)}
+	p := &Policy{proto: proto.Clone(pb).(*policyv1.WindowsEventLogSourcePolicy)}
 	if err := p.Validate(); err != nil {
 		return nil, err
 	}
@@ -352,7 +352,7 @@ func (p *Policy) Consolidate(policies []googlepolicy.SourcePolicy) (googlepolicy
 		mergedChannels = append(mergedChannels, seen[key])
 	}
 
-	cloned := proto.Clone(p.proto).(*policyv1alpha1.WindowsEventLogSourcePolicy)
+	cloned := proto.Clone(p.proto).(*policyv1.WindowsEventLogSourcePolicy)
 	cloned.Channels = mergedChannels
 	return NewPolicyFromProto(cloned)
 }

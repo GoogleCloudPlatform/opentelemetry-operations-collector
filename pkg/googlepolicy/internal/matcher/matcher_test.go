@@ -18,66 +18,66 @@ import (
 	"math"
 	"testing"
 
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-func intValue(v int64) *policyv1alpha1.Value {
-	return &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_IntValue{IntValue: v}}
+func intValue(v int64) *policyv1.Value {
+	return &policyv1.Value{Kind: &policyv1.Value_IntValue{IntValue: v}}
 }
 
-func strValue(v string) *policyv1alpha1.Value {
-	return &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: v}}
+func strValue(v string) *policyv1.Value {
+	return &policyv1.Value{Kind: &policyv1.Value_StringValue{StringValue: v}}
 }
 
-func bytesValue(v []byte) *policyv1alpha1.Value {
-	return &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BytesValue{BytesValue: v}}
+func bytesValue(v []byte) *policyv1.Value {
+	return &policyv1.Value{Kind: &policyv1.Value_BytesValue{BytesValue: v}}
 }
 
-func intNumeric(v int64) *policyv1alpha1.NumericValue {
-	return &policyv1alpha1.NumericValue{Kind: &policyv1alpha1.NumericValue_IntValue{IntValue: v}}
+func intNumeric(v int64) *policyv1.NumericValue {
+	return &policyv1.NumericValue{Kind: &policyv1.NumericValue_IntValue{IntValue: v}}
 }
 
-func doubleNumeric(v float64) *policyv1alpha1.NumericValue {
-	return &policyv1alpha1.NumericValue{Kind: &policyv1alpha1.NumericValue_DoubleValue{DoubleValue: v}}
+func doubleNumeric(v float64) *policyv1.NumericValue {
+	return &policyv1.NumericValue{Kind: &policyv1.NumericValue_DoubleValue{DoubleValue: v}}
 }
 
-func predExists() *policyv1alpha1.Predicate {
-	return &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{Existence: &emptypb.Empty{}}}
+func predExists() *policyv1.Predicate {
+	return &policyv1.Predicate{Kind: &policyv1.Predicate_Existence{Existence: &emptypb.Empty{}}}
 }
 
-func predEquals(v *policyv1alpha1.Value) *policyv1alpha1.Predicate {
-	return &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{Equality: v}}
+func predEquals(v *policyv1.Value) *policyv1.Predicate {
+	return &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{Equality: v}}
 }
 
-func predGlob(pattern string) *policyv1alpha1.Predicate {
-	return &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Glob{Glob: pattern}}
+func predGlob(pattern string) *policyv1.Predicate {
+	return &policyv1.Predicate{Kind: &policyv1.Predicate_Glob{Glob: pattern}}
 }
 
-func predGt(n *policyv1alpha1.NumericValue) *policyv1alpha1.Predicate {
-	return &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_ExclusiveMinimum{ExclusiveMinimum: n}}
+func predGt(n *policyv1.NumericValue) *policyv1.Predicate {
+	return &policyv1.Predicate{Kind: &policyv1.Predicate_ExclusiveMinimum{ExclusiveMinimum: n}}
 }
 
-func predGte(n *policyv1alpha1.NumericValue) *policyv1alpha1.Predicate {
-	return &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_InclusiveMinimum{InclusiveMinimum: n}}
+func predGte(n *policyv1.NumericValue) *policyv1.Predicate {
+	return &policyv1.Predicate{Kind: &policyv1.Predicate_InclusiveMinimum{InclusiveMinimum: n}}
 }
 
-func predLt(n *policyv1alpha1.NumericValue) *policyv1alpha1.Predicate {
-	return &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_ExclusiveMaximum{ExclusiveMaximum: n}}
+func predLt(n *policyv1.NumericValue) *policyv1.Predicate {
+	return &policyv1.Predicate{Kind: &policyv1.Predicate_ExclusiveMaximum{ExclusiveMaximum: n}}
 }
 
-func predLte(n *policyv1alpha1.NumericValue) *policyv1alpha1.Predicate {
-	return &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_InclusiveMaximum{InclusiveMaximum: n}}
+func predLte(n *policyv1.NumericValue) *policyv1.Predicate {
+	return &policyv1.Predicate{Kind: &policyv1.Predicate_InclusiveMaximum{InclusiveMaximum: n}}
 }
 
-func predContains(v *policyv1alpha1.Value) *policyv1alpha1.Predicate {
-	return &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Containment{Containment: v}}
+func predContains(v *policyv1.Value) *policyv1.Predicate {
+	return &policyv1.Predicate{Kind: &policyv1.Predicate_Containment{Containment: v}}
 }
 
-func mustCompile(t *testing.T, predicate *policyv1alpha1.Predicate) Predicate {
+func mustCompile(t *testing.T, predicate *policyv1.Predicate) Predicate {
 	t.Helper()
 	p, err := CompilePredicate(predicate, false)
 	require.NoError(t, err)
@@ -88,32 +88,32 @@ func mustCompile(t *testing.T, predicate *policyv1alpha1.Predicate) Predicate {
 // predicate the engine cannot honour is rejected at load time rather than
 // silently never matching at runtime.
 func TestCompilePredicateRejectsMalformed(t *testing.T) {
-	nanVal := &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_DoubleValue{DoubleValue: math.NaN()}}
-	posInfVal := &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_DoubleValue{DoubleValue: math.Inf(1)}}
-	negInfVal := &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_DoubleValue{DoubleValue: math.Inf(-1)}}
+	nanVal := &policyv1.Value{Kind: &policyv1.Value_DoubleValue{DoubleValue: math.NaN()}}
+	posInfVal := &policyv1.Value{Kind: &policyv1.Value_DoubleValue{DoubleValue: math.Inf(1)}}
+	negInfVal := &policyv1.Value{Kind: &policyv1.Value_DoubleValue{DoubleValue: math.Inf(-1)}}
 
 	tests := []struct {
 		name      string
-		predicate *policyv1alpha1.Predicate
+		predicate *policyv1.Predicate
 		wantErr   error
 	}{
 		{"nil predicate", nil, ErrMissingPredicate},
-		{"unset predicate oneof", &policyv1alpha1.Predicate{}, ErrMissingPredicate},
+		{"unset predicate oneof", &policyv1.Predicate{}, ErrMissingPredicate},
 		{"equals with nil value", predEquals(nil), ErrMissingPredicate},
-		{"equals with unset value oneof", predEquals(&policyv1alpha1.Value{}), ErrMissingPredicate},
+		{"equals with unset value oneof", predEquals(&policyv1.Value{}), ErrMissingPredicate},
 		{"equals with NaN double_value", predEquals(nanVal), ErrNonFiniteDouble},
 		{"equals with +Inf double_value", predEquals(posInfVal), ErrNonFiniteDouble},
 		{"equals with -Inf double_value", predEquals(negInfVal), ErrNonFiniteDouble},
-		{"contains with unset value oneof", predContains(&policyv1alpha1.Value{}), ErrMissingPredicate},
+		{"contains with unset value oneof", predContains(&policyv1.Value{}), ErrMissingPredicate},
 		{"contains with NaN double_value", predContains(nanVal), ErrNonFiniteDouble},
 		{"contains with +Inf double_value", predContains(posInfVal), ErrNonFiniteDouble},
 		{"contains with -Inf double_value", predContains(negInfVal), ErrNonFiniteDouble},
 		{"gt with nil numeric", predGt(nil), ErrMissingPredicate},
-		{"gt with unset numeric oneof", predGt(&policyv1alpha1.NumericValue{}), ErrMissingPredicate},
+		{"gt with unset numeric oneof", predGt(&policyv1.NumericValue{}), ErrMissingPredicate},
 		{"gt with NaN double_value", predGt(doubleNumeric(math.NaN())), ErrNonFiniteDouble},
 		{"gte with +Inf double_value", predGte(doubleNumeric(math.Inf(1))), ErrNonFiniteDouble},
 		{"lt with -Inf double_value", predLt(doubleNumeric(math.Inf(-1))), ErrNonFiniteDouble},
-		{"lte with unset numeric oneof", predLte(&policyv1alpha1.NumericValue{}), ErrMissingPredicate},
+		{"lte with unset numeric oneof", predLte(&policyv1.NumericValue{}), ErrMissingPredicate},
 		{"lte with NaN double_value", predLte(doubleNumeric(math.NaN())), ErrNonFiniteDouble},
 	}
 
@@ -183,14 +183,14 @@ func TestPredicateEquals(t *testing.T) {
 	})
 
 	t.Run("double widens across Go float types", func(t *testing.T) {
-		pred := mustCompile(t, predEquals(&policyv1alpha1.Value{Kind: &policyv1alpha1.Value_DoubleValue{DoubleValue: 3.5}}))
+		pred := mustCompile(t, predEquals(&policyv1.Value{Kind: &policyv1.Value_DoubleValue{DoubleValue: 3.5}}))
 		assert.True(t, pred(3.5, true))
 		assert.True(t, pred(float32(3.5), true))
 		assert.False(t, pred("str", true))
 	})
 
 	t.Run("bool", func(t *testing.T) {
-		pred := mustCompile(t, predEquals(&policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BoolValue{BoolValue: true}}))
+		pred := mustCompile(t, predEquals(&policyv1.Value{Kind: &policyv1.Value_BoolValue{BoolValue: true}}))
 		assert.True(t, pred(true, true))
 		assert.False(t, pred(false, true))
 	})
@@ -222,7 +222,7 @@ func TestPredicateEquals(t *testing.T) {
 func TestPredicateNumericComparisons(t *testing.T) {
 	tests := []struct {
 		name      string
-		predicate *policyv1alpha1.Predicate
+		predicate *policyv1.Predicate
 		val       any
 		want      bool
 	}{
@@ -274,13 +274,13 @@ func TestCompilePathRejectsEmpty(t *testing.T) {
 	_, err := CompilePath(nil, "log")
 	assert.ErrorContains(t, err, "log attribute path cannot be empty")
 
-	_, err = CompilePath(&policyv1alpha1.AttributePath{}, "datapoint")
+	_, err = CompilePath(&policyv1.AttributePath{}, "datapoint")
 	assert.ErrorContains(t, err, "datapoint attribute path cannot be empty")
 
-	_, err = CompilePath(&policyv1alpha1.AttributePath{Segments: []string{""}}, "log")
+	_, err = CompilePath(&policyv1.AttributePath{Segments: []string{""}}, "log")
 	assert.ErrorContains(t, err, "log attribute path segment[0] cannot be empty")
 
-	_, err = CompilePath(&policyv1alpha1.AttributePath{Segments: []string{"http", ""}}, "resource")
+	_, err = CompilePath(&policyv1.AttributePath{Segments: []string{"http", ""}}, "resource")
 	assert.ErrorContains(t, err, "resource attribute path segment[1] cannot be empty")
 }
 
@@ -317,7 +317,7 @@ func TestEvalPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			steps, err := CompilePath(&policyv1alpha1.AttributePath{Segments: tt.path}, "test")
+			steps, err := CompilePath(&policyv1.AttributePath{Segments: tt.path}, "test")
 			require.NoError(t, err)
 			got, ok := EvalPath(m, steps)
 			assert.Equal(t, tt.ok, ok)
@@ -328,7 +328,7 @@ func TestEvalPath(t *testing.T) {
 	}
 
 	t.Run("whole slice", func(t *testing.T) {
-		steps, err := CompilePath(&policyv1alpha1.AttributePath{Segments: []string{"items"}}, "test")
+		steps, err := CompilePath(&policyv1.AttributePath{Segments: []string{"items"}}, "test")
 		require.NoError(t, err)
 		got, ok := EvalPath(m, steps)
 		require.True(t, ok)
@@ -336,7 +336,7 @@ func TestEvalPath(t *testing.T) {
 	})
 
 	t.Run("zero map", func(t *testing.T) {
-		steps, err := CompilePath(&policyv1alpha1.AttributePath{Segments: []string{"str"}}, "test")
+		steps, err := CompilePath(&policyv1.AttributePath{Segments: []string{"str"}}, "test")
 		require.NoError(t, err)
 		_, ok := EvalPath(pcommon.Map{}, steps)
 		assert.False(t, ok)
@@ -367,7 +367,7 @@ func TestNullAttributeBehavior(t *testing.T) {
 	attrs := pcommon.NewMap()
 	attrs.PutEmpty("null_key")
 
-	steps, err := CompilePath(&policyv1alpha1.AttributePath{Segments: []string{"null_key"}}, "log")
+	steps, err := CompilePath(&policyv1.AttributePath{Segments: []string{"null_key"}}, "log")
 	require.NoError(t, err)
 
 	val, exists := EvalPath(attrs, steps)
@@ -380,7 +380,7 @@ func TestNullAttributeBehavior(t *testing.T) {
 	assert.True(t, existsPred(val, exists))
 
 	// equals "" evaluates to false
-	equalsEmptyPred, err := CompilePredicate(predEquals(&policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: ""}}), false)
+	equalsEmptyPred, err := CompilePredicate(predEquals(&policyv1.Value{Kind: &policyv1.Value_StringValue{StringValue: ""}}), false)
 	require.NoError(t, err)
 	assert.False(t, equalsEmptyPred(val, exists), "null attribute must not match equals \"\"")
 
@@ -393,22 +393,22 @@ func TestNullAttributeBehavior(t *testing.T) {
 func TestCompareNumericNaN(t *testing.T) {
 	nan64 := math.NaN()
 	nan32 := float32(math.NaN())
-	expected100 := &policyv1alpha1.NumericValue{
-		Kind: &policyv1alpha1.NumericValue_DoubleValue{DoubleValue: 100.0},
+	expected100 := &policyv1.NumericValue{
+		Kind: &policyv1.NumericValue_DoubleValue{DoubleValue: 100.0},
 	}
-	expectedNaN := &policyv1alpha1.NumericValue{
-		Kind: &policyv1alpha1.NumericValue_DoubleValue{DoubleValue: nan64},
+	expectedNaN := &policyv1.NumericValue{
+		Kind: &policyv1.NumericValue_DoubleValue{DoubleValue: nan64},
 	}
 
 	predicates := []struct {
 		name string
-		pred *policyv1alpha1.Predicate
+		pred *policyv1.Predicate
 	}{
 		{"gt", predGt(expected100)},
 		{"gte", predGte(expected100)},
 		{"lt", predLt(expected100)},
 		{"lte", predLte(expected100)},
-		{"equals", predEquals(&policyv1alpha1.Value{Kind: &policyv1alpha1.Value_DoubleValue{DoubleValue: 100.0}})},
+		{"equals", predEquals(&policyv1.Value{Kind: &policyv1.Value_DoubleValue{DoubleValue: 100.0}})},
 	}
 
 	for _, tc := range predicates {
@@ -433,20 +433,20 @@ func TestCompilePathSetter(t *testing.T) {
 		_, err := CompilePathSetter(nil, "log", strValue("v"), true)
 		assert.ErrorContains(t, err, "log attribute path cannot be empty")
 
-		_, err = CompilePathSetter(&policyv1alpha1.AttributePath{Segments: []string{""}}, "log", strValue("v"), true)
+		_, err = CompilePathSetter(&policyv1.AttributePath{Segments: []string{""}}, "log", strValue("v"), true)
 		assert.ErrorContains(t, err, "log attribute path segment[0] cannot be empty")
 
-		_, err = CompilePathSetter(&policyv1alpha1.AttributePath{Segments: []string{"k"}}, "log", nil, true)
+		_, err = CompilePathSetter(&policyv1.AttributePath{Segments: []string{"k"}}, "log", nil, true)
 		assert.ErrorIs(t, err, ErrMissingValue)
 
-		_, err = CompilePathSetter(&policyv1alpha1.AttributePath{Segments: []string{"k"}}, "log", &policyv1alpha1.Value{}, true)
+		_, err = CompilePathSetter(&policyv1.AttributePath{Segments: []string{"k"}}, "log", &policyv1.Value{}, true)
 		assert.ErrorIs(t, err, ErrMissingValue)
 
 		for _, nonFinite := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
 			_, err = CompilePathSetter(
-				&policyv1alpha1.AttributePath{Segments: []string{"k"}},
+				&policyv1.AttributePath{Segments: []string{"k"}},
 				"log",
-				&policyv1alpha1.Value{Kind: &policyv1alpha1.Value_DoubleValue{DoubleValue: nonFinite}},
+				&policyv1.Value{Kind: &policyv1.Value_DoubleValue{DoubleValue: nonFinite}},
 				true,
 			)
 			assert.ErrorIs(t, err, ErrNonFiniteDouble)
@@ -456,27 +456,27 @@ func TestCompilePathSetter(t *testing.T) {
 	t.Run("all scalar value types flat and zero map guard", func(t *testing.T) {
 		attrs := pcommon.NewMap()
 
-		setStr, err := CompilePathSetter(&policyv1alpha1.AttributePath{Segments: []string{"s"}}, "log", strValue("hello"), true)
+		setStr, err := CompilePathSetter(&policyv1.AttributePath{Segments: []string{"s"}}, "log", strValue("hello"), true)
 		require.NoError(t, err)
 		assert.False(t, setStr(pcommon.Map{}), "zero map must return false")
 		assert.True(t, setStr(attrs))
 
-		setInt, err := CompilePathSetter(&policyv1alpha1.AttributePath{Segments: []string{"i"}}, "log", intValue(42), true)
+		setInt, err := CompilePathSetter(&policyv1.AttributePath{Segments: []string{"i"}}, "log", intValue(42), true)
 		require.NoError(t, err)
 		assert.True(t, setInt(attrs))
 
-		setDouble, err := CompilePathSetter(&policyv1alpha1.AttributePath{Segments: []string{"d"}}, "log",
-			&policyv1alpha1.Value{Kind: &policyv1alpha1.Value_DoubleValue{DoubleValue: 3.14}}, true)
+		setDouble, err := CompilePathSetter(&policyv1.AttributePath{Segments: []string{"d"}}, "log",
+			&policyv1.Value{Kind: &policyv1.Value_DoubleValue{DoubleValue: 3.14}}, true)
 		require.NoError(t, err)
 		assert.True(t, setDouble(attrs))
 
-		setBool, err := CompilePathSetter(&policyv1alpha1.AttributePath{Segments: []string{"b"}}, "log",
-			&policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BoolValue{BoolValue: true}}, true)
+		setBool, err := CompilePathSetter(&policyv1.AttributePath{Segments: []string{"b"}}, "log",
+			&policyv1.Value{Kind: &policyv1.Value_BoolValue{BoolValue: true}}, true)
 		require.NoError(t, err)
 		assert.True(t, setBool(attrs))
 
 		raw := []byte{0xaa, 0xbb}
-		setBytes, err := CompilePathSetter(&policyv1alpha1.AttributePath{Segments: []string{"by"}}, "log", bytesValue(raw), true)
+		setBytes, err := CompilePathSetter(&policyv1.AttributePath{Segments: []string{"by"}}, "log", bytesValue(raw), true)
 		require.NoError(t, err)
 		raw[0] = 0xff // mutating input slice after compile must not affect setter
 		assert.True(t, setBytes(attrs))
@@ -504,12 +504,12 @@ func TestCompilePathSetter(t *testing.T) {
 
 	t.Run("flat upsert false vs true", func(t *testing.T) {
 		attrs := pcommon.NewMap()
-		insertOnly, err := CompilePathSetter(&policyv1alpha1.AttributePath{Segments: []string{"tier"}}, "log", strValue("initial"), false)
+		insertOnly, err := CompilePathSetter(&policyv1.AttributePath{Segments: []string{"tier"}}, "log", strValue("initial"), false)
 		require.NoError(t, err)
 		assert.True(t, insertOnly(attrs))
 		assert.False(t, insertOnly(attrs), "second insert with upsert=false must be a no-op")
 
-		overwrite, err := CompilePathSetter(&policyv1alpha1.AttributePath{Segments: []string{"tier"}}, "log", strValue("updated"), true)
+		overwrite, err := CompilePathSetter(&policyv1.AttributePath{Segments: []string{"tier"}}, "log", strValue("updated"), true)
 		require.NoError(t, err)
 		assert.True(t, overwrite(attrs))
 		v, _ := attrs.Get("tier")
@@ -518,7 +518,7 @@ func TestCompilePathSetter(t *testing.T) {
 
 	t.Run("nested path creates intermediate maps and respects upsert", func(t *testing.T) {
 		attrs := pcommon.NewMap()
-		nestedPath := &policyv1alpha1.AttributePath{Segments: []string{"gcp", "routing", "tier"}}
+		nestedPath := &policyv1.AttributePath{Segments: []string{"gcp", "routing", "tier"}}
 
 		setNestedInsert, err := CompilePathSetter(nestedPath, "log", strValue("HOT_ACTIVE_SOC"), false)
 		require.NoError(t, err)
@@ -547,7 +547,7 @@ func TestCompilePathSetter(t *testing.T) {
 
 		// Intermediate key is a non-map scalar: upsert=false leaves scalar intact, upsert=true replaces with map
 		attrs.PutStr("scalar_parent", "keep_me")
-		conflictPath := &policyv1alpha1.AttributePath{Segments: []string{"scalar_parent", "child"}}
+		conflictPath := &policyv1.AttributePath{Segments: []string{"scalar_parent", "child"}}
 		noClobber, err := CompilePathSetter(conflictPath, "log", strValue("v"), false)
 		require.NoError(t, err)
 		assert.False(t, noClobber(attrs))
@@ -569,11 +569,11 @@ func TestCompileValueSetter(t *testing.T) {
 	_, err := CompileValueSetter(nil)
 	assert.ErrorIs(t, err, ErrMissingValue)
 
-	_, err = CompileValueSetter(&policyv1alpha1.Value{})
+	_, err = CompileValueSetter(&policyv1.Value{})
 	assert.ErrorIs(t, err, ErrMissingValue)
 
 	for _, nonFinite := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
-		_, err = CompileValueSetter(&policyv1alpha1.Value{Kind: &policyv1alpha1.Value_DoubleValue{DoubleValue: nonFinite}})
+		_, err = CompileValueSetter(&policyv1.Value{Kind: &policyv1.Value_DoubleValue{DoubleValue: nonFinite}})
 		assert.ErrorIs(t, err, ErrNonFiniteDouble)
 	}
 
@@ -589,12 +589,12 @@ func TestCompileValueSetter(t *testing.T) {
 	setInt(dest)
 	assert.Equal(t, int64(99), dest.Int())
 
-	setDouble, err := CompileValueSetter(&policyv1alpha1.Value{Kind: &policyv1alpha1.Value_DoubleValue{DoubleValue: 2.5}})
+	setDouble, err := CompileValueSetter(&policyv1.Value{Kind: &policyv1.Value_DoubleValue{DoubleValue: 2.5}})
 	require.NoError(t, err)
 	setDouble(dest)
 	assert.Equal(t, 2.5, dest.Double())
 
-	setBool, err := CompileValueSetter(&policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BoolValue{BoolValue: true}})
+	setBool, err := CompileValueSetter(&policyv1.Value{Kind: &policyv1.Value_BoolValue{BoolValue: true}})
 	require.NoError(t, err)
 	setBool(dest)
 	assert.True(t, dest.Bool())
@@ -617,27 +617,27 @@ func TestCompilePathRemover(t *testing.T) {
 	nested.PutInt("child", 42)
 	attrs.PutStr("scalar_parent", "not_a_map")
 
-	rmTop, err := CompilePathRemover(&policyv1alpha1.AttributePath{Segments: []string{"top"}}, "log")
+	rmTop, err := CompilePathRemover(&policyv1.AttributePath{Segments: []string{"top"}}, "log")
 	require.NoError(t, err)
 	assert.False(t, rmTop(pcommon.Map{}))
 	assert.True(t, rmTop(attrs))
 	assert.False(t, rmTop(attrs))
 
-	nestedPath := &policyv1alpha1.AttributePath{Segments: []string{"parent", "child"}}
+	nestedPath := &policyv1.AttributePath{Segments: []string{"parent", "child"}}
 	rmNested, err := CompilePathRemover(nestedPath, "log")
 	require.NoError(t, err)
 	assert.False(t, rmNested(pcommon.Map{}))
 	assert.True(t, rmNested(attrs))
 	assert.False(t, rmNested(attrs))
 
-	missingParentPath := &policyv1alpha1.AttributePath{Segments: []string{"missing", "child"}}
+	missingParentPath := &policyv1.AttributePath{Segments: []string{"missing", "child"}}
 	rmMissing, err := CompilePathRemover(missingParentPath, "log")
 	require.NoError(t, err)
 	assert.False(t, rmMissing(attrs))
 	_, exists := attrs.Get("missing")
 	assert.False(t, exists)
 
-	scalarAncestorPath := &policyv1alpha1.AttributePath{Segments: []string{"scalar_parent", "child"}}
+	scalarAncestorPath := &policyv1.AttributePath{Segments: []string{"scalar_parent", "child"}}
 	rmScalar, err := CompilePathRemover(scalarAncestorPath, "log")
 	require.NoError(t, err)
 	assert.False(t, rmScalar(attrs))
@@ -646,7 +646,7 @@ func TestCompilePathRemover(t *testing.T) {
 	dupAttrs := pcommon.NewMap()
 	dupAttrs.PutStr("dup_key", "first")
 	// Verify that CompilePathRemover removes the key.
-	rmDup, err := CompilePathRemover(&policyv1alpha1.AttributePath{Segments: []string{"dup_key"}}, "log")
+	rmDup, err := CompilePathRemover(&policyv1.AttributePath{Segments: []string{"dup_key"}}, "log")
 	require.NoError(t, err)
 	assert.True(t, rmDup(dupAttrs))
 	assert.False(t, rmDup(dupAttrs))
@@ -662,7 +662,7 @@ func TestCompilePathValueSetter(t *testing.T) {
 	attrs.PutStr("existing", "orig")
 
 	// Upsert=false on existing top-level key should fail.
-	setTopNoUpsert, err := CompilePathValueSetter(&policyv1alpha1.AttributePath{Segments: []string{"existing"}}, "log", false)
+	setTopNoUpsert, err := CompilePathValueSetter(&policyv1.AttributePath{Segments: []string{"existing"}}, "log", false)
 	require.NoError(t, err)
 	newVal := pcommon.NewValueStr("new")
 	assert.False(t, setTopNoUpsert(attrs, newVal))
@@ -671,7 +671,7 @@ func TestCompilePathValueSetter(t *testing.T) {
 	assert.Equal(t, "orig", v.Str())
 
 	// Upsert=true on existing top-level key should succeed.
-	setTopUpsert, err := CompilePathValueSetter(&policyv1alpha1.AttributePath{Segments: []string{"existing"}}, "log", true)
+	setTopUpsert, err := CompilePathValueSetter(&policyv1.AttributePath{Segments: []string{"existing"}}, "log", true)
 	require.NoError(t, err)
 	assert.True(t, setTopUpsert(attrs, newVal))
 	v, ok = attrs.Get("existing")
@@ -679,7 +679,7 @@ func TestCompilePathValueSetter(t *testing.T) {
 	assert.Equal(t, "new", v.Str())
 
 	// Setting nested path with upsert=false into empty destination should create intermediates.
-	nestedPath := &policyv1alpha1.AttributePath{Segments: []string{"a", "b", "c"}}
+	nestedPath := &policyv1.AttributePath{Segments: []string{"a", "b", "c"}}
 	setNested, err := CompilePathValueSetter(nestedPath, "log", false)
 	require.NoError(t, err)
 	intVal := pcommon.NewValueInt(100)
@@ -694,7 +694,7 @@ func TestCompilePathValueSetter(t *testing.T) {
 
 	// Obstructed intermediate (scalar ancestor) with upsert=false should fail without modifying.
 	attrs.PutStr("scalar", "blocked")
-	blockedPath := &policyv1alpha1.AttributePath{Segments: []string{"scalar", "child"}}
+	blockedPath := &policyv1.AttributePath{Segments: []string{"scalar", "child"}}
 	setBlocked, err := CompilePathValueSetter(blockedPath, "log", false)
 	require.NoError(t, err)
 	assert.False(t, setBlocked(attrs, pcommon.NewValueStr("val")))

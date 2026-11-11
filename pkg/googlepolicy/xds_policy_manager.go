@@ -36,6 +36,7 @@ import (
 	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	discoveryv3 "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
+	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/oauth2"
@@ -200,11 +201,24 @@ var (
 	_ FleetMetadataProvider = (*xdsPolicyManager)(nil)
 )
 
+// XDSPolicyManagerOption configures optional settings on xdsPolicyManager.
+type XDSPolicyManagerOption func(*xdsPolicyManager)
+
+// WithMeterProvider configures the OpenTelemetry MeterProvider used to record
+// grpc.xds_client.* self-observability metrics. If unset, otel.GetMeterProvider()
+// is used.
+func WithMeterProvider(mp metric.MeterProvider) XDSPolicyManagerOption {
+	return func(m *xdsPolicyManager) {
+		m.meterProvider = mp
+	}
+}
+
 // xdsPolicyManager connects to an xDS control plane using grpc-go's generic
 // xdsclient.Client, parses received policies, updates ActivePolicySet, and
 // sends ACKs/NACKs over the ADS stream.
 type xdsPolicyManager struct {
-	logger *zap.Logger
+	logger        *zap.Logger
+	meterProvider metric.MeterProvider
 
 	// Connection settings, resolved once in the constructor and never written
 	// again. Being immutable, they are read from the stream goroutine without
@@ -317,7 +331,7 @@ type xdsPolicyManager struct {
 //
 // All configuration is validated here, so a manager that constructs
 // successfully can always Start.
-func NewXDSPolicyManager(logger *zap.Logger, uri *url.URL, collectorID string) (Manager, error) {
+func NewXDSPolicyManager(logger *zap.Logger, uri *url.URL, collectorID string, opts ...XDSPolicyManagerOption) (Manager, error) {
 	if uri == nil {
 		return nil, ErrXDSMissingServerAddr
 	}
@@ -405,6 +419,11 @@ func NewXDSPolicyManager(logger *zap.Logger, uri *url.URL, collectorID string) (
 		backoffMax:         defaultBackoffMax,
 		timeAfter:          time.After,
 		initialSyncTimeout: defaultInitialSyncTimeout,
+	}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(m)
+		}
 	}
 	return m, nil
 }
@@ -803,6 +822,9 @@ func (m *xdsPolicyManager) backoffDelay(retries int) time.Duration {
 func (m *xdsPolicyManager) run(ctx context.Context) {
 	defer m.markReady()
 
+	metricsReporter := newOTelMetricsReporter(m.meterProvider, m.serverAddr)
+	defer metricsReporter.close()
+
 	var credsBundle credentials.Bundle
 	if m.insecure {
 		credsBundle = insecure.NewBundle()
@@ -858,10 +880,11 @@ func (m *xdsPolicyManager) run(ctx context.Context) {
 		ResourceTypes: map[string]xdsclient.ResourceType{
 			xdsPolicyTypeURL: rType,
 		},
-		Logger:    newZapDepthLogger(m.logger),
-		Backoff:   m.backoffDelay,
-		TimeAfter: m.timeAfter,
-		Target:    m.serverAddr,
+		MetricsReporter: metricsReporter,
+		Logger:          newZapDepthLogger(m.logger),
+		Backoff:         m.backoffDelay,
+		TimeAfter:       m.timeAfter,
+		Target:          m.serverAddr,
 	}
 
 	client, err := xdsclient.New(cfg)

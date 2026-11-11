@@ -22,6 +22,8 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -37,8 +39,11 @@ import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/googlecontrolplaneextension"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider"
+	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	xdsv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/xds/v1alpha1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/filelogsource"
+	discoveryv3 "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	"github.com/google/go-cmp/cmp"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/iisreceiver"
@@ -71,6 +76,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	_ "google.golang.org/grpc/encoding/gzip"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 var (
@@ -1414,6 +1420,116 @@ func TestPolicySetActiveSelfMetric(t *testing.T) {
 	}
 	if id, ok := attrs[googlecontrolplaneextension.AttrPolicySetID]; !ok || id != "" {
 		t.Errorf("%s = %q (present=%v), want present and empty; attributes: %v", googlecontrolplaneextension.AttrPolicySetID, id, ok, attrs)
+	}
+}
+
+type staticADSServer struct {
+	discoveryv3.UnimplementedAggregatedDiscoveryServiceServer
+	resp *discoveryv3.DiscoveryResponse
+}
+
+func (s *staticADSServer) StreamAggregatedResources(stream discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error {
+	if _, err := stream.Recv(); err != nil {
+		return err
+	}
+	if err := stream.Send(s.resp); err != nil {
+		return err
+	}
+	for {
+		if _, err := stream.Recv(); err != nil {
+			return err
+		}
+	}
+}
+
+// TestXDSClientSelfMetrics verifies that when googlecontrolplaneprovider is
+// configured with an xds:// URI, googlecontrolplaneextension wires the
+// collector's internal MeterProvider into pkg/googlepolicy so that the gRFC A78
+// grpc.xds_client.* metrics (including initial-sync counter updates replayed on
+// late binding) are exported through the default_self_metrics pipeline alongside
+// gcp.policy.set.active.
+func TestXDSClientSelfMetrics(t *testing.T) {
+	otelcolBin := resolveOtelcolBinary(t)
+	tempDir := t.TempDir()
+
+	metaSrv := httptest.NewServer(http.NotFoundHandler())
+	t.Cleanup(metaSrv.Close)
+	t.Setenv("GCE_METADATA_HOST", metaSrv.Listener.Addr().String())
+
+	const (
+		wantPolicySetID = "projects/my-project/locations/us-central1/policySets/ps-xds"
+		wantRevisionHex = "b2c3d479"
+	)
+
+	policyAny, err := anypb.New(&policyv1alpha1.HostMetricsSourcePolicy{
+		Id: wantPolicySetID + "/policies/hm-1",
+	})
+	if err != nil {
+		t.Fatalf("failed to pack HostMetricsSourcePolicy: %v", err)
+	}
+
+	tcAny, err := anypb.New(&xdsv1alpha1.TelemetryCollector{
+		PolicySetRevision: wantPolicySetID + "/revisions/" + wantRevisionHex,
+		Policies:          []*anypb.Any{policyAny},
+	})
+	if err != nil {
+		t.Fatalf("failed to pack TelemetryCollector: %v", err)
+	}
+
+	adsLn, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to listen for ADS server: %v", err)
+	}
+	adsSrv := grpc.NewServer()
+	discoveryv3.RegisterAggregatedDiscoveryServiceServer(adsSrv, &staticADSServer{
+		resp: &discoveryv3.DiscoveryResponse{
+			VersionInfo: wantRevisionHex,
+			TypeUrl:     "type.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector",
+			Nonce:       "nonce-1",
+			Resources:   []*anypb.Any{tcAny},
+		},
+	})
+	go func() {
+		_ = adsSrv.Serve(adsLn)
+	}()
+	t.Cleanup(func() {
+		adsSrv.Stop()
+	})
+
+	pipelineCfgPath, _, _, _, selfMockSrv := stageTestPipelineConfig(t, tempDir)
+	xdsURI := fmt.Sprintf("googlecontrolplane:xds://%s?project=my-project&region=us-central1&insecure=true", adsLn.Addr().String())
+
+	col := startCollectorWithURIs(t, otelcolBin, xdsURI, fmt.Sprintf("file:%s", filepath.ToSlash(pipelineCfgPath)))
+
+	wantXDSMetrics := []string{
+		googlecontrolplaneextension.MetricPolicySetActive,
+		"grpc.xds_client.connected",
+		"grpc.xds_client.resources",
+		"grpc.xds_client.resource_updates_valid",
+	}
+
+	var gotMetricCounts map[string]int
+	allFound := waitCondition(10*time.Second, 50*time.Millisecond, func() bool {
+		gotMetricCounts = collectMetricNames(selfMockSrv.CollectedMetrics())
+		for _, name := range wantXDSMetrics {
+			if gotMetricCounts[name] == 0 {
+				return false
+			}
+		}
+		return true
+	})
+
+	value, attrs, foundActive := latestPolicySetActive(selfMockSrv.CollectedMetrics())
+	col.shutdown(t)
+
+	if !allFound {
+		t.Fatalf("timed out waiting for xDS self-metrics %v on selfMockSrv, got: %v\ncollector logs:\n%s", wantXDSMetrics, gotMetricCounts, col.logs())
+	}
+	if !foundActive || value != 0xb2c3d479 {
+		t.Errorf("%s = %d (found=%v), want %d", googlecontrolplaneextension.MetricPolicySetActive, value, foundActive, int64(0xb2c3d479))
+	}
+	if gotID := attrs[googlecontrolplaneextension.AttrPolicySetID]; gotID != wantPolicySetID {
+		t.Errorf("%s = %q, want %q", googlecontrolplaneextension.AttrPolicySetID, gotID, wantPolicySetID)
 	}
 }
 

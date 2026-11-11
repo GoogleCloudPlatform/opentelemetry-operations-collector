@@ -247,8 +247,10 @@ func TestXDSPolicyManager_ReconnectsWithBackoff(t *testing.T) {
 	}
 
 	m := newTestManager(t, startFakeADSServer(t, srv))
+	m.initialSyncTimeout = 5 * time.Second
 	require.NoError(t, m.Start())
 	t.Cleanup(func() { require.NoError(t, m.Stop()) })
+	require.NotNil(t, ActivePolicySet(), "Start must wait past transient attempt 1 failure for attempt 2's policy set")
 
 	// The policy from the second attempt must be ACKed with its version+nonce.
 	var ack *discoveryv3.DiscoveryRequest

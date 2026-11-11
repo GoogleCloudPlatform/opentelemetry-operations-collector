@@ -244,6 +244,9 @@ type ConsolidatableSourcePolicy interface {
 	Consolidate(policies []SourcePolicy) (SourcePolicy, error)
 }
 
+// StorageExtensionID is the component ID for the persistent file storage extension.
+var StorageExtensionID = component.MustNewIDWithName("file_storage", "googlecontrolplane")
+
 // DestinationPolicy is an extended interface that any Destination policy
 // will implement.
 type DestinationPolicy interface {

@@ -17,6 +17,9 @@ exporters:
         timeout: 5s
         write_buffer_size: 524288
 extensions:
+    file_storage/googlecontrolplane:
+        create_directory: true
+        directory: C:\ProgramData\Google\OpenTelemetry Collector\storage
     googleclientauth/default_gcp_destination:
         project: ""
         quota_project: ""
@@ -126,6 +129,7 @@ service:
     extensions:
         - googleclientauth/default_gcp_destination
         - googlecontrolplane
+        - file_storage/googlecontrolplane
     pipelines:
         logs/default_self_metrics:
             exporters:

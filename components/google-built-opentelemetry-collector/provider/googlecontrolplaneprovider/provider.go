@@ -20,7 +20,9 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -46,6 +48,7 @@ import (
 	"go.opentelemetry.io/collector/otelcol"
 	"go.opentelemetry.io/collector/pipeline"
 	"go.opentelemetry.io/collector/service"
+	"go.opentelemetry.io/collector/service/extensions"
 	"go.opentelemetry.io/collector/service/pipelines"
 	"go.uber.org/zap"
 )
@@ -583,8 +586,27 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 	canonicalMetricProcessors := append([]component.ID{rdID, transformID, googlePolicyID}, destPolicy.PreProcessMetricIDs()...)
 	canonicalTraceProcessors := append([]component.ID{rdID, transformID, googlePolicyID}, destPolicy.PreProcessTraceIDs()...)
 
+	storageExtID := googlepolicy.StorageExtensionID
+	storageCfg := map[string]any{
+		"create_directory": true,
+		"directory":        defaultStorageDir(),
+	}
+	storageExtConf := &otelcol.Config{
+		Extensions: map[component.ID]component.Config{
+			storageExtID: component.Config(storageCfg),
+		},
+	}
+	storageCm := confmap.New()
+	if err := storageCm.Marshal(storageExtConf); err != nil {
+		return nil, true, fmt.Errorf("failed to marshal file_storage extension config: %w", err)
+	}
+	if err := conf.Merge(cleanConf(storageCm)); err != nil {
+		return nil, true, fmt.Errorf("failed to merge file_storage extension config: %w", err)
+	}
+
 	canonicalServiceConf := &otelcol.Config{
 		Service: service.Config{
+			Extensions: extensions.Config{storageExtID},
 			Pipelines: pipelines.Config{
 				canonicalLogsPipelineID: &pipelines.PipelineConfig{
 					Receivers:  deduplicateComponentIDs(activeLogReceivers),
@@ -1005,4 +1027,16 @@ func (p *provider) Shutdown(context.Context) error {
 		manager.Stop()
 	}
 	return nil
+}
+
+// defaultStorageDir returns the GBOC-owned storage directory path for the host OS.
+func defaultStorageDir() string {
+	if runtime.GOOS == "windows" {
+		progData := os.Getenv("ProgramData")
+		if progData == "" {
+			progData = `C:\ProgramData`
+		}
+		return filepath.Join(progData, "Google", "OpenTelemetry Collector", "storage")
+	}
+	return "/var/lib/otelcol-google/storage"
 }

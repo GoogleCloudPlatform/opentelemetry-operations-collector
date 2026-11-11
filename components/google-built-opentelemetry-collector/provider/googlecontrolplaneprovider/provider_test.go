@@ -587,6 +587,7 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource(t *testing.T) {
 		assert.False(t, conf.IsSet("receivers::"+secRecID+"::event_driven_scraping"))
 		assert.Equal(t, 500, conf.Get("receivers::"+secRecID+"::max_reads"))
 		assert.Equal(t, true, conf.Get("receivers::"+secRecID+"::ignore_channel_errors"))
+		assert.Equal(t, "file_storage/googlecontrolplane", conf.Get("receivers::"+secRecID+"::storage"))
 		assert.ElementsMatch(t, []string{"otelcol-google"}, conf.Get("receivers::"+secRecID+"::exclude_providers"))
 
 		assert.True(t, conf.IsSet("receivers::"+sysmonRecID))
@@ -595,7 +596,14 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource(t *testing.T) {
 		assert.False(t, conf.IsSet("receivers::"+sysmonRecID+"::event_driven_scraping"))
 		assert.Equal(t, 500, conf.Get("receivers::"+sysmonRecID+"::max_reads"))
 		assert.Equal(t, true, conf.Get("receivers::"+sysmonRecID+"::ignore_channel_errors"))
+		assert.Equal(t, "file_storage/googlecontrolplane", conf.Get("receivers::"+sysmonRecID+"::storage"))
 		assert.ElementsMatch(t, []string{"otelcol-google"}, conf.Get("receivers::"+sysmonRecID+"::exclude_providers"))
+
+		// Persistent storage extension must be synthesized on Windows
+		assert.True(t, conf.IsSet("extensions::file_storage/googlecontrolplane"))
+		assert.Equal(t, true, conf.Get("extensions::file_storage/googlecontrolplane::create_directory"))
+		exts := conf.Get("service::extensions")
+		assert.Contains(t, exts, "file_storage/googlecontrolplane")
 
 		// Receivers must attach to canonical shared logs/googlecontrolplane pipeline
 		receivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
@@ -605,6 +613,8 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource(t *testing.T) {
 	} else {
 		assert.False(t, conf.IsSet("receivers::"+secRecID))
 		assert.False(t, conf.IsSet("receivers::"+sysmonRecID))
+		assert.True(t, conf.IsSet("extensions::file_storage/googlecontrolplane"))
+		assert.Equal(t, defaultStorageDir(), conf.Get("extensions::file_storage/googlecontrolplane::directory"))
 		receivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
 		assert.Contains(t, receivers, "nop/googlecontrolplane")
 		assert.NotContains(t, receivers, secRecID)
@@ -2820,6 +2830,38 @@ func (i *invalidIISSourcePolicy) LogReceiverIDs() []component.ID   { return nil 
 func (i *invalidIISSourcePolicy) TraceReceiverIDs() []component.ID { return nil }
 func (i *invalidIISSourcePolicy) Consolidate(_ []googlepolicy.SourcePolicy) (googlepolicy.SourcePolicy, error) {
 	return nil, errors.New("invalid policy cannot consolidate")
+}
+
+func TestRetrieve_PersistentStorageSynthesis(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+
+	t.Run("synthesizes file_storage extension with platform default directory", func(t *testing.T) {
+		p := createProvider()
+
+		ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:test-storage", nil)
+		require.NoError(t, err)
+		require.NotNil(t, ret)
+
+		conf, err := ret.AsConf()
+		require.NoError(t, err)
+
+		assert.True(t, conf.IsSet("extensions::file_storage/googlecontrolplane"))
+		assert.Equal(t, true, conf.Get("extensions::file_storage/googlecontrolplane::create_directory"))
+		assert.Equal(t, defaultStorageDir(), conf.Get("extensions::file_storage/googlecontrolplane::directory"))
+
+		exts := conf.Get("service::extensions")
+		assert.Contains(t, exts, "file_storage/googlecontrolplane")
+		assert.NoError(t, p.Shutdown(context.Background()))
+	})
+
+	t.Run("resolves correct storage directory per OS", func(t *testing.T) {
+		dir := defaultStorageDir()
+		if runtime.GOOS == "windows" {
+			assert.Contains(t, dir, `Google\OpenTelemetry Collector\storage`)
+		} else {
+			assert.Equal(t, "/var/lib/otelcol-google/storage", dir)
+		}
+	})
 }
 
 func TestEscapeDollarSigns(t *testing.T) {

@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -37,7 +38,9 @@ import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
+	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/filelogsource"
 	"github.com/google/go-cmp/cmp"
+	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/iisreceiver"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/confmap"
@@ -538,6 +541,7 @@ func testCollectorFactories() (otelcol.Factories, error) {
 
 	factories.Receivers, err = otelcol.MakeFactoryMap[receiver.Factory](
 		otlpreceiver.NewFactory(),
+		filelogreceiver.NewFactory(),
 		newStubReceiverFactory("nop"),
 		newStubReceiverFactory("hostmetrics"),
 		iisreceiver.NewFactory(),
@@ -2371,5 +2375,95 @@ func TestSelfObservabilityBypassesTelemetryPolicies(t *testing.T) {
 	}
 	if gotWorkloadMetrics := collectMetricNames(h.mockSrv.CollectedMetrics()); len(gotWorkloadMetrics) != 0 {
 		t.Errorf("expected catch-all metric_filter policy to drop workload metrics, got: %v", gotWorkloadMetrics)
+	}
+}
+
+func TestFileLogSourcePolicy_Integration(t *testing.T) {
+	otelcolBin := resolveOtelcolBinary(t)
+	tempDir := t.TempDir()
+
+	logsDir := filepath.Join(tempDir, "logs")
+	if err := os.MkdirAll(logsDir, 0755); err != nil {
+		t.Fatalf("failed to create logs directory: %v", err)
+	}
+
+	logFilePath := filepath.Join(logsDir, "app.log")
+
+	policiesDir := filepath.Join(tempDir, "policies")
+	if err := os.MkdirAll(policiesDir, 0755); err != nil {
+		t.Fatalf("failed to create policies directory: %v", err)
+	}
+
+	policyContent := fmt.Sprintf(`{
+  "type": "file_log_source",
+  "id": "app-filelog-source",
+  "included_paths": [%q]
+}`, filepath.ToSlash(logFilePath))
+	if err := os.WriteFile(filepath.Join(policiesDir, "01-filelog.json"), []byte(policyContent), 0644); err != nil {
+		t.Fatalf("failed to write filelog source policy: %v", err)
+	}
+
+	h := startTestHarness(t, otelcolBin, tempDir, policiesDir)
+
+	// Allow fileconsumer to discover and start watching the file.
+	time.Sleep(500 * time.Millisecond)
+
+	// Append a log line to logFilePath now that the collector is running and watching.
+	const testLogMessage = "integration test log message from filelog source"
+	writeLogLine := func() {
+		f, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err != nil {
+			t.Fatalf("failed to open log file %s: %v", logFilePath, err)
+		}
+		if _, err := f.WriteString(testLogMessage + "\n"); err != nil {
+			_ = f.Close()
+			t.Fatalf("failed to write to log file: %v", err)
+		}
+		if err := f.Close(); err != nil {
+			t.Fatalf("failed to close log file: %v", err)
+		}
+	}
+	writeLogLine()
+
+	// Wait for the filelog receiver to poll, process, and export to selfMockSrv (otlp_grpc/default_gcp_destination).
+	deadline := time.Now().Add(10 * time.Second)
+	var capturedBodies []string
+	var foundFilePath string
+	for time.Now().Before(deadline) {
+		logs := h.selfMockSrv.CollectedLogs()
+		for _, ld := range logs {
+			for i := 0; i < ld.ResourceLogs().Len(); i++ {
+				rl := ld.ResourceLogs().At(i)
+				for j := 0; j < rl.ScopeLogs().Len(); j++ {
+					sl := rl.ScopeLogs().At(j)
+					for k := 0; k < sl.LogRecords().Len(); k++ {
+						lr := sl.LogRecords().At(k)
+						capturedBodies = append(capturedBodies, lr.Body().Str())
+						if fp, ok := lr.Attributes().Get("log.file.path"); ok {
+							foundFilePath = fp.Str()
+						}
+					}
+				}
+			}
+		}
+		if slices.Contains(capturedBodies, testLogMessage) {
+			break
+		}
+		capturedBodies = nil
+		foundFilePath = ""
+		// Re-append in case the initial write occurred before the fileconsumer watcher attached.
+		writeLogLine()
+		time.Sleep(200 * time.Millisecond)
+	}
+
+	h.col.shutdown(t)
+
+	if !slices.Contains(capturedBodies, testLogMessage) {
+		t.Fatalf("expected log %q not received.\ncollector logs:\n%s", testLogMessage, h.col.logs())
+	}
+
+	// Verify log.file.path attribute was added because include_file_path is enabled by default.
+	if filepath.Clean(foundFilePath) != filepath.Clean(logFilePath) {
+		t.Errorf("expected log.file.path attribute %q, got %q", logFilePath, foundFilePath)
 	}
 }

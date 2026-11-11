@@ -126,6 +126,7 @@ receivers:
             - /var/log/app/*.log
             - /var/log/syslog
         include_file_path: true
+        storage: file_storage/googlecontrolplane
     nop/googlecontrolplane: {}
     otlp/default_self_metrics:
         protocols:

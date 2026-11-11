@@ -163,6 +163,7 @@ func (p *Policy) Evaluate(_ context.Context) (*confmap.Conf, error) {
 				"include":           includes,
 				"exclude":           slices.Clone(defaultExcludePatterns),
 				"include_file_path": true,
+				"storage":           googlepolicy.StorageExtensionID.String(),
 			},
 		},
 	}

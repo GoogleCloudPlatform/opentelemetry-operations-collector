@@ -346,6 +346,7 @@ func TestPolicy_Evaluate(t *testing.T) {
 		"**/*.zip",
 	}, cfgMap["exclude"])
 	assert.Equal(t, true, cfgMap["include_file_path"])
+	assert.Equal(t, googlepolicy.StorageExtensionID.String(), cfgMap["storage"])
 
 	// Validate error on invalid internal proto.
 	invalidPolicy := &Policy{
@@ -382,6 +383,7 @@ func TestPolicy_Evaluate_WindowsEnvExpansion(t *testing.T) {
 		`C:/programdata/myapp/logs/*.log`,
 		`C:/inetpub/logs/*.log`,
 	}, cfgMap["include"])
+	assert.Equal(t, googlepolicy.StorageExtensionID.String(), cfgMap["storage"])
 }
 
 func TestPolicy_ReceiverIDs(t *testing.T) {
@@ -532,6 +534,7 @@ func TestMerge_MultiplePolicies_WindowsEnvDeduplication(t *testing.T) {
 	sub, err := conf.Sub("receivers::filelog/googlecontrolplane")
 	require.NoError(t, err)
 	assert.Equal(t, []string{`C:/programdata/app/logs/app.log`}, sub.ToStringMap()["include"])
+	assert.Equal(t, googlepolicy.StorageExtensionID.String(), sub.ToStringMap()["storage"])
 }
 
 func TestMerge_MultiplePolicies_WindowsEnvSortingDeterminism(t *testing.T) {

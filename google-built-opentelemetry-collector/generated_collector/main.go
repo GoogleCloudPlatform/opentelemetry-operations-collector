@@ -22,7 +22,7 @@ func main() {
 	info := component.BuildInfo{
 		Command:     "otelcol-google",
 		Description: "OpenTelemetry Collector Built By Google",
-		Version:     "0.164.0",
+		Version:     "0.165.1",
 	}
 
 	set := otelcol.CollectorSettings{
@@ -42,13 +42,13 @@ func main() {
 			},
 		},
 		ProviderModules: map[string]string{
-			googlesecretmanagerprovider.NewFactory().Create(confmap.ProviderSettings{}).Scheme(): "github.com/open-telemetry/opentelemetry-collector-contrib/confmap/provider/googlesecretmanagerprovider v0.164.1",
-			secretsmanagerprovider.NewFactory().Create(confmap.ProviderSettings{}).Scheme(): "github.com/open-telemetry/opentelemetry-collector-contrib/confmap/provider/secretsmanagerprovider v0.164.1",
-			envprovider.NewFactory().Create(confmap.ProviderSettings{}).Scheme(): "go.opentelemetry.io/collector/confmap/provider/envprovider v1.70.0",
-			fileprovider.NewFactory().Create(confmap.ProviderSettings{}).Scheme(): "go.opentelemetry.io/collector/confmap/provider/fileprovider v1.70.0",
-			httpprovider.NewFactory().Create(confmap.ProviderSettings{}).Scheme(): "go.opentelemetry.io/collector/confmap/provider/httpprovider v1.70.0",
-			httpsprovider.NewFactory().Create(confmap.ProviderSettings{}).Scheme(): "go.opentelemetry.io/collector/confmap/provider/httpsprovider v1.70.0",
-			yamlprovider.NewFactory().Create(confmap.ProviderSettings{}).Scheme(): "go.opentelemetry.io/collector/confmap/provider/yamlprovider v1.70.0",
+			googlesecretmanagerprovider.NewFactory().Create(confmap.ProviderSettings{}).Scheme(): "github.com/open-telemetry/opentelemetry-collector-contrib/confmap/provider/googlesecretmanagerprovider v0.165.1",
+			secretsmanagerprovider.NewFactory().Create(confmap.ProviderSettings{}).Scheme(): "github.com/open-telemetry/opentelemetry-collector-contrib/confmap/provider/secretsmanagerprovider v0.165.1",
+			envprovider.NewFactory().Create(confmap.ProviderSettings{}).Scheme(): "go.opentelemetry.io/collector/confmap/provider/envprovider v1.71.0",
+			fileprovider.NewFactory().Create(confmap.ProviderSettings{}).Scheme(): "go.opentelemetry.io/collector/confmap/provider/fileprovider v1.71.0",
+			httpprovider.NewFactory().Create(confmap.ProviderSettings{}).Scheme(): "go.opentelemetry.io/collector/confmap/provider/httpprovider v1.71.0",
+			httpsprovider.NewFactory().Create(confmap.ProviderSettings{}).Scheme(): "go.opentelemetry.io/collector/confmap/provider/httpsprovider v1.71.0",
+			yamlprovider.NewFactory().Create(confmap.ProviderSettings{}).Scheme(): "go.opentelemetry.io/collector/confmap/provider/yamlprovider v1.71.0",
 		},
 		ConverterModules: []string{
 		},

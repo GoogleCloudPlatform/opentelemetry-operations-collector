@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -316,12 +317,20 @@ func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrie
 		projectID = v
 	}
 
+	var region string
+	if v, ok := ctx.Value("REGION").(string); ok && v != "" {
+		region = v
+	}
+
 	if fleetMgr, ok := manager.(googlepolicy.FleetMetadataProvider); ok {
 		if fleetMgr.FleetID() != "" {
 			fleetID = fleetMgr.FleetID()
 		}
 		if projectID == "" {
 			projectID = fleetMgr.ProjectID()
+		}
+		if region == "" {
+			region = fleetMgr.Region()
 		}
 	} else if manager != nil && manager.URI() != nil {
 		if fleetID == "" {
@@ -343,6 +352,14 @@ func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrie
 	}
 	if projectID != "" {
 		ctx = context.WithValue(ctx, "PROJECT_ID", projectID)
+	}
+	if region == "" {
+		// Non-xDS sources have no control plane subscription to agree with; use
+		// the location of a full Fleet resource name, then the environment.
+		region = nonXDSRegion(fleetID)
+	}
+	if region != "" {
+		ctx = context.WithValue(ctx, "REGION", region)
 	}
 
 	for {
@@ -461,30 +478,25 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 
 	transformType, _ := component.NewType("transform")
 	transformID := component.NewIDWithName(transformType, "googlecontrolplane")
+	resourceStatements := workloadResourceStatements(stringFromContext(ctx, "PROJECT_ID"), stringFromContext(ctx, "REGION"))
 	transformCfg := map[string]any{
 		"error_mode": "ignore",
 		"log_statements": []map[string]any{
 			{
-				"context": "resource",
-				"statements": []string{
-					`set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil`,
-				},
+				"context":    "resource",
+				"statements": resourceStatements,
 			},
 		},
 		"metric_statements": []map[string]any{
 			{
-				"context": "resource",
-				"statements": []string{
-					`set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil`,
-				},
+				"context":    "resource",
+				"statements": resourceStatements,
 			},
 		},
 		"trace_statements": []map[string]any{
 			{
-				"context": "resource",
-				"statements": []string{
-					`set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil`,
-				},
+				"context":    "resource",
+				"statements": resourceStatements,
 			},
 		},
 	}
@@ -802,6 +814,66 @@ func (p *provider) consolidateSourcePolicies(ctx context.Context, activePolicySe
 		}
 	}
 	return consolidated
+}
+
+// workloadProjectIDStatementFromAccount stamps gcp.project_id on workload
+// telemetry from the cloud.account.id that the gcp resource detector reports.
+const workloadProjectIDStatementFromAccount = `set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil`
+
+// stringFromContext returns the string stored in ctx under key, or "".
+// evaluateActivePolicySet stores the resolved PROJECT_ID (alphanumeric project
+// ID) and REGION there.
+func stringFromContext(ctx context.Context, key string) string {
+	if ctx == nil {
+		return ""
+	}
+	v, _ := ctx.Value(key).(string)
+	return v
+}
+
+// nonXDSRegion returns the region for policy sources that have no xDS
+// subscription (file:, component:): the location of fleetID if it is a full
+// Fleet resource name, then $CLOUD_REGION / $GOOGLE_CLOUD_REGION, else "".
+func nonXDSRegion(fleetID string) string {
+	if _, location, _, ok := googlepolicy.ParseFleetResourceName(fleetID); ok {
+		return location
+	}
+	for _, key := range []string{"CLOUD_REGION", "GOOGLE_CLOUD_REGION"} {
+		if v := os.Getenv(key); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// workloadResourceStatements returns the OTTL resource statements that set
+// gcp.project_id and cloud.region, which telemetry.googleapis.com requires, on
+// workload telemetry in the canonical googlecontrolplane pipelines.
+//
+// Values from the resource detectors always win, so behavior on Google Cloud
+// is unchanged:
+//   - gcp.project_id comes from cloud.account.id when the gcp detector reports
+//     it; otherwise the project ID the collector resolved for itself (the same
+//     one stamped on its own self-metrics) is used as a fallback.
+//   - cloud.region falls back to the region the collector resolved for its
+//     control plane subscription (the fleet's location) only when none of
+//     cloud.region, cloud.availability_zone or location is present, so a
+//     detected host region or zone is never replaced.
+//
+// An explicit value set by the workload or an earlier processor is never
+// overwritten.
+func workloadResourceStatements(projectID, region string) []string {
+	statements := []string{workloadProjectIDStatementFromAccount}
+	if projectID != "" {
+		statements = append(statements, fmt.Sprintf(
+			`set(attributes["gcp.project_id"], %s) where attributes["gcp.project_id"] == nil`,
+			strconv.Quote(projectID),
+		))
+	}
+	if stmt := googlepolicy.CloudRegionFallbackStatement(region); stmt != "" {
+		statements = append(statements, stmt)
+	}
+	return statements
 }
 
 func cleanConf(c *confmap.Conf) *confmap.Conf {

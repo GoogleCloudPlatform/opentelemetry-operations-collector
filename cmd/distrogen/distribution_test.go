@@ -17,6 +17,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"gotest.tools/v3/assert"
@@ -256,4 +257,77 @@ func TestDetectProjectToolChange(t *testing.T) {
 			assert.Equal(t, tc.current.DetectProjectToolChange(original), tc.expected)
 		})
 	}
+}
+
+func TestDistributionGenerate_LocalComponentReplaces(t *testing.T) {
+	registry := NewRegistry()
+	registry.Processors["localproc"] = &RegistryComponent{
+		Name:  "localproc",
+		GoMod: &GoModuleID{URL: "github.com/example/repo/components/processor/localproc"},
+		Path:  "../components/processor/localproc",
+	}
+
+	spec := &DistributionSpec{
+		Name:                        "test-distro",
+		BinaryName:                  "otelcol-test",
+		Version:                     "0.165.1",
+		OpenTelemetryVersion:        "0.165.0",
+		OpenTelemetryContribVersion: "0.165.1",
+		GoVersion:                   "1.26.10",
+		BuildContainer:              Debian,
+		OCBOutputDir:                permanentOCBDirname,
+		Components: &DistributionComponents{
+			Processors: []string{"localproc"},
+		},
+	}
+
+	g, err := NewDistributionGenerator(spec, registry, true)
+	assert.NilError(t, err)
+	t.Cleanup(func() { g.Clean() })
+
+	assert.NilError(t, g.Generate())
+
+	manifestBytes, err := os.ReadFile(filepath.Join(g.GeneratePath, "manifest.yaml"))
+	assert.NilError(t, err)
+	manifest := string(manifestBytes)
+
+	assert.Assert(t, strings.Contains(manifest, "  path: ../components/processor/localproc\n"), "manifest component entry should retain path:\n%s", manifest)
+	assert.Assert(t, strings.Contains(manifest, "replaces:\n- github.com/example/repo/components/processor/localproc => ../../components/processor/localproc\n"), "manifest missing unversioned local replace:\n%s", manifest)
+}
+
+func TestDistributionGenerate_LocalTelemetryReplace(t *testing.T) {
+	registry := NewRegistry()
+	registry.Telemetry["localtelemetry"] = &RegistryComponent{
+		Name:  "localtelemetry",
+		GoMod: &GoModuleID{URL: "github.com/example/repo/components/telemetry/localtelemetry"},
+		Path:  "../components/telemetry/localtelemetry",
+	}
+
+	spec := &DistributionSpec{
+		Name:                        "test-distro",
+		BinaryName:                  "otelcol-test",
+		Version:                     "0.165.1",
+		OpenTelemetryVersion:        "0.165.0",
+		OpenTelemetryContribVersion: "0.165.1",
+		GoVersion:                   "1.26.10",
+		BuildContainer:              Debian,
+		OCBOutputDir:                permanentOCBDirname,
+		Components: &DistributionComponents{
+			Telemetry: "localtelemetry",
+		},
+	}
+
+	g, err := NewDistributionGenerator(spec, registry, true)
+	assert.NilError(t, err)
+	t.Cleanup(func() { g.Clean() })
+
+	assert.NilError(t, g.Generate())
+
+	manifestBytes, err := os.ReadFile(filepath.Join(g.GeneratePath, "manifest.yaml"))
+	assert.NilError(t, err)
+	manifest := string(manifestBytes)
+
+	assert.Assert(t, strings.Contains(manifest, "\ntelemetry:\n"), "manifest missing telemetry stanza:\n%s", manifest)
+	assert.Assert(t, strings.Contains(manifest, "gomod: github.com/example/repo/components/telemetry/localtelemetry v0.165.0\n"), "manifest missing telemetry module:\n%s", manifest)
+	assert.Assert(t, strings.Contains(manifest, "replaces:\n- github.com/example/repo/components/telemetry/localtelemetry => ../../components/telemetry/localtelemetry\n"), "manifest missing unversioned local telemetry replace:\n%s", manifest)
 }

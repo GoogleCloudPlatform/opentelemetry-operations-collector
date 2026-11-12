@@ -870,13 +870,12 @@ func (m *xdsPolicyManager) run(ctx context.Context) {
 		return
 	}
 	m.setClient(client)
+	cancelWatch := client.WatchResource(xdsPolicyTypeURL, m.resourceName, &policyResourceWatcher{m: m})
 	defer func() {
 		m.setClient(nil)
 		client.Close()
+		cancelWatch()
 	}()
-
-	cancelWatch := client.WatchResource(xdsPolicyTypeURL, m.resourceName, &policyResourceWatcher{m: m})
-	defer cancelWatch()
 
 	<-ctx.Done()
 }

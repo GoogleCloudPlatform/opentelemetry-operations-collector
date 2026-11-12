@@ -140,11 +140,17 @@ update-ocb-directory:
 # This target is to ensure that if the target does not yet exist, OCB will
 # be run while also getting go modules. We have to guarantee this is done the
 # first time you generate the directory.
-$(COLLECTOR_BUILD_DIR): $(OCB_BIN)
+{{ if index .Receivers "obi" -}}
+.PHONY: prepare-obi
+prepare-obi:
+	../internal/tools/scripts/prepare-obi.sh manifest.yaml
+
+{{ end -}}
+$(COLLECTOR_BUILD_DIR): $(OCB_BIN){{ if index .Receivers "obi" }} prepare-obi{{ end }}
 	$(GO_COMMAND_ENV) $(OCB_BIN) --skip-compilation --verbose --config manifest.yaml
 
 .PHONY: ocb-generate
-ocb-generate: $(OCB_BIN) $(COLLECTOR_BUILD_DIR)
+ocb-generate: $(OCB_BIN){{ if index .Receivers "obi" }} prepare-obi{{ end }} $(COLLECTOR_BUILD_DIR)
 	$(GO_COMMAND_ENV) $(OCB_BIN) --skip-compilation $(if $(MODULE_UPDATE),,--skip-get-modules) --verbose --config manifest.yaml
 {{ if .VendorDependencies }}	cd $(COLLECTOR_BUILD_DIR) && $(GO_COMMAND_ENV) $(GO_BIN) mod tidy && $(GO_COMMAND_ENV) $(GO_BIN) mod vendor{{ end }}
 
@@ -153,7 +159,7 @@ COLLECTOR_LD_FLAGS_STRIP ?= -s -w
 COLLECTOR_LD_FLAGS_STATIC_LINK ?= {{ if .BoringCrypto }}-linkmode=external -extldflags=-static{{ end }}
 
 # Using OCB and the local manifest file, build a collector.
-$(COLLECTOR_BINARY_NAME): $(COLLECTOR_BUILD_DIR) $(GO_BIN)
+$(COLLECTOR_BINARY_NAME): $(COLLECTOR_BUILD_DIR) $(GO_BIN){{ if index .Receivers "obi" }} prepare-obi{{ end }}
 	cd $(COLLECTOR_BUILD_DIR) && \
 		{{ if .BoringCrypto -}}
 		GOEXPERIMENT=boringcrypto \
@@ -170,7 +176,7 @@ $(COLLECTOR_BINARY_NAME): $(COLLECTOR_BUILD_DIR) $(GO_BIN)
 
 # Build a Windows collector binary.
 # Note: distrogen currently does not support BoringCrypto and CGO for Windows builds.
-$(COLLECTOR_BINARY_NAME_EXE): $(COLLECTOR_BUILD_DIR) $(GO_BIN)
+$(COLLECTOR_BINARY_NAME_EXE): $(COLLECTOR_BUILD_DIR) $(GO_BIN){{ if index .Receivers "obi" }} prepare-obi{{ end }}
 	cd $(COLLECTOR_BUILD_DIR) && \
 		CGO_ENABLED=0 \
 		GOOS=windows GOARCH=$(TARGETARCH) \

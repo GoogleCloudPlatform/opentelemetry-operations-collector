@@ -237,6 +237,13 @@ func (c *RegistryComponent) ApplyOTelVersion(otelVersion otelComponentVersion) {
 		return
 	}
 
+	// Preserve explicit release tags for upstream modules outside the core and
+	// contrib repositories, such as go.opentelemetry.io/obi/collector which uses
+	// independent v0.x tags. Local unversioned components use "" or "v0.0.0".
+	if c.Path == "" && c.GoMod.Tag != "" && c.GoMod.Tag != "v0.0.0" {
+		return
+	}
+
 	logger.Debug("module not published in versions.yaml, using the repository release version", slog.String("module", c.GoMod.URL))
 	c.GoMod.Tag = "v" + otelVersion.core
 	if c.IsContrib() {

@@ -169,6 +169,9 @@ receivers:
     nsxt:
         gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/nsxtreceiver
         docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/nsxtreceiver/README.md
+    obi:
+        gomod: go.opentelemetry.io/obi/collector v0.15.2
+        docs_url: https://www.github.com/open-telemetry/opentelemetry-ebpf-instrumentation/tree/main/collector
     opencensus:
         gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/opencensusreceiver
         docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/opencensusreceiver/README.md

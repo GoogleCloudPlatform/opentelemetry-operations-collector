@@ -21,6 +21,7 @@ package logtransform
 import (
 	"errors"
 	"fmt"
+	"slices"
 
 	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
@@ -547,13 +548,12 @@ func compileRename(a *policyv1alpha1.LogRenaming) (compiledAction, error) {
 		return nil, err
 	}
 
-	if proto.Equal(a.Source, a.Target) {
-		return func(_ googlepolicy.LogContext) bool {
-			return false
-		}, nil
-	}
-
 	if srcInBody == tgtInBody {
+		if slices.Equal(srcAttrPath.GetSegments(), tgtAttrPath.GetSegments()) {
+			return func(_ googlepolicy.LogContext) bool {
+				return false
+			}, nil
+		}
 		if isPathPrefix(srcAttrPath.GetSegments(), tgtAttrPath.GetSegments()) {
 			return nil, errors.New("rename source cannot be an ancestor of target")
 		}

@@ -2,12 +2,12 @@
 
 | Status    |                                         |
 | --------- | --------------------------------------- |
-| Stability | development: metrics                    |
+| Stability | development: metrics, logs              |
 | Distros   | google-built-opentelemetry-collector    |
 
 The `selftelemetry` receiver emits the Collector's own internal metrics
-(`otelcol_*`) into a regular metrics pipeline **without exposing any host
-endpoint**. There is no TCP port, Unix socket, named pipe or file involved:
+(`otelcol_*`) into a regular metrics pipeline, and the Collector's own internal
+logs into a regular logs pipeline, **without exposing any host endpoint**. There is no TCP port, Unix socket, named pipe or file involved:
 the metrics are handed over in memory inside the Collector process.
 
 This is an alternative to the common pattern of having the Collector expose
@@ -77,3 +77,47 @@ service:
   native OTLP form, and there are no `scrape_*` / `up` metrics and no
   `promhttp_*` handler metrics.
 * Instrumentation scope name/version is preserved.
+
+## Internal logs
+
+Used in a `logs` pipeline, the receiver delivers the Collector's own log
+records (the same entries written to stderr, after level filtering and
+sampling) in-process. This replaces the pattern of exporting internal logs
+with a `service::telemetry::logs::processors` OTLP exporter pointed at a local
+`otlp` receiver.
+
+With the `telemetry.inProcessReader` feature gate enabled, the
+`inprocesstelemetry` factory tees the Collector's logger into an in-memory
+buffer. On every `collection_interval` the receiver drains that buffer and
+converts the records to `plog.Logs`, again through the OTel Go SDK's own OTLP
+exporter with an in-memory transport. Per-component attributes
+(`otelcol.component.id`, `otelcol.component.kind`, `otelcol.signal`, ...) are
+instrumentation scope attributes, and the resource is the Collector's telemetry
+resource, the same as upstream's OTLP log export produces.
+
+The buffer holds up to 8192 records between two collections. If it fills up,
+the oldest records are dropped and the receiver logs a warning with the number
+of dropped records. On shutdown, the receiver drains the buffer one last time.
+
+```yaml
+# otelcol-google --feature-gates=+telemetry.inProcessReader --config ...
+receivers:
+  selftelemetry:
+service:
+  telemetry:
+    logs:
+      processors: []   # no OTLP log export to a local port
+    metrics:
+      readers: []      # no Prometheus pull endpoint or OTLP push
+  pipelines:
+    metrics/self:
+      receivers: [selftelemetry]
+      exporters: [googlecloud]
+    logs/self:
+      receivers: [selftelemetry]
+      exporters: [googlecloud]
+```
+
+Only one `logs` pipeline should use the receiver, because each collection
+drains the buffer. To send internal logs to several destinations, fan out from
+that one pipeline.

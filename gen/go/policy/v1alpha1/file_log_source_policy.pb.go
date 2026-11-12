@@ -41,6 +41,9 @@ const (
 // Evaluation, Deduplication & Security Guardrails:
 //   - At least one non-empty, non-whitespace `included_paths` pattern with valid
 //     glob syntax is required; invalid patterns are rejected (fail-open).
+//   - Duplicate `included_paths` patterns within a single policy are
+//     deduplicated preserving first-seen order (Windows drive-letter paths are
+//     compared after normalizing `\` to `/` and lowercasing the path).
 //   - Host filesystem access boundaries are enforced by the collector's
 //     install-time OS and container sandbox (for example, Linux systemd mount
 //     namespace directives and non-root service user permissions, Windows

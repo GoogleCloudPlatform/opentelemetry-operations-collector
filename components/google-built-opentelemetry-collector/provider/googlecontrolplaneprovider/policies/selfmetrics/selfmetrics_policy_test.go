@@ -372,3 +372,87 @@ func TestSelfMetricsPolicy_Evaluate_RegionFallback(t *testing.T) {
 	assert.Equal(t, []any{fromAccount}, resourceStatements(t, conf, "self", "metric_statements"))
 	assert.Equal(t, []any{fromAccount}, resourceStatements(t, conf, "self", "log_statements"))
 }
+
+// withInProcessReader overrides the telemetry.inProcessReader gate lookup for
+// the duration of the test.
+func withInProcessReader(t *testing.T, enabled bool) {
+	t.Helper()
+	orig := inProcessReaderEnabled
+	inProcessReaderEnabled = func() bool { return enabled }
+	t.Cleanup(func() { inProcessReaderEnabled = orig })
+}
+
+func TestSelfMetricsPolicy_InProcessReader(t *testing.T) {
+	withInProcessReader(t, true)
+
+	policy := &SelfMetricsPolicy{Name: "self", Port: 9999}
+	ctx := policy.ContextSetup(t.Context(), "collector-id", "1234")
+
+	conf, err := policy.Evaluate(ctx)
+	require.NoError(t, err)
+
+	// No metric reader and no log processor: nothing is exported over OTLP to
+	// a local port. Both keys must be present as explicit empty lists so they
+	// replace the telemetry factory's defaults (e.g. the :8888 reader).
+	require.True(t, conf.IsSet("service::telemetry::metrics::readers"))
+	assert.Equal(t, []any{}, conf.Get("service::telemetry::metrics::readers"))
+	require.True(t, conf.IsSet("service::telemetry::logs::processors"))
+	assert.Equal(t, []any{}, conf.Get("service::telemetry::logs::processors"))
+
+	// No OTLP receiver, so no listening port at all.
+	receivers, ok := conf.Get("receivers").(map[string]any)
+	require.True(t, ok)
+	assert.Len(t, receivers, 2)
+	assert.NotContains(t, receivers, "otlp/self")
+
+	// Internal metrics and logs are collected in-process, by separate
+	// receiver instances with their own collection intervals.
+	assert.Equal(t, 60*time.Second, conf.Get("receivers::selftelemetry/self_metrics::collection_interval"))
+	assert.Equal(t, 30*time.Second, conf.Get("receivers::selftelemetry/self_metrics::timeout"))
+	assert.Equal(t, selfLogsCollectionInterval, conf.Get("receivers::selftelemetry/self_logs::collection_interval"))
+	assert.Equal(t, 30*time.Second, conf.Get("receivers::selftelemetry/self_logs::timeout"))
+
+	exporter := component.MustNewIDWithName("otlp_grpc", "gcp")
+	metricsConf, err := policy.MetricsPipelines(nil, []component.ID{exporter}, nil)
+	require.NoError(t, err)
+	assert.Equal(t, []any{"selftelemetry/self_metrics"}, metricsConf.Get("service::pipelines::metrics/self::receivers"))
+	assert.Equal(t, []any{"resourcedetection/self", "transform/self"}, metricsConf.Get("service::pipelines::metrics/self::processors"))
+
+	logsConf, err := policy.LogsPipelines(nil, []component.ID{exporter}, nil)
+	require.NoError(t, err)
+	assert.Equal(t, []any{"selftelemetry/self_logs"}, logsConf.Get("service::pipelines::logs/self::receivers"))
+	assert.Equal(t, []any{"resourcedetection/self", "transform/self"}, logsConf.Get("service::pipelines::logs/self::processors"))
+}
+
+func TestSelfMetricsPolicy_InProcessReaderDisabled(t *testing.T) {
+	withInProcessReader(t, false)
+
+	policy := &SelfMetricsPolicy{Name: "self", Port: 9999}
+	ctx := policy.ContextSetup(t.Context(), "collector-id", "1234")
+
+	conf, err := policy.Evaluate(ctx)
+	require.NoError(t, err)
+
+	assert.False(t, conf.IsSet("receivers::selftelemetry/self_metrics"))
+	assert.False(t, conf.IsSet("receivers::selftelemetry/self_logs"))
+	assert.Equal(t, "localhost:9999", conf.Get("receivers::otlp/self::protocols::grpc::endpoint"))
+	readers, ok := conf.Get("service::telemetry::metrics::readers").([]any)
+	require.True(t, ok)
+	require.Len(t, readers, 1)
+	processors, ok := conf.Get("service::telemetry::logs::processors").([]any)
+	require.True(t, ok)
+	require.Len(t, processors, 1)
+
+	metricsConf, err := policy.MetricsPipelines(nil, nil, nil)
+	require.NoError(t, err)
+	assert.Equal(t, []any{"otlp/self"}, metricsConf.Get("service::pipelines::metrics/self::receivers"))
+	logsConf, err := policy.LogsPipelines(nil, nil, nil)
+	require.NoError(t, err)
+	assert.Equal(t, []any{"otlp/self"}, logsConf.Get("service::pipelines::logs/self::receivers"))
+}
+
+func TestInProcessReaderEnabled_UnregisteredGate(t *testing.T) {
+	// The inprocesstelemetry factory is not linked into this test binary, so
+	// the gate is not registered and the loopback path must be used.
+	assert.False(t, inProcessReaderEnabled())
+}

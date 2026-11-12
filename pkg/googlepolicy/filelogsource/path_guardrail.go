@@ -22,7 +22,7 @@ import (
 
 var (
 	// ErrEmptyIncludePattern is returned when an include pattern is empty or whitespace-only.
-	ErrEmptyIncludePattern = errors.New("include pattern cannot be empty")
+	ErrEmptyIncludePattern = errors.New("include pattern cannot be empty or whitespace-only")
 	// ErrInvalidGlobPattern is returned when an include pattern contains invalid glob syntax.
 	ErrInvalidGlobPattern = errors.New("invalid glob pattern")
 )

@@ -588,4 +588,10 @@ replace github.com/open-telemetry/opentelemetry-collector-contrib/extension/oaut
 
 replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter v0.165.0 => ../../components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter
 
+replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter => ../../components/google-built-opentelemetry-collector/exporter/googleservicecontrolexporter
+
+replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/healthagent => ../../components/google-built-opentelemetry-collector/extension/healthagent
+
+replace github.com/open-telemetry/opentelemetry-collector-contrib/extension/oauth2clientauthextension => ../../components/google-built-opentelemetry-collector/extension/oauth2clientauthextension
+
 replace github.com/go-jose/go-jose/v4 => github.com/go-jose/go-jose/v4 v4.1.6

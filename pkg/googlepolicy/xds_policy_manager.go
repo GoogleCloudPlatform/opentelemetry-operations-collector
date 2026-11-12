@@ -985,11 +985,9 @@ func (d *telemetryCollectorDecoder) Decode(resource *xdsclient.AnyProto, options
 		}
 	}
 
-	anyResources := []*anypb.Any{rawAny}
-
-	d.m.logger.Info("Received xDS DiscoveryResponse",
+	d.m.logger.Info("Received xDS TelemetryCollector resource",
 		zap.String("version", options.Version),
-		zap.Int("resources", len(anyResources)),
+		zap.String("type_url", rawAny.GetTypeUrl()),
 	)
 
 	if version := options.Version; version != "" && version == d.m.LastAppliedVersion() {
@@ -1005,9 +1003,11 @@ func (d *telemetryCollectorDecoder) Decode(resource *xdsclient.AnyProto, options
 		}, nil
 	}
 
+	// Each SotW DiscoveryResponse carries at most one TelemetryCollector resource
+	// for this collector; individual policies live inside TelemetryCollector.Policies.
 	resp := &discoveryv3.DiscoveryResponse{
 		VersionInfo: options.Version,
-		Resources:   anyResources,
+		Resources:   []*anypb.Any{rawAny},
 	}
 
 	manifest, extractErr := extractManifest(resp)

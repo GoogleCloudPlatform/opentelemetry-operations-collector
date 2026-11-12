@@ -90,6 +90,9 @@ func TestMetricsBuilder(t *testing.T) {
 			mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(ts, 1, AttributeGpuClockViolationPower)
 			if tt.name == "reaggregate_set" {
 				mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(ts, 3, AttributeGpuClockViolationThermal)
+				// a different timestamp is a different key: must not merge with the above.
+				mb.RecordGpuDcgmClockThrottleDurationTimeDataPoint(ts+1, 3, AttributeGpuClockViolationThermal)
+				assert.Equal(t, 2, mb.metricGpuDcgmClockThrottleDurationTime.data.Sum().DataPoints().Len())
 			}
 			defaultMetricsCount++
 			allMetricsCount++
@@ -102,6 +105,9 @@ func TestMetricsBuilder(t *testing.T) {
 			mb.RecordGpuDcgmEccErrorsDataPoint(ts, 1, AttributeGpuErrorTypeSbe)
 			if tt.name == "reaggregate_set" {
 				mb.RecordGpuDcgmEccErrorsDataPoint(ts, 3, AttributeGpuErrorTypeDbe)
+				// a different timestamp is a different key: must not merge with the above.
+				mb.RecordGpuDcgmEccErrorsDataPoint(ts+1, 3, AttributeGpuErrorTypeDbe)
+				assert.Equal(t, 2, mb.metricGpuDcgmEccErrors.data.Sum().DataPoints().Len())
 			}
 			defaultMetricsCount++
 			allMetricsCount++
@@ -114,24 +120,36 @@ func TestMetricsBuilder(t *testing.T) {
 			mb.RecordGpuDcgmMemoryBytesUsedDataPoint(ts, 1, AttributeGpuMemoryStateUsed)
 			if tt.name == "reaggregate_set" {
 				mb.RecordGpuDcgmMemoryBytesUsedDataPoint(ts, 3, AttributeGpuMemoryStateFree)
+				// a different timestamp is a different key: must not merge with the above.
+				mb.RecordGpuDcgmMemoryBytesUsedDataPoint(ts+1, 3, AttributeGpuMemoryStateFree)
+				assert.Equal(t, 2, mb.metricGpuDcgmMemoryBytesUsed.data.Gauge().DataPoints().Len())
 			}
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordGpuDcgmNvlinkIoDataPoint(ts, 1, AttributeNetworkIoDirectionTransmit)
 			if tt.name == "reaggregate_set" {
 				mb.RecordGpuDcgmNvlinkIoDataPoint(ts, 3, AttributeNetworkIoDirectionReceive)
+				// a different timestamp is a different key: must not merge with the above.
+				mb.RecordGpuDcgmNvlinkIoDataPoint(ts+1, 3, AttributeNetworkIoDirectionReceive)
+				assert.Equal(t, 2, mb.metricGpuDcgmNvlinkIo.data.Sum().DataPoints().Len())
 			}
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordGpuDcgmPcieIoDataPoint(ts, 1, AttributeNetworkIoDirectionTransmit)
 			if tt.name == "reaggregate_set" {
 				mb.RecordGpuDcgmPcieIoDataPoint(ts, 3, AttributeNetworkIoDirectionReceive)
+				// a different timestamp is a different key: must not merge with the above.
+				mb.RecordGpuDcgmPcieIoDataPoint(ts+1, 3, AttributeNetworkIoDirectionReceive)
+				assert.Equal(t, 2, mb.metricGpuDcgmPcieIo.data.Sum().DataPoints().Len())
 			}
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordGpuDcgmPipeUtilizationDataPoint(ts, 1, AttributeGpuPipeTensor)
 			if tt.name == "reaggregate_set" {
 				mb.RecordGpuDcgmPipeUtilizationDataPoint(ts, 3, AttributeGpuPipeFp64)
+				// a different timestamp is a different key: must not merge with the above.
+				mb.RecordGpuDcgmPipeUtilizationDataPoint(ts+1, 3, AttributeGpuPipeFp64)
+				assert.Equal(t, 2, mb.metricGpuDcgmPipeUtilization.data.Gauge().DataPoints().Len())
 			}
 
 			allMetricsCount++
@@ -150,6 +168,9 @@ func TestMetricsBuilder(t *testing.T) {
 			mb.RecordGpuDcgmXidErrorsDataPoint(ts, 1, 13)
 			if tt.name == "reaggregate_set" {
 				mb.RecordGpuDcgmXidErrorsDataPoint(ts, 3, 14)
+				// a different timestamp is a different key: must not merge with the above.
+				mb.RecordGpuDcgmXidErrorsDataPoint(ts+1, 3, 14)
+				assert.Equal(t, 2, mb.metricGpuDcgmXidErrors.data.Sum().DataPoints().Len())
 			}
 
 			rb := mb.NewResourceBuilder()
@@ -227,7 +248,9 @@ func TestMetricsBuilder(t *testing.T) {
 						assert.False(t, validatedMetrics["gpu.dcgm.clock.throttle_duration.time"], "Found a duplicate in the metrics slice: gpu.dcgm.clock.throttle_duration.time")
 						validatedMetrics["gpu.dcgm.clock.throttle_duration.time"] = true
 						assert.Equal(t, pmetric.MetricTypeSum, mi.Type())
-						assert.Equal(t, 1, mi.Sum().DataPoints().Len())
+						// 2 points: the merged one above, plus one with a different timestamp that must not have merged with it.
+						assert.Equal(t, 2, mi.Sum().DataPoints().Len())
+						assert.Equal(t, ts+1, mi.Sum().DataPoints().At(1).Timestamp())
 						assert.Equal(t, "Clock throttle total duration.", mi.Description())
 						assert.Equal(t, "s", mi.Unit())
 						assert.True(t, mi.Sum().IsMonotonic())
@@ -295,7 +318,9 @@ func TestMetricsBuilder(t *testing.T) {
 						assert.False(t, validatedMetrics["gpu.dcgm.ecc_errors"], "Found a duplicate in the metrics slice: gpu.dcgm.ecc_errors")
 						validatedMetrics["gpu.dcgm.ecc_errors"] = true
 						assert.Equal(t, pmetric.MetricTypeSum, mi.Type())
-						assert.Equal(t, 1, mi.Sum().DataPoints().Len())
+						// 2 points: the merged one above, plus one with a different timestamp that must not have merged with it.
+						assert.Equal(t, 2, mi.Sum().DataPoints().Len())
+						assert.Equal(t, ts+1, mi.Sum().DataPoints().At(1).Timestamp())
 						assert.Equal(t, "Data corruption errors.", mi.Description())
 						assert.Equal(t, "1", mi.Unit())
 						assert.True(t, mi.Sum().IsMonotonic())
@@ -363,7 +388,9 @@ func TestMetricsBuilder(t *testing.T) {
 						assert.False(t, validatedMetrics["gpu.dcgm.memory.bytes_used"], "Found a duplicate in the metrics slice: gpu.dcgm.memory.bytes_used")
 						validatedMetrics["gpu.dcgm.memory.bytes_used"] = true
 						assert.Equal(t, pmetric.MetricTypeGauge, mi.Type())
-						assert.Equal(t, 1, mi.Gauge().DataPoints().Len())
+						// 2 points: the merged one above, plus one with a different timestamp that must not have merged with it.
+						assert.Equal(t, 2, mi.Gauge().DataPoints().Len())
+						assert.Equal(t, ts+1, mi.Gauge().DataPoints().At(1).Timestamp())
 						assert.Equal(t, "Current number of GPU memory bytes used by state. Summing the values of all states yields the total GPU memory space.", mi.Description())
 						assert.Equal(t, "By", mi.Unit())
 						dp := mi.Gauge().DataPoints().At(0)
@@ -405,7 +432,9 @@ func TestMetricsBuilder(t *testing.T) {
 						assert.False(t, validatedMetrics["gpu.dcgm.nvlink.io"], "Found a duplicate in the metrics slice: gpu.dcgm.nvlink.io")
 						validatedMetrics["gpu.dcgm.nvlink.io"] = true
 						assert.Equal(t, pmetric.MetricTypeSum, mi.Type())
-						assert.Equal(t, 1, mi.Sum().DataPoints().Len())
+						// 2 points: the merged one above, plus one with a different timestamp that must not have merged with it.
+						assert.Equal(t, 2, mi.Sum().DataPoints().Len())
+						assert.Equal(t, ts+1, mi.Sum().DataPoints().At(1).Timestamp())
 						assert.Equal(t, "The number of bytes sent over NVLink, not including protocol headers.", mi.Description())
 						assert.Equal(t, "By", mi.Unit())
 						assert.True(t, mi.Sum().IsMonotonic())
@@ -449,7 +478,9 @@ func TestMetricsBuilder(t *testing.T) {
 						assert.False(t, validatedMetrics["gpu.dcgm.pcie.io"], "Found a duplicate in the metrics slice: gpu.dcgm.pcie.io")
 						validatedMetrics["gpu.dcgm.pcie.io"] = true
 						assert.Equal(t, pmetric.MetricTypeSum, mi.Type())
-						assert.Equal(t, 1, mi.Sum().DataPoints().Len())
+						// 2 points: the merged one above, plus one with a different timestamp that must not have merged with it.
+						assert.Equal(t, 2, mi.Sum().DataPoints().Len())
+						assert.Equal(t, ts+1, mi.Sum().DataPoints().At(1).Timestamp())
 						assert.Equal(t, "The number of bytes sent over the PCIe bus, including both protocol headers and data payloads.", mi.Description())
 						assert.Equal(t, "By", mi.Unit())
 						assert.True(t, mi.Sum().IsMonotonic())
@@ -491,7 +522,9 @@ func TestMetricsBuilder(t *testing.T) {
 						assert.False(t, validatedMetrics["gpu.dcgm.pipe.utilization"], "Found a duplicate in the metrics slice: gpu.dcgm.pipe.utilization")
 						validatedMetrics["gpu.dcgm.pipe.utilization"] = true
 						assert.Equal(t, pmetric.MetricTypeGauge, mi.Type())
-						assert.Equal(t, 1, mi.Gauge().DataPoints().Len())
+						// 2 points: the merged one above, plus one with a different timestamp that must not have merged with it.
+						assert.Equal(t, 2, mi.Gauge().DataPoints().Len())
+						assert.Equal(t, ts+1, mi.Gauge().DataPoints().At(1).Timestamp())
 						assert.Equal(t, "Fraction of cycles the corresponding GPU pipe was active, averaged over time and all multiprocessors.", mi.Description())
 						assert.Equal(t, "1", mi.Unit())
 						dp := mi.Gauge().DataPoints().At(0)
@@ -581,7 +614,9 @@ func TestMetricsBuilder(t *testing.T) {
 						assert.False(t, validatedMetrics["gpu.dcgm.xid_errors"], "Found a duplicate in the metrics slice: gpu.dcgm.xid_errors")
 						validatedMetrics["gpu.dcgm.xid_errors"] = true
 						assert.Equal(t, pmetric.MetricTypeSum, mi.Type())
-						assert.Equal(t, 1, mi.Sum().DataPoints().Len())
+						// 2 points: the merged one above, plus one with a different timestamp that must not have merged with it.
+						assert.Equal(t, 2, mi.Sum().DataPoints().Len())
+						assert.Equal(t, ts+1, mi.Sum().DataPoints().At(1).Timestamp())
 						assert.Equal(t, "XID errors.", mi.Description())
 						assert.Equal(t, "1", mi.Unit())
 						assert.True(t, mi.Sum().IsMonotonic())

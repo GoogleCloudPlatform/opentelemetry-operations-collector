@@ -41,7 +41,7 @@ func newVarnishScraper(settings receiver.Settings, config *Config) *varnishScrap
 	return &varnishScraper{
 		telemetrySettings: settings.TelemetrySettings,
 		config:            config,
-		mb:                metadata.NewMetricsBuilder(metadata.DefaultMetricsBuilderConfig(), settings),
+		mb:                metadata.NewMetricsBuilder(metadata.NewDefaultMetricsBuilderConfig(), settings),
 	}
 }
 

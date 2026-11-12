@@ -33,6 +33,7 @@ import (
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 // policySetNamePattern matches a fully qualified PolicySet resource name:
@@ -141,9 +142,16 @@ const (
 // LogTransformPolicyEvaluator is implemented by transformation policies that
 // modify surviving log records in-place (e.g., LogTransformPolicy in
 // pkg/googlepolicy/logtransform).
+//
+// Across a PolicySet, MatchesLog is evaluated once per policy against the
+// pre-transform log record before any stage mutates it, and TransformLogStage
+// is then invoked across matching policies in global stage order
+// (TransformStageRename -> TransformStageAdd -> TransformStageRemove ->
+// TransformStageRedact) with ascending PolicyName() tie-breaking.
 type LogTransformPolicyEvaluator interface {
 	TransformationPolicy
-	TransformStage() TransformStage
+	MatchesLog(ctx LogContext) bool
+	TransformLogStage(stage TransformStage, ctx LogContext) TransformResult
 	TransformLog(ctx LogContext) TransformResult
 }
 
@@ -229,11 +237,15 @@ type DedicatedPipelineSourcePolicy interface {
 }
 
 // ConsolidatableSourcePolicy is an optional interface implemented by SourcePolicy types
-// where multiple policies of the same type merge into a single shared receiver instance.
+// where multiple policies of the same type merge into a single shared receiver instance
+// (e.g. multiple FileLogSourcePolicy instances merging their include paths via set union).
 type ConsolidatableSourcePolicy interface {
 	SourcePolicy
 	Consolidate(policies []SourcePolicy) (SourcePolicy, error)
 }
+
+// StorageExtensionID is the component ID for the persistent file storage extension.
+var StorageExtensionID = component.MustNewIDWithName("file_storage", "googlecontrolplane")
 
 // DestinationPolicy is an extended interface that any Destination policy
 // will implement.
@@ -675,10 +687,16 @@ func (d ProtoDriver[P]) PolicyProto() proto.Message { return d.newP() }
 
 // LoadPolicyProto builds the policy directly from the decoded message, which is
 // the whole point of the type: no serialization happens on this path.
+// Unknown wire fields on the message or any nested sub-message are rejected so
+// the entire policy fails open atomically rather than silently ignoring
+// unrecognized matchers, oneof branches, or fields from a newer schema.
 func (d ProtoDriver[P]) LoadPolicyProto(msg proto.Message) (Policy, error) {
 	typed, ok := msg.(P)
 	if !ok {
 		return nil, fmt.Errorf("%w: expected %T, got %T", ErrPolicyProtoMismatch, d.newP(), msg)
+	}
+	if err := checkNoUnknownFields(typed.ProtoReflect()); err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrPolicyFailedValidation, err)
 	}
 	p, err := d.New(typed)
 	if err != nil {
@@ -688,8 +706,9 @@ func (d ProtoDriver[P]) LoadPolicyProto(msg proto.Message) (Policy, error) {
 }
 
 // LoadPolicy decodes an authored config into P and loads it. Unknown fields are
-// discarded so that a config written against a newer schema still loads what
-// this build understands, rather than being rejected outright.
+// rejected (DiscardUnknown: false) so that a policy containing unrecognized
+// fields, matchers, oneof branches, or enum values fails open atomically rather
+// than being partially applied.
 func (d ProtoDriver[P]) LoadPolicy(raw map[string]any) (Policy, error) {
 	jsonBytes, err := json.Marshal(raw)
 	if err != nil {
@@ -697,7 +716,7 @@ func (d ProtoDriver[P]) LoadPolicy(raw map[string]any) (Policy, error) {
 	}
 
 	pb := d.newP()
-	if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(jsonBytes, pb); err != nil {
+	if err := (protojson.UnmarshalOptions{DiscardUnknown: false}).Unmarshal(jsonBytes, pb); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal into %T: %w", pb, err)
 	}
 
@@ -706,4 +725,52 @@ func (d ProtoDriver[P]) LoadPolicy(raw map[string]any) (Policy, error) {
 		return nil, fmt.Errorf("%w: %w", ErrPolicyFailedValidation, err)
 	}
 	return p, nil
+}
+
+// checkNoUnknownFields recursively inspects m and all populated nested messages
+// for unrecognized wire fields (m.GetUnknown()), returning an error wrapping
+// ErrPolicyUnknownFields if any are present.
+func checkNoUnknownFields(m protoreflect.Message) error {
+	if m == nil || !m.IsValid() {
+		return nil
+	}
+	if len(m.GetUnknown()) > 0 {
+		return fmt.Errorf("%w in %s", ErrPolicyUnknownFields, m.Descriptor().FullName())
+	}
+	var foundErr error
+	m.Range(func(fd protoreflect.FieldDescriptor, v protoreflect.Value) bool {
+		switch {
+		case fd.IsList():
+			if fd.Kind() == protoreflect.MessageKind || fd.Kind() == protoreflect.GroupKind {
+				list := v.List()
+				for i := 0; i < list.Len(); i++ {
+					if err := checkNoUnknownFields(list.Get(i).Message()); err != nil {
+						foundErr = err
+						return false
+					}
+				}
+			}
+		case fd.IsMap():
+			valKind := fd.MapValue().Kind()
+			if valKind == protoreflect.MessageKind || valKind == protoreflect.GroupKind {
+				v.Map().Range(func(_ protoreflect.MapKey, mv protoreflect.Value) bool {
+					if err := checkNoUnknownFields(mv.Message()); err != nil {
+						foundErr = err
+						return false
+					}
+					return true
+				})
+				if foundErr != nil {
+					return false
+				}
+			}
+		case fd.Kind() == protoreflect.MessageKind || fd.Kind() == protoreflect.GroupKind:
+			if err := checkNoUnknownFields(v.Message()); err != nil {
+				foundErr = err
+				return false
+			}
+		}
+		return true
+	})
+	return foundErr
 }

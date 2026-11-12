@@ -657,3 +657,6 @@ providers:
     googlesecretmanager:
         gomod: github.com/open-telemetry/opentelemetry-collector-contrib/confmap/provider/googlesecretmanagerprovider
         docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/confmap/provider/googlesecretmanagerprovider
+    secretsmanager:
+        gomod: github.com/open-telemetry/opentelemetry-collector-contrib/confmap/provider/secretsmanagerprovider
+        docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/confmap/provider/secretsmanagerprovider

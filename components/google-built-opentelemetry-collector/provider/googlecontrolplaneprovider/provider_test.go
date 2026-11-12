@@ -41,6 +41,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
+	"google.golang.org/protobuf/proto"
 )
 
 func createProvider() confmap.Provider {
@@ -89,9 +90,11 @@ func TestEmptyTarget(t *testing.T) {
 func TestRetrieve(t *testing.T) {
 	t.Setenv("FLEET_ID", "1234")
 	p := createProvider()
+	assert.False(t, googlepolicy.IsControlPlaneActive())
 	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
 	require.NoError(t, err)
 	require.NotNil(t, ret)
+	assert.True(t, googlepolicy.IsControlPlaneActive())
 
 	conf, err := ret.AsConf()
 	require.NoError(t, err)
@@ -110,6 +113,7 @@ func TestRetrieve(t *testing.T) {
 	assert.True(t, conf.IsSet("service::pipelines::traces/googlecontrolplane"))
 
 	assert.NoError(t, p.Shutdown(context.Background()))
+	assert.False(t, googlepolicy.IsControlPlaneActive())
 }
 
 func TestShutdown(t *testing.T) {
@@ -586,6 +590,7 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource(t *testing.T) {
 		assert.False(t, conf.IsSet("receivers::"+secRecID+"::event_driven_scraping"))
 		assert.Equal(t, 500, conf.Get("receivers::"+secRecID+"::max_reads"))
 		assert.Equal(t, true, conf.Get("receivers::"+secRecID+"::ignore_channel_errors"))
+		assert.Equal(t, "file_storage/googlecontrolplane", conf.Get("receivers::"+secRecID+"::storage"))
 		assert.ElementsMatch(t, []string{"otelcol-google"}, conf.Get("receivers::"+secRecID+"::exclude_providers"))
 
 		assert.True(t, conf.IsSet("receivers::"+sysmonRecID))
@@ -594,7 +599,14 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource(t *testing.T) {
 		assert.False(t, conf.IsSet("receivers::"+sysmonRecID+"::event_driven_scraping"))
 		assert.Equal(t, 500, conf.Get("receivers::"+sysmonRecID+"::max_reads"))
 		assert.Equal(t, true, conf.Get("receivers::"+sysmonRecID+"::ignore_channel_errors"))
+		assert.Equal(t, "file_storage/googlecontrolplane", conf.Get("receivers::"+sysmonRecID+"::storage"))
 		assert.ElementsMatch(t, []string{"otelcol-google"}, conf.Get("receivers::"+sysmonRecID+"::exclude_providers"))
+
+		// Persistent storage extension must be synthesized on Windows
+		assert.True(t, conf.IsSet("extensions::file_storage/googlecontrolplane"))
+		assert.Equal(t, true, conf.Get("extensions::file_storage/googlecontrolplane::create_directory"))
+		exts := conf.Get("service::extensions")
+		assert.Contains(t, exts, "file_storage/googlecontrolplane")
 
 		// Receivers must attach to canonical shared logs/googlecontrolplane pipeline
 		receivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
@@ -604,6 +616,8 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource(t *testing.T) {
 	} else {
 		assert.False(t, conf.IsSet("receivers::"+secRecID))
 		assert.False(t, conf.IsSet("receivers::"+sysmonRecID))
+		assert.True(t, conf.IsSet("extensions::file_storage/googlecontrolplane"))
+		assert.Equal(t, defaultStorageDir(), conf.Get("extensions::file_storage/googlecontrolplane::directory"))
 		receivers := conf.Get("service::pipelines::logs/googlecontrolplane::receivers")
 		assert.Contains(t, receivers, "nop/googlecontrolplane")
 		assert.NotContains(t, receivers, secRecID)
@@ -1049,6 +1063,11 @@ var (
 func TestFilterPolicyDriversRegistered(t *testing.T) {
 	// Verify that importing googlecontrolplaneprovider registers log_filter,
 	// metric_filter, and trace_filter policy drivers in googlepolicy.
+	fileLogPaths := []any{"/var/log/**/*.log"}
+	if runtime.GOOS == "windows" {
+		fileLogPaths = []any{`C:\logs\**\*.log`}
+	}
+
 	for _, tc := range []struct {
 		policyType string
 		raw        map[string]any
@@ -1092,6 +1111,14 @@ func TestFilterPolicyDriversRegistered(t *testing.T) {
 						"predicate": map[string]any{"existence": map[string]any{}},
 					},
 				},
+			},
+		},
+		{
+			policyType: "file_log_source",
+			raw: map[string]any{
+				"type":           "file_log_source",
+				"id":             "test-filelog",
+				"included_paths": fileLogPaths,
 			},
 		},
 		{
@@ -1359,6 +1386,290 @@ func TestRetrieve_RecordsPolicyEvaluateErrorEventForFailedPoliciesWithClass(t *t
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
+
+func TestRetrieve_MultipleFileLogSourcePoliciesConsolidated(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	p := createProvider()
+
+	var p1Paths, p2Paths []string
+	var expectedPaths []any
+	if runtime.GOOS == "windows" {
+		p1Paths = []string{`C:\logs\syslog`, `C:\logs\nginx\*.log`}
+		p2Paths = []string{`C:\logs\nginx\*.log`, `C:\logs\auth.log`}
+		expectedPaths = []any{
+			"C:/logs/auth.log",
+			"C:/logs/nginx/*.log",
+			"C:/logs/syslog",
+		}
+	} else {
+		p1Paths = []string{"/var/log/syslog", "/var/log/nginx/*.log"}
+		p2Paths = []string{"/var/log/nginx/*.log", "/var/log/auth.log"}
+		expectedPaths = []any{
+			"/var/log/auth.log",
+			"/var/log/nginx/*.log",
+			"/var/log/syslog",
+		}
+	}
+
+	p1 := &policyv1alpha1.FileLogSourcePolicy{
+		Id:            "app-logs-1",
+		IncludedPaths: p1Paths,
+	}
+	p2 := &policyv1alpha1.FileLogSourcePolicy{
+		Id:            "app-logs-2",
+		IncludedPaths: p2Paths,
+	}
+
+	ps, err := googlepolicy.MakePolicySetFromProtos("test-set", "rev-filelog", []proto.Message{p1, p2})
+	require.NoError(t, err)
+
+	googlepolicy.SetActivePolicySet(ps)
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+
+	// A single consolidated filelog receiver must be present.
+	assert.True(t, conf.IsSet("receivers::filelog/googlecontrolplane"))
+	sub, err := conf.Sub("receivers::filelog/googlecontrolplane")
+	require.NoError(t, err)
+	assert.Equal(t, expectedPaths, sub.ToStringMap()["include"])
+	assert.Equal(t, true, sub.ToStringMap()["include_file_path"])
+	assert.Equal(t, "file_storage/googlecontrolplane", sub.ToStringMap()["storage"])
+
+	// The shared canonical logs/googlecontrolplane pipeline must connect to the consolidated filelog receiver and include googlepolicy.
+	assert.True(t, conf.IsSet("service::pipelines::logs/googlecontrolplane"))
+	pipeSub, err := conf.Sub("service::pipelines::logs/googlecontrolplane")
+	require.NoError(t, err)
+	receivers := pipeSub.ToStringMap()["receivers"]
+	assert.Contains(t, receivers, "nop/googlecontrolplane")
+	assert.Contains(t, receivers, "filelog/googlecontrolplane")
+	assert.Contains(t, pipeSub.ToStringMap()["processors"], "googlepolicy")
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestRetrieve_FileLogSourcePolicy_WithInvalidPolicy_FaultIsolation(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	core, recorded := observer.New(zapcore.InfoLevel)
+	logger := zap.New(core)
+	p := createProviderWithLogger(logger)
+
+	var valid1Path, valid2Path, invalidPath string
+	var expectedValid []any
+	if runtime.GOOS == "windows" {
+		valid1Path = `C:\logs\valid1.log`
+		valid2Path = `C:\logs\valid2.log`
+		invalidPath = `C:\logs\..\Windows\System32\cmd.exe`
+		expectedValid = []any{"C:/logs/valid1.log", "C:/logs/valid2.log"}
+	} else {
+		valid1Path = "/var/log/valid1.log"
+		valid2Path = "/var/log/valid2.log"
+		invalidPath = "/var/log/../etc/shadow"
+		expectedValid = []any{"/var/log/valid1.log", "/var/log/valid2.log"}
+	}
+
+	valid1 := &policyv1alpha1.FileLogSourcePolicy{
+		Id:            "valid-source-1",
+		IncludedPaths: []string{valid1Path},
+	}
+	valid2 := &policyv1alpha1.FileLogSourcePolicy{
+		Id:            "valid-source-2",
+		IncludedPaths: []string{valid2Path},
+	}
+	invalid := &policyv1alpha1.FileLogSourcePolicy{
+		Id:            "invalid-source",
+		IncludedPaths: []string{invalidPath},
+	}
+
+	ps, err := googlepolicy.MakePolicySetFromProtos("test-set", "rev-fault-isolation", []proto.Message{valid1, valid2, invalid})
+	require.Error(t, err)
+	require.NotNil(t, ps)
+
+	googlepolicy.SetActivePolicySet(ps)
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+
+	// Valid policies should survive and be consolidated into receivers::filelog/googlecontrolplane.
+	assert.True(t, conf.IsSet("receivers::filelog/googlecontrolplane"))
+	sub, err := conf.Sub("receivers::filelog/googlecontrolplane")
+	require.NoError(t, err)
+	assert.Equal(t, expectedValid, sub.ToStringMap()["include"])
+
+	// Invalid policy should have recorded an evaluation error event with source class and failed validation type.
+	var invalidEntry *observer.LoggedEntry
+	for _, entry := range recorded.All() {
+		if entry.ContextMap()["gcp.policy.id"] == "invalid-source" {
+			invalidEntry = &entry
+			break
+		}
+	}
+	require.NotNil(t, invalidEntry, "expected an error event recorded for invalid-source")
+	assert.Equal(t, "policy_failed_validation", (*invalidEntry).ContextMap()["error.type"])
+	assert.Equal(t, "source", (*invalidEntry).ContextMap()["gcp.policy.class"])
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestRetrieve_FileLogSourcePolicy_PoisonedBatchHead_FaultIsolation(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	core, recorded := observer.New(zapcore.InfoLevel)
+	logger := zap.New(core)
+	p := createProviderWithLogger(logger)
+
+	var valid1Path, valid2Path, invalidPath string
+	var expectedValid []any
+	if runtime.GOOS == "windows" {
+		valid1Path = `C:\logs\valid1.log`
+		valid2Path = `C:\logs\valid2.log`
+		invalidPath = `C:\logs\..\Windows\System32\cmd.exe`
+		expectedValid = []any{"C:/logs/valid1.log", "C:/logs/valid2.log"}
+	} else {
+		valid1Path = "/var/log/valid1.log"
+		valid2Path = "/var/log/valid2.log"
+		invalidPath = "/var/log/../etc/shadow"
+		expectedValid = []any{"/var/log/valid1.log", "/var/log/valid2.log"}
+	}
+
+	// Invariant INV-1: Malformed element 0 must not poison or drop valid peers.
+	invalid := &policyv1alpha1.FileLogSourcePolicy{
+		Id:            "invalid-source-at-head",
+		IncludedPaths: []string{invalidPath},
+	}
+	valid1 := &policyv1alpha1.FileLogSourcePolicy{
+		Id:            "valid-source-1",
+		IncludedPaths: []string{valid1Path},
+	}
+	valid2 := &policyv1alpha1.FileLogSourcePolicy{
+		Id:            "valid-source-2",
+		IncludedPaths: []string{valid2Path},
+	}
+
+	ps, err := googlepolicy.MakePolicySetFromProtos("test-set", "rev-poisoned-head", []proto.Message{invalid, valid1, valid2})
+	require.Error(t, err)
+	require.NotNil(t, ps)
+
+	googlepolicy.SetActivePolicySet(ps)
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+
+	// Valid policies must survive and consolidate into receivers::filelog/googlecontrolplane.
+	assert.True(t, conf.IsSet("receivers::filelog/googlecontrolplane"))
+	sub, err := conf.Sub("receivers::filelog/googlecontrolplane")
+	require.NoError(t, err)
+	assert.Equal(t, expectedValid, sub.ToStringMap()["include"])
+
+	// Invalid policy at index 0 must have an error event recorded.
+	var invalidEntry *observer.LoggedEntry
+	for _, entry := range recorded.All() {
+		if entry.ContextMap()["gcp.policy.id"] == "invalid-source-at-head" {
+			invalidEntry = &entry
+			break
+		}
+	}
+	require.NotNil(t, invalidEntry, "expected an error event recorded for invalid-source-at-head")
+	assert.Equal(t, "policy_failed_validation", (*invalidEntry).ContextMap()["error.type"])
+	assert.Equal(t, "source", (*invalidEntry).ContextMap()["gcp.policy.class"])
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+func TestRetrieve_ConsolidationFailure_ErrorAttribution(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	core, recorded := observer.New(zapcore.InfoLevel)
+	logger := zap.New(core)
+	p := createProviderWithLogger(logger)
+
+	// Invariant INV-5: Consolidation errors must be attributed across all candidate policy IDs.
+	m1 := &mockFailingConsolidatableSourcePolicy{name: "failing-policy-1"}
+	m2 := &mockFailingConsolidatableSourcePolicy{name: "failing-policy-2"}
+
+	ps := &googlepolicy.PolicySet{
+		RevisionID: "rev-consolidation-failure",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			"failing-policy-1": {PolicyObj: m1},
+			"failing-policy-2": {PolicyObj: m2},
+		},
+	}
+	googlepolicy.SetActivePolicySet(ps)
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	require.NotNil(t, ret)
+
+	// Both policies must have recorded an evaluate error event.
+	seenPolicies := make(map[string]bool)
+	for _, entry := range recorded.All() {
+		id, ok := entry.ContextMap()["gcp.policy.id"].(string)
+		if ok && (id == "failing-policy-1" || id == "failing-policy-2") {
+			seenPolicies[id] = true
+			assert.Equal(t, "source", entry.ContextMap()["gcp.policy.class"])
+			assert.Equal(t, "policy_evaluation_failed", entry.ContextMap()["error.type"])
+		}
+	}
+	assert.True(t, seenPolicies["failing-policy-1"], "expected error event for failing-policy-1")
+	assert.True(t, seenPolicies["failing-policy-2"], "expected error event for failing-policy-2")
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
+type mockFailingConsolidatableSourcePolicy struct {
+	name string
+}
+
+func (m *mockFailingConsolidatableSourcePolicy) PolicyName() string { return m.name }
+func (m *mockFailingConsolidatableSourcePolicy) PolicyType() string { return "failing_consolidatable" }
+func (m *mockFailingConsolidatableSourcePolicy) PolicyClass() googlepolicy.PolicyClass {
+	return googlepolicy.PolicyClassSource
+}
+func (m *mockFailingConsolidatableSourcePolicy) Validate() error { return nil }
+func (m *mockFailingConsolidatableSourcePolicy) Evaluate(_ context.Context) (*confmap.Conf, error) {
+	return confmap.New(), nil
+}
+func (m *mockFailingConsolidatableSourcePolicy) LogReceiverIDs() []component.ID    { return nil }
+func (m *mockFailingConsolidatableSourcePolicy) MetricReceiverIDs() []component.ID { return nil }
+func (m *mockFailingConsolidatableSourcePolicy) TraceReceiverIDs() []component.ID  { return nil }
+func (m *mockFailingConsolidatableSourcePolicy) Consolidate(_ []googlepolicy.SourcePolicy) (googlepolicy.SourcePolicy, error) {
+	return nil, errors.New("simulated consolidation engine failure")
+}
+
+var (
+	_ googlepolicy.SourcePolicy               = (*mockFailingConsolidatableSourcePolicy)(nil)
+	_ googlepolicy.ConsolidatableSourcePolicy = (*mockFailingConsolidatableSourcePolicy)(nil)
+)
 
 func TestPolicyHotReload_SourcePolicyTriggersWatcher(t *testing.T) {
 	t.Setenv("FLEET_ID", "1234")
@@ -1891,7 +2202,7 @@ func TestRetrieve_MultipleJournaldSourcePoliciesConsolidated(t *testing.T) {
 	require.True(t, ok)
 
 	// Exactly 1 journald receiver is present
-	require.Contains(t, receivers, "journald")
+	require.Contains(t, receivers, "journald/googlecontrolplane")
 
 	pipelines, ok := raw["service"].(map[string]any)["pipelines"].(map[string]any)
 	require.True(t, ok)
@@ -1899,7 +2210,7 @@ func TestRetrieve_MultipleJournaldSourcePoliciesConsolidated(t *testing.T) {
 	require.True(t, ok)
 	pipelineReceivers, ok := logsPipeline["receivers"].([]any)
 	require.True(t, ok)
-	require.Contains(t, pipelineReceivers, "journald")
+	require.Contains(t, pipelineReceivers, "journald/googlecontrolplane")
 	require.Contains(t, pipelineReceivers, "nop/googlecontrolplane")
 
 	assert.NoError(t, p.Shutdown(context.Background()))
@@ -1919,7 +2230,7 @@ func (i *invalidJournaldSourcePolicy) Evaluate(_ context.Context) (*confmap.Conf
 	return nil, errors.New("invalid journald policy")
 }
 func (i *invalidJournaldSourcePolicy) LogReceiverIDs() []component.ID {
-	return []component.ID{component.MustNewID("journald")}
+	return []component.ID{component.MustNewIDWithName("journald", "googlecontrolplane")}
 }
 func (i *invalidJournaldSourcePolicy) MetricReceiverIDs() []component.ID { return nil }
 func (i *invalidJournaldSourcePolicy) TraceReceiverIDs() []component.ID  { return nil }
@@ -1972,7 +2283,7 @@ func TestRetrieve_MultipleJournaldSourcePolicies_FaultIsolation_FirstPolicyInval
 	require.True(t, ok)
 
 	// Fault isolation: good-1 and good-2 consolidated successfully into journald despite bad-0
-	require.Contains(t, receivers, "journald")
+	require.Contains(t, receivers, "journald/googlecontrolplane")
 
 	pipelines, ok := raw["service"].(map[string]any)["pipelines"].(map[string]any)
 	require.True(t, ok)
@@ -1980,7 +2291,7 @@ func TestRetrieve_MultipleJournaldSourcePolicies_FaultIsolation_FirstPolicyInval
 	require.True(t, ok)
 	pipelineReceivers, ok := logsPipeline["receivers"].([]any)
 	require.True(t, ok)
-	require.Contains(t, pipelineReceivers, "journald")
+	require.Contains(t, pipelineReceivers, "journald/googlecontrolplane")
 	require.Contains(t, pipelineReceivers, "nop/googlecontrolplane")
 
 	assert.NoError(t, p.Shutdown(context.Background()))
@@ -2000,7 +2311,7 @@ func (f *failConsolidateJournaldSourcePolicy) Evaluate(_ context.Context) (*conf
 	return confmap.New(), nil
 }
 func (f *failConsolidateJournaldSourcePolicy) LogReceiverIDs() []component.ID {
-	return []component.ID{component.MustNewID("journald")}
+	return []component.ID{component.MustNewIDWithName("journald", "googlecontrolplane")}
 }
 func (f *failConsolidateJournaldSourcePolicy) MetricReceiverIDs() []component.ID { return nil }
 func (f *failConsolidateJournaldSourcePolicy) TraceReceiverIDs() []component.ID  { return nil }
@@ -2039,7 +2350,7 @@ func TestRetrieve_MultipleJournaldSourcePolicies_ConsolidationFailureAttributesA
 	raw := conf.ToStringMap()
 	receivers, ok := raw["receivers"].(map[string]any)
 	require.True(t, ok)
-	require.NotContains(t, receivers, "journald")
+	require.NotContains(t, receivers, "journald/googlecontrolplane")
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
@@ -2300,14 +2611,14 @@ func TestRetrieve_ActivePolicySetWithIISSource_SynthesizesIISReceiver(t *testing
 	require.True(t, ok)
 
 	if runtime.GOOS == "windows" {
-		iisCfg, ok := receivers["iis"].(map[string]any)
+		iisCfg, ok := receivers["iis/googlecontrolplane"].(map[string]any)
 		require.True(t, ok, "iis receiver must be configured")
 		assert.Equal(t, "30s", iisCfg["collection_interval"])
-		assert.Contains(t, pipelineReceivers, "iis")
+		assert.Contains(t, pipelineReceivers, "iis/googlecontrolplane")
 	} else {
-		_, ok := receivers["iis"]
+		_, ok := receivers["iis/googlecontrolplane"]
 		assert.False(t, ok, "iis receiver must not be configured on non-Windows")
-		assert.NotContains(t, pipelineReceivers, "iis")
+		assert.NotContains(t, pipelineReceivers, "iis/googlecontrolplane")
 	}
 	assert.Contains(t, pipelineReceivers, "nop/googlecontrolplane")
 
@@ -2365,14 +2676,14 @@ func TestRetrieve_MultipleIISSourcePolicies_ConsolidatesMinInterval(t *testing.T
 	require.True(t, ok)
 
 	if runtime.GOOS == "windows" {
-		iisCfg, ok := receivers["iis"].(map[string]any)
+		iisCfg, ok := receivers["iis/googlecontrolplane"].(map[string]any)
 		require.True(t, ok, "iis receiver must be configured")
 		assert.Equal(t, "15s", iisCfg["collection_interval"], "consolidation must choose minimum interval")
-		assert.Contains(t, pipelineReceivers, "iis")
+		assert.Contains(t, pipelineReceivers, "iis/googlecontrolplane")
 	} else {
-		_, ok := receivers["iis"]
+		_, ok := receivers["iis/googlecontrolplane"]
 		assert.False(t, ok, "iis receiver must not be configured on non-Windows")
-		assert.NotContains(t, pipelineReceivers, "iis")
+		assert.NotContains(t, pipelineReceivers, "iis/googlecontrolplane")
 	}
 	assert.Contains(t, pipelineReceivers, "nop/googlecontrolplane")
 
@@ -2436,14 +2747,14 @@ func TestRetrieve_MultipleIISSourcePolicies_FaultIsolation_InvalidPolicyIgnored(
 	require.True(t, ok)
 
 	if runtime.GOOS == "windows" {
-		iisCfg, ok := receivers["iis"].(map[string]any)
+		iisCfg, ok := receivers["iis/googlecontrolplane"].(map[string]any)
 		require.True(t, ok, "iis receiver must be configured from valid sibling policy")
 		assert.Equal(t, "20s", iisCfg["collection_interval"])
-		assert.Contains(t, pipelineReceivers, "iis")
+		assert.Contains(t, pipelineReceivers, "iis/googlecontrolplane")
 	} else {
-		_, ok := receivers["iis"]
+		_, ok := receivers["iis/googlecontrolplane"]
 		assert.False(t, ok, "iis receiver must not be configured on non-Windows")
-		assert.NotContains(t, pipelineReceivers, "iis")
+		assert.NotContains(t, pipelineReceivers, "iis/googlecontrolplane")
 	}
 	assert.Contains(t, pipelineReceivers, "nop/googlecontrolplane")
 
@@ -2488,7 +2799,7 @@ func TestRetrieve_ActivePolicySetWithIISSource_SilentNoOpOnNonWindows(t *testing
 	raw := conf.ToStringMap()
 	receivers, ok := raw["receivers"].(map[string]any)
 	require.True(t, ok)
-	assert.NotContains(t, receivers, "iis", "iis receiver must not be synthesized on non-Windows")
+	assert.NotContains(t, receivers, "iis/googlecontrolplane", "iis receiver must not be synthesized on non-Windows")
 
 	pipelines, ok := raw["service"].(map[string]any)["pipelines"].(map[string]any)
 	require.True(t, ok)
@@ -2496,7 +2807,7 @@ func TestRetrieve_ActivePolicySetWithIISSource_SilentNoOpOnNonWindows(t *testing
 	require.True(t, ok)
 	pipelineReceivers, ok := metricsPipeline["receivers"].([]any)
 	require.True(t, ok)
-	assert.NotContains(t, pipelineReceivers, "iis", "iis must not be in pipeline on non-Windows")
+	assert.NotContains(t, pipelineReceivers, "iis/googlecontrolplane", "iis must not be in pipeline on non-Windows")
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 }
@@ -2517,10 +2828,306 @@ func (i *invalidIISSourcePolicy) Evaluate(_ context.Context) (*confmap.Conf, err
 	return confmap.New(), nil
 }
 func (i *invalidIISSourcePolicy) MetricReceiverIDs() []component.ID {
-	return []component.ID{component.MustNewID("iis")}
+	return []component.ID{component.MustNewIDWithName("iis", "googlecontrolplane")}
 }
 func (i *invalidIISSourcePolicy) LogReceiverIDs() []component.ID   { return nil }
 func (i *invalidIISSourcePolicy) TraceReceiverIDs() []component.ID { return nil }
 func (i *invalidIISSourcePolicy) Consolidate(_ []googlepolicy.SourcePolicy) (googlepolicy.SourcePolicy, error) {
 	return nil, errors.New("invalid policy cannot consolidate")
+}
+
+func TestRetrieve_PersistentStorageSynthesis(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+
+	t.Run("synthesizes file_storage extension with platform default directory", func(t *testing.T) {
+		p := createProvider()
+
+		ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:test-storage", nil)
+		require.NoError(t, err)
+		require.NotNil(t, ret)
+
+		conf, err := ret.AsConf()
+		require.NoError(t, err)
+
+		assert.True(t, conf.IsSet("extensions::file_storage/googlecontrolplane"))
+		assert.Equal(t, true, conf.Get("extensions::file_storage/googlecontrolplane::create_directory"))
+		assert.Equal(t, defaultStorageDir(), conf.Get("extensions::file_storage/googlecontrolplane::directory"))
+
+		exts := conf.Get("service::extensions")
+		assert.Contains(t, exts, "file_storage/googlecontrolplane")
+		assert.NoError(t, p.Shutdown(context.Background()))
+	})
+
+	t.Run("resolves correct storage directory per OS", func(t *testing.T) {
+		dir := defaultStorageDir()
+		if runtime.GOOS == "windows" {
+			assert.Contains(t, dir, `Google\OpenTelemetry Collector\storage`)
+		} else {
+			assert.Equal(t, "/var/lib/otelcol-google/storage", dir)
+		}
+	})
+}
+
+func TestEscapeDollarSigns(t *testing.T) {
+	origStringSlice := []string{"$var", "${env:SECRET}", "pa$$word", "plain"}
+	origMapSlice := []map[string]any{
+		{"expr": `body matches "^\$\{1\}$$"`, "count": 42},
+	}
+	origStringMap := map[string]string{
+		"authorization": "Bearer pa$$word-${env:TOKEN}",
+	}
+
+	input := map[string]any{
+		"plain":          "hello",
+		"single_dollar":  "$1@***",
+		"env_uri":        "${env:SECRET}",
+		"implicit_uri":   "${SECRET}",
+		"invalid_env":    "${1}",
+		"double_dollar":  "pa$$word",
+		"escaped_uri":    "$${env:SECRET}",
+		"triple_dollar":  "$$${env:SECRET}",
+		"int_val":        123,
+		"bool_val":       true,
+		"any_slice":      []any{"${file:/etc/shadow}", "pa$$word", []any{"$nested"}},
+		"string_slice":   origStringSlice,
+		"map_slice":      origMapSlice,
+		"string_map":     origStringMap,
+		"nil_any_slice":  []any(nil),
+		"nil_str_slice":  []string(nil),
+		"nil_map_slice":  []map[string]any(nil),
+		"nil_any_map":    map[string]any(nil),
+		"nil_str_map":    map[string]string(nil),
+		"nested_any_map": map[string]any{"query": "SELECT * FROM t WHERE x = '$val' AND y = '${env:Y}'"},
+	}
+
+	escaped, ok := escapeDollarSigns(input).(map[string]any)
+	require.True(t, ok)
+
+	assert.Equal(t, "hello", escaped["plain"])
+	assert.Equal(t, "$$1@***", escaped["single_dollar"])
+	assert.Equal(t, "$${env:SECRET}", escaped["env_uri"])
+	assert.Equal(t, "$${SECRET}", escaped["implicit_uri"])
+	assert.Equal(t, "$${1}", escaped["invalid_env"])
+	assert.Equal(t, "pa$$$$word", escaped["double_dollar"])
+	assert.Equal(t, "$$$${env:SECRET}", escaped["escaped_uri"])
+	assert.Equal(t, "$$$$$${env:SECRET}", escaped["triple_dollar"])
+	assert.Equal(t, 123, escaped["int_val"])
+	assert.Equal(t, true, escaped["bool_val"])
+	assert.Equal(t, []any{"$${file:/etc/shadow}", "pa$$$$word", []any{"$$nested"}}, escaped["any_slice"])
+	assert.Equal(t, []any{"$$var", "$${env:SECRET}", "pa$$$$word", "plain"}, escaped["string_slice"])
+	assert.Equal(t, []any{
+		map[string]any{"expr": `body matches "^\$$\{1\}$$$$"`, "count": 42},
+	}, escaped["map_slice"])
+	assert.Equal(t, map[string]any{
+		"authorization": "Bearer pa$$$$word-$${env:TOKEN}",
+	}, escaped["string_map"])
+	assert.Nil(t, escaped["nil_any_slice"])
+	assert.Nil(t, escaped["nil_str_slice"])
+	assert.Nil(t, escaped["nil_map_slice"])
+	assert.Nil(t, escaped["nil_any_map"])
+	assert.Nil(t, escaped["nil_str_map"])
+	assert.Equal(t, map[string]any{
+		"query": "SELECT * FROM t WHERE x = '$$val' AND y = '$${env:Y}'",
+	}, escaped["nested_any_map"])
+
+	// Verify caller-owned slices and maps were not mutated in place.
+	assert.Equal(t, []string{"$var", "${env:SECRET}", "pa$$word", "plain"}, origStringSlice)
+	assert.Equal(t, `body matches "^\$\{1\}$$"`, origMapSlice[0]["expr"])
+	assert.Equal(t, "Bearer pa$$word-${env:TOKEN}", origStringMap["authorization"])
+}
+
+type dollarSignTestSourcePolicy struct {
+	name    string
+	version string
+}
+
+func (d *dollarSignTestSourcePolicy) PolicyName() string { return d.name }
+func (d *dollarSignTestSourcePolicy) PolicyType() string { return "dollar_sign_test_source" }
+func (d *dollarSignTestSourcePolicy) PolicyClass() googlepolicy.PolicyClass {
+	return googlepolicy.PolicyClassSource
+}
+func (d *dollarSignTestSourcePolicy) Validate() error { return nil }
+func (d *dollarSignTestSourcePolicy) Evaluate(context.Context) (*confmap.Conf, error) {
+	return confmap.NewFromStringMap(map[string]any{
+		"receivers": map[string]any{
+			"otlp/" + d.name: map[string]any{
+				"endpoint_env":     "${env:SECRET_ENDPOINT}",
+				"implicit_env":     "${SECRET_ENDPOINT}",
+				"file_uri":         "${file:/etc/shadow}",
+				"invalid_env_name": "${1}",
+				"regex_replace":    "$1@***",
+				"password":         "pa$$word",
+				"already_doubled":  "$${env:SECRET_ENDPOINT}",
+				"triple_dollar":    "$$${env:SECRET_ENDPOINT}",
+				"version":          d.version,
+				"include_paths": []string{
+					"/var/log/${file:/etc/shadow}",
+					"/var/log/${env:SECRET_PATH}.log",
+					"/var/log/pa$$word.log",
+					"/var/log/${1}.log",
+				},
+				"operators": []map[string]any{
+					{
+						"type": "filter",
+						"expr": `body matches "^\\$\\{1\\}$$" && attributes["secret"] == "${env:SECRET}"`,
+					},
+				},
+				"headers": map[string]string{
+					"Authorization": "Bearer pa$$word-${env:SECRET_TOKEN}",
+				},
+			},
+		},
+	}), nil
+}
+func (d *dollarSignTestSourcePolicy) LogReceiverIDs() []component.ID {
+	return []component.ID{component.MustNewIDWithName("otlp", d.name)}
+}
+func (d *dollarSignTestSourcePolicy) MetricReceiverIDs() []component.ID { return nil }
+func (d *dollarSignTestSourcePolicy) TraceReceiverIDs() []component.ID  { return nil }
+
+type forbidExpansionProvider struct {
+	scheme string
+	called *atomic.Int32
+}
+
+func (f *forbidExpansionProvider) Retrieve(_ context.Context, uri string, _ confmap.WatcherFunc) (*confmap.Retrieved, error) {
+	f.called.Add(1)
+	return nil, fmt.Errorf("unexpected provider expansion for %q", uri)
+}
+
+func (f *forbidExpansionProvider) Scheme() string {
+	return f.scheme
+}
+
+func (f *forbidExpansionProvider) Shutdown(context.Context) error {
+	return nil
+}
+
+func TestRetrieve_EscapesDollarSignsForConfmapResolver(t *testing.T) {
+	t.Setenv("FLEET_ID", "fleet-pa$$word-${env:SECRET_FLEET}-${1}")
+
+	ps1 := &googlepolicy.PolicySet{
+		RevisionID: "rev-dollar-1",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			"dollar_src": {PolicyObj: &dollarSignTestSourcePolicy{name: "dollar_src", version: "v1-$${env:VER}"}},
+		},
+	}
+	googlepolicy.SetActivePolicySet(ps1)
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+
+	// 1. Direct Retrieve verification: all '$' characters are doubled to '$$' in Retrieved.
+	directProvider := createProvider()
+	ret, err := directProvider.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	rawConf, err := ret.AsConf()
+	require.NoError(t, err)
+	assert.Equal(t, "$${env:SECRET_ENDPOINT}", rawConf.Get("receivers::otlp/dollar_src::endpoint_env"))
+	assert.Equal(t, "$${SECRET_ENDPOINT}", rawConf.Get("receivers::otlp/dollar_src::implicit_env"))
+	assert.Equal(t, "$${file:/etc/shadow}", rawConf.Get("receivers::otlp/dollar_src::file_uri"))
+	assert.Equal(t, "$${1}", rawConf.Get("receivers::otlp/dollar_src::invalid_env_name"))
+	assert.Equal(t, "$$1@***", rawConf.Get("receivers::otlp/dollar_src::regex_replace"))
+	assert.Equal(t, "pa$$$$word", rawConf.Get("receivers::otlp/dollar_src::password"))
+	assert.Equal(t, "$$$${env:SECRET_ENDPOINT}", rawConf.Get("receivers::otlp/dollar_src::already_doubled"))
+	assert.Equal(t, "$$$$$${env:SECRET_ENDPOINT}", rawConf.Get("receivers::otlp/dollar_src::triple_dollar"))
+	assert.Equal(t, []any{
+		"/var/log/$${file:/etc/shadow}",
+		"/var/log/$${env:SECRET_PATH}.log",
+		"/var/log/pa$$$$word.log",
+		"/var/log/$${1}.log",
+	}, rawConf.Get("receivers::otlp/dollar_src::include_paths"))
+	require.NoError(t, directProvider.Shutdown(context.Background()))
+
+	// 2. End-to-end confmap.Resolver verification:
+	// Register mock 'env' and 'file' providers with DefaultScheme: "env".
+	// Neither provider may be called when resolving policy-synthesized strings,
+	// and all literal '$' sequences must round-trip to their exact original values.
+	var envCalls, fileCalls atomic.Int32
+	envFactory := confmap.NewProviderFactory(func(confmap.ProviderSettings) confmap.Provider {
+		return &forbidExpansionProvider{scheme: "env", called: &envCalls}
+	})
+	fileFactory := confmap.NewProviderFactory(func(confmap.ProviderSettings) confmap.Provider {
+		return &forbidExpansionProvider{scheme: "file", called: &fileCalls}
+	})
+
+	resolver, err := confmap.NewResolver(confmap.ResolverSettings{
+		URIs:              []string{"googlecontrolplane:component:my-config"},
+		ProviderFactories: []confmap.ProviderFactory{NewFactory(), envFactory, fileFactory},
+		DefaultScheme:     "env",
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		assert.NoError(t, resolver.Shutdown(context.Background()))
+	})
+
+	resolvedConf, err := resolver.Resolve(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, int32(0), envCalls.Load(), "env provider must never be invoked for policy strings")
+	assert.Equal(t, int32(0), fileCalls.Load(), "file provider must never be invoked for policy strings")
+
+	assert.Equal(t, "${env:SECRET_ENDPOINT}", resolvedConf.Get("receivers::otlp/dollar_src::endpoint_env"))
+	assert.Equal(t, "${SECRET_ENDPOINT}", resolvedConf.Get("receivers::otlp/dollar_src::implicit_env"))
+	assert.Equal(t, "${file:/etc/shadow}", resolvedConf.Get("receivers::otlp/dollar_src::file_uri"))
+	assert.Equal(t, "${1}", resolvedConf.Get("receivers::otlp/dollar_src::invalid_env_name"))
+	assert.Equal(t, "$1@***", resolvedConf.Get("receivers::otlp/dollar_src::regex_replace"))
+	assert.Equal(t, "pa$$word", resolvedConf.Get("receivers::otlp/dollar_src::password"))
+	assert.Equal(t, "$${env:SECRET_ENDPOINT}", resolvedConf.Get("receivers::otlp/dollar_src::already_doubled"))
+	assert.Equal(t, "$$${env:SECRET_ENDPOINT}", resolvedConf.Get("receivers::otlp/dollar_src::triple_dollar"))
+	assert.Equal(t, "v1-$${env:VER}", resolvedConf.Get("receivers::otlp/dollar_src::version"))
+	assert.Equal(t, []any{
+		"/var/log/${file:/etc/shadow}",
+		"/var/log/${env:SECRET_PATH}.log",
+		"/var/log/pa$$word.log",
+		"/var/log/${1}.log",
+	}, resolvedConf.Get("receivers::otlp/dollar_src::include_paths"))
+	assert.Equal(t, []any{
+		map[string]any{
+			"type": "filter",
+			"expr": `body matches "^\\$\\{1\\}$$" && attributes["secret"] == "${env:SECRET}"`,
+		},
+	}, resolvedConf.Get("receivers::otlp/dollar_src::operators"))
+	assert.Equal(t, map[string]any{
+		"Authorization": "Bearer pa$$word-${env:SECRET_TOKEN}",
+	}, resolvedConf.Get("receivers::otlp/dollar_src::headers"))
+
+	// Verify resource attributes synthesized by BuiltInSelfMetricsPolicy also preserve literal '$'.
+	rawAttrs, ok := resolvedConf.Get("service::telemetry::resource::attributes").([]any)
+	require.True(t, ok)
+	attrMap := map[string]any{}
+	for _, entry := range rawAttrs {
+		if m, ok := entry.(map[string]any); ok {
+			if name, ok := m["name"].(string); ok {
+				attrMap[name] = m["value"]
+			}
+		}
+	}
+	assert.Equal(t, "fleet-pa$$word-${env:SECRET_FLEET}-${1}", attrMap["gcp.fleet_id"])
+
+	// 3. Hot-reload verification: updating the active policy set caches the evaluated
+	// Retrieved in onPolicySetUpdated; resolving again must not double-escape cachedRet.
+	ps2 := &googlepolicy.PolicySet{
+		RevisionID: "rev-dollar-2",
+		Policies: map[string]*googlepolicy.PolicySetEntry{
+			"dollar_src": {PolicyObj: &dollarSignTestSourcePolicy{name: "dollar_src", version: "v2-pa$$word-${env:VER2}"}},
+		},
+	}
+	googlepolicy.SetActivePolicySet(ps2)
+
+	select {
+	case watchErr := <-resolver.Watch():
+		require.NoError(t, watchErr)
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for resolver watcher notification")
+	}
+
+	resolvedConf2, err := resolver.Resolve(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, int32(0), envCalls.Load())
+	assert.Equal(t, int32(0), fileCalls.Load())
+	assert.Equal(t, "v2-pa$$word-${env:VER2}", resolvedConf2.Get("receivers::otlp/dollar_src::version"))
+	assert.Equal(t, "pa$$word", resolvedConf2.Get("receivers::otlp/dollar_src::password"))
+	assert.Equal(t, "${env:SECRET_ENDPOINT}", resolvedConf2.Get("receivers::otlp/dollar_src::endpoint_env"))
 }

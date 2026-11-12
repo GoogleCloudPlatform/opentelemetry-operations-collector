@@ -32,6 +32,7 @@ The Google-Built OpenTelemetry Collector is an open-source, production-ready bui
 | prometheusremotewrite | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/prometheusremotewritereceiver/README.md) |
 | receivercreator | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/receivercreator/README.md) |
 | redis | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/redisreceiver/README.md) |
+| selftelemetry | [docs](No docs linked for component) |
 | statsd | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/statsdreceiver/README.md) |
 | syslog | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/syslogreceiver/README.md) |
 | tcplog | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/tcplogreceiver/README.md) |
@@ -143,5 +144,6 @@ The Google-Built OpenTelemetry Collector is an open-source, production-ready bui
 | googlesecretmanager | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/confmap/provider/googlesecretmanagerprovider) |
 | http | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/confmap/provider/httpprovider) |
 | https | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/confmap/provider/httpsprovider) |
+| secretsmanager | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/confmap/provider/secretsmanagerprovider) |
 | yaml | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/confmap/provider/yamlprovider) |
 

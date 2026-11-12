@@ -453,22 +453,18 @@ func (a *authority) handleADSResourceUpdate(serverConfig *ServerConfig, rType Re
 		return
 	}
 	for name, state := range resourceStates {
-		if state.cache == nil {
-			// If the resource state does not contain a cached update, which can
-			// happen when:
-			// - resource was newly requested but has not yet been received, or,
-			// - resource was removed as part of a previous update,
-			// we don't want to generate an error for the watchers.
+		if state.cache == nil && len(updates) > 0 {
+			// If the resource state does not contain a cached update and the
+			// response carried other resources, this ADS response may be in
+			// reaction to an earlier request that did not yet request the new
+			// resource, so its absence from the response does not necessarily
+			// indicate that the resource does not exist. For that case, we rely
+			// on the request timeout instead.
 			//
-			// For the first of the above two conditions, this ADS response may
-			// be in reaction to an earlier request that did not yet request the
-			// new resource, so its absence from the response does not
-			// necessarily indicate that the resource does not exist. For that
-			// case, we rely on the request timeout instead.
-			//
-			// For the second of the above two conditions, we already generated
-			// an error when we received the first response which removed this
-			// resource. So, there is no need to generate another one.
+			// When len(updates) == 0 (an explicit 0-resource SotW response), we
+			// fall through so watchers waiting on the initial response are
+			// notified immediately (unless state.md.Status is already
+			// ServiceStatusNotExist below).
 			continue
 		}
 		if _, ok := updates[name]; ok {
@@ -550,7 +546,7 @@ func (a *authority) handleADSResourceDoesNotExist(rType ResourceType, resourceNa
 	for watcher := range state.watchers {
 		watcher := watcher
 		a.watcherCallbackSerializer.TrySchedule(func(context.Context) {
-			watcher.ResourceError(xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "xds: resource %q of type %q has been removed", resourceName, rType.TypeName), func() {})
+			watcher.ResourceError(xdsresource.NewErrorf(xdsresource.ErrorTypeResourceNotFound, "xds: watch for resource %q of type %q timed out", resourceName, rType.TypeName), func() {})
 		})
 	}
 }

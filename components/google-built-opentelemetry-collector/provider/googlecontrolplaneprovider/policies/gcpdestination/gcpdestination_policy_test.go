@@ -85,6 +85,8 @@ func TestGCPDestinationPolicy_Evaluate_QueueBatchConfig(t *testing.T) {
 	assert.Nil(t, splitLogMap["storage"])
 	assert.Equal(t, "requests", splitLogMap["sizer"])
 	assert.Equal(t, int64(10), splitLogMap["queue_size"])
+	assert.Equal(t, 10, splitLogMap["num_consumers"])
+	assert.Equal(t, true, splitLogMap["wait_for_result"])
 
 	splitLogBatchMap, ok := splitLogMap["batch"].(map[string]any)
 	require.True(t, ok)
@@ -123,12 +125,16 @@ func TestGCPDestinationPolicy_Evaluate_QueueBatchConfig(t *testing.T) {
 	splitMetricMap := splitMetricSub.ToStringMap()
 	assert.Nil(t, splitMetricMap["storage"])
 	assert.Equal(t, "requests", splitMetricMap["sizer"])
+	assert.Equal(t, int64(10), splitMetricMap["queue_size"])
+	assert.Equal(t, 1, splitMetricMap["num_consumers"])
+	assert.Equal(t, false, splitMetricMap["wait_for_result"])
 
 	splitMetricBatchMap, ok := splitMetricMap["batch"].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, "items", splitMetricBatchMap["sizer"])
 	assert.Equal(t, int64(0), splitMetricBatchMap["min_size"])
 	assert.Equal(t, int64(200), splitMetricBatchMap["max_size"])
+	assert.Equal(t, 200*time.Millisecond, splitMetricBatchMap["flush_timeout"])
 
 	// PreProcessMetricIDs should contain both stages in order
 	preMetricIDs := policy.PreProcessMetricIDs()
@@ -160,12 +166,16 @@ func TestGCPDestinationPolicy_Evaluate_QueueBatchConfig(t *testing.T) {
 	splitTraceMap := splitTraceSub.ToStringMap()
 	assert.Nil(t, splitTraceMap["storage"])
 	assert.Equal(t, "requests", splitTraceMap["sizer"])
+	assert.Equal(t, int64(10), splitTraceMap["queue_size"])
+	assert.Equal(t, 1, splitTraceMap["num_consumers"])
+	assert.Equal(t, false, splitTraceMap["wait_for_result"])
 
 	splitTraceBatchMap, ok := splitTraceMap["batch"].(map[string]any)
 	require.True(t, ok)
 	assert.Equal(t, "items", splitTraceBatchMap["sizer"])
 	assert.Equal(t, int64(0), splitTraceBatchMap["min_size"])
 	assert.Equal(t, int64(8192), splitTraceBatchMap["max_size"])
+	assert.Equal(t, 200*time.Millisecond, splitTraceBatchMap["flush_timeout"])
 
 	// PreProcessTraceIDs should contain both stages in order
 	preTraceIDs := policy.PreProcessTraceIDs()

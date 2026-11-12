@@ -86,10 +86,10 @@ processors:
                 idle_timeout: 1m30s
             sizer: items
         block_on_overflow: true
-        num_consumers: 1
+        num_consumers: 10
         queue_size: 10
         sizer: requests
-        wait_for_result: false
+        wait_for_result: true
     queue_batch/default_gcp_destination_split_metrics:
         batch:
             flush_timeout: 200ms

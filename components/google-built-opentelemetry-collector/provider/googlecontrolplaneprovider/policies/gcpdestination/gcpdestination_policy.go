@@ -173,6 +173,8 @@ func (p *GCPDestinationPolicy) Evaluate(_ context.Context) (*confmap.Conf, error
 	queueBatchTrace := newStage1ByteBatchConfig()
 
 	queueSplitLog := newStage2ItemSplitConfig(utrMaxLogItems)
+	queueSplitLog.WaitForResult = true
+	queueSplitLog.NumConsumers = queueBatchLog.NumConsumers
 	queueSplitMetric := newStage2ItemSplitConfig(utrMaxMetricItems)
 	queueSplitTrace := newStage2ItemSplitConfig(utrMaxTraceItems)
 

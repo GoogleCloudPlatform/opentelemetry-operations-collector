@@ -25,14 +25,14 @@ import (
 	"sync"
 	"sync/atomic"
 
-	anypb "google.golang.org/protobuf/types/known/anypb"
-	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 	"google.golang.org/grpc/grpclog"
 	igrpclog "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/internal/grpclog"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/internal/syncutil"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/xdsclient/internal/xdsresource"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/xdsclient/metrics"
+	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	v3adminpb "github.com/envoyproxy/go-control-plane/envoy/admin/v3"
 	v3statuspb "github.com/envoyproxy/go-control-plane/envoy/service/status/v3"
@@ -86,7 +86,6 @@ type authority struct {
 	name                      string                       // Name of the authority from xDS client configuration.
 	watcherCallbackSerializer *syncutil.CallbackSerializer // Serializer to run watcher callbacks, owned by the xDS client implementation.
 	getChannelForADS          xdsChannelForADS             // Function to get an xdsChannel for ADS, provided by the xDS client implementation.
-	resourceTypes             map[string]ResourceType      // Registry of resource types, keyed by type URL.
 	xdsClientSerializer       *syncutil.CallbackSerializer // Serializer to run call ins from the xDS client, owned by this authority.
 	xdsClientSerializerClose  func()                       // Function to close the above serializer.
 	logger                    *igrpclog.PrefixLogger       // Logger for this authority.
@@ -98,13 +97,13 @@ type authority struct {
 
 	// A two level map containing the state of all the resources being watched.
 	//
-	// The first level map key is the ResourceType TypeURL (Listener, Route etc).
-	// This allows us to have a single map for all resources instead of having per
+	// The first level map key is the ResourceType (Listener, Route etc). This
+	// allows us to have a single map for all resources instead of having per
 	// resource-type maps.
 	//
 	// The second level map key is the resource name, with the value being the
 	// actual state of the resource.
-	resources map[string]map[string]*resourceState
+	resources map[ResourceType]map[string]*resourceState
 
 	// An ordered list of xdsChannels corresponding to the list of server
 	// configurations specified for this authority in the config. The
@@ -124,7 +123,6 @@ type authorityBuildOptions struct {
 	name             string                       // Name of the authority
 	serializer       *syncutil.CallbackSerializer // Callback serializer for invoking watch callbacks
 	getChannelForADS xdsChannelForADS             // Function to acquire a reference to an xdsChannel
-	resourceTypes    map[string]ResourceType      // Registry of resource types, keyed by type URL
 	logPrefix        string                       // Prefix for logging
 	target           string                       // Target for the gRPC Channel that owns xDS Client/Authority
 	metricsReporter  clients.MetricsReporter      // Metrics reporter for the authority
@@ -147,11 +145,10 @@ func newAuthority(args authorityBuildOptions) *authority {
 		name:                      args.name,
 		watcherCallbackSerializer: args.serializer,
 		getChannelForADS:          args.getChannelForADS,
-		resourceTypes:             args.resourceTypes,
 		xdsClientSerializer:       syncutil.NewCallbackSerializer(ctx),
 		xdsClientSerializerClose:  cancel,
 		logger:                    prefixLoggerWithParent(args.logger, logPrefix),
-		resources:                 make(map[string]map[string]*resourceState),
+		resources:                 make(map[ResourceType]map[string]*resourceState),
 		target:                    args.target,
 		metricsReporter:           args.metricsReporter,
 	}
@@ -295,8 +292,7 @@ func (a *authority) fallbackToServer(xc *xdsChannelWithConfig) bool {
 	a.activeXDSChannel = xc
 
 	// Subscribe to all existing resources from the new management server.
-	for typeURL, resources := range a.resources {
-		typ := a.resourceTypes[typeURL]
+	for typ, resources := range a.resources {
 		for name, state := range resources {
 			if a.logger.V(2) {
 				a.logger.Infof("Resubscribing to resource of type %q and name %q", typ.TypeName, name)
@@ -365,7 +361,7 @@ func (a *authority) handleADSResourceUpdate(serverConfig *ServerConfig, rType Re
 		}
 	}()
 
-	resourceStates := a.resources[rType.TypeURL]
+	resourceStates := a.resources[rType]
 	for name, uErr := range updates {
 		state, ok := resourceStates[name]
 		if !ok {
@@ -526,7 +522,7 @@ func (a *authority) handleADSResourceDoesNotExist(rType ResourceType, resourceNa
 		a.logger.Infof("Watch for resource %q of type %s timed out", resourceName, rType.TypeName)
 	}
 
-	resourceStates := a.resources[rType.TypeURL]
+	resourceStates := a.resources[rType]
 	if resourceStates == nil {
 		if a.logger.V(2) {
 			a.logger.Infof("Resource %q of type %s currently not being watched", resourceName, rType.TypeName)
@@ -613,8 +609,7 @@ func (a *authority) handleRevertingToPrimaryOnUpdate(serverConfig *ServerConfig)
 	for i := serverIdx + 1; i < len(a.xdsChannelConfigs); i++ {
 		cfg := a.xdsChannelConfigs[i]
 
-		for typeURL, rState := range a.resources {
-			rType := a.resourceTypes[typeURL]
+		for rType, rState := range a.resources {
 			for resourceName, state := range rState {
 				for xcc := range state.xdsChannelConfigs {
 					if xcc != cfg {
@@ -672,10 +667,10 @@ func (a *authority) watchResource(rType ResourceType, resourceName string, watch
 
 		// Lookup the entry for the resource type in the top-level map. If there is
 		// no entry for this resource type, create one.
-		resources := a.resources[rType.TypeURL]
+		resources := a.resources[rType]
 		if resources == nil {
 			resources = make(map[string]*resourceState)
-			a.resources[rType.TypeURL] = resources
+			a.resources[rType] = resources
 		}
 
 		// Lookup the resource state for the particular resource name that the watch
@@ -756,7 +751,7 @@ func (a *authority) unwatchResource(rType ResourceType, resourceName string, wat
 			// Lookup the resource type from the resource cache. The entry is
 			// guaranteed to be present, since *we* were the ones who added it in
 			// there when the watch was registered.
-			resources := a.resources[rType.TypeURL]
+			resources := a.resources[rType]
 			state := resources[resourceName]
 
 			// Delete this particular watcher from the list of watchers, so that its
@@ -786,7 +781,7 @@ func (a *authority) unwatchResource(rType ResourceType, resourceName string, wat
 				if a.logger.V(2) {
 					a.logger.Infof("Removing last watch for resource type %q", rType.TypeName)
 				}
-				delete(a.resources, rType.TypeURL)
+				delete(a.resources, rType)
 			}
 			// If there are no more watchers for any resource type, release the
 			// reference to the xdsChannels.
@@ -876,7 +871,8 @@ func (a *authority) dumpResources() []*v3statuspb.ClientConfig_GenericXdsConfig 
 // Only executed in the context of a serializer callback.
 func (a *authority) resourceConfig() []*v3statuspb.ClientConfig_GenericXdsConfig {
 	var ret []*v3statuspb.ClientConfig_GenericXdsConfig
-	for typeURL, resourceStates := range a.resources {
+	for rType, resourceStates := range a.resources {
+		typeURL := rType.TypeURL
 		for name, state := range resourceStates {
 			var raw *anypb.Any
 			if state.cache != nil {
@@ -952,8 +948,7 @@ func (a *authority) resourceStats() map[string]map[string]int {
 	ret := make(chan map[string]map[string]int, 1)
 	op := func(context.Context) {
 		summary := make(map[string]map[string]int)
-		for typeURL, resourceMap := range a.resources {
-			rType := a.resourceTypes[typeURL]
+		for rType, resourceMap := range a.resources {
 			typeName := rType.TypeName
 			if _, ok := summary[typeName]; !ok {
 				summary[typeName] = make(map[string]int)

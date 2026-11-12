@@ -18,6 +18,8 @@
 
 package xdsclient
 
+import "google.golang.org/protobuf/types/known/anypb"
+
 // ResourceType wraps all resource-type specific functionality. Each supported
 // resource type needs to provide an implementation of the Decoder.
 type ResourceType struct {
@@ -64,11 +66,25 @@ type Decoder interface {
 
 // AnyProto contains the type URL and serialized proto data of an xDS resource.
 type AnyProto struct {
-	// TypeURL is the type URL of the resource.
-	TypeURL string
+	typeURL string
+	value   []byte
+}
 
-	// Value is the serialized proto data of the resource.
-	Value []byte
+// NewAnyProto creates an AnyProto from an anypb.Any. Must be called with a
+// non-nil argument.
+func NewAnyProto(a *anypb.Any) *AnyProto {
+	return &AnyProto{
+		typeURL: a.TypeUrl,
+		value:   a.Value,
+	}
+}
+
+// ToAny converts an AnyProto to an anypb.Any. Never returns nil.
+func (a *AnyProto) ToAny() *anypb.Any {
+	return &anypb.Any{
+		TypeUrl: a.typeURL,
+		Value:   a.value,
+	}
 }
 
 // DecodeOptions wraps the options required by ResourceType implementations for

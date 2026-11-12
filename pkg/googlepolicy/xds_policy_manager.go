@@ -266,7 +266,7 @@ type xdsPolicyManager struct {
 
 	lastAppliedVersion  string
 	lastAppliedRawBytes []byte
-	activeClient        *xdsclient.Client
+	activeClient        *xdsclient.XDSClient
 }
 
 // NewXDSPolicyManager creates a manager for the given `xds://` URI.
@@ -715,7 +715,7 @@ func (m *xdsPolicyManager) PolicyEvaluationResult(string, error) {}
 // this collector instance.
 func (m *xdsPolicyManager) buildNode() *corev3.Node {
 	cn := m.buildClientNode()
-	metaStruct, _ := structpb.NewStruct(cn.Metadata)
+	metaStruct, _ := cn.Metadata.(*structpb.Struct)
 	return &corev3.Node{
 		Id:      cn.ID,
 		Cluster: cn.Cluster,
@@ -739,6 +739,7 @@ func (m *xdsPolicyManager) buildClientNode() clients.Node {
 	if m.zone != "" {
 		meta["cloud.availability_zone"] = m.zone
 	}
+	metaStruct, _ := structpb.NewStruct(meta)
 
 	return clients.Node{
 		ID:      m.fleetName,
@@ -747,7 +748,7 @@ func (m *xdsPolicyManager) buildClientNode() clients.Node {
 			Region: m.region,
 			Zone:   m.zone,
 		},
-		Metadata: meta,
+		Metadata: metaStruct,
 	}
 }
 
@@ -771,7 +772,7 @@ func (m *xdsPolicyManager) DumpResources() (*v3statuspb.ClientStatusResponse, er
 	return resp, nil
 }
 
-func (m *xdsPolicyManager) setClient(c *xdsclient.Client) {
+func (m *xdsPolicyManager) setClient(c *xdsclient.XDSClient) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.activeClient = c
@@ -997,10 +998,7 @@ type telemetryCollectorDecoder struct {
 var _ xdsclient.Decoder = (*telemetryCollectorDecoder)(nil)
 
 func (d *telemetryCollectorDecoder) Decode(resource *xdsclient.AnyProto, options xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
-	rawAny := &anypb.Any{
-		TypeUrl: resource.TypeURL,
-		Value:   resource.Value,
-	}
+	rawAny := resource.ToAny()
 	if rawAny.GetTypeUrl() == "type.googleapis.com/envoy.service.discovery.v3.Resource" {
 		var r discoveryv3.Resource
 		if err := proto.Unmarshal(rawAny.GetValue(), &r); err == nil && r.GetResource() != nil {
@@ -1152,10 +1150,7 @@ func (m *xdsPolicyManager) handleResponse(_ any, _ any, resp *discoveryv3.Discov
 		return
 	}
 	for _, r := range resp.GetResources() {
-		res, err := decoder.Decode(&xdsclient.AnyProto{
-			TypeURL: r.GetTypeUrl(),
-			Value:   r.GetValue(),
-		}, xdsclient.DecodeOptions{
+		res, err := decoder.Decode(xdsclient.NewAnyProto(r), xdsclient.DecodeOptions{
 			Version: resp.GetVersionInfo(),
 		})
 		if err != nil {

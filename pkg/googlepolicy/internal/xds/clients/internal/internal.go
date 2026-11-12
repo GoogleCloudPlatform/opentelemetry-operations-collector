@@ -20,8 +20,9 @@
 package internal
 
 import (
-	structpb "google.golang.org/protobuf/types/known/structpb"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 )
@@ -45,14 +46,13 @@ func NodeProto(n clients.Node) *v3corepb.Node {
 			}
 		}(),
 		Metadata: func() *structpb.Struct {
-			if len(n.Metadata) == 0 {
+			if n.Metadata == nil {
 				return nil
 			}
-			md, err := structpb.NewStruct(n.Metadata)
-			if err != nil {
-				return nil
+			if md, ok := n.Metadata.(*structpb.Struct); ok {
+				return proto.Clone(md).(*structpb.Struct)
 			}
-			return md
+			return nil
 		}(),
 		UserAgentName:        n.UserAgentName,
 		UserAgentVersionType: &v3corepb.Node_UserAgentVersion{UserAgentVersion: n.UserAgentVersion},

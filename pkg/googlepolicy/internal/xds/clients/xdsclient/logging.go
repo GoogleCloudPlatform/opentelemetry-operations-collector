@@ -27,7 +27,7 @@ import (
 
 var logger = grpclog.Component("xds")
 
-func prefixLogger(p *Client) *internalgrpclog.PrefixLogger {
+func prefixLogger(p *XDSClient) *internalgrpclog.PrefixLogger {
 	if p != nil && p.config != nil && p.config.Logger != nil {
 		return internalgrpclog.NewPrefixLogger(p.config.Logger, clientPrefix(p))
 	}
@@ -41,6 +41,6 @@ func prefixLoggerWithParent(parent grpclog.DepthLoggerV2, prefix string) *intern
 	return internalgrpclog.NewPrefixLogger(logger, prefix)
 }
 
-func clientPrefix(p *Client) string {
+func clientPrefix(p *XDSClient) string {
 	return fmt.Sprintf("[xds-client %p] ", p)
 }

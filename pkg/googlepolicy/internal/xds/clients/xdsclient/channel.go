@@ -26,8 +26,8 @@ import (
 
 	igrpclog "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/internal/grpclog"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients"
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/internal/backoff"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/internal"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/internal/backoff"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/internal/syncutil"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/xdsclient/internal/xdsresource"
 )
@@ -35,7 +35,6 @@ import (
 const (
 	clientFeatureNoOverprovisioning = "envoy.lb.does_not_support_overprovisioning"
 	clientFeatureResourceWrapper    = "xds.config.resource-in-sotw"
-	recoverPanicInResourceParsing   = true
 )
 
 // xdsChannelEventHandler wraps callbacks used to notify the xDS client about
@@ -226,6 +225,19 @@ func (xc *xdsChannel) onResponse(resp response, onDone func()) ([]string, error)
 }
 
 // decodeResponse decodes the resources in the given ADS response.
+//
+// The opts parameter provides configuration options for decoding the resources.
+// The rType parameter specifies the resource type parser to use for decoding
+// the resources.
+//
+// The returned map contains a key for each resource in the response, with the
+// value being either the decoded resource data or an error if decoding failed.
+// The returned metadata includes the version of the response, the timestamp of
+// the update, and the status of the update (ACKed or NACKed).
+//
+// If there are any errors decoding the resources, the metadata will indicate
+// that the update was NACKed, and the returned error will contain information
+// about all errors encountered by this function.
 func (xc *xdsChannel) decodeResponse(rType *ResourceType, resp response) (map[string]dataAndErrTuple, xdsresource.UpdateMetadata, error) {
 	timestamp := time.Now()
 	md := xdsresource.UpdateMetadata{
@@ -241,20 +253,16 @@ func (xc *xdsChannel) decodeResponse(rType *ResourceType, resp response) (map[st
 	topLevelErrors := make([]error, 0)          // Tracks deserialization errors, where we don't have a resource name.
 	perResourceErrors := make(map[string]error) // Tracks resource validation errors, where we have a resource name.
 	ret := make(map[string]dataAndErrTuple)     // Return result, a map from resource name to either resource data or error.
-
 	for _, r := range resp.resources {
 		result, err := func() (res *DecodeResult, err error) {
 			defer func() {
-				if recoverPanicInResourceParsing {
+				if true {
 					if p := recover(); p != nil {
 						err = fmt.Errorf("recovered from panic during resource parsing, resource: %v, panic: %v", r, p)
 					}
 				}
 			}()
-			return rType.Decoder.Decode(&AnyProto{
-				TypeURL: r.GetTypeUrl(),
-				Value:   r.GetValue(),
-			}, *opts)
+			return rType.Decoder.Decode(NewAnyProto(r), *opts)
 		}()
 
 		// Name field of the result is left unpopulated only when resource
@@ -271,7 +279,7 @@ func (xc *xdsChannel) decodeResponse(rType *ResourceType, resp response) (map[st
 			ret[name] = dataAndErrTuple{Resource: result.Resource}
 			continue
 		}
-		if result == nil || name == "" {
+		if name == "" {
 			topLevelErrors = append(topLevelErrors, err)
 			continue
 		}

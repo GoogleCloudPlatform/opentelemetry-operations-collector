@@ -26,11 +26,11 @@ import (
 	"testing"
 	"time"
 
-	anypb "google.golang.org/protobuf/types/known/anypb"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/internal/grpctest"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/internal/pretty"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/xdsclient/internal/xdsresource"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
@@ -162,10 +162,7 @@ type listenerDecoder struct{}
 // Decode deserializes and validates an xDS resource serialized inside the
 // provided `Any` proto, as received from the xDS management server.
 func (listenerDecoder) Decode(resource *AnyProto, _ DecodeOptions) (*DecodeResult, error) {
-	name, listener, err := unmarshalListenerResource(&anypb.Any{
-		TypeUrl: resource.TypeURL,
-		Value:   resource.Value,
-	})
+	name, listener, err := unmarshalListenerResource(resource.ToAny())
 	switch {
 	case name == "":
 		// Name is unset only when protobuf deserialization fails.

@@ -16,6 +16,7 @@ package googlepolicy
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"testing"
@@ -33,6 +34,7 @@ import (
 
 	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
 	xdsv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/xds/v1alpha1"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/xdsclient"
 )
 
 type fakeGCEMetadata struct {
@@ -899,7 +901,7 @@ func TestHandleResponse_MissingPolicySetRevisionRejects(t *testing.T) {
 
 	m := &xdsPolicyManager{logger: zap.NewNop()}
 	prevActive := ActivePolicySet()
-	m.handleResponse(nil, nil, resp)
+	m.handleResponse(resp)
 	assert.Equal(t, prevActive, ActivePolicySet())
 }
 
@@ -919,7 +921,7 @@ func TestHandleResponse_EmptyTelemetryCollectorAppliesEmptyPolicySet(t *testing.
 	})
 
 	m := &xdsPolicyManager{logger: zap.NewNop(), ready: make(chan struct{})}
-	m.handleResponse(nil, nil, resp)
+	m.handleResponse(resp)
 
 	active := ActivePolicySet()
 	require.NotNil(t, active)
@@ -943,6 +945,29 @@ func TestHandleResponse_MalformedPolicySetRevisionRejects(t *testing.T) {
 
 	m := &xdsPolicyManager{logger: zap.NewNop()}
 	prevActive := ActivePolicySet()
-	m.handleResponse(nil, nil, resp)
+	m.handleResponse(resp)
 	assert.Equal(t, prevActive, ActivePolicySet())
+}
+
+// handleResponse exercises the decode and watch pipeline directly with a
+// synthetic DiscoveryResponse.
+func (m *xdsPolicyManager) handleResponse(resp *discoveryv3.DiscoveryResponse) {
+	decoder := &telemetryCollectorDecoder{m: m}
+	watcher := &policyResourceWatcher{m: m}
+	if len(resp.GetResources()) == 0 {
+		watcher.ResourceError(errors.New("resource has been removed"), func() {})
+		return
+	}
+	for _, r := range resp.GetResources() {
+		res, err := decoder.Decode(xdsclient.NewAnyProto(r), xdsclient.DecodeOptions{
+			Version: resp.GetVersionInfo(),
+		})
+		if err != nil {
+			watcher.ResourceError(err, func() {})
+			return
+		}
+		if res != nil && res.Resource != nil {
+			watcher.ResourceChanged(res.Resource, func() {})
+		}
+	}
 }

@@ -1006,11 +1006,11 @@ func TestXDSPolicyManager_StartGivesUpAfterTimeout(t *testing.T) {
 	assert.Nil(t, ActivePolicySet(), "nothing was served, so nothing should be active")
 }
 
-// TestXDSPolicyManager_StopsOnTerminalAuthError asserts that when the control
+// TestXDSPolicyManager_UnblocksStartOnAuthErrorAndRetries asserts that when the control
 // plane rejects the initial stream with PermissionDenied, Start() unblocks
 // immediately via ResourceError rather than waiting out initialSyncTimeout,
 // while xdsclient continues retrying in the background with exponential backoff.
-func TestXDSPolicyManager_StopsOnTerminalAuthError(t *testing.T) {
+func TestXDSPolicyManager_UnblocksStartOnAuthErrorAndRetries(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
 		readsFirst bool

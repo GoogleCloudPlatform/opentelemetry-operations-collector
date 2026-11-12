@@ -104,6 +104,7 @@ import (
 	zipkinreceiver "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/zipkinreceiver"
 	nopreceiver "go.opentelemetry.io/collector/receiver/nopreceiver"
 	otlpreceiver "go.opentelemetry.io/collector/receiver/otlpreceiver"
+	collector "go.opentelemetry.io/ebpf-profiler/collector"
 )
 
 type aliasProvider interface{ DeprecatedAlias() component.Type }
@@ -199,6 +200,7 @@ func components() (otelcol.Factories, error) {
 		zipkinreceiver.NewFactory(),
 		nopreceiver.NewFactory(),
 		otlpreceiver.NewFactory(),
+		collector.NewFactory(),
 	)
 	if err != nil {
 		return otelcol.Factories{}, err
@@ -234,6 +236,7 @@ func components() (otelcol.Factories, error) {
 		zipkinreceiver.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/zipkinreceiver v0.165.1",
 		nopreceiver.NewFactory().Type(): "go.opentelemetry.io/collector/receiver/nopreceiver v0.165.0",
 		otlpreceiver.NewFactory().Type(): "go.opentelemetry.io/collector/receiver/otlpreceiver v0.165.0",
+		collector.NewFactory().Type(): "go.opentelemetry.io/ebpf-profiler v0.0.202645",
 	})
 
 	factories.Exporters, err = otelcol.MakeFactoryMap[exporter.Factory](

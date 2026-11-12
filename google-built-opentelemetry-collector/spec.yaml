@@ -29,6 +29,7 @@ components:
         - nop
         - otelarrow
         - pprof
+        - profiling
         - prometheus
         - prometheusremotewrite
         - receivercreator

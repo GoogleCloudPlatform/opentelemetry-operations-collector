@@ -417,14 +417,15 @@ func TestXDSPolicyManager_NACKsUndecodableResource(t *testing.T) {
 	assert.Nil(t, ActivePolicySet())
 }
 
-// A revision is only rejected when nothing in it is usable. If at least one
-// policy loads, it is applied and the revision is ACKed, so a single bad policy
-// from the control plane cannot disable all enforcement.
-func TestXDSPolicyManager_ACKsRevisionWithSomeUsablePolicies(t *testing.T) {
+// A TelemetryCollector manifest is validated atomically: if any policy fails to
+// decode or compile, the entire revision is NACKed and the previous valid
+// PolicySet remains active.
+func TestXDSPolicyManager_NACKsRevisionWithPartiallyInvalidPolicies(t *testing.T) {
 	registerDummyDriverForTest(t)
 	resetActivePolicySet(t)
 
 	ackReceived := make(chan *discoveryv3.DiscoveryRequest, 1)
+	nackReceived := make(chan *discoveryv3.DiscoveryRequest, 1)
 
 	srv := &fakeADSServer{streamOpened: make(chan struct{}, 8)}
 	srv.handlers = []func(discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error{
@@ -432,7 +433,22 @@ func TestXDSPolicyManager_ACKsRevisionWithSomeUsablePolicies(t *testing.T) {
 			if _, err := srv.recv(stream); err != nil {
 				return err
 			}
-			// One policy the collector understands, one it does not.
+			// First deliver a valid revision so there is a cached PolicySet.
+			if err := stream.Send(&discoveryv3.DiscoveryResponse{
+				VersionInfo: "rev-1",
+				Nonce:       "nonce-1",
+				TypeUrl:     xdsPolicyTypeURL,
+				Resources:   []*anypb.Any{policyResource(t, "baseline-filter", "rev-1")},
+			}); err != nil {
+				return err
+			}
+			ack, err := srv.recv(stream)
+			if err != nil {
+				return err
+			}
+			ackReceived <- ack
+
+			// Next send a revision with one valid policy and one undecodable policy.
 			if err := stream.Send(&discoveryv3.DiscoveryResponse{
 				VersionInfo: "rev-partial",
 				Nonce:       "nonce-partial",
@@ -449,11 +465,11 @@ func TestXDSPolicyManager_ACKsRevisionWithSomeUsablePolicies(t *testing.T) {
 			}); err != nil {
 				return err
 			}
-			ack, err := srv.recv(stream)
+			nack, err := srv.recv(stream)
 			if err != nil {
 				return err
 			}
-			ackReceived <- ack
+			nackReceived <- nack
 			<-stream.Context().Done()
 			return stream.Context().Err()
 		},
@@ -463,25 +479,31 @@ func TestXDSPolicyManager_ACKsRevisionWithSomeUsablePolicies(t *testing.T) {
 	require.NoError(t, m.Start())
 	t.Cleanup(func() { require.NoError(t, m.Stop()) })
 
-	var ack *discoveryv3.DiscoveryRequest
 	select {
-	case ack = <-ackReceived:
+	case ack := <-ackReceived:
+		require.Nil(t, ack.GetErrorDetail())
 	case <-time.After(10 * time.Second):
-		t.Fatal("timed out waiting for ACK")
+		t.Fatal("timed out waiting for initial ACK")
 	}
 
-	require.Nil(t, ack.GetErrorDetail(), "a revision with at least one usable policy must be ACKed")
-	assert.Equal(t, "rev-partial", ack.GetVersionInfo())
-	assert.Equal(t, "nonce-partial", ack.GetResponseNonce())
+	var nack *discoveryv3.DiscoveryRequest
+	select {
+	case nack = <-nackReceived:
+	case <-time.After(10 * time.Second):
+		t.Fatal("timed out waiting for NACK")
+	}
 
-	// The policy that loaded is applied; the undecodable resource is dropped.
-	require.Eventually(t, func() bool {
-		return ActivePolicySet() != nil
-	}, 5*time.Second, time.Millisecond)
+	require.NotNil(t, nack.GetErrorDetail(), "a revision with any invalid policy must be NACKed atomically")
+	assert.Contains(t, nack.GetErrorDetail().GetMessage(), "does.not.Exist")
+	assert.Equal(t, "rev-1", nack.GetVersionInfo(), "NACK must report the previously accepted version")
+	assert.Equal(t, "nonce-partial", nack.GetResponseNonce())
+
+	// The previously active PolicySet must remain intact.
 	active := ActivePolicySet()
-	assert.Equal(t, "rev-partial", active.RevisionID)
-	assert.Contains(t, active.Policies, "log-filter")
-	assert.Len(t, active.Policies, 1, "only the usable policy is applied")
+	require.NotNil(t, active)
+	assert.Equal(t, "rev-1", active.RevisionID)
+	assert.Contains(t, active.Policies, "baseline-filter")
+	assert.NotContains(t, active.Policies, "log-filter")
 }
 
 func TestXDSPolicyManager_Lifecycle(t *testing.T) {

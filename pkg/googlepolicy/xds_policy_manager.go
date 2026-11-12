@@ -132,7 +132,7 @@ const (
 	// Reconnect backoff defaults. The stream is re-established after any error,
 	// with the delay growing from defaultBackoffInitial up to defaultBackoffMax.
 	defaultBackoffInitial = 1 * time.Second
-	defaultBackoffMax     = 30 * time.Second
+	defaultBackoffMax     = 120 * time.Second
 	backoffMultiplier     = 1.6
 	// backoffJitterFraction is the fraction of the delay randomized in either
 	// direction, to avoid a fleet of collectors reconnecting in lockstep.
@@ -862,7 +862,6 @@ func (m *xdsPolicyManager) run(ctx context.Context) {
 		Logger:    newZapDepthLogger(m.logger),
 		Backoff:   m.backoffDelay,
 		TimeAfter: m.timeAfter,
-		Target:    m.serverAddr,
 	}
 
 	client, err := xdsclient.New(cfg)
@@ -942,8 +941,11 @@ func isAuthRejectionError(err error) bool {
 		strings.Contains(msg, codes.PermissionDenied.String())
 }
 
-func (*policyResourceWatcher) AmbientError(_ error, done func()) {
-	done()
+func (w *policyResourceWatcher) AmbientError(err error, done func()) {
+	defer done()
+	if err != nil {
+		w.m.logger.Warn("xDS ambient error; retaining cached policy set", zap.Error(err))
+	}
 }
 
 type policyResourceData struct {
@@ -975,11 +977,17 @@ type telemetryCollectorDecoder struct {
 var _ xdsclient.Decoder = (*telemetryCollectorDecoder)(nil)
 
 func (d *telemetryCollectorDecoder) Decode(resource *xdsclient.AnyProto, options xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
+	resourceName := d.m.resourceName
 	rawAny := resource.ToAny()
 	if rawAny.GetTypeUrl() == "type.googleapis.com/envoy.service.discovery.v3.Resource" {
 		var r discoveryv3.Resource
-		if err := proto.Unmarshal(rawAny.GetValue(), &r); err == nil && r.GetResource() != nil {
-			rawAny = r.GetResource()
+		if err := proto.Unmarshal(rawAny.GetValue(), &r); err == nil {
+			if r.GetName() != "" {
+				resourceName = r.GetName()
+			}
+			if r.GetResource() != nil {
+				rawAny = r.GetResource()
+			}
 		}
 	}
 
@@ -988,10 +996,10 @@ func (d *telemetryCollectorDecoder) Decode(resource *xdsclient.AnyProto, options
 		zap.String("type_url", rawAny.GetTypeUrl()),
 	)
 
-	if version := options.Version; version != "" && version == d.m.LastAppliedVersion() {
+	if version := options.Version; version != "" && resourceName == d.m.resourceName && version == d.m.LastAppliedVersion() {
 		d.m.logger.Debug("Re-ACKing an already applied xDS revision", zap.String("version", version))
 		return &xdsclient.DecodeResult{
-			Name: d.m.resourceName,
+			Name: resourceName,
 			Resource: &policyResourceData{
 				policySet: ActivePolicySet(),
 				version:   version,
@@ -1009,12 +1017,6 @@ func (d *telemetryCollectorDecoder) Decode(resource *xdsclient.AnyProto, options
 	}
 
 	manifest, extractErr := extractManifest(resp)
-	if extractErr != nil {
-		d.m.logger.Warn("Some xDS resources could not be decoded and will be skipped",
-			zap.String("version", options.Version),
-			zap.Error(extractErr),
-		)
-	}
 
 	if (manifest.decodedCollectors > 0 || len(manifest.policies) > 0) && d.m.logger.Core().Enabled(zapcore.DebugLevel) {
 		d.m.logger.Debug("Decoded xDS TelemetryCollector",
@@ -1026,12 +1028,12 @@ func (d *telemetryCollectorDecoder) Decode(resource *xdsclient.AnyProto, options
 		)
 	}
 
-	if extractErr != nil && manifest.policySetRevision == "" && len(manifest.policies) == 0 {
+	if extractErr != nil {
 		d.m.logger.Warn("xDS revision could not be decoded, sending NACK",
 			zap.String("version", options.Version),
 			zap.Error(extractErr),
 		)
-		return &xdsclient.DecodeResult{Name: d.m.resourceName}, extractErr
+		return &xdsclient.DecodeResult{Name: resourceName}, extractErr
 	}
 
 	// A TelemetryCollector with no policy_set_revision and no policies is the
@@ -1045,7 +1047,7 @@ func (d *telemetryCollectorDecoder) Decode(resource *xdsclient.AnyProto, options
 			ReceivedAt: time.Now(),
 		}
 		return &xdsclient.DecodeResult{
-			Name: d.m.resourceName,
+			Name: resourceName,
 			Resource: &policyResourceData{
 				policySet: emptySet,
 				version:   options.Version,
@@ -1057,14 +1059,14 @@ func (d *telemetryCollectorDecoder) Decode(resource *xdsclient.AnyProto, options
 	if manifest.policySetRevision == "" {
 		err := errors.New("xDS TelemetryCollector resource is missing required field policy_set_revision")
 		d.m.logger.Warn("Rejecting xDS revision", zap.String("version", options.Version), zap.Error(err))
-		return &xdsclient.DecodeResult{Name: d.m.resourceName}, err
+		return &xdsclient.DecodeResult{Name: resourceName}, err
 	}
 
 	policySetID, revisionID, ok := ParsePolicySetRevision(manifest.policySetRevision)
 	if !ok {
 		err := fmt.Errorf("xDS policy_set_revision %q is not in canonical format", manifest.policySetRevision)
 		d.m.logger.Warn("Rejecting xDS revision", zap.String("version", options.Version), zap.Error(err))
-		return &xdsclient.DecodeResult{Name: d.m.resourceName}, err
+		return &xdsclient.DecodeResult{Name: resourceName}, err
 	}
 
 	policySet, makeErr := MakePolicySetFromProtos(policySetID, revisionID, manifest.policies)
@@ -1072,24 +1074,17 @@ func (d *telemetryCollectorDecoder) Decode(resource *xdsclient.AnyProto, options
 		policySet.RevisionCreateTime = manifest.revisionCreateTime
 	}
 	if makeErr != nil {
-		d.m.logger.Warn("Some policies in the xDS revision could not be loaded and will be skipped",
+		d.m.logger.Warn("xDS revision contains invalid policies, sending NACK",
 			zap.String("version", options.Version),
 			zap.Error(makeErr),
 		)
-	}
-
-	if err := errors.Join(extractErr, makeErr); err != nil && len(policySet.Policies) == 0 {
-		d.m.logger.Warn("xDS revision contains no usable policies, sending NACK",
-			zap.String("version", options.Version),
-			zap.Error(err),
-		)
-		return &xdsclient.DecodeResult{Name: d.m.resourceName}, err
+		return &xdsclient.DecodeResult{Name: resourceName}, makeErr
 	}
 
 	rawBytes := marshalCollectorBytes(manifest.policySetRevision, manifest.policies)
 
 	return &xdsclient.DecodeResult{
-		Name: d.m.resourceName,
+		Name: resourceName,
 		Resource: &policyResourceData{
 			policySet:         policySet,
 			version:           options.Version,

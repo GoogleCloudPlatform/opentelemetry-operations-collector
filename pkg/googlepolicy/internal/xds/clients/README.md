@@ -54,7 +54,6 @@ fixes are applied for `pkg/googlepolicy`:
 1. **`xdsclient.Config` hooks (`xdsconfig.go`, `xdsclient.go`, `logging.go`, `channel.go`, `authority.go`, `ads_stream.go`, `internal/backoff/backoff.go`):**
    - `Logger` (`grpclog.DepthLoggerV2`): Routes internal `xdsclient` logs to the Collector's `*zap.Logger` instead of the global `grpclog` singleton.
    - `Backoff` (`func(int) time.Duration`) and `TimeAfter` (`func(time.Duration) <-chan time.Time`): Allow `xdsPolicyManager` to configure reconnect backoff and inject a deterministic clock in unit tests ([grpc/grpc-go#9457](https://github.com/grpc/grpc-go/issues/9457)).
-   - `Target` (`string`): Populates the target label reported in `grpc.xds_client.*` metrics instead of the hardcoded `"xds-client"` string.
 2. **`xdsclient.DecodeOptions.Version` (`resource_type.go`, `channel.go`):**
    - Exposes `DiscoveryResponse.VersionInfo` to `Decoder.Decode` so `telemetryCollectorDecoder` can associate decoded policy sets with their xDS response version.
 3. **ADS stream & SotW state fixes (`ads_stream.go`, `authority.go`):**

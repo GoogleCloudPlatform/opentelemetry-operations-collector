@@ -63,7 +63,7 @@ type FileLogSourcePolicy struct {
 	// Supported glob syntax:
 	//   - `*` matches zero or more non-separator characters.
 	//   - `**` matches zero or more directories or path segments recursively across
-	//     path separators.
+	//     path separators when used as a complete path segment.
 	//   - `?` matches any single non-separator character.
 	//
 	// At least one pattern is required, and each pattern must be a non-empty,

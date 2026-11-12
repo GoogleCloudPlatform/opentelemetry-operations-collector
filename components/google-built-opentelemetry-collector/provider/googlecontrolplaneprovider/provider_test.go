@@ -463,6 +463,37 @@ func TestRetrieve_WorkloadRegionFallbackNonXDS(t *testing.T) {
 	}
 }
 
+// TestRetrieve_SelfMetricsRegionFallback asserts that the built-in
+// self-observability pipelines get the same cloud.region fallback as workload
+// telemetry, from the region resolved for the control plane subscription.
+func TestRetrieve_SelfMetricsRegionFallback(t *testing.T) {
+	withFakeGCEMetadata(t)
+	t.Setenv("FLEET_ID", "")
+	t.Setenv("GOOGLE_CLOUD_PROJECT", "")
+	t.Setenv("CLOUD_REGION", "")
+	t.Setenv("GOOGLE_CLOUD_REGION", "")
+	p := createProvider()
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:xds://127.0.0.1:1?gcp.fleet_id=projects/fleet-project/locations/europe-west3/fleets/my-fleet&insecure=true", nil)
+	require.NoError(t, err)
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+
+	for _, key := range []string{"log_statements", "metric_statements"} {
+		groups, ok := conf.Get("processors::transform/default_self_metrics::" + key).([]any)
+		require.True(t, ok, key)
+		var stmts []any
+		for _, g := range groups {
+			if m, ok := g.(map[string]any); ok && m["context"] == "resource" {
+				stmts, _ = m["statements"].([]any)
+			}
+		}
+		assert.Contains(t, stmts, regionStatement("europe-west3"), key)
+	}
+
+	assert.NoError(t, p.Shutdown(context.Background()))
+}
+
 func TestWorkloadResourceStatements(t *testing.T) {
 	assert.Equal(t, []string{workloadProjectIDStatementFromAccount}, workloadResourceStatements("", ""))
 	assert.Equal(t, []string{

@@ -326,3 +326,49 @@ func TestSelfMetricsPolicy_Validate_LoadableFromRegistry(t *testing.T) {
 	})
 	require.ErrorIs(t, err, googlepolicy.ErrPolicyFailedValidation)
 }
+
+// resourceStatements returns the resource-context statements of the policy's
+// transform processor for the given signal key ("log_statements" or
+// "metric_statements").
+func resourceStatements(t *testing.T, conf interface{ Get(string) any }, policyName, key string) []any {
+	t.Helper()
+	groups, ok := conf.Get("processors::transform/" + policyName + "::" + key).([]any)
+	require.True(t, ok, key)
+	for _, g := range groups {
+		m, ok := g.(map[string]any)
+		require.True(t, ok)
+		if m["context"] == "resource" {
+			stmts, ok := m["statements"].([]any)
+			require.True(t, ok)
+			return stmts
+		}
+	}
+	t.Fatalf("no resource statements in %s", key)
+	return nil
+}
+
+func TestSelfMetricsPolicy_Evaluate_RegionFallback(t *testing.T) {
+	policy := &SelfMetricsPolicy{Name: "self", Port: 9999}
+	fromAccount := `set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil`
+
+	// With a resolved region, self-metrics and self-logs get the cloud.region
+	// fallback after resource detection.
+	ctx := context.WithValue(policy.ContextSetup(t.Context(), "collector-id", "1234"), contextKeyRegion, "us-east1")
+	conf, err := policy.Evaluate(ctx)
+	require.NoError(t, err)
+	want := []any{fromAccount, googlepolicy.CloudRegionFallbackStatement("us-east1")}
+	assert.Equal(t, want, resourceStatements(t, conf, "self", "metric_statements"))
+	assert.Equal(t, want, resourceStatements(t, conf, "self", "log_statements"))
+
+	// The fallback is applied in the transform, never as a telemetry resource
+	// attribute, so the gcp detector can still set the host's own region.
+	for _, a := range conf.Get("service::telemetry::resource::attributes").([]any) {
+		assert.NotEqual(t, "cloud.region", a.(map[string]any)["name"])
+	}
+
+	// Without a resolved region, nothing changes.
+	conf, err = policy.Evaluate(policy.ContextSetup(t.Context(), "collector-id", "1234"))
+	require.NoError(t, err)
+	assert.Equal(t, []any{fromAccount}, resourceStatements(t, conf, "self", "metric_statements"))
+	assert.Equal(t, []any{fromAccount}, resourceStatements(t, conf, "self", "log_statements"))
+}

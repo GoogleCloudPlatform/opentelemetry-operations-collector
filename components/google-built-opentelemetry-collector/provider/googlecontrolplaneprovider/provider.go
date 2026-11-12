@@ -870,11 +870,8 @@ func workloadResourceStatements(projectID, region string) []string {
 			strconv.Quote(projectID),
 		))
 	}
-	if region != "" {
-		statements = append(statements, fmt.Sprintf(
-			`set(attributes["cloud.region"], %s) where attributes["cloud.region"] == nil and attributes["cloud.availability_zone"] == nil and attributes["location"] == nil`,
-			strconv.Quote(region),
-		))
+	if stmt := googlepolicy.CloudRegionFallbackStatement(region); stmt != "" {
+		statements = append(statements, stmt)
 	}
 	return statements
 }

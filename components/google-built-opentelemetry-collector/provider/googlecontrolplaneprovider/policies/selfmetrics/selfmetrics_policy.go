@@ -25,6 +25,7 @@ import (
 	"go.opentelemetry.io/collector/config/configoptional"
 	"go.opentelemetry.io/collector/config/configtelemetry"
 	"go.opentelemetry.io/collector/confmap"
+	"go.opentelemetry.io/collector/featuregate"
 	"go.opentelemetry.io/collector/otelcol"
 	"go.opentelemetry.io/collector/pipeline"
 	"go.opentelemetry.io/collector/receiver/otlpreceiver"
@@ -100,7 +101,10 @@ func (p *SelfMetricsPolicy) Validate() error {
 	}
 	// Evaluate builds a receiver endpoint and the matching telemetry exporter
 	// endpoint from this port. Port 0 would bind an arbitrary free port that
-	// the exporter's "localhost:0" endpoint could never reach.
+	// the exporter's "localhost:0" endpoint could never reach. The port is
+	// unused (and nothing is bound) when the telemetry.inProcessReader
+	// feature gate is enabled, but it is still validated so a policy stays
+	// valid whichever way the collector is started.
 	if p.Port < 1 || p.Port > 65535 {
 		return fmt.Errorf("port must be between 1 and 65535, got %d", p.Port)
 	}
@@ -136,6 +140,12 @@ func (p *SelfMetricsPolicy) Evaluate(ctx context.Context) (*confmap.Conf, error)
 
 	conf := &otelcol.Config{}
 
+	// With the telemetry.inProcessReader feature gate enabled, internal
+	// metrics and logs are handed to the self-observability pipelines in
+	// memory by the selftelemetry receiver instead of being pushed over OTLP
+	// to this policy's loopback receiver, so no local port is opened.
+	inProcess := inProcessReaderEnabled()
+
 	endpoint := fmt.Sprintf("http://localhost:%d", p.Port)
 	protocol := "grpc"
 	insecure := true
@@ -158,31 +168,17 @@ func (p *SelfMetricsPolicy) Evaluate(ctx context.Context) (*confmap.Conf, error)
 	}
 
 	telemetryCfg.Logs.Level = zapcore.InfoLevel
-	telemetryCfg.Logs.Processors = []config.LogRecordProcessor{
-		{
-			Batch: &config.BatchLogRecordProcessor{
-				Exporter: config.LogRecordExporter{
-					OTLP: &config.OTLP{
-						Endpoint: &endpoint,
-						Protocol: &protocol,
-						Insecure: &insecure,
-					},
-				},
-			},
-		},
-	}
-
-	telemetryCfg.Metrics.Level = configtelemetry.LevelNormal
-	// Replaces the factory's default Prometheus pull reader on :8888, which
-	// this collector does not expose.
-	telemetryCfg.Metrics.MeterProvider = config.MeterProvider{
-		Readers: []config.MetricReader{
+	if inProcess {
+		// The inprocesstelemetry factory tees the logger into an in-memory
+		// buffer that the selftelemetry receiver drains, so no log processor
+		// (and no OTLP export to a local port) is configured here.
+		telemetryCfg.Logs.Processors = []config.LogRecordProcessor{}
+	} else {
+		telemetryCfg.Logs.Processors = []config.LogRecordProcessor{
 			{
-				Periodic: &config.PeriodicMetricReader{
-					Interval: &interval,
-					Timeout:  &timeout,
-					Exporter: config.PushMetricExporter{
-						OTLP: &config.OTLPMetric{
+				Batch: &config.BatchLogRecordProcessor{
+					Exporter: config.LogRecordExporter{
+						OTLP: &config.OTLP{
 							Endpoint: &endpoint,
 							Protocol: &protocol,
 							Insecure: &insecure,
@@ -190,7 +186,39 @@ func (p *SelfMetricsPolicy) Evaluate(ctx context.Context) (*confmap.Conf, error)
 					},
 				},
 			},
-		},
+		}
+	}
+
+	telemetryCfg.Metrics.Level = configtelemetry.LevelNormal
+	if inProcess {
+		// The selftelemetry receiver below reads internal metrics from the
+		// in-memory reader that the inprocesstelemetry factory attaches to the
+		// internal MeterProvider, so no reader (and no host endpoint) is
+		// configured here. The explicit empty slice also replaces the factory's
+		// default Prometheus pull reader on :8888.
+		telemetryCfg.Metrics.MeterProvider = config.MeterProvider{
+			Readers: []config.MetricReader{},
+		}
+	} else {
+		// Replaces the factory's default Prometheus pull reader on :8888, which
+		// this collector does not expose.
+		telemetryCfg.Metrics.MeterProvider = config.MeterProvider{
+			Readers: []config.MetricReader{
+				{
+					Periodic: &config.PeriodicMetricReader{
+						Interval: &interval,
+						Timeout:  &timeout,
+						Exporter: config.PushMetricExporter{
+							OTLP: &config.OTLPMetric{
+								Endpoint: &endpoint,
+								Protocol: &protocol,
+								Insecure: &insecure,
+							},
+						},
+					},
+				},
+			},
+		}
 	}
 
 	conf.Service = service.Config{
@@ -198,8 +226,10 @@ func (p *SelfMetricsPolicy) Evaluate(ctx context.Context) (*confmap.Conf, error)
 	}
 
 	// The control plane extension reports policy set state on the collector's
-	// internal MeterProvider, which the periodic reader configured above pushes
-	// into this policy's own OTLP receiver. It is enabled here rather than in
+	// internal MeterProvider, which reaches the self-metrics pipeline either
+	// through the selftelemetry receiver (in-process) or through the periodic
+	// reader configured above pushing into this policy's own OTLP receiver.
+	// It is enabled here rather than in
 	// the distribution's static config because it only reports anything
 	// meaningful when the control plane provider is driving the collector,
 	// which is exactly when this policy is evaluated.
@@ -226,16 +256,37 @@ func (p *SelfMetricsPolicy) Evaluate(ctx context.Context) (*confmap.Conf, error)
 	// nothing that is not also listed under service::extensions.
 	conf.Service.Extensions = extensions.Config{cpExtID}
 
-	otlpReceiver := otlpreceiver.NewFactory().CreateDefaultConfig().(*otlpreceiver.Config)
-	otlpReceiver.Protocols.HTTP = configoptional.None[otlpreceiver.HTTPConfig]()
-	grpcConfig := otlpReceiver.Protocols.GRPC.GetOrInsertDefault()
-	grpcConfig.NetAddr.Endpoint = fmt.Sprintf("localhost:%d", p.Port)
+	if inProcess {
+		// No OTLP receiver, and therefore no listening port. The selftelemetry
+		// receivers are configured as raw maps, like resourcedetection and
+		// transform, so the provider does not take a module dependency on the
+		// receiver. Metrics and logs use separate receiver instances because
+		// they want different collection intervals: metrics are collected once
+		// a minute, like the loopback reader, while logs are drained every few
+		// seconds so remote diagnostics stay timely and the bounded in-memory
+		// log buffer does not overflow between drains.
+		conf.Receivers = map[component.ID]component.Config{
+			selfTelemetryReceiverID(p.Name, pipeline.SignalMetrics): component.Config(map[string]any{
+				"collection_interval": time.Duration(interval) * time.Millisecond,
+				"timeout":             time.Duration(timeout) * time.Millisecond,
+			}),
+			selfTelemetryReceiverID(p.Name, pipeline.SignalLogs): component.Config(map[string]any{
+				"collection_interval": selfLogsCollectionInterval,
+				"timeout":             time.Duration(timeout) * time.Millisecond,
+			}),
+		}
+	} else {
+		otlpReceiver := otlpreceiver.NewFactory().CreateDefaultConfig().(*otlpreceiver.Config)
+		otlpReceiver.Protocols.HTTP = configoptional.None[otlpreceiver.HTTPConfig]()
+		grpcConfig := otlpReceiver.Protocols.GRPC.GetOrInsertDefault()
+		grpcConfig.NetAddr.Endpoint = fmt.Sprintf("localhost:%d", p.Port)
 
-	otlpReceiverType, _ := component.NewType("otlp")
-	otlpReceiverID := component.NewIDWithName(otlpReceiverType, p.Name)
+		otlpReceiverType, _ := component.NewType("otlp")
+		otlpReceiverID := component.NewIDWithName(otlpReceiverType, p.Name)
 
-	conf.Receivers = map[component.ID]component.Config{
-		otlpReceiverID: component.Config(otlpReceiver),
+		conf.Receivers = map[component.ID]component.Config{
+			otlpReceiverID: component.Config(otlpReceiver),
+		}
 	}
 
 	rdType, _ := component.NewType("resourcedetection")
@@ -331,6 +382,11 @@ func (p *SelfMetricsPolicy) createPipeline(signal pipeline.Signal, preExportProc
 	otlpReceiverType, _ := component.NewType("otlp")
 	otlpReceiverID := component.NewIDWithName(otlpReceiverType, p.Name)
 
+	receiverID := otlpReceiverID
+	if inProcessReaderEnabled() {
+		receiverID = selfTelemetryReceiverID(p.Name, signal)
+	}
+
 	rdType, _ := component.NewType("resourcedetection")
 	rdID := component.NewIDWithName(rdType, p.Name)
 
@@ -344,7 +400,7 @@ func (p *SelfMetricsPolicy) createPipeline(signal pipeline.Signal, preExportProc
 		Service: service.Config{
 			Pipelines: pipelines.Config{
 				pipeID: &pipelines.PipelineConfig{
-					Receivers:  []component.ID{otlpReceiverID},
+					Receivers:  []component.ID{receiverID},
 					Processors: processors,
 					Exporters:  exporters,
 				},
@@ -362,4 +418,42 @@ func (p *SelfMetricsPolicy) ContextSetup(ctx context.Context, collectorID, fleet
 	ctx = context.WithValue(ctx, contextKeyCollectorID, collectorID)
 	ctx = context.WithValue(ctx, contextKeyFleetID, fleetID)
 	return ctx
+}
+
+// inProcessReaderFeatureGateID is the ID of the feature gate registered by
+// the inprocesstelemetry telemetry factory
+// (components/google-built-opentelemetry-collector/telemetry/inprocesstelemetry).
+// It is duplicated rather than imported so the provider does not take a module
+// dependency on the telemetry factory.
+const inProcessReaderFeatureGateID = "telemetry.inProcessReader"
+
+// inProcessReaderEnabled reports whether the telemetry.inProcessReader feature
+// gate is registered and enabled. The gate is only registered when the binary
+// is built with the inprocesstelemetry factory; if it is absent (or disabled),
+// the policy keeps using the OTLP loopback for internal metrics, because the
+// selftelemetry receiver would have no in-memory reader to collect from.
+//
+// It is a variable so tests can override it.
+var inProcessReaderEnabled = func() bool {
+	enabled := false
+	featuregate.GlobalRegistry().VisitAll(func(g *featuregate.Gate) {
+		if g.ID() == inProcessReaderFeatureGateID {
+			enabled = g.IsEnabled()
+		}
+	})
+	return enabled
+}
+
+// selfLogsCollectionInterval is how often the selftelemetry receiver drains
+// the in-process log buffer into the self-logs pipeline. The OTLP batch log
+// processor it replaces exported about once a second; a few seconds keeps
+// self-logs timely while staying well within the buffer's capacity.
+const selfLogsCollectionInterval = 5 * time.Second
+
+// selfTelemetryReceiverID returns the ID of the selftelemetry receiver that
+// feeds internal telemetry of the given signal in-process into the policy's
+// pipeline for that signal, e.g. selftelemetry/default_self_metrics_logs.
+func selfTelemetryReceiverID(policyName string, signal pipeline.Signal) component.ID {
+	selfTelemetryType, _ := component.NewType("selftelemetry")
+	return component.NewIDWithName(selfTelemetryType, policyName+"_"+signal.String())
 }

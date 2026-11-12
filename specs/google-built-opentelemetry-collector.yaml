@@ -65,6 +65,7 @@ components:
     - windowseventlog
     - iis
     - windowsperfcounters
+    - selftelemetry
 
   processors:
     - batch
@@ -145,6 +146,8 @@ components:
     - yaml
     - googlesecretmanager
     - secretsmanager
+
+  telemetry: inprocess
 
 replaces:
   - from: github.com/go-jose/go-jose/v4

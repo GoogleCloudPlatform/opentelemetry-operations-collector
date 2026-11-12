@@ -9,14 +9,16 @@
         "matchers": [
           {
             "target": { "recordField": "LOG_RECORD_FIELD_BODY" },
-            "containment": { "stringValue": "gboc-smoke" }
+            "predicate": { "containment": { "stringValue": "gboc-smoke" } }
           }
         ],
-        "addition": {
-          "target": { "logAttributePath": { "segments": ["gboc_smoke"] } },
-          "value": { "stringValue": "true" },
-          "upsertEnabled": true
-        }
+        "additions": [
+          {
+            "target": { "logAttributePath": { "segments": ["gboc_smoke"] } },
+            "value": { "stringValue": "true" },
+            "upsertEnabled": true
+          }
+        ]
       }
     }
   ],
@@ -27,7 +29,7 @@
         "matchers": [
           {
             "target": { "recordField": "LOG_RECORD_FIELD_BODY" },
-            "containment": { "stringValue": "gboc-smoke=drop" }
+            "predicate": { "containment": { "stringValue": "gboc-smoke=drop" } }
           }
         ]
       }
@@ -38,7 +40,7 @@
         "matchers": [
           {
             "target": { "recordField": "LOG_RECORD_FIELD_BODY" },
-            "containment": { "stringValue": "gboc-smoke" },
+            "predicate": { "containment": { "stringValue": "gboc-smoke" } },
             "negated": true
           }
         ]

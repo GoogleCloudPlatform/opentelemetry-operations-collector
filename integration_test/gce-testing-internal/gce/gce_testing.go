@@ -53,6 +53,7 @@ this library.
 package gce
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -1000,11 +1001,23 @@ func RunRemotelyStdin(ctx context.Context, logger *log.Logger, vm *VM, stdin io.
 		ctx,
 	)
 
+	var stdinBytes []byte
+	if stdin != nil {
+		stdinBytes, err = io.ReadAll(stdin)
+		if err != nil {
+			return CommandOutput{}, err
+		}
+	}
+
 	attempt := 0
 	var runErr error
 	err = backoff.Retry(func() error {
 		attempt++
-		output, runErr = runCommand(ctx, logger, stdin, args, nil)
+		var attemptStdin io.Reader
+		if stdin != nil {
+			attemptStdin = bytes.NewReader(stdinBytes)
+		}
+		output, runErr = runCommand(ctx, logger, attemptStdin, args, nil)
 		if runErr != nil {
 			if isSSHTransportError(runErr) {
 				logger.Printf("SSH transport attempt %d to VM %s (%s) failed (%v), retrying...", attempt, vm.Name, vm.IPAddress, runErr)
@@ -2451,6 +2464,33 @@ func StopInstance(ctx context.Context, logger *log.Logger, vm *VM) error {
 			Project:  vm.Project,
 			Zone:     vm.Zone,
 			Instance: vm.Name,
+		})
+		if err != nil {
+			return err
+		}
+		return op.Wait(ctx)
+	})
+}
+
+// DetachServiceAccount removes the attached service account and all OAuth
+// scopes from a stopped VM instance.
+func DetachServiceAccount(ctx context.Context, logger *log.Logger, vm *VM) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+
+	LogEquivalentGcloud(logger, "compute", "instances", "set-service-account",
+		"--project="+vm.Project,
+		"--zone="+vm.Zone,
+		"--no-service-account",
+		"--no-scopes",
+		vm.Name)
+
+	return retryOp(ctx, newRateLimitBackOff(), isTransientError, func() error {
+		op, err := instancesClient.SetServiceAccount(ctx, &computepb.SetServiceAccountInstanceRequest{
+			Project:  vm.Project,
+			Zone:     vm.Zone,
+			Instance: vm.Name,
+			InstancesSetServiceAccountRequestResource: &computepb.InstancesSetServiceAccountRequest{},
 		})
 		if err != nil {
 			return err

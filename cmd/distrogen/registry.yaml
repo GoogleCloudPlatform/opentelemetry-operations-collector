@@ -190,6 +190,9 @@ receivers:
     postgresql:
         gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/postgresqlreceiver
         docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/postgresqlreceiver/README.md
+    pprof:
+        gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/pprofreceiver
+        docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/pprofreceiver/README.md
     prometheus:
         gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver
         docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/prometheusreceiver/README.md

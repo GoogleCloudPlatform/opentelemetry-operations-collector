@@ -554,6 +554,17 @@ func (s *adsStreamImpl) onRecv(stream clients.Stream, names []string, url, versi
 			}
 		}
 	}
+	if len(names) == 0 && nackErr == nil && typeState.typ.AllResourcesRequiredInSotW {
+		for _, rs := range typeState.subscribedResources {
+			if ws := rs.State; ws == xdsresource.ResourceWatchStateStarted || ws == xdsresource.ResourceWatchStateRequested {
+				rs.State = xdsresource.ResourceWatchStateReceived
+				if rs.ExpiryTimer != nil {
+					rs.ExpiryTimer.Stop()
+					rs.ExpiryTimer = nil
+				}
+			}
+		}
+	}
 
 	// Send an ACK or NACK.
 	subscribedResourceNames := resourceNames(typeState.subscribedResources)

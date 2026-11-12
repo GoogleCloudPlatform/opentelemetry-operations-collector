@@ -325,23 +325,53 @@ func workloadTransformStatements(t *testing.T, conf *confmap.Conf) map[string][]
 	return got
 }
 
-// TestRetrieve_WorkloadProjectIDFallback asserts that the project ID the
-// collector resolves for itself is also used as a fallback gcp.project_id on
-// workload telemetry, after cloud.account.id from the gcp resource detector.
-// Off Google Cloud the detector reports nothing, and telemetry.googleapis.com
-// rejects data without gcp.project_id.
-func TestRetrieve_WorkloadProjectIDFallback(t *testing.T) {
+func regionStatement(region string) string {
+	return `set(attributes["cloud.region"], "` + region + `") where attributes["cloud.region"] == nil and attributes["cloud.availability_zone"] == nil and attributes["location"] == nil`
+}
+
+func projectStatement(project string) string {
+	return `set(attributes["gcp.project_id"], "` + project + `") where attributes["gcp.project_id"] == nil`
+}
+
+// TestRetrieve_WorkloadResourceFallbacks asserts that the project ID and
+// region the collector resolves for itself are also used as fallback
+// gcp.project_id and cloud.region on workload telemetry, after the values the
+// gcp resource detector reports. Off Google Cloud the detector reports
+// nothing, and telemetry.googleapis.com rejects data without a project or a
+// valid region.
+func TestRetrieve_WorkloadResourceFallbacks(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		uri  string
+		env  map[string]string
 		want []string
 	}{
 		{
-			name: "project query parameter",
+			name: "project query parameter, default region",
 			uri:  "googlecontrolplane:xds://127.0.0.1:1?project=my-project&insecure=true",
 			want: []string{
 				workloadProjectIDStatementFromAccount,
-				`set(attributes["gcp.project_id"], "my-project") where attributes["gcp.project_id"] == nil`,
+				projectStatement("my-project"),
+				regionStatement("asia-east1"),
+			},
+		},
+		{
+			name: "region query parameter",
+			uri:  "googlecontrolplane:xds://127.0.0.1:1?project=my-project&region=europe-west3&insecure=true",
+			want: []string{
+				workloadProjectIDStatementFromAccount,
+				projectStatement("my-project"),
+				regionStatement("europe-west3"),
+			},
+		},
+		{
+			name: "region environment variable",
+			uri:  "googlecontrolplane:xds://127.0.0.1:1?project=my-project&insecure=true",
+			env:  map[string]string{"CLOUD_REGION": "us-east1"},
+			want: []string{
+				workloadProjectIDStatementFromAccount,
+				projectStatement("my-project"),
+				regionStatement("us-east1"),
 			},
 		},
 		{
@@ -349,13 +379,17 @@ func TestRetrieve_WorkloadProjectIDFallback(t *testing.T) {
 			uri:  "googlecontrolplane:xds://127.0.0.1:1?gcp.fleet_id=projects/fleet-project/locations/us-central1/fleets/my-fleet&insecure=true",
 			want: []string{
 				workloadProjectIDStatementFromAccount,
-				`set(attributes["gcp.project_id"], "fleet-project") where attributes["gcp.project_id"] == nil`,
+				projectStatement("fleet-project"),
+				regionStatement("us-central1"),
 			},
 		},
 		{
 			name: "numeric project only",
 			uri:  "googlecontrolplane:xds://127.0.0.1:1?project=123456789012&insecure=true",
-			want: []string{workloadProjectIDStatementFromAccount},
+			want: []string{
+				workloadProjectIDStatementFromAccount,
+				regionStatement("asia-east1"),
+			},
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -366,6 +400,11 @@ func TestRetrieve_WorkloadProjectIDFallback(t *testing.T) {
 				t.Setenv("FLEET_ID", "1234")
 			}
 			t.Setenv("GOOGLE_CLOUD_PROJECT", "")
+			t.Setenv("CLOUD_REGION", "")
+			t.Setenv("GOOGLE_CLOUD_REGION", "")
+			for k, v := range tc.env {
+				t.Setenv(k, v)
+			}
 			p := createProvider()
 
 			ret, err := p.Retrieve(context.Background(), tc.uri, nil)
@@ -383,16 +422,59 @@ func TestRetrieve_WorkloadProjectIDFallback(t *testing.T) {
 	}
 }
 
-func TestWorkloadProjectIDStatements(t *testing.T) {
-	assert.Equal(t, []string{workloadProjectIDStatementFromAccount}, workloadProjectIDStatements(""))
+// TestRetrieve_WorkloadRegionFallbackNonXDS asserts that sources without an
+// xDS subscription take the region from a full fleet resource name, then the
+// environment, and add no region fallback otherwise.
+func TestRetrieve_WorkloadRegionFallbackNonXDS(t *testing.T) {
+	t.Setenv("GOOGLE_CLOUD_PROJECT", "")
+	t.Cleanup(func() {
+		for googlepolicy.ActivePolicySet() != nil {
+			googlepolicy.RollbackActivePolicySet()
+		}
+	})
+	for _, tc := range []struct {
+		name    string
+		fleetID string
+		env     string
+		want    []string
+	}{
+		{name: "short fleet, no env", fleetID: "my-fleet", want: []string{workloadProjectIDStatementFromAccount}},
+		{name: "short fleet, env", fleetID: "my-fleet", env: "us-east1", want: []string{workloadProjectIDStatementFromAccount, regionStatement("us-east1")}},
+		{name: "full fleet name", fleetID: "projects/p/locations/europe-west4/fleets/f", env: "us-east1", want: []string{workloadProjectIDStatementFromAccount, regionStatement("europe-west4")}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("FLEET_ID", tc.fleetID)
+			t.Setenv("CLOUD_REGION", tc.env)
+			t.Setenv("GOOGLE_CLOUD_REGION", "")
+			p := createProvider()
+			dir := filepath.ToSlash(t.TempDir())
+			if !strings.HasPrefix(dir, "/") {
+				dir = "/" + dir
+			}
+			ret, err := p.Retrieve(context.Background(), "googlecontrolplane:file://"+dir, nil)
+			require.NoError(t, err)
+			conf, err := ret.AsConf()
+			require.NoError(t, err)
+			for key, got := range workloadTransformStatements(t, conf) {
+				assert.Equal(t, tc.want, got, key)
+			}
+			assert.NoError(t, p.Shutdown(context.Background()))
+		})
+	}
+}
+
+func TestWorkloadResourceStatements(t *testing.T) {
+	assert.Equal(t, []string{workloadProjectIDStatementFromAccount}, workloadResourceStatements("", ""))
 	assert.Equal(t, []string{
 		workloadProjectIDStatementFromAccount,
-		`set(attributes["gcp.project_id"], "example.com:my-project") where attributes["gcp.project_id"] == nil`,
-	}, workloadProjectIDStatements("example.com:my-project"))
-	// Quotes and backslashes are escaped so the value stays a single OTTL string literal.
+		projectStatement("example.com:my-project"),
+		regionStatement("us-east1"),
+	}, workloadResourceStatements("example.com:my-project", "us-east1"))
+	assert.Equal(t, []string{workloadProjectIDStatementFromAccount, regionStatement("us-east1")}, workloadResourceStatements("", "us-east1"))
+	// Quotes and backslashes are escaped so each value stays a single OTTL string literal.
 	assert.Equal(t,
 		`set(attributes["gcp.project_id"], "a\"b\\c") where attributes["gcp.project_id"] == nil`,
-		workloadProjectIDStatements(`a"b\c`)[1])
+		workloadResourceStatements(`a"b\c`, "")[1])
 }
 
 // TestRetrieve_NonXDSReportsFleetIDAsGiven asserts that a non-xDS source does

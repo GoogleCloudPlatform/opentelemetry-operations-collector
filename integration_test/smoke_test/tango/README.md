@@ -90,36 +90,63 @@ env PROJECT=stackdriver-test-143416 ZONES=asia-east1-a IMAGE_SPECS=debian-cloud:
   go test -tags integration_test -run TestTangoSmoke -v -timeout 60m ./...
 ```
 
-## Running on a VM without the guest environment
+## Off-prem mode
 
-`TestTangoSmokeOffPrem` (also in `../tango_smoke_test.go`) runs the same checks
-on a VM that resembles a machine outside GCE. It is skipped unless
-`OFFPREM_MODE` is set. For each image spec it:
+`OFFPREM_MODE` makes the tests of this package run on a VM that resembles a
+machine outside GCE. They are the same tests, with the same names:
+`TestTangoSmoke`, and also `TestSmoke` (`../smoke_test.go`). There is no
+separate off-prem test. Without `OFFPREM_MODE`, the tests do what the sections
+above describe. The code of the mode is in `../offprem_mode_test.go`.
 
-1. creates a VM of its own, with the same scopes as `TestTangoSmoke`;
-2. downloads the collector package from `_BUILD_ARTIFACTS_PACKAGE_GCS` to the
-   VM, while the VM still has `gcloud`;
-3. changes the VM as `OFFPREM_MODE` says (`gce.SimulateOffPrem`), and writes
-   what it did to `simulate_off_prem.txt` in the log directory of the test;
-4. installs the collector from the downloaded package and configures it like
-   `TestTangoSmoke` does, with the files uploaded over ssh;
-5. waits for the PolicySet-active gauge, uploads the sample logs over ssh and
-   checks which lines reach Cloud Logging.
+The mode is for manual runs for now. No CI job sets `OFFPREM_MODE`.
+
+This work is based on the `gboc-experiment-policy` branch. The collector that
+the `master` branch builds does not contain the Tango components, so
+`TestTangoSmoke` cannot pass with it (see "Testing a local build").
+
+In off-prem mode, a test treats each VM differently in two ways:
+
+1. The collector is installed in three steps. First the VM downloads the
+   collector package from `_BUILD_ARTIFACTS_PACKAGE_GCS`, while it still has
+   `gcloud`. Then the test changes the VM as `OFFPREM_MODE` says
+   (`gce.SimulateOffPrem`). Only then does the test install the collector,
+   from the downloaded package.
+2. From then on, the test uploads every file over ssh
+   (`gce.UploadContentSSH`) instead of through GCS. For `TestTangoSmoke` these
+   files are the collector config, the service drop-in and the sample logs.
+
+These are the same in both modes: the machine type and the scopes of the VM,
+what the test checks, and the Cloud Monitoring and Cloud Logging queries.
+
+The name of a test does not show the mode. Two places do:
+
+- The log directory of the test. `main_log.txt` names the mode in its first
+  lines, and `simulate_off_prem.txt` holds what was done to the VM.
+- The VM. In off-prem mode it is created with the label `offprem_mode`, whose
+  value is the mode.
 
 ### Variables
 
-`OFFPREM_MODE` selects what is changed on the VM. `guest-env` is the only mode;
-any other value fails the test.
+`OFFPREM_MODE` selects what is changed on the VM. `guest-env` is the only
+mode. With any other value, every test fails before it creates a VM.
 
-Once `OFFPREM_MODE` is set, the test needs `_BUILD_ARTIFACTS_PACKAGE_GCS`,
-`KOKORO_BUILD_ID`, `TANGO_CP_ENDPOINT`, `TANGO_EXPECTED_REVISION`, `PROJECT`
-and `IMAGE_SPECS`. If any of them are missing, the test fails before it creates
-a VM, and one message names all the missing ones. `ZONES` is needed as for
-every test of this package. If it is missing, the `gce` library says so and
-exits when the test binary starts, before any test runs. `TANGO_FLEET_ID`,
-`TANGO_POLICY_SET_ID` and `TANGO_REGION` have the same defaults as for
-`TestTangoSmoke`. `TRANSFERS_BUCKET` is not used: after the package download,
-nothing goes through GCS.
+In off-prem mode, a test fails before it creates a VM if any of these
+variables are missing, and one message names all the missing ones:
+
+- `_BUILD_ARTIFACTS_PACKAGE_GCS`;
+- `KOKORO_BUILD_ID`, the id of the test run. For a local run, a value like
+  `local-$(date +%s)` is sufficient;
+- `TANGO_CP_ENDPOINT` and `TANGO_EXPECTED_REVISION`, for `TestTangoSmoke`
+  only. Without `OFFPREM_MODE` the test is skipped when `TANGO_CP_ENDPOINT` is
+  missing. In off-prem mode it fails: whoever sets `OFFPREM_MODE` asks for the
+  test to run;
+- `PROJECT` and `IMAGE_SPECS`.
+
+`ZONES` is needed as for every test of this package. If it is missing, the
+`gce` library says so and exits when the test binary starts, before any test
+runs. `TANGO_FLEET_ID`, `TANGO_POLICY_SET_ID` and `TANGO_REGION` have the same
+defaults in both modes. `TRANSFERS_BUCKET` is not used in off-prem mode: after
+the package download, nothing goes through GCS.
 
 ### What `guest-env` does and does not prove
 
@@ -130,12 +157,14 @@ Login, the OS Config agent, the GCE configuration and disk expansion packages,
 the Google Cloud CLI) along with the package repositories they come from. The
 metadata server stays reachable and the VM keeps its service account.
 
-A passing test therefore shows that:
+A test that passes in this mode therefore shows that:
 
 - the package installs, and the service starts, on a host that has neither the
   guest environment nor `gcloud`;
-- on such a host the collector receives the PolicySet from the Control Plane,
-  reports it, and enforces its log filters on the way to the Data Plane;
+- on such a host the collector does what the test checks. For
+  `TestTangoSmoke`: the collector receives the PolicySet from the Control
+  Plane, reports it, and enforces its log filters on the way to the Data
+  Plane;
 - the test needs nothing of the guest environment once it is removed: from
   then on it reaches the VM over ssh only.
 
@@ -151,19 +180,24 @@ It does not show:
 
 ### Supported hosts and projects
 
-Only Debian 12 (`debian-cloud:debian-12`) has been verified. Not supported:
+Only Debian 12 (`debian-cloud:debian-12`) has been verified, so set
+`IMAGE_SPECS` to it in off-prem mode. It has been verified with
+`TestTangoSmoke` only: `TestSmoke` has not been run in off-prem mode yet. Not
+supported:
 
 - RPM-based Linux and Windows: removing the guest environment is not
-  implemented for them yet. The test says so with the "not supported yet"
-  error of `gce.SimulateOffPrem`, but only once the VM exists and its package
-  is downloaded. If the GCS directory has no package for the image, the test
-  fails at the download instead.
+  implemented for them yet. For such an image spec the test fails with the
+  "not supported yet" error of `gce.SimulateOffPrem`. It fails for that image
+  only, and only once the VM exists and its package is downloaded. If the GCS
+  directory has no package for the image, the test fails at the download
+  instead.
 - Ubuntu: it takes the same path as Debian and has not been tried. The removal
   covers dpkg packages only, not snaps, which is how some Ubuntu images ship
   `gcloud`.
-- Projects that enforce OS Login. This holds for every test of this package:
-  the tests log in with an SSH key that they put into the instance metadata,
-  and they turn OS Login off for the VM, which such a project does not allow.
+- Projects that enforce OS Login. This holds for every test of this package,
+  in both modes: the tests log in with an SSH key that they put into the
+  instance metadata, and they turn OS Login off for the VM, which such a
+  project does not allow.
 
 ### Testing a local build
 
@@ -196,7 +230,8 @@ Only Debian 12 (`debian-cloud:debian-12`) has been verified. Not supported:
    gcloud storage cp google-built-opentelemetry-collector/dist/*.deb gs://<bucket>/<package-dir>/
    ```
 
-3. Run the test. `-run TestTangoSmoke` selects both tests, hence the anchors:
+3. Run the test in off-prem mode. This is a usual run of `TestTangoSmoke`,
+   with `OFFPREM_MODE` set and with one image:
 
    ```
    cd integration_test/smoke_test
@@ -205,5 +240,12 @@ Only Debian 12 (`debian-cloud:debian-12`) has been verified. Not supported:
      _BUILD_ARTIFACTS_PACKAGE_GCS=gs://<bucket>/<package-dir> \
      TANGO_CP_ENDPOINT=staging-telemetrydirector.asia-east1.rep.sandbox.googleapis.com:443 \
      TANGO_EXPECTED_REVISION=75cbca3b \
-     go test -tags integration_test -run '^TestTangoSmokeOffPrem$' -v -timeout 60m ./...
+     go test -tags integration_test -run TestTangoSmoke -v -timeout 60m ./...
    ```
+
+   To run the same test on a VM that keeps its guest environment, leave out
+   `OFFPREM_MODE`. The test then uploads its files through `TRANSFERS_BUCKET`
+   again (see "Running locally").
+
+   Without `-run`, `TestSmoke` runs too, in the same mode. It also needs
+   `OTELCOL_CONFIGS_DIR`.

@@ -24,6 +24,10 @@ IMAGE_SPECS: comma-separated list of image specs, see gce_testing.go for details
 OTELCOL_CONFIGS_DIR: path to config files for otelcol to use for testing.
 _BUILD_ARTIFACTS_PACKAGE_GCS: "gcloud storage" URI for a directory containing otelcol-google
 package files. Should start with 'gs://'.
+
+Optional environment variable, for every test of this package:
+OFFPREM_MODE: if set, the tests run in off-prem mode, on VMs that resemble
+machines outside GCE. See offprem_mode_test.go. The only mode is guest-env.
 */
 
 package smoke
@@ -123,6 +127,8 @@ func commonSetupWithExtraCreateArgumentsAndMetadata(t *testing.T, imageSpec stri
 	ctx = gce.WithGcloudConfigDir(ctx, gcloudConfigDir)
 
 	logger := gce.SetupLogger(t)
+	logOffPremMode(logger)
+	ctx = withDirLog(ctx, logger)
 	logger.ToMainLog().Println("Calling SetupVM(). For details, see VM_initialization.txt.")
 	options := gce.VMOptions{
 		ImageSpec:            imageSpec,
@@ -130,6 +136,7 @@ func commonSetupWithExtraCreateArgumentsAndMetadata(t *testing.T, imageSpec stri
 		MachineType:          recommendedMachineType(imageSpec),
 		ExtraCreateArguments: extraCreateArguments,
 		Metadata:             additionalMetadata,
+		Labels:               offPremLabels(),
 	}
 	vm := gce.SetupVM(ctx, t, logger.ToFile("VM_initialization.txt"), options)
 	logger.ToMainLog().Printf("VM is ready: %#v", vm)
@@ -265,22 +272,25 @@ func installDownloadedPackage(ctx context.Context, logger *log.Logger, vm *gce.V
 	return nil
 }
 
-// installPackageFromGCS installs the collector package from GCS onto the given VM.
-//
-// gcsPath must point to a GCS Path that contains .deb/.rpm/.goo files to install on the testing VMs.
-func installPackageFromGCS(ctx context.Context, logger *log.Logger, vm *gce.VM, gcsPath string) error {
-	if err := downloadPackageFromGCS(ctx, logger, vm, gcsPath); err != nil {
-		return err
-	}
-	return installDownloadedPackage(ctx, logger, vm)
-}
-
 // installOtelCollector installs the Otel collector on the given VM. Consults the given
 // PackageLocation to determine where to install it from. For details
 // about PackageLocation, see the documentation for the PackageLocation struct.
+//
+// In off-prem mode (see offprem_mode_test.go) it changes the VM in between:
+// the VM downloads the package while it still has gcloud, and the package is
+// then installed on a VM that resembles a machine outside GCE. After this the
+// tests must not use gcloud on the VM: they upload files with uploadContent.
 func installOtelCollector(ctx context.Context, logger *log.Logger, vm *gce.VM, location PackageLocation) error {
 	if location.packagesInGCS != "" {
-		return installPackageFromGCS(ctx, logger, vm, location.packagesInGCS)
+		if err := downloadPackageFromGCS(ctx, logger, vm, location.packagesInGCS); err != nil {
+			return err
+		}
+		if offPremMode != "" {
+			if err := simulateOffPrem(ctx, logger, vm); err != nil {
+				return err
+			}
+		}
+		return installDownloadedPackage(ctx, logger, vm)
 	}
 	return errors.New("Unimplemented handling of empty value for location.packagesInGCS (_BUILD_ARTIFACTS_PACKAGE_GCS)")
 }
@@ -312,7 +322,7 @@ func setupOtelCollectorFrom(ctx context.Context, logger *log.Logger, vm *gce.VM,
 	}
 
 	defaultConfigPath := collectorConfigPath(vm.ImageSpec)
-	if err := gce.UploadContent(ctx, logger, vm, strings.NewReader(config), defaultConfigPath); err != nil {
+	if err := uploadContent(ctx, logger, vm, strings.NewReader(config), defaultConfigPath); err != nil {
 		return fmt.Errorf("setupOtelCollectorFrom() failed to upload config file: %v", err)
 	}
 	return restartOtelCollector(ctx, logger, vm)
@@ -365,8 +375,11 @@ func TracesTest(ctx context.Context, t *testing.T, logger *log.Logger, vm *gce.V
 }
 
 // getSmokeOtelcolConfig reads smoke.yaml from OTEL_CONFIGS_DIR and returns it
-// after substituting in TestRunID.
+// after substituting in TestRunID. TestSmoke reads its environment here,
+// before it creates a VM, so in off-prem mode this first checks the
+// environment that the mode needs (see requireOffPremEnv).
 func getSmokeOtelcolConfig(t *testing.T) string {
+	requireOffPremEnv(t)
 	configDir := os.Getenv("OTELCOL_CONFIGS_DIR")
 	if configDir == "" {
 		t.Fatal("Must pass nonempty value for OTELCOL_CONFIGS_DIR")

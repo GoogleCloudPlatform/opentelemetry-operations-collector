@@ -48,17 +48,10 @@ TANGO_POLICY_SET_ID: pre-created PolicySet ID (default gboc-smoke-ps).
 TANGO_REGION: region of the fleet and Control Plane endpoint (default
   asia-east1). Passed explicitly so it does not depend on the VM's zone.
 
-TestTangoSmokeOffPrem runs the same checks on a VM that resembles a machine
-outside GCE: gce.SimulateOffPrem changes the VM before the collector is
-installed, and from then on the test reaches the VM over ssh only. See
-tango/README.md for what this does and does not prove.
-
-Environment variable for TestTangoSmokeOffPrem, in addition to the above:
-OFFPREM_MODE: what gce.SimulateOffPrem changes on the VM. The test is skipped
-  when unset. The only mode is guest-env, which removes the Google guest
-  environment, gcloud included (see gce.OffPremOptions), and keeps the
-  metadata server and the VM's service account. When it is set, the
-  variables of offPremRequiredEnv are required.
+In off-prem mode (OFFPREM_MODE, see offprem_mode_test.go) the test makes the
+same checks on a VM that has no Google guest environment. It then fails,
+instead of being skipped, when TANGO_CP_ENDPOINT is unset. See
+tango/README.md for what the mode does and does not prove.
 */
 
 package smoke
@@ -66,7 +59,6 @@ package smoke
 import (
 	"context"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"path"
@@ -125,14 +117,6 @@ const (
 	// keptMessage is the sample log that the PolicySet keeps.
 	keptMessage = "gboc-smoke=keep"
 	logWindow   = 30 * time.Minute
-
-	// offPremModeGuestEnv is the OFFPREM_MODE that removes the Google guest
-	// environment from the VM and keeps the metadata server and the VM's
-	// service account.
-	offPremModeGuestEnv = "guest-env"
-	// offPremLogFile holds what gce.SimulateOffPrem did to the VM, including
-	// the journal of the removal.
-	offPremLogFile = "simulate_off_prem.txt"
 )
 
 // droppedMessages are the sample logs that the PolicySet drops.
@@ -141,27 +125,6 @@ var droppedMessages = []string{
 	"gboc-smoke=drop",
 	// Dropped by the body does not contain "gboc-smoke" filter.
 	"smoke-test=other",
-}
-
-// offPremRequiredEnv lists the environment variables that
-// TestTangoSmokeOffPrem needs once OFFPREM_MODE is set, in the order in which
-// requireOffPremEnv names the ones that are missing.
-//
-// PROJECT and IMAGE_SPECS are read by the gce package. They are listed here so
-// that one failure names everything that is missing. The gce package reports a
-// missing IMAGE_SPECS only when the test reaches gce.RunForEachImage. It does
-// not report a missing PROJECT at all: creating the VM then fails with an
-// error that does not name it.
-//
-// ZONES is not listed, because a test cannot report it: the gce package reads
-// it when the test binary starts, and exits if it is empty.
-var offPremRequiredEnv = []string{
-	"_BUILD_ARTIFACTS_PACKAGE_GCS",
-	"KOKORO_BUILD_ID",
-	"TANGO_CP_ENDPOINT",
-	"TANGO_EXPECTED_REVISION",
-	"PROJECT",
-	"IMAGE_SPECS",
 }
 
 // tangoLogDir returns the directory holding the sample log file on imageSpec.
@@ -232,6 +195,10 @@ type tangoSettings struct {
 
 func tangoSettingsFromEnv(t *testing.T) tangoSettings {
 	t.Helper()
+	// In off-prem mode the test fails here if a variable that the mode needs
+	// is missing, before the checks below. So it is not skipped without
+	// TANGO_CP_ENDPOINT: whoever set OFFPREM_MODE asked for the test to run.
+	requireOffPremEnv(t, "TANGO_CP_ENDPOINT", "TANGO_EXPECTED_REVISION")
 	s := tangoSettings{
 		cpEndpoint:       os.Getenv("TANGO_CP_ENDPOINT"),
 		expectedRevision: os.Getenv("TANGO_EXPECTED_REVISION"),
@@ -256,44 +223,6 @@ func envOrDefault(key, def string) string {
 		return v
 	}
 	return def
-}
-
-// offPremOptionsFromEnv returns what OFFPREM_MODE asks gce.SimulateOffPrem to
-// change on the VM. It skips the test when OFFPREM_MODE is not set: the test
-// is opt-in, so that the other tests of the package can run without the
-// environment that this one needs. It fails the test for a mode that is not
-// supported.
-func offPremOptionsFromEnv(t *testing.T) gce.OffPremOptions {
-	t.Helper()
-	mode := os.Getenv("OFFPREM_MODE")
-	if mode == "" {
-		t.Skip("OFFPREM_MODE is not set; skipping the off-prem Tango-GBOC smoke test")
-	}
-	if mode != offPremModeGuestEnv {
-		t.Fatalf("OFFPREM_MODE=%q is not supported; the only supported mode is %q", mode, offPremModeGuestEnv)
-	}
-	return gce.OffPremOptions{RemoveGuestEnvironment: true}
-}
-
-// requireOffPremEnv fails the test if any variable of offPremRequiredEnv is
-// not set. The failure names every variable that is missing, so that one run
-// shows all of them.
-//
-// tangoSettingsFromEnv looks at some of the same variables, but it skips the
-// test when TANGO_CP_ENDPOINT is missing. A test that OFFPREM_MODE asked for
-// must not be skipped, and it should fail before any VM is created, so call
-// this first.
-func requireOffPremEnv(t *testing.T) {
-	t.Helper()
-	var missing []string
-	for _, name := range offPremRequiredEnv {
-		if os.Getenv(name) == "" {
-			missing = append(missing, name)
-		}
-	}
-	if len(missing) > 0 {
-		t.Fatalf("OFFPREM_MODE is set, so %s must be set as well; see tango/README.md", strings.Join(missing, ", "))
-	}
 }
 
 // controlPlaneConfig returns the additional --config flag that loads policies
@@ -323,40 +252,27 @@ Set-ItemProperty -Path $key -Name ImagePath -Value $imagePath
 (Get-ItemProperty -Path $key).ImagePath`, tangoServiceRegistryKey, s.controlPlaneConfig())
 }
 
-// uploadFunc uploads content to remotePath on vm. It is gce.UploadContent,
-// which needs gcloud on the VM, or gce.UploadContentSSH, which does not.
-type uploadFunc func(ctx context.Context, logger *log.Logger, vm *gce.VM, content io.Reader, remotePath string) error
-
 // setupTangoCollector installs otelcol-google with tangoCollectorConfig and
 // restarts it with the googlecontrolplane config source added.
 func setupTangoCollector(ctx context.Context, logger *log.Logger, vm *gce.VM, s tangoSettings) error {
 	if err := installOtelCollector(ctx, logger, vm, locationFromEnvVars()); err != nil {
 		return err
 	}
-	return configureTangoCollector(ctx, logger, vm, s, gce.UploadContent)
-}
-
-// configureTangoCollector replaces the config.yaml of the otelcol-google that
-// was just installed on vm with tangoCollectorConfig, and restarts the
-// collector with the googlecontrolplane config source added.
-//
-// The config.yaml and, on Linux, the service drop-in reach the VM through
-// upload. On Windows the command line of the service is changed with
-// gce.RunScriptRemotely, which sends its script through GCS and so needs
-// gcloud on the VM, whatever upload is.
-func configureTangoCollector(ctx context.Context, logger *log.Logger, vm *gce.VM, s tangoSettings, upload uploadFunc) error {
 	if gce.IsWindows(vm.ImageSpec) {
 		// Give the collector time to start up, as setupOtelCollectorFrom does.
 		time.Sleep(10 * time.Second)
 	}
 	configPath := collectorConfigPath(vm.ImageSpec)
-	if err := upload(ctx, logger, vm, strings.NewReader(tangoCollectorConfig(vm.ImageSpec)), configPath); err != nil {
+	if err := uploadContent(ctx, logger, vm, strings.NewReader(tangoCollectorConfig(vm.ImageSpec)), configPath); err != nil {
 		return fmt.Errorf("failed to upload %s: %v", configPath, err)
 	}
 	if gce.IsWindows(vm.ImageSpec) {
 		if _, err := gce.RunRemotely(ctx, logger, vm, fmt.Sprintf("New-Item -ItemType Directory -Force -Path '%s'", tangoLogDirWindows)); err != nil {
 			return err
 		}
+		// gce.RunScriptRemotely sends its script to a Windows VM through GCS,
+		// not through uploadContent, so it needs gcloud on the VM. Off-prem
+		// mode does not get this far on Windows yet.
 		if _, err := gce.RunScriptRemotely(ctx, logger, vm, s.windowsImagePathScript(), nil, nil); err != nil {
 			return fmt.Errorf("failed to add the googlecontrolplane config source to the service command line: %v", err)
 		}
@@ -365,7 +281,7 @@ func configureTangoCollector(ctx context.Context, logger *log.Logger, vm *gce.VM
 	if _, err := gce.RunRemotely(ctx, logger, vm, fmt.Sprintf("sudo mkdir -p %s %s", path.Dir(tangoDropInPath), tangoLogDirLinux)); err != nil {
 		return err
 	}
-	if err := upload(ctx, logger, vm, strings.NewReader(s.dropIn()), tangoDropInPath); err != nil {
+	if err := uploadContent(ctx, logger, vm, strings.NewReader(s.dropIn()), tangoDropInPath); err != nil {
 		return fmt.Errorf("failed to upload %s: %v", tangoDropInPath, err)
 	}
 	if _, err := gce.RunRemotely(ctx, logger, vm, "sudo systemctl daemon-reload"); err != nil {
@@ -500,16 +416,16 @@ func waitForPolicySetActive(ctx context.Context, logger *log.Logger, vm *gce.VM,
 		policySetActiveMetric, collector, s.policySetID, want, s.expectedRevision, last, collectorLogsFile(vm.ImageSpec))
 }
 
-// uploadSampleLogs uploads sampleLogsFile to tangoLogPath through upload. The
-// filelog receiver picks the file up on its next poll.
-func uploadSampleLogs(ctx context.Context, logger *log.Logger, vm *gce.VM, upload uploadFunc) error {
+// uploadSampleLogs uploads sampleLogsFile to tangoLogPath, which the filelog
+// receiver picks up on its next poll.
+func uploadSampleLogs(ctx context.Context, logger *log.Logger, vm *gce.VM) error {
 	f, err := os.Open(sampleLogsFile)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
 	logPath := tangoLogPath(vm.ImageSpec)
-	if err := upload(ctx, logger, vm, f, logPath); err != nil {
+	if err := uploadContent(ctx, logger, vm, f, logPath); err != nil {
 		return fmt.Errorf("failed to upload %s to %s: %v", sampleLogsFile, logPath, err)
 	}
 	if gce.IsWindows(vm.ImageSpec) {
@@ -578,64 +494,9 @@ func TestTangoSmoke(t *testing.T) {
 		}
 		// Logs written before the PolicySet is active pass through
 		// unfiltered, so they are only written now.
-		if err := uploadSampleLogs(ctx, logger, vm, gce.UploadContent); err != nil {
+		if err := uploadSampleLogs(ctx, logger, vm); err != nil {
 			t.Fatal(err)
 		}
-		if err := verifyFilteredLogs(ctx, logger, vm); err != nil {
-			t.Fatal(err)
-		}
-	})
-}
-
-func TestTangoSmokeOffPrem(t *testing.T) {
-	t.Parallel()
-	offPrem := offPremOptionsFromEnv(t)
-	requireOffPremEnv(t)
-	s := tangoSettingsFromEnv(t)
-	location := locationFromEnvVars()
-
-	gce.RunForEachImage(t, func(t *testing.T, imageSpec string) {
-		t.Parallel()
-		// The same scopes as in TestTangoSmoke: the VM keeps its service
-		// account, and the collector authenticates with it as it does there.
-		ctx, dirLog, vm := commonSetupWithExtraCreateArgumentsAndMetadata(t, imageSpec, []string{"--scopes=cloud-platform"}, nil)
-		logger := dirLog.ToMainLog()
-
-		// The VM downloads the package with gcloud, so this has to happen
-		// before gcloud is removed. Only the file is on the VM by then: the
-		// package is installed afterwards, on a VM without the guest
-		// environment.
-		logger.Printf("Downloading the otelcol-google package from %s", location.packagesInGCS)
-		if err := downloadPackageFromGCS(ctx, logger, vm, location.packagesInGCS); err != nil {
-			t.Fatal(err)
-		}
-		logger.Printf("Calling SimulateOffPrem() with %+v. For details, see %s.", offPrem, offPremLogFile)
-		if err := gce.SimulateOffPrem(ctx, dirLog.ToFile(offPremLogFile), vm, offPrem); err != nil {
-			t.Fatal(err)
-		}
-
-		// From here on the VM has no gcloud, so files reach it over ssh.
-		logger.Printf("Installing otelcol-google with the extra config source %s", s.controlPlaneConfig())
-		if err := installDownloadedPackage(ctx, logger, vm); err != nil {
-			t.Fatal(err)
-		}
-		if err := configureTangoCollector(ctx, logger, vm, s, gce.UploadContentSSH); err != nil {
-			t.Fatal(err)
-		}
-		collector, err := collectorID(ctx, logger, vm)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := waitForPolicySetActive(ctx, logger, vm, s, collector); err != nil {
-			t.Fatal(err)
-		}
-		// Logs written before the PolicySet is active pass through
-		// unfiltered, so they are only written now.
-		if err := uploadSampleLogs(ctx, logger, vm, gce.UploadContentSSH); err != nil {
-			t.Fatal(err)
-		}
-		// The VM still reports as a GCE instance, so the queries can be
-		// scoped to it as in TestTangoSmoke.
 		if err := verifyFilteredLogs(ctx, logger, vm); err != nil {
 			t.Fatal(err)
 		}

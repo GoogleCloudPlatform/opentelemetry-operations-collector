@@ -284,6 +284,8 @@ func TestRegistryComponent_ApplyOTelVersion(t *testing.T) {
 	testCases := []struct {
 		name     string
 		url      string
+		tag      string
+		path     string
 		expected string
 	}{
 		{
@@ -311,11 +313,24 @@ func TestRegistryComponent_ApplyOTelVersion(t *testing.T) {
 			url:      "github.com/open-telemetry/opentelemetry-collector-contrib/receiver/removed",
 			expected: "v0.5.0",
 		},
+		{
+			name:     "Pinned External Upstream Component",
+			url:      "go.opentelemetry.io/ebpf-profiler",
+			tag:      "v0.0.202645",
+			expected: "v0.0.202645",
+		},
+		{
+			name:     "Local Placeholder Tag Uses Core Version",
+			url:      "github.com/test/localcomponent",
+			tag:      "v0.0.0",
+			path:     "../components/localcomponent",
+			expected: "v1.2.3",
+		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			c := &RegistryComponent{GoMod: &GoModuleID{URL: tc.url}}
+			c := &RegistryComponent{GoMod: &GoModuleID{URL: tc.url, Tag: tc.tag}, Path: tc.path}
 			c.ApplyOTelVersion(otelVersion)
 			assert.Equal(t, c.GoMod.Tag, tc.expected)
 		})

@@ -193,6 +193,10 @@ receivers:
     pprof:
         gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/pprofreceiver
         docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/pprofreceiver/README.md
+    profiling:
+        gomod: go.opentelemetry.io/ebpf-profiler v0.0.202645
+        import: go.opentelemetry.io/ebpf-profiler/collector
+        docs_url: https://www.github.com/open-telemetry/opentelemetry-ebpf-profiler/tree/main/collector/README.md
     prometheus:
         gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver
         docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/prometheusreceiver/README.md
@@ -617,6 +621,12 @@ extensions:
     oauth2clientauth:
         gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/oauth2clientauthextension
         docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/oauth2clientauthextension/README.md
+    # NOTE: Upstream probes/offcpu/offcpu.go lacks a Linux build tag in v0.0.202645,
+    # so enabling offcpu breaks Windows/Darwin cross-compilation until fixed upstream.
+    offcpu:
+        gomod: go.opentelemetry.io/ebpf-profiler v0.0.202645
+        import: go.opentelemetry.io/ebpf-profiler/probes/offcpu
+        docs_url: https://www.github.com/open-telemetry/opentelemetry-ebpf-profiler/tree/main/probes/offcpu
     oidcauth:
         gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/oidcauthextension
         docs_url: https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/oidcauthextension/README.md

@@ -39,6 +39,7 @@ receivers:
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/receiver/zipkinreceiver v0.165.1
 - gomod: go.opentelemetry.io/collector/receiver/nopreceiver v0.165.0
 - gomod: go.opentelemetry.io/collector/receiver/otlpreceiver v0.165.0
+- gomod: go.opentelemetry.io/obi/collector v0.15.2
 
 processors:
 - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/processor/attributesprocessor v0.165.1
@@ -135,4 +136,6 @@ replaces:
 - github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/telemetry/inprocesstelemetry => ../../components/google-built-opentelemetry-collector/telemetry/inprocesstelemetry
 # Force update go-jose/v4 to v4.1.6 to fix CVE-2026-116587
 - github.com/go-jose/go-jose/v4 => github.com/go-jose/go-jose/v4 v4.1.6
+# Use pre-generated OBI BPF source archive downloaded by internal/tools/scripts/prepare-obi.sh
+- go.opentelemetry.io/obi => ../../.tools/obi-src
 

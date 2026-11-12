@@ -51,6 +51,7 @@ components:
     - k8sobjects
     - kubeletstats
     - nop
+    - obi
     - otelarrow
     - pprof
     - prometheus
@@ -155,3 +156,6 @@ replaces:
   - from: github.com/go-jose/go-jose/v4
     to: github.com/go-jose/go-jose/v4 v4.1.6
     reason: Force update go-jose/v4 to v4.1.6 to fix CVE-2026-116587
+  - from: go.opentelemetry.io/obi
+    to: ../../.tools/obi-src
+    reason: Use pre-generated OBI BPF source archive downloaded by internal/tools/scripts/prepare-obi.sh

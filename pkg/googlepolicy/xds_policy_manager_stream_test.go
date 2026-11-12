@@ -764,7 +764,7 @@ func TestXDSPolicyManager_EmptyRevisionClearsPolicies(t *testing.T) {
 				return stream.Context().Err()
 			}
 
-			// Rolling back to rev-1 after a 0-resource removal must re-apply rev-1.
+			// Roll back to rev-1 after the empty revision; must be re-applied rather than skipped.
 			if err := stream.Send(&discoveryv3.DiscoveryResponse{
 				VersionInfo: "rev-1", Nonce: "n3", TypeUrl: xdsPolicyTypeURL,
 				Resources: []*anypb.Any{policyResource(t, "log-filter", "rev-1")},
@@ -800,12 +800,13 @@ func TestXDSPolicyManager_EmptyRevisionClearsPolicies(t *testing.T) {
 	}, 5*time.Second, time.Millisecond, "an empty revision for our own type clears the policy set")
 	close(secondAsserted)
 
-	restored := <-responded
-	assert.Equal(t, "rev-1", restored.GetVersionInfo())
-	assert.Nil(t, restored.GetErrorDetail())
+	rollback := <-responded
+	assert.Equal(t, "rev-1", rollback.GetVersionInfo())
+	assert.Equal(t, "n3", rollback.GetResponseNonce())
+	assert.Nil(t, rollback.GetErrorDetail())
 	require.Eventually(t, func() bool {
 		return assert.ObjectsAreEqual([]string{"log-filter"}, activePolicyNames(t))
-	}, 5*time.Second, time.Millisecond, "rolling back to rev-1 after a 0-resource response must re-apply rev-1")
+	}, 5*time.Second, time.Millisecond, "rolling back to a prior version after an empty revision must re-apply policies")
 }
 
 // TestXDSPolicyManager_EmptyTelemetryCollectorACKsAndReleasesStart asserts that

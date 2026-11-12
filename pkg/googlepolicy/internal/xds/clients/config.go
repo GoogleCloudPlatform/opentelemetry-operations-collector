@@ -84,7 +84,7 @@ type Node struct {
 	Locality Locality
 	// Metadata provides additional context about the application by associating
 	// arbitrary key-value pairs with it.
-	Metadata map[string]any
+	Metadata any
 	// UserAgentName is the user agent name of application.
 	UserAgentName string
 	// UserAgentVersion is the user agent version of application.
@@ -101,10 +101,10 @@ type Locality struct {
 	SubZone string
 }
 
-// MetricsReporter is used by the Client to report metrics.
+// MetricsReporter is used by the XDSClient to report metrics.
 type MetricsReporter interface {
 	// ReportMetric reports a metric. The metric will be one of the predefined
-	// set of types depending on the client (xdsclient.Client or lrsclient.Client).
+	// set of types depending on the client (XDSClient or LRSClient).
 	//
 	// Each client will produce different metrics. Please see the client's
 	// documentation for a list of possible metrics events.

@@ -113,11 +113,7 @@ func New(config Config) (*XDSClient, error) {
 	if config.WatchExpiryTimeout == 0 {
 		config.WatchExpiryTimeout = defaultWatchExpiryTimeout
 	}
-	target := name
-	if config.Target != "" {
-		target = config.Target
-	}
-	client, err := newClient(&config, target)
+	client, err := newClient(&config, name)
 	if err != nil {
 		return nil, err
 	}

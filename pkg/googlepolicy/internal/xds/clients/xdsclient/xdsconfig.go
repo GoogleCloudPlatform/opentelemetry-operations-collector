@@ -96,9 +96,6 @@ type Config struct {
 	// TimeAfter is an optional function used to sleep for backoff durations.
 	// If nil, time.After is used.
 	TimeAfter func(time.Duration) <-chan time.Time
-
-	// Target is an optional target label reported in metrics. If empty, defaults to "xds-client".
-	Target string
 }
 
 // ServerConfig contains configuration for an xDS management server.

@@ -669,7 +669,7 @@ func TestRetrieve_ActivePolicySetWithCustomSelfMetrics(t *testing.T) {
 	assert.False(t, conf.IsSet("receivers::otlp/default_self_metrics"))
 	assert.NotContains(t, conf.Get("service::pipelines::logs/custom_self_metrics::processors"), "googlepolicy")
 	assert.NotContains(t, conf.Get("service::pipelines::metrics/custom_self_metrics::processors"), "googlepolicy")
-	assert.Contains(t, conf.Get("service::pipelines::logs/custom_self_metrics::processors"), "queue_batch/default_gcp_destination_batch_logs")
+	assert.Contains(t, conf.Get("service::pipelines::logs/custom_self_metrics::processors"), "queue_batch/default_gcp_destination_batch_logs_custom_self_metrics")
 	assert.Contains(t, conf.Get("service::pipelines::metrics/custom_self_metrics::processors"), "queue_batch/default_gcp_destination_batch_metrics")
 
 	assert.NoError(t, p.Shutdown(context.Background()))
@@ -709,7 +709,7 @@ func TestRetrieve_ActivePolicySetWithOtherSource(t *testing.T) {
 	assert.True(t, conf.IsSet("receivers::otlp/default_self_metrics"))
 	assert.NotContains(t, conf.Get("service::pipelines::logs/default_self_metrics::processors"), "googlepolicy")
 	assert.NotContains(t, conf.Get("service::pipelines::metrics/default_self_metrics::processors"), "googlepolicy")
-	assert.Contains(t, conf.Get("service::pipelines::logs/default_self_metrics::processors"), "queue_batch/default_gcp_destination_batch_logs")
+	assert.Contains(t, conf.Get("service::pipelines::logs/default_self_metrics::processors"), "queue_batch/default_gcp_destination_batch_logs_default_self_metrics")
 	assert.Contains(t, conf.Get("service::pipelines::metrics/default_self_metrics::processors"), "queue_batch/default_gcp_destination_batch_metrics")
 
 	assert.NoError(t, p.Shutdown(context.Background()))

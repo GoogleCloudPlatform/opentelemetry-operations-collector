@@ -48,6 +48,21 @@ processors:
         sizer: bytes
         storage: file_storage/googlecontrolplane
         wait_for_result: false
+    queue_batch/default_gcp_destination_batch_logs_default_self_metrics:
+        batch:
+            flush_timeout: 200ms
+            max_size: 4194304
+            min_size: 3670016
+            partition:
+                cache_size: 10000
+                idle_timeout: 1m30s
+            sizer: bytes
+        block_on_overflow: true
+        num_consumers: 10
+        queue_size: 33554432
+        sizer: bytes
+        storage: file_storage/googlecontrolplane
+        wait_for_result: false
     queue_batch/default_gcp_destination_batch_metrics:
         batch:
             flush_timeout: 200ms
@@ -182,7 +197,7 @@ service:
             processors:
                 - resourcedetection/default_self_metrics
                 - transform/default_self_metrics
-                - queue_batch/default_gcp_destination_batch_logs
+                - queue_batch/default_gcp_destination_batch_logs_default_self_metrics
                 - queue_batch/default_gcp_destination_split_logs
             receivers:
                 - otlp/default_self_metrics

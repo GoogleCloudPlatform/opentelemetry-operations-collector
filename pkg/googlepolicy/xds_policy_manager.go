@@ -978,25 +978,30 @@ var _ xdsclient.Decoder = (*telemetryCollectorDecoder)(nil)
 
 func (d *telemetryCollectorDecoder) Decode(resource *xdsclient.AnyProto, options xdsclient.DecodeOptions) (*xdsclient.DecodeResult, error) {
 	resourceName := d.m.resourceName
+	version := options.Version
 	rawAny := resource.ToAny()
 	if rawAny.GetTypeUrl() == "type.googleapis.com/envoy.service.discovery.v3.Resource" {
 		var r discoveryv3.Resource
-		if err := proto.Unmarshal(rawAny.GetValue(), &r); err == nil {
-			if r.GetName() != "" {
-				resourceName = r.GetName()
-			}
-			if r.GetResource() != nil {
-				rawAny = r.GetResource()
-			}
+		if err := proto.Unmarshal(rawAny.GetValue(), &r); err != nil {
+			return &xdsclient.DecodeResult{Name: resourceName}, fmt.Errorf("failed to unmarshal Resource wrapper: %w", err)
+		}
+		if r.GetName() != "" {
+			resourceName = r.GetName()
+		}
+		if version == "" {
+			version = r.GetVersion()
+		}
+		if r.GetResource() != nil {
+			rawAny = r.GetResource()
 		}
 	}
 
 	d.m.logger.Info("Received xDS TelemetryCollector resource",
-		zap.String("version", options.Version),
+		zap.String("version", version),
 		zap.String("type_url", rawAny.GetTypeUrl()),
 	)
 
-	if version := options.Version; version != "" && resourceName == d.m.resourceName && version == d.m.LastAppliedVersion() {
+	if version != "" && resourceName == d.m.resourceName && version == d.m.LastAppliedVersion() {
 		d.m.logger.Debug("Re-ACKing an already applied xDS revision", zap.String("version", version))
 		return &xdsclient.DecodeResult{
 			Name: resourceName,
@@ -1012,7 +1017,7 @@ func (d *telemetryCollectorDecoder) Decode(resource *xdsclient.AnyProto, options
 	// Each SotW DiscoveryResponse carries at most one TelemetryCollector resource
 	// for this collector; individual policies live inside TelemetryCollector.Policies.
 	resp := &discoveryv3.DiscoveryResponse{
-		VersionInfo: options.Version,
+		VersionInfo: version,
 		Resources:   []*anypb.Any{rawAny},
 	}
 
@@ -1020,7 +1025,7 @@ func (d *telemetryCollectorDecoder) Decode(resource *xdsclient.AnyProto, options
 
 	if (manifest.decodedCollectors > 0 || len(manifest.policies) > 0) && d.m.logger.Core().Enabled(zapcore.DebugLevel) {
 		d.m.logger.Debug("Decoded xDS TelemetryCollector",
-			zap.String("version", options.Version),
+			zap.String("version", version),
 			zap.String("policy_set_revision", manifest.policySetRevision),
 			zap.Time("revision_create_time", manifest.revisionCreateTime),
 			zap.Int("policy_count", len(manifest.policies)),
@@ -1030,7 +1035,7 @@ func (d *telemetryCollectorDecoder) Decode(resource *xdsclient.AnyProto, options
 
 	if extractErr != nil {
 		d.m.logger.Warn("xDS revision could not be decoded, sending NACK",
-			zap.String("version", options.Version),
+			zap.String("version", version),
 			zap.Error(extractErr),
 		)
 		return &xdsclient.DecodeResult{Name: resourceName}, extractErr
@@ -1043,14 +1048,14 @@ func (d *telemetryCollectorDecoder) Decode(resource *xdsclient.AnyProto, options
 	if manifest.policySetRevision == "" && len(manifest.policies) == 0 {
 		emptySet := &PolicySet{
 			Policies:   make(map[string]*PolicySetEntry),
-			RevisionID: options.Version,
+			RevisionID: version,
 			ReceivedAt: time.Now(),
 		}
 		return &xdsclient.DecodeResult{
 			Name: resourceName,
 			Resource: &policyResourceData{
 				policySet: emptySet,
-				version:   options.Version,
+				version:   version,
 				rawBytes:  rawAny.GetValue(),
 			},
 		}, nil
@@ -1058,14 +1063,14 @@ func (d *telemetryCollectorDecoder) Decode(resource *xdsclient.AnyProto, options
 
 	if manifest.policySetRevision == "" {
 		err := errors.New("xDS TelemetryCollector resource is missing required field policy_set_revision")
-		d.m.logger.Warn("Rejecting xDS revision", zap.String("version", options.Version), zap.Error(err))
+		d.m.logger.Warn("Rejecting xDS revision", zap.String("version", version), zap.Error(err))
 		return &xdsclient.DecodeResult{Name: resourceName}, err
 	}
 
 	policySetID, revisionID, ok := ParsePolicySetRevision(manifest.policySetRevision)
 	if !ok {
 		err := fmt.Errorf("xDS policy_set_revision %q is not in canonical format", manifest.policySetRevision)
-		d.m.logger.Warn("Rejecting xDS revision", zap.String("version", options.Version), zap.Error(err))
+		d.m.logger.Warn("Rejecting xDS revision", zap.String("version", version), zap.Error(err))
 		return &xdsclient.DecodeResult{Name: resourceName}, err
 	}
 
@@ -1075,7 +1080,7 @@ func (d *telemetryCollectorDecoder) Decode(resource *xdsclient.AnyProto, options
 	}
 	if makeErr != nil {
 		d.m.logger.Warn("xDS revision contains invalid policies, sending NACK",
-			zap.String("version", options.Version),
+			zap.String("version", version),
 			zap.Error(makeErr),
 		)
 		return &xdsclient.DecodeResult{Name: resourceName}, makeErr
@@ -1087,7 +1092,7 @@ func (d *telemetryCollectorDecoder) Decode(resource *xdsclient.AnyProto, options
 		Name: resourceName,
 		Resource: &policyResourceData{
 			policySet:         policySet,
-			version:           options.Version,
+			version:           version,
 			policySetRevision: manifest.policySetRevision,
 			policiesSkipped:   manifest.skipped + len(policySet.FailedPolicies),
 			rawBytes:          rawBytes,
@@ -1110,29 +1115,6 @@ func marshalCollectorBytes(policySetRevision string, policyProtos []proto.Messag
 		Policies:          policies,
 	})
 	return rawBytes
-}
-
-// handleResponse is used by unit tests to exercise the decode and watch
-// pipeline directly with a synthetic DiscoveryResponse.
-func (m *xdsPolicyManager) handleResponse(_ any, _ any, resp *discoveryv3.DiscoveryResponse) {
-	decoder := &telemetryCollectorDecoder{m: m}
-	watcher := &policyResourceWatcher{m: m}
-	if len(resp.GetResources()) == 0 {
-		watcher.ResourceError(errors.New("resource has been removed"), func() {})
-		return
-	}
-	for _, r := range resp.GetResources() {
-		res, err := decoder.Decode(xdsclient.NewAnyProto(r), xdsclient.DecodeOptions{
-			Version: resp.GetVersionInfo(),
-		})
-		if err != nil {
-			watcher.ResourceError(err, func() {})
-			return
-		}
-		if res != nil && res.Resource != nil {
-			watcher.ResourceChanged(res.Resource, func() {})
-		}
-	}
 }
 
 type wireLogClientStream struct {

@@ -68,7 +68,9 @@ type FileLogSourcePolicy struct {
 	//
 	// At least one pattern is required, and each pattern must be a non-empty,
 	// non-whitespace string without `[...]` character classes, `{a,b}` brace
-	// alternation, or `\` glob escapes.
+	// alternation, or `\` glob escapes (except in Windows drive-letter paths such
+	// as `C:\...`, where `\` is treated as a path separator and normalized to
+	// `/`).
 	IncludedPaths []string `protobuf:"bytes,2,rep,name=included_paths,json=includedPaths,proto3" json:"included_paths,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

@@ -786,6 +786,8 @@ github.com/open-telemetry/opentelemetry-collector-contrib/pkg/status v0.165.1 h1
 github.com/open-telemetry/opentelemetry-collector-contrib/pkg/status v0.165.1/go.mod h1:dlD7vNSq3ak+7kKyhJ3wMeb65aRLGNCNc/FWQnhRXsw=
 github.com/open-telemetry/opentelemetry-collector-contrib/pkg/translator/jaeger v0.165.1 h1:ZSjKjVOEW+rWYzqsOBOCx7kpgUlXOqDbBmzgUL7B8Wg=
 github.com/open-telemetry/opentelemetry-collector-contrib/pkg/translator/jaeger v0.165.1/go.mod h1:zlCoZSsM4dxJDBqY10c6WQW74/t9ad57bVCym3+0keA=
+github.com/open-telemetry/opentelemetry-collector-contrib/pkg/translator/pprof v0.165.1 h1:w7kVxvDJ+xFBM8C6KcsCWpf+ZzATkyqUQzszYLlGuvw=
+github.com/open-telemetry/opentelemetry-collector-contrib/pkg/translator/pprof v0.165.1/go.mod h1:1KVFosuWxYgyD/Ir3Uy2rD9TOdbS/yOd+po22LjBPwc=
 github.com/open-telemetry/opentelemetry-collector-contrib/pkg/translator/prometheus v0.165.1 h1:IUgnB8YkIRt3kbPfOkQQCO3ZfYmArYrPYfiJAhqlJ7k=
 github.com/open-telemetry/opentelemetry-collector-contrib/pkg/translator/prometheus v0.165.1/go.mod h1:NV6CuQzlqXyVFOpEhQA3QT1YxOOzZyYslIj4XAH+uwE=
 github.com/open-telemetry/opentelemetry-collector-contrib/pkg/translator/prometheusremotewrite v0.165.1 h1:I3i6fLrFvBNZd5dEqRdeywvP+NNE9fWThfCRdk3Zt8k=
@@ -868,6 +870,8 @@ github.com/open-telemetry/opentelemetry-collector-contrib/receiver/otelarrowrece
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/otelarrowreceiver v0.165.1/go.mod h1:kz2CoLSPn8bZqCrqZLyAoiV6dxTM4A2jfEdzQS2DSus=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/otlpjsonfilereceiver v0.165.1 h1:C0QZpo2ByZR5SGoBqhOSen0z/rUldQQeq9BC6OGCIqM=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/otlpjsonfilereceiver v0.165.1/go.mod h1:kAs3siotfXLxrd0lySgh7N+eruapIkXboNIOBIuNDFw=
+github.com/open-telemetry/opentelemetry-collector-contrib/receiver/pprofreceiver v0.165.1 h1:KqfYDw2q5NU4eeqWoAFaUEKMoEYMU4DSa9fHUqgsKlI=
+github.com/open-telemetry/opentelemetry-collector-contrib/receiver/pprofreceiver v0.165.1/go.mod h1:uuOqldsBsRZxSOYUqBTYD/rn6VjPWl8WxoFxc7QG9b8=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver v0.165.1 h1:mim3IE10ldumek3jp9MLp+eKHA83P11oYarBz85b9MU=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusreceiver v0.165.1/go.mod h1:XWSb/8urI5RbIHg9b0wemOHRIoRRTHza8+Jn/micpU0=
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/prometheusremotewritereceiver v0.165.1 h1:q4lfoGtHQDzgz11pFJnyZv/JR2yOwpA5vNb6cR0FQyU=
@@ -890,6 +894,8 @@ github.com/open-telemetry/opentelemetry-collector-contrib/receiver/zipkinreceive
 github.com/open-telemetry/opentelemetry-collector-contrib/receiver/zipkinreceiver v0.165.1/go.mod h1:dhcc6OJ4l3scJba7ZJauSFVVuMICa8CW9KGUY2vOayc=
 github.com/open-telemetry/otel-arrow/go v0.60.1 h1:m2Yke4E315uBwpWgFVnZATa/j8G3XoVBFcrLnV38wJc=
 github.com/open-telemetry/otel-arrow/go v0.60.1/go.mod h1:vX51qrFUGPikbBBIl6ZlDeuFPz0sPORC/wlM6hK9t94=
+github.com/open-telemetry/sig-profiling/profcheck v0.0.0-20260605055552-091960d5da90 h1:Pvu/hHr3XjXFlWQlNk/+dG69b0R1ScGWk8Bgm29lP2g=
+github.com/open-telemetry/sig-profiling/profcheck v0.0.0-20260605055552-091960d5da90/go.mod h1:WPdgk1BinVdvYdkbt1KIkgDw6qUiK8CnGq+ftaJ41Ns=
 github.com/opencontainers/go-digest v1.0.0 h1:apOUWs51W5PlhuyGyz9FCeeBIOUDA/6nW8Oi/yOhh5U=
 github.com/opencontainers/go-digest v1.0.0/go.mod h1:0JzlMkj0TRzQZfJkVvzbP0HBR3IKzErnv2BNG4W4MAM=
 github.com/opencontainers/image-spec v1.1.1 h1:y0fUlFfIZhPF1W537XOLg0/fcx6zcHCJwooC2xJA040=
@@ -1250,8 +1256,12 @@ go.opentelemetry.io/collector/scraper v0.165.0 h1:TO/RFNj9FmYLPOpylNTaF29iJSY55d
 go.opentelemetry.io/collector/scraper v0.165.0/go.mod h1:y9TFjeDQepWcJ7o0mwQCSG11ZJvKeo1V9RmMTF56z/Q=
 go.opentelemetry.io/collector/scraper/scraperhelper v0.165.0 h1:rQPTKLttezgUktVmxHYilu7X4IkwfBubfixNTc/EpSY=
 go.opentelemetry.io/collector/scraper/scraperhelper v0.165.0/go.mod h1:nz7FeheaRMa4GV+q7QktbdSihwGXpGQMf/npBvQ8cdk=
+go.opentelemetry.io/collector/scraper/scraperhelper/xscraperhelper v0.165.0 h1:iPE0w4LiTo1S8tPQ+Gu1MWTBA9eRvcNsMVVcmGq0h+c=
+go.opentelemetry.io/collector/scraper/scraperhelper/xscraperhelper v0.165.0/go.mod h1:vNCh25tuGWHzeBMTzP3yDl49srAID9C2HX8IV4mBol4=
 go.opentelemetry.io/collector/scraper/scrapertest v0.165.0 h1:iFSGmbVDr4cafdfJ4uvZG/2ZbALdtWhOkD8FuBgLEtI=
 go.opentelemetry.io/collector/scraper/scrapertest v0.165.0/go.mod h1:rW1ah2xMUic7z+tid7HyxRiRPRmd7lJq41xUMcgOObA=
+go.opentelemetry.io/collector/scraper/xscraper v0.165.0 h1:QKhihcFIpc3OHnmt2JIb4zXwpgBZohtE9yUGAg/te0w=
+go.opentelemetry.io/collector/scraper/xscraper v0.165.0/go.mod h1:HsKxrLN8+zGbxJ8/PkkjoEiEspP2i+EfWYxvLYUOvwc=
 go.opentelemetry.io/collector/service v0.165.0 h1:jSUhKIsow5kGQSYkgT3F7b8UKXiYeb/FQBu+tB6TShY=
 go.opentelemetry.io/collector/service v0.165.0/go.mod h1:8usKlVLQCMMNnKv1VrEfl0eLuz9MpeOI3gs35hK2+W4=
 go.opentelemetry.io/collector/service/hostcapabilities v0.165.0 h1:mDFJuZV+OaonZhy9H+90tH2PsdZARR6Jybv0jfcPN/w=
@@ -1352,6 +1362,8 @@ go.opentelemetry.io/otel/trace v1.47.1-0.20261102082644-9c507082cd98 h1:ExsQlPTI
 go.opentelemetry.io/otel/trace v1.47.1-0.20261102082644-9c507082cd98/go.mod h1:jNaSLa2PZEYFG6fRjJABAu+bw4FS08uDmPg28lTghu0=
 go.opentelemetry.io/proto/otlp v1.11.1 h1:SCrPqH9NE5CmBrOqpjNCiT0X5mGwMyGERXdogfR7Yjw=
 go.opentelemetry.io/proto/otlp v1.11.1/go.mod h1:wq8W4aSf6bOy8RZyESOeQFr9Pu7wydWX/TY4sgvrTPg=
+go.opentelemetry.io/proto/otlp/profiles/v1development v0.4.1 h1:/r6OKUO8PmUMAfAG0lIIZEWQZHa3o56LHMulrusszYo=
+go.opentelemetry.io/proto/otlp/profiles/v1development v0.4.1/go.mod h1:iXB90dhIyHY9OFlaMA3a4pCftOIs6gxbN4kXoLQEtmU=
 go.opentelemetry.io/proto/slim/otlp v1.11.1 h1:qf2OA3kQcIDXh3q7b6kc0IzRe8BFXlVIlH5uaOACrVQ=
 go.opentelemetry.io/proto/slim/otlp v1.11.1/go.mod h1:15pWfj6/rYjQzyrC3ZGQoZ0rNgLqI/Lk+jFgYgV4UIE=
 go.opentelemetry.io/proto/slim/otlp/collector/profiles/v1development v0.4.1 h1:pgPIbi29ViNY/gE//bHlHuLyqHE+PDhhw7jAhItWIaM=

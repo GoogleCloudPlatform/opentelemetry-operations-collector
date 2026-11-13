@@ -1419,7 +1419,7 @@ func TestPolicySetActiveSelfMetric(t *testing.T) {
 
 // TestPolicySetActiveSelfMetric_NotEmittedWithoutProvider verifies
 // that when the collector is started with a file config only (without
-// googlecontrolplaneprovider), Tango self-o11y metrics (gcp.policy.set.active)
+// googlecontrolplaneprovider), self-o11y metrics (gcp.policy.set.active)
 // are not emitted even when internal collector telemetry metrics are enabled,
 // both when googlecontrolplaneextension is omitted and when it is configured
 // independently.

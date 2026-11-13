@@ -28,10 +28,10 @@ if command -v iptables >/dev/null 2>&1; then
   iptables -C OUTPUT -p tcp -d "$METADATA_IP" ! --dport 53 -m owner --uid-owner "$COLLECTOR_USER" -j REJECT --reject-with tcp-reset 2>/dev/null ||
     iptables -I OUTPUT -p tcp -d "$METADATA_IP" ! --dport 53 -m owner --uid-owner "$COLLECTOR_USER" -j REJECT --reject-with tcp-reset
 elif command -v nft >/dev/null 2>&1; then
-  nft list table inet tango_offgcp >/dev/null 2>&1 && nft delete table inet tango_offgcp || true
-  nft add table inet tango_offgcp
-  nft 'add chain inet tango_offgcp output { type filter hook output priority 0 ; policy accept ; }'
-  nft "add rule inet tango_offgcp output ip daddr $METADATA_IP tcp dport != 53 meta skuid \"$COLLECTOR_USER\" reject with tcp reset"
+  nft list table inet offgcp_block_metadata >/dev/null 2>&1 && nft delete table inet offgcp_block_metadata || true
+  nft add table inet offgcp_block_metadata
+  nft 'add chain inet offgcp_block_metadata output { type filter hook output priority 0 ; policy accept ; }'
+  nft "add rule inet offgcp_block_metadata output ip daddr $METADATA_IP tcp dport != 53 meta skuid \"$COLLECTOR_USER\" reject with tcp reset"
 else
   echo "neither iptables nor nft is available" >&2
   exit 1

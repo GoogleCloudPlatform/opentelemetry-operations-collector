@@ -13,15 +13,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# One-time setup for TestTangoSmoke: opts the project into the staging
+# One-time setup for TestTelemetryPoliciesSmoke: opts the project into the staging
 # Telemetry Management and Telemetry Director APIs, creates (or updates) the
 # Linux and Windows smoke test fleets and PolicySets, and rolls the latest
 # PolicySet revisions out to their respective fleets.
 #
-# When WIF_PROJECT_ID is also passed (e.g. gboc-tango-testing, a project outside
-# the google.com organization), the script also sets up the X.509 Workload
-# Identity Pool (gboc-x509-pool), X.509 provider (gboc-x509-prov), certificates,
-# credential configuration files, and IAM bindings for off-GCP smoke testing.
+# When WIF_PROJECT_ID is also passed (e.g. a project outside the google.com
+# organization), the script also sets up the X.509 Workload Identity Pool
+# (gboc-x509-pool), X.509 provider (gboc-x509-prov), certificates, credential
+# configuration files, and IAM bindings for off-GCP smoke testing.
 #
 # Not run by CI. Requires a Google corp workstation (for the Tenant Manager
 # CLI) and permission to manage services in the project.
@@ -33,7 +33,7 @@ set -euo pipefail
 PROJECT_ID="${1:?usage: $0 PROJECT_ID [LOCATION] [WIF_PROJECT_ID] [WIF_OUT_DIR]}"
 LOCATION="${2:-asia-east1}"
 WIF_PROJECT_ID="${3:-${WIF_PROJECT_ID:-}}"
-WIF_OUT_DIR="${4:-${WIF_OUT_DIR:-/tmp/gboc-tango-wif}}"
+WIF_OUT_DIR="${4:-${WIF_OUT_DIR:-/tmp/gboc-smoke-wif}}"
 FLEET_ID="${FLEET_ID:-gboc-smoke-fleet}"
 POLICY_SET_ID="${POLICY_SET_ID:-gboc-smoke-ps}"
 WINDOWS_FLEET_ID="${WINDOWS_FLEET_ID:-gboc-smoke-fleet-windows}"
@@ -131,10 +131,10 @@ upsert_fleet_and_policyset() {
 
 LINUX_REV=""
 WINDOWS_REV=""
-upsert_fleet_and_policyset "${FLEET_ID}" "${POLICY_SET_ID}" "${SCRIPT_DIR}/policyset.json" "Tango-GBOC Linux smoke test fleet" LINUX_REV
-upsert_fleet_and_policyset "${WINDOWS_FLEET_ID}" "${WINDOWS_POLICY_SET_ID}" "${SCRIPT_DIR}/policyset_windows.json" "Tango-GBOC Windows smoke test fleet" WINDOWS_REV
+upsert_fleet_and_policyset "${FLEET_ID}" "${POLICY_SET_ID}" "${SCRIPT_DIR}/policyset.json" "Telemetry Policy Linux smoke test fleet" LINUX_REV
+upsert_fleet_and_policyset "${WINDOWS_FLEET_ID}" "${WINDOWS_POLICY_SET_ID}" "${SCRIPT_DIR}/policyset_windows.json" "Telemetry Policy Windows smoke test fleet" WINDOWS_REV
 
-echo "Set TANGO_EXPECTED_REVISION=${LINUX_REV} TANGO_EXPECTED_REVISION_WINDOWS=${WINDOWS_REV} when running the test (see README.md) and update the revisions in README.md."
+echo "Set TELEMETRY_POLICY_EXPECTED_REVISION=${LINUX_REV} TELEMETRY_POLICY_EXPECTED_REVISION_WINDOWS=${WINDOWS_REV} when running the test (see README.md) and update the revisions in README.md."
 
 if [[ -n "${WIF_PROJECT_ID}" ]]; then
   echo
@@ -189,7 +189,7 @@ if [[ -n "${WIF_PROJECT_ID}" ]]; then
         -keyout "${WIF_OUT_DIR}/ca.key" \
         -out "${WIF_OUT_DIR}/ca.pem" \
         -days 3650 \
-        -subj "/CN=gboc-tango-x509-ca" \
+        -subj "/CN=gboc-smoke-x509-ca" \
         -addext "basicConstraints=critical,CA:TRUE" \
         -addext "keyUsage=critical,keyCertSign,cRLSign" \
         -addext "subjectKeyIdentifier=hash"

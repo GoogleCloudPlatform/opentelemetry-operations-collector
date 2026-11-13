@@ -15,7 +15,7 @@
 //go:build integration_test
 
 /*
-End-to-end smoke test for the Tango-GBOC loop: Control Plane (Telemetry
+End-to-end smoke test for the Telemetry Policy loop: Control Plane (Telemetry
 Director, over xDS) -> Collector (otelcol-google, configured solely via the
 googlecontrolplane config source) -> Data Plane (telemetry.googleapis.com) ->
 Cloud Monitoring & Cloud Logging.
@@ -35,43 +35,44 @@ PolicySet's fileLogSourcePolicy), and checks in Cloud Logging that:
   - the PolicySet's logTransformPolicy added labels.gboc_smoke="true" to the kept line.
 
 Linux and Windows collectors subscribe to separate fleets and OS-specific
-PolicySets (tango/policyset.json for /var/log/gboc-smoke/*.log on Linux, and
-tango/policyset_windows.json for %SystemDrive%/gboc-smoke/*.log on Windows). The
-same PolicySet definitions are used on GCP and off GCP.
+PolicySets (telemetry_policy/policyset.json for /var/log/gboc-smoke/*.log on
+Linux, and telemetry_policy/policyset_windows.json for
+%SystemDrive%/gboc-smoke/*.log on Windows). The same PolicySet definitions are
+used on GCP and off GCP.
 
 Environment variables (in addition to those in smoke_test.go):
-TANGO_CP_ENDPOINT: host:port of the xDS Control Plane, e.g.
+TELEMETRY_POLICY_CONTROL_PLANE_ENDPOINT: host:port of the xDS Control Plane, e.g.
   staging-telemetrydirector.asia-east1.rep.sandbox.googleapis.com:443.
   The test is skipped when unset.
-TANGO_EXPECTED_REVISION: revision ID of the pre-provisioned Linux PolicySet
-  rolled out to TANGO_FLEET_ID (also used as fallback on Windows if
-  TANGO_EXPECTED_REVISION_WINDOWS is unset).
-TANGO_EXPECTED_REVISION_WINDOWS: revision ID of the pre-provisioned Windows
-  PolicySet rolled out to TANGO_WINDOWS_FLEET_ID.
-TANGO_FLEET_ID: Linux fleet ID (default gboc-smoke-fleet).
-TANGO_POLICY_SET_ID: Linux PolicySet ID (default gboc-smoke-ps).
-TANGO_WINDOWS_FLEET_ID: Windows fleet ID (default gboc-smoke-fleet-windows).
-TANGO_WINDOWS_POLICY_SET_ID: Windows PolicySet ID (default gboc-smoke-ps-windows).
-TANGO_REGION: region of the fleet and Control Plane endpoint (default
-  asia-east1). Passed explicitly so it does not depend on the VM's zone.
+TELEMETRY_POLICY_EXPECTED_REVISION: revision ID of the pre-provisioned Linux
+  PolicySet rolled out to FLEET_ID (also used as fallback on Windows if
+  TELEMETRY_POLICY_EXPECTED_REVISION_WINDOWS is unset).
+TELEMETRY_POLICY_EXPECTED_REVISION_WINDOWS: revision ID of the pre-provisioned
+  Windows PolicySet rolled out to WINDOWS_FLEET_ID.
+FLEET_ID: Linux fleet ID (default gboc-smoke-fleet).
+POLICY_SET_ID: Linux PolicySet ID (default gboc-smoke-ps).
+WINDOWS_FLEET_ID: Windows fleet ID (default gboc-smoke-fleet-windows).
+WINDOWS_POLICY_SET_ID: Windows PolicySet ID (default gboc-smoke-ps-windows).
+REGION: region of the fleet and Control Plane endpoint (default asia-east1).
+  Passed explicitly so it does not depend on the VM's zone.
 
-Off-GCP mode (see tango/README.md):
-TANGO_OFF_GCP: set to "true" to simulate an off-GCP host on Linux or Windows:
-  after installing the collector package and writing helper scripts, filtered
-  hosts, and X.509 Workload Identity Federation (WIF) credentials from Secret
-  Manager directly onto the VM over SSH, the test stops the VM, detaches its GCE
-  service account and OAuth scopes, blocks the GCE metadata server for the
-  collector process, and boots the VM back up.
-TANGO_PROJECT_NUMBER: project number of the fleet (required when
-  TANGO_OFF_GCP=true, since the metadata server is blocked).
-TANGO_WIF_AUDIENCE: audience of the X.509 WIF provider (default: the
-  gboc-tango-testing provider in tango/README.md).
-TANGO_WIF_CERT_SECRET: Secret Manager secret ID in PROJECT holding the PEM
-  workload certificate (default gboc-x509-leaf-cert).
-TANGO_WIF_KEY_SECRET: Secret Manager secret ID in PROJECT holding the PEM
-  workload private key (default gboc-x509-leaf-key).
-TANGO_WIF_DIR: optional local directory holding leaf.pem and leaf.key to
-  override Secret Manager lookup.
+Off-GCP mode (see telemetry_policy/README.md):
+OFF_GCP: set to "true" to simulate an off-GCP host on Linux or Windows: after
+  installing the collector package and writing helper scripts, filtered hosts,
+  and X.509 Workload Identity Federation (WIF) credentials from Secret Manager
+  directly onto the VM over SSH, the test stops the VM, detaches its GCE service
+  account and OAuth scopes, blocks the GCE metadata server for the collector
+  process, and boots the VM back up.
+PROJECT_NUMBER: project number of the fleet (required when OFF_GCP=true, since
+  the metadata server is blocked).
+WIF_AUDIENCE: audience of the X.509 WIF provider (default:
+  //iam.googleapis.com/projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/gboc-x509-pool/providers/gboc-x509-prov).
+WIF_CERT_SECRET: Secret Manager secret ID in PROJECT holding the PEM workload
+  certificate (default gboc-x509-leaf-cert).
+WIF_KEY_SECRET: Secret Manager secret ID in PROJECT holding the PEM workload
+  private key (default gboc-x509-leaf-key).
+WIF_DIR: optional local directory holding leaf.pem and leaf.key to override
+  Secret Manager lookup.
 */
 
 package smoke
@@ -112,9 +113,9 @@ const (
 	// deriving the collector ID (service.instance.id) from the hostname.
 	collectorUUIDNamespace = "5AFFCE1A-3D0A-4220-8EA1-7D64A842BEB4"
 
-	// tangoDropInPath is the systemd drop-in written on Linux so otelcol-google
-	// runs strictly with the googlecontrolplane config source.
-	tangoDropInPath = "/etc/systemd/system/otelcol-google.service.d/tango.conf"
+	// telemetryPolicyDropInPath is the systemd drop-in written on Linux so
+	// otelcol-google runs strictly with the googlecontrolplane config source.
+	telemetryPolicyDropInPath = "/etc/systemd/system/otelcol-google.service.d/telemetry-policy.conf"
 
 	// policySetActiveMetric is exported via OTLP to telemetry.googleapis.com,
 	// which lands in Cloud Monitoring under prometheus.googleapis.com/<name>/gauge
@@ -128,14 +129,15 @@ const (
 	queryMaxAttempts     = 20
 	queryBackoffDuration = 30 * time.Second
 
-	// Per-OS log directories matching tango/policyset.json and tango/policyset_windows.json.
-	tangoLogDirLinux   = "/var/log/gboc-smoke"
-	tangoLogDirWindows = `C:\gboc-smoke`
+	// Per-OS log directories matching telemetry_policy/policyset.json and
+	// telemetry_policy/policyset_windows.json.
+	telemetryPolicyLogDirLinux   = "/var/log/gboc-smoke"
+	telemetryPolicyLogDirWindows = `C:\gboc-smoke`
 
 	// sampleLogsFile is written to activeLogsFileName over SSH only after the
 	// PolicySet is active so filelog/googlecontrolplane (start_at: end) tails
 	// the newly created file through the active filter and transform policies.
-	sampleLogsFile     = "tango/sample_logs.log"
+	sampleLogsFile     = "telemetry_policy/sample_logs.log"
 	activeLogsFileName = "test.log"
 
 	// keptMessage is the sample log line kept by logFilterPolicy; logTransformPolicy
@@ -145,10 +147,10 @@ const (
 	transformedAttrValue = "true"
 	logWindow            = 30 * time.Minute
 
-	// Helper scripts stored under integration_test/smoke_test/tango/.
-	ensureFirewallLocalScript   = "tango/ensure_firewall_linux.sh"
-	blockMetadataLocalScript    = "tango/block_metadata_linux.sh"
-	configureWindowsLocalScript = "tango/configure_windows.ps1"
+	// Helper scripts stored under integration_test/smoke_test/telemetry_policy/.
+	ensureFirewallLocalScript   = "telemetry_policy/ensure_firewall_linux.sh"
+	blockMetadataLocalScript    = "telemetry_policy/block_metadata_linux.sh"
+	configureWindowsLocalScript = "telemetry_policy/configure_windows.ps1"
 
 	// Default per-OS fleet and PolicySet IDs.
 	defaultLinuxFleetID       = "gboc-smoke-fleet"
@@ -170,7 +172,8 @@ const (
 	windowsSystemHostsPath       = `C:\Windows\System32\drivers\etc\hosts`
 	wifDirWindows                = `C:\ProgramData\Google\OpenTelemetry Collector\wif`
 
-	defaultWIFAudience   = "//iam.googleapis.com/projects/406580743452/locations/global/workloadIdentityPools/gboc-x509-pool/providers/gboc-x509-prov"
+	defaultWIFPoolID     = "gboc-x509-pool"
+	defaultWIFProviderID = "gboc-x509-prov"
 	defaultWIFCertSecret = "gboc-x509-leaf-cert"
 	defaultWIFKeySecret  = "gboc-x509-leaf-key"
 )
@@ -181,15 +184,20 @@ var droppedMessages = []string{
 	"smoke-test=other",
 }
 
-func tangoLogPath(imageSpec string) string {
-	if gce.IsWindows(imageSpec) {
-		return tangoLogDirWindows + `\` + activeLogsFileName
-	}
-	return tangoLogDirLinux + "/" + activeLogsFileName
+func defaultWIFAudience(projectNumber string) string {
+	return fmt.Sprintf("//iam.googleapis.com/projects/%s/locations/global/workloadIdentityPools/%s/providers/%s",
+		projectNumber, defaultWIFPoolID, defaultWIFProviderID)
 }
 
-// tangoSettings holds the Tango-specific environment for the test.
-type tangoSettings struct {
+func telemetryPolicyLogPath(imageSpec string) string {
+	if gce.IsWindows(imageSpec) {
+		return telemetryPolicyLogDirWindows + `\` + activeLogsFileName
+	}
+	return telemetryPolicyLogDirLinux + "/" + activeLogsFileName
+}
+
+// telemetryPolicySettings holds the Telemetry Policy environment for the test.
+type telemetryPolicySettings struct {
 	cpEndpoint              string
 	expectedRevision        string
 	windowsExpectedRevision string
@@ -199,7 +207,7 @@ type tangoSettings struct {
 	windowsPolicySetID      string
 	region                  string
 
-	// Off-GCP mode only (TANGO_OFF_GCP=true).
+	// Off-GCP mode only (OFF_GCP=true).
 	offGCP        bool
 	projectNumber string
 	wifDir        string
@@ -208,58 +216,58 @@ type tangoSettings struct {
 	wifAudience   string
 }
 
-func (s tangoSettings) fleetIDFor(imageSpec string) string {
+func (s telemetryPolicySettings) fleetIDFor(imageSpec string) string {
 	if gce.IsWindows(imageSpec) {
 		return s.windowsFleetID
 	}
 	return s.fleetID
 }
 
-func (s tangoSettings) policySetIDFor(imageSpec string) string {
+func (s telemetryPolicySettings) policySetIDFor(imageSpec string) string {
 	if gce.IsWindows(imageSpec) {
 		return s.windowsPolicySetID
 	}
 	return s.policySetID
 }
 
-func (s tangoSettings) expectedRevisionFor(imageSpec string) string {
+func (s telemetryPolicySettings) expectedRevisionFor(imageSpec string) string {
 	if gce.IsWindows(imageSpec) && s.windowsExpectedRevision != "" {
 		return s.windowsExpectedRevision
 	}
 	return s.expectedRevision
 }
 
-func tangoSettingsFromEnv(t *testing.T) tangoSettings {
+func telemetryPolicySettingsFromEnv(t *testing.T) telemetryPolicySettings {
 	t.Helper()
-	s := tangoSettings{
-		cpEndpoint:              os.Getenv("TANGO_CP_ENDPOINT"),
-		expectedRevision:        os.Getenv("TANGO_EXPECTED_REVISION"),
-		windowsExpectedRevision: os.Getenv("TANGO_EXPECTED_REVISION_WINDOWS"),
-		fleetID:                 envOrDefault("TANGO_FLEET_ID", defaultLinuxFleetID),
-		policySetID:             envOrDefault("TANGO_POLICY_SET_ID", defaultLinuxPolicySetID),
-		windowsFleetID:          envOrDefault("TANGO_WINDOWS_FLEET_ID", defaultWindowsFleetID),
-		windowsPolicySetID:      envOrDefault("TANGO_WINDOWS_POLICY_SET_ID", defaultWindowsPolicySetID),
-		region:                  envOrDefault("TANGO_REGION", "asia-east1"),
-		offGCP:                  os.Getenv("TANGO_OFF_GCP") == "true",
+	s := telemetryPolicySettings{
+		cpEndpoint:              os.Getenv("TELEMETRY_POLICY_CONTROL_PLANE_ENDPOINT"),
+		expectedRevision:        os.Getenv("TELEMETRY_POLICY_EXPECTED_REVISION"),
+		windowsExpectedRevision: os.Getenv("TELEMETRY_POLICY_EXPECTED_REVISION_WINDOWS"),
+		fleetID:                 envOrDefault("FLEET_ID", defaultLinuxFleetID),
+		policySetID:             envOrDefault("POLICY_SET_ID", defaultLinuxPolicySetID),
+		windowsFleetID:          envOrDefault("WINDOWS_FLEET_ID", defaultWindowsFleetID),
+		windowsPolicySetID:      envOrDefault("WINDOWS_POLICY_SET_ID", defaultWindowsPolicySetID),
+		region:                  envOrDefault("REGION", "asia-east1"),
+		offGCP:                  os.Getenv("OFF_GCP") == "true",
 	}
 	if s.offGCP {
-		s.projectNumber = os.Getenv("TANGO_PROJECT_NUMBER")
-		s.wifDir = os.Getenv("TANGO_WIF_DIR")
-		s.wifCertSecret = envOrDefault("TANGO_WIF_CERT_SECRET", defaultWIFCertSecret)
-		s.wifKeySecret = envOrDefault("TANGO_WIF_KEY_SECRET", defaultWIFKeySecret)
-		s.wifAudience = envOrDefault("TANGO_WIF_AUDIENCE", defaultWIFAudience)
+		s.projectNumber = os.Getenv("PROJECT_NUMBER")
+		s.wifDir = os.Getenv("WIF_DIR")
+		s.wifCertSecret = envOrDefault("WIF_CERT_SECRET", defaultWIFCertSecret)
+		s.wifKeySecret = envOrDefault("WIF_KEY_SECRET", defaultWIFKeySecret)
+		s.wifAudience = envOrDefault("WIF_AUDIENCE", defaultWIFAudience(s.projectNumber))
 	}
 	if s.cpEndpoint == "" {
-		t.Skip("TANGO_CP_ENDPOINT is not set; skipping Tango-GBOC smoke test")
+		t.Skip("TELEMETRY_POLICY_CONTROL_PLANE_ENDPOINT is not set; skipping Telemetry Policy smoke test")
 	}
 	if s.expectedRevision == "" && s.windowsExpectedRevision == "" {
-		t.Fatal("TANGO_EXPECTED_REVISION (or TANGO_EXPECTED_REVISION_WINDOWS) must be set to the revision rolled out to the fleet")
+		t.Fatal("TELEMETRY_POLICY_EXPECTED_REVISION (or TELEMETRY_POLICY_EXPECTED_REVISION_WINDOWS) must be set to the revision rolled out to the fleet")
 	}
 	if testRunID == "" {
 		t.Fatal("This test does not support being run outside of Kokoro.")
 	}
 	if s.offGCP && s.projectNumber == "" {
-		t.Fatal("TANGO_OFF_GCP=true requires TANGO_PROJECT_NUMBER")
+		t.Fatal("OFF_GCP=true requires PROJECT_NUMBER")
 	}
 	return s
 }
@@ -274,7 +282,7 @@ func envOrDefault(key, def string) string {
 // controlPlaneConfig returns the --config flag that loads policies from the
 // Control Plane. On GCP, project and project_number are resolved from the GCE
 // metadata server; off GCP, they are passed explicitly because metadata is blocked.
-func (s tangoSettings) controlPlaneConfig(project, imageSpec string) string {
+func (s telemetryPolicySettings) controlPlaneConfig(project, imageSpec string) string {
 	uri := fmt.Sprintf("--config=googlecontrolplane:xds://%s?gcp.fleet_id=%s&region=%s",
 		s.cpEndpoint, s.fleetIDFor(imageSpec), s.region)
 	if s.offGCP {
@@ -293,7 +301,7 @@ func (s tangoSettings) controlPlaneConfig(project, imageSpec string) string {
 // googleclientauth/default_gcp_destination for external_account credentials
 // (project, project_number, and region on the xds:// URI take precedence for
 // control-plane and resource fallback resolution).
-func (s tangoSettings) dropIn(project, imageSpec string) string {
+func (s telemetryPolicySettings) dropIn(project, imageSpec string) string {
 	var extraLines string
 	if s.offGCP {
 		extraLines = fmt.Sprintf(
@@ -344,17 +352,17 @@ func accessSecretBytes(ctx context.Context, svc *secretmanager.Service, project,
 }
 
 // loadWIFLeafCertAndKey loads the X.509 workload certificate and private key
-// from TANGO_WIF_DIR when set, or from Secret Manager in project by default.
-func loadWIFLeafCertAndKey(ctx context.Context, logger *log.Logger, project string, s tangoSettings) (certPEM, keyPEM []byte, err error) {
+// from WIF_DIR when set, or from Secret Manager in project by default.
+func loadWIFLeafCertAndKey(ctx context.Context, logger *log.Logger, project string, s telemetryPolicySettings) (certPEM, keyPEM []byte, err error) {
 	if s.wifDir != "" {
-		logger.Printf("Loading WIF workload certificate and key from TANGO_WIF_DIR=%s", s.wifDir)
+		logger.Printf("Loading WIF workload certificate and key from WIF_DIR=%s", s.wifDir)
 		certPEM, err = os.ReadFile(filepath.Join(s.wifDir, "leaf.pem"))
 		if err != nil {
-			return nil, nil, fmt.Errorf("reading TANGO_WIF_DIR/leaf.pem: %v", err)
+			return nil, nil, fmt.Errorf("reading WIF_DIR/leaf.pem: %v", err)
 		}
 		keyPEM, err = os.ReadFile(filepath.Join(s.wifDir, "leaf.key"))
 		if err != nil {
-			return nil, nil, fmt.Errorf("reading TANGO_WIF_DIR/leaf.key: %v", err)
+			return nil, nil, fmt.Errorf("reading WIF_DIR/leaf.key: %v", err)
 		}
 		return certPEM, keyPEM, nil
 	}
@@ -377,7 +385,7 @@ func loadWIFLeafCertAndKey(ctx context.Context, logger *log.Logger, project stri
 
 // buildWIFCredentialFiles builds the 4 WIF files (cert_config.json,
 // cred_config.json, leaf.pem, leaf.key) for the given remote directory.
-func buildWIFCredentialFiles(ctx context.Context, logger *log.Logger, project, remoteDir, sep string, s tangoSettings) (map[string][]byte, error) {
+func buildWIFCredentialFiles(ctx context.Context, logger *log.Logger, project, remoteDir, sep string, s telemetryPolicySettings) (map[string][]byte, error) {
 	certConfig, err := json.MarshalIndent(map[string]any{
 		"cert_configs": map[string]any{
 			"workload": map[string]string{
@@ -438,7 +446,7 @@ func writeRemoteFile(ctx context.Context, logger *log.Logger, vm *gce.VM, remote
 
 // stageWIFCredentials writes WIF credentials fetched from Secret Manager
 // directly onto vm in a single SSH invocation (never touching GCS or command logs).
-func stageWIFCredentials(ctx context.Context, logger *log.Logger, vm *gce.VM, s tangoSettings) error {
+func stageWIFCredentials(ctx context.Context, logger *log.Logger, vm *gce.VM, s telemetryPolicySettings) error {
 	if gce.IsWindows(vm.ImageSpec) {
 		files, err := buildWIFCredentialFiles(ctx, logger, vm.Project, wifDirWindows, `\`, s)
 		if err != nil {
@@ -493,7 +501,7 @@ func stageWIFCredentials(ctx context.Context, logger *log.Logger, vm *gce.VM, s 
 
 // writeSampleLogs writes sampleLogsFile directly into the *.log path watched by
 // filelog/googlecontrolplane over SSH after the PolicySet is active.
-func writeSampleLogs(ctx context.Context, logger *log.Logger, vm *gce.VM, s tangoSettings) error {
+func writeSampleLogs(ctx context.Context, logger *log.Logger, vm *gce.VM, s telemetryPolicySettings) error {
 	content, err := os.ReadFile(sampleLogsFile)
 	if err != nil {
 		return err
@@ -501,14 +509,14 @@ func writeSampleLogs(ctx context.Context, logger *log.Logger, vm *gce.VM, s tang
 	if s.offGCP {
 		content = tagSampleLogs(content, vm)
 	}
-	return writeRemoteFile(ctx, logger, vm, tangoLogPath(vm.ImageSpec), "0644", content)
+	return writeRemoteFile(ctx, logger, vm, telemetryPolicyLogPath(vm.ImageSpec), "0644", content)
 }
 
-// setupTangoCollector installs otelcol-google, writes scripts and (in off-GCP
-// mode) filtered hosts and WIF credentials directly over SSH, optionally
-// detaches the VM's service account and blocks metadata for off-GCP simulation,
-// and restarts otelcol-google with --config=googlecontrolplane:xds://...
-func setupTangoCollector(ctx context.Context, logger *log.Logger, vm *gce.VM, s tangoSettings) error {
+// setupTelemetryPolicyCollector installs otelcol-google, writes scripts and (in
+// off-GCP mode) filtered hosts and WIF credentials directly over SSH,
+// optionally detaches the VM's service account and blocks metadata for off-GCP
+// simulation, and restarts otelcol-google with --config=googlecontrolplane:xds://...
+func setupTelemetryPolicyCollector(ctx context.Context, logger *log.Logger, vm *gce.VM, s telemetryPolicySettings) error {
 	if err := installOtelCollector(ctx, logger, vm, locationFromEnvVars()); err != nil {
 		return err
 	}
@@ -522,7 +530,7 @@ func setupTangoCollector(ctx context.Context, logger *log.Logger, vm *gce.VM, s 
 		if err := writeRemoteFile(ctx, logger, vm, windowsConfigureRemoteScript, "", configureScript); err != nil {
 			return err
 		}
-		args := fmt.Sprintf("-ControlPlaneConfig '%s' -LogDir '%s'", s.controlPlaneConfig(vm.Project, vm.ImageSpec), tangoLogDirWindows)
+		args := fmt.Sprintf("-ControlPlaneConfig '%s' -LogDir '%s'", s.controlPlaneConfig(vm.Project, vm.ImageSpec), telemetryPolicyLogDirWindows)
 		if s.offGCP {
 			hostsOut, err := gce.RunRemotely(ctx, logger, vm, fmt.Sprintf("$ErrorActionPreference = 'Stop'; Get-Content -Raw -LiteralPath '%s'", windowsSystemHostsPath))
 			if err != nil {
@@ -541,7 +549,7 @@ func setupTangoCollector(ctx context.Context, logger *log.Logger, vm *gce.VM, s 
 			return fmt.Errorf("configuring Windows collector service: %v", err)
 		}
 	} else {
-		if _, err := gce.RunRemotely(ctx, logger, vm, fmt.Sprintf("sudo mkdir -p '%s'", tangoLogDirLinux)); err != nil {
+		if _, err := gce.RunRemotely(ctx, logger, vm, fmt.Sprintf("sudo mkdir -p '%s'", telemetryPolicyLogDirLinux)); err != nil {
 			return err
 		}
 		if s.offGCP {
@@ -573,7 +581,7 @@ func setupTangoCollector(ctx context.Context, logger *log.Logger, vm *gce.VM, s 
 				return err
 			}
 		}
-		if err := writeRemoteFile(ctx, logger, vm, tangoDropInPath, "0644", []byte(s.dropIn(vm.Project, vm.ImageSpec))); err != nil {
+		if err := writeRemoteFile(ctx, logger, vm, telemetryPolicyDropInPath, "0644", []byte(s.dropIn(vm.Project, vm.ImageSpec))); err != nil {
 			return err
 		}
 		if _, err := gce.RunRemotely(ctx, logger, vm, "sudo systemctl daemon-reload"); err != nil {
@@ -673,7 +681,7 @@ func waitForCollectorMetricSeries(ctx context.Context, logger *log.Logger, clien
 
 // waitForPolicySetActive waits until the collector's gcp.policy.set.active
 // series reports the expected PolicySet and revision for vm's OS.
-func waitForPolicySetActive(ctx context.Context, logger *log.Logger, vm *gce.VM, s tangoSettings, collector string) error {
+func waitForPolicySetActive(ctx context.Context, logger *log.Logger, vm *gce.VM, s telemetryPolicySettings, collector string) error {
 	expectedRev := s.expectedRevisionFor(vm.ImageSpec)
 	expectedPS := s.policySetIDFor(vm.ImageSpec)
 	want, err := revisionValue(expectedRev)
@@ -802,7 +810,7 @@ func verifyLogsOffGCP(ctx context.Context, logger *log.Logger, vm *gce.VM) error
 // verifyFilteredAndTransformedLogs checks that the kept sample log reached Cloud
 // Logging with labels.gboc_smoke="true" (from logTransformPolicy) and that both
 // dropped sample logs were filtered out (by logFilterPolicy).
-func verifyFilteredAndTransformedLogs(ctx context.Context, logger *log.Logger, vm *gce.VM, s tangoSettings) error {
+func verifyFilteredAndTransformedLogs(ctx context.Context, logger *log.Logger, vm *gce.VM, s telemetryPolicySettings) error {
 	if s.offGCP {
 		return verifyLogsOffGCP(ctx, logger, vm)
 	}
@@ -817,23 +825,23 @@ func verifyFilteredAndTransformedLogs(ctx context.Context, logger *log.Logger, v
 	return nil
 }
 
-func TestTangoSmoke(t *testing.T) {
+func TestTelemetryPoliciesSmoke(t *testing.T) {
 	t.Parallel()
-	s := tangoSettingsFromEnv(t)
+	s := telemetryPolicySettingsFromEnv(t)
 
 	gce.RunForEachImage(t, func(t *testing.T, imageSpec string) {
 		t.Parallel()
 		if s.expectedRevisionFor(imageSpec) == "" {
-			t.Fatalf("missing expected revision for %s (set TANGO_EXPECTED_REVISION / TANGO_EXPECTED_REVISION_WINDOWS)", imageSpec)
+			t.Fatalf("missing expected revision for %s (set TELEMETRY_POLICY_EXPECTED_REVISION / TELEMETRY_POLICY_EXPECTED_REVISION_WINDOWS)", imageSpec)
 		}
 		// Both on-GCP and off-GCP share the same VM creation call; in off-GCP
-		// mode setupTangoCollector subsequently stops the VM and detaches its
-		// service account and scopes.
+		// mode setupTelemetryPolicyCollector subsequently stops the VM and
+		// detaches its service account and scopes.
 		ctx, dirLog, vm := commonSetupWithExtraCreateArgumentsAndMetadata(t, imageSpec, []string{"--scopes=cloud-platform"}, nil)
 		logger := dirLog.ToMainLog()
 
 		logger.Printf("Installing otelcol-google with config source %s", s.controlPlaneConfig(vm.Project, imageSpec))
-		if err := setupTangoCollector(ctx, logger, vm, s); err != nil {
+		if err := setupTelemetryPolicyCollector(ctx, logger, vm, s); err != nil {
 			t.Fatal(err)
 		}
 		collector, err := collectorID(ctx, logger, vm)
@@ -860,7 +868,7 @@ func TestTangoSmoke(t *testing.T) {
 func TestFilterOffGCPHosts(t *testing.T) {
 	in := "127.0.0.1\tlocalhost\r\n" +
 		"::1\t\tlocalhost ip6-localhost ip6-loopback\r\n" +
-		"10.140.0.12\tvm-1.asia-east1-a.c.gboc-tango-testing.internal vm-1  # Added by Google\r\n" +
+		"10.140.0.12\tvm-1.asia-east1-a.c.off-gcp-test-project.internal vm-1  # Added by Google\r\n" +
 		"# comment mentioning 169.254.169.254 is harmless\r\n" +
 		"169.254.169.254 metadata.google.internal  # Added by Google\r\n" +
 		"169.254.169.254 metadata\r\n"
@@ -868,7 +876,7 @@ func TestFilterOffGCPHosts(t *testing.T) {
 	if strings.Contains(got, "169.254.169.254 metadata") {
 		t.Errorf("filterOffGCPHosts left GCE metadata IP mapping:\n%s", got)
 	}
-	if !strings.Contains(got, "10.140.0.12\tvm-1.asia-east1-a.c.gboc-tango-testing.internal vm-1") {
+	if !strings.Contains(got, "10.140.0.12\tvm-1.asia-east1-a.c.off-gcp-test-project.internal vm-1") {
 		t.Errorf("filterOffGCPHosts dropped VM hostname entry:\n%s", got)
 	}
 	if !strings.Contains(got, "127.0.0.1 metadata.google.internal metadata.google.internal. metadata\n") {
@@ -876,20 +884,20 @@ func TestFilterOffGCPHosts(t *testing.T) {
 	}
 }
 
-func TestTangoSettingsFromEnvAndOSSelection(t *testing.T) {
+func TestTelemetryPolicySettingsFromEnvAndOSSelection(t *testing.T) {
 	origRunID := testRunID
 	testRunID = "test-run"
 	t.Cleanup(func() { testRunID = origRunID })
 
-	t.Setenv("TANGO_CP_ENDPOINT", "cp.example.com:443")
-	t.Setenv("TANGO_EXPECTED_REVISION", "1b20a331")
-	t.Setenv("TANGO_EXPECTED_REVISION_WINDOWS", "3d90357c")
-	t.Setenv("TANGO_PROJECT_NUMBER", "406580743452")
+	t.Setenv("TELEMETRY_POLICY_CONTROL_PLANE_ENDPOINT", "cp.example.com:443")
+	t.Setenv("TELEMETRY_POLICY_EXPECTED_REVISION", "1b20a331")
+	t.Setenv("TELEMETRY_POLICY_EXPECTED_REVISION_WINDOWS", "3d90357c")
+	t.Setenv("PROJECT_NUMBER", "406580743452")
 
-	t.Setenv("TANGO_OFF_GCP", "false")
-	onGCP := tangoSettingsFromEnv(t)
+	t.Setenv("OFF_GCP", "false")
+	onGCP := telemetryPolicySettingsFromEnv(t)
 	if onGCP.offGCP || onGCP.projectNumber != "" || onGCP.wifCertSecret != "" || onGCP.wifKeySecret != "" {
-		t.Fatalf("expected off-GCP fields to stay empty when TANGO_OFF_GCP=false, got %+v", onGCP)
+		t.Fatalf("expected off-GCP fields to stay empty when OFF_GCP=false, got %+v", onGCP)
 	}
 	if got := onGCP.fleetIDFor("debian-cloud:debian-12"); got != defaultLinuxFleetID {
 		t.Errorf("Linux fleetID = %q, want %q", got, defaultLinuxFleetID)
@@ -910,16 +918,18 @@ func TestTangoSettingsFromEnvAndOSSelection(t *testing.T) {
 		t.Errorf("Windows expectedRevision = %q, want 3d90357c", got)
 	}
 
-	t.Setenv("TANGO_OFF_GCP", "true")
-	offGCP := tangoSettingsFromEnv(t)
+	t.Setenv("OFF_GCP", "true")
+	offGCP := telemetryPolicySettingsFromEnv(t)
+	wantAudience := "//iam.googleapis.com/projects/406580743452/locations/global/workloadIdentityPools/gboc-x509-pool/providers/gboc-x509-prov"
 	if !offGCP.offGCP || offGCP.projectNumber != "406580743452" ||
-		offGCP.wifCertSecret != defaultWIFCertSecret || offGCP.wifKeySecret != defaultWIFKeySecret || offGCP.wifDir != "" {
-		t.Fatalf("unexpected off-GCP settings when TANGO_OFF_GCP=true: %+v", offGCP)
+		offGCP.wifCertSecret != defaultWIFCertSecret || offGCP.wifKeySecret != defaultWIFKeySecret ||
+		offGCP.wifAudience != wantAudience || offGCP.wifDir != "" {
+		t.Fatalf("unexpected off-GCP settings when OFF_GCP=true: %+v", offGCP)
 	}
 }
 
-func TestTangoConfigHelpers(t *testing.T) {
-	s := tangoSettings{
+func TestTelemetryPolicyConfigHelpers(t *testing.T) {
+	s := telemetryPolicySettings{
 		cpEndpoint:         "staging-telemetrydirector.asia-east1.rep.sandbox.googleapis.com:443",
 		fleetID:            defaultLinuxFleetID,
 		windowsFleetID:     defaultWindowsFleetID,
@@ -930,7 +940,7 @@ func TestTangoConfigHelpers(t *testing.T) {
 		projectNumber:      "406580743452",
 	}
 
-	dropIn := s.dropIn("gboc-tango-testing", "debian-cloud:debian-12")
+	dropIn := s.dropIn("off-gcp-test-project", "debian-cloud:debian-12")
 	for _, forbidden := range []string{
 		"GCE_METADATA_HOST",
 		"OTELCOL_OPTIONS",
@@ -947,11 +957,11 @@ func TestTangoConfigHelpers(t *testing.T) {
 		"ExecStartPre=+/bin/sh /etc/otelcol-google/block_metadata.sh",
 		"BindReadOnlyPaths=/etc/otelcol-google/hosts:/etc/hosts",
 		"Environment=GOOGLE_APPLICATION_CREDENTIALS=/etc/otelcol-google/wif/cred_config.json",
-		"Environment=GOOGLE_CLOUD_PROJECT=gboc-tango-testing",
+		"Environment=GOOGLE_CLOUD_PROJECT=off-gcp-test-project",
 		"ExecStart=/usr/bin/otelcol-google --config=googlecontrolplane:xds://",
 		"gcp.fleet_id=gboc-smoke-fleet",
 		"region=asia-east1",
-		"project=gboc-tango-testing",
+		"project=off-gcp-test-project",
 		"project_number=406580743452",
 	} {
 		if !strings.Contains(dropIn, want) {
@@ -959,12 +969,12 @@ func TestTangoConfigHelpers(t *testing.T) {
 		}
 	}
 
-	winURI := s.controlPlaneConfig("gboc-tango-testing", "windows-cloud:windows-2022")
+	winURI := s.controlPlaneConfig("off-gcp-test-project", "windows-cloud:windows-2022")
 	if !strings.Contains(winURI, "gcp.fleet_id=gboc-smoke-fleet-windows") || !strings.Contains(winURI, "project_number=406580743452") {
 		t.Errorf("unexpected Windows off-GCP URI: %s", winURI)
 	}
 
-	onGCP := tangoSettings{
+	onGCP := telemetryPolicySettings{
 		cpEndpoint:     "staging-telemetrydirector.asia-east1.rep.sandbox.googleapis.com:443",
 		fleetID:        defaultLinuxFleetID,
 		windowsFleetID: defaultWindowsFleetID,
@@ -997,7 +1007,7 @@ func TestTangoConfigHelpers(t *testing.T) {
 func TestAccessSecretBytesAndLocalOverride(t *testing.T) {
 	wantCert := "-----BEGIN CERTIFICATE-----\ntest-cert\n-----END CERTIFICATE-----\n"
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/projects/gboc-tango-testing/secrets/gboc-x509-leaf-cert/versions/latest:access" {
+		if r.URL.Path != "/v1/projects/off-gcp-test-project/secrets/gboc-x509-leaf-cert/versions/latest:access" {
 			http.NotFound(w, r)
 			return
 		}
@@ -1014,7 +1024,7 @@ func TestAccessSecretBytesAndLocalOverride(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := accessSecretBytes(context.Background(), svc, "gboc-tango-testing", defaultWIFCertSecret)
+	got, err := accessSecretBytes(context.Background(), svc, "off-gcp-test-project", defaultWIFCertSecret)
 	if err != nil {
 		t.Fatalf("accessSecretBytes failed: %v", err)
 	}
@@ -1029,7 +1039,7 @@ func TestAccessSecretBytesAndLocalOverride(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "leaf.key"), []byte("dir-key"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	cert, key, err := loadWIFLeafCertAndKey(context.Background(), log.New(io.Discard, "", 0), "gboc-tango-testing", tangoSettings{wifDir: dir})
+	cert, key, err := loadWIFLeafCertAndKey(context.Background(), log.New(io.Discard, "", 0), "off-gcp-test-project", telemetryPolicySettings{wifDir: dir})
 	if err != nil {
 		t.Fatalf("loadWIFLeafCertAndKey(wifDir) failed: %v", err)
 	}

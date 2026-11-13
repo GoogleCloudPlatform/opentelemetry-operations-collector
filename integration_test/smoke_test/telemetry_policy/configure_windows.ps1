@@ -45,7 +45,7 @@ $newImagePath = "`"$exePath`" $ControlPlaneConfig"
 Set-ItemProperty -Path $regKey -Name ImagePath -Value $newImagePath
 
 if ($OffGCP) {
-    $ruleName = 'TangoOffGCPBlockMetadata'
+    $ruleName = 'OffGCPBlockMetadata'
     Remove-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue
     New-NetFirewallRule `
         -DisplayName $ruleName `

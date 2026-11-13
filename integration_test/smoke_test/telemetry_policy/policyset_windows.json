@@ -1,7 +1,7 @@
 {
-  "description": "Tango-GBOC smoke test policy set (owner: xuechun). Used by integration_test/smoke_test TestTangoSmoke.",
+  "description": "Telemetry Policy Windows smoke test policy set (owner: xuechun). Used by integration_test/smoke_test TestTelemetryPoliciesSmoke.",
   "receiverPolicies": [
-    { "fileLogSourcePolicy": { "includedPaths": ["/var/log/gboc-smoke/*.log"] } }
+    { "fileLogSourcePolicy": { "includedPaths": ["%SystemDrive%/gboc-smoke/*.log"] } }
   ],
   "componentPolicies": [
     {

@@ -45,6 +45,7 @@ const PolicyType = "self_metrics"
 const contextKeyCollectorID = "COLLECTOR_ID"
 const contextKeyFleetID = "FLEET_ID"
 const contextKeyProjectID = "PROJECT_ID"
+const contextKeyRegion = "REGION"
 
 type SelfMetricsPolicy struct {
 	Name string `mapstructure:"name"`
@@ -247,22 +248,31 @@ func (p *SelfMetricsPolicy) Evaluate(ctx context.Context) (*confmap.Conf, error)
 
 	transformType, _ := component.NewType("transform")
 	transformID := component.NewIDWithName(transformType, p.Name)
+	// Resource statements run after resourcedetection (override: false), so
+	// values detected for the host win. Off Google Cloud the gcp detector
+	// reports nothing; the region the collector resolved for its control plane
+	// subscription then serves as the cloud.region fallback that
+	// telemetry.googleapis.com requires. It is applied here rather than in
+	// service::telemetry::resource, where it would already be present when
+	// resourcedetection runs and would shadow the host's detected region.
+	resourceStatements := []string{
+		`set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil`,
+	}
+	if region, _ := ctx.Value(contextKeyRegion).(string); region != "" {
+		resourceStatements = append(resourceStatements, googlepolicy.CloudRegionFallbackStatement(region))
+	}
 	transformCfg := map[string]any{
 		"error_mode": "ignore",
 		"log_statements": []map[string]any{
 			{
-				"context": "resource",
-				"statements": []string{
-					`set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil`,
-				},
+				"context":    "resource",
+				"statements": resourceStatements,
 			},
 		},
 		"metric_statements": []map[string]any{
 			{
-				"context": "resource",
-				"statements": []string{
-					`set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil`,
-				},
+				"context":    "resource",
+				"statements": resourceStatements,
 			},
 			// Cloud Monitoring's OTLP ingestion (telemetry.googleapis.com) maps
 			// metrics onto the prometheus_target Monitored Resource using only

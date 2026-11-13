@@ -34,6 +34,7 @@ build_container: debian
 feature_gates:
   - exporter.googlemanagedprometheus.intToDouble
   - exporter.googlecloud.CustomMonitoredResources
+  - service.profilesSupport
 
 components:
   receivers:
@@ -51,6 +52,7 @@ components:
     - kubeletstats
     - nop
     - otelarrow
+    - pprof
     - prometheus
     - prometheusremotewrite
     - receivercreator

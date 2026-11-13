@@ -29,7 +29,7 @@ import (
 	"time"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider/policies/selfmetrics"
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/event"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/windowseventlogsource"
@@ -760,7 +760,7 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource(t *testing.T) {
 	t.Setenv("FLEET_ID", "1234")
 	p := createProvider()
 
-	pol, err := windowseventlogsource.NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+	pol, err := windowseventlogsource.NewPolicyFromProto(&policyv1.WindowsEventLogSourcePolicy{
 		Id:       "windows-security-sysmon",
 		Channels: []string{"Security", "Microsoft-Windows-Sysmon/Operational"},
 	})
@@ -845,13 +845,13 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource_MultiPolicyConsolidat
 	t.Setenv("FLEET_ID", "1234")
 	p := createProvider()
 
-	pol1, err := windowseventlogsource.NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+	pol1, err := windowseventlogsource.NewPolicyFromProto(&policyv1.WindowsEventLogSourcePolicy{
 		Id:       "win-1",
 		Channels: []string{"Security", "System"},
 	})
 	require.NoError(t, err)
 
-	pol2, err := windowseventlogsource.NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+	pol2, err := windowseventlogsource.NewPolicyFromProto(&policyv1.WindowsEventLogSourcePolicy{
 		Id:       "win-2",
 		Channels: []string{"security", "Application", "SYSTEM"},
 	})
@@ -928,14 +928,14 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource_RealPolicyFaultIsolat
 	p := createProviderWithLogger(logger)
 
 	// Valid policy
-	polValid, err := windowseventlogsource.NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+	polValid, err := windowseventlogsource.NewPolicyFromProto(&policyv1.WindowsEventLogSourcePolicy{
 		Id:       "win-valid",
 		Channels: []string{"Security"},
 	})
 	require.NoError(t, err)
 
 	// Real policy with empty channel that fails validation
-	badProto := &policyv1alpha1.WindowsEventLogSourcePolicy{
+	badProto := &policyv1.WindowsEventLogSourcePolicy{
 		Id:       "win-bad-empty",
 		Channels: []string{"Security", ""},
 	}
@@ -1004,7 +1004,7 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource_InvalidComponentIDIso
 	logger := zap.New(obsCore)
 	p := createProviderWithLogger(logger)
 
-	polValid, err := windowseventlogsource.NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+	polValid, err := windowseventlogsource.NewPolicyFromProto(&policyv1.WindowsEventLogSourcePolicy{
 		Id:       "win-valid",
 		Channels: []string{"Security"},
 	})
@@ -1054,13 +1054,13 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource_MultiPolicyDelimiterC
 	t.Setenv("FLEET_ID", "1234")
 	p := createProviderWithLogger(zap.NewNop())
 
-	pol1, err := windowseventlogsource.NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+	pol1, err := windowseventlogsource.NewPolicyFromProto(&policyv1.WindowsEventLogSourcePolicy{
 		Id:       "win-slash",
 		Channels: []string{"Foo/Bar"},
 	})
 	require.NoError(t, err)
 
-	pol2, err := windowseventlogsource.NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+	pol2, err := windowseventlogsource.NewPolicyFromProto(&policyv1.WindowsEventLogSourcePolicy{
 		Id:       "win-underscore",
 		Channels: []string{"Foo_Bar"},
 	})
@@ -1141,7 +1141,7 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource_FaultIsolation(t *tes
 	logger := zap.New(obsCore)
 	p := createProviderWithLogger(logger)
 
-	polValid, err := windowseventlogsource.NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+	polValid, err := windowseventlogsource.NewPolicyFromProto(&policyv1.WindowsEventLogSourcePolicy{
 		Id:       "win-valid",
 		Channels: []string{"Security"},
 	})
@@ -1205,7 +1205,7 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource_SilentNoOpOnNonWindow
 	t.Setenv("FLEET_ID", "1234")
 	p := createProvider()
 
-	pol, err := windowseventlogsource.NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+	pol, err := windowseventlogsource.NewPolicyFromProto(&policyv1.WindowsEventLogSourcePolicy{
 		Id:       "windows-source-nonwindows",
 		Channels: []string{"Security", "Application"},
 	})
@@ -1618,11 +1618,11 @@ func TestRetrieve_MultipleFileLogSourcePoliciesConsolidated(t *testing.T) {
 		}
 	}
 
-	p1 := &policyv1alpha1.FileLogSourcePolicy{
+	p1 := &policyv1.FileLogSourcePolicy{
 		Id:            "app-logs-1",
 		IncludedPaths: p1Paths,
 	}
-	p2 := &policyv1alpha1.FileLogSourcePolicy{
+	p2 := &policyv1.FileLogSourcePolicy{
 		Id:            "app-logs-2",
 		IncludedPaths: p2Paths,
 	}
@@ -1684,15 +1684,15 @@ func TestRetrieve_FileLogSourcePolicy_WithInvalidPolicy_FaultIsolation(t *testin
 		expectedValid = []any{"/var/log/valid1.log", "/var/log/valid2.log"}
 	}
 
-	valid1 := &policyv1alpha1.FileLogSourcePolicy{
+	valid1 := &policyv1.FileLogSourcePolicy{
 		Id:            "valid-source-1",
 		IncludedPaths: []string{valid1Path},
 	}
-	valid2 := &policyv1alpha1.FileLogSourcePolicy{
+	valid2 := &policyv1.FileLogSourcePolicy{
 		Id:            "valid-source-2",
 		IncludedPaths: []string{valid2Path},
 	}
-	invalid := &policyv1alpha1.FileLogSourcePolicy{
+	invalid := &policyv1.FileLogSourcePolicy{
 		Id:            "invalid-source",
 		IncludedPaths: []string{invalidPath},
 	}
@@ -1757,15 +1757,15 @@ func TestRetrieve_FileLogSourcePolicy_PoisonedBatchHead_FaultIsolation(t *testin
 	}
 
 	// Invariant INV-1: Malformed element 0 must not poison or drop valid peers.
-	invalid := &policyv1alpha1.FileLogSourcePolicy{
+	invalid := &policyv1.FileLogSourcePolicy{
 		Id:            "invalid-source-at-head",
 		IncludedPaths: []string{invalidPath},
 	}
-	valid1 := &policyv1alpha1.FileLogSourcePolicy{
+	valid1 := &policyv1.FileLogSourcePolicy{
 		Id:            "valid-source-1",
 		IncludedPaths: []string{valid1Path},
 	}
-	valid2 := &policyv1alpha1.FileLogSourcePolicy{
+	valid2 := &policyv1.FileLogSourcePolicy{
 		Id:            "valid-source-2",
 		IncludedPaths: []string{valid2Path},
 	}

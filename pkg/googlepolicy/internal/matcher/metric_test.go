@@ -17,7 +17,7 @@ package matcher
 import (
 	"testing"
 
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -30,45 +30,45 @@ func TestCompileMetricMatcherAndExtractor(t *testing.T) {
 		_, err := CompileMetricExtractor(nil)
 		assert.ErrorIs(t, err, ErrMissingMetricTarget)
 
-		_, err = CompileMetricExtractor(&policyv1alpha1.MetricFieldSelector{})
+		_, err = CompileMetricExtractor(&policyv1.MetricFieldSelector{})
 		assert.ErrorIs(t, err, ErrMissingMetricTarget)
 
-		_, err = CompileMetricExtractor(&policyv1alpha1.MetricFieldSelector{
-			Target: &policyv1alpha1.MetricFieldSelector_DescriptorField{
-				DescriptorField: policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_UNSPECIFIED,
+		_, err = CompileMetricExtractor(&policyv1.MetricFieldSelector{
+			Target: &policyv1.MetricFieldSelector_DescriptorField{
+				DescriptorField: policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_UNSPECIFIED,
 			},
 		})
 		assert.ErrorContains(t, err, "metric descriptor field cannot be unspecified")
 
-		_, err = CompileMetricExtractor(&policyv1alpha1.MetricFieldSelector{
-			Target: &policyv1alpha1.MetricFieldSelector_ScopeField{
-				ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_UNSPECIFIED,
+		_, err = CompileMetricExtractor(&policyv1.MetricFieldSelector{
+			Target: &policyv1.MetricFieldSelector_ScopeField{
+				ScopeField: policyv1.ScopeField_SCOPE_FIELD_UNSPECIFIED,
 			},
 		})
 		assert.ErrorContains(t, err, "scope field cannot be unspecified")
 
-		_, err = CompileMetricExtractor(&policyv1alpha1.MetricFieldSelector{
-			Target: &policyv1alpha1.MetricFieldSelector_DataPointAttributePath{},
+		_, err = CompileMetricExtractor(&policyv1.MetricFieldSelector{
+			Target: &policyv1.MetricFieldSelector_DataPointAttributePath{},
 		})
 		assert.ErrorContains(t, err, "datapoint attribute path cannot be empty")
 
-		_, err = CompileMetricExtractor(&policyv1alpha1.MetricFieldSelector{
-			Target: &policyv1alpha1.MetricFieldSelector_ResourceAttributePath{},
+		_, err = CompileMetricExtractor(&policyv1.MetricFieldSelector{
+			Target: &policyv1.MetricFieldSelector_ResourceAttributePath{},
 		})
 		assert.ErrorContains(t, err, "resource attribute path cannot be empty")
 
-		_, err = CompileMetricExtractor(&policyv1alpha1.MetricFieldSelector{
-			Target: &policyv1alpha1.MetricFieldSelector_ScopeAttributePath{},
+		_, err = CompileMetricExtractor(&policyv1.MetricFieldSelector{
+			Target: &policyv1.MetricFieldSelector_ScopeAttributePath{},
 		})
 		assert.ErrorContains(t, err, "scope attribute path cannot be empty")
 
-		_, err = CompileMetricMatcher(&policyv1alpha1.MetricMatcher{})
+		_, err = CompileMetricMatcher(&policyv1.MetricMatcher{})
 		assert.ErrorIs(t, err, ErrMissingMetricTarget)
 
-		_, err = CompileMetricMatcher(&policyv1alpha1.MetricMatcher{
-			Target: &policyv1alpha1.MetricFieldSelector{
-				Target: &policyv1alpha1.MetricFieldSelector_DescriptorField{
-					DescriptorField: policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME,
+		_, err = CompileMetricMatcher(&policyv1.MetricMatcher{
+			Target: &policyv1.MetricFieldSelector{
+				Target: &policyv1.MetricFieldSelector_DescriptorField{
+					DescriptorField: policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME,
 				},
 			},
 		})
@@ -113,113 +113,113 @@ func TestCompileMetricMatcherAndExtractor(t *testing.T) {
 
 		selectors := []struct {
 			name    string
-			target  *policyv1alpha1.MetricFieldSelector
+			target  *policyv1.MetricFieldSelector
 			wantVal any
 		}{
 			{
 				name: "descriptor_field NAME",
-				target: &policyv1alpha1.MetricFieldSelector{
-					Target: &policyv1alpha1.MetricFieldSelector_DescriptorField{
-						DescriptorField: policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME,
+				target: &policyv1.MetricFieldSelector{
+					Target: &policyv1.MetricFieldSelector_DescriptorField{
+						DescriptorField: policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME,
 					},
 				},
 				wantVal: "system.cpu.time",
 			},
 			{
 				name: "descriptor_field DESCRIPTION",
-				target: &policyv1alpha1.MetricFieldSelector{
-					Target: &policyv1alpha1.MetricFieldSelector_DescriptorField{
-						DescriptorField: policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_DESCRIPTION,
+				target: &policyv1.MetricFieldSelector{
+					Target: &policyv1.MetricFieldSelector_DescriptorField{
+						DescriptorField: policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_DESCRIPTION,
 					},
 				},
 				wantVal: "CPU time",
 			},
 			{
 				name: "descriptor_field UNIT",
-				target: &policyv1alpha1.MetricFieldSelector{
-					Target: &policyv1alpha1.MetricFieldSelector_DescriptorField{
-						DescriptorField: policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_UNIT,
+				target: &policyv1.MetricFieldSelector{
+					Target: &policyv1.MetricFieldSelector_DescriptorField{
+						DescriptorField: policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_UNIT,
 					},
 				},
 				wantVal: "s",
 			},
 			{
 				name: "descriptor_field TYPE",
-				target: &policyv1alpha1.MetricFieldSelector{
-					Target: &policyv1alpha1.MetricFieldSelector_DescriptorField{
-						DescriptorField: policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE,
+				target: &policyv1.MetricFieldSelector{
+					Target: &policyv1.MetricFieldSelector_DescriptorField{
+						DescriptorField: policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE,
 					},
 				},
 				wantVal: "SUM",
 			},
 			{
 				name: "descriptor_field AGGREGATION_TEMPORALITY",
-				target: &policyv1alpha1.MetricFieldSelector{
-					Target: &policyv1alpha1.MetricFieldSelector_DescriptorField{
-						DescriptorField: policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_AGGREGATION_TEMPORALITY,
+				target: &policyv1.MetricFieldSelector{
+					Target: &policyv1.MetricFieldSelector_DescriptorField{
+						DescriptorField: policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_AGGREGATION_TEMPORALITY,
 					},
 				},
 				wantVal: "CUMULATIVE",
 			},
 			{
 				name: "descriptor_field IS_MONOTONIC",
-				target: &policyv1alpha1.MetricFieldSelector{
-					Target: &policyv1alpha1.MetricFieldSelector_DescriptorField{
-						DescriptorField: policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_IS_MONOTONIC,
+				target: &policyv1.MetricFieldSelector{
+					Target: &policyv1.MetricFieldSelector_DescriptorField{
+						DescriptorField: policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_IS_MONOTONIC,
 					},
 				},
 				wantVal: true,
 			},
 			{
 				name: "datapoint_attribute",
-				target: &policyv1alpha1.MetricFieldSelector{
-					Target: &policyv1alpha1.MetricFieldSelector_DataPointAttributePath{
-						DataPointAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"dp.key"}},
+				target: &policyv1.MetricFieldSelector{
+					Target: &policyv1.MetricFieldSelector_DataPointAttributePath{
+						DataPointAttributePath: &policyv1.AttributePath{Segments: []string{"dp.key"}},
 					},
 				},
 				wantVal: "dp-val",
 			},
 			{
 				name: "resource_attribute",
-				target: &policyv1alpha1.MetricFieldSelector{
-					Target: &policyv1alpha1.MetricFieldSelector_ResourceAttributePath{
-						ResourceAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"res.key"}},
+				target: &policyv1.MetricFieldSelector{
+					Target: &policyv1.MetricFieldSelector_ResourceAttributePath{
+						ResourceAttributePath: &policyv1.AttributePath{Segments: []string{"res.key"}},
 					},
 				},
 				wantVal: "res-val",
 			},
 			{
 				name: "scope_attribute",
-				target: &policyv1alpha1.MetricFieldSelector{
-					Target: &policyv1alpha1.MetricFieldSelector_ScopeAttributePath{
-						ScopeAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"scope.key"}},
+				target: &policyv1.MetricFieldSelector{
+					Target: &policyv1.MetricFieldSelector_ScopeAttributePath{
+						ScopeAttributePath: &policyv1.AttributePath{Segments: []string{"scope.key"}},
 					},
 				},
 				wantVal: "scope-val",
 			},
 			{
 				name: "scope_field NAME",
-				target: &policyv1alpha1.MetricFieldSelector{
-					Target: &policyv1alpha1.MetricFieldSelector_ScopeField{
-						ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_NAME,
+				target: &policyv1.MetricFieldSelector{
+					Target: &policyv1.MetricFieldSelector_ScopeField{
+						ScopeField: policyv1.ScopeField_SCOPE_FIELD_NAME,
 					},
 				},
 				wantVal: "my-scope",
 			},
 			{
 				name: "scope_field VERSION",
-				target: &policyv1alpha1.MetricFieldSelector{
-					Target: &policyv1alpha1.MetricFieldSelector_ScopeField{
-						ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_VERSION,
+				target: &policyv1.MetricFieldSelector{
+					Target: &policyv1.MetricFieldSelector_ScopeField{
+						ScopeField: policyv1.ScopeField_SCOPE_FIELD_VERSION,
 					},
 				},
 				wantVal: "v1",
 			},
 			{
 				name: "scope_field SCHEMA_URL",
-				target: &policyv1alpha1.MetricFieldSelector{
-					Target: &policyv1alpha1.MetricFieldSelector_ScopeField{
-						ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_SCHEMA_URL,
+				target: &policyv1.MetricFieldSelector{
+					Target: &policyv1.MetricFieldSelector_ScopeField{
+						ScopeField: policyv1.ScopeField_SCOPE_FIELD_SCHEMA_URL,
 					},
 				},
 				wantVal: "https://schema.example/v1",
@@ -228,7 +228,7 @@ func TestCompileMetricMatcherAndExtractor(t *testing.T) {
 
 		for _, tc := range selectors {
 			t.Run(tc.name, func(t *testing.T) {
-				cm, err := CompileMetricMatcher(&policyv1alpha1.MetricMatcher{
+				cm, err := CompileMetricMatcher(&policyv1.MetricMatcher{
 					Target:    tc.target,
 					Predicate: predExists(),
 				})

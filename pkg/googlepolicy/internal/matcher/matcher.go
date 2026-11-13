@@ -37,7 +37,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 )
 
@@ -56,7 +56,7 @@ type Predicate func(val any, exists bool) bool
 
 // CompilePredicate compiles a shared Predicate protobuf message into a
 // Predicate closure. The negate flag inverts the compiled result.
-func CompilePredicate(predicate *policyv1alpha1.Predicate, negate bool) (Predicate, error) {
+func CompilePredicate(predicate *policyv1.Predicate, negate bool) (Predicate, error) {
 	if predicate == nil {
 		return nil, ErrMissingPredicate
 	}
@@ -66,10 +66,10 @@ func CompilePredicate(predicate *policyv1alpha1.Predicate, negate bool) (Predica
 		err  error
 	)
 	switch p := predicate.GetKind().(type) {
-	case *policyv1alpha1.Predicate_Existence:
+	case *policyv1.Predicate_Existence:
 		pred = func(_ any, exists bool) bool { return exists }
 
-	case *policyv1alpha1.Predicate_Equality:
+	case *policyv1.Predicate_Equality:
 		if p.Equality.GetKind() == nil {
 			return nil, ErrMissingPredicate
 		}
@@ -78,25 +78,25 @@ func CompilePredicate(predicate *policyv1alpha1.Predicate, negate bool) (Predica
 			return present(val, exists) && valueEquals(val, expected)
 		}
 
-	case *policyv1alpha1.Predicate_Glob:
+	case *policyv1.Predicate_Glob:
 		pattern := p.Glob
 		pred = func(val any, exists bool) bool {
 			return present(val, exists) && valueMatchesGlob(val, pattern)
 		}
 
-	case *policyv1alpha1.Predicate_ExclusiveMinimum:
+	case *policyv1.Predicate_ExclusiveMinimum:
 		pred, err = numericPredicate(p.ExclusiveMinimum, func(c int) bool { return c > 0 })
 
-	case *policyv1alpha1.Predicate_InclusiveMinimum:
+	case *policyv1.Predicate_InclusiveMinimum:
 		pred, err = numericPredicate(p.InclusiveMinimum, func(c int) bool { return c >= 0 })
 
-	case *policyv1alpha1.Predicate_ExclusiveMaximum:
+	case *policyv1.Predicate_ExclusiveMaximum:
 		pred, err = numericPredicate(p.ExclusiveMaximum, func(c int) bool { return c < 0 })
 
-	case *policyv1alpha1.Predicate_InclusiveMaximum:
+	case *policyv1.Predicate_InclusiveMaximum:
 		pred, err = numericPredicate(p.InclusiveMaximum, func(c int) bool { return c <= 0 })
 
-	case *policyv1alpha1.Predicate_Containment:
+	case *policyv1.Predicate_Containment:
 		if p.Containment.GetKind() == nil {
 			return nil, ErrMissingPredicate
 		}
@@ -119,7 +119,7 @@ func CompilePredicate(predicate *policyv1alpha1.Predicate, negate bool) (Predica
 	return pred, nil
 }
 
-func numericPredicate(expected *policyv1alpha1.NumericValue, accept func(cmp int) bool) (Predicate, error) {
+func numericPredicate(expected *policyv1.NumericValue, accept func(cmp int) bool) (Predicate, error) {
 	if expected.GetKind() == nil {
 		return nil, ErrMissingPredicate
 	}
@@ -146,7 +146,7 @@ type PathStep struct {
 
 // CompilePath pre-parses an AttributePath into PathSteps. The kind label names
 // the attribute source (for example "log" or "datapoint") in error messages.
-func CompilePath(attrPath *policyv1alpha1.AttributePath, kind string) ([]PathStep, error) {
+func CompilePath(attrPath *policyv1.AttributePath, kind string) ([]PathStep, error) {
 	if attrPath == nil || len(attrPath.GetSegments()) == 0 {
 		return nil, fmt.Errorf("%s attribute path cannot be empty", kind)
 	}
@@ -233,7 +233,7 @@ func PathExists(attrs pcommon.Map, steps []PathStep) bool {
 // Intermediate maps are created automatically when missing. When upsert is
 // false and either the leaf key or an intermediate non-map key already exists,
 // the returned closure leaves the map unmodified and returns false.
-func CompilePathSetter(attrPath *policyv1alpha1.AttributePath, kind string, val *policyv1alpha1.Value, upsert bool) (func(pcommon.Map) bool, error) {
+func CompilePathSetter(attrPath *policyv1.AttributePath, kind string, val *policyv1.Value, upsert bool) (func(pcommon.Map) bool, error) {
 	steps, err := CompilePath(attrPath, kind)
 	if err != nil {
 		return nil, err
@@ -283,7 +283,7 @@ func CompilePathSetter(attrPath *policyv1alpha1.AttributePath, kind string, val 
 // Intermediate maps are created automatically when missing. When upsert is
 // false and the target already exists (as a leaf or intermediate non-map),
 // the returned closure leaves the map unmodified and returns false.
-func CompilePathValueSetter(attrPath *policyv1alpha1.AttributePath, kind string, upsert bool) (func(pcommon.Map, pcommon.Value) bool, error) {
+func CompilePathValueSetter(attrPath *policyv1.AttributePath, kind string, upsert bool) (func(pcommon.Map, pcommon.Value) bool, error) {
 	steps, err := CompilePath(attrPath, kind)
 	if err != nil {
 		return nil, err
@@ -354,24 +354,24 @@ func resolveParentMap(attrs pcommon.Map, prefix []PathStep, upsert bool) (pcommo
 	return curr, true
 }
 
-func compileMapValuePutter(val *policyv1alpha1.Value) (func(pcommon.Map, string), error) {
+func compileMapValuePutter(val *policyv1.Value) (func(pcommon.Map, string), error) {
 	if val == nil {
 		return nil, ErrMissingValue
 	}
 	switch v := val.GetKind().(type) {
-	case *policyv1alpha1.Value_StringValue:
+	case *policyv1.Value_StringValue:
 		s := v.StringValue
 		return func(m pcommon.Map, key string) { m.PutStr(key, s) }, nil
-	case *policyv1alpha1.Value_IntValue:
+	case *policyv1.Value_IntValue:
 		n := v.IntValue
 		return func(m pcommon.Map, key string) { m.PutInt(key, n) }, nil
-	case *policyv1alpha1.Value_DoubleValue:
+	case *policyv1.Value_DoubleValue:
 		d := v.DoubleValue
 		return func(m pcommon.Map, key string) { m.PutDouble(key, d) }, nil
-	case *policyv1alpha1.Value_BoolValue:
+	case *policyv1.Value_BoolValue:
 		b := v.BoolValue
 		return func(m pcommon.Map, key string) { m.PutBool(key, b) }, nil
-	case *policyv1alpha1.Value_BytesValue:
+	case *policyv1.Value_BytesValue:
 		raw := bytes.Clone(v.BytesValue)
 		return func(m pcommon.Map, key string) { m.PutEmptyBytes(key).FromRaw(raw) }, nil
 	default:
@@ -382,24 +382,24 @@ func compileMapValuePutter(val *policyv1alpha1.Value) (func(pcommon.Map, string)
 // CompileValueSetter validates a Value proto and returns a closure that writes
 // the typed scalar into a destination pcommon.Value with zero hot-path type
 // switching.
-func CompileValueSetter(val *policyv1alpha1.Value) (func(pcommon.Value), error) {
+func CompileValueSetter(val *policyv1.Value) (func(pcommon.Value), error) {
 	if val == nil {
 		return nil, ErrMissingValue
 	}
 	switch v := val.GetKind().(type) {
-	case *policyv1alpha1.Value_StringValue:
+	case *policyv1.Value_StringValue:
 		s := v.StringValue
 		return func(dest pcommon.Value) { dest.SetStr(s) }, nil
-	case *policyv1alpha1.Value_IntValue:
+	case *policyv1.Value_IntValue:
 		n := v.IntValue
 		return func(dest pcommon.Value) { dest.SetInt(n) }, nil
-	case *policyv1alpha1.Value_DoubleValue:
+	case *policyv1.Value_DoubleValue:
 		d := v.DoubleValue
 		return func(dest pcommon.Value) { dest.SetDouble(d) }, nil
-	case *policyv1alpha1.Value_BoolValue:
+	case *policyv1.Value_BoolValue:
 		b := v.BoolValue
 		return func(dest pcommon.Value) { dest.SetBool(b) }, nil
-	case *policyv1alpha1.Value_BytesValue:
+	case *policyv1.Value_BytesValue:
 		raw := bytes.Clone(v.BytesValue)
 		return func(dest pcommon.Value) { dest.SetEmptyBytes().FromRaw(raw) }, nil
 	default:
@@ -411,7 +411,7 @@ func CompileValueSetter(val *policyv1alpha1.Value) (func(pcommon.Value), error) 
 // the target key from a pcommon.Map without creating intermediate maps.
 // It removes all occurrences of the target key (handling duplicate keys) and
 // returns true iff the target key existed and was removed.
-func CompilePathRemover(attrPath *policyv1alpha1.AttributePath, kind string) (func(pcommon.Map) bool, error) {
+func CompilePathRemover(attrPath *policyv1.AttributePath, kind string) (func(pcommon.Map) bool, error) {
 	steps, err := CompilePath(attrPath, kind)
 	if err != nil {
 		return nil, err
@@ -481,12 +481,12 @@ func ValueToAny(v pcommon.Value) any {
 
 // Equals reports whether the extracted value equals the policy's expected
 // Value, comparing within the type selected by the expected value's oneof.
-func valueEquals(val any, expected *policyv1alpha1.Value) bool {
+func valueEquals(val any, expected *policyv1.Value) bool {
 	switch exp := expected.GetKind().(type) {
-	case *policyv1alpha1.Value_StringValue:
+	case *policyv1.Value_StringValue:
 		s, ok := asString(val)
 		return ok && s == exp.StringValue
-	case *policyv1alpha1.Value_IntValue:
+	case *policyv1.Value_IntValue:
 		if n, ok := toInt64(val); ok {
 			return n == exp.IntValue
 		}
@@ -494,13 +494,13 @@ func valueEquals(val any, expected *policyv1alpha1.Value) bool {
 			return f == float64(exp.IntValue)
 		}
 		return false
-	case *policyv1alpha1.Value_DoubleValue:
+	case *policyv1.Value_DoubleValue:
 		f, ok := toFloat64(val)
 		return ok && f == exp.DoubleValue
-	case *policyv1alpha1.Value_BoolValue:
+	case *policyv1.Value_BoolValue:
 		b, ok := val.(bool)
 		return ok && b == exp.BoolValue
-	case *policyv1alpha1.Value_BytesValue:
+	case *policyv1.Value_BytesValue:
 		b, ok := asBytes(val)
 		return ok && bytes.Equal(b, exp.BytesValue)
 	default:
@@ -560,7 +560,7 @@ func globMatch(pattern, s string) bool {
 
 // Contains reports containment: membership for slice values, substring for
 // strings, and subslice for bytes.
-func valueContains(val any, expected *policyv1alpha1.Value) bool {
+func valueContains(val any, expected *policyv1.Value) bool {
 	if elems, ok := val.([]any); ok {
 		for _, elem := range elems {
 			if valueEquals(elem, expected) {
@@ -571,10 +571,10 @@ func valueContains(val any, expected *policyv1alpha1.Value) bool {
 	}
 
 	switch exp := expected.GetKind().(type) {
-	case *policyv1alpha1.Value_StringValue:
+	case *policyv1.Value_StringValue:
 		s, ok := asString(val)
 		return ok && strings.Contains(s, exp.StringValue)
-	case *policyv1alpha1.Value_BytesValue:
+	case *policyv1.Value_BytesValue:
 		b, ok := asBytes(val)
 		return ok && bytes.Contains(b, exp.BytesValue)
 	default:
@@ -585,7 +585,7 @@ func valueContains(val any, expected *policyv1alpha1.Value) bool {
 // CompareNumeric compares the extracted value against the policy's expected
 // NumericValue, returning -1, 0, or 1. The second result is false when the
 // extracted value is not numeric or the expected value is unset.
-func compareNumeric(val any, expected *policyv1alpha1.NumericValue) (int, bool) {
+func compareNumeric(val any, expected *policyv1.NumericValue) (int, bool) {
 	intVal, isInt := toInt64(val)
 	floatVal, isFloat := toFloat64(val)
 	if !isInt && !isFloat {
@@ -593,12 +593,12 @@ func compareNumeric(val any, expected *policyv1alpha1.NumericValue) (int, bool) 
 	}
 
 	switch exp := expected.GetKind().(type) {
-	case *policyv1alpha1.NumericValue_IntValue:
+	case *policyv1.NumericValue_IntValue:
 		if isInt {
 			return compare(intVal, exp.IntValue), true
 		}
 		return compare(floatVal, float64(exp.IntValue)), true
-	case *policyv1alpha1.NumericValue_DoubleValue:
+	case *policyv1.NumericValue_DoubleValue:
 		if math.IsNaN(exp.DoubleValue) {
 			return 0, false
 		}

@@ -31,8 +31,8 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
-	xdsv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/xds/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
+	xdsv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/xds/v1"
 )
 
 type fakeGCEMetadata struct {
@@ -188,7 +188,7 @@ func TestNewXDSPolicyManager_Validation(t *testing.T) {
 // subscribes to nothing, and no error says so.
 func TestXDSTPResourceName(t *testing.T) {
 	assert.Equal(t,
-		"xdstp://telemetry-director.us-central1.xds.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector/projects/my-project/fleets/my-fleet/collectors/default",
+		"xdstp://telemetry-director.us-central1.xds.googleapis.com/google.telemetry.xds.v1.TelemetryCollector/projects/my-project/fleets/my-fleet/collectors/default",
 		xdstpResourceName("us-central1", "my-project", "my-fleet"),
 	)
 }
@@ -498,7 +498,7 @@ func TestExtractPolicyProtos_TelemetryCollector(t *testing.T) {
 	policyAny, err := anypb.New(policyPayload)
 	require.NoError(t, err)
 
-	collector := &xdsv1alpha1.TelemetryCollector{
+	collector := &xdsv1.TelemetryCollector{
 		Policies: []*anypb.Any{policyAny},
 	}
 
@@ -550,7 +550,7 @@ func TestExtractPolicyProtos_Errors(t *testing.T) {
 		{
 			name: "policy with empty Any",
 			resources: func() []*anypb.Any {
-				collectorAny, err := anypb.New(&xdsv1alpha1.TelemetryCollector{
+				collectorAny, err := anypb.New(&xdsv1.TelemetryCollector{
 					Policies: []*anypb.Any{{}},
 				})
 				require.NoError(t, err)
@@ -563,7 +563,7 @@ func TestExtractPolicyProtos_Errors(t *testing.T) {
 		{
 			name: "policy with unregistered type URL",
 			resources: func() []*anypb.Any {
-				collectorAny, err := anypb.New(&xdsv1alpha1.TelemetryCollector{
+				collectorAny, err := anypb.New(&xdsv1.TelemetryCollector{
 					Policies: []*anypb.Any{unknownTypeAny},
 				})
 				require.NoError(t, err)
@@ -575,7 +575,7 @@ func TestExtractPolicyProtos_Errors(t *testing.T) {
 		{
 			name: "valid and invalid policies in one collector",
 			resources: func() []*anypb.Any {
-				collectorAny, err := anypb.New(&xdsv1alpha1.TelemetryCollector{
+				collectorAny, err := anypb.New(&xdsv1.TelemetryCollector{
 					Policies: []*anypb.Any{validPayloadAny, unknownTypeAny},
 				})
 				require.NoError(t, err)
@@ -664,9 +664,9 @@ func registerProtoDriverForTest(t *testing.T, policyType string, msg proto.Messa
 // driver is registered under, so every policy of this shape was rejected and
 // took its whole revision down with it.
 func TestMakePolicySetFromProtos_RoutesBareProtoToItsDriver(t *testing.T) {
-	d := registerProtoDriverForTest(t, "log_filter", &policyv1alpha1.LogFilterPolicy{})
+	d := registerProtoDriverForTest(t, "log_filter", &policyv1.LogFilterPolicy{})
 
-	policy := &policyv1alpha1.LogFilterPolicy{Id: "retain-errors"}
+	policy := &policyv1.LogFilterPolicy{Id: "retain-errors"}
 
 	ps, err := MakePolicySetFromProtos("projects/p/locations/l/policySets/ps", "v1", []proto.Message{policy})
 	require.NoError(t, err)
@@ -685,10 +685,10 @@ func TestMakePolicySetFromProtos_RoutesBareProtoToItsDriver(t *testing.T) {
 // that policy.
 func TestMakePolicySetFromProtos_UnclaimedProtoIsRejectedByName(t *testing.T) {
 	// Nothing registers MetricFilterPolicy in this test binary.
-	ps, err := MakePolicySetFromProtos("projects/p/locations/l/policySets/ps", "v1", []proto.Message{&policyv1alpha1.MetricFilterPolicy{}})
+	ps, err := MakePolicySetFromProtos("projects/p/locations/l/policySets/ps", "v1", []proto.Message{&policyv1.MetricFilterPolicy{}})
 
 	require.ErrorIs(t, err, ErrPolicyTypeNotFound)
-	assert.Contains(t, err.Error(), "google.telemetry.policy.v1alpha1.MetricFilterPolicy")
+	assert.Contains(t, err.Error(), "google.telemetry.policy.v1.MetricFilterPolicy")
 	assert.Empty(t, ps.Policies)
 }
 
@@ -697,11 +697,11 @@ func TestMakePolicySetFromProtos_UnclaimedProtoIsRejectedByName(t *testing.T) {
 // the revision the policies that were understood. The xDS manager depends on
 // this to tell a partially bad revision from a completely bad one.
 func TestMakePolicySetFromProtos_KeepsUsablePoliciesFromAMixedRevision(t *testing.T) {
-	registerProtoDriverForTest(t, "log_filter", &policyv1alpha1.LogFilterPolicy{})
+	registerProtoDriverForTest(t, "log_filter", &policyv1.LogFilterPolicy{})
 
 	ps, err := MakePolicySetFromProtos("projects/p/locations/l/policySets/ps", "v1", []proto.Message{
-		&policyv1alpha1.TraceFilterPolicy{Id: "unclaimed"},
-		&policyv1alpha1.LogFilterPolicy{Id: "usable"},
+		&policyv1.TraceFilterPolicy{Id: "unclaimed"},
+		&policyv1.LogFilterPolicy{Id: "usable"},
 	})
 
 	require.ErrorIs(t, err, ErrPolicyTypeNotFound)
@@ -764,7 +764,7 @@ func TestXDSPolicyLifecycle_SetActivePolicySet(t *testing.T) {
 	policyAny, err := anypb.New(policyPayload)
 	require.NoError(t, err)
 
-	collector := &xdsv1alpha1.TelemetryCollector{
+	collector := &xdsv1.TelemetryCollector{
 		PolicySetRevision: "projects/123456/locations/global/policySets/prod-ps/revisions/rev-xds-100",
 		Policies:          []*anypb.Any{policyAny},
 	}
@@ -814,7 +814,7 @@ func TestExtractManifest_TelemetryCollector(t *testing.T) {
 	policyAny, err := anypb.New(policyPayload)
 	require.NoError(t, err)
 
-	collector := &xdsv1alpha1.TelemetryCollector{
+	collector := &xdsv1.TelemetryCollector{
 		PolicySetRevision:           "projects/123456/locations/global/policySets/prod-ps/revisions/r1",
 		PolicySetRevisionCreateTime: timestamppb.New(now),
 		Policies:                    []*anypb.Any{policyAny},
@@ -834,9 +834,43 @@ func TestExtractManifest_TelemetryCollector(t *testing.T) {
 	require.Len(t, manifest.policies, 1)
 }
 
+func TestExtractManifest_LegacyV1Alpha1TelemetryCollector(t *testing.T) {
+	now := time.Now().Truncate(time.Microsecond)
+	policyPayload, err := structpb.NewStruct(map[string]any{
+		"name": "legacy-log-filter-policy",
+	})
+	require.NoError(t, err)
+
+	policyAny, err := anypb.New(policyPayload)
+	require.NoError(t, err)
+
+	collector := &xdsv1.TelemetryCollector{
+		PolicySetRevision:           "projects/123456/locations/global/policySets/prod-ps/revisions/r-legacy",
+		PolicySetRevisionCreateTime: timestamppb.New(now),
+		Policies:                    []*anypb.Any{policyAny},
+	}
+	wireBytes, err := proto.Marshal(collector)
+	require.NoError(t, err)
+
+	resp := &discoveryv3.DiscoveryResponse{
+		VersionInfo: "v1-legacy",
+		TypeUrl:     legacyXDSPolicyTypeURL,
+		Resources: []*anypb.Any{{
+			TypeUrl: legacyXDSPolicyTypeURL,
+			Value:   wireBytes,
+		}},
+	}
+
+	manifest, err := extractManifest(resp)
+	require.NoError(t, err)
+	assert.Equal(t, "projects/123456/locations/global/policySets/prod-ps/revisions/r-legacy", manifest.policySetRevision)
+	assert.True(t, now.Equal(manifest.revisionCreateTime))
+	require.Len(t, manifest.policies, 1)
+}
+
 func TestXDSPolicyLifecycle_EmptyPolicySetWithRevision(t *testing.T) {
 	createTime := time.Now().Truncate(time.Microsecond).Add(-5 * time.Minute)
-	collector := &xdsv1alpha1.TelemetryCollector{
+	collector := &xdsv1.TelemetryCollector{
 		PolicySetRevision:           "projects/123456/locations/global/policySets/empty-ps/revisions/rev-empty",
 		PolicySetRevisionCreateTime: timestamppb.New(createTime),
 		Policies:                    nil,
@@ -886,7 +920,7 @@ func TestHandleResponse_MissingPolicySetRevisionRejects(t *testing.T) {
 	policyAny, err := anypb.New(policyPayload)
 	require.NoError(t, err)
 
-	collector := &xdsv1alpha1.TelemetryCollector{
+	collector := &xdsv1.TelemetryCollector{
 		Policies: []*anypb.Any{policyAny},
 	}
 	collectorAny, err := anypb.New(collector)
@@ -904,7 +938,7 @@ func TestHandleResponse_MissingPolicySetRevisionRejects(t *testing.T) {
 }
 
 func TestHandleResponse_EmptyTelemetryCollectorAppliesEmptyPolicySet(t *testing.T) {
-	collectorAny, err := anypb.New(&xdsv1alpha1.TelemetryCollector{})
+	collectorAny, err := anypb.New(&xdsv1.TelemetryCollector{})
 	require.NoError(t, err)
 
 	resp := &discoveryv3.DiscoveryResponse{
@@ -930,7 +964,7 @@ func TestHandleResponse_EmptyTelemetryCollectorAppliesEmptyPolicySet(t *testing.
 }
 
 func TestHandleResponse_MalformedPolicySetRevisionRejects(t *testing.T) {
-	collector := &xdsv1alpha1.TelemetryCollector{
+	collector := &xdsv1.TelemetryCollector{
 		PolicySetRevision: "not-canonical-format",
 	}
 	collectorAny, err := anypb.New(collector)

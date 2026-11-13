@@ -22,7 +22,7 @@ import (
 	"errors"
 	"fmt"
 
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/matcher"
 	"go.opentelemetry.io/collector/pdata/ptrace"
@@ -37,9 +37,9 @@ const PolicyType = "trace_filter"
 //
 // Exposed to the package (rather than constructed inline in init) so tests
 // exercise the very value that is registered.
-var driver = googlepolicy.ProtoDriver[*policyv1alpha1.TraceFilterPolicy]{
+var driver = googlepolicy.ProtoDriver[*policyv1.TraceFilterPolicy]{
 	Class: googlepolicy.PolicyClassTransformation,
-	New: func(pb *policyv1alpha1.TraceFilterPolicy) (googlepolicy.Policy, error) {
+	New: func(pb *policyv1.TraceFilterPolicy) (googlepolicy.Policy, error) {
 		return NewPolicyFromProto(pb)
 	},
 }
@@ -65,7 +65,7 @@ var (
 
 // Policy represents a compiled, validated TraceFilterPolicy ready for hot-loop evaluation.
 type Policy struct {
-	proto    *policyv1alpha1.TraceFilterPolicy
+	proto    *policyv1.TraceFilterPolicy
 	matchers []matcher.CompiledTraceMatcher
 }
 
@@ -73,7 +73,7 @@ var _ googlepolicy.TransformationPolicy = (*Policy)(nil)
 var _ googlepolicy.TraceFilterPolicyEvaluator = (*Policy)(nil)
 
 // NewPolicyFromProto validates and compiles a TraceFilterPolicy protobuf into a Policy.
-func NewPolicyFromProto(pb *policyv1alpha1.TraceFilterPolicy) (*Policy, error) {
+func NewPolicyFromProto(pb *policyv1.TraceFilterPolicy) (*Policy, error) {
 	if pb == nil {
 		return nil, ErrNilProto
 	}

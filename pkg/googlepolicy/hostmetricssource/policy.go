@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"time"
 
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/confmap"
@@ -64,9 +64,9 @@ var defaultScrapers = []string{
 
 // driver loads a HostMetricsSourcePolicy from either shape it can arrive in: the proto
 // a control plane sends, or the map an authored config decodes to.
-var driver = &googlepolicy.ProtoDriver[*policyv1alpha1.HostMetricsSourcePolicy]{
+var driver = &googlepolicy.ProtoDriver[*policyv1.HostMetricsSourcePolicy]{
 	Class: googlepolicy.PolicyClassSource,
-	New: func(pb *policyv1alpha1.HostMetricsSourcePolicy) (googlepolicy.Policy, error) {
+	New: func(pb *policyv1.HostMetricsSourcePolicy) (googlepolicy.Policy, error) {
 		return NewPolicyFromProto(pb)
 	},
 }
@@ -79,7 +79,7 @@ func init() {
 
 // Policy represents a compiled, validated HostMetricsSourcePolicy ready for evaluation into Collector configuration.
 type Policy struct {
-	proto *policyv1alpha1.HostMetricsSourcePolicy
+	proto *policyv1.HostMetricsSourcePolicy
 }
 
 var (
@@ -90,11 +90,11 @@ var (
 )
 
 // NewPolicyFromProto validates and compiles a HostMetricsSourcePolicy protobuf into a Policy.
-func NewPolicyFromProto(pb *policyv1alpha1.HostMetricsSourcePolicy) (*Policy, error) {
+func NewPolicyFromProto(pb *policyv1.HostMetricsSourcePolicy) (*Policy, error) {
 	if pb == nil {
 		return nil, ErrNilProto
 	}
-	p := &Policy{proto: proto.Clone(pb).(*policyv1alpha1.HostMetricsSourcePolicy)}
+	p := &Policy{proto: proto.Clone(pb).(*policyv1.HostMetricsSourcePolicy)}
 	if err := p.Validate(); err != nil {
 		return nil, err
 	}
@@ -181,7 +181,7 @@ func (p *Policy) Consolidate(policies []googlepolicy.SourcePolicy) (googlepolicy
 		}
 	}
 
-	cloned := proto.Clone(p.proto).(*policyv1alpha1.HostMetricsSourcePolicy)
+	cloned := proto.Clone(p.proto).(*policyv1.HostMetricsSourcePolicy)
 	cloned.CollectionIntervalSeconds = &minEffectiveInterval
 	return NewPolicyFromProto(cloned)
 }

@@ -37,6 +37,8 @@ jobs:
         run: make install-tools
       - name: Lint and Format Protos
         run: make lint-protos
+      - name: Check for Breaking Proto Changes
+        run: make breaking-protos
 
   proto-generate-check:
     runs-on: ubuntu-latest

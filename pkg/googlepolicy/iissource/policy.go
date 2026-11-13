@@ -22,7 +22,7 @@ import (
 	"errors"
 	"fmt"
 
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/confmap"
@@ -54,9 +54,9 @@ var (
 
 // driver loads an IisSourcePolicy from either shape it can arrive in: the proto
 // a control plane sends, or the map an authored config decodes to.
-var driver = &googlepolicy.ProtoDriver[*policyv1alpha1.IisSourcePolicy]{
+var driver = &googlepolicy.ProtoDriver[*policyv1.IisSourcePolicy]{
 	Class: googlepolicy.PolicyClassSource,
-	New: func(pb *policyv1alpha1.IisSourcePolicy) (googlepolicy.Policy, error) {
+	New: func(pb *policyv1.IisSourcePolicy) (googlepolicy.Policy, error) {
 		return NewPolicyFromProto(pb)
 	},
 }
@@ -69,7 +69,7 @@ func init() {
 
 // Policy represents a compiled, validated IisSourcePolicy ready for evaluation into Collector configuration.
 type Policy struct {
-	proto *policyv1alpha1.IisSourcePolicy
+	proto *policyv1.IisSourcePolicy
 }
 
 var (
@@ -81,11 +81,11 @@ var (
 
 // NewPolicyFromProto validates and compiles an IisSourcePolicy protobuf into a Policy.
 // It defensively clones the input proto to prevent concurrent mutation by callers.
-func NewPolicyFromProto(pb *policyv1alpha1.IisSourcePolicy) (*Policy, error) {
+func NewPolicyFromProto(pb *policyv1.IisSourcePolicy) (*Policy, error) {
 	if pb == nil {
 		return nil, ErrNilProto
 	}
-	p := &Policy{proto: proto.Clone(pb).(*policyv1alpha1.IisSourcePolicy)}
+	p := &Policy{proto: proto.Clone(pb).(*policyv1.IisSourcePolicy)}
 	if err := p.Validate(); err != nil {
 		return nil, err
 	}
@@ -169,7 +169,7 @@ func (p *Policy) Consolidate(policies []googlepolicy.SourcePolicy) (googlepolicy
 		}
 	}
 
-	cloned := proto.Clone(p.proto).(*policyv1alpha1.IisSourcePolicy)
+	cloned := proto.Clone(p.proto).(*policyv1.IisSourcePolicy)
 	cloned.CollectionIntervalSeconds = proto.Int32(minInterval)
 	return NewPolicyFromProto(cloned)
 }

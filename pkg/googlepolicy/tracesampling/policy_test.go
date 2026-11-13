@@ -19,7 +19,7 @@ import (
 	"math"
 	"testing"
 
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -35,7 +35,7 @@ func TestNewPolicyFromProto_Validation(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNilProto)
 
 	// 2. Empty ID
-	_, err = NewPolicyFromProto(&policyv1alpha1.TraceSamplingPolicy{
+	_, err = NewPolicyFromProto(&policyv1.TraceSamplingPolicy{
 		Id:              "",
 		SamplingPercent: 50.0,
 	})
@@ -44,7 +44,7 @@ func TestNewPolicyFromProto_Validation(t *testing.T) {
 	// 3. Invalid sampling percentages
 	invalidPercents := []float64{0.0, -0.01, -50.0, 100.0001, 200.0, math.NaN(), math.Inf(1), math.Inf(-1)}
 	for _, p := range invalidPercents {
-		_, err = NewPolicyFromProto(&policyv1alpha1.TraceSamplingPolicy{
+		_, err = NewPolicyFromProto(&policyv1.TraceSamplingPolicy{
 			Id:              "test-p",
 			SamplingPercent: p,
 		})
@@ -52,7 +52,7 @@ func TestNewPolicyFromProto_Validation(t *testing.T) {
 	}
 
 	// 4. Valid policy
-	pol, err := NewPolicyFromProto(&policyv1alpha1.TraceSamplingPolicy{
+	pol, err := NewPolicyFromProto(&policyv1.TraceSamplingPolicy{
 		Id:              "sample-50",
 		SamplingPercent: 50.0,
 	})
@@ -70,7 +70,7 @@ func TestMatchesTrace(t *testing.T) {
 	t.Parallel()
 
 	// 1. Unconditional policy (empty matchers -> matches all spans)
-	unconditional, err := NewPolicyFromProto(&policyv1alpha1.TraceSamplingPolicy{
+	unconditional, err := NewPolicyFromProto(&policyv1.TraceSamplingPolicy{
 		Id:              "sample-all",
 		SamplingPercent: 10.0,
 	})
@@ -81,22 +81,22 @@ func TestMatchesTrace(t *testing.T) {
 	assert.True(t, unconditional.MatchesTrace(ctx))
 
 	// 2. Conditional policy targeting http.status_code == 500
-	conditional, err := NewPolicyFromProto(&policyv1alpha1.TraceSamplingPolicy{
+	conditional, err := NewPolicyFromProto(&policyv1.TraceSamplingPolicy{
 		Id:              "sample-500",
 		SamplingPercent: 100.0,
-		Matchers: []*policyv1alpha1.TraceMatcher{
+		Matchers: []*policyv1.TraceMatcher{
 			{
-				Target: &policyv1alpha1.TraceFieldSelector{
-					Target: &policyv1alpha1.TraceFieldSelector_SpanAttributePath{
-						SpanAttributePath: &policyv1alpha1.AttributePath{
+				Target: &policyv1.TraceFieldSelector{
+					Target: &policyv1.TraceFieldSelector_SpanAttributePath{
+						SpanAttributePath: &policyv1.AttributePath{
 							Segments: []string{"http.status_code"},
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.Predicate{
-					Kind: &policyv1alpha1.Predicate_Equality{
-						Equality: &policyv1alpha1.Value{
-							Kind: &policyv1alpha1.Value_IntValue{
+				Predicate: &policyv1.Predicate{
+					Kind: &policyv1.Predicate_Equality{
+						Equality: &policyv1.Value{
+							Kind: &policyv1.Value_IntValue{
 								IntValue: 500,
 							},
 						},
@@ -120,20 +120,20 @@ func TestMatchesTrace(t *testing.T) {
 	assert.True(t, conditional.MatchesTrace(ctx500))
 
 	// 3. Multi-matcher policy (AND logic)
-	multi, err := NewPolicyFromProto(&policyv1alpha1.TraceSamplingPolicy{
+	multi, err := NewPolicyFromProto(&policyv1.TraceSamplingPolicy{
 		Id:              "sample-cart-errors",
 		SamplingPercent: 20.0,
-		Matchers: []*policyv1alpha1.TraceMatcher{
+		Matchers: []*policyv1.TraceMatcher{
 			{
-				Target: &policyv1alpha1.TraceFieldSelector{
-					Target: &policyv1alpha1.TraceFieldSelector_RecordField{
-						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME,
+				Target: &policyv1.TraceFieldSelector{
+					Target: &policyv1.TraceFieldSelector_RecordField{
+						RecordField: policyv1.SpanRecordField_SPAN_RECORD_FIELD_NAME,
 					},
 				},
-				Predicate: &policyv1alpha1.Predicate{
-					Kind: &policyv1alpha1.Predicate_Equality{
-						Equality: &policyv1alpha1.Value{
-							Kind: &policyv1alpha1.Value_StringValue{
+				Predicate: &policyv1.Predicate{
+					Kind: &policyv1.Predicate_Equality{
+						Equality: &policyv1.Value{
+							Kind: &policyv1.Value_StringValue{
 								StringValue: "Checkout",
 							},
 						},
@@ -141,17 +141,17 @@ func TestMatchesTrace(t *testing.T) {
 				},
 			},
 			{
-				Target: &policyv1alpha1.TraceFieldSelector{
-					Target: &policyv1alpha1.TraceFieldSelector_SpanAttributePath{
-						SpanAttributePath: &policyv1alpha1.AttributePath{
+				Target: &policyv1.TraceFieldSelector{
+					Target: &policyv1.TraceFieldSelector_SpanAttributePath{
+						SpanAttributePath: &policyv1.AttributePath{
 							Segments: []string{"error"},
 						},
 					},
 				},
-				Predicate: &policyv1alpha1.Predicate{
-					Kind: &policyv1alpha1.Predicate_Equality{
-						Equality: &policyv1alpha1.Value{
-							Kind: &policyv1alpha1.Value_BoolValue{
+				Predicate: &policyv1.Predicate{
+					Kind: &policyv1.Predicate_Equality{
+						Equality: &policyv1.Value{
+							Kind: &policyv1.Value_BoolValue{
 								BoolValue: true,
 							},
 						},
@@ -209,7 +209,7 @@ func TestDriver_LoadPolicy(t *testing.T) {
 	assert.Error(t, err)
 
 	// 4. LoadPolicyProto from proto
-	pb := &policyv1alpha1.TraceSamplingPolicy{
+	pb := &policyv1.TraceSamplingPolicy{
 		Id:              "from-proto",
 		SamplingPercent: 30.0,
 	}
@@ -218,7 +218,7 @@ func TestDriver_LoadPolicy(t *testing.T) {
 	assert.Equal(t, "from-proto", p.PolicyName())
 
 	// 5. LoadPolicyProto with foreign proto returns error
-	foreignProto := &policyv1alpha1.LogFilterPolicy{Id: "bad"}
+	foreignProto := &policyv1.LogFilterPolicy{Id: "bad"}
 	_, err = driver.LoadPolicyProto(foreignProto)
 	assert.ErrorIs(t, err, googlepolicy.ErrPolicyProtoMismatch)
 }

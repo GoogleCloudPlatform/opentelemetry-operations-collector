@@ -24,7 +24,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -37,7 +37,7 @@ func TestPolicy_Validation(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		proto   *policyv1alpha1.WindowsEventLogSourcePolicy
+		proto   *policyv1.WindowsEventLogSourcePolicy
 		wantErr error
 	}{
 		{
@@ -47,7 +47,7 @@ func TestPolicy_Validation(t *testing.T) {
 		},
 		{
 			name: "empty id",
-			proto: &policyv1alpha1.WindowsEventLogSourcePolicy{
+			proto: &policyv1.WindowsEventLogSourcePolicy{
 				Id:       "",
 				Channels: []string{"Security"},
 			},
@@ -55,7 +55,7 @@ func TestPolicy_Validation(t *testing.T) {
 		},
 		{
 			name: "whitespace id",
-			proto: &policyv1alpha1.WindowsEventLogSourcePolicy{
+			proto: &policyv1.WindowsEventLogSourcePolicy{
 				Id:       "   ",
 				Channels: []string{"Security"},
 			},
@@ -63,7 +63,7 @@ func TestPolicy_Validation(t *testing.T) {
 		},
 		{
 			name: "empty channels slice",
-			proto: &policyv1alpha1.WindowsEventLogSourcePolicy{
+			proto: &policyv1.WindowsEventLogSourcePolicy{
 				Id:       "win-1",
 				Channels: []string{},
 			},
@@ -71,7 +71,7 @@ func TestPolicy_Validation(t *testing.T) {
 		},
 		{
 			name: "nil channels slice",
-			proto: &policyv1alpha1.WindowsEventLogSourcePolicy{
+			proto: &policyv1.WindowsEventLogSourcePolicy{
 				Id:       "win-1",
 				Channels: nil,
 			},
@@ -79,7 +79,7 @@ func TestPolicy_Validation(t *testing.T) {
 		},
 		{
 			name: "channel with empty string",
-			proto: &policyv1alpha1.WindowsEventLogSourcePolicy{
+			proto: &policyv1.WindowsEventLogSourcePolicy{
 				Id:       "win-1",
 				Channels: []string{"Security", ""},
 			},
@@ -87,7 +87,7 @@ func TestPolicy_Validation(t *testing.T) {
 		},
 		{
 			name: "channel with whitespace only",
-			proto: &policyv1alpha1.WindowsEventLogSourcePolicy{
+			proto: &policyv1.WindowsEventLogSourcePolicy{
 				Id:       "win-1",
 				Channels: []string{"Security", "   "},
 			},
@@ -95,7 +95,7 @@ func TestPolicy_Validation(t *testing.T) {
 		},
 		{
 			name: "channel with punctuation only",
-			proto: &policyv1alpha1.WindowsEventLogSourcePolicy{
+			proto: &policyv1.WindowsEventLogSourcePolicy{
 				Id:       "win-1",
 				Channels: []string{"Security", "///"},
 			},
@@ -103,7 +103,7 @@ func TestPolicy_Validation(t *testing.T) {
 		},
 		{
 			name: "channel with colons only",
-			proto: &policyv1alpha1.WindowsEventLogSourcePolicy{
+			proto: &policyv1.WindowsEventLogSourcePolicy{
 				Id:       "win-1",
 				Channels: []string{"Security", ":::::"},
 			},
@@ -111,7 +111,7 @@ func TestPolicy_Validation(t *testing.T) {
 		},
 		{
 			name: "channel with symbols only",
-			proto: &policyv1alpha1.WindowsEventLogSourcePolicy{
+			proto: &policyv1.WindowsEventLogSourcePolicy{
 				Id:       "win-1",
 				Channels: []string{"Security", "©"},
 			},
@@ -119,7 +119,7 @@ func TestPolicy_Validation(t *testing.T) {
 		},
 		{
 			name: "channel with embedded NUL character",
-			proto: &policyv1alpha1.WindowsEventLogSourcePolicy{
+			proto: &policyv1.WindowsEventLogSourcePolicy{
 				Id:       "win-1",
 				Channels: []string{"Security", "Sec\x00urity"},
 			},
@@ -127,7 +127,7 @@ func TestPolicy_Validation(t *testing.T) {
 		},
 		{
 			name: "valid policy",
-			proto: &policyv1alpha1.WindowsEventLogSourcePolicy{
+			proto: &policyv1.WindowsEventLogSourcePolicy{
 				Id:       "win-1",
 				Channels: []string{"Security", "System"},
 			},
@@ -235,7 +235,7 @@ func TestSanitizeChannelName(t *testing.T) {
 func TestPolicy_Channels_Deduplication(t *testing.T) {
 	t.Parallel()
 
-	p, err := NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+	p, err := NewPolicyFromProto(&policyv1.WindowsEventLogSourcePolicy{
 		Id:       "win-dedup",
 		Channels: []string{"Security", "security", "SYSTEM", "System", "Application", "Sysmon/Operational", "Sysmon_Operational"},
 	})
@@ -251,7 +251,7 @@ func TestPolicy_ReceiverID_DisambiguationAndDeterminism(t *testing.T) {
 	t.Parallel()
 
 	// 1. Two distinct channels receive distinct, deterministic IDs
-	p, err := NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+	p, err := NewPolicyFromProto(&policyv1.WindowsEventLogSourcePolicy{
 		Id:       "win-disambiguate",
 		Channels: []string{"Sysmon/Operational", "Sysmon_Operational"},
 	})
@@ -268,13 +268,13 @@ func TestPolicy_ReceiverID_DisambiguationAndDeterminism(t *testing.T) {
 	assert.Equal(t, secID, SanitizeChannelName("security"))
 	assert.Equal(t, secID, SanitizeChannelName("SECURITY"))
 
-	p1, err := NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+	p1, err := NewPolicyFromProto(&policyv1.WindowsEventLogSourcePolicy{
 		Id:       "policy-alpha",
 		Channels: []string{"Security"},
 	})
 	require.NoError(t, err)
 
-	p2, err := NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+	p2, err := NewPolicyFromProto(&policyv1.WindowsEventLogSourcePolicy{
 		Id:       "policy-beta",
 		Channels: []string{"System", "security", "Sysmon/Operational"},
 	})
@@ -311,7 +311,7 @@ func TestPolicy_ReceiverID_CollidingLongUTF8(t *testing.T) {
 
 	ch1 := "a" + strings.Repeat("é", 255) + "/" + strings.Repeat("é", 255)
 	ch2 := "a" + strings.Repeat("é", 255) + " " + strings.Repeat("é", 255)
-	p, err := NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+	p, err := NewPolicyFromProto(&policyv1.WindowsEventLogSourcePolicy{
 		Id:       "collision-long-utf8",
 		Channels: []string{ch1, ch2},
 	})
@@ -328,7 +328,7 @@ func TestPolicy_ReceiverID_CollidingLongUTF8(t *testing.T) {
 func TestPolicy_ReceiverIDs(t *testing.T) {
 	t.Parallel()
 
-	p, err := NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+	p, err := NewPolicyFromProto(&policyv1.WindowsEventLogSourcePolicy{
 		Id:       "win-1",
 		Channels: []string{"System", "Security", "Microsoft-Windows-Sysmon/Operational"},
 	})
@@ -355,7 +355,7 @@ func TestPolicy_ReceiverIDs(t *testing.T) {
 func TestPolicy_DefensiveProtoClone(t *testing.T) {
 	t.Parallel()
 
-	original := &policyv1alpha1.WindowsEventLogSourcePolicy{
+	original := &policyv1.WindowsEventLogSourcePolicy{
 		Id:       "win-clone-test",
 		Channels: []string{"Security", "System"},
 	}
@@ -375,7 +375,7 @@ func TestPolicy_DefensiveProtoClone(t *testing.T) {
 func TestPolicy_ReceiverConfigs(t *testing.T) {
 	t.Parallel()
 
-	p, err := NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+	p, err := NewPolicyFromProto(&policyv1.WindowsEventLogSourcePolicy{
 		Id:       "win-cfg",
 		Channels: []string{"Security", "Microsoft-Windows-Sysmon/Operational"},
 	})
@@ -412,7 +412,7 @@ func TestPolicy_ReceiverConfigs(t *testing.T) {
 func TestPolicy_Evaluate(t *testing.T) {
 	t.Parallel()
 
-	p, err := NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+	p, err := NewPolicyFromProto(&policyv1.WindowsEventLogSourcePolicy{
 		Id:       "win-eval",
 		Channels: []string{"Security", "Microsoft-Windows-Sysmon/Operational"},
 	})
@@ -457,7 +457,7 @@ func TestPolicy_Evaluate(t *testing.T) {
 func TestPolicy_Evaluate_InvalidPolicy(t *testing.T) {
 	t.Parallel()
 
-	bad := &Policy{proto: &policyv1alpha1.WindowsEventLogSourcePolicy{Id: ""}}
+	bad := &Policy{proto: &policyv1.WindowsEventLogSourcePolicy{Id: ""}}
 	conf, err := bad.Evaluate(context.Background())
 	require.ErrorIs(t, err, ErrMissingID)
 	assert.Nil(t, conf)
@@ -503,19 +503,19 @@ func TestDriver_LoadPolicy(t *testing.T) {
 func TestPolicy_Consolidate(t *testing.T) {
 	t.Parallel()
 
-	p1, err := NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+	p1, err := NewPolicyFromProto(&policyv1.WindowsEventLogSourcePolicy{
 		Id:       "win-1",
 		Channels: []string{"Security", "System"},
 	})
 	require.NoError(t, err)
 
-	p2, err := NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+	p2, err := NewPolicyFromProto(&policyv1.WindowsEventLogSourcePolicy{
 		Id:       "win-2",
 		Channels: []string{"security", "Application"},
 	})
 	require.NoError(t, err)
 
-	p3, err := NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+	p3, err := NewPolicyFromProto(&policyv1.WindowsEventLogSourcePolicy{
 		Id:       "win-3",
 		Channels: []string{"SYSTEM", "Microsoft-Windows-Sysmon/Operational"},
 	})
@@ -582,7 +582,7 @@ func TestPolicy_Consolidate(t *testing.T) {
 
 	t.Run("invalid receiver returns error", func(t *testing.T) {
 		t.Parallel()
-		badReceiver := &Policy{proto: &policyv1alpha1.WindowsEventLogSourcePolicy{Id: ""}}
+		badReceiver := &Policy{proto: &policyv1.WindowsEventLogSourcePolicy{Id: ""}}
 		res, err := badReceiver.Consolidate(nil)
 		require.ErrorIs(t, err, ErrMissingID)
 		assert.Nil(t, res)
@@ -595,7 +595,7 @@ func TestPolicy_Consolidate(t *testing.T) {
 
 	t.Run("invalid policy in slice returns error", func(t *testing.T) {
 		t.Parallel()
-		bad := &Policy{proto: &policyv1alpha1.WindowsEventLogSourcePolicy{Id: ""}}
+		bad := &Policy{proto: &policyv1.WindowsEventLogSourcePolicy{Id: ""}}
 		res, err := p1.Consolidate([]googlepolicy.SourcePolicy{bad})
 		require.Error(t, err)
 		assert.Nil(t, res)

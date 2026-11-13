@@ -22,7 +22,7 @@ import (
 	"errors"
 	"fmt"
 
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/confmap"
@@ -51,9 +51,9 @@ var (
 
 // driver loads a JournaldSourcePolicy from either shape it can arrive in: the proto
 // a control plane sends, or the map an authored config decodes to.
-var driver = &googlepolicy.ProtoDriver[*policyv1alpha1.JournaldSourcePolicy]{
+var driver = &googlepolicy.ProtoDriver[*policyv1.JournaldSourcePolicy]{
 	Class: googlepolicy.PolicyClassSource,
-	New: func(pb *policyv1alpha1.JournaldSourcePolicy) (googlepolicy.Policy, error) {
+	New: func(pb *policyv1.JournaldSourcePolicy) (googlepolicy.Policy, error) {
 		return NewPolicyFromProto(pb)
 	},
 }
@@ -66,7 +66,7 @@ func init() {
 
 // Policy represents a compiled, validated JournaldSourcePolicy ready for evaluation into Collector configuration.
 type Policy struct {
-	proto *policyv1alpha1.JournaldSourcePolicy
+	proto *policyv1.JournaldSourcePolicy
 }
 
 var (
@@ -77,11 +77,11 @@ var (
 )
 
 // NewPolicyFromProto validates and compiles a JournaldSourcePolicy protobuf into a Policy.
-func NewPolicyFromProto(pb *policyv1alpha1.JournaldSourcePolicy) (*Policy, error) {
+func NewPolicyFromProto(pb *policyv1.JournaldSourcePolicy) (*Policy, error) {
 	if pb == nil {
 		return nil, ErrNilProto
 	}
-	p := &Policy{proto: proto.Clone(pb).(*policyv1alpha1.JournaldSourcePolicy)}
+	p := &Policy{proto: proto.Clone(pb).(*policyv1.JournaldSourcePolicy)}
 	if err := p.Validate(); err != nil {
 		return nil, err
 	}

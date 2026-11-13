@@ -705,17 +705,13 @@ func copyDir(src, dst string) error {
 		if err != nil {
 			return err
 		}
-		defer func() {
-			_ = srcFile.Close()
-		}()
+		defer srcFile.Close()
 
 		dstFile, err := os.OpenFile(dstPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, info.Mode())
 		if err != nil {
 			return err
 		}
-		defer func() {
-			_ = dstFile.Close()
-		}()
+		defer dstFile.Close()
 
 		if _, err := io.Copy(dstFile, srcFile); err != nil {
 			return err

@@ -29,11 +29,7 @@ func TestComponentGenerator(t *testing.T) {
 	assert.NilError(t, err)
 
 	// Create temp dir
-	tempDir, err := os.MkdirTemp("", "component-generator-test")
-	assert.NilError(t, err)
-	t.Cleanup(func() {
-		assert.NilError(t, os.RemoveAll(tempDir))
-	})
+	tempDir := t.TempDir()
 
 	// Change to temp dir
 	err = os.Chdir(tempDir)

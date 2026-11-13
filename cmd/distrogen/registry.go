@@ -406,9 +406,7 @@ func fetchOTelModuleVersions(repo string, version string) (otelModuleVersions, e
 	if err != nil {
 		return nil, fmt.Errorf("could not fetch %s: %w", url, err)
 	}
-	defer func() {
-		_ = response.Body.Close()
-	}()
+	defer response.Body.Close()
 
 	if response.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("could not fetch %s: %s", url, response.Status)

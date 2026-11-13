@@ -49,11 +49,7 @@ func testProjectGeneratorCase(t *testing.T, registry *Registry, testFolder strin
 	specPath := filepath.Join(testdataFullProjectPath, testFolder, "spec.yaml")
 
 	// Create a temporary directory to generate files in, to avoid polluting testdata.
-	tempDir, err := os.MkdirTemp("", "project-generator-test")
-	assert.NilError(t, err)
-	t.Cleanup(func() {
-		assert.NilError(t, os.RemoveAll(tempDir))
-	})
+	tempDir := t.TempDir()
 
 	// The generator expects the spec file to be in the project path, so copy it there.
 	specData, err := os.ReadFile(specPath)

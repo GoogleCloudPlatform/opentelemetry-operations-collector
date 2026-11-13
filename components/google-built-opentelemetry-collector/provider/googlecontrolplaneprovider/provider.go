@@ -656,7 +656,9 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 		return nil, false, err
 	}
 
-	confMap, _ := escapeDollarSigns(conf.ToStringMap()).(map[string]any)
+	stringMap := conf.ToStringMap()
+	splitSharedStorageProcessors(stringMap)
+	confMap, _ := escapeDollarSigns(stringMap).(map[string]any)
 	ret, err := confmap.NewRetrieved(confMap)
 	return ret, false, err
 }

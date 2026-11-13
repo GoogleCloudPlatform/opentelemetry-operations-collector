@@ -106,6 +106,7 @@ func TestPolicy_Evaluate(t *testing.T) {
 
 	journaldCfg, ok := receivers[receiverID.String()].(map[string]any)
 	require.True(t, ok, "journald/googlecontrolplane receiver must be present")
+	assert.Equal(t, googlepolicy.StorageExtensionID.String(), journaldCfg["storage"])
 
 	operators, ok := journaldCfg["operators"].([]any)
 	require.True(t, ok, "operators key must be a slice")

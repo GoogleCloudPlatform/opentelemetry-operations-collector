@@ -2410,6 +2410,7 @@ func TestRetrieve_MultipleJournaldSourcePoliciesConsolidated(t *testing.T) {
 
 	// Exactly 1 journald receiver is present
 	require.Contains(t, receivers, "journald/googlecontrolplane")
+	assert.Equal(t, "file_storage/googlecontrolplane", conf.Get("receivers::journald/googlecontrolplane::storage"))
 
 	pipelines, ok := raw["service"].(map[string]any)["pipelines"].(map[string]any)
 	require.True(t, ok)

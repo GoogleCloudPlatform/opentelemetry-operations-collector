@@ -192,6 +192,7 @@ receivers:
               overwrite_text: true
               parse_from: body.PRIORITY
               type: severity_parser
+        storage: file_storage/googlecontrolplane
     nop/googlecontrolplane: {}
     otlp/default_self_metrics:
         protocols:

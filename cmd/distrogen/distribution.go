@@ -705,13 +705,17 @@ func copyDir(src, dst string) error {
 		if err != nil {
 			return err
 		}
-		defer srcFile.Close()
+		defer func() {
+			_ = srcFile.Close()
+		}()
 
 		dstFile, err := os.OpenFile(dstPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, info.Mode())
 		if err != nil {
 			return err
 		}
-		defer dstFile.Close()
+		defer func() {
+			_ = dstFile.Close()
+		}()
 
 		if _, err := io.Copy(dstFile, srcFile); err != nil {
 			return err
@@ -818,7 +822,7 @@ func BumpHotfix(specPath string, identifierOverride string) error {
 func validateSpecFieldPath(t reflect.Type, fieldParts []string, fullPath string) error {
 	currentType := t
 	for _, part := range fieldParts {
-		if currentType.Kind() == reflect.Ptr {
+		if currentType.Kind() == reflect.Pointer {
 			currentType = currentType.Elem()
 		}
 		if currentType.Kind() != reflect.Struct {

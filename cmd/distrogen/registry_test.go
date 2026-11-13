@@ -472,7 +472,7 @@ func TestComponentsRegistryGenerator_PreservesExistingRegistry(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "registry-generator-test")
 	assert.NilError(t, err)
 	t.Cleanup(func() {
-		os.RemoveAll(tempDir)
+		assert.NilError(t, os.RemoveAll(tempDir))
 	})
 
 	componentsDir := filepath.Join(tempDir, "components")

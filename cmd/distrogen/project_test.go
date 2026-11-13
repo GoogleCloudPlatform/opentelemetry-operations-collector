@@ -52,7 +52,7 @@ func testProjectGeneratorCase(t *testing.T, registry *Registry, testFolder strin
 	tempDir, err := os.MkdirTemp("", "project-generator-test")
 	assert.NilError(t, err)
 	t.Cleanup(func() {
-		os.RemoveAll(tempDir)
+		assert.NilError(t, os.RemoveAll(tempDir))
 	})
 
 	// The generator expects the spec file to be in the project path, so copy it there.

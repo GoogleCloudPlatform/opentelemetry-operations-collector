@@ -88,6 +88,10 @@ func mustCompile(t *testing.T, predicate *policyv1alpha1.Predicate) Predicate {
 // predicate the engine cannot honour is rejected at load time rather than
 // silently never matching at runtime.
 func TestCompilePredicateRejectsMalformed(t *testing.T) {
+	nanVal := &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_DoubleValue{DoubleValue: math.NaN()}}
+	posInfVal := &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_DoubleValue{DoubleValue: math.Inf(1)}}
+	negInfVal := &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_DoubleValue{DoubleValue: math.Inf(-1)}}
+
 	tests := []struct {
 		name      string
 		predicate *policyv1alpha1.Predicate
@@ -97,10 +101,20 @@ func TestCompilePredicateRejectsMalformed(t *testing.T) {
 		{"unset predicate oneof", &policyv1alpha1.Predicate{}, ErrMissingPredicate},
 		{"equals with nil value", predEquals(nil), ErrMissingPredicate},
 		{"equals with unset value oneof", predEquals(&policyv1alpha1.Value{}), ErrMissingPredicate},
+		{"equals with NaN double_value", predEquals(nanVal), ErrNonFiniteDouble},
+		{"equals with +Inf double_value", predEquals(posInfVal), ErrNonFiniteDouble},
+		{"equals with -Inf double_value", predEquals(negInfVal), ErrNonFiniteDouble},
 		{"contains with unset value oneof", predContains(&policyv1alpha1.Value{}), ErrMissingPredicate},
+		{"contains with NaN double_value", predContains(nanVal), ErrNonFiniteDouble},
+		{"contains with +Inf double_value", predContains(posInfVal), ErrNonFiniteDouble},
+		{"contains with -Inf double_value", predContains(negInfVal), ErrNonFiniteDouble},
 		{"gt with nil numeric", predGt(nil), ErrMissingPredicate},
 		{"gt with unset numeric oneof", predGt(&policyv1alpha1.NumericValue{}), ErrMissingPredicate},
+		{"gt with NaN double_value", predGt(doubleNumeric(math.NaN())), ErrNonFiniteDouble},
+		{"gte with +Inf double_value", predGte(doubleNumeric(math.Inf(1))), ErrNonFiniteDouble},
+		{"lt with -Inf double_value", predLt(doubleNumeric(math.Inf(-1))), ErrNonFiniteDouble},
 		{"lte with unset numeric oneof", predLte(&policyv1alpha1.NumericValue{}), ErrMissingPredicate},
+		{"lte with NaN double_value", predLte(doubleNumeric(math.NaN())), ErrNonFiniteDouble},
 	}
 
 	for _, tt := range tests {
@@ -262,6 +276,12 @@ func TestCompilePathRejectsEmpty(t *testing.T) {
 
 	_, err = CompilePath(&policyv1alpha1.AttributePath{}, "datapoint")
 	assert.ErrorContains(t, err, "datapoint attribute path cannot be empty")
+
+	_, err = CompilePath(&policyv1alpha1.AttributePath{Segments: []string{""}}, "log")
+	assert.ErrorContains(t, err, "log attribute path segment[0] cannot be empty")
+
+	_, err = CompilePath(&policyv1alpha1.AttributePath{Segments: []string{"http", ""}}, "resource")
+	assert.ErrorContains(t, err, "resource attribute path segment[1] cannot be empty")
 }
 
 func TestEvalPath(t *testing.T) {
@@ -389,8 +409,6 @@ func TestCompareNumericNaN(t *testing.T) {
 		{"lt", predLt(expected100)},
 		{"lte", predLte(expected100)},
 		{"equals", predEquals(&policyv1alpha1.Value{Kind: &policyv1alpha1.Value_DoubleValue{DoubleValue: 100.0}})},
-		{"gte with expected NaN", predGte(expectedNaN)},
-		{"lte with expected NaN", predLte(expectedNaN)},
 	}
 
 	for _, tc := range predicates {
@@ -399,11 +417,15 @@ func TestCompareNumericNaN(t *testing.T) {
 			require.NoError(t, err)
 			assert.False(t, fn(nan64, true), "float64(NaN) must never match %s", tc.name)
 			assert.False(t, fn(nan32, true), "float32(NaN) must never match %s", tc.name)
-			if tc.name == "gte with expected NaN" || tc.name == "lte with expected NaN" {
-				assert.False(t, fn(100.0, true), "100.0 against expected NaN must never match %s", tc.name)
-			}
 		})
 	}
+
+	// Non-finite expected values are rejected at compile time, and compareNumeric
+	// also guards against NaN defensively if invoked directly.
+	_, err := CompilePredicate(predGte(expectedNaN), false)
+	require.ErrorIs(t, err, ErrNonFiniteDouble)
+	_, ok := compareNumeric(100.0, expectedNaN)
+	assert.False(t, ok)
 }
 
 func TestCompilePathSetter(t *testing.T) {
@@ -411,11 +433,24 @@ func TestCompilePathSetter(t *testing.T) {
 		_, err := CompilePathSetter(nil, "log", strValue("v"), true)
 		assert.ErrorContains(t, err, "log attribute path cannot be empty")
 
+		_, err = CompilePathSetter(&policyv1alpha1.AttributePath{Segments: []string{""}}, "log", strValue("v"), true)
+		assert.ErrorContains(t, err, "log attribute path segment[0] cannot be empty")
+
 		_, err = CompilePathSetter(&policyv1alpha1.AttributePath{Segments: []string{"k"}}, "log", nil, true)
 		assert.ErrorIs(t, err, ErrMissingValue)
 
 		_, err = CompilePathSetter(&policyv1alpha1.AttributePath{Segments: []string{"k"}}, "log", &policyv1alpha1.Value{}, true)
 		assert.ErrorIs(t, err, ErrMissingValue)
+
+		for _, nonFinite := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+			_, err = CompilePathSetter(
+				&policyv1alpha1.AttributePath{Segments: []string{"k"}},
+				"log",
+				&policyv1alpha1.Value{Kind: &policyv1alpha1.Value_DoubleValue{DoubleValue: nonFinite}},
+				true,
+			)
+			assert.ErrorIs(t, err, ErrNonFiniteDouble)
+		}
 	})
 
 	t.Run("all scalar value types flat and zero map guard", func(t *testing.T) {
@@ -536,6 +571,11 @@ func TestCompileValueSetter(t *testing.T) {
 
 	_, err = CompileValueSetter(&policyv1alpha1.Value{})
 	assert.ErrorIs(t, err, ErrMissingValue)
+
+	for _, nonFinite := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+		_, err = CompileValueSetter(&policyv1alpha1.Value{Kind: &policyv1alpha1.Value_DoubleValue{DoubleValue: nonFinite}})
+		assert.ErrorIs(t, err, ErrNonFiniteDouble)
+	}
 
 	dest := pcommon.NewValueEmpty()
 

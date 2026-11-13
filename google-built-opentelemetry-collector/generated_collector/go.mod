@@ -114,6 +114,7 @@ require (
 	go.opentelemetry.io/collector/receiver v1.71.0
 	go.opentelemetry.io/collector/receiver/nopreceiver v0.165.0
 	go.opentelemetry.io/collector/receiver/otlpreceiver v0.165.0
+	go.opentelemetry.io/ebpf-profiler v0.0.202645
 	golang.org/x/sys v0.49.0
 )
 
@@ -195,6 +196,7 @@ require (
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cenkalti/backoff/v7 v7.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/cilium/ebpf v0.22.0 // indirect
 	github.com/cncf/xds/go v0.0.0-20260202195803-dba9d589def2 // indirect
 	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
@@ -211,7 +213,9 @@ require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/ebitengine/purego v0.11.2 // indirect
 	github.com/edsrzf/mmap-go v1.2.1-0.20241212181136-fad1cd13edbd // indirect
+	github.com/elastic/go-freelru v0.16.0 // indirect
 	github.com/elastic/go-grok v0.3.1 // indirect
+	github.com/elastic/go-perf v0.0.0-20260224073651-af0ee0c731b7 // indirect
 	github.com/elastic/lunes v0.2.2 // indirect
 	github.com/elastic/proxy-connect-dialer-go v0.1.1 // indirect
 	github.com/emicklei/go-restful/v3 v3.13.0 // indirect
@@ -303,6 +307,7 @@ require (
 	github.com/jaegertracing/jaeger-idl v0.14.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/jonboulle/clockwork v0.5.0 // indirect
+	github.com/josharian/native v1.1.0 // indirect
 	github.com/jpillora/backoff v1.1.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/julienschmidt/httprouter v1.3.0 // indirect
@@ -323,9 +328,12 @@ require (
 	github.com/magefile/mage v1.15.0 // indirect
 	github.com/mattn/go-colorable v0.1.15 // indirect
 	github.com/mattn/go-isatty v0.0.23 // indirect
+	github.com/mdlayher/kobject v0.0.0-20200520190114-19ca17470d7d // indirect
+	github.com/mdlayher/netlink v1.7.2 // indirect
 	github.com/mdlayher/socket v0.6.0 // indirect
 	github.com/mdlayher/vsock v1.3.0 // indirect
 	github.com/miekg/dns v1.1.73 // indirect
+	github.com/minio/sha256-simd v1.0.1 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
@@ -546,6 +554,7 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.47.1-0.20261102082644-9c507082cd98 // indirect
 	go.opentelemetry.io/otel/trace v1.47.1-0.20261102082644-9c507082cd98 // indirect
 	go.opentelemetry.io/proto/otlp v1.11.1 // indirect
+	go.opentelemetry.io/proto/otlp/processcontext/v1development v0.4.1 // indirect
 	go.uber.org/atomic v1.12.0 // indirect
 	go.uber.org/goleak v1.3.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
@@ -554,8 +563,9 @@ require (
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	go.yaml.in/yaml/v3 v3.0.6 // indirect
 	go.yaml.in/yaml/v4 v4.0.0-rc.6 // indirect
+	golang.org/x/arch v0.32.0 // indirect
 	golang.org/x/crypto v0.58.0 // indirect
-	golang.org/x/exp v0.0.0-20261011100332-faecfb24eb49 // indirect
+	golang.org/x/exp v0.0.0-20261014143641-f0251eb4aa3e // indirect
 	golang.org/x/net v0.62.0 // indirect
 	golang.org/x/oauth2 v0.37.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect

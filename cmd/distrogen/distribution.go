@@ -818,7 +818,7 @@ func BumpHotfix(specPath string, identifierOverride string) error {
 func validateSpecFieldPath(t reflect.Type, fieldParts []string, fullPath string) error {
 	currentType := t
 	for _, part := range fieldParts {
-		if currentType.Kind() == reflect.Ptr {
+		if currentType.Kind() == reflect.Pointer {
 			currentType = currentType.Elem()
 		}
 		if currentType.Kind() != reflect.Struct {

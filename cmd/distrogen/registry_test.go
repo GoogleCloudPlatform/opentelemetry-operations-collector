@@ -469,14 +469,10 @@ func TestRegistryComponents_RenderOCBComponents(t *testing.T) {
 }
 
 func TestComponentsRegistryGenerator_PreservesExistingRegistry(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "registry-generator-test")
-	assert.NilError(t, err)
-	t.Cleanup(func() {
-		os.RemoveAll(tempDir)
-	})
+	tempDir := t.TempDir()
 
 	componentsDir := filepath.Join(tempDir, "components")
-	err = os.MkdirAll(componentsDir, 0755)
+	err := os.MkdirAll(componentsDir, 0755)
 	assert.NilError(t, err)
 
 	// Create an existing registry with some components

@@ -188,14 +188,15 @@ message LogTargetSelector {
     // `LOG_RECORD_FIELD_TRACE_ID` and `LOG_RECORD_FIELD_SPAN_ID` are valid only
     // for read-only matching in `LogFieldSelector` and are not valid mutation
     // targets in `LogTargetSelector`.
-    // - For `LogAddition`, valid `record_field` targets are
-    //   `LOG_RECORD_FIELD_BODY` (any scalar `Value`; treats unset
-    //   `ValueTypeEmpty` and `""` as absent when `upsert_enabled: false`),
-    //   `LOG_RECORD_FIELD_SEVERITY_TEXT` (`string_value`), and
-    //   `LOG_RECORD_FIELD_SEVERITY_NUMBER` (`int_value` in `[1, 24]`).
-    // - For `LogRedaction`, valid `record_field` targets are string-valued
-    //   fields (`LOG_RECORD_FIELD_BODY` when string-valued, and
-    //   `LOG_RECORD_FIELD_SEVERITY_TEXT`).
+    //   - For `LogAddition`, valid `record_field` targets are
+    //     `LOG_RECORD_FIELD_BODY` (any scalar `Value`; treats unset
+    //     `ValueTypeEmpty` and `""` as absent when `upsert_enabled: false`),
+    //     `LOG_RECORD_FIELD_SEVERITY_TEXT` (`string_value`), and
+    //     `LOG_RECORD_FIELD_SEVERITY_NUMBER` (`int_value` in `[1, 24]`).
+    //   - For `LogRedaction`, valid `record_field` targets are string-valued
+    //     fields (`LOG_RECORD_FIELD_BODY` when string-valued, and
+    //     `LOG_RECORD_FIELD_SEVERITY_TEXT`).
+    //
     // `LOG_RECORD_FIELD_SEVERITY_NUMBER` and `LOG_RECORD_FIELD_SEVERITY_TEXT`
     // are independent OTLP fields (mutating one does not automatically derive
     // or overwrite the other).

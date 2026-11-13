@@ -97,6 +97,9 @@ type DecodeOptions struct {
 	// ServerConfig contains the configuration of the xDS server that provided
 	// the current resource being decoded.
 	ServerConfig *ServerConfig
+
+	// Version is the VersionInfo from the incoming DiscoveryResponse.
+	Version string
 }
 
 // DecodeResult is the result of a decode operation.

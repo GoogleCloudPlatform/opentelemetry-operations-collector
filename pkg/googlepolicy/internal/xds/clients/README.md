@@ -46,7 +46,22 @@ adjustments were applied during the initial vendor copy:
    `TestDecodeResponse_PanicRecoveryDisabled`) that depend on `internal/testutils/e2e`
    and `google.golang.org/grpc/internal/envconfig`.
 
-## Exact Reproduction Script
+## Local Adaptations for `pkg/googlepolicy`
+
+Beyond the mechanical decoupling edits above, the following targeted hooks and
+fixes are applied for `pkg/googlepolicy`:
+
+1. **`xdsclient.Config` hooks (`xdsconfig.go`, `xdsclient.go`, `logging.go`, `channel.go`, `authority.go`, `ads_stream.go`, `internal/backoff/backoff.go`):**
+   - `Logger` (`grpclog.DepthLoggerV2`): Routes internal `xdsclient` logs to the Collector's `*zap.Logger` instead of the global `grpclog` singleton.
+   - `Backoff` (`func(int) time.Duration`) and `TimeAfter` (`func(time.Duration) <-chan time.Time`): Allow `xdsPolicyManager` to configure reconnect backoff and inject a deterministic clock in unit tests ([grpc/grpc-go#9457](https://github.com/grpc/grpc-go/issues/9457)).
+2. **`xdsclient.DecodeOptions.Version` (`resource_type.go`, `channel.go`):**
+   - Exposes `DiscoveryResponse.VersionInfo` to `Decoder.Decode` so `telemetryCollectorDecoder` can associate decoded policy sets with their xDS response version.
+3. **ADS stream & SotW state fixes (`ads_stream.go`, `authority.go`):**
+   - Releases flow-control pending state (`s.fc.setPending(false)`) when ignoring an unsupported resource type URL so subsequent responses on the stream are not blocked.
+   - Resets `s.streamEstablished.Store(false)` whenever `recvMessage` returns an error so `grpc.xds_client.connected` reports `0` after mid-stream disconnects.
+   - Stops watch expiry timers and notifies `ResourceError` immediately when an initial 0-resource SotW response (`len(updates) == 0`) is ACKed, and distinguishes 15s watch timeouts (`"watch for resource ... timed out"`) from explicit SotW resource deletion (`"has been removed"`).
+
+## Exact Reproduction Script (Initial Copy)
 
 From the repository root (with `google.golang.org/grpc v1.84.0` in `pkg/googlepolicy/go.mod`):
 

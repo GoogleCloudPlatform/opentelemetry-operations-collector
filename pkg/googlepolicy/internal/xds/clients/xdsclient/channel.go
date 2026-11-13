@@ -24,7 +24,6 @@ import (
 	"strings"
 	"time"
 
-	"google.golang.org/grpc/grpclog"
 	igrpclog "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/internal/grpclog"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/internal"
@@ -63,13 +62,14 @@ type xdsChannelEventHandler interface {
 
 // xdsChannelOpts holds the options for creating a new xdsChannel.
 type xdsChannelOpts struct {
-	transport          clients.Transport       // Takes ownership of this transport.
-	serverConfig       *ServerConfig           // Configuration of the server to connect to.
-	clientConfig       *Config                 // Complete xDS client configuration, used to decode resources.
-	eventHandler       xdsChannelEventHandler  // Callbacks for ADS stream events.
-	backoff            func(int) time.Duration // Backoff function to use for stream retries. Defaults to exponential backoff, if unset.
-	watchExpiryTimeout time.Duration           // Timeout for ADS resource watch expiry.
-	logPrefix          string                  // Prefix to use for logging.
+	transport          clients.Transport                    // Takes ownership of this transport.
+	serverConfig       *ServerConfig                        // Configuration of the server to connect to.
+	clientConfig       *Config                              // Complete xDS client configuration, used to decode resources.
+	eventHandler       xdsChannelEventHandler               // Callbacks for ADS stream events.
+	backoff            func(int) time.Duration              // Backoff function to use for stream retries. Defaults to exponential backoff, if unset.
+	timeAfter          func(time.Duration) <-chan time.Time // Optional sleep function for backoff retries.
+	watchExpiryTimeout time.Duration                        // Timeout for ADS resource watch expiry.
+	logPrefix          string                               // Prefix to use for logging.
 }
 
 // newXDSChannel creates a new xdsChannel instance with the provided options.
@@ -95,9 +95,8 @@ func newXDSChannel(opts xdsChannelOpts) (*xdsChannel, error) {
 		closed:       syncutil.NewEvent(),
 	}
 
-	l := grpclog.Component("xds")
 	logPrefix := opts.logPrefix + fmt.Sprintf("[xds-channel %p] ", xc)
-	xc.logger = igrpclog.NewPrefixLogger(l, logPrefix)
+	xc.logger = prefixLoggerWithParent(opts.clientConfig.Logger, logPrefix)
 
 	if opts.backoff == nil {
 		opts.backoff = backoff.DefaultExponential.Backoff
@@ -108,9 +107,11 @@ func newXDSChannel(opts xdsChannelOpts) (*xdsChannel, error) {
 		transport:          opts.transport,
 		eventHandler:       xc,
 		backoff:            opts.backoff,
+		timeAfter:          opts.timeAfter,
 		nodeProto:          np,
 		watchExpiryTimeout: opts.watchExpiryTimeout,
 		logPrefix:          logPrefix,
+		logger:             opts.clientConfig.Logger,
 	})
 	if xc.logger.V(2) {
 		xc.logger.Infof("xdsChannel is created for ServerConfig %v", opts.serverConfig)
@@ -246,6 +247,7 @@ func (xc *xdsChannel) decodeResponse(rType *ResourceType, resp response) (map[st
 	opts := &DecodeOptions{
 		Config:       xc.clientConfig,
 		ServerConfig: xc.serverConfig,
+		Version:      resp.version,
 	}
 
 	topLevelErrors := make([]error, 0)          // Tracks deserialization errors, where we don't have a resource name.

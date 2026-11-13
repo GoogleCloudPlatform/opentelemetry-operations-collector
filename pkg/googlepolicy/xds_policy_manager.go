@@ -793,6 +793,13 @@ func (m *xdsPolicyManager) ProjectID() string {
 	return m.projectID
 }
 
+// Region returns the resolved GCP region: the location of a full Fleet
+// resource name, $CLOUD_REGION / $GOOGLE_CLOUD_REGION, the `region` URI
+// parameter, the GCE instance's region, or defaultRegion, in that order.
+func (m *xdsPolicyManager) Region() string {
+	return m.region
+}
+
 // PolicyEvaluationResult satisfies the Manager interface.
 //
 // TODO: Defer the ACK until the policy set has actually been evaluated, and NACK

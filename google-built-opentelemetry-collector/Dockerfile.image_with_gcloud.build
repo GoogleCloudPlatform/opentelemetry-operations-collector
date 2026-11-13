@@ -49,5 +49,5 @@ COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certifica
 COPY --from=build --chmod=755 /google-built-opentelemetry-collector/otelcol-google /otelcol-google
 COPY --from=build /etc/otelcol-google /etc/otelcol-google
 
-ENTRYPOINT ["/otelcol-google", "--feature-gates=exporter.googlemanagedprometheus.intToDouble,exporter.googlecloud.CustomMonitoredResources"]
+ENTRYPOINT ["/otelcol-google", "--feature-gates=exporter.googlemanagedprometheus.intToDouble,exporter.googlecloud.CustomMonitoredResources,service.profilesSupport"]
 CMD ["--config=/etc/otelcol-google/config.yaml"]

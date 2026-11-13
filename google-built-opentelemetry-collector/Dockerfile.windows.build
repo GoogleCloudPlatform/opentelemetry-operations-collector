@@ -5,5 +5,5 @@ FROM ${WINBASE} AS windows
 COPY otelcol-google.exe /otelcol-google.exe
 COPY config.yaml /etc/otelcol-google/config.yaml
 
-ENTRYPOINT ["/otelcol-google.exe", "--feature-gates=exporter.googlemanagedprometheus.intToDouble,exporter.googlecloud.CustomMonitoredResources"]
+ENTRYPOINT ["/otelcol-google.exe", "--feature-gates=exporter.googlemanagedprometheus.intToDouble,exporter.googlecloud.CustomMonitoredResources,service.profilesSupport"]
 CMD ["--config=/etc/otelcol-google/config.yaml"]

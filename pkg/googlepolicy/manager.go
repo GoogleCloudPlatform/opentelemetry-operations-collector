@@ -24,9 +24,12 @@ type Manager interface {
 }
 
 // FleetMetadataProvider is an optional interface implemented by Manager
-// implementations (such as xdsPolicyManager) that resolve canonical fleet and
-// project identifiers for the collector.
+// implementations (such as xdsPolicyManager) that resolve canonical fleet,
+// project and region identifiers for the collector.
 type FleetMetadataProvider interface {
 	FleetID() string
 	ProjectID() string
+	// Region returns the GCP region the collector resolved for its control
+	// plane subscription (the fleet's location), or "" if none.
+	Region() string
 }

@@ -328,6 +328,12 @@ func (x *LogRemoval) GetTarget() *LogAttributeSelector {
 }
 
 // Moves an existing attribute or structured `body_field_path` to a new destination.
+//
+// When `source` and `target` select the same map (`log_attribute_path` or
+// `body_field_path`), `source` cannot be an ancestor (strict prefix) of
+// `target` and `target` cannot be an ancestor (strict prefix) of `source`. If
+// `source` and `target` refer to the exact same path, the rename is a no-op at
+// runtime.
 type LogRenaming struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Existing source attribute or `body_field_path` to rename.

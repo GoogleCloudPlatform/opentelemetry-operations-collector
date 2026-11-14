@@ -49,6 +49,10 @@ var ErrMissingPredicate = errors.New("matcher must specify a valid predicate")
 // it to a nil variant.
 var ErrMissingValue = errors.New("operation must specify a valid value")
 
+// ErrNonFiniteDouble is returned when a Value or NumericValue specifies a
+// non-finite double_value (NaN or ±Inf).
+var ErrNonFiniteDouble = errors.New("double_value must be finite")
+
 // Predicate tests an extracted target value. The exists flag reports whether
 // the extractor found the target at all, which lets predicates distinguish a
 // missing field from a zero-valued one.
@@ -72,6 +76,9 @@ func CompilePredicate(predicate *policyv1alpha1.Predicate, negate bool) (Predica
 	case *policyv1alpha1.Predicate_Equality:
 		if p.Equality.GetKind() == nil {
 			return nil, ErrMissingPredicate
+		}
+		if dv, ok := p.Equality.GetKind().(*policyv1alpha1.Value_DoubleValue); ok && !isFinite(dv.DoubleValue) {
+			return nil, ErrNonFiniteDouble
 		}
 		expected := p.Equality
 		pred = func(val any, exists bool) bool {
@@ -100,6 +107,9 @@ func CompilePredicate(predicate *policyv1alpha1.Predicate, negate bool) (Predica
 		if p.Containment.GetKind() == nil {
 			return nil, ErrMissingPredicate
 		}
+		if dv, ok := p.Containment.GetKind().(*policyv1alpha1.Value_DoubleValue); ok && !isFinite(dv.DoubleValue) {
+			return nil, ErrNonFiniteDouble
+		}
 		expected := p.Containment
 		pred = func(val any, exists bool) bool {
 			return present(val, exists) && valueContains(val, expected)
@@ -123,6 +133,9 @@ func numericPredicate(expected *policyv1alpha1.NumericValue, accept func(cmp int
 	if expected.GetKind() == nil {
 		return nil, ErrMissingPredicate
 	}
+	if dv, ok := expected.GetKind().(*policyv1alpha1.NumericValue_DoubleValue); ok && !isFinite(dv.DoubleValue) {
+		return nil, ErrNonFiniteDouble
+	}
 	return func(val any, exists bool) bool {
 		if !present(val, exists) {
 			return false
@@ -130,6 +143,10 @@ func numericPredicate(expected *policyv1alpha1.NumericValue, accept func(cmp int
 		cmp, ok := compareNumeric(val, expected)
 		return ok && accept(cmp)
 	}, nil
+}
+
+func isFinite(d float64) bool {
+	return !math.IsNaN(d) && !math.IsInf(d, 0)
 }
 
 // present reports whether the extractor produced something worth testing.
@@ -153,6 +170,9 @@ func CompilePath(attrPath *policyv1alpha1.AttributePath, kind string) ([]PathSte
 	segments := attrPath.GetSegments()
 	steps := make([]PathStep, len(segments))
 	for i, seg := range segments {
+		if seg == "" {
+			return nil, fmt.Errorf("%s attribute path segment[%d] cannot be empty", kind, i)
+		}
 		steps[i] = PathStep{Key: seg}
 	}
 	return steps, nil
@@ -367,6 +387,9 @@ func compileMapValuePutter(val *policyv1alpha1.Value) (func(pcommon.Map, string)
 		return func(m pcommon.Map, key string) { m.PutInt(key, n) }, nil
 	case *policyv1alpha1.Value_DoubleValue:
 		d := v.DoubleValue
+		if !isFinite(d) {
+			return nil, ErrNonFiniteDouble
+		}
 		return func(m pcommon.Map, key string) { m.PutDouble(key, d) }, nil
 	case *policyv1alpha1.Value_BoolValue:
 		b := v.BoolValue
@@ -395,6 +418,9 @@ func CompileValueSetter(val *policyv1alpha1.Value) (func(pcommon.Value), error) 
 		return func(dest pcommon.Value) { dest.SetInt(n) }, nil
 	case *policyv1alpha1.Value_DoubleValue:
 		d := v.DoubleValue
+		if !isFinite(d) {
+			return nil, ErrNonFiniteDouble
+		}
 		return func(dest pcommon.Value) { dest.SetDouble(d) }, nil
 	case *policyv1alpha1.Value_BoolValue:
 		b := v.BoolValue

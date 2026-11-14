@@ -155,10 +155,12 @@ func tangoLogGlob(imageSpec string) string {
 // string body that the PolicySet's body log filter policies match on.
 //
 // googlepolicy enforces the PolicySet activated by the googlecontrolplane
-// config source, whichever config declares the processor. The other processors
-// and the exporter are the fixed-name components that the googlecontrolplane
-// config source always generates; the exporter sends to
-// telemetry.googleapis.com.
+// config source, whichever config declares the processor. The resourcedetection
+// and transform processors and the exporter are the fixed-name components that
+// the googlecontrolplane config source always generates; the exporter sends to
+// telemetry.googleapis.com. The pipeline uses its own queue_batch processor:
+// the generated logs queue_batch has a persistent queue, and two pipelines
+// sharing it would open the same storage file and fail to start.
 func tangoCollectorConfig(imageSpec string) string {
 	return `receivers:
   filelog/tango_smoke:
@@ -166,6 +168,7 @@ func tangoCollectorConfig(imageSpec string) string {
     start_at: beginning
 processors:
   googlepolicy:
+  queue_batch/tango_smoke:
 service:
   pipelines:
     logs/tango_smoke:
@@ -174,7 +177,7 @@ service:
         - resourcedetection/googlecontrolplane
         - transform/googlecontrolplane
         - googlepolicy
-        - queue_batch/default_gcp_destination_batch_logs
+        - queue_batch/tango_smoke
       exporters: [otlp_grpc/default_gcp_destination]
 `
 }

@@ -112,6 +112,13 @@ func TestRetrieve(t *testing.T) {
 	assert.True(t, conf.IsSet("service::pipelines::metrics/googlecontrolplane"))
 	assert.True(t, conf.IsSet("service::pipelines::traces/googlecontrolplane"))
 
+	for _, procID := range []string{"resourcedetection/googlecontrolplane", "resourcedetection/default_self_metrics"} {
+		assert.Equal(t, []any{"env", "gcp", "system"}, conf.Get("processors::"+procID+"::detectors"), procID)
+		assert.Equal(t, false, conf.Get("processors::"+procID+"::override"), procID)
+		assert.Equal(t, 10*time.Second, conf.Get("processors::"+procID+"::timeout"), procID)
+		assert.Equal(t, true, conf.Get("processors::"+procID+"::system::resource_attributes::host.id::enabled"), procID)
+	}
+
 	assert.NoError(t, p.Shutdown(context.Background()))
 	assert.False(t, googlepolicy.IsControlPlaneActive())
 }

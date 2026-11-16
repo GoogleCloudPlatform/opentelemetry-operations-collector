@@ -17,7 +17,40 @@ package googlepolicy
 import (
 	"fmt"
 	"strconv"
+	"time"
 )
+
+// ResourceDetectionProcessorConfig returns the resourcedetection processor
+// configuration shared by the canonical workload pipelines and the collector's
+// self-observability pipelines.
+//
+// Detectors run with override: false so attributes already present on incoming
+// telemetry (or set in service::telemetry::resource on collector self-telemetry,
+// such as service.instance.id and gcp.fleet_id) are preserved, and detected
+// attributes merge in detector list order (first non-empty value wins):
+//   - "env" lets operators supply or override resource attributes (such as a
+//     custom host.id or Kubernetes attributes) via OTEL_RESOURCE_ATTRIBUTES.
+//   - "gcp" resolves Google Cloud platform metadata (such as Compute Engine
+//     instance ID and zone/region) when running on Google Cloud.
+//   - "system" (with host.id enabled) falls back to the OS machine ID
+//     (/etc/machine-id on Linux, MachineGuid on Windows) along with host.name
+//     and os.type off Google Cloud, ensuring telemetry.googleapis.com has a
+//     unique host.id per node for generic_node.node_id and
+//     prometheus_target.instance.
+func ResourceDetectionProcessorConfig() map[string]any {
+	return map[string]any{
+		"detectors": []string{"env", "gcp", "system"},
+		"override":  false,
+		"timeout":   10 * time.Second,
+		"system": map[string]any{
+			"resource_attributes": map[string]any{
+				"host.id": map[string]any{
+					"enabled": true,
+				},
+			},
+		},
+	}
+}
 
 // CloudRegionFallbackStatement returns an OTTL resource-context statement that
 // sets cloud.region to region only when the resource carries no location at

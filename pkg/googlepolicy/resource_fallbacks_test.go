@@ -16,9 +16,30 @@ package googlepolicy
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
+
+func TestResourceDetectionProcessorConfig(t *testing.T) {
+	cfg := ResourceDetectionProcessorConfig()
+	assert.Equal(t, map[string]any{
+		"detectors": []string{"env", "gcp", "system"},
+		"override":  false,
+		"timeout":   10 * time.Second,
+		"system": map[string]any{
+			"resource_attributes": map[string]any{
+				"host.id": map[string]any{
+					"enabled": true,
+				},
+			},
+		},
+	}, cfg)
+
+	// Returned map is newly allocated per call so callers cannot mutate shared state.
+	cfg["override"] = true
+	assert.Equal(t, false, ResourceDetectionProcessorConfig()["override"])
+}
 
 func TestCloudRegionFallbackStatement(t *testing.T) {
 	assert.Empty(t, CloudRegionFallbackStatement(""))

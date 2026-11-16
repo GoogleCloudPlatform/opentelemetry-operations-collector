@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"go.opentelemetry.io/collector/component"
@@ -240,11 +239,7 @@ func (p *SelfMetricsPolicy) Evaluate(ctx context.Context) (*confmap.Conf, error)
 
 	rdType, _ := component.NewType("resourcedetection")
 	rdID := component.NewIDWithName(rdType, p.Name)
-	rdCfg := map[string]any{
-		"detectors": []string{"gcp"},
-		"override":  false,
-		"timeout":   10 * time.Second,
-	}
+	rdCfg := googlepolicy.ResourceDetectionProcessorConfig()
 
 	transformType, _ := component.NewType("transform")
 	transformID := component.NewIDWithName(transformType, p.Name)

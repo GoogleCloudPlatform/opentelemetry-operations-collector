@@ -135,13 +135,25 @@ processors:
         wait_for_result: false
     resourcedetection/default_self_metrics:
         detectors:
+            - env
             - gcp
+            - system
         override: false
+        system:
+            resource_attributes:
+                host.id:
+                    enabled: true
         timeout: 10s
     resourcedetection/googlecontrolplane:
         detectors:
+            - env
             - gcp
+            - system
         override: false
+        system:
+            resource_attributes:
+                host.id:
+                    enabled: true
         timeout: 10s
     transform/default_self_metrics:
         error_mode: ignore

@@ -26,7 +26,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider/policies/gcpdestination"
@@ -467,14 +466,10 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 	preProcessMetricIDs := append([]component.ID{googlePolicyID}, destPolicy.PreProcessMetricIDs()...)
 	preProcessTraceIDs := append([]component.ID{googlePolicyID}, destPolicy.PreProcessTraceIDs()...)
 
-	// Configure GCP resource detection and transform for canonical workload pipelines
+	// Configure resource detection and transform for canonical workload pipelines
 	rdType, _ := component.NewType("resourcedetection")
 	rdID := component.NewIDWithName(rdType, "googlecontrolplane")
-	rdCfg := map[string]any{
-		"detectors": []string{"gcp"},
-		"override":  false,
-		"timeout":   10 * time.Second,
-	}
+	rdCfg := googlepolicy.ResourceDetectionProcessorConfig()
 
 	transformType, _ := component.NewType("transform")
 	transformID := component.NewIDWithName(transformType, "googlecontrolplane")

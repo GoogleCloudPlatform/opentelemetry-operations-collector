@@ -96,9 +96,10 @@ func TestSelfMetricsPolicy_Evaluate(t *testing.T) {
 	}, conf.Get("service::telemetry::metrics::readers"))
 
 	// Verify resourcedetection processor
-	assert.Equal(t, []any{"gcp"}, conf.Get("processors::resourcedetection/custom_self_obs::detectors"))
+	assert.Equal(t, []any{"env", "gcp", "system"}, conf.Get("processors::resourcedetection/custom_self_obs::detectors"))
 	assert.Equal(t, false, conf.Get("processors::resourcedetection/custom_self_obs::override"))
 	assert.Equal(t, 10*time.Second, conf.Get("processors::resourcedetection/custom_self_obs::timeout"))
+	assert.Equal(t, true, conf.Get("processors::resourcedetection/custom_self_obs::system::resource_attributes::host.id::enabled"))
 
 	// Verify transform processor
 	assert.Equal(t, "ignore", conf.Get("processors::transform/custom_self_obs::error_mode"))

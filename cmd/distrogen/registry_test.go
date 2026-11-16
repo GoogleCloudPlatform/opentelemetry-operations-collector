@@ -500,3 +500,45 @@ func TestComponentsRegistryGenerator_PreservesExistingRegistry(t *testing.T) {
 	assert.Assert(t, loadedRegistry.Receivers["customreceiver"] != nil, "Expected customreceiver to be preserved")
 	assert.Equal(t, loadedRegistry.Receivers["customreceiver"].GoMod.URL, "github.com/custom/receiver")
 }
+
+func TestNewTemplateContextFromSpec_Telemetry(t *testing.T) {
+	registry := NewRegistry()
+	// Name is left empty, as it is for entries loaded from a registry file
+	// (RegistryComponent.Name is `yaml:"-"`).
+	registry.Telemetry["inprocess"] = &RegistryComponent{
+		GoMod: &GoModuleID{URL: "github.com/example/telemetry"},
+	}
+	spec := &DistributionSpec{
+		OpenTelemetryVersion:        "0.164.0",
+		OpenTelemetryContribVersion: "0.164.1",
+		Components:                  &DistributionComponents{Telemetry: "inprocess"},
+	}
+
+	ctx, err := NewTemplateContextFromSpec(spec, registry)
+	assert.NilError(t, err)
+	assert.Assert(t, ctx.Telemetry != nil)
+	assert.Equal(t, ctx.Telemetry.GoMod.String(), "github.com/example/telemetry v0.164.0")
+	assert.Equal(t, ctx.RenderOCBTelemetry(),
+		"telemetry:\n"+
+			"    gomod: github.com/example/telemetry v0.164.0\n")
+
+	registry.Telemetry["inprocess"].Import = "github.com/example/telemetry/factory"
+	registry.Telemetry["inprocess"].Path = "../telemetry"
+	ctx, err = NewTemplateContextFromSpec(spec, registry)
+	assert.NilError(t, err)
+	assert.Equal(t, ctx.RenderOCBTelemetry(),
+		"telemetry:\n"+
+			"    gomod: github.com/example/telemetry v0.164.0\n"+
+			"    import: github.com/example/telemetry/factory\n"+
+			"    path: ../telemetry\n")
+
+	spec.Components.Telemetry = "missing"
+	_, err = NewTemplateContextFromSpec(spec, registry)
+	assert.ErrorContains(t, err, "missing")
+
+	spec.Components.Telemetry = ""
+	ctx, err = NewTemplateContextFromSpec(spec, registry)
+	assert.NilError(t, err)
+	assert.Assert(t, ctx.Telemetry == nil)
+	assert.Equal(t, ctx.RenderOCBTelemetry(), "")
+}

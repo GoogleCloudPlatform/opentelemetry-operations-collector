@@ -1140,7 +1140,7 @@ func TestDriverLoadPolicyErrors(t *testing.T) {
 			raw: map[string]any{
 				"type":    "metric_filter",
 				"id":      "typo-policy",
-				"actions": "ACTION_DROP", // unknown field discarded -> action left unspecified -> validation error
+				"actions": "ACTION_DROP", // unknown field rejected by DiscardUnknown: false -> load error
 				"matchers": []any{
 					map[string]any{
 						"target": map[string]any{
@@ -1150,7 +1150,7 @@ func TestDriverLoadPolicyErrors(t *testing.T) {
 					},
 				},
 			},
-			wantErr: googlepolicy.ErrPolicyFailedValidation,
+			wantErr: googlepolicy.ErrPolicyFailedToLoad,
 		},
 		{
 			name: "missing target due to typo'd nested field",
@@ -1161,13 +1161,13 @@ func TestDriverLoadPolicyErrors(t *testing.T) {
 				"matchers": []any{
 					map[string]any{
 						"target": map[string]any{
-							"descriptor_fields": "METRIC_DESCRIPTOR_FIELD_NAME", // unknown field discarded -> target unset -> validation error
+							"descriptor_fields": "METRIC_DESCRIPTOR_FIELD_NAME", // unknown field rejected by DiscardUnknown: false -> load error
 						},
 						"predicate": map[string]any{"existence": map[string]any{}},
 					},
 				},
 			},
-			wantErr: googlepolicy.ErrPolicyFailedValidation,
+			wantErr: googlepolicy.ErrPolicyFailedToLoad,
 		},
 		{
 			name: "invalid enum value",
@@ -1175,6 +1175,23 @@ func TestDriverLoadPolicyErrors(t *testing.T) {
 				"type":   "metric_filter",
 				"id":     "bad-enum",
 				"action": "ACTION_NOPE",
+			},
+			wantErr: googlepolicy.ErrPolicyFailedToLoad,
+		},
+		{
+			name: "unrecognized numeric enum value",
+			raw: map[string]any{
+				"type":   "metric_filter",
+				"id":     "bad-enum-num",
+				"action": 999,
+				"matchers": []any{
+					map[string]any{
+						"target": map[string]any{
+							"descriptor_field": "METRIC_DESCRIPTOR_FIELD_NAME",
+						},
+						"predicate": map[string]any{"existence": map[string]any{}},
+					},
+				},
 			},
 			wantErr: googlepolicy.ErrPolicyFailedValidation,
 		},
@@ -1642,35 +1659,61 @@ func TestZeroValueMetricInPopulatedContext(t *testing.T) {
 	}
 }
 
-// TestDriverLoadPolicyIgnoresUnknownFields pins forward-compatibility behavior
-// (DiscardUnknown: true): when the server adds new top-level or nested proto
-// fields in future versions, older agents ignore the unknown fields and still
-// compile and evaluate the policy cleanly.
-func TestDriverLoadPolicyIgnoresUnknownFields(t *testing.T) {
-	raw := map[string]any{
-		"type":             "metric_filter",
-		"id":               "future-compatible-metric-policy",
-		"action":           "ACTION_DROP",
-		"future_top_field": "ignored_server_metadata",
-		"future_priority":  42,
-		"matchers": []any{
-			map[string]any{
-				"target":              map[string]any{"descriptor_field": "METRIC_DESCRIPTOR_FIELD_NAME"},
-				"predicate":           map[string]any{"existence": map[string]any{}},
-				"future_matcher_hint": true,
+// TestDriverLoadPolicyRejectsUnknownFields pins atomic fail-open behavior
+// (DiscardUnknown: false and wire GetUnknown checks): when a policy contains
+// unrecognized top-level or nested fields, the entire policy is rejected rather
+// than partially applied.
+func TestDriverLoadPolicyRejectsUnknownFields(t *testing.T) {
+	t.Run("top-level unknown JSON field", func(t *testing.T) {
+		raw := map[string]any{
+			"type":             "metric_filter",
+			"id":               "unknown-top-field-metric-policy",
+			"action":           "ACTION_DROP",
+			"future_top_field": "unexpected_server_metadata",
+			"matchers": []any{
+				map[string]any{
+					"target":    map[string]any{"descriptor_field": "METRIC_DESCRIPTOR_FIELD_NAME"},
+					"predicate": map[string]any{"existence": map[string]any{}},
+				},
 			},
-		},
-	}
+		}
+		_, err := googlepolicy.LoadPolicy(PolicyType, raw)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, googlepolicy.ErrPolicyFailedToLoad)
+	})
 
-	p, err := driver.LoadPolicy(raw)
-	require.NoError(t, err)
-	assert.Equal(t, "future-compatible-metric-policy", p.PolicyName())
+	t.Run("nested matcher unknown JSON field", func(t *testing.T) {
+		raw := map[string]any{
+			"type":   "metric_filter",
+			"id":     "unknown-nested-field-metric-policy",
+			"action": "ACTION_DROP",
+			"matchers": []any{
+				map[string]any{
+					"target":              map[string]any{"descriptor_field": "METRIC_DESCRIPTOR_FIELD_NAME"},
+					"predicate":           map[string]any{"existence": map[string]any{}},
+					"future_matcher_hint": true,
+				},
+			},
+		}
+		_, err := googlepolicy.LoadPolicy(PolicyType, raw)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, googlepolicy.ErrPolicyFailedToLoad)
+	})
 
-	metricPol, ok := p.(googlepolicy.MetricFilterPolicyEvaluator)
-	require.True(t, ok)
+	t.Run("unknown wire fields on proto rejected", func(t *testing.T) {
+		pb := dropPolicy(
+			"unknown-wire-metric-policy",
+			descriptorTarget(policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME),
+			&policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+			false,
+		)
+		pb.Matchers[0].ProtoReflect().SetUnknown([]byte{0x88, 0x06, 0x01}) // field 99, varint 1
 
-	m, sm, rm := newTestMetricBundle()
-	assert.Equal(t, googlepolicy.FilterDrop, metricPol.FilterMetric(metricContext(m, sm, rm)))
+		_, err := driver.LoadPolicyProto(pb)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, googlepolicy.ErrPolicyFailedValidation)
+		assert.ErrorIs(t, err, googlepolicy.ErrPolicyUnknownFields)
+	})
 }
 
 // TestDriverRoutesItsProto pins the link between the proto a control plane puts

@@ -86,6 +86,9 @@ func TestMetricsBuilder(t *testing.T) {
 			mb.RecordVarnishBackendConnectionCountDataPoint(ts, 1, AttributeBackendConnectionTypeSuccess)
 			if tt.name == "reaggregate_set" {
 				mb.RecordVarnishBackendConnectionCountDataPoint(ts, 3, AttributeBackendConnectionTypeRecycle)
+				// a different timestamp is a different key: must not merge with the above.
+				mb.RecordVarnishBackendConnectionCountDataPoint(ts+1, 3, AttributeBackendConnectionTypeRecycle)
+				assert.Equal(t, 2, mb.metricVarnishBackendConnectionCount.data.Sum().DataPoints().Len())
 			}
 			defaultMetricsCount++
 			allMetricsCount++
@@ -95,18 +98,27 @@ func TestMetricsBuilder(t *testing.T) {
 			mb.RecordVarnishCacheOperationCountDataPoint(ts, 1, AttributeCacheOperationsHit)
 			if tt.name == "reaggregate_set" {
 				mb.RecordVarnishCacheOperationCountDataPoint(ts, 3, AttributeCacheOperationsMiss)
+				// a different timestamp is a different key: must not merge with the above.
+				mb.RecordVarnishCacheOperationCountDataPoint(ts+1, 3, AttributeCacheOperationsMiss)
+				assert.Equal(t, 2, mb.metricVarnishCacheOperationCount.data.Sum().DataPoints().Len())
 			}
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordVarnishClientRequestCountDataPoint(ts, 1, AttributeStateReceived)
 			if tt.name == "reaggregate_set" {
 				mb.RecordVarnishClientRequestCountDataPoint(ts, 3, AttributeStateDropped)
+				// a different timestamp is a different key: must not merge with the above.
+				mb.RecordVarnishClientRequestCountDataPoint(ts+1, 3, AttributeStateDropped)
+				assert.Equal(t, 2, mb.metricVarnishClientRequestCount.data.Sum().DataPoints().Len())
 			}
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordVarnishClientRequestErrorCountDataPoint(ts, 1, "http.status_code-val")
 			if tt.name == "reaggregate_set" {
 				mb.RecordVarnishClientRequestErrorCountDataPoint(ts, 3, "http.status_code-val-2")
+				// a different timestamp is a different key: must not merge with the above.
+				mb.RecordVarnishClientRequestErrorCountDataPoint(ts+1, 3, "http.status_code-val-2")
+				assert.Equal(t, 2, mb.metricVarnishClientRequestErrorCount.data.Sum().DataPoints().Len())
 			}
 			defaultMetricsCount++
 			allMetricsCount++
@@ -125,12 +137,18 @@ func TestMetricsBuilder(t *testing.T) {
 			mb.RecordVarnishSessionCountDataPoint(ts, 1, AttributeSessionTypeAccepted)
 			if tt.name == "reaggregate_set" {
 				mb.RecordVarnishSessionCountDataPoint(ts, 3, AttributeSessionTypeDropped)
+				// a different timestamp is a different key: must not merge with the above.
+				mb.RecordVarnishSessionCountDataPoint(ts+1, 3, AttributeSessionTypeDropped)
+				assert.Equal(t, 2, mb.metricVarnishSessionCount.data.Sum().DataPoints().Len())
 			}
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordVarnishThreadOperationCountDataPoint(ts, 1, AttributeThreadOperationsCreated)
 			if tt.name == "reaggregate_set" {
 				mb.RecordVarnishThreadOperationCountDataPoint(ts, 3, AttributeThreadOperationsDestroyed)
+				// a different timestamp is a different key: must not merge with the above.
+				mb.RecordVarnishThreadOperationCountDataPoint(ts+1, 3, AttributeThreadOperationsDestroyed)
+				assert.Equal(t, 2, mb.metricVarnishThreadOperationCount.data.Sum().DataPoints().Len())
 			}
 
 			rb := mb.NewResourceBuilder()
@@ -193,7 +211,9 @@ func TestMetricsBuilder(t *testing.T) {
 						assert.False(t, validatedMetrics["varnish.backend.connection.count"], "Found a duplicate in the metrics slice: varnish.backend.connection.count")
 						validatedMetrics["varnish.backend.connection.count"] = true
 						assert.Equal(t, pmetric.MetricTypeSum, mi.Type())
-						assert.Equal(t, 1, mi.Sum().DataPoints().Len())
+						// 2 points: the merged one above, plus one with a different timestamp that must not have merged with it.
+						assert.Equal(t, 2, mi.Sum().DataPoints().Len())
+						assert.Equal(t, ts+1, mi.Sum().DataPoints().At(1).Timestamp())
 						assert.Equal(t, "The backend connection type count.", mi.Description())
 						assert.Equal(t, "{connections}", mi.Unit())
 						assert.True(t, mi.Sum().IsMonotonic())
@@ -251,7 +271,9 @@ func TestMetricsBuilder(t *testing.T) {
 						assert.False(t, validatedMetrics["varnish.cache.operation.count"], "Found a duplicate in the metrics slice: varnish.cache.operation.count")
 						validatedMetrics["varnish.cache.operation.count"] = true
 						assert.Equal(t, pmetric.MetricTypeSum, mi.Type())
-						assert.Equal(t, 1, mi.Sum().DataPoints().Len())
+						// 2 points: the merged one above, plus one with a different timestamp that must not have merged with it.
+						assert.Equal(t, 2, mi.Sum().DataPoints().Len())
+						assert.Equal(t, ts+1, mi.Sum().DataPoints().At(1).Timestamp())
 						assert.Equal(t, "The cache operation type count.", mi.Description())
 						assert.Equal(t, "{operations}", mi.Unit())
 						assert.True(t, mi.Sum().IsMonotonic())
@@ -295,7 +317,9 @@ func TestMetricsBuilder(t *testing.T) {
 						assert.False(t, validatedMetrics["varnish.client.request.count"], "Found a duplicate in the metrics slice: varnish.client.request.count")
 						validatedMetrics["varnish.client.request.count"] = true
 						assert.Equal(t, pmetric.MetricTypeSum, mi.Type())
-						assert.Equal(t, 1, mi.Sum().DataPoints().Len())
+						// 2 points: the merged one above, plus one with a different timestamp that must not have merged with it.
+						assert.Equal(t, 2, mi.Sum().DataPoints().Len())
+						assert.Equal(t, ts+1, mi.Sum().DataPoints().At(1).Timestamp())
 						assert.Equal(t, "The client request count.", mi.Description())
 						assert.Equal(t, "{requests}", mi.Unit())
 						assert.True(t, mi.Sum().IsMonotonic())
@@ -339,7 +363,9 @@ func TestMetricsBuilder(t *testing.T) {
 						assert.False(t, validatedMetrics["varnish.client.request.error.count"], "Found a duplicate in the metrics slice: varnish.client.request.error.count")
 						validatedMetrics["varnish.client.request.error.count"] = true
 						assert.Equal(t, pmetric.MetricTypeSum, mi.Type())
-						assert.Equal(t, 1, mi.Sum().DataPoints().Len())
+						// 2 points: the merged one above, plus one with a different timestamp that must not have merged with it.
+						assert.Equal(t, 2, mi.Sum().DataPoints().Len())
+						assert.Equal(t, ts+1, mi.Sum().DataPoints().At(1).Timestamp())
 						assert.Equal(t, "The client request errors received by status code.", mi.Description())
 						assert.Equal(t, "{requests}", mi.Unit())
 						assert.True(t, mi.Sum().IsMonotonic())
@@ -439,7 +465,9 @@ func TestMetricsBuilder(t *testing.T) {
 						assert.False(t, validatedMetrics["varnish.session.count"], "Found a duplicate in the metrics slice: varnish.session.count")
 						validatedMetrics["varnish.session.count"] = true
 						assert.Equal(t, pmetric.MetricTypeSum, mi.Type())
-						assert.Equal(t, 1, mi.Sum().DataPoints().Len())
+						// 2 points: the merged one above, plus one with a different timestamp that must not have merged with it.
+						assert.Equal(t, 2, mi.Sum().DataPoints().Len())
+						assert.Equal(t, ts+1, mi.Sum().DataPoints().At(1).Timestamp())
 						assert.Equal(t, "The session connection type count.", mi.Description())
 						assert.Equal(t, "{connections}", mi.Unit())
 						assert.True(t, mi.Sum().IsMonotonic())
@@ -483,7 +511,9 @@ func TestMetricsBuilder(t *testing.T) {
 						assert.False(t, validatedMetrics["varnish.thread.operation.count"], "Found a duplicate in the metrics slice: varnish.thread.operation.count")
 						validatedMetrics["varnish.thread.operation.count"] = true
 						assert.Equal(t, pmetric.MetricTypeSum, mi.Type())
-						assert.Equal(t, 1, mi.Sum().DataPoints().Len())
+						// 2 points: the merged one above, plus one with a different timestamp that must not have merged with it.
+						assert.Equal(t, 2, mi.Sum().DataPoints().Len())
+						assert.Equal(t, ts+1, mi.Sum().DataPoints().At(1).Timestamp())
 						assert.Equal(t, "The thread operation type count.", mi.Description())
 						assert.Equal(t, "{operations}", mi.Unit())
 						assert.True(t, mi.Sum().IsMonotonic())

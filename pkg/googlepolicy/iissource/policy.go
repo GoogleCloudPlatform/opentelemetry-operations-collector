@@ -31,8 +31,7 @@ import (
 
 // PolicyType is the registered policy type identifier for IIS source policies.
 const (
-	PolicyType        = "iis_source"
-	DefaultReceiverID = "iis"
+	PolicyType = "iis_source"
 
 	// DefaultCollectionIntervalSeconds is used when collection_interval_seconds is unset.
 	DefaultCollectionIntervalSeconds int32 = 60
@@ -41,6 +40,8 @@ const (
 	// MaxCollectionIntervalSeconds is the maximum allowed scrape interval (24 hours).
 	MaxCollectionIntervalSeconds int32 = 86400
 )
+
+var receiverID = component.MustNewIDWithName("iis", "googlecontrolplane")
 
 var (
 	// ErrNilProto is returned when a nil IisSourcePolicy protobuf is provided.
@@ -179,7 +180,7 @@ func (p *Policy) Consolidate(policies []googlepolicy.SourcePolicy) (googlepolicy
 func (p *Policy) receiverConfig() map[string]any {
 	return map[string]any{
 		"receivers": map[string]any{
-			DefaultReceiverID: map[string]any{
+			receiverID.String(): map[string]any{
 				"collection_interval": fmt.Sprintf("%ds", p.EffectiveCollectionIntervalSeconds()),
 			},
 		},
@@ -207,7 +208,7 @@ func (p *Policy) MetricReceiverIDs() []component.ID {
 	if !isWindows {
 		return nil
 	}
-	return []component.ID{component.MustNewID(DefaultReceiverID)}
+	return []component.ID{receiverID}
 }
 
 // LogReceiverIDs returns nil because IisSourcePolicy only handles the metrics signal.

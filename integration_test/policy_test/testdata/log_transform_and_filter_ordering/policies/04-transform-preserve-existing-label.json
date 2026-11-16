@@ -5,19 +5,31 @@
     {
       "target": {
         "resource_attribute_path": {
-          "segments": ["env"]
+          "segments": [
+            "env"
+          ]
         }
       },
-      "predicate": { "equality": { "string_value": "prod" } }
+      "predicate": {
+        "equality": {
+          "string_value": "prod"
+        }
+      }
     }
   ],
-  "addition": {
-    "target": {
-      "log_attribute_path": {
-        "segments": ["existing_label"]
-      }
-    },
-    "value": { "string_value": "overwritten" },
-    "upsert_enabled": false
-  }
+  "additions": [
+    {
+      "target": {
+        "log_attribute_path": {
+          "segments": [
+            "existing_label"
+          ]
+        }
+      },
+      "value": {
+        "string_value": "overwritten"
+      },
+      "upsert_enabled": false
+    }
+  ]
 }

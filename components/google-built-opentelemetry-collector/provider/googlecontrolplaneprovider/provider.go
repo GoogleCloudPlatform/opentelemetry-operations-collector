@@ -20,7 +20,10 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path/filepath"
 	"reflect"
+	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -30,6 +33,7 @@ import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider/policies/selfmetrics"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/event"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
+	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/filelogsource"
 	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/hostmetricssource"
 	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/iissource"
 	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/journaldsource"
@@ -45,6 +49,7 @@ import (
 	"go.opentelemetry.io/collector/otelcol"
 	"go.opentelemetry.io/collector/pipeline"
 	"go.opentelemetry.io/collector/service"
+	"go.opentelemetry.io/collector/service/extensions"
 	"go.opentelemetry.io/collector/service/pipelines"
 	"go.uber.org/zap"
 )
@@ -97,6 +102,7 @@ type provider struct {
 	mu          sync.Mutex
 	stopped     bool
 	notified    bool
+	registered  bool
 	cachedRet   *confmap.Retrieved
 	cachedRevID string
 	manager     googlepolicy.Manager
@@ -214,6 +220,7 @@ func (p *provider) Retrieve(ctx context.Context, uri string, watcher confmap.Wat
 		if err != nil {
 			return nil, err
 		}
+		p.register()
 		p.setupWatcher(watcher, ctx, ret)
 		return ret, nil
 	}
@@ -256,6 +263,7 @@ func (p *provider) Retrieve(ctx context.Context, uri string, watcher confmap.Wat
 		return nil, err
 	}
 
+	p.register()
 	p.setupWatcher(watcher, ctx, ret)
 	return ret, nil
 }
@@ -309,12 +317,20 @@ func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrie
 		projectID = v
 	}
 
+	var region string
+	if v, ok := ctx.Value("REGION").(string); ok && v != "" {
+		region = v
+	}
+
 	if fleetMgr, ok := manager.(googlepolicy.FleetMetadataProvider); ok {
 		if fleetMgr.FleetID() != "" {
 			fleetID = fleetMgr.FleetID()
 		}
 		if projectID == "" {
 			projectID = fleetMgr.ProjectID()
+		}
+		if region == "" {
+			region = fleetMgr.Region()
 		}
 	} else if manager != nil && manager.URI() != nil {
 		if fleetID == "" {
@@ -336,6 +352,14 @@ func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrie
 	}
 	if projectID != "" {
 		ctx = context.WithValue(ctx, "PROJECT_ID", projectID)
+	}
+	if region == "" {
+		// Non-xDS sources have no control plane subscription to agree with; use
+		// the location of a full Fleet resource name, then the environment.
+		region = nonXDSRegion(fleetID)
+	}
+	if region != "" {
+		ctx = context.WithValue(ctx, "REGION", region)
 	}
 
 	for {
@@ -454,30 +478,25 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 
 	transformType, _ := component.NewType("transform")
 	transformID := component.NewIDWithName(transformType, "googlecontrolplane")
+	resourceStatements := workloadResourceStatements(stringFromContext(ctx, "PROJECT_ID"), stringFromContext(ctx, "REGION"))
 	transformCfg := map[string]any{
 		"error_mode": "ignore",
 		"log_statements": []map[string]any{
 			{
-				"context": "resource",
-				"statements": []string{
-					`set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil`,
-				},
+				"context":    "resource",
+				"statements": resourceStatements,
 			},
 		},
 		"metric_statements": []map[string]any{
 			{
-				"context": "resource",
-				"statements": []string{
-					`set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil`,
-				},
+				"context":    "resource",
+				"statements": resourceStatements,
 			},
 		},
 		"trace_statements": []map[string]any{
 			{
-				"context": "resource",
-				"statements": []string{
-					`set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil`,
-				},
+				"context":    "resource",
+				"statements": resourceStatements,
 			},
 		},
 	}
@@ -582,8 +601,27 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 	canonicalMetricProcessors := append([]component.ID{rdID, transformID, googlePolicyID}, destPolicy.PreProcessMetricIDs()...)
 	canonicalTraceProcessors := append([]component.ID{rdID, transformID, googlePolicyID}, destPolicy.PreProcessTraceIDs()...)
 
+	storageExtID := googlepolicy.StorageExtensionID
+	storageCfg := map[string]any{
+		"create_directory": true,
+		"directory":        defaultStorageDir(),
+	}
+	storageExtConf := &otelcol.Config{
+		Extensions: map[component.ID]component.Config{
+			storageExtID: component.Config(storageCfg),
+		},
+	}
+	storageCm := confmap.New()
+	if err := storageCm.Marshal(storageExtConf); err != nil {
+		return nil, true, fmt.Errorf("failed to marshal file_storage extension config: %w", err)
+	}
+	if err := conf.Merge(cleanConf(storageCm)); err != nil {
+		return nil, true, fmt.Errorf("failed to merge file_storage extension config: %w", err)
+	}
+
 	canonicalServiceConf := &otelcol.Config{
 		Service: service.Config{
+			Extensions: extensions.Config{storageExtID},
 			Pipelines: pipelines.Config{
 				canonicalLogsPipelineID: &pipelines.PipelineConfig{
 					Receivers:  deduplicateComponentIDs(activeLogReceivers),
@@ -618,7 +656,9 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 		return nil, false, err
 	}
 
-	confMap := conf.ToStringMap()
+	stringMap := conf.ToStringMap()
+	splitSharedStorageProcessors(stringMap)
+	confMap, _ := escapeDollarSigns(stringMap).(map[string]any)
 	ret, err := confmap.NewRetrieved(confMap)
 	return ret, false, err
 }
@@ -778,6 +818,66 @@ func (p *provider) consolidateSourcePolicies(ctx context.Context, activePolicySe
 	return consolidated
 }
 
+// workloadProjectIDStatementFromAccount stamps gcp.project_id on workload
+// telemetry from the cloud.account.id that the gcp resource detector reports.
+const workloadProjectIDStatementFromAccount = `set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil`
+
+// stringFromContext returns the string stored in ctx under key, or "".
+// evaluateActivePolicySet stores the resolved PROJECT_ID (alphanumeric project
+// ID) and REGION there.
+func stringFromContext(ctx context.Context, key string) string {
+	if ctx == nil {
+		return ""
+	}
+	v, _ := ctx.Value(key).(string)
+	return v
+}
+
+// nonXDSRegion returns the region for policy sources that have no xDS
+// subscription (file:, component:): the location of fleetID if it is a full
+// Fleet resource name, then $CLOUD_REGION / $GOOGLE_CLOUD_REGION, else "".
+func nonXDSRegion(fleetID string) string {
+	if _, location, _, ok := googlepolicy.ParseFleetResourceName(fleetID); ok {
+		return location
+	}
+	for _, key := range []string{"CLOUD_REGION", "GOOGLE_CLOUD_REGION"} {
+		if v := os.Getenv(key); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// workloadResourceStatements returns the OTTL resource statements that set
+// gcp.project_id and cloud.region, which telemetry.googleapis.com requires, on
+// workload telemetry in the canonical googlecontrolplane pipelines.
+//
+// Values from the resource detectors always win, so behavior on Google Cloud
+// is unchanged:
+//   - gcp.project_id comes from cloud.account.id when the gcp detector reports
+//     it; otherwise the project ID the collector resolved for itself (the same
+//     one stamped on its own self-metrics) is used as a fallback.
+//   - cloud.region falls back to the region the collector resolved for its
+//     control plane subscription (the fleet's location) only when none of
+//     cloud.region, cloud.availability_zone or location is present, so a
+//     detected host region or zone is never replaced.
+//
+// An explicit value set by the workload or an earlier processor is never
+// overwritten.
+func workloadResourceStatements(projectID, region string) []string {
+	statements := []string{workloadProjectIDStatementFromAccount}
+	if projectID != "" {
+		statements = append(statements, fmt.Sprintf(
+			`set(attributes["gcp.project_id"], %s) where attributes["gcp.project_id"] == nil`,
+			strconv.Quote(projectID),
+		))
+	}
+	if stmt := googlepolicy.CloudRegionFallbackStatement(region); stmt != "" {
+		statements = append(statements, stmt)
+	}
+	return statements
+}
+
 func cleanConf(c *confmap.Conf) *confmap.Conf {
 	if c == nil {
 		return confmap.New()
@@ -804,6 +904,88 @@ func cleanNilEntries(m map[string]any) {
 		if subMap, ok := v.(map[string]any); ok {
 			cleanNilEntries(subMap)
 		}
+	}
+}
+
+// escapeDollarSigns recursively replaces every literal "$" with "$$" across all
+// strings in val (and normalizes typed string/map slices and maps to []any and
+// map[string]any so upstream confmap.Resolver traverses them).
+//
+// Upstream confmap.Resolver.Resolve runs expandValueRecursively followed by its
+// own escapeDollarSigns pass ("$$" -> "$") on the merged configuration. Doubling
+// every "$" ensures that any sequence of k >= 1 dollar signs preceding "{...}"
+// becomes 2k dollar signs (so 2k-1, an odd number, precedes "${...}"), which
+// confmap treats as an escaped literal rather than a provider URI reference, and
+// confmap's unescaping pass then restores the exact original string.
+func escapeDollarSigns(val any) any {
+	switch v := val.(type) {
+	case string:
+		return strings.ReplaceAll(v, "$", "$$")
+	case []any:
+		if v == nil {
+			return nil
+		}
+		nslice := make([]any, len(v))
+		for i, x := range v {
+			nslice[i] = escapeDollarSigns(x)
+		}
+		return nslice
+	case []string:
+		if v == nil {
+			return nil
+		}
+		nslice := make([]any, len(v))
+		for i, x := range v {
+			nslice[i] = strings.ReplaceAll(x, "$", "$$")
+		}
+		return nslice
+	case []map[string]any:
+		if v == nil {
+			return nil
+		}
+		nslice := make([]any, len(v))
+		for i, x := range v {
+			nslice[i] = escapeDollarSigns(x)
+		}
+		return nslice
+	case map[string]any:
+		if v == nil {
+			return nil
+		}
+		nmap := make(map[string]any, len(v))
+		for k, x := range v {
+			nmap[k] = escapeDollarSigns(x)
+		}
+		return nmap
+	case map[string]string:
+		if v == nil {
+			return nil
+		}
+		nmap := make(map[string]any, len(v))
+		for k, x := range v {
+			nmap[k] = strings.ReplaceAll(x, "$", "$$")
+		}
+		return nmap
+	default:
+		return val
+	}
+}
+
+func (p *provider) register() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if !p.stopped && !p.registered {
+		googlepolicy.RegisterProvider()
+		p.registered = true
+	}
+}
+
+func (p *provider) unregister() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.registered {
+		googlepolicy.UnregisterProvider()
+		p.registered = false
 	}
 }
 
@@ -931,6 +1113,7 @@ func (p *provider) Shutdown(context.Context) error {
 			googlepolicy.UnregisterWatcherChannel(p.watcherCh)
 			p.watcherCh = nil
 		}
+		p.unregister()
 	})
 	p.mu.Lock()
 	manager := p.manager
@@ -940,4 +1123,16 @@ func (p *provider) Shutdown(context.Context) error {
 		manager.Stop()
 	}
 	return nil
+}
+
+// defaultStorageDir returns the GBOC-owned storage directory path for the host OS.
+func defaultStorageDir() string {
+	if runtime.GOOS == "windows" {
+		progData := os.Getenv("ProgramData")
+		if progData == "" {
+			progData = `C:\ProgramData`
+		}
+		return filepath.Join(progData, "Google", "OpenTelemetry Collector", "storage")
+	}
+	return "/var/lib/otelcol-google/storage"
 }

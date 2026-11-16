@@ -276,6 +276,10 @@ type DistributionComponents struct {
 	Connectors []string `yaml:"connectors,omitempty"`
 	Extensions []string `yaml:"extensions,omitempty"`
 	Providers  []string `yaml:"providers,omitempty"`
+	// Telemetry is the name of the telemetry.Factory registry entry to use for
+	// the Collector's internal telemetry. When empty, OCB's default
+	// (otelconftelemetry) is used.
+	Telemetry string `yaml:"telemetry,omitempty"`
 }
 
 // DistributionGenerator contains all the facilities to generate a distribution
@@ -549,6 +553,7 @@ type TemplateContext struct {
 	Extensions RegistryComponents
 	Connectors RegistryComponents
 	Providers  RegistryComponents
+	Telemetry  *RegistryComponent
 
 	SystemdServiceName  string
 	SystemdConfFileName string
@@ -587,6 +592,13 @@ func NewTemplateContextFromSpec(spec *DistributionSpec, registry *Registry) (*Te
 	mapMerge(errs, err)
 	context.Providers, err = registry.Providers.LoadAllComponents(spec.Components.Providers, otelVersion)
 	mapMerge(errs, err)
+	if name := spec.Components.Telemetry; name != "" {
+		telemetry, terr := registry.Telemetry.LoadComponent(name, otelVersion)
+		if terr != nil {
+			errs[name] = terr
+		}
+		context.Telemetry = telemetry
+	}
 
 	context.SystemdServiceName = spec.BinaryName + ".service"
 	context.SystemdConfFileName = spec.BinaryName + ".conf"
@@ -595,6 +607,18 @@ func NewTemplateContextFromSpec(spec *DistributionSpec, registry *Registry) (*Te
 		return nil, errs
 	}
 	return &context, nil
+}
+
+// RenderOCBTelemetry renders the optional top-level `telemetry:` stanza of
+// the OCB manifest, or an empty string if the distribution uses OCB's default
+// telemetry factory.
+func (c *TemplateContext) RenderOCBTelemetry() string {
+	if c.Telemetry == nil {
+		return ""
+	}
+	return renderYaml(struct {
+		Telemetry OCBManifestComponent `yaml:"telemetry"`
+	}{c.Telemetry.GetOCBComponent()})
 }
 
 // FeatureGates is a list of feature gate names to enable in a

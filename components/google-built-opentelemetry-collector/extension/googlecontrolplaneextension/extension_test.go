@@ -35,11 +35,14 @@ import (
 type fakeSource struct {
 	revisionID  string
 	policySetID string
+	inactive    bool
 }
 
 func (f fakeSource) ActivePolicySet() PolicySetState {
 	return PolicySetState{ID: f.policySetID, Revision: f.revisionID}
 }
+
+func (f fakeSource) IsControlPlaneActive() bool { return !f.inactive }
 
 // newTestExtension wires the extension up to a real SDK MeterProvider backed by
 // a manual reader, so tests can assert on the actual emitted metrics.
@@ -117,6 +120,18 @@ func TestExtension_ReportsActivePolicySet(t *testing.T) {
 	assert.Equal(t, map[string]string{
 		attrPolicySetID: testPolicySetID,
 	}, attrsOf(setActive[0]))
+}
+
+// When the extension is configured independently without the control plane
+// provider, gcp.policy.set.active must not be emitted.
+func TestExtension_DoesNotEmitWhenControlPlaneInactive(t *testing.T) {
+	ext, reader := newTestExtension(t, fakeSource{inactive: true})
+
+	require.NoError(t, ext.Start(context.Background(), componenttest.NewNopHost()))
+	t.Cleanup(func() { assert.NoError(t, ext.Shutdown(context.Background())) })
+
+	metrics := collect(t, reader)
+	assert.Empty(t, metrics[metricPolicySetActive])
 }
 
 // A collector with no active policy set must still emit a gcp.policy.set.active
@@ -305,6 +320,7 @@ type mutableSource struct {
 }
 
 func (m *mutableSource) ActivePolicySet() PolicySetState { return m.state }
+func (m *mutableSource) IsControlPlaneActive() bool      { return true }
 func (m *mutableSource) set(rev, policySetID string) {
 	m.state = PolicySetState{ID: policySetID, Revision: rev}
 }

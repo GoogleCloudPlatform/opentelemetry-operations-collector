@@ -124,35 +124,74 @@ func (p *GCPDestinationPolicy) Evaluate(_ context.Context) (*confmap.Conf, error
 	// unmarshal once the component settled on "queuebatch".
 	queueBatchType := queuebatchprocessor.NewFactory().Type()
 
-	queueBatchLog := queuebatchprocessor.NewFactory().CreateDefaultConfig().(*queuebatchprocessor.Config)
-	batchSubconfig := queueBatchLog.Batch.GetOrInsertDefault()
-	batchSubconfig.MaxSize = 8192
-	batchSubconfig.MinSize = 8192
+	const (
+		stage1QueueSizeBytes = 32 * 1024 * 1024    // 32 MiB (33,554,432 B)
+		stage1MinBatchBytes  = 7 * 1024 * 1024 / 2 // 3.5 MiB (3,670,016 B)
+		stage1MaxBatchBytes  = 4 * 1024 * 1024     // 4 MiB (4,194,304 B), leaving 1 MiB headroom below UTR's 5 MiB limit
+		utrMaxLogItems       = 8192                // UTR kMaxLogCountPerBatch
+		utrMaxMetricItems    = 200                 // UTR kMaxPointsPerRequest
+		utrMaxTraceItems     = 8192                // UTR kMaxSpanCountPerBatch (#710)
+	)
+
+	newStage1ByteBatchConfig := func() *queuebatchprocessor.Config {
+		cfg := queuebatchprocessor.NewFactory().CreateDefaultConfig().(*queuebatchprocessor.Config)
+		cfg.Sizer = exporterhelper.RequestSizerTypeBytes
+		cfg.QueueSize = stage1QueueSizeBytes
+		batchCfg := cfg.Batch.GetOrInsertDefault()
+		batchCfg.Sizer = exporterhelper.RequestSizerTypeBytes
+		batchCfg.MinSize = stage1MinBatchBytes
+		batchCfg.MaxSize = stage1MaxBatchBytes
+		return cfg
+	}
+
+	newStage2ItemSplitConfig := func(maxItems int64) *queuebatchprocessor.Config {
+		cfg := queuebatchprocessor.NewFactory().CreateDefaultConfig().(*queuebatchprocessor.Config)
+		cfg.Sizer = exporterhelper.RequestSizerTypeRequests
+		cfg.QueueSize = 10
+		batchCfg := cfg.Batch.GetOrInsertDefault()
+		batchCfg.Sizer = exporterhelper.RequestSizerTypeItems
+		batchCfg.MinSize = 0
+		batchCfg.MaxSize = maxItems
+		return cfg
+	}
+
 	queueBatchLogsID := component.NewIDWithName(queueBatchType, fmt.Sprintf("%s_batch_logs", p.Name))
+	queueSplitLogsID := component.NewIDWithName(queueBatchType, fmt.Sprintf("%s_split_logs", p.Name))
 
-	queueBatchMetric := queuebatchprocessor.NewFactory().CreateDefaultConfig().(*queuebatchprocessor.Config)
-	batchSubconfig = queueBatchMetric.Batch.GetOrInsertDefault()
-	batchSubconfig.MaxSize = 200
-	batchSubconfig.MinSize = 200
 	queueBatchMetricsID := component.NewIDWithName(queueBatchType, fmt.Sprintf("%s_batch_metrics", p.Name))
+	queueSplitMetricsID := component.NewIDWithName(queueBatchType, fmt.Sprintf("%s_split_metrics", p.Name))
 
-	queueBatchTrace := queuebatchprocessor.NewFactory().CreateDefaultConfig().(*queuebatchprocessor.Config)
-	batchSubconfig = queueBatchTrace.Batch.GetOrInsertDefault()
-	batchSubconfig.MaxSize = 25000
-	batchSubconfig.MinSize = 25000
 	queueBatchTracesID := component.NewIDWithName(queueBatchType, fmt.Sprintf("%s_batch_traces", p.Name))
+	queueSplitTracesID := component.NewIDWithName(queueBatchType, fmt.Sprintf("%s_split_traces", p.Name))
+
+	queueBatchLog := newStage1ByteBatchConfig()
+	queueBatchLog.StorageID = &googlepolicy.StorageExtensionID
+	queueBatchLog.NumConsumers = 10
+	queueBatchLog.BlockOnOverflow = true
+
+	queueBatchMetric := newStage1ByteBatchConfig()
+	queueBatchTrace := newStage1ByteBatchConfig()
+
+	queueSplitLog := newStage2ItemSplitConfig(utrMaxLogItems)
+	queueSplitLog.WaitForResult = true
+	queueSplitLog.NumConsumers = queueBatchLog.NumConsumers
+	queueSplitMetric := newStage2ItemSplitConfig(utrMaxMetricItems)
+	queueSplitTrace := newStage2ItemSplitConfig(utrMaxTraceItems)
 
 	conf.Processors = map[component.ID]component.Config{
 		queueBatchLogsID:    component.Config(queueBatchLog),
+		queueSplitLogsID:    component.Config(queueSplitLog),
 		queueBatchMetricsID: component.Config(queueBatchMetric),
+		queueSplitMetricsID: component.Config(queueSplitMetric),
 		queueBatchTracesID:  component.Config(queueBatchTrace),
+		queueSplitTracesID:  component.Config(queueSplitTrace),
 	}
 
 	p.extensionIDs = []component.ID{authID}
 	p.exporterIDs = []component.ID{otlpExporterID}
-	p.preprocessorLogIDs = []component.ID{queueBatchLogsID}
-	p.preprocessorMetricIDs = []component.ID{queueBatchMetricsID}
-	p.preprocessorTraceIDs = []component.ID{queueBatchTracesID}
+	p.preprocessorLogIDs = []component.ID{queueBatchLogsID, queueSplitLogsID}
+	p.preprocessorMetricIDs = []component.ID{queueBatchMetricsID, queueSplitMetricsID}
+	p.preprocessorTraceIDs = []component.ID{queueBatchTracesID, queueSplitTracesID}
 
 	cm := confmap.New()
 	if err := cm.Marshal(conf); err != nil {
@@ -175,7 +214,48 @@ func (p *GCPDestinationPolicy) Evaluate(_ context.Context) (*confmap.Conf, error
 		return nil, fmt.Errorf("policy implementation failure for %s: disabling exporter sending queue got error '%w'", p.PolicyName(), err)
 	}
 
+	// confmap marshals the queue and batch sizers as empty maps: SizerType
+	// implements TextMarshaler on a pointer receiver and the marshaled structs
+	// are not addressable, so the collector would fall back to the factory
+	// default sizer on load. Write the sizer names explicitly.
+	for id, cfg := range map[component.ID]*queuebatchprocessor.Config{
+		queueBatchLogsID:    queueBatchLog,
+		queueSplitLogsID:    queueSplitLog,
+		queueBatchMetricsID: queueBatchMetric,
+		queueSplitMetricsID: queueSplitMetric,
+		queueBatchTracesID:  queueBatchTrace,
+		queueSplitTracesID:  queueSplitTrace,
+	} {
+		sizers, err := queueBatchSizers(cfg)
+		if err != nil {
+			return nil, fmt.Errorf("policy implementation failure for %s: marshaling sizers of %s got error '%w'", p.PolicyName(), id, err)
+		}
+		if err := cm.Merge(confmap.NewFromStringMap(map[string]any{
+			"processors": map[string]any{id.String(): sizers},
+		})); err != nil {
+			return nil, fmt.Errorf("policy implementation failure for %s: setting sizers of %s got error '%w'", p.PolicyName(), id, err)
+		}
+	}
+
 	return cm, nil
+}
+
+// queueBatchSizers returns the queue and batch sizer names of cfg in the shape
+// of the generated processor config.
+func queueBatchSizers(cfg *queuebatchprocessor.Config) (map[string]any, error) {
+	queueSizer, err := cfg.Sizer.MarshalText()
+	if err != nil {
+		return nil, err
+	}
+	sizers := map[string]any{"sizer": string(queueSizer)}
+	if cfg.Batch.HasValue() {
+		batchSizer, err := cfg.Batch.Get().Sizer.MarshalText()
+		if err != nil {
+			return nil, err
+		}
+		sizers["batch"] = map[string]any{"sizer": string(batchSizer)}
+	}
+	return sizers, nil
 }
 
 func (p *GCPDestinationPolicy) Validate() error {

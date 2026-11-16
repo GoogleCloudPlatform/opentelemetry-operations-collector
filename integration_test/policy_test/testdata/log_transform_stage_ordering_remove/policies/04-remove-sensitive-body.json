@@ -1,11 +1,16 @@
 {
   "type": "log_transform",
   "id": "04-remove-sensitive-body",
-  "removal": {
-    "target": {
-      "body_field_path": {
-        "segments": ["auth", "session_token"]
+  "removals": [
+    {
+      "target": {
+        "body_field_path": {
+          "segments": [
+            "auth",
+            "session_token"
+          ]
+        }
       }
     }
-  }
+  ]
 }

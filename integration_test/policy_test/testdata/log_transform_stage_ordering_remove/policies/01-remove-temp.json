@@ -1,11 +1,15 @@
 {
   "type": "log_transform",
   "id": "01-remove-temp",
-  "removal": {
-    "target": {
-      "log_attribute_path": {
-        "segments": ["temp_tag"]
+  "removals": [
+    {
+      "target": {
+        "log_attribute_path": {
+          "segments": [
+            "temp_tag"
+          ]
+        }
       }
     }
-  }
+  ]
 }

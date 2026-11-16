@@ -10,6 +10,7 @@ Restart=on-failure
 Type=simple
 User=otelcol-google
 Group=otelcol-google
+StateDirectory=otelcol-google
 
 [Install]
 WantedBy=multi-user.target

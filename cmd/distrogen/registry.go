@@ -52,7 +52,10 @@ type Registry struct {
 	Connectors RegistryComponents `yaml:"connectors"`
 	Extensions RegistryComponents `yaml:"extensions"`
 	Providers  RegistryComponents `yaml:"providers"`
-	Path       string             `yaml:"-"`
+	// Telemetry contains telemetry.Factory modules (the Collector's internal
+	// telemetry provider). A distribution may select at most one.
+	Telemetry RegistryComponents `yaml:"telemetry,omitempty"`
+	Path      string             `yaml:"-"`
 
 	// moduleVersions is the released version of every module published by the
 	// core and contrib repositories. It is empty until ResolveOTelModuleVersions
@@ -71,6 +74,7 @@ func NewRegistry() *Registry {
 		Connectors: RegistryComponents{},
 		Extensions: RegistryComponents{},
 		Providers:  RegistryComponents{},
+		Telemetry:  RegistryComponents{},
 	}
 }
 
@@ -102,6 +106,10 @@ func (r *Registry) Merge(r2 *Registry) {
 	mapMerge(r.Connectors, r2.Connectors)
 	mapMerge(r.Extensions, r2.Extensions)
 	mapMerge(r.Providers, r2.Providers)
+	if r.Telemetry == nil {
+		r.Telemetry = RegistryComponents{}
+	}
+	mapMerge(r.Telemetry, r2.Telemetry)
 }
 
 func (r *Registry) Add(componentType ComponentType, component *RegistryComponent) {

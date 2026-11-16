@@ -16,6 +16,7 @@ package googlepolicyprocessor
 
 import (
 	"encoding/binary"
+	"fmt"
 	"testing"
 
 	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
@@ -1147,35 +1148,31 @@ func TestEvaluator_LogTransform(t *testing.T) {
 		}},
 	}
 
-	// Transform 1a: Add flat log attribute threat_tier when event_id == 4625
+	// Transform 1: Add flat log attribute threat_tier and nested log attribute gcp.routing.priority when event_id == 4625
 	labelSOC := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
 		Id:       "01-label-soc-logs",
 		Matchers: []*policyv1alpha1.LogMatcher{eventID4625},
-		Action: &policyv1alpha1.LogTransformPolicy_Addition{
-			Addition: &policyv1alpha1.LogAddAction{
+		Additions: []*policyv1alpha1.LogAddition{
+			{
 				Target: &policyv1alpha1.LogTargetSelector{
 					Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
 						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"threat_tier"}},
 					},
 				},
-				Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "HOT_ACTIVE_SOC"}},
+				Source: &policyv1alpha1.LogAddition_Value{
+					Value: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "HOT_ACTIVE_SOC"}},
+				},
 				UpsertEnabled: proto.Bool(true),
 			},
-		},
-	})
-
-	// Transform 1b: Add nested log attribute gcp.routing.priority when event_id == 4625
-	labelSOCPriority := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
-		Id:       "02-label-soc-priority",
-		Matchers: []*policyv1alpha1.LogMatcher{eventID4625},
-		Action: &policyv1alpha1.LogTransformPolicy_Addition{
-			Addition: &policyv1alpha1.LogAddAction{
+			{
 				Target: &policyv1alpha1.LogTargetSelector{
 					Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
 						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"gcp", "routing", "priority"}},
 					},
 				},
-				Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_IntValue{IntValue: 1}},
+				Source: &policyv1alpha1.LogAddition_Value{
+					Value: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_IntValue{IntValue: 1}},
+				},
 				UpsertEnabled: proto.Bool(false),
 			},
 		},
@@ -1194,26 +1191,28 @@ func TestEvaluator_LogTransform(t *testing.T) {
 				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
 			},
 		},
-		Action: &policyv1alpha1.LogTransformPolicy_Addition{
-			Addition: &policyv1alpha1.LogAddAction{
+		Additions: []*policyv1alpha1.LogAddition{
+			{
 				Target: &policyv1alpha1.LogTargetSelector{
 					Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
 						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"threat_tier"}},
 					},
 				},
-				Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "DEFAULT_TIER"}},
+				Source: &policyv1alpha1.LogAddition_Value{
+					Value: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "DEFAULT_TIER"}},
+				},
 				UpsertEnabled: proto.Bool(false),
 			},
 		},
 	})
 
-	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{labelSOC, labelSOCPriority, defaultTier})
+	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{labelSOC, defaultTier})
 	require.NoError(t, err)
 
 	ld := plog.NewLogs()
 	sl := ld.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty()
 
-	// Record 0: event_id = 4625 -> matches labelSOC (sets threat_tier="HOT_ACTIVE_SOC") and labelSOCPriority (sets gcp.routing.priority=1);
+	// Record 0: event_id = 4625 -> matches labelSOC (sets threat_tier="HOT_ACTIVE_SOC" and gcp.routing.priority=1);
 	// defaultTier also matches on event_id exists, but upsert=false does NOT overwrite threat_tier!
 	lr0 := sl.LogRecords().AppendEmpty()
 	lr0.Attributes().PutEmptyMap("winlog").PutInt("event_id", 4625)
@@ -1258,14 +1257,16 @@ func TestEvaluator_LogTransformDeterministicOrdering(t *testing.T) {
 	// winning the upsert: false race even when passed out of order to NewEvaluator.
 	policyZ := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
 		Id: "z-policy",
-		Action: &policyv1alpha1.LogTransformPolicy_Addition{
-			Addition: &policyv1alpha1.LogAddAction{
+		Additions: []*policyv1alpha1.LogAddition{
+			{
 				Target: &policyv1alpha1.LogTargetSelector{
 					Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
 						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"winner"}},
 					},
 				},
-				Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "z"}},
+				Source: &policyv1alpha1.LogAddition_Value{
+					Value: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "z"}},
+				},
 				UpsertEnabled: proto.Bool(false),
 			},
 		},
@@ -1273,14 +1274,16 @@ func TestEvaluator_LogTransformDeterministicOrdering(t *testing.T) {
 
 	policyA := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
 		Id: "a-policy",
-		Action: &policyv1alpha1.LogTransformPolicy_Addition{
-			Addition: &policyv1alpha1.LogAddAction{
+		Additions: []*policyv1alpha1.LogAddition{
+			{
 				Target: &policyv1alpha1.LogTargetSelector{
 					Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
 						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"winner"}},
 					},
 				},
-				Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "a"}},
+				Source: &policyv1alpha1.LogAddition_Value{
+					Value: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "a"}},
+				},
 				UpsertEnabled: proto.Bool(false),
 			},
 		},
@@ -1353,14 +1356,16 @@ func TestEvaluator_LogFilterBeforeTransformOrdering(t *testing.T) {
 				}},
 			},
 		},
-		Action: &policyv1alpha1.LogTransformPolicy_Addition{
-			Addition: &policyv1alpha1.LogAddAction{
+		Additions: []*policyv1alpha1.LogAddition{
+			{
 				Target: &policyv1alpha1.LogTargetSelector{
 					Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
 						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"utr_route"}},
 					},
 				},
-				Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "security_lakehouse"}},
+				Source: &policyv1alpha1.LogAddition_Value{
+					Value: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "security_lakehouse"}},
+				},
 				UpsertEnabled: proto.Bool(true),
 			},
 		},
@@ -1430,14 +1435,16 @@ func TestEvaluator_LogTransformBodyFieldAndRecordFields(t *testing.T) {
 	enrichBodyField := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
 		Id:       "01-enrich-body-field",
 		Matchers: adMatcher,
-		Action: &policyv1alpha1.LogTransformPolicy_Addition{
-			Addition: &policyv1alpha1.LogAddAction{
+		Additions: []*policyv1alpha1.LogAddition{
+			{
 				Target: &policyv1alpha1.LogTargetSelector{
 					Target: &policyv1alpha1.LogTargetSelector_BodyFieldPath{
 						BodyFieldPath: &policyv1alpha1.AttributePath{Segments: []string{"gcp", "utr", "stream"}},
 					},
 				},
-				Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "secops-ad"}},
+				Source: &policyv1alpha1.LogAddition_Value{
+					Value: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "secops-ad"}},
+				},
 				UpsertEnabled: proto.Bool(true),
 			},
 		},
@@ -1446,14 +1453,16 @@ func TestEvaluator_LogTransformBodyFieldAndRecordFields(t *testing.T) {
 	enrichSeverity := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
 		Id:       "02-enrich-severity",
 		Matchers: adMatcher,
-		Action: &policyv1alpha1.LogTransformPolicy_Addition{
-			Addition: &policyv1alpha1.LogAddAction{
+		Additions: []*policyv1alpha1.LogAddition{
+			{
 				Target: &policyv1alpha1.LogTargetSelector{
 					Target: &policyv1alpha1.LogTargetSelector_RecordField{
 						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT,
 					},
 				},
-				Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "WARN"}},
+				Source: &policyv1alpha1.LogAddition_Value{
+					Value: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "WARN"}},
+				},
 				UpsertEnabled: proto.Bool(true),
 			},
 		},
@@ -1462,14 +1471,16 @@ func TestEvaluator_LogTransformBodyFieldAndRecordFields(t *testing.T) {
 	enrichLog := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
 		Id:       "03-enrich-log",
 		Matchers: adMatcher,
-		Action: &policyv1alpha1.LogTransformPolicy_Addition{
-			Addition: &policyv1alpha1.LogAddAction{
+		Additions: []*policyv1alpha1.LogAddition{
+			{
 				Target: &policyv1alpha1.LogTargetSelector{
 					Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
 						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"threat_tier"}},
 					},
 				},
-				Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "HOT_ACTIVE_SOC"}},
+				Source: &policyv1alpha1.LogAddition_Value{
+					Value: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "HOT_ACTIVE_SOC"}},
+				},
 				UpsertEnabled: proto.Bool(true),
 			},
 		},
@@ -1555,14 +1566,16 @@ func TestEvaluator_LogTransformPostTransformFiltering(t *testing.T) {
 				}},
 			},
 		},
-		Action: &policyv1alpha1.LogTransformPolicy_Addition{
-			Addition: &policyv1alpha1.LogAddAction{
+		Additions: []*policyv1alpha1.LogAddition{
+			{
 				Target: &policyv1alpha1.LogTargetSelector{
 					Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
 						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"threat_tier"}},
 					},
 				},
-				Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "DROP_ME"}},
+				Source: &policyv1alpha1.LogAddition_Value{
+					Value: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "DROP_ME"}},
+				},
 				UpsertEnabled: proto.Bool(true),
 			},
 		},
@@ -1583,14 +1596,16 @@ func TestEvaluator_LogTransformPostTransformFiltering(t *testing.T) {
 				}},
 			},
 		},
-		Action: &policyv1alpha1.LogTransformPolicy_Addition{
-			Addition: &policyv1alpha1.LogAddAction{
+		Additions: []*policyv1alpha1.LogAddition{
+			{
 				Target: &policyv1alpha1.LogTargetSelector{
 					Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
 						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"threat_tier"}},
 					},
 				},
-				Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "KEEP_ME"}},
+				Source: &policyv1alpha1.LogAddition_Value{
+					Value: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "KEEP_ME"}},
+				},
 				UpsertEnabled: proto.Bool(true),
 			},
 		},
@@ -1626,31 +1641,11 @@ func TestEvaluator_LogTransformPostTransformFiltering(t *testing.T) {
 	assert.Equal(t, "KEEP_ME", tier.Str())
 }
 
-func TestEvaluator_LogTransformRejectUnspecifiedStage(t *testing.T) {
-	fake := &fakeUnspecifiedStageTransformPolicy{name: "unspecified-stage"}
-	_, err := NewEvaluator([]googlepolicy.TransformationPolicy{fake})
+func TestEvaluator_LogTransformRejectInvalidPolicy(t *testing.T) {
+	invalid := &logtransform.Policy{}
+	_, err := NewEvaluator([]googlepolicy.TransformationPolicy{invalid})
 	require.Error(t, err)
-	assert.ErrorContains(t, err, "unspecified transform stage")
-}
-
-type fakeUnspecifiedStageTransformPolicy struct {
-	name string
-}
-
-func (f *fakeUnspecifiedStageTransformPolicy) PolicyName() string { return f.name }
-func (f *fakeUnspecifiedStageTransformPolicy) PolicyType() string { return "fake" }
-func (f *fakeUnspecifiedStageTransformPolicy) PolicyClass() googlepolicy.PolicyClass {
-	return googlepolicy.PolicyClassTransformation
-}
-func (f *fakeUnspecifiedStageTransformPolicy) TargetSignals() []googlepolicy.Signal {
-	return []googlepolicy.Signal{googlepolicy.SignalLogs}
-}
-func (f *fakeUnspecifiedStageTransformPolicy) Validate() error { return nil }
-func (f *fakeUnspecifiedStageTransformPolicy) TransformStage() googlepolicy.TransformStage {
-	return googlepolicy.TransformStageUnspecified
-}
-func (f *fakeUnspecifiedStageTransformPolicy) TransformLog(ctx LogContext) googlepolicy.TransformResult {
-	return googlepolicy.TransformNoMatch
+	assert.ErrorIs(t, err, logtransform.ErrNilProto)
 }
 
 func TestEvaluator_LogTransformPass2Interaction_KeptByAttributeThenRemovedAndDropped(t *testing.T) {
@@ -1690,11 +1685,11 @@ func TestEvaluator_LogTransformPass2Interaction_KeptByAttributeThenRemovedAndDro
 		},
 	})
 
-	// LogRemoveAction removes "auth.exempt".
+	// Removals removes "auth.exempt".
 	removeExempt := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
 		Id: "remove-exempt-attr",
-		Action: &policyv1alpha1.LogTransformPolicy_Removal{
-			Removal: &policyv1alpha1.LogRemoveAction{
+		Removals: []*policyv1alpha1.LogRemoval{
+			{
 				Target: &policyv1alpha1.LogAttributeSelector{
 					Target: &policyv1alpha1.LogAttributeSelector_LogAttributePath{
 						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"auth.exempt"}},
@@ -1741,8 +1736,8 @@ func TestEvaluator_LogTransformNonMatchingMatcherLeavesTargetIntact(t *testing.T
 				}},
 			},
 		},
-		Action: &policyv1alpha1.LogTransformPolicy_Removal{
-			Removal: &policyv1alpha1.LogRemoveAction{
+		Removals: []*policyv1alpha1.LogRemoval{
+			{
 				Target: &policyv1alpha1.LogAttributeSelector{
 					Target: &policyv1alpha1.LogAttributeSelector_LogAttributePath{
 						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"temp.secret"}},
@@ -1792,8 +1787,8 @@ func TestEvaluator_LogTransformStageOrdering(t *testing.T) {
 	// takes precedence over ID order, while ID order breaks ties within the same stage.
 	renameLegacy := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
 		Id: "z-rename-legacy",
-		Action: &policyv1alpha1.LogTransformPolicy_Renaming{
-			Renaming: &policyv1alpha1.LogRenameAction{
+		Renamings: []*policyv1alpha1.LogRenaming{
+			{
 				Source:        logAttr("legacy_user"),
 				Target:        logAttr("user_name"),
 				UpsertEnabled: proto.Bool(false),
@@ -1803,10 +1798,8 @@ func TestEvaluator_LogTransformStageOrdering(t *testing.T) {
 
 	removeTemp := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
 		Id: "b-remove-temp",
-		Action: &policyv1alpha1.LogTransformPolicy_Removal{
-			Removal: &policyv1alpha1.LogRemoveAction{
-				Target: logAttr("temp_flag"),
-			},
+		Removals: []*policyv1alpha1.LogRemoval{
+			{Target: logAttr("temp_flag")},
 		},
 	})
 
@@ -1815,10 +1808,12 @@ func TestEvaluator_LogTransformStageOrdering(t *testing.T) {
 	// "user_name" will already exist, so "m-add-fallback" will skip it.
 	addFallback := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
 		Id: "m-add-fallback",
-		Action: &policyv1alpha1.LogTransformPolicy_Addition{
-			Addition: &policyv1alpha1.LogAddAction{
-				Target:        logTarget("user_name"),
-				Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "guest"}},
+		Additions: []*policyv1alpha1.LogAddition{
+			{
+				Target: logTarget("user_name"),
+				Source: &policyv1alpha1.LogAddition_Value{
+					Value: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "guest"}},
+				},
 				UpsertEnabled: proto.Bool(false),
 			},
 		},
@@ -1828,20 +1823,24 @@ func TestEvaluator_LogTransformStageOrdering(t *testing.T) {
 	// Both have upsert=false on "stage_winner", so "m-add-1" must win.
 	addWinner1 := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
 		Id: "m-add-1",
-		Action: &policyv1alpha1.LogTransformPolicy_Addition{
-			Addition: &policyv1alpha1.LogAddAction{
-				Target:        logTarget("stage_winner"),
-				Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "first"}},
+		Additions: []*policyv1alpha1.LogAddition{
+			{
+				Target: logTarget("stage_winner"),
+				Source: &policyv1alpha1.LogAddition_Value{
+					Value: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "first"}},
+				},
 				UpsertEnabled: proto.Bool(false),
 			},
 		},
 	})
 	addWinner2 := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
 		Id: "m-add-2",
-		Action: &policyv1alpha1.LogTransformPolicy_Addition{
-			Addition: &policyv1alpha1.LogAddAction{
-				Target:        logTarget("stage_winner"),
-				Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "second"}},
+		Additions: []*policyv1alpha1.LogAddition{
+			{
+				Target: logTarget("stage_winner"),
+				Source: &policyv1alpha1.LogAddition_Value{
+					Value: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "second"}},
+				},
 				UpsertEnabled: proto.Bool(false),
 			},
 		},
@@ -1851,10 +1850,12 @@ func TestEvaluator_LogTransformStageOrdering(t *testing.T) {
 	// removed in Stage 3 by "b-remove-temp" (even though "b-remove-temp" < "n-add-temp" lexicographically).
 	addTemp := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
 		Id: "n-add-temp",
-		Action: &policyv1alpha1.LogTransformPolicy_Addition{
-			Addition: &policyv1alpha1.LogAddAction{
-				Target:        logTarget("temp_flag"),
-				Value:         &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "to-be-removed"}},
+		Additions: []*policyv1alpha1.LogAddition{
+			{
+				Target: logTarget("temp_flag"),
+				Source: &policyv1alpha1.LogAddition_Value{
+					Value: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "to-be-removed"}},
+				},
 				UpsertEnabled: proto.Bool(true),
 			},
 		},
@@ -1865,10 +1866,10 @@ func TestEvaluator_LogTransformStageOrdering(t *testing.T) {
 	// Stage 4 (redact) runs LAST after rename (Stage 1), add (Stage 2), and remove (Stage 3).
 	redactUser := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
 		Id: "a-redact-user",
-		Action: &policyv1alpha1.LogTransformPolicy_Redaction{
-			Redaction: &policyv1alpha1.LogRedactAction{
-				Target:      logTarget("user_name"),
-				Replacement: proto.String("[REDACTED_USER]"),
+		Redactions: []*policyv1alpha1.LogRedaction{
+			{
+				Target: logTarget("user_name"),
+				Mask:   &policyv1alpha1.LogRedaction_Replacement{Replacement: "[REDACTED_USER]"},
 			},
 		},
 	})
@@ -1908,6 +1909,359 @@ func TestEvaluator_LogTransformStageOrdering(t *testing.T) {
 
 	_, ok = records.At(0).Attributes().Get("temp_flag")
 	assert.False(t, ok, "temp_flag added in Stage 2 must be removed in Stage 3")
+}
+
+func TestEvaluator_LogTransformPreTransformMatcherIsolation(t *testing.T) {
+	// Invariant 1: Every LogTransformPolicy evaluates matchers once against the
+	// pre-transform record before Stage 1 mutates any field.
+	programIsHAProxy := &policyv1alpha1.LogMatcher{
+		Target: &policyv1alpha1.LogFieldSelector{
+			Target: &policyv1alpha1.LogFieldSelector_LogAttributePath{
+				LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"program"}},
+			},
+		},
+		Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
+			Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "haproxy"}},
+		}},
+	}
+	serviceIsHAProxy := &policyv1alpha1.LogMatcher{
+		Target: &policyv1alpha1.LogFieldSelector{
+			Target: &policyv1alpha1.LogFieldSelector_LogAttributePath{
+				LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"service.name"}},
+			},
+		},
+		Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
+			Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "haproxy"}},
+		}},
+	}
+
+	// Policy A matches program == "haproxy", renames program -> service.name, and adds tier = "edge".
+	policyA := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id:       "01-normalize-haproxy",
+		Matchers: []*policyv1alpha1.LogMatcher{programIsHAProxy},
+		Renamings: []*policyv1alpha1.LogRenaming{
+			{
+				Source: &policyv1alpha1.LogAttributeSelector{
+					Target: &policyv1alpha1.LogAttributeSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"program"}},
+					},
+				},
+				Target: &policyv1alpha1.LogAttributeSelector{
+					Target: &policyv1alpha1.LogAttributeSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"service.name"}},
+					},
+				},
+				UpsertEnabled: proto.Bool(true),
+			},
+		},
+		Additions: []*policyv1alpha1.LogAddition{
+			{
+				Target: &policyv1alpha1.LogTargetSelector{
+					Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"tier"}},
+					},
+				},
+				Source: &policyv1alpha1.LogAddition_Value{
+					Value: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "edge"}},
+				},
+				UpsertEnabled: proto.Bool(true),
+			},
+		},
+	})
+
+	// Policy B ALSO matches program == "haproxy" and redacts body in Stage 4, even though
+	// Policy A renamed "program" away in Stage 1.
+	policyB := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id:       "02-scrub-haproxy-body",
+		Matchers: []*policyv1alpha1.LogMatcher{programIsHAProxy},
+		Redactions: []*policyv1alpha1.LogRedaction{
+			{
+				Target: &policyv1alpha1.LogTargetSelector{
+					Target: &policyv1alpha1.LogTargetSelector_RecordField{
+						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
+					},
+				},
+				Pattern: &policyv1alpha1.LogRedaction_Regex{Regex: `secret=\w+`},
+				Mask:    &policyv1alpha1.LogRedaction_Replacement{Replacement: "secret=[REDACTED]"},
+			},
+		},
+	})
+
+	// Policy C matches service.name == "haproxy" (absent before Stage 1) and must NOT match.
+	policyC := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id:       "03-must-not-chain-on-post-rename",
+		Matchers: []*policyv1alpha1.LogMatcher{serviceIsHAProxy},
+		Additions: []*policyv1alpha1.LogAddition{
+			{
+				Target: &policyv1alpha1.LogTargetSelector{
+					Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"chained"}},
+					},
+				},
+				Source: &policyv1alpha1.LogAddition_Value{
+					Value: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "unexpected"}},
+				},
+				UpsertEnabled: proto.Bool(true),
+			},
+		},
+	})
+
+	// Pass 2 LogFilterPolicy evaluates post-transform state: drop all UNLESS service.name == "haproxy".
+	dropAll := mustPolicy(t, &policyv1alpha1.LogFilterPolicy{
+		Id:     "00-drop-non-haproxy",
+		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+		Matchers: []*policyv1alpha1.LogMatcher{
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_RecordField{
+						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
+					},
+				},
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+			},
+		},
+	})
+	keepNormalizedHAProxy := mustPolicy(t, &policyv1alpha1.LogFilterPolicy{
+		Id:       "01-keep-normalized-haproxy",
+		Action:   policyv1alpha1.Action_ACTION_KEEP.Enum(),
+		Matchers: []*policyv1alpha1.LogMatcher{serviceIsHAProxy},
+	})
+	keepRawHAProxy := mustPolicy(t, &policyv1alpha1.LogFilterPolicy{
+		Id:       "02-keep-raw-haproxy",
+		Action:   policyv1alpha1.Action_ACTION_KEEP.Enum(),
+		Matchers: []*policyv1alpha1.LogMatcher{programIsHAProxy},
+	})
+
+	// Also add 18 matching marker policies (> 16) to exercise the matchedBuf overflow slice path.
+	policies := []googlepolicy.TransformationPolicy{
+		policyA, policyB, policyC,
+		dropAll, keepNormalizedHAProxy, keepRawHAProxy,
+	}
+	for i := range 18 {
+		id := fmt.Sprintf("10-marker-%02d", i)
+		attr := fmt.Sprintf("marker_%02d", i)
+		policies = append(policies, mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+			Id:       id,
+			Matchers: []*policyv1alpha1.LogMatcher{programIsHAProxy},
+			Additions: []*policyv1alpha1.LogAddition{
+				{
+					Target: &policyv1alpha1.LogTargetSelector{
+						Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
+							LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{attr}},
+						},
+					},
+					Source: &policyv1alpha1.LogAddition_Value{
+						Value: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_BoolValue{BoolValue: true}},
+					},
+					UpsertEnabled: proto.Bool(true),
+				},
+			},
+		}))
+	}
+
+	ev, err := NewEvaluator(policies)
+	require.NoError(t, err)
+
+	ld := plog.NewLogs()
+	lr := ld.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty().LogRecords().AppendEmpty()
+	lr.Body().SetStr("login secret=hunter2")
+	lr.Attributes().PutStr("program", "haproxy")
+
+	ev.TransformLogs(ld)
+
+	require.Equal(t, 1, ld.ResourceLogs().Len(), "Pass 2 filter must keep record via post-transform service.name == haproxy")
+	got := ld.ResourceLogs().At(0).ScopeLogs().At(0).LogRecords().At(0)
+	_, hasProgram := got.Attributes().Get("program")
+	assert.False(t, hasProgram)
+	svc, ok := got.Attributes().Get("service.name")
+	require.True(t, ok)
+	assert.Equal(t, "haproxy", svc.Str())
+	tier, ok := got.Attributes().Get("tier")
+	require.True(t, ok)
+	assert.Equal(t, "edge", tier.Str())
+	assert.Equal(t, "login secret=[REDACTED]", got.Body().Str(), "Policy B must still match pre-transform program == haproxy")
+	_, hasChained := got.Attributes().Get("chained")
+	assert.False(t, hasChained, "Policy C must NOT match post-transform service.name == haproxy")
+	markerLast, ok := got.Attributes().Get("marker_17")
+	require.True(t, ok)
+	assert.True(t, markerLast.Bool())
+}
+
+func TestEvaluator_LogTransformDecompositionEquivalence(t *testing.T) {
+	// Invariant 2: A single combined multi-stage policy produces identical output
+	// to 4 single-stage policies OR 2 field-split multi-stage policies with the
+	// same matchers and relative ID order.
+	matcher := []*policyv1alpha1.LogMatcher{
+		{
+			Target: &policyv1alpha1.LogFieldSelector{
+				Target: &policyv1alpha1.LogFieldSelector_LogAttributePath{
+					LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"legacy_service"}},
+				},
+			},
+			Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+		},
+	}
+	renameOp := &policyv1alpha1.LogRenaming{
+		Source: &policyv1alpha1.LogAttributeSelector{
+			Target: &policyv1alpha1.LogAttributeSelector_LogAttributePath{
+				LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"legacy_service"}},
+			},
+		},
+		Target: &policyv1alpha1.LogAttributeSelector{
+			Target: &policyv1alpha1.LogAttributeSelector_LogAttributePath{
+				LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"service_name"}},
+			},
+		},
+		UpsertEnabled: proto.Bool(true),
+	}
+	addFallbackOp := &policyv1alpha1.LogAddition{
+		Target: &policyv1alpha1.LogTargetSelector{
+			Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
+				LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"env"}},
+			},
+		},
+		Source: &policyv1alpha1.LogAddition_Value{
+			Value: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "prod"}},
+		},
+		UpsertEnabled: proto.Bool(false),
+	}
+	removeDebugOp := &policyv1alpha1.LogRemoval{
+		Target: &policyv1alpha1.LogAttributeSelector{
+			Target: &policyv1alpha1.LogAttributeSelector_LogAttributePath{
+				LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"debug_payload"}},
+			},
+		},
+	}
+	redactBodyOp := &policyv1alpha1.LogRedaction{
+		Target: &policyv1alpha1.LogTargetSelector{
+			Target: &policyv1alpha1.LogTargetSelector_RecordField{
+				RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
+			},
+		},
+		Pattern: &policyv1alpha1.LogRedaction_Regex{Regex: `ssn=\d{3}-\d{2}-\d{4}`},
+		Mask:    &policyv1alpha1.LogRedaction_Replacement{Replacement: "ssn=[REDACTED]"},
+	}
+
+	makeInput := func() plog.Logs {
+		ld := plog.NewLogs()
+		sl := ld.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty()
+		r0 := sl.LogRecords().AppendEmpty()
+		r0.Body().SetStr("user ssn=123-45-6789 logged in")
+		r0.Attributes().PutStr("legacy_service", "billing")
+		r0.Attributes().PutStr("debug_payload", "raw-stack")
+
+		r1 := sl.LogRecords().AppendEmpty()
+		r1.Body().SetStr("unmatched ssn=999-99-9999")
+		r1.Attributes().PutStr("debug_payload", "keep-me")
+		return ld
+	}
+
+	// Set 1: Single combined multi-stage policy.
+	evCombined, err := NewEvaluator([]googlepolicy.TransformationPolicy{
+		mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+			Id:         "01-combined",
+			Matchers:   matcher,
+			Renamings:  []*policyv1alpha1.LogRenaming{renameOp},
+			Additions:  []*policyv1alpha1.LogAddition{addFallbackOp},
+			Removals:   []*policyv1alpha1.LogRemoval{removeDebugOp},
+			Redactions: []*policyv1alpha1.LogRedaction{redactBodyOp},
+		}),
+	})
+	require.NoError(t, err)
+
+	// Set 2: Four single-stage policies.
+	evFourSingle, err := NewEvaluator([]googlepolicy.TransformationPolicy{
+		mustPolicy(t, &policyv1alpha1.LogTransformPolicy{Id: "04-redact", Matchers: matcher, Redactions: []*policyv1alpha1.LogRedaction{redactBodyOp}}),
+		mustPolicy(t, &policyv1alpha1.LogTransformPolicy{Id: "03-remove", Matchers: matcher, Removals: []*policyv1alpha1.LogRemoval{removeDebugOp}}),
+		mustPolicy(t, &policyv1alpha1.LogTransformPolicy{Id: "02-add", Matchers: matcher, Additions: []*policyv1alpha1.LogAddition{addFallbackOp}}),
+		mustPolicy(t, &policyv1alpha1.LogTransformPolicy{Id: "01-rename", Matchers: matcher, Renamings: []*policyv1alpha1.LogRenaming{renameOp}}),
+	})
+	require.NoError(t, err)
+
+	// Set 3: Two field-split multi-stage policies.
+	evTwoSplit, err := NewEvaluator([]googlepolicy.TransformationPolicy{
+		mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+			Id:        "01-normalize",
+			Matchers:  matcher,
+			Renamings: []*policyv1alpha1.LogRenaming{renameOp},
+			Additions: []*policyv1alpha1.LogAddition{addFallbackOp},
+		}),
+		mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+			Id:         "02-scrub",
+			Matchers:   matcher,
+			Removals:   []*policyv1alpha1.LogRemoval{removeDebugOp},
+			Redactions: []*policyv1alpha1.LogRedaction{redactBodyOp},
+		}),
+	})
+	require.NoError(t, err)
+
+	ldCombined := makeInput()
+	ldFour := makeInput()
+	ldTwo := makeInput()
+
+	evCombined.TransformLogs(ldCombined)
+	evFourSingle.TransformLogs(ldFour)
+	evTwoSplit.TransformLogs(ldTwo)
+
+	assert.Equal(t, ldCombined, ldFour)
+	assert.Equal(t, ldCombined, ldTwo)
+}
+
+func TestEvaluator_LogTransformGlobalStageInterleavingAcrossPolicies(t *testing.T) {
+	// Invariant 3: Global stage ordering applies across ALL matching policies.
+	// Policy 1 ("01-first") has a Stage 2 fallback addition on "env" ("default", upsert=false).
+	// Policy 2 ("02-second") has a Stage 1 rename "legacy_env" -> "env" (upsert=true).
+	// Even though "01-first" < "02-second", Policy 2's Stage 1 rename MUST run before
+	// Policy 1's Stage 2 fallback addition, preserving "staging" rather than "default".
+	policy1 := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id: "01-first",
+		Additions: []*policyv1alpha1.LogAddition{
+			{
+				Target: &policyv1alpha1.LogTargetSelector{
+					Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"env"}},
+					},
+				},
+				Source: &policyv1alpha1.LogAddition_Value{
+					Value: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "default"}},
+				},
+				UpsertEnabled: proto.Bool(false),
+			},
+		},
+	})
+	policy2 := mustPolicy(t, &policyv1alpha1.LogTransformPolicy{
+		Id: "02-second",
+		Renamings: []*policyv1alpha1.LogRenaming{
+			{
+				Source: &policyv1alpha1.LogAttributeSelector{
+					Target: &policyv1alpha1.LogAttributeSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"legacy_env"}},
+					},
+				},
+				Target: &policyv1alpha1.LogAttributeSelector{
+					Target: &policyv1alpha1.LogAttributeSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"env"}},
+					},
+				},
+				UpsertEnabled: proto.Bool(true),
+			},
+		},
+	})
+
+	ev, err := NewEvaluator([]googlepolicy.TransformationPolicy{policy1, policy2})
+	require.NoError(t, err)
+
+	ld := plog.NewLogs()
+	lr := ld.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty().LogRecords().AppendEmpty()
+	lr.Attributes().PutStr("legacy_env", "staging")
+
+	ev.TransformLogs(ld)
+
+	envVal, ok := lr.Attributes().Get("env")
+	require.True(t, ok)
+	assert.Equal(t, "staging", envVal.Str(), "Stage 1 rename from 02-second must precede Stage 2 fallback add from 01-first")
+	_, hasLegacy := lr.Attributes().Get("legacy_env")
+	assert.False(t, hasLegacy)
 }
 
 // --- policy helpers --------------------------------------------------------

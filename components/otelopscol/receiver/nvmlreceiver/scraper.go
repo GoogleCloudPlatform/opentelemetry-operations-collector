@@ -49,7 +49,7 @@ func (s *nvmlScraper) start(_ context.Context, _ component.Host) error {
 	}
 
 	startTime := pcommon.NewTimestampFromTime(time.Now())
-	mbConfig := metadata.DefaultMetricsBuilderConfig()
+	mbConfig := metadata.NewDefaultMetricsBuilderConfig()
 	mbConfig.Metrics = s.config.Metrics
 	s.mb = metadata.NewMetricsBuilder(
 		mbConfig, s.settings, metadata.WithStartTime(startTime))

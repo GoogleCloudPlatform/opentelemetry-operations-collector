@@ -1,0 +1,8 @@
+{
+  "type": "file_log_source",
+  "id": "app_logs",
+  "included_paths": [
+    "/var/log/app/*.log",
+    "/var/log/syslog"
+  ]
+}

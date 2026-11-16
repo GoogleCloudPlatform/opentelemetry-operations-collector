@@ -56,20 +56,47 @@ func (e *Evaluator) TransformLogs(ld plog.Logs) {
 
 // EvalLog returns true if the log record should be DROPPED, false if KEPT.
 // Filter policies are evaluated first (Pass 1); dropped records never enter transformation.
-// Surviving records have active LogTransformPolicy rules applied in-place in stage order
-// (rename -> add -> remove -> redact). If any transform policy modified the record,
-// filter policies are re-evaluated (Pass 2) so that post-transform mutations can be filtered or dropped before egress.
+// Surviving records evaluate each LogTransformPolicy's matchers once against the
+// pre-transform record, then execute matching policies' operations in global stage
+// order (rename -> add -> remove -> redact) with ascending PolicyName() tie-breaking.
+// If any transform policy modified the record, filter policies are re-evaluated
+// (Pass 2) against the post-transform record before egress.
 func (e *Evaluator) EvalLog(ctx LogContext) bool {
 	// Pass 1: Pre-transform filter policies.
 	if e.evalLogFilters(ctx) {
 		return true
 	}
 
-	// Transform policies (only evaluated on surviving log records in stage order).
-	var modified bool
+	if len(e.logTransformPolicies) == 0 {
+		return false
+	}
+
+	// Step 1: Pre-transform matcher evaluation across all active transform policies
+	// (sorted by ascending PolicyName() in NewEvaluator) before any stage mutates ctx.
+	var matchedBuf [16]googlepolicy.LogTransformPolicyEvaluator
+	matched := matchedBuf[:0]
 	for _, tp := range e.logTransformPolicies {
-		if tp.TransformLog(ctx) == googlepolicy.TransformModified {
-			modified = true
+		if tp.MatchesLog(ctx) {
+			matched = append(matched, tp)
+		}
+	}
+	if len(matched) == 0 {
+		return false
+	}
+
+	// Step 2: Execute operations across matching policies in global stage order:
+	// Rename -> Add -> Remove -> Redact, preserving ascending PolicyName() tie-breaking.
+	var modified bool
+	for _, stage := range [...]googlepolicy.TransformStage{
+		googlepolicy.TransformStageRename,
+		googlepolicy.TransformStageAdd,
+		googlepolicy.TransformStageRemove,
+		googlepolicy.TransformStageRedact,
+	} {
+		for _, tp := range matched {
+			if tp.TransformLogStage(stage, ctx) == googlepolicy.TransformModified {
+				modified = true
+			}
 		}
 	}
 

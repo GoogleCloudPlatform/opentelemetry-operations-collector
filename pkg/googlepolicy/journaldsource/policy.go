@@ -31,8 +31,7 @@ import (
 
 // PolicyType is the registered policy type identifier for journald source policies.
 const (
-	PolicyType        = "journald_source"
-	DefaultReceiverID = "journald"
+	PolicyType = "journald_source"
 
 	// collectorLogFilterExpr drops the collector's own log records across both Linux VM systemd
 	// services and containerized environments (Kubernetes DaemonSet / Docker) to prevent self-logging loops.
@@ -40,6 +39,8 @@ const (
 		`(body._SYSTEMD_UNIT != nil && body._SYSTEMD_UNIT == "otelcol-google.service") || ` +
 		`(body.SYSLOG_IDENTIFIER != nil && body.SYSLOG_IDENTIFIER == "otelcol-google")`
 )
+
+var receiverID = component.MustNewIDWithName("journald", "googlecontrolplane")
 
 var (
 	// ErrNilProto is returned when a nil JournaldSourcePolicy protobuf is provided.
@@ -141,8 +142,9 @@ func (p *Policy) Consolidate(policies []googlepolicy.SourcePolicy) (googlepolicy
 // Evaluate produces the confmap for the journald receiver.
 // It configures an inline Stanza filter operator to automatically drop the collector's
 // own log lines across both Linux VM systemd services and containerized environments,
-// preventing self-logging amplification loops, and parses systemd/syslog priority (body.PRIORITY)
-// into OpenTelemetry severity levels.
+// preventing self-logging amplification loops, parses systemd/syslog priority (body.PRIORITY)
+// into OpenTelemetry severity levels, and persists the journal read cursor via the shared
+// file storage extension across collector restarts.
 func (p *Policy) Evaluate(_ context.Context) (*confmap.Conf, error) {
 	if err := p.Validate(); err != nil {
 		return nil, fmt.Errorf("policy %q failed validation: %w", p.PolicyName(), err)
@@ -150,7 +152,8 @@ func (p *Policy) Evaluate(_ context.Context) (*confmap.Conf, error) {
 
 	cfg := map[string]any{
 		"receivers": map[string]any{
-			DefaultReceiverID: map[string]any{
+			receiverID.String(): map[string]any{
+				"storage": googlepolicy.StorageExtensionID.String(),
 				"operators": []any{
 					map[string]any{
 						"type": "filter",
@@ -183,7 +186,7 @@ func (p *Policy) Evaluate(_ context.Context) (*confmap.Conf, error) {
 
 // LogReceiverIDs returns the component IDs of log receivers synthesized by this policy.
 func (p *Policy) LogReceiverIDs() []component.ID {
-	return []component.ID{component.MustNewID(DefaultReceiverID)}
+	return []component.ID{receiverID}
 }
 
 // MetricReceiverIDs returns nil because JournaldSourcePolicy only handles the logs signal.

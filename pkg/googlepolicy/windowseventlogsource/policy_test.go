@@ -394,6 +394,7 @@ func TestPolicy_ReceiverConfigs(t *testing.T) {
 	assert.Equal(t, 500, secCfg["max_reads"])
 	assert.Equal(t, true, secCfg["ignore_channel_errors"])
 	assert.Equal(t, []string{DefaultExcludeProvider}, secCfg["exclude_providers"])
+	assert.Equal(t, googlepolicy.StorageExtensionID.String(), secCfg["storage"])
 	assert.NotContains(t, secCfg, "event_driven_scraping")
 
 	sysmonKey := fmt.Sprintf("%s/%s", ReceiverType, SanitizeChannelName("Microsoft-Windows-Sysmon/Operational"))
@@ -404,6 +405,7 @@ func TestPolicy_ReceiverConfigs(t *testing.T) {
 	assert.Equal(t, 500, sysmonCfg["max_reads"])
 	assert.Equal(t, true, sysmonCfg["ignore_channel_errors"])
 	assert.Equal(t, []string{DefaultExcludeProvider}, sysmonCfg["exclude_providers"])
+	assert.Equal(t, googlepolicy.StorageExtensionID.String(), sysmonCfg["storage"])
 	assert.NotContains(t, sysmonCfg, "event_driven_scraping")
 }
 
@@ -436,6 +438,7 @@ func TestPolicy_Evaluate(t *testing.T) {
 		assert.Equal(t, 500, secCfg["max_reads"])
 		assert.Equal(t, true, secCfg["ignore_channel_errors"])
 		assert.Equal(t, []string{DefaultExcludeProvider}, secCfg["exclude_providers"])
+		assert.Equal(t, googlepolicy.StorageExtensionID.String(), secCfg["storage"])
 		assert.NotContains(t, secCfg, "event_driven_scraping")
 
 		// Verify compiler defaults for Sysmon channel
@@ -446,6 +449,7 @@ func TestPolicy_Evaluate(t *testing.T) {
 		assert.Equal(t, 500, sysmonCfg["max_reads"])
 		assert.Equal(t, true, sysmonCfg["ignore_channel_errors"])
 		assert.Equal(t, []string{DefaultExcludeProvider}, sysmonCfg["exclude_providers"])
+		assert.Equal(t, googlepolicy.StorageExtensionID.String(), sysmonCfg["storage"])
 		assert.NotContains(t, sysmonCfg, "event_driven_scraping")
 	}
 }

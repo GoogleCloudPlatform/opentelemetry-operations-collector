@@ -1169,7 +1169,23 @@ func TestDriverLoadPolicyErrors(t *testing.T) {
 				"matchers": []any{
 					map[string]any{
 						"target": map[string]any{
-							"recordfield": "SPAN_RECORD_FIELD_NAME", // unknown field discarded -> target unset -> validation error
+							"recordfield": "SPAN_RECORD_FIELD_NAME", // unknown field rejected by DiscardUnknown: false -> load error
+						},
+						"predicate": map[string]any{"equality": map[string]any{"string_value": "x"}},
+					},
+				},
+			},
+			wantErr: googlepolicy.ErrPolicyFailedToLoad,
+		},
+		{
+			name: "unrecognized numeric enum value",
+			raw: map[string]any{
+				"type": "trace_filter",
+				"id":   "bad-enum-num",
+				"matchers": []any{
+					map[string]any{
+						"target": map[string]any{
+							"record_field": 999,
 						},
 						"predicate": map[string]any{"equality": map[string]any{"string_value": "x"}},
 					},
@@ -1205,34 +1221,59 @@ func TestDriverLoadPolicyErrors(t *testing.T) {
 	}
 }
 
-// TestDriverLoadPolicyIgnoresUnknownFields pins forward-compatibility behavior
-// (DiscardUnknown: true): when the server adds new top-level or nested proto
-// fields in future versions, older agents ignore the unknown fields and still
-// compile and evaluate the policy cleanly.
-func TestDriverLoadPolicyIgnoresUnknownFields(t *testing.T) {
-	d := driver
-	raw := map[string]any{
-		"type":             "trace_filter",
-		"id":               "future-compatible-trace-policy",
-		"future_top_field": "ignored_server_metadata",
-		"future_priority":  42,
-		"matchers": []any{
-			map[string]any{
-				"target":              map[string]any{"record_field": "SPAN_RECORD_FIELD_NAME"},
-				"predicate":           map[string]any{"existence": map[string]any{}},
-				"future_matcher_hint": true,
+// TestDriverLoadPolicyRejectsUnknownFields pins atomic fail-open behavior
+// (DiscardUnknown: false and wire GetUnknown checks): when a policy contains
+// unrecognized top-level or nested fields, the entire policy is rejected rather
+// than partially applied.
+func TestDriverLoadPolicyRejectsUnknownFields(t *testing.T) {
+	t.Run("top-level unknown JSON field", func(t *testing.T) {
+		raw := map[string]any{
+			"type":             "trace_filter",
+			"id":               "unknown-top-field-trace-policy",
+			"future_top_field": "unexpected_server_metadata",
+			"matchers": []any{
+				map[string]any{
+					"target":    map[string]any{"record_field": "SPAN_RECORD_FIELD_NAME"},
+					"predicate": map[string]any{"existence": map[string]any{}},
+				},
 			},
-		},
-	}
-	p, err := d.LoadPolicy(raw)
-	require.NoError(t, err)
-	assert.Equal(t, "future-compatible-trace-policy", p.PolicyName())
+		}
+		_, err := googlepolicy.LoadPolicy(PolicyType, raw)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, googlepolicy.ErrPolicyFailedToLoad)
+	})
 
-	tracePol, ok := p.(googlepolicy.TraceFilterPolicyEvaluator)
-	require.True(t, ok)
+	t.Run("nested matcher unknown JSON field", func(t *testing.T) {
+		raw := map[string]any{
+			"type": "trace_filter",
+			"id":   "unknown-nested-field-trace-policy",
+			"matchers": []any{
+				map[string]any{
+					"target":              map[string]any{"record_field": "SPAN_RECORD_FIELD_NAME"},
+					"predicate":           map[string]any{"existence": map[string]any{}},
+					"future_matcher_hint": true,
+				},
+			},
+		}
+		_, err := googlepolicy.LoadPolicy(PolicyType, raw)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, googlepolicy.ErrPolicyFailedToLoad)
+	})
 
-	span, scope, res := newTestSpanBundle()
-	assert.Equal(t, googlepolicy.FilterDrop, tracePol.FilterTrace(traceContext(span, scope, res)))
+	t.Run("unknown wire fields on proto rejected", func(t *testing.T) {
+		pb := dropPolicy(
+			"unknown-wire-trace-policy",
+			recordFieldTarget(policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME),
+			&policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Existence{}},
+			false,
+		)
+		pb.Matchers[0].ProtoReflect().SetUnknown([]byte{0x88, 0x06, 0x01}) // field 99, varint 1
+
+		_, err := driver.LoadPolicyProto(pb)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, googlepolicy.ErrPolicyFailedValidation)
+		assert.ErrorIs(t, err, googlepolicy.ErrPolicyUnknownFields)
+	})
 }
 
 func TestUnsetSpanStringFieldsReportAbsent(t *testing.T) {

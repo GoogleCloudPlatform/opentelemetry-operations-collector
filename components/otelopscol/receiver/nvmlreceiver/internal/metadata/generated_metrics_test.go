@@ -75,24 +75,36 @@ func TestMetricsBuilder(t *testing.T) {
 			mb.RecordNvmlGpuMemoryBytesUsedDataPoint(ts, 1, "model-val", "gpu_number-val", "uuid-val", AttributeMemoryStateUsed)
 			if tt.name == "reaggregate_set" {
 				mb.RecordNvmlGpuMemoryBytesUsedDataPoint(ts, 3, "model-val-2", "gpu_number-val-2", "uuid-val-2", AttributeMemoryStateFree)
+				// a different timestamp is a different key: must not merge with the above.
+				mb.RecordNvmlGpuMemoryBytesUsedDataPoint(ts+1, 3, "model-val-2", "gpu_number-val-2", "uuid-val-2", AttributeMemoryStateFree)
+				assert.Equal(t, 2, mb.metricNvmlGpuMemoryBytesUsed.data.Gauge().DataPoints().Len())
 			}
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordNvmlGpuProcessesMaxBytesUsedDataPoint(ts, 1, "model-val", "gpu_number-val", "uuid-val", 3, "process-val", "command-val", "command_line-val", "owner-val")
 			if tt.name == "reaggregate_set" {
 				mb.RecordNvmlGpuProcessesMaxBytesUsedDataPoint(ts, 3, "model-val-2", "gpu_number-val-2", "uuid-val-2", 4, "process-val-2", "command-val-2", "command_line-val-2", "owner-val-2")
+				// a different timestamp is a different key: must not merge with the above.
+				mb.RecordNvmlGpuProcessesMaxBytesUsedDataPoint(ts+1, 3, "model-val-2", "gpu_number-val-2", "uuid-val-2", 4, "process-val-2", "command-val-2", "command_line-val-2", "owner-val-2")
+				assert.Equal(t, 2, mb.metricNvmlGpuProcessesMaxBytesUsed.data.Gauge().DataPoints().Len())
 			}
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordNvmlGpuProcessesUtilizationDataPoint(ts, 1, "model-val", "gpu_number-val", "uuid-val", 3, "process-val", "command-val", "command_line-val", "owner-val")
 			if tt.name == "reaggregate_set" {
 				mb.RecordNvmlGpuProcessesUtilizationDataPoint(ts, 3, "model-val-2", "gpu_number-val-2", "uuid-val-2", 4, "process-val-2", "command-val-2", "command_line-val-2", "owner-val-2")
+				// a different timestamp is a different key: must not merge with the above.
+				mb.RecordNvmlGpuProcessesUtilizationDataPoint(ts+1, 3, "model-val-2", "gpu_number-val-2", "uuid-val-2", 4, "process-val-2", "command-val-2", "command_line-val-2", "owner-val-2")
+				assert.Equal(t, 2, mb.metricNvmlGpuProcessesUtilization.data.Gauge().DataPoints().Len())
 			}
 			defaultMetricsCount++
 			allMetricsCount++
 			mb.RecordNvmlGpuUtilizationDataPoint(ts, 1, "model-val", "gpu_number-val", "uuid-val")
 			if tt.name == "reaggregate_set" {
 				mb.RecordNvmlGpuUtilizationDataPoint(ts, 3, "model-val-2", "gpu_number-val-2", "uuid-val-2")
+				// a different timestamp is a different key: must not merge with the above.
+				mb.RecordNvmlGpuUtilizationDataPoint(ts+1, 3, "model-val-2", "gpu_number-val-2", "uuid-val-2")
+				assert.Equal(t, 2, mb.metricNvmlGpuUtilization.data.Gauge().DataPoints().Len())
 			}
 
 			res := pcommon.NewResource()
@@ -158,7 +170,9 @@ func TestMetricsBuilder(t *testing.T) {
 						assert.False(t, validatedMetrics["nvml.gpu.memory.bytes_used"], "Found a duplicate in the metrics slice: nvml.gpu.memory.bytes_used")
 						validatedMetrics["nvml.gpu.memory.bytes_used"] = true
 						assert.Equal(t, pmetric.MetricTypeGauge, mi.Type())
-						assert.Equal(t, 1, mi.Gauge().DataPoints().Len())
+						// 2 points: the merged one above, plus one with a different timestamp that must not have merged with it.
+						assert.Equal(t, 2, mi.Gauge().DataPoints().Len())
+						assert.Equal(t, ts+1, mi.Gauge().DataPoints().At(1).Timestamp())
 						assert.Equal(t, "Current number of GPU memory bytes used by state. Summing the values of all states yields the total GPU memory space.", mi.Description())
 						assert.Equal(t, "By", mi.Unit())
 						dp := mi.Gauge().DataPoints().At(0)
@@ -225,7 +239,9 @@ func TestMetricsBuilder(t *testing.T) {
 						assert.False(t, validatedMetrics["nvml.gpu.processes.max_bytes_used"], "Found a duplicate in the metrics slice: nvml.gpu.processes.max_bytes_used")
 						validatedMetrics["nvml.gpu.processes.max_bytes_used"] = true
 						assert.Equal(t, pmetric.MetricTypeGauge, mi.Type())
-						assert.Equal(t, 1, mi.Gauge().DataPoints().Len())
+						// 2 points: the merged one above, plus one with a different timestamp that must not have merged with it.
+						assert.Equal(t, 2, mi.Gauge().DataPoints().Len())
+						assert.Equal(t, ts+1, mi.Gauge().DataPoints().At(1).Timestamp())
 						assert.Equal(t, "Maximum total GPU memory in bytes that was ever allocated by the process.", mi.Description())
 						assert.Equal(t, "By", mi.Unit())
 						dp := mi.Gauge().DataPoints().At(0)
@@ -300,7 +316,9 @@ func TestMetricsBuilder(t *testing.T) {
 						assert.False(t, validatedMetrics["nvml.gpu.processes.utilization"], "Found a duplicate in the metrics slice: nvml.gpu.processes.utilization")
 						validatedMetrics["nvml.gpu.processes.utilization"] = true
 						assert.Equal(t, pmetric.MetricTypeGauge, mi.Type())
-						assert.Equal(t, 1, mi.Gauge().DataPoints().Len())
+						// 2 points: the merged one above, plus one with a different timestamp that must not have merged with it.
+						assert.Equal(t, 2, mi.Gauge().DataPoints().Len())
+						assert.Equal(t, ts+1, mi.Gauge().DataPoints().At(1).Timestamp())
 						assert.Equal(t, "Fraction of time over the process's life thus far during which one or more kernels was executing on the GPU.", mi.Description())
 						assert.Equal(t, "1", mi.Unit())
 						dp := mi.Gauge().DataPoints().At(0)
@@ -360,7 +378,9 @@ func TestMetricsBuilder(t *testing.T) {
 						assert.False(t, validatedMetrics["nvml.gpu.utilization"], "Found a duplicate in the metrics slice: nvml.gpu.utilization")
 						validatedMetrics["nvml.gpu.utilization"] = true
 						assert.Equal(t, pmetric.MetricTypeGauge, mi.Type())
-						assert.Equal(t, 1, mi.Gauge().DataPoints().Len())
+						// 2 points: the merged one above, plus one with a different timestamp that must not have merged with it.
+						assert.Equal(t, 2, mi.Gauge().DataPoints().Len())
+						assert.Equal(t, ts+1, mi.Gauge().DataPoints().At(1).Timestamp())
 						assert.Equal(t, "Fraction of time GPU was not idle since the last sample.", mi.Description())
 						assert.Equal(t, "1", mi.Unit())
 						dp := mi.Gauge().DataPoints().At(0)

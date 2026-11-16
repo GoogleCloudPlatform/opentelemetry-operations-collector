@@ -414,7 +414,7 @@ func TestProcessLogs_WithRealLogTransformPolicy(t *testing.T) {
 	defer func() { _ = p.shutdown(context.Background()) }()
 
 	transformPolicy, err := logtransform.NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
-		Id: "add-soc-tier",
+		Id: "normalize-and-add-soc-tier",
 		Matchers: []*policyv1alpha1.LogMatcher{
 			{
 				Target: &policyv1alpha1.LogFieldSelector{
@@ -429,17 +429,54 @@ func TestProcessLogs_WithRealLogTransformPolicy(t *testing.T) {
 				}},
 			},
 		},
-		Action: &policyv1alpha1.LogTransformPolicy_Addition{
-			Addition: &policyv1alpha1.LogAddAction{
+		Renamings: []*policyv1alpha1.LogRenaming{
+			{
+				Source: &policyv1alpha1.LogAttributeSelector{
+					Target: &policyv1alpha1.LogAttributeSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"legacy_actor"}},
+					},
+				},
+				Target: &policyv1alpha1.LogAttributeSelector{
+					Target: &policyv1alpha1.LogAttributeSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"user.name"}},
+					},
+				},
+				UpsertEnabled: proto.Bool(false),
+			},
+		},
+		Additions: []*policyv1alpha1.LogAddition{
+			{
 				Target: &policyv1alpha1.LogTargetSelector{
 					Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
 						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"soc_tier"}},
 					},
 				},
-				Value: &policyv1alpha1.Value{
-					Kind: &policyv1alpha1.Value_StringValue{StringValue: "HOT_ACTIVE_SOC"},
+				Source: &policyv1alpha1.LogAddition_Value{
+					Value: &policyv1alpha1.Value{
+						Kind: &policyv1alpha1.Value_StringValue{StringValue: "HOT_ACTIVE_SOC"},
+					},
 				},
 				UpsertEnabled: proto.Bool(true),
+			},
+		},
+		Removals: []*policyv1alpha1.LogRemoval{
+			{
+				Target: &policyv1alpha1.LogAttributeSelector{
+					Target: &policyv1alpha1.LogAttributeSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"temp_token"}},
+					},
+				},
+			},
+		},
+		Redactions: []*policyv1alpha1.LogRedaction{
+			{
+				Target: &policyv1alpha1.LogTargetSelector{
+					Target: &policyv1alpha1.LogTargetSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"user.name"}},
+					},
+				},
+				Pattern: &policyv1alpha1.LogRedaction_Regex{Regex: `@.+`},
+				Mask:    &policyv1alpha1.LogRedaction_Replacement{Replacement: "@[REDACTED]"},
 			},
 		},
 	})
@@ -465,6 +502,8 @@ func TestProcessLogs_WithRealLogTransformPolicy(t *testing.T) {
 
 	lr := sl.LogRecords().AppendEmpty()
 	lr.Body().SetStr("security audit line")
+	lr.Attributes().PutStr("legacy_actor", "alice@example.com")
+	lr.Attributes().PutStr("temp_token", "secret")
 
 	out, err := p.processLogs(context.Background(), ld)
 	require.NoError(t, err)
@@ -475,6 +514,13 @@ func TestProcessLogs_WithRealLogTransformPolicy(t *testing.T) {
 	val, exists := records.At(0).Attributes().Get("soc_tier")
 	require.True(t, exists)
 	assert.Equal(t, "HOT_ACTIVE_SOC", val.AsString())
+	userVal, exists := records.At(0).Attributes().Get("user.name")
+	require.True(t, exists)
+	assert.Equal(t, "alice@[REDACTED]", userVal.AsString())
+	_, exists = records.At(0).Attributes().Get("legacy_actor")
+	assert.False(t, exists)
+	_, exists = records.At(0).Attributes().Get("temp_token")
+	assert.False(t, exists)
 }
 
 func TestProcessor_DoubleShutdownAndReloadFailure(t *testing.T) {

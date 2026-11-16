@@ -33,8 +33,9 @@ option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-col
 //   nested map (`kvlist_value`) levels in order: key `"http"`, then
 //   `"request"`, then `"method"`.
 message AttributePath {
-  // Ordered path segments to traverse. At least one segment is required
-  // (e.g. `["service.name"]` or `["http", "request", "method"]`).
+  // Ordered path segments to traverse. At least one segment is required, and
+  // each segment must be non-empty (e.g. `["service.name"]` or
+  // `["http", "request", "method"]`).
   repeated string segments = 1;
 }
 
@@ -52,7 +53,7 @@ message Value {
     // Boolean value.
     bool bool_value = 3;
 
-    // 64-bit floating point value.
+    // 64-bit floating point value. Must be finite (not `NaN` or `Infinity`).
     double double_value = 4;
 
     // Byte sequence value.
@@ -70,7 +71,7 @@ message NumericValue {
     // 64-bit signed integer value.
     int64 int_value = 1;
 
-    // 64-bit floating point value.
+    // 64-bit floating point value. Must be finite (not `NaN` or `Infinity`).
     double double_value = 2;
   }
 }

@@ -509,6 +509,99 @@ type stubLogsProcessor struct {
 	consumer.Logs
 }
 
+type resourceDetectionConfig struct {
+	Detectors []string      `mapstructure:"detectors"`
+	Override  bool          `mapstructure:"override"`
+	Timeout   time.Duration `mapstructure:"timeout"`
+	System    any           `mapstructure:"system"`
+}
+
+func applyEnvResourceAttributes(attrs pcommon.Map, override bool) {
+	envStr := os.Getenv("OTEL_RESOURCE_ATTRIBUTES")
+	if envStr == "" {
+		return
+	}
+	for _, pair := range strings.Split(envStr, ",") {
+		kv := strings.SplitN(strings.TrimSpace(pair), "=", 2)
+		if len(kv) == 2 {
+			k := strings.TrimSpace(kv[0])
+			v := strings.TrimSpace(kv[1])
+			if k != "" {
+				if _, exists := attrs.Get(k); !exists || override {
+					attrs.PutStr(k, v)
+				}
+			}
+		}
+	}
+}
+
+type resourceDetectionTracesProcessor struct {
+	component.StartFunc
+	component.ShutdownFunc
+	cfg *resourceDetectionConfig
+	consumer.Traces
+}
+
+func (p *resourceDetectionTracesProcessor) ConsumeTraces(ctx context.Context, td ptrace.Traces) error {
+	if slices.Contains(p.cfg.Detectors, "env") {
+		for i := 0; i < td.ResourceSpans().Len(); i++ {
+			rs := td.ResourceSpans().At(i)
+			applyEnvResourceAttributes(rs.Resource().Attributes(), p.cfg.Override)
+		}
+	}
+	return p.Traces.ConsumeTraces(ctx, td)
+}
+
+type resourceDetectionMetricsProcessor struct {
+	component.StartFunc
+	component.ShutdownFunc
+	cfg *resourceDetectionConfig
+	consumer.Metrics
+}
+
+func (p *resourceDetectionMetricsProcessor) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) error {
+	if slices.Contains(p.cfg.Detectors, "env") {
+		for i := 0; i < md.ResourceMetrics().Len(); i++ {
+			rm := md.ResourceMetrics().At(i)
+			applyEnvResourceAttributes(rm.Resource().Attributes(), p.cfg.Override)
+		}
+	}
+	return p.Metrics.ConsumeMetrics(ctx, md)
+}
+
+type resourceDetectionLogsProcessor struct {
+	component.StartFunc
+	component.ShutdownFunc
+	cfg *resourceDetectionConfig
+	consumer.Logs
+}
+
+func (p *resourceDetectionLogsProcessor) ConsumeLogs(ctx context.Context, ld plog.Logs) error {
+	if slices.Contains(p.cfg.Detectors, "env") {
+		for i := 0; i < ld.ResourceLogs().Len(); i++ {
+			rl := ld.ResourceLogs().At(i)
+			applyEnvResourceAttributes(rl.Resource().Attributes(), p.cfg.Override)
+		}
+	}
+	return p.Logs.ConsumeLogs(ctx, ld)
+}
+
+func newResourceDetectionProcessorFactory() processor.Factory {
+	return processor.NewFactory(
+		component.MustNewType("resourcedetection"),
+		func() component.Config { return &resourceDetectionConfig{} },
+		processor.WithTraces(func(_ context.Context, _ processor.Settings, cfg component.Config, next consumer.Traces) (processor.Traces, error) {
+			return &resourceDetectionTracesProcessor{cfg: cfg.(*resourceDetectionConfig), Traces: next}, nil
+		}, component.StabilityLevelAlpha),
+		processor.WithMetrics(func(_ context.Context, _ processor.Settings, cfg component.Config, next consumer.Metrics) (processor.Metrics, error) {
+			return &resourceDetectionMetricsProcessor{cfg: cfg.(*resourceDetectionConfig), Metrics: next}, nil
+		}, component.StabilityLevelAlpha),
+		processor.WithLogs(func(_ context.Context, _ processor.Settings, cfg component.Config, next consumer.Logs) (processor.Logs, error) {
+			return &resourceDetectionLogsProcessor{cfg: cfg.(*resourceDetectionConfig), Logs: next}, nil
+		}, component.StabilityLevelAlpha),
+	)
+}
+
 func newStubProcessorFactory(typeStr string) processor.Factory {
 	return processor.NewFactory(
 		component.MustNewType(typeStr),
@@ -562,7 +655,7 @@ func testCollectorFactories() (otelcol.Factories, error) {
 
 	factories.Processors, err = otelcol.MakeFactoryMap[processor.Factory](
 		googlepolicyprocessor.NewFactory(),
-		newStubProcessorFactory("resourcedetection"),
+		newResourceDetectionProcessorFactory(),
 		newStubProcessorFactory("transform"),
 		newStubProcessorFactory("queue_batch"),
 	)
@@ -2497,5 +2590,193 @@ func TestFileLogSourcePolicy_Integration(t *testing.T) {
 	// Verify log.file.path attribute was added because include_file_path is enabled by default.
 	if filepath.Clean(foundFilePath) != filepath.Clean(logFilePath) {
 		t.Errorf("expected log.file.path attribute %q, got %q", logFilePath, foundFilePath)
+	}
+}
+
+// TestPolicy_SecOpsPayloadCategorization_EnvResourceDetection verifies that setting
+// OTEL_RESOURCE_ATTRIBUTES dynamically attaches resource attributes to payloads
+// flowing through the canonical pipeline (logs/googlecontrolplane), enabling downstream
+// backends (such as SecOps) to categorize and route payloads based on resource metadata.
+func TestPolicy_SecOpsPayloadCategorization_EnvResourceDetection(t *testing.T) {
+	// Set the environment variable used by SecOps to categorize and route payloads
+	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", "routing.target=secops,secops.category=audit_events,deployment.environment=production")
+
+	otelcolBin := resolveOtelcolBinary(t)
+	tempDir, policiesDir := stagePoliciesDir(t, "drop_by_body_equals")
+
+	ports := allocateEphemeralPorts(t, 1)
+	customReceiverAddr := fmt.Sprintf("127.0.0.1:%d", ports[0])
+
+	appendReceiverCfg := fmt.Sprintf(`receivers:
+  otlp/secops_in:
+    protocols:
+      grpc:
+        endpoint: %s
+service:
+  pipelines:
+    logs/googlecontrolplane:
+      receivers: [otlp/secops_in]
+    metrics/googlecontrolplane:
+      receivers: [otlp/secops_in]
+`, customReceiverAddr)
+
+	appendCfgPath := filepath.Join(tempDir, "append_secops_receiver.yaml")
+	if err := os.WriteFile(appendCfgPath, []byte(appendReceiverCfg), 0644); err != nil {
+		t.Fatalf("failed to write append_secops_receiver.yaml: %v", err)
+	}
+
+	h := startTestHarness(t, otelcolBin, tempDir, policiesDir, appendCfgPath)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	conn, err := grpc.NewClient(customReceiverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("failed to connect to custom receiver %s: %v", customReceiverAddr, err)
+	}
+	t.Cleanup(func() {
+		_ = conn.Close()
+	})
+
+	// 1. Export log payload to custom receiver on canonical pipeline
+	customLogsClient := plogotlp.NewGRPCClient(conn)
+	logs := plog.NewLogs()
+	rl := logs.ResourceLogs().AppendEmpty()
+	rl.Resource().Attributes().PutStr("host.id", "vm-secops-01")
+	sl := rl.ScopeLogs().AppendEmpty()
+	lr := sl.LogRecords().AppendEmpty()
+	lr.Body().SetStr("KEEP_THIS_LOG_LINE")
+
+	if _, err := customLogsClient.Export(ctx, plogotlp.NewExportRequestFromLogs(logs)); err != nil {
+		t.Fatalf("failed to export logs to custom receiver on canonical pipeline: %v\nstderr:\n%s", err, h.col.logs())
+	}
+
+	// 2. Export metric payload to custom receiver on canonical pipeline
+	customMetricsClient := pmetricotlp.NewGRPCClient(conn)
+	metrics := pmetric.NewMetrics()
+	rm := metrics.ResourceMetrics().AppendEmpty()
+	rm.Resource().Attributes().PutStr("service.name", "secops-workload")
+	sm := rm.ScopeMetrics().AppendEmpty()
+	m := sm.Metrics().AppendEmpty()
+	m.SetName("secops.threat.events")
+	dp := m.SetEmptyGauge().DataPoints().AppendEmpty()
+	dp.SetIntValue(1)
+	dp.SetTimestamp(pcommon.NewTimestampFromTime(time.Now()))
+
+	if _, err := customMetricsClient.Export(ctx, pmetricotlp.NewExportRequestFromMetrics(metrics)); err != nil {
+		t.Fatalf("failed to export metrics to custom receiver on canonical pipeline: %v\nstderr:\n%s", err, h.col.logs())
+	}
+
+	// Wait for exported logs to arrive on selfMockSrv (otlp_grpc/default_gcp_destination).
+	deadline := time.Now().Add(10 * time.Second)
+	var foundLogResourceAttrs map[string]string
+	var foundMetricResourceAttrs map[string]string
+
+	for time.Now().Before(deadline) {
+		if foundLogResourceAttrs == nil {
+			collected := h.selfMockSrv.CollectedLogs()
+			for _, ld := range collected {
+				for i := 0; i < ld.ResourceLogs().Len(); i++ {
+					r := ld.ResourceLogs().At(i)
+					for j := 0; j < r.ScopeLogs().Len(); j++ {
+						for k := 0; k < r.ScopeLogs().At(j).LogRecords().Len(); k++ {
+							rec := r.ScopeLogs().At(j).LogRecords().At(k)
+							if rec.Body().Str() == "KEEP_THIS_LOG_LINE" {
+								attrs := make(map[string]string)
+								r.Resource().Attributes().Range(func(key string, val pcommon.Value) bool {
+									attrs[key] = val.AsString()
+									return true
+								})
+								foundLogResourceAttrs = attrs
+								break
+							}
+						}
+						if foundLogResourceAttrs != nil {
+							break
+						}
+					}
+					if foundLogResourceAttrs != nil {
+						break
+					}
+				}
+				if foundLogResourceAttrs != nil {
+					break
+				}
+			}
+		}
+
+		if foundMetricResourceAttrs == nil {
+			collected := h.selfMockSrv.CollectedMetrics()
+			for _, md := range collected {
+				for i := 0; i < md.ResourceMetrics().Len(); i++ {
+					r := md.ResourceMetrics().At(i)
+					for j := 0; j < r.ScopeMetrics().Len(); j++ {
+						for k := 0; k < r.ScopeMetrics().At(j).Metrics().Len(); k++ {
+							met := r.ScopeMetrics().At(j).Metrics().At(k)
+							if met.Name() == "secops.threat.events" {
+								attrs := make(map[string]string)
+								r.Resource().Attributes().Range(func(key string, val pcommon.Value) bool {
+									attrs[key] = val.AsString()
+									return true
+								})
+								foundMetricResourceAttrs = attrs
+								break
+							}
+						}
+						if foundMetricResourceAttrs != nil {
+							break
+						}
+					}
+					if foundMetricResourceAttrs != nil {
+						break
+					}
+				}
+				if foundMetricResourceAttrs != nil {
+					break
+				}
+			}
+		}
+
+		if foundLogResourceAttrs != nil && foundMetricResourceAttrs != nil {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	h.col.shutdown(t)
+
+	if foundLogResourceAttrs == nil {
+		t.Fatalf("expected log record not found at destination.\ncollector logs:\n%s", h.col.logs())
+	}
+	if foundMetricResourceAttrs == nil {
+		t.Fatalf("expected metric record not found at destination.\ncollector logs:\n%s", h.col.logs())
+	}
+
+	// Verify SecOps routing and categorization resource attributes populated on logs
+	if got := foundLogResourceAttrs["routing.target"]; got != "secops" {
+		t.Errorf("expected log routing.target to be 'secops', got %q", got)
+	}
+	if got := foundLogResourceAttrs["secops.category"]; got != "audit_events" {
+		t.Errorf("expected log secops.category to be 'audit_events', got %q", got)
+	}
+	if got := foundLogResourceAttrs["deployment.environment"]; got != "production" {
+		t.Errorf("expected log deployment.environment to be 'production', got %q", got)
+	}
+	if got := foundLogResourceAttrs["host.id"]; got != "vm-secops-01" {
+		t.Errorf("expected log host.id to be 'vm-secops-01', got %q", got)
+	}
+
+	// Verify SecOps routing and categorization resource attributes populated on metrics
+	if got := foundMetricResourceAttrs["routing.target"]; got != "secops" {
+		t.Errorf("expected metric routing.target to be 'secops', got %q", got)
+	}
+	if got := foundMetricResourceAttrs["secops.category"]; got != "audit_events" {
+		t.Errorf("expected metric secops.category to be 'audit_events', got %q", got)
+	}
+	if got := foundMetricResourceAttrs["deployment.environment"]; got != "production" {
+		t.Errorf("expected metric deployment.environment to be 'production', got %q", got)
+	}
+	if got := foundMetricResourceAttrs["service.name"]; got != "secops-workload" {
+		t.Errorf("expected metric service.name to be 'secops-workload', got %q", got)
 	}
 }

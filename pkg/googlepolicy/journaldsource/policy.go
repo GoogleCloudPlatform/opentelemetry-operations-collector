@@ -142,8 +142,9 @@ func (p *Policy) Consolidate(policies []googlepolicy.SourcePolicy) (googlepolicy
 // Evaluate produces the confmap for the journald receiver.
 // It configures an inline Stanza filter operator to automatically drop the collector's
 // own log lines across both Linux VM systemd services and containerized environments,
-// preventing self-logging amplification loops, and parses systemd/syslog priority (body.PRIORITY)
-// into OpenTelemetry severity levels.
+// preventing self-logging amplification loops, parses systemd/syslog priority (body.PRIORITY)
+// into OpenTelemetry severity levels, and persists the journal read cursor via the shared
+// file storage extension across collector restarts.
 func (p *Policy) Evaluate(_ context.Context) (*confmap.Conf, error) {
 	if err := p.Validate(); err != nil {
 		return nil, fmt.Errorf("policy %q failed validation: %w", p.PolicyName(), err)
@@ -152,6 +153,7 @@ func (p *Policy) Evaluate(_ context.Context) (*confmap.Conf, error) {
 	cfg := map[string]any{
 		"receivers": map[string]any{
 			receiverID.String(): map[string]any{
+				"storage": googlepolicy.StorageExtensionID.String(),
 				"operators": []any{
 					map[string]any{
 						"type": "filter",

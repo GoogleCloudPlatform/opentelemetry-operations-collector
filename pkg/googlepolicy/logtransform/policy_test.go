@@ -1596,7 +1596,7 @@ func TestTransformLogRenameAction(t *testing.T) {
 		assert.Equal(t, "val", v.Str())
 
 		p2, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
-			Id:     "same-body-field",
+			Id:        "same-body-field",
 			Renamings: renameOps(logBodyFieldSelector("field"), logBodyFieldSelector("field"), false),
 		})
 		require.NoError(t, err)
@@ -1604,6 +1604,20 @@ func TestTransformLogRenameAction(t *testing.T) {
 		v2, ok := lr.Body().Map().Get("field")
 		require.True(t, ok)
 		assert.Equal(t, "val2", v2.Str())
+
+		// Identical segments with differing unknown fields on nested AttributePath
+		// must still be treated as a no-op rather than deleting the source.
+		srcWithUnknown := logAttrSelector("key")
+		srcWithUnknown.GetLogAttributePath().ProtoReflect().SetUnknown([]byte{0x98, 0x06, 0x01})
+		p3, err := NewPolicyFromProto(&policyv1alpha1.LogTransformPolicy{
+			Id:        "same-attr-key-unknown-fields",
+			Renamings: renameOps(srcWithUnknown, logAttrSelector("key"), false),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, googlepolicy.TransformNoMatch, p3.TransformLog(ctx))
+		v3, ok := lr.Attributes().Get("key")
+		require.True(t, ok)
+		assert.Equal(t, "val", v3.Str())
 	})
 
 	t.Run("cross-boundary body_field to nested log_attribute", func(t *testing.T) {
@@ -2215,5 +2229,16 @@ func TestPolicyValidationAtomicMultiStageAndUnknownRedactionWireField(t *testing
 		})
 		require.ErrorIs(t, err, ErrUnsupportedAction)
 		assert.ErrorContains(t, err, "removals[0]:")
+	})
+
+	t.Run("driver sets PolicyClassTransformation on FailedPolicy", func(t *testing.T) {
+		ps, err := googlepolicy.MakePolicySetFromProtos("test-ps", "rev1", []proto.Message{
+			&policyv1alpha1.LogTransformPolicy{Id: "invalid-empty-transform"},
+		})
+		require.Error(t, err)
+		require.NotNil(t, ps)
+		require.Len(t, ps.FailedPolicies, 1)
+		assert.Equal(t, "invalid-empty-transform", ps.FailedPolicies[0].ID)
+		assert.Equal(t, googlepolicy.PolicyClassTransformation, ps.FailedPolicies[0].Class)
 	})
 }

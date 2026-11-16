@@ -24,9 +24,9 @@ import (
 // configuration for the collector's self-observability pipelines.
 //
 // Self-telemetry always originates from the collector process itself, so all
-// three detectors ([env, gcp, system]) run in a single processor with
-// override: false (preserving attributes set in service::telemetry::resource,
-// such as service.instance.id and gcp.fleet_id):
+// three detectors ([env, gcp, system]) run with override: false (preserving
+// attributes set in service::telemetry::resource, such as service.instance.id
+// and gcp.fleet_id):
 //   - "env" reads standard OpenTelemetry identity and platform attributes from
 //     OTEL_RESOURCE_ATTRIBUTES (for example Kubernetes Downward API pod/node
 //     attributes or a custom host.id), while ignoring arbitrary custom or
@@ -67,12 +67,11 @@ func SelfResourceDetectionProcessorConfig() map[string]any {
 	}
 }
 
-// WorkloadResourceDetectionProcessorConfig returns the primary resourcedetection
-// processor configuration for the canonical workload pipelines, executed before
-// transform/googlecontrolplane.
+// WorkloadResourceDetectionProcessorConfig returns the resourcedetection
+// processor configuration for the canonical workload pipelines.
 //
-// Detectors run with override: false so attributes already present on incoming
-// telemetry win:
+// Detectors ([env, gcp, system]) run with override: false so attributes already
+// present on incoming telemetry win:
 //   - "env" lets operators supply host/node/cloud or routing attributes via
 //     OTEL_RESOURCE_ATTRIBUTES while excluding collector process and pod/workload
 //     identity attributes (service.*, k8s.pod.*, k8s.container.*, k8s.namespace.*,
@@ -81,9 +80,23 @@ func SelfResourceDetectionProcessorConfig() map[string]any {
 //     telemetry.
 //   - "gcp" resolves Google Cloud platform metadata (such as Compute Engine or
 //     GKE instance ID and zone/region) when running on Google Cloud.
+//   - "system" (with host.id enabled and os.type disabled) falls back to the OS
+//     machine ID (/etc/machine-id on Linux, MachineGuid on Windows) and
+//     host.name off Google Cloud, ensuring telemetry.googleapis.com receives a
+//     unique per-host host.id for generic_node.node_id and
+//     prometheus_target.instance without adding extra attributes on Compute
+//     Engine.
+//
+// Note on gateway / forwarding deployments: the canonical workload pipelines
+// assume a host/node-agent topology. Detected gcp/system attributes and
+// non-excluded host/node-level OTEL_RESOURCE_ATTRIBUTES (such as host.*,
+// k8s.node.name, and k8s.cluster.name) apply to all workload telemetry lacking
+// those keys, including forwarded OTLP. In gateway setups, edge collectors
+// should populate their own host.id and host.name before forwarding, and
+// host/node-level OTEL_RESOURCE_ATTRIBUTES should not be set on gateways.
 func WorkloadResourceDetectionProcessorConfig() map[string]any {
 	return map[string]any{
-		"detectors": []string{"env", "gcp"},
+		"detectors": []string{"env", "gcp", "system"},
 		"override":  false,
 		"timeout":   10 * time.Second,
 		"env": map[string]any{
@@ -102,30 +115,6 @@ func WorkloadResourceDetectionProcessorConfig() map[string]any {
 				},
 			},
 		},
-	}
-}
-
-// WorkloadSystemResourceDetectionProcessorConfig returns the fallback system
-// resourcedetection processor configuration for the canonical workload
-// pipelines, executed after transform/googlecontrolplane.
-//
-// Running "system" after transform/googlecontrolplane (which promotes an
-// incoming off-GCP sender's host.name to host.id when host.id is absent)
-// ensures that:
-//   - On Google Cloud, where "gcp" already populated host.id and host.name, and
-//     with os.type disabled, this processor adds no attributes to GCE workload
-//     telemetry.
-//   - Off Google Cloud, local sources (filelog, hostmetrics, journald,
-//     windowseventlog, iis) receive the collector host's OS machine ID
-//     (/etc/machine-id on Linux, MachineGuid on Windows) and host.name, while
-//     forwarded OTLP telemetry that already carries a remote sender's host.name
-//     keeps that sender's identity instead of collapsing onto the collector's
-//     machine ID.
-func WorkloadSystemResourceDetectionProcessorConfig() map[string]any {
-	return map[string]any{
-		"detectors": []string{"system"},
-		"override":  false,
-		"timeout":   10 * time.Second,
 		"system": map[string]any{
 			"resource_attributes": map[string]any{
 				"host.id": map[string]any{

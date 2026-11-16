@@ -160,6 +160,7 @@ processors:
         detectors:
             - env
             - gcp
+            - system
         env:
             attributes:
                 excluded:
@@ -173,11 +174,6 @@ processors:
                     - k8s.statefulset.*
                     - k8s.job.*
                     - k8s.cronjob.*
-        override: false
-        timeout: 10s
-    resourcedetection/googlecontrolplane_system:
-        detectors:
-            - system
         override: false
         system:
             resource_attributes:
@@ -207,17 +203,14 @@ processors:
             - context: resource
               statements:
                 - set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil
-                - set(attributes["host.id"], attributes["host.name"]) where attributes["cloud.provider"] == nil and attributes["host.id"] == nil and attributes["host.name"] != nil and attributes["host.name"] != ""
         metric_statements:
             - context: resource
               statements:
                 - set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil
-                - set(attributes["host.id"], attributes["host.name"]) where attributes["cloud.provider"] == nil and attributes["host.id"] == nil and attributes["host.name"] != nil and attributes["host.name"] != ""
         trace_statements:
             - context: resource
               statements:
                 - set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil
-                - set(attributes["host.id"], attributes["host.name"]) where attributes["cloud.provider"] == nil and attributes["host.id"] == nil and attributes["host.name"] != nil and attributes["host.name"] != ""
 receivers:
     journald/googlecontrolplane:
         operators:
@@ -271,7 +264,6 @@ service:
             processors:
                 - resourcedetection/googlecontrolplane
                 - transform/googlecontrolplane
-                - resourcedetection/googlecontrolplane_system
                 - googlepolicy
                 - queue_batch/default_gcp_destination_batch_logs
                 - queue_batch/default_gcp_destination_split_logs
@@ -294,7 +286,6 @@ service:
             processors:
                 - resourcedetection/googlecontrolplane
                 - transform/googlecontrolplane
-                - resourcedetection/googlecontrolplane_system
                 - googlepolicy
                 - queue_batch/default_gcp_destination_batch_metrics
                 - queue_batch/default_gcp_destination_split_metrics
@@ -306,7 +297,6 @@ service:
             processors:
                 - resourcedetection/googlecontrolplane
                 - transform/googlecontrolplane
-                - resourcedetection/googlecontrolplane_system
                 - googlepolicy
                 - queue_batch/default_gcp_destination_batch_traces
                 - queue_batch/default_gcp_destination_split_traces

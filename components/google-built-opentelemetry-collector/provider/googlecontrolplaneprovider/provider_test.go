@@ -119,7 +119,7 @@ func TestRetrieve(t *testing.T) {
 	assert.Equal(t, true, conf.Get("processors::resourcedetection/default_self_metrics::system::resource_attributes::host.id::enabled"))
 	assert.Equal(t, false, conf.Get("processors::resourcedetection/default_self_metrics::system::resource_attributes::os.type::enabled"))
 
-	assert.Equal(t, []any{"env", "gcp"}, conf.Get("processors::resourcedetection/googlecontrolplane::detectors"))
+	assert.Equal(t, []any{"env", "gcp", "system"}, conf.Get("processors::resourcedetection/googlecontrolplane::detectors"))
 	assert.Equal(t, false, conf.Get("processors::resourcedetection/googlecontrolplane::override"))
 	assert.Equal(t, 10*time.Second, conf.Get("processors::resourcedetection/googlecontrolplane::timeout"))
 	assert.Equal(t, []any{
@@ -134,22 +134,18 @@ func TestRetrieve(t *testing.T) {
 		"k8s.job.*",
 		"k8s.cronjob.*",
 	}, conf.Get("processors::resourcedetection/googlecontrolplane::env::attributes::excluded"))
-
-	assert.Equal(t, []any{"system"}, conf.Get("processors::resourcedetection/googlecontrolplane_system::detectors"))
-	assert.Equal(t, false, conf.Get("processors::resourcedetection/googlecontrolplane_system::override"))
-	assert.Equal(t, 10*time.Second, conf.Get("processors::resourcedetection/googlecontrolplane_system::timeout"))
-	assert.Equal(t, true, conf.Get("processors::resourcedetection/googlecontrolplane_system::system::resource_attributes::host.id::enabled"))
-	assert.Equal(t, false, conf.Get("processors::resourcedetection/googlecontrolplane_system::system::resource_attributes::os.type::enabled"))
+	assert.Equal(t, true, conf.Get("processors::resourcedetection/googlecontrolplane::system::resource_attributes::host.id::enabled"))
+	assert.Equal(t, false, conf.Get("processors::resourcedetection/googlecontrolplane::system::resource_attributes::os.type::enabled"))
+	assert.False(t, conf.IsSet("processors::resourcedetection/googlecontrolplane_system"))
 
 	for _, pipe := range []string{"logs/googlecontrolplane", "metrics/googlecontrolplane", "traces/googlecontrolplane"} {
 		procs := conf.Get("service::pipelines::" + pipe + "::processors").([]any)
-		require.GreaterOrEqual(t, len(procs), 4, pipe)
+		require.GreaterOrEqual(t, len(procs), 3, pipe)
 		assert.Equal(t, []any{
 			"resourcedetection/googlecontrolplane",
 			"transform/googlecontrolplane",
-			"resourcedetection/googlecontrolplane_system",
 			"googlepolicy",
-		}, procs[:4], pipe)
+		}, procs[:3], pipe)
 	}
 
 	assert.NoError(t, p.Shutdown(context.Background()))
@@ -393,7 +389,6 @@ func TestRetrieve_WorkloadResourceFallbacks(t *testing.T) {
 				workloadProjectIDStatementFromAccount,
 				projectStatement("my-project"),
 				regionStatement("asia-east1"),
-				workloadHostIDFromHostNameStatement,
 			},
 		},
 		{
@@ -403,7 +398,6 @@ func TestRetrieve_WorkloadResourceFallbacks(t *testing.T) {
 				workloadProjectIDStatementFromAccount,
 				projectStatement("my-project"),
 				regionStatement("europe-west3"),
-				workloadHostIDFromHostNameStatement,
 			},
 		},
 		{
@@ -414,7 +408,6 @@ func TestRetrieve_WorkloadResourceFallbacks(t *testing.T) {
 				workloadProjectIDStatementFromAccount,
 				projectStatement("my-project"),
 				regionStatement("us-east1"),
-				workloadHostIDFromHostNameStatement,
 			},
 		},
 		{
@@ -424,7 +417,6 @@ func TestRetrieve_WorkloadResourceFallbacks(t *testing.T) {
 				workloadProjectIDStatementFromAccount,
 				projectStatement("fleet-project"),
 				regionStatement("us-central1"),
-				workloadHostIDFromHostNameStatement,
 			},
 		},
 		{
@@ -433,7 +425,6 @@ func TestRetrieve_WorkloadResourceFallbacks(t *testing.T) {
 			want: []string{
 				workloadProjectIDStatementFromAccount,
 				regionStatement("asia-east1"),
-				workloadHostIDFromHostNameStatement,
 			},
 		},
 	} {
@@ -483,9 +474,9 @@ func TestRetrieve_WorkloadRegionFallbackNonXDS(t *testing.T) {
 		env     string
 		want    []string
 	}{
-		{name: "short fleet, no env", fleetID: "my-fleet", want: []string{workloadProjectIDStatementFromAccount, workloadHostIDFromHostNameStatement}},
-		{name: "short fleet, env", fleetID: "my-fleet", env: "us-east1", want: []string{workloadProjectIDStatementFromAccount, regionStatement("us-east1"), workloadHostIDFromHostNameStatement}},
-		{name: "full fleet name", fleetID: "projects/p/locations/europe-west4/fleets/f", env: "us-east1", want: []string{workloadProjectIDStatementFromAccount, regionStatement("europe-west4"), workloadHostIDFromHostNameStatement}},
+		{name: "short fleet, no env", fleetID: "my-fleet", want: []string{workloadProjectIDStatementFromAccount}},
+		{name: "short fleet, env", fleetID: "my-fleet", env: "us-east1", want: []string{workloadProjectIDStatementFromAccount, regionStatement("us-east1")}},
+		{name: "full fleet name", fleetID: "projects/p/locations/europe-west4/fleets/f", env: "us-east1", want: []string{workloadProjectIDStatementFromAccount, regionStatement("europe-west4")}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv("FLEET_ID", tc.fleetID)
@@ -540,14 +531,13 @@ func TestRetrieve_SelfMetricsRegionFallback(t *testing.T) {
 }
 
 func TestWorkloadResourceStatements(t *testing.T) {
-	assert.Equal(t, []string{workloadProjectIDStatementFromAccount, workloadHostIDFromHostNameStatement}, workloadResourceStatements("", ""))
+	assert.Equal(t, []string{workloadProjectIDStatementFromAccount}, workloadResourceStatements("", ""))
 	assert.Equal(t, []string{
 		workloadProjectIDStatementFromAccount,
 		projectStatement("example.com:my-project"),
 		regionStatement("us-east1"),
-		workloadHostIDFromHostNameStatement,
 	}, workloadResourceStatements("example.com:my-project", "us-east1"))
-	assert.Equal(t, []string{workloadProjectIDStatementFromAccount, regionStatement("us-east1"), workloadHostIDFromHostNameStatement}, workloadResourceStatements("", "us-east1"))
+	assert.Equal(t, []string{workloadProjectIDStatementFromAccount, regionStatement("us-east1")}, workloadResourceStatements("", "us-east1"))
 	// Quotes and backslashes are escaped so each value stays a single OTTL string literal.
 	assert.Equal(t,
 		`set(attributes["gcp.project_id"], "a\"b\\c") where attributes["gcp.project_id"] == nil`,

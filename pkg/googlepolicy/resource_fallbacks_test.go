@@ -59,7 +59,7 @@ func TestSelfResourceDetectionProcessorConfig(t *testing.T) {
 func TestWorkloadResourceDetectionProcessorConfig(t *testing.T) {
 	cfg := WorkloadResourceDetectionProcessorConfig()
 	assert.Equal(t, map[string]any{
-		"detectors": []string{"env", "gcp"},
+		"detectors": []string{"env", "gcp", "system"},
 		"override":  false,
 		"timeout":   10 * time.Second,
 		"env": map[string]any{
@@ -78,18 +78,6 @@ func TestWorkloadResourceDetectionProcessorConfig(t *testing.T) {
 				},
 			},
 		},
-	}, cfg)
-
-	cfg["override"] = true
-	assert.Equal(t, false, WorkloadResourceDetectionProcessorConfig()["override"])
-}
-
-func TestWorkloadSystemResourceDetectionProcessorConfig(t *testing.T) {
-	cfg := WorkloadSystemResourceDetectionProcessorConfig()
-	assert.Equal(t, map[string]any{
-		"detectors": []string{"system"},
-		"override":  false,
-		"timeout":   10 * time.Second,
 		"system": map[string]any{
 			"resource_attributes": map[string]any{
 				"host.id": map[string]any{
@@ -103,7 +91,7 @@ func TestWorkloadSystemResourceDetectionProcessorConfig(t *testing.T) {
 	}, cfg)
 
 	cfg["override"] = true
-	assert.Equal(t, false, WorkloadSystemResourceDetectionProcessorConfig()["override"])
+	assert.Equal(t, false, WorkloadResourceDetectionProcessorConfig()["override"])
 }
 
 func TestCloudRegionFallbackStatement(t *testing.T) {

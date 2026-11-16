@@ -27,6 +27,15 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+type indexedSlice[Element any] interface {
+	Len() int
+	At(int) Element
+}
+
+type sizedSlice interface {
+	Len() int
+}
+
 // assertCountNeverIncreasesInvariant verifies that transformation never increases item counts.
 func assertCountNeverIncreasesInvariant(t *testing.T, itemKind string, before, after int) {
 	t.Helper()
@@ -36,15 +45,26 @@ func assertCountNeverIncreasesInvariant(t *testing.T, itemKind string, before, a
 }
 
 // assertNoEmptyContainersInvariant verifies that no empty Resource or Scope containers remain.
-func assertNoEmptyContainersInvariant(t *testing.T, resourceLen int, scopeLen func(i int) int, itemLen func(i, j int) int) {
+func assertNoEmptyContainersInvariant[
+	Resource any,
+	ResourceSlice indexedSlice[Resource],
+	Scope any,
+	ScopeSlice indexedSlice[Scope],
+	ItemSlice sizedSlice,
+](
+	t *testing.T,
+	resources ResourceSlice,
+	scopesOf func(Resource) ScopeSlice,
+	itemsOf func(Scope) ItemSlice,
+) {
 	t.Helper()
-	for i := 0; i < resourceLen; i++ {
-		sLen := scopeLen(i)
-		if sLen == 0 {
+	for i := 0; i < resources.Len(); i++ {
+		scopes := scopesOf(resources.At(i))
+		if scopes.Len() == 0 {
 			t.Fatalf("invariant violated: empty Resource container at index %d", i)
 		}
-		for j := 0; j < sLen; j++ {
-			if itemLen(i, j) == 0 {
+		for j := 0; j < scopes.Len(); j++ {
+			if itemsOf(scopes.At(j)).Len() == 0 {
 				t.Fatalf("invariant violated: empty Scope container at index [%d][%d]", i, j)
 			}
 		}
@@ -55,31 +75,31 @@ func buildFuzzLogs(body, attrKey, attrVal string, attrFloat float64) plog.Logs {
 	ld := plog.NewLogs()
 
 	// Resource 1: Fuzzed dynamic record + nested Map/Slice body record
-	rl1 := ld.ResourceLogs().AppendEmpty()
-	rl1.Resource().Attributes().PutStr("env", "prod")
-	rl1.Resource().Attributes().PutStr(attrKey, attrVal)
+	resourceLogs1 := ld.ResourceLogs().AppendEmpty()
+	resourceLogs1.Resource().Attributes().PutStr("env", "prod")
+	resourceLogs1.Resource().Attributes().PutStr(attrKey, attrVal)
 
-	sl1 := rl1.ScopeLogs().AppendEmpty()
-	sl1.Scope().SetName("fuzz.scope")
+	scopeLogs1 := resourceLogs1.ScopeLogs().AppendEmpty()
+	scopeLogs1.Scope().SetName("fuzz.scope")
 
-	lr1 := sl1.LogRecords().AppendEmpty()
-	lr1.Body().SetStr(body)
-	lr1.Attributes().PutStr(attrKey, attrVal)
-	lr1.Attributes().PutStr("legacy_env", "staging")
-	lr1.Attributes().PutDouble("float_val", attrFloat)
+	logRecord1 := scopeLogs1.LogRecords().AppendEmpty()
+	logRecord1.Body().SetStr(body)
+	logRecord1.Attributes().PutStr(attrKey, attrVal)
+	logRecord1.Attributes().PutStr("legacy_env", "staging")
+	logRecord1.Attributes().PutDouble("float_val", attrFloat)
 
-	lr2 := sl1.LogRecords().AppendEmpty()
-	nestedBody := lr2.Body().SetEmptyMap()
+	logRecord2 := scopeLogs1.LogRecords().AppendEmpty()
+	nestedBody := logRecord2.Body().SetEmptyMap()
 	nestedBody.PutEmptyMap("event").PutStr("user", attrVal)
 	nestedSlice := nestedBody.PutEmptySlice("tags")
 	nestedSlice.AppendEmpty().SetStr(body)
 	nestedSlice.AppendEmpty().SetEmptyMap().PutDouble("score", attrFloat)
 
 	// Resource 2: Weird / edge-case values (NaN, +-Inf, nil/empty, empty maps/slices)
-	rl2 := ld.ResourceLogs().AppendEmpty()
-	sl2 := rl2.ScopeLogs().AppendEmpty()
-	edgeLR := sl2.LogRecords().AppendEmpty()
-	edgeAttrs := edgeLR.Attributes()
+	resourceLogs2 := ld.ResourceLogs().AppendEmpty()
+	scopeLogs2 := resourceLogs2.ScopeLogs().AppendEmpty()
+	edgeLogRecord := scopeLogs2.LogRecords().AppendEmpty()
+	edgeAttrs := edgeLogRecord.Attributes()
 	edgeAttrs.PutDouble("nan_val", math.NaN())
 	edgeAttrs.PutDouble("pos_inf", math.Inf(1))
 	edgeAttrs.PutDouble("neg_inf", math.Inf(-1))
@@ -96,25 +116,25 @@ func buildFuzzMetrics(metricName, attrKey, attrVal string, dpFloat float64) pmet
 	md := newAllMetricTypes()
 
 	// Resource 2: Fuzzed metric + weird/edge-case values and multiple datapoints
-	rm2 := md.ResourceMetrics().AppendEmpty()
-	rm2.Resource().Attributes().PutStr(attrKey, attrVal)
-	sm2 := rm2.ScopeMetrics().AppendEmpty()
+	resourceMetrics2 := md.ResourceMetrics().AppendEmpty()
+	resourceMetrics2.Resource().Attributes().PutStr(attrKey, attrVal)
+	scopeMetrics2 := resourceMetrics2.ScopeMetrics().AppendEmpty()
 
 	// Untyped empty metric
-	emptyMetric := sm2.Metrics().AppendEmpty()
+	emptyMetric := scopeMetrics2.Metrics().AppendEmpty()
 	emptyMetric.SetName("untyped.metric")
 
 	// Multi-datapoint Gauge with fuzzed and weird values (NaN, +-Inf, empty)
-	fuzzGauge := sm2.Metrics().AppendEmpty()
+	fuzzGauge := scopeMetrics2.Metrics().AppendEmpty()
 	fuzzGauge.SetName(metricName)
-	dps := fuzzGauge.SetEmptyGauge().DataPoints()
+	dataPoints := fuzzGauge.SetEmptyGauge().DataPoints()
 
-	dp1 := dps.AppendEmpty()
+	dp1 := dataPoints.AppendEmpty()
 	dp1.SetDoubleValue(dpFloat)
 	dp1.Attributes().PutStr("env", "staging")
 	dp1.Attributes().PutStr(attrKey, attrVal)
 
-	dp2 := dps.AppendEmpty()
+	dp2 := dataPoints.AppendEmpty()
 	dp2.SetDoubleValue(math.NaN())
 	dp2.Attributes().PutStr("env", "prod")
 	dp2.Attributes().PutDouble("pos_inf", math.Inf(1))
@@ -130,19 +150,19 @@ func buildFuzzTraces(spanName, attrKey, attrVal string, attrFloat float64) ptrac
 	td := ptrace.NewTraces()
 
 	// Resource 1: Fuzzed dynamic span
-	rs1 := td.ResourceSpans().AppendEmpty()
-	rs1.Resource().Attributes().PutStr(attrKey, attrVal)
-	ss1 := rs1.ScopeSpans().AppendEmpty()
-	span1 := ss1.Spans().AppendEmpty()
+	resourceSpans1 := td.ResourceSpans().AppendEmpty()
+	resourceSpans1.Resource().Attributes().PutStr(attrKey, attrVal)
+	scopeSpans1 := resourceSpans1.ScopeSpans().AppendEmpty()
+	span1 := scopeSpans1.Spans().AppendEmpty()
 	span1.SetName(spanName)
 	span1.SetTraceID(pcommon.TraceID([16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}))
 	span1.Attributes().PutStr(attrKey, attrVal)
 	span1.Attributes().PutDouble("float_val", attrFloat)
 
 	// Resource 2: Weird / edge-case span (NaN, +-Inf, nested map/slice, empty TraceID)
-	rs2 := td.ResourceSpans().AppendEmpty()
-	ss2 := rs2.ScopeSpans().AppendEmpty()
-	edgeSpan := ss2.Spans().AppendEmpty()
+	resourceSpans2 := td.ResourceSpans().AppendEmpty()
+	scopeSpans2 := resourceSpans2.ScopeSpans().AppendEmpty()
+	edgeSpan := scopeSpans2.Spans().AppendEmpty()
 	edgeSpan.SetName("healthcheck")
 	edgeAttrs := edgeSpan.Attributes()
 	edgeAttrs.PutDouble("nan_val", math.NaN())
@@ -247,11 +267,7 @@ func FuzzTransformLogs(f *testing.F) {
 		eval.TransformLogs(ld)
 
 		assertCountNeverIncreasesInvariant(t, "log record", initialCount, ld.LogRecordCount())
-		assertNoEmptyContainersInvariant(t,
-			ld.ResourceLogs().Len(),
-			func(i int) int { return ld.ResourceLogs().At(i).ScopeLogs().Len() },
-			func(i, j int) int { return ld.ResourceLogs().At(i).ScopeLogs().At(j).LogRecords().Len() },
-		)
+		assertNoEmptyContainersInvariant(t, ld.ResourceLogs(), plog.ResourceLogs.ScopeLogs, plog.ScopeLogs.LogRecords)
 	})
 }
 
@@ -316,11 +332,7 @@ func FuzzTransformMetrics(f *testing.F) {
 
 		assertCountNeverIncreasesInvariant(t, "metric", initialMetrics, md.MetricCount())
 		assertCountNeverIncreasesInvariant(t, "datapoint", initialDataPoints, md.DataPointCount())
-		assertNoEmptyContainersInvariant(t,
-			md.ResourceMetrics().Len(),
-			func(i int) int { return md.ResourceMetrics().At(i).ScopeMetrics().Len() },
-			func(i, j int) int { return md.ResourceMetrics().At(i).ScopeMetrics().At(j).Metrics().Len() },
-		)
+		assertNoEmptyContainersInvariant(t, md.ResourceMetrics(), pmetric.ResourceMetrics.ScopeMetrics, pmetric.ScopeMetrics.Metrics)
 	})
 }
 
@@ -380,10 +392,6 @@ func FuzzTransformTraces(f *testing.F) {
 		eval.TransformTraces(td)
 
 		assertCountNeverIncreasesInvariant(t, "span", initialSpans, td.SpanCount())
-		assertNoEmptyContainersInvariant(t,
-			td.ResourceSpans().Len(),
-			func(i int) int { return td.ResourceSpans().At(i).ScopeSpans().Len() },
-			func(i, j int) int { return td.ResourceSpans().At(i).ScopeSpans().At(j).Spans().Len() },
-		)
+		assertNoEmptyContainersInvariant(t, td.ResourceSpans(), ptrace.ResourceSpans.ScopeSpans, ptrace.ScopeSpans.Spans)
 	})
 }

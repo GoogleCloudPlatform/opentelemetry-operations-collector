@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -509,14 +510,35 @@ type stubLogsProcessor struct {
 	consumer.Logs
 }
 
-type resourceDetectionConfig struct {
-	Detectors []string      `mapstructure:"detectors"`
-	Override  bool          `mapstructure:"override"`
-	Timeout   time.Duration `mapstructure:"timeout"`
-	System    any           `mapstructure:"system"`
+type envDetectorAttributesConfig struct {
+	Included []string `mapstructure:"included"`
+	Excluded []string `mapstructure:"excluded"`
 }
 
-func applyEnvResourceAttributes(attrs pcommon.Map, override bool) {
+type envDetectorConfig struct {
+	Attributes envDetectorAttributesConfig `mapstructure:"attributes"`
+}
+
+type resourceDetectionConfig struct {
+	Detectors []string          `mapstructure:"detectors"`
+	Override  bool              `mapstructure:"override"`
+	Timeout   time.Duration     `mapstructure:"timeout"`
+	Env       envDetectorConfig `mapstructure:"env"`
+	System    any               `mapstructure:"system"`
+}
+
+func matchEnvWildcardPatterns(patterns []string, key string) bool {
+	for _, p := range patterns {
+		quoted := regexp.QuoteMeta(p)
+		expr := "(?s)^" + strings.ReplaceAll(strings.ReplaceAll(quoted, `\*`, `.*`), `\?`, `.`) + "$"
+		if matched, err := regexp.MatchString(expr, key); err == nil && matched {
+			return true
+		}
+	}
+	return false
+}
+
+func applyEnvResourceAttributes(attrs pcommon.Map, cfg *resourceDetectionConfig) {
 	envStr := os.Getenv("OTEL_RESOURCE_ATTRIBUTES")
 	if envStr == "" {
 		return
@@ -527,7 +549,13 @@ func applyEnvResourceAttributes(attrs pcommon.Map, override bool) {
 			k := strings.TrimSpace(kv[0])
 			v := strings.TrimSpace(kv[1])
 			if k != "" {
-				if _, exists := attrs.Get(k); !exists || override {
+				if len(cfg.Env.Attributes.Included) > 0 && !matchEnvWildcardPatterns(cfg.Env.Attributes.Included, k) {
+					continue
+				}
+				if len(cfg.Env.Attributes.Excluded) > 0 && matchEnvWildcardPatterns(cfg.Env.Attributes.Excluded, k) {
+					continue
+				}
+				if _, exists := attrs.Get(k); !exists || cfg.Override {
 					attrs.PutStr(k, v)
 				}
 			}
@@ -546,7 +574,7 @@ func (p *resourceDetectionTracesProcessor) ConsumeTraces(ctx context.Context, td
 	if slices.Contains(p.cfg.Detectors, "env") {
 		for i := 0; i < td.ResourceSpans().Len(); i++ {
 			rs := td.ResourceSpans().At(i)
-			applyEnvResourceAttributes(rs.Resource().Attributes(), p.cfg.Override)
+			applyEnvResourceAttributes(rs.Resource().Attributes(), p.cfg)
 		}
 	}
 	return p.Traces.ConsumeTraces(ctx, td)
@@ -563,7 +591,7 @@ func (p *resourceDetectionMetricsProcessor) ConsumeMetrics(ctx context.Context, 
 	if slices.Contains(p.cfg.Detectors, "env") {
 		for i := 0; i < md.ResourceMetrics().Len(); i++ {
 			rm := md.ResourceMetrics().At(i)
-			applyEnvResourceAttributes(rm.Resource().Attributes(), p.cfg.Override)
+			applyEnvResourceAttributes(rm.Resource().Attributes(), p.cfg)
 		}
 	}
 	return p.Metrics.ConsumeMetrics(ctx, md)
@@ -580,7 +608,7 @@ func (p *resourceDetectionLogsProcessor) ConsumeLogs(ctx context.Context, ld plo
 	if slices.Contains(p.cfg.Detectors, "env") {
 		for i := 0; i < ld.ResourceLogs().Len(); i++ {
 			rl := ld.ResourceLogs().At(i)
-			applyEnvResourceAttributes(rl.Resource().Attributes(), p.cfg.Override)
+			applyEnvResourceAttributes(rl.Resource().Attributes(), p.cfg)
 		}
 	}
 	return p.Logs.ConsumeLogs(ctx, ld)
@@ -2778,5 +2806,126 @@ service:
 	}
 	if got := foundMetricResourceAttrs["service.name"]; got != "secops-workload" {
 		t.Errorf("expected metric service.name to be 'secops-workload', got %q", got)
+	}
+}
+
+// TestPolicy_EnvResourceDetection_ExcludesCollectorPodAttributes verifies that
+// collector process and Kubernetes pod/controller identity attributes present in
+// OTEL_RESOURCE_ATTRIBUTES (describing the collector pod itself) do not leak onto
+// canonical workload pipelines, while node/cluster and custom routing attributes
+// still apply.
+func TestPolicy_EnvResourceDetection_ExcludesCollectorPodAttributes(t *testing.T) {
+	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", strings.Join([]string{
+		"service.name=collector-pod",
+		"service.instance.id=collector-pod-instance",
+		"k8s.cluster.name=prod-cluster",
+		"k8s.namespace.name=opentelemetry-system",
+		"k8s.pod.name=otelcol-ds-abc",
+		"k8s.pod.uid=pod-uid-123",
+		"k8s.container.name=otelcol",
+		"k8s.daemonset.name=otelcol-ds",
+		"k8s.node.name=worker-node-1",
+		"routing.target=secops",
+	}, ","))
+
+	otelcolBin := resolveOtelcolBinary(t)
+	tempDir, policiesDir := stagePoliciesDir(t, "drop_by_body_equals")
+
+	ports := allocateEphemeralPorts(t, 1)
+	customReceiverAddr := fmt.Sprintf("127.0.0.1:%d", ports[0])
+
+	appendReceiverCfg := fmt.Sprintf(`receivers:
+  otlp/k8s_in:
+    protocols:
+      grpc:
+        endpoint: %s
+service:
+  pipelines:
+    logs/googlecontrolplane:
+      receivers: [otlp/k8s_in]
+`, customReceiverAddr)
+
+	appendCfgPath := filepath.Join(tempDir, "append_k8s_receiver.yaml")
+	if err := os.WriteFile(appendCfgPath, []byte(appendReceiverCfg), 0644); err != nil {
+		t.Fatalf("failed to write append_k8s_receiver.yaml: %v", err)
+	}
+
+	h := startTestHarness(t, otelcolBin, tempDir, policiesDir, appendCfgPath)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	conn, err := grpc.NewClient(customReceiverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("failed to connect to custom receiver %s: %v", customReceiverAddr, err)
+	}
+	t.Cleanup(func() {
+		_ = conn.Close()
+	})
+
+	customLogsClient := plogotlp.NewGRPCClient(conn)
+	logs := plog.NewLogs()
+	rl := logs.ResourceLogs().AppendEmpty()
+	lr := rl.ScopeLogs().AppendEmpty().LogRecords().AppendEmpty()
+	lr.Body().SetStr("KEEP_THIS_LOG_LINE")
+
+	if _, err := customLogsClient.Export(ctx, plogotlp.NewExportRequestFromLogs(logs)); err != nil {
+		t.Fatalf("failed to export logs to custom receiver: %v\nstderr:\n%s", err, h.col.logs())
+	}
+
+	deadline := time.Now().Add(10 * time.Second)
+	var foundLogResourceAttrs map[string]string
+	for time.Now().Before(deadline) {
+		for _, ld := range h.selfMockSrv.CollectedLogs() {
+			for i := 0; i < ld.ResourceLogs().Len(); i++ {
+				r := ld.ResourceLogs().At(i)
+				for j := 0; j < r.ScopeLogs().Len(); j++ {
+					for k := 0; k < r.ScopeLogs().At(j).LogRecords().Len(); k++ {
+						if r.ScopeLogs().At(j).LogRecords().At(k).Body().Str() == "KEEP_THIS_LOG_LINE" {
+							attrs := make(map[string]string)
+							r.Resource().Attributes().Range(func(key string, val pcommon.Value) bool {
+								attrs[key] = val.AsString()
+								return true
+							})
+							foundLogResourceAttrs = attrs
+						}
+					}
+				}
+			}
+		}
+		if foundLogResourceAttrs != nil {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	h.col.shutdown(t)
+
+	if foundLogResourceAttrs == nil {
+		t.Fatalf("expected log record not found at destination.\ncollector logs:\n%s", h.col.logs())
+	}
+
+	if got := foundLogResourceAttrs["k8s.cluster.name"]; got != "prod-cluster" {
+		t.Errorf("expected k8s.cluster.name 'prod-cluster', got %q", got)
+	}
+	if got := foundLogResourceAttrs["k8s.node.name"]; got != "worker-node-1" {
+		t.Errorf("expected k8s.node.name 'worker-node-1', got %q", got)
+	}
+	if got := foundLogResourceAttrs["routing.target"]; got != "secops" {
+		t.Errorf("expected routing.target 'secops', got %q", got)
+	}
+
+	for _, excludedKey := range []string{
+		"service.name",
+		"service.instance.id",
+		"k8s.namespace.name",
+		"k8s.pod.name",
+		"k8s.pod.uid",
+		"k8s.container.name",
+		"k8s.daemonset.name",
+	} {
+		if val, exists := foundLogResourceAttrs[excludedKey]; exists {
+			t.Errorf("collector pod attribute %q=%q must not leak onto workload logs", excludedKey, val)
+		}
 	}
 }

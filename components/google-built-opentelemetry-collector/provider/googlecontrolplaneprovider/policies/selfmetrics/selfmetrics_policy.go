@@ -239,7 +239,7 @@ func (p *SelfMetricsPolicy) Evaluate(ctx context.Context) (*confmap.Conf, error)
 
 	rdType, _ := component.NewType("resourcedetection")
 	rdID := component.NewIDWithName(rdType, p.Name)
-	rdCfg := googlepolicy.ResourceDetectionProcessorConfig()
+	rdCfg := googlepolicy.SelfResourceDetectionProcessorConfig()
 
 	transformType, _ := component.NewType("transform")
 	transformID := component.NewIDWithName(transformType, p.Name)

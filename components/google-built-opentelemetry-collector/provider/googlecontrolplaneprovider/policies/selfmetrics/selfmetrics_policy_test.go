@@ -99,7 +99,9 @@ func TestSelfMetricsPolicy_Evaluate(t *testing.T) {
 	assert.Equal(t, []any{"env", "gcp", "system"}, conf.Get("processors::resourcedetection/custom_self_obs::detectors"))
 	assert.Equal(t, false, conf.Get("processors::resourcedetection/custom_self_obs::override"))
 	assert.Equal(t, 10*time.Second, conf.Get("processors::resourcedetection/custom_self_obs::timeout"))
+	assert.Equal(t, []any{"cloud.*", "faas.*", "host.*", "k8s.*", "location", "os.*", "service.*"}, conf.Get("processors::resourcedetection/custom_self_obs::env::attributes::included"))
 	assert.Equal(t, true, conf.Get("processors::resourcedetection/custom_self_obs::system::resource_attributes::host.id::enabled"))
+	assert.Equal(t, false, conf.Get("processors::resourcedetection/custom_self_obs::system::resource_attributes::os.type::enabled"))
 
 	// Verify transform processor
 	assert.Equal(t, "ignore", conf.Get("processors::transform/custom_self_obs::error_mode"))

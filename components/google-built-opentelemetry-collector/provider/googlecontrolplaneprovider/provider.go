@@ -469,7 +469,10 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 	// Configure resource detection and transform for canonical workload pipelines
 	rdType, _ := component.NewType("resourcedetection")
 	rdID := component.NewIDWithName(rdType, "googlecontrolplane")
-	rdCfg := googlepolicy.ResourceDetectionProcessorConfig()
+	rdCfg := googlepolicy.WorkloadResourceDetectionProcessorConfig()
+
+	rdSystemID := component.NewIDWithName(rdType, "googlecontrolplane_system")
+	rdSystemCfg := googlepolicy.WorkloadSystemResourceDetectionProcessorConfig()
 
 	transformType, _ := component.NewType("transform")
 	transformID := component.NewIDWithName(transformType, "googlecontrolplane")
@@ -499,6 +502,7 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 	workloadProcessorsConf := &otelcol.Config{
 		Processors: map[component.ID]component.Config{
 			rdID:        component.Config(rdCfg),
+			rdSystemID:  component.Config(rdSystemCfg),
 			transformID: component.Config(transformCfg),
 		},
 	}
@@ -592,9 +596,9 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 	canonicalMetricsPipelineID := pipeline.NewIDWithName(pipeline.SignalMetrics, "googlecontrolplane")
 	canonicalTracesPipelineID := pipeline.NewIDWithName(pipeline.SignalTraces, "googlecontrolplane")
 
-	canonicalLogProcessors := append([]component.ID{rdID, transformID, googlePolicyID}, destPolicy.PreProcessLogIDs()...)
-	canonicalMetricProcessors := append([]component.ID{rdID, transformID, googlePolicyID}, destPolicy.PreProcessMetricIDs()...)
-	canonicalTraceProcessors := append([]component.ID{rdID, transformID, googlePolicyID}, destPolicy.PreProcessTraceIDs()...)
+	canonicalLogProcessors := append([]component.ID{rdID, transformID, rdSystemID, googlePolicyID}, destPolicy.PreProcessLogIDs()...)
+	canonicalMetricProcessors := append([]component.ID{rdID, transformID, rdSystemID, googlePolicyID}, destPolicy.PreProcessMetricIDs()...)
+	canonicalTraceProcessors := append([]component.ID{rdID, transformID, rdSystemID, googlePolicyID}, destPolicy.PreProcessTraceIDs()...)
 
 	storageExtID := googlepolicy.StorageExtensionID
 	storageCfg := map[string]any{
@@ -817,6 +821,14 @@ func (p *provider) consolidateSourcePolicies(ctx context.Context, activePolicySe
 // telemetry from the cloud.account.id that the gcp resource detector reports.
 const workloadProjectIDStatementFromAccount = `set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil`
 
+// workloadHostIDFromHostNameStatement promotes an incoming off-GCP sender's
+// host.name to host.id when host.id is absent, before
+// resourcedetection/googlecontrolplane_system runs. This keeps forwarded OTLP
+// telemetry that already identifies a remote host via host.name from having the
+// collector host's own machine ID stamped onto it by the system detector, while
+// ensuring telemetry.googleapis.com receives a non-empty host.id.
+const workloadHostIDFromHostNameStatement = `set(attributes["host.id"], attributes["host.name"]) where attributes["cloud.provider"] == nil and attributes["host.id"] == nil and attributes["host.name"] != nil and attributes["host.name"] != ""`
+
 // stringFromContext returns the string stored in ctx under key, or "".
 // evaluateActivePolicySet stores the resolved PROJECT_ID (alphanumeric project
 // ID) and REGION there.
@@ -870,6 +882,7 @@ func workloadResourceStatements(projectID, region string) []string {
 	if stmt := googlepolicy.CloudRegionFallbackStatement(region); stmt != "" {
 		statements = append(statements, stmt)
 	}
+	statements = append(statements, workloadHostIDFromHostNameStatement)
 	return statements
 }
 

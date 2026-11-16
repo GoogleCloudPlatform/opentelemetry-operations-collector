@@ -21,10 +21,73 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestResourceDetectionProcessorConfig(t *testing.T) {
-	cfg := ResourceDetectionProcessorConfig()
+func TestSelfResourceDetectionProcessorConfig(t *testing.T) {
+	cfg := SelfResourceDetectionProcessorConfig()
 	assert.Equal(t, map[string]any{
 		"detectors": []string{"env", "gcp", "system"},
+		"override":  false,
+		"timeout":   10 * time.Second,
+		"env": map[string]any{
+			"attributes": map[string]any{
+				"included": []string{
+					"cloud.*",
+					"faas.*",
+					"host.*",
+					"k8s.*",
+					"location",
+					"os.*",
+					"service.*",
+				},
+			},
+		},
+		"system": map[string]any{
+			"resource_attributes": map[string]any{
+				"host.id": map[string]any{
+					"enabled": true,
+				},
+				"os.type": map[string]any{
+					"enabled": false,
+				},
+			},
+		},
+	}, cfg)
+
+	cfg["override"] = true
+	assert.Equal(t, false, SelfResourceDetectionProcessorConfig()["override"])
+}
+
+func TestWorkloadResourceDetectionProcessorConfig(t *testing.T) {
+	cfg := WorkloadResourceDetectionProcessorConfig()
+	assert.Equal(t, map[string]any{
+		"detectors": []string{"env", "gcp"},
+		"override":  false,
+		"timeout":   10 * time.Second,
+		"env": map[string]any{
+			"attributes": map[string]any{
+				"excluded": []string{
+					"service.*",
+					"k8s.pod.*",
+					"k8s.container.*",
+					"k8s.namespace.*",
+					"k8s.daemonset.*",
+					"k8s.deployment.*",
+					"k8s.replicaset.*",
+					"k8s.statefulset.*",
+					"k8s.job.*",
+					"k8s.cronjob.*",
+				},
+			},
+		},
+	}, cfg)
+
+	cfg["override"] = true
+	assert.Equal(t, false, WorkloadResourceDetectionProcessorConfig()["override"])
+}
+
+func TestWorkloadSystemResourceDetectionProcessorConfig(t *testing.T) {
+	cfg := WorkloadSystemResourceDetectionProcessorConfig()
+	assert.Equal(t, map[string]any{
+		"detectors": []string{"system"},
 		"override":  false,
 		"timeout":   10 * time.Second,
 		"system": map[string]any{
@@ -32,13 +95,15 @@ func TestResourceDetectionProcessorConfig(t *testing.T) {
 				"host.id": map[string]any{
 					"enabled": true,
 				},
+				"os.type": map[string]any{
+					"enabled": false,
+				},
 			},
 		},
 	}, cfg)
 
-	// Returned map is newly allocated per call so callers cannot mutate shared state.
 	cfg["override"] = true
-	assert.Equal(t, false, ResourceDetectionProcessorConfig()["override"])
+	assert.Equal(t, false, WorkloadSystemResourceDetectionProcessorConfig()["override"])
 }
 
 func TestCloudRegionFallbackStatement(t *testing.T) {

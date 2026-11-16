@@ -20,32 +20,119 @@ import (
 	"time"
 )
 
-// ResourceDetectionProcessorConfig returns the resourcedetection processor
-// configuration shared by the canonical workload pipelines and the collector's
-// self-observability pipelines.
+// SelfResourceDetectionProcessorConfig returns the resourcedetection processor
+// configuration for the collector's self-observability pipelines.
 //
-// Detectors run with override: false so attributes already present on incoming
-// telemetry (or set in service::telemetry::resource on collector self-telemetry,
-// such as service.instance.id and gcp.fleet_id) are preserved, and detected
-// attributes merge in detector list order (first non-empty value wins):
-//   - "env" lets operators supply or override resource attributes (such as a
-//     custom host.id or Kubernetes attributes) via OTEL_RESOURCE_ATTRIBUTES.
-//   - "gcp" resolves Google Cloud platform metadata (such as Compute Engine
-//     instance ID and zone/region) when running on Google Cloud.
-//   - "system" (with host.id enabled) falls back to the OS machine ID
-//     (/etc/machine-id on Linux, MachineGuid on Windows) along with host.name
-//     and os.type off Google Cloud, ensuring telemetry.googleapis.com has a
-//     unique host.id per node for generic_node.node_id and
-//     prometheus_target.instance.
-func ResourceDetectionProcessorConfig() map[string]any {
+// Self-telemetry always originates from the collector process itself, so all
+// three detectors ([env, gcp, system]) run in a single processor with
+// override: false (preserving attributes set in service::telemetry::resource,
+// such as service.instance.id and gcp.fleet_id):
+//   - "env" reads standard OpenTelemetry identity and platform attributes from
+//     OTEL_RESOURCE_ATTRIBUTES (for example Kubernetes Downward API pod/node
+//     attributes or a custom host.id), while ignoring arbitrary custom or
+//     workload-routing attributes that should not apply to collector
+//     self-telemetry.
+//   - "gcp" resolves Google Cloud platform metadata when running on Google Cloud.
+//   - "system" (with host.id enabled and os.type disabled) falls back to the OS
+//     machine ID and host.name off Google Cloud without adding extra attributes
+//     on Compute Engine.
+func SelfResourceDetectionProcessorConfig() map[string]any {
 	return map[string]any{
 		"detectors": []string{"env", "gcp", "system"},
+		"override":  false,
+		"timeout":   10 * time.Second,
+		"env": map[string]any{
+			"attributes": map[string]any{
+				"included": []string{
+					"cloud.*",
+					"faas.*",
+					"host.*",
+					"k8s.*",
+					"location",
+					"os.*",
+					"service.*",
+				},
+			},
+		},
+		"system": map[string]any{
+			"resource_attributes": map[string]any{
+				"host.id": map[string]any{
+					"enabled": true,
+				},
+				"os.type": map[string]any{
+					"enabled": false,
+				},
+			},
+		},
+	}
+}
+
+// WorkloadResourceDetectionProcessorConfig returns the primary resourcedetection
+// processor configuration for the canonical workload pipelines, executed before
+// transform/googlecontrolplane.
+//
+// Detectors run with override: false so attributes already present on incoming
+// telemetry win:
+//   - "env" lets operators supply host/node/cloud or routing attributes via
+//     OTEL_RESOURCE_ATTRIBUTES while excluding collector process and pod/workload
+//     identity attributes (service.*, k8s.pod.*, k8s.container.*, k8s.namespace.*,
+//     and Kubernetes controller names) that commonly describe the collector pod
+//     itself in Kubernetes deployments and would otherwise leak onto workload
+//     telemetry.
+//   - "gcp" resolves Google Cloud platform metadata (such as Compute Engine or
+//     GKE instance ID and zone/region) when running on Google Cloud.
+func WorkloadResourceDetectionProcessorConfig() map[string]any {
+	return map[string]any{
+		"detectors": []string{"env", "gcp"},
+		"override":  false,
+		"timeout":   10 * time.Second,
+		"env": map[string]any{
+			"attributes": map[string]any{
+				"excluded": []string{
+					"service.*",
+					"k8s.pod.*",
+					"k8s.container.*",
+					"k8s.namespace.*",
+					"k8s.daemonset.*",
+					"k8s.deployment.*",
+					"k8s.replicaset.*",
+					"k8s.statefulset.*",
+					"k8s.job.*",
+					"k8s.cronjob.*",
+				},
+			},
+		},
+	}
+}
+
+// WorkloadSystemResourceDetectionProcessorConfig returns the fallback system
+// resourcedetection processor configuration for the canonical workload
+// pipelines, executed after transform/googlecontrolplane.
+//
+// Running "system" after transform/googlecontrolplane (which promotes an
+// incoming off-GCP sender's host.name to host.id when host.id is absent)
+// ensures that:
+//   - On Google Cloud, where "gcp" already populated host.id and host.name, and
+//     with os.type disabled, this processor adds no attributes to GCE workload
+//     telemetry.
+//   - Off Google Cloud, local sources (filelog, hostmetrics, journald,
+//     windowseventlog, iis) receive the collector host's OS machine ID
+//     (/etc/machine-id on Linux, MachineGuid on Windows) and host.name, while
+//     forwarded OTLP telemetry that already carries a remote sender's host.name
+//     keeps that sender's identity instead of collapsing onto the collector's
+//     machine ID.
+func WorkloadSystemResourceDetectionProcessorConfig() map[string]any {
+	return map[string]any{
+		"detectors": []string{"system"},
 		"override":  false,
 		"timeout":   10 * time.Second,
 		"system": map[string]any{
 			"resource_attributes": map[string]any{
 				"host.id": map[string]any{
 					"enabled": true,
+				},
+				"os.type": map[string]any{
+					"enabled": false,
 				},
 			},
 		},

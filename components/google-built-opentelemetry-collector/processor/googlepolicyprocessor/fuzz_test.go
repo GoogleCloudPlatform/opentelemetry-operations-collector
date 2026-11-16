@@ -15,8 +15,6 @@
 package googlepolicyprocessor
 
 import (
-	"bytes"
-	"fmt"
 	"math"
 	"testing"
 
@@ -28,85 +26,6 @@ import (
 	"go.opentelemetry.io/collector/pdata/ptrace"
 	"google.golang.org/protobuf/proto"
 )
-
-const policyChunkSep = "\n---\n"
-
-// encodeSeedPolicies serializes a variable-length slice of 1..N policy protos
-// into a single byte slice so seed cases can pass any number of policies.
-func encodeSeedPolicies(f *testing.F, msgs []proto.Message) []byte {
-	f.Helper()
-	var chunks [][]byte
-	for _, m := range msgs {
-		var kind byte
-		switch m.(type) {
-		case *policyv1alpha1.LogFilterPolicy, *policyv1alpha1.MetricFilterPolicy, *policyv1alpha1.TraceFilterPolicy:
-			kind = 0
-		default:
-			kind = 1
-		}
-		b, err := proto.Marshal(m)
-		if err != nil {
-			f.Fatalf("proto.Marshal seed failed: %v", err)
-		}
-		chunks = append(chunks, append([]byte{kind}, b...))
-	}
-	return bytes.Join(chunks, []byte(policyChunkSep))
-}
-
-// decodeFuzzPolicies splits fuzz bytes into 1..N policy chunks and unmarshals
-// each chunk into a policy proto with a unique ID.
-func decodeFuzzPolicies(data []byte, newPolicy func(kind byte, id string) proto.Message) []proto.Message {
-	var protos []proto.Message
-	for i, chunk := range bytes.Split(data, []byte(policyChunkSep)) {
-		if len(chunk) == 0 {
-			continue
-		}
-		id := fmt.Sprintf("fuzz-policy-%02d", i)
-		pb := newPolicy(chunk[0], id)
-		if proto.Unmarshal(chunk[1:], pb) == nil {
-			// Ensure every policy in the 1..N list has a non-empty, unique ID.
-			pb = newPolicyWithUniqueID(pb, id)
-			protos = append(protos, pb)
-		}
-	}
-	return protos
-}
-
-func newPolicyWithUniqueID(pb proto.Message, fallbackID string) proto.Message {
-	switch p := pb.(type) {
-	case *policyv1alpha1.LogFilterPolicy:
-		if p.Id == "" {
-			p.Id = fallbackID
-		} else {
-			p.Id = p.Id + "-" + fallbackID
-		}
-	case *policyv1alpha1.LogTransformPolicy:
-		if p.Id == "" {
-			p.Id = fallbackID
-		} else {
-			p.Id = p.Id + "-" + fallbackID
-		}
-	case *policyv1alpha1.MetricFilterPolicy:
-		if p.Id == "" {
-			p.Id = fallbackID
-		} else {
-			p.Id = p.Id + "-" + fallbackID
-		}
-	case *policyv1alpha1.TraceFilterPolicy:
-		if p.Id == "" {
-			p.Id = fallbackID
-		} else {
-			p.Id = p.Id + "-" + fallbackID
-		}
-	case *policyv1alpha1.TraceSamplingPolicy:
-		if p.Id == "" {
-			p.Id = fallbackID
-		} else {
-			p.Id = p.Id + "-" + fallbackID
-		}
-	}
-	return pb
-}
 
 func buildFuzzLogs(body, attrKey, attrVal string, attrFloat float64) plog.Logs {
 	ld := plog.NewLogs()
@@ -215,91 +134,77 @@ func buildFuzzTraces(spanName, attrKey, attrVal string, attrFloat float64) ptrac
 // FuzzTransformLogs verifies that evaluating 1 to N log filter and transform
 // policies through Evaluator.TransformLogs never panics and preserves container invariants.
 func FuzzTransformLogs(f *testing.F) {
-	dropBodyPolicy := newDropLogBodyProto("01-drop-body", "redacted")
-	keepBodyPolicy := newDropLogBodyProto("02-keep-body", "keep-me")
-	keepBodyPolicy.Action = policyv1alpha1.Action_ACTION_KEEP.Enum()
-
-	setBodyRedactedPolicy := &policyv1alpha1.LogTransformPolicy{
-		Id: "01-set-body",
-		Additions: []*policyv1alpha1.LogAddition{
-			{
-				Target: &policyv1alpha1.LogTargetSelector{
-					Target: &policyv1alpha1.LogTargetSelector_RecordField{
-						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
-					},
-				},
-				Source: &policyv1alpha1.LogAddition_Value{
-					Value: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "redacted"}},
-				},
-				UpsertEnabled: proto.Bool(true),
-			},
-		},
-	}
-	renameEnvPolicy := &policyv1alpha1.LogTransformPolicy{
-		Id: "02-rename-env",
-		Renamings: []*policyv1alpha1.LogRenaming{
-			{
-				Source: &policyv1alpha1.LogAttributeSelector{
-					Target: &policyv1alpha1.LogAttributeSelector_LogAttributePath{
-						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"legacy_env"}},
-					},
-				},
-				Target: &policyv1alpha1.LogAttributeSelector{
-					Target: &policyv1alpha1.LogAttributeSelector_LogAttributePath{
-						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"env"}},
-					},
-				},
-				UpsertEnabled: proto.Bool(true),
-			},
-		},
-	}
-
 	seedCases := []struct {
-		name                   string
-		policies               []proto.Message
-		body, attrKey, attrVal string
-		attrFloat              float64
+		name                                     string
+		setIdx                                   uint8
+		matchVal, addVal, body, attrKey, attrVal string
+		keep, upsert                             bool
+		attrFloat                                float64
 	}{
-		{
-			name:     "1-policy-single-filter",
-			policies: []proto.Message{dropBodyPolicy},
-			body:     "redacted", attrKey: "env", attrVal: "prod", attrFloat: 1.5,
-		},
-		{
-			name:     "2-policies-keep-overrides-drop",
-			policies: []proto.Message{dropBodyPolicy, keepBodyPolicy},
-			body:     "keep-me", attrKey: "env", attrVal: "prod", attrFloat: 2.0,
-		},
-		{
-			name:     "2-policies-filter-and-transform-pass2",
-			policies: []proto.Message{dropBodyPolicy, setBodyRedactedPolicy},
-			body:     "hello", attrKey: "k", attrVal: "v", attrFloat: 0.0,
-		},
-		{
-			name:     "2-policies-multi-transform-stage-order",
-			policies: []proto.Message{setBodyRedactedPolicy, renameEnvPolicy},
-			body:     "hello", attrKey: "env", attrVal: "staging", attrFloat: -1.0,
-		},
-		{
-			name:     "4-policies-all-combined-weird-values",
-			policies: []proto.Message{dropBodyPolicy, keepBodyPolicy, setBodyRedactedPolicy, renameEnvPolicy},
-			body:     "", attrKey: "", attrVal: "", attrFloat: math.NaN(),
-		},
+		{"1-policy-single-filter", 0, "redacted", "redacted", "redacted", "env", "prod", false, true, 1.5},
+		{"2-policies-keep-overrides-drop", 1, "keep-me", "redacted", "keep-me", "env", "prod", true, true, 2.0},
+		{"2-policies-filter-and-transform-pass2", 2, "redacted", "redacted", "hello", "k", "v", false, true, 0.0},
+		{"2-policies-multi-transform-stage-order", 3, "staging", "prod", "hello", "env", "staging", false, true, -1.0},
+		{"4-policies-all-combined-weird-values", 4, "", "", "", "", "", true, false, math.NaN()},
 	}
 	for _, tc := range seedCases {
-		f.Add(encodeSeedPolicies(f, tc.policies), tc.body, tc.attrKey, tc.attrVal, tc.attrFloat)
+		f.Add(tc.setIdx, tc.matchVal, tc.addVal, tc.body, tc.attrKey, tc.attrVal, tc.keep, tc.upsert, tc.attrFloat)
 	}
 
-	f.Fuzz(func(t *testing.T, policiesData []byte, body, attrKey, attrVal string, attrFloat float64) {
-		protos := decodeFuzzPolicies(policiesData, func(kind byte, _ string) proto.Message {
-			if kind%2 == 0 {
-				return &policyv1alpha1.LogFilterPolicy{}
-			}
-			return &policyv1alpha1.LogTransformPolicy{}
-		})
-		if len(protos) == 0 {
-			return
+	f.Fuzz(func(t *testing.T, setIdx uint8, matchVal, addVal, body, attrKey, attrVal string, keep, upsert bool, attrFloat float64) {
+		dropBodyPolicy := newDropLogBodyProto("01-drop-body", matchVal)
+
+		secondFilterAction := policyv1alpha1.Action_ACTION_DROP
+		if keep {
+			secondFilterAction = policyv1alpha1.Action_ACTION_KEEP
 		}
+		keepOrDropPolicy := newDropLogBodyProto("02-keep-or-drop-body", matchVal)
+		keepOrDropPolicy.Action = secondFilterAction.Enum()
+
+		setBodyPolicy := &policyv1alpha1.LogTransformPolicy{
+			Id: "01-set-body",
+			Additions: []*policyv1alpha1.LogAddition{
+				{
+					Target: &policyv1alpha1.LogTargetSelector{
+						Target: &policyv1alpha1.LogTargetSelector_RecordField{
+							RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
+						},
+					},
+					Source: &policyv1alpha1.LogAddition_Value{
+						Value: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: addVal}},
+					},
+					UpsertEnabled: proto.Bool(upsert),
+				},
+			},
+		}
+		renameEnvPolicy := &policyv1alpha1.LogTransformPolicy{
+			Id: "02-rename-env",
+			Renamings: []*policyv1alpha1.LogRenaming{
+				{
+					Source: &policyv1alpha1.LogAttributeSelector{
+						Target: &policyv1alpha1.LogAttributeSelector_LogAttributePath{
+							LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"legacy_env"}},
+						},
+					},
+					Target: &policyv1alpha1.LogAttributeSelector{
+						Target: &policyv1alpha1.LogAttributeSelector_LogAttributePath{
+							LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"env"}},
+						},
+					},
+					UpsertEnabled: proto.Bool(upsert),
+				},
+			},
+		}
+
+		// 1..N policy combinations (new combinations of any length can be appended here).
+		policySets := [][]proto.Message{
+			{dropBodyPolicy},
+			{dropBodyPolicy, keepOrDropPolicy},
+			{dropBodyPolicy, setBodyPolicy},
+			{setBodyPolicy, renameEnvPolicy},
+			{dropBodyPolicy, keepOrDropPolicy, setBodyPolicy, renameEnvPolicy},
+		}
+		protos := policySets[int(setIdx)%len(policySets)]
 
 		ps, _ := googlepolicy.MakePolicySetFromProtos("fuzz-set", "fuzz-rev", protos)
 		policies := ps.TransformationPolicies()
@@ -339,52 +244,44 @@ func FuzzTransformLogs(f *testing.F) {
 // FuzzTransformMetrics verifies that evaluating 1 to N MetricFilterPolicies
 // through Evaluator.TransformMetrics never panics and preserves container invariants.
 func FuzzTransformMetrics(f *testing.F) {
-	dropInstPolicy := newDropMetricNameProto("01-drop-inst", "gauge.metric")
-	keepInstPolicy := newDropMetricNameProto("02-keep-inst", "gauge.metric")
-	keepInstPolicy.Action = policyv1alpha1.Action_ACTION_KEEP.Enum()
-
-	dropDpPolicy := newDropDatapointAttrProto("03-drop-dp", "env", "staging")
-	keepDpPolicy := newDropDatapointAttrProto("04-keep-dp", "env", "prod")
-	keepDpPolicy.Action = policyv1alpha1.Action_ACTION_KEEP.Enum()
-
 	seedCases := []struct {
-		name                         string
-		policies                     []proto.Message
-		metricName, attrKey, attrVal string
-		dpFloat                      float64
+		name                                   string
+		setIdx                                 uint8
+		matchMetric, metricName, attrKey, attrVal string
+		keepInst, keepDp                       bool
+		dpFloat                                float64
 	}{
-		{
-			name:       "1-policy-single-instrument-drop",
-			policies:   []proto.Message{dropInstPolicy},
-			metricName: "gauge.metric", attrKey: "env", attrVal: "staging", dpFloat: 1.0,
-		},
-		{
-			name:       "2-policies-instrument-keep-overrides-drop",
-			policies:   []proto.Message{dropInstPolicy, keepInstPolicy},
-			metricName: "gauge.metric", attrKey: "env", attrVal: "prod", dpFloat: 2.0,
-		},
-		{
-			name:       "3-policies-instrument-and-datapoint-mix",
-			policies:   []proto.Message{dropInstPolicy, dropDpPolicy, keepDpPolicy},
-			metricName: "fuzz.metric", attrKey: "env", attrVal: "staging", dpFloat: 3.0,
-		},
-		{
-			name:       "4-policies-all-combined-weird-values",
-			policies:   []proto.Message{dropInstPolicy, keepInstPolicy, dropDpPolicy, keepDpPolicy},
-			metricName: "", attrKey: "", attrVal: "", dpFloat: math.NaN(),
-		},
+		{"1-policy-single-instrument-drop", 0, "gauge.metric", "gauge.metric", "env", "staging", false, false, 1.0},
+		{"2-policies-instrument-keep-overrides-drop", 1, "gauge.metric", "gauge.metric", "env", "prod", true, false, 2.0},
+		{"3-policies-instrument-and-datapoint-mix", 2, "gauge.metric", "fuzz.metric", "env", "staging", false, true, 3.0},
+		{"4-policies-all-combined-weird-values", 3, "", "", "", "", true, true, math.NaN()},
 	}
 	for _, tc := range seedCases {
-		f.Add(encodeSeedPolicies(f, tc.policies), tc.metricName, tc.attrKey, tc.attrVal, tc.dpFloat)
+		f.Add(tc.setIdx, tc.matchMetric, tc.metricName, tc.attrKey, tc.attrVal, tc.keepInst, tc.keepDp, tc.dpFloat)
 	}
 
-	f.Fuzz(func(t *testing.T, policiesData []byte, metricName, attrKey, attrVal string, dpFloat float64) {
-		protos := decodeFuzzPolicies(policiesData, func(_ byte, _ string) proto.Message {
-			return &policyv1alpha1.MetricFilterPolicy{}
-		})
-		if len(protos) == 0 {
-			return
+	f.Fuzz(func(t *testing.T, setIdx uint8, matchMetric, metricName, attrKey, attrVal string, keepInst, keepDp bool, dpFloat float64) {
+		dropInstPolicy := newDropMetricNameProto("01-drop-inst", matchMetric)
+
+		keepInstPolicy := newDropMetricNameProto("02-keep-inst", matchMetric)
+		if keepInst {
+			keepInstPolicy.Action = policyv1alpha1.Action_ACTION_KEEP.Enum()
 		}
+
+		dropDpPolicy := newDropDatapointAttrProto("03-drop-dp", "env", "staging")
+		keepDpPolicy := newDropDatapointAttrProto("04-keep-dp", attrKey, attrVal)
+		if keepDp {
+			keepDpPolicy.Action = policyv1alpha1.Action_ACTION_KEEP.Enum()
+		}
+
+		// 1..N policy combinations (new combinations of any length can be appended here).
+		policySets := [][]proto.Message{
+			{dropInstPolicy},
+			{dropInstPolicy, keepInstPolicy},
+			{dropInstPolicy, dropDpPolicy, keepDpPolicy},
+			{dropInstPolicy, keepInstPolicy, dropDpPolicy, keepDpPolicy},
+		}
+		protos := policySets[int(setIdx)%len(policySets)]
 
 		ps, _ := googlepolicy.MakePolicySetFromProtos("fuzz-set", "fuzz-rev", protos)
 		policies := ps.TransformationPolicies()
@@ -426,58 +323,41 @@ func FuzzTransformMetrics(f *testing.F) {
 // FuzzTransformTraces verifies that evaluating 1 to N trace filter and sampling
 // policies through Evaluator.TransformTraces never panics and preserves container invariants.
 func FuzzTransformTraces(f *testing.F) {
-	dropSpan1 := newDropSpanNameProto("01-drop-span", "drop-span")
-	dropSpan2 := newDropSpanNameProto("02-drop-health", "healthcheck")
-	sample50 := &policyv1alpha1.TraceSamplingPolicy{
-		Id:              "03-sample-50",
-		SamplingPercent: 50.0,
-	}
-	sample10 := &policyv1alpha1.TraceSamplingPolicy{
-		Id:              "04-sample-10",
-		SamplingPercent: 10.0,
-	}
-
 	seedCases := []struct {
-		name                       string
-		policies                   []proto.Message
-		spanName, attrKey, attrVal string
-		attrFloat                  float64
+		name                                     string
+		setIdx                                   uint8
+		matchSpan, spanName, attrKey, attrVal    string
+		samplingPct, attrFloat                   float64
 	}{
-		{
-			name:     "1-policy-single-trace-filter",
-			policies: []proto.Message{dropSpan1},
-			spanName: "drop-span", attrKey: "env", attrVal: "prod", attrFloat: 1.0,
-		},
-		{
-			name:     "2-policies-filter-and-sampling-combined",
-			policies: []proto.Message{dropSpan1, sample50},
-			spanName: "keep-span", attrKey: "env", attrVal: "prod", attrFloat: 2.0,
-		},
-		{
-			name:     "3-policies-multi-filter-and-sampling",
-			policies: []proto.Message{dropSpan1, dropSpan2, sample10},
-			spanName: "keep-span", attrKey: "k", attrVal: "v", attrFloat: 3.0,
-		},
-		{
-			name:     "4-policies-all-combined-weird-values",
-			policies: []proto.Message{dropSpan1, dropSpan2, sample50, sample10},
-			spanName: "", attrKey: "", attrVal: "", attrFloat: math.NaN(),
-		},
+		{"1-policy-single-trace-filter", 0, "drop-span", "drop-span", "env", "prod", 50.0, 1.0},
+		{"2-policies-filter-and-sampling-combined", 1, "drop-span", "keep-span", "env", "prod", 50.0, 2.0},
+		{"3-policies-multi-filter-and-sampling", 2, "drop-span", "keep-span", "k", "v", 10.0, 3.0},
+		{"4-policies-all-combined-weird-values", 3, "", "", "", "", 100.0, math.NaN()},
 	}
 	for _, tc := range seedCases {
-		f.Add(encodeSeedPolicies(f, tc.policies), tc.spanName, tc.attrKey, tc.attrVal, tc.attrFloat)
+		f.Add(tc.setIdx, tc.matchSpan, tc.spanName, tc.attrKey, tc.attrVal, tc.samplingPct, tc.attrFloat)
 	}
 
-	f.Fuzz(func(t *testing.T, policiesData []byte, spanName, attrKey, attrVal string, attrFloat float64) {
-		protos := decodeFuzzPolicies(policiesData, func(kind byte, _ string) proto.Message {
-			if kind%2 == 0 {
-				return &policyv1alpha1.TraceFilterPolicy{}
-			}
-			return &policyv1alpha1.TraceSamplingPolicy{}
-		})
-		if len(protos) == 0 {
-			return
+	f.Fuzz(func(t *testing.T, setIdx uint8, matchSpan, spanName, attrKey, attrVal string, samplingPct, attrFloat float64) {
+		dropSpan1 := newDropSpanNameProto("01-drop-span", matchSpan)
+		dropSpan2 := newDropSpanNameProto("02-drop-health", "healthcheck")
+		sample1 := &policyv1alpha1.TraceSamplingPolicy{
+			Id:              "03-sample-custom",
+			SamplingPercent: samplingPct,
 		}
+		sample2 := &policyv1alpha1.TraceSamplingPolicy{
+			Id:              "04-sample-50",
+			SamplingPercent: 50.0,
+		}
+
+		// 1..N policy combinations (new combinations of any length can be appended here).
+		policySets := [][]proto.Message{
+			{dropSpan1},
+			{dropSpan1, sample1},
+			{dropSpan1, dropSpan2, sample1},
+			{dropSpan1, dropSpan2, sample1, sample2},
+		}
+		protos := policySets[int(setIdx)%len(policySets)]
 
 		ps, _ := googlepolicy.MakePolicySetFromProtos("fuzz-set", "fuzz-rev", protos)
 		policies := ps.TransformationPolicies()

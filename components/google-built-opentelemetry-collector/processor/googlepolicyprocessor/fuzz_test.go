@@ -179,30 +179,30 @@ func buildFuzzTraces(spanName, attrKey, attrVal string, attrFloat float64) ptrac
 // policies through Evaluator.TransformLogs never panics and preserves container invariants.
 func FuzzTransformLogs(f *testing.F) {
 	seedCases := []struct {
-		name                                     string
-		setIdx                                   uint8
-		matchVal, addVal, body, attrKey, attrVal string
-		keep, upsert                             bool
-		attrFloat                                float64
+		name                                         string
+		setIdx                                       uint8
+		body1, body2, addVal, body, attrKey, attrVal string
+		keep, upsert                                 bool
+		attrFloat                                    float64
 	}{
-		{"1-policy-single-filter", 0, "redacted", "redacted", "redacted", "env", "prod", false, true, 1.5},
-		{"2-policies-keep-overrides-drop", 1, "keep-me", "redacted", "keep-me", "env", "prod", true, true, 2.0},
-		{"2-policies-filter-and-transform-pass2", 2, "redacted", "redacted", "hello", "k", "v", false, true, 0.0},
-		{"2-policies-multi-transform-stage-order", 3, "staging", "prod", "hello", "env", "staging", false, true, -1.0},
-		{"4-policies-all-combined-weird-values", 4, "", "", "", "", "", true, false, math.NaN()},
+		{"1-policy-single-filter", 0, "redacted", "redacted", "redacted", "redacted", "env", "prod", false, true, 1.5},
+		{"2-policies-keep-overrides-drop", 1, "redacted", "redacted", "redacted", "redacted", "env", "prod", true, true, 2.0},
+		{"2-policies-filter-and-transform-pass2", 2, "redacted", "keep-me", "redacted", "hello", "k", "v", false, true, 0.0},
+		{"2-policies-multi-transform-stage-order", 3, "staging", "prod", "prod", "hello", "env", "staging", false, true, -1.0},
+		{"4-policies-all-combined-weird-values", 4, "", "", "", "", "", "", true, false, math.NaN()},
 	}
 	for _, tc := range seedCases {
-		f.Add(tc.setIdx, tc.matchVal, tc.addVal, tc.body, tc.attrKey, tc.attrVal, tc.keep, tc.upsert, tc.attrFloat)
+		f.Add(tc.setIdx, tc.body1, tc.body2, tc.addVal, tc.body, tc.attrKey, tc.attrVal, tc.keep, tc.upsert, tc.attrFloat)
 	}
 
-	f.Fuzz(func(t *testing.T, setIdx uint8, matchVal, addVal, body, attrKey, attrVal string, keep, upsert bool, attrFloat float64) {
-		dropBodyPolicy := newDropLogBodyProto("01-drop-body", matchVal)
+	f.Fuzz(func(t *testing.T, setIdx uint8, body1, body2, addVal, body, attrKey, attrVal string, keep, upsert bool, attrFloat float64) {
+		dropBodyPolicy := newDropLogBodyProto("01-drop-body", body1)
 
 		secondFilterAction := policyv1alpha1.Action_ACTION_DROP
 		if keep {
 			secondFilterAction = policyv1alpha1.Action_ACTION_KEEP
 		}
-		keepOrDropPolicy := newDropLogBodyProto("02-keep-or-drop-body", matchVal)
+		keepOrDropPolicy := newDropLogBodyProto("02-keep-or-drop-body", body2)
 		keepOrDropPolicy.Action = secondFilterAction.Enum()
 
 		setBodyPolicy := &policyv1alpha1.LogTransformPolicy{

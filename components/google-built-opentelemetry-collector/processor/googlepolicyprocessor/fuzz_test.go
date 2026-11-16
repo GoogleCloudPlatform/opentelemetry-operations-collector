@@ -27,6 +27,30 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// assertCountNeverIncreasesInvariant verifies that transformation never increases item counts.
+func assertCountNeverIncreasesInvariant(t *testing.T, itemKind string, before, after int) {
+	t.Helper()
+	if after > before {
+		t.Fatalf("invariant violated: %s count increased from %d to %d", itemKind, before, after)
+	}
+}
+
+// assertNoEmptyContainersInvariant verifies that no empty Resource or Scope containers remain.
+func assertNoEmptyContainersInvariant(t *testing.T, resourceLen int, scopeLen func(i int) int, itemLen func(i, j int) int) {
+	t.Helper()
+	for i := 0; i < resourceLen; i++ {
+		sLen := scopeLen(i)
+		if sLen == 0 {
+			t.Fatalf("invariant violated: empty Resource container at index %d", i)
+		}
+		for j := 0; j < sLen; j++ {
+			if itemLen(i, j) == 0 {
+				t.Fatalf("invariant violated: empty Scope container at index [%d][%d]", i, j)
+			}
+		}
+	}
+}
+
 func buildFuzzLogs(body, attrKey, attrVal string, attrFloat float64) plog.Logs {
 	ld := plog.NewLogs()
 
@@ -222,22 +246,12 @@ func FuzzTransformLogs(f *testing.F) {
 
 		eval.TransformLogs(ld)
 
-		// Invariant 1: Dropped records never return
-		if ld.LogRecordCount() > initialCount {
-			t.Fatalf("LogRecordCount increased from %d to %d", initialCount, ld.LogRecordCount())
-		}
-		// Invariant 2: No empty ResourceLogs or ScopeLogs left behind
-		for i := 0; i < ld.ResourceLogs().Len(); i++ {
-			rl := ld.ResourceLogs().At(i)
-			if rl.ScopeLogs().Len() == 0 {
-				t.Fatalf("empty ResourceLogs at index %d", i)
-			}
-			for j := 0; j < rl.ScopeLogs().Len(); j++ {
-				if rl.ScopeLogs().At(j).LogRecords().Len() == 0 {
-					t.Fatalf("empty ScopeLogs at index [%d][%d]", i, j)
-				}
-			}
-		}
+		assertCountNeverIncreasesInvariant(t, "log record", initialCount, ld.LogRecordCount())
+		assertNoEmptyContainersInvariant(t,
+			ld.ResourceLogs().Len(),
+			func(i int) int { return ld.ResourceLogs().At(i).ScopeLogs().Len() },
+			func(i, j int) int { return ld.ResourceLogs().At(i).ScopeLogs().At(j).LogRecords().Len() },
+		)
 	})
 }
 
@@ -245,11 +259,11 @@ func FuzzTransformLogs(f *testing.F) {
 // through Evaluator.TransformMetrics never panics and preserves container invariants.
 func FuzzTransformMetrics(f *testing.F) {
 	seedCases := []struct {
-		name                                   string
-		setIdx                                 uint8
+		name                                      string
+		setIdx                                    uint8
 		matchMetric, metricName, attrKey, attrVal string
-		keepInst, keepDp                       bool
-		dpFloat                                float64
+		keepInst, keepDp                          bool
+		dpFloat                                   float64
 	}{
 		{"1-policy-single-instrument-drop", 0, "gauge.metric", "gauge.metric", "env", "staging", false, false, 1.0},
 		{"2-policies-instrument-keep-overrides-drop", 1, "gauge.metric", "gauge.metric", "env", "prod", true, false, 2.0},
@@ -300,23 +314,13 @@ func FuzzTransformMetrics(f *testing.F) {
 
 		eval.TransformMetrics(md)
 
-		// Invariant 1: Dropped metrics/datapoints never return
-		if md.MetricCount() > initialMetrics || md.DataPointCount() > initialDataPoints {
-			t.Fatalf("metric/datapoint count increased: metrics %d->%d, dps %d->%d",
-				initialMetrics, md.MetricCount(), initialDataPoints, md.DataPointCount())
-		}
-		// Invariant 2: No empty ResourceMetrics or ScopeMetrics left behind
-		for i := 0; i < md.ResourceMetrics().Len(); i++ {
-			rm := md.ResourceMetrics().At(i)
-			if rm.ScopeMetrics().Len() == 0 {
-				t.Fatalf("empty ResourceMetrics at index %d", i)
-			}
-			for j := 0; j < rm.ScopeMetrics().Len(); j++ {
-				if rm.ScopeMetrics().At(j).Metrics().Len() == 0 {
-					t.Fatalf("empty ScopeMetrics at index [%d][%d]", i, j)
-				}
-			}
-		}
+		assertCountNeverIncreasesInvariant(t, "metric", initialMetrics, md.MetricCount())
+		assertCountNeverIncreasesInvariant(t, "datapoint", initialDataPoints, md.DataPointCount())
+		assertNoEmptyContainersInvariant(t,
+			md.ResourceMetrics().Len(),
+			func(i int) int { return md.ResourceMetrics().At(i).ScopeMetrics().Len() },
+			func(i, j int) int { return md.ResourceMetrics().At(i).ScopeMetrics().At(j).Metrics().Len() },
+		)
 	})
 }
 
@@ -324,10 +328,10 @@ func FuzzTransformMetrics(f *testing.F) {
 // policies through Evaluator.TransformTraces never panics and preserves container invariants.
 func FuzzTransformTraces(f *testing.F) {
 	seedCases := []struct {
-		name                                     string
-		setIdx                                   uint8
-		matchSpan, spanName, attrKey, attrVal    string
-		samplingPct, attrFloat                   float64
+		name                                  string
+		setIdx                                uint8
+		matchSpan, spanName, attrKey, attrVal string
+		samplingPct, attrFloat                float64
 	}{
 		{"1-policy-single-trace-filter", 0, "drop-span", "drop-span", "env", "prod", 50.0, 1.0},
 		{"2-policies-filter-and-sampling-combined", 1, "drop-span", "keep-span", "env", "prod", 50.0, 2.0},
@@ -375,21 +379,11 @@ func FuzzTransformTraces(f *testing.F) {
 
 		eval.TransformTraces(td)
 
-		// Invariant 1: Dropped spans never return
-		if td.SpanCount() > initialSpans {
-			t.Fatalf("SpanCount increased from %d to %d", initialSpans, td.SpanCount())
-		}
-		// Invariant 2: No empty ResourceSpans or ScopeSpans left behind
-		for i := 0; i < td.ResourceSpans().Len(); i++ {
-			rs := td.ResourceSpans().At(i)
-			if rs.ScopeSpans().Len() == 0 {
-				t.Fatalf("empty ResourceSpans at index %d", i)
-			}
-			for j := 0; j < rs.ScopeSpans().Len(); j++ {
-				if rs.ScopeSpans().At(j).Spans().Len() == 0 {
-					t.Fatalf("empty ScopeSpans at index [%d][%d]", i, j)
-				}
-			}
-		}
+		assertCountNeverIncreasesInvariant(t, "span", initialSpans, td.SpanCount())
+		assertNoEmptyContainersInvariant(t,
+			td.ResourceSpans().Len(),
+			func(i int) int { return td.ResourceSpans().At(i).ScopeSpans().Len() },
+			func(i, j int) int { return td.ResourceSpans().At(i).ScopeSpans().At(j).Spans().Len() },
+		)
 	})
 }

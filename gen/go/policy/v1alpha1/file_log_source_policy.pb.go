@@ -64,10 +64,10 @@ type FileLogSourcePolicy struct {
 	// File path glob patterns to tail.
 	//
 	// Supported glob syntax:
-	//   - `*` matches zero or more non-separator characters.
-	//   - `**` matches zero or more directories or path segments recursively across
-	//     path separators when used as a complete path segment.
-	//   - `?` matches any single non-separator character.
+	// - `*` matches zero or more non-separator characters.
+	// - `**` matches zero or more directories or path segments recursively across
+	//   path separators when used as a complete path segment.
+	// - `?` matches any single non-separator character.
 	//
 	// At least one pattern is required, and each pattern must be a non-empty,
 	// non-whitespace string without `[...]` character classes, `{a,b}` brace

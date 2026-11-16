@@ -115,7 +115,11 @@ write_files:
       # Note: In addition to per-request item limits (8,192 for logs/traces, 200 for
       # metrics), the API enforces a 5 MiB request size limit. An 8,192-item batch
       # stays under 5 MiB only when the average log or span is under ~640 bytes. If
-      # your payloads are larger, reduce `max_size` or set `sending_queue.batch.sizer: bytes`.
+      # your payloads are larger, reduce `max_size` or set `sending_queue.batch.sizer: bytes`
+      # and update `min_size` and `max_size` with byte limits that make sense for your deployment.
+      #
+      # For `telemetry.googleapis.com:443`, `sending_queue.num_consumers` can be increased up to 100
+      # per exporter if you have the CPU and network bandwidth to increase request concurrency.
       #
       # Docs:
       # https://github.com/open-telemetry/opentelemetry-collector/tree/main/exporter/otlpexporter

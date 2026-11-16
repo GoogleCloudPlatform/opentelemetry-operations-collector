@@ -983,6 +983,9 @@ func startSubprocessCollector(t *testing.T, otelcolBin string, configURIs ...str
 // (otlp/default_self_metrics) and default destination exporter
 // (otlp_grpc/default_gcp_destination) in place to the test's local mock servers
 // with auth disabled and insecure TLS, so tests never dial real GCP endpoints.
+// It also rewires the built-in workload OTLP receiver (otlp/googlecontrolplane)
+// to ephemeral ports (127.0.0.1:0) on both gRPC and HTTP to avoid port 4317/4318
+// bind conflicts across concurrent test collector instances.
 //
 // Self telemetry goes to its own mock server so it never mixes with the
 // telemetry the policy test cases assert on. The self metrics receiver is
@@ -996,6 +999,12 @@ func testPipelineConfig(otlpReceiverAddr, selfReceiverAddr, mockExporterAddr, se
     protocols:
       grpc:
         endpoint: %[1]s
+  otlp/googlecontrolplane:
+    protocols:
+      grpc:
+        endpoint: 127.0.0.1:0
+      http:
+        endpoint: 127.0.0.1:0
   otlp/default_self_metrics:
     protocols:
       grpc:
@@ -1414,6 +1423,12 @@ func TestUnsupportedPolicyEmitsErrorEvent(t *testing.T) {
     protocols:
       grpc:
         endpoint: %[1]s
+  otlp/googlecontrolplane:
+    protocols:
+      grpc:
+        endpoint: 127.0.0.1:0
+      http:
+        endpoint: 127.0.0.1:0
   otlp/default_self_metrics:
     protocols:
       grpc:
@@ -2100,7 +2115,7 @@ service:
 // logs pipeline (logs/googlecontrolplane).
 //
 // Because googlecontrolplaneprovider enables confmap.enableMergeAppendOption, the
-// customer-provided receiver is appended to [nop/googlecontrolplane], so logs sent to
+// customer-provided receiver is appended to [otlp/googlecontrolplane], so logs sent to
 // otlp/custom_in flow through the canonical pipeline: they are processed by
 // resourcedetection/googlecontrolplane, transform/googlecontrolplane, and googlepolicy,
 // before being exported to otlp_grpc/default_gcp_destination.
@@ -2782,6 +2797,12 @@ func TestPolicyHostMetricsSource_FaultIsolation(t *testing.T) {
     protocols:
       grpc:
         endpoint: %[1]s
+  otlp/googlecontrolplane:
+    protocols:
+      grpc:
+        endpoint: 127.0.0.1:0
+      http:
+        endpoint: 127.0.0.1:0
   otlp/default_self_metrics:
     protocols:
       grpc:
@@ -3096,7 +3117,6 @@ service:
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-
 	conn, err := grpc.NewClient(customReceiverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("failed to connect to custom receiver %s: %v", customReceiverAddr, err)
@@ -3539,5 +3559,122 @@ service:
 	}
 	if got := workloadTraceAttrs["routing.target"]; got != "secops" {
 		t.Errorf("expected workload trace routing.target='secops', got %q", got)
+	}
+}
+
+// TestBuiltinOTLPReceiver_CanonicalPipelines verifies that the built-in
+// otlp/googlecontrolplane receiver is wired into logs/googlecontrolplane,
+// metrics/googlecontrolplane, and traces/googlecontrolplane by default and
+// accepts telemetry over both gRPC and HTTP.
+func TestBuiltinOTLPReceiver_CanonicalPipelines(t *testing.T) {
+	otelcolBin := resolveOtelcolBinary(t)
+	tempDir, policiesDir := stagePoliciesDir(t, "drop_by_body_equals")
+
+	ports := allocateEphemeralPorts(t, 2)
+	grpcAddr := fmt.Sprintf("127.0.0.1:%d", ports[0])
+	httpAddr := fmt.Sprintf("127.0.0.1:%d", ports[1])
+
+	rewireBuiltinOTLPCfg := fmt.Sprintf(`receivers:
+  otlp/googlecontrolplane:
+    protocols:
+      grpc:
+        endpoint: %[1]s
+      http:
+        endpoint: %[2]s
+`, grpcAddr, httpAddr)
+	rewireCfgPath := filepath.Join(tempDir, "rewire_builtin_otlp.yaml")
+	if err := os.WriteFile(rewireCfgPath, []byte(rewireBuiltinOTLPCfg), 0644); err != nil {
+		t.Fatalf("failed to write rewire_builtin_otlp.yaml: %v", err)
+	}
+
+	h := startTestHarness(t, otelcolBin, tempDir, policiesDir, rewireCfgPath)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	grpcConn, err := grpc.NewClient(grpcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		h.col.shutdown(t)
+		t.Fatalf("failed to connect to otlp/googlecontrolplane gRPC endpoint %s: %v", grpcAddr, err)
+	}
+	t.Cleanup(func() {
+		_ = grpcConn.Close()
+	})
+
+	// 1. Export logs over gRPC to otlp/googlecontrolplane (filtered by drop_by_body_equals).
+	inputLogs := readInputLogs(t, filepath.Join("testdata", "drop_by_body_equals", "input_logs.yaml"))
+	if _, err := plogotlp.NewGRPCClient(grpcConn).Export(ctx, plogotlp.NewExportRequestFromLogs(inputLogs)); err != nil {
+		h.col.shutdown(t)
+		t.Fatalf("failed to export logs over gRPC to otlp/googlecontrolplane: %v\nstderr:\n%s", err, h.col.logs())
+	}
+
+	// 2. Export logs over HTTP (/v1/logs) to otlp/googlecontrolplane.
+	httpLogs := plog.NewLogs()
+	httpRL := httpLogs.ResourceLogs().AppendEmpty()
+	httpLR := httpRL.ScopeLogs().AppendEmpty().LogRecords().AppendEmpty()
+	httpLR.Body().SetStr("KEEP_HTTP_LOG_LINE")
+	httpPayload, err := plogotlp.NewExportRequestFromLogs(httpLogs).MarshalProto()
+	if err != nil {
+		h.col.shutdown(t)
+		t.Fatalf("failed to marshal HTTP OTLP logs request: %v", err)
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, fmt.Sprintf("http://%s/v1/logs", httpAddr), bytes.NewReader(httpPayload))
+	if err != nil {
+		h.col.shutdown(t)
+		t.Fatalf("failed to create HTTP request: %v", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/x-protobuf")
+	httpResp, err := http.DefaultClient.Do(httpReq)
+	if err != nil {
+		h.col.shutdown(t)
+		t.Fatalf("failed to POST logs to otlp/googlecontrolplane HTTP endpoint: %v\nstderr:\n%s", err, h.col.logs())
+	}
+	_ = httpResp.Body.Close()
+	if httpResp.StatusCode != http.StatusOK {
+		h.col.shutdown(t)
+		t.Fatalf("expected HTTP 200 from otlp/googlecontrolplane /v1/logs, got %d\nstderr:\n%s", httpResp.StatusCode, h.col.logs())
+	}
+
+	// 3. Export metrics over gRPC to otlp/googlecontrolplane.
+	inputMetrics := pmetric.NewMetrics()
+	metric := inputMetrics.ResourceMetrics().AppendEmpty().ScopeMetrics().AppendEmpty().Metrics().AppendEmpty()
+	metric.SetName("workload.custom.metric")
+	metric.SetEmptyGauge().DataPoints().AppendEmpty().SetIntValue(42)
+	if _, err := pmetricotlp.NewGRPCClient(grpcConn).Export(ctx, pmetricotlp.NewExportRequestFromMetrics(inputMetrics)); err != nil {
+		h.col.shutdown(t)
+		t.Fatalf("failed to export metrics over gRPC to otlp/googlecontrolplane: %v\nstderr:\n%s", err, h.col.logs())
+	}
+
+	// 4. Export traces over gRPC to otlp/googlecontrolplane.
+	inputTraces := ptrace.NewTraces()
+	span := inputTraces.ResourceSpans().AppendEmpty().ScopeSpans().AppendEmpty().Spans().AppendEmpty()
+	span.SetName("workload-span")
+	span.SetTraceID(pcommon.TraceID([16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}))
+	span.SetSpanID(pcommon.SpanID([8]byte{1, 2, 3, 4, 5, 6, 7, 8}))
+	if _, err := ptraceotlp.NewGRPCClient(grpcConn).Export(ctx, ptraceotlp.NewExportRequestFromTraces(inputTraces)); err != nil {
+		h.col.shutdown(t)
+		t.Fatalf("failed to export traces over gRPC to otlp/googlecontrolplane: %v\nstderr:\n%s", err, h.col.logs())
+	}
+
+	// Wait for asynchronous queue_batch processors (when running with -otelcol) to flush all 3 signals before shutdown.
+	waitCondition(10*time.Second, 25*time.Millisecond, func() bool {
+		bodies := extractAllLogBodies(h.selfMockSrv.CollectedLogs())
+		metrics := collectMetricNames(h.selfMockSrv.CollectedMetrics())
+		traces := h.selfMockSrv.CollectedTraces()
+		return len(bodies) >= 2 && metrics["workload.custom.metric"] > 0 && len(traces) > 0
+	})
+
+	h.col.shutdown(t)
+
+	gotBodies := extractAllLogBodies(h.selfMockSrv.CollectedLogs())
+	slices.Sort(gotBodies)
+	if diff := cmp.Diff([]string{"KEEP_HTTP_LOG_LINE", "KEEP_THIS_LOG_LINE"}, gotBodies); diff != "" {
+		t.Errorf("canonical logs pipeline bodies mismatch (-want +got):\n%s\nlogs:\n%s", diff, h.col.logs())
+	}
+	if gotMetrics := collectMetricNames(h.selfMockSrv.CollectedMetrics()); gotMetrics["workload.custom.metric"] == 0 {
+		t.Errorf("expected canonical metrics pipeline to export workload.custom.metric from otlp/googlecontrolplane, got metrics: %v\nlogs:\n%s", gotMetrics, h.col.logs())
+	}
+	if gotTraces := h.selfMockSrv.CollectedTraces(); len(gotTraces) == 0 {
+		t.Errorf("expected canonical traces pipeline to export traces from otlp/googlecontrolplane, got 0 batches\nlogs:\n%s", h.col.logs())
 	}
 }

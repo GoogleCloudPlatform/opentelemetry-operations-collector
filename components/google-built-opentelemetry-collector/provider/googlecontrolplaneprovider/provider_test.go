@@ -115,7 +115,7 @@ func TestRetrieve(t *testing.T) {
 	assert.Equal(t, []any{"env", "gcp", "system"}, conf.Get("processors::resourcedetection/default_self_metrics::detectors"))
 	assert.Equal(t, false, conf.Get("processors::resourcedetection/default_self_metrics::override"))
 	assert.Equal(t, 10*time.Second, conf.Get("processors::resourcedetection/default_self_metrics::timeout"))
-	assert.Equal(t, []any{"cloud.*", "faas.*", "host.*", "k8s.*", "location", "os.*", "service.*"}, conf.Get("processors::resourcedetection/default_self_metrics::env::attributes::included"))
+	assert.Nil(t, conf.Get("processors::resourcedetection/default_self_metrics::env"))
 	assert.Equal(t, true, conf.Get("processors::resourcedetection/default_self_metrics::system::resource_attributes::host.id::enabled"))
 	assert.Equal(t, false, conf.Get("processors::resourcedetection/default_self_metrics::system::resource_attributes::os.type::enabled"))
 
@@ -449,9 +449,11 @@ func TestRetrieve_WorkloadResourceFallbacks(t *testing.T) {
 			conf, err := ret.AsConf()
 			require.NoError(t, err)
 
-			for key, got := range workloadTransformStatements(t, conf) {
-				assert.Equal(t, tc.want, got, key)
-			}
+			got := workloadTransformStatements(t, conf)
+			wantNonLog := append(append([]string(nil), tc.want...), googlepolicy.DeleteTelemetryTypeStatement)
+			assert.Equal(t, tc.want, got["log_statements"], "log_statements")
+			assert.Equal(t, wantNonLog, got["metric_statements"], "metric_statements")
+			assert.Equal(t, wantNonLog, got["trace_statements"], "trace_statements")
 
 			assert.NoError(t, p.Shutdown(context.Background()))
 		})
@@ -491,9 +493,11 @@ func TestRetrieve_WorkloadRegionFallbackNonXDS(t *testing.T) {
 			require.NoError(t, err)
 			conf, err := ret.AsConf()
 			require.NoError(t, err)
-			for key, got := range workloadTransformStatements(t, conf) {
-				assert.Equal(t, tc.want, got, key)
-			}
+			got := workloadTransformStatements(t, conf)
+			wantNonLog := append(append([]string(nil), tc.want...), googlepolicy.DeleteTelemetryTypeStatement)
+			assert.Equal(t, tc.want, got["log_statements"], "log_statements")
+			assert.Equal(t, wantNonLog, got["metric_statements"], "metric_statements")
+			assert.Equal(t, wantNonLog, got["trace_statements"], "trace_statements")
 			assert.NoError(t, p.Shutdown(context.Background()))
 		})
 	}

@@ -27,11 +27,9 @@ import (
 // three detectors ([env, gcp, system]) run with override: false (preserving
 // attributes set in service::telemetry::resource, such as service.instance.id
 // and gcp.fleet_id):
-//   - "env" reads standard OpenTelemetry identity and platform attributes from
-//     OTEL_RESOURCE_ATTRIBUTES (for example Kubernetes Downward API pod/node
-//     attributes or a custom host.id), while ignoring arbitrary custom or
-//     workload-routing attributes that should not apply to collector
-//     self-telemetry.
+//   - "env" reads OTEL_RESOURCE_ATTRIBUTES (for example Kubernetes Downward API
+//     pod/node attributes or a custom host.id). Log-only routing attributes such
+//     as gcp.telemetry_type are removed downstream by DeleteTelemetryTypeStatement.
 //   - "gcp" resolves Google Cloud platform metadata when running on Google Cloud.
 //   - "system" (with host.id enabled and os.type disabled) falls back to the OS
 //     machine ID and host.name off Google Cloud without adding extra attributes
@@ -41,19 +39,6 @@ func SelfResourceDetectionProcessorConfig() map[string]any {
 		"detectors": []string{"env", "gcp", "system"},
 		"override":  false,
 		"timeout":   10 * time.Second,
-		"env": map[string]any{
-			"attributes": map[string]any{
-				"included": []string{
-					"cloud.*",
-					"faas.*",
-					"host.*",
-					"k8s.*",
-					"location",
-					"os.*",
-					"service.*",
-				},
-			},
-		},
 		"system": map[string]any{
 			"resource_attributes": map[string]any{
 				"host.id": map[string]any{
@@ -146,3 +131,10 @@ func CloudRegionFallbackStatement(region string) string {
 		strconv.Quote(region),
 	)
 }
+
+// DeleteTelemetryTypeStatement is an OTTL resource-context statement that
+// removes gcp.telemetry_type so log-routing values supplied via
+// OTEL_RESOURCE_ATTRIBUTES (as a temporary mechanism until a resource policy
+// exists) remain only on canonical workload logs and do not affect collector
+// self-observability or canonical workload metrics and traces.
+const DeleteTelemetryTypeStatement = `delete_key(attributes, "gcp.telemetry_type")`

@@ -27,19 +27,6 @@ func TestSelfResourceDetectionProcessorConfig(t *testing.T) {
 		"detectors": []string{"env", "gcp", "system"},
 		"override":  false,
 		"timeout":   10 * time.Second,
-		"env": map[string]any{
-			"attributes": map[string]any{
-				"included": []string{
-					"cloud.*",
-					"faas.*",
-					"host.*",
-					"k8s.*",
-					"location",
-					"os.*",
-					"service.*",
-				},
-			},
-		},
 		"system": map[string]any{
 			"resource_attributes": map[string]any{
 				"host.id": map[string]any{
@@ -101,4 +88,5 @@ func TestCloudRegionFallbackStatement(t *testing.T) {
 		CloudRegionFallbackStatement("us-east1"))
 	// Quotes are escaped so the value stays a single OTTL string literal.
 	assert.Contains(t, CloudRegionFallbackStatement(`a"b`), `"a\"b"`)
+	assert.Equal(t, `delete_key(attributes, "gcp.telemetry_type")`, DeleteTelemetryTypeStatement)
 }

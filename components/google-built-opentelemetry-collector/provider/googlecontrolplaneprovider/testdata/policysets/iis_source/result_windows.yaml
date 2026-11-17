@@ -138,16 +138,6 @@ processors:
             - env
             - gcp
             - system
-        env:
-            attributes:
-                included:
-                    - cloud.*
-                    - faas.*
-                    - host.*
-                    - k8s.*
-                    - location
-                    - os.*
-                    - service.*
         override: false
         system:
             resource_attributes:
@@ -188,10 +178,12 @@ processors:
             - context: resource
               statements:
                 - set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil
+                - delete_key(attributes, "gcp.telemetry_type")
         metric_statements:
             - context: resource
               statements:
                 - set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil
+                - delete_key(attributes, "gcp.telemetry_type")
             - context: datapoint
               statements:
                 - set(attributes["gcp.fleet_id"], resource.attributes["gcp.fleet_id"]) where resource.attributes["gcp.fleet_id"] != nil
@@ -207,10 +199,12 @@ processors:
             - context: resource
               statements:
                 - set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil
+                - delete_key(attributes, "gcp.telemetry_type")
         trace_statements:
             - context: resource
               statements:
                 - set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil
+                - delete_key(attributes, "gcp.telemetry_type")
 receivers:
     iis/googlecontrolplane:
         collection_interval: 60s

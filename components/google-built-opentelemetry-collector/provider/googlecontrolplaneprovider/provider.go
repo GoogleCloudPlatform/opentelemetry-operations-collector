@@ -473,25 +473,30 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 
 	transformType, _ := component.NewType("transform")
 	transformID := component.NewIDWithName(transformType, "googlecontrolplane")
-	resourceStatements := workloadResourceStatements(stringFromContext(ctx, "PROJECT_ID"), stringFromContext(ctx, "REGION"))
+	logResourceStatements := workloadResourceStatements(stringFromContext(ctx, "PROJECT_ID"), stringFromContext(ctx, "REGION"))
+	// Strip gcp.telemetry_type from canonical workload metrics and traces so a
+	// log-routing value supplied via OTEL_RESOURCE_ATTRIBUTES applies only to
+	// logs/googlecontrolplane and does not cause telemetry.googleapis.com to
+	// reject metrics or traces.
+	nonLogResourceStatements := append(append([]string(nil), logResourceStatements...), googlepolicy.DeleteTelemetryTypeStatement)
 	transformCfg := map[string]any{
 		"error_mode": "ignore",
 		"log_statements": []map[string]any{
 			{
 				"context":    "resource",
-				"statements": resourceStatements,
+				"statements": logResourceStatements,
 			},
 		},
 		"metric_statements": []map[string]any{
 			{
 				"context":    "resource",
-				"statements": resourceStatements,
+				"statements": nonLogResourceStatements,
 			},
 		},
 		"trace_statements": []map[string]any{
 			{
 				"context":    "resource",
-				"statements": resourceStatements,
+				"statements": nonLogResourceStatements,
 			},
 		},
 	}

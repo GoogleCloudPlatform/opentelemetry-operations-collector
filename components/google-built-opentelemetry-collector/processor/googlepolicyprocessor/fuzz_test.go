@@ -248,17 +248,17 @@ func FuzzTransformMetrics(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, matchMetric, metricName, attrKey, attrVal string, dpFloat float64) {
-		dropInstPolicy := newDropMetricNameProto("01-drop-inst", matchMetric)
-		keepInstPolicy := newKeepMetricNameProto("02-keep-inst", matchMetric)
-		dropDpPolicy := newDropDatapointAttrProto("03-drop-dp", "env", "staging")
-		keepDpPolicy := newKeepDatapointAttrProto("04-keep-dp", attrKey, attrVal)
+		dropMetricNamePolicy := newDropMetricNameProto("01-drop-metric-name", matchMetric)
+		keepMetricNamePolicy := newKeepMetricNameProto("02-keep-metric-name", matchMetric)
+		dropDatapointAttrPolicy := newDropDatapointAttrProto("03-drop-datapoint-attr", "env", "staging")
+		keepDatapointAttrPolicy := newKeepDatapointAttrProto("04-keep-datapoint-attr", attrKey, attrVal)
 
 		// 1..N policy combinations (new combinations of any length can be appended here).
 		policySets := [][]proto.Message{
-			{dropInstPolicy},
-			{dropInstPolicy, keepInstPolicy},
-			{dropInstPolicy, dropDpPolicy, keepDpPolicy},
-			{dropInstPolicy, keepInstPolicy, dropDpPolicy, keepDpPolicy},
+			{dropMetricNamePolicy},
+			{dropMetricNamePolicy, keepMetricNamePolicy},
+			{dropMetricNamePolicy, dropDatapointAttrPolicy, keepDatapointAttrPolicy},
+			{dropMetricNamePolicy, keepMetricNamePolicy, dropDatapointAttrPolicy, keepDatapointAttrPolicy},
 		}
 
 		for _, protos := range policySets {

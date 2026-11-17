@@ -37,7 +37,7 @@ PolicySet's fileLogSourcePolicy), and checks in Cloud Logging that:
 Linux and Windows collectors subscribe to separate fleets and OS-specific
 PolicySets (telemetry_policy/policyset.json for /var/log/gboc-smoke/*.log on
 Linux, and telemetry_policy/policyset_windows.json for
-%SystemDrive%/gboc-smoke/*.log on Windows). The same PolicySet definitions are
+C:/gboc-smoke/*.log on Windows). The same PolicySet definitions are
 used on GCP and off GCP.
 
 Environment variables (in addition to those in smoke_test.go):

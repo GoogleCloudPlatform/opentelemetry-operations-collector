@@ -1,7 +1,7 @@
 {
   "description": "Telemetry Policy Windows smoke test policy set (owner: xuechun). Used by integration_test/smoke_test TestTelemetryPoliciesSmoke.",
   "receiverPolicies": [
-    { "fileLogSourcePolicy": { "includedPaths": ["%SystemDrive%/gboc-smoke/*.log"] } }
+    { "fileLogSourcePolicy": { "includedPaths": ["C:/gboc-smoke/*.log"] } }
   ],
   "componentPolicies": [
     {

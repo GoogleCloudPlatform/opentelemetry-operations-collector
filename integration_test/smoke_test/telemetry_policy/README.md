@@ -25,7 +25,7 @@ over SSH into the watched directory (`/var/log/gboc-smoke/test.log` on Linux,
 
 Linux and Windows collectors belong to separate fleets and receive OS-specific
 PolicySets (`policyset.json` for `/var/log/gboc-smoke/*.log` on Linux, and
-`policyset_windows.json` for `%SystemDrive%/gboc-smoke/*.log` on Windows). The
+`policyset_windows.json` for `C:/gboc-smoke/*.log` on Windows). The
 same PolicySets are used for both on-GCP and off-GCP execution.
 
 The test assumes the fleets and PolicySets already exist and have been rolled
@@ -44,7 +44,7 @@ projects hold identical Linux (`gboc-smoke-fleet` / `gboc-smoke-ps`) and Windows
 | Resource | Name |
 |---|---|
 | On-GCP Project | `stackdriver-test-143416` (number `228437877067`, Linux rev `68668fd3`, Windows rev `86f9ce08`) |
-| Off-GCP Project | `gboc-tango-testing` (number `406580743452`, Linux rev `1b20a331`, Windows rev `3d90357c`) |
+| Off-GCP Project | `gboc-tango-testing` (number `406580743452`, Linux rev `4bdde359`, Windows rev `3019b368`) |
 | Linux Fleet | `projects/<project>/locations/asia-east1/fleets/gboc-smoke-fleet` |
 | Linux PolicySet | `projects/<project_number>/locations/asia-east1/policySets/gboc-smoke-ps` |
 | Windows Fleet | `projects/<project>/locations/asia-east1/fleets/gboc-smoke-fleet-windows` |
@@ -60,7 +60,7 @@ projects hold identical Linux (`gboc-smoke-fleet` / `gboc-smoke-ps`) and Windows
 > migration state; until cleared, on-GCP runs in `stackdriver-test-143416` can
 > pass `FLEET_ID=projects/406580743452/locations/asia-east1/fleets/gboc-smoke-fleet`
 > and `WINDOWS_FLEET_ID=projects/406580743452/locations/asia-east1/fleets/gboc-smoke-fleet-windows`
-> (with `TELEMETRY_POLICY_EXPECTED_REVISION=1b20a331` and `TELEMETRY_POLICY_EXPECTED_REVISION_WINDOWS=3d90357c`),
+> (with `TELEMETRY_POLICY_EXPECTED_REVISION=4bdde359` and `TELEMETRY_POLICY_EXPECTED_REVISION_WINDOWS=3019b368`),
 > then re-run `./setup_policyset.sh stackdriver-test-143416` once cleared.
 
 Both the X.509 WIF principal (used off-GCP) and each project's default Compute
@@ -184,8 +184,8 @@ env PROJECT=gboc-tango-testing ZONES=asia-east1-a \
   KOKORO_BUILD_ID=local-$(date +%s) TRANSFERS_BUCKET=gboc-tango-testing-smoke \
   _BUILD_ARTIFACTS_PACKAGE_GCS=gs://gboc-tango-testing-smoke/<package-dir> \
   TELEMETRY_POLICY_CONTROL_PLANE_ENDPOINT=staging-telemetrydirector.asia-east1.rep.sandbox.googleapis.com:443 \
-  TELEMETRY_POLICY_EXPECTED_REVISION=1b20a331 \
-  TELEMETRY_POLICY_EXPECTED_REVISION_WINDOWS=3d90357c \
+  TELEMETRY_POLICY_EXPECTED_REVISION=4bdde359 \
+  TELEMETRY_POLICY_EXPECTED_REVISION_WINDOWS=3019b368 \
   OFF_GCP=true PROJECT_NUMBER=406580743452 \
   go test -tags integration_test -run '^TestTelemetryPoliciesSmoke$' -v -timeout 60m ./...
 ```

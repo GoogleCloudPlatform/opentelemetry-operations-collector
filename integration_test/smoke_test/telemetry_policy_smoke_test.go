@@ -753,6 +753,14 @@ func keptTransformedQuery(message string) string {
 	return fmt.Sprintf("textPayload=%q AND labels.%s=%q", message, transformedAttrKey, transformedAttrValue)
 }
 
+// offGCPKeptTransformedQuery matches the kept sample log, verifies that
+// logTransformPolicy added labels.gboc_smoke="true", and asserts
+// resource.type="generic_node" so any fallback to GCE metadata (gce_instance)
+// fails the off-GCP check on both Linux and Windows.
+func offGCPKeptTransformedQuery(message string) string {
+	return fmt.Sprintf(`resource.type="generic_node" AND %s`, keptTransformedQuery(message))
+}
+
 func countLogsMatchingFilter(ctx context.Context, logger *log.Logger, client *logadmin.Client, project, extraFilter string) (int, error) {
 	filter := fmt.Sprintf(`logName:"projects/%s/logs/" AND timestamp > %q AND %s`,
 		project, time.Now().Add(-logWindow).Format(time.RFC3339), extraFilter)
@@ -780,9 +788,10 @@ func verifyLogsOffGCP(ctx context.Context, logger *log.Logger, vm *gce.VM) error
 	defer client.Close()
 
 	kept := offGCPLogLine(keptMessage, vm)
+	keptQuery := offGCPKeptTransformedQuery(kept)
 	found := false
 	for attempt := 1; attempt <= gce.LogQueryMaxAttempts && !found; attempt++ {
-		n, err := countLogsMatchingFilter(ctx, logger, client, vm.Project, keptTransformedQuery(kept))
+		n, err := countLogsMatchingFilter(ctx, logger, client, vm.Project, keptQuery)
 		if err != nil {
 			logger.Printf("Log query failed (attempt %d/%d): %v", attempt, gce.LogQueryMaxAttempts, err)
 		}
@@ -792,7 +801,7 @@ func verifyLogsOffGCP(ctx context.Context, logger *log.Logger, vm *gce.VM) error
 	}
 	if !found {
 		return fmt.Errorf("transformed kept log (%s) not found in Cloud Logging of %s; see %s",
-			keptTransformedQuery(kept), vm.Project, collectorLogsFile(vm.ImageSpec))
+			keptQuery, vm.Project, collectorLogsFile(vm.ImageSpec))
 	}
 	for _, m := range droppedMessages {
 		dropped := offGCPLogLine(m, vm)
@@ -989,6 +998,9 @@ func TestTelemetryPolicyConfigHelpers(t *testing.T) {
 
 	if got, want := keptTransformedQuery("gboc-smoke=keep"), `textPayload="gboc-smoke=keep" AND labels.gboc_smoke="true"`; got != want {
 		t.Errorf("keptTransformedQuery = %q, want %q", got, want)
+	}
+	if got, want := offGCPKeptTransformedQuery("gboc-smoke=keep vm=42"), `resource.type="generic_node" AND textPayload="gboc-smoke=keep vm=42" AND labels.gboc_smoke="true"`; got != want {
+		t.Errorf("offGCPKeptTransformedQuery = %q, want %q", got, want)
 	}
 
 	tagged := string(tagSampleLogs([]byte("gboc-smoke=keep\r\ngboc-smoke=drop\r\n"), &gce.VM{ID: 42}))

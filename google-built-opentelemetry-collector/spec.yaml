@@ -44,6 +44,8 @@ components:
         - iis
         - windowsperfcounters
         - selftelemetry
+        - nginx
+        - udplog
     processors:
         - batch
         - memorylimiter
@@ -67,6 +69,9 @@ components:
         - transform
         - interval
         - metricsgeneration
+        - googlepolicy
+        - queuebatch
+        - geoip
     exporters:
         - debug
         - nop
@@ -82,6 +87,7 @@ components:
         - prometheus
         - prometheusremotewrite
         - syslog
+        - kafka
     connectors:
         - forward
         - count
@@ -111,6 +117,7 @@ components:
         - pprof
         - filestorage
         - googleclientauth
+        - googlecontrolplane
     providers:
         - env
         - file
@@ -119,11 +126,24 @@ components:
         - yaml
         - googlesecretmanager
         - secretsmanager
+        - googlecontrolplane
     telemetry: inprocess
 replaces:
     - from: github.com/go-jose/go-jose/v4
       to: github.com/go-jose/go-jose/v4 v4.1.6
       reason: Force update go-jose/v4 to v4.1.6 to fix CVE-2026-116587
+    - from: github.com/buger/jsonparser
+      to: github.com/buger/jsonparser v1.1.2
+      reason: Force update buger/jsonparser to v1.1.2 to fix vulnerability
+    - from: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy
+      to: ../../pkg/googlepolicy
+      reason: Local dependency for googlecontrolplaneprovider
+    - from: github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/event
+      to: ../../pkg/event
+      reason: Local dependency for googlepolicyprocessor and googlecontrolplaneprovider
+    - from: github.com/GoogleCloudPlatform/opentelemetry-operations-collector
+      to: ../..
+      reason: Local root module so pkg/googlepolicy builds against in-tree gen/go protos
 feature_gates:
     - exporter.googlemanagedprometheus.intToDouble
     - exporter.googlecloud.CustomMonitoredResources

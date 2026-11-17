@@ -8,6 +8,7 @@ import (
 
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/confmap"
+	googlecontrolplaneprovider "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider"
 	googlesecretmanagerprovider "github.com/open-telemetry/opentelemetry-collector-contrib/confmap/provider/googlesecretmanagerprovider"
 	secretsmanagerprovider "github.com/open-telemetry/opentelemetry-collector-contrib/confmap/provider/secretsmanagerprovider"
 	envprovider "go.opentelemetry.io/collector/confmap/provider/envprovider"
@@ -31,6 +32,7 @@ func main() {
 		ConfigProviderSettings: otelcol.ConfigProviderSettings{
 			ResolverSettings: confmap.ResolverSettings{
 				ProviderFactories: []confmap.ProviderFactory{
+					googlecontrolplaneprovider.NewFactory(),
 					googlesecretmanagerprovider.NewFactory(),
 					secretsmanagerprovider.NewFactory(),
 					envprovider.NewFactory(),
@@ -42,6 +44,7 @@ func main() {
 			},
 		},
 		ProviderModules: map[string]string{
+			googlecontrolplaneprovider.NewFactory().Create(confmap.ProviderSettings{}).Scheme(): "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider v0.165.0",
 			googlesecretmanagerprovider.NewFactory().Create(confmap.ProviderSettings{}).Scheme(): "github.com/open-telemetry/opentelemetry-collector-contrib/confmap/provider/googlesecretmanagerprovider v0.165.1",
 			secretsmanagerprovider.NewFactory().Create(confmap.ProviderSettings{}).Scheme(): "github.com/open-telemetry/opentelemetry-collector-contrib/confmap/provider/secretsmanagerprovider v0.165.1",
 			envprovider.NewFactory().Create(confmap.ProviderSettings{}).Scheme(): "go.opentelemetry.io/collector/confmap/provider/envprovider v1.71.0",

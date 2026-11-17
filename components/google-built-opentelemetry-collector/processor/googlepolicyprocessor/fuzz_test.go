@@ -178,9 +178,9 @@ func buildFuzzTraces(spanName, attrKey, attrVal string, attrFloat float64) ptrac
 // policies through Evaluator.TransformLogs never panics and preserves container invariants.
 func FuzzTransformLogs(f *testing.F) {
 	seedCases := []struct {
-		name                                         string
-		body1, body2, addVal, body, attrKey, attrVal string
-		attrFloat                                    float64
+		name                                                string
+		dropBody, keepBody, setBody, body, attrKey, attrVal string
+		attrFloat                                           float64
 	}{
 		{"drop-without-keep", "redacted", "keep-me", "transformed", "redacted", "env", "prod", 1.5},
 		{"keep-overrides-drop", "redacted", "redacted", "redacted", "redacted", "env", "prod", 2.0},
@@ -189,14 +189,14 @@ func FuzzTransformLogs(f *testing.F) {
 		{"all-combined-weird-values", "", "", "", "", "", "", math.NaN()},
 	}
 	for _, tc := range seedCases {
-		f.Add(tc.body1, tc.body2, tc.addVal, tc.body, tc.attrKey, tc.attrVal, tc.attrFloat)
+		f.Add(tc.dropBody, tc.keepBody, tc.setBody, tc.body, tc.attrKey, tc.attrVal, tc.attrFloat)
 	}
 
-	f.Fuzz(func(t *testing.T, body1, body2, addVal, body, attrKey, attrVal string, attrFloat float64) {
-		dropBodyPolicy := newDropLogBodyProto("01-drop-body", body1)
-		keepBodyPolicy := newKeepLogBodyProto("02-keep-body", body2)
-		setBodyPolicy := newSetLogBodyProto("01-set-body", addVal)
-		renameEnvPolicy := newRenameLogAttrProto("02-rename-env", "legacy_env", "env")
+	f.Fuzz(func(t *testing.T, dropBody, keepBody, setBody, body, attrKey, attrVal string, attrFloat float64) {
+		dropBodyPolicy := newDropLogBodyProto("drop-body", dropBody)
+		keepBodyPolicy := newKeepLogBodyProto("keep-body", keepBody)
+		setBodyPolicy := newSetLogBodyProto("set-body", setBody)
+		renameEnvPolicy := newRenameLogAttrProto("rename-env", "legacy_env", "env")
 
 		// 1..N policy combinations (new combinations of any length can be appended here).
 		policySets := [][]proto.Message{
@@ -234,24 +234,24 @@ func FuzzTransformLogs(f *testing.F) {
 // through Evaluator.TransformMetrics never panics and preserves container invariants.
 func FuzzTransformMetrics(f *testing.F) {
 	seedCases := []struct {
-		name                                      string
-		matchMetric, metricName, attrKey, attrVal string
-		dpFloat                                   float64
+		name                                                         string
+		dropMetricName, keepMetricName, metricName, attrKey, attrVal string
+		dpFloat                                                      float64
 	}{
-		{"single-instrument-drop", "gauge.metric", "gauge.metric", "env", "staging", 1.0},
-		{"instrument-keep-overrides-drop", "gauge.metric", "gauge.metric", "env", "prod", 2.0},
-		{"instrument-and-datapoint-mix", "gauge.metric", "fuzz.metric", "env", "staging", 3.0},
-		{"all-combined-weird-values", "", "", "", "", math.NaN()},
+		{"single-instrument-drop", "gauge.metric", "other.metric", "gauge.metric", "env", "staging", 1.0},
+		{"instrument-keep-overrides-drop", "gauge.metric", "gauge.metric", "gauge.metric", "env", "prod", 2.0},
+		{"instrument-and-datapoint-mix", "gauge.metric", "other.metric", "fuzz.metric", "env", "staging", 3.0},
+		{"all-combined-weird-values", "", "", "", "", "", math.NaN()},
 	}
 	for _, tc := range seedCases {
-		f.Add(tc.matchMetric, tc.metricName, tc.attrKey, tc.attrVal, tc.dpFloat)
+		f.Add(tc.dropMetricName, tc.keepMetricName, tc.metricName, tc.attrKey, tc.attrVal, tc.dpFloat)
 	}
 
-	f.Fuzz(func(t *testing.T, matchMetric, metricName, attrKey, attrVal string, dpFloat float64) {
-		dropMetricNamePolicy := newDropMetricNameProto("01-drop-metric-name", matchMetric)
-		keepMetricNamePolicy := newKeepMetricNameProto("02-keep-metric-name", matchMetric)
-		dropDatapointAttrPolicy := newDropDatapointAttrProto("03-drop-datapoint-attr", "env", "staging")
-		keepDatapointAttrPolicy := newKeepDatapointAttrProto("04-keep-datapoint-attr", attrKey, attrVal)
+	f.Fuzz(func(t *testing.T, dropMetricName, keepMetricName, metricName, attrKey, attrVal string, dpFloat float64) {
+		dropMetricNamePolicy := newDropMetricNameProto("drop-metric-name", dropMetricName)
+		keepMetricNamePolicy := newKeepMetricNameProto("keep-metric-name", keepMetricName)
+		dropDatapointAttrPolicy := newDropDatapointAttrProto("drop-datapoint-attr", "env", "staging")
+		keepDatapointAttrPolicy := newKeepDatapointAttrProto("keep-datapoint-attr", attrKey, attrVal)
 
 		// 1..N policy combinations (new combinations of any length can be appended here).
 		policySets := [][]proto.Message{
@@ -304,17 +304,17 @@ func FuzzTransformTraces(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, matchSpan, spanName, attrKey, attrVal string, samplingPct, attrFloat float64) {
-		dropSpan1 := newDropSpanNameProto("01-drop-span", matchSpan)
-		dropSpan2 := newDropSpanNameProto("02-drop-health", "healthcheck")
-		sample1 := newTraceSamplingProto("03-sample-custom", samplingPct)
-		sample2 := newTraceSamplingProto("04-sample-50", 50.0)
+		dropSpanNamePolicy := newDropSpanNameProto("drop-span-name", matchSpan)
+		dropHealthSpanPolicy := newDropSpanNameProto("drop-health-span", "healthcheck")
+		sampleCustomPolicy := newTraceSamplingProto("sample-custom", samplingPct)
+		sampleHalfPolicy := newTraceSamplingProto("sample-half", 50.0)
 
 		// 1..N policy combinations (new combinations of any length can be appended here).
 		policySets := [][]proto.Message{
-			{dropSpan1},
-			{dropSpan1, sample1},
-			{dropSpan1, dropSpan2, sample1},
-			{dropSpan1, dropSpan2, sample1, sample2},
+			{dropSpanNamePolicy},
+			{dropSpanNamePolicy, sampleCustomPolicy},
+			{dropSpanNamePolicy, dropHealthSpanPolicy, sampleCustomPolicy},
+			{dropSpanNamePolicy, dropHealthSpanPolicy, sampleCustomPolicy, sampleHalfPolicy},
 		}
 
 		for _, protos := range policySets {

@@ -911,7 +911,6 @@ func (w *policyResourceWatcher) ResourceChanged(data xdsclient.ResourceData, don
 				zap.String("version", d.version),
 				zap.String("policy_set_revision", d.policySetRevision),
 				zap.Int("policies_loaded", len(d.policySet.Policies)),
-				zap.Int("policies_skipped", d.policiesSkipped),
 			)
 		}
 	}
@@ -920,21 +919,33 @@ func (w *policyResourceWatcher) ResourceChanged(data xdsclient.ResourceData, don
 
 func (w *policyResourceWatcher) ResourceError(err error, done func()) {
 	defer done()
-	if err != nil && strings.Contains(err.Error(), "has been removed") {
-		if active := ActivePolicySet(); active != nil {
-			if len(active.Policies) > 0 {
-				w.m.logger.Warn("xDS revision contains no policies, clearing the active policy set")
-			}
-			SetActivePolicySet(&PolicySet{
-				Policies:   map[string]*PolicySetEntry{},
-				ReceivedAt: time.Now(),
-			})
+	if err == nil {
+		return
+	}
+	// Keep Start() blocked across transient non-auth connection errors so the
+	// collector waits up to initialSyncTimeout for reconnect attempts to
+	// deliver the initial policy set. All other ResourceError notifications
+	// (initial NACKs while no resource is cached, SotW resource removals,
+	// watch expiry timeouts, and auth rejections) clear any stale active
+	// policy set and unblock Start() immediately.
+	if isConnectionError(err) && !isAuthRejectionError(err) {
+		return
+	}
+	if active := ActivePolicySet(); active != nil {
+		if len(active.Policies) > 0 {
+			w.m.logger.Warn("xDS revision contains no policies, clearing the active policy set")
 		}
-		w.m.setLastAppliedState("", nil)
+		SetActivePolicySet(&PolicySet{
+			Policies:   map[string]*PolicySetEntry{},
+			ReceivedAt: time.Now(),
+		})
 	}
-	if err != nil && (strings.Contains(err.Error(), "has been removed") || isAuthRejectionError(err)) {
-		w.m.markReady()
-	}
+	w.m.setLastAppliedState("", nil)
+	w.m.markReady()
+}
+
+func isConnectionError(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "xds: error received from xDS stream:")
 }
 
 func isAuthRejectionError(err error) bool {
@@ -958,7 +969,6 @@ type policyResourceData struct {
 	policySet         *PolicySet
 	version           string
 	policySetRevision string
-	policiesSkipped   int
 	rawBytes          []byte
 	skip              bool
 }
@@ -1100,7 +1110,6 @@ func (d *telemetryCollectorDecoder) Decode(resource *xdsclient.AnyProto, options
 			policySet:         policySet,
 			version:           version,
 			policySetRevision: manifest.policySetRevision,
-			policiesSkipped:   manifest.skipped + len(policySet.FailedPolicies),
 			rawBytes:          rawBytes,
 		},
 	}, nil
@@ -1256,7 +1265,6 @@ type xdsManifest struct {
 	policies           []proto.Message
 	policySetRevision  string
 	revisionCreateTime time.Time
-	skipped            int
 	decodedCollectors  int
 }
 
@@ -1272,7 +1280,6 @@ func extractManifest(resp *discoveryv3.DiscoveryResponse) (xdsManifest, error) {
 		if anyRes.MessageIs(&xdsv1alpha1.TelemetryCollector{}) {
 			collector := &xdsv1alpha1.TelemetryCollector{}
 			if err := anyRes.UnmarshalTo(collector); err != nil {
-				manifest.skipped++
 				errs = append(errs, fmt.Errorf("%w at index %d: %w", ErrXDSResourceDecode, i, err))
 				continue
 			}
@@ -1285,8 +1292,7 @@ func extractManifest(resp *discoveryv3.DiscoveryResponse) (xdsManifest, error) {
 				manifest.revisionCreateTime = ct.AsTime()
 			}
 
-			collectorPolicies, skipped, err := policiesFromCollector(collector)
-			manifest.skipped += skipped
+			collectorPolicies, err := policiesFromCollector(collector)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("resource at index %d: %w", i, err))
 			}
@@ -1296,7 +1302,6 @@ func extractManifest(resp *discoveryv3.DiscoveryResponse) (xdsManifest, error) {
 
 		msg, err := protoFromAny(anyRes)
 		if err != nil {
-			manifest.skipped++
 			errs = append(errs, fmt.Errorf("resource at index %d: %w", i, err))
 			continue
 		}
@@ -1306,23 +1311,20 @@ func extractManifest(resp *discoveryv3.DiscoveryResponse) (xdsManifest, error) {
 	return manifest, errors.Join(errs...)
 }
 
-func policiesFromCollector(collector *xdsv1alpha1.TelemetryCollector) ([]proto.Message, int, error) {
+func policiesFromCollector(collector *xdsv1alpha1.TelemetryCollector) ([]proto.Message, error) {
 	var (
 		policies []proto.Message
-		skipped  int
 		errs     []error
 	)
 
 	for i, policyAny := range collector.GetPolicies() {
 		if policyAny == nil || policyAny.GetTypeUrl() == "" {
-			skipped++
 			errs = append(errs, fmt.Errorf("%w: policy at index %d", ErrXDSPolicyMissingBody, i))
 			continue
 		}
 
 		msg, err := protoFromAny(policyAny)
 		if err != nil {
-			skipped++
 			errs = append(errs, fmt.Errorf("policy at index %d (%q): %w", i, policyAny.GetTypeUrl(), err))
 			continue
 		}
@@ -1330,7 +1332,7 @@ func policiesFromCollector(collector *xdsv1alpha1.TelemetryCollector) ([]proto.M
 		policies = append(policies, msg)
 	}
 
-	return policies, skipped, errors.Join(errs...)
+	return policies, errors.Join(errs...)
 }
 
 func protoFromAny(msgAny *anypb.Any) (proto.Message, error) {

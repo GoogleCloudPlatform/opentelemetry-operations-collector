@@ -963,7 +963,11 @@ func (m *xdsPolicyManager) handleResponse(resp *discoveryv3.DiscoveryResponse) {
 			Version: resp.GetVersionInfo(),
 		})
 		if err != nil {
-			watcher.ResourceError(err, func() {})
+			if m.LastAppliedVersion() == "" {
+				watcher.ResourceError(err, func() {})
+			} else {
+				watcher.AmbientError(err, func() {})
+			}
 			return
 		}
 		if res != nil && res.Resource != nil {

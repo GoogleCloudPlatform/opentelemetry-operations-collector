@@ -397,8 +397,11 @@ func TestXDSPolicyManager_NACKsUndecodableResource(t *testing.T) {
 	}
 
 	m := newTestManager(t, startFakeADSServer(t, srv))
+	m.initialSyncTimeout = 5 * time.Second
+	start := time.Now()
 	require.NoError(t, m.Start())
 	t.Cleanup(func() { require.NoError(t, m.Stop()) })
+	assert.Less(t, time.Since(start), time.Second, "Start must unblock immediately when the initial revision is NACKed")
 
 	var nack *discoveryv3.DiscoveryRequest
 	select {
@@ -415,6 +418,57 @@ func TestXDSPolicyManager_NACKsUndecodableResource(t *testing.T) {
 
 	// A rejected response must not become the active policy set.
 	assert.Nil(t, ActivePolicySet())
+}
+
+func TestXDSPolicyManager_InitialNACKClearsStaleActivePolicySet(t *testing.T) {
+	registerDummyDriverForTest(t)
+	resetActivePolicySet(t)
+
+	// Simulate a stale ActivePolicySet left over from a previous in-process manager.
+	SetActivePolicySet(&PolicySet{
+		RevisionID: "stale-rev",
+		Policies: map[string]*PolicySetEntry{
+			"stale-policy": {},
+		},
+		ReceivedAt: time.Now(),
+	})
+
+	srv := &fakeADSServer{streamOpened: make(chan struct{}, 8)}
+	srv.handlers = []func(discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error{
+		func(stream discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error {
+			if _, err := srv.recv(stream); err != nil {
+				return err
+			}
+			// Send an invalid initial TelemetryCollector (missing policy_set_revision with a policy).
+			badCollector, err := anypb.New(&xdsv1alpha1.TelemetryCollector{
+				Policies: []*anypb.Any{policyPayloadAny(t, "bad-policy")},
+			})
+			if err != nil {
+				return err
+			}
+			if err := stream.Send(&discoveryv3.DiscoveryResponse{
+				VersionInfo: "rev-bad",
+				Nonce:       "nonce-bad",
+				TypeUrl:     xdsPolicyTypeURL,
+				Resources:   []*anypb.Any{badCollector},
+			}); err != nil {
+				return err
+			}
+			<-stream.Context().Done()
+			return stream.Context().Err()
+		},
+	}
+
+	m := newTestManager(t, startFakeADSServer(t, srv))
+	m.initialSyncTimeout = 5 * time.Second
+	start := time.Now()
+	require.NoError(t, m.Start())
+	t.Cleanup(func() { require.NoError(t, m.Stop()) })
+	assert.Less(t, time.Since(start), time.Second, "Start must unblock immediately on an invalid initial revision")
+
+	active := ActivePolicySet()
+	require.NotNil(t, active)
+	assert.Empty(t, active.Policies, "initial NACK with no cached revision must clear any stale ActivePolicySet")
 }
 
 // A TelemetryCollector manifest is validated atomically: if any policy fails to
@@ -1375,5 +1429,5 @@ func TestXDSPolicyManager_DebugProtoJSONAndAppliedPolicyLogging(t *testing.T) {
 	assert.Equal(t, "rev-1", appliedLogs[0].ContextMap()["version"])
 	assert.Equal(t, "projects/my-project/locations/global/policySets/fleet-1/revisions/rev-1", appliedLogs[0].ContextMap()["policy_set_revision"])
 	assert.EqualValues(t, 1, appliedLogs[0].ContextMap()["policies_loaded"])
-	assert.EqualValues(t, 0, appliedLogs[0].ContextMap()["policies_skipped"])
+	assert.NotContains(t, appliedLogs[0].ContextMap(), "policies_skipped")
 }

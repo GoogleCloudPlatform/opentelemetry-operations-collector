@@ -25,8 +25,8 @@ METADATA_IP="169.254.169.254"
 COLLECTOR_USER="otelcol-google"
 
 if command -v iptables >/dev/null 2>&1; then
-  iptables -C OUTPUT -p tcp -d "$METADATA_IP" ! --dport 53 -m owner --uid-owner "$COLLECTOR_USER" -j REJECT --reject-with tcp-reset 2>/dev/null ||
-    iptables -I OUTPUT -p tcp -d "$METADATA_IP" ! --dport 53 -m owner --uid-owner "$COLLECTOR_USER" -j REJECT --reject-with tcp-reset
+  iptables -w -C OUTPUT -p tcp -d "$METADATA_IP" ! --dport 53 -m owner --uid-owner "$COLLECTOR_USER" -j REJECT --reject-with tcp-reset 2>/dev/null ||
+    iptables -w -I OUTPUT -p tcp -d "$METADATA_IP" ! --dport 53 -m owner --uid-owner "$COLLECTOR_USER" -j REJECT --reject-with tcp-reset
 elif command -v nft >/dev/null 2>&1; then
   nft list table inet offgcp_block_metadata >/dev/null 2>&1 && nft delete table inet offgcp_block_metadata || true
   nft add table inet offgcp_block_metadata

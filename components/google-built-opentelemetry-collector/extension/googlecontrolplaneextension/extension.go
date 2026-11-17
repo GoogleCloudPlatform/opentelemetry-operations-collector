@@ -26,6 +26,7 @@ import (
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/googlecontrolplaneextension/internal/metadata"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/googlecontrolplaneextension/internal/telemetry"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 )
 
 // MetricPolicySetActive is the name of the gcp.policy.set.active metric.
@@ -83,6 +84,8 @@ func (e *controlPlaneExtension) Start(_ context.Context, _ component.Host) error
 	if err != nil {
 		return fmt.Errorf("failed to register control plane metric callback: %w", err)
 	}
+
+	googlepolicy.SetXDSMeterProvider(mp)
 
 	return nil
 }
@@ -144,6 +147,7 @@ func parseRevisionValue(rev string) (int64, bool) {
 }
 
 func (e *controlPlaneExtension) Shutdown(context.Context) error {
+	googlepolicy.SetXDSMeterProvider(nil)
 	if e.registration == nil {
 		return nil
 	}

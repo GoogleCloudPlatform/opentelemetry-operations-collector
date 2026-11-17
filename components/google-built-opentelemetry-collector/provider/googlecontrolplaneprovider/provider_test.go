@@ -112,6 +112,42 @@ func TestRetrieve(t *testing.T) {
 	assert.True(t, conf.IsSet("service::pipelines::metrics/googlecontrolplane"))
 	assert.True(t, conf.IsSet("service::pipelines::traces/googlecontrolplane"))
 
+	assert.Equal(t, []any{"env", "gcp", "system"}, conf.Get("processors::resourcedetection/default_self_metrics::detectors"))
+	assert.Equal(t, false, conf.Get("processors::resourcedetection/default_self_metrics::override"))
+	assert.Equal(t, 10*time.Second, conf.Get("processors::resourcedetection/default_self_metrics::timeout"))
+	assert.Nil(t, conf.Get("processors::resourcedetection/default_self_metrics::env"))
+	assert.Equal(t, true, conf.Get("processors::resourcedetection/default_self_metrics::system::resource_attributes::host.id::enabled"))
+	assert.Equal(t, false, conf.Get("processors::resourcedetection/default_self_metrics::system::resource_attributes::os.type::enabled"))
+
+	assert.Equal(t, []any{"env", "gcp", "system"}, conf.Get("processors::resourcedetection/googlecontrolplane::detectors"))
+	assert.Equal(t, false, conf.Get("processors::resourcedetection/googlecontrolplane::override"))
+	assert.Equal(t, 10*time.Second, conf.Get("processors::resourcedetection/googlecontrolplane::timeout"))
+	assert.Equal(t, []any{
+		"service.*",
+		"k8s.pod.*",
+		"k8s.container.*",
+		"k8s.namespace.*",
+		"k8s.daemonset.*",
+		"k8s.deployment.*",
+		"k8s.replicaset.*",
+		"k8s.statefulset.*",
+		"k8s.job.*",
+		"k8s.cronjob.*",
+	}, conf.Get("processors::resourcedetection/googlecontrolplane::env::attributes::excluded"))
+	assert.Equal(t, true, conf.Get("processors::resourcedetection/googlecontrolplane::system::resource_attributes::host.id::enabled"))
+	assert.Equal(t, false, conf.Get("processors::resourcedetection/googlecontrolplane::system::resource_attributes::os.type::enabled"))
+	assert.False(t, conf.IsSet("processors::resourcedetection/googlecontrolplane_system"))
+
+	for _, pipe := range []string{"logs/googlecontrolplane", "metrics/googlecontrolplane", "traces/googlecontrolplane"} {
+		procs := conf.Get("service::pipelines::" + pipe + "::processors").([]any)
+		require.GreaterOrEqual(t, len(procs), 3, pipe)
+		assert.Equal(t, []any{
+			"resourcedetection/googlecontrolplane",
+			"transform/googlecontrolplane",
+			"googlepolicy",
+		}, procs[:3], pipe)
+	}
+
 	assert.NoError(t, p.Shutdown(context.Background()))
 	assert.False(t, googlepolicy.IsControlPlaneActive())
 }
@@ -413,9 +449,11 @@ func TestRetrieve_WorkloadResourceFallbacks(t *testing.T) {
 			conf, err := ret.AsConf()
 			require.NoError(t, err)
 
-			for key, got := range workloadTransformStatements(t, conf) {
-				assert.Equal(t, tc.want, got, key)
-			}
+			got := workloadTransformStatements(t, conf)
+			wantNonLog := append(append([]string(nil), tc.want...), googlepolicy.DeleteTelemetryTypeStatement)
+			assert.Equal(t, tc.want, got["log_statements"], "log_statements")
+			assert.Equal(t, wantNonLog, got["metric_statements"], "metric_statements")
+			assert.Equal(t, wantNonLog, got["trace_statements"], "trace_statements")
 
 			assert.NoError(t, p.Shutdown(context.Background()))
 		})
@@ -455,9 +493,11 @@ func TestRetrieve_WorkloadRegionFallbackNonXDS(t *testing.T) {
 			require.NoError(t, err)
 			conf, err := ret.AsConf()
 			require.NoError(t, err)
-			for key, got := range workloadTransformStatements(t, conf) {
-				assert.Equal(t, tc.want, got, key)
-			}
+			got := workloadTransformStatements(t, conf)
+			wantNonLog := append(append([]string(nil), tc.want...), googlepolicy.DeleteTelemetryTypeStatement)
+			assert.Equal(t, tc.want, got["log_statements"], "log_statements")
+			assert.Equal(t, wantNonLog, got["metric_statements"], "metric_statements")
+			assert.Equal(t, wantNonLog, got["trace_statements"], "trace_statements")
 			assert.NoError(t, p.Shutdown(context.Background()))
 		})
 	}

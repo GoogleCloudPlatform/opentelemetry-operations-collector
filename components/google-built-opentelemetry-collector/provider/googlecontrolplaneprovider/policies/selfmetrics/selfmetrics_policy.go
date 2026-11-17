@@ -291,11 +291,7 @@ func (p *SelfMetricsPolicy) Evaluate(ctx context.Context) (*confmap.Conf, error)
 
 	rdType, _ := component.NewType("resourcedetection")
 	rdID := component.NewIDWithName(rdType, p.Name)
-	rdCfg := map[string]any{
-		"detectors": []string{"gcp"},
-		"override":  false,
-		"timeout":   10 * time.Second,
-	}
+	rdCfg := googlepolicy.SelfResourceDetectionProcessorConfig()
 
 	transformType, _ := component.NewType("transform")
 	transformID := component.NewIDWithName(transformType, p.Name)
@@ -312,6 +308,12 @@ func (p *SelfMetricsPolicy) Evaluate(ctx context.Context) (*confmap.Conf, error)
 	if region, _ := ctx.Value(contextKeyRegion).(string); region != "" {
 		resourceStatements = append(resourceStatements, googlepolicy.CloudRegionFallbackStatement(region))
 	}
+	// OpenTelemetry Go SDK providers merge OTEL_RESOURCE_ATTRIBUTES onto the
+	// collector's internal telemetry resource via resource.Environment(). Strip
+	// gcp.telemetry_type so log-routing values set via OTEL_RESOURCE_ATTRIBUTES
+	// do not divert collector self-logs or cause telemetry.googleapis.com to
+	// reject collector self-metrics.
+	resourceStatements = append(resourceStatements, googlepolicy.DeleteTelemetryTypeStatement)
 	transformCfg := map[string]any{
 		"error_mode": "ignore",
 		"log_statements": []map[string]any{

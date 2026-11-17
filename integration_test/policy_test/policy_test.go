@@ -25,6 +25,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"sort"
 	"strconv"
@@ -509,6 +510,211 @@ type stubLogsProcessor struct {
 	consumer.Logs
 }
 
+type envDetectorAttributesConfig struct {
+	Included []string `mapstructure:"included"`
+	Excluded []string `mapstructure:"excluded"`
+}
+
+type envDetectorConfig struct {
+	Attributes envDetectorAttributesConfig `mapstructure:"attributes"`
+}
+
+type resourceDetectionConfig struct {
+	Detectors []string          `mapstructure:"detectors"`
+	Override  bool              `mapstructure:"override"`
+	Timeout   time.Duration     `mapstructure:"timeout"`
+	Env       envDetectorConfig `mapstructure:"env"`
+	System    any               `mapstructure:"system"`
+}
+
+func matchEnvWildcardPatterns(patterns []string, key string) bool {
+	for _, p := range patterns {
+		quoted := regexp.QuoteMeta(p)
+		expr := "(?s)^" + strings.ReplaceAll(strings.ReplaceAll(quoted, `\*`, `.*`), `\?`, `.`) + "$"
+		if matched, err := regexp.MatchString(expr, key); err == nil && matched {
+			return true
+		}
+	}
+	return false
+}
+
+func applyEnvResourceAttributes(attrs pcommon.Map, cfg *resourceDetectionConfig) {
+	envStr := os.Getenv("OTEL_RESOURCE_ATTRIBUTES")
+	if envStr == "" {
+		return
+	}
+	for _, pair := range strings.Split(envStr, ",") {
+		kv := strings.SplitN(strings.TrimSpace(pair), "=", 2)
+		if len(kv) == 2 {
+			k := strings.TrimSpace(kv[0])
+			v := strings.TrimSpace(kv[1])
+			if k != "" {
+				if len(cfg.Env.Attributes.Included) > 0 && !matchEnvWildcardPatterns(cfg.Env.Attributes.Included, k) {
+					continue
+				}
+				if len(cfg.Env.Attributes.Excluded) > 0 && matchEnvWildcardPatterns(cfg.Env.Attributes.Excluded, k) {
+					continue
+				}
+				if _, exists := attrs.Get(k); !exists || cfg.Override {
+					attrs.PutStr(k, v)
+				}
+			}
+		}
+	}
+}
+
+type resourceDetectionTracesProcessor struct {
+	component.StartFunc
+	component.ShutdownFunc
+	cfg *resourceDetectionConfig
+	consumer.Traces
+}
+
+func (p *resourceDetectionTracesProcessor) ConsumeTraces(ctx context.Context, td ptrace.Traces) error {
+	if slices.Contains(p.cfg.Detectors, "env") {
+		for i := 0; i < td.ResourceSpans().Len(); i++ {
+			rs := td.ResourceSpans().At(i)
+			applyEnvResourceAttributes(rs.Resource().Attributes(), p.cfg)
+		}
+	}
+	return p.Traces.ConsumeTraces(ctx, td)
+}
+
+type resourceDetectionMetricsProcessor struct {
+	component.StartFunc
+	component.ShutdownFunc
+	cfg *resourceDetectionConfig
+	consumer.Metrics
+}
+
+func (p *resourceDetectionMetricsProcessor) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) error {
+	if slices.Contains(p.cfg.Detectors, "env") {
+		for i := 0; i < md.ResourceMetrics().Len(); i++ {
+			rm := md.ResourceMetrics().At(i)
+			applyEnvResourceAttributes(rm.Resource().Attributes(), p.cfg)
+		}
+	}
+	return p.Metrics.ConsumeMetrics(ctx, md)
+}
+
+type resourceDetectionLogsProcessor struct {
+	component.StartFunc
+	component.ShutdownFunc
+	cfg *resourceDetectionConfig
+	consumer.Logs
+}
+
+func (p *resourceDetectionLogsProcessor) ConsumeLogs(ctx context.Context, ld plog.Logs) error {
+	if slices.Contains(p.cfg.Detectors, "env") {
+		for i := 0; i < ld.ResourceLogs().Len(); i++ {
+			rl := ld.ResourceLogs().At(i)
+			applyEnvResourceAttributes(rl.Resource().Attributes(), p.cfg)
+		}
+	}
+	return p.Logs.ConsumeLogs(ctx, ld)
+}
+
+func newResourceDetectionProcessorFactory() processor.Factory {
+	return processor.NewFactory(
+		component.MustNewType("resourcedetection"),
+		func() component.Config { return &resourceDetectionConfig{} },
+		processor.WithTraces(func(_ context.Context, _ processor.Settings, cfg component.Config, next consumer.Traces) (processor.Traces, error) {
+			return &resourceDetectionTracesProcessor{cfg: cfg.(*resourceDetectionConfig), Traces: next}, nil
+		}, component.StabilityLevelAlpha),
+		processor.WithMetrics(func(_ context.Context, _ processor.Settings, cfg component.Config, next consumer.Metrics) (processor.Metrics, error) {
+			return &resourceDetectionMetricsProcessor{cfg: cfg.(*resourceDetectionConfig), Metrics: next}, nil
+		}, component.StabilityLevelAlpha),
+		processor.WithLogs(func(_ context.Context, _ processor.Settings, cfg component.Config, next consumer.Logs) (processor.Logs, error) {
+			return &resourceDetectionLogsProcessor{cfg: cfg.(*resourceDetectionConfig), Logs: next}, nil
+		}, component.StabilityLevelAlpha),
+	)
+}
+
+type transformContextStatements struct {
+	Context    string   `mapstructure:"context"`
+	Statements []string `mapstructure:"statements"`
+}
+
+type transformProcessorConfig struct {
+	ErrorMode        string                       `mapstructure:"error_mode"`
+	LogStatements    []transformContextStatements `mapstructure:"log_statements"`
+	MetricStatements []transformContextStatements `mapstructure:"metric_statements"`
+	TraceStatements  []transformContextStatements `mapstructure:"trace_statements"`
+}
+
+var deleteKeyAttrRegex = regexp.MustCompile(`^delete_key\(attributes,\s*"([^"]+)"\)$`)
+
+func applyResourceTransformStatements(attrs pcommon.Map, groups []transformContextStatements) {
+	for _, g := range groups {
+		if g.Context != "resource" {
+			continue
+		}
+		for _, stmt := range g.Statements {
+			if m := deleteKeyAttrRegex.FindStringSubmatch(strings.TrimSpace(stmt)); len(m) == 2 {
+				attrs.Remove(m[1])
+			}
+		}
+	}
+}
+
+type transformTracesProcessor struct {
+	component.StartFunc
+	component.ShutdownFunc
+	stmts []transformContextStatements
+	consumer.Traces
+}
+
+func (p *transformTracesProcessor) ConsumeTraces(ctx context.Context, td ptrace.Traces) error {
+	for i := 0; i < td.ResourceSpans().Len(); i++ {
+		applyResourceTransformStatements(td.ResourceSpans().At(i).Resource().Attributes(), p.stmts)
+	}
+	return p.Traces.ConsumeTraces(ctx, td)
+}
+
+type transformMetricsProcessor struct {
+	component.StartFunc
+	component.ShutdownFunc
+	stmts []transformContextStatements
+	consumer.Metrics
+}
+
+func (p *transformMetricsProcessor) ConsumeMetrics(ctx context.Context, md pmetric.Metrics) error {
+	for i := 0; i < md.ResourceMetrics().Len(); i++ {
+		applyResourceTransformStatements(md.ResourceMetrics().At(i).Resource().Attributes(), p.stmts)
+	}
+	return p.Metrics.ConsumeMetrics(ctx, md)
+}
+
+type transformLogsProcessor struct {
+	component.StartFunc
+	component.ShutdownFunc
+	stmts []transformContextStatements
+	consumer.Logs
+}
+
+func (p *transformLogsProcessor) ConsumeLogs(ctx context.Context, ld plog.Logs) error {
+	for i := 0; i < ld.ResourceLogs().Len(); i++ {
+		applyResourceTransformStatements(ld.ResourceLogs().At(i).Resource().Attributes(), p.stmts)
+	}
+	return p.Logs.ConsumeLogs(ctx, ld)
+}
+
+func newTransformProcessorFactory() processor.Factory {
+	return processor.NewFactory(
+		component.MustNewType("transform"),
+		func() component.Config { return &transformProcessorConfig{} },
+		processor.WithTraces(func(_ context.Context, _ processor.Settings, cfg component.Config, next consumer.Traces) (processor.Traces, error) {
+			return &transformTracesProcessor{stmts: cfg.(*transformProcessorConfig).TraceStatements, Traces: next}, nil
+		}, component.StabilityLevelAlpha),
+		processor.WithMetrics(func(_ context.Context, _ processor.Settings, cfg component.Config, next consumer.Metrics) (processor.Metrics, error) {
+			return &transformMetricsProcessor{stmts: cfg.(*transformProcessorConfig).MetricStatements, Metrics: next}, nil
+		}, component.StabilityLevelAlpha),
+		processor.WithLogs(func(_ context.Context, _ processor.Settings, cfg component.Config, next consumer.Logs) (processor.Logs, error) {
+			return &transformLogsProcessor{stmts: cfg.(*transformProcessorConfig).LogStatements, Logs: next}, nil
+		}, component.StabilityLevelAlpha),
+	)
+}
+
 func newStubProcessorFactory(typeStr string) processor.Factory {
 	return processor.NewFactory(
 		component.MustNewType(typeStr),
@@ -562,8 +768,8 @@ func testCollectorFactories() (otelcol.Factories, error) {
 
 	factories.Processors, err = otelcol.MakeFactoryMap[processor.Factory](
 		googlepolicyprocessor.NewFactory(),
-		newStubProcessorFactory("resourcedetection"),
-		newStubProcessorFactory("transform"),
+		newResourceDetectionProcessorFactory(),
+		newTransformProcessorFactory(),
 		newStubProcessorFactory("queue_batch"),
 	)
 	if err != nil {
@@ -2497,5 +2703,487 @@ func TestFileLogSourcePolicy_Integration(t *testing.T) {
 	// Verify log.file.path attribute was added because include_file_path is enabled by default.
 	if filepath.Clean(foundFilePath) != filepath.Clean(logFilePath) {
 		t.Errorf("expected log.file.path attribute %q, got %q", logFilePath, foundFilePath)
+	}
+}
+
+// TestPolicy_SecOpsPayloadCategorization_EnvResourceDetection verifies that setting
+// OTEL_RESOURCE_ATTRIBUTES dynamically attaches resource attributes to payloads
+// flowing through the canonical pipeline (logs/googlecontrolplane), enabling downstream
+// backends (such as SecOps) to categorize and route payloads based on resource metadata.
+func TestPolicy_SecOpsPayloadCategorization_EnvResourceDetection(t *testing.T) {
+	// Set the environment variable used by SecOps to categorize and route payloads
+	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", "routing.target=secops,secops.category=audit_events,deployment.environment=production")
+
+	otelcolBin := resolveOtelcolBinary(t)
+	tempDir, policiesDir := stagePoliciesDir(t, "drop_by_body_equals")
+
+	ports := allocateEphemeralPorts(t, 1)
+	customReceiverAddr := fmt.Sprintf("127.0.0.1:%d", ports[0])
+
+	appendReceiverCfg := fmt.Sprintf(`receivers:
+  otlp/secops_in:
+    protocols:
+      grpc:
+        endpoint: %s
+service:
+  pipelines:
+    logs/googlecontrolplane:
+      receivers: [otlp/secops_in]
+    metrics/googlecontrolplane:
+      receivers: [otlp/secops_in]
+`, customReceiverAddr)
+
+	appendCfgPath := filepath.Join(tempDir, "append_secops_receiver.yaml")
+	if err := os.WriteFile(appendCfgPath, []byte(appendReceiverCfg), 0644); err != nil {
+		t.Fatalf("failed to write append_secops_receiver.yaml: %v", err)
+	}
+
+	h := startTestHarness(t, otelcolBin, tempDir, policiesDir, appendCfgPath)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	conn, err := grpc.NewClient(customReceiverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("failed to connect to custom receiver %s: %v", customReceiverAddr, err)
+	}
+	t.Cleanup(func() {
+		_ = conn.Close()
+	})
+
+	// 1. Export log payload to custom receiver on canonical pipeline
+	customLogsClient := plogotlp.NewGRPCClient(conn)
+	logs := plog.NewLogs()
+	rl := logs.ResourceLogs().AppendEmpty()
+	rl.Resource().Attributes().PutStr("host.id", "vm-secops-01")
+	sl := rl.ScopeLogs().AppendEmpty()
+	lr := sl.LogRecords().AppendEmpty()
+	lr.Body().SetStr("KEEP_THIS_LOG_LINE")
+
+	if _, err := customLogsClient.Export(ctx, plogotlp.NewExportRequestFromLogs(logs)); err != nil {
+		t.Fatalf("failed to export logs to custom receiver on canonical pipeline: %v\nstderr:\n%s", err, h.col.logs())
+	}
+
+	// 2. Export metric payload to custom receiver on canonical pipeline
+	customMetricsClient := pmetricotlp.NewGRPCClient(conn)
+	metrics := pmetric.NewMetrics()
+	rm := metrics.ResourceMetrics().AppendEmpty()
+	rm.Resource().Attributes().PutStr("service.name", "secops-workload")
+	sm := rm.ScopeMetrics().AppendEmpty()
+	m := sm.Metrics().AppendEmpty()
+	m.SetName("secops.threat.events")
+	dp := m.SetEmptyGauge().DataPoints().AppendEmpty()
+	dp.SetIntValue(1)
+	dp.SetTimestamp(pcommon.NewTimestampFromTime(time.Now()))
+
+	if _, err := customMetricsClient.Export(ctx, pmetricotlp.NewExportRequestFromMetrics(metrics)); err != nil {
+		t.Fatalf("failed to export metrics to custom receiver on canonical pipeline: %v\nstderr:\n%s", err, h.col.logs())
+	}
+
+	// Wait for exported logs to arrive on selfMockSrv (otlp_grpc/default_gcp_destination).
+	deadline := time.Now().Add(10 * time.Second)
+	var foundLogResourceAttrs map[string]string
+	var foundMetricResourceAttrs map[string]string
+
+	for time.Now().Before(deadline) {
+		if foundLogResourceAttrs == nil {
+			collected := h.selfMockSrv.CollectedLogs()
+			for _, ld := range collected {
+				for i := 0; i < ld.ResourceLogs().Len(); i++ {
+					r := ld.ResourceLogs().At(i)
+					for j := 0; j < r.ScopeLogs().Len(); j++ {
+						for k := 0; k < r.ScopeLogs().At(j).LogRecords().Len(); k++ {
+							rec := r.ScopeLogs().At(j).LogRecords().At(k)
+							if rec.Body().Str() == "KEEP_THIS_LOG_LINE" {
+								attrs := make(map[string]string)
+								r.Resource().Attributes().Range(func(key string, val pcommon.Value) bool {
+									attrs[key] = val.AsString()
+									return true
+								})
+								foundLogResourceAttrs = attrs
+								break
+							}
+						}
+						if foundLogResourceAttrs != nil {
+							break
+						}
+					}
+					if foundLogResourceAttrs != nil {
+						break
+					}
+				}
+				if foundLogResourceAttrs != nil {
+					break
+				}
+			}
+		}
+
+		if foundMetricResourceAttrs == nil {
+			collected := h.selfMockSrv.CollectedMetrics()
+			for _, md := range collected {
+				for i := 0; i < md.ResourceMetrics().Len(); i++ {
+					r := md.ResourceMetrics().At(i)
+					for j := 0; j < r.ScopeMetrics().Len(); j++ {
+						for k := 0; k < r.ScopeMetrics().At(j).Metrics().Len(); k++ {
+							met := r.ScopeMetrics().At(j).Metrics().At(k)
+							if met.Name() == "secops.threat.events" {
+								attrs := make(map[string]string)
+								r.Resource().Attributes().Range(func(key string, val pcommon.Value) bool {
+									attrs[key] = val.AsString()
+									return true
+								})
+								foundMetricResourceAttrs = attrs
+								break
+							}
+						}
+						if foundMetricResourceAttrs != nil {
+							break
+						}
+					}
+					if foundMetricResourceAttrs != nil {
+						break
+					}
+				}
+				if foundMetricResourceAttrs != nil {
+					break
+				}
+			}
+		}
+
+		if foundLogResourceAttrs != nil && foundMetricResourceAttrs != nil {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	h.col.shutdown(t)
+
+	if foundLogResourceAttrs == nil {
+		t.Fatalf("expected log record not found at destination.\ncollector logs:\n%s", h.col.logs())
+	}
+	if foundMetricResourceAttrs == nil {
+		t.Fatalf("expected metric record not found at destination.\ncollector logs:\n%s", h.col.logs())
+	}
+
+	// Verify SecOps routing and categorization resource attributes populated on logs
+	if got := foundLogResourceAttrs["routing.target"]; got != "secops" {
+		t.Errorf("expected log routing.target to be 'secops', got %q", got)
+	}
+	if got := foundLogResourceAttrs["secops.category"]; got != "audit_events" {
+		t.Errorf("expected log secops.category to be 'audit_events', got %q", got)
+	}
+	if got := foundLogResourceAttrs["deployment.environment"]; got != "production" {
+		t.Errorf("expected log deployment.environment to be 'production', got %q", got)
+	}
+	if got := foundLogResourceAttrs["host.id"]; got != "vm-secops-01" {
+		t.Errorf("expected log host.id to be 'vm-secops-01', got %q", got)
+	}
+
+	// Verify SecOps routing and categorization resource attributes populated on metrics
+	if got := foundMetricResourceAttrs["routing.target"]; got != "secops" {
+		t.Errorf("expected metric routing.target to be 'secops', got %q", got)
+	}
+	if got := foundMetricResourceAttrs["secops.category"]; got != "audit_events" {
+		t.Errorf("expected metric secops.category to be 'audit_events', got %q", got)
+	}
+	if got := foundMetricResourceAttrs["deployment.environment"]; got != "production" {
+		t.Errorf("expected metric deployment.environment to be 'production', got %q", got)
+	}
+	if got := foundMetricResourceAttrs["service.name"]; got != "secops-workload" {
+		t.Errorf("expected metric service.name to be 'secops-workload', got %q", got)
+	}
+}
+
+// TestPolicy_EnvResourceDetection_ExcludesCollectorPodAttributes verifies that
+// collector process and Kubernetes pod/controller identity attributes present in
+// OTEL_RESOURCE_ATTRIBUTES (describing the collector pod itself) do not leak onto
+// canonical workload pipelines, while node/cluster and custom routing attributes
+// still apply.
+func TestPolicy_EnvResourceDetection_ExcludesCollectorPodAttributes(t *testing.T) {
+	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", strings.Join([]string{
+		"service.name=collector-pod",
+		"service.instance.id=collector-pod-instance",
+		"k8s.cluster.name=prod-cluster",
+		"k8s.namespace.name=opentelemetry-system",
+		"k8s.pod.name=otelcol-ds-abc",
+		"k8s.pod.uid=pod-uid-123",
+		"k8s.container.name=otelcol",
+		"k8s.daemonset.name=otelcol-ds",
+		"k8s.node.name=worker-node-1",
+		"routing.target=secops",
+	}, ","))
+
+	otelcolBin := resolveOtelcolBinary(t)
+	tempDir, policiesDir := stagePoliciesDir(t, "drop_by_body_equals")
+
+	ports := allocateEphemeralPorts(t, 1)
+	customReceiverAddr := fmt.Sprintf("127.0.0.1:%d", ports[0])
+
+	appendReceiverCfg := fmt.Sprintf(`receivers:
+  otlp/k8s_in:
+    protocols:
+      grpc:
+        endpoint: %s
+service:
+  pipelines:
+    logs/googlecontrolplane:
+      receivers: [otlp/k8s_in]
+`, customReceiverAddr)
+
+	appendCfgPath := filepath.Join(tempDir, "append_k8s_receiver.yaml")
+	if err := os.WriteFile(appendCfgPath, []byte(appendReceiverCfg), 0644); err != nil {
+		t.Fatalf("failed to write append_k8s_receiver.yaml: %v", err)
+	}
+
+	h := startTestHarness(t, otelcolBin, tempDir, policiesDir, appendCfgPath)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	conn, err := grpc.NewClient(customReceiverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("failed to connect to custom receiver %s: %v", customReceiverAddr, err)
+	}
+	t.Cleanup(func() {
+		_ = conn.Close()
+	})
+
+	customLogsClient := plogotlp.NewGRPCClient(conn)
+	logs := plog.NewLogs()
+	rl := logs.ResourceLogs().AppendEmpty()
+	lr := rl.ScopeLogs().AppendEmpty().LogRecords().AppendEmpty()
+	lr.Body().SetStr("KEEP_THIS_LOG_LINE")
+
+	if _, err := customLogsClient.Export(ctx, plogotlp.NewExportRequestFromLogs(logs)); err != nil {
+		t.Fatalf("failed to export logs to custom receiver: %v\nstderr:\n%s", err, h.col.logs())
+	}
+
+	deadline := time.Now().Add(10 * time.Second)
+	var foundLogResourceAttrs map[string]string
+	for time.Now().Before(deadline) {
+		for _, ld := range h.selfMockSrv.CollectedLogs() {
+			for i := 0; i < ld.ResourceLogs().Len(); i++ {
+				r := ld.ResourceLogs().At(i)
+				for j := 0; j < r.ScopeLogs().Len(); j++ {
+					for k := 0; k < r.ScopeLogs().At(j).LogRecords().Len(); k++ {
+						if r.ScopeLogs().At(j).LogRecords().At(k).Body().Str() == "KEEP_THIS_LOG_LINE" {
+							attrs := make(map[string]string)
+							r.Resource().Attributes().Range(func(key string, val pcommon.Value) bool {
+								attrs[key] = val.AsString()
+								return true
+							})
+							foundLogResourceAttrs = attrs
+						}
+					}
+				}
+			}
+		}
+		if foundLogResourceAttrs != nil {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	h.col.shutdown(t)
+
+	if foundLogResourceAttrs == nil {
+		t.Fatalf("expected log record not found at destination.\ncollector logs:\n%s", h.col.logs())
+	}
+
+	if got := foundLogResourceAttrs["k8s.cluster.name"]; got != "prod-cluster" {
+		t.Errorf("expected k8s.cluster.name 'prod-cluster', got %q", got)
+	}
+	if got := foundLogResourceAttrs["k8s.node.name"]; got != "worker-node-1" {
+		t.Errorf("expected k8s.node.name 'worker-node-1', got %q", got)
+	}
+	if got := foundLogResourceAttrs["routing.target"]; got != "secops" {
+		t.Errorf("expected routing.target 'secops', got %q", got)
+	}
+
+	for _, excludedKey := range []string{
+		"service.name",
+		"service.instance.id",
+		"k8s.namespace.name",
+		"k8s.pod.name",
+		"k8s.pod.uid",
+		"k8s.container.name",
+		"k8s.daemonset.name",
+	} {
+		if val, exists := foundLogResourceAttrs[excludedKey]; exists {
+			t.Errorf("collector pod attribute %q=%q must not leak onto workload logs", excludedKey, val)
+		}
+	}
+}
+
+// TestPolicy_EnvResourceDetection_TelemetryTypeScopedToWorkloadLogs verifies that
+// when gcp.telemetry_type is supplied via OTEL_RESOURCE_ATTRIBUTES, it is preserved
+// on canonical workload logs (logs/googlecontrolplane) while being stripped from
+// collector self-logs, collector self-metrics, canonical workload metrics, and
+// canonical workload traces.
+func TestPolicy_EnvResourceDetection_TelemetryTypeScopedToWorkloadLogs(t *testing.T) {
+	t.Setenv("OTEL_RESOURCE_ATTRIBUTES", "gcp.telemetry_type=custom_logs,routing.target=secops")
+
+	otelcolBin := resolveOtelcolBinary(t)
+	tempDir, policiesDir := stagePoliciesDir(t, "drop_by_body_equals")
+	copyDir(t, filepath.Join("testdata", "unsupported_policy", "policies"), policiesDir)
+
+	ports := allocateEphemeralPorts(t, 1)
+	customReceiverAddr := fmt.Sprintf("127.0.0.1:%d", ports[0])
+
+	appendReceiverCfg := fmt.Sprintf(`receivers:
+  otlp/telemetry_type_in:
+    protocols:
+      grpc:
+        endpoint: %s
+service:
+  pipelines:
+    logs/googlecontrolplane:
+      receivers: [otlp/telemetry_type_in]
+    metrics/googlecontrolplane:
+      receivers: [otlp/telemetry_type_in]
+    traces/googlecontrolplane:
+      receivers: [otlp/telemetry_type_in]
+`, customReceiverAddr)
+
+	appendCfgPath := filepath.Join(tempDir, "append_telemetry_type_receiver.yaml")
+	if err := os.WriteFile(appendCfgPath, []byte(appendReceiverCfg), 0644); err != nil {
+		t.Fatalf("failed to write append_telemetry_type_receiver.yaml: %v", err)
+	}
+
+	h := startTestHarnessWithSelfLogs(t, otelcolBin, tempDir, policiesDir, appendCfgPath)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	conn, err := grpc.NewClient(customReceiverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("failed to connect to custom receiver %s: %v", customReceiverAddr, err)
+	}
+	t.Cleanup(func() {
+		_ = conn.Close()
+	})
+
+	// 1. Send workload log
+	logs := plog.NewLogs()
+	logs.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty().LogRecords().AppendEmpty().Body().SetStr("WORKLOAD_LOG_TELEMETRY_TYPE")
+	if _, err := plogotlp.NewGRPCClient(conn).Export(ctx, plogotlp.NewExportRequestFromLogs(logs)); err != nil {
+		t.Fatalf("failed to export workload logs: %v\nstderr:\n%s", err, h.col.logs())
+	}
+
+	// 2. Send workload metric
+	metrics := pmetric.NewMetrics()
+	m := metrics.ResourceMetrics().AppendEmpty().ScopeMetrics().AppendEmpty().Metrics().AppendEmpty()
+	m.SetName("workload.telemetry_type.check")
+	dp := m.SetEmptyGauge().DataPoints().AppendEmpty()
+	dp.SetIntValue(1)
+	dp.SetTimestamp(pcommon.NewTimestampFromTime(time.Now()))
+	if _, err := pmetricotlp.NewGRPCClient(conn).Export(ctx, pmetricotlp.NewExportRequestFromMetrics(metrics)); err != nil {
+		t.Fatalf("failed to export workload metrics: %v\nstderr:\n%s", err, h.col.logs())
+	}
+
+	// 3. Send workload trace
+	traces := ptrace.NewTraces()
+	sp := traces.ResourceSpans().AppendEmpty().ScopeSpans().AppendEmpty().Spans().AppendEmpty()
+	sp.SetName("workload.telemetry_type.span")
+	sp.SetTraceID([16]byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16})
+	sp.SetSpanID([8]byte{1, 2, 3, 4, 5, 6, 7, 8})
+	if _, err := ptraceotlp.NewGRPCClient(conn).Export(ctx, ptraceotlp.NewExportRequestFromTraces(traces)); err != nil {
+		t.Fatalf("failed to export workload traces: %v\nstderr:\n%s", err, h.col.logs())
+	}
+
+	attrsToMap := func(am pcommon.Map) map[string]string {
+		out := make(map[string]string, am.Len())
+		am.Range(func(k string, v pcommon.Value) bool {
+			out[k] = v.AsString()
+			return true
+		})
+		return out
+	}
+
+	deadline := time.Now().Add(10 * time.Second)
+	var workloadLogAttrs, selfLogAttrs, workloadMetricAttrs, selfMetricAttrs, workloadTraceAttrs map[string]string
+
+	for time.Now().Before(deadline) {
+		for _, ld := range h.selfMockSrv.CollectedLogs() {
+			for i := 0; i < ld.ResourceLogs().Len(); i++ {
+				rl := ld.ResourceLogs().At(i)
+				for j := 0; j < rl.ScopeLogs().Len(); j++ {
+					for k := 0; k < rl.ScopeLogs().At(j).LogRecords().Len(); k++ {
+						body := rl.ScopeLogs().At(j).LogRecords().At(k).Body().Str()
+						if body == "WORKLOAD_LOG_TELEMETRY_TYPE" && workloadLogAttrs == nil {
+							workloadLogAttrs = attrsToMap(rl.Resource().Attributes())
+						}
+						if strings.Contains(body, "no driver found for policy type: unsupported_policy_type") && selfLogAttrs == nil {
+							selfLogAttrs = attrsToMap(rl.Resource().Attributes())
+						}
+					}
+				}
+			}
+		}
+		for _, md := range h.selfMockSrv.CollectedMetrics() {
+			for i := 0; i < md.ResourceMetrics().Len(); i++ {
+				rm := md.ResourceMetrics().At(i)
+				for j := 0; j < rm.ScopeMetrics().Len(); j++ {
+					for k := 0; k < rm.ScopeMetrics().At(j).Metrics().Len(); k++ {
+						name := rm.ScopeMetrics().At(j).Metrics().At(k).Name()
+						if name == "workload.telemetry_type.check" && workloadMetricAttrs == nil {
+							workloadMetricAttrs = attrsToMap(rm.Resource().Attributes())
+						}
+						if name == "gcp.policy.set.active" && selfMetricAttrs == nil {
+							selfMetricAttrs = attrsToMap(rm.Resource().Attributes())
+						}
+					}
+				}
+			}
+		}
+		for _, td := range h.selfMockSrv.CollectedTraces() {
+			for i := 0; i < td.ResourceSpans().Len(); i++ {
+				rs := td.ResourceSpans().At(i)
+				for j := 0; j < rs.ScopeSpans().Len(); j++ {
+					for k := 0; k < rs.ScopeSpans().At(j).Spans().Len(); k++ {
+						if rs.ScopeSpans().At(j).Spans().At(k).Name() == "workload.telemetry_type.span" && workloadTraceAttrs == nil {
+							workloadTraceAttrs = attrsToMap(rs.Resource().Attributes())
+						}
+					}
+				}
+			}
+		}
+		if workloadLogAttrs != nil && selfLogAttrs != nil && workloadMetricAttrs != nil && selfMetricAttrs != nil && workloadTraceAttrs != nil {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	h.col.shutdown(t)
+
+	if workloadLogAttrs == nil || selfLogAttrs == nil || workloadMetricAttrs == nil || selfMetricAttrs == nil || workloadTraceAttrs == nil {
+		t.Fatalf("timed out waiting for all signals (workloadLog=%v selfLog=%v workloadMetric=%v selfMetric=%v workloadTrace=%v)\nlogs:\n%s",
+			workloadLogAttrs != nil, selfLogAttrs != nil, workloadMetricAttrs != nil, selfMetricAttrs != nil, workloadTraceAttrs != nil, h.col.logs())
+	}
+
+	// Workload logs MUST preserve gcp.telemetry_type.
+	if got := workloadLogAttrs["gcp.telemetry_type"]; got != "custom_logs" {
+		t.Errorf("expected workload log gcp.telemetry_type='custom_logs', got %q (attrs=%v)", got, workloadLogAttrs)
+	}
+	if got := workloadLogAttrs["routing.target"]; got != "secops" {
+		t.Errorf("expected workload log routing.target='secops', got %q", got)
+	}
+
+	// Self-logs, self-metrics, workload metrics, and workload traces MUST NOT carry gcp.telemetry_type.
+	for name, attrs := range map[string]map[string]string{
+		"self-log":        selfLogAttrs,
+		"self-metric":     selfMetricAttrs,
+		"workload-metric": workloadMetricAttrs,
+		"workload-trace":  workloadTraceAttrs,
+	} {
+		if val, exists := attrs["gcp.telemetry_type"]; exists {
+			t.Errorf("expected gcp.telemetry_type to be stripped from %s, got %q (attrs=%v)", name, val, attrs)
+		}
+	}
+	if got := workloadMetricAttrs["routing.target"]; got != "secops" {
+		t.Errorf("expected workload metric routing.target='secops', got %q", got)
+	}
+	if got := workloadTraceAttrs["routing.target"]; got != "secops" {
+		t.Errorf("expected workload trace routing.target='secops', got %q", got)
 	}
 }

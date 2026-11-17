@@ -96,9 +96,12 @@ func TestSelfMetricsPolicy_Evaluate(t *testing.T) {
 	}, conf.Get("service::telemetry::metrics::readers"))
 
 	// Verify resourcedetection processor
-	assert.Equal(t, []any{"gcp"}, conf.Get("processors::resourcedetection/custom_self_obs::detectors"))
+	assert.Equal(t, []any{"env", "gcp", "system"}, conf.Get("processors::resourcedetection/custom_self_obs::detectors"))
 	assert.Equal(t, false, conf.Get("processors::resourcedetection/custom_self_obs::override"))
 	assert.Equal(t, 10*time.Second, conf.Get("processors::resourcedetection/custom_self_obs::timeout"))
+	assert.Nil(t, conf.Get("processors::resourcedetection/custom_self_obs::env"))
+	assert.Equal(t, true, conf.Get("processors::resourcedetection/custom_self_obs::system::resource_attributes::host.id::enabled"))
+	assert.Equal(t, false, conf.Get("processors::resourcedetection/custom_self_obs::system::resource_attributes::os.type::enabled"))
 
 	// Verify transform processor
 	assert.Equal(t, "ignore", conf.Get("processors::transform/custom_self_obs::error_mode"))
@@ -108,6 +111,7 @@ func TestSelfMetricsPolicy_Evaluate(t *testing.T) {
 			"context": "resource",
 			"statements": []any{
 				`set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil`,
+				googlepolicy.DeleteTelemetryTypeStatement,
 			},
 		},
 		map[string]any{
@@ -356,7 +360,7 @@ func TestSelfMetricsPolicy_Evaluate_RegionFallback(t *testing.T) {
 	ctx := context.WithValue(policy.ContextSetup(t.Context(), "collector-id", "1234"), contextKeyRegion, "us-east1")
 	conf, err := policy.Evaluate(ctx)
 	require.NoError(t, err)
-	want := []any{fromAccount, googlepolicy.CloudRegionFallbackStatement("us-east1")}
+	want := []any{fromAccount, googlepolicy.CloudRegionFallbackStatement("us-east1"), googlepolicy.DeleteTelemetryTypeStatement}
 	assert.Equal(t, want, resourceStatements(t, conf, "self", "metric_statements"))
 	assert.Equal(t, want, resourceStatements(t, conf, "self", "log_statements"))
 
@@ -369,8 +373,8 @@ func TestSelfMetricsPolicy_Evaluate_RegionFallback(t *testing.T) {
 	// Without a resolved region, nothing changes.
 	conf, err = policy.Evaluate(policy.ContextSetup(t.Context(), "collector-id", "1234"))
 	require.NoError(t, err)
-	assert.Equal(t, []any{fromAccount}, resourceStatements(t, conf, "self", "metric_statements"))
-	assert.Equal(t, []any{fromAccount}, resourceStatements(t, conf, "self", "log_statements"))
+	assert.Equal(t, []any{fromAccount, googlepolicy.DeleteTelemetryTypeStatement}, resourceStatements(t, conf, "self", "metric_statements"))
+	assert.Equal(t, []any{fromAccount, googlepolicy.DeleteTelemetryTypeStatement}, resourceStatements(t, conf, "self", "log_statements"))
 }
 
 // withInProcessReader overrides the telemetry.inProcessReader gate lookup for

@@ -148,7 +148,7 @@ const (
 	logWindow            = 30 * time.Minute
 
 	// Helper scripts stored under integration_test/smoke_test/telemetry_policy/.
-	ensureFirewallLocalScript   = "telemetry_policy/ensure_firewall_linux.sh"
+	ensureNetfilterLocalScript  = "telemetry_policy/ensure_netfilter_linux.sh"
 	blockMetadataLocalScript    = "telemetry_policy/block_metadata_linux.sh"
 	configureWindowsLocalScript = "telemetry_policy/configure_windows.ps1"
 
@@ -159,12 +159,12 @@ const (
 	defaultWindowsPolicySetID = "gboc-smoke-ps-windows"
 
 	// Off-GCP simulation paths and defaults on Linux and Windows.
-	metadataServerIP          = "169.254.169.254"
-	metadataHostAlias         = "metadata.google.internal"
-	offGCPHostsPathLinux      = "/etc/otelcol-google/hosts"
-	offGCPFirewallScriptLinux = "/etc/otelcol-google/block_metadata.sh"
-	wifDirLinux               = "/etc/otelcol-google/wif"
-	collectorUserLinux        = "otelcol-google"
+	metadataServerIP           = "169.254.169.254"
+	metadataHostAlias          = "metadata.google.internal"
+	offGCPHostsPathLinux       = "/etc/otelcol-google/hosts"
+	offGCPNetfilterScriptLinux = "/etc/otelcol-google/block_metadata.sh"
+	wifDirLinux                = "/etc/otelcol-google/wif"
+	collectorUserLinux         = "otelcol-google"
 
 	windowsStateDir              = `C:\ProgramData\Google\OpenTelemetry Collector`
 	windowsConfigureRemoteScript = `C:\ProgramData\Google\OpenTelemetry Collector\configure_windows.ps1`
@@ -293,7 +293,7 @@ func (s telemetryPolicySettings) controlPlaneConfig(project, imageSpec string) s
 
 // dropIn returns a systemd drop-in that runs otelcol-google strictly from the
 // googlecontrolplane config source (without /etc/otelcol-google/config.yaml).
-// When offGCP is set, ExecStartPre=+ runs the metadata-blocking firewall script
+// When offGCP is set, ExecStartPre=+ runs the metadata-blocking netfilter script
 // as root on boot before the collector starts, BindReadOnlyPaths overrides
 // /etc/hosts inside the service namespace so metadata.google.internal maps to
 // 127.0.0.1, GOOGLE_APPLICATION_CREDENTIALS configures X.509 WIF, and
@@ -306,7 +306,7 @@ func (s telemetryPolicySettings) dropIn(project, imageSpec string) string {
 	if s.offGCP {
 		extraLines = fmt.Sprintf(
 			"ExecStartPre=+/bin/sh %s\nBindReadOnlyPaths=%s:/etc/hosts\nEnvironment=GOOGLE_APPLICATION_CREDENTIALS=%s/cred_config.json\nEnvironment=GOOGLE_CLOUD_PROJECT=%s\n",
-			offGCPFirewallScriptLinux, offGCPHostsPathLinux, wifDirLinux, project)
+			offGCPNetfilterScriptLinux, offGCPHostsPathLinux, wifDirLinux, project)
 	}
 	return fmt.Sprintf("[Service]\n%sExecStart=\nExecStart=/usr/bin/otelcol-google %s\n",
 		extraLines, s.controlPlaneConfig(project, imageSpec))
@@ -556,12 +556,12 @@ func setupTelemetryPolicyCollector(ctx context.Context, logger *log.Logger, vm *
 			if _, err := gce.RunRemotely(ctx, logger, vm, "sudo systemctl stop otelcol-google"); err != nil {
 				return err
 			}
-			ensureFirewallScript, err := os.ReadFile(ensureFirewallLocalScript)
+			ensureNetfilterScript, err := os.ReadFile(ensureNetfilterLocalScript)
 			if err != nil {
 				return err
 			}
-			if _, err := gce.RunRemotelyStdin(ctx, logger, vm, bytes.NewReader(ensureFirewallScript), "sudo sh -eu"); err != nil {
-				return fmt.Errorf("ensuring firewall CLI is installed: %v", err)
+			if _, err := gce.RunRemotelyStdin(ctx, logger, vm, bytes.NewReader(ensureNetfilterScript), "sudo sh -eu"); err != nil {
+				return fmt.Errorf("ensuring netfilter CLI is installed: %v", err)
 			}
 			hostsOut, err := gce.RunRemotely(ctx, logger, vm, "cat /etc/hosts")
 			if err != nil {
@@ -574,7 +574,7 @@ func setupTelemetryPolicyCollector(ctx context.Context, logger *log.Logger, vm *
 			if err != nil {
 				return err
 			}
-			if err := writeRemoteFile(ctx, logger, vm, offGCPFirewallScriptLinux, "0755", blockScript); err != nil {
+			if err := writeRemoteFile(ctx, logger, vm, offGCPNetfilterScriptLinux, "0755", blockScript); err != nil {
 				return err
 			}
 			if err := stageWIFCredentials(ctx, logger, vm, s); err != nil {
@@ -997,7 +997,7 @@ func TestTelemetryPolicyConfigHelpers(t *testing.T) {
 		t.Errorf("tagSampleLogs = %q, want %q", tagged, wantTagged)
 	}
 
-	for _, script := range []string{ensureFirewallLocalScript, blockMetadataLocalScript, configureWindowsLocalScript} {
+	for _, script := range []string{ensureNetfilterLocalScript, blockMetadataLocalScript, configureWindowsLocalScript} {
 		if _, err := os.Stat(script); err != nil {
 			t.Errorf("expected helper script %s to exist: %v", script, err)
 		}

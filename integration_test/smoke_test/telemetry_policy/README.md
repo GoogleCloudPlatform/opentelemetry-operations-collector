@@ -154,7 +154,7 @@ env PROJECT=stackdriver-test-143416 ZONES=asia-east1-a \
 
 With `OFF_GCP=true`, the test creates the GCE VM with the same helper as
 on-GCP, installs the collector package from GCS, and writes helper scripts
-([`ensure_firewall_linux.sh`](ensure_firewall_linux.sh),
+([`ensure_netfilter_linux.sh`](ensure_netfilter_linux.sh),
 [`block_metadata_linux.sh`](block_metadata_linux.sh),
 [`configure_windows.ps1`](configure_windows.ps1)), filtered `hosts`, and the
 Secret Manager X.509 WIF credentials directly onto the VM over SSH. It then

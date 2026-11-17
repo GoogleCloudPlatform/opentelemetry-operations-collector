@@ -179,21 +179,20 @@ func buildFuzzTraces(spanName, attrKey, attrVal string, attrFloat float64) ptrac
 func FuzzTransformLogs(f *testing.F) {
 	seedCases := []struct {
 		name                                         string
-		setIdx                                       uint8
 		body1, body2, addVal, body, attrKey, attrVal string
 		attrFloat                                    float64
 	}{
-		{"1-policy-single-filter", 0, "redacted", "redacted", "redacted", "redacted", "env", "prod", 1.5},
-		{"2-policies-keep-overrides-drop", 1, "redacted", "redacted", "redacted", "redacted", "env", "prod", 2.0},
-		{"2-policies-filter-and-transform-pass2", 2, "redacted", "keep-me", "redacted", "hello", "k", "v", 0.0},
-		{"2-policies-multi-transform-stage-order", 3, "staging", "prod", "prod", "hello", "env", "staging", -1.0},
-		{"4-policies-all-combined-weird-values", 4, "", "", "", "", "", "", math.NaN()},
+		{"drop-without-keep", "redacted", "keep-me", "transformed", "redacted", "env", "prod", 1.5},
+		{"keep-overrides-drop", "redacted", "redacted", "redacted", "redacted", "env", "prod", 2.0},
+		{"filter-and-transform-pass2", "redacted", "keep-me", "redacted", "hello", "k", "v", 0.0},
+		{"multi-transform-stage-order", "staging", "prod", "prod", "hello", "env", "staging", -1.0},
+		{"all-combined-weird-values", "", "", "", "", "", "", math.NaN()},
 	}
 	for _, tc := range seedCases {
-		f.Add(tc.setIdx, tc.body1, tc.body2, tc.addVal, tc.body, tc.attrKey, tc.attrVal, tc.attrFloat)
+		f.Add(tc.body1, tc.body2, tc.addVal, tc.body, tc.attrKey, tc.attrVal, tc.attrFloat)
 	}
 
-	f.Fuzz(func(t *testing.T, setIdx uint8, body1, body2, addVal, body, attrKey, attrVal string, attrFloat float64) {
+	f.Fuzz(func(t *testing.T, body1, body2, addVal, body, attrKey, attrVal string, attrFloat float64) {
 		dropBodyPolicy := newDropLogBodyProto("01-drop-body", body1)
 		keepBodyPolicy := newKeepLogBodyProto("02-keep-body", body2)
 		setBodyPolicy := newSetLogBodyProto("01-set-body", addVal)
@@ -207,26 +206,27 @@ func FuzzTransformLogs(f *testing.F) {
 			{setBodyPolicy, renameEnvPolicy},
 			{dropBodyPolicy, keepBodyPolicy, setBodyPolicy, renameEnvPolicy},
 		}
-		protos := policySets[int(setIdx)%len(policySets)]
 
-		ps, _ := googlepolicy.MakePolicySetFromProtos("fuzz-set", "fuzz-rev", protos)
-		policies := ps.TransformationPolicies()
-		if len(policies) == 0 {
-			return
+		for _, protos := range policySets {
+			ps, _ := googlepolicy.MakePolicySetFromProtos("fuzz-set", "fuzz-rev", protos)
+			policies := ps.TransformationPolicies()
+			if len(policies) == 0 {
+				continue
+			}
+
+			eval, err := NewEvaluator(policies)
+			if err != nil || eval == nil {
+				continue
+			}
+
+			ld := buildFuzzLogs(body, attrKey, attrVal, attrFloat)
+			initialCount := ld.LogRecordCount()
+
+			eval.TransformLogs(ld)
+
+			assertCountNeverIncreasesInvariant(t, "log record", initialCount, ld.LogRecordCount())
+			assertNoEmptyContainersInvariant(t, ld.ResourceLogs(), plog.ResourceLogs.ScopeLogs, plog.ScopeLogs.LogRecords)
 		}
-
-		eval, err := NewEvaluator(policies)
-		if err != nil || eval == nil {
-			return
-		}
-
-		ld := buildFuzzLogs(body, attrKey, attrVal, attrFloat)
-		initialCount := ld.LogRecordCount()
-
-		eval.TransformLogs(ld)
-
-		assertCountNeverIncreasesInvariant(t, "log record", initialCount, ld.LogRecordCount())
-		assertNoEmptyContainersInvariant(t, ld.ResourceLogs(), plog.ResourceLogs.ScopeLogs, plog.ScopeLogs.LogRecords)
 	})
 }
 
@@ -235,20 +235,19 @@ func FuzzTransformLogs(f *testing.F) {
 func FuzzTransformMetrics(f *testing.F) {
 	seedCases := []struct {
 		name                                      string
-		setIdx                                    uint8
 		matchMetric, metricName, attrKey, attrVal string
 		dpFloat                                   float64
 	}{
-		{"1-policy-single-instrument-drop", 0, "gauge.metric", "gauge.metric", "env", "staging", 1.0},
-		{"2-policies-instrument-keep-overrides-drop", 1, "gauge.metric", "gauge.metric", "env", "prod", 2.0},
-		{"3-policies-instrument-and-datapoint-mix", 2, "gauge.metric", "fuzz.metric", "env", "staging", 3.0},
-		{"4-policies-all-combined-weird-values", 3, "", "", "", "", math.NaN()},
+		{"single-instrument-drop", "gauge.metric", "gauge.metric", "env", "staging", 1.0},
+		{"instrument-keep-overrides-drop", "gauge.metric", "gauge.metric", "env", "prod", 2.0},
+		{"instrument-and-datapoint-mix", "gauge.metric", "fuzz.metric", "env", "staging", 3.0},
+		{"all-combined-weird-values", "", "", "", "", math.NaN()},
 	}
 	for _, tc := range seedCases {
-		f.Add(tc.setIdx, tc.matchMetric, tc.metricName, tc.attrKey, tc.attrVal, tc.dpFloat)
+		f.Add(tc.matchMetric, tc.metricName, tc.attrKey, tc.attrVal, tc.dpFloat)
 	}
 
-	f.Fuzz(func(t *testing.T, setIdx uint8, matchMetric, metricName, attrKey, attrVal string, dpFloat float64) {
+	f.Fuzz(func(t *testing.T, matchMetric, metricName, attrKey, attrVal string, dpFloat float64) {
 		dropInstPolicy := newDropMetricNameProto("01-drop-inst", matchMetric)
 		keepInstPolicy := newKeepMetricNameProto("02-keep-inst", matchMetric)
 		dropDpPolicy := newDropDatapointAttrProto("03-drop-dp", "env", "staging")
@@ -261,28 +260,29 @@ func FuzzTransformMetrics(f *testing.F) {
 			{dropInstPolicy, dropDpPolicy, keepDpPolicy},
 			{dropInstPolicy, keepInstPolicy, dropDpPolicy, keepDpPolicy},
 		}
-		protos := policySets[int(setIdx)%len(policySets)]
 
-		ps, _ := googlepolicy.MakePolicySetFromProtos("fuzz-set", "fuzz-rev", protos)
-		policies := ps.TransformationPolicies()
-		if len(policies) == 0 {
-			return
+		for _, protos := range policySets {
+			ps, _ := googlepolicy.MakePolicySetFromProtos("fuzz-set", "fuzz-rev", protos)
+			policies := ps.TransformationPolicies()
+			if len(policies) == 0 {
+				continue
+			}
+
+			eval, err := NewEvaluator(policies)
+			if err != nil || eval == nil {
+				continue
+			}
+
+			md := buildFuzzMetrics(metricName, attrKey, attrVal, dpFloat)
+			initialMetrics := md.MetricCount()
+			initialDataPoints := md.DataPointCount()
+
+			eval.TransformMetrics(md)
+
+			assertCountNeverIncreasesInvariant(t, "metric", initialMetrics, md.MetricCount())
+			assertCountNeverIncreasesInvariant(t, "datapoint", initialDataPoints, md.DataPointCount())
+			assertNoEmptyContainersInvariant(t, md.ResourceMetrics(), pmetric.ResourceMetrics.ScopeMetrics, pmetric.ScopeMetrics.Metrics)
 		}
-
-		eval, err := NewEvaluator(policies)
-		if err != nil || eval == nil {
-			return
-		}
-
-		md := buildFuzzMetrics(metricName, attrKey, attrVal, dpFloat)
-		initialMetrics := md.MetricCount()
-		initialDataPoints := md.DataPointCount()
-
-		eval.TransformMetrics(md)
-
-		assertCountNeverIncreasesInvariant(t, "metric", initialMetrics, md.MetricCount())
-		assertCountNeverIncreasesInvariant(t, "datapoint", initialDataPoints, md.DataPointCount())
-		assertNoEmptyContainersInvariant(t, md.ResourceMetrics(), pmetric.ResourceMetrics.ScopeMetrics, pmetric.ScopeMetrics.Metrics)
 	})
 }
 
@@ -291,20 +291,19 @@ func FuzzTransformMetrics(f *testing.F) {
 func FuzzTransformTraces(f *testing.F) {
 	seedCases := []struct {
 		name                                  string
-		setIdx                                uint8
 		matchSpan, spanName, attrKey, attrVal string
 		samplingPct, attrFloat                float64
 	}{
-		{"1-policy-single-trace-filter", 0, "drop-span", "drop-span", "env", "prod", 50.0, 1.0},
-		{"2-policies-filter-and-sampling-combined", 1, "drop-span", "keep-span", "env", "prod", 50.0, 2.0},
-		{"3-policies-multi-filter-and-sampling", 2, "drop-span", "keep-span", "k", "v", 10.0, 3.0},
-		{"4-policies-all-combined-weird-values", 3, "", "", "", "", 100.0, math.NaN()},
+		{"single-trace-filter", "drop-span", "drop-span", "env", "prod", 50.0, 1.0},
+		{"filter-and-sampling-combined", "drop-span", "keep-span", "env", "prod", 50.0, 2.0},
+		{"multi-filter-and-sampling", "drop-span", "keep-span", "k", "v", 10.0, 3.0},
+		{"all-combined-weird-values", "", "", "", "", 100.0, math.NaN()},
 	}
 	for _, tc := range seedCases {
-		f.Add(tc.setIdx, tc.matchSpan, tc.spanName, tc.attrKey, tc.attrVal, tc.samplingPct, tc.attrFloat)
+		f.Add(tc.matchSpan, tc.spanName, tc.attrKey, tc.attrVal, tc.samplingPct, tc.attrFloat)
 	}
 
-	f.Fuzz(func(t *testing.T, setIdx uint8, matchSpan, spanName, attrKey, attrVal string, samplingPct, attrFloat float64) {
+	f.Fuzz(func(t *testing.T, matchSpan, spanName, attrKey, attrVal string, samplingPct, attrFloat float64) {
 		dropSpan1 := newDropSpanNameProto("01-drop-span", matchSpan)
 		dropSpan2 := newDropSpanNameProto("02-drop-health", "healthcheck")
 		sample1 := newTraceSamplingProto("03-sample-custom", samplingPct)
@@ -317,25 +316,26 @@ func FuzzTransformTraces(f *testing.F) {
 			{dropSpan1, dropSpan2, sample1},
 			{dropSpan1, dropSpan2, sample1, sample2},
 		}
-		protos := policySets[int(setIdx)%len(policySets)]
 
-		ps, _ := googlepolicy.MakePolicySetFromProtos("fuzz-set", "fuzz-rev", protos)
-		policies := ps.TransformationPolicies()
-		if len(policies) == 0 {
-			return
+		for _, protos := range policySets {
+			ps, _ := googlepolicy.MakePolicySetFromProtos("fuzz-set", "fuzz-rev", protos)
+			policies := ps.TransformationPolicies()
+			if len(policies) == 0 {
+				continue
+			}
+
+			eval, err := NewEvaluator(policies)
+			if err != nil || eval == nil {
+				continue
+			}
+
+			td := buildFuzzTraces(spanName, attrKey, attrVal, attrFloat)
+			initialSpans := td.SpanCount()
+
+			eval.TransformTraces(td)
+
+			assertCountNeverIncreasesInvariant(t, "span", initialSpans, td.SpanCount())
+			assertNoEmptyContainersInvariant(t, td.ResourceSpans(), ptrace.ResourceSpans.ScopeSpans, ptrace.ScopeSpans.Spans)
 		}
-
-		eval, err := NewEvaluator(policies)
-		if err != nil || eval == nil {
-			return
-		}
-
-		td := buildFuzzTraces(spanName, attrKey, attrVal, attrFloat)
-		initialSpans := td.SpanCount()
-
-		eval.TransformTraces(td)
-
-		assertCountNeverIncreasesInvariant(t, "span", initialSpans, td.SpanCount())
-		assertNoEmptyContainersInvariant(t, td.ResourceSpans(), ptrace.ResourceSpans.ScopeSpans, ptrace.ScopeSpans.Spans)
 	})
 }

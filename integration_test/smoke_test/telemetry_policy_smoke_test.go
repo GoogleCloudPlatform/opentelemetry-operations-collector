@@ -877,7 +877,7 @@ func TestTelemetryPoliciesSmoke(t *testing.T) {
 func TestFilterOffGCPHosts(t *testing.T) {
 	in := "127.0.0.1\tlocalhost\r\n" +
 		"::1\t\tlocalhost ip6-localhost ip6-loopback\r\n" +
-		"10.140.0.12\tvm-1.asia-east1-a.c.off-gcp-test-project.internal vm-1  # Added by Google\r\n" +
+		"10.140.0.12\tvm-1.asia-east1-a.c.gboc-tango-testing.internal vm-1  # Added by Google\r\n" +
 		"# comment mentioning 169.254.169.254 is harmless\r\n" +
 		"169.254.169.254 metadata.google.internal  # Added by Google\r\n" +
 		"169.254.169.254 metadata\r\n"
@@ -885,7 +885,7 @@ func TestFilterOffGCPHosts(t *testing.T) {
 	if strings.Contains(got, "169.254.169.254 metadata") {
 		t.Errorf("filterOffGCPHosts left GCE metadata IP mapping:\n%s", got)
 	}
-	if !strings.Contains(got, "10.140.0.12\tvm-1.asia-east1-a.c.off-gcp-test-project.internal vm-1") {
+	if !strings.Contains(got, "10.140.0.12\tvm-1.asia-east1-a.c.gboc-tango-testing.internal vm-1") {
 		t.Errorf("filterOffGCPHosts dropped VM hostname entry:\n%s", got)
 	}
 	if !strings.Contains(got, "127.0.0.1 metadata.google.internal metadata.google.internal. metadata\n") {
@@ -949,7 +949,7 @@ func TestTelemetryPolicyConfigHelpers(t *testing.T) {
 		projectNumber:      "406580743452",
 	}
 
-	dropIn := s.dropIn("off-gcp-test-project", "debian-cloud:debian-12")
+	dropIn := s.dropIn("gboc-tango-testing", "debian-cloud:debian-12")
 	for _, forbidden := range []string{
 		"GCE_METADATA_HOST",
 		"OTELCOL_OPTIONS",
@@ -966,11 +966,11 @@ func TestTelemetryPolicyConfigHelpers(t *testing.T) {
 		"ExecStartPre=+/bin/sh /etc/otelcol-google/block_metadata.sh",
 		"BindReadOnlyPaths=/etc/otelcol-google/hosts:/etc/hosts",
 		"Environment=GOOGLE_APPLICATION_CREDENTIALS=/etc/otelcol-google/wif/cred_config.json",
-		"Environment=GOOGLE_CLOUD_PROJECT=off-gcp-test-project",
+		"Environment=GOOGLE_CLOUD_PROJECT=gboc-tango-testing",
 		"ExecStart=/usr/bin/otelcol-google --config=googlecontrolplane:xds://",
 		"gcp.fleet_id=gboc-smoke-fleet",
 		"region=asia-east1",
-		"project=off-gcp-test-project",
+		"project=gboc-tango-testing",
 		"project_number=406580743452",
 	} {
 		if !strings.Contains(dropIn, want) {
@@ -978,7 +978,7 @@ func TestTelemetryPolicyConfigHelpers(t *testing.T) {
 		}
 	}
 
-	winURI := s.controlPlaneConfig("off-gcp-test-project", "windows-cloud:windows-2022")
+	winURI := s.controlPlaneConfig("gboc-tango-testing", "windows-cloud:windows-2022")
 	if !strings.Contains(winURI, "gcp.fleet_id=gboc-smoke-fleet-windows") || !strings.Contains(winURI, "project_number=406580743452") {
 		t.Errorf("unexpected Windows off-GCP URI: %s", winURI)
 	}
@@ -1019,7 +1019,7 @@ func TestTelemetryPolicyConfigHelpers(t *testing.T) {
 func TestAccessSecretBytesAndLocalOverride(t *testing.T) {
 	wantCert := "-----BEGIN CERTIFICATE-----\ntest-cert\n-----END CERTIFICATE-----\n"
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/projects/off-gcp-test-project/secrets/gboc-x509-leaf-cert/versions/latest:access" {
+		if r.URL.Path != "/v1/projects/gboc-tango-testing/secrets/gboc-x509-leaf-cert/versions/latest:access" {
 			http.NotFound(w, r)
 			return
 		}
@@ -1036,7 +1036,7 @@ func TestAccessSecretBytesAndLocalOverride(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := accessSecretBytes(context.Background(), svc, "off-gcp-test-project", defaultWIFCertSecret)
+	got, err := accessSecretBytes(context.Background(), svc, "gboc-tango-testing", defaultWIFCertSecret)
 	if err != nil {
 		t.Fatalf("accessSecretBytes failed: %v", err)
 	}
@@ -1051,7 +1051,7 @@ func TestAccessSecretBytesAndLocalOverride(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "leaf.key"), []byte("dir-key"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	cert, key, err := loadWIFLeafCertAndKey(context.Background(), log.New(io.Discard, "", 0), "off-gcp-test-project", telemetryPolicySettings{wifDir: dir})
+	cert, key, err := loadWIFLeafCertAndKey(context.Background(), log.New(io.Discard, "", 0), "gboc-tango-testing", telemetryPolicySettings{wifDir: dir})
 	if err != nil {
 		t.Fatalf("loadWIFLeafCertAndKey(wifDir) failed: %v", err)
 	}

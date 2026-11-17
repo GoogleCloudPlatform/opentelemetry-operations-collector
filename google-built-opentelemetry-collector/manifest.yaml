@@ -149,8 +149,6 @@ replaces:
 - github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/telemetry/inprocesstelemetry => ../../components/google-built-opentelemetry-collector/telemetry/inprocesstelemetry
 # Force update go-jose/v4 to v4.1.6 to fix CVE-2026-116587
 - github.com/go-jose/go-jose/v4 => github.com/go-jose/go-jose/v4 v4.1.6
-# Force update buger/jsonparser to v1.1.2 to fix vulnerability
-- github.com/buger/jsonparser => github.com/buger/jsonparser v1.1.2
 # Local dependency for googlecontrolplaneprovider
 - github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy => ../../pkg/googlepolicy
 # Local dependency for googlepolicyprocessor and googlecontrolplaneprovider

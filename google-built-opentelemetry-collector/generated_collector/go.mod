@@ -651,8 +651,6 @@ replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/compon
 
 replace github.com/go-jose/go-jose/v4 => github.com/go-jose/go-jose/v4 v4.1.6
 
-replace github.com/buger/jsonparser => github.com/buger/jsonparser v1.1.2
-
 replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy => ../../pkg/googlepolicy
 
 replace github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/event => ../../pkg/event

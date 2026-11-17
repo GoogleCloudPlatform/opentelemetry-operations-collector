@@ -17,7 +17,101 @@ package googlepolicy
 import (
 	"fmt"
 	"strconv"
+	"time"
 )
+
+// SelfResourceDetectionProcessorConfig returns the resourcedetection processor
+// configuration for the collector's self-observability pipelines.
+//
+// Self-telemetry always originates from the collector process itself, so all
+// three detectors ([env, gcp, system]) run with override: false (preserving
+// attributes set in service::telemetry::resource, such as service.instance.id
+// and gcp.fleet_id):
+//   - "env" reads OTEL_RESOURCE_ATTRIBUTES (for example Kubernetes Downward API
+//     pod/node attributes or a custom host.id). Log-only routing attributes such
+//     as gcp.telemetry_type are removed downstream by DeleteTelemetryTypeStatement.
+//   - "gcp" resolves Google Cloud platform metadata when running on Google Cloud.
+//   - "system" (with host.id enabled and os.type disabled) falls back to the OS
+//     machine ID and host.name off Google Cloud without adding extra attributes
+//     on Compute Engine.
+func SelfResourceDetectionProcessorConfig() map[string]any {
+	return map[string]any{
+		"detectors": []string{"env", "gcp", "system"},
+		"override":  false,
+		"timeout":   10 * time.Second,
+		"system": map[string]any{
+			"resource_attributes": map[string]any{
+				"host.id": map[string]any{
+					"enabled": true,
+				},
+				"os.type": map[string]any{
+					"enabled": false,
+				},
+			},
+		},
+	}
+}
+
+// WorkloadResourceDetectionProcessorConfig returns the resourcedetection
+// processor configuration for the canonical workload pipelines.
+//
+// Detectors ([env, gcp, system]) run with override: false so attributes already
+// present on incoming telemetry win:
+//   - "env" lets operators supply host/node/cloud or routing attributes via
+//     OTEL_RESOURCE_ATTRIBUTES while excluding collector process and pod/workload
+//     identity attributes (service.*, k8s.pod.*, k8s.container.*, k8s.namespace.*,
+//     and Kubernetes controller names) that commonly describe the collector pod
+//     itself in Kubernetes deployments and would otherwise leak onto workload
+//     telemetry.
+//   - "gcp" resolves Google Cloud platform metadata (such as Compute Engine or
+//     GKE instance ID and zone/region) when running on Google Cloud.
+//   - "system" (with host.id enabled and os.type disabled) falls back to the OS
+//     machine ID (/etc/machine-id on Linux, MachineGuid on Windows) and
+//     host.name off Google Cloud, ensuring telemetry.googleapis.com receives a
+//     unique per-host host.id for generic_node.node_id and
+//     prometheus_target.instance without adding extra attributes on Compute
+//     Engine.
+//
+// Note on gateway / forwarding deployments: the canonical workload pipelines
+// assume a host/node-agent topology. Detected gcp/system attributes and
+// non-excluded host/node-level OTEL_RESOURCE_ATTRIBUTES (such as host.*,
+// k8s.node.name, and k8s.cluster.name) apply to all workload telemetry lacking
+// those keys, including forwarded OTLP. In gateway setups, edge collectors
+// should populate their own host.id and host.name before forwarding, and
+// host/node-level OTEL_RESOURCE_ATTRIBUTES should not be set on gateways.
+func WorkloadResourceDetectionProcessorConfig() map[string]any {
+	return map[string]any{
+		"detectors": []string{"env", "gcp", "system"},
+		"override":  false,
+		"timeout":   10 * time.Second,
+		"env": map[string]any{
+			"attributes": map[string]any{
+				"excluded": []string{
+					"service.*",
+					"k8s.pod.*",
+					"k8s.container.*",
+					"k8s.namespace.*",
+					"k8s.daemonset.*",
+					"k8s.deployment.*",
+					"k8s.replicaset.*",
+					"k8s.statefulset.*",
+					"k8s.job.*",
+					"k8s.cronjob.*",
+				},
+			},
+		},
+		"system": map[string]any{
+			"resource_attributes": map[string]any{
+				"host.id": map[string]any{
+					"enabled": true,
+				},
+				"os.type": map[string]any{
+					"enabled": false,
+				},
+			},
+		},
+	}
+}
 
 // CloudRegionFallbackStatement returns an OTTL resource-context statement that
 // sets cloud.region to region only when the resource carries no location at
@@ -37,3 +131,10 @@ func CloudRegionFallbackStatement(region string) string {
 		strconv.Quote(region),
 	)
 }
+
+// DeleteTelemetryTypeStatement is an OTTL resource-context statement that
+// removes gcp.telemetry_type so log-routing values supplied via
+// OTEL_RESOURCE_ATTRIBUTES (as a temporary mechanism until a resource policy
+// exists) remain only on canonical workload logs and do not affect collector
+// self-observability or canonical workload metrics and traces.
+const DeleteTelemetryTypeStatement = `delete_key(attributes, "gcp.telemetry_type")`

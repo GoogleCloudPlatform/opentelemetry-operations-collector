@@ -16,9 +16,70 @@ package googlepolicy
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
+
+func TestSelfResourceDetectionProcessorConfig(t *testing.T) {
+	cfg := SelfResourceDetectionProcessorConfig()
+	assert.Equal(t, map[string]any{
+		"detectors": []string{"env", "gcp", "system"},
+		"override":  false,
+		"timeout":   10 * time.Second,
+		"system": map[string]any{
+			"resource_attributes": map[string]any{
+				"host.id": map[string]any{
+					"enabled": true,
+				},
+				"os.type": map[string]any{
+					"enabled": false,
+				},
+			},
+		},
+	}, cfg)
+
+	cfg["override"] = true
+	assert.Equal(t, false, SelfResourceDetectionProcessorConfig()["override"])
+}
+
+func TestWorkloadResourceDetectionProcessorConfig(t *testing.T) {
+	cfg := WorkloadResourceDetectionProcessorConfig()
+	assert.Equal(t, map[string]any{
+		"detectors": []string{"env", "gcp", "system"},
+		"override":  false,
+		"timeout":   10 * time.Second,
+		"env": map[string]any{
+			"attributes": map[string]any{
+				"excluded": []string{
+					"service.*",
+					"k8s.pod.*",
+					"k8s.container.*",
+					"k8s.namespace.*",
+					"k8s.daemonset.*",
+					"k8s.deployment.*",
+					"k8s.replicaset.*",
+					"k8s.statefulset.*",
+					"k8s.job.*",
+					"k8s.cronjob.*",
+				},
+			},
+		},
+		"system": map[string]any{
+			"resource_attributes": map[string]any{
+				"host.id": map[string]any{
+					"enabled": true,
+				},
+				"os.type": map[string]any{
+					"enabled": false,
+				},
+			},
+		},
+	}, cfg)
+
+	cfg["override"] = true
+	assert.Equal(t, false, WorkloadResourceDetectionProcessorConfig()["override"])
+}
 
 func TestCloudRegionFallbackStatement(t *testing.T) {
 	assert.Empty(t, CloudRegionFallbackStatement(""))
@@ -27,4 +88,5 @@ func TestCloudRegionFallbackStatement(t *testing.T) {
 		CloudRegionFallbackStatement("us-east1"))
 	// Quotes are escaped so the value stays a single OTTL string literal.
 	assert.Contains(t, CloudRegionFallbackStatement(`a"b`), `"a\"b"`)
+	assert.Equal(t, `delete_key(attributes, "gcp.telemetry_type")`, DeleteTelemetryTypeStatement)
 }

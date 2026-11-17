@@ -26,7 +26,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider/policies/gcpdestination"
@@ -467,36 +466,37 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 	preProcessMetricIDs := append([]component.ID{googlePolicyID}, destPolicy.PreProcessMetricIDs()...)
 	preProcessTraceIDs := append([]component.ID{googlePolicyID}, destPolicy.PreProcessTraceIDs()...)
 
-	// Configure GCP resource detection and transform for canonical workload pipelines
+	// Configure resource detection and transform for canonical workload pipelines
 	rdType, _ := component.NewType("resourcedetection")
 	rdID := component.NewIDWithName(rdType, "googlecontrolplane")
-	rdCfg := map[string]any{
-		"detectors": []string{"gcp"},
-		"override":  false,
-		"timeout":   10 * time.Second,
-	}
+	rdCfg := googlepolicy.WorkloadResourceDetectionProcessorConfig()
 
 	transformType, _ := component.NewType("transform")
 	transformID := component.NewIDWithName(transformType, "googlecontrolplane")
-	resourceStatements := workloadResourceStatements(stringFromContext(ctx, "PROJECT_ID"), stringFromContext(ctx, "REGION"))
+	logResourceStatements := workloadResourceStatements(stringFromContext(ctx, "PROJECT_ID"), stringFromContext(ctx, "REGION"))
+	// Strip gcp.telemetry_type from canonical workload metrics and traces so a
+	// log-routing value supplied via OTEL_RESOURCE_ATTRIBUTES applies only to
+	// logs/googlecontrolplane and does not cause telemetry.googleapis.com to
+	// reject metrics or traces.
+	nonLogResourceStatements := append(append([]string(nil), logResourceStatements...), googlepolicy.DeleteTelemetryTypeStatement)
 	transformCfg := map[string]any{
 		"error_mode": "ignore",
 		"log_statements": []map[string]any{
 			{
 				"context":    "resource",
-				"statements": resourceStatements,
+				"statements": logResourceStatements,
 			},
 		},
 		"metric_statements": []map[string]any{
 			{
 				"context":    "resource",
-				"statements": resourceStatements,
+				"statements": nonLogResourceStatements,
 			},
 		},
 		"trace_statements": []map[string]any{
 			{
 				"context":    "resource",
-				"statements": resourceStatements,
+				"statements": nonLogResourceStatements,
 			},
 		},
 	}

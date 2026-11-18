@@ -21,6 +21,7 @@ package xdsclient
 import (
 	"time"
 
+	"google.golang.org/grpc/grpclog"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients"
 )
 
@@ -83,6 +84,18 @@ type Config struct {
 	// seconds is used as specified here:
 	// envoyproxy.io/docs/envoy/latest/api-docs/xds_protocol#knowing-when-a-requested-resource-does-not-exist
 	WatchExpiryTimeout time.Duration
+
+	// Logger is an optional DepthLoggerV2 used for xDS client debug/warning/error logs.
+	// If nil, the global grpclog "xds" component logger is used.
+	Logger grpclog.DepthLoggerV2
+
+	// Backoff is an optional function returning the backoff duration for a given
+	// retry attempt (0-indexed). If nil, default exponential backoff is used.
+	Backoff func(int) time.Duration
+
+	// TimeAfter is an optional function used to sleep for backoff durations.
+	// If nil, time.After is used.
+	TimeAfter func(time.Duration) <-chan time.Time
 }
 
 // ServerConfig contains configuration for an xDS management server.

@@ -641,17 +641,25 @@ func AssertMetricMissing(ctx context.Context, logger *log.Logger, vm *VM, metric
 	return nil
 }
 
-// findMatchingLogs looks in the logging backend for logs matching the given query,
+func buildLogFilter(vm *VM, includeInstanceID bool, logNameRegex string, start time.Time, query string) string {
+	t := start.Format(time.RFC3339)
+	var b strings.Builder
+	fmt.Fprintf(&b, `logName=~"projects/%s/logs/%s"`, vm.Project, logNameRegex)
+	if includeInstanceID {
+		fmt.Fprintf(&b, ` AND resource.labels.instance_id="%d"`, vm.ID)
+	}
+	fmt.Fprintf(&b, ` AND timestamp > "%s"`, t)
+	if query != "" {
+		fmt.Fprintf(&b, ` AND %s`, query)
+	}
+	return b.String()
+}
+
+// findMatchingLogsScoped looks in the logging backend for logs matching the given query,
 // over the trailing time interval specified by the given window.
 // Returns all the matching log entries found, or an error if the lookup failed.
-func findMatchingLogs(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string) ([]*cloudlogging.Entry, error) {
-	start := time.Now().Add(-window)
-
-	t := start.Format(time.RFC3339)
-	filter := fmt.Sprintf(`logName=~"projects/%s/logs/%s" AND resource.labels.instance_id="%d" AND timestamp > "%s"`, vm.Project, logNameRegex, vm.ID, t)
-	if query != "" {
-		filter += fmt.Sprintf(` AND %s`, query)
-	}
+func findMatchingLogsScoped(ctx context.Context, logger *log.Logger, vm *VM, includeInstanceID bool, logNameRegex string, window time.Duration, query string) ([]*cloudlogging.Entry, error) {
+	filter := buildLogFilter(vm, includeInstanceID, logNameRegex, time.Now().Add(-window), query)
 	logger.Println(filter)
 
 	logClient, err := logClients.new(vm.Project)
@@ -677,11 +685,25 @@ func findMatchingLogs(ctx context.Context, logger *log.Logger, vm *VM, logNameRe
 	return matchingLogs, nil
 }
 
+// findMatchingLogs looks in the logging backend for logs matching the given query,
+// over the trailing time interval specified by the given window.
+// Returns all the matching log entries found, or an error if the lookup failed.
+func findMatchingLogs(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string) ([]*cloudlogging.Entry, error) {
+	return findMatchingLogsScoped(ctx, logger, vm, true, logNameRegex, window, query)
+}
+
 // WaitForLog looks in the logging backend for a log matching the given query,
 // over the trailing time interval specified by the given window.
 // Returns an error if the log could not be found after LogQueryMaxAttempts retries.
 func WaitForLog(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string) error {
-	_, err := QueryLog(ctx, logger, vm, logNameRegex, window, query, LogQueryMaxAttempts)
+	_, err := queryLogScoped(ctx, logger, vm, true, logNameRegex, window, query, LogQueryMaxAttempts)
+	return err
+}
+
+// WaitForProjectLog is the project-scoped variant of WaitForLog (omitting
+// resource.labels.instance_id) for off-GCP collectors without GCE metadata.
+func WaitForProjectLog(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string) error {
+	_, err := queryLogScoped(ctx, logger, vm, false, logNameRegex, window, query, LogQueryMaxAttempts)
 	return err
 }
 
@@ -692,13 +714,9 @@ func shouldRetryHasMatchingLog(err error) bool {
 		strings.Contains(err.Error(), "Internal error encountered")
 }
 
-// QueryLog looks in the logging backend for a log matching the given query,
-// over the trailing time interval specified by the given window.
-// Returns the first log entry found, or an error if the log could not be
-// found after some retries.
-func QueryLog(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string, maxAttempts int) (*cloudlogging.Entry, error) {
+func queryLogScoped(ctx context.Context, logger *log.Logger, vm *VM, includeInstanceID bool, logNameRegex string, window time.Duration, query string, maxAttempts int) (*cloudlogging.Entry, error) {
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		matchingLogs, err := findMatchingLogs(ctx, logger, vm, logNameRegex, window, query)
+		matchingLogs, err := findMatchingLogsScoped(ctx, logger, vm, includeInstanceID, logNameRegex, window, query)
 		found := len(matchingLogs) > 0
 		if err == nil && found {
 			// Success.
@@ -715,14 +733,17 @@ func QueryLog(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex stri
 	return nil, fmt.Errorf("QueryLog() failed: %s not found, exhausted retries", logNameRegex)
 }
 
-// QueryAllLogs looks in the logging backend for logs matching the given query,
+// QueryLog looks in the logging backend for a log matching the given query,
 // over the trailing time interval specified by the given window.
-// Returns all the log entries found, or an error if no successful queries to the
-// backend. To consider possible transient errors while querying the backend we
-// make maxAttempts query attempts.
-func QueryAllLogs(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string, maxAttempts int) ([]*cloudlogging.Entry, error) {
+// Returns the first log entry found, or an error if the log could not be
+// found after some retries.
+func QueryLog(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string, maxAttempts int) (*cloudlogging.Entry, error) {
+	return queryLogScoped(ctx, logger, vm, true, logNameRegex, window, query, maxAttempts)
+}
+
+func queryAllLogsScoped(ctx context.Context, logger *log.Logger, vm *VM, includeInstanceID bool, logNameRegex string, window time.Duration, query string, maxAttempts int) ([]*cloudlogging.Entry, error) {
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		matchingLogs, err := findMatchingLogs(ctx, logger, vm, logNameRegex, window, query)
+		matchingLogs, err := findMatchingLogsScoped(ctx, logger, vm, includeInstanceID, logNameRegex, window, query)
 		if err == nil {
 			// Success.
 			return matchingLogs, nil
@@ -738,11 +759,17 @@ func QueryAllLogs(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex 
 	return nil, fmt.Errorf("QueryAllLogs() failed: %s no succesful queries to the backend, exhausted retries", logNameRegex)
 }
 
-// AssertLogMissing looks in the logging backend for a log matching the given query
-// and returns success if no data is found. To consider possible transient errors
-// while querying the backend we make queryMaxAttemptsLogMissing query attempts.
-func AssertLogMissing(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string) error {
-	matchingLogs, err := QueryAllLogs(ctx, logger, vm, logNameRegex, window, query, queryMaxAttemptsLogMissing)
+// QueryAllLogs looks in the logging backend for logs matching the given query,
+// over the trailing time interval specified by the given window.
+// Returns all the log entries found, or an error if no successful queries to the
+// backend. To consider possible transient errors while querying the backend we
+// make maxAttempts query attempts.
+func QueryAllLogs(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string, maxAttempts int) ([]*cloudlogging.Entry, error) {
+	return queryAllLogsScoped(ctx, logger, vm, true, logNameRegex, window, query, maxAttempts)
+}
+
+func assertLogMissingScoped(ctx context.Context, logger *log.Logger, vm *VM, includeInstanceID bool, logNameRegex string, window time.Duration, query string) error {
+	matchingLogs, err := queryAllLogsScoped(ctx, logger, vm, includeInstanceID, logNameRegex, window, query, queryMaxAttemptsLogMissing)
 	if err == nil {
 		if len(matchingLogs) > 0 {
 			return fmt.Errorf("AssertLogMissing(log=%q): %v failed: unexpectedly found data for log", query, err)
@@ -751,6 +778,19 @@ func AssertLogMissing(ctx context.Context, logger *log.Logger, vm *VM, logNameRe
 		return nil
 	}
 	return fmt.Errorf("AssertLogMissing(log=%q): %v failed: no successful queries to the backend for log %s, exhausted retries", query, err, logNameRegex)
+}
+
+// AssertLogMissing looks in the logging backend for a log matching the given query
+// and returns success if no data is found. To consider possible transient errors
+// while querying the backend we make queryMaxAttemptsLogMissing query attempts.
+func AssertLogMissing(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string) error {
+	return assertLogMissingScoped(ctx, logger, vm, true, logNameRegex, window, query)
+}
+
+// AssertProjectLogMissing is the project-scoped variant of AssertLogMissing
+// (omitting resource.labels.instance_id) for off-GCP collectors without GCE metadata.
+func AssertProjectLogMissing(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string) error {
+	return assertLogMissingScoped(ctx, logger, vm, false, logNameRegex, window, query)
 }
 
 // CommandOutput holds the textual output from running a subprocess.

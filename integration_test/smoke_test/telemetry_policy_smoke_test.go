@@ -87,7 +87,6 @@ import (
 	"testing"
 	"time"
 
-	"cloud.google.com/go/logging/logadmin"
 	monitoring "cloud.google.com/go/monitoring/apiv3/v2"
 	"cloud.google.com/go/monitoring/apiv3/v2/monitoringpb"
 	"github.com/google/uuid"
@@ -469,73 +468,28 @@ func offGCPKeptTransformedQuery(message string) string {
 	return fmt.Sprintf(`resource.type="generic_node" AND %s`, keptTransformedQuery(message))
 }
 
-func countLogsMatchingFilter(ctx context.Context, logger *log.Logger, client *logadmin.Client, project, extraFilter string) (int, error) {
-	filter := fmt.Sprintf(`logName:"projects/%s/logs/" AND timestamp > %q AND %s`,
-		project, time.Now().Add(-logWindow).Format(time.RFC3339), extraFilter)
-	logger.Println(filter)
-	it := client.Entries(ctx, logadmin.Filter(filter))
-	n := 0
-	for {
-		entry, err := it.Next()
-		if err == iterator.Done {
-			return n, nil
-		}
-		if err != nil {
-			return 0, err
-		}
-		logger.Printf("Found matching log entry: %v", entry)
-		n++
-	}
-}
-
-func verifyLogsOffGCP(ctx context.Context, logger *log.Logger, vm *gce.VM) error {
-	client, err := logadmin.NewClient(ctx, vm.Project)
-	if err != nil {
-		return fmt.Errorf("logadmin.NewClient(%s): %v", vm.Project, err)
-	}
-	defer client.Close()
-
-	kept := offGCPLogLine(keptMessage, vm)
-	keptQuery := offGCPKeptTransformedQuery(kept)
-	found := false
-	for attempt := 1; attempt <= gce.LogQueryMaxAttempts && !found; attempt++ {
-		n, err := countLogsMatchingFilter(ctx, logger, client, vm.Project, keptQuery)
-		if err != nil {
-			logger.Printf("Log query failed (attempt %d/%d): %v", attempt, gce.LogQueryMaxAttempts, err)
-		}
-		if found = n > 0; !found {
-			time.Sleep(queryBackoffDuration)
-		}
-	}
-	if !found {
-		return fmt.Errorf("transformed kept log (%s) not found in Cloud Logging of %s; see %s",
-			keptQuery, vm.Project, collectorLogsFile(vm.ImageSpec))
-	}
-	for _, m := range droppedMessages {
-		dropped := offGCPLogLine(m, vm)
-		n, err := countLogsMatchingFilter(ctx, logger, client, vm.Project, messageQuery(dropped))
-		if err != nil {
-			return fmt.Errorf("querying log %q: %v", dropped, err)
-		}
-		if n > 0 {
-			return fmt.Errorf("log %q should have been dropped by the PolicySet, found %d entries in %s", dropped, n, vm.Project)
-		}
-	}
-	return nil
-}
-
 // verifyFilteredAndTransformedLogs checks that the kept sample log reached Cloud
 // Logging with labels.gboc_smoke="true" (from logTransformPolicy) and that both
 // dropped sample logs were filtered out (by logFilterPolicy).
 func verifyFilteredAndTransformedLogs(ctx context.Context, logger *log.Logger, vm *gce.VM, s telemetryPolicySettings) error {
+	waitFn := gce.WaitForLog
+	missingFn := gce.AssertLogMissing
+	keptMsg := keptMessage
+	keptFilter := keptTransformedQuery(keptMsg)
+	formatDropped := func(m string) string { return m }
 	if s.offGCP {
-		return verifyLogsOffGCP(ctx, logger, vm)
+		waitFn = gce.WaitForProjectLog
+		missingFn = gce.AssertProjectLogMissing
+		keptMsg = offGCPLogLine(keptMessage, vm)
+		keptFilter = offGCPKeptTransformedQuery(keptMsg)
+		formatDropped = func(m string) string { return offGCPLogLine(m, vm) }
 	}
-	if err := gce.WaitForLog(ctx, logger, vm, ".*", logWindow, keptTransformedQuery(keptMessage)); err != nil {
-		return fmt.Errorf("transformed kept log (%s) not found in Cloud Logging: %v", keptTransformedQuery(keptMessage), err)
+	if err := waitFn(ctx, logger, vm, ".*", logWindow, keptFilter); err != nil {
+		return fmt.Errorf("transformed kept log (%s) not found in Cloud Logging: %v; see %s",
+			keptFilter, err, collectorLogsFile(vm.ImageSpec))
 	}
 	for _, m := range droppedMessages {
-		if err := gce.AssertLogMissing(ctx, logger, vm, ".*", logWindow, messageQuery(m)); err != nil {
+		if err := missingFn(ctx, logger, vm, ".*", logWindow, messageQuery(formatDropped(m))); err != nil {
 			return fmt.Errorf("log %q should have been dropped by the PolicySet: %v", m, err)
 		}
 	}

@@ -838,13 +838,27 @@ func TestExtractManifest_TelemetryCollector(t *testing.T) {
 
 func TestExtractManifest_LegacyV1Alpha1TelemetryCollector(t *testing.T) {
 	now := time.Now().Truncate(time.Microsecond)
-	policyPayload, err := structpb.NewStruct(map[string]any{
-		"name": "legacy-log-filter-policy",
-	})
+	rawPolicy := &policyv1.LogFilterPolicy{
+		Id:     "legacy-log-filter-policy",
+		Action: policyv1.Action_ACTION_DROP.Enum(),
+		Matchers: []*policyv1.LogMatcher{
+			{
+				Target: &policyv1.LogFieldSelector{
+					Target: &policyv1.LogFieldSelector_RecordField{
+						RecordField: policyv1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT,
+					},
+				},
+				Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Glob{Glob: "DEBUG*"}},
+			},
+		},
+	}
+	policyWireBytes, err := proto.Marshal(rawPolicy)
 	require.NoError(t, err)
 
-	policyAny, err := anypb.New(policyPayload)
-	require.NoError(t, err)
+	policyAny := &anypb.Any{
+		TypeUrl: "type.googleapis.com/google.telemetry.policy.v1alpha1.LogFilterPolicy",
+		Value:   policyWireBytes,
+	}
 
 	collector := &xdsv1.TelemetryCollector{
 		PolicySetRevision:           "projects/123456/locations/global/policySets/prod-ps/revisions/r-legacy",
@@ -868,6 +882,128 @@ func TestExtractManifest_LegacyV1Alpha1TelemetryCollector(t *testing.T) {
 	assert.Equal(t, "projects/123456/locations/global/policySets/prod-ps/revisions/r-legacy", manifest.policySetRevision)
 	assert.True(t, now.Equal(manifest.revisionCreateTime))
 	require.Len(t, manifest.policies, 1)
+
+	decoded, ok := manifest.policies[0].(*policyv1.LogFilterPolicy)
+	require.True(t, ok, "expected *policyv1.LogFilterPolicy, got %T", manifest.policies[0])
+	assert.True(t, proto.Equal(rawPolicy, decoded), "decoded v1 policy should match wire-compatible v1alpha1 payload")
+}
+
+func TestProtoFromAny_LegacyV1Alpha1PolicyTypeURL(t *testing.T) {
+	want := &policyv1.LogFilterPolicy{
+		Id:     "drop-debug",
+		Action: policyv1.Action_ACTION_DROP.Enum(),
+	}
+	wireBytes, err := proto.Marshal(want)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name    string
+		typeURL string
+		wantOK  bool
+	}{
+		{
+			name:    "standard googleapis prefix",
+			typeURL: "type.googleapis.com/google.telemetry.policy.v1alpha1.LogFilterPolicy",
+			wantOK:  true,
+		},
+		{
+			name:    "https custom domain prefix",
+			typeURL: "https://type.googleapis.com/google.telemetry.policy.v1alpha1.LogFilterPolicy",
+			wantOK:  true,
+		},
+		{
+			name:    "bare message full name",
+			typeURL: "google.telemetry.policy.v1alpha1.LogFilterPolicy",
+			wantOK:  true,
+		},
+		{
+			name:    "unknown message in v1alpha1 package",
+			typeURL: "type.googleapis.com/google.telemetry.policy.v1alpha1.DoesNotExist",
+			wantOK:  false,
+		},
+		{
+			name:    "foreign package with embedded v1alpha1 prefix",
+			typeURL: "type.googleapis.com/other.google.telemetry.policy.v1alpha1.LogFilterPolicy",
+			wantOK:  false,
+		},
+		{
+			name:    "empty message name after v1alpha1 prefix",
+			typeURL: "type.googleapis.com/google.telemetry.policy.v1alpha1.",
+			wantOK:  false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			in := &anypb.Any{
+				TypeUrl: tc.typeURL,
+				Value:   wireBytes,
+			}
+			msg, err := protoFromAny(in)
+			// Verify caller input is never mutated.
+			assert.Equal(t, tc.typeURL, in.GetTypeUrl())
+			if tc.wantOK {
+				require.NoError(t, err)
+				decoded, ok := msg.(*policyv1.LogFilterPolicy)
+				require.True(t, ok, "expected *policyv1.LogFilterPolicy, got %T", msg)
+				assert.True(t, proto.Equal(want, decoded))
+				return
+			}
+			require.ErrorIs(t, err, ErrXDSPolicyDecode)
+			assert.Contains(t, err.Error(), tc.typeURL, "error should report the original incoming type URL")
+		})
+	}
+}
+
+func TestExtractManifest_V1CollectorWithLegacyV1Alpha1Policy(t *testing.T) {
+	want := &policyv1.LogFilterPolicy{
+		Id:     "mixed-rollout-policy",
+		Action: policyv1.Action_ACTION_KEEP.Enum(),
+	}
+	policyWireBytes, err := proto.Marshal(want)
+	require.NoError(t, err)
+
+	collectorAny, err := anypb.New(&xdsv1.TelemetryCollector{
+		PolicySetRevision: "projects/123456/locations/global/policySets/prod-ps/revisions/r-mixed",
+		Policies: []*anypb.Any{{
+			TypeUrl: "type.googleapis.com/google.telemetry.policy.v1alpha1.LogFilterPolicy",
+			Value:   policyWireBytes,
+		}},
+	})
+	require.NoError(t, err)
+
+	manifest, err := extractManifest(&discoveryv3.DiscoveryResponse{
+		VersionInfo: "v1-mixed",
+		TypeUrl:     xdsPolicyTypeURL,
+		Resources:   []*anypb.Any{collectorAny},
+	})
+	require.NoError(t, err)
+	require.Len(t, manifest.policies, 1)
+	decoded, ok := manifest.policies[0].(*policyv1.LogFilterPolicy)
+	require.True(t, ok)
+	assert.True(t, proto.Equal(want, decoded))
+}
+
+func TestExtractManifest_BareLegacyV1Alpha1Policy(t *testing.T) {
+	want := &policyv1.LogFilterPolicy{
+		Id:     "bare-legacy-policy",
+		Action: policyv1.Action_ACTION_DROP.Enum(),
+	}
+	wireBytes, err := proto.Marshal(want)
+	require.NoError(t, err)
+
+	manifest, err := extractManifest(&discoveryv3.DiscoveryResponse{
+		VersionInfo: "v1-bare",
+		Resources: []*anypb.Any{{
+			TypeUrl: "type.googleapis.com/google.telemetry.policy.v1alpha1.LogFilterPolicy",
+			Value:   wireBytes,
+		}},
+	})
+	require.NoError(t, err)
+	require.Len(t, manifest.policies, 1)
+	decoded, ok := manifest.policies[0].(*policyv1.LogFilterPolicy)
+	require.True(t, ok)
+	assert.True(t, proto.Equal(want, decoded))
 }
 
 func TestXDSPolicyLifecycle_EmptyPolicySetWithRevision(t *testing.T) {

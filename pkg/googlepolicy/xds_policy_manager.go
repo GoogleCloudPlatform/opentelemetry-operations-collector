@@ -79,6 +79,13 @@ const (
 	legacyXDSResourceType  = "google.telemetry.xds.v1alpha1.TelemetryCollector"
 	legacyXDSPolicyTypeURL = "type.googleapis.com/" + legacyXDSResourceType
 
+	// policyProtoPrefix and legacyPolicyProtoPrefix are the protobuf package
+	// prefixes for telemetry policy messages. Because v1 is wire-compatible with
+	// v1alpha1 (only the package name changed), protoFromAny rewrites incoming
+	// legacy v1alpha1 policy Any type URLs to v1 before unmarshaling.
+	policyProtoPrefix       = "google.telemetry.policy.v1."
+	legacyPolicyProtoPrefix = "google.telemetry.policy.v1alpha1."
+
 	// defaultCollectorResource is the collector resource name suffix in the
 	// xdstp:// subscription URI. The control plane organizes collector
 	// configurations under /collectors/{name}. Currently all collectors
@@ -1438,7 +1445,7 @@ func extractManifest(resp *discoveryv3.DiscoveryResponse) (xdsManifest, error) {
 		// Accept both the v1 type URL and the legacy v1alpha1 type URL so the
 		// collector can decode responses from a control plane that has not yet
 		// migrated to google.telemetry.xds.v1.TelemetryCollector.
-		if anyRes.MessageIs(&xdsv1.TelemetryCollector{}) || anyRes.GetTypeUrl() == legacyXDSPolicyTypeURL {
+		if anyRes.MessageIs(&xdsv1.TelemetryCollector{}) || string(anyRes.MessageName()) == legacyXDSResourceType {
 			collector := &xdsv1.TelemetryCollector{}
 			if err := proto.Unmarshal(anyRes.GetValue(), collector); err != nil {
 				errs = append(errs, fmt.Errorf("%w at index %d: %w", ErrXDSResourceDecode, i, err))
@@ -1497,11 +1504,31 @@ func policiesFromCollector(collector *xdsv1.TelemetryCollector) ([]proto.Message
 }
 
 func protoFromAny(msgAny *anypb.Any) (proto.Message, error) {
-	msg, err := msgAny.UnmarshalNew()
+	msg, err := rewriteLegacyPolicyAny(msgAny).UnmarshalNew()
 	if err != nil {
 		return nil, fmt.Errorf("%w: unknown or unregistered type URL %q: %w", ErrXDSPolicyDecode, msgAny.GetTypeUrl(), err)
 	}
 	return msg, nil
+}
+
+// rewriteLegacyPolicyAny returns a copy of msgAny whose TypeUrl prefix is
+// rewritten from google.telemetry.policy.v1alpha1.<Msg> to
+// google.telemetry.policy.v1.<Msg>. Any other type URL is returned unchanged.
+func rewriteLegacyPolicyAny(msgAny *anypb.Any) *anypb.Any {
+	if msgAny == nil {
+		return nil
+	}
+	typeURL := msgAny.GetTypeUrl()
+	slash := strings.LastIndexByte(typeURL, '/')
+	prefix, fullName := typeURL[:slash+1], typeURL[slash+1:]
+	suffix, ok := strings.CutPrefix(fullName, legacyPolicyProtoPrefix)
+	if !ok || suffix == "" {
+		return msgAny
+	}
+	return &anypb.Any{
+		TypeUrl: prefix + policyProtoPrefix + suffix,
+		Value:   msgAny.GetValue(),
+	}
 }
 
 type tlsCredentialsBundle struct {

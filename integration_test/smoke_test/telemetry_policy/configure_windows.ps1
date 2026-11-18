@@ -15,18 +15,16 @@
 # Configures the otelcol-google Windows service to run strictly from the
 # googlecontrolplane xDS config source (without config.yaml). When -OffGCP is
 # set, it also stops the service, blocks outbound traffic from
-# otelcol-google.exe to the GCE metadata server (169.254.169.254), installs the
-# filtered hosts file so metadata.google.internal resolves to 127.0.0.1, and
-# sets GOOGLE_APPLICATION_CREDENTIALS and GOOGLE_CLOUD_PROJECT on the Windows
-# service for X.509 WIF and googleclientauth/default_gcp_destination.
+# otelcol-google.exe to the GCE metadata server (169.254.169.254), and sets
+# GOOGLE_APPLICATION_CREDENTIALS and GOOGLE_CLOUD_PROJECT on the Windows service
+# for X.509 WIF and googleclientauth/default_gcp_destination.
 
 param(
     [Parameter(Mandatory = $true)][string]$ControlPlaneConfig,
     [Parameter(Mandatory = $true)][string]$LogDir,
     [switch]$OffGCP,
     [string]$WifCredConfig = "",
-    [string]$Project = "",
-    [string]$FilteredHostsPath = ""
+    [string]$Project = ""
 )
 
 $ErrorActionPreference = 'Stop'
@@ -53,12 +51,6 @@ if ($OffGCP) {
         -Action Block `
         -RemoteAddress '169.254.169.254' `
         -Program $exePath | Out-Null
-
-    if ($FilteredHostsPath -ne "") {
-        $systemHosts = "$env:SystemRoot\System32\drivers\etc\hosts"
-        Copy-Item -Force -LiteralPath $FilteredHostsPath -Destination $systemHosts
-        Clear-DnsClientCache
-    }
 
     [string[]]$svcEnv = @(
         "GOOGLE_APPLICATION_CREDENTIALS=$WifCredConfig",

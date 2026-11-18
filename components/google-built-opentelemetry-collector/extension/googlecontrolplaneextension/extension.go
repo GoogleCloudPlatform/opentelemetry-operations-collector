@@ -26,7 +26,6 @@ import (
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/googlecontrolplaneextension/internal/metadata"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/googlecontrolplaneextension/internal/telemetry"
-	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 )
 
 // MetricPolicySetActive is the name of the gcp.policy.set.active metric.
@@ -40,6 +39,7 @@ type controlPlaneExtension struct {
 	set    extension.Settings
 	logger *zap.Logger
 	source PolicyStateSource
+	binder xdsMetricsBinder
 
 	metrics            *telemetry.Metrics
 	registration       metric.Registration
@@ -48,12 +48,13 @@ type controlPlaneExtension struct {
 
 var _ extension.Extension = (*controlPlaneExtension)(nil)
 
-func newControlPlaneExtension(cfg *Config, set extension.Settings, source PolicyStateSource) *controlPlaneExtension {
+func newControlPlaneExtension(cfg *Config, set extension.Settings, source PolicyStateSource, binder xdsMetricsBinder) *controlPlaneExtension {
 	return &controlPlaneExtension{
 		cfg:    cfg,
 		set:    set,
 		logger: set.Logger,
 		source: source,
+		binder: binder,
 	}
 }
 
@@ -65,6 +66,9 @@ func newControlPlaneExtension(cfg *Config, set extension.Settings, source Policy
 // on this MeterProvider are picked up by service::telemetry::metrics and
 // exported through the self metrics pipeline; this extension does not need to
 // sit in a pipeline itself.
+//
+// Start also hands the same MeterProvider to the xDS client, so its metrics
+// are exported the same way. Shutdown takes it back.
 func (e *controlPlaneExtension) Start(_ context.Context, _ component.Host) error {
 	mp := e.set.TelemetrySettings.MeterProvider
 	if mp == nil {
@@ -85,7 +89,7 @@ func (e *controlPlaneExtension) Start(_ context.Context, _ component.Host) error
 		return fmt.Errorf("failed to register control plane metric callback: %w", err)
 	}
 
-	googlepolicy.SetXDSMeterProvider(mp)
+	e.binder.BindXDSMeterProvider(mp)
 
 	return nil
 }
@@ -150,7 +154,7 @@ func (e *controlPlaneExtension) Shutdown(context.Context) error {
 	if e.registration == nil {
 		return nil
 	}
-	googlepolicy.SetXDSMeterProvider(nil)
+	e.binder.BindXDSMeterProvider(nil)
 	err := e.registration.Unregister()
 	e.registration = nil
 	return err

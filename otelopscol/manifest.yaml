@@ -98,6 +98,11 @@ replaces:
 - github.com/GoogleCloudPlatform/opentelemetry-operations-collector => ../../
 # Force update buger/jsonparser to v1.1.2 to fix vulnerability
 - github.com/buger/jsonparser => github.com/buger/jsonparser v1.1.2
+# Test opentelemetry-operations-go release v1.39.0/v0.63.0 for retry_on_failure.
+- github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector => github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/collector v0.63.0
+- github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace => github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/trace v1.39.0
+# Test contrib PR #52568 for googlecloudexporter retry_on_failure.
+- github.com/open-telemetry/opentelemetry-collector-contrib/exporter/googlecloudexporter => github.com/franciscovalentecastro/opentelemetry-collector-contrib/exporter/googlecloudexporter 2ccbf0f93a956ff839624843782aedb9e73b6a6e
 
 build:
   build_tags:

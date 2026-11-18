@@ -205,8 +205,8 @@ var (
 type XDSPolicyManagerOption func(*xdsPolicyManager)
 
 // WithMeterProvider configures the OpenTelemetry MeterProvider used to record
-// grpc.xds_client.* self-observability metrics. If unset, otel.GetMeterProvider()
-// is used.
+// grpc.xds_client.* self-observability metrics. If unset, the provider
+// registered via SetXDSMeterProvider is used.
 func WithMeterProvider(mp metric.MeterProvider) XDSPolicyManagerOption {
 	return func(m *xdsPolicyManager) {
 		m.meterProvider = mp

@@ -210,9 +210,26 @@ func TestXDSPolicyManager_Metrics(t *testing.T) {
 		}
 	}
 
-	// Collect metrics while connected and holding a nacked_but_cached resource.
+	// The ACK/NACK goes on the wire before the authority finishes recording
+	// the update on its callback serializer, so poll until both NACKs and the
+	// nacked_but_cached state are reflected in the metrics.
 	var rm metricdata.ResourceMetrics
-	require.NoError(t, reader.Collect(context.Background(), &rm))
+	require.Eventually(t, func() bool {
+		rm = metricdata.ResourceMetrics{}
+		if err := reader.Collect(context.Background(), &rm); err != nil {
+			return false
+		}
+		invalidPts := findInt64SumPoints(rm, "grpc.xds_client.resource_updates_invalid")
+		if len(invalidPts) != 1 || invalidPts[0].Value != 2 {
+			return false
+		}
+		for _, pt := range findInt64GaugePoints(rm, "grpc.xds_client.resources") {
+			if attrValue(pt.Attributes, "grpc.xds.cache_state") == "nacked_but_cached" && pt.Value == 1 {
+				return true
+			}
+		}
+		return false
+	}, 2*time.Second, 10*time.Millisecond, "expected metrics to reflect both NACKs and nacked_but_cached state")
 
 	validPts := findInt64SumPoints(rm, "grpc.xds_client.resource_updates_valid")
 	require.Len(t, validPts, 1, "expected 1 series for grpc.xds_client.resource_updates_valid")
@@ -235,7 +252,7 @@ func TestXDSPolicyManager_Metrics(t *testing.T) {
 	for _, sm := range rm.ScopeMetrics {
 		for _, m := range sm.Metrics {
 			if m.Name == "grpc.xds_client.connected" {
-				assert.Equal(t, "{connected}", m.Unit)
+				assert.Equal(t, "{bool}", m.Unit)
 			}
 		}
 	}
@@ -460,9 +477,13 @@ func TestXDSPolicyManager_SetXDSMeterProviderLateBinding(t *testing.T) {
 	}
 
 	// Start the manager WITHOUT WithMeterProvider (simulating googlecontrolplaneprovider.Retrieve()).
+	// A long initialSyncTimeout makes Start block until the first revision is
+	// applied, so its ResourceUpdateValid is recorded before the late bind.
 	m := newTestManager(t, startFakeADSServer(t, srv))
+	m.initialSyncTimeout = 5 * time.Second
 	require.NoError(t, m.Start())
 	t.Cleanup(func() { require.NoError(t, m.Stop()) })
+	require.Equal(t, "rev-1", m.LastAppliedVersion(), "expected initial sync to complete before late binding")
 
 	select {
 	case <-ackCh:

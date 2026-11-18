@@ -18,7 +18,6 @@ import (
 	"context"
 	"sync"
 
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 
@@ -32,6 +31,7 @@ var (
 	xdsMetricsMu       sync.Mutex
 	activeXDSReporters = make(map[*otelMetricsReporter]struct{})
 	defaultXDSMeter    metric.MeterProvider
+	defaultXDSMeterGen uint64
 )
 
 // SetXDSMeterProvider registers the OpenTelemetry MeterProvider used by active
@@ -40,6 +40,8 @@ var (
 // provider (for example on extension shutdown).
 func SetXDSMeterProvider(mp metric.MeterProvider) {
 	xdsMetricsMu.Lock()
+	defaultXDSMeterGen++
+	gen := defaultXDSMeterGen
 	defaultXDSMeter = mp
 	reporters := make([]*otelMetricsReporter, 0, len(activeXDSReporters))
 	for r := range activeXDSReporters {
@@ -48,7 +50,7 @@ func SetXDSMeterProvider(mp metric.MeterProvider) {
 	xdsMetricsMu.Unlock()
 
 	for _, r := range reporters {
-		r.setFallbackMeterProvider(mp)
+		r.setFallbackMeterProvider(mp, gen)
 	}
 }
 
@@ -63,69 +65,87 @@ type otelMetricsReporter struct {
 	target     string
 	explicitMP metric.MeterProvider
 
+	// bindMu serializes MeterProvider binding/unbinding and close() without
+	// ever being acquired from observeAsyncMetrics (which runs under the OTel
+	// SDK pipeline lock). Lock order: bindMu -> OTel pipeline lock -> mu.
+	bindMu   sync.Mutex
+	boundGen uint64
+	reg      metric.Registration
+	closed   bool
+
 	mu                     sync.Mutex
-	meter                  metric.Meter
 	resourceUpdatesValid   metric.Int64Counter
 	resourceUpdatesInvalid metric.Int64Counter
 	serverFailure          metric.Int64Counter
-	connectedGauge         metric.Int64ObservableGauge
-	resourcesGauge         metric.Int64ObservableGauge
-	reg                    metric.Registration
 
-	validCounts    map[counterKey]int64
-	invalidCounts  map[counterKey]int64
-	failureCounts  map[string]int64
-	asyncReporters map[clients.AsyncReporter]struct{}
-	closed         bool
+	pendingValid    map[counterKey]int64
+	pendingInvalid  map[counterKey]int64
+	pendingFailures map[string]int64
+	asyncReporters  map[clients.AsyncReporter]struct{}
 }
 
 var _ clients.MetricsReporter = (*otelMetricsReporter)(nil)
 
 func newOTelMetricsReporter(mp metric.MeterProvider, target string) *otelMetricsReporter {
 	r := &otelMetricsReporter{
-		target:         target,
-		explicitMP:     mp,
-		validCounts:    make(map[counterKey]int64),
-		invalidCounts:  make(map[counterKey]int64),
-		failureCounts:  make(map[string]int64),
-		asyncReporters: make(map[clients.AsyncReporter]struct{}),
+		target:          target,
+		explicitMP:      mp,
+		pendingValid:    make(map[counterKey]int64),
+		pendingInvalid:  make(map[counterKey]int64),
+		pendingFailures: make(map[string]int64),
+		asyncReporters:  make(map[clients.AsyncReporter]struct{}),
+	}
+
+	if mp != nil {
+		r.bindMeterProvider(mp, 0, false)
+		return r
 	}
 
 	xdsMetricsMu.Lock()
 	activeXDSReporters[r] = struct{}{}
 	fallbackMP := defaultXDSMeter
+	gen := defaultXDSMeterGen
 	xdsMetricsMu.Unlock()
 
-	effectiveMP := mp
-	if effectiveMP == nil {
-		effectiveMP = fallbackMP
-	}
-	r.bindMeterProvider(effectiveMP)
+	r.setFallbackMeterProvider(fallbackMP, gen)
 	return r
 }
 
-func (r *otelMetricsReporter) setFallbackMeterProvider(mp metric.MeterProvider) {
+func (r *otelMetricsReporter) setFallbackMeterProvider(mp metric.MeterProvider, gen uint64) {
 	if r.explicitMP != nil {
 		return
 	}
-	r.bindMeterProvider(mp)
+	r.bindMeterProvider(mp, gen, true)
 }
 
-func (r *otelMetricsReporter) bindMeterProvider(mp metric.MeterProvider) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
+func (r *otelMetricsReporter) bindMeterProvider(mp metric.MeterProvider, gen uint64, checkGen bool) {
+	r.bindMu.Lock()
+	defer r.bindMu.Unlock()
 
 	if r.closed {
 		return
 	}
+	if checkGen {
+		if gen < r.boundGen {
+			return
+		}
+		r.boundGen = gen
+	}
+
 	if r.reg != nil {
 		_ = r.reg.Unregister()
 		r.reg = nil
 	}
 
 	if mp == nil {
-		mp = otel.GetMeterProvider()
+		r.mu.Lock()
+		r.resourceUpdatesValid = nil
+		r.resourceUpdatesInvalid = nil
+		r.serverFailure = nil
+		r.mu.Unlock()
+		return
 	}
+
 	meter := mp.Meter(xdsMeterName)
 
 	validCounter, _ := meter.Int64Counter(
@@ -146,7 +166,7 @@ func (r *otelMetricsReporter) bindMeterProvider(mp metric.MeterProvider) {
 	connectedGauge, _ := meter.Int64ObservableGauge(
 		"grpc.xds_client.connected",
 		metric.WithDescription("Whether or not the xDS client currently has a working ADS stream to the xDS server."),
-		metric.WithUnit("{connected}"),
+		metric.WithUnit("{bool}"),
 	)
 	resourcesGauge, _ := meter.Int64ObservableGauge(
 		"grpc.xds_client.resources",
@@ -154,40 +174,49 @@ func (r *otelMetricsReporter) bindMeterProvider(mp metric.MeterProvider) {
 		metric.WithUnit("{resource}"),
 	)
 
-	r.meter = meter
-	r.resourceUpdatesValid = validCounter
-	r.resourceUpdatesInvalid = invalidCounter
-	r.serverFailure = serverFailureCounter
-	r.connectedGauge = connectedGauge
-	r.resourcesGauge = resourcesGauge
-
-	reg, err := meter.RegisterCallback(r.observeAsyncMetrics, connectedGauge, resourcesGauge)
+	// Capture the gauges created on this meter so a concurrent rebind cannot
+	// mix instruments from two different meters in one callback invocation.
+	reg, err := meter.RegisterCallback(func(_ context.Context, o metric.Observer) error {
+		return r.observeAsyncMetrics(o, connectedGauge, resourcesGauge)
+	}, connectedGauge, resourcesGauge)
 	if err == nil {
 		r.reg = reg
 	}
 
+	r.mu.Lock()
+	r.resourceUpdatesValid = validCounter
+	r.resourceUpdatesInvalid = invalidCounter
+	r.serverFailure = serverFailureCounter
+	pendingValid := r.pendingValid
+	pendingInvalid := r.pendingInvalid
+	pendingFailures := r.pendingFailures
+	r.pendingValid = make(map[counterKey]int64)
+	r.pendingInvalid = make(map[counterKey]int64)
+	r.pendingFailures = make(map[string]int64)
+	r.mu.Unlock()
+
 	ctx := context.Background()
-	for k, count := range r.validCounts {
-		if count > 0 && r.resourceUpdatesValid != nil {
-			r.resourceUpdatesValid.Add(ctx, count, metric.WithAttributes(
+	for k, count := range pendingValid {
+		if count > 0 && validCounter != nil {
+			validCounter.Add(ctx, count, metric.WithAttributes(
 				attribute.String("grpc.target", r.target),
 				attribute.String("grpc.xds.server", k.serverURI),
 				attribute.String("grpc.xds.resource_type", k.resourceType),
 			))
 		}
 	}
-	for k, count := range r.invalidCounts {
-		if count > 0 && r.resourceUpdatesInvalid != nil {
-			r.resourceUpdatesInvalid.Add(ctx, count, metric.WithAttributes(
+	for k, count := range pendingInvalid {
+		if count > 0 && invalidCounter != nil {
+			invalidCounter.Add(ctx, count, metric.WithAttributes(
 				attribute.String("grpc.target", r.target),
 				attribute.String("grpc.xds.server", k.serverURI),
 				attribute.String("grpc.xds.resource_type", k.resourceType),
 			))
 		}
 	}
-	for serverURI, count := range r.failureCounts {
-		if count > 0 && r.serverFailure != nil {
-			r.serverFailure.Add(ctx, count, metric.WithAttributes(
+	for serverURI, count := range pendingFailures {
+		if count > 0 && serverFailureCounter != nil {
+			serverFailureCounter.Add(ctx, count, metric.WithAttributes(
 				attribute.String("grpc.target", r.target),
 				attribute.String("grpc.xds.server", serverURI),
 			))
@@ -197,32 +226,44 @@ func (r *otelMetricsReporter) bindMeterProvider(mp metric.MeterProvider) {
 
 func (r *otelMetricsReporter) ReportMetric(m any) {
 	ctx := context.Background()
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
 	switch v := m.(type) {
 	case *metrics.ResourceUpdateValid:
-		r.validCounts[counterKey{serverURI: v.ServerURI, resourceType: v.ResourceType}]++
-		if r.resourceUpdatesValid != nil {
-			r.resourceUpdatesValid.Add(ctx, 1, metric.WithAttributes(
+		r.mu.Lock()
+		counter := r.resourceUpdatesValid
+		if counter == nil {
+			r.pendingValid[counterKey{serverURI: v.ServerURI, resourceType: v.ResourceType}]++
+		}
+		r.mu.Unlock()
+		if counter != nil {
+			counter.Add(ctx, 1, metric.WithAttributes(
 				attribute.String("grpc.target", r.target),
 				attribute.String("grpc.xds.server", v.ServerURI),
 				attribute.String("grpc.xds.resource_type", v.ResourceType),
 			))
 		}
 	case *metrics.ResourceUpdateInvalid:
-		r.invalidCounts[counterKey{serverURI: v.ServerURI, resourceType: v.ResourceType}]++
-		if r.resourceUpdatesInvalid != nil {
-			r.resourceUpdatesInvalid.Add(ctx, 1, metric.WithAttributes(
+		r.mu.Lock()
+		counter := r.resourceUpdatesInvalid
+		if counter == nil {
+			r.pendingInvalid[counterKey{serverURI: v.ServerURI, resourceType: v.ResourceType}]++
+		}
+		r.mu.Unlock()
+		if counter != nil {
+			counter.Add(ctx, 1, metric.WithAttributes(
 				attribute.String("grpc.target", r.target),
 				attribute.String("grpc.xds.server", v.ServerURI),
 				attribute.String("grpc.xds.resource_type", v.ResourceType),
 			))
 		}
 	case *metrics.ServerFailure:
-		r.failureCounts[v.ServerURI]++
-		if r.serverFailure != nil {
-			r.serverFailure.Add(ctx, 1, metric.WithAttributes(
+		r.mu.Lock()
+		counter := r.serverFailure
+		if counter == nil {
+			r.pendingFailures[v.ServerURI]++
+		}
+		r.mu.Unlock()
+		if counter != nil {
+			counter.Add(ctx, 1, metric.WithAttributes(
 				attribute.String("grpc.target", r.target),
 				attribute.String("grpc.xds.server", v.ServerURI),
 			))
@@ -242,14 +283,16 @@ func (r *otelMetricsReporter) RegisterAsyncReporter(reporter clients.AsyncReport
 	}
 }
 
-func (r *otelMetricsReporter) observeAsyncMetrics(_ context.Context, o metric.Observer) error {
+func (r *otelMetricsReporter) observeAsyncMetrics(
+	o metric.Observer,
+	connectedGauge metric.Int64ObservableGauge,
+	resourcesGauge metric.Int64ObservableGauge,
+) error {
 	r.mu.Lock()
 	reporters := make([]clients.AsyncReporter, 0, len(r.asyncReporters))
 	for rep := range r.asyncReporters {
 		reporters = append(reporters, rep)
 	}
-	connectedGauge := r.connectedGauge
-	resourcesGauge := r.resourcesGauge
 	r.mu.Unlock()
 
 	rec := &otelAsyncRecorder{
@@ -265,18 +308,26 @@ func (r *otelMetricsReporter) observeAsyncMetrics(_ context.Context, o metric.Ob
 }
 
 func (r *otelMetricsReporter) close() {
-	xdsMetricsMu.Lock()
-	delete(activeXDSReporters, r)
-	xdsMetricsMu.Unlock()
+	if r.explicitMP == nil {
+		xdsMetricsMu.Lock()
+		delete(activeXDSReporters, r)
+		xdsMetricsMu.Unlock()
+	}
+
+	r.bindMu.Lock()
+	defer r.bindMu.Unlock()
+
+	r.closed = true
+	if r.reg != nil {
+		_ = r.reg.Unregister()
+		r.reg = nil
+	}
 
 	r.mu.Lock()
-	r.closed = true
-	reg := r.reg
-	r.reg = nil
+	r.resourceUpdatesValid = nil
+	r.resourceUpdatesInvalid = nil
+	r.serverFailure = nil
 	r.mu.Unlock()
-	if reg != nil {
-		_ = reg.Unregister()
-	}
 }
 
 type otelAsyncRecorder struct {

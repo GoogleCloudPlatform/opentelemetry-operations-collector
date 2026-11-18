@@ -147,10 +147,10 @@ func parseRevisionValue(rev string) (int64, bool) {
 }
 
 func (e *controlPlaneExtension) Shutdown(context.Context) error {
-	googlepolicy.SetXDSMeterProvider(nil)
 	if e.registration == nil {
 		return nil
 	}
+	googlepolicy.SetXDSMeterProvider(nil)
 	err := e.registration.Unregister()
 	e.registration = nil
 	return err

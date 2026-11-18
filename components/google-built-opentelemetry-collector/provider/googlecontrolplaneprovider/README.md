@@ -13,4 +13,10 @@ This provider supports the `googlecontrolplane:` scheme:
 googlecontrolplane:<target>
 ```
 
-When starting the Collector with this provider, enable `--feature-gates=+confmap.enableMergeAppendOption` so `confmap` appends and deduplicates `service.extensions` and pipeline `receivers`/`exporters` slices across policies and across additional configuration sources (for example, `file:` + `googlecontrolplane:`).
+## Merge behavior
+
+The configuration this provider generates relies on the `confmap.enableMergeAppendOption` feature gate, so that `service.extensions` and pipeline `receivers`/`exporters` lists are appended and deduplicated instead of replaced, both across policies and across additional configuration sources (for example, `file:` + `googlecontrolplane:`).
+
+The provider enables that gate itself the first time a `googlecontrolplane:` URI is retrieved. A Collector that does not use a `googlecontrolplane:` URI keeps the default merge behavior.
+
+Because the gate is enabled when the URI is retrieved, list the `googlecontrolplane:` URI before any other `--config` source. Sources listed before it are merged with each other before the gate is on.

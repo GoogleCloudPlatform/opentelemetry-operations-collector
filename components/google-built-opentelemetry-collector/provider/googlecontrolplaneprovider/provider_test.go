@@ -45,12 +45,15 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const mergeAppendFeatureGateID = "confmap.enableMergeAppendOption"
-
-func init() {
-	if err := featuregate.GlobalRegistry().Set(mergeAppendFeatureGateID, true); err != nil {
-		panic(err)
-	}
+// setMergeAppendFeatureGate sets confmap.enableMergeAppendOption for the
+// duration of the test and restores its previous value afterwards.
+func setMergeAppendFeatureGate(t *testing.T, enabled bool) {
+	t.Helper()
+	was := mergeAppendEnabled()
+	require.NoError(t, featuregate.GlobalRegistry().Set(mergeAppendFeatureGateID, enabled))
+	t.Cleanup(func() {
+		require.NoError(t, featuregate.GlobalRegistry().Set(mergeAppendFeatureGateID, was))
+	})
 }
 
 func createProvider() confmap.Provider {
@@ -1423,31 +1426,56 @@ func TestFilterPolicyDriversRegistered(t *testing.T) {
 	}
 }
 
-// TestNewProviderDoesNotEnableMergeAppendFeatureGate verifies that instantiating
-// the provider factory does not mutate the global confmap.enableMergeAppendOption
-// feature gate for Collector runs that do not opt into it on the command line.
-func TestNewProviderDoesNotEnableMergeAppendFeatureGate(t *testing.T) {
-	require.NoError(t, featuregate.GlobalRegistry().Set(mergeAppendFeatureGateID, false))
+// TestMergeAppendFeatureGateEnabledOnRetrieve verifies when the provider turns
+// on confmap.enableMergeAppendOption.
+//
+// The Collector creates every registered provider at startup, so creating this
+// one must leave the gate alone: otherwise a Collector that never uses a
+// googlecontrolplane: URI gets append merging for all of its config sources.
+// The gate is enabled once a googlecontrolplane: URI is actually retrieved,
+// because the configuration generated for it depends on append merging.
+func TestMergeAppendFeatureGateEnabledOnRetrieve(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	setMergeAppendFeatureGate(t, false)
+
+	const enabledLog = "enabled feature gate required by the googlecontrolplane provider"
+	core, recorded := observer.New(zapcore.InfoLevel)
+	p := createProviderWithLogger(zap.New(core))
 	t.Cleanup(func() {
-		require.NoError(t, featuregate.GlobalRegistry().Set(mergeAppendFeatureGateID, true))
+		assert.NoError(t, p.Shutdown(context.Background()))
 	})
+	assert.False(t, mergeAppendEnabled(), "creating the provider must not enable %s", mergeAppendFeatureGateID)
 
-	_ = createProvider()
+	// A URI this provider rejects must not enable it either.
+	_, err := p.Retrieve(context.Background(), "file:/path/to/conf", nil)
+	require.ErrorIs(t, err, ErrURINotSupported)
+	assert.False(t, mergeAppendEnabled(), "a rejected URI must not enable %s", mergeAppendFeatureGateID)
 
-	var enabled bool
-	featuregate.GlobalRegistry().VisitAll(func(g *featuregate.Gate) {
-		if g.ID() == mergeAppendFeatureGateID {
-			enabled = g.IsEnabled()
-		}
-	})
-	assert.False(t, enabled, "creating the provider must not mutate %s", mergeAppendFeatureGateID)
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	assert.True(t, mergeAppendEnabled(), "retrieving a googlecontrolplane: URI must enable %s", mergeAppendFeatureGateID)
+
+	// The destination, self metrics and storage configs each declare
+	// service::extensions. All three survive only with append merging.
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []any{
+		"googleclientauth/default_gcp_destination",
+		"googlecontrolplane",
+		googlepolicy.StorageExtensionID.String(),
+	}, conf.Get("service::extensions"))
+
+	// Retrieving again finds the gate already enabled and does not log again.
+	_, err = p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	assert.Equal(t, 1, recorded.FilterMessage(enabledLog).Len())
 }
 
 // TestMergeAppendUnionsServiceExtensions pins the behaviour that makes it safe
 // for more than one policy (or confmap provider) to declare an extension when
 // confmap.enableMergeAppendOption is enabled.
 func TestMergeAppendUnionsServiceExtensions(t *testing.T) {
-	require.NoError(t, featuregate.GlobalRegistry().Set(mergeAppendFeatureGateID, true))
+	setMergeAppendFeatureGate(t, true)
 	conf := confmap.New()
 
 	destination := confmap.NewFromStringMap(map[string]any{
@@ -1471,7 +1499,7 @@ func TestMergeAppendUnionsServiceExtensions(t *testing.T) {
 }
 
 func TestMergeAppendDeduplicatesServiceExtensions(t *testing.T) {
-	require.NoError(t, featuregate.GlobalRegistry().Set(mergeAppendFeatureGateID, true))
+	setMergeAppendFeatureGate(t, true)
 	conf := confmap.New()
 	declare := func() *confmap.Conf {
 		return confmap.NewFromStringMap(map[string]any{
@@ -1490,7 +1518,7 @@ func TestMergeAppendDeduplicatesServiceExtensions(t *testing.T) {
 // TestMergeAppendWithoutServiceExtensions guards the common case: a policy that
 // declares no extensions must not introduce an empty service::extensions key.
 func TestMergeAppendWithoutServiceExtensions(t *testing.T) {
-	require.NoError(t, featuregate.GlobalRegistry().Set(mergeAppendFeatureGateID, true))
+	setMergeAppendFeatureGate(t, true)
 	conf := confmap.New()
 	require.NoError(t, conf.Merge(cleanConf(confmap.NewFromStringMap(map[string]any{
 		"receivers": map[string]any{"otlp/x": map[string]any{}},

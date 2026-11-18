@@ -54,7 +54,6 @@ import (
 	"go.opentelemetry.io/collector/exporter/otlpexporter"
 	"go.opentelemetry.io/collector/extension"
 	"go.opentelemetry.io/collector/extension/xextension/storage"
-	"go.opentelemetry.io/collector/featuregate"
 	"go.opentelemetry.io/collector/otelcol"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
@@ -803,27 +802,9 @@ func startCollectorWithURIs(t *testing.T, otelcolBin string, configURIs ...strin
 	return startSubprocessCollector(t, otelcolBin, configURIs...)
 }
 
-const mergeAppendFeatureGateID = "confmap.enableMergeAppendOption"
-
-func usesControlPlaneProvider(configURIs []string) bool {
-	for _, uri := range configURIs {
-		if strings.HasPrefix(uri, "googlecontrolplane:") {
-			return true
-		}
-	}
-	return false
-}
-
 func startInProcessCollector(t *testing.T, configURIs ...string) *collectorHandle {
 	t.Helper()
 	t.Setenv("FLEET_ID", "test-fleet")
-
-	enableMergeAppend := usesControlPlaneProvider(configURIs)
-	if enableMergeAppend {
-		if err := featuregate.GlobalRegistry().Set(mergeAppendFeatureGateID, true); err != nil {
-			t.Fatalf("failed to enable %s: %v", mergeAppendFeatureGateID, err)
-		}
-	}
 
 	logBuf := &syncBuffer{}
 	set := otelcol.CollectorSettings{
@@ -877,9 +858,6 @@ func startInProcessCollector(t *testing.T, configURIs ...string) *collectorHandl
 				t.Fatalf("timed out waiting for in-process collector shutdown.\nlogs:\n%s", logBuf.String())
 			}
 			googlepolicy.SetActivePolicySet(nil)
-			if enableMergeAppend {
-				_ = featuregate.GlobalRegistry().Set(mergeAppendFeatureGateID, false)
-			}
 		})
 	}
 	t.Cleanup(func() {
@@ -910,10 +888,7 @@ func startInProcessCollector(t *testing.T, configURIs ...string) *collectorHandl
 
 func startSubprocessCollector(t *testing.T, otelcolBin string, configURIs ...string) *collectorHandle {
 	t.Helper()
-	args := make([]string, 0, len(configURIs)+1)
-	if usesControlPlaneProvider(configURIs) {
-		args = append(args, "--feature-gates=+"+mergeAppendFeatureGateID)
-	}
+	args := make([]string, 0, len(configURIs))
 	for _, uri := range configURIs {
 		args = append(args, fmt.Sprintf("--config=%s", uri))
 	}
@@ -1901,7 +1876,7 @@ service:
 // file config can append a custom receiver (e.g. otlp/custom_in) to the canonical shared
 // logs pipeline (logs/googlecontrolplane).
 //
-// With confmap.enableMergeAppendOption enabled alongside googlecontrolplane:, the
+// Because googlecontrolplaneprovider enables confmap.enableMergeAppendOption, the
 // customer-provided receiver is appended to [nop/googlecontrolplane], so logs sent to
 // otlp/custom_in flow through the canonical pipeline: they are processed by
 // resourcedetection/googlecontrolplane, transform/googlecontrolplane, and googlepolicy,
@@ -1964,7 +1939,7 @@ service:
 // file config can append a secondary exporter to the canonical shared logs pipeline
 // (logs/googlecontrolplane).
 //
-// With confmap.enableMergeAppendOption enabled alongside googlecontrolplane:, the
+// Because googlecontrolplaneprovider enables confmap.enableMergeAppendOption, the
 // secondary exporter is appended to [otlp_grpc/default_gcp_destination], causing
 // logs processed by the canonical pipeline (including googlepolicy filtering) to fan
 // out to BOTH destinations.
@@ -2136,7 +2111,7 @@ func TestFileConfigMerge_DisableSelfMetrics(t *testing.T) {
 //     keeping service.telemetry.logs enabled suppresses self-metrics while
 //     preserving logs/default_self_metrics (so Weaver error events like
 //     gcp.policy.evaluate.error still flow).
-//  2. With confmap.enableMergeAppendOption enabled alongside googlecontrolplane:,
+//  2. Because googlecontrolplaneprovider enables confmap.enableMergeAppendOption,
 //     a subsequent file config that sets service.extensions or pipeline exporters
 //     appends to (rather than overwrites) the existing slices:
 //     - service.extensions retains [googleclientauth/default_gcp_destination, googlecontrolplane]
@@ -2220,7 +2195,7 @@ func TestFileConfigMerge_SelectiveSelfMetricsAndExtensionOverrides(t *testing.T)
 
 		secondaryMockSrv, secondaryExporterAddr := startMockOTLPServer(t)
 
-		// With confmap.enableMergeAppendOption enabled alongside googlecontrolplane:,
+		// Because confmap.enableMergeAppendOption is enabled by googlecontrolplaneprovider,
 		// setting service.extensions: [] and logs/test.exporters: [otlp_grpc/secondary_out]
 		// appends to the existing slices rather than overwriting them.
 		appendSliceCfg := fmt.Sprintf(`exporters:

@@ -135,7 +135,7 @@ const (
 	telemetryPolicyLogDirWindows = `C:\gboc-smoke`
 
 	// sampleLogsFile is written to activeLogsFileName over SSH only after the
-	// PolicySet is active so filelog/googlecontrolplane (start_at: end) tails
+	// PolicySet is active so filelog/googlecontrolplane (defaults to start_at: end) tails
 	// the newly created file through the active filter and transform policies.
 	sampleLogsFile     = "telemetry_policy/sample_logs.log"
 	activeLogsFileName = "test.log"
@@ -863,7 +863,7 @@ func TestTelemetryPoliciesSmoke(t *testing.T) {
 			t.Fatal(err)
 		}
 		// Write the sample logs only after the PolicySet is active so
-		// filelog/googlecontrolplane (start_at: end) tails the newly created
+		// filelog/googlecontrolplane (defaults to start_at: end) tails the newly created
 		// test.log file through the active filter and transform policies.
 		if err := writeSampleLogs(ctx, logger, vm, s); err != nil {
 			t.Fatal(err)

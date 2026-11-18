@@ -36,14 +36,17 @@ out. It never creates, updates, or deletes them.
 On-GCP runs target `stackdriver-test-143416` (`228437877067`), and off-GCP runs
 target `gboc-tango-testing` (`406580743452`, positioned outside the
 `google.com` organization so external X.509 WIF pools are permitted). Both
-projects hold identical Linux (`gboc-smoke-fleet` / `gboc-smoke-ps`) and Windows
-(`gboc-smoke-fleet-windows` / `gboc-smoke-ps-windows`) definitions in
+projects define Linux (`gboc-smoke-fleet` / `gboc-smoke-ps`) and Windows
+(`gboc-smoke-fleet-windows` / `gboc-smoke-ps-windows`) resources in
 `asia-east1` against staging Telemetry Management and staging Telemetry Director
-(`staging-telemetrydirector.asia-east1.rep.sandbox.googleapis.com:443`):
+(`staging-telemetrydirector.asia-east1.rep.sandbox.googleapis.com:443`);
+`gboc-tango-testing` holds the active `C:/gboc-smoke/*.log` rollouts while
+`stackdriver-test-143416` rollouts remain blocked on staging Control Plane
+migration state (leaving older unrolled revisions there):
 
 | Resource | Name |
 |---|---|
-| On-GCP Project | `stackdriver-test-143416` (number `228437877067`, Linux rev `68668fd3`, Windows rev `86f9ce08`) |
+| On-GCP Project | `stackdriver-test-143416` (number `228437877067`, unrolled Linux rev `68668fd3`, unrolled Windows rev `86f9ce08`) |
 | Off-GCP Project | `gboc-tango-testing` (number `406580743452`, Linux rev `4bdde359`, Windows rev `3019b368`) |
 | Linux Fleet | `projects/<project>/locations/asia-east1/fleets/gboc-smoke-fleet` |
 | Linux PolicySet | `projects/<project_number>/locations/asia-east1/policySets/gboc-smoke-ps` |
@@ -72,7 +75,9 @@ in off-GCP mode) have `roles/telemetry.writer`, `roles/logging.logWriter`,
 collector packages during initial installation.
 
 The workload certificate (`CN=gboc-smoke-workload`) signed by the CA in the
-provider's trust store (`CN=gboc-smoke-x509-ca`) and its private key are stored
+provider's trust store (`CN=gboc-tango-x509-ca` in the pre-provisioned secrets;
+`setup_policyset.sh` uses `CN=gboc-smoke-x509-ca` when generating or rotating
+with `ROTATE_WIF_CERTS=true`) and its private key are stored
 in Cloud Secret Manager in `gboc-tango-testing` (`gboc-x509-leaf-cert` and
 `gboc-x509-leaf-key`). Test runners and developers running `OFF_GCP=true` need
 `roles/secretmanager.secretAccessor` on those secrets (the WIF principal itself
@@ -138,6 +143,11 @@ in GCS built with the `googlecontrolplane` provider, extension, and
 
 ### On-GCP mode (`stackdriver-test-143416`, Linux + Windows)
 
+Uses the `gboc-tango-testing` (`406580743452`) fleets until `stackdriver-test-143416`
+staging rollouts are unblocked and `./setup_policyset.sh stackdriver-test-143416`
+is re-run (at which point `FLEET_ID` / `WINDOWS_FLEET_ID` can be omitted and
+the expected revisions updated to match):
+
 ```
 cd integration_test/smoke_test
 env PROJECT=stackdriver-test-143416 ZONES=asia-east1-a \
@@ -145,8 +155,10 @@ env PROJECT=stackdriver-test-143416 ZONES=asia-east1-a \
   KOKORO_BUILD_ID=local-$(date +%s) TRANSFERS_BUCKET=stackdriver-test-143416-file-transfers \
   _BUILD_ARTIFACTS_PACKAGE_GCS=gs://stackdriver-test-143416-file-transfers/<package-dir> \
   TELEMETRY_POLICY_CONTROL_PLANE_ENDPOINT=staging-telemetrydirector.asia-east1.rep.sandbox.googleapis.com:443 \
-  TELEMETRY_POLICY_EXPECTED_REVISION=68668fd3 \
-  TELEMETRY_POLICY_EXPECTED_REVISION_WINDOWS=86f9ce08 \
+  FLEET_ID=projects/406580743452/locations/asia-east1/fleets/gboc-smoke-fleet \
+  WINDOWS_FLEET_ID=projects/406580743452/locations/asia-east1/fleets/gboc-smoke-fleet-windows \
+  TELEMETRY_POLICY_EXPECTED_REVISION=4bdde359 \
+  TELEMETRY_POLICY_EXPECTED_REVISION_WINDOWS=3019b368 \
   go test -tags integration_test -run '^TestTelemetryPoliciesSmoke$' -v -timeout 60m ./...
 ```
 

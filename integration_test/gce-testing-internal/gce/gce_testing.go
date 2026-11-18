@@ -963,6 +963,47 @@ func SSHOptionsForTest() []string {
 	return append([]string(nil), sshOptions...)
 }
 
+// retrySSHCommand runs an ssh or scp command, retrying transient SSH transport
+// errors up to 10 times with 3s backoff (~30s total) to bridge the post-boot
+// network handover window on newly booted VMs.
+func retrySSHCommand(ctx context.Context, logger *log.Logger, vm *VM, opName string, stdin io.Reader, args []string) (CommandOutput, error) {
+	backoffPolicy := backoff.WithContext(
+		backoff.WithMaxRetries(backoff.NewConstantBackOff(3*time.Second), 10),
+		ctx,
+	)
+
+	var stdinBytes []byte
+	if stdin != nil {
+		var err error
+		stdinBytes, err = io.ReadAll(stdin)
+		if err != nil {
+			return CommandOutput{}, err
+		}
+	}
+
+	attempt := 0
+	var output CommandOutput
+	var runErr error
+	err := backoff.Retry(func() error {
+		attempt++
+		var attemptStdin io.Reader
+		if stdin != nil {
+			attemptStdin = bytes.NewReader(stdinBytes)
+		}
+		output, runErr = runCommand(ctx, logger, attemptStdin, args, nil)
+		if runErr != nil {
+			if isSSHTransportError(runErr) {
+				logger.Printf("%s transport attempt %d to VM %s (%s) failed (%v), retrying...", opName, attempt, vm.Name, vm.IPAddress, runErr)
+				return runErr
+			}
+			return backoff.Permanent(runErr)
+		}
+		return nil
+	}, backoffPolicy)
+
+	return output, err
+}
+
 // RunRemotelyStdin is just like RunRemotely but it accepts an io.Reader
 // for what data to pass in over standard input to the command.
 func RunRemotelyStdin(ctx context.Context, logger *log.Logger, vm *VM, stdin io.Reader, command string) (output CommandOutput, err error) {
@@ -990,45 +1031,94 @@ func RunRemotelyStdin(ctx context.Context, logger *log.Logger, vm *VM, stdin io.
 	args = append(args, sshOptions...)
 	args = append(args, wrappedCommand)
 
-	// Retry up to 10 times with 3s backoff (~30s total retry window) strictly for
-	// SSH transport errors (exit status 255 / connection refused/reset/timeout).
-	// This bridges the 10-15s network handover window on newly booted VMs where
-	// google-guest-agent rolls back network configurations and triggers NetworkManager
-	// DHCP renegotiation (b/557287367), especially on fast-booting ARM64 instances.
-	// Non-transport command errors (e.g. exit status 1 or 2) fail immediately on attempt 1.
-	backoffPolicy := backoff.WithContext(
-		backoff.WithMaxRetries(backoff.NewConstantBackOff(3*time.Second), 10),
-		ctx,
-	)
+	return retrySSHCommand(ctx, logger, vm, "SSH", stdin, args)
+}
 
-	var stdinBytes []byte
-	if stdin != nil {
-		stdinBytes, err = io.ReadAll(stdin)
+var (
+	scpLegacyOnce sync.Once
+	scpLegacyFlag string
+)
+
+// detectSCPLegacyFlag returns "-O" on OpenSSH 9.0+ (which otherwise defaults to
+// SFTP, disabled by default on GCE Windows OpenSSH) and "" on older OpenSSH
+// versions that already default to legacy SCP and do not accept -O.
+func detectSCPLegacyFlag() string {
+	scpLegacyOnce.Do(func() {
+		out, _ := exec.Command("scp", "-O").CombinedOutput()
+		msg := string(out)
+		if !strings.Contains(msg, "unknown option") && !strings.Contains(msg, "illegal option") {
+			scpLegacyFlag = "-O"
+		}
+	})
+	return scpLegacyFlag
+}
+
+// UploadFile copies a local file to remotePath on vm using legacy SCP, without
+// requiring a VM service account, GCS access from the VM, or an SFTP server.
+func UploadFile(ctx context.Context, logger *log.Logger, vm *VM, localPath, remotePath string) error {
+	logger.Printf("Copying %s to %s:%s", localPath, vm.Name, remotePath)
+	args := []string{"scp"}
+	if flag := detectSCPLegacyFlag(); flag != "" {
+		args = append(args, flag)
+	}
+	args = append(args, "-q", "-oIdentityFile="+privateKeyFile)
+	args = append(args, sshOptions...)
+	args = append(args, localPath, sshUserName+"@"+vm.IPAddress+":"+remotePath)
+	_, err := retrySSHCommand(ctx, logger, vm, "SCP", nil, args)
+	return err
+}
+
+// DownloadMatchingGCSObject downloads the unique object directly inside gcsDir
+// (a gs://<bucket>/<prefix> URL) whose name ends with suffix into destDir.
+func DownloadMatchingGCSObject(ctx context.Context, gcsDir, suffix, destDir string) (string, error) {
+	trimmed, ok := strings.CutPrefix(strings.TrimRight(gcsDir, "/"), "gs://")
+	if !ok {
+		return "", fmt.Errorf("invalid GCS directory %q: expected gs:// prefix", gcsDir)
+	}
+	bucketName, prefix, _ := strings.Cut(trimmed, "/")
+	if prefix != "" {
+		prefix += "/"
+	}
+	it := storageClient.Bucket(bucketName).Objects(ctx, &storage.Query{
+		Prefix:    prefix,
+		Delimiter: "/",
+	})
+	var match string
+	for {
+		attrs, err := it.Next()
+		if errors.Is(err, iterator.Done) {
+			break
+		}
 		if err != nil {
-			return CommandOutput{}, err
+			return "", fmt.Errorf("listing %s: %w", gcsDir, err)
+		}
+		if attrs.Name != "" && strings.HasSuffix(attrs.Name, suffix) {
+			if match != "" {
+				return "", fmt.Errorf("multiple objects matching *%s in %s (%s, %s)", suffix, gcsDir, match, attrs.Name)
+			}
+			match = attrs.Name
 		}
 	}
+	if match == "" {
+		return "", fmt.Errorf("no object matching *%s in %s", suffix, gcsDir)
+	}
+	r, err := storageClient.Bucket(bucketName).Object(match).NewReader(ctx)
+	if err != nil {
+		return "", fmt.Errorf("opening gs://%s/%s: %w", bucketName, match, err)
+	}
+	defer r.Close()
 
-	attempt := 0
-	var runErr error
-	err = backoff.Retry(func() error {
-		attempt++
-		var attemptStdin io.Reader
-		if stdin != nil {
-			attemptStdin = bytes.NewReader(stdinBytes)
-		}
-		output, runErr = runCommand(ctx, logger, attemptStdin, args, nil)
-		if runErr != nil {
-			if isSSHTransportError(runErr) {
-				logger.Printf("SSH transport attempt %d to VM %s (%s) failed (%v), retrying...", attempt, vm.Name, vm.IPAddress, runErr)
-				return runErr
-			}
-			return backoff.Permanent(runErr)
-		}
-		return nil
-	}, backoffPolicy)
-
-	return output, err
+	localPath := filepath.Join(destDir, path.Base(match))
+	f, err := os.Create(localPath)
+	if err != nil {
+		return "", fmt.Errorf("creating %s: %w", localPath, err)
+	}
+	_, copyErr := io.Copy(f, r)
+	closeErr := f.Close()
+	if err := multierr.Combine(copyErr, closeErr); err != nil {
+		return "", fmt.Errorf("downloading gs://%s/%s to %s: %w", bucketName, match, localPath, err)
+	}
+	return localPath, nil
 }
 
 // UploadContent takes an io.Reader and uploads its contents as a file to a
@@ -2464,33 +2554,6 @@ func StopInstance(ctx context.Context, logger *log.Logger, vm *VM) error {
 			Project:  vm.Project,
 			Zone:     vm.Zone,
 			Instance: vm.Name,
-		})
-		if err != nil {
-			return err
-		}
-		return op.Wait(ctx)
-	})
-}
-
-// DetachServiceAccount removes the attached service account and all OAuth
-// scopes from a stopped VM instance.
-func DetachServiceAccount(ctx context.Context, logger *log.Logger, vm *VM) error {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
-	defer cancel()
-
-	LogEquivalentGcloud(logger, "compute", "instances", "set-service-account",
-		"--project="+vm.Project,
-		"--zone="+vm.Zone,
-		"--no-service-account",
-		"--no-scopes",
-		vm.Name)
-
-	return retryOp(ctx, newRateLimitBackOff(), isTransientError, func() error {
-		op, err := instancesClient.SetServiceAccount(ctx, &computepb.SetServiceAccountInstanceRequest{
-			Project:  vm.Project,
-			Zone:     vm.Zone,
-			Instance: vm.Name,
-			InstancesSetServiceAccountRequestResource: &computepb.InstancesSetServiceAccountRequest{},
 		})
 		if err != nil {
 			return err

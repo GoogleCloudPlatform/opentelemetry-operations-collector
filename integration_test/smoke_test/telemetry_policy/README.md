@@ -5,7 +5,7 @@
 Linux (`gboc-smoke-fleet` / `gboc-smoke-ps`, [`policyset.json`](policyset.json)) and Windows (`gboc-smoke-fleet-windows` / `gboc-smoke-ps-windows`, [`policyset_windows.json`](policyset_windows.json)) use separate fleets and PolicySets. Both modes share the same PolicySet definitions:
 
 - **On-GCP:** Runs in a Google-org project (`<google-org-project-name>`, `<google-org-project-number>`) using the VM's default Compute Engine service account and metadata server.
-- **Off-GCP (`OFF_GCP=true`):** Runs in a non-Google-org project (`<joonix-org-project-name>`, `<joonix-org-project-number>`) where external X.509 Workload Identity Federation (WIF) pools are permitted, detaches the VM service account/scopes, blocks the metadata server for `otelcol-google`, and authenticates with X.509 WIF credentials fetched from Secret Manager (or `WIF_DIR`).
+- **Off-GCP (`OFF_GCP=true`):** Runs in a non-Google-org project (`<joonix-org-project-name>`, `<joonix-org-project-number>`) where external X.509 Workload Identity Federation (WIF) pools are permitted, boots the VM without a service account or scopes (`--no-service-account --no-scopes`), blocks the metadata server for `otelcol-google`, and authenticates with X.509 WIF credentials fetched from Secret Manager (or `WIF_DIR`).
 
 ## Provisioning
 

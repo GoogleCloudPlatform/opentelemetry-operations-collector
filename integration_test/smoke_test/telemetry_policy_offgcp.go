@@ -238,8 +238,11 @@ func setupWindowsCollector(ctx context.Context, logger *log.Logger, vm *gce.VM, 
 		if err != nil {
 			return fmt.Errorf("reading %s: %v", windowsSystemHostsPath, err)
 		}
-		if err := writeRemoteFile(ctx, logger, vm, offGCPHostsPathWindows, "", []byte(filterOffGCPHosts(hostsOut.Stdout))); err != nil {
+		if err := writeRemoteFile(ctx, logger, vm, windowsSystemHostsPath, "", []byte(filterOffGCPHosts(hostsOut.Stdout))); err != nil {
 			return err
+		}
+		if _, err := gce.RunRemotely(ctx, logger, vm, "$ErrorActionPreference = 'Stop'; Clear-DnsClientCache"); err != nil {
+			return fmt.Errorf("clearing Windows DNS client cache: %v", err)
 		}
 		if err := stageWIFCredentials(ctx, logger, vm, s); err != nil {
 			return err
@@ -292,33 +295,11 @@ func setupLinuxCollector(ctx context.Context, logger *log.Logger, vm *gce.VM, s 
 	return err
 }
 
-func detachAndRestartOffGCPVM(ctx context.Context, logger *log.Logger, vm *gce.VM) error {
-	logger.Printf("Stopping %s, detaching service account, and restarting to simulate off-GCP host", vm.Name)
-	if err := gce.StopInstance(ctx, logger, vm); err != nil {
-		return fmt.Errorf("stopping VM before detaching service account: %v", err)
-	}
-	if err := gce.DetachServiceAccount(ctx, logger, vm); err != nil {
-		return fmt.Errorf("detaching VM service account: %v", err)
-	}
-	if err := gce.StartInstance(ctx, logger, vm); err != nil {
-		return fmt.Errorf("starting VM after detaching service account: %v", err)
-	}
-	if gce.IsWindows(vm.ImageSpec) {
-		// Install the filtered hosts file after reboot (overwriting GCEAgent's
-		// boot-time hosts entries) and flush DNS before restarting otelcol-google.
-		if _, err := gce.RunRemotely(ctx, logger, vm, fmt.Sprintf("$ErrorActionPreference = 'Stop'; Copy-Item -Force -LiteralPath '%s' -Destination '%s'; Clear-DnsClientCache",
-			offGCPHostsPathWindows, windowsSystemHostsPath)); err != nil {
-			return fmt.Errorf("installing Windows off-GCP hosts file after reboot: %v", err)
-		}
-	}
-	return nil
-}
-
 // setupTelemetryPolicyCollector installs otelcol-google, configures the service
 // (plus off-GCP metadata blocks and WIF credentials when s.offGCP is set), and
 // restarts otelcol-google with --config=googlecontrolplane:xds://...
 func setupTelemetryPolicyCollector(ctx context.Context, logger *log.Logger, vm *gce.VM, s telemetryPolicySettings) error {
-	if err := installOtelCollector(ctx, logger, vm, locationFromEnvVars()); err != nil {
+	if err := installOtelCollectorWithTransferMode(ctx, logger, vm, locationFromEnvVars(), s.offGCP); err != nil {
 		return err
 	}
 	if gce.IsWindows(vm.ImageSpec) {
@@ -327,11 +308,6 @@ func setupTelemetryPolicyCollector(ctx context.Context, logger *log.Logger, vm *
 		}
 	} else {
 		if err := setupLinuxCollector(ctx, logger, vm, s); err != nil {
-			return err
-		}
-	}
-	if s.offGCP {
-		if err := detachAndRestartOffGCPVM(ctx, logger, vm); err != nil {
 			return err
 		}
 	}

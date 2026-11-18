@@ -156,6 +156,12 @@ func TestTelemetryPolicyConfigHelpers(t *testing.T) {
 			t.Errorf("on-GCP dropIn must not contain %q:\n%s", forbidden, onGCPDropIn)
 		}
 	}
+	if got := strings.Join(s.vmCreateArgs(), ","); got != "--no-service-account,--no-scopes" {
+		t.Errorf("off-GCP vmCreateArgs = %q, want --no-service-account,--no-scopes", got)
+	}
+	if got := strings.Join(onGCP.vmCreateArgs(), ","); got != "--scopes=cloud-platform" {
+		t.Errorf("on-GCP vmCreateArgs = %q, want --scopes=cloud-platform", got)
+	}
 
 	if got, want := keptTransformedQuery("gboc-smoke=keep"), `textPayload="gboc-smoke=keep" AND labels.gboc_smoke="true"`; got != want {
 		t.Errorf("keptTransformedQuery = %q, want %q", got, want)

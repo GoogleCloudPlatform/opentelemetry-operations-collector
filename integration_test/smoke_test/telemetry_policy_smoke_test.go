@@ -57,12 +57,11 @@ REGION: region of the fleet and Control Plane endpoint (default asia-east1).
   Passed explicitly so it does not depend on the VM's zone.
 
 Off-GCP mode (see telemetry_policy/README.md):
-OFF_GCP: set to "true" to simulate an off-GCP host on Linux or Windows: after
-  installing the collector package and writing helper scripts, filtered hosts,
-  and X.509 Workload Identity Federation (WIF) credentials from Secret Manager
-  directly onto the VM over SSH, the test stops the VM, detaches its GCE service
-  account and OAuth scopes, blocks the GCE metadata server for the collector
-  process, and boots the VM back up.
+OFF_GCP: set to "true" to simulate an off-GCP host on Linux or Windows: the
+  test boots the VM with --no-service-account --no-scopes, uploads the
+  collector package, helper scripts, filtered hosts, and X.509 Workload Identity
+  Federation (WIF) credentials from Secret Manager over SSH, and blocks the GCE
+  metadata server for the collector process.
 PROJECT_NUMBER: project number of the fleet (required when OFF_GCP=true, since
   the metadata server is blocked).
 WIF_AUDIENCE: audience of the X.509 WIF provider (default:
@@ -158,7 +157,6 @@ const (
 
 	windowsStateDir              = `C:\ProgramData\Google\OpenTelemetry Collector`
 	windowsConfigureRemoteScript = `C:\ProgramData\Google\OpenTelemetry Collector\configure_windows.ps1`
-	offGCPHostsPathWindows       = `C:\ProgramData\Google\OpenTelemetry Collector\hosts`
 	windowsSystemHostsPath       = `C:\Windows\System32\drivers\etc\hosts`
 	wifDirWindows                = `C:\ProgramData\Google\OpenTelemetry Collector\wif`
 
@@ -267,6 +265,13 @@ func envOrDefault(key, def string) string {
 		return v
 	}
 	return def
+}
+
+func (s telemetryPolicySettings) vmCreateArgs() []string {
+	if s.offGCP {
+		return []string{"--no-service-account", "--no-scopes"}
+	}
+	return []string{"--scopes=cloud-platform"}
 }
 
 // controlPlaneConfig returns the --config flag that loads policies from the
@@ -546,10 +551,7 @@ func TestTelemetryPoliciesSmoke(t *testing.T) {
 		if s.expectedRevisionFor(imageSpec) == "" {
 			t.Fatalf("missing expected revision for %s (set TELEMETRY_POLICY_EXPECTED_REVISION / TELEMETRY_POLICY_EXPECTED_REVISION_WINDOWS)", imageSpec)
 		}
-		// Both on-GCP and off-GCP share the same VM creation call; in off-GCP
-		// mode setupTelemetryPolicyCollector subsequently stops the VM and
-		// detaches its service account and scopes.
-		ctx, dirLog, vm := commonSetupWithExtraCreateArgumentsAndMetadata(t, imageSpec, []string{"--scopes=cloud-platform"}, nil)
+		ctx, dirLog, vm := commonSetupWithExtraCreateArgumentsAndMetadata(t, imageSpec, s.vmCreateArgs(), nil)
 		logger := dirLog.ToMainLog()
 
 		logger.Printf("Installing otelcol-google with config source %s", s.controlPlaneConfig(vm.Project, imageSpec))

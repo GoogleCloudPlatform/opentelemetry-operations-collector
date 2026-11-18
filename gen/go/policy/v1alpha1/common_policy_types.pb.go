@@ -352,11 +352,9 @@ func (SpanRecordField) EnumDescriptor() ([]byte, []int) {
 // When evaluated with `existence`, first-class fields evaluate to true when set
 // to a non-default (non-empty / non-zero) value.
 //
-// `METRIC_DESCRIPTOR_FIELD_TYPE`,
-// `METRIC_DESCRIPTOR_FIELD_AGGREGATION_TEMPORALITY`, and
-// `METRIC_DESCRIPTOR_FIELD_IS_MONOTONIC` are valid only for read-only matching
-// in `MetricFieldSelector` and are not valid mutation targets in
-// `MetricTransformPolicy`.
+// Metric descriptor fields are shared across all data points of a metric and
+// are valid only for read-only matching in `MetricFieldSelector`; they are not
+// valid mutation targets in `MetricTransformPolicy`.
 type MetricDescriptorField int32
 
 const (

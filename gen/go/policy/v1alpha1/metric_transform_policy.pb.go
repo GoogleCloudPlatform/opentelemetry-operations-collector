@@ -35,31 +35,42 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// Defines conditional in-memory modifications to matching metrics or metric
+// Defines conditional in-memory modifications to attributes of matching metric
 // data points across up to two transformation stages (`renamings` and
 // `additions`).
 //
 // Policies are declarative, atomic, and transport-agnostic.
 //
 // Evaluation & Ordering Semantics:
+//   - Data-Point Granularity & Read-Only Parents: `matchers`
+//     (`MetricFieldSelector`) may inspect both shared parent fields
+//     (`resource_attribute_path`, `scope_attribute_path`, `scope_field`,
+//     `descriptor_field`) and per-data-point attributes
+//     (`data_point_attribute_path`). Mutations (`renamings` and `additions`) are
+//     scoped strictly to the matched individual data point's `attributes` map
+//     (`MetricAttributeSelector` and `MetricTargetSelector`). Shared parent
+//     containers (`Resource`, `InstrumentationScope`, and `Metric` descriptor
+//     fields) are never mutated, so matching a subset of data points never
+//     affects sibling metrics or data points and never requires splitting
+//     containers.
 //   - Double-Applied Filtering (Pass 1 & Pass 2): `MetricFilterPolicy` rules run
 //     in Pass 1 (Pre-Transform) before `MetricTransformPolicy` stages
 //     (`renamings` -> `additions`), and re-run in Pass 2 (Post-Transform) if any
-//     transform policy modified the metric or data point. Both `ACTION_KEEP` and
+//     transform policy modified the data point. Both `ACTION_KEEP` and
 //     `ACTION_DROP` are re-evaluated statelessly in Pass 2 against the
-//     post-transform metric or data point (guaranteeing multi-hop consistency
-//     across SDK and Collector evaluation). Within each pass, `ACTION_KEEP`
-//     overrides `ACTION_DROP`; however, if a metric or data point survived Pass 1
-//     only because an `ACTION_KEEP` rule matched a field or attribute that was
-//     subsequently renamed in Stage 1 such that `ACTION_KEEP` no longer matches
-//     in Pass 2 (while an `ACTION_DROP` rule still matches), it is dropped in
-//     Pass 2.
+//     post-transform data point (guaranteeing multi-hop consistency across SDK
+//     and Collector evaluation). Within each pass, `ACTION_KEEP` overrides
+//     `ACTION_DROP`; however, if a data point survived Pass 1 only because an
+//     `ACTION_KEEP` rule matched an attribute that was subsequently renamed in
+//     Stage 1 such that `ACTION_KEEP` no longer matches in Pass 2 (while an
+//     `ACTION_DROP` rule still matches), it is dropped in Pass 2.
 //   - Pre-Transform Matcher Evaluation: All conditions in `matchers` are ANDed
-//     together (an empty `matchers` list matches all surviving metrics and data
-//     points). After Pass 1 `MetricFilterPolicy` evaluation, `matchers` is
-//     evaluated once per active `MetricTransformPolicy` against the pre-transform
-//     metric or data point before any transform stage executes. Every matching
-//     policy contributes all of its configured stage lists to the transform pass;
+//     together (an empty `matchers` list matches all surviving data points).
+//     After Pass 1 `MetricFilterPolicy` evaluation, `matchers` is evaluated once
+//     per active `MetricTransformPolicy` against each surviving pre-transform
+//     data point (and its enclosing `Metric`, `InstrumentationScope`, and
+//     `Resource`) before any transform stage executes. Every matching policy
+//     contributes all of its configured stage lists to the transform pass;
 //     mutations performed in Stage 1 (`renamings`) do not re-trigger or
 //     invalidate any transform policy's `matchers`.
 //   - Global Stage Execution & Tie-Breaking: Across all matching
@@ -72,27 +83,28 @@ const (
 //     validation (otherwise the entire policy is rejected atomically at load
 //     time).
 //   - Collision Handling & Fail-Open Runtime Execution: Metric transform
-//     operations never overwrite existing target fields or attributes (to prevent
+//     operations never overwrite existing target attributes (to prevent
 //     accidental time-series identity collisions when collapsing dimensions). If
 //     an individual operation cannot be applied at runtime (e.g., `renamings`
 //     when `source` does not exist or `target` already exists, or `additions`
-//     when `target` is already populated), that operation is a no-op and
+//     when `target` is already present), that operation is a no-op and
 //     remaining operations still execute.
 type MetricTransformPolicy struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Unique identifier for the policy within its configuration scope
 	// (e.g. a UUID or namespaced URI like "io.opentelemetry.operator/{namespace}/policies/add-metric-tier").
 	Id string `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	// Conditions evaluated against the pre-transform metric or data point that
-	// must all match for this policy's operations to apply.
-	// If empty, this policy applies to all surviving metrics.
+	// Conditions evaluated against the pre-transform data point (and its
+	// enclosing metric, scope, and resource) that must all match for this
+	// policy's operations to apply.
+	// If empty, this policy applies to all surviving data points.
 	Matchers []*MetricMatcher `protobuf:"bytes,2,rep,name=matchers,proto3" json:"matchers,omitempty"`
-	// Stage 1: Attribute rename operations (`data_point_attribute_path`,
-	// `resource_attribute_path`, or `scope_attribute_path`), applied in list
-	// order before `additions`.
+	// Stage 1: Data point attribute rename operations
+	// (`data_point_attribute_path`), applied in list order before `additions`.
 	Renamings []*MetricRenaming `protobuf:"bytes,3,rep,name=renamings,proto3" json:"renamings,omitempty"`
-	// Stage 2: Field or attribute addition operations, applied in list order
-	// after all matching policies' `renamings`.
+	// Stage 2: Data point attribute addition operations
+	// (`data_point_attribute_path`), applied in list order after all matching
+	// policies' `renamings`.
 	Additions     []*MetricAddition `protobuf:"bytes,4,rep,name=additions,proto3" json:"additions,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -156,13 +168,13 @@ func (x *MetricTransformPolicy) GetAdditions() []*MetricAddition {
 	return nil
 }
 
-// Moves an existing metric, resource, or scope attribute to a new destination.
+// Moves an existing metric data point attribute to a new destination within
+// the same data point's `attributes` map.
 //
-// Both `source` and `target` must select an attribute path
-// (`data_point_attribute_path`, `resource_attribute_path`, or
-// `scope_attribute_path`). First-class `descriptor_field` and `scope_field`
-// selectors are not valid rename sources or targets and are rejected at policy
-// load time.
+// `source` cannot be an ancestor (strict prefix) of `target` and `target`
+// cannot be an ancestor (strict prefix) of `source` (rejected at policy load
+// time). If `source` and `target` refer to the exact same path, the rename is
+// a no-op at runtime.
 //
 // Collision Handling: If `source` does not exist or `target` already exists,
 // the rename is a no-op and existing attributes are preserved unchanged.
@@ -172,10 +184,10 @@ func (x *MetricTransformPolicy) GetAdditions() []*MetricAddition {
 // or `target`).
 type MetricRenaming struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Existing source attribute to rename. Required.
-	Source *MetricFieldSelector `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"`
-	// Destination attribute to write. Required.
-	Target        *MetricFieldSelector `protobuf:"bytes,2,opt,name=target,proto3" json:"target,omitempty"`
+	// Existing source data point attribute to rename. Required.
+	Source *MetricAttributeSelector `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"`
+	// Destination data point attribute to write. Required.
+	Target        *MetricAttributeSelector `protobuf:"bytes,2,opt,name=target,proto3" json:"target,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -210,47 +222,33 @@ func (*MetricRenaming) Descriptor() ([]byte, []int) {
 	return file_policy_v1alpha1_metric_transform_policy_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *MetricRenaming) GetSource() *MetricFieldSelector {
+func (x *MetricRenaming) GetSource() *MetricAttributeSelector {
 	if x != nil {
 		return x.Source
 	}
 	return nil
 }
 
-func (x *MetricRenaming) GetTarget() *MetricFieldSelector {
+func (x *MetricRenaming) GetTarget() *MetricAttributeSelector {
 	if x != nil {
 		return x.Target
 	}
 	return nil
 }
 
-// Inserts a new field or attribute on a metric or metric data point if not
-// already present.
+// Inserts a new attribute on a metric data point if not already present.
 //
-// Collision Handling: If `target` is already present (or, for first-class
-// string fields, set to a non-empty string), the addition is skipped and the
-// existing value is preserved unchanged.
+// Collision Handling: If `target` is already present, the addition is skipped
+// and the existing value is preserved unchanged.
 //
-// Valid `target` variants:
-//   - `data_point_attribute_path`, `resource_attribute_path`,
-//     `scope_attribute_path`: accepts any scalar `Value`. Missing intermediate
-//     map segments in a multi-element `AttributePath` are created automatically
-//     unless an intermediate segment already exists as a non-map value (in which
-//     case the operation fails open).
-//   - `descriptor_field`: valid targets are `METRIC_DESCRIPTOR_FIELD_NAME`,
-//     `METRIC_DESCRIPTOR_FIELD_DESCRIPTION`, and `METRIC_DESCRIPTOR_FIELD_UNIT`
-//     (requires `string_value`, and only sets the field if it is currently empty
-//     `""`). `METRIC_DESCRIPTOR_FIELD_TYPE`,
-//     `METRIC_DESCRIPTOR_FIELD_AGGREGATION_TEMPORALITY`, and
-//     `METRIC_DESCRIPTOR_FIELD_IS_MONOTONIC` are not valid mutation targets.
-//   - `scope_field`: valid targets are `SCOPE_FIELD_NAME` and
-//     `SCOPE_FIELD_VERSION` (requires `string_value`, and only sets the field if
-//     it is currently empty `""`). `SCOPE_FIELD_SCHEMA_URL` is not a valid
-//     mutation target.
+// Accepts any scalar `Value`. Missing intermediate map segments in a
+// multi-element `AttributePath` are created automatically unless an
+// intermediate segment already exists as a non-map value (in which case the
+// operation fails open).
 type MetricAddition struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Target field or attribute to set. Required.
-	Target *MetricFieldSelector `protobuf:"bytes,1,opt,name=target,proto3" json:"target,omitempty"`
+	// Target data point attribute to set. Required.
+	Target *MetricTargetSelector `protobuf:"bytes,1,opt,name=target,proto3" json:"target,omitempty"`
 	// Source of the value to assign to `target`. Exactly one must be set.
 	//
 	// Types that are valid to be assigned to Source:
@@ -291,7 +289,7 @@ func (*MetricAddition) Descriptor() ([]byte, []int) {
 	return file_policy_v1alpha1_metric_transform_policy_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *MetricAddition) GetTarget() *MetricFieldSelector {
+func (x *MetricAddition) GetTarget() *MetricTargetSelector {
 	if x != nil {
 		return x.Target
 	}
@@ -325,6 +323,161 @@ type MetricAddition_Value struct {
 
 func (*MetricAddition_Value) isMetricAddition_Source() {}
 
+// Designates a writable metric data point attribute for addition operations.
+//
+// Kept separate from `MetricAttributeSelector` (mirroring `LogTargetSelector`
+// and `LogAttributeSelector`) so addition targets and rename targets can evolve
+// independently without a source-breaking type change. Shared parent fields
+// (`resource_attribute_path`, `scope_attribute_path`, `scope_field`, and
+// `descriptor_field`) are valid only for read-only matching in
+// `MetricFieldSelector` and are not valid mutation targets in
+// `MetricTargetSelector`.
+type MetricTargetSelector struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The writable target attribute to set. Exactly one must be set.
+	//
+	// Types that are valid to be assigned to Target:
+	//
+	//	*MetricTargetSelector_DataPointAttributePath
+	Target        isMetricTargetSelector_Target `protobuf_oneof:"target"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MetricTargetSelector) Reset() {
+	*x = MetricTargetSelector{}
+	mi := &file_policy_v1alpha1_metric_transform_policy_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MetricTargetSelector) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MetricTargetSelector) ProtoMessage() {}
+
+func (x *MetricTargetSelector) ProtoReflect() protoreflect.Message {
+	mi := &file_policy_v1alpha1_metric_transform_policy_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MetricTargetSelector.ProtoReflect.Descriptor instead.
+func (*MetricTargetSelector) Descriptor() ([]byte, []int) {
+	return file_policy_v1alpha1_metric_transform_policy_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *MetricTargetSelector) GetTarget() isMetricTargetSelector_Target {
+	if x != nil {
+		return x.Target
+	}
+	return nil
+}
+
+func (x *MetricTargetSelector) GetDataPointAttributePath() *AttributePath {
+	if x != nil {
+		if x, ok := x.Target.(*MetricTargetSelector_DataPointAttributePath); ok {
+			return x.DataPointAttributePath
+		}
+	}
+	return nil
+}
+
+type isMetricTargetSelector_Target interface {
+	isMetricTargetSelector_Target()
+}
+
+type MetricTargetSelector_DataPointAttributePath struct {
+	// A key or nested path inside an individual metric data point's
+	// `attributes` map (e.g. `["http.status_code"]` or `["env"]`).
+	DataPointAttributePath *AttributePath `protobuf:"bytes,1,opt,name=data_point_attribute_path,json=dataPointAttributePath,proto3,oneof"`
+}
+
+func (*MetricTargetSelector_DataPointAttributePath) isMetricTargetSelector_Target() {}
+
+// Designates a renameable metric data point attribute for renaming operations.
+//
+// Shared parent fields (`resource_attribute_path`, `scope_attribute_path`,
+// `scope_field`, and `descriptor_field`) are valid only for read-only matching
+// in `MetricFieldSelector` and are not valid rename sources or targets in
+// `MetricAttributeSelector`.
+type MetricAttributeSelector struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The data point attribute path to target. Exactly one must be set.
+	//
+	// Types that are valid to be assigned to Target:
+	//
+	//	*MetricAttributeSelector_DataPointAttributePath
+	Target        isMetricAttributeSelector_Target `protobuf_oneof:"target"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MetricAttributeSelector) Reset() {
+	*x = MetricAttributeSelector{}
+	mi := &file_policy_v1alpha1_metric_transform_policy_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MetricAttributeSelector) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MetricAttributeSelector) ProtoMessage() {}
+
+func (x *MetricAttributeSelector) ProtoReflect() protoreflect.Message {
+	mi := &file_policy_v1alpha1_metric_transform_policy_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MetricAttributeSelector.ProtoReflect.Descriptor instead.
+func (*MetricAttributeSelector) Descriptor() ([]byte, []int) {
+	return file_policy_v1alpha1_metric_transform_policy_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *MetricAttributeSelector) GetTarget() isMetricAttributeSelector_Target {
+	if x != nil {
+		return x.Target
+	}
+	return nil
+}
+
+func (x *MetricAttributeSelector) GetDataPointAttributePath() *AttributePath {
+	if x != nil {
+		if x, ok := x.Target.(*MetricAttributeSelector_DataPointAttributePath); ok {
+			return x.DataPointAttributePath
+		}
+	}
+	return nil
+}
+
+type isMetricAttributeSelector_Target interface {
+	isMetricAttributeSelector_Target()
+}
+
+type MetricAttributeSelector_DataPointAttributePath struct {
+	// A key or nested path inside an individual metric data point's
+	// `attributes` map (e.g. `["http.status_code"]` or `["env"]`).
+	DataPointAttributePath *AttributePath `protobuf:"bytes,1,opt,name=data_point_attribute_path,json=dataPointAttributePath,proto3,oneof"`
+}
+
+func (*MetricAttributeSelector_DataPointAttributePath) isMetricAttributeSelector_Target() {}
+
 var File_policy_v1alpha1_metric_transform_policy_proto protoreflect.FileDescriptor
 
 const file_policy_v1alpha1_metric_transform_policy_proto_rawDesc = "" +
@@ -334,14 +487,20 @@ const file_policy_v1alpha1_metric_transform_policy_proto_rawDesc = "" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12K\n" +
 	"\bmatchers\x18\x02 \x03(\v2/.google.telemetry.policy.v1alpha1.MetricMatcherR\bmatchers\x12N\n" +
 	"\trenamings\x18\x03 \x03(\v20.google.telemetry.policy.v1alpha1.MetricRenamingR\trenamings\x12N\n" +
-	"\tadditions\x18\x04 \x03(\v20.google.telemetry.policy.v1alpha1.MetricAdditionR\tadditions\"\xae\x01\n" +
-	"\x0eMetricRenaming\x12M\n" +
-	"\x06source\x18\x01 \x01(\v25.google.telemetry.policy.v1alpha1.MetricFieldSelectorR\x06source\x12M\n" +
-	"\x06target\x18\x02 \x01(\v25.google.telemetry.policy.v1alpha1.MetricFieldSelectorR\x06target\"\xaa\x01\n" +
-	"\x0eMetricAddition\x12M\n" +
-	"\x06target\x18\x01 \x01(\v25.google.telemetry.policy.v1alpha1.MetricFieldSelectorR\x06target\x12?\n" +
+	"\tadditions\x18\x04 \x03(\v20.google.telemetry.policy.v1alpha1.MetricAdditionR\tadditions\"\xb6\x01\n" +
+	"\x0eMetricRenaming\x12Q\n" +
+	"\x06source\x18\x01 \x01(\v29.google.telemetry.policy.v1alpha1.MetricAttributeSelectorR\x06source\x12Q\n" +
+	"\x06target\x18\x02 \x01(\v29.google.telemetry.policy.v1alpha1.MetricAttributeSelectorR\x06target\"\xab\x01\n" +
+	"\x0eMetricAddition\x12N\n" +
+	"\x06target\x18\x01 \x01(\v26.google.telemetry.policy.v1alpha1.MetricTargetSelectorR\x06target\x12?\n" +
 	"\x05value\x18\x02 \x01(\v2'.google.telemetry.policy.v1alpha1.ValueH\x00R\x05valueB\b\n" +
-	"\x06sourceB\xce\x02\n" +
+	"\x06source\"\x8e\x01\n" +
+	"\x14MetricTargetSelector\x12l\n" +
+	"\x19data_point_attribute_path\x18\x01 \x01(\v2/.google.telemetry.policy.v1alpha1.AttributePathH\x00R\x16dataPointAttributePathB\b\n" +
+	"\x06target\"\x91\x01\n" +
+	"\x17MetricAttributeSelector\x12l\n" +
+	"\x19data_point_attribute_path\x18\x01 \x01(\v2/.google.telemetry.policy.v1alpha1.AttributePathH\x00R\x16dataPointAttributePathB\b\n" +
+	"\x06targetB\xce\x02\n" +
 	"$com.google.telemetry.policy.v1alpha1B\x1aMetricTransformPolicyProtoP\x01Zggithub.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1;policyv1alpha1\xa2\x02\x03GTP\xaa\x02 Google.Telemetry.Policy.V1alpha1\xca\x02 Google\\Telemetry\\Policy\\V1alpha1\xe2\x02,Google\\Telemetry\\Policy\\V1alpha1\\GPBMetadata\xea\x02#Google::Telemetry::Policy::V1alpha1b\x06proto3"
 
 var (
@@ -356,28 +515,32 @@ func file_policy_v1alpha1_metric_transform_policy_proto_rawDescGZIP() []byte {
 	return file_policy_v1alpha1_metric_transform_policy_proto_rawDescData
 }
 
-var file_policy_v1alpha1_metric_transform_policy_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_policy_v1alpha1_metric_transform_policy_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_policy_v1alpha1_metric_transform_policy_proto_goTypes = []any{
-	(*MetricTransformPolicy)(nil), // 0: google.telemetry.policy.v1alpha1.MetricTransformPolicy
-	(*MetricRenaming)(nil),        // 1: google.telemetry.policy.v1alpha1.MetricRenaming
-	(*MetricAddition)(nil),        // 2: google.telemetry.policy.v1alpha1.MetricAddition
-	(*MetricMatcher)(nil),         // 3: google.telemetry.policy.v1alpha1.MetricMatcher
-	(*MetricFieldSelector)(nil),   // 4: google.telemetry.policy.v1alpha1.MetricFieldSelector
-	(*Value)(nil),                 // 5: google.telemetry.policy.v1alpha1.Value
+	(*MetricTransformPolicy)(nil),   // 0: google.telemetry.policy.v1alpha1.MetricTransformPolicy
+	(*MetricRenaming)(nil),          // 1: google.telemetry.policy.v1alpha1.MetricRenaming
+	(*MetricAddition)(nil),          // 2: google.telemetry.policy.v1alpha1.MetricAddition
+	(*MetricTargetSelector)(nil),    // 3: google.telemetry.policy.v1alpha1.MetricTargetSelector
+	(*MetricAttributeSelector)(nil), // 4: google.telemetry.policy.v1alpha1.MetricAttributeSelector
+	(*MetricMatcher)(nil),           // 5: google.telemetry.policy.v1alpha1.MetricMatcher
+	(*Value)(nil),                   // 6: google.telemetry.policy.v1alpha1.Value
+	(*AttributePath)(nil),           // 7: google.telemetry.policy.v1alpha1.AttributePath
 }
 var file_policy_v1alpha1_metric_transform_policy_proto_depIdxs = []int32{
-	3, // 0: google.telemetry.policy.v1alpha1.MetricTransformPolicy.matchers:type_name -> google.telemetry.policy.v1alpha1.MetricMatcher
+	5, // 0: google.telemetry.policy.v1alpha1.MetricTransformPolicy.matchers:type_name -> google.telemetry.policy.v1alpha1.MetricMatcher
 	1, // 1: google.telemetry.policy.v1alpha1.MetricTransformPolicy.renamings:type_name -> google.telemetry.policy.v1alpha1.MetricRenaming
 	2, // 2: google.telemetry.policy.v1alpha1.MetricTransformPolicy.additions:type_name -> google.telemetry.policy.v1alpha1.MetricAddition
-	4, // 3: google.telemetry.policy.v1alpha1.MetricRenaming.source:type_name -> google.telemetry.policy.v1alpha1.MetricFieldSelector
-	4, // 4: google.telemetry.policy.v1alpha1.MetricRenaming.target:type_name -> google.telemetry.policy.v1alpha1.MetricFieldSelector
-	4, // 5: google.telemetry.policy.v1alpha1.MetricAddition.target:type_name -> google.telemetry.policy.v1alpha1.MetricFieldSelector
-	5, // 6: google.telemetry.policy.v1alpha1.MetricAddition.value:type_name -> google.telemetry.policy.v1alpha1.Value
-	7, // [7:7] is the sub-list for method output_type
-	7, // [7:7] is the sub-list for method input_type
-	7, // [7:7] is the sub-list for extension type_name
-	7, // [7:7] is the sub-list for extension extendee
-	0, // [0:7] is the sub-list for field type_name
+	4, // 3: google.telemetry.policy.v1alpha1.MetricRenaming.source:type_name -> google.telemetry.policy.v1alpha1.MetricAttributeSelector
+	4, // 4: google.telemetry.policy.v1alpha1.MetricRenaming.target:type_name -> google.telemetry.policy.v1alpha1.MetricAttributeSelector
+	3, // 5: google.telemetry.policy.v1alpha1.MetricAddition.target:type_name -> google.telemetry.policy.v1alpha1.MetricTargetSelector
+	6, // 6: google.telemetry.policy.v1alpha1.MetricAddition.value:type_name -> google.telemetry.policy.v1alpha1.Value
+	7, // 7: google.telemetry.policy.v1alpha1.MetricTargetSelector.data_point_attribute_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
+	7, // 8: google.telemetry.policy.v1alpha1.MetricAttributeSelector.data_point_attribute_path:type_name -> google.telemetry.policy.v1alpha1.AttributePath
+	9, // [9:9] is the sub-list for method output_type
+	9, // [9:9] is the sub-list for method input_type
+	9, // [9:9] is the sub-list for extension type_name
+	9, // [9:9] is the sub-list for extension extendee
+	0, // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_policy_v1alpha1_metric_transform_policy_proto_init() }
@@ -389,13 +552,19 @@ func file_policy_v1alpha1_metric_transform_policy_proto_init() {
 	file_policy_v1alpha1_metric_transform_policy_proto_msgTypes[2].OneofWrappers = []any{
 		(*MetricAddition_Value)(nil),
 	}
+	file_policy_v1alpha1_metric_transform_policy_proto_msgTypes[3].OneofWrappers = []any{
+		(*MetricTargetSelector_DataPointAttributePath)(nil),
+	}
+	file_policy_v1alpha1_metric_transform_policy_proto_msgTypes[4].OneofWrappers = []any{
+		(*MetricAttributeSelector_DataPointAttributePath)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_policy_v1alpha1_metric_transform_policy_proto_rawDesc), len(file_policy_v1alpha1_metric_transform_policy_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

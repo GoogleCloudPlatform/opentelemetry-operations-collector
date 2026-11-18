@@ -120,15 +120,49 @@ func NewFactory() confmap.ProviderFactory {
 }
 
 func newProvider(set confmap.ProviderSettings) confmap.Provider {
-	// Enable confmap.enableMergeAppendOption so confmap.Merge appends and
-	// deduplicates service::extensions, service::**::receivers, and
-	// service::**::exporters slices across policies and across multiple
-	// confmap providers (e.g. file: + googlecontrolplane:).
-	if err := featuregate.GlobalRegistry().Set(mergeAppendFeatureGateID, true); err != nil && set.Logger != nil {
-		set.Logger.Warn("failed to enable confmap merge append feature gate", zap.Error(err))
-	}
 	return &provider{
 		logger: set.Logger,
+	}
+}
+
+// mergeAppendEnabled reports whether confmap.enableMergeAppendOption is
+// currently enabled.
+func mergeAppendEnabled() bool {
+	enabled := false
+	featuregate.GlobalRegistry().VisitAll(func(g *featuregate.Gate) {
+		if g.ID() == mergeAppendFeatureGateID {
+			enabled = g.IsEnabled()
+		}
+	})
+	return enabled
+}
+
+// enableMergeAppend turns on confmap.enableMergeAppendOption so confmap.Merge
+// appends and deduplicates service::extensions, service::**::receivers and
+// service::**::exporters instead of replacing them. The configuration this
+// provider generates depends on it, both for the policies it merges together
+// and for other config sources (e.g. file:) layered on top.
+//
+// It is called from Retrieve rather than when the provider is created: the
+// Collector creates every registered provider at startup, and a Collector that
+// never retrieves a googlecontrolplane: URI must keep the default merge
+// behavior.
+//
+// The gate is process wide and stays enabled once set. Config sources listed
+// before the first googlecontrolplane: URI are merged before this runs, so list
+// that URI first for the gate to apply to every source.
+func (p *provider) enableMergeAppend() {
+	if mergeAppendEnabled() {
+		return
+	}
+	if err := featuregate.GlobalRegistry().Set(mergeAppendFeatureGateID, true); err != nil {
+		if p.logger != nil {
+			p.logger.Warn("failed to enable confmap merge append feature gate", zap.Error(err))
+		}
+		return
+	}
+	if p.logger != nil {
+		p.logger.Info("enabled feature gate required by the googlecontrolplane provider", zap.String("feature_gate", mergeAppendFeatureGateID))
 	}
 }
 
@@ -198,6 +232,8 @@ func (p *provider) Retrieve(ctx context.Context, uri string, watcher confmap.Wat
 	if err != nil {
 		return nil, fmt.Errorf("%q: %w: %w", uri, ErrURIInvalidInnerURI, err)
 	}
+
+	p.enableMergeAppend()
 
 	p.mu.Lock()
 	manager := p.manager

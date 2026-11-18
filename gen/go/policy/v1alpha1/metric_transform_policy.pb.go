@@ -83,12 +83,13 @@ const (
 //     validation (otherwise the entire policy is rejected atomically at load
 //     time).
 //   - Collision Handling & Fail-Open Runtime Execution: Metric transform
-//     operations never overwrite existing target attributes (to prevent
-//     accidental time-series identity collisions when collapsing dimensions). If
-//     an individual operation cannot be applied at runtime (e.g., `renamings`
-//     when `source` does not exist or `target` already exists, or `additions`
-//     when `target` is already present), that operation is a no-op and
-//     remaining operations still execute.
+//     operations never overwrite existing target attributes (this reduces the
+//     risk of accidental time-series identity collisions, though non-overwriting
+//     additions and renamings can still collide when sibling series in the same
+//     metric have different attribute sets). If an individual operation cannot
+//     be applied at runtime (e.g., `renamings` when `source` does not exist or
+//     `target` already exists, or `additions` when `target` is already present),
+//     that operation is a no-op and remaining operations still execute.
 type MetricTransformPolicy struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Unique identifier for the policy within its configuration scope

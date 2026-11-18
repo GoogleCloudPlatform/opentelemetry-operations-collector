@@ -18,7 +18,7 @@
 # Linux and Windows smoke test fleets and PolicySets, and rolls the latest
 # PolicySet revisions out to their respective fleets.
 #
-# When WIF_PROJECT_ID is also passed (e.g. gboc-tango-testing, a project outside
+# When WIF_PROJECT_ID is also passed (e.g. <joonix-org-project-name>, a project outside
 # the google.com organization), the script also sets up the X.509 Workload Identity Pool
 # (gboc-x509-pool), X.509 provider (gboc-x509-prov), certificates, credential
 # configuration files, and IAM bindings for off-GCP smoke testing.

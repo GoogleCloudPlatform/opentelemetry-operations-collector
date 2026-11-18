@@ -38,7 +38,7 @@ import (
 func TestFilterOffGCPHosts(t *testing.T) {
 	in := "127.0.0.1\tlocalhost\r\n" +
 		"::1\t\tlocalhost ip6-localhost ip6-loopback\r\n" +
-		"10.140.0.12\tvm-1.asia-east1-a.c.gboc-tango-testing.internal vm-1  # Added by Google\r\n" +
+		"10.140.0.12\tvm-1.asia-east1-a.c.joonix-org-project-name.internal vm-1  # Added by Google\r\n" +
 		"# comment mentioning 169.254.169.254 is harmless\r\n" +
 		"169.254.169.254 metadata.google.internal  # Added by Google\r\n" +
 		"169.254.169.254 metadata\r\n"
@@ -46,7 +46,7 @@ func TestFilterOffGCPHosts(t *testing.T) {
 	if strings.Contains(got, "169.254.169.254 metadata") {
 		t.Errorf("filterOffGCPHosts left GCE metadata IP mapping:\n%s", got)
 	}
-	if !strings.Contains(got, "10.140.0.12\tvm-1.asia-east1-a.c.gboc-tango-testing.internal vm-1") {
+	if !strings.Contains(got, "10.140.0.12\tvm-1.asia-east1-a.c.joonix-org-project-name.internal vm-1") {
 		t.Errorf("filterOffGCPHosts dropped VM hostname entry:\n%s", got)
 	}
 	if !strings.Contains(got, "127.0.0.1 metadata.google.internal metadata.google.internal. metadata\n") {
@@ -62,7 +62,7 @@ func TestTelemetryPolicySettingsFromEnvAndOSSelection(t *testing.T) {
 	t.Setenv("TELEMETRY_POLICY_CONTROL_PLANE_ENDPOINT", "cp.example.com:443")
 	t.Setenv("TELEMETRY_POLICY_EXPECTED_REVISION", "1b20a331")
 	t.Setenv("TELEMETRY_POLICY_EXPECTED_REVISION_WINDOWS", "3d90357c")
-	t.Setenv("PROJECT_NUMBER", "406580743452")
+	t.Setenv("PROJECT_NUMBER", "123456789012")
 
 	t.Setenv("OFF_GCP", "false")
 	onGCP := telemetryPolicySettingsFromEnv(t)
@@ -90,8 +90,8 @@ func TestTelemetryPolicySettingsFromEnvAndOSSelection(t *testing.T) {
 
 	t.Setenv("OFF_GCP", "true")
 	offGCP := telemetryPolicySettingsFromEnv(t)
-	wantAudience := "//iam.googleapis.com/projects/406580743452/locations/global/workloadIdentityPools/gboc-x509-pool/providers/gboc-x509-prov"
-	if !offGCP.offGCP || offGCP.projectNumber != "406580743452" ||
+	wantAudience := "//iam.googleapis.com/projects/123456789012/locations/global/workloadIdentityPools/gboc-x509-pool/providers/gboc-x509-prov"
+	if !offGCP.offGCP || offGCP.projectNumber != "123456789012" ||
 		offGCP.wifCertSecret != defaultWIFCertSecret || offGCP.wifKeySecret != defaultWIFKeySecret ||
 		offGCP.wifAudience != wantAudience || offGCP.wifDir != "" {
 		t.Fatalf("unexpected off-GCP settings: %+v", offGCP)
@@ -107,10 +107,10 @@ func TestTelemetryPolicyConfigHelpers(t *testing.T) {
 		windowsPolicySetID: defaultWindowsPolicySetID,
 		region:             "asia-east1",
 		offGCP:             true,
-		projectNumber:      "406580743452",
+		projectNumber:      "123456789012",
 	}
 
-	dropIn := s.dropIn("gboc-tango-testing", "debian-cloud:debian-12")
+	dropIn := s.dropIn("joonix-org-project-name", "debian-cloud:debian-12")
 	for _, forbidden := range []string{
 		"GCE_METADATA_HOST",
 		"OTELCOL_OPTIONS",
@@ -127,20 +127,20 @@ func TestTelemetryPolicyConfigHelpers(t *testing.T) {
 		"ExecStartPre=+/bin/sh /etc/otelcol-google/block_metadata.sh",
 		"BindReadOnlyPaths=/etc/otelcol-google/hosts:/etc/hosts",
 		"Environment=GOOGLE_APPLICATION_CREDENTIALS=/etc/otelcol-google/wif/cred_config.json",
-		"Environment=GOOGLE_CLOUD_PROJECT=gboc-tango-testing",
+		"Environment=GOOGLE_CLOUD_PROJECT=joonix-org-project-name",
 		"ExecStart=/usr/bin/otelcol-google --config=googlecontrolplane:xds://",
 		"gcp.fleet_id=gboc-smoke-fleet",
 		"region=asia-east1",
-		"project=gboc-tango-testing",
-		"project_number=406580743452",
+		"project=joonix-org-project-name",
+		"project_number=123456789012",
 	} {
 		if !strings.Contains(dropIn, want) {
 			t.Errorf("off-GCP dropIn missing %q:\n%s", want, dropIn)
 		}
 	}
 
-	winURI := s.controlPlaneConfig("gboc-tango-testing", "windows-cloud:windows-2022")
-	if !strings.Contains(winURI, "gcp.fleet_id=gboc-smoke-fleet-windows") || !strings.Contains(winURI, "project_number=406580743452") {
+	winURI := s.controlPlaneConfig("joonix-org-project-name", "windows-cloud:windows-2022")
+	if !strings.Contains(winURI, "gcp.fleet_id=gboc-smoke-fleet-windows") || !strings.Contains(winURI, "project_number=123456789012") {
 		t.Errorf("unexpected Windows off-GCP URI: %s", winURI)
 	}
 
@@ -150,7 +150,7 @@ func TestTelemetryPolicyConfigHelpers(t *testing.T) {
 		windowsFleetID: defaultWindowsFleetID,
 		region:         "asia-east1",
 	}
-	onGCPDropIn := onGCP.dropIn("stackdriver-test-143416", "debian-cloud:debian-12")
+	onGCPDropIn := onGCP.dropIn("google-org-project-name", "debian-cloud:debian-12")
 	for _, forbidden := range []string{"BindReadOnlyPaths", "OTELCOL_OPTIONS", "config.yaml"} {
 		if strings.Contains(onGCPDropIn, forbidden) {
 			t.Errorf("on-GCP dropIn must not contain %q:\n%s", forbidden, onGCPDropIn)
@@ -180,7 +180,7 @@ func TestTelemetryPolicyConfigHelpers(t *testing.T) {
 func TestAccessSecretBytesAndLocalOverride(t *testing.T) {
 	wantCert := "-----BEGIN CERTIFICATE-----\ntest-cert\n-----END CERTIFICATE-----\n"
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/projects/gboc-tango-testing/secrets/gboc-x509-leaf-cert/versions/latest:access" {
+		if r.URL.Path != "/v1/projects/joonix-org-project-name/secrets/gboc-x509-leaf-cert/versions/latest:access" {
 			http.NotFound(w, r)
 			return
 		}
@@ -197,7 +197,7 @@ func TestAccessSecretBytesAndLocalOverride(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := accessSecretBytes(context.Background(), svc, "gboc-tango-testing", defaultWIFCertSecret)
+	got, err := accessSecretBytes(context.Background(), svc, "joonix-org-project-name", defaultWIFCertSecret)
 	if err != nil {
 		t.Fatalf("accessSecretBytes failed: %v", err)
 	}
@@ -212,7 +212,7 @@ func TestAccessSecretBytesAndLocalOverride(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "leaf.key"), []byte("dir-key"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	cert, key, err := loadWIFLeafCertAndKey(context.Background(), log.New(io.Discard, "", 0), "gboc-tango-testing", telemetryPolicySettings{wifDir: dir})
+	cert, key, err := loadWIFLeafCertAndKey(context.Background(), log.New(io.Discard, "", 0), "joonix-org-project-name", telemetryPolicySettings{wifDir: dir})
 	if err != nil {
 		t.Fatalf("loadWIFLeafCertAndKey(wifDir) failed: %v", err)
 	}

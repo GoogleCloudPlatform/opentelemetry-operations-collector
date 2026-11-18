@@ -164,11 +164,12 @@ func (x *MetricTransformPolicy) GetAdditions() []*MetricAddition {
 // selectors are not valid rename sources or targets and are rejected at policy
 // load time.
 //
-// Collision Handling: If `target` already exists, the rename is a no-op and
-// both `source` and `target` are preserved unchanged. Missing intermediate map
-// segments in a multi-element `AttributePath` are created automatically unless
-// an intermediate segment already exists as a non-map value (in which case the
-// rename fails open without mutating `source` or `target`).
+// Collision Handling: If `source` does not exist or `target` already exists,
+// the rename is a no-op and existing attributes are preserved unchanged.
+// Missing intermediate map segments in a multi-element `AttributePath` are
+// created automatically unless an intermediate segment already exists as a
+// non-map value (in which case the rename fails open without mutating `source`
+// or `target`).
 type MetricRenaming struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Existing source attribute to rename. Required.
@@ -238,12 +239,14 @@ func (x *MetricRenaming) GetTarget() *MetricFieldSelector {
 //     case the operation fails open).
 //   - `descriptor_field`: valid targets are `METRIC_DESCRIPTOR_FIELD_NAME`,
 //     `METRIC_DESCRIPTOR_FIELD_DESCRIPTION`, and `METRIC_DESCRIPTOR_FIELD_UNIT`
-//     (each requiring a non-empty `string_value`). `METRIC_DESCRIPTOR_FIELD_TYPE`,
+//     (requires `string_value`, and only sets the field if it is currently empty
+//     `""`). `METRIC_DESCRIPTOR_FIELD_TYPE`,
 //     `METRIC_DESCRIPTOR_FIELD_AGGREGATION_TEMPORALITY`, and
 //     `METRIC_DESCRIPTOR_FIELD_IS_MONOTONIC` are not valid mutation targets.
 //   - `scope_field`: valid targets are `SCOPE_FIELD_NAME` and
-//     `SCOPE_FIELD_VERSION` (each requiring a non-empty `string_value`).
-//     `SCOPE_FIELD_SCHEMA_URL` is not a valid mutation target.
+//     `SCOPE_FIELD_VERSION` (requires `string_value`, and only sets the field if
+//     it is currently empty `""`). `SCOPE_FIELD_SCHEMA_URL` is not a valid
+//     mutation target.
 type MetricAddition struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Target field or attribute to set. Required.

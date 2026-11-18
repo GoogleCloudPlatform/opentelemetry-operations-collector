@@ -1654,7 +1654,7 @@ func (s *staticADSServer) StreamAggregatedResources(stream discoveryv3.Aggregate
 // collector's internal MeterProvider into pkg/googlepolicy so that the gRFC A78
 // grpc.xds_client.* metrics (including initial-sync counter updates replayed on
 // late binding) are exported through the default_self_metrics pipeline alongside
-// gcp.policy.set.active.
+// gcp.policy.set.active, with the expected values and attributes.
 func TestXDSClientSelfMetrics(t *testing.T) {
 	otelcolBin := resolveOtelcolBinary(t)
 	tempDir := t.TempDir()
@@ -1708,29 +1708,76 @@ func TestXDSClientSelfMetrics(t *testing.T) {
 
 	col := startCollectorWithURIs(t, otelcolBin, xdsURI, fmt.Sprintf("file:%s", filepath.ToSlash(pipelineCfgPath)))
 
-	wantXDSMetrics := []string{
-		googlecontrolplaneextension.MetricPolicySetActive,
-		"grpc.xds_client.connected",
-		"grpc.xds_client.resources",
-		"grpc.xds_client.resource_updates_valid",
+	// The single resource is accepted on the first response, so each metric
+	// settles on one data point: a connected stream, one valid update, and
+	// one resource in the acked state.
+	adsAddr := adsLn.Addr().String()
+	wantXDSPoints := map[string]struct {
+		value int64
+		attrs map[string]string
+	}{
+		"grpc.xds_client.connected": {
+			value: 1,
+			attrs: map[string]string{
+				"grpc.target":     adsAddr,
+				"grpc.xds.server": adsAddr,
+			},
+		},
+		"grpc.xds_client.resource_updates_valid": {
+			value: 1,
+			attrs: map[string]string{
+				"grpc.target":            adsAddr,
+				"grpc.xds.server":        adsAddr,
+				"grpc.xds.resource_type": "TelemetryCollector",
+			},
+		},
+		"grpc.xds_client.resources": {
+			value: 1,
+			attrs: map[string]string{
+				"grpc.target":            adsAddr,
+				"grpc.xds.authority":     "telemetry-director.us-central1.xds.googleapis.com",
+				"grpc.xds.cache_state":   "acked",
+				"grpc.xds.resource_type": "TelemetryCollector",
+			},
+		},
 	}
 
-	var gotMetricCounts map[string]int
-	allFound := waitCondition(10*time.Second, 50*time.Millisecond, func() bool {
-		gotMetricCounts = collectMetricNames(selfMockSrv.CollectedMetrics())
-		for _, name := range wantXDSMetrics {
-			if gotMetricCounts[name] == 0 {
-				return false
+	// Wait for the latest export to match, not for the first one to arrive:
+	// an export taken before the resource is acked reports other values.
+	gotXDSPoints := map[string][]selfMetricPoint{}
+	allMatch := waitCondition(10*time.Second, 50*time.Millisecond, func() bool {
+		batches := selfMockSrv.CollectedMetrics()
+		_, _, match := latestPolicySetActive(batches)
+		for name, want := range wantXDSPoints {
+			got := latestSelfMetricPoints(batches, name)
+			gotXDSPoints[name] = got
+			if len(got) != 1 || got[0].value != want.value || !cmp.Equal(got[0].attrs, want.attrs) {
+				match = false
 			}
 		}
-		return true
+		return match
 	})
 
 	value, attrs, foundActive := latestPolicySetActive(selfMockSrv.CollectedMetrics())
 	col.shutdown(t)
 
-	if !allFound {
-		t.Fatalf("timed out waiting for xDS self-metrics %v on selfMockSrv, got: %v\ncollector logs:\n%s", wantXDSMetrics, gotMetricCounts, col.logs())
+	if !allMatch {
+		t.Fatalf("timed out waiting for xDS self-metrics on selfMockSrv\nwant: %+v\ngot:  %+v\n%s found: %v\ncollector logs:\n%s",
+			wantXDSPoints, gotXDSPoints, googlecontrolplaneextension.MetricPolicySetActive, foundActive, col.logs())
+	}
+
+	// The self metrics pipeline copies these identity attributes from the
+	// resource onto every data point. The transform processor in this test
+	// collector is a stand-in that does not do the copy, so check them on the
+	// resource they are copied from.
+	for name, points := range gotXDSPoints {
+		resourceAttrs := points[0].resourceAttrs
+		if got, want := resourceAttrs["gcp.fleet_id"], "projects/my-project/locations/us-central1/fleets/test-fleet"; got != want {
+			t.Errorf("%s: resource attribute gcp.fleet_id = %q, want %q", name, got, want)
+		}
+		if resourceAttrs["service.instance.id"] == "" {
+			t.Errorf("%s: resource attribute service.instance.id is missing or empty, resource attributes: %v", name, resourceAttrs)
+		}
 	}
 	if !foundActive || value != 0xb2c3d479 {
 		t.Errorf("%s = %d (found=%v), want %d", googlecontrolplaneextension.MetricPolicySetActive, value, foundActive, int64(0xb2c3d479))
@@ -1913,6 +1960,65 @@ func latestPolicySetActive(batches []pmetric.Metrics) (int64, map[string]string,
 		}
 	}
 	return value, attrs, found
+}
+
+// selfMetricPoint is one integer data point of a collector self metric,
+// together with the attributes of the resource it was exported under.
+type selfMetricPoint struct {
+	value         int64
+	attrs         map[string]string
+	resourceAttrs map[string]string
+}
+
+// latestSelfMetricPoints returns the data points of the named gauge or sum
+// from the most recent collected batch that contains it.
+func latestSelfMetricPoints(batches []pmetric.Metrics, name string) []selfMetricPoint {
+	stringAttrs := func(m pcommon.Map) map[string]string {
+		out := map[string]string{}
+		m.Range(func(k string, v pcommon.Value) bool {
+			out[k] = v.AsString()
+			return true
+		})
+		return out
+	}
+
+	for b := len(batches) - 1; b >= 0; b-- {
+		var points []selfMetricPoint
+		rms := batches[b].ResourceMetrics()
+		for i := 0; i < rms.Len(); i++ {
+			resourceAttrs := stringAttrs(rms.At(i).Resource().Attributes())
+			sms := rms.At(i).ScopeMetrics()
+			for j := 0; j < sms.Len(); j++ {
+				ms := sms.At(j).Metrics()
+				for k := 0; k < ms.Len(); k++ {
+					m := ms.At(k)
+					if m.Name() != name {
+						continue
+					}
+					var dps pmetric.NumberDataPointSlice
+					switch m.Type() {
+					case pmetric.MetricTypeGauge:
+						dps = m.Gauge().DataPoints()
+					case pmetric.MetricTypeSum:
+						dps = m.Sum().DataPoints()
+					default:
+						continue
+					}
+					for l := 0; l < dps.Len(); l++ {
+						points = append(points, selfMetricPoint{
+							value:         dps.At(l).IntValue(),
+							attrs:         stringAttrs(dps.At(l).Attributes()),
+							resourceAttrs: resourceAttrs,
+						})
+					}
+				}
+			}
+		}
+		if len(points) > 0 {
+			return points
+		}
+	}
+	return nil
 }
 
 func extractAllLogBodies(batches []plog.Logs) []string {

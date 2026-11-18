@@ -967,6 +967,12 @@ func SSHOptionsForTest() []string {
 // errors up to 10 times with 3s backoff (~30s total) to bridge the post-boot
 // network handover window on newly booted VMs.
 func retrySSHCommand(ctx context.Context, logger *log.Logger, vm *VM, opName string, stdin io.Reader, args []string) (CommandOutput, error) {
+	// Retry up to 10 times with 3s backoff (~30s total retry window) strictly for
+	// SSH transport errors (exit status 255 / connection refused/reset/timeout).
+	// This bridges the 10-15s network handover window on newly booted VMs where
+	// google-guest-agent rolls back network configurations and triggers NetworkManager
+	// DHCP renegotiation (b/557287367), especially on fast-booting ARM64 instances.
+	// Non-transport command errors (e.g. exit status 1 or 2) fail immediately on attempt 1.
 	backoffPolicy := backoff.WithContext(
 		backoff.WithMaxRetries(backoff.NewConstantBackOff(3*time.Second), 10),
 		ctx,

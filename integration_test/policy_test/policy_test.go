@@ -54,6 +54,7 @@ import (
 	"go.opentelemetry.io/collector/exporter/otlpexporter"
 	"go.opentelemetry.io/collector/extension"
 	"go.opentelemetry.io/collector/extension/xextension/storage"
+	"go.opentelemetry.io/collector/featuregate"
 	"go.opentelemetry.io/collector/otelcol"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
@@ -2310,6 +2311,137 @@ func TestFileConfigMerge_ProviderOrderPrecedence(t *testing.T) {
 	}
 	if !found || value <= 0 {
 		t.Errorf("expected googlecontrolplaneprovider to override earlier file config's level: None and report positive gcp.policy.set.active revision, got found=%v value=%d\nlogs:\n%s", found, value, col.logs())
+	}
+}
+
+// mergeAppendFeatureGateID is the confmap feature gate that makes the lists
+// under service (extensions, pipeline receivers and pipeline exporters) append
+// across config sources instead of being replaced by the last source.
+const mergeAppendFeatureGateID = "confmap.enableMergeAppendOption"
+
+// mergeAppendEnabled reports whether confmap.enableMergeAppendOption is enabled
+// in this process.
+func mergeAppendEnabled() bool {
+	enabled := false
+	featuregate.GlobalRegistry().VisitAll(func(g *featuregate.Gate) {
+		if g.ID() == mergeAppendFeatureGateID {
+			enabled = g.IsEnabled()
+		}
+	})
+	return enabled
+}
+
+// TestFileConfigMerge_WithoutProviderKeepsDefaultReplace guards Collectors that
+// do not use a googlecontrolplane: URI. The provider is still registered, and
+// the Collector still creates it at startup, but that alone must not change how
+// their config sources are merged.
+//
+// It layers two file configs. The second one sets the exporters of a pipeline
+// the first one defined, which by default replaces the list, so logs reach only
+// the second config's destination. If confmap.enableMergeAppendOption were
+// turned on behind the user's back, the list would be appended to instead and
+// logs would be exported to both destinations.
+func TestFileConfigMerge_WithoutProviderKeepsDefaultReplace(t *testing.T) {
+	otelcolBin := resolveOtelcolBinary(t)
+	tempDir := t.TempDir()
+
+	if otelcolBin == "" {
+		// The in-process collector shares its feature gates with every test
+		// that ran before it, and the ones that use the provider leave this
+		// gate enabled. Start from the default instead.
+		was := mergeAppendEnabled()
+		if err := featuregate.GlobalRegistry().Set(mergeAppendFeatureGateID, false); err != nil {
+			t.Fatalf("failed to disable %s: %v", mergeAppendFeatureGateID, err)
+		}
+		t.Cleanup(func() {
+			_ = featuregate.GlobalRegistry().Set(mergeAppendFeatureGateID, was)
+		})
+	}
+
+	baseMockSrv, baseExporterAddr := startMockOTLPServer(t)
+	overrideMockSrv, overrideExporterAddr := startMockOTLPServer(t)
+	ports := allocateEphemeralPorts(t, 1)
+	receiverAddr := fmt.Sprintf("127.0.0.1:%d", ports[0])
+
+	baseCfg := fmt.Sprintf(`receivers:
+  otlp/in:
+    protocols:
+      grpc:
+        endpoint: %[1]s
+exporters:
+  otlp_grpc/base_out:
+    endpoint: %[2]s
+    sending_queue:
+      enabled: false
+    tls:
+      insecure: true
+  otlp_grpc/override_out:
+    endpoint: %[3]s
+    sending_queue:
+      enabled: false
+    tls:
+      insecure: true
+service:
+  telemetry:
+    metrics:
+      level: None
+  pipelines:
+    logs:
+      receivers: [otlp/in]
+      processors: []
+      exporters: [otlp_grpc/base_out]
+`, receiverAddr, baseExporterAddr, overrideExporterAddr)
+	baseCfgPath := filepath.Join(tempDir, "base.yaml")
+	if err := os.WriteFile(baseCfgPath, []byte(baseCfg), 0644); err != nil {
+		t.Fatalf("failed to write base.yaml: %v", err)
+	}
+
+	overrideCfg := `service:
+  pipelines:
+    logs:
+      exporters: [otlp_grpc/override_out]
+`
+	overrideCfgPath := filepath.Join(tempDir, "override.yaml")
+	if err := os.WriteFile(overrideCfgPath, []byte(overrideCfg), 0644); err != nil {
+		t.Fatalf("failed to write override.yaml: %v", err)
+	}
+
+	col := startCollectorWithURIs(
+		t,
+		otelcolBin,
+		fmt.Sprintf("file:%s", filepath.ToSlash(baseCfgPath)),
+		fmt.Sprintf("file:%s", filepath.ToSlash(overrideCfgPath)),
+	)
+
+	if otelcolBin == "" && mergeAppendEnabled() {
+		t.Errorf("%s was enabled by a collector that does not use a googlecontrolplane: URI", mergeAppendFeatureGateID)
+	}
+
+	conn, err := grpc.NewClient(receiverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("failed to create gRPC client to %s: %v", receiverAddr, err)
+	}
+	t.Cleanup(func() {
+		_ = conn.Close()
+	})
+
+	const body = "MERGE_CHECK_LOG_LINE"
+	inputLogs := plog.NewLogs()
+	inputLogs.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty().LogRecords().AppendEmpty().Body().SetStr(body)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if _, err := plogotlp.NewGRPCClient(conn).Export(ctx, plogotlp.NewExportRequestFromLogs(inputLogs)); err != nil {
+		t.Fatalf("failed to export logs: %v\nlogs:\n%s", err, col.logs())
+	}
+
+	col.shutdown(t)
+
+	if diff := cmp.Diff([]string{body}, extractAllLogBodies(overrideMockSrv.CollectedLogs())); diff != "" {
+		t.Errorf("override exporter bodies mismatch (-want +got):\n%s\nlogs:\n%s", diff, col.logs())
+	}
+	if got := extractAllLogBodies(baseMockSrv.CollectedLogs()); len(got) != 0 {
+		t.Errorf("base exporter received %v, want nothing: the override config must replace the pipeline's exporters, not append to them\nlogs:\n%s", got, col.logs())
 	}
 }
 

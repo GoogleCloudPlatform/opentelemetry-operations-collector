@@ -38,11 +38,20 @@ import (
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/confmap"
 	"go.opentelemetry.io/collector/confmap/confmaptest"
+	"go.opentelemetry.io/collector/featuregate"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
 	"google.golang.org/protobuf/proto"
 )
+
+const mergeAppendFeatureGateID = "confmap.enableMergeAppendOption"
+
+func init() {
+	if err := featuregate.GlobalRegistry().Set(mergeAppendFeatureGateID, true); err != nil {
+		panic(err)
+	}
+}
 
 func createProvider() confmap.Provider {
 	return NewFactory().Create(confmaptest.NewNopProviderSettings())
@@ -1414,14 +1423,31 @@ func TestFilterPolicyDriversRegistered(t *testing.T) {
 	}
 }
 
-// TestMergeAppendUnionsServiceExtensions pins the behaviour that makes it safe
-// for more than one policy (or confmap provider) to declare an extension.
-//
-// Creating the provider enables the confmap.enableMergeAppendOption feature
-// gate so confmap.Merge appends and deduplicates service::extensions instead of
-// replacing the slice with only the last policy's extension.
-func TestMergeAppendUnionsServiceExtensions(t *testing.T) {
+// TestNewProviderDoesNotEnableMergeAppendFeatureGate verifies that instantiating
+// the provider factory does not mutate the global confmap.enableMergeAppendOption
+// feature gate for Collector runs that do not opt into it on the command line.
+func TestNewProviderDoesNotEnableMergeAppendFeatureGate(t *testing.T) {
+	require.NoError(t, featuregate.GlobalRegistry().Set(mergeAppendFeatureGateID, false))
+	t.Cleanup(func() {
+		require.NoError(t, featuregate.GlobalRegistry().Set(mergeAppendFeatureGateID, true))
+	})
+
 	_ = createProvider()
+
+	var enabled bool
+	featuregate.GlobalRegistry().VisitAll(func(g *featuregate.Gate) {
+		if g.ID() == mergeAppendFeatureGateID {
+			enabled = g.IsEnabled()
+		}
+	})
+	assert.False(t, enabled, "creating the provider must not mutate %s", mergeAppendFeatureGateID)
+}
+
+// TestMergeAppendUnionsServiceExtensions pins the behaviour that makes it safe
+// for more than one policy (or confmap provider) to declare an extension when
+// confmap.enableMergeAppendOption is enabled.
+func TestMergeAppendUnionsServiceExtensions(t *testing.T) {
+	require.NoError(t, featuregate.GlobalRegistry().Set(mergeAppendFeatureGateID, true))
 	conf := confmap.New()
 
 	destination := confmap.NewFromStringMap(map[string]any{
@@ -1445,7 +1471,7 @@ func TestMergeAppendUnionsServiceExtensions(t *testing.T) {
 }
 
 func TestMergeAppendDeduplicatesServiceExtensions(t *testing.T) {
-	_ = createProvider()
+	require.NoError(t, featuregate.GlobalRegistry().Set(mergeAppendFeatureGateID, true))
 	conf := confmap.New()
 	declare := func() *confmap.Conf {
 		return confmap.NewFromStringMap(map[string]any{
@@ -1464,7 +1490,7 @@ func TestMergeAppendDeduplicatesServiceExtensions(t *testing.T) {
 // TestMergeAppendWithoutServiceExtensions guards the common case: a policy that
 // declares no extensions must not introduce an empty service::extensions key.
 func TestMergeAppendWithoutServiceExtensions(t *testing.T) {
-	_ = createProvider()
+	require.NoError(t, featuregate.GlobalRegistry().Set(mergeAppendFeatureGateID, true))
 	conf := confmap.New()
 	require.NoError(t, conf.Merge(cleanConf(confmap.NewFromStringMap(map[string]any{
 		"receivers": map[string]any{"otlp/x": map[string]any{}},

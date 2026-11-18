@@ -12,3 +12,5 @@ This provider supports the `googlecontrolplane:` scheme:
 ```yaml
 googlecontrolplane:<target>
 ```
+
+When starting the Collector with this provider, enable `--feature-gates=+confmap.enableMergeAppendOption` so `confmap` appends and deduplicates `service.extensions` and pipeline `receivers`/`exporters` slices across policies and across additional configuration sources (for example, `file:` + `googlecontrolplane:`).

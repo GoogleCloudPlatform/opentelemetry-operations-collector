@@ -44,7 +44,6 @@ import (
 	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/windowseventlogsource"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/confmap"
-	"go.opentelemetry.io/collector/featuregate"
 	"go.opentelemetry.io/collector/otelcol"
 	"go.opentelemetry.io/collector/pipeline"
 	"go.opentelemetry.io/collector/service"
@@ -54,8 +53,7 @@ import (
 )
 
 const (
-	schemeName               = "googlecontrolplane"
-	mergeAppendFeatureGateID = "confmap.enableMergeAppendOption"
+	schemeName = "googlecontrolplane"
 )
 
 var (
@@ -120,13 +118,6 @@ func NewFactory() confmap.ProviderFactory {
 }
 
 func newProvider(set confmap.ProviderSettings) confmap.Provider {
-	// Enable confmap.enableMergeAppendOption so confmap.Merge appends and
-	// deduplicates service::extensions, service::**::receivers, and
-	// service::**::exporters slices across policies and across multiple
-	// confmap providers (e.g. file: + googlecontrolplane:).
-	if err := featuregate.GlobalRegistry().Set(mergeAppendFeatureGateID, true); err != nil && set.Logger != nil {
-		set.Logger.Warn("failed to enable confmap merge append feature gate", zap.Error(err))
-	}
 	return &provider{
 		logger: set.Logger,
 	}

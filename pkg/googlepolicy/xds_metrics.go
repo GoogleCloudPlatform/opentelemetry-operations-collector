@@ -20,6 +20,7 @@ import (
 
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
+	"go.uber.org/zap"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/xdsclient/metrics"
@@ -64,6 +65,7 @@ type counterKey struct {
 type otelMetricsReporter struct {
 	target     string
 	explicitMP metric.MeterProvider
+	logger     *zap.Logger
 
 	// bindMu serializes MeterProvider binding/unbinding and close() without
 	// ever being acquired from observeAsyncMetrics (which runs under the OTel
@@ -86,10 +88,14 @@ type otelMetricsReporter struct {
 
 var _ clients.MetricsReporter = (*otelMetricsReporter)(nil)
 
-func newOTelMetricsReporter(mp metric.MeterProvider, target string) *otelMetricsReporter {
+func newOTelMetricsReporter(mp metric.MeterProvider, target string, logger *zap.Logger) *otelMetricsReporter {
+	if logger == nil {
+		logger = zap.NewNop()
+	}
 	r := &otelMetricsReporter{
 		target:          target,
 		explicitMP:      mp,
+		logger:          logger,
 		pendingValid:    make(map[counterKey]int64),
 		pendingInvalid:  make(map[counterKey]int64),
 		pendingFailures: make(map[string]int64),
@@ -148,79 +154,113 @@ func (r *otelMetricsReporter) bindMeterProvider(mp metric.MeterProvider, gen uin
 
 	meter := mp.Meter(xdsMeterName)
 
-	validCounter, _ := meter.Int64Counter(
+	validCounter, err := meter.Int64Counter(
 		"grpc.xds_client.resource_updates_valid",
 		metric.WithDescription("A counter of resources received that were considered valid."),
 		metric.WithUnit("{resource}"),
 	)
-	invalidCounter, _ := meter.Int64Counter(
+	r.warnInstrumentError("grpc.xds_client.resource_updates_valid", err)
+	invalidCounter, err := meter.Int64Counter(
 		"grpc.xds_client.resource_updates_invalid",
 		metric.WithDescription("A counter of resources received that were considered invalid."),
 		metric.WithUnit("{resource}"),
 	)
-	serverFailureCounter, _ := meter.Int64Counter(
+	r.warnInstrumentError("grpc.xds_client.resource_updates_invalid", err)
+	serverFailureCounter, err := meter.Int64Counter(
 		"grpc.xds_client.server_failure",
 		metric.WithDescription("A counter of xDS servers going from healthy to unhealthy."),
 		metric.WithUnit("{failure}"),
 	)
-	connectedGauge, _ := meter.Int64ObservableGauge(
+	r.warnInstrumentError("grpc.xds_client.server_failure", err)
+	connectedGauge, err := meter.Int64ObservableGauge(
 		"grpc.xds_client.connected",
 		metric.WithDescription("Whether or not the xDS client currently has a working ADS stream to the xDS server."),
 		metric.WithUnit("{bool}"),
 	)
-	resourcesGauge, _ := meter.Int64ObservableGauge(
+	r.warnInstrumentError("grpc.xds_client.connected", err)
+	resourcesGauge, err := meter.Int64ObservableGauge(
 		"grpc.xds_client.resources",
 		metric.WithDescription("How many xDS resources are currently associated with each xDS client cache state."),
 		metric.WithUnit("{resource}"),
 	)
+	r.warnInstrumentError("grpc.xds_client.resources", err)
 
-	// Capture the gauges created on this meter so a concurrent rebind cannot
-	// mix instruments from two different meters in one callback invocation.
-	reg, err := meter.RegisterCallback(func(_ context.Context, o metric.Observer) error {
-		return r.observeAsyncMetrics(o, connectedGauge, resourcesGauge)
-	}, connectedGauge, resourcesGauge)
-	if err == nil {
-		r.reg = reg
+	// Only observe the gauges that were created.
+	var gauges []metric.Observable
+	if connectedGauge != nil {
+		gauges = append(gauges, connectedGauge)
+	}
+	if resourcesGauge != nil {
+		gauges = append(gauges, resourcesGauge)
+	}
+	if len(gauges) > 0 {
+		// Capture the gauges created on this meter so a concurrent rebind
+		// cannot mix instruments from two different meters in one callback
+		// invocation.
+		reg, err := meter.RegisterCallback(func(_ context.Context, o metric.Observer) error {
+			return r.observeAsyncMetrics(o, connectedGauge, resourcesGauge)
+		}, gauges...)
+		if err != nil {
+			r.logger.Warn("Failed to register the xDS client metrics callback; "+
+				"grpc.xds_client.connected and grpc.xds_client.resources may not be reported", zap.Error(err))
+		}
+		if reg != nil {
+			r.reg = reg
+		}
 	}
 
+	// A counter that could not be created stays nil, so ReportMetric keeps
+	// buffering for it. Leave its pending counts in place for the next bind
+	// instead of dropping them.
+	var (
+		pendingValid, pendingInvalid map[counterKey]int64
+		pendingFailures              map[string]int64
+	)
 	r.mu.Lock()
 	r.resourceUpdatesValid = validCounter
 	r.resourceUpdatesInvalid = invalidCounter
 	r.serverFailure = serverFailureCounter
-	pendingValid := r.pendingValid
-	pendingInvalid := r.pendingInvalid
-	pendingFailures := r.pendingFailures
-	r.pendingValid = make(map[counterKey]int64)
-	r.pendingInvalid = make(map[counterKey]int64)
-	r.pendingFailures = make(map[string]int64)
+	if validCounter != nil {
+		pendingValid, r.pendingValid = r.pendingValid, make(map[counterKey]int64)
+	}
+	if invalidCounter != nil {
+		pendingInvalid, r.pendingInvalid = r.pendingInvalid, make(map[counterKey]int64)
+	}
+	if serverFailureCounter != nil {
+		pendingFailures, r.pendingFailures = r.pendingFailures, make(map[string]int64)
+	}
 	r.mu.Unlock()
 
 	ctx := context.Background()
 	for k, count := range pendingValid {
-		if count > 0 && validCounter != nil {
-			validCounter.Add(ctx, count, metric.WithAttributes(
-				attribute.String("grpc.target", r.target),
-				attribute.String("grpc.xds.server", k.serverURI),
-				attribute.String("grpc.xds.resource_type", k.resourceType),
-			))
-		}
+		validCounter.Add(ctx, count, metric.WithAttributes(
+			attribute.String("grpc.target", r.target),
+			attribute.String("grpc.xds.server", k.serverURI),
+			attribute.String("grpc.xds.resource_type", k.resourceType),
+		))
 	}
 	for k, count := range pendingInvalid {
-		if count > 0 && invalidCounter != nil {
-			invalidCounter.Add(ctx, count, metric.WithAttributes(
-				attribute.String("grpc.target", r.target),
-				attribute.String("grpc.xds.server", k.serverURI),
-				attribute.String("grpc.xds.resource_type", k.resourceType),
-			))
-		}
+		invalidCounter.Add(ctx, count, metric.WithAttributes(
+			attribute.String("grpc.target", r.target),
+			attribute.String("grpc.xds.server", k.serverURI),
+			attribute.String("grpc.xds.resource_type", k.resourceType),
+		))
 	}
 	for serverURI, count := range pendingFailures {
-		if count > 0 && serverFailureCounter != nil {
-			serverFailureCounter.Add(ctx, count, metric.WithAttributes(
-				attribute.String("grpc.target", r.target),
-				attribute.String("grpc.xds.server", serverURI),
-			))
-		}
+		serverFailureCounter.Add(ctx, count, metric.WithAttributes(
+			attribute.String("grpc.target", r.target),
+			attribute.String("grpc.xds.server", serverURI),
+		))
+	}
+}
+
+// warnInstrumentError logs a failure to create a metric instrument. The
+// instrument may still be usable, so the caller carries on with whatever was
+// returned.
+func (r *otelMetricsReporter) warnInstrumentError(name string, err error) {
+	if err != nil {
+		r.logger.Warn("Failed to create xDS client metric instrument",
+			zap.String("metric", name), zap.Error(err))
 	}
 }
 
@@ -340,11 +380,17 @@ type otelAsyncRecorder struct {
 func (a *otelAsyncRecorder) ReportMetric(m any) {
 	switch v := m.(type) {
 	case *metrics.XDSClientConnected:
+		if a.connectedGauge == nil {
+			return
+		}
 		a.observer.ObserveInt64(a.connectedGauge, v.Value, metric.WithAttributes(
 			attribute.String("grpc.target", a.target),
 			attribute.String("grpc.xds.server", v.ServerURI),
 		))
 	case *metrics.XDSClientResourceStats:
+		if a.resourcesGauge == nil {
+			return
+		}
 		a.observer.ObserveInt64(a.resourcesGauge, v.Count, metric.WithAttributes(
 			attribute.String("grpc.target", a.target),
 			attribute.String("grpc.xds.authority", v.Authority),

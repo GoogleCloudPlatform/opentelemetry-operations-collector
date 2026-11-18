@@ -16,14 +16,20 @@ package googlepolicy
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/metric/noop"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/xdsclient/metrics"
@@ -73,7 +79,7 @@ func TestOTelMetricsReporter_RebindRecordsEachEventOnce(t *testing.T) {
 	mp := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
 	t.Cleanup(func() { _ = mp.Shutdown(context.Background()) })
 
-	r := newOTelMetricsReporter(nil, "target")
+	r := newOTelMetricsReporter(nil, "target", nil)
 	t.Cleanup(r.close)
 
 	// Reported before any provider is bound: buffered, then replayed once.
@@ -108,6 +114,68 @@ func TestOTelMetricsReporter_RebindRecordsEachEventOnce(t *testing.T) {
 	}
 }
 
+// failingMeterProvider hands out a meter that cannot create counters or
+// register callbacks.
+type failingMeterProvider struct {
+	noop.MeterProvider
+}
+
+func (failingMeterProvider) Meter(string, ...metric.MeterOption) metric.Meter {
+	return failingMeter{}
+}
+
+type failingMeter struct {
+	noop.Meter
+}
+
+var errFailingMeter = errors.New("failing meter")
+
+func (failingMeter) Int64Counter(string, ...metric.Int64CounterOption) (metric.Int64Counter, error) {
+	return nil, errFailingMeter
+}
+
+func (failingMeter) RegisterCallback(metric.Callback, ...metric.Observable) (metric.Registration, error) {
+	return nil, errFailingMeter
+}
+
+// A provider that cannot create the instruments must be reported in the log,
+// and must not cost the events that were waiting to be recorded.
+func TestOTelMetricsReporter_InstrumentErrorsAreLoggedAndKeepPendingCounts(t *testing.T) {
+	t.Cleanup(func() { SetXDSMeterProvider(nil) })
+
+	core, logs := observer.New(zapcore.WarnLevel)
+	r := newOTelMetricsReporter(nil, "target", zap.New(core))
+	t.Cleanup(r.close)
+	t.Cleanup(r.RegisterAsyncReporter(&fakeAsyncReporter{}))
+
+	// One event buffered before the failing bind, one reported after it.
+	reportOneOfEachCounter(r)
+	SetXDSMeterProvider(failingMeterProvider{})
+	reportOneOfEachCounter(r)
+
+	var failedInstruments []string
+	for _, entry := range logs.FilterMessage("Failed to create xDS client metric instrument").All() {
+		assert.Equal(t, zapcore.WarnLevel, entry.Level)
+		fields := entry.ContextMap()
+		assert.Equal(t, errFailingMeter.Error(), fields["error"])
+		failedInstruments = append(failedInstruments, fields["metric"].(string))
+	}
+	assert.ElementsMatch(t, xdsCounterNames, failedInstruments)
+	assert.Equal(t, 1, logs.FilterMessageSnippet("Failed to register the xDS client metrics callback").Len())
+
+	// A working provider then records every event exactly once.
+	reader := sdkmetric.NewManualReader()
+	mp := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+	t.Cleanup(func() { _ = mp.Shutdown(context.Background()) })
+	SetXDSMeterProvider(mp)
+
+	rm := collectMetrics(t, reader)
+	for _, name := range xdsCounterNames {
+		assert.Equal(t, int64(2), sumInt64Counter(rm, name), name)
+	}
+	require.Len(t, findInt64GaugePoints(rm, "grpc.xds_client.connected"), 1)
+}
+
 // SetXDSMeterProvider(nil) must unregister the async callback from the
 // provider it was bound to.
 func TestOTelMetricsReporter_NilProviderDetachesCallback(t *testing.T) {
@@ -117,7 +185,7 @@ func TestOTelMetricsReporter_NilProviderDetachesCallback(t *testing.T) {
 	mp := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
 	t.Cleanup(func() { _ = mp.Shutdown(context.Background()) })
 
-	r := newOTelMetricsReporter(nil, "target")
+	r := newOTelMetricsReporter(nil, "target", nil)
 	t.Cleanup(r.close)
 	unregister := r.RegisterAsyncReporter(&fakeAsyncReporter{})
 	t.Cleanup(unregister)
@@ -138,7 +206,7 @@ func TestOTelMetricsReporter_ConcurrentCollectAndRebind(t *testing.T) {
 	reader := sdkmetric.NewManualReader()
 	mp := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
 
-	r := newOTelMetricsReporter(nil, "target")
+	r := newOTelMetricsReporter(nil, "target", nil)
 	unregister := r.RegisterAsyncReporter(&fakeAsyncReporter{})
 	SetXDSMeterProvider(mp)
 

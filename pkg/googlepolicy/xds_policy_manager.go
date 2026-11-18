@@ -830,7 +830,7 @@ func (m *xdsPolicyManager) backoffDelay(retries int) time.Duration {
 func (m *xdsPolicyManager) run(ctx context.Context) {
 	defer m.markReady()
 
-	metricsReporter := newOTelMetricsReporter(m.meterProvider, m.serverAddr)
+	metricsReporter := newOTelMetricsReporter(m.meterProvider, m.serverAddr, m.logger)
 	defer metricsReporter.close()
 
 	var credsBundle credentials.Bundle

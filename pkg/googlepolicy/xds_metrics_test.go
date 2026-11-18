@@ -114,6 +114,72 @@ func TestOTelMetricsReporter_RebindRecordsEachEventOnce(t *testing.T) {
 	}
 }
 
+// A collector config reload keeps the same xDS policy manager but builds a
+// new MeterProvider, so the reporter moves from one provider to another.
+func TestOTelMetricsReporter_SwitchToNewProvider(t *testing.T) {
+	tests := []struct {
+		name string
+		// detach unsets the provider, and reports one event while detached,
+		// before the second provider is bound.
+		detach       bool
+		wantOnSecond int64
+	}{
+		{name: "detach then bind", detach: true, wantOnSecond: 2},
+		{name: "direct switch", detach: false, wantOnSecond: 1},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Cleanup(func() { SetXDSMeterProvider(nil) })
+
+			reader1 := sdkmetric.NewManualReader()
+			mp1 := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader1))
+			t.Cleanup(func() { _ = mp1.Shutdown(context.Background()) })
+			reader2 := sdkmetric.NewManualReader()
+			mp2 := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader2))
+			t.Cleanup(func() { _ = mp2.Shutdown(context.Background()) })
+
+			r := newOTelMetricsReporter(nil, "target", nil)
+			t.Cleanup(r.close)
+			t.Cleanup(r.RegisterAsyncReporter(&fakeAsyncReporter{}))
+
+			// One event buffered before any bind, one recorded while bound.
+			reportOneOfEachCounter(r)
+			SetXDSMeterProvider(mp1)
+			reportOneOfEachCounter(r)
+
+			rm1 := collectMetrics(t, reader1)
+			for _, name := range xdsCounterNames {
+				assert.Equal(t, int64(2), sumInt64Counter(rm1, name), "%s on first provider", name)
+			}
+			require.Len(t, findInt64GaugePoints(rm1, "grpc.xds_client.connected"), 1)
+
+			if tc.detach {
+				SetXDSMeterProvider(nil)
+				reportOneOfEachCounter(r)
+			}
+			SetXDSMeterProvider(mp2)
+			reportOneOfEachCounter(r)
+
+			// The second provider gets only what was buffered while detached
+			// and what is reported after the switch, not the first provider's
+			// history.
+			rm2 := collectMetrics(t, reader2)
+			for _, name := range xdsCounterNames {
+				assert.Equal(t, tc.wantOnSecond, sumInt64Counter(rm2, name), "%s on second provider", name)
+			}
+			require.Len(t, findInt64GaugePoints(rm2, "grpc.xds_client.connected"), 1)
+
+			// The first provider receives nothing further.
+			rm1 = collectMetrics(t, reader1)
+			for _, name := range xdsCounterNames {
+				assert.Equal(t, int64(2), sumInt64Counter(rm1, name), "%s on first provider after the switch", name)
+			}
+			assert.Empty(t, findInt64GaugePoints(rm1, "grpc.xds_client.connected"),
+				"first provider must not observe the gauge after the switch")
+		})
+	}
+}
+
 // failingMeterProvider hands out a meter that cannot create counters or
 // register callbacks.
 type failingMeterProvider struct {

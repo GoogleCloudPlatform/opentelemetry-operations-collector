@@ -2321,6 +2321,25 @@ func newDropLogBodyProto(id, body string) *policyv1alpha1.LogFilterPolicy {
 	}
 }
 
+func newKeepLogBodyProto(id, body string) *policyv1alpha1.LogFilterPolicy {
+	return &policyv1alpha1.LogFilterPolicy{
+		Id:     id,
+		Action: policyv1alpha1.Action_ACTION_KEEP.Enum(),
+		Matchers: []*policyv1alpha1.LogMatcher{
+			{
+				Target: &policyv1alpha1.LogFieldSelector{
+					Target: &policyv1alpha1.LogFieldSelector_RecordField{
+						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
+					},
+				},
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
+					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: body}},
+				}},
+			},
+		},
+	}
+}
+
 func newDropMetricDescriptorProto(id string, field policyv1alpha1.MetricDescriptorField, value string) *policyv1alpha1.MetricFilterPolicy {
 	return &policyv1alpha1.MetricFilterPolicy{
 		Id:     id,
@@ -2338,14 +2357,54 @@ func newDropMetricDescriptorProto(id string, field policyv1alpha1.MetricDescript
 	}
 }
 
+func newKeepMetricDescriptorProto(id string, field policyv1alpha1.MetricDescriptorField, value string) *policyv1alpha1.MetricFilterPolicy {
+	return &policyv1alpha1.MetricFilterPolicy{
+		Id:     id,
+		Action: policyv1alpha1.Action_ACTION_KEEP.Enum(),
+		Matchers: []*policyv1alpha1.MetricMatcher{
+			{
+				Target: &policyv1alpha1.MetricFieldSelector{
+					Target: &policyv1alpha1.MetricFieldSelector_DescriptorField{DescriptorField: field},
+				},
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
+					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: value}},
+				}},
+			},
+		},
+	}
+}
+
 func newDropMetricNameProto(id, name string) *policyv1alpha1.MetricFilterPolicy {
 	return newDropMetricDescriptorProto(id, policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME, name)
+}
+
+func newKeepMetricNameProto(id, name string) *policyv1alpha1.MetricFilterPolicy {
+	return newKeepMetricDescriptorProto(id, policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME, name)
 }
 
 func newDropDatapointAttrProto(id, key, value string) *policyv1alpha1.MetricFilterPolicy {
 	return &policyv1alpha1.MetricFilterPolicy{
 		Id:     id,
 		Action: policyv1alpha1.Action_ACTION_DROP.Enum(),
+		Matchers: []*policyv1alpha1.MetricMatcher{
+			{
+				Target: &policyv1alpha1.MetricFieldSelector{
+					Target: &policyv1alpha1.MetricFieldSelector_DataPointAttributePath{
+						DataPointAttributePath: &policyv1alpha1.AttributePath{Segments: []string{key}},
+					},
+				},
+				Predicate: &policyv1alpha1.Predicate{Kind: &policyv1alpha1.Predicate_Equality{
+					Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: value}},
+				}},
+			},
+		},
+	}
+}
+
+func newKeepDatapointAttrProto(id, key, value string) *policyv1alpha1.MetricFilterPolicy {
+	return &policyv1alpha1.MetricFilterPolicy{
+		Id:     id,
+		Action: policyv1alpha1.Action_ACTION_KEEP.Enum(),
 		Matchers: []*policyv1alpha1.MetricMatcher{
 			{
 				Target: &policyv1alpha1.MetricFieldSelector{
@@ -2376,6 +2435,53 @@ func newDropSpanNameProto(id, name string) *policyv1alpha1.TraceFilterPolicy {
 				}},
 			},
 		},
+	}
+}
+
+func newSetLogBodyProto(id, value string) *policyv1alpha1.LogTransformPolicy {
+	return &policyv1alpha1.LogTransformPolicy{
+		Id: id,
+		Additions: []*policyv1alpha1.LogAddition{
+			{
+				Target: &policyv1alpha1.LogTargetSelector{
+					Target: &policyv1alpha1.LogTargetSelector_RecordField{
+						RecordField: policyv1alpha1.LogRecordField_LOG_RECORD_FIELD_BODY,
+					},
+				},
+				Source: &policyv1alpha1.LogAddition_Value{
+					Value: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: value}},
+				},
+				UpsertEnabled: proto.Bool(true),
+			},
+		},
+	}
+}
+
+func newRenameLogAttrProto(id, fromAttr, toAttr string) *policyv1alpha1.LogTransformPolicy {
+	return &policyv1alpha1.LogTransformPolicy{
+		Id: id,
+		Renamings: []*policyv1alpha1.LogRenaming{
+			{
+				Source: &policyv1alpha1.LogAttributeSelector{
+					Target: &policyv1alpha1.LogAttributeSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{fromAttr}},
+					},
+				},
+				Target: &policyv1alpha1.LogAttributeSelector{
+					Target: &policyv1alpha1.LogAttributeSelector_LogAttributePath{
+						LogAttributePath: &policyv1alpha1.AttributePath{Segments: []string{toAttr}},
+					},
+				},
+				UpsertEnabled: proto.Bool(true),
+			},
+		},
+	}
+}
+
+func newTraceSamplingProto(id string, percent float64) *policyv1alpha1.TraceSamplingPolicy {
+	return &policyv1alpha1.TraceSamplingPolicy{
+		Id:              id,
+		SamplingPercent: percent,
 	}
 }
 

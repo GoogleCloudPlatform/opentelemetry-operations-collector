@@ -209,6 +209,10 @@ compare-otelopscol:
 test-all:
 	TARGET="test" $(MAKE) target-all-modules
 
+.PHONY: fuzz-all
+fuzz-all:
+	TARGET="fuzz" $(MAKE) target-all-modules
+
 .PHONY: tidy-all
 tidy-all:
 	TARGET="tidy" $(MAKE) target-all-modules

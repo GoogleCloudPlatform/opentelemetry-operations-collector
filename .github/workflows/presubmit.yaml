@@ -60,6 +60,22 @@ jobs:
       - name: Run policy integration tests
         run: make -C integration_test/policy_test test
 
+  fuzz:
+    name: Fuzz
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@0717577d45739eb3c851188b29f50ed6c0b2194e # v2
+        with:
+          submodules: true
+          fetch-depth: 0
+          lfs: true
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: 1.26
+          cache: true
+      - name: Run fuzz tests
+        run: make fuzz-all
+
   test-distros:
     strategy:
       matrix:

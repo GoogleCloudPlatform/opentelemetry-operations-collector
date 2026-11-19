@@ -23,7 +23,7 @@ func main() {
 	info := component.BuildInfo{
 		Command:     "otelcol-google",
 		Description: "OpenTelemetry Collector Built By Google",
-		Version:     "0.165.1",
+		Version:     "0.165.2-r.1",
 	}
 
 	set := otelcol.CollectorSettings{

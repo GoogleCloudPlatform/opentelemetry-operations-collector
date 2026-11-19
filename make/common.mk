@@ -5,6 +5,14 @@ FUZZTIME ?= 5s
 test:
 	go test ./...
 
+.PHONY: tidy
+tidy:
+	go mod tidy
+
+.PHONY: generate
+generate:
+	go generate ./...
+
 .PHONY: fuzz
 fuzz:
 	@set -eu; \
@@ -16,11 +24,3 @@ fuzz:
 			go test -run='^$$' -fuzz="^$${target}$$" -fuzztime=$(FUZZTIME) "$$dir"; \
 		done; \
 	done
-
-.PHONY: tidy
-tidy:
-	go mod tidy
-
-.PHONY: generate
-generate:
-	go generate ./...

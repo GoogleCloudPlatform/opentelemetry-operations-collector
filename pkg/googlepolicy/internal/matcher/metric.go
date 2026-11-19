@@ -17,7 +17,7 @@ package matcher
 import (
 	"errors"
 
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/pmetric"
@@ -46,7 +46,7 @@ func (cm *CompiledMetricMatcher) Eval(ctx googlepolicy.MetricContext) bool {
 
 // CompileMetricMatcher validates and compiles a MetricMatcher protobuf into a
 // CompiledMetricMatcher.
-func CompileMetricMatcher(m *policyv1alpha1.MetricMatcher) (CompiledMetricMatcher, error) {
+func CompileMetricMatcher(m *policyv1.MetricMatcher) (CompiledMetricMatcher, error) {
 	extract, err := CompileMetricExtractor(m.GetTarget())
 	if err != nil {
 		return CompiledMetricMatcher{}, err
@@ -60,16 +60,16 @@ func CompileMetricMatcher(m *policyv1alpha1.MetricMatcher) (CompiledMetricMatche
 
 // CompileMetricExtractor validates and compiles a MetricFieldSelector into a
 // MetricTargetExtractor.
-func CompileMetricExtractor(target *policyv1alpha1.MetricFieldSelector) (MetricTargetExtractor, error) {
+func CompileMetricExtractor(target *policyv1.MetricFieldSelector) (MetricTargetExtractor, error) {
 	if target == nil || target.Target == nil {
 		return nil, ErrMissingMetricTarget
 	}
 
 	switch t := target.Target.(type) {
-	case *policyv1alpha1.MetricFieldSelector_DescriptorField:
+	case *policyv1.MetricFieldSelector_DescriptorField:
 		return compileMetricDescriptorFieldExtractor(t.DescriptorField)
 
-	case *policyv1alpha1.MetricFieldSelector_DataPointAttributePath:
+	case *policyv1.MetricFieldSelector_DataPointAttributePath:
 		steps, err := CompilePath(t.DataPointAttributePath, "datapoint")
 		if err != nil {
 			return nil, err
@@ -78,7 +78,7 @@ func CompileMetricExtractor(target *policyv1alpha1.MetricFieldSelector) (MetricT
 			return EvalPath(ctx.DatapointAttributes, steps)
 		}, nil
 
-	case *policyv1alpha1.MetricFieldSelector_ResourceAttributePath:
+	case *policyv1.MetricFieldSelector_ResourceAttributePath:
 		steps, err := CompilePath(t.ResourceAttributePath, "resource")
 		if err != nil {
 			return nil, err
@@ -90,7 +90,7 @@ func CompileMetricExtractor(target *policyv1alpha1.MetricFieldSelector) (MetricT
 			return EvalPath(ctx.Resource.Attributes(), steps)
 		}, nil
 
-	case *policyv1alpha1.MetricFieldSelector_ScopeAttributePath:
+	case *policyv1.MetricFieldSelector_ScopeAttributePath:
 		steps, err := CompilePath(t.ScopeAttributePath, "scope")
 		if err != nil {
 			return nil, err
@@ -102,7 +102,7 @@ func CompileMetricExtractor(target *policyv1alpha1.MetricFieldSelector) (MetricT
 			return EvalPath(ctx.Scope.Attributes(), steps)
 		}, nil
 
-	case *policyv1alpha1.MetricFieldSelector_ScopeField:
+	case *policyv1.MetricFieldSelector_ScopeField:
 		return compileMetricScopeFieldExtractor(t.ScopeField)
 
 	default:
@@ -118,9 +118,9 @@ func CompileMetricExtractor(target *policyv1alpha1.MetricFieldSelector) (MetricT
 // value." String fields (NAME, DESCRIPTION, UNIT) return (nil, false) when
 // empty; enum fields (TYPE) return their rendered string ("UNSPECIFIED") with
 // exists=false so string predicates can still match the default (see matcher.present).
-func compileMetricDescriptorFieldExtractor(field policyv1alpha1.MetricDescriptorField) (MetricTargetExtractor, error) {
+func compileMetricDescriptorFieldExtractor(field policyv1.MetricDescriptorField) (MetricTargetExtractor, error) {
 	switch field {
-	case policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME:
+	case policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_NAME:
 		return func(ctx googlepolicy.MetricContext) (any, bool) {
 			if ctx.Metric == (pmetric.Metric{}) {
 				return nil, false
@@ -132,7 +132,7 @@ func compileMetricDescriptorFieldExtractor(field policyv1alpha1.MetricDescriptor
 			return s, true
 		}, nil
 
-	case policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_DESCRIPTION:
+	case policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_DESCRIPTION:
 		return func(ctx googlepolicy.MetricContext) (any, bool) {
 			if ctx.Metric == (pmetric.Metric{}) {
 				return nil, false
@@ -144,7 +144,7 @@ func compileMetricDescriptorFieldExtractor(field policyv1alpha1.MetricDescriptor
 			return s, true
 		}, nil
 
-	case policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_UNIT:
+	case policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_UNIT:
 		return func(ctx googlepolicy.MetricContext) (any, bool) {
 			if ctx.Metric == (pmetric.Metric{}) {
 				return nil, false
@@ -156,7 +156,7 @@ func compileMetricDescriptorFieldExtractor(field policyv1alpha1.MetricDescriptor
 			return s, true
 		}, nil
 
-	case policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE:
+	case policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_TYPE:
 		// Every instrument has a type, so an untyped one is present-but-default
 		// rather than absent: `existence` reports false, but string predicates can
 		// still select it by its "UNSPECIFIED" spelling.
@@ -168,7 +168,7 @@ func compileMetricDescriptorFieldExtractor(field policyv1alpha1.MetricDescriptor
 			return MetricTypeString(t), t != pmetric.MetricTypeEmpty
 		}, nil
 
-	case policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_AGGREGATION_TEMPORALITY:
+	case policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_AGGREGATION_TEMPORALITY:
 		// Unlike TYPE, temporality is only defined for sums and histograms, and
 		// the proto enumerates "DELTA" and "CUMULATIVE" as the only matchable
 		// spellings. An instrument without a temporality is therefore reported
@@ -180,7 +180,7 @@ func compileMetricDescriptorFieldExtractor(field policyv1alpha1.MetricDescriptor
 			return TemporalityString(ctx.AggregationTemporality), true
 		}, nil
 
-	case policyv1alpha1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_IS_MONOTONIC:
+	case policyv1.MetricDescriptorField_METRIC_DESCRIPTOR_FIELD_IS_MONOTONIC:
 		// Monotonicity is only defined for sums; every other instrument type
 		// reports the field as absent rather than as false.
 		return func(ctx googlepolicy.MetricContext) (any, bool) {
@@ -195,9 +195,9 @@ func compileMetricDescriptorFieldExtractor(field policyv1alpha1.MetricDescriptor
 	}
 }
 
-func compileMetricScopeFieldExtractor(field policyv1alpha1.ScopeField) (MetricTargetExtractor, error) {
+func compileMetricScopeFieldExtractor(field policyv1.ScopeField) (MetricTargetExtractor, error) {
 	switch field {
-	case policyv1alpha1.ScopeField_SCOPE_FIELD_NAME:
+	case policyv1.ScopeField_SCOPE_FIELD_NAME:
 		return func(ctx googlepolicy.MetricContext) (any, bool) {
 			if ctx.Scope == (pcommon.InstrumentationScope{}) {
 				return nil, false
@@ -209,7 +209,7 @@ func compileMetricScopeFieldExtractor(field policyv1alpha1.ScopeField) (MetricTa
 			return s, true
 		}, nil
 
-	case policyv1alpha1.ScopeField_SCOPE_FIELD_VERSION:
+	case policyv1.ScopeField_SCOPE_FIELD_VERSION:
 		return func(ctx googlepolicy.MetricContext) (any, bool) {
 			if ctx.Scope == (pcommon.InstrumentationScope{}) {
 				return nil, false
@@ -221,7 +221,7 @@ func compileMetricScopeFieldExtractor(field policyv1alpha1.ScopeField) (MetricTa
 			return s, true
 		}, nil
 
-	case policyv1alpha1.ScopeField_SCOPE_FIELD_SCHEMA_URL:
+	case policyv1.ScopeField_SCOPE_FIELD_SCHEMA_URL:
 		return func(ctx googlepolicy.MetricContext) (any, bool) {
 			if ctx.ScopeSchemaURL == "" {
 				return nil, false

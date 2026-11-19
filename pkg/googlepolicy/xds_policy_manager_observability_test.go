@@ -37,7 +37,7 @@ import (
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/structpb"
 
-	xdsv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/xds/v1alpha1"
+	xdsv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/xds/v1"
 )
 
 func validRevisionResponse(t *testing.T, version, nonce, policyName string) *discoveryv3.DiscoveryResponse {
@@ -443,10 +443,10 @@ func TestXDSPolicyManager_CSDSDumpResources(t *testing.T) {
 	assert.Equal(t, "rev-bad", cfg.GetErrorState().GetVersionInfo())
 	assert.Contains(t, cfg.GetErrorState().GetDetails(), "does.not.Exist")
 
-	// Verify the cached XdsConfig payload unmarshals cleanly into xdsv1alpha1.TelemetryCollector
+	// Verify the cached XdsConfig payload unmarshals cleanly into xdsv1.TelemetryCollector
 	// and preserves all resources (including bare policy protos).
 	require.NotNil(t, cfg.GetXdsConfig())
-	var dumpedCollector xdsv1alpha1.TelemetryCollector
+	var dumpedCollector xdsv1.TelemetryCollector
 	require.NoError(t, cfg.GetXdsConfig().UnmarshalTo(&dumpedCollector))
 	assert.Len(t, dumpedCollector.GetPolicies(), 2)
 }

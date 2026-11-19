@@ -40,8 +40,8 @@ import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/googlecontrolplaneextension"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider"
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
-	xdsv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/xds/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
+	xdsv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/xds/v1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/filelogsource"
 	discoveryv3 "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
@@ -1668,14 +1668,14 @@ func TestXDSClientSelfMetrics(t *testing.T) {
 		wantRevisionHex = "b2c3d479"
 	)
 
-	policyAny, err := anypb.New(&policyv1alpha1.HostMetricsSourcePolicy{
+	policyAny, err := anypb.New(&policyv1.HostMetricsSourcePolicy{
 		Id: wantPolicySetID + "/policies/hm-1",
 	})
 	if err != nil {
 		t.Fatalf("failed to pack HostMetricsSourcePolicy: %v", err)
 	}
 
-	tcAny, err := anypb.New(&xdsv1alpha1.TelemetryCollector{
+	tcAny, err := anypb.New(&xdsv1.TelemetryCollector{
 		PolicySetRevision: wantPolicySetID + "/revisions/" + wantRevisionHex,
 		Policies:          []*anypb.Any{policyAny},
 	})
@@ -1691,7 +1691,7 @@ func TestXDSClientSelfMetrics(t *testing.T) {
 	discoveryv3.RegisterAggregatedDiscoveryServiceServer(adsSrv, &staticADSServer{
 		resp: &discoveryv3.DiscoveryResponse{
 			VersionInfo: wantRevisionHex,
-			TypeUrl:     "type.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector",
+			TypeUrl:     "type.googleapis.com/google.telemetry.xds.v1.TelemetryCollector",
 			Nonce:       "nonce-1",
 			Resources:   []*anypb.Any{tcAny},
 		},

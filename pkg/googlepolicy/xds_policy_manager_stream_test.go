@@ -37,10 +37,12 @@ import (
 	"google.golang.org/grpc/codes"
 	grpcstatus "google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
+	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/structpb"
 
-	xdsv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/xds/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
+	xdsv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/xds/v1"
 )
 
 // fakeADSServer is an in-memory AggregatedDiscoveryService. Each time a client
@@ -131,7 +133,7 @@ func startFakeADSServer(t *testing.T, srv *fakeADSServer) grpc.DialOption {
 // It is spelled out rather than derived with xdstpResourceName, so a manager
 // that stops setting the name, or builds it wrong, cannot pass by agreeing
 // with itself.
-const testResourceName = "xdstp://telemetry-director." + defaultRegion + ".xds.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector/projects/my-project/fleets/fleet-1/collectors/default"
+const testResourceName = "xdstp://telemetry-director." + defaultRegion + ".xds.googleapis.com/google.telemetry.xds.v1.TelemetryCollector/projects/my-project/fleets/fleet-1/collectors/default"
 
 // newTestManager builds a manager wired to the fake server, with a negligible
 // backoff so reconnect tests stay fast.
@@ -171,7 +173,7 @@ func policyPayloadAny(t *testing.T, name string) *anypb.Any {
 func collectorResource(t *testing.T, rev string, policies ...*anypb.Any) *anypb.Any {
 	t.Helper()
 
-	collectorAny, err := anypb.New(&xdsv1alpha1.TelemetryCollector{
+	collectorAny, err := anypb.New(&xdsv1.TelemetryCollector{
 		PolicySetRevision: "projects/my-project/locations/global/policySets/fleet-1/revisions/" + rev,
 		Policies:          policies,
 	})
@@ -347,7 +349,7 @@ func TestXDSPolicyManager_PopulatesNodeLocalityAndMetadataFromGCEMetadata(t *tes
 	}
 
 	assert.Equal(t, []string{
-		"xdstp://telemetry-director.us-central1.xds.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector/projects/123456789/fleets/fleet-1/collectors/default",
+		"xdstp://telemetry-director.us-central1.xds.googleapis.com/google.telemetry.xds.v1.TelemetryCollector/projects/123456789/fleets/fleet-1/collectors/default",
 	}, req.GetResourceNames())
 	// Node.Id is the same project-number-based Fleet name as the subscription
 	// and the reported gcp.fleet_id, not the readable project ID.
@@ -440,7 +442,7 @@ func TestXDSPolicyManager_InitialNACKClearsStaleActivePolicySet(t *testing.T) {
 				return err
 			}
 			// Send an invalid initial TelemetryCollector (missing policy_set_revision with a policy).
-			badCollector, err := anypb.New(&xdsv1alpha1.TelemetryCollector{
+			badCollector, err := anypb.New(&xdsv1.TelemetryCollector{
 				Policies: []*anypb.Any{policyPayloadAny(t, "bad-policy")},
 			})
 			if err != nil {
@@ -894,7 +896,7 @@ func TestXDSPolicyManager_EmptyTelemetryCollectorACKsAndReleasesStart(t *testing
 	registerDummyDriverForTest(t)
 	resetActivePolicySet(t)
 
-	emptyCollectorAny, err := anypb.New(&xdsv1alpha1.TelemetryCollector{})
+	emptyCollectorAny, err := anypb.New(&xdsv1.TelemetryCollector{})
 	require.NoError(t, err)
 
 	responded := make(chan *discoveryv3.DiscoveryRequest, 4)
@@ -1430,4 +1432,275 @@ func TestXDSPolicyManager_DebugProtoJSONAndAppliedPolicyLogging(t *testing.T) {
 	assert.Equal(t, "projects/my-project/locations/global/policySets/fleet-1/revisions/rev-1", appliedLogs[0].ContextMap()["policy_set_revision"])
 	assert.EqualValues(t, 1, appliedLogs[0].ContextMap()["policies_loaded"])
 	assert.NotContains(t, appliedLogs[0].ContextMap(), "policies_skipped")
+}
+
+func registerLogFilterProtoDriverForTest(t *testing.T) chan *policyv1.LogFilterPolicy {
+	t.Helper()
+	loaded := make(chan *policyv1.LogFilterPolicy, 4)
+	driver := ProtoDriver[*policyv1.LogFilterPolicy]{
+		New: func(pb *policyv1.LogFilterPolicy) (Policy, error) {
+			loaded <- pb
+			return &mockTransformationPolicy{name: pb.GetId(), signals: []Signal{SignalLogs}}, nil
+		},
+	}
+	require.NoError(t, RegisterPolicyDriver("log_filter_test", driver))
+	t.Cleanup(func() {
+		delete(policyRegistry, "log_filter_test")
+		delete(policyProtoRegistry, (&policyv1.LogFilterPolicy{}).ProtoReflect().Descriptor().FullName())
+	})
+	return loaded
+}
+
+func legacyLogFilterPolicyAny(t *testing.T, id string) (*policyv1.LogFilterPolicy, *anypb.Any) {
+	t.Helper()
+	pb := &policyv1.LogFilterPolicy{
+		Id:     id,
+		Action: policyv1.Action_ACTION_DROP.Enum(),
+		Matchers: []*policyv1.LogMatcher{
+			{
+				Target: &policyv1.LogFieldSelector{
+					Target: &policyv1.LogFieldSelector_RecordField{
+						RecordField: policyv1.LogRecordField_LOG_RECORD_FIELD_SEVERITY_TEXT,
+					},
+				},
+				Predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Glob{Glob: "DEBUG*"}},
+			},
+		},
+	}
+	wireBytes, err := proto.Marshal(pb)
+	require.NoError(t, err)
+	return pb, &anypb.Any{
+		TypeUrl: "type.googleapis.com/google.telemetry.policy.v1alpha1.LogFilterPolicy",
+		Value:   wireBytes,
+	}
+}
+
+func TestXDSPolicyManager_FallsBackToLegacyV1Alpha1OnInvalidArgument(t *testing.T) {
+	loadedProtos := registerLogFilterProtoDriverForTest(t)
+	resetActivePolicySet(t)
+
+	const legacyTestResourceName = "xdstp://telemetry-director." + defaultRegion + ".xds.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector/projects/my-project/fleets/fleet-1/collectors/default"
+
+	wantPolicy, legacyPolicyAny := legacyLogFilterPolicyAny(t, "legacy-log-filter")
+
+	ackReceived := make(chan *discoveryv3.DiscoveryRequest, 1)
+
+	srv := &fakeADSServer{streamOpened: make(chan struct{}, 8)}
+	srv.handlers = []func(discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error{
+		// Attempt 1: server rejects the v1 subscription with InvalidArgument
+		// (matching Traffic Director's response when it only recognizes
+		// google.telemetry.xds.v1alpha1.TelemetryCollector).
+		func(stream discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error {
+			req, err := srv.recv(stream)
+			if err != nil {
+				return err
+			}
+			assert.Equal(t, xdsPolicyTypeURL, req.GetTypeUrl())
+			assert.Equal(t, []string{testResourceName}, req.GetResourceNames())
+			return grpcstatus.Error(codes.InvalidArgument, "Unsupported resource type in Telemetry Director resource name")
+		},
+		// Attempt 2: client immediately reconnects using legacy v1alpha1
+		// type_url and resource_name, receives a v1alpha1 TelemetryCollector
+		// wrapping a v1alpha1 LogFilterPolicy Any, decodes it into v1, and ACKs it.
+		func(stream discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error {
+			req, err := srv.recv(stream)
+			if err != nil {
+				return err
+			}
+			assert.Equal(t, legacyXDSPolicyTypeURL, req.GetTypeUrl())
+			assert.Equal(t, []string{legacyTestResourceName}, req.GetResourceNames())
+
+			legacyRes := collectorResource(t, "rev-legacy-1", legacyPolicyAny)
+			legacyRes.TypeUrl = legacyXDSPolicyTypeURL
+
+			if err := stream.Send(&discoveryv3.DiscoveryResponse{
+				VersionInfo: "rev-legacy-1",
+				Nonce:       "nonce-legacy-1",
+				TypeUrl:     legacyXDSPolicyTypeURL,
+				Resources:   []*anypb.Any{legacyRes},
+			}); err != nil {
+				return err
+			}
+			ack, err := srv.recv(stream)
+			if err != nil {
+				return err
+			}
+			ackReceived <- ack
+			<-stream.Context().Done()
+			return stream.Context().Err()
+		},
+	}
+
+	m := newTestManager(t, startFakeADSServer(t, srv))
+	// Use a large backoff to verify fallback reconnects immediately without waiting for backoff.
+	m.backoffInitial = 10 * time.Second
+	m.backoffMax = 10 * time.Second
+	m.initialSyncTimeout = 5 * time.Second
+
+	start := time.Now()
+	require.NoError(t, m.Start())
+	elapsed := time.Since(start)
+	t.Cleanup(func() { require.NoError(t, m.Stop()) })
+
+	assert.Less(t, elapsed, m.initialSyncTimeout/2,
+		"v1 -> v1alpha1 fallback must complete initial sync before Start times out")
+
+	var ack *discoveryv3.DiscoveryRequest
+	select {
+	case ack = <-ackReceived:
+	case <-time.After(10 * time.Second):
+		t.Fatal("timed out waiting for legacy v1alpha1 ACK")
+	}
+
+	assert.Equal(t, legacyXDSPolicyTypeURL, ack.GetTypeUrl())
+	assert.Equal(t, []string{legacyTestResourceName}, ack.GetResourceNames())
+	assert.Equal(t, "rev-legacy-1", ack.GetVersionInfo())
+	assert.Equal(t, "nonce-legacy-1", ack.GetResponseNonce())
+	assert.Nil(t, ack.GetErrorDetail())
+
+	active := ActivePolicySet()
+	require.NotNil(t, active)
+	assert.Equal(t, "rev-legacy-1", active.RevisionID)
+	assert.Contains(t, active.Policies, "legacy-log-filter")
+
+	select {
+	case got := <-loadedProtos:
+		assert.True(t, proto.Equal(wantPolicy, got), "decoded LogFilterPolicy must match wire-compatible v1alpha1 payload")
+	case <-time.After(time.Second):
+		t.Fatal("expected ProtoDriver[*policyv1.LogFilterPolicy] to receive decoded legacy policy")
+	}
+
+	dump, err := m.DumpResources()
+	require.NoError(t, err)
+	require.Len(t, dump.GetConfig(), 1)
+	require.Len(t, dump.GetConfig()[0].GetGenericXdsConfigs(), 1)
+	xdsCfg := dump.GetConfig()[0].GetGenericXdsConfigs()[0]
+	assert.Equal(t, legacyXDSPolicyTypeURL, xdsCfg.GetTypeUrl())
+	assert.Equal(t, legacyTestResourceName, xdsCfg.GetName())
+	assert.Equal(t, "rev-legacy-1", xdsCfg.GetVersionInfo())
+	var dumpedCollector xdsv1.TelemetryCollector
+	require.NoError(t, proto.Unmarshal(xdsCfg.GetXdsConfig().GetValue(), &dumpedCollector))
+	require.Len(t, dumpedCollector.GetPolicies(), 1)
+	assert.Equal(t, "type.googleapis.com/google.telemetry.policy.v1.LogFilterPolicy", dumpedCollector.GetPolicies()[0].GetTypeUrl())
+}
+
+func TestXDSPolicyManager_V1EnvelopeWithLegacyV1Alpha1Policy(t *testing.T) {
+	loadedProtos := registerLogFilterProtoDriverForTest(t)
+	resetActivePolicySet(t)
+
+	wantPolicy, legacyPolicyAny := legacyLogFilterPolicyAny(t, "mixed-log-filter")
+	ackReceived := make(chan *discoveryv3.DiscoveryRequest, 1)
+
+	srv := &fakeADSServer{streamOpened: make(chan struct{}, 8)}
+	srv.handlers = []func(discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error{
+		func(stream discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error {
+			req, err := srv.recv(stream)
+			if err != nil {
+				return err
+			}
+			assert.Equal(t, xdsPolicyTypeURL, req.GetTypeUrl())
+			if err := stream.Send(&discoveryv3.DiscoveryResponse{
+				VersionInfo: "rev-mixed-1",
+				Nonce:       "nonce-mixed-1",
+				TypeUrl:     xdsPolicyTypeURL,
+				Resources:   []*anypb.Any{collectorResource(t, "rev-mixed-1", legacyPolicyAny)},
+			}); err != nil {
+				return err
+			}
+			ack, err := srv.recv(stream)
+			if err != nil {
+				return err
+			}
+			ackReceived <- ack
+			<-stream.Context().Done()
+			return stream.Context().Err()
+		},
+	}
+
+	m := newTestManager(t, startFakeADSServer(t, srv))
+	m.initialSyncTimeout = 5 * time.Second
+
+	require.NoError(t, m.Start())
+	t.Cleanup(func() { require.NoError(t, m.Stop()) })
+
+	var ack *discoveryv3.DiscoveryRequest
+	select {
+	case ack = <-ackReceived:
+	case <-time.After(10 * time.Second):
+		t.Fatal("timed out waiting for ACK on v1 envelope with v1alpha1 policy")
+	}
+
+	assert.Equal(t, xdsPolicyTypeURL, ack.GetTypeUrl())
+	assert.Equal(t, "rev-mixed-1", ack.GetVersionInfo())
+	assert.Nil(t, ack.GetErrorDetail())
+	assert.False(t, m.useLegacyXDS())
+
+	active := ActivePolicySet()
+	require.NotNil(t, active)
+	assert.Contains(t, active.Policies, "mixed-log-filter")
+
+	select {
+	case got := <-loadedProtos:
+		assert.True(t, proto.Equal(wantPolicy, got))
+	case <-time.After(time.Second):
+		t.Fatal("expected ProtoDriver[*policyv1.LogFilterPolicy] to receive decoded policy")
+	}
+}
+
+func TestXDSPolicyManager_DoesNotFallBackAfterV1Response(t *testing.T) {
+	registerDummyDriverForTest(t)
+	resetActivePolicySet(t)
+
+	reconnectReq := make(chan *discoveryv3.DiscoveryRequest, 1)
+
+	srv := &fakeADSServer{streamOpened: make(chan struct{}, 8)}
+	srv.handlers = []func(discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error{
+		// Stream 1: server sends a valid v1 response, then closes with InvalidArgument.
+		func(stream discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error {
+			req, err := srv.recv(stream)
+			if err != nil {
+				return err
+			}
+			assert.Equal(t, xdsPolicyTypeURL, req.GetTypeUrl())
+			if err := stream.Send(&discoveryv3.DiscoveryResponse{
+				VersionInfo: "rev-1",
+				Nonce:       "nonce-1",
+				TypeUrl:     xdsPolicyTypeURL,
+				Resources:   []*anypb.Any{policyResource(t, "v1-policy", "rev-1")},
+			}); err != nil {
+				return err
+			}
+			if _, err := srv.recv(stream); err != nil {
+				return err
+			}
+			return grpcstatus.Error(codes.InvalidArgument, "later stream error")
+		},
+		// Stream 2: client must stay on v1 rather than falling back to v1alpha1.
+		func(stream discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error {
+			req, err := srv.recv(stream)
+			if err != nil {
+				return err
+			}
+			reconnectReq <- req
+			<-stream.Context().Done()
+			return stream.Context().Err()
+		},
+	}
+
+	m := newTestManager(t, startFakeADSServer(t, srv))
+	m.initialSyncTimeout = 5 * time.Second
+
+	require.NoError(t, m.Start())
+	t.Cleanup(func() { require.NoError(t, m.Stop()) })
+
+	var req *discoveryv3.DiscoveryRequest
+	select {
+	case req = <-reconnectReq:
+	case <-time.After(10 * time.Second):
+		t.Fatal("timed out waiting for v1 reconnect request")
+	}
+
+	assert.Equal(t, xdsPolicyTypeURL, req.GetTypeUrl())
+	assert.Equal(t, []string{testResourceName}, req.GetResourceNames())
+	assert.False(t, m.useLegacyXDS())
 }

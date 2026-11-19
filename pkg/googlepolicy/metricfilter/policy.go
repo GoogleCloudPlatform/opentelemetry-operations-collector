@@ -22,7 +22,7 @@ import (
 	"errors"
 	"fmt"
 
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/matcher"
 	"go.opentelemetry.io/collector/pdata/pmetric"
@@ -37,9 +37,9 @@ const PolicyType = "metric_filter"
 //
 // Exposed to the package (rather than constructed inline in init) so tests
 // exercise the very value that is registered.
-var driver = googlepolicy.ProtoDriver[*policyv1alpha1.MetricFilterPolicy]{
+var driver = googlepolicy.ProtoDriver[*policyv1.MetricFilterPolicy]{
 	Class: googlepolicy.PolicyClassTransformation,
-	New: func(pb *policyv1alpha1.MetricFilterPolicy) (googlepolicy.Policy, error) {
+	New: func(pb *policyv1.MetricFilterPolicy) (googlepolicy.Policy, error) {
 		return NewPolicyFromProto(pb)
 	},
 }
@@ -67,7 +67,7 @@ var (
 
 // Policy represents a compiled, validated MetricFilterPolicy ready for hot-loop evaluation.
 type Policy struct {
-	proto            *policyv1alpha1.MetricFilterPolicy
+	proto            *policyv1.MetricFilterPolicy
 	matchers         []matcher.CompiledMetricMatcher
 	isDatapointLevel bool
 }
@@ -76,7 +76,7 @@ var _ googlepolicy.TransformationPolicy = (*Policy)(nil)
 var _ googlepolicy.MetricFilterPolicyEvaluator = (*Policy)(nil)
 
 // NewPolicyFromProto validates and compiles a MetricFilterPolicy protobuf into a Policy.
-func NewPolicyFromProto(pb *policyv1alpha1.MetricFilterPolicy) (*Policy, error) {
+func NewPolicyFromProto(pb *policyv1.MetricFilterPolicy) (*Policy, error) {
 	if pb == nil {
 		return nil, ErrNilProto
 	}
@@ -85,7 +85,7 @@ func NewPolicyFromProto(pb *policyv1alpha1.MetricFilterPolicy) (*Policy, error) 
 	}
 
 	switch pb.GetAction() {
-	case policyv1alpha1.Action_ACTION_KEEP, policyv1alpha1.Action_ACTION_DROP:
+	case policyv1.Action_ACTION_KEEP, policyv1.Action_ACTION_DROP:
 	default:
 		return nil, ErrMissingAction
 	}
@@ -103,7 +103,7 @@ func NewPolicyFromProto(pb *policyv1alpha1.MetricFilterPolicy) (*Policy, error) 
 		if err != nil {
 			return nil, fmt.Errorf("matcher[%d]: %w", i, err)
 		}
-		if _, ok := m.GetTarget().GetTarget().(*policyv1alpha1.MetricFieldSelector_DataPointAttributePath); ok {
+		if _, ok := m.GetTarget().GetTarget().(*policyv1.MetricFieldSelector_DataPointAttributePath); ok {
 			p.isDatapointLevel = true
 		}
 		p.matchers = append(p.matchers, cm)
@@ -140,8 +140,8 @@ func (p *Policy) Validate() error {
 	return nil
 }
 
-// Action returns the configured policyv1alpha1.Action (ACTION_KEEP or ACTION_DROP).
-func (p *Policy) Action() policyv1alpha1.Action {
+// Action returns the configured policyv1.Action (ACTION_KEEP or ACTION_DROP).
+func (p *Policy) Action() policyv1.Action {
 	return p.proto.GetAction()
 }
 
@@ -164,9 +164,9 @@ func (p *Policy) FilterMetric(ctx googlepolicy.MetricContext) googlepolicy.Filte
 		return googlepolicy.FilterNoMatch
 	}
 	switch p.Action() {
-	case policyv1alpha1.Action_ACTION_KEEP:
+	case policyv1.Action_ACTION_KEEP:
 		return googlepolicy.FilterKeep
-	case policyv1alpha1.Action_ACTION_DROP:
+	case policyv1.Action_ACTION_DROP:
 		return googlepolicy.FilterDrop
 	default:
 		return googlepolicy.FilterNoMatch

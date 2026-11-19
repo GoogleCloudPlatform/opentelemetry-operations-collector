@@ -1,0 +1,83 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package xdsv1_test
+
+import (
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
+
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
+	xdsv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/xds/v1"
+)
+
+func TestTelemetryCollector_AnyPackaging(t *testing.T) {
+	// Create pure policy (Tier 1).
+	policy := &policyv1.LogFilterPolicy{
+		Id: "default-log-filter",
+	}
+
+	anyPolicy, err := anypb.New(policy)
+	require.NoError(t, err)
+	assert.Equal(t, "type.googleapis.com/google.telemetry.policy.v1.LogFilterPolicy", anyPolicy.GetTypeUrl())
+
+	// Wrap inside TelemetryCollector (Tier 2).
+	collector := &xdsv1.TelemetryCollector{
+		Policies: []*anypb.Any{anyPolicy},
+	}
+
+	// Verify serialization round-trip.
+	data, err := proto.Marshal(collector)
+	require.NoError(t, err)
+
+	unmarshaled := &xdsv1.TelemetryCollector{}
+	require.NoError(t, proto.Unmarshal(data, unmarshaled))
+
+	require.Len(t, unmarshaled.GetPolicies(), 1)
+	assert.Equal(t, "type.googleapis.com/google.telemetry.policy.v1.LogFilterPolicy", unmarshaled.GetPolicies()[0].GetTypeUrl())
+
+	unpackedPolicy := &policyv1.LogFilterPolicy{}
+	require.NoError(t, unmarshaled.GetPolicies()[0].UnmarshalTo(unpackedPolicy))
+	assert.Equal(t, "default-log-filter", unpackedPolicy.GetId())
+}
+
+func TestTelemetryCollector_PolicySetRevisionRoundTrip(t *testing.T) {
+	const revision = "projects/p/locations/l/policySets/ps/revisions/9f3a0c1e"
+	createTime := timestamppb.New(time.Unix(1790000000, 123456789))
+	collector := &xdsv1.TelemetryCollector{
+		PolicySetRevision:           revision,
+		PolicySetRevisionCreateTime: createTime,
+	}
+
+	data, err := proto.Marshal(collector)
+	require.NoError(t, err)
+
+	unmarshaled := &xdsv1.TelemetryCollector{}
+	require.NoError(t, proto.Unmarshal(data, unmarshaled))
+	assert.Equal(t, revision, unmarshaled.GetPolicySetRevision())
+	assert.True(t, proto.Equal(createTime, unmarshaled.GetPolicySetRevisionCreateTime()))
+
+	// Manifests from control planes that predate these fields decode with an
+	// empty revision and no create time.
+	legacy := &xdsv1.TelemetryCollector{}
+	require.NoError(t, proto.Unmarshal(nil, legacy))
+	assert.Empty(t, legacy.GetPolicySetRevision())
+	assert.Nil(t, legacy.GetPolicySetRevisionCreateTime())
+}

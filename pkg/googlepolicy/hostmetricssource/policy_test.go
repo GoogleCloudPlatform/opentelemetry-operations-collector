@@ -20,7 +20,7 @@ import (
 	"testing"
 	"time"
 
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -36,7 +36,7 @@ func TestPolicy_Validation(t *testing.T) {
 
 	tests := []struct {
 		name         string
-		proto        *policyv1alpha1.HostMetricsSourcePolicy
+		proto        *policyv1.HostMetricsSourcePolicy
 		wantErr      error
 		wantInterval int32
 	}{
@@ -47,14 +47,14 @@ func TestPolicy_Validation(t *testing.T) {
 		},
 		{
 			name: "empty id",
-			proto: &policyv1alpha1.HostMetricsSourcePolicy{
+			proto: &policyv1.HostMetricsSourcePolicy{
 				Id: "",
 			},
 			wantErr: ErrMissingID,
 		},
 		{
 			name: "valid policy with unset interval defaults to 60",
-			proto: &policyv1alpha1.HostMetricsSourcePolicy{
+			proto: &policyv1.HostMetricsSourcePolicy{
 				Id: "system-host-metrics",
 			},
 			wantErr:      nil,
@@ -62,7 +62,7 @@ func TestPolicy_Validation(t *testing.T) {
 		},
 		{
 			name: "valid policy with explicit 10s interval (minimum allowed)",
-			proto: &policyv1alpha1.HostMetricsSourcePolicy{
+			proto: &policyv1.HostMetricsSourcePolicy{
 				Id:                        "system-host-metrics",
 				CollectionIntervalSeconds: int32Ptr(10),
 			},
@@ -71,7 +71,7 @@ func TestPolicy_Validation(t *testing.T) {
 		},
 		{
 			name: "valid policy with explicit 30s interval",
-			proto: &policyv1alpha1.HostMetricsSourcePolicy{
+			proto: &policyv1.HostMetricsSourcePolicy{
 				Id:                        "system-host-metrics",
 				CollectionIntervalSeconds: int32Ptr(30),
 			},
@@ -80,7 +80,7 @@ func TestPolicy_Validation(t *testing.T) {
 		},
 		{
 			name: "valid policy with explicit 86400s interval (maximum allowed)",
-			proto: &policyv1alpha1.HostMetricsSourcePolicy{
+			proto: &policyv1.HostMetricsSourcePolicy{
 				Id:                        "system-host-metrics",
 				CollectionIntervalSeconds: int32Ptr(86400),
 			},
@@ -89,7 +89,7 @@ func TestPolicy_Validation(t *testing.T) {
 		},
 		{
 			name: "invalid policy with interval 86401s (above maximum 86400s)",
-			proto: &policyv1alpha1.HostMetricsSourcePolicy{
+			proto: &policyv1.HostMetricsSourcePolicy{
 				Id:                        "system-host-metrics",
 				CollectionIntervalSeconds: int32Ptr(86401),
 			},
@@ -97,7 +97,7 @@ func TestPolicy_Validation(t *testing.T) {
 		},
 		{
 			name: "invalid policy with interval 9s (below minimum 10s)",
-			proto: &policyv1alpha1.HostMetricsSourcePolicy{
+			proto: &policyv1.HostMetricsSourcePolicy{
 				Id:                        "system-host-metrics",
 				CollectionIntervalSeconds: int32Ptr(9),
 			},
@@ -105,7 +105,7 @@ func TestPolicy_Validation(t *testing.T) {
 		},
 		{
 			name: "invalid policy with interval 0s",
-			proto: &policyv1alpha1.HostMetricsSourcePolicy{
+			proto: &policyv1.HostMetricsSourcePolicy{
 				Id:                        "system-host-metrics",
 				CollectionIntervalSeconds: int32Ptr(0),
 			},
@@ -113,7 +113,7 @@ func TestPolicy_Validation(t *testing.T) {
 		},
 		{
 			name: "invalid policy with negative interval",
-			proto: &policyv1alpha1.HostMetricsSourcePolicy{
+			proto: &policyv1.HostMetricsSourcePolicy{
 				Id:                        "system-host-metrics",
 				CollectionIntervalSeconds: int32Ptr(-5),
 			},
@@ -146,7 +146,7 @@ func TestPolicy_Validation(t *testing.T) {
 func TestPolicy_ReceiverIDs(t *testing.T) {
 	t.Parallel()
 
-	pol, err := NewPolicyFromProto(&policyv1alpha1.HostMetricsSourcePolicy{
+	pol, err := NewPolicyFromProto(&policyv1.HostMetricsSourcePolicy{
 		Id: "host-metrics-test",
 	})
 	require.NoError(t, err)
@@ -161,7 +161,7 @@ func TestPolicy_Evaluate(t *testing.T) {
 
 	t.Run("default interval 60s", func(t *testing.T) {
 		t.Parallel()
-		pol, err := NewPolicyFromProto(&policyv1alpha1.HostMetricsSourcePolicy{
+		pol, err := NewPolicyFromProto(&policyv1.HostMetricsSourcePolicy{
 			Id: "host-metrics-sys",
 		})
 		require.NoError(t, err)
@@ -191,7 +191,7 @@ func TestPolicy_Evaluate(t *testing.T) {
 
 	t.Run("custom interval 15s", func(t *testing.T) {
 		t.Parallel()
-		pol, err := NewPolicyFromProto(&policyv1alpha1.HostMetricsSourcePolicy{
+		pol, err := NewPolicyFromProto(&policyv1.HostMetricsSourcePolicy{
 			Id:                        "host-metrics-15s",
 			CollectionIntervalSeconds: int32Ptr(15),
 		})
@@ -212,7 +212,7 @@ func TestPolicy_Evaluate_InvalidPolicy(t *testing.T) {
 	t.Parallel()
 
 	pol := &Policy{
-		proto: &policyv1alpha1.HostMetricsSourcePolicy{
+		proto: &policyv1.HostMetricsSourcePolicy{
 			Id: "",
 		},
 	}
@@ -278,16 +278,16 @@ func TestDriver_LoadPolicy(t *testing.T) {
 func TestPolicy_Consolidate(t *testing.T) {
 	t.Parallel()
 
-	pDefault, err := NewPolicyFromProto(&policyv1alpha1.HostMetricsSourcePolicy{Id: "hm-default"})
+	pDefault, err := NewPolicyFromProto(&policyv1.HostMetricsSourcePolicy{Id: "hm-default"})
 	require.NoError(t, err)
 
-	p30, err := NewPolicyFromProto(&policyv1alpha1.HostMetricsSourcePolicy{
+	p30, err := NewPolicyFromProto(&policyv1.HostMetricsSourcePolicy{
 		Id:                        "hm-30s",
 		CollectionIntervalSeconds: int32Ptr(30),
 	})
 	require.NoError(t, err)
 
-	p10, err := NewPolicyFromProto(&policyv1alpha1.HostMetricsSourcePolicy{
+	p10, err := NewPolicyFromProto(&policyv1.HostMetricsSourcePolicy{
 		Id:                        "hm-10s",
 		CollectionIntervalSeconds: int32Ptr(10),
 	})
@@ -342,7 +342,7 @@ func TestPolicy_Consolidate(t *testing.T) {
 
 	t.Run("invalid receiver returns error", func(t *testing.T) {
 		t.Parallel()
-		badReceiver := &Policy{proto: &policyv1alpha1.HostMetricsSourcePolicy{Id: ""}}
+		badReceiver := &Policy{proto: &policyv1.HostMetricsSourcePolicy{Id: ""}}
 		res, err := badReceiver.Consolidate(nil)
 		require.ErrorIs(t, err, ErrMissingID)
 		assert.Nil(t, res)
@@ -355,7 +355,7 @@ func TestPolicy_Consolidate(t *testing.T) {
 
 	t.Run("invalid policy in slice returns error", func(t *testing.T) {
 		t.Parallel()
-		bad := &Policy{proto: &policyv1alpha1.HostMetricsSourcePolicy{
+		bad := &Policy{proto: &policyv1.HostMetricsSourcePolicy{
 			Id:                        "bad",
 			CollectionIntervalSeconds: int32Ptr(5),
 		}}
@@ -382,7 +382,7 @@ func FuzzPolicy_LoadAndValidate(f *testing.F) {
 	f.Add("hostmetrics-6", int32(86401), true)
 
 	f.Fuzz(func(t *testing.T, id string, interval int32, setInterval bool) {
-		pb := &policyv1alpha1.HostMetricsSourcePolicy{Id: id}
+		pb := &policyv1.HostMetricsSourcePolicy{Id: id}
 		if setInterval {
 			pb.CollectionIntervalSeconds = &interval
 		}

@@ -17,7 +17,7 @@ package matcher
 import (
 	"testing"
 
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -58,20 +58,20 @@ func TestCompileTraceMatcher_AndExtractor(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		matcher *policyv1alpha1.TraceMatcher
+		matcher *policyv1.TraceMatcher
 		want    bool
 	}{
 		{
 			name: "span name equals",
-			matcher: &policyv1alpha1.TraceMatcher{
-				Target: &policyv1alpha1.TraceFieldSelector{
-					Target: &policyv1alpha1.TraceFieldSelector_RecordField{
-						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_NAME,
+			matcher: &policyv1.TraceMatcher{
+				Target: &policyv1.TraceFieldSelector{
+					Target: &policyv1.TraceFieldSelector_RecordField{
+						RecordField: policyv1.SpanRecordField_SPAN_RECORD_FIELD_NAME,
 					},
 				},
-				Predicate: &policyv1alpha1.Predicate{
-					Kind: &policyv1alpha1.Predicate_Equality{
-						Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "GET /checkout"}},
+				Predicate: &policyv1.Predicate{
+					Kind: &policyv1.Predicate_Equality{
+						Equality: &policyv1.Value{Kind: &policyv1.Value_StringValue{StringValue: "GET /checkout"}},
 					},
 				},
 			},
@@ -79,15 +79,15 @@ func TestCompileTraceMatcher_AndExtractor(t *testing.T) {
 		},
 		{
 			name: "span kind SERVER",
-			matcher: &policyv1alpha1.TraceMatcher{
-				Target: &policyv1alpha1.TraceFieldSelector{
-					Target: &policyv1alpha1.TraceFieldSelector_RecordField{
-						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_KIND,
+			matcher: &policyv1.TraceMatcher{
+				Target: &policyv1.TraceFieldSelector{
+					Target: &policyv1.TraceFieldSelector_RecordField{
+						RecordField: policyv1.SpanRecordField_SPAN_RECORD_FIELD_KIND,
 					},
 				},
-				Predicate: &policyv1alpha1.Predicate{
-					Kind: &policyv1alpha1.Predicate_Equality{
-						Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "SERVER"}},
+				Predicate: &policyv1.Predicate{
+					Kind: &policyv1.Predicate_Equality{
+						Equality: &policyv1.Value{Kind: &policyv1.Value_StringValue{StringValue: "SERVER"}},
 					},
 				},
 			},
@@ -95,29 +95,29 @@ func TestCompileTraceMatcher_AndExtractor(t *testing.T) {
 		},
 		{
 			name: "trace_id, span_id, parent_span_id exist",
-			matcher: &policyv1alpha1.TraceMatcher{
-				Target: &policyv1alpha1.TraceFieldSelector{
-					Target: &policyv1alpha1.TraceFieldSelector_RecordField{
-						RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID,
+			matcher: &policyv1.TraceMatcher{
+				Target: &policyv1.TraceFieldSelector{
+					Target: &policyv1.TraceFieldSelector_RecordField{
+						RecordField: policyv1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID,
 					},
 				},
-				Predicate: &policyv1alpha1.Predicate{
-					Kind: &policyv1alpha1.Predicate_Existence{Existence: &emptypb.Empty{}},
+				Predicate: &policyv1.Predicate{
+					Kind: &policyv1.Predicate_Existence{Existence: &emptypb.Empty{}},
 				},
 			},
 			want: true,
 		},
 		{
 			name: "span attribute gte",
-			matcher: &policyv1alpha1.TraceMatcher{
-				Target: &policyv1alpha1.TraceFieldSelector{
-					Target: &policyv1alpha1.TraceFieldSelector_SpanAttributePath{
-						SpanAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"http.status_code"}},
+			matcher: &policyv1.TraceMatcher{
+				Target: &policyv1.TraceFieldSelector{
+					Target: &policyv1.TraceFieldSelector_SpanAttributePath{
+						SpanAttributePath: &policyv1.AttributePath{Segments: []string{"http.status_code"}},
 					},
 				},
-				Predicate: &policyv1alpha1.Predicate{
-					Kind: &policyv1alpha1.Predicate_InclusiveMinimum{
-						InclusiveMinimum: &policyv1alpha1.NumericValue{Kind: &policyv1alpha1.NumericValue_IntValue{IntValue: 500}},
+				Predicate: &policyv1.Predicate{
+					Kind: &policyv1.Predicate_InclusiveMinimum{
+						InclusiveMinimum: &policyv1.NumericValue{Kind: &policyv1.NumericValue_IntValue{IntValue: 500}},
 					},
 				},
 			},
@@ -125,15 +125,15 @@ func TestCompileTraceMatcher_AndExtractor(t *testing.T) {
 		},
 		{
 			name: "resource attribute equals",
-			matcher: &policyv1alpha1.TraceMatcher{
-				Target: &policyv1alpha1.TraceFieldSelector{
-					Target: &policyv1alpha1.TraceFieldSelector_ResourceAttributePath{
-						ResourceAttributePath: &policyv1alpha1.AttributePath{Segments: []string{"service.name"}},
+			matcher: &policyv1.TraceMatcher{
+				Target: &policyv1.TraceFieldSelector{
+					Target: &policyv1.TraceFieldSelector_ResourceAttributePath{
+						ResourceAttributePath: &policyv1.AttributePath{Segments: []string{"service.name"}},
 					},
 				},
-				Predicate: &policyv1alpha1.Predicate{
-					Kind: &policyv1alpha1.Predicate_Equality{
-						Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "frontend"}},
+				Predicate: &policyv1.Predicate{
+					Kind: &policyv1.Predicate_Equality{
+						Equality: &policyv1.Value{Kind: &policyv1.Value_StringValue{StringValue: "frontend"}},
 					},
 				},
 			},
@@ -141,15 +141,15 @@ func TestCompileTraceMatcher_AndExtractor(t *testing.T) {
 		},
 		{
 			name: "scope attribute and scope fields",
-			matcher: &policyv1alpha1.TraceMatcher{
-				Target: &policyv1alpha1.TraceFieldSelector{
-					Target: &policyv1alpha1.TraceFieldSelector_ScopeField{
-						ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_NAME,
+			matcher: &policyv1.TraceMatcher{
+				Target: &policyv1.TraceFieldSelector{
+					Target: &policyv1.TraceFieldSelector_ScopeField{
+						ScopeField: policyv1.ScopeField_SCOPE_FIELD_NAME,
 					},
 				},
-				Predicate: &policyv1alpha1.Predicate{
-					Kind: &policyv1alpha1.Predicate_Equality{
-						Equality: &policyv1alpha1.Value{Kind: &policyv1alpha1.Value_StringValue{StringValue: "tracer.lib"}},
+				Predicate: &policyv1.Predicate{
+					Kind: &policyv1.Predicate_Equality{
+						Equality: &policyv1.Value{Kind: &policyv1.Value_StringValue{StringValue: "tracer.lib"}},
 					},
 				},
 			},
@@ -171,19 +171,19 @@ func TestCompileTraceExtractor_Errors(t *testing.T) {
 	_, err := CompileTraceExtractor(nil)
 	require.ErrorIs(t, err, ErrMissingTraceTarget)
 
-	_, err = CompileTraceExtractor(&policyv1alpha1.TraceFieldSelector{})
+	_, err = CompileTraceExtractor(&policyv1.TraceFieldSelector{})
 	require.ErrorIs(t, err, ErrMissingTraceTarget)
 
-	_, err = CompileTraceExtractor(&policyv1alpha1.TraceFieldSelector{
-		Target: &policyv1alpha1.TraceFieldSelector_RecordField{
-			RecordField: policyv1alpha1.SpanRecordField_SPAN_RECORD_FIELD_UNSPECIFIED,
+	_, err = CompileTraceExtractor(&policyv1.TraceFieldSelector{
+		Target: &policyv1.TraceFieldSelector_RecordField{
+			RecordField: policyv1.SpanRecordField_SPAN_RECORD_FIELD_UNSPECIFIED,
 		},
 	})
 	require.Error(t, err)
 
-	_, err = CompileTraceExtractor(&policyv1alpha1.TraceFieldSelector{
-		Target: &policyv1alpha1.TraceFieldSelector_ScopeField{
-			ScopeField: policyv1alpha1.ScopeField_SCOPE_FIELD_UNSPECIFIED,
+	_, err = CompileTraceExtractor(&policyv1.TraceFieldSelector{
+		Target: &policyv1.TraceFieldSelector_ScopeField{
+			ScopeField: policyv1.ScopeField_SCOPE_FIELD_UNSPECIFIED,
 		},
 	})
 	require.Error(t, err)

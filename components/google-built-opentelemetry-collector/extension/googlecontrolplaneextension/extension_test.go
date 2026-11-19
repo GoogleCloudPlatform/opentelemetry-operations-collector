@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component/componenttest"
 	"go.opentelemetry.io/collector/extension/extensiontest"
+	"go.opentelemetry.io/otel/metric"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 
@@ -44,6 +45,17 @@ func (f fakeSource) ActivePolicySet() PolicySetState {
 
 func (f fakeSource) IsControlPlaneActive() bool { return !f.inactive }
 
+// fakeBinder is an xdsMetricsBinder test double that records every
+// MeterProvider it is given, so these tests never set the process wide xDS
+// MeterProvider in pkg/googlepolicy.
+type fakeBinder struct {
+	bound []metric.MeterProvider
+}
+
+func (f *fakeBinder) BindXDSMeterProvider(mp metric.MeterProvider) {
+	f.bound = append(f.bound, mp)
+}
+
 // newTestExtension wires the extension up to a real SDK MeterProvider backed by
 // a manual reader, so tests can assert on the actual emitted metrics.
 //
@@ -58,7 +70,7 @@ func newTestExtension(t *testing.T, source PolicyStateSource) (*controlPlaneExte
 	set := extensiontest.NewNopSettings(metadata.Type)
 	set.TelemetrySettings.MeterProvider = mp
 
-	return newControlPlaneExtension(&Config{}, set, source), reader
+	return newControlPlaneExtension(&Config{}, set, source, &fakeBinder{}), reader
 }
 
 func collect(t *testing.T, reader *sdkmetric.ManualReader) map[string][]metricdata.DataPoint[int64] {
@@ -271,14 +283,53 @@ func TestExtension_ShutdownUnregistersCallback(t *testing.T) {
 	assert.NoError(t, ext.Shutdown(context.Background()))
 }
 
-// A nil MeterProvider must not be fatal; the extension simply reports nothing.
+// A nil MeterProvider must not be fatal; the extension simply reports nothing,
+// and has no MeterProvider to hand to the xDS client.
 func TestExtension_NilMeterProviderIsNotFatal(t *testing.T) {
 	set := extensiontest.NewNopSettings(metadata.Type)
 	set.TelemetrySettings.MeterProvider = nil
 
-	ext := newControlPlaneExtension(&Config{}, set, fakeSource{})
+	binder := &fakeBinder{}
+	ext := newControlPlaneExtension(&Config{}, set, fakeSource{}, binder)
 	require.NoError(t, ext.Start(context.Background(), componenttest.NewNopHost()))
 	assert.NoError(t, ext.Shutdown(context.Background()))
+	assert.Empty(t, binder.bound)
+}
+
+// Start must hand the collector's MeterProvider to the xDS client, and
+// Shutdown must take it back, once.
+func TestExtension_BindsXDSMeterProviderForItsLifetime(t *testing.T) {
+	mp := sdkmetric.NewMeterProvider()
+	t.Cleanup(func() { _ = mp.Shutdown(context.Background()) })
+
+	set := extensiontest.NewNopSettings(metadata.Type)
+	set.TelemetrySettings.MeterProvider = mp
+
+	binder := &fakeBinder{}
+	ext := newControlPlaneExtension(&Config{}, set, fakeSource{}, binder)
+
+	require.NoError(t, ext.Start(context.Background(), componenttest.NewNopHost()))
+	require.Len(t, binder.bound, 1)
+	assert.Same(t, mp, binder.bound[0], "Start must bind the collector's MeterProvider")
+
+	require.NoError(t, ext.Shutdown(context.Background()))
+	require.Len(t, binder.bound, 2)
+	assert.Nil(t, binder.bound[1], "Shutdown must unbind")
+
+	// A second Shutdown must not unbind a MeterProvider that a newer
+	// extension instance may have bound since.
+	require.NoError(t, ext.Shutdown(context.Background()))
+	assert.Len(t, binder.bound, 2)
+}
+
+// An extension that was never started bound nothing, so its Shutdown must not
+// unbind a MeterProvider that another instance bound.
+func TestExtension_ShutdownWithoutStartDoesNotUnbind(t *testing.T) {
+	binder := &fakeBinder{}
+	ext := newControlPlaneExtension(&Config{}, extensiontest.NewNopSettings(metadata.Type), fakeSource{}, binder)
+
+	require.NoError(t, ext.Shutdown(context.Background()))
+	assert.Empty(t, binder.bound)
 }
 
 // When identity cannot be derived, for example a collector running file sourced

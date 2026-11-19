@@ -93,7 +93,7 @@ lint-protos: $(BUF) $(API_LINTER)
 
 .PHONY: compare-protos
 compare-protos: gen-protos
-	@git diff --exit-code gen/go && test -z "$$(git status --porcelain gen/go)" || (echo "Generated proto files in gen/go are out-of-date. Run 'make gen-protos' to regenerate." && exit 1)
+	@git diff --exit-code gen/go && test -z "$$(git ls-files --others --exclude-standard gen/go)" || (echo "Generated proto files in gen/go are out-of-date. Run 'make gen-protos' to regenerate." && exit 1)
 
 .PHONY: test-protos
 test-protos:
@@ -103,7 +103,7 @@ test-protos:
 # Weaver Generation
 ####################
 
-WEAVER_VERSION ?= v0.26.1
+WEAVER_VERSION ?= v0.28.0
 WEAVER_IMAGE ?= otel/weaver:$(WEAVER_VERSION)
 WEAVER_RUN = docker run --rm --user "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace" -w /workspace
 WEAVER = $(WEAVER_RUN) $(WEAVER_IMAGE)
@@ -260,7 +260,7 @@ tools-dir:
 
 TOOL_LIST ?= github.com/google/addlicense \
 			 github.com/client9/misspell/cmd/misspell \
-			 github.com/golangci/golangci-lint/cmd/golangci-lint \
+			 github.com/golangci/golangci-lint/v2/cmd/golangci-lint \
 			 golang.org/x/tools/cmd/goimports \
 			 github.com/bufbuild/buf/cmd/buf \
 			 github.com/googleapis/api-linter/cmd/api-linter \

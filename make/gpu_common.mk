@@ -6,6 +6,10 @@ test:
 	go test ./...
 	go test -tags=gpu ./...
 
+.PHONY: fuzz
+fuzz:
+	@echo "No fuzz targets for GPU receivers."
+
 .PHONY: tidy
 tidy:
 	go mod tidy

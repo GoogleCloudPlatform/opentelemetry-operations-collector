@@ -35,6 +35,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"testing"
 	"text/template"
@@ -174,13 +175,50 @@ func isRPMBased(imageSpec string) bool {
 		strings.Contains(imageSpec, "sles-")
 }
 
+func transferPackageFromGCS(ctx context.Context, logger *log.Logger, vm *gce.VM, gcsPath, suffix, remoteDir string, viaSSH bool) error {
+	if viaSSH {
+		tmpDir, err := os.MkdirTemp("", "gboc-pkg-*")
+		if err != nil {
+			return err
+		}
+		defer os.RemoveAll(tmpDir)
+
+		localPkg, err := gce.DownloadMatchingGCSObject(ctx, gcsPath, suffix, tmpDir)
+		if err != nil {
+			return err
+		}
+		remotePath := remoteDir + "/" + filepath.Base(localPkg)
+		if gce.IsWindows(vm.ImageSpec) {
+			remotePath = "C:/collectorUpload/" + filepath.Base(localPkg)
+		}
+		if err := gce.UploadFile(ctx, logger, vm, localPkg, remotePath); err != nil {
+			return fmt.Errorf("error copying collector package over SSH: %v", err)
+		}
+		return nil
+	}
+	if !gce.IsWindows(vm.ImageSpec) {
+		if err := gce.InstallGcloudIfNeeded(ctx, logger, vm); err != nil {
+			return err
+		}
+	}
+	pkgSelector := gcsPath + "/*" + suffix
+	copyCmd := fmt.Sprintf("gcloud storage cp -r %s %s", pkgSelector, remoteDir)
+	if !gce.IsWindows(vm.ImageSpec) {
+		copyCmd = "sudo " + copyCmd
+	}
+	if _, err := gce.RunRemotely(ctx, logger, vm, copyCmd); err != nil {
+		return fmt.Errorf("error copying down collector package from GCS: %v", err)
+	}
+	return nil
+}
+
 // Installs the collector package from GCS (see packagesInGCS) onto the given Windows VM.
-func installWindowsPackageFromGCS(ctx context.Context, logger *log.Logger, vm *gce.VM, gcsPath string) error {
+func installWindowsPackageFromGCS(ctx context.Context, logger *log.Logger, vm *gce.VM, gcsPath string, viaSSH bool) error {
 	if _, err := gce.RunRemotely(ctx, logger, vm, "New-Item -ItemType directory -Path C:\\collectorUpload"); err != nil {
 		return err
 	}
-	if _, err := gce.RunRemotely(ctx, logger, vm, fmt.Sprintf("gcloud storage cp -r %s/*.goo C:\\collectorUpload", gcsPath)); err != nil {
-		return fmt.Errorf("error copying down collector package from GCS: %v", err)
+	if err := transferPackageFromGCS(ctx, logger, vm, gcsPath, ".goo", `C:\collectorUpload`, viaSSH); err != nil {
+		return err
 	}
 	if _, err := gce.RunRemotely(ctx, logger, vm, "googet -noconfirm -verbose install -reinstall (Get-ChildItem C:\\collectorUpload\\*.goo | Select-Object -Expand FullName)"); err != nil {
 		return fmt.Errorf("error installing collector from .goo file: %v", err)
@@ -188,17 +226,16 @@ func installWindowsPackageFromGCS(ctx context.Context, logger *log.Logger, vm *g
 	return nil
 }
 
-// installPackageFromGCS installs the collector package from GCS onto the given Linux VM.
+// installPackageFromGCS installs the collector package from GCS onto the given VM.
 //
 // gcsPath must point to a GCS Path that contains .deb/.rpm/.goo files to install on the testing VMs.
-func installPackageFromGCS(ctx context.Context, logger *log.Logger, vm *gce.VM, gcsPath string) error {
+// When viaSSH is true, the runner downloads the package from GCS and uploads it over SSH instead
+// of running gcloud on the VM (used when the VM has no attached service account).
+func installPackageFromGCSWithTransferMode(ctx context.Context, logger *log.Logger, vm *gce.VM, gcsPath string, viaSSH bool) error {
 	if gce.IsWindows(vm.ImageSpec) {
-		return installWindowsPackageFromGCS(ctx, logger, vm, gcsPath)
+		return installWindowsPackageFromGCS(ctx, logger, vm, gcsPath, viaSSH)
 	}
 	if _, err := gce.RunRemotely(ctx, logger, vm, "mkdir -p /tmp/collectorUpload"); err != nil {
-		return err
-	}
-	if err := gce.InstallGcloudIfNeeded(ctx, logger, vm); err != nil {
 		return err
 	}
 
@@ -220,9 +257,8 @@ func installPackageFromGCS(ctx context.Context, logger *log.Logger, vm *gce.VM, 
 	if isRPMBased(vm.ImageSpec) {
 		ext = ".rpm"
 	}
-	pkgSelector := gcsPath + "/*" + arch + ext
-	if _, err := gce.RunRemotely(ctx, logger, vm, "sudo gcloud storage cp -r "+pkgSelector+" /tmp/collectorUpload"); err != nil {
-		return fmt.Errorf("error copying down collector package from GCS: %v", err)
+	if err := transferPackageFromGCS(ctx, logger, vm, gcsPath, arch+ext, "/tmp/collectorUpload", viaSSH); err != nil {
+		return err
 	}
 	// Print the contents of /tmp/collectorUpload into the logs.
 	if _, err := gce.RunRemotely(ctx, logger, vm, "ls /tmp/collectorUpload"); err != nil {
@@ -249,8 +285,12 @@ func installPackageFromGCS(ctx context.Context, logger *log.Logger, vm *gce.VM, 
 // PackageLocation to determine where to install it from. For details
 // about PackageLocation, see the documentation for the PackageLocation struct.
 func installOtelCollector(ctx context.Context, logger *log.Logger, vm *gce.VM, location PackageLocation) error {
+	return installOtelCollectorWithTransferMode(ctx, logger, vm, location, false)
+}
+
+func installOtelCollectorWithTransferMode(ctx context.Context, logger *log.Logger, vm *gce.VM, location PackageLocation, viaSSH bool) error {
 	if location.packagesInGCS != "" {
-		return installPackageFromGCS(ctx, logger, vm, location.packagesInGCS)
+		return installPackageFromGCSWithTransferMode(ctx, logger, vm, location.packagesInGCS, viaSSH)
 	}
 	return errors.New("Unimplemented handling of empty value for location.packagesInGCS (_BUILD_ARTIFACTS_PACKAGE_GCS)")
 }

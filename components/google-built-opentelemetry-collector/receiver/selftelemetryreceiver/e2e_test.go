@@ -39,6 +39,7 @@ import (
 	"go.opentelemetry.io/collector/featuregate"
 	"go.opentelemetry.io/collector/otelcol"
 	"go.opentelemetry.io/collector/pdata/pcommon"
+	"go.opentelemetry.io/collector/pdata/plog"
 	"go.opentelemetry.io/collector/pdata/pmetric"
 	"go.opentelemetry.io/collector/receiver"
 
@@ -459,10 +460,11 @@ func freePort(t *testing.T) int {
 	return l.Addr().(*net.TCPAddr).Port
 }
 
-// sinkExporter is a minimal metrics exporter that records every batch.
+// sinkExporter is a minimal metrics and logs exporter that records every batch.
 type sinkExporter struct {
 	mu   sync.Mutex
 	got  []pmetric.Metrics
+	logs []plog.Logs
 	once sync.Once
 	f    exporter.Factory
 }
@@ -473,6 +475,9 @@ func (s *sinkExporter) factory() exporter.Factory {
 			component.MustNewType("sink"),
 			func() component.Config { return &struct{}{} },
 			exporter.WithMetrics(func(context.Context, exporter.Settings, component.Config) (exporter.Metrics, error) {
+				return s, nil
+			}, component.StabilityLevelDevelopment),
+			exporter.WithLogs(func(context.Context, exporter.Settings, component.Config) (exporter.Logs, error) {
 				return s, nil
 			}, component.StabilityLevelDevelopment),
 		)
@@ -493,6 +498,22 @@ func (s *sinkExporter) ConsumeMetrics(_ context.Context, md pmetric.Metrics) err
 	s.got = append(s.got, cp)
 	s.mu.Unlock()
 	return nil
+}
+
+func (s *sinkExporter) ConsumeLogs(_ context.Context, ld plog.Logs) error {
+	cp := plog.NewLogs()
+	ld.CopyTo(cp)
+	s.mu.Lock()
+	s.logs = append(s.logs, cp)
+	s.mu.Unlock()
+	return nil
+}
+
+// allLogs returns every log batch received so far.
+func (s *sinkExporter) allLogs() []plog.Logs {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]plog.Logs(nil), s.logs...)
 }
 
 func (s *sinkExporter) batches() int {

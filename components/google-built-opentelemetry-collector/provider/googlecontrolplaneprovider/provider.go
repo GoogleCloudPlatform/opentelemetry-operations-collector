@@ -23,9 +23,9 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider/policies/gcpdestination"
@@ -120,15 +120,49 @@ func NewFactory() confmap.ProviderFactory {
 }
 
 func newProvider(set confmap.ProviderSettings) confmap.Provider {
-	// Enable confmap.enableMergeAppendOption so confmap.Merge appends and
-	// deduplicates service::extensions, service::**::receivers, and
-	// service::**::exporters slices across policies and across multiple
-	// confmap providers (e.g. file: + googlecontrolplane:).
-	if err := featuregate.GlobalRegistry().Set(mergeAppendFeatureGateID, true); err != nil && set.Logger != nil {
-		set.Logger.Warn("failed to enable confmap merge append feature gate", zap.Error(err))
-	}
 	return &provider{
 		logger: set.Logger,
+	}
+}
+
+// mergeAppendEnabled reports whether confmap.enableMergeAppendOption is
+// currently enabled.
+func mergeAppendEnabled() bool {
+	enabled := false
+	featuregate.GlobalRegistry().VisitAll(func(g *featuregate.Gate) {
+		if g.ID() == mergeAppendFeatureGateID {
+			enabled = g.IsEnabled()
+		}
+	})
+	return enabled
+}
+
+// enableMergeAppend turns on confmap.enableMergeAppendOption so confmap.Merge
+// appends and deduplicates service::extensions, service::**::receivers and
+// service::**::exporters instead of replacing them. The configuration this
+// provider generates depends on it, both for the policies it merges together
+// and for other config sources (e.g. file:) layered on top.
+//
+// It is called from Retrieve rather than when the provider is created: the
+// Collector creates every registered provider at startup, and a Collector that
+// never retrieves a googlecontrolplane: URI must keep the default merge
+// behavior.
+//
+// The gate is process wide and stays enabled once set. Config sources listed
+// before the first googlecontrolplane: URI are merged before this runs, so list
+// that URI first for the gate to apply to every source.
+func (p *provider) enableMergeAppend() {
+	if mergeAppendEnabled() {
+		return
+	}
+	if err := featuregate.GlobalRegistry().Set(mergeAppendFeatureGateID, true); err != nil {
+		if p.logger != nil {
+			p.logger.Warn("failed to enable confmap merge append feature gate", zap.Error(err))
+		}
+		return
+	}
+	if p.logger != nil {
+		p.logger.Info("enabled feature gate required by the googlecontrolplane provider", zap.String("feature_gate", mergeAppendFeatureGateID))
 	}
 }
 
@@ -198,6 +232,8 @@ func (p *provider) Retrieve(ctx context.Context, uri string, watcher confmap.Wat
 	if err != nil {
 		return nil, fmt.Errorf("%q: %w: %w", uri, ErrURIInvalidInnerURI, err)
 	}
+
+	p.enableMergeAppend()
 
 	p.mu.Lock()
 	manager := p.manager
@@ -316,12 +352,20 @@ func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrie
 		projectID = v
 	}
 
+	var region string
+	if v, ok := ctx.Value("REGION").(string); ok && v != "" {
+		region = v
+	}
+
 	if fleetMgr, ok := manager.(googlepolicy.FleetMetadataProvider); ok {
 		if fleetMgr.FleetID() != "" {
 			fleetID = fleetMgr.FleetID()
 		}
 		if projectID == "" {
 			projectID = fleetMgr.ProjectID()
+		}
+		if region == "" {
+			region = fleetMgr.Region()
 		}
 	} else if manager != nil && manager.URI() != nil {
 		if fleetID == "" {
@@ -343,6 +387,14 @@ func (p *provider) evaluateActivePolicySet(ctx context.Context) (*confmap.Retrie
 	}
 	if projectID != "" {
 		ctx = context.WithValue(ctx, "PROJECT_ID", projectID)
+	}
+	if region == "" {
+		// Non-xDS sources have no control plane subscription to agree with; use
+		// the location of a full Fleet resource name, then the environment.
+		region = nonXDSRegion(fleetID)
+	}
+	if region != "" {
+		ctx = context.WithValue(ctx, "REGION", region)
 	}
 
 	for {
@@ -450,41 +502,37 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 	preProcessMetricIDs := append([]component.ID{googlePolicyID}, destPolicy.PreProcessMetricIDs()...)
 	preProcessTraceIDs := append([]component.ID{googlePolicyID}, destPolicy.PreProcessTraceIDs()...)
 
-	// Configure GCP resource detection and transform for canonical workload pipelines
+	// Configure resource detection and transform for canonical workload pipelines
 	rdType, _ := component.NewType("resourcedetection")
 	rdID := component.NewIDWithName(rdType, "googlecontrolplane")
-	rdCfg := map[string]any{
-		"detectors": []string{"gcp"},
-		"override":  false,
-		"timeout":   10 * time.Second,
-	}
+	rdCfg := googlepolicy.WorkloadResourceDetectionProcessorConfig()
 
 	transformType, _ := component.NewType("transform")
 	transformID := component.NewIDWithName(transformType, "googlecontrolplane")
+	logResourceStatements := workloadResourceStatements(stringFromContext(ctx, "PROJECT_ID"), stringFromContext(ctx, "REGION"))
+	// Strip gcp.telemetry_type from canonical workload metrics and traces so a
+	// log-routing value supplied via OTEL_RESOURCE_ATTRIBUTES applies only to
+	// logs/googlecontrolplane and does not cause telemetry.googleapis.com to
+	// reject metrics or traces.
+	nonLogResourceStatements := append(append([]string(nil), logResourceStatements...), googlepolicy.DeleteTelemetryTypeStatement)
 	transformCfg := map[string]any{
 		"error_mode": "ignore",
 		"log_statements": []map[string]any{
 			{
-				"context": "resource",
-				"statements": []string{
-					`set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil`,
-				},
+				"context":    "resource",
+				"statements": logResourceStatements,
 			},
 		},
 		"metric_statements": []map[string]any{
 			{
-				"context": "resource",
-				"statements": []string{
-					`set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil`,
-				},
+				"context":    "resource",
+				"statements": nonLogResourceStatements,
 			},
 		},
 		"trace_statements": []map[string]any{
 			{
-				"context": "resource",
-				"statements": []string{
-					`set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil`,
-				},
+				"context":    "resource",
+				"statements": nonLogResourceStatements,
 			},
 		},
 	}
@@ -644,7 +692,9 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 		return nil, false, err
 	}
 
-	confMap, _ := escapeDollarSigns(conf.ToStringMap()).(map[string]any)
+	stringMap := conf.ToStringMap()
+	splitSharedStorageProcessors(stringMap)
+	confMap, _ := escapeDollarSigns(stringMap).(map[string]any)
 	ret, err := confmap.NewRetrieved(confMap)
 	return ret, false, err
 }
@@ -802,6 +852,66 @@ func (p *provider) consolidateSourcePolicies(ctx context.Context, activePolicySe
 		}
 	}
 	return consolidated
+}
+
+// workloadProjectIDStatementFromAccount stamps gcp.project_id on workload
+// telemetry from the cloud.account.id that the gcp resource detector reports.
+const workloadProjectIDStatementFromAccount = `set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil`
+
+// stringFromContext returns the string stored in ctx under key, or "".
+// evaluateActivePolicySet stores the resolved PROJECT_ID (alphanumeric project
+// ID) and REGION there.
+func stringFromContext(ctx context.Context, key string) string {
+	if ctx == nil {
+		return ""
+	}
+	v, _ := ctx.Value(key).(string)
+	return v
+}
+
+// nonXDSRegion returns the region for policy sources that have no xDS
+// subscription (file:, component:): the location of fleetID if it is a full
+// Fleet resource name, then $CLOUD_REGION / $GOOGLE_CLOUD_REGION, else "".
+func nonXDSRegion(fleetID string) string {
+	if _, location, _, ok := googlepolicy.ParseFleetResourceName(fleetID); ok {
+		return location
+	}
+	for _, key := range []string{"CLOUD_REGION", "GOOGLE_CLOUD_REGION"} {
+		if v := os.Getenv(key); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// workloadResourceStatements returns the OTTL resource statements that set
+// gcp.project_id and cloud.region, which telemetry.googleapis.com requires, on
+// workload telemetry in the canonical googlecontrolplane pipelines.
+//
+// Values from the resource detectors always win, so behavior on Google Cloud
+// is unchanged:
+//   - gcp.project_id comes from cloud.account.id when the gcp detector reports
+//     it; otherwise the project ID the collector resolved for itself (the same
+//     one stamped on its own self-metrics) is used as a fallback.
+//   - cloud.region falls back to the region the collector resolved for its
+//     control plane subscription (the fleet's location) only when none of
+//     cloud.region, cloud.availability_zone or location is present, so a
+//     detected host region or zone is never replaced.
+//
+// An explicit value set by the workload or an earlier processor is never
+// overwritten.
+func workloadResourceStatements(projectID, region string) []string {
+	statements := []string{workloadProjectIDStatementFromAccount}
+	if projectID != "" {
+		statements = append(statements, fmt.Sprintf(
+			`set(attributes["gcp.project_id"], %s) where attributes["gcp.project_id"] == nil`,
+			strconv.Quote(projectID),
+		))
+	}
+	if stmt := googlepolicy.CloudRegionFallbackStatement(region); stmt != "" {
+		statements = append(statements, stmt)
+	}
+	return statements
 }
 
 func cleanConf(c *confmap.Conf) *confmap.Conf {

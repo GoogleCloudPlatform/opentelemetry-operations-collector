@@ -102,7 +102,11 @@ func NewFactory() telemetry.Factory {
 			return base.CreateResource(ctx, set, unwrap(cfg))
 		}),
 		telemetry.WithCreateLogger(func(ctx context.Context, set telemetry.LoggerSettings, cfg component.Config) (*zap.Logger, component.ShutdownFunc, error) {
-			return base.CreateLogger(ctx, set, unwrap(cfg))
+			logger, shutdown, err := base.CreateLogger(ctx, set, unwrap(cfg))
+			if err != nil || !inProcessReaderGate.IsEnabled() {
+				return logger, shutdown, err
+			}
+			return attachLogBuffer(ctx, set, logger, shutdown)
 		}),
 		telemetry.WithCreateMeterProvider(func(ctx context.Context, set telemetry.MeterSettings, cfg component.Config) (telemetry.MeterProvider, error) {
 			if !inProcessReaderGate.IsEnabled() {

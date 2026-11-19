@@ -113,7 +113,7 @@ func CompileMetricExtractor(target *policyv1alpha1.MetricFieldSelector) (MetricT
 // compileMetricDescriptorFieldExtractor builds an extractor for a first-class
 // metric descriptor field.
 //
-// Per metric_filter_policy.proto: "When evaluated with `existence`, first-class
+// Per common_policy_types.proto: "When evaluated with `existence`, first-class
 // fields evaluate to true when set to a non-default (non-empty / non-zero)
 // value." String fields (NAME, DESCRIPTION, UNIT) return (nil, false) when
 // empty; enum fields (TYPE) return their rendered string ("UNSPECIFIED") with

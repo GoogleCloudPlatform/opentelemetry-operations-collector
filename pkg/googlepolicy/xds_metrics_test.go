@@ -1,0 +1,330 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package googlepolicy
+
+import (
+	"context"
+	"errors"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/metric/noop"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
+
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients"
+	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/internal/xds/clients/xdsclient/metrics"
+)
+
+// fakeAsyncReporter reports a connected ADS stream on every collection.
+type fakeAsyncReporter struct{}
+
+func (*fakeAsyncReporter) Report(rec clients.AsyncMetricsRecorder) error {
+	rec.ReportMetric(&metrics.XDSClientConnected{ServerURI: "server", Value: 1})
+	return nil
+}
+
+func collectMetrics(t *testing.T, reader *sdkmetric.ManualReader) metricdata.ResourceMetrics {
+	t.Helper()
+	var rm metricdata.ResourceMetrics
+	require.NoError(t, reader.Collect(context.Background(), &rm))
+	return rm
+}
+
+func sumInt64Counter(rm metricdata.ResourceMetrics, name string) int64 {
+	var total int64
+	for _, pt := range findInt64SumPoints(rm, name) {
+		total += pt.Value
+	}
+	return total
+}
+
+func reportOneOfEachCounter(r *otelMetricsReporter) {
+	r.ReportMetric(&metrics.ResourceUpdateValid{ServerURI: "server", ResourceType: "TelemetryCollector"})
+	r.ReportMetric(&metrics.ResourceUpdateInvalid{ServerURI: "server", ResourceType: "TelemetryCollector"})
+	r.ReportMetric(&metrics.ServerFailure{ServerURI: "server"})
+}
+
+var xdsCounterNames = []string{
+	"grpc.xds_client.resource_updates_valid",
+	"grpc.xds_client.resource_updates_invalid",
+	"grpc.xds_client.server_failure",
+}
+
+// Each counter event must be recorded exactly once, however many times the
+// MeterProvider is bound, unbound, and bound again.
+func TestOTelMetricsReporter_RebindRecordsEachEventOnce(t *testing.T) {
+	t.Cleanup(func() { SetXDSMeterProvider(nil) })
+
+	reader := sdkmetric.NewManualReader()
+	mp := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+	t.Cleanup(func() { _ = mp.Shutdown(context.Background()) })
+
+	r := newOTelMetricsReporter(nil, "target", nil)
+	t.Cleanup(r.close)
+
+	// Reported before any provider is bound: buffered, then replayed once.
+	reportOneOfEachCounter(r)
+	SetXDSMeterProvider(mp)
+	rm := collectMetrics(t, reader)
+	for _, name := range xdsCounterNames {
+		assert.Equal(t, int64(1), sumInt64Counter(rm, name), "%s after first bind", name)
+	}
+
+	// Binding the same provider again must not replay the event.
+	SetXDSMeterProvider(mp)
+	rm = collectMetrics(t, reader)
+	for _, name := range xdsCounterNames {
+		assert.Equal(t, int64(1), sumInt64Counter(rm, name), "%s after binding the same provider twice", name)
+	}
+
+	// Reported while detached: buffered, then replayed once on the next bind.
+	SetXDSMeterProvider(nil)
+	reportOneOfEachCounter(r)
+	SetXDSMeterProvider(mp)
+	rm = collectMetrics(t, reader)
+	for _, name := range xdsCounterNames {
+		assert.Equal(t, int64(2), sumInt64Counter(rm, name), "%s after bind -> nil -> bind", name)
+	}
+
+	// Reported while bound: recorded directly.
+	reportOneOfEachCounter(r)
+	rm = collectMetrics(t, reader)
+	for _, name := range xdsCounterNames {
+		assert.Equal(t, int64(3), sumInt64Counter(rm, name), "%s after a direct report", name)
+	}
+}
+
+// A collector config reload keeps the same xDS policy manager but builds a
+// new MeterProvider, so the reporter moves from one provider to another.
+func TestOTelMetricsReporter_SwitchToNewProvider(t *testing.T) {
+	tests := []struct {
+		name string
+		// detach unsets the provider, and reports one event while detached,
+		// before the second provider is bound.
+		detach       bool
+		wantOnSecond int64
+	}{
+		{name: "detach then bind", detach: true, wantOnSecond: 2},
+		{name: "direct switch", detach: false, wantOnSecond: 1},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Cleanup(func() { SetXDSMeterProvider(nil) })
+
+			reader1 := sdkmetric.NewManualReader()
+			mp1 := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader1))
+			t.Cleanup(func() { _ = mp1.Shutdown(context.Background()) })
+			reader2 := sdkmetric.NewManualReader()
+			mp2 := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader2))
+			t.Cleanup(func() { _ = mp2.Shutdown(context.Background()) })
+
+			r := newOTelMetricsReporter(nil, "target", nil)
+			t.Cleanup(r.close)
+			t.Cleanup(r.RegisterAsyncReporter(&fakeAsyncReporter{}))
+
+			// One event buffered before any bind, one recorded while bound.
+			reportOneOfEachCounter(r)
+			SetXDSMeterProvider(mp1)
+			reportOneOfEachCounter(r)
+
+			rm1 := collectMetrics(t, reader1)
+			for _, name := range xdsCounterNames {
+				assert.Equal(t, int64(2), sumInt64Counter(rm1, name), "%s on first provider", name)
+			}
+			require.Len(t, findInt64GaugePoints(rm1, "grpc.xds_client.connected"), 1)
+
+			if tc.detach {
+				SetXDSMeterProvider(nil)
+				reportOneOfEachCounter(r)
+			}
+			SetXDSMeterProvider(mp2)
+			reportOneOfEachCounter(r)
+
+			// The second provider gets only what was buffered while detached
+			// and what is reported after the switch, not the first provider's
+			// history.
+			rm2 := collectMetrics(t, reader2)
+			for _, name := range xdsCounterNames {
+				assert.Equal(t, tc.wantOnSecond, sumInt64Counter(rm2, name), "%s on second provider", name)
+			}
+			require.Len(t, findInt64GaugePoints(rm2, "grpc.xds_client.connected"), 1)
+
+			// The first provider receives nothing further.
+			rm1 = collectMetrics(t, reader1)
+			for _, name := range xdsCounterNames {
+				assert.Equal(t, int64(2), sumInt64Counter(rm1, name), "%s on first provider after the switch", name)
+			}
+			assert.Empty(t, findInt64GaugePoints(rm1, "grpc.xds_client.connected"),
+				"first provider must not observe the gauge after the switch")
+		})
+	}
+}
+
+// failingMeterProvider hands out a meter that cannot create counters or
+// register callbacks.
+type failingMeterProvider struct {
+	noop.MeterProvider
+}
+
+func (failingMeterProvider) Meter(string, ...metric.MeterOption) metric.Meter {
+	return failingMeter{}
+}
+
+type failingMeter struct {
+	noop.Meter
+}
+
+var errFailingMeter = errors.New("failing meter")
+
+func (failingMeter) Int64Counter(string, ...metric.Int64CounterOption) (metric.Int64Counter, error) {
+	return nil, errFailingMeter
+}
+
+func (failingMeter) RegisterCallback(metric.Callback, ...metric.Observable) (metric.Registration, error) {
+	return nil, errFailingMeter
+}
+
+// A provider that cannot create the instruments must be reported in the log,
+// and must not cost the events that were waiting to be recorded.
+func TestOTelMetricsReporter_InstrumentErrorsAreLoggedAndKeepPendingCounts(t *testing.T) {
+	t.Cleanup(func() { SetXDSMeterProvider(nil) })
+
+	core, logs := observer.New(zapcore.WarnLevel)
+	r := newOTelMetricsReporter(nil, "target", zap.New(core))
+	t.Cleanup(r.close)
+	t.Cleanup(r.RegisterAsyncReporter(&fakeAsyncReporter{}))
+
+	// One event buffered before the failing bind, one reported after it.
+	reportOneOfEachCounter(r)
+	SetXDSMeterProvider(failingMeterProvider{})
+	reportOneOfEachCounter(r)
+
+	var failedInstruments []string
+	for _, entry := range logs.FilterMessage("Failed to create xDS client metric instrument").All() {
+		assert.Equal(t, zapcore.WarnLevel, entry.Level)
+		fields := entry.ContextMap()
+		assert.Equal(t, errFailingMeter.Error(), fields["error"])
+		failedInstruments = append(failedInstruments, fields["metric"].(string))
+	}
+	assert.ElementsMatch(t, xdsCounterNames, failedInstruments)
+	assert.Equal(t, 1, logs.FilterMessageSnippet("Failed to register the xDS client metrics callback").Len())
+
+	// A working provider then records every event exactly once.
+	reader := sdkmetric.NewManualReader()
+	mp := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+	t.Cleanup(func() { _ = mp.Shutdown(context.Background()) })
+	SetXDSMeterProvider(mp)
+
+	rm := collectMetrics(t, reader)
+	for _, name := range xdsCounterNames {
+		assert.Equal(t, int64(2), sumInt64Counter(rm, name), name)
+	}
+	require.Len(t, findInt64GaugePoints(rm, "grpc.xds_client.connected"), 1)
+}
+
+// SetXDSMeterProvider(nil) must unregister the async callback from the
+// provider it was bound to.
+func TestOTelMetricsReporter_NilProviderDetachesCallback(t *testing.T) {
+	t.Cleanup(func() { SetXDSMeterProvider(nil) })
+
+	reader := sdkmetric.NewManualReader()
+	mp := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+	t.Cleanup(func() { _ = mp.Shutdown(context.Background()) })
+
+	r := newOTelMetricsReporter(nil, "target", nil)
+	t.Cleanup(r.close)
+	unregister := r.RegisterAsyncReporter(&fakeAsyncReporter{})
+	t.Cleanup(unregister)
+
+	SetXDSMeterProvider(mp)
+	connected := findInt64GaugePoints(collectMetrics(t, reader), "grpc.xds_client.connected")
+	require.Len(t, connected, 1, "connected gauge must be observed while bound")
+	assert.Equal(t, int64(1), connected[0].Value)
+
+	SetXDSMeterProvider(nil)
+	assert.Empty(t, findInt64GaugePoints(collectMetrics(t, reader), "grpc.xds_client.connected"),
+		"connected gauge must not be observed after the provider is unset")
+}
+
+// A metric collection runs the async callback under the SDK pipeline lock,
+// while a rebind calls into the SDK. The two must not deadlock.
+func TestOTelMetricsReporter_ConcurrentCollectAndRebind(t *testing.T) {
+	reader := sdkmetric.NewManualReader()
+	mp := sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))
+
+	r := newOTelMetricsReporter(nil, "target", nil)
+	unregister := r.RegisterAsyncReporter(&fakeAsyncReporter{})
+	SetXDSMeterProvider(mp)
+
+	const iterations = 2000
+	var wg sync.WaitGroup
+	wg.Add(3)
+	go func() {
+		defer wg.Done()
+		for range iterations {
+			var rm metricdata.ResourceMetrics
+			_ = reader.Collect(context.Background(), &rm)
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := range iterations {
+			if i%2 == 0 {
+				SetXDSMeterProvider(nil)
+			} else {
+				SetXDSMeterProvider(mp)
+			}
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for range iterations {
+			reportOneOfEachCounter(r)
+		}
+	}()
+
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+		// No cleanup here: it would block on the same locks.
+		t.Fatal("concurrent metric collection and MeterProvider rebind did not finish; likely deadlock")
+	}
+
+	// Every event is recorded exactly once across all the rebinds.
+	SetXDSMeterProvider(mp)
+	rm := collectMetrics(t, reader)
+	for _, name := range xdsCounterNames {
+		assert.Equal(t, int64(iterations), sumInt64Counter(rm, name), name)
+	}
+
+	unregister()
+	r.close()
+	SetXDSMeterProvider(nil)
+	_ = mp.Shutdown(context.Background())
+}

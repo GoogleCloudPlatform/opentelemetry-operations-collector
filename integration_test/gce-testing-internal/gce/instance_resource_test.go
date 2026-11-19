@@ -504,3 +504,44 @@ func TestDeducedBaseInstanceName(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildInstanceResourceNoServiceAccountAndNoScopes(t *testing.T) {
+	vm := &VM{
+		Name:        "test-vm",
+		Project:     "test-project",
+		Zone:        "us-central1-a",
+		ImageSpec:   "debian-cloud:debian-12",
+		MachineType: "e2-standard-2",
+	}
+
+	inst, err := buildInstanceResource(VMOptions{
+		ImageSpec:            "debian-cloud:debian-12",
+		ExtraCreateArguments: []string{"--no-service-account", "--no-scopes"},
+	}, vm)
+	if err != nil {
+		t.Fatalf("buildInstanceResource() error = %v", err)
+	}
+	if len(inst.GetServiceAccounts()) != 0 {
+		t.Errorf("expected no ServiceAccounts with --no-service-account, got %v", inst.GetServiceAccounts())
+	}
+
+	instNoScopes, err := buildInstanceResource(VMOptions{
+		ImageSpec:            "debian-cloud:debian-12",
+		ExtraCreateArguments: []string{"--no-scopes"},
+	}, vm)
+	if err != nil {
+		t.Fatalf("buildInstanceResource(--no-scopes) error = %v", err)
+	}
+	if len(instNoScopes.GetServiceAccounts()) != 1 || len(instNoScopes.GetServiceAccounts()[0].GetScopes()) != 0 {
+		t.Errorf("expected 1 SA with 0 scopes, got %v", instNoScopes.GetServiceAccounts())
+	}
+
+	for _, bad := range [][]string{
+		{"--no-service-account", "--service-account=custom@test-project.iam.gserviceaccount.com"},
+		{"--no-scopes", "--scopes=cloud-platform"},
+	} {
+		if _, err := parseExtraCreateArguments(bad); err == nil {
+			t.Errorf("parseExtraCreateArguments(%v) unexpectedly succeeded", bad)
+		}
+	}
+}

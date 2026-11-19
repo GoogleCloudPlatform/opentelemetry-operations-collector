@@ -28,8 +28,6 @@ import (
 )
 
 func TestPolicyValidation_ValidLinuxPaths(t *testing.T) {
-	t.Cleanup(setOSForTest("linux"))
-
 	validPaths := [][]string{
 		{"/var/log/**/*.log"},
 		{"/var/log/messages"},
@@ -38,6 +36,7 @@ func TestPolicyValidation_ValidLinuxPaths(t *testing.T) {
 		{"/srv/web/logs/**/*.log"},
 		{"/var/log/syslog", "/opt/app/logs/server.log"},
 		{"/var/log/app.log", "/var/log/App.log"},
+		{"/var/log/app$log.txt"},
 	}
 
 	for _, paths := range validPaths {
@@ -55,16 +54,12 @@ func TestPolicyValidation_ValidLinuxPaths(t *testing.T) {
 }
 
 func TestPolicyValidation_ValidWindowsPaths(t *testing.T) {
-	t.Cleanup(setOSForTest("windows"))
-
 	validPaths := [][]string{
 		{`C:\ProgramData\MyApp\logs\app.log`},
 		{`C:/ProgramData/MyApp/logs/app.log`},
-		{`%ProgramData%\MyApp\logs\*.log`},
 		{`D:\ProgramData\MyApp\logs\*.log`},
 		{`C:\inetpub\logs\LogFiles\**\*.log`},
 		{`C:/inetpub/logs/LogFiles/**/*.log`},
-		{`%SystemDrive%\inetpub\logs\*.log`},
 	}
 
 	for _, paths := range validPaths {
@@ -81,11 +76,61 @@ func TestPolicyValidation_ValidWindowsPaths(t *testing.T) {
 	}
 }
 
+func TestPolicyValidation_IntraPolicyDeduplication(t *testing.T) {
+	t.Run("deduplicates duplicate linux paths preserving first-seen order", func(t *testing.T) {
+		pb := &policyv1alpha1.FileLogSourcePolicy{
+			Id: "dedupe-linux",
+			IncludedPaths: []string{
+				"/var/log/b.log",
+				"/var/log/a.log",
+				"/var/log/b.log",
+				"/var/log/c.log",
+				"/var/log/a.log",
+			},
+		}
+		policy, err := NewPolicyFromProto(pb)
+		require.NoError(t, err)
+		assert.Equal(t, []string{
+			"/var/log/b.log",
+			"/var/log/a.log",
+			"/var/log/c.log",
+		}, policy.IncludedPaths())
+
+		conf, err := policy.Evaluate(context.Background())
+		require.NoError(t, err)
+		sub, err := conf.Sub("receivers::filelog/googlecontrolplane")
+		require.NoError(t, err)
+		assert.Equal(t, []string{
+			"/var/log/b.log",
+			"/var/log/a.log",
+			"/var/log/c.log",
+		}, sub.ToStringMap()["include"])
+	})
+
+	t.Run("deduplicates case-insensitive and separator-mixed windows paths", func(t *testing.T) {
+		pb := &policyv1alpha1.FileLogSourcePolicy{
+			Id: "dedupe-windows",
+			IncludedPaths: []string{
+				`C:\ProgramData\MyApp\logs\app.log`,
+				`c:\programdata\myapp\logs\app.log`,
+				`C:/ProgramData/MyApp/logs/app.log`,
+				`C:\inetpub\logs\app.log`,
+				`C:/inetpub/logs/app.log`,
+			},
+		}
+		policy, err := NewPolicyFromProto(pb)
+		require.NoError(t, err)
+		assert.Equal(t, []string{
+			"C:/programdata/myapp/logs/app.log",
+			"C:/inetpub/logs/app.log",
+		}, policy.IncludedPaths())
+	})
+}
+
 func TestPolicyValidation_InvalidPaths(t *testing.T) {
 	testCases := []struct {
 		name        string
 		id          string
-		os          string
 		include     []string
 		expectedErr error
 	}{
@@ -108,90 +153,27 @@ func TestPolicyValidation_InvalidPaths(t *testing.T) {
 			expectedErr: ErrEmptyIncludePattern,
 		},
 		{
-			name:        "path traversal linux",
+			name:        "whitespace-only include pattern",
 			id:          "test-policy",
-			include:     []string{"/var/log/../../etc/shadow"},
-			expectedErr: ErrPathTraversal,
+			include:     []string{"   "},
+			expectedErr: ErrEmptyIncludePattern,
 		},
 		{
-			name:        "path traversal windows",
+			name:        "invalid glob character class",
 			id:          "test-policy",
-			os:          "windows",
-			include:     []string{`C:\ProgramData\logs\..\..\Windows\System32`},
-			expectedErr: ErrPathTraversal,
-		},
-		{
-			name:        "relative path linux",
-			id:          "test-policy",
-			include:     []string{"var/log/app.log"},
-			expectedErr: ErrRelativePath,
-		},
-		{
-			name:        "relative path windows",
-			id:          "test-policy",
-			os:          "windows",
-			include:     []string{`ProgramData\MyApp\logs\app.log`},
-			expectedErr: ErrRelativePath,
-		},
-		{
-			name:        "duplicate path linux",
-			id:          "test-policy",
-			include:     []string{"/var/log/app.log", "/var/log/app.log"},
-			expectedErr: ErrDuplicateIncludePattern,
-		},
-		{
-			name:        "duplicate path windows case-insensitive",
-			id:          "test-policy",
-			os:          "windows",
-			include:     []string{`C:\ProgramData\MyApp\logs\app.log`, `c:\programdata\myapp\logs\app.log`},
-			expectedErr: ErrDuplicateIncludePattern,
-		},
-		{
-			name:        "duplicate path windows separator normalized",
-			id:          "test-policy",
-			os:          "windows",
-			include:     []string{`C:\inetpub\logs\app.log`, `C:/inetpub/logs/app.log`},
-			expectedErr: ErrDuplicateIncludePattern,
-		},
-		{
-			name:        "duplicate path windows env var expanded",
-			id:          "test-policy",
-			os:          "windows",
-			include:     []string{`%ProgramData%\MyApp\logs\app.log`, `C:\ProgramData\MyApp\logs\app.log`},
-			expectedErr: ErrDuplicateIncludePattern,
-		},
-		{
-			name:        "duplicate path windows systemdrive expanded",
-			id:          "test-policy",
-			os:          "windows",
-			include:     []string{`%SystemDrive%\inetpub\logs\*.log`, `C:\inetpub\logs\*.log`},
-			expectedErr: ErrDuplicateIncludePattern,
-		},
-		{
-			name:        "confmap dollar expansion linux",
-			id:          "test-policy",
-			os:          "linux",
-			include:     []string{"/var/log/${file:/etc/shadow}"},
-			expectedErr: ErrDollarNotAllowed,
-		},
-		{
-			name:        "confmap dollar expansion windows",
-			id:          "test-policy",
-			os:          "windows",
-			include:     []string{`C:\ProgramData\logs\${env:FOO}\app.log`},
-			expectedErr: ErrDollarNotAllowed,
-		},
-		{
-			name:        "confmap bare dollar linux",
-			id:          "test-policy",
-			os:          "linux",
-			include:     []string{"/var/log/app$log.txt"},
-			expectedErr: ErrDollarNotAllowed,
+			include:     []string{"/var/log/[a-z]*.log"},
+			expectedErr: ErrInvalidGlobPattern,
 		},
 		{
 			name:        "invalid glob unclosed bracket",
 			id:          "test-policy",
 			include:     []string{"/var/log/[a-z"},
+			expectedErr: ErrInvalidGlobPattern,
+		},
+		{
+			name:        "invalid glob brace alternation",
+			id:          "test-policy",
+			include:     []string{"/var/log/{app,web}/*.log"},
 			expectedErr: ErrInvalidGlobPattern,
 		},
 		{
@@ -207,67 +189,33 @@ func TestPolicyValidation_InvalidPaths(t *testing.T) {
 			expectedErr: ErrInvalidGlobPattern,
 		},
 		{
+			name:        "invalid glob posix backslash escape",
+			id:          "test-policy",
+			include:     []string{`/var/log/app\[1\].log`},
+			expectedErr: ErrInvalidGlobPattern,
+		},
+		{
+			name:        "invalid glob windows character class",
+			id:          "test-policy",
+			include:     []string{`C:\ProgramData\MyApp\logs\[a-z].log`},
+			expectedErr: ErrInvalidGlobPattern,
+		},
+		{
 			name:        "invalid glob windows unclosed bracket",
 			id:          "test-policy",
-			os:          "windows",
 			include:     []string{`C:\ProgramData\MyApp\logs\[a-z`},
 			expectedErr: ErrInvalidGlobPattern,
 		},
 		{
-			name:        "bare directory /var/log/",
+			name:        "invalid glob windows brace alternation",
 			id:          "test-policy",
-			include:     []string{"/var/log/"},
-			expectedErr: ErrBareDirectoryPath,
-		},
-		{
-			name:        "bare directory /opt/google/logs/",
-			id:          "test-policy",
-			include:     []string{"/opt/google/logs/"},
-			expectedErr: ErrBareDirectoryPath,
-		},
-		{
-			name:        "bare directory /srv/web/logs/",
-			id:          "test-policy",
-			include:     []string{"/srv/web/logs/"},
-			expectedErr: ErrBareDirectoryPath,
-		},
-		{
-			name:        "bare directory root slash",
-			id:          "test-policy",
-			include:     []string{"/"},
-			expectedErr: ErrBareDirectoryPath,
-		},
-		{
-			name:        "bare directory windows ProgramData logs trailing backslash",
-			id:          "test-policy",
-			os:          "windows",
-			include:     []string{`C:\ProgramData\MyApp\logs\`},
-			expectedErr: ErrBareDirectoryPath,
-		},
-		{
-			name:        "bare directory windows inetpub logs trailing slash",
-			id:          "test-policy",
-			os:          "windows",
-			include:     []string{`C:/inetpub/logs/`},
-			expectedErr: ErrBareDirectoryPath,
-		},
-		{
-			name:        "bare directory windows drive root",
-			id:          "test-policy",
-			os:          "windows",
-			include:     []string{`C:\`},
-			expectedErr: ErrBareDirectoryPath,
+			include:     []string{`C:\ProgramData\MyApp\logs\{app,web}.log`},
+			expectedErr: ErrInvalidGlobPattern,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			targetOS := tc.os
-			if targetOS == "" {
-				targetOS = "linux"
-			}
-			t.Cleanup(setOSForTest(targetOS))
-
 			pb := &policyv1alpha1.FileLogSourcePolicy{
 				Id:            tc.id,
 				IncludedPaths: tc.include,
@@ -281,8 +229,6 @@ func TestPolicyValidation_InvalidPaths(t *testing.T) {
 }
 
 func TestPolicy_Metadata(t *testing.T) {
-	t.Cleanup(setOSForTest("linux"))
-
 	pb := &policyv1alpha1.FileLogSourcePolicy{
 		Id:            "test-log-source",
 		IncludedPaths: []string{"/var/log/test.log"},
@@ -317,8 +263,6 @@ func TestPolicy_Metadata(t *testing.T) {
 }
 
 func TestPolicy_Evaluate(t *testing.T) {
-	t.Cleanup(setOSForTest("linux"))
-
 	pb := &policyv1alpha1.FileLogSourcePolicy{
 		Id:            "projects/123/locations/global/policySets/ps1/policies/app-logs",
 		IncludedPaths: []string{"/var/log/app/*.log"},
@@ -358,14 +302,12 @@ func TestPolicy_Evaluate(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestPolicy_Evaluate_WindowsEnvExpansion(t *testing.T) {
-	t.Cleanup(setOSForTest("windows"))
-
+func TestPolicy_Evaluate_WindowsNormalization(t *testing.T) {
 	pb := &policyv1alpha1.FileLogSourcePolicy{
-		Id: "win-env-logs",
+		Id: "win-logs",
 		IncludedPaths: []string{
-			`%ProgramData%\MyApp\logs\*.log`,
-			`%SystemDrive%\inetpub\logs\*.log`,
+			`C:\ProgramData\MyApp\logs\*.log`,
+			`C:\inetpub\logs\*.log`,
 		},
 	}
 	policy, err := NewPolicyFromProto(pb)
@@ -387,8 +329,6 @@ func TestPolicy_Evaluate_WindowsEnvExpansion(t *testing.T) {
 }
 
 func TestPolicy_ReceiverIDs(t *testing.T) {
-	t.Cleanup(setOSForTest("linux"))
-
 	pb := &policyv1alpha1.FileLogSourcePolicy{
 		Id:            "nginx-logs",
 		IncludedPaths: []string{"/var/log/nginx/*.log"},
@@ -416,8 +356,6 @@ func TestMerge_NilAndEmpty(t *testing.T) {
 }
 
 func TestMerge_SinglePolicy(t *testing.T) {
-	t.Cleanup(setOSForTest("linux"))
-
 	p, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
 		Id:            "single-policy",
 		IncludedPaths: []string{"/var/log/single/*.log"},
@@ -432,8 +370,6 @@ func TestMerge_SinglePolicy(t *testing.T) {
 }
 
 func TestMerge_MultiplePolicies_DeduplicatedAndSorted(t *testing.T) {
-	t.Cleanup(setOSForTest("linux"))
-
 	p1, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
 		Id:            "policy-1",
 		IncludedPaths: []string{"/var/log/syslog", "/var/log/nginx/*.log"},
@@ -480,8 +416,6 @@ func TestMerge_MultiplePolicies_DeduplicatedAndSorted(t *testing.T) {
 }
 
 func TestMerge_MultiplePolicies_WindowsCaseInsensitiveDeduplication(t *testing.T) {
-	t.Cleanup(setOSForTest("windows"))
-
 	p1, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
 		Id:            "win-1",
 		IncludedPaths: []string{`C:\ProgramData\App\logs\app.log`},
@@ -499,36 +433,7 @@ func TestMerge_MultiplePolicies_WindowsCaseInsensitiveDeduplication(t *testing.T
 	require.NotNil(t, merged)
 	assert.Len(t, merged.IncludedPaths(), 1)
 	assert.Equal(t, `C:/programdata/app/logs/app.log`, merged.IncludedPaths()[0])
-}
 
-func TestMerge_MultiplePolicies_WindowsEnvDeduplication(t *testing.T) {
-	t.Cleanup(setOSForTest("windows"))
-
-	p1, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
-		Id:            "win-env-1",
-		IncludedPaths: []string{`%ProgramData%\App\logs\app.log`},
-	})
-	require.NoError(t, err)
-
-	p2, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
-		Id:            "win-env-2",
-		IncludedPaths: []string{`C:\ProgramData\App\logs\app.log`},
-	})
-	require.NoError(t, err)
-
-	merged, err := Merge(p1, p2)
-	require.NoError(t, err)
-	require.NotNil(t, merged)
-	assert.Len(t, merged.IncludedPaths(), 1)
-	assert.Equal(t, `C:/programdata/app/logs/app.log`, merged.IncludedPaths()[0])
-
-	// Reverse merge order must produce the identical result.
-	mergedRev, err := Merge(p2, p1)
-	require.NoError(t, err)
-	require.NotNil(t, mergedRev)
-	assert.Equal(t, merged.IncludedPaths(), mergedRev.IncludedPaths())
-
-	// Evaluating the merged policy should produce expanded path.
 	conf, err := merged.Evaluate(context.Background())
 	require.NoError(t, err)
 	sub, err := conf.Sub("receivers::filelog/googlecontrolplane")
@@ -537,38 +442,7 @@ func TestMerge_MultiplePolicies_WindowsEnvDeduplication(t *testing.T) {
 	assert.Equal(t, googlepolicy.StorageExtensionID.String(), sub.ToStringMap()["storage"])
 }
 
-func TestMerge_MultiplePolicies_WindowsEnvSortingDeterminism(t *testing.T) {
-	t.Cleanup(setOSForTest("windows"))
-
-	p1, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
-		Id:            "win-sort-1",
-		IncludedPaths: []string{`%ProgramData%\App\logs\z.log`},
-	})
-	require.NoError(t, err)
-
-	p2, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
-		Id:            "win-sort-2",
-		IncludedPaths: []string{`C:\ProgramData\App\logs\a.log`},
-	})
-	require.NoError(t, err)
-
-	expected := []string{
-		`C:/programdata/app/logs/a.log`,
-		`C:/programdata/app/logs/z.log`,
-	}
-
-	merged1, err := Merge(p1, p2)
-	require.NoError(t, err)
-	assert.Equal(t, expected, merged1.IncludedPaths())
-
-	merged2, err := Merge(p2, p1)
-	require.NoError(t, err)
-	assert.Equal(t, expected, merged2.IncludedPaths())
-}
-
 func TestMerge_FailsFastOnInvalidPolicy(t *testing.T) {
-	t.Cleanup(setOSForTest("linux"))
-
 	valid, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
 		Id:            "valid",
 		IncludedPaths: []string{"/var/log/valid.log"},
@@ -578,12 +452,12 @@ func TestMerge_FailsFastOnInvalidPolicy(t *testing.T) {
 	invalid := &Policy{
 		proto: &policyv1alpha1.FileLogSourcePolicy{
 			Id:            "invalid",
-			IncludedPaths: []string{"/var/log/../etc/shadow"},
+			IncludedPaths: []string{"/var/log/[unclosed"},
 		},
 	}
 
 	merged, err := Merge(valid, invalid)
-	assert.ErrorIs(t, err, ErrPathTraversal)
+	assert.ErrorIs(t, err, ErrInvalidGlobPattern)
 	assert.Nil(t, merged)
 
 	merged, err = Merge(valid, nil)
@@ -592,8 +466,6 @@ func TestMerge_FailsFastOnInvalidPolicy(t *testing.T) {
 }
 
 func TestConsolidate(t *testing.T) {
-	t.Cleanup(setOSForTest("linux"))
-
 	p1, err := NewPolicyFromProto(&policyv1alpha1.FileLogSourcePolicy{
 		Id:            "p1",
 		IncludedPaths: []string{"/var/log/a.log", "/var/log/shared.log"},
@@ -695,8 +567,6 @@ func (m *mockForeignSourcePolicy) MetricReceiverIDs() []component.ID { return ni
 func (m *mockForeignSourcePolicy) TraceReceiverIDs() []component.ID  { return nil }
 
 func TestDriver_WireProtoAndMapLoading(t *testing.T) {
-	t.Cleanup(setOSForTest("linux"))
-
 	pb := &policyv1alpha1.FileLogSourcePolicy{
 		Id:            "wire-log-source",
 		IncludedPaths: []string{"/var/log/**/*.log"},
@@ -735,8 +605,6 @@ func TestDriver_WireProtoAndMapLoading(t *testing.T) {
 
 func TestPolicyValidation_CustomApplicationPaths(t *testing.T) {
 	t.Run("linux custom application paths", func(t *testing.T) {
-		t.Cleanup(setOSForTest("linux"))
-
 		customLinuxPaths := []string{
 			"/var/tmp/app/*.log",
 			"/tmp/app.log",
@@ -754,25 +622,13 @@ func TestPolicyValidation_CustomApplicationPaths(t *testing.T) {
 			require.NoError(t, err, "path %q should be accepted", p)
 			assert.NoError(t, pol.Validate())
 		}
-
-		// Path traversal is still strictly rejected
-		pbTraversal := &policyv1alpha1.FileLogSourcePolicy{
-			Id:            "traversal-policy",
-			IncludedPaths: []string{"/var/tmp/../etc/shadow"},
-		}
-		_, err := NewPolicyFromProto(pbTraversal)
-		require.ErrorIs(t, err, ErrPathTraversal)
 	})
 
 	t.Run("windows custom application paths", func(t *testing.T) {
-		t.Cleanup(setOSForTest("windows"))
-
 		customWindowsPaths := []string{
 			`C:\custom\app\logs\*.log`,
 			`D:\Data\logs\app.log`,
 			`C:\Program Files\App\logs\*.log`,
-			`%ProgramData%\custom\logs\*.log`,
-			`%SystemDrive%\custom\logs\*.log`,
 		}
 		for _, p := range customWindowsPaths {
 			pb := &policyv1alpha1.FileLogSourcePolicy{
@@ -783,13 +639,5 @@ func TestPolicyValidation_CustomApplicationPaths(t *testing.T) {
 			require.NoError(t, err, "path %q should be accepted", p)
 			assert.NoError(t, pol.Validate())
 		}
-
-		// Path traversal is still strictly rejected
-		pbTraversal := &policyv1alpha1.FileLogSourcePolicy{
-			Id:            "traversal-policy-win",
-			IncludedPaths: []string{`C:\custom\app\..\..\Windows\System32\app.log`},
-		}
-		_, err := NewPolicyFromProto(pbTraversal)
-		require.ErrorIs(t, err, ErrPathTraversal)
 	})
 }

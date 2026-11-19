@@ -38,7 +38,7 @@ func createDefaultConfig() component.Config {
 }
 
 func createExtension(_ context.Context, set extension.Settings, cfg component.Config) (extension.Extension, error) {
-	// The production source reads the process wide policy registry. Tests
-	// substitute a fake via newControlPlaneExtension.
-	return newControlPlaneExtension(cfg.(*Config), set, registrySource{}), nil
+	// The production source and binder use the process wide state in
+	// pkg/googlepolicy. Tests substitute fakes via newControlPlaneExtension.
+	return newControlPlaneExtension(cfg.(*Config), set, registrySource{}, registrySource{}), nil
 }

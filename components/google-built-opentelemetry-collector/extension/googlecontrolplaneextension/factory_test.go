@@ -52,4 +52,5 @@ func TestCreateExtension_UsesRegistrySource(t *testing.T) {
 	cpExt, ok := ext.(*controlPlaneExtension)
 	require.True(t, ok)
 	assert.IsType(t, registrySource{}, cpExt.source)
+	assert.IsType(t, registrySource{}, cpExt.binder)
 }

@@ -22,6 +22,8 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -38,8 +40,11 @@ import (
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/extension/googlecontrolplaneextension"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/processor/googlepolicyprocessor"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider"
+	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	xdsv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/xds/v1alpha1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	_ "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/filelogsource"
+	discoveryv3 "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	"github.com/google/go-cmp/cmp"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/filelogreceiver"
 	"github.com/open-telemetry/opentelemetry-collector-contrib/receiver/iisreceiver"
@@ -54,6 +59,7 @@ import (
 	"go.opentelemetry.io/collector/exporter/otlpexporter"
 	"go.opentelemetry.io/collector/extension"
 	"go.opentelemetry.io/collector/extension/xextension/storage"
+	"go.opentelemetry.io/collector/featuregate"
 	"go.opentelemetry.io/collector/otelcol"
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
@@ -72,6 +78,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	_ "google.golang.org/grpc/encoding/gzip"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 var (
@@ -1623,6 +1630,163 @@ func TestPolicySetActiveSelfMetric(t *testing.T) {
 	}
 }
 
+type staticADSServer struct {
+	discoveryv3.UnimplementedAggregatedDiscoveryServiceServer
+	resp *discoveryv3.DiscoveryResponse
+}
+
+func (s *staticADSServer) StreamAggregatedResources(stream discoveryv3.AggregatedDiscoveryService_StreamAggregatedResourcesServer) error {
+	if _, err := stream.Recv(); err != nil {
+		return err
+	}
+	if err := stream.Send(s.resp); err != nil {
+		return err
+	}
+	for {
+		if _, err := stream.Recv(); err != nil {
+			return err
+		}
+	}
+}
+
+// TestXDSClientSelfMetrics verifies that when googlecontrolplaneprovider is
+// configured with an xds:// URI, googlecontrolplaneextension wires the
+// collector's internal MeterProvider into pkg/googlepolicy so that the gRFC A78
+// grpc.xds_client.* metrics (including initial-sync counter updates replayed on
+// late binding) are exported through the default_self_metrics pipeline alongside
+// gcp.policy.set.active, with the expected values and attributes.
+func TestXDSClientSelfMetrics(t *testing.T) {
+	otelcolBin := resolveOtelcolBinary(t)
+	tempDir := t.TempDir()
+
+	metaSrv := httptest.NewServer(http.NotFoundHandler())
+	t.Cleanup(metaSrv.Close)
+	t.Setenv("GCE_METADATA_HOST", metaSrv.Listener.Addr().String())
+
+	const (
+		wantPolicySetID = "projects/my-project/locations/us-central1/policySets/ps-xds"
+		wantRevisionHex = "b2c3d479"
+	)
+
+	policyAny, err := anypb.New(&policyv1alpha1.HostMetricsSourcePolicy{
+		Id: wantPolicySetID + "/policies/hm-1",
+	})
+	if err != nil {
+		t.Fatalf("failed to pack HostMetricsSourcePolicy: %v", err)
+	}
+
+	tcAny, err := anypb.New(&xdsv1alpha1.TelemetryCollector{
+		PolicySetRevision: wantPolicySetID + "/revisions/" + wantRevisionHex,
+		Policies:          []*anypb.Any{policyAny},
+	})
+	if err != nil {
+		t.Fatalf("failed to pack TelemetryCollector: %v", err)
+	}
+
+	adsLn, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to listen for ADS server: %v", err)
+	}
+	adsSrv := grpc.NewServer()
+	discoveryv3.RegisterAggregatedDiscoveryServiceServer(adsSrv, &staticADSServer{
+		resp: &discoveryv3.DiscoveryResponse{
+			VersionInfo: wantRevisionHex,
+			TypeUrl:     "type.googleapis.com/google.telemetry.xds.v1alpha1.TelemetryCollector",
+			Nonce:       "nonce-1",
+			Resources:   []*anypb.Any{tcAny},
+		},
+	})
+	go func() {
+		_ = adsSrv.Serve(adsLn)
+	}()
+	t.Cleanup(func() {
+		adsSrv.Stop()
+	})
+
+	pipelineCfgPath, _, _, _, selfMockSrv := stageTestPipelineConfig(t, tempDir)
+	xdsURI := fmt.Sprintf("googlecontrolplane:xds://%s?project=my-project&region=us-central1&insecure=true", adsLn.Addr().String())
+
+	col := startCollectorWithURIs(t, otelcolBin, xdsURI, fmt.Sprintf("file:%s", filepath.ToSlash(pipelineCfgPath)))
+
+	// The single resource is accepted on the first response, so each metric
+	// settles on one data point: a connected stream, one valid update, and
+	// one resource in the acked state.
+	adsAddr := adsLn.Addr().String()
+	wantXDSPoints := map[string]struct {
+		value int64
+		attrs map[string]string
+	}{
+		"grpc.xds_client.connected": {
+			value: 1,
+			attrs: map[string]string{
+				"grpc.target":     adsAddr,
+				"grpc.xds.server": adsAddr,
+			},
+		},
+		"grpc.xds_client.resource_updates_valid": {
+			value: 1,
+			attrs: map[string]string{
+				"grpc.target":            adsAddr,
+				"grpc.xds.server":        adsAddr,
+				"grpc.xds.resource_type": "TelemetryCollector",
+			},
+		},
+		"grpc.xds_client.resources": {
+			value: 1,
+			attrs: map[string]string{
+				"grpc.target":            adsAddr,
+				"grpc.xds.authority":     "telemetry-director.us-central1.xds.googleapis.com",
+				"grpc.xds.cache_state":   "acked",
+				"grpc.xds.resource_type": "TelemetryCollector",
+			},
+		},
+	}
+
+	// Wait for the latest export to match, not for the first one to arrive:
+	// an export taken before the resource is acked reports other values.
+	gotXDSPoints := map[string][]selfMetricPoint{}
+	allMatch := waitCondition(10*time.Second, 50*time.Millisecond, func() bool {
+		batches := selfMockSrv.CollectedMetrics()
+		_, _, match := latestPolicySetActive(batches)
+		for name, want := range wantXDSPoints {
+			got := latestSelfMetricPoints(batches, name)
+			gotXDSPoints[name] = got
+			if len(got) != 1 || got[0].value != want.value || !cmp.Equal(got[0].attrs, want.attrs) {
+				match = false
+			}
+		}
+		return match
+	})
+
+	value, attrs, foundActive := latestPolicySetActive(selfMockSrv.CollectedMetrics())
+	col.shutdown(t)
+
+	if !allMatch {
+		t.Fatalf("timed out waiting for xDS self-metrics on selfMockSrv\nwant: %+v\ngot:  %+v\n%s found: %v\ncollector logs:\n%s",
+			wantXDSPoints, gotXDSPoints, googlecontrolplaneextension.MetricPolicySetActive, foundActive, col.logs())
+	}
+
+	// The self metrics pipeline copies these identity attributes from the
+	// resource onto every data point. The transform processor in this test
+	// collector is a stand-in that does not do the copy, so check them on the
+	// resource they are copied from.
+	for name, points := range gotXDSPoints {
+		resourceAttrs := points[0].resourceAttrs
+		if got, want := resourceAttrs["gcp.fleet_id"], "projects/my-project/locations/us-central1/fleets/test-fleet"; got != want {
+			t.Errorf("%s: resource attribute gcp.fleet_id = %q, want %q", name, got, want)
+		}
+		if resourceAttrs["service.instance.id"] == "" {
+			t.Errorf("%s: resource attribute service.instance.id is missing or empty, resource attributes: %v", name, resourceAttrs)
+		}
+	}
+	if !foundActive || value != 0xb2c3d479 {
+		t.Errorf("%s = %d (found=%v), want %d", googlecontrolplaneextension.MetricPolicySetActive, value, foundActive, int64(0xb2c3d479))
+	}
+	if gotID := attrs[googlecontrolplaneextension.AttrPolicySetID]; gotID != wantPolicySetID {
+		t.Errorf("%s = %q, want %q", googlecontrolplaneextension.AttrPolicySetID, gotID, wantPolicySetID)
+	}
+}
+
 // TestPolicySetActiveSelfMetric_NotEmittedWithoutProvider verifies
 // that when the collector is started with a file config only (without
 // googlecontrolplaneprovider), self-o11y metrics (gcp.policy.set.active)
@@ -1796,6 +1960,65 @@ func latestPolicySetActive(batches []pmetric.Metrics) (int64, map[string]string,
 		}
 	}
 	return value, attrs, found
+}
+
+// selfMetricPoint is one integer data point of a collector self metric,
+// together with the attributes of the resource it was exported under.
+type selfMetricPoint struct {
+	value         int64
+	attrs         map[string]string
+	resourceAttrs map[string]string
+}
+
+// latestSelfMetricPoints returns the data points of the named gauge or sum
+// from the most recent collected batch that contains it.
+func latestSelfMetricPoints(batches []pmetric.Metrics, name string) []selfMetricPoint {
+	stringAttrs := func(m pcommon.Map) map[string]string {
+		out := map[string]string{}
+		m.Range(func(k string, v pcommon.Value) bool {
+			out[k] = v.AsString()
+			return true
+		})
+		return out
+	}
+
+	for b := len(batches) - 1; b >= 0; b-- {
+		var points []selfMetricPoint
+		rms := batches[b].ResourceMetrics()
+		for i := 0; i < rms.Len(); i++ {
+			resourceAttrs := stringAttrs(rms.At(i).Resource().Attributes())
+			sms := rms.At(i).ScopeMetrics()
+			for j := 0; j < sms.Len(); j++ {
+				ms := sms.At(j).Metrics()
+				for k := 0; k < ms.Len(); k++ {
+					m := ms.At(k)
+					if m.Name() != name {
+						continue
+					}
+					var dps pmetric.NumberDataPointSlice
+					switch m.Type() {
+					case pmetric.MetricTypeGauge:
+						dps = m.Gauge().DataPoints()
+					case pmetric.MetricTypeSum:
+						dps = m.Sum().DataPoints()
+					default:
+						continue
+					}
+					for l := 0; l < dps.Len(); l++ {
+						points = append(points, selfMetricPoint{
+							value:         dps.At(l).IntValue(),
+							attrs:         stringAttrs(dps.At(l).Attributes()),
+							resourceAttrs: resourceAttrs,
+						})
+					}
+				}
+			}
+		}
+		if len(points) > 0 {
+			return points
+		}
+	}
+	return nil
 }
 
 func extractAllLogBodies(batches []plog.Logs) []string {
@@ -2310,6 +2533,137 @@ func TestFileConfigMerge_ProviderOrderPrecedence(t *testing.T) {
 	}
 	if !found || value <= 0 {
 		t.Errorf("expected googlecontrolplaneprovider to override earlier file config's level: None and report positive gcp.policy.set.active revision, got found=%v value=%d\nlogs:\n%s", found, value, col.logs())
+	}
+}
+
+// mergeAppendFeatureGateID is the confmap feature gate that makes the lists
+// under service (extensions, pipeline receivers and pipeline exporters) append
+// across config sources instead of being replaced by the last source.
+const mergeAppendFeatureGateID = "confmap.enableMergeAppendOption"
+
+// mergeAppendEnabled reports whether confmap.enableMergeAppendOption is enabled
+// in this process.
+func mergeAppendEnabled() bool {
+	enabled := false
+	featuregate.GlobalRegistry().VisitAll(func(g *featuregate.Gate) {
+		if g.ID() == mergeAppendFeatureGateID {
+			enabled = g.IsEnabled()
+		}
+	})
+	return enabled
+}
+
+// TestFileConfigMerge_WithoutProviderKeepsDefaultReplace guards Collectors that
+// do not use a googlecontrolplane: URI. The provider is still registered, and
+// the Collector still creates it at startup, but that alone must not change how
+// their config sources are merged.
+//
+// It layers two file configs. The second one sets the exporters of a pipeline
+// the first one defined, which by default replaces the list, so logs reach only
+// the second config's destination. If confmap.enableMergeAppendOption were
+// turned on behind the user's back, the list would be appended to instead and
+// logs would be exported to both destinations.
+func TestFileConfigMerge_WithoutProviderKeepsDefaultReplace(t *testing.T) {
+	otelcolBin := resolveOtelcolBinary(t)
+	tempDir := t.TempDir()
+
+	if otelcolBin == "" {
+		// The in-process collector shares its feature gates with every test
+		// that ran before it, and the ones that use the provider leave this
+		// gate enabled. Start from the default instead.
+		was := mergeAppendEnabled()
+		if err := featuregate.GlobalRegistry().Set(mergeAppendFeatureGateID, false); err != nil {
+			t.Fatalf("failed to disable %s: %v", mergeAppendFeatureGateID, err)
+		}
+		t.Cleanup(func() {
+			_ = featuregate.GlobalRegistry().Set(mergeAppendFeatureGateID, was)
+		})
+	}
+
+	baseMockSrv, baseExporterAddr := startMockOTLPServer(t)
+	overrideMockSrv, overrideExporterAddr := startMockOTLPServer(t)
+	ports := allocateEphemeralPorts(t, 1)
+	receiverAddr := fmt.Sprintf("127.0.0.1:%d", ports[0])
+
+	baseCfg := fmt.Sprintf(`receivers:
+  otlp/in:
+    protocols:
+      grpc:
+        endpoint: %[1]s
+exporters:
+  otlp_grpc/base_out:
+    endpoint: %[2]s
+    sending_queue:
+      enabled: false
+    tls:
+      insecure: true
+  otlp_grpc/override_out:
+    endpoint: %[3]s
+    sending_queue:
+      enabled: false
+    tls:
+      insecure: true
+service:
+  telemetry:
+    metrics:
+      level: None
+  pipelines:
+    logs:
+      receivers: [otlp/in]
+      processors: []
+      exporters: [otlp_grpc/base_out]
+`, receiverAddr, baseExporterAddr, overrideExporterAddr)
+	baseCfgPath := filepath.Join(tempDir, "base.yaml")
+	if err := os.WriteFile(baseCfgPath, []byte(baseCfg), 0644); err != nil {
+		t.Fatalf("failed to write base.yaml: %v", err)
+	}
+
+	overrideCfg := `service:
+  pipelines:
+    logs:
+      exporters: [otlp_grpc/override_out]
+`
+	overrideCfgPath := filepath.Join(tempDir, "override.yaml")
+	if err := os.WriteFile(overrideCfgPath, []byte(overrideCfg), 0644); err != nil {
+		t.Fatalf("failed to write override.yaml: %v", err)
+	}
+
+	col := startCollectorWithURIs(
+		t,
+		otelcolBin,
+		fmt.Sprintf("file:%s", filepath.ToSlash(baseCfgPath)),
+		fmt.Sprintf("file:%s", filepath.ToSlash(overrideCfgPath)),
+	)
+
+	if otelcolBin == "" && mergeAppendEnabled() {
+		t.Errorf("%s was enabled by a collector that does not use a googlecontrolplane: URI", mergeAppendFeatureGateID)
+	}
+
+	conn, err := grpc.NewClient(receiverAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("failed to create gRPC client to %s: %v", receiverAddr, err)
+	}
+	t.Cleanup(func() {
+		_ = conn.Close()
+	})
+
+	const body = "MERGE_CHECK_LOG_LINE"
+	inputLogs := plog.NewLogs()
+	inputLogs.ResourceLogs().AppendEmpty().ScopeLogs().AppendEmpty().LogRecords().AppendEmpty().Body().SetStr(body)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if _, err := plogotlp.NewGRPCClient(conn).Export(ctx, plogotlp.NewExportRequestFromLogs(inputLogs)); err != nil {
+		t.Fatalf("failed to export logs: %v\nlogs:\n%s", err, col.logs())
+	}
+
+	col.shutdown(t)
+
+	if diff := cmp.Diff([]string{body}, extractAllLogBodies(overrideMockSrv.CollectedLogs())); diff != "" {
+		t.Errorf("override exporter bodies mismatch (-want +got):\n%s\nlogs:\n%s", diff, col.logs())
+	}
+	if got := extractAllLogBodies(baseMockSrv.CollectedLogs()); len(got) != 0 {
+		t.Errorf("base exporter received %v, want nothing: the override config must replace the pipeline's exporters, not append to them\nlogs:\n%s", got, col.logs())
 	}
 }
 

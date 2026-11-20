@@ -256,5 +256,46 @@ func TestCompileLogMatcherAndExtractor(t *testing.T) {
 		val, ok = bodyExt(googlepolicy.LogContext{Record: lrInt})
 		assert.True(t, ok)
 		assert.Equal(t, int64(123), val)
+
+		lrMap := plog.NewLogRecord()
+		lrMap.Body().SetEmptyMap().PutStr("env", "prod")
+		val, ok = bodyExt(googlepolicy.LogContext{Record: lrMap})
+		assert.True(t, ok)
+		assert.Equal(t, ValueToAny(lrMap.Body()), val)
 	})
+}
+
+func BenchmarkLogBodyExtractor(b *testing.B) {
+	bodyExt, err := CompileLogExtractor(&policyv1.LogFieldSelector{
+		Target: &policyv1.LogFieldSelector_RecordField{
+			RecordField: policyv1.LogRecordField_LOG_RECORD_FIELD_BODY,
+		},
+	})
+	require.NoError(b, err)
+
+	makeCtx := func(set func(pcommon.Value)) googlepolicy.LogContext {
+		lr := plog.NewLogRecord()
+		set(lr.Body())
+		return googlepolicy.LogContext{Record: lr}
+	}
+
+	cases := []struct {
+		name string
+		ctx  googlepolicy.LogContext
+	}{
+		{name: "string", ctx: makeCtx(func(v pcommon.Value) { v.SetStr("hello world") })},
+		{name: "empty_string", ctx: makeCtx(func(v pcommon.Value) { v.SetStr("") })},
+		{name: "empty", ctx: makeCtx(func(pcommon.Value) {})},
+		{name: "map", ctx: makeCtx(func(v pcommon.Value) { v.SetEmptyMap().PutStr("env", "prod") })},
+		{name: "int", ctx: makeCtx(func(v pcommon.Value) { v.SetInt(1000) })},
+	}
+
+	for _, tc := range cases {
+		b.Run(tc.name, func(b *testing.B) {
+			b.ReportAllocs()
+			for b.Loop() {
+				_, _ = bodyExt(tc.ctx)
+			}
+		})
+	}
 }

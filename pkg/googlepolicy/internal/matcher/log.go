@@ -127,15 +127,25 @@ func compileLogRecordFieldExtractor(field policyv1.LogRecordField) (LogTargetExt
 	switch field {
 	case policyv1.LogRecordField_LOG_RECORD_FIELD_BODY:
 		return func(ctx googlepolicy.LogContext) (any, bool) {
-			if ctx.Record == (plog.LogRecord{}) || ctx.Record.Body().Type() == pcommon.ValueTypeEmpty {
+			if ctx.Record == (plog.LogRecord{}) {
 				return nil, false
 			}
-			val := ValueToAny(ctx.Record.Body())
-			if s, ok := val.(string); ok {
+			body := ctx.Record.Body()
+			switch body.Type() {
+			case pcommon.ValueTypeEmpty:
+				return nil, false
+			case pcommon.ValueTypeStr:
+				s := body.Str()
 				if s == "" {
 					return nil, false
 				}
 				return s, true
+			}
+			// Non-string values (e.g., maps) may render to string via ValueToAny;
+			// return val directly to avoid re-boxing it into any.
+			val := ValueToAny(body)
+			if s, ok := val.(string); ok && s == "" {
+				return nil, false
 			}
 			return val, true
 		}, nil

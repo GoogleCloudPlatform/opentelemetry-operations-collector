@@ -37,10 +37,10 @@ COSIGN_BIN ?= $(TOOLS_DIR)/cosign
 SET_COSIGN_BIN_PATH ?= PATH="$(TOOLS_DIR):$$PATH"
 
 .PHONY: build
-build: $(COLLECTOR_BINARY_NAME)
+build: go ocb $(COLLECTOR_BINARY_NAME)
 
 .PHONY: build-win
-build-win: $(COLLECTOR_BINARY_NAME_EXE)
+build-win: go ocb $(COLLECTOR_BINARY_NAME_EXE)
 
 .PHONY: image
 image: image-build image-push
@@ -134,7 +134,7 @@ $(COLLECTOR_BUILD_DIR): $(OCB_BIN)
 	$(GO_COMMAND_ENV) $(OCB_BIN) --skip-compilation --verbose --config manifest.yaml
 
 .PHONY: ocb-generate
-ocb-generate: $(OCB_BIN) $(COLLECTOR_BUILD_DIR)
+ocb-generate: ocb $(COLLECTOR_BUILD_DIR)
 	$(GO_COMMAND_ENV) $(OCB_BIN) --skip-compilation $(if $(MODULE_UPDATE),,--skip-get-modules) --verbose --config manifest.yaml
 
 
@@ -213,10 +213,20 @@ local-container-goreleaser:
 # required for the build process.
 
 .PHONY: ocb
-ocb: $(OCB_BIN)
+ocb: go $(OCB_BIN)
+	@if [ "$$($(OCB_BIN) version 2>&1 | awk '{print $$NF}')" != "$(OTEL_VERSION_TAG)" ]; then \
+		echo "Detected out of date ocb version. Installing $(OTEL_VERSION_TAG)"; \
+		rm -f $(OCB_BIN); \
+		$(MAKE) $(OCB_BIN); \
+	fi
 
 .PHONY: go
 go: $(GO_BIN)
+	@if [ "$$($(GO_BIN) version 2>&1 | awk '{print $$3}')" != "go$(GO_VERSION)" ]; then \
+		echo "Detected out of date go version. Installing go$(GO_VERSION)"; \
+		rm -rf $(TOOLS_DIR)/go; \
+		$(MAKE) $(GO_BIN); \
+	fi
 
 .PHONY: goreleaser
 goreleaser: $(GORELEASER_BIN)
@@ -241,7 +251,8 @@ $(OCB_BIN): $(GO_BIN)
 	set -e ;\
 	mkdir -p $(TOOLS_DIR) ;\
 	echo "Installing ocb at $(TOOLS_DIR)" ;\
-	GOBIN=$(TOOLS_DIR) $(if $(USE_GO_PROXY),GOPROXY=$(USE_GO_PROXY),) CGO_ENABLED=0 GOARCH=$(BUILDARCH) $(GO_BIN) install -trimpath -ldflags="-s -w" go.opentelemetry.io/collector/cmd/builder@$(OTEL_VERSION_TAG) ;\
+	GOWORK=off $(if $(USE_GO_PROXY),GOPROXY=$(USE_GO_PROXY),) $(GO_BIN) mod download go.opentelemetry.io/collector/cmd/builder@$(OTEL_VERSION_TAG) ;\
+	GOBIN=$(TOOLS_DIR) GOWORK=off $(if $(USE_GO_PROXY),GOPROXY=$(USE_GO_PROXY),) CGO_ENABLED=0 GOARCH=$(BUILDARCH) $(GO_BIN) install -trimpath -ldflags="-s -w" go.opentelemetry.io/collector/cmd/builder@$(OTEL_VERSION_TAG) ;\
 	mv $(TOOLS_DIR)/builder $(OCB_BIN) ;\
 	}
 

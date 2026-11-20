@@ -1,7 +1,11 @@
 .PHONY: update-components
 update-components: export OTEL_VERSION := $(OTEL_VERSION)
 update-components: export OTEL_CONTRIB_VERSION := $(OTEL_CONTRIB_VERSION)
-update-components: update-deps tidy-components generate-components
+update-components:
+	$(MAKE) generate-components
+	$(MAKE) tidy-components
+	$(MAKE) update-deps
+	$(MAKE) tidy-components
 
 .PHONY: update-deps
 update-deps:

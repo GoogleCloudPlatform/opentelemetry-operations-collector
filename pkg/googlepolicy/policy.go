@@ -61,6 +61,7 @@ var (
 	ErrPolicyNotFound           = errors.New("policy not found")
 	ErrPolicyTypeFieldMissing   = errors.New("critical policy field 'type' was not found")
 	ErrPolicyTypeFieldWrongType = errors.New("critical policy field 'type' is not a string")
+	ErrDuplicatePolicyID        = errors.New("conflicting duplicate policy id")
 )
 
 // PolicyClass is the class of a policy. https://xkcd.com/703/
@@ -338,14 +339,19 @@ type PolicySetEntry struct {
 	Error     error
 }
 
+type protoPolicy interface {
+	Proto() proto.Message
+}
+
 // MakePolicySet builds a PolicySet from raw policy configs on a best-effort
 // basis: every config that cannot be turned into a valid Policy is skipped and
-// recorded, and the successfully loaded ones are still returned.
+// recorded, and the successfully loaded ones are still returned. Identical
+// duplicate policy IDs are deduplicated as a no-op; conflicting policies that
+// share an ID are rejected so neither takes effect.
 //
 // The returned PolicySet is always non-nil, so a non-nil error does not mean
-// there is nothing usable. Callers decide how strict to be: compare
-// len(ps.Policies) against the number of inputs to detect a partial set, and
-// reject the whole thing if that is not acceptable.
+// there is nothing usable. Callers decide how strict to be by inspecting the
+// returned error and ps.FailedPolicies.
 func MakePolicySet(revisionID string, rawPolicyConfigs []map[string]any) (*PolicySet, error) {
 	ps, err := makePolicySet(
 		"",
@@ -370,11 +376,17 @@ func MakePolicySet(revisionID string, rawPolicyConfigs []map[string]any) (*Polic
 			}
 			return loadPolicyWithClass(policyType, rawPolicyConfig)
 		},
-		func(i int, rawPolicyConfig map[string]any) string {
+		func(rawPolicyConfig map[string]any) (string, bool) {
 			if id, ok := rawPolicyConfig["id"].(string); ok && id != "" {
-				return id
+				return id, true
 			}
-			return fmt.Sprintf("index_%d", i)
+			return "", false
+		},
+		func(prevRaw map[string]any, prevPolicy Policy, newRaw map[string]any, newPolicy Policy) bool {
+			if prevRaw["type"] != newRaw["type"] {
+				return false
+			}
+			return policiesEqual(prevPolicy, newPolicy)
 		},
 	)
 	ps.PolicySetID = derivePolicySetID(ps)
@@ -386,7 +398,9 @@ func MakePolicySet(revisionID string, rawPolicyConfigs []map[string]any) (*Polic
 // PolicySet revision resource name.
 //
 // Each policy is routed to a driver by its message type, so no "type" field is
-// read from -- or needed in -- the policy body.
+// read from -- or needed in -- the policy body. Identical duplicate policy IDs
+// are deduplicated as a no-op (via proto.Equal); conflicting policies that
+// share an ID are rejected so neither takes effect.
 func MakePolicySetFromProtos(policySetID, revisionID string, msgs []proto.Message) (*PolicySet, error) {
 	return makePolicySet(
 		policySetID,
@@ -401,22 +415,63 @@ func MakePolicySetFromProtos(policySetID, revisionID string, msgs []proto.Messag
 			}
 			return p, class, nil
 		},
-		func(i int, msg proto.Message) string {
+		func(msg proto.Message) (string, bool) {
 			if idGetter, ok := msg.(interface{ GetId() string }); ok {
 				if id := idGetter.GetId(); id != "" {
-					return id
+					return id, true
 				}
 			}
-			return fmt.Sprintf("index_%d", i)
+			return "", false
+		},
+		func(prevMsg proto.Message, prevPolicy Policy, newMsg proto.Message, newPolicy Policy) bool {
+			if prevPolicy.PolicyType() != newPolicy.PolicyType() || prevPolicy.PolicyClass() != newPolicy.PolicyClass() {
+				return false
+			}
+			pa, okA := prevPolicy.(protoPolicy)
+			pb, okB := newPolicy.(protoPolicy)
+			if okA && okB {
+				if paMsg, pbMsg := pa.Proto(), pb.Proto(); paMsg != nil && pbMsg != nil {
+					return proto.Equal(paMsg, pbMsg)
+				}
+				return false
+			}
+			if okA != okB {
+				return false
+			}
+			return proto.Equal(prevMsg, newMsg)
 		},
 	)
+}
+
+func policiesEqual(a, b Policy) bool {
+	if a.PolicyType() != b.PolicyType() || a.PolicyClass() != b.PolicyClass() {
+		return false
+	}
+	pa, okA := a.(protoPolicy)
+	pb, okB := b.(protoPolicy)
+	if okA && okB {
+		if paMsg, pbMsg := pa.Proto(), pb.Proto(); paMsg != nil && pbMsg != nil {
+			return proto.Equal(paMsg, pbMsg)
+		}
+		return false
+	}
+	if okA != okB {
+		return false
+	}
+	return reflect.DeepEqual(a, b)
 }
 
 // makePolicySet accumulates whatever load can make sense of, collecting the
 // failures rather than stopping at the first one. It is the shared body of
 // MakePolicySet and MakePolicySetFromProtos, which differ only in how a single
 // input is turned into a Policy.
-func makePolicySet[T any](policySetID, revisionID string, inputs []T, load func(int, T) (Policy, PolicyClass, error), idOf func(int, T) string) (*PolicySet, error) {
+func makePolicySet[T any](
+	policySetID, revisionID string,
+	inputs []T,
+	load func(int, T) (Policy, PolicyClass, error),
+	explicitIDOf func(T) (string, bool),
+	equal func(prevIn T, prevPolicy Policy, newIn T, newPolicy Policy) bool,
+) (*PolicySet, error) {
 	ps := &PolicySet{
 		Policies:    make(map[string]*PolicySetEntry, len(inputs)),
 		PolicySetID: policySetID,
@@ -425,20 +480,81 @@ func makePolicySet[T any](policySetID, revisionID string, inputs []T, load func(
 	}
 
 	errs := make([]error, 0, len(inputs))
+	seenInputs := make(map[string]T, len(inputs))
+	conflicted := make(map[string]bool)
+	failedIDs := make(map[string]PolicyClass)
+
+	recordConflict := func(id string, class PolicyClass) {
+		if conflicted[id] {
+			return
+		}
+		conflicted[id] = true
+		delete(ps.Policies, id)
+		conflictErr := fmt.Errorf("%w: %w: %q", ErrPolicyFailedValidation, ErrDuplicatePolicyID, id)
+		errs = append(errs, conflictErr)
+		ps.FailedPolicies = append(ps.FailedPolicies, FailedPolicy{
+			ID:    id,
+			Class: class,
+			Err:   conflictErr,
+		})
+	}
 
 	for i, in := range inputs {
 		p, class, err := load(i, in)
 		if err != nil {
+			id, hasExplicitID := explicitIDOf(in)
+			failedID := id
+			if !hasExplicitID {
+				failedID = fmt.Sprintf("index_%d", i)
+			}
 			errs = append(errs, err)
 			ps.FailedPolicies = append(ps.FailedPolicies, FailedPolicy{
-				ID:    idOf(i, in),
+				ID:    failedID,
 				Class: class,
 				Err:   err,
 			})
+			if hasExplicitID {
+				if existing, exists := ps.Policies[id]; exists {
+					conflictClass := class
+					if existing.PolicyObj.PolicyClass() != class {
+						conflictClass = ""
+					}
+					recordConflict(id, conflictClass)
+				} else if prevClass, alreadyFailed := failedIDs[id]; !alreadyFailed {
+					failedIDs[id] = class
+				} else if prevClass != class {
+					failedIDs[id] = ""
+				}
+			}
 			continue
 		}
 
-		ps.Policies[p.PolicyName()] = &PolicySetEntry{PolicyObj: p}
+		name := p.PolicyName()
+		if conflicted[name] {
+			continue
+		}
+		if prevClass, failed := failedIDs[name]; failed {
+			conflictClass := class
+			if prevClass != class {
+				conflictClass = ""
+			}
+			recordConflict(name, conflictClass)
+			continue
+		}
+		if existing, exists := ps.Policies[name]; exists {
+			if equal(seenInputs[name], existing.PolicyObj, in, p) {
+				continue
+			}
+			conflictClass := class
+			if existing.PolicyObj.PolicyClass() != class {
+				conflictClass = ""
+			}
+			recordConflict(name, conflictClass)
+			continue
+		}
+
+		ps.Policies[name] = &PolicySetEntry{PolicyObj: p}
+		seenInputs[name] = in
 	}
 
 	return ps, errors.Join(errs...)

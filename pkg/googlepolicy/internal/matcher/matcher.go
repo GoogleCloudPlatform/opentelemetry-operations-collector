@@ -476,9 +476,11 @@ func findExistingParentMap(attrs pcommon.Map, prefix []PathStep) (pcommon.Map, b
 	return curr, true
 }
 
-// ValueToAny converts a pcommon.Value into the plain Go value that the
-// predicates operate on. Returning plain values rather than pcommon.Value keeps
-// the hot path free of pdata allocations.
+// ValueToAny converts a pcommon.Value into the representation that predicates
+// operate on. Scalars and slices become plain Go values to avoid pdata
+// allocations; maps are returned as pcommon.Map (never serialized to a string)
+// so existence evaluates to true while scalar, string, and slice predicates
+// evaluate to false without extra allocations.
 func ValueToAny(v pcommon.Value) any {
 	switch v.Type() {
 	case pcommon.ValueTypeEmpty:
@@ -500,8 +502,10 @@ func ValueToAny(v pcommon.Value) any {
 			res[i] = ValueToAny(s.At(i))
 		}
 		return res
+	case pcommon.ValueTypeMap:
+		return v.Map()
 	default:
-		return v.AsString()
+		return nil
 	}
 }
 
@@ -513,16 +517,11 @@ func valueEquals(val any, expected *policyv1.Value) bool {
 		s, ok := asString(val)
 		return ok && s == exp.StringValue
 	case *policyv1.Value_IntValue:
-		if n, ok := toInt64(val); ok {
-			return n == exp.IntValue
-		}
-		if f, ok := toFloat64(val); ok {
-			return f == float64(exp.IntValue)
-		}
-		return false
+		cmp, ok := compareWithInt64(val, exp.IntValue)
+		return ok && cmp == 0
 	case *policyv1.Value_DoubleValue:
-		f, ok := toFloat64(val)
-		return ok && f == exp.DoubleValue
+		cmp, ok := compareWithFloat64(val, exp.DoubleValue)
+		return ok && cmp == 0
 	case *policyv1.Value_BoolValue:
 		b, ok := val.(bool)
 		return ok && b == exp.BoolValue
@@ -612,29 +611,17 @@ func valueContains(val any, expected *policyv1.Value) bool {
 // NumericValue, returning -1, 0, or 1. The second result is false when the
 // extracted value is not numeric or the expected value is unset.
 func compareNumeric(val any, expected *policyv1.NumericValue) (int, bool) {
-	intVal, isInt := toInt64(val)
-	floatVal, isFloat := toFloat64(val)
-	if !isInt && !isFloat {
-		return 0, false
-	}
-
 	switch exp := expected.GetKind().(type) {
 	case *policyv1.NumericValue_IntValue:
-		if isInt {
-			return compare(intVal, exp.IntValue), true
-		}
-		return compare(floatVal, float64(exp.IntValue)), true
+		return compareWithInt64(val, exp.IntValue)
 	case *policyv1.NumericValue_DoubleValue:
-		if math.IsNaN(exp.DoubleValue) {
-			return 0, false
-		}
-		return compare(floatVal, exp.DoubleValue), true
+		return compareWithFloat64(val, exp.DoubleValue)
 	default:
 		return 0, false
 	}
 }
 
-func compare[T int64 | float64](a, b T) int {
+func compare[T int64 | uint64 | float64](a, b T) int {
 	switch {
 	case a < b:
 		return -1
@@ -676,49 +663,130 @@ func asBytes(val any) ([]byte, bool) {
 	}
 }
 
-func toFloat64(val any) (float64, bool) {
+// compareWithInt64 compares a numeric val against an int64 expected value by
+// exact mathematical value without lossy int64->float64 casts.
+func compareWithInt64(val any, expected int64) (int, bool) {
 	switch v := val.(type) {
-	case float64:
-		if math.IsNaN(v) {
-			return 0, false
-		}
-		return v, true
-	case float32:
-		f := float64(v)
-		if math.IsNaN(f) {
-			return 0, false
-		}
-		return f, true
 	case int64:
-		return float64(v), true
+		return compare(v, expected), true
 	case int:
-		return float64(v), true
+		return compare(int64(v), expected), true
 	case int32:
-		return float64(v), true
-	case uint64:
-		return float64(v), true
+		return compare(int64(v), expected), true
 	case uint32:
-		return float64(v), true
+		return compare(int64(v), expected), true
+	case uint64:
+		if v <= math.MaxInt64 {
+			return compare(int64(v), expected), true
+		}
+		return 1, true
+	case float64:
+		cmp, ok := compareInt64Float64(expected, v)
+		return -cmp, ok
+	case float32:
+		cmp, ok := compareInt64Float64(expected, float64(v))
+		return -cmp, ok
 	default:
 		return 0, false
 	}
 }
 
-func toInt64(val any) (int64, bool) {
+// compareWithFloat64 compares a numeric val against a float64 expected value by
+// exact mathematical value without lossy int64->float64 casts.
+func compareWithFloat64(val any, expected float64) (int, bool) {
+	if math.IsNaN(expected) {
+		return 0, false
+	}
 	switch v := val.(type) {
+	case float64:
+		if math.IsNaN(v) {
+			return 0, false
+		}
+		return compare(v, expected), true
+	case float32:
+		f := float64(v)
+		if math.IsNaN(f) {
+			return 0, false
+		}
+		return compare(f, expected), true
 	case int64:
-		return v, true
+		return compareInt64Float64(v, expected)
 	case int:
-		return int64(v), true
+		return compareInt64Float64(int64(v), expected)
 	case int32:
-		return int64(v), true
-	case uint64:
-		return int64(v), true
+		return compareInt64Float64(int64(v), expected)
 	case uint32:
-		return int64(v), true
+		return compareInt64Float64(int64(v), expected)
+	case uint64:
+		if v <= math.MaxInt64 {
+			return compareInt64Float64(int64(v), expected)
+		}
+		return compareUint64Float64(v, expected)
 	default:
 		return 0, false
 	}
+}
+
+// compareInt64Float64 compares an int64 and float64 by exact mathematical value.
+// Returns (0, false) when f is NaN.
+func compareInt64Float64(i int64, f float64) (int, bool) {
+	if math.IsNaN(f) {
+		return 0, false
+	}
+	// -2^63 is exactly representable as float64 (-0x1p63), as is 2^63 (0x1p63).
+	// Every int64 lies in [-2^63, 2^63 - 1], and every float64 in [-2^63, 2^63)
+	// has a truncated integer part in [-2^63, 2^63 - 1024] that converts to
+	// int64 without overflow or loss of precision.
+	if f < -0x1p63 {
+		return 1, true
+	}
+	if f >= 0x1p63 {
+		return -1, true
+	}
+	trunc := math.Trunc(f)
+	fi := int64(trunc)
+	if i < fi {
+		return -1, true
+	}
+	if i > fi {
+		return 1, true
+	}
+	if f > trunc {
+		return -1, true
+	}
+	if f < trunc {
+		return 1, true
+	}
+	return 0, true
+}
+
+// compareUint64Float64 compares a uint64 and float64 by exact mathematical value.
+// Returns (0, false) when f is NaN.
+func compareUint64Float64(u uint64, f float64) (int, bool) {
+	if math.IsNaN(f) {
+		return 0, false
+	}
+	if f < 0 {
+		return 1, true
+	}
+	// 2^64 (0x1p64) is exactly representable as float64; every float64 in
+	// [0, 2^64) has a truncated integer part in [0, 2^64 - 2048] that converts
+	// to uint64 without overflow or loss of precision.
+	if f >= 0x1p64 {
+		return -1, true
+	}
+	trunc := math.Trunc(f)
+	fu := uint64(trunc)
+	if u < fu {
+		return -1, true
+	}
+	if u > fu {
+		return 1, true
+	}
+	if f > trunc {
+		return -1, true
+	}
+	return 0, true
 }
 
 // CompileStringRedactor compiles an optional RE2 regex pattern and replacement

@@ -13,10 +13,15 @@ tidy:
 generate:
 	go generate ./...
 
+# Fuzz each target individually (`go test -fuzz` allows one package and one target per run).
 .PHONY: fuzz
+FUZZ_FIND := find .
+FUZZ_FIND += \( -name .git -o -name .tools \) -prune                  # skip .git and .tools
+FUZZ_FIND += -o ! -path . -type d -exec test -f '{}/go.mod' \; -prune # skip nested go.mod
+FUZZ_FIND += -o -name '*_test.go' -exec grep -l '^func Fuzz' {} +     # find Fuzz tests
 fuzz:
 	@set -eu; \
-	dirs=$$(find . \( -name '.git' -o -name '.tools' \) -prune -o \( ! -path . -type d -exec test -f '{}/go.mod' \; -prune \) -o \( -name '*_test.go' -type f -exec grep -l '^func Fuzz' {} + \) | while IFS= read -r f; do dirname "$$f"; done | sort -u); \
+	dirs=$$($(FUZZ_FIND) | xargs -r dirname | sort -u); \
 	for dir in $$dirs; do \
 		list=$$(go test -list='^Fuzz' "$$dir"); \
 		for target in $$(printf '%s\n' "$$list" | grep '^Fuzz' || true); do \

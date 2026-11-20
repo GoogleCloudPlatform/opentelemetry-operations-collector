@@ -206,7 +206,6 @@ processors:
                 - set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil
                 - delete_key(attributes, "gcp.telemetry_type")
 receivers:
-    nop/googlecontrolplane: {}
     otlp/default_self_metrics:
         protocols:
             grpc:
@@ -216,6 +215,12 @@ receivers:
                     server_parameters: {}
                 read_buffer_size: 524288
                 transport: tcp
+    otlp/googlecontrolplane:
+        protocols:
+            grpc:
+                endpoint: 127.0.0.1:4317
+            http:
+                endpoint: 127.0.0.1:4318
     windowseventlog/application_9ce1051c5d63c61f:
         channel: Application
         exclude_providers:
@@ -274,7 +279,7 @@ service:
                 - queue_batch/default_gcp_destination_batch_logs
                 - queue_batch/default_gcp_destination_split_logs
             receivers:
-                - nop/googlecontrolplane
+                - otlp/googlecontrolplane
                 - windowseventlog/application_9ce1051c5d63c61f
                 - windowseventlog/microsoft-windows-sysmon_operational_6ebeeb3b09fcec02
                 - windowseventlog/security_c3a409ae6f7ebfb4
@@ -299,7 +304,7 @@ service:
                 - queue_batch/default_gcp_destination_batch_metrics
                 - queue_batch/default_gcp_destination_split_metrics
             receivers:
-                - nop/googlecontrolplane
+                - otlp/googlecontrolplane
         traces/googlecontrolplane:
             exporters:
                 - otlp_grpc/default_gcp_destination
@@ -310,7 +315,7 @@ service:
                 - queue_batch/default_gcp_destination_batch_traces
                 - queue_batch/default_gcp_destination_split_traces
             receivers:
-                - nop/googlecontrolplane
+                - otlp/googlecontrolplane
     telemetry:
         logs:
             encoding: console

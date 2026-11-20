@@ -551,25 +551,35 @@ func (p *provider) evaluatePolicySet(ctx context.Context, collectorID string, fl
 		return nil, true, fmt.Errorf("failed to merge workload resource processors config: %w", err)
 	}
 
-	// Fallback nop receiver for canonical pipelines, allowing local config.yaml to append receivers
-	nopType, _ := component.NewType("nop")
-	nopReceiverID := component.NewIDWithName(nopType, "googlecontrolplane")
-	nopConf := &otelcol.Config{
-		Receivers: map[component.ID]component.Config{
-			nopReceiverID: map[string]any{},
+	// Built-in loopback OTLP receiver for canonical workload pipelines.
+	otlpType, _ := component.NewType("otlp")
+	otlpReceiverID := component.NewIDWithName(otlpType, "googlecontrolplane")
+	otlpCfg := map[string]any{
+		"protocols": map[string]any{
+			"grpc": map[string]any{
+				"endpoint": "127.0.0.1:4317",
+			},
+			"http": map[string]any{
+				"endpoint": "127.0.0.1:4318",
+			},
 		},
 	}
-	nopCm := confmap.New()
-	if err := nopCm.Marshal(nopConf); err != nil {
-		return nil, true, fmt.Errorf("failed to marshal nop receiver config: %w", err)
+	otlpConf := &otelcol.Config{
+		Receivers: map[component.ID]component.Config{
+			otlpReceiverID: component.Config(otlpCfg),
+		},
 	}
-	if err := conf.Merge(cleanConf(nopCm)); err != nil {
-		return nil, true, fmt.Errorf("failed to merge nop receiver config: %w", err)
+	otlpCm := confmap.New()
+	if err := otlpCm.Marshal(otlpConf); err != nil {
+		return nil, true, fmt.Errorf("failed to marshal otlp receiver config: %w", err)
+	}
+	if err := conf.Merge(cleanConf(otlpCm)); err != nil {
+		return nil, true, fmt.Errorf("failed to merge otlp receiver config: %w", err)
 	}
 
-	activeLogReceivers := []component.ID{nopReceiverID}
-	activeMetricReceivers := []component.ID{nopReceiverID}
-	activeTraceReceivers := []component.ID{nopReceiverID}
+	activeLogReceivers := []component.ID{otlpReceiverID}
+	activeMetricReceivers := []component.ID{otlpReceiverID}
+	activeTraceReceivers := []component.ID{otlpReceiverID}
 
 	// Load all source policies from the active policy set.
 	sourcePolicies := p.consolidateSourcePolicies(ctx, activePolicySet, activePolicySet.LoadPoliciesOfClass(googlepolicy.PolicyClassSource))

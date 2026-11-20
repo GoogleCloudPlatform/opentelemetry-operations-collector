@@ -585,26 +585,30 @@ func TestPolicyMatchingAndDrop(t *testing.T) {
 	})
 }
 
-// TestIDFieldsMatchHexAndBytes pins the dual representation of the native
+// TestIDFieldsMatchHexOnly pins the representation of the native
 // pcommon.TraceID / pcommon.SpanID values returned by the ID extractors: string
-// predicates see the lowercase hex spelling, bytes predicates see the raw bytes.
-func TestIDFieldsMatchHexAndBytes(t *testing.T) {
+// predicates see the lowercase hex spelling, while bytes_value predicates
+// evaluate to false.
+func TestIDFieldsMatchHexOnly(t *testing.T) {
 	span, scope, res := newTestSpanBundle()
 
 	tests := []struct {
 		name      string
 		field     policyv1.SpanRecordField
 		predicate *policyv1.Predicate
+		want      bool
 	}{
 		{
 			name:      "trace id equals hex string",
 			field:     policyv1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID,
 			predicate: equalsString(testTraceIDHex),
+			want:      true,
 		},
 		{
 			name:      "trace id glob on hex string",
 			field:     policyv1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID,
 			predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Glob{Glob: "0102*0f10"}},
+			want:      true,
 		},
 		{
 			name:  "trace id contains hex substring",
@@ -612,68 +616,79 @@ func TestIDFieldsMatchHexAndBytes(t *testing.T) {
 			predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Containment{
 				Containment: &policyv1.Value{Kind: &policyv1.Value_StringValue{StringValue: "090a0b0c"}},
 			}},
+			want: true,
 		},
 		{
-			name:  "trace id equals raw bytes",
+			name:  "trace id equals raw bytes does not match",
 			field: policyv1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID,
 			predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
 				Equality: &policyv1.Value{Kind: &policyv1.Value_BytesValue{BytesValue: testTraceIDBytes[:]}},
 			}},
+			want: false,
 		},
 		{
-			name:  "trace id contains raw byte subsequence",
+			name:  "trace id contains raw byte subsequence does not match",
 			field: policyv1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID,
 			predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Containment{
 				Containment: &policyv1.Value{Kind: &policyv1.Value_BytesValue{BytesValue: []byte{0x03, 0x04, 0x05}}},
 			}},
+			want: false,
 		},
 		{
 			name:      "span id equals hex string",
 			field:     policyv1.SpanRecordField_SPAN_RECORD_FIELD_SPAN_ID,
 			predicate: equalsString(testSpanIDHex),
+			want:      true,
 		},
 		{
 			name:      "span id glob on hex string",
 			field:     policyv1.SpanRecordField_SPAN_RECORD_FIELD_SPAN_ID,
 			predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Glob{Glob: "0102030405060708"}},
+			want:      true,
 		},
 		{
-			name:  "span id equals raw bytes",
+			name:  "span id equals raw bytes does not match",
 			field: policyv1.SpanRecordField_SPAN_RECORD_FIELD_SPAN_ID,
 			predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
 				Equality: &policyv1.Value{Kind: &policyv1.Value_BytesValue{BytesValue: testSpanIDBytes[:]}},
 			}},
+			want: false,
 		},
 		{
-			name:  "span id contains raw byte subsequence",
+			name:  "span id contains raw byte subsequence does not match",
 			field: policyv1.SpanRecordField_SPAN_RECORD_FIELD_SPAN_ID,
 			predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Containment{
 				Containment: &policyv1.Value{Kind: &policyv1.Value_BytesValue{BytesValue: []byte{0x06, 0x07, 0x08}}},
 			}},
+			want: false,
 		},
 		{
 			name:      "parent span id equals hex string",
 			field:     policyv1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID,
 			predicate: equalsString(testParentSpanIDHex),
+			want:      true,
 		},
 		{
 			name:      "parent span id glob on hex string",
 			field:     policyv1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID,
 			predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Glob{Glob: "0a0b*"}},
+			want:      true,
 		},
 		{
-			name:  "parent span id equals raw bytes",
+			name:  "parent span id equals raw bytes does not match",
 			field: policyv1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID,
 			predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Equality{
 				Equality: &policyv1.Value{Kind: &policyv1.Value_BytesValue{BytesValue: testParentSpanIDBytes[:]}},
 			}},
+			want: false,
 		},
 		{
-			name:  "parent span id contains raw byte subsequence",
+			name:  "parent span id contains raw byte subsequence does not match",
 			field: policyv1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID,
 			predicate: &policyv1.Predicate{Kind: &policyv1.Predicate_Containment{
 				Containment: &policyv1.Value{Kind: &policyv1.Value_BytesValue{BytesValue: []byte{0x0f, 0x10, 0x11}}},
 			}},
+			want: false,
 		},
 	}
 
@@ -681,7 +696,7 @@ func TestIDFieldsMatchHexAndBytes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			pol, err := NewPolicyFromProto(dropPolicy("id-"+tt.name, recordFieldTarget(tt.field), tt.predicate, false))
 			require.NoError(t, err)
-			assert.True(t, matchesTrace(pol, span, scope, res))
+			assert.Equal(t, tt.want, matchesTrace(pol, span, scope, res))
 		})
 	}
 
@@ -777,9 +792,9 @@ func TestZeroIDsReportAbsent(t *testing.T) {
 //     `containment`), a root span matches against the empty string `\"\"`."
 //
 // Satisfying both at once is why the extractor returns a present-but-empty
-// ("", false) for a root span rather than the (nil, false) that TRACE_ID and
-// SPAN_ID use: matcher.present() keys off val != nil, so the string predicates
-// still run while `existence` stays false.
+// ("", false) for a root span (matching TRACE_ID and SPAN_ID): matcher.present()
+// keys off val != nil, so string predicates still run while `existence` stays
+// false.
 //
 // This restores the coverage that was lost when
 // googlepolicyprocessor.TestEvaluator_TraceAllTargetsAndRootSpanParentID was
@@ -854,13 +869,11 @@ func TestRootSpanParentSpanIDEmptyString(t *testing.T) {
 	})
 }
 
-// TestZeroTraceAndSpanIDDoNotMatchEmptyString is the counterpart to
-// TestRootSpanParentSpanIDEmptyString: SPAN_RECORD_FIELD_TRACE_ID and
-// SPAN_RECORD_FIELD_SPAN_ID have NO empty-string contract in the proto (see
-// trace_filter_policy.proto:141-151, which only describes the hex spelling), so
-// their extractors return a genuinely absent (nil, false) and every value
-// predicate — including equals "" — must report no match.
-func TestZeroTraceAndSpanIDDoNotMatchEmptyString(t *testing.T) {
+// TestZeroTraceAndSpanIDMatchEmptyString verifies that empty/all-zero
+// SPAN_RECORD_FIELD_TRACE_ID and SPAN_RECORD_FIELD_SPAN_ID match empty string
+// predicates consistently with SPAN_RECORD_FIELD_PARENT_SPAN_ID while still
+// reporting existence=false.
+func TestZeroTraceAndSpanIDMatchEmptyString(t *testing.T) {
 	bareSpan := ptrace.NewSpan()
 	bareSpan.SetName("no-ids")
 	scope := ptrace.NewScopeSpans()
@@ -875,8 +888,8 @@ func TestZeroTraceAndSpanIDDoNotMatchEmptyString(t *testing.T) {
 		t.Run(field.String()+" equals empty string", func(t *testing.T) {
 			pol, err := NewPolicyFromProto(dropPolicy("zero-"+field.String(), recordFieldTarget(field), equalsString(""), false))
 			require.NoError(t, err)
-			assert.False(t, matchesTrace(pol, bareSpan, scope, res))
-			assert.Equal(t, googlepolicy.FilterNoMatch, evalTrace(pol, bareSpan, scope, res))
+			assert.True(t, matchesTrace(pol, bareSpan, scope, res))
+			assert.Equal(t, googlepolicy.FilterDrop, evalTrace(pol, bareSpan, scope, res))
 		})
 
 		t.Run(field.String()+" glob empty", func(t *testing.T) {
@@ -887,7 +900,7 @@ func TestZeroTraceAndSpanIDDoNotMatchEmptyString(t *testing.T) {
 				false,
 			))
 			require.NoError(t, err)
-			assert.False(t, matchesTrace(pol, bareSpan, scope, res))
+			assert.True(t, matchesTrace(pol, bareSpan, scope, res))
 		})
 
 		t.Run(field.String()+" contains empty string", func(t *testing.T) {
@@ -899,6 +912,12 @@ func TestZeroTraceAndSpanIDDoNotMatchEmptyString(t *testing.T) {
 				}},
 				false,
 			))
+			require.NoError(t, err)
+			assert.True(t, matchesTrace(pol, bareSpan, scope, res))
+		})
+
+		t.Run(field.String()+" non-empty string does not match", func(t *testing.T) {
+			pol, err := NewPolicyFromProto(dropPolicy("zero-non-empty-"+field.String(), recordFieldTarget(field), equalsString("0000000000000000"), false))
 			require.NoError(t, err)
 			assert.False(t, matchesTrace(pol, bareSpan, scope, res))
 		})

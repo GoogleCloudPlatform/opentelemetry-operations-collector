@@ -134,7 +134,7 @@ func compileSpanRecordFieldExtractor(field policyv1.SpanRecordField) (TraceTarge
 			}
 			tid := ctx.Span.TraceID()
 			if tid.IsEmpty() {
-				return nil, false
+				return "", false
 			}
 			return tid, true
 		}, nil
@@ -146,7 +146,7 @@ func compileSpanRecordFieldExtractor(field policyv1.SpanRecordField) (TraceTarge
 			}
 			sid := ctx.Span.SpanID()
 			if sid.IsEmpty() {
-				return nil, false
+				return "", false
 			}
 			return sid, true
 		}, nil

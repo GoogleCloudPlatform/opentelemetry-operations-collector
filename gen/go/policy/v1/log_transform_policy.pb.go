@@ -95,8 +95,8 @@ type LogTransformPolicy struct {
 	// applied in list order after all matching policies' `additions` and before
 	// `redactions`.
 	Removals []*LogRemoval `protobuf:"bytes,5,rep,name=removals,proto3" json:"removals,omitempty"`
-	// Stage 4: String redaction operations, applied in list order after all
-	// matching policies' `renamings`, `additions`, and `removals`.
+	// Stage 4: Redaction operations, applied in list order after all matching
+	// policies' `renamings`, `additions`, and `removals`.
 	Redactions    []*LogRedaction `protobuf:"bytes,6,rep,name=redactions,proto3" json:"redactions,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -202,9 +202,8 @@ type LogAddition struct {
 	// Missing intermediate map segments in a multi-element `AttributePath`
 	// (`log_attribute_path` or `body_field_path`) are created automatically. When
 	// an intermediate path segment already exists as a non-map value (scalar or
-	// array), `upsert_enabled: false` fails open (preserving the existing value)
-	// while `upsert_enabled: true` replaces the intermediate non-map value with a
-	// map.
+	// array), the operation fails open (no-op, preserving the existing value)
+	// regardless of `upsert_enabled`.
 	UpsertEnabled *bool `protobuf:"varint,3,opt,name=upsert_enabled,json=upsertEnabled,proto3,oneof" json:"upsert_enabled,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -346,9 +345,8 @@ type LogRenaming struct {
 	// Missing intermediate map segments in a multi-element `AttributePath`
 	// (`log_attribute_path` or `body_field_path`) are created automatically. When
 	// an intermediate path segment already exists as a non-map value (scalar or
-	// array), `upsert_enabled: false` fails open (preserving the existing value)
-	// while `upsert_enabled: true` replaces the intermediate non-map value with a
-	// map.
+	// array), the operation fails open (no-op, preserving the existing value)
+	// regardless of `upsert_enabled`.
 	UpsertEnabled *bool `protobuf:"varint,3,opt,name=upsert_enabled,json=upsertEnabled,proto3,oneof" json:"upsert_enabled,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -405,27 +403,36 @@ func (x *LogRenaming) GetUpsertEnabled() bool {
 	return false
 }
 
-// Masks sensitive substrings within a target string.
+// Masks sensitive values or substrings on a target log record field, attribute,
+// or structured body field.
 //
-// When `target` is `record_field`, valid targets are string-valued fields
-// (`LOG_RECORD_FIELD_BODY` when string-valued, and
-// `LOG_RECORD_FIELD_SEVERITY_TEXT`). `LOG_RECORD_FIELD_SEVERITY_NUMBER`,
+// When `pattern` is unset (whole-field redaction), any present non-`ValueTypeEmpty`
+// value on `log_attribute_path` or `body_field_path` (of any `AnyValue` type,
+// including `""`), any present non-empty `LOG_RECORD_FIELD_BODY` (of any
+// `AnyValue` type), and any non-empty `LOG_RECORD_FIELD_SEVERITY_TEXT` is
+// replaced with the replacement string. Absent targets, `ValueTypeEmpty`
+// values, empty `body` (`ValueTypeEmpty` or `""`), and empty `severity_text`
+// (`""`) are no-ops. When `regex` is set, redaction applies to string values
+// only (non-string values yield no change).
+//
+// When `target` is `record_field`, valid targets are `LOG_RECORD_FIELD_BODY`
+// and `LOG_RECORD_FIELD_SEVERITY_TEXT`. `LOG_RECORD_FIELD_SEVERITY_NUMBER`,
 // `LOG_RECORD_FIELD_TRACE_ID`, and `LOG_RECORD_FIELD_SPAN_ID` are not valid
 // mutation targets.
 type LogRedaction struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// Target string field, attribute, or `body_field_path` to redact.
+	// Target field, attribute, or `body_field_path` to redact.
 	Target *LogTargetSelector `protobuf:"bytes,1,opt,name=target,proto3" json:"target,omitempty"`
-	// Optional pattern selecting which substrings of the target string to mask.
-	// If unset, the entire target string is replaced.
+	// Optional pattern selecting which substrings of a string target to mask.
+	// If unset, the entire target value is replaced (whole-field redaction).
 	//
 	// Types that are valid to be assigned to Pattern:
 	//
 	//	*LogRedaction_Regex
 	Pattern isLogRedaction_Pattern `protobuf_oneof:"pattern"`
 	// Optional masking strategy applied to matched substrings (or to the entire
-	// target string when `pattern` is unset). If unset, matched text is replaced
-	// with `""`.
+	// target value when `pattern` is unset). If unset, matched text or the target
+	// value is replaced with `"[REDACTED]"`.
 	//
 	// Types that are valid to be assigned to Mask:
 	//
@@ -509,8 +516,10 @@ type isLogRedaction_Pattern interface {
 }
 
 type LogRedaction_Regex struct {
-	// RE2 regular expression matching substrings within the target string to
-	// redact. If empty, the entire target value is replaced.
+	// RE2 regular expression matching substrings within a string target to
+	// redact. Must be non-empty when set; leave `pattern` unset for
+	// whole-field redaction. Applies to string values only (non-string targets
+	// yield no change).
 	Regex string `protobuf:"bytes,2,opt,name=regex,proto3,oneof"`
 }
 
@@ -521,8 +530,9 @@ type isLogRedaction_Mask interface {
 }
 
 type LogRedaction_Replacement struct {
-	// Literal replacement string (e.g. "[REDACTED]"). Supports RE2 capture
-	// group references ($1, ${name}) when `regex` is set.
+	// Literal replacement string (e.g. "[REDACTED]", or `""` to strip matched
+	// text). Defaults to `"[REDACTED]"` when `mask` is unset. Supports RE2
+	// capture group references ($1, ${name}) when `regex` is set.
 	Replacement string `protobuf:"bytes,3,opt,name=replacement,proto3,oneof"`
 }
 
@@ -624,9 +634,10 @@ type LogTargetSelector_RecordField struct {
 	//     `ValueTypeEmpty` and `""` as absent when `upsert_enabled: false`),
 	//     `LOG_RECORD_FIELD_SEVERITY_TEXT` (`string_value`), and
 	//     `LOG_RECORD_FIELD_SEVERITY_NUMBER` (`int_value` in `[1, 24]`).
-	//   - For `LogRedaction`, valid `record_field` targets are string-valued
-	//     fields (`LOG_RECORD_FIELD_BODY` when string-valued, and
-	//     `LOG_RECORD_FIELD_SEVERITY_TEXT`).
+	//   - For `LogRedaction`, valid `record_field` targets are
+	//     `LOG_RECORD_FIELD_BODY` (any present non-empty `AnyValue` when
+	//     `pattern` is unset; string-valued only when `regex` is set) and
+	//     `LOG_RECORD_FIELD_SEVERITY_TEXT` (when non-empty).
 	//
 	// `LOG_RECORD_FIELD_SEVERITY_NUMBER` and `LOG_RECORD_FIELD_SEVERITY_TEXT`
 	// are independent OTLP fields (mutating one does not automatically derive

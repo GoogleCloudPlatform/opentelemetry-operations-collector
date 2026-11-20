@@ -188,3 +188,45 @@ func TestCompileTraceExtractor_Errors(t *testing.T) {
 	})
 	require.Error(t, err)
 }
+
+func TestTraceIDAndSpanIDEmptyConsistency(t *testing.T) {
+	emptySpan := ptrace.NewSpan()
+	emptyCtx := googlepolicy.TraceContext{Span: emptySpan}
+
+	for _, field := range []policyv1.SpanRecordField{
+		policyv1.SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID,
+		policyv1.SpanRecordField_SPAN_RECORD_FIELD_SPAN_ID,
+		policyv1.SpanRecordField_SPAN_RECORD_FIELD_PARENT_SPAN_ID,
+	} {
+		t.Run(field.String(), func(t *testing.T) {
+			target := &policyv1.TraceFieldSelector{
+				Target: &policyv1.TraceFieldSelector_RecordField{RecordField: field},
+			}
+			ext, err := CompileTraceExtractor(target)
+			require.NoError(t, err)
+
+			val, ok := ext(emptyCtx)
+			assert.False(t, ok)
+			assert.Equal(t, "", val)
+
+			zeroVal, zeroOK := ext(googlepolicy.TraceContext{})
+			assert.False(t, zeroOK)
+			assert.Nil(t, zeroVal)
+
+			existsMatcher, err := CompileTraceMatcher(&policyv1.TraceMatcher{
+				Target:    target,
+				Predicate: predExists(),
+			})
+			require.NoError(t, err)
+			assert.False(t, existsMatcher.Eval(emptyCtx))
+
+			eqEmpty, err := CompileTraceMatcher(&policyv1.TraceMatcher{
+				Target:    target,
+				Predicate: predEquals(strValue("")),
+			})
+			require.NoError(t, err)
+			assert.True(t, eqEmpty.Eval(emptyCtx))
+			assert.False(t, eqEmpty.Eval(googlepolicy.TraceContext{}))
+		})
+	}
+}

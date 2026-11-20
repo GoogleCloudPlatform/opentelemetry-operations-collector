@@ -250,9 +250,10 @@ func PathExists(attrs pcommon.Map, steps []PathStep) bool {
 // CompilePathSetter pre-compiles an AttributePath and Value into a closure that
 // inserts or overwrites the target attribute in a pcommon.Map.
 //
-// Intermediate maps are created automatically when missing. When upsert is
-// false and either the leaf key or an intermediate non-map key already exists,
-// the returned closure leaves the map unmodified and returns false.
+// Intermediate maps are created automatically when missing. When an existing
+// intermediate segment is not a map, the closure leaves the map unmodified and
+// returns false regardless of upsert. When upsert is false and the leaf key
+// already exists, the closure leaves the map unmodified and returns false.
 func CompilePathSetter(attrPath *policyv1.AttributePath, kind string, val *policyv1.Value, upsert bool) (func(pcommon.Map) bool, error) {
 	steps, err := CompilePath(attrPath, kind)
 	if err != nil {
@@ -284,7 +285,7 @@ func CompilePathSetter(attrPath *policyv1.AttributePath, kind string, val *polic
 		if attrs == (pcommon.Map{}) {
 			return false
 		}
-		parent, ok := resolveParentMap(attrs, prefix, upsert)
+		parent, ok := resolveParentMap(attrs, prefix)
 		if !ok {
 			return false
 		}
@@ -300,9 +301,11 @@ func CompilePathSetter(attrPath *policyv1.AttributePath, kind string, val *polic
 
 // CompilePathValueSetter pre-compiles an AttributePath into a closure that
 // inserts or overwrites the target attribute with a given pcommon.Value.
-// Intermediate maps are created automatically when missing. When upsert is
-// false and the target already exists (as a leaf or intermediate non-map),
-// the returned closure leaves the map unmodified and returns false.
+// Intermediate maps are created automatically when missing. When an existing
+// intermediate segment is not a map, the closure leaves the map unmodified and
+// returns false regardless of upsert. When upsert is false and the target
+// already exists (as a leaf or intermediate non-map), the returned closure
+// leaves the map unmodified and returns false.
 func CompilePathValueSetter(attrPath *policyv1.AttributePath, kind string, upsert bool) (func(pcommon.Map, pcommon.Value) bool, error) {
 	steps, err := CompilePath(attrPath, kind)
 	if err != nil {
@@ -334,7 +337,7 @@ func CompilePathValueSetter(attrPath *policyv1.AttributePath, kind string, upser
 		if !upsert && PathExists(attrs, steps) {
 			return false
 		}
-		parent, ok := resolveParentMap(attrs, prefix, upsert)
+		parent, ok := resolveParentMap(attrs, prefix)
 		if !ok {
 			return false
 		}
@@ -350,11 +353,12 @@ func CompilePathValueSetter(attrPath *policyv1.AttributePath, kind string, upser
 }
 
 // resolveParentMap walks prefix segments in attrs, creating missing
-// intermediate maps on the fly. Because an existing key (intermediate or leaf)
-// can only be reached if every ancestor map in prefix already existed, single-
-// pass map creation never leaves behind partial intermediate maps when !upsert
-// returns false.
-func resolveParentMap(attrs pcommon.Map, prefix []PathStep, upsert bool) (pcommon.Map, bool) {
+// intermediate maps on the fly. If any existing intermediate segment is not a
+// map, it returns (pcommon.Map{}, false) without modifying attrs. Because an
+// existing key (intermediate or leaf) can only be reached if every ancestor map
+// in prefix already existed, single-pass map creation never leaves behind
+// partial intermediate maps when returning false.
+func resolveParentMap(attrs pcommon.Map, prefix []PathStep) (pcommon.Map, bool) {
 	curr := attrs
 	for _, step := range prefix {
 		child, exists := curr.Get(step.Key)
@@ -362,14 +366,10 @@ func resolveParentMap(attrs pcommon.Map, prefix []PathStep, upsert bool) (pcommo
 			curr = curr.PutEmptyMap(step.Key)
 			continue
 		}
-		if child.Type() == pcommon.ValueTypeMap {
-			curr = child.Map()
-			continue
-		}
-		if !upsert {
+		if child.Type() != pcommon.ValueTypeMap {
 			return pcommon.Map{}, false
 		}
-		curr = curr.PutEmptyMap(step.Key)
+		curr = child.Map()
 	}
 	return curr, true
 }
@@ -661,19 +661,11 @@ func asString(val any) (string, bool) {
 	}
 }
 
-// asBytes exposes the byte-like extracted values, including the raw bytes
-// behind a TraceID or SpanID.
+// asBytes exposes byte-slice extracted values. Identifier fields (TraceID and
+// SpanID) match canonical lowercase hex strings only, never raw bytes_value.
 func asBytes(val any) ([]byte, bool) {
-	switch v := val.(type) {
-	case []byte:
-		return v, true
-	case pcommon.TraceID:
-		return v[:], true
-	case pcommon.SpanID:
-		return v[:], true
-	default:
-		return nil, false
-	}
+	b, ok := val.([]byte)
+	return b, ok
 }
 
 func toFloat64(val any) (float64, bool) {

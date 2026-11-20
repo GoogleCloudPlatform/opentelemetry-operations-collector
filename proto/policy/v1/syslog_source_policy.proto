@@ -1,0 +1,116 @@
+// Copyright 2026 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+package google.telemetry.policy.v1;
+
+option go_package = "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1;policyv1";
+
+// Enables syslog log collection (`syslog` receiver) over TCP or UDP using raw
+// syslog framing (`protocol: none`, decoding a leading `<PRI>` header into
+// OpenTelemetry severity fields and `facility` / `facility_text` / `priority`
+// log attributes while preserving the raw syslog message in `LogRecord.body`).
+//
+// Policies are declarative, atomic, and transport-agnostic.
+//
+// Valid Policies:
+// - `id` is a non-empty, non-whitespace string identifying the policy within
+//   its configuration scope.
+// - Exactly one `transport` branch (`tcp` or `udp`) is set.
+// - `listen_address` is an explicit IP literal and port (`IPv4:port` or
+//   `[IPv6]:port`), where the IP is dotted-decimal IPv4 (no leading zeros) or
+//   bracketed IPv6 (no zone ID), and the port is a decimal integer in
+//   `[1, 65535]` (no leading zeros). Examples: `"127.0.0.1:1514"`,
+//   `"0.0.0.0:514"`, `"[::1]:1514"`, `"[::]:5514"`.
+// - On hosts with privileged-port restrictions (for example Linux ports below
+//   `net.ipv4.ip_unprivileged_port_start`, default `1024`), binding a
+//   privileged port requires the collector process to hold the necessary
+//   effective OS capability (`CAP_NET_BIND_SERVICE` on Linux, for example via
+//   systemd `AmbientCapabilities=CAP_NET_BIND_SERVICE` while staying non-root).
+//
+// Invalid Policies (Rejected Atomically / Fail-Open):
+// - Empty or whitespace-only `id`.
+// - Unset `transport` oneof.
+// - Empty or whitespace-containing `listen_address`, embedded NUL bytes, or
+//   `$` characters (preventing confmap `${...}` environment expansion).
+// - Bare ports (`":514"`), DNS hostnames (`"localhost:514"`), unbracketed
+//   IPv6 addresses (`"::1:514"`), or IPv6 zone IDs (`"[fe80::1%eth0]:514"`).
+// - Port `0`, out-of-range ports (`> 65535`), or leading zeros in IPv4 octets
+//   or port numbers (for example `"010.0.0.1:514"` or `"127.0.0.1:0514"`).
+// - Unknown protobuf fields (rejected atomically so future schema extensions
+//   are never applied partially).
+// - Privileged ports (`port < net.ipv4.ip_unprivileged_port_start` on Linux)
+//   when the collector lacks `CAP_NET_BIND_SERVICE` in its effective capability
+//   set. Collectors must pre-check bind capability before triggering a receiver
+//   reload so an unbindable policy is skipped individually (or NACKed if no
+//   usable policies remain in the revision) rather than crash-looping the
+//   collector on `EACCES`. Note: `EADDRINUSE` (port already bound by another
+//   process such as `rsyslog`) cannot be safely pre-checked with a trial
+//   `net.Listen` because it self-collides during hot-reload.
+//
+// Evaluation, Deduplication & Security Guardrails:
+// - Default Disposition: Syslog log collection is disabled unless at least one
+//   valid SyslogSourcePolicy is configured.
+// - Order-Independent Deduplication: Multiple valid SyslogSourcePolicy
+//   instances merge via the set union of canonical `(transport, listen_address)`
+//   pairs (normalizing IPv6 formatting and unmapping IPv4-mapped IPv6 literals
+//   such as `[::ffff:127.0.0.1]:1514` to `127.0.0.1:1514`), synthesizing one
+//   shared `syslog/<id>` receiver per unique listener.
+// - Non-Root & Network Isolation: Listeners run plaintext with no TLS or client
+//   authentication. Prefer loopback (`127.0.0.1` / `[::1]`) for local
+//   forwarding, or restrict network/wildcard (`0.0.0.0` / `[::]`) ingress with
+//   host or VPC firewalls. On Linux VMs, prefer an unprivileged port (`>= 1024`,
+//   such as `1514`, `5140`, or `10514`) directly or behind a load balancer when
+//   possible; when direct binding on port `514` is required, grant
+//   `CAP_NET_BIND_SERVICE` via a systemd drop-in (`AmbientCapabilities`) while
+//   staying non-root. Host-level `nftables`/`iptables` redirects or local
+//   `rsyslog` forwarding are last-resort fallbacks only.
+// - Built-in TCP Defaults: Synthesized TCP receivers cap `max_connections` at
+//   `1024`, preserve the upstream `syslogreceiver` `max_log_size` default of
+//   `1 MiB` (`1048576` bytes; lines exceeding `max_log_size` fail with
+//   `bufio.ErrTooLong` and close the connection), and leave
+//   `connection_idle_timeout` unset (`0`) so Go TCP keepalives reap dead peers
+//   without churning quiet persistent syslog streams.
+message SyslogSourcePolicy {
+  // Configures a TCP syslog listener framing messages on newline (`\n`).
+  message TcpEndpoint {
+    // Explicit IPv4 or bracketed IPv6 `IP:port` address to listen on over TCP
+    // (for example, `"127.0.0.1:1514"`, `"0.0.0.0:1514"`, or `"[::1]:1514"`).
+    // Required.
+    string listen_address = 1;
+  }
+
+  // Configures a UDP syslog listener treating each datagram as one log record.
+  message UdpEndpoint {
+    // Explicit IPv4 or bracketed IPv6 `IP:port` address to listen on over UDP
+    // (for example, `"127.0.0.1:1514"`, `"0.0.0.0:1514"`, or `"[::1]:1514"`).
+    // Required.
+    string listen_address = 1;
+  }
+
+  // Unique identifier for the policy within its configuration scope. Required;
+  // must be non-empty and non-whitespace.
+  string id = 1;
+
+  // Network transport and local socket address to listen on. Exactly one must
+  // be set.
+  oneof transport {
+    // TCP syslog listener configuration.
+    TcpEndpoint tcp = 2;
+
+    // UDP syslog listener configuration.
+    UdpEndpoint udp = 3;
+  }
+}

@@ -1,5 +1,3 @@
-FUZZTIME ?= 5s
-
 # TODO: This could be better
 .PHONY: test
 test:
@@ -15,6 +13,7 @@ generate:
 
 # Fuzz each target individually (`go test -fuzz` allows one package and one target per run).
 .PHONY: fuzz
+FUZZTIME ?= 5s
 FUZZ_FIND := find .
 FUZZ_FIND += \( -name .git -o -name .tools \) -prune                  # skip .git and .tools
 FUZZ_FIND += -o ! -path . -type d -exec test -f '{}/go.mod' \; -prune # skip nested go.mod

@@ -30,6 +30,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/confmap"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestPolicy_Validation(t *testing.T) {
@@ -482,6 +483,25 @@ func TestDriver_LoadPolicy(t *testing.T) {
 		wp, ok := pol.(*Policy)
 		require.True(t, ok)
 		assert.Equal(t, []string{"Security", "System"}, wp.Channels())
+		assert.True(t, proto.Equal(&policyv1.WindowsEventLogSourcePolicy{
+			Id:       "host-windows-logs",
+			Channels: []string{"Security", "System"},
+		}, wp.Proto()))
+		assert.Nil(t, (*Policy)(nil).Proto())
+	})
+
+	t.Run("duplicate policy IDs deduplicate when identical and fail when conflicting", func(t *testing.T) {
+		t.Parallel()
+		rawA := map[string]any{"type": PolicyType, "id": "win-dup", "channels": []any{"Security"}}
+		rawB := map[string]any{"type": PolicyType, "id": "win-dup", "channels": []any{"System"}}
+
+		psSame, err := googlepolicy.MakePolicySet("rev-same", []map[string]any{rawA, rawA})
+		require.NoError(t, err)
+		assert.Len(t, psSame.Policies, 1)
+
+		psConflict, err := googlepolicy.MakePolicySet("rev-conflict", []map[string]any{rawA, rawB})
+		require.ErrorIs(t, err, googlepolicy.ErrDuplicatePolicyID)
+		assert.Empty(t, psConflict.Policies)
 	})
 
 	t.Run("load from missing id", func(t *testing.T) {

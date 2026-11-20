@@ -123,6 +123,14 @@ func (p *Policy) PolicyClass() googlepolicy.PolicyClass {
 	return googlepolicy.PolicyClassSource
 }
 
+// Proto returns the underlying protobuf message for this policy.
+func (p *Policy) Proto() proto.Message {
+	if p == nil || p.proto == nil {
+		return nil
+	}
+	return p.proto
+}
+
 // canonicalChannel returns the trimmed, case-folded form of a Windows Event Log channel name.
 // Case folding follows Windows invariant ordinal uppercase rules so that deduplication,
 // consolidation, and receiver ID hash derivation use the exact same canonical representation.

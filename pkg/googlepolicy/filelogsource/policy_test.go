@@ -601,6 +601,26 @@ func TestDriver_WireProtoAndMapLoading(t *testing.T) {
 	srcPolicy, ok := mapEntry.PolicyObj.(*Policy)
 	require.True(t, ok)
 	assert.Equal(t, []string{"/opt/services/logs/*.log"}, srcPolicy.IncludedPaths())
+	assert.True(t, proto.Equal(&policyv1.FileLogSourcePolicy{
+		Id:            "authored-log-source",
+		IncludedPaths: []string{"/opt/services/logs/*.log"},
+	}, srcPolicy.Proto()))
+
+	// 3. Identical duplicate source policies deduplicate as a no-op; conflicting ones are rejected.
+	psDup, err := googlepolicy.MakePolicySet("rev-dup", []map[string]any{rawConfig[0], rawConfig[0]})
+	require.NoError(t, err)
+	assert.Len(t, psDup.Policies, 1)
+
+	psConflict, err := googlepolicy.MakePolicySet("rev-conflict", []map[string]any{
+		rawConfig[0],
+		{
+			"type":           PolicyType,
+			"id":             "authored-log-source",
+			"included_paths": []any{"/var/log/different/*.log"},
+		},
+	})
+	require.ErrorIs(t, err, googlepolicy.ErrDuplicatePolicyID)
+	assert.Empty(t, psConflict.Policies)
 }
 
 func TestPolicyValidation_CustomApplicationPaths(t *testing.T) {

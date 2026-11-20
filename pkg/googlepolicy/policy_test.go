@@ -213,6 +213,7 @@ func TestPolicySet_MarkAndClone(t *testing.T) {
 type driverTestPolicy struct {
 	Name        string `mapstructure:"name"`
 	Type        string `mapstructure:"type"`
+	Tag         string `mapstructure:"tag"`
 	FailVal     bool   `mapstructure:"fail_val"`
 	FailLoadErr bool   `mapstructure:"-"`
 }
@@ -962,5 +963,273 @@ func TestProtoDriver_AtomicFailOpenOnUnknownFieldsEnumsAndOneofs(t *testing.T) {
 		err = checkNoUnknownFields(st.ProtoReflect())
 		require.Error(t, err)
 		assert.ErrorIs(t, err, ErrPolicyUnknownFields)
+	})
+}
+
+type protoBackedTestPolicy struct {
+	pb    proto.Message
+	name  string
+	pType string
+	class PolicyClass
+}
+
+func (p *protoBackedTestPolicy) PolicyName() string       { return p.name }
+func (p *protoBackedTestPolicy) PolicyType() string       { return p.pType }
+func (p *protoBackedTestPolicy) PolicyClass() PolicyClass { return p.class }
+func (p *protoBackedTestPolicy) Validate() error          { return nil }
+func (p *protoBackedTestPolicy) Proto() proto.Message     { return p.pb }
+
+func TestMakePolicySet_DuplicatePolicyIDs(t *testing.T) {
+	logFilterDriver := ProtoDriver[*policyv1.LogFilterPolicy]{
+		Class: PolicyClassTransformation,
+		New: func(pb *policyv1.LogFilterPolicy) (Policy, error) {
+			if pb == nil || pb.GetId() == "" {
+				return nil, errors.New("id required")
+			}
+			if pb.GetAction() == policyv1.Action_ACTION_UNSPECIFIED {
+				return nil, errors.New("action required")
+			}
+			return &protoBackedTestPolicy{
+				pb:    proto.Clone(pb),
+				name:  pb.GetId(),
+				pType: "dup_test_log_filter",
+				class: PolicyClassTransformation,
+			}, nil
+		},
+	}
+	fileSourceDriver := ProtoDriver[*policyv1.FileLogSourcePolicy]{
+		Class: PolicyClassSource,
+		New: func(pb *policyv1.FileLogSourcePolicy) (Policy, error) {
+			if pb == nil || pb.GetId() == "" {
+				return nil, errors.New("id required")
+			}
+			return &protoBackedTestPolicy{
+				pb:    proto.Clone(pb),
+				name:  pb.GetId(),
+				pType: "dup_test_file_source",
+				class: PolicyClassSource,
+			}, nil
+		},
+	}
+
+	lfProtoName := (&policyv1.LogFilterPolicy{}).ProtoReflect().Descriptor().FullName()
+	fsProtoName := (&policyv1.FileLogSourcePolicy{}).ProtoReflect().Descriptor().FullName()
+	unregisterForTest(t, "dup_test_log_filter", lfProtoName)
+	unregisterForTest(t, "dup_test_file_source", fsProtoName)
+	require.NoError(t, RegisterPolicyDriver("dup_test_log_filter", logFilterDriver))
+	require.NoError(t, RegisterPolicyDriver("dup_test_file_source", fileSourceDriver))
+
+	dropPol := func(id string) *policyv1.LogFilterPolicy {
+		return &policyv1.LogFilterPolicy{
+			Id:     id,
+			Action: policyv1.Action_ACTION_DROP.Enum(),
+			Matchers: []*policyv1.LogMatcher{
+				{
+					Target: &policyv1.LogFieldSelector{
+						Target: &policyv1.LogFieldSelector_RecordField{
+							RecordField: policyv1.LogRecordField_LOG_RECORD_FIELD_BODY,
+						},
+					},
+					Predicate: &policyv1.Predicate{
+						Kind: &policyv1.Predicate_Existence{Existence: &emptypb.Empty{}},
+					},
+				},
+			},
+		}
+	}
+	keepPol := func(id string) *policyv1.LogFilterPolicy {
+		p := dropPol(id)
+		p.Action = policyv1.Action_ACTION_KEEP.Enum()
+		return p
+	}
+
+	t.Run("MakePolicySetFromProtos deduplicates identical duplicates as no-op", func(t *testing.T) {
+		ps, err := MakePolicySetFromProtos("ps-id", "rev-1", []proto.Message{
+			dropPol("pol-1"),
+			dropPol("pol-1"),
+			keepPol("pol-2"),
+		})
+		require.NoError(t, err)
+		assert.Len(t, ps.Policies, 2)
+		assert.Contains(t, ps.Policies, "pol-1")
+		assert.Contains(t, ps.Policies, "pol-2")
+		assert.Empty(t, ps.FailedPolicies)
+	})
+
+	t.Run("MakePolicySetFromProtos rejects conflicting policies sharing id while keeping siblings", func(t *testing.T) {
+		ps, err := MakePolicySetFromProtos("ps-id", "rev-2", []proto.Message{
+			dropPol("pol-conflict"),
+			keepPol("pol-conflict"),
+			dropPol("pol-conflict"), // 3rd occurrence must not resurrect conflicted ID
+			keepPol("pol-sibling"),
+		})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrDuplicatePolicyID)
+		assert.ErrorIs(t, err, ErrPolicyFailedValidation)
+		assert.Equal(t, "policy_failed_validation", ClassifyPolicyError(err))
+
+		assert.NotContains(t, ps.Policies, "pol-conflict")
+		assert.Contains(t, ps.Policies, "pol-sibling")
+		require.Len(t, ps.FailedPolicies, 1)
+		assert.Equal(t, "pol-conflict", ps.FailedPolicies[0].ID)
+		assert.Equal(t, PolicyClassTransformation, ps.FailedPolicies[0].Class)
+		assert.ErrorIs(t, ps.FailedPolicies[0].Err, ErrDuplicatePolicyID)
+	})
+
+	t.Run("MakePolicySetFromProtos rejects cross-type and cross-class duplicate id", func(t *testing.T) {
+		ps, err := MakePolicySetFromProtos("ps-id", "rev-cross", []proto.Message{
+			dropPol("shared-id"),
+			&policyv1.FileLogSourcePolicy{Id: "shared-id", IncludedPaths: []string{"/var/log/app.log"}},
+		})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrDuplicatePolicyID)
+		assert.Empty(t, ps.Policies)
+		require.Len(t, ps.FailedPolicies, 1)
+		assert.Equal(t, "shared-id", ps.FailedPolicies[0].ID)
+		assert.Equal(t, PolicyClass(""), ps.FailedPolicies[0].Class)
+	})
+
+	t.Run("MakePolicySetFromProtos rejects mixed valid and invalid sharing id in either order", func(t *testing.T) {
+		invalid := &policyv1.LogFilterPolicy{Id: "mixed-id"} // missing action
+		valid := dropPol("mixed-id")
+
+		for _, tc := range []struct {
+			name string
+			msgs []proto.Message
+		}{
+			{"valid then invalid", []proto.Message{valid, invalid}},
+			{"invalid then valid", []proto.Message{invalid, valid}},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				ps, err := MakePolicySetFromProtos("ps-id", "rev-mixed", tc.msgs)
+				require.Error(t, err)
+				assert.ErrorIs(t, err, ErrDuplicatePolicyID)
+				assert.NotContains(t, ps.Policies, "mixed-id")
+			})
+		}
+
+		// Cross-class invalid entries followed by a valid entry clear FailedPolicy.Class regardless of order.
+		invalidSource := &policyv1.FileLogSourcePolicy{Id: "cross-mixed"}
+		invalidSource.ProtoReflect().SetUnknown(protowire.AppendVarint(protowire.AppendTag(nil, 99, protowire.VarintType), 1))
+		invalidTransform := &policyv1.LogFilterPolicy{Id: "cross-mixed"}
+		validTransform := dropPol("cross-mixed")
+
+		for _, tc := range []struct {
+			name string
+			msgs []proto.Message
+		}{
+			{"invalid transform, invalid source, valid transform", []proto.Message{invalidTransform, invalidSource, validTransform}},
+			{"invalid source, invalid transform, valid transform", []proto.Message{invalidSource, invalidTransform, validTransform}},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				ps, err := MakePolicySetFromProtos("ps-id", "rev-cross-mixed", tc.msgs)
+				require.Error(t, err)
+				assert.ErrorIs(t, err, ErrDuplicatePolicyID)
+				assert.NotContains(t, ps.Policies, "cross-mixed")
+				var dupFP *FailedPolicy
+				for i := range ps.FailedPolicies {
+					if errors.Is(ps.FailedPolicies[i].Err, ErrDuplicatePolicyID) {
+						dupFP = &ps.FailedPolicies[i]
+						break
+					}
+				}
+				require.NotNil(t, dupFP)
+				assert.Equal(t, PolicyClass(""), dupFP.Class)
+			})
+		}
+	})
+
+	t.Run("MakePolicySet deduplicates identical proto JSON policies and rejects conflicting ones", func(t *testing.T) {
+		rawDrop := map[string]any{
+			"type":   "dup_test_log_filter",
+			"id":     "json-pol",
+			"action": "ACTION_DROP",
+		}
+		rawDropCopy := map[string]any{
+			"action": "ACTION_DROP",
+			"id":     "json-pol",
+			"type":   "dup_test_log_filter",
+		}
+		rawKeep := map[string]any{
+			"type":   "dup_test_log_filter",
+			"id":     "json-pol",
+			"action": "ACTION_KEEP",
+		}
+		rawSibling := map[string]any{
+			"type":   "dup_test_log_filter",
+			"id":     "json-sibling",
+			"action": "ACTION_KEEP",
+		}
+
+		// Identical duplicates -> no-op
+		psDup, err := MakePolicySet("rev-json-dup", []map[string]any{rawDrop, rawDropCopy, rawSibling})
+		require.NoError(t, err)
+		assert.Len(t, psDup.Policies, 2)
+		assert.Empty(t, psDup.FailedPolicies)
+
+		// Conflicting duplicates -> rejected, sibling preserved
+		psConflict, err := MakePolicySet("rev-json-conflict", []map[string]any{rawDrop, rawKeep, rawSibling})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrDuplicatePolicyID)
+		assert.ErrorIs(t, err, ErrPolicyFailedValidation)
+		assert.NotContains(t, psConflict.Policies, "json-pol")
+		assert.Contains(t, psConflict.Policies, "json-sibling")
+		require.Len(t, psConflict.FailedPolicies, 1)
+		assert.Equal(t, "json-pol", psConflict.FailedPolicies[0].ID)
+	})
+
+	t.Run("MakePolicySet handles GenericDriver non-proto identical and conflicting duplicates", func(t *testing.T) {
+		unregisterForTest(t, "dup_generic_type", "")
+		require.NoError(t, RegisterPolicyDriver("dup_generic_type", &GenericDriver[*driverTestPolicy]{}))
+
+		psSame, err := MakePolicySet("rev-gen-same", []map[string]any{
+			{"type": "dup_generic_type", "name": "gen-1"},
+			{"type": "dup_generic_type", "name": "gen-1"},
+		})
+		require.NoError(t, err)
+		assert.Len(t, psSame.Policies, 1)
+		assert.Empty(t, psSame.FailedPolicies)
+
+		// Two non-proto policies with same PolicyName and same type but different fields conflict
+		psDiffField, err := MakePolicySet("rev-gen-diff-field", []map[string]any{
+			{"type": "dup_generic_type", "name": "gen-1", "tag": "a"},
+			{"type": "dup_generic_type", "name": "gen-1", "tag": "b"},
+		})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrDuplicatePolicyID)
+		assert.NotContains(t, psDiffField.Policies, "gen-1")
+
+		// Two non-proto policies with same PolicyName but different registered types conflict
+		psDiffType, err := MakePolicySet("rev-gen-diff-type", []map[string]any{
+			{"type": "dup_generic_type", "name": "gen-1"},
+			{"type": "driver_test_type", "name": "gen-1"},
+		})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrDuplicatePolicyID)
+		assert.NotContains(t, psDiffType.Policies, "gen-1")
+	})
+
+	t.Run("MakePolicySetFromProtos falls back to proto.Equal on input protos when policy has no Proto() method", func(t *testing.T) {
+		mockDriver := ProtoDriver[*policyv1.MetricFilterPolicy]{
+			Class: PolicyClassTransformation,
+			New: func(pb *policyv1.MetricFilterPolicy) (Policy, error) {
+				return &mockTransformationPolicy{name: pb.GetId(), signals: []Signal{SignalMetrics}}, nil
+			},
+		}
+		mfProtoName := (&policyv1.MetricFilterPolicy{}).ProtoReflect().Descriptor().FullName()
+		unregisterForTest(t, "dup_mock_metric_filter", mfProtoName)
+		require.NoError(t, RegisterPolicyDriver("dup_mock_metric_filter", mockDriver))
+
+		mDrop := &policyv1.MetricFilterPolicy{Id: "mf-1", Action: policyv1.Action_ACTION_DROP.Enum()}
+		mKeep := &policyv1.MetricFilterPolicy{Id: "mf-1", Action: policyv1.Action_ACTION_KEEP.Enum()}
+
+		psSame, err := MakePolicySetFromProtos("ps-id", "rev-mf-same", []proto.Message{mDrop, proto.Clone(mDrop)})
+		require.NoError(t, err)
+		assert.Len(t, psSame.Policies, 1)
+
+		psConflict, err := MakePolicySetFromProtos("ps-id", "rev-mf-conflict", []proto.Message{mDrop, mKeep})
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrDuplicatePolicyID)
+		assert.Empty(t, psConflict.Policies)
 	})
 }

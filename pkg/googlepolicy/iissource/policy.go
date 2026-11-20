@@ -110,6 +110,14 @@ func (p *Policy) PolicyClass() googlepolicy.PolicyClass {
 	return googlepolicy.PolicyClassSource
 }
 
+// Proto returns the underlying protobuf message for this policy.
+func (p *Policy) Proto() proto.Message {
+	if p == nil || p.proto == nil {
+		return nil
+	}
+	return p.proto
+}
+
 // EffectiveCollectionIntervalSeconds returns the effective scrape interval in seconds.
 // If collection_interval_seconds is unset, it defaults to DefaultCollectionIntervalSeconds (60).
 func (p *Policy) EffectiveCollectionIntervalSeconds() int32 {

@@ -119,6 +119,14 @@ func (p *Policy) PolicyClass() googlepolicy.PolicyClass {
 	return googlepolicy.PolicyClassSource
 }
 
+// Proto returns the underlying protobuf message for this policy.
+func (p *Policy) Proto() proto.Message {
+	if p == nil || p.proto == nil {
+		return nil
+	}
+	return p.proto
+}
+
 // Validate checks the fields of the policy.
 func (p *Policy) Validate() error {
 	if p.proto == nil {

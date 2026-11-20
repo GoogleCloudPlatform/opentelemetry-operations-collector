@@ -1287,11 +1287,11 @@ func TestUnsetSeverityNumberReportsAbsent(t *testing.T) {
 	assert.Equal(t, googlepolicy.FilterDrop, evalLog(dropDebugPol, debugLog, scope, res))
 }
 
-// TestIDFieldsMatchHexAndBytes pins the dual representation of the native
+// TestIDFieldsMatchHexOnly pins the representation of the native
 // pcommon.TraceID / pcommon.SpanID returned by the ID extractors: string
 // predicates see the 32/16-character lowercase hex spelling required by
-// common_policy_types.proto, bytes predicates see the raw bytes.
-func TestIDFieldsMatchHexAndBytes(t *testing.T) {
+// common_policy_types.proto, while bytes_value predicates evaluate to false.
+func TestIDFieldsMatchHexOnly(t *testing.T) {
 	log, scope, res := newTestLogBundle()
 
 	const (
@@ -1326,16 +1326,16 @@ func TestIDFieldsMatchHexAndBytes(t *testing.T) {
 			want:      true,
 		},
 		{
-			name:      "trace id equals raw bytes",
+			name:      "trace id equals raw bytes does not match",
 			field:     policyv1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID,
 			predicate: equalsBytes(traceIDBytes),
-			want:      true,
+			want:      false,
 		},
 		{
-			name:      "trace id contains raw byte subsequence",
+			name:      "trace id contains raw byte subsequence does not match",
 			field:     policyv1.LogRecordField_LOG_RECORD_FIELD_TRACE_ID,
 			predicate: containsBytes([]byte{0x03, 0x04, 0x05}),
-			want:      true,
+			want:      false,
 		},
 		{
 			name:      "trace id wrong hex string",
@@ -1356,16 +1356,16 @@ func TestIDFieldsMatchHexAndBytes(t *testing.T) {
 			want:      true,
 		},
 		{
-			name:      "span id equals raw bytes",
+			name:      "span id equals raw bytes does not match",
 			field:     policyv1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID,
 			predicate: equalsBytes(spanIDBytes),
-			want:      true,
+			want:      false,
 		},
 		{
-			name:      "span id contains raw byte subsequence",
+			name:      "span id contains raw byte subsequence does not match",
 			field:     policyv1.LogRecordField_LOG_RECORD_FIELD_SPAN_ID,
 			predicate: containsBytes([]byte{0x06, 0x07, 0x08}),
-			want:      true,
+			want:      false,
 		},
 		{
 			name:      "span id wrong raw bytes",
@@ -1384,9 +1384,9 @@ func TestIDFieldsMatchHexAndBytes(t *testing.T) {
 }
 
 // TestZeroIDsReportAbsent covers log records emitted outside a trace: both ID
-// extractors return a genuinely absent (nil, false), so `exists` is false and
-// — unlike the empty-string fields above — no value predicate matches, not
-// even equals "". The proto grants TRACE_ID / SPAN_ID no empty-string contract.
+// extractors return ("", false) so `existence` reports false while string
+// predicates match against the empty string `""` (matching parent_span_id and
+// the upstream OpenTelemetry policy specification).
 func TestZeroIDsReportAbsent(t *testing.T) {
 	lr := plog.NewLogRecord()
 	lr.Body().SetStr("no ids here")
@@ -1401,10 +1401,10 @@ func TestZeroIDsReportAbsent(t *testing.T) {
 	for _, field := range fields {
 		target := recordFieldTarget(field)
 
-		t.Run(field.String()+" extracts nil", func(t *testing.T) {
+		t.Run(field.String()+" extracts empty string with exists=false", func(t *testing.T) {
 			val, exists := mustExtract(t, target)(logContext(lr, scope, res))
 			assert.False(t, exists)
-			assert.Nil(t, val)
+			assert.Equal(t, "", val)
 		})
 
 		t.Run(field.String()+" exists is false", func(t *testing.T) {
@@ -1419,15 +1419,18 @@ func TestZeroIDsReportAbsent(t *testing.T) {
 			assert.Equal(t, googlepolicy.FilterDrop, evalLog(pol, lr, scope, res))
 		})
 
-		t.Run(field.String()+" does not match empty string", func(t *testing.T) {
+		t.Run(field.String()+" matches empty string on string predicates", func(t *testing.T) {
 			pol := mustDropPolicy(t, "zero-equals-"+field.String(), target, equalsString(""), false)
-			assert.False(t, matchesLog(pol, lr, scope, res))
+			assert.True(t, matchesLog(pol, lr, scope, res))
 
 			globPol := mustDropPolicy(t, "zero-glob-"+field.String(), target, &policyv1.Predicate{Kind: &policyv1.Predicate_Glob{Glob: ""}}, false)
-			assert.False(t, matchesLog(globPol, lr, scope, res))
+			assert.True(t, matchesLog(globPol, lr, scope, res))
 
 			containsPol := mustDropPolicy(t, "zero-contains-"+field.String(), target, containsString(""), false)
-			assert.False(t, matchesLog(containsPol, lr, scope, res))
+			assert.True(t, matchesLog(containsPol, lr, scope, res))
+
+			nonEmptyPol := mustDropPolicy(t, "zero-non-empty-"+field.String(), target, equalsString("0000000000000000"), false)
+			assert.False(t, matchesLog(nonEmptyPol, lr, scope, res))
 		})
 	}
 }

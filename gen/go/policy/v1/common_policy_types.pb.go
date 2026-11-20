@@ -197,16 +197,22 @@ const (
 	// `inclusive_maximum`).
 	LogRecordField_LOG_RECORD_FIELD_SEVERITY_NUMBER LogRecordField = 3
 	// The 16-byte trace identifier associated with the log record.
-	// When evaluated against string predicates (`equality` with `string_value`,
-	// `glob`, `containment` with `string_value`), this matches against the
-	// 32-character lowercase hexadecimal string representation per the
-	// OpenTelemetry / W3C Trace Context specification.
+	// Matches string predicates only (`equality` with `string_value`, `glob`,
+	// `containment` with `string_value`), never `bytes_value`.
+	// When absent or all zeroes (16 zero bytes), `existence` evaluates to false
+	// (and true with `negated: true`) while string predicates match against the
+	// empty string `""`. When present, matches against the 32-character lowercase
+	// hexadecimal string representation per the OpenTelemetry / W3C Trace Context
+	// specification.
 	LogRecordField_LOG_RECORD_FIELD_TRACE_ID LogRecordField = 4
 	// The 8-byte span identifier associated with the log record.
-	// When evaluated against string predicates (`equality` with `string_value`,
-	// `glob`, `containment` with `string_value`), this matches against the
-	// 16-character lowercase hexadecimal string representation per the
-	// OpenTelemetry / W3C Trace Context specification.
+	// Matches string predicates only (`equality` with `string_value`, `glob`,
+	// `containment` with `string_value`), never `bytes_value`.
+	// When absent or all zeroes (8 zero bytes), `existence` evaluates to false
+	// (and true with `negated: true`) while string predicates match against the
+	// empty string `""`. When present, matches against the 16-character lowercase
+	// hexadecimal string representation per the OpenTelemetry / W3C Trace Context
+	// specification.
 	LogRecordField_LOG_RECORD_FIELD_SPAN_ID LogRecordField = 5
 )
 
@@ -268,18 +274,26 @@ const (
 	// The operation name of the span (e.g. "HTTP GET /users", "SELECT * FROM users").
 	SpanRecordField_SPAN_RECORD_FIELD_NAME SpanRecordField = 1
 	// The 16-byte trace identifier associated with the span.
-	// When evaluated against string predicates (`equality` with `string_value`,
-	// `glob`, `containment` with `string_value`), this matches against the
-	// 32-character lowercase hexadecimal string representation per the
-	// OpenTelemetry / W3C Trace Context specification.
+	// Matches string predicates only (`equality` with `string_value`, `glob`,
+	// `containment` with `string_value`), never `bytes_value`.
+	// When absent or all zeroes (16 zero bytes), `existence` evaluates to false
+	// (and true with `negated: true`) while string predicates match against the
+	// empty string `""`. When present, matches against the 32-character lowercase
+	// hexadecimal string representation per the OpenTelemetry / W3C Trace Context
+	// specification.
 	SpanRecordField_SPAN_RECORD_FIELD_TRACE_ID SpanRecordField = 2
 	// The 8-byte span identifier.
-	// When evaluated against string predicates (`equality` with `string_value`,
-	// `glob`, `containment` with `string_value`), this matches against the
-	// 16-character lowercase hexadecimal string representation per the
-	// OpenTelemetry / W3C Trace Context specification.
+	// Matches string predicates only (`equality` with `string_value`, `glob`,
+	// `containment` with `string_value`), never `bytes_value`.
+	// When absent or all zeroes (8 zero bytes), `existence` evaluates to false
+	// (and true with `negated: true`) while string predicates match against the
+	// empty string `""`. When present, matches against the 16-character lowercase
+	// hexadecimal string representation per the OpenTelemetry / W3C Trace Context
+	// specification.
 	SpanRecordField_SPAN_RECORD_FIELD_SPAN_ID SpanRecordField = 3
 	// The 8-byte parent span identifier.
+	// Matches string predicates only (`equality` with `string_value`, `glob`,
+	// `containment` with `string_value`), never `bytes_value`.
 	// Root spans have no parent span identifier (in OpenTelemetry data models,
 	// `parent_span_id` is empty or all zeroes).
 	// When evaluated with `existence`, this evaluates to false for root spans (and

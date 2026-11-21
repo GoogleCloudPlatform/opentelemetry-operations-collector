@@ -27,10 +27,9 @@ import (
 )
 
 func TestHeaderLoggingInterceptor(t *testing.T) {
-	server, mockServer, listener, err := StartMockServer()
-	defer StopMockServer(server, listener)
+	mockServer, err := StartInMemoryMockServer()
+	defer StopMockServer(mockServer)
 	require.NoError(t, err)
-	defer server.Stop()
 
 	mockServer.SetReturnFunc(func(ctx context.Context, req *scpb.ReportRequest) (*scpb.ReportResponse, error) {
 		md := metadata.Pairs(debugHeaderKey, "This is debug encrypted response value.")
@@ -47,7 +46,7 @@ func TestHeaderLoggingInterceptor(t *testing.T) {
 		context.Background(),
 		"bufconn",
 		grpc.WithInsecure(),
-		grpc.WithContextDialer(BufDialer),
+		grpc.WithContextDialer(mockServer.DialFunc),
 		grpc.WithUnaryInterceptor(interceptor.UnaryInterceptor),
 	)
 	require.NoError(t, err)

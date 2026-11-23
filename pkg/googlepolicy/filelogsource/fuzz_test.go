@@ -19,7 +19,7 @@ import (
 	"strings"
 	"testing"
 
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
 	"github.com/stretchr/testify/require"
 )
 
@@ -58,7 +58,7 @@ func FuzzPolicyValidation(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, pathStr string) {
-		pb := &policyv1alpha1.FileLogSourcePolicy{
+		pb := &policyv1.FileLogSourcePolicy{
 			Id:            "fuzz-policy",
 			IncludedPaths: []string{pathStr},
 		}

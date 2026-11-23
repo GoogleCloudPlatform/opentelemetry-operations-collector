@@ -135,13 +135,42 @@ processors:
         wait_for_result: false
     resourcedetection/default_self_metrics:
         detectors:
+            - env
             - gcp
+            - system
         override: false
+        system:
+            resource_attributes:
+                host.id:
+                    enabled: true
+                os.type:
+                    enabled: false
         timeout: 10s
     resourcedetection/googlecontrolplane:
         detectors:
+            - env
             - gcp
+            - system
+        env:
+            attributes:
+                excluded:
+                    - service.*
+                    - k8s.pod.*
+                    - k8s.container.*
+                    - k8s.namespace.*
+                    - k8s.daemonset.*
+                    - k8s.deployment.*
+                    - k8s.replicaset.*
+                    - k8s.statefulset.*
+                    - k8s.job.*
+                    - k8s.cronjob.*
         override: false
+        system:
+            resource_attributes:
+                host.id:
+                    enabled: true
+                os.type:
+                    enabled: false
         timeout: 10s
     transform/default_self_metrics:
         error_mode: ignore
@@ -149,10 +178,12 @@ processors:
             - context: resource
               statements:
                 - set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil
+                - delete_key(attributes, "gcp.telemetry_type")
         metric_statements:
             - context: resource
               statements:
                 - set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil
+                - delete_key(attributes, "gcp.telemetry_type")
             - context: datapoint
               statements:
                 - set(attributes["gcp.fleet_id"], resource.attributes["gcp.fleet_id"]) where resource.attributes["gcp.fleet_id"] != nil
@@ -168,10 +199,12 @@ processors:
             - context: resource
               statements:
                 - set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil
+                - delete_key(attributes, "gcp.telemetry_type")
         trace_statements:
             - context: resource
               statements:
                 - set(attributes["gcp.project_id"], attributes["cloud.account.id"]) where attributes["gcp.project_id"] == nil and attributes["cloud.account.id"] != nil
+                - delete_key(attributes, "gcp.telemetry_type")
 receivers:
     journald/googlecontrolplane:
         operators:

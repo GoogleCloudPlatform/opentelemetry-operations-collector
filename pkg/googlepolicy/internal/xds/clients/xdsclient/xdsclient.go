@@ -77,6 +77,7 @@ type XDSClient struct {
 	config             *Config                      // Complete xDS client configuration.
 	watchExpiryTimeout time.Duration                // Expiry timeout for ADS watch.
 	backoff            func(int) time.Duration      // Backoff for ADS and LRS stream failures.
+	timeAfter          func(time.Duration) <-chan time.Time
 	transportBuilder   clients.TransportBuilder     // Builder to create transports to xDS server.
 	resourceTypes      map[string]ResourceType      // Registry of resource types, for parsing incoming ADS responses.
 	serializer         *syncutil.CallbackSerializer // Serializer for invoking resource watcher callbacks.
@@ -127,13 +128,18 @@ func New(config Config) (*XDSClient, error) {
 // newClient returns a new XDSClient with the given config.
 func newClient(config *Config, target string) (*XDSClient, error) {
 	ctx, cancel := context.WithCancel(context.Background())
+	bo := xdsclientinternal.StreamBackoff
+	if config.Backoff != nil {
+		bo = config.Backoff
+	}
 	c := &XDSClient{
 		target:             target,
 		done:               syncutil.NewEvent(),
 		authorities:        make(map[string]*authority),
 		config:             config,
 		watchExpiryTimeout: config.WatchExpiryTimeout,
-		backoff:            xdsclientinternal.StreamBackoff,
+		backoff:            bo,
+		timeAfter:          config.TimeAfter,
 		serializer:         syncutil.NewCallbackSerializer(ctx),
 		serializerClose:    cancel,
 		transportBuilder:   config.TransportBuilder,
@@ -157,6 +163,7 @@ func newClient(config *Config, target string) (*XDSClient, error) {
 			logPrefix:        clientPrefix(c),
 			target:           target,
 			metricsReporter:  c.metricsReporter,
+			logger:           config.Logger,
 		})
 	}
 	c.topLevelAuthority = newAuthority(authorityBuildOptions{
@@ -167,6 +174,7 @@ func newClient(config *Config, target string) (*XDSClient, error) {
 		logPrefix:        clientPrefix(c),
 		target:           target,
 		metricsReporter:  c.metricsReporter,
+		logger:           config.Logger,
 	})
 	c.logger = prefixLogger(c)
 
@@ -301,6 +309,7 @@ func (c *XDSClient) getOrCreateChannel(serverConfig *ServerConfig, initLocked, d
 		clientConfig:       c.config,
 		eventHandler:       state,
 		backoff:            c.backoff,
+		timeAfter:          c.timeAfter,
 		watchExpiryTimeout: c.watchExpiryTimeout,
 		logPrefix:          clientPrefix(c),
 	})

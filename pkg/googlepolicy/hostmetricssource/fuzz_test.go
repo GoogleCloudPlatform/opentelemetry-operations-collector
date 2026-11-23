@@ -20,20 +20,20 @@ import (
 	"fmt"
 	"testing"
 
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
-func fuzzHostMetricsSeedPolicies() []*policyv1alpha1.HostMetricsSourcePolicy {
+func fuzzHostMetricsSeedPolicies() []*policyv1.HostMetricsSourcePolicy {
 	int10 := int32(10)
 	int30 := int32(30)
 	int60 := int32(60)
 	int300 := int32(300)
 	int86400 := int32(86400)
 
-	return []*policyv1alpha1.HostMetricsSourcePolicy{
+	return []*policyv1.HostMetricsSourcePolicy{
 		{
 			Id: "seed-default-interval",
 		},
@@ -155,7 +155,7 @@ func FuzzHostMetricsSourcePolicy(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, data []byte) {
 		// 1. Proto wire unmarshaling path
-		pb := &policyv1alpha1.HostMetricsSourcePolicy{}
+		pb := &policyv1.HostMetricsSourcePolicy{}
 		if err := proto.Unmarshal(data, pb); err == nil {
 			ps, err := googlepolicy.MakePolicySetFromProtos("projects/p/locations/l/policySets/ps", "fuzz-rev", []proto.Message{pb})
 			if err == nil {
@@ -215,13 +215,13 @@ func FuzzHostMetricsSourcePolicy_ConsolidationInvariants(f *testing.F) {
 	f.Add("p1", int32(86400), true, "p2", int32(86401), true)
 
 	f.Fuzz(func(t *testing.T, id1 string, interval1 int32, set1 bool, id2 string, interval2 int32, set2 bool) {
-		pb1 := &policyv1alpha1.HostMetricsSourcePolicy{Id: id1}
+		pb1 := &policyv1.HostMetricsSourcePolicy{Id: id1}
 		if set1 {
 			pb1.CollectionIntervalSeconds = &interval1
 		}
 		p1, err1 := NewPolicyFromProto(pb1)
 
-		pb2 := &policyv1alpha1.HostMetricsSourcePolicy{Id: id2}
+		pb2 := &policyv1.HostMetricsSourcePolicy{Id: id2}
 		if set2 {
 			pb2.CollectionIntervalSeconds = &interval2
 		}

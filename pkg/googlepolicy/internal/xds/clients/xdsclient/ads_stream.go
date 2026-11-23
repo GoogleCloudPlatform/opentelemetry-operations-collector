@@ -118,16 +118,19 @@ type adsStreamImpl struct {
 	firstRequest       atomic.Bool // False after the first request is sent out.
 	firstStreamCreated atomic.Bool // Set to true after the very first ADS stream is created.
 	streamEstablished  atomic.Bool // Set to true when an ADS stream is established and a response is received, except for the very first stream which is set to true immediately.
+	timeAfter          func(time.Duration) <-chan time.Time
 }
 
 // adsStreamOpts contains the options for creating a new ADS Stream.
 type adsStreamOpts struct {
-	transport          clients.Transport       // xDS transport to create the stream on.
-	eventHandler       adsStreamEventHandler   // Callbacks for stream events.
-	backoff            func(int) time.Duration // Backoff for retries, after stream failures.
-	nodeProto          *v3corepb.Node          // Node proto to identify the gRPC application.
-	watchExpiryTimeout time.Duration           // Resource watch expiry timeout.
-	logPrefix          string                  // Prefix to be used for log messages.
+	transport          clients.Transport                    // xDS transport to create the stream on.
+	eventHandler       adsStreamEventHandler                // Callbacks for stream events.
+	backoff            func(int) time.Duration              // Backoff for retries, after stream failures.
+	timeAfter          func(time.Duration) <-chan time.Time // Optional sleep function for backoff retries.
+	nodeProto          *v3corepb.Node                       // Node proto to identify the gRPC application.
+	watchExpiryTimeout time.Duration                        // Resource watch expiry timeout.
+	logPrefix          string                               // Prefix to be used for log messages.
+	logger             grpclog.DepthLoggerV2                // Optional custom logger.
 }
 
 // newADSStreamImpl initializes a new adsStreamImpl instance using the given
@@ -138,6 +141,7 @@ func newADSStreamImpl(opts adsStreamOpts) *adsStreamImpl {
 		transport:          opts.transport,
 		eventHandler:       opts.eventHandler,
 		backoff:            opts.backoff,
+		timeAfter:          opts.timeAfter,
 		nodeProto:          opts.nodeProto,
 		watchExpiryTimeout: opts.watchExpiryTimeout,
 
@@ -148,8 +152,7 @@ func newADSStreamImpl(opts adsStreamOpts) *adsStreamImpl {
 		resourceTypeState: make(map[ResourceType]*resourceTypeState),
 	}
 
-	l := grpclog.Component("xds")
-	s.logger = igrpclog.NewPrefixLogger(l, opts.logPrefix+fmt.Sprintf("[ads-stream %p] ", s))
+	s.logger = prefixLoggerWithParent(opts.logger, opts.logPrefix+fmt.Sprintf("[ads-stream %p] ", s))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	s.cancel = cancel
@@ -275,7 +278,7 @@ func (s *adsStreamImpl) runner(ctx context.Context) {
 		}
 		return nil
 	}
-	backoff.RunF(ctx, runStreamWithBackoff, s.backoff)
+	backoff.RunFWithTimeAfter(ctx, runStreamWithBackoff, s.backoff, s.timeAfter)
 }
 
 // send is a long running goroutine that handles sending discovery requests for
@@ -445,9 +448,7 @@ func (s *adsStreamImpl) recv(stream clients.Stream) bool {
 
 		resources, url, version, nonce, err := s.recvMessage(stream)
 		if err != nil {
-			if !msgReceived {
-				s.streamEstablished.Store(false)
-			}
+			s.streamEstablished.Store(false)
 			s.onError(err, msgReceived)
 			s.logger.Warningf("ADS stream closed: %v", err)
 			return msgReceived
@@ -467,6 +468,7 @@ func (s *adsStreamImpl) recv(stream clients.Stream) bool {
 		s.fc.setPending(true)
 		resourceNames, nackErr = s.eventHandler.onResponse(resp, sync.OnceFunc(func() { s.fc.setPending(false) }))
 		if xdsresource.ErrType(nackErr) == xdsresource.ErrorTypeResourceTypeUnsupported {
+			s.fc.setPending(false)
 			// A general guiding principle is that if the server sends
 			// something the client didn't actually subscribe to, then the
 			// client ignores it. Here, we have received a response with
@@ -552,6 +554,17 @@ func (s *adsStreamImpl) onRecv(stream clients.Stream, names []string, url, versi
 			if rs.ExpiryTimer != nil {
 				rs.ExpiryTimer.Stop()
 				rs.ExpiryTimer = nil
+			}
+		}
+	}
+	if len(names) == 0 && nackErr == nil && typ.AllResourcesRequiredInSotW {
+		for _, rs := range typeState.subscribedResources {
+			if ws := rs.State; ws == xdsresource.ResourceWatchStateStarted || ws == xdsresource.ResourceWatchStateRequested {
+				rs.State = xdsresource.ResourceWatchStateReceived
+				if rs.ExpiryTimer != nil {
+					rs.ExpiryTimer.Stop()
+					rs.ExpiryTimer = nil
+				}
 			}
 		}
 	}

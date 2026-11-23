@@ -16,7 +16,7 @@ This skill guides the design and review of policy Protocol Buffers in `GoogleClo
 
 - **Do NOT duplicate CI checks**: Linters (`buf lint`, `api-linter`, `make test-protos`) enforce syntax, formatting, and naming conventions. Focus strictly on architectural and semantic design aspects linters cannot evaluate.
 - **Do NOT suppress linter warnings**: Never use inline suppressions (e.g. `-- api-linter: ...=disabled --`). Linter failures usually point to schema design anti-patterns (such as naked booleans in selectors); fix the underlying design instead.
-- **Follow existing patterns**: Reuse conventions and types already established in `proto/policy/v1alpha1/` (e.g. `common_policy_types.proto`) rather than inventing novel mechanisms for matchers, string representations, or value coercion.
+- **Follow existing patterns**: Reuse conventions and types already established in `proto/policy/v1/` (e.g. `common_policy_types.proto`) rather than inventing novel mechanisms for matchers, string representations, or value coercion.
 - **Broad Applicability**: Applies to existing filter policies and future policy types (e.g. transformations, routing, sampling).
 - **Standards**: References [Google AIP-122](https://google.aip.dev/122), [Google AIP-128](https://google.aip.dev/128), [Google AIP-140](https://google.aip.dev/140), [Google AIP-149](https://google.aip.dev/149), [Google AIP-180](https://google.aip.dev/180), and [Protobuf Best Practices](https://protobuf.dev/programming-guides/dos-donts/).
 

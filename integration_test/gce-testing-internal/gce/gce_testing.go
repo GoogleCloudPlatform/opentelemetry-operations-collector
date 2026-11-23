@@ -53,6 +53,7 @@ this library.
 package gce
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -640,17 +641,25 @@ func AssertMetricMissing(ctx context.Context, logger *log.Logger, vm *VM, metric
 	return nil
 }
 
-// findMatchingLogs looks in the logging backend for logs matching the given query,
+func buildLogFilter(vm *VM, includeInstanceID bool, logNameRegex string, start time.Time, query string) string {
+	t := start.Format(time.RFC3339)
+	var b strings.Builder
+	fmt.Fprintf(&b, `logName=~"projects/%s/logs/%s"`, vm.Project, logNameRegex)
+	if includeInstanceID {
+		fmt.Fprintf(&b, ` AND resource.labels.instance_id="%d"`, vm.ID)
+	}
+	fmt.Fprintf(&b, ` AND timestamp > "%s"`, t)
+	if query != "" {
+		fmt.Fprintf(&b, ` AND %s`, query)
+	}
+	return b.String()
+}
+
+// findMatchingLogsScoped looks in the logging backend for logs matching the given query,
 // over the trailing time interval specified by the given window.
 // Returns all the matching log entries found, or an error if the lookup failed.
-func findMatchingLogs(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string) ([]*cloudlogging.Entry, error) {
-	start := time.Now().Add(-window)
-
-	t := start.Format(time.RFC3339)
-	filter := fmt.Sprintf(`logName=~"projects/%s/logs/%s" AND resource.labels.instance_id="%d" AND timestamp > "%s"`, vm.Project, logNameRegex, vm.ID, t)
-	if query != "" {
-		filter += fmt.Sprintf(` AND %s`, query)
-	}
+func findMatchingLogsScoped(ctx context.Context, logger *log.Logger, vm *VM, includeInstanceID bool, logNameRegex string, window time.Duration, query string) ([]*cloudlogging.Entry, error) {
+	filter := buildLogFilter(vm, includeInstanceID, logNameRegex, time.Now().Add(-window), query)
 	logger.Println(filter)
 
 	logClient, err := logClients.new(vm.Project)
@@ -676,11 +685,25 @@ func findMatchingLogs(ctx context.Context, logger *log.Logger, vm *VM, logNameRe
 	return matchingLogs, nil
 }
 
+// findMatchingLogs looks in the logging backend for logs matching the given query,
+// over the trailing time interval specified by the given window.
+// Returns all the matching log entries found, or an error if the lookup failed.
+func findMatchingLogs(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string) ([]*cloudlogging.Entry, error) {
+	return findMatchingLogsScoped(ctx, logger, vm, true, logNameRegex, window, query)
+}
+
 // WaitForLog looks in the logging backend for a log matching the given query,
 // over the trailing time interval specified by the given window.
 // Returns an error if the log could not be found after LogQueryMaxAttempts retries.
 func WaitForLog(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string) error {
-	_, err := QueryLog(ctx, logger, vm, logNameRegex, window, query, LogQueryMaxAttempts)
+	_, err := queryLogScoped(ctx, logger, vm, true, logNameRegex, window, query, LogQueryMaxAttempts)
+	return err
+}
+
+// WaitForProjectLog is the project-scoped variant of WaitForLog (omitting
+// resource.labels.instance_id) for off-GCP collectors without GCE metadata.
+func WaitForProjectLog(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string) error {
+	_, err := queryLogScoped(ctx, logger, vm, false, logNameRegex, window, query, LogQueryMaxAttempts)
 	return err
 }
 
@@ -691,13 +714,9 @@ func shouldRetryHasMatchingLog(err error) bool {
 		strings.Contains(err.Error(), "Internal error encountered")
 }
 
-// QueryLog looks in the logging backend for a log matching the given query,
-// over the trailing time interval specified by the given window.
-// Returns the first log entry found, or an error if the log could not be
-// found after some retries.
-func QueryLog(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string, maxAttempts int) (*cloudlogging.Entry, error) {
+func queryLogScoped(ctx context.Context, logger *log.Logger, vm *VM, includeInstanceID bool, logNameRegex string, window time.Duration, query string, maxAttempts int) (*cloudlogging.Entry, error) {
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		matchingLogs, err := findMatchingLogs(ctx, logger, vm, logNameRegex, window, query)
+		matchingLogs, err := findMatchingLogsScoped(ctx, logger, vm, includeInstanceID, logNameRegex, window, query)
 		found := len(matchingLogs) > 0
 		if err == nil && found {
 			// Success.
@@ -714,14 +733,17 @@ func QueryLog(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex stri
 	return nil, fmt.Errorf("QueryLog() failed: %s not found, exhausted retries", logNameRegex)
 }
 
-// QueryAllLogs looks in the logging backend for logs matching the given query,
+// QueryLog looks in the logging backend for a log matching the given query,
 // over the trailing time interval specified by the given window.
-// Returns all the log entries found, or an error if no successful queries to the
-// backend. To consider possible transient errors while querying the backend we
-// make maxAttempts query attempts.
-func QueryAllLogs(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string, maxAttempts int) ([]*cloudlogging.Entry, error) {
+// Returns the first log entry found, or an error if the log could not be
+// found after some retries.
+func QueryLog(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string, maxAttempts int) (*cloudlogging.Entry, error) {
+	return queryLogScoped(ctx, logger, vm, true, logNameRegex, window, query, maxAttempts)
+}
+
+func queryAllLogsScoped(ctx context.Context, logger *log.Logger, vm *VM, includeInstanceID bool, logNameRegex string, window time.Duration, query string, maxAttempts int) ([]*cloudlogging.Entry, error) {
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		matchingLogs, err := findMatchingLogs(ctx, logger, vm, logNameRegex, window, query)
+		matchingLogs, err := findMatchingLogsScoped(ctx, logger, vm, includeInstanceID, logNameRegex, window, query)
 		if err == nil {
 			// Success.
 			return matchingLogs, nil
@@ -737,11 +759,17 @@ func QueryAllLogs(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex 
 	return nil, fmt.Errorf("QueryAllLogs() failed: %s no succesful queries to the backend, exhausted retries", logNameRegex)
 }
 
-// AssertLogMissing looks in the logging backend for a log matching the given query
-// and returns success if no data is found. To consider possible transient errors
-// while querying the backend we make queryMaxAttemptsLogMissing query attempts.
-func AssertLogMissing(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string) error {
-	matchingLogs, err := QueryAllLogs(ctx, logger, vm, logNameRegex, window, query, queryMaxAttemptsLogMissing)
+// QueryAllLogs looks in the logging backend for logs matching the given query,
+// over the trailing time interval specified by the given window.
+// Returns all the log entries found, or an error if no successful queries to the
+// backend. To consider possible transient errors while querying the backend we
+// make maxAttempts query attempts.
+func QueryAllLogs(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string, maxAttempts int) ([]*cloudlogging.Entry, error) {
+	return queryAllLogsScoped(ctx, logger, vm, true, logNameRegex, window, query, maxAttempts)
+}
+
+func assertLogMissingScoped(ctx context.Context, logger *log.Logger, vm *VM, includeInstanceID bool, logNameRegex string, window time.Duration, query string) error {
+	matchingLogs, err := queryAllLogsScoped(ctx, logger, vm, includeInstanceID, logNameRegex, window, query, queryMaxAttemptsLogMissing)
 	if err == nil {
 		if len(matchingLogs) > 0 {
 			return fmt.Errorf("AssertLogMissing(log=%q): %v failed: unexpectedly found data for log", query, err)
@@ -750,6 +778,19 @@ func AssertLogMissing(ctx context.Context, logger *log.Logger, vm *VM, logNameRe
 		return nil
 	}
 	return fmt.Errorf("AssertLogMissing(log=%q): %v failed: no successful queries to the backend for log %s, exhausted retries", query, err, logNameRegex)
+}
+
+// AssertLogMissing looks in the logging backend for a log matching the given query
+// and returns success if no data is found. To consider possible transient errors
+// while querying the backend we make queryMaxAttemptsLogMissing query attempts.
+func AssertLogMissing(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string) error {
+	return assertLogMissingScoped(ctx, logger, vm, true, logNameRegex, window, query)
+}
+
+// AssertProjectLogMissing is the project-scoped variant of AssertLogMissing
+// (omitting resource.labels.instance_id) for off-GCP collectors without GCE metadata.
+func AssertProjectLogMissing(ctx context.Context, logger *log.Logger, vm *VM, logNameRegex string, window time.Duration, query string) error {
+	return assertLogMissingScoped(ctx, logger, vm, false, logNameRegex, window, query)
 }
 
 // CommandOutput holds the textual output from running a subprocess.
@@ -962,6 +1003,53 @@ func SSHOptionsForTest() []string {
 	return append([]string(nil), sshOptions...)
 }
 
+// retrySSHCommand runs an ssh or scp command, retrying transient SSH transport
+// errors up to 10 times with 3s backoff (~30s total) to bridge the post-boot
+// network handover window on newly booted VMs.
+func retrySSHCommand(ctx context.Context, logger *log.Logger, vm *VM, opName string, stdin io.Reader, args []string) (CommandOutput, error) {
+	// Retry up to 10 times with 3s backoff (~30s total retry window) strictly for
+	// SSH transport errors (exit status 255 / connection refused/reset/timeout).
+	// This bridges the 10-15s network handover window on newly booted VMs where
+	// google-guest-agent rolls back network configurations and triggers NetworkManager
+	// DHCP renegotiation (b/557287367), especially on fast-booting ARM64 instances.
+	// Non-transport command errors (e.g. exit status 1 or 2) fail immediately on attempt 1.
+	backoffPolicy := backoff.WithContext(
+		backoff.WithMaxRetries(backoff.NewConstantBackOff(3*time.Second), 10),
+		ctx,
+	)
+
+	var stdinBytes []byte
+	if stdin != nil {
+		var err error
+		stdinBytes, err = io.ReadAll(stdin)
+		if err != nil {
+			return CommandOutput{}, err
+		}
+	}
+
+	attempt := 0
+	var output CommandOutput
+	var runErr error
+	err := backoff.Retry(func() error {
+		attempt++
+		var attemptStdin io.Reader
+		if stdin != nil {
+			attemptStdin = bytes.NewReader(stdinBytes)
+		}
+		output, runErr = runCommand(ctx, logger, attemptStdin, args, nil)
+		if runErr != nil {
+			if isSSHTransportError(runErr) {
+				logger.Printf("%s transport attempt %d to VM %s (%s) failed (%v), retrying...", opName, attempt, vm.Name, vm.IPAddress, runErr)
+				return runErr
+			}
+			return backoff.Permanent(runErr)
+		}
+		return nil
+	}, backoffPolicy)
+
+	return output, err
+}
+
 // RunRemotelyStdin is just like RunRemotely but it accepts an io.Reader
 // for what data to pass in over standard input to the command.
 func RunRemotelyStdin(ctx context.Context, logger *log.Logger, vm *VM, stdin io.Reader, command string) (output CommandOutput, err error) {
@@ -989,33 +1077,94 @@ func RunRemotelyStdin(ctx context.Context, logger *log.Logger, vm *VM, stdin io.
 	args = append(args, sshOptions...)
 	args = append(args, wrappedCommand)
 
-	// Retry up to 10 times with 3s backoff (~30s total retry window) strictly for
-	// SSH transport errors (exit status 255 / connection refused/reset/timeout).
-	// This bridges the 10-15s network handover window on newly booted VMs where
-	// google-guest-agent rolls back network configurations and triggers NetworkManager
-	// DHCP renegotiation (b/557287367), especially on fast-booting ARM64 instances.
-	// Non-transport command errors (e.g. exit status 1 or 2) fail immediately on attempt 1.
-	backoffPolicy := backoff.WithContext(
-		backoff.WithMaxRetries(backoff.NewConstantBackOff(3*time.Second), 10),
-		ctx,
-	)
+	return retrySSHCommand(ctx, logger, vm, "SSH", stdin, args)
+}
 
-	attempt := 0
-	var runErr error
-	err = backoff.Retry(func() error {
-		attempt++
-		output, runErr = runCommand(ctx, logger, stdin, args, nil)
-		if runErr != nil {
-			if isSSHTransportError(runErr) {
-				logger.Printf("SSH transport attempt %d to VM %s (%s) failed (%v), retrying...", attempt, vm.Name, vm.IPAddress, runErr)
-				return runErr
-			}
-			return backoff.Permanent(runErr)
+var (
+	scpLegacyOnce sync.Once
+	scpLegacyFlag string
+)
+
+// detectSCPLegacyFlag returns "-O" on OpenSSH 9.0+ (which otherwise defaults to
+// SFTP, disabled by default on GCE Windows OpenSSH) and "" on older OpenSSH
+// versions that already default to legacy SCP and do not accept -O.
+func detectSCPLegacyFlag() string {
+	scpLegacyOnce.Do(func() {
+		out, _ := exec.Command("scp", "-O").CombinedOutput()
+		msg := string(out)
+		if !strings.Contains(msg, "unknown option") && !strings.Contains(msg, "illegal option") {
+			scpLegacyFlag = "-O"
 		}
-		return nil
-	}, backoffPolicy)
+	})
+	return scpLegacyFlag
+}
 
-	return output, err
+// UploadFile copies a local file to remotePath on vm using legacy SCP, without
+// requiring a VM service account, GCS access from the VM, or an SFTP server.
+func UploadFile(ctx context.Context, logger *log.Logger, vm *VM, localPath, remotePath string) error {
+	logger.Printf("Copying %s to %s:%s", localPath, vm.Name, remotePath)
+	args := []string{"scp"}
+	if flag := detectSCPLegacyFlag(); flag != "" {
+		args = append(args, flag)
+	}
+	args = append(args, "-q", "-oIdentityFile="+privateKeyFile)
+	args = append(args, sshOptions...)
+	args = append(args, localPath, sshUserName+"@"+vm.IPAddress+":"+remotePath)
+	_, err := retrySSHCommand(ctx, logger, vm, "SCP", nil, args)
+	return err
+}
+
+// DownloadMatchingGCSObject downloads the unique object directly inside gcsDir
+// (a gs://<bucket>/<prefix> URL) whose name ends with suffix into destDir.
+func DownloadMatchingGCSObject(ctx context.Context, gcsDir, suffix, destDir string) (string, error) {
+	trimmed, ok := strings.CutPrefix(strings.TrimRight(gcsDir, "/"), "gs://")
+	if !ok {
+		return "", fmt.Errorf("invalid GCS directory %q: expected gs:// prefix", gcsDir)
+	}
+	bucketName, prefix, _ := strings.Cut(trimmed, "/")
+	if prefix != "" {
+		prefix += "/"
+	}
+	it := storageClient.Bucket(bucketName).Objects(ctx, &storage.Query{
+		Prefix:    prefix,
+		Delimiter: "/",
+	})
+	var match string
+	for {
+		attrs, err := it.Next()
+		if errors.Is(err, iterator.Done) {
+			break
+		}
+		if err != nil {
+			return "", fmt.Errorf("listing %s: %w", gcsDir, err)
+		}
+		if attrs.Name != "" && strings.HasSuffix(attrs.Name, suffix) {
+			if match != "" {
+				return "", fmt.Errorf("multiple objects matching *%s in %s (%s, %s)", suffix, gcsDir, match, attrs.Name)
+			}
+			match = attrs.Name
+		}
+	}
+	if match == "" {
+		return "", fmt.Errorf("no object matching *%s in %s", suffix, gcsDir)
+	}
+	r, err := storageClient.Bucket(bucketName).Object(match).NewReader(ctx)
+	if err != nil {
+		return "", fmt.Errorf("opening gs://%s/%s: %w", bucketName, match, err)
+	}
+	defer r.Close()
+
+	localPath := filepath.Join(destDir, path.Base(match))
+	f, err := os.Create(localPath)
+	if err != nil {
+		return "", fmt.Errorf("creating %s: %w", localPath, err)
+	}
+	_, copyErr := io.Copy(f, r)
+	closeErr := f.Close()
+	if err := multierr.Combine(copyErr, closeErr); err != nil {
+		return "", fmt.Errorf("downloading gs://%s/%s to %s: %w", bucketName, match, localPath, err)
+	}
+	return localPath, nil
 }
 
 // UploadContent takes an io.Reader and uploads its contents as a file to a

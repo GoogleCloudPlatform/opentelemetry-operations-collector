@@ -29,7 +29,7 @@ import (
 	"time"
 
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/components/google-built-opentelemetry-collector/provider/googlecontrolplaneprovider/policies/selfmetrics"
-	policyv1alpha1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1alpha1"
+	policyv1 "github.com/GoogleCloudPlatform/opentelemetry-operations-collector/gen/go/policy/v1"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/event"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy"
 	"github.com/GoogleCloudPlatform/opentelemetry-operations-collector/pkg/googlepolicy/windowseventlogsource"
@@ -38,11 +38,23 @@ import (
 	"go.opentelemetry.io/collector/component"
 	"go.opentelemetry.io/collector/confmap"
 	"go.opentelemetry.io/collector/confmap/confmaptest"
+	"go.opentelemetry.io/collector/featuregate"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest/observer"
 	"google.golang.org/protobuf/proto"
 )
+
+// setMergeAppendFeatureGate sets confmap.enableMergeAppendOption for the
+// duration of the test and restores its previous value afterwards.
+func setMergeAppendFeatureGate(t *testing.T, enabled bool) {
+	t.Helper()
+	was := mergeAppendEnabled()
+	require.NoError(t, featuregate.GlobalRegistry().Set(mergeAppendFeatureGateID, enabled))
+	t.Cleanup(func() {
+		require.NoError(t, featuregate.GlobalRegistry().Set(mergeAppendFeatureGateID, was))
+	})
+}
 
 func createProvider() confmap.Provider {
 	return NewFactory().Create(confmaptest.NewNopProviderSettings())
@@ -111,6 +123,42 @@ func TestRetrieve(t *testing.T) {
 	assert.True(t, conf.IsSet("service::pipelines::logs/googlecontrolplane"))
 	assert.True(t, conf.IsSet("service::pipelines::metrics/googlecontrolplane"))
 	assert.True(t, conf.IsSet("service::pipelines::traces/googlecontrolplane"))
+
+	assert.Equal(t, []any{"env", "gcp", "system"}, conf.Get("processors::resourcedetection/default_self_metrics::detectors"))
+	assert.Equal(t, false, conf.Get("processors::resourcedetection/default_self_metrics::override"))
+	assert.Equal(t, 10*time.Second, conf.Get("processors::resourcedetection/default_self_metrics::timeout"))
+	assert.Nil(t, conf.Get("processors::resourcedetection/default_self_metrics::env"))
+	assert.Equal(t, true, conf.Get("processors::resourcedetection/default_self_metrics::system::resource_attributes::host.id::enabled"))
+	assert.Equal(t, false, conf.Get("processors::resourcedetection/default_self_metrics::system::resource_attributes::os.type::enabled"))
+
+	assert.Equal(t, []any{"env", "gcp", "system"}, conf.Get("processors::resourcedetection/googlecontrolplane::detectors"))
+	assert.Equal(t, false, conf.Get("processors::resourcedetection/googlecontrolplane::override"))
+	assert.Equal(t, 10*time.Second, conf.Get("processors::resourcedetection/googlecontrolplane::timeout"))
+	assert.Equal(t, []any{
+		"service.*",
+		"k8s.pod.*",
+		"k8s.container.*",
+		"k8s.namespace.*",
+		"k8s.daemonset.*",
+		"k8s.deployment.*",
+		"k8s.replicaset.*",
+		"k8s.statefulset.*",
+		"k8s.job.*",
+		"k8s.cronjob.*",
+	}, conf.Get("processors::resourcedetection/googlecontrolplane::env::attributes::excluded"))
+	assert.Equal(t, true, conf.Get("processors::resourcedetection/googlecontrolplane::system::resource_attributes::host.id::enabled"))
+	assert.Equal(t, false, conf.Get("processors::resourcedetection/googlecontrolplane::system::resource_attributes::os.type::enabled"))
+	assert.False(t, conf.IsSet("processors::resourcedetection/googlecontrolplane_system"))
+
+	for _, pipe := range []string{"logs/googlecontrolplane", "metrics/googlecontrolplane", "traces/googlecontrolplane"} {
+		procs := conf.Get("service::pipelines::" + pipe + "::processors").([]any)
+		require.GreaterOrEqual(t, len(procs), 3, pipe)
+		assert.Equal(t, []any{
+			"resourcedetection/googlecontrolplane",
+			"transform/googlecontrolplane",
+			"googlepolicy",
+		}, procs[:3], pipe)
+	}
 
 	assert.NoError(t, p.Shutdown(context.Background()))
 	assert.False(t, googlepolicy.IsControlPlaneActive())
@@ -413,9 +461,11 @@ func TestRetrieve_WorkloadResourceFallbacks(t *testing.T) {
 			conf, err := ret.AsConf()
 			require.NoError(t, err)
 
-			for key, got := range workloadTransformStatements(t, conf) {
-				assert.Equal(t, tc.want, got, key)
-			}
+			got := workloadTransformStatements(t, conf)
+			wantNonLog := append(append([]string(nil), tc.want...), googlepolicy.DeleteTelemetryTypeStatement)
+			assert.Equal(t, tc.want, got["log_statements"], "log_statements")
+			assert.Equal(t, wantNonLog, got["metric_statements"], "metric_statements")
+			assert.Equal(t, wantNonLog, got["trace_statements"], "trace_statements")
 
 			assert.NoError(t, p.Shutdown(context.Background()))
 		})
@@ -455,9 +505,11 @@ func TestRetrieve_WorkloadRegionFallbackNonXDS(t *testing.T) {
 			require.NoError(t, err)
 			conf, err := ret.AsConf()
 			require.NoError(t, err)
-			for key, got := range workloadTransformStatements(t, conf) {
-				assert.Equal(t, tc.want, got, key)
-			}
+			got := workloadTransformStatements(t, conf)
+			wantNonLog := append(append([]string(nil), tc.want...), googlepolicy.DeleteTelemetryTypeStatement)
+			assert.Equal(t, tc.want, got["log_statements"], "log_statements")
+			assert.Equal(t, wantNonLog, got["metric_statements"], "metric_statements")
+			assert.Equal(t, wantNonLog, got["trace_statements"], "trace_statements")
 			assert.NoError(t, p.Shutdown(context.Background()))
 		})
 	}
@@ -760,7 +812,7 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource(t *testing.T) {
 	t.Setenv("FLEET_ID", "1234")
 	p := createProvider()
 
-	pol, err := windowseventlogsource.NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+	pol, err := windowseventlogsource.NewPolicyFromProto(&policyv1.WindowsEventLogSourcePolicy{
 		Id:       "windows-security-sysmon",
 		Channels: []string{"Security", "Microsoft-Windows-Sysmon/Operational"},
 	})
@@ -845,13 +897,13 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource_MultiPolicyConsolidat
 	t.Setenv("FLEET_ID", "1234")
 	p := createProvider()
 
-	pol1, err := windowseventlogsource.NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+	pol1, err := windowseventlogsource.NewPolicyFromProto(&policyv1.WindowsEventLogSourcePolicy{
 		Id:       "win-1",
 		Channels: []string{"Security", "System"},
 	})
 	require.NoError(t, err)
 
-	pol2, err := windowseventlogsource.NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+	pol2, err := windowseventlogsource.NewPolicyFromProto(&policyv1.WindowsEventLogSourcePolicy{
 		Id:       "win-2",
 		Channels: []string{"security", "Application", "SYSTEM"},
 	})
@@ -928,14 +980,14 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource_RealPolicyFaultIsolat
 	p := createProviderWithLogger(logger)
 
 	// Valid policy
-	polValid, err := windowseventlogsource.NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+	polValid, err := windowseventlogsource.NewPolicyFromProto(&policyv1.WindowsEventLogSourcePolicy{
 		Id:       "win-valid",
 		Channels: []string{"Security"},
 	})
 	require.NoError(t, err)
 
 	// Real policy with empty channel that fails validation
-	badProto := &policyv1alpha1.WindowsEventLogSourcePolicy{
+	badProto := &policyv1.WindowsEventLogSourcePolicy{
 		Id:       "win-bad-empty",
 		Channels: []string{"Security", ""},
 	}
@@ -1004,7 +1056,7 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource_InvalidComponentIDIso
 	logger := zap.New(obsCore)
 	p := createProviderWithLogger(logger)
 
-	polValid, err := windowseventlogsource.NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+	polValid, err := windowseventlogsource.NewPolicyFromProto(&policyv1.WindowsEventLogSourcePolicy{
 		Id:       "win-valid",
 		Channels: []string{"Security"},
 	})
@@ -1054,13 +1106,13 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource_MultiPolicyDelimiterC
 	t.Setenv("FLEET_ID", "1234")
 	p := createProviderWithLogger(zap.NewNop())
 
-	pol1, err := windowseventlogsource.NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+	pol1, err := windowseventlogsource.NewPolicyFromProto(&policyv1.WindowsEventLogSourcePolicy{
 		Id:       "win-slash",
 		Channels: []string{"Foo/Bar"},
 	})
 	require.NoError(t, err)
 
-	pol2, err := windowseventlogsource.NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+	pol2, err := windowseventlogsource.NewPolicyFromProto(&policyv1.WindowsEventLogSourcePolicy{
 		Id:       "win-underscore",
 		Channels: []string{"Foo_Bar"},
 	})
@@ -1141,7 +1193,7 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource_FaultIsolation(t *tes
 	logger := zap.New(obsCore)
 	p := createProviderWithLogger(logger)
 
-	polValid, err := windowseventlogsource.NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+	polValid, err := windowseventlogsource.NewPolicyFromProto(&policyv1.WindowsEventLogSourcePolicy{
 		Id:       "win-valid",
 		Channels: []string{"Security"},
 	})
@@ -1205,7 +1257,7 @@ func TestRetrieve_ActivePolicySetWithWindowsEventLogSource_SilentNoOpOnNonWindow
 	t.Setenv("FLEET_ID", "1234")
 	p := createProvider()
 
-	pol, err := windowseventlogsource.NewPolicyFromProto(&policyv1alpha1.WindowsEventLogSourcePolicy{
+	pol, err := windowseventlogsource.NewPolicyFromProto(&policyv1.WindowsEventLogSourcePolicy{
 		Id:       "windows-source-nonwindows",
 		Channels: []string{"Security", "Application"},
 	})
@@ -1374,14 +1426,56 @@ func TestFilterPolicyDriversRegistered(t *testing.T) {
 	}
 }
 
-// TestMergeAppendUnionsServiceExtensions pins the behaviour that makes it safe
-// for more than one policy (or confmap provider) to declare an extension.
+// TestMergeAppendFeatureGateEnabledOnRetrieve verifies when the provider turns
+// on confmap.enableMergeAppendOption.
 //
-// Creating the provider enables the confmap.enableMergeAppendOption feature
-// gate so confmap.Merge appends and deduplicates service::extensions instead of
-// replacing the slice with only the last policy's extension.
+// The Collector creates every registered provider at startup, so creating this
+// one must leave the gate alone: otherwise a Collector that never uses a
+// googlecontrolplane: URI gets append merging for all of its config sources.
+// The gate is enabled once a googlecontrolplane: URI is actually retrieved,
+// because the configuration generated for it depends on append merging.
+func TestMergeAppendFeatureGateEnabledOnRetrieve(t *testing.T) {
+	t.Setenv("FLEET_ID", "1234")
+	setMergeAppendFeatureGate(t, false)
+
+	const enabledLog = "enabled feature gate required by the googlecontrolplane provider"
+	core, recorded := observer.New(zapcore.InfoLevel)
+	p := createProviderWithLogger(zap.New(core))
+	t.Cleanup(func() {
+		assert.NoError(t, p.Shutdown(context.Background()))
+	})
+	assert.False(t, mergeAppendEnabled(), "creating the provider must not enable %s", mergeAppendFeatureGateID)
+
+	// A URI this provider rejects must not enable it either.
+	_, err := p.Retrieve(context.Background(), "file:/path/to/conf", nil)
+	require.ErrorIs(t, err, ErrURINotSupported)
+	assert.False(t, mergeAppendEnabled(), "a rejected URI must not enable %s", mergeAppendFeatureGateID)
+
+	ret, err := p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	assert.True(t, mergeAppendEnabled(), "retrieving a googlecontrolplane: URI must enable %s", mergeAppendFeatureGateID)
+
+	// The destination, self metrics and storage configs each declare
+	// service::extensions. All three survive only with append merging.
+	conf, err := ret.AsConf()
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []any{
+		"googleclientauth/default_gcp_destination",
+		"googlecontrolplane",
+		googlepolicy.StorageExtensionID.String(),
+	}, conf.Get("service::extensions"))
+
+	// Retrieving again finds the gate already enabled and does not log again.
+	_, err = p.Retrieve(context.Background(), "googlecontrolplane:component:my-config", nil)
+	require.NoError(t, err)
+	assert.Equal(t, 1, recorded.FilterMessage(enabledLog).Len())
+}
+
+// TestMergeAppendUnionsServiceExtensions pins the behaviour that makes it safe
+// for more than one policy (or confmap provider) to declare an extension when
+// confmap.enableMergeAppendOption is enabled.
 func TestMergeAppendUnionsServiceExtensions(t *testing.T) {
-	_ = createProvider()
+	setMergeAppendFeatureGate(t, true)
 	conf := confmap.New()
 
 	destination := confmap.NewFromStringMap(map[string]any{
@@ -1405,7 +1499,7 @@ func TestMergeAppendUnionsServiceExtensions(t *testing.T) {
 }
 
 func TestMergeAppendDeduplicatesServiceExtensions(t *testing.T) {
-	_ = createProvider()
+	setMergeAppendFeatureGate(t, true)
 	conf := confmap.New()
 	declare := func() *confmap.Conf {
 		return confmap.NewFromStringMap(map[string]any{
@@ -1424,7 +1518,7 @@ func TestMergeAppendDeduplicatesServiceExtensions(t *testing.T) {
 // TestMergeAppendWithoutServiceExtensions guards the common case: a policy that
 // declares no extensions must not introduce an empty service::extensions key.
 func TestMergeAppendWithoutServiceExtensions(t *testing.T) {
-	_ = createProvider()
+	setMergeAppendFeatureGate(t, true)
 	conf := confmap.New()
 	require.NoError(t, conf.Merge(cleanConf(confmap.NewFromStringMap(map[string]any{
 		"receivers": map[string]any{"otlp/x": map[string]any{}},
@@ -1618,11 +1712,11 @@ func TestRetrieve_MultipleFileLogSourcePoliciesConsolidated(t *testing.T) {
 		}
 	}
 
-	p1 := &policyv1alpha1.FileLogSourcePolicy{
+	p1 := &policyv1.FileLogSourcePolicy{
 		Id:            "app-logs-1",
 		IncludedPaths: p1Paths,
 	}
-	p2 := &policyv1alpha1.FileLogSourcePolicy{
+	p2 := &policyv1.FileLogSourcePolicy{
 		Id:            "app-logs-2",
 		IncludedPaths: p2Paths,
 	}
@@ -1684,15 +1778,15 @@ func TestRetrieve_FileLogSourcePolicy_WithInvalidPolicy_FaultIsolation(t *testin
 		expectedValid = []any{"/var/log/valid1.log", "/var/log/valid2.log"}
 	}
 
-	valid1 := &policyv1alpha1.FileLogSourcePolicy{
+	valid1 := &policyv1.FileLogSourcePolicy{
 		Id:            "valid-source-1",
 		IncludedPaths: []string{valid1Path},
 	}
-	valid2 := &policyv1alpha1.FileLogSourcePolicy{
+	valid2 := &policyv1.FileLogSourcePolicy{
 		Id:            "valid-source-2",
 		IncludedPaths: []string{valid2Path},
 	}
-	invalid := &policyv1alpha1.FileLogSourcePolicy{
+	invalid := &policyv1.FileLogSourcePolicy{
 		Id:            "invalid-source",
 		IncludedPaths: []string{invalidPath},
 	}
@@ -1757,15 +1851,15 @@ func TestRetrieve_FileLogSourcePolicy_PoisonedBatchHead_FaultIsolation(t *testin
 	}
 
 	// Invariant INV-1: Malformed element 0 must not poison or drop valid peers.
-	invalid := &policyv1alpha1.FileLogSourcePolicy{
+	invalid := &policyv1.FileLogSourcePolicy{
 		Id:            "invalid-source-at-head",
 		IncludedPaths: []string{invalidPath},
 	}
-	valid1 := &policyv1alpha1.FileLogSourcePolicy{
+	valid1 := &policyv1.FileLogSourcePolicy{
 		Id:            "valid-source-1",
 		IncludedPaths: []string{valid1Path},
 	}
-	valid2 := &policyv1alpha1.FileLogSourcePolicy{
+	valid2 := &policyv1.FileLogSourcePolicy{
 		Id:            "valid-source-2",
 		IncludedPaths: []string{valid2Path},
 	}

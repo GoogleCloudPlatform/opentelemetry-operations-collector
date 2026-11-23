@@ -22,6 +22,7 @@ The Google-Built OpenTelemetry Collector is an open-source, production-ready bui
 | k8sevents | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/k8seventsreceiver/README.md) |
 | k8sobjects | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/k8sobjectsreceiver/README.md) |
 | kubeletstats | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/kubeletstatsreceiver/README.md) |
+| nginx | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/nginxreceiver/README.md) |
 | nop | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/receiver/nopreceiver/README.md) |
 | otelarrow | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/otelarrowreceiver/README.md) |
 | otlp | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/receiver/otlpreceiver/README.md) |
@@ -35,6 +36,7 @@ The Google-Built OpenTelemetry Collector is an open-source, production-ready bui
 | statsd | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/statsdreceiver/README.md) |
 | syslog | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/syslogreceiver/README.md) |
 | tcplog | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/tcplogreceiver/README.md) |
+| udplog | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/udplogreceiver/README.md) |
 | windowseventlog | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/windowseventlogreceiver/README.md) |
 | windowsperfcounters | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/windowsperfcountersreceiver/README.md) |
 | zipkin | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/receiver/zipkinreceiver/README.md) |
@@ -50,6 +52,8 @@ The Google-Built OpenTelemetry Collector is an open-source, production-ready bui
 | deltatocumulative | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/deltatocumulativeprocessor/README.md) |
 | deltatorate | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/deltatorateprocessor/README.md) |
 | filter | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/filterprocessor/README.md) |
+| geoip | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/geoipprocessor/README.md) |
+| googlepolicy | [docs](No docs linked for component) |
 | groupbyattrs | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/groupbyattrsprocessor/README.md) |
 | groupbytrace | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/groupbytraceprocessor/README.md) |
 | interval | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/intervalprocessor/README.md) |
@@ -60,6 +64,7 @@ The Google-Built OpenTelemetry Collector is an open-source, production-ready bui
 | metricstarttime | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/metricstarttimeprocessor/README.md) |
 | metricstransform | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/metricstransformprocessor/README.md) |
 | probabilisticsampler | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/probabilisticsamplerprocessor/README.md) |
+| queuebatch | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/processor/queuebatchprocessor/README.md) |
 | redaction | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/redactionprocessor/README.md) |
 | remotetap | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/remotetapprocessor/README.md) |
 | resource | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/processor/resourceprocessor/README.md) |
@@ -78,6 +83,7 @@ The Google-Built OpenTelemetry Collector is an open-source, production-ready bui
 | googlecloudpubsub | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/googlecloudpubsubexporter/README.md) |
 | googlemanagedprometheus | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/googlemanagedprometheusexporter/README.md) |
 | googleservicecontrol | [docs](No docs linked for component) |
+| kafka | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/kafkaexporter/README.md) |
 | loadbalancing | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/loadbalancingexporter/README.md) |
 | nop | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/exporter/nopexporter/README.md) |
 | otelarrow | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/otelarrowexporter/README.md) |
@@ -97,6 +103,7 @@ The Google-Built OpenTelemetry Collector is an open-source, production-ready bui
 | bearertokenauth | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/bearertokenauthextension/README.md) |
 | filestorage | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/storage/filestorage/README.md) |
 | googleclientauth | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/googleclientauthextension/README.md) |
+| googlecontrolplane | [docs](No docs linked for component) |
 | headerssetter | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/headerssetterextension/README.md) |
 | healthagent | [docs](No docs linked for component) |
 | healthcheck | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/extension/healthcheckextension/README.md) |
@@ -133,6 +140,7 @@ The Google-Built OpenTelemetry Collector is an open-source, production-ready bui
 | -------------- | ------------- |
 | env | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/confmap/provider/envprovider) |
 | file | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/confmap/provider/fileprovider) |
+| googlecontrolplane | [docs](No docs linked for component) |
 | googlesecretmanager | [docs](https://www.github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/confmap/provider/googlesecretmanagerprovider) |
 | http | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/confmap/provider/httpprovider) |
 | https | [docs](https://www.github.com/open-telemetry/opentelemetry-collector/tree/main/confmap/provider/httpsprovider) |

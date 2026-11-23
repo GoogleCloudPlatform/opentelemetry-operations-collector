@@ -1541,8 +1541,17 @@ func verifyVMCreation(ctx context.Context, logger *log.Logger, vm *VM) error {
 
 	if IsSUSEVM(vm) {
 		// Set download.max_silent_tries to 5 (by default, it is commented out in
-		// the config file). This should help with issues like b/211003972.
-		if _, err := RunRemotely(ctx, logger, vm, "sudo sed -i -E 's/.*download.max_silent_tries.*/download.max_silent_tries = 5/g' /etc/zypp/zypp.conf"); err != nil {
+		// /etc/zypp/zypp.conf on SLES 12/15 and defaults to 1 on SLES 16+).
+		// This should help with issues like b/211003972.
+		version, err := getReleaseInfo(ctx, logger, vm, "VERSION_ID")
+		if err != nil {
+			return fmt.Errorf("attemptCreateInstance() failed to determine SUSE version: %v", err)
+		}
+		cmd := `sudo mkdir -p /etc/zypp/zypp.conf.d && printf '[main]\ndownload.max_silent_tries = 5\n' | sudo tee /etc/zypp/zypp.conf.d/99-max-silent-tries.conf > /dev/null`
+		if strings.HasPrefix(version.Stdout, "12") || strings.HasPrefix(version.Stdout, "15") {
+			cmd = "sudo sed -i -E 's/.*download.max_silent_tries.*/download.max_silent_tries = 5/g' /etc/zypp/zypp.conf"
+		}
+		if _, err := RunRemotely(ctx, logger, vm, cmd); err != nil {
 			return fmt.Errorf("attemptCreateInstance() failed to configure retries in zypp.conf: %v", err)
 		}
 	}
